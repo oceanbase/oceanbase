@@ -2980,7 +2980,6 @@ DEFINE_ORACLE_ERROR(OB_ERR_INVALID_USERENV_PARAMETER, -11131, -1, "HY000", "inva
 DEFINE_ERROR_EXT(OB_SRF_NOT_ALLOWED, -11132, -1, "HY000", "set-returning functions usage are not allowed", "set-returning functions '%.*s' usage are not allowed")
 DEFINE_ERROR_EXT(OB_AI_REMOTE_SERVICE_ERROR, -11133, -1, "HY000", "AI REMOTE SERVICE ERROR", "AI REMOTE SERVICE ERROR: %.*s");
 DEFINE_ERROR(OB_NOT_SUPPORTED_FOR_PARALLEL_DDL, -11134, -1, "HY000", "Operation not supported in parallel DDL path");
-
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // SQL扩展区段1：[-11000, -12000)

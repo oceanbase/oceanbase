@@ -67,6 +67,7 @@ class ObTriggerInfo;
 class ObConstraint;
 class ObUDF;
 class ObDependencyInfo;
+class ObSchemaGuardWrapper;
 }
 }
 
@@ -157,6 +158,12 @@ public:
        const common::ObRowkey &fir_values,
        const common::ObIArray<common::ObNewRow> &sed_values);
 
+  // Check whether external table's default partition part_idx needs updating.
+  // Returns need_update=true when default partition's part_idx <= max_inc_part_idx.
+  static int check_need_update_external_default_part_idx(
+      const share::schema::ObTableSchema &orig_table_schema,
+      int64_t max_inc_part_idx,
+      bool &need_update);
   int update_default_partition_part_idx_for_external_table(const share::schema::ObTableSchema &orig_table_schema,
                                         const share::schema::ObTableSchema &new_table_schema,
                                         ObMySQLTransaction &trans);
@@ -308,12 +315,12 @@ public:
   int create_sequence_in_add_column(const share::schema::ObTableSchema &table_schema,
                                     share::schema::ObColumnSchemaV2 &column_schema,
                                     common::ObMySQLTransaction &trans,
-                                    share::schema::ObSchemaGetterGuard &schema_guard,
+                                    share::schema::ObSchemaGuardWrapper &schema_guard,
                                     obrpc::ObSequenceDDLArg &sequence_ddl_arg);
 
   int drop_sequence_in_drop_column(const share::schema::ObColumnSchemaV2 &column_schema,
                                    common::ObMySQLTransaction &trans,
-                                   share::schema::ObSchemaGetterGuard &schema_guard);
+                                   share::schema::ObSchemaGuardWrapper &schema_guard);
   virtual int alter_table_create_index(const share::schema::ObTableSchema &new_table_schema,
                                        common::ObIArray<share::schema::ObColumnSchemaV2*> &gen_columns,
                                        share::schema::ObTableSchema &index_schema,
@@ -367,7 +374,7 @@ public:
                                            common::ObMySQLTransaction &trans);
 
   virtual int alter_table_options(
-      share::schema::ObSchemaGetterGuard &schema_guard,
+      share::schema::ObSchemaGuardWrapper &schema_guard_wrapper,
       share::schema::ObTableSchema &new_table_schema,
       const share::schema::ObTableSchema &table_schema,
       const bool need_update_aux_table,
@@ -702,6 +709,10 @@ public:
                             common::ObMySQLTransaction &trans,
                             share::schema::ObMultiVersionSchemaService &schema_service,
                             share::schema::ObSchemaGetterGuard &schema_guard);
+  static int drop_obj_privs(const uint64_t tenant_id,
+                            const common::ObIArray<const share::schema::ObObjPriv *> &obj_privs,
+                            common::ObMySQLTransaction &trans,
+                            share::schema::ObMultiVersionSchemaService &schema_service);
   //----End of functions for managing privileges----
   //----Functions for managing outlines----
   int create_outline(share::schema::ObOutlineInfo &outline_info,
@@ -904,7 +915,8 @@ public:
                       common::ObMySQLTransaction &trans);
   int drop_directory(const ObString &ddl_str,
                      share::schema::ObDirectorySchema &schema,
-                     common::ObMySQLTransaction &trans);
+                     common::ObMySQLTransaction &trans,
+                     share::schema::ObSchemaGetterGuard &schema_guard);
   //----End of functions for directory object----
 
   //----Functions for row level security----
@@ -1113,7 +1125,8 @@ protected:
       const uint64_t tenant_id,
       const uint64_t obj_id,
       const uint64_t obj_ypte,
-      common::ObMySQLTransaction &trans);
+      common::ObMySQLTransaction &trans,
+      share::schema::ObSchemaGetterGuard &schema_guard);
 
 private:
   int alter_table_rename_built_in_index_(

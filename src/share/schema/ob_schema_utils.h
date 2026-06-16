@@ -25,6 +25,10 @@ namespace common
 {
 class ObISQLClient;
 }
+namespace obrpc
+{
+class ObAlterTableArg;
+}
 
 namespace share
 {
@@ -35,6 +39,7 @@ class ObColumnSchemaV2;
 class ObServerSchemaService;
 struct SchemaKey;
 class AlterTableSchema;
+class ObSchemaGuardWrapper;
 class ObSchemaUtils
 {
 public:
@@ -468,6 +473,27 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObParallelDDLControlMode);
 };
 
+// On can_parallel_alter==false, `reason` points to a static string naming the
+// field that blocked parallel DDL (forwarded to LOG_WARN by callers).
+int check_alter_table_arg_for_parallel(const obrpc::ObAlterTableArg &arg,
+                                       bool &can_parallel_alter,
+                                       const char *&reason);
+// Check that non-column-operation fields in ObAlterTableArg are all in their
+// default/safe state for parallel DDL. Thin wrapper over
+// ObAlterTableArg::has_no_non_column_operation() — add new whitelist entries
+// there rather than here.
+int check_non_column_arg_for_parallel(const obrpc::ObAlterTableArg &arg,
+                                      bool &can_parallel,
+                                      const char *&reason);
+int check_drop_column_can_parallel(const obrpc::ObAlterTableArg &arg,
+                                   const ObTableSchema &orig_table_schema,
+                                   ObSchemaGetterGuard &schema_guard,
+                                   bool &can_parallel_alter,
+                                   const char *&reason);
+int check_add_column_can_parallel(const obrpc::ObAlterTableArg &arg,
+                                  const ObTableSchema &orig_table_schema,
+                                  bool &can_parallel_alter,
+                                  const char *&reason);
 class ObTenantDDLCountGuard
 {
 public:
@@ -481,6 +507,7 @@ private:
 };
 
 } // end schema
+
 } // end share
 } // end oceanbase
 

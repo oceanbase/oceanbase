@@ -2081,6 +2081,43 @@ OB_SERIALIZE_MEMBER((ObSetCommentArg, ObDDLArg),
                      table_comment_,
                      op_type_);
 
+bool ObAlterTableArg::has_no_non_column_operation(const char *&reason) const
+{
+  reason = nullptr;
+#define REJECT_IF(expr, msg)                                              \
+  do { if (nullptr == reason && (expr)) { reason = (msg); } } while (0)
+
+  // alter_part_type_ / is_alter_partitions_ and the accompanying
+  // is_update_global_indexes_ flag are legitimate parallel partition
+  // operations gated by the action whitelist in ObAlterTableHelper, not by this
+  // check. The single-action invariant in check_supported_action_types_()
+  // forbids them coexisting with column ops.
+  REJECT_IF(!foreign_key_arg_list_.empty(),                       "foreign_key_arg_list");
+  REJECT_IF(is_alter_options_,                                    "is_alter_options");
+  REJECT_IF(!alter_table_schema_.alter_option_bitset_.is_empty(), "alter_option_bitset");
+  REJECT_IF(is_alter_indexs_,                                     "is_alter_indexs");
+  REJECT_IF(is_inner_,                                            "is_inner");
+  REJECT_IF(alter_constraint_type_ != CONSTRAINT_NO_OPERATION,    "alter_constraint_type");
+  REJECT_IF(is_convert_to_character_,                             "is_convert_to_character");
+  REJECT_IF(need_rebuild_trigger_,                                "need_rebuild_trigger");
+  REJECT_IF(is_add_to_scheduler_,                                 "is_add_to_scheduler");
+  REJECT_IF(alter_auto_partition_attr_,                           "alter_auto_partition_attr");
+  REJECT_IF(is_direct_load_partition_,                            "is_direct_load_partition");
+  REJECT_IF(is_alter_column_group_delayed_,                       "is_alter_column_group_delayed");
+  REJECT_IF(is_alter_mview_attributes_,                           "is_alter_mview_attributes");
+  REJECT_IF(is_alter_mlog_attributes_,                            "is_alter_mlog_attributes");
+  REJECT_IF(skip_sys_table_check_,                                "skip_sys_table_check");
+  REJECT_IF(enable_hidden_table_partition_pruning_,               "enable_hidden_table_partition_pruning");
+  REJECT_IF(!index_arg_list_.empty(),                             "index_arg_list");
+  REJECT_IF(!foreign_key_checks_,                                 "foreign_key_checks_disabled");
+  REJECT_IF(!rebuild_index_arg_list_.empty(),                     "rebuild_index_arg_list");
+  REJECT_IF(!part_storage_cache_policy_.empty(),                  "part_storage_cache_policy");
+  REJECT_IF(common::OB_INVALID_ID != hidden_table_id_,            "hidden_table_id");
+  REJECT_IF(share::INVALID_TASK != ddl_task_type_,                "ddl_task_type");
+#undef REJECT_IF
+  return nullptr == reason;
+}
+
 DEF_TO_STRING(ObAlterViewArg)
 {
   int64_t pos = 0;

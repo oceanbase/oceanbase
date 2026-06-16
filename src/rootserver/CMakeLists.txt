@@ -1,5 +1,7 @@
 ob_set_subtarget(ob_rootserver ALONE
   ob_ddl_service.cpp
+  ob_alter_column_ddl_service.cpp
+  ob_alter_partition_ddl_service.cpp
   ob_ddl_service_launcher.cpp
   ob_root_service.cpp
   ddl_task/ob_ddl_redefinition_task.cpp
@@ -196,6 +198,17 @@ ob_set_subtarget(ob_rootserver parallel_ddl
   parallel_ddl/ob_drop_tablegroup_helper.cpp
   parallel_ddl/ob_table_helper.cpp
   parallel_ddl/ob_create_table_like_helper.cpp
+  parallel_ddl/ob_alter_table_helper.cpp
+  parallel_ddl/ob_alter_table_column_action.cpp
+  parallel_ddl/ob_alter_table_add_column_action.cpp
+  parallel_ddl/ob_alter_table_drop_column_action.cpp
+  parallel_ddl/ob_alter_table_partition_action.cpp
+  parallel_ddl/ob_add_partition_action.cpp
+  parallel_ddl/ob_add_subpartition_action.cpp
+  parallel_ddl/ob_drop_partition_action.cpp
+  parallel_ddl/ob_drop_subpartition_action.cpp
+  parallel_ddl/ob_truncate_partition_action.cpp
+  parallel_ddl/ob_truncate_subpartition_action.cpp
 )
 
 ob_set_subtarget(ob_rootserver freeze

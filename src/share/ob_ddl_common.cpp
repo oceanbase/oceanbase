@@ -37,6 +37,7 @@
 #include "sql/resolver/mv/ob_mv_provider.h"
 #include "share/search_index/ob_search_index_builder_util.h"
 #include "lib/utility/ob_sort.h"
+#include "share/ob_rpc_struct.h" // for obrpc::ObAlterTableArg::AlterAlgorithm in ObAlterColumnDDLHelper
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -7630,6 +7631,193 @@ bool ObDDLFTSUtils::ddl_using_batch_interface(const oceanbase::storage::ObDDLTab
                               ddl_table_schema.storage_schema_->get_row_store_type(),
                               tenant_data_version)) {
     ret = true;
+  }
+  return ret;
+}
+
+int ObAlterColumnDDLHelper::check_can_add_column_use_instant(
+    const bool is_oracle_mode,
+    const uint64_t tenant_data_version,
+    bool &can_add_column_instant)
+{
+  int ret = OB_SUCCESS;
+  can_add_column_instant = false;
+  if (is_oracle_mode) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("in oracle mode not supported to add column instant", KR(ret), K(tenant_data_version));
+  } else if (OB_UNLIKELY(tenant_data_version < MOCK_DATA_VERSION_4_2_5_0)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("in mysql mode not supported instant algorithm under this version", KR(ret), K(tenant_data_version));
+  } else if (OB_UNLIKELY(tenant_data_version >= DATA_VERSION_4_3_0_0
+                         && tenant_data_version < DATA_VERSION_4_3_5_0)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("in mysql mode not supported instant algorithm under this version", KR(ret), K(tenant_data_version));
+  } else {
+    can_add_column_instant = true;
+  }
+  return ret;
+}
+
+int ObAlterColumnDDLHelper::check_is_change_column_order(
+    const schema::ObTableSchema &table_schema,
+    const schema::AlterColumnSchema &alter_column_schema,
+    bool &is_change_column_order)
+{
+  int ret = OB_SUCCESS;
+  const ObString &this_name = alter_column_schema.get_origin_column_name();
+  const ObString &next_name = alter_column_schema.get_next_column_name();
+  const ObString &prev_name = alter_column_schema.get_prev_column_name();
+  const bool is_first = alter_column_schema.is_first_;
+  const bool is_before = !next_name.empty();
+  const bool is_after = !prev_name.empty();
+  const int flag_cnt = static_cast<int>(is_first) + static_cast<int>(is_before) + static_cast<int>(is_after);
+  const schema::ObSchemaOperationType op_type = alter_column_schema.alter_type_;
+  if (OB_UNLIKELY(1 < flag_cnt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("change column order flag conflict", K(ret), K(is_first), K(is_before), K(is_after));
+  } else {
+    is_change_column_order = 0 != flag_cnt;
+  }
+  if (OB_SUCC(ret) && is_change_column_order) {
+    bool is_oracle_mode = false;
+    if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+      LOG_WARN("failed to get oracle mode", K(ret));
+    } else if (schema::OB_DDL_CHANGE_COLUMN == op_type || schema::OB_DDL_MODIFY_COLUMN == op_type) {
+      lib::CompatModeGuard guard(is_oracle_mode ?
+          lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL);
+      const ObString &left_name = is_before ? this_name : prev_name;
+      const ObString &right_name = is_before ? next_name : this_name;
+      const schema::ObColumnNameHashWrapper left_wrap(left_name);
+      bool same_order = false;
+      schema::ObColumnIterByPrevNextID iter(table_schema);
+      const schema::ObColumnSchemaV2 *column = nullptr;
+      while (OB_SUCC(ret) && !same_order && !is_first) {
+        if (OB_FAIL(iter.next(column))) {
+        } else if (OB_ISNULL(column)) {
+          ret = OB_ERR_UNEXPECTED;
+        } else if (left_wrap == schema::ObColumnNameHashWrapper(column->get_column_name_str())) {
+          // Keep the literal equality semantics of the original code: only when
+          // the user-provided left/right names are byte-identical do we treat
+          // them as the same target without further iteration.
+          if (left_name == right_name) {
+            same_order = true;
+          }
+          break;
+        }
+      }
+      while (OB_SUCC(ret) && !same_order) {
+        if (OB_FAIL(iter.next(column))) {
+        } else if (OB_ISNULL(column)) {
+          ret = OB_ERR_UNEXPECTED;
+        } else if (column->is_shadow_column() || column->is_hidden()) {
+          // skip
+        } else {
+          if (schema::ObColumnNameHashWrapper(right_name) == schema::ObColumnNameHashWrapper(column->get_column_name_str())) {
+            same_order = true;
+          }
+          break;
+        }
+      }
+      if (same_order) {
+        is_change_column_order = false;
+      }
+      if (OB_FAIL(ret)) {
+        if (ret == OB_ITER_END) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to check is change column order", K(ret));
+        }
+      }
+    } else if (schema::OB_DDL_ADD_COLUMN == op_type) {
+      const schema::ObColumnSchemaV2 *column = nullptr;
+      if (is_after && nullptr != (column = table_schema.get_column_schema(prev_name))
+          && column->get_next_column_id() == schema::BORDER_COLUMN_ID) {
+        is_change_column_order = false;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAlterColumnDDLHelper::compute_add_column_ddl_type(
+    const schema::AlterTableSchema &alter_table_schema,
+    const schema::ObTableSchema &orig_table_schema,
+    const schema::AlterColumnSchema &alter_column_schema,
+    const int64_t algorithm,
+    const bool is_oracle_mode,
+    const uint64_t tenant_data_version,
+    ObDDLType &ddl_type)
+{
+  int ret = OB_SUCCESS;
+  ddl_type = ObDDLType::DDL_INVALID;
+  bool can_add_column_instant = false;
+  bool is_change_column_order = false;
+  if (schema::OB_DDL_ADD_COLUMN != alter_column_schema.alter_type_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("alter_type is not add column", KR(ret), K(alter_column_schema));
+  } else if (algorithm == static_cast<int64_t>(obrpc::ObAlterTableArg::AlterAlgorithm::INSTANT)) {
+    if (OB_FAIL(check_can_add_column_use_instant(is_oracle_mode,
+                                                 tenant_data_version,
+                                                 can_add_column_instant))) {
+      LOG_WARN("fail to check can add column use instant algorithm", KR(ret), K(is_oracle_mode));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (alter_column_schema.is_autoincrement_ || alter_column_schema.is_primary_key_ || alter_column_schema.has_not_null_constraint()) {
+      ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
+    } else if (nullptr != orig_table_schema.get_column_schema(alter_column_schema.get_column_name())) {
+      schema::ObTableSchema::const_column_iterator it_begin = alter_table_schema.column_begin();
+      schema::ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
+      for (; OB_SUCC(ret) && it_begin != it_end; it_begin++) {
+        const schema::AlterColumnSchema *column_schema = nullptr;
+        if (OB_ISNULL(column_schema = static_cast<schema::AlterColumnSchema *>(*it_begin))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("*it_begin is NULL", K(ret));
+        } else if (schema::ObSchemaOperationType::OB_DDL_DROP_COLUMN == column_schema->alter_type_) {
+          lib::Worker::CompatMode compat_mode = (is_oracle_mode ?
+              lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL);
+          lib::CompatModeGuard guard(compat_mode);
+          const ObString &drop_column_name = column_schema->get_origin_column_name();
+          const ObString &add_column_name = alter_column_schema.get_column_name();
+          if (schema::ObColumnNameHashWrapper(drop_column_name) == schema::ObColumnNameHashWrapper(add_column_name)) {
+            ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
+          }
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (ObDDLType::DDL_INVALID != ddl_type) {
+    } else if (alter_column_schema.is_stored_generated_column()) {
+      ddl_type = ObDDLType::DDL_ADD_COLUMN_OFFLINE;
+    } else if (OB_FAIL(check_is_change_column_order(orig_table_schema, alter_column_schema, is_change_column_order))) {
+      LOG_WARN("fail to check is change column order", KR(ret));
+    } else if (!can_add_column_instant) {
+      ddl_type = is_change_column_order ? ObDDLType::DDL_ADD_COLUMN_OFFLINE : ObDDLType::DDL_ADD_COLUMN_ONLINE;
+    } else {
+      ddl_type = is_change_column_order ? ObDDLType::DDL_ADD_COLUMN_INSTANT : ObDDLType::DDL_ADD_COLUMN_ONLINE;
+    }
+  }
+  return ret;
+}
+
+int ObAlterColumnDDLHelper::compute_drop_column_ddl_type(
+    const schema::ObColumnSchemaV2 &orig_column_schema,
+    const uint64_t tenant_id,
+    const bool is_oracle_mode,
+    const uint64_t tenant_data_version,
+    ObDDLType &ddl_type,
+    int64_t &algorithm_hint)
+{
+  int ret = OB_SUCCESS;
+  ddl_type = ObDDLType::DDL_DROP_COLUMN;
+  if (!share::schema::check_can_drop_column_instant(tenant_id, is_oracle_mode, tenant_data_version)) {
+    // version/config gate: keep offline drop column
+  } else if (!is_oracle_mode && orig_column_schema.is_autoincrement()) {
+    algorithm_hint = static_cast<int64_t>(obrpc::ObAlterTableArg::AlterAlgorithm::INPLACE);
+  } else {
+    ddl_type = ObDDLType::DDL_DROP_COLUMN_INSTANT;
   }
   return ret;
 }

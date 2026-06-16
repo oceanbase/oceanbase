@@ -916,6 +916,12 @@ public:
               const uint64_t tablegroup_id,
               common::ObIArray<ObString> &table_names,
               common::ObIArray<uint64_t> &table_ids);
+
+  virtual int get_min_table_id_in_tablegroup(
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const uint64_t tablegroup_id,
+              uint64_t &min_table_id) override;
   /*----------- interfaces for latest schema end -------------*/
 
 private:

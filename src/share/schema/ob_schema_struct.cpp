@@ -144,6 +144,8 @@ int ObSchemaVersionGenerator::init(
                                          static_cast<uint64_t>(start_version),
                                          static_cast<uint64_t>(end_version)))) {
     LOG_WARN("fail to init id generator", KR(ret), K(start_version), K(end_version));
+  } else {
+    wasted_cnt_ = 0;
   }
   return ret;
 }
@@ -191,7 +193,7 @@ int ObSchemaVersionGenerator::get_end_version(int64_t &end_version) const
   if (OB_FAIL(ObIDGenerator::get_end_id(id))) {
     LOG_WARN("fail to get end id", KR(ret));
   } else {
-    end_version = static_cast<int64_t>(id);
+    end_version = static_cast<int64_t>(id) - wasted_cnt_ * SCHEMA_VERSION_INC_STEP;
   }
   return ret;
 }
@@ -203,7 +205,7 @@ int ObSchemaVersionGenerator::get_version_cnt(int64_t &version_cnt) const
   if (OB_FAIL(ObIDGenerator::get_id_cnt(id_cnt))) {
     LOG_WARN("fail to get id cnt", KR(ret));
   } else {
-    version_cnt = static_cast<int64_t>(id_cnt);
+    version_cnt = static_cast<int64_t>(id_cnt) - wasted_cnt_;
   }
   return ret;
 }

@@ -194,7 +194,9 @@ private:
     const common::ObString &access_info,
     common::ObIAllocator &allocator,
     common::ObStorageType &storage_type);
-  int populate_based_schema_obj_info_(obrpc::ObAlterTableArg &alter_table_arg);
+  int populate_based_schema_obj_info_(const share::schema::ObTableSchema *&orig_table_schema,
+                                      obrpc::ObAlterTableArg &alter_table_arg,
+                                      share::schema::ObSchemaGetterGuard &schema_guard);
 
 private:
   //DISALLOW_COPY_AND_ASSIGN(ObAlterTableExecutor);

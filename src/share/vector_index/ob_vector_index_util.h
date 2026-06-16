@@ -18,6 +18,8 @@
 
 namespace oceanbase
 {
+namespace share { namespace schema { class ObSchemaGuardWrapper; }}
+
 namespace share
 {
 
@@ -830,7 +832,7 @@ public:
       const ObTableSchema &index_table_schema,
       const uint64_t data_table_id,
       const bool is_vec_inner_drop,
-      share::schema::ObSchemaGetterGuard &schema_guard,
+      share::schema::ObSchemaGuardWrapper &schema_guard_wrapper,
       rootserver::ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans,
       common::ObIArray<share::schema::ObTableSchema> &new_aux_schemas);

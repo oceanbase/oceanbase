@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX COMMON
 #include "share/search_index/ob_search_index_builder_util.h"
+#include "share/schema/ob_schema_guard_wrapper.h"
 #include "share/search_index/ob_search_index_encoder.h"
 #include "share/ob_index_builder_util.h"
 #include "share/ob_server_struct.h"
@@ -216,10 +217,10 @@ int ObSearchIndexBuilderUtil::add_search_index_column(
 int ObSearchIndexBuilderUtil::get_dropping_search_data_index_invisiable_index_schema(
     const uint64_t tenant_id,
     const ObTableSchema &index_table_schema,
-    share::schema::ObSchemaGetterGuard &schema_guard,
-    common::ObIArray<share::schema::ObTableSchema> &new_aux_schemas)
+    share::schema::ObSchemaGuardWrapper &schema_guard_wrapper,    common::ObIArray<share::schema::ObTableSchema> &new_aux_schemas)
 {
   int ret = OB_SUCCESS;
+  UNUSED(tenant_id);
   if (index_table_schema.is_search_def_index()) {
     const ObIArray<share::schema::ObAuxTableMetaInfo> &indexs = index_table_schema.get_simple_index_infos();
     for (int64_t i = 0; OB_SUCC(ret) && i < indexs.count(); ++i) {
@@ -228,9 +229,8 @@ int ObSearchIndexBuilderUtil::get_dropping_search_data_index_invisiable_index_sc
       if (!share::schema::is_search_data_index(info.index_type_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expect data search index", KR(ret), K(info.index_type_));
-      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
-                                                       info.table_id_,
-                                                       data_index_schema))) {
+      } else if (OB_FAIL(schema_guard_wrapper.get_table_schema(info.table_id_,
+                                                               data_index_schema))) {
         LOG_WARN("fail to get search data index schema", K(ret),
                   "data_index_table_id", info.table_id_);
       } else if (OB_ISNULL(data_index_schema)) {

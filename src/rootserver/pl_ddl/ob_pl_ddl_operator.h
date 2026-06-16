@@ -46,6 +46,7 @@ public:
   int drop_routine(const share::schema::ObRoutineInfo &routine_info,
                     common::ObMySQLTransaction &trans,
                      share::schema::ObErrorInfo &error_info,
+                     share::schema::ObSchemaGetterGuard &schema_guard,
                      const common::ObString *ddl_stmt_str/*=NULL*/);
   //----End of functions for managing routine----
 

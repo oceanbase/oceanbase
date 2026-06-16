@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_vector_index_util.h"
+#include "share/schema/ob_schema_guard_wrapper.h"
 #include "storage/vector_index/ob_vector_index_sched_job_utils.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "sql/engine/ob_exec_context.h"
@@ -5850,10 +5851,13 @@ int ObVectorIndexUtil::check_rename_rebuild_confilt(
   ObDropIndexArg tmp_drop_arg;
   tmp_drop_arg.tenant_id_ = origin_table_schema.get_tenant_id();
   tmp_drop_arg.index_name_ = ori_index_name;
-  if (OB_FAIL(ddl_service.get_index_schema_by_name(origin_table_schema.get_table_id(),
+  ObSchemaGuardWrapper schema_guard_wrapper(origin_table_schema.get_tenant_id(), &ddl_service.get_schema_service());
+  if (OB_FAIL(schema_guard_wrapper.init(schema_guard))) {
+    LOG_WARN("fail to init schema guard wrapper", KR(ret));
+  } else if (OB_FAIL(ddl_service.get_index_schema_by_name(origin_table_schema.get_table_id(),
                                       origin_table_schema.get_database_id(),
                                       tmp_drop_arg,
-                                      schema_guard,
+                                      schema_guard_wrapper,
                                       orig_index_schema))) {
     LOG_WARN("failed to get index schema by name", K(ret), K(ori_index_name));
   } else if (OB_NOT_NULL(orig_index_schema) && orig_index_schema->is_vec_index()) {
@@ -6275,7 +6279,7 @@ int ObVectorIndexUtil::get_dropping_vec_index_invisiable_table_schema(
     const share::schema::ObTableSchema &index_table_schema,
     const uint64_t data_table_id,
     const bool is_vec_inner_drop,
-    share::schema::ObSchemaGetterGuard &schema_guard,
+    share::schema::ObSchemaGuardWrapper &schema_guard_wrapper,
     rootserver::ObDDLOperator &ddl_operator,
     common::ObMySQLTransaction &trans,
     common::ObIArray<share::schema::ObTableSchema> &new_aux_schemas)
@@ -6293,7 +6297,7 @@ int ObVectorIndexUtil::get_dropping_vec_index_invisiable_table_schema(
         || index_name.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(data_table_id), K(index_table_id), K(tenant_id), K(index_name));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, data_table_id, data_table_schema))) {
+  } else if (OB_FAIL(schema_guard_wrapper.get_table_schema(data_table_id, data_table_schema))) {
     LOG_WARN("fail to get index schema with data table id", K(ret), K(tenant_id), K(data_table_id));
   } else if (OB_ISNULL(data_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
@@ -6330,7 +6334,7 @@ int ObVectorIndexUtil::get_dropping_vec_index_invisiable_table_schema(
         const share::schema::ObAuxTableMetaInfo &info = indexs.at(i);
         if (share::schema::is_vec_rowkey_vid_type(info.index_type_)) {
           if (!check_is_match_index_type(index_table_schema.get_index_type(), info.index_type_)) { // skip getting diff index type
-          } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, info.table_id_, rowkey_vid_schema))) {
+          } else if (OB_FAIL(schema_guard_wrapper.get_table_schema(info.table_id_, rowkey_vid_schema))) {
             LOG_WARN("fail to get vec rowkey vid table schema", K(ret), K(tenant_id), K(info));
           } else if (OB_ISNULL(rowkey_vid_schema)) {
             ret = OB_TABLE_NOT_EXIST;
@@ -6340,7 +6344,7 @@ int ObVectorIndexUtil::get_dropping_vec_index_invisiable_table_schema(
           }
         } else if (share::schema::is_vec_vid_rowkey_type(info.index_type_)) {
           if (!check_is_match_index_type(index_table_schema.get_index_type(), info.index_type_)) { // skip getting diff index type
-          } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, info.table_id_, vid_rowkey_schema))) {
+          } else if (OB_FAIL(schema_guard_wrapper.get_table_schema(info.table_id_, vid_rowkey_schema))) {
             LOG_WARN("fail to get vec vid rowkey table schema", K(ret), K(tenant_id), K(info));
           } else if (OB_ISNULL(vid_rowkey_schema)) {
             ret = OB_TABLE_NOT_EXIST;
@@ -6355,7 +6359,7 @@ int ObVectorIndexUtil::get_dropping_vec_index_invisiable_table_schema(
           // 主表可能存在多个4号表，但这里只取满足index_name字串的4号表,
           // 如果不判断已经拿到了，那么循环时会从主表上拿多次同样的index_schema，不符合预期，这里需要skip。
           // 下面对其他表的获取类似
-          } else if (OB_FAIL(ObVecIndexBuilderUtil::get_vec_table_schema_by_name(schema_guard,
+          } else if (OB_FAIL(ObVecIndexBuilderUtil::get_vec_table_schema_by_name(schema_guard_wrapper,
                                                                                  tenant_id,
                                                                                  database_id,
                                                                                  index_name,
@@ -6375,7 +6379,7 @@ int ObVectorIndexUtil::get_dropping_vec_index_invisiable_table_schema(
           // 通过索引名获取5号表
           if (!check_is_match_index_type(index_table_schema.get_index_type(), info.index_type_)) { // skip getting diff index type
           } else if (already_get_snapshot_data_table) {   // skip
-          } else if (OB_FAIL(ObVecIndexBuilderUtil::get_vec_table_schema_by_name(schema_guard,
+          } else if (OB_FAIL(ObVecIndexBuilderUtil::get_vec_table_schema_by_name(schema_guard_wrapper,
                                                                                  tenant_id,
                                                                                  database_id,
                                                                                  index_name,
@@ -6395,7 +6399,7 @@ int ObVectorIndexUtil::get_dropping_vec_index_invisiable_table_schema(
           // 通过索引名获取6号表
           if (!check_is_match_index_type(index_table_schema.get_index_type(), info.index_type_)) { // skip getting diff index type
           } else if (already_get_embedded_vec_table || !index_table_schema.is_hybrid_vec_index_log_type()) {   // skip
-          } else if (OB_FAIL(ObVecIndexBuilderUtil::get_vec_table_schema_by_name(schema_guard,
+          } else if (OB_FAIL(ObVecIndexBuilderUtil::get_vec_table_schema_by_name(schema_guard_wrapper,
                                                                                  tenant_id,
                                                                                  database_id,
                                                                                  index_name,
@@ -6416,7 +6420,7 @@ int ObVectorIndexUtil::get_dropping_vec_index_invisiable_table_schema(
             // get cid_vector
           if (!check_is_match_index_type(index_table_schema.get_index_type(), info.index_type_)) { // skip getting diff index type
           } else if (already_get_cid_vector_table) {    // skip
-          } else if (OB_FAIL(ObVecIndexBuilderUtil::get_vec_table_schema_by_name(schema_guard,
+          } else if (OB_FAIL(ObVecIndexBuilderUtil::get_vec_table_schema_by_name(schema_guard_wrapper,
                                                                                  tenant_id,
                                                                                  database_id,
                                                                                  index_name,
@@ -6438,7 +6442,7 @@ int ObVectorIndexUtil::get_dropping_vec_index_invisiable_table_schema(
             // get rowkey_cid
           if (!check_is_match_index_type(index_table_schema.get_index_type(), info.index_type_)) { // skip getting diff index type
           } else if (already_get_rowkey_cid_table) {   // skip
-          } else if (OB_FAIL(ObVecIndexBuilderUtil::get_vec_table_schema_by_name(schema_guard,
+          } else if (OB_FAIL(ObVecIndexBuilderUtil::get_vec_table_schema_by_name(schema_guard_wrapper,
                                                                                  tenant_id,
                                                                                  database_id,
                                                                                  index_name,
@@ -6458,7 +6462,7 @@ int ObVectorIndexUtil::get_dropping_vec_index_invisiable_table_schema(
             // get rowkey_cid
           if (!check_is_match_index_type(index_table_schema.get_index_type(), info.index_type_)) { // skip getting diff index type
           } else if (already_get_sq_meta_table) {           // skip
-          } else if (OB_FAIL(ObVecIndexBuilderUtil::get_vec_table_schema_by_name(schema_guard,
+          } else if (OB_FAIL(ObVecIndexBuilderUtil::get_vec_table_schema_by_name(schema_guard_wrapper,
                                                                                  tenant_id,
                                                                                  database_id,
                                                                                  index_name,
@@ -6478,7 +6482,7 @@ int ObVectorIndexUtil::get_dropping_vec_index_invisiable_table_schema(
             // get pg_centroid
           if (!check_is_match_index_type(index_table_schema.get_index_type(), info.index_type_)) { // skip getting diff index type
           } else if (already_get_pq_centroid_table) {     // skip
-          } else if (OB_FAIL(ObVecIndexBuilderUtil::get_vec_table_schema_by_name(schema_guard,
+          } else if (OB_FAIL(ObVecIndexBuilderUtil::get_vec_table_schema_by_name(schema_guard_wrapper,
                                                                                  tenant_id,
                                                                                  database_id,
                                                                                  index_name,
@@ -6498,7 +6502,7 @@ int ObVectorIndexUtil::get_dropping_vec_index_invisiable_table_schema(
             // get pq_code_schema
           if (!check_is_match_index_type(index_table_schema.get_index_type(), info.index_type_)) { // skip getting diff index type
           } else if (already_get_pq_code_table) {          // skip
-          } else if (OB_FAIL(ObVecIndexBuilderUtil::get_vec_table_schema_by_name(schema_guard,
+          } else if (OB_FAIL(ObVecIndexBuilderUtil::get_vec_table_schema_by_name(schema_guard_wrapper,
                                                                                  tenant_id,
                                                                                  database_id,
                                                                                  index_name,

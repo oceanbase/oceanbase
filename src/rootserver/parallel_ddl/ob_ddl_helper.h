@@ -122,12 +122,14 @@ public:
   {
     return clean_on_fail_commit_();
   }
+  int check_inner_stat() { return check_inner_stat_(); }
 protected:
   virtual int check_inner_stat_();
   virtual int init_() = 0;
   /* main actions */
   int start_ddl_trans_();
   virtual int lock_objects_() = 0;
+  virtual int check_after_lock_() { return OB_SUCCESS; }
   virtual int generate_schemas_() = 0;
   virtual int calc_schema_version_cnt_() = 0;
   int gen_task_id_and_schema_versions_();
@@ -244,6 +246,8 @@ protected:
   common::ObArenaAllocator allocator_;
   const char* parallel_ddl_type_;
   // should use this guard after related objects are locked
+  share::schema::ObSchemaGetterGuard local_schema_guard_;
+  share::schema::ObLatestSchemaGuard latest_schema_guard_;
   share::schema::ObSchemaGuardWrapper schema_guard_wrapper_;
   bool enable_ddl_parallel_;
 private:

@@ -95,7 +95,8 @@ public:
   int init(const uint64_t tenant_id,
            obrpc::ObCommonRpcProxy &rpc_proxy,
            const ObString &database_name,
-           const common::ObIArray<ObString> &table_names);
+           const common::ObIArray<ObString> &table_names,
+           const bool force_drop = false);
   int execute();
 public:
   static const int64_t MAX_TABLES_PER_RPC = 1;
@@ -129,13 +130,14 @@ private:
   int64_t next_table_idx_;
   ObString database_name_;
   common::ObArray<ObString> table_names_;
+  bool force_drop_;
   obrpc::ObCommonRpcProxy *rpc_proxy_;
   common::ObArray<ProxyCtx *> proxy_ctxs_;
   ObArenaAllocator allocator_;
   DISABLE_COPY_ASSIGN(ObDropTableBatchScheduler);
 };
 
-int non_atomic_drop_table_in_database(const uint64_t tenant_id, const ObString &database_name, obrpc::ObCommonRpcProxy &common_rpc_proxy);
+int non_atomic_drop_table_in_database(const uint64_t tenant_id, const ObString &database_name, obrpc::ObCommonRpcProxy &common_rpc_proxy, const bool force_drop = false);
 
 }  // namespace sql
 }  // namespace oceanbase

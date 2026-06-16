@@ -20,6 +20,7 @@
 #include "storage/ddl/ob_ddl_lock.h" // ObDDLLock
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
 #include "logservice/data_dictionary/ob_data_dict_storager.h"
+#include "share/schema/ob_schema_guard_wrapper.h"
 #include "share/tablet/ob_tablet_to_table_history_operator.h"
 #include "share/ob_unit_table_operator.h"
 #include "share/ob_cluster_version.h"
@@ -287,9 +288,12 @@ int ObSessionTabletCreateHelper::choose_log_stream(
   } else {
     ObSessionTabletInfo data_table_info;
     common::ObSEArray<share::ObLSID, 1> ls_id_array;
-    rootserver::ObNewTableTabletAllocator new_table_tablet_allocator(tenant_id_, schema_guard, GCTX.sql_proxy_);
+    share::schema::ObSchemaGuardWrapper schema_guard_wrapper(tenant_id_, GCTX.schema_service_);
+    rootserver::ObNewTableTabletAllocator new_table_tablet_allocator(tenant_id_, schema_guard_wrapper, GCTX.sql_proxy_);
     const share::schema::ObTableSchema *schema = &table_schema;
-    if (table_schema.is_oracle_tmp_table_v2_index_table()) {
+    if (OB_FAIL(schema_guard_wrapper.init(schema_guard))) {
+      LOG_WARN("fail to init schema guard wrapper", KR(ret));
+    } else if (table_schema.is_oracle_tmp_table_v2_index_table()) {
       const uint64_t data_table_id = table_schema.get_data_table_id();
       const share::schema::ObTableSchema *data_table_schema = nullptr;
       const ObSessionTabletInfoKey data_table_key(data_table_id, sequence_, session_id_);

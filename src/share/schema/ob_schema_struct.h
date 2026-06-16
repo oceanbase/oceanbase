@@ -646,7 +646,7 @@ public:
   static const int64_t SCHEMA_VERSION_INC_STEP = 8;
 public:
   ObSchemaVersionGenerator()
-    : ObIDGenerator(SCHEMA_VERSION_INC_STEP) {}
+    : ObIDGenerator(SCHEMA_VERSION_INC_STEP), wasted_cnt_(0) {}
   virtual ~ObSchemaVersionGenerator() {}
 
   int init(const int64_t start_version, const int64_t end_version);
@@ -655,6 +655,10 @@ public:
   int get_current_version(int64_t &current_version) const;
   int get_end_version(int64_t &end_version) const;
   int get_version_cnt(int64_t &version_cnt) const;
+  void inc_wasted_cnt() { ++wasted_cnt_; }
+  int64_t get_wasted_cnt() const { return wasted_cnt_; }
+private:
+  int64_t wasted_cnt_;
 };
 typedef ObSchemaVersionGenerator TSISchemaVersionGenerator;
 

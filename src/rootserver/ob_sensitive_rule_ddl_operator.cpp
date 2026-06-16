@@ -9,6 +9,7 @@
 #include "share/schema/ob_priv_sql_service.h"
 #include "share/schema/ob_sensitive_rule_schema_struct.h"
 #include "share/schema/ob_table_sql_service.h"
+#include "share/schema/ob_schema_guard_wrapper.h"
 
 namespace oceanbase
 {
@@ -20,7 +21,7 @@ int ObSensitiveRuleDDLOperator::handle_sensitive_rule_function(ObSensitiveRuleSc
                                                                const share::schema::ObSchemaOperationType ddl_type,
                                                                const ObString &ddl_stmt_str,
                                                                const uint64_t tenant_id,
-                                                               ObSchemaGetterGuard &schema_guard,
+                                                               share::schema::ObSchemaGuardWrapper &schema_guard,
                                                                uint64_t user_id)
 {
   int ret = OB_SUCCESS;
@@ -128,7 +129,7 @@ int ObSensitiveRuleDDLOperator::handle_sensitive_rule_function_inner(ObSensitive
 
 int ObSensitiveRuleDDLOperator::update_table_schema(ObSensitiveRuleSchema &schema,
                                                     ObMySQLTransaction &trans,
-                                                    ObSchemaGetterGuard &schema_guard,
+                                                    share::schema::ObSchemaGuardWrapper &schema_guard,
                                                     const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
@@ -162,7 +163,7 @@ int ObSensitiveRuleDDLOperator::update_table_schema(ObSensitiveRuleSchema &schem
 int ObSensitiveRuleDDLOperator::grant_or_revoke_after_ddl(ObSensitiveRuleSchema &schema,
                                                           ObMySQLTransaction &trans,
                                                           const share::schema::ObSchemaOperationType ddl_type,
-                                                          ObSchemaGetterGuard &schema_guard,
+                                                          share::schema::ObSchemaGuardWrapper &schema_guard,
                                                           uint64_t user_id)
 {
   int ret = OB_SUCCESS;
@@ -177,9 +178,12 @@ int ObSensitiveRuleDDLOperator::grant_or_revoke_after_ddl(ObSensitiveRuleSchema 
     LOG_ERROR("schema_sql_service must not null", K(ret));
   } else if (OB_DDL_DROP_SENSITIVE_RULE == ddl_type) {
     if (lib::Worker::CompatMode::ORACLE == compat_mode) {
-      OZ(ddl_operator.drop_obj_privs(tenant_id, schema.get_sensitive_rule_id(),
-                                     static_cast<uint64_t>(ObObjectType::SENSITIVE_RULE), trans,
-                                     schema_service_, schema_guard));
+      ObArray<const ObObjPriv *> obj_privs;
+      OZ(schema_guard.get_obj_priv_with_obj_id(tenant_id,
+                                                schema.get_sensitive_rule_id(),
+                                                static_cast<uint64_t>(ObObjectType::SENSITIVE_RULE),
+                                                obj_privs, true));
+      OZ(ObDDLOperator::drop_obj_privs(tenant_id, obj_privs, trans, schema_service_));
     }
   } else {
     // do nothing.
@@ -242,7 +246,7 @@ int ObSensitiveRuleDDLOperator::grant_revoke_sensitive_rule(const ObSensitiveRul
 int ObSensitiveRuleDDLOperator::drop_sensitive_column_cascades(const ObTableSchema &table_schema,
                                                                const ObIArray<uint64_t> &drop_column_ids,
                                                                ObMySQLTransaction &trans,
-                                                               ObSchemaGetterGuard &schema_guard)
+                                                               share::schema::ObSchemaGuardWrapper &schema_guard)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = table_schema.get_tenant_id();
@@ -276,9 +280,12 @@ int ObSensitiveRuleDDLOperator::drop_sensitive_column_in_drop_table(const ObTabl
 {
   int ret = OB_SUCCESS;
   ObSEArray<uint64_t, 8> column_ids;
-  if (OB_FAIL(table_schema.get_column_ids(column_ids))) {
+  share::schema::ObSchemaGuardWrapper schema_guard_wrapper(table_schema.get_tenant_id(), &schema_service_);
+  if (OB_FAIL(schema_guard_wrapper.init(schema_guard))) {
+    LOG_WARN("fail to init schema guard wrapper", KR(ret));
+  } else if (OB_FAIL(table_schema.get_column_ids(column_ids))) {
     LOG_WARN("get column ids failed", KR(ret), K(table_schema));
-  } else if (OB_FAIL(drop_sensitive_column_cascades(table_schema, column_ids, trans, schema_guard))) {
+  } else if (OB_FAIL(drop_sensitive_column_cascades(table_schema, column_ids, trans, schema_guard_wrapper))) {
     LOG_WARN("drop sensitive column cascades failed", KR(ret), K(table_schema));
   }
   return ret;

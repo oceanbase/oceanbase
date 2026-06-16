@@ -1966,16 +1966,19 @@ int ObTenantDDLService::create_tenant_sys_tablets_in_trans_(
     ObTableCreator table_creator(tenant_id,
                                  frozen_scn,
                                  trans);
+    schema::ObSchemaGuardWrapper schema_guard_wrapper(tenant_id, schema_service_);
     ObNewTableTabletAllocator new_table_tablet_allocator(
                               tenant_id,
-                              schema_guard,
+                              schema_guard_wrapper,
                               sql_proxy_);
     common::ObArray<share::ObLSID> ls_id_array;
     const ObTablegroupSchema *dummy_tablegroup_schema = NULL;
     ObArray<const share::schema::ObTableSchema*> table_schemas;
     ObArray<uint64_t> index_tids;
     ObArray<bool> need_create_empty_majors;
-    if (OB_FAIL(table_creator.init(false/*need_tablet_cnt_check*/))) {
+    if (OB_FAIL(schema_guard_wrapper.init(schema_guard))) {
+      LOG_WARN("fail to init schema guard wrapper", KR(ret));
+    } else if (OB_FAIL(table_creator.init(false/*need_tablet_cnt_check*/))) {
       LOG_WARN("fail to init tablet creator", KR(ret), K(tenant_id));
     } else if (OB_FAIL(new_table_tablet_allocator.init())) {
       LOG_WARN("fail to init new table tablet allocator", KR(ret));

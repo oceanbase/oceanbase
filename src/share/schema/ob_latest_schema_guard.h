@@ -346,6 +346,10 @@ int get_table_schemas_in_tablegroup(
     const uint64_t tablegroup_id,
     common::ObIArray<const ObTableSchema *> &table_schemas);
 
+int get_primary_table_schema_in_tablegroup(
+    const uint64_t tablegroup_id,
+    const ObTableSchema *&table_schema);
+
 int check_database_exists_in_tablegroup(
     const uint64_t tablegroup_id,
     bool &exists);
@@ -437,6 +441,36 @@ int get_table_id_and_table_name_in_tablegroup(
                           const ObSequenceSchema *&sequence_schema);
 
   int get_sys_variable_schema(const ObSysVariableSchema *&sys_variable_schema);
+
+  // 1. won't cache. allocates ObObjPriv copies in local_allocator_.
+  // @param[in]:
+  // - obj_id
+  // - obj_type
+  // - reset_flag: unused, kept for interface alignment with ObSchemaGetterGuard
+  // @param[out]:
+  // - obj_privs: pointers to allocated copies, empty if no privs
+  int get_obj_priv_with_obj_id(const uint64_t obj_id,
+                               const uint64_t obj_type,
+                               common::ObIArray<const ObObjPriv *> &obj_privs,
+                               bool reset_flag);
+
+  // 1. won't cache. allocates ObSAuditSchema copies in local_allocator_.
+  // @param[in]:
+  // - audit_type
+  // - owner_id
+  // @param[out]:
+  // - audit_schemas: pointers to allocated copies, empty if no audits
+  int get_audit_schema_in_owner(const ObSAuditType audit_type,
+                                const uint64_t owner_id,
+                                common::ObIArray<const ObSAuditSchema *> &audit_schemas);
+
+  // 1. won't cache. allocates ObSensitiveRuleSchema copy in local_allocator_.
+  // @param[in]:
+  // - name: sensitive rule name
+  // @param[out]:
+  // - schema: pointer to allocated copy, NULL if not exist
+  int get_sensitive_rule_schema_by_name(const common::ObString &name,
+                                        const ObSensitiveRuleSchema *&schema);
 
   /* -------------- interfaces with cache end ---------------*/
 private:

@@ -11973,6 +11973,49 @@ int ObSchemaServiceSQLImpl::get_table_id_and_table_name_in_tablegroup(
   return ret;
 }
 
+int ObSchemaServiceSQLImpl::get_min_table_id_in_tablegroup(
+    common::ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    const uint64_t tablegroup_id,
+    uint64_t &min_table_id)
+{
+  int ret = OB_SUCCESS;
+  min_table_id = OB_INVALID_ID;
+  ObSqlString sql;
+  ObMySQLResult *result = NULL;
+  // keep table_type filter aligned with ObSchemaMgr::get_table_schemas_in_tablegroup
+  if (OB_FAIL(sql.assign_fmt(
+          "SELECT table_id FROM %s "
+          "WHERE tenant_id = 0 AND tablegroup_id = %lu "
+          "AND table_type IN (%d, %d, %d) "
+          "ORDER BY table_id ASC LIMIT 1",
+          OB_ALL_TABLE_TNAME, tablegroup_id,
+          static_cast<int>(ObTableType::SYSTEM_TABLE),
+          static_cast<int>(ObTableType::USER_TABLE),
+          static_cast<int>(ObTableType::TMP_TABLE)))) {
+    LOG_WARN("failed to append sql", KR(ret), K(sql));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
+        LOG_WARN("failed to execute sql", KR(ret), K(sql), K(tenant_id));
+      } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get result", KR(ret));
+      } else if (OB_FAIL(result->next())) {
+        if (OB_ITER_END == ret) {
+          // no matching table in tablegroup, keep min_table_id = OB_INVALID_ID
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to get next result", KR(ret), K(tenant_id), K(tablegroup_id));
+        }
+      } else {
+        EXTRACT_INT_FIELD_MYSQL(*result, "table_id", min_table_id, uint64_t);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSchemaServiceSQLImpl::fetch_ai_models(ObISQLClient &sql_client,
                                             const ObRefreshSchemaStatus &schema_status,
                                             const int64_t schema_version,

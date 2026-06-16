@@ -61,6 +61,7 @@ namespace schema
 {
 struct ObFTSIndexParams;
 class ObSchemaGetterGuard;
+class ObSchemaGuardWrapper;
 class ObColDesc;
 class ObConstraint;
 class ObColumnSchemaV2;
@@ -1896,10 +1897,13 @@ public:
   // returns true when user defined primary key is given
   // 返回true: 用户明确指定了主键列（IOT模式和HEAP模式）；
   int is_table_with_logic_pk(ObSchemaGetterGuard &schema_guard, bool &bool_result) const;
+  int is_table_with_logic_pk(ObSchemaGuardWrapper &schema_guard, bool &bool_result) const;
   // 返回用户指定的主键列（IOT模式和HEAP模式）；
   int get_logic_pk_column_ids(ObSchemaGetterGuard *schema_guard, ObIArray<uint64_t> &pk_ids) const;
+  int get_logic_pk_column_ids(ObSchemaGuardWrapper &schema_guard, ObIArray<uint64_t> &pk_ids) const;
   int get_heap_table_pk(ObSchemaGetterGuard *schema_guard, ObIArray<uint64_t> &pk_ids) const;
   int get_heap_table_pk_without_valid_check(ObSchemaGetterGuard *schema_guard, ObIArray<uint64_t> &pk_ids) const;
+  int get_heap_table_pk_without_valid_check(ObSchemaGuardWrapper &schema_guard, ObIArray<uint64_t> &pk_ids) const;
 
   // The table has a generated column that is a partition key.
   bool has_generated_and_partkey_column() const;
@@ -1910,7 +1914,7 @@ public:
                                        bool &has_prefix_idx_col_deps,
                                        bool &can_change_prefix_column_length,
                                        const ObColumnSchemaV2 *&prefix_column) const;
-  int check_functional_index_columns_depend(const ObColumnSchemaV2 &data_column_schema, ObSchemaGetterGuard &schema_guard, bool &has_prefix_idx_col_deps) const;
+  int check_functional_index_columns_depend(const ObColumnSchemaV2 &data_column_schema, ObSchemaGuardWrapper &schema_guard, bool &has_prefix_idx_col_deps) const;
   int check_column_has_multivalue_index_depend(const ObColumnSchemaV2 &data_column_schema, bool &has_func_idx_col_deps) const;
   int add_base_table_id(uint64_t base_table_id) { return base_table_ids_.push_back(base_table_id); }
   int add_depend_table_id(uint64_t depend_table_id) { return depend_table_ids_.push_back(depend_table_id); }
@@ -2067,6 +2071,7 @@ public:
   int extract_actual_index_rowkey_columns_name(ObIArray<ObString> &rowkey_columns_name) const;
   int is_presetting_partition_key(const uint64_t partition_key_id, bool &is_presetting_partition_key) const;
   int check_primary_key_cover_partition_column(ObSchemaGetterGuard &schema_guard);
+  int check_primary_key_cover_partition_column(ObSchemaGuardWrapper &schema_guard);
   int check_logic_pk_cover_partition_keys(const common::ObPartitionKeyInfo &part_key, const common::ObIArray<uint64_t> &logic_pks);
   int check_index_table_cover_partition_keys(const common::ObPartitionKeyInfo &part_key) const;
   int check_create_index_on_hidden_primary_key(const ObTableSchema &index_table) const;

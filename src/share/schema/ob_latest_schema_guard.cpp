@@ -7,6 +7,7 @@
 #include "share/schema/ob_latest_schema_guard.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/schema/ob_schema_utils.h"
+#include "share/schema/ob_sensitive_rule_mgr.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -1097,13 +1098,44 @@ int ObLatestSchemaGuard::get_table_schemas_in_tablegroup(
     ObIArray<const ObTableSchema *> &table_schemas)
 {
   int ret = OB_SUCCESS;
+  ObArray<ObString> table_names;
+  ObArray<uint64_t> table_ids;
+  if (OB_FAIL(get_table_id_and_table_name_in_tablegroup(
+          tablegroup_id, table_names, table_ids))) {
+    LOG_WARN("fail to get table ids in tablegroup", KR(ret), K_(tenant_id), K(tablegroup_id));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); i++) {
+    const ObTableSchema *table_schema = NULL;
+    if (OB_FAIL(get_table_schema(table_ids.at(i), table_schema))) {
+      LOG_WARN("fail to get table schema", KR(ret), K_(tenant_id), K(table_ids.at(i)));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("table schema not exist", KR(ret), K_(tenant_id), K(table_ids.at(i)));
+    } else if (OB_FAIL(table_schemas.push_back(table_schema))) {
+      LOG_WARN("fail to push back", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLatestSchemaGuard::get_primary_table_schema_in_tablegroup(
+    const uint64_t tablegroup_id,
+    const ObTableSchema *&table_schema)
+{
+  int ret = OB_SUCCESS;
+  table_schema = NULL;
   ObSchemaService *schema_service_impl = NULL;
   ObISQLClient *sql_client = NULL;
+  uint64_t min_table_id = OB_INVALID_ID;
   if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
     LOG_WARN("fail to check and get service", KR(ret));
-  } else if (OB_FAIL(schema_service_impl->get_table_schemas_in_tablegroup(local_allocator_,
-      *sql_client, tenant_id_, tablegroup_id, table_schemas))) {
-    LOG_WARN("failed to get table schemas in tablegroup", KR(ret), K_(tenant_id), K(tablegroup_id));
+  } else if (OB_FAIL(schema_service_impl->get_min_table_id_in_tablegroup(
+      *sql_client, tenant_id_, tablegroup_id, min_table_id))) {
+    LOG_WARN("fail to get min table id in tablegroup", KR(ret), K_(tenant_id), K(tablegroup_id));
+  } else if (OB_INVALID_ID == min_table_id) {
+    // empty tablegroup, leave table_schema as NULL for caller to handle
+  } else if (OB_FAIL(get_table_schema(min_table_id, table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K_(tenant_id), K(min_table_id));
   }
   return ret;
 }
@@ -1151,6 +1183,137 @@ int ObLatestSchemaGuard::get_sys_variable_schema(const ObSysVariableSchema *&sys
     LOG_WARN("fail to get tenant system variable", KR(ret), K_(tenant_id), KPC(sys_variable_schema));
   } else if (OB_ISNULL(sys_variable_schema)) {
     LOG_INFO("sys_variable_schema is null", KR(ret), K_(tenant_id));
+  }
+  return ret;
+}
+
+int ObLatestSchemaGuard::get_obj_priv_with_obj_id(
+    const uint64_t obj_id,
+    const uint64_t obj_type,
+    common::ObIArray<const ObObjPriv *> &obj_privs,
+    bool reset_flag)
+{
+  UNUSED(reset_flag);
+  int ret = OB_SUCCESS;
+  ObISQLClient *sql_client = NULL;
+  ObSchemaService *schema_service_impl = nullptr;
+  ObArray<ObObjPriv> tmp_privs;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_ID == obj_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(obj_id));
+  } else if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
+    LOG_WARN("fail to check and get service", KR(ret));
+  } else if (OB_FAIL(schema_service_impl->get_obj_priv_with_obj_id(
+                 *sql_client, tenant_id_, obj_id, obj_type, tmp_privs))) {
+    LOG_WARN("fail to get obj priv", KR(ret), K_(tenant_id), K(obj_id), K(obj_type));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tmp_privs.count(); ++i) {
+      ObObjPriv *priv = nullptr;
+      if (OB_FAIL(ObSchemaUtils::alloc_schema(local_allocator_, tmp_privs.at(i), priv))) {
+        LOG_WARN("fail to alloc schema", KR(ret));
+      } else if (OB_ISNULL(priv)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("priv is null", KR(ret));
+      } else if (OB_FAIL(obj_privs.push_back(priv))) {
+        LOG_WARN("fail to push back", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLatestSchemaGuard::get_audit_schema_in_owner(
+    const ObSAuditType audit_type,
+    const uint64_t owner_id,
+    common::ObIArray<const ObSAuditSchema *> &audit_schemas)
+{
+  int ret = OB_SUCCESS;
+  ObISQLClient *sql_client = NULL;
+  ObSchemaService *schema_service_impl = nullptr;
+  ObArray<ObSAuditSchema> tmp_audits;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
+    LOG_WARN("fail to check and get service", KR(ret));
+  } else if (OB_FAIL(schema_service_impl->get_audits_in_owner(
+                 *sql_client, tenant_id_, audit_type, owner_id, tmp_audits))) {
+    LOG_WARN("fail to get audit schemas in owner", KR(ret), K_(tenant_id),
+             K(audit_type), K(owner_id));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tmp_audits.count(); ++i) {
+      ObSAuditSchema *audit = nullptr;
+      if (OB_FAIL(ObSchemaUtils::alloc_schema(local_allocator_, tmp_audits.at(i), audit))) {
+        LOG_WARN("fail to alloc schema", KR(ret));
+      } else if (OB_ISNULL(audit)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("audit is null", KR(ret));
+      } else if (OB_FAIL(audit_schemas.push_back(audit))) {
+        LOG_WARN("fail to push back", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+// NOTE: This method fetches ALL sensitive rules then iterates to find by name.
+// Acceptable because sensitive rules are typically few per tenant (< 100).
+// If this ever becomes a hotspot, add a by-name query in ObSchemaService.
+int ObLatestSchemaGuard::get_sensitive_rule_schema_by_name(
+    const common::ObString &name,
+    const ObSensitiveRuleSchema *&schema)
+{
+  int ret = OB_SUCCESS;
+  schema = nullptr;
+  ObISQLClient *sql_client = NULL;
+  ObSchemaService *schema_service_impl = nullptr;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(name.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("name is empty", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
+    LOG_WARN("fail to check and get service", KR(ret));
+  } else {
+    // Fetch all sensitive rules for the tenant via get_all_sensitive_rules
+    // (schema_version=INT64_MAX returns latest non-deleted rules), then find by name.
+    ObRefreshSchemaStatus schema_status;
+    schema_status.tenant_id_ = tenant_id_;
+    const int64_t schema_version = INT64_MAX;
+    ObArray<ObSensitiveRuleSchema> rule_array;
+    if (OB_FAIL(schema_service_impl->get_all_sensitive_rules(
+                    *sql_client, schema_status, schema_version,
+                    tenant_id_, rule_array))) {
+      LOG_WARN("fail to get all sensitive rules", KR(ret), K_(tenant_id));
+    } else {
+      ObNameCaseMode name_case_mode = OB_NAME_CASE_INVALID;
+      if (OB_FAIL(schema_service_->get_tenant_name_case_mode(tenant_id_, name_case_mode))) {
+        LOG_WARN("fail to get tenant name case mode", KR(ret), K_(tenant_id));
+      } else if (OB_NAME_CASE_INVALID == name_case_mode) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid case mode", KR(ret), K(name_case_mode));
+      }
+      const ObSensitiveRuleNameHashKey src_key(tenant_id_, name_case_mode, name);
+      for (int64_t i = 0; OB_SUCC(ret) && i < rule_array.count(); ++i) {
+        const ObSensitiveRuleNameHashKey dst_key(
+            tenant_id_, name_case_mode,
+            rule_array.at(i).get_sensitive_rule_name_str());
+        if (src_key == dst_key) {
+          ObSensitiveRuleSchema *tmp = nullptr;
+          if (OB_FAIL(ObSchemaUtils::alloc_schema(local_allocator_,
+                                                   rule_array.at(i), tmp))) {
+            LOG_WARN("fail to alloc schema", KR(ret));
+          } else if (OB_ISNULL(tmp)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("sensitive rule schema is null", KR(ret));
+          } else {
+            schema = tmp;
+          }
+          break;
+        }
+      }
+    }
   }
   return ret;
 }

@@ -651,9 +651,9 @@ int ObCreateIndexHelper::create_tablets_()
     ObTableCreator table_creator(tenant_id_, frozen_scn, get_trans_());
     ObNewTableTabletAllocator new_table_tablet_allocator(
                               tenant_id_,
-                              schema_guard,
+                              schema_guard_wrapper_,
                               sql_proxy_,
-                              true /*use parallel ddl*/,
+                              true/*use_parallel_ddl*/,
                               orig_data_table_schema_);
     common::ObArray<share::ObLSID> ls_id_array;
     const ObTablegroupSchema *data_tablegroup_schema = NULL; // keep NULL if no tablegroup

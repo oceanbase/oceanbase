@@ -43,6 +43,7 @@
 #include "sql/spm/ob_spm_controller.h"
 #endif
 #include "share/compaction/ob_schedule_daily_maintenance_window.h"
+#include "share/schema/ob_schema_guard_wrapper.h"
 
 namespace oceanbase
 {
@@ -1792,8 +1793,11 @@ int ObDDLOperator::create_sequence_in_create_table(ObTableSchema &table_schema,
                                                    const obrpc::ObSequenceDDLArg *sequence_ddl_arg)
 {
   int ret = OB_SUCCESS;
+  share::schema::ObSchemaGuardWrapper schema_guard_wrapper(table_schema.get_tenant_id(), &schema_service_);
   if (!(table_schema.is_user_table() || table_schema.is_oracle_tmp_table() || table_schema.is_oracle_tmp_table_v2())) {
     // do nothing
+  } else if (OB_FAIL(schema_guard_wrapper.init(schema_guard))) {
+    LOG_WARN("fail to init schema guard wrapper", KR(ret));
   } else {
     for (ObTableSchema::const_column_iterator iter = table_schema.column_begin();
          OB_SUCC(ret) && iter != table_schema.column_end(); ++iter) {
@@ -1838,14 +1842,14 @@ int ObDDLOperator::create_sequence_in_create_table(ObTableSchema &table_schema,
               // thus we do not have to check the validity of option_bitset again for the hidden table.
               if (OB_FAIL(ddl_operator.create_sequence_without_bitset(sequence_schema,
                                                                       trans,
-                                                                      schema_guard,
+                                                                      schema_guard_wrapper,
                                                                       nullptr))) {
               LOG_WARN("create sequence fail", K(ret), K(table_schema));
               } else {/* do nothing. */}
             } else if (OB_FAIL(ddl_operator.create_sequence(sequence_schema,
                                                             sequence_ddl_arg->option_bitset_,
                                                             trans,
-                                                            schema_guard,
+                                                            schema_guard_wrapper,
                                                             NULL))) {
               LOG_WARN("create sequence fail", K(ret), K(table_schema));
             }
@@ -1894,10 +1898,14 @@ int ObDDLOperator::drop_sequence_in_drop_table(const ObTableSchema &table_schema
 {
   int ret = OB_SUCCESS;
   if (table_schema.is_user_table() || table_schema.is_oracle_tmp_table() || table_schema.is_oracle_tmp_table_v2()) {
+    share::schema::ObSchemaGuardWrapper schema_guard_wrapper(table_schema.get_tenant_id(), &schema_service_);
+    if (OB_FAIL(schema_guard_wrapper.init(schema_guard))) {
+      LOG_WARN("fail to init schema guard wrapper", KR(ret));
+    }
     for (ObTableSchema::const_column_iterator iter = table_schema.column_begin();
          OB_SUCC(ret) && iter != table_schema.column_end(); ++iter) {
       ObColumnSchemaV2 &column_schema = (**iter);
-      if (OB_FAIL(drop_sequence_in_drop_column(column_schema, trans, schema_guard))) {
+      if (OB_FAIL(drop_sequence_in_drop_column(column_schema, trans, schema_guard_wrapper))) {
         LOG_WARN("drop sequence in drop column fail", K(ret), K(column_schema));
       }
     }
@@ -1908,7 +1916,7 @@ int ObDDLOperator::drop_sequence_in_drop_table(const ObTableSchema &table_schema
 int ObDDLOperator::create_sequence_in_add_column(const ObTableSchema &table_schema,
     ObColumnSchemaV2 &column_schema,
     ObMySQLTransaction &trans,
-    ObSchemaGetterGuard &schema_guard,
+    ObSchemaGuardWrapper &schema_guard,
     ObSequenceDDLArg &sequence_ddl_arg)
 {
   int ret = OB_SUCCESS;
@@ -1967,37 +1975,138 @@ int ObDDLOperator::create_sequence_in_add_column(const ObTableSchema &table_sche
   return ret;
 }
 
+static int get_drop_column_sequence_schema(
+       const ObColumnSchemaV2 &column_schema,
+       share::schema::ObSchemaGuardWrapper &schema_guard,
+       bool &sequence_exists,
+       ObSequenceSchema &sequence_schema)
+{
+  int ret = OB_SUCCESS;
+  const ObSequenceSchema *temp_sequence_schema = NULL;
+  sequence_exists = true;
+  if (OB_FAIL(schema_guard.get_sequence_schema(column_schema.get_tenant_id(),
+                                               column_schema.get_sequence_id(),
+                                               temp_sequence_schema))) {
+    LOG_WARN("get sequence schema fail", K(ret), K(column_schema));
+    if (ret == OB_ERR_UNEXPECTED) {
+      // sequence has been deleted externally.
+      // Oracle does not allow sequences internally created to be deleted externally.
+      // In the future, it will be solved by adding columns to the internal table,
+      // and then the error code conversion can be removed.
+      ret = OB_SUCCESS;
+      sequence_exists = false;
+    }
+  } else if (OB_ISNULL(temp_sequence_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sequence not exist", KR(ret), K(column_schema));
+  } else if (OB_FAIL(sequence_schema.assign(*temp_sequence_schema))) {
+    LOG_WARN("fail to assign sequence schema", KR(ret));
+  }
+  return ret;
+}
+
+static int drop_sequence_schema_for_drop_column(
+       share::schema::ObMultiVersionSchemaService &schema_service,
+       const ObColumnSchemaV2 &column_schema,
+       ObSequenceSchema &sequence_schema,
+       common::ObMySQLTransaction &trans,
+       share::schema::ObSchemaGuardWrapper &schema_guard)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = column_schema.get_tenant_id();
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service_impl = schema_service.get_schema_service();
+  bool sequence_exists = true;
+  bool is_system_generated = false;
+  uint64_t sequence_id = OB_INVALID_ID;
+  if (OB_FAIL(schema_guard.check_sequence_exist_with_name(tenant_id,
+                                                          sequence_schema.get_database_id(),
+                                                          sequence_schema.get_sequence_name(),
+                                                          sequence_exists,
+                                                          sequence_id,
+                                                          is_system_generated))) {
+    LOG_WARN("fail get sequence", K(ret), K(sequence_schema));
+  } else if (!sequence_exists) {
+    ret = OB_OBJECT_NAME_NOT_EXIST;
+    LOG_WARN("sequence does not exist", K(sequence_schema), K(ret));
+    LOG_USER_ERROR(OB_OBJECT_NAME_NOT_EXIST, "sequence");
+  } else {
+    sequence_schema.set_sequence_id(sequence_id);
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(schema_service_impl)) {
+    ret = OB_ERR_SYS;
+    LOG_ERROR("schema_service must not null", KR(ret));
+  } else {
+    ObArray<const ObObjPriv *> obj_privs;
+    if (OB_FAIL(schema_guard.get_obj_priv_with_obj_id(tenant_id,
+                                                      sequence_schema.get_sequence_id(),
+                                                      static_cast<uint64_t>(ObObjectType::SEQUENCE),
+                                                      obj_privs,
+                                                      true))) {
+      LOG_WARN("fail to get obj privs", KR(ret));
+    } else if (OB_FAIL(ObDDLOperator::drop_obj_privs(tenant_id, obj_privs, trans, schema_service))) {
+      LOG_WARN("fail to drop obj privs", KR(ret));
+    } else if (OB_FAIL(schema_service.gen_new_schema_version(tenant_id, new_schema_version))) {
+      LOG_WARN("fail to gen new schema_version", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(schema_service_impl->get_sequence_sql_service().drop_sequence(
+                sequence_schema, new_schema_version, &trans, NULL/*ddl_stmt_str*/))) {
+      LOG_WARN("drop sequence info failed", KR(ret), K(sequence_schema.get_sequence_name()));
+    }
+  }
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(schema_service_impl)) {
+    ObArray<const ObSAuditSchema *> audits;
+    if (OB_FAIL(schema_guard.get_audit_schema_in_owner(tenant_id,
+                                                       AUDIT_SEQUENCE,
+                                                       sequence_schema.get_sequence_id(),
+                                                       audits))) {
+      LOG_WARN("get_audit_schema_in_owner failed", KR(ret), K(tenant_id));
+    } else if (!audits.empty()) {
+      common::ObSqlString public_sql_string;
+      for (int64_t i = 0; OB_SUCC(ret) && i < audits.count(); ++i) {
+        const ObSAuditSchema *audit_schema = audits.at(i);
+        if (OB_ISNULL(audit_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("audit_schema is NULL", KR(ret));
+        } else if (OB_FAIL(schema_service.gen_new_schema_version(tenant_id, new_schema_version))) {
+          LOG_WARN("fail to gen new schema_version", KR(ret), K(tenant_id));
+        } else if (OB_FAIL(schema_service_impl->get_audit_sql_service().handle_audit_metainfo(
+            *audit_schema,
+            AUDIT_MT_DEL,
+            false,
+            new_schema_version,
+            NULL,
+            trans,
+            public_sql_string))) {
+          LOG_WARN("drop audit_schema failed", KR(ret), KPC(audit_schema));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLOperator::drop_sequence_in_drop_column(const ObColumnSchemaV2 &column_schema,
     common::ObMySQLTransaction &trans,
-    share::schema::ObSchemaGetterGuard &schema_guard)
+    share::schema::ObSchemaGuardWrapper &schema_guard)
 {
   int ret = OB_SUCCESS;
   if (column_schema.is_identity_column()) {
-    ObSequenceDDLProxy ddl_operator(schema_service_);
-    const ObSequenceSchema *temp_sequence_schema = NULL;
+    bool sequence_exists = true;
     ObSequenceSchema sequence_schema;
-    if (OB_FAIL(schema_guard.get_sequence_schema(column_schema.get_tenant_id(),
-                                                 column_schema.get_sequence_id(),
-                                                 temp_sequence_schema))) {
-      LOG_WARN("get sequence schema fail", K(ret), K(column_schema));
-      if (ret == OB_ERR_UNEXPECTED) {
-        // sequence has been deleted externally.
-        // Oracle does not allow sequences internally created to be deleted externally.
-        // In the future, it will be solved by adding columns to the internal table,
-        // and then the error code conversion can be removed.
-        ret = OB_SUCCESS;
-      }
-    } else if (OB_ISNULL(temp_sequence_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("sequence not exist", KR(ret), K(column_schema));
-    } else if (OB_FAIL(sequence_schema.assign(*temp_sequence_schema))) {
-      LOG_WARN("fail to assign sequence schema", KR(ret));
-    } else if (OB_FAIL(ddl_operator.drop_sequence(sequence_schema,
-                                           trans,
-                                           schema_guard,
-                                           NULL,
-                                           FROM_TABLE_DDL))) {
-      LOG_WARN("drop sequence fail", K(ret), K(column_schema));
+    if (OB_FAIL(get_drop_column_sequence_schema(column_schema,
+                                                schema_guard,
+                                                sequence_exists,
+                                                sequence_schema))) {
+      LOG_WARN("get sequence schema for drop column fail", KR(ret), K(column_schema));
+    } else if (sequence_exists && OB_FAIL(drop_sequence_schema_for_drop_column(schema_service_,
+                                                                               column_schema,
+                                                                               sequence_schema,
+                                                                               trans,
+                                                                               schema_guard))) {
+      LOG_WARN("drop sequence schema for drop column fail", KR(ret), K(column_schema));
     }
   }
   return ret;
@@ -2383,6 +2492,37 @@ int ObDDLOperator::add_table_constraints(const ObTableSchema &inc_table_schema,
   return ret;
 }
 
+int ObDDLOperator::check_need_update_external_default_part_idx(
+    const ObTableSchema &orig_table_schema,
+    int64_t max_inc_part_idx,
+    bool &need_update)
+{
+  int ret = OB_SUCCESS;
+  need_update = false;
+  const int64_t part_num = orig_table_schema.get_part_option().get_part_num();
+  if (OB_UNLIKELY(!orig_table_schema.is_external_table() || !orig_table_schema.is_partitioned_table())
+      || OB_ISNULL(orig_table_schema.get_part_array())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", KR(ret));
+  }
+  bool found = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !found && i < part_num; i++) {
+    const ObPartition *part = orig_table_schema.get_part_array()[i];
+    if (OB_ISNULL(part)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("partition is null", KR(ret), K(i));
+    } else if (ObPartitionUtils::is_default_list_part(*part)) {
+      need_update = (part->get_part_idx() <= max_inc_part_idx);
+      found = true;
+    }
+  }
+  if (OB_SUCC(ret) && OB_UNLIKELY(!found)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("default partition not found", KR(ret));
+  }
+  return ret;
+}
+
 int ObDDLOperator::update_default_partition_part_idx_for_external_table(const ObTableSchema &orig_table_schema,
                                                      const ObTableSchema &inc_table_schema,
                                                      ObMySQLTransaction &trans)
@@ -2393,53 +2533,43 @@ int ObDDLOperator::update_default_partition_part_idx_for_external_table(const Ob
   int64_t max_part_idx = OB_INVALID_INDEX;
   const uint64_t tenant_id = orig_table_schema.get_tenant_id();
   int64_t new_schema_version = OB_INVALID_VERSION;
+  bool need_update = false;
   ObSchemaService *schema_service = schema_service_.get_schema_service();
-  if (OB_UNLIKELY(!orig_table_schema.is_external_table() || !orig_table_schema.is_partitioned_table())
-      || OB_ISNULL(orig_table_schema.get_part_array())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error", K(ret));
-  } else if (OB_ISNULL(schema_service)) {
+  if (OB_ISNULL(schema_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service is NULL", K(ret));
   } else if (OB_FAIL(inc_table_schema.get_max_part_idx(max_part_idx, true/*without_default*/))) {
     LOG_WARN("get max part idx failed", K(ret));
-  }
-  bool found = false;
-  for (int i = 0; OB_SUCC(ret) && !found && i < part_num; i++) {
-    ObPartition *default_part = orig_table_schema.get_part_array()[i];
-    if (OB_ISNULL(default_part)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected error", K(ret));
-    } else {
-      const ObIArray<common::ObNewRow>* orig_list_value = &(default_part->get_list_row_values());
-      if (OB_ISNULL(orig_list_value)) {
+  } else if (OB_FAIL(check_need_update_external_default_part_idx(
+      orig_table_schema, max_part_idx, need_update))) {
+    LOG_WARN("fail to check need update", KR(ret));
+  } else if (!need_update) {
+    // default partition's part_idx is still large enough, no update needed
+  } else {
+    // find and update default partition
+    bool found = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !found && i < part_num; i++) {
+      ObPartition *default_part = orig_table_schema.get_part_array()[i];
+      if (OB_ISNULL(default_part)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("list row value is null", K(ret), K(orig_list_value));
-      } else if (orig_list_value->count() == 1 && orig_list_value->at(0).get_count() >= 1
-          && orig_list_value->at(0).get_cell(0).is_max_value()) {
-        if (default_part->get_part_idx() <= max_part_idx) {
-          default_part->set_part_idx(max_part_idx + update_step);
-          ObTableSchema alter_part_schema;
-          if (OB_FAIL(alter_part_schema.add_partition(*default_part))) {
-            LOG_WARN("add partition failed", K(ret));
-          } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
-            LOG_WARN("fail to gen new schema version", KR(ret), K(tenant_id));
-          } else if (OB_FAIL(schema_service->get_table_sql_service().rename_inc_part_info(trans,
-                                                                                  orig_table_schema,
-                                                                                  alter_part_schema,
-                                                                                  new_schema_version,
-                                                                                  true/*update part idx*/))) {
-            LOG_WARN("rename inc part info failed", KR(ret));
-          }
+        LOG_WARN("partition is null", KR(ret), K(i));
+      } else if (ObPartitionUtils::is_default_list_part(*default_part)) {
+        default_part->set_part_idx(max_part_idx + update_step);
+        ObTableSchema alter_part_schema;
+        if (OB_FAIL(alter_part_schema.add_partition(*default_part))) {
+          LOG_WARN("add partition failed", KR(ret));
+        } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+          LOG_WARN("fail to gen new schema version", KR(ret), K(tenant_id));
+        } else if (OB_FAIL(schema_service->get_table_sql_service().rename_inc_part_info(trans,
+                                                                                orig_table_schema,
+                                                                                alter_part_schema,
+                                                                                new_schema_version,
+                                                                                true/*update part idx*/))) {
+          LOG_WARN("rename inc part info failed", KR(ret));
         }
         found = true;
       }
     }
-  }
-
-  if (OB_SUCC(ret) && OB_UNLIKELY(!found)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("update default partition part idx failed", K(ret));
   }
   return ret;
 }
@@ -4544,7 +4674,7 @@ int ObDDLOperator::alter_index_table_tablespace(const uint64_t data_table_id,
 //}
 
 int ObDDLOperator::alter_table_options(
-    ObSchemaGetterGuard &schema_guard,
+    ObSchemaGuardWrapper &schema_guard_wrapper,
     ObTableSchema &new_table_schema,
     const ObTableSchema &table_schema,
     const bool need_update_aux_table,
@@ -4556,10 +4686,15 @@ int ObDDLOperator::alter_table_options(
   const uint64_t tenant_id = table_schema.get_tenant_id();
   int64_t new_schema_version = OB_INVALID_VERSION;
   ObSchemaService *schema_service = schema_service_.get_schema_service();
+  ObSchemaGetterGuard *schema_guard = schema_guard_wrapper.get_local_schema_guard();
   if (OB_ISNULL(schema_service)) {
     ret = OB_ERR_SYS;
     RS_LOG(WARN, "schema sql service must not be null",
            K(schema_service), K(ret));
+  } else if (need_update_aux_table && OB_ISNULL(schema_guard)) {
+    ret = OB_ERR_UNEXPECTED;
+    RS_LOG(WARN, "local schema guard is null while need_update_aux_table is true",
+           K(ret), K(need_update_aux_table));
   } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
     LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
   } else {
@@ -4577,7 +4712,7 @@ int ObDDLOperator::alter_table_options(
       }
       if (OB_FAIL(update_aux_table(table_schema,
           new_table_schema,
-          schema_guard,
+          *schema_guard,
           trans,
           USER_INDEX,
           has_aux_table_updated,
@@ -4586,7 +4721,7 @@ int ObDDLOperator::alter_table_options(
         RS_LOG(WARN, "failed to update_index_table!", K(ret), K(table_schema), K(new_table_schema));
       } else if (OB_FAIL(update_aux_table(table_schema,
           new_table_schema,
-          schema_guard,
+          *schema_guard,
           trans,
           AUX_VERTIAL_PARTITION_TABLE,
           has_aux_table_updated,
@@ -4595,7 +4730,7 @@ int ObDDLOperator::alter_table_options(
         RS_LOG(WARN, "failed to update_aux_vp_table!", K(ret), K(table_schema), K(new_table_schema));
       } else if (OB_FAIL(update_aux_table(table_schema,
           new_table_schema,
-          schema_guard,
+          *schema_guard,
           trans,
           AUX_LOB_META,
           has_aux_table_updated,
@@ -4604,7 +4739,7 @@ int ObDDLOperator::alter_table_options(
         RS_LOG(WARN, "failed to update_aux_vp_table!", K(ret), K(table_schema), K(new_table_schema));
       } else if (OB_FAIL(update_aux_table(table_schema,
           new_table_schema,
-          schema_guard,
+          *schema_guard,
           trans,
           AUX_LOB_PIECE,
           has_aux_table_updated,
@@ -5422,11 +5557,22 @@ int ObDDLOperator::drop_obj_privs(
     ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
-  ObSchemaService *schema_sql_service = schema_service.get_schema_service();
   ObArray<const ObObjPriv *> obj_privs;
+  OZ (schema_guard.get_obj_priv_with_obj_id(tenant_id, obj_id, obj_type, obj_privs, true));
+  OZ (ObDDLOperator::drop_obj_privs(tenant_id, obj_privs, trans, schema_service));
+  return ret;
+}
+
+int ObDDLOperator::drop_obj_privs(
+    const uint64_t tenant_id,
+    const ObIArray<const ObObjPriv *> &obj_privs,
+    ObMySQLTransaction &trans,
+    ObMultiVersionSchemaService &schema_service)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaService *schema_sql_service = schema_service.get_schema_service();
 
   CK (OB_NOT_NULL(schema_sql_service));
-  OZ (schema_guard.get_obj_priv_with_obj_id(tenant_id, obj_id, obj_type, obj_privs, true));
   for (int64_t i = 0; OB_SUCC(ret) && i < obj_privs.count(); ++i) {
     const ObObjPriv *obj_priv = obj_privs.at(i);
     int64_t new_schema_version = OB_INVALID_VERSION;
@@ -5448,19 +5594,15 @@ int ObDDLOperator::drop_obj_privs(
   return ret;
 }
 
-
 int ObDDLOperator::drop_obj_privs(
     const uint64_t tenant_id,
     const uint64_t obj_id,
     const uint64_t obj_type,
-    ObMySQLTransaction &trans)
+    ObMySQLTransaction &trans,
+    ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
-  ObSchemaGetterGuard schema_guard;
-
-  OZ (schema_service_.get_tenant_schema_guard(tenant_id, schema_guard));
   OZ (drop_obj_privs(tenant_id, obj_id, obj_type, trans, schema_service_, schema_guard));
-
   return ret;
 }
 
@@ -5625,7 +5767,7 @@ int ObDDLOperator::drop_table_for_not_dropped_schema(
   uint64_t obj_type = static_cast<uint64_t>(ObObjectType::TABLE);
   uint64_t table_id = table_schema.get_table_id();
   if (OB_SUCC(ret) && !is_drop_db && delete_priv) {
-    OZ (drop_obj_privs(tenant_id, table_id, obj_type, trans),tenant_id, table_id, obj_type);
+    OZ (drop_obj_privs(tenant_id, table_id, obj_type, trans, schema_guard), tenant_id, table_id, obj_type);
   } else {
     LOG_WARN("do not cascade drop obj priv", K(ret), K(is_drop_db), K(delete_priv));
   }
@@ -9827,7 +9969,10 @@ int ObDDLOperator::drop_inner_generated_index_column(ObMySQLTransaction &trans,
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(alter_table_options(schema_guard,
+    ObSchemaGuardWrapper schema_guard_wrapper(tenant_id, &schema_service_);
+    if (OB_FAIL(schema_guard_wrapper.init(schema_guard))) {
+      LOG_WARN("fail to init schema guard wrapper", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(alter_table_options(schema_guard_wrapper,
                                     new_data_table_schema,
                                     *data_table,
                                     false,
@@ -11232,7 +11377,8 @@ int ObDDLOperator::alter_directory(const ObString &ddl_str,
 
 int ObDDLOperator::drop_directory(const ObString &ddl_str,
                                   share::schema::ObDirectorySchema &schema,
-                                  common::ObMySQLTransaction &trans)
+                                  common::ObMySQLTransaction &trans,
+                                  share::schema::ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
   ObSchemaService *schema_service = schema_service_.get_schema_service();
@@ -11243,7 +11389,7 @@ int ObDDLOperator::drop_directory(const ObString &ddl_str,
   if (OB_ISNULL(schema_service)) {
     ret = OB_ERR_SYS;
     LOG_ERROR("schema_service must not null", K(ret));
-  } else if (OB_FAIL(this->drop_obj_privs(tenant_id, directory_id, directory_type, trans))) {
+  } else if (OB_FAIL(this->drop_obj_privs(tenant_id, directory_id, directory_type, trans, schema_guard))) {
     LOG_WARN("failed to drop obj privs for directory", K(ret),
         K(tenant_id), K(directory_id), K(directory_type));
   } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {

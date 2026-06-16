@@ -417,6 +417,10 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &const_arg, obrpc::ObDropInd
           }
         }
 
+        share::schema::ObSchemaGuardWrapper schema_guard_wrapper(tenant_id, &ddl_service_.get_schema_service());
+        if (FAILEDx(schema_guard_wrapper.init(schema_guard))) {
+          LOG_WARN("fail to init schema guard wrapper", KR(ret));
+        }
         uint64_t fts_aux_index_schema_count = 4; // default value
         uint64_t multivalue_aux_index_schema_count = 3;  // default value
         uint64_t spiv_aux_index_schema_count = 3;  // default value
@@ -458,7 +462,7 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &const_arg, obrpc::ObDropInd
                                                       *index_table_schema,
                                                       is_inner_and_search_or_fts_or_mulvalue_or_vector_index,
                                                       arg,
-                                                      schema_guard,
+                                                      schema_guard_wrapper,
                                                       ddl_operator,
                                                       trans,
                                                       new_index_schemas))) {

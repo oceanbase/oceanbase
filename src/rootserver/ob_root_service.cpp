@@ -79,6 +79,7 @@
 #include "share/ob_license_utils.h"
 #include "share/ob_fts_index_builder_util.h"
 #include "parallel_ddl/ob_drop_table_helper.h" // ObDropTableHelper
+#include "parallel_ddl/ob_alter_table_helper.h" // ObAlterTableHelper
 #include "share/backup/ob_backup_clean_util.h"
 
 namespace oceanbase
@@ -4168,6 +4169,50 @@ int ObRootService::parallel_drop_table(const ObDropTableArg &arg, ObDropTableRes
                         "session_id", arg.session_id_,
                         "schema_version", res.schema_version_);
   LOG_INFO("finish parallel drop table ddl", KR(ret), K(arg), K(cost), "ddl_event_info", ObDDLEventInfo());
+  return ret;
+}
+
+int ObRootService::parallel_alter_table(const ObAlterTableArg &arg, ObAlterTableRes &res)
+{
+  int ret = OB_SUCCESS;
+  LOG_TRACE("receive parallel alter table arg", K(arg));
+  int64_t begin_time = ObTimeUtility::current_time();
+  const uint64_t tenant_id = arg.exec_tenant_id_;
+  uint64_t data_version = 0;
+  ObTZMapWrap tz_map_wrap;
+  ObAlterTableArg &nonconst_arg = const_cast<ObAlterTableArg &>(arg);
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+  } else if (data_version < DATA_VERSION_4_6_1_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("parallel alter table is not supported", KR(ret), K(tenant_id), K(data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "parallel alter table");
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_FAIL(parallel_ddl_pre_check_(tenant_id))) {
+    LOG_WARN("pre check failed before parallel ddl execute", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObDDLService::prepare_alter_table_arg_tz_info_map(
+                         tenant_id, nonconst_arg, tz_map_wrap))) {
+    LOG_WARN("fail to prepare alter table arg timezone info", KR(ret), K(tenant_id));
+  } else {
+    ObAlterTableHelper alter_table_helper(schema_service_, tenant_id, nonconst_arg, res);
+    if (OB_FAIL(alter_table_helper.init(ddl_service_))) {
+      LOG_WARN("fail to init alter table helper", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(alter_table_helper.execute())) {
+      LOG_WARN("fail to execute alter table", KR(ret), K(tenant_id));
+    }
+  }
+  int64_t cost = ObTimeUtility::current_time() - begin_time;
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "parallel alter table",
+                        "tenant_id", tenant_id,
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
+                        "schema_version", res.schema_version_);
+  LOG_INFO("finish parallel alter table ddl", KR(ret), K(arg), K(cost), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 

@@ -25,9 +25,11 @@
 #include "storage/mview/cmd/ob_mview_executor_util.h"
 #include "storage/ob_partition_pre_split.h"
 #include "share/schema/ob_add_interval_part_controller.h"
+#include "share/schema/ob_dependency_info.h"
 #include "sql/engine/cmd/ob_interval_partition_utils.h"
 #include "storage/tablet/ob_session_tablet_helper.h"
 #include "share/stat/ob_dbms_stats_utils.h"
+#include "share/ob_get_compat_mode.h"
 
 namespace oceanbase
 {
@@ -902,6 +904,61 @@ int ObAlterTableExecutor::refresh_schema_for_table(
   }
   return ret;
 }
+static void check_column_op_types(const obrpc::ObAlterTableArg &arg,
+                                   bool &has_add, bool &has_drop)
+{
+  has_add = false;
+  has_drop = false;
+  const AlterTableSchema &alter_table_schema = arg.alter_table_schema_;
+  ObTableSchema::const_column_iterator it = alter_table_schema.column_begin();
+  ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
+  for (; it != it_end && !(has_add && has_drop); ++it) {
+    if (OB_NOT_NULL(*it)) {
+      const AlterColumnSchema *alter_col = static_cast<const AlterColumnSchema *>(*it);
+      if (OB_DDL_ADD_COLUMN == alter_col->alter_type_) {
+        has_add = true;
+      } else if (OB_DDL_DROP_COLUMN == alter_col->alter_type_) {
+        has_drop = true;
+      }
+    }
+  }
+}
+
+static int check_can_parallel_alter_table_(
+       obrpc::ObAlterTableArg &arg,
+       const ObTableSchema *&orig_table_schema,
+       ObSchemaGetterGuard &schema_guard,
+       bool &can_parallel_alter)
+{
+  int ret = OB_SUCCESS;
+  can_parallel_alter = false;
+  const char *reason = nullptr;
+  bool has_add = false, has_drop = false;
+  if (arg.data_version_ < DATA_VERSION_4_6_1_0) {
+    reason = "data version not supported";
+  } else if (OB_ISNULL(orig_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("orig table schema is null", KR(ret));
+  } else if (OB_FAIL(check_alter_table_arg_for_parallel(arg, can_parallel_alter, reason))) {
+    LOG_WARN("fail to check alter table arg for parallel", KR(ret));
+  } else if (!can_parallel_alter) {
+    // arg level check failed, reason already set by check_alter_table_arg_for_parallel
+  } else if (FALSE_IT(check_column_op_types(arg, has_add, has_drop))) {
+  } else if (has_drop
+             && OB_FAIL(check_drop_column_can_parallel(arg, *orig_table_schema, schema_guard, can_parallel_alter, reason))) {
+    LOG_WARN("fail to check drop column can parallel", KR(ret));
+  } else if (can_parallel_alter
+             && has_add
+             && OB_FAIL(check_add_column_can_parallel(arg, *orig_table_schema, can_parallel_alter, reason))) {
+    LOG_WARN("fail to check add column can parallel", KR(ret));
+  }
+  if (OB_SUCC(ret) && !can_parallel_alter) {
+    LOG_TRACE("cannot do parallel alter table, fall back to serial",
+              "reason", reason != nullptr ? reason : "unknown",
+              "table_name", arg.alter_table_schema_.get_origin_table_name());
+  }
+  return ret;
+}
 
 /* 从 3100 开始的版本 alter table 逻辑是将建索引和其他操作放到同一个 rpc 里发到 rs，返回后对每个创建的索引进行同步等，如果一个索引创建失败，则回滚全部索引
    mysql 模式下支持 alter table 同时做建索引操作和其他操作，需要保证 rs 在处理 drop index 之后再处理 add index
@@ -926,6 +983,9 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
   if (OB_ISNULL(my_session)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
+  } else if (OB_ISNULL(common_rpc_proxy)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("common rpc proxy should not be null", KR(ret));
   } else {
     alter_table_arg.compat_mode_ = ORACLE_MODE == my_session->get_compatibility_mode() ?
             lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL;
@@ -976,7 +1036,11 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
       }
     }
     ObPartitionPreSplit pre_split;
-    if (FAILEDx(populate_based_schema_obj_info_(alter_table_arg))) {
+    bool &can_parallel_alter = alter_table_arg.is_parallel_;
+    can_parallel_alter = false;
+    SMART_VAR(ObSchemaGetterGuard, schema_guard) {
+    const ObTableSchema *orig_table_schema = nullptr;
+    if (FAILEDx(populate_based_schema_obj_info_(orig_table_schema, alter_table_arg, schema_guard))) {
       LOG_WARN("fail to populate based schema obj info", KR(ret));
     } else if (OB_FAIL(pre_split.get_global_index_pre_split_schema_if_need(alter_table_schema.get_tenant_id(),
                                                             alter_table_arg.session_id_,
@@ -986,17 +1050,45 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
       LOG_WARN("fail to get global index pre split schema if need", K(ret), K(alter_table_arg));
       //overwrite ret code
       ret = OB_SUCCESS;
-    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, alter_table_arg.data_version_))) {
-      LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
     }
+    if (FAILEDx(GET_MIN_DATA_VERSION(tenant_id, alter_table_arg.data_version_))) {
+      LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(check_can_parallel_alter_table_(alter_table_arg, orig_table_schema, schema_guard, can_parallel_alter))) {
+      LOG_WARN("fail to check can parallel alter table", KR(ret));
+    }
+    } // end SMART_VAR(ObSchemaGetterGuard, schema_guard)
     DEBUG_SYNC(BEFORE_SEND_ALTER_TABLE);
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(common_rpc_proxy->alter_table(alter_table_arg, res))) {
-      LOG_WARN("rpc proxy alter table failed", KR(ret), "dst", common_rpc_proxy->get_server(), K(alter_table_arg));
-    } else {
-      // 在回滚时不会重试，也不检查 schema version
-      alter_table_arg.based_schema_object_infos_.reset();
+    } else if (can_parallel_alter) {
+      ObTimeoutCtx ctx;
+      if (OB_FAIL(ctx.set_timeout(common_rpc_proxy->get_timeout()))) {
+        LOG_WARN("fail to set timeout ctx", KR(ret));
+      } else if (OB_FAIL(common_rpc_proxy->parallel_alter_table(alter_table_arg, res))) {
+        if (OB_NOT_SUPPORTED_FOR_PARALLEL_DDL == ret) {
+          // RS returns OB_NOT_SUPPORTED_FOR_PARALLEL_DDL when the operation
+          // cannot be handled in parallel path; fall back to serial path.
+          ret = OB_SUCCESS;
+          can_parallel_alter = false;
+          LOG_INFO("parallel alter table not supported, fall back to serial path");
+        } else {
+          LOG_WARN("rpc proxy parallel alter table failed", KR(ret), "dst", common_rpc_proxy->get_server(), K(alter_table_arg));
+        }
+      } else {
+        alter_table_arg.based_schema_object_infos_.reset();
+        if (OB_FAIL(ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
+            ctx, my_session, tenant_id, res.schema_version_, false/*skip_consensus*/))) {
+          LOG_WARN("fail to check parallel ddl schema in sync", KR(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret) && !can_parallel_alter) {
+      if (OB_FAIL(common_rpc_proxy->alter_table(alter_table_arg, res))) {
+        LOG_WARN("rpc proxy alter table failed", KR(ret), "dst", common_rpc_proxy->get_server(), K(alter_table_arg));
+      } else {
+        // 在回滚时不会重试，也不检查 schema version
+        alter_table_arg.based_schema_object_infos_.reset();
+      }
     }
     DEBUG_SYNC(AFTER_SEND_ALTER_TABLE);
   }
@@ -3060,13 +3152,16 @@ int ObOptimizeAllExecutor::execute(ObExecContext &ctx, ObOptimizeAllStmt &stmt)
   return ret;
 }
 
-int ObAlterTableExecutor::populate_based_schema_obj_info_(obrpc::ObAlterTableArg &alter_table_arg) {
+int ObAlterTableExecutor::populate_based_schema_obj_info_(
+    const share::schema::ObTableSchema *&orig_table,
+    obrpc::ObAlterTableArg &alter_table_arg,
+    share::schema::ObSchemaGetterGuard &guard)
+{
   int ret = OB_SUCCESS;
+  orig_table = nullptr;
   const uint64_t table_id = alter_table_arg.alter_table_schema_.get_table_id();
   if (OB_INVALID_ID != table_id) {
     const uint64_t tenant_id = alter_table_arg.alter_table_schema_.get_tenant_id();
-    SMART_VAR(ObSchemaGetterGuard, guard) {
-    const ObTableSchema *orig_table = nullptr;
     if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
                 tenant_id, guard))) {
       LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
@@ -3100,7 +3195,6 @@ int ObAlterTableExecutor::populate_based_schema_obj_info_(obrpc::ObAlterTableArg
         }
       }
     }
-    } // end smart var
   }
   return ret;
 }

@@ -208,6 +208,7 @@ int ObPLDDLOperator::alter_routine(const share::schema::ObRoutineInfo &routine_i
 int ObPLDDLOperator::drop_routine(const share::schema::ObRoutineInfo &routine_info,
                                   common::ObMySQLTransaction &trans,
                                   share::schema::ObErrorInfo &error_info,
+                                  share::schema::ObSchemaGetterGuard &schema_guard,
                                   const common::ObString *ddl_stmt_str/*=NULL*/)
 {
   int ret = OB_SUCCESS;
@@ -220,7 +221,7 @@ int ObPLDDLOperator::drop_routine(const share::schema::ObRoutineInfo &routine_in
     LOG_ERROR("schema_service must not null", K(ret));
   } else if (OB_FAIL(drop_obj_privs(tenant_id, routine_info.get_routine_id(),
                                     static_cast<uint64_t>(routine_info.get_routine_type()),
-                                    trans))) {
+                                    trans, schema_guard))) {
     LOG_WARN("fail to drop_obj_privs", K(ret), K(tenant_id));
   } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
     LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
@@ -246,14 +247,11 @@ int ObPLDDLOperator::drop_routine(const share::schema::ObRoutineInfo &routine_in
   // delete audit in procedure
   if (OB_SUCC(ret)) {
     ObArray<const ObSAuditSchema *> audits;
-    ObSchemaGetterGuard schema_guard;
     ObSchemaService *schema_service_impl = schema_service_.get_schema_service();
-    if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
-      LOG_WARN("failed to get schema guard", K(ret));
-    } else if (OB_FAIL(schema_guard.get_audit_schema_in_owner(tenant_id,
-                                                              AUDIT_PROCEDURE,
-                                                              routine_info.get_routine_id(),
-                                                              audits))) {
+    if (OB_FAIL(schema_guard.get_audit_schema_in_owner(tenant_id,
+                                                      AUDIT_PROCEDURE,
+                                                      routine_info.get_routine_id(),
+                                                      audits))) {
       LOG_WARN("get get_audit_schema_in_owner failed", K(tenant_id), K(ret));
     } else if (!audits.empty()) {
       common::ObSqlString public_sql_string;
@@ -682,7 +680,7 @@ int ObPLDDLOperator::drop_udt(const share::schema::ObUDTTypeInfo &udt_info,
     LOG_ERROR("schema_service must not null", K(ret));
   } else if (OB_FAIL(drop_obj_privs(tenant_id, type_id,
                                     static_cast<uint64_t>(ObObjectType::TYPE),
-                                    trans))) {
+                                    trans, schema_guard))) {
     LOG_WARN("fail to drop_obj_privs", K(ret), K(udt_info), K(tenant_id));
   } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
     LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
@@ -1041,7 +1039,8 @@ int ObPLDDLOperator::drop_package(const ObPackageInfo &package_info,
       OZ (drop_obj_privs(tenant_id,
                          package_info.get_package_id(),
                          static_cast<uint64_t>(ObObjectType::PACKAGE),
-                         trans));
+                         trans,
+                         schema_guard));
       uint64_t database_id = package_info.get_database_id();
       int64_t compatible_mode = package_info.get_compatibility_mode();
       const ObString &package_name = package_info.get_package_name();

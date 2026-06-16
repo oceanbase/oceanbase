@@ -12,6 +12,13 @@
 
 namespace oceanbase
 {
+namespace share
+{
+namespace schema
+{
+class ObSchemaGuardWrapper;
+} // end namespace schema
+} // end namespace share
 namespace rootserver
 {
 class ObSensitiveRuleDDLService
@@ -28,7 +35,7 @@ public:
                                   share::schema::ObSchemaGetterGuard &schema_guard);
   int revoke_sensitive_rule(const ObRevokeSensitiveRuleArg &arg);
   int drop_sensitive_column_caused_by_drop_column_online(
-    share::schema::ObSchemaGetterGuard &schema_guard,
+    share::schema::ObSchemaGuardWrapper &schema_guard,
     const share::schema::ObTableSchema &origin_table_schema,
     const common::ObIArray<uint64_t> &drop_cols_id_arr,
     common::ObMySQLTransaction &trans);

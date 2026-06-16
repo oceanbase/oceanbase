@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX COMMON
 #include "ob_vec_index_builder_util.h"
+#include "share/schema/ob_schema_guard_wrapper.h"
 #include "ob_index_builder_util.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "ob_fts_index_builder_util.h"
@@ -6130,8 +6131,7 @@ int ObVecIndexBuilderUtil::check_vec_gen_col(
   通过索引名和类型，获取3/4/5/6号表的table_schema
 */
 int ObVecIndexBuilderUtil::get_vec_table_schema_by_name(
-    share::schema::ObSchemaGetterGuard &schema_guard,
-    const int64_t tenant_id,
+    share::schema::ObSchemaGuardWrapper &schema_guard_wrapper,    const int64_t tenant_id,
     const int64_t database_id,
     const ObString &index_name, /* domain index name */
     const share::schema::ObIndexType index_type,
@@ -6149,13 +6149,13 @@ int ObVecIndexBuilderUtil::get_vec_table_schema_by_name(
                                              index_name,
                                              full_index_name))) {
     LOG_WARN("fail to generate vec index name", K(ret), K(index_type));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
-                                                   database_id,
-                                                   full_index_name,
-                                                   true, /* is_index */
-                                                   index_schema,
-                                                   false, /* is_hidden_flag */
-                                                   true/* is_built_in_flag */))) {
+  } else if (OB_FAIL(schema_guard_wrapper.get_table_schema_in_database_by_name(database_id,
+                                                                               full_index_name,
+                                                                               true, /* is_index */
+                                                                               index_schema,
+                                                                               0, /* session_id */
+                                                                               false, /* is_hidden */
+                                                                               true /* is_built_in */))) {
     LOG_WARN("fail to get table schema",
       K(ret), K(tenant_id), K(database_id), K(index_name), K(full_index_name), K(index_type));
   } else if (OB_ISNULL(index_schema)) {
@@ -6163,7 +6163,6 @@ int ObVecIndexBuilderUtil::get_vec_table_schema_by_name(
   }
   return ret;
 }
-
 
 int ObVecIndexBuilderUtil::generate_vec_index_aux_columns(
     ObSchemaGetterGuard &schema_guard,

@@ -193,11 +193,14 @@ int ObMviewAlterService::alter_mview_attributes(
           }
         }
 
-        if (OB_FAIL(ddl_operator.alter_table_options(schema_guard, new_container_schema,
+        ObSchemaGuardWrapper schema_guard_wrapper(tenant_id, &ddl_operator.get_multi_schema_service());
+        if (OB_FAIL(schema_guard_wrapper.init(schema_guard))) {
+          LOG_WARN("fail to init schema guard wrapper", KR(ret), K(tenant_id));
+        } else if (OB_FAIL(ddl_operator.alter_table_options(schema_guard_wrapper, new_container_schema,
                                                      *container_table_schema, false, trans))) {
           LOG_WARN("failed to update container schema", KR(ret), K(new_mview_schema));
         } else if (need_alter_mview_schema &&
-                   OB_FAIL(ddl_operator.alter_table_options(schema_guard, new_mview_schema,
+                   OB_FAIL(ddl_operator.alter_table_options(schema_guard_wrapper, new_mview_schema,
                                                             *orig_table_schema, false, trans))) {
           LOG_WARN("failed to update mview schema", KR(ret), K(new_mview_schema));
         } else if (need_alter_mview_refresh_job &&
@@ -326,8 +329,11 @@ int ObMviewAlterService::alter_mlog_attributes(const uint64_t tenant_id,
           }
         }
 
+        ObSchemaGuardWrapper schema_guard_wrapper(tenant_id, &ddl_operator.get_multi_schema_service());
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(ddl_operator.alter_table_options(schema_guard, new_mlog_schema,
+        } else if (OB_FAIL(schema_guard_wrapper.init(schema_guard))) {
+          LOG_WARN("fail to init schema guard wrapper", KR(ret), K(tenant_id));
+        } else if (OB_FAIL(ddl_operator.alter_table_options(schema_guard_wrapper, new_mlog_schema,
                                                      *mlog_table_schema, false, trans))) {
           LOG_WARN("failed to update container schema", KR(ret), K(new_mlog_schema));
         } else if (need_alter_mlog_purge_job &&

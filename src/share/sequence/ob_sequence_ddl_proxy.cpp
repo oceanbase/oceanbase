@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX SHARE
 #include "ob_sequence_ddl_proxy.h"
 #include "share/sequence/ob_sequence_option_builder.h"
+#include "share/schema/ob_schema_guard_wrapper.h"
 #include "share/schema/ob_schema_service_sql_impl.h"
 #include "rootserver/ob_ddl_operator.h"
 
@@ -27,7 +28,7 @@ ObSequenceDDLProxy::~ObSequenceDDLProxy()
 int ObSequenceDDLProxy::create_sequence_without_bitset(
     ObSequenceSchema &seq_schema,
     common::ObMySQLTransaction &trans,
-    share::schema::ObSchemaGetterGuard &schema_guard,
+    share::schema::ObSchemaGuardWrapper &schema_guard,
     const ObString *ddl_stmt_str)
 {
   int ret = OB_SUCCESS;
@@ -51,28 +52,29 @@ int ObSequenceDDLProxy::create_sequence_without_bitset(
   return ret;
 }
 
-// create sequence for normal create table.
 int ObSequenceDDLProxy::create_sequence(
     ObSequenceSchema &seq_schema,
     const common::ObBitSet<> &opt_bitset,
     common::ObMySQLTransaction &trans,
-    share::schema::ObSchemaGetterGuard &schema_guard,
+    share::schema::ObSchemaGuardWrapper &schema_guard,
     const ObString *ddl_stmt_str)
 {
   int ret = OB_SUCCESS;
   ObSequenceOptionBuilder opt_builder;
-  ObArray<ObSchemaType> conflict_schema_types;
   uint64_t sequence_id = OB_INVALID_ID;
   bool is_system_generated = false;
   bool exists = false;
-  if (OB_FAIL(schema_guard.check_oracle_object_exist(
-      seq_schema.get_tenant_id(), seq_schema.get_database_id(), seq_schema.get_sequence_name(),
-      SEQUENCE_SCHEMA, INVALID_ROUTINE_TYPE, false, conflict_schema_types))) {
-    LOG_WARN("fail to check oracle_object exist", K(ret), K(seq_schema));
-  } else if (conflict_schema_types.count() > 0) {
-    ret = OB_ERR_EXIST_OBJECT;
-    LOG_WARN("Name is already used by an existing object", K(ret), K(seq_schema),
-        K(conflict_schema_types));
+  if (OB_FAIL(schema_guard.check_oracle_object_exist(seq_schema.get_database_id(),
+                                                     schema_guard.get_session_id(),
+                                                     seq_schema.get_sequence_name(),
+                                                     SEQUENCE_SCHEMA,
+                                                     INVALID_ROUTINE_TYPE,
+                                                     false))) {
+    if (OB_ERR_EXIST_OBJECT == ret) {
+      LOG_WARN("Name is already used by an existing object", K(ret), K(seq_schema));
+    } else {
+      LOG_WARN("fail to check oracle_object exist", K(ret), K(seq_schema));
+    }
   } else if (OB_FAIL(schema_guard.check_sequence_exist_with_name(
               seq_schema.get_tenant_id(),
               seq_schema.get_database_id(),
@@ -86,7 +88,11 @@ int ObSequenceDDLProxy::create_sequence(
     LOG_WARN("sequence already exist", K(sequence_id), K(ret));
   } else if (OB_FAIL(opt_builder.build_create_sequence_option(opt_bitset, seq_schema.get_sequence_option()))) {
     LOG_WARN("fail build create sequence option", K(seq_schema), K(ret));
-  } else if (OB_FAIL(inner_create_sequence(seq_schema, trans, schema_guard, ddl_stmt_str, false /* need_sync_seq_val */))) {
+  } else if (OB_FAIL(inner_create_sequence(seq_schema,
+                                           trans,
+                                           schema_guard,
+                                           ddl_stmt_str,
+                                           false /* need_sync_seq_val */))) {
     LOG_WARN("fail inner create sequence", K(seq_schema), K(ret));
   }
   return ret;
@@ -95,7 +101,7 @@ int ObSequenceDDLProxy::create_sequence(
 int ObSequenceDDLProxy::inner_create_sequence(
     ObSequenceSchema &seq_schema,
     common::ObMySQLTransaction &trans,
-    share::schema::ObSchemaGetterGuard &schema_guard,
+    share::schema::ObSchemaGuardWrapper &schema_guard,
     const ObString *ddl_stmt_str,
     const bool need_sync_seq_val)
 {
@@ -135,7 +141,6 @@ int ObSequenceDDLProxy::inner_create_sequence(
                                                        audits))) {
       LOG_WARN("get get_audit_schema_in_owner failed", K(tenant_id), K(ret));
     } else if (!audits.empty()) {
-      ObSchemaService *schema_service = schema_service_.get_schema_service();
       common::ObSqlString public_sql_string;
       for (int64_t i = 0; OB_SUCC(ret) && i < audits.count(); ++i) {
         uint64_t new_audit_id = common::OB_INVALID_ID;
@@ -145,7 +150,7 @@ int ObSequenceDDLProxy::inner_create_sequence(
           LOG_WARN("audit_schema is NULL", K(ret));
         } else if (!audit_schema->is_access_operation_for_sequence()) {
           continue;
-        } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id,new_schema_version))){
+        } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
           LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
         } else if (OB_FAIL(schema_service->fetch_new_audit_id(tenant_id, new_audit_id))) {
           LOG_WARN("Failed to fetch new_audit_id", K(ret));

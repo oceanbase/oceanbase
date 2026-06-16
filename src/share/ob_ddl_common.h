@@ -1813,6 +1813,47 @@ public:
       ObIArray<int64_t> &column_checksum_array);
 };
 
+// Helpers shared by RS serial DDL routing (ObDDLService::check_is_add_column_online_
+// / check_can_drop_column_instant_) and parallel DDL admission
+// (share/schema/ob_schema_utils check_add_column_can_parallel /
+// check_drop_column_can_parallel). Co-located in ob_ddl_common because both the
+// RS layer and the share layer depend on it, and ObDDLType lives here.
+// NOTE: `algorithm` / `algorithm_hint` are passed as int64_t (not
+// obrpc::ObAlterTableArg::AlterAlgorithm) on purpose: ob_ddl_common.h is included
+// by ob_rpc_struct.h, so it cannot include ob_rpc_struct.h back without a cycle.
+// Callers cast with static_cast<int64_t>(arg.alter_algorithm_) and write the
+// hint back with static_cast<obrpc::ObAlterTableArg::AlterAlgorithm>(hint).
+class ObAlterColumnDDLHelper
+{
+public:
+  static int compute_add_column_ddl_type(
+      const schema::AlterTableSchema &alter_table_schema,
+      const schema::ObTableSchema &orig_table_schema,
+      const schema::AlterColumnSchema &alter_column_schema,
+      const int64_t algorithm,
+      const bool is_oracle_mode,
+      const uint64_t tenant_data_version,
+      ObDDLType &ddl_type);
+
+  static int compute_drop_column_ddl_type(
+      const schema::ObColumnSchemaV2 &orig_column_schema,
+      const uint64_t tenant_id,
+      const bool is_oracle_mode,
+      const uint64_t tenant_data_version,
+      ObDDLType &ddl_type,
+      int64_t &algorithm_hint);
+
+  static int check_can_add_column_use_instant(
+      const bool is_oracle_mode,
+      const uint64_t tenant_data_version,
+      bool &can_add_column_instant);
+
+  static int check_is_change_column_order(
+      const schema::ObTableSchema &table_schema,
+      const schema::AlterColumnSchema &alter_column_schema,
+      bool &is_change_column_order);
+};
+
 
 
 class ObCheckTabletDataComplementOp

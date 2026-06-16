@@ -64,6 +64,7 @@ ObDropTableBatchScheduler::ObDropTableBatchScheduler()
     next_table_idx_(0),
     database_name_(),
     table_names_(),
+    force_drop_(false),
     rpc_proxy_(nullptr),
     proxy_ctxs_(),
     allocator_("DropNonAto")
@@ -73,7 +74,8 @@ ObDropTableBatchScheduler::ObDropTableBatchScheduler()
 int ObDropTableBatchScheduler::init(const uint64_t tenant_id,
     obrpc::ObCommonRpcProxy &rpc_proxy,
     const ObString &database_name,
-    const common::ObIArray<ObString> &table_names)
+    const common::ObIArray<ObString> &table_names,
+    const bool force_drop)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
@@ -85,6 +87,7 @@ int ObDropTableBatchScheduler::init(const uint64_t tenant_id,
   } else {
     tenant_id_ = tenant_id;
     rpc_proxy_ = &rpc_proxy;
+    force_drop_ = force_drop;
     database_name_.reset();
     table_names_.reset();
     next_table_idx_ = 0;
@@ -242,11 +245,13 @@ int ObDropTableBatchScheduler::send_one_rpc(ProxyCtx &ctx)
     SQL_ENG_LOG(WARN, "failed to get rootservice address", KR(ret));
   } else {
     ObDropTableArg arg;
+    arg.is_parallel_ = true;
     arg.tenant_id_ = tenant_id_;
     arg.exec_tenant_id_ = tenant_id_;
     // this parameter only distinguish drop table or drop view, not used in drop table type
     arg.table_type_ = USER_TABLE;
     arg.foreign_key_checks_ = false;
+    arg.force_drop_ = force_drop_;
     for (; OB_SUCC(ret) && next_table_idx_ < table_count_ && carried_tables_count < MAX_TABLES_PER_RPC;
        ++carried_tables_count, ++next_table_idx_) {
       ObTableItem item;
@@ -511,7 +516,8 @@ ObDropDatabaseExecutor::~ObDropDatabaseExecutor()
 int non_atomic_drop_table_in_database(
     const uint64_t tenant_id,
     const ObString &database_name,
-    obrpc::ObCommonRpcProxy &common_rpc_proxy)
+    obrpc::ObCommonRpcProxy &common_rpc_proxy,
+    const bool force_drop)
 {
   int ret = OB_SUCCESS;
   uint64_t data_version = 0;
@@ -551,6 +557,8 @@ int non_atomic_drop_table_in_database(
       if (OB_ISNULL(simple_table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         SQL_ENG_LOG(WARN, "table schema is null", KR(ret), K(i));
+      } else if (simple_table_schema->is_in_recyclebin()) {
+        // table in recyclebin has __all_recyclebin entry, parallel drop can not clean it
       } else if (ObSchemaUtils::is_support_parallel_drop(simple_table_schema->get_table_type())) {
         if (OB_FAIL(table_names.push_back(simple_table_schema->get_table_name()))) {
           SQL_ENG_LOG(WARN, "fail to push back table name", KR(ret), K(simple_table_schema->get_table_name()));
@@ -565,7 +573,8 @@ int non_atomic_drop_table_in_database(
       if (OB_FAIL(scheduler.init(tenant_id,
                                  common_rpc_proxy,
                                  database_name,
-                                 table_names))) {
+                                 table_names,
+                                 force_drop))) {
         SQL_ENG_LOG(WARN, "fail to init drop table batch scheduler", KR(ret), K(database_name));
       } else {
         // to avoid hold one version's schema guard too much time
@@ -726,8 +735,9 @@ int ObPurgeDatabaseExecutor::execute(ObExecContext &ctx, ObPurgeDatabaseStmt &st
     SQL_ENG_LOG(WARN, "common rpc proxy should not be null", K(ret));
   }
   const uint64_t tenant_id = purge_database_arg.tenant_id_;
-  if (FAILEDx(non_atomic_drop_table_in_database(tenant_id, purge_database_arg.db_name_, *common_rpc_proxy))) {
-    SQL_ENG_LOG(WARN, "rpc proxy drop table failed",
+  if (FAILEDx(non_atomic_drop_table_in_database(tenant_id, purge_database_arg.db_name_,
+                                                *common_rpc_proxy, true/*force_drop*/))) {
+    SQL_ENG_LOG(WARN, "fail to drop table non atomic in database",
                 "timeout", THIS_WORKER.get_timeout_remain(), KR(ret));
   }
   // after non_atomic_drop_table_in_database

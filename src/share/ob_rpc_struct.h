@@ -2635,6 +2635,15 @@ public:
             && !is_inner_ && !is_update_global_indexes_ && !is_convert_to_character_
             && !skip_sys_table_check_ && !need_rebuild_trigger_ && !is_add_to_scheduler_;
   }
+  // Returns true iff every non-column-operation field is at its default/safe state.
+  // Used by parallel DDL to gate column-only alters. On false, `reason` points to
+  // a static string naming the first field that failed — attach it to LOG_WARN for
+  // fast root-cause on production.
+  //
+  // NOTE: Differs from is_only_alter_column(). That method additionally requires
+  // is_alter_columns_ == true and only covers 9 fields; it is used by
+  // ob_alter_table_constraint_checker.cpp with stricter semantics. Do not merge.
+  bool has_no_non_column_operation(const char *&reason) const;
   ObAlterTableArg &operator=(const ObAlterTableArg &other) = delete;
   ObAlterTableArg(const ObAlterTableArg &other) = delete;
   virtual bool is_allow_when_disable_ddl() const;
@@ -2717,6 +2726,16 @@ public:
 private:
   int alloc_index_arg(const ObIndexArg::IndexActionType index_action_type, ObIndexArg *&index_arg);
 public:
+  // ====================================================================
+  // IMPORTANT: When adding a new member variable to ObAlterTableArg,
+  // you MUST also update the following:
+  // 1. ObAlterTableArg::has_no_non_column_operation() in ob_rpc_struct.cpp
+  //    - Add a REJECT_IF entry for the new field if it represents a
+  //      non-column DDL operation.
+  // 2. The serialize_size_tripwire UT in test_alter_table_helper.cpp
+  //    - The UT will auto-fail when serialize size changes; update
+  //      the expected constant after reviewing the whitelist.
+  // ====================================================================
   uint64_t session_id_; //Only used to update the last active time of the temporary table. At this time, the session id used to create the temporary table is passed in
   AlterPartitionType alter_part_type_;
   AlterConstraintType alter_constraint_type_;

@@ -7,6 +7,7 @@
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_table_schema.h"
 #include "share/schema/ob_part_mgr_util.h"
+#include "share/schema/ob_schema_guard_wrapper.h"
 
 #include "rootserver/ob_split_partition_helper.h"
 #include "share/catalog/ob_external_catalog.h"
@@ -7262,6 +7263,42 @@ int ObTableSchema::is_table_with_logic_pk(ObSchemaGetterGuard &schema_guard, boo
   return ret;
 }
 
+int ObTableSchema::is_table_with_logic_pk(ObSchemaGuardWrapper &schema_guard, bool &bool_result) const
+{
+  int ret = OB_SUCCESS;
+  bool_result = false;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+  uint64_t compat_version = 0;
+  if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
+    LOG_WARN("get simple_index_infos failed", K(ret));
+  } else if (is_heap_organized_table()) {
+    for (int64_t i = 0; !bool_result && OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+      const ObTableSchema *index_table_schema = NULL;
+      if (OB_FAIL(schema_guard.get_table_schema(simple_index_infos.at(i).table_id_, index_table_schema))) {
+        LOG_WARN("fail to get index table schema", K(ret), "table_id", simple_index_infos.at(i).table_id_);
+      } else if (OB_ISNULL(index_table_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("index table schema from schema guard is NULL", K(ret), K(index_table_schema));
+      } else if (INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY == index_table_schema->get_index_type()) {
+        if (OB_FAIL(GET_MIN_DATA_VERSION(get_tenant_id(), compat_version))) {
+          LOG_WARN("failed to get min data version", KR(ret), K(get_tenant_id()));
+        } else if (compat_version < DATA_VERSION_4_3_5_1) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("heap organized table is not supported under version 4.3.5.1", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "heap organized table under version 4.3.5.1 is");
+        } else {
+          bool_result = true;
+        }
+        break;
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    bool_result |= is_table_with_pk() && is_index_organized_table();
+  }
+  return ret;
+}
+
 int ObTableSchema::get_logic_pk_column_ids(ObSchemaGetterGuard *schema_guard, ObIArray<uint64_t> &pk_ids) const
 {
   int ret = OB_SUCCESS;
@@ -7272,6 +7309,19 @@ int ObTableSchema::get_logic_pk_column_ids(ObSchemaGetterGuard *schema_guard, Ob
   } else if (is_heap_organized_table() && OB_FAIL(get_heap_table_pk_without_valid_check(schema_guard, pk_ids))) {
     LOG_WARN("fail to get heap table pks", K(ret), KPC(this));
   } else if (is_index_organized_table() && is_table_with_pk() && OB_FAIL(get_rowkey_column_ids_without_valid_check(pk_ids))) {
+    LOG_WARN("fail to get IOT table pks", K(ret), KPC(this));
+  }
+  return ret;
+}
+
+int ObTableSchema::get_logic_pk_column_ids(ObSchemaGuardWrapper &schema_guard, ObIArray<uint64_t> &pk_ids) const
+{
+  int ret = OB_SUCCESS;
+  pk_ids.reuse();
+  if (is_heap_organized_table() && OB_FAIL(get_heap_table_pk_without_valid_check(schema_guard, pk_ids))) {
+    LOG_WARN("fail to get heap table pks", K(ret), KPC(this));
+  } else if (is_index_organized_table() && is_table_with_pk()
+             && OB_FAIL(get_rowkey_column_ids_without_valid_check(pk_ids))) {
     LOG_WARN("fail to get IOT table pks", K(ret), KPC(this));
   }
   return ret;
@@ -7289,6 +7339,48 @@ int ObTableSchema::get_heap_table_pk_without_valid_check(ObSchemaGetterGuard *sc
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos_.count(); ++i) {
     if (OB_FAIL(schema_guard->get_table_schema(tenant_id_, simple_index_infos_.at(i).table_id_, index_schema))) {
+      LOG_WARN("fail to get index schema", K(ret));
+    } else if (OB_ISNULL(index_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("index table not exist", K(ret), K(tenant_id_), "table_id", simple_index_infos_.at(i).table_id_);
+    } else if (ObIndexType::INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY == index_schema->get_index_type()) {
+      has_pk = true;
+      break;
+    }
+  }
+
+  if (OB_SUCC(ret) && has_pk) {
+    const ObRowkeyInfo &rowkey_info = index_schema->get_rowkey_info();
+    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); i++) {
+      const ObRowkeyColumn *rowkey_column = nullptr;
+      const ObColumnSchemaV2 *column = nullptr;
+      if (OB_ISNULL(rowkey_column = rowkey_info.get_column(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, rowkey column must not be nullptr", K(ret));
+      } else if (OB_ISNULL(column = index_schema->get_column_schema(rowkey_column->column_id_))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("col is nullptr", K(ret), K(rowkey_column->column_id_), K(*index_schema));
+      } else if (column->get_column_id() == OB_HIDDEN_SESSION_ID_COLUMN_ID) {
+        // do nothing
+      } else if (column->is_heap_table_primary_key_column() && !column->is_shadow_column()) {
+        if (OB_FAIL(pk_ids.push_back(column->get_column_id()))) {
+          LOG_WARN("fail to push back pk id", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableSchema::get_heap_table_pk_without_valid_check(ObSchemaGuardWrapper &schema_guard,
+                                                         ObIArray<uint64_t> &pk_ids) const
+{
+  int ret = OB_SUCCESS;
+  pk_ids.reuse();
+  bool has_pk = false;
+  const ObTableSchema *index_schema = NULL;
+  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos_.count(); ++i) {
+    if (OB_FAIL(schema_guard.get_table_schema(simple_index_infos_.at(i).table_id_, index_schema))) {
       LOG_WARN("fail to get index schema", K(ret));
     } else if (OB_ISNULL(index_schema)) {
       ret = OB_TABLE_NOT_EXIST;
@@ -7382,7 +7474,7 @@ int ObTableSchema::check_column_has_multivalue_index_depend(
 
 int ObTableSchema::check_functional_index_columns_depend(
   const ObColumnSchemaV2 &data_column_schema,
-  ObSchemaGetterGuard &schema_guard,
+  ObSchemaGuardWrapper &schema_guard,
   bool &has_func_idx_col_deps) const
 {
   int ret = OB_SUCCESS;
@@ -8864,6 +8956,28 @@ int ObTableSchema::check_primary_key_cover_partition_column(ObSchemaGetterGuard 
   } else {
     ObSEArray<uint64_t, 8> logic_pk_column_ids;
     if (OB_FAIL(get_logic_pk_column_ids(&schema_guard, logic_pk_column_ids))) {
+      LOG_WARN("Failed to get logic pk column ids", K(ret));
+    } else if (OB_FAIL(check_logic_pk_cover_partition_keys(partition_key_info_, logic_pk_column_ids))) {
+      LOG_WARN("Check logic pk cover partition key failed", K(ret));
+    } else if (OB_FAIL(check_logic_pk_cover_partition_keys(subpartition_key_info_, logic_pk_column_ids))) {
+      LOG_WARN("Check logic pk cover subpartition key failed", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+int ObTableSchema::check_primary_key_cover_partition_column(ObSchemaGuardWrapper &schema_guard)
+{
+  int ret = OB_SUCCESS;
+  bool table_with_logic_pk = false;
+  if (OB_FAIL(is_table_with_logic_pk(schema_guard, table_with_logic_pk))) {
+    LOG_WARN("Failed to check if table with logic pk", K(ret));
+  } else if (!is_partitioned_table() || !table_with_logic_pk) {
+    //nothing todo
+  } else {
+    ObSEArray<uint64_t, 8> logic_pk_column_ids;
+    if (OB_FAIL(get_logic_pk_column_ids(schema_guard, logic_pk_column_ids))) {
       LOG_WARN("Failed to get logic pk column ids", K(ret));
     } else if (OB_FAIL(check_logic_pk_cover_partition_keys(partition_key_info_, logic_pk_column_ids))) {
       LOG_WARN("Check logic pk cover partition key failed", K(ret));

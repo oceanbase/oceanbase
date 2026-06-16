@@ -571,8 +571,7 @@ int ObDropTableHelper::lock_databases_by_name_()
       }
       if (OB_SUCC(ret)
           || OB_ERR_BAD_DATABASE == ret
-          || (OB_RECYCLEBIN_SCHEMA_ID != database_id
-              && OB_ERR_OPERATION_ON_RECYCLE_OBJECT == ret)) {
+          || OB_ERR_OPERATION_ON_RECYCLE_OBJECT == ret) {
         // OB_INVALID_ID == database_id indicates bad database
         if (OB_FAIL(database_ids_.push_back(database_id))) { // overwrite ret
           LOG_WARN("fail to push back database id", KR(ret));
@@ -697,6 +696,23 @@ int ObDropTableHelper::prefetch_table_schemas_()
       } else if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema is null", KR(ret), K(table_id));
+      } else if (table_schema->is_in_recyclebin()) {
+        // table in recyclebin has __all_recyclebin entry which parallel drop can not clean,
+        // skip and let drop_database/purge_database handle it
+        ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+        LOG_WARN("can not parallel drop table which is in recyclebin",
+                 KR(ret), K_(tenant_id), K(table_id), K(table_name));
+      } else {
+        const ObDatabaseSchema *db_schema = nullptr;
+        if (OB_FAIL(schema_guard_wrapper_.get_database_schema(database_id, db_schema))) {
+          LOG_WARN("fail to get database schema", KR(ret), K_(tenant_id), K(database_id));
+        } else if (!arg_.force_drop_ && OB_NOT_NULL(db_schema) && db_schema->is_in_recyclebin()) {
+          ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+          LOG_WARN("can not drop table in database which is in recyclebin",
+                   KR(ret), K_(tenant_id), K(database_id), K(table_name));
+        }
+      }
+      if (OB_FAIL(ret) || OB_ISNULL(table_schema)) {
       } else if (table_schema->mv_container_table()) {
         // skip
         ret = OB_NOT_SUPPORTED;

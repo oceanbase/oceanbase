@@ -21,6 +21,7 @@ namespace share
 namespace schema
 {
 class ObSchemaGetterGuard;
+class ObSchemaGuardWrapper;
 class ObSequenceSchema;
 class ObMultiVersionSchemaService;
 }
@@ -37,18 +38,18 @@ public:
   virtual ~ObSequenceDDLProxy();
   int create_sequence_without_bitset(share::schema::ObSequenceSchema &seq_schema,
                                      common::ObMySQLTransaction &trans,
-                                     share::schema::ObSchemaGetterGuard &schema_guard,
+                                     share::schema::ObSchemaGuardWrapper &schema_guard,
                                      const common::ObString *ddl_stmt_str);
   int create_sequence(share::schema::ObSequenceSchema &seq_schema,
                       const common::ObBitSet<> &opt_bitset,
                       common::ObMySQLTransaction &trans,
-                      share::schema::ObSchemaGetterGuard &schema_guard,
+                      share::schema::ObSchemaGuardWrapper &schema_guard,
                       const common::ObString *ddl_stmt_str);
   // Notice that, offline ddl and truncate operation, sequence object is inherited from origin one.
   // And need_sync_seq_val is used to judge whether to synchronize origin next value of sequence to the inherited one.
   int inner_create_sequence(share::schema::ObSequenceSchema &seq_schema,
                             common::ObMySQLTransaction &trans,
-                            share::schema::ObSchemaGetterGuard &schema_guard,
+                            share::schema::ObSchemaGuardWrapper &schema_guard,
                             const common::ObString *ddl_stmt_str,
                             const bool need_sync_seq_val);
   int alter_sequence(share::schema::ObSequenceSchema &seq_schema,
@@ -65,6 +66,7 @@ public:
   int rename_sequence(share::schema::ObSequenceSchema &seq_schema,
                       common::ObMySQLTransaction &trans,
                       const common::ObString *ddl_stmt_str);
+  share::schema::ObMultiVersionSchemaService &get_schema_service() { return schema_service_; }
 private:
   /* functions */
   /* variables */

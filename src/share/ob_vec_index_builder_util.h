@@ -17,6 +17,14 @@ namespace oceanbase
 {
 namespace share
 {
+namespace schema
+{
+class ObSchemaGuardWrapper;
+} // namespace schema
+} // namespace share
+
+namespace share
+{
 
 class ObVecIndexBuilderUtil
 {
@@ -123,8 +131,7 @@ public:
       const ObString &index_name,
       ObString &new_index_name);
   static int get_vec_table_schema_by_name(
-      share::schema::ObSchemaGetterGuard &schema_guard,
-      const int64_t tenant_id,
+      share::schema::ObSchemaGuardWrapper &schema_guard_wrapper,      const int64_t tenant_id,
       const int64_t database_id,
       const ObString &index_name, /* domain index name */
       const share::schema::ObIndexType index_type,

@@ -488,7 +488,7 @@ int ObPLDDLService::drop_routine(const ObRoutineInfo &routine_info,
                                                                pl_operator,
                                                                *ddl_service.schema_service_))) {
       LOG_WARN("failed to modify obj status", K(ret));
-    } else if (OB_FAIL(pl_operator.drop_routine(routine_info, trans, error_info, ddl_stmt_str))) {
+    } else if (OB_FAIL(pl_operator.drop_routine(routine_info, trans, error_info, schema_guard, ddl_stmt_str))) {
       LOG_WARN("drop procedure failed", K(ret), K(routine_info));
     } else {
       lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;

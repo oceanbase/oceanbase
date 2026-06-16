@@ -500,9 +500,9 @@ int ObTableHelper::create_tablets_()
     // - primary table may be incorrect when ddl execute concurrently.
     ObNewTableTabletAllocator new_table_tablet_allocator(
                               tenant_id_,
-                              schema_guard,
+                              schema_guard_wrapper_,
                               sql_proxy,
-                              true /*use parallel ddl*/);
+                              true/*use_parallel_ddl*/);
     const ObTablegroupSchema *data_tablegroup_schema = NULL; // keep NULL if no tablegroup
     int64_t last_schema_version = OB_INVALID_VERSION;
     ObSchemaVersionGenerator *tsi_generator = GET_TSI(TSISchemaVersionGenerator);
@@ -567,9 +567,7 @@ int ObTableHelper::create_tablets_()
       } else if (schemas.count() > 0) {
         if (OB_FAIL(new_table_tablet_allocator.prepare(get_trans_(),
                                                        data_table,
-                                                       data_tablegroup_schema,
-                                                       false,  /* is_add_partition */
-                                                       get_external_trans_() == NULL ? NULL : schema_guard_wrapper_.get_latest_schema_guard()))) {
+                                                       data_tablegroup_schema))) {
           LOG_WARN("fail to prepare ls for data table", KR(ret));
         } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(ls_id_array))) {
           LOG_WARN("fail to get ls id array", KR(ret));

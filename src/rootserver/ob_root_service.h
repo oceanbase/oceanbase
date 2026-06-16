@@ -509,6 +509,7 @@ public:
   int alter_database(const obrpc::ObAlterDatabaseArg &arg);
   int set_comment(const obrpc::ObSetCommentArg &arg, obrpc::ObParallelDDLRes &res);
   int alter_table(const obrpc::ObAlterTableArg &arg, obrpc::ObAlterTableRes &res);
+  int parallel_alter_table(const obrpc::ObAlterTableArg &arg, obrpc::ObAlterTableRes &res);
   int alter_view(const obrpc::ObAlterViewArg &arg, obrpc::ObAlterViewRes &res);
   int start_redef_table(const obrpc::ObStartRedefTableArg &arg, obrpc::ObStartRedefTableRes &res);
   int copy_table_dependents(const obrpc::ObCopyTableDependentsArg &arg);

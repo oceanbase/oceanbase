@@ -13,6 +13,8 @@
 
 namespace oceanbase
 {
+namespace share { namespace schema { class ObSchemaGuardWrapper; }}
+
 namespace rootserver
 {
 class ObDDLService;
@@ -41,8 +43,7 @@ public:
     static int get_dropping_search_data_index_invisiable_index_schema(
         const uint64_t tenant_id,
         const ObTableSchema &index_table_schema,
-        share::schema::ObSchemaGetterGuard &schema_guard,
-        common::ObIArray<share::schema::ObTableSchema> &new_aux_schemas);
+        share::schema::ObSchemaGuardWrapper &schema_guard_wrapper,        common::ObIArray<share::schema::ObTableSchema> &new_aux_schemas);
     static int get_search_index_column_name(
         const ObTableSchema &data_table_schema,
         const ObTableSchema &index_table_schema,

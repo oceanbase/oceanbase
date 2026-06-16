@@ -12,7 +12,7 @@
 #include "share/location_cache/ob_location_service.h" // ObLocationService
 #include "rootserver/ob_root_service.h"
 #include "rootserver/ob_primary_ls_service.h" // ObDupLSCreateHelper
-#include "share/schema/ob_latest_schema_guard.h"
+#include "share/schema/ob_schema_guard_wrapper.h"
 #include "storage/tablet/ob_session_tablet_info_map.h"
 #include "storage/tablet/ob_session_tablet_helper.h"
 #include "storage/tx_storage/ob_ls_service.h"
@@ -474,12 +474,12 @@ int ObBalanceGroupLSStatOperator::generate_insert_update_sql(
 
 ObNewTableTabletAllocator::ObNewTableTabletAllocator(
     const uint64_t tenant_id,
-    share::schema::ObSchemaGetterGuard &schema_guard,
+    share::schema::ObSchemaGuardWrapper &schema_guard_wrapper,
     common::ObISQLClient *sql_proxy,
     const bool use_parallel_ddl /*= false*/,
-    const share::schema::ObTableSchema *data_table_schema /*nullptr*/)
+    const share::schema::ObTableSchema *data_table_schema /*= nullptr*/)
   : tenant_id_(tenant_id),
-    schema_guard_(schema_guard),
+    schema_guard_wrapper_(schema_guard_wrapper),
     sql_proxy_(sql_proxy),
     bg_ls_stat_operator_(),
     status_(MyStatus::INVALID),
@@ -519,8 +519,7 @@ int ObNewTableTabletAllocator::prepare(
     ObMySQLTransaction &trans,
     const share::schema::ObTableSchema &table_schema,
     const share::schema::ObTablegroupSchema *tablegroup_schema,
-    bool is_add_partition,
-    share::schema::ObLatestSchemaGuard *latest_schema_guard /* NULL*/)
+    bool is_add_partition)
 {
   int ret = OB_SUCCESS;
   is_add_partition_ = is_add_partition;
@@ -580,7 +579,7 @@ int ObNewTableTabletAllocator::prepare(
         if (OB_ISNULL(tablegroup_schema)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("tablegroup_schema is null", KR(ret), K(table_schema));
-        } else if (OB_FAIL(alloc_ls_for_in_tablegroup_tablet(table_schema, *tablegroup_schema, latest_schema_guard))) {
+        } else if (OB_FAIL(alloc_ls_for_in_tablegroup_tablet(table_schema, *tablegroup_schema))) {
           LOG_WARN("fail to alloc ls for in tablegroup tablet", KR(ret));
         }
       } else {
@@ -1351,20 +1350,8 @@ int ObNewTableTabletAllocator::alloc_ls_for_local_index_tablet(
     const uint64_t tenant_id = index_schema.get_tenant_id();
     const uint64_t data_table_id = index_schema.get_data_table_id();
     const share::schema::ObTableSchema *table_schema = nullptr;
-    if (use_parallel_ddl_) {
-      if (OB_ISNULL(data_table_schema_)) {
-        ret = OB_NOT_INIT;
-        LOG_WARN("should use cached data_table_schema when alloc ls for local index tablet when doing parallel ddl", KR(ret));
-      } else if (OB_UNLIKELY(data_table_schema_->get_table_id() != data_table_id)) {
-        LOG_WARN("fail to get table schema", KR(ret), K(data_table_schema_->get_table_id()) ,K(data_table_id));
-      } else {
-        table_schema = data_table_schema_;
-      }
-    } else {
-      if (OB_FAIL(schema_guard_.get_table_schema(
-          tenant_id, data_table_id, table_schema))) {
-        LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(data_table_id));
-      }
+    if (OB_FAIL(get_table_schema_(data_table_id, table_schema))) {
+      LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(data_table_id));
     }
     if (OB_FAIL(ret)) {
     } else if (OB_UNLIKELY(nullptr == table_schema)) {
@@ -1394,24 +1381,18 @@ int ObNewTableTabletAllocator::alloc_ls_for_global_index_in_subpart_sharding_tab
   } else {
     const uint64_t tenant_id = index_schema.get_tenant_id();
     const ObTableSchema *primary_table_schema = NULL;
-    const ObSimpleTableSchemaV2 *simple_primary_table_schema = NULL;
-    if (OB_FAIL(schema_guard_.get_primary_table_schema_in_tablegroup(tenant_id,
+    if (OB_FAIL(schema_guard_wrapper_.get_primary_table_schema_in_tablegroup(tenant_id,
                                                                      tablegroup_schema.get_tablegroup_id(),
-                                                                     simple_primary_table_schema))) {
+                                                                     primary_table_schema))) {
       LOG_WARN("fail to get primary table schema in tablegroup", KR(ret),
                K(tenant_id), "tablegroup_id", tablegroup_schema.get_tablegroup_id());
-    } else if (OB_ISNULL(simple_primary_table_schema)) {
+    } else if (OB_ISNULL(primary_table_schema)) {
       // such as CREATE TABLE ... WITH INDEX scenario, data table not yet visible
       LOG_INFO("tablegroup is empty, alloc global index independently (will be aligned by balance)",
                 K(index_schema.get_table_id()), "tablegroup_id", tablegroup_schema.get_tablegroup_id());
       if (OB_FAIL(alloc_ls_for_global_index_tablet(index_schema))) {
         LOG_WARN("fail to alloc ls for global index tablet", KR(ret));
       }
-    } else if (OB_FAIL(schema_guard_.get_table_schema(tenant_id, simple_primary_table_schema->get_table_id(), primary_table_schema))) {
-      LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), KPC(simple_primary_table_schema));
-    } else if (OB_ISNULL(primary_table_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("primary table schema is null", KR(ret), K(tenant_id), KP(primary_table_schema));
     } else if (OB_UNLIKELY(schema::PARTITION_LEVEL_TWO != primary_table_schema->get_part_level())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("primary table should be two-level partition for SUBPARTITION sharding", KR(ret),
@@ -1476,8 +1457,7 @@ int ObNewTableTabletAllocator::alloc_ls_for_global_index_tablet(
 
 int ObNewTableTabletAllocator::alloc_ls_for_in_tablegroup_tablet(
     const share::schema::ObTableSchema &table_schema,
-    const share::schema::ObTablegroupSchema &tablegroup_schema,
-    share::schema::ObLatestSchemaGuard *latest_schema_guard /* = NULL */)
+    const share::schema::ObTablegroupSchema &tablegroup_schema)
 {
   int ret = OB_SUCCESS;
   LOG_INFO("alloc ls for in tablegroup tablet",
@@ -1514,9 +1494,9 @@ int ObNewTableTabletAllocator::alloc_ls_for_in_tablegroup_tablet(
       }
     }
   } else {
-    const ObTableSchema *primary_table_schema = NULL;
-    if (OB_FAIL(get_primary_table_schema_in_tablegroup_(
-                tablegroup_schema, latest_schema_guard, primary_table_schema))) {
+    const share::schema::ObTableSchema *primary_table_schema = NULL;
+    if (OB_FAIL(schema_guard_wrapper_.get_primary_table_schema_in_tablegroup(
+            tenant_id_, tablegroup_schema.get_tablegroup_id(), primary_table_schema))) {
       LOG_WARN("fail to get primary table schema in tablegroup", KR(ret),
                "tenant_id", tenant_id_,
                "tablegroup_id", tablegroup_schema.get_tablegroup_id());
@@ -1545,7 +1525,7 @@ int ObNewTableTabletAllocator::alloc_ls_for_in_tablegroup_tablet(
          * otherwise alloc tablet as new table
          */
         const ObTableSchema *origin_table_schema = NULL;
-        if (OB_FAIL(schema_guard_.get_table_schema(table_schema.get_tenant_id(), table_schema.get_table_id(), origin_table_schema))) {
+        if (OB_FAIL(get_table_schema_(table_schema.get_table_id(), origin_table_schema))) {
           LOG_WARN("fail to get origin table_schema", KR(ret), K(table_schema.get_table_id()));
         } else if (OB_ISNULL(origin_table_schema)) {
           ret = OB_ERR_UNDEFINED;
@@ -1563,49 +1543,24 @@ int ObNewTableTabletAllocator::alloc_ls_for_in_tablegroup_tablet(
   return ret;
 }
 
-// Only the first table (primary table) in the tablegroup is needed by the caller.
-// Fetch only that one full schema instead of loading every table's full schema, which
-// can be very slow when the tablegroup contains a large number of tables.
-//
-// latest_schema_guard != NULL only when multiple tables are created in one DDL
-// transaction. In that case schema cache may miss tables created earlier within the
-// same transaction, so we must read from the latest_schema_guard to satisfy tablegroup
-// constraints.
-int ObNewTableTabletAllocator::get_primary_table_schema_in_tablegroup_(
-    const ObTablegroupSchema &tablegroup_schema,
-    ObLatestSchemaGuard *latest_schema_guard,
-    const ObTableSchema *&primary_table_schema)
+int ObNewTableTabletAllocator::get_table_schema_(
+    const uint64_t table_id,
+    const share::schema::ObTableSchema *&table_schema)
 {
   int ret = OB_SUCCESS;
-  const uint64_t tablegroup_id = tablegroup_schema.get_tablegroup_id();
-  primary_table_schema = NULL;
-  if (OB_ISNULL(latest_schema_guard)) {
-    const ObSimpleTableSchemaV2 *primary_simple_schema = NULL;
-    if (OB_FAIL(schema_guard_.get_primary_table_schema_in_tablegroup(
-                              tenant_id_, tablegroup_id, primary_simple_schema))) {
-      LOG_WARN("fail to get primary table schema in tablegroup", KR(ret),
-               K_(tenant_id), K(tablegroup_id));
-    } else if (OB_NOT_NULL(primary_simple_schema)) {
-      if (OB_FAIL(schema_guard_.get_table_schema(primary_simple_schema->get_tenant_id(),
-                                                 primary_simple_schema->get_table_id(),
-                                                 primary_table_schema))) {
-        LOG_WARN("fail to get primary table schema", KR(ret), KPC(primary_simple_schema));
-      } else if (OB_ISNULL(primary_table_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("primary table schema is null", KR(ret), KPC(primary_simple_schema));
-      }
-    }
-  } else {
-    common::ObArray<const ObTableSchema *> table_schema_array;
-    if (OB_FAIL(latest_schema_guard->get_table_schemas_in_tablegroup(
-                                     tablegroup_id, table_schema_array))) {
-      LOG_WARN("fail to get latest table schemas in tablegroup", KR(ret),
-               K_(tenant_id), K(tablegroup_id));
-    } else if (table_schema_array.count() > 0
-               && OB_ISNULL(primary_table_schema = table_schema_array.at(0))) {
+  if (use_parallel_ddl_) {
+    if (OB_ISNULL(data_table_schema_)) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("should use cached data_table_schema when doing parallel ddl", KR(ret));
+    } else if (OB_UNLIKELY(data_table_schema_->get_table_id() != table_id)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table schema ptr is null", KR(ret), K(table_schema_array));
+      LOG_WARN("data_table_schema table_id mismatch", KR(ret),
+               K(data_table_schema_->get_table_id()), K(table_id));
+    } else {
+      table_schema = data_table_schema_;
     }
+  } else if (OB_FAIL(schema_guard_wrapper_.get_table_schema(table_id, table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id_), K(table_id));
   }
   return ret;
 }
