@@ -88,6 +88,9 @@ private:
                                const bool try_lock = false);
   int get_table_row_count(const ObString &db_name, const ObString &table_name,
                           const share::SCN &scn, int64_t &row_cnt);
+  int get_tablet_row_count(const ObString &db_name, const ObString &table_name,
+                           const share::SCN &scn, const bool is_partitioned,
+                           const ObString &partition_clause, int64_t &row_cnt);
   static int get_vector_index_col_names(const ObTableSchema *table_schema,
                                  bool is_collect_col_id,
                                  ObIArray<uint64_t>& col_ids,

@@ -185,6 +185,56 @@ int ObVectorIndexRefresher::get_table_row_count(const ObString &db_name,
   return ret;
 }
 
+int ObVectorIndexRefresher::get_tablet_row_count(const ObString &db_name,
+                                                 const ObString &table_name,
+                                                 const share::SCN &scn,
+                                                 const bool is_partitioned,
+                                                 const ObString &partition_clause,
+                                                 int64_t &row_cnt) {
+  int ret = OB_SUCCESS;
+  if (!is_partitioned) {
+    if (OB_FAIL(get_table_row_count(db_name, table_name, scn, row_cnt))) {
+      LOG_WARN("fail to get non-partition table row count", KR(ret),
+               K(table_name));
+    }
+  } else if (OB_ISNULL(refresh_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("refresh ctx is null", KR(ret));
+  } else if (partition_clause.empty()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("partition clause is empty for partitioned table", KR(ret), K(table_name));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      common::sqlclient::ObMySQLResult *result = nullptr;
+      ObSqlString sql;
+      if (OB_FAIL(sql.assign_fmt(
+              "SELECT COUNT(*) AS CNT FROM `%.*s`.`%.*s` %.*s AS OF SNAPSHOT %ld",
+              static_cast<int>(db_name.length()), db_name.ptr(),
+              static_cast<int>(table_name.length()), table_name.ptr(),
+              static_cast<int>(partition_clause.length()),
+              partition_clause.ptr(), scn.get_val_for_tx()))) {
+        LOG_WARN("fail to assign sql", KR(ret));
+      } else if (OB_ISNULL(refresh_ctx_->trans_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("trans is null", K(ret));
+      } else if (OB_FAIL(refresh_ctx_->trans_->read(res, refresh_ctx_->tenant_id_,
+                                                    sql.ptr()))) {
+        LOG_WARN("execute sql failed", KR(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", KR(ret));
+      } else if (OB_FAIL(result->next())) {
+        LOG_WARN("fail to get count", KR(ret));
+      } else {
+        EXTRACT_INT_FIELD_MYSQL(*result, "CNT", row_cnt, int64_t);
+        LOG_INFO("############# DBMS_VECTOR ############### get tablet row cnt ",
+                  K(table_name), K(row_cnt), K(partition_clause));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObVectorIndexRefresher::get_vector_index_col_names(
     const ObTableSchema *table_schema,
     bool is_collect_col_id,
@@ -969,12 +1019,17 @@ int ObVectorIndexRefresher::tablet_fast_refresh()
     LOG_WARN("set trx timeout failed", K(ret), K(init_timeout_us));
   } else if (OB_FAIL(timeout_ctx.set_timeout(init_timeout_us))) {
     LOG_WARN("set timeout failed", K(ret), K(init_timeout_us));
-  } else if (OB_FAIL(get_table_row_count(
+  } else if (domain_table_schema->is_partitioned_table() && OB_FAIL(get_partition_name(
+      tenant_id, refresh_ctx_->base_tb_id_, refresh_ctx_->domain_tb_id_,
+      refresh_ctx_->domain_tablet_id_, allocator, partition_names))) {
+    LOG_WARN("get_partition_name fail", K(ret));
+  } else if (OB_FAIL(get_tablet_row_count(
       db_schema->get_database_name_str(),
       domain_table_schema->get_table_name_str(), refresh_ctx_->scn_,
+      domain_table_schema->is_partitioned_table(), partition_names,
       domain_table_row_cnt))) {
-    LOG_WARN("fail to get delta_buf_table row count", KR(ret),
-      K(domain_table_schema->get_table_name_str()));
+    LOG_WARN("fail to get delta_buf_table tablet row count", KR(ret),
+      K(domain_table_schema->get_table_name_str()), K(partition_names));
   } else if (domain_table_row_cnt <= 0) {
     LOG_INFO("there is no new row, so no need refresh", K(domain_table_row_cnt), K(tenant_id),
       K(refresh_ctx_->scn_), K(refresh_ctx_->domain_tb_id_), K(refresh_ctx_->domain_tablet_id_));
@@ -1003,10 +1058,6 @@ int ObVectorIndexRefresher::tablet_fast_refresh()
                                                       index_id_tb_col_names))) {
           LOG_WARN("fail to get vid & type col names", KR(ret),
                   K(index_id_tb_schema->get_table_name_str()));
-        } else if (domain_table_schema->is_partitioned_table() && OB_FAIL(get_partition_name(
-              tenant_id, refresh_ctx_->base_tb_id_, refresh_ctx_->domain_tb_id_, refresh_ctx_->domain_tablet_id_,
-              allocator, partition_names))) {
-          LOG_WARN("get_partition_name fail", K(ret));
         } else if (domain_table_schema->is_partitioned_table() && OB_FAIL(insert_sel_sql.append_fmt(
                 "INSERT INTO `%.*s`.`%.*s` (%.*s) SELECT ora_rowscn, %.*s FROM "
                 "`%.*s`.`%.*s` %.*s WHERE ora_rowscn <= %lu",
