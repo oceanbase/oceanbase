@@ -9,6 +9,54 @@
 #include <type_traits>
 #include <cmath>
 
+#if defined(__aarch64__)
+#include <arm_neon.h>
+#endif
+
+// ARM64 optimized 64x64->128 bit multiplication
+// Uses umulh instruction to get high 64 bits of multiplication result
+#if defined(__aarch64__)
+static inline void mul64x64_128(uint64_t a, uint64_t b, uint64_t &lo, uint64_t &hi)
+{
+
+  lo = a * b;
+  // umulh: unsigned multiply high - returns upper 64 bits of 64x64 multiplication
+  asm ("umulh %0, %1, %2" : "=r"(hi) : "r"(a), "r"(b));
+}
+
+// Multiply-add: result = a * b + c, returns (lo, hi) and carry
+// This is useful for wide integer multiplication with accumulation
+static inline void mul64x64_add_128(uint64_t a, uint64_t b, uint64_t c,
+                                     uint64_t &lo, uint64_t &hi)
+{
+  uint64_t prod_lo = a * b;
+  uint64_t prod_hi;
+  asm ("umulh %0, %1, %2" : "=r"(prod_hi) : "r"(a), "r"(b));
+
+  lo = prod_lo + c;
+  hi = prod_hi + (lo < prod_lo ? 1 : 0);  // handle carry from addition
+}
+
+// Multiply-add with two addends: result = a * b + c + d
+static inline void mul64x64_add2_128(uint64_t a, uint64_t b, uint64_t c, uint64_t d,
+                                      uint64_t &lo, uint64_t &hi)
+{
+  uint64_t prod_lo = a * b;
+  uint64_t prod_hi;
+  asm ("umulh %0, %1, %2" : "=r"(prod_hi) : "r"(a), "r"(b));
+
+  // Add c first
+  uint64_t sum1 = prod_lo + c;
+  uint64_t carry1 = (sum1 < prod_lo) ? 1 : 0;
+
+  // Add d
+  lo = sum1 + d;
+  uint64_t carry2 = (lo < sum1) ? 1 : 0;
+
+  hi = prod_hi + carry1 + carry2;
+}
+#endif // __aarch64__
+
 namespace oceanbase
 {
 namespace common
@@ -300,27 +348,26 @@ struct ObWideInteger<Bits, Signed>::_impl
   {
     int ret = OB_SUCCESS;
     if (Bits >= Bits2) {
-      if (Bits == 128) {
+#if defined(__x86_64__)
+      if constexpr (Bits == 128) {
         dw_type l = *reinterpret_cast<const dw_type *>(lhs.items_);
         dw_type r = *reinterpret_cast<const dw_type *>(rhs.items_);
         dw_type result = l + r;
-        res.items_[1] = static_cast<uint64_t>(result>>BASE_BITS);
+        res.items_[1] = static_cast<uint64_t>(result >> BASE_BITS);
         res.items_[0] = static_cast<uint64_t>(result);
       } else {
+#endif
         constexpr const unsigned op_items = ObWideInteger<Bits2, Signed2>::ITEM_COUNT;
-        bool overflows[ITEM_COUNT] = {false};
+        unsigned long long carry = 0;
         for (unsigned i = 0; i < op_items; i++) {
-          res.items_[i] = lhs.items_[i] + rhs.items_[i];
-          overflows[i] = (rhs.items_[i] > res.items_[i]);
+          res.items_[i] = __builtin_addcll(lhs.items_[i], rhs.items_[i], carry, &carry);
         }
-        for (unsigned i = op_items; i < ITEM_COUNT; i++) { res.items_[i] = lhs.items_[i]; }
-        for (unsigned i = 1; i < ITEM_COUNT; i++) {
-          if (overflows[i - 1]) {
-            res.items_[i]++;
-            if (res.items_[i] == 0) { overflows[i] = true; }
-          }
+        for (unsigned i = op_items; i < ITEM_COUNT; i++) {
+          res.items_[i] = __builtin_addcll(lhs.items_[i], 0, carry, &carry);
         }
+#if defined(__x86_64__)
       }
+#endif
     } else {
       using calc_type =
           typename CommonType<ObWideInteger<Bits, Signed>,
@@ -345,19 +392,13 @@ struct ObWideInteger<Bits, Signed>::_impl
       if ((void *)&res != (void *)&self) {
         res = self;
       }
-      bool overflow = false;
+      unsigned long long carry = 0;
       for (unsigned i = 0; i < op_items; i++) {
         uint64_t r_val = get_item(rhs, i);
-        if (overflow) {
-          res.items_[i]++;
-          overflow = (res.items_[i] == 0);
-        }
-        res.items_[i] += r_val;
-        overflow = (overflow || (res.items_[i] < r_val));
+        res.items_[i] = __builtin_addcll(res.items_[i], r_val, carry, &carry);
       }
-      for (unsigned i = op_items; overflow && i < ITEM_COUNT; i++) {
-        res.items_[i]++;
-        overflow = (res.items_[i] == 0);
+      for (unsigned i = op_items; i < ITEM_COUNT; i++) {
+        res.items_[i] = __builtin_addcll(res.items_[i], 0, carry, &carry);
       }
     } else {
       using calc_type = typename CommonType<ObWideInteger<Bits, Signed>, T>::type;
@@ -376,29 +417,29 @@ struct ObWideInteger<Bits, Signed>::_impl
   {
     int ret = OB_SUCCESS;
     if (Bits >= Bits2) {
-      constexpr const unsigned op_items = ObWideInteger<Bits2, Signed2>::ITEM_COUNT;
-      if ((void *)&res != (void *)&lhs) {
-        res = lhs;
-      }
-      bool l_neg = is_negative(lhs);
-      bool r_neg = is_negative(rhs);
-      bool borrow = false;
-      for (unsigned i = 0; i < op_items; i++) {
-        uint64_t r_val = rhs.items_[i];
-        if (borrow) {
-          res.items_[i]--;
-          borrow = (res.items_[i] == BASE_MAX);
+#if defined(__x86_64__)
+      if constexpr (Bits == 128) {
+        dw_type l = *reinterpret_cast<const dw_type *>(lhs.items_);
+        dw_type r = *reinterpret_cast<const dw_type *>(rhs.items_);
+        dw_type result = l - r;
+        res.items_[1] = static_cast<uint64_t>(result >> BASE_BITS);
+        res.items_[0] = static_cast<uint64_t>(result);
+      } else {
+#endif
+        constexpr const unsigned op_items = ObWideInteger<Bits2, Signed2>::ITEM_COUNT;
+        if ((void *)&res != (void *)&lhs) { res = lhs; }
+        // bool l_neg = is_negative(lhs);
+        // bool r_neg = is_negative(rhs);
+        unsigned long long borrow = 0;
+        for (unsigned i = 0; i < op_items; i++) {
+          res.items_[i] = __builtin_subcll(res.items_[i], rhs.items_[i], borrow, &borrow);
         }
-        borrow = (borrow || (res.items_[i] < r_val));
-        res.items_[i] -= r_val;
+        for (unsigned i = op_items; i < ITEM_COUNT; i++) {
+          res.items_[i] = __builtin_subcll(res.items_[i], 0, borrow, &borrow);
+        }
+#if defined(__x86_64__)
       }
-      for (unsigned i = op_items; borrow && i < ITEM_COUNT; i++) {
-        res.items_[i]--;
-        borrow = (res.items_[i] == BASE_MAX);
-      }
-      if (check_overflow && sub_overflow(l_neg, r_neg, is_negative(res))) {
-        ret = OB_OPERATE_OVERFLOW;
-      }
+#endif
     } else {
       using calc_type =
           typename CommonType<ObWideInteger<Bits, Signed>,
@@ -423,35 +464,13 @@ struct ObWideInteger<Bits, Signed>::_impl
       if ((void *)&res != (void *)&self) {
         res = self;
       }
-      bool l_neg = is_negative(self);
-      bool r_neg = is_negative(rhs);
-      bool borrow = false;
+      unsigned long long borrow = 0;
       for (unsigned i = 0; i < op_items; i++) {
         uint64_t r_val = get_item(rhs, i);
-        if (borrow) {
-          res.items_[i]--;
-          borrow = (res.items_[i] == BASE_MAX);
-        }
-        borrow = (borrow || (res.items_[i] < r_val));
-        res.items_[i] -= r_val;
+        res.items_[i] = __builtin_subcll(res.items_[i], r_val, borrow, &borrow);
       }
-      for (unsigned i = op_items; borrow && i < ITEM_COUNT; i++) {
-        res.items_[i]--;
-        borrow = (res.items_[i] == BASE_MAX);
-      }
-      if (check_overflow) {
-        bool res_neg = is_negative(res);
-        // positive - negative = negative => overflow
-        // negative - positive = positive => overflow
-        if (!l_neg && r_neg) {
-          if (res_neg) {
-            ret = OB_OPERATE_OVERFLOW;
-          }
-        } else if (l_neg && !r_neg) {
-          if (!res_neg) {
-            ret = OB_OPERATE_OVERFLOW;
-          }
-        }
+      for (unsigned i = op_items; i < ITEM_COUNT; i++) {
+        res.items_[i] = __builtin_subcll(res.items_[i], 0, borrow, &borrow);
       }
     } else {
       using calc_type = typename CommonType<ObWideInteger<Bits, Signed>, T>::type;
@@ -496,13 +515,25 @@ struct ObWideInteger<Bits, Signed>::_impl
       res = lhs;
     } else if (sizeof(T) <= sizeof(uint64_t)) {
       res = make_positive(lhs);
-      dw_type rval = make_positive(rhs);
+      uint64_t rval = static_cast<uint64_t>(make_positive(rhs));
+#if defined(__aarch64__)
+      // ARM64 optimized path using umulh instruction
+      uint64_t carry = 0;
+      for (unsigned i = 0; i < ITEM_COUNT; i++) {
+        uint64_t lo, hi;
+        mul64x64_add_128(res.items_[i], rval, carry, lo, hi);
+        res.items_[i] = lo;
+        carry = hi;
+      }
+      dw_type carrier = carry;
+#else
       dw_type carrier = 0;
       for (unsigned i = 0; i < ITEM_COUNT; i++) {
         carrier += static_cast<dw_type>(res.items_[i]) * rval;
         res.items_[i] = static_cast<uint64_t>(carrier);
         carrier >>= 64;
       }
+#endif
       bool l_neg = is_negative(lhs);
       bool r_neg = is_negative(rhs);
       if (check_overflow) {
@@ -544,6 +575,30 @@ struct ObWideInteger<Bits, Signed>::_impl
     int ret = OB_SUCCESS;
     if (Bits >= Bits2) {
       if (Bits == 128) {
+#if defined(__aarch64__)
+        ObWideInteger<128, Signed> tmpl = make_positive(lhs);
+        ObWideInteger<128, Signed> tmpr = make_positive(rhs);
+        uint64_t l0 = tmpl.items_[0];
+        uint64_t h0 = tmpl.items_[1];
+        uint64_t l1 = tmpr.items_[0];
+        uint64_t h1 = tmpr.items_[1];
+
+        uint64_t carry, carry2, carry3, temp, overflow_lo, overflow_hi;
+
+        // Step 1: l0 * l1 -> res[0], carry
+        mul64x64_128(l0, l1, res.items_[0], carry);
+
+        // Step 2: carry + h0*l1 -> temp, carry2
+        mul64x64_add_128(h0, l1, carry, temp, carry2);
+
+        // Step 3: temp + h1*l0 -> res[1], carry3
+        mul64x64_add_128(h1, l0, temp, res.items_[1], carry3);
+
+        if constexpr (check_overflow) {
+          if (carry2 > 0 || carry3 > 0 || (h1 > 0 && h0 > 0)) { ret = OB_OPERATE_OVERFLOW; }
+        }
+        if (is_negative(lhs) != is_negative(rhs)) { unary_minus<IgnoreOverFlow>(res, res); }
+#else
         dw_type lop = *(reinterpret_cast<const dw_type *>(lhs.items_));
         dw_type rop = *(reinterpret_cast<const dw_type *>(rhs.items_));
         dw_type result = lop * rop;
@@ -579,6 +634,7 @@ struct ObWideInteger<Bits, Signed>::_impl
             }
           }
         }
+#endif
       } else {
         ObWideInteger<Bits, unsigned> lval = make_positive(lhs);
         ObWideInteger<Bits2, unsigned> rval = make_positive(rhs);
@@ -586,8 +642,37 @@ struct ObWideInteger<Bits, Signed>::_impl
         unsigned outter_limit = item_size(lval);
         unsigned inner_limit = item_size(rval);
         res = 0;
-        dw_type carrier = 0;
         bool overflow = false;
+#if defined(__aarch64__)
+        // ARM64 optimized path using umulh instruction
+        uint64_t carry = 0;
+        for (unsigned j = 0; j < inner_limit; j++) {
+          carry = 0;
+          for (unsigned i = 0; i < outter_limit; i++) {
+            if (i + j < ITEM_COUNT) {
+              uint64_t lo, hi;
+              // Compute: carry + res[i+j] + lval[i] * rval[j]
+              mul64x64_add2_128(lval.items_[i], rval.items_[j], res.items_[i + j], carry, lo, hi);
+              res.items_[i + j] = lo;
+              carry = hi;
+            } else {
+              overflow = true;
+              break;
+            }
+          } // end inner loop
+          if (OB_UNLIKELY(overflow)) {
+            break;
+          } else if (carry) {
+            if (j + outter_limit < ITEM_COUNT) {
+              res.items_[j + outter_limit] = carry;
+            } else {
+              overflow = true;
+              break;
+            }
+          }
+        }
+#else
+        dw_type carrier = 0;
         for (unsigned j = 0; j < inner_limit; j++) {
           for (unsigned i = 0; i < outter_limit; i++) {
             if (i + j < ITEM_COUNT) {
@@ -612,6 +697,7 @@ struct ObWideInteger<Bits, Signed>::_impl
             carrier = 0;
           }
         }
+#endif
         bool l_neg = is_negative(lhs);
         bool r_neg = is_negative(rhs);
         if (check_overflow) {

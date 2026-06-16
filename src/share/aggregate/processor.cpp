@@ -1181,25 +1181,29 @@ int Processor::reuse_group(const int64_t group_id)
 int Processor::reuse_agg_row(AggrRowPtr agg_row, RuntimeContext &agg_ctx, ReuseAggCellMgr &reuse_mgr)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(reuse_mgr.save(agg_ctx, agg_row))) {
-    LOG_WARN("save cell info failed", K(ret));
-  }
-  if (OB_SUCC(ret)) {
+  if (reuse_mgr.can_simple_reuse()) {
     MEMSET(agg_row, 0, agg_ctx.row_meta().row_size_);
-  }
-  // reset result values
-  for (int col_id = 0; OB_SUCC(ret) && col_id < agg_ctx.aggr_infos_.count(); col_id++) {
-    ObAggrInfo &aggr_info = agg_ctx.aggr_infos_.at(col_id);
-    ObDatumMeta &res_meta = aggr_info.expr_->datum_meta_;
-    VecValueTypeClass res_tc =
-      get_vec_value_tc(res_meta.type_, res_meta.scale_, res_meta.precision_);
-    char *cell = nullptr;
-    int32_t cell_len = 0;
-    agg_ctx.row_meta().locate_cell_payload(col_id, agg_row, cell, cell_len);
-    helper::init_cell_value(res_tc, cell, aggr_info);
-  }
-  if (OB_SUCC(ret) && OB_FAIL(reuse_mgr.restore(agg_ctx, agg_row))) {
-    LOG_WARN("restore cell infos failed", K(ret));
+  } else {
+    if (OB_FAIL(reuse_mgr.save(agg_ctx, agg_row))) {
+      LOG_WARN("save cell info failed", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      MEMSET(agg_row, 0, agg_ctx.row_meta().row_size_);
+    }
+    // reset result values
+    for (int col_id = 0; OB_SUCC(ret) && col_id < agg_ctx.aggr_infos_.count(); col_id++) {
+      ObAggrInfo &aggr_info = agg_ctx.aggr_infos_.at(col_id);
+      ObDatumMeta &res_meta = aggr_info.expr_->datum_meta_;
+      VecValueTypeClass res_tc =
+        get_vec_value_tc(res_meta.type_, res_meta.scale_, res_meta.precision_);
+      char *cell = nullptr;
+      int32_t cell_len = 0;
+      agg_ctx.row_meta().locate_cell_payload(col_id, agg_row, cell, cell_len);
+      helper::init_cell_value(res_tc, cell, aggr_info);
+    }
+    if (OB_SUCC(ret) && OB_FAIL(reuse_mgr.restore(agg_ctx, agg_row))) {
+      LOG_WARN("restore cell infos failed", K(ret));
+    }
   }
   return ret;
 }

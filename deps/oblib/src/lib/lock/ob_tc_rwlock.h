@@ -9,6 +9,7 @@
 #include "lib/stat/ob_latch_define.h"
 #include "lib/lock/ob_latch.h"
 #include "lib/time/ob_time_utility.h"
+#include "lib/utility/utility.h"
 
 namespace oceanbase
 {

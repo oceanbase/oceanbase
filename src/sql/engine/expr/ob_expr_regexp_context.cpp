@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "lib/ob_errno.h"
 #define USING_LOG_PREFIX LIB
 #include "sql/engine/expr/ob_expr_regexp_context.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
@@ -1337,6 +1338,840 @@ int ObExprHsRegexCtx::check_hs_regexp_status(hs_error_t status) const
   return ret;
 }
 #endif
+
+// RE2 flags for ObExprRe2RegexCtx (match_param mapping)
+static const uint32_t RE2_FLAG_CASELESS = 0x01;
+static const uint32_t RE2_FLAG_DOTALL = 0x02;
+static const uint32_t RE2_FLAG_MULTILINE = 0x04;
+
+ObExprRe2RegexCtx::ObExprRe2RegexCtx()
+  : ObExprOperatorCtx(),
+    inited_(false),
+    use_cached_replace_string_(false),
+    replace_string_cache_ready_(false),
+    cached_rewritten_replace_(),
+    replace_string_allocator_(nullptr),
+    pattern_(),
+    re2_flags_(0),
+    re2_(nullptr)
+{
+}
+
+ObExprRe2RegexCtx::~ObExprRe2RegexCtx()
+{
+  destroy();
+}
+
+void ObExprRe2RegexCtx::reset()
+{
+  destroy();
+}
+
+void ObExprRe2RegexCtx::destroy()
+{
+  if (inited_) {
+    inited_ = false;
+    re2_flags_ = 0;
+    if (re2_ != nullptr) {
+      delete re2_;
+      re2_ = nullptr;
+    }
+    pattern_.reset();
+  }
+}
+
+int ObExprRe2RegexCtx::get_regexp_flags(const ObString &match_param,
+                                        const bool is_case_sensitive,
+                                        const bool is_som_leftmost,
+                                        const bool is_single_match,
+                                        uint32_t &flags)
+{
+  int ret = OB_SUCCESS;
+  UNUSEDx(is_som_leftmost, is_single_match);
+  flags = 0;
+  flags |= is_case_sensitive ? 0 : RE2_FLAG_CASELESS;
+  const char *ptr = match_param.ptr();
+  int length = match_param.length();
+  for (int i = 0; OB_SUCC(ret) && i < length; i++) {
+    char c = ptr[i];
+    switch (c) {
+      case 'c':
+        flags &= ~RE2_FLAG_CASELESS;
+        break;
+      case 'i':
+        flags |= RE2_FLAG_CASELESS;
+        break;
+      case 'm':
+        flags |= RE2_FLAG_MULTILINE;
+        break;
+      case 'n':
+        flags |= RE2_FLAG_DOTALL;
+        break;
+      case 'u':
+        // RE2 default is Unix-like line ending, do nothing
+        break;
+      case 'x':
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("RE2 cannot handle flag 'x', please use ICU engine", K(match_param), K(c));
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "re2 engine, not supported match_param of RE2 engine");
+        break;
+      default:
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid match param", K(match_param), K(c));
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "re2 engine, use match param in regexp expression");
+        break;
+    }
+  }
+  return ret;
+}
+
+// Oracle mode preprocess pattern for RE2 (UTF-8, simpler than ICU)
+// [^][:] -> [^:] when appears only once
+int ObExprRe2RegexCtx::preprocess_pattern(ObExprStringBuf &string_buf,
+                                           const ObString &origin_pattern,
+                                           ObString &pattern)
+{
+  int ret = OB_SUCCESS;
+  if (lib::is_mysql_mode()) {
+    pattern = origin_pattern;
+  } else if (origin_pattern.length() > strlen("[^][:]")) {
+    /*oracle mode allow:
+    * regexp_substr('xxxx','[^][:]') <==> regexp_substr('xxxx','[^:]')
+    */
+    ObString const_str1(strlen("[^][:]"), "[^][:]");
+    bool is_continued = true;
+    bool need_transform = false;
+    const char *origin_buf = origin_pattern.ptr();
+    const int32_t origin_buf_len = origin_pattern.length();
+    int32_t begin_idx = -1;
+    for (int32_t i = 0; is_continued && i + const_str1.length() <= origin_buf_len; ++i) {
+      ObString tmp_str(const_str1.length(), origin_buf + i);
+      if (0 == tmp_str.compare(const_str1)) {
+        if (!need_transform) {
+          need_transform = true;
+          begin_idx = i;
+          i = i + const_str1.length() - 1;
+        } else {
+          // appears twice, do not transform
+          need_transform = false;
+          is_continued = false;
+        }
+      }
+    }
+    if (need_transform) {
+      ObString const_str2(strlen("[^:]"), "[^:]");
+      char *buf = NULL;
+      if (OB_UNLIKELY(begin_idx < 0 || begin_idx > origin_buf_len - const_str1.length())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(ret), K(begin_idx), K(origin_buf_len), K(const_str1.length()));
+      } else if (OB_ISNULL(buf = static_cast<char *>(string_buf.alloc(
+                                 origin_buf_len - const_str1.length() + const_str2.length())))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc memory", K(origin_pattern), K(ret));
+      } else {
+        int32_t buf_len = 0;
+        MEMCPY(buf, origin_buf, begin_idx);
+        buf_len += begin_idx;
+        MEMCPY(buf + buf_len, const_str2.ptr(), const_str2.length());
+        buf_len += const_str2.length();
+        if (origin_buf_len - begin_idx - const_str1.length() > 0) {
+          MEMCPY(buf + buf_len,
+                 origin_buf + begin_idx + const_str1.length(),
+                 origin_buf_len - begin_idx - const_str1.length());
+          buf_len += origin_buf_len - begin_idx - const_str1.length();
+        }
+        pattern.assign_ptr(buf, buf_len);
+        LOG_TRACE("succeed to preprocess pattern for RE2", K(buf), K(buf_len));
+      }
+    } else {
+      pattern = origin_pattern;
+      LOG_TRACE("succeed to preprocess pattern for RE2", K(origin_pattern), K(pattern));
+    }
+  } else {
+    pattern = origin_pattern;
+    LOG_TRACE("succeed to preprocess pattern for RE2", K(origin_pattern), K(pattern));
+  }
+  return ret;
+}
+
+int ObExprRe2RegexCtx::init(ObExprStringBuf &string_buf,
+                            const ObExprRegexpSessionVariables &regex_vars,
+                            const ObString &origin_pattern,
+                            const uint32_t flags,
+                            const bool reusable,
+                            const ObCollationType cs_type)
+{
+  int ret = OB_SUCCESS;
+  replace_string_cache_ready_ = false;
+  use_cached_replace_string_ = false;
+  cached_rewritten_replace_.reset();
+  replace_string_allocator_ = &string_buf;
+  ObString pattern;
+  ObString origin_pattern_utf8;
+  UNUSED(regex_vars);
+  if (OB_UNLIKELY(inited_ && !reusable)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("already inited", K(ret), K(this));
+  } else if (OB_UNLIKELY(origin_pattern.length() < 0) ||
+             (origin_pattern.length() > 0 && OB_ISNULL(origin_pattern.ptr()))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid pattern", K(ret), K(origin_pattern));
+  } else if (CS_TYPE_UTF8MB4_BIN != cs_type && CS_TYPE_UTF8MB4_GENERAL_CI != cs_type &&
+             CS_TYPE_UTF8MB4_0900_BIN != cs_type) {
+    if (OB_FAIL(ObExprUtil::convert_string_collation(
+          origin_pattern,
+          cs_type,
+          origin_pattern_utf8,
+          ObCharset::is_bin_sort(cs_type) ? CS_TYPE_UTF8MB4_BIN : CS_TYPE_UTF8MB4_GENERAL_CI,
+          string_buf))) {
+      LOG_WARN("convert charset failed", K(ret));
+    }
+  } else {
+    origin_pattern_utf8 = origin_pattern;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (origin_pattern_utf8.empty()) {
+    pattern = ObString(".{0}");
+  } else if (OB_FAIL(preprocess_pattern(string_buf, origin_pattern_utf8, pattern))) {
+    LOG_WARN("preprocess pattern failed", K(ret), K(origin_pattern_utf8));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (reusable && inited_ &&
+             pattern_ == ObString(0, pattern.length(), pattern.ptr()) &&
+             re2_flags_ == flags) {
+    // reuse the previous compile result
+  } else {
+    if (inited_) {
+      reset();
+    }
+    re2::RE2::Options options;
+    options.set_case_sensitive((flags & RE2_FLAG_CASELESS) == 0);
+    // NOTE: set_one_line(false) is the default and does NOT enable multiline ^/$.
+    // To actually enable multiline mode, we must prefix the pattern with (?m).
+    // set_one_line(true) would force single-line mode (override (?m) in pattern).
+    options.set_one_line(false);
+    options.set_dot_nl((flags & RE2_FLAG_DOTALL) != 0);
+    std::string pattern_str(pattern.ptr(), pattern.length());
+    if (flags & RE2_FLAG_MULTILINE) {
+      pattern_str = "(?m)" + pattern_str;
+    }
+    re2_ = new re2::RE2(pattern_str, options);
+    if (OB_ISNULL(re2_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate RE2 failed", K(ret));
+    } else if (!re2_->ok()) {
+      ret = OB_ERR_REGEXP_ERROR;
+      LOG_WARN("RE2 compile pattern failed", K(ret), K(pattern));
+      LOG_USER_ERROR(OB_ERR_REGEXP_ERROR, re2_->error().c_str());
+      delete re2_;
+      re2_ = nullptr;
+    } else {
+      char *pattern_save = static_cast<char *>(string_buf.alloc(pattern.length() + 1));
+      if (OB_ISNULL(pattern_save)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(ret));
+        delete re2_;
+        re2_ = nullptr;
+      } else {
+        MEMCPY(pattern_save, pattern.ptr(), pattern.length());
+        pattern_save[pattern.length()] = '\0';
+        pattern_.assign_ptr(pattern_save, pattern.length());
+        re2_flags_ = flags;
+        inited_ = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExprRe2RegexCtx::match(ObExprStringBuf &string_buf,
+                            const ObString &text,
+                            const ObCollationType cs_type,
+                            const int64_t start,
+                            bool &result) const
+{
+  int ret = OB_SUCCESS;
+  result = false;
+  UNUSED(string_buf);
+  if (OB_UNLIKELY(!inited_ || OB_ISNULL(re2_))) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("RE2 regexp context not inited", K(ret), K(inited_), K(re2_));
+  } else if (0 == text.length() || start >= text.length()) {
+    // do nothing
+  } else {
+    int64_t start_byte = ObCharset::charpos(cs_type, text.ptr(), text.length(), start);
+    if (start_byte >= text.length()) {
+      // do nothing
+    } else {
+      re2::StringPiece sp(text.ptr() + start_byte, text.length() - start_byte);
+      result = re2::RE2::PartialMatch(sp, *re2_);
+      LOG_DEBUG("RE2 match", K(start), K(start_byte), K(text.length()), K(result));
+    }
+  }
+  return ret;
+}
+
+int ObExprRe2RegexCtx::find(ObExprStringBuf &string_buf,
+                           const ObString &text,
+                           const ObCollationType cs_type,
+                           const int64_t start,
+                           const int64_t occurrence,
+                           const int64_t return_option,
+                           const int64_t subexpr,
+                           int64_t &result) const
+{
+  int ret = OB_SUCCESS;
+  result = 0;
+  UNUSED(string_buf);
+  int64_t occur = (occurrence < 1 && lib::is_mysql_mode() ? 1 : occurrence);
+  if (OB_UNLIKELY(!inited_ || OB_ISNULL(re2_))) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("RE2 regexp context not inited", K(ret), K(inited_), K(re2_));
+  } else if (0 == text.length() || text.length() <= start) {
+    // do nothing
+  } else if (subexpr > INT_MAX) {
+    // subexpr exceeds INT_MAX, would overflow when cast to int, Oracle compatible: return 0
+    result = 0;
+  } else {
+    int64_t start_byte = ObCharset::charpos(cs_type, text.ptr(), text.length(), start);
+    if (start_byte >= text.length()) {
+      // do nothing
+    } else {
+      int64_t match_start = -1;
+      int64_t match_end = -1;
+      int ncap = static_cast<int>(re2_->NumberOfCapturingGroups());
+      int need_cap = static_cast<int>(subexpr);
+      if (need_cap > ncap && need_cap > 0) {
+        // subexpr exceeds capture group count, Oracle compatible
+        result = 0;
+      } else {
+        int64_t search_pos = start_byte;
+        // Step 1: Skip occur - 1 matches using fast Match
+        for (int64_t i = 1; i < occur; i++) {
+          re2::StringPiece match;
+          bool ok = re2_->Match(
+              re2::StringPiece(text.ptr(), text.length()),
+              static_cast<int>(search_pos),
+              static_cast<int>(text.length()),
+              re2::RE2::UNANCHORED,
+              &match,
+              1);
+          if (!ok) {
+            search_pos = -1;
+            break;
+          }
+          search_pos = (match.data() - text.ptr()) + match.size();
+          if (search_pos == (match.data() - text.ptr())) {
+            // Zero-length match, advance by 1 UTF-8 character
+            int64_t char_len = ObCharset::charpos(cs_type, text.ptr() + search_pos, text.length() - search_pos, 1);
+            search_pos += (char_len > 0 ? char_len : 1);
+          }
+        }
+
+        if (search_pos < 0) {
+          // No match found for the specified occurrence
+        } else if (need_cap <= 0 || ncap == 0) {
+          // Step 2a: No capture group needed, use Match to get full match position
+          re2::StringPiece match;
+          bool ok = re2_->Match(
+              re2::StringPiece(text.ptr(), text.length()),
+              static_cast<int>(search_pos),
+              static_cast<int>(text.length()),
+              re2::RE2::UNANCHORED,
+              &match,
+              1);
+          if (ok) {
+            match_start = match.data() - text.ptr();
+            match_end = match_start + match.size();
+          }
+        } else if (need_cap > 9) {
+          ret = OB_ERR_REGEXP_ERROR;
+          LOG_WARN("subexpr exceeds maximum supported value 9", K(ret), K(need_cap));
+        } else {
+          // Step 2b: Use FindAndConsume for final match to get capture group position.
+          // subexpr is 1-based: m[0] = group 1, m[1] = group 2, ..., m[need_cap-1] = group need_cap
+          re2::StringPiece input(text.ptr() + search_pos, text.length() - search_pos);
+          re2::StringPiece m[9];
+          bool ok = false;
+          if (need_cap == 1) {
+            ok = re2::RE2::FindAndConsume(&input, *re2_, &m[0]);
+          } else if (need_cap == 2) {
+            ok = re2::RE2::FindAndConsume(&input, *re2_, &m[0], &m[1]);
+          } else if (need_cap == 3) {
+            ok = re2::RE2::FindAndConsume(&input, *re2_, &m[0], &m[1], &m[2]);
+          } else if (need_cap == 4) {
+            ok = re2::RE2::FindAndConsume(&input, *re2_, &m[0], &m[1], &m[2], &m[3]);
+          } else if (need_cap == 5) {
+            ok = re2::RE2::FindAndConsume(&input, *re2_, &m[0], &m[1], &m[2], &m[3], &m[4]);
+          } else if (need_cap == 6) {
+            ok = re2::RE2::FindAndConsume(&input, *re2_, &m[0], &m[1], &m[2], &m[3], &m[4], &m[5]);
+          } else if (need_cap == 7) {
+            ok = re2::RE2::FindAndConsume(&input, *re2_, &m[0], &m[1], &m[2], &m[3], &m[4], &m[5], &m[6]);
+          } else if (need_cap == 8) {
+            ok = re2::RE2::FindAndConsume(&input, *re2_, &m[0], &m[1], &m[2], &m[3], &m[4], &m[5], &m[6], &m[7]);
+          } else {
+            ok = re2::RE2::FindAndConsume(&input, *re2_, &m[0], &m[1], &m[2], &m[3], &m[4], &m[5], &m[6], &m[7], &m[8]);
+          }
+          if (ok) {
+            const re2::StringPiece &sel = m[need_cap - 1];
+            match_start = sel.data() - text.ptr();
+            match_end = match_start + sel.size();
+          }
+        }
+        if (match_start >= 0) {
+          // Convert byte position to character position
+          int64_t char_pos = ObCharset::strlen_char(cs_type, text.ptr(), match_start);
+          int64_t char_end = ObCharset::strlen_char(cs_type, text.ptr(), match_end);
+          result = return_option ? char_end : char_pos;
+          result += 1;
+        }
+      }
+      LOG_DEBUG("RE2 find", K(result), K(start), K(occurrence), K(return_option), K(subexpr));
+    }
+  }
+  return ret;
+}
+
+int ObExprRe2RegexCtx::count(ObExprStringBuf &string_buf,
+                             const ObString &text,
+                             const ObCollationType cs_type,
+                             const int32_t start,
+                             int64_t &result) const
+{
+  int ret = OB_SUCCESS;
+  result = 0;
+  UNUSED(string_buf);
+  if (OB_UNLIKELY(!inited_ || OB_ISNULL(re2_))) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("RE2 regexp context not inited", K(ret), K(inited_), K(re2_));
+  } else if (0 == text.length() || start >= text.length()) {
+    // do nothing
+  } else {
+    int64_t start_byte = ObCharset::charpos(cs_type, text.ptr(), text.length(), start);
+    if (start_byte < text.length()) {
+      // Use Match with explicit position tracking to correctly handle zero-length matches
+      // (e.g. pattern '.*'): after a zero-length match advance by 1 byte to avoid infinite loop.
+      int64_t search_pos = start_byte;
+      while (search_pos <= static_cast<int64_t>(text.length())) {
+        re2::StringPiece match;
+        bool ok = re2_->Match(
+            re2::StringPiece(text.ptr(), text.length()),
+            static_cast<int>(search_pos),
+            static_cast<int>(text.length()),
+            re2::RE2::UNANCHORED,
+            &match,
+            1);
+        if (!ok) {
+          break;
+        }
+        result++;
+        int64_t next = (match.data() - text.ptr()) + static_cast<int64_t>(match.size());
+        if (next == (match.data() - text.ptr())) {
+          // zero-length match: advance by 1 UTF-8 character to avoid infinite loop
+          int64_t char_len = ObCharset::charpos(cs_type, text.ptr() + next, text.length() - next, 1);
+          next += (char_len > 0 ? char_len : 1);
+        }
+        search_pos = next;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExprRe2RegexCtx::substr(ObExprStringBuf &string_buf,
+                              const ObString &text,
+                              const ObCollationType cs_type,
+                              const int64_t start,
+                              const int64_t occurrence,
+                              const int64_t subexpr,
+                              ObString &result) const
+{
+  int ret = OB_SUCCESS;
+  result.reset();
+  if (OB_UNLIKELY(!inited_ || OB_ISNULL(re2_))) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("RE2 regexp context not inited", K(ret), K(inited_), K(re2_));
+  } else if (0 == text.length() || text.length() <= start) {
+    // do nothing
+  } else if (subexpr > INT_MAX) {
+    // subexpr exceeds INT_MAX, would overflow when cast to int, Oracle compatible: return empty
+    // do nothing, result already reset
+  } else {
+    int64_t start_byte = ObCharset::charpos(cs_type, text.ptr(), text.length(), start);
+    if (start_byte >= text.length()) {
+      // do nothing
+    } else {
+      int ncap = static_cast<int>(re2_->NumberOfCapturingGroups());
+      int need_cap = static_cast<int>(subexpr);
+      if (need_cap > 9) {
+        ret = OB_ERR_REGEXP_ERROR;
+        LOG_WARN("subexpr exceeds maximum supported value 9", K(ret), K(need_cap));
+      } else if (need_cap > ncap && need_cap > 0) {
+        // subexpr exceeds capture group count, do nothing
+      } else {
+        int64_t search_pos = start_byte;
+        // Step 1: Skip occurrence - 1 matches using fast Match (no capture groups)
+        for (int64_t i = 1; i < occurrence; i++) {
+          re2::StringPiece match;
+          bool ok = re2_->Match(
+              re2::StringPiece(text.ptr(), text.length()),
+              static_cast<int>(search_pos),
+              static_cast<int>(text.length()),
+              re2::RE2::UNANCHORED,
+              &match,
+              1);
+          if (!ok) {
+            // No more matches
+            search_pos = -1;
+            break;
+          }
+          search_pos = (match.data() - text.ptr()) + match.size();
+          if (search_pos == (match.data() - text.ptr())) {
+            // Zero-length match, advance by 1 UTF-8 character
+            int64_t char_len = ObCharset::charpos(cs_type, text.ptr() + search_pos, text.length() - search_pos, 1);
+            search_pos += (char_len > 0 ? char_len : 1);
+          }
+        }
+
+        if (search_pos < 0) {
+          // No match found for the specified occurrence
+        } else if (need_cap <= 0 || ncap == 0) {
+          // Step 2a: No capture group needed, use Match to get full match content
+          // This is more reliable than FindAndConsume for patterns without capture groups
+          re2::StringPiece match;
+          bool ok = re2_->Match(
+              re2::StringPiece(text.ptr(), text.length()),
+              static_cast<int>(search_pos),
+              static_cast<int>(text.length()),
+              re2::RE2::UNANCHORED,
+              &match,
+              1);
+          if (ok && match.size() > 0) {
+            char *res_buf = static_cast<char *>(string_buf.alloc(match.size()));
+            if (OB_ISNULL(res_buf)) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("allocate memory failed", K(ret));
+            } else {
+              MEMCPY(res_buf, match.data(), match.size());
+              result.assign_ptr(res_buf, match.size());
+            }
+          }
+        } else {
+          // Step 2b: Use FindAndConsume for the final match to extract capture group.
+          // subexpr is 1-based: m[0] = group 1, m[1] = group 2, ..., m[need_cap-1] = group need_cap
+          re2::StringPiece input(text.ptr() + search_pos, text.length() - search_pos);
+          re2::StringPiece m[9];
+          bool ok = false;
+          if (need_cap == 1) {
+            ok = re2::RE2::FindAndConsume(&input, *re2_, &m[0]);
+          } else if (need_cap == 2) {
+            ok = re2::RE2::FindAndConsume(&input, *re2_, &m[0], &m[1]);
+          } else if (need_cap == 3) {
+            ok = re2::RE2::FindAndConsume(&input, *re2_, &m[0], &m[1], &m[2]);
+          } else if (need_cap == 4) {
+            ok = re2::RE2::FindAndConsume(&input, *re2_, &m[0], &m[1], &m[2], &m[3]);
+          } else if (need_cap == 5) {
+            ok = re2::RE2::FindAndConsume(&input, *re2_, &m[0], &m[1], &m[2], &m[3], &m[4]);
+          } else if (need_cap == 6) {
+            ok = re2::RE2::FindAndConsume(&input, *re2_, &m[0], &m[1], &m[2], &m[3], &m[4], &m[5]);
+          } else if (need_cap == 7) {
+            ok = re2::RE2::FindAndConsume(&input, *re2_, &m[0], &m[1], &m[2], &m[3], &m[4], &m[5], &m[6]);
+          } else if (need_cap == 8) {
+            ok = re2::RE2::FindAndConsume(&input, *re2_, &m[0], &m[1], &m[2], &m[3], &m[4], &m[5], &m[6], &m[7]);
+          } else if (need_cap == 9) {
+            ok = re2::RE2::FindAndConsume(&input, *re2_, &m[0], &m[1], &m[2], &m[3], &m[4], &m[5], &m[6], &m[7], &m[8]);
+          }
+          if (ok) {
+            const re2::StringPiece &sel = m[need_cap - 1];
+            if (sel.size() > 0) {
+              char *res_buf = static_cast<char *>(string_buf.alloc(sel.size()));
+              if (OB_ISNULL(res_buf)) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                LOG_WARN("allocate memory failed", K(ret));
+              } else {
+                MEMCPY(res_buf, sel.data(), sel.size());
+                result.assign_ptr(res_buf, sel.size());
+              }
+            }
+          }
+        }
+      }
+      LOG_DEBUG("RE2 substr", K(result), K(start), K(occurrence), K(subexpr));
+    }
+  }
+  return ret;
+}
+
+// Preprocess replace string for RE2:
+// - Convert $N to \N (RE2 uses \1, \2 syntax for capture groups)
+// - Handle \\$ to keep literal $
+// - Handle \$ to keep literal $ (escaped dollar sign)
+int ObExprRe2RegexCtx::get_valid_replace_string(ObIAllocator &string_buf,
+                                                 const ObString &origin_replace,
+                                                 ObString &rewritten_replace) const
+{
+  int ret = OB_SUCCESS;
+  rewritten_replace.reset();
+  // If cache is enabled and cache is ready, use cached value
+  if (use_cached_replace_string_ && replace_string_cache_ready_) {
+    rewritten_replace = cached_rewritten_replace_;
+  } else if (origin_replace.empty()) {
+    // Empty replace string (Oracle treats NULL as empty string)
+    // Return empty string, not NULL pointer
+    rewritten_replace.assign_ptr("", 0);
+  } else {
+    int ncap = static_cast<int>(re2_->NumberOfCapturingGroups());
+    // Allocate buffer: worst case is every char needs escaping, so 2x length
+    int64_t buf_len = origin_replace.length() * 2;
+    ObIAllocator *allocator = use_cached_replace_string_ ? replace_string_allocator_ : &string_buf;
+    char *buf = static_cast<char *>(allocator->alloc(buf_len));
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret), K(buf_len));
+    } else {
+      int64_t pos = 0;
+      const char *ptr = origin_replace.ptr();
+      int64_t len = origin_replace.length();
+
+      for (int64_t i = 0; i < len && OB_SUCC(ret); ++i) {
+        if (ptr[i] == '\\') {
+          // Backslash: check next char
+          if (i + 1 < len) {
+            char next = ptr[i + 1];
+            if (next == '$') {
+              // \$ -> literal $ (keep as $, RE2 will treat it literally in replace)
+              if (pos + 1 > buf_len) {
+                ret = OB_SIZE_OVERFLOW;
+                LOG_WARN("buffer overflow", K(ret), K(pos), K(buf_len));
+              } else {
+                buf[pos++] = '$';
+                ++i;  // skip the $
+              }
+            } else if (next >= '1' && next <= '9') {
+              // \N -> capture group reference (RE2 syntax, keep as is)
+              int group_num = next - '0';
+              if (group_num <= ncap) {
+                // Valid group, keep \N
+                if (pos + 2 > buf_len) {
+                  ret = OB_SIZE_OVERFLOW;
+                  LOG_WARN("buffer overflow", K(ret), K(pos), K(buf_len));
+                } else {
+                  buf[pos++] = '\\';
+                  buf[pos++] = next;
+                  ++i;
+                }
+              } else {
+                // Invalid group number (N > ncap), convert \N to \\N (ICU compatible)
+                // ICU produces a literal backslash followed by the digit in the output
+                if (pos + 3 > buf_len) {
+                  ret = OB_SIZE_OVERFLOW;
+                  LOG_WARN("buffer overflow", K(ret), K(pos), K(buf_len));
+                } else {
+                  // Write two backslashes followed by the digit
+                  buf[pos++] = '\\';
+                  buf[pos++] = '\\';
+                  buf[pos++] = next;
+                  ++i;
+                }
+              }
+            } else if (next == '\\') {
+              // \\ -> literal backslash
+              if (pos + 2 > buf_len) {
+                ret = OB_SIZE_OVERFLOW;
+                LOG_WARN("buffer overflow", K(ret), K(pos), K(buf_len));
+              } else {
+                buf[pos++] = '\\';
+                buf[pos++] = '\\';
+                ++i;
+              }
+            } else {
+              // \other -> keep both
+              if (pos + 2 > buf_len) {
+                ret = OB_SIZE_OVERFLOW;
+                LOG_WARN("buffer overflow", K(ret), K(pos), K(buf_len));
+              } else {
+                buf[pos++] = '\\';
+                buf[pos++] = next;
+                ++i;
+              }
+            }
+          } else {
+            // Trailing backslash, keep as is
+            if (pos + 1 > buf_len) {
+              ret = OB_SIZE_OVERFLOW;
+              LOG_WARN("buffer overflow", K(ret), K(pos), K(buf_len));
+            } else {
+              buf[pos++] = '\\';
+            }
+          }
+        } else if (ptr[i] == '$') {
+          // Dollar sign: check if it's a capture group reference
+          if (i + 1 < len && ptr[i + 1] >= '1' && ptr[i + 1] <= '9') {
+            // $N -> convert to \N for RE2
+            int group_num = ptr[i + 1] - '0';
+            if (group_num <= ncap) {
+              // Valid group, convert $N to \N
+              if (pos + 2 > buf_len) {
+                ret = OB_SIZE_OVERFLOW;
+                LOG_WARN("buffer overflow", K(ret), K(pos), K(buf_len));
+              } else {
+                buf[pos++] = '\\';
+                buf[pos++] = ptr[i + 1];
+                ++i;
+              }
+            } else {
+              // Invalid group number, skip $N (Oracle compatible)
+              ++i;
+            }
+          } else {
+            // Just a literal $, keep as is
+            if (pos + 1 > buf_len) {
+              ret = OB_SIZE_OVERFLOW;
+              LOG_WARN("buffer overflow", K(ret), K(pos), K(buf_len));
+            } else {
+              buf[pos++] = '$';
+            }
+          }
+        } else {
+          // Regular character, copy as is
+          if (pos + 1 > buf_len) {
+            ret = OB_SIZE_OVERFLOW;
+            LOG_WARN("buffer overflow", K(ret), K(pos), K(buf_len));
+          } else {
+            buf[pos++] = ptr[i];
+          }
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        rewritten_replace.assign_ptr(buf, pos);
+        if (use_cached_replace_string_) {
+          cached_rewritten_replace_ = rewritten_replace;
+          replace_string_cache_ready_ = true;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExprRe2RegexCtx::replace(ObExprStringBuf &string_buf,
+                               const ObString &text_string,
+                               const ObCollationType cs_type,
+                               const ObString &replace_string,
+                               const int64_t start,
+                               const int64_t occurrence,
+                               ObString &result) const
+{
+  int ret = OB_SUCCESS;
+  result.reset();
+  if (OB_UNLIKELY(!inited_ || OB_ISNULL(re2_))) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("RE2 regexp context not inited", K(ret), K(inited_), K(re2_));
+  } else if (0 == text_string.length() || text_string.length() <= start) {
+    result = text_string;
+  } else {
+    int64_t start_byte = ObCharset::charpos(cs_type, text_string.ptr(), text_string.length(), start);
+    if (start_byte >= text_string.length()) {
+      result = text_string;
+    } else {
+      int ncap = static_cast<int>(re2_->NumberOfCapturingGroups());
+      // Preprocess replace string: convert $N to \N for RE2
+      ObString rewritten_replace;
+      if (OB_FAIL(get_valid_replace_string(string_buf, replace_string, rewritten_replace))) {
+        LOG_WARN("failed to preprocess replace string", K(ret), K(replace_string));
+      } else {
+        std::string text_std(text_string.ptr(), text_string.length());
+        std::string rewrite_std(rewritten_replace.ptr(), rewritten_replace.length());
+        std::string result_std;
+
+        std::string prefix_str;
+        std::string to_replace;
+        if (occurrence == 0) {
+          // Global replace: replace all matches after start_byte
+          prefix_str.assign(text_string.ptr(), start_byte);
+          to_replace.assign(text_string.ptr() + start_byte, text_string.length() - start_byte);
+          RE2::GlobalReplace(&to_replace, *re2_, rewrite_std);
+          result_std = prefix_str + to_replace;
+        } else {
+          // Replace specific occurrence (1-based): occurrence=1 means the first match.
+          // Algorithm: skip the first (occurrence-1) matches, then find and replace the occurrence-th.
+          int64_t search_pos = start_byte;
+          bool enough_matches = true;
+          for (int64_t i = 1; i < occurrence; i++) {
+            re2::StringPiece skip_match;
+            bool ok = re2_->Match(
+                re2::StringPiece(text_std),
+                static_cast<int>(search_pos),
+                static_cast<int>(text_std.length()),
+                re2::RE2::UNANCHORED,
+                &skip_match,
+                1);
+            if (!ok) {
+              enough_matches = false;
+              break;
+            }
+            int64_t next = (skip_match.data() - text_std.data()) + static_cast<int64_t>(skip_match.size());
+            if (next == (skip_match.data() - text_std.data())) {
+              // zero-length match: advance by 1 UTF-8 character to avoid infinite loop
+              int64_t char_len = ObCharset::charpos(cs_type, text_string.ptr() + next, text_string.length() - next, 1);
+              next += (char_len > 0 ? char_len : 1);
+            }
+            search_pos = next;
+          }
+          if (!enough_matches) {
+            // Fewer than occurrence matches exist, return original text unchanged
+            prefix_str = text_std;
+            to_replace.clear();
+          } else {
+            re2::StringPiece match;
+            bool ok = re2_->Match(
+                re2::StringPiece(text_std),
+                static_cast<int>(search_pos),
+                static_cast<int>(text_std.length()),
+                re2::RE2::UNANCHORED,
+                &match,
+                1);
+            if (!ok) {
+              // The occurrence-th match does not exist, return original text unchanged
+              prefix_str = text_std;
+              to_replace.clear();
+            } else {
+              int64_t m_start = match.data() - text_std.data();
+              prefix_str = text_std.substr(0, m_start);
+              // to_replace starts exactly at the matched position, so RE2::Replace
+              // replaces the first (and only relevant) occurrence within it.
+              to_replace = text_std.substr(m_start);
+              RE2::Replace(&to_replace, *re2_, rewrite_std);
+            }
+          }
+        }
+
+        // Copy result to output
+        if (OB_SUCC(ret)) {
+          int64_t result_len = prefix_str.length() + to_replace.length();
+          if (result_len == 0) {
+            // Empty result, no need to allocate memory
+            result.reset();
+          } else {
+            char *res_buf = static_cast<char *>(string_buf.alloc(result_len));
+            if (OB_ISNULL(res_buf)) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("allocate memory failed", K(ret), K(result_len));
+            } else {
+              MEMCPY(res_buf, prefix_str.data(), prefix_str.length());
+              MEMCPY(res_buf + prefix_str.length(), to_replace.data(), to_replace.length());
+              result.assign_ptr(res_buf, result_len);
+            }
+          }
+        }
+      }
+      LOG_DEBUG("RE2 replace", K(result), K(start), K(start_byte), K(occurrence),
+                K(text_string), K(replace_string));
+    }
+  }
+  return ret;
+}
 
 }
 }

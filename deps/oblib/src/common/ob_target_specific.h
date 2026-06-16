@@ -20,7 +20,7 @@ enum ObTargetArch : uint32_t
   AVX      = (1 << 1),
   AVX2     = (1 << 2),
   AVX512    = (1 << 3),
-  NEON    = (1 << 4),
+  NEON    = (1 << 4)
 };
 
 bool is_arch_supported(ObTargetArch arch);
@@ -119,9 +119,38 @@ namespace avx512 { \
 } \
 OB_END_TARGET_SPECIFIC_CODE
 
+/* NEON is not available on x86_64, define empty macro */
+#define OB_DECLARE_NEON_SPECIFIC_CODE(...)
+#define OB_ARM_USE_MULTITARGET_CODE 0
+
+#elif defined(__GNUC__) && defined(__aarch64__)
+
+#if defined(__ARM_NEON)
+
+#define OB_ARM_USE_MULTITARGET_CODE 1
+
+#define OB_DECLARE_NEON_SPECIFIC_CODE(...) \
+namespace specific { \
+namespace neon { \
+  using namespace oceanbase::common::specific::neon; \
+  __VA_ARGS__ \
+} \
+} \
+
 #else
 
+#define OB_DECLARE_NEON_SPECIFIC_CODE(...)
+
+#endif
+
+/* x86 instructions are not available on aarch64, define empty macros */
+#define OB_DECLARE_SSE42_SPECIFIC_CODE(...)
+#define OB_DECLARE_AVX_SPECIFIC_CODE(...)
+#define OB_DECLARE_AVX2_SPECIFIC_CODE(...)
+#define OB_DECLARE_AVX512_SPECIFIC_CODE(...)
 #define OB_USE_MULTITARGET_CODE 0
+
+#else
 
 /* Multitarget code is disabled, just delete target-specific code.
  */
@@ -129,6 +158,9 @@ OB_END_TARGET_SPECIFIC_CODE
 #define OB_DECLARE_AVX_SPECIFIC_CODE(...)
 #define OB_DECLARE_AVX2_SPECIFIC_CODE(...)
 #define OB_DECLARE_AVX512_SPECIFIC_CODE(...)
+#define OB_DECLARE_NEON_SPECIFIC_CODE(...)
+#define OB_USE_MULTITARGET_CODE 0
+#define OB_ARM_USE_MULTITARGET_CODE 0
 
 #endif
 
@@ -155,24 +187,87 @@ OB_DECLARE_AVX2_SPECIFIC_CODE (__VA_ARGS__)
 OB_DECLARE_DEFAULT_CODE         (__VA_ARGS__) \
 OB_DECLARE_AVX512_SPECIFIC_CODE (__VA_ARGS__)
 
+// OB_DISPATCH_MULTITARGET_CODE
+#if OB_USE_MULTITARGET_CODE
+#define OB_DISPATCH_MULTITARGET_CODE(func, ...)                                   \
+  (oceanbase::common::is_arch_supported(oceanbase::common::ObTargetArch::AVX512)  \
+     ? oceanbase::common::specific::avx512::func(__VA_ARGS__)                     \
+   : oceanbase::common::is_arch_supported(oceanbase::common::ObTargetArch::AVX2)  \
+     ? oceanbase::common::specific::avx2::func(__VA_ARGS__)                       \
+   : oceanbase::common::is_arch_supported(oceanbase::common::ObTargetArch::SSE42) \
+     ? oceanbase::common::specific::sse42::func(__VA_ARGS__)                      \
+     : oceanbase::common::specific::normal::func(__VA_ARGS__))
+#elif OB_ARM_USE_MULTITARGET_CODE
+#define OB_DISPATCH_MULTITARGET_CODE(func, ...)                                \
+  (oceanbase::common::is_arch_supported(oceanbase::common::ObTargetArch::NEON) \
+     ? oceanbase::common::specific::neon::func(__VA_ARGS__)                    \
+     : oceanbase::common::specific::normal::func(__VA_ARGS__))
+#else
+#define OB_DISPATCH_MULTITARGET_CODE(func, ...) \
+  (oceanbase::common::specific::normal::func(__VA_ARGS__))
+#endif
+
+// Hook used by OB_UNITTEST_MULTITARGET_CODE to record the current target arch in unittest traces.
+// Override before including this header.
+// e.g.(gtest):
+//   #define OB_UNITTEST_MULTITARGET_CODE_SCOPED_TRACE(msg) SCOPED_TRACE(msg)
+#ifndef OB_UNITTEST_MULTITARGET_CODE_SCOPED_TRACE
+#define OB_UNITTEST_MULTITARGET_CODE_SCOPED_TRACE(msg) ((void)0)
+#endif
+
+// OB_UNITTEST_MULTITARGET_CODE
+// Unittest helper: expand statements for each compiled and CPU-supported target.
+// Use NS:: in body to call the per-target implementation in oceanbase::common::specific::*.
+// e.g.(gtest):
+//   OB_UNITTEST_MULTITARGET_CODE(
+//     EXPECT_EQ(ref, NS::popcnt_bytes(data, sz));
+//   )
+#define OB_UNITTEST_MULTITARGET_CODE_IMPL_(arch, ns, ...)                              \
+  do {                                                                                 \
+    if (oceanbase::common::is_arch_supported(oceanbase::common::ObTargetArch::arch)) { \
+      namespace NS = oceanbase::common::specific::ns;                                  \
+      OB_UNITTEST_MULTITARGET_CODE_SCOPED_TRACE("target=" #ns);                        \
+      __VA_ARGS__                                                                      \
+    }                                                                                  \
+  } while (0);
+
+#if OB_USE_MULTITARGET_CODE
+#define OB_UNITTEST_MULTITARGET_CODE(...)                          \
+  OB_UNITTEST_MULTITARGET_CODE_IMPL_(Default, normal, __VA_ARGS__) \
+  OB_UNITTEST_MULTITARGET_CODE_IMPL_(SSE42, sse42, __VA_ARGS__)    \
+  OB_UNITTEST_MULTITARGET_CODE_IMPL_(AVX2, avx2, __VA_ARGS__)      \
+  OB_UNITTEST_MULTITARGET_CODE_IMPL_(AVX512, avx512, __VA_ARGS__)
+#elif OB_ARM_USE_MULTITARGET_CODE
+#define OB_UNITTEST_MULTITARGET_CODE(...)                          \
+  OB_UNITTEST_MULTITARGET_CODE_IMPL_(Default, normal, __VA_ARGS__) \
+  OB_UNITTEST_MULTITARGET_CODE_IMPL_(NEON, neon, __VA_ARGS__)
+#else
+#define OB_UNITTEST_MULTITARGET_CODE(...) \
+  OB_UNITTEST_MULTITARGET_CODE_IMPL_(Default, normal, __VA_ARGS__)
+#endif
+
 OB_DECLARE_DEFAULT_CODE(
-  constexpr auto BuildArch = ObTargetArch::Default;
+  constexpr ObTargetArch BuildArch = ObTargetArch::Default;
 )
 
 OB_DECLARE_SSE42_SPECIFIC_CODE(
-  constexpr auto BuildArch = ObTargetArch::SSE42;
+  constexpr ObTargetArch BuildArch = ObTargetArch::SSE42;
 )
 
 OB_DECLARE_AVX_SPECIFIC_CODE(
-  constexpr auto BuildArch = ObTargetArch::AVX;
+  constexpr ObTargetArch BuildArch = ObTargetArch::AVX;
 )
 
 OB_DECLARE_AVX2_SPECIFIC_CODE(
-  constexpr auto BuildArch = ObTargetArch::AVX2;
+  constexpr ObTargetArch BuildArch = ObTargetArch::AVX2;
 )
 
 OB_DECLARE_AVX512_SPECIFIC_CODE(
-  constexpr auto BuildArch = ObTargetArch::AVX512;
+  constexpr ObTargetArch BuildArch = ObTargetArch::AVX512;
+)
+
+OB_DECLARE_NEON_SPECIFIC_CODE(
+  constexpr ObTargetArch BuildArch = ObTargetArch::NEON;
 )
 
 #define OB_MULTITARGET_FUNCTION_HEADER(...) __VA_ARGS__

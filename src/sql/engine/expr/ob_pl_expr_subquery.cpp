@@ -7,6 +7,7 @@
 
 #include "ob_pl_expr_subquery.h"
 #include "pl/ob_pl_resolver.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 
 namespace oceanbase

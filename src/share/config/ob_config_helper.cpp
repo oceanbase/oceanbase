@@ -1630,7 +1630,9 @@ bool ObConfigDegradationPolicyChecker::check(const ObConfigItem &t) const
 bool ObConfigRegexpEngineChecker::check(const ObConfigItem &t) const
 {
   bool valid = false;
-  if (0 == ObString::make_string("Hyperscan").case_compare(t.str())) {
+  if (0 == ObString::make_string("re2").case_compare(t.str())) {
+    valid = true;
+  } else if (0 == ObString::make_string("Hyperscan").case_compare(t.str())) {
 #if defined(__x86_64__)
     valid = true;
 #else

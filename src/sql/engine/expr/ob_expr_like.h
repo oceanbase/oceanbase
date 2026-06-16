@@ -28,6 +28,8 @@ class ObExprLike : public ObFuncExprOperator
 {
 #if OB_USE_MULTITARGET_CODE
   using StringSearcher = common::specific::avx2::ObStringSearcher;
+#elif defined(__aarch64__)
+  using StringSearcher = common::specific::neon::ObStringSearcher;
 #endif
   struct InstrInfo
   {

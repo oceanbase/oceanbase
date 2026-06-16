@@ -49,7 +49,7 @@ OB_INLINE void* ob_aligned_to(void* memptr, uint32_t alignment)
 OB_INLINE uint64_t ob_popcount64(uint64_t v)
 {
   int64_t cnt = 0;
-#if __POPCNT__
+#if __POPCNT__ || defined(__aarch64__)
   cnt = __builtin_popcountl(v);
 #else
   if (0 != v) {
@@ -63,7 +63,7 @@ OB_INLINE uint64_t ob_popcount64(uint64_t v)
 
 OB_INLINE uint32_t ob_popcount32(uint32_t x)
 {
-#if __POPCNT__
+#if __POPCNT__ || defined(__aarch64__)
   return __builtin_popcount(x);
 #else
   /* 32-bit recursive reduction using SWAR...

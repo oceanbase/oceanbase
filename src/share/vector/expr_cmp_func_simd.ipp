@@ -13,6 +13,9 @@
 #include <emmintrin.h>
 #include <immintrin.h>
 #endif
+#if OB_ARM_USE_MULTITARGET_CODE
+#include <arm_neon.h>
+#endif
 
 namespace oceanbase
 {
@@ -21,6 +24,12 @@ namespace common
 using namespace sql;
 
 OB_DECLARE_AVX512_SPECIFIC_CODE(
+template <VecValueTypeClass vec_tc, int val_size, ObCmpOp cmp_op, bool left_is_const, bool right_is_const>
+static int simd_eval_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
+                            const EvalBound &bound);
+)
+
+OB_DECLARE_NEON_SPECIFIC_CODE(
 template <VecValueTypeClass vec_tc, int val_size, ObCmpOp cmp_op, bool left_is_const, bool right_is_const>
 static int simd_eval_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
                             const EvalBound &bound);
@@ -74,6 +83,17 @@ struct FixedVectorCmp
             } else {
               DO_VECTOR_CMP(L_VEC_FIXED_FMT, R_VEC_FIXED_FMT, RES_VEC_FIXED_FMT);
             }
+#elif OB_ARM_USE_MULTITARGET_CODE
+            if constexpr (simd_supported(l_tc)) {
+              if (use_simd) {
+                ret = common::specific::neon::simd_eval_vector<l_tc, sizeof(RTCType<l_tc>), cmp_op, false, false >(
+                  expr, ctx, skip, bound);
+              } else {
+                DO_VECTOR_CMP(L_VEC_FIXED_FMT, R_VEC_FIXED_FMT, RES_VEC_FIXED_FMT);
+              }
+            } else {
+              DO_VECTOR_CMP(L_VEC_FIXED_FMT, R_VEC_FIXED_FMT, RES_VEC_FIXED_FMT);
+            }
 #else
               DO_VECTOR_CMP(L_VEC_FIXED_FMT, R_VEC_FIXED_FMT, RES_VEC_FIXED_FMT);
 #endif
@@ -87,6 +107,17 @@ struct FixedVectorCmp
             } else {
               DO_VECTOR_CMP(L_VEC_FIXED_FMT, R_VEC_UNIFORM_CONST_FMT, RES_VEC_FIXED_FMT);
             }
+#elif OB_ARM_USE_MULTITARGET_CODE
+            if constexpr (simd_supported(l_tc)) {
+              if (use_simd(expr, ctx, left, right, bound)) {
+                ret = common::specific::neon::simd_eval_vector<l_tc, sizeof(RTCType<l_tc>), cmp_op, false, true >(
+                        expr, ctx, skip, bound);
+              } else {
+                DO_VECTOR_CMP(L_VEC_FIXED_FMT, R_VEC_UNIFORM_CONST_FMT, RES_VEC_FIXED_FMT);
+              }
+            } else {
+              DO_VECTOR_CMP(L_VEC_FIXED_FMT, R_VEC_UNIFORM_CONST_FMT, RES_VEC_FIXED_FMT);
+            }
 #else
               DO_VECTOR_CMP(L_VEC_FIXED_FMT, R_VEC_UNIFORM_CONST_FMT, RES_VEC_FIXED_FMT);
 #endif
@@ -97,6 +128,17 @@ struct FixedVectorCmp
             if (use_simd(expr, ctx, left, right, bound) && common::is_arch_supported(ObTargetArch::AVX512)) {
               ret = common::specific::avx512::simd_eval_vector<l_tc, sizeof(RTCType<l_tc>), cmp_op, true, false>(
                       expr, ctx, skip, bound);
+            } else {
+              DO_VECTOR_CMP(L_VEC_UNIFORM_CONST_FMT, R_VEC_FIXED_FMT, RES_VEC_FIXED_FMT);
+            }
+#elif OB_ARM_USE_MULTITARGET_CODE
+            if constexpr (simd_supported(l_tc)) {
+              if (use_simd(expr, ctx, left, right, bound)) {
+                ret = common::specific::neon::simd_eval_vector<l_tc, sizeof(RTCType<l_tc>), cmp_op, true, false >(
+                      expr, ctx, skip, bound);
+              } else {
+                DO_VECTOR_CMP(L_VEC_UNIFORM_CONST_FMT, R_VEC_FIXED_FMT, RES_VEC_FIXED_FMT);
+              }
             } else {
               DO_VECTOR_CMP(L_VEC_UNIFORM_CONST_FMT, R_VEC_FIXED_FMT, RES_VEC_FIXED_FMT);
             }
@@ -492,6 +534,459 @@ static int simd_eval_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVecto
   }
   return ret;
 };
+)
+
+OB_DECLARE_NEON_SPECIFIC_CODE(
+  template<typename T>
+  struct NeonTraits;
+
+  OB_INLINE static uint64x2_t neon_not_u64(uint64x2_t val)
+  {
+    return vreinterpretq_u64_u32(vmvnq_u32(vreinterpretq_u32_u64(val)));
+  }
+
+  template<>
+  struct NeonTraits<int64_t>
+  {
+    using VecType = int64x2_t;
+    using ResType = uint64x2_t;
+    using LoadType = int64x2x4_t;
+    static const int constexpr vec_batch = 8;
+    static const int constexpr q_cnt = 4;
+    OB_INLINE static void store(char *res_data, ResType res)
+    {
+      vst1q_u64(reinterpret_cast<uint64_t *>(res_data), vshrq_n_u64(res, 63));
+    }
+    template<ObCmpOp cmp_op>
+    OB_INLINE static ResType cmp(VecType left, VecType right) {
+      ResType ret;
+      if constexpr (cmp_op == CO_EQ) {
+        ret = cmp_eq(left, right);
+      } else if constexpr (cmp_op == CO_NE) {
+        ret = cmp_neq(left, right);
+      } else if constexpr (cmp_op == CO_LT) {
+        ret = cmp_lt(left, right);
+      } else if constexpr (cmp_op == CO_LE) {
+        ret = cmp_le(left, right);
+      } else if constexpr (cmp_op == CO_GE) {
+        ret = cmp_ge(left, right);
+      } else {
+        ret = cmp_gt(left, right);
+      }
+      return ret;
+    }
+    OB_INLINE static ResType cmp_eq(VecType left, VecType right) { return vceqq_s64(left, right); }
+    OB_INLINE static ResType cmp_neq(VecType left, VecType right)
+    {
+      return neon_not_u64(vceqq_s64(left, right));
+    }
+    OB_INLINE static ResType cmp_lt(VecType left, VecType right) { return vcltq_s64(left, right); }
+    OB_INLINE static ResType cmp_le(VecType left, VecType right) { return vcleq_s64(left, right); }
+    OB_INLINE static ResType cmp_ge(VecType left, VecType right) { return vcgeq_s64(left, right); }
+    OB_INLINE static ResType cmp_gt(VecType left, VecType right) { return vcgtq_s64(left, right); }
+    OB_INLINE static LoadType load(const char *data) { return vld1q_s64_x4(reinterpret_cast<const int64_t *>(data)); }
+    OB_INLINE static VecType dup_v(const char *data) { return vdupq_n_s64(*(reinterpret_cast<const int64_t *>(data))); }
+  };
+
+  template<>
+  struct NeonTraits<uint64_t>
+  {
+    using VecType = uint64x2_t;
+    using ResType = uint64x2_t;
+    using LoadType = uint64x2x4_t;
+    static const int constexpr vec_batch = 8;
+    static const int constexpr q_cnt = 4;
+    OB_INLINE static void store(char *res_data, ResType res)
+    {
+      vst1q_u64(reinterpret_cast<uint64_t *>(res_data), vshrq_n_u64(res, 63));
+    }
+    template<ObCmpOp cmp_op>
+    OB_INLINE static ResType cmp(VecType left, VecType right) {
+      ResType ret;
+      if constexpr (cmp_op == CO_EQ) {
+        ret = cmp_eq(left, right);
+      } else if constexpr (cmp_op == CO_NE) {
+        ret = cmp_neq(left, right);
+      } else if constexpr (cmp_op == CO_LT) {
+        ret = cmp_lt(left, right);
+      } else if constexpr (cmp_op == CO_LE) {
+        ret = cmp_le(left, right);
+      } else if constexpr (cmp_op == CO_GE) {
+        ret = cmp_ge(left, right);
+      } else {
+        ret = cmp_gt(left, right);
+      }
+      return ret;
+    }
+    OB_INLINE static ResType cmp_eq(VecType left, VecType right) { return vceqq_u64(left, right); }
+    OB_INLINE static ResType cmp_neq(VecType left, VecType right)
+    {
+      return neon_not_u64(vceqq_u64(left, right));
+    }
+    OB_INLINE static ResType cmp_lt(VecType left, VecType right) { return vcltq_u64(left, right); }
+    OB_INLINE static ResType cmp_le(VecType left, VecType right) { return vcleq_u64(left, right); }
+    OB_INLINE static ResType cmp_ge(VecType left, VecType right) { return vcgeq_u64(left, right); }
+    OB_INLINE static ResType cmp_gt(VecType left, VecType right) { return vcgtq_u64(left, right); }
+    OB_INLINE static LoadType load(const char *data) { return vld1q_u64_x4(reinterpret_cast<const uint64_t *>(data)); }
+    OB_INLINE static VecType dup_v(const char *data) { return vdupq_n_u64(*(reinterpret_cast<const uint64_t *>(data))); }
+  };
+
+  template<>
+  struct NeonTraits<int32_t>
+  {
+    using VecType = int32x4_t;
+    using ResType = uint32x4_t;
+    using LoadType = int32x4x4_t;
+    static const int constexpr vec_batch = 16;
+    static const int constexpr q_cnt = 4;
+    OB_INLINE static void store(char *res_data, ResType res)
+    {
+      uint32x4_t res_v = vshrq_n_u32(res, 31);
+      vst1q_u64(reinterpret_cast<uint64_t *>(res_data), vmovl_u32(vget_low_u32(res_v)));
+      vst1q_u64(reinterpret_cast<uint64_t *>(res_data + sizeof(uint64_t) * 2), vmovl_u32(vget_high_u32(res_v)));
+    }
+    template<ObCmpOp cmp_op>
+    OB_INLINE static ResType cmp(VecType left, VecType right) {
+      ResType ret;
+      if constexpr (cmp_op == CO_EQ) {
+        ret = cmp_eq(left, right);
+      } else if constexpr (cmp_op == CO_NE) {
+        ret = cmp_neq(left, right);
+      } else if constexpr (cmp_op == CO_LT) {
+        ret = cmp_lt(left, right);
+      } else if constexpr (cmp_op == CO_LE) {
+        ret = cmp_le(left, right);
+      } else if constexpr (cmp_op == CO_GE) {
+        ret = cmp_ge(left, right);
+      } else {
+        ret = cmp_gt(left, right);
+      }
+      return ret;
+    }
+    OB_INLINE static ResType cmp_eq(VecType left, VecType right) { return vceqq_s32(left, right); }
+    OB_INLINE static ResType cmp_neq(VecType left, VecType right)
+    {
+      return vmvnq_u32(vceqq_s32(left, right));
+    }
+    OB_INLINE static ResType cmp_lt(VecType left, VecType right) { return vcltq_s32(left, right); }
+    OB_INLINE static ResType cmp_le(VecType left, VecType right) { return vcleq_s32(left, right); }
+    OB_INLINE static ResType cmp_ge(VecType left, VecType right) { return vcgeq_s32(left, right); }
+    OB_INLINE static ResType cmp_gt(VecType left, VecType right) { return vcgtq_s32(left, right); }
+    OB_INLINE static LoadType load(const char *data) { return vld1q_s32_x4(reinterpret_cast<const int32_t *>(data)); }
+    OB_INLINE static VecType dup_v(const char *data) { return vdupq_n_s32(*(reinterpret_cast<const int32_t *>(data))); }
+  };
+
+  template<>
+  struct NeonTraits<uint32_t>
+  {
+    using VecType = uint32x4_t;
+    using ResType = uint32x4_t;
+    using LoadType = uint32x4x4_t;
+    static const int constexpr vec_batch = 16;
+    static const int constexpr q_cnt = 4;
+    OB_INLINE static void store(char *res_data, ResType res)
+    {
+      uint32x4_t res_v = vshrq_n_u32(res, 31);
+      vst1q_u64(reinterpret_cast<uint64_t *>(res_data), vmovl_u32(vget_low_u32(res_v)));
+      vst1q_u64(reinterpret_cast<uint64_t *>(res_data + sizeof(uint64_t) * 2), vmovl_u32(vget_high_u32(res_v)));
+    }
+    template<ObCmpOp cmp_op>
+    OB_INLINE static ResType cmp(VecType left, VecType right) {
+      ResType ret;
+      if constexpr (cmp_op == CO_EQ) {
+        ret = cmp_eq(left, right);
+      } else if constexpr (cmp_op == CO_NE) {
+        ret = cmp_neq(left, right);
+      } else if constexpr (cmp_op == CO_LT) {
+        ret = cmp_lt(left, right);
+      } else if constexpr (cmp_op == CO_LE) {
+        ret = cmp_le(left, right);
+      } else if constexpr (cmp_op == CO_GE) {
+        ret = cmp_ge(left, right);
+      } else {
+        ret = cmp_gt(left, right);
+      }
+      return ret;
+    }
+    OB_INLINE static ResType cmp_eq(VecType left, VecType right) { return vceqq_u32(left, right); }
+    OB_INLINE static ResType cmp_neq(VecType left, VecType right)
+    {
+      return vmvnq_u32(vceqq_u32(left, right));
+    }
+    OB_INLINE static ResType cmp_lt(VecType left, VecType right) { return vcltq_u32(left, right); }
+    OB_INLINE static ResType cmp_le(VecType left, VecType right) { return vcleq_u32(left, right); }
+    OB_INLINE static ResType cmp_ge(VecType left, VecType right) { return vcgeq_u32(left, right); }
+    OB_INLINE static ResType cmp_gt(VecType left, VecType right) { return vcgtq_u32(left, right); }
+    OB_INLINE static LoadType load(const char *data) { return vld1q_u32_x4(reinterpret_cast<const uint32_t *>(data)); }
+    OB_INLINE static VecType dup_v(const char *data) { return vdupq_n_u32(*(reinterpret_cast<const uint32_t *>(data))); }
+  };
+
+  template<>
+  struct NeonTraits<uint8_t>
+  {
+    using VecType = uint8x16_t;
+    using ResType = uint8x16_t;
+    using LoadType = uint8x16_t;
+    static const int constexpr vec_batch = 16;
+    static const int constexpr q_cnt = 1;
+    OB_INLINE static void store(char *res_data, ResType res)
+    {
+      uint8x16_t res_v = vshrq_n_u8(res, 7);
+      uint64_t *out = reinterpret_cast<uint64_t *>(res_data);
+
+      uint16x8_t v16_lo = vmovl_u8(vget_low_u8(res_v));     // [0..7]
+      uint16x8_t v16_hi = vmovl_u8(vget_high_u8(res_v));    // [8..15]
+
+      uint32x4_t v32_0 = vmovl_u16(vget_low_u16(v16_lo));   // [0..3]
+      uint32x4_t v32_1 = vmovl_u16(vget_high_u16(v16_lo));  // [4..7]
+      uint32x4_t v32_2 = vmovl_u16(vget_low_u16(v16_hi));   // [8..11]
+      uint32x4_t v32_3 = vmovl_u16(vget_high_u16(v16_hi));  // [12..15]
+
+      vst1q_u64(out,      vmovl_u32(vget_low_u32(v32_0)));   // [0,1]
+      vst1q_u64(out + 2,  vmovl_u32(vget_high_u32(v32_0)));  // [2,3]
+      vst1q_u64(out + 4,  vmovl_u32(vget_low_u32(v32_1)));   // [4,5]
+      vst1q_u64(out + 6,  vmovl_u32(vget_high_u32(v32_1)));  // [6,7]
+      vst1q_u64(out + 8,  vmovl_u32(vget_low_u32(v32_2)));   // [8,9]
+      vst1q_u64(out + 10, vmovl_u32(vget_high_u32(v32_2)));  // [10,11]
+      vst1q_u64(out + 12, vmovl_u32(vget_low_u32(v32_3)));   // [12,13]
+      vst1q_u64(out + 14, vmovl_u32(vget_high_u32(v32_3)));  // [14,15]
+    }
+
+    template<ObCmpOp cmp_op>
+    OB_INLINE static ResType cmp(VecType left, VecType right) {
+      ResType ret;
+      if constexpr (cmp_op == CO_EQ) {
+        ret = cmp_eq(left, right);
+      } else if constexpr (cmp_op == CO_NE) {
+        ret = cmp_neq(left, right);
+      } else if constexpr (cmp_op == CO_LT) {
+        ret = cmp_lt(left, right);
+      } else if constexpr (cmp_op == CO_LE) {
+        ret = cmp_le(left, right);
+      } else if constexpr (cmp_op == CO_GE) {
+        ret = cmp_ge(left, right);
+      } else {
+        ret = cmp_gt(left, right);
+      }
+      return ret;
+    }
+
+    OB_INLINE static ResType cmp_eq(VecType left, VecType right) { return vceqq_u8(left, right); }
+    OB_INLINE static ResType cmp_neq(VecType left, VecType right)
+    {
+      return vmvnq_u8(vceqq_u8(left, right));
+    }
+    OB_INLINE static ResType cmp_lt(VecType left, VecType right) { return vcltq_u8(left, right); }
+    OB_INLINE static ResType cmp_le(VecType left, VecType right) { return vcleq_u8(left, right); }
+    OB_INLINE static ResType cmp_ge(VecType left, VecType right) { return vcgeq_u8(left, right); }
+    OB_INLINE static ResType cmp_gt(VecType left, VecType right) { return vcgtq_u8(left, right); }
+    OB_INLINE static LoadType load(const char *data) { return vld1q_u8(reinterpret_cast<const uint8_t *>(data)); }
+    OB_INLINE static VecType dup_v(const char *data) { return vdupq_n_u8(*(reinterpret_cast<const uint8_t *>(data))); }
+  };
+
+  template<>
+  struct NeonTraits<float>
+  {
+    using VecType = float32x4_t;
+    using ResType = uint32x4_t;
+    using LoadType = float32x4x4_t;
+    static const int constexpr vec_batch = 16;
+    static const int constexpr q_cnt = 4;
+    OB_INLINE static void store(char *res_data, ResType res)
+    {
+      uint32x4_t res_v = vshrq_n_u32(res, 31);
+      vst1q_u64(reinterpret_cast<uint64_t *>(res_data), vmovl_u32(vget_low_u32(res_v)));
+      vst1q_u64(reinterpret_cast<uint64_t *>(res_data + sizeof(uint64_t) * 2), vmovl_u32(vget_high_u32(res_v)));
+    }
+
+    template<ObCmpOp cmp_op>
+    OB_INLINE static ResType cmp(VecType left, VecType right) {
+      ResType ret;
+      if constexpr (cmp_op == CO_EQ) {
+        ret = cmp_eq(left, right);
+      } else if constexpr (cmp_op == CO_NE) {
+        ret = cmp_neq(left, right);
+      } else if constexpr (cmp_op == CO_LT) {
+        ret = cmp_lt(left, right);
+      } else if constexpr (cmp_op == CO_LE) {
+        ret = cmp_le(left, right);
+      } else if constexpr (cmp_op == CO_GE) {
+        ret = cmp_ge(left, right);
+      } else {
+        ret = cmp_gt(left, right);
+      }
+      return ret;
+    }
+
+    OB_INLINE static ResType cmp_eq(VecType left, VecType right) { return vceqq_f32(left, right); }
+    OB_INLINE static ResType cmp_neq(VecType left, VecType right)
+    {
+      return vmvnq_u32(vceqq_f32(left, right));
+    }
+    OB_INLINE static ResType cmp_lt(VecType left, VecType right) { return vcltq_f32(left, right); }
+    OB_INLINE static ResType cmp_le(VecType left, VecType right) { return vcleq_f32(left, right); }
+    OB_INLINE static ResType cmp_ge(VecType left, VecType right) { return vcgeq_f32(left, right); }
+    OB_INLINE static ResType cmp_gt(VecType left, VecType right) { return vcgtq_f32(left, right); }
+    OB_INLINE static LoadType load(const char *data)
+    {
+      return vld1q_f32_x4(reinterpret_cast<const float *>(data));
+    }
+    OB_INLINE static VecType dup_v(const char *data) { return vdupq_n_f32(*(reinterpret_cast<const float *>(data))); }
+  };
+
+  template<>
+  struct NeonTraits<double>
+  {
+    using VecType = float64x2_t;
+    using ResType = uint64x2_t;
+    using LoadType = float64x2x4_t;
+    static const int constexpr vec_batch = 8;
+    static const int constexpr q_cnt = 4;
+    OB_INLINE static void store(char *res_data, ResType res)
+    {
+      vst1q_u64(reinterpret_cast<uint64_t *>(res_data), vshrq_n_u64(res, 63));
+    }
+
+    template<ObCmpOp cmp_op>
+    OB_INLINE static ResType cmp(VecType left, VecType right) {
+      ResType ret;
+      if constexpr (cmp_op == CO_EQ) {
+        ret = cmp_eq(left, right);
+      } else if constexpr (cmp_op == CO_NE) {
+        ret = cmp_neq(left, right);
+      } else if constexpr (cmp_op == CO_LT) {
+        ret = cmp_lt(left, right);
+      } else if constexpr (cmp_op == CO_LE) {
+        ret = cmp_le(left, right);
+      } else if constexpr (cmp_op == CO_GE) {
+        ret = cmp_ge(left, right);
+      } else {
+        ret = cmp_gt(left, right);
+      }
+      return ret;
+    }
+
+    OB_INLINE static ResType cmp_eq(VecType left, VecType right) { return vceqq_f64(left, right); }
+    OB_INLINE static ResType cmp_neq(VecType left, VecType right)
+    {
+      return neon_not_u64(vceqq_f64(left, right));
+    }
+    OB_INLINE static ResType cmp_lt(VecType left, VecType right) { return vcltq_f64(left, right); }
+    OB_INLINE static ResType cmp_le(VecType left, VecType right) { return vcleq_f64(left, right); }
+    OB_INLINE static ResType cmp_ge(VecType left, VecType right) { return vcgeq_f64(left, right); }
+    OB_INLINE static ResType cmp_gt(VecType left, VecType right) { return vcgtq_f64(left, right); }
+    OB_INLINE static LoadType load(const char *data) { return vld1q_f64_x4(reinterpret_cast<const double *>(data)); }
+    OB_INLINE static VecType dup_v(const char *data) { return vdupq_n_f64(*(reinterpret_cast<const double *>(data))); }
+  };
+
+  template <VecValueTypeClass vec_tc, int val_size, ObCmpOp cmp_op, bool left_is_const, bool right_is_const>
+  static int simd_eval_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
+                              const EvalBound &bound)
+  {
+    int ret = OB_SUCCESS;
+    using Neon = NeonTraits<RTCType<vec_tc>>;
+    using CmpType = typename Neon::VecType;
+    using LoadType = typename Neon::LoadType;
+    constexpr int unit_batch = Neon::vec_batch;
+
+    char *res_data = static_cast<ObFixedLengthBase *>(expr.get_vector(ctx))->get_data() + bound.start() * sizeof(int64_t);
+    int64_t output_idx = bound.start();
+    int64_t arg_step = sizeof(RTCType<vec_tc>) * unit_batch;
+    int64_t res_step = sizeof(int64_t) * unit_batch;
+    int64_t res_cnt_perf_sq = unit_batch / Neon::q_cnt;
+    static_assert(Neon::q_cnt == 4 || Neon::q_cnt == 1, "Neon::q_cnt must be 4 or 1");
+
+    if constexpr (!left_is_const && !right_is_const) {
+      const char *left_data = expr.args_[0]->get_vector(ctx)->get_payload(bound.start());
+      const char *right_data = expr.args_[1]->get_vector(ctx)->get_payload(bound.start());
+      for (int i = 0; i < bound.range_size() / unit_batch; i++) {
+        LoadType left_v = Neon::load(left_data + i * arg_step);
+        LoadType right_v = Neon::load(right_data + i * arg_step);
+        if constexpr (Neon::q_cnt == 4) {
+          CmpType res0 = Neon::template cmp<cmp_op>(left_v.val[0], right_v.val[0]);
+          CmpType res1 = Neon::template cmp<cmp_op>(left_v.val[1], right_v.val[1]);
+          CmpType res2 = Neon::template cmp<cmp_op>(left_v.val[2], right_v.val[2]);
+          CmpType res3 = Neon::template cmp<cmp_op>(left_v.val[3], right_v.val[3]);
+          Neon::store(res_data + i * res_step, res0);
+          Neon::store(res_data + i * res_step + sizeof(int64_t) * res_cnt_perf_sq, res1);
+          Neon::store(res_data + i * res_step + sizeof(int64_t) * res_cnt_perf_sq * 2, res2);
+          Neon::store(res_data + i * res_step + sizeof(int64_t) * res_cnt_perf_sq * 3, res3);
+        } else if constexpr (Neon::q_cnt == 1) {
+          CmpType res = Neon::template cmp<cmp_op>(left_v, right_v);
+          Neon::store(res_data + i * res_step, res);
+        }
+        output_idx += unit_batch;
+      }
+    } else if constexpr (right_is_const) {
+      const char *left_data = expr.args_[0]->get_vector(ctx)->get_payload(bound.start());
+      const char *right_data = expr.args_[1]->get_vector(ctx)->get_payload(bound.start());
+      CmpType right_v = Neon::dup_v(right_data);
+      for (int i = 0; i < bound.range_size() / unit_batch; i++) {
+        LoadType left_v = Neon::load(left_data + i * arg_step);
+        if constexpr (Neon::q_cnt == 4) {
+          CmpType res0 = Neon::template cmp<cmp_op>(left_v.val[0], right_v);
+          CmpType res1 = Neon::template cmp<cmp_op>(left_v.val[1], right_v);
+          CmpType res2 = Neon::template cmp<cmp_op>(left_v.val[2], right_v);
+          CmpType res3 = Neon::template cmp<cmp_op>(left_v.val[3], right_v);
+          Neon::store(res_data + i * res_step, res0);
+          Neon::store(res_data + i * res_step + sizeof(int64_t) * res_cnt_perf_sq, res1);
+          Neon::store(res_data + i * res_step + sizeof(int64_t) * res_cnt_perf_sq * 2, res2);
+          Neon::store(res_data + i * res_step + sizeof(int64_t) * res_cnt_perf_sq * 3, res3);
+        } else if constexpr (Neon::q_cnt == 1) {
+          CmpType res = Neon::template cmp<cmp_op>(left_v, right_v);
+          Neon::store(res_data + i * res_step, res);
+        }
+        output_idx += unit_batch;
+      }
+    } else {
+      const char *left_data = expr.args_[0]->get_vector(ctx)->get_payload(bound.start());
+      const char *right_data = expr.args_[1]->get_vector(ctx)->get_payload(bound.start());
+      CmpType left_v = Neon::dup_v(left_data);
+      for (int i = 0; i < bound.range_size() / unit_batch; i++) {
+        LoadType right_v = Neon::load(right_data + i * arg_step);
+        if constexpr (Neon::q_cnt == 4) {
+          CmpType res0 = Neon::template cmp<cmp_op>(left_v, right_v.val[0]);
+          CmpType res1 = Neon::template cmp<cmp_op>(left_v, right_v.val[1]);
+          CmpType res2 = Neon::template cmp<cmp_op>(left_v, right_v.val[2]);
+          CmpType res3 = Neon::template cmp<cmp_op>(left_v, right_v.val[3]);
+          Neon::store(res_data + i * res_step, res0);
+          Neon::store(res_data + i * res_step + sizeof(int64_t) * res_cnt_perf_sq, res1);
+          Neon::store(res_data + i * res_step + sizeof(int64_t) * res_cnt_perf_sq * 2, res2);
+          Neon::store(res_data + i * res_step + sizeof(int64_t) * res_cnt_perf_sq * 3, res3);
+        } else if constexpr (Neon::q_cnt == 1) {
+          CmpType res = Neon::template cmp<cmp_op>(left_v, right_v);
+          Neon::store(res_data + i * res_step, res);
+        }
+        output_idx += unit_batch;
+      }
+    }
+
+    if (output_idx < bound.end()) {
+      ObObjMeta obj_meta = expr.args_[0]->obj_meta_;
+      const char *const_data_ptr =
+        left_is_const ?
+          expr.args_[0]->get_vector(ctx)->get_payload(0) :
+          (right_is_const ? expr.args_[1]->get_vector(ctx)->get_payload(0) : nullptr);
+      const char *left_data = expr.args_[0]->get_vector(ctx)->get_payload(0);
+      const char *right_data = expr.args_[1]->get_vector(ctx)->get_payload(0);
+      ObFixedLengthFormat<int64_t> *res_vec = static_cast<ObFixedLengthFormat<int64_t> *>(expr.get_vector(ctx));
+      for (; output_idx < bound.end(); output_idx++) {
+        int cmp_ret = 0;
+        VecTCCmpCalc<vec_tc, vec_tc>::cmp(
+          obj_meta, obj_meta,
+          left_is_const ? const_data_ptr : left_data + output_idx * val_size,
+          val_size,
+          right_is_const ? const_data_ptr : right_data + output_idx * val_size,
+          val_size,
+          cmp_ret);
+        res_vec->set_int(output_idx, get_cmp_ret<cmp_op>(cmp_ret));
+      }
+    }
+    ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+    eval_flags.set_all(bound.start(), bound.end());
+    OB_ASSERT(output_idx == bound.end());
+    return ret;
+  }
 )
 
 template<int X, int Y, bool defined>

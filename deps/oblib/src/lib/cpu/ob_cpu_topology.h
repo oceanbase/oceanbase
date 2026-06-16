@@ -6,10 +6,8 @@
 #ifndef OCEANBASE_LIB_OB_CPU_TOPOLOGY_
 #define OCEANBASE_LIB_OB_CPU_TOPOLOGY_
 
+#include <stdint.h>
 #include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/utility.h"
-
-#include "lib/container/ob_bit_set.h"
 
 namespace oceanbase
 {

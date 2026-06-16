@@ -16,6 +16,7 @@
 #include "storage/blocksstable/encoding/ob_encoding_query_util.h"
 #include "storage/blocksstable/encoding/neon/ob_encoding_neon_util.h"
 #include "storage/blocksstable/encoding/ob_encoding_util.h"
+#include "lib/container/ob_bit_simd.h"
 
 namespace oceanbase
 {
@@ -101,13 +102,12 @@ typedef void (*cs_dict_val_bt_tranverse) (
             int64_t &matched_ref_cnt,
             sql::ObBitVector *ref_bitset);
 
-typedef int (*cs_dict_ref_sort_bt_tranverse) (
+typedef void (*cs_dict_ref_sort_bt_tranverse) (
             const char *dict_ref_buf,
             const uint64_t dict_val_cnt,
             const int64_t *refs_val,
             const int64_t row_start,
             const int64_t row_count,
-            const sql::ObPushdownFilterExecutor *parent,
             common::ObBitmap &result_bitmap);
 
 typedef void (*cs_dict_val_in_tranverse) (
@@ -120,12 +120,11 @@ typedef void (*cs_dict_val_in_tranverse) (
             int64_t &matched_ref_cnt,
             sql::ObBitVector *ref_bitset);
 
-typedef int (*cs_dict_tranverse_ref) (
+typedef void (*cs_dict_tranverse_ref) (
             const char *dict_ref_buf,
             const int64_t row_start,
             const int64_t row_count,
             const common::ObBitmap *ref_bitmap,
-            const sql::ObPushdownFilterExecutor *parent,
             common::ObBitmap &result_bitmap);
 
 typedef int (*cs_dict_set_bitmap_with_bitset) (
@@ -284,24 +283,14 @@ public:
   {
     int ret = common::OB_SUCCESS;
     const ValDataType cast_datum_val = *reinterpret_cast<const ValDataType *>(&datum_val);
-    const ValDataType *start_pos = reinterpret_cast<const ValDataType *>(buf);
-    start_pos += row_start;
-    for (int64_t i = 0; OB_SUCC(ret) && (i < row_count); ++i) {
-      if (ExistParent && parent->can_skip_filter(i)) {
-        // skip
-      } else if (ExistNullBitmap && result_bitmap.test(i)) {
-        if (OB_FAIL(result_bitmap.set(i, false))) {
-          STORAGE_LOG(WARN, "fail to set", KR(ret), K(i), K(row_start));
-        }
+    const ValDataType *__restrict__ val_arr = reinterpret_cast<const ValDataType *>(buf) + row_start;
+    uint8_t *__restrict__ result_data = result_bitmap.get_data();
+    for (int64_t i = 0; i < row_count; ++i) {
+      if constexpr (ExistNullBitmap) {
+        result_data[i] = (result_data[i] ^ 1) & static_cast<uint8_t>(Op::apply(val_arr[i], cast_datum_val));
       } else {
-        ValDataType cur_val = *start_pos;
-        if (Op::apply(cur_val, cast_datum_val)) {
-          if (OB_FAIL(result_bitmap.set(i))) {
-            STORAGE_LOG(WARN, "fail to set bitmap", KR(ret), K(i), K(row_start));
-          }
-        }
+        result_data[i] = static_cast<uint8_t>(Op::apply(val_arr[i], cast_datum_val));
       }
-      ++start_pos;
     }
     return ret;
   }
@@ -313,24 +302,15 @@ public:
     int ret = common::OB_SUCCESS;
     const ValDataType left_boundary = *reinterpret_cast<const ValDataType *>(datums_val);
     const ValDataType right_boundary = *reinterpret_cast<const ValDataType *>(datums_val + 1);
-    const ValDataType *start_pos = reinterpret_cast<const ValDataType *>(buf);
-    start_pos += row_start;
-    for (int64_t i = 0; OB_SUCC(ret) && (i < row_count); ++i) {
-      if (ExistParent && parent->can_skip_filter(i)) {
-        // skip
-      } else if (ExistNullBitmap && result_bitmap.test(i)) {
-        if (OB_FAIL(result_bitmap.set(i, false))) {
-          STORAGE_LOG(WARN, "fail to set", KR(ret), K(i), K(row_start));
-        }
+    const ValDataType *__restrict__ val_arr = reinterpret_cast<const ValDataType *>(buf) + row_start;
+    uint8_t *__restrict__ result_data = result_bitmap.get_data();
+    const ValDataType delta = right_boundary - left_boundary;
+    for (int64_t i = 0; i < row_count; ++i) {
+      if constexpr (ExistNullBitmap) {
+        result_data[i] = (result_data[i] ^ 1) & static_cast<uint8_t>(static_cast<ValDataType>(val_arr[i] - left_boundary) <= delta);
       } else {
-        ValDataType cur_val = *start_pos;
-        if ((cur_val >= left_boundary) && (cur_val <= right_boundary)) {
-          if (OB_FAIL(result_bitmap.set(i))) {
-            STORAGE_LOG(WARN, "fail to set bitmap", KR(ret), K(i), K(row_start));
-          }
-        }
+        result_data[i] = static_cast<uint8_t>(static_cast<ValDataType>(val_arr[i] - left_boundary) <= delta);
       }
-      ++start_pos;
     }
     return ret;
   }
@@ -344,23 +324,27 @@ public:
     const ValDataType left_boundary = *reinterpret_cast<const ValDataType *>(datums_val);
     const ValDataType right_boundary = *reinterpret_cast<const ValDataType *>(datums_val + 1);
     const ValDataType cast_null_val = *reinterpret_cast<const ValDataType *>(&null_replaced_val);
-    const ValDataType *start_pos = reinterpret_cast<const ValDataType *>(buf);
-    start_pos += row_start;
-    for (int64_t i = 0; OB_SUCC(ret) && (i < row_count); ++i) {
-      if (ExistParent && parent->can_skip_filter(i)) {
-        // skip
-      } else {
-        ValDataType cur_val = *start_pos;
-        if ((cur_val != cast_null_val) && (cur_val >= left_boundary) && (cur_val <= right_boundary)) {
-          if (OB_FAIL(result_bitmap.set(i))) {
-            STORAGE_LOG(WARN, "fail to set bitmap", KR(ret), K(i), K(row_start));
-          }
-        }
+    const ValDataType *__restrict__ val_arr = reinterpret_cast<const ValDataType *>(buf) + row_start;
+    uint8_t *__restrict__ result_data = result_bitmap.get_data();
+    const ValDataType delta = right_boundary - left_boundary;
+    const bool null_in_range = static_cast<ValDataType>(cast_null_val - left_boundary) <= delta;
+    if (!null_in_range) {
+      for (int64_t i = 0; i < row_count; ++i) {
+        result_data[i] = static_cast<uint8_t>(static_cast<ValDataType>(val_arr[i] - left_boundary) <= delta);
       }
-      ++start_pos;
+    } else {
+      for (int64_t i = 0; i < row_count; ++i) {
+        const ValDataType cur_val = val_arr[i];
+        result_data[i] =
+          static_cast<uint8_t>(cur_val != cast_null_val) &
+          static_cast<uint8_t>(static_cast<ValDataType>(cur_val - left_boundary) <= delta);
+      }
     }
     return ret;
   }
+
+  static const int64_t MAX_STACK_BYTES = 256;
+  static const int64_t MAX_STACK_COUNT = MAX_STACK_BYTES / sizeof(ValDataType);
 
   // For in op, if the filter_datum count and row_count are both large, we will create hash_set
   // to optimize the performance
@@ -374,8 +358,8 @@ public:
     const uint64_t base_val, const sql::ObPushdownFilterExecutor *parent, ObBitmap &result_bitmap, const sql::ObWhiteFilterExecutor *filter)
   {
     int ret = common::OB_SUCCESS;
-    const ValDataType *start_pos = reinterpret_cast<const ValDataType *>(buf);
-    start_pos += row_start;
+    const ValDataType *__restrict__ val_arr = reinterpret_cast<const ValDataType *>(buf) + row_start;
+    uint8_t *__restrict__ result_data = result_bitmap.get_data();
 
     CHECK_USE_HASHSET_FOR_IN_OP(filter_val_cnt, row_count);
     if (use_hash_set) {
@@ -404,7 +388,7 @@ public:
               STORAGE_LOG(WARN, "fail to set", KR(ret), K(i), K(row_start));
             }
           } else {
-            ValDataType cur_val = *start_pos;
+            const ValDataType cur_val = val_arr[i];
             cast_cur_val.set_uint(cur_val);
             bool is_exist;
             if (OB_FAIL(datums_val.exist_datum(cast_cur_val, is_exist))) {
@@ -413,7 +397,6 @@ public:
               STORAGE_LOG(WARN, "fail to set bitmap", KR(ret), K(i), K(row_start));
             }
           }
-          ++start_pos;
         }
       } else {
         common::hash::ObHashSet<ValDataType, common::hash::NoPthreadDefendMode> datums_val;
@@ -439,14 +422,64 @@ public:
               STORAGE_LOG(WARN, "fail to set", KR(ret), K(i), K(row_start));
             }
           } else {
-            ValDataType cur_val = *start_pos;
+            const ValDataType cur_val = val_arr[i];
             if (datums_val.exist_refactored(cur_val) == OB_HASH_EXIST) {
               if (OB_FAIL(result_bitmap.set(i))) {
                 STORAGE_LOG(WARN, "fail to set bitmap", KR(ret), K(i), K(row_start));
               }
             }
           }
-          ++start_pos;
+        }
+      }
+    } else if (filter_val_cnt <= MAX_STACK_COUNT) {
+      ValDataType valid_vals[MAX_STACK_COUNT];
+      int64_t valid_cnt = 0;
+      for (int64_t i = 0; i < filter_val_cnt; ++i) {
+        if (filter_vals_valid[i]) {
+          const uint64_t datum_val = filter_vals[i] - base_val;
+          const ValDataType cast_datum_val = *reinterpret_cast<const ValDataType *>(&datum_val);
+          valid_vals[valid_cnt++] = cast_datum_val;
+        }
+      }
+      if (valid_cnt == 0) {
+        if constexpr (ExistNullBitmap) {
+          result_bitmap.set_bitmap_batch(0, row_count, false);
+        }
+      } else if (valid_cnt == 1) {
+        const ValDataType valid_val = valid_vals[0];
+        for (int64_t i = 0; i < row_count; ++i) {
+          if constexpr (ExistNullBitmap) {
+            result_data[i] = (result_data[i] ^ 1) & static_cast<uint8_t>(val_arr[i] == valid_val);
+          } else {
+            result_data[i] = static_cast<uint8_t>(val_arr[i] == valid_val);
+          }
+        }
+      } else if (valid_cnt <= 4) {
+        for (int64_t i = 0; i < row_count; ++i) {
+          const ValDataType cur_val = val_arr[i];
+          bool is_matched = false;
+          for (int64_t j = 0; j < valid_cnt; ++j) {
+            is_matched |= cur_val == valid_vals[j];
+          }
+          if constexpr (ExistNullBitmap) {
+            result_data[i] = (result_data[i] ^ 1) & static_cast<uint8_t>(is_matched);
+          } else {
+            result_data[i] = static_cast<uint8_t>(is_matched);
+          }
+        }
+      } else {
+        for (int64_t i = 0; i < row_count; ++i) {
+          if (ExistNullBitmap && result_data[i]) {
+            result_data[i] = 0;
+          } else {
+            const ValDataType cur_val = val_arr[i];
+            for (int64_t j = 0; j < valid_cnt; ++j) {
+              if (cur_val == valid_vals[j]) {
+                result_data[i] = 1;
+                break;
+              }
+            }
+          }
         }
       }
     } else {
@@ -458,7 +491,7 @@ public:
             STORAGE_LOG(WARN, "fail to set", KR(ret), K(i), K(row_start));
           }
         } else {
-          ValDataType cur_val = *start_pos;
+          const ValDataType cur_val = val_arr[i];
           for (int64_t j = 0; OB_SUCC(ret) && j < filter_val_cnt; ++j) {
             if (filter_vals_valid[j]) {
               const uint64_t datum_val = filter_vals[j] - base_val;
@@ -472,7 +505,6 @@ public:
             }
           }
         }
-        ++start_pos;
       }
     }
     return ret;
@@ -486,8 +518,8 @@ public:
     UNUSED(ExistNullBitmap);
     int ret = common::OB_SUCCESS;
     const ValDataType cast_null_val = *reinterpret_cast<const ValDataType *>(&null_replaced_val);
-    const ValDataType *start_pos = reinterpret_cast<const ValDataType *>(buf);
-    start_pos += row_start;
+    const ValDataType *__restrict__ val_arr = reinterpret_cast<const ValDataType *>(buf) + row_start;
+    uint8_t *__restrict__ result_data = result_bitmap.get_data();
 
     CHECK_USE_HASHSET_FOR_IN_OP(filter_val_cnt, row_count);
     if (use_hash_set) {
@@ -512,7 +544,7 @@ public:
         for (int64_t i = 0; OB_SUCC(ret) && (i < row_count); ++i) {
           if (ExistParent && parent->can_skip_filter(i)) {
             // skip
-          } else if ((cur_val = *start_pos) == cast_null_val) {
+          } else if ((cur_val = val_arr[i]) == cast_null_val) {
             // skip null
           } else {
             cast_cur_val.set_uint(cur_val);
@@ -523,7 +555,6 @@ public:
               STORAGE_LOG(WARN, "fail to set bitmap", KR(ret), K(i), K(row_start));
             }
           }
-          ++start_pos;
         }
       } else {
         common::hash::ObHashSet<uint64_t, common::hash::NoPthreadDefendMode> datums_val;
@@ -545,14 +576,51 @@ public:
         for (int64_t i = 0; OB_SUCC(ret) && (i < row_count); ++i) {
           if (ExistParent && parent->can_skip_filter(i)) {
             // skip
-          } else if ((cur_val = *start_pos) == cast_null_val) {
+          } else if ((cur_val = val_arr[i]) == cast_null_val) {
             // skip null
           } else if (datums_val.exist_refactored(cur_val) == OB_HASH_EXIST) {
             if (OB_FAIL(result_bitmap.set(i))) {
               STORAGE_LOG(WARN, "fail to set bitmap", KR(ret), K(i), K(row_start));
             }
           }
-          ++start_pos;
+        }
+      }
+    } else if (filter_val_cnt <= MAX_STACK_COUNT) {
+      ValDataType valid_vals[MAX_STACK_COUNT];
+      int64_t valid_cnt = 0;
+      for (int64_t i = 0; i < filter_val_cnt; ++i) {
+        if (filter_vals_valid[i]) {
+          const uint64_t datum_val = filter_vals[i] - base_val;
+          const ValDataType cast_datum_val = *reinterpret_cast<const ValDataType *>(&datum_val);
+          if (cast_datum_val != cast_null_val) {
+            valid_vals[valid_cnt++] = cast_datum_val;
+          }
+        }
+      }
+      if (valid_cnt == 0) {
+      } else if (valid_cnt == 1) {
+        const ValDataType valid_val = valid_vals[0];
+        for (int64_t i = 0; i < row_count; ++i) {
+          result_data[i] = static_cast<uint8_t>(val_arr[i] == valid_val);
+        }
+      } else if (valid_cnt <= 4) {
+        for (int64_t i = 0; i < row_count; ++i) {
+          const ValDataType cur_val = val_arr[i];
+          bool is_match = false;
+          for (int64_t j = 0; j < valid_cnt; ++j) {
+            is_match |= cur_val == valid_vals[j];
+          }
+          result_data[i] = static_cast<uint8_t>(is_match);
+        }
+      } else {
+        for (int64_t i = 0; i < row_count; ++i) {
+          const ValDataType cur_val = val_arr[i];
+          for (int64_t j = 0; j < valid_cnt; ++j) {
+            if (cur_val == valid_vals[j]) {
+              result_data[i] = 1;
+              break;
+            }
+          }
         }
       }
     } else {
@@ -560,7 +628,7 @@ public:
       for (int64_t i = 0; OB_SUCC(ret) && (i < row_count); ++i) {
         if (ExistParent && parent->can_skip_filter(i)) {
           // skip
-        } else if ((cur_val = *start_pos) == cast_null_val) {
+        } else if ((cur_val = val_arr[i]) == cast_null_val) {
           // skip null
         } else {
           for (int64_t j = 0; OB_SUCC(ret) && j < filter_val_cnt; ++j) {
@@ -576,14 +644,13 @@ public:
             }
           }
         }
-        ++start_pos;
       }
     }
     return ret;
   }
 };
 
-template <typename ValDataType, typename Op, bool ExistParent>
+template <typename ValDataType, typename Op>
 class ObCSDictFilterOpFunc
 {
 public:
@@ -591,103 +658,136 @@ public:
     const uint64_t datum_val, const int64_t dict_val_cnt,
     int64_t &matched_ref_cnt, sql::ObBitVector *ref_bitset)
   {
-    UNUSED(ExistParent);
     const ValDataType cast_datum_val = *reinterpret_cast<const ValDataType *>(&datum_val);
-    const ValDataType *start_pos = reinterpret_cast<const ValDataType *>(dict_val_buf);
-    for (int64_t i = 0; i < dict_val_cnt; ++i) {
-      ValDataType cur_val = *start_pos;
-      if (Op::apply(cur_val, cast_datum_val)) {
-        ref_bitset->set(i);
-        ++matched_ref_cnt;
-      }
-      ++start_pos;
-    }
+    const ValDataType *__restrict__ val_arr = reinterpret_cast<const ValDataType *>(dict_val_buf);
+    ref_bitset->bit_assign(0, dict_val_cnt, [&](int64_t i) {
+      return Op::apply(val_arr[i], cast_datum_val);
+    });
+    matched_ref_cnt += ref_bitset->accumulate_bit_cnt(dict_val_cnt);
   }
 
   static void dict_val_bt_tranverse(const char *dict_val_buf,
     const uint64_t *datums_val, const int64_t dict_val_cnt,
     int64_t &matched_ref_cnt, sql::ObBitVector *ref_bitset)
   {
-    UNUSED(ExistParent);
     const ValDataType cast_left_boundary = *reinterpret_cast<const ValDataType *>(datums_val);
     const ValDataType cast_right_boundary = *reinterpret_cast<const ValDataType *>(datums_val + 1);
-    const ValDataType *start_pos = reinterpret_cast<const ValDataType *>(dict_val_buf);
-    for (int64_t i = 0; i < dict_val_cnt; ++i) {
-      ValDataType cur_val = *start_pos;
-      if ((cur_val >= cast_left_boundary) && (cur_val <= cast_right_boundary)) {
-        ref_bitset->set(i);
-        ++matched_ref_cnt;
-      }
-      ++start_pos;
-    }
+    const ValDataType *__restrict__ val_arr = reinterpret_cast<const ValDataType *>(dict_val_buf);
+    const ValDataType delta = cast_right_boundary - cast_left_boundary;
+    ref_bitset->bit_assign(0, dict_val_cnt, [&](int64_t i) {
+      return static_cast<ValDataType>(val_arr[i] - cast_left_boundary) <= delta;
+    });
+    matched_ref_cnt += ref_bitset->accumulate_bit_cnt(dict_val_cnt);
   }
 
-  static int dict_ref_sort_bt_tranverse(const char *dict_ref_buf, const uint64_t dict_val_cnt,
+  static void dict_ref_sort_bt_tranverse(const char *dict_ref_buf, const uint64_t dict_val_cnt,
     const int64_t *refs_val, const int64_t row_start, const int64_t row_count,
-    const sql::ObPushdownFilterExecutor *parent, common::ObBitmap &result_bitmap)
+    common::ObBitmap &result_bitmap)
   {
-    int ret = OB_SUCCESS;
     const ValDataType cast_left_inclusive = *reinterpret_cast<const ValDataType *>(refs_val);
     const ValDataType cast_right_inclusive = *reinterpret_cast<const ValDataType *>(refs_val + 1);
-    const ValDataType *start_pos = reinterpret_cast<const ValDataType *>(dict_ref_buf);
-    start_pos += row_start;
-    for (int64_t i = 0; OB_SUCC(ret) && (i < row_count); ++i) {
-      if (ExistParent && parent->can_skip_filter(i)) {
-        // skip
-      } else {
-        ValDataType cur_val = *start_pos;
-        if ((cur_val >= cast_left_inclusive) && (cur_val <= cast_right_inclusive) && (cur_val < dict_val_cnt)) {
-          if (OB_FAIL(result_bitmap.set(i))) {
-            STORAGE_LOG(WARN, "fail to set bitmap", KR(ret), K(i), K(row_start));
-          }
-        }
-      }
-      ++start_pos;
+    OB_ASSERT(cast_right_inclusive < dict_val_cnt);
+    const ValDataType *__restrict__ ref_arr = reinterpret_cast<const ValDataType *>(dict_ref_buf) + row_start;
+    const ValDataType delta = cast_right_inclusive - cast_left_inclusive;
+    uint8_t *__restrict__ result_data = result_bitmap.get_data();
+    for (int64_t i = 0; i < row_count; ++i) {
+      const ValDataType d = static_cast<ValDataType>(ref_arr[i] - cast_left_inclusive);
+      result_data[i] = static_cast<uint8_t>(d <= delta);
     }
-    return ret;
   }
 
+  // unused
   static void dict_val_in_tranverse(const char *dict_val_buf, const uint64_t dict_val_base,
     const bool *vals_valid, const uint64_t *vals, const int64_t datums_cnt,
     const int64_t dict_val_cnt, int64_t &matched_ref_cnt, sql::ObBitVector *ref_bitset)
   {
-    UNUSED(ExistParent);
-    const ValDataType *start_pos = reinterpret_cast<const ValDataType *>(dict_val_buf);
-    for (int64_t i = 0; i < dict_val_cnt; ++i) {
-      ValDataType cur_val = *start_pos;
-      for (int64_t j = 0; j < datums_cnt; ++j) {
-        if (vals_valid[j]) {
-          const ValDataType cast_ref_val = (ValDataType)(vals[j] - dict_val_base);
-          if (cur_val == cast_ref_val) {
-            ref_bitset->set(i);
-            ++matched_ref_cnt;
-            break;
+    static const int64_t MAX_STACK_BYTES = 256;
+    static const int64_t MAX_STACK_COUNT = MAX_STACK_BYTES / sizeof(ValDataType);
+    const ValDataType *__restrict__ val_arr = reinterpret_cast<const ValDataType *>(dict_val_buf);
+    if (datums_cnt <= MAX_STACK_COUNT) {
+      ValDataType valid_vals[MAX_STACK_COUNT];
+      int64_t valid_cnt = 0;
+      for (int64_t i = 0; i < datums_cnt; ++i) {
+        if (vals_valid[i]) {
+          valid_vals[valid_cnt++] = (ValDataType) (vals[i] - dict_val_base);
+        }
+      }
+      if (valid_cnt == 0) {
+      } else if (valid_cnt == 1) {
+        const ValDataType valid_val = valid_vals[0];
+        ref_bitset->bit_assign(0, dict_val_cnt, [&](int64_t i) {
+          return val_arr[i] == valid_val;
+        });
+      } else if (valid_cnt <= 4) {
+        ref_bitset->bit_assign(0, dict_val_cnt, [&](int64_t i) {
+          bool is_match = false;
+          for (int64_t j = 0; j < valid_cnt; ++j) {
+            is_match |= val_arr[i] == valid_vals[j];
+          }
+          return is_match;
+        });
+      } else {
+        ref_bitset->bit_assign(0, dict_val_cnt, [&](int64_t i) {
+          for (int64_t j = 0; j < valid_cnt; ++j) {
+            if (val_arr[i] == valid_vals[j]) {
+              return true;
+            }
+          }
+          return false;
+        });
+      }
+    } else {
+      ref_bitset->bit_assign(0, dict_val_cnt, [&](int64_t i) {
+        for (int64_t j = 0; j < datums_cnt; ++j) {
+          if (vals_valid[j]) {
+            const ValDataType cast_ref_val = (ValDataType)(vals[j] - dict_val_base);
+            if (val_arr[i] == cast_ref_val) {
+              return true;
+            }
           }
         }
-      }
-      ++start_pos;
+        return false;
+      });
     }
+    matched_ref_cnt += ref_bitset->accumulate_bit_cnt(dict_val_cnt);
   }
 
-  static int dict_tranverse_ref(const char *dict_ref_buf, const int64_t row_start,
+  static void dict_tranverse_ref(const char *dict_ref_buf, const int64_t row_start,
     const int64_t row_count, const common::ObBitmap *ref_bitmap,
-    const sql::ObPushdownFilterExecutor *parent, common::ObBitmap &result_bitmap)
+    common::ObBitmap &result_bitmap)
   {
-    int ret = OB_SUCCESS;
-    const ValDataType *start_pos = reinterpret_cast<const ValDataType *>(dict_ref_buf);
-    start_pos += row_start;
-    for (int64_t offset = 0; OB_SUCC(ret) && (offset < row_count); offset++) {
-      if (ExistParent && parent->can_skip_filter(offset)) {
-        // skip
+    const ValDataType *ref_arr = reinterpret_cast<const ValDataType *>(dict_ref_buf) + row_start;
+    const uint8_t *__restrict__ ref_data = ref_bitmap->get_data();
+    uint8_t *__restrict__ result_data = result_bitmap.get_data();
+    if constexpr (sizeof(ValDataType) == 1) {
+      if (ref_bitmap->size() <= 64) {
+        uint64_t word = 0;
+        ref_bitmap->to_bits_mask(0, ref_bitmap->size(), false, reinterpret_cast<uint8_t *>(&word));
+        if (word != 0) {
+          for (int64_t i = 0; i < row_count; ++i) {
+            result_data[i] = (word >> ref_arr[i]) & 1;
+          }
+        }
+      } else if (ref_bitmap->size() <= 128) {
+        uint64_t words[2] = {0};
+        ref_bitmap->to_bits_mask(0, ref_bitmap->size(), false, reinterpret_cast<uint8_t *>(words));
+        if (words[0] != 0 || words[1] != 0) {
+          for (int64_t i = 0; i < row_count; ++i) {
+            const ValDataType ref = ref_arr[i];
+            const uint64_t word = (ref < 64) ? words[0] : words[1];
+            result_data[i] = (word >> (ref & 63)) & 1;
+          }
+        }
       } else {
-        ValDataType cur_ref = *start_pos;
-        if (ref_bitmap->test(cur_ref) && OB_FAIL(result_bitmap.set(offset))) {
-          STORAGE_LOG(WARN, "fail to set result bitmap", KR(ret), K(offset), K(cur_ref), K(row_start));
+        for (int64_t i = 0; i < row_count; ++i) {
+          result_data[i] = ref_data[ref_arr[i]];
         }
       }
-      ++start_pos;
+    } else {
+      for (int64_t i = 0; i < row_count; ++i) {
+        result_data[i] = ref_data[ref_arr[i]];
+      }
     }
-    return ret;
   }
 };
 
@@ -762,14 +862,14 @@ struct ObCSIntegerFilterFuncProducerWithNull
   }
 };
 
-template <bool EXIST_PARENT, int32_t VAL_WIDTH_TAG>
+template <int32_t VAL_WIDTH_TAG>
 struct ObCSDictRefFilterFuncProducer
 {
   static cs_dict_ref_sort_bt_tranverse produce_dict_ref_sort_bt_tranverse()
   {
     typedef typename ObEncodingTypeInference<false, VAL_WIDTH_TAG>::Type ValDataType;
     cs_dict_ref_sort_bt_tranverse func = nullptr;
-    func = ObCSDictFilterOpFunc<ValDataType, CSBetweenOp<ValDataType>, EXIST_PARENT>::dict_ref_sort_bt_tranverse;
+    func = ObCSDictFilterOpFunc<ValDataType, CSBetweenOp<ValDataType>>::dict_ref_sort_bt_tranverse;
     return func;
   }
 
@@ -777,7 +877,7 @@ struct ObCSDictRefFilterFuncProducer
   {
     typedef typename ObEncodingTypeInference<false, VAL_WIDTH_TAG>::Type ValDataType;
     cs_dict_tranverse_ref func = nullptr;
-    func = ObCSDictFilterOpFunc<ValDataType, CSEqualsOp<ValDataType>, EXIST_PARENT>::dict_tranverse_ref;
+    func = ObCSDictFilterOpFunc<ValDataType, CSEqualsOp<ValDataType>>::dict_tranverse_ref;
     return func;
   }
 };
@@ -792,22 +892,22 @@ struct ObCSDictFilterFuncProducer
     cs_dict_val_compare_tranverse func = nullptr;
     switch (op_type) {
       case sql::ObWhiteFilterOperatorType::WHITE_OP_EQ:
-        func = ObCSDictFilterOpFunc<ValDataType, CSEqualsOp<ValDataType>, false>::dict_val_compare_tranverse;
+        func = ObCSDictFilterOpFunc<ValDataType, CSEqualsOp<ValDataType>>::dict_val_compare_tranverse;
         break;
       case sql::ObWhiteFilterOperatorType::WHITE_OP_LE:
-        func = ObCSDictFilterOpFunc<ValDataType, CSLessOrEqualsOp<ValDataType>, false>::dict_val_compare_tranverse;
+        func = ObCSDictFilterOpFunc<ValDataType, CSLessOrEqualsOp<ValDataType>>::dict_val_compare_tranverse;
         break;
       case sql::ObWhiteFilterOperatorType::WHITE_OP_LT:
-        func = ObCSDictFilterOpFunc<ValDataType, CSLessOp<ValDataType>, false>::dict_val_compare_tranverse;
+        func = ObCSDictFilterOpFunc<ValDataType, CSLessOp<ValDataType>>::dict_val_compare_tranverse;
         break;
       case sql::ObWhiteFilterOperatorType::WHITE_OP_GE:
-        func = ObCSDictFilterOpFunc<ValDataType, CSGreaterOrEqualsOp<ValDataType>, false>::dict_val_compare_tranverse;
+        func = ObCSDictFilterOpFunc<ValDataType, CSGreaterOrEqualsOp<ValDataType>>::dict_val_compare_tranverse;
         break;
       case sql::ObWhiteFilterOperatorType::WHITE_OP_GT:
-        func = ObCSDictFilterOpFunc<ValDataType, CSGreaterOp<ValDataType>, false>::dict_val_compare_tranverse;
+        func = ObCSDictFilterOpFunc<ValDataType, CSGreaterOp<ValDataType>>::dict_val_compare_tranverse;
         break;
       case sql::ObWhiteFilterOperatorType::WHITE_OP_NE:
-        func = ObCSDictFilterOpFunc<ValDataType, CSNotEqualsOp<ValDataType>, false>::dict_val_compare_tranverse;
+        func = ObCSDictFilterOpFunc<ValDataType, CSNotEqualsOp<ValDataType>>::dict_val_compare_tranverse;
         break;
       default:
         func = nullptr;
@@ -820,7 +920,7 @@ struct ObCSDictFilterFuncProducer
   {
     typedef typename ObEncodingTypeInference<false, VAL_WIDTH_TAG>::Type ValDataType;
     cs_dict_val_bt_tranverse func = nullptr;
-    func = ObCSDictFilterOpFunc<ValDataType, CSBetweenOp<ValDataType>, false>::dict_val_bt_tranverse;
+    func = ObCSDictFilterOpFunc<ValDataType, CSBetweenOp<ValDataType>>::dict_val_bt_tranverse;
     return func;
   }
 
@@ -828,7 +928,7 @@ struct ObCSDictFilterFuncProducer
   {
     typedef typename ObEncodingTypeInference<false, VAL_WIDTH_TAG>::Type ValDataType;
     cs_dict_val_in_tranverse func = nullptr;
-    func = ObCSDictFilterOpFunc<ValDataType, CSEqualsOp<ValDataType>, false>::dict_val_in_tranverse;
+    func = ObCSDictFilterOpFunc<ValDataType, CSEqualsOp<ValDataType>>::dict_val_in_tranverse;
     return func;
   }
 };
@@ -866,7 +966,7 @@ struct ObCSDictSetBitmapOpFunc
         }
       } else {
         alignas(64) uint8_t lut[256];
-        ref_bitset->unpack_to_byte_bitmap<IS_CONVERSELY>(lut, ref_bitset_size);
+        unpack_bits_to_bytes<IS_CONVERSELY>(ref_bitset->reinterpret_data<uint64_t>(), lut, ref_bitset_size);
         for (int i = 0; i < row_cnt; ++i) {
           result_data[i] = lut[ref_arr[i]];
         }
@@ -874,7 +974,7 @@ struct ObCSDictSetBitmapOpFunc
     } else if constexpr (sizeof(RefIntType) == 2) {
       if (ref_bitset_size <= 4096) {
         alignas(64) uint8_t lut[4096];
-        ref_bitset->unpack_to_byte_bitmap<IS_CONVERSELY>(lut, ref_bitset_size);
+        unpack_bits_to_bytes<IS_CONVERSELY>(ref_bitset->reinterpret_data<uint64_t>(), lut, ref_bitset_size);
         for (int i = 0; i < row_cnt; ++i) {
           result_data[i] = lut[ref_arr[i]];
         }
@@ -1029,15 +1129,14 @@ public:
     func(dict_val_buf, datums_val, dict_val_cnt, matched_ref_cnt, ref_bitset);
   }
 
-  OB_INLINE int dict_ref_sort_bt_tranverse(const char *dict_ref_buf,
+  OB_INLINE void dict_ref_sort_bt_tranverse(const char *dict_ref_buf,
     const uint64_t dict_val_cnt, const int64_t *refs_val, const int64_t row_start,
-    const int64_t row_count, const sql::ObPushdownFilterExecutor *parent,
-    const uint32_t ref_width_size, common::ObBitmap &result_bitmap)
+    const int64_t row_count, const uint32_t ref_width_size,
+    common::ObBitmap &result_bitmap)
   {
     const int32_t ref_width_tag = get_value_len_tag_map()[ref_width_size];
-    const bool exist_parent = (nullptr != parent);
-    cs_dict_ref_sort_bt_tranverse func = dict_ref_sort_bt_funcs_[exist_parent][ref_width_tag];
-    return func(dict_ref_buf, dict_val_cnt, refs_val, row_start, row_count, parent, result_bitmap);
+    cs_dict_ref_sort_bt_tranverse func = dict_ref_sort_bt_funcs_[ref_width_tag];
+    func(dict_ref_buf, dict_val_cnt, refs_val, row_start, row_count, result_bitmap);
   }
 
   OB_INLINE void dict_val_in_tranverse(const char *dict_val_buf, const uint32_t val_width_size,
@@ -1049,14 +1148,13 @@ public:
     func(dict_val_buf, dict_val_base, vals_valid, vals, datums_cnt, dict_val_cnt, matched_ref_cnt, ref_bitset);
   }
 
-  OB_INLINE int dict_tranverse_ref(const char *dict_ref_buf, const uint32_t ref_width_size,
+  OB_INLINE void dict_tranverse_ref(const char *dict_ref_buf, const uint32_t ref_width_size,
     const int64_t row_start, const int64_t row_count, const common::ObBitmap *ref_bitmap,
-    const sql::ObPushdownFilterExecutor *parent, common::ObBitmap &result_bitmap)
+    common::ObBitmap &result_bitmap)
   {
     const int32_t ref_width_tag = get_value_len_tag_map()[ref_width_size];
-    const bool exist_parent = (nullptr != parent);
-    cs_dict_tranverse_ref func = dict_scan_ref_funcs_[exist_parent][ref_width_tag];
-    return func(dict_ref_buf, row_start, row_count, ref_bitmap, parent, result_bitmap);
+    cs_dict_tranverse_ref func = dict_scan_ref_funcs_[ref_width_tag];
+    func(dict_ref_buf, row_start, row_count, ref_bitmap, result_bitmap);
   }
 
   // if the row's ref is set in @ref_bitset, set it as @flag in @result_bitmap, otherwise set it conversely.
@@ -1094,9 +1192,9 @@ private:
 
   ObMultiDimArray_T<cs_dict_val_compare_tranverse, 4/*val_tag*/, 6/*op*/> dict_val_cmp_funcs_;
   ObMultiDimArray_T<cs_dict_val_bt_tranverse, 4/*val_tag*/> dict_val_bt_funcs_;
-  ObMultiDimArray_T<cs_dict_ref_sort_bt_tranverse, 2/*exist_parent*/, 4/*val_tag*/> dict_ref_sort_bt_funcs_;
+  ObMultiDimArray_T<cs_dict_ref_sort_bt_tranverse, 4/*val_tag*/> dict_ref_sort_bt_funcs_;
   ObMultiDimArray_T<cs_dict_val_in_tranverse, 4/*val_tag*/> dict_val_in_funcs_;
-  ObMultiDimArray_T<cs_dict_tranverse_ref, 2/*exist_parent*/, 4/*val_tag*/> dict_scan_ref_funcs_;
+  ObMultiDimArray_T<cs_dict_tranverse_ref, 4/*val_tag*/> dict_scan_ref_funcs_;
 
   ObMultiDimArray_T<cs_dict_set_bitmap_with_bitset, 4/*ref_width_tag*/, 2 /*flag*/> dict_set_bitmap_with_bitset_funcs_;
   ObMultiDimArray_T<cs_dict_set_bitmap_with_bitset_const, 4/*ref_width_tag*/, 2 /*flag*/> dict_set_bitmap_with_bitset_const_funcs_;

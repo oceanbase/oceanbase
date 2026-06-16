@@ -6,8 +6,11 @@
 #define USING_LOG_PREFIX COMMON
 
 #include "lib/cpu/ob_cpu_topology.h"
+#include "lib/utility/utility.h"
 #include "lib/oblog/ob_log_module.h"
-#include "lib/container/ob_bit_set.h"
+#if defined(__aarch64__)
+#include <sys/auxv.h>
+#endif
 
 namespace oceanbase {
 namespace common {
@@ -51,9 +54,9 @@ CpuFlagSet::CpuFlagSet() : flags_(0)
   }
 #define LOG_CPUFLAG(flag) \
   if (have_flag(CpuFlag::flag)) { \
-    _LOG_INFO("#flag is supported"); \
+    _LOG_INFO(#flag " is supported"); \
   } else { \
-    _LOG_WARN("#flag is not supported"); \
+    _LOG_WARN(#flag " is not supported"); \
   }
   LOG_CPUFLAG(SSE4_2)
   LOG_CPUFLAG(AVX)
@@ -82,7 +85,8 @@ int CpuFlagSet::init_from_os(uint64_t& flags)
 {
   int ret = OB_SUCCESS;
   flags = 0;
-  const char* const CPU_FLAG_CMDS[(int)CpuFlag::MAX] = {"grep -E ' sse4_2( |$)' /proc/cpuinfo",
+  const char* const CPU_FLAG_CMDS[(int)CpuFlag::MAX] = {
+      "grep -E ' sse4_2( |$)' /proc/cpuinfo",
       "grep -E ' avx( |$)' /proc/cpuinfo",
       "grep -E ' avx2( |$)' /proc/cpuinfo",
       "grep -E ' avx512bw( |$)' /proc/cpuinfo",

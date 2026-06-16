@@ -1557,13 +1557,10 @@ int ObDictColumnDecoder::sorted_between_for_ref(
   if (OB_FAIL(ret)) {
   } else if (right_ref_exclusive <= left_ref_inclusive) {
     // all false
-  } else if (OB_FAIL(ObCSFilterFunctionFactory::instance().dict_ref_sort_bt_tranverse(ctx.ref_data_, dict_val_cnt, refs_val,
-          row_start, row_cnt, parent, ref_width_size, result_bitmap))) {
-    LOG_WARN("fail to exe dict_ref_sort_bt_tranverse", KR(ret), K(ref_width_size), K(dict_val_cnt), K(left_ref_inclusive),
-        K(right_ref_inclusive));
+  } else {
+    ObCSFilterFunctionFactory::instance().dict_ref_sort_bt_tranverse(ctx.ref_data_, dict_val_cnt, refs_val,
+          row_start, row_cnt, ref_width_size, result_bitmap);
   }
-
-
   return ret;
 }
 
@@ -2100,10 +2097,8 @@ int ObDictColumnDecoder::set_res_with_bitmap(
       LOG_WARN("fail to set_res_with_const_encoding_ref", K(ret), K(ref_desc), K(pd_filter_info));
     }
   } else {
-    if (OB_FAIL(ObCSFilterFunctionFactory::instance().dict_tranverse_ref(ref_buf, ref_width_size, pd_filter_info.start_,
-        pd_filter_info.count_, ref_bitmap, parent, result_bitmap))) {
-      LOG_WARN("fail to tranverse ref", KR(ret), K(ref_width_size), K(pd_filter_info));
-    }
+    ObCSFilterFunctionFactory::instance().dict_tranverse_ref(ref_buf, ref_width_size, pd_filter_info.start_,
+        pd_filter_info.count_, ref_bitmap, result_bitmap);
   }
   return ret;
 }

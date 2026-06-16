@@ -91,9 +91,6 @@ ObCSFilterFunctionFactory::ObCSFilterFunctionFactory()
 {
   INIT_FILTER_OP_FUNCS_2P4(integer_bt_null_funcs_, ObCSIntegerFilterFuncProducerWithNull, produce_integer_bt_tranverse_with_null);
   INIT_FILTER_OP_FUNCS_2P4(integer_in_null_funcs_, ObCSIntegerFilterFuncProducerWithNull, produce_integer_in_tranverse_with_null);
-  INIT_FILTER_OP_FUNCS_2P4(dict_ref_sort_bt_funcs_, ObCSDictRefFilterFuncProducer, produce_dict_ref_sort_bt_tranverse);
-  INIT_FILTER_OP_FUNCS_2P4(dict_scan_ref_funcs_, ObCSDictRefFilterFuncProducer, produce_dict_tranverse_ref);
-
   INIT_FILTER_OP_FUNCS_2P2P4(integer_bt_funcs_, ObCSIntegerFilterFuncProducer, produce_integer_bt_tranverse);
   INIT_FILTER_OP_FUNCS_2P2P4(integer_in_funcs_, ObCSIntegerFilterFuncProducer, produce_integer_in_tranverse);
 
@@ -102,6 +99,8 @@ ObCSFilterFunctionFactory::ObCSFilterFunctionFactory()
     INIT_FILTER_OP_FUNCS_4P6(dict_val_cmp_funcs_, ObCSDictFilterFuncProducer, produce_dict_val_cmp_tranverse);
   }
 
+  INIT_FILTER_OP_FUNCS_4(dict_ref_sort_bt_funcs_, ObCSDictRefFilterFuncProducer, produce_dict_ref_sort_bt_tranverse);
+  INIT_FILTER_OP_FUNCS_4(dict_scan_ref_funcs_, ObCSDictRefFilterFuncProducer, produce_dict_tranverse_ref);
   INIT_FILTER_OP_FUNCS_4(dict_val_bt_funcs_, ObCSDictFilterFuncProducer, produce_dict_val_bt_tranverse);
   INIT_FILTER_OP_FUNCS_4(dict_val_in_funcs_, ObCSDictFilterFuncProducer, produce_dict_val_in_tranverse);
 

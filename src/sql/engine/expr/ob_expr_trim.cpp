@@ -13,6 +13,68 @@
 #include <emmintrin.h>
 #include <immintrin.h>
 #endif
+#if defined(__ARM_NEON)
+#include <arm_neon.h>
+#endif
+
+// ============================================================================
+// SIMD Traits for unified trim implementation
+// Template functions defined before namespace for cross-namespace access
+// ============================================================================
+
+// Generic trim implementation using traits (single implementation)
+template<typename Traits>
+static int simd_ltrim_impl(const ObString &src, const ObString &pattern, int32_t &start) {
+  int ret = OB_SUCCESS;
+  bool is_finish = false;
+  typename Traits::SimdVec spaces = Traits::set1(pattern[0]);
+  int64_t cur_pos = 0;
+
+  for (; cur_pos + Traits::SIMD_BYTES - 1 < src.length();) {
+    typename Traits::SimdVec data = Traits::load(src.ptr() + cur_pos);
+    typename Traits::MaskType mask = Traits::compare_get_mask(data, spaces);
+    int unmatched_pos = Traits::find_first_unmatched(mask);
+    if (unmatched_pos < static_cast<int>(Traits::SIMD_BYTES)) {
+      start = cur_pos + unmatched_pos;
+      is_finish = true;
+      break;
+    }
+    cur_pos += Traits::SIMD_BYTES;
+  }
+
+  if (!is_finish) {
+    for (; cur_pos < src.length() && src[cur_pos] == pattern[0]; ++cur_pos) {}
+    start = cur_pos;
+  }
+  return ret;
+}
+
+template<typename Traits>
+static int simd_rtrim_impl(const ObString &src, const ObString &pattern, const int32_t &start, int32_t &end) {
+  int ret = OB_SUCCESS;
+  bool is_finish = false;
+  typename Traits::SimdVec spaces = Traits::set1(pattern[0]);
+  int64_t cur_pos = src.length() - Traits::SIMD_BYTES;
+
+  for (; cur_pos >= start; cur_pos -= Traits::SIMD_BYTES) {
+    typename Traits::SimdVec data = Traits::load(src.ptr() + cur_pos);
+    typename Traits::MaskType mask = Traits::compare_get_mask(data, spaces);
+    int unmatched_pos = Traits::find_last_unmatched(mask);
+    if (unmatched_pos < static_cast<int>(Traits::SIMD_BYTES)) {
+      end = cur_pos + Traits::SIMD_BYTES - unmatched_pos;
+      is_finish = true;
+      break;
+    }
+  }
+
+  if (!is_finish) {
+    cur_pos += Traits::SIMD_BYTES;
+    for (; cur_pos - 1 >= start && src[cur_pos - 1] == pattern[0]; --cur_pos) {}
+    end = cur_pos;
+  }
+  return ret;
+}
+
 namespace oceanbase
 {
 using namespace common;
@@ -38,67 +100,109 @@ ObExprTrim::~ObExprTrim()
 {
 }
 
+// SSE2/AVX SIMD Traits
 OB_DECLARE_AVX2_SPECIFIC_CODE(
-static int ltrim(const ObString &src, const ObString &pattern, int32_t &start) {
-  int ret = OB_SUCCESS;
-  bool is_finish = false;
-  const uint64_t SSE2_BYTES = sizeof(__m128i);
-  const __m128i spaces = _mm_set1_epi8(pattern[0]);
-  int64_t cur_pos = 0;
-  if (cur_pos + SSE2_BYTES - 1 < src.length()) {
-    for (; cur_pos + SSE2_BYTES - 1 < src.length(); cur_pos += SSE2_BYTES) {
-      uint32_t masks = _mm_movemask_epi8(_mm_cmpeq_epi8(_mm_loadu_si128((__m128i *)(src.ptr() + cur_pos)), spaces));
-      int unmatched_pos = __builtin_ctz((1u << SSE2_BYTES) | ~masks);
-      if (unmatched_pos < SSE2_BYTES) {
-        start = cur_pos + unmatched_pos;
-        is_finish = true;
-        break;
-      }
-    }
-    cur_pos -= SSE2_BYTES;
+struct SimdTrimTraits {
+  static constexpr uint64_t SIMD_BYTES = 16;
+  using SimdVec = __m128i;
+  using MaskType = uint32_t;
+
+  static inline SimdVec set1(char pattern) {
+    return _mm_set1_epi8(pattern);
   }
 
-  if (false == is_finish) {
-    for (; cur_pos < src.length() && src[cur_pos] == pattern[0]; ++cur_pos) {}
-    start = cur_pos;
+  static inline SimdVec load(const char *ptr) {
+    return _mm_loadu_si128(reinterpret_cast<const __m128i *>(ptr));
   }
-  return ret;
+
+  static inline MaskType compare_get_mask(SimdVec a, SimdVec b) {
+    return static_cast<MaskType>(_mm_movemask_epi8(_mm_cmpeq_epi8(a, b)));
+  }
+
+  static inline int find_first_unmatched(MaskType mask) {
+    return __builtin_ctz((1u << SIMD_BYTES) | ~mask);
+  }
+
+  static inline int find_last_unmatched(MaskType mask) {
+    return __builtin_clz(~(mask << SIMD_BYTES));
+  }
+};
+
+static int ltrim(const ObString &src, const ObString &pattern, int32_t &start) {
+  return simd_ltrim_impl<SimdTrimTraits>(src, pattern, start);
 }
 
-// Need start param to prevent the situation where end < start.
 static int rtrim(const ObString &src, const ObString &pattern, const int32_t &start, int32_t &end) {
-  int ret = OB_SUCCESS;
-  bool is_finish = false;
-  const uint64_t SSE2_BYTES = sizeof(__m128i);
-  const __m128i spaces = _mm_set1_epi8(pattern[0]);
-  int64_t cur_pos = src.length() - SSE2_BYTES;
-  for (; cur_pos >= start; cur_pos -= SSE2_BYTES) {
-    uint32_t masks = _mm_movemask_epi8(_mm_cmpeq_epi8(_mm_loadu_si128((__m128i *)(src.ptr() + cur_pos)), spaces));
-    int unmatched_pos = __builtin_clz(~(masks << SSE2_BYTES));
-    if (unmatched_pos < SSE2_BYTES) {
-      end = cur_pos + SSE2_BYTES - unmatched_pos;
-      is_finish = true;
-      break;
-    }
-  }
-
-  if (false == is_finish) {
-    cur_pos += SSE2_BYTES;
-    for (; cur_pos - 1 >= start && src[cur_pos - 1] == pattern[0]; --cur_pos) {}
-    end = cur_pos;
-  }
-  return ret;
+  return simd_rtrim_impl<SimdTrimTraits>(src, pattern, start, end);
 }
 
 static int lrtrim(const ObString &src, const ObString &pattern, int32_t &start, int32_t &end) {
-  int ret = OB_SUCCESS;
   start = 0;
   end = src.length();
   specific::avx2::ltrim(src, pattern, start);
   specific::avx2::rtrim(src, pattern, start, end);
-  return ret;
+  return OB_SUCCESS;
 }
 )
+
+// ARM NEON SIMD Traits - close sql namespace first to define in correct scope
+
+OB_DECLARE_NEON_SPECIFIC_CODE(
+struct SimdTrimTraits {
+  static constexpr uint64_t SIMD_BYTES = 16;
+  using SimdVec = uint8x16_t;
+  using MaskType = uint16_t;
+
+  static inline MaskType neon_movemask_u8(uint8x16_t cmp) {
+    uint8x16_t bits = vshrq_n_u8(cmp, 7);
+    const uint8_t POWER[8] = {1, 2, 4, 8, 16, 32, 64, 128};
+    uint8x8_t power = vld1_u8(POWER);
+    uint8x8_t lo = vget_low_u8(bits);
+    uint8x8_t hi = vget_high_u8(bits);
+    uint16_t mask_lo = static_cast<uint16_t>(vaddv_u8(vmul_u8(lo, power)));
+    uint16_t mask_hi = static_cast<uint16_t>(vaddv_u8(vmul_u8(hi, power)));
+    return mask_lo | (mask_hi << 8);
+  }
+
+  static inline SimdVec set1(char pattern) {
+    return vdupq_n_u8(static_cast<uint8_t>(pattern));
+  }
+
+  static inline SimdVec load(const char *ptr) {
+    return vld1q_u8(reinterpret_cast<const uint8_t *>(ptr));
+  }
+
+  static inline MaskType compare_get_mask(SimdVec a, SimdVec b) {
+    return neon_movemask_u8(vceqq_u8(a, b));
+  }
+
+  static inline int find_first_unmatched(MaskType mask) {
+    uint32_t not_mask = ~static_cast<uint32_t>(mask) | (1u << SIMD_BYTES);
+    return __builtin_ctz(not_mask);
+  }
+
+  static inline int find_last_unmatched(MaskType mask) {
+    uint32_t shifted = static_cast<uint32_t>(mask) << SIMD_BYTES;
+    return __builtin_clz(~shifted);
+  }
+};
+
+inline int ltrim(const ObString &src, const ObString &pattern, int32_t &start) {
+  return simd_ltrim_impl<SimdTrimTraits>(src, pattern, start);
+}
+
+inline int rtrim(const ObString &src, const ObString &pattern, const int32_t &start, int32_t &end) {
+  return simd_rtrim_impl<SimdTrimTraits>(src, pattern, start, end);
+}
+
+inline int lrtrim(const ObString &src, const ObString &pattern, int32_t &start, int32_t &end) {
+  start = 0;
+  end = src.length();
+  ltrim(src, pattern, start);
+  rtrim(src, pattern, start, end);
+  return OB_SUCCESS;
+}
+);
 
 int ObExprTrim::trim(ObString &result, const int64_t trim_type, const ObString &pattern,
     const ObString &text)
@@ -135,6 +239,32 @@ int ObExprTrim::trim(ObString &result, const int64_t trim_type, const ObString &
       }
     }
 #endif
+#if OB_ARM_USE_MULTITARGET_CODE
+  // ARM NEON optimization for pattern length = 1
+  } else if (text.length() > 0 && 1 == pattern.length() &&
+             common::is_arch_supported(ObTargetArch::NEON)) {
+    switch (trim_type) {
+      case TYPE_LRTRIM: {
+        ret = specific::neon::lrtrim(text, pattern, start, end);
+        break;
+      }
+      case TYPE_LTRIM: {
+        end = text.length();
+        ret = specific::neon::ltrim(text, pattern, start);
+        break;
+      }
+      case TYPE_RTRIM: {
+        start = 0;
+        ret = specific::neon::rtrim(text, pattern, start, end);
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid type", K(trim_type), K(ret));
+        break;
+      }
+    }
+#endif // OB_ARM_USE_MULTITARGET_CODE
   } else {
     switch (trim_type) {
       case TYPE_LRTRIM: {

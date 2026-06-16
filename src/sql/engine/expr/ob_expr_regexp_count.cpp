@@ -47,6 +47,7 @@ int ObExprRegexpCount::calc_result_typeN(ObExprResType &type,
       bool is_case_sensitive = ObCharset::is_bin_sort(types[0].get_calc_collation_type());
       bool need_utf8 = false;
       bool is_use_hs = type_ctx.get_session()->get_enable_hyperscan_regexp_engine();
+      bool is_use_re2 = type_ctx.get_session()->get_enable_re2_regexp_engine();
       switch (param_num) {
         case 4/*match type*/:
           types[3].set_calc_type(ObVarcharType);
@@ -69,7 +70,7 @@ int ObExprRegexpCount::calc_result_typeN(ObExprResType &type,
           need_utf8 = false;
           if (OB_FAIL(ObExprRegexContext::check_need_utf8(raw_expr->get_param_expr(1), need_utf8))) {
             LOG_WARN("fail to check need utf8", K(ret));
-          } else if (need_utf8 || is_use_hs) {
+          } else if (need_utf8 || is_use_hs || is_use_re2) {
             types[1].set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF8MB4_BIN : CS_TYPE_UTF8MB4_GENERAL_CI);
           } else {
             types[1].set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF16_BIN : CS_TYPE_UTF16_GENERAL_CI);
@@ -78,7 +79,7 @@ int ObExprRegexpCount::calc_result_typeN(ObExprResType &type,
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(ObExprRegexContext::check_need_utf8(raw_expr->get_param_expr(0), need_utf8))) {
             LOG_WARN("fail to check need utf8", K(ret));
-          } else if (need_utf8 || is_use_hs) {
+          } else if (need_utf8 || is_use_hs || is_use_re2) {
             types[0].set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF8MB4_BIN : CS_TYPE_UTF8MB4_GENERAL_CI);
           } else {
             types[0].set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF16_BIN : CS_TYPE_UTF16_GENERAL_CI);
@@ -113,8 +114,9 @@ int ObExprRegexpCount::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr
       const bool const_text = text->is_const_expr();
       const bool const_pattern = pattern->is_const_expr();
       rt_expr.extra_ = (!const_text && const_pattern) ? 1 : 0;
+      const bool is_use_re2 = op_cg_ctx.session_->get_enable_re2_regexp_engine();
       const bool is_use_hs = op_cg_ctx.session_->get_enable_hyperscan_regexp_engine();
-      rt_expr.eval_func_ = is_use_hs ? eval_hs_regexp_count : eval_regexp_count;
+      rt_expr.eval_func_ = is_use_re2 ? eval_re2_regexp_count : (is_use_hs ? eval_hs_regexp_count : eval_regexp_count);
       LOG_TRACE("regexp count expr cg", K(const_text), K(const_pattern), K(rt_expr.extra_));
     }
   }
@@ -134,10 +136,12 @@ int ObExprRegexpCount::regexp_count(const ObExpr &expr, ObEvalCtx &ctx, ObDatum 
   } else if (OB_UNLIKELY(expr.arg_cnt_ < 2 ||
                          (expr.args_[0]->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_GENERAL_CI &&
                            expr.args_[0]->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN &&
+                           expr.args_[0]->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_0900_BIN &&
                            expr.args_[0]->datum_meta_.cs_type_ != CS_TYPE_UTF16_GENERAL_CI &&
                            expr.args_[0]->datum_meta_.cs_type_ != CS_TYPE_UTF16_BIN) ||
                          (expr.args_[1]->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_GENERAL_CI &&
                           expr.args_[1]->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN &&
+                          expr.args_[1]->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_0900_BIN &&
                           expr.args_[1]->datum_meta_.cs_type_ != CS_TYPE_UTF16_GENERAL_CI &&
                           expr.args_[1]->datum_meta_.cs_type_ != CS_TYPE_UTF16_BIN))) {
     ret = OB_ERR_UNEXPECTED;
@@ -153,6 +157,9 @@ int ObExprRegexpCount::regexp_count(const ObExpr &expr, ObEvalCtx &ctx, ObDatum 
       ret = OB_ERR_ARGUMENT_OUT_OF_RANGE;
       LOG_WARN("position out of range", K(ret), K(position), K(pos));
     } else {
+      ObMemAttr re2_memattr(MTL_ID(), ObExprRe2RegexCtx::MEM_MODULE_NAME);
+      ObMallocHookAttrGuard mem_guard(re2_memattr);
+
       ObString match_param = (NULL != match_type && !match_type->is_null()) ? match_type->get_string() : ObString();
       ObEvalCtx::TempAllocGuard alloc_guard(ctx);
       ObIAllocator &tmp_alloc = alloc_guard.get_allocator();
@@ -250,6 +257,11 @@ int ObExprRegexpCount::eval_hs_regexp_count(const ObExpr &expr, ObEvalCtx &ctx, 
 #else
   return OB_NOT_IMPLEMENT;
 #endif
+}
+
+int ObExprRegexpCount::eval_re2_regexp_count(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+{
+  return regexp_count<ObExprRe2RegexCtx>(expr, ctx, expr_datum);
 }
 }
 }

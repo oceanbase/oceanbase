@@ -11,6 +11,8 @@
 #if OB_USE_MULTITARGET_CODE
 #include <emmintrin.h>
 #include <immintrin.h>
+#elif OB_ARM_USE_MULTITARGET_CODE
+#include <arm_neon.h>
 #endif
 
 namespace oceanbase
@@ -80,12 +82,52 @@ inline static void copy_cs_row_ids(int32_t *row_ids, const int64_t cap, const in
 )
 
 OB_DECLARE_AVX512_SPECIFIC_CODE(
-/*
- * [from, to): inteval of bitmap to get row ids
- * limit: upper limit of row ids
- * block_offset: start bit index of current micro block
- */
-inline void get_cs_row_ids(
+// return processed row count
+int32_t inner_get_cs_row_ids(const int32_t *pos, const int32_t count,
+                             const int32_t block_offset, int32_t *row_ids) {
+  int32_t row_count = 0;
+  const int32_t *end_pos16 = pos + count / 16 * 16;
+  __m512i offset = _mm512_set1_epi32(-block_offset);
+  for (; pos < end_pos16; pos += 16) {
+    __m512i idx_arr = _mm512_loadu_epi32(pos);
+    __m512i res_arr = _mm512_add_epi32(idx_arr, offset);
+    _mm512_storeu_epi32(row_ids + row_count, res_arr);
+    row_count += 16;
+  }
+  return row_count;
+});
+
+OB_DECLARE_AVX2_SPECIFIC_CODE(
+int32_t inner_get_cs_row_ids(const int32_t *pos, const int32_t count,
+                             const int32_t block_offset, int32_t *row_ids) {
+  int32_t row_count = 0;
+  const int32_t *end_pos8 = pos + count / 8 * 8;
+  __m256i offset = _mm256_set1_epi32(-block_offset);
+  for (; pos < end_pos8; pos += 8) {
+    __m256i idx_arr = _mm256_loadu_si256((const __m256i *)(pos));
+    __m256i res_arr = _mm256_add_epi32(idx_arr, offset);
+    _mm256_storeu_si256((__m256i *)(row_ids + row_count), res_arr);
+    row_count += 8;
+  }
+  return row_count;
+});
+
+OB_DECLARE_NEON_SPECIFIC_CODE(
+int32_t inner_get_cs_row_ids(const int32_t *pos, const int32_t count,
+                             const int32_t block_offset, int32_t *row_ids) {
+  int32_t row_count = 0;
+  const int32_t *end_pos4 = pos + count / 4 * 4;
+  int32x4_t offset = vdupq_n_s32(-block_offset);
+  for (; pos < end_pos4; pos += 4) {
+    int32x4_t idx_arr = vld1q_s32(pos);
+    int32x4_t res_arr = vaddq_s32(idx_arr, offset);
+    vst1q_s32(row_ids + row_count, res_arr);
+    row_count += 4;
+  }
+  return row_count;
+});
+
+void get_cs_row_ids(
     const int32_t *condensed_idx,
     const int32_t condensed_cnt,
     const int32_t from,
@@ -109,14 +151,19 @@ inline void get_cs_row_ids(
       } else if (!is_reverse) {
         const int32_t *pos = condensed_idx + pos1;
         const int32_t *end_pos = pos + count;
-        const int32_t *end_pos16 = pos + count / 16 * 16;
-        __m512i offset = _mm512_set1_epi32(-block_offset);
-        for (; pos < end_pos16; pos += 16) {
-          __m512i idx_arr = _mm512_loadu_epi32(pos);
-          __m512i res_arr = _mm512_add_epi32(idx_arr, offset);
-          _mm512_storeu_epi32(row_ids + row_count, res_arr);
-          row_count += 16;
+#if OB_USE_MULTITARGET_CODE
+        // enable when avx512 is more efficient
+        /* if (common::is_arch_supported(ObTargetArch::AVX512)) {
+          row_count = specific::avx512::inner_get_cs_row_ids(pos, count, block_offset, row_ids);
+        } else */ if (common::is_arch_supported(ObTargetArch::AVX2)) {
+          row_count = specific::avx2::inner_get_cs_row_ids(pos, count, block_offset, row_ids);
         }
+#elif OB_ARM_USE_MULTITARGET_CODE
+        if (common::is_arch_supported(ObTargetArch::NEON)) {
+          row_count = specific::neon::inner_get_cs_row_ids(pos, count, block_offset, row_ids);
+        }
+#endif /* OB_USE_MULTITARGET_CODE */
+        pos += row_count;
         while (pos < end_pos) {
           row_ids[row_count++] = *pos - block_offset;
           ++pos;
@@ -138,110 +185,6 @@ inline void get_cs_row_ids(
     }
   }
 }
-)
-
-OB_DECLARE_AVX2_SPECIFIC_CODE(
-inline void get_cs_row_ids(
-    const int32_t *condensed_idx,
-    const int32_t condensed_cnt,
-    const int32_t from,
-    const int32_t to,
-    const int32_t limit,
-    const int32_t block_offset,
-    const bool is_reverse,
-    int32_t *row_ids,
-    int64_t &row_count,
-    int32_t &next_valid_idx)
-{
-  row_count = 0;
-  next_valid_idx = -1;
-  if (from > condensed_idx[condensed_cnt - 1] || to <= condensed_idx[0]) {
-  } else {
-    int32_t pos1 = std::lower_bound(condensed_idx, condensed_idx + MIN(from + 1, condensed_cnt), from) - condensed_idx;
-    if (pos1 < condensed_cnt) {
-      int32_t pos2 = std::lower_bound(condensed_idx + pos1, condensed_idx + MIN(to + 1, condensed_cnt), to) - condensed_idx;
-      int32_t count = MIN(pos2 - pos1, limit);
-      if (0 == count) {
-      } else if (!is_reverse) {
-        const int32_t *pos = condensed_idx + pos1;
-        const int32_t *end_pos = pos + count;
-        const int32_t *end_pos8 = pos + count / 8 * 8;
-        __m256i offset = _mm256_set1_epi32(-block_offset);
-        for (; pos < end_pos8; pos += 8) {
-          __m256i idx_arr = _mm256_loadu_si256((const __m256i *)(pos));
-          __m256i res_arr = _mm256_add_epi32(idx_arr, offset);
-          _mm256_storeu_si256((__m256i *)(row_ids + row_count), res_arr);
-          row_count += 8;
-        }
-        while (pos < end_pos) {
-          row_ids[row_count++] = *pos - block_offset;
-          ++pos;
-        }
-        if (pos < (condensed_idx + condensed_cnt)) {
-          next_valid_idx = *pos;
-        }
-      } else {
-        const int32_t* __restrict idx_pos = condensed_idx + pos2 - 1;
-        const int32_t* __restrict idx_end = condensed_idx + pos1;
-        while (row_count < limit && idx_pos >= idx_end) {
-          row_ids[row_count++] = *idx_pos - block_offset;
-          --idx_pos;
-        }
-        if (idx_pos >= condensed_idx) {
-          next_valid_idx = *idx_pos;
-        }
-      }
-    }
-  }
-}
-)
-
-OB_DECLARE_DEFAULT_CODE(
-inline void get_cs_row_ids(
-    const int32_t *condensed_idx,
-    const int32_t condensed_cnt,
-    const int32_t from,
-    const int32_t to,
-    const int32_t limit,
-    const int32_t block_offset,
-    const bool is_reverse,
-    int32_t *row_ids,
-    int64_t &row_count,
-    int32_t &next_valid_idx)
-{
-  row_count = 0;
-  next_valid_idx = -1;
-  if (from > condensed_idx[condensed_cnt - 1] || to <= condensed_idx[0]) {
-  } else {
-    int pos1 = std::lower_bound(condensed_idx, condensed_idx + MIN(from + 1, condensed_cnt), from) - condensed_idx;
-    if (pos1 < condensed_cnt) {
-      int pos2 = std::lower_bound(condensed_idx + pos1, condensed_idx + MIN(to + 1, condensed_cnt), to) - condensed_idx;
-      if (pos1 == pos2) {
-      } else if (!is_reverse) {
-        const int32_t* __restrict idx_pos = condensed_idx + pos1;
-        const int32_t* __restrict idx_end = condensed_idx + pos2;
-        while (row_count < limit && idx_pos < idx_end) {
-          row_ids[row_count++] = *idx_pos - block_offset;
-          ++idx_pos;
-        }
-        if (idx_pos < (condensed_idx + condensed_cnt)) {
-          next_valid_idx = *idx_pos;
-        }
-      } else {
-        const int32_t* __restrict idx_pos = condensed_idx + pos2 - 1;
-        const int32_t* __restrict idx_end = condensed_idx + pos1;
-        while (row_count < limit && idx_pos >= idx_end) {
-          row_ids[row_count++] = *idx_pos - block_offset;
-          --idx_pos;
-        }
-        if (idx_pos >= condensed_idx) {
-          next_valid_idx = *idx_pos;
-        }
-      }
-    }
-  }
-}
-)
 
 int convert_bitmap_to_cs_index(int32_t *row_ids,
                                int64_t &row_cap,
@@ -267,10 +210,10 @@ int convert_bitmap_to_cs_index(int32_t *row_ids,
           if (common::is_arch_supported(ObTargetArch::AVX2)) {
             specific::avx2::copy_cs_row_ids(row_ids, limit, current - data_range.start_row_id_, false);
           } else {
-        #endif
-          specific::normal::copy_cs_row_ids(row_ids, limit, current - data_range.start_row_id_, false);
-        #if OB_USE_MULTITARGET_CODE
+            specific::normal::copy_cs_row_ids(row_ids, limit, current - data_range.start_row_id_, false);
           }
+        #else
+          specific::normal::copy_cs_row_ids(row_ids, limit, current - data_range.start_row_id_, false);
         #endif
           row_cap = limit;
           current += limit;
@@ -295,10 +238,10 @@ int convert_bitmap_to_cs_index(int32_t *row_ids,
           if (common::is_arch_supported(ObTargetArch::AVX2)) {
             specific::avx2::copy_cs_row_ids(row_ids, limit, current - data_range.start_row_id_, true);
           } else {
-        #endif
-          specific::normal::copy_cs_row_ids(row_ids, limit, current - data_range.start_row_id_, true);
-        #if OB_USE_MULTITARGET_CODE
+            specific::normal::copy_cs_row_ids(row_ids, limit, current - data_range.start_row_id_, true);
           }
+        #else
+          specific::normal::copy_cs_row_ids(row_ids, limit, current - data_range.start_row_id_, true);
         #endif
           row_cap = limit;
           current -= limit;
@@ -361,42 +304,17 @@ int ObCGBitmap::get_row_ids(
     if (0 == condensed_cnt) {
       row_cap = 0;
       next_valid_idx = -1;
-#if OB_USE_MULTITARGET_CODE
-    // enable when avx512 is more efficient
-    //} else if (common::is_arch_supported(ObTargetArch::AVX512)) {
-    //  specific::avx512::get_cs_row_ids(condensed_idx,
-    //                                   condensed_cnt,
-    //                                   from_pos,
-    //                                   end_pos,
-    //                                   batch_size,
-    //                                   data_range.start_row_id_ - start_row_id_,
-    //                                   is_reverse,
-    //                                   row_ids,
-    //                                   row_cap,
-    //                                   next_valid_idx);
-    } else if (common::is_arch_supported(ObTargetArch::AVX2)) {
-      specific::avx2::get_cs_row_ids(condensed_idx,
-                                     condensed_cnt,
-                                     from_pos,
-                                     end_pos,
-                                     batch_size,
-                                     data_range.start_row_id_ - start_row_id_,
-                                     is_reverse,
-                                     row_ids,
-                                     row_cap,
-                                     next_valid_idx);
-#endif
     } else {
-      specific::normal::get_cs_row_ids(condensed_idx,
-                                       condensed_cnt,
-                                       from_pos,
-                                       end_pos,
-                                       batch_size,
-                                       data_range.start_row_id_ - start_row_id_,
-                                       is_reverse,
-                                       row_ids,
-                                       row_cap,
-                                       next_valid_idx);
+      get_cs_row_ids(condensed_idx,
+                     condensed_cnt,
+                     from_pos,
+                     end_pos,
+                     batch_size,
+                     data_range.start_row_id_ - start_row_id_,
+                     is_reverse,
+                     row_ids,
+                     row_cap,
+                     next_valid_idx);
     }
 
     if (-1 == next_valid_idx) {

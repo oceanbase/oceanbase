@@ -27,8 +27,9 @@ devdeps-oss-c-sdk-3.11.2-142025100915.al8.aarch64.rpm
 devdeps-zlib-static-1.2.13-82024102414.al8.aarch64.rpm
 devdeps-ncurses-static-6.5-62025040314.al8.aarch64.rpm
 devdeps-boost-1.74.0-112025121712.al8.aarch64.rpm
-devdeps-abseil-cpp-20211102.0-62024122014.al8.aarch64.rpm
-devdeps-s2geometry-0.10.0-122024122617.al8.aarch64.rpm
+devdeps-abseil-cpp-20250814.1-42026041611.al8.aarch64.rpm
+devdeps-s2geometry-0.10.0-262026050610.al8.aarch64.rpm
+devdeps-re2-20250812-62026050610.al8.aarch64.rpm
 devdeps-icu-69.1-342025121913.al8.aarch64.rpm
 devdeps-s3-cpp-sdk-1.11.156-222024100811.al8.aarch64.rpm
 devdeps-protobuf-c-1.5.1-100000052025032810.al8.aarch64.rpm

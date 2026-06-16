@@ -2728,9 +2728,9 @@ ERRSIM_DEF_TIME(errsim_delay_gc_interval, OB_CLUSTER_PARAMETER, "30m", "[0,)",
 // regexp engine
 DEF_STR_WITH_CHECKER(_regex_engine, OB_TENANT_PARAMETER, "ICU",
                      common::ObConfigRegexpEngineChecker,
-                     "specifies the regexp engine. Values: ICU(International Components for Unicode), Hyperscan",
+                     "specifies the regexp engine. Values: re2, ICU(International Components for Unicode), Hyperscan",
                      ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
-                     "ICU, Hyperscan");
+                     "re2, ICU, Hyperscan");
 
 DEF_BOOL(_preset_runtime_bloom_filter_size, OB_CLUSTER_PARAMETER, "False",
          "Whether build runtime bloom filter with row count estimated by optimizor."

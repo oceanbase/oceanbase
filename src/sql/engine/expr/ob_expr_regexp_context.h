@@ -6,6 +6,7 @@
 #ifndef  OCEANBASE_SQL_ENGINE_REGEX_OB_POSIX_REGEX_
 #define  OCEANBASE_SQL_ENGINE_REGEX_OB_POSIX_REGEX_
 #include "easy_define.h"  // for conflict of macro likely
+#include "lib/allocator/ob_allocator.h"
 #include "lib/utility/ob_print_utils.h"
 #include "obcharset/ob_mysql_global.h"
 #include "lib/charset/ob_ctype.h"
@@ -17,6 +18,7 @@
 #if defined(__x86_64__)
 #include <hyperscan/hs/hs.h>
 #endif
+#include <re2/re2.h>
 
 // this regex is compatible with mysql 8.0
 
@@ -55,6 +57,7 @@ public:
            const uint32_t cflags,
            const bool reusable,
            const ObCollationType cs_type);
+  void enable_cached_replace_string() { }
 
   int match(ObExprStringBuf &string_buf,
             const ObString &text,
@@ -172,6 +175,7 @@ public:
            const uint32_t flags,
            const bool reusable,
            const ObCollationType cs_type);
+  void enable_cached_replace_string() { }
   int match(ObExprStringBuf &string_buf,
             const ObString &text,
             const ObCollationType cs_type,
@@ -237,6 +241,83 @@ private:
   // empty class
   class ObExprHsRegexCtx {};
 #endif
+
+class ObExprRe2RegexCtx : public ObExprOperatorCtx
+{
+public:
+  static constexpr const char *MEM_MODULE_NAME = "regexp_re2";
+public:
+  ObExprRe2RegexCtx();
+  virtual ~ObExprRe2RegexCtx();
+public:
+  inline bool is_inited() const { return inited_; }
+  static int get_regexp_flags(const ObString &match_param,
+                              const bool is_case_sensitive,
+                              const bool is_som_leftmost,
+                              const bool is_single_match,
+                              uint32_t &flags);
+  int init(ObExprStringBuf &string_buf,
+           const ObExprRegexpSessionVariables &regex_vars,
+           const ObString &origin_pattern,
+           const uint32_t flags,
+           const bool reusable,
+           const ObCollationType cs_type);
+  int get_valid_replace_string(ObIAllocator &alloc,
+                               const ObString &origin_replace,
+                               ObString &out_replace) const;
+  void enable_cached_replace_string() { use_cached_replace_string_ = true; }
+  int prepare_vector_replace_string_cache(ObIAllocator &alloc, const ObString &to_conv);
+  int match(ObExprStringBuf &string_buf,
+            const ObString &text,
+            const ObCollationType cs_type,
+            const int64_t start,
+            bool &result) const;
+
+  int find(ObExprStringBuf &string_buf,
+           const ObString &text,
+           const ObCollationType cs_type,
+           const int64_t start,
+           const int64_t occurrence,
+           const int64_t return_option,
+           const int64_t subexpr,
+           int64_t &result) const;
+
+  int count(ObExprStringBuf &string_buf,
+            const ObString &text,
+            const ObCollationType cs_type,
+            const int32_t start,
+            int64_t &result) const;
+
+  int substr(ObExprStringBuf &string_buf,
+            const ObString &text,
+            const ObCollationType cs_type,
+            const int64_t start,
+            const int64_t occurrence,
+            const int64_t subexpr,
+            ObString &result) const;
+  int replace(ObExprStringBuf &string_buf,
+              const ObString &text_string,
+              const ObCollationType cs_type,
+              const ObString &replace_string,
+              const int64_t start,
+              const int64_t occurrence,
+              ObString &result) const;
+  void destroy();
+  void reset();
+private:
+  int preprocess_pattern(common::ObExprStringBuf &string_buf,
+                         const common::ObString &origin_pattern,
+                         common::ObString &pattern);
+  bool inited_;
+  bool use_cached_replace_string_;
+  mutable bool replace_string_cache_ready_;
+  mutable common::ObString cached_rewritten_replace_;
+  ObIAllocator *replace_string_allocator_;
+  common::ObString pattern_;
+  uint32_t re2_flags_;
+  RE2 *re2_;
+};
+
 }
 }
 

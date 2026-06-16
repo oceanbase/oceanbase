@@ -1527,6 +1527,7 @@ int ObBasicSessionInfo::load_default_configs_in_pc()
   int ret = OB_SUCCESS;
   inf_pc_configs_.pushdown_storage_level_ = ObConfigInfoInPC::DEFAULT_PUSHDOWN_STORAGE_LEVEL;
   inf_pc_configs_.enable_hyperscan_regexp_engine_ = false;
+  inf_pc_configs_.enable_re2_regexp_engine_ = false;
   inf_pc_configs_.min_cluster_version_ = GET_MIN_CLUSTER_VERSION();
   return ret;
 }
@@ -8232,6 +8233,11 @@ bool ObBasicSessionInfo::get_enable_hyperscan_regexp_engine() const
   // disable hyperscan during upgrading
   return inf_pc_configs_.enable_hyperscan_regexp_engine_
          && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0;
+}
+
+bool ObBasicSessionInfo::get_enable_re2_regexp_engine() const
+{
+  return inf_pc_configs_.enable_re2_regexp_engine_;
 }
 
 int8_t ObBasicSessionInfo::get_min_const_integer_precision() const

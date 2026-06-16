@@ -663,6 +663,187 @@ TEST_F(TestIntDictPdFilter, test_bound_ref_exceed_range_compare_filter)
   LOG_INFO(">>>>>>>>>>FINISH PD FILTER<<<<<<<<<<<");
 }
 
+// Cover 2-byte ref width paths in set_bitmap_with_bitset, dict_tranverse_ref, etc.
+// Requires >256 distinct values so that ref width exceeds 1 byte.
+TEST_F(TestIntDictPdFilter, test_large_dict_2byte_ref)
+{
+  const int64_t rowkey_cnt = 1;
+  const int64_t col_cnt = 2;
+  const bool enable_check = ENABLE_CASE_CHECK;
+  ObObjType col_types[col_cnt] = {ObInt32Type, ObIntType};
+  ASSERT_EQ(OB_SUCCESS, prepare(col_types, rowkey_cnt, col_cnt));
+  ctx_.column_encodings_[0] = ObCSColumnHeader::Type::INT_DICT;
+  ctx_.column_encodings_[1] = ObCSColumnHeader::Type::INT_DICT;
+
+  for (int8_t flag = 0; flag <= 1; ++flag) {
+    bool has_null = flag;
+    const int64_t distinct_cnt = 300;
+    const int64_t null_cnt = has_null ? 50 : 0;
+    const int64_t row_cnt = distinct_cnt + null_cnt;
+
+    ObMicroBlockCSEncoder<> encoder;
+    ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
+    ObDatumRow row_arr[row_cnt];
+    for (int64_t i = 0; i < row_cnt; ++i) {
+      ASSERT_EQ(OB_SUCCESS, row_arr[i].init(allocator_, col_cnt));
+    }
+
+    // 300 distinct values: 0, 100, 200, ..., 29900
+    for (int64_t i = 0; i < row_cnt; ++i) {
+      row_arr[i].storage_datums_[0].set_int32(i);
+      if (i < distinct_cnt) {
+        row_arr[i].storage_datums_[1].set_int(i * 100);
+      } else {
+        row_arr[i].storage_datums_[1].set_null();
+      }
+      ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
+    }
+
+    HANDLE_TRANSFORM();
+
+    const int64_t col_offset = 1;
+    bool need_check = true;
+
+    // check NU/NN
+    {
+      int64_t ref_arr[1];
+      const int64_t nu_cnt = has_null ? null_cnt : 0;
+      int64_t res_arr_nu[1] = {nu_cnt};
+      integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_NU, 1, 0, res_arr_nu);
+      int64_t res_arr_nn[1] = {distinct_cnt};
+      integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_NN, 1, 0, res_arr_nn);
+    }
+
+    // check EQ/NE
+    {
+      int64_t ref_arr[4] = {-1, 0, 15000, 30000};
+      int64_t res_arr_eq[4] = {0, 1, 1, 0};
+      integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_EQ, 4, 1, res_arr_eq);
+      int64_t res_arr_ne[4] = {distinct_cnt, distinct_cnt - 1, distinct_cnt - 1, distinct_cnt};
+      integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_NE, 4, 1, res_arr_ne);
+    }
+
+    // check LT/LE/GT/GE
+    {
+      // values: 0,100,...,29900. values < 500 => {0,100,200,300,400} = 5
+      int64_t ref_arr[4] = {-1, 500, 15000, 30000};
+      int64_t res_arr_lt[4] = {0, 5, 150, distinct_cnt};
+      integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_LT, 4, 1, res_arr_lt);
+      int64_t res_arr_le[4] = {0, 6, 151, distinct_cnt};
+      integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_LE, 4, 1, res_arr_le);
+    }
+    {
+      int64_t ref_arr[4] = {-1, 500, 29800, 30000};
+      int64_t res_arr_gt[4] = {distinct_cnt, 294, 1, 0};
+      integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_GT, 4, 1, res_arr_gt);
+      int64_t res_arr_ge[4] = {distinct_cnt, 295, 2, 0};
+      integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_GE, 4, 1, res_arr_ge);
+    }
+
+    // check BT
+    {
+      // BT(0, 29900): all 300 values match
+      // BT(100, 500): values 100,200,300,400,500 = 5
+      // BT(-100, -1): no match
+      int64_t ref_arr[6] = {0, 29900, 100, 500, -100, -1};
+      int64_t res_arr[3] = {distinct_cnt, 5, 0};
+      integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_BT, 3, 2, res_arr);
+    }
+
+    // check IN
+    {
+      int64_t ref_arr[5] = {-1, 0, 500, 29900, 30000};
+      int64_t res_arr[1] = {3};
+      integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_IN, 1, 5, res_arr);
+    }
+
+    LOG_INFO(">>>>>>>>>>FINISH PD FILTER<<<<<<<<<<<");
+
+    encoder.reuse();
+  }
+}
+
+// Cover set_bitmap_with_bitset 2-byte ref per-element fallback path (ref_bitset_size > 4096).
+// Requires >4096 distinct values so that ref_bitset_size exceeds the LUT threshold.
+// has_null=false: ref_bitset_size = 4100 > 4096, per-element path
+// has_null=true:  ref_bitset_size = 4101 > 4096, per-element path
+TEST_F(TestIntDictPdFilter, test_huge_dict_2byte_ref_no_lut)
+{
+  const int64_t rowkey_cnt = 1;
+  const int64_t col_cnt = 2;
+  const bool enable_check = ENABLE_CASE_CHECK;
+  ObObjType col_types[col_cnt] = {ObInt32Type, ObIntType};
+  ASSERT_EQ(OB_SUCCESS, prepare(col_types, rowkey_cnt, col_cnt));
+  ctx_.column_encodings_[0] = ObCSColumnHeader::Type::INT_DICT;
+  ctx_.column_encodings_[1] = ObCSColumnHeader::Type::INT_DICT;
+
+  const int64_t distinct_cnt = 4100;
+
+  for (int8_t flag = 0; flag <= 1; ++flag) {
+    bool has_null = flag;
+    const int64_t null_cnt = has_null ? 50 : 0;
+    const int64_t row_cnt = distinct_cnt + null_cnt;
+
+    ObMicroBlockCSEncoder<> encoder;
+    ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
+    ObDatumRow row_arr[row_cnt];
+    for (int64_t i = 0; i < row_cnt; ++i) {
+      ASSERT_EQ(OB_SUCCESS, row_arr[i].init(allocator_, col_cnt));
+    }
+
+    for (int64_t i = 0; i < row_cnt; ++i) {
+      row_arr[i].storage_datums_[0].set_int32(i);
+      if (i < distinct_cnt) {
+        row_arr[i].storage_datums_[1].set_int(i);
+      } else {
+        row_arr[i].storage_datums_[1].set_null();
+      }
+      ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
+    }
+
+    HANDLE_TRANSFORM();
+
+    const int64_t col_offset = 1;
+    bool need_check = true;
+
+    // check EQ/NE
+    {
+      int64_t ref_arr[4] = {-1, 0, 4099, 4100};
+      int64_t res_arr_eq[4] = {0, 1, 1, 0};
+      integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_EQ, 4, 1, res_arr_eq);
+      int64_t res_arr_ne[4] = {distinct_cnt, distinct_cnt - 1, distinct_cnt - 1, distinct_cnt};
+      integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_NE, 4, 1, res_arr_ne);
+    }
+
+    // check LT/LE
+    {
+      int64_t ref_arr[3] = {0, 2000, 4100};
+      int64_t res_arr_lt[3] = {0, 2000, distinct_cnt};
+      integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_LT, 3, 1, res_arr_lt);
+      int64_t res_arr_le[3] = {1, 2001, distinct_cnt};
+      integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_LE, 3, 1, res_arr_le);
+    }
+
+    // check IN
+    {
+      int64_t ref_arr[5] = {-1, 0, 2048, 4099, 5000};
+      int64_t res_arr[1] = {3};
+      integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_IN, 1, 5, res_arr);
+    }
+
+    // check BT
+    {
+      int64_t ref_arr[2] = {1000, 2000};
+      int64_t res_arr[1] = {1001};
+      integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_BT, 1, 2, res_arr);
+    }
+
+    LOG_INFO(">>>>>>>>>>FINISH PD FILTER<<<<<<<<<<<");
+
+    encoder.reuse();
+  }
+}
+
 }
 }
 

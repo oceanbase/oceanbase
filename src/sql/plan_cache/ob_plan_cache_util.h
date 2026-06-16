@@ -1215,6 +1215,7 @@ public:
     enable_index_merge_(false),
     bloom_filter_ratio_(0),
     enable_hyperscan_regexp_engine_(false),
+    enable_re2_regexp_engine_(false),
     realistic_runtime_bloom_filter_size_(false),
     enable_parallel_das_dml_(false),
     direct_load_allow_fallback_(false),
@@ -1279,6 +1280,7 @@ public:
   bool enable_index_merge_;
   int bloom_filter_ratio_;
   bool enable_hyperscan_regexp_engine_;
+  bool enable_re2_regexp_engine_;
   bool realistic_runtime_bloom_filter_size_;
   bool enable_parallel_das_dml_;
   bool direct_load_allow_fallback_;

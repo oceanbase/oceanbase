@@ -29,6 +29,7 @@ target_include_directories(
   ${DEP_DIR}/include/fast_float
   ${DEP_DIR}/include/avro
   ${DEP_DIR}/include/krb5
+  ${DEP_DIR}/include/re2
   ${USSL_INCLUDE_DIRS}
   ${DEP_DIR}/python3/include/python3.13
 )
@@ -220,27 +221,46 @@ endif()
 
 target_compile_features(oblib_base INTERFACE cxx_std_11)
 
-set(OBLIB_ABSEIL_LIST
-    ${DEP_DIR}/lib64/libabsl_base.a
-    ${DEP_DIR}/lib64/libabsl_city.a
-    ${DEP_DIR}/lib64/libabsl_debugging_internal.a
-    ${DEP_DIR}/lib64/libabsl_demangle_internal.a
-    ${DEP_DIR}/lib64/libabsl_hash.a
-    ${DEP_DIR}/lib64/libabsl_int128.a
-    ${DEP_DIR}/lib64/libabsl_low_level_hash.a
-    ${DEP_DIR}/lib64/libabsl_malloc_internal.a
-    ${DEP_DIR}/lib64/libabsl_raw_hash_set.a
-    ${DEP_DIR}/lib64/libabsl_raw_logging_internal.a
+set(RE2_ABSL_LIBS
+    ${DEP_DIR}/lib64/libabsl_synchronization.a
     ${DEP_DIR}/lib64/libabsl_spinlock_wait.a
-    ${DEP_DIR}/lib64/libabsl_stacktrace.a
+    ${DEP_DIR}/lib64/libabsl_log_internal_message.a
+    ${DEP_DIR}/lib64/libabsl_raw_hash_set.a
     ${DEP_DIR}/lib64/libabsl_str_format_internal.a
     ${DEP_DIR}/lib64/libabsl_strings.a
-    ${DEP_DIR}/lib64/libabsl_strings_internal.a
+    ${DEP_DIR}/lib64/libabsl_hash.a
+    ${DEP_DIR}/lib64/libabsl_log_entry.a
+    ${DEP_DIR}/lib64/libabsl_log_severity.a
+    ${DEP_DIR}/lib64/libabsl_log_globals.a
+    ${DEP_DIR}/lib64/libabsl_log_sink.a
+    ${DEP_DIR}/lib64/libabsl_log_internal_format.a
+    ${DEP_DIR}/lib64/libabsl_log_internal_globals.a
+    ${DEP_DIR}/lib64/libabsl_log_internal_nullguard.a
+    ${DEP_DIR}/lib64/libabsl_log_internal_log_sink_set.a
+    ${DEP_DIR}/lib64/libabsl_log_internal_proto.a
+    ${DEP_DIR}/lib64/libabsl_log_internal_structured_proto.a
+    ${DEP_DIR}/lib64/libabsl_examine_stack.a
     ${DEP_DIR}/lib64/libabsl_symbolize.a
-    ${DEP_DIR}/lib64/libabsl_synchronization.a
-    ${DEP_DIR}/lib64/libabsl_throw_delegate.a
+    ${DEP_DIR}/lib64/libabsl_demangle_internal.a
+    ${DEP_DIR}/lib64/libabsl_demangle_rust.a
+    ${DEP_DIR}/lib64/libabsl_decode_rust_punycode.a
+    ${DEP_DIR}/lib64/libabsl_utf8_for_code_point.a
+    ${DEP_DIR}/lib64/libabsl_base.a
+    ${DEP_DIR}/lib64/libabsl_malloc_internal.a
+    ${DEP_DIR}/lib64/libabsl_raw_logging_internal.a
+    ${DEP_DIR}/lib64/libabsl_stacktrace.a
     ${DEP_DIR}/lib64/libabsl_time.a
-    ${DEP_DIR}/lib64/libabsl_time_zone.a)
+    ${DEP_DIR}/lib64/libabsl_time_zone.a
+    ${DEP_DIR}/lib64/libabsl_civil_time.a
+    ${DEP_DIR}/lib64/libabsl_kernel_timeout_internal.a
+    ${DEP_DIR}/lib64/libabsl_tracing_internal.a
+    ${DEP_DIR}/lib64/libabsl_strings_internal.a
+    ${DEP_DIR}/lib64/libabsl_int128.a
+    ${DEP_DIR}/lib64/libabsl_city.a
+    ${DEP_DIR}/lib64/libabsl_hashtablez_sampler.a
+    ${DEP_DIR}/lib64/libabsl_debugging_internal.a
+    ${DEP_DIR}/lib64/libabsl_strerror.a
+  )
 
 if(OB_BUILD_OPENSOURCE)
 set(LGPL_DEPS "-L${DEP_DIR}/lib/mariadb -lmariadb")
@@ -255,7 +275,7 @@ target_link_libraries(oblib_base_without_pass
   ${DEP_DIR}/lib/libssl.a
   ${DEP_DIR}/lib/libcrypto.a
   ${DEP_DIR}/lib64/libs2.a
-  ${OBLIB_ABSEIL_LIST}
+  ${RE2_ABSL_LIBS}
   ${DEP_DIR}/lib/libroaring.a
   ${LGPL_DEPS}
   $<$<STREQUAL:"${ARCHITECTURE}","x86_64">:${DEP_DIR}/lib/libunwind.a>
@@ -290,6 +310,7 @@ target_link_libraries(oblib_base_without_pass
   ${DEP_DIR}/lib/libisal.a
   ${DEP_DIR}/lib/libavrocpp_s.a
   ${DEP_DIR}/lib64/libfmt.a # used by avro
+  ${DEP_DIR}/lib/re2/libre2.a
   ${DEP_DIR}/lib/obcharset/libcharset_tables.a
  )
 else()
@@ -304,7 +325,7 @@ target_link_libraries(oblib_base_without_pass
   ${DEP_3RD_DIR}/usr/local/babassl-ob/lib/libcrypto.a
   ${DEP_3RD_DIR}/u01/obclient/lib/libobclnt.a
   ${DEP_DIR}/lib64/libs2.a
-  ${OBLIB_ABSEIL_LIST}
+  ${RE2_ABSL_LIBS}
   ${DEP_DIR}/lib/libroaring.a
   ${DEP_DIR}/lib/libz.a
   ${DEP_DIR}/lib/libicui18n.a
@@ -338,6 +359,7 @@ target_link_libraries(oblib_base_without_pass
   ${DEP_DIR}/lib/libpalf.a
   ${DEP_DIR}/lib/libavrocpp_s.a
   ${DEP_DIR}/lib64/libfmt.a # used by avro
+  ${DEP_DIR}/lib/re2/libre2.a
   ${DEP_DIR}/lib/obcharset/libcharset_tables.a
  )
 endif()

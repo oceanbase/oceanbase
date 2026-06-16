@@ -35,7 +35,7 @@ public:
           rf_msg_(nullptr), rf_key_(), hash_funcs_(), cmp_funcs_(), start_time_(0),
           filter_count_(0), total_count_(0), check_count_(0),
           n_times_(0), ready_ts_(0), by_pass_count_before_ready_(0), slide_window_(total_count_), flag_(0), max_wait_time_ms_(0),
-          cur_row_(), cur_row_with_hash_(nullptr), skip_vector_(nullptr)
+          cur_row_(), cur_row_with_hash_(nullptr), skip_vector_(nullptr), selector_(nullptr)
         {
           cur_row_.set_attr(ObMemAttr(MTL_ID(), "RfCurRow"));
           need_wait_rf_ = true;
@@ -141,6 +141,8 @@ public:
       ObBitVector *skip_vector_;
       // used in ObRFInFilterVecMsg/ObRFBloomFilterMsg, cal probe data's hash value
       uint64_t *right_hash_vals_;
+      // used in ObRFBloomFilterMsg, scratch buffer for converting skip bits to row indices
+      uint16_t *selector_;
   };
   ObExprJoinFilter();
   explicit ObExprJoinFilter(common::ObIAllocator& alloc);

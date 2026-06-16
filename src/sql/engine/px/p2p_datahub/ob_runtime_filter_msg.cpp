@@ -954,8 +954,8 @@ int ObRFBloomFilterMsg::do_might_contain_vector(
   }
   if (OB_FAIL(ret)) {
   } else {
-    ret = bloom_filter_.might_contain_vector(expr, ctx, skip, bound, hash_values, total_count,
-                                             filter_count);
+    ret = bloom_filter_.might_contain_vector(expr, ctx, skip, bound, hash_values,
+                                             filter_ctx.selector_, total_count, filter_count);
   }
   if (OB_FAIL(ret)) {
   } else {

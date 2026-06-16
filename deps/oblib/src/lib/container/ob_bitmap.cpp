@@ -5,10 +5,17 @@
 
 #include "lib/container/ob_bitmap.h"
 #include "common/ob_target_specific.h"
+#include "lib/container/ob_bit_simd.h"
+
+#include <array>
+#include <limits>
+#include <type_traits>
 
 #if OB_USE_MULTITARGET_CODE
 #include <immintrin.h>
-#endif
+#elif OB_ARM_USE_MULTITARGET_CODE
+#include <arm_neon.h>
+#endif /* OB_USE_MULTITARGET_CODE */
 
 namespace oceanbase
 {
@@ -67,34 +74,6 @@ inline static void bitmap_get_condensed_index(
   while (pos < end_pos) {
     if (*pos) {
       row_ids[row_count++] = pos - data;
-    }
-    ++pos;
-  }
-}
-
-inline static void uint64_mask_to_bits_mask(
-    const uint64_t *data,
-    const int64_t size,
-    uint8_t *skip)
-{
-  const uint64_t *pos = data;
-  const uint64_t *end_pos = data + size;
-  const uint64_t *end_pos64 = data + size / 8 * 8;
-  uint64_t i = 0;
-  const __m512i zero64 = _mm512_setzero_si512();
-
-  while (pos < end_pos64) {
-    __m512i v = _mm512_loadu_si512(pos);
-    skip[i++] |= _mm512_cmp_epi64_mask(v, zero64, 0);
-    pos += 8;
-  }
-
-  uint64_t *skip64 = reinterpret_cast<uint64_t *>(skip);
-
-  while (pos < end_pos) {
-    if (*pos == 0) {
-      i = pos - data;
-      skip64[i / 64] |= 1LU << (i % 64);
     }
     ++pos;
   }
@@ -168,23 +147,6 @@ OB_INLINE static uint8_t is_bit_set(
 }
 
 OB_DECLARE_DEFAULT_AND_AVX2_CODE(
-inline static uint64_t bitmap_popcnt(
-    const uint8_t *data,
-    const int64_t valid_bytes)
-{
-  uint64_t count = 0;
-  const uint8_t *pos = data;
-  const uint8_t *end_pos = pos + valid_bytes;
-  const uint8_t *end_pos64 = pos + valid_bytes / 64 * 64;
-  for (; pos < end_pos64; pos += 64) {
-    uint64_t mask = bytes64mask_to_bits64mask(pos);
-    count += popcount64(mask);
-  }
-  for (; pos < end_pos; ++pos) {
-    count += (*pos != 0);
-  }
-  return count;
-}
 
 inline static bool bitmap_is_all_true(
     const int64_t start,
@@ -350,58 +312,6 @@ inline static void bitmap_get_condensed_index(
     ++pos;
   }
 }
-
-inline static void bitmap_to_bits_mask(
-    const int64_t from,
-    const int64_t to,
-    const bool need_flip,
-    const uint8_t *data,
-    uint8_t* bits)
-{
-  const uint8_t *pos = data + from;
-  const uint8_t *end_pos = data + to;
-  const uint8_t *end_pos64 = pos + (to - from) / 64 * 64;
-  for (; pos < end_pos64; pos += 64) {
-    uint64_t *mask = reinterpret_cast<uint64_t *>(bits);
-    *mask = bytes64mask_to_bits64mask(pos, need_flip);
-    bits += sizeof(uint64_t);
-  }
-  if (pos < end_pos) {
-    const uint8_t *tmp_pos = pos;
-    uint64_t *bits64 = reinterpret_cast<uint64_t *>(bits);
-    bits64[0] = 0;
-    if (need_flip) {
-      while (pos < end_pos) {
-        const uint64_t idx = pos - tmp_pos;
-        bits64[0] |= (static_cast<uint64_t>(0 == *(pos++)) << (idx % 64));
-      }
-    } else {
-      while (pos < end_pos) {
-        const uint64_t idx = pos - tmp_pos;
-        bits64[0] |= (static_cast<uint64_t>(0 != *(pos++)) << (idx % 64));
-      }
-    }
-  }
-}
-
-inline static void uint64_mask_to_bits_mask(
-    const uint64_t *data,
-    const int64_t size,
-    uint8_t *skip)
-{
-  const uint64_t *pos = data;
-  const uint64_t *end_pos = data + size;
-  uint64_t i = 0;
-  uint64_t *skip64 = reinterpret_cast<uint64_t *>(skip);
-
-  while (pos < end_pos) {
-    if (*pos == 0) {
-      i = pos - data;
-      skip64[i / 64] |= 1LU << (i % 64);
-    }
-    ++pos;
-  }
-}
 )
 
 class SelectAndOp {
@@ -467,47 +377,105 @@ ObBitmap::~ObBitmap()
 
 uint64_t ObBitmap::popcnt() const
 {
-  uint64_t ret = 0;
-#if OB_USE_MULTITARGET_CODE
-  if (common::is_arch_supported(ObTargetArch::AVX2)) {
-    ret = common::specific::avx2::bitmap_popcnt(data_, valid_bytes_);
+  return common::popcnt_bytes(data_, valid_bytes_);
+}
+
+namespace {
+
+template<std::size_t SIZE>
+std::array<uint8_t, SIZE> all_true_bytes_bitmap() {
+  std::array<uint8_t, SIZE> array;
+  memset(array.data(), 1, SIZE);
+  return array;
+}
+
+const static std::array<uint8_t, CACHE_ALIGN_SIZE> ALL_TRUE_BITMAP = all_true_bytes_bitmap<CACHE_ALIGN_SIZE>();
+const static std::array<uint8_t, CACHE_ALIGN_SIZE> ALL_FALSE_BITMAP = std::array<uint8_t, CACHE_ALIGN_SIZE>();
+
+}
+
+template<bool IS_ALL_TRUE>
+bool is_all_true_or_false_memcmp(const int64_t start, const int64_t end,
+                        const uint8_t *data) {
+  bool bret = true;
+  const uint8_t *from = data + start;
+  const uint8_t *to = data + end + 1;
+  uintptr_t from_ptr = reinterpret_cast<uintptr_t>(from),
+            to_ptr = reinterpret_cast<uintptr_t>(to);
+  uintptr_t aligned_from_ptr = upper_align(from_ptr, CACHE_ALIGN_SIZE);
+  uintptr_t aligned_to_ptr = lower_align(to_ptr, CACHE_ALIGN_SIZE);
+  const uint8_t *aligned_from =
+      reinterpret_cast<const uint8_t *>(aligned_from_ptr);
+  const uint8_t *aligned_to = reinterpret_cast<const uint8_t *>(aligned_to_ptr);
+  if (OB_UNLIKELY(aligned_from_ptr >= aligned_to_ptr)) {
+    if constexpr (IS_ALL_TRUE) {
+      bret = common::specific::normal::bitmap_is_all_true(start, end, data);
+    } else {
+      bret = common::specific::normal::bitmap_is_all_false(start, end, data);
+    }
   } else {
-    ret = common::specific::normal::bitmap_popcnt(data_, valid_bytes_);
+    if (aligned_from != from) {
+      if constexpr (IS_ALL_TRUE) {
+        bret = common::specific::normal::bitmap_is_all_true(
+            start, aligned_from - data - 1, data);
+      } else {
+        bret = common::specific::normal::bitmap_is_all_false(
+            start, aligned_from - data - 1, data);
+      }
+    }
+    if (bret) {
+      for (const uint8_t *curr = aligned_from; bret && curr < aligned_to;
+           curr += CACHE_ALIGN_SIZE) {
+        if constexpr (IS_ALL_TRUE) {
+          bret = memcmp(curr, ALL_TRUE_BITMAP.data(), CACHE_ALIGN_SIZE) == 0;
+        } else {
+          bret = memcmp(curr, ALL_FALSE_BITMAP.data(), CACHE_ALIGN_SIZE) == 0;
+        }
+      }
+    }
+    if (bret && aligned_to != to) {
+      if constexpr (IS_ALL_TRUE) {
+        bret = common::specific::normal::bitmap_is_all_true(aligned_to - data, end, data);
+      } else {
+        bret = common::specific::normal::bitmap_is_all_false(aligned_to - data, end, data);
+      }
+    }
   }
-#else
-  ret = common::specific::normal::bitmap_popcnt(data_, valid_bytes_);
-#endif
-  return ret;
+  return bret;
 }
 
 bool ObBitmap::is_all_true(const int64_t start, const int64_t end) const
 {
-  bool ret = false;
-#if OB_USE_MULTITARGET_CODE
+  bool bret = false;
+#ifdef __aarch64__
+  bret = is_all_true_or_false_memcmp<true>(start, end, data_);
+#elif OB_USE_MULTITARGET_CODE
   if (common::is_arch_supported(ObTargetArch::AVX2)) {
-    ret = common::specific::avx2::bitmap_is_all_true(start, end, data_);
+    bret = common::specific::avx2::bitmap_is_all_true(start, end, data_);
   } else {
-    ret = common::specific::normal::bitmap_is_all_true(start, end, data_);
+    bret = common::specific::normal::bitmap_is_all_true(start, end, data_);
   }
 #else
-  ret = common::specific::normal::bitmap_is_all_true(start, end, data_);
+  bret = common::specific::normal::bitmap_is_all_true(start, end, data_);
 #endif
-  return ret;
+  return bret;
 }
 
 bool ObBitmap::is_all_false(const int64_t start, const int64_t end) const
 {
-  bool ret = false;
-#if OB_USE_MULTITARGET_CODE
+  bool bret = false;
+#ifdef __aarch64__
+  bret = is_all_true_or_false_memcmp<false>(start, end, data_);
+#elif OB_USE_MULTITARGET_CODE
   if (common::is_arch_supported(ObTargetArch::AVX2)) {
-    ret = common::specific::avx2::bitmap_is_all_false(start, end, data_);
+    bret = common::specific::avx2::bitmap_is_all_false(start, end, data_);
   } else {
-    ret = common::specific::normal::bitmap_is_all_false(start, end, data_);
+    bret = common::specific::normal::bitmap_is_all_false(start, end, data_);
   }
 #else
-  ret = common::specific::normal::bitmap_is_all_false(start, end, data_);
+  bret = common::specific::normal::bitmap_is_all_false(start, end, data_);
 #endif
-  return ret;
+  return bret;
 }
 
 int64_t ObBitmap::next_valid_idx(const int64_t start,
@@ -762,61 +730,6 @@ int ObBitmap::set_bitmap_batch(const int64_t offset, const int64_t count, const 
   return ret;
 }
 
-OB_DECLARE_AVX2_SPECIFIC_CODE(
-inline static void inner_from_bits_mask(
-    const int64_t from,
-    const int64_t to,
-    uint8_t* bits,
-    uint8_t* data)
-{
-  const uint64_t size = to - from;
-  const uint8_t *pos = bits;
-  const uint8_t *end_pos32 = pos + size / 32 * 4;
-  uint8_t *out = data + from;
-  for (; pos < end_pos32; pos += 4) {
-    // we only use the low 32bits of each lane, but this is fine with AVX2
-    __m256i xbcast = _mm256_set1_epi32(*(reinterpret_cast<const int32_t *>(pos)));
-    // Each byte gets the source byte containing the corresponding bit
-    __m256i shufmask = _mm256_set_epi64x(
-        0x0303030303030303, 0x0202020202020202,
-        0x0101010101010101, 0x0000000000000000);
-    __m256i shuf  = _mm256_shuffle_epi8(xbcast, shufmask);
-    __m256i andmask  = _mm256_set1_epi64x(0x8040201008040201);  // every 8 bits -> 8 bytes, pattern repeats.
-    __m256i isolated_inverted = _mm256_andnot_si256(shuf, andmask);
-    // this is the extra step: compare each byte == 0 to produce 0 or -1
-    __m256i z = _mm256_cmpeq_epi8(isolated_inverted, _mm256_setzero_si256());
-    // alternative: compare against the AND mask to get 0 or -1,
-    // avoiding the need for a vector zero constant.
-    _mm256_storeu_si256((__m256i*)out,z);
-
-    out += 32;
-  }
-  const int64_t remain_size = (to - from) % 32;
-  for (int64_t idx = 0; idx < remain_size; ++idx) {
-    *(out++) = is_bit_set(pos, idx);
-  }
-}
-)
-
-OB_DECLARE_DEFAULT_CODE(
-inline static void inner_from_bits_mask(
-    const int64_t from,
-    const int64_t to,
-    uint8_t* bits,
-    uint8_t* data)
-{
-  const uint64_t size = to - from;
-  uint8_t *out = data + from;
-  uint64_t *bits64 = reinterpret_cast<uint64_t *>(bits);
-  for (uint64_t i = 0; i < size; ++i) {
-    if (bits64[i / 64] & (1LU << (i % 64))) {
-      *out = 1;
-    }
-    ++out;
-  }
-}
-)
-
 int ObBitmap::from_bits_mask(
     const int64_t from,
     const int64_t to,
@@ -826,14 +739,9 @@ int ObBitmap::from_bits_mask(
   if (OB_UNLIKELY(valid_bytes_ < to || nullptr == bits)) {
     ret = OB_INVALID_ARGUMENT;
     LIB_LOG(WARN, "Invalid argument", K_(valid_bytes), K(to), KP(bits));
-#if OB_USE_MULTITARGET_CODE
-  } else if (common::is_arch_supported(ObTargetArch::AVX2)) {
-    common::specific::avx2::inner_from_bits_mask(from, to, bits, data_);
-#endif
   } else {
-    common::specific::normal::inner_from_bits_mask(from, to, bits, data_);
+    unpack_bits_to_bytes<false>(bits, data_ + from, to - from);
   }
-
   return ret;
 }
 
@@ -847,12 +755,10 @@ int ObBitmap::to_bits_mask(
   if (OB_UNLIKELY(valid_bytes_ < to || nullptr == bits)) {
     ret = OB_INVALID_ARGUMENT;
     LIB_LOG(WARN, "Invalid argument", K_(valid_bytes), K(to), KP(bits));
-#if OB_USE_MULTITARGET_CODE
-  } else if (common::is_arch_supported(ObTargetArch::AVX2)) {
-    common::specific::avx2::bitmap_to_bits_mask(from, to, need_flip, data_, bits);
-#endif
+  } else if (!need_flip) {
+    pack_bytes_to_bits<false>(data_ + from, bits, to - from);
   } else {
-    common::specific::normal::bitmap_to_bits_mask(from, to, need_flip, data_, bits);
+    pack_bytes_to_bits<true>(data_ + from, bits, to - from);
   }
   return ret;
 }
@@ -875,17 +781,7 @@ void ObBitmap::filter(
     SelectOpImpl<SelectOrOp>::apply_op(skip, nulls, (size + 7) / 8);
   }
 
-#if OB_USE_MULTITARGET_CODE
-  if (common::is_arch_supported(ObTargetArch::AVX512)) {
-    common::specific::avx512::uint64_mask_to_bits_mask(data, size, skip);
-  } else if (common::is_arch_supported(ObTargetArch::AVX2)) {
-    common::specific::avx2::uint64_mask_to_bits_mask(data, size, skip);
-  } else {
-#endif
-    common::specific::normal::uint64_mask_to_bits_mask(data, size, skip);
-#if OB_USE_MULTITARGET_CODE
-  }
-#endif
+  bits_bit_or_bytes64<true>(skip, data, size);
 }
 
 int ObBitmap::generate_condensed_index()

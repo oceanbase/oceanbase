@@ -11,6 +11,7 @@
 #include "lib/allocator/ob_block_alloc_mgr.h"
 #include "lib/allocator/ob_qsync.h"
 #include "lib/utility/ob_print_utils.h"
+#include "lib/utility/ob_backtrace.h"
 
 namespace oceanbase
 {

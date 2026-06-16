@@ -220,6 +220,11 @@
           "name": "default_delta_format",
           "value": "encoding",
           "comment": "for olap workloads, set delta format to encoding by default when creating table"
+        },
+        {
+          "name": "_rowsets_max_rows",
+          "value": 512,
+          "comment": "for olap workload, increate default rowsets to 512 in order to gain better performance"
         }
       ]
     }

@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 
+#include <algorithm>
 #include <gtest/gtest.h>
 #define protected public
 #define private public
@@ -1118,6 +1119,736 @@ TEST_F(TestCSDecoder, multi_version_for_multi_version_cols)
                           row, trans_version));
 
     ASSERT_EQ(-found->storage_datums_[1].get_int(), trans_version);
+  }
+}
+
+// Dedicated vector decode tests for ConvertUintToVec paths:
+//   - continuous row_ids from 0 and from non-zero start (copy path)
+//   - non-continuous row_ids (gather path)
+//   - IS_NULL_REPLACED null handling (mark_nulls with value comparison)
+//   - dict / dict-const encoding (process_int_dict_column / process_int_dict_column_const)
+//   - gather_with_null_ref (covered by int_dict / int_dict_const with null)
+TEST_F(TestCSDecoder, test_vector_decode_integer)
+{
+  const int64_t rowkey_cnt = 1;
+  const int64_t col_cnt = 2;
+  ObObjType col_types[col_cnt] = {ObInt32Type, ObIntType};
+  ASSERT_EQ(OB_SUCCESS, prepare(col_types, rowkey_cnt, col_cnt));
+  ctx_.column_encodings_[0] = ObCSColumnHeader::Type::INTEGER;
+  ctx_.column_encodings_[1] = ObCSColumnHeader::Type::INTEGER;
+
+  for (int8_t null_flag = 0; null_flag <= 1; ++null_flag) {
+    const int64_t null_cnt = null_flag ? 20 : 0;
+    const int64_t row_cnt = 100 + null_cnt;
+    ObMicroBlockCSEncoder<> encoder;
+    ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
+    ObDatumRow row_arr[row_cnt];
+    for (int64_t i = 0; i < row_cnt; ++i) {
+      ASSERT_EQ(OB_SUCCESS, row_arr[i].init(allocator_, col_cnt));
+    }
+    for (int64_t i = 0; i < row_cnt; ++i) {
+      row_arr[i].storage_datums_[0].set_int32(i);
+      if (i < 100) {
+        row_arr[i].storage_datums_[1].set_int(i * 3 - 50);
+      } else {
+        row_arr[i].storage_datums_[1].set_null();
+      }
+      ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
+    }
+    ObMicroBlockDesc micro_block_desc;
+    ObMicroBlockHeader *header = nullptr;
+    ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
+    ObMicroBlockData full_transformed_data;
+    ObMicroBlockCSDecoder<> decoder;
+    ASSERT_EQ(OB_SUCCESS, init_cs_decoder(header, micro_block_desc, full_transformed_data, decoder));
+
+    const int64_t col_idx = 1;
+    ObObjMeta col_meta = col_descs_.at(col_idx).col_type_;
+    sql::ObExecContext exec_ctx(allocator_);
+    sql::ObEvalCtx eval_ctx(exec_ctx);
+    ObArenaAllocator frame_alloc;
+
+    // 1) continuous row_ids: all rows
+    {
+      sql::ObExpr col_expr;
+      ASSERT_EQ(OB_SUCCESS, VectorDecodeTestUtil::generate_column_output_expr(
+          row_cnt, col_meta, VEC_FIXED, eval_ctx, col_expr, frame_alloc));
+      int32_t row_ids[row_cnt];
+      for (int32_t i = 0; i < row_cnt; ++i) row_ids[i] = i;
+      const char *ptr_arr[row_cnt];
+      uint32_t len_arr[row_cnt];
+      ObVectorDecodeCtx vec_ctx(ptr_arr, len_arr, row_ids, row_cnt, 0, col_expr.get_vector_header(eval_ctx));
+      ASSERT_EQ(OB_SUCCESS, decoder.get_col_data(col_idx, vec_ctx));
+      for (int64_t i = 0; i < row_cnt; ++i) {
+        ASSERT_TRUE(VectorDecodeTestUtil::verify_vector_and_datum_match_nop(
+            *vec_ctx.get_vector(), i, row_arr[i].storage_datums_[col_idx])) << "cont i=" << i;
+      }
+    }
+
+    // 2) continuous row_ids starting from non-zero: {50,51,...,99}
+    //    tests copy(dest, src + row_ids[0], ...) with row_ids[0] != 0
+    {
+      const int64_t start = 50;
+      const int64_t decode_cnt = std::min(static_cast<int64_t>(50), row_cnt - start);
+      sql::ObExpr col_expr;
+      ASSERT_EQ(OB_SUCCESS, VectorDecodeTestUtil::generate_column_output_expr(
+          decode_cnt, col_meta, VEC_FIXED, eval_ctx, col_expr, frame_alloc));
+      int32_t row_ids[decode_cnt];
+      for (int64_t i = 0; i < decode_cnt; ++i) row_ids[i] = start + i;
+      const char *ptr_arr[decode_cnt];
+      uint32_t len_arr[decode_cnt];
+      ObVectorDecodeCtx vec_ctx(ptr_arr, len_arr, row_ids, decode_cnt, 0, col_expr.get_vector_header(eval_ctx));
+      ASSERT_EQ(OB_SUCCESS, decoder.get_col_data(col_idx, vec_ctx));
+      for (int64_t i = 0; i < decode_cnt; ++i) {
+        ASSERT_TRUE(VectorDecodeTestUtil::verify_vector_and_datum_match_nop(
+            *vec_ctx.get_vector(), i, row_arr[row_ids[i]].storage_datums_[col_idx]))
+            << "cont_nonzero i=" << i << " row_id=" << row_ids[i];
+      }
+    }
+
+    // 3) non-continuous row_ids: every 3rd row
+    {
+      const int64_t decode_cnt = (row_cnt + 2) / 3;
+      sql::ObExpr col_expr;
+      ASSERT_EQ(OB_SUCCESS, VectorDecodeTestUtil::generate_column_output_expr(
+          decode_cnt, col_meta, VEC_FIXED, eval_ctx, col_expr, frame_alloc));
+      int32_t row_ids[decode_cnt];
+      for (int64_t i = 0; i < decode_cnt; ++i) row_ids[i] = i * 3;
+      const char *ptr_arr[decode_cnt];
+      uint32_t len_arr[decode_cnt];
+      ObVectorDecodeCtx vec_ctx(ptr_arr, len_arr, row_ids, decode_cnt, 0, col_expr.get_vector_header(eval_ctx));
+      ASSERT_EQ(OB_SUCCESS, decoder.get_col_data(col_idx, vec_ctx));
+      for (int64_t i = 0; i < decode_cnt; ++i) {
+        ASSERT_TRUE(VectorDecodeTestUtil::verify_vector_and_datum_match_nop(
+            *vec_ctx.get_vector(), i, row_arr[row_ids[i]].storage_datums_[col_idx]))
+            << "non-cont i=" << i << " row_id=" << row_ids[i];
+      }
+    }
+
+    // 4) non-continuous with vec_offset
+    {
+      const int64_t decode_cnt = 10;
+      const int64_t vec_offset = 5;
+      const int64_t total_vec_cnt = decode_cnt + vec_offset;
+      sql::ObExpr col_expr;
+      ASSERT_EQ(OB_SUCCESS, VectorDecodeTestUtil::generate_column_output_expr(
+          total_vec_cnt, col_meta, VEC_FIXED, eval_ctx, col_expr, frame_alloc));
+      int32_t row_ids[decode_cnt];
+      for (int64_t i = 0; i < decode_cnt; ++i) row_ids[i] = i * 5;
+      const char *ptr_arr[decode_cnt];
+      uint32_t len_arr[decode_cnt];
+      ObVectorDecodeCtx vec_ctx(ptr_arr, len_arr, row_ids, decode_cnt, vec_offset, col_expr.get_vector_header(eval_ctx));
+      ASSERT_EQ(OB_SUCCESS, decoder.get_col_data(col_idx, vec_ctx));
+      for (int64_t i = 0; i < decode_cnt; ++i) {
+        ASSERT_TRUE(VectorDecodeTestUtil::verify_vector_and_datum_match_nop(
+            *vec_ctx.get_vector(), vec_offset + i, row_arr[row_ids[i]].storage_datums_[col_idx]))
+            << "offset i=" << i << " row_id=" << row_ids[i];
+      }
+    }
+
+    encoder.reuse();
+  }
+}
+
+// Cover IS_NULL_REPLACED path explicitly with SmallInt value range [0,99]+null.
+// null_replaced_value = 100 (max+1). Large row count to exercise mark_nulls 64-bit loop.
+TEST_F(TestCSDecoder, test_vector_decode_integer_null_replaced)
+{
+  const int64_t rowkey_cnt = 1;
+  const int64_t col_cnt = 2;
+  ObObjType col_types[col_cnt] = {ObInt32Type, ObSmallIntType};
+  ASSERT_EQ(OB_SUCCESS, prepare(col_types, rowkey_cnt, col_cnt));
+  ctx_.column_encodings_[0] = ObCSColumnHeader::Type::INTEGER;
+  ctx_.column_encodings_[1] = ObCSColumnHeader::Type::INTEGER;
+
+  const int64_t data_cnt = 200;
+  const int64_t null_cnt = 100;
+  const int64_t row_cnt = data_cnt + null_cnt;
+  ObMicroBlockCSEncoder<> encoder;
+  ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
+  ObDatumRow row_arr[row_cnt];
+  for (int64_t i = 0; i < row_cnt; ++i) {
+    ASSERT_EQ(OB_SUCCESS, row_arr[i].init(allocator_, col_cnt));
+  }
+  for (int64_t i = 0; i < row_cnt; ++i) {
+    row_arr[i].storage_datums_[0].set_int32(i);
+    if (i < data_cnt) {
+      row_arr[i].storage_datums_[1].set_int(static_cast<int16_t>(i % 100));
+    } else {
+      row_arr[i].storage_datums_[1].set_null();
+    }
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
+  }
+  ObMicroBlockDesc micro_block_desc;
+  ObMicroBlockHeader *header = nullptr;
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
+  ObMicroBlockData full_transformed_data;
+  ObMicroBlockCSDecoder<> decoder;
+  ASSERT_EQ(OB_SUCCESS, init_cs_decoder(header, micro_block_desc, full_transformed_data, decoder));
+
+  const int64_t col_idx = 1;
+  ObObjMeta col_meta = col_descs_.at(col_idx).col_type_;
+  sql::ObExecContext exec_ctx(allocator_);
+  sql::ObEvalCtx eval_ctx(exec_ctx);
+  ObArenaAllocator frame_alloc;
+
+  // continuous from 0: all rows
+  {
+    sql::ObExpr col_expr;
+    ASSERT_EQ(OB_SUCCESS, VectorDecodeTestUtil::generate_column_output_expr(
+        row_cnt, col_meta, VEC_FIXED, eval_ctx, col_expr, frame_alloc));
+    int32_t row_ids[row_cnt];
+    for (int32_t i = 0; i < row_cnt; ++i) row_ids[i] = i;
+    const char *ptr_arr[row_cnt];
+    uint32_t len_arr[row_cnt];
+    ObVectorDecodeCtx vec_ctx(ptr_arr, len_arr, row_ids, row_cnt, 0, col_expr.get_vector_header(eval_ctx));
+    ASSERT_EQ(OB_SUCCESS, decoder.get_col_data(col_idx, vec_ctx));
+    for (int64_t i = 0; i < row_cnt; ++i) {
+      ASSERT_TRUE(VectorDecodeTestUtil::verify_vector_and_datum_match_nop(
+          *vec_ctx.get_vector(), i, row_arr[i].storage_datums_[col_idx])) << "null_replaced cont i=" << i;
+    }
+  }
+
+  // continuous from non-zero start: {150,...,299} includes data+null boundary
+  {
+    const int64_t start = 150;
+    const int64_t decode_cnt = row_cnt - start;
+    sql::ObExpr col_expr;
+    ASSERT_EQ(OB_SUCCESS, VectorDecodeTestUtil::generate_column_output_expr(
+        decode_cnt, col_meta, VEC_FIXED, eval_ctx, col_expr, frame_alloc));
+    int32_t row_ids[decode_cnt];
+    for (int64_t i = 0; i < decode_cnt; ++i) row_ids[i] = start + i;
+    const char *ptr_arr[decode_cnt];
+    uint32_t len_arr[decode_cnt];
+    ObVectorDecodeCtx vec_ctx(ptr_arr, len_arr, row_ids, decode_cnt, 0, col_expr.get_vector_header(eval_ctx));
+    ASSERT_EQ(OB_SUCCESS, decoder.get_col_data(col_idx, vec_ctx));
+    for (int64_t i = 0; i < decode_cnt; ++i) {
+      ASSERT_TRUE(VectorDecodeTestUtil::verify_vector_and_datum_match_nop(
+          *vec_ctx.get_vector(), i, row_arr[row_ids[i]].storage_datums_[col_idx]))
+          << "null_replaced cont_nonzero i=" << i;
+    }
+  }
+
+  // non-continuous: every 2nd row, decode_cnt=150 > 64, exercises mark_nulls main loop
+  {
+    const int64_t decode_cnt = row_cnt / 2;
+    sql::ObExpr col_expr;
+    ASSERT_EQ(OB_SUCCESS, VectorDecodeTestUtil::generate_column_output_expr(
+        decode_cnt, col_meta, VEC_FIXED, eval_ctx, col_expr, frame_alloc));
+    int32_t row_ids[decode_cnt];
+    for (int64_t i = 0; i < decode_cnt; ++i) row_ids[i] = i * 2;
+    const char *ptr_arr[decode_cnt];
+    uint32_t len_arr[decode_cnt];
+    ObVectorDecodeCtx vec_ctx(ptr_arr, len_arr, row_ids, decode_cnt, 0, col_expr.get_vector_header(eval_ctx));
+    ASSERT_EQ(OB_SUCCESS, decoder.get_col_data(col_idx, vec_ctx));
+    for (int64_t i = 0; i < decode_cnt; ++i) {
+      ASSERT_TRUE(VectorDecodeTestUtil::verify_vector_and_datum_match_nop(
+          *vec_ctx.get_vector(), i, row_arr[row_ids[i]].storage_datums_[col_idx]))
+          << "null_replaced non-cont i=" << i;
+    }
+  }
+}
+
+TEST_F(TestCSDecoder, test_vector_decode_int_dict)
+{
+  const int64_t rowkey_cnt = 1;
+  const int64_t col_cnt = 2;
+  ObObjType col_types[col_cnt] = {ObInt32Type, ObIntType};
+  ASSERT_EQ(OB_SUCCESS, prepare(col_types, rowkey_cnt, col_cnt));
+  ctx_.column_encodings_[0] = ObCSColumnHeader::Type::INT_DICT;
+  ctx_.column_encodings_[1] = ObCSColumnHeader::Type::INT_DICT;
+
+  for (int8_t null_flag = 0; null_flag <= 1; ++null_flag) {
+    const int64_t distinct_cnt = 20;
+    const int64_t null_cnt = null_flag ? 20 : 0;
+    const int64_t row_cnt = 100 + null_cnt;
+    ObMicroBlockCSEncoder<> encoder;
+    ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
+    ObDatumRow row_arr[row_cnt];
+    for (int64_t i = 0; i < row_cnt; ++i) {
+      ASSERT_EQ(OB_SUCCESS, row_arr[i].init(allocator_, col_cnt));
+    }
+    for (int64_t i = 0; i < row_cnt; ++i) {
+      row_arr[i].storage_datums_[0].set_int32(i);
+      if (i < 100) {
+        row_arr[i].storage_datums_[1].set_int(i % distinct_cnt + INT32_MAX);
+      } else {
+        row_arr[i].storage_datums_[1].set_null();
+      }
+      ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
+    }
+    ObMicroBlockDesc micro_block_desc;
+    ObMicroBlockHeader *header = nullptr;
+    ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
+    ObMicroBlockData full_transformed_data;
+    ObMicroBlockCSDecoder<> decoder;
+    ASSERT_EQ(OB_SUCCESS, init_cs_decoder(header, micro_block_desc, full_transformed_data, decoder));
+
+    const int64_t col_idx = 1;
+    ObObjMeta col_meta = col_descs_.at(col_idx).col_type_;
+    sql::ObExecContext exec_ctx(allocator_);
+    sql::ObEvalCtx eval_ctx(exec_ctx);
+    ObArenaAllocator frame_alloc;
+
+    // continuous row_ids
+    {
+      sql::ObExpr col_expr;
+      ASSERT_EQ(OB_SUCCESS, VectorDecodeTestUtil::generate_column_output_expr(
+          row_cnt, col_meta, VEC_FIXED, eval_ctx, col_expr, frame_alloc));
+      int32_t row_ids[row_cnt];
+      for (int32_t i = 0; i < row_cnt; ++i) row_ids[i] = i;
+      const char *ptr_arr[row_cnt];
+      uint32_t len_arr[row_cnt];
+      ObVectorDecodeCtx vec_ctx(ptr_arr, len_arr, row_ids, row_cnt, 0, col_expr.get_vector_header(eval_ctx));
+      ASSERT_EQ(OB_SUCCESS, decoder.get_col_data(col_idx, vec_ctx));
+      for (int64_t i = 0; i < row_cnt; ++i) {
+        ASSERT_TRUE(VectorDecodeTestUtil::verify_vector_and_datum_match_nop(
+            *vec_ctx.get_vector(), i, row_arr[i].storage_datums_[col_idx])) << "dict cont i=" << i;
+      }
+    }
+
+    // non-continuous row_ids: every 2nd row
+    {
+      const int64_t decode_cnt = row_cnt / 2;
+      sql::ObExpr col_expr;
+      ASSERT_EQ(OB_SUCCESS, VectorDecodeTestUtil::generate_column_output_expr(
+          decode_cnt, col_meta, VEC_FIXED, eval_ctx, col_expr, frame_alloc));
+      int32_t row_ids[decode_cnt];
+      for (int64_t i = 0; i < decode_cnt; ++i) row_ids[i] = i * 2;
+      const char *ptr_arr[decode_cnt];
+      uint32_t len_arr[decode_cnt];
+      ObVectorDecodeCtx vec_ctx(ptr_arr, len_arr, row_ids, decode_cnt, 0, col_expr.get_vector_header(eval_ctx));
+      ASSERT_EQ(OB_SUCCESS, decoder.get_col_data(col_idx, vec_ctx));
+      for (int64_t i = 0; i < decode_cnt; ++i) {
+        ASSERT_TRUE(VectorDecodeTestUtil::verify_vector_and_datum_match_nop(
+            *vec_ctx.get_vector(), i, row_arr[row_ids[i]].storage_datums_[col_idx]))
+            << "dict non-cont i=" << i;
+      }
+    }
+
+    encoder.reuse();
+  }
+}
+
+TEST_F(TestCSDecoder, test_vector_decode_int_dict_const)
+{
+  const int64_t rowkey_cnt = 1;
+  const int64_t col_cnt = 2;
+  ObObjType col_types[col_cnt] = {ObInt32Type, ObIntType};
+  ASSERT_EQ(OB_SUCCESS, prepare(col_types, rowkey_cnt, col_cnt));
+  ctx_.column_encodings_[0] = ObCSColumnHeader::Type::INT_DICT;
+  ctx_.column_encodings_[1] = ObCSColumnHeader::Type::INT_DICT;
+
+  for (int8_t null_flag = 0; null_flag <= 1; ++null_flag) {
+    // 110 rows const value, 4 exception rows, 6 null rows (if null_flag).
+    // exception_cnt=10 < row_cnt*10% keeps const encoding; null rows exercise
+    // gather_with_null_ref in process_int_dict_column_const (non-continuous decode).
+    const int64_t const_cnt = 110;
+    const int64_t exception_cnt = 4;
+    const int64_t null_cnt = null_flag ? 6 : 0;
+    const int64_t row_cnt = const_cnt + exception_cnt + null_cnt;
+    ObMicroBlockCSEncoder<> encoder;
+    ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
+    ObDatumRow row_arr[row_cnt];
+    for (int64_t i = 0; i < row_cnt; ++i) {
+      ASSERT_EQ(OB_SUCCESS, row_arr[i].init(allocator_, col_cnt));
+    }
+    for (int64_t i = 0; i < const_cnt; ++i) {
+      row_arr[i].storage_datums_[0].set_int32(i);
+      row_arr[i].storage_datums_[1].set_int(42);
+      ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
+    }
+    for (int64_t i = const_cnt; i < const_cnt + exception_cnt; ++i) {
+      row_arr[i].storage_datums_[0].set_int32(i);
+      row_arr[i].storage_datums_[1].set_int((i - const_cnt + 1) * 100);
+      ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
+    }
+    for (int64_t i = const_cnt + exception_cnt; i < row_cnt; ++i) {
+      row_arr[i].storage_datums_[0].set_int32(i);
+      row_arr[i].storage_datums_[1].set_null();
+      ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
+    }
+    ObMicroBlockDesc micro_block_desc;
+    ObMicroBlockHeader *header = nullptr;
+    ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
+    ObMicroBlockData full_transformed_data;
+    ObMicroBlockCSDecoder<> decoder;
+    ASSERT_EQ(OB_SUCCESS, init_cs_decoder(header, micro_block_desc, full_transformed_data, decoder));
+
+    const int64_t col_idx = 1;
+    ObObjMeta col_meta = col_descs_.at(col_idx).col_type_;
+    sql::ObExecContext exec_ctx(allocator_);
+    sql::ObEvalCtx eval_ctx(exec_ctx);
+    ObArenaAllocator frame_alloc;
+
+    // continuous
+    {
+      sql::ObExpr col_expr;
+      ASSERT_EQ(OB_SUCCESS, VectorDecodeTestUtil::generate_column_output_expr(
+          row_cnt, col_meta, VEC_FIXED, eval_ctx, col_expr, frame_alloc));
+      int32_t row_ids[row_cnt];
+      for (int32_t i = 0; i < row_cnt; ++i) row_ids[i] = i;
+      const char *ptr_arr[row_cnt];
+      uint32_t len_arr[row_cnt];
+      ObVectorDecodeCtx vec_ctx(ptr_arr, len_arr, row_ids, row_cnt, 0, col_expr.get_vector_header(eval_ctx));
+      ASSERT_EQ(OB_SUCCESS, decoder.get_col_data(col_idx, vec_ctx));
+      for (int64_t i = 0; i < row_cnt; ++i) {
+        ASSERT_TRUE(VectorDecodeTestUtil::verify_vector_and_datum_match_nop(
+            *vec_ctx.get_vector(), i, row_arr[i].storage_datums_[col_idx])) << "const cont i=" << i;
+      }
+    }
+
+    // non-continuous: every 7th row
+    {
+      const int64_t decode_cnt = (row_cnt + 6) / 7;
+      sql::ObExpr col_expr;
+      ASSERT_EQ(OB_SUCCESS, VectorDecodeTestUtil::generate_column_output_expr(
+          decode_cnt, col_meta, VEC_FIXED, eval_ctx, col_expr, frame_alloc));
+      int32_t row_ids[decode_cnt];
+      for (int64_t i = 0; i < decode_cnt; ++i) row_ids[i] = std::min(static_cast<int64_t>(i * 7), row_cnt - 1);
+      const char *ptr_arr[decode_cnt];
+      uint32_t len_arr[decode_cnt];
+      ObVectorDecodeCtx vec_ctx(ptr_arr, len_arr, row_ids, decode_cnt, 0, col_expr.get_vector_header(eval_ctx));
+      ASSERT_EQ(OB_SUCCESS, decoder.get_col_data(col_idx, vec_ctx));
+      for (int64_t i = 0; i < decode_cnt; ++i) {
+        ASSERT_TRUE(VectorDecodeTestUtil::verify_vector_and_datum_match_nop(
+            *vec_ctx.get_vector(), i, row_arr[row_ids[i]].storage_datums_[col_idx]))
+            << "const non-cont i=" << i << " row_id=" << row_ids[i];
+      }
+    }
+
+    encoder.reuse();
+  }
+}
+
+// Cover HAS_NULL_OR_NOP_BITMAP path: TinyInt filling entire [-128,127] range
+// so encoder can't find null_replaced_value, falls back to bitmap.
+TEST_F(TestCSDecoder, test_vector_decode_integer_null_bitmap)
+{
+  const int64_t rowkey_cnt = 1;
+  const int64_t col_cnt = 2;
+  ObObjType col_types[col_cnt] = {ObInt32Type, ObTinyIntType};
+  ASSERT_EQ(OB_SUCCESS, prepare(col_types, rowkey_cnt, col_cnt));
+  ctx_.column_encodings_[0] = ObCSColumnHeader::Type::INTEGER;
+  ctx_.column_encodings_[1] = ObCSColumnHeader::Type::INTEGER;
+
+  const int64_t data_cnt = 256; // -128..127 fills entire TinyInt range
+  const int64_t null_cnt = 20;
+  const int64_t row_cnt = data_cnt + null_cnt;
+  ObMicroBlockCSEncoder<> encoder;
+  ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
+  encoder.is_all_column_force_raw_ = true;
+  ObDatumRow row_arr[row_cnt];
+  for (int64_t i = 0; i < row_cnt; ++i) {
+    ASSERT_EQ(OB_SUCCESS, row_arr[i].init(allocator_, col_cnt));
+  }
+  for (int64_t i = 0; i < row_cnt; ++i) {
+    row_arr[i].storage_datums_[0].set_int32(i);
+    if (i < data_cnt) {
+      row_arr[i].storage_datums_[1].set_int(static_cast<int8_t>(i - 128));
+    } else {
+      row_arr[i].storage_datums_[1].set_null();
+    }
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
+  }
+  ObMicroBlockDesc micro_block_desc;
+  ObMicroBlockHeader *header = nullptr;
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
+  ObMicroBlockData full_transformed_data;
+  ObMicroBlockCSDecoder<> decoder;
+  ASSERT_EQ(OB_SUCCESS, init_cs_decoder(header, micro_block_desc, full_transformed_data, decoder));
+
+  const int64_t col_idx = 1;
+  ObObjMeta col_meta = col_descs_.at(col_idx).col_type_;
+  sql::ObExecContext exec_ctx(allocator_);
+  sql::ObEvalCtx eval_ctx(exec_ctx);
+  ObArenaAllocator frame_alloc;
+
+  // continuous all rows
+  {
+    sql::ObExpr col_expr;
+    ASSERT_EQ(OB_SUCCESS, VectorDecodeTestUtil::generate_column_output_expr(
+        row_cnt, col_meta, VEC_FIXED, eval_ctx, col_expr, frame_alloc));
+    int32_t row_ids[row_cnt];
+    for (int32_t i = 0; i < row_cnt; ++i) row_ids[i] = i;
+    const char *ptr_arr[row_cnt];
+    uint32_t len_arr[row_cnt];
+    ObVectorDecodeCtx vec_ctx(ptr_arr, len_arr, row_ids, row_cnt, 0, col_expr.get_vector_header(eval_ctx));
+    ASSERT_EQ(OB_SUCCESS, decoder.get_col_data(col_idx, vec_ctx));
+    for (int64_t i = 0; i < row_cnt; ++i) {
+      ASSERT_TRUE(VectorDecodeTestUtil::verify_vector_and_datum_match_nop(
+          *vec_ctx.get_vector(), i, row_arr[i].storage_datums_[col_idx])) << "bitmap cont i=" << i;
+    }
+  }
+
+  // non-continuous: every 3rd row
+  {
+    const int64_t decode_cnt = (row_cnt + 2) / 3;
+    sql::ObExpr col_expr;
+    ASSERT_EQ(OB_SUCCESS, VectorDecodeTestUtil::generate_column_output_expr(
+        decode_cnt, col_meta, VEC_FIXED, eval_ctx, col_expr, frame_alloc));
+    int32_t row_ids[decode_cnt];
+    for (int64_t i = 0; i < decode_cnt; ++i) row_ids[i] = std::min(i * 3, row_cnt - 1);
+    const char *ptr_arr[decode_cnt];
+    uint32_t len_arr[decode_cnt];
+    ObVectorDecodeCtx vec_ctx(ptr_arr, len_arr, row_ids, decode_cnt, 0, col_expr.get_vector_header(eval_ctx));
+    ASSERT_EQ(OB_SUCCESS, decoder.get_col_data(col_idx, vec_ctx));
+    for (int64_t i = 0; i < decode_cnt; ++i) {
+      ASSERT_TRUE(VectorDecodeTestUtil::verify_vector_and_datum_match_nop(
+          *vec_ctx.get_vector(), i, row_arr[row_ids[i]].storage_datums_[col_idx]))
+          << "bitmap non-cont i=" << i;
+    }
+  }
+}
+
+// Cover is_decimal_V=true path in copy/gather.
+TEST_F(TestCSDecoder, test_vector_decode_decimal_int)
+{
+  const int64_t rowkey_cnt = 1;
+  const int64_t col_cnt = 2;
+  ObObjType col_types[col_cnt] = {ObDecimalIntType, ObDecimalIntType};
+  int64_t precision_arr[col_cnt] = {MAX_PRECISION_DECIMAL_INT_64, MAX_PRECISION_DECIMAL_INT_32};
+  ASSERT_EQ(OB_SUCCESS, prepare(col_types, rowkey_cnt, col_cnt, ObCompressorType::ZSTD_1_3_8_COMPRESSOR, precision_arr));
+  ctx_.column_encodings_[0] = ObCSColumnHeader::Type::INTEGER;
+  ctx_.column_encodings_[1] = ObCSColumnHeader::Type::INTEGER;
+
+  for (int8_t null_flag = 0; null_flag <= 1; ++null_flag) {
+    const int64_t null_cnt = null_flag ? 20 : 0;
+    const int64_t row_cnt = 100 + null_cnt;
+    ObMicroBlockCSEncoder<> encoder;
+    ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
+    ObDatumRow row_arr[row_cnt];
+    for (int64_t i = 0; i < row_cnt; ++i) {
+      ASSERT_EQ(OB_SUCCESS, row_arr[i].init(allocator_, col_cnt));
+    }
+    for (int64_t i = 0; i < row_cnt; ++i) {
+      if (i < 100) {
+        int64_t v0 = i - 50;
+        int32_t v1 = static_cast<int32_t>(i * 7 - 200);
+        row_arr[i].storage_datums_[0].set_decimal_int(v0);
+        row_arr[i].storage_datums_[1].set_decimal_int(v1);
+      } else {
+        row_arr[i].storage_datums_[0].set_decimal_int(i - 50);
+        row_arr[i].storage_datums_[1].set_null();
+      }
+      ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
+    }
+    ObMicroBlockDesc micro_block_desc;
+    ObMicroBlockHeader *header = nullptr;
+    ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
+    ObMicroBlockData full_transformed_data;
+    ObMicroBlockCSDecoder<> decoder;
+    ASSERT_EQ(OB_SUCCESS, init_cs_decoder(header, micro_block_desc, full_transformed_data, decoder));
+
+    sql::ObExecContext exec_ctx(allocator_);
+    sql::ObEvalCtx eval_ctx(exec_ctx);
+    ObArenaAllocator frame_alloc;
+
+    for (int64_t col_idx = 0; col_idx < col_cnt; ++col_idx) {
+      ObObjMeta col_meta = col_descs_.at(col_idx).col_type_;
+      const int16_t precision = col_meta.get_stored_precision();
+      VecValueTypeClass vec_tc = common::get_vec_value_tc(col_meta.get_type(), col_meta.get_scale(), precision);
+      if (!VectorDecodeTestUtil::need_test_vec_with_type(VEC_FIXED, vec_tc)) continue;
+
+      // continuous
+      {
+        sql::ObExpr col_expr;
+        ASSERT_EQ(OB_SUCCESS, VectorDecodeTestUtil::generate_column_output_expr(
+            row_cnt, col_meta, VEC_FIXED, eval_ctx, col_expr, frame_alloc));
+        int32_t row_ids[row_cnt];
+        for (int32_t i = 0; i < row_cnt; ++i) row_ids[i] = i;
+        const char *ptr_arr[row_cnt];
+        uint32_t len_arr[row_cnt];
+        ObVectorDecodeCtx vec_ctx(ptr_arr, len_arr, row_ids, row_cnt, 0, col_expr.get_vector_header(eval_ctx));
+        ASSERT_EQ(OB_SUCCESS, decoder.get_col_data(col_idx, vec_ctx));
+        for (int64_t i = 0; i < row_cnt; ++i) {
+          ASSERT_TRUE(VectorDecodeTestUtil::verify_vector_and_datum_match_nop(
+              *vec_ctx.get_vector(), i, row_arr[i].storage_datums_[col_idx]))
+              << "decimal cont col=" << col_idx << " i=" << i;
+        }
+      }
+
+      // non-continuous: every 2nd row
+      {
+        const int64_t decode_cnt = row_cnt / 2;
+        sql::ObExpr col_expr;
+        ASSERT_EQ(OB_SUCCESS, VectorDecodeTestUtil::generate_column_output_expr(
+            decode_cnt, col_meta, VEC_FIXED, eval_ctx, col_expr, frame_alloc));
+        int32_t row_ids[decode_cnt];
+        for (int64_t i = 0; i < decode_cnt; ++i) row_ids[i] = i * 2;
+        const char *ptr_arr[decode_cnt];
+        uint32_t len_arr[decode_cnt];
+        ObVectorDecodeCtx vec_ctx(ptr_arr, len_arr, row_ids, decode_cnt, 0, col_expr.get_vector_header(eval_ctx));
+        ASSERT_EQ(OB_SUCCESS, decoder.get_col_data(col_idx, vec_ctx));
+        for (int64_t i = 0; i < decode_cnt; ++i) {
+          ASSERT_TRUE(VectorDecodeTestUtil::verify_vector_and_datum_match_nop(
+              *vec_ctx.get_vector(), i, row_arr[row_ids[i]].storage_datums_[col_idx]))
+              << "decimal non-cont col=" << col_idx << " i=" << i;
+        }
+      }
+    }
+
+    encoder.reuse();
+  }
+}
+
+// Cover mark_nulls 64-bit aligned main loop (rows_num >= 64 with non-continuous row_ids).
+TEST_F(TestCSDecoder, test_vector_decode_large_batch_non_continuous)
+{
+  const int64_t rowkey_cnt = 1;
+  const int64_t col_cnt = 2;
+  ObObjType col_types[col_cnt] = {ObInt32Type, ObIntType};
+  ASSERT_EQ(OB_SUCCESS, prepare(col_types, rowkey_cnt, col_cnt));
+  ctx_.column_encodings_[0] = ObCSColumnHeader::Type::INTEGER;
+  ctx_.column_encodings_[1] = ObCSColumnHeader::Type::INTEGER;
+
+  const int64_t row_cnt = 500;
+  const int64_t null_start = 400;
+  ObMicroBlockCSEncoder<> encoder;
+  ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
+  ObDatumRow row_arr[row_cnt];
+  for (int64_t i = 0; i < row_cnt; ++i) {
+    ASSERT_EQ(OB_SUCCESS, row_arr[i].init(allocator_, col_cnt));
+  }
+  for (int64_t i = 0; i < row_cnt; ++i) {
+    row_arr[i].storage_datums_[0].set_int32(i);
+    if (i < null_start) {
+      row_arr[i].storage_datums_[1].set_int(i * 5 - 1000);
+    } else {
+      row_arr[i].storage_datums_[1].set_null();
+    }
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
+  }
+  ObMicroBlockDesc micro_block_desc;
+  ObMicroBlockHeader *header = nullptr;
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
+  ObMicroBlockData full_transformed_data;
+  ObMicroBlockCSDecoder<> decoder;
+  ASSERT_EQ(OB_SUCCESS, init_cs_decoder(header, micro_block_desc, full_transformed_data, decoder));
+
+  const int64_t col_idx = 1;
+  ObObjMeta col_meta = col_descs_.at(col_idx).col_type_;
+  sql::ObExecContext exec_ctx(allocator_);
+  sql::ObEvalCtx eval_ctx(exec_ctx);
+  ObArenaAllocator frame_alloc;
+
+  // non-continuous every 2nd row, decode_cnt=250 > 64, exercises mark_nulls 64-bit loop
+  {
+    const int64_t decode_cnt = row_cnt / 2;
+    sql::ObExpr col_expr;
+    ASSERT_EQ(OB_SUCCESS, VectorDecodeTestUtil::generate_column_output_expr(
+        decode_cnt, col_meta, VEC_FIXED, eval_ctx, col_expr, frame_alloc));
+    int32_t row_ids[decode_cnt];
+    for (int64_t i = 0; i < decode_cnt; ++i) row_ids[i] = i * 2;
+    const char *ptr_arr[decode_cnt];
+    uint32_t len_arr[decode_cnt];
+    ObVectorDecodeCtx vec_ctx(ptr_arr, len_arr, row_ids, decode_cnt, 0, col_expr.get_vector_header(eval_ctx));
+    ASSERT_EQ(OB_SUCCESS, decoder.get_col_data(col_idx, vec_ctx));
+    for (int64_t i = 0; i < decode_cnt; ++i) {
+      ASSERT_TRUE(VectorDecodeTestUtil::verify_vector_and_datum_match_nop(
+          *vec_ctx.get_vector(), i, row_arr[row_ids[i]].storage_datums_[col_idx]))
+          << "large non-cont i=" << i;
+    }
+  }
+
+  // non-continuous gather with vec_offset=3, decode_cnt=200 (no null rows in batch)
+  {
+    const int64_t decode_cnt = 200;
+    const int64_t vec_offset = 3;
+    const int64_t total = decode_cnt + vec_offset;
+    sql::ObExpr col_expr;
+    ASSERT_EQ(OB_SUCCESS, VectorDecodeTestUtil::generate_column_output_expr(
+        total, col_meta, VEC_FIXED, eval_ctx, col_expr, frame_alloc));
+    int32_t row_ids[decode_cnt];
+    for (int64_t i = 0; i < decode_cnt; ++i) row_ids[i] = i * 2;
+    const char *ptr_arr[decode_cnt];
+    uint32_t len_arr[decode_cnt];
+    ObVectorDecodeCtx vec_ctx(ptr_arr, len_arr, row_ids, decode_cnt, vec_offset, col_expr.get_vector_header(eval_ctx));
+    ASSERT_EQ(OB_SUCCESS, decoder.get_col_data(col_idx, vec_ctx));
+    for (int64_t i = 0; i < decode_cnt; ++i) {
+      ASSERT_TRUE(VectorDecodeTestUtil::verify_vector_and_datum_match_nop(
+          *vec_ctx.get_vector(), vec_offset + i, row_arr[row_ids[i]].storage_datums_[col_idx]))
+          << "large offset i=" << i;
+    }
+  }
+}
+
+// Cover is_all_null=true branch in mark_nulls: decode only null rows.
+TEST_F(TestCSDecoder, test_vector_decode_all_null_batch)
+{
+  const int64_t rowkey_cnt = 1;
+  const int64_t col_cnt = 2;
+  ObObjType col_types[col_cnt] = {ObInt32Type, ObIntType};
+  ASSERT_EQ(OB_SUCCESS, prepare(col_types, rowkey_cnt, col_cnt));
+  ctx_.column_encodings_[0] = ObCSColumnHeader::Type::INTEGER;
+  ctx_.column_encodings_[1] = ObCSColumnHeader::Type::INTEGER;
+
+  const int64_t row_cnt = 200;
+  ObMicroBlockCSEncoder<> encoder;
+  ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
+  ObDatumRow row_arr[row_cnt];
+  for (int64_t i = 0; i < row_cnt; ++i) {
+    ASSERT_EQ(OB_SUCCESS, row_arr[i].init(allocator_, col_cnt));
+  }
+  // first 100 rows have data, last 100 rows are null
+  for (int64_t i = 0; i < row_cnt; ++i) {
+    row_arr[i].storage_datums_[0].set_int32(i);
+    if (i < 100) {
+      row_arr[i].storage_datums_[1].set_int(i);
+    } else {
+      row_arr[i].storage_datums_[1].set_null();
+    }
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
+  }
+  ObMicroBlockDesc micro_block_desc;
+  ObMicroBlockHeader *header = nullptr;
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
+  ObMicroBlockData full_transformed_data;
+  ObMicroBlockCSDecoder<> decoder;
+  ASSERT_EQ(OB_SUCCESS, init_cs_decoder(header, micro_block_desc, full_transformed_data, decoder));
+
+  const int64_t col_idx = 1;
+  ObObjMeta col_meta = col_descs_.at(col_idx).col_type_;
+  sql::ObExecContext exec_ctx(allocator_);
+  sql::ObEvalCtx eval_ctx(exec_ctx);
+  ObArenaAllocator frame_alloc;
+
+  // decode only null rows (row 100..199) — triggers is_all_null=true
+  {
+    const int64_t decode_cnt = 100;
+    sql::ObExpr col_expr;
+    ASSERT_EQ(OB_SUCCESS, VectorDecodeTestUtil::generate_column_output_expr(
+        decode_cnt, col_meta, VEC_FIXED, eval_ctx, col_expr, frame_alloc));
+    int32_t row_ids[decode_cnt];
+    for (int64_t i = 0; i < decode_cnt; ++i) row_ids[i] = 100 + i;
+    const char *ptr_arr[decode_cnt];
+    uint32_t len_arr[decode_cnt];
+    ObVectorDecodeCtx vec_ctx(ptr_arr, len_arr, row_ids, decode_cnt, 0, col_expr.get_vector_header(eval_ctx));
+    ASSERT_EQ(OB_SUCCESS, decoder.get_col_data(col_idx, vec_ctx));
+    for (int64_t i = 0; i < decode_cnt; ++i) {
+      ASSERT_TRUE(VectorDecodeTestUtil::verify_vector_and_datum_match_nop(
+          *vec_ctx.get_vector(), i, row_arr[row_ids[i]].storage_datums_[col_idx]))
+          << "all_null i=" << i;
+    }
+  }
+
+  // non-continuous: only null rows every 2nd (row 100,102,...,198)
+  {
+    const int64_t decode_cnt = 50;
+    sql::ObExpr col_expr;
+    ASSERT_EQ(OB_SUCCESS, VectorDecodeTestUtil::generate_column_output_expr(
+        decode_cnt, col_meta, VEC_FIXED, eval_ctx, col_expr, frame_alloc));
+    int32_t row_ids[decode_cnt];
+    for (int64_t i = 0; i < decode_cnt; ++i) row_ids[i] = 100 + i * 2;
+    const char *ptr_arr[decode_cnt];
+    uint32_t len_arr[decode_cnt];
+    ObVectorDecodeCtx vec_ctx(ptr_arr, len_arr, row_ids, decode_cnt, 0, col_expr.get_vector_header(eval_ctx));
+    ASSERT_EQ(OB_SUCCESS, decoder.get_col_data(col_idx, vec_ctx));
+    for (int64_t i = 0; i < decode_cnt; ++i) {
+      ASSERT_TRUE(VectorDecodeTestUtil::verify_vector_and_datum_match_nop(
+          *vec_ctx.get_vector(), i, row_arr[row_ids[i]].storage_datums_[col_idx]))
+          << "all_null non-cont i=" << i;
+    }
   }
 }
 

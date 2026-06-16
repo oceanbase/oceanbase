@@ -149,7 +149,13 @@ int ObPxBloomFilter::init(int64_t data_length, ObIAllocator &allocator, int64_t 
     bits_array_length_ = ceil((double)bits_count_ / 64);
     fit_l3_cache_ = bits_array_length_ * sizeof(int64_t) < get_level3_cache_size();
     void *bits_array_buf = NULL;
-    bool simd_support = common::is_arch_supported(ObTargetArch::AVX512);
+#ifdef __x86_64__
+    const bool simd_support = common::is_arch_supported(ObTargetArch::AVX512);
+#elif defined(__aarch64__)
+    const bool simd_support = common::is_arch_supported(ObTargetArch::NEON);
+#else
+#error unsupported arch
+#endif
     might_contain_ = simd_support ? &ObPxBloomFilter::might_contain_simd
                      : &ObPxBloomFilter::might_contain_nonsimd;
     if (OB_ISNULL(bits_array_buf = allocator.alloc(
@@ -602,9 +608,36 @@ namespace oceanbase
 {
 namespace common
 {
-OB_DECLARE_DEFAULT_AND_AVX512_CODE(
+class BloomFilterConvertSelectorOP
+{
+public:
+  BloomFilterConvertSelectorOP(uint16_t *selector, int &cnt)
+      : selector_(selector), cnt_(cnt)
+  {}
+  OB_INLINE int operator()(int64_t i)
+  {
+    selector_[cnt_++] = i;
+    return OB_SUCCESS;
+  }
+private:
+  uint16_t *__restrict__ selector_;
+  int &cnt_;
+};
 
-template <bool SUPPORT_SIMD, typename ResVec>
+OB_DECLARE_DEFAULT_AND_AVX512_CODE(
+struct BloomFilterFixedVecWriteOP
+{
+  uint64_t *__restrict__ data_;
+  OB_INLINE void operator()(int i, int v) const { data_[i] = v; }
+};
+
+struct BloomFilterUniVecWriteOP
+{
+  ObDatum *__restrict__ datums_;
+  OB_INLINE void operator()(int i, int v) const { datums_[i].set_int(v); }
+};
+
+template <ObTargetArch Arch, typename ResVec>
 class BloomFilterProbeOP
 {
 public:
@@ -620,13 +653,18 @@ public:
     bool is_match = false;
     constexpr int64_t is_match_payload = 1;
 #if OB_USE_MULTITARGET_CODE
-    if (SUPPORT_SIMD) {
-      (void)common::specific::avx512::inline_might_contain_simd(bits_array_, block_mask_,
-                                                                hash_values_[i], is_match);
+    if (Arch == ObTargetArch::AVX512) {
+      (void)common::specific::avx512::might_contain_simd(bits_array_, block_mask_,
+                                                         hash_values_[i], is_match);
+    } else {
+#elif OB_ARM_USE_MULTITARGET_CODE
+    if (Arch == ObTargetArch::NEON) {
+      (void)common::specific::neon::might_contain_simd(bits_array_, block_mask_,
+                                                       hash_values_[i], is_match);
     } else {
 #endif
       (void)bloom_filter_->might_contain_nonsimd(hash_values_[i], is_match);
-#if OB_USE_MULTITARGET_CODE
+#if OB_USE_MULTITARGET_CODE || OB_ARM_USE_MULTITARGET_CODE
     }
 #endif
     ++total_count_;
@@ -655,58 +693,193 @@ private:
   int64_t &filter_count_;
 };
 
-template <bool ALL_ROWS_ACTIVE, bool SUPPORT_SIMD, typename ResVec>
-int inner_might_contain(ObPxBloomFilter *bloom_filter, int64_t *bits_array,
-                        int64_t block_mask, const ObExpr &expr, ObEvalCtx &ctx,
-                        const ObBitVector &skip, const EvalBound &bound,
-                        uint64_t *hash_values, int64_t &total_count,
-                        int64_t &filter_count) {
-  int ret = OB_SUCCESS;
-  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
-  static const int64_t is_match_payload = 1;
+template<ObTargetArch Arch>
+OB_INLINE
+int might_contain_value(ObPxBloomFilter *bloom_filter, int64_t *bits_array, int64_t block_mask, uint64_t hash_value)
+{
   bool is_match = true;
-  if (std::is_same<ResVec, IntegerFixedVec>::value) {
-    IntegerFixedVec *int_fixed_vec = reinterpret_cast<IntegerFixedVec *>(res_vec);
-    uint64_t *data = reinterpret_cast<uint64_t *>(int_fixed_vec->get_data());
-    MEMSET(data + bound.start(), 0, (bound.range_size() * int_fixed_vec->get_length(0)));
+#if OB_USE_MULTITARGET_CODE
+  if (Arch == ObTargetArch::AVX512) {
+    (void)specific::avx512::might_contain_simd(bits_array, block_mask, hash_value, is_match);
+  } else {
+#elif OB_ARM_USE_MULTITARGET_CODE
+  if (Arch == ObTargetArch::NEON) {
+    (void)specific::neon::might_contain_simd(bits_array, block_mask, hash_value, is_match);
+  } else {
+#endif
+    (void)bloom_filter->might_contain_nonsimd(hash_value, is_match);
+#if OB_USE_MULTITARGET_CODE || OB_ARM_USE_MULTITARGET_CODE
   }
+#endif
+  return static_cast<int>(is_match);
+}
 
-  if (ALL_ROWS_ACTIVE) {
-    total_count += bound.end() - bound.start();
-    for (int64_t i = bound.start(); i < bound.end(); ++i) {
-      (void)bloom_filter->prefetch_bits_block(hash_values[i]);
+template<bool ALL_ROWS_ACTIVE, ObTargetArch Arch, typename Op>
+OB_NOINLINE
+void inner_might_contain_common(
+  ObPxBloomFilter *bloom_filter,
+  int64_t *bits_array,
+  int64_t block_mask,
+  const ObBitVector &skip,
+  const EvalBound &bound,
+  uint64_t *__restrict__ hash_values,
+  uint16_t *__restrict__ selector,
+  int64_t &total_count,
+  int64_t &filter_count,
+  Op &op)
+{
+  static constexpr int PREFETCH_DISTANCE = ObPxBloomFilter::PREFETCH_DISTANCE;
+  int cnt = 0;
+  int hit_cnt = 0;
+  if constexpr (ALL_ROWS_ACTIVE) {
+    const int start = bound.start();
+    const int end = bound.end();
+    cnt = end - start;
+
+    int i = start;
+    if (cnt > PREFETCH_DISTANCE * 2) {
+      for (int j = 0; j < PREFETCH_DISTANCE; ++j) {
+        bloom_filter->prefetch_bits_block(hash_values[i + j]);
+      }
+      // Batch prefetch + batch processing
+      const int batch_prefetch_end = end - 2 * PREFETCH_DISTANCE;
+      for (; i <= batch_prefetch_end; i += PREFETCH_DISTANCE) {
+        for (int j = 0; j < PREFETCH_DISTANCE; ++j) {
+          bloom_filter->prefetch_bits_block(hash_values[i + PREFETCH_DISTANCE + j]);
+        }
+        for (int j = 0; j < PREFETCH_DISTANCE; ++j) {
+          const int v = might_contain_value<Arch>(bloom_filter, bits_array, block_mask, hash_values[i + j]);
+          op(i + j, v);
+          hit_cnt += v;
+        }
+      }
+      // Prefetch the remaining partial batch
+      for (int j = i + PREFETCH_DISTANCE; j < end; ++j) {
+        bloom_filter->prefetch_bits_block(hash_values[j]);
+      }
+      // Process the last prefetched batch
+      for (int j = 0; j < PREFETCH_DISTANCE; ++j) {
+        const int v = might_contain_value<Arch>(bloom_filter, bits_array, block_mask, hash_values[i + j]);
+        op(i + j, v);
+        hit_cnt += v;
+      }
+      i += PREFETCH_DISTANCE;
+    } else {
+      // Prefetch all
+      for (int j = i; j < end; ++j) {
+        bloom_filter->prefetch_bits_block(hash_values[j]);
+      }
     }
-    for (int64_t i = bound.start(); i < bound.end(); ++i) {
-#if OB_USE_MULTITARGET_CODE
-      if (SUPPORT_SIMD) {
-        (void)specific::avx512::inline_might_contain_simd(bits_array, block_mask, hash_values[i],
-                                                          is_match);
-      } else {
-#endif
-        (void)bloom_filter->might_contain_nonsimd(hash_values[i], is_match);
-#if OB_USE_MULTITARGET_CODE
-      }
-#endif
-      if (!is_match) {
-        filter_count += 1;
-        if (std::is_same<ResVec, IntegerFixedVec>::value) {
-        } else {
-          res_vec->set_int(i, 0);
-        }
-      } else {
-        if (std::is_same<ResVec, IntegerFixedVec>::value) {
-          res_vec->set_payload(i, &is_match_payload, sizeof(int64_t));
-        } else {
-          res_vec->set_int(i, 1);
-        }
-      }
+    // Process the remaining partial batch
+    for (; i < end; ++i) {
+      const int v = might_contain_value<Arch>(bloom_filter, bits_array, block_mask, hash_values[i]);
+      op(i, v);
+      hit_cnt += v;
     }
   } else {
-    BloomFilterPrefetchOP prefetch_op(bloom_filter, hash_values);
-    BloomFilterProbeOP<SUPPORT_SIMD, ResVec> probe_op(res_vec, bloom_filter, bits_array, block_mask,
-                                                      hash_values, total_count, filter_count);
-    (void)ObBitVector::flip_foreach(skip, bound, prefetch_op);
-    (void)ObBitVector::flip_foreach(skip, bound, probe_op);
+    BloomFilterConvertSelectorOP convert_op(selector, cnt);
+    (void)ObBitVector::flip_foreach(skip, bound, convert_op);
+
+    int i = 0;
+    if (cnt > PREFETCH_DISTANCE * 2) {
+      for (int j = 0; j < PREFETCH_DISTANCE; ++j) {
+        bloom_filter->prefetch_bits_block(hash_values[selector[j]]);
+      }
+      // Batch prefetch + batch processing
+      const int batch_prefetch_end = cnt - 2 * PREFETCH_DISTANCE;
+      for (; i <= batch_prefetch_end; i += PREFETCH_DISTANCE) {
+        for (int j = 0; j < PREFETCH_DISTANCE; ++j) {
+          bloom_filter->prefetch_bits_block(hash_values[selector[i + PREFETCH_DISTANCE + j]]);
+        }
+        for (int j = 0; j < PREFETCH_DISTANCE; ++j) {
+          const uint16_t s = selector[i + j];
+          const int v = might_contain_value<Arch>(bloom_filter, bits_array, block_mask, hash_values[s]);
+          op(s, v);
+          hit_cnt += v;
+        }
+      }
+      // Prefetch the remaining partial batch
+      for (int j = i + PREFETCH_DISTANCE; j < cnt; ++j) {
+        bloom_filter->prefetch_bits_block(hash_values[selector[j]]);
+      }
+      // Process the last prefetched batch
+      for (int j = 0; j < PREFETCH_DISTANCE; ++j) {
+        const uint16_t s = selector[i + j];
+        const int v = might_contain_value<Arch>(bloom_filter, bits_array, block_mask, hash_values[s]);
+        op(s, v);
+        hit_cnt += v;
+      }
+      i += PREFETCH_DISTANCE;
+    } else {
+      // Prefetch all
+      for (int j = 0; j < cnt; ++j) {
+        bloom_filter->prefetch_bits_block(hash_values[selector[j]]);
+      }
+    }
+    // Process the remaining partial batch
+    for (; i < cnt; ++i) {
+      const uint16_t s = selector[i];
+      const int v = might_contain_value<Arch>(bloom_filter, bits_array, block_mask, hash_values[s]);
+      op(s, v);
+      hit_cnt += v;
+    }
+  }
+
+  total_count += cnt;
+  filter_count += cnt - hit_cnt;
+}
+
+template<bool ALL_ROWS_ACTIVE, ObTargetArch Arch>
+OB_NOINLINE
+void inner_might_contain_const(
+  ObPxBloomFilter *bloom_filter,
+  int64_t *bits_array,
+  int64_t block_mask,
+  const ObBitVector &skip,
+  const EvalBound &bound,
+  uint64_t *__restrict__ hash_values,
+  uint16_t *__restrict__ selector,
+  int64_t &total_count,
+  int64_t &filter_count,
+  ObDatum &datum)
+{
+  int cnt = 0;
+  int v = 0;
+  if constexpr (ALL_ROWS_ACTIVE) {
+    const int start = bound.start();
+    const int end = bound.end();
+    cnt = end - start;
+    v = might_contain_value<Arch>(bloom_filter, bits_array, block_mask, hash_values[start]);
+  } else {
+    BloomFilterConvertSelectorOP convert_op(selector, cnt);
+    (void)ObBitVector::flip_foreach(skip, bound, convert_op);
+    v = might_contain_value<Arch>(bloom_filter, bits_array, block_mask, hash_values[selector[0]]);
+  }
+  total_count += cnt;
+  filter_count += cnt * (1 - v);
+  datum.set_int(v);
+}
+
+template <bool ALL_ROWS_ACTIVE, ObTargetArch Arch, typename ResVec>
+OB_NOINLINE
+int inner_might_contain(
+  ObPxBloomFilter *bloom_filter, int64_t *bits_array,
+  int64_t block_mask, const ObExpr &expr, ObEvalCtx &ctx,
+  const ObBitVector &skip, const EvalBound &bound,
+  uint64_t *hash_values, uint16_t *selector,
+  int64_t &total_count, int64_t &filter_count)
+{
+  int ret = OB_SUCCESS;
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  if constexpr (std::is_same<ResVec, IntegerFixedVec>::value) {
+    BloomFilterFixedVecWriteOP op{reinterpret_cast<uint64_t *>(res_vec->get_data())};
+    inner_might_contain_common<ALL_ROWS_ACTIVE, Arch, BloomFilterFixedVecWriteOP>(bloom_filter, bits_array, block_mask, skip, bound, hash_values, selector, total_count, filter_count, op);
+  } else if constexpr (std::is_same<ResVec, IntegerUniVec>::value) {
+    BloomFilterUniVecWriteOP op{res_vec->get_datums()};
+    inner_might_contain_common<ALL_ROWS_ACTIVE, Arch, BloomFilterUniVecWriteOP>(bloom_filter, bits_array, block_mask, skip, bound, hash_values, selector, total_count, filter_count, op);
+  } else if constexpr (std::is_same<ResVec, IntegerUniCVec>::value) {
+    ObDatum &datum = res_vec->get_datums()[0];
+    inner_might_contain_const<ALL_ROWS_ACTIVE, Arch>(bloom_filter, bits_array, block_mask, skip, bound, hash_values, selector, total_count, filter_count, datum);
   }
   return ret;
 }
@@ -715,55 +888,54 @@ int inner_might_contain(ObPxBloomFilter *bloom_filter, int64_t *bits_array,
 } // namespace common
 } // namespace oceanbase
 
-#define BLOOM_FILTER_DISPATCH_ALL_ROWS_ACTIVATE(function, all_rows_active, support_simd,           \
+#define BLOOM_FILTER_DISPATCH_ALL_ROWS_ACTIVATE(function, all_rows_active, arch,                   \
                                                 res_format)                                        \
   if (all_rows_active) {                                                                           \
-    BLOOM_FILTER_DISPATCH_SIMD(function, true, support_simd, res_format)                           \
+    BLOOM_FILTER_DISPATCH_RES_FORMAT(function, true, arch, res_format)                             \
   } else {                                                                                         \
-    BLOOM_FILTER_DISPATCH_SIMD(function, false, support_simd, res_format)                          \
+    BLOOM_FILTER_DISPATCH_RES_FORMAT(function, false, arch, res_format)                            \
   }
 
-#define BLOOM_FILTER_DISPATCH_SIMD(function, all_rows_active, support_simd, res_format)            \
-  if (support_simd) {                                                                              \
-    BLOOM_FILTER_DISPATCH_RES_FORMAT(function, all_rows_active, true, res_format)                  \
-  } else {                                                                                         \
-    BLOOM_FILTER_DISPATCH_RES_FORMAT(function, all_rows_active, false, res_format)                 \
-  }
-
-#define BLOOM_FILTER_DISPATCH_RES_FORMAT(function, all_rows_active, support_simd, res_format)      \
+#define BLOOM_FILTER_DISPATCH_RES_FORMAT(function, all_rows_active, arch, res_format)              \
   if (res_format == VEC_FIXED) {                                                                   \
-    ret = function<all_rows_active, support_simd, IntegerFixedVec>(                                \
-        this, bits_array_, block_mask_, expr, ctx, skip, bound, hash_values, total_count,          \
-        filter_count);                                                                             \
+    ret = function<all_rows_active, arch, IntegerFixedVec>(                                        \
+        this, bits_array_, block_mask_, expr, ctx, skip, bound, hash_values, selector,             \
+        total_count, filter_count);                                                                \
   } else if (res_format == VEC_UNIFORM_CONST) {                                                    \
-    ret = function<all_rows_active, support_simd, IntegerUniCVec>(                                 \
-        this, bits_array_, block_mask_, expr, ctx, skip, bound, hash_values, total_count,          \
-        filter_count);                                                                             \
+    ret = function<all_rows_active, arch, IntegerUniCVec>(                                         \
+        this, bits_array_, block_mask_, expr, ctx, skip, bound, hash_values, selector,             \
+        total_count, filter_count);                                                                \
   } else {                                                                                         \
-    ret = function<all_rows_active, support_simd, IntegerUniVec>(                                  \
-        this, bits_array_, block_mask_, expr, ctx, skip, bound, hash_values, total_count,          \
-        filter_count);                                                                             \
+    ret = function<all_rows_active, arch, IntegerUniVec>(                                          \
+        this, bits_array_, block_mask_, expr, ctx, skip, bound, hash_values, selector,             \
+        total_count, filter_count);                                                                \
   }
 
 int ObPxBloomFilter::might_contain_vector(const ObExpr &expr, ObEvalCtx &ctx,
                                           const ObBitVector &skip, const EvalBound &bound,
-                                          uint64_t *hash_values, int64_t &total_count,
-                                          int64_t &filter_count)
+                                          uint64_t *hash_values, uint16_t *selector,
+                                          int64_t &total_count, int64_t &filter_count)
 {
   int ret = OB_SUCCESS;
   bool all_rows_active = bound.get_all_rows_active();
   VectorFormat res_format = expr.get_format(ctx);
 #if OB_USE_MULTITARGET_CODE
   if (common::is_arch_supported(ObTargetArch::AVX512)) {
-    constexpr bool support_simd = true;
+    constexpr ObTargetArch arch = ObTargetArch::AVX512;
     BLOOM_FILTER_DISPATCH_ALL_ROWS_ACTIVATE(common::specific::avx512::inner_might_contain,
-                                            all_rows_active, support_simd, res_format)
+                                            all_rows_active, arch, res_format);
+  } else {
+#elif OB_ARM_USE_MULTITARGET_CODE
+  if (common::is_arch_supported(ObTargetArch::NEON)) {
+    constexpr ObTargetArch arch = ObTargetArch::NEON;
+    BLOOM_FILTER_DISPATCH_ALL_ROWS_ACTIVATE(common::specific::normal::inner_might_contain,
+                                            all_rows_active, arch, res_format);
   } else {
 #endif
-    constexpr bool support_simd = false;
+    constexpr ObTargetArch arch = ObTargetArch::Default;
     BLOOM_FILTER_DISPATCH_ALL_ROWS_ACTIVATE(common::specific::normal::inner_might_contain,
-                                            all_rows_active, support_simd, res_format)
-#if OB_USE_MULTITARGET_CODE
+                                            all_rows_active, arch, res_format)
+#if OB_USE_MULTITARGET_CODE || OB_ARM_USE_MULTITARGET_CODE
   }
 #endif
   return ret;

@@ -2975,6 +2975,7 @@ private:
   bool route_to_column_replica_;
 public:
   bool get_enable_hyperscan_regexp_engine() const;
+  bool get_enable_re2_regexp_engine() const;
   int8_t get_min_const_integer_precision() const;
   bool get_extend_sql_plan_monitor_metrics() const;
   bool get_rowsets_enabled() const;

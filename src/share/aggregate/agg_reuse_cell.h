@@ -188,12 +188,14 @@ private:
 struct ReuseAggCellMgr
 {
   ReuseAggCellMgr(ObIAllocator &allocator, int32_t agg_cnt) :
-    tmp_store_vals_(allocator, agg_cnt), allocator_(allocator), extra_store_idx_(-1)
+    tmp_store_vals_(allocator, agg_cnt), allocator_(allocator), extra_store_idx_(-1),
+    need_reuse_(false), simple_reuse_(false)
   {}
   int init(RuntimeContext &agg_ctx);
   int save(RuntimeContext &agg_ctx, const char *agg_row);
   int restore(RuntimeContext &agg_ctx, char *agg_row);
 
+  bool can_simple_reuse() const { return simple_reuse_; }
 private:
   int save_extra_stores(RuntimeContext &agg_ctx, const char *agg_row);
   int restore_extra_stores(RuntimeContext &agg_ctx, char *agg_row);
@@ -202,6 +204,8 @@ private:
   ObFixedArray<void *, ObIAllocator> tmp_store_vals_;
   ObIAllocator &allocator_;
   int32_t extra_store_idx_;
+  bool need_reuse_;
+  bool simple_reuse_;
 };
 }
 }

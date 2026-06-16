@@ -2092,6 +2092,19 @@ int ObJoinFilterOp::prepare_extra_use_info_for_vec20(
       }
     }
   }
+
+  if (OB_SUCC(ret)) {
+    if (ObP2PDatahubMsgBase::BLOOM_FILTER_VEC_MSG == dh_msg_type) {
+      // allocate selector_
+      void *buf = nullptr;
+      if (OB_ISNULL(buf = ctx_.get_allocator().alloc(sizeof(uint16_t) * max_batch_size))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate selector_", K(max_batch_size));
+      } else {
+        join_filter_ctx->selector_ = static_cast<uint16_t *>(buf);
+      }
+    }
+  }
   return ret;
 }
 

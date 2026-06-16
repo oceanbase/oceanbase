@@ -629,6 +629,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_array_contains.cpp
   engine/expr/ob_expr_array_to_string.cpp
   engine/expr/ob_expr_string_to_array.cpp
+  engine/expr/ob_expr_string_searcher.cpp
   engine/expr/ob_expr_array_append.cpp
   engine/expr/ob_expr_element_at.cpp
   engine/expr/ob_expr_array_cardinality.cpp

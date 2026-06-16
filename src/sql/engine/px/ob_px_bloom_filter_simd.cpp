@@ -7,6 +7,8 @@
 #include "ob_px_bloom_filter.h"
 #if defined(__x86_64__)
 #include <immintrin.h>
+#elif defined(__aarch64__)
+#include <arm_neon.h>
 #endif
 
 using namespace oceanbase;
@@ -19,7 +21,9 @@ int ObPxBloomFilter::might_contain_simd(uint64_t hash, bool &is_match)
 {
   int ret = OB_SUCCESS;
 #if defined(__x86_64__)
-  specific::avx512::inline_might_contain_simd(bits_array_, block_mask_, hash, is_match);
+  specific::avx512::might_contain_simd(bits_array_, block_mask_, hash, is_match);
+#elif defined(__aarch64__)
+  specific::neon::might_contain_simd(bits_array_, block_mask_, hash, is_match);
 #else
   ret = might_contain_nonsimd(hash, is_match);
 #endif

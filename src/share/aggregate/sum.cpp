@@ -7,6 +7,7 @@
 
 #include "sum.h"
 #include "sum_nmb.h"
+#include "sum_simd.h"
 
 namespace oceanbase
 {
@@ -36,6 +37,18 @@ int init_sum_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
     ret = init_agg_func<SumAggregate<in_tc, out_tc>>(agg_ctx, agg_col_id, aggr_info.has_distinct_, \
                                                      allocator, agg);                              \
   }
+
+#if defined(__ARM_NEON)
+#define INIT_NEON_SUM_I32_TO_I128()                                                                \
+  if (tmp_res_size != nullptr) {                                                                   \
+    *tmp_res_size = 0;                                                                             \
+  } else {                                                                                         \
+    ret = init_agg_func<NeonSumI32ToI128>(agg_ctx, agg_col_id, aggr_info.has_distinct_,            \
+                                          allocator, agg);                                         \
+  }
+#else
+#define INIT_NEON_SUM_I32_TO_I128() INIT_SUM_AGGREGATE(VEC_TC_DEC_INT32, VEC_TC_DEC_INT128)
+#endif
 
   int ret = OB_SUCCESS;
   ObAggrInfo &aggr_info = agg_ctx.locate_aggr_info(agg_col_id);
@@ -153,7 +166,7 @@ int init_sum_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
       break;
     }
     case VEC_TC_DEC_INT128: {
-      INIT_SUM_AGGREGATE(VEC_TC_DEC_INT32, VEC_TC_DEC_INT128);
+      INIT_NEON_SUM_I32_TO_I128();
       break;
     }
     default: {

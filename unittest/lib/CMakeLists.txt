@@ -1,2 +1,4 @@
 ob_unittest(test_ob_searray)
 ob_unittest(test_ob_linear_hash_map)
+ob_unittest(test_ob_expr_regexp_context test_ob_expr_regexp_context.cpp)
+ob_unittest(test_ob_bit_simd)

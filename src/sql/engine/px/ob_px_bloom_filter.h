@@ -17,7 +17,9 @@
 #if OB_USE_MULTITARGET_CODE
 #include <emmintrin.h>
 #include <immintrin.h>
-#endif
+#elif OB_ARM_USE_MULTITARGET_CODE
+#include <arm_neon.h>
+#endif /* OB_USE_MULTITARGET_CODE */
 
 #ifndef __SQL_ENG_PX_BLOOM_FILTER_H__
 #define __SQL_ENG_PX_BLOOM_FILTER_H__
@@ -124,8 +126,8 @@ public:
     return (this->*might_contain_)(hash, is_match);
   }
   int might_contain_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
-                           const EvalBound &bound, uint64_t *hash_values, int64_t &total_count,
-                           int64_t &filter_count);
+                           const EvalBound &bound, uint64_t *hash_values, uint16_t *selector,
+                           int64_t &total_count, int64_t &filter_count);
   int put(uint64_t hash);
   int put_batch(ObPxBFHashArray &hash_val_array);
   int put_batch(uint64_t *batch_hash_values, const EvalBound &bound, const ObBitVector &skip, bool &is_empty);
@@ -140,10 +142,15 @@ public:
   void set_end_idx(int64_t idx) { end_idx_ = idx; }
   int64_t get_begin_idx() const { return begin_idx_; }
   int64_t get_end_idx() const { return end_idx_; }
+  // Prefetch distance: approximately 8 cache lines latency
+  // This allows prefetch to complete while processing earlier elements
+  static constexpr int64_t PREFETCH_DISTANCE = 8;
+
   inline void prefetch_bits_block(uint64_t hash)
   {
     uint64_t block_begin = (hash & block_mask_) << LOG_HASH_COUNT;
-    __builtin_prefetch(&bits_array_[block_begin], 0);
+    // Prefetch with high locality (3) for read access (0)
+    __builtin_prefetch(&bits_array_[block_begin], 0, 3);
   }
   typedef int (ObPxBloomFilter::*GetFunc)(uint64_t hash, bool &is_match);
   void reset();
@@ -224,7 +231,7 @@ public:
 
 namespace common
 {
-OB_DECLARE_AVX512_SPECIFIC_CODE(OB_INLINE void inline_might_contain_simd(
+OB_DECLARE_AVX512_SPECIFIC_CODE(OB_INLINE void might_contain_simd(
     int64_t *bits_array, int64_t block_mask, uint64_t hash, bool &is_match) {
   static const __m256i HASH_VALUES_MASK = _mm256_set_epi64x(24, 16, 8, 0);
   uint32_t hash_high = (uint32_t)(hash >> 32);
@@ -243,11 +250,40 @@ OB_DECLARE_AVX512_SPECIFIC_CODE(void might_contain_batch_simd(
     const int64_t &batch_size) {
   bool is_match;
   for (int64_t i = 0; i < batch_size; ++i) {
-    common::specific::avx512::inline_might_contain_simd(bits_array, block_mask, hash_values[i],
+    common::specific::avx512::might_contain_simd(bits_array, block_mask, hash_values[i],
                                                         is_match);
   }
 })
 #endif
+
+OB_DECLARE_NEON_SPECIFIC_CODE(OB_INLINE void might_contain_simd(
+    int64_t *bits_array, int64_t block_mask, uint64_t hash, bool &is_match) {
+  uint32_t hash_high = (uint32_t)(hash >> 32) & 0x3F3F3F3F;
+  uint64_t block_begin = (hash & block_mask) << LOG_HASH_COUNT;
+
+  // The 4 6-bit shift amounts reside in byte[0..3] of hash_high:
+  //   lane 0..1 -> shift {0,  -8}   (right-shift by 0,  8 then keep low 6 bits)
+  //   lane 2..3 -> shift {-16, -24} (right-shift by 16, 24 then keep low 6 bits)
+  uint64x2_t bit_ones = vdupq_n_u64(1);
+  uint64x2_t hh = vdupq_n_u64(hash_high);
+  int64x2_t shift_lo = {0, -8};
+  int64x2_t shift_hi = {-16, -24};
+  uint64x2_t s_lo = vshlq_u64(hh, shift_lo);
+  uint64x2_t s_hi = vshlq_u64(hh, shift_hi);
+  uint64x2_t m_lo = vshlq_u64(bit_ones, vreinterpretq_s64_u64(s_lo));
+  uint64x2_t m_hi = vshlq_u64(bit_ones, vreinterpretq_s64_u64(s_hi));
+
+  uint64x2x2_t bf = vld1q_u64_x2(
+      reinterpret_cast<uint64_t *>(&bits_array[block_begin]));
+  // (mask & ~bf): any non-zero lane -> that hash bit is not set in bf -> not match
+  uint64x2_t t_lo = vbicq_u64(m_lo, bf.val[0]);
+  uint64x2_t t_hi = vbicq_u64(m_hi, bf.val[1]);
+  uint64x2_t combined = vorrq_u64(t_lo, t_hi);
+  // Note: ARMv8 NEON's UMAXV does not support 64-bit lanes (no vmaxvq_u64),
+  // so reinterpret the 2-lane uint64 as 4-lane uint32 and then horizontal max:
+  // "all 4 u32 lanes are zero" is equivalent to "both u64 lanes are zero".
+  is_match = (vmaxvq_u32(vreinterpretq_u32_u64(combined)) == 0);
+})
 } // namespace common
 
 namespace sql {

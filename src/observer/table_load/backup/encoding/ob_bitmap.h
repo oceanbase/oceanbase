@@ -17,7 +17,7 @@ namespace table_load_backup
 OB_INLINE int64_t popcount64(uint64_t v)
 {
   int64_t cnt = 0;
-#if __POPCNT__
+#if __POPCNT__ || defined(__aarch64__)
   cnt = __builtin_popcountl(v);
 #else
   if (0 != v) {
