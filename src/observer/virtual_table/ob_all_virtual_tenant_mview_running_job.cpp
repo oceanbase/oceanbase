@@ -63,7 +63,7 @@ int ObAllVirtualTenantMviewRunningJob::inner_get_next_row(ObNewRow *&row)
         {
           omt::ObTenantConfigGuard tenant_config(TENANT_CONF(cur_tenant_id));
           const bool refresh_queuing_enabled = tenant_config.is_valid()
-                                      && tenant_config->_enable_mview_refresh_queuing;
+                                      && tenant_config->_enable_mv_refresh_queuing;
           ObMViewMaintenanceService *mview_service = MTL(ObMViewMaintenanceService *);
           // New engine: pending task manager is the source of truth for
           // running jobs; fields not tracked in pending (session_id,

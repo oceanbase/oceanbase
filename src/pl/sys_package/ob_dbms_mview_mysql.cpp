@@ -143,7 +143,7 @@ int ObDBMSMViewMysql::refresh(ObExecContext &ctx, ParamStore &params, ObObj &res
   ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
   const bool refresh_queuing_enabled = (data_version >= DATA_VERSION_4_4_2_2)
                               && tenant_config.is_valid()
-                              && tenant_config->_enable_mview_refresh_queuing;
+                              && tenant_config->_enable_mv_refresh_queuing;
   // DBMS_SCHEDULER-driven refreshes must not block the scheduler worker — force async.
   if (OB_SUCC(ret) && nullptr != ctx.get_my_session()->get_job_info()) {
     async = true;

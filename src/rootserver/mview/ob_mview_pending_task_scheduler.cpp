@@ -142,7 +142,7 @@ int ObMviewPendingTaskScheduler::check_concurrent_limit(uint64_t tenant_id) cons
   int64_t max_concurrent = 10;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
   if (tenant_config.is_valid()) {
-    max_concurrent = tenant_config->_mview_refresh_concurrency;
+    max_concurrent = tenant_config->mv_refresh_concurrency;
   }
   const int64_t running_cnt = manager_->get_total_running_cnt();
   if (running_cnt >= max_concurrent) {
