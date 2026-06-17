@@ -335,6 +335,7 @@ all_table_def = dict(
       ('delta_format', 'varchar:OB_MAX_VARCHAR_LENGTH', 'false', 'flat'),
       ('skip_index_level', 'int', 'false', '0'),
       ('external_file_pattern_type', 'int', 'false', '0'),
+      ('merge_engine_upper_version', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
     ],
 )
 

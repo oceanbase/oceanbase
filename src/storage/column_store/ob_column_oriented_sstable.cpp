@@ -199,7 +199,8 @@ const char* ObMajorSSTableStatusStr[] = {
   "ROW_STORE",
   "ALL_CG",
   "ALL_EACH_CG",
-  "EACH_CG"
+  "EACH_CG",
+  "ALL_EACH_HIDDEN_CG"
 };
 
 const char* major_sstable_status_to_str(const ObMajorSSTableStatus status)

@@ -640,6 +640,7 @@ ob_set_subtarget(ob_share schema
   schema/ob_table_schema_fts_index.cpp
   schema/ob_iceberg_table_schema.cpp
   schema/ob_latest_schema_guard.cpp
+  schema/ob_merge_engine_upper_version.cpp
   schema/ob_mlog_info.cpp
   schema/ob_mview_info.cpp
   schema/ob_mview_refresh_stats_params.cpp

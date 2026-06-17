@@ -1585,6 +1585,8 @@ int ObSchemaRetrieveUtils::fill_table_schema(
       result, semistruct_properties, table_schema, true/*skip null*/, true/*ignore column error*/, "");
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, skip_index_level, table_schema, ObSkipIndexLevel,
         true/*skip null*/, true/*ignore column error*/, ObSkipIndexLevel::OB_SKIP_INDEX_LEVEL_BASE_ONLY);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+      result, merge_engine_upper_version, table_schema, true/*skip null*/, true/*ignore column error*/, empty_str);
     if (OB_SUCC(ret)) {
       bool with_dynamic_partition_policy = !table_schema.get_dynamic_partition_policy().empty();
       table_schema.set_with_dynamic_partition_policy(with_dynamic_partition_policy);

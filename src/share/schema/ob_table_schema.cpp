@@ -1923,7 +1923,8 @@ ObTableSchema::ObTableSchema(ObIAllocator *allocator)
     semistruct_encoding_type_(),
     dynamic_partition_policy_(),
     semistruct_properties_(),
-    ttl_flag_()
+    ttl_flag_(),
+    merge_engine_upper_version_()
 {
   reset();
 }
@@ -2069,6 +2070,10 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
 
       if (FAILEDx(mv_mode_.assign(src_schema.mv_mode_))) {
         LOG_WARN("fail to assign mv_mode", K(ret));
+      }
+
+      if (FAILEDx(merge_engine_upper_version_.assign(src_schema.merge_engine_upper_version_))) {
+        LOG_WARN("fail to assign merge engine upper version", K(ret));
       }
 
       //copy columns
@@ -4116,6 +4121,7 @@ int64_t ObTableSchema::get_convert_size() const
   convert_size += dynamic_partition_policy_.length() + 1;
   convert_size += external_sub_path_.length() + 1;
   convert_size += semistruct_properties_.length() + 1;
+  convert_size += merge_engine_upper_version_.get_convert_size() - sizeof(ObMergeEngineUpperVersion);
   return convert_size;
 }
 
@@ -4233,6 +4239,7 @@ void ObTableSchema::reset()
   external_location_id_ = OB_INVALID_ID;
   external_sub_path_.reset();
   semistruct_properties_.reset();
+  merge_engine_upper_version_.reset();
   ObSimpleTableSchemaV2::reset();
   external_file_pattern_type_ = static_cast<int64_t>(REGEXP_EXTERNAL_FILE_PATTERN);
 }
@@ -8067,6 +8074,7 @@ OB_DEF_SERIALIZE(ObTableSchema)
   OB_UNIS_ENCODE(minor_row_store_type_);
   OB_UNIS_ENCODE(skip_index_level_);
   OB_UNIS_ENCODE(external_file_pattern_type_);
+  OB_UNIS_ENCODE(merge_engine_upper_version_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -8322,6 +8330,7 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   OB_UNIS_DECODE(minor_row_store_type_);
   OB_UNIS_DECODE(skip_index_level_);
   OB_UNIS_DECODE(external_file_pattern_type_);
+  OB_UNIS_DECODE(merge_engine_upper_version_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -8477,6 +8486,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(minor_row_store_type_);
   OB_UNIS_ADD_LEN(skip_index_level_);
   OB_UNIS_ADD_LEN(external_file_pattern_type_);
+  OB_UNIS_ADD_LEN(merge_engine_upper_version_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -11411,6 +11421,13 @@ int ObTableSchema::inherit_ttl_definition(const ObTableSchema &data_table_schema
     }
   }
 
+  return ret;
+}
+
+int ObTableSchema::set_merge_engine_upper_version(const common::ObString &upper_version_str)
+{
+  int ret = OB_SUCCESS;
+  // TODO: add implementation
   return ret;
 }
 

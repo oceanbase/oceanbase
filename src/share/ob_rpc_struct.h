@@ -2533,6 +2533,7 @@ public:
        SEMISTRUCT_PROPERTIES,
        SKIP_INDEX_LEVEL,
        DELTA_FORMAT,
+       MERGE_ENGINE_TYPE,
        MAX_OPTION = 1000
   };
   enum AlterPartitionType

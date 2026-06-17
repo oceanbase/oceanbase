@@ -342,7 +342,8 @@ private:
     {
       uint8_t offset_type_ : 2; // cluster offset
       uint8_t single_cluster_ : 1;
-      uint8_t reserved_ : 5;
+      uint8_t merge_engine_valid_ : 1;
+      uint8_t reserved_ : 4;
     };
   };
   uint8_t reserved8_;

@@ -98,6 +98,7 @@ enum ObMajorSSTableStatus : uint8_t {
   ALL_CG = 2,         // Only ALL column group
   ALL_EACH_CG = 3,         // ALL CG + EACH CG
   EACH_CG = 4,             // EACH CG (rowkey + normal)
+  ALL_EACH_HIDDEN_CG = 5,  // ALL CG + EACH CG + HIDDEN ROWKEY CG
   MAJOR_SSTABLE_STATUS_MAX
 };
 inline bool is_valid_major_sstable_status(const ObMajorSSTableStatus status)

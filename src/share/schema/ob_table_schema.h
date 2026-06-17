@@ -24,6 +24,7 @@
 #include "share/compaction_ttl/ob_ttl_definition.h"
 #include "share/ob_define.h"
 #include "share/ob_get_compat_mode.h"
+#include "share/schema/ob_merge_engine_upper_version.h"
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_trigger_info.h"
 #include "lib/compress/ob_compress_util.h"
@@ -2399,6 +2400,11 @@ public:
   int check_identity_column_for_interval_part() const;
   int get_hidden_column_count(int64_t &hidden_column_count) const;
   int get_search_data_index_tid(uint64_t &tid) const;
+  int set_merge_engine_upper_version(const common::ObString &upper_version_str);
+  inline const ObMergeEngineUpperVersion& get_merge_engine_upper_version() const
+  {
+    return merge_engine_upper_version_;
+  }
 
   DECLARE_VIRTUAL_TO_STRING;
 
@@ -2625,6 +2631,7 @@ protected:
   ObTTLFlag ttl_flag_;
   ObSkipIndexLevel skip_index_level_;
   int64_t external_file_pattern_type_;
+  ObMergeEngineUpperVersion merge_engine_upper_version_;
 };
 
 class ObPrintableTableSchema final : public ObTableSchema
