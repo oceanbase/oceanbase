@@ -4145,6 +4145,7 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
   ObSPIResultSet *spi_result = NULL;
   ObString sql_copy;
   ObString ps_sql_copy;
+  bool need_end_cursor_stmt = false;
   if (cursor.is_ps_cursor()) {
     spi_result = cursor.get_cursor_handler();
   } else {
@@ -4155,6 +4156,7 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
   CK (OB_NOT_NULL(spi_result->get_memory_ctx()));
   if (!cursor.is_ps_cursor()) {
     OZ (spi_result->start_cursor_stmt(ctx, static_cast<stmt::StmtType>(type), for_update));
+    OX (need_end_cursor_stmt = true);
   } else {
     OX (spi_result->get_sql_ctx().is_ps_cursor_ = true);
   }
@@ -4244,10 +4246,10 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
       is_retry = true;
     } while (RETRY_TYPE_NONE != retry_ctrl.get_retry_type());
   }
-    if (!cursor.is_ps_cursor()) { // need to end cursor stmt after ObSPIExecEnvGuard destructed, otherwise session query start time is wrong
-      spi_result->end_cursor_stmt(ctx, ret);
-    }
     cursor.set_last_execute_time(ObTimeUtility::current_time());
+  }
+  if (need_end_cursor_stmt) {
+    spi_result->end_cursor_stmt(ctx, ret);
   }
   if (OB_SUCC(ret) && cursor.isopen() && !cursor.is_server_cursor()) {  //non_session cursor opened need to add into non session cursor map
     int add_ret = session_info.add_non_session_cursor(&cursor);
