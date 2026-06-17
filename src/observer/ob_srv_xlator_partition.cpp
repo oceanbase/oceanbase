@@ -69,6 +69,7 @@ void oceanbase::observer::init_srv_xlator_for_partition(ObSrvRpcXlator *xlator) 
   RPC_PROCESSOR(ObForceSwitchILogFileP, gctx_);
   RPC_PROCESSOR(ObForceSetAllAsSingleReplicaP, gctx_);
   RPC_PROCESSOR(ObForceSetLSAsSingleReplicaP, gctx_);
+  RPC_PROCESSOR(ObForceRemoveLSReplicaP, gctx_);
   // RPC_PROCESSOR(ObSplitDestPartitionRequestP, gctx_.par_ser_);
   // RPC_PROCESSOR(ObReplicaSplitProgressRequestP, gctx_.par_ser_);
   // RPC_PROCESSOR(ObCheckMemberMajorSSTableEnoughP, gctx_.par_ser_);

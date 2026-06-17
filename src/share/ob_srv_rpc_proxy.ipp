@@ -262,6 +262,7 @@
   RPC_S(PR5 sync_rewrite_rules, OB_SYNC_REWRITE_RULES, (ObSyncRewriteRuleArg));
   RPC_AP(PR1 get_ls_replayed_scn, OB_GET_LS_REPLAYED_SCN, (ObGetLSReplayedScnArg), obrpc::ObGetLSReplayedScnRes);
   RPC_S(PR5 force_set_ls_as_single_replica, OB_LOG_FORCE_SET_LS_AS_SINGLE_REPLICA, (obrpc::ObForceSetLSAsSingleReplicaArg));
+  RPC_S(PR5 force_remove_ls_replica, OB_FORCE_REMOVE_LS_REPLICA, (obrpc::ObForceRemoveLSReplicaArg));
   RPC_AP(PR5 net_endpoint_predict_ingress, OB_PREDICT_INGRESS_BW, (obrpc::ObNetEndpointPredictIngressArg), obrpc::ObNetEndpointPredictIngressRes);
   RPC_AP(PR5 net_endpoint_set_ingress, OB_SET_INGRESS_BW, (obrpc::ObNetEndpointSetIngressArg), obrpc::ObNetEndpointSetIngressRes);
   RPC_S(PR5 session_info_verification, OB_SESS_INFO_VERIFICATION, (ObSessInfoVerifyArg), ObSessionInfoVeriRes);

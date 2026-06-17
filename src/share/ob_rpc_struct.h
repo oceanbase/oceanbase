@@ -9268,6 +9268,32 @@ private:
   share::ObLSID ls_id_;
 };
 
+struct ObForceRemoveLSReplicaArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObForceRemoveLSReplicaArg(): tenant_id_(OB_INVALID_TENANT_ID), ls_id_() {}
+  ~ObForceRemoveLSReplicaArg() {}
+  bool is_valid() const;
+  int init(const uint64_t tenant_id, const share::ObLSID &ls_id);
+  int assign(const ObForceRemoveLSReplicaArg &other);
+  TO_STRING_KV(K_(tenant_id), K_(ls_id));
+
+  uint64_t get_tenant_id() const
+  {
+    return tenant_id_;
+  }
+  share::ObLSID get_ls_id() const
+  {
+    return ls_id_;
+  }
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObForceRemoveLSReplicaArg);
+private:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+};
+
 struct ObGetLSSyncScnArg
 {
   OB_UNIS_VERSION(1);

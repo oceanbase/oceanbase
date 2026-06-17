@@ -3796,6 +3796,48 @@ int ObService::force_set_ls_as_single_replica(
   return ret;
 }
 
+// Force remove a single log stream replica on THIS server.
+// This is an emergency O&M interface that bypasses the normal disaster-recovery
+// (member change) flow and directly removes the local replica via ObLSService::remove_ls,
+// just like ObGarbageCollector does, but without the GC gating checks.
+// ATTENTION:
+//   1. The replica is removed only on the server that receives this RPC.
+//   2. The graceful leader handling (block tx / kill tx / write offline log) done by the
+//      normal remove flow is skipped here, so prefer running it against a follower replica.
+//   3. RS may re-add the replica according to the locality afterwards; disable
+//      rereplication first if the removal needs to stay effective.
+int ObService::force_remove_ls_replica(
+    const ObForceRemoveLSReplicaArg &arg)
+{
+  int ret = OB_SUCCESS;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  ObLSService *ls_svr = nullptr;
+  LOG_INFO("force_remove_ls_replica", K(arg));
+
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("arg is invaild", KR(ret), K(arg));
+  } else if (arg.get_tenant_id() != MTL_ID() && OB_FAIL(guard.switch_to(arg.get_tenant_id()))) {
+    LOG_WARN("switch tenant failed", KR(ret), K(arg));
+  }
+
+  if (OB_SUCC(ret)) {
+    ls_svr = MTL(ObLSService*);
+    const ObLSID ls_id = arg.get_ls_id();
+    if (OB_ISNULL(ls_svr)) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(ERROR, "ls service should not be null", KR(ret), KP(ls_svr));
+    } else if (OB_FAIL(ls_svr->remove_ls(ls_id))) {
+      LOG_WARN("failed to remove ls", KR(ret), K(ls_id));
+    }
+  }
+  LOG_INFO("finish force_remove_ls_replica", KR(ret), K(arg));
+  return ret;
+}
+
 int ObService::force_set_server_list(const obrpc::ObForceSetServerListArg &arg, obrpc::ObForceSetServerListResult &result)
 {
   int ret = OB_SUCCESS;
