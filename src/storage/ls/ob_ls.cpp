@@ -175,6 +175,9 @@ int ObLS::init(const share::ObLSID &ls_id,
         LOG_WARN("failed to init ls migration handler", K(ret));
       } else if (OB_FAIL(ls_remove_member_handler_.init(this, ls_service->get_storage_rpc()))) {
         LOG_WARN("failed to init ls remove member handler", K(ret));
+      } else if (OB_FAIL(ls_rebuild_cb_impl_.init(this, GCTX.bandwidth_throttle_,
+          ls_service->get_storage_rpc_proxy(), ls_service->get_storage_rpc()))) {
+        LOG_WARN("failed to init ls rebuild cb impl", K(ret));
       } else if (OB_FAIL(ls_recovery_stat_handler_.init(tenant_id, this))) {
         LOG_WARN("ls_recovery_stat_handler_ init failed", KR(ret));
       } else if (OB_FAIL(member_list_service_.init(this, &log_handler_))) {
@@ -399,8 +402,7 @@ int ObLS::create_ls(const share::ObTenantRole tenant_role,
   } else {
     if (OB_FAIL(log_handler_.set_election_priority(&election_priority_))) {
       LOG_WARN("set election failed", K(ret), K_(ls_meta));
-    } else if (!ObReplicaTypeCheck::is_log_replica(replica_type) &&
-               OB_FAIL(log_handler_.register_rebuild_cb(&ls_rebuild_cb_impl_))) {
+    } else if (OB_FAIL(log_handler_.register_rebuild_cb(&ls_rebuild_cb_impl_))) {
       LOG_WARN("failed to register rebuild cb", K(ret), KPC(this));
     }
     if (OB_FAIL(ret)) {
@@ -442,8 +444,7 @@ int ObLS::load_ls(const share::ObTenantRole &tenant_role,
   } else {
     if (OB_FAIL(log_handler_.set_election_priority(&election_priority_))) {
       LOG_WARN("set election failed", K(ret), K_(ls_meta));
-    } else if (!ObReplicaTypeCheck::is_log_replica(ls_meta_.get_replica_type()) &&
-               OB_FAIL(log_handler_.register_rebuild_cb(&ls_rebuild_cb_impl_))) {
+    } else if (OB_FAIL(log_handler_.register_rebuild_cb(&ls_rebuild_cb_impl_))) {
       LOG_WARN("failed to register rebuild cb", K(ret), KPC(this));
     }
     // TODO: add_ls has no interface to rollback now, something can not rollback.
@@ -464,8 +465,7 @@ int ObLS::remove_ls()
     LOG_WARN("ls do not init", K(ret));
   } else {
     log_handler_.reset_election_priority();
-    if (!ObReplicaTypeCheck::is_log_replica(ls_meta_.get_replica_type()) &&
-        OB_TMP_FAIL(log_handler_.unregister_rebuild_cb())) {
+    if (OB_TMP_FAIL(log_handler_.unregister_rebuild_cb())) {
       LOG_WARN("unregister rebuild cb failed", K(ret), K(ls_meta_));
     }
     if (OB_FAIL(logservice->remove_ls(ls_meta_.ls_id_, log_handler_, restore_handler_))) {
@@ -669,20 +669,19 @@ int ObLS::stop_()
       restore_sswriter_ls_handler_.stop();
     }
 #endif
-
-    if (OB_SUCC(ret)) {
-      ObRebuildService *rebuild_service = nullptr;
-      if (OB_ISNULL(rebuild_service = MTL(ObRebuildService *))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("rebuild service should not be NULL", K(ret), KP(rebuild_service));
-      } else if (OB_FAIL(rebuild_service->remove_rebuild_ls(get_ls_id()))) {
-        LOG_WARN("failed to remove rebuild ls", K(ret), KPC(this));
-      } else {
-        LOG_INFO("stop_ls finish", KR(ret), KPC(this));
-      }
-    }
   }
 
+  if (OB_SUCC(ret)) {
+    ObRebuildService *rebuild_service = nullptr;
+    if (OB_ISNULL(rebuild_service = MTL(ObRebuildService *))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("rebuild service should not be NULL", K(ret), KP(rebuild_service));
+    } else if (OB_FAIL(rebuild_service->remove_rebuild_ls(get_ls_id()))) {
+      LOG_WARN("failed to remove rebuild ls", K(ret), KPC(this));
+    } else {
+      LOG_INFO("stop_ls finish", KR(ret), KPC(this));
+    }
+  }
   return ret;
 }
 
@@ -885,6 +884,7 @@ void ObLS::destroy()
     ls_meta_.reset();
     ls_migration_handler_.destroy();
     ls_remove_member_handler_.destroy();
+    ls_rebuild_cb_impl_.destroy();
     ls_recovery_stat_handler_.reset();
     member_list_service_.destroy();
     rs_reporter_ = nullptr;
@@ -918,6 +918,7 @@ void ObLS::destroy()
     ls_ddl_log_handler_.reset();
     ls_migration_handler_.destroy();
     ls_remove_member_handler_.destroy();
+    ls_rebuild_cb_impl_.destroy();
     tablet_gc_handler_.reset();
     tablet_empty_shell_handler_.reset();
     transfer_handler_.destroy();

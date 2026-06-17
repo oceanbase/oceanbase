@@ -58,6 +58,18 @@ int ObLSRebuildCbImpl::init(
   return ret;
 }
 
+// must run after log_handler_.destroy(): the handler holds a rebuild
+// callback into this object, so clearing these fields first would let
+// a concurrent on_rebuild() dereference a null pointer
+void ObLSRebuildCbImpl::destroy()
+{
+  is_inited_ = false;
+  ls_ = nullptr;
+  bandwidth_throttle_ = nullptr;
+  svr_rpc_proxy_ = nullptr;
+  storage_rpc_ = nullptr;
+}
+
 int ObLSRebuildCbImpl::on_rebuild(
     const int64_t id, const palf::LSN &lsn)
 {
