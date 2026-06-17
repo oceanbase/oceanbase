@@ -732,6 +732,11 @@ int ObStaticEngineCG::check_vectorize_supported(bool &support,
         OZ(SMART_CALL(check_vectorize_supported(
             support, stop_checking, scan_cardinality, force_disable_batch_row_wrapper, op->get_child(i), root)));
       }
+      // When force_disable_batch_row_wrapper is set (e.g., user variable assignment),
+      // child operators' vectorization support must not override the parent's disable decision.
+      if (force_disable_batch_row_wrapper) {
+        support = false;
+      }
     }
     }
   }
