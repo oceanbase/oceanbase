@@ -587,5 +587,21 @@ int ObTabletMajorMergeCtx::prepare_schema()
   return ret;
 }
 
+int64_t ObTabletMajorMergeCtx::get_recycle_version() const
+{
+  int64_t recycle_version = ObBasicTabletMergeCtx::get_recycle_version();
+
+  // For mlog tablets, reuse recycle_version to carry the mlog purge SCN for row reclamation.
+  // Tenant major (medium clog: MAJOR_COMPACTION / TENANT_MAJOR) also satisfies is_medium_merge(): the
+  // compaction scheduler always passes ObMergeType::MEDIUM_MERGE into schedule_merge_dag, not MAJOR_MERGE.
+  if (is_major_merge_type(get_merge_type())
+      && nullptr != get_schema()
+      && get_schema()->is_mlog_table()
+      && filter_ctx_.mds_filter_info_.has_mlog_purge_scn()) {
+    recycle_version = filter_ctx_.mds_filter_info_.get_mlog_purge_scn();
+  }
+  return recycle_version;
+}
+
 } // namespace compaction
 } // namespace oceanbase

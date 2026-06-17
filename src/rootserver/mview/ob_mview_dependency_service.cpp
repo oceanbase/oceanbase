@@ -306,5 +306,29 @@ int ObMViewDependencyService::check_table_exist_(
   return ret;
 }
 
+int ObMViewDependencyService::swap_mview_dep_base_table(
+    ObMySQLTransaction &trans,
+    const uint64_t tenant_id,
+    ObTableSchema &new_orig_table_schema,
+    ObTableSchema &new_hidden_table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (new_orig_table_schema.table_referenced_by_mv()) {
+    const uint64_t orig_table_id = new_orig_table_schema.get_table_id();
+    const uint64_t hidden_table_id = new_hidden_table_schema.get_table_id();
+    if (OB_FAIL(ObMVDepUtils::update_mview_dep_base_table(
+            trans, tenant_id, orig_table_id, hidden_table_id))) {
+      LOG_WARN("failed to update mview dep base table", KR(ret), K(tenant_id),
+               K(orig_table_id), K(hidden_table_id));
+    } else {
+      new_hidden_table_schema.set_table_referenced_by_mv(ObTableReferencedByMVFlag::IS_REFERENCED_BY_MV);
+      new_orig_table_schema.set_table_referenced_by_mv(ObTableReferencedByMVFlag::IS_NOT_REFERENCED_BY_MV);
+      LOG_INFO("swapped mview dep base table and set hidden table referenced by mv",
+               K(tenant_id), K(orig_table_id), K(hidden_table_id));
+    }
+  }
+  return ret;
+}
+
 } // end of sql
 } // end of oceanbase

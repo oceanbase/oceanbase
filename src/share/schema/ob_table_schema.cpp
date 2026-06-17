@@ -7084,20 +7084,22 @@ int ObTableSchema::get_column_ids_without_rowkey(
     LOG_WARN("The ObTableSchema is invalid", K(ret));
   } else {
     //add other columns
-    for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt_; ++i) {
-      if (NULL == column_array_[i]) {
+    ObNonRowkeyStoreColumnIterator iter(*this);
+    const ObColumnSchemaV2 *column_schema = NULL;
+    while (OB_SUCC(ret) && OB_SUCC(iter.next()) && !iter.is_end()) {
+      if (OB_ISNULL(column_schema = *iter)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("The column is NULL, ", K(i));
-      } else if (!column_array_[i]->is_rowkey_column()
-          && !(no_virtual && column_array_[i]->is_virtual_generated_column())) {
-        col_desc.col_id_ = static_cast<int32_t>(column_array_[i]->get_column_id());
-        col_desc.col_type_ = column_array_[i]->get_meta_type();
+        LOG_WARN("The column is null", K(ret));
+      } else if (!column_schema->is_rowkey_column()
+          && !(no_virtual && column_schema->is_virtual_generated_column())) {
+        col_desc.col_id_ = static_cast<int32_t>(column_schema->get_column_id());
+        col_desc.col_type_ = column_schema->get_meta_type();
         if (col_desc.col_type_.is_decimal_int()) {
-          col_desc.col_type_.set_scale(column_array_[i]->get_data_scale());
+          col_desc.col_type_.set_scale(column_schema->get_data_scale());
         }
         //for non-rowkey, col_desc.col_order_ is not meaningful
         if (OB_FAIL(column_ids.push_back(col_desc))) {
-          LOG_WARN("Fail to add column id to column_ids", K(ret), K(i), K(column_array_[i]), K(column_cnt_));
+          LOG_WARN("Fail to add column id to column_ids", K(ret), K(column_schema), K(column_cnt_));
         }
       }
     }
@@ -8965,7 +8967,7 @@ int ObTableSchema::check_primary_key_cover_partition_column(ObSchemaGetterGuard 
   bool table_with_logic_pk = false;
   if (OB_FAIL(is_table_with_logic_pk(schema_guard, table_with_logic_pk))) {
     LOG_WARN("Failed to check if table with logic pk", K(ret));
-  } else if (!is_partitioned_table() || !table_with_logic_pk) {
+  } else if (!is_partitioned_table() || !table_with_logic_pk || is_mlog_table()) {
     //nothing todo
   } else {
     ObSEArray<uint64_t, 8> logic_pk_column_ids;
@@ -9983,49 +9985,140 @@ const ObColumnSchemaV2 *ObColumnIterByPrevNextID::get_first_column() const
   return ret_col;
 }
 
-int ObColumnIterByPrevNextID::next(const ObColumnSchemaV2 *&column_schema)
+int ObColumnIterByColumnID::next()
 {
   int ret = OB_SUCCESS;
-  column_schema = NULL;
-  if (is_end_) {
+  if (is_end()) {
+    ret = OB_ITER_END;
+  } else if (NULL == iter_) {
+    iter_ = table_schema_.column_begin();
+  } else {
+    ++iter_;
+  }
+  return ret;
+}
+
+const ObColumnSchemaV2 *ObColumnIterByColumnID::operator*()
+{
+  const ObColumnSchemaV2 *column_schema = NULL;
+  if (!is_end() && NULL != iter_) {
+    column_schema = *iter_;
+  }
+  return column_schema;
+}
+
+int ObColumnIterByPrevNextID::next()
+{
+  int ret = OB_SUCCESS;
+  if (is_end()) {
     ret = OB_ITER_END;
   } else if (table_schema_.is_index_table()) {
     if (OB_ISNULL(last_iter_)) {
       last_iter_ = table_schema_.column_begin();
-      column_schema = *last_iter_;
     } else if (++last_iter_ == table_schema_.column_end()) {
       is_end_ = true;
-      ret = OB_ITER_END;
-    } else {
-      column_schema = *last_iter_;
     }
   } else {
     if (OB_ISNULL(last_column_schema_)) {
       if ((table_schema_.is_sys_view() || table_schema_.get_object_status() == ObObjectStatus::INVALID)
            && 0 == table_schema_.get_column_count()) {
         is_end_ = true;
-        ret = OB_ITER_END;
       } else {
-        column_schema = get_first_column();
+        last_column_schema_ = get_first_column();
       }
     } else if (BORDER_COLUMN_ID == last_column_schema_->get_next_column_id()) {
       is_end_ = true;
-      ret = OB_ITER_END;
     } else {
-      column_schema = table_schema_.get_column_schema_by_prev_next_id(
-                                    last_column_schema_->get_next_column_id());
-    }
-    if (OB_NOT_NULL(column_schema)) {
-      last_column_schema_ = column_schema;
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_ISNULL(column_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("The column is null", K(ret));
+      const ObColumnSchemaV2 *next_column_schema = table_schema_.get_column_schema_by_prev_next_id(
+                                                    last_column_schema_->get_next_column_id());
+      if (OB_ISNULL(next_column_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else {
+        last_column_schema_ = next_column_schema;
+      }
     }
   }
   return ret;
+}
+
+const ObColumnSchemaV2 *ObColumnIterByPrevNextID::operator*()
+{
+  const ObColumnSchemaV2 *column_schema = NULL;
+  if (!is_end_) {
+    if (table_schema_.is_index_table()) {
+      if (NULL != last_iter_ && last_iter_ != table_schema_.column_end()) {
+        column_schema = *last_iter_;
+      }
+    } else {
+      column_schema = last_column_schema_;
+    }
+  }
+  return column_schema;
+}
+
+int ObColumnIterByPrevNextID::next(const ObColumnSchemaV2 *&column_schema)
+{
+  int ret = OB_SUCCESS;
+  column_schema = NULL;
+  if (OB_FAIL(next())) {
+    // do nothing
+  } else if (is_end()) {
+    ret = OB_ITER_END;
+  } else if (OB_ISNULL(column_schema = operator*())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  }
+  return ret;
+}
+
+ObNonRowkeyStoreColumnIterator::ObNonRowkeyStoreColumnIterator(const ObTableSchema &table_schema,
+                                                               const bool contain_rowkey)
+  : column_id_iter(table_schema), prev_next_id_iter(table_schema), contain_rowkey_(contain_rowkey)
+{
+  iter = &column_id_iter;
+  if (table_schema.is_mlog_table()) {
+    iter = &prev_next_id_iter;
+  }
+}
+
+int ObNonRowkeyStoreColumnIterator::next()
+{
+  int ret = OB_SUCCESS;
+  const ObColumnSchemaV2 *column_schema = NULL;
+  if (OB_ISNULL(iter)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else {
+    bool found = false;
+    while (OB_SUCC(ret) && !found && OB_SUCC(iter->next()) && !iter->is_end()) {
+      if (OB_ISNULL(column_schema = **iter)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (contain_rowkey_ || !column_schema->is_rowkey_column()) {
+        found = true;
+      }
+    }
+  }
+  return ret;
+}
+
+bool ObNonRowkeyStoreColumnIterator::is_end() const
+{
+  bool bret = true;
+  if (iter != NULL) {
+    bret = iter->is_end();
+  }
+  return bret;
+}
+
+const ObColumnSchemaV2 *ObNonRowkeyStoreColumnIterator::operator*()
+{
+  const ObColumnSchemaV2 *column_schema = NULL;
+  if (iter != NULL) {
+    column_schema = **iter;
+  }
+  return column_schema;
 }
 
 int ObTableSchema::set_column_encodings(const common::ObIArray<int64_t> &col_encodings)

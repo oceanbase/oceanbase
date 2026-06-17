@@ -3276,6 +3276,10 @@ DEF_TIME(mlog_trim_interval, OB_TENANT_PARAMETER, "1d", "[5s, 30d]",
          "Control the scheduling interval of MLOG background trimming tasks. Range: [5s, 30d]",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_BOOL(_enable_mlog_compaction_purge, OB_TENANT_PARAMETER, "True",
+         "enable/disable mlog purge by compaction",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_INT(approx_count_distinct_precision, OB_TENANT_PARAMETER, "10", "[4, 16]",
         "specify the result accuracy of approx_count_distinct",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

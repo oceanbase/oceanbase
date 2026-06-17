@@ -9,8 +9,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "storage/mview/ob_mview_transaction.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
-#include "src/share/schema/ob_mview_info.h"
-#include "sql/resolver/mv/ob_mv_dep_utils.h"
+#include "share/schema/ob_mview_info.h"
 
 namespace oceanbase
 {
@@ -93,6 +92,7 @@ int ObMViewRefreshHelper::lock_mview(ObMViewTransaction &trans, const uint64_t t
 int ObMViewRefreshHelper::generate_purge_mlog_sql(ObSchemaGetterGuard &schema_guard,
                                                   const uint64_t tenant_id, const uint64_t mlog_id,
                                                   const SCN &purge_scn, const int64_t purge_log_parallel,
+                                                  const int64_t batch_size,
                                                   ObSqlString &sql_string)
 {
   int ret = OB_SUCCESS;
@@ -147,12 +147,18 @@ int ObMViewRefreshHelper::generate_purge_mlog_sql(ObSchemaGetterGuard &schema_gu
       }
       if (OB_SUCC(ret)
           && OB_FAIL(sql_string.append_fmt(is_oracle_mode ?
-                                           " FROM \"%.*s\".\"%.*s\" WHERE ora_rowscn <= %lu;" :
-                                           " FROM `%.*s`.`%.*s` WHERE ora_rowscn <= %lu;",
+                                           " FROM \"%.*s\".\"%.*s\" WHERE ora_rowscn <= %lu" :
+                                           " FROM `%.*s`.`%.*s` WHERE ora_rowscn <= %lu",
                                            static_cast<int>(database_name.length()), database_name.ptr(),
                                            static_cast<int>(table_name.length()), table_name.ptr(),
                                            purge_scn.get_val_for_sql()))) {
         LOG_WARN("fail to append sql", KR(ret));
+      } else if (batch_size > 0 &&
+                 OB_FAIL(sql_string.append_fmt(is_oracle_mode ?
+                                               " AND ROWNUM <= %ld" :
+                                               " LIMIT %ld",
+                                               batch_size))) {
+        LOG_WARN("fail to append limit", KR(ret));
       }
     }
   }
@@ -460,149 +466,5 @@ int ObMViewRefreshHelper::sync_get_min_target_data_sync_scn(
   return ret;
 }
 
-int ObMViewRefreshHelper::get_dep_mviews_from_dep_info(
-                          const uint64_t tenant_id,
-                          const ObIArray<sql::ObMVDepInfo> &mv_dep_infos,
-                          ObSchemaGetterGuard &schema_guard,
-                          ObIArray<uint64_t> &dep_mview_ids)
-{
-  int ret = OB_SUCCESS;
-  dep_mview_ids.reuse();
-  const int64_t view_type = static_cast<int64_t>(ObObjectType::VIEW);
-  ARRAY_FOREACH(mv_dep_infos, idx) {
-    const ObMVDepInfo &dep_info = mv_dep_infos.at(idx);
-    const ObTableSchema *table_schema = nullptr;
-    if (view_type != dep_info.p_type_) {
-      /* do nothing */
-    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, dep_info.p_obj_, table_schema))) {
-      LOG_WARN("fail to get table schema", K(ret), K(tenant_id));
-    } else if (OB_ISNULL(table_schema)) {
-      LOG_INFO("table schema is null, maybe dep container tale not exist",
-                K(ret), K(tenant_id), K(dep_info.p_type_));
-    } else if (table_schema->is_materialized_view() &&
-               OB_FAIL(dep_mview_ids.push_back(dep_info.p_obj_))) {
-      LOG_WARN("fail to push back dep mview id", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObMViewRefreshHelper::check_dep_mviews_satisfy_target_scn(
-                          const uint64_t tenant_id,
-                          const share::SCN &target_data_sync_scn,
-                          const share::SCN &read_snapshot,
-                          const ObIArray<uint64_t> &dep_mview_ids,
-                          common::ObISQLClient &sql_proxy,
-                          bool &satisfy,
-                          bool oracle_mode)
-{
-  int ret = OB_SUCCESS;
-  satisfy = true;
-  if (tenant_id == OB_INVALID_TENANT_ID ||
-      !target_data_sync_scn.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(target_data_sync_scn));
-  } else {
-    // check dep mview's data sync scn fit target data_sync_scn
-    ObSEArray<ObMViewInfo, 2> dep_mview_infos;
-    if (OB_FAIL(ret)) {
-    } else if (dep_mview_ids.empty()) {
-      satisfy = true;
-      LOG_INFO("no dep mview");
-    } else if (OB_FAIL(ObMViewInfo::bacth_fetch_mview_infos(sql_proxy, tenant_id,
-                       read_snapshot.get_val_for_sql(), dep_mview_ids, dep_mview_infos, oracle_mode))) {
-      LOG_WARN("fail to batch fetch mview info", K(ret));
-    } else {
-      const uint64_t target_data_sync_ts = target_data_sync_scn.get_val_for_gts();
-      satisfy = true;
-      ARRAY_FOREACH(dep_mview_infos, idx) {
-        ObMViewInfo &dep_mview_info = dep_mview_infos.at(idx);
-        if (OB_FAIL(ObMViewInfo::check_satisfy_target_data_sync_scn(
-                    dep_mview_info, target_data_sync_ts, satisfy))) {
-          LOG_INFO("fail to check satisfy target data sync scn", K(ret), K(dep_mview_info));
-          break;
-        } else if (!satisfy) {
-          break;
-        }
-      }
-    }
-    LOG_INFO("check satified", K(tenant_id), K(target_data_sync_scn), K(satisfy));
-  }
-  return ret;
-}
-
-int ObMViewRefreshHelper::collect_deps_and_check_satisfy(
-                          const uint64_t tenant_id,
-                          const uint64_t mview_id,
-                          const uint64_t target_data_sync_ts,
-                          const uint64_t snapshot_version,
-                          common::ObISQLClient &sql_proxy,
-                          ObSchemaGetterGuard &schema_guard,
-                          bool oracle_mode)
-{
-  int ret = OB_SUCCESS;
-  ObArray<ObMVDepInfo> mv_dep_infos;
-  ObSEArray<uint64_t, 2> dep_mview_ids;
-  share::SCN target_data_sync_scn;
-  share::SCN read_snapshot;
-  bool satisfy = false;
-  if (tenant_id == OB_INVALID_TENANT_ID ||
-      target_data_sync_ts == OB_INVALID_SCN_VAL ||
-      snapshot_version == OB_INVALID_SCN_VAL) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(tenant_id), K(mview_id),
-             K(target_data_sync_ts), K(snapshot_version));
-  } else if (OB_FAIL(target_data_sync_scn.convert_for_sql(target_data_sync_ts))) {
-    LOG_WARN("failed to convert to scn", K(target_data_sync_ts));
-  } else if (OB_FAIL(read_snapshot.convert_for_sql(snapshot_version))) {
-    LOG_WARN("failed to convert to scn", K(snapshot_version));
-  } else if (OB_FAIL(ObMVDepUtils::get_mview_dep_infos(sql_proxy, tenant_id, mview_id, mv_dep_infos))) {
-      LOG_WARN("fail to get mv dep infos", K(ret), K(mview_id));
-  } else if (OB_FAIL(ObMViewRefreshHelper::get_dep_mviews_from_dep_info(
-                     tenant_id, mv_dep_infos, schema_guard, dep_mview_ids))) {
-    LOG_WARN("fail to get dep mview ids", K(ret));
-  } else if (OB_FAIL(ObMViewRefreshHelper::check_dep_mviews_satisfy_target_scn(
-                     tenant_id, target_data_sync_scn, read_snapshot,
-                     dep_mview_ids, sql_proxy, satisfy, oracle_mode))) {
-    LOG_WARN("fail to target data sync scn satisfied", K(ret));
-  } else if (!satisfy) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dep mviews not satisfy target data sync scn, need retry",
-             K(ret), K(target_data_sync_scn));
-  }
-  return ret;
-}
-
-int ObMViewRefreshHelper::replace_all_snapshot_zero(const ObString &input,
-                                                    const uint64_t snapshot_version,
-                                                    std::string &output,
-                                                    const bool oracle_mode)
-{
-  int ret = OB_SUCCESS;
-  output = input.ptr();
-  std::string search = oracle_mode ? "as of scn " : "as of snapshot ";
-  std::string new_value_str = std::to_string(snapshot_version);
-
-  int64_t pos = 0;
-  while ((pos = output.find(search, pos)) != std::string::npos) {
-    int64_t value_pos = pos + search.size();
-    if (value_pos >= output.size()) break;
-
-    if (output[value_pos] == '0' &&
-        (value_pos + 1 == output.size() || !isdigit(output[value_pos + 1]))) {
-      int64_t value_end = value_pos;
-      while (value_end < output.size() && isdigit(output[value_end])) {
-        ++value_end;
-      }
-      output.replace(pos + search.size(), value_end - value_pos, new_value_str);
-      pos += search.size() + new_value_str.size();
-    } else {
-      ++pos;
-    }
-  }
-  // for debug
-  LOG_DEBUG("print generate sql", K(input), K(output.c_str()), K(oracle_mode));
-  return ret;
-}
 } // namespace storage
 } // namespace oceanbase

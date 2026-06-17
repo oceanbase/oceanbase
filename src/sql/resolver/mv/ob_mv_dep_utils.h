@@ -8,12 +8,16 @@
 
 #include "lib/ob_define.h"
 #include "lib/container/ob_array.h"
+#include "lib/container/ob_se_array.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/mysqlclient/ob_isql_client.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
 
 namespace oceanbase
 {
+namespace common
+{
+class ObSqlString;
+}
 namespace share
 {
 namespace schema
@@ -39,13 +43,22 @@ public:
   TO_STRING_KV(K_(tenant_id), K_(mview_id), K_(p_order), K_(p_obj), K_(p_type), K_(qbcid), K_(flags));
 
 public:
+  static const int64_t IS_COMPLETE_REFRESH_ONLY_FLAG = 1 << 0;
+
+public:
   uint64_t tenant_id_;
   uint64_t mview_id_;
   int64_t p_order_;
   uint64_t p_obj_;
   int64_t p_type_;
   int64_t qbcid_;
-  int64_t flags_;
+  union {
+    int64_t flags_;
+    struct {
+      int64_t is_complete_refresh_only_ : 1;
+      int64_t reserved_                 : 63;
+    };
+  };
 };
 
 class ObMVDepUtils
@@ -80,9 +93,42 @@ public:
                                             const uint64_t base_table_id,
                                             ObIArray<uint64_t> &mview_ids,
                                             bool &exists_nested_mv);
-  static int get_all_mview_dep_infos(common::ObMySQLProxy *sql_proxy,
-                                     const uint64_t tenant_id,
-                                     common::ObIArray<ObMVDepInfo> &dep_infos);
+  static int check_database_referenced_by_mv_from_other_database(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const uint64_t database_id,
+      bool &exists);
+  static int get_mview_ids_in_topo_refresh_order(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const uint64_t target_mview_id,
+      common::ObIArray<uint64_t> &topo_ordered_mview_ids);
+  static int get_mview_ids_in_topo_refresh_order(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const uint64_t target_mview_id,
+      common::ObIArray<uint64_t> &topo_ordered_mview_ids,
+      common::ObIArray<common::ObSEArray<uint64_t, 4>> &topo_ordered_dep_mview_ids);
+  static int get_mds_locked_mview_ids(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const uint64_t target_mview_id,
+      const int64_t unrefreshed_mv_count,
+      common::ObIArray<uint64_t> &mds_locked_mview_ids);
+  static int update_mview_dep_base_table(common::ObISQLClient &sql_client,
+                                    const uint64_t tenant_id,
+                                    const uint64_t old_p_obj,
+                                    const uint64_t new_p_obj);
+
+private:
+  static int fetch_mview_ids_by_sql(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const common::ObSqlString &sql,
+      common::ObIArray<uint64_t> &mview_ids);
+  static int build_mview_dep_recursive_cte(const uint64_t target_mview_id,
+      const char *cte_name,
+      common::ObSqlString &cte_sql);
 };
 } // end of sql
 } // end of oceanbase

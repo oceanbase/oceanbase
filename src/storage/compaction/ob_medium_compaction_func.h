@@ -32,7 +32,9 @@ public:
     ObScheduleTabletCnt *schedule_tablet_cnt,
     const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason = ObAdaptiveMergePolicy::NONE,
     const int64_t least_medium_snapshot = 0,
-    const ObWindowCompactionDecisionLogInfo *window_decision_log_info = nullptr)
+    const ObWindowCompactionDecisionLogInfo *window_decision_log_info = nullptr,
+    const int64_t mlog_latest_purge_scn = OB_INVALID_SCN_VAL,
+    const int64_t mlog_purge_scn_read_snapshot = -1)
     : allocator_("MediumSchedule"),
       ls_(ls),
       weak_read_ts_(weak_read_ts.get_val_for_tx()),
@@ -41,7 +43,9 @@ public:
       least_medium_snapshot_(least_medium_snapshot),
       table_id_(OB_INVALID_ID),
       merge_reason_(merge_reason),
-      window_decision_log_info_(window_decision_log_info)
+      window_decision_log_info_(window_decision_log_info),
+      mlog_latest_purge_scn_(mlog_latest_purge_scn),
+      mlog_purge_scn_read_snapshot_(mlog_purge_scn_read_snapshot)
   {}
   ~ObMediumCompactionScheduleFunc() {}
   int init_tablet_handle(ObTabletHandle &tablet_handle)
@@ -195,6 +199,7 @@ protected:
   int fill_mlog_purge_scn(ObMediumCompactionInfo &medium_info);
   int fill_for_ttl_in_partial_update(const int64_t ttl_newest_commit_version, ObMediumCompactionInfo &medium_info);
   int fill_window_decision_log_info(ObMediumCompactionInfo &medium_info);
+  int try_refresh_mlog_purge_scn(const int64_t &read_snapshot);
   bool need_read_mds(const ObMediumCompactionInfo &medium_info);
   static const int64_t DEFAULT_SCHEDULE_MEDIUM_INTERVAL = 60_s;
   static constexpr double SCHEDULE_RANGE_INC_ROW_COUNT_PERCENRAGE_THRESHOLD = 0.2;
@@ -218,6 +223,8 @@ private:
   uint64_t table_id_; // for mlog
   ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason_;
   const ObWindowCompactionDecisionLogInfo *window_decision_log_info_; // optional debug payload from window compaction
+  int64_t mlog_latest_purge_scn_; // for mlog compaction latest purge scn
+  int64_t mlog_purge_scn_read_snapshot_; // for mlog compaction latest purge scn read snapshot
 };
 
 } //namespace compaction

@@ -960,7 +960,30 @@ int ObDDLService::add_new_column_to_table_schema(
   } else {
     int64_t max_used_column_id = new_table_schema.get_max_used_column_id();
     const uint64_t tenant_id = new_table_schema.get_tenant_id();
-    if (is_inner_table(new_table_schema.get_table_id())
+    if (OB_FAIL(ret)) {
+    } else if (new_table_schema.is_mlog_table()) {
+      const ObTableSchema *base_table_schema = nullptr;
+      const ObColumnSchemaV2 *base_column_schema = nullptr;
+      const ObColumnSchemaV2 *old_mlog_column_schema = nullptr;
+      const uint64_t base_table_id = new_table_schema.get_data_table_id();
+      if (OB_FAIL(schema_guard.get_table_schema(tenant_id, base_table_id, base_table_schema))) {
+        LOG_WARN("failed to get base table schema", KR(ret), K(tenant_id), K(base_table_id));
+      } else if (OB_ISNULL(base_table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("base table schema is null", K(ret), K(tenant_id), K(base_table_id));
+      } else if (OB_ISNULL(base_column_schema = base_table_schema->get_column_schema(alter_column_schema.get_column_name_str()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("base column schema is null", K(ret), K(alter_column_schema));
+      } else if (NULL != (old_mlog_column_schema = new_table_schema.get_column_schema(base_column_schema->get_column_id()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("old mlog column schema already existed",
+                  K(ret), K(alter_column_schema), KPC(old_mlog_column_schema));
+      } else {
+        alter_column_schema.set_column_id(base_column_schema->get_column_id());
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (is_inner_table(new_table_schema.get_table_id())
         && (OB_INVALID_ID == alter_column_schema.get_column_id()
         || alter_column_schema.get_column_id() != max_used_column_id + 1)) {
       // 225 is barrier version, after this adding column in system table need specify column_id
@@ -980,7 +1003,11 @@ int ObDDLService::add_new_column_to_table_schema(
         }
       }
       if (OB_SUCC(ret)) {
-        alter_column_schema.set_column_id(++max_used_column_id);
+        if (OB_INVALID_ID == alter_column_schema.get_column_id()) {
+          alter_column_schema.set_column_id(++max_used_column_id);
+        } else {
+          max_used_column_id = MAX(max_used_column_id, alter_column_schema.get_column_id());
+        }
         alter_column_schema.set_rowkey_position(0);
         alter_column_schema.set_index_position(0);
         alter_column_schema.set_not_part_key();
@@ -999,6 +1026,8 @@ int ObDDLService::add_new_column_to_table_schema(
     }
   }
   if (OB_FAIL(ret)) {
+  } else if (new_table_schema.is_mlog_table()) {
+    // columns with constraints/sequences in aux tables need not create related schema objects
   } else if (OB_FAIL(refill_columns_id_for_check_constraint(origin_table_schema,
                                                             alter_table_schema,
                                                             alter_column_schema,
@@ -1250,7 +1279,28 @@ int ObDDLService::update_prev_id_for_add_column(const ObTableSchema &origin_tabl
   } else {
     ObString pos_column_name;
     const uint64_t alter_column_id = alter_column_schema.get_column_id();
-    if (is_first) {
+    if (new_table_schema.is_mlog_table()) {
+      ObColumnIterByPrevNextID iter(new_table_schema);
+      const ObColumnSchemaV2 *column = NULL;
+      const ObColumnSchemaV2 *last_column = NULL;
+      while (OB_SUCC(ret) && OB_SUCC(iter.next(column))) {
+        if (OB_ISNULL(column)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("The column is null", K(ret));
+        } else {
+          last_column = column;
+        }
+      }
+      if (OB_UNLIKELY(ret != OB_ITER_END)) {
+        LOG_WARN("Failed to iterate all table columns. iter quit. ", K(ret));
+      } else if (OB_ISNULL(last_column)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Failed to get last column", K(ret));
+      } else {
+        ret = OB_SUCCESS;
+        alter_column_schema.set_prev_column_id(last_column->get_column_id());
+      }
+    } else if (is_first) {
       // this first means the first of no hidden/shdow column.
       ObColumnIterByPrevNextID iter(new_table_schema);
       const ObColumnSchemaV2 *head_col = NULL;

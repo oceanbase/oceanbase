@@ -11,7 +11,6 @@
 #include "storage/compaction/ob_medium_compaction_func.h"
 #include "storage/compaction/ob_sstable_merge_info_mgr.h"
 #include "storage/ddl/ob_ddl_merge_schedule.h"
-#include "storage/compaction/ob_sstable_merge_info_mgr.h"
 #include "storage/column_store/ob_co_merge_dag.h"
 #include "storage/multi_data_source/ob_mds_table_merge_dag.h"
 #include "storage/ob_gc_upper_trans_helper.h"

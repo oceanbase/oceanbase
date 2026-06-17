@@ -2496,10 +2496,11 @@ int ObSQLUtils::reconstruct_sql(ObIAllocator &allocator, const ObStmt *stmt, ObS
                                 ObSchemaGetterGuard *schema_guard,
                                 ObObjPrintParams print_params,
                                 const ParamStore *param_store,
-                                const ObSQLSessionInfo *session)
+                                const ObSQLSessionInfo *session,
+                                bool c_style)
 {
   int ret = OB_SUCCESS;
-  ObSqlPrinter sql_printer(stmt, schema_guard, print_params, param_store, session);
+  ObSqlPrinter sql_printer(stmt, schema_guard, print_params, param_store, session, c_style);
   if (OB_ISNULL(stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt is NULL", K(stmt), K(ret));
@@ -2595,7 +2596,7 @@ int ObISqlPrinter::do_print(ObIAllocator &allocator, ObString &result)
     MEMSET(buf, 0, sizeof(buf));
     if (OB_FAIL(inner_print(buf, sizeof(buf), res_len))) {
         LOG_WARN("failed to print", K(sizeof(buf)), K(ret));
-    } else if (OB_FAIL(ob_write_string(allocator, ObString(res_len, buf), result))) {
+    } else if (OB_FAIL(ob_write_string(allocator, ObString(res_len, buf), result, get_c_style()))) {
       LOG_WARN("fail to deep copy string", K(ret));
     }
   }
@@ -2605,7 +2606,7 @@ int ObISqlPrinter::do_print(ObIAllocator &allocator, ObString &result)
       MEMSET(buf, 0, sizeof(buf));
       if (OB_FAIL(inner_print(buf, sizeof(buf), res_len))) {
         LOG_WARN("failed to print", K(sizeof(buf)), K(ret));
-      } else if (OB_FAIL(ob_write_string(allocator, ObString(res_len, buf), result))) {
+      } else if (OB_FAIL(ob_write_string(allocator, ObString(res_len, buf), result, get_c_style()))) {
         LOG_WARN("fail to deep copy string", K(ret));
       }
     }
@@ -2623,7 +2624,7 @@ int ObISqlPrinter::do_print(ObIAllocator &allocator, ObString &result)
       } else if (FALSE_IT(MEMSET(buf, 0, length))) {
       } else if (OB_FAIL(inner_print(buf, length, res_len))) {
         LOG_WARN("failed to print", K(sizeof(buf)), K(ret));
-      } else if (OB_FAIL(ob_write_string(allocator, ObString(res_len, buf), result))) {
+      } else if (OB_FAIL(ob_write_string(allocator, ObString(res_len, buf), result, get_c_style()))) {
         LOG_WARN("fail to deep copy string", K(ret));
       }
       if (OB_SUCC(ret)) {
@@ -2633,7 +2634,6 @@ int ObISqlPrinter::do_print(ObIAllocator &allocator, ObString &result)
       }
     }
   }
-
   return ret;
 }
 

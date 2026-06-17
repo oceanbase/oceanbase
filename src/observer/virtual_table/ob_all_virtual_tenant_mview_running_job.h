@@ -50,20 +50,26 @@ private:
       cur_row_(NULL),
       output_column_ids_() {}
     virtual ~FillScanner() {}
-    int operator()(common::hash::HashMapPair<transaction::ObTransID, storage::ObMViewOpArg> &entry);
+    int operator()(const common::hash::HashMapPair<transaction::ObTransID, storage::ObMViewOpArg> &entry);
+#ifdef OB_BUILD_MV_REFRESH_QUEUEING
+    int operator()(const rootserver::ObMViewPendingRunningJobInfo &job_info);
+#endif
     int init(uint64_t effective_tenant_id,
              common::ObScanner *scanner,
              common::ObNewRow *cur_row,
              const ObIArray<uint64_t> &column_ids);
     void reset();
   private:
-      char ip_buf_[common::OB_IP_STR_BUFF];
-      int32_t port_;
-      uint64_t effective_tenant_id_;
-      common::ObScanner *scanner_;
-      common::ObNewRow *cur_row_;
-      ObSEArray<uint64_t, common::OB_PREALLOCATED_NUM> output_column_ids_;
-      DISALLOW_COPY_AND_ASSIGN(FillScanner);
+    int check_fill_param() const;
+    static void get_job_type(const share::schema::ObMVRefreshMethod refresh_method,
+                             int64_t &job_type);
+    char ip_buf_[common::OB_IP_STR_BUFF];
+    int32_t port_;
+    uint64_t effective_tenant_id_;
+    common::ObScanner *scanner_;
+    common::ObNewRow *cur_row_;
+    ObSEArray<uint64_t, common::OB_PREALLOCATED_NUM> output_column_ids_;
+    DISALLOW_COPY_AND_ASSIGN(FillScanner);
   };
   FillScanner fill_scanner_;
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualTenantMviewRunningJob);

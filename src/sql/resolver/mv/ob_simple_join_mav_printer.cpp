@@ -38,7 +38,8 @@ int ObSimpleJoinMAVPrinter::gen_inner_delta_mav_for_mav(ObIArray<ObSelectStmt*> 
     if (OB_ISNULL(source_table = source_tables.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null table", K(ret), K(i));
-    } else if (is_table_skip_refresh(*source_table)) {
+    } else if (is_table_skip_refresh(*source_table)
+               || is_table_without_delta_data(*source_table)) {
       // do nothing, no need to gen inner delta mav
     } else if (OB_FAIL(gen_inner_delta_mav_for_simple_join_mav(i,
                                                                inner_delta_mav))) {

@@ -20,6 +20,7 @@
 #include "rootserver/ob_root_service.h"
 #include "rootserver/ob_tablet_drop.h"
 #include "rootserver/ob_server_zone_op_service.h"
+#include "rootserver/mview/ob_mview_dependency_service.h"
 #include "share/ob_global_merge_table_operator.h"
 #include "share/ob_zone_merge_table_operator.h"
 #include "share/ob_zone_merge_info.h"
@@ -793,6 +794,8 @@ int ObDDLOperator::drop_database(const ObDatabaseSchema &db_schema,
               // drop triggers before drop table
               if (OB_FAIL(ObPLDDLOperator::drop_trigger_cascade(*table, trans, *this))) {
                 LOG_WARN("drop trigger failed", K(ret), K(table->get_table_id()));
+              } else if (OB_FAIL(drop_mview_dep_info(*table, trans, schema_guard))) {
+                LOG_WARN("failed to drop mview dep info", KR(ret), KPC(table));
               } else if (OB_FAIL(drop_table(*table, trans, NULL, false, NULL, true))) {
                 LOG_WARN("drop table failed", K(ret), K(table->get_table_id()));
               }
@@ -5835,6 +5838,25 @@ int ObDDLOperator::drop_table_for_not_dropped_schema(
   return ret;
 }
 
+int ObDDLOperator::drop_mview_dep_info(
+    const ObTableSchema &table_schema,
+    ObMySQLTransaction &trans,
+    ObSchemaGetterGuard &schema_guard)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = table_schema.get_tenant_id();
+  if (!table_schema.is_materialized_view()) {
+    // do nothing
+  } else {
+    ObMViewDependencyService mv_dep_service(schema_service_);
+    if (OB_FAIL(mv_dep_service.remove_mview_dep_infos(
+        trans, schema_guard, tenant_id, table_schema.get_table_id()))) {
+      LOG_WARN("failed to remove mview dep infos", KR(ret), K(tenant_id), K(table_schema));
+    }
+  }
+  return ret;
+}
+
 // ref
 // When tables with auto-increment columns are frequently created or deleted, if the auto-increment column cache is not cleared, the memory will grow slowly.
 // so every time when you drop table, if you bring auto-increment columns, clean up the corresponding cache.
@@ -5926,10 +5948,7 @@ int ObDDLOperator::drop_table_to_recyclebin(const ObTableSchema &table_schema,
   // materialized view will not be dropped into recyclebin
   if (table_schema.get_table_type() == MATERIALIZED_VIEW) {
     LOG_WARN("bypass recyclebin for materialized view");
-  } else if (OB_UNLIKELY(table_schema.has_mlog_table())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table with materialized view log should not come to recyclebin", KR(ret));
-  } else if (OB_UNLIKELY(table_schema.table_referenced_by_fast_lsm_mv())) {
+  } else if (OB_UNLIKELY(table_schema.table_referenced_by_mv())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table required by materialized view should not come to recyclebin", KR(ret));
   } else if (OB_UNLIKELY(table_schema.get_table_type() == MATERIALIZED_VIEW_LOG)) {

@@ -9100,9 +9100,9 @@ desc oceanbase.DBA_MVREF_RUN_STATS;
 Field	Type	Null	Key	Default	Extra
 RUN_OWNER	varchar(128)	NO		NULL	
 REFRESH_ID	bigint(20)	NO		NULL	
-NUM_MVS	bigint(20)	YES		NULL	
-MVIEWS	text	YES		NULL	
-BASE_TABLES	text	YES		NULL	
+NUM_MVS	bigint(20)	NO			
+MVIEWS	text	NO			
+BASE_TABLES	text	NO			
 METHOD	text	YES		NULL	
 ROLLBACK_SEG	text	YES		NULL	
 PUSH_DEFERRED_RPC	varchar(1)	NO			
@@ -9120,6 +9120,10 @@ ELAPSED_TIME	bigint(20)	NO		NULL
 LOG_SETUP_TIME	bigint(1)	NO			
 LOG_PURGE_TIME	bigint(20)	YES		NULL	
 COMPLETE_STATS_AVAILABLE	varchar(1)	NO			
+MVIEW_ID	bigint(20)	YES		NULL	
+MVIEW_NAME	varchar(128)	NO			
+DATA_TARGET_SCN	bigint(20) unsigned	YES		NULL	
+TRACE_ID	varchar(64)	YES		NULL	
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_MVREF_RUN_STATS|%') then 2
@@ -9145,7 +9149,11 @@ LOG_SETUP_TIME	bigint(1)	NO
 LOG_PURGE_TIME	bigint(20)	YES		NULL	
 INITIAL_NUM_ROWS	bigint(20)	NO		NULL	
 FINAL_NUM_ROWS	bigint(20)	NO		NULL	
+NUM_STEPS	bigint(20)	NO		NULL	
 RESULT	bigint(20)	NO		NULL	
+REFRESH_SCN	bigint(20) unsigned	YES		NULL	
+SVR_IP	varchar(64)	YES		NULL	
+SVR_PORT	bigint(20)	YES		NULL	
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_MVREF_STATS|%') then 2
@@ -9163,6 +9171,7 @@ TBL_NAME	varchar(128)	NO
 MV_OWNER	varchar(128)	NO			
 MV_NAME	varchar(128)	NO			
 REFRESH_ID	bigint(20)	NO		NULL	
+RETRY_ID	bigint(20)	NO		NULL	
 NUM_ROWS_INS	bigint(20)	YES		NULL	
 NUM_ROWS_UPD	bigint(20)	YES		NULL	
 NUM_ROWS_DEL	bigint(20)	YES		NULL	
@@ -9185,11 +9194,15 @@ Field	Type	Null	Key	Default	Extra
 MV_OWNER	varchar(128)	NO			
 MV_NAME	varchar(128)	NO			
 REFRESH_ID	bigint(20)	NO		NULL	
+RETRY_ID	bigint(20)	NO		NULL	
 STEP	bigint(20)	NO		NULL	
 SQLID	varchar(32)	YES		NULL	
 STMT	longtext	NO		NULL	
+START_TIME	datetime	YES		NULL	
 EXECUTION_TIME	bigint(20)	NO		NULL	
 EXECUTION_PLAN	longtext	YES		NULL	
+RESULT	bigint(20)	NO		NULL	
+PARALLELISM	bigint(20)	YES		NULL	
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_MVREF_STMT_STATS|%') then 2
@@ -11076,6 +11089,7 @@ SESSION_ID	bigint(20) unsigned	NO		NULL
 READ_SNAPSHOT	bigint(20)	NO		NULL	
 PARALLEL	bigint(20)	NO		NULL	
 JOB_START_TIME	timestamp(6)	NO		NULL	
+REFRESH_ID	bigint(20) unsigned	NO		NULL	
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_MVIEW_RUNNING_JOBS|%') then 2

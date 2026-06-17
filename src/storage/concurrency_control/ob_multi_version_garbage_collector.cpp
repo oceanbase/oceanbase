@@ -506,6 +506,14 @@ int ObMultiVersionGarbageCollector::study_min_active_txn_version(
     MVCC_LOG(INFO, "study_min_active_txn_version", K(min_active_txn_version), K(min_mview_mds_snapshot));
     min_active_txn_version = min_mview_mds_snapshot;
   }
+
+  share::SCN min_mview_pending_snapshot;
+  if (FAILEDx(MTL(rootserver::ObMViewMaintenanceService*)->get_min_mview_pending_task_snapshot(min_mview_pending_snapshot))) {
+    MVCC_LOG(WARN, "get min mview pending task snapshot failed", K(ret));
+  } else if (min_mview_pending_snapshot.is_valid() && min_mview_pending_snapshot < min_active_txn_version) {
+    MVCC_LOG(INFO, "study_min_active_txn_version", K(min_active_txn_version), K(min_mview_pending_snapshot));
+    min_active_txn_version = min_mview_pending_snapshot;
+  }
   return ret;
 }
 

@@ -14,6 +14,7 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tablet/ob_tablet_medium_info_reader.h"
+#include "storage/compaction_ttl/ob_mlog_purge_info_helper.h"
 #include "storage/direct_load/ob_inc_major_ddl_aggregate_sstable.h"
 
 namespace oceanbase
@@ -1702,7 +1703,8 @@ const char * ObAdaptiveMergeReasonStr[] = {
   "DURING_DDL",
   "RECYCLE_MDS_INFO",
   "TOO_MANY_INC_MAJOR",
-  "WINDOW_COMPACTION"
+  "WINDOW_COMPACTION",
+  "NEED_MLOG_PURGE_CATCHUP",
 };
 
 const char* ObAdaptiveMergePolicy::merge_reason_to_str(const int64_t merge_reason)
@@ -1751,6 +1753,11 @@ bool ObAdaptiveMergePolicy::is_recycle_mds_info_merge_reason(const AdaptiveMerge
 bool ObAdaptiveMergePolicy::is_window_merge_reason(const AdaptiveMergeReason &reason)
 {
   return AdaptiveMergeReason::WINDOW_COMPACTION == reason;
+}
+
+bool ObAdaptiveMergePolicy::is_need_mlog_purge_catchup_reason(const AdaptiveMergeReason &reason)
+{
+  return AdaptiveMergeReason::NEED_MLOG_PURGE_CATCHUP == reason;
 }
 
 #ifdef ERRSIM
@@ -1803,6 +1810,20 @@ bool ObAdaptiveMergePolicy::is_valid_compaction_event(const AdaptiveCompactionEv
 bool ObAdaptiveMergePolicy::need_schedule_medium(const AdaptiveCompactionEvent& event)
 {
   return AdaptiveCompactionEvent::SCHEDULE_AFTER_MINI == event;
+}
+
+int ObAdaptiveMergePolicy::check_mlog_purge_catchup_reason(
+      const storage::ObTablet &tablet,
+      const int64_t mlog_latest_purge_scn,
+      AdaptiveMergeReason &merge_reason)
+{
+  int ret = OB_SUCCESS;
+  if (tablet.is_mlog_purge_by_compaction()) {
+    if (mlog_latest_purge_scn > tablet.get_mlog_last_purge_scn()) {
+      merge_reason = AdaptiveMergeReason::NEED_MLOG_PURGE_CATCHUP;
+    }
+  }
+  return ret;
 }
 
 bool ObAdaptiveMergePolicy::need_and_only_schedule_medium(const share::schema::ObTableModeFlag &mode, const AdaptiveCompactionEvent& event)

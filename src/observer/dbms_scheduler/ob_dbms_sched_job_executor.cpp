@@ -460,6 +460,9 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(uint64_t tenant_id, bool is_oracl
   OZ (table_operator_.get_dbms_sched_job_info(tenant_id, is_oracle_tenant, job_id, job_name, allocator, job_info));
 
   if (OB_SUCC(ret)) {
+    if (job_info.is_mview_job() && job_info.max_run_duration_ > 0) {
+      THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + job_info.max_run_duration_ * 1000000LL);
+    }
     if (job_info.is_killed()) { //Intercept user cancellation requests before the actual execution of the job
       OZ(table_operator_.update_for_kill(job_info));
     } else {

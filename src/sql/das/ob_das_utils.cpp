@@ -1083,37 +1083,51 @@ int ObDASUtils::generate_mlog_row(const ObLSID &ls_id,
   } else if (OB_FAIL(auto_inc.get_autoinc_seq_for_mlog(tenant_id, ls_id, tablet_id, autoinc_seq))) {
     LOG_WARN("get_autoinc_seq fail", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
   } else {
-    // mlog_row = | base_table_rowkey_cols | partition key cols | sequence_col | ... | dmltype_col | old_new_col |
+    // mlog_row = | base_table_rowkey_cols | partition key cols | sequence_col | ... | dmltype_col | old_new_col | ... |
     int sequence_col = 0;
-    int dmltype_col = row.count_ - 2;
-    int old_new_col = row.count_ - 1;
+    int dmltype_col = 0;
+    int old_new_col = 0;
     const ObTableDMLParam::ObColDescArray &col_descs = dml_param.table_param_->get_col_descs();
     bool found_seq_col = false;
-    for (int64_t i = 0; !found_seq_col && (i < row.count_); ++i) {
+    bool found_dmltype_col = false;
+    bool found_old_new_col = false;
+    for (int64_t i = 0; !(found_seq_col && found_dmltype_col && found_old_new_col) && (i < row.count_); ++i) {
       if (OB_MLOG_SEQ_NO_COLUMN_ID == col_descs.at(i).col_id_) {
         sequence_col = i; // sequence_no is the last rowkey
         found_seq_col = true;
+      } else if (OB_MLOG_DML_TYPE_COLUMN_ID == col_descs.at(i).col_id_) {
+        dmltype_col = i;
+        found_dmltype_col = true;
+      } else if (OB_MLOG_OLD_NEW_COLUMN_ID == col_descs.at(i).col_id_) {
+        old_new_col = i;
+        found_old_new_col = true;
       }
     }
 
-    row.storage_datums_[sequence_col].reuse();
-    row.storage_datums_[dmltype_col].reuse();
-    row.storage_datums_[old_new_col].reuse();
+    if (OB_UNLIKELY(!found_seq_col || !found_dmltype_col || !found_old_new_col)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("not found mlog special columns", K(ret), K(found_seq_col), K(found_dmltype_col),
+                                                 K(found_old_new_col), K(col_descs));
+    } else {
+      row.storage_datums_[sequence_col].reuse();
+      row.storage_datums_[dmltype_col].reuse();
+      row.storage_datums_[old_new_col].reuse();
 
-    row.storage_datums_[sequence_col].set_int(static_cast<int64_t>(autoinc_seq));
-    if (sql::DAS_OP_TABLE_DELETE == op_type) {
-      row.storage_datums_[dmltype_col].set_string(ObString("D"));
-      row.storage_datums_[old_new_col].set_string(ObString("O"));
-    } else if (sql::DAS_OP_TABLE_UPDATE == op_type) {
-      row.storage_datums_[dmltype_col].set_string(ObString("U"));
-      if (is_old_row) {
+      row.storage_datums_[sequence_col].set_int(static_cast<int64_t>(autoinc_seq));
+      if (sql::DAS_OP_TABLE_DELETE == op_type) {
+        row.storage_datums_[dmltype_col].set_string(ObString("D"));
         row.storage_datums_[old_new_col].set_string(ObString("O"));
+      } else if (sql::DAS_OP_TABLE_UPDATE == op_type) {
+        row.storage_datums_[dmltype_col].set_string(ObString("U"));
+        if (is_old_row) {
+          row.storage_datums_[old_new_col].set_string(ObString("O"));
+        } else {
+          row.storage_datums_[old_new_col].set_string(ObString("N"));
+        }
       } else {
+        row.storage_datums_[dmltype_col].set_string(ObString("I"));
         row.storage_datums_[old_new_col].set_string(ObString("N"));
       }
-    } else {
-      row.storage_datums_[dmltype_col].set_string(ObString("I"));
-      row.storage_datums_[old_new_col].set_string(ObString("N"));
     }
   }
   return ret;

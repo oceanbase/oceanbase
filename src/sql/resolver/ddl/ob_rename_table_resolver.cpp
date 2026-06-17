@@ -127,11 +127,7 @@ int ObRenameTableResolver::resolve_rename_action(const ParseNode &rename_action_
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("rename materialized view log is not supported", KR(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "rename materialized view log is");
-        } else if (table_schema->has_mlog_table()) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("rename table required with materialized view log is not supported", KR(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "rename table with materialized view log is");
-        } else if (table_schema->table_referenced_by_fast_lsm_mv()) {
+        } else if (table_schema->required_by_mv_refresh()) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("rename table required by materialized view is not supported", KR(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "rename table required by materialized view is");

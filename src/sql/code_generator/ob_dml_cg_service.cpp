@@ -1561,8 +1561,8 @@ int ObDmlCgService::convert_dml_column_info(ObTableID index_tid,
     }
   }
   if (OB_SUCC(ret) && !only_rowkey) {
-    ObTableSchema::const_column_iterator iter = index_schema->column_begin();
-    for (; OB_SUCC(ret) && iter != index_schema->column_end(); ++iter) {
+    ObNonRowkeyStoreColumnIterator iter(*index_schema);
+    while (OB_SUCC(ret) && OB_SUCC(iter.next()) && !iter.is_end()) {
       const ObColumnSchemaV2 *column = *iter;
       ObObjMeta column_type;
       if (!column->is_rowkey_column() && (!column->is_virtual_generated_column())) {

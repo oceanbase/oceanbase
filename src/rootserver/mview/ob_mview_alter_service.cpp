@@ -180,9 +180,13 @@ int ObMviewAlterService::alter_mview_attributes(
         }
         if (mv_arg.is_alter_refresh_dop()) {
           if (mv_arg.get_refresh_dop() != mview_info.get_refresh_dop()) {
-            new_container_schema.set_dop(mv_arg.get_refresh_dop());
             mview_info.set_refresh_dop(mv_arg.get_refresh_dop());
             need_alter_mview_info = true;
+          }
+        }
+        if (mv_arg.is_alter_table_dop()) {
+          if (mv_arg.get_table_dop() != new_container_schema.get_dop()) {
+            new_container_schema.set_dop(mv_arg.get_table_dop());
           }
         }
         if (mv_arg.is_alter_nested_refresh_mode()) {

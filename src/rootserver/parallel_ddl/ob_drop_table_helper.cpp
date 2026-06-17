@@ -163,11 +163,7 @@ int ObDropTableHelper::check_legitimacy_()
       } else if (has_conflict_ddl) {
         ret = OB_EAGAIN;
         LOG_WARN("failed to drop table that has conflict ddl", KR(ret), K(table_schema->get_table_id()));
-      } else if (table_schema->has_mlog_table()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("drop table with materialized view log is not supported", KR(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop table with materialized view log is");
-      } else if (table_schema->table_referenced_by_fast_lsm_mv()) {
+      } else if (table_schema->table_referenced_by_mv()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("drop table required by materialized view is not supported", KR(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop table required by materialized view is");
@@ -213,7 +209,8 @@ int ObDropTableHelper::calc_schema_version_cnt_()
             LOG_WARN("aux table schema is null", KR(ret));
           } else if (to_recyclebin && aux_table_schema->is_in_recyclebin()) {
             LOG_INFO("aux table is already in recyclebin");
-          } else if (OB_FAIL(calc_schema_version_cnt_for_table_(*aux_table_schema, to_recyclebin))) {
+          } else if (OB_FAIL(calc_schema_version_cnt_for_table_(*aux_table_schema,
+                                          to_recyclebin && !aux_table_schema->is_mlog_table()))) {
             LOG_WARN("calc schema version cnt drop table failed", KR(ret));
           }
         }
@@ -449,7 +446,7 @@ int ObDropTableHelper::operate_schemas_()
             LOG_WARN("fail to assign table schema", KR(ret));
           } else {
             new_aux_table_schema.set_in_offline_ddl_white_list(table_schema->get_in_offline_ddl_white_list());
-            if (is_to_recyclebin_(*table_schema)) {
+            if (is_to_recyclebin_(*table_schema) && !aux_table_schema->is_mlog_table()) {
               if (new_aux_table_schema.is_in_recyclebin()) {
                 LOG_INFO("aux table is already in recyclebin");
               } else if (OB_FAIL(drop_table_to_recyclebin_(new_aux_table_schema, NULL/*ddl_stmt_str*/))) {
@@ -1121,6 +1118,18 @@ int ObDropTableHelper::collect_aux_table_schemas_(
         LOG_WARN("fail to push back aux table schema", KR(ret));
       }
     }
+    if (OB_SUCC(ret) && table_schema.has_mlog_table()) {
+      const ObTableSchema *aux_table_schema = NULL;
+      const uint64_t table_id = table_schema.get_mlog_tid();
+      if (OB_FAIL(schema_guard_wrapper_.get_table_schema(table_id, aux_table_schema))) {
+        LOG_WARN("get table schema failed", KR(ret), K(table_id));
+      } else if (OB_ISNULL(aux_table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table schema is null", KR(ret));
+      } else if (OB_FAIL(aux_table_schemas.push_back(aux_table_schema))) {
+        LOG_WARN("fail to push back aux table schema", KR(ret));
+      }
+    }
 
     // aux vp & lob meta & lob piece
     ObArray<uint64_t> aux_table_ids;
@@ -1195,6 +1204,11 @@ int ObDropTableHelper::calc_schema_version_cnt_for_table_(
 
     // for aux table, promote data table schema version
     if (table_schema.is_aux_table()) {
+      schema_version_cnt_++;
+    }
+
+    // for mlog table, promote mlog table schema version
+    if (table_schema.is_mlog_table()) {
       schema_version_cnt_++;
     }
 

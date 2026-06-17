@@ -31,6 +31,9 @@ struct ObMediumLoop
       || OB_STATE_NOT_MATCH == ret
       || OB_LS_NOT_EXIST == ret;
   }
+  OB_INLINE bool is_during_tenant_major() const {
+    return merge_version_ > MERGE_SCHEDULER_PTR->get_merged_version();
+  }
 private:
   int loop_in_ls(
     storage::ObLSHandle &ls_handle,

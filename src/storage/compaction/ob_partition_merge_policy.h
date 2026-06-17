@@ -270,6 +270,7 @@ public:
     RECYCLE_MDS_INFO = 11,
     TOO_MANY_INC_MAJOR = 12,
     WINDOW_COMPACTION = 13,
+    NEED_MLOG_PURGE_CATCHUP = 14,
     INVALID_REASON
   };
 
@@ -292,6 +293,7 @@ public:
   static bool is_skip_merge_reason(const AdaptiveMergeReason &reason);
   static bool is_recycle_mds_info_merge_reason(const AdaptiveMergeReason &reason);
   static bool is_window_merge_reason(const AdaptiveMergeReason &reason);
+  static bool is_need_mlog_purge_catchup_reason(const AdaptiveMergeReason &reason);
   static bool is_valid_compaction_policy(const AdaptiveCompactionPolicy &policy);
   static bool is_schedule_medium(const share::schema::ObTableModeFlag &mode);
   static bool is_schedule_meta(const share::schema::ObTableModeFlag &mode);
@@ -300,6 +302,7 @@ public:
   static bool take_extrem_policy(const share::schema::ObTableModeFlag &mode);
   static bool is_valid_compaction_event(const AdaptiveCompactionEvent& event);
   static bool need_schedule_medium(const AdaptiveCompactionEvent& event);
+
   static bool need_and_only_schedule_medium(const share::schema::ObTableModeFlag &mode, const AdaptiveCompactionEvent& event);
 
   static int get_meta_merge_tables(
@@ -331,6 +334,10 @@ public:
       storage::ObTablet &tablet,
       AdaptiveMergeReason &reason,
       int64_t &least_medium_snapshot);
+  static int check_mlog_purge_catchup_reason(
+      const storage::ObTablet &tablet,
+      const int64_t mlog_latest_purge_scn,
+      AdaptiveMergeReason &merge_reason);
   static int find_adaptive_merge_tables(
       const ObMergeType &merge_type,
       const storage::ObTablet &tablet,

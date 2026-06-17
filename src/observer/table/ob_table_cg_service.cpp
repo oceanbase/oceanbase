@@ -3145,10 +3145,13 @@ int ObTableDmlCgService::generate_column_info(ObTableID index_tid,
 
     // add normal column infos if need
     if (OB_SUCC(ret)) {
-      ObTableSchema::const_column_iterator iter = index_schema->column_begin();
-      for (; OB_SUCC(ret) && iter != index_schema->column_end(); ++iter) {
+      ObNonRowkeyStoreColumnIterator iter(*index_schema);
+      while (OB_SUCC(ret) && OB_SUCC(iter.next()) && !iter.is_end()) {
         const ObColumnSchemaV2 *column = *iter;
-        if (column->is_rowkey_column() || column->is_virtual_generated_column()) {
+        if (OB_ISNULL(column)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("column is NULL", K(ret));
+        } else if (column->is_rowkey_column() || column->is_virtual_generated_column()) {
           // do nothing
         } else {
           ObObjMeta column_type;

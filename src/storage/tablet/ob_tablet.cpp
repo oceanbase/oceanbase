@@ -19,7 +19,6 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/truncate_info/ob_tablet_truncate_info_reader.h"
 #include "storage/truncate_info/ob_truncate_info_array.h"
-#include "storage/tablet/ob_tablet_medium_info_reader.h"
 #include "storage/ob_storage_schema_util.h"
 #include "storage/compaction/ob_medium_list_checker.h"
 #include "storage/memtable/ob_row_conflict_handler.h"
@@ -33,7 +32,6 @@
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
 #include "storage/ob_direct_load_table_guard.h"
 #include "share/ob_tablet_replica_checksum_operator.h"
-#include "observer/ob_server_event_history_table_operator.h"
 #include "storage/ddl/ob_ddl_merge_schedule.h"
 #include "storage/ddl/ob_inc_ddl_merge_task_utils.h"
 #include "storage/compaction_ttl/ob_ttl_filter_info_array.h"
@@ -102,10 +100,12 @@ ObTableStoreCache::ObTableStoreCache()
     last_major_latest_row_store_type_(ObRowStoreType::MAX_ROW_STORE),
     last_major_store_type_(ObMajorStoreType::MAX_STORE_TYPE),
     unmerged_inc_major_cnt_(0),
+    is_mlog_purge_by_compaction_(false),
     min_recycle_scn_(),
     max_upper_trans_version_(0),
     mds_minor_table_cnt_(0),
     max_sync_medium_scn_(0),
+    mlog_last_purge_scn_(0),
     is_inited_(false)
 {
 }
@@ -130,11 +130,13 @@ void ObTableStoreCache::reset()
   last_major_latest_row_store_type_ = ObRowStoreType::MAX_ROW_STORE;
   last_major_store_type_ = ObMajorStoreType::MAX_STORE_TYPE;
   unmerged_inc_major_cnt_ = 0;
+  is_mlog_purge_by_compaction_ = false;
   min_recycle_scn_.reset();
   max_upper_trans_version_ = 0;
   mds_minor_table_cnt_ = 0;
   max_sync_medium_scn_ = 0;
   is_inited_ = false;
+  mlog_last_purge_scn_ = 0;
 }
 
 void ObTableStoreCache::assign(const ObTableStoreCache &other)
@@ -154,7 +156,6 @@ void ObTableStoreCache::assign(const ObTableStoreCache &other)
   last_major_compressor_type_ = other.last_major_compressor_type_;
   last_major_latest_row_store_type_ = other.last_major_latest_row_store_type_;
   last_major_store_type_ = other.last_major_store_type_;
-  unmerged_inc_major_cnt_ = other.unmerged_inc_major_cnt_;
   min_recycle_scn_ = other.min_recycle_scn_;
   max_upper_trans_version_ = other.max_upper_trans_version_;
   mds_minor_table_cnt_ = other.mds_minor_table_cnt_;
@@ -162,6 +163,8 @@ void ObTableStoreCache::assign(const ObTableStoreCache &other)
   version_ = other.version_;
   is_inited_ = other.is_inited_;
   unmerged_inc_major_cnt_ = other.unmerged_inc_major_cnt_;
+  is_mlog_purge_by_compaction_ = other.is_mlog_purge_by_compaction_;
+  mlog_last_purge_scn_ = other.mlog_last_purge_scn_;
 }
 
 int ObTableStoreCache::init(
@@ -184,6 +187,8 @@ int ObTableStoreCache::init(
   recycle_version_ = 0;
   last_major_store_type_ = ObMajorStoreType::NONE;
   unmerged_inc_major_cnt_ = 0;
+  is_mlog_purge_by_compaction_ = storage_schema.is_mlog_purge_by_compaction();
+  mlog_last_purge_scn_ = 0;
 
   ObSSTableMetaHandle sst_meta_hdl;
   share::SCN min_recycle_scn(share::SCN::max_scn());
@@ -203,6 +208,7 @@ int ObTableStoreCache::init(
       const ObSSTableMeta &sstable_meta = sst_meta_hdl.get_sstable_meta();
       last_major_snapshot_version_ = last_major->get_snapshot_version();
       recycle_version_ = last_major_snapshot_version_;
+      mlog_last_purge_scn_ = sstable_meta.get_basic_meta().get_recycle_version();
       last_major_compressor_type_ = sstable_meta.get_basic_meta().get_compressor_type();
       last_major_latest_row_store_type_ = sstable_meta.get_basic_meta().get_latest_row_store_type();
       last_major_row_cnt_ = last_major->get_row_count();
@@ -343,6 +349,8 @@ int ObTableStoreCache::serialize(
     LOG_WARN("failed to serialize mds minor table cnt", K(ret), K(len), K(new_pos), K_(mds_minor_table_cnt));
   } else if (new_pos - pos < length && OB_FAIL(serialization::encode_i64(buf, len, new_pos, max_sync_medium_scn_))) {
     LOG_WARN("failed to serialize max sync medium scn", K(ret), K(len), K(new_pos), K_(max_sync_medium_scn));
+  } else if (new_pos - pos < length && OB_FAIL(serialization::encode_i64(buf, len, new_pos, mlog_last_purge_scn_))) {
+    LOG_WARN("failed to serialize mlog last purge scn", K(ret), K(len), K(new_pos), K_(mlog_last_purge_scn));
   } else if (OB_UNLIKELY(length != new_pos - pos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table store cache's length doesn't match standard length", K(ret), K(new_pos), K(pos), K(length), K(length));
@@ -407,6 +415,8 @@ int ObTableStoreCache::deserialize(
       LOG_WARN("failed to deserialize mds_minor_table_cnt_", K(ret), K(len));
     } else if (new_pos - pos < length_ && OB_FAIL(serialization::decode_i64(buf, len, new_pos, &max_sync_medium_scn_))) {
       LOG_WARN("failed to deserialize max_sync_medium_scn_", K(ret), K(len));
+    } else if (new_pos - pos < length_ && OB_FAIL(serialization::decode_i64(buf, len, new_pos, &mlog_last_purge_scn_))) {
+      LOG_WARN("failed to deserialize mlog last purge scn", K(ret), K(len));
     } else if (OB_UNLIKELY(length_ < new_pos - pos)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet's length doesn't match standard length", K(ret), K(new_pos), K(pos), K_(length));
@@ -447,6 +457,7 @@ int64_t ObTableStoreCache::get_serialize_size(const uint64_t data_version) const
   size += serialization::encoded_length_i64(max_upper_trans_version_);
   size += serialization::encoded_length_i64(mds_minor_table_cnt_);
   size += serialization::encoded_length_i64(max_sync_medium_scn_);
+  size += serialization::encoded_length_i64(mlog_last_purge_scn_);
   //ATTENTION!
   //Add new value after 451, need using data version to check serialize
   return size;
@@ -469,11 +480,14 @@ bool ObTableStoreCache::operator==(const ObTableStoreCache &other) const
       && last_major_compressor_type_ == other.last_major_compressor_type_
       && last_major_latest_row_store_type_ == other.last_major_latest_row_store_type_
       && last_major_store_type_ == other.last_major_store_type_
+      && unmerged_inc_major_cnt_ == other.unmerged_inc_major_cnt_
+      && is_mlog_purge_by_compaction_ == other.is_mlog_purge_by_compaction_
       && min_recycle_scn_ == other.min_recycle_scn_
       && max_upper_trans_version_ == other.max_upper_trans_version_
       && mds_minor_table_cnt_ == other.mds_minor_table_cnt_
       && max_sync_medium_scn_ == other.max_sync_medium_scn_
-      && is_inited_ == other.is_inited_;
+      && is_inited_ == other.is_inited_
+      && mlog_last_purge_scn_ == other.mlog_last_purge_scn_;
   return bret;
 }
 
@@ -521,7 +535,7 @@ ObTablet::ObTablet(const bool is_external_tablet)
     is_external_tablet_(is_external_tablet)
 {
 #if defined(__x86_64__) && !defined(ENABLE_OBJ_LEAK_CHECK)
-  check_size<ObTablet, ObRowkeyReadInfo, 1616>();
+  check_size<ObTablet, ObRowkeyReadInfo, 1624>();
 #endif
   MEMSET(memtables_, 0x0, sizeof(memtables_));
 }

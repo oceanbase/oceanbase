@@ -10,6 +10,7 @@
 #include "storage/ddl/ob_ddl_lock.h"
 #include "share/ob_heap_organized_table_util.h"
 #include "share/compaction_ttl/ob_compaction_ttl_util.h"
+#include "share/ob_index_builder_util.h"
 
 namespace oceanbase
 {
@@ -21,7 +22,7 @@ using namespace storage;
 
 namespace rootserver
 {
-ObMLogBuilder::MLogColumnUtils::MLogColumnUtils()
+MLogColumnUtils::MLogColumnUtils()
   : mlog_table_column_array_(),
     allocator_("MlogColUtil"),
     rowkey_count_(0)
@@ -29,7 +30,7 @@ ObMLogBuilder::MLogColumnUtils::MLogColumnUtils()
 
 }
 
-ObMLogBuilder::MLogColumnUtils::~MLogColumnUtils()
+MLogColumnUtils::~MLogColumnUtils()
 {
   for (int64_t i = 0; i < mlog_table_column_array_.count(); ++i) {
     ObColumnSchemaV2 *column = mlog_table_column_array_.at(i);
@@ -40,7 +41,7 @@ ObMLogBuilder::MLogColumnUtils::~MLogColumnUtils()
   }
 }
 
-int ObMLogBuilder::MLogColumnUtils::check_column_type(
+int MLogColumnUtils::check_column_type(
     const ObColumnSchemaV2 &column_schema)
 {
   int ret = OB_SUCCESS;
@@ -68,7 +69,7 @@ int ObMLogBuilder::MLogColumnUtils::check_column_type(
   return ret;
 }
 
-int ObMLogBuilder::MLogColumnUtils::add_special_columns()
+int MLogColumnUtils::add_special_columns()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(add_sequence_column())) {
@@ -83,7 +84,7 @@ int ObMLogBuilder::MLogColumnUtils::add_special_columns()
 
 // sequence_no is part of mlog's rowkey
 // its rowkey position will be set later
-int ObMLogBuilder::MLogColumnUtils::add_sequence_column()
+int MLogColumnUtils::add_sequence_column()
 {
   int ret = OB_SUCCESS;
   ObColumnSchemaV2 *rowkey_column = nullptr;
@@ -110,7 +111,7 @@ int ObMLogBuilder::MLogColumnUtils::add_sequence_column()
   return ret;
 }
 
-int ObMLogBuilder::MLogColumnUtils::add_dmltype_column()
+int MLogColumnUtils::add_dmltype_column()
 {
   int ret = OB_SUCCESS;
   ObColumnSchemaV2 *column = nullptr;
@@ -136,7 +137,7 @@ int ObMLogBuilder::MLogColumnUtils::add_dmltype_column()
   return ret;
 }
 
-int ObMLogBuilder::MLogColumnUtils::add_old_new_column()
+int MLogColumnUtils::add_old_new_column()
 {
   int ret = OB_SUCCESS;
   ObColumnSchemaV2 *column = nullptr;
@@ -162,7 +163,7 @@ int ObMLogBuilder::MLogColumnUtils::add_old_new_column()
   return ret;
 }
 
-int ObMLogBuilder::MLogColumnUtils::add_base_table_pk_columns(
+int MLogColumnUtils::add_base_table_pk_columns(
     ObRowDesc &row_desc,
     share::schema::ObSchemaGetterGuard &schema_guard,
     const ObTableSchema &base_table_schema)
@@ -215,14 +216,19 @@ int ObMLogBuilder::MLogColumnUtils::add_base_table_pk_columns(
   return ret;
 }
 
-int ObMLogBuilder::MLogColumnUtils::add_base_table_columns(
-    const ObCreateMLogArg &create_mlog_arg,
+int MLogColumnUtils::add_base_table_columns(
+    const ObIArray<ObString> &store_columns,
     ObRowDesc &row_desc,
-    const ObTableSchema &base_table_schema)
+    const ObTableSchema &base_table_schema,
+    const bool need_not_null_default_value)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && (i < create_mlog_arg.store_columns_.count()); ++i) {
-    const ObString &column_name = create_mlog_arg.store_columns_.at(i);
+  bool is_oracle_mode = false;
+  if (OB_FAIL(base_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("failed to check if oracle compat mode", KR(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && (i < store_columns.count()); ++i) {
+    const ObString &column_name = store_columns.at(i);
     const ObColumnSchemaV2 *data_column = nullptr;
     ObColumnSchemaV2 *ref_column = nullptr;
     if (OB_FAIL(alloc_column(ref_column))) {
@@ -251,7 +257,41 @@ int ObMLogBuilder::MLogColumnUtils::add_base_table_columns(
       ref_column->set_next_column_id(UINT64_MAX);
       ref_column->set_column_id(ObTableSchema::gen_mlog_col_id_from_ref_col_id(
                                                   data_column->get_column_id()));
-      if (OB_FAIL(mlog_table_column_array_.push_back(ref_column))) {
+      ObIndexBuilderUtil::del_column_flags_and_default_value(*ref_column);
+      // set orig_default_value for oracle mode not-null columns (for add column scenario)
+      if (is_oracle_mode && ref_column->has_not_null_constraint() &&
+          need_not_null_default_value && ref_column->get_orig_default_value().is_null_oracle()) {
+        ObObj default_value;
+        default_value.set_type(ref_column->get_data_type());
+        if (OB_FAIL(default_value.build_not_strict_default_value(
+            ref_column->get_accuracy().get_precision(),
+            ref_column->get_collation_type()))) {
+          LOG_WARN("failed to build not strict default value", KR(ret));
+        } else {
+          const ObObjType data_type = ref_column->get_data_type();
+          // In Oracle mode, empty string is NULL, use space ' ' adapted to charset
+          if (ob_is_string_type(data_type)) {
+            ObString space = ObCharsetUtils::get_const_str(ref_column->get_collation_type(), ' ');
+            default_value.set_string(data_type, space);
+            default_value.set_collation_type(ref_column->get_collation_type());
+            default_value.set_collation_level(CS_LEVEL_IMPLICIT);
+            if (ob_is_text_tc(data_type)) {
+              default_value.set_inrow();
+            }
+          } else if (ob_is_datetime(data_type)) {
+            default_value.set_datetime(0);
+          } else if (ob_is_otimestamp_type(data_type)) {
+            ObOTimestampData zero_ts;
+            zero_ts.reset();
+            default_value.set_otimestamp_value(data_type, zero_ts);
+          }
+          if (OB_FAIL(ref_column->set_cur_default_value(default_value, false))) {
+            LOG_WARN("failed to set orig default value", KR(ret));
+          }
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(mlog_table_column_array_.push_back(ref_column))) {
         LOG_WARN("failed to push back column to mlog table column array",
             KR(ret), KP(ref_column));
       }
@@ -260,7 +300,7 @@ int ObMLogBuilder::MLogColumnUtils::add_base_table_columns(
   return ret;
 }
 
-int ObMLogBuilder::MLogColumnUtils::implicit_add_base_table_part_key_columns(
+int MLogColumnUtils::implicit_add_base_table_part_key_columns(
     const ObPartitionKeyInfo &part_key_info,
     ObRowDesc &row_desc,
     const ObTableSchema &base_table_schema)
@@ -311,7 +351,7 @@ int ObMLogBuilder::MLogColumnUtils::implicit_add_base_table_part_key_columns(
   return ret;
 }
 
-int ObMLogBuilder::MLogColumnUtils::add_base_table_part_key_columns(
+int MLogColumnUtils::add_base_table_part_key_columns(
     ObRowDesc &row_desc,
     const ObTableSchema &base_table_schema)
 {
@@ -328,7 +368,7 @@ int ObMLogBuilder::MLogColumnUtils::add_base_table_part_key_columns(
   return ret;
 }
 
-int ObMLogBuilder::MLogColumnUtils::alloc_column(ObColumnSchemaV2 *&column)
+int MLogColumnUtils::alloc_column(ObColumnSchemaV2 *&column)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObSchemaUtils::alloc_schema<ObColumnSchemaV2>(allocator_, column))) {
@@ -337,7 +377,7 @@ int ObMLogBuilder::MLogColumnUtils::alloc_column(ObColumnSchemaV2 *&column)
   return ret;
 }
 
-int ObMLogBuilder::MLogColumnUtils::construct_mlog_table_columns(
+int MLogColumnUtils::construct_mlog_table_columns(
     ObTableSchema &mlog_schema)
 {
   int ret = OB_SUCCESS;
@@ -801,6 +841,7 @@ int ObMLogBuilder::set_basic_infos(
     ObArenaAllocator allocator(ObModIds::OB_SCHEMA);
     bool is_oracle_mode = false;
     ObTableType mlog_type = MATERIALIZED_VIEW_LOG;
+    bool mlog_purge_by_compaction = false;
     if (OB_FAIL(base_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
       LOG_WARN("failed to check if oracle compat mode", KR(ret));
     } else if (OB_FAIL(ObTableSchema::build_mlog_table_name(allocator, create_mlog_arg.table_name_,
@@ -809,8 +850,12 @@ int ObMLogBuilder::set_basic_infos(
       LOG_WARN("failed to build mlog table name", KR(ret), K(create_mlog_arg.table_name_));
     } else if (OB_FAIL(mlog_schema.set_table_name(mlog_table_name))) {
       LOG_WARN("failed to set table name", KR(ret), K(mlog_table_name));
+    } else if (OB_FAIL(check_enable_mlog_compaction_purge(tenant_id, mlog_purge_by_compaction))) {
+      LOG_WARN("failed to check enable mlog purge by compaction", KR(ret));
     } else {
-      mlog_schema.set_table_mode_flag(ObTableModeFlag::TABLE_MODE_QUEUING_EXTREME);
+      if (!mlog_purge_by_compaction) {
+        mlog_schema.set_table_mode_flag(ObTableModeFlag::TABLE_MODE_QUEUING_EXTREME);
+      }
       mlog_schema.set_table_type(mlog_type);
       mlog_schema.set_table_organization_mode(TOM_INDEX_ORGANIZED);
       mlog_schema.set_index_status(ObIndexStatus::INDEX_STATUS_UNAVAILABLE);
@@ -833,6 +878,7 @@ int ObMLogBuilder::set_basic_infos(
       mlog_schema.set_autoinc_column_id(0);
       mlog_schema.set_progressive_merge_num(base_table_schema.get_progressive_merge_num());
       mlog_schema.set_progressive_merge_round(base_table_schema.get_progressive_merge_round());
+      mlog_schema.set_mlog_purge_by_compaction(mlog_purge_by_compaction);
       if (OB_FAIL(mlog_schema.set_compress_func_name(base_table_schema.get_compress_func_name()))) {
         LOG_WARN("failed to set compress func name", KR(ret));
       } else if (OB_INVALID_ID != mlog_schema.get_tablespace_id()) {
@@ -902,7 +948,7 @@ int ObMLogBuilder::set_table_columns(
           row_desc, schema_guard, base_table_schema))) {
         LOG_WARN("failed to add base table pk columns", KR(ret));
       } else if (OB_FAIL(mlog_column_utils_.add_base_table_columns(
-          create_mlog_arg, row_desc, base_table_schema))) {
+          create_mlog_arg.store_columns_, row_desc, base_table_schema))) {
         LOG_WARN("failed to add base table columns", KR(ret));
       } else if (OB_FAIL(mlog_column_utils_.add_base_table_part_key_columns(
           row_desc, base_table_schema))) {
@@ -933,6 +979,22 @@ int ObMLogBuilder::set_table_options(
     mlog_schema.set_tablespace_id(create_mlog_arg.mlog_schema_.get_tablespace_id());
     mlog_schema.set_comment(create_mlog_arg.mlog_schema_.get_comment());
     mlog_schema.set_lob_inrow_threshold(create_mlog_arg.mlog_schema_.get_lob_inrow_threshold());
+  }
+  return ret;
+}
+
+int ObMLogBuilder::check_enable_mlog_compaction_purge(const uint64_t tenant_id, bool &is_enable)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  is_enable = false;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("failed to get data version", KR(ret), K(tenant_id));
+  } else if (data_version >= DATA_VERSION_4_6_1_0) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      is_enable = tenant_config->_enable_mlog_compaction_purge;
+    }
   }
   return ret;
 }

@@ -6996,3 +6996,40 @@ plan_expired_before	bigint(20)	NO		-1
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table_opt_stat_invalidate_plan;
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_mview_dep;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+mview_id	bigint(20)	NO	PRI	NULL	
+p_order	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+p_obj	bigint(20)	NO		NULL	
+p_type	bigint(20)	NO		NULL	
+qbcid	bigint(20)	NO		NULL	
+flags	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_mview_dep;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_mview_refresh_pending_task;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+refresh_id	bigint(20)	NO	PRI	NULL	
+mview_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+svr_ip	varchar(46)	YES		NULL	
+svr_port	bigint(20)	YES		NULL	
+session_id	bigint(20)	YES		NULL	
+seq	bigint(20)	NO		0	
+refresh_method	bigint(20)	NO		0	
+refresh_parallel	bigint(20)	NO		0	
+target_data_sync_scn	bigint(20) unsigned	NO		0	
+expire_time	timestamp(6)	YES		NULL	
+status	bigint(20)	NO		0	
+flags	bigint(20)	NO		0	
+skip_cnt	bigint(20)	NO		0	
+retry_count	bigint(20)	NO		0	
+next_retry_time	timestamp(6)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_mview_refresh_pending_task;
+IF(count(*) >= 0, 1, 0)
+1

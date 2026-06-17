@@ -73,11 +73,18 @@ public:
   int gen_update_mview_attribute_dml(const uint64_t exec_tenant_id, ObDMLSqlSplicer &dml) const;
   int gen_update_mview_last_refresh_info_dml(const uint64_t exec_tenant_id,
                                              ObDMLSqlSplicer &dml) const;
+  int set_last_refresh_info(ObISQLClient &sql_client,
+                            const uint64_t tenant_id,
+                            const uint64_t last_refresh_scn,
+                            const uint64_t target_data_sync_scn,
+                            const ObMVRefreshType refresh_type,
+                            const int64_t start_time,
+                            const int64_t end_time);
 
   static int insert_mview_info(ObISQLClient &sql_client, const ObMViewInfo &mview_info);
   static int update_mview_attribute(ObISQLClient &sql_client, const ObMViewInfo &mview_info);
-  static int update_mview_last_refresh_info(ObISQLClient &sql_client,
-                                            const ObMViewInfo &mview_info);
+  static int record_mview_info(ObISQLClient &sql_client,
+                               const ObMViewInfo &mview_info);
   static int drop_mview_info(ObISQLClient &sql_client, const ObMViewInfo &mview_info);
   static int drop_mview_info(ObISQLClient &sql_client, const uint64_t tenant_id,
                              const uint64_t mview_id);
@@ -95,14 +102,9 @@ public:
                                                       const uint64_t tenant_id, bool &contains);
   static int contains_major_refresh_mview(ObISQLClient &sql_client,
                                           const uint64_t tenant_id, bool &contains);
+
   static int update_mview_data_sync_scn(ObISQLClient &sql_client, uint64_t tenant_id,
                                         ObMViewInfo &mview_info, const uint64_t refresh_scn);
-  static int update_mview_data_attr(ObISQLClient &sql_client,
-                                    const uint64_t tenant_id,
-                                    const uint64_t refresh_scn,
-                                    const uint64_t target_data_sync_scn,
-                                    ObMViewInfo &mview_info,
-                                    bool allow_empty_dep = false);
   static int bacth_fetch_mview_infos(ObISQLClient &sql_client,
                                      const uint64_t tenant_id,
                                      const uint64_t refresh_scn,
@@ -141,6 +143,14 @@ public:
 
 public:
   static constexpr char *MVIEW_REFRESH_JOB_PREFIX = const_cast<char *>("MVIEW_REFRESH$J_");
+
+private:
+  static int check_consistent_refresh_satisfied(ObISQLClient &sql_client,
+                                                const uint64_t tenant_id,
+                                                const uint64_t mview_id,
+                                                const uint64_t target_data_sync_ts,
+                                                const uint64_t snapshot_version,
+                                                bool &satisfied);
 
 private:
   uint64_t tenant_id_;

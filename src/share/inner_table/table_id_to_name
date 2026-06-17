@@ -447,6 +447,7 @@
 # 593: __all_optstat_catalog_user_prefs
 # 594: __all_optstat_catalog_global_prefs
 # 596: __all_table_opt_stat_invalidate_plan
+# 604: __all_mview_refresh_pending_task
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
 # 10003: __tenant_virtual_table_index
@@ -1420,6 +1421,10 @@
 # 12603: __all_virtual_tenant_worker_group
 # 12608: __all_virtual_table_opt_stat_invalidate_plan
 # 12608: __all_table_opt_stat_invalidate_plan  # BASE_TABLE_NAME
+# 12616: __all_virtual_mview_dep
+# 12616: __all_mview_dep  # BASE_TABLE_NAME
+# 12617: __all_virtual_mview_refresh_pending_task
+# 12617: __all_mview_refresh_pending_task  # BASE_TABLE_NAME
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -2213,6 +2218,8 @@
 # 15555: __all_table_opt_stat_invalidate_plan  # BASE_TABLE_NAME
 # 15556: ALL_VIRTUAL_SYS_VARIABLE_HISTORY
 # 15556: __all_virtual_sys_variable_history  # BASE_TABLE_NAME
+# 15557: ALL_VIRTUAL_MVIEW_REFRESH_PENDING_TASK_REAL_AGENT
+# 15557: __all_mview_refresh_pending_task  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA
@@ -2828,6 +2835,7 @@
 # 21727: DBA_OB_EXTERNAL_PART_COL_STATISTICS
 # 21744: DBA_OB_SYS_VARIABLE_HISTORY
 # 21745: CDB_OB_SYS_VARIABLE_HISTORY
+# 21746: CDB_MVIEW_DEPS
 # 25001: DBA_SYNONYMS
 # 25002: DBA_OBJECTS
 # 25003: ALL_OBJECTS

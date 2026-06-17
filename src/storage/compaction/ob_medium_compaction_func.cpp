@@ -321,12 +321,15 @@ int ObMediumCompactionScheduleFunc::get_adaptive_reason(
   int ret = OB_SUCCESS;
   int64_t max_sync_medium_scn = 0;
   ObTablet *tablet = tablet_handle_.get_obj();
-  if (OB_FAIL(ObMediumCompactionScheduleFunc::get_max_sync_medium_scn(
+  if (OB_FAIL(ObAdaptiveMergePolicy::check_mlog_purge_catchup_reason(
+    *tablet, mlog_latest_purge_scn_, merge_reason_))) {
+    LOG_WARN("failed to check mlog purge catchup reason", KR(ret), KPC(this));
+  } else if (OB_FAIL(ObMediumCompactionScheduleFunc::get_max_sync_medium_scn(
       *tablet, *medium_info_list_, max_sync_medium_scn))) {
     LOG_WARN("failed to get max received medium scn", KR(ret), KPC(this));
   } else if (!ObAdaptiveMergePolicy::is_user_request_merge_reason(merge_reason_)
       && schedule_major_snapshot > max_sync_medium_scn) {
-    // priority: user_request > TENANT_MAJOR > adaptive_policy
+    // priority: user_request > TENANT_MAJOR > need_mlog_purge_catchup > adaptive_policy
     merge_reason_ = ObAdaptiveMergePolicy::AdaptiveMergeReason::TENANT_MAJOR;
   } else if (ObAdaptiveMergePolicy::is_valid_merge_reason(merge_reason_)) {
     // is valid merge reason when init func, no need to use policy
@@ -447,7 +450,7 @@ int ObMediumCompactionScheduleFunc::choose_scn_for_user_request(
     LOG_WARN("special merge tablet, no need schedule merge", K(ret), "tablet_id", tablet->get_tablet_meta().tablet_id_);
   } else if (latest_frozen_version > last_major_snapshot_version) {
     ret = OB_NO_NEED_MERGE;
-    LOG_WARN("unfinished freeze info exist, can't schedule another medium", K(ret));
+    LOG_WARN("unfinished freeze info exist, can't schedule another medium", K(ret), K(latest_frozen_version), K(last_major_snapshot_version));
   } else if (OB_FAIL(get_max_reserved_snapshot(max_reserved_snapshot))) {
     LOG_WARN("failed to get reserved snapshot", K(ret), KPC(this));
   } else if (FALSE_IT(medium_info.medium_snapshot_ = MAX(max_reserved_snapshot, weak_read_ts_))) {
@@ -605,6 +608,7 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(bool &medium_clog_sub
     } else if (ObAdaptiveMergePolicy::is_user_request_merge_reason(merge_reason_)
             || ObAdaptiveMergePolicy::is_recycle_mds_info_merge_reason(merge_reason_)
             || ObAdaptiveMergePolicy::is_window_merge_reason(merge_reason_)
+            || ObAdaptiveMergePolicy::is_need_mlog_purge_catchup_reason(merge_reason_)
             || ObAdaptiveMergePolicy::TOO_MANY_INC_MAJOR == merge_reason_) {
       if (OB_FAIL(choose_scn_for_user_request(max_sync_medium_scn, medium_info, result, schema_version))) {
         LOG_WARN("failed to choose medium scn for user request", K(ret), KPC(this));
@@ -1677,6 +1681,20 @@ int ObMediumCompactionScheduleFunc::fill_mds_filter_info(
   return ret;
 }
 
+int ObMediumCompactionScheduleFunc::try_refresh_mlog_purge_scn(const int64_t &read_snapshot)
+{
+  int ret = OB_SUCCESS;
+  if (read_snapshot < mlog_purge_scn_read_snapshot_) {
+    if (OB_FAIL(ObMLogPurgeInfoHelper::get_mlog_purge_scn(
+          table_id_, read_snapshot, mlog_latest_purge_scn_))) {
+      LOG_WARN("failed to get mlog purge scn", KR(ret), K(table_id_), K(read_snapshot));
+    } else {
+      mlog_purge_scn_read_snapshot_ = read_snapshot;
+    }
+  }
+  return ret;
+}
+
 int ObMediumCompactionScheduleFunc::fill_for_ttl_in_partial_update(
   const int64_t ttl_newest_commit_version,
   ObMediumCompactionInfo &medium_info)
@@ -1701,8 +1719,8 @@ int ObMediumCompactionScheduleFunc::fill_for_ttl_in_partial_update(
 int ObMediumCompactionScheduleFunc::fill_mlog_purge_scn(ObMediumCompactionInfo &medium_info)
 {
   int ret = OB_SUCCESS;
-  int64_t mlog_purge_scn = 0;
-  if (ObCompactionTTLUtil::DISABLE_MLOG_PURGE_IN_COMPACTION || medium_info.data_version_ < ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION) {
+  if (!medium_info.storage_schema_.is_mlog_purge_by_compaction() ||
+      medium_info.data_version_ < ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION) {
     medium_info.contain_mds_filter_info_ = false;
   } else if (!medium_info.storage_schema_.is_mlog_table()) {
     ret = OB_NOT_SUPPORTED;
@@ -1710,12 +1728,16 @@ int ObMediumCompactionScheduleFunc::fill_mlog_purge_scn(ObMediumCompactionInfo &
   } else if (OB_UNLIKELY(OB_INVALID_ID == table_id_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table id is not inited", KR(ret), K(table_id_));
-  } else if (OB_FAIL(ObMLogPurgeInfoHelper::get_mlog_purge_scn(table_id_, medium_info.medium_snapshot_, mlog_purge_scn))) {
-    LOG_WARN("failed to get mlog purge scn", KR(ret), K(table_id_));
-  } else if (0 == mlog_purge_scn) {
+  } else if (OB_FAIL(try_refresh_mlog_purge_scn(medium_info.medium_snapshot_))) {
+    LOG_WARN("failed to get mlog purge scn", KR(ret), K(table_id_), K(medium_info.medium_snapshot_));
+  } else if (0 == mlog_latest_purge_scn_) {
     medium_info.contain_mds_filter_info_ = false;
-  } else if (OB_FAIL(medium_info.mds_filter_info_.init(medium_info.data_version_, mlog_purge_scn))) {
-    LOG_WARN("failed to init mds filter info", KR(ret), K(mlog_purge_scn));
+  } else if (OB_UNLIKELY(OB_INVALID_SCN_VAL == mlog_latest_purge_scn_)) {
+    ret = OB_ERR_UNEXPECTED;
+    medium_info.contain_mds_filter_info_ = false;
+    LOG_WARN("mlog_latest_purge_scn_ should be inited here", KR(ret), K(mlog_latest_purge_scn_));
+  } else if (OB_FAIL(medium_info.mds_filter_info_.init(medium_info.data_version_, mlog_latest_purge_scn_))) {
+    LOG_WARN("failed to init mds filter info", KR(ret), K(mlog_latest_purge_scn_));
   } else {
     medium_info.contain_mds_filter_info_ = true;
   }

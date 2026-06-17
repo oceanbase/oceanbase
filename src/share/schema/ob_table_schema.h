@@ -735,6 +735,7 @@ public:
   virtual inline bool is_index_table() const = 0;
   virtual inline bool has_ttl_definition() const { return false; }
   virtual inline bool was_compaction_ttl() const { return false; }
+  virtual inline bool is_mlog_purge_by_compaction() const { return false; }
   virtual int get_is_column_store(bool &is_column_store) const { UNUSED(is_column_store); return common::OB_NOT_SUPPORTED; }
 
   virtual int get_store_column_ids(common::ObIArray<ObColDesc> &column_ids, const bool full_col) const
@@ -1817,6 +1818,8 @@ public:
   bool is_external_table_auto_refresh_off() const { return get_external_table_auto_refresh() == 0; }
   virtual bool is_oracle_tmp_table_v2_index_table() const override { return (table_flags_ & ORCL_TEMP_TABLE_V2_INDEX_TABLE_FLAG) != 0; }
   void set_oracle_tmp_table_v2_index_table() { table_flags_ |= ORCL_TEMP_TABLE_V2_INDEX_TABLE_FLAG; }
+  virtual bool is_mlog_purge_by_compaction() const override { return (table_flags_ & MLOG_PURGE_BY_COMPACTION_FLAG) != 0; }
+  void set_mlog_purge_by_compaction(const bool enable) { add_or_del_table_flag(MLOG_PURGE_BY_COMPACTION_FLAG, enable); }
   inline void set_name_generated_type(const ObNameGeneratedType is_sys_generated) {
     name_generated_type_ = is_sys_generated;
   }
@@ -2281,7 +2284,8 @@ public:
   bool has_lob_aux_table() const { return (aux_lob_meta_tid_ != OB_INVALID_ID && aux_lob_piece_tid_ != OB_INVALID_ID); }
   bool has_mlog_table() const { return (OB_INVALID_ID != mlog_tid_); }
   bool has_tmp_mlog_table() const { return (OB_INVALID_ID != tmp_mlog_tid_); }
-  bool required_by_mview_refresh() const { return has_mlog_table() || table_referenced_by_fast_lsm_mv(); }
+  bool required_by_mv_fast_refresh() const { return has_mlog_table() || table_referenced_by_fast_lsm_mv(); }
+  bool required_by_mv_refresh() const { return required_by_mv_fast_refresh() || table_referenced_by_mv(); }
   // ObColumnIterByPrevNextID's column id is not in order, it means table has add column instant and return true
   int has_add_column_instant(bool &add_column_instant) const;
   int get_unused_column_ids(common::ObIArray<uint64_t> &column_ids) const;
@@ -3426,14 +3430,42 @@ int ObTableSchema::build_mlog_table_name(Allocator &allocator,
   return ret;
 }
 
-class ObColumnIterByPrevNextID
+class ObColumnSchemaIterator
+{
+public:
+  ObColumnSchemaIterator() {}
+  virtual ~ObColumnSchemaIterator() {}
+  virtual int next() = 0;
+  virtual bool is_end() const = 0;
+  virtual const ObColumnSchemaV2 *operator*() = 0;
+};
+
+class ObColumnIterByColumnID : public ObColumnSchemaIterator
+{
+public:
+  explicit ObColumnIterByColumnID(const ObTableSchema &table_schema) :
+      table_schema_(table_schema), iter_(NULL) {}
+  virtual ~ObColumnIterByColumnID() {}
+  virtual int next() override;
+  virtual bool is_end() const override { return iter_ == table_schema_.column_end(); }
+  virtual const ObColumnSchemaV2 *operator*() override;
+private:
+  const ObTableSchema &table_schema_;
+  ObTableSchema::const_column_iterator iter_;
+};
+
+class ObColumnIterByPrevNextID : public ObColumnSchemaIterator
 {
 public:
   explicit ObColumnIterByPrevNextID(const ObTableSchema &table_schema) :
       is_end_(false), table_schema_(table_schema),
       last_column_schema_(NULL), last_iter_(NULL) { }
-  ~ObColumnIterByPrevNextID() {}
+  virtual ~ObColumnIterByPrevNextID() {}
+  virtual int next() override;
+  virtual bool is_end() const override { return is_end_; }
+  virtual const ObColumnSchemaV2 *operator*() override;
   int next(const ObColumnSchemaV2 *&column_schema);
+private:
   const ObColumnSchemaV2 *get_first_column() const;
 private:
   bool is_end_;
@@ -3442,6 +3474,23 @@ private:
   ObTableSchema::const_column_iterator last_iter_;
 };
 
+// Iterate all non-rowkey columns in storage order. Rowkey columns are skipped by default.
+// When contain_rowkey is set to true, rowkey columns will be included,
+// but their order is not guaranteed
+class ObNonRowkeyStoreColumnIterator
+{
+public:
+  ObNonRowkeyStoreColumnIterator(const ObTableSchema &table_schema, bool contain_rowkey = false);
+  ~ObNonRowkeyStoreColumnIterator() {}
+  int next();
+  bool is_end() const;
+  const ObColumnSchemaV2 *operator*();
+private:
+  ObColumnIterByColumnID column_id_iter;
+  ObColumnIterByPrevNextID prev_next_id_iter;
+  ObColumnSchemaIterator *iter;
+  bool contain_rowkey_;
+};
 
 inline bool ObSimpleTableSchemaV2::is_final_invalid_index() const
 {

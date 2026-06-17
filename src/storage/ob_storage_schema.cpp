@@ -1832,15 +1832,15 @@ int ObStorageSchema::generate_column_array(
     STORAGE_LOG(WARN, "invalid schema", K(ret), K(input_schema));
   }
 
-  ObTableSchema::const_column_iterator iter = input_schema.column_begin();
-  ObColumnSchemaV2 *col = NULL;
+  const ObColumnSchemaV2 *col = NULL;
   if (FAILEDx(column_array_.reserve(input_schema.get_column_count()))) {
     STORAGE_LOG(WARN, "Fail to reserve column array", K(ret));
   }
   int64_t col_idx = 0;
   int64_t col_cnt_in_sstable = 0;
   ObSEArray<share::schema::ObSkipIndexAttrWithId, 16> tmp_skip_array;
-  for ( ; OB_SUCC(ret) && iter != input_schema.column_end(); iter++) {
+  ObNonRowkeyStoreColumnIterator iter(input_schema, true/*contain_rowkey*/);
+  while (OB_SUCC(ret) && OB_SUCC(iter.next()) && !iter.is_end()) {
     if (OB_ISNULL(col = *iter)) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "The column is NULL", K(col));
@@ -2390,6 +2390,7 @@ int ObStorageSchema::copy_from(const share::schema::ObMergeSchema &input_schema)
     skip_index_level_ = input_schema.get_skip_index_level();
     has_ttl_definition_ = input_schema.has_ttl_definition();
     was_compaction_ttl_ = input_schema.was_compaction_ttl();
+    is_mlog_purge_by_compaction_ = input_schema.is_mlog_purge_by_compaction();
   }
 
   return ret;

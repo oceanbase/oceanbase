@@ -178,6 +178,66 @@ int ObLocalSessionVar::get_different_vars_from_session(const sql::ObBasicSession
   return ret;
 }
 
+int ObLocalSessionVar::apply_different_vars_to_session(ObBasicSessionInfo &session,
+                                                       ObIAllocator *saved_vals_alloc,
+                                                       ObIArray<ObSessionSysVar> *saved_old_values) const
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<const ObSessionSysVar *, 8> diff_vars;
+  ObSEArray<ObObj, 8> cur_var_vals;
+  const bool need_save_old_values = NULL != saved_old_values;
+  if (OB_UNLIKELY((NULL == saved_vals_alloc) != (NULL == saved_old_values))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("saved_vals_alloc and saved_old_values should be both null or both not null", K(ret), K(saved_vals_alloc), K(saved_old_values));
+  } else if (OB_FAIL(get_different_vars_from_session(&session, diff_vars, cur_var_vals))) {
+    LOG_WARN("fail to get different vars from session", K(ret));
+  } else if (OB_UNLIKELY(cur_var_vals.count() != diff_vars.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected array size", K(ret), K(cur_var_vals.count()), K(diff_vars.count()));
+  } else if (need_save_old_values) {
+    saved_old_values->reuse();
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < diff_vars.count(); ++i) {
+    const ObSessionSysVar *var = diff_vars.at(i);
+    if (OB_ISNULL(var)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret), K(i));
+    } else if (need_save_old_values) {
+      ObSessionSysVar tmp_var;
+      tmp_var.type_ = var->type_;
+      if (OB_FAIL(saved_old_values->push_back(tmp_var))) {
+        LOG_WARN("fail to push back sys var", K(ret));
+      } else {
+        ObSessionSysVar &pushed_var = saved_old_values->at(saved_old_values->count() - 1);
+        if (OB_FAIL(deep_copy_obj(*saved_vals_alloc, cur_var_vals.at(i), pushed_var.val_))) {
+          saved_old_values->pop_back();
+          LOG_WARN("fail to deep copy old var val", K(ret));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(session.update_sys_variable(var->type_, var->val_))) {
+      LOG_WARN("fail to update sys var", K(ret), K(var->type_));
+    } else {
+      LOG_INFO("use solidified var to update sys var", K(var->type_), K(var->val_));
+    }
+  }
+  return ret;
+}
+
+int ObLocalSessionVar::restore_saved_session_vars(ObBasicSessionInfo &session,
+                                                  const ObIArray<ObSessionSysVar> &saved_old_values)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < saved_old_values.count(); ++i) {
+    const ObSessionSysVar &var = saved_old_values.at(i);
+    if (OB_FAIL(session.update_sys_variable(var.type_, var.val_))) {
+      LOG_WARN("fail to restore sys var", K(ret), K(var.type_));
+    }
+  }
+  return ret;
+}
+
 int ObLocalSessionVar::check_var_same_with_session(const sql::ObBasicSessionInfo &session,
                                                    const ObSessionSysVar *local_var,
                                                    bool &is_same,

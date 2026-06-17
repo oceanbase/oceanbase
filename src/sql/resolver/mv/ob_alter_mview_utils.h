@@ -30,19 +30,16 @@ public:
                                   ObAlterTableStmt *alter_table_stmt,
                                   common::ObIAllocator *allocator,
                                   ObResolverParams &resolver_params);
-  static int check_column_option_for_mlog_master(const ObTableSchema &table_schema,
+  static int check_column_option_for_mv_base_table(const ObTableSchema &table_schema,
+                                                   const ObItemType type);
+  static int check_action_node_for_mv_base_table(const ObTableSchema &table_schema,
                                                  const ObItemType type);
-  static int check_action_node_for_mlog_master(const ObTableSchema &table_schema,
-                                               const ObItemType type);
-  static int check_partition_option_for_mlog_master(const ObTableSchema &table_schema,
-                                                    const ObItemType type);
-private:
-  template<typename T>
-  static int resolve_interval_node(const ParseNode &node,
-                                   ObSQLSessionInfo *session_info,
-                                   common::ObIAllocator *allocator,
-                                   ObResolverParams &resolver_params,
-                                   T &arg);
+  static int check_partition_option_for_mv_base_table(const ObTableSchema &table_schema,
+                                                      const ObItemType type);
+  static int check_database_referenced_by_mv_from_other_database(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const uint64_t database_id);
 };
 
 } // namespace sql

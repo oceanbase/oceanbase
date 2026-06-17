@@ -44,9 +44,19 @@ int ObMVPrinter::print_mv_operators(ObIAllocator &str_alloc,
     LOG_WARN("failed to init mv printer", K(ret));
   } else if (OB_FAIL(gen_mv_operator_stmts(dml_stmts))) {
     LOG_WARN("failed to print mv operators", K(ret));
-  } else if (OB_UNLIKELY(dml_stmts.empty())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected empty array", K(ret), K(dml_stmts.empty()));
+  } else if (dml_stmts.empty()) {
+    // only when all tables are the proctime table or without delta data, the dml_stmts are empty
+    for (int64_t i = 0; OB_SUCC(ret) && i < mv_def_stmt_.get_table_size(); ++i) {
+      const TableItem *table = mv_def_stmt_.get_table_item(i);
+      if (OB_ISNULL(table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null table item", K(ret), K(i));
+      } else if (OB_UNLIKELY(!is_table_skip_refresh(*table)
+                             && !is_table_without_delta_data(*table))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("there is a table that needs to refresh, but gets unexpected empty refresh dml stmts", K(ret), KPC(table));
+      }
+    }
   } else if (OB_FAIL(operators.prepare_allocate(dml_stmts.count()))) {
     LOG_WARN("failed to prepare allocate ObSqlString arrays", K(ret), K(dml_stmts.count()));
   } else {
@@ -58,7 +68,10 @@ int ObMVPrinter::print_mv_operators(ObIAllocator &str_alloc,
                                               dml_stmts.at(i),
                                               operators.at(i),
                                               mv_def_stmt_.get_query_ctx()->sql_schema_guard_.get_schema_guard(),
-                                              obj_print_params))) {
+                                              obj_print_params,
+                                              NULL, /* param_store */
+                                              NULL, /* session */
+                                              true /* c_style, true for trans.write() */))) {
         LOG_WARN("fail to reconstruct sql", K(ret));
       } else {
         LOG_TRACE("generate one mv operator", K(i), K(operators.at(i)));
@@ -1378,10 +1391,26 @@ int ObMVPrinter::add_dynamic_sampling_hint(ObDMLStmt *stmt,
   return ret;
 }
 
-bool ObMVPrinter::is_table_skip_refresh(const TableItem &table) const
+bool ObMVPrinter::is_table_without_delete(const TableItem &table) const
 {
-  // TODO we can skip refresh for tables that do not contain delta data
-  return table.is_mv_proctime_table_;
+  bool without_delete = false;
+  if (table.is_basic_table()
+      && NULL != ctx_.refresh_info_
+      && NULL != ctx_.refresh_info_->tables_without_delete_) {
+    without_delete = ObOptimizerUtil::find_item(*ctx_.refresh_info_->tables_without_delete_, table.ref_id_);
+  }
+  return without_delete;
+}
+
+bool ObMVPrinter::is_table_without_insert(const TableItem &table) const
+{
+  bool without_insert = false;
+  if (table.is_basic_table()
+      && NULL != ctx_.refresh_info_
+      && NULL != ctx_.refresh_info_->tables_without_insert_) {
+    without_insert = ObOptimizerUtil::find_item(*ctx_.refresh_info_->tables_without_insert_, table.ref_id_);
+  }
+  return without_insert;
 }
 
 int ObMVPrinter::print_complete_refresh_mview_operator(ObRawExprFactory &expr_factory,

@@ -67,10 +67,21 @@ private:
   TableReferencedColumnsMap table_referenced_columns_map_;
 };
 
+struct MvCheckerExtraInfo {
+  MvCheckerExtraInfo() : mlog_tables_(),
+                         union_all_marker_idx_(OB_INVALID_INDEX),
+                         child_refresh_types_() {}
+  ObSEArray<std::pair<const TableItem*, const share::schema::ObTableSchema*>, 4>  mlog_tables_;
+  // for union all mv
+  int64_t union_all_marker_idx_;
+  ObSEArray<ObMVRefreshableType, 4> child_refresh_types_;
+};
+
 class ObMVChecker
 {
   public:
-  explicit ObMVChecker(const ObSelectStmt &stmt,
+  explicit ObMVChecker(uint64_t tenant_id,
+                       const ObSelectStmt &stmt,
                        ObRawExprFactory &expr_factory,
                        ObSQLSessionInfo *session_info,
                        const ObTableSchema &mv_container_table_schema,
@@ -80,7 +91,8 @@ class ObMVChecker
                        common::ObIArray<std::pair<ObRawExpr*, int64_t>> &fast_refresh_dependent_columns,
                        ObTableReferencedColumnsInfo *table_referenced_columns_info = nullptr)
 
-    : stmt_(stmt),
+    : tenant_id_(tenant_id),
+      stmt_(stmt),
       refresh_type_(OB_MV_REFRESH_INVALID),
       expr_factory_(expr_factory),
       session_info_(session_info),
@@ -96,6 +108,7 @@ class ObMVChecker
   ~ObMVChecker() {}
   void reset();
   static int check_mv_fast_refresh_type(const ObSelectStmt *view_stmt,
+                                        const bool need_pre_process_view_stmt,
                                         ObIAllocator *allocator,
                                         ObSchemaChecker *schema_checker,
                                         ObStmtFactory *stmt_factory,
@@ -106,19 +119,18 @@ class ObMVChecker
                                         ObMVRefreshableType &refresh_type,
                                         FastRefreshableNotes &note,
                                         ObIArray<std::pair<ObRawExpr*, int64_t>> &fast_refresh_dependent_columns,
-                                        ObIArray<obrpc::ObMVRequiredColumnsInfo> &required_columns_infos);
+                                        ObTableReferencedColumnsInfo *table_referenced_columns_info = NULL,
+                                        MvCheckerExtraInfo *extra_info = NULL);
   int check_mv_refresh_type();
   int check_mv_stmt_refresh_type(const ObSelectStmt &stmt, ObMVRefreshableType &refresh_type);
-  ObMVRefreshableType get_refersh_type() const { return refresh_type_; };
+  ObMVRefreshableType get_refresh_type() const { return refresh_type_; };
   static bool is_basic_aggr(const ObItemType aggr_type);
   static bool is_group_recalculate_aggr(const ObItemType aggr_type);
   static int extract_group_recalculate_aggrs(const ObIArray<ObAggFunRawExpr*> &all_aggrs,
                                              ObIArray<ObAggFunRawExpr*> &group_recalculate_aggrs);
-  static int get_dependent_aggr_of_fun_sum(const ObSelectStmt &stmt, const ObRawExpr *sum_param, const ObAggFunRawExpr *&dep_aggr);
   const ObSelectStmt &get_stmt() const {  return stmt_; }
   const MlogSchemaPairIArray &get_mlog_tables() const {  return mlog_tables_; }
   const ObTableSchema &get_mv_container_table_schema() const {  return mv_container_table_schema_;  }
-  const ObIArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>> &get_expand_aggrs() const {  return expand_aggrs_;  }
   int64_t get_union_all_marker_idx() const {  return marker_idx_;  }
   const ObIArray<ObMVRefreshableType> &get_child_refresh_types() const {  return child_refresh_types_;  }
   static int pre_process_view_stmt(ObRawExprFactory *expr_factory,
@@ -129,6 +141,10 @@ class ObMVChecker
   static int get_table_rowkey_ids(const ObTableSchema *table_schema,
                                   ObSchemaGetterGuard *schema_guard,
                                   ObIArray<uint64_t> &rowkey_ids);
+  static int get_equivalent_count_aggr(const ObSelectStmt &stmt,
+                                       const ObRawExpr *count_param,
+                                       ObSQLSessionInfo *session_info,
+                                       int64_t &select_idx);
 private:
   int check_mv_stmt_refresh_type_basic(const ObSelectStmt &stmt, bool &is_valid);
   int check_mv_join_type(const ObSelectStmt &stmt, bool &is_valid_join, bool &has_outer_join);
@@ -161,20 +177,17 @@ private:
   int is_standard_select_in_group_by(const hash::ObHashSet<uint64_t> &expr_set,
                                      const ObRawExpr *expr,
                                      bool &is_standard);
-  int check_and_expand_mav_aggrs(const ObSelectStmt &stmt,
-                                 ObIArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>> &expand_aggrs,
-                                 bool &is_valid);
-  int check_and_expand_mav_aggr(const ObSelectStmt &stmt,
-                                ObAggFunRawExpr *aggr,
-                                ObIArray<ObAggFunRawExpr*> &all_aggrs,
-                                ObIArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>> &expand_aggrs,
-                                bool &is_valid);
-  int try_replace_equivalent_count_aggr(const ObSelectStmt &stmt,
-                                        const int64_t orig_aggr_count,
-                                        ObIArray<ObAggFunRawExpr*> &all_aggrs,
-                                        ObRawExpr *&replace_expr);
+  int check_mav_aggr_items(const ObSelectStmt &stmt,
+                           bool &is_valid);
+  int check_mav_aggr_item(const ObSelectStmt &stmt,
+                          ObAggFunRawExpr *aggr,
+                          bool &is_valid);
+  int collect_equivalent_count_aggr(const ObSelectStmt &stmt,
+                                    const ObRawExpr *count_param);
   static int get_equivalent_null_check_param(const ObRawExpr *param_expr, const ObRawExpr *&check_param);
-  static int get_mav_default_count(const ObIArray<ObAggFunRawExpr*> &aggrs, const ObAggFunRawExpr *&count_aggr);
+  int collect_mav_default_count(const ObSelectStmt &stmt);
+  static int find_default_count_expr(const ObSelectStmt &stmt,
+                                     int64_t &select_idx);
   int check_mjv_refresh_type(const ObSelectStmt &stmt, ObMVRefreshableType &refresh_type);
   int check_join_mv_fast_refresh_valid(const ObSelectStmt &stmt,
                                        const bool for_join_mav,
@@ -198,16 +211,16 @@ private:
   static const char *get_table_type_str(const TableItem::TableType type);
   static bool is_child_refresh_type_supported(const ObMVRefreshableType refresh_type);
   int check_union_all_refresh_type(const ObSelectStmt &stmt, ObMVRefreshableType &refresh_type);
-  int check_union_all_mv_marker_column_valid(const ObSelectStmt &stmt, bool &is_valid);
+  int collect_union_all_mv_marker_column(const ObSelectStmt &stmt);
   inline bool is_child_stmt(const ObSelectStmt *stmt) const { return &stmt_ != stmt; }
   int add_dep_columns_no_dup(ObRawExpr* expr);
 
 private:
+  uint64_t tenant_id_;
   const ObSelectStmt &stmt_;
   ObMVRefreshableType refresh_type_;
   // map the table in mv to mlog, use physical table id
   common::ObSEArray<std::pair<const TableItem*, const share::schema::ObTableSchema*>, 4> mlog_tables_;
-  common::ObSEArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>, 4> expand_aggrs_;
   ObRawExprFactory &expr_factory_;
   ObSQLSessionInfo *session_info_;
   const ObTableSchema &mv_container_table_schema_;
@@ -217,7 +230,10 @@ private:
   // union all mv child refreshable type
   common::ObSEArray<ObMVRefreshableType, 4> child_refresh_types_;
   ObTableReferencedColumnsInfo *table_referenced_columns_info_;
-  // automatically generated invisible columns for refresh
+  // refresh_dep_columns_: automatically generated invisible columns for refresh
+  // for the non-set query, ObRawExpr is the dependent column, int64_t is always OB_INVALID_INDEX(-1)
+  // for the set query's child dependency, ObRawExpr is the dependent column, int64_t is the index of set query(>=0)
+  // for the set query's marker column, ObRawExpr is a const expr(0), int64_t is OB_INVALID_INDEX(-1)
   common::ObIArray<std::pair<ObRawExpr*, int64_t>> &refresh_dep_columns_;
   int64_t stmt_idx_; // union all child mv stmt idx in select list
   DISALLOW_COPY_AND_ASSIGN(ObMVChecker);

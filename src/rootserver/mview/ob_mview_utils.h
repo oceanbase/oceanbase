@@ -12,6 +12,10 @@
 
 namespace oceanbase
 {
+namespace share
+{
+class SCN;
+}
 namespace rootserver
 {
 
@@ -34,6 +38,10 @@ public:
                                     const share::schema::ObTableSchema *base_table_schema,
                                     int64_t &task_id);
 
+  static int add_missing_columns_to_mlog(const uint64_t tenant_id,
+                                         ObIArray<ObString> &missing_columns,
+                                         share::schema::ObSchemaGetterGuard &schema_guard,
+                                         const share::schema::ObTableSchema *base_table_schema);
   static int check_mview_complete_refresh_need_gather_stats(const uint64_t tenant_id,
                                                             const uint64_t tenant_data_version,
                                                             ObSchemaGetterGuard &schema_guard,
@@ -44,15 +52,13 @@ public:
                                                  const int64_t mview_table_id,
                                                  const int64_t container_table_id,
                                                  ObSchemaGetterGuard &schema_guard,
-                                                 const int64_t snapshot_version,
-                                                 const uint64_t mview_target_data_sync_scn,
+                                                 const ObString &select_sql,
                                                  const int64_t execution_id,
                                                  const int64_t task_id,
                                                  const int64_t parallelism,
                                                  const bool use_schema_version_hint_for_src_table,
                                                  const bool need_gather_stats,
                                                  const ObIArray<ObBasedSchemaObjectInfo> &based_schema_object_infos,
-                                                 const ObString &mview_select_sql,
                                                  ObSqlString &sql_string);
 
   static int check_schema_version_and_generate_ddl_schema_hint(const uint64_t tenant_id,
@@ -114,6 +120,12 @@ public:
                                          const bool is_oracle_mode,
                                          ObSqlString &column_list_str,
                                          ObIAllocator &allocator);
+  static int get_relevent_mviews(common::ObISQLClient &sql_client,
+                                 share::schema::ObSchemaGetterGuard &schema_guard,
+                                 const uint64_t tenant_id,
+                                 const share::schema::ObTableSchema *base_table_schema,
+                                 ObIArray<uint64_t> &relevent_mviews,
+                                 const uint64_t excluded_mview_id = OB_INVALID_ID);
 };
 
 class ObMViewAutoMlogEventInfo

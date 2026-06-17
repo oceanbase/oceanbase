@@ -139,23 +139,25 @@ public:
   bool operator==(const ObTableStoreCache &other) const;
   bool is_inited() const { return is_inited_; }
   inline bool is_global_index_table() const { return is_global_index_table_; }
+  inline bool is_mlog_purge_by_compaction() const { return is_mlog_purge_by_compaction_; }
   inline bool need_progressive_merge() const { return need_progressive_merge_; }
 
   TO_STRING_KV(K_(version), K_(length), K_(last_major_snapshot_version), K_(major_table_cnt),
       K_(minor_table_cnt), K_(recycle_version), K_(last_major_column_count),
       K_(last_major_macro_block_cnt), K_(last_major_row_cnt), K_(inc_row_cnt),
       K_(is_row_store), K_(is_tablet_referenced_by_collect_mv),
-      K_(is_global_index_table), K_(need_progressive_merge),
+      K_(is_global_index_table), K_(need_progressive_merge), K_(is_mlog_purge_by_compaction),
       K_(last_major_compressor_type), K_(last_major_latest_row_store_type),
       K_(last_major_store_type), K_(unmerged_inc_major_cnt), K_(min_recycle_scn),
-      K_(max_upper_trans_version), K_(mds_minor_table_cnt), K_(max_sync_medium_scn), K_(is_inited));
+      K_(max_upper_trans_version), K_(mds_minor_table_cnt), K_(max_sync_medium_scn),
+      K_(mlog_last_purge_scn), K_(is_inited));
 private:
   int32_t version_;
   int32_t length_;
 private:
   static const int32_t TSC_ONE_BIT = 1;
   static const int32_t TSC_ONE_BYTE = 8;
-  static const int32_t TSC_RESERVED = 28;
+  static const int32_t TSC_RESERVED = 27;
 public:
   int64_t last_major_snapshot_version_;
   int64_t major_table_cnt_;
@@ -165,7 +167,7 @@ public:
   int64_t last_major_macro_block_cnt_;
   int64_t last_major_row_cnt_;
   int64_t inc_row_cnt_;
-  union {
+  union { // FARM COMPAT WHITELIST
     int64_t merge_info_;
     struct {
       uint64_t is_row_store_                       : TSC_ONE_BIT;  // not only used by merge, but put here for alignment
@@ -176,6 +178,7 @@ public:
       uint64_t last_major_latest_row_store_type_   : TSC_ONE_BYTE; // for progressive merge
       uint64_t last_major_store_type_              : TSC_ONE_BYTE; // for cs replica
       uint64_t unmerged_inc_major_cnt_             : TSC_ONE_BYTE; // for adaptive compaction
+      uint64_t is_mlog_purge_by_compaction_        : TSC_ONE_BIT;  // FARM COMPAT WHITELIST
       uint64_t reserved_                           : TSC_RESERVED;
     };
   };
@@ -183,6 +186,7 @@ public:
   int64_t max_upper_trans_version_;  //max upper trans version
   int64_t mds_minor_table_cnt_;
   int64_t max_sync_medium_scn_;
+  int64_t mlog_last_purge_scn_; //last mlog purge scn
   //no need serialize add below
 private:
   bool is_inited_;
@@ -251,6 +255,7 @@ public:
   inline int64_t get_minor_table_count() const { return table_store_cache_.minor_table_cnt_; }
   inline int64_t get_unmerged_inc_major_count() const { return table_store_cache_.unmerged_inc_major_cnt_; }
   inline int64_t get_recycle_version() const { return table_store_cache_.recycle_version_; }
+  inline int64_t get_mlog_last_purge_scn() const { return table_store_cache_.mlog_last_purge_scn_; }
   inline int64_t get_last_major_column_count() const { return table_store_cache_.last_major_column_count_; }
   inline int64_t get_last_major_total_macro_block_count() const { return table_store_cache_.last_major_macro_block_cnt_; }
   inline int64_t get_last_major_row_count() const { return table_store_cache_.last_major_row_cnt_; }
@@ -270,6 +275,7 @@ public:
   inline bool is_user_data_table() const { return tablet_meta_.table_store_flag_.is_user_data_table(); }
   inline bool is_last_major_column_store() const { return table_store_cache_.is_last_major_column_store(); }
   inline bool is_last_major_row_store() const { return table_store_cache_.is_last_major_row_store(); }
+  inline bool is_mlog_purge_by_compaction() const { return table_store_cache_.is_mlog_purge_by_compaction(); }
   inline SCN get_min_recycle_scn() const { return table_store_cache_.min_recycle_scn_; }
   inline int64_t get_mds_minor_table_count() const { return table_store_cache_.mds_minor_table_cnt_; }
   int get_mds_table_rec_scn(share::SCN &rec_scn) const;

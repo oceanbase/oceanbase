@@ -330,6 +330,7 @@ public:
     is_alter_nested_refresh_mode_ = true;
     nested_refresh_mode_ = nested_refresh_mode;
   }
+
   void set_table_dop(int64_t table_dop)
   {
     is_alter_table_dop_ = true;
@@ -355,6 +356,7 @@ public:
   const ObString &get_next_time_expr() const { return next_time_expr_; }
   bool is_alter_nested_refresh_mode() const { return is_alter_nested_refresh_mode_; }
   share::schema::ObMVNestedRefreshMode get_nested_refresh_mode() const { return nested_refresh_mode_; }
+
   bool is_alter_table_dop() const { return is_alter_table_dop_; }
   int64_t get_table_dop() const { return table_dop_; }
   bool is_alter_compat_version() const { return is_alter_compat_version_; }

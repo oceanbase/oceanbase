@@ -118,6 +118,7 @@ protected:
   }
   virtual int prepare_compaction_filter() override
   { return alloc_mds_info_compaction_filter(); }
+  virtual int64_t get_recycle_version() const override;
 };
 } // namespace compaction
 } // namespace oceanbase

@@ -84,45 +84,12 @@ int ObMViewTransaction::ObSessionParamSaved::save(
         }
       }
       if (OB_SUCC(ret) && nullptr != mv_solidified_session_var) {
-        ObSEArray<const ObSessionSysVar*, 8> mv_solidified_diff_vars;
-        ObSEArray<ObObj, 8> cur_var_vals;
-        if (OB_FAIL(mv_solidified_session_var->get_different_vars_from_session(session_info_,
-                                               mv_solidified_diff_vars, cur_var_vals))) {
-          LOG_WARN("fail to get different vars from session", KR(ret), KP(mv_solidified_session_var));
-        } else if (mv_solidified_diff_vars.count() > 0) {
-          if (cur_var_vals.count() != mv_solidified_diff_vars.count()) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected array size", K(ret), K(cur_var_vals.count()), K(mv_solidified_diff_vars.count()));
-          } else {
-            ARRAY_FOREACH(mv_solidified_diff_vars, i) {
-              const ObSessionSysVar *var = mv_solidified_diff_vars.at(i);
-              if (OB_ISNULL(var)) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("var is NULL", KR(ret));
-              } else {
-                ObSessionSysVar tmp_var;
-                tmp_var.type_ = var->type_;
-                if (OB_FAIL(cur_session_vars_.push_back(tmp_var))) {
-                  LOG_WARN("fail to push back sys var", KR(ret));
-                } else {
-                  // Deep copy the old variable value after push_back to avoid dangling pointer issues
-                  ObSessionSysVar &pushed_var = cur_session_vars_.at(cur_session_vars_.count() - 1);
-                  if (OB_FAIL(deep_copy_obj(allocator_, cur_var_vals.at(i), pushed_var.val_))) {
-                    LOG_WARN("fail to deep copy old var val", KR(ret));
-                    cur_session_vars_.pop_back();
-                  } else if (OB_FAIL(session_info_->update_sys_variable(var->type_, var->val_))) {
-                    LOG_WARN("fail to update sys var", KR(ret), K(var->type_));
-                  }
-                }
-              }
-              // for debug
-              if (OB_SUCC(ret)) {
-                LOG_INFO("use solidified var to update sys var", K(var->type_), K(var->val_));
-              }
-            }
-          }
+        if (OB_FAIL(mv_solidified_session_var->apply_different_vars_to_session(*session_info_,
+                                                                               &allocator_,
+                                                                               &cur_session_vars_))) {
+          LOG_WARN("fail to apply solidified vars to session", KR(ret), KP(mv_solidified_session_var));
         }
-        LOG_DEBUG("update sys var", K(mv_solidified_diff_vars), K(mv_solidified_diff_vars.count()));
+        LOG_DEBUG("update sys var", K(cur_session_vars_.count()));
       }
     }
   }
@@ -153,15 +120,9 @@ int ObMViewTransaction::ObSessionParamSaved::restore()
     database_id_ = OB_INVALID_ID;
     session_info_->get_ddl_info().reset();
     // restore cur session vars
-    if (cur_session_vars_.count() > 0) {
-      ARRAY_FOREACH(cur_session_vars_, i) {
-        const ObSessionSysVar &var = cur_session_vars_.at(i);
-        if (OB_FAIL(session_info_->update_sys_variable(var.type_, var.val_))) {
-          LOG_WARN("fail to update sys var", KR(ret), K(var.type_));
-        }
-        // for debug
-        LOG_INFO("restore sys var", K(var.type_), K(var.val_));
-      }
+    if (cur_session_vars_.count() > 0
+        && OB_FAIL(sql::ObLocalSessionVar::restore_saved_session_vars(*session_info_, cur_session_vars_))) {
+      LOG_WARN("fail to restore saved session vars", KR(ret));
     }
     session_info_ = nullptr;
   }

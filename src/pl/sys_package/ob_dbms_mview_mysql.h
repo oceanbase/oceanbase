@@ -29,6 +29,15 @@ enum ObDBMSMViewRefreshParam
   MAX_PARAM
 };
 
+enum ObDBMSMViewRefreshReportParam
+{
+  REPORT_REFRESH_ID = 0,
+  REPORT_MV_NAME = 1,
+  REPORT_TENANT_ID = 2,
+  REPORT_FORMAT = 3,
+  REPORT_MAX_PARAM
+};
+
 public:
   ObDBMSMViewMysql() {}
   virtual ~ObDBMSMViewMysql() {}
@@ -38,6 +47,8 @@ public:
 
   DECLARE_FUNC(purge_log);
   DECLARE_FUNC(refresh);
+  DECLARE_FUNC(refresh_report);
+  DECLARE_FUNC(kill);
   DECLARE_FUNC(set_refresh_params);
 
 #undef DECLARE_FUNC

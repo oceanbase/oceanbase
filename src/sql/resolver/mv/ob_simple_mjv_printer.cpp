@@ -71,7 +71,8 @@ int ObSimpleMJVPrinter::gen_delete_for_simple_mjv(ObIArray<ObDMLStmt*> &dml_stmt
       if (OB_ISNULL(orig_table_items.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null table item", K(ret), K(i));
-      } else if (is_table_skip_refresh(*orig_table_items.at(i))) {
+      } else if (is_table_skip_refresh(*orig_table_items.at(i))
+                 || is_table_without_delete(*orig_table_items.at(i))) {
         // do nothing, no need to gen delete stmt
       } else if (OB_FAIL(gen_exists_cond_for_table(orig_table_items.at(i), mv_table, true, false, true, semi_filter))) {
         LOG_WARN("failed to create simple column exprs", K(ret));
@@ -221,8 +222,9 @@ int ObSimpleMJVPrinter::gen_access_delta_data_for_simple_mjv(ObIArray<ObSelectSt
     if (OB_ISNULL(orig_table_items.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null table item", K(ret), K(i));
-    } else if (is_table_skip_refresh(*orig_table_items.at(i))) {
-      // do nothing, no need to gen exists cond
+    } else if (is_table_skip_refresh(*orig_table_items.at(i))
+               || is_table_without_insert(*orig_table_items.at(i))) {
+      // do nothing, no need to gen access delta data stmt
     } else if (OB_FAIL(gen_one_access_delta_data_for_simple_mjv(i, anti_filters, delta_stmt))) {
       LOG_WARN("failed to generate one access delta data stmt", K(ret));
     } else if (OB_FAIL(access_delta_stmts.push_back(delta_stmt))) {

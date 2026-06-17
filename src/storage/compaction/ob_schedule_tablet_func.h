@@ -3,6 +3,7 @@
 #ifndef OB_STORAGE_COMPACTION_SCHEDULE_TABLET_FUNC_H_
 #define OB_STORAGE_COMPACTION_SCHEDULE_TABLET_FUNC_H_
 #include "storage/compaction/ob_basic_schedule_tablet_func.h"
+#include "storage/compaction_ttl/ob_mlog_purge_info_helper.h"
 namespace oceanbase
 {
 namespace storage
@@ -14,6 +15,23 @@ class ObTabletHandle;
 namespace compaction
 {
 struct ObWindowCompactionDecisionLogInfo;
+struct ObTenantMlogPurgeScnMapCache final
+{
+  static constexpr int64_t MIN_REFRESH_INTERVAL_US = 30 * 1000 * 1000L; // 30s
+  static constexpr int64_t MIN_NEED_REFRESH_MAP_SIZE = 10000;
+  ObTenantMlogPurgeScnMapCache()
+    : map_(),
+      read_snapshot_(-1)
+  {}
+  DISABLE_COPY_ASSIGN(ObTenantMlogPurgeScnMapCache);
+  int refresh_or_init(const int64_t read_snapshot);
+  const MlogPurgeScnMap &get_map() const { return map_; }
+  int64_t get_read_snapshot() const { return read_snapshot_; }
+  bool is_initialized() const { return map_.created(); }
+  bool is_empty() const { return map_.empty(); }
+  MlogPurgeScnMap map_;
+  int64_t read_snapshot_;
+};
 struct ObScheduleTabletFunc : public ObBasicScheduleTabletFunc
 {
   ObScheduleTabletFunc(
@@ -36,6 +54,7 @@ struct ObScheduleTabletFunc : public ObBasicScheduleTabletFunc
     storage::ObTabletHandle &tablet_handle,
     const bool user_request,
     const bool need_load_tablet_status);
+  int refresh_mlog_purge_scn_cache(const int64_t &merge_version);
   const ObTabletStatusCache &get_tablet_status() const { return tablet_status_; }
   virtual const ObCompactionTimeGuard &get_time_guard() const override { return time_guard_; }
   virtual const ObWindowCompactionDecisionLogInfo *get_window_decision_log_info() const { return nullptr; }
@@ -75,6 +94,10 @@ private:
     ObCOMajorMergeStrategy &co_major_merge_strategy,
     ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason,
     int64_t &need_freeze_snapshot);
+  int get_mlog_latest_purge_scn(
+    const storage::ObTablet &tablet,
+    int64_t &latest_mlog_purge_scn);
+
 protected:
   ObTabletStatusCache tablet_status_;
 private:
@@ -82,6 +105,7 @@ private:
   ObSEArray<ObTabletID, 64> clear_stat_tablets_;
   ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason_;
   ObCompactionScheduleMode schedule_mode_;
+  ObTenantMlogPurgeScnMapCache mlog_purge_scn_cache_;
 };
 
 } // namespace compaction

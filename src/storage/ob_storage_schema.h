@@ -266,6 +266,7 @@ public:
   virtual inline bool is_use_bloomfilter() const override { return is_use_bloomfilter_; }
   virtual inline bool has_ttl_definition() const override { return has_ttl_definition_; }
   virtual inline bool was_compaction_ttl() const override { return was_compaction_ttl_; }
+  virtual inline bool is_mlog_purge_by_compaction() const override { return is_mlog_purge_by_compaction_; }
   virtual inline bool is_index_table() const override { return share::schema::is_index_table(table_type_); }
   virtual inline bool is_storage_index_table() const override
   {
@@ -432,7 +433,7 @@ public:
   static const int32_t SS_ONE_BIT = 1;
   static const int32_t SS_HALF_BYTE = 4;
   static const int32_t SS_ONE_BYTE = 8;
-  static const int32_t SS_RESERVED_BITS = 13;
+  static const int32_t SS_RESERVED_BITS = 12;
 
   // STORAGE_SCHEMA_VERSION is for serde compatibility.
   // Currently we do not use "standard" serde function macro,
@@ -464,6 +465,7 @@ public:
       uint32_t enable_macro_block_bloom_filter_  : SS_ONE_BIT;
       uint32_t has_ttl_definition_               : SS_ONE_BIT;
       uint32_t was_compaction_ttl_               : SS_ONE_BIT;
+      uint32_t is_mlog_purge_by_compaction_      : SS_ONE_BIT;
       uint32_t reserved_                         : SS_RESERVED_BITS;
     };
   };

@@ -9,6 +9,7 @@ namespace oceanbase
 {
 namespace storage
 {
+using MlogPurgeScnMap = common::hash::ObHashMap<int64_t, uint64_t>; // mlog id -> last purge scn
 class ObMLogPurgeInfoHelper
 {
 public:
@@ -16,6 +17,9 @@ public:
     const uint64_t mlog_id,
     const int64_t read_snapshot,
     int64_t &last_purge_scn);
+  static int get_recent_tenant_mlog_purge_scns(
+    const int64_t read_snapshot,
+    MlogPurgeScnMap &mlog_purge_scn_map);
 };
 
 } // namespace storage

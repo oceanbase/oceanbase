@@ -37,8 +37,8 @@ public:
   OB_INLINE static bool is_compaction_ttl_merge_engine(const ObMergeEngineType &merge_engine_type)
   {
     return ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT == merge_engine_type
-           || ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY == merge_engine_type
-           || ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE == merge_engine_type;
+          || ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY == merge_engine_type
+          || ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE == merge_engine_type;
   }
 
   OB_INLINE static bool is_rowscn_column(const ObString &column_name)

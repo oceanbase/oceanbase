@@ -378,6 +378,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 593	__all_optstat_catalog_user_prefs	0	201001	1
 594	__all_optstat_catalog_global_prefs	0	201001	1
 596	__all_table_opt_stat_invalidate_plan	0	201001	1
+604	__all_mview_refresh_pending_task	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1
@@ -956,6 +957,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12602	__all_virtual_optstat_catalog_global_prefs	2	201001	1
 12603	__all_virtual_tenant_worker_group	2	201001	1
 12608	__all_virtual_table_opt_stat_invalidate_plan	2	201001	1
+12616	__all_virtual_mview_dep	2	201001	1
+12617	__all_virtual_mview_refresh_pending_task	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
@@ -1571,6 +1574,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21727	DBA_OB_EXTERNAL_PART_COL_STATISTICS	1	201001	1
 21744	DBA_OB_SYS_VARIABLE_HISTORY	1	201001	1
 21745	CDB_OB_SYS_VARIABLE_HISTORY	1	201001	1
+21746	CDB_MVIEW_DEPS	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;
