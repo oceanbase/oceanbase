@@ -1903,7 +1903,7 @@ int ObSqlUdtUtils::convert_sql_udt_to_string(
   ret = OB_NOT_SUPPORTED;
   LOG_WARN("convert sql udt to text not supported without oracle pl", K(ret));
 #else
-  if (OB_UNLIKELY(!sql_udt_obj.is_user_defined_sql_type())) {
+  if (OB_UNLIKELY(!(sql_udt_obj.is_user_defined_sql_type() || (sql_udt_obj.is_string_type() && !has_lob_header)))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("input obj is not user defined sql type", K(ret), K(sql_udt_obj));
   } else if (OB_UNLIKELY(OB_INVALID_ID == udt_id)) {
