@@ -15249,7 +15249,8 @@ int ObLogPlan::negotiate_advisor_table_id(ObLogicalOperator *op)
         } else if (OB_INVALID_ID == dup_table_id) {
           dup_table_id = table_scan->get_table_id();
         }
-      } else {
+      } else if (OB_NOT_NULL(table_scan->get_sharding()) &&
+                 OB_NOT_NULL(table_scan->get_sharding()->get_phy_table_location_info())) {
         if (OB_INVALID_ID == base_table_id) {
           base_table_id = table_scan->get_table_id();
         }
