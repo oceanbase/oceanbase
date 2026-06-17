@@ -465,6 +465,7 @@
 #include "ob_expr_collect_file_list.h"
 #include "ob_expr_md5_concat_ws.h"
 #include "ob_expr_vector_similarity.h"
+#include "ob_expr_get_routine_param_type_str.h"
 
 namespace oceanbase
 {
@@ -1472,6 +1473,9 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprCollationTypeToCollation::eval_collation_type_to_collation, /* 903 */
   ObExprAuditLogPasswordGet::eval_get_encryption_password,            /* 904 */
   ObExprAuditLogPasswordSet::eval_set_encryption_password,            /* 905 */
+  NULL, //ObExprImageType::eval_image_type,                           /* 906 */
+  NULL, // ObExprRandomPartNextval::eval_nextval,                     /* 907 */
+  ObExprGetRoutineParamTypeStr::eval_routine_param_type_str,          /* 908 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

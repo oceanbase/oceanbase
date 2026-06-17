@@ -490,6 +490,7 @@
 #include "sql/engine/expr/ob_expr_array_first.h"
 #include "sql/engine/expr/ob_expr_mysql_proc_info.h"
 #include "sql/engine/expr/ob_expr_get_mysql_routine_parameter_type_str.h"
+#include "sql/engine/expr/ob_expr_get_routine_param_type_str.h"
 #include "sql/engine/expr/ob_expr_ora_login_user.h"
 #include "sql/engine/expr/ob_expr_priv_st_geohash.h"
 #include "sql/engine/expr/ob_expr_priv_st_makepoint.h"
@@ -1418,6 +1419,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprTimestampToScn, EAGER_EVALUATION);
   REG_OP_ORCL(ObExprScnToTimestamp, EAGER_EVALUATION);
   REG_OP_ORCL(ObExprNlsInitCap, SHORT_CIRCUIT_EVALUATION);
+  REG_OP_ORCL(ObExprGetRoutineParamTypeStr, EAGER_EVALUATION);
   //部分内部使用的表达式
   REG_OP_ORCL(ObExprAdd, SHORT_CIRCUIT_EVALUATION);
   REG_OP_ORCL(ObExprAggAdd, SHORT_CIRCUIT_EVALUATION);
