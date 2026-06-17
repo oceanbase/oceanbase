@@ -85,6 +85,8 @@
 #include "rootserver/ob_objpriv_mysql_ddl_service.h"
 #include "storage/ob_micro_block_format_version_helper.h"
 #include "share/ob_heap_organized_table_util.h"
+#include "storage/ddl/ob_partition_random_distribution_helper.h"
+#include "rootserver/ob_random_partition_helper.h"
 #include "rootserver/ob_create_index_on_empty_table_helper.h"
 #include "share/ob_license_utils.h"
 #include "share/compaction_ttl/ob_compaction_ttl_util.h"
@@ -4605,6 +4607,9 @@ int ObDDLService::check_alter_table_partition(const obrpc::ObAlterTableArg &alte
         ddl_type = ObDDLType::DDL_ALTER_PARTITION_BY;
       }
     }
+  } else if (orig_table_schema.is_random_part()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "can't alter partition on random partition table");
   } else {
     if (is_long_running_ddl(ddl_type)) {
       ret = OB_NOT_SUPPORTED;
@@ -4947,9 +4952,11 @@ int ObDDLService::gen_alter_partition_new_table_schema_offline(
   }
   OZ (fill_interval_info_for_offline(alter_table_schema, new_table_schema), new_table_schema);
   if (OB_SUCC(ret) && alter_table_arg.is_alter_partitions_) {
-    // In the alter table partition by range(xxx) (partitions...) case,
-    // it is necessary to reset attributes of old table related to automatic partitioning here
-    new_table_schema.get_part_option().assign_auto_partition_attr(orig_table_schema.get_part_option());
+    if (orig_table_schema.is_random_part() && !new_table_schema.is_random_part()) {
+      // do not inherit auto_part_ / auto_part_size_ from a random-partitioned origin table
+    } else {
+      new_table_schema.get_part_option().assign_auto_partition_attr(orig_table_schema.get_part_option());
+    }
   }
   if (OB_SUCC(ret) && has_drop_column_instant) {
     if (OB_FAIL(redistribute_column_ids(new_table_schema))) {
@@ -6142,6 +6149,174 @@ int ObDDLService::switch_index_name_and_status_for_mlog_table(obrpc::ObAlterTabl
   return ret;
 }
 
+int ObDDLService::drop_index_schema_on_fail(const obrpc::ObAlterTableArg &alter_table_arg)
+{
+  int ret = OB_SUCCESS;
+  ObTableLockOwnerID owner_id;
+  ObArenaAllocator allocator;
+  ObDDLSQLTransaction trans(schema_service_);
+  ObSchemaGetterGuard schema_guard;
+  int64_t refreshed_schema_version = 0;
+  int64_t schema_version = 0;
+  ObIndexBuildTask tmp_task;
+  int64_t pos = 0;
+  ObDropIndexArg *drop_index_arg = nullptr;
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  int64_t task_id = 0;
+  int64_t task_status = 0;
+  int64_t unused_execution_id = 0;
+  int64_t unused_ret_code = 0;
+  int64_t snapshot_version = 0;
+  ObDDLTaskRecord task_record;
+  uint64_t data_table_id = OB_INVALID_ID;
+  uint64_t index_table_id = OB_INVALID_ID;
+  const ObTableSchema *data_table_schema = nullptr;
+  const ObTableSchema *const_index_table_schema = nullptr;
+  ObArray<ObTabletID> latest_data_tablet_ids;
+  ObArray<ObTabletID> inc_data_tablet_ids;
+  DropTableIdHashSet drop_table_set;
+  bool need_drop_lob_for_vec_index = false;
+  uint64_t vec_index_aux_lob_meta_tid = OB_INVALID_ID;
+  uint64_t vec_index_data_table_id = OB_INVALID_ID;
+  int64_t vec_index_task_id = 0;
+  ObTabletAutoincCacheCleaner tablet_autoinc_cleaner(tenant_id);
+  SMART_VAR(ObTableSchema, index_table_schema) {
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("variable is not init", K(ret));
+  } else if (OB_UNLIKELY(1 != alter_table_arg.index_arg_list_.count()) || OB_ISNULL(alter_table_arg.index_arg_list_.at(0))
+      || OB_UNLIKELY(ObIndexArg::DROP_INDEX != alter_table_arg.index_arg_list_.at(0)->index_action_type_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(alter_table_arg.index_arg_list_.count()), K(alter_table_arg.index_arg_list_));
+  } else {
+    drop_index_arg = static_cast<ObDropIndexArg *>(alter_table_arg.index_arg_list_.at(0));
+    tenant_id = drop_index_arg->tenant_id_;
+    task_id = drop_index_arg->task_id_;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get schema guard with version in inner table", KR(ret), KR(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+    LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
+    LOG_WARN("fail to start trans", KR(ret), K(tenant_id), K(refreshed_schema_version));
+  } else if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id, task_id, task_status,
+          unused_execution_id, unused_ret_code, snapshot_version))) {
+    LOG_WARN("failed to select for update", K(ret));
+  } else if (OB_FAIL(ObDDLTaskRecordOperator::get_ddl_task_record(tenant_id, task_id, trans, allocator, task_record))) {
+    LOG_WARN("failed to get ddl task record", K(ret));
+  } else if (OB_FAIL(tmp_task.deserialize_params_from_message(task_record.tenant_id_, task_record.message_.ptr(), task_record.message_.length(), pos))) {
+    LOG_WARN("deserialize params from message failed", KR(ret));
+  } else if (OB_FALSE_IT(data_table_id = task_record.object_id_)) {
+  } else if (OB_FALSE_IT(index_table_id = task_record.target_object_id_)) {
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, data_table_id, data_table_schema))) {
+    LOG_WARN("failed to get data table schema", K(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, index_table_id, const_index_table_schema))) {
+    LOG_WARN("failed to get index table schema", K(ret), K(tenant_id), K(index_table_id));
+  } else if (OB_ISNULL(data_table_schema) || OB_ISNULL(const_index_table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("invalid data table schema", K(ret), K(tenant_id), K(data_table_id), K(index_table_id), KP(data_table_schema), KP(const_index_table_schema));
+  } else if (OB_FAIL(data_table_schema->get_tablet_ids(latest_data_tablet_ids))) {
+    LOG_WARN("failed to get tablet ids", K(ret));
+  } else if (OB_FAIL(get_difference(latest_data_tablet_ids, tmp_task.get_data_tablet_ids(), inc_data_tablet_ids))) {
+    LOG_WARN("failed to get difference", K(ret), K(latest_data_tablet_ids.count()), K(tmp_task.get_data_tablet_ids().count()));
+  } else if (OB_FAIL(ObDDLLock::lock_for_add_drop_index_inc_data_part_in_trans(tenant_id, data_table_id, inc_data_tablet_ids, trans))) {
+    LOG_WARN("failed to lock for add drop index", K(ret), K(data_table_id), K(inc_data_tablet_ids.count()));
+  } else if (OB_FAIL(drop_table_set.create(1))) {
+    LOG_WARN("fail to add create ObHashSet", KR(ret));
+  } else if (OB_FAIL(drop_table_set.set_refactored(index_table_id))) {
+    LOG_WARN("set table_id to hash set failed", K(ret), K(index_table_id));
+  } else if (OB_FAIL(index_table_schema.assign(*const_index_table_schema))) {
+    LOG_WARN("fail to assign table schema", K(ret));
+  } else {
+     // the index of normal redefinition task's hidden table is hidden
+     // the index of table recovery ddl task's hidden table is normal, see data_table_schema's flag
+    index_table_schema.set_in_offline_ddl_white_list(const_index_table_schema->is_user_hidden_table() || (ObTableStateFlag::TABLE_STATE_HIDDEN_OFFLINE_DDL == data_table_schema->get_table_state_flag()));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(drop_table_in_trans(schema_guard, index_table_schema, false/*is_rebuild_index*/,
+          index_table_schema.is_index_table(), false/*to_recyclebin*/, &drop_index_arg->ddl_stmt_str_, &trans, &drop_table_set,
+          nullptr/*mock_fk_parent_table_ptr*/))) {
+    LOG_WARN("failed to drop index", K(ret));
+  } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, task_id))) {
+    LOG_WARN("failed to get owner id", K(ret), K(task_id));
+  } else if (OB_FAIL(ObDDLLock::unlock_for_add_drop_index(*data_table_schema,
+                                                          &tmp_task.get_data_tablet_ids(),
+                                                          index_table_schema.get_table_id(),
+                                                          index_table_schema.is_global_index_table(),
+                                                          owner_id,
+                                                          trans))) {
+    LOG_WARN("failed to unlock for add drop index", K(ret));
+  }
+
+  if (OB_SUCC(ret) && index_table_schema.is_index_table() && OB_NOT_NULL(data_table_schema)) {
+    bool need_drop = false;
+    uint64_t aux_lob_tid = OB_INVALID_ID;
+    if (OB_FAIL(check_need_drop_lob_for_hybrid_vec_index(schema_guard, index_table_schema,
+                                                         *data_table_schema, need_drop, aux_lob_tid))) {
+      LOG_WARN("failed to check need drop lob for hybrid vec index", K(ret));
+    } else if (need_drop) {
+      // save info for drop lob outside transaction
+      need_drop_lob_for_vec_index = true;
+      vec_index_aux_lob_meta_tid = aux_lob_tid;
+      vec_index_data_table_id = data_table_schema->get_table_id();
+      vec_index_task_id = task_id;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(tablet_autoinc_cleaner.add_table(schema_guard, index_table_schema))) {
+      LOG_WARN("failed to add table to tablet autoinc cleaner", K(tmp_ret));
+    }
+  }
+
+  if (trans.is_started()) {
+    int temp_ret = OB_SUCCESS;
+    bool commit = OB_SUCC(ret);
+    if (OB_SUCCESS != (temp_ret = trans.end(commit))) {
+      ret = (OB_SUCC(ret)) ? temp_ret : ret;
+      LOG_WARN("trans end failed", K(commit), K(temp_ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(publish_schema(tenant_id))) {
+    LOG_WARN("publish_schema failed", K(ret));
+  }
+
+  if (OB_SUCC(ret) && need_drop_lob_for_vec_index) {
+    obrpc::ObDropLobArg drop_lob_arg;
+    ObSqlString drop_lob_sql;
+    drop_lob_arg.tenant_id_ = tenant_id;
+    drop_lob_arg.exec_tenant_id_ = tenant_id;
+    drop_lob_arg.data_table_id_ = vec_index_data_table_id;
+    drop_lob_arg.aux_lob_meta_table_id_ = vec_index_aux_lob_meta_tid;
+    drop_lob_arg.task_id_ = vec_index_task_id;
+    drop_lob_arg.session_id_ = drop_index_arg->session_id_;
+    if (OB_FAIL(drop_lob_sql.assign("DROP LOB AUX TABLE FOR SEMANTIC VEC INDEX"))) {
+      LOG_WARN("fail to assign ddl_stmt_str", K(ret));
+    } else {
+      drop_lob_arg.ddl_stmt_str_ = drop_lob_sql.string();
+    }
+    if (OB_FAIL(ret)) {
+      // already logged
+    } else if (OB_FAIL(drop_lob(drop_lob_arg))) {
+      LOG_WARN("fail to drop lob aux table for hybrid vec index", K(ret), K(drop_lob_arg));
+    } else {
+      LOG_INFO("success to drop lob aux table for hybrid vec index",
+               K(vec_index_data_table_id), K(vec_index_aux_lob_meta_tid));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(tablet_autoinc_cleaner.commit())) {
+      LOG_WARN("failed to commit tablet autoinc cleaner", K(tmp_ret));
+    }
+  }
+  }
+  return ret;
+}
+
 int ObDDLService::update_autoinc_schema(obrpc::ObAlterTableArg &alter_table_arg)
 {
   int ret = OB_SUCCESS;
@@ -6627,6 +6802,7 @@ int ObDDLService::create_aux_index_task_(
     const int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;
+  ObArray<ObTabletID> data_tablet_ids;
   if (OB_ISNULL(data_schema) ||
       OB_ISNULL(idx_schema) ||
       OB_ISNULL(GCTX.sql_proxy_) ||
@@ -6634,6 +6810,8 @@ int ObDDLService::create_aux_index_task_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KPC(data_schema), KPC(idx_schema),
              KP(GCTX.sql_proxy_), K(create_index_arg));
+  } else if (OB_FAIL(data_schema->get_tablet_ids(data_tablet_ids))) {
+    LOG_WARN("failed to get tablet ids", K(ret));
   } else {
     bool need_partitioned = ((DATA_VERSION_4_2_2_0 <= tenant_data_version &&
                               tenant_data_version < DATA_VERSION_4_3_0_0) ||
@@ -6650,7 +6828,11 @@ int ObDDLService::create_aux_index_task_(
                                create_index_arg.consumer_group_id_,
                                &allocator,
                                &create_index_arg,
-                               parent_task_id);
+                               parent_task_id,
+                               0/*task_id*/,
+                               false/*ddl_need_retry_at_executor*/,
+                               false/*direct_load_need_sync_stats_info*/,
+                               &data_tablet_ids);
     param.tenant_data_version_ = tenant_data_version;
     const bool is_rowkey_doc_aux = share::schema::is_rowkey_doc_aux(create_index_arg.index_type_);
     const bool is_vec_rowkey_vid_aux = share::schema::is_vec_rowkey_vid_type(create_index_arg.index_type_);
@@ -13060,6 +13242,18 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
             LOG_WARN("fail to alter table part attr.", K(ret));
           }
         }
+        if (OB_SUCC(ret) && alter_table_arg.is_alter_random_partition_) {
+          if (OB_FAIL(check_restore_point_allow(tenant_id, *orig_table_schema))) {
+            LOG_WARN("check restore point allow failed,", KR(ret), K(tenant_id), K(orig_table_schema->get_table_id()));
+          } else if (OB_FAIL(ObRandomPartitionHelper::alter_table_random_part_attr_if_need(
+              alter_table_arg,
+              schema_guard,
+              new_table_schema,
+              ddl_operator,
+              trans))) {
+            LOG_WARN("fail to alter table random part attr.", KR(ret));
+          }
+        }
         //table partitions
         // the first element is data_table_schema
         // the others element are local_index_schemas
@@ -18747,7 +18941,7 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
           } else if (OB_FAIL(gen_hidden_index_schema_columns(
                      orig_table_schema, *index_table_schema, schema_guard, drop_cols_id_arr, col_name_map, is_oracle_mode, new_table_schema, new_index_schema, domain_index_columns, domain_store_columns, alter_table_arg.data_version_))) {
             LOG_WARN("failed to gen hidden index schema", K(ret));
-          } else if ((hidden_table_schema.get_part_level() > 0 || hidden_table_schema.is_auto_partitioned_table())
+          } else if ((hidden_table_schema.get_part_level() > 0 || hidden_table_schema.is_auto_partitioned_table() || hidden_table_schema.is_random_part())
                      && new_index_schema.is_index_local_storage()
                      && OB_FAIL(new_index_schema.assign_partition_schema_without_auto_part_attr(hidden_table_schema))) {
             LOG_WARN("fail to assign partition schema", K(ret), K(new_index_schema));
@@ -22000,6 +22194,44 @@ int ObDDLService::inner_drop_and_create_tablet_(const int64_t &schema_version,
       LOG_WARN("failed to execute tablet drop", KR(ret), K(tenant_id));
     }
   }
+  // truncate rand part table will reset_to_initial_partitions, so check and reallocate ls for its data and local aux table schema
+  if (OB_SUCC(ret) && new_table_schemas.at(0)->is_random_part()) {
+    const int64_t data_all_part_num = new_table_schemas.at(0)->get_all_part_num();
+    for (int64_t i = 1; OB_SUCC(ret) && i < new_table_schemas.count(); ++i) {
+      const ObTableSchema *schema = new_table_schemas.at(i);
+      if (OB_ISNULL(schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("new table schema is NULL", KR(ret), K(i));
+      } else if (OB_UNLIKELY(schema->get_all_part_num() != data_all_part_num)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("inconsistent all_part_num between data and local aux table for random part",
+                 KR(ret), K(i), K(schema->get_all_part_num()), K(data_all_part_num));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && new_table_schemas.at(0)->is_random_part() && new_table_schemas.at(0)->get_all_part_num() != orig_ls_id_array.count()) {
+    share::schema::ObSchemaGuardWrapper unused_schema_guard_wrapper(tenant_id, schema_service_);
+    ObNewTableTabletAllocator new_tablet_allocator(tenant_id, unused_schema_guard_wrapper, sql_proxy_);
+    if (OB_FAIL(new_tablet_allocator.init())) {
+      LOG_WARN("fail to init new table tablet allocator", KR(ret), K(tenant_id));
+    } else if (OB_UNLIKELY(OB_INVALID_ID != new_table_schemas.at(0)->get_tablegroup_id())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("random partition table should not have tablegroup id", K(ret), K(new_table_schemas.at(0)->get_table_id()));
+    } else if (OB_FAIL(new_tablet_allocator.prepare(trans, *new_table_schemas.at(0), nullptr/*tablegroup_schema*/))) {
+      LOG_WARN("fail to prepare new tablet allocator", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(new_tablet_allocator.get_ls_id_array(orig_ls_id_array))) {
+      LOG_WARN("fail to get new ls id array", KR(ret), K(tenant_id));
+    } else if (OB_UNLIKELY(orig_ls_id_array.count() != new_table_schemas.at(0)->get_all_part_num())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected re-allocated ls count", KR(ret), K(tenant_id), K(orig_ls_id_array.count()), K(new_table_schemas.at(0)->get_all_part_num()));
+    } else {
+      LOG_INFO("re-allocated ls for random-partitioned table truncate", K(tenant_id), K(orig_ls_id_array.count()));
+    }
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = new_tablet_allocator.finish(OB_SUCCESS == ret))) {
+      LOG_WARN("fail to finish new table tablet allocator", KR(tmp_ret));
+    }
+  }
   if (FAILEDx(ObNewTableTabletAllocator::check_and_replace_ls(
       sql_proxy_, trans, tenant_id, orig_ls_id_array))) {
     LOG_WARN("fail to check and replace ls", KR(ret), K(tenant_id), K(orig_ls_id_array));
@@ -22094,6 +22326,18 @@ int ObDDLService::generate_table_schemas(const ObIArray<const ObTableSchema*> &o
   if (OB_SUCC(ret) && 0 != gen_schema_version_array.count()) {
     truncate_version = gen_schema_version_array.at(0);
   }
+  // For random-partitioned table truncate, target_part_num must be the same value for
+  // every schema in this batch (data table + each local index).
+  int64_t random_part_target_num = 0;
+  if (OB_SUCC(ret) && OB_NOT_NULL(orig_table_schemas.at(0)) && orig_table_schemas.at(0)->is_random_part()) {
+    if (OB_FAIL(rootserver::ObRandomPartitionHelper::get_available_ls_cnt(tenant_id, random_part_target_num))) {
+      LOG_WARN("fail to get available ls cnt for random-partitioned table truncate", KR(ret), K(tenant_id));
+    } else if (OB_UNLIKELY(random_part_target_num <= 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid available ls cnt for random-partitioned table truncate",
+               KR(ret), K(tenant_id), K(random_part_target_num));
+    }
+  }
   // construnct new table_schemas
   for (int64_t i = 0; OB_SUCC(ret) && i < orig_table_count; ++i) {
     new_schema_ptr = allocator.alloc(sizeof(ObTableSchema));
@@ -22111,6 +22355,12 @@ int ObDDLService::generate_table_schemas(const ObIArray<const ObTableSchema*> &o
                 KR(ret), K(tenant_id), K(tmp_table_schema->get_table_id()));
       } else if (i == 0 && FALSE_IT(new_table_schema->set_auto_increment(1))) {
       } else if (FALSE_IT(new_table_schema->set_truncate_version(truncate_version))) {
+      } else if (new_table_schema->is_random_part()
+                 && OB_FAIL(rootserver::ObRandomPartitionHelper::reset_to_initial_partitions(
+                     random_part_target_num, *new_table_schema))) {
+        LOG_WARN("failed to reset random partitioned table to initial partitions",
+                 KR(ret), K(tenant_id), K(new_table_schema->get_table_id()),
+                 K(random_part_target_num));
       } else if (OB_FAIL(new_table_schemas.push_back(new_table_schema))) {
         LOG_WARN("failed to push back table_schema",
                 KR(ret), K(tenant_id), K(new_table_schema->get_table_id()));
@@ -25446,6 +25696,7 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
                                                                drop_table_arg.task_id_))) {
                   LOG_WARN("failed to get owner id", K(ret), K(drop_table_arg.task_id_));
                 } else if (OB_FAIL(ObDDLLock::unlock_for_add_drop_index(*data_table_schema,
+                                                                        nullptr/*specified_data_tablet_ids*/,
                                                                         tmp_table_schema.get_table_id(),
                                                                         tmp_table_schema.is_global_index_table(),
                                                                         owner_id,
@@ -26312,20 +26563,12 @@ int ObDDLService::update_index_status(const obrpc::ObUpdateIndexStatusArg &arg)
     if (OB_SUCC(ret) && arg.task_id_ != 0) {
       if (table->get_index_status() != new_status && new_status == INDEX_STATUS_AVAILABLE) {
         const ObTableSchema *data_table_schema = nullptr;
-        ObTableLockOwnerID owner_id;
         if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table->get_data_table_id(), data_table_schema))) {
           LOG_WARN("failed to get data table schema", K(ret));
         } else if (nullptr == data_table_schema) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("data table has been deleted", K(ret), K(table->get_data_table_id()));
-        } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
-                                                       arg.task_id_))) {
-          LOG_WARN("failed to get owner id", K(ret), K(arg.task_id_));
-        } else if (OB_FAIL(ObDDLLock::unlock_for_add_drop_index(*data_table_schema,
-                                                                table->get_table_id(),
-                                                                table->is_global_index_table(),
-                                                                owner_id,
-                                                                trans))) {
+        } else if (OB_FAIL(ObIndexBuildTask::unlock_for_enable_index(tenant_id, *data_table_schema, *table, arg.task_id_, trans))) {
           LOG_WARN("failed to unlock ddl lock", K(ret));
         }
       }

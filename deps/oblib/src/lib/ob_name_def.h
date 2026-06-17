@@ -278,6 +278,7 @@
 #define N_LINK_TABLE_NAME "link_table_name"
 #define N_QB_NAME "qb_name"
 #define N_AUTOINC_NEXTVAL "nextval"
+#define N_RANDOM_PART_NEXTVAL "random_part_nextval"
 #define N_TABLET_AUTOINC_NEXTVAL "tablet_autoinc"
 #define N_SEQ_NEXTVAL "seq_value"
 #define N_RESERVED_CELL_COUNT "reserved_cell_count"

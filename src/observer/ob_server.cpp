@@ -78,6 +78,7 @@
 #include "storage/fts/dict/ob_gen_dic_loader.h"
 #include "plugin/sys/ob_plugin_mgr.h"
 #include "storage/reorganization_info_table/ob_tablet_reorg_info_table_schema_helper.h"
+#include "storage/ddl/ob_partition_random_distribution_helper.h"
 #include "share/ob_license_utils.h"
 #include "lib/encrypt/ob_caching_sha2_cache_mgr.h"
 #include "lib/encrypt/ob_rsa_getter.h"
@@ -477,6 +478,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     } else if (OB_FAIL(ObTableStoreStatMgr::get_instance().init())) {
       LOG_ERROR("init table store stat mgr failed", KR(ret));
     } else if (OB_FAIL(ObServerAutoSplitScheduler::get_instance().init())) {
+      LOG_ERROR("init auto split scheduler failed", KR(ret));
+    } else if (OB_FAIL(ObServerRandomPartitionScheduler::get_instance().init())) {
       LOG_ERROR("init auto split scheduler failed", KR(ret));
     } else if (OB_FAIL(ObCompatModeGetter::instance().init(&sql_proxy_))) {
       LOG_ERROR("init get compat mode server failed",KR(ret));

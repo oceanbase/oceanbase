@@ -74,6 +74,7 @@ public:
     : batch_arg_(),
       table_schemas_map_(),
       auto_part_size_arr_(),
+      auto_random_size_arr_(),
       result_(common::OB_NOT_MASTER),
       next_(NULL)
   {}
@@ -93,6 +94,7 @@ public:
     batch_arg_.reset();
     table_schemas_map_.clear();
     auto_part_size_arr_.reset();
+    auto_random_size_arr_.reset();
     result_ = common::OB_NOT_MASTER;
   }
   DECLARE_TO_STRING;
@@ -101,6 +103,9 @@ public:
   common::hash::ObHashMap<int64_t, int64_t> table_schemas_map_;
   // if non-empty, auto_part_size_arr_[i] = auto_part_size of batch_arg_.table_schemas_[i]
   ObArray<int64_t> auto_part_size_arr_;
+  // if non-empty, auto_random_size_arr_[i] = auto_random_size of batch_arg_.table_schemas_[i]
+  ObArray<int64_t> auto_random_size_arr_;
+
   //the result of create tablet
   int result_;
   ObBatchCreateTabletHelper *next_;

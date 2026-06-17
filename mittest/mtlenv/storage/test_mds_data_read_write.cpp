@@ -175,7 +175,7 @@ int TestMdsDataReadWrite::mock_auto_inc_seq_disk_addr(
   share::ObTabletAutoincSeq auto_inc_seq;
 
   {
-    if (OB_FAIL(auto_inc_seq.set_autoinc_seq_value(allocator, 100))) {
+    if (OB_FAIL(auto_inc_seq.set_autoinc_seq_value(allocator, 100, INT64_MAX))) {
       LOG_WARN("failed to set auto inc seq", K(ret));
     }
   }

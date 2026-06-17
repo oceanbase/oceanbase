@@ -77,6 +77,8 @@ public:
       const uint64_t tenant_id,
       const uint64_t table_id,
       const uint64_t index_table_id,
+      const ObIArray<ObTabletID> &tablet_ids,
+      const ObIArray<ObTabletID> &index_tablet_ids,
       const int64_t ddl_task_id,
       const bool is_unique_index_checking,
       common::hash::ObHashMap<int64_t, int64_t> &column_checksums, common::ObMySQLProxy &sql_proxy);
@@ -110,6 +112,8 @@ public:
       const uint64_t tenant_id,
       const uint64_t data_table_id,
       const uint64_t index_table_id,
+      const ObIArray<ObTabletID> &data_tablet_ids,
+      const ObIArray<ObTabletID> &index_tablet_ids,
       const int64_t ddl_task_id,
       const bool is_unique_index_checking,
       const ObIArray<int64_t> &ignore_col_ids,

@@ -2150,6 +2150,22 @@ int ObSchemaPrinter::print_partition_func(const ObTableSchema &table_schema,
   }
 
   if (OB_FAIL(ret)) {
+  } else if (table_schema.is_random_part()) {
+    // Random-distributed table reuses the auto-partition machinery internally
+    // (auto_part_=true, part_func_type_=RANDOM, is_range_part(RANDOM)=true), so
+    // it would otherwise fall into the auto-partition range branch below and
+    // print "partition by <type_str>(<func_expr>) size (...)". The type string
+    // for RANDOM is the sentinel "unknown" and the func expr is the hidden
+    // "__pk_increment" column, both of which leak through when the random_part
+    // case is not checked first. Handle it explicitly up front and skip the
+    // partition list (printed by the caller) for the same reason.
+    if (!strict_compat) {
+      int64_t random_partition_size = part_opt.get_auto_part_size();
+      random_partition_size = random_partition_size >> 20; // MB
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos, "partition by random size (\'%ldMB\')", random_partition_size))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to append display random distribution expr", K(ret));
+      }
+    }
   } else if (part_opt.get_auto_part() && part_opt.is_range_part() && !part_opt.is_interval_part()) {
     // is auto partition table
     // do not support show index table auto part info, because now we do not support index auto split sql grammar
@@ -2361,7 +2377,15 @@ int ObSchemaPrinter::print_table_definition_partition_options(const ObTableSchem
       if (OB_SUCC(ret)) {
         bool print_sub_part_element = is_subpart &&
                                       (strict_compat_ || !partition_schema->sub_part_template_def_valid());
-        if (table_schema.is_range_part()) {
+        if (table_schema.is_random_part()) {
+          // Random-distributed table is internally a range-typed auto-partition
+          // (is_range_part(RANDOM)==true), so it would fall into the range branch
+          // below and print partition elements like (partition "P8192" values
+          // less than (...)). Random partitions are an internal implementation
+          // detail and must NOT appear in show create. The "partition by random
+          // size (...)" text printed by print_partition_func is the entire
+          // user-visible partition clause for this table type.
+        } else if (table_schema.is_range_part()) {
           if (OB_FAIL(print_range_partition_elements(partition_schema, buf, buf_len, pos,
                                                     print_sub_part_element, agent_mode, false, tz_info))) {
             SHARE_SCHEMA_LOG(WARN, "fail to print partition elements", K(ret));

@@ -61,6 +61,7 @@ ob_set_subtarget(ob_rootserver common
   ob_index_builder.cpp
   ob_mlog_builder.cpp
   ob_locality_util.cpp
+  ob_random_partition_helper.cpp
   ob_resource_weight_parser.cpp
   ob_root_balancer.cpp
   ob_partition_balance.cpp

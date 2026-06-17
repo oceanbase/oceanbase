@@ -2622,7 +2622,7 @@ int ObDDLRedefinitionTask::check_and_do_sync_tablet_autoinc_seq(ObSchemaGetterGu
     LOG_WARN("error unexpected, table schema must not be nullptr", K(ret), K(target_object_id_));
   } else if (OB_FAIL(table_schema->check_has_fts_index_aux(new_schema_guard, has_fts_index))) {
     LOG_WARN("failed to check has fts index", K(ret), KPC(table_schema));
-  } else if (has_fts_index && table_schema->is_table_with_hidden_pk_column()
+  } else if (has_fts_index && (table_schema->is_table_with_hidden_pk_column() || table_schema->is_random_part())
       && !(DDL_ALTER_PARTITION_BY == task_type_ || DDL_DROP_PRIMARY_KEY == task_type_)
       && OB_FAIL(sync_tablet_autoinc_seq())) {
     LOG_WARN("fail to sync tablet autoinc seq", K(ret));

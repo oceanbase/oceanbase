@@ -85,12 +85,12 @@ int ObTableLoadStoreTableCtx::get_table_data_desc(
       }
       case ObTableLoadInputDataType::ADAPTIVE_FULL_ROW: {
         table_data_desc.rowkey_column_num_ =
-          (!schema_->is_table_without_pk_ ? schema_->rowkey_column_count_ : 0);
+          (!schema_->is_table_without_pk_ || schema_->is_random_part_ ? schema_->rowkey_column_count_ : 0);
         table_data_desc.column_count_ =
-          (!schema_->is_table_without_pk_ ? schema_->store_column_count_
+          (!schema_->is_table_without_pk_ || schema_->is_random_part_ ? schema_->store_column_count_
                                           : schema_->store_column_count_ - 1);
         table_data_desc.row_flag_.reset();
-        table_data_desc.row_flag_.uncontain_hidden_pk_ = schema_->is_table_without_pk_;
+        table_data_desc.row_flag_.uncontain_hidden_pk_ = schema_->is_table_without_pk_ && !schema_->is_random_part_;
         break;
       }
       case ObTableLoadInputDataType::ROWKEY: {

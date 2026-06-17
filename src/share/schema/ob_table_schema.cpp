@@ -8655,6 +8655,10 @@ int ObTableSchema::check_enable_split_partition(bool is_auto_partitioning) const
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support to split a partition of the table doing offline ddl", KR(ret), KPC(this));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "the table doing offline ddl is");
+  } else if (is_random_part()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Split partition on random-distributed table");
+    LOG_WARN("split partition on random-distributed table is not supported", KR(ret), KPC(this));
   } else if (is_user_table()) {
     ObSchemaGetterGuard schema_guard;
     if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(get_tenant_id(), schema_guard))) {

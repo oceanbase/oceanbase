@@ -131,6 +131,7 @@ public:
     // with another allocator should call destroy here.
     subschema_ctx_.destroy();
     all_local_session_vars_.destroy();
+    autoinc_params_.destroy();
   }
   inline void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
   inline void set_show_seed(bool show_seed) { is_show_seed_ = show_seed; }

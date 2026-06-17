@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_physical_plan_ctx.h"
+#include "share/ob_tablet_autoincrement_service.h"
 #include "src/sql/engine/ob_des_exec_context.h"
 #include "sql/engine/expr/ob_expr_sql_udt_utils.h"
 #include "sql/table_format/iceberg/ob_iceberg_table_metadata.h"
@@ -206,6 +207,8 @@ int ObPhysicalPlanCtx::sync_last_value_global()
   for (int64_t i = 0; OB_SUCC(ret) && i < autoinc_params.count(); ++i) {
     AutoincParam &autoinc_param = autoinc_params.at(i);
     if (OB_FAIL(auto_service.sync_insert_value_global(autoinc_param))) {
+      LOG_WARN("failed to sync last insert value globally", K(ret));
+    } else if (OB_FAIL(ObTabletAutoincrementService::get_instance().sync_insert_value_global(autoinc_param.tenant_id_, autoinc_param.random_part_sync_ctxs_))) {
       LOG_WARN("failed to sync last insert value globally", K(ret));
     }
   }

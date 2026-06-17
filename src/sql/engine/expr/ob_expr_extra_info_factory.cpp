@@ -31,6 +31,7 @@
 #include "sql/engine/expr/ob_expr_array_map.h"
 #include "sql/engine/expr/ob_expr_ai/ob_ai_func.h"
 #include "sql/engine/expr/ob_expr_get_package_var.h"
+#include "sql/engine/expr/ob_expr_random_part_nextval.h"
 
 namespace oceanbase
 {
@@ -117,6 +118,7 @@ void ObExprExtraInfoFactory::register_expr_extra_infos()
   REG_EXTRA_INFO(T_FUN_SYS_AI_EMBED, ObAIFuncExprInfo);
   REG_EXTRA_INFO(T_FUN_SYS_AI_RERANK, ObAIFuncExprInfo);
   REG_EXTRA_INFO(T_OP_GET_PACKAGE_VAR, ObExprGetPackageVar::ExtraInfo);
+  REG_EXTRA_INFO(T_FUN_SYS_RANDOM_PART_NEXTVAL, ObAutoincNextvalInfo);
 }
 
 } // end namespace sql

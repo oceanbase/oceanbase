@@ -24,7 +24,8 @@ public:
            const ObDirectLoadRowFlag &row_flag,
            const int64_t max_batch_size,
            // 为了老路径farm能过
-           const bool need_reshape);
+           const bool need_reshape,
+           const bool is_random_part);
 
   // 深拷贝
   int append_batch(const IVectorPtrs &vectors, const int64_t offset, const int64_t size);
@@ -52,7 +53,7 @@ public:
   // Rows bytes usage
   inline int64_t bytes_usage() const { return batch_rows_.bytes_usage(); }
 
-  TO_STRING_KV(K_(batch_rows), K_(is_inited));
+  TO_STRING_KV(K_(batch_rows), K_(is_random_part), K_(is_inited));
 
 private:
   ObArray<ObColDesc> col_descs_;
@@ -60,6 +61,7 @@ private:
   ObArenaAllocator reshape_allocator_;
   storage::ObDirectLoadBatchRows batch_rows_;
   bool need_reshape_;
+  bool is_random_part_;
   bool is_inited_;
 };
 

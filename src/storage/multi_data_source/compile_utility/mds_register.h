@@ -83,6 +83,8 @@
   #include "src/storage/tablet/ob_tablet_split_info_mds_user_data.h"
   #include "src/storage/direct_load/ob_direct_load_auto_inc_seq_mds_helper.h"
   #include "src/storage/direct_load/ob_direct_load_auto_inc_seq_data.h"
+  #include "src/storage/tablet/ob_tablet_random_mds_helper.h"
+  #include "src/storage/tablet/ob_tablet_random_mds_user_data.h"
 #endif
 
 /**************************************************************************************************/
@@ -242,9 +244,9 @@ _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENU
                                           44,\
                                           DIRECT_LOAD_AUTO_INC_SEQ)
   GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletRandomMdsHelper,\
-                                           ::oceanbase::storage::mds::MdsCtx,\
-                                           45,\
-                                           TABLET_RANDOM)
+                                          ::oceanbase::storage::mds::MdsCtx,\
+                                          45,\
+                                          TABLET_RANDOM)
   GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::share::ObSyncStandbyStatusMDSHelper, \
                                        ::oceanbase::storage::mds::MdsCtx, \
                                        46,\
@@ -298,7 +300,6 @@ public: \
 
 namespace storage
 {
-  DEFINE_EMPTY(ObTabletRandomMdsHelper)
   DEFINE_EMPTY(ObTabletTruncateMdsHelper)
 }
 namespace share
@@ -404,9 +405,9 @@ _GENERATE_MDS_UNIT_(KEY_TYPE, VALUE_TYPE, NEED_MULTI_VERSION)
   GENERATE_MDS_UNIT(::oceanbase::storage::mds::DummyKey,\
                     ::oceanbase::storage::ObDirectLoadAutoIncSeqData,\
                     false)
-  // GENERATE_MDS_UNIT(::oceanbase::storage::mds::DummyKey,\
-  //                   ::oceanbase::storage::ObTabletRandomMdsUserData,\
-  //                   false)
+  GENERATE_MDS_UNIT(::oceanbase::storage::mds::DummyKey,\
+                    ::oceanbase::storage::ObTabletRandomMdsUserData,\
+                    false)
   // GENERATE_MDS_UNIT(::oceanbase::storage::mds::DummyKey,\
   //                   ::oceanbase::storage::ObTabletTruncateMdsUserData,\
   //                   false)

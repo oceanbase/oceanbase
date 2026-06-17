@@ -1334,6 +1334,7 @@ int ObDDLService::generate_tables_array(const obrpc::ObAlterTableArg &alter_tabl
         new_aux_table_schema = new (new_schema_ptr)ObTableSchema(&allocator);
         inc_aux_table_schema = new (inc_schema_ptr)AlterTableSchema(&allocator);
       }
+      bool need_set_random_part_attr = orig_aux_table_schema->is_aux_lob_meta_table() && inc_table_schema.is_random_part();
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(new_aux_table_schema->assign(*orig_aux_table_schema))) {
         LOG_WARN("fail to assign schema", KR(ret), KPC(orig_aux_table_schema));
@@ -1341,7 +1342,11 @@ int ObDDLService::generate_tables_array(const obrpc::ObAlterTableArg &alter_tabl
                  && FALSE_IT(new_aux_table_schema->unset_sub_part_template_def_valid())) {
       } else if (OB_FAIL(inc_aux_table_schema->assign(*new_aux_table_schema))) {
         LOG_WARN("failed to push back table_schema", KR(ret), KPC(new_aux_table_schema));
-      } else if (OB_FAIL(inc_aux_table_schema->assign_partition_schema_without_auto_part_attr(inc_table_schema))) {
+      } else if (!need_set_random_part_attr &&
+                 OB_FAIL(inc_aux_table_schema->assign_partition_schema_without_auto_part_attr(inc_table_schema))) {
+        LOG_WARN("fail to assign partition schema without auto part attr", K(inc_table_schema), KR(ret));
+      } else if (need_set_random_part_attr &&
+                 OB_FAIL(inc_aux_table_schema->assign_partition_schema(inc_table_schema))) {
         LOG_WARN("fail to assign partition schema", K(inc_table_schema), KR(ret));
       } else if (OB_FAIL(inc_aux_table_schema->set_transition_point(inc_table_schema.get_transition_point()))) {
         LOG_WARN("fail to set transition point", K(ret));
@@ -2016,6 +2021,10 @@ int ObDDLService::check_alter_partitions(const ObTableSchema &orig_table_schema,
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter partition of materialized view is");
   } else if (orig_table_schema.is_interval_part() && OB_FAIL(orig_table_schema.check_support_interval_part())) {
     LOG_WARN("fail to check support interval part", KR(ret), K(orig_table_schema));
+  } else if (orig_table_schema.is_random_part()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("alter partition of random partition table is not supported", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter partition of random partition table");
   } else if (OB_FAIL(check_has_index_local_storage_(orig_table_schema, schema_guard_wrapper, has_local_index))) {
     LOG_WARN("fail to check_has_index_local_storage", K(ret), K(has_local_index));
   } else if (obrpc::ObAlterTableArg::PARTITIONED_TABLE == alter_part_type

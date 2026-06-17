@@ -177,10 +177,11 @@ public:
   {
     return memtable::MultiSourceDataUnitType::TABLET_SEQ;
   }
-  int get_autoinc_seq_value(uint64_t &autoinc_seq) const;
+  int get_autoinc_seq_value(uint64_t &autoinc_seq, uint64_t &autoinc_seq_end) const;
   int set_autoinc_seq_value(
     common::ObArenaAllocator &allocator,
-    const uint64_t autoinc_seq);
+    const uint64_t autoinc_seq,
+    const uint64_t autoinc_seq_end);
   const share::ObTabletAutoincInterval* get_intervals() const { return intervals_; }
   int64_t get_intervals_count() const { return intervals_count_; }
 

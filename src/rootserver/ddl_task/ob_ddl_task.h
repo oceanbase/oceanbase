@@ -262,7 +262,8 @@ public:
                        const int64_t parent_task_id = 0,
                        const int64_t task_id = 0,
                        const bool ddl_need_retry_at_executor = false,
-                       const bool direct_load_need_sync_stats_info = false);
+                       const bool direct_load_need_sync_stats_info = false,
+                       const ObIArray<ObTabletID> *data_tablet_ids = nullptr);
   ~ObCreateDDLTaskParam() = default;
   bool is_valid() const { return OB_INVALID_ID != tenant_id_ && type_ > share::DDL_INVALID
                                  && type_ < share::DDL_MAX && nullptr != allocator_; }
@@ -271,7 +272,7 @@ public:
                K_(sub_task_trace_id), KPC_(aux_rowkey_doc_schema), KPC_(aux_doc_rowkey_schema), KPC_(fts_index_aux_schema), KPC_(aux_doc_word_schema),
                K_(vec_rowkey_vid_schema), K_(vec_vid_rowkey_schema), K_(vec_domain_index_schema), K_(vec_index_id_schema), K_(vec_snapshot_data_schema),
                K_(vec_centroid_schema), K_(vec_cid_vector_schema), K_(vec_rowkey_cid_schema), K_(vec_sq_meta_schema), K_(vec_pq_centroid_schema), K_(vec_pq_code_schema),
-               K_(ddl_need_retry_at_executor), K_(is_pre_split), K_(new_snapshot_version), K_(hybrid_vec_embedded_schema), K_(direct_load_need_sync_stats_info));
+               K_(ddl_need_retry_at_executor), K_(is_pre_split), K_(new_snapshot_version), K_(hybrid_vec_embedded_schema), K_(direct_load_need_sync_stats_info), KPC_(data_tablet_ids));
 public:
   int32_t sub_task_trace_id_;
   uint64_t tenant_id_;
@@ -311,6 +312,7 @@ public:
   bool is_pre_split_;
   int64_t new_snapshot_version_;  // fts rowkey doc or vec rowkey vid index build snapshot version
   bool direct_load_need_sync_stats_info_;
+  const ObIArray<ObTabletID> *data_tablet_ids_;
 };
 
 class ObDDLTaskRecordOperator final
@@ -456,7 +458,7 @@ public:
   static int get_ddl_task_record(
       const uint64_t tenant_id,
       const int64_t task_id,
-      common::ObMySQLProxy &proxy,
+      common::ObISQLClient &proxy,
       common::ObIAllocator &allocator,
       ObDDLTaskRecord &record);
   static int get_all_ddl_task_record(
@@ -498,6 +500,12 @@ public:
       const int64_t task_id,
       const share::ObDDLType ddl_type,
       bool &has_conflict_ddl);
+
+  static int check_has_task_disallow_add_part(
+    common::ObISQLClient &proxy,
+    const uint64_t tenant_id,
+    const uint64_t data_table_id,
+    bool &has_conflict_task);
 
   static int check_has_index_or_mlog_task(
       common::ObISQLClient &proxy,
@@ -566,7 +574,7 @@ private:
   static int get_task_record(
       const uint64_t tenant_id,
       const ObSqlString &sql_string,
-      common::ObMySQLProxy &proxy,
+      common::ObISQLClient &proxy,
       common::ObIAllocator &allocator,
       common::ObIArray<ObDDLTaskRecord> &records);
 };
@@ -600,12 +608,21 @@ public:
       const common::ObIArray<common::ObTabletID> &tablet_ids,
       const WaitTransType wait_trans_type,
       const int64_t wait_version);
+  int init(
+      const uint64_t tenant_id,
+      const int64_t ddl_task_id,
+      const share::ObDDLTaskStatus ddl_task_status,
+      const uint64_t table_id,
+      const common::ObIArray<common::ObTabletID> &tablet_ids,
+      const common::ObIArray<common::ObTabletID> &inc_tablet_ids,
+      const WaitTransType wait_trans_type,
+      const int64_t wait_version);
   void reset();
   bool is_inited() const { return is_inited_; }
   int try_wait(bool &is_trans_end, int64_t &snapshot_version, const bool need_wait_trans_end = true);
   transaction::ObTransID get_pending_tx_id() const { return pending_tx_id_; }
   TO_STRING_KV(K(is_inited_), K_(tenant_id), K(table_id_), K(is_trans_end_), K(wait_type_),
-      K(wait_version_), K_(pending_tx_id), K(tablet_ids_.count()), K(snapshot_array_.count()), K(ddl_task_id_), K_(ddl_task_status), K_(is_write_defensive_done));
+      K(wait_version_), K_(pending_tx_id), K(tablet_ids_.count()), K(inc_tablet_ids_.count()), K(snapshot_array_.count()), K(ddl_task_id_), K_(ddl_task_status), K_(is_write_defensive_done));
 
 private:
   static bool is_wait_trans_type_valid(const WaitTransType wait_trans_type);
@@ -640,7 +657,9 @@ private:
       const uint64_t tenant_id,
       const int64_t ddl_task_id,
       const share::ObDDLTaskStatus ddl_task_status,
+      const uint64_t table_id,
       const ObIArray<ObTabletID> &tablet_ids,
+      const ObIArray<ObTabletID> &inc_tablet_ids,
       const int64_t schema_version);
 private:
   static const int64_t INDEX_SNAPSHOT_VERSION_DIFF = 100 * 1000 * 1000; // 100ms
@@ -652,6 +671,7 @@ private:
   int64_t wait_version_;
   transaction::ObTransID pending_tx_id_;
   common::ObArray<common::ObTabletID> tablet_ids_;
+  common::ObArray<common::ObTabletID> inc_tablet_ids_;
   common::ObArray<int64_t> snapshot_array_;
   int64_t ddl_task_id_;
   share::ObDDLTaskStatus ddl_task_status_;
@@ -984,6 +1004,8 @@ public:
       const uint64_t tenant_id,
       const uint64_t source_table_id,
       const uint64_t target_table_id,
+      const ObIArray<ObTabletID> &source_tablet_ids,
+      const ObIArray<ObTabletID> &target_tablet_ids,
       const int64_t schema_version,
       const int64_t snapshot_version,
       const int64_t execution_id,

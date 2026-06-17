@@ -479,10 +479,18 @@ int ObInsertStmt::check_pdml_disabled(const bool is_online_ddl,
           LOG_WARN("unexpected null expr", K(ret));
         } else if (column_expr->is_rowkey_column() || column_expr->is_table_part_key_column()) {
           const ObRawExpr *auto_inc_expr = NULL;
-          if (OB_FAIL(find_first_auto_inc_expr(column_conv_expr, auto_inc_expr))) {
+          const ObRawExpr *random_part_expr = NULL;
+          if (OB_FAIL(find_first_expr(T_FUN_SYS_AUTOINC_NEXTVAL, column_conv_expr, auto_inc_expr))) {
             LOG_WARN("fail to find first auto inc expr", K(ret));
           } else if (auto_inc_expr != NULL) {
             disable_pdml = auto_inc_expr->get_param_count() > 0; // means the specified value exists
+          }
+          if (OB_SUCC(ret) && !disable_pdml) {
+            if (OB_FAIL(find_first_expr(T_FUN_SYS_RANDOM_PART_NEXTVAL, column_conv_expr, random_part_expr))) {
+              LOG_WARN("fail to find first random part expr", K(ret));
+            } else if (random_part_expr != NULL) {
+              disable_pdml = random_part_expr->get_param_count() > 0; // means the specified value exists
+            }
           }
         }
       }
@@ -495,17 +503,17 @@ int ObInsertStmt::check_pdml_disabled(const bool is_online_ddl,
   return ret;
 }
 
-int ObInsertStmt::find_first_auto_inc_expr(const ObRawExpr *expr, const ObRawExpr *&auto_inc) const
+int ObInsertStmt::find_first_expr(const ObItemType expr_type, const ObRawExpr *expr, const ObRawExpr *&auto_inc) const
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
-  } else if (T_FUN_SYS_AUTOINC_NEXTVAL == expr->get_expr_type()) {
+  } else if (expr_type == expr->get_expr_type()) {
     auto_inc = expr;
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-      if (OB_FAIL(find_first_auto_inc_expr(expr->get_param_expr(i), auto_inc))) {
+      if (OB_FAIL(find_first_expr(expr_type, expr->get_param_expr(i), auto_inc))) {
         LOG_WARN("fail to find first auto inc expr", K(ret), K(i), K(expr));
       }
     }

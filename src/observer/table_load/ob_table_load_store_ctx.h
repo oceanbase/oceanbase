@@ -201,7 +201,7 @@ private:
     const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &partition_id_array,
     const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &target_partition_id_array);
   int init_sort_param();
-  int generate_autoinc_params(share::AutoincParam &autoinc_param);
+  int generate_autoinc_params(const uint64_t column_id, share::AutoincParam &autoinc_param);
   int init_sequence();
   int get_table_store_from_committed_trans_stores(ObDirectLoadTableStore &table_store);
   void clear_committed_trans_stores();

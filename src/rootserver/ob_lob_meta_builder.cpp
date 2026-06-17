@@ -45,6 +45,7 @@ int ObLobMetaBuilder::generate_aux_lob_meta_schema(
     char buf[buf_size];
     MEMSET(buf, 0, buf_size);
     int64_t pos = 0;
+    bool need_set_random_part_attr = data_schema.is_random_part();
     if (OB_FAIL(generate_schema(data_schema, aux_lob_meta_schema))) {
       LOG_WARN("generate_schema for aux vp table failed", K(data_schema), K(ret));
     } else if (OB_INVALID_ID == new_table_id
@@ -77,7 +78,10 @@ int ObLobMetaBuilder::generate_aux_lob_meta_schema(
     } else if (OB_FAIL(set_lob_table_column_store_if_need(aux_lob_meta_schema))) {
       LOG_WARN("fail to set lob table column store if need", KR(ret));
     } else if ((data_schema.is_partitioned_table() || data_schema.is_auto_partitioned_table())
+               && !need_set_random_part_attr
                && OB_FAIL(aux_lob_meta_schema.assign_partition_schema_without_auto_part_attr(data_schema))) {
+      LOG_WARN("fail to assign partition schema", K(aux_lob_meta_schema), K(ret));
+    } else if (need_set_random_part_attr && OB_FAIL(aux_lob_meta_schema.assign_partition_schema(data_schema))) {
       LOG_WARN("fail to assign partition schema", K(aux_lob_meta_schema), K(ret));
     } else if (need_generate_id) {
       if (OB_FAIL(ddl_service_.generate_object_id_for_partition_schema(aux_lob_meta_schema))) {

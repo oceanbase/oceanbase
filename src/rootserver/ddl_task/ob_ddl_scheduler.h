@@ -415,6 +415,7 @@ private:
       const obrpc::ObCreateIndexArg *create_index_arg,
       const share::ObDDLType task_type,
       const uint64_t tenant_data_version,
+      const ObIArray<ObTabletID> *data_tablet_ids,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record,
       const int64_t snapshot_version = 0,

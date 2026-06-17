@@ -9,13 +9,19 @@
 #include "lib/hash/ob_hashmap.h"
 #include "lib/hash/ob_link_hashmap.h"
 #include "lib/allocator/ob_small_allocator.h"
+#include "observer/ob_server_struct.h"
+#include "rpc/obrpc/ob_rpc_proxy.h"
 #include "share/ob_tablet_autoincrement_param.h"
 #include "share/ob_rpc_struct.h"
+#include "share/rpc/ob_async_rpc_proxy.h"
 
 namespace oceanbase
 {
 namespace share
 {
+RPC_F(obrpc::OB_SYNC_TABLET_AUTOINC_SEQ_CACHE, obrpc::ObSyncTabletSeqCacheArg,
+    obrpc::ObSrvRpcProxy::ObRpc<obrpc::OB_SYNC_TABLET_AUTOINC_SEQ_CACHE>::Response, ObSyncTabletAutoincSeqCacheProxy);
+
 struct ObTabletCacheNode
 {
 public:
@@ -39,7 +45,7 @@ public:
       tablet_id_(),
       next_value_(1),
       last_refresh_ts_(common::ObTimeUtility::current_time()),
-      cache_size_(DEFAULT_TABLET_INCREMENT_CACHE_SIZE),
+      sync_value_(0),
       prefetching_(false),
       is_inited_(false)
   {}
@@ -48,37 +54,41 @@ public:
     destroy();
   }
 
-  int init(const common::ObTabletID &tablet_id, const int64_t cache_size);
-  void reset();
-  int clear();
-  int fetch_interval(const ObTabletAutoincParam &param, ObTabletCacheInterval &interval);
-  int fetch_interval_without_cache(const ObTabletAutoincParam &param, ObTabletCacheInterval &interval);
+  int init(const common::ObTabletID &tablet_id);
+  int fetch_interval(const ObTabletAutoincParam &param, const bool prefetch, ObTabletCacheInterval &interval);
+  static int fetch_interval_without_cache(const ObTabletAutoincParam &param, const ObTabletID &tablet_id, ObTabletCacheInterval &interval);
+  int sync_insert_value_global(const ObTabletAutoincParam &param, const uint64_t insert_value);
   void destroy() {}
   int clear_cache_if_fallback_for_mlog(
       const uint64_t current_value);
+  int sync_tablet_autoinc_seq_cache(const uint64_t sync_value, const int64_t abs_timeout_us);
 
   TO_STRING_KV(K_(tablet_id),
                K_(next_value),
                K_(last_refresh_ts),
-               K_(cache_size),
                K_(curr_node),
                K_(prefetch_node),
+               K_(sync_value),
+               K_(prefetching),
                K_(is_inited));
 private:
-  int set_interval(const ObTabletAutoincParam &param, ObTabletCacheInterval &interval);
-  int fetch_new_range(const ObTabletAutoincParam &param,
+  static const int64_t TRY_LOCK_INTERVAL = 1000L; // 1ms
+
+  int set_interval(ObTabletCacheInterval &interval);
+  static int fetch_new_range(const ObTabletAutoincParam &param,
                       const common::ObTabletID &tablet_id,
+                      const uint64_t sync_value,
                       ObTabletCacheNode &node);
   bool prefetch_condition()
   {
     return !prefetch_node_.is_valid() &&
         (next_value_ - curr_node_.cache_start_) * PREFETCH_THRESHOLD > curr_node_.cache_end_ - curr_node_.cache_start_;
   }
-  bool is_retryable(int ret)
+  static bool is_retryable(int ret)
   {
     return OB_NOT_MASTER == ret || OB_NOT_INIT == ret || OB_TIMEOUT == ret || OB_EAGAIN == ret || OB_LS_NOT_EXIST == ret || OB_TABLET_NOT_EXIST == ret || OB_TENANT_NOT_IN_SERVER == ret || OB_LS_LOCATION_NOT_EXIST == ret;
   }
-  bool is_block_renew_location(int ret)
+  static bool is_block_renew_location(int ret)
   {
     return OB_LOCATION_LEADER_NOT_EXIST == ret || OB_LS_LOCATION_LEADER_NOT_EXIST == ret || OB_NO_READABLE_REPLICA == ret
       || OB_NOT_MASTER == ret || OB_RS_NOT_MASTER == ret || OB_RS_SHUTDOWN == ret || OB_PARTITION_NOT_EXIST == ret || OB_LOCATION_NOT_EXIST == ret
@@ -87,6 +97,9 @@ private:
       || OB_LS_NOT_EXIST == ret || OB_TABLET_NOT_EXIST == ret || OB_LS_LOCATION_NOT_EXIST == ret || OB_PARTITION_IS_BLOCKED == ret || OB_MAPPING_BETWEEN_TABLET_AND_LS_NOT_EXIST == ret
       || OB_GET_LOCATION_TIME_OUT == ret;
   }
+  void try_prefetch(const ObTabletAutoincParam &param);
+  int sync_tablet_seq_cache(const uint64_t x);
+  int sync_tablet_seq_cache_all(const uint64_t tenant_id, const ObTabletID &tablet_id, const uint64_t sync_value);
 private:
   static const int64_t PREFETCH_THRESHOLD = 4;
   static const int64_t RETRY_INTERVAL = 100 * 1000L; // 100ms
@@ -94,9 +107,9 @@ private:
   common::ObTabletID tablet_id_;
   uint64_t next_value_;
   int64_t  last_refresh_ts_; // use this to determine active tablet
-  int64_t cache_size_;
   ObTabletCacheNode curr_node_;
   ObTabletCacheNode prefetch_node_;
+  uint64_t sync_value_;
   bool prefetching_;
   bool is_inited_;
 };
@@ -145,10 +158,13 @@ public:
       const ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       uint64_t &autoinc_seq);
+  int sync_insert_value_global(const uint64_t tenant_id, ObIArray<RandomPartSyncTabletCtx> &sync_ctxs);
   int clear_tablet_autoinc_seq_cache(const uint64_t tenant_id, const common::ObIArray<common::ObTabletID> &tablet_ids, const int64_t abs_timeout_us);
+  int sync_tablet_autoinc_seq_cache(const obrpc::ObSyncTabletSeqCacheArg &arg, const int64_t abs_timeout_us);
 private:
-  int acquire_mgr(const uint64_t tenant_id, const common::ObTabletID &tablet_id, const int64_t init_cache_size, ObTabletAutoincMgr *&autoinc_mgr);
+  int acquire_mgr(const uint64_t tenant_id, const common::ObTabletID &tablet_id, ObTabletAutoincMgr *&autoinc_mgr);
   void release_mgr(ObTabletAutoincMgr *autoinc_mgr);
+  int sync_insert_value_global(const uint64_t tenant_id, const ObTabletID &tablet_id, const int64_t value_to_sync);
 
   ObTabletAutoincrementService();
   ~ObTabletAutoincrementService();

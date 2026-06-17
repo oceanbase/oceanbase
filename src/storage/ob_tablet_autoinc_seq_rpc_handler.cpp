@@ -25,6 +25,7 @@ ObSyncTabletSeqReplayExecutor::ObSyncTabletSeqReplayExecutor()
 
 int ObSyncTabletSeqReplayExecutor::init(
     const uint64_t autoinc_seq,
+    const uint64_t autoinc_seq_end,
     const bool is_tablet_creating,
     const SCN &replay_scn)
 {
@@ -38,6 +39,7 @@ int ObSyncTabletSeqReplayExecutor::init(
     LOG_WARN("invalid arguments", K(autoinc_seq), K(replay_scn), K(ret));
   } else {
     seq_ = autoinc_seq;
+    seq_end_ = autoinc_seq_end;
     is_tablet_creating_ = is_tablet_creating;
     scn_ = replay_scn;
     is_inited_ = true;
@@ -58,20 +60,21 @@ int ObSyncTabletSeqReplayExecutor::do_replay_(ObTabletHandle &handle)
     ObArenaAllocator allocator;
     ObTabletAutoincSeq curr_autoinc_seq;
     uint64_t curr_autoinc_seq_value;
+    uint64_t curr_autoinc_seq_end = INT64_MAX;
     bool need_replay = true;
     if (CLUSTER_CURRENT_VERSION >= CLUSTER_VERSION_4_3_2_0) {
       // just replay for multi-vesion mds
     } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_autoinc_seq(allocator, share::SCN::max_scn(), curr_autoinc_seq))) {
       LOG_WARN("fail to get latest autoinc seq", K(ret), KPC(tablet));
-    } else if (OB_FAIL(curr_autoinc_seq.get_autoinc_seq_value(curr_autoinc_seq_value))) {
+    } else if (OB_FAIL(curr_autoinc_seq.get_autoinc_seq_value(curr_autoinc_seq_value, curr_autoinc_seq_end))) {
       LOG_WARN("failed to get autoinc seq value", K(ret), KPC(tablet), K(curr_autoinc_seq));
-    } else if (seq_ <= curr_autoinc_seq_value) {
+    } else if (seq_ <= curr_autoinc_seq_value && curr_autoinc_seq_end <= seq_end_) {
       need_replay = false;
     }
 
     if (OB_SUCC(ret) && need_replay) {
-      if (OB_FAIL(curr_autoinc_seq.set_autoinc_seq_value(allocator, seq_))) {
-        LOG_WARN("failed to set autoinc seq value", K(ret), K(seq_), K(curr_autoinc_seq));
+      if (OB_FAIL(curr_autoinc_seq.set_autoinc_seq_value(allocator, seq_, seq_end_))) {
+        LOG_WARN("failed to set autoinc seq value", K(ret), K(tablet->get_tablet_meta().tablet_id_), K(seq_), K(seq_end_), K(curr_autoinc_seq), K(curr_autoinc_seq_end));
       } else {
         mds::MdsWriter mds_writer(mds::WriterType::AUTO_INC_SEQ, static_cast<int64_t>(seq_));
         mds::MdsCtx mds_ctx(mds_writer);
@@ -192,8 +195,7 @@ int ObTabletAutoincSeqRpcHandler::fetch_tablet_autoinc_seq_cache(
         ret = OB_EAGAIN;
         LOG_WARN("tablet status not committed, maybe transfer or split start trans", K(ret), K(user_data), K(trans_stat), K(writer));
       // TODO(lihongqin.lhq): fetch from split dst to avoid retry
-      } else if (OB_FAIL(tablet_handle.get_obj()->fetch_tablet_autoinc_seq_cache(
-          ls_switch_checker, arg.cache_size_, autoinc_interval))) {
+      } else if (OB_FAIL(fetch_tablet_autoinc_seq_cache(*tablet_handle.get_obj(), ls_switch_checker, arg.cache_size_, arg.sync_value_, autoinc_interval))) {
         LOG_WARN("failed to fetch tablet autoinc seq on tablet", K(ret), K(tablet_id));
       } else {
         res.cache_interval_ = autoinc_interval;
@@ -202,6 +204,79 @@ int ObTabletAutoincSeqRpcHandler::fetch_tablet_autoinc_seq_cache(
   }
   return ret;
 }
+
+// if sync_value == 0, result.end_ - result.start_ + 1 == cache_size
+// if sync_value != 0, result.end_ - result.start_ + 1 <= cache_size
+// result.end_ >= sync_value
+int ObTabletAutoincSeqRpcHandler::fetch_tablet_autoinc_seq_cache(
+    ObTablet &tablet,
+    const ObLSSwitchChecker &ls_switch_checker,
+    const uint64_t cache_size,
+    const uint64_t sync_value,
+    share::ObTabletAutoincInterval &result)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "FetchAutoSeq"));
+  ObTabletAutoincSeq autoinc_seq;
+  mds::MdsWriter writer;// will be removed later
+  mds::TwoPhaseCommitState trans_stat;// will be removed later
+  share::SCN trans_version;// will be removed later
+  uint64_t auto_inc_seqvalue = 0;
+  uint64_t autoinc_seq_end = 0;
+  bool is_online = false;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_FAIL(tablet.get_latest_autoinc_seq(autoinc_seq, allocator, writer, trans_stat, trans_version))) {
+    if (OB_EMPTY_RESULT == ret) {
+      ret = OB_SUCCESS;
+      autoinc_seq.reset();
+      trans_stat = mds::TwoPhaseCommitState::ON_COMMIT;
+    } else {
+      LOG_WARN("fail to get latest autoinc seq", K(ret), K(tablet.get_tablet_meta().tablet_id_));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(mds::TwoPhaseCommitState::ON_COMMIT != trans_stat)) {
+    ret = OB_EAGAIN;
+    LOG_WARN("tablet autoinc not committed", K(ret), K(autoinc_seq));
+  } else if (OB_FAIL(ls_switch_checker.double_check_epoch(is_online))) {
+    LOG_WARN("double check failed", K(ret), K(tablet.get_tablet_meta().tablet_id_), K(is_online));
+    if (OB_VERSION_NOT_MATCH == ret) {
+      ret = OB_NOT_MASTER;
+    }
+  } else if (OB_FAIL(autoinc_seq.get_autoinc_seq_value(auto_inc_seqvalue, autoinc_seq_end))) { // auto_inc_seqvalue >= 1
+    LOG_WARN("failed to get autoinc seq value", K(ret), K(autoinc_seq));
+  } else if (OB_UNLIKELY(auto_inc_seqvalue > UINT64_MAX - cache_size || sync_value > UINT64_MAX - cache_size)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("arthimetic overflow or seq used out", K(ret), K(auto_inc_seqvalue), K(sync_value), K(cache_size));
+  } else if (OB_UNLIKELY(autoinc_seq_end < sync_value)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("sync value not in tablet seq range", K(ret), K(tablet.get_tablet_meta().tablet_id_), K(sync_value), K(autoinc_seq));
+  } else {
+    const uint64_t interval_start = auto_inc_seqvalue;
+    const uint64_t interval_end = sync_value == 0 ? auto_inc_seqvalue + cache_size - 1
+                                                  : std::max(std::min(autoinc_seq_end, auto_inc_seqvalue + cache_size - 1), sync_value);
+    const uint64_t result_autoinc_seq = interval_end + 1;
+    const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
+    SCN scn = SCN::min_scn();
+    if (OB_UNLIKELY(interval_end >= UINT64_MAX/*result_autoinc_seq > UINT64_MAX*/ || interval_end > autoinc_seq_end)) {
+      ret = OB_SIZE_OVERFLOW;
+      LOG_WARN("tablet seq used out", K(ret), K(interval_start), K(interval_end), K(sync_value), K(autoinc_seq), K(result_autoinc_seq));
+    } else if (OB_FAIL(autoinc_seq.set_autoinc_seq_value(allocator, result_autoinc_seq, autoinc_seq_end))) {
+      LOG_WARN("failed to set autoinc seq value", K(ret), K(tablet_id), K(result_autoinc_seq));
+    } else if (auto_inc_seqvalue != result_autoinc_seq && OB_FAIL(tablet.write_sync_tablet_seq_log(autoinc_seq, false/*is_tablet_creating*/, scn))) {
+      LOG_WARN("fail to write sync tablet seq log", K(ret), K(auto_inc_seqvalue), K(autoinc_seq_end), K(autoinc_seq), K(interval_end), K(cache_size), K(sync_value));
+    } else {
+      result.start_ = interval_start;
+      result.end_ = interval_end;
+      result.tablet_id_ = tablet_id;
+    }
+  }
+  return ret;
+}
+
 
 int ObTabletAutoincSeqRpcHandler::batch_get_tablet_autoinc_seq(
     const obrpc::ObBatchGetTabletAutoincSeqArg &arg,
@@ -279,7 +354,7 @@ int ObTabletAutoincSeqRpcHandler::batch_get_tablet_autoinc_seq(
               if (OB_VERSION_NOT_MATCH == tmp_ret) {
                 tmp_ret = OB_NOT_MASTER;
               }
-            } else if (OB_TMP_FAIL(autoinc_seq.get_autoinc_seq_value(autoinc_param.autoinc_seq_))) {
+            } else if (OB_TMP_FAIL(autoinc_seq.get_autoinc_seq_value(autoinc_param.autoinc_seq_, autoinc_param.autoinc_seq_end_))) {
               LOG_WARN("failed to get autoinc seq value", K(tmp_ret));
             }
           }
@@ -343,7 +418,7 @@ int ObTabletAutoincSeqRpcHandler::batch_set_tablet_autoinc_seq(
           if (OB_TMP_FAIL(ls_handle.get_ls()->get_tablet(autoinc_param.dest_tablet_id_, tablet_handle,
               ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
             LOG_WARN("failed to get tablet", K(tmp_ret), K(autoinc_param));
-          } else if (OB_TMP_FAIL(tablet_handle.get_obj()->update_tablet_autoinc_seq(ls_switch_checker, autoinc_param.autoinc_seq_, arg.is_tablet_creating_))) {
+          } else if (OB_TMP_FAIL(update_tablet_autoinc_seq(*tablet_handle.get_obj(), ls_switch_checker, autoinc_param.autoinc_seq_, autoinc_param.autoinc_seq_end_, arg.is_tablet_creating_))) {
             LOG_WARN("failed to update tablet autoinc seq", K(tmp_ret), K(autoinc_param));
           }
           autoinc_param.ret_code_ = tmp_ret;
@@ -354,10 +429,62 @@ int ObTabletAutoincSeqRpcHandler::batch_set_tablet_autoinc_seq(
   return ret;
 }
 
+int ObTabletAutoincSeqRpcHandler::update_tablet_autoinc_seq(
+    ObTablet &tablet,
+    const ObLSSwitchChecker &ls_switch_checker,
+    const uint64_t autoinc_seq,
+    const uint64_t autoinc_seq_end,
+    const bool is_tablet_creating)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "UpdAutoincSeq"));
+  ObTabletAutoincSeq curr_autoinc_seq;
+  mds::MdsWriter writer;// will be removed later
+  mds::TwoPhaseCommitState trans_stat;// will be removed later
+  share::SCN trans_version;// will be removed later
+  uint64_t curr_auto_inc_seqvalue;
+  uint64_t curr_autoinc_seq_end = INT64_MAX;
+  SCN scn;
+  bool is_online = false;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_FAIL(tablet.get_latest_autoinc_seq(curr_autoinc_seq, allocator, writer, trans_stat, trans_version))) {
+    if (OB_EMPTY_RESULT == ret) {
+      ret = OB_SUCCESS;
+      curr_autoinc_seq.reset();
+      trans_stat = mds::TwoPhaseCommitState::ON_COMMIT;
+    } else {
+      LOG_WARN("fail to get latest autoinc seq", K(ret), K(tablet.get_tablet_meta().tablet_id_));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (mds::TwoPhaseCommitState::ON_COMMIT != trans_stat) {
+    ret = OB_EAGAIN;
+    LOG_WARN("tablet autoinc not committed", K(ret), K(autoinc_seq));
+  } else if (OB_FAIL(ls_switch_checker.double_check_epoch(is_online))) {
+    LOG_WARN("double check failed", K(ret), K(tablet.get_tablet_meta().tablet_id_), K(is_online));
+    if (OB_VERSION_NOT_MATCH == ret) {
+      ret = OB_NOT_MASTER;
+    }
+  } else if (OB_FAIL(curr_autoinc_seq.get_autoinc_seq_value(curr_auto_inc_seqvalue, curr_autoinc_seq_end))) {
+    LOG_WARN("failed to get autoinc seq value", K(ret));
+  } else if (autoinc_seq > curr_auto_inc_seqvalue || autoinc_seq_end < curr_autoinc_seq_end) {
+    if (OB_FAIL(curr_autoinc_seq.set_autoinc_seq_value(allocator, autoinc_seq, autoinc_seq_end))) {
+      LOG_WARN("failed to set autoinc seq value", K(ret), K(tablet.get_tablet_meta().tablet_id_), K(autoinc_seq));
+    } else if (OB_FAIL(tablet.write_sync_tablet_seq_log(curr_autoinc_seq, is_tablet_creating, scn))) {
+      LOG_WARN("fail to write sync tablet seq log", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObTabletAutoincSeqRpcHandler::replay_update_tablet_autoinc_seq(
     const ObLS *ls,
     const ObTabletID &tablet_id,
     const uint64_t autoinc_seq,
+    const uint64_t autoinc_seq_end,
     const bool is_tablet_creating,
     const share::SCN &replay_scn)
 {
@@ -375,8 +502,8 @@ int ObTabletAutoincSeqRpcHandler::replay_update_tablet_autoinc_seq(
       ret = OB_EAGAIN;
       LOG_WARN("failed to wlock", K(ret));
     } else if (OB_FALSE_IT(locked = true)) {
-    } else if (OB_FAIL(replay_executor.init(autoinc_seq, is_tablet_creating, replay_scn))) {
-      LOG_WARN("failed to init tablet auto inc sequence replay executor", K(ret), K(autoinc_seq), K(is_tablet_creating), K(replay_scn));
+    } else if (OB_FAIL(replay_executor.init(autoinc_seq, autoinc_seq_end, is_tablet_creating, replay_scn))) {
+      LOG_WARN("failed to init tablet auto inc sequence replay executor", K(ret), K(autoinc_seq), K(autoinc_seq_end), K(is_tablet_creating), K(replay_scn));
     } else if (OB_FAIL(replay_executor.execute(replay_scn, ls->get_ls_id(), tablet_id))) {
       if (OB_TABLET_NOT_EXIST == ret) {
         LOG_INFO("tablet may be deleted, skip this log", K(ret), K(tablet_id), K(replay_scn));
@@ -415,10 +542,11 @@ int ObTabletAutoincSeqRpcHandler::batch_set_tablet_autoinc_seq_in_trans(
     allocator.reuse();
     const ObTabletID &tablet_id = arg.autoinc_params_.at(i).dest_tablet_id_;
     const uint64_t autoinc_seq = arg.autoinc_params_.at(i).autoinc_seq_;
+    const uint64_t autoinc_seq_end = arg.autoinc_params_.at(i).autoinc_seq_end_;
     ObTabletAutoincSeq data;
     ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
-    if (OB_FAIL(data.set_autoinc_seq_value(allocator, autoinc_seq))) {
-      LOG_WARN("failed to set autoinc seq value", K(ret), K(ls_id), K(tablet_id), K(autoinc_seq));
+    if (OB_FAIL(data.set_autoinc_seq_value(allocator, autoinc_seq, autoinc_seq_end))) {
+      LOG_WARN("failed to set autoinc seq value", K(ret), K(ls_id), K(tablet_id), K(autoinc_seq), K(autoinc_seq_end));
     } else if (OB_FAIL(set_tablet_autoinc_seq_in_trans(ls, tablet_id, data, replay_scn, ctx))) {
       LOG_WARN("failed to set mds", K(ret), K(ls_id), K(tablet_id));
     }

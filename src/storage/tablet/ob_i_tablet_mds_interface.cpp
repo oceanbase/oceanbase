@@ -253,6 +253,43 @@ int ObITabletMdsInterface::get_split_data(
   #undef PRINT_WRAPPER
 }
 
+int ObITabletMdsInterface::get_random_part_data(
+    ObTabletRandomMdsUserData &data,
+    const int64_t timeout) const
+{
+  #define PRINT_WRAPPER KR(ret), K(data), K(timeout)
+  MDS_TG(10_ms);
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!check_is_inited_())) {
+    ret = OB_NOT_INIT;
+    MDS_LOG_GET(WARN, "not inited");
+  } else {
+    // TODO(lihongqin.lhq): use get_latest_committed and block during 2pc
+    const share::SCN snapshot = share::SCN::max_scn();
+    ObITabletMdsInterface *src = nullptr;
+    ObTabletHandle src_tablet_handle;
+    if (get_tablet_meta_().has_transfer_table()) {
+      if (CLICK_FAIL(get_src_tablet_handle_and_base_ptr_(src_tablet_handle, src))) {
+        MDS_LOG(WARN, "fail to get src tablet handle", K(ret), K(get_tablet_meta_()));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (CLICK_FAIL((cross_ls_get_snapshot<mds::DummyKey, ObTabletRandomMdsUserData>(src, mds::DummyKey(),
+        ReadRandomPartDataOp(data), snapshot, timeout)))) {
+      if (OB_EMPTY_RESULT != ret) {
+        MDS_LOG_GET(WARN, "fail to cross ls get snapshot", K(lbt()));
+      } else {
+        data.reset(); // use default value
+        ret = OB_SUCCESS;
+      }
+    }
+  }
+
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
 int ObITabletMdsInterface::split_partkey_compare(const blocksstable::ObDatumRowkey &rowkey,
                                                  const ObITableReadInfo &rowkey_read_info,
                                                  const ObIArray<uint64_t> &partkey_projector,

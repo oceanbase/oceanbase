@@ -94,6 +94,7 @@ ob_set_subtarget(ob_share ALONE
   ob_lonely_table_clean_rpc_struct.cpp
   ob_create_hidden_tablev2_rpc_struct.cpp
   ob_external_resource_rpc_struct.cpp
+  ob_random_partition_args.cpp
   ob_java_policy_rpc_struct.cpp
 )
 

@@ -5,6 +5,7 @@
 #define USING_LOG_PREFIX RS
 
 #include "rootserver/parallel_ddl/ob_update_index_status_helper.h"
+#include "rootserver/ddl_task/ob_index_build_task.h"
 #include "share/schema/ob_table_sql_service.h"
 #include "src/storage/ddl/ob_ddl_lock.h"
 
@@ -180,19 +181,15 @@ int ObUpdateIndexStatusHelper::operate_schemas_()
                          get_trans_(), tenant_id_, arg_.task_id_, consensus_schema_version))) {
         LOG_WARN("fail to update consensus_schema_version", KR(ret), K_(tenant_id), K_(arg_.task_id), K(consensus_schema_version));
       } else if (orig_index_table_schema_->get_index_status() != new_status_ && new_status_ == INDEX_STATUS_AVAILABLE) {
-        ObTableLockOwnerID owner_id;
         if (OB_ISNULL(new_data_table_schema_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("data_table_schema is null", KR(ret));
-        } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
-                                                       arg_.task_id_))) {
-          LOG_WARN("failed to get owner id", KR(ret), K_(arg_.task_id));
-        } else if (OB_FAIL(ObDDLLock::unlock_for_add_drop_index(*new_data_table_schema_,
-                                                                orig_index_table_schema_->get_table_id(),
-                                                                orig_index_table_schema_->is_global_index_table(),
-                                                                owner_id,
-                                                                get_trans_()))) {
-          LOG_WARN("failed to unlock ddl lock", KR(ret));
+        } else if (OB_FAIL(ObIndexBuildTask::unlock_for_enable_index(tenant_id_,
+                                                                     *new_data_table_schema_,
+                                                                     *orig_index_table_schema_,
+                                                                     arg_.task_id_,
+                                                                     get_trans_()))) {
+          LOG_WARN("failed to unlock ddl lock", KR(ret), K_(arg_.task_id));
         }
       }
     }

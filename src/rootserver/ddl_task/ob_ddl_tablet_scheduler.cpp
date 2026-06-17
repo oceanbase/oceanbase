@@ -44,7 +44,8 @@ int ObDDLTabletScheduler::init(const uint64_t tenant_id,
                                const common::ObCurTraceId::TraceId &trace_id,
                                const ObIArray<ObTabletID> &tablets,
                                const uint64_t data_version,
-                               const bool need_single_partition_build)
+                               const bool need_single_partition_build,
+                               const ObIArray<ObTabletID> &ref_data_table_tablets)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator arena("tblt_sched_init");
@@ -52,7 +53,6 @@ int ObDDLTabletScheduler::init(const uint64_t tenant_id,
   common::ObAddr inner_sql_exec_addr;
   common::ObArray<ObString> running_sql_info;
   common::ObArray<ObLSID> ls_ids;
-  common::ObArray<ObTabletID> ref_data_table_tablets;
   common::hash::ObHashMap<uint64_t, bool> tablet_finished_map;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -76,8 +76,6 @@ int ObDDLTabletScheduler::init(const uint64_t tenant_id,
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(table_id), K(ref_data_table_id), K(task_id), K(parallelism), K(snapshot_version), K(trace_id), K(tablets.count()));
   } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
     LOG_WARN("failed to check is oracle mode", K(ret), K(tenant_id));
-  } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id, ref_data_table_id, ref_data_table_tablets))) {
-    LOG_WARN("failed to get ref data table tablet ids", K(ret), K(tenant_id), K(ref_data_table_id), K(ref_data_table_tablets));
   } else if (OB_UNLIKELY(tablets.count() != ref_data_table_tablets.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("index table tablets count is not equal to data table tablets count", K(ret), K(tablets.count()), K(ref_data_table_tablets.count()));

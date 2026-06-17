@@ -638,6 +638,17 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
                                "incremental direct-load does only support "
                                "normal local index or "
                                "single local unique index in heap table");
+      } else if (has_non_normal_local_index && table_schema->is_random_part()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN(
+          "unsupported index type exists, "
+          "incremental direct-load does only support "
+          "normal local index in random-partitioned table",
+          KR(ret));
+        FORWARD_USER_ERROR_MSG(ret,
+                               "unsupported index type exists, "
+                               "incremental direct-load does only support "
+                               "normal local index in random-partitioned table");
       } else if (table_schema->get_foreign_key_infos().count() > 0) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("incremental direct-load does not support table with foreign keys", KR(ret));

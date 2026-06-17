@@ -37,6 +37,9 @@ private:
   int handle_partition_with_autoinc_identity(SessionContext &session_ctx,
                                              table::ObTableLoadObjRowArray &obj_rows,
                                              const uint64_t &sql_mode, int32_t session_id);
+  int handle_partition_with_random_part(SessionContext &session_ctx,
+                                        table::ObTableLoadObjRowArray &obj_rows,
+                                        const uint64_t &sql_mode, int32_t session_id);
   int handle_autoinc_column(const share::schema::ObColumnSchemaV2 *column_schema,
                             const common::ObObj &obj,
                             common::ObObj &out_obj,
@@ -46,6 +49,12 @@ private:
                              const common::ObObj &obj,
                              common::ObObj &out_obj,
                              common::ObArenaAllocator &cast_allocator);
+  int handle_random_part_column(const share::schema::ObColumnSchemaV2 &column_schema,
+                                const common::ObObj &obj,
+                                common::ObObj &out_obj,
+                                int32_t session_id,
+                                const uint64_t &sql_mode);
+
   // 非分区表
   int write_for_non_partitioned(SessionContext &session_ctx,
                                 const table::ObTableLoadObjRowArray &obj_rows);

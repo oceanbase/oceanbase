@@ -29,6 +29,7 @@ public:
   ObTableLoadPartitionCalc();
   ~ObTableLoadPartitionCalc();
   int init(const ObTableLoadParam &param,
+           const ObTableLoadSchema &schema,
            sql::ObSQLSessionInfo *session_info,
            const ObIArray<ObTabletID> &tablet_ids);
   int get_part_key(const table::ObTableLoadObjRow &row, common::ObNewRow &part_key) const;
@@ -38,6 +39,7 @@ public:
   int64_t get_part_key_obj_count() const {return part_key_obj_index_.count();}
 private:
   int init_part_key_index(const share::schema::ObTableSchema *table_schema,
+                          const ObTableLoadSchema &schema,
                         common::ObIAllocator &allocator);
 public:
   struct IndexAndType
@@ -54,6 +56,8 @@ public:
   common::ObCastMode cast_mode_;
   bool is_partition_with_autoinc_;
   int64_t partition_with_autoinc_idx_;
+  bool is_partition_with_random_part_;
+  int64_t partition_with_random_part_idx_;
 private:
   const ObTableLoadParam *param_;
   // data members

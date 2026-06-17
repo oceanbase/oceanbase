@@ -27,7 +27,8 @@ public:
            const common::ObCurTraceId::TraceId &trace_id,
            const ObIArray<ObTabletID> &tablets,
            const uint64_t data_version,
-           const bool need_single_partition_build);
+           const bool need_single_partition_build,
+           const ObIArray<ObTabletID> &ref_data_table_tablets);
   int get_next_batch_tablets(const bool is_ddl_retryable,
                              int64_t &parallelism,
                              int64_t &new_execution_id,

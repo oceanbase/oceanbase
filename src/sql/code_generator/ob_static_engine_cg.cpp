@@ -10471,7 +10471,7 @@ int ObStaticEngineCG::set_properties_post(const ObLogPlan &log_plan, ObPhysicalP
     if (exec_ctx->get_stmt_factory()->get_query_ctx()->has_nested_sql()) {
       phy_plan.set_has_nested_sql(exec_ctx->get_stmt_factory()->get_query_ctx()->has_nested_sql());
     }
-    if (log_plan.get_stmt()->is_insert_stmt() || log_plan.get_stmt()->is_merge_stmt()) {
+    if (log_plan.get_stmt()->is_insert_stmt() || log_plan.get_stmt()->is_merge_stmt() || log_plan.get_stmt()->is_insert_all_stmt()) {
       phy_plan.set_autoinc_params(log_plan.get_stmt()->get_autoinc_params());
     }
     phy_plan.set_affected_last_insert_id(log_plan.get_stmt()->get_affected_last_insert_id());

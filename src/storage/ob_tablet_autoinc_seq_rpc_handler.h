@@ -21,12 +21,15 @@ namespace mds
 {
 struct BufferCtx;
 }
+class ObTablet;
+class ObLSSwitchChecker;
 
 class ObSyncTabletSeqReplayExecutor final : public logservice::ObTabletReplayExecutor
 {
 public:
   ObSyncTabletSeqReplayExecutor();
   int init(const uint64_t autoinc_seq,
+      const uint64_t autoinc_seq_end,
       const bool is_tablet_creating,
       const share::SCN &replay_scn);
 
@@ -54,6 +57,7 @@ protected:
 
 private:
   uint64_t seq_;
+  uint64_t seq_end_;
   bool is_tablet_creating_;
   share::SCN scn_;
 };
@@ -103,6 +107,7 @@ public:
       const ObLS *ls,
       const ObTabletID &tablet_id,
       const uint64_t autoinc_seq,
+      const uint64_t autoinc_seq_end,
       const bool is_tablet_creating,
       const share::SCN &replay_scn);
   int batch_set_tablet_autoinc_seq_in_trans(
@@ -119,6 +124,18 @@ private:
       const share::ObTabletAutoincSeq &data,
       const share::SCN &replay_scn,
       mds::BufferCtx &ctx);
+  int fetch_tablet_autoinc_seq_cache(
+      ObTablet &tablet,
+      const ObLSSwitchChecker &ls_switch_checker,
+      const uint64_t cache_size,
+      const uint64_t sync_value,
+      share::ObTabletAutoincInterval &result);
+  int update_tablet_autoinc_seq(
+      ObTablet &tablet,
+      const ObLSSwitchChecker &ls_switch_checker,
+      const uint64_t autoinc_seq,
+      const uint64_t autoinc_seq_end,
+      const bool is_tablet_creating);
 private:
   static const int64_t BUCKET_LOCK_BUCKET_CNT = 10243L;
   bool is_inited_;

@@ -104,6 +104,7 @@
 #include "share/schema/ob_objpriv_mysql_schema_struct.h"
 #include "share/backup/ob_backup_struct.h"
 #include "share/ai_service/ob_ai_service_struct.h"
+#include "share/ob_random_partition_args.h"
 #include "share/schema/ob_schema_struct_fts.h"
 
 namespace oceanbase
@@ -2622,7 +2623,9 @@ public:
       alter_mlog_arg_(),
       part_storage_cache_policy_(),
       data_version_(0),
-      enable_hidden_table_partition_pruning_(false)
+      enable_hidden_table_partition_pruning_(false),
+      is_alter_random_partition_(false),
+      alter_random_partition_arg_()
   {
   }
   virtual ~ObAlterTableArg()
@@ -2671,6 +2674,9 @@ public:
             && !is_alter_indexs_ && !is_alter_options_ && !is_alter_partitions_
             && !is_inner_ && !is_update_global_indexes_ && !is_convert_to_character_
             && !skip_sys_table_check_ && !need_rebuild_trigger_ && !is_add_to_scheduler_;
+  }
+  bool is_random_partition() const {
+    return is_alter_random_partition_;
   }
   // Returns true iff every non-column-operation field is at its default/safe state.
   // Used by parallel DDL to gate column-only alters. On false, `reason` points to
@@ -2759,7 +2765,9 @@ public:
                K_(alter_mlog_arg),
                K_(part_storage_cache_policy),
                K_(data_version),
-               K_(enable_hidden_table_partition_pruning));
+               K_(enable_hidden_table_partition_pruning),
+               K_(is_alter_random_partition),
+               K_(alter_random_partition_arg));
 private:
   int alloc_index_arg(const ObIndexArg::IndexActionType index_action_type, ObIndexArg *&index_arg);
 public:
@@ -2818,6 +2826,8 @@ public:
   common::ObString part_storage_cache_policy_;
   uint64_t data_version_;
   bool enable_hidden_table_partition_pruning_;
+  bool is_alter_random_partition_;
+  ObAlterRandomPartitionArg alter_random_partition_arg_;
   int serialize_index_args(char *buf, const int64_t data_len, int64_t &pos) const;
   int deserialize_index_args(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_index_args_serialize_size() const;
@@ -4918,7 +4928,6 @@ public:
   uint64_t sync_value_; // ensure that mds's start is greater than sync_value_
 private:
   DISALLOW_COPY_AND_ASSIGN(ObFetchTabletSeqArg);
-
 };
 
 struct ObFetchTabletSeqRes
@@ -4941,6 +4950,27 @@ private:
 };
 
 using ObClearTabletAutoincSeqCacheArg = ObBatchRemoveTabletArg;
+
+struct ObSyncTabletSeqCacheArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObSyncTabletSeqCacheArg() : tenant_id_(OB_INVALID_TENANT_ID), tablet_id_(), sync_value_(0) { reset(); }
+  ~ObSyncTabletSeqCacheArg() = default;
+  bool is_valid() const;
+  void reset();
+  int assign(const ObSyncTabletSeqCacheArg &arg);
+  int init(const uint64_t tenant_id,
+           const common::ObTabletID &tablet_id,
+           const uint64_t sync_value);
+  TO_STRING_KV(K_(tenant_id), K_(tablet_id), K_(sync_value));
+public:
+  uint64_t tenant_id_;
+  common::ObTabletID tablet_id_;
+  uint64_t sync_value_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObSyncTabletSeqCacheArg);
+};
 
 struct ObGetMinSSTableSchemaVersionRes
 {
@@ -11870,8 +11900,10 @@ public:
   int assign(const ObAutoSplitTabletArg &other);
   bool is_valid() const
   {
-    return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid() && tablet_id_.is_valid()
-        && OB_INVALID_SIZE != auto_split_tablet_size_ && OB_INVALID_SIZE != used_disk_space_;
+    return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid()
+        && OB_INVALID_SIZE != auto_split_tablet_size_ && OB_INVALID_SIZE != used_disk_space_
+        && ((!is_random_part_ && tablet_id_.is_valid())
+        || (is_random_part_ && !inactive_tablet_ids_.empty() && table_id_ != OB_INVALID_ID));
   };
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(auto_split_tablet_size), K_(used_disk_space), K_(is_random_part), K_(table_id), K_(inactive_tablet_ids));
 public:

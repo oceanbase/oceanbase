@@ -286,7 +286,7 @@ int ObDirectLoadOptimizerCtx::init_direct_load_ctx(
                                                       table_id_,
                                                       table_schema))) {
         LOG_WARN("fail to get table schema", KR(ret));
-      } else if (OB_FAIL(ObTableLoadSchema::get_column_ids(table_schema, column_ids_))) {
+      } else if (OB_FAIL(ObTableLoadSchema::get_column_ids(table_schema, column_ids_, table_schema->is_random_part()))) {
         LOG_WARN("fail to get column ids", KR(ret));
       }
 

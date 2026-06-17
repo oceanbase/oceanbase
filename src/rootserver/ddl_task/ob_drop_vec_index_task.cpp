@@ -1042,6 +1042,7 @@ int ObDropVecIndexTask::cleanup_impl()
     } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, task_id_))) {
       LOG_WARN("fail to get owner id", K(ret), K(task_id_));
     } else if (OB_FAIL(ObDDLLock::unlock_for_add_drop_index(*data_table_schema,
+                                                            nullptr /* specified_data_tablet_ids */,
                                                             0 /* index_table_id */, // not support global vector index
                                                             false /* is_global_index = false */,
                                                             owner_id,

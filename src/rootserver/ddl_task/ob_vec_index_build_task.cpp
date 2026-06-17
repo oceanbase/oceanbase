@@ -2135,6 +2135,7 @@ int ObVecIndexBuildTask::cleanup_impl()
       LOG_WARN("failed to get owner id", K(ret), K(task_id_));
     } else if (!is_skip_unlock &&
                OB_FAIL(ObDDLLock::unlock_for_add_drop_index(*data_schema,
+                                                            nullptr,
                                                             index_table_id,
                                                             false,
                                                             owner_id,

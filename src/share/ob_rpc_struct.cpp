@@ -2699,7 +2699,9 @@ OB_DEF_SERIALIZE(ObAlterTableArg)
               alter_mlog_arg_,
               part_storage_cache_policy_,
               data_version_,
-              enable_hidden_table_partition_pruning_);
+              enable_hidden_table_partition_pruning_,
+              is_alter_random_partition_,
+              alter_random_partition_arg_);
 
   return ret;
 }
@@ -2813,7 +2815,9 @@ OB_DEF_DESERIALIZE(ObAlterTableArg)
               alter_mlog_arg_,
               part_storage_cache_policy_,
               data_version_,
-              enable_hidden_table_partition_pruning_);
+              enable_hidden_table_partition_pruning_,
+              is_alter_random_partition_,
+              alter_random_partition_arg_);
   return ret;
 }
 
@@ -2873,7 +2877,9 @@ OB_DEF_SERIALIZE_SIZE(ObAlterTableArg)
                 alter_mlog_arg_,
                 part_storage_cache_policy_,
                 data_version_,
-                enable_hidden_table_partition_pruning_);
+                enable_hidden_table_partition_pruning_,
+                is_alter_random_partition_,
+                alter_random_partition_arg_);
   }
 
   if (OB_FAIL(ret)) {
@@ -11866,6 +11872,50 @@ DEF_TO_STRING(ObFetchTabletSeqRes)
 }
 
 OB_SERIALIZE_MEMBER(ObFetchTabletSeqRes, tenant_id_, cache_interval_);
+
+bool ObSyncTabletSeqCacheArg::is_valid() const
+{
+  return tenant_id_ != OB_INVALID_TENANT_ID && tablet_id_.is_valid() && sync_value_ > 0;
+}
+
+void ObSyncTabletSeqCacheArg::reset()
+{
+  tablet_id_.reset();
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  sync_value_ = 0;
+}
+
+int ObSyncTabletSeqCacheArg::assign(const ObSyncTabletSeqCacheArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("arg is invalid", KR(ret), K(arg));
+  } else {
+    tablet_id_ = arg.tablet_id_;
+    tenant_id_ = arg.tenant_id_;
+    sync_value_ = arg.sync_value_;
+  }
+  return ret;
+}
+
+int ObSyncTabletSeqCacheArg::init(const uint64_t tenant_id,
+                                  const ObTabletID &tablet_id,
+                                  const uint64_t sync_value)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = tenant_id;
+  tablet_id_ = tablet_id;
+  sync_value_ = sync_value;
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KPC(this));
+    reset();
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObSyncTabletSeqCacheArg, tenant_id_, tablet_id_, sync_value_);
 
 OB_SERIALIZE_MEMBER(ObDetectMasterRsArg, addr_, cluster_id_);
 ObDetectMasterRsArg::ObDetectMasterRsArg()

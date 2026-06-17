@@ -742,7 +742,7 @@ int ObTableLoadStoreCtx::init_write_ctx_for_dag()
       } else if (wa_mem_limit < ObDirectLoadMemContext::MIN_MEM_LIMIT) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("wa_mem_limit is too small", KR(ret), K(wa_mem_limit));
-      } else if (data_store_table_ctx_->schema_->is_table_without_pk_) {
+      } else if (data_store_table_ctx_->schema_->is_table_without_pk_ && !data_store_table_ctx_->schema_->is_random_part_) {
         int64_t part_mem_size = 0;
         if (!data_store_table_ctx_->schema_->is_column_store() ||
             ObDirectLoadMethod::is_incremental(ctx_->param_.method_)) {
@@ -776,7 +776,7 @@ int ObTableLoadStoreCtx::init_write_ctx_for_dag()
   // enable_pre_sort_
   if (OB_SUCC(ret)) {
     write_ctx_.enable_pre_sort_ =
-      (write_ctx_.is_multiple_mode_ && !data_store_table_ctx_->schema_->is_table_without_pk_);
+      (write_ctx_.is_multiple_mode_ && (!data_store_table_ctx_->schema_->is_table_without_pk_ || data_store_table_ctx_->schema_->is_random_part_));
   }
   if (OB_SUCC(ret) && ctx_->param_.px_mode_) {
     const ObArray<ObTableLoadLSIdAndPartitionId> &ls_partition_ids =
@@ -833,11 +833,13 @@ int ObTableLoadStoreCtx::init_dag()
   return ret;
 }
 
-int ObTableLoadStoreCtx::generate_autoinc_params(AutoincParam &autoinc_param)
+int ObTableLoadStoreCtx::generate_autoinc_params(const uint64_t column_id, AutoincParam &autoinc_param)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = nullptr;
+  const ObColumnSchemaV2 *autoinc_column_schema = nullptr;
+  //ddl对于auto increment是最后进行自增值同步，对于autoinc_param参数初始化得使用原表table id的table schema
   if (OB_FAIL(ObTableLoadSchema::get_table_schema(ctx_->param_.tenant_id_,
                                                   ctx_->param_.table_id_,
                                                   schema_guard, table_schema))) {
@@ -846,51 +848,30 @@ int ObTableLoadStoreCtx::generate_autoinc_params(AutoincParam &autoinc_param)
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table not exist", KR(ret), K(ctx_->param_.tenant_id_), K(ctx_->param_.table_id_));
+  } else if (OB_ISNULL(autoinc_column_schema = table_schema->get_column_schema(column_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null autoinc column schema", KR(ret), K(column_id));
   } else {
-    //ddl对于auto increment是最后进行自增值同步，对于autoinc_param参数初始化得使用原表table id的table schema
-    ObColumnSchemaV2 *autoinc_column_schema = nullptr;
-    uint64_t column_id = 0;
-    for (ObTableSchema::const_column_iterator iter = table_schema->column_begin();
-         OB_SUCC(ret) && iter != table_schema->column_end(); ++iter) {
-      ObColumnSchemaV2 *column_schema = *iter;
-      if (OB_ISNULL(column_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("invalid column schema", KR(ret), KP(column_schema));
-      } else {
-        column_id = column_schema->get_column_id();
-        if (column_schema->is_autoincrement() && column_id != OB_HIDDEN_PK_INCREMENT_COLUMN_ID) {
-          autoinc_column_schema = column_schema;
-          break;
-        }
-      }
-    }//end for
-    if (OB_SUCC(ret)) {
-      if (OB_ISNULL(autoinc_column_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null autoinc column schema", KR(ret), KP(autoinc_column_schema));
-      } else {
-        autoinc_param.tenant_id_ = ctx_->param_.tenant_id_;
-        autoinc_param.autoinc_table_id_ = ctx_->param_.table_id_;
-        autoinc_param.autoinc_first_part_num_ = table_schema->get_first_part_num();
-        autoinc_param.autoinc_table_part_num_ = table_schema->get_all_part_num();
-        autoinc_param.autoinc_col_id_ = column_id;
-        autoinc_param.auto_increment_cache_size_ = MAX_INCREMENT_CACHE_SIZE;
-        autoinc_param.part_level_ = table_schema->get_part_level();
-        autoinc_param.autoinc_col_type_ = autoinc_column_schema->get_data_type();
-        autoinc_param.total_value_count_ = 1;
-        autoinc_param.autoinc_desired_count_ = 0;
-        autoinc_param.autoinc_mode_is_order_ = table_schema->is_order_auto_increment_mode();
-        autoinc_param.autoinc_auto_increment_ = table_schema->get_auto_increment();
-        autoinc_param.autoinc_increment_ = 1;
-        autoinc_param.autoinc_offset_ = 1;
-        autoinc_param.part_value_no_order_ = true;
-        if (autoinc_column_schema->is_tbl_part_key_column()) {
-          // don't keep intra-partition value asc order when partkey column is auto inc
-          autoinc_param.part_value_no_order_ = true;
-        }
-        autoinc_param.autoinc_version_ = table_schema->get_truncate_version();
-      }
+    autoinc_param.tenant_id_ = ctx_->param_.tenant_id_;
+    autoinc_param.autoinc_table_id_ = ctx_->param_.table_id_;
+    autoinc_param.autoinc_first_part_num_ = table_schema->get_first_part_num();
+    autoinc_param.autoinc_table_part_num_ = table_schema->get_all_part_num();
+    autoinc_param.autoinc_col_id_ = column_id;
+    autoinc_param.auto_increment_cache_size_ = MAX_INCREMENT_CACHE_SIZE;
+    autoinc_param.part_level_ = table_schema->get_part_level();
+    autoinc_param.autoinc_col_type_ = autoinc_column_schema->get_data_type();
+    autoinc_param.total_value_count_ = 1;
+    autoinc_param.autoinc_desired_count_ = 0;
+    autoinc_param.autoinc_mode_is_order_ = table_schema->is_order_auto_increment_mode();
+    autoinc_param.autoinc_auto_increment_ = table_schema->get_auto_increment();
+    autoinc_param.autoinc_increment_ = 1;
+    autoinc_param.autoinc_offset_ = 1;
+    autoinc_param.part_value_no_order_ = true;
+    if (autoinc_column_schema->is_tbl_part_key_column()) {
+      // don't keep intra-partition value asc order when partkey column is auto inc
+      autoinc_param.part_value_no_order_ = true;
     }
+    autoinc_param.autoinc_version_ = table_schema->get_truncate_version();
   }
   return ret;
 }
@@ -970,7 +951,7 @@ int ObTableLoadStoreCtx::init_session_ctx_array()
   if (OB_ISNULL(buf = allocator_.alloc(sizeof(SessionContext) * ctx_->param_.write_session_count_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory", KR(ret));
-  } else if (data_store_table_ctx_->schema_->has_autoinc_column_ && OB_FAIL(generate_autoinc_params(autoinc_param))) {
+  } else if (OB_INVALID_ID != data_store_table_ctx_->schema_->autoinc_column_id_ && OB_FAIL(generate_autoinc_params(data_store_table_ctx_->schema_->autoinc_column_id_, autoinc_param))) {
     LOG_WARN("fail to init auto increment param", KR(ret));
   } else {
     session_ctx_array_ = new (buf) SessionContext[ctx_->param_.write_session_count_];

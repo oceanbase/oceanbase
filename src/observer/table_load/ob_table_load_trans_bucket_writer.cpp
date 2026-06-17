@@ -15,6 +15,7 @@
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/ob_table_load_trans_ctx.h"
 #include "share/sequence/ob_sequence_cache.h"
+#include "sql/engine/expr/ob_expr_random_part_nextval.h"
 
 namespace oceanbase
 {
@@ -92,7 +93,7 @@ int ObTableLoadTransBucketWriter::init()
     const ObTableLoadSchema &schema = coordinator_ctx_->ctx_->schema_;
     is_partitioned_ = schema.is_partitioned_table_;
     column_count_ =
-      (!schema.is_table_without_pk_ ? schema.store_column_count_ : schema.store_column_count_ - 1);
+      ((!schema.is_table_without_pk_ || schema.is_random_part_) ? schema.store_column_count_ : schema.store_column_count_ - 1);
     session_count_ = param_.write_session_count_;
     if (OB_FAIL(ObSQLUtils::get_default_cast_mode(coordinator_ctx_->ctx_->session_info_, cast_mode_))) {
       LOG_WARN("fail to get_default_cast_mode", KR(ret));
@@ -192,11 +193,21 @@ int ObTableLoadTransBucketWriter::write(int32_t session_id, ObTableLoadObjRowArr
         LOG_WARN("fail to write for non partitioned", KR(ret));
       }
     } else {
-      if (coordinator_ctx_->partition_calc_.is_partition_with_autoinc_ &&
-          OB_FAIL(handle_partition_with_autoinc_identity(
+      if (coordinator_ctx_->partition_calc_.is_partition_with_autoinc_) {
+        if (OB_FAIL(handle_partition_with_autoinc_identity(
             session_ctx, obj_rows, coordinator_ctx_->ctx_->session_info_->get_sql_mode(),
             session_id))) {
-        LOG_WARN("fail to handle partition column with autoincrement or identity", KR(ret));
+          LOG_WARN("fail to handle partition column with autoincrement or identity", KR(ret));
+        }
+      }
+      if (OB_SUCC(ret) && coordinator_ctx_->partition_calc_.is_partition_with_random_part_) {
+        if (OB_FAIL(handle_partition_with_random_part(
+            session_ctx, obj_rows, coordinator_ctx_->ctx_->session_info_->get_sql_mode(),
+            session_id))) {
+          LOG_WARN("fail to handle partition column with autoincrement or identity", KR(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(write_for_partitioned(session_ctx, obj_rows))) {
         LOG_WARN("fail to write for partitioned", KR(ret));
       }
@@ -289,6 +300,66 @@ int ObTableLoadTransBucketWriter::handle_partition_with_autoinc_identity(
   return ret;
 }
 
+int ObTableLoadTransBucketWriter::handle_partition_with_random_part(
+  SessionContext &session_ctx, table::ObTableLoadObjRowArray &obj_rows, const uint64_t &sql_mode,
+  int32_t session_id)
+{
+  int ret = OB_SUCCESS;
+  const int64_t row_count = obj_rows.count();
+  ObArenaAllocator autoinc_allocator("TLD_RandPart", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObDataTypeCastParams cast_params(coordinator_ctx_->partition_calc_.session_info_->get_timezone_info());
+  ObCastCtx cast_ctx(&autoinc_allocator, &cast_params, cast_mode_,
+                      ObCharset::get_system_collation());
+  ObTableLoadCastObjCtx cast_obj_ctx(param_, &(coordinator_ctx_->partition_calc_.time_cvrt_), &cast_ctx,
+                                      true);
+  ObObj tmp_obj;
+  ObObj out_obj;
+  for (int64_t j = 0; OB_SUCC(ret) && j < row_count; ++j) {
+    ObTableLoadObjRow &obj_row = obj_rows.at(j);
+    const ObTableLoadPartitionCalc::IndexAndType &index_and_type =
+      coordinator_ctx_->partition_calc_.part_key_obj_index_.at(
+        coordinator_ctx_->partition_calc_.partition_with_random_part_idx_);
+    const ObColumnSchemaV2 *column_schema = index_and_type.column_schema_;
+    const int64_t obj_index = index_and_type.index_;
+    ObObj &obj = obj_row.cells_[obj_index];
+    if (OB_UNLIKELY(obj_row.count_ != column_count_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected column count not match", KR(ret), K(obj_row), K(column_count_));
+    } else if (OB_UNLIKELY(obj_index < 0 || obj_index >= column_count_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected obj index", KR(ret), K(index_and_type), K(column_count_));
+    } else {
+      // mysql模式还不支持快速删列, 先加个拦截
+      if (OB_UNLIKELY(column_schema->is_unused())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected unused identity column", KR(ret), KPC(column_schema));
+      } else if (obj.is_null() || obj.is_nop_value()) {
+        tmp_obj = obj;
+      } else if (OB_FAIL(ObTableLoadObjCaster::cast_obj(cast_obj_ctx,
+                                                        column_schema,
+                                                        obj,
+                                                        tmp_obj))) {
+        LOG_WARN("fail to cast obj", KR(ret), K(obj), KPC(column_schema));
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(handle_random_part_column(*column_schema,
+                                              tmp_obj,
+                                              out_obj,
+                                              session_id,
+                                              sql_mode))) {
+          LOG_WARN("fail to handle autoinc column", KR(ret), K(tmp_obj));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ob_write_obj(*(obj_row.get_allocator_handler()), out_obj, obj))) {
+        LOG_WARN("fail to deep copy obj", KR(ret), K(tmp_obj));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTableLoadTransBucketWriter::handle_autoinc_column(const ObColumnSchemaV2 *column_schema,
                                                         const ObObj &obj,
                                                         ObObj &out_obj,
@@ -344,6 +415,32 @@ int ObTableLoadTransBucketWriter::handle_identity_column(const ObColumnSchemaV2 
     } else {
       out_obj = obj;
     }
+  }
+  return ret;
+}
+
+int ObTableLoadTransBucketWriter::handle_random_part_column(const ObColumnSchemaV2 &column_schema,
+                                                            const ObObj &obj,
+                                                            ObObj &out_obj,
+                                                            int32_t session_id,
+                                                            const uint64_t &sql_mode)
+{
+  int ret = OB_SUCCESS;
+  const ObObjTypeClass &tc = column_schema.get_meta_type().get_type_class();
+  ObStorageDatum datum;
+  bool is_to_generate = false;
+  uint64_t new_val = 0;
+  if (OB_ISNULL(coordinator_ctx_) || OB_ISNULL(coordinator_ctx_->exec_ctx_) || OB_ISNULL(coordinator_ctx_->exec_ctx_->get_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid schema guard", K(ret));
+  } else if (OB_FAIL(datum.from_obj_enhance(obj))) {
+    LOG_WARN("fail to from obj enhance", KR(ret), K(obj));
+  } else if (OB_FAIL(ObExprRandomPartNextval::eval_nextval(sql_mode, false/*is_ddl_idempotent_autoinc*/,
+          ObExprRandomPartNextval::get_table_load_action(param_), *coordinator_ctx_->exec_ctx_->get_schema_guard(),
+          coordinator_ctx_->session_ctx_array_[session_id - 1].random_part_param_, &tc, &datum, tc, datum, is_to_generate, new_val))) {
+    LOG_WARN("fail to get random part next value", KR(ret));
+  } else if (OB_FAIL(datum.to_obj_enhance(out_obj, column_schema.get_meta_type()))) {
+    LOG_WARN("fail to obj enhance", KR(ret), K(datum));
   }
   return ret;
 }

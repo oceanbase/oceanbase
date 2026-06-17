@@ -27,6 +27,8 @@
 #include "share/ob_fts_index_builder_util.h"
 #include "storage/fts/dict/ob_gen_dic_loader.h"
 #include "rootserver/ddl_task/ob_vec_ivf_index_build_task.h"
+#include "storage/ddl/ob_partition_random_distribution_helper.h"
+#include "rootserver/ob_random_partition_helper.h"
 
 namespace oceanbase
 {
@@ -1292,6 +1294,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                             create_index_arg,
                                             param.type_,
                                             param.tenant_data_version_,
+                                            param.data_tablet_ids_,
                                             *param.allocator_,
                                             task_record,
                                             param.new_snapshot_version_,
@@ -1745,12 +1748,27 @@ int ObDDLScheduler::cache_auto_split_task(const obrpc::ObAutoSplitTabletBatchArg
   if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(arg));
+  } else if (arg.args_.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("args is empty", K(ret), K(arg));
   } else {
-    ObRsAutoSplitScheduler &split_task_scheduler = ObRsAutoSplitScheduler::get_instance();
+    const bool is_random_part = arg.args_.at(0).is_random_part_;
+    ObRsSplitScheduler* task_scheduler = nullptr;
     ObArray<ObAutoSplitTask> task_array;
     ObAutoSplitTask task;
     res.suggested_next_valid_time_ = OB_INVALID_TIMESTAMP;
     res.rets_.reuse();
+    if (is_random_part) {
+      ObRsRandomPartitionScheduler *ptr = MTL_WITH_CHECK_TENANT(ObRsRandomPartitionScheduler*, OB_SYS_TENANT_ID);
+      if (OB_ISNULL(ptr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("random partition scheduler nullptr", K(ret), K(MTL_ID()));
+      } else {
+        task_scheduler = static_cast<ObRsSplitScheduler*>(ptr);
+      }
+    } else {
+      task_scheduler = static_cast<ObRsSplitScheduler*>(&ObRsAutoSplitScheduler::get_instance());
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < single_arg_array.size(); ++i) {
       const obrpc::ObAutoSplitTabletArg &single_arg = single_arg_array.at(i);
       task.reset();
@@ -1760,19 +1778,23 @@ int ObDDLScheduler::cache_auto_split_task(const obrpc::ObAutoSplitTabletBatchArg
       task.tenant_id_ = single_arg.tenant_id_;
       task.used_disk_space_ = single_arg.used_disk_space_;
       task.retry_times_ = 0;
-      if (OB_FAIL(task_array.push_back(task))) {
+      task.is_random_part_ = single_arg.is_random_part_;
+      task.table_id_ = single_arg.table_id_;
+      if (OB_FAIL(task.inactive_tablet_ids_.assign(single_arg.inactive_tablet_ids_))) {
+        LOG_WARN("fail to assign inactive tablet ids", K(ret));
+      } else if (OB_FAIL(task_array.push_back(task))) {
         LOG_WARN("fail to push back task", K(ret) ,K(task), K(task_array));
       } else if (OB_FAIL(res.rets_.push_back(OB_SUCCESS))) {
         LOG_WARN("fail to push back ret", K(ret));
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(split_task_scheduler.push_tasks(task_array))) {
+      if (OB_FAIL(task_scheduler->push_tasks(task_array))) {
         LOG_WARN("fail to push tasks into auto_split_task_tree_", K(ret), K(task_array));
       } else {
         int64_t cur_time = ObTimeUtility::current_time();
-        bool is_busy = split_task_scheduler.is_busy();
-        res.suggested_next_valid_time_ = cur_time + (is_busy ? ObServerAutoSplitScheduler::OB_SERVER_DELAYED_TIME : 0);
+        bool is_busy = task_scheduler->is_busy();
+        res.suggested_next_valid_time_ = cur_time + (is_busy ? ObServerSplitScheduler::OB_SERVER_DELAYED_TIME : 0);
       }
     }
   }
@@ -2332,6 +2354,7 @@ int ObDDLScheduler::create_build_index_task(
     const obrpc::ObCreateIndexArg *create_index_arg,
     const share::ObDDLType task_type,
     const uint64_t tenant_data_version,
+    const ObIArray<ObTabletID> *data_tablet_ids,
     ObIAllocator &allocator,
     ObDDLTaskRecord &task_record,
     const int64_t snapshot_version,
@@ -2349,9 +2372,9 @@ int ObDDLScheduler::create_build_index_task(
       ret = OB_NOT_INIT;
       LOG_WARN("not init", K(ret));
     } else if (OB_ISNULL(create_index_arg) || OB_ISNULL(data_table_schema) || OB_ISNULL(index_schema)
-        || OB_UNLIKELY(tenant_data_version <= 0) || OB_ISNULL(GCTX.sql_proxy_)) {
+        || OB_UNLIKELY(tenant_data_version <= 0) || OB_ISNULL(GCTX.sql_proxy_) || OB_ISNULL(data_tablet_ids)) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret), KPC(create_index_arg), KPC(data_table_schema), KPC(index_schema), K(tenant_data_version));
+      LOG_WARN("invalid argument", K(ret), KPC(create_index_arg), KPC(data_table_schema), KPC(index_schema), K(tenant_data_version), KP(data_tablet_ids));
     } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(*GCTX.sql_proxy_, data_table_schema->get_tenant_id(), task_id))) {
       LOG_WARN("fetch new task id failed", K(ret));
     } else if (OB_FAIL(index_task.init(data_table_schema->get_tenant_id(),
@@ -2367,6 +2390,7 @@ int ObDDLScheduler::create_build_index_task(
                                       task_type,
                                       parent_task_id,
                                       tenant_data_version,
+                                      *data_tablet_ids,
                                       task_status,
                                       snapshot_version,
                                       !ddl_need_retry_at_executor))) {
@@ -3250,6 +3274,12 @@ int ObDDLScheduler::recover_task()
     if (OB_TMP_FAIL(ObSysDDLSchedulerUtil::schedule_auto_split_task())) {
       LOG_WARN("fail to schedule auto split task", KR(tmp_ret));
     } //ignore schedule auto split task error
+    if (OB_TMP_FAIL(ObRsRandomPartitionScheduler::schedule_random_part_task())) {
+      LOG_WARN("fail to schedule random part task", KR(tmp_ret));
+    } //ignore schedule random part task error
+    if (OB_TMP_FAIL(ObRsRandomPartitionScheduler::refresh_auto_random_part())) {
+      LOG_WARN("fail to refresh auto random part", KR(tmp_ret));
+    } //ignore refresh auto random part error
 
     ObSqlString sql_string;
     ObArray<ObDDLTaskRecord> task_records;

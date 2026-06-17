@@ -84,6 +84,8 @@ int ObTableLoadInstance::init(ObTableLoadParam &param,
 
     int64_t db_id = -1;
     ObString query_sql;
+    ObArray<ObTabletID> cur_tablet_ids;
+    const ObIArray<ObTabletID> *exec_tablet_ids = &tablet_ids;
     if (execute_ctx_ != nullptr) {
       ObSQLSessionInfo *session = execute_ctx_->get_session_info();
       if (session != nullptr) {
@@ -106,8 +108,29 @@ int ObTableLoadInstance::init(ObTableLoadParam &param,
     else if (OB_FAIL(ObTableLoadService::check_tenant())) {
       LOG_WARN("fail to check tenant", KR(ret), K(param.tenant_id_));
     }
+    // increment load only need to lock current partitions to allow random partitioned table to extend partitions
+    else if (ObDirectLoadMethod::is_incremental(param.method_) && tablet_ids.empty()) {
+      ObSchemaGetterGuard schema_guard;
+      const ObTableSchema *table_schema = nullptr;
+      if (OB_FAIL(ObTableLoadSchema::get_schema_guard(param.tenant_id_, schema_guard))) {
+        LOG_WARN("fail to get schema guard", KR(ret));
+      } else if (OB_FAIL(ObTableLoadSchema::get_table_schema(schema_guard,
+                                                             param.tenant_id_,
+                                                             param.table_id_,
+                                                             table_schema))) {
+        LOG_WARN("fail to get table schema", KR(ret), K(param.tenant_id_), K(param.table_id_));
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("table schema is nullptr", KR(ret), K(param.table_id_));
+      } else if (OB_FAIL(table_schema->get_tablet_ids(cur_tablet_ids))) {
+        LOG_WARN("failed to get tablet ids", K(ret));
+      } else {
+        exec_tablet_ids = &cur_tablet_ids;
+      }
+    }
+    if (OB_FAIL(ret)) {}
     // start stmt
-    else if (OB_FAIL(start_stmt(param, tablet_ids))) {
+    else if (OB_FAIL(start_stmt(param, *exec_tablet_ids))) {
       LOG_WARN("fail to start stmt", KR(ret), K(param), K(tablet_ids));
     }
     // double check support for concurrency of direct load and ddl

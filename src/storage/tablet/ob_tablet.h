@@ -726,15 +726,6 @@ public:
       const int64_t buf_size,
       int64_t &pos);
 
-  int fetch_tablet_autoinc_seq_cache(
-      const ObLSSwitchChecker &ls_switch_checker,
-      const uint64_t cache_size,
-      share::ObTabletAutoincInterval &result);
-
-  int update_tablet_autoinc_seq(
-      const ObLSSwitchChecker &ls_switch_checker,
-      const uint64_t autoinc_seq,
-      const bool is_tablet_creating);
   int get_kept_snapshot_info(
       const int64_t min_reserved_snapshot_on_ls,
       ObStorageSnapshotInfo &snapshot_info,
@@ -856,6 +847,9 @@ public:
       const uint64_t data_format_version);
   int check_tx_data_can_explain_user_data(const share::SCN &tx_data_table_filled_tx_scn);
   int check_can_set_restore_status(const ObTabletRestoreStatus::STATUS &restore_status);
+  int write_sync_tablet_seq_log(share::ObTabletAutoincSeq &autoinc_seq,
+                                const bool is_tablet_creating,
+                                share::SCN &scn);
 
   static bool is_snapshot_not_advance(const ObStorageSnapshotInfo &snapshot_info,
                          const int64_t snapshot_version);
@@ -994,10 +988,6 @@ private:
   int inner_create_memtable(CreateMemtableArg &arg);
 
   int inner_get_memtables(common::ObIArray<storage::ObITable *> &memtables) const;
-
-  int write_sync_tablet_seq_log(share::ObTabletAutoincSeq &autoinc_seq,
-                                const bool is_tablet_creating,
-                                share::SCN &scn);
 
   int update_ddl_info(
       const int64_t schema_version,

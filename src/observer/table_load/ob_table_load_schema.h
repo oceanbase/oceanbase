@@ -78,8 +78,8 @@ public:
   bool is_valid() const { return is_inited_; }
   bool is_column_store() const { return cg_cnt_ > 1; }
   bool is_local_unique_index() const { return is_local_unique_index_table(index_type_); }
-  TO_STRING_KV(K_(table_name), K_(is_partitioned_table), K_(is_table_without_pk), K_(is_table_with_hidden_pk_column),
-               K_(has_autoinc_column), K_(has_identity_column), K_(has_lob_rowkey), K_(rowkey_column_count), K_(store_column_count),
+  TO_STRING_KV(K_(table_name), K_(is_partitioned_table), K_(is_table_without_pk), K_(is_table_with_hidden_pk_column), K_(is_random_part),
+               K_(random_partkey_column_id), K_(autoinc_column_id), K_(has_identity_column), K_(has_lob_rowkey), K_(rowkey_column_count), K_(store_column_count),
                K_(cg_cnt), K_(collation_type), K_(column_descs), K_(is_inited));
 private:
   int init_table_schema(const share::schema::ObTableSchema *table_schema);
@@ -97,8 +97,10 @@ public:
   bool is_table_without_pk_;
   bool is_table_with_hidden_pk_column_;
   bool is_delete_insert_engine_;
+  bool is_random_part_;
   share::schema::ObIndexType index_type_;
-  bool has_autoinc_column_;
+  uint64_t random_partkey_column_id_;
+  uint64_t autoinc_column_id_;
   bool has_identity_column_;
   bool has_lob_rowkey_;
   int64_t rowkey_column_count_;

@@ -71,6 +71,8 @@
 #include "parallel_ddl/ob_htable_ddl_handler.h" // ObUpdateIndexStatusHelper
 #include "pl_ddl/ob_pl_ddl_service.h"
 #include "storage/ddl/ob_tablet_split_util.h"
+#include "storage/ddl/ob_partition_random_distribution_helper.h"
+#include "rootserver/ob_random_partition_helper.h"
 #include "share/compaction_ttl/ob_compaction_ttl_util.h"
 #include "rootserver/ob_ai_model_ddl_service.h"
 #include "parallel_ddl/ob_drop_tablegroup_helper.h" // ObDropTableGroupHelper
@@ -3036,6 +3038,10 @@ int ObRootService::parallel_create_table(const ObCreateTableArg &arg, ObCreateTa
         LOG_WARN("version lower than 4.4.1.0 does not support cluster by table", KR(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant's data version is lower than 4.4.1.0; cluster by table is ");
       }
+    } else if (DATA_VERSION_4_6_1_0 > compat_version && arg.schema_.is_random_part()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("version lower than 4.6.1 does not support random partitioned table", KR(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant's data version is below 4.6.1, random partitioned table is ");
     }
     ObCreateTableHelper create_table_helper(schema_service_, tenant_id, arg, res, nullptr /*external trans*/,is_parallel);
     if (FAILEDx(create_table_helper.init(ddl_service_))) {
@@ -3401,6 +3407,12 @@ int ObRootService::execute_ddl_task(const obrpc::ObAlterTableArg &arg,
       case share::SWITCH_MLOG_NAME_TASK: {
         if (OB_FAIL(ddl_service_.switch_index_name_and_status_for_mlog_table(const_cast<ObAlterTableArg &>(arg)))) {
           LOG_WARN("failed to switch index name and status for mlog table", K(ret), K(arg));
+        }
+        break;
+      }
+      case share::DROP_INDEX_SCHEMA_ON_FAIL: {
+        if (OB_FAIL(ddl_service_.drop_index_schema_on_fail(const_cast<ObAlterTableArg &>(arg)))) {
+          LOG_WARN("failed to drop index schema on failed", K(ret), K(arg));
         }
         break;
       }
@@ -4519,6 +4531,21 @@ int ObRootService::split_global_index_tablet(const obrpc::ObAlterTableArg &arg)
   return ret;
 }
 
+int ObRootService::alter_random_distribution_partition(const obrpc::ObAlterTableArg &arg, obrpc::ObAlterRandomPartitionRes &res)
+{
+  int ret = OB_SUCCESS;
+  ObAlterTableArg &nonconst_arg = const_cast<ObAlterTableArg &>(arg);
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!arg.is_valid() || !arg.is_random_partition()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_FAIL(ObRandomPartitionHelper::alter_random_distribution_partition(ddl_service_, nonconst_arg, res))) {
+    LOG_WARN("ddl_service alter random distribution partition failed", KR(ret), K(arg));
+  }
+  return ret;
+}
 int ObRootService::clean_splitted_tablet(const obrpc::ObCleanSplittedTabletArg &arg)
 {
   int ret = OB_SUCCESS;

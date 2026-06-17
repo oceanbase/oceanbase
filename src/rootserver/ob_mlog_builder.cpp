@@ -528,6 +528,7 @@ int ObMLogBuilder::do_create_mlog(
     ObDDLSQLTransaction trans(&ddl_service_.get_schema_service());
     int64_t refreshed_schema_version = 0;
     const uint64_t tenant_id = base_table_schema.get_tenant_id();
+    ObArray<ObTabletID> data_tablet_ids;
     if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
       LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
     } else if (OB_FAIL(trans.start(&ddl_service_.get_sql_proxy(),
@@ -539,6 +540,8 @@ int ObMLogBuilder::do_create_mlog(
     } else if (!src_table_schema.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to copy table schema", KR(ret));
+    } else if (OB_FAIL(src_table_schema.get_tablet_ids(data_tablet_ids))) {
+      LOG_WARN("failed to get data tablet ids", K(ret), K(src_table_schema));
     } else if (OB_FAIL(generate_mlog_schema(schema_guard, create_mlog_arg, src_table_schema, mlog_schema))) {
       LOG_WARN("failed to generate schema", KR(ret), K(create_mlog_arg), K(src_table_schema));
     } else if (OB_FAIL(ddl_service_.create_mlog_table(trans, create_mlog_arg, tenant_data_version, schema_guard, mlog_schema))) {
@@ -560,7 +563,12 @@ int ObMLogBuilder::do_create_mlog(
                                   create_mlog_arg.parallelism_,
                                   create_mlog_arg.consumer_group_id_,
                                   &allocator,
-                                  &create_index_arg);
+                                  &create_index_arg,
+                                  0/*parent_task_id*/,
+                                  0/*task_id*/,
+                                  false/*ddl_need_retry_at_executor*/,
+                                  false/*direct_load_need_sync_stats_info*/,
+                                  &data_tablet_ids);
       param.tenant_data_version_ = tenant_data_version;
       ObTableLockOwnerID owner_id;
       if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {

@@ -9,6 +9,7 @@
 #include "rootserver/ddl_task/ob_ddl_scheduler.h"
 #include "share/ob_ddl_error_message_table_operator.h"
 #include "rootserver/ob_root_service.h"
+#include "storage/ddl/ob_ddl_lock.h"
 #include "storage/ob_common_id_utils.h"
 #include "storage/tablet/ob_tablet_binding_helper.h"
 #include "storage/tx/ob_ts_mgr.h"
@@ -224,7 +225,7 @@ ObCreateDDLTaskParam::ObCreateDDLTaskParam()
     vec_rowkey_vid_schema_(nullptr), vec_vid_rowkey_schema_(nullptr), vec_domain_index_schema_(nullptr), vec_index_id_schema_(nullptr), vec_snapshot_data_schema_(nullptr),
     vec_centroid_schema_(nullptr), vec_cid_vector_schema_(nullptr), vec_rowkey_cid_schema_(nullptr), vec_sq_meta_schema_(nullptr), vec_pq_centroid_schema_(nullptr), vec_pq_code_schema_(nullptr),
     hybrid_vec_embedded_schema_(nullptr), def_index_schema_(nullptr), data_index_schema_(nullptr), tenant_data_version_(0), ddl_need_retry_at_executor_(false), is_pre_split_(false),
-    direct_load_need_sync_stats_info_(false)
+    direct_load_need_sync_stats_info_(false), data_tablet_ids_(nullptr)
 {
 }
 
@@ -241,7 +242,8 @@ ObCreateDDLTaskParam::ObCreateDDLTaskParam(const uint64_t tenant_id,
                                            const int64_t parent_task_id,
                                            const int64_t task_id,
                                            const bool ddl_need_retry_at_executor,
-                                           const bool direct_load_need_sync_stats_info)
+                                           const bool direct_load_need_sync_stats_info,
+                                           const ObIArray<ObTabletID> *data_tablet_ids)
   : sub_task_trace_id_(0), tenant_id_(tenant_id), object_id_(object_id), schema_version_(schema_version), parallelism_(parallelism), consumer_group_id_(consumer_group_id),
     parent_task_id_(parent_task_id), task_id_(task_id), type_(type), src_table_schema_(src_table_schema), dest_table_schema_(dest_table_schema),
     ddl_arg_(ddl_arg), allocator_(allocator), aux_rowkey_doc_schema_(nullptr), aux_doc_rowkey_schema_(nullptr),
@@ -249,7 +251,7 @@ ObCreateDDLTaskParam::ObCreateDDLTaskParam(const uint64_t tenant_id,
     vec_rowkey_vid_schema_(nullptr), vec_vid_rowkey_schema_(nullptr), vec_domain_index_schema_(nullptr), vec_index_id_schema_(nullptr), vec_snapshot_data_schema_(nullptr),
     vec_centroid_schema_(nullptr), vec_cid_vector_schema_(nullptr), vec_rowkey_cid_schema_(nullptr), vec_sq_meta_schema_(nullptr), vec_pq_centroid_schema_(nullptr), vec_pq_code_schema_(nullptr),
     hybrid_vec_embedded_schema_(nullptr), def_index_schema_(nullptr), data_index_schema_(nullptr), tenant_data_version_(0),
-    ddl_need_retry_at_executor_(ddl_need_retry_at_executor), is_pre_split_(false), new_snapshot_version_(0), direct_load_need_sync_stats_info_(direct_load_need_sync_stats_info)
+    ddl_need_retry_at_executor_(ddl_need_retry_at_executor), is_pre_split_(false), new_snapshot_version_(0), direct_load_need_sync_stats_info_(direct_load_need_sync_stats_info), data_tablet_ids_(data_tablet_ids)
 {
 }
 
@@ -1894,8 +1896,51 @@ int ObDDLWaitTransEndCtx::init(
         || tablet_ids.count() <= 0
         || !is_wait_trans_type_valid(wait_trans_type)
         || wait_version <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(ddl_task_id), K(table_id), K(tablet_ids.count()), K(wait_trans_type), K(wait_version));
   } else if (OB_FAIL(tablet_ids_.assign(tablet_ids))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else if (OB_FAIL(snapshot_array_.prepare_allocate(tablet_ids_.count()))) {
+    LOG_WARN("failed to prepare allocate", K(ret));
+  } else {
+    tenant_id_ = tenant_id;
+    ddl_task_id_ = ddl_task_id;
+    table_id_ = table_id;
+    wait_type_ = wait_trans_type;
+    wait_version_ = wait_version;
+    is_trans_end_ = false;
+    ddl_task_status_ = ddl_task_status;
+    is_write_defensive_done_ = false;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObDDLWaitTransEndCtx::init(
+    const uint64_t tenant_id,
+    const int64_t ddl_task_id,
+    const share::ObDDLTaskStatus ddl_task_status,
+    const uint64_t table_id,
+    const ObIArray<ObTabletID> &tablet_ids,
+    const ObIArray<ObTabletID> &inc_tablet_ids,
+    const WaitTransType wait_trans_type,
+    const int64_t wait_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret), K(is_inited_));
+  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id
+        || ddl_task_id <= 0
+        || table_id <= 0
+        || tablet_ids.count() <= 0
+        || !is_wait_trans_type_valid(wait_trans_type)
+        || wait_version <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(ddl_task_id), K(table_id), K(tablet_ids.count()), K(wait_trans_type), K(wait_version));
+  } else if (OB_FAIL(tablet_ids_.assign(tablet_ids))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else if (OB_FAIL(inc_tablet_ids_.assign(inc_tablet_ids))) {
     LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(snapshot_array_.prepare_allocate(tablet_ids_.count()))) {
     LOG_WARN("failed to prepare allocate", K(ret));
@@ -1922,6 +1967,7 @@ void ObDDLWaitTransEndCtx::reset()
   wait_type_ = WaitTransType::MIN_WAIT_TYPE;
   wait_version_ = 0;
   tablet_ids_.reset();
+  inc_tablet_ids_.reset();
   snapshot_array_.reset();
   ddl_task_id_ = 0;
   ddl_task_status_ = ObDDLTaskStatus::PREPARE;
@@ -2115,7 +2161,7 @@ int ObDDLWaitTransEndCtx::check_schema_trans_end(
   } else if (OB_FAIL(group_tablets_leader_addr(tenant_id, tablet_ids, location_service, send_array))) {
     LOG_WARN("group tablet by leader addr failed", K(ret), K(tenant_id), K(tablet_ids.count()));
   } else if (need_write_defensive && !is_write_defensive_done_) {
-    if (OB_FAIL(do_write_defensive(tenant_id, ddl_task_id_, ddl_task_status_, tablet_ids, schema_version))) {
+    if (OB_FAIL(do_write_defensive(tenant_id, ddl_task_id_, ddl_task_status_, table_id_, tablet_ids, inc_tablet_ids_, schema_version))) {
       LOG_WARN("failed to do write defense", K(ret), K(tenant_id), K(ddl_task_id_), K(ddl_task_status_), K(tablet_ids.count()));
     } else {
       is_write_defensive_done_ = true;
@@ -2142,7 +2188,9 @@ int ObDDLWaitTransEndCtx::do_write_defensive(
     const uint64_t tenant_id,
     const int64_t ddl_task_id,
     const ObDDLTaskStatus ddl_task_status,
+    const uint64_t table_id,
     const ObIArray<ObTabletID> &tablet_ids,
+    const ObIArray<ObTabletID> &inc_tablet_ids,
     const int64_t schema_version)
 {
   int ret = OB_SUCCESS;
@@ -2168,6 +2216,10 @@ int ObDDLWaitTransEndCtx::do_write_defensive(
   } else if (OB_UNLIKELY(ddl_task_status != static_cast<share::ObDDLTaskStatus>(cur_task_status))) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("task status not match, operation is stale", K(ret), K(tenant_id), K(ddl_task_id), K(ddl_task_status), K(cur_task_status));
+  // because inc_tablet_ids were added during index building without any lock protected
+  } else if (OB_FAIL(storage::ObDDLLock::lock_for_add_drop_index_inc_data_part_in_trans(tenant_id, table_id, inc_tablet_ids, trans))) {
+    LOG_WARN("failed to lock for add drop index", K(ret), K(table_id), K(inc_tablet_ids.count()));
+    // FIXME: may be after drop index schema and unlock?
   } else if (OB_FAIL(storage::ObTabletBindingMdsHelper::modify_tablet_binding_for_write_defensive(tenant_id, tablet_ids, schema_version, ObTimeUtility::current_time() + timeout_us, trans))) {
     LOG_WARN("failed to modify tablet binding for write defensive", K(ret), K(schema_version));
   }
@@ -2411,6 +2463,8 @@ int ObDDLWaitColumnChecksumCtx::init(
     const uint64_t tenant_id,
     const uint64_t source_table_id,
     const uint64_t target_table_id,
+    const ObIArray<ObTabletID> &source_tablet_ids,
+    const ObIArray<ObTabletID> &target_tablet_ids,
     const int64_t schema_version,
     const int64_t snapshot_version,
     const int64_t execution_id,
@@ -2435,7 +2489,6 @@ int ObDDLWaitColumnChecksumCtx::init(
     LOG_WARN("invalid argument", K(ret), K(task_id), K(tenant_id), K(source_table_id), K(target_table_id),
         K(schema_version), K(snapshot_version), K(execution_id));
   } else {
-    ObArray<ObTabletID> tablet_ids;
     hash::ObHashSet<ObTabletID> tablet_set;
     PartitionColChecksumStat tmp_stat;
     const int64_t NEED_CALC_CHECKSUM_COUNT =  2;  // source table and target table
@@ -2447,12 +2500,10 @@ int ObDDLWaitColumnChecksumCtx::init(
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < NEED_CALC_CHECKSUM_COUNT; ++i) {
       const uint64_t cur_table_id =  0 == i ? source_table_id : target_table_id;
-      tablet_ids.reset();
+      const ObIArray<ObTabletID> &tablet_ids = 0 == i ? source_tablet_ids : target_tablet_ids;
       if (OB_UNLIKELY(cur_table_id <= 0)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid table id", K(ret), K(i), K(cur_table_id));
-      } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id, cur_table_id, tablet_ids))) {
-        LOG_WARN("get table partition failed", K(ret), K(tenant_id), K(cur_table_id));
       } else if (OB_UNLIKELY(tablet_ids.count() <= 0)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get invalid tablet ids", K(ret), K(tablet_ids.count()));
@@ -3990,6 +4041,47 @@ int ObDDLTaskRecordOperator::check_has_conflict_ddl(
   return ret;
 }
 
+// only for tasks that need to conflict with add part but feel hard to use SHARE table-level online ddl lock
+int ObDDLTaskRecordOperator::check_has_task_disallow_add_part(
+    common::ObISQLClient &proxy,
+    const uint64_t tenant_id,
+    const uint64_t data_table_id,
+    bool &has_conflict_task)
+{
+  int ret = OB_SUCCESS;
+  has_conflict_task = false;
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id
+    || OB_INVALID_ID == data_table_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(tenant_id), K(data_table_id));
+  } else {
+    ObSqlString sql_string;
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(sql_string.assign_fmt("SELECT EXISTS(SELECT 1 FROM %s WHERE object_id = %lu AND ddl_type IN ("
+              "%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)) as has",
+          OB_ALL_DDL_TASK_STATUS_TNAME, data_table_id,
+          DDL_DROP_INDEX, DDL_CREATE_FTS_INDEX, DDL_CREATE_MLOG, DDL_DROP_MLOG,
+          DDL_DROP_LOB, DDL_DROP_FTS_INDEX, DDL_DROP_MULVALUE_INDEX, DDL_DROP_VEC_INDEX, DDL_CREATE_VEC_INDEX,
+          DDL_CREATE_MULTIVALUE_INDEX, DDL_REBUILD_INDEX, DDL_CREATE_VEC_IVFFLAT_INDEX, DDL_CREATE_VEC_IVFSQ8_INDEX, DDL_CREATE_VEC_IVFPQ_INDEX,
+          DDL_DROP_VEC_IVFFLAT_INDEX, DDL_DROP_VEC_IVFSQ8_INDEX, DDL_DROP_VEC_IVFPQ_INDEX, DDL_DROP_VEC_SPIV_INDEX, DDL_REPLACE_MLOG,
+          DDL_CREATE_VEC_SPIV_INDEX, DDL_CREATE_SEARCH_INDEX, DDL_DROP_SEARCH_INDEX))) {
+        LOG_WARN("assign sql string failed", K(ret));
+      } else if (OB_FAIL(proxy.read(res, tenant_id, sql_string.ptr()))) {
+        LOG_WARN("query ddl task record failed", K(ret), K(sql_string));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get sql result", K(ret), KP(result));
+      } else if (OB_FAIL(result->next())) {
+        LOG_WARN("result next failed", K(ret), K(tenant_id), K(data_table_id));
+      } else {
+        EXTRACT_BOOL_FIELD_MYSQL(*result, "has", has_conflict_task);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLTaskRecordOperator::check_rebuild_index_task_exist(
     const uint64_t tenant_id,
     const uint64_t data_table_id,
@@ -4146,14 +4238,14 @@ int ObDDLTaskRecordOperator::get_create_index_or_mlog_task_cnt(
 
 int ObDDLTaskRecordOperator::get_task_record(const uint64_t tenant_id,
                                              const ObSqlString &sql_string,
-                                             common::ObMySQLProxy &proxy,
+                                             common::ObISQLClient &proxy,
                                              common::ObIAllocator &allocator,
                                              common::ObIArray<ObDDLTaskRecord> &records)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!proxy.is_inited() || !sql_string.is_valid())) {
+  if (OB_UNLIKELY(!sql_string.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argment", K(ret), K(proxy.is_inited()), K(sql_string));
+    LOG_WARN("invalid argment", K(ret), K(sql_string));
   } else {
     records.reset();
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
@@ -4194,17 +4286,14 @@ int ObDDLTaskRecordOperator::get_task_record(const uint64_t tenant_id,
 
 int ObDDLTaskRecordOperator::get_ddl_task_record(const uint64_t tenant_id,
                                                  const int64_t task_id,
-                                                 common::ObMySQLProxy &proxy,
+                                                 common::ObISQLClient &proxy,
                                                  common::ObIAllocator &allocator,
                                                  ObDDLTaskRecord &record)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql_string;
   ObArray<ObDDLTaskRecord> task_records;
-  if (OB_UNLIKELY(!proxy.is_inited())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(proxy.is_inited()));
-  } else if (OB_FAIL(sql_string.assign_fmt(GET_DDL_TASK_SQL
+  if (OB_FAIL(sql_string.assign_fmt(GET_DDL_TASK_SQL
                                            " WHERE task_id=%lu ", OB_ALL_DDL_TASK_STATUS_TNAME, task_id))) {
     LOG_WARN("assign sql string failed", K(ret), K(task_id));
   } else if (OB_FAIL(get_task_record(tenant_id, sql_string, proxy, allocator, task_records))) {

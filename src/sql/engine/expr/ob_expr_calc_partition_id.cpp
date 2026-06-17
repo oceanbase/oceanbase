@@ -235,7 +235,7 @@ int ObExprCalcPartitionBase::cg_expr(ObExprCGCtx &expr_cg_ctx,
             rt_expr.eval_vector_func_ =
                 ObExprCalcPartitionBase::fast_calc_partition_level_one_vector;
           }
-        } else if (table_schema->is_range_part()) {
+        } else if (table_schema->is_range_or_random_part()) {
           if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_0) {
             fallback = true;
           } else {
@@ -714,7 +714,7 @@ if (table_schema->is_hash_part()) {                                             
   PART_DISPATCH_VECTOR_IN_CALC_ID_TYPE(func_name, is_oracle_mode, ObExprCalcPartitionBase::PartType::HASH);    \
 } else if (table_schema->is_key_part()) {                                                                      \
   PART_DISPATCH_VECTOR_IN_CALC_ID_TYPE(func_name, is_oracle_mode, ObExprCalcPartitionBase::PartType::KEY);     \
-} else if (table_schema->is_range_part()) {                                                                    \
+} else if (table_schema->is_range_or_random_part()) {                                                                    \
   PART_DISPATCH_VECTOR_IN_CALC_ID_TYPE(func_name, is_oracle_mode, ObExprCalcPartitionBase::PartType::RANGE);   \
 } else if (table_schema->is_list_part()) {                                                                     \
   PART_DISPATCH_VECTOR_IN_CALC_ID_TYPE(func_name, is_oracle_mode, ObExprCalcPartitionBase::PartType::LIST);    \

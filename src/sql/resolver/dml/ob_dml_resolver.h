@@ -513,6 +513,12 @@ protected:
                                  const uint64_t autoinc_col_id,
                                  const ObString autoinc_table_name,
                                  const ObString autoinc_column_name);
+  int build_random_part_nextval_expr(ObRawExpr *&expr,
+                                 const uint64_t autoinc_table_id,
+                                 const uint64_t autoinc_col_id,
+                                 const ObString autoinc_table_name,
+                                 const ObString autoinc_column_name,
+                                 const share::schema::ObTableSchema &table_schema);
   int fill_doc_id_expr_param(
       const uint64_t table_id,
       const uint64_t index_tid,

@@ -45,6 +45,7 @@
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
 #include "storage/truncate_info/ob_truncate_partition_filter.h"
 #include "storage/access/ob_old_row_check_dumper.h"
+#include "storage/ddl/ob_partition_random_distribution_helper.h"
 #include "storage/lob/ob_lob_tablet_dml.h"
 #include "rootserver/truncate_info/ob_truncate_info_service.h"
 #include "rootserver/compaction_ttl/ob_compaction_ttl_service.h"
@@ -957,7 +958,10 @@ int ObLSTabletService::update_tablet_table_store(
   if (OB_SUCC(ret)) {
     int tmp_ret = OB_SUCCESS;
     ObServerAutoSplitScheduler &auto_split_scheduler = ObServerAutoSplitScheduler::get_instance();
-    if (OB_TMP_FAIL(auto_split_scheduler.push_task(new_tablet_hdl, *ls_))) {
+    ObServerRandomPartitionScheduler &random_part_scheduler = ObServerRandomPartitionScheduler::get_instance();
+    if (OB_TMP_FAIL(random_part_scheduler.push_task(new_tablet_hdl, *ls_))) {
+      LOG_WARN("fail to push random part split task", K(tmp_ret));
+    } else if (OB_TMP_FAIL(auto_split_scheduler.push_task(new_tablet_hdl, *ls_))) {
       LOG_WARN("fail to push auto split task", K(tmp_ret));
     }
   }
@@ -1051,8 +1055,11 @@ int ObLSTabletService::update_tablet_table_store(
   }
   if (OB_SUCC(ret)) {
     int tmp_ret = OB_SUCCESS;
-    ObServerAutoSplitScheduler &auto_split_scheduler= ObServerAutoSplitScheduler::get_instance();
-    if (OB_TMP_FAIL(auto_split_scheduler.push_task(new_tablet_hdl, *ls_))) {
+    ObServerAutoSplitScheduler &auto_split_scheduler = ObServerAutoSplitScheduler::get_instance();
+    ObServerRandomPartitionScheduler &random_part_scheduler = ObServerRandomPartitionScheduler::get_instance();
+    if (OB_TMP_FAIL(random_part_scheduler.push_task(new_tablet_hdl, *ls_))) {
+      LOG_WARN("fail to push random part split task", K(tmp_ret));
+    } else if (OB_TMP_FAIL(auto_split_scheduler.push_task(new_tablet_hdl, *ls_))) {
       LOG_WARN("fail to push auto split task", K(tmp_ret));
     }
   }
@@ -2397,8 +2404,11 @@ int ObLSTabletService::replay_create_tablet(
   }
   if (OB_SUCC(ret) && load_tablet) {
     int tmp_ret = OB_SUCCESS;
-    ObServerAutoSplitScheduler &auto_split_scheduler= ObServerAutoSplitScheduler::get_instance();
-    if (OB_TMP_FAIL(auto_split_scheduler.push_task(tablet_hdl, *ls_))) {
+    ObServerAutoSplitScheduler &auto_split_scheduler = ObServerAutoSplitScheduler::get_instance();
+    ObServerRandomPartitionScheduler &random_part_scheduler = ObServerRandomPartitionScheduler::get_instance();
+    if (OB_TMP_FAIL(random_part_scheduler.push_task(tablet_hdl, *ls_))) {
+      LOG_WARN("fail to push random part split task", K(tmp_ret));
+    } else if (OB_TMP_FAIL(auto_split_scheduler.push_task(tablet_hdl, *ls_))) {
       LOG_WARN("fail to push auto split task", K(tmp_ret));
     }
   }

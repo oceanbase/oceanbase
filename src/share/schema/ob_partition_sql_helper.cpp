@@ -447,6 +447,7 @@ int ObAddPartInfoHelper::add_part_dml_column(const uint64_t exec_tenant_id,
       sub_part_num = part.get_sub_part_num();
     }
     PartitionType partition_type = part.get_partition_type();
+    ObPartitionStatus status = table->is_random_part() ? part.get_status() : PARTITION_STATUS_INVALID;
     if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
                                                exec_tenant_id, table->get_tenant_id())))
         || OB_FAIL(dml.add_pk_column("table_id", ObSchemaUtils::get_extract_schema_id(
@@ -457,7 +458,7 @@ int ObAddPartInfoHelper::add_part_dml_column(const uint64_t exec_tenant_id,
         || OB_FAIL(dml.add_column("sub_part_num", sub_part_num))
         || OB_FAIL(dml.add_column("sub_part_space", 0 /*unused now*/))
         || OB_FAIL(dml.add_column("new_sub_part_space", 0 /*unused now*/))
-        || OB_FAIL(dml.add_column("status", PARTITION_STATUS_INVALID))
+        || OB_FAIL(dml.add_column("status", status))
         || OB_FAIL(dml.add_column("spare1", 0 /*unused now*/))
         || OB_FAIL(dml.add_column("spare2", 0 /*unused now*/))
         || OB_FAIL(dml.add_column("spare3", "" /*unused now*/))
@@ -590,7 +591,7 @@ int ObAddPartInfoHelper::add_part_high_bound_val_column(const ObPartitionSchema 
   if (OB_ISNULL(table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table is null", K(ret));
-  } else if (table->is_range_part()) {
+  } else if (table->is_range_or_random_part()) {
     if (OB_FAIL(add_high_bound_val_column(table, part, dml))) {
       LOG_WARN("add high bound val column failed", K(ret));
     }
@@ -1060,12 +1061,13 @@ int ObAddIncPartDMLGenerator::extract_part_info(PartInfo &part_info)
     if (PARTITION_LEVEL_TWO == ori_table_->get_part_level()) {
       sub_part_num = part_.get_sub_part_num();
     }
+    ObPartitionStatus status = ori_table_->is_random_part() ? part_.get_status() : PARTITION_STATUS_INVALID;
     part_info.tenant_id_ = ori_table_->get_tenant_id();
     part_info.table_id_ = ori_table_->get_table_id();
     part_info.part_id_ = part_.get_part_id();
     part_info.schema_version_ = schema_version_;
     part_info.sub_part_num_ = sub_part_num;
-    part_info.status_ = PARTITION_STATUS_INVALID;
+    part_info.status_ = status;
     part_info.part_idx_ = part_.get_part_idx();
     part_info.partition_type_ = part_.get_partition_type();
     part_info.tablet_id_ = part_.get_tablet_id();
@@ -1086,7 +1088,7 @@ int ObAddIncPartDMLGenerator::extract_part_info(PartInfo &part_info)
       part_info.part_storage_cache_policy_type_ = part_.get_part_storage_cache_policy_type();
     }
     if (OB_FAIL(ret)) {
-    } else if (ori_table_->is_range_part()) {
+    } else if (ori_table_->is_range_or_random_part()) {
       if (OB_FAIL(gen_high_bound_val_str(is_oracle_mode,
                                          part_.get_high_bound_val(),
                                          part_info.high_bound_val_,

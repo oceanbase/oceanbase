@@ -71,6 +71,11 @@ int ObIntervalPartitionResolver::resolve_set_interval(
     LOG_WARN("tenant data version is less than 4.4.2, set interval is not supported",
              KR(ret), KDV(tenant_data_version));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.4.2, set interval");
+  } else if (table_schema.is_random_part()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Set interval on random-distributed table");
+    SQL_RESV_LOG(WARN, "set interval on random-distributed table is not supported",
+                 KR(ret), K(table_schema));
   } else if (!table_schema.is_range_part()) {
     ret = OB_ERR_SET_INTERVAL_IS_NOT_LEGAL_ON_THIS_TABLE;
     SQL_RESV_LOG(WARN, "set interval on no range partitioned table", KR(ret));

@@ -742,6 +742,7 @@ int ObIndexBuilder::submit_build_index_task(
 {
   int ret = OB_SUCCESS;
   ObTableLockOwnerID owner_id;
+  ObArray<ObTabletID> data_tablet_ids;
   ObCreateDDLTaskParam param(index_schema->get_tenant_id(),
                              get_create_index_type(tenant_data_version, *index_schema),
                              data_schema,
@@ -751,7 +752,12 @@ int ObIndexBuilder::submit_build_index_task(
                              parallelism,
                              group_id,
                              &allocator,
-                             &create_index_arg);
+                             &create_index_arg,
+                             0/*parent_task_id*/,
+                             0/*task_id*/,
+                             false/*ddl_need_retry_at_executor*/,
+                             false/*direct_load_need_sync_stats_info*/,
+                             &data_tablet_ids);
   param.tenant_data_version_ = tenant_data_version;
   param.new_snapshot_version_ = new_fetched_snapshot;
   const bool is_search_index = share::schema::is_search_index(create_index_arg.index_type_);
@@ -774,6 +780,8 @@ int ObIndexBuilder::submit_build_index_task(
              data_schema->is_auto_partitioned_table()
       && OB_FAIL(ObSplitPartitionHelper::check_split_supported_index(*data_schema, *index_schema))) {
     LOG_WARN("failed to check split supported index", K(ret), KPC(index_schema));
+  } else if (OB_FAIL(ObDDLUtil::get_and_calc_tablet_ids(*data_schema, inc_data_tablet_ids, del_data_tablet_ids, data_tablet_ids))) {
+    LOG_WARN("failed to get data tablet ids", K(ret), KPC(data_schema));
   } else {
     bool is_create_fts_index = share::schema::is_fts_index(create_index_arg.index_type_);
     if (is_create_fts_index) {

@@ -6686,62 +6686,6 @@ int ObTablet::get_ha_sstable_size(int64_t &data_size)
   return ret;
 }
 
-int ObTablet::fetch_tablet_autoinc_seq_cache(
-    const ObLSSwitchChecker &ls_switch_checker,
-    const uint64_t cache_size,
-    share::ObTabletAutoincInterval &result)
-{
-  int ret = OB_SUCCESS;
-  ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "FetchAutoSeq"));
-  ObTabletAutoincSeq autoinc_seq;
-  mds::MdsWriter writer;// will be removed later
-  mds::TwoPhaseCommitState trans_stat;// will be removed later
-  share::SCN trans_version;// will be removed later
-  uint64_t auto_inc_seqvalue = 0;
-  bool is_online = false;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_FAIL(get_latest_autoinc_seq(autoinc_seq, allocator, writer, trans_stat, trans_version))) {
-    if (OB_EMPTY_RESULT == ret) {
-      ret = OB_SUCCESS;
-      autoinc_seq.reset();
-      trans_stat = mds::TwoPhaseCommitState::ON_COMMIT;
-    } else {
-      LOG_WARN("fail to get latest autoinc seq", K(ret), K(tablet_meta_.tablet_id_));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_UNLIKELY(mds::TwoPhaseCommitState::ON_COMMIT != trans_stat)) {
-    ret = OB_EAGAIN;
-    LOG_WARN("tablet autoinc not committed", K(ret), K(autoinc_seq));
-  } else if (OB_FAIL(ls_switch_checker.double_check_epoch(is_online))) {
-    LOG_WARN("double check failed", K(ret), K(tablet_meta_.tablet_id_), K(is_online));
-    if (OB_VERSION_NOT_MATCH == ret) {
-      ret = OB_NOT_MASTER;
-    }
-  } else if (OB_FAIL(autoinc_seq.get_autoinc_seq_value(auto_inc_seqvalue))) {
-    LOG_WARN("failed to get autoinc seq value", K(ret), K(autoinc_seq));
-  } else {
-    const uint64_t interval_start = auto_inc_seqvalue;
-    const uint64_t interval_end = auto_inc_seqvalue + cache_size - 1;
-    const uint64_t result_autoinc_seq = auto_inc_seqvalue + cache_size;
-    const ObTabletID &tablet_id = tablet_meta_.tablet_id_;
-    SCN scn = SCN::min_scn();
-    if (OB_FAIL(autoinc_seq.set_autoinc_seq_value(allocator, result_autoinc_seq))) {
-      LOG_WARN("failed to set autoinc seq value", K(ret), K(result_autoinc_seq));
-    } else if (OB_FAIL(write_sync_tablet_seq_log(autoinc_seq, false/*is_tablet_creating*/, scn))) {
-      LOG_WARN("fail to write sync tablet seq log", K(ret));
-    } else {
-      result.start_ = interval_start;
-      result.end_ = interval_end;
-      result.tablet_id_ = tablet_id;
-    }
-  }
-  return ret;
-}
-
 // MIN { ls min_reserved_snapshot, freeze_info, all_acquired_snapshot}
 ERRSIM_POINT_DEF(ERRSIM_MULTI_VERSION_START)
 ERRSIM_POINT_DEF(EN_PRINT_MULTI_VERSION_START_SNAPSHOT_INFO)
@@ -6922,9 +6866,6 @@ int ObTablet::write_sync_tablet_seq_log(ObTabletAutoincSeq &autoinc_seq,
                                                                           : logservice::ObReplayBarrierType::NO_NEED_BARRIER;
   ObLogBaseHeader base_header(ObLogBaseType::TABLET_SEQ_SYNC_LOG_BASE_TYPE, replay_barrier_type);
   ObSyncTabletSeqLog log;
-  // NOTICE: ObLogBaseHeader & ObSyncTabletSeqLog should have fixed serialize size!
-  const int64_t buffer_size = base_header.get_serialize_size() + log.get_serialize_size();
-  char buffer[buffer_size];
   int64_t retry_cnt = 0;
   int64_t pos = 0;
   ObSyncTabletSeqMdsLogCb *cb = nullptr;
@@ -6934,112 +6875,69 @@ int ObTablet::write_sync_tablet_seq_log(ObTabletAutoincSeq &autoinc_seq,
   const bool allow_compression= false;
   const SCN ref_scn = SCN::min_scn();
   uint64_t new_autoinc_seq = 0;
-  if (OB_FAIL(autoinc_seq.get_autoinc_seq_value(new_autoinc_seq))) {
+  uint64_t new_autoinc_seq_end = 0;
+  if (OB_FAIL(autoinc_seq.get_autoinc_seq_value(new_autoinc_seq, new_autoinc_seq_end))) {
     LOG_WARN("failed to get autoinc seq value", K(ret));
-  } else if (OB_FAIL(log.init(tablet_id, new_autoinc_seq))) {
-    LOG_WARN("fail to init SyncTabletSeqLog", K(tablet_id), K(new_autoinc_seq));
-  } else if (OB_ISNULL(cb = op_alloc(ObSyncTabletSeqMdsLogCb))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc memory", K(ret));
-  } else if (OB_FAIL(base_header.serialize(buffer, buffer_size, pos))) {
-    LOG_WARN("failed to serialize log base header", K(ret));
-  } else if (OB_FAIL(log.serialize(buffer, buffer_size, pos))) {
-    LOG_WARN("fail to serialize sync tablet seq log", K(ret));
-  } else if (OB_FAIL(cb->init(tablet_meta_.ls_id_, tablet_id, static_cast<int64_t>(new_autoinc_seq)))) {
-    LOG_WARN("failed to init cb", K(ret), K(tablet_meta_));
-  } else if (OB_FAIL(set<ObTabletAutoincSeq>(std::move(autoinc_seq), cb->get_mds_ctx(), THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_remain() : obrpc::ObRpcProxy::MAX_RPC_TIMEOUT))) {
-    LOG_WARN("failed to set mds", K(ret));
-  } else if (OB_FAIL(log_handler->append(buffer,
-                                         buffer_size,
-                                         ref_scn,
-                                         need_nonblock,
-                                         allow_compression,
-                                         cb,
-                                         lsn,
-                                         scn))) {
-    LOG_WARN("fail to submit sync tablet seq log", K(ret), K(buffer_size));
-    cb->on_failure();
+  } else if (OB_FAIL(log.init(tablet_id, new_autoinc_seq, new_autoinc_seq_end))) {
+    LOG_WARN("fail to init SyncTabletSeqLog", K(tablet_id), K(new_autoinc_seq), K(new_autoinc_seq_end));
   } else {
-    // wait until majority
-    bool wait_timeout = false;
-    int64_t start_time = ObTimeUtility::fast_current_time();
-    while (!cb->is_finished() && !wait_timeout) {
-      ob_usleep(WAIT_TIME);
-      retry_cnt++;
-      if (retry_cnt % 1000 == 0) {
-        if (ObTimeUtility::fast_current_time() - start_time > SYNC_TABLET_SEQ_LOG_TIMEOUT) {
-          wait_timeout = true;
-        }
-        LOG_WARN("submit sync tablet seq log wait too much time", K(retry_cnt), K(wait_timeout));
-      }
-    }
-    if (wait_timeout) {
-      ret = OB_TIMEOUT;
-      LOG_WARN("submit sync tablet seq log timeout", K(ret));
-    } else if (cb->is_failed()) {
-      ret = OB_NOT_MASTER;
-      LOG_WARN("submit sync tablet seq log failed", K(ret));
+    const int64_t buffer_size = base_header.get_serialize_size() + log.get_serialize_size();
+    char buffer[buffer_size];
+    if (OB_ISNULL(cb = op_alloc(ObSyncTabletSeqMdsLogCb))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc memory", K(ret));
+    } else if (OB_FAIL(base_header.serialize(buffer, buffer_size, pos))) {
+      LOG_WARN("failed to serialize log base header", K(ret));
+    } else if (OB_FAIL(log.serialize(buffer, buffer_size, pos))) {
+      LOG_WARN("fail to serialize sync tablet seq log", K(ret));
+    } else if (OB_FAIL(cb->init(tablet_meta_.ls_id_, tablet_id, static_cast<int64_t>(new_autoinc_seq)))) {
+      LOG_WARN("failed to init cb", K(ret), K(tablet_meta_));
+    } else if (OB_FAIL(set<ObTabletAutoincSeq>(std::move(autoinc_seq), cb->get_mds_ctx(), THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_remain() : obrpc::ObRpcProxy::MAX_RPC_TIMEOUT))) {
+      LOG_WARN("failed to set mds", K(ret));
+    } else if (OB_FAIL(log_handler->append(buffer,
+                                           buffer_size,
+                                           ref_scn,
+                                           need_nonblock,
+                                           allow_compression,
+                                           cb,
+                                           lsn,
+                                           scn))) {
+      LOG_WARN("fail to submit sync tablet seq log", K(ret), K(buffer_size));
+      cb->on_failure();
     } else {
-      int64_t wait_time = ObTimeUtility::fast_current_time() - start_time;
-      LOG_INFO("submit sync tablet seq log succeed", K(ret), K(ls_id), K(tablet_id),
-          K(new_autoinc_seq), K(lsn), K(scn), K(wait_time));
-    }
-    if (nullptr != cb) {
-      cb->try_release();
-      cb = nullptr;
+      // wait until majority
+      bool wait_timeout = false;
+      int64_t start_time = ObTimeUtility::fast_current_time();
+      while (!cb->is_finished() && !wait_timeout) {
+        ob_usleep(WAIT_TIME);
+        retry_cnt++;
+        if (retry_cnt % 1000 == 0) {
+          if (ObTimeUtility::fast_current_time() - start_time > SYNC_TABLET_SEQ_LOG_TIMEOUT) {
+            wait_timeout = true;
+          }
+          LOG_WARN("submit sync tablet seq log wait too much time", K(retry_cnt), K(wait_timeout));
+        }
+      }
+      if (wait_timeout) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("submit sync tablet seq log timeout", K(ret));
+      } else if (cb->is_failed()) {
+        ret = OB_NOT_MASTER;
+        LOG_WARN("submit sync tablet seq log failed", K(ret));
+      } else {
+        int64_t wait_time = ObTimeUtility::fast_current_time() - start_time;
+        LOG_INFO("submit sync tablet seq log succeed", K(ret), K(ls_id), K(tablet_id),
+            K(new_autoinc_seq), K(lsn), K(scn), K(wait_time));
+      }
+      if (nullptr != cb) {
+        cb->try_release();
+        cb = nullptr;
+      }
     }
   }
   if (OB_FAIL(ret) && nullptr != cb) {
     op_free(cb);
     cb = nullptr;
-  }
-  return ret;
-}
-
-int ObTablet::update_tablet_autoinc_seq(
-    const ObLSSwitchChecker &ls_switch_checker,
-    const uint64_t autoinc_seq,
-    const bool is_tablet_creating)
-{
-  int ret = OB_SUCCESS;
-  ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "UpdAutoincSeq"));
-  ObTabletAutoincSeq curr_autoinc_seq;
-  mds::MdsWriter writer;// will be removed later
-  mds::TwoPhaseCommitState trans_stat;// will be removed later
-  share::SCN trans_version;// will be removed later
-  uint64_t curr_auto_inc_seqvalue;
-  SCN scn;
-  bool is_online = false;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_FAIL(get_latest_autoinc_seq(curr_autoinc_seq, allocator, writer, trans_stat, trans_version))) {
-    if (OB_EMPTY_RESULT == ret) {
-      ret = OB_SUCCESS;
-      curr_autoinc_seq.reset();
-      trans_stat = mds::TwoPhaseCommitState::ON_COMMIT;
-    } else {
-      LOG_WARN("fail to get latest autoinc seq", K(ret), K(tablet_meta_.tablet_id_));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (mds::TwoPhaseCommitState::ON_COMMIT != trans_stat) {
-    ret = OB_EAGAIN;
-    LOG_WARN("tablet autoinc not committed", K(ret), K(autoinc_seq));
-  } else if (OB_FAIL(ls_switch_checker.double_check_epoch(is_online))) {
-    LOG_WARN("double check failed", K(ret), K(tablet_meta_.tablet_id_), K(is_online));
-    if (OB_VERSION_NOT_MATCH == ret) {
-      ret = OB_NOT_MASTER;
-    }
-  } else if (OB_FAIL(curr_autoinc_seq.get_autoinc_seq_value(curr_auto_inc_seqvalue))) {
-    LOG_WARN("failed to get autoinc seq value", K(ret));
-  } else if (autoinc_seq > curr_auto_inc_seqvalue) {
-    if (OB_FAIL(curr_autoinc_seq.set_autoinc_seq_value(allocator, autoinc_seq))) {
-      LOG_WARN("failed to set autoinc seq value", K(ret), K(autoinc_seq));
-    } else if (OB_FAIL(write_sync_tablet_seq_log(curr_autoinc_seq, is_tablet_creating, scn))) {
-      LOG_WARN("fail to write sync tablet seq log", K(ret));
-    }
   }
   return ret;
 }

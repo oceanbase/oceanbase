@@ -2656,6 +2656,19 @@ int ObRpcClearTabletAutoincSeqCacheP::process()
   return ret;
 }
 
+int ObRpcSyncTabletAutoincSeqCacheP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(rpc_pkt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid rpc pkt", K(ret));
+  } else {
+    const int64_t abs_timeout_us = get_send_timestamp() + rpc_pkt_->get_timeout();
+    ret = ObTabletAutoincrementService::get_instance().sync_tablet_autoinc_seq_cache(arg_, abs_timeout_us);
+  }
+  return ret;
+}
+
 int ObRpcBatchGetTabletBindingP::process()
 {
   int ret = OB_SUCCESS;
@@ -2678,6 +2691,19 @@ int ObRpcBatchGetTabletSplitP::process()
   } else {
     const int64_t abs_timeout_us = get_send_timestamp() + rpc_pkt_->get_timeout();
     ret = ObTabletSplitMdsHelper::batch_get_tablet_split(abs_timeout_us, arg_, result_);
+  }
+  return ret;
+}
+
+int ObRpcBatchGetTabletRandomP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(rpc_pkt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid rpc pkt", K(ret));
+  } else {
+    const int64_t abs_timeout_us = get_send_timestamp() + rpc_pkt_->get_timeout();
+    ret = ObTabletRandomMdsHelper::batch_get_tablet_random(abs_timeout_us, arg_, result_);
   }
   return ret;
 }

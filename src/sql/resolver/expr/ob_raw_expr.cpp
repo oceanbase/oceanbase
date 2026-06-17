@@ -23,6 +23,7 @@
 #include "sql/engine/expr/ob_expr_sql_udt_construct.h"
 #include "sql/engine/expr/ob_expr_priv_attribute_access.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
+#include "sql/engine/expr/ob_expr_random_part_nextval.h"
 #include "share/aggregate/util.h"
 
 using namespace oceanbase::sql;
@@ -1068,6 +1069,7 @@ int ObRawExpr::is_const_inherit_expr(bool &is_const_inherit,
       || T_FUN_SYS_UUID_SHORT == type_
       || T_FUN_SYS_SEQ_NEXTVAL == type_
       || T_FUN_SYS_AUTOINC_NEXTVAL == type_
+      || T_FUN_SYS_RANDOM_PART_NEXTVAL == type_
       || T_FUN_SYS_DOC_ID == type_
       || T_FUN_SYS_VEC_VID == type_
       || T_PSEUDO_HIDDEN_CLUSTERING_KEY == type_
@@ -5012,6 +5014,9 @@ int ObSysFunRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t
     if (T_FUN_SYS_AUTOINC_NEXTVAL == get_expr_type() &&
         OB_FAIL(get_autoinc_nextval_name(buf, buf_len, pos))) {
       LOG_WARN("fail to get_autoinc_nextval_name", K(ret));
+    } else if (T_FUN_SYS_RANDOM_PART_NEXTVAL == get_expr_type() &&
+        OB_FAIL(get_random_part_nextval_name(buf, buf_len, pos))) {
+      LOG_WARN("fail to get_autoinc_nextval_name", K(ret));
     } else {
       if (T_FUN_COLUMN_CONV == get_expr_type()) {
         if ((EXPLAIN_EXTENDED == type || EXPLAIN_EXTENDED_NOADDR == type)
@@ -5245,6 +5250,27 @@ int ObSysFunRawExpr::get_autoinc_nextval_name(char *buf, int64_t buf_len, int64_
     ObString autoinc_qualified_name =
             concat_qualified_name("", autoinc_table_name, autoinc_column_name);
     if (OB_FAIL(BUF_PRINTF("%s.", autoinc_qualified_name.ptr()))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSysFunRawExpr::get_random_part_nextval_name(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  ObAutoincNextvalExtra *random_part_extra = NULL;
+  if (OB_ISNULL(buf) || T_FUN_SYS_RANDOM_PART_NEXTVAL != get_expr_type()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(buf), K(get_expr_type()), K(ret));
+  } else if (OB_ISNULL((random_part_extra = reinterpret_cast<ObAutoincNextvalExtra *>(extra_.random_part_nextval_extra_)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("extra_ is null", K(ret));
+  } else {
+    ObString table_name = random_part_extra->autoinc_table_name_;
+    ObString column_name = random_part_extra->autoinc_column_name_;
+    ObString qualified_name = concat_qualified_name("", table_name, column_name);
+    if (OB_FAIL(BUF_PRINTF("%s.", qualified_name.ptr()))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
     }
   }

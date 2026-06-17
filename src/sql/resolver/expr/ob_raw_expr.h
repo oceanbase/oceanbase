@@ -1893,6 +1893,7 @@ struct ObRawExprExtraInfo
                          // T_FUN_COLUMN_CONV
                          // T_FUN_SYS_ALIGN_DATE4CMP
     uint64_t autoinc_nextval_extra_; // T_FUN_SYS_AUTOINC_NEXTVAL
+    uint64_t random_part_nextval_extra_; // T_FUN_SYS_RANDOM_PART_NEXTVAL
     uint64_t res_cs_type_; // T_FUN_SYS_SOUNDEX
     uint64_t column_idx_; // T_PSEUDO_EXTERNAL_FILE_COL
                           // T_PSEUDO_PARTITION_LIST_COL
@@ -2286,6 +2287,7 @@ public:
   // extra accesstors begin
   void set_cast_mode(const uint64_t val) { extra_.cast_mode_ = val; }
   void set_autoinc_nextval_extra(const uint64_t val) { extra_.autoinc_nextval_extra_ = val; }
+  void set_random_part_nextval_extra(const uint64_t val) { extra_.random_part_nextval_extra_ = val; }
   void set_res_cs_type(const uint64_t val) { extra_.res_cs_type_ = val; }
   void set_column_idx(const uint64_t val) { extra_.column_idx_ = val; }
   void set_json_partial_update_flag(const uint64_t val) { extra_.json_partial_update_flag_ = val; }
@@ -2304,6 +2306,7 @@ public:
   void set_is_inner_split_contains_expr(const bool val) { extra_.is_inner_split_contains_expr_ = val; }
   uint64_t get_cast_mode() const { return extra_.cast_mode_; }
   uint64_t get_autoinc_nextval_extra() const { return extra_.autoinc_nextval_extra_; }
+  uint64_t get_random_part_nextval_extra() const { return extra_.random_part_nextval_extra_; }
   uint64_t get_res_cs_type() const { return extra_.res_cs_type_; }
   uint64_t get_column_idx() const { return extra_.column_idx_; }
   uint64_t get_json_partial_update_flag() const { return extra_.json_partial_update_flag_; }
@@ -4193,6 +4196,7 @@ public:
   int get_cast_type_name(char *buf, int64_t buf_len, int64_t &pos) const;
   int get_column_conv_name(char *buf, int64_t buf_len, int64_t &pos, ExplainType type) const;
   int get_autoinc_nextval_name(char *buf, int64_t buf_len, int64_t &pos) const;
+  int get_random_part_nextval_name(char *buf, int64_t buf_len, int64_t &pos) const;
   void set_op_id(int64_t operator_id) { extra_.operator_id_ = operator_id; }
   int64_t get_op_id() const { return extra_.operator_id_; }
   void set_mview_id(uint64_t mview_id) { extra_.mview_id_ = mview_id; }

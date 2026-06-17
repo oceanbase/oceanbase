@@ -436,7 +436,7 @@ TEST_F(TestTablet, test_serialize_meta_compat)
   tablet_meta.snapshot_version_ = 5;
   tablet_meta.multi_version_start_ = 9;
   tablet_meta.compat_mode_ = lib::Worker::CompatMode::MYSQL;
-  tablet_meta.autoinc_seq_.set_autoinc_seq_value(allocator_, 1);
+  tablet_meta.autoinc_seq_.set_autoinc_seq_value(allocator_, 1, INT64_MAX);
   ASSERT_EQ(OB_SUCCESS, tablet_meta.ha_status_.init_status());
   tablet_meta.ddl_start_scn_ = share::SCN::base_scn();
   tablet_meta.ddl_snapshot_version_ = 3;
@@ -461,9 +461,11 @@ TEST_F(TestTablet, test_serialize_meta_compat)
   ASSERT_EQ(OB_SUCCESS,
             tablet.deserialize_meta_v1(allocator_, buf, len, pos, autoinc_seq, tx_data, ddl_data));
   uint64_t autoinc_seq_v1;
-  ASSERT_EQ(OB_SUCCESS, tablet_meta.autoinc_seq_.get_autoinc_seq_value(autoinc_seq_v1));
+  uint64_t autoinc_seq_end_v1;
+  ASSERT_EQ(OB_SUCCESS, tablet_meta.autoinc_seq_.get_autoinc_seq_value(autoinc_seq_v1, autoinc_seq_end_v1));
   uint64_t autoinc_seq_v2;
-  ASSERT_EQ(OB_SUCCESS, autoinc_seq.get_autoinc_seq_value(autoinc_seq_v2));
+  uint64_t autoinc_seq_end_v2;
+  ASSERT_EQ(OB_SUCCESS, autoinc_seq.get_autoinc_seq_value(autoinc_seq_v2, autoinc_seq_end_v2));
   ASSERT_EQ(autoinc_seq_v1, autoinc_seq_v2);
   ASSERT_EQ(tx_data.tablet_status_, ObTabletStatus::NORMAL);
 }
@@ -485,7 +487,7 @@ TEST_F(TestTablet, test_serialize_mig_param_compat)
   mig_param.snapshot_version_ = 9;
   mig_param.multi_version_start_ = 5;
   mig_param.compat_mode_ = lib::Worker::CompatMode::MYSQL;
-  mig_param.autoinc_seq_.set_autoinc_seq_value(allocator_, 1);
+  mig_param.autoinc_seq_.set_autoinc_seq_value(allocator_, 1, INT64_MAX);
   ASSERT_EQ(OB_SUCCESS, mig_param.ha_status_.init_status());
   mig_param.tx_data_.tablet_status_ = ObTabletStatus::NORMAL;
   mig_param.ddl_start_scn_ = share::SCN::base_scn();

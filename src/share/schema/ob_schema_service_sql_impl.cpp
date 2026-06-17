@@ -9836,7 +9836,7 @@ int ObSchemaServiceSQLImpl::sort_partition_array(ObPartitionSchema &partition_sc
                || partition_num <= 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("partition array is empty", K(ret), K(partition_schema));
-    } else if (partition_schema.is_range_part()) {
+    } else if (partition_schema.is_range_or_random_part()) {
       lib::ob_sort(partition_schema.get_part_array(),
           partition_schema.get_part_array() + partition_num,
           ObBasePartition::range_like_func_less_than);

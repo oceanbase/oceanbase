@@ -23,14 +23,15 @@ namespace storage
 class ObSyncTabletSeqLog final
 {
 public:
-  ObSyncTabletSeqLog() : tablet_id_(), autoinc_seq_(0) {}
+  ObSyncTabletSeqLog() : tablet_id_(), autoinc_seq_(0), autoinc_seq_end_(INT64_MAX) {}
   ~ObSyncTabletSeqLog() = default;
 public:
-  int init(const common::ObTabletID &tablet_id, const uint64_t autoinc_seq);
+  int init(const common::ObTabletID &tablet_id, const uint64_t autoinc_seq, const uint64_t autoinc_seq_end);
 
-  bool is_valid() const { return tablet_id_.is_valid() && autoinc_seq_ >= 0; }
+  bool is_valid() const { return tablet_id_.is_valid() && autoinc_seq_ >= 0 && autoinc_seq_end_ <= INT64_MAX; }
   common::ObTabletID get_tablet_id() const { return tablet_id_; }
   uint64_t get_autoinc_seq() const { return autoinc_seq_; }
+  uint64_t get_autoinc_seq_end() const { return autoinc_seq_end_; }
 
   int serialize(char *buf, const int64_t len, int64_t &pos) const;
   int deserialize(const char *buf, const int64_t len, int64_t &pos);
@@ -40,6 +41,7 @@ public:
 private:
   common::ObTabletID tablet_id_;
   uint64_t autoinc_seq_;
+  uint64_t autoinc_seq_end_;
 };
 
 class ObSyncTabletSeqMdsLogCb : public logservice::AppendCb

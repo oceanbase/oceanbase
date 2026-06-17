@@ -23,6 +23,7 @@
 #include "sql/resolver/ob_resolver_utils.h"
 #include "share/ob_fts_index_builder_util.h"
 #include "rootserver/ob_location_ddl_service.h"
+#include "rootserver/ob_random_partition_helper.h"
 #include "share/compaction_ttl/ob_compaction_ttl_util.h"
 #include "share/ob_license_utils.h"
 #include "share/search_index/ob_search_index_builder_util.h"

@@ -5688,6 +5688,18 @@ void ObPartitionOption::forbid_auto_partition(const bool is_partitioned_table)
   auto_part_size_ = -1;
 }
 
+int ObPartitionOption::enable_random_partition(const int64_t auto_random_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(enable_auto_partition_(auto_random_size))) {
+    LOG_WARN("fail to enable auto_partition", KR(ret), K(auto_random_size));
+  } else {
+    part_func_type_ = PARTITION_FUNC_TYPE_RANDOM;
+  }
+
+  return ret;
+}
+
 OB_DEF_SERIALIZE(ObPartitionOption)
 {
   int ret = OB_SUCCESS;
@@ -6928,7 +6940,7 @@ int ObPartitionUtils::get_tablet_and_part_id(
         LOG_WARN("fail to fill hash tablet_id and part_id",
                  KR(ret), K(range), K(table_id));
       }
-    } else if (table_schema.is_range_part()) {
+    } else if (table_schema.is_range_or_random_part()) {
       if (OB_FAIL(ObPartitionUtils::get_range_tablet_and_part_id_(
                   range, part_array, part_num, partition_indexes))) {
         LOG_WARN("fail to fill range tablet_id and part_id",
@@ -6990,7 +7002,7 @@ int ObPartitionUtils::get_tablet_and_part_id(
         LOG_WARN("fail to fill hash tablet_id and part_id",
                  KR(ret), K(row), K(table_id));
       }
-    } else if (table_schema.is_range_part()) {
+    } else if (table_schema.is_range_or_random_part()) {
       if (OB_FAIL(ObPartitionUtils::get_range_tablet_and_part_id_(
                   row, part_array, part_num, partition_indexes))) {
         LOG_WARN("fail to fill range tablet_id and part_id",
@@ -10404,6 +10416,7 @@ const char *PART_TYPE_STR[PARTITION_FUNC_TYPE_MAX + 1] =
   "list",
   "list columns",
   "range",
+  "random",
   "unknown"
 };
 

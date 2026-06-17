@@ -214,16 +214,16 @@ int ObExprAutoincNextval::get_casted_value_by_result_type(ObCastCtx &cast_ctx,
   return ret;
 }
 
-int ObExprAutoincNextval::get_uint_value(const ObExpr &input_expr,
-                                         ObDatum *input_value,
-                                         bool &is_zero, uint64_t &casted_value)
+
+int ObExprAutoincNextval::get_uint_value_with_tc(const ObObjTypeClass tc,
+                                                 ObDatum *input_value,
+                                                 bool &is_zero, uint64_t &casted_value)
 {
   int ret = OB_SUCCESS;
   if (NULL == input_value || input_value->is_null()) {
     is_zero = true;
     casted_value = 0;
   } else {
-    ObObjTypeClass tc = ob_obj_type_class(input_expr.datum_meta_.type_);
     switch (tc) {
       case ObIntTC: {
         is_zero = 0 == input_value->get_int();
@@ -256,8 +256,19 @@ int ObExprAutoincNextval::get_uint_value(const ObExpr &input_expr,
       default:
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("only int/float/double types support auto increment",
-                 K(ret), K(input_expr.datum_meta_));
+                 K(ret), K(tc));
     }
+  }
+  return ret;
+}
+
+int ObExprAutoincNextval::get_uint_value(const ObExpr &input_expr,
+                                         ObDatum *input_value,
+                                         bool &is_zero, uint64_t &casted_value)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_uint_value_with_tc(ob_obj_type_class(input_expr.datum_meta_.type_), input_value, is_zero, casted_value))) {
+    LOG_WARN("failed to get uint values with tc", K(ret), K(input_expr.datum_meta_));
   }
   return ret;
 }

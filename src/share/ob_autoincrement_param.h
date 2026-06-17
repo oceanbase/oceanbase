@@ -68,6 +68,19 @@ public:
   uint64_t column_id_;
 };
 
+struct RandomPartSyncTabletCtx final
+{
+public:
+  RandomPartSyncTabletCtx() : tablet_id_(), high_bound_val_(0), value_to_sync_(0) {}
+  ~RandomPartSyncTabletCtx() = default;
+  TO_STRING_KV(K_(tablet_id), K_(high_bound_val), K_(value_to_sync));
+public:
+  ObTabletID tablet_id_;
+  int64_t high_bound_val_;
+  int64_t value_to_sync_;
+  bool sync_flag_;
+};
+
 struct CacheHandle;
 struct AutoincParam
 {
@@ -95,7 +108,9 @@ struct AutoincParam
       auto_increment_cache_size_(DEFAULT_INCREMENT_CACHE_SIZE),
       autoinc_mode_is_order_(true),
       autoinc_version_(OB_INVALID_VERSION),
-      autoinc_auto_increment_(1)
+      autoinc_auto_increment_(1),
+      active_tablet_ids_(),
+      cur_tablet_id_()
   {}
 
   TO_STRING_KV("tenant_id"               , tenant_id_,
@@ -120,7 +135,9 @@ struct AutoincParam
                "part_value_no_order"     , part_value_no_order_,
                "autoinc_mode_is_order"   , autoinc_mode_is_order_,
                "autoinc_version"         , autoinc_version_,
-               "autoinc_auto_increment"  , autoinc_auto_increment_);
+               "autoinc_auto_increment"  , autoinc_auto_increment_,
+               "active_tablet_ids"       , active_tablet_ids_,
+               "cur_tablet_id"           , cur_tablet_id_);
 
   inline bool with_order() const { return !part_value_no_order_; }
   // pay attention to schema changes
@@ -159,6 +176,11 @@ struct AutoincParam
   bool              autoinc_mode_is_order_;
   int64_t           autoinc_version_;
   uint64_t          autoinc_auto_increment_; // auto increment value of table schema
+  /* for random partitioned table, do not serialize */
+  ObArray<ObTabletID> active_tablet_ids_;
+  ObTabletID cur_tablet_id_;
+  ObArray<RandomPartSyncTabletCtx> random_part_sync_ctxs_;
+  /* for random partitioned table end*/
   OB_UNIS_VERSION(1);
 };
 

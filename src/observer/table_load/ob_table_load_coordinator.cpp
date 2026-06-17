@@ -22,6 +22,7 @@
 #include "storage/direct_load/ob_direct_load_mem_define.h"
 #include "storage/ddl/ob_cg_row_tmp_file.h"
 #include "observer/table_load/ob_table_load_empty_insert_tablet_ctx_manager.h"
+#include "share/ob_tablet_autoincrement_service.h"
 #include "sql/engine/px/ob_px_target_mgr.h"
 
 namespace oceanbase
@@ -386,7 +387,7 @@ int ObTableLoadCoordinator::calc_memory_size(
     if (ObDirectLoadMode::is_insert_overwrite(ctx_->param_.load_mode_) || ObDirectLoadMode::is_insert_into(ctx_->param_.load_mode_)) {
       thread_count = unit.thread_count_;
     }
-    if (ctx_->schema_.is_table_without_pk_) {
+    if (ctx_->schema_.is_table_without_pk_ && !ctx_->schema_.is_random_part_) {
       if (!ctx_->param_.need_sort_) {
         // sql指定need_sort=false，强制不排序
       } else if (partitions[i] == 1) {
@@ -421,7 +422,7 @@ int ObTableLoadCoordinator::calc_memory_size(
 
   // pk table also direct load many time
   if (OB_SUCC(ret) && !task_need_sort) {
-    if (!ctx_->schema_.is_table_without_pk_ &&
+    if ((!ctx_->schema_.is_table_without_pk_ || ctx_->schema_.is_random_part_) &&
         ObDirectLoadMethod::is_incremental(ctx_->param_.method_)) {
       task_need_sort = true;
     }
@@ -479,7 +480,7 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
     int64_t part_unsort_memory = 0; // 一个分区写入阶段不排序需要的内存, 用于判断是否排序
     int64_t min_part_memory = 0; // 一个分区在整个导入过程中至少需要的内存, 用于计算分配的内存大小
     int64_t parallel_servers_target = 0;
-    if (ctx_->schema_.is_table_without_pk_) {
+    if (ctx_->schema_.is_table_without_pk_ && !ctx_->schema_.is_random_part_) {
       // 直接写宏块需要的内存
       if (!ctx_->schema_.is_column_store() ||
           (ObDirectLoadMethod::is_incremental(ctx_->param_.method_) &&
@@ -580,7 +581,7 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
           ctx_->param_.task_need_sort_ = task_need_sort;
           ctx_->param_.session_count_ = coord_session_count;
           ctx_->param_.write_session_count_ = write_session_count;
-          ctx_->param_.exe_mode_ = (ctx_->schema_.is_table_without_pk_ ?
+          ctx_->param_.exe_mode_ = ((ctx_->schema_.is_table_without_pk_ && !ctx_->schema_.is_random_part_) ?
               (main_need_sort ? ObTableLoadExeMode::MULTIPLE_HEAP_TABLE_COMPACT : ObTableLoadExeMode::FAST_HEAP_TABLE) :
               (main_need_sort ? ObTableLoadExeMode::MEM_COMPACT : ObTableLoadExeMode::GENERAL_TABLE_COMPACT));
           ctx_->job_stat_->parallel_ = coord_session_count;
@@ -1460,6 +1461,18 @@ int ObTableLoadCoordinator::write_sql_stat(ObTableLoadSqlStatistics &sql_statist
   return ret;
 }
 
+int ObTableLoadCoordinator::commit_random_part_value()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->param_.write_session_count_; ++i) {
+    AutoincParam &autoinc_param = coordinator_ctx_->session_ctx_array_[i].random_part_param_;
+    if (OB_FAIL(ObTabletAutoincrementService::get_instance().sync_insert_value_global(autoinc_param.tenant_id_, autoinc_param.random_part_sync_ctxs_))) {
+      LOG_WARN("failed to sync last insert value globally", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObTableLoadCoordinator::commit(ObTableLoadResultInfo &result_info)
 {
   int ret = OB_SUCCESS;
@@ -1478,6 +1491,8 @@ int ObTableLoadCoordinator::commit(ObTableLoadResultInfo &result_info)
     } else if (param_.online_opt_stat_gather_ &&
                OB_FAIL(write_sql_stat(sql_statistics, dml_stats))) {
       LOG_WARN("fail to write sql stat", KR(ret));
+    } else if (ctx_->schema_.is_random_part_ && OB_FAIL(commit_random_part_value())) {
+      LOG_WARN("fail to commit sync random part auto increment value", KR(ret));
     } else if (OB_FAIL(coordinator_ctx_->set_status_commit())) {
       LOG_WARN("fail to set coordinator status commit", KR(ret));
     } else {

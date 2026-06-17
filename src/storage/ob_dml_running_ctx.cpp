@@ -305,7 +305,7 @@ int ObDMLRunningCtx::check_schema_version(
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_SCHEMA_ERROR;
     LOG_WARN("failed to get schema", K(ret));
-  } else if (table_schema->is_auto_partitioned_table()) {
+  } else if (table_schema->is_auto_partitioned_table() || table_schema->is_random_part()) {
     // Online partition split allows dml with old schema to continue executing,
     // so checkings must be done case by case.
     if (table_version > table_schema->get_schema_version()) {

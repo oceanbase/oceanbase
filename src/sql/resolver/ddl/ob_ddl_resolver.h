@@ -789,6 +789,22 @@ protected:
                                        ObTableSchema &table_schema);
   int check_only_modify_auto_partition_attr(ObPartitionedStmt *stmt, ParseNode *node,
                                             ObTableSchema &table_schema, bool &is_only_modify_auto_part_attr);
+  int check_only_modify_auto_random_attr(ObPartitionedStmt *stmt, ParseNode *node,
+                                         bool &is_only_modify_auto_random_attr);
+
+  static int resolve_interval_node(
+      ObResolverParams &params,
+      ParseNode *interval_node,
+      common::ColumnType &col_dt,
+      int64_t precision,
+      int64_t scale,
+      ObRawExpr *&interval_value_expr_out);
+  static int resolve_interval_expr_low(
+      ObResolverParams &params,
+      ParseNode *interval_node,
+      const share::schema::ObTableSchema &table_schema,
+      ObRawExpr *transition_expr,
+      ObRawExpr *&interval_value);
   int resolve_partition_list(
       ObPartitionedStmt *stmt,
       ParseNode *node,
@@ -948,6 +964,10 @@ protected:
   inline bool is_list_type_partition(ObItemType type) const
   {
     return T_LIST_PARTITION == type || T_LIST_COLUMNS_PARTITION == type;
+  }
+  inline bool is_random_type_partition(ObItemType type) const
+  {
+    return T_RANDOM_PARTITION == type;
   }
 
   int resolve_individual_subpartition(ObPartitionedStmt *stmt,

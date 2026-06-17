@@ -1042,6 +1042,10 @@ int ObCreateIndexResolver::set_table_option_to_stmt(
     if (UNIQUE_KEY == index_keyname_) {
       if (global_) {
         index_arg.index_type_ = INDEX_TYPE_UNIQUE_GLOBAL;
+      } else if (tbl_schema.is_random_part()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("create local unique index on random partition table is not supported", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create local unique index on random partition table");
       } else {
         index_arg.index_type_ = INDEX_TYPE_UNIQUE_LOCAL;
       }

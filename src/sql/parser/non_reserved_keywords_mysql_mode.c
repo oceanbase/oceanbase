@@ -830,6 +830,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"quarters", QUARTERS},
   {"query", QUERY},
   {"quick", QUICK},
+  {"random", RANDOM},
   {"range", RANGE},
   {"rank", RANK},
   {"rb_and_cardinality_agg", RB_AND_CARDINALITY_AGG},

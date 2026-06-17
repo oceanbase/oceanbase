@@ -24,6 +24,7 @@
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/ob_index_builder_util.h"
 #include "sql/resolver/ob_resolver_utils.h"
+#include "storage/tablet/ob_tablet_random_mds_helper.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -576,6 +577,9 @@ int ObTableHelper::create_tablets_()
           LOG_WARN("create table partitions failed", KR(ret), K(data_table));
         } else if (OB_FAIL(table_creator.execute())) {
           LOG_WARN("execute create partition failed", KR(ret));
+        } else if (data_table.is_random_part() && OB_FAIL(storage::ObTabletRandomMdsHelper::set_autoinc_seq_for_create(
+                data_table, 1/*prev_high_bound_val*/, get_trans_()))) {
+          LOG_WARN("failed to set autoinc seq for create", KR(ret), K(data_table));
         }
       }
     }
@@ -843,6 +847,11 @@ int ObTableHelper::inner_generate_table_schema_(const ObCreateTableArg &arg, ObT
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("fail to generate schema, not support ttl flag for this version", KR(ret), K_(tenant_id), K(compat_version), K(arg.schema_));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "this ttl flag in this version is");
+  } else if (compat_version < DATA_VERSION_4_6_1_0 && arg.schema_.is_random_part()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("fail to generate schema, not support random partitioned table for this version",
+             KR(ret), K(tenant_id_), K(compat_version), K(arg));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "this version not support random partitioned table");
   } else if (arg.schema_.is_duplicate_table()) { // check compatibility for duplicate table
     bool is_compatible = false;
     if (OB_FAIL(ObShareUtil::check_compat_version_for_readonly_replica(tenant_id_, is_compatible))) {

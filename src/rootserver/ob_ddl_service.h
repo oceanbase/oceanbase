@@ -574,6 +574,12 @@ public:
   int switch_index_name_and_status_for_vec_index_table(obrpc::ObAlterTableArg &alter_table_arg);
   int switch_index_name_and_status_for_mlog_table(obrpc::ObAlterTableArg &alter_table_arg);
 
+
+  /**
+   * This function is called by the DDL INDEX BUILD TASK.
+   */
+  int drop_index_schema_on_fail(const obrpc::ObAlterTableArg &alter_table_arg);
+
   /**
    * This function is called by the storage layer in the three stage of offline ddl.
    * all the following steps are completed in the same trans:
@@ -1220,6 +1226,17 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
              bool is_materialized_view,
              bool is_oracle_mode,
              common::ObString &ddl_stmt_str);
+  int drop_table_in_trans(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const share::schema::ObTableSchema &table_schema,
+      const bool is_rebuild_index,
+      const bool is_index,
+      const bool to_recyclebin,
+      const common::ObString *ddl_stmt_str,
+      ObMySQLTransaction *sql_trans,
+      share::schema::DropTableIdHashSet *drop_table_set,
+      ObMockFKParentTableSchema *mock_fk_parent_table_ptr,
+      const bool delete_priv = true);
 private:
   enum PartitionBornMethod : int64_t
   {
@@ -2455,17 +2472,6 @@ private:
       const common::ObString &index_name,
       ObSchemaGetterGuard &schema_guard,
       bool &is_exist);
-  int drop_table_in_trans(
-      share::schema::ObSchemaGetterGuard &schema_guard,
-      const share::schema::ObTableSchema &table_schema,
-      const bool is_rebuild_index,
-      const bool is_index,
-      const bool to_recyclebin,
-      const common::ObString *ddl_stmt_str,
-      ObMySQLTransaction *sql_trans,
-      share::schema::DropTableIdHashSet *drop_table_set,
-      ObMockFKParentTableSchema *mock_fk_parent_table_ptr,
-      const bool delete_priv = true);
   int drop_aux_table_in_drop_table(
       ObMySQLTransaction &trans,
       ObDDLOperator &ddl_operator,
@@ -3156,7 +3162,7 @@ int ObDDLService::check_partition_name_valid(const SCHEMA &orig_schema,
         } else if (ObCharset::case_insensitive_equal(orig_part_array[i]->get_part_name(),
                                                      part_name)) {
           valid = false;
-          RS_LOG(INFO, "partition name not valid", K(part_name), K(orig_part_array));
+          RS_LOG(INFO, "partition name not valid", K(part_name), KPC(orig_part_array[i]));
           break;
         }
       }

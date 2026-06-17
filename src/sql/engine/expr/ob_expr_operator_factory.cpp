@@ -539,6 +539,7 @@
 #include "sql/engine/expr/ob_expr_format_profile.h"
 #include "sql/engine/expr/ob_expr_max_pt.h"
 #include "sql/engine/expr/ob_expr_date_trunc.h"
+#include "sql/engine/expr/ob_expr_random_part_nextval.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -1375,6 +1376,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprCollectFileList, EAGER_EVALUATION);
     REG_OP(ObExprVoid, EAGER_EVALUATION);
     REG_OP(ObExprLoadFile, SHORT_CIRCUIT_EVALUATION);
+    REG_OP(ObExprRandomPartNextval, EAGER_EVALUATION);
     REG_OP(ObExprRandCanonical, EAGER_EVALUATION);
     REG_OP(ObExprSearchIndexInnerPath, SHORT_CIRCUIT_EVALUATION);
     REG_OP(ObExprSearchIndexInnerValue, SHORT_CIRCUIT_EVALUATION);
@@ -1731,6 +1733,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprCheckLocationAccess, EAGER_EVALUATION);
   REG_OP_ORCL(ObExprEnhancedAesEncrypt, SHORT_CIRCUIT_EVALUATION);
   REG_OP_ORCL(ObExprMaxPt, EAGER_EVALUATION);
+  REG_OP_ORCL(ObExprRandomPartNextval, EAGER_EVALUATION);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

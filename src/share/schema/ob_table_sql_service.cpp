@@ -3716,7 +3716,8 @@ int ObTableSqlService::gen_partition_option_dml(const ObTableSchema &table, ObDM
       || (table.is_interval_part() && OB_FAIL(add_interval_range_val(dml, table)))
       || (data_version >= DATA_VERSION_4_1_0_0
           && OB_FAIL(dml.add_column("table_flags", table.get_table_flags())))
-      || OB_FAIL(dml.add_gmt_modified())) {
+      || OB_FAIL(dml.add_gmt_modified())
+      ) {
     LOG_WARN("add column failed", K(ret));
   }
   return ret;

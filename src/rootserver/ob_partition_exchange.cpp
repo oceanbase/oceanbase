@@ -93,6 +93,10 @@ int ObPartitionExchange::check_and_exchange_partition(const obrpc::ObExchangePar
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("interval part table exchange partition is not supported", KR(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "interval part table exchange partition is");
+  } else if (base_table_schema->is_random_part() || inc_table_schema->is_random_part()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("exchange partition on random partition table is not supported", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "exchange partition on random partition table");
   } else if (OB_FAIL(check_partition_exchange_conditions_(arg, *base_table_schema, *inc_table_schema, is_oracle_mode, schema_guard, part_exchange_type, base_tablet_ids, inc_tablet_ids))) {
     LOG_WARN("fail to check partition exchange conditions", K(ret), K(arg), KPC(base_table_schema), KPC(inc_table_schema), K(is_oracle_mode));
   } else if (OB_FAIL(inner_init(*base_table_schema, *inc_table_schema, is_oracle_mode, schema_guard))) {
@@ -224,6 +228,10 @@ int ObPartitionExchange::check_partition_exchange_schema_for_user(
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table type");
     LOG_WARN("unsupported behavior on non-user table", KR(ret), K(base_table_schema), K(inc_table_schema));
+  } else if (OB_UNLIKELY(base_table_schema.is_random_part() || inc_table_schema.is_random_part())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("exchange partition on random partition table is not supported", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "exchange partition on random partition table");
   } else if (!is_subpart_exchange_supported(compat_version) && inc_table_schema.is_partitioned_table()) {
     const ObString &exchange_table_name = inc_table_schema.get_table_name_str();
     ret = OB_ERR_PARTITION_EXCHANGE_PART_TABLE;

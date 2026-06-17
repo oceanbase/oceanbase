@@ -268,6 +268,7 @@ enum ObPartitionFuncType
   PARTITION_FUNC_TYPE_LIST,
   PARTITION_FUNC_TYPE_LIST_COLUMNS,
   PARTITION_FUNC_TYPE_INTERVAL,
+  PARTITION_FUNC_TYPE_RANDOM,
   PARTITION_FUNC_TYPE_MAX,
 };
 
@@ -301,7 +302,8 @@ inline bool is_range_part(const ObPartitionFuncType part_type)
 {
   return PARTITION_FUNC_TYPE_RANGE == part_type
       || PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_type
-      || PARTITION_FUNC_TYPE_INTERVAL == part_type;
+      || PARTITION_FUNC_TYPE_INTERVAL == part_type
+      || PARTITION_FUNC_TYPE_RANDOM == part_type;
 }
 
 inline bool is_range_columns_part(const ObPartitionFuncType part_type)
@@ -320,6 +322,10 @@ inline bool is_list_part(const ObPartitionFuncType part_type)
       || PARTITION_FUNC_TYPE_LIST_COLUMNS == part_type;
 }
 
+inline bool is_random_part(const ObPartitionFuncType part_type)
+{
+  return PARTITION_FUNC_TYPE_RANDOM == part_type;
+}
 int is_sys_table_name(uint64_t database_id, const common::ObString &table_name, bool &is_sys_table);
 
 
@@ -531,6 +537,7 @@ enum ObPartitionStatus
   PARTITION_STATUS_MERGE = 2,
   PARTITION_STATUS_PHYSICAL_SPLITTING = 3,  // deprecated
   PARTITION_STATUS_SPLIT = 4,
+  PARTITION_STATUS_INACTIVE = 5,
   PARTITION_STATUS_MAX,
 };
 
@@ -2574,6 +2581,8 @@ public:
   { return share::schema::is_key_part(part_func_type_); }
   inline bool is_list_part() const
   { return share::schema::is_list_part(part_func_type_); }
+  inline bool is_random_part() const
+  { return share::schema::is_random_part(part_func_type_); }
   inline bool is_valid_split_part_type() const
   {
     return is_range_part() && !is_interval_part();
@@ -2625,6 +2634,9 @@ public:
   int enable_auto_partition(const int64_t auto_part_size, const ObPartitionFuncType part_func_type);
   void forbid_auto_partition(const bool is_partitioned_table);
   bool is_enable_auto_part() const { return auto_part_ &&  auto_part_size_ >= MIN_AUTO_PART_SIZE; }
+  int enable_random_partition(const int64_t auto_random_size);
+  bool is_enable_random_part() const { return is_random_part() && is_enable_auto_part(); }
+
   TO_STRING_KV(K_(part_func_type), K_(part_func_expr), K_(part_num),
                K_(auto_part), K_(auto_part_size));
 private:
@@ -2845,6 +2857,7 @@ public:
         && status_ == other.status_;
   }
   ObPartitionStatus get_status() const { return status_; }
+  void set_status(const ObPartitionStatus &status) { status_ = status; }
   void set_is_empty_partition_name(bool is_empty) { is_empty_partition_name_ = is_empty; }
   bool is_empty_partition_name() const { return is_empty_partition_name_; }
 
@@ -2865,7 +2878,7 @@ public:
   const common::ObString &get_external_location() const
   { return external_location_; }
   VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(table_id), K_(part_id), K_(name), K_(low_bound_val),
-                       K_(high_bound_val), K_(list_row_values), K_(part_idx),
+                       K_(high_bound_val), K_(list_row_values), K_(status), K_(part_idx),
                        K_(is_empty_partition_name), K_(tablet_id), K_(external_location),
                        K_(split_source_tablet_id), K_(part_storage_cache_policy_type));
 protected:
@@ -3145,6 +3158,7 @@ public:
   inline bool is_key_part() const { return part_option_.is_key_part(); }
   inline bool is_key_subpart() const { return sub_part_option_.is_key_part(); }
   inline bool is_range_part() const { return part_option_.is_range_part(); }
+  inline bool is_random_part() const { return part_option_.is_random_part(); }
   inline bool is_interval_part() const { return part_option_.is_interval_part(); }
   inline bool is_range_subpart() const { return sub_part_option_.is_range_part(); }
 
@@ -3155,12 +3169,15 @@ public:
 
   inline bool is_valid_split_part_type() const { return part_option_.is_valid_split_part_type();}
   inline bool is_auto_partitioned_table() const { return part_option_.get_auto_part() &&
-                                                         part_option_.is_valid_auto_part_size(); }
+                                                         part_option_.is_valid_auto_part_size() &&
+                                                         !part_option_.is_random_part();}
+  inline bool is_range_or_random_part() const {return is_range_part() || is_random_part();}
   inline const ObPartitionOption &get_part_option() const { return part_option_; }
   inline ObPartitionOption &get_part_option() { return part_option_; }
   inline const ObPartitionOption &get_sub_part_option() const { return sub_part_option_; }
   inline ObPartitionOption &get_sub_part_option() { return sub_part_option_; }
   inline int64_t get_auto_part_size() const { return part_option_.get_auto_part_size(); }
+
 
   // deal with partition schema from ddl resolver
   int try_generate_hash_part();

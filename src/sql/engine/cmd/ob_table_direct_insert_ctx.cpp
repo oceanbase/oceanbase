@@ -93,7 +93,7 @@ int ObTableDirectInsertCtx::init(
                                                                  parallel,
                                                                  compressor_type))) {
         LOG_WARN("fail to get tmp store compressor type", KR(ret));
-      } else if (OB_FAIL(ObTableLoadSchema::get_column_ids(table_schema, column_ids))) {
+      } else if (OB_FAIL(ObTableLoadSchema::get_column_ids(table_schema, column_ids, table_schema->is_random_part()))) {
         LOG_WARN("failed to init store column idxs", KR(ret));
       } else if (OB_FAIL(get_partition_level_tablet_ids(phy_plan, table_schema, tablet_ids))) {
         LOG_WARN("failed to get partition level tablet ids", KR(ret), K(phy_plan), KPC(table_schema));

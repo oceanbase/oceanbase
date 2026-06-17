@@ -489,6 +489,7 @@ int ObTableRedefinitionTask::copy_table_indexes()
       ObSchemaGetterGuard schema_guard;
       const ObTableSchema *table_schema = nullptr;
       ObSArray<uint64_t> index_ids;
+      ObArray<ObTabletID> data_tablet_ids;
       alter_table_arg_.ddl_task_type_ = share::REBUILD_INDEX_TASK;
       alter_table_arg_.table_id_ = object_id_;
       alter_table_arg_.hidden_table_id_ = target_object_id_;
@@ -500,6 +501,8 @@ int ObTableRedefinitionTask::copy_table_indexes()
       } else if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("error unexpected, table schema must not be nullptr", K(ret), K(target_object_id_));
+      } else if (OB_FAIL(table_schema->get_tablet_ids(data_tablet_ids))) {
+        LOG_WARN("failed to get tablet ids", K(ret));
       } else {
         const common::ObIArray<ObAuxTableMetaInfo> &index_infos = table_schema->get_simple_index_infos();
         if ((index_infos.count() > 0) || (table_schema->mv_container_table()
@@ -604,7 +607,11 @@ int ObTableRedefinitionTask::copy_table_indexes()
                                            consumer_group_id_,
                                            &allocator_,
                                            &create_index_arg,
-                                           task_id_);
+                                           task_id_,
+                                           0/*task_id*/,
+                                           false/*ddl_need_retry_at_executor*/,
+                                           false/*direct_load_need_sync_stats_info*/,
+                                           &data_tablet_ids);
                 param.sub_task_trace_id_ = sub_task_trace_id_;
                 param.tenant_data_version_ = data_format_version_;
                 if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, *GCTX.sql_proxy_, task_record))) {
@@ -909,7 +916,7 @@ int ObTableRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status)
     LOG_WARN("table schema not exist", K(ret), K(target_object_id_));
   } else if (!table_schema->is_user_hidden_table()) {
     LOG_INFO("target schema took effect", K(target_object_id_));
-  } else if (table_schema->is_table_with_hidden_pk_column()
+  } else if ((table_schema->is_table_with_hidden_pk_column() || table_schema->is_random_part())
       && !(DDL_ALTER_PARTITION_BY == task_type_ || DDL_DROP_PRIMARY_KEY == task_type_)
       && OB_FAIL(sync_tablet_autoinc_seq())) {
     if (OB_TIMEOUT == ret || OB_NOT_MASTER == ret) {

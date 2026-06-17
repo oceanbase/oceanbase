@@ -259,6 +259,7 @@ namespace observer
 namespace storage {
   class MockTenantModuleEnv;
   class ObStorageHADiagMgr;
+  class ObRsRandomPartitionScheduler;
 }
 #ifdef OB_BUILD_SHARED_STORAGE
 namespace sslog
@@ -557,6 +558,7 @@ using ObHMSClientUnifyPoolMgr = share::ObCatalogClientPoolMgr<oceanbase::share::
       observer::ObTabletReplicaInfoCacheMgr*  ,       \
       ObCurlRestClientPoolMgr*,                      \
       share::schema::ObSchemaHistoryRecycleService*, \
+      storage::ObRsRandomPartitionScheduler*,        \
       share::ObInspectionService*                    \
   )
 

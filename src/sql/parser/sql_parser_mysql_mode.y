@@ -603,6 +603,7 @@ END_P SET_VAR DELIMITER
 %type <node> dynamic_partition_option dynamic_partition_option_list sys_view_cast_opt
 %type <node> create_location_stmt alter_location_stmt drop_location_stmt location_name location_url opt_sub_path credential_option_list credential_option opt_credential location_utils_stmt
 %type <node> flashback_standby_log_stmt
+%type <node> random_partition_option opt_random_partition_tablet_size_option random_partition_tablet_size_option
 %type <node> column_list_with_boost with_param_column_ref
 %type <node> es_sql_opt
 %type <node> operator_list
@@ -8310,10 +8311,6 @@ DEFAULT
 {
   malloc_terminal_node($$, result->malloc_pool_, T_DEFAULT);
 }
-| RANDOM
-{
-  malloc_terminal_node($$, result->malloc_pool_, T_RANDOM);
-}
 | USER_VARIABLE
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_OP_GET_USER_VAR, 1, $1);
@@ -9159,6 +9156,38 @@ hash_partition_option
 | external_table_partition_option
 {
   $$ = $1;
+}
+| random_partition_option
+{
+  $$ = $1;
+}
+;
+
+random_partition_option:
+PARTITION BY RANDOM opt_random_partition_tablet_size_option
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RANDOM_PARTITION, 1, $4);
+}
+;
+
+opt_random_partition_tablet_size_option:
+/* EMPTY */
+{
+  $$ = NULL;
+}
+|
+random_partition_tablet_size_option
+{
+  $$ = $1;
+}
+;
+
+random_partition_tablet_size_option:
+SIZE '(' STRING_VALUE ')'
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_AUTO_SPLIT_TABLET_SIZE);
+  $$->str_value_ = $3->str_value_;
+  $$->str_len_ = $3->str_len_;
 }
 ;
 
@@ -20991,6 +21020,10 @@ hash_partition_option
 {
   $$ = $1;
 }
+| random_partition_option
+{
+  $$ = $1;
+}
 ;
 
 modify_tg_partition_info:
@@ -26375,6 +26408,10 @@ STATISTICS
 {
   make_name_node($$, result->malloc_pool_, "decrypt");
 }
+| RANDOM
+{
+  make_name_node($$, result->malloc_pool_, "random");
+}
 | AI
 {
   make_name_node($$, result->malloc_pool_, "ai");
@@ -28889,6 +28926,7 @@ ACCESS_INFO
 |       QUERY_RESPONSE_TIME
 |       QUEUE_TIME
 |       QUICK
+|       RANDOM
 |       RANK
 |       READ_ERROR_LOG
 |       READ_ONLY

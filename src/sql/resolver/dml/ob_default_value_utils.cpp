@@ -7,6 +7,8 @@
 #include "sql/resolver/dml/ob_default_value_utils.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
 #include "sql/resolver/dml/ob_del_upd_resolver.h"
+#include "rootserver/ob_random_partition_helper.h"
+
 namespace oceanbase
 {
 using namespace common;
@@ -350,7 +352,25 @@ int ObDefaultValueUtils::build_default_expr_strict(const ColumnItem *column, ObR
       }
     }
   } else if (column->base_cid_ == OB_HIDDEN_PK_INCREMENT_COLUMN_ID) {
-    if (OB_FAIL(resolver_->build_heap_table_hidden_pk_expr(expr, column->get_expr()))) {
+    const ObTableSchema *table_schema = nullptr;
+    bool is_random_partkey = false;
+    if (OB_FAIL(resolver_->get_table_schema(column->table_id_, column->base_tid_, stmt_, table_schema))) {
+      LOG_WARN("failed to get table schema", K(ret), KPC(column));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table not exists", K(ret), KPC(column));
+    } else if (OB_FAIL(rootserver::ObRandomPartitionHelper::check_is_random_partkey(*table_schema, column->base_cid_, is_random_partkey))) {
+      LOG_WARN("failed to check is random partkey", K(ret), K(column->base_cid_), KPC(table_schema));
+    } else if (is_random_partkey) {
+      if (OB_FAIL(resolver_->build_random_part_nextval_expr(expr,
+                                                            column->base_tid_,
+                                                            column->base_cid_,
+                                                            column->get_expr()->get_table_name(),
+                                                            column->get_expr()->get_column_name(),
+                                                            *table_schema))) {
+        LOG_WARN("failed to build next_val expr", K(ret));
+      }
+    } else if (OB_FAIL(resolver_->build_heap_table_hidden_pk_expr(expr, column->get_expr()))) {
       LOG_WARN("failed to build next_val expr", K(ret), KPC(column->get_expr()));
     }
   } else if (column->is_hidden_clustering_key_column()) {
@@ -361,7 +381,25 @@ int ObDefaultValueUtils::build_default_expr_strict(const ColumnItem *column, ObR
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, column expr is nullptr", K(ret), KPC(column));
   } else if (column->is_auto_increment()) {
-    if (OB_FAIL(resolver_->build_autoinc_nextval_expr(expr,
+    const ObTableSchema *table_schema = nullptr;
+    bool is_random_partkey = false;
+    if (OB_FAIL(resolver_->get_table_schema(column->table_id_, column->base_tid_, stmt_, table_schema))) {
+      LOG_WARN("failed to get table schema", K(ret), KPC(column));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table not exists", K(ret), KPC(column));
+    } else if (OB_FAIL(rootserver::ObRandomPartitionHelper::check_is_random_partkey(*table_schema, column->base_cid_, is_random_partkey))) {
+      LOG_WARN("failed to check is random partkey", K(ret), K(column->base_cid_), KPC(table_schema));
+    } else if (is_random_partkey) {
+      if (OB_FAIL(resolver_->build_random_part_nextval_expr(expr,
+                                                            column->base_tid_,
+                                                            column->base_cid_,
+                                                            column->get_expr()->get_table_name(),
+                                                            column->get_expr()->get_column_name(),
+                                                            *table_schema))) {
+        LOG_WARN("failed to build next_val expr", K(ret));
+      }
+    } else if (OB_FAIL(resolver_->build_autoinc_nextval_expr(expr,
                                                       column->base_tid_,
                                                       column->base_cid_,
                                                       column->get_expr()->get_table_name(),

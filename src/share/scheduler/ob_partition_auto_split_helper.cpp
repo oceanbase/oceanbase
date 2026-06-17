@@ -61,6 +61,9 @@ int ObAutoSplitTask::assign(const ObAutoSplitTask &other)
     tablet_id_ = other.tablet_id_;
     tenant_id_ = other.tenant_id_;
     used_disk_space_ = other.used_disk_space_;
+    is_random_part_ = other.is_random_part_;
+    table_id_ = other.table_id_;
+    inactive_tablet_ids_.assign(other.inactive_tablet_ids_);
   }
   return ret;
 }
@@ -80,6 +83,69 @@ int ObTabletSplitTask::assign(const ObTabletSplitTask &other)
   return ret;
 }
 
+uint64_t ObAutoSplitTask::hash() const
+{
+  uint64_t hash_val = murmurhash(&tenant_id_, sizeof(tenant_id_), 0);
+  if (is_random_part_) {
+    hash_val = murmurhash(&table_id_, sizeof(table_id_), hash_val);
+  } else {
+    hash_val = murmurhash(&tablet_id_, sizeof(tablet_id_), hash_val);
+  }
+  return hash_val;
+}
+
+bool ObAutoSplitTask::operator==(const ObAutoSplitTask &other) const
+{
+  return tenant_id_ == other.tenant_id_ && is_random_part_ == other.is_random_part_
+      && (is_random_part_ ? table_id_ == other.table_id_ : tablet_id_ == other.tablet_id_);
+}
+
+bool ObAutoSplitTask::operator!=(const ObAutoSplitTask &other) const
+{
+  return !(*this == other);
+}
+
+int ObAutoSplitTask::update(const ObAutoSplitTask &task)
+{
+  int ret = OB_SUCCESS;
+  if (!task.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(task));
+  } else if (tenant_id_ != task.tenant_id_ || is_random_part_ != task.is_random_part_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant id or task type is not same", K(ret), K(tenant_id_), K(task.tenant_id_), K(is_random_part_), K(task.is_random_part_));
+  } else if((!is_random_part_ && tablet_id_ != task.tablet_id_) || (is_random_part_ && table_id_ != task.table_id_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("not same type", K(ret), K(is_random_part_), K(tablet_id_), K(task.tablet_id_), K(table_id_), K(task.table_id_));
+  } else {
+    // update used_disk_space_ and auto_split_tablet_size_
+    double old_priority = static_cast<double>(used_disk_space_) / auto_split_tablet_size_;
+    double update_priority = static_cast<double>(task.used_disk_space_) / task.auto_split_tablet_size_;
+    if (update_priority > old_priority) {
+      used_disk_space_ = task.used_disk_space_;
+      auto_split_tablet_size_ = task.auto_split_tablet_size_;
+    }
+    if (is_random_part_) {
+      // random part task need update inactive_tablet_ids_
+
+      for (int64_t i = 0; OB_SUCC(ret) && i < task.inactive_tablet_ids_.count(); ++i) {
+        bool find = false;
+        const ObTabletID &tablet_id = task.inactive_tablet_ids_.at(i);
+        for (int64_t j = 0; j < inactive_tablet_ids_.count(); ++j) {
+          if (inactive_tablet_ids_.at(j) == tablet_id) {
+            find = true;
+            break;
+          }
+        }
+        if (!find && OB_FAIL(inactive_tablet_ids_.push_back(tablet_id))) {
+          LOG_WARN("failed to push back tablet id", K(ret), K(tablet_id));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 ObAutoSplitTaskCache::ObAutoSplitTaskCache()
   : ObSplitTaskCache(), max_heap_(max_comp_, &cache_malloc_), min_heap_(min_comp_, &cache_malloc_)
   {}
@@ -94,7 +160,7 @@ int ObAutoSplitTaskCache::init(const int64_t bucket_num, const uint64_t tenant_i
   } else if (OB_UNLIKELY(bucket_num <= 0 || OB_INVALID_TENANT_ID == tenant_id || OB_INVALID_TENANT_ID == host_tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(bucket_num), K(tenant_id), K(host_tenant_id));
-  } else if (OB_FAIL(tasks_set_.create(bucket_num, ObMemAttr(host_tenant_id, "task_cache")))) {
+  } else if (OB_FAIL(tasks_map_.create(bucket_num, ObMemAttr(host_tenant_id, "task_cache")))) {
     LOG_WARN("fail to create hashset", KR(ret));
   } else {
     inited_ = true;
@@ -151,7 +217,7 @@ void ObAutoSplitTaskCache::destroy()
   tenant_id_ = OB_INVALID_TENANT_ID;
   max_heap_.reset();
   min_heap_.reset();
-  (void) tasks_set_.destroy();
+  (void) tasks_map_.destroy();
 }
 
 int ObAutoSplitTaskCache::remove_tasks(const int64_t num_tasks_to_rem)
@@ -193,7 +259,7 @@ int ObAutoSplitTaskCache::atomic_remove_task()
       if (OB_TMP_FAIL(min_heap_.pop())) {
         LOG_WARN("pop from min heap failed", K(ret));
       }
-    } else if (OB_FAIL(tasks_set_.erase_refactored(ObSplitTask(ptr_task_wrapper->task_.tenant_id_, ptr_task_wrapper->task_.tablet_id_))) && OB_HASH_NOT_EXIST != ret) {
+    } else if (OB_FAIL(tasks_map_.erase_refactored(ObAutoSplitTask(ptr_task_wrapper->task_))) && OB_HASH_NOT_EXIST != ret) {
       LOG_WARN("remove key from task_set_ failed", K(ret));
     } else {
       if (OB_HASH_NOT_EXIST == ret) {
@@ -254,9 +320,9 @@ int ObAutoSplitTaskCache::atomic_push_task(const ObAutoSplitTask &task)
     } else if (OB_FALSE_IT(ptr_t_wra_to_min = nullptr)) {
     } else if (OB_FAIL(max_heap_.push(ptr_t_wra_to_max))) {
       LOG_WARN("push task into max_heap_ failed", K(ret), K(task));
+    } else if (OB_FAIL(tasks_map_.set_refactored(ObAutoSplitTask(task), ptr_t_wra_to_max))) {
+      LOG_WARN("push into task_map_ failed", K(ret));
     } else if (OB_FALSE_IT(ptr_t_wra_to_max = nullptr)) {
-    } else if (OB_FAIL(tasks_set_.set_refactored(ObSplitTask (task.tenant_id_, task.tablet_id_)))) {
-      LOG_WARN("push into task_set_ failed", K(ret));
     }
     if (OB_NOT_NULL(ptr_t_wra_to_min)) {
       (void) ATOMIC_FAA(&total_tasks_, -1);
@@ -289,7 +355,7 @@ int ObAutoSplitTaskCache::atomic_pop_task(ObAutoSplitTask &task)
       }
     } else if (OB_FAIL(task.assign(ptr_task_wrapper->task_))) {
       LOG_WARN("assign task failed", K(ret), K(task));
-    } else if (OB_FAIL(tasks_set_.erase_refactored(ObSplitTask(task.tenant_id_, task.tablet_id_))) && OB_HASH_NOT_EXIST != ret) {
+    } else if (OB_FAIL(tasks_map_.erase_refactored(ObAutoSplitTask(task))) && OB_HASH_NOT_EXIST != ret) {
       LOG_WARN("remove key from task_set_ failed", K(ret));
     } else {
       if (OB_HASH_NOT_EXIST == ret) {
@@ -373,6 +439,7 @@ int ObAutoSplitTaskCache::push_tasks(const ObIArray<const ObSplitTask*> &task_ar
     for (int64_t i = 0; OB_SUCC(ret) && i < task_array.count(); ++i) {
       const ObSplitTask *split_task = task_array.at(i);
       const ObAutoSplitTask *auto_split_task = nullptr;
+      ObAutoSplitTaskWrapper *ptr_t_wra_on_map;
       double task_priority = 0;
       tmp_ret = OB_SUCCESS;
       if (OB_ISNULL(split_task)) {
@@ -387,26 +454,55 @@ int ObAutoSplitTaskCache::push_tasks(const ObIArray<const ObSplitTask*> &task_ar
       } else if (OB_FALSE_IT(task_priority = static_cast<double>(auto_split_task->used_disk_space_) / auto_split_task->auto_split_tablet_size_)) {
       } else if (get_tasks_num() >= CACHE_MAX_CAPACITY && task_priority <= min_heap_.top()->priority_) {
         // do nothing
-      } else if (OB_TMP_FAIL(tasks_set_.exist_refactored(ObSplitTask(auto_split_task->tenant_id_, auto_split_task->tablet_id_)))) {
+      } else if (OB_TMP_FAIL(tasks_map_.get_refactored(ObAutoSplitTask(*auto_split_task), ptr_t_wra_on_map))) {
         if (OB_HASH_NOT_EXIST == tmp_ret) {
           tmp_ret = OB_SUCCESS;
           if (OB_FAIL(atomic_push_task(*auto_split_task))) {
             LOG_WARN("atomic push task failed", K(ret), K(*auto_split_task));
           }
-        } else if (OB_HASH_EXIST == tmp_ret) {
-          tmp_ret = OB_SUCCESS;
         } else {
-          LOG_WARN("check task key existed failed", K(tmp_ret));
+          LOG_WARN("get task key failed", K(tmp_ret));
         }
+      } else if (OB_FAIL(update_task(*auto_split_task, ptr_t_wra_on_map))) {
+        LOG_WARN("update task failed", K(ret), K(*auto_split_task));
       } else {
-        //ObHashSet::exist_refactored always returns error
-        LOG_WARN("never expect to reach here", K(tmp_ret));
+        (*ptr_t_wra_on_map).~ObAutoSplitTaskWrapper();
+        cache_malloc_.free(ptr_t_wra_on_map);
+        ptr_t_wra_on_map = nullptr;
+        (void) ATOMIC_FAA(&total_tasks_, -1);
       }
     }
     tmp_ret = OB_SUCCESS;
     int64_t diff =  get_tasks_num() - CACHE_MAX_CAPACITY;
     if (diff > 0 && OB_FAIL(remove_tasks(diff))) {
       LOG_WARN("remove task from cache failed", K(ret), K(diff));
+    }
+  }
+  return ret;
+}
+
+
+int ObAutoSplitTaskCache::update_task(const ObAutoSplitTask &task, ObAutoSplitTaskWrapper *ptr_t_wra_on_map)
+{
+  int ret = OB_SUCCESS;
+  if (!task.is_valid() || OB_ISNULL(ptr_t_wra_on_map)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(task), KP(ptr_t_wra_on_map));
+  } else {
+    ObAutoSplitTask old_task = ptr_t_wra_on_map->task_;
+    if (!old_task.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(old_task));
+    } else if (OB_FAIL(old_task.update(task))) {
+      LOG_WARN("update task failed", K(ret), K(old_task), K(task));
+    } else if (OB_FAIL(max_heap_.remove(ptr_t_wra_on_map))) {
+      LOG_WARN("remove from max_heap_ failed", K(ret));
+    } else if (OB_FAIL(min_heap_.remove(ptr_t_wra_on_map))) {
+      LOG_WARN("remove from min_heap_ failed", K(ret));
+    } else if (OB_FAIL(tasks_map_.erase_refactored(ObAutoSplitTask(old_task))) && OB_HASH_NOT_EXIST != ret) {
+      LOG_WARN("remove key from task_set_ failed", K(ret));
+    } else if (OB_FAIL(atomic_push_task(old_task))) {
+      LOG_WARN("atomic push task failed", K(ret), K(old_task));
     }
   }
   return ret;
@@ -429,7 +525,7 @@ int ObAutoSpTaskSchedEntry::assign(const ObAutoSpTaskSchedEntry &other)
   return ret;
 }
 
-int ObRsAutoSplitScheduler::pop_tasks(const int64_t num_tasks_can_pop, const bool throttle_by_table, ObArray<ObAutoSplitTask> &task_array)
+int ObRsSplitScheduler::pop_tasks(const int64_t num_tasks_can_pop, const bool throttle_by_table, ObArray<ObAutoSplitTask> &task_array)
 {
   int ret = OB_SUCCESS;
   task_array.reuse();
@@ -470,7 +566,9 @@ int ObRsAutoSplitScheduler::pop_tasks(const int64_t num_tasks_can_pop, const boo
       }
     }
   } else {
-    if (OB_FAIL(pop_from_direct_cache(num_tasks_can_pop, task_array))) {
+    if (polling_mgr_.is_empty() && task_direct_cache_.empty()) {
+      //do nothing
+    } else if (OB_FAIL(pop_from_direct_cache(num_tasks_can_pop, task_array))) {
       LOG_WARN("failed ot pop from direct cache", K(ret));
     } else if (task_array.size() < num_tasks_can_pop) {
       if (OB_FAIL(polling_mgr_.pop_tasks(num_tasks_can_pop - task_array.size(), false, tmp_tenant_task_arrays, allocator))) {
@@ -671,7 +769,7 @@ ObRsAutoSplitScheduler &ObRsAutoSplitScheduler::get_instance()
   return instance;
 }
 
-int ObRsAutoSplitScheduler::push_tasks(const ObArray<ObAutoSplitTask> &task_array)
+int ObRsSplitScheduler::push_tasks(const ObArray<ObAutoSplitTask> &task_array)
 {
   int ret = OB_SUCCESS;
   ObSEArray<const ObSplitTask*, 10> input_task_array;
@@ -696,13 +794,13 @@ int ObRsAutoSplitScheduler::push_tasks(const ObArray<ObAutoSplitTask> &task_arra
   return ret;
 }
 
-bool ObRsAutoSplitScheduler::can_retry(const ObAutoSplitTask &task, const int ret)
+bool ObRsSplitScheduler::can_retry(const ObAutoSplitTask &task, const int ret)
 {
-  return task.retry_times_ < ObRsAutoSplitScheduler::MAX_TIMES_TASK_RETRY
+  return task.retry_times_ < ObRsSplitScheduler::MAX_TIMES_TASK_RETRY
       && ((!share::ObIDDLTask::in_ddl_retry_black_list(ret) && share::ObIDDLTask::in_ddl_retry_white_list(ret)) || OB_ERR_PARALLEL_DDL_CONFLICT == ret);
 }
 
-int ObRsAutoSplitScheduler::init()
+int ObRsSplitScheduler::init()
 {
   int ret = OB_SUCCESS;
   if (inited_) {
@@ -774,7 +872,7 @@ int ObRsAutoSplitScheduler::check_ls_migrating(
   return ret;
 }
 
-int ObRsAutoSplitScheduler::gc_deleted_tenant_caches()
+int ObRsSplitScheduler::gc_deleted_tenant_caches()
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -792,7 +890,7 @@ ObServerAutoSplitScheduler &ObServerAutoSplitScheduler::get_instance()
   return instance;
 }
 
-int ObServerAutoSplitScheduler::init()
+int ObServerSplitScheduler::init()
 {
   int ret = OB_SUCCESS;
   if (inited_) {
@@ -806,7 +904,7 @@ int ObServerAutoSplitScheduler::init()
   return ret;
 }
 
-int ObRsAutoSplitScheduler::pop_from_direct_cache(const int64_t num_tasks_can_pop, ObIArray<ObAutoSplitTask> &task_array)
+int ObRsSplitScheduler::pop_from_direct_cache(const int64_t num_tasks_can_pop, ObIArray<ObAutoSplitTask> &task_array)
 {
   int ret = OB_SUCCESS;
   int64_t budget = num_tasks_can_pop;
@@ -839,7 +937,7 @@ int ObRsAutoSplitScheduler::pop_from_direct_cache(const int64_t num_tasks_can_po
   return ret;
 }
 
-int ObRsAutoSplitScheduler::push_to_direct_cache(ObArray<ObArray<ObAutoSplitTask>> &tenant_task_arrays)
+int ObRsSplitScheduler::push_to_direct_cache(ObArray<ObArray<ObAutoSplitTask>> &tenant_task_arrays)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObTabletID, MAX_SPLIT_TASKS_ONE_ROUND> tablet_ids;
@@ -1061,7 +1159,7 @@ int ObServerAutoSplitScheduler::check_and_fetch_tablet_split_info(const storage:
   return ret;
 }
 
-int ObServerAutoSplitScheduler::push_task(const storage::ObTabletHandle &tablet_handle, oceanbase::storage::ObLS &ls)
+int ObServerSplitScheduler::push_task(const storage::ObTabletHandle &tablet_handle, oceanbase::storage::ObLS &ls)
 {
   int ret = OB_SUCCESS;
   ObSEArray<const ObSplitTask* ,1> task_array;
@@ -1112,7 +1210,7 @@ int ObServerAutoSplitScheduler::push_task(const storage::ObTabletHandle &tablet_
  return ret;
 }
 
-int ObServerAutoSplitScheduler::pop_tasks(ObIArray<ObSEArray<ObSplitTask*, 10>> &task_array, ObIAllocator &allocator)
+int ObServerSplitScheduler::pop_tasks(ObIArray<ObSEArray<ObSplitTask*, 10>> &task_array, ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -1122,14 +1220,14 @@ int ObServerAutoSplitScheduler::pop_tasks(ObIArray<ObSEArray<ObSplitTask*, 10>> 
     LOG_WARN("not init", K(ret), K(inited_));
   } else if (polling_manager_.is_empty()) {
     //do nothing
-  } else if (OB_FAIL(polling_manager_.pop_tasks(ObServerAutoSplitScheduler::MAX_SPLIT_RPC_IN_BATCH, true/*need_to_prior_pop*/, task_array, allocator))) {
+  } else if (OB_FAIL(polling_manager_.pop_tasks(ObServerSplitScheduler::MAX_SPLIT_RPC_IN_BATCH, true/*need_to_prior_pop*/, task_array, allocator))) {
     LOG_WARN("fail to pop tasks from tree", K(ret));
   }
   return ret;
 }
 
 
-int ObServerAutoSplitScheduler::batch_send_split_request(const ObIArray<ObSEArray<ObSplitTask*, 10>> &tenant_task_arrays)
+int ObServerSplitScheduler::batch_send_split_request(const ObIArray<ObSEArray<ObSplitTask*, 10>> &tenant_task_arrays)
 {
   int ret = OB_SUCCESS;
   obrpc::ObCommonRpcProxy *rpc_proxy = GCTX.rs_rpc_proxy_;
@@ -1153,7 +1251,11 @@ int ObServerAutoSplitScheduler::batch_send_split_request(const ObIArray<ObSEArra
         single_arg.tablet_id_ = auto_split_task->tablet_id_;
         single_arg.tenant_id_ = auto_split_task->tenant_id_;
         single_arg.used_disk_space_ = auto_split_task->used_disk_space_;
-        if (OB_FAIL(args.args_.push_back(single_arg))) {
+        single_arg.is_random_part_ = auto_split_task->is_random_part_;
+        single_arg.table_id_ = auto_split_task->table_id_;
+        if (OB_FAIL(single_arg.inactive_tablet_ids_.assign(auto_split_task->inactive_tablet_ids_))) {
+          LOG_WARN("assign inactive tablet ids failed", K(ret), K(auto_split_task), K(j));
+        } else if (OB_FAIL(args.args_.push_back(single_arg))) {
           LOG_WARN("push task failed", K(ret), K(auto_split_task), K(j));
         }
       }
@@ -1175,14 +1277,14 @@ int ObServerAutoSplitScheduler::batch_send_split_request(const ObIArray<ObSEArra
   return ret;
 }
 
-int ObServerAutoSplitScheduler::check_tablet_creation_limit(const int64_t inc_tablet_cnt, const double safe_ratio, const int64_t split_size, int64_t &real_split_size)
+int ObServerSplitScheduler::check_tablet_creation_limit(const int64_t inc_tablet_cnt, const double safe_ratio, const int64_t split_size, int64_t &real_split_size)
 {
   int ret = OB_SUCCESS;
   real_split_size = OB_INVALID_SIZE;
   const uint64_t tenant_id = MTL_ID();
   ObUnitInfoGetter::ObTenantConfig unit;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-  int64_t tablet_cnt_per_gb = ObServerAutoSplitScheduler::TABLET_CNT_PER_GB; // default value
+  int64_t tablet_cnt_per_gb = ObServerSplitScheduler::TABLET_CNT_PER_GB; // default value
   if (OB_UNLIKELY(inc_tablet_cnt < 0 || safe_ratio > 1 || safe_ratio <= 0 || split_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(inc_tablet_cnt), K(safe_ratio), K(split_size));
@@ -1225,7 +1327,7 @@ int ObServerAutoSplitScheduler::check_tablet_creation_limit(const int64_t inc_ta
 
 // since we don't want to do the auto split when the number of tablets is closed to the limit
 // we implicitly increase the auto split size, when the number of tablets approaches to the limit
-int ObServerAutoSplitScheduler::cal_real_auto_split_size(const double base_ratio, const double cur_ratio, const int64_t split_size, int64_t &real_split_size)
+int ObServerSplitScheduler::cal_real_auto_split_size(const double base_ratio, const double cur_ratio, const int64_t split_size, int64_t &real_split_size)
 {
   int ret = OB_SUCCESS;
   int64_t tablet_limit_penalty = 1;
@@ -1261,6 +1363,7 @@ int ObServerAutoSplitScheduler::cal_real_auto_split_size(const double base_ratio
   }
   return ret;
 }
+
 #ifdef OB_BUILD_SHARED_STORAGE
 int ObLSTabletSplitScheduler::init()
 {
@@ -1950,7 +2053,6 @@ int ObSplitTaskPollingMgr::push_tasks(const ObIArray<const ObSplitTask*> &task_a
   int ret = OB_SUCCESS;
   ObLockGuard<ObSpinLock> guard(lock_);
   uint64_t tenant_id = OB_INVALID_TENANT_ID;
-
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(inited_));
@@ -2011,6 +2113,7 @@ int ObSplitTaskPollingMgr::push_tasks(const ObIArray<const ObSplitTask*> &task_a
       }
     }
   }
+
   return ret;
 }
 
@@ -2056,7 +2159,7 @@ int ObSplitTaskPollingMgr::register_task_cache(const uint64_t tenant_id, ObSplit
 }
 
 int ObAutoSplitArgBuilder::build_arg(const uint64_t tenant_id,
-                                     const share::ObLSID ls_id,
+                                    const share::ObLSID ls_id,
                                      const ObTabletID tablet_id,
                                      const int64_t auto_split_tablet_size,
                                      const int64_t used_disk_space,
@@ -2670,6 +2773,8 @@ int ObAutoSplitArgBuilder::check_need_to_cast(const ObObj &obj, bool &need_to_ca
   }
   return ret;
 }
+
+
 
 // sample rowkey ranges of data_table/global_index from given tablet
 int ObSplitSampler::query_ranges(const uint64_t tenant_id,

@@ -22,7 +22,7 @@ using namespace sql;
 using namespace storage;
 
 ObTableLoadPXBatchRows::ObTableLoadPXBatchRows()
-  : reshape_allocator_("TLD_Reshape"), need_reshape_(false), is_inited_(false)
+  : reshape_allocator_("TLD_Reshape"), need_reshape_(false), is_random_part_(false), is_inited_(false)
 {
   col_descs_.set_tenant_id(MTL_ID());
   col_accuracys_.set_tenant_id(MTL_ID());
@@ -52,7 +52,8 @@ int ObTableLoadPXBatchRows::init(const ObIArray<ObColDesc> &col_descs,
                                  const ObBitVector *col_nullables,
                                  const ObDirectLoadRowFlag &row_flag,
                                  const int64_t max_batch_size,
-                                 const bool need_reshape)
+                                 const bool need_reshape,
+                                 const bool is_random_part)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -72,6 +73,7 @@ int ObTableLoadPXBatchRows::init(const ObIArray<ObColDesc> &col_descs,
     LOG_WARN("fail to init batch rows", KR(ret));
   } else {
     need_reshape_ = need_reshape;
+    is_random_part_ = is_random_part;
     is_inited_ = true;
   }
   return ret;
@@ -94,7 +96,7 @@ int ObTableLoadPXBatchRows::append_batch(const IVectorPtrs &vectors, const int64
     const int64_t batch_idx = batch_rows_.size();
     for (int64_t i = 0; OB_SUCC(ret) && i < get_column_count(); ++i) {
       const ObColDesc &col_desc = col_descs_.at(i);
-      if (!ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_)) {
+      if (!ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_) || is_random_part_) {
         ObIVector *vector = vectors.at(i);
         ObBatchSelector batch_selector(offset, size);
         if (need_reshape_ &&
@@ -132,7 +134,7 @@ int ObTableLoadPXBatchRows::append_batch(const ObIArray<ObDatumVector> &datum_ve
     const int64_t batch_idx = batch_rows_.size();
     for (int64_t i = 0; OB_SUCC(ret) && i < get_column_count(); ++i) {
       const ObColDesc &col_desc = col_descs_.at(i);
-      if (!ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_)) {
+      if (!ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_) || is_random_part_) {
         const ObDatumVector &datum_vector = datum_vectors.at(i);
         ObBatchSelector batch_selector(offset, size);
         if (need_reshape_ && OB_FAIL(ObDASUtils::reshape_datum_vector_value(
@@ -170,7 +172,7 @@ int ObTableLoadPXBatchRows::append_selective(const IVectorPtrs &vectors, const u
     const int64_t batch_idx = batch_rows_.size();
     for (int64_t i = 0; OB_SUCC(ret) && i < get_column_count(); ++i) {
       const ObColDesc &col_desc = col_descs_.at(i);
-      if (!ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_)) {
+      if (!ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_) || is_random_part_) {
         ObIVector *vector = vectors.at(i);
         ObBatchSelector batch_selector(selector, size);
         if (need_reshape_ &&
@@ -209,7 +211,7 @@ int ObTableLoadPXBatchRows::append_selective(const ObIArray<ObDatumVector> &datu
     const int64_t batch_idx = batch_rows_.size();
     for (int64_t i = 0; OB_SUCC(ret) && i < get_column_count(); ++i) {
       const ObColDesc &col_desc = col_descs_.at(i);
-      if (!ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_)) {
+      if (!ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_) || is_random_part_) {
         const ObDatumVector &datum_vector = datum_vectors.at(i);
         ObBatchSelector batch_selector(selector, size);
         if (need_reshape_ && OB_FAIL(ObDASUtils::reshape_datum_vector_value(
@@ -248,7 +250,7 @@ int ObTableLoadPXBatchRows::append_row(const ObDirectLoadDatumRow &datum_row)
     for (int64_t i = 0; OB_SUCC(ret) && i < get_column_count(); ++i) {
       ObStorageDatum &datum = datum_row.storage_datums_[i];
       const ObColDesc &col_desc = col_descs_.at(i);
-      if (!ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_)) {
+      if (!ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_) || is_random_part_) {
         if (need_reshape_ &&
             OB_FAIL(ObDASUtils::reshape_datum_value(
               col_desc.col_type_, col_accuracys_.at(i),
@@ -281,7 +283,7 @@ int ObTableLoadPXBatchRows::shallow_copy(const IVectorPtrs &vectors, const int64
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < get_column_count(); ++i) {
       const ObColDesc &col_desc = col_descs_.at(i);
-      if (!ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_)) {
+      if (!ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_) || is_random_part_) {
         ObIVector *vector = vectors.at(i);
         ObBatchSelector batch_selector(0L, batch_size);
         if (need_reshape_ &&
@@ -314,7 +316,7 @@ int ObTableLoadPXBatchRows::shallow_copy(const ObIArray<ObDatumVector> &datum_ve
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < get_column_count(); ++i) {
       const ObColDesc &col_desc = col_descs_.at(i);
-      if (!ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_)) {
+      if (!ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_) || is_random_part_) {
         const ObDatumVector &datum_vector = datum_vectors.at(i);
         ObBatchSelector batch_selector(0L, batch_size);
         if (need_reshape_ && OB_FAIL(ObDASUtils::reshape_datum_vector_value(

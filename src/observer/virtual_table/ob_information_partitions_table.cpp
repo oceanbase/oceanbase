@@ -335,7 +335,7 @@ int ObInfoSchemaPartitionsTable::add_partitions(const ObSimpleTableSchemaV2 &tab
         }
         case PARTITION_DESCRIPTION: {
           ObString desc;
-          if (table_schema.is_range_part()) {
+          if (table_schema.is_range_or_random_part()) {
             if (OB_FAIL(gen_high_bound_val_str(is_oracle_mode, part_info.part_, desc))) {
               SERVER_LOG(WARN, "fail to generate PARTITION_DESCRIPTION", K(ret), K(part_info));
             } else {

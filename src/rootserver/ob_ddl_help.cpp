@@ -163,6 +163,10 @@ int ObTableGroupHelp::check_table_alter_tablegroup(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("table can't in tablegroup", KR(ret), K(new_table_schema));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "add this type of table to tablegroup is");
+  } else if (new_table_schema.is_random_part()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("table can't in tablegroup", KR(ret), K(new_table_schema));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "add random partitioned table to tablegroup is");
   } else if (orig_table_schema.is_oracle_tmp_table_v2()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("temporary table is not allowed to be added to tablegroup", KR(ret), K(orig_table_schema));
@@ -246,6 +250,10 @@ int ObTableGroupHelp::check_table_partition_in_tablegroup(const ObTableSchema *f
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("table or tablegroup is splitting", KR(ret), K(table), KPC(tablegroup_schema));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "add table to tablegroup while either object is splitting");
+  } else if (OB_UNLIKELY(table.is_random_part())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("table is random partition", KR(ret), K(table), KPC(tablegroup_schema));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "add random partitioned table to tablegroup");
   } else {
     // sort partition info in order, to prevent same value not in order from being misjudged
     if (OB_FAIL(ObSchemaServiceSQLImpl::sort_table_partition_info_v2(table))) {

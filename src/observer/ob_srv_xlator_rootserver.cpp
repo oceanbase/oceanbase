@@ -304,6 +304,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
 
     RPC_PROCESSOR(rootserver::ObRpcCreateExternalResourceP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDropExternalResourceP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObAlterRandomDistributionPartitionP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateJavaPolicyP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDropJavaPolicyP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcModifyJavaPolicyP, *gctx_.root_service_);

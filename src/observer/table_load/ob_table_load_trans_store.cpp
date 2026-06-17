@@ -26,7 +26,6 @@
 #include "storage/direct_load/ob_direct_load_insert_table_row_writer.h"
 #include "storage/direct_load/ob_direct_load_multiple_sstable_builder.h"
 #include "storage/direct_load/ob_direct_load_tmp_file.h"
-#include "share/ob_tablet_autoincrement_service.h"
 #include "share/ob_heap_organized_table_util.h"
 
 namespace oceanbase
@@ -328,7 +327,7 @@ int ObTableLoadTransStoreWriter::StoreWriter::new_table_builder(
     }
   } else {
     // 有主键表不排序路径
-    abort_unless(!store_ctx_->data_store_table_ctx_->schema_->is_table_without_pk_);
+    abort_unless(!(store_ctx_->data_store_table_ctx_->schema_->is_table_without_pk_ && !store_ctx_->data_store_table_ctx_->schema_->is_random_part_));
     ObDirectLoadMultipleSSTableBuildParam param;
     param.tablet_id_ = tablet_id;
     param.table_data_desc_ = store_ctx_->write_ctx_.table_data_desc_;
@@ -732,7 +731,7 @@ int ObTableLoadTransStoreWriter::init_column_schemas_and_lob_info()
   for (int64_t i = 0; OB_SUCC(ret) && i < column_descs.count(); ++i) {
     const ObColumnSchemaV2 *column_schema =
       table_schema->get_column_schema(column_descs.at(i).col_id_);
-    if (ObColumnSchemaV2::is_hidden_pk_column_id(column_schema->get_column_id())) {
+    if (ObColumnSchemaV2::is_hidden_pk_column_id(column_schema->get_column_id()) && !table_schema->is_random_part()) {
     } else if (OB_FAIL(column_schemas_.push_back(column_schema))) {
       LOG_WARN("failed to push back column schema", K(ret), K(i), KPC(column_schema));
     }
@@ -1052,7 +1051,20 @@ int ObTableLoadTransStoreWriter::cast_column(
   ObTableLoadCastObjCtx cast_obj_ctx(param_, &time_cvrt_, &cast_ctx, true);
   cast_ctx.exec_ctx_ = trans_ctx_->ctx_->exec_ctx_;
   ObObj out_obj;
-  if (column_schema->is_autoincrement()) {
+  if (column_schema->get_column_id() == trans_ctx_->ctx_->schema_.random_partkey_column_id_) { // 包括作为随机分区键的自增列
+    if (OB_UNLIKELY(column_schema->is_unused())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected random partkey column is unused", KR(ret), KPC(column_schema));
+    } else if (OB_UNLIKELY(obj.is_null() || obj.is_nop_value())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected random partkey column value is null or nop", KR(ret), KPC(column_schema));
+    } else {
+      out_obj = obj;
+      if (OB_FAIL(datum.from_obj_enhance(out_obj))) {
+        LOG_WARN("fail to from obj enhance", KR(ret), K(out_obj));
+      }
+    }
+  } else if (column_schema->is_autoincrement()) {
     // mysql模式还不支持快速删列, 先加个拦截
     if (OB_UNLIKELY(column_schema->is_unused())) {
       ret = OB_ERR_UNEXPECTED;

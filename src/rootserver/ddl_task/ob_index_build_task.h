@@ -13,6 +13,7 @@ namespace oceanbase
 {
 namespace rootserver
 {
+class ObDDLService;
 
 class ObIndexSSTableBuildTask : public share::ObAsyncTask
 {
@@ -32,11 +33,13 @@ public:
       ObRootService *root_service,
       const common::ObAddr &inner_sql_exec_addr,
       const bool is_retryable_ddl,
-      const bool is_partition_local_ddl)
+      const bool is_partition_local_ddl,
+      const int64_t data_tablet_ids_cnt)
       : task_id_(task_id), tenant_id_(tenant_id), data_table_id_(data_table_id), dest_table_id_(dest_table_id),
         schema_version_(schema_version), snapshot_version_(snapshot_version), execution_id_(execution_id),
         consumer_group_id_(consumer_group_id), trace_id_(trace_id), parallelism_(parallelism), is_partitioned_local_index_task_(is_partitioned_local_index_task),
-        allocator_("IdxSSTBuildTask"), root_service_(root_service), inner_sql_exec_addr_(inner_sql_exec_addr), is_retryable_ddl_(is_retryable_ddl), is_partition_local_ddl_(is_partition_local_ddl)
+        allocator_("IdxSSTBuildTask"), root_service_(root_service), inner_sql_exec_addr_(inner_sql_exec_addr), is_retryable_ddl_(is_retryable_ddl), is_partition_local_ddl_(is_partition_local_ddl),
+        data_tablet_ids_cnt_(data_tablet_ids_cnt)
   {
     set_retry_times(0);
   }
@@ -53,7 +56,7 @@ public:
   void add_event_info(const int ret, const ObString &ddl_event_stmt);
   TO_STRING_KV(K_(data_table_id), K_(dest_table_id), K_(schema_version), K_(snapshot_version),
                K_(execution_id), K_(consumer_group_id), K_(trace_id), K_(parallelism), K_(is_partitioned_local_index_task),
-               K_(addition_info), K_(nls_date_format), K_(nls_timestamp_format), K_(nls_timestamp_tz_format), K_(is_retryable_ddl), K_(is_partition_local_ddl));
+               K_(addition_info), K_(nls_date_format), K_(nls_timestamp_format), K_(nls_timestamp_tz_format), K_(is_retryable_ddl), K_(is_partition_local_ddl), K_(data_tablet_ids_cnt));
 private:
   inline bool is_partitioned_local_index_task() const { return is_partitioned_local_index_task_ == true; }
 private:
@@ -77,6 +80,7 @@ private:
   ObDDLTaskInfo addition_info_;
   bool is_retryable_ddl_;
   bool is_partition_local_ddl_;
+  int64_t data_tablet_ids_cnt_;
 
   DISALLOW_COPY_AND_ASSIGN(ObIndexSSTableBuildTask);
 };
@@ -100,6 +104,7 @@ public:
       const share::ObDDLType task_type,
       const int64_t parent_task_id /* = 0 */,
       const uint64_t tenant_data_version,
+      const ObIArray<ObTabletID> &data_tablet_ids,
       const int64_t task_status = share::ObDDLTaskStatus::PREPARE,
       const int64_t snapshot_version = 0,
       const bool is_retryable_ddl = true);
@@ -114,6 +119,12 @@ public:
       const int64_t execution_id,
       const int ret_code,
       const ObDDLTaskInfo &addition_info);
+  static int unlock_for_enable_index(
+      const uint64_t tenant_id,
+      const ObTableSchema &data_table_schema,
+      const ObTableSchema &index_table_schema,
+      const int64_t task_id,
+      ObMySQLTransaction &trans);
   virtual int process() override;
   virtual bool is_valid() const override;
   virtual int collect_longops_stat(share::ObLongopsValue &value) override;
@@ -127,8 +138,9 @@ public:
   }
   static int deep_copy_index_arg(common::ObIAllocator &allocator, const obrpc::ObCreateIndexArg &source_arg, obrpc::ObCreateIndexArg &dest_arg);
   bool is_offline_rebuild() const { return create_index_arg_.is_offline_rebuild_; }
+  const ObIArray<ObTabletID> &get_data_tablet_ids() const { return data_tablet_ids_; }
   INHERIT_TO_STRING_KV("ObDDLTask", ObDDLTask, K(index_table_id_), K(is_sstable_complete_task_submitted_), K(sstable_complete_request_time_),
-      K(sstable_complete_ts_), K(check_unique_snapshot_), K(complete_sstable_job_ret_code_), K_(redefinition_execution_id), K(create_index_arg_), K(target_cg_cnt_));
+      K(sstable_complete_ts_), K(check_unique_snapshot_), K(complete_sstable_job_ret_code_), K_(redefinition_execution_id), K(create_index_arg_), K(target_cg_cnt_), K(data_tablet_ids_), K(global_unique_inc_data_tablets_));
 private:
   int prepare();
   int wait_trans_end();
@@ -139,11 +151,14 @@ private:
       int64_t &pos);
   int create_schedule_queue();
   int verify_checksum();
+  int verify_checksum_v2();
   int enable_index();
   int clean_on_failed();
+  int clean_on_failed_v2();
   int succ();
   virtual int cleanup_impl() override;
   int hold_snapshot(common::ObMySQLTransaction &trans, const int64_t snapshot);
+  int hold_snapshot(common::ObMySQLTransaction &trans, const ObIArray<ObTabletID> &data_tablet_ids, const int64_t snapshot);
   int release_snapshot(const int64_t snapshot);
   int update_index_status_in_schema(
       const share::schema::ObTableSchema &index_schema,
@@ -172,6 +187,10 @@ private:
     const int64_t data_format_version,
     const common::ObIArray<common::ObTabletID> &tablets,
     const uint64_t tenant_id);
+  int insert_or_get_unique_check_snapshot(
+    const int64_t &check_unique_snapshot,
+    const ObIArray<ObTabletID> &global_unique_inc_data_tablets);
+  int release_snapshot_and_inc_data_lock();
 private:
   static const int64_t OB_INDEX_BUILD_TASK_VERSION = 1;
   using ObDDLTask::is_inited_;
@@ -193,6 +212,8 @@ private:
   obrpc::ObCreateIndexArg create_index_arg_; // this is not a valid arg, only has nls formats for now
   int64_t target_cg_cnt_;
   bool is_retryable_ddl_;
+  ObSArray<ObTabletID> data_tablet_ids_;
+  ObSArray<ObTabletID> global_unique_inc_data_tablets_;
 };
 
 }  // end namespace rootserver

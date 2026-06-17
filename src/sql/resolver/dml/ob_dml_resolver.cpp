@@ -17,6 +17,7 @@
 #include "sql/printer/ob_select_stmt_printer.h"
 #include "sql/engine/expr/ob_expr_autoinc_nextval.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
+#include "sql/engine/expr/ob_expr_random_part_nextval.h"
 #include "sql/engine/expr/ob_expr_version.h"
 #include "sql/resolver/dml/ob_insert_resolver.h"
 #include "lib/xml/ob_path_parser.h"
@@ -43,6 +44,7 @@
 #include "share/catalog/ob_catalog_utils.h"
 #include "share/ob_license_utils.h"
 #include "rootserver/mview/ob_mview_utils.h"
+#include "rootserver/ob_random_partition_helper.h"
 #include "share/schema/ob_external_table_column_schema_helper.h"
 #include "src/share/hybrid_search/ob_hybrid_search_executor.h"
 #include "sql/hybrid_search/ob_hybrid_search_dsl_resolver.h"
@@ -2795,8 +2797,37 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
       if (OB_UNLIKELY(is_hidden_pk
                       && (T_UPDATE_SCOPE == current_scope_
                           || T_INSERT_SCOPE == current_scope_))) {
-        ret = OB_ERR_BAD_FIELD_ERROR;
-        LOG_WARN("can not modify __pk_increment column using DML", K(ret));
+        const ObTableSchema *table_schema = NULL;
+        uint64_t tid = table_item.ref_id_;
+        if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                                                      tid,
+                                                      table_schema,
+                                                      table_item.is_link_table()))) {
+          LOG_WARN("invalid table id", K(tid));
+        } else if (OB_ISNULL(table_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("table schema is null", K(tid));
+        } else if (table_item.is_index_table_) {
+          const ObTableSchema *data_table_schema = NULL;
+          if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                                                        table_schema->get_data_table_id(),
+                                                        data_table_schema))) {
+            LOG_WARN("failed to get data table schema", K(ret));
+          } else if (OB_ISNULL(data_table_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("data table schema is null", K(ret));
+          } else if (data_table_schema->is_random_part() && data_table_schema->is_table_without_pk()) {
+            // do nothing
+          } else {
+            ret = OB_ERR_BAD_FIELD_ERROR;
+            LOG_WARN("not allowed update insert hidden pk increment column", K(ret));
+          }
+        } else if (table_schema->is_random_part() && table_schema->is_table_without_pk()) {
+          // do nothing
+        } else {
+          ret = OB_ERR_BAD_FIELD_ERROR;
+          LOG_WARN("can not modify __pk_increment column using DML", K(ret));
+        }
       }
     }
   } else {
@@ -2838,9 +2869,23 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
                                                enable_hidden_visible))) {
         LOG_WARN("failed to check hidden column visible hint", K(ret));
       } else if (OB_UNLIKELY(!enable_hidden_visible)) {
-        ret = OB_ERR_BAD_FIELD_ERROR;
-        ObString scope_name = ObString::make_string(get_scope_name(current_scope_));
-        LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(), scope_name.length(), scope_name.ptr());
+        const ObTableSchema *table_schema = NULL;
+        uint64_t tid = table_item.ref_id_;
+        if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                                                      tid,
+                                                      table_schema,
+                                                      table_item.is_link_table()))) {
+          LOG_WARN("invalid table id", K(tid));
+        } else if (OB_ISNULL(table_schema)) {
+          ret = OB_TABLE_NOT_EXIST;
+          LOG_WARN("table schema is null", K(ret), K(tid));
+        } else if (table_schema->is_random_part() && table_schema->is_table_without_pk()) {
+          // do nothing
+        } else {
+          ret = OB_ERR_BAD_FIELD_ERROR;
+          ObString scope_name = ObString::make_string(get_scope_name(current_scope_));
+          LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(), scope_name.length(), scope_name.ptr());
+        }
       }
     }
     if (OB_FAIL(ret)) {
@@ -9352,7 +9397,7 @@ int ObDMLResolver::resolve_partition_expr(
         LOG_WARN("resolve columns for parent table partition expr failed", K(ret));
       }
     } else if (OB_FAIL(resolve_columns_for_partition_expr(expr, columns, table_item,
-            table_schema.is_oracle_tmp_table() || table_schema.is_fts_index() || table_schema.is_vec_index()))) {
+            table_schema.is_oracle_tmp_table() || table_schema.is_fts_index() || table_schema.is_vec_index() || table_schema.is_random_part()))) {
       LOG_WARN("resolve columns for partition expr failed", K(ret));
     }
   }
@@ -9639,6 +9684,42 @@ int ObDMLResolver::build_autoinc_nextval_expr(ObRawExpr *&expr,
     LOG_WARN("create nextval failed", K(ret));
   } else {
     func_expr->set_func_name(ObString::make_string(N_AUTOINC_NEXTVAL));
+    if (NULL != expr && OB_FAIL(func_expr->set_param_expr(expr))) {
+      LOG_WARN("add function param expr failed", K(ret));
+    } else if (OB_FAIL(func_expr->formalize(session_info_))) {
+      LOG_WARN("failed to extract info", K(ret));
+    } else if (OB_FAIL(ObAutoincNextvalExtra::init_autoinc_nextval_extra(
+            allocator_,
+            reinterpret_cast<ObRawExpr *&>(func_expr),
+            autoinc_table_id,
+            autoinc_col_id,
+            autoinc_table_name,
+            autoinc_column_name))) {
+      LOG_WARN("failed to init autoinc_nextval_extra", K(ret));
+    } else {
+      expr = func_expr;
+    }
+  }
+  return ret;
+}
+
+// build next_val expr; set expr as its param
+int ObDMLResolver::build_random_part_nextval_expr(ObRawExpr *&expr,
+                                                 const uint64_t autoinc_table_id,
+                                                 const uint64_t autoinc_col_id,
+                                                 const ObString autoinc_table_name,
+                                                 const ObString autoinc_column_name,
+                                                 const ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  ObSysFunRawExpr *func_expr = NULL;
+  if (OB_ISNULL(session_info_) || OB_ISNULL(params_.expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is NULL", K_(session_info), K_(params_.expr_factory));
+  } else if (OB_FAIL(params_.expr_factory_->create_raw_expr(T_FUN_SYS_RANDOM_PART_NEXTVAL, func_expr))) {
+    LOG_WARN("create nextval failed", K(ret));
+  } else {
+    func_expr->set_func_name(ObString::make_string(N_RANDOM_PART_NEXTVAL));
     if (NULL != expr && OB_FAIL(func_expr->set_param_expr(expr))) {
       LOG_WARN("add function param expr failed", K(ret));
     } else if (OB_FAIL(func_expr->formalize(session_info_))) {
@@ -11066,14 +11147,33 @@ int ObDMLResolver::add_additional_function_according_to_type(const ColumnItem *c
         // In the old engine, nextval() expr returned ObObj with different types:
         // return ObUInt64Type for generate type if input obj is zero or the original input obj.
         // Not acceptable in static typing engine, so convert to the defined data type first.
-        if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(*params_.expr_factory_,
+        const ObTableSchema *table_schema = nullptr;
+        bool is_random_partkey = false;
+        if (OB_ISNULL(schema_checker_) || OB_ISNULL(session_info_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid params", K(ret), KP(schema_checker_), KP(session_info_));
+        } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), column->base_tid_, table_schema))) {
+          LOG_WARN("failed to get table schema", K(ret), KPC(column));
+        } else if (OB_ISNULL(table_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("table not exists", K(ret), KPC(column));
+        } else if (OB_FAIL(rootserver::ObRandomPartitionHelper::check_is_random_partkey(*table_schema, column->base_cid_, is_random_partkey))) {
+          LOG_WARN("failed to check is random partkey", K(ret), K(column->base_cid_), KPC(table_schema));
+        } else if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(*params_.expr_factory_,
                                                            *params_.allocator_,
                                                            *column->get_expr(),
                                                            expr,
                                                            session_info_))) {
           LOG_WARN("fail to build column conv expr", K(ret), K(column));
-        }
-        if (OB_FAIL(ret)) {
+        } else if (is_random_partkey) {
+          if (OB_FAIL(build_random_part_nextval_expr(
+                  expr,
+                  column->base_tid_,column->base_cid_,
+                  column->get_expr()->get_table_name(),
+                  column->get_expr()->get_column_name(),
+                  *table_schema))) {
+            LOG_WARN("fail to build nextval expr", K(ret), K(column->base_cid_));
+          }
         } else if (OB_FAIL(build_autoinc_nextval_expr(
                 expr,
                 column->base_tid_,column->base_cid_,

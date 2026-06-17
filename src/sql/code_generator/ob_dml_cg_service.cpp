@@ -3158,7 +3158,7 @@ int ObDmlCgService::check_is_heap_table_or_cluster_by_table(ObLogicalOperator &o
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is null", K(ret), K(table_schema));
-  } else if (table_schema->is_table_with_pk()) {
+  } else if (table_schema->is_table_with_pk() || table_schema->is_random_part()) {
     is_heap_table = false;
     is_cluster_by_table = table_schema->is_table_with_clustering_key();
   } else {

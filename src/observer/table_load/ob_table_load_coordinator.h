@@ -89,6 +89,7 @@ private:
                              common::ObIAllocator &allocator);
   int write_sql_stat(table::ObTableLoadSqlStatistics &sql_statistics,
                      table::ObTableLoadDmlStat &dml_stats);
+  int commit_random_part_value();
   int heart_beat_peer();
 private:
   int init_empty_tablets();

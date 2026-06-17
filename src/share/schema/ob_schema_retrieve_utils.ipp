@@ -5323,6 +5323,13 @@ int ObSchemaRetrieveUtils::fill_base_part_info(
         }
       }
     }
+    if (OB_SUCC(ret)) {
+      ObPartitionStatus status;
+      EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "status", status, ObPartitionStatus, true/*skip null error*/, true/*skip column error*/, PARTITION_STATUS_ACTIVE);
+      if (OB_SUCC(ret) && PARTITION_STATUS_INVALID != status) {
+        partition.set_status(status);
+      }
+    }
   } else { }//do nothing
   return ret;
 }

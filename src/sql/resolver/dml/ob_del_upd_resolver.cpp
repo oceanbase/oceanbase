@@ -15,6 +15,7 @@
 #include "share/vector_index/ob_vector_index_util.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "share/domain_id/ob_domain_id.h"
+#include "rootserver/ob_random_partition_helper.h"
 
 namespace oceanbase
 {
@@ -3659,10 +3660,13 @@ int ObDelUpdResolver::generate_autoinc_params(ObInsertTableInfo &table_info)
     for (ObTableSchema::const_column_iterator iter = table_schema->column_begin();
          OB_SUCCESS == ret && iter != table_schema->column_end(); ++iter) {
       ObColumnSchemaV2 *column_schema = *iter;
+      bool is_random_partkey = false;
       if (OB_ISNULL(column_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("invalid column schema", K(column_schema));
-      } else if (column_schema->is_autoincrement()) {
+      } else if (OB_FAIL(rootserver::ObRandomPartitionHelper::check_is_random_partkey(*table_schema, column_schema->get_column_id(), is_random_partkey))) {
+        LOG_WARN("failed to check is random partkey", K(ret), K(column_schema->get_column_id()), KPC(table_schema));
+      } else if (column_schema->is_autoincrement() || is_random_partkey) {
         const ObTableSchema *t_schema = table_schema;
         uint64_t table_id = table_info.ref_table_id_;
         AutoincParam param;
@@ -4388,7 +4392,8 @@ int ObDelUpdResolver::build_hidden_pk_assignment(ObTableAssignment &ta,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get column schema fail", K(column_schema));
     } else if (column_schema->get_column_id() != OB_HIDDEN_PK_INCREMENT_COLUMN_ID &&
-              !column_schema->is_hidden_clustering_key_column()) {
+              !column_schema->is_hidden_clustering_key_column() &&
+              !table_schema->is_random_part()) {
       //do nothing
     } else {
       is_end_loop = true;

@@ -1043,7 +1043,7 @@ int ObSplitPartitionHelper::start_src_(
           const int64_t table_idx = j;
           if (OB_FAIL(autoinc_param.ret_code_)) {
             LOG_WARN("failed to get autoinc", KR(ret));
-          } else if (1 < autoinc_param.autoinc_seq_) { // only non-empty autoinc_seqs are needed to sync to dst
+          } else if (1 < autoinc_param.autoinc_seq_ || autoinc_param.autoinc_seq_end_ < INT64_MAX) { // only non-default autoinc_seqs are needed to sync to dst
             if (OB_FAIL(end_autoinc_seqs.push_back(std::make_pair(table_idx, autoinc_param.autoinc_seq_)))) {
               LOG_WARN("failed to push back", KR(ret));
             }

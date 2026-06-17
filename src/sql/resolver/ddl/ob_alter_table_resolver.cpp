@@ -2912,6 +2912,10 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
       } else if (is_unique_key) {
         if (global_) {
           type = INDEX_TYPE_UNIQUE_GLOBAL;
+        } else if (OB_NOT_NULL(table_schema_) && table_schema_->is_random_part()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("create local unique index on random partition table is not supported", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "create local unique index on random partition table");
         } else {
           type = INDEX_TYPE_UNIQUE_LOCAL;
         }
@@ -4123,6 +4127,10 @@ int ObAlterTableResolver::resolve_add_primary(const ParseNode &node)
   } else if (OB_ISNULL(table_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "table_schema is null", K(ret));
+  } else if (table_schema_->is_random_part()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Add primary key to random-distributed table");
+    SQL_RESV_LOG(WARN, "add primary key on random-distributed table is not supported", K(ret), KPC(table_schema_));
   } else if (table_schema_->is_table_with_pk()) {
     ret = OB_ERR_MULTIPLE_PRI_KEY;
     SQL_RESV_LOG(WARN, "multiple primary key defined", K(ret));
@@ -4349,6 +4357,10 @@ int ObAlterTableResolver::resolve_drop_primary(const ParseNode &action_node_list
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("can't DROP 'PRIMARY', feature is not supported in the heap organized table", K(ret), KPC(table_schema_));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "can't DROP 'PRIMARY', DROP 'PRIMARY' in the heap organized table");
+  } else if (table_schema_->is_random_part()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Drop primary key on random-distributed table");
+    SQL_RESV_LOG(WARN, "drop primary key on random-distributed table is not supported", K(ret), KPC(table_schema_));
   } else if (table_schema_->is_table_without_pk()) {
     const ObString pk_name = "PRIMAY";
     ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
@@ -5618,6 +5630,7 @@ int ObAlterTableResolver::resolve_partition_options(const ParseNode &node)
 
     if (OB_SUCC(ret)) {
       bool is_only_modify_auto_part_attr = false;
+      bool is_only_modify_auto_random_attr = false;
       ParseNode *partition_node = node.children_[0];
       const ObPartitionLevel part_level = table_schema_->get_part_level();
       if (T_ALTER_PARTITION_PARTITIONED != node.children_[0]->type_
@@ -5630,8 +5643,13 @@ int ObAlterTableResolver::resolve_partition_options(const ParseNode &node)
                                                       is_only_modify_auto_part_attr))) {
         LOG_WARN("fail to check only modify auto_part attr", K(ret));
       } else if (T_ALTER_PARTITION_PARTITIONED == node.children_[0]->type_
+                 && OB_FAIL(check_only_modify_auto_random_attr(alter_table_stmt, partition_node->children_[0],
+                                                      is_only_modify_auto_random_attr))) {
+        LOG_WARN("fail to check only modify random_part attr", K(ret));
+      } else if (T_ALTER_PARTITION_PARTITIONED == node.children_[0]->type_
                  && PARTITION_LEVEL_ZERO != part_level
                  && !is_only_modify_auto_part_attr
+                 && !is_only_modify_auto_random_attr
                  && lib::is_oracle_mode()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("can't re-partitioned a partitioned table", K(ret));
@@ -5643,6 +5661,10 @@ int ObAlterTableResolver::resolve_partition_options(const ParseNode &node)
       } else if (OB_FAIL(ObAlterMviewUtils::check_partition_option_for_mlog_master(
                      *table_schema_, partition_node->type_))) {
         LOG_WARN("mlog master is not supported", KR(ret));
+      } else if (T_ALTER_PARTITION_PARTITIONED != partition_node->type_ && table_schema_->is_random_part()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("alter partition on random partition table is not supported", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter partition on random partition table");
       }
     }
     if (OB_SUCC(ret)) {
@@ -5863,7 +5885,7 @@ int ObAlterTableResolver::resolve_partitioned_partition(const ParseNode *node,
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(resolve_partition_node(alter_table_stmt, node->children_[0], table_schema))) {
       LOG_WARN("failed to resolve partition option", K(ret));
-    } else if (OB_FAIL(resolve_auto_partition(alter_table_stmt, node->children_[0], table_schema))) {
+    } else if ((is_range_type_partition(node->children_[0]->type_) || is_random_type_partition(node->children_[0]->type_)) && OB_FAIL(resolve_auto_partition(alter_table_stmt, node->children_[0], table_schema))) {
       LOG_WARN("failed to resolve auto partition option", K(ret));
     } else if (OB_FAIL(table_schema.check_primary_key_cover_partition_column(*schema_guard))) {
       LOG_WARN("fail to check primary key cover partition column", K(ret));
@@ -5889,8 +5911,9 @@ int ObAlterTableResolver::resolve_partitioned_partition(const ParseNode *node,
     }
     if (OB_FAIL(ret)) {
     } else if (alter_table_stmt->use_auto_partition_clause()) {
-      alter_table_stmt->get_alter_table_arg().alter_auto_partition_attr_ = true;
+      alter_table_stmt->get_alter_table_arg().alter_auto_partition_attr_ = !table_schema.is_random_part();
       alter_table_stmt->get_alter_table_arg().is_alter_partitions_ = false;
+      alter_table_stmt->get_alter_table_arg().is_alter_random_partition_ = table_schema.is_random_part();
     }
   }
   return ret;

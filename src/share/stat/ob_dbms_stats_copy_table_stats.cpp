@@ -492,7 +492,7 @@ int ObDbmsStatsCopyTableStats::get_dst_part_infos(const ObTableStatParam &table_
     const ObPartition *pre_part = NULL;
     ObCheckPartitionMode check_partition_mode = CHECK_PARTITION_MODE_NORMAL;
     ObPartIterator iter(*table_schema, check_partition_mode);
-    found_src = !table_schema->is_range_part();
+    found_src = !table_schema->is_range_or_random_part();
     while (OB_SUCC(ret) && !is_found && OB_SUCC(iter.next(part))) {
       if (OB_ISNULL(part)) {
         ret = OB_ERR_UNEXPECTED;
@@ -504,7 +504,7 @@ int ObDbmsStatsCopyTableStats::get_dst_part_infos(const ObTableStatParam &table_
           helper.dst_part_id_ = part->get_part_id();
           found_dst = true;
         }
-      } else if (table_schema->is_range_part() &&
+      } else if (table_schema->is_range_or_random_part() &&
                  ObCharset::case_insensitive_equal(helper.srcpart_name_, part->get_part_name())) {
         if (OB_FAIL(get_src_part_info(table_schema, helper, part, pre_part, copy_level))) {
           LOG_WARN("failed to get src part info", K(ret));
@@ -603,7 +603,7 @@ int ObDbmsStatsCopyTableStats::get_dst_part_info(const ObTableSchema *table_sche
                                                  list_val_cnt))) {
       LOG_WARN("failed to get normal list part info", K(ret));
     }
-  } else if ((copy_level == CopyOnePartLevel && table_schema->is_range_part())
+  } else if ((copy_level == CopyOnePartLevel && table_schema->is_range_or_random_part())
              || (copy_level == CopyTwoPartLevel && table_schema->is_range_subpart())) {
     const ObRowkey &high_bound_val = part->get_high_bound_val();
     int64_t rowkey_cnt = high_bound_val.get_obj_cnt();
@@ -814,7 +814,7 @@ int ObDbmsStatsCopyTableStats::get_src_part_info(const ObTableSchema *table_sche
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(part), K(table_schema));
   } else if (OB_UNLIKELY(!table_schema->is_partitioned_table()
-            || (CopyOnePartLevel == copy_level && !table_schema->is_range_part())
+            || (CopyOnePartLevel == copy_level && !table_schema->is_range_or_random_part())
             || (CopyTwoPartLevel == copy_level && !table_schema->is_range_subpart()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("only range partitioned table need to get src part info", K(ret));

@@ -644,6 +644,134 @@ int ObDDLUtil::get_tablets(
   return ret;
 }
 
+int ObDDLUtil::get_latest_tablets(
+    const uint64_t tenant_id,
+    const int64_t table_id,
+    common::ObIArray<common::ObTabletID> &tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  share::schema::ObSchemaGetterGuard schema_guard;
+  const share::schema::ObTableSchema *table_schema = nullptr;
+  rootserver::ObRootService *root_service = GCTX.root_service_;
+  tablet_ids.reset();
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == table_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_ISNULL(root_service)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  } else if (OB_FAIL(root_service->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+    LOG_WARN("get schema guard failed", K(ret));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_FAIL(table_schema->get_tablet_ids(tablet_ids))) {
+    LOG_WARN("get tablets failed", K(ret), KPC(table_schema));
+  }
+  return ret;
+}
+
+int ObDDLUtil::get_part_idxs_by_tablet(
+    ObSchemaGetterGuard &schema_guard,
+    const uint64_t tenant_id,
+    const int64_t table_id,
+    const ObIArray<ObTabletID> &tablet_ids,
+    ObIArray<int64_t> &part_idx,
+    ObIArray<int64_t> &subpart_idx)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *table_schema = nullptr;
+  ObArray<ObTabletID> new_tablet_ids;
+  ObArray<ObObjectID> new_part_ids;
+  ObArray<int64_t> part_ids;
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == table_id || !part_idx.empty() || !subpart_idx.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(tenant_id), K(table_id), K(part_idx), K(subpart_idx));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exist", K(ret), K(table_id));
+  } else if (OB_FAIL(table_schema->get_all_tablet_and_object_ids(new_tablet_ids, new_part_ids))) {
+    LOG_WARN("failed to get all data tablets", K(ret), KPC(table_schema));
+  } else if (OB_UNLIKELY(new_tablet_ids.count() != new_part_ids.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet ids and part ids count mismatch", K(ret), K(new_tablet_ids), K(new_part_ids));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); i++) {
+      bool found = false;
+      for (int64_t j = 0; OB_SUCC(ret) && !found && j < new_tablet_ids.count(); j++) {
+        if (tablet_ids.at(i) == new_tablet_ids.at(j)) {
+          if (OB_FAIL(part_ids.push_back(new_part_ids.at(j)))) {
+            LOG_WARN("failed to push back", K(ret));
+          } else {
+            found = true;
+          }
+        }
+      }
+      if (OB_SUCC(ret) && !found) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tablet id not found", K(ret), K(i), K(tablet_ids.at(i)), K(tablet_ids), K(new_tablet_ids));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (PARTITION_LEVEL_ZERO == table_schema->get_part_level()) {
+    if (OB_UNLIKELY(1 != tablet_ids.count())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid arg", K(tablet_ids), K(table_id));
+    } else {
+      // do nothing
+    }
+  } else if (OB_FAIL(table_schema->get_part_idx_by_part_id(part_ids, part_idx, subpart_idx))) {
+    LOG_WARN("failed to get part idx", K(ret), K(part_ids));
+  }
+  return ret;
+}
+
+int ObDDLUtil::get_tablet_ids_by_part_idx(
+    ObSchemaGetterGuard &schema_guard,
+    const uint64_t tenant_id,
+    const int64_t table_id,
+    const ObIArray<int64_t> &part_idx,
+    const ObIArray<int64_t> &subpart_idx,
+    ObIArray<ObTabletID> &tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *table_schema = nullptr;
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == table_id || part_idx.count() != subpart_idx.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(tenant_id), K(table_id), K(part_idx), K(subpart_idx));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(table_id));
+  } else if (PARTITION_LEVEL_ZERO == table_schema->get_part_level()) {
+    if (OB_UNLIKELY(0 != part_idx.count() || !table_schema->get_tablet_id().is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid arg", K(ret), K(part_idx), K(table_id), K(table_schema->get_tablet_id()));
+    } else if (OB_FAIL(tablet_ids.push_back(table_schema->get_tablet_id()))) {
+      LOG_WARN("failed to get tablet ids", K(ret), K(table_id));
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < part_idx.count(); i++) {
+      ObBasePartition *part = nullptr;
+      if (OB_FAIL(table_schema->get_part_by_idx(part_idx.at(i), subpart_idx.at(i), part))) {
+        LOG_WARN("failed to get part by idx", K(ret), K(part_idx.at(i)), K(subpart_idx.at(i)), KPC(table_schema));
+      } else if (OB_ISNULL(part) || OB_UNLIKELY(!part->get_tablet_id().is_valid())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid part", K(ret), K(part_idx.at(i)), K(subpart_idx.at(i)), KPC(part), KPC(table_schema));
+      } else if (OB_FAIL(tablet_ids.push_back(part->get_tablet_id()))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLUtil::get_tablet_count(const uint64_t tenant_id,
                               const int64_t table_id,
                               int64_t &tablet_count)
@@ -5683,6 +5811,32 @@ int ObDDLUtil::convert_to_storage_schema(
     }
     if (OB_FAIL(ret)) {
       ObTabletObjLoadHelper::free(allocator, storage_schema);
+    }
+  }
+  return ret;
+}
+
+int ObDDLUtil::get_and_calc_tablet_ids(
+    const schema::ObTableSchema &data_schema,
+    const ObIArray<ObTabletID> *inc_data_tablet_ids,
+    const ObIArray<ObTabletID> *del_data_tablet_ids,
+    ObIArray<ObTabletID> &data_tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  data_tablet_ids.reset();
+  if (OB_FAIL(data_schema.get_tablet_ids(data_tablet_ids))) {
+    LOG_WARN("failed to get data tablet ids", K(ret));
+  } else if (nullptr != del_data_tablet_ids) {
+    ObArray<ObTabletID> tmp_tablet_ids;
+    if (OB_FAIL(get_difference(data_tablet_ids, *del_data_tablet_ids, tmp_tablet_ids))) {
+      LOG_WARN("failed to get diff tablet ids", K(ret));
+    } else if (OB_FAIL(data_tablet_ids.assign(tmp_tablet_ids))) {
+      LOG_WARN("failed to assign data tablet ids", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && nullptr != inc_data_tablet_ids) {
+    if (OB_FAIL(append(data_tablet_ids, *inc_data_tablet_ids))) {
+      LOG_WARN("failed to append inc data tablet ids", K(ret));
     }
   }
   return ret;

@@ -123,7 +123,7 @@ private:
                   ObTableLoadCoordinatorTrans *&trans);
   int init_column_idxs(const common::ObIArray<uint64_t> &column_ids);
   int init_session_ctx_array();
-  int generate_autoinc_params(share::AutoincParam &autoinc_param);
+  int generate_autoinc_params(const uint64_t column_id, share::AutoincParam &autoinc_param);
   int init_sequence();
   void add_to_all_server_event(int ret_code);
   int init_partition_ids(const ObIArray<ObTabletID> &tablet_ids);
@@ -151,6 +151,7 @@ public:
     SessionContext() {}
     ~SessionContext() {}
     share::AutoincParam autoinc_param_;
+    share::AutoincParam random_part_param_;
   };
   SessionContext *session_ctx_array_;
   struct StoreInfo

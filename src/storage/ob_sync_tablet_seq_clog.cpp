@@ -17,15 +17,16 @@ using namespace share;
 namespace storage
 {
 
-int ObSyncTabletSeqLog::init(const ObTabletID &tablet_id, const uint64_t autoinc_seq)
+int ObSyncTabletSeqLog::init(const ObTabletID &tablet_id, const uint64_t autoinc_seq, const uint64_t autoinc_seq_end)
 {
   int ret = OB_SUCCESS;
-  if (!tablet_id.is_valid() || autoinc_seq <= 0) {
+  if (!tablet_id.is_valid() || autoinc_seq <= 0 || autoinc_seq_end > INT64_MAX) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tablet_id), K(autoinc_seq));
+    LOG_WARN("invalid argument", K(ret), K(tablet_id), K(autoinc_seq), K(autoinc_seq_end));
   } else {
     tablet_id_ = tablet_id;
     autoinc_seq_ = autoinc_seq;
+    autoinc_seq_end_ = autoinc_seq_end;
   }
   return ret;
 }
@@ -42,9 +43,18 @@ int ObSyncTabletSeqLog::serialize(char *buf, const int64_t len, int64_t &pos) co
     LOG_WARN("invalid argument", K(ret), K(buf), K(len), K(pos));
   } else if (OB_FAIL(tablet_id_.serialize(buf, len, new_pos))) {
     LOG_WARN("failed to serialize tablet id", K(ret), K(len), K(new_pos));
-  } else if (OB_FAIL(serialization::encode_i64(buf, len, new_pos, static_cast<int64_t>(autoinc_seq_)))) {
-    LOG_WARN("failed to serialize auto inc seq", K(ret), K(len), K(new_pos));
+  } else if (autoinc_seq_end_ >= INT64_MAX) {
+    if (OB_FAIL(serialization::encode_i64(buf, len, new_pos, static_cast<int64_t>(autoinc_seq_)))) {
+      LOG_WARN("failed to serialize auto inc seq", K(ret), K(len), K(new_pos));
+    }
   } else {
+    if (OB_FAIL(serialization::encode_i64(buf, len, new_pos, -static_cast<int64_t>(autoinc_seq_)))) {
+      LOG_WARN("failed to serialize auto inc seq", K(ret), K(len), K(new_pos));
+    } else if (OB_FAIL(serialization::encode_i64(buf, len, new_pos, static_cast<int64_t>(autoinc_seq_end_)))) {
+      LOG_WARN("failed to serialize auto inc seq", K(ret), K(len), K(new_pos));
+    }
+  }
+  if (OB_SUCC(ret)) {
     pos = new_pos;
   }
 
@@ -55,6 +65,7 @@ int ObSyncTabletSeqLog::deserialize(const char *buf, const int64_t len, int64_t 
 {
   int ret = OB_SUCCESS;
   int64_t new_pos = pos;
+  int64_t tmp_autoinc_seq = 0;
 
   if (OB_ISNULL(buf)
       || OB_UNLIKELY(len <= 0)
@@ -63,9 +74,17 @@ int ObSyncTabletSeqLog::deserialize(const char *buf, const int64_t len, int64_t 
     LOG_WARN("invalid argument", K(ret), K(buf), K(len), K(pos));
   } else if (OB_FAIL(tablet_id_.deserialize(buf, len, new_pos))) {
     LOG_WARN("failed to deserialize tablet id", K(ret), K(len), K(new_pos));
-  } else if (OB_FAIL(serialization::decode_i64(buf, len, new_pos, (int64_t*)(&autoinc_seq_)))) {
+  } else if (OB_FAIL(serialization::decode_i64(buf, len, new_pos, &tmp_autoinc_seq))) {
     LOG_WARN("failed to deserialize auto inc seq", K(ret), K(len), K(new_pos));
-  } else {
+  } else if (tmp_autoinc_seq >= 0) {
+    autoinc_seq_ = tmp_autoinc_seq;
+  } else if (tmp_autoinc_seq < 0) {
+    autoinc_seq_ = -tmp_autoinc_seq;
+    if (OB_FAIL(serialization::decode_i64(buf, len, new_pos, (int64_t*)(&autoinc_seq_end_)))) {
+      LOG_WARN("failed to serialize auto inc seq", K(ret), K(len), K(new_pos));
+    }
+  }
+  if (OB_SUCC(ret)) {
     pos = new_pos;
   }
 
@@ -76,7 +95,12 @@ int64_t ObSyncTabletSeqLog::get_serialize_size() const
 {
   int64_t size = 0;
   size += tablet_id_.get_serialize_size();
-  size += serialization::encoded_length_i64(autoinc_seq_);
+  if (autoinc_seq_end_ >= INT64_MAX) {
+    size += serialization::encoded_length_i64(autoinc_seq_);
+  } else {
+    size += serialization::encoded_length_i64(-static_cast<int64_t>(autoinc_seq_));
+    size += serialization::encoded_length_i64(autoinc_seq_end_);
+  }
   return size;
 }
 

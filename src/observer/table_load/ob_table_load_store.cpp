@@ -364,7 +364,7 @@ int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info,
       LOG_WARN("trans service is null", KR(ret));
     } else if (OB_FAIL(store_ctx_->check_status(ObTableLoadStatusType::MERGED))) {
       LOG_WARN("fail to check store status", KR(ret));
-    } else if (store_ctx_->data_store_table_ctx_->schema_->has_autoinc_column_ && OB_FAIL(store_ctx_->commit_autoinc_value())) {
+    } else if (OB_INVALID_ID != store_ctx_->data_store_table_ctx_->schema_->autoinc_column_id_ && OB_FAIL(store_ctx_->commit_autoinc_value())) {
       LOG_WARN("fail to commit sync auto increment value", KR(ret));
     } else if (OB_FAIL(dml_stats.merge(store_ctx_->dml_stats_))) {
       LOG_WARN("fail to merge dml stats", KR(ret));

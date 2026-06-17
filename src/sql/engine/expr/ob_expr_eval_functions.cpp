@@ -489,6 +489,7 @@
 #include "sql/engine/expr/ob_expr_ai/ob_expr_load_file.h"
 #include "ob_expr_rand_canonical.h"
 #include "ob_expr_collation.h"
+#include "ob_expr_random_part_nextval.h"
 #include "ob_expr_get_routine_param_type_str.h"
 #include "ob_expr_image_type.h"
 
@@ -1499,7 +1500,7 @@ ObExprRandCanonical::calc_random_expr_canonical,                    /* 890 */
   NULL, // ObExprAuditLogPasswordGet::eval_get_encryption_password,   /* 904 */
   NULL, // ObExprAuditLogPasswordSet::eval_set_encryption_password,   /* 905 */
   ObExprImageType::eval_image_type,                                   /* 906 */
-  NULL, // ObExprRandomPartNextval::eval_nextval,                     /* 907 */
+  ObExprRandomPartNextval::eval_nextval,                              /* 907 */
   ObExprGetRoutineParamTypeStr::eval_routine_param_type_str,          /* 908 */
   ObExprNchr::calc_nchr_expr,                                         /* 909 */
   NULL, // ObExprToMonday::calc_to_monday,                            /* 910 */

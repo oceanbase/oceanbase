@@ -7,6 +7,7 @@
 
 #include "observer/table_load/ob_table_load_schema.h"
 #include "observer/table_load/ob_table_load_utils.h"
+#include "rootserver/ob_random_partition_helper.h"
 #include "storage/direct_load/ob_direct_load_vector_utils.h"
 #include "storage/lob/ob_lob_meta.h"
 
@@ -444,8 +445,10 @@ ObTableLoadSchema::ObTableLoadSchema()
     is_table_without_pk_(false),
     is_table_with_hidden_pk_column_(false),
     is_delete_insert_engine_(false),
+    is_random_part_(false),
     index_type_(ObIndexType::INDEX_TYPE_MAX),
-    has_autoinc_column_(false),
+    random_partkey_column_id_(OB_INVALID_ID),
+    autoinc_column_id_(OB_INVALID_ID),
     has_identity_column_(false),
     has_lob_rowkey_(false),
     rowkey_column_count_(0),
@@ -481,8 +484,10 @@ void ObTableLoadSchema::reset()
   is_table_without_pk_ = false;
   is_table_with_hidden_pk_column_ = false;
   is_table_with_hidden_pk_column_ = false;
+  is_random_part_ = false;
   index_type_ = share::schema::ObIndexType::INDEX_TYPE_MAX;
-  has_autoinc_column_ = false;
+  random_partkey_column_id_ = OB_INVALID_ID;
+  autoinc_column_id_ = OB_INVALID_ID;
   has_identity_column_ = false;
   has_lob_rowkey_ = false;
   rowkey_column_count_ = 0;
@@ -530,10 +535,14 @@ int ObTableLoadSchema::init(uint64_t tenant_id, uint64_t table_id, const int64_t
 int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
 {
   int ret = OB_SUCCESS;
+  uint64_t random_partkey_column_id = OB_INVALID_ID;
   if (OB_ISNULL(table_schema)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(table_schema));
+  } else if (table_schema->is_table() && OB_FAIL(rootserver::ObRandomPartitionHelper::get_random_partkey_column_id(*table_schema, random_partkey_column_id))) {
+    LOG_WARN("failed to get random partkey column id", K(ret), KPC(table_schema));
   } else {
+    const uint64_t autoinc_column_id = table_schema->get_autoinc_column_id();
     table_id_ = table_schema->get_table_id();
     is_index_table_ = table_schema->is_index_table();
     is_lob_table_ = table_schema->is_aux_lob_table();
@@ -541,8 +550,10 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
     is_table_without_pk_ = table_schema->is_table_without_pk();
     is_table_with_hidden_pk_column_ = table_schema->is_table_with_hidden_pk_column();
     is_delete_insert_engine_ = table_schema->is_delete_insert_merge_engine();
+    is_random_part_ = table_schema->is_random_part();
     index_type_ = table_schema->get_index_type();
-    has_autoinc_column_ = (table_schema->get_autoinc_column_id() != 0);
+    autoinc_column_id_ = autoinc_column_id != 0 && autoinc_column_id != random_partkey_column_id ? autoinc_column_id : OB_INVALID_ID;
+    random_partkey_column_id_ = random_partkey_column_id;
     rowkey_column_count_ = table_schema->get_rowkey_column_num();
     collation_type_ = table_schema->get_collation_type();
     part_level_ = table_schema->get_part_level();

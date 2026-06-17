@@ -101,7 +101,7 @@ private:
   // 数据表插入算子
   // 用INSERT代替DELETE&INSERT,此算子保留但是走不到
   OB_DEFINE_TABLE_LOAD_DATA_TABLE_OP(INC_DATA_TABLE_INSERT_OP, IncDataTableInsertEputOp, WRITE_INPUT,
-                                     ADAPTIVE_FULL_ROW, MERGE_WITH_CONFLICT_CHECK, INC,
+                                     FULL_ROW, MERGE_WITH_CONFLICT_CHECK, INC,
                                      ObTableLoadDataTableInsertRowHandler,
                                      OB_TABLE_LOAD_INC_BASIC_OPEN_FLAG |
                                        ObTableLoadTableOpOpenFlag::NEED_RESERVED_PARALLEL |
@@ -109,14 +109,14 @@ private:
                                        ObTableLoadTableOpOpenFlag::NEED_INSERT_LOB);
   //数据表导入非冲突行
   OB_DEFINE_TABLE_LOAD_DATA_TABLE_OP(INC_DATA_TABLE_INSERT_OP, IncDataTableInsertOp, WRITE_INPUT,
-                                     ADAPTIVE_FULL_ROW, MERGE_WITH_CONFLICT_CHECK_WITHOUT_ROW, INC_MAJOR,
+                                     FULL_ROW, MERGE_WITH_CONFLICT_CHECK_WITHOUT_ROW, INC_MAJOR,
                                      ObTableLoadDataTableInsertRowHandler,
                                      OB_TABLE_LOAD_INC_BASIC_OPEN_FLAG |
                                        ObTableLoadTableOpOpenFlag::NEED_RESERVED_PARALLEL |
                                        ObTableLoadTableOpOpenFlag::NEED_ONLINE_OPT_STAT_GATHER |
                                        ObTableLoadTableOpOpenFlag::NEED_INSERT_LOB);
   OB_DEFINE_TABLE_LOAD_DATA_TABLE_OP(INC_DATA_TABLE_INSERT_OP, IncMinorDataTableInsertOp,
-                                     WRITE_INPUT, ADAPTIVE_FULL_ROW,
+                                     WRITE_INPUT, FULL_ROW,
                                      MERGE_WITH_CONFLICT_CHECK_WITHOUT_ROW, INC,
                                      ObTableLoadDataTableInsertRowHandler,
                                      OB_TABLE_LOAD_INC_BASIC_OPEN_FLAG |

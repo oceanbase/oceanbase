@@ -1152,6 +1152,32 @@ public:
       const int64_t table_id,
       common::ObIArray<common::ObTabletID> &tablet_ids);
 
+  static int get_latest_tablets(
+      const uint64_t tenant_id,
+      const int64_t table_id,
+      common::ObIArray<common::ObTabletID> &tablet_ids);
+
+  static int get_part_idxs_by_tablet(
+    schema::ObSchemaGetterGuard &schema_guard,
+    const uint64_t tenant_id,
+    const int64_t table_id,
+    const ObIArray<ObTabletID> &tablet_ids,
+    ObIArray<int64_t> &part_idx,
+    ObIArray<int64_t> &subpart_idx);
+  static int get_tablet_ids_by_part_idx(
+    schema::ObSchemaGetterGuard &schema_guard,
+    const uint64_t tenant_id,
+    const int64_t table_id,
+    const ObIArray<int64_t> &part_idx,
+    const ObIArray<int64_t> &subpart_idx,
+    ObIArray<ObTabletID> &tablet_ids);
+
+  static int get_and_calc_tablet_ids(
+    const share::schema::ObTableSchema &data_schema,
+    const ObIArray<ObTabletID> *inc_data_tablet_ids,
+    const ObIArray<ObTabletID> *del_data_tablet_ids,
+    ObIArray<ObTabletID> &data_tablet_ids);
+
   static int get_tablet_count(const uint64_t tenant_id,
                               const int64_t table_id,
                               int64_t &tablet_count);

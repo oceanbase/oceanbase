@@ -460,6 +460,9 @@ ob_set_subtarget(ob_storage tablet
   tablet/ob_tablet_split_info_mds_helper.cpp
   tablet/ob_tablet_split_info_replay_executor.cpp
   tablet/ob_tablet_inc_major_info_replay_executor.cpp
+  tablet/ob_tablet_random_mds_helper.cpp
+  tablet/ob_tablet_random_mds_user_data.cpp
+  tablet/ob_tablet_random_replay_executor.cpp
 )
 
 ob_set_subtarget(ob_storage tx_wrs
@@ -788,6 +791,7 @@ ob_set_subtarget(ob_storage ddl
   ddl/ob_ddl_merge_schedule.cpp
   ddl/ob_ddl_inc_merge_schedule.cpp
   ddl/ob_hnsw_embedmgr.cpp
+  ddl/ob_partition_random_distribution_helper.cpp
   ddl/ob_fts_macro_block_write_op.cpp
   ddl/ob_final_merge_sort_write_task.cpp
   ddl/ob_ddl_encode_sortkey_utils.cpp

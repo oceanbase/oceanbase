@@ -210,7 +210,8 @@ int ObTableLoadStoreTransPXWriter::init_batch_ctx(const bool is_vectorized,
                                                    store_ctx_->ctx_->schema_.col_nullables_,
                                                    row_flag,
                                                    max_batch_size,
-                                                   store_ctx_->enable_dag_))) {
+                                                   store_ctx_->enable_dag_,
+                                                   store_ctx_->ctx_->schema_.is_random_part_))) {
       LOG_WARN("fail to init batch rows", KR(ret));
     } else if (OB_ISNULL(batch_ctx_->selector_ = static_cast<uint16_t *>(
                            allocator_.alloc(sizeof(uint16_t) * max_batch_size)))) {

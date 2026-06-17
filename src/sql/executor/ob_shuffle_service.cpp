@@ -81,6 +81,7 @@ int ObShuffleService::get_part_id(ObExecContext &exec_ctx,
     }
   } else if (table_schema.is_list_part() ||
              table_schema.is_range_part() ||
+             table_schema.is_random_part() ||
              table_schema.is_hash_part()) {
     if (OB_FAIL(get_non_key_partition_part_id(exec_ctx, table_schema, row,
                                               repart_columns, part_id))) {

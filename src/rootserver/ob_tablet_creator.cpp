@@ -9,6 +9,7 @@
 #include "rootserver/ob_split_partition_helper.h"
 #include "storage/tx/ob_tx_log.h"
 #include "storage/tablet/ob_tablet_ddl_complete_mds_helper.h"
+#include "storage/tablet/ob_tablet_random_mds_helper.h"
 
 namespace oceanbase
 {
@@ -139,6 +140,7 @@ int ObBatchCreateTabletHelper::init(
   int ret = OB_SUCCESS;
   const int64_t bucket_count = hash::cal_next_prime(100);
   auto_part_size_arr_.reset();
+  auto_random_size_arr_.reset();
   if (OB_UNLIKELY(!ls_key.is_valid()
                   || OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
@@ -264,6 +266,8 @@ int ObBatchCreateTabletHelper::add_table_schema_(
     } else if (OB_FAIL(batch_arg_.tablet_extra_infos_.push_back(create_tablet_extr_info))) {
       LOG_WARN("failed to push back tablet extra infos", K(ret), K(create_tablet_extr_info));
     } else if (OB_FAIL(auto_part_size_arr_.push_back(table_schema.is_auto_partitioned_table() ? table_schema.get_auto_part_size() : OB_INVALID_SIZE))) {
+      LOG_WARN("failed to push back", KR(ret));
+    } else if (OB_FAIL(auto_random_size_arr_.push_back(table_schema.is_random_part() ? table_schema.get_auto_part_size() : OB_INVALID_SIZE))) {
       LOG_WARN("failed to push back", KR(ret));
     }
   }
@@ -504,6 +508,16 @@ int ObTabletCreator::execute()
               }
               const int64_t end_time = ObTimeUtility::current_time();
               LOG_INFO("set auto part size for create", KR(ret), K(buf_len), K(batch_arg->batch_arg_.tablets_.count()),
+                                                    "cost_ts", end_time - start_time);
+            }
+            if (OB_SUCC(ret)) {
+              const int64_t start_time = ObTimeUtility::current_time();
+              if (OB_FAIL(ObTabletRandomMdsHelper::set_auto_random_size_for_create(tenant_id_,
+                      batch_arg->batch_arg_, batch_arg->auto_random_size_arr_, ctx.get_abs_timeout(), trans_))) {
+                LOG_WARN("failed to set auto random size for create", K(ret));
+              }
+              const int64_t end_time = ObTimeUtility::current_time();
+              LOG_INFO("set random part size for create", KR(ret), K(buf_len), K(batch_arg->batch_arg_.tablets_.count()),
                                                     "cost_ts", end_time - start_time);
             }
           }
