@@ -137,6 +137,7 @@ typedef void (*ser_eval_vector_function)(ObEvalVectorFuncTag &);
   OB_SFA_DATUM_NULLSAFE_ROARINGBITMAP_CMP,       \
   OB_SFA_EXPR_ROARINGBITMAP_BASIC_PART1,         \
   OB_SFA_EXPR_ROARINGBITMAP_BASIC_PART2,         \
+  OB_SFA_DATUM_CMP_UDT,                          \
   OB_SFA_MAX
 
 enum ObSerFuncArrayID {

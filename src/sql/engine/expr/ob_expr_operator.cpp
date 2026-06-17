@@ -4971,7 +4971,8 @@ int ObVectorExprOperator::calc_result_typeN(ObExprResType &type,
     }
     if (lib::is_oracle_mode() && has_composite_elem) {
       if (row_dimension_ != 1) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "composite element in condition have more than one left operator");
         LOG_WARN("in condition of nest table can only have one left operator", K(ret),
                  K(row_dimension_), K(param_num));
       } else if (not_composite_elem_idx != OB_INVALID_INDEX) {

@@ -854,6 +854,7 @@ extern ObExpr::EvalFunc EVAL_JSON_CMP_FUNCS[CO_MAX][2];
 extern ObDatumCmpFuncType DATUM_JSON_CMP_FUNCS[2];
 extern ObExpr::EvalFunc EVAL_GEO_CMP_FUNCS[CO_MAX][2];
 extern ObDatumCmpFuncType DATUM_GEO_CMP_FUNCS[2];
+extern ObDatumCmpFuncType DATUM_UDT_CMP_FUNCS[2];
 extern ObExpr::EvalFunc EVAL_COLLECTION_CMP_FUNCS[CO_MAX][2];
 extern ObDatumCmpFuncType DATUM_COLLECTION_CMP_FUNCS[2];
 
@@ -1233,6 +1234,19 @@ struct DatumGeoExprCmpIniter
   {
     DATUM_GEO_CMP_FUNCS[0] = Def::defined_ ? DatumCmp<0>::cmp : NULL;
     DATUM_GEO_CMP_FUNCS[1] = Def::defined_ ? DatumCmp<1>::cmp : NULL;
+  }
+};
+
+template<int X>
+struct DatumUDTExprCmpIniter
+{
+  template<bool HAS_LOB_HEADER>
+  using DatumCmp = datum_cmp::ObDatumUDTCmp<HAS_LOB_HEADER>;
+  using Def = datum_cmp::ObDatumUDTCmp<false>;
+  static void init_array()
+  {
+    DATUM_UDT_CMP_FUNCS[0] = Def::defined_ ? DatumCmp<0>::cmp : NULL;
+    DATUM_UDT_CMP_FUNCS[1] = Def::defined_ ? DatumCmp<1>::cmp : NULL;
   }
 };
 

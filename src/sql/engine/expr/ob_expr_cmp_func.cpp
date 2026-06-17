@@ -49,6 +49,7 @@ ObExpr::EvalFunc EVAL_JSON_CMP_FUNCS[CO_MAX][2];
 ObDatumCmpFuncType DATUM_JSON_CMP_FUNCS[2];
 ObExpr::EvalFunc EVAL_GEO_CMP_FUNCS[CO_MAX][2];
 ObDatumCmpFuncType DATUM_GEO_CMP_FUNCS[2];
+ObDatumCmpFuncType DATUM_UDT_CMP_FUNCS[2];
 ObExpr::EvalFunc EVAL_COLLECTION_CMP_FUNCS[CO_MAX][2];
 ObDatumCmpFuncType DATUM_COLLECTION_CMP_FUNCS[2];
 
@@ -113,6 +114,7 @@ static int64_t init_all_funcs()
   int g_init_json_datum_ret = ObArrayConstIniter<1, DatumJsonExprCmpIniter>::init();
   int g_init_geo_ret = ObArrayConstIniter<CO_MAX, GeoExprFuncIniter>::init();
   int g_init_geo_datum_ret = ObArrayConstIniter<1, DatumGeoExprCmpIniter>::init();
+  int g_init_udt_datum_ret = ObArrayConstIniter<1, DatumUDTExprCmpIniter>::init();
 
   int g_init_collection_ret = ObArrayConstIniter<CO_MAX, CollectionExprFuncIniter>::init();
   int g_init_collection_datum_ret = ObArrayConstIniter<1, DatumCollectionExprCmpIniter>::init();
@@ -291,7 +293,7 @@ DatumCmpFunc ObExprCmpFuncsHelper::get_datum_expr_cmp_func(const ObObjType type1
     OB_ASSERT(rw < DECIMAL_INT_MAX && rw >= 0);
     func_ptr = DATUM_DECINT_CMP_FUNCS[lw][rw];
   } else if (tc1 == ObUserDefinedSQLTC || tc2 == ObUserDefinedSQLTC) {
-    func_ptr = NULL; //?
+    func_ptr = DATUM_UDT_CMP_FUNCS[has_lob_header];
   } else if (!ObDatumFuncs::is_string_type(type1) || !ObDatumFuncs::is_string_type(type2)) {
     func_ptr = DATUM_TYPE_CMP_FUNCS[type1][type2];
     if (NULL == func_ptr) {
@@ -463,6 +465,12 @@ static_assert(2 == sizeof(DATUM_GEO_CMP_FUNCS) / sizeof(void *),
 REG_SER_FUNC_ARRAY(OB_SFA_DATUM_CMP_GEO,
                    DATUM_GEO_CMP_FUNCS,
                    sizeof(DATUM_GEO_CMP_FUNCS) / sizeof(void *));
+
+static_assert(2 == sizeof(DATUM_UDT_CMP_FUNCS) / sizeof(void *),
+              "unexpected size");
+REG_SER_FUNC_ARRAY(OB_SFA_DATUM_CMP_UDT,
+                   DATUM_UDT_CMP_FUNCS,
+                   sizeof(DATUM_UDT_CMP_FUNCS) / sizeof(void *));
 
 // Collection cmp functions reg
 static_assert(7 == CO_MAX && CO_MAX * 2 == sizeof(EVAL_COLLECTION_CMP_FUNCS) / sizeof(void *),
