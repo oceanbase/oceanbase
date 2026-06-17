@@ -160,6 +160,8 @@ namespace common
 
 class JVMClass;
 
+int check_jvm_stack_size();
+
 typedef lib::ObLockGuard<lib::ObMutex> LockGuard;
 
 struct ObHdfsEnvContext {

@@ -723,7 +723,9 @@ int ObJniTool::init_jni()
     LOG_WARN("failed to get created java vm", K(jni_ret), K(ret));
   } else if (0 == num_jvms) {
     ObArray<JavaVMOptionWrapper> options;
-    if (OB_FAIL(init_jvm_options(allocator, options))) {
+    if (OB_FAIL(common::check_jvm_stack_size())) {
+      LOG_WARN("failed to check ob stack_size before starting jvm", K(ret));
+    } else if (OB_FAIL(init_jvm_options(allocator, options))) {
       LOG_WARN("failed to init jvm options to create jvm", K(ret));
     } else {
       JavaVMInitArgs jvm_args;

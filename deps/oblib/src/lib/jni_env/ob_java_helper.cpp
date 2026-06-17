@@ -13,6 +13,8 @@
 
 #include <cstdlib>
 #include <dirent.h>
+#include <pthread.h>
+#include <unistd.h>
 
 #include "lib/oblog/ob_log.h"
 #include "lib/oblog/ob_log_module.h"
@@ -73,30 +75,82 @@ static JNINativeMethod java_native_methods[] = {
 };
 #pragma GCC diagnostic pop
 
+static int64_t calc_jvm_min_stack_remaining()
+{
+  const int64_t page_size = sysconf(_SC_PAGESIZE);
+#if defined(__x86_64__) || defined(__i386__)
+  const int64_t stack_red_pages      = 1;
+  const int64_t stack_yellow_pages   = 2;
+  const int64_t stack_reserved_pages = 1;
+  const int64_t stack_shadow_pages   = 6;
+  const int64_t jvm_init_frames      = 160L << 10;
+#elif defined(__aarch64__)
+  const int64_t stack_red_pages      = 1;
+  const int64_t stack_yellow_pages   = 1;
+  const int64_t stack_reserved_pages = 0;
+  const int64_t stack_shadow_pages   = 1;
+  const int64_t jvm_init_frames      = 200L << 10;
+#else
+  const int64_t stack_red_pages      = 1;
+  const int64_t stack_yellow_pages   = 2;
+  const int64_t stack_reserved_pages = 1;
+  const int64_t stack_shadow_pages   = 6;
+  const int64_t jvm_init_frames      = 200L << 10;
+#endif
+  const int64_t guard_zone      = (stack_red_pages + stack_yellow_pages + stack_reserved_pages) * page_size;
+  const int64_t shadow_zone     = stack_shadow_pages * page_size;
+  const int64_t call_chain_gap  = 20L << 10;
+  const int64_t safety_margin   = 30L << 10;
+  return guard_zone + shadow_zone + jvm_init_frames + call_chain_gap + safety_margin;
+}
+
+int check_jvm_stack_size()
+{
+  int ret = OB_SUCCESS;
+  const int64_t min_jvm_stack_remaining = calc_jvm_min_stack_remaining();
+  pthread_attr_t attr;
+  void *stack_base = nullptr;
+  size_t stack_size = 0;
+  if (0 != pthread_getattr_np(pthread_self(), &attr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get current thread attributes, skip stack size check", K(ret), K(errno));
+  } else {
+    pthread_attr_getstack(&attr, &stack_base, &stack_size);
+    pthread_attr_destroy(&attr);
+    char local_var;
+    const int64_t remaining = (int64_t)((uintptr_t)&local_var - (uintptr_t)stack_base);
+    if (OB_UNLIKELY(remaining <= min_jvm_stack_remaining)) {
+      ret = OB_JNI_ENV_SETUP_ERROR;
+      const char *user_warn_msg =
+          "JVM startup requires more remaining stack space; "
+          "please set stack_size and _tenant_stack_size to larger values, for example 2M, and restart observer";
+      LOG_WARN("remaining thread stack is too small to start jvm",
+               K(ret), K(remaining), K(min_jvm_stack_remaining), K(stack_size));
+      LOG_USER_WARN(OB_JNI_ENV_SETUP_ERROR, static_cast<int>(STRLEN(user_warn_msg)), user_warn_msg);
+    } else {
+      LOG_INFO("thread stack check passed for jvm startup",
+               K(remaining), K(min_jvm_stack_remaining), K(stack_size));
+    }
+  }
+  return ret;
+}
+
 // ------------------------- start of JVMFunctionHelper -------------------------
 JVMFunctionHelper &JVMFunctionHelper::getInstance() {
   static JVMFunctionHelper helper;
   int ret = OB_SUCCESS;
-  if (OB_LIKELY(helper.init_result_ == OB_SUCCESS)) {
+  if (OB_LIKELY(ATOMIC_LOAD(&helper.init_result_) == OB_SUCCESS)) {
     // do nothing
     // if we do not init success we will do symbol link again
   } else if (OB_UNLIKELY(OB_FAIL(helper.do_init_()))) {
     LOG_WARN("failed to init jni env", K(ret));
   } else {
-    helper.init_result_ = ret;
+    ATOMIC_STORE(&helper.init_result_, ret);
   }
   return helper;
 }
 
 JVMFunctionHelper::JVMFunctionHelper(): lock_(common::ObLatchIds::JVM_FUNCTION_HELPER_MUTEX), load_lib_lock_(common::ObLatchIds::JAVA_HELPER_LOCK), error_msg_(nullptr) {
-    int ret = OB_SUCCESS;
-    if (init_result_ != OB_NOT_INIT) {
-      // do nothing
-    } else if (OB_FAIL(do_init_())) {
-      init_result_ = ret;
-    } else {
-      init_result_ = OB_SUCCESS;
-    }
 }
 
 int JVMFunctionHelper::jni_find_class(const char *clazz, jclass* gen_clazz) {
@@ -525,9 +579,14 @@ int JVMFunctionHelper::load_lib(ObJavaEnvContext &java_env_ctx,
 
 int JVMFunctionHelper::init_jni_env() {
   int ret = OB_SUCCESS;
+  if (OB_FAIL(check_jvm_stack_size())) {
+    error_msg_ = "remaining thread stack is too small to start JVM, please set stack_size and _tenant_stack_size to larger values and restart observer";
+    LOG_WARN("failed to check ob stack_size before starting jvm", K(ret));
+  }
   // init_jni_env can be called by multiple thread which it needs to add lock.
   LockGuard guard(lock_);
-  if (OB_FAIL(detect_java_runtime_variables())) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(detect_java_runtime_variables())) {
     LOG_WARN("jni env is invalid", K(ret));
   } else if (OB_FAIL(load_lib(java_env_ctx_, hdfs_env_ctx_))) {
     LOG_WARN("failed to load dynamic library", K(ret));
