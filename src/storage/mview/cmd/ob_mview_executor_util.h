@@ -67,6 +67,12 @@ public:
                                 uint64_t mview_id);
 
   static int check_kill_refresh_privilege(sql::ObExecContext &ctx);
+  static int check_refresh_mview_privilege(sql::ObExecContext &ctx,
+                                           uint64_t tenant_id,
+                                           uint64_t mview_id);
+  static int check_nested_mview_refresh_privilege(sql::ObExecContext &ctx,
+                                                  uint64_t tenant_id,
+                                                  uint64_t mview_id);
   static int load_refresh_run_stats_error_message(sql::ObExecContext &ctx,
                                                   uint64_t tenant_id,
                                                   int64_t refresh_id);

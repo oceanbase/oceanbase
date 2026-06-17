@@ -175,6 +175,14 @@ int ObDBMSMViewMysql::refresh(ObExecContext &ctx, ParamStore &params, ObObj &res
         LOG_WARN("fail to resolve mview list and method", KR(ret));
       } else if (OB_INVALID_ID == schedule_arg.mview_id_) {
         // empty list: do nothing, return success
+      } else if (schedule_arg.is_nested_
+                 && OB_FAIL(ObMViewExecutorUtil::check_nested_mview_refresh_privilege(
+                        ctx, tenant_id, schedule_arg.mview_id_))) {
+        LOG_WARN("fail to check nested mview refresh privilege", KR(ret));
+      } else if (!schedule_arg.is_nested_
+                 && OB_FAIL(ObMViewExecutorUtil::check_refresh_mview_privilege(
+                        ctx, tenant_id, schedule_arg.mview_id_))) {
+        LOG_WARN("fail to check refresh privilege", KR(ret));
       } else if (OB_FAIL(mview_maintenance_service->get_pending_task_manager()->schedule_mview_refresh(
                             schedule_arg, schedule_result))) {
         int tmp_ret = OB_SUCCESS;
