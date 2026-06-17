@@ -2008,7 +2008,10 @@ int ObAlterTableResolver::add_sort_column(const obrpc::ObColumnSortItem &sort_co
   const ObString &column_name = sort_column.column_name_;
   ObColumnNameWrapper column_key(column_name, sort_column.prefix_len_);
   bool check_prefix_len = false;
-  if (is_column_exists(sort_column_array_, column_key, check_prefix_len)) {
+  if (OB_USER_MAX_ROWKEY_COLUMN_NUMBER == index_arg.index_columns_.count()) {
+    ret = OB_ERR_TOO_MANY_ROWKEY_COLUMNS;
+    LOG_USER_ERROR(OB_ERR_TOO_MANY_ROWKEY_COLUMNS, OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
+  } else if (is_column_exists(sort_column_array_, column_key, check_prefix_len)) {
     ret = OB_ERR_COLUMN_DUPLICATE;    //index (c1,c1) or index (c1(3), c1 (6))
     LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, column_name.length(), column_name.ptr());
   } else if (OB_FAIL(sort_column_array_.push_back(column_key))) {
