@@ -270,6 +270,12 @@ public:
     return has_memtable_();
   }
 
+  int64_t get_memtable_count() const
+  {
+    MemMgrRLockGuard lock_guard(lock_);
+    return get_memtable_count_();
+  }
+
   int get_newest_clog_checkpoint_scn(share::SCN &clog_checkpoint_scn);
 
   int get_newest_snapshot_version(share::SCN &snapshot_version);

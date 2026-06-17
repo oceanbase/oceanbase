@@ -141,6 +141,16 @@ private:
       const ObDDLMacroBlockRedoInfo &redo_info,
       const ObTabletHandle &tablet_handle,
       bool &can_skip);
+  // Pre-check the memtable slot capacity for DIRECT_LOAD_INCREMENTAL before writing a
+  // macro block on disk during replay. If the downstream is full, fail fast with
+  // OB_EAGAIN so the macro block is not allocated. Otherwise each replay retry would
+  // write a macro block that the downstream cannot accept, exhausting datafile until
+  // the 30s background block GC catches up.
+  // See workitem 2026033000115020192.
+  int precheck_inc_ddl_capacity_(
+      ObTabletHandle &tablet_handle,
+      const ObDirectLoadType direct_load_type);
+  int precheck_full_ddl_capacity_(ObTabletHandle &tablet_handle);
 private:
   const ObDDLRedoLog *log_;
 };

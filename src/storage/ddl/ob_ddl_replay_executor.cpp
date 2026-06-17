@@ -16,6 +16,8 @@
 #include "storage/compaction/ob_schedule_dag_func.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
+#include "storage/ob_protected_memtable_mgr_handle.h"
+#include "share/ob_task_define.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/ddl/ob_direct_load_mgr.h"
 #include "storage/compaction_v2/ob_ss_compact_helper.h"
@@ -457,6 +459,10 @@ int ObDDLRedoReplayExecutor::do_inc_replay_(
     }
   } else if (!need_replay) {
     // do nothing
+  } else if (OB_FAIL(precheck_inc_ddl_capacity_(tablet_handle, log_->get_redo_info().type_))) {
+    if (OB_EAGAIN != ret) {
+      LOG_WARN("failed to precheck inc ddl capacity", KR(ret), K(log_->get_redo_info().type_));
+    }
   } else {
     ObStorageObjectOpt opt;
     opt.set_private_object_opt(tablet_handle.get_obj()->get_tablet_id().id(),
@@ -495,7 +501,81 @@ int ObDDLRedoReplayExecutor::do_inc_replay_(
     }
     FLOG_INFO("finish replay ddl inc redo log", K(ret), KPC_(log), K(macro_block), "ddl_event_info", ObDDLEventInfo());
   }
+  return ret;
+}
 
+int ObDDLRedoReplayExecutor::precheck_inc_ddl_capacity_(
+    ObTabletHandle &tablet_handle,
+    const ObDirectLoadType direct_load_type)
+{
+  // Pre-check the memtable slot capacity for DIRECT_LOAD_INCREMENTAL before allocating
+  // a new macro block on disk. If the capacity is exhausted, fail fast with OB_EAGAIN
+  // so that the macro block is not allocated. Otherwise each replay retry would write a
+  // macro block that the downstream cannot accept, exhausting datafile until the 30s
+  // background block GC catches up.
+  // See workitem 2026033000115020192.
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!tablet_handle.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tablet handle", KR(ret));
+  } else if (is_incremental_direct_load(direct_load_type)) {
+    // Conservative threshold: only fail-fast when memtable slots are fully exhausted
+    // (count >= MAX_MEMSTORE_CNT - 1).
+    ObProtectedMemtableMgrHandle *protected_handle = nullptr;
+    int64_t memtable_count = 0;
+    if (OB_FAIL(tablet_handle.get_obj()->get_protected_memtable_mgr_handle(protected_handle))) {
+      LOG_WARN("failed to get protected memtable mgr handle", KR(ret));
+    } else if (OB_ISNULL(protected_handle)) {
+      // memtable mgr not ready yet, nothing to precheck
+    } else if (FALSE_IT(memtable_count = protected_handle->get_memtable_count())) {
+    } else if (memtable_count >= common::MAX_MEMSTORE_CNT - 1) {
+      // Memtable mgr is fully saturated. Even ObDirectLoadTableGuard's internal
+      // 1-second retry loop cannot recover here, so fail-fast before allocating
+      // a new macro block on disk.
+      ret = OB_EAGAIN;
+      if (REACH_TIME_INTERVAL(10LL * 1000LL * 1000LL)) {
+        ObTaskController::get().allow_next_syslog();
+        LOG_INFO("inc minor memtable slot is full on replay, skip allocating macro block and retry later",
+                 KR(ret), K(memtable_count),
+                 "ls_id", ls_->get_ls_id(),
+                 "tablet_id", tablet_handle.get_obj()->get_tablet_id());
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLRedoReplayExecutor::precheck_full_ddl_capacity_(ObTabletHandle &tablet_handle)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!tablet_handle.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tablet handle", KR(ret));
+  } else {
+    ObDDLKvMgrHandle ddl_kv_mgr_handle;
+    if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS; // ddl kv mgr not created yet, no capacity concern
+      } else {
+        LOG_WARN("failed to get ddl kv mgr", KR(ret));
+      }
+    } else if (OB_ISNULL(ddl_kv_mgr_handle.get_obj())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ddl kv mgr is null", KR(ret));
+    } else {
+      const int64_t ddl_kv_count = ddl_kv_mgr_handle.get_obj()->get_count();
+      if (ddl_kv_count >= ObTabletDDLKvMgr::MAX_DDL_KV_CNT_IN_STORAGE - 1) {
+        ret = OB_EAGAIN;
+        if (REACH_TIME_INTERVAL(10LL * 1000LL * 1000LL)) {
+          ObTaskController::get().allow_next_syslog();
+          LOG_INFO("full ddl kv slot is full on replay, skip allocating macro block and retry later",
+                   KR(ret), K(ddl_kv_count),
+                   "ls_id", ls_->get_ls_id(),
+                   "tablet_id", tablet_handle.get_obj()->get_tablet_id());
+        }
+      }
+    }
+  }
   return ret;
 }
 
@@ -515,6 +595,10 @@ int ObDDLRedoReplayExecutor::do_full_replay_(
     }
   } else if (!need_replay) {
     // do nothing
+  } else if (OB_FAIL(precheck_full_ddl_capacity_(tablet_handle))) {
+    if (OB_EAGAIN != ret) {
+      LOG_WARN("failed to precheck full ddl capacity", KR(ret));
+    }
   } else if (OB_FAIL(tablet_handle.get_obj()->fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
   } else if (!table_store_wrapper.get_member()->get_major_sstables().empty()) {
