@@ -28,6 +28,7 @@ namespace oceanbase
 
 namespace omt
 {
+
 int create_worker(ObThWorker* &worker, ObTenant *tenant, uint64_t group_id,
                   int32_t level, bool force, ObResourceGroup *group, int32_t group_index)
 {
@@ -62,6 +63,7 @@ int create_worker(ObThWorker* &worker, ObTenant *tenant, uint64_t group_id,
     } else if (OBCG_LQ == group_id) {
       worker->set_thread_group_id(OB_THREAD_GROUP_LARGE_QUERY);
     }
+    worker->set_group_index(group_index);
     if (OB_FAIL(worker->start())) {
       ob_delete(worker);
       worker = nullptr;
@@ -233,6 +235,27 @@ inline void ObThWorker::process_request(rpc::ObRequest &req)
   // reset retry flags
   can_retry_ = true;
   need_retry_ = false;
+  last_idle_ts_ = 0;
+
+  if (is_resource_manager_group(get_group_id()) && (get_group() != NULL)) {
+    ObResourceGroup *group = static_cast<ObResourceGroup *>(get_group());
+    int64_t old_idle = ATOMIC_FAA(&group->idle_cnt_, -1);
+
+    if (OB_UNLIKELY(old_idle <= 1)
+        && group->workers_.get_size() < group->min_worker_cnt()
+        && group->enable_database_isolation_mode_) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS == (tmp_ret = group->workers_lock_.trylock())) {
+        int64_t succ_num = 0;
+        group->acquire_more_worker(1, succ_num, false/*is_force*/);
+        LOG_INFO("worker thread acquired", K(group->get_group_id()), K(group->workers_.get_size()), K(old_idle), K(get_group_index()));
+        IGNORE_RETURN group->workers_lock_.unlock();
+      } else {
+        ATOMIC_STORE(&group->expand_hint_, 1);
+      }
+    }
+  }
+
   req.set_large_retry_flag(false);
   bool need_wait_lock = false;
   int ret = OB_SUCCESS;
@@ -285,7 +308,6 @@ inline void ObThWorker::process_request(rpc::ObRequest &req)
         }
       }
     }
-
     if (OB_FAIL(ret)) {
       if (OB_NOT_NULL(di)) {
         di->end_wait_event(ObWaitEventIds::NETWORK_QUEUE_WAIT, false);
@@ -298,6 +320,12 @@ inline void ObThWorker::process_request(rpc::ObRequest &req)
     }
   }
 
+  if (is_resource_manager_group(get_group_id()) && (get_group() != NULL)) {
+    ObResourceGroup *group = static_cast<ObResourceGroup *>(get_group());
+    ATOMIC_INC(&group->idle_cnt_);
+  }
+
+  last_idle_ts_ = ObTimeUtility::current_time();
   set_req_flag(NULL);
   reset_rpc_tenant();
 }
@@ -407,6 +435,7 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
                 last_check_time_ = wait_end_time;
                 set_last_wakeup_ts(query_start_time_);
                 set_rpc_stat_srv(&(tenant_->rpc_stat_info_->rpc_stat_srv_));
+
                 process_request(*req);
                 query_enqueue_time_ = INT64_MAX;
                 query_start_time_ = INT64_MAX;

@@ -11,11 +11,16 @@
 #include "share/resource_manager/ob_resource_manager_proxy.h"
 #include "share/compaction/ob_schedule_daily_maintenance_window.h"
 #include "rootserver/freeze/window/ob_window_compaction_helper.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::sqlclient;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
+
+// 设计容量上限：单个租户最多500个resource consumer group，单个observer上最多2000个
+static const int64_t OB_MAX_CONSUMER_GROUP_PER_TENANT = 500;
+static const int64_t OB_MAX_CONSUMER_GROUP_PER_OBSERVER = 2000;
 
 static bool isSameGroup(const ObString& str1, const ObString& str2, ObCompatibilityMode mode) {
     int cmp = 0;
@@ -310,6 +315,68 @@ int ObResourceManagerProxy::allocate_consumer_group_id(
   return ret;
 }
 
+int ObResourceManagerProxy::get_tenant_consumer_group_count(
+    ObMySQLTransaction &trans,
+    uint64_t tenant_id,
+    int64_t &count)
+{
+  int ret = OB_SUCCESS;
+  count = 0;
+  ObSQLClientRetryWeak sql_client_retry_weak(
+      &trans, tenant_id, OB_ALL_RES_MGR_CONSUMER_GROUP_TID);
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    common::sqlclient::ObMySQLResult *result = NULL;
+    ObSqlString sql;
+    const char *tname = OB_ALL_RES_MGR_CONSUMER_GROUP_TNAME;
+    if (OB_FAIL(sql.assign_fmt(
+                "SELECT /* GET_TENANT_CONSUMER_GROUP_COUNT */ COUNT(*) AS CNT FROM %s "
+                "WHERE TENANT_ID = %ld",
+                tname, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)))) {
+      LOG_WARN("fail format sql", K(ret));
+    } else if (OB_FAIL(sql_client_retry_weak.read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("fail to execute sql", K(sql), K(ret));
+    } else if (NULL == (result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail query sql", K(tname), K(tenant_id), K(ret));
+    } else if (OB_FAIL(result->next())) {
+      LOG_WARN("fail get next row", K(ret), K(tname), K(tenant_id));
+    } else {
+      EXTRACT_INT_FIELD_MYSQL(*result, "CNT", count, int64_t);
+    }
+  }
+  return ret;
+}
+
+int ObResourceManagerProxy::get_observer_consumer_group_count(int64_t &count)
+{
+  int ret = OB_SUCCESS;
+  count = 0;
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy is null", K(ret));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      common::sqlclient::ObMySQLResult *result = NULL;
+      ObSqlString sql;
+      const char *tname = OB_ALL_RES_MGR_CONSUMER_GROUP_TNAME;
+      if (OB_FAIL(sql.assign_fmt(
+                  "SELECT /* GET_OBSERVER_CONSUMER_GROUP_COUNT */ COUNT(*) AS CNT FROM %s",
+                  tname))) {
+        LOG_WARN("fail format sql", K(ret));
+      } else if (OB_FAIL(GCTX.sql_proxy_->read(res, OB_SYS_TENANT_ID, sql.ptr()))) {
+        LOG_WARN("fail to execute sql", K(sql), K(ret));
+      } else if (NULL == (result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail query sql", K(tname), K(ret));
+      } else if (OB_FAIL(result->next())) {
+        LOG_WARN("fail get next row", K(ret), K(tname));
+      } else {
+        EXTRACT_INT_FIELD_MYSQL(*result, "CNT", count, int64_t);
+      }
+    }
+  }
+  return ret;
+}
 
 int ObResourceManagerProxy::create_consumer_group(
     uint64_t tenant_id,
@@ -325,6 +392,36 @@ int ObResourceManagerProxy::create_consumer_group(
   return ret;
 }
 
+int ObResourceManagerProxy::check_consumer_group_limit(
+    ObMySQLTransaction &trans,
+    uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (!tenant_config.is_valid() || !tenant_config->_enable_database_isolation_mode) {
+    // no need check limit for database isolation mode off
+  } else {
+    int64_t tenant_count = 0;
+    int64_t observer_count = 0;
+    if (OB_FAIL(get_tenant_consumer_group_count(trans, tenant_id, tenant_count))) {
+      LOG_WARN("fail to get tenant consumer group count", K(tenant_id), K(ret));
+    } else if (tenant_count >= OB_MAX_CONSUMER_GROUP_PER_TENANT) {
+      ret = OB_RESOURCE_OUT;
+      LOG_USER_ERROR(OB_RESOURCE_OUT);
+      LOG_WARN("tenant consumer group count exceeds limit",
+               K(tenant_id), K(tenant_count), K(OB_MAX_CONSUMER_GROUP_PER_TENANT), K(ret));
+    } else if (OB_FAIL(get_observer_consumer_group_count(observer_count))) {
+      LOG_WARN("fail to get observer consumer group count", K(ret));
+    } else if (observer_count >= OB_MAX_CONSUMER_GROUP_PER_OBSERVER) {
+      ret = OB_RESOURCE_OUT;
+      LOG_USER_ERROR(OB_RESOURCE_OUT);
+      LOG_WARN("observer consumer group count exceeds limit",
+               K(observer_count), K(OB_MAX_CONSUMER_GROUP_PER_OBSERVER), K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObResourceManagerProxy::create_consumer_group(
     ObMySQLTransaction &trans,
     uint64_t tenant_id,
@@ -335,7 +432,9 @@ int ObResourceManagerProxy::create_consumer_group(
   int ret = OB_SUCCESS;
   ObSqlString sql;
   const char *tname = OB_ALL_RES_MGR_CONSUMER_GROUP_TNAME;
-  if (consumer_group_id < 0 && /* 如果 id >=0 则使用外面传入的 id */
+  if (OB_FAIL(check_consumer_group_limit(trans, tenant_id))) {
+    LOG_WARN("consumer group limit check failed", K(tenant_id), K(ret));
+  } else if (consumer_group_id < 0 && /* 如果 id >=0 则使用外面传入的 id */
       OB_FAIL(allocate_consumer_group_id(trans, tenant_id, consumer_group_id))) {
     LOG_WARN("fail alloc group id", K(tenant_id), K(ret));
   } else if (OB_FAIL(sql.assign_fmt("INSERT /* CREATE_CONSUMER_GROUP */ INTO %s (", tname))) {
@@ -783,6 +882,34 @@ int ObResourceManagerProxy::check_if_user_exist(
     LOG_WARN("get users info failed", K(ret), K(user_name));
   } else if (users_info.empty()) {
     exist = false;
+  }
+  return ret;
+}
+
+int ObResourceManagerProxy::check_if_database_exist(
+    uint64_t tenant_id,
+    const ObString &database_name,
+    bool &exist)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  uint64_t database_id = OB_INVALID_ID;
+  exist = false;
+  if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is null");
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("get schema guard failed", K(ret));
+  } else if (OB_FAIL(schema_guard.get_database_id(tenant_id, database_name, database_id))) {
+    if (OB_SCHEMA_EAGAIN == ret) {
+      LOG_WARN("schema not ready, try again", K(ret), K(database_name));
+    } else {
+      LOG_WARN("get database id failed", K(ret), K(database_name));
+    }
+  } else if (OB_INVALID_ID == database_id) {
+    exist = false;
+  } else {
+    exist = true;
   }
   return ret;
 }
@@ -1473,6 +1600,15 @@ int ObResourceManagerProxy::replace_mapping_rule(
         } else if (OB_FAIL(update_resource_mapping_version(trans, tenant_id))) {
           LOG_WARN("update resource mapping rule version failed", K(ret));
         }
+      } else if (0 == attribute.case_compare("database")) {
+        // Oracle mode does not support database-level mapping (user and database are not distinguished)
+        if (session.is_oracle_compatible()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "database-level resource group mapping in Oracle mode");
+          LOG_WARN("database-level resource group mapping is not supported in Oracle mode", K(ret), K(tenant_id));
+        } else if (OB_FAIL(replace_database_mapping_rule(trans, tenant_id, attribute, value, consumer_group))) {
+          LOG_WARN("replace database mapping rule failed", K(ret));
+        }
       } else {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid attribute", K(ret), K(attribute));
@@ -1716,6 +1852,87 @@ int ObResourceManagerProxy::replace_column_mapping_rule(ObMySQLTransaction &tran
           } else if (OB_FAIL(trans.write(tenant_id,
                                           sql.ptr(),
                                           affected_rows))) {
+            trans.reset_last_error();
+            LOG_WARN("fail to execute sql", K(sql), K(ret));
+          } else {
+            if (is_single_row(affected_rows) || is_double_row(affected_rows)) {
+              // insert or replace
+            } else {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected value. expect 1 or 2 row affected", K(affected_rows), K(sql), K(ret));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObResourceManagerProxy::replace_database_mapping_rule(ObMySQLTransaction &trans, uint64_t tenant_id,
+                                                          const ObString &attribute, const ObString &value,
+                                                          const ObString &consumer_group)
+{
+  int ret = OB_SUCCESS;
+  // Note: Oracle mode check is done in replace_mapping_rule() before calling this function
+  bool database_exist = true;
+  if (OB_SUCC(ret)) {
+    // if database not exists, throw error
+    if (OB_FAIL(check_if_database_exist(tenant_id, value, database_exist))) {
+      LOG_WARN("fail check if database exist", K(tenant_id), K(value), K(ret));
+    } else if (!database_exist) {
+      ret = OB_ERR_BAD_DATABASE;
+      LOG_USER_ERROR(OB_ERR_BAD_DATABASE, value.length(), value.ptr());
+    }
+  }
+  if (OB_SUCC(ret) && database_exist) {
+    ObSqlString sql;
+    const char *tname = OB_ALL_RES_MGR_MAPPING_RULE_TNAME;
+    int64_t affected_rows = 0;
+    if (consumer_group.empty()) {
+      // if consumer_group is empty, delete mapping
+      if (OB_FAIL(sql.assign_fmt(
+                  "DELETE /* REMOVE_MAPPING_RULES */ FROM %s "
+                  "WHERE TENANT_ID = %ld "
+                  "AND ATTRIBUTE = '%.*s'"
+                  "AND VALUE = '%.*s'",
+                  tname, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+                  attribute.length(), attribute.ptr(),
+                  value.length(), value.ptr()))) {
+        LOG_WARN("fail append value", K(ret));
+      } else if (OB_FAIL(trans.write(
+                  tenant_id,
+                  sql.ptr(),
+                  affected_rows))) {
+        trans.reset_last_error();
+        LOG_WARN("fail to execute sql", K(sql), K(ret));
+      }
+      if (OB_SUCC(ret)) {
+        // reset map
+        ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
+        ObResMgrVarcharValue db_name;
+        db_name.set_value(value);
+        if (OB_FAIL(rule_mgr.reset_group_id_by_database(tenant_id, db_name))) {
+          LOG_WARN("fail reset database_group map", K(ret), K(tenant_id), K(db_name), K(value));
+        }
+      }
+    } else {
+      if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s (", tname))) {
+        STORAGE_LOG(WARN, "append table name failed, ", K(ret));
+      } else {
+        ObSqlString values;
+        SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id), "tenant_id", "%lu");
+        SQL_COL_APPEND_STR_VALUE(sql, values, attribute.ptr(), attribute.length(), "attribute");
+        SQL_COL_APPEND_STR_VALUE(sql, values, value.ptr(), value.length(), "value");
+        SQL_COL_APPEND_STR_VALUE(sql, values, consumer_group.ptr(), consumer_group.length(), "consumer_group");
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(sql.append_fmt(") VALUES (%.*s)",
+                                    static_cast<int32_t>(values.length()),
+                                    values.ptr()))) {
+            LOG_WARN("append sql failed, ", K(ret));
+          } else if (OB_FAIL(trans.write(tenant_id,
+                                        sql.ptr(),
+                                        affected_rows))) {
             trans.reset_last_error();
             LOG_WARN("fail to execute sql", K(sql), K(ret));
           } else {
@@ -2085,6 +2302,66 @@ int ObResourceManagerProxy::get_all_resource_mapping_rules_by_user(
           EXTRACT_INT_FIELD_TO_CLASS_MYSQL(*result, user_id, rule, uint64_t);
           EXTRACT_INT_FIELD_TO_CLASS_MYSQL(*result, group_id, rule, uint64_t);
           EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(*result, group_name, rule);
+          if (OB_SUCC(ret) && OB_FAIL(rules.push_back(rule))) {
+            LOG_WARN("fail push back rules", K(rule), K(ret));
+          }
+        }
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail get next row", K(ret), K(t_a_res_name), K(tenant_id));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObResourceManagerProxy::get_all_resource_mapping_rules_by_database(
+    uint64_t tenant_id,
+    const common::ObString &plan,
+    common::ObIArray<ObResourceMappingRule> &rules)
+{
+  int ret = OB_SUCCESS;
+  ObMySQLTransaction trans;
+  TransGuard trans_guard(trans, tenant_id, ret);
+  if (trans_guard.ready()) {
+    ObSQLClientRetryWeak sql_client_retry_weak(
+        &trans, tenant_id, OB_ALL_RES_MGR_MAPPING_RULE_TID);
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      common::sqlclient::ObMySQLResult *result = NULL;
+      ObSqlString sql;
+      const char *t_a_res_name = OB_ALL_RES_MGR_MAPPING_RULE_TNAME;
+      const char *t_c_consumer_group_name = OB_ALL_RES_MGR_CONSUMER_GROUP_TNAME;
+      const char *t_d_directive = OB_ALL_RES_MGR_DIRECTIVE_TNAME;
+      uint64_t sql_tenant_id = ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id);
+      // 当 resource plan 为空时，或者对应的 directive 不存在时，使用默认组 OTHER_GROUPS
+      if (OB_FAIL(sql.assign_fmt(
+                  "SELECT /* GET_ALL_RES_MAPPING_RULE_BY_DATABASE */ "
+                  "a.`value` as `value`,"
+                  "(case when d.group_or_subplan is NULL then 'OTHER_GROUPS' else c.consumer_group end) as `group`, "
+                  "(case when d.group_or_subplan is NULL then 0 else c.consumer_group_id end) as group_id  "
+                  "FROM %s a left join %s d ON a.consumer_group = d.group_or_subplan AND d.plan = '%.*s' AND d.tenant_id = %ld,"
+                  "%s c "
+                  "WHERE a.TENANT_ID = %ld AND c.tenant_id = %ld AND a.tenant_id = c.tenant_id "
+                  "AND a.attribute = 'DATABASE' AND c.consumer_group = a.consumer_group",
+                  t_a_res_name, t_d_directive, plan.length(), plan.ptr(), sql_tenant_id,
+                  t_c_consumer_group_name,
+                  sql_tenant_id, sql_tenant_id))) {
+        LOG_WARN("fail format sql", K(ret));
+      } else if (OB_FAIL(sql_client_retry_weak.read(res, tenant_id, sql.ptr()))) {
+        LOG_WARN("fail to execute sql", K(sql), K(ret));
+      } else if (NULL == (result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail query sql", K(t_a_res_name), K(tenant_id), K(ret));
+      } else {
+        while (OB_SUCC(result->next())) {
+          ObResourceMappingRule rule;
+          rule.set_tenant_id(tenant_id);
+          rule.set_attr(ObString::make_string(""));
+          EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(*result, value, rule);
+          EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(*result, group, rule);
+          EXTRACT_INT_FIELD_TO_CLASS_MYSQL(*result, group_id, rule, uint64_t);
           if (OB_SUCC(ret) && OB_FAIL(rules.push_back(rule))) {
             LOG_WARN("fail push back rules", K(rule), K(ret));
           }

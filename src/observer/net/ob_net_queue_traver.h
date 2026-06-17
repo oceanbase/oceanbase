@@ -76,7 +76,7 @@ public:
   int traverse(ObINetTraverProcess &process);
   int traverse_one_tenant(oceanbase::omt::ObTenant *tenant_ptr, ObINetTraverProcess &process);
 private:
-  typedef oceanbase::common::ObPriorityQueue2<0, 1> TenantReqQueue;
+  typedef oceanbase::omt::ReqQueue TenantReqQueue;
   int traverse_one_tenant_queue(oceanbase::omt::ReqQueue &tenant_req_queue, oceanbase::omt::ObMultiLevelQueue *tenant_multi_level_queue, int32_t group_id, ObINetTraverProcess &process);
   int traverse_one_tenant_group_queue(TenantReqQueue &tenant_group_queue,oceanbase::omt::ObMultiLevelQueue *tenant_multi_level_queue, int32_t group_id, ObINetTraverProcess &process);
   int traverse_one_tenant_one_link_queue(ObLinkQueue *link_queue, int32_t group_id, ObINetTraverProcess &process);

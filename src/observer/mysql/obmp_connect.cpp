@@ -382,6 +382,7 @@ int ObMPConnect::process()
                "user_id", session->get_user_id(),
                K(tenant_id),
                K(user_name_),
+               "database_name", session->get_database_name(),
                "group_id", conn->group_id_,
                "sql_req_level", conn->sql_req_level_);
       conn->set_auth_phase();
@@ -1995,6 +1996,12 @@ int ObMPConnect::check_update_proxy_capability(ObSMConnection &conn) const
       server_proxy_cap_flag.cap_flags_.OB_CAP_CHANGE_USER_CONN_ATTRS = 1;
     } else {
       server_proxy_cap_flag.cap_flags_.OB_CAP_CHANGE_USER_CONN_ATTRS = 0;
+    }
+    // Enable proxy one way sync extra info for database level resource isolation
+    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_6_1_0) {
+      server_proxy_cap_flag.cap_flags_.OB_CAP_PROXY_EXTRA_INFO_ONE_WAY_SYNC = 1;
+    } else {
+      server_proxy_cap_flag.cap_flags_.OB_CAP_PROXY_EXTRA_INFO_ONE_WAY_SYNC = 0;
     }
     if ((GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_4_2_1 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_0_0) ||
         GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_6_1_0) {

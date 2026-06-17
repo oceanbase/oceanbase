@@ -10,6 +10,7 @@
 #include "share/resource_manager/ob_cgroup_ctrl.h"
 #include "observer/ob_server_struct.h"
 #include "observer/omt/ob_tenant.h"
+#include "share/ob_get_compat_mode.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -20,7 +21,8 @@ int ObResourceMappingRuleManager::init()
   int rule_bucket_size = 4096;
   int group_bucket_size = 512;
   if (user_rule_map_.created() || group_id_name_map_.created() ||
-      function_rule_map_.created() || group_name_id_map_.created()) {
+      function_rule_map_.created() || group_name_id_map_.created() ||
+      database_rule_map_.created()) {
     ret = OB_INIT_TWICE;
     LOG_WARN("mapping rule manager should not init multiple times", K(ret));
   } else if (OB_FAIL(user_rule_map_.create(rule_bucket_size, "UsrRuleMap", "UsrRuleMapNode"))) {
@@ -31,6 +33,8 @@ int ObResourceMappingRuleManager::init()
     LOG_WARN("fail create group map", K(ret));
   } else if (OB_FAIL(function_rule_map_.create(group_bucket_size, "FuncRuleMap", "FuncRuleNode"))) {
     LOG_WARN("fail create function rule map", K(ret));
+  } else if (OB_FAIL(database_rule_map_.create(group_bucket_size, "DbRuleMap", "DbRuleMapNode"))) {
+    LOG_WARN("fail create database rule map", K(ret));
   } else if (OB_FAIL(group_name_id_map_.create(group_bucket_size, "GrpNameIdMap", "GrpNameIdNode"))) {
     LOG_WARN("fail create name id map", K(ret));
   }
@@ -150,6 +154,8 @@ int ObResourceMappingRuleManager::refresh_resource_mapping_rule(
     LOG_WARN("fail refresh user mapping rule", K(tenant_id), K(plan), K(ret));
   } else if (OB_FAIL(refresh_resource_function_mapping_rule(proxy, tenant_id, plan))) {
     LOG_WARN("fail refresh function mapping rule", K(tenant_id), K(plan), K(ret));
+  } else if (OB_FAIL(refresh_resource_database_mapping_rule(proxy, tenant_id, plan))) {
+    LOG_WARN("fail refresh database mapping rule", K(tenant_id), K(plan), K(ret));
   } else {
     LOG_INFO("refresh resource mapping rule success", K(tenant_id), K(plan));
   }
@@ -234,6 +240,80 @@ int ObResourceMappingRuleManager::refresh_resource_function_mapping_rule(
   return ret;
 }
 
+
+int ObResourceMappingRuleManager::refresh_resource_database_mapping_rule(
+    ObResourceManagerProxy &proxy,
+    const uint64_t tenant_id,
+    const ObString &plan)
+{
+  int ret = OB_SUCCESS;
+  // Oracle mode does not support database-level mapping (user and database are not distinguished)
+  bool is_oracle_mode = false;
+  ObResourceMappingRuleSet rules;
+  if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+    LOG_WARN("fail to check oracle mode", K(ret), K(tenant_id));
+  } else if (is_oracle_mode) {
+    // Skip database mapping refresh in Oracle mode
+    LOG_TRACE("skip database mapping refresh in Oracle mode", K(tenant_id));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_TENANT_ID;
+    LOG_WARN("invalid config", K(ret), K(tenant_id));
+  } else if (OB_FAIL(proxy.get_all_resource_mapping_rules_by_database(tenant_id, plan, rules))) {
+    LOG_WARN("fail get resource mapping rules", K(tenant_id), K(ret));
+  } else {
+    for (int64_t i = 0; i < rules.count() && OB_SUCC(ret); ++i) {
+      ObResourceMappingRule &rule = rules.at(i);
+      // 建立 database_name => group_id 的映射
+      uint64_t group_id = 0;
+      bool map_changed = true;
+      if (OB_SUCCESS == database_rule_map_.get_refactored(
+              share::ObTenantFunctionKey(rule.tenant_id_, rule.value_), group_id)) {
+        if (rule.group_id_ == group_id) {
+          // no new database mapping, don't update the database_rule_map_ to avoid memory fragment
+          map_changed = false;
+        }
+      }
+      if (map_changed && OB_FAIL(database_rule_map_.set_refactored(
+                  share::ObTenantFunctionKey(rule.tenant_id_, rule.value_), /* database name */
+                  rule.group_id_, /* group id */
+                  1 /* overwrite on dup key */))) {
+        LOG_WARN("fail set database mapping rule to rule_map", K(rule), K(ret));
+      }
+    }
+    (void)clear_resource_database_mapping_rule(tenant_id, rules);
+    LOG_INFO("refresh resource database mapping rule", K(tenant_id), K(plan), K(rules));
+  }
+  return ret;
+}
+
+int ObResourceMappingRuleManager::clear_resource_database_mapping_rule(const uint64_t tenant_id,
+    const ObResourceMappingRuleSet &rules)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<share::ObTenantFunctionKey, 16> db_keys;
+  ObSEArray<uint64_t, 16> group_ids;
+  GetTenantFunctionRuleFunctor functor(tenant_id, db_keys, group_ids);
+  if (OB_FAIL(database_rule_map_.foreach_refactored(functor))) {
+    LOG_WARN("failed to do foreach", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < db_keys.count(); ++i) {
+      bool is_group_id_found = false;
+      for (int64_t j = 0; !is_group_id_found && j < rules.count(); ++j) {
+        const ObResourceMappingRule &rule = rules.at(j);
+        if (share::ObTenantFunctionKey(rule.tenant_id_, rule.value_) == db_keys.at(i)) {
+          is_group_id_found = true;
+        }
+      }
+      if (!is_group_id_found) {
+        LOG_INFO("tenant database need to be cleared", "database", db_keys.at(i), "group_id", group_ids.at(i));
+        if (OB_FAIL(database_rule_map_.erase_refactored(db_keys.at(i)))) {
+          LOG_WARN("failed to reset database map", K(ret), K(db_keys.at(i)));
+        }
+      }
+    }
+  }
+  return ret;
+}
 
 int ObResourceMappingRuleManager::clear_resource_function_mapping_rule(const uint64_t tenant_id,
     const ObResourceMappingRuleSet &rules)

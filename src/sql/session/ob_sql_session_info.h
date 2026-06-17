@@ -21,6 +21,7 @@
 #include "lib/time/ob_cur_time.h"
 #include "lib/lock/ob_recursive_mutex.h"
 #include "lib/hash/ob_link_hashmap.h"
+#include "lib/utility/ob_tracepoint.h"
 #include "lib/mysqlclient/ob_server_connection_pool.h"
 #include "lib/stat/ob_session_stat.h"
 #include "rpc/obmysql/ob_mysql_packet.h"
@@ -595,6 +596,20 @@ typedef common::hash::ObHashMap<common::ObString, ObInnerContextMap *,
                                 2> ObContextsMap;
 typedef common::LinkHashNode<SessionInfoKey> SessionInfoHashNode;
 typedef common::LinkHashValue<SessionInfoKey> SessionInfoHashValue;
+// Resource isolation level for multi-level group_id tracking (SQL-level vs DB-level)
+enum ResourceIsolationLevel {
+  ISOLATION_SQL = 0,   // hint / column rules
+  ISOLATION_DB  = 1,   // database mapping
+  ISOLATION_MAX
+};
+
+struct GroupIsolationInfo {
+  int64_t expect_group_id_;
+  bool group_id_not_expected_;
+  GroupIsolationInfo() : expect_group_id_(common::OB_INVALID_ID), group_id_not_expected_(false) {}
+  void reset() { expect_group_id_ = common::OB_INVALID_ID; group_id_not_expected_ = false; }
+};
+
 // ObBasicSessionInfo存储系统变量及其相关变量，并存储远程执行SQL task时，需要序列化到远端的状态
 // ObPsInfoMgr存储prepared statement相关信息
 // ObSQLSessionInfo存储其他执行时状态信息；远程执行时同步 application context 等状态
@@ -851,6 +866,7 @@ public:
                                  enable_pl_sql_parameterize_(false),
                                  enable_fast_json_path_lookup_(false),
                                  enable_pl_null_literal_parameterization_(false),
+                                 enable_database_isolation_mode_(false),
                                  enable_foreign_key_gts_opt_(false),
                                  session_(session)
     {
@@ -916,6 +932,7 @@ public:
     bool enable_pl_sql_parameterize() const { return enable_pl_sql_parameterize_; }
     bool enable_fast_json_path_lookup() const { return enable_fast_json_path_lookup_; }
     bool enable_pl_null_literal_parameterization() const { return enable_pl_null_literal_parameterization_; }
+    bool get_enable_database_isolation_mode() const { return enable_database_isolation_mode_; }
     bool enable_foreign_key_gts_opt() const { return ATOMIC_LOAD(&enable_foreign_key_gts_opt_); }
   private:
     //租户级别配置项缓存session 上，避免每次获取都需要刷新
@@ -965,6 +982,7 @@ public:
     bool enable_pl_sql_parameterize_;
     bool enable_fast_json_path_lookup_;
     bool enable_pl_null_literal_parameterization_;
+    bool enable_database_isolation_mode_;
     bool enable_foreign_key_gts_opt_;
     ObSQLSessionInfo *session_;
   };
@@ -1531,10 +1549,55 @@ public:
   }
 
   bool is_encrypt_tenant();
-  int64_t get_expect_group_id() const { return expect_group_id_; }
-  void set_expect_group_id(int64_t group_id) { expect_group_id_ = group_id; }
-	bool get_group_id_not_expected() const { return group_id_not_expected_; }
-  void set_group_id_not_expected(bool value) { group_id_not_expected_ = value; }
+  int64_t get_expect_group_id() const {
+    // SQL level takes precedence over DB level
+    if (group_isolation_arr_[ISOLATION_SQL].expect_group_id_ != common::OB_INVALID_ID) {
+      return group_isolation_arr_[ISOLATION_SQL].expect_group_id_;
+    }
+    return group_isolation_arr_[ISOLATION_DB].expect_group_id_;
+  }
+  void set_expect_group_id(int64_t group_id) {
+    // backward compat: sets SQL level by default
+    group_isolation_arr_[ISOLATION_SQL].expect_group_id_ = group_id;
+  }
+	bool get_group_id_not_expected() const {
+    for (int i = 0; i < ISOLATION_MAX; i++) {
+      if (group_isolation_arr_[i].group_id_not_expected_) return true;
+    }
+    return false;
+  }
+  void set_group_id_not_expected(bool value) {
+    // backward compat: sets all levels
+    for (int i = 0; i < ISOLATION_MAX; i++) {
+      group_isolation_arr_[i].group_id_not_expected_ = value;
+    }
+  }
+  // Level-based API
+  int64_t get_expect_group_id(ResourceIsolationLevel level) const {
+    return group_isolation_arr_[level].expect_group_id_;
+  }
+  void set_expect_group_id(ResourceIsolationLevel level, int64_t id) {
+    group_isolation_arr_[level].expect_group_id_ = id;
+  }
+  bool get_group_id_not_expected(ResourceIsolationLevel level) const {
+    return group_isolation_arr_[level].group_id_not_expected_;
+  }
+  void set_group_id_not_expected(ResourceIsolationLevel level, bool v) {
+    group_isolation_arr_[level].group_id_not_expected_ = v;
+  }
+  void reset_all_group_isolation() {
+    for (int i = 0; i < ISOLATION_MAX; i++) {
+      group_isolation_arr_[i].reset();
+    }
+  }
+  // Proxy specified database name for database level resource isolation
+  const common::ObString& get_proxy_specified_db_name() const { return proxy_specified_db_name_; }
+  void set_proxy_specified_db_name(const common::ObString &db_name) { proxy_specified_db_name_ = db_name; }
+  void reset_proxy_specified_db_name() { proxy_specified_db_name_.reset(); }
+  // Get effective database name for resource isolation: proxy_specified > session database
+  common::ObString get_effective_database_for_isolation() const {
+    return !proxy_specified_db_name_.empty() ? proxy_specified_db_name_ : get_database_name();
+  }
   int is_force_temp_table_inline(bool &force_inline) const;
   int is_force_temp_table_materialize(bool &force_materialize) const;
   int is_temp_table_transformation_enabled(bool &transformation_enabled) const;
@@ -1598,6 +1661,15 @@ public:
   void set_xa_last_result(const int result) { xa_last_result_ = result; }
   // 为了性能优化考虑，租户级别配置项不需要实时获取，缓存在session上，每隔5s触发一次刷新
   void refresh_tenant_config() { cached_tenant_config_info_.refresh(); }
+  bool is_enable_database_isolation_mode()
+  {
+    cached_tenant_config_info_.refresh();
+    bool bret = cached_tenant_config_info_.get_enable_database_isolation_mode();
+    if (OB_SUCCESS != OB_E(::oceanbase::common::EventTable::EN_ENABLE_DATABASE_ISOLATION) OB_SUCCESS) {
+      bret = true;
+    }
+    return bret;
+  }
   bool is_support_external_consistent()
   {
     cached_tenant_config_info_.refresh();
@@ -2182,10 +2254,15 @@ private:
   oceanbase::sql::ObDblinkCtxInSession dblink_context_;
   int64_t dblink_ctx_acc_cnt_;
   int64_t sql_req_level_; // for sql request between cluster avoid dead lock, such as dblink dead lock
-  int64_t expect_group_id_;
-  // When try packet retry failed, set this flag true and retry at current thread.
-  // This situation is unexpected and will report a warning to user.
-  bool group_id_not_expected_;
+  // Multi-level resource isolation tracking (SQL-level vs DB-level)
+  // SQL-level (hint/column) takes precedence over DB-level (database mapping)
+  GroupIsolationInfo group_isolation_arr_[ISOLATION_MAX];
+  // Proxy specified database name for database level resource isolation.
+  // Memory lifecycle: Pointer references memory from packet's extra_info,
+  // which is valid during request processing. Deep copied by assign() in
+  // Ob20ProtocolProcessor::after_process_mysql_packet. Per-request lifetime,
+  // should be reset after each request.
+  common::ObString proxy_specified_db_name_;
   ObOptimizerTraceImpl optimizer_tracer_;
   //For Oracle Global Temporary Table
   //unique key: obs_id(16bit) + timestamp(48bit)

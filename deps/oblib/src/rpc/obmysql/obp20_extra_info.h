@@ -18,7 +18,8 @@ OBP20_EXTRA_INFO_DEF(TRACE_INFO, 2001, EMySQLFieldType::MYSQL_TYPE_VAR_STRING)
 OBP20_EXTRA_INFO_DEF(SESS_INFO, 2002, EMySQLFieldType::MYSQL_TYPE_VAR_STRING)
 OBP20_EXTRA_INFO_DEF(FULL_TRC, 2003, EMySQLFieldType::MYSQL_TYPE_VAR_STRING)
 OBP20_EXTRA_INFO_DEF(SESS_INFO_VERI, 2004, EMySQLFieldType::MYSQL_TYPE_VAR_STRING)
-OBP20_EXTRA_INFO_DEF(OBP20_SVR_END, 2005, EMySQLFieldType::MYSQL_TYPE_NOT_DEFINED)
+OBP20_EXTRA_INFO_DEF(PROXY_ONE_WAY_SYNC_INFO, 2005, EMySQLFieldType::MYSQL_TYPE_VAR_STRING)
+OBP20_EXTRA_INFO_DEF(OBP20_SVR_END, 2006, EMySQLFieldType::MYSQL_TYPE_NOT_DEFINED)
 OBP20_EXTRA_INFO_DEF(OBP20_SVR_MAX_TYPE, 65535, EMySQLFieldType::MYSQL_TYPE_NOT_DEFINED)
 #endif /* OBP20_EXTRA_INFO_DEF */
 
@@ -38,6 +39,13 @@ enum ExtraInfoKeyType {
     #define OBP20_EXTRA_INFO_DEF(extra_id, id, type) extra_id=id,
     #include "obp20_extra_info.h"
     #undef OBP20_EXTRA_INFO_DEF
+};
+
+// Sub-key types for PROXY_ONE_WAY_SYNC_INFO
+enum ProxyOneWaySyncSubKeyType {
+    PROXY_SYNC_DATABASE_TYPE = 0,
+    // reserve for future extensions
+    PROXY_SYNC_MAX_TYPE
 };
 
 class Obp20Encoder {
@@ -147,6 +155,14 @@ class Obp20FullTrcDecoder : public Obp20Decoder{
   ExtraInfoKeyType type_;
   Obp20FullTrcDecoder() : type_(FULL_TRC) {}
   ~Obp20FullTrcDecoder() {}
+  int deserialize(const char *buf, int64_t len, int64_t &pos, Ob20ExtraInfo &extra_info);
+};
+
+// Decoder for proxy one way sync info (database isolation)
+class Obp20ProxyOneWaySyncDecoder : public Obp20Decoder{
+  public:
+  Obp20ProxyOneWaySyncDecoder() { type_ = PROXY_ONE_WAY_SYNC_INFO; }
+  ~Obp20ProxyOneWaySyncDecoder() {}
   int deserialize(const char *buf, int64_t len, int64_t &pos, Ob20ExtraInfo &extra_info);
 };
 }; // end of namespace lib

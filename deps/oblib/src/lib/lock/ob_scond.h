@@ -130,17 +130,22 @@ public:
       }
     }
   }
-  void signal(uint32_t x = 1, int prio=0) {
-    uint32_t icpu_id = id_gen_.get();
-    for (int p = PRIO-1; p >= prio && x > 0; p--) {
-      x -= conds_[icpu_id % COND_COUNT][p].cond_.signal(x);
+  void signal(uint32_t x = 1, int prio=0, bool group_index_prefer = false) {
+    uint32_t icpu_id = 0;
+    if (group_index_prefer == false) {
+      icpu_id = id_gen_.get();
+      for (int p = PRIO-1; p >= prio && x > 0; p--) {
+        x -= conds_[icpu_id % COND_COUNT][p].cond_.signal(x);
+      }
     }
     if (x > 0) {
-      n2wakeup_.add(x, icpu_id);
+      if (group_index_prefer == false) {
+        n2wakeup_.add(x, icpu_id);
+      }
       int64_t loop_cnt = 0;
       while(loop_cnt < LOOP_LIMIT) {
         if (lock_.trylock()) {
-          do_wakeup();
+          do_wakeup(group_index_prefer);
           lock_.unlock();
           break;
         } else {
@@ -149,13 +154,13 @@ public:
         }
       }
       if (loop_cnt > LOOP_LIMIT) {
-        do_wakeup();
+        do_wakeup(group_index_prefer);
       }
     }
   }
-  void prepare(int prio=0) {
+  void prepare(int prio=0, int32_t group_index = -1) {
     uint32_t id = 0;
-    uint32_t key = get_key(prio, id);
+    uint32_t key = get_key(prio, id, group_index);
     id += (prio << 16);
     get_wait_key() = ((uint64_t)id<<32) + key;
   }
@@ -164,7 +169,15 @@ public:
     return wait((uint32_t)(wait_key>>32), (uint32_t)wait_key, timeout);
   }
 protected:
-  uint32_t get_key(int prio, uint32_t& id) { return conds_[id = (id_gen_.next() % COND_COUNT)][prio].cond_.get_key(); }
+  uint32_t get_key(int prio, uint32_t& id, int32_t group_index = -1)
+  {
+    if (group_index >= 0) {
+      id = group_index % COND_COUNT;
+    } else {
+      id = (id_gen_.next() % COND_COUNT);
+    }
+    return conds_[id][prio].cond_.get_key();
+  }
   int wait(uint32_t id, uint32_t key, int64_t timeout) {
     return conds_[((uint16_t)id) % COND_COUNT][id >> 16].cond_.wait(key, timeout);
   }
@@ -173,11 +186,15 @@ private:
     RLOCAL(uint64_t, key);
     return key;
   }
-  void do_wakeup() {
+  void do_wakeup(bool group_index_prefer = false) {
     uint32_t n2wakeup = 0;
-    //for (int p = PRIO - 1; p >= 0; p--) {
-      n2wakeup = n2wakeup_.fetch();
-      //    }
+    if (group_index_prefer == false) {
+      //for (int p = PRIO - 1; p >= 0; p--) {
+        n2wakeup = n2wakeup_.fetch();
+        //    }
+    } else {
+      n2wakeup = 1;
+    }
     for (int p = PRIO - 1; n2wakeup > 0 && p >= 0; p--) {
       for(int i = 0; n2wakeup > 0 && i < COND_COUNT; i++) {
         n2wakeup -= conds_[i][p].cond_.signal(n2wakeup);

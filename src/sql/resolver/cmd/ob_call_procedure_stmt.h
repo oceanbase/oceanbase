@@ -185,6 +185,7 @@ public:
     call_proc_info_ = info;
   }
   ObCallProcedureInfo *get_call_proc_info() { return call_proc_info_; }
+  const ObCallProcedureInfo *get_call_proc_info() const { return call_proc_info_; }
   ObCacheObjGuard &get_cacheobj_guard() { return cache_call_info_guard_; }
   void set_dblink_routine_info(const ObRoutineInfo *routine_info) { dblink_routine_info_ = routine_info; }
   const ObRoutineInfo *get_dblink_routine_info() const { return dblink_routine_info_; }

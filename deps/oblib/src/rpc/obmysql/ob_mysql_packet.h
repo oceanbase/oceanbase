@@ -173,6 +173,8 @@ union ObProxyCapabilityFlags
                                                         && is_ob_protocol_v2_support(); }
   bool is_max_execution_time_support() const { return 1 == cap_flags_.OB_CAP_MAX_EXECUTION_TIME
                                                         && is_ob_protocol_v2_support(); }
+  bool is_proxy_extra_info_one_way_sync_support() const { return 1 == cap_flags_.OB_CAP_PROXY_EXTRA_INFO_ONE_WAY_SYNC
+                                                        && is_ob_protocol_v2_support(); }
   uint64_t capability_;
   struct CapabilityFlags
   {
@@ -212,7 +214,9 @@ union ObProxyCapabilityFlags
     uint64_t OB_CAP_FEEDBACK_PROXY_SHIFT:              1;
     uint64_t OB_CAP_CHANGE_USER_CONN_ATTRS:            1;
     uint64_t OB_CAP_MAX_EXECUTION_TIME:                1;
-    uint64_t OB_CAP_RESERVED_NOT_USE:                 39;
+    // for proxy one way sync extra info (database isolation)
+    uint64_t OB_CAP_PROXY_EXTRA_INFO_ONE_WAY_SYNC:     1;
+    uint64_t OB_CAP_RESERVED_NOT_USE:                 38;
   } cap_flags_;
 };
 
@@ -369,6 +373,8 @@ public:
   ObString sync_sess_info_;
   ObString full_link_trace_;
   ObString sess_info_veri_;
+  // proxy one way sync info
+  ObString sql_database_;
 
 public:
   Ob20ExtraInfo() : extra_len_(0), exist_trace_info_(false) {}
@@ -380,8 +386,11 @@ public:
     sync_sess_info_.reset();
     full_link_trace_.reset();
     sess_info_veri_.reset();
+    sql_database_.reset();
   }
   bool exist_sync_sess_info() { return !sync_sess_info_.empty(); }
+  bool exist_sql_database() { return !sql_database_.empty(); }
+  ObString& get_sql_database() { return sql_database_; }
   bool exist_full_link_trace() { return !full_link_trace_.empty(); }
   bool exist_sess_info_veri() { return !sess_info_veri_.empty(); }
   ObString& get_sync_sess_info() { return sync_sess_info_; }
@@ -390,20 +399,22 @@ public:
   bool exist_sync_sess_info() const { return !sync_sess_info_.empty(); }
   bool exist_full_link_trace() const { return !full_link_trace_.empty(); }
   bool exist_sess_info_veri() const { return !sess_info_veri_.empty(); }
+  bool exist_sql_database() const { return !sql_database_.empty(); }
   const ObString& get_sync_sess_info() const { return sync_sess_info_; }
   const ObString& get_full_link_trace() const { return full_link_trace_; }
   const ObString& get_sess_info_veri() const { return sess_info_veri_; }
+  const ObString& get_sql_database() const { return sql_database_; }
   bool exist_extra_info() {return !sync_sess_info_.empty() || !full_link_trace_.empty()
-                            || !sess_info_veri_.empty() || exist_trace_info_;}
+                            || !sess_info_veri_.empty() || !sql_database_.empty() || exist_trace_info_;}
   bool exist_extra_info() const {return !sync_sess_info_.empty() || !full_link_trace_.empty()
-                            || !sess_info_veri_.empty() || exist_trace_info_;}
+                            || !sess_info_veri_.empty() || !sql_database_.empty() || exist_trace_info_;}
   int assign(const Ob20ExtraInfo &other, char* buf, int64_t len);
   int64_t get_total_len() {return trace_info_.length() + sync_sess_info_.length() +
-                                full_link_trace_.length() + sess_info_veri_.length();}
+                                full_link_trace_.length() + sess_info_veri_.length() + sql_database_.length();}
   int64_t get_total_len() const {return trace_info_.length() + sync_sess_info_.length() +
-                                full_link_trace_.length() + sess_info_veri_.length();}
+                                full_link_trace_.length() + sess_info_veri_.length() + sql_database_.length();}
   TO_STRING_KV(K_(extra_len), K_(exist_trace_info), K_(trace_info),
-               K_(sync_sess_info), K_(full_link_trace), K_(sync_sess_info));
+               K_(sync_sess_info), K_(full_link_trace), K_(sess_info_veri), K_(sql_database));
 };
 
 typedef ObCommonKV<common::ObString, common::ObString> ObStringKV;

@@ -36,24 +36,17 @@ int ObNetQueueTraver::traverse_one_tenant(oceanbase::omt::ObTenant *tenant_ptr, 
   // traverse all tenant queue, types are as follow:
   // 1、tenant req queue, multi_level_queue
   // 2、group req queue, multi_level_queue
-  oceanbase::omt::ObResourceGroupNode *iter = nullptr;
-  oceanbase::omt::ObResourceGroup *group = nullptr;
   int32_t group_id = 0;  // default group id for mysql request without resource_mgr is 0.
   if (OB_ISNULL(tenant_ptr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("tenant_ptr is nullptr", K(ret));
   } else if (OB_FAIL(traverse_one_tenant_queue(tenant_ptr->get_req_queue(), tenant_ptr->get_multi_level_queue(), group_id, process))) {  // 1、tenant req queue
     LOG_ERROR("traverse tenant's req queue failed", K(ret));
-  } else {
-    oceanbase::omt::GroupMap& group_map = tenant_ptr->get_group_map();
-    // 2、group req queue
-    while (OB_NOT_NULL(iter = group_map.quick_next(iter))) {
-      group = static_cast<oceanbase::omt::ObResourceGroup *>(iter);
-      group_id = group->get_group_id();
-      if (OB_FAIL(traverse_one_tenant_group_queue(group->get_req_queue(), group->get_multi_level_queue(), group_id, process))) {
-        LOG_ERROR("traverse tenant's group queue failed", K(ret));
-      }
-    }  // group_map
+  } else if (OB_FAIL(tenant_ptr->for_each_group([this, &process](oceanbase::omt::ObResourceGroup* group) {
+    int32_t gid = group->get_group_id();
+    return traverse_one_tenant_group_queue(group->get_req_queue(), group->get_multi_level_queue(), gid, process);
+  }))) {
+    LOG_ERROR("traverse tenant's group queue failed", K(ret));
   }
   return ret;
 }
@@ -115,11 +108,8 @@ int ObNetQueueTraver::traverse_one_tenant_group_queue(TenantReqQueue &tenant_gro
       }
     }
   }
-  // multi level queue
-  if (OB_ISNULL(tenant_multi_level_queue)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("tenant_req_queue is nullptr", K(ret));
-  } else {
+  // multi level queue (may be null for groups without database isolation mode)
+  if (OB_NOT_NULL(tenant_multi_level_queue)) {
     for (int64_t i = 0; OB_SUCC(ret) && i < MULTI_LEVEL_QUEUE_SIZE; i++) {
       common::ObPriorityQueue<1>* pq = tenant_multi_level_queue->get_pq_queue(i);
       if (OB_ISNULL(pq)) {

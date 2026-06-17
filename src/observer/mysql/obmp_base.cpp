@@ -13,6 +13,7 @@
 #include "share/resource_manager/ob_resource_manager.h"
 #include "observer/mysql/obmp_utils.h"
 #include "observer/mysql/ob_query_driver.h"
+#include "sql/ob_sql_utils.h"
 #include "sql/session/ob_sess_info_verify.h"
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
 #include "rpc/obmysql/packet/ompk_auth_switch.h"
@@ -430,17 +431,19 @@ int ObMPBase::record_flt_trace(sql::ObSQLSessionInfo &session) const
 
 void ObMPBase::set_request_expect_group_id(sql::ObSQLSessionInfo *session)
 {
-  if (OB_INVALID_ID != session->get_expect_group_id()) {
-    // Session->expected_group_id_ is set when hit plan cache or resolve a query, and find that
-    // expcted group is consistent with current group.
-    // Set group_id of req_ so that the req_ will be put in the corresponding queue when do packet retry.
+  // SQL level takes precedence over DB level
+  int64_t group_id = OB_INVALID_ID;
+  if (OB_INVALID_ID != session->get_expect_group_id(sql::ISOLATION_SQL)) {
+    group_id = session->get_expect_group_id(sql::ISOLATION_SQL);
+    session->set_expect_group_id(sql::ISOLATION_SQL, OB_INVALID_ID);
+  } else if (OB_INVALID_ID != session->get_expect_group_id(sql::ISOLATION_DB)) {
+    group_id = session->get_expect_group_id(sql::ISOLATION_DB);
+    session->set_expect_group_id(sql::ISOLATION_DB, OB_INVALID_ID);
+  }
+  if (OB_INVALID_ID != group_id) {
     if (NULL != req_) {
-      req_->set_group_id(session->get_expect_group_id());
+      req_->set_group_id(group_id);
     }
-    // also set conn.group_id_. It means use current consumer group when execute next query for first time.
-    // conn.group_id_ = session->get_expect_group_id();
-    // reset to invalid because session.expected_group_id is single_use.
-    session->set_expect_group_id(OB_INVALID_ID);
   }
 }
 
@@ -452,6 +455,15 @@ int ObMPBase::setup_user_resource_group(
   int ret = OB_SUCCESS;
   uint64_t group_id = 0;
   uint64_t user_id = session->get_user_id();
+  // Priority: proxy_specified_db_name > session database_name
+  const ObString &proxy_db_name = session->get_proxy_specified_db_name();
+  const ObString &session_db_name = session->get_database_name();
+  ObString effective_db_name;
+  if (!proxy_db_name.empty()) {
+    effective_db_name = proxy_db_name;
+  } else {
+    effective_db_name = session_db_name;
+  }
   if (OB_INVALID_ID != session->get_expect_group_id()) {
     set_request_expect_group_id(session);
   } else if (!is_valid_tenant_id(tenant_id)) {
@@ -459,14 +471,37 @@ int ObMPBase::setup_user_resource_group(
     LOG_WARN("Invalid tenant", K(tenant_id), K(ret));
   } else if (conn.group_id_ == OBCG_DIAG_TENANT) {
     // OBCG_DIAG_TENANT was set in check_update_tenant_id, DO NOT overlap it.
-  } else if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_user(
-              tenant_id, user_id, group_id))) {
-    LOG_WARN("fail get group id by user", K(user_id), K(tenant_id), K(ret));
   } else {
+    // Priority order: database > user
+    // Note: Oracle mode does not support database-level mapping (user and database are not distinguished)
+    const bool database_isolation_enabled = session->is_enable_database_isolation_mode();
+    if (database_isolation_enabled
+        && !session->is_oracle_compatible()) {
+      if (!effective_db_name.empty()) {
+        uint64_t db_group_id = OB_INVALID_ID;
+        if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_database(
+              tenant_id, effective_db_name, db_group_id))) {
+          LOG_WARN("fail get group id by database", K(effective_db_name), K(tenant_id), K(ret));
+        } else if (0 != db_group_id) {
+          group_id = db_group_id;
+          LOG_TRACE("get group id by database", K(effective_db_name), K(tenant_id), K(group_id));
+        }
+      }
+    }
+    // If database mapping not found, try user mapping
+    if (OB_SUCC(ret) && 0 == group_id) {
+      if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_user(
+            tenant_id, user_id, group_id))) {
+        LOG_WARN("fail get group id by user", K(user_id), K(effective_db_name), K(tenant_id), K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
     // 将 group id 设置到调度层，之后这个 session 上的所有请求都是用这个 cgroup 的资源
-    conn.group_id_ = group_id;
+      conn.group_id_ = group_id;
+    }
   }
-  LOG_TRACE("setup user resource group", K(user_id), K(tenant_id), K(ret));
+  LOG_TRACE("setup user resource group", K(user_id), K(proxy_db_name), K(session_db_name),
+            K(effective_db_name), K(tenant_id), K(group_id), K(ret));
   return ret;
 }
 
@@ -635,6 +670,47 @@ int ObMPBase::process_extra_info(sql::ObSQLSessionInfo &session,
               OB_FAIL(ObSessInfoVerify::verify_session_info(session,
               sess_info_verification))) {
     LOG_WARN("fail to verify sess info", K(ret));
+  }
+  // Proxy specified database is per-request state.  If this packet does not
+  // carry PROXY_ONE_WAY_SYNC_INFO, do not inherit database info from older SQL.
+  if (OB_SUCC(ret) && !pkt.get_extra_info().get_sql_database().empty()) {
+    session.set_proxy_specified_db_name(pkt.get_extra_info().get_sql_database());
+    LOG_TRACE("received proxy specified database for resource isolation",
+              K(pkt.get_extra_info().get_sql_database()));
+  } else if (OB_SUCC(ret)) {
+    session.reset_proxy_specified_db_name();
+  }
+  return ret;
+}
+
+int ObMPBase::check_proxy_db_resource_group(sql::ObSQLSessionInfo &session)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = session.get_effective_tenant_id();
+  const ObString &proxy_db_name = session.get_proxy_specified_db_name();
+  const bool database_isolation_enabled = session.is_enable_database_isolation_mode();
+  if (!database_isolation_enabled
+      || session.is_oracle_compatible()
+      || proxy_db_name.empty()) {
+    // no database level isolation for this request
+  } else {
+    uint64_t db_group_id = OB_INVALID_ID;
+    if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_database(
+          tenant_id, proxy_db_name, db_group_id))) {
+      LOG_WARN("fail get group id by proxy specified database",
+               K(ret), K(tenant_id), K(proxy_db_name));
+    } else if (0 == db_group_id || db_group_id == THIS_WORKER.get_group_id()) {
+      // no mapping or already in expected group
+    } else if (session.get_is_in_retry()
+               && OB_NEED_SWITCH_CONSUMER_GROUP == session.get_retry_info().get_last_query_retry_err()) {
+      LOG_ERROR("use unexpected group when retry by proxy specified database",
+                K(db_group_id), K(THIS_WORKER.get_group_id()), K(proxy_db_name));
+    } else {
+      session.set_expect_group_id(sql::ISOLATION_DB, db_group_id);
+      ret = OB_NEED_SWITCH_CONSUMER_GROUP;
+      LOG_TRACE("need switch consumer group by proxy specified database",
+                K(tenant_id), K(proxy_db_name), K(db_group_id), K(ret));
+    }
   }
   return ret;
 }

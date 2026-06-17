@@ -252,6 +252,11 @@ int Ob20ExtraInfo::assign(const Ob20ExtraInfo &other, char* buf, int64_t buf_len
       sess_info_veri_.assign_ptr(buf+len, other.sess_info_veri_.length());
       len += other.sess_info_veri_.length();
     }
+    if (other.sql_database_.length() > 0) {
+      MEMCPY(buf+len, other.sql_database_.ptr(), other.sql_database_.length());
+      sql_database_.assign_ptr(buf+len, other.sql_database_.length());
+      len += other.sql_database_.length();
+    }
   }
   return ret;
 }

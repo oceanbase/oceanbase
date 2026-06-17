@@ -62,12 +62,15 @@ private:
                               &trace_info_dcd_,
                               &sess_info_dcd_,
                               &full_trc_dcd_,
-                              &sess_info_veri_dcd_
+                              &sess_info_veri_dcd_,
+                              &proxy_one_way_sync_dcd_
                             };
   Obp20TaceInfoDecoder trace_info_dcd_;
   Obp20SessInfoDecoder sess_info_dcd_;
   Obp20FullTrcDecoder full_trc_dcd_;
   Obp20SessInfoVeriDecoder sess_info_veri_dcd_;
+  // proxy one way sync decoder for database isolation
+  Obp20ProxyOneWaySyncDecoder proxy_one_way_sync_dcd_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(Ob20ProtocolProcessor);

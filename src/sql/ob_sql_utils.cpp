@@ -27,11 +27,14 @@
 #include "observer/omt/ob_tenant_srs.h"
 #include "sql/resolver/ddl/ob_create_view_resolver.h"
 #include "sql/resolver/ob_resolver_utils.h"
+#include "sql/resolver/dml/ob_dml_stmt.h"
+#include "sql/resolver/cmd/ob_call_procedure_stmt.h"
 #ifdef OB_BUILD_AUDIT_SECURITY
 #include "sql/audit/ob_audit_log_utils.h"
 #endif
 #include "sql/plan_cache/ob_sql_parameterization.h"
 #include "sql/parser/ob_parser.h"
+#include "share/schema/ob_schema_getter_guard.h"
 extern "C" {
 #include "sql/parser/ob_non_reserved_keywords.h"
 }
@@ -42,6 +45,7 @@ extern "C" {
 #include "lib/udt/ob_array_type.h"
 #include "lib/udt/ob_collection_type.h"
 #include "share/search_index/ob_search_index_config_filter.h"
+#include "observer/omt/ob_tenant_errsim.h"
 
 using namespace oceanbase;
 using namespace oceanbase::sql;
@@ -6506,8 +6510,9 @@ int ObSQLUtils::check_sql_map_expected_resource_group(const ObSqlCtx &context,
   // 1. remote query
   // 2. inner sql
   // 3. prepare in ps
-  // 4. multi stmt
-  if (NULL != GCTX.cgroup_ctrl_ && GCTX.cgroup_ctrl_->is_valid()
+  // 4. multi stmt (only first stmt triggers check)
+  if (((NULL != GCTX.cgroup_ctrl_ && GCTX.cgroup_ctrl_->is_valid())
+       || context.enable_database_isolation_mode_)
       && context.enable_sql_resource_manage_ && !context.is_remote_sql_
       && !result.get_session().is_inner()
       && !(context.is_prepare_protocol_ && context.is_prepare_stage_)
@@ -6517,25 +6522,84 @@ int ObSQLUtils::check_sql_map_expected_resource_group(const ObSqlCtx &context,
       ObSQLSessionInfo *session_info = resolve_ctx->session_info_;
       const ObGlobalHint &global_hint = resolve_ctx->query_ctx_->get_query_hint().get_global_hint();
       uint64_t tenant_id = result.get_session().get_effective_tenant_id();
-      uint64_t final_choosed_group_id = OB_INVALID_ID;
-      // 1.first check hint
+      // Track SQL-level (hint/column) and DB-level (database mapping) separately
+      uint64_t sql_level_group_id = OB_INVALID_ID;
+      uint64_t db_level_group_id = OB_INVALID_ID;
+
+      // 1. check hint → SQL-level
       if (OB_FAIL(check_hint_for_resource_group(tenant_id, global_hint, resource_map_rule,
-                                                final_choosed_group_id))) {
+                                                sql_level_group_id))) {
         LOG_WARN("fail to check hint for resource group", K(ret));
       } else if (!resource_map_rule.use_hint_control_resource()) {
-        // 2.then check if map column resource rule
+        // 2. check column rules → SQL-level
         OZ(check_column_equal_conditions_for_resource_group(resolve_ctx, stmt, resource_map_rule,
-                                                            final_choosed_group_id));
+                                                            sql_level_group_id));
       }
-      // 3.use default resource group if not match any resource group
-      // OB_INVALID_ID means current neither
-      // resource group specified by hint
-      // nor
-      // user+param_value column rule
-      // is in used
-      // get group_id according to current user.
+
+      // 3. check database rule → DB-level (with cross-db detection)
+      // Priority: hint > column > database > user.  Once SQL-level routing
+      // is found, DB-level routing must not override or linger for this SQL.
+      if (OB_SUCC(ret)
+          && OB_INVALID_ID == sql_level_group_id
+          && context.enable_database_isolation_mode_
+          && !session_info->is_oracle_compatible()) {
+        const ObDMLStmt *dml_stmt = static_cast<const ObDMLStmt*>(stmt);
+        ObString first_checked_db;
+        bool is_cross_db = false;
+        // Cross-database SQL uses the first database that can be mapped to a group.
+        for (int64_t i = 0; OB_SUCC(ret) && OB_INVALID_ID == db_level_group_id
+             && i < dml_stmt->get_table_size(); i++) {
+          const TableItem *item = dml_stmt->get_table_item(i);
+          if (OB_NOT_NULL(item) && item->is_basic_table() && !item->database_name_.empty()) {
+            if (first_checked_db.empty()) {
+              first_checked_db = item->database_name_;
+            } else if (0 != first_checked_db.case_compare(item->database_name_)) {
+              is_cross_db = true;
+            }
+            uint64_t tmp_db_group_id = OB_INVALID_ID;
+            if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_database(
+                  tenant_id, item->database_name_, tmp_db_group_id))) {
+              LOG_WARN("get group id by database failed", K(ret), K(item->database_name_), K(tenant_id));
+            } else if (0 != tmp_db_group_id) {
+              db_level_group_id = tmp_db_group_id;
+              LOG_TRACE("get group id by database in resolve stage (database isolation)",
+                        K(item->database_name_), K(db_level_group_id), K(is_cross_db));
+            }
+          }
+        }
+        if (OB_SUCC(ret) && OB_INVALID_ID == db_level_group_id) {
+          ObString effective_db = session_info->get_effective_database_for_isolation();
+          if (!effective_db.empty()) {
+            uint64_t tmp_db_group_id = OB_INVALID_ID;
+            if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_database(
+                  tenant_id, effective_db, tmp_db_group_id))) {
+              LOG_WARN("get group id by effective database failed", K(ret), K(effective_db), K(tenant_id));
+            } else if (0 != tmp_db_group_id) {
+              db_level_group_id = tmp_db_group_id;
+              LOG_TRACE("get group id by effective database in resolve stage (database isolation)",
+                        K(effective_db), K(db_level_group_id), K(is_cross_db));
+            }
+          }
+        }
+        if (is_cross_db) {
+          LOG_TRACE("cross-database query detected, using first available db group",
+                    K(first_checked_db), K(dml_stmt->get_table_size()), K(db_level_group_id));
+        }
+      }
+
+      // Determine effective group: SQL-level > DB-level > user-level
+      uint64_t final_choosed_group_id = OB_INVALID_ID;
+      if (OB_SUCC(ret)) {
+        if (OB_INVALID_ID != sql_level_group_id) {
+          final_choosed_group_id = sql_level_group_id;
+        } else if (OB_INVALID_ID != db_level_group_id) {
+          final_choosed_group_id = db_level_group_id;
+        }
+      }
+
+      // 4. user mapping as fallback if no SQL or DB level group found
       if (OB_SUCC(ret) && OB_INVALID_ID == final_choosed_group_id) {
-        LOG_TRACE("Dose not find any hint or column resource group map, try to use user name map group:");
+        LOG_TRACE("No hint, column or database resource group map, try user name map group");
         if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_user(
               tenant_id, session_info->get_user_id(), final_choosed_group_id))) {
           LOG_WARN("get group id by user failed", K(ret));
@@ -6550,22 +6614,131 @@ int ObSQLUtils::check_sql_map_expected_resource_group(const ObSqlCtx &context,
       }
 
       LOG_TRACE("final choose resource group:", K(final_choosed_group_id), K(THIS_WORKER.get_group_id()),
+                    K(sql_level_group_id), K(db_level_group_id),
                     K(resource_map_rule.get_res_map_rule_id()));
 
       if (OB_SUCC(ret)) {
+        /*
+        const bool skip_switch_for_rand_push_errsim =
+            oceanbase::omt::ob_tenant_errsim_rand_push_group_active_for_tenant(tenant_id);
+        */
+        const bool skip_switch_for_rand_push_errsim = false;
         if (final_choosed_group_id == THIS_WORKER.get_group_id()) {
           // do nothing if equals to current group id.
-        } else if (session_info->get_is_in_retry()
-                   && OB_NEED_SWITCH_CONSUMER_GROUP
-                        == session_info->get_retry_info().get_last_query_retry_err()) {
-          LOG_ERROR("use unexpected group when retry, maybe set packet retry failed before",
-                    K(final_choosed_group_id), K(THIS_WORKER.get_group_id()),
-                    K(resource_map_rule.get_res_map_rule_id()));
-        } else {
-          // 4.retry sql if current resource group is not match
-          session_info->set_expect_group_id(final_choosed_group_id);
-          ret = OB_NEED_SWITCH_CONSUMER_GROUP;
+        } else if (!skip_switch_for_rand_push_errsim) {
+          const bool allow_sql_level_reswitch = OB_INVALID_ID != sql_level_group_id;
+          if (session_info->get_is_in_retry()
+              && OB_NEED_SWITCH_CONSUMER_GROUP
+                     == session_info->get_retry_info().get_last_query_retry_err()
+              && (!allow_sql_level_reswitch || session_info->get_group_id_not_expected())) {
+            LOG_ERROR("use unexpected group when retry, maybe set packet retry failed before",
+                      K(final_choosed_group_id), K(THIS_WORKER.get_group_id()),
+                      K(resource_map_rule.get_res_map_rule_id()));
+          } else {
+            // Set level-based expect_group_id for retry with proper priority
+            if (OB_INVALID_ID != sql_level_group_id) {
+              session_info->set_expect_group_id(ISOLATION_SQL, sql_level_group_id);
+              session_info->set_expect_group_id(ISOLATION_DB, OB_INVALID_ID);
+            }
+            if (OB_INVALID_ID == sql_level_group_id && OB_INVALID_ID != db_level_group_id) {
+              session_info->set_expect_group_id(ISOLATION_DB, db_level_group_id);
+            }
+            // If only user-level was found, set it as DB-level for retry routing
+            if (OB_INVALID_ID == sql_level_group_id && OB_INVALID_ID == db_level_group_id) {
+              session_info->set_expect_group_id(ISOLATION_DB, final_choosed_group_id);
+            }
+            ret = OB_NEED_SWITCH_CONSUMER_GROUP;
+          }
         }
+      }
+    } else if (context.enable_database_isolation_mode_
+               && !result.get_session().is_oracle_compatible()
+               && (stmt::T_CALL_PROCEDURE == stmt->get_stmt_type()
+                   || stmt::T_ANONYMOUS_BLOCK == stmt->get_stmt_type())) {
+      // PL and anonymous blocks: DB-level resource isolation
+      // For CALL PROCEDURE: use procedure's defining database
+      // For anonymous block: use first DEPENDENCY_TABLE from global_dependency_tables_
+      ObSQLSessionInfo *session_info = resolve_ctx->session_info_;
+      uint64_t tenant_id = result.get_session().get_effective_tenant_id();
+      uint64_t db_level_group_id = OB_INVALID_ID;
+
+      if (stmt::T_CALL_PROCEDURE == stmt->get_stmt_type()) {
+        const ObCallProcedureStmt *call_stmt = static_cast<const ObCallProcedureStmt*>(stmt);
+        if (OB_NOT_NULL(call_stmt->get_call_proc_info())) {
+          const ObString &proc_db = call_stmt->get_call_proc_info()->get_db_name();
+          if (!proc_db.empty()) {
+            uint64_t tmp_db_group_id = OB_INVALID_ID;
+            if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_database(
+                  tenant_id, proc_db, tmp_db_group_id))) {
+              LOG_WARN("get group id by database failed for procedure", K(ret), K(proc_db), K(tenant_id));
+            } else if (0 != tmp_db_group_id) {
+              db_level_group_id = tmp_db_group_id;
+              LOG_TRACE("get group id by procedure db in resolve stage (database isolation)",
+                        K(proc_db), K(db_level_group_id));
+            }
+          }
+        }
+      } else {
+        // T_ANONYMOUS_BLOCK: use first DEPENDENCY_TABLE from global_dependency_tables_
+        const ObIArray<ObSchemaObjVersion> &dep_tables =
+            resolve_ctx->query_ctx_->global_dependency_tables_;
+        if (OB_SUCC(ret) && OB_NOT_NULL(context.schema_guard_)) {
+        for (int64_t i = 0; OB_SUCC(ret) && OB_INVALID_ID == db_level_group_id
+             && i < dep_tables.count(); i++) {
+          if (DEPENDENCY_TABLE == dep_tables.at(i).object_type_) {
+            uint64_t table_id = dep_tables.at(i).get_object_id();
+            const ObTableSchema *table_schema = NULL;
+            if (OB_FAIL(context.schema_guard_->get_table_schema(tenant_id, table_id, table_schema))) {
+              LOG_WARN("get table schema failed", K(ret), K(table_id), K(tenant_id));
+            } else if (OB_NOT_NULL(table_schema)) {
+              uint64_t database_id = table_schema->get_database_id();
+              const ObDatabaseSchema *db_schema = NULL;
+              if (OB_FAIL(context.schema_guard_->get_database_schema(tenant_id, database_id, db_schema))) {
+                LOG_WARN("get database schema failed", K(ret), K(database_id), K(tenant_id));
+              } else if (OB_NOT_NULL(db_schema)) {
+                const ObString &db_name = db_schema->get_database_name();
+                uint64_t tmp_db_group_id = OB_INVALID_ID;
+                if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_database(
+                      tenant_id, db_name, tmp_db_group_id))) {
+                  LOG_WARN("get group id by database failed for anon block",
+                           K(ret), K(db_name), K(tenant_id));
+                } else if (0 != tmp_db_group_id) {
+                  db_level_group_id = tmp_db_group_id;
+                  LOG_TRACE("get group id by anon block table db in resolve stage (database isolation)",
+                            K(db_name), K(db_level_group_id));
+                }
+              }
+            }
+          }
+        }
+        } // end if OB_NOT_NULL(context.schema_guard_)
+      }
+
+      // Fallback to effective database if no table-based mapping found
+      if (OB_SUCC(ret) && OB_INVALID_ID == db_level_group_id) {
+        ObString effective_db = session_info->get_effective_database_for_isolation();
+        if (!effective_db.empty()) {
+          uint64_t tmp_db_group_id = OB_INVALID_ID;
+          if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_database(
+                tenant_id, effective_db, tmp_db_group_id))) {
+            LOG_WARN("get group id by effective db failed for PL",
+                     K(ret), K(effective_db), K(tenant_id));
+          } else if (0 != tmp_db_group_id) {
+            db_level_group_id = tmp_db_group_id;
+            LOG_TRACE("get group id by effective db for PL in resolve stage (database isolation)",
+                      K(effective_db), K(db_level_group_id));
+          }
+        }
+      }
+
+      // Trigger consumer group switch if needed
+      if (OB_SUCC(ret) && OB_INVALID_ID != db_level_group_id
+          && db_level_group_id != THIS_WORKER.get_group_id()) {
+        session_info->set_expect_group_id(ISOLATION_DB, db_level_group_id);
+        ret = OB_NEED_SWITCH_CONSUMER_GROUP;
+        LOG_TRACE("PL/anonymous block triggers consumer group switch (database isolation)",
+                  K(db_level_group_id), K(THIS_WORKER.get_group_id()),
+                  K(stmt->get_stmt_type()));
       }
     }
   }

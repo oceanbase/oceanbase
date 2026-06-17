@@ -1153,6 +1153,7 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
       ret = tmp_ret;
     }
   } else if (FALSE_IT(ctx_.enable_sql_resource_manage_ = true)) {
+  } else if (FALSE_IT(ctx_.enable_database_isolation_mode_ = session.is_enable_database_isolation_mode())) {
   } else if (OB_FAIL(gctx_.sql_engine_->stmt_execute(stmt_id_,
                                                       stmt_type_,
                                                       *params_,
@@ -1831,18 +1832,8 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
         LOG_WARN("fail to do process", K(ret), K(ctx_.cur_sql_));
       }
 
-      /* Function setup_user_resource_group cause performance regression.
-          No need to setup group_id here,
-          Only setup group_id in MPConnect
-      */
       if (is_conn_valid()) {
-        // int bak_ret = ret;
-        // // Call setup_user_resource_group no matter OB_SUCC or OB_FAIL
-        // if (OB_FAIL(setup_user_resource_group(*conn, sess->get_effective_tenant_id(), sess))) {
-        //   LOG_WARN("fail setup user resource group", K(ret));
-        // }
         set_request_expect_group_id(&session);
-        // ret = OB_SUCC(bak_ret) ? ret : bak_ret;
       }
     }
     ObThreadLogLevelUtils::clear();
@@ -1947,6 +1938,22 @@ int ObMPStmtExecute::process()
     } else if (!is_prexecute() && FALSE_IT(session.set_txn_free_route(pkt.txn_free_route()))) {
     } else if (!is_prexecute() && OB_FAIL(process_extra_info(session, pkt, need_response_error))) {
       LOG_WARN("fail get process extra info", K(ret));
+    } else if (!is_prexecute() && OB_FAIL(check_proxy_db_resource_group(session))) {
+      if (OB_NEED_SWITCH_CONSUMER_GROUP == ret && THIS_WORKER.can_retry()) {
+        THIS_WORKER.set_need_retry();
+        retry_ctrl_.set_packet_retry(ret);
+        session.get_retry_info_for_update().set_last_query_retry_err(ret);
+        session.get_retry_info_for_update().inc_retry_cnt();
+        need_response_error = false;
+        LOG_TRACE("retry stmt execute by proxy specified database group", K(ret));
+      } else if (OB_NEED_SWITCH_CONSUMER_GROUP == ret) {
+        // Let PlanCache/Resolver stage fall back to the existing local retry path
+        // when packet retry is not available for this request.
+        session.set_expect_group_id(sql::ISOLATION_DB, OB_INVALID_ID);
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to check proxy database resource group", K(ret));
+      }
     } else if (!is_prexecute() && FALSE_IT(session.post_sync_session_info())) {
     } else if (OB_UNLIKELY(packet_len > session.get_max_packet_size())) {
       //packet size check with session variable max_allowd_packet or net_buffer_length

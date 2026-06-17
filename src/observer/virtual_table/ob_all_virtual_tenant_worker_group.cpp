@@ -72,10 +72,7 @@ int ObAllVirtualTenantWorkerGroup::inner_get_next_row(ObNewRow *&row)
           if (OB_ISNULL(tenant)) {
             continue;
           }
-          omt::ObResourceGroupNode *group_iter = nullptr;
-          omt::GroupMap &group_map = tenant->get_group_map();
-          while (OB_SUCC(ret) && OB_NOT_NULL(group_iter = group_map.quick_next(group_iter))) {
-            omt::ObResourceGroup *group = static_cast<omt::ObResourceGroup *>(group_iter);
+          if (OB_FAIL(tenant->for_each_group([&](omt::ObResourceGroup *group) {
             int tmp_ret = OB_SUCCESS;
             int64_t req_queue_size = group->get_req_queue().size();
             const int64_t col_count = output_column_ids_.count();
@@ -97,7 +94,7 @@ int ObAllVirtualTenantWorkerGroup::inner_get_next_row(ObNewRow *&row)
                   cells[j].set_int(group->get_group_id());
                   break;
                 case WORKERS_SIZE:
-                  cells[j].set_int(0);
+                  cells[j].set_int(group->workers_.get_size());
                   break;
                 case REQ_QUEUE_SIZE:
                   cells[j].set_int(req_queue_size);
@@ -109,16 +106,16 @@ int ObAllVirtualTenantWorkerGroup::inner_get_next_row(ObNewRow *&row)
                   cells[j].set_bool(group->is_deleted());
                   break;
                 case TOKEN_CHANGE_TS:
-                  cells[j].set_int(0);
+                  cells[j].set_int(group->get_token_change_ts());
                   break;
                 case THROTTLED_TIME_US:
-                  cells[j].set_int(0);
+                  cells[j].set_int(group->get_throttled_time_us());
                   break;
                 case IDLE_CNT:
-                  cells[j].set_int(0);
+                  cells[j].set_int(group->idle_cnt_);
                   break;
                 case LAST_NOT_EMPTY_TS:
-                  cells[j].set_int(0);
+                  cells[j].set_int(group->last_not_empty_ts_);
                   break;
                 default:
                   tmp_ret = OB_ERR_UNEXPECTED;
@@ -129,10 +126,9 @@ int ObAllVirtualTenantWorkerGroup::inner_get_next_row(ObNewRow *&row)
             if (OB_SUCCESS == tmp_ret && OB_SUCCESS != (tmp_ret = scanner_.add_row(cur_row_))) {
               SERVER_LOG(WARN, "fail to add row", K(tmp_ret), K(cur_row_));
             }
-            if (OB_SUCCESS != tmp_ret) {
-              ret = tmp_ret;
-              SERVER_LOG(WARN, "iterate worker group failed", K(ret), K(tenant_id));
-            }
+            return tmp_ret;
+          }))) {
+            SERVER_LOG(WARN, "for_each_group failed", K(ret), K(tenant_id));
           }
         }
       }

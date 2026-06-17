@@ -22,6 +22,7 @@
 #endif
 #include "pl/ob_pl_dependency_util.h"
 #include "pl/ob_pl_stmt.h"
+#include "sql/ob_sql_utils.h"
 namespace oceanbase
 {
 using namespace common;
@@ -6870,9 +6871,12 @@ int ObPLResolver::resolve_static_sql(const ObStmtNodeTree *parse_tree,
 
       if (OB_SUCC(ret)) {
         if (lib::is_mysql_mode()) {
+          const bool database_isolation_enabled =
+              resolve_ctx_.session_info_.is_enable_database_isolation_mode();
           for (int64_t i = 0; OB_SUCC(ret) && i < prepare_result.ref_objects_.count(); ++i) {
-            if (DEPENDENCY_TABLE == prepare_result.ref_objects_.at(i).object_type_) {
-              // do nothing, no need collect table schema in mysql mode
+            if (DEPENDENCY_TABLE == prepare_result.ref_objects_.at(i).object_type_
+                && !database_isolation_enabled) {
+              // skip table schema collection only when database isolation is not enabled
             } else if (OB_FAIL(ObPLDependencyUtil::add_dependency_object_impl(func.get_dependency_table(), prepare_result.ref_objects_.at(i)))) {
               LOG_WARN("add dependency object failed", K(ret));
             }

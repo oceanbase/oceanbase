@@ -196,6 +196,7 @@ ObSqlCtx::ObSqlCtx()
     flashback_query_expr_(nullptr),
     is_execute_call_stmt_(false),
     enable_sql_resource_manage_(false),
+    enable_database_isolation_mode_(false),
     resource_map_rule_(),
     is_text_ps_mode_(false),
     first_plan_hash_(0),
@@ -251,6 +252,7 @@ void ObSqlCtx::reset()
   can_reroute_sql_ = false;
   is_sensitive_ = false;
   enable_sql_resource_manage_ = false;
+  enable_database_isolation_mode_ = false;
   resource_map_rule_.reset();
   is_protocol_weak_read_ = false;
   first_plan_hash_ = 0;

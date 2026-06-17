@@ -781,6 +781,7 @@ public:
   ObSpmCacheCtx spm_ctx_;
   bool is_execute_call_stmt_;
   bool enable_sql_resource_manage_;
+  bool enable_database_isolation_mode_;
   ObPCResourceMapRule resource_map_rule_;
   uint64_t res_map_rule_version_;
   bool is_text_ps_mode_;

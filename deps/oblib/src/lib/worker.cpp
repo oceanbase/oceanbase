@@ -92,9 +92,11 @@ Worker::Worker()
       timeout_ts_(INT64_MAX),
       ntp_offset_(0),
       rpc_tenant_id_(0),
-      disable_wait_(false)
+      disable_wait_(false),
+      group_index_(-1)
 {
   worker_node_.get_data() = this;
+  last_idle_ts_ = ObTimeUtility::current_time();
 }
 
 Worker::~Worker()

@@ -2351,6 +2351,17 @@ OB_INLINE int ObPlanCache::construct_plan_cache_key(ObSQLSessionInfo &session,
   pc_key.is_weak_read_ = is_weak;
   pc_key.enable_mysql_compatible_dates_ = session.enable_mysql_compatible_dates();
   OZ (session.get_collation_connection(pc_key.collation_connection_));
+  if (OB_SUCC(ret)) {
+    int tmp_ret = OB_E(EventTable::EN_CHECK_PROXY_DB_ACCURACY) OB_SUCCESS;
+    if (OB_SUCCESS != tmp_ret) {
+      const ObString &proxy_db = session.get_proxy_specified_db_name();
+      if (!proxy_db.empty() && proxy_db != session.get_database_name()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("proxy specified db does not match session db in plan cache",
+                  K(ret), K(proxy_db), "session_db", session.get_database_name());
+      }
+    }
+  }
   return ret;
 }
 

@@ -179,6 +179,24 @@ public:
     return ret;
   }
 
+  inline int get_group_id_by_database(const uint64_t tenant_id,
+                                      const common::ObString &database,
+                                      uint64_t &group_id)
+  {
+    int ret = common::OB_SUCCESS;
+    if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+      ret = OB_INVALID_TENANT_ID;
+      LOG_WARN("invalid config", K(ret), K(tenant_id));
+    } else if (OB_FAIL(database_rule_map_.get_refactored(
+                share::ObTenantFunctionKey(tenant_id, database), group_id))) {
+      if (common::OB_HASH_NOT_EXIST == ret) {
+        group_id = 0; // 没有定义 mapping rule，默认为 0 (OTHER_GROUPS)
+        ret = common::OB_SUCCESS;
+      }
+    }
+    return ret;
+  }
+
   inline int get_group_name_by_id(const uint64_t tenant_id,
                                   const uint64_t group_id,
                                   ObGroupName &group_name)
@@ -206,6 +224,12 @@ public:
     int ret = function_rule_map_.set_refactored(share::ObTenantFunctionKey(tenant_id, func), 0, 1/*overwrite*/);
     return ret;
   }
+  inline int reset_group_id_by_database(const uint64_t tenant_id,
+                                        ObResMgrVarcharValue &database)
+  {
+    int ret = database_rule_map_.set_refactored(share::ObTenantFunctionKey(tenant_id, database), 0, 1/*overwrite*/);
+    return ret;
+  }
   int64_t to_string(char *buf, const int64_t len) const;
 private:
   int refresh_resource_function_mapping_rule(
@@ -218,12 +242,19 @@ private:
       const uint64_t tenant_id,
       const ObString &plan);
   int clear_resource_user_mapping_rule(const uint64_t tenant_id, const ObResourceUserMappingRuleSet &rules);
+  int refresh_resource_database_mapping_rule(
+      ObResourceManagerProxy &proxy,
+      const uint64_t tenant_id,
+      const ObString &plan);
+  int clear_resource_database_mapping_rule(const uint64_t tenant_id, const ObResourceMappingRuleSet &rules);
 private:
   /* variables */
   // 将用户 id 映射到 group id，用于用户登录时快速确定登录用户所属 cgroup
   common::hash::ObHashMap<sql::ObTenantUserKey, uint64_t> user_rule_map_;
   // 将 function 映射到 group id，用于后台线程快速确定后台 session 所属 cgroup
   common::hash::ObHashMap<share::ObTenantFunctionKey, uint64_t> function_rule_map_;
+  // 将 database 映射到 group id，用于根据数据库名称快速确定所属 cgroup
+  common::hash::ObHashMap<share::ObTenantFunctionKey, uint64_t> database_rule_map_;
   // 将 group_id 映射到 group_name, 用于快速更新 cgroup fs 目录(包括user和function使用的group)
   common::hash::ObHashMap<ObTenantGroupIdKey, ObGroupName> group_id_name_map_;
   // 将 group_name 映射到 group_id, 用于快速根据group_name找到id(主要是用于io控制)

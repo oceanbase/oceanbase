@@ -158,6 +158,7 @@ protected:
                    ObSchemaGetterGuard *schema_guard = NULL);
   int process_extra_info(sql::ObSQLSessionInfo &session, const obmysql::ObMySQLRawPacket &pkt,
                                 bool &need_response_error);
+  int check_proxy_db_resource_group(sql::ObSQLSessionInfo &session);
   int process_kill_client_session(sql::ObSQLSessionInfo &session, bool is_connect = false);
   int load_privilege_info_for_change_user(sql::ObSQLSessionInfo *session);
 

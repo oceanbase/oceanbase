@@ -12,6 +12,7 @@
 #include "sql/udr/ob_udr_utils.h"
 #include "share/resource_manager/ob_resource_manager.h"
 #include "sql/plan_cache/ob_values_table_compression.h"
+#include "observer/omt/ob_tenant_errsim.h"
 
 using namespace oceanbase::share::schema;
 using namespace oceanbase::common;
@@ -699,82 +700,157 @@ int ObPlanCacheValue::choose_plan_from_plan_sets(ObPlanCacheCtx &pc_ctx,
         if (pc_ctx.sql_ctx_.enable_sql_resource_manage_) {
           uint64_t rule_id = plan_set->resource_map_rule_.get_res_map_rule_id();
           int64_t param_idx = plan_set->resource_map_rule_.get_res_map_rule_param_idx();
-          if (plan_set->resource_map_rule_.use_hint_control_resource()
-              || (rule_id != OB_INVALID_ID && param_idx != OB_INVALID_INDEX)) {
-            uint64_t final_choosed_group_id = OB_INVALID_ID;
-            // 1. check hint first
-            if (plan_set->resource_map_rule_.use_hint_control_resource()) {
-              share::ObGroupName group_name;
-              group_name.set_value(plan_set->resource_map_rule_.get_resource_group());
-              ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
-              if (OB_FAIL(rule_mgr.get_group_id_by_name(tenant_id, group_name,
-                                                        final_choosed_group_id))) {
-                if (OB_HASH_NOT_EXIST == ret) {
-                  // create directive and delete it immediately，may haven't beed flush into
-                  // disk storage group not exist, or hint is invalid，need to try to match
-                  // column rule
-                  ret = OB_SUCCESS;
-                  LOG_TRACE("resource group specified by hint did not exist",
-                            K(plan_set->resource_map_rule_.get_resource_group()), K(tenant_id));
-                } else {
-                  LOG_WARN("fail get group id", K(ret), K(final_choosed_group_id),
-                           K(group_name));
+          uint64_t sql_level_group_id = OB_INVALID_ID;
+          uint64_t db_level_group_id = OB_INVALID_ID;
+          bool db_group_found = false;
+          // 1. check hint / column rule → SQL-level
+          if (plan_set->resource_map_rule_.use_hint_control_resource()) {
+            share::ObGroupName group_name;
+            group_name.set_value(plan_set->resource_map_rule_.get_resource_group());
+            ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
+            if (OB_FAIL(rule_mgr.get_group_id_by_name(tenant_id, group_name,
+                                                      sql_level_group_id))) {
+              if (OB_HASH_NOT_EXIST == ret) {
+                ret = OB_SUCCESS;
+                LOG_TRACE("resource group specified by hint did not exist",
+                          K(plan_set->resource_map_rule_.get_resource_group()), K(tenant_id));
+              } else {
+                LOG_WARN("fail get group id", K(ret), K(sql_level_group_id),
+                         K(group_name));
+              }
+            }
+          } else if (rule_id != OB_INVALID_ID && param_idx != OB_INVALID_INDEX) {
+            // 2. check col res map rule → SQL-level
+            ObString param_text;
+            ObCollationType cs_type = CS_TYPE_INVALID;
+            if (OB_UNLIKELY(param_idx < 0 || param_idx >= params->count())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_ERROR("unexpected res map rule param idx", K(ret), K(rule_id), K(param_idx),
+                        K(params->count()));
+            } else if (OB_FAIL(session.get_collation_connection(cs_type))) {
+              LOG_WARN("get collation connection failed", K(ret));
+            } else if (OB_FAIL(ObObjCaster::get_obj_param_text(
+                         params->at(param_idx), pc_ctx.raw_sql_, pc_ctx.allocator_, cs_type,
+                         param_text))) {
+              LOG_WARN("get obj param text failed", K(ret));
+            } else {
+              sql_level_group_id =
+                G_RES_MGR.get_col_mapping_rule_mgr().get_column_mapping_group_id(
+                  tenant_id, rule_id, session.get_user_name(), param_text);
+            }
+          }
+
+          // 3. check database rule → DB-level.  SQL-level routing has higher
+          // priority, so only check DB-level when hint/column did not match.
+          // PlanCache uses the cached
+          // dependency table database first, and falls back to session/proxy db
+          // when the cached plan has no table database to inspect.
+          if (OB_SUCC(ret)
+              && OB_INVALID_ID == sql_level_group_id
+              && pc_ctx.sql_ctx_.enable_database_isolation_mode_
+              && !session.is_oracle_compatible()) {
+            for (int64_t i = 0; OB_SUCC(ret) && !db_group_found && i < stored_schema_objs_.count(); ++i) {
+              const PCVSchemaObj *schema_obj = stored_schema_objs_.at(i);
+              if (OB_ISNULL(schema_obj)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected null schema obj", K(ret), K(i));
+              } else if (TABLE_SCHEMA == schema_obj->schema_type_
+                         && OB_INVALID_ID != schema_obj->database_id_
+                         && OB_NOT_NULL(pc_ctx.sql_ctx_.schema_guard_)) {
+                const ObDatabaseSchema *db_schema = NULL;
+                if (OB_FAIL(pc_ctx.sql_ctx_.schema_guard_->get_database_schema(
+                      tenant_id, schema_obj->database_id_, db_schema))) {
+                  LOG_WARN("fail to get database schema for plan cache db isolation",
+                           K(ret), K(tenant_id), K(schema_obj->database_id_));
+                } else if (OB_NOT_NULL(db_schema)) {
+                  uint64_t tmp_db_group_id = OB_INVALID_ID;
+                  const ObString &db_name = db_schema->get_database_name();
+                  if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_database(
+                        tenant_id, db_name, tmp_db_group_id))) {
+                    LOG_WARN("get group id by database failed", K(ret), K(db_name), K(tenant_id));
+                  } else if (0 != tmp_db_group_id) {
+                    db_level_group_id = tmp_db_group_id;
+                    db_group_found = true;
+                    LOG_TRACE("get group id by database in plan cache",
+                              K(db_name), K(db_level_group_id));
+                  }
                 }
               }
-            } else {
-              // 2. check col res map rule
-              uint64_t tenant_id = OB_INVALID_ID;
-              ObString param_text;
-              ObCollationType cs_type = CS_TYPE_INVALID;
-              if (OB_UNLIKELY(param_idx < 0 || param_idx >= params->count())) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_ERROR("unexpected res map rule param idx", K(ret), K(rule_id), K(param_idx),
-                          K(params->count()));
-              } else if (OB_FAIL(session.get_collation_connection(cs_type))) {
-                LOG_WARN("get collation connection failed", K(ret));
-              } else if (OB_INVALID_ID == (tenant_id = session.get_effective_tenant_id())) {
-                ret = OB_ERR_UNEXPECTED;
-                SQL_PC_LOG(ERROR, "got effective tenant id is invalid", K(ret));
-              } else if (OB_FAIL(ObObjCaster::get_obj_param_text(
-                           params->at(param_idx), pc_ctx.raw_sql_, pc_ctx.allocator_, cs_type,
-                           param_text))) {
-                LOG_WARN("get obj param text failed", K(ret));
-              } else {
-                final_choosed_group_id =
-                  G_RES_MGR.get_col_mapping_rule_mgr().get_column_mapping_group_id(
-                    tenant_id, rule_id, session.get_user_name(), param_text);
+            }
+            if (OB_SUCC(ret) && !db_group_found) {
+              ObString effective_db = session.get_effective_database_for_isolation();
+              if (!effective_db.empty()) {
+                uint64_t tmp_db_group_id = OB_INVALID_ID;
+                if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_database(
+                      tenant_id, effective_db, tmp_db_group_id))) {
+                  LOG_WARN("get group id by database failed", K(ret), K(effective_db), K(tenant_id));
+                } else if (0 != tmp_db_group_id) {
+                  db_level_group_id = tmp_db_group_id;
+                  LOG_TRACE("get group id by effective database in plan cache",
+                            K(effective_db), K(db_level_group_id));
+                }
               }
             }
-            // 3.use default resource group if not match any resource group
-            // OB_INVALID_ID means current neither resource group specified by hint
-            // nor user+param_value column rule is in used.
-            if (OB_SUCC(ret) && OB_INVALID_ID == final_choosed_group_id) {
-              if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_user(
-                    tenant_id, session.get_user_id(), final_choosed_group_id))) {
-                LOG_WARN("get group id by user failed", K(ret));
-              } else if (OB_INVALID_ID == final_choosed_group_id) {
-                // if not set consumer_group for current user, use OTHER_GROUP by default.
-                final_choosed_group_id = 0;
-              }
+          }
+          // Determine effective group: SQL > DB > user
+          const bool has_sql_rule = plan_set->resource_map_rule_.use_hint_control_resource()
+              || (rule_id != OB_INVALID_ID && param_idx != OB_INVALID_INDEX);
+          const bool need_resource_group_check = has_sql_rule
+              || pc_ctx.sql_ctx_.enable_database_isolation_mode_;
+          uint64_t final_choosed_group_id = OB_INVALID_ID;
+          if (OB_SUCC(ret)) {
+            if (OB_INVALID_ID != sql_level_group_id) {
+              final_choosed_group_id = sql_level_group_id;
+            } else if (OB_INVALID_ID != db_level_group_id) {
+              final_choosed_group_id = db_level_group_id;
             }
-            if (OB_SUCC(ret)) {
-              if (final_choosed_group_id == THIS_WORKER.get_group_id()) {
-                // do nothing if equals to current group id.
-              } else if (session.get_is_in_retry()
-                         && OB_NEED_SWITCH_CONSUMER_GROUP
-                              == session.get_retry_info().get_last_query_retry_err()) {
+          }
+          // 4. user mapping as fallback
+          if (OB_SUCC(ret) && need_resource_group_check && OB_INVALID_ID == final_choosed_group_id) {
+            if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_user(
+                  tenant_id, session.get_user_id(), final_choosed_group_id))) {
+              LOG_WARN("get group id by user failed", K(ret));
+            } else if (OB_INVALID_ID == final_choosed_group_id) {
+              final_choosed_group_id = 0;
+            }
+          }
+          if (OB_SUCC(ret) && need_resource_group_check) {
+            /*
+            const bool skip_switch_for_rand_push_errsim =
+                oceanbase::omt::ob_tenant_errsim_rand_push_group_active_for_tenant(
+                    session->get_effective_tenant_id());
+            */
+            const bool skip_switch_for_rand_push_errsim = false;
+            if (final_choosed_group_id == THIS_WORKER.get_group_id()) {
+              // do nothing if equals to current group id.
+            } else if (!skip_switch_for_rand_push_errsim) {
+              const bool allow_sql_level_reswitch = OB_INVALID_ID != sql_level_group_id;
+              if (session.get_is_in_retry()
+                  && OB_NEED_SWITCH_CONSUMER_GROUP
+                       == session.get_retry_info().get_last_query_retry_err()
+                  && (!allow_sql_level_reswitch || session.get_group_id_not_expected())) {
                 LOG_ERROR(
-                  "use unexpected group when retry, maybe set packet retry failed before",
-                  K(final_choosed_group_id), K(THIS_WORKER.get_group_id()),
-                  K(plan_set->resource_map_rule_));
+                    "use unexpected group when retry, maybe set packet retry failed before",
+                    K(final_choosed_group_id), K(THIS_WORKER.get_group_id()),
+                    K(plan_set->resource_map_rule_));
               } else {
-                session.set_expect_group_id(final_choosed_group_id);
+                // Set level-based expect_group_id for retry
+                if (OB_INVALID_ID != sql_level_group_id) {
+                  session.set_expect_group_id(sql::ISOLATION_SQL, sql_level_group_id);
+                  session.set_expect_group_id(sql::ISOLATION_DB, OB_INVALID_ID);
+                }
+                if (OB_INVALID_ID == sql_level_group_id && OB_INVALID_ID != db_level_group_id) {
+                  session.set_expect_group_id(sql::ISOLATION_DB, db_level_group_id);
+                }
+                if (OB_INVALID_ID == sql_level_group_id && OB_INVALID_ID == db_level_group_id) {
+                  session.set_expect_group_id(sql::ISOLATION_DB, final_choosed_group_id);
+                }
                 ret = OB_NEED_SWITCH_CONSUMER_GROUP;
               }
-              LOG_TRACE("get expect rule id", K(ret), K(final_choosed_group_id),
-                        K(THIS_WORKER.get_group_id()), K(session.get_expect_group_id()),
-                        K(pc_ctx.raw_sql_));
             }
+            LOG_TRACE("plan cache resource group check", K(ret), K(final_choosed_group_id),
+                      K(sql_level_group_id), K(db_level_group_id),
+                      K(THIS_WORKER.get_group_id()), K(pc_ctx.raw_sql_));
           }
         }
         break;
