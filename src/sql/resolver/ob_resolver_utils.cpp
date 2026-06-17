@@ -1450,36 +1450,28 @@ int ObResolverUtils::pick_routine(ObIArray<ObRoutineMatchInfo> &match_infos,
       if (!match_infos.at(i).need_cast()) {
         if (match_infos.at(i).match_same_type()) {
           if (OB_NOT_NULL(routine_info)) {
-            // A new exact-match candidate conflicts with the already-selected routine.
-            // For each conflicting candidate, independently compare every parameter position
-            // against the already-selected routine. The conflict is excusable only if every
-            // position where the two routines differ in dest_type has ObExtendType on BOTH
-            // sides (i.e., the difference is purely in collection sub-type — nested table /
-            // varray / associative array — which protocols like JDBC cannot distinguish via
-            // user_type_id). If any differing position involves a non-ObExtendType (e.g. CHAR
-            // vs VARCHAR), the ambiguity is real and PLS-00307 must be reported.
-            bool has_extend_only_diff = false;
+            // Two exact-match candidates conflict. Tolerate when the only
+            // distinguishing parameters are ObExtendType (collection sub-types
+            // that JDBC cannot distinguish) — just pick the first candidate.
+            bool extend_ambiguity_only = false;
             int64_t param_cnt = match_infos.at(routine_info_idx).match_info_.count();
             for (int64_t k = 0; k < param_cnt; ++k) {
               ObObjType t1 = match_infos.at(routine_info_idx).match_info_.at(k).dest_type_;
               ObObjType t2 = match_infos.at(i).match_info_.at(k).dest_type_;
               if (t1 != t2) {
-                if (ObExtendType != t1 || ObExtendType != t2) {
-                  has_extend_only_diff = false;
-                  break;
-                } else {
-                  has_extend_only_diff = true;
-                }
+                extend_ambiguity_only = false;
+                break;
+              } else if (ObExtendType == t1) {
+                extend_ambiguity_only = true;
               }
             }
-            if (!has_extend_only_diff) {
+            if (!extend_ambiguity_only) {
               ret = OB_ERR_FUNC_DUP;
               LOG_USER_ERROR(OB_ERR_FUNC_DUP, match_infos.at(0).routine_info_->get_routine_name().length(),
                              match_infos.at(0).routine_info_->get_routine_name().ptr());
               LOG_WARN("PLS-00307: too many declarations of 'string' match this call",
                        K(ret), K(match_infos));
             }
-            // has_non_extend_diff == false: keep routine_info (the first one) and continue
           } else {
             routine_info = match_infos.at(i).routine_info_;
             routine_info_idx = i;
