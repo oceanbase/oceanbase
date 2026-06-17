@@ -574,7 +574,8 @@ public:
   bool is_in_internal_catalog();
   bool is_in_external_catalog();
   int set_default_database(const common::ObString &database_name,
-                           common::ObCollationType coll_type = common::CS_TYPE_INVALID);
+                           common::ObCollationType coll_type = common::CS_TYPE_INVALID,
+                           bool need_track_database = true);
   int reset_default_database() { return set_default_database(""); }
   int update_database_variables(share::schema::ObSchemaGetterGuard *schema_guard);
   int update_max_packet_size();

@@ -101,7 +101,7 @@ int ObCreatePackageResolver::resolve(const ParseNode &parse_tree)
         } else if (database_schema->get_database_name_str() != session_info_->get_database_name()) {
           OZ (old_database_name.append(session_info_->get_database_name()));
           OX (old_database_id = session_info_->get_database_id());
-          OZ (session_info_->set_default_database(database_schema->get_database_name_str()));
+          OZ (session_info_->set_default_database(database_schema->get_database_name_str(), common::CS_TYPE_INVALID, false));
           OX (session_info_->set_database_id(database_id));
           OX (need_reset_default_database = true);
         }
@@ -299,7 +299,7 @@ int ObCreatePackageResolver::resolve(const ParseNode &parse_tree)
     }
     if (need_reset_default_database) {
       int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = session_info_->set_default_database(old_database_name.string()))) {
+      if (OB_SUCCESS != (tmp_ret = session_info_->set_default_database(old_database_name.string(), common::CS_TYPE_INVALID, false))) {
         ret = OB_SUCCESS == ret ? tmp_ret : ret;
         LOG_ERROR("failed to reset default database", K(ret), K(tmp_ret), K(old_database_name));
       } else {

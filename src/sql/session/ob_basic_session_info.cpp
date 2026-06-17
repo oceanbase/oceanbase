@@ -984,7 +984,8 @@ int ObBasicSessionInfo::set_diagnosis_bad_file(const ObString &diagnosis_bad_fil
   return ret;
 }
 int ObBasicSessionInfo::set_default_database(const ObString &database_name,
-                                             const ObCollationType coll_type/*= CS_TYPE_INVALID */)
+                                             const ObCollationType coll_type/*= CS_TYPE_INVALID */,
+                                             bool need_track_database/*= true */)
 {
   int ret = OB_SUCCESS;
   if (database_name.length() > OB_MAX_DATABASE_NAME_LENGTH * OB_MAX_CHAR_LEN) {
@@ -1004,7 +1005,7 @@ int ObBasicSessionInfo::set_default_database(const ObString &database_name,
       LockGuard lock_guard(thread_data_mutex_);
       MEMCPY(thread_data_.database_name_, database_name.ptr(), database_name.length());
       thread_data_.database_name_[database_name.length()] = '\0';
-      if (is_track_session_info()) {
+      if (need_track_database && is_track_session_info()) {
         is_database_changed_ = true;
       }
     }
