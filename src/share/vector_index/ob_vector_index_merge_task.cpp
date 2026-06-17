@@ -426,8 +426,7 @@ int ObVecIdxMergeTask::upadte_task_merge_segments_info() {
 int ObVecIdxMergeTask::upadte_task_result_segments_info(const ObVectorIndexSegmentMeta *new_meta) {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(new_meta)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("new_meta is null", K(ret));
+    LOG_INFO("new_meta is null, so skip update task result segments info", K(ret));
   } else {
     const ObVecIdxSnapshotDataHandle& new_snap = new_adapter_->get_snap_data();
     if (new_snap->meta_.bases_.count() == 1) {
@@ -723,7 +722,7 @@ int ObVecIdxMergeTask::check_and_merge(ObPluginVectorIndexAdapterGuard &adpt_gua
   {
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(vector_index_service->release_vector_index_tmp_info(ctx_->task_status_.task_id_))) {
-      LOG_WARN("fail to release vector index tmp info", K(ret));
+      LOG_WARN("fail to release vector index tmp info", K(tmp_ret));
     }
     ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
   }
@@ -1037,6 +1036,7 @@ int ObVecIdxMergeTask::update_meta(
     transaction::ObTxReadSnapshot &snapshot, const uint64_t timeout_us)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObVecIdxSnapTableSegMergeOp snap_table_handler(new_adapter_->get_tenant_id());
   const int64_t base_count = new_snap->meta_.bases_.count();
   ObVectorIndexSegmentMeta *new_seg_meta = base_count > 0 ? &new_snap->meta_.bases_.at(0) : nullptr;
@@ -1046,12 +1046,13 @@ int ObVecIdxMergeTask::update_meta(
     LOG_WARN("prepare meta fail", K(ret));
   } else if (OB_FAIL(snap_table_handler.insertup_meta_row(new_adapter_, tx_desc, timeout_us))) {
     LOG_WARN("insertup_meta_row fail", K(ret));
-  } else if (OB_FAIL(upadte_task_result_segments_info(new_seg_meta))) {
-    // The observability should not alter the execution flow. So update task info here
-    LOG_WARN("upadte task result segments info fail", K(ret));
-    ret = OB_SUCCESS;
   } else {
     new_snap->meta_.is_persistent_ = true;
+  }
+
+  if (OB_SUCC(ret) && OB_TMP_FAIL(upadte_task_result_segments_info(new_seg_meta))) {
+    // The observability should not alter the execution flow. So update task info here
+    LOG_WARN("upadte task result segments info fail", K(tmp_ret));
   }
   return ret;
 }

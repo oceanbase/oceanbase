@@ -3519,8 +3519,12 @@ int ObPluginVectorIndexAdaptor::serialize_snapshot(ObHNSWSerializeCallback::CbPa
         LOG_INFO("build empty segment sucess", KPC(this));
       }
     } else if (!snap_data_->builder_->segment_handle_.is_valid()) {
-      ret = OB_NOT_INIT;
-      LOG_WARN("build segment is not init, empty index", K(ret), K(snap_data_));
+      if (created_by_segment_merge_) {
+        LOG_INFO("build empty segment by merge task, skip", KPC(this));
+      } else {
+        ret = OB_NOT_INIT;
+        LOG_WARN("build segment is not init, empty index", K(ret), K(snap_data_));
+      }
     } else if (OB_FAIL(snap_data_->builder_->segment_handle_->get_index_number(vec_cnt))) {
       LOG_WARN("failed to get snap index number.", K(ret));
     } else if (vec_cnt == 0) {
