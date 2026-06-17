@@ -1162,8 +1162,8 @@ int ObPLDDLService::check_udt_dep_objs(uint64_t tenant_id,
           LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(table_id));
         } else if (OB_ISNULL(table_schema)) {
           LOG_INFO("table schema is null, table may have been dropped", K(table_id));
-        } else if (table_schema->is_in_recyclebin() && purge_table_in_recyclebin) {
-          if (OB_FAIL(ddl_operator.purge_table_with_aux_table(*table_schema,
+        } else if (table_schema->is_in_recyclebin()) {
+          if (purge_table_in_recyclebin && OB_FAIL(ddl_operator.purge_table_with_aux_table(*table_schema,
                                                                   schema_guard,
                                                                   trans,
                                                                   NULL /*ddl_stmt_str*/))) {
