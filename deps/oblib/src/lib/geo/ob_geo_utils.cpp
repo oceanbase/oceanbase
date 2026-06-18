@@ -555,7 +555,8 @@ int ObGeoTypeUtil::build_geometry(ObIAllocator &allocator,
       } else if (FALSE_IT(geo->set_data(wkb_data))) {
       } else if (!is_3d_geo_type(header.type_)) {
         bool need_check_ring = build_flag & ObGeoBuildFlag::GEO_CHECK_RING;
-        ObGeoWkbCheckVisitor wkb_check(wkb_data, header.bo_, need_check_ring);
+        bool need_check_finite = build_flag & ObGeoBuildFlag::GEO_CHECK_FINITE;
+        ObGeoWkbCheckVisitor wkb_check(wkb_data, header.bo_, need_check_ring, need_check_finite);
         if (OB_FAIL(geo->do_visit(wkb_check))) {
           ret = OB_ERR_GIS_INVALID_DATA;
           LOG_WARN("invalid swkb", K(swkb), K(header.type_), K(header.srid_), K(crs));

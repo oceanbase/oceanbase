@@ -38,6 +38,7 @@ enum ObGeoBuildFlag: uint8_t {
   GEO_CHECK_RANGE = 0x10,
   GEO_RESERVE_3D = 0x20, // do not convert 3D Geometry to 2D
   GEO_NOT_COPY_WKB = 0x40, // copy input wkb str to output geo data
+  GEO_CHECK_FINITE = 0x80, // reject NaN/inf coordinates in linestring/ring, only needed when wkb enters OB
   GEO_DEFAULT = GEO_NORMALIZE | GEO_CORRECT | GEO_CHECK_RANGE,
   GEO_ALLOW_3D_DEFAULT = GEO_DEFAULT | GEO_ALLOW_3D,
   GEO_CARTESIAN = GEO_CORRECT,

@@ -250,7 +250,7 @@ int ObIExprSTGeomFromWKB::create_by_wkb_without_srid(ObIAllocator &allocator,
           LOG_WARN("invalid wkb", K(ret), K(type), K(srid), K(crs));
         }
       } else {
-        ObGeoWkbCheckVisitor wkb_check(wkb_nosrid, bo);
+        ObGeoWkbCheckVisitor wkb_check(wkb_nosrid, bo, true /* need_check_ring */, true /* need_check_finite */);
         ObIWkbGeometry *geo_bin = static_cast<ObIWkbGeometry *>(geo);
         if (OB_FAIL(geo->do_visit(wkb_check))) {
           ret = OB_ERR_GIS_INVALID_DATA;

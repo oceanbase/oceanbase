@@ -5,9 +5,27 @@
 
 #define USING_LOG_PREFIX LIB
 #include "ob_geo_wkb_check_visitor.h"
+#include <cmath>
 
 namespace oceanbase {
 namespace common {
+
+int ObGeoWkbCheckVisitor::check_coordinate_finite(uint64_t start_pos, uint32_t po_num)
+{
+  int ret = OB_SUCCESS;
+  for (uint32_t i = 0; OB_SUCC(ret) && i < po_num; i++) {
+    uint64_t point_pos = start_pos + static_cast<uint64_t>(i) * WKB_POINT_DATA_SIZE;
+    double x = ObGeoWkbByteOrderUtil::read<double>(wkb_.ptr() + point_pos, bo_);
+    double y = ObGeoWkbByteOrderUtil::read<double>(
+        wkb_.ptr() + point_pos + WKB_GEO_DOUBLE_STORED_SIZE, bo_);
+    if (!std::isfinite(x) || !std::isfinite(y)) {
+      ret = OB_INVALID_DATA;
+      LOG_WARN("invalid coordinate, NaN or infinite value is not allowed",
+               K(ret), K(point_pos), K(x), K(y), K(po_num));
+    }
+  }
+  return ret;
+}
 
 
 template<typename T>
@@ -60,6 +78,8 @@ int ObGeoWkbCheckVisitor::check_line_string(T *geo)
       if (wkb_.length() < po_num * WKB_POINT_DATA_SIZE + pos_) {
         ret = OB_INVALID_DATA;
         LOG_WARN("invaid wkb linestring", K(ret), K(wkb_.length()), K(pos_), K(po_num), K(geo->type()));
+      } else if (need_check_finite_ && OB_FAIL(check_coordinate_finite(pos_, po_num))) {
+        LOG_WARN("invalid linestring coordinate", K(ret), K(pos_), K(po_num), K(geo->type()));
       } else {
         pos_ += po_num * WKB_POINT_DATA_SIZE;
       }
@@ -89,6 +109,8 @@ int ObGeoWkbCheckVisitor::check_ring(T *geo)
       if (wkb_.length() < po_num * WKB_POINT_DATA_SIZE + pos_) {
         ret = OB_INVALID_DATA;
         LOG_WARN("invaid wkb ring", K(ret), K(wkb_.length()), K(pos_), K(po_num), K(geo->type()));
+      } else if (need_check_finite_ && OB_FAIL(check_coordinate_finite(pos_, po_num))) {
+        LOG_WARN("invalid ring coordinate", K(ret), K(pos_), K(po_num), K(geo->type()));
       } else if (memcmp(wkb_.ptr() + pos_, wkb_.ptr() + pos_ + (po_num - 1) * WKB_POINT_DATA_SIZE,
                         WKB_POINT_DATA_SIZE)) {
         is_ring_closed_ = false;

@@ -19,13 +19,22 @@ public:
       bo_(bo),
       pos_(0),
       need_check_ring_(true),
-      is_ring_closed_(true) {}
+      is_ring_closed_(true),
+      need_check_finite_(false) {}
   ObGeoWkbCheckVisitor(ObString wkb, ObGeoWkbByteOrder bo, bool need_check_ring)
     : wkb_(wkb),
       bo_(bo),
       pos_(0),
       need_check_ring_(need_check_ring),
-      is_ring_closed_(true) {}
+      is_ring_closed_(true),
+      need_check_finite_(false) {}
+  ObGeoWkbCheckVisitor(ObString wkb, ObGeoWkbByteOrder bo, bool need_check_ring, bool need_check_finite)
+    : wkb_(wkb),
+      bo_(bo),
+      pos_(0),
+      need_check_ring_(need_check_ring),
+      is_ring_closed_(true),
+      need_check_finite_(need_check_finite) {}
   virtual ~ObGeoWkbCheckVisitor() {}
 
   bool prepare(ObGeometry *geo) override { UNUSED(geo); return true; }
@@ -63,6 +72,9 @@ private:
   uint64_t pos_;
   bool need_check_ring_;
   bool is_ring_closed_;
+  // only check coordinate finiteness when wkb enters OB (input boundary), not on the
+  // spatial query read path where geometry has already been validated on write.
+  bool need_check_finite_;
 
   template<typename T>
   int check_common_header(T *geo, ObGeoType geo_type, ObGeoWkbByteOrder bo);
@@ -72,6 +84,10 @@ private:
   int check_line_string(T *geo);
   template<typename T>
   int check_ring(T *geo);
+  // check whether the coordinates in po_num points starting at start_pos are all finite.
+  // NaN/inf coordinates inside a linestring or ring would crash boost.geometry, so reject
+  // them here. Standalone point with NaN is left untouched since it represents an empty point.
+  int check_coordinate_finite(uint64_t start_pos, uint32_t po_num);
   template<typename T>
   int check_geometrycollection(T *geo);
   template<typename T>

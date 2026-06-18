@@ -269,7 +269,7 @@ int ObExprPrivSTGeomFromEWKB::create_geo_by_ewkb(ObIAllocator &allocator,
           LOG_WARN("fail to check geo 3d is valid", K(ret));
         }
       } else {
-        ObGeoWkbCheckVisitor ewkb_check(ewkb_data, header.bo_);
+        ObGeoWkbCheckVisitor ewkb_check(ewkb_data, header.bo_, true /* need_check_ring */, true /* need_check_finite */);
         ObIWkbGeometry *geo_bin = static_cast<ObIWkbGeometry *>(geo);
         if (OB_FAIL(geo->do_visit(ewkb_check))) {
           ret = OB_ERR_GIS_INVALID_DATA;

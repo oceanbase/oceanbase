@@ -8,6 +8,7 @@
 #include "ob_geo_func_buffer.h"
 #include "lib/geo/ob_geo_func_utils.h"
 #include "lib/geo/ob_geo_longtitude_correct_visitor.h"
+#include <cmath>
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -16,6 +17,16 @@ namespace common
 {
 
 namespace bg = boost::geometry;
+
+// Boost.Geometry 1.74 with BOOST_GEOMETRY_USE_RESCALING converts double coordinates to
+// long long via a rescale policy. When the bounding-box span >= 1e7 the scale factor
+// becomes 1, so rescaled coordinates keep their original magnitude. Segment-intersection
+// arithmetic then multiplies two such values; if |coord| > sqrt(LLONG_MAX) ~ 3.03e9 the
+// product overflows long long, producing LLONG_MIN in a segment_ratio denominator. The
+// subsequent boost::rational::normalize() calls gcd(0, LLONG_MIN) which triggers SIGFPE.
+// We use 1e9 as a conservative safe limit (well below 3.03e9) to reject such inputs
+// before they reach bg::buffer.
+static const double OB_GEO_BUFFER_COORD_LIMIT = 1e9;
 
 class ObGeoFuncBufferImpl : public ObIGeoDispatcher<ObGeometry *, ObGeoFuncBufferImpl>
 {
@@ -78,6 +89,109 @@ private:
     return ret;
   }
 
+  // Check whether any coordinate in a linestring/ring exceeds the safe limit for
+  // boost::geometry::buffer's rescale arithmetic. Returns OB_SUCCESS if all coordinates
+  // are within range, or OB_ERR_GIS_INVALID_DATA if any coordinate is out of range.
+  static int check_linestring_coord_range(const ObCartesianLineString &line)
+  {
+    INIT_SUCC(ret);
+    for (int64_t i = 0; OB_SUCC(ret) && i < line.size(); i++) {
+      double x = line[i].get<0>();
+      double y = line[i].get<1>();
+      if (std::fabs(x) > OB_GEO_BUFFER_COORD_LIMIT
+          || std::fabs(y) > OB_GEO_BUFFER_COORD_LIMIT) {
+        ret = OB_ERR_GIS_INVALID_DATA;
+        LOG_WARN("coordinate out of range for buffer operation",
+                 K(ret), K(i), K(x), K(y), K(OB_GEO_BUFFER_COORD_LIMIT));
+      }
+    }
+    return ret;
+  }
+
+  // Dispatch coordinate range check based on geometry type.
+  static int check_coord_range_for_buffer(const ObGeometry *geo_tree)
+  {
+    INIT_SUCC(ret);
+    if (OB_ISNULL(geo_tree)) {
+      // do nothing, null check is done elsewhere
+    } else {
+      switch (geo_tree->type()) {
+        case ObGeoType::POINT: {
+          const ObCartesianPoint *pt = static_cast<const ObCartesianPoint *>(geo_tree);
+          double x = pt->get<0>();
+          double y = pt->get<1>();
+          if (std::fabs(x) > OB_GEO_BUFFER_COORD_LIMIT
+              || std::fabs(y) > OB_GEO_BUFFER_COORD_LIMIT) {
+            ret = OB_ERR_GIS_INVALID_DATA;
+            LOG_WARN("coordinate out of range for buffer operation",
+                     K(ret), K(x), K(y), K(OB_GEO_BUFFER_COORD_LIMIT));
+          }
+          break;
+        }
+        case ObGeoType::LINESTRING: {
+          const ObCartesianLineString *line = static_cast<const ObCartesianLineString *>(geo_tree);
+          ret = check_linestring_coord_range(*line);
+          break;
+        }
+        case ObGeoType::POLYGON: {
+          const ObCartesianPolygon *poly = static_cast<const ObCartesianPolygon *>(geo_tree);
+          if (OB_FAIL(check_linestring_coord_range(poly->exterior_ring()))) {
+            // logged inside
+          } else {
+            for (uint64_t r = 0; OB_SUCC(ret) && r < poly->inner_ring_size(); r++) {
+              ret = check_linestring_coord_range(poly->inner_ring(r));
+            }
+          }
+          break;
+        }
+        case ObGeoType::MULTIPOINT: {
+          const ObCartesianMultipoint *mpt = static_cast<const ObCartesianMultipoint *>(geo_tree);
+          for (int64_t i = 0; OB_SUCC(ret) && i < mpt->size(); i++) {
+            double x = (*mpt)[i].get<0>();
+            double y = (*mpt)[i].get<1>();
+            if (std::fabs(x) > OB_GEO_BUFFER_COORD_LIMIT
+                || std::fabs(y) > OB_GEO_BUFFER_COORD_LIMIT) {
+              ret = OB_ERR_GIS_INVALID_DATA;
+              LOG_WARN("coordinate out of range for buffer operation",
+                       K(ret), K(i), K(x), K(y), K(OB_GEO_BUFFER_COORD_LIMIT));
+            }
+          }
+          break;
+        }
+        case ObGeoType::MULTILINESTRING: {
+          const ObCartesianMultilinestring *ml = static_cast<const ObCartesianMultilinestring *>(geo_tree);
+          for (uint64_t i = 0; OB_SUCC(ret) && i < ml->size(); i++) {
+            ret = check_linestring_coord_range((*ml)[i]);
+          }
+          break;
+        }
+        case ObGeoType::MULTIPOLYGON: {
+          const ObCartesianMultipolygon *mpo = static_cast<const ObCartesianMultipolygon *>(geo_tree);
+          for (uint64_t i = 0; OB_SUCC(ret) && i < mpo->size(); i++) {
+            const ObCartesianPolygon &poly = (*mpo)[i];
+            if (OB_FAIL(check_linestring_coord_range(poly.exterior_ring()))) {
+              // logged inside
+            } else {
+              for (uint64_t r = 0; OB_SUCC(ret) && r < poly.inner_ring_size(); r++) {
+                ret = check_linestring_coord_range(poly.inner_ring(r));
+              }
+            }
+          }
+          break;
+        }
+        case ObGeoType::GEOMETRYCOLLECTION: {
+          // collection is handled by eval_buffer_cartisan_collection which decomposes
+          // into multipoint/multilinestring/multipolygon, each checked separately.
+          break;
+        }
+        default: {
+          break;
+        }
+      }
+    }
+    return ret;
+  }
+
   // cartisan
   template <typename GeomTreeType, typename GeomIType>
   static int eval_buffer_cartisan(const ObGeometry *g,
@@ -121,6 +235,8 @@ private:
     if (OB_ISNULL(geo_tree) || OB_ISNULL(geo_res)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory", K(ret), KP(geo_tree), KP(geo_res));
+    } else if (OB_FAIL(check_coord_range_for_buffer(geo_tree))) {
+      LOG_WARN("coordinate out of range for cartesian buffer", K(ret));
     } else {
       switch (ObGeoBufferStrategyStateType(strategy.state_num_)) {
         case ObGeoBufferStrategyStateType::JR_ER_PC: {
@@ -255,6 +371,19 @@ private:
       ml = reinterpret_cast<ObCartesianMultilinestring *>(dedup_ml_ptr);
       mpo = reinterpret_cast<ObCartesianMultipolygon *>(dedup_mpo_ptr);
 
+      // check coordinate range before calling bg::buffer to avoid integer overflow in
+      // boost::geometry's rescale arithmetic (SIGFPE)
+      if (OB_FAIL(check_coord_range_for_buffer(mpt))) {
+        LOG_WARN("multipoint coordinate out of range for buffer", K(ret));
+      } else if (OB_FAIL(check_coord_range_for_buffer(ml))) {
+        LOG_WARN("multilinestring coordinate out of range for buffer", K(ret));
+      } else if (OB_FAIL(check_coord_range_for_buffer(mpo))) {
+        LOG_WARN("multipolygon coordinate out of range for buffer", K(ret));
+      }
+
+      if (OB_FAIL(ret)) {
+        // skip buffer computation
+      } else {
       // param 1, 2
       bg::strategy::buffer::distance_symmetric<double> distance_s(strategy->distance_val_);
       bg::strategy::buffer::side_straight side_s;
@@ -323,6 +452,7 @@ private:
           break;
         }
       }
+      } // end of coord range check else
     }
 
     if (OB_SUCC(ret)) {

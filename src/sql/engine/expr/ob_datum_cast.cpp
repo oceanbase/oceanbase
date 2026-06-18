@@ -5425,7 +5425,8 @@ static int common_string_geometry(const char *buf, int64_t length, const sql::Ob
                                            cast_name))) {
     LOG_WARN("fail to get srs item", K(ret));
   } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, ObString(length, buf), geo, srs,
-                                                    cast_name))) {
+                                                    cast_name,
+                                                    ObGeoBuildFlag::GEO_DEFAULT | ObGeoBuildFlag::GEO_CHECK_FINITE))) {
     LOG_WARN("fail to parse geometry", K(ret), K(ObString(length, buf)), K(dst_geo_type));
   } else {
     ObString res_wkb;
@@ -9982,7 +9983,8 @@ CAST_FUNC_NAME(lob, geometry)
     const ObSrsItem *srs = NULL;
     if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, in_str, srs, true, cast_name))) {
       LOG_WARN("fail to get srs item", K(ret), K(in_str));
-    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, in_str, geo, srs, cast_name))) {
+    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, in_str, geo, srs, cast_name,
+                                                      ObGeoBuildFlag::GEO_DEFAULT | ObGeoBuildFlag::GEO_CHECK_FINITE))) {
       LOG_WARN("fail to parse geometry", K(ret), K(in_str), K(dst_geo_type));
     } else if (ObGeoType::GEOMETRY == dst_geo_type || ObGeoType::GEOTYPEMAX == dst_geo_type) {
       res_datum.set_string(in_str);
