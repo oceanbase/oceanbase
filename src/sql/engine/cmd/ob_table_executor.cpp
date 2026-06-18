@@ -24,6 +24,7 @@
 #include "share/external_table/ob_external_table_utils.h"
 #include "storage/mview/cmd/ob_mview_executor_util.h"
 #include "storage/ob_partition_pre_split.h"
+#include "storage/tablet/ob_tablet_to_global_temporary_table_operator.h"
 #include "share/schema/ob_add_interval_part_controller.h"
 #include "share/schema/ob_dependency_info.h"
 #include "sql/engine/cmd/ob_interval_partition_utils.h"
@@ -37,6 +38,9 @@ using namespace common;
 using namespace share;
 using namespace share::schema;
 using namespace observer;
+
+ERRSIM_POINT_DEF(EN_CTAS_FAIL_AFTER_INSERT);
+
 namespace sql
 {
 
@@ -514,6 +518,14 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
 
         DEBUG_SYNC(BEFORE_EXECUTE_CTAS_CLEAR_SESSION_ID);
 
+        #ifdef ERRSIM
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(EN_CTAS_FAIL_AFTER_INSERT ? : OB_SUCCESS)) {
+            LOG_WARN("errsim: ctas fail after insert", K(ret));
+          }
+        }
+        #endif
+
         //4, 刷新schema, 将table的sess id重置为0
         if (OB_SUCC(ret)) {
           obrpc::ObAlterTableRes res;
@@ -584,13 +596,27 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
           my_session->update_last_active_time();
           if (OB_LIKELY(need_clean)) {
             int tmp_ret = OB_SUCCESS;
-            obrpc::ObDDLRes res;
-            drop_table_arg.compat_mode_ = ORACLE_MODE == my_session->get_compatibility_mode() ?
-              lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL;
-            if (OB_SUCCESS != (tmp_ret = common_rpc_proxy->drop_table(drop_table_arg, res))) {
-              LOG_WARN("failed to drop table", K(drop_table_arg), K(ret));
+            // For GTT v2 (TMP_TABLE_ORA_SESS_V2/TMP_TABLE_ORA_TRX_V2), clean up session tablets
+            // before dropping schema to avoid orphan tablet records.
+            if (create_table_arg.schema_.is_oracle_tmp_table_v2()
+                && OB_INVALID_ID != create_table_res.table_id_) {
+              if (OB_TMP_FAIL(storage::ObSessionTabletDeleteHelper::delete_session_tablets_by_table_id(
+                    *sql_proxy, tenant_id, create_table_res.table_id_))) {
+                LOG_WARN("failed to delete session tablets for ctas cleanup", K(tmp_ret),
+                         K(tenant_id), K(create_table_res.table_id_));
+              }
+            }
+            if (OB_TMP_FAIL(tmp_ret)) {
+              LOG_WARN("failed to clean session tablets, skip drop table", K(tmp_ret));
             } else {
-              LOG_INFO("table is created and dropped due to error ", K(ret));
+              obrpc::ObDDLRes res;
+              drop_table_arg.compat_mode_ = ORACLE_MODE == my_session->get_compatibility_mode() ?
+                lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL;
+              if (OB_SUCCESS != (tmp_ret = common_rpc_proxy->drop_table(drop_table_arg, res))) {
+                LOG_WARN("failed to drop table", K(drop_table_arg), K(ret));
+              } else {
+                LOG_INFO("table is created and dropped due to error ", K(ret));
+              }
             }
           }
         } else {

@@ -394,6 +394,48 @@ int ObSessionTabletCreateHelper::generate_tablet_create_arg(
   return ret;
 }
 
+int ObSessionTabletDeleteHelper::delete_session_tablets_by_table_id(
+    common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
+    const uint64_t table_id)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObSessionTabletInfo, 4> session_tablet_infos;
+  ObSEArray<ObSessionTabletInfo *, 4> session_tablet_info_ptrs;
+  if (OB_FAIL(share::ObTabletToGlobalTmpTableOperator::get_by_table_id(sql_proxy,
+                                                                       tenant_id,
+                                                                       table_id,
+                                                                       session_tablet_infos))) {
+    LOG_WARN("failed to get session tablet infos", K(ret), K(tenant_id), K(table_id));
+  } else if (!session_tablet_infos.empty()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < session_tablet_infos.count(); i++) {
+      ObSessionTabletInfo &info = session_tablet_infos.at(i);
+      info.is_creator_ = true;
+      if (OB_FAIL(session_tablet_info_ptrs.push_back(&info))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      common::ObMySQLTransaction trans;
+      if (OB_FAIL(trans.start(&sql_proxy, tenant_id))) {
+        LOG_WARN("failed to start transaction", K(ret));
+      } else {
+        ObSessionTabletDeleteHelper delete_helper(tenant_id, session_tablet_info_ptrs, trans);
+        if (OB_FAIL(delete_helper.do_work())) {
+          LOG_WARN("failed to delete session tablets", K(ret));
+        }
+        const bool is_commit = (OB_SUCCESS == ret);
+        int tmp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (tmp_ret = trans.end(is_commit))) {
+          LOG_WARN("failed to end transaction", K(tmp_ret), K(ret), K(is_commit));
+          ret = OB_SUCCESS != ret ? ret : tmp_ret;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 // if the table is a related table of a data table, we need to lock the data table
 // if the table was dropped and gc tasks call this function, we can delete the tablet directly
 // All tablet_info.is_creator_ should be true. Also, the LS must be the same for all,

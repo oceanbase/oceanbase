@@ -136,6 +136,10 @@ public:
   {}
   ~ObSessionTabletDeleteHelper() = default;
   int do_work();
+  static int delete_session_tablets_by_table_id(
+      common::ObISQLClient &sql_proxy,
+      const uint64_t tenant_id,
+      const uint64_t table_id);
   /// @brief Delete session tablets with GC-oriented batch(For GC only).
   ///   per-table failures are filtered
   ///   (see remove_failed_tables inside check_and_lock_tables) so tablets that
