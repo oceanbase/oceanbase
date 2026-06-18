@@ -102,6 +102,10 @@ public:
   {
     return (read_info_ != nullptr) ? &read_info_->get_columns_desc() : nullptr;
   }
+  OB_INLINE const ObMergeEngineUpperVersion &get_merge_engine_upper_version() const
+  {
+    return merge_engine_upper_version_;
+  }
   OB_INLINE bool read_with_same_schema() const
   {
     return is_same_schema_column_;
@@ -121,6 +125,10 @@ public:
   OB_INLINE bool need_ttl_filter() const
   {
     return (read_info_ != nullptr && read_info_ != rowkey_read_info_) ? read_info_->has_ttl_definition() : false;
+  }
+  OB_INLINE bool need_adjust_query_merge_engine() const
+  {
+    return !is_mds_query_ && merge_engine_upper_version_.is_inited();
   }
   bool can_be_reused(const uint32_t cg_idx, const common::ObIArray<sql::ObExpr*> &exprs, const bool is_aggregate)
   {
@@ -333,6 +341,7 @@ public:
       uint64_t reserved_ : 38;
     };
   };
+  ObMergeEngineUpperVersion merge_engine_upper_version_;
 };
 
 struct ObTableAccessParam
@@ -353,7 +362,7 @@ public:
                        const common::ObTabletID &tablet_id,
                        const ObITableReadInfo &read_info,
                        const bool is_multi_version_merge = false,
-                       const ObMergeEngineType merge_engine_type = ObMergeEngineType::OB_MERGE_ENGINE_MAX);
+                       const ObMergeEngineType original_merge_engine_type = ObMergeEngineType::OB_MERGE_ENGINE_MAX);
   // used for get unique index conflict row
   int init_dml_access_param(const ObRelativeTable &table,
                             const ObITableReadInfo &rowkey_read_info,

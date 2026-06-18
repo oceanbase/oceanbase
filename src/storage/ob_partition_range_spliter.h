@@ -8,6 +8,7 @@
 
 #include "storage/access/ob_table_access_param.h"
 #include "storage/access/ob_table_access_context.h"
+#include "storage/access/ob_tablet_read_tables.h"
 #include "ob_storage_struct.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/container/ob_heap.h"
@@ -679,7 +680,7 @@ protected:
     ObStoreCtx store_ctx_;
     ObTableAccessContext tbl_xs_ctx_;
     ObTableStoreIterator tbls_iter_;
-    ObGetTableParam get_tbl_param_;
+    ObTabletReadTables tablet_read_tables;
     blocksstable::ObDatumRange range_to_scan_;
     ObIStoreRowIterator *iter_;
     bool is_inited_;

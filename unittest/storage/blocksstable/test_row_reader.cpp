@@ -1265,7 +1265,7 @@ TEST_F(TestNewRowReader, test_write_lock_rowkey)
   const int64_t rowkey_cnt = 30;
   ObStoreRowkey rowkey;
   rowkey.assign(writer_row.row_val_.cells_, rowkey_cnt);
-  ret = row_writer.write_lock_rowkey(rowkey, nullptr, buf, pos);
+  ret = row_writer.write_lock_rowkey(rowkey, nullptr, ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE, buf, pos);
   STORAGE_LOG(INFO, "write_row", K(writer_row), K(pos));
 
   ObDatumRow reader_row;
@@ -1381,6 +1381,73 @@ TEST_F(TestNewRowReader, test_write_update_row)
       ASSERT_TRUE(!reader_row.storage_datums_[i].is_nop());
     }
   }
+}
+
+TEST_F(TestNewRowReader, test_merge_engine_type_compact_and_read_path)
+{
+  const int64_t rowkey_cnt = 1;
+  const int64_t column_cnt = 4;
+  ObDatumRow new_row;
+  ObDatumRow old_row;
+  ASSERT_EQ(OB_SUCCESS, new_row.init(allocator_, column_cnt));
+  ASSERT_EQ(OB_SUCCESS, old_row.init(allocator_, column_cnt));
+  new_row.count_ = column_cnt;
+  old_row.count_ = column_cnt;
+  for (int64_t i = 0; i < column_cnt; ++i) {
+    new_row.storage_datums_[i].set_int(100 + i);
+    old_row.storage_datums_[i].set_int(200 + i);
+  }
+  new_row.row_flag_.set_flag(ObDmlFlag::DF_UPDATE);
+  old_row.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
+  new_row.merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE;
+  old_row.merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT;
+
+  ObArray<int64_t> update_idx;
+  ASSERT_EQ(OB_SUCCESS, update_idx.push_back(1));
+  char *new_buf = nullptr;
+  char *old_buf = nullptr;
+  int64_t new_len = 0;
+  int64_t old_len = 0;
+  ObRowWriter new_writer;
+  ObRowWriter old_writer;
+  ASSERT_EQ(OB_SUCCESS, new_writer.write(rowkey_cnt, new_row, &update_idx, nullptr, new_buf, new_len));
+  ASSERT_EQ(OB_SUCCESS, old_writer.write(rowkey_cnt, old_row, nullptr, nullptr, old_buf, old_len));
+
+  ObRowReader header_reader;
+  const ObRowHeader *new_header = nullptr;
+  const ObRowHeader *old_header = nullptr;
+  ASSERT_EQ(OB_SUCCESS, header_reader.read_row_header(new_buf, new_len, new_header));
+  ASSERT_EQ(OB_SUCCESS, header_reader.read_row_header(old_buf, old_len, old_header));
+
+  // ObMemtableRowCompactor keeps the first non-MAX merge engine type it sees.
+  ObDatumRow compact_row;
+  ASSERT_EQ(OB_SUCCESS, compact_row.init(allocator_, column_cnt));
+  compact_row.fuse_merge_engine_type(new_header->get_merge_engine_type());
+  compact_row.fuse_merge_engine_type(old_header->get_merge_engine_type());
+  ASSERT_EQ(ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE, compact_row.merge_engine_type_);
+
+  // ObRowReader::read_memtable_row overwrites merge_engine_type_ for every node read.
+  ObDatumRow reader_row;
+  ASSERT_EQ(OB_SUCCESS, reader_row.init(allocator_, column_cnt));
+  reader_row.count_ = column_cnt;
+  for (int64_t i = 0; i < column_cnt; ++i) {
+    reader_row.storage_datums_[i].set_nop();
+  }
+  build_column_read_info(rowkey_cnt, old_row);
+  memtable::ObNopBitMap nop_bitmap;
+  bool read_finished = false;
+  const ObRowHeader *row_header = nullptr;
+  ObRowReader row_reader;
+  ASSERT_EQ(OB_SUCCESS, nop_bitmap.init(column_cnt, rowkey_cnt));
+  ASSERT_EQ(OB_SUCCESS, row_reader.read_memtable_row(
+      new_buf, new_len, read_info_, reader_row, nop_bitmap, read_finished, row_header));
+  ASSERT_FALSE(read_finished);
+  ASSERT_EQ(ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE, reader_row.merge_engine_type_);
+  ASSERT_EQ(OB_SUCCESS, row_reader.read_memtable_row(
+      old_buf, old_len, read_info_, reader_row, nop_bitmap, read_finished, row_header));
+  ASSERT_TRUE(read_finished);
+  ASSERT_EQ(ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE, reader_row.merge_engine_type_);
+  ASSERT_EQ(compact_row.merge_engine_type_, reader_row.merge_engine_type_);
 }
 
 TEST_F(TestNewRowReader, test_write_write_nop_val)

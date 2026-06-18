@@ -40,6 +40,10 @@ public:
           || ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY == merge_engine_type
           || ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE == merge_engine_type;
   }
+  static bool is_deleting_ttl_merge_engine(const ObMergeEngineType &merge_engine_type) {
+    return ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE == merge_engine_type
+      || ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT == merge_engine_type;
+  }
 
   OB_INLINE static bool is_rowscn_column(const ObString &column_name)
   {
@@ -60,6 +64,7 @@ public:
   static int check_ttl_column_valid(const share::schema::ObTableSchema &table_schema,
                                     const ObString &ttl_definition,
                                     const ObTTLFlag &ttl_flag,
+                                    const ObMergeEngineType &merge_engine_type,
                                     const uint64_t tenant_data_version,
                                     const uint64_t tenant_id);
 
@@ -68,8 +73,9 @@ public:
 
   // alter merge engine feature will support in 4.5.2
   // this function now is just a placeholder for future feature support
-  OB_INLINE static int check_alter_merge_engine_valid(const share::schema::ObTableSchema &table_schema,
-                                                      const AlterTableSchema &alter_table_schema);
+  static int check_alter_merge_engine_valid(const share::schema::ObTableSchema &table_schema,
+                                            const AlterTableSchema &alter_table_schema,
+                                            share::schema::ObSchemaGetterGuard &schema_guard);
 
   OB_INLINE static int check_create_ttl_schema_valid(const share::schema::ObTableSchema &table_schema,
                                                      const uint64_t tenant_id);
@@ -227,44 +233,6 @@ OB_INLINE int ObCompactionTTLUtil::check_create_append_only_engine_valid(
   return ret;
 }
 
-OB_INLINE int ObCompactionTTLUtil::check_alter_merge_engine_valid(const share::schema::ObTableSchema &table_schema,
-                                                                  const AlterTableSchema &alter_table_schema)
-{
-  int ret = OB_SUCCESS;
-
-  // 1. dynamic partition policy is not supported for append_only table
-  //    [x] (ALTER TABLE) when you add dynamic partition policy to append_only table
-  if (table_schema.is_append_only_merge_engine() && alter_table_schema.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::DYNAMIC_PARTITION_POLICY)) {
-    ret = OB_NOT_SUPPORTED;
-    COMMON_LOG(WARN, "dynamic partition policy is not supported for append_only table", K(ret), K(table_schema));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "dynamic partition policy for append_only table is");
-  }
-
-  //! Below is placeholder for future feature support (4.5.2 support alter merge engine)
-  //! Some checks are as follows:
-  //! Notice that if you alter merge engine, you should also ensure the above checks are passed.
-
-  // 1. check data version
-  //    [x] (ALTER merge engine) when you alter merge engine (for future merge_engine alter feature)
-
-  // 2. append_only table can not have delete/update event trigger
-  //    [x] (ALTER merge engine) when you alter merge engine (for future merge_engine alter feature)
-
-  // 3. TTL table can not alter to partial update merge engine (notice that there may be alter_ttl and alter_merge_engine at the same time)
-  //    [x] (ALTER merge engine) when you alter merge engine (for future merge_engine alter feature)
-
-  // 4. append_only table can not be alter to other merge engine
-  //    [x] (ALTER merge engine) when you alter merge engine (for future merge_engine alter feature)
-
-  // 5. dynamic partition policy is not supported for append_only table
-  //    [x] (ALTER merge engine) when you alter merge engine (for future merge_engine alter feature)
-
-  // 6. delta format 'encoding' is not supported for partial_update merge engine table
-  //    handled in ObAlterTableResolver::check_delta_encoding_type
-
-  return ret;
-}
-
 OB_INLINE int ObCompactionTTLUtil::check_create_ttl_schema_valid(const share::schema::ObTableSchema &table_schema,
                                                                  const uint64_t tenant_id)
 {
@@ -300,6 +268,7 @@ OB_INLINE int ObCompactionTTLUtil::check_create_ttl_schema_valid(const share::sc
         && OB_FAIL(check_ttl_column_valid(table_schema,
                                           table_schema.get_ttl_definition(),
                                           table_schema.get_ttl_flag(),
+                                          table_schema.get_merge_engine_type(),
                                           tenant_data_version,
                                           tenant_id))) {
       COMMON_LOG(WARN, "fail to check ttl column valid", KR(ret), K(table_schema));
@@ -395,7 +364,9 @@ int ObCompactionTTLUtil::check_alter_ttl_schema_valid(const share::schema::ObTab
       // 6. check ttl column valid
       //    [x] (ALTER TTL) check ttl column valid when alter table
       if (OB_SUCC(ret) && alter_table_schema.has_ttl_definition()) {
-        if (OB_FAIL(check_ttl_column_valid(table_schema, alter_table_schema.get_ttl_definition(), alter_table_schema.get_ttl_flag(), tenant_data_version, tenant_id))) {
+        const ObMergeEngineType new_merge_engine_type = alter_table_schema.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::MERGE_ENGINE_TYPE)
+          ? alter_table_schema.get_merge_engine_type() : table_schema.get_merge_engine_type();
+        if (OB_FAIL(check_ttl_column_valid(table_schema, alter_table_schema.get_ttl_definition(), alter_table_schema.get_ttl_flag(), new_merge_engine_type, tenant_data_version, tenant_id))) {
           COMMON_LOG(WARN, "fail to check ttl column valid", KR(ret), K(table_schema), K(alter_table_schema));
         } else if (OB_FAIL(check_exist_user_defined_rowscn_column(alter_table_schema))) {
           COMMON_LOG(WARN, "table is compaction ttl table, can't add user defined rowscn column", K(ret), K(alter_table_schema));

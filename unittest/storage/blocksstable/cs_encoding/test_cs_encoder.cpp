@@ -1135,7 +1135,7 @@ TEST_F(TestMultiVersionCSEncoder, micro_header)
   ASSERT_EQ(1, header->is_last_row_last_flag_);
   ASSERT_EQ(1, header->has_row_header_);
   column_headers = reinterpret_cast<ObCSColumnHeader *>(block_buf + header->header_size_ + sizeof(ObAllColumnHeader));
-  ASSERT_EQ(ObCSRowHeader::TYPE.get_type(), column_headers[header->column_count_].obj_type_);
+  ASSERT_EQ(ObCSRowMultiVersionHeader::TYPE.get_type(), column_headers[header->column_count_].obj_type_);
   encoder_.reuse();
 
   data =

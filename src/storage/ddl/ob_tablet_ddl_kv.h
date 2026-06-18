@@ -343,9 +343,6 @@ public:
     int64_t &row_count) const;
 
   int64_t get_merge_slice_idx() const { return merge_slice_idx_; }
-  OB_INLINE int64_t get_column_group_cnt() const { return column_group_cnt_; }
-  OB_INLINE int64_t get_column_cnt() const { return full_column_cnt_; }
-  OB_INLINE ObCOSSTableBaseType get_co_base_type() const { return co_base_type_; }
 
   // for inc_ddl_kv only
   template<class _callback>
@@ -375,9 +372,6 @@ public:
                        K_(merge_slice_idx),
                        K_(seq_no),
                        K_(ddl_kv_type),
-                       K_(column_group_cnt),
-                       K_(full_column_cnt),
-                       K_(co_base_type),
                        K_(ddl_snapshot_version));
 
 private:
@@ -420,9 +414,6 @@ private:
   ObArray<common::ObArenaAllocator *> ddl_memtable_arena_allocators_;
   int64_t merge_slice_idx_; // record max slice idx can be merged, require all data begin from start_scn
   ObDDLKVType ddl_kv_type_;
-  int64_t column_group_cnt_;
-  int64_t full_column_cnt_;
-  ObCOSSTableBaseType co_base_type_;
 };
 
 template<class _callback>

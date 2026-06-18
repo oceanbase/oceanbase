@@ -842,25 +842,28 @@ int ObTabletCreateDeleteHelper::inner_create_empty_co_sstable(
   table_handle.reset();
 
   // build main cg sstables
-  bool has_all_cg = false;
-  const ObIArray<ObStorageColumnGroupSchema> &cg_schemas = storage_schema.get_column_groups();
-  for (int64_t idx = cg_schemas.count() - 1; OB_SUCC(ret) && idx >= 0; --idx) {
-    const ObStorageColumnGroupSchema &cg_schema = cg_schemas.at(idx);
-    if (cg_schema.is_all_column_group()) {
-      has_all_cg = true;
+  const bool has_all_cg = storage_schema.has_all_column_group();
+  ObStorageCGSchemaIterator cg_iterator(storage_schema);
+  ObTableHandleV2 co_handle;
+  while (OB_SUCC(ret)) {
+    const ObStorageColumnGroupSchema *cg_schema = nullptr;
+    int64_t cg_idx = -1; // column group id in table key
+    int64_t iter_idx = -1;
+    if (OB_FAIL(cg_iterator.next(cg_schema, cg_idx, iter_idx))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("fail to get next cg schema", K(ret));
+      } else {
+        ret = OB_SUCCESS;
+      }
       break;
     }
-  }
 
-  ObTableHandleV2 co_handle;
-  for (int64_t idx = 0; OB_SUCC(ret) && idx < cg_schemas.count(); ++idx) {
-    const ObStorageColumnGroupSchema &cg_schema = cg_schemas.at(idx);
-    if (cg_schema.is_all_column_group() || (!has_all_cg && cg_schema.is_rowkey_column_group())) {
+    if (cg_schema->is_all_column_group() || (!has_all_cg && cg_schema->is_rowkey_column_group())) {
       ObTabletCreateSSTableParam cs_param;
       ObCOSSTableV2 *co_sstable = nullptr;
       ObSSTable *sstable = nullptr;
 
-      if (OB_FAIL(cs_param.init_for_empty_major_sstable(tablet_id, storage_schema, snapshot_version, idx, has_all_cg, is_shared))) {
+      if (OB_FAIL(cs_param.init_for_empty_major_sstable(tablet_id, storage_schema, snapshot_version, cg_idx, has_all_cg, is_shared))) {
         LOG_WARN("failed to build table cs param for column store", K(ret), K(tablet_id), K(cg_schema));
       } else if (OB_FAIL(create_sstable<ObCOSSTableV2>(cs_param, allocator, co_handle))) {
         LOG_WARN("failed to create all cg sstable", K(ret), K(cs_param));

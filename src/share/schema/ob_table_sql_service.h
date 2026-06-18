@@ -592,6 +592,11 @@ private:
                                        const ObColumnGroupSchema &column_group,
                                        const ObIArray<uint64_t> &column_ids,
                                        const bool is_history);
+  int exec_insert_single_column_group_mapping(ObISQLClient &sql_client,
+                                               const ObTableSchema &table,
+                                               const int64_t schema_version,
+                                               const ObColumnGroupSchema &column_group,
+                                               const bool is_history);
   int append_column_group_dml_for_create_table(const ObTableSchema &table,
                                                const uint64_t data_version,
                                                ObDMLSqlSplicer &cg_dml,
@@ -600,7 +605,15 @@ private:
                                                ObDMLSqlSplicer &mapping_history_dml,
                                                int64_t &column_group_cnt,
                                                int64_t &mapping_cnt);
-
+  int generate_dml_for_create_table(const ObTableSchema &table,
+                                    const uint64_t data_version,
+                                    const ObColumnGroupSchema &column_group,
+                                    ObDMLSqlSplicer &cg_dml,
+                                    ObDMLSqlSplicer &cg_history_dml,
+                                    ObDMLSqlSplicer &mapping_dml,
+                                    ObDMLSqlSplicer &mapping_history_dml,
+                                    int64_t &column_group_cnt,
+                                    int64_t &mapping_cnt);
   int delete_column_group(ObISQLClient &sql_clinet,
                           const ObTableSchema &table,
                           const int64_t schema_version);

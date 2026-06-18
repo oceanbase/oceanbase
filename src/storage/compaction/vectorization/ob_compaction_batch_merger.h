@@ -88,7 +88,6 @@ public:
 protected:
   virtual int alloc_writers(
     const blocksstable::ObDatumRow &default_row,
-    const common::ObIArray<ObStorageColumnGroupSchema> &cg_array,
     ObTabletMergeInfo **merge_infos,
     ObIArray<ObITable*> &tables) override;
 };

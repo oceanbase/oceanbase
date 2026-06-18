@@ -147,7 +147,7 @@ public:
         version_range,
         &merge_dag_,
         ctx,
-        false);
+        ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE);
   }
   void prepare_ttl_filter(
     const int64_t filter_max_version,
@@ -292,12 +292,21 @@ public:
   {
     ObStorageSchema storage_schema;
     OK(storage_schema.init(allocator_, table_schema_, lib::Worker::CompatMode::MYSQL));
-    const ObIArray<ObStorageColumnGroupSchema> &cg_array = storage_schema.get_column_groups();
-
     common::ObArray<ObITable *> cg_tables;
-
-    for (int64_t cg_idx = 0; cg_idx < cg_array.count(); ++cg_idx) {
-      const ObStorageColumnGroupSchema &cg_schema = cg_array.at(cg_idx);
+    ObStorageCGSchemaIterator cg_iter(storage_schema);
+    int ret = OB_SUCCESS;
+    while (OB_SUCC(ret)) {
+      const ObStorageColumnGroupSchema *cg_schema = nullptr;
+      int64_t cg_idx = -1;
+      int64_t iter_idx = -1;
+      if (OB_FAIL(cg_iter.next(cg_schema, cg_idx, iter_idx))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to get next cg schema", K(ret));
+        }
+        break;
+      }
 
       ObWholeDataStoreDesc whole_desc;
       OK(whole_desc.init(
@@ -308,7 +317,7 @@ public:
           0 /*transfer_seq*/, 0 /*concurrent_cnt*/,
           SCN::min_scn() /*reorganization_scn*/,
           SCN::invalid_scn() /*end_scn*/,
-          &cg_schema, cg_idx));
+          cg_schema, cg_idx));
 
       ObSSTableIndexBuilder idx_builder(false);
       OK(idx_builder.init(whole_desc.get_desc()));
@@ -324,8 +333,8 @@ public:
 
       ObCOMergeProjector projector;
       ObCOMergeProjector *proj_ptr = nullptr;
-      if (!cg_schema.is_all_column_group()) {
-        OK(projector.init(cg_schema, allocator_));
+      if (!cg_schema->is_all_column_group()) {
+        OK(projector.init(*cg_schema, allocator_));
         proj_ptr = &projector;
       }
 
@@ -343,11 +352,11 @@ public:
             ? datum_row : proj_ptr->get_project_row();
         OK(cg_writer.append_row(append_row));
 
-        if (cg_writer.micro_writer_->get_row_count() >= micro_row_cnt[cg_idx]) {
+        if (cg_writer.micro_writer_->get_row_count() >= micro_row_cnt[iter_idx]) {
           OK(cg_writer.build_micro_block());
         }
         if (cg_writer.macro_blocks_[cg_writer.current_index_].get_row_count()
-            >= macro_row_cnt[cg_idx]) {
+            >= macro_row_cnt[iter_idx]) {
           OK(cg_writer.try_switch_macro_block());
         }
       }
@@ -356,16 +365,16 @@ public:
 
       ObITable::TableKey tkey;
       tkey.tablet_id_  = ObTabletID(tablet_id_);
-      tkey.table_type_ = cg_schema.has_multi_version_column()
+      tkey.table_type_ = cg_schema->has_multi_version_column()
           ? ObITable::COLUMN_ORIENTED_SSTABLE
           : ObITable::NORMAL_COLUMN_GROUP_SSTABLE;
       tkey.scn_range_  = scn_range;
-      if (cg_schema.has_multi_version_column()) {
+      if (cg_schema->has_multi_version_column()) {
         tkey.column_group_idx_ = cg_idx;
       }
 
-      const int64_t cg_cnt_param = cg_schema.has_multi_version_column() ? cg_array.count() : 1;
-      const bool    is_co_base   = cg_schema.has_multi_version_column();
+      const int64_t cg_cnt_param = cg_schema->has_multi_version_column() ? cg_iter.get_column_group_count() : 1;
+      const bool    is_co_base   = cg_schema->has_multi_version_column();
 
       ObTableHandleV2 tmp_hdl;
 

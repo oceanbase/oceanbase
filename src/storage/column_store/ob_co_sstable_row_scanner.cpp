@@ -29,6 +29,7 @@ ObCOSSTableRowScanner::ObCOSSTableRowScanner()
     reverse_scan_(false),
     is_limit_end_(false),
     use_row_store_projector_(false),
+    need_getter_project_(false),
     state_(BEGIN),
     blockscan_state_(MAX_STATE),
     group_by_project_idx_(0),
@@ -88,7 +89,7 @@ int ObCOSSTableRowScanner::init(
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(init_project_iter_for_single_row(param, context, table))) {
-      LOG_WARN("Fail to init project iter for single row", K(ret));
+      LOG_WARN("Fail to init project iter for single row", K(ret), KPC(row_sstable));
     } else if (param.has_lob_column_out()
         && nullptr != param.out_cols_project_ && param.out_cols_project_->count() > 0
         && (nullptr == context.lob_locator_helper_
@@ -107,7 +108,7 @@ int ObCOSSTableRowScanner::init(
     reverse_scan_ = context.query_flag_.is_reverse_scan();
     batched_row_store_ = static_cast<ObBlockBatchedRowStore*>(context.block_row_store_);
     block_row_store_ = context.block_row_store_;
-    column_group_cnt_ = table_->get_cs_meta().get_column_group_count();
+    column_group_cnt_ = table_->get_column_group_count(false/*include hidden cg*/);
   }
   return ret;
 }
@@ -140,6 +141,7 @@ void ObCOSSTableRowScanner::reset()
   pending_end_row_id_ = OB_INVALID_CS_ROW_ID;
   column_group_cnt_ = -1;
   use_row_store_projector_ = false;
+  need_getter_project_ = false;
   getter_projector_.reset();
 }
 
@@ -160,6 +162,7 @@ void ObCOSSTableRowScanner::reuse()
   }
   range_idx_ = 0;
   is_new_group_ = false;
+  need_getter_project_ = false;
   current_ = OB_INVALID_CS_ROW_ID;
   end_ = OB_INVALID_CS_ROW_ID;
   group_size_ = 0;
@@ -336,8 +339,11 @@ int ObCOSSTableRowScanner::init_rows_filter(
           LOG_WARN("Fail to init rows filter", K(ret), K(row_param), KPC(table));
         }
       }
-    } else if (OB_FAIL(rows_filter_->switch_context(row_param, context, table,
-        column_group_cnt_ != static_cast<ObCOSSTableV2*>(table)->get_cs_meta().get_column_group_count()))) {
+    } else if (OB_FAIL(rows_filter_->switch_context(
+                        row_param,
+                        context,
+                        table,
+                        column_group_cnt_ != static_cast<ObCOSSTableV2*>(table)->get_column_group_count(false/*include hidden cg*/)))) {
       LOG_WARN("Failed to switch context for filter", K(ret));
     }
   }
@@ -404,8 +410,7 @@ int ObCOSSTableRowScanner::init_project_iter(
                    co_sstable,
                    context,
                    iter_params,
-                   column_group_cnt_ !=
-                       co_sstable->get_cs_meta().get_column_group_count(),
+                   column_group_cnt_ != co_sstable->get_column_group_count(false/*include hidden cg*/),
                    project_iter_))) {
       LOG_WARN("Fail to switch context for cg iter", K(ret));
     }
@@ -423,6 +428,7 @@ int ObCOSSTableRowScanner::init_project_iter_for_single_row(
   ObCOSSTableV2* co_sstable = static_cast<ObCOSSTableV2*>(table);
   common::ObSEArray<ObTableIterParam*, 8> iter_params;
   getter_projector_.set_allocator(context.stmt_allocator_);
+  need_getter_project_ = false;
   if (co_sstable->is_all_cg_base()) {
     // use all cg if exists for getter
   } else if (OB_FAIL(init_fixed_array_param(getter_projector_, row_param.get_out_col_cnt()))) {
@@ -441,18 +447,26 @@ int ObCOSSTableRowScanner::init_project_iter_for_single_row(
         LOG_WARN("Failed to init cg canner for single row", K(ret));
       } else {
         getter_project_iter_ = cg_scanner;
+        need_getter_project_ = true;
       }
     } else if (OB_ISNULL(getter_project_iter_ = OB_NEWx(ObCGTileScanner, context.stmt_allocator_))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Failed to alloc cg tile scanner", K(ret));
     } else if (OB_FAIL(static_cast<ObCGTileScanner*>(getter_project_iter_)->init(iter_params, true, false, context, co_sstable))) {
       LOG_WARN("Failed to init cg tile scanner", K(ret), K(iter_params));
+    } else {
+      need_getter_project_ = true;
     }
   } else if (OB_FAIL(ObCOSSTableRowsFilter::switch_context_for_cg_iter(true, true, false, co_sstable, context, iter_params,
-      column_group_cnt_ != co_sstable->get_cs_meta().get_column_group_count(), getter_project_iter_))) {
+      column_group_cnt_ != co_sstable->get_column_group_count(false/*include hidden cg*/),
+      getter_project_iter_))) {
     LOG_WARN("Failed to switch context for cg iter", K(ret));
+  } else {
+    need_getter_project_ = true;
   }
-  LOG_DEBUG("[COLUMNSTORE] init project iter for single row", K(ret), K_(getter_project_iter), K(row_param));
+  if (OB_FAIL(ret)) {
+    FLOG_INFO("[COLUMNSTORE] init project iter for single row", K(ret), K(co_sstable->is_all_cg_base()), KPC(co_sstable), K_(getter_project_iter), K(row_param));
+  }
   return ret;
 }
 
@@ -957,12 +971,15 @@ int ObCOSSTableRowScanner::inner_get_next_row(const ObDatumRow *&store_row)
       state_ = BEGIN;
       blockscan_state_ = BLOCKSCAN_RANGE;
     }
-  } else if (nullptr == getter_project_iter_) {
+  } else if (!need_getter_project_) {
     // All columns have been fetched in the row scanner.
+  } else if (OB_ISNULL(getter_project_iter_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected null getter_project_iter_ when need_getter_project_ is true", K(ret), KPC(this));
   } else {
     // 3. Seek position in cg iterator.
     if (OB_FAIL(getter_project_iter_->locate({row_id, 1}))) {
-      LOG_WARN("Failed to locate", K(ret), KPC_(getter_project_iter), K(row_id), KPC(this));
+      LOG_WARN("Failed to locate", K(ret), KPC_(getter_project_iter), K(row_id), KPC(this->table_), KPC(this));
       // 4. Fetch one row in all cg iterators, datum will be set in gext_next_row.
     } else if (OB_FAIL(getter_project_iter_->get_next_row(cg_datum_row))) {
       if (OB_ITER_END == ret) {

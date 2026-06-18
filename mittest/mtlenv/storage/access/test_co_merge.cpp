@@ -383,10 +383,12 @@ void TestCOMerge::prepare_co_sstable(
   common::ObArray<ObITable *> cg_tables;
   ObITable *co_table = nullptr;
   ASSERT_EQ(OB_SUCCESS, storage_schema.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL));
-  const common::ObIArray<ObStorageColumnGroupSchema> &cg_array = storage_schema.get_column_groups();
-
-  for (int64_t i = 0; i < cg_array.count(); i++) {
-    const ObStorageColumnGroupSchema &cg_schema = cg_array.at(i);
+  ObStorageCGSchemaIterator cg_iterator(storage_schema);
+  int ret = OB_SUCCESS;
+  while (OB_SUCC(ret)) {
+    const ObStorageColumnGroupSchema *cg_schema = nullptr;
+    int64_t cg_idx = 0;
+    int64_t iter_idx = -1;
     ObCOMergeProjector projector;
     blocksstable::ObWholeDataStoreDesc data_store_desc;
     ObMacroBlockWriter macro_writer;
@@ -394,53 +396,62 @@ void TestCOMerge::prepare_co_sstable(
     ObCOMergeProjector *row_project = nullptr;
     ObTableHandleV2 *table_handle = nullptr;
 
-    OK(data_store_desc.init(false/*is_ddl*/, table_schema,
-                          ObLSID(ls_id_),
-                          ObTabletID(tablet_id_),
-                          merge_type,
-                          snapshot_version,
-                          DATA_CURRENT_VERSION,
-                          table_schema.get_micro_index_clustered(),
-                          0 /*tablet_transfer_seq*/,
-                          0/*concurrent_cnt*/,
-                          share::SCN::min_scn(), /*reorganization_scn*/
-                          share::SCN::invalid_scn(), /*end_scn*/
-                          &cg_schema,
-                          i));
-    ASSERT_EQ(OB_SUCCESS, root_index_builder.init(data_store_desc.get_desc()));
-    data_store_desc.get_desc().sstable_index_builder_ = &root_index_builder;
-    if (!cg_schema.is_all_column_group()) {
-      OK(projector.init(cg_schema, allocator_));
-      row_project = &projector;
-    }
-    ObMacroSeqParam seq_param;
-    seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
-    seq_param.start_ = 0;
-    ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-    ObSSTablePrivateObjectCleaner cleaner;
-    OK(macro_writer.open(data_store_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
-    prepare_data(micro_row_cnt[i], macro_row_cnt[i],
-            table_schema.get_column_count(), data_iter, macro_writer, row_project);
-    OK(macro_writer.close());
-    // data write ctx has been moved to root_index_builder
-    ASSERT_EQ(macro_writer.get_macro_block_write_ctx().get_macro_block_count(), 0);
-
-    ObITable::TableKey table_key;
-    table_key.tablet_id_ = ObTabletID(tablet_id_);
-    table_key.table_type_ = cg_schema.has_multi_version_column() ? ObITable::COLUMN_ORIENTED_SSTABLE : ObITable::NORMAL_COLUMN_GROUP_SSTABLE;
-    table_key.scn_range_ = scn_range;
-    if (cg_schema.has_multi_version_column()) {
-      table_key.column_group_idx_ = i;
-    }
-    ASSERT_NE(nullptr, table_handle = OB_NEWx(ObTableHandleV2, (&allocator_)));
-    const int64_t cg_cnt = cg_schema.has_multi_version_column() ? cg_array.count() : 1;
-    close_builder_and_prepare_sstable(data_store_desc.get_desc(), table_key, table_schema, cg_cnt, root_index_builder, *table_handle, is_all_cg_base);
-    if (cg_schema.has_multi_version_column()) {
-      co_table_handle.set_sstable(table_handle->get_table(), &allocator_);
+    if (OB_FAIL(cg_iterator.next(cg_schema, cg_idx, iter_idx))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("fail to get next cg schema", K(ret));
+      } else {
+        ret = OB_SUCCESS;
+        break;
+      }
     } else {
-      OK(cg_tables.push_back(table_handle->get_table()));
+      OK(data_store_desc.init(false/*is_ddl*/, table_schema,
+                            ObLSID(ls_id_),
+                            ObTabletID(tablet_id_),
+                            merge_type,
+                            snapshot_version,
+                            DATA_CURRENT_VERSION,
+                            table_schema.get_micro_index_clustered(),
+                            0 /*tablet_transfer_seq*/,
+                            0/*concurrent_cnt*/,
+                            share::SCN::min_scn(), /*reorganization_scn*/
+                            share::SCN::invalid_scn(), /*end_scn*/
+                            cg_schema,
+                            cg_idx));
+      ASSERT_EQ(OB_SUCCESS, root_index_builder.init(data_store_desc.get_desc()));
+      data_store_desc.get_desc().sstable_index_builder_ = &root_index_builder;
+      if (!cg_schema->is_all_column_group()) {
+        OK(projector.init(*cg_schema, allocator_));
+        row_project = &projector;
+      }
+      ObMacroSeqParam seq_param;
+      seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+      seq_param.start_ = 0;
+      ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
+      ObSSTablePrivateObjectCleaner cleaner;
+      OK(macro_writer.open(data_store_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+      prepare_data(micro_row_cnt[cg_idx], macro_row_cnt[cg_idx],
+              table_schema.get_column_count(), data_iter, macro_writer, row_project);
+      OK(macro_writer.close());
+      // data write ctx has been moved to root_index_builder
+      ASSERT_EQ(macro_writer.get_macro_block_write_ctx().get_macro_block_count(), 0);
+
+      ObITable::TableKey table_key;
+      table_key.tablet_id_ = ObTabletID(tablet_id_);
+      table_key.table_type_ = cg_schema->has_multi_version_column() ? ObITable::COLUMN_ORIENTED_SSTABLE : ObITable::NORMAL_COLUMN_GROUP_SSTABLE;
+      table_key.scn_range_ = scn_range;
+      if (cg_schema->has_multi_version_column()) {
+        table_key.column_group_idx_ = cg_idx;
+      }
+      ASSERT_NE(nullptr, table_handle = OB_NEWx(ObTableHandleV2, (&allocator_)));
+      const int64_t cg_cnt = cg_schema->has_multi_version_column() ? cg_iterator.get_column_group_count() : 1;
+      close_builder_and_prepare_sstable(data_store_desc.get_desc(), table_key, table_schema, cg_cnt, root_index_builder, *table_handle, is_all_cg_base);
+      if (cg_schema->has_multi_version_column()) {
+        co_table_handle.set_sstable(table_handle->get_table(), &allocator_);
+      } else {
+        OK(cg_tables.push_back(table_handle->get_table()));
+      }
+      //table_key.log_ts_range_ = 0;
     }
-    //table_key.log_ts_range_ = 0;
   }
 
   for (int i = 0; i < cg_tables.count(); i++ ) {
@@ -2440,7 +2451,6 @@ TEST_P(TestCOMerge, test_co_merge_log_row_store)
   replay_merge_log.major_idx_ = 1;
   replay_merge_log.row_id_ = 10;
 
-  const common::ObIArray<ObStorageColumnGroupSchema> &cg_array = merge_context.get_schema()->get_column_groups();
   // init merge log writer
   ASSERT_EQ(OB_SUCCESS, writer.init(allocator_, merge_context, 0/*task_id*/));
   // write merge logs
@@ -2567,8 +2577,8 @@ TEST_P(TestCOMerge, test_co_merge_log_column_store)
   replay_merge_log.major_idx_ = 1;
   replay_merge_log.row_id_ = 10;
 
-  const common::ObIArray<ObStorageColumnGroupSchema> &cg_array = merge_context.get_schema()->get_column_groups();
-  ASSERT_EQ(3, cg_array.count());
+  ObStorageCGSchemaIterator cg_iterator(storage_schema);
+  ASSERT_EQ(3, cg_iterator.get_column_group_count());
   // init merge log writer
   ASSERT_EQ(OB_SUCCESS, writer.init(allocator_, merge_context, 0/*task_id*/));
   // write merge logs
@@ -2612,11 +2622,15 @@ TEST_P(TestCOMerge, test_co_merge_log_column_store)
     ASSERT_EQ(OB_SUCCESS, data_iter.from_for_datum(micro_data[0]));
     merge_log = replay_merge_log;
     merge_log.op_ = ObMergeLog::INSERT;
-    const ObStorageColumnGroupSchema &cg_schema = cg_array.at(i);
+
+    int64_t cg_idx = -1;
+    ASSERT_EQ(OB_SUCCESS, storage_schema.convert_iter_idx_to_column_group_idx(i, cg_idx));
+    const ObStorageColumnGroupSchema *cg_schema = nullptr;
+    ASSERT_EQ(OB_SUCCESS, cg_iterator.get_cg_schema_with_column_group_idx(cg_idx, cg_schema));
     ObCOMergeProjector projector;
     ObCOMergeProjector *row_project = nullptr;
-    if (!cg_schema.is_all_column_group()) {
-      OK(projector.init(cg_schema, allocator_));
+    if (!cg_schema->is_all_column_group()) {
+      OK(projector.init(*cg_schema, allocator_));
       row_project = &projector;
     }
     while (is_equal) {

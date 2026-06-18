@@ -110,7 +110,7 @@ void ObMajorRowsMergerTest::prepare_merge_context(const ObMergeType &merge_type,
                                                   ObTabletMergeCtx &merge_context)
 {
   TestMergeBasic::prepare_merge_context(
-      merge_type, is_full_merge, trans_version_range, &merge_dag_, merge_context, false/*is_delete_insert_merge*/);
+      merge_type, is_full_merge, trans_version_range, &merge_dag_, merge_context);
   if (is_schema_changed_in_medium_info && merge_context.static_param_.major_merge_sstable_status_array_.count() > 0) {
     merge_context.static_param_.major_merge_sstable_status_array_.at(0).is_schema_changed_ = true;
   }

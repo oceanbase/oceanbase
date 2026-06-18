@@ -384,7 +384,7 @@ int ObCGBlockFile::BlockStore::take_cg_block_header(const ObCGBlock &cg_block)
 int ObCGBlockFile::open(const ObTabletID tablet_id,
                         const int64_t slice_idx,
                         const int64_t scan_idx,
-                        const int64_t cg_idx)
+                        const int64_t cg_iter_idx)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -393,15 +393,15 @@ int ObCGBlockFile::open(const ObTabletID tablet_id,
   } else if (OB_UNLIKELY(!tablet_id.is_valid() ||
                          slice_idx < 0 ||
                          scan_idx < 0 ||
-                         cg_idx < 0)) {
+                         cg_iter_idx < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("there are invalid arguments",
-        K(ret), K(tablet_id), K(slice_idx), K(scan_idx), K(cg_idx));
+        K(ret), K(tablet_id), K(slice_idx), K(scan_idx), K(cg_iter_idx));
   } else {
     tablet_id_ = tablet_id;
     slice_idx_ = slice_idx;
     scan_idx_ = scan_idx;
-    cg_idx_ = cg_idx;
+    cg_iter_idx_ = cg_iter_idx;
     if (OB_FAIL(block_store_.open())) {
       LOG_WARN("fail to open block store", K(ret));
     } else {

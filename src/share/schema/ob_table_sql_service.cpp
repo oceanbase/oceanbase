@@ -6058,6 +6058,56 @@ int ObTableSqlService::batch_add_column_groups_for_create_table(ObISQLClient &sq
   return ret;
 }
 
+int ObTableSqlService::generate_dml_for_create_table(
+    const ObTableSchema &table,
+    const uint64_t data_version,
+    const ObColumnGroupSchema &column_group,
+    ObDMLSqlSplicer &cg_dml,
+    ObDMLSqlSplicer &cg_history_dml,
+    ObDMLSqlSplicer &mapping_dml,
+    ObDMLSqlSplicer &mapping_history_dml,
+    int64_t &column_group_cnt,
+    int64_t &mapping_cnt)
+{
+  int ret = OB_SUCCESS;
+  const int64_t schema_version = table.get_schema_version();
+  if (OB_FAIL(gen_column_group_dml(table, column_group, false /*not history*/,
+                                   false /*not deleted*/, schema_version, cg_dml))) {
+    LOG_WARN("fail to gen column_group_dml", KR(ret), K(table), K(column_group));
+  } else if (OB_FAIL(gen_column_group_dml(table, column_group, true /*history*/,
+                                          false /*not deleted*/, schema_version, cg_history_dml))) {
+    LOG_WARN("fail to gen column_group_history_dml", KR(ret), K(table), K(column_group));
+  } else {
+    ++column_group_cnt;
+    const int64_t column_id_cnt = column_group.get_column_id_count();
+    if (column_id_cnt > 0) {
+      for (int64_t idx = 0; OB_SUCC(ret) && idx < column_id_cnt; ++idx) {
+        uint64_t tmp_column_id = UINT64_MAX;
+        if (OB_FAIL(column_group.get_column_id(idx, tmp_column_id))) {
+          LOG_WARN("fail to get column id", KR(ret), K(idx), K(column_group));
+        } else {
+          const int64_t column_id = static_cast<int64_t>(tmp_column_id);
+          if (OB_FAIL(gen_column_group_mapping_dml(table, column_group,
+                                                   column_id, false /*not history*/,
+                                                   false /*not deleted*/, schema_version, mapping_dml))) {
+            LOG_WARN("fail to gen column_group_mapping_dml", KR(ret), K(table), K(column_id));
+          } else if (OB_FAIL(gen_column_group_mapping_dml(table, column_group,
+                                                          column_id, true /*history*/,
+                                                          false /*not deleted*/, schema_version, mapping_history_dml))) {
+            LOG_WARN("fail to gen column_group_mapping_history_dml", KR(ret), K(table), K(column_id));
+          } else {
+            ++mapping_cnt;
+          }
+        }
+      }
+    } else if (column_group.get_column_group_type() != ObColumnGroupType::DEFAULT_COLUMN_GROUP) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid column group type without column ids", KR(ret), K(column_group));
+    }
+  }
+  return ret;
+}
+
 int ObTableSqlService::append_column_group_dml_for_create_table(const ObTableSchema &table,
                                                                 const uint64_t data_version,
                                                                 ObDMLSqlSplicer &cg_dml,
@@ -6084,39 +6134,37 @@ int ObTableSqlService::append_column_group_dml_for_create_table(const ObTableSch
       if (OB_ISNULL(column_group)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("column_group schema should not be null", KR(ret), K(table));
-      }  else if (OB_FAIL(gen_column_group_dml(table, *column_group, false /*not history*/,
-                                              false /*not deleted*/, schema_version, cg_dml))) {
-        LOG_WARN("fail to gen column_group_dml", KR(ret), K(table), KPC(column_group));
-      } else if (OB_FAIL(gen_column_group_dml(table, *column_group, true /*history*/,
-                                              false /*not deleted*/, schema_version, cg_history_dml))) {
-        LOG_WARN("fail to gen column_group_history_dml", KR(ret), K(table), KPC(column_group));
-      } else {
-        ++column_group_cnt;
-        const int64_t column_id_cnt = column_group->get_column_id_count();
-        if (column_id_cnt > 0) {
-          for (int64_t idx = 0; OB_SUCC(ret) && idx < column_id_cnt; ++idx) {
-            uint64_t tmp_column_id = UINT64_MAX;
-            if (OB_FAIL(column_group->get_column_id(idx, tmp_column_id))) {
-              LOG_WARN("fail to get column id", KR(ret), K(idx), KPC(column_group));
-            } else {
-              const int64_t column_id = static_cast<int64_t>(tmp_column_id);
-              if (OB_FAIL(gen_column_group_mapping_dml(table, *column_group,
-                      column_id, false /*not history*/,
-                      false /*not deleted*/, schema_version, mapping_dml))) {
-                LOG_WARN("fail to gen column_group_mapping_dml", KR(ret), K(table), K(column_id));
-              } else if (OB_FAIL(gen_column_group_mapping_dml(table, *column_group,
-                      column_id, true /*history*/,
-                      false /*not deleted*/, schema_version, mapping_history_dml))) {
-                LOG_WARN("fail to gen column_group_mapping_history_dml", KR(ret), K(table), K(column_id));
-              } else {
-                ++mapping_cnt;
-              }
-            }
-          }
-        } else if (column_group->get_column_group_type() != ObColumnGroupType::DEFAULT_COLUMN_GROUP) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("invalid column group type without column ids", KR(ret), KPC(column_group));
-        }
+      } else if (OB_FAIL(generate_dml_for_create_table(table,
+                                                       data_version,
+                                                       *column_group,
+                                                       cg_dml,
+                                                       cg_history_dml,
+                                                       mapping_dml,
+                                                       mapping_history_dml,
+                                                       column_group_cnt,
+                                                       mapping_cnt))) {
+        LOG_WARN("fail to generate dml for create table", KR(ret), K(table), KPC(column_group));
+      }
+    }
+
+    // Handle hidden_rowkey_column_group_
+    if (OB_SUCC(ret)) {
+      const ObColumnGroupSchema *hidden_cg = table.get_hidden_rowkey_column_group();
+      if (OB_ISNULL(hidden_cg)) {
+        // do nothing
+      } else if (data_version < DATA_VERSION_4_6_1_0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_ERROR("hidden rowkey column group should be null", K(ret), K(data_version), K(table));
+      } else if (OB_FAIL(generate_dml_for_create_table(table,
+                                                       data_version,
+                                                       *hidden_cg,
+                                                       cg_dml,
+                                                       cg_history_dml,
+                                                       mapping_dml,
+                                                       mapping_history_dml,
+                                                       column_group_cnt,
+                                                       mapping_cnt))) {
+        LOG_WARN("fail to generate dml for create table", KR(ret), K(table), KPC(hidden_cg));
       }
     }
   }
@@ -6235,6 +6283,18 @@ int ObTableSqlService::exec_insert_column_group(
       }
     }
 
+    if (OB_SUCC(ret)) {
+      const ObColumnGroupSchema *hidden_cg = table.get_hidden_rowkey_column_group();
+      if (OB_ISNULL(hidden_cg)) {
+        // do nothing
+      } else if (data_version < DATA_VERSION_4_6_1_0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_ERROR("hidden rowkey column group should be null", K(ret), K(data_version), K(table));
+      } else if (OB_FAIL(gen_column_group_dml(table, *hidden_cg, is_history, false /*not deleted*/, schema_version, dml))){
+        LOG_WARN("fail to gen column_group_dml", K(ret));
+      }
+    }
+
     int64_t affected_rows = 0;
     if (FAILEDx(dml.splice_batch_insert_sql(tname, sql))) {
       LOG_WARN("fail to splice batch update sql", KR(ret), K(sql));
@@ -6311,18 +6371,8 @@ int ObTableSqlService::exec_insert_column_group_mapping(
       const int64_t column_id_cnt = column_group->get_column_id_count();
       // only default type column_group can have empty column_ids.
       if (column_id_cnt > 0) {
-        ObArray<uint64_t> column_ids;
-        for (int64_t i = 0; OB_SUCC(ret) && (i < column_id_cnt); ++i) {
-          uint64_t tmp_column_id = UINT64_MAX;
-          if (OB_FAIL(column_group->get_column_id(i, tmp_column_id))) {
-            LOG_WARN("fail to get column id", KR(ret), K(i), K(column_id_cnt));
-          } else if (OB_FAIL(column_ids.push_back(tmp_column_id))) {
-            LOG_WARN("fail to push back column id", KR(ret), K(i), K(column_ids));
-          }
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(exec_insert_column_group_mapping(sql_client, table, schema_version, *column_group, column_ids, is_history))) {
-          LOG_WARN("fail to exec_insert_column_group_mapping", KR(ret), K(table), KPC(column_group), K(column_ids));
+        if (OB_FAIL(exec_insert_single_column_group_mapping(sql_client, table, schema_version, *column_group, is_history))) {
+          LOG_WARN("fail to insert single column group mapping", KR(ret), K(table), KPC(column_group));
         }
       } else if (cg_type != ObColumnGroupType::DEFAULT_COLUMN_GROUP) {
         ret = OB_INVALID_ARGUMENT;
@@ -6331,6 +6381,36 @@ int ObTableSqlService::exec_insert_column_group_mapping(
     }
   }
 
+  if (OB_FAIL(ret) || nullptr == (column_group = table.get_hidden_rowkey_column_group())) {
+  } else if (OB_FAIL(exec_insert_single_column_group_mapping(sql_client, table, schema_version, *column_group, is_history))) {
+    LOG_WARN("fail to insert single column group mapping", KR(ret), K(table), KPC(column_group));
+  }
+  return ret;
+}
+
+int ObTableSqlService::exec_insert_single_column_group_mapping(
+    ObISQLClient &sql_client,
+    const ObTableSchema &table,
+    const int64_t schema_version,
+    const ObColumnGroupSchema &column_group,
+    const bool is_history)
+{
+  int ret = OB_SUCCESS;
+  const int64_t column_id_cnt = column_group.get_column_id_count();
+  ObSEArray<uint64_t, 16> column_ids;
+  for (int64_t i = 0; OB_SUCC(ret) && (i < column_id_cnt); ++i) {
+    uint64_t tmp_column_id = UINT64_MAX;
+    if (OB_FAIL(column_group.get_column_id(i, tmp_column_id))) {
+      LOG_WARN("fail to get column id", KR(ret), K(i), K(column_id_cnt));
+    } else if (OB_FAIL(column_ids.push_back(tmp_column_id))) {
+      LOG_WARN("fail to push back column id", KR(ret), K(i), K(column_ids));
+    }
+  }
+
+  if (OB_FAIL(ret) || column_ids.empty()) {
+  } else if (OB_FAIL(exec_insert_column_group_mapping(sql_client, table, schema_version, column_group, column_ids, is_history))) {
+    LOG_WARN("fail to exec_insert_column_group_mapping", KR(ret), K(table), K(column_group), K(column_ids));
+  }
   return ret;
 }
 
@@ -6424,6 +6504,7 @@ int ObTableSqlService::delete_from_column_group(ObISQLClient &sql_client,
     ObDMLExecHelper exec(sql_client, exec_tenant_id);
     ObTableSchema::const_column_group_iterator iter_begin = table_schema.column_group_begin();
     ObTableSchema::const_column_group_iterator iter_end = table_schema.column_group_end();
+
     if (table_schema.get_column_group_count() == 0) {
       /* skip table has not column*/
     } else if (is_history) { /* remove from __all_column_group_history*/
@@ -6434,12 +6515,20 @@ int ObTableSqlService::delete_from_column_group(ObISQLClient &sql_client,
           LOG_WARN("column group should not be null", K(ret), K(table_schema));
         } else if (OB_FAIL(gen_column_group_dml(table_schema, *column_group, is_history,
                                               true /* is_delete */, new_schema_version, dml))) {
-          LOG_WARN("fail to write dml for __all_column_group", K(ret));
+          LOG_WARN("fail to write dml for __all_column_group_history", K(ret));
         }
       }
 
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(dml.splice_batch_insert_sql(OB_ALL_COLUMN_GROUP_HISTORY_TNAME, sql))) {
+      if (OB_SUCC(ret)) {
+        const ObColumnGroupSchema *hidden_cg = table_schema.get_hidden_rowkey_column_group();
+        if (OB_ISNULL(hidden_cg)) {
+          // do nothing
+        } else if (OB_FAIL(gen_column_group_dml(table_schema, *hidden_cg, is_history, true /*is_delete*/, new_schema_version, dml))){
+          LOG_WARN("fail to write dml for __all_column_group_history", K(ret));
+        }
+      }
+
+      if (FAILEDx(dml.splice_batch_insert_sql(OB_ALL_COLUMN_GROUP_HISTORY_TNAME, sql))) {
         LOG_WARN("fail to splice batch insert sql", K(ret), K(sql), K(table_schema));
       } else if (OB_FAIL(sql_client.write(exec_tenant_id, sql.ptr(), affect_rows))) {
         LOG_WARN("fail to insert deleted record to all column group history", K(ret));
@@ -6485,16 +6574,27 @@ int ObTableSqlService::delete_from_column_group_mapping(ObISQLClient &sql_client
     /* count affect rows & form dml for history table*/
     for (; OB_SUCC(ret) && iter_begin != iter_end; iter_begin++) {
       const ObColumnGroupSchema *column_group = *iter_begin;
-      cg_mapping_cnt += column_group->get_column_id_count();
       if (OB_ISNULL(column_group)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("column group should not be null", K(ret), K(table_schema));
       } else {
+        cg_mapping_cnt += column_group->get_column_id_count();
         for (int64_t i = 0; OB_SUCC(ret) && is_history && i < column_group->get_column_id_count(); i++) {
           if (OB_FAIL(gen_column_group_mapping_dml(table_schema, *column_group, column_group->get_column_ids()[i],
                                                   is_history, true /* is_deleted*/, schema_version, dml))) {
             LOG_WARN("fail to write column group mapping dml", K(ret));
           }
+        }
+      }
+    }
+
+    const ObColumnGroupSchema *hidden_cg = table_schema.get_hidden_rowkey_column_group();
+    if (OB_SUCC(ret) && nullptr != hidden_cg) {
+      cg_mapping_cnt += hidden_cg->get_column_id_count();
+      for (int64_t i = 0; OB_SUCC(ret) && is_history && i < hidden_cg->get_column_id_count(); i++) {
+        if (OB_FAIL(gen_column_group_mapping_dml(table_schema, *hidden_cg, hidden_cg->get_column_ids()[i],
+                                                is_history, true /* is_deleted*/, schema_version, dml))) {
+          LOG_WARN("fail to write column group mapping dml", K(ret));
         }
       }
     }

@@ -1937,17 +1937,28 @@ int ObDDLUtil::init_cg_macro_block_writers(
                                       K(param.tablet_id_), K(param.slice_idx_));
   } else {
     const bool is_inc_major = is_incremental_major_direct_load(param.direct_load_type_);
-    const int64_t cg_count = param.tablet_param_.storage_schema_->get_column_group_count();
     ObITable::TableKey cg_table_key;
     cg_table_key.tablet_id_ = param.tablet_id_;
     cg_table_key.version_range_.snapshot_version_ = param.snapshot_version_;
     storage_schema = param.tablet_param_.storage_schema_;
-    for (int64_t cg_idx = 0; OB_SUCC(ret) && cg_idx < cg_count; ++cg_idx) {
+    ObStorageCGSchemaIterator cg_iterator(*storage_schema);
+
+    while (OB_SUCC(ret)) {
+      int64_t cg_idx = -1;
+      int64_t iter_idx = -1;
+      const ObStorageColumnGroupSchema *cg_schema = nullptr;
+      if (OB_FAIL(cg_iterator.next(cg_schema, cg_idx, iter_idx))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to get next cg schema", K(ret));
+        }
+        break;
+      }
       cg_table_key.column_group_idx_ = cg_idx;
-      const ObStorageColumnGroupSchema &cg_schema = storage_schema->get_column_groups().at(cg_idx);
       if (!param.ddl_table_schema_.table_item_.is_column_store_) {
         cg_table_key.table_type_ = is_inc_major ? ObITable::INC_MAJOR_SSTABLE : ObITable::MAJOR_SSTABLE;
-      } else if (cg_schema.is_rowkey_column_group() || cg_schema.is_all_column_group()) {
+      } else if (ObStorageSchema::is_basic_column_group_schema(*cg_schema, cg_idx)) {
         cg_table_key.slice_range_.start_slice_idx_ = param.slice_idx_;
         cg_table_key.slice_range_.end_slice_idx_ = param.slice_idx_;
         cg_table_key.table_type_ = is_inc_major ? ObITable::INC_COLUMN_ORIENTED_SSTABLE
@@ -1963,9 +1974,9 @@ int ObDDLUtil::init_cg_macro_block_writers(
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to allocate memory", K(ret));
       } else if (OB_FAIL(cg_macro_block_writer->init(param,
-                                                     cg_table_key,
-                                                     start_seq,
-                                                     row_offset))) {
+                                                    cg_table_key,
+                                                    start_seq,
+                                                    row_offset))) {
         LOG_WARN("fail to initialize cg macro block writer", K(ret), K(cg_idx));
       } else if (OB_FAIL(cg_writers.push_back(cg_macro_block_writer))) {
         LOG_TRACE("fail to push back cg macro block writer", K(cg_idx), KPC(cg_macro_block_writer));
@@ -7288,11 +7299,22 @@ int ObCODDLUtil::get_base_cg_idx(const storage::ObStorageSchema *storage_schema,
     LOG_WARN("invalid argument", K(ret), KP(storage_schema));
   } else {
     bool found_base_cg_idx = false;
-    const ObIArray<ObStorageColumnGroupSchema> &cg_schemas = storage_schema->get_column_groups();
-    for (int64_t i = 0; OB_SUCC(ret) && !found_base_cg_idx && i < cg_schemas.count(); ++i) {
-      const ObStorageColumnGroupSchema &cur_cg_schmea = cg_schemas.at(i);
-      if (cur_cg_schmea.is_all_column_group() || cur_cg_schmea.is_rowkey_column_group()) {
-        base_cg_idx = i;
+    ObStorageCGSchemaIterator cg_iter(*storage_schema);
+    while (OB_SUCC(ret) && !found_base_cg_idx) {
+      const ObStorageColumnGroupSchema *cg_schema = nullptr;
+      int64_t cg_idx = -1; // column group idx in table key
+      int64_t iter_idx = -1;
+      if (OB_FAIL(cg_iter.next(cg_schema, cg_idx, iter_idx))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to get next cg schema", K(ret));
+        }
+        break;
+      }
+
+      if (ObStorageSchema::is_basic_column_group_schema(*cg_schema, cg_idx)) {
+        base_cg_idx = cg_idx;
         found_base_cg_idx = true;
       }
     }
@@ -7319,7 +7341,6 @@ int ObCODDLUtil::get_column_checksums(
   } else if (OB_FAIL(storage_schema->get_stored_column_count_in_sstable(column_count))) {
     LOG_WARN("fail to get_stored_column_count_in_sstable", K(ret), KPC(storage_schema));
   } else {
-    const common::ObIArray<ObStorageColumnGroupSchema> &column_groups = storage_schema->get_column_groups();
     ObArray<bool/*checksum_ready*/> checksum_ready_array;
     if (OB_FAIL(checksum_ready_array.reserve(column_count))) {
       LOG_WARN("reserve checksum ready array failed", K(ret), K(column_count));
@@ -7335,31 +7356,37 @@ int ObCODDLUtil::get_column_checksums(
     }
     ObSSTableWrapper cg_sstable_wrapper;
     ObSSTable *cg_sstable = nullptr;
-    for (int64_t i = 0; !co_sstable->is_cgs_empty_co_table() && i < column_groups.count() && OB_SUCC(ret); i++) {
-      const ObStorageColumnGroupSchema &column_group = column_groups.at(i);
+    const int64_t cg_count = storage_schema->get_column_group_count();
+    for (int64_t i = 0; !co_sstable->is_cgs_empty_co_table() && i < cg_count && OB_SUCC(ret); i++) {
+      const ObStorageColumnGroupSchema *column_group = nullptr;
       ObSSTableMetaHandle cg_table_meta_hdl;
-      if (column_group.is_all_column_group()) {
+      int64_t cg_idx = -1;
+      if (OB_FAIL(storage_schema->get_cg_schema_with_iter_idx(i, column_group))) {
+        LOG_WARN("fail to get cg schema with iter idx", K(ret), K(i));
+      } else if (OB_FAIL(storage_schema->convert_iter_idx_to_column_group_idx(i, cg_idx))) {
+        LOG_WARN("fail to convert iter idx to cg idx", K(ret), K(i));
+      } else if (column_group->is_all_column_group()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected column_group", K(ret), K(i));
-      } else if (OB_FAIL(co_sstable->fetch_cg_sstable(i, cg_sstable_wrapper))) {
+      } else if (OB_FAIL(co_sstable->fetch_cg_sstable(cg_idx, cg_sstable_wrapper))) {
         LOG_WARN("fail to get cg sstable", K(ret), K(i));
       } else if (OB_FAIL(cg_sstable_wrapper.get_loaded_column_store_sstable(cg_sstable))) {
         LOG_WARN("get sstable failed", K(ret));
       } else if (OB_UNLIKELY(cg_sstable == nullptr || !cg_sstable->is_valid())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpec cg sstable", K(ret), KPC(cg_sstable));
+        LOG_WARN("unexpected cg sstable", K(ret), KPC(cg_sstable));
       } else if (OB_FAIL(cg_sstable->get_meta(cg_table_meta_hdl))) {
         LOG_WARN("fail to get meta", K(ret), KPC(cg_sstable));
-      } else if (OB_UNLIKELY(cg_table_meta_hdl.get_sstable_meta().get_col_checksum_cnt() != column_group.get_column_count())) {
+      } else if (OB_UNLIKELY(cg_table_meta_hdl.get_sstable_meta().get_col_checksum_cnt() != column_group->get_column_count())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected col_checksum_cnt", K(ret),
-            K(cg_table_meta_hdl.get_sstable_meta().get_col_checksum_cnt()), K(column_group.get_column_count()));
+            K(cg_table_meta_hdl.get_sstable_meta().get_col_checksum_cnt()), K(column_group->get_column_count()));
       } else {
-        for (int64_t j = 0; j < column_group.get_column_count() && OB_SUCC(ret); j++) {
-          const uint16_t column_idx = column_group.get_column_idx(j);
+        for (int64_t j = 0; j < column_group->get_column_count() && OB_SUCC(ret); j++) {
+          const uint16_t column_idx = column_group->get_column_idx(j);
           if (column_idx < 0 || column_idx >= column_checksums.count()) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("invalid column index", K(ret), K(i), K(j), K(column_idx), K(column_checksums.count()));
+            LOG_WARN("invalid column index", K(ret), K(cg_idx), K(i), K(j), K(column_idx), K(column_checksums.count()));
           } else {
             int64_t &column_checksum = column_checksums.at(column_idx);
             bool &is_checksum_ready = checksum_ready_array.at(column_idx);
@@ -7390,11 +7417,11 @@ int ObCODDLUtil::is_rowkey_based_co_sstable(
     LOG_WARN("invalid argument", K(ret), KP(co_sstable), KP(storage_schema));
   } else {
     const int64_t base_cg_idx = co_sstable->get_key().get_column_group_id();
-    if (base_cg_idx < 0 || base_cg_idx >= storage_schema->get_column_groups().count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid base column group index", K(ret), K(base_cg_idx));
+    const ObStorageColumnGroupSchema *cg_schema = nullptr;
+    if (OB_FAIL(storage_schema->get_cg_schema_with_column_group_idx(base_cg_idx, cg_schema))) {
+      LOG_WARN("failed to get base column group", K(ret), K(base_cg_idx));
     } else {
-      is_rowkey_based = storage_schema->get_column_groups().at(base_cg_idx).is_rowkey_column_group();
+      is_rowkey_based = cg_schema->is_rowkey_column_group();
     }
   }
   return ret;

@@ -132,6 +132,7 @@ private:
   int prepare_data_store_desc_(const share::ObLSID &ls_id, const ObTabletHandle &tablet_handle,
       const storage::ObITable::TableKey &table_key, blocksstable::ObSSTable *sstable,
       blocksstable::ObWholeDataStoreDesc &data_store_desc);
+  int build_mock_cg_schemas_if_need_(const storage::ObStorageSchema &storage_schema);
   int get_table_key_idx_(const storage::ObITable::TableKey &table_key, int64_t &idx);
   int alloc_sstable_index_builder_(const storage::ObITable::TableKey &table_key,
       const blocksstable::ObDataStoreDesc &data_store_desc, blocksstable::ObSSTableIndexBuilder *&index_builder);
@@ -156,6 +157,10 @@ private:
   common::ObArray<blocksstable::ObSSTableMergeRes> merge_results_;
   common::hash::ObHashMap<blocksstable::ObLogicMacroBlockId, ObBackupMacroBlockIndex> local_reuse_map_;
   bool is_major_compaction_mview_dep_tablet_;
+  // used to support online row col switch
+  common::ObArenaAllocator mock_cg_allocator_;
+  storage::ObStorageColumnGroupSchema *mock_rowkey_cg_schema_;
+  storage::ObStorageColumnGroupSchema *mock_single_cg_schema_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupTabletSSTableIndexBuilderMgr);
 };
 

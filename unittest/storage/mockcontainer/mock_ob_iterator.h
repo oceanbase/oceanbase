@@ -77,7 +77,7 @@ public:
   static bool inner_equals(const blocksstable::ObDatumRow &r1, const blocksstable::ObDatumRow &r2);
   static bool equals(const blocksstable::ObDatumRow &r1, const blocksstable::ObDatumRow &r2,
       const bool cmp_multi_version_row_flag = false, const bool cmp_row_flag = false,
-      const bool cmp_is_get_and_scan_index = false);
+      const bool cmp_is_get_and_scan_index = false, const bool cmp_merge_engine_type = false);
   bool equals(int64_t idx, blocksstable::ObDatumRow &row) const;
   bool equals(int64_t idx, const blocksstable::ObDatumRow &row) const;
   bool equals(blocksstable::ObDatumRow &other_row) const { return equals(0, other_row); }
@@ -85,7 +85,8 @@ public:
 
   static bool equals(const common::ObNewRow &r1, const common::ObNewRow &r2);
   static bool equals(const storage::ObStoreRow &r1, const storage::ObStoreRow &r2,
-      const bool cmp_multi_version_row_flag = false, const bool cmp_row_flag = false, const bool cmp_is_get_and_scan_index = false);
+      const bool cmp_multi_version_row_flag = false, const bool cmp_row_flag = false,
+      const bool cmp_is_get_and_scan_index = false, const bool cmp_merge_engine_type = false);
   static bool equals(uint16_t *col_id1, uint16_t *col_id2, const int64_t col_cnt);
   bool equals(int64_t idx, common::ObNewRow &row) const;
   bool equals(int64_t idx, storage::ObStoreRow &row) const;
@@ -120,7 +121,8 @@ public:
   bool equals(T &other_iter, const bool cmp_multi_version_row_flag = false,
       const bool cmp_row_flag = false,
       const bool cmp_is_get_and_scan_index = false,
-      const bool skip_iter_end = false)
+      const bool skip_iter_end = false,
+      const bool cmp_merge_engine_type = false)
   {
     bool bool_ret = true;
     int ret1 = common::OB_SUCCESS;
@@ -139,7 +141,7 @@ public:
       if (ret1 == ret2) {
         if (common::OB_SUCCESS == ret1 && this_row && other_row) {
           bool_ret = ObMockIterator::equals(*this_row, *other_row,
-              cmp_multi_version_row_flag, cmp_row_flag, cmp_is_get_and_scan_index);
+              cmp_multi_version_row_flag, cmp_row_flag, cmp_is_get_and_scan_index, cmp_merge_engine_type);
           STORAGE_LOG(DEBUG, "compare row", K(bool_ret), K(ret1), KPC(this_row), K(ret2), KPC(other_row));
           if (this_row->trans_id_ != other_row->trans_id_) {
             STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "not equal trans_id", KPC(this_row), K(this_row->trans_id_),
@@ -421,6 +423,14 @@ private:
                               const common::ObString &word,
                               storage::ObStoreRow &row,
                               int64_t &idx);
+  static int parse_datum_merge_engine_type(common::ObIAllocator *allocator,
+                                           const common::ObString &word,
+                                           blocksstable::ObDatumRow &row,
+                                           int64_t &idx);
+  static int parse_obj_merge_engine_type(common::ObIAllocator *allocator,
+                                         const common::ObString &word,
+                                         storage::ObStoreRow &row,
+                                         int64_t &idx);
   static int parse_dml(common::ObIAllocator *allocator,
                        const common::ObString &word,
                        storage::ObStoreRow &row,

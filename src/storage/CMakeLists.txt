@@ -707,6 +707,7 @@ ob_set_subtarget(ob_storage access
   access/ob_table_scan_range.cpp
   access/ob_table_access_param.cpp
   access/ob_table_access_context.cpp
+  access/ob_tablet_read_tables.cpp
   access/ob_fuse_row_cache_fetcher.cpp
   access/ob_dml_param.cpp
   access/ob_micro_block_handle_mgr.cpp

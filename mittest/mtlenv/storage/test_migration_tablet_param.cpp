@@ -207,6 +207,9 @@ TEST_F(TestMigrationTabletParam, migration)
     ret = tablet->build_migration_tablet_param(param_v3);
     ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_EQ(true, param_v3.version_ == ObMigrationTabletParam::PARAM_VERSION_V3);
+    // tablet has no cs sstables, mock cg schemas should stay invalid
+    ASSERT_FALSE(param_v3.mock_rowkey_cg_schema_.is_valid());
+    ASSERT_FALSE(param_v3.mock_single_cg_schema_.is_valid());
 
     // insert some data into migration param
     ret = insert_data_into_mds_data(allocator_, param_v3.mds_data_.tablet_status_committed_kv_);
@@ -226,9 +229,96 @@ TEST_F(TestMigrationTabletParam, migration)
     ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_EQ(pos, serialize_size);
     ASSERT_TRUE(param2.is_valid());
+    ASSERT_FALSE(param2.mock_rowkey_cg_schema_.is_valid());
+    ASSERT_FALSE(param2.mock_single_cg_schema_.is_valid());
 
     delete [] buffer;
   }
+}
+
+TEST_F(TestMigrationTabletParam, mock_cg_schemas)
+{
+  int ret = OB_SUCCESS;
+
+  // create tablet with row-store schema
+  const common::ObTabletID tablet_id(ObTimeUtility::fast_current_time() % 10000000000000);
+  ObTabletHandle tablet_handle;
+  share::SCN create_commit_scn = share::SCN::plus(share::SCN::min_scn(), 100);
+  ret = create_tablet(tablet_id, tablet_handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObTablet *tablet = tablet_handle.get_obj();
+  ASSERT_NE(nullptr, tablet);
+
+  {
+    ObTabletCreateDeleteMdsUserData user_data;
+    user_data.tablet_status_ = ObTabletStatus::NORMAL;
+    user_data.data_type_ = ObTabletMdsUserDataType::CREATE_TABLET;
+
+    mds::MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(456)));
+    ret = tablet->set_tablet_status(user_data, ctx);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    share::SCN redo_scn = share::SCN::plus(share::SCN::min_scn(), 50);
+    ctx.on_redo(redo_scn);
+    ctx.on_commit(create_commit_scn, create_commit_scn);
+  }
+
+  // build migration param, then manually populate mock cg schemas to simulate
+  // a delayed col-to-row migration source (online row col switch).
+  ObMigrationTabletParam param_src;
+  ret = tablet->build_migration_tablet_param(param_src);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_TRUE(param_src.is_valid());
+  ASSERT_TRUE(param_src.storage_schema_.is_row_store());
+
+  ASSERT_EQ(OB_SUCCESS, param_src.storage_schema_.build_rowkey_column_group_schema(
+      param_src.allocator_, param_src.mock_rowkey_cg_schema_));
+  const uint16_t fake_idx = static_cast<uint16_t>(
+      param_src.storage_schema_.get_rowkey_column_num()
+      + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt());
+  ASSERT_EQ(OB_SUCCESS, param_src.storage_schema_.generate_single_column_group_schema(
+      param_src.allocator_, param_src.mock_single_cg_schema_, fake_idx));
+  ASSERT_TRUE(param_src.mock_rowkey_cg_schema_.is_valid());
+  ASSERT_TRUE(param_src.mock_rowkey_cg_schema_.is_rowkey_column_group());
+  ASSERT_TRUE(param_src.mock_single_cg_schema_.is_valid());
+  ASSERT_TRUE(param_src.mock_single_cg_schema_.is_single_column_group());
+
+  // serialize / deserialize round-trip preserves both mock cg schemas
+  int64_t serialize_size = param_src.get_serialize_size();
+  char *buffer = new char[serialize_size]();
+  int64_t pos = 0;
+  ret = param_src.serialize(buffer, serialize_size, pos);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(serialize_size, pos);
+
+  ObMigrationTabletParam param_dst;
+  pos = 0;
+  ret = param_dst.deserialize(buffer, serialize_size, pos);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(pos, serialize_size);
+  ASSERT_TRUE(param_dst.is_valid());
+  ASSERT_TRUE(param_dst.mock_rowkey_cg_schema_.is_valid());
+  ASSERT_TRUE(param_dst.mock_rowkey_cg_schema_.is_rowkey_column_group());
+  ASSERT_EQ(param_src.mock_rowkey_cg_schema_.column_cnt_, param_dst.mock_rowkey_cg_schema_.column_cnt_);
+  ASSERT_EQ(param_src.mock_rowkey_cg_schema_.rowkey_column_cnt_, param_dst.mock_rowkey_cg_schema_.rowkey_column_cnt_);
+  ASSERT_TRUE(param_dst.mock_single_cg_schema_.is_valid());
+  ASSERT_TRUE(param_dst.mock_single_cg_schema_.is_single_column_group());
+  ASSERT_EQ(param_src.mock_single_cg_schema_.column_cnt_, param_dst.mock_single_cg_schema_.column_cnt_);
+  delete [] buffer;
+
+  // assign deep-copies both mock cg schemas
+  ObMigrationTabletParam param_assign;
+  ret = param_assign.assign(param_src);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_TRUE(param_assign.mock_rowkey_cg_schema_.is_valid());
+  ASSERT_TRUE(param_assign.mock_rowkey_cg_schema_.is_rowkey_column_group());
+  ASSERT_TRUE(param_assign.mock_single_cg_schema_.is_valid());
+  ASSERT_TRUE(param_assign.mock_single_cg_schema_.is_single_column_group());
+
+  // reset clears both mock cg schemas
+  param_src.reset();
+  ASSERT_FALSE(param_src.mock_rowkey_cg_schema_.is_valid());
+  ASSERT_FALSE(param_src.mock_single_cg_schema_.is_valid());
 }
 
 TEST_F(TestMigrationTabletParam, transfer)

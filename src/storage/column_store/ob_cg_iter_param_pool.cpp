@@ -189,7 +189,7 @@ int ObCGIterParamPool::build_read_info_for_rowkey_cg(const ObTableIterParam &row
         false /*has_all_column_group*/,
         false /*is_cg_sstable*/,
         false /*need_truncate_filter*/,
-        false /*is_delete_insert_table*/,
+        ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN,
         ObMicroBlockFormatVersionHelper::DEFAULT_VERSION,
         read_info->has_ttl_definition()))) {
       LOG_WARN("Fail to init table read info", K(ret), K(schema_rowkey_cnt), K(schema_column_count));

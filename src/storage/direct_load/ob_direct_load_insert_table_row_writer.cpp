@@ -80,6 +80,7 @@ int ObDirectLoadInsertTableBatchRowBufferWriter::inner_init(
       datum_rows_.row_flag_ = row_info.row_flag_;
       datum_rows_.mvcc_row_flag_ = row_info.mvcc_row_flag_;
       datum_rows_.trans_id_ = row_info.trans_id_;
+      datum_rows_.merge_engine_type_ = row_info.merge_engine_type_;
       const ObIArray<ObDirectLoadVector *> &vectors = batch_rows_.get_vectors();
       for (int64_t i = 0; i < vectors.count(); ++i) {
         if (i < rowkey_column_count) {
@@ -211,6 +212,7 @@ int ObDirectLoadInsertTableBatchRowDirectWriter::init(
       direct_datum_rows_.row_flag_ = row_info.row_flag_;
       direct_datum_rows_.mvcc_row_flag_ = row_info.mvcc_row_flag_;
       direct_datum_rows_.trans_id_ = row_info.trans_id_;
+      direct_datum_rows_.merge_engine_type_ = row_info.merge_engine_type_;
       dml_row_handler_ = dml_row_handler;
       job_stat_ = job_stat;
       expect_column_count_ = column_count - 1;

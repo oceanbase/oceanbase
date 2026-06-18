@@ -61,7 +61,8 @@ ObSSTableMetaCache::ObSSTableMetaCache()
     filled_tx_scn_(share::SCN::min_scn()),
     contain_uncommitted_row_(false),
     rec_scn_(),
-    min_merged_trans_version_(0)
+    min_merged_trans_version_(0),
+    has_hidden_rowkey_cg_(false)
 {
 }
 
@@ -82,6 +83,7 @@ void ObSSTableMetaCache::reset()
   filled_tx_scn_.set_min();
   contain_uncommitted_row_ = false;
   rec_scn_.reset();
+  has_hidden_rowkey_cg_ = false;
 }
 
 int ObSSTableMetaCache::init(
@@ -111,6 +113,7 @@ int ObSSTableMetaCache::init(
     filled_tx_scn_ = meta->get_filled_tx_scn();
     contain_uncommitted_row_ = meta->contain_uncommitted_row();
     rec_scn_ = meta->get_rec_scn();
+    has_hidden_rowkey_cg_ = meta->has_hidden_rowkey_cg();
     version_ = SSTABLE_META_CACHE_VERSION_V3;
   }
   return ret;
@@ -214,7 +217,7 @@ OB_DEF_DESERIALIZE_SIMPLE(ObSSTableMetaCache)
       } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &min_merged_trans_version_))) {
         LOG_WARN("fail to decode min_merged_trans_version", K(ret), K(data_len), K(pos));
       } else if (pos < old_pos + length_
-        && OB_FAIL(serialization::decode_bool(buf, data_len, pos, &has_hidden_rowkey_cg_))) {
+              && OB_FAIL(serialization::decode_bool(buf, data_len, pos, &has_hidden_rowkey_cg_))) {
         LOG_WARN("fail to decode has_hidden_rowkey_cg", K(ret), K(data_len), K(pos));
       } else if (OB_UNLIKELY(pos != old_pos + length_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -228,6 +231,7 @@ OB_DEF_DESERIALIZE_SIMPLE(ObSSTableMetaCache)
   if (OB_SUCC(ret) && compat_deserialize) {
     version_ = SSTABLE_META_CACHE_VERSION_V3;
     min_merged_trans_version_ = 0;
+    has_hidden_rowkey_cg_ = false;
   }
   return ret;
 }
@@ -361,6 +365,28 @@ int ObSSTable::init(
   return ret;
 }
 
+#define COPY_AND_PUSH_CG_SSTABLE(cg_sstable, sstable_arr)                                                              \
+  do {                                                                                                                 \
+    ObSSTable *loaded_table = nullptr;                                                                                 \
+    ObSSTable *copied_table = nullptr;                                                                                 \
+    ObStorageMetaHandle handle;                                                                                        \
+    if (OB_UNLIKELY(nullptr == cg_sstable || !cg_sstable->is_cg_sstable())) {                                          \
+      ret = OB_ERR_UNEXPECTED;                                                                                         \
+      LOG_WARN("get unexpected table", K(ret), KPC(cg_sstable), K(sstable_arr));                                       \
+    } else if (cg_sstable->is_loaded()) {                                                                              \
+      loaded_table = cg_sstable;                                                                                       \
+    } else if (OB_FAIL(ObCacheSSTableHelper::load_sstable(cg_sstable->get_addr(), false/*is_co_sstable*/, handle))) {  \
+      LOG_WARN("fail to load cg sstable", K(ret), KPC(cg_sstable));                                                    \
+    } else if (OB_FAIL(handle.get_sstable(loaded_table))) {                                                            \
+      LOG_WARN("fail to get sstable", K(ret), K(handle));                                                              \
+    }                                                                                                                  \
+    if (FAILEDx(loaded_table->inner_deep_copy_and_inc_macro_ref(allocator, copied_table, expand_macro_info))) {        \
+      LOG_WARN("failed to copy sstable", K(ret), KPC(loaded_table));                                                   \
+    } else if (OB_FAIL(sstable_arr.push_back(copied_table))) {                                                         \
+      LOG_WARN("failed to add sstable", K(ret), KPC(copied_table));                                                    \
+    }                                                                                                                  \
+  } while (0)
+
 int ObSSTable::copy_from_old_sstable(
     const ObSSTable &src,
     common::ObArenaAllocator &allocator,
@@ -379,38 +405,42 @@ int ObSSTable::copy_from_old_sstable(
     // nothing to do and skip it.
   } else {
     ObSEArray<ObITable *, 64> cg_sstables;
+    ObSEArray<ObITable *, 1> hidden_cg_sstables;
     for (int64_t i = 0; OB_SUCC(ret) && i < sstable->meta_->cg_sstables_.count(); ++i) {
       ObSSTable *table = sstable->meta_->cg_sstables_.at(i);
-      ObSSTable *loaded_table = nullptr;
-      ObSSTable *copied_table = nullptr;
-      ObStorageMetaHandle handle;
-      if (OB_ISNULL(table) || OB_UNLIKELY(!table->is_cg_sstable())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected error, cg table is nullptr", K(ret), K(i), KPC(table), KPC(sstable));
-      } else if (table->is_loaded()) {
-        loaded_table = table;
-      } else if (OB_FAIL(ObCacheSSTableHelper::load_sstable(table->get_addr(), false/*is_co_sstable*/, handle))) {
-        LOG_WARN("fail to load cg sstable", K(ret), KPC(table));
-      } else if (OB_FAIL(handle.get_sstable(loaded_table))) {
-        LOG_WARN("fail to get sstable", K(ret), K(handle));
-      }
-      if (FAILEDx(loaded_table->inner_deep_copy_and_inc_macro_ref(allocator, copied_table, expand_macro_info))) {
-        LOG_WARN("fail to inner copy and inc macro ref", K(ret), KPC(loaded_table));
-      } else if (OB_FAIL(cg_sstables.push_back(copied_table))) {
-        LOG_WARN("fail to push back", K(ret), KPC(copied_table));
-      }
+      COPY_AND_PUSH_CG_SSTABLE(table, cg_sstables);
+    }
+
+    if (OB_FAIL(ret) || !sstable->meta_->has_hidden_rowkey_cg()) {
+      // do nothing
+    } else if (OB_UNLIKELY(1 != sstable->meta_->hidden_cg_sstable_.count() || nullptr == sstable->meta_->hidden_cg_sstable_.at(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected hidden cg sstable", K(ret), "hidden_cg_sstable", sstable->meta_->hidden_cg_sstable_);
+    } else {
+      ObSSTable *table = sstable->meta_->hidden_cg_sstable_.at(0);
+      COPY_AND_PUSH_CG_SSTABLE(table, hidden_cg_sstables);
     }
     if (OB_SUCC(ret)) {
       sstable->meta_->cg_sstables_.reset();
+      sstable->meta_->hidden_cg_sstable_.reset();
       if (OB_FAIL(sstable->meta_->cg_sstables_.init_empty_array_for_cg(allocator, cg_sstables.count()))) {
         LOG_WARN("fail to init cg sstables", K(ret), K(cg_sstables));
       } else if (OB_FAIL(sstable->meta_->cg_sstables_.add_tables_for_cg_without_deep_copy(cg_sstables))) {
         LOG_WARN("fail to add tables for cg without deep copy", K(ret), K(cg_sstables));
+      } else if (hidden_cg_sstables.empty()) {
+        // do nothing
+      } else if (OB_FAIL(sstable->meta_->hidden_cg_sstable_.init_empty_array_for_cg(allocator, hidden_cg_sstables.count()))) {
+        LOG_WARN("fail to init hidden cg sstables", K(ret), K(hidden_cg_sstables));
+      } else if (OB_FAIL(sstable->meta_->hidden_cg_sstable_.add_tables_for_cg_without_deep_copy(hidden_cg_sstables))) {
+        LOG_WARN("fail to add tables for hidden cg without deep copy", K(ret), K(hidden_cg_sstables));
       }
     }
     if (OB_FAIL(ret)) {
       for (int64_t i = 0; i < cg_sstables.count(); ++i) {// ingore error code
         cg_sstables.at(i)->~ObITable();
+      }
+      for (int64_t i = 0; i < hidden_cg_sstables.count(); ++i) {// ignore error code
+        hidden_cg_sstables.at(i)->~ObITable();
       }
     }
   }

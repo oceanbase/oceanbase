@@ -43,6 +43,7 @@ void ObMergeFuser::clean_nop_pos_and_result_row()
   result_row_.row_flag_.set_flag(ObDmlFlag::DF_NOT_EXIST);
   result_row_.trans_id_.reset();
   result_row_.mvcc_row_flag_.reset();
+  result_row_.merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_MAX;
   result_row_.major_merge_flag_.reset();
   for (int64_t i = 0; i < result_row_.count_; i++) {
     result_row_.storage_datums_[i].set_nop();
@@ -121,6 +122,7 @@ int ObMergeFuser::fuse_row(MERGE_ITER_ARRAY &macro_row_iters, bool &append_row_f
   } else if (!is_need_fuse && macro_row_iters.at(0)->get_curr_row()->row_flag_.is_delete()) {
     result_row_.row_flag_.reset();
     result_row_.row_flag_ = macro_row_iters.at(0)->get_curr_row()->row_flag_;
+    result_row_.merge_engine_type_ = macro_row_iters.at(0)->get_curr_row()->merge_engine_type_;
     for (int64_t i = 1; i < macro_row_iters_cnt; ++i) {
       result_row_.row_flag_.fuse_flag(macro_row_iters.at(i)->get_curr_row()->row_flag_);
     }
@@ -180,7 +182,7 @@ int ObMergeFuser::fuse_delete_row(
       result_row_.row_flag_.set_flag(ObDmlFlag::DF_DELETE);
       result_row_.mvcc_row_flag_ = del_row.mvcc_row_flag_;
       result_row_.set_compacted_multi_version_row();
-      STORAGE_LOG(DEBUG, "fuse delete row", K(ret), K_(enable_delete_insert), K(del_row), K(result_row_));
+      STORAGE_LOG(DEBUG, "fuse delete row", K(ret), K_(original_merge_engine_type), K(del_row), K(result_row_));
     }
   }
 
@@ -374,9 +376,9 @@ int ObMinorPartitionMergeFuser::inner_init(const ObMergeParameter &merge_param)
   } else {
     column_cnt_ = column_cnt + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
     multi_version_rowkey_column_cnt_ = merge_param.get_schema()->get_rowkey_column_num() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-    enable_delete_insert_ = merge_param.is_delete_insert_merge();
+    decide_merge_by_row_ = merge_param.static_param_.get_tablet_id().is_user_tablet() &&
+                          !compaction::is_mds_merge(merge_param.static_param_.get_merge_type());
   }
-
   return ret;
 }
 
@@ -396,7 +398,7 @@ void ObMinorPartitionMergeFuser::fill_default_value_of_added_columns(ObDatumRow&
   // @cuiyuntian.cyt TODO: fill default value of update row in full update mode
   if (default_row_.is_valid() && !row.row_flag_.is_lock() &&
       !row.row_flag_.is_update() && !row.row_flag_.is_not_exist() &&
-      (enable_delete_insert_ || !row.row_flag_.is_delete())) {
+      (row.is_di_merge_engine_row() || !row.row_flag_.is_delete())) {
     for (int64_t i = row.get_column_count() - 1;
          i >= multi_version_rowkey_column_cnt_; --i) {
       if (row.storage_datums_[i].is_nop()) {
@@ -412,6 +414,7 @@ int ObMinorPartitionMergeFuser::preprocess_fuse_row(const blocksstable::ObDatumR
 {
   int ret = OB_SUCCESS;
   is_need_fuse = true;
+  bool is_delete_insert_merge = false;
   clean_nop_pos_and_result_row();
   if (row.trans_id_.is_valid()) {
     if (!row.mvcc_row_flag_.is_uncommitted_row()) {
@@ -424,7 +427,9 @@ int ObMinorPartitionMergeFuser::preprocess_fuse_row(const blocksstable::ObDatumR
 
   if (OB_FAIL(ret)) {
   } else if (row.row_flag_.is_delete()) {
-    if (OB_FAIL(fuse_delete_row(row, enable_delete_insert_ ? column_cnt_ : multi_version_rowkey_column_cnt_))) {
+    if (OB_FAIL(check_is_delete_insert_merge(row.merge_engine_type_, is_delete_insert_merge, decide_merge_by_row_))) {
+      STORAGE_LOG(WARN, "failed to check is delete insert merge", K(ret), K(row));
+    } else if (OB_FAIL(fuse_delete_row(row, is_delete_insert_merge ? column_cnt_ : multi_version_rowkey_column_cnt_))) {
       STORAGE_LOG(WARN, "failed to fuse_delete_row", K(ret), K(row), K(multi_version_rowkey_column_cnt_));
     } else {
       is_need_fuse = false;
@@ -436,7 +441,8 @@ int ObMinorPartitionMergeFuser::preprocess_fuse_row(const blocksstable::ObDatumR
 int ObMergeFuserBuilder::build(const ObMergeParameter &merge_param,
                                const int64_t cluster_version,
                                ObIAllocator &allocator,
-                               ObIPartitionMergeFuser *&partition_fuser)
+                               ObIPartitionMergeFuser *&partition_fuser,
+                               const bool use_co_inc_fuser)
 {
   int ret = OB_SUCCESS;
   bool is_fuse_row_flag = true;
@@ -446,7 +452,8 @@ int ObMergeFuserBuilder::build(const ObMergeParameter &merge_param,
     STORAGE_LOG(WARN, "Invalid argument to build MergeFuser", K(merge_param), K(ret));
   } else {
     const ObMergeType merge_type = merge_param.static_param_.get_merge_type();
-    if (is_major_or_meta_merge_type(merge_type) && !merge_param.get_schema()->is_row_store()) {
+    // ObCOMergeLogBuilder should always use co minor fuser for COLUMN STORE switch to ROW STORE
+    if (is_major_or_meta_merge_type(merge_type) && (!merge_param.get_schema()->is_row_store() || use_co_inc_fuser)) {
       partition_fuser = alloc_helper<ObCOMinorSSTableFuser>(allocator, allocator);
     } else if (is_major_or_meta_merge_type(merge_type)) {
       is_fuse_row_flag = false;

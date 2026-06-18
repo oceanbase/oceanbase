@@ -351,55 +351,57 @@ int ObCSEncodeBlockGetReader<IS_MULTI_VERSION>::add_decoder(const int64_t store_
   return ret;
 }
 
-#define DEFINE_MULTI_VERSION_COMMON_FUNCS(ClassName)                           \
-  template <bool IS_MULTI_VERSION>                                             \
-  int ClassName<IS_MULTI_VERSION>::add_decoder_for_row_header(                 \
-      int64_t &decoders_buf_pos) {                                             \
-    int ret = OB_SUCCESS;                                                      \
-    const ObIColumnCSDecoder *decoder = nullptr;                               \
-    /* row header is the last column and is a hidden column */                 \
-    int64_t store_idx =                                                        \
-        transform_helper_.get_micro_block_header()->column_count_;             \
-    int64_t decoder_idx = get_decoder_count() - 1;                             \
-    int64_t ctx_idx = get_ctx_count() - 1;                                     \
-    if (OB_FAIL(acquire(store_idx, decoders_buf_pos, decoder))) {              \
-      LOG_ERROR("acquire decoder failed", K(ret), K(store_idx));               \
-    } else if (OB_FAIL(transform_helper_.build_column_decoder_ctx(             \
-                   ObCSRowHeader::TYPE, store_idx, ctxs_[ctx_idx]))) {         \
-      LOG_ERROR("fail to build column decoder ctx", K(ret), K(store_idx),      \
-                K(decoder_idx), K(ctx_idx));                                   \
-    } else {                                                                   \
-      decoders_[decoder_idx].decoder_ = decoder;                               \
-      decoders_[decoder_idx].ctx_ = &ctxs_[ctx_idx];                           \
-    }                                                                          \
-    return ret;                                                                \
-  }                                                                            \
-  template <>                                                                  \
-  int ClassName<true>::get_multi_version_info(                                 \
-      const int64_t row_id, MultiVersionInfo &multi_version_info) {            \
-    int ret = OB_SUCCESS;                                                      \
-    ObStorageDatum datum;                                                      \
-    if (OB_FAIL(decoders_[get_decoder_count() - 1].decode(row_id, datum))) {   \
-      LOG_ERROR("decode row header failed", K(ret), K(row_id));                \
-    } else if (datum.len_ != sizeof(ObCSRowHeader)) {                          \
-      ret = OB_ERR_UNEXPECTED;                                                 \
-      LOG_ERROR("row header length is unexpected", K(ret), K(datum.len_));     \
-    } else {                                                                   \
-      const ObCSRowHeader &row_header =                                        \
-          *reinterpret_cast<const ObCSRowHeader *>(datum.ptr_);                \
-      multi_version_info.dml_row_flag_ = row_header.row_flag_;                 \
-      multi_version_info.mvcc_row_flag_ = row_header.mvcc_flag_;               \
-      multi_version_info.trans_id_ = row_header.trans_id_;                     \
-    }                                                                          \
-    return ret;                                                                \
-  }                                                                            \
-  template <>                                                                  \
-  int ClassName<false>::get_multi_version_info(                                \
-      const int64_t, MultiVersionInfo &multi_verion_info) {                    \
-    multi_verion_info.dml_row_flag_.set_flag(ObDmlFlag::DF_INSERT);            \
-    multi_verion_info.mvcc_row_flag_.reset();                                  \
-    multi_verion_info.trans_id_.reset();                                       \
-    return OB_SUCCESS;                                                         \
+#define DEFINE_MULTI_VERSION_COMMON_FUNCS(ClassName)                                \
+  template <bool IS_MULTI_VERSION>                                                  \
+  int ClassName<IS_MULTI_VERSION>::add_decoder_for_row_header(                      \
+      int64_t &decoders_buf_pos) {                                                  \
+    int ret = OB_SUCCESS;                                                           \
+    const ObIColumnCSDecoder *decoder = nullptr;                                    \
+    /* row header is the last column and is a hidden column */                      \
+    int64_t store_idx =                                                             \
+        transform_helper_.get_micro_block_header()->column_count_;                  \
+    int64_t decoder_idx = get_decoder_count() - 1;                                  \
+    int64_t ctx_idx = get_ctx_count() - 1;                                          \
+    if (OB_FAIL(acquire(store_idx, decoders_buf_pos, decoder))) {                   \
+      LOG_ERROR("acquire decoder failed", K(ret), K(store_idx));                    \
+    } else if (OB_FAIL(transform_helper_.build_column_decoder_ctx(                  \
+                   ObCSRowMultiVersionHeader::TYPE, store_idx, ctxs_[ctx_idx]))) {  \
+      LOG_ERROR("fail to build column decoder ctx", K(ret), K(store_idx),           \
+                K(decoder_idx), K(ctx_idx));                                        \
+    } else {                                                                        \
+      decoders_[decoder_idx].decoder_ = decoder;                                    \
+      decoders_[decoder_idx].ctx_ = &ctxs_[ctx_idx];                                \
+    }                                                                               \
+    return ret;                                                                     \
+  }                                                                                 \
+  template <>                                                                       \
+  int ClassName<true>::get_multi_version_info(                                      \
+      const int64_t row_id, MultiVersionInfo &multi_version_info) {                 \
+    int ret = OB_SUCCESS;                                                           \
+    ObStorageDatum datum;                                                           \
+    if (OB_FAIL(decoders_[get_decoder_count() - 1].decode(row_id, datum))) {        \
+      LOG_ERROR("decode row header failed", K(ret), K(row_id));                     \
+    } else if (datum.len_ != sizeof(ObCSRowMultiVersionHeader)) {                   \
+      ret = OB_ERR_UNEXPECTED;                                                      \
+      LOG_ERROR("row header length is unexpected", K(ret), K(datum.len_));          \
+    } else {                                                                        \
+      const ObCSRowMultiVersionHeader &row_header =                                 \
+          *reinterpret_cast<const ObCSRowMultiVersionHeader *>(datum.ptr_);         \
+      multi_version_info.dml_row_flag_ = row_header.row_flag_;                      \
+      multi_version_info.mvcc_row_flag_ = row_header.mvcc_flag_;                    \
+      multi_version_info.trans_id_ = row_header.trans_id_;                          \
+      multi_version_info.merge_engine_type_ = row_header.get_merge_engine_type();   \
+    }                                                                               \
+    return ret;                                                                     \
+  }                                                                                 \
+  template <>                                                                       \
+  int ClassName<false>::get_multi_version_info(                                     \
+      const int64_t, MultiVersionInfo &multi_version_info) {                        \
+    multi_version_info.dml_row_flag_.set_flag(ObDmlFlag::DF_INSERT);                \
+    multi_version_info.mvcc_row_flag_.reset();                                      \
+    multi_version_info.trans_id_.reset();                                           \
+    multi_version_info.merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_MAX; \
+    return OB_SUCCESS;                                                              \
   }
 
 DEFINE_MULTI_VERSION_COMMON_FUNCS(ObCSEncodeBlockGetReader);
@@ -602,6 +604,7 @@ int ObCSEncodeBlockGetReader<IS_MULTI_VERSION>::get_row(const ObMicroBlockAddr &
         row.row_flag_ = multi_version_info.dml_row_flag_;
         row.mvcc_row_flag_ = multi_version_info.mvcc_row_flag_;
         row.trans_id_ = multi_version_info.trans_id_;
+        row.merge_engine_type_ = multi_version_info.merge_engine_type_;
         row.count_ = request_cnt_;
       }
     } else {
@@ -662,6 +665,7 @@ int ObCSEncodeBlockGetReader<IS_MULTI_VERSION>::get_row_and_trans_version(
         row.row_flag_ = multi_version_info.dml_row_flag_;
         row.mvcc_row_flag_ = multi_version_info.mvcc_row_flag_;
         row.trans_id_ = multi_version_info.trans_id_;
+        row.merge_engine_type_ = multi_version_info.merge_engine_type_;
         row.count_ = request_cnt_;
       }
     } else {
@@ -922,6 +926,7 @@ int ObCSEncodeBlockGetReader<IS_MULTI_VERSION>::get_row(
       row.row_flag_ = multi_verion_info.dml_row_flag_;
       row.mvcc_row_flag_ = multi_verion_info.mvcc_row_flag_;
       row.trans_id_ = multi_verion_info.trans_id_;
+      row.merge_engine_type_ = multi_verion_info.merge_engine_type_;
       row.count_ = request_cnt_;
     }
   }
@@ -1489,6 +1494,7 @@ OB_INLINE int ObMicroBlockCSDecoder<IS_MULTI_VERSION>::get_row_impl(int64_t inde
     row.row_flag_ = multi_verion_info.dml_row_flag_;
     row.mvcc_row_flag_ = multi_verion_info.mvcc_row_flag_;
     row.trans_id_ = multi_verion_info.trans_id_;
+    row.merge_engine_type_ = multi_verion_info.merge_engine_type_;
     row.fast_filter_skipped_ = false;
     row.count_ = request_cnt_;
   }

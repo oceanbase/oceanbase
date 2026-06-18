@@ -28,6 +28,126 @@ using namespace oceanbase::share;
 using namespace oceanbase::storage;
 using namespace oceanbase::compaction;
 
+int ObTabletSplitUtil::build_split_base_storage_schema(
+    ObIAllocator &allocator,
+    const ObSSTable &src_sstable,
+    const ObStorageSchema &split_mds_storage_schema,
+    ObStorageSchema *&target_storage_schema)
+{
+  int ret = OB_SUCCESS;
+  ObSSTableMetaHandle meta_handle;
+  const ObTabletID &src_tablet_id = src_sstable.get_key().get_tablet_id();
+  target_storage_schema = nullptr;
+  const bool need_truncate_column = !src_sstable.is_column_store_sstable()
+      || (src_sstable.is_co_sstable() && static_cast<const ObCOSSTableV2 *>(&src_sstable)->is_all_cg_base());
+  ObUpdateCSReplicaSchemaParam update_param;
+  int64_t sstable_stored_cols_cnt = 0;
+  if (OB_FAIL(src_sstable.get_meta(meta_handle))) {
+    LOG_WARN("get meta failed", K(ret));
+  } else if (OB_FALSE_IT(sstable_stored_cols_cnt = meta_handle.get_sstable_meta().get_column_count())) {
+  } else if (OB_ISNULL(target_storage_schema = OB_NEWx(ObStorageSchema, &allocator))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc mem failed", K(ret));
+  } else if (need_truncate_column && OB_FAIL(update_param.init(src_tablet_id,
+      sstable_stored_cols_cnt/*major_column_cnt*/,
+      ObUpdateCSReplicaSchemaParam::UpdateType::TRUNCATE_COLUMN_ARRAY))) {
+    LOG_WARN("update param failed", K(ret), K(src_tablet_id));
+  } else if (OB_FAIL(target_storage_schema->init(allocator,
+      split_mds_storage_schema/*old_schema*/,
+      false/*skip_column_info*/,
+      nullptr/*column_group_schema*/,
+      false/*generate_cs_replica_cg_array*/,
+      need_truncate_column ? &update_param/*ObUpdateCSReplicaSchemaParam*/ : nullptr))) {
+    LOG_WARN("init storage schema for tablet split failed", K(ret), K(need_truncate_column), K(update_param));
+  } else {
+    target_storage_schema->schema_version_ = meta_handle.get_sstable_meta().get_schema_version();
+    target_storage_schema->progressive_merge_round_ = meta_handle.get_sstable_meta().get_progressive_merge_round();
+  }
+  return ret;
+}
+
+int ObTabletSplitUtil::build_adjusted_col_layout_storage_schema(
+    ObIAllocator &allocator,
+    const ObSSTable &src_sstable,
+    const ObStorageSchema &split_mds_storage_schema,
+    const ObStorageSchema *target_storage_schema,
+    const ObStorageSchema *&storage_schema)
+{
+  int ret = OB_SUCCESS;
+  const ObTabletID &src_tablet_id = src_sstable.get_key().get_tablet_id();
+  ObStorageSchema::ColumnGroupLayout target_layout = ObStorageSchema::INVALID;
+  bool rebuild_col_layout = false;
+  ObStorageSchema *convert_col_storage_schema = nullptr;
+  if (src_sstable.is_co_sstable()) {
+    const ObCOSSTableV2 *co_sstable = static_cast<const ObCOSSTableV2 *>(&src_sstable);
+    if (co_sstable->is_cgs_empty_co_table() || co_sstable->is_row_store_only_co_table()) {
+      // do nothing, prepare_sstable_cg_infos mocks the row store cg for these tables.
+    } else if (co_sstable->is_all_cg_base() && !co_sstable->has_hidden_rowkey_cg()) {
+      // do nothing, old version row-column mixed store table
+    } else if (split_mds_storage_schema.is_row_store()) {
+      // col->row delayed: mds schema is row store but base co is still columnar, rebuild a columnar schema
+      if (OB_UNLIKELY(split_mds_storage_schema.is_column_info_simplified())) {
+        // the storage schema in mds must not be column info simplified
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected column info simplified mds schema", K(ret), K(src_tablet_id), K(split_mds_storage_schema));
+      } else {
+        rebuild_col_layout = true;
+        target_layout = co_sstable->has_hidden_rowkey_cg() ? ObStorageSchema::ALL_CG_WITH_HIDDEN : ObStorageSchema::PURE_COL;
+      }
+    } else if (!co_sstable->has_hidden_rowkey_cg() && split_mds_storage_schema.has_hidden_rowkey_column_group()) {
+      // replace all cg with rowkey cg && remove hidden cg in clipped schema
+      target_layout = ObStorageSchema::PURE_COL;
+    } else if (co_sstable->has_hidden_rowkey_cg() && !split_mds_storage_schema.has_hidden_rowkey_column_group()) {
+      // replace rowkey cg with all cg && add hidden cg in clipped schema
+      target_layout = ObStorageSchema::ALL_CG_WITH_HIDDEN;
+    } else {
+      // do nothing
+    }
+  } else if (src_sstable.is_cg_sstable()) {
+    if (split_mds_storage_schema.is_row_store()) {
+      // col->row delayed: mds schema is row store but this cg sstable still belongs to a columnar
+      // major, rebuild a columnar schema so the cg sstable's column group idx stays valid.
+      if (OB_UNLIKELY(split_mds_storage_schema.is_column_info_simplified())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected column info simplified mds schema", K(ret), K(src_tablet_id), K(split_mds_storage_schema));
+      } else {
+        rebuild_col_layout = true;
+        target_layout = HIDDEN_ROWKEY_COLUMN_GROUP_IDX == src_sstable.get_column_group_id()
+                      ? ObStorageSchema::ALL_CG_WITH_HIDDEN
+                      : ObStorageSchema::PURE_COL;
+      }
+    } else if (HIDDEN_ROWKEY_COLUMN_GROUP_IDX == src_sstable.get_column_group_id()
+            && !split_mds_storage_schema.has_hidden_rowkey_column_group()) {
+      target_layout = ObStorageSchema::ALL_CG_WITH_HIDDEN;
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (ObStorageSchema::INVALID == target_layout) {
+    storage_schema = target_storage_schema;
+  } else if (OB_ISNULL(convert_col_storage_schema = OB_NEWx(ObStorageSchema, &allocator))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc mem failed", K(ret));
+  } else if (rebuild_col_layout && OB_FAIL(convert_col_storage_schema->init_for_split_rebuild_col_layout(
+      allocator, *target_storage_schema, target_layout))) {
+    LOG_WARN("rebuild col layout schema for col to row split failed", K(ret), "target_layout",
+        static_cast<int64_t>(target_layout), KPC(target_storage_schema));
+  } else if (!rebuild_col_layout && OB_FAIL(convert_col_storage_schema->init(allocator, *target_storage_schema, false/*skip_column_info*/,
+      target_storage_schema/*column_group_schema*/, false/*generate_cs_replica_cg_array*/,
+      nullptr/*update_param*/, target_layout))) {
+    // cg layout switch (rowkey cg <-> all cg with hidden): reshape the base schema's cg array to target_layout
+    LOG_WARN("reshape col layout for split failed", K(ret), "target_layout",
+        static_cast<int64_t>(target_layout), KPC(target_storage_schema));
+  } else {
+    storage_schema = convert_col_storage_schema;
+  }
+
+  if (convert_col_storage_schema != storage_schema) {
+    destroy_split_object(allocator, convert_col_storage_schema);
+  }
+  return ret;
+}
+
 bool ObTabletSplitRegisterMdsArg::is_valid() const
 {
   /*      exec_tenant_id_(common::OB_INVALID_TENANT_ID),*/
@@ -104,43 +224,27 @@ int ObTabletSplitUtil::get_clipped_storage_schema_on_demand(
 {
   int ret = OB_SUCCESS;
   storage_schema = nullptr;
-  ObSSTableMetaHandle meta_handle;
   if (OB_UNLIKELY(!split_mds_storage_schema.is_valid())) {
     ret = OB_ERR_SYS;
     LOG_WARN("error sys", K(ret), K(split_mds_storage_schema));
   } else if (!src_sstable.is_major_sstable()) {
     storage_schema = &split_mds_storage_schema;
-  } else if (OB_FAIL(src_sstable.get_meta(meta_handle))) {
-    LOG_WARN("get meta failed", K(ret));
   } else {
     // For normal cg sstable/rowkey cg sstable, use mds_storage_schema_ with corrected schema_version and progressive_merge_round;
     // For row-store/all cg sstable, use clipped mds_storage_schema_.
     ObStorageSchema *target_storage_schema = nullptr;
-    const int64_t sstable_stored_cols_cnt = meta_handle.get_sstable_meta().get_column_count();
-    ObUpdateCSReplicaSchemaParam update_param;
-    // truncate column for row-store sstable and all co sstable.
-    const bool need_truncate_column = !src_sstable.is_column_store_sstable()
-      || (src_sstable.is_co_sstable() && static_cast<const ObCOSSTableV2 *>(&src_sstable)->is_all_cg_base());
-    if (OB_ISNULL(target_storage_schema = OB_NEWx(ObStorageSchema, &allocator))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("alloc mem failed", K(ret));
-    } else if (need_truncate_column && OB_FAIL(update_param.init(src_tablet_id,
-        sstable_stored_cols_cnt/*major_column_cnt*/,
-        ObUpdateCSReplicaSchemaParam::UpdateType::TRUNCATE_COLUMN_ARRAY))) {
-      LOG_WARN("update param failed", K(ret), K(src_tablet_id));
-    } else if (OB_FAIL(target_storage_schema->init(allocator,
-          split_mds_storage_schema/*old_schema*/,
-          false/*skip_column_info*/,
-          nullptr/*column_group_schema*/,
-          false/*generate_cs_replica_cg_array*/,
-          need_truncate_column ? &update_param/*ObUpdateCSReplicaSchemaParam*/ : nullptr))) {
-      LOG_WARN("init storage schema for tablet split failed", K(ret), K(need_truncate_column), K(update_param));
-    } else {
-      target_storage_schema->schema_version_ = meta_handle.get_sstable_meta().get_schema_version();
-      target_storage_schema->progressive_merge_round_ = meta_handle.get_sstable_meta().get_progressive_merge_round();
-      storage_schema = target_storage_schema;
+    if (OB_FAIL(build_split_base_storage_schema(
+        allocator, src_sstable, split_mds_storage_schema, target_storage_schema))) {
+      LOG_WARN("build split base storage schema failed", K(ret), K(src_tablet_id), K(src_sstable));
+    } else if (OB_FAIL(build_adjusted_col_layout_storage_schema(
+        allocator, src_sstable, split_mds_storage_schema,
+        target_storage_schema, storage_schema))) {
+      LOG_WARN("build adjusted col layout storage schema failed", K(ret), K(src_tablet_id), K(src_sstable));
     }
-    if (OB_FAIL(ret)) {
+
+    // release the intermediate schemas that are not chosen as the final result (on failure storage_schema stays
+    // null, so every allocated schema is freed here).
+    if (target_storage_schema != storage_schema) {
       destroy_split_object(allocator, target_storage_schema);
     }
   }

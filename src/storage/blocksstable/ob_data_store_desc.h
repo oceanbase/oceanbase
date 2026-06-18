@@ -90,7 +90,6 @@ public:
       K_(enable_macro_block_bloom_filter),
       K_(progressive_merge_round),
       K_(need_submit_io),
-      K_(merge_engine_type),
       K_(encoding_granularity),
       K_(reorganization_scn),
       K_(semistruct_properties),
@@ -133,7 +132,6 @@ public:
   // For ddl redo log for cs replica, leader write only macro block data in memory but do not flush to disk.
   // indicate whether to submit io to write maroc block data to disk.
   bool need_submit_io_;
-  ObMergeEngineType merge_engine_type_;
   uint64_t encoding_granularity_;
   int64_t micro_block_format_version_;
   share::SCN reorganization_scn_;
@@ -257,6 +255,7 @@ public:
   OB_INLINE bool is_major_merge_type() const { return compaction::is_major_merge_type(get_merge_type()); }
   OB_INLINE bool is_major_or_meta_merge_type() const { return compaction::is_major_or_meta_merge_type(get_merge_type()); }
   OB_INLINE bool is_use_pct_free() const { return get_macro_block_size() != get_macro_store_size(); }
+  OB_INLINE bool decide_merge_by_row() const { return get_tablet_id().is_user_tablet() && !is_major_or_meta_merge_type() && !compaction::is_mds_merge(get_merge_type()); }
   int64_t get_logical_version() const
   {
     return is_major_or_meta_merge_type() ? get_snapshot_version() : get_end_scn().get_val_for_tx();
@@ -289,8 +288,6 @@ public:
     return use_old_version_macro_header() ? col_desc_->row_column_count_ : col_desc_->rowkey_column_count_;
   }
   bool micro_index_clustered() const;
-  bool is_delete_insert_merge() const
-  { return is_delete_insert_merge_engine() && !is_major_merge_type(); }
   bool enable_macro_block_bloom_filter() const;
 
   OB_INLINE int64_t get_micro_block_format_version() const
@@ -330,7 +327,6 @@ public:
   STATIC_DESC_FUNC(share::SCN, reorganization_scn);
   STATIC_DESC_FUNC(int64_t, data_version_for_ss);
   STATIC_DESC_FUNC(ObStorageObjectWriteStrategy, io_write_strategy);
-  STATIC_DESC_FUNC(ObMergeEngineType, merge_engine_type);
   COL_DESC_FUNC(bool, is_row_store);
   COL_DESC_FUNC(uint16_t, table_cg_idx);
   COL_DESC_FUNC(int64_t, row_column_count);
@@ -349,9 +345,6 @@ public:
   OB_INLINE int64_t get_micro_block_size() const { return micro_block_size_; }
   OB_INLINE common::ObRowStoreType get_row_store_type() const { return row_store_type_; }
   OB_INLINE const share::ObSemistructProperties& get_semistruct_properties() const { return static_desc_->semistruct_properties_; }
-  OB_INLINE bool is_delete_insert_merge_engine() const { return get_merge_engine_type() == ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT; }
-  OB_INLINE bool is_partial_update_merge_engine() const { return get_merge_engine_type() == ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE; }
-  OB_INLINE bool is_append_only_merge_engine() const { return get_merge_engine_type() == ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY; }
   static const int64_t MIN_MICRO_BLOCK_SIZE = 4 * 1024; //4KB
   // emergency magic table id is 10000
   static const uint64_t EMERGENCY_TENANT_ID_MAGIC = 0;

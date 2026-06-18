@@ -10,6 +10,7 @@
 #include "share/datum/ob_datum_funcs.h"
 #include "sql/engine/expr/ob_expr.h"
 #include "common/ob_common_types.h"
+#include "common/ob_store_format.h"
 
 namespace oceanbase
 {
@@ -94,6 +95,22 @@ int check_skip_by_monotonicity(sql::ObBlackFilterExecutor &filter,
 
 int cast_obj(const common::ObObjMeta &src_meta, common::ObIAllocator &cast_allocator, common::ObObj &obj);
 
+OB_INLINE int check_is_delete_insert_merge(const ObMergeEngineType row_merge_engine_type,
+                                           bool &is_delete_insert_merge,
+                                           const bool decide_merge_by_row = true)
+{
+  int ret = OB_SUCCESS;
+  is_delete_insert_merge = false;
+  if (decide_merge_by_row) {
+    if (OB_LIKELY(ObMergeEngineStoreFormat::is_merge_engine_valid(row_merge_engine_type))) {
+      is_delete_insert_merge = ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT == row_merge_engine_type;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "Unexpected merge engine type", K(ret), K(row_merge_engine_type), K(decide_merge_by_row), K(lbt()));
+    }
+  }
+  return ret;
+}
 
 OB_INLINE int init_expr_vector_header(
     sql::ObExpr &expr,

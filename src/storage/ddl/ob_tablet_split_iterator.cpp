@@ -52,7 +52,7 @@ int ObSplitIterator::build_rowkey_read_info(
     if (OB_UNLIKELY(is_inited_)) {
       ret = OB_INIT_TWICE;
       LOG_WARN("init twice", K(ret));
-    } else if (OB_UNLIKELY(!param.is_valid() || sstable.is_cg_sstable())) {
+    } else if (OB_UNLIKELY(!param.is_valid() || sstable.is_normal_cg_sstable())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid arg", K(ret), K(param), K(sstable));
     } else if (OB_FAIL(param.storage_schema_->get_mulit_version_rowkey_column_ids(cols_desc))) {
@@ -90,13 +90,19 @@ int ObSplitIterator::build_rowkey_read_info(
   int ret = OB_SUCCESS;
   common::ObArenaAllocator tmp_arena("BltCgReadInfo", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   const uint16_t cg_idx = sstable.get_column_group_id();
+  const ObStorageColumnGroupSchema *cg_schema = nullptr;
+
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_UNLIKELY(!param.is_valid() || !sstable.is_cg_sstable()
-      || cg_idx >= param.storage_schema_->get_column_groups().count())) {
+  } else if (OB_UNLIKELY(!param.is_valid() || !sstable.is_normal_cg_sstable())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), K(cg_idx), "cgs_cnt", param.storage_schema_->get_column_groups().count(), K(param), K(sstable));
+    LOG_WARN("invalid arg", K(ret), K(cg_idx), K(param), K(sstable));
+  } else if (OB_FAIL(param.storage_schema_->get_cg_schema_with_column_group_idx(cg_idx, cg_schema))) {
+    LOG_WARN("fail to get column group schema", K(ret), K(cg_idx), KPC(param.storage_schema_));
+  } else if (OB_ISNULL(cg_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null cg schema", K(ret), K(cg_idx), KPC(param.storage_schema_));
   } else {
     ObArray<ObColDesc> multi_version_cols_desc;
     int64_t column_idx = 0;
@@ -104,13 +110,12 @@ int ObSplitIterator::build_rowkey_read_info(
     ObColumnParam *column_param = nullptr;
     const ObStorageColumnSchema *column_schema = nullptr;
     ObTableReadInfo *table_read_info = nullptr;
-    const ObStorageColumnGroupSchema &cg_schema = param.storage_schema_->get_column_groups().at(cg_idx);
-    if (OB_UNLIKELY(!cg_schema.is_single_column_group())) {
+    if (OB_UNLIKELY(nullptr == cg_schema || !cg_schema->is_single_column_group())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected column group", K(ret), K(cg_schema), K(sstable));
+      LOG_WARN("unexpected column group", K(ret), KPC(cg_schema), K(sstable));
     } else if (OB_FAIL(param.storage_schema_->get_multi_version_column_descs(multi_version_cols_desc))) {
       LOG_WARN("get multi version column descs failed", K(ret));
-    } else if (OB_FALSE_IT(column_idx = cg_schema.get_column_idx(0/*column idx*/))) {
+    } else if (OB_FALSE_IT(column_idx = cg_schema->get_column_idx(0/*column idx*/))) {
     } else if (OB_UNLIKELY(column_idx < 0 || column_idx >= multi_version_cols_desc.count())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error", K(ret), K(column_idx), "multi_version_cols_desc", multi_version_cols_desc);
@@ -148,7 +153,7 @@ int ObSplitIterator::construct_access_param(
   const ObSSTable &sstable)
 {
   int ret = OB_SUCCESS;
-  const bool is_cg_sstable = sstable.is_cg_sstable();
+  const bool is_cg_sstable = sstable.is_normal_cg_sstable();
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
@@ -326,7 +331,7 @@ int ObRowScan::get_next_row(const ObDatumRow *&tmp_row)
 
 ObSnapshotRowScan::ObSnapshotRowScan() : is_inited_(false),
   allocator_("SplitSnapScan", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-  snapshot_version_(0), range_(), read_info_(), write_row_(), out_cols_projector_(), access_param_(), ctx_(), access_ctx_(), get_table_param_(), scan_merge_(nullptr)
+  snapshot_version_(0), range_(), read_info_(), write_row_(), out_cols_projector_(), access_param_(), ctx_(), access_ctx_(), tablet_read_tables_(), scan_merge_(nullptr)
 {
   reset();
 }
@@ -344,7 +349,7 @@ void ObSnapshotRowScan::reset()
     allocator_.free(scan_merge_);
     scan_merge_ = nullptr;
   }
-  get_table_param_.reset();
+  tablet_read_tables_.reset();
   access_ctx_.reset();
   ctx_.reset();
   access_param_.reset();
@@ -479,13 +484,13 @@ int ObSnapshotRowScan::construct_multiple_scan_merge(
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
-  if (OB_FAIL(get_table_param_.tablet_iter_.assign(table_iter))) {
+  if (OB_FAIL(tablet_read_tables_.tablet_iter_.assign(table_iter))) {
     LOG_WARN("fail to assign tablet iterator", K(ret));
   } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObMultipleScanMerge)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory for ObMultipleScanMerge", K(ret));
   } else if (FALSE_IT(scan_merge_ = new(buf)ObMultipleScanMerge())) {
-  } else if (OB_FAIL(scan_merge_->init(access_param_, access_ctx_, get_table_param_))) {
+  } else if (OB_FAIL(scan_merge_->init(access_param_, access_ctx_, tablet_read_tables_))) {
     LOG_WARN("fail to init scan merge", K(ret), K(access_param_), K(access_ctx_));
   } else if (OB_FAIL(scan_merge_->open(range))) {
     LOG_WARN("fail to open scan merge", K(ret), K(access_param_), K(access_ctx_), K(range));
@@ -833,7 +838,7 @@ int ObSplitReuseBlockIter::inner_open_cur_micro_block()
         decompressed_data,
         is_compressed))) {
       LOG_WARN("Failed to decrypt and decompress data", K(ret), KPC_(cur_micro_block));
-    } else if (split_helper_->get_sstable()->is_cg_sstable()) { // not including co sstable.
+    } else if (split_helper_->get_sstable()->is_normal_cg_sstable()) { // only each cg needs row id
       ObCSRange range;
       range.start_row_id_ = 0;
       range.end_row_id_ = cur_micro_block_->header_.row_count_ - 1;

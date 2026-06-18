@@ -55,6 +55,7 @@ public:
   virtual int get_next_log(ObMergeLog &mergelog, const ObMergeVectorStore *&vector_store, const blocksstable::ObDatumRow *&row) override;
   virtual int close() override;
   virtual int get_major_sstable_merge_iters_for_check(common::ObIArray<ObPartitionMergeIter *> &iters) override;
+  virtual bool use_co_inc_fuser() const override { return true; }
   VIRTUAL_TO_STRING_KV(KP_(cmp), K_(need_replay_base_cg), KP_(base_writer));
 protected:
   int init_full_default_row();
@@ -209,7 +210,6 @@ public:
 protected:
   virtual int alloc_writers(
     const blocksstable::ObDatumRow &default_row,
-    const common::ObIArray<ObStorageColumnGroupSchema> &cg_array,
     ObTabletMergeInfo **merge_infos,
     ObIArray<ObITable*> &tables);
   template <typename T>
@@ -225,7 +225,6 @@ private:
   int init_cg_writers(ObIArray<ObITable*> &tables);
   int alloc_single_writer(
       const blocksstable::ObDatumRow &default_row,
-      const common::ObIArray<ObStorageColumnGroupSchema> &cg_array,
       ObTabletMergeInfo **merge_infos,
       ObIArray<ObITable*> &tables);
 private:

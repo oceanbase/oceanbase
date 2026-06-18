@@ -146,35 +146,44 @@ int ObSSTableArray::init_empty_array_for_cg(
   return ret;
 }
 
-int ObSSTableArray::add_tables_for_cg(
+// intput_tables: [normal cg1, normal cg2, ..., special cg1]
+int ObSSTableArray::fill_cg_sstables(
     common::ObArenaAllocator &allocator,
-    const ObIArray<ObITable *> &tables)
+    const ObIArray<ObITable *> &input_tables,
+    ObSSTableArray &normal_cgs,
+    ObSSTableArray &hidden_cg)
 {
   int ret = OB_SUCCESS;
+  const bool has_hidden_cg = 1 == hidden_cg.count();
 
-  if (OB_UNLIKELY(0 == cnt_ || NULL == sstable_array_ || is_inited_)) {
-    ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("this table array can't add tables", K(ret), KPC(this));
-  } else if (OB_UNLIKELY(cnt_ != tables.count())) {
+  if (OB_UNLIKELY(input_tables.count() != normal_cgs.count() + hidden_cg.count())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid arguments", K(ret), KPC(this), K(tables.count()));
+    LOG_WARN("get invalid arguments", K(ret), K(input_tables.count()), K(normal_cgs), K(hidden_cg));
+  } else if (OB_UNLIKELY(nullptr == normal_cgs.sstable_array_ || (has_hidden_cg && nullptr == hidden_cg.sstable_array_))) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("this table array can't add tables", K(ret), K(normal_cgs), K(hidden_cg));
   }
 
-  for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); ++i) {
-    ObITable *table = tables.at(i);
+  for (int64_t i = 0; OB_SUCC(ret) && i < input_tables.count(); ++i) {
+    ObITable *table = input_tables.at(i);
     if (OB_ISNULL(table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null table ptr", K(ret));
     } else if (OB_UNLIKELY(!table->is_cg_sstable())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected table type", K(ret), KPC(table));
-    } else if (OB_FAIL(static_cast<ObSSTable *>(table)->deep_copy(allocator, sstable_array_[i]))) {
+    } else if (has_hidden_cg && i == input_tables.count() - 1) {
+      if (OB_FAIL(static_cast<ObSSTable *>(table)->deep_copy(allocator, hidden_cg.sstable_array_[0]))) {
+        LOG_WARN("fail to copy sstable", K(ret), KPC(static_cast<ObSSTable *>(table)));
+      }
+    } else if (OB_FAIL(static_cast<ObSSTable *>(table)->deep_copy(allocator, normal_cgs.sstable_array_[i]))) {
       LOG_WARN("fail to copy sstable", K(ret), KPC(static_cast<ObSSTable *>(table)));
     }
   }
 
   if (OB_SUCC(ret)) {
-    is_inited_ = true;
+    normal_cgs.is_inited_ = true;
+    hidden_cg.is_inited_ = has_hidden_cg;
   }
   return ret;
 }

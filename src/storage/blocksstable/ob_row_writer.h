@@ -29,7 +29,7 @@ public:
       const int64_t buf_len,
       int64_t &pos);
   int write(const int64_t rowkey_column_cnt, const ObDatumRow &datum_row, char *&buf, int64_t &len);
-  int write_lock_rowkey(const common::ObStoreRowkey &rowkey, char *&buf, int64_t &len);
+  int write_lock_rowkey(const common::ObStoreRowkey &rowkey, const ObMergeEngineType merge_engine_type, char *&buf, int64_t &len);
   int write(
       const int64_t rowkey_cnt,
       const ObDatumRow &datum_row,
@@ -99,7 +99,8 @@ private:
       const uint8_t multi_version_flag,
       const int64_t trans_id,
       const int64_t column_cnt,
-      const int64_t rowkey_cnt);
+      const int64_t rowkey_cnt,
+      const ObMergeEngineType merge_engine_type);
   template <typename T>
   int inner_write_cells(
       const T *cells,
@@ -254,12 +255,14 @@ public:
    *
    * @param rowkey
    * @param col_descs
+   * @param merge_engine_type
    * @param buf
    * @param len
    * @return int
    */
   int write_lock_rowkey(const common::ObStoreRowkey &rowkey,
                         const ObIArray<ObColDesc> *col_descs,
+                        const ObMergeEngineType merge_engine_type,
                         char *&buf,
                         int64_t &len);
 
@@ -318,7 +321,8 @@ private:
                         const uint8_t multi_version_flag,
                         const int64_t trans_id,
                         const ColumnCnt column_cnt,
-                        const RowkeyCnt rowkey_cnt);
+                        const RowkeyCnt rowkey_cnt,
+                        const ObMergeEngineType merge_engine_type);
 
   template <bool HAS_UPDATE_ARRAY>
   int inner_write_row(const ObStorageDatum *datums,
@@ -530,6 +534,7 @@ public:
 
   using WriteRowkeyFunc = int (ObCompatRowWriter::*)(const common::ObStoreRowkey &rowkey,
                                                       const ObIArray<ObColDesc> *col_descs,
+                                                      const ObMergeEngineType merge_engine_type,
                                                       char *&buf,
                                                       int64_t &len);
 
@@ -565,10 +570,11 @@ public:
 
   OB_INLINE int write_lock_rowkey(const common::ObStoreRowkey &rowkey,
                                   const ObIArray<ObColDesc> *col_descs,
+                                  const ObMergeEngineType merge_engine_type,
                                   char *&buf,
                                   int64_t &len)
   {
-    return (this->*write_rowkey_func_)(rowkey, col_descs, buf, len);
+    return (this->*write_rowkey_func_)(rowkey, col_descs, merge_engine_type, buf, len);
   }
 
 private:
@@ -641,22 +647,25 @@ private:
 
   int inner_new_write_lock_rowkey(const common::ObStoreRowkey &rowkey,
                                   const ObIArray<ObColDesc> *col_descs,
+                                  const ObMergeEngineType merge_engine_type,
                                   char *&buf,
                                   int64_t &len)
   {
-    return writer_.write_lock_rowkey(rowkey, col_descs, buf, len);
+    return writer_.write_lock_rowkey(rowkey, col_descs, merge_engine_type, buf, len);
   }
 
   int inner_old_write_lock_rowkey(const common::ObStoreRowkey &rowkey,
                                   const ObIArray<ObColDesc> *col_descs,
+                                  const ObMergeEngineType merge_engine_type,
                                   char *&buf,
                                   int64_t &len)
   {
-    return writer_v0_.write_lock_rowkey(rowkey, buf, len);
+    return writer_v0_.write_lock_rowkey(rowkey, merge_engine_type, buf, len);
   }
 
   int inner_not_init_write_lock_rowkey(const common::ObStoreRowkey &,
                                        const ObIArray<ObColDesc> *,
+                                       const ObMergeEngineType,
                                        char *&,
                                        int64_t &)
   {

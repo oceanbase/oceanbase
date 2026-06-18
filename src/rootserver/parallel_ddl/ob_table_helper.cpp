@@ -1025,6 +1025,11 @@ int ObTableHelper::inner_generate_table_schema_(const ObCreateTableArg &arg, ObT
     }
   }
 
+  if (OB_SUCC(ret) && compat_version >= DATA_VERSION_4_6_1_0) {
+    if (OB_FAIL(new_table.init_merge_engine_upper_version(arg.schema_.get_merge_engine_type()))) {
+      LOG_WARN("failed to init merge engine upper version", KR(ret), K(arg), K(new_table));
+    }
+  }
 
   return ret;
 }

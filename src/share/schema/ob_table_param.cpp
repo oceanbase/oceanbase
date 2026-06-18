@@ -633,7 +633,8 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     aggregate_param_props_(allocator),
     plan_enable_rich_format_(false),
     table_type_(ObTableType::MAX_TABLE_TYPE),
-    merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN)
+    merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN),
+    merge_engine_upper_version_()
 {
   reset();
 }
@@ -676,6 +677,7 @@ void ObTableParam::reset()
   plan_enable_rich_format_ = false;
   table_type_ = ObTableType::MAX_TABLE_TYPE;
   merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN;
+  merge_engine_upper_version_.reset();
 }
 
 OB_DEF_SERIALIZE(ObTableParam)
@@ -870,7 +872,9 @@ OB_DEF_DESERIALIZE(ObTableParam)
   if (OB_SUCC(ret) && is_fts_index_ && pos < data_len) {
     OB_UNIS_DECODE(fts_index_type_);
   }
-  LST_DO_CODE(OB_UNIS_DECODE, merge_engine_upper_version_);
+  if (OB_SUCC(ret) && pos < data_len) {
+    LST_DO_CODE(OB_UNIS_DECODE, merge_engine_upper_version_);
+  }
   return ret;
 }
 
@@ -950,6 +954,15 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
   }
   OB_UNIS_ADD_LEN(merge_engine_upper_version_);
   return len;
+}
+
+int ObTableParam::set_merge_engine_upper_version(const ObMergeEngineUpperVersion &merge_engine_upper_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(merge_engine_upper_version_.assign(merge_engine_upper_version))) {
+    LOG_WARN("Failed to assign merge engine upper version", K(ret), K(merge_engine_upper_version));
+  }
+  return ret;
 }
 
 int ObTableParam::get_columns_serialize_size(const Columns &columns, int64_t &size)
@@ -1052,25 +1065,25 @@ int ObTableParam::construct_columns_and_projector(
   share::schema::ObColDesc tmp_col_desc;
   share::schema::ObColExtend tmp_col_extend;
   int32_t cg_idx = 0;
-  bool is_cs_table = false;
-  bool is_cs = false;
+  bool is_cs_schema = false;
+  bool use_skip_index = false;
   bool has_all_column_group = false;
   bool need_truncate_filter = false;
   bool has_ttl_definition = false;
   int64_t rowkey_count = 0;
-  is_column_replica_table_ = false; // row store table schema does not contains cg, if true, need calculate cg idx by designed rules
+  is_column_replica_table_ = false; // always calculate cg idx by designed rules
 
-  if (OB_FAIL(table_schema.get_is_column_store(is_cs_table))) {
+  if (OB_FAIL(table_schema.get_is_column_store(is_cs_schema))) {
     LOG_WARN("fail to get is table column store", K(ret), K(table_schema));
-  } else if (FALSE_IT(is_cs = is_cs_table)) {
-  } else if (!is_cs && query_cs_replica) {
-    is_cs = true;
+  } else if (FALSE_IT(use_skip_index = is_cs_schema)) {
+  } else if (!is_cs_schema && query_cs_replica) {
+    use_skip_index = true;
     is_column_replica_table_ = true;
     has_all_column_group = false;
   }
 
   if (OB_FAIL(ret)) {
-  } else if (!is_column_replica_table_ && OB_FAIL(table_schema.has_all_column_group(has_all_column_group))) {
+  } else if (!query_cs_replica && OB_FAIL(table_schema.has_column_group(ObColumnGroupType::ALL_COLUMN_GROUP, has_all_column_group))) {
     LOG_WARN("Failed to check if has all column group", K(ret));
   } else {
     // column array
@@ -1109,7 +1122,7 @@ int ObTableParam::construct_columns_and_projector(
         tmp_col_desc.col_order_ = column->get_column_order();
         tmp_col_extend.skip_index_attr_ = column_schema->get_skip_index_attr();
         int tmp_ret = OB_E(EventTable::EN_ROW_STORE_GEN_SKIP_INDEX_ADAPTIVELY) OB_SUCCESS;
-        if (!tmp_col_extend.skip_index_attr_.has_skip_index() && (is_cs || tmp_ret != OB_SUCCESS) &&
+        if (!tmp_col_extend.skip_index_attr_.has_skip_index() && (use_skip_index || tmp_ret != OB_SUCCESS) &&
             ObMergeEngineStoreFormat::is_merge_engine_support_delta_sstable_skip_index(table_schema.get_merge_engine_type())) {
           tmp_col_extend.skip_index_attr_.set_min_max();
         }
@@ -1120,16 +1133,14 @@ int ObTableParam::construct_columns_and_projector(
           LOG_WARN("fail to push_back tmp_col_desc", K(ret));
         } else if (OB_FAIL(tmp_access_cols_extend.push_back(tmp_col_extend))) {
           LOG_WARN("fail to push_back tmp_access_cols_extend", K(ret));
-        } else if (is_cs) {
-          if (OB_FAIL(table_schema.get_column_group_index(*column, is_column_replica_table_, cg_idx))) {
-            LOG_WARN("Fail to get column group index", K(ret), KPC(column));
-          } else if (OB_FAIL(tmp_cg_idxs.push_back(cg_idx))) {
-            LOG_WARN("Fail to push back cg idx", K(ret));
-          }
+        } else if (OB_FAIL(table_schema.get_column_group_index(*column, !is_cs_schema, cg_idx))) {
+          LOG_WARN("Fail to get column group index", K(ret), KPC(column));
+        } else if (OB_FAIL(tmp_cg_idxs.push_back(cg_idx))) {
+          LOG_WARN("Fail to push back cg idx", K(ret));
         }
       }
     }
-    if (OB_SUCC(ret) && !is_cs_table && table_schema.is_global_index_table()) {
+    if (OB_SUCC(ret) && !is_cs_schema && table_schema.is_global_index_table()) {
       ObSEArray<ObColDesc, COMMON_COLUMN_NUM> non_rowkey_column_ids;
       if (OB_FAIL(table_schema.get_column_ids_without_rowkey(non_rowkey_column_ids, true))) {
         LOG_WARN("get column ids failed", K(ret));
@@ -1248,7 +1259,7 @@ int ObTableParam::construct_columns_and_projector(
           col_index = idx;
           tmp_col_extend.skip_index_attr_ = column_schema->get_skip_index_attr();
           int tmp_ret = OB_E(EventTable::EN_ROW_STORE_GEN_SKIP_INDEX_ADAPTIVELY) OB_SUCCESS;
-          if (!tmp_col_extend.skip_index_attr_.has_skip_index() && (is_cs || tmp_ret != OB_SUCCESS) &&
+          if (!tmp_col_extend.skip_index_attr_.has_skip_index() && (use_skip_index || tmp_ret != OB_SUCCESS) &&
               ObMergeEngineStoreFormat::is_merge_engine_support_delta_sstable_skip_index(table_schema.get_merge_engine_type())) {
             tmp_col_extend.skip_index_attr_.set_min_max();
           }
@@ -1271,16 +1282,14 @@ int ObTableParam::construct_columns_and_projector(
           LOG_WARN("fail to push_back tmp_access_cols_index", K(ret));
         } else if (OB_FAIL(tmp_access_cols_extend.push_back(tmp_col_extend))) {
           LOG_WARN("fail to push_back tmp_access_cols_extend", K(ret));
-        } else if (is_cs) {
-          if (OB_FAIL(table_schema.get_column_group_index(*column, is_column_replica_table_, cg_idx))) {
-            LOG_WARN("Fail to get column group index", K(ret));
-          } else if (OB_FAIL(tmp_cg_idxs.push_back(cg_idx))) {
-            LOG_WARN("Fail to push back cg idx", K(ret));
-          }
+        } else if (OB_FAIL(table_schema.get_column_group_index(*column, !is_cs_schema, cg_idx))) {
+          LOG_WARN("Fail to get column group index", K(ret));
+        } else if (OB_FAIL(tmp_cg_idxs.push_back(cg_idx))) {
+          LOG_WARN("Fail to push back cg idx", K(ret));
         }
       }
     }
-  }
+  } // end else
 
   // output projector
   if (OB_SUCC(ret)) {
@@ -1347,12 +1356,12 @@ int ObTableParam::construct_columns_and_projector(
                                      tmp_access_cols_desc,
                                      &tmp_access_cols_index,
                                      &tmp_access_cols_param,
-                                     is_cs ? &tmp_cg_idxs : nullptr,
+                                     &tmp_cg_idxs, // always add cg idxs to support online row col switch
                                      &tmp_access_cols_extend,
                                      has_all_column_group,
                                      false /*is_cg_sstable*/,
                                      need_truncate_filter,
-                                     table_schema.is_delete_insert_merge_engine(),
+                                     table_schema.get_original_merge_engine_type(),
                                      table_schema.get_micro_block_format_version(),
                                      has_ttl_definition))) {
       LOG_WARN("fail to init main read info", K(ret));
@@ -1364,7 +1373,8 @@ int ObTableParam::construct_columns_and_projector(
   }
   LOG_DEBUG("Generated main read info", K_(main_read_info));
   read_param_version_ = ObCGReadInfo::MIX_READ_INFO_LOCAL_CACHE;
-  if (OB_SUCC(ret) && is_cs && tmp_cg_idxs.count() <= ObCGReadInfo::get_local_max_cg_cnt()) {
+  // always construct cg read infos to support online row col switch
+  if (OB_SUCC(ret) && tmp_cg_idxs.count() <= ObCGReadInfo::get_local_max_cg_cnt()) {
     // construct cg read infos
     int64_t cg_cnt = tmp_cg_idxs.count();
     void *tmp_ptr  = nullptr;
@@ -1829,7 +1839,8 @@ int64_t ObTableParam::to_string(char *buf, const int64_t buf_len) const
        K_(aggregate_param_props),
        K_(access_virtual_col_cnt),
        K_(plan_enable_rich_format),
-       K_(table_type));
+       K_(table_type),
+       K_(merge_engine_upper_version));
   J_OBJ_END();
 
   return pos;

@@ -342,7 +342,9 @@ public:
                K_(has_merged_with_mds_info),
                K_(min_ss_tablet_version),
                K_(inc_major_snapshot),
-               K_(inc_major_replay_scn));
+               K_(inc_major_replay_scn),
+               K_(mock_rowkey_cg_schema),
+               K_(mock_single_cg_schema));
 private:
   int deserialize_v2_v3(const char *buf, const int64_t len, int64_t &pos);
   int deserialize_v1(const char *buf, const int64_t len, int64_t &pos);
@@ -404,8 +406,15 @@ public:
   share::SCN min_ss_tablet_version_;
   int64_t inc_major_snapshot_; // recording the latest inc major merge snapshot
   share::SCN inc_major_replay_scn_;
+  // used for online row col switch
+  ObStorageColumnGroupSchema mock_rowkey_cg_schema_;
+  ObStorageColumnGroupSchema mock_single_cg_schema_;
   // Add new serialization member before this line, below members won't serialize
   common::ObArenaAllocator allocator_; // for storage schema
+private:
+  int serialize_mock_cg_schemas_(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int deserialize_mock_cg_schemas_(const char *buf, const int64_t data_len, int64_t &pos);
+  int64_t get_mock_cg_schemas_serialize_size_() const;
 };
 
 } // namespace storage

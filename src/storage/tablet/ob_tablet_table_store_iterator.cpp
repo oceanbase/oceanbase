@@ -221,6 +221,20 @@ int ObTableStoreIterator::get_boundary_table(const bool is_last, ObITable *&tabl
   return ret;
 }
 
+ObSSTable *ObTableStoreIterator::get_major_sstable()
+{
+  int ret = OB_SUCCESS;
+  ObSSTable *major_sstable = nullptr;
+  ObITable *table = nullptr;
+  if (!is_valid()) {
+  } else if (OB_FAIL(get_boundary_table(false /*is_last*/, table))) {
+    LOG_WARN("fail to get boundary table", K(ret), K_(table_ptr_array));
+  } else if (OB_NOT_NULL(table) && table->is_major_sstable()) {
+    major_sstable = static_cast<ObSSTable *>(table);
+  }
+  return major_sstable;
+}
+
 ObITable *ObTableStoreIterator::get_last_memtable()
 {
   ObITable *table = nullptr;
@@ -384,8 +398,13 @@ int ObTableStoreIterator::add_tables(
           LOG_WARN("failed to get co meta handle", K(ret), KPC(co_table));
         } else {
           const ObSSTableArray &cg_sstables = meta_handle.get_sstable_meta().get_cg_sstables();
+          const ObSSTableArray &hidden_cg_sstable = meta_handle.get_sstable_meta().get_hidden_rowkey_sstable();
           if (OB_FAIL(add_cg_tables(cg_sstables, co_table->is_loaded(), meta_handle))) {
             LOG_WARN("fail to add cg table to iterator", K(ret), KPC(co_table));
+          } else if (!co_table->has_hidden_rowkey_cg()) {
+            // do nothing
+          } else if (OB_FAIL(add_cg_tables(hidden_cg_sstable, co_table->is_loaded(), meta_handle))) {
+            LOG_WARN("fail to add hidden cg table to iterator", K(ret), KPC(co_table));
           }
         }
       }

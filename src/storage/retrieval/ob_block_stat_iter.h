@@ -8,6 +8,7 @@
 
 #include "storage/blocksstable/index_block/ob_sstable_index_scanner.h"
 #include "storage/access/ob_table_access_context.h"
+#include "storage/access/ob_tablet_read_tables.h"
 #include "storage/tx_storage/ob_access_service.h"
 #include "ob_block_stat_collector.h"
 
@@ -183,7 +184,7 @@ private:
   ObArenaAllocator merged_endkey_allocator_;
   ObBlockStatCollector stat_collector_;
   ObTableScanRange scan_range_;
-  ObGetTableParam get_table_param_;
+  ObTabletReadTables tablet_read_tables_;
   ObStoreCtxGuard ctx_guard_;
   // ObTableAccessParam and ObTableAccessContext for memtable scan
   ObTableAccessParam main_table_param_;

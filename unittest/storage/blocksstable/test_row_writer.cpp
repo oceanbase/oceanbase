@@ -353,11 +353,11 @@ TEST_F(TestRowWriter, write_rowkey)
 
     // normal case
     if (i <= 128) {
-      ASSERT_EQ(OB_SUCCESS, writer.write_lock_rowkey(rowkey, nullptr, buf, len));
+      ASSERT_EQ(OB_SUCCESS, writer.write_lock_rowkey(rowkey, nullptr, ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE, buf, len));
       ASSERT_NE(buf, nullptr);
       ASSERT_GE(len, sizeof(ObRowHeader));
     } else {
-      ASSERT_EQ(OB_BUF_NOT_ENOUGH, writer.write_lock_rowkey(rowkey, nullptr, buf, len));
+      ASSERT_EQ(OB_BUF_NOT_ENOUGH, writer.write_lock_rowkey(rowkey, nullptr, ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE, buf, len));
     }
   }
 }

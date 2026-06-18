@@ -482,7 +482,7 @@ public:
   ObStoreCtx store_ctx_;
   ObTabletMergeExecuteDag merge_dag_;
   ObTableAccessParam access_param_;
-  ObGetTableParam get_table_param_;
+  ObTabletReadTables tablet_read_tables_;
   ObTableReadInfo read_info_;
   ObFixedArray<int32_t, ObIAllocator> output_cols_project_;
   ObFixedArray<share::schema::ObColumnParam*, ObIAllocator> cols_param_;
@@ -573,7 +573,7 @@ void TestDeleteInsertCSScan::prepare_scan_param(
 {
   context_.reset();
   access_param_.reset();
-  get_table_param_.reset();
+  tablet_read_tables_.reset();
   read_info_.reset();
   output_cols_project_.reset();
   cols_param_.reset();
@@ -590,13 +590,13 @@ void TestDeleteInsertCSScan::prepare_scan_param(
   ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
 
-  get_table_param_.frozen_version_ = INT64_MAX;
-  get_table_param_.refreshed_merge_ = nullptr;
-  get_table_param_.need_split_dst_table_ = false;
-  get_table_param_.tablet_iter_.tablet_handle_.assign(tablet_handle);
-  get_table_param_.tablet_iter_.table_store_iter_.assign(table_store_iter);
-  get_table_param_.tablet_iter_.transfer_src_handle_ = nullptr;
-  get_table_param_.tablet_iter_.split_extra_tablet_handles_.reset();
+  tablet_read_tables_.frozen_version_ = INT64_MAX;
+  tablet_read_tables_.refreshed_merge_ = nullptr;
+  tablet_read_tables_.need_split_dst_table_ = false;
+  tablet_read_tables_.tablet_iter_.tablet_handle_.assign(tablet_handle);
+  tablet_read_tables_.tablet_iter_.table_store_iter_.assign(table_store_iter);
+  tablet_read_tables_.tablet_iter_.transfer_src_handle_ = nullptr;
+  tablet_read_tables_.tablet_iter_.split_extra_tablet_handles_.reset();
 
   int64_t schema_column_count = full_read_info_.get_schema_column_count();
   int64_t schema_rowkey_count = full_read_info_.get_schema_rowkey_count();
@@ -983,7 +983,7 @@ void TestDeleteInsertCSScan::test_keep_order_blockscan(
   context_.query_flag_.scan_order_ = ObQueryFlag::ScanOrder::KeepOrder;
 
   ObMultipleMultiScanMerge scan_merge;
-  ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, get_table_param_));
+  ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, tablet_read_tables_));
   ASSERT_EQ(OB_SUCCESS, scan_merge.open(ranges));
   scan_merge.disable_padding();
   scan_merge.disable_fill_virtual_column();
@@ -1100,7 +1100,7 @@ TEST_P(TestDeleteInsertCSScan, test_co_scan)
   prepare_scan_param(trans_version_range, table_store_iter);
 
   ObMultipleScanMerge scan_merge;
-  ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, get_table_param_));
+  ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, tablet_read_tables_));
   ASSERT_EQ(OB_SUCCESS, scan_merge.open(range));
   scan_merge.disable_padding();
   scan_merge.disable_fill_virtual_column();
@@ -1213,7 +1213,7 @@ TEST_P(TestDeleteInsertCSScan, test_co_scan_with_reverted_delete_row)
   prepare_scan_param(trans_version_range, table_store_iter);
 
   ObMultipleScanMerge scan_merge;
-  ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, get_table_param_));
+  ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, tablet_read_tables_));
   ASSERT_EQ(OB_SUCCESS, scan_merge.open(range));
   scan_merge.disable_padding();
   scan_merge.disable_fill_virtual_column();
@@ -1310,7 +1310,7 @@ TEST_P(TestDeleteInsertCSScan, test_co_filter)
                                                access_param_.iter_param_.pushdown_filter_));
 
   ObMockMultipleScanMerge scan_merge;
-  ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, get_table_param_));
+  ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, tablet_read_tables_));
   ASSERT_EQ(OB_SUCCESS, scan_merge.open(range));
   scan_merge.disable_padding();
   scan_merge.disable_fill_virtual_column();
@@ -1507,7 +1507,7 @@ TEST_P(TestDeleteInsertCSScan, test_multi_version_row_filter)
                             *access_param_.iter_param_.get_read_info(),
                             access_param_.iter_param_.pushdown_filter_));
   ObMockMultipleScanMerge scan_merge;
-  ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, get_table_param_));
+  ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, tablet_read_tables_));
   ASSERT_EQ(OB_SUCCESS, scan_merge.open(range));
   scan_merge.disable_padding();
   scan_merge.disable_fill_virtual_column();
@@ -1620,7 +1620,7 @@ TEST_P(TestDeleteInsertCSScan, test_multi_co_scan)
   prepare_scan_param(trans_version_range, table_store_iter);
 
   ObMultipleScanMerge scan_merge;
-  ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, get_table_param_));
+  ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, tablet_read_tables_));
   ASSERT_EQ(OB_SUCCESS, scan_merge.open(range));
   scan_merge.disable_padding();
   scan_merge.disable_fill_virtual_column();
@@ -1727,7 +1727,7 @@ TEST_P(TestDeleteInsertCSScan, test_minor_major_version_overlap)
   prepare_scan_param(trans_version_range, table_store_iter);
 
   ObMultipleScanMerge scan_merge;
-  ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, get_table_param_));
+  ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, tablet_read_tables_));
   ASSERT_EQ(OB_SUCCESS, scan_merge.open(range));
   scan_merge.disable_padding();
   scan_merge.disable_fill_virtual_column();
@@ -1836,7 +1836,7 @@ TEST_P(TestDeleteInsertCSScan, test_minor_major_version_overlap2)
   prepare_scan_param(trans_version_range, table_store_iter);
 
   ObMultipleScanMerge scan_merge;
-  ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, get_table_param_));
+  ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, tablet_read_tables_));
   ASSERT_EQ(OB_SUCCESS, scan_merge.open(range));
   scan_merge.disable_padding();
   scan_merge.disable_fill_virtual_column();
@@ -1957,7 +1957,7 @@ TEST_P(TestDeleteInsertCSScan, test_multi_minor_major_version_overlap)
                             *access_param_.iter_param_.get_read_info(),
                             access_param_.iter_param_.pushdown_filter_));
   ObMockMultipleScanMerge scan_merge;
-  ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, get_table_param_));
+  ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, tablet_read_tables_));
   ASSERT_EQ(OB_SUCCESS, scan_merge.open(range));
   scan_merge.disable_padding();
   scan_merge.disable_fill_virtual_column();
@@ -2110,7 +2110,7 @@ TEST_P(TestDeleteInsertCSScan, test_co_filter_with_uncommit)
   prepare_scan_param(trans_version_range, table_store_iter);
 
   ObMultipleScanMerge scan_merge;
-  ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, get_table_param_));
+  ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, tablet_read_tables_));
   ASSERT_EQ(OB_SUCCESS, scan_merge.open(range));
   scan_merge.disable_padding();
   scan_merge.disable_fill_virtual_column();
@@ -2242,7 +2242,7 @@ TEST_P(TestDeleteInsertCSScan, test_refresh_table)
   prepare_scan_param(trans_version_range, table_store_iter);
 
   ObMultipleScanMerge scan_merge;
-  ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, get_table_param_));
+  ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, tablet_read_tables_));
   ASSERT_EQ(OB_SUCCESS, scan_merge.open(range));
   scan_merge.disable_padding();
   scan_merge.disable_fill_virtual_column();

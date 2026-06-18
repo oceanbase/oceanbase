@@ -48,8 +48,7 @@ public:
                              ObTabletMergeCtx &merge_context)
   {
     TestMergeBasic::prepare_merge_context(
-      merge_type,is_full_merge, trans_version_range, &merge_dag_, merge_context, false/*is_delete_insert_merge*/);
-    merge_context.static_param_.merge_level_ = std::get<1>(GetParam());
+      merge_type,is_full_merge, trans_version_range, &merge_dag_, merge_context);
   }
   void prepare_output_expr(const ObIArray<int32_t> &projector,
                            const ObIArray<ObColDesc> &cols_desc);
@@ -66,7 +65,7 @@ public:
   ObStoreCtx store_ctx_;
   ObTabletMergeExecuteDag merge_dag_;
   ObTableAccessParam access_param_;
-  ObGetTableParam get_table_param_;
+  ObTabletReadTables tablet_read_tables_;
   ObTableReadInfo read_info_;
   ObFixedArray<int32_t, ObIAllocator> output_cols_project_;
   ObFixedArray<share::schema::ObColumnParam*, ObIAllocator> cols_param_;
@@ -154,7 +153,7 @@ void TestMultiVersionMerge::prepare_scan_param(
 {
   context_.reset();
   access_param_.reset();
-  get_table_param_.reset();
+  tablet_read_tables_.reset();
   read_info_.reset();
   output_cols_project_.reset();
   cols_param_.reset();
@@ -171,13 +170,13 @@ void TestMultiVersionMerge::prepare_scan_param(
   ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
 
-  get_table_param_.frozen_version_ = INT64_MAX;
-  get_table_param_.refreshed_merge_ = nullptr;
-  get_table_param_.need_split_dst_table_ = false;
-  get_table_param_.tablet_iter_.tablet_handle_.assign(tablet_handle);
-  get_table_param_.tablet_iter_.table_store_iter_.assign(table_store_iter);
-  get_table_param_.tablet_iter_.transfer_src_handle_ = nullptr;
-  get_table_param_.tablet_iter_.split_extra_tablet_handles_.reset();
+  tablet_read_tables_.frozen_version_ = INT64_MAX;
+  tablet_read_tables_.refreshed_merge_ = nullptr;
+  tablet_read_tables_.need_split_dst_table_ = false;
+  tablet_read_tables_.tablet_iter_.tablet_handle_.assign(tablet_handle);
+  tablet_read_tables_.tablet_iter_.table_store_iter_.assign(table_store_iter);
+  tablet_read_tables_.tablet_iter_.transfer_src_handle_ = nullptr;
+  tablet_read_tables_.tablet_iter_.split_extra_tablet_handles_.reset();
 
   int64_t schema_column_count = full_read_info_.get_schema_column_count();
   int64_t schema_rowkey_count = full_read_info_.get_schema_rowkey_count();
@@ -4372,7 +4371,7 @@ TEST_P(TestMultiVersionMerge, across_multi_blocks)
   trans_version_range.snapshot_version_ = INT64_MAX;
   prepare_scan_param(trans_version_range, table_store_iter);
   ObMultipleMultiScanMerge scan_merge;
-  ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, get_table_param_));
+  ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, tablet_read_tables_));
   ASSERT_EQ(OB_SUCCESS, scan_merge.open(ranges));
   scan_merge.disable_padding();
   scan_merge.disable_fill_virtual_column();

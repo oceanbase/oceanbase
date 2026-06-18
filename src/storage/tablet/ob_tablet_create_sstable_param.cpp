@@ -79,6 +79,7 @@ ObTabletCreateSSTableParam::ObTabletCreateSSTableParam()
     rec_scn_(),
     upper_trans_version_(0),
     min_merged_trans_version_(0),
+    has_hidden_rowkey_cg_(false),
     sstable_skip_index_()
 {
   data_block_ids_.set_attr(ObMemAttr(MTL_ID(), "CreateSSTable"));
@@ -234,9 +235,9 @@ int ObTabletCreateSSTableParam::init_for_empty_major_sstable(const ObTabletID &t
     MEMCPY(encrypt_key_, storage_schema.get_encrypt_key_str(), storage_schema.get_encrypt_key_len());
 
     const int64_t multi_version_col_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-    table_key_.table_type_ = 1 < storage_schema.get_column_group_count()
-                                 ? ObITable::TableType::COLUMN_ORIENTED_SSTABLE
-                                 : ObITable::TableType::MAJOR_SSTABLE;
+    table_key_.table_type_ = storage_schema.get_column_group_count() > 1
+                           ? ObITable::TableType::COLUMN_ORIENTED_SSTABLE
+                           : ObITable::TableType::MAJOR_SSTABLE;
 
     table_key_.tablet_id_ = tablet_id;
     table_key_.version_range_.snapshot_version_ = snapshot_version;
@@ -283,6 +284,7 @@ int ObTabletCreateSSTableParam::init_for_empty_major_sstable(const ObTabletID &t
     nested_size_ = 0;
     nested_offset_ = 0;
     column_group_cnt_ = 1;
+    has_hidden_rowkey_cg_ = false;
     co_base_type_ = ObCOSSTableBaseType::INVALID_TYPE;
     full_column_cnt_ = 0;
     is_co_table_without_cgs_ = false;
@@ -300,15 +302,19 @@ int ObTabletCreateSSTableParam::init_for_empty_major_sstable(const ObTabletID &t
     table_key_.column_group_idx_ = column_group_idx;
     is_co_table_without_cgs_ = true;
 
+    const ObStorageColumnGroupSchema *cg_schema = nullptr;
     if (OB_FAIL(storage_schema.get_stored_column_count_in_sstable(full_column_cnt_))) {
       LOG_WARN("failed to get_stored_column_count_in_sstable", K(ret));
+    } else if (OB_FAIL(storage_schema.get_cg_schema_with_column_group_idx(column_group_idx, cg_schema))) {
+      LOG_WARN("fail to get column group schema", K(ret), K(column_group_idx), K(storage_schema));
+    } else if (OB_ISNULL(cg_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get cg schema", K(ret), K(column_group_idx), K(storage_schema));
     } else {
-      const ObStorageColumnGroupSchema &cg_schema = storage_schema.get_column_groups().at(column_group_idx);
-
-      if (cg_schema.is_all_column_group()) {
+      if (cg_schema->is_all_column_group()) {
         table_key_.table_type_ = ObITable::TableType::COLUMN_ORIENTED_SSTABLE;
         co_base_type_ = ObCOSSTableBaseType::ALL_CG_TYPE;
-      } else if (cg_schema.is_rowkey_column_group()) {
+      } else if (cg_schema->is_rowkey_column_group()) {
         table_key_.table_type_ = has_all_column_group
                                         ? ObITable::TableType::ROWKEY_COLUMN_GROUP_SSTABLE
                                         : ObITable::TableType::COLUMN_ORIENTED_SSTABLE;
@@ -317,16 +323,17 @@ int ObTabletCreateSSTableParam::init_for_empty_major_sstable(const ObTabletID &t
                               ? ObCOSSTableBaseType::ALL_CG_TYPE
                               : ObCOSSTableBaseType::ROWKEY_CG_TYPE;
 
-        rowkey_column_cnt_ = cg_schema.column_cnt_;
-        column_cnt_ = cg_schema.column_cnt_;
+        rowkey_column_cnt_ = cg_schema->column_cnt_;
+        column_cnt_ = cg_schema->column_cnt_;
       } else {
         table_key_.table_type_ = ObITable::TableType::NORMAL_COLUMN_GROUP_SSTABLE;
         rowkey_column_cnt_ = 0;
-        column_cnt_ = cg_schema.column_cnt_;
+        column_cnt_ = cg_schema->column_cnt_;
       }
 
       if (ObITable::TableType::COLUMN_ORIENTED_SSTABLE == table_key_.table_type_) {
         column_group_cnt_ = storage_schema.get_column_group_count();
+        has_hidden_rowkey_cg_ = nullptr != storage_schema.get_hidden_rowkey_column_group();
       }
     }
   }
@@ -388,6 +395,7 @@ int ObTabletCreateSSTableParam::init_for_split_empty_minor_sstable(const ObTable
   root_macro_seq_ = 0;
   full_column_cnt_ = 0;
   column_group_cnt_ = 1;
+  has_hidden_rowkey_cg_ = false;
 
   if (GCTX.is_shared_storage_mode()) {
     table_shared_flag_.set_is_split_sstable();
@@ -470,6 +478,7 @@ int ObTabletCreateSSTableParam::init_for_transfer_empty_mini_minor_sstable(const
     nested_offset_ = 0;
     nested_size_ = 0;
     column_group_cnt_ = 1;
+    has_hidden_rowkey_cg_ = false;
     co_base_type_ = ObCOSSTableBaseType::INVALID_TYPE;
     full_column_cnt_ = 0;
     is_co_table_without_cgs_ = false;
@@ -585,7 +594,8 @@ int ObTabletCreateSSTableParam::init_for_merge(const compaction::ObBasicTabletMe
     LOG_WARN("fail to set min merged trans version", K(ret));
   } else {
     ObITable::TableKey table_key;
-    bool is_main_table = (nullptr == cg_schema) ? false : (cg_schema->is_all_column_group() || cg_schema->is_rowkey_column_group());
+    bool is_main_table = (nullptr == cg_schema) ? false : (cg_schema->is_all_column_group()
+                 || (cg_schema->is_rowkey_column_group() && !ctx.get_schema()->has_all_column_group()));
     table_key.table_type_ = ctx.get_merged_table_type(cg_schema, is_main_table);
     table_key.tablet_id_ = ctx.get_tablet_id();
     table_key.column_group_idx_ = (nullptr == cg_schema) ? 0 : column_group_idx;
@@ -599,9 +609,7 @@ int ObTabletCreateSSTableParam::init_for_merge(const compaction::ObBasicTabletMe
 
     if (ObITable::TableType::COLUMN_ORIENTED_SSTABLE == table_key.table_type_ ||
         ObITable::TableType::COLUMN_ORIENTED_META_SSTABLE == table_key.table_type_) {
-      co_base_type_ = cg_schema->is_all_column_group()
-                          ? ObCOSSTableBaseType::ALL_CG_TYPE
-                          : ObCOSSTableBaseType::ROWKEY_CG_TYPE;
+      co_base_type_ = cg_schema->is_all_column_group() ? ObCOSSTableBaseType::ALL_CG_TYPE : ObCOSSTableBaseType::ROWKEY_CG_TYPE;
     }
 
     sstable_logic_seq_ = static_param.sstable_logic_seq_;
@@ -617,8 +625,8 @@ int ObTabletCreateSSTableParam::init_for_merge(const compaction::ObBasicTabletMe
       rowkey_column_cnt_ = 0;
     } else {
       column_group_cnt_ = static_param.schema_->get_column_group_count();
-      rowkey_column_cnt_ = static_param.schema_->get_rowkey_column_num()
-            + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+      has_hidden_rowkey_cg_ = nullptr != static_param.schema_->get_hidden_rowkey_column_group() && table_key.is_co_sstable();
+      rowkey_column_cnt_ = static_param.schema_->get_rowkey_column_num() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
     }
     latest_row_store_type_ = ctx.get_schema()->get_row_store_type();
     recycle_version_ = ctx.get_recycle_version();
@@ -716,15 +724,17 @@ int ObTabletCreateSSTableParam::init_for_ddl(blocksstable::ObSSTableIndexBuilder
       if (ddl_param.table_key_.is_normal_cg_sstable()) {
         rowkey_column_cnt = 0;
         column_count = 1;
-      } else { // co sstable with all cg or rowkey cg
-        const ObIArray<ObStorageColumnGroupSchema> &cg_schemas = storage_schema.get_column_groups();
+      } else { // co sstable with all cg or rowkey cg || hidden rowkey cg
         const int64_t cg_idx = ddl_param.table_key_.get_column_group_id();
-        if (cg_idx < 0 || cg_idx >= cg_schemas.count()) {
+        const ObStorageColumnGroupSchema *cg_schema = nullptr;
+        if (OB_FAIL(storage_schema.get_cg_schema_with_column_group_idx(cg_idx, cg_schema))) {
+          LOG_WARN("fail to get column group schema", K(ret), K(cg_idx), K(storage_schema));
+        } else if (OB_ISNULL(cg_schema)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected column group index", K(ret), K(cg_idx));
+          LOG_WARN("fail to get cg schema", K(ret), K(cg_idx), K(storage_schema));
         } else if (OB_FAIL(storage_schema.get_stored_column_count_in_sstable(full_column_cnt))) { // set full_column_cnt in first ddl sstable
           LOG_WARN("fail to get stored column count in sstable", K(ret));
-        } else if (cg_schemas.at(cg_idx).is_rowkey_column_group()) {
+        } else if (cg_schema->is_rowkey_column_group()) {
           column_count = rowkey_column_cnt;
         } else {
           column_count = full_column_cnt;
@@ -808,18 +818,21 @@ int ObTabletCreateSSTableParam::init_for_ddl(blocksstable::ObSSTableIndexBuilder
         LOG_WARN("fail to inner init with merge res", K(ret), K(res));
       } else if (ddl_param.table_key_.is_co_sstable()) {
         column_group_cnt_ = storage_schema.get_column_group_count();
+        has_hidden_rowkey_cg_ = nullptr != storage_schema.get_hidden_rowkey_column_group();
         // only set true when build empty major sstable. ddl co sstable must set false and fill cg sstables
         is_co_table_without_cgs_ = ddl_param.table_key_.is_major_sstable() && 0 == data_blocks_cnt_;
         co_base_snapshot_version_ = 0;
         const int64_t base_cg_idx = ddl_param.table_key_.get_column_group_id();
-        if (base_cg_idx < 0 || base_cg_idx >= storage_schema.get_column_group_count()) {
+        const ObStorageColumnGroupSchema *base_cg_schema = nullptr;
+        if (OB_FAIL(storage_schema.get_cg_schema_with_column_group_idx(base_cg_idx, base_cg_schema))) {
+          LOG_WARN("fail to get column group schema", K(ret), K(base_cg_idx), K(storage_schema));
+        } else if (OB_ISNULL(base_cg_schema)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid column group index", K(ret), K(ddl_param.table_key_));
+          LOG_WARN("fail to get cg schema", K(ret), K(base_cg_idx), K(storage_schema));
         } else {
-          const ObStorageColumnGroupSchema &base_cg_schema = storage_schema.get_column_groups().at(base_cg_idx);
-          if (base_cg_schema.is_all_column_group()) {
+          if (base_cg_schema->is_all_column_group()) {
             co_base_type_ = ObCOSSTableBaseType::ALL_CG_TYPE;
-          } else if (base_cg_schema.is_rowkey_column_group()) {
+          } else if (base_cg_schema->is_rowkey_column_group()) {
             co_base_type_ = ObCOSSTableBaseType::ROWKEY_CG_TYPE;
           } else {
             ret = OB_ERR_SYS;
@@ -854,7 +867,7 @@ int ObTabletCreateSSTableParam::init_for_ddl(blocksstable::ObSSTableIndexBuilder
         } else if (OB_UNLIKELY(column_checksums_.count() != column_count)) {
           // we have corrected the col_default_checksum_array_ in prepare_index_data_desc
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected column checksums", K(ret), K(column_count), KPC(this));
+          LOG_ERROR("unexpected column checksums", K(ret), K(column_count), KPC(this));
         }
       }
 
@@ -913,17 +926,20 @@ int ObTabletCreateSSTableParam::init_for_ddl_mem(const ObITable::TableKey &table
         rowkey_column_cnt_ = 0;
         column_cnt_ = 1;
       } else { // co sstable with all cg or rowkey cg
-        table_key_.table_type_ = is_inc_major ? ObITable::TableType::INC_MAJOR_DDL_MEM_CO_SSTABLE
-                                              : ObITable::TableType::DDL_MEM_CO_SSTABLE;
+        const bool is_hidden_cg = HIDDEN_ROWKEY_COLUMN_GROUP_IDX == table_key.get_column_group_id();
+        table_key_.table_type_ = is_inc_major ? (is_hidden_cg ? ObITable::TableType::INC_MAJOR_DDL_MEM_CG_SSTABLE : ObITable::TableType::INC_MAJOR_DDL_MEM_CO_SSTABLE)
+                                              : (is_hidden_cg ? ObITable::TableType::DDL_MEM_CG_SSTABLE : ObITable::TableType::DDL_MEM_CO_SSTABLE);
         rowkey_column_cnt_ = storage_schema.get_rowkey_column_num() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
 
         // calculate column count
-        const ObIArray<ObStorageColumnGroupSchema> &cg_schemas = storage_schema.get_column_groups();
+        const ObStorageColumnGroupSchema *cg_schema = nullptr;
         const int64_t cg_idx = table_key_.get_column_group_id();
-        if (cg_idx < 0 || cg_idx >= cg_schemas.count()) {
+        if (OB_FAIL(storage_schema.get_cg_schema_with_column_group_idx(cg_idx, cg_schema))) {
+          LOG_WARN("fail to get column group schema", K(ret), K(cg_idx), K(storage_schema));
+        } else if (OB_ISNULL(cg_schema)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected column group index", K(ret), K(cg_idx));
-        } else if (cg_schemas.at(cg_idx).is_rowkey_column_group()) {
+          LOG_WARN("fail to get cg schema", K(ret), K(cg_idx), K(storage_schema));
+        } else if (cg_schema->is_rowkey_column_group()) {
           column_count = storage_schema.get_rowkey_column_num() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
         } else {
           if (OB_FAIL(storage_schema.get_stored_column_count_in_sstable(column_count))) {
@@ -982,6 +998,7 @@ int ObTabletCreateSSTableParam::init_for_ddl_mem(const ObITable::TableKey &table
     progressive_merge_round_ = 0;
     progressive_merge_step_ = 0;
     column_group_cnt_ = 1;
+    has_hidden_rowkey_cg_ = false;
     co_base_type_ = ObCOSSTableBaseType::INVALID_TYPE;
     full_column_cnt_ = 0;
     is_co_table_without_cgs_ = false;
@@ -1042,14 +1059,16 @@ int ObTabletCreateSSTableParam::init_for_ss_ddl(blocksstable::ObSSTableMergeRes 
       rowkey_column_cnt = 0;
       column_count = 1;
     } else { // co sstable with all cg or rowkey cg
-      const ObIArray<ObStorageColumnGroupSchema> &cg_schemas = storage_schema.get_column_groups();
       const int64_t cg_idx = table_key.get_column_group_id();
-      if (cg_idx < 0 || cg_idx >= cg_schemas.count()) {
+      const ObStorageColumnGroupSchema *cg_schema = nullptr;
+      if (OB_FAIL(storage_schema.get_cg_schema_with_column_group_idx(cg_idx, cg_schema))) {
+        LOG_WARN("fail to get column group schema", K(ret), K(cg_idx), K(storage_schema));
+      } else if (OB_ISNULL(cg_schema)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected column group index", K(ret), K(cg_idx));
+        LOG_WARN("fail to get cg schema", K(ret), K(cg_idx), K(storage_schema));
       } else if (OB_FAIL(storage_schema.get_stored_column_count_in_sstable(full_column_cnt))) { // set full_column_cnt in first ddl sstable
         LOG_WARN("fail to get stored column count in sstable", K(ret));
-      } else if (cg_schemas.at(cg_idx).is_rowkey_column_group()) {
+      } else if (cg_schema->is_rowkey_column_group()) {
         column_count = rowkey_column_cnt;
       } else {
         column_count = full_column_cnt;
@@ -1106,18 +1125,21 @@ int ObTabletCreateSSTableParam::init_for_ss_ddl(blocksstable::ObSSTableMergeRes 
       LOG_WARN("fail to inner init with merge res", K(ret), K(res));
     } else if (table_key.is_co_sstable()) {
       column_group_cnt_ = storage_schema.get_column_group_count();
+      has_hidden_rowkey_cg_ = nullptr != storage_schema.get_hidden_rowkey_column_group();
       co_base_snapshot_version_ = 0;
       // only set true when build empty major sstable. ddl co sstable must set false and fill cg sstables
       //is_empty_co_table_ = table_key.is_major_sstable() && 0 == data_blocks_cnt_;
       const int64_t base_cg_idx = table_key.get_column_group_id();
-      if (base_cg_idx < 0 || base_cg_idx >= storage_schema.get_column_group_count()) {
+      const ObStorageColumnGroupSchema *base_cg_schema = nullptr;
+      if (OB_FAIL(storage_schema.get_cg_schema_with_column_group_idx(base_cg_idx, base_cg_schema))) {
+        LOG_WARN("fail to get column group schema", K(ret), K(base_cg_idx), K(storage_schema));
+      } else if (OB_ISNULL(base_cg_schema)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid column group index", K(ret), K(table_key));
+        LOG_WARN("fail to get cg schema", K(ret), K(base_cg_idx), K(storage_schema));
       } else {
-        const ObStorageColumnGroupSchema &base_cg_schema = storage_schema.get_column_groups().at(base_cg_idx);
-        if (base_cg_schema.is_all_column_group()) {
+        if (base_cg_schema->is_all_column_group()) {
           co_base_type_ = ObCOSSTableBaseType::ALL_CG_TYPE;
-        } else if (base_cg_schema.is_rowkey_column_group()) {
+        } else if (base_cg_schema->is_rowkey_column_group()) {
           co_base_type_ = ObCOSSTableBaseType::ROWKEY_CG_TYPE;
         } else {
           ret = OB_ERR_SYS;
@@ -1192,8 +1214,10 @@ int ObTabletCreateSSTableParam::init_for_split(const ObTabletID &dst_tablet_id,
   full_column_cnt_ = 0;
   tx_data_recycle_scn_.set_min();
   column_group_cnt_ = 1;
+  has_hidden_rowkey_cg_ = false;
   if (src_sstable.is_co_sstable()) {
-    column_group_cnt_ = static_cast<const ObCOSSTableV2 &>(src_sstable).get_cs_meta().get_column_group_count();
+    column_group_cnt_ = static_cast<const ObCOSSTableV2 &>(src_sstable).get_column_group_count(true/*include hidden cg*/);
+    has_hidden_rowkey_cg_ = static_cast<const ObCOSSTableV2 &>(src_sstable).has_hidden_rowkey_cg();
     co_base_type_ = static_cast<const ObCOSSTableV2 &>(src_sstable).is_all_cg_base()
         ? ObCOSSTableBaseType::ALL_CG_TYPE : ObCOSSTableBaseType::ROWKEY_CG_TYPE;
     full_column_cnt_ = static_cast<const ObCOSSTableV2 &>(src_sstable).get_cs_meta().full_column_cnt_;
@@ -1271,6 +1295,7 @@ int ObTabletCreateSSTableParam::init_for_lob_split(const ObTabletID &new_tablet_
   full_column_cnt_ = 0;
   tx_data_recycle_scn_.set_min();
   column_group_cnt_ = 1;
+  has_hidden_rowkey_cg_ = false;
 
   if (OB_FAIL(set_min_merged_trans_version_with_check(res.min_merged_trans_version_))) {
     LOG_WARN("fail to set min merged trans version", K(ret));
@@ -1324,6 +1349,7 @@ int ObTabletCreateSSTableParam::init_for_ha(
   co_base_snapshot_version_ = sstable_param.basic_meta_.co_base_snapshot_version_;
   if (table_key_.is_co_sstable()) {
     column_group_cnt_ = sstable_param.column_group_cnt_;
+    has_hidden_rowkey_cg_ = sstable_param.has_hidden_rowkey_cg_;
     full_column_cnt_ = sstable_param.full_column_cnt_;
     co_base_type_ = sstable_param.co_base_type_;
     is_co_table_without_cgs_ = sstable_param.is_empty_cg_sstables_;
@@ -1409,6 +1435,7 @@ int ObTabletCreateSSTableParam::init_for_ha(
   data_block_macro_meta_addr_.set_none_addr();
   if (table_key_.is_co_sstable()) {
     column_group_cnt_ = sstable_param.column_group_cnt_;
+    has_hidden_rowkey_cg_ = sstable_param.has_hidden_rowkey_cg_;
     is_co_table_without_cgs_ = sstable_param.is_empty_cg_sstables_;
     full_column_cnt_ = sstable_param.full_column_cnt_;
     co_base_type_ = sstable_param.co_base_type_;
@@ -1502,6 +1529,7 @@ int ObTabletCreateSSTableParam::init_for_remote(const blocksstable::ObMigrationS
   co_base_snapshot_version_ = sstable_param.basic_meta_.co_base_snapshot_version_;
   if (table_key_.is_co_sstable()) {
     column_group_cnt_ = sstable_param.column_group_cnt_;
+    has_hidden_rowkey_cg_ = sstable_param.has_hidden_rowkey_cg_;
     full_column_cnt_ = sstable_param.full_column_cnt_;
     co_base_type_ = sstable_param.co_base_type_;
     is_co_table_without_cgs_ = sstable_param.is_empty_cg_sstables_;
@@ -1559,6 +1587,7 @@ int ObTabletCreateSSTableParam::init_for_mds(
   table_mode_ = mds_schema.get_table_mode_struct();
   index_type_ = mds_schema.get_index_type();
   column_group_cnt_ = 1; // for row store;
+  has_hidden_rowkey_cg_ = false;
   rowkey_column_cnt_ = mds_schema.get_rowkey_column_num()
       + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   latest_row_store_type_ = mds_schema.get_row_store_type();
@@ -1614,7 +1643,8 @@ int ObTabletCreateSSTableParam::init_for_inc_major_ddl_aggregate(
     const int64_t column_group_cnt,
     const int64_t rowkey_column_cnt,
     const int64_t column_cnt,
-    const int64_t row_cnt)
+    const int64_t row_cnt,
+    const bool has_hidden_rowkey_cg)
 {
   int ret = OB_SUCCESS;
   {
@@ -1639,6 +1669,7 @@ int ObTabletCreateSSTableParam::init_for_inc_major_ddl_aggregate(
     use_old_macro_block_count_ = 0;
     row_count_ = row_cnt;
     column_group_cnt_ = column_group_cnt;
+    has_hidden_rowkey_cg_ = has_hidden_rowkey_cg;
     co_base_type_ = ObCOSSTableBaseType::INVALID_TYPE;
     full_column_cnt_ = column_cnt;
     data_checksum_ = 0;
@@ -1759,6 +1790,7 @@ int ObTabletCreateSSTableParam::inner_init_with_shared_sstable(
 void ObTabletCreateSSTableParam::set_init_value_for_column_store_()
 {
   column_group_cnt_ = 1;
+  has_hidden_rowkey_cg_ = false;
   co_base_type_ = ObCOSSTableBaseType::INVALID_TYPE;
   full_column_cnt_ = 0;
   is_co_table_without_cgs_ = false;

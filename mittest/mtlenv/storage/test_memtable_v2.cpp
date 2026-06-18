@@ -507,7 +507,8 @@ public:
                                NULL, /*old_row*/
                                1,    /*row_count*/
                                false /*check_exist*/,
-                               encrypt_meta_);
+                               encrypt_meta_,
+                               ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE);
 
     EXPECT_EQ(expect_ret, (ret = memtable->set(iter_param_, context, arg)));
 
@@ -551,7 +552,8 @@ public:
                                NULL, /*old_row*/
                                1,    /*row_count*/
                                false /*check_exist*/,
-                               encrypt_meta_);
+                               encrypt_meta_,
+                               ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE);
 
     EXPECT_EQ(expect_ret, (ret = memtable->set(iter_param_, context, arg)));
 
@@ -3469,7 +3471,8 @@ TEST_F(TestMemtableV2, test_seq_set_violation)
                              NULL, /*old_row*/
                              1,    /*row_count*/
                              false /*check_exist*/,
-                             encrypt_meta_);
+                             encrypt_meta_,
+                             ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE);
 
   EXPECT_EQ(OB_SUCCESS, (ret = memtable->set(iter_param_,
                                              context,

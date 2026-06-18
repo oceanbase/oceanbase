@@ -1088,6 +1088,8 @@ int ObMacroBlockWriter::append_row(const ObDatumRow &row, const int64_t split_si
     STORAGE_LOG(WARN, "invalid split_size", K(ret), K(split_size));
   } else if (!data_store_desc_->is_cg() && OB_FAIL(check_order(row))) {
     STORAGE_LOG(WARN, "macro block writer fail to check order", K(row), KPC(data_store_desc_));
+  } else if (!data_store_desc_->decide_merge_by_row()) {
+    const_cast<ObDatumRow &>(row).merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_MAX;
   }
 
   if (OB_SUCC(ret)) {
@@ -1362,11 +1364,15 @@ int ObMacroBlockWriter::check_order(const ObDatumRow &row)
         data_store_desc_->get_rowkey_column_count() != data_store_desc_->get_schema_rowkey_col_cnt());
   int64_t cur_row_version = 0;
   int64_t cur_sql_sequence = 0;
+  bool is_delete_insert_merge = false;
   if (!row.is_valid() || row.get_column_count() != data_store_desc_->get_row_column_count()) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "invalid macro block writer input argument.",
         K(row), "row_column_count", data_store_desc_->get_row_column_count(), K(ret));
-  } else if (OB_UNLIKELY(!data_store_desc_->is_delete_insert_merge_engine() && !row.mvcc_row_flag_.is_valid())) {
+  } else if (ObMergeEngineType::OB_MERGE_ENGINE_MAX != row.merge_engine_type_ &&
+      OB_FAIL(check_is_delete_insert_merge(row.merge_engine_type_, is_delete_insert_merge, data_store_desc_->decide_merge_by_row()))) {
+    STORAGE_LOG(WARN, "Failed to check is delete insert merge", K(ret), K(row));
+  } else if (OB_UNLIKELY(!is_delete_insert_merge && !row.mvcc_row_flag_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "invalid mvcc_row_flag", K(ret), K(row));
   } else {
@@ -1394,18 +1400,8 @@ int ObMacroBlockWriter::check_order(const ObDatumRow &row)
       if (OB_UNLIKELY(!transaction::is_effective_trans_version(-cur_row_version))) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "Get unexpected trans version for committed transaction", K(ret), K(row));
-      } else if (!row.mvcc_row_flag_.is_shadow_row()) {
-        const_cast<ObDatumRow&>(row).storage_datums_[sql_sequence_col_idx].reuse(); // make sql sequence positive
-        if (data_store_desc_->is_delete_insert_merge() && row.row_flag_.is_insert()) {
-          const_cast<ObDatumRow&>(row).storage_datums_[sql_sequence_col_idx].set_int(-common::DELETE_INSERT_TRANS_SEQUENCE); // make sql sequence positive
-          cur_sql_sequence = -common::DELETE_INSERT_TRANS_SEQUENCE;
-        } else {
-          const_cast<ObDatumRow&>(row).storage_datums_[sql_sequence_col_idx].set_int(0); // make sql sequence positive
-          cur_sql_sequence = 0;
-        }
-      } else if (OB_UNLIKELY(row.storage_datums_[sql_sequence_col_idx].get_int() != -INT64_MAX)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Unexpected shadow row", K(ret), K(row));
+      } else if (OB_FAIL(adjust_sql_sequence(row, sql_sequence_col_idx, is_delete_insert_merge, cur_sql_sequence))) {
+        STORAGE_LOG(WARN, "Failed to adjust sql sequence", K(ret), K(row));
       }
     }
     if (OB_SUCC(ret) && last_key_.is_valid()) {
@@ -1439,7 +1435,7 @@ int ObMacroBlockWriter::check_order(const ObDatumRow &row)
               if (data_store_desc_->get_is_ddl()) {
                 STORAGE_LOG(WARN, "input rowkey is equal with last rowkey in DDL", K(ret), K(cur_sql_sequence), K_(last_key), K(row));
               } else {
-                STORAGE_LOG(ERROR, "cur row sql_sequence is equal with last row", K(ret), K(cur_sql_sequence), K_(last_key), K(row));
+                STORAGE_LOG(ERROR, "cur row sql_sequence is equal with last row", K(ret), K(cur_sql_sequence), K_(last_key), K(row), K(is_delete_insert_merge));
               }
             } else if (cur_sql_sequence < last_row_sql_seq) {
               ret = OB_ROWKEY_ORDER_ERROR;
@@ -1507,9 +1503,32 @@ int ObMacroBlockWriter::update_micro_commit_info(const ObBatchDatumRows &datum_r
   return ret;
 }
 
+int ObMacroBlockWriter::adjust_sql_sequence(const ObDatumRow &row,
+                                            const int64_t sql_sequence_col_idx,
+                                            const bool is_delete_insert_merge,
+                                            int64_t &cur_sql_sequence)
+{
+  int ret = OB_SUCCESS;
+  if (!row.mvcc_row_flag_.is_shadow_row()) {
+    const_cast<ObDatumRow&>(row).storage_datums_[sql_sequence_col_idx].reuse(); // make sql sequence positive
+    if (is_delete_insert_merge && row.row_flag_.is_insert()) {
+      const_cast<ObDatumRow&>(row).storage_datums_[sql_sequence_col_idx].set_int(-common::DELETE_INSERT_TRANS_SEQUENCE); // adjust sql sequence for insert row in delete_insert merge
+      cur_sql_sequence = -common::DELETE_INSERT_TRANS_SEQUENCE;
+    } else {
+      const_cast<ObDatumRow&>(row).storage_datums_[sql_sequence_col_idx].set_int(0); // make sql sequence positive
+      cur_sql_sequence = 0;
+    }
+  } else if (OB_UNLIKELY(row.storage_datums_[sql_sequence_col_idx].get_int() != -INT64_MAX)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected shadow row", K(ret), K(row));
+  }
+  return ret;
+}
+
 int ObMacroBlockWriter::update_cs_row_sql_sequence_info(const ObBatchDatumRows *&datum_rows)
 {
   int ret = OB_SUCCESS;
+  bool is_delete_insert_merge = false;
   const int64_t sql_sequence_col_idx =
     ObMultiVersionRowkeyHelpper::get_sql_sequence_col_store_index(
       data_store_desc_->get_schema_rowkey_col_cnt(),
@@ -1521,8 +1540,11 @@ int ObMacroBlockWriter::update_cs_row_sql_sequence_info(const ObBatchDatumRows *
     LOG_WARN("invalid args", K(ret), KPC(datum_rows), KPC(data_store_desc_), K(sql_sequence_col_idx));
   } else if (OB_FAIL(datum_rows_.shadow_copy(*datum_rows))) {
     LOG_WARN("failed to shadow copy", KR(ret), KPC(datum_rows));
+  } else if (ObMergeEngineType::OB_MERGE_ENGINE_MAX != datum_rows->merge_engine_type_ &&
+      OB_FAIL(check_is_delete_insert_merge(datum_rows->merge_engine_type_, is_delete_insert_merge, data_store_desc_->decide_merge_by_row()))) {
+    STORAGE_LOG(WARN, "failed to check is delete insert merge", K(ret), KPC(datum_rows));
   } else {
-    if (data_store_desc_->is_delete_insert_merge()) {
+    if (is_delete_insert_merge) {
       datum_rows_.vectors_.at(sql_sequence_col_idx) =
         const_cast<ObIVector *>(DELETE_INSERT_TRANS_SEQUENCE_CONST_UNIFORM.get_vector());
     } else {

@@ -8,6 +8,7 @@
 #include "storage/ob_i_table.h"
 #include "storage/memtable/ob_memtable.h"
 #include "storage/tablet/ob_tablet.h"
+#include "storage/column_store/ob_column_oriented_sstable.h"
 #include "ob_storage_schema_util.h"
 namespace oceanbase
 {
@@ -20,10 +21,13 @@ namespace storage
 
 int ObStorageSchemaUtil::update_tablet_storage_schema(
     const common::ObTabletID &tablet_id,
+    const bool is_major_merge,
     common::ObIAllocator &allocator,
     const ObStorageSchema &old_schema_on_tablet,
     const ObStorageSchema &param_schema,
-    ObStorageSchema *&new_storage_schema_ptr)
+    const ObSSTableArray &major_sstables,
+    ObStorageSchema *&new_storage_schema_ptr,
+    const bool is_tablet_split)
 {
   int ret = OB_SUCCESS;
   int64_t tablet_schema_stored_col_cnt = 0;
@@ -42,24 +46,66 @@ int ObStorageSchemaUtil::update_tablet_storage_schema(
     const int64_t old_schema_column_group_cnt = old_schema_on_tablet.get_column_group_count();
     const int64_t param_schema_column_group_cnt = param_schema.get_column_group_count();
     // param schema may from major merge, will have column info, so if col cnt equal use param schema instead of tablet schema
-    const ObStorageSchema *column_group_schema = old_schema_column_group_cnt > param_schema_column_group_cnt
-                        ? &old_schema_on_tablet
-                        : &param_schema;
     const ObStorageSchema *input_schema = tablet_schema_stored_col_cnt > param_schema_stored_col_cnt
                         ? &old_schema_on_tablet
                         : &param_schema;
     const ObStorageSchema *other_schema = input_schema == &old_schema_on_tablet
                         ? &param_schema
                         : &old_schema_on_tablet;
+    const ObStorageSchema *column_group_schema = old_schema_on_tablet.get_column_group_count(false/*has hidden cg*/) > param_schema.get_column_group_count(false/*has hidden cg*/)
+                                               ? &old_schema_on_tablet
+                                               : &param_schema;
     const int64_t result_schema_column_cnt = MAX(old_schema_on_tablet.get_column_count(), param_schema.get_column_count());
     const bool column_info_simplified = input_schema->get_store_column_schemas().count() != result_schema_column_cnt;
     const int64_t input_progressive_merge_round = input_schema->get_progressive_merge_round();
     const int64_t other_progressive_merge_round = other_schema->get_progressive_merge_round();
-    if (OB_FAIL(alloc_storage_schema(allocator, new_storage_schema_ptr))) {
+    ObStorageSchema::ColumnGroupLayout target_layout = ObStorageSchema::INVALID;
+    bool need_rebuild_cg_schema = false;
+    if (is_major_merge && !major_sstables.empty()) {
+      const ObITable *last_major = major_sstables.get_boundary_table(true/*last*/);
+      if (OB_ISNULL(last_major)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null last major sstable", KR(ret));
+      } else if (last_major->is_co_sstable()) {
+        const ObCOSSTableV2 *co_sstable = static_cast<const ObCOSSTableV2 *>(last_major);
+        if (co_sstable->is_cgs_empty_co_table() || co_sstable->is_row_store_only_co_table()) {
+          // do nothing
+        } else if (co_sstable->is_all_cg_base() && !co_sstable->has_hidden_rowkey_cg()) {
+          // do nothing, old version row-column mixed store table
+        } else if (OB_UNLIKELY(column_group_schema->is_row_store())) {
+          if (is_tablet_split) {
+            target_layout = co_sstable->is_all_cg_base()
+                          ? ObStorageSchema::ALL_CG_WITH_HIDDEN
+                          : ObStorageSchema::PURE_COL;
+            need_rebuild_cg_schema = true;
+          }
+        } else if (!co_sstable->has_hidden_rowkey_cg() && column_group_schema->has_hidden_rowkey_column_group()) {
+          target_layout = ObStorageSchema::PURE_COL;
+        } else if (co_sstable->has_hidden_rowkey_cg() && !column_group_schema->has_hidden_rowkey_column_group()) {
+          target_layout = ObStorageSchema::ALL_CG_WITH_HIDDEN;
+        }
+      } else if (!column_group_schema->is_row_store()) {
+        target_layout = ObStorageSchema::ROW_STORE;
+      }
+    }
+
+    if (FAILEDx(alloc_storage_schema(allocator, new_storage_schema_ptr))) {
       LOG_WARN("failed to alloc mem for tmp storage schema", K(ret), K(param_schema), K(old_schema_on_tablet));
-    } else if (OB_FAIL(new_storage_schema_ptr->init(allocator, *input_schema, column_info_simplified, column_group_schema))) {
-      // use param_schema as default base schema to init
-      LOG_WARN("fail to init new storage schema", K(ret), K(input_schema));
+    } else if (!need_rebuild_cg_schema
+             && OB_FAIL(new_storage_schema_ptr->init(allocator,
+                                                     *input_schema,
+                                                     column_info_simplified,
+                                                     column_group_schema,
+                                                     false/*generate_cs_replica_cg_array*/,
+                                                     nullptr/*update_param*/,
+                                                     target_layout))) {
+      LOG_WARN("fail to init new storage schema", K(ret), K(input_schema), "target_layout", static_cast<int64_t>(target_layout));
+    } else if (need_rebuild_cg_schema
+            && OB_FAIL(new_storage_schema_ptr->init_for_split_rebuild_col_layout(allocator,
+                                                                                 *other_schema,
+                                                                                 target_layout))) {
+      LOG_WARN("fail to rebuild col layout storage schema for split", K(ret), KPC(input_schema),
+          "target_layout", static_cast<int64_t>(target_layout));
     } else {
       new_storage_schema_ptr->update_column_cnt_and_schema_version(
         result_schema_column_cnt,
@@ -75,8 +121,7 @@ int ObStorageSchemaUtil::update_tablet_storage_schema(
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("generated schema is invalid", KR(ret), KPC(new_storage_schema_ptr), K(old_schema_on_tablet), K(param_schema));
       } else if (param_schema_version > tablet_schema_version
-          || param_schema_stored_col_cnt > tablet_schema_stored_col_cnt
-          || param_schema_column_group_cnt > old_schema_column_group_cnt) {
+          || param_schema_stored_col_cnt > tablet_schema_stored_col_cnt) {
         // ATTENTION! Critical diagnostic log, DO NOT CHANGE!!!
         LOG_INFO("success to init storage schema from param_schema",
             K(tablet_id), K(tablet_schema_version), K(param_schema_version),

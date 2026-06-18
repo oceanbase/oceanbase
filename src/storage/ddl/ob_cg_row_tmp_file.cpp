@@ -22,7 +22,7 @@ namespace storage
 int ObCGRowFile::open(const ObIArray<ObColumnSchemaItem> &all_column_schema_its,
                       const ObTabletID &tablet_id,
                       const int64_t slice_idx,
-                      const int64_t cg_idx,
+                      const int64_t cg_iter_idx,
                       const ObStorageColumnGroupSchema &cg_schema,
                       const int64_t max_batch_size,
                       const int64_t memory_limit,
@@ -36,14 +36,14 @@ int ObCGRowFile::open(const ObIArray<ObColumnSchemaItem> &all_column_schema_its,
   } else if (OB_UNLIKELY(all_column_schema_its.empty() ||
                          !tablet_id.is_valid() ||
                          slice_idx < 0 ||
-                         cg_idx < 0 ||
+                         cg_iter_idx < 0 ||
                          cg_schema.get_column_count() <= 0 ||
                          max_batch_size <= 0 ||
                          memory_limit <= 0 ||
                          dir_id < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("there are invalid argument", K(ret), K(all_column_schema_its.count()), K(tablet_id),
-        K(slice_idx), K(cg_idx), K(cg_schema.get_column_count()), K(max_batch_size), K(memory_limit), K(dir_id));
+        K(slice_idx), K(cg_iter_idx), K(cg_schema.get_column_count()), K(max_batch_size), K(memory_limit), K(dir_id));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < cg_schema.get_column_count(); ++i) {
     const int64_t column_idx = cg_schema.get_column_idx(i);
@@ -79,7 +79,7 @@ int ObCGRowFile::open(const ObIArray<ObColumnSchemaItem> &all_column_schema_its,
     } else {
       tablet_id_ = tablet_id;
       slice_idx_ = slice_idx;
-      cg_idx_ = cg_idx;
+      cg_iter_idx_ = cg_iter_idx;
       column_count_ = cg_schema.get_column_count();
       store_.set_dir_id(dir_id);
       store_.get_inner_allocator().set_tenant_id(MTL_ID());
@@ -323,21 +323,21 @@ int ObCGRowFilesGenerater::append_batch(
     // by pass
   } else {
     blocksstable::ObBatchDatumRows cg_rows;
-    const ObIArray<ObStorageColumnGroupSchema> &cg_schemas = storage_schema_->get_column_groups();
     output_chunk.reset();
     cg_rows.row_flag_.set_flag(blocksstable::ObDmlFlag::DF_INSERT);
     cg_rows.mvcc_row_flag_ = bdrs.mvcc_row_flag_;
     cg_rows.row_count_ = bdrs.row_count_;
     cg_rows.trans_id_ = bdrs.trans_id_;
-
-    for (int64_t cg_idx = 0; OB_SUCC(ret) && cg_idx < cg_schemas.count(); ++cg_idx) {
+    for (int64_t iter_idx = 0; OB_SUCC(ret) && iter_idx < storage_schema_->get_column_group_count(); ++iter_idx) {
+      const ObStorageColumnGroupSchema *cg_schema = nullptr;
       ObCGRowFile *cg_row_file = nullptr;
-      const ObStorageColumnGroupSchema &cg_schema = cg_schemas.at(cg_idx);
-      if (OB_UNLIKELY(cg_idx >= cg_row_file_arr_.count())) {
+      if (OB_FAIL(storage_schema_->get_cg_schema_with_iter_idx(iter_idx, cg_schema))) {
+        LOG_WARN("fail to get cg schema with iter idx", K(ret), K(iter_idx));
+      } else if (OB_UNLIKELY(iter_idx >= cg_row_file_arr_.count())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("cg idx is invalid", K(ret), K(cg_idx), K(cg_row_file_arr_.count()));
+        LOG_WARN("iter idx is invalid", K(ret), K(cg_row_file_arr_.count()), K(iter_idx));
       } else {
-        cg_row_file = cg_row_file_arr_.at(cg_idx);
+        cg_row_file = cg_row_file_arr_.at(iter_idx);
         if (nullptr == cg_row_file) {
           cg_row_file = OB_NEW(ObCGRowFile, ObMemAttr(MTL_ID(), "CGRowFile"));
           if (OB_UNLIKELY(nullptr == cg_row_file)) {
@@ -346,13 +346,13 @@ int ObCGRowFilesGenerater::append_batch(
           } else if (OB_FAIL(cg_row_file->open(all_column_schema_its_,
                                                tablet_id_,
                                                slice_idx_,
-                                               cg_idx,
-                                               cg_schema,
+                                               iter_idx,
+                                               *cg_schema,
                                                max_batch_size_,
                                                cg_row_file_memory_limit_))) {
-            LOG_WARN("fail to open cg block file", K(ret), K(tablet_id_), K(slice_idx_), K(cg_idx));
+            LOG_WARN("fail to open cg block file", K(ret), K(tablet_id_), K(slice_idx_), K(iter_idx));
           } else {
-            cg_row_file_arr_.at(cg_idx) = cg_row_file;
+            cg_row_file_arr_.at(iter_idx) = cg_row_file;
           }
           if (OB_FAIL(ret) && nullptr != cg_row_file) {
             cg_row_file->~ObCGRowFile();
@@ -361,13 +361,14 @@ int ObCGRowFilesGenerater::append_batch(
           }
         }
       }
+
       if (OB_SUCC(ret)) {
         cg_rows.vectors_.reuse();
-        for (int64_t j = 0; OB_SUCC(ret) && j < cg_schema.get_column_count(); ++j) {
-          const int64_t column_idx = cg_schema.get_column_idx(j);
+        for (int64_t j = 0; OB_SUCC(ret) && j < cg_schema->get_column_count(); ++j) {
+          const int64_t column_idx = cg_schema->get_column_idx(j);
           if (OB_UNLIKELY(column_idx < 0 || column_idx >= bdrs.vectors_.count())) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("this is invalid column idx", K(ret), K(column_idx), K(cg_schema));
+            LOG_WARN("this is invalid column idx", K(ret), K(column_idx), KPC(cg_schema));
           } else if (OB_FAIL(cg_rows.vectors_.push_back(bdrs.vectors_.at(column_idx)))) {
             LOG_WARN("push back vector failed", K(ret), K(column_idx));
           }

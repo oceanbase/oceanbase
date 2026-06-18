@@ -89,7 +89,12 @@ int ObCOTabletMergeCtx::init_tablet_merge_info()
   const int64_t alloc_size = cg_count * (sizeof(ObTabletMergeInfo*) + sizeof(ObITable*))
                            + cg_count * sizeof(ObMergeVectorStoreLayoutParam *);
   void *buf = nullptr;
-  if (OB_UNLIKELY(cg_count <= 1)) {
+  ObMajorSSTableStatus base_major_status = MAJOR_SSTABLE_STATUS_INVALID;
+
+  if (OB_FAIL(static_param_.get_co_major_sstable_status(0, base_major_status))) {
+    LOG_WARN("failed to get co major sstable status", K(ret));
+  } else if (OB_UNLIKELY(cg_count <= 1
+          && !(is_all_cg_base_status(base_major_status) && get_schema()->is_row_store()))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "Unexpected cg count for co major", K(ret), K(cg_count), K(static_param_));
   } else if (OB_ISNULL(buf = mem_ctx_.alloc(alloc_size))) {
@@ -230,6 +235,8 @@ int ObCOTabletMergeCtx::prepare_schema()
     LOG_WARN("fail to get medium info with merge version", K(ret), KPC(this));
   } else if (OB_FAIL(prepare_cs_replica_param(medium_info))) {
     LOG_WARN("failed to prepare cs replica param", K(ret), K_(static_param), KPC(medium_info));
+  } else if (OB_FAIL(init_major_sstable_status())) { // must be inited before prepare_from_medium_compaction_info
+    LOG_WARN("failed to init major sstable status", K(ret));
   } else if (is_meta_major_merge(get_merge_type())) {
     if (OB_FAIL(get_meta_compaction_info())) {
       LOG_WARN("failed to get meta compaction info", K(ret), KPC(this));
@@ -238,13 +245,12 @@ int ObCOTabletMergeCtx::prepare_schema()
     if (OB_FAIL(get_convert_compaction_info())) {
       LOG_WARN("failed to get convert compaction info", K(ret), KPC(this));
     }
-  } else if (OB_FAIL(prepare_from_medium_compaction_info(medium_info))) {
+  } else if (OB_FAIL(prepare_from_medium_compaction_info(medium_info))) { // rely on the inited major sstable status!
     // have checked medium info inside
     LOG_WARN("failed to get medium compaction info", K(ret), KPC(this), KPC(medium_info));
   }
 
-  if (FAILEDx(init_major_sstable_status())) {
-    LOG_WARN("failed to init major sstable status", K(ret));
+  if (OB_FAIL(ret)) {
   } else if (should_mock_row_store_cg_schema() && OB_FAIL(prepare_mocked_row_store_cg_schema())) {
     LOG_WARN("fail to init mocked row store cg schema", K(ret));
   } else {
@@ -274,8 +280,7 @@ int ObCOTabletMergeCtx::check_prefer_reuse_macro_block()
       LOG_WARN("failed to push back array", K(ret));
     }
   }
-  if (OB_FAIL(ret)) {
-  } else {
+  if (OB_SUCC(ret)) {
     int64_t could_reuse_sstable_row_count = 0;
     int64_t cannot_reuse_sstable_row_count = 0;
     ObMajorSSTableStatus co_major_sstable_status = ObMajorSSTableStatus::MAJOR_SSTABLE_STATUS_INVALID;
@@ -307,14 +312,23 @@ int ObCOTabletMergeCtx::build_ctx(bool &finish_flag)
 {
   int ret = OB_SUCCESS;
   int32_t base_rowkey_cg_idx = -1;
+  ObMajorSSTableStatus base_major_status = MAJOR_SSTABLE_STATUS_INVALID;
+
   // finish_flag in this function is useless, just for virtual function definition.
   if (OB_FAIL(ObBasicTabletMergeCtx::build_ctx(finish_flag))) {
     LOG_WARN("failed to build basic ctx", KR(ret), "param", get_dag_param(), KPC(this));
   } else if (OB_ISNULL(get_schema())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema is null", K(ret), K_(static_param));
+  } else if (OB_FAIL(static_param_.get_co_major_sstable_status(0, base_major_status))) {
+    LOG_WARN("failed to get co major sstable status", K(ret));
+  } else if (is_all_cg_base_status(base_major_status) && get_schema()->is_row_store()) {
+    base_rowkey_cg_idx = 0;
   } else if (OB_FAIL(get_schema()->get_base_rowkey_column_group_index(base_rowkey_cg_idx))) {
     LOG_WARN("fail to get base rowkey column group index", K(ret), KPC(get_schema()));
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (FALSE_IT(base_rowkey_cg_idx_ = base_rowkey_cg_idx)) {
   } else if (!static_param_.is_force_single_writer() && OB_FAIL(check_prefer_reuse_macro_block())) {
     LOG_WARN("failed to check prefer reuse macro block", K(ret), KPC(this));
@@ -334,21 +348,30 @@ int ObCOTabletMergeCtx::init_merge_flag()
   int ret = OB_SUCCESS;
   MergeLogStorage merge_log_storage = MergeLogStorage::NORMAL;
   ObSSTable *sstable = static_cast<ObSSTable *>(get_tables_handle().get_table(0));
-  if (OB_ISNULL(sstable)) {
+  ObMajorSSTableStatus base_major_status = MAJOR_SSTABLE_STATUS_INVALID;
+
+  if (OB_UNLIKELY(nullptr == sstable || nullptr == get_schema())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get sstable", K(ret), K(sstable), K(static_param_.tables_handle_));
-  } else if (OB_UNLIKELY(!sstable->is_co_sstable()) || only_use_row_store() || is_build_all_cg_only()) {
-    merge_log_storage_ = MergeLogStorage::ROW_TMP_FILE;
+  } else if (OB_FAIL(static_param_.get_co_major_sstable_status(0, base_major_status))) {
+    LOG_WARN("failed to get co major sstable status", K(ret));
   } else {
-    merge_log_storage_ = MergeLogStorage::COLUMN_TMP_FILE;
+    if (OB_UNLIKELY(!sstable->is_co_sstable()) || only_use_row_store() || is_build_all_cg_only()) {
+      merge_log_storage_ = MergeLogStorage::ROW_TMP_FILE;
+    } else {
+      merge_log_storage_ = MergeLogStorage::COLUMN_TMP_FILE;
+    }
+    if (EN_COMPACTION_CO_MERGE_LOG_USE_TMP_FILE) {
+      merge_log_storage = static_cast<MergeLogStorage>(merge_log_storage_);
+      ret = OB_SUCCESS;
+      LOG_INFO("ERRSIM EN_COMPACTION_CO_MERGE_LOG_USE_TMP_FILE", K(ret));
+    }
+
+    merge_log_storage_ = merge_log_storage; // tmp code to disable tmp file
+    // ALL_CG_TO_EACH_CG: no need to replay old all cg base
+    const bool is_all_cg_to_each_cg = is_all_cg_base_status(base_major_status) && !get_schema()->has_all_column_group();
+    need_replay_base_directly_ = MergeLogStorage::NORMAL == merge_log_storage_ && !is_all_cg_to_each_cg;
   }
-  if (EN_COMPACTION_CO_MERGE_LOG_USE_TMP_FILE) {
-    merge_log_storage = static_cast<MergeLogStorage>(merge_log_storage_);
-    ret = OB_SUCCESS;
-    LOG_INFO("ERRSIM EN_COMPACTION_CO_MERGE_LOG_USE_TMP_FILE", K(ret));
-  }
-  merge_log_storage_ = merge_log_storage; // tmp code to disable tmp file
-  need_replay_base_directly_ = MergeLogStorage::NORMAL == merge_log_storage_;
   return ret;
 }
 
@@ -470,8 +493,7 @@ int ObCOTabletMergeCtx::prepare_index_builder(
   } else if (OB_ISNULL(cg_merge_info_array_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("merge info array is null", K(ret), KP(cg_merge_info_array_));
-  } else if (OB_UNLIKELY(!is_schema_valid()
-      || get_schema()->get_column_group_count() < end_cg_idx)) {
+  } else if (OB_UNLIKELY(!is_schema_valid() || get_schema()->get_column_group_count() < end_cg_idx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema is invalid", K(ret), K_(static_param));
   } else if (reuse_merge_info && is_cg_merge_infos_valid(start_cg_idx, end_cg_idx, false/*check_info_ready*/)) {
@@ -520,6 +542,7 @@ int ObCOTabletMergeCtx::inner_loop_prepare_index_tree(
   if (OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->get_index_read_info(cg_idx_read_info))) {
     LOG_WARN("failed to get index read info from ObTenantCGReadInfoMgr", KR(ret));
   }
+
   for (int64_t i = start_cg_idx; OB_SUCC(ret) && i < end_cg_idx; i++) {
     ObTabletMergeInfo *merge_info = nullptr;
     void *buf = nullptr;
@@ -530,8 +553,12 @@ int ObCOTabletMergeCtx::inner_loop_prepare_index_tree(
       merge_info = new (buf) ObTabletMergeInfo();
       cg_merge_info_array_[i] = merge_info;
     }
-    if (FAILEDx(get_cg_schema_for_merge(i, cg_schema_ptr))) {
-      LOG_WARN("fail to get cg schema for merge", K(ret), K(i));
+
+    int64_t cg_idx = -1;
+    if (FAILEDx(get_schema()->convert_iter_idx_to_column_group_idx(i, cg_idx))) {
+      LOG_WARN("fail to convert iter idx to cg idx", K(ret), K(i));
+    } else if (OB_FAIL(get_cg_schema_for_merge(cg_idx, cg_schema_ptr))) {
+      LOG_WARN("fail to get cg schema for merge", K(ret), K(cg_idx));
     } else if (OB_FAIL(cg_merge_info_array_[i]->init(static_history_))) {
       LOG_WARN("failed to init merge info", K(ret), K(i), KPC(cg_merge_info_array_[i]));
     } else if (cg_schema_ptr->is_all_column_group()) {
@@ -539,7 +566,7 @@ int ObCOTabletMergeCtx::inner_loop_prepare_index_tree(
     } else {
       rowkey_read_info = cg_idx_read_info;
     }
-    if (FAILEDx(build_index_tree(*cg_merge_info_array_[i], rowkey_read_info, cg_schema_ptr, i /*table_cg_idx*/))) {
+    if (FAILEDx(build_index_tree(*cg_merge_info_array_[i], rowkey_read_info, cg_schema_ptr, cg_idx))) {
       LOG_WARN("fail to prepare index tree", K(ret), K(i), KPC(cg_schema_ptr));
     }
     if (OB_FAIL(ret) && OB_NOT_NULL(cg_merge_info_array_[i])) {
@@ -549,33 +576,37 @@ int ObCOTabletMergeCtx::inner_loop_prepare_index_tree(
   return ret;
 }
 
-int ObCOTabletMergeCtx::create_cg_sstable(const int64_t cg_idx)
+int ObCOTabletMergeCtx::create_cg_sstable(const int64_t iter_idx)
 {
   int ret = OB_SUCCESS;
-  if (0 > cg_idx || array_count_ <= cg_idx) {
+  if (0 > iter_idx || array_count_ <= iter_idx) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid column group index", K(ret), K(cg_idx));
-  } else if (nullptr != merged_sstable_array_[cg_idx]) {
+    LOG_WARN("invalid column group index", K(ret), K(iter_idx));
+  } else if (nullptr != merged_sstable_array_[iter_idx]) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("cg sstable already created", K(ret), K(cg_idx));
+    LOG_WARN("cg sstable already created", K(ret), K(iter_idx));
   } else {
     int64_t count = 0;
     const ObStorageColumnGroupSchema *cg_schema_ptr = nullptr;
     ObTableHandleV2 table_handle;
     bool skip_to_create_empty_cg = false;
-    if (OB_FAIL(get_cg_schema_for_merge(cg_idx, cg_schema_ptr))) {
-      LOG_WARN("fail to get cg schema for merge", K(ret), K(cg_idx));
-    } else if (OB_UNLIKELY(nullptr == cg_merge_info_array_[cg_idx] || nullptr == merged_sstable_array_)) {
+    int64_t cg_idx = -1;
+
+    if (OB_FAIL(get_schema()->convert_iter_idx_to_column_group_idx(iter_idx, cg_idx))) {
+      LOG_WARN("fail to convert iter idx to cg idx", K(ret), K(iter_idx));
+    } else if (OB_FAIL(get_cg_schema_for_merge(cg_idx, cg_schema_ptr))) {
+      LOG_WARN("fail to get cg schema for merge", K(ret), K(iter_idx));
+    } else if (OB_UNLIKELY(nullptr == cg_merge_info_array_[iter_idx] || nullptr == merged_sstable_array_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("merge info or table array is null", K(ret), K(cg_idx), K(merged_sstable_array_));
-    } else if (OB_FAIL(cg_merge_info_array_[cg_idx]->create_sstable(*this, table_handle, skip_to_create_empty_cg, cg_schema_ptr, cg_idx))) {
-      LOG_WARN("fail to create sstable", K(ret), K(cg_idx), KPC(this));
+      LOG_WARN("merge info or table array is null", K(ret), K(iter_idx), K(merged_sstable_array_));
+    } else if (OB_FAIL(cg_merge_info_array_[iter_idx]->create_sstable(*this, table_handle, skip_to_create_empty_cg, cg_schema_ptr, cg_idx))) {
+      LOG_WARN("fail to create sstable", K(ret), K(iter_idx), KPC(this));
       // index builder is non-reentrant, so cancel dag net to retry
       (void) static_cast<ObCOMergeDagNet&>(dag_net_).cancel_dag_net(ret, true/*force_cancel*/);
 #ifdef ERRSIM
     } else if (OB_FAIL(ret = OB_E(EventTable::EN_COMPACTION_CO_PUSH_TABLES_FAILED) OB_SUCCESS)) {
-      if (cg_idx == -ret) {
-        LOG_INFO("ERRSIM EN_COMPACTION_CO_PUSH_TABLES_FAILED", K(ret), K(cg_idx));
+      if (iter_idx == -ret) {
+        LOG_INFO("ERRSIM EN_COMPACTION_CO_PUSH_TABLES_FAILED", K(ret), K(iter_idx));
         SERVER_EVENT_SYNC_ADD("merge_errsim", "co_push_table_failed", "ret_code", ret);
       } else {
         ret = OB_SUCCESS;
@@ -588,7 +619,7 @@ int ObCOTabletMergeCtx::create_cg_sstable(const int64_t cg_idx)
     } else if (OB_FAIL(push_table_handle(table_handle, count))) {
       LOG_WARN("failed to add table into tables handle array", K(ret), K(table_handle));
     } else {
-      merged_sstable_array_[cg_idx] = table_handle.get_table();
+      merged_sstable_array_[iter_idx] = table_handle.get_table();
       const ObSSTable *new_sstable = static_cast<ObSSTable *>(table_handle.get_table());
 #ifdef ERRSIM
       char *origin_thread_name = ob_get_tname_v2();
@@ -601,12 +632,12 @@ int ObCOTabletMergeCtx::create_cg_sstable(const int64_t cg_idx)
         SERVER_EVENT_SYNC_ADD("merge_errsim", "create_sstable",
                               "origin_thread_name", origin_thread_name,
                               "tablet_id", get_tablet_id().id(),
-                              "column_group_idx", cg_idx,
+                              "column_group_idx", iter_idx,
                               "base_snapshot_version", base_snapshot_version,
                               "co_base_snapshot_version", co_base_snapshot_version);
       }
 #endif
-      FLOG_INFO("success to create sstable", KPC(new_sstable), KPC(cg_schema_ptr), K(cg_idx));
+      FLOG_INFO("success to create sstable", KPC(new_sstable), KPC(cg_schema_ptr), K(iter_idx));
     }
   }
 
@@ -663,35 +694,41 @@ void ObCOTabletMergeCtx::destroy_merge_info(const uint32_t cg_idx, const bool re
 int ObCOTabletMergeCtx::create_sstable(const ObSSTable *&new_sstable)
 {
   int ret = OB_SUCCESS;
-  const ObIArray<ObStorageColumnGroupSchema> &cg_schemas = get_schema()->get_column_groups();
+  const int64_t cg_schemas_count = get_schema()->get_column_group_count();
   const ObTablesHandleArray &cg_tables_handle = merged_cg_tables_handle_;
-  ObITable *base_co_table = nullptr;
-  ObCOSSTableV2 *co_sstable = nullptr;
+  ObSSTable *new_base_table = nullptr;
+  const ObStorageSchema *target_schema = get_target_schema();
 
   /*
    * There are only 2 case:
    * 1. every cg is not empty, cg_schemas.count() == cg_tables_handle.get_count()
    * 2. some cgs are empty, cg_tables_handle.get_count() == 1 < cg_schemas.count(), only one all cg exists
    */
-  if (cg_schemas.count() == cg_tables_handle.get_count()) {
+  if (OB_ISNULL(target_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null target schema", K(ret), KPC(this));
+  } else if (target_schema->is_row_store()) { // column store switch to row store
+    new_sstable = static_cast<ObSSTable *>(cg_tables_handle.get_table(0));
+  } else if (cg_schemas_count == cg_tables_handle.get_count()) {
     // no empty cg table skip
     if (OB_FAIL(inner_add_cg_sstables(new_sstable))) {
       LOG_WARN("failed to innner add cg sstables", K(ret), KPC(this));
     }
   } else if (OB_UNLIKELY(cg_tables_handle.get_count() > 1)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected cg table cnt", K(ret), "cg_schemas_count", cg_schemas.count(),
-        "cg_tables_count", cg_tables_handle.get_count());
+    LOG_WARN("get unexpected cg table cnt", K(ret), K(cg_schemas_count), "cg_tables_count", cg_tables_handle.get_count());
     CTX_SET_DIAGNOSE_LOCATION(*this);
-  } else if (FALSE_IT(base_co_table = cg_tables_handle.get_table(0))) {
-  } else if (OB_UNLIKELY(NULL == base_co_table || !base_co_table->is_co_sstable()
-      || OB_ISNULL(co_sstable = static_cast<ObCOSSTableV2 *>(base_co_table)))) {
+  } else if (OB_ISNULL(new_base_table = static_cast<ObSSTable *>(cg_tables_handle.get_table(0)))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected cg sstable", K(ret), KPC(base_co_table), K(cg_tables_handle), K(cg_schemas));
+    LOG_WARN("get unexpected null new sstable", K(ret), KPC(new_base_table), K(cg_tables_handle), K(cg_schemas_count));
+    CTX_SET_DIAGNOSE_LOCATION(*this);
+  } else if (OB_UNLIKELY(!new_base_table->is_co_sstable())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected cg sstable", K(ret), KPC(new_base_table), K(cg_tables_handle), K(cg_schemas_count));
     CTX_SET_DIAGNOSE_LOCATION(*this);
   } else {
     // only exist one co table here, empty or empty cg sstables
-    new_sstable = static_cast<ObSSTable *>(base_co_table);
+    new_sstable = new_base_table;
     LOG_DEBUG("[RowColSwitch] FinsihTask with only one co sstable", KPC(new_sstable));
   }
 
@@ -705,23 +742,26 @@ int ObCOTabletMergeCtx::inner_add_cg_sstables(const ObSSTable *&new_sstable)
 {
   int ret = OB_SUCCESS;
   new_sstable = nullptr;
-  const ObIArray<ObStorageColumnGroupSchema> &cg_schemas = get_schema()->get_column_groups();
+  const int64_t cg_schemas_count = get_schema()->get_column_group_count();
   // check whether cg table and cg schema match
   ObCOSSTableV2 *base_co_table = nullptr;
   ObSEArray<ObITable *, 16> cg_sstables;
-  for (int64_t idx = 0; OB_SUCC(ret) && idx < cg_schemas.count(); ++idx) {
-    const ObStorageColumnGroupSchema &cg_schema = cg_schemas.at(idx);
+  for (int64_t idx = 0; OB_SUCC(ret) && idx < cg_schemas_count; ++idx) {
     ObSSTable *table = static_cast<ObSSTable *>(merged_sstable_array_[idx]);
-
     if (OB_ISNULL(table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table is unexpected null", K(ret), K(idx), KPC(this));
     } else if (table->is_co_sstable()) {
-      base_co_table = static_cast<ObCOSSTableV2 *>(table);
+      if (OB_UNLIKELY(nullptr != base_co_table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("find multiple base co tables", K(ret), K(idx), KPC(base_co_table), KPC(this));
+      } else {
+        base_co_table = static_cast<ObCOSSTableV2 *>(table);
+      }
     } else if (OB_FAIL(cg_sstables.push_back(table))) { // only add cg table
       LOG_WARN("failed to add cg sstable", K(ret));
     }
-  } // end for
+  }
 
   // check cksum between co and cg sstables
   const common::ObTabletID &tablet_id = get_tablet_id();
@@ -735,7 +775,7 @@ int ObCOTabletMergeCtx::inner_add_cg_sstables(const ObSSTable *&new_sstable)
     LOG_WARN("failed to get sstable meta handle", K(ret), KPC(base_co_table));
   } else if (base_co_table->is_all_cg_base() && compaction::is_major_merge_type(static_param_.get_merge_type())
                 && OB_FAIL(validate_column_checksums(meta_handle.get_sstable_meta().get_col_checksum(),
-                  meta_handle.get_sstable_meta().get_col_checksum_cnt(), cg_schemas))) {
+                  meta_handle.get_sstable_meta().get_col_checksum_cnt()))) {
     LOG_ERROR("failed to validate column checksums", K(ret), KPC(base_co_table));
     if (OB_CHECKSUM_ERROR == ret) {
       (void) get_ls()->get_tablet_svr()->update_tablet_report_status(tablet_id, true/*found_cksum_error*/);
@@ -754,12 +794,15 @@ int ObCOTabletMergeCtx::inner_add_cg_sstables(const ObSSTable *&new_sstable)
 
 int ObCOTabletMergeCtx::validate_column_checksums(
     int64_t *all_column_cksums,
-    const int64_t all_column_cnt,
-    const common::ObIArray<ObStorageColumnGroupSchema> &cg_schemas)
+    const int64_t all_column_cnt)
 {
   int ret = OB_SUCCESS;
   ObArray<share::schema::ObColDesc> column_descs;
-  if (OB_UNLIKELY(array_count_ != cg_schemas.count())) {
+  common::ObSEArray<ObStorageColumnGroupSchema, 16> cg_schemas;
+
+  if (OB_FAIL(get_schema()->get_all_column_group_schemas(cg_schemas))) {
+    LOG_WARN("failed to get all column group schemas", K(ret));
+  } else if (OB_UNLIKELY(array_count_ != cg_schemas.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table count must be equal to schema count", K(ret), K(cg_schemas.count()), K_(array_count), KPC(this));
   } else if (OB_FAIL(get_schema()->get_multi_version_column_descs(column_descs))) {//temp code
@@ -816,26 +859,27 @@ int ObCOTabletMergeCtx::prepare_mocked_row_store_cg_schema()
   return ret;
 }
 
-int ObCOTabletMergeCtx::get_cg_schema_for_merge(const int64_t idx, const ObStorageColumnGroupSchema *&cg_schema_ptr)
+int ObCOTabletMergeCtx::get_cg_schema_for_merge(
+    const int64_t column_group_idx,
+    const ObStorageColumnGroupSchema *&cg_schema_ptr)
 {
   int ret = OB_SUCCESS;
   cg_schema_ptr = nullptr;
-  const common::ObIArray<ObStorageColumnGroupSchema> &cg_schemas = get_schema()->get_column_groups();
-  if (OB_UNLIKELY(idx < 0 || idx >= cg_schemas.count())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("idx is out of range", K(ret), K(idx), "count", cg_schemas.count());
+  const ObStorageColumnGroupSchema *cg_schema = nullptr;
+  if (OB_FAIL(get_schema()->get_cg_schema_with_column_group_idx(column_group_idx, cg_schema))) {
+    LOG_WARN("failed to get column group schema", K(ret), K(column_group_idx));
   } else {
-    cg_schema_ptr = (cg_schemas.at(idx).is_rowkey_column_group() && should_mock_row_store_cg_schema())
+    cg_schema_ptr = (cg_schema->is_rowkey_column_group() && should_mock_row_store_cg_schema())
                   ? &mocked_row_store_cg_
-                  : &cg_schemas.at(idx);
+                  : cg_schema;
     if (OB_ISNULL(cg_schema_ptr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to get cg schema ptr", K(ret));
     } else if (OB_UNLIKELY(!cg_schema_ptr->is_valid())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get invalid cg schema", K(ret), KPC(cg_schema_ptr), K(idx), K(cg_schemas.at(idx)), KPC(this));
+      LOG_WARN("get invalid cg schema", K(ret), KPC(cg_schema_ptr), K(column_group_idx), KPC(cg_schema), KPC(this));
     } else {
-      LOG_DEBUG("[RowColSwitch] get cg schema for merge", K(idx), KPC(cg_schema_ptr));
+      LOG_DEBUG("[RowColSwitch] get cg schema for merge", K(column_group_idx), KPC(cg_schema_ptr));
     }
   }
   return ret;
@@ -1105,6 +1149,7 @@ int ObCOMergeTwoStageCtx::init_mgr(const int64_t task_id, ObBasicTabletMergeCtx 
   int ret = OB_SUCCESS;
   ObCOMergeLogFileMgr *mgr = nullptr;
   void *buf = nullptr;
+  common::ObSEArray<ObStorageColumnGroupSchema, 1> cg_array;
   if (!is_valid()) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
@@ -1114,6 +1159,8 @@ int ObCOMergeTwoStageCtx::init_mgr(const int64_t task_id, ObBasicTabletMergeCtx 
   } else if (nullptr != mgr_array_[task_id]) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("mgr is not null", KR(ret), K(task_id), K(*mgr_array_[task_id]));
+  } else if (OB_FAIL(ctx.get_schema()->get_all_column_group_schemas(cg_array))) {
+    LOG_WARN("failed to get all column group schemas", KR(ret));
   } else if (OB_ISNULL(buf = mem_ctx_->local_alloc(sizeof(ObCOMergeLogFileMgr)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory", K(ret));
@@ -1122,13 +1169,11 @@ int ObCOMergeTwoStageCtx::init_mgr(const int64_t task_id, ObBasicTabletMergeCtx 
     LOG_WARN("failed to alloc memory", KR(ret));
   } else {
     ObCOTabletMergeCtx &co_ctx = static_cast<ObCOTabletMergeCtx &>(ctx);
-    const common::ObIArray<ObStorageColumnGroupSchema> &cg_array = ctx.static_param_.schema_->get_column_groups();
     common::ObSEArray<ObStorageColumnGroupSchema, 1> empty_cg_array;
-    if (OB_FAIL(mgr->init(
-        co_ctx.is_using_column_tmp_file() ? cg_array : empty_cg_array,
-        file_block_size_,
-        co_ctx.need_replay_base_directly_
-        ))) {
+    if (OB_FAIL(mgr->init(co_ctx.is_using_column_tmp_file() ? cg_array : empty_cg_array,
+                          file_block_size_,
+                          co_ctx.get_schema()->has_all_column_group(),
+                          co_ctx.need_replay_base_directly_))) {
       LOG_WARN("failed to init ObCOMergeLogFileMgr", KR(ret));
     } else {
       mgr_array_[task_id] = mgr;

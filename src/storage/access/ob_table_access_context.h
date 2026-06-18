@@ -190,8 +190,7 @@ struct ObTableAccessContext
   // used for query
   int init(ObTableScanParam &scan_param,
            ObStoreCtx &ctx,
-           const common::ObVersionRange &trans_version_range,
-           CachedIteratorNode *cached_iter_node);
+           const common::ObVersionRange &trans_version_range);
   // used for merge and exist
   int init(const common::ObQueryFlag &query_flag,
            ObStoreCtx &ctx,

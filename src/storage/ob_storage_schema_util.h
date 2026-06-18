@@ -17,17 +17,20 @@ class ObTabletID;
 
 namespace  storage
 {
+class ObSSTableArray;
 
-// TODO(@DanLing) manage major/minor/mini's storage schema here
 class ObStorageSchemaUtil
 {
 public:
   static int update_tablet_storage_schema(
       const common::ObTabletID &tablet_id,
+      const bool is_major_merge,
       common::ObIAllocator &allocator,
       const ObStorageSchema &old_schema_on_tablet,
       const ObStorageSchema &param_schema,
-      ObStorageSchema *&chosen_schema);
+      const storage::ObSSTableArray &major_sstables,
+      ObStorageSchema *&chosen_schema,
+      const bool is_tablet_split = false);
   static int update_storage_schema(
       common::ObIAllocator &allocator,
       const ObStorageSchema &other_schema,
@@ -57,6 +60,7 @@ private:
     const int64_t column_cnt_in_schema,
     int64_t &max_column_cnt_in_memtable,
     int64_t &max_schema_version_in_memtable);
+
 };
 
 } // namespace storage

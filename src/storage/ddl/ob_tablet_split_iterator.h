@@ -141,7 +141,7 @@ private:
   ObTableAccessParam access_param_;
   ObStoreCtx ctx_;
   ObTableAccessContext access_ctx_;
-  ObGetTableParam get_table_param_;
+  ObTabletReadTables tablet_read_tables_;
   ObMultipleScanMerge *scan_merge_;
 };
 

@@ -144,8 +144,7 @@ int ObDMLRunningCtx::prepare_relative_table(
     LOG_WARN("fail to init relative_table_", K(ret), K(tablet_handle), K(schema.get_index_status()));
   } else if (OB_FAIL(relative_table_.tablet_iter_.set_tablet_handle(tablet_handle))) {
     LOG_WARN("fail to set tablet handle to iter", K(ret), K(relative_table_.tablet_iter_));
-  } else if (OB_FAIL(tablet_handle.get_obj()->check_is_delete_insert_table(is_delete_insert_table_))) {
-    LOG_WARN("fail to check is delete insert table", K(ret));
+  } else if (FALSE_IT(is_delete_insert_table_ = ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT == schema.get_merge_engine_type())) {
   } else if (OB_FAIL(relative_table_.tablet_iter_.refresh_read_tables_from_tablet(
       read_snapshot.get_val_for_tx(),
       relative_table_.allow_not_ready(),

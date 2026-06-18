@@ -227,20 +227,20 @@ public:
     SCAN_MULTI_VERSION_ROW,
     SCAN_END
   };
-  TO_STRING_KV(KPC_(context), K_(row), KPC_(key), KPC_(value_iter), K_(scan_state), K_(enable_delete_insert));
+  TO_STRING_KV(KPC_(context), K_(row), KPC_(key), KPC_(value_iter), K_(scan_state), K_(original_merge_engine_type));
 protected:
   virtual int inner_get_next_row(const blocksstable::ObDatumRow *&row);
   virtual void row_reset();
-  int get_compacted_multi_version_row(const blocksstable::ObDatumRow *&row);
+  int get_compacted_multi_version_row(const blocksstable::ObDatumRow *&row, bool &is_delete_insert_merge);
   int get_multi_version_row(const blocksstable::ObDatumRow *&row);
   int get_uncommitted_row(const blocksstable::ObDatumRow *&row);
-  int switch_scan_state();
+  int switch_scan_state(const bool is_delete_insert_merge);
   int switch_to_committed_scan_state();
   virtual int init_next_value_iter();
   int get_next_row();
 protected:
   // iterate row
-  virtual int iterate_compacted_row(const common::ObStoreRowkey &key, blocksstable::ObDatumRow &row);
+  virtual int iterate_compacted_row(const common::ObStoreRowkey &key, blocksstable::ObDatumRow &row, bool &is_delete_insert_merge);
   virtual int iterate_uncommitted_row(const ObStoreRowkey &key, blocksstable::ObDatumRow &row);
   virtual int iterate_multi_version_row(const ObStoreRowkey &rowkey, blocksstable::ObDatumRow &row);
   int set_compacted_row_state(ObDatumRow &row, const bool add_shadow_row);
@@ -249,7 +249,7 @@ protected:
   int iterate_compacted_row_value_(blocksstable::ObDatumRow &row);
   int iterate_uncommitted_row_value_(blocksstable::ObDatumRow &row);
   int iterate_multi_version_row_value_(blocksstable::ObDatumRow &row);
-  int iterate_delete_insert_compacted_row_value_(blocksstable::ObDatumRow &row);
+  int iterate_single_trans_compacted_row_value_(blocksstable::ObDatumRow &row, bool &is_delete_insert_merge);
 
 protected:
   struct ObOuputRowValidateChecker
@@ -268,7 +268,7 @@ protected:
 protected:
   const uint64_t MAGIC_;
   bool is_inited_;
-  bool enable_delete_insert_;
+  ObMergeEngineType original_merge_engine_type_;
   const storage::ObITableReadInfo *read_info_;
   ObMemtableKey *start_key_;
   ObMemtableKey *end_key_;

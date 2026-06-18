@@ -480,6 +480,7 @@ public:
   int init(
       const common::ObIArray<ObStorageColumnGroupSchema> &cg_array,
       const int64_t file_block_size,
+      const bool has_all_column_group,
       const bool skip_base_cg = false);
   void reset();
   int close_part(const int64_t start_cg_idx, const int64_t end_cg_idx);

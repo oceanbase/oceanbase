@@ -8,6 +8,7 @@
 
 #include "share/ob_ddl_common.h"
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
+#include "storage/access/ob_tablet_read_tables.h"
 #include "storage/blocksstable/index_block/ob_index_block_builder.h"
 #include "storage/ddl/ob_tablet_split_sstable_helper.h"
 #include "storage/ob_micro_block_index_iterator.h"

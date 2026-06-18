@@ -150,7 +150,7 @@ public:
                              const ObMergeLevel merge_level = MICRO_BLOCK_MERGE_LEVEL)
   {
     TestMergeBasic::prepare_merge_context(
-      merge_type, is_full_merge, trans_version_range, &merge_dag_, merge_context, false/*is_delete_insert_merge*/);
+      merge_type, is_full_merge, trans_version_range, &merge_dag_, merge_context, ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE);
     merge_context.static_param_.merge_level_ = merge_level;
   }
 

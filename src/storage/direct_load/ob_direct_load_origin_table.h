@@ -7,6 +7,7 @@
 #include "share/schema/ob_table_dml_param.h"
 #include "storage/access/ob_multiple_scan_merge.h"
 #include "storage/access/ob_single_merge.h"
+#include "storage/access/ob_tablet_read_tables.h"
 #include "storage/direct_load/ob_direct_load_datum_row.h"
 #include "storage/direct_load/ob_direct_load_row_iterator.h"
 #include "storage/direct_load/ob_direct_load_struct.h"
@@ -121,7 +122,7 @@ protected:
   ObTableAccessParam table_access_param_;
   ObStoreCtx store_ctx_;
   ObTableAccessContext table_access_ctx_;
-  ObGetTableParam get_table_param_;
+  ObTabletReadTables tablet_read_tables_;
   ObDirectLoadDatumRow datum_row_;
   static const int64_t TABLET_HANDLE_REFRESH_INTERVAL = 10LL * 60LL * 1000LL * 1000LL; // 10min
   int64_t tablet_handle_refresh_time_;

@@ -3681,6 +3681,7 @@ int ObLSTabletService::insert_rows(
           } else {
             for (int64_t i = 0; i < row_count; i++) {
               rows[i].row_flag_.set_flag(ObDmlFlag::DF_INSERT);
+              rows[i].merge_engine_type_ = relative_table.get_merge_engine_type();
             }
           }
           if (OB_FAIL(ret)) {
@@ -3829,6 +3830,7 @@ int ObLSTabletService::insert_rows_with_fetch_dup(
           } else {
             for (int64_t i = 0; i < row_count; i++) {
               rows[i].row_flag_.set_flag(ObDmlFlag::DF_INSERT);
+              rows[i].merge_engine_type_ = relative_table.get_merge_engine_type();
             }
             if (OB_FAIL(rows_info.assign_rows(row_count, rows))) {
               LOG_WARN("fail to assign rows", K(ret), K(row_count));
@@ -4054,6 +4056,8 @@ int ObLSTabletService::update_rows(
         } else if (1 == new_rows_count) {
           old_rows[0].row_flag_.set_flag(ObDmlFlag::DF_UPDATE);
           new_rows[0].row_flag_.set_flag(ObDmlFlag::DF_UPDATE);
+          old_rows[0].merge_engine_type_ = relative_table.get_merge_engine_type();
+          new_rows[0].merge_engine_type_ = relative_table.get_merge_engine_type();
         } else if (nullptr == rows_infos) { // is first batch
           if (OB_ISNULL(rows_infos = static_cast<ObRowsInfo*>(work_allocator.alloc(2 * sizeof(ObRowsInfo) )))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -4074,6 +4078,8 @@ int ObLSTabletService::update_rows(
           for (int64_t i = 0; i < new_rows_count; i++) {
             old_rows[i].row_flag_.set_flag(ObDmlFlag::DF_UPDATE);
             new_rows[i].row_flag_.set_flag(ObDmlFlag::DF_UPDATE);
+            old_rows[i].merge_engine_type_ = relative_table.get_merge_engine_type();
+            new_rows[i].merge_engine_type_ = relative_table.get_merge_engine_type();
           }
           if (OB_FAIL(rows_infos[0].assign_rows(old_rows_count, old_rows))) {
             LOG_WARN("fail to assign old rows", K(ret), K(old_rows_count));
@@ -4295,6 +4301,7 @@ int ObLSTabletService::put_rows(
           } else {
             for (int64_t i = 0; i < row_count; i++) {
               rows[i].row_flag_.set_flag(ObDmlFlag::DF_UPDATE);
+              rows[i].merge_engine_type_ = data_table.get_merge_engine_type();
             }
             if (OB_FAIL(rows_info.assign_rows(row_count, rows))) {
               LOG_WARN("fail to assign rows", K(ret), K(row_count));
@@ -4428,6 +4435,7 @@ int ObLSTabletService::delete_rows(
           if (OB_SUCC(ret)) {
             for (int64_t i = 0; i < row_count; i++) {
               rows[i].row_flag_.set_flag(ObDmlFlag::DF_DELETE);
+              rows[i].merge_engine_type_ = relative_table.get_merge_engine_type();
             }
             if (OB_FAIL(rows_info.assign_rows(row_count, rows))) {
               LOG_WARN("fail to assign rows", K(ret), K(row_count));
@@ -7536,7 +7544,7 @@ int ObLSTabletService::inner_estimate_block_count_and_row_count(
     if (OB_SUCC(ret) && table->is_co_sstable()) {
       ObCOSSTableV2 *co_sstable = static_cast<ObCOSSTableV2 *>(table);
       common::ObArray<ObSSTableWrapper> table_wrappers;
-      if (OB_FAIL(co_sstable->get_all_tables(table_wrappers))) {
+      if (OB_FAIL(co_sstable->get_all_tables(table_wrappers, false/*include hidden cg*/))) {
         LOG_WARN("fail to get all tables", K(ret), KPC(co_sstable));
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < table_wrappers.count(); i++) {
@@ -9861,6 +9869,7 @@ int ObLSTabletService::estimate_skip_index_sortedness(
     // the column_param is used to transform column_id to cg_idx
     common::ObArenaAllocator allocator(common::ObMemAttr(tenant_id, "SkipIndexEsti"));
     ObColumnParam *column_param = nullptr;
+    bool has_each_cg = false;
 
     if (cosstable->is_cgs_empty_co_table()) {
       // there are not cg_sstable here
@@ -9870,7 +9879,11 @@ int ObLSTabletService::estimate_skip_index_sortedness(
       LOG_WARN("Fail to alloc column param", KR(ret));
     } else if (OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->get_index_read_info(index_read_info))) {
       LOG_WARN("Fail to get cg index read info", KR(ret));
+    } else if (OB_FAIL(table_schema->has_column_group(ObColumnGroupType::SINGLE_COLUMN_GROUP, has_each_cg))) {
+      LOG_WARN("failed to check if has each cg", K(ret), KPC(table_schema));
     } else {
+      const int64_t column_group_cnt = cosstable->get_column_group_count(false/*include hidden cg*/);
+      const bool need_calculate_cg_idx = !has_each_cg; // online row col switch scene
       // the table contains cg_sstable, we need do as follows:
       //   1. transform the column_id to cg_idx
       //   2. get the cg sstable and calc skip index sortedness
@@ -9895,9 +9908,9 @@ int ObLSTabletService::estimate_skip_index_sortedness(
         } else if (OB_FAIL(ObTableParam::convert_column_schema_to_param(*column_schema,
                                                                         *column_param))) {
           LOG_WARN("Fail to convert column schema to param", KR(ret));
-        } else if (OB_FAIL(table_schema->get_column_group_index(*column_param, false, cg_idx))) {
+        } else if (OB_FAIL(table_schema->get_column_group_index(*column_param, need_calculate_cg_idx, cg_idx))) {
           LOG_WARN("Fail to get column group idx", KR(ret), KPC(column_param));
-        } else if (cg_idx >= cosstable->get_cs_meta().get_column_group_count() || cg_idx < 0) {
+        } else if (cg_idx >= column_group_cnt || cg_idx < 0) {
           // no cg sstable for this column, the sortedness is 0
           if (OB_FAIL(sortedness.push_back(0))) {
             LOG_WARN("Fail to push back sortedness", KR(ret));

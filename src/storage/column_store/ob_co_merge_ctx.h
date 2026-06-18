@@ -108,8 +108,7 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   int inner_add_cg_sstables(const ObSSTable *&new_sstable);
   int validate_column_checksums(
       int64_t *all_column_cksums,
-      const int64_t all_column_cnt,
-      const common::ObIArray<ObStorageColumnGroupSchema> &cg_schemas);
+      const int64_t all_column_cnt);
   int check_convert_co_checksum(const ObSSTable *new_sstable);
   int push_table_handle(ObTableHandleV2 &table_handle, int64_t &count);
   int collect_cg_running_info(const int64_t cg_idx);
@@ -138,7 +137,7 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
     return static_param_.co_static_param_.contain_each_cg_sstable_ &&
       (is_build_all_cg_only() || get_schema()->has_all_column_group() || only_use_row_store());
   }
-  int get_cg_schema_for_merge(const int64_t idx, const ObStorageColumnGroupSchema *&cg_schema_ptr);
+  int get_cg_schema_for_merge(const int64_t column_group_idx, const ObStorageColumnGroupSchema *&cg_schema_ptr);
   int prepare_cg_layout_params();
   int get_cg_layout_param(const int64_t cg_idx, const ObMergeVectorStoreLayoutParam *&layout_param) const;
   virtual ObSSTableMergeHistory &get_merge_history() override { return dag_net_merge_history_; }
@@ -162,7 +161,7 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   int get_merge_log_mgr(const int64_t idx, ObCOMergeLogFileMgr *&mgr);
 
   INHERIT_TO_STRING_KV("ObCOTabletMergeCtx", ObBasicTabletMergeCtx,
-      K_(merge_flag), K_(array_count), K_(retry_cnt), K_(prefer_reuse_macro_block), K_(base_rowkey_cg_idx));
+      K_(need_replay_base_directly), K_(merge_log_storage), K_(array_count), K_(retry_cnt), K_(prefer_reuse_macro_block), K_(base_rowkey_cg_idx));
 
   /* STATIC CONST */
   static const int64_t PREFER_REUSE_MACRO_BLOCKS_RAITO = 2;

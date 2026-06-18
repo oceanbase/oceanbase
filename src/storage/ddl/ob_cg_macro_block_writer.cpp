@@ -196,7 +196,7 @@ int ObCgMacroBlockWriter::init(
     const bool with_cs_replica = tablet_param.with_cs_replica_;
     const bool need_submit_io = true;
     int64_t cg_idx = table_key.column_group_idx_;
-    const ObStorageColumnGroupSchema &cg_schema = tablet_param.storage_schema_->get_column_groups().at(cg_idx);
+    const ObStorageColumnGroupSchema *cg_schema = nullptr;
     ObMacroSeqParam macro_seq_param;
     ObPreWarmerParam pre_warm_param;
     ObISSTableObjectCleaner *object_cleaner = nullptr;
@@ -214,7 +214,9 @@ int ObCgMacroBlockWriter::init(
     macro_seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
     macro_seq_param.start_ = start_sequence.macro_data_seq_;
 
-    if (OB_FAIL(pre_warm_param.init(ls_id, table_key.tablet_id_))) {
+    if (OB_FAIL(tablet_param.storage_schema_->get_cg_schema_with_column_group_idx(cg_idx, cg_schema))) {
+      LOG_WARN("fail to get column group schema", K(ret), K(cg_idx));
+    } else if (OB_FAIL(pre_warm_param.init(ls_id, table_key.tablet_id_))) {
       LOG_WARN("fail to initialize pre warm param", K(ret), K(ls_id), K(table_key.tablet_id_));
     } else if (OB_FAIL(data_desc_.init(true/*is ddl*/,
                                        *tablet_param.storage_schema_,
@@ -228,7 +230,7 @@ int ObCgMacroBlockWriter::init(
                                        0/*concurrent_cnt*/,
                                        SCN::min_scn()/*reorganization_scn : only for ss*/,
                                        SCN::min_scn(),
-                                       &cg_schema,
+                                       cg_schema,
                                        cg_idx,
                                        exec_mode,
                                        need_submit_io))) {

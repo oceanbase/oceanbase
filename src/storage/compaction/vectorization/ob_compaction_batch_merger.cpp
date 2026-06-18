@@ -454,7 +454,6 @@ int ObCOBatchMergeLogBuilder::alloc_base_writer(ObIArray<ObITable*> &tables)
 // -------------------------------- ObCOBatchMergeLogReplayer -------------------------------- //
 int ObCOBatchMergeLogReplayer::alloc_writers(
     const blocksstable::ObDatumRow &default_row,
-    const common::ObIArray<ObStorageColumnGroupSchema> &cg_array,
     ObTabletMergeInfo **merge_infos,
     ObIArray<ObITable*> &tables)
 {

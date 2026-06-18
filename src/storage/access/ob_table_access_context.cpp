@@ -194,8 +194,7 @@ int ObTableAccessContext::build_lob_locator_helper(const ObStoreCtx &ctx,
 
 int ObTableAccessContext::init(ObTableScanParam &scan_param,
                                ObStoreCtx &ctx,
-                               const ObVersionRange &trans_version_range,
-                               CachedIteratorNode *cached_iter_node)
+                               const ObVersionRange &trans_version_range)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_ && stmt_allocator_ != scan_param.allocator_)) {
@@ -206,7 +205,6 @@ int ObTableAccessContext::init(ObTableScanParam &scan_param,
     LOG_WARN("Failed to init scan allocator", K(ret));
   } else {
     stmt_allocator_ = scan_param.allocator_;
-    cached_iter_node_ = cached_iter_node;
     ls_id_ = scan_param.ls_id_;
     tablet_id_ = scan_param.tablet_id_;
     query_flag_ = scan_param.scan_flag_;

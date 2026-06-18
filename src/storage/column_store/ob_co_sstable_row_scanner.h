@@ -70,6 +70,7 @@ public:
                K_(reverse_scan),
                K_(is_limit_end),
                K_(use_row_store_projector),
+               K_(need_getter_project),
                K_(state),
                K_(blockscan_state),
                K_(group_by_project_idx),
@@ -215,6 +216,7 @@ private:
   bool reverse_scan_;
   bool is_limit_end_;
   mutable bool use_row_store_projector_;
+  bool need_getter_project_;
   ScanState state_;
   BlockScanState blockscan_state_;
   int32_t group_by_project_idx_;

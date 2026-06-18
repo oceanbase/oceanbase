@@ -1126,15 +1126,13 @@ int ObTabletDDLUtil::prepare_index_data_desc(const ObTablet &tablet,
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(data_format_version),
         KP(storage_schema), K(reorganization_scn));
   } else if (cg_idx >= 0) {
-    const ObIArray<ObStorageColumnGroupSchema > &cg_schemas = storage_schema->get_column_groups();
-    if (cg_idx >= cg_schemas.count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid cg idx", K(ret), K(cg_idx), K(cg_schemas.count()));
-    } else if (OB_UNLIKELY(table_key.is_minor_sstable())) {
+    const ObStorageColumnGroupSchema *cur_cg_schema = nullptr;
+    if (OB_UNLIKELY(table_key.is_minor_sstable())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected table key is minor sstable", K(ret), K(table_key));
+    } else if (OB_FAIL(storage_schema->get_cg_schema_with_column_group_idx(cg_idx, cur_cg_schema))) {
+      LOG_WARN("fail to get column group schema", K(ret), K(cg_idx));
     } else {
-      const ObStorageColumnGroupSchema &cur_cg_schema = cg_schemas.at(cg_idx);
       int32_t private_transfer_epoch = -1;
       if (OB_FAIL(tablet.get_private_transfer_epoch(private_transfer_epoch))) {
         LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
@@ -1143,12 +1141,12 @@ int ObTabletDDLUtil::prepare_index_data_desc(const ObTablet &tablet,
                                  snapshot_version, data_format_version,
                                  tablet.get_tablet_meta().micro_index_clustered_,
                                  private_transfer_epoch, 0 /*concurrent_cnt*/, reorganization_scn,
-                                 end_scn, &cur_cg_schema, cg_idx))) {
+                                 end_scn, cur_cg_schema, cg_idx))) {
         LOG_WARN("init data desc for cg failed", K(ret));
       } else {
         data_desc.get_static_desc().micro_index_clustered_ = micro_index_clustered;
         LOG_DEBUG("get data desc from column group schema", K(ret),
-                  K(tablet_id), K(cg_idx), K(data_desc), K(cur_cg_schema),
+                  K(tablet_id), K(cg_idx), K(data_desc), KPC(cur_cg_schema),
                   K(micro_index_clustered));
       }
     }
@@ -1203,18 +1201,17 @@ int ObTabletDDLUtil::create_ddl_empty_co_sstable(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invlaid argument", K(ret), K(tablet_id), K(ddl_start_scn), K(snapshot_version), KP(storage_schema));
   } else {
-    const ObIArray<ObStorageColumnGroupSchema> &cg_schemas = storage_schema->get_column_groups();
     bool has_all_cg = false;
     int32_t base_cg_idx = -1;
     ObTabletCreateSSTableParam cs_param;
     ObTableHandleV2 co_handle;
     ObTablesHandleArray empty_cg_sstable_handles;
+    const ObStorageColumnGroupSchema *base_cg_schema = nullptr;
     if (OB_FAIL(storage_schema->get_base_rowkey_column_group_index(base_cg_idx))) {
       LOG_WARN("get base cg idx failed", K(ret));
-    } else if (base_cg_idx < 0 || base_cg_idx >= cg_schemas.count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid base cg idx", K(ret), K(base_cg_idx), K(cg_schemas.count()));
-    } else if (FALSE_IT(has_all_cg = cg_schemas.at(base_cg_idx).is_all_column_group())) {
+    } else if (OB_FAIL(storage_schema->get_cg_schema_with_column_group_idx(base_cg_idx, base_cg_schema))) {
+      LOG_WARN("fail to get column group schema", K(ret), K(base_cg_idx));
+    } else if (FALSE_IT(has_all_cg = base_cg_schema->is_all_column_group())) {
     } else if (OB_FAIL(cs_param.init_for_empty_major_sstable(tablet_id, *storage_schema, snapshot_version, base_cg_idx, has_all_cg, false/*is_shared*/))) {
       LOG_WARN("failed to build table cs param for column store", K(ret), K(tablet_id), K(base_cg_idx));
     } else {
@@ -1239,11 +1236,17 @@ int ObTabletDDLUtil::create_ddl_empty_co_sstable(
           LOG_WARN("fail to fill column checksum for empty major", K(ret));
         }
       }
-      for (int64_t i = 0; OB_SUCC(ret) && i < cg_schemas.count(); ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < storage_schema->get_column_group_count(); i++) {
         ObTableHandleV2 cur_handle;
-        cs_param.table_key_.column_group_idx_ = static_cast<uint16_t>(i);
-        if (base_cg_idx == i) {
-          // skip base cg idx
+        const ObStorageColumnGroupSchema *cg_schema = nullptr;
+        int64_t cg_idx = -1;
+        if (OB_FAIL(storage_schema->get_cg_schema_with_iter_idx(i, cg_schema))) {
+          LOG_WARN("fail to get column group schema", K(ret), K(i));
+        } else if (OB_FAIL(storage_schema->convert_iter_idx_to_column_group_idx(i, cg_idx))) {
+          LOG_WARN("fail to convert iter idx to column group idx", K(ret), K(i));
+        } else if (FALSE_IT(cs_param.table_key_.column_group_idx_ = static_cast<uint16_t>(cg_idx))) {
+        } else if (cg_schema == base_cg_schema) {
+          // skip base cg schema
         } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable<ObSSTable>(cs_param, allocator, cur_handle))) {
           LOG_WARN("failed to create cg sstable", K(ret), K(cs_param));
         } else if (OB_FAIL(empty_cg_sstable_handles.add_table(cur_handle))) {

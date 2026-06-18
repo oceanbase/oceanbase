@@ -1755,7 +1755,7 @@ void ObPartitionIncrementalRangeSpliter::ObIncrementalIterator::reset()
   store_ctx_.reset();
   tbl_xs_ctx_.reset();
   tbls_iter_.reset();
-  get_tbl_param_.reset();
+  tablet_read_tables.reset();
   range_to_scan_.reset();
   if (iter_ != nullptr) {
     iter_->~ObIStoreRowIterator();
@@ -1784,7 +1784,7 @@ int ObPartitionIncrementalRangeSpliter::ObIncrementalIterator::init()
       STORAGE_LOG(WARN, "Failed to prepare table access context", KR(ret));
     } else if (OB_FAIL(prepare_get_table_param())) {
       STORAGE_LOG(WARN, "Failed to prepare get table param", KR(ret));
-    } else if (OB_FAIL(mpl_scan_mrg->init(tbl_xs_param_, tbl_xs_ctx_, get_tbl_param_))) {
+    } else if (OB_FAIL(mpl_scan_mrg->init(tbl_xs_param_, tbl_xs_ctx_, tablet_read_tables))) {
       STORAGE_LOG(WARN, "Failed to init multiple scan merge", KR(ret));
     } else if (OB_FAIL(mpl_scan_mrg->open(range_to_scan_))) {
       STORAGE_LOG(WARN, "Failed to open multiple scan merge", KR(ret));
@@ -1893,7 +1893,7 @@ int ObPartitionIncrementalRangeSpliter::ObIncrementalIterator::prepare_get_table
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(get_tbl_param_.tablet_iter_.table_iter()->assign(tbls_iter_))) {
+    if (OB_FAIL(tablet_read_tables.tablet_iter_.table_iter()->assign(tbls_iter_))) {
       STORAGE_LOG(WARN, "Failed to assign tablet iterator", KR(ret));
     }
   }

@@ -140,7 +140,6 @@ public:
       const ObMergeParameter &merge_param,
       const ObITableReadInfo *full_read_info,
       const int64_t parallel_idx,
-      const common::ObIArray<ObStorageColumnGroupSchema> &cg_array,
       ObTabletMergeInfo **merge_infos,
       ObIArray<ObITable*> &tables)
   { return OB_NOT_SUPPORTED; }
@@ -324,7 +323,6 @@ public:
       const ObMergeParameter &merge_param,
       const ObITableReadInfo *full_read_info,
       const int64_t parallel_idx,
-      const common::ObIArray<ObStorageColumnGroupSchema> &cg_array,
       ObTabletMergeInfo **merge_infos,
       ObIArray<ObITable*> &tables) override;
   virtual int end_write(ObCOTabletMergeCtx &co_ctx) override;

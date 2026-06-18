@@ -356,6 +356,14 @@ int ObSparseClusterReader<T, R, EmptyDatumType>::batch_compare(
   return ret;
 }
 
+#define SET_ROW_BASIC_INFO(row) \
+  { \
+    row.row_flag_ = row_header_->get_row_flag(); \
+    row.mvcc_row_flag_.flag_ = row_header_->get_mvcc_row_flag(); \
+    row.trans_id_ = row_header_->get_trans_id(); \
+    row.merge_engine_type_ = row_header_->get_merge_engine_type(); \
+  }
+
 int ObRowReaderV1::init(const char *buf, const int64_t buf_len)
 {
   int ret = OB_SUCCESS;
@@ -444,6 +452,7 @@ int ObRowReaderV1::read_memtable_row(const char *row_buf,
     LOG_WARN("Fail to init row", KR(ret), K(row_len));
   } else {
     row.count_ = read_info.get_request_count();
+    row.fuse_merge_engine_type(row_header_->get_merge_engine_type());
     const ObColumnIndexArray &cols_index = read_info.get_memtable_columns_index();
 
     int64_t idx = 0;
@@ -503,9 +512,7 @@ int ObRowReaderV1::read_row(const char *row_buf,
   } else if (OB_FAIL(row.is_valid() ? row.reserve(column_cnt) : row.init(column_cnt))) {
     LOG_WARN("Fail to reserve datum row", KR(ret), K(column_cnt));
   } else {
-    row.row_flag_ = row_header_->get_row_flag();
-    row.mvcc_row_flag_.flag_ = row_header_->get_mvcc_row_flag();
-    row.trans_id_ = row_header_->get_trans_id();
+    SET_ROW_BASIC_INFO(row);  // set flag/row_type_flag/trans_id/merge_engine_type
     row.count_ = column_cnt;
 
     // sequence read
@@ -733,13 +740,6 @@ template class ObSparseClusterReader<uint16_t, uint8_t, ObFlatEmptyDatumType::No
 template class ObSparseClusterReader<uint32_t, uint8_t, ObFlatEmptyDatumType::Nop>;
 
 /* ====================== old ob row reader (need remove) ============================ */
-
-#define SET_ROW_BASIC_INFO(row) \
-  { \
-    row.row_flag_ = row_header_->get_row_flag(); \
-    row.mvcc_row_flag_.flag_ = row_header_->get_mvcc_row_flag(); \
-    row.trans_id_ = row_header_->get_trans_id(); \
-  }
 
 ObRowReaderV0::ObRowReaderV0()
    : buf_(NULL),
@@ -1202,6 +1202,7 @@ int ObRowReaderV0::read_memtable_row(
     LOG_WARN("Fail to set up row", K(ret), K(row_len));
   } else {
     datum_row.count_ = read_info.get_request_count();
+    datum_row.fuse_merge_engine_type(row_header_->get_merge_engine_type());
     int64_t store_idx = 0;
     const ObColumnIndexArray &cols_index = read_info.get_memtable_columns_index();
     for (int i = 0; OB_SUCC(ret) && i < read_info.get_request_count(); ++i) {
@@ -1338,7 +1339,7 @@ int ObRowReaderV0::read_row(
       STORAGE_LOG(WARN, "Failed to init datum row", K(ret), K(column_cnt));
     }
     if (OB_SUCC(ret)) {
-      SET_ROW_BASIC_INFO(datum_row);  // set flag/row_type_flag/trans_id
+      SET_ROW_BASIC_INFO(datum_row);  // set flag/row_type_flag/trans_id/merge_engine_type
       datum_row.count_ = column_cnt;
       // sequence read
       int64_t idx = 0;

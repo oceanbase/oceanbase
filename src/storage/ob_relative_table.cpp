@@ -438,6 +438,11 @@ int ObRelativeTable::get_primary_key_name(ObString &pk_name) const
   return ret;
 }
 
+ObMergeEngineType ObRelativeTable::get_merge_engine_type() const
+{
+  return schema_param_->get_merge_engine_type();
+}
+
 bool ObRelativeTable::is_index_table() const
 {
   return schema_param_->is_index_table();

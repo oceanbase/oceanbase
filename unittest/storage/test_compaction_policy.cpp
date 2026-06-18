@@ -1503,42 +1503,36 @@ TEST_F(TestCompactionPolicy, test_co_convert_replace_old_major_rebuild)
 TEST_F(TestCompactionPolicy, test_build_tablet_for_hybrid_store)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObITable *, 4> hybrid_major_tables;
   ObTablesHandleArray hybrid_major_handle_array;
   ObTableHandleV2 co_table_handle0;
   ret = mock_co_sstable(allocator_, ObCOSSTableBaseType::ROWKEY_CG_TYPE, 0 /*base_version*/, 1 /*snapshot_version*/,
           1 /*max_merged_trans_version*/, 1 /*upper_trans_version*/, 4 /*column_group_cnt*/, co_table_handle0);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_NE(nullptr, co_table_handle0.get_table());
-  ASSERT_EQ(OB_SUCCESS, hybrid_major_tables.push_back(co_table_handle0.get_table()));
 
   ObTableHandleV2 table_handle0;
   ret = mock_sstable(allocator_, ObITable::MAJOR_SSTABLE, 0 /*base_version*/, 100 /*snapshot_version*/,
           100 /*max_merged_trans_version*/, 100 /*upper_trans_version*/, table_handle0);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_NE(nullptr, table_handle0.get_table());
-  ASSERT_EQ(OB_SUCCESS, hybrid_major_tables.push_back(table_handle0.get_table()));
 
   ObTableHandleV2 table_handle1;
   ret = mock_sstable(allocator_, ObITable::MAJOR_SSTABLE, 0 /*base_version*/, 200 /*snapshot_version*/,
           200 /*max_merged_trans_version*/, 200 /*upper_trans_version*/, table_handle1);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_NE(nullptr, table_handle1.get_table());
-  ASSERT_EQ(OB_SUCCESS, hybrid_major_tables.push_back(table_handle1.get_table()));
 
   ObTableHandleV2 co_table_handle1;
   ret = mock_co_sstable(allocator_, ObCOSSTableBaseType::ROWKEY_CG_TYPE, 0 /*base_version*/, 300 /*snapshot_version*/,
           300 /*max_merged_trans_version*/, 300 /*upper_trans_version*/, 4 /*column_group_cnt*/, co_table_handle1);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_NE(nullptr, co_table_handle1.get_table());
-  ASSERT_EQ(OB_SUCCESS, hybrid_major_tables.push_back(co_table_handle1.get_table()));
 
   ObTableHandleV2 table_handle2;
   ret = mock_sstable(allocator_, ObITable::MAJOR_SSTABLE, 0 /*base_version*/, 400 /*snapshot_version*/,
           400 /*max_merged_trans_version*/, 400 /*upper_trans_version*/, table_handle2);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_NE(nullptr, table_handle2.get_table());
-  ASSERT_EQ(OB_SUCCESS, hybrid_major_tables.push_back(table_handle2.get_table()));
 
   ASSERT_EQ(OB_SUCCESS, hybrid_major_handle_array.add_table(co_table_handle0));
   ASSERT_EQ(OB_SUCCESS, hybrid_major_handle_array.add_table(table_handle0));

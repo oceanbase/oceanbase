@@ -227,6 +227,7 @@ void ObReadInfoStruct::reset()
   memtable_cols_index_.reset();
   datum_utils_.reset();
   micro_block_format_version_ = ObMicroBlockFormatVersionHelper::DEFAULT_VERSION;
+  original_merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN;
 }
 
 void ObReadInfoStruct::init_basic_info(const int64_t schema_column_count,
@@ -234,7 +235,7 @@ void ObReadInfoStruct::init_basic_info(const int64_t schema_column_count,
                      const bool is_oracle_mode,
                      const bool is_cg_sstable,
                      const bool is_cs_replica_compat,
-                     const bool is_delete_insert_table,
+                     const ObMergeEngineType original_merge_engine_type,
                      const bool is_global_index_table,
                      const int64_t micro_block_format_version,
                      const bool is_mv_major_refresh_tablet,
@@ -245,11 +246,12 @@ void ObReadInfoStruct::init_basic_info(const int64_t schema_column_count,
   rowkey_cnt_ = schema_rowkey_cnt + extra_rowkey_cnt;
   is_oracle_mode_ = is_oracle_mode;
   is_cs_replica_compat_ = is_cs_replica_compat;
-  is_delete_insert_table_ = is_delete_insert_table;
+  // is_delete_insert_table_ = ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT == original_merge_engine_type;
   is_global_index_table_ = is_global_index_table;
   micro_block_format_version_ = micro_block_format_version;
   is_mv_major_refresh_tablet_ = is_mv_major_refresh_tablet;
   has_ttl_definition_ = has_ttl_definition;
+  original_merge_engine_type_ = original_merge_engine_type;
 }
 
 int ObReadInfoStruct::generate_for_column_store(ObIAllocator &allocator,
@@ -296,7 +298,8 @@ int64_t ObReadInfoStruct::to_string(char *buf, const int64_t buf_len) const
         K_(cols_desc),
         K_(datum_utils),
         K_(memtable_cols_index),
-        K_(micro_block_format_version));
+        K_(micro_block_format_version),
+        K_(original_merge_engine_type));
     J_OBJ_END();
   }
   return pos;
@@ -320,8 +323,10 @@ int ObReadInfoStruct::init_compat_version()
     compat_version_ = READ_INFO_VERSION_V5;
   } else if (compat_version < share::ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION) {
     compat_version_ = READ_INFO_VERSION_V6;
-  } else {
+  } else if (compat_version < DATA_VERSION_4_6_1_0) {
     compat_version_ = READ_INFO_VERSION_V7;
+  } else {
+    compat_version_ = READ_INFO_VERSION_V8;
   }
   return ret;
 }
@@ -368,7 +373,7 @@ int ObTableReadInfo::mock_for_sstable_query(
     LOG_WARN("failed to init compat version", KR(ret));
   } else if (FALSE_IT(init_basic_info(schema_column_count, schema_rowkey_cnt, is_oracle_mode, is_cg_sstable,
       false /*is_cs_replica_compat*/,
-      false /*is_delete_insert_table*/,
+      ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN /*original merge engine type*/,
       false/*is_global_index_table*/,
       ObMicroBlockFormatVersionHelper::DEFAULT_VERSION,
       false/*mv major refresh tablet*/,
@@ -451,7 +456,7 @@ int ObTableReadInfo::init(
     const bool has_all_column_group,
     const bool is_cg_sstable,
     const bool need_truncate_filter,
-    const bool is_delete_insert_table,
+    const ObMergeEngineType original_merge_engine_type,
     const int64_t micro_block_format_version,
     const bool has_ttl_definition)
 {
@@ -463,7 +468,7 @@ int ObTableReadInfo::init(
     LOG_WARN("failed to init compat version", KR(ret));
   } else if (FALSE_IT(init_basic_info(schema_column_count, schema_rowkey_cnt, is_oracle_mode, is_cg_sstable,
       false /*is_cs_replica_compat*/,
-      is_delete_insert_table,
+      original_merge_engine_type,
       false/*is_global_index_table*/,
       micro_block_format_version,
       false/*mv major refresh tablet*/,
@@ -860,7 +865,8 @@ int64_t ObTableReadInfo::to_string(char *buf, const int64_t buf_len) const
         K_(has_all_column_group),
         K_(need_truncate_filter),
         K_(micro_block_format_version),
-        K_(has_ttl_definition));
+        K_(has_ttl_definition),
+        K_(original_merge_engine_type));
         //K_(datum_utils),
         //"cols_param",
         //ObArrayWrap<ObColumnParam *>(0 == cols_param_.count() ? NULL : &cols_param_.at(0),
@@ -890,7 +896,7 @@ int ObRowkeyReadInfo::init(
     const bool is_cg_sstable,
     const bool use_default_compat_version,
     const bool is_cs_replica_compat,
-    const bool is_delete_insert_table,
+    const ObMergeEngineType original_merge_engine_type,
     const bool is_global_index_table,
     const int64_t micro_block_format_version,
     const bool is_mv_major_refresh_tablet,
@@ -914,7 +920,7 @@ int ObRowkeyReadInfo::init(
   }
   if (OB_SUCC(ret)) {
     init_basic_info(schema_column_count, schema_rowkey_cnt, is_oracle_mode,
-                    is_cg_sstable, is_cs_replica_compat, is_delete_insert_table,
+                    is_cg_sstable, is_cs_replica_compat, original_merge_engine_type,
                     is_global_index_table, micro_block_format_version, is_mv_major_refresh_tablet, has_ttl_definition); // init basic info
     if (OB_FAIL(prepare_arrays(allocator, rowkey_col_descs, out_cols_cnt))) {
       LOG_WARN("failed to prepare arrays", K(ret), K(out_cols_cnt));
@@ -961,6 +967,7 @@ int ObRowkeyReadInfo::deep_copy(char *buf, const int64_t buf_len, ObRowkeyReadIn
     dst_value->rowkey_cnt_ = rowkey_cnt_;
     dst_value->is_oracle_mode_ = is_oracle_mode_;
     dst_value->micro_block_format_version_ = micro_block_format_version_;
+    dst_value->original_merge_engine_type_ = original_merge_engine_type_;
     // can not deep copy cols param cuz ObColumnParam need an allocator on constructor for default value
     if (OB_FAIL(cols_desc_.deep_copy(buf, buf_len, pos, dst_value->cols_desc_))) {
       LOG_WARN("fail to deep copy cols_desc array", K(ret));
@@ -1000,6 +1007,7 @@ int ObRowkeyReadInfo::serialize(
   if (OB_SUCC(ret) && compat_version_ >= READ_INFO_VERSION_V6) {
     OB_UNIS_ENCODE(micro_block_format_version_);
   }
+
   if (OB_SUCC(ret) && compat_version_ >= READ_INFO_VERSION_V8) {
     OB_UNIS_ENCODE(original_merge_engine_type_);
   }
@@ -1030,7 +1038,6 @@ int ObRowkeyReadInfo::deserialize(
   } else if (compat_version_ >= READ_INFO_VERSION_V6) {
     OB_UNIS_DECODE(micro_block_format_version_);
   }
-
   if (OB_SUCC(ret)) {
     if (compat_version_ >= READ_INFO_VERSION_V8) {
       OB_UNIS_DECODE(original_merge_engine_type_);
@@ -1315,7 +1322,7 @@ int ObTenantCGReadInfoMgr::construct_index_read_info(ObIAllocator &allocator, Ob
                                           true, /* is_cg_sstable */
                                           true /* use_default_compat_version */,
                                           false /* is_cs_replica_compat */,
-                                          false /* is_delete_insert_table */,
+                                          ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN /* original merge engine type */,
                                           false /* is_global_index_table */,
                                           ObMicroBlockFormatVersionHelper::DEFAULT_VERSION /* micro_block_format_version */))) {
     STORAGE_LOG(WARN, "Fail to init mtl index read info", K(ret));

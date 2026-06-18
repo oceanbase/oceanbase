@@ -2224,10 +2224,9 @@ int ObTabletDirectLoadMgr::fill_column_group(const int64_t thread_cnt, const int
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid tablet handle", K(ret), KP(sqc_build_ctx_.storage_schema_));
     } else {
-      const ObIArray<ObStorageColumnGroupSchema> &cg_schemas = sqc_build_ctx_.storage_schema_->get_column_groups();
       FLOG_INFO("[DIRECT_LOAD_FILL_CG] start fill cg",
           "tablet_id", tablet_id_,
-          "cg_cnt", cg_schemas.count(),
+          "cg_cnt", sqc_build_ctx_.storage_schema_->get_column_group_count(),
           "slice_cnt", sqc_build_ctx_.sorted_slice_writers_.count(),
           K(thread_cnt), K(thread_id), K(start_idx), K(last_idx));
       if (OB_FAIL(fill_aggregated_column_group(thread_id, start_idx, last_idx, sqc_build_ctx_.storage_schema_, fill_cg_finish_count, row_cnt, arena_allocator))) {
@@ -2291,9 +2290,20 @@ int ObTabletDirectLoadMgr::fill_aggregated_column_group(
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory for co writer failed", K(ret));
   } else {
-    const ObIArray<ObStorageColumnGroupSchema> &cg_schemas = storage_schema->get_column_groups();
-    for (int64_t cg_idx = 0; OB_SUCC(ret) && cg_idx < cg_schemas.count(); ++cg_idx) {
+    ObStorageCGSchemaIterator cg_iterator(*storage_schema);
+    while (OB_SUCC(ret)) {
       cur_writer->reset();
+      const ObStorageColumnGroupSchema *cg_schema = nullptr;
+      int64_t cg_idx = -1; // column group id in table key
+      int64_t iter_idx = -1;
+      if (OB_FAIL(cg_iterator.next(cg_schema, cg_idx, iter_idx))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("fail to get next cg schema", K(ret));
+        } else {
+          ret = OB_SUCCESS;
+        }
+        break;
+      }
       if (start_idx == last_idx || start_idx >= sqc_build_ctx_.sorted_slice_writers_.count() || last_idx > sqc_build_ctx_.sorted_slice_writers_.count()) {
         // skip
       } else {
@@ -2313,9 +2323,9 @@ int ObTabletDirectLoadMgr::fill_aggregated_column_group(
             if (OB_ISNULL(slice_writer)) { /* complement dag path may not exec prepare_slice_store ignore check need_column_store */
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("wrong slice writer",  K(ret));
-            } else if (OB_FAIL(slice_writer->fill_aggregated_column_group(cg_idx, cur_writer, insert_monitor))) {
-              LOG_WARN("slice writer rescan failed", K(ret), K(cg_idx), KPC(cur_writer));
-            } else if (cg_idx == cg_schemas.count() - 1) {
+            } else if (OB_FAIL(slice_writer->fill_aggregated_column_group(iter_idx, cur_writer, insert_monitor))) {
+              LOG_WARN("slice writer rescan failed", K(ret), K(iter_idx), KPC(cur_writer));
+            } else if (iter_idx == storage_schema->get_column_group_count() - 1) {
               // after fill last cg, inc finish cnt
               fill_row_cnt += slice_writer->get_row_count();
               ++fill_aggregated_cg_cnt;
@@ -3413,13 +3423,15 @@ int ObTabletFullDirectLoadMgr::init_ddl_table_store(
     } else if (ddl_param.table_key_.is_co_sstable()) {
       // add empty cg sstables
       ObCOSSTableV2 *co_sstable = static_cast<ObCOSSTableV2 *>(sstable_handle.get_table());
-      const ObIArray<ObStorageColumnGroupSchema> &cg_schemas = storage_schema->get_column_groups();
       ObTabletDDLParam cg_ddl_param = ddl_param;
       cg_ddl_param.table_key_.table_type_ = ObITable::TableType::DDL_MERGE_CG_SSTABLE;
-      for (int64_t i = 0; OB_SUCC(ret) && i < cg_schemas.count(); ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < storage_schema->get_column_group_count(); i++) {
         ObTableHandleV2 cur_handle;
-        cg_ddl_param.table_key_.column_group_idx_ = static_cast<uint16_t>(i);
-        if (table_key_.get_column_group_id() == i) {
+        int64_t cg_idx = -1;
+        if (OB_FAIL(storage_schema->convert_iter_idx_to_column_group_idx(i, cg_idx))) {
+          LOG_WARN("fail to convert iter idx to column group idx", K(ret), K(i));
+        } else if (FALSE_IT(cg_ddl_param.table_key_.column_group_idx_ = static_cast<uint16_t>(cg_idx))) {
+        } else if (table_key_.get_column_group_id() == cg_idx) {
           // skip base cg idx
         } else if (OB_FAIL(ObTabletDDLUtil::create_ddl_sstable(*tablet_handle.get_obj(), cg_ddl_param, empty_meta_array, ObArray<MacroBlockId>(),
                 nullptr/*first_ddl_sstable*/, storage_schema, nullptr /* mutext not need */, tmp_arena, cur_handle))) {
@@ -3450,7 +3462,6 @@ int ObTabletFullDirectLoadMgr::init_ddl_table_store(
           "need_process_cs_replica", need_process_cs_replica_,
           "need_fill_column_group", need_fill_column_group_,
           "replay_normal_in_cs_replica", replay_normal_in_cs_replica,
-          "column_group_schemas", storage_schema->get_column_groups(),
           "update_table_store_param", param, K(start_scn), K(snapshot_version), K(ddl_checkpoint_scn));
     }
   }

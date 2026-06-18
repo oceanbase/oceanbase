@@ -436,7 +436,8 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
         LOG_WARN("failed to check ttl schema valid", K(ret));
       } else if (OB_FAIL(ObCompactionTTLUtil::check_alter_merge_engine_valid(
                      *table_schema_,
-                     alter_table_stmt->get_alter_table_arg().alter_table_schema_))) {
+                     alter_table_stmt->get_alter_table_arg().alter_table_schema_,
+                     *schema_checker_->get_schema_guard()))) {
         LOG_WARN("failed to check append_only engine valid", K(ret));
       }
     }
@@ -8144,24 +8145,28 @@ int ObAlterTableResolver::resolve_alter_column_groups(const ParseNode &node)
         } else if (OB_ISNULL(delayed_node)) {
           alter_table_stmt->get_alter_table_arg().is_alter_column_group_delayed_ = false;
         } else if (T_ALTER_COLUMN_GROUP_DELAYED == delayed_node->type_) {
-          if (T_COLUMN_GROUP_DROP == column_group_node->type_) {
-            ret = OB_NOT_SUPPORTED;
-            SQL_RESV_LOG(WARN, "drop column group in delayed mode is not supported", K(ret));
-          } else {
-            alter_table_stmt->get_alter_table_arg().is_alter_column_group_delayed_ = true;
-            SQL_RESV_LOG(INFO, "set is_alter_column_group_delayed_ to true");
-          }
+          alter_table_stmt->get_alter_table_arg().is_alter_column_group_delayed_ = true;
+          SQL_RESV_LOG(INFO, "set is_alter_column_group_delayed_ to true");
         } else {
           ret = OB_ERR_UNEXPECTED;
           SQL_RESV_LOG(WARN, "invalid alter column group delayed type", K(ret), "type", delayed_node->type_);
         }
       }
 
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(parse_column_group(column_group_node,
-                                            *table_schema_,
-                                            alter_table_schema,
-                                            alter_table_stmt->get_alter_table_arg().is_alter_column_group_delayed_))) {
+      if (OB_SUCC(ret)) {
+        if (alter_table_stmt->get_alter_table_arg().is_alter_column_group_delayed_ &&
+            alter_table_stmt->get_alter_table_arg().alter_table_schema_.alter_type_ == OB_DDL_DROP_COLUMN_GROUP &&
+            compat_version < DATA_VERSION_4_6_1_0) {
+          ret = OB_NOT_SUPPORTED;
+          SQL_RESV_LOG(WARN, "drop column group delayed gets unsupported data_version", K(ret), K(compat_version), K(node.num_child_));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.6.1, drop column group delayed");
+        }
+      }
+
+      if (FAILEDx(parse_column_group(column_group_node,
+                                     *table_schema_,
+                                     alter_table_schema,
+                                     alter_table_stmt->get_alter_table_arg().is_alter_column_group_delayed_))) {
         LOG_WARN("fail to parse column gorup list", K(ret));
       }
     }

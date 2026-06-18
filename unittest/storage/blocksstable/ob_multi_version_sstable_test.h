@@ -229,14 +229,15 @@ public:
   void prepare_one_macro(
       const char **micro_data,
       const int64_t micro_cnt,
-      const bool contain_uncommitted = false);
+      const bool contain_uncommitted = false,
+      const bool set_merge_engine = true);
   void prepare_data_end(
     ObTableHandleV2 &handle,
     const ObITable::TableType &table_type = ObITable::MINI_SSTABLE,
     const uint16_t column_idx = 0,
     const int64_t min_merged_trans_version = 0,
     const int64_t max_merged_trans_version = INT64_MAX);
-  void append_micro_block(ObMockIterator &data_iter);
+  void append_micro_block(ObMockIterator &data_iter, const bool set_merge_engine = true);
   void build_sstable(
       ObTabletMergeCtx &ctx,
       ObSSTable *&merged_sstable)
@@ -513,7 +514,8 @@ void ObMultiVersionSSTableTest::reset_writer(
 void ObMultiVersionSSTableTest::prepare_one_macro(
     const char **micro_data,
     const int64_t micro_cnt,
-    const bool contain_uncommitted)
+    const bool contain_uncommitted,
+    const bool set_merge_engine)
 {
   int64_t parsed_micro_cnt = 0;
   ASSERT_TRUE(data_iter_cursor_ < MAX_MICRO_BLOCK_CNT);
@@ -522,7 +524,7 @@ void ObMultiVersionSSTableTest::prepare_one_macro(
     macro_writer_.macro_blocks_[macro_writer_.current_index_].update_max_merged_trans_version(INT64_MAX);
   }
   if (0 == data_iter_cursor_) {
-    append_micro_block(data_iter_[0]);
+    append_micro_block(data_iter_[0], set_merge_engine);
     if (1 == micro_cnt) {
       OK(macro_writer_.build_micro_block());
       OK(macro_writer_.try_switch_macro_block());
@@ -535,7 +537,7 @@ void ObMultiVersionSSTableTest::prepare_one_macro(
 
   for (; parsed_micro_cnt < micro_cnt && data_iter_cursor_ < MAX_MICRO_BLOCK_CNT;) {
     OK(data_iter_[data_iter_cursor_].from(micro_data[parsed_micro_cnt]));
-    append_micro_block(data_iter_[data_iter_cursor_]);
+    append_micro_block(data_iter_[data_iter_cursor_], set_merge_engine);
     parsed_micro_cnt++;
     data_iter_cursor_++;
     if (micro_cnt == parsed_micro_cnt) {
@@ -547,13 +549,19 @@ void ObMultiVersionSSTableTest::prepare_one_macro(
   }
 }
 
-void ObMultiVersionSSTableTest::append_micro_block(ObMockIterator &data_iter)
+void ObMultiVersionSSTableTest::append_micro_block(ObMockIterator &data_iter, const bool set_merge_engine)
 {
   const ObStoreRow *row = nullptr;
   for (int64_t i = 0; i < data_iter.count(); i++) {
     OK(data_iter.get_row(i, row));
     ASSERT_TRUE(nullptr != row);
     datum_row_.from_store_row(*row);
+    if (set_merge_engine) {
+      datum_row_.merge_engine_type_ = table_schema_.get_merge_engine_type();
+    } else if (datum_row_.is_merge_engine_unknown_row()) {
+      // convert unknown row to max row
+      datum_row_.merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_MAX;
+    }
     ASSERT_EQ(OB_SUCCESS, macro_writer_.append_row(datum_row_));
   }
 }

@@ -350,12 +350,6 @@ public:
                                  ObTableSchema *&table_schema);
 
   template<typename T>
-  static int retrieve_column_group_schema(const uint64_t tenant_id,
-                                          const bool check_deleted,
-                                          T &result,
-                                          ObTableSchema *&table_schema);
-
-  template<typename T>
   static int retrieve_column_group_mapping(const uint64_t tenant_id,
                                            const bool check_deleted,
                                            T &result,

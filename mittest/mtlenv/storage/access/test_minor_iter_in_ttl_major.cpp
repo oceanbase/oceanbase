@@ -78,7 +78,7 @@ public:
         trans_version_range,
         &merge_dag_,
         merge_context,
-        false /* is_delete_insert_merge */);
+        ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE);
   }
 
 private:

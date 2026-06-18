@@ -20,6 +20,7 @@ using namespace blocksstable;
 
 namespace compaction
 {
+ERRSIM_POINT_DEF(EN_CHECK_ROW_MERGE_ENGINE_TYPE, "Whether check merge engine type when write rows in mini/minor merge");
 
 /*
  *ObDataDescHelper
@@ -113,7 +114,7 @@ int ObMerger::basic_prepare(ObBasicTabletMergeCtx &ctx, const int64_t idx)
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObMergerBasic::basic_prepare(ctx, idx))) {
     LOG_WARN("Failed to do basic prepare", K(ret));
-  } else if (OB_FAIL(ObMergeFuserBuilder::build(merge_param_, ctx.static_desc_.major_working_cluster_version_, merger_arena_, partition_fuser_))) {
+  } else if (OB_FAIL(ObMergeFuserBuilder::build(merge_param_, ctx.static_desc_.major_working_cluster_version_, merger_arena_, partition_fuser_, use_co_inc_fuser()))) {
     LOG_WARN("failed to build partition fuser", K(ret), K(merge_param_));
   } else if (OB_FAIL(filter_handle_.init(ctx.get_compaction_filter(), ctx.get_filter_col_idxs()))) {
     LOG_WARN("failed to init filter handle", K(ret), K(ctx));
@@ -547,6 +548,18 @@ int ObPartitionMerger::process(
     STORAGE_LOG(WARN, "Failed to check row columns", K(ret), K(row));
   } else if (OB_FAIL(inner_process(row, is_incremental_row))) {
     STORAGE_LOG(WARN, "Failed to inner append row", K(ret));
+  } else {
+    // TODO@wenye: just for test, move to errism later
+    if (OB_UNLIKELY(OB_SUCCESS != EN_CHECK_ROW_MERGE_ENGINE_TYPE)) {
+      if (OB_UNLIKELY(!is_major_merge_type(merge_param_.static_param_.get_merge_type()) &&
+                      !is_mds_merge(merge_param_.static_param_.get_merge_type()) &&
+                      merge_param_.static_param_.get_tablet_id().is_user_tablet() &&
+                      !ObMergeEngineStoreFormat::is_merge_engine_valid_with_unknown(row.merge_engine_type_))) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "Unexpected merge engine type", K(ret), K(row), K(lbt()));
+      }
+    }
+    LOG_DEBUG("append row", K(ret), K(row));
   }
   return ret;
 }
@@ -1448,7 +1461,7 @@ int ObPartitionMinorMerger::try_remove_ghost_iters(MERGE_ITER_ARRAY &merge_iters
       } else {
         LOG_TRACE("try to remove useless row which consists of ghost rows only",
             KPC(minimum_iters.at(0)), K(rowkey_first_row), K(iter_idxs));
-        if (OB_FAIL(move_and_remove_unused_iters(merge_iters, minimum_iters, iter_idxs))) {
+        if (OB_FAIL(move_and_remove_unused_iters(merge_iters, minimum_iters, iter_idxs, false))) {
           STORAGE_LOG(WARN, "Failed to move and remove iters", K(ret));
         }
       }
@@ -1481,6 +1494,7 @@ int ObPartitionMinorMerger::merge_same_rowkey_iters(
     // base iter always iters the row with newer version
     while (OB_SUCC(ret) && (!merge_iters.empty() || row_queue_.has_next())) {
       bool add_shadow_row = false;
+      bool is_delete_insert_merge = false;
       MERGE_ITER_ARRAY *fuse_iters = &minimum_iters_;
       if (row_queue_.has_next()) {
         const ObDatumRow *curr_row = nullptr;
@@ -1519,11 +1533,15 @@ int ObPartitionMinorMerger::merge_same_rowkey_iters(
       } else if (OB_ISNULL(base_iter->get_curr_row())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "Unexpected ghost row", K(ret), KPC(base_iter));
+      } else if (OB_FAIL(storage::check_is_delete_insert_merge(base_iter->get_curr_row()->merge_engine_type_,
+                                                               is_delete_insert_merge,
+                                                               data_store_desc_.decide_merge_by_row()))) {
+        LOG_WARN("Failed to check is delete insert merge", K(ret), KPC(base_iter->get_curr_row()));
       } else if (shadow_already_output && base_iter->get_curr_row()->is_shadow_row()) {
         if (OB_UNLIKELY(1 != minimum_iters_.count())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Unexpected minimum shadow row iters", K(ret), K(minimum_iters_));
-        } else if (OB_FAIL(move_and_remove_unused_iters(merge_iters, minimum_iters_, minimum_iter_idxs_))) {
+        } else if (OB_FAIL(move_and_remove_unused_iters(merge_iters, minimum_iters_, minimum_iter_idxs_, is_delete_insert_merge))) {
           LOG_WARN("Failed to move and remove iters", K(ret));
         } else {
           continue;
@@ -1540,7 +1558,7 @@ int ObPartitionMinorMerger::merge_same_rowkey_iters(
       }
 
       if (OB_FAIL(ret)) {
-      } else if (merge_param_.is_delete_insert_merge() && 1 < minimum_iters_.count()) {
+      } else if (is_delete_insert_merge && 1 < minimum_iters_.count()) {
         if (OB_FAIL(compact_delete_insert_iters(merge_iters, minimum_iters_, minimum_iter_idxs_, add_shadow_row))) {
           LOG_WARN("Fail to compact delete insert iters", K(ret));
         } else if (add_shadow_row) {
@@ -1564,7 +1582,7 @@ int ObPartitionMinorMerger::merge_same_rowkey_iters(
           if (OB_FAIL(skip_shadow_row(*fuse_iters))) {
             LOG_WARN("Failed to skip shadow row", K(ret), K(merge_iters));
           }
-        } else if (OB_FAIL(move_and_remove_unused_iters(merge_iters, minimum_iters_, minimum_iter_idxs_))) {
+        } else if (OB_FAIL(move_and_remove_unused_iters(merge_iters, minimum_iters_, minimum_iter_idxs_, is_delete_insert_merge))) {
           LOG_WARN("Failed to move and remove iters", K(ret));
         }
       }
@@ -1665,7 +1683,9 @@ int ObPartitionMinorMerger::compact_delete_insert_iters(MERGE_ITER_ARRAY &merge_
   return ret;
 }
 
-int ObPartitionMinorMerger::check_add_shadow_row(MERGE_ITER_ARRAY &merge_iters, const bool contain_multi_trans, bool& add_shadow_row)
+int ObPartitionMinorMerger::check_add_shadow_row(MERGE_ITER_ARRAY &merge_iters,
+                                                 const bool contain_multi_trans,
+                                                 bool& add_shadow_row)
 {
   int ret = OB_SUCCESS;
   add_shadow_row = false;
@@ -1691,17 +1711,18 @@ int ObPartitionMinorMerger::check_add_shadow_row(MERGE_ITER_ARRAY &merge_iters, 
 
 int ObPartitionMinorMerger::move_and_remove_unused_iters(MERGE_ITER_ARRAY &merge_iters,
                                                          MERGE_ITER_ARRAY &minimum_iters,
-                                                         ObIArray<int64_t> &iter_idxs)
+                                                         ObIArray<int64_t> &iter_idxs,
+                                                         const bool is_delete_insert_merge)
 {
   int ret = OB_SUCCESS;
   bool need_remove = false;
-  if (merge_param_.is_delete_insert_merge() && 1 < minimum_iters.count()) {
+  if (is_delete_insert_merge && 1 < minimum_iters.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected merge iters in delete insert", K(ret), K(minimum_iters));
   } else {
     for (int64_t i = minimum_iters.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
       if (OB_FAIL(move_and_remove_unused_iter(merge_iters, minimum_iters.at(i), iter_idxs.at(i), need_remove))) {
-        LOG_WARN("Fail to move_and_remove_unused_iter", K(ret));
+        LOG_WARN("Fail to move_and_remove_unused_iter", K(ret), K(i), K(is_delete_insert_merge));
       }
     }
   }

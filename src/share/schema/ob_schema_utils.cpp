@@ -1053,73 +1053,86 @@ int ObSchemaUtils::batch_get_table_schemas_by_version(
   return ret;
 }
 
-int ObSchemaUtils::alter_rowkey_column_group(share::schema::ObTableSchema &table_schema)
+int ObSchemaUtils::check_need_rowkey_column_group(
+    const share::schema::ObTableSchema &table_schema,
+    bool &need_rowkey_cg,
+    bool &need_hidden_rowkey_cg)
 {
   int ret = OB_SUCCESS;
   bool is_each_cg_exist = false;
   bool is_all_cg_exist = false;
-  ObColumnGroupSchema *rowkey_cg = nullptr;
-  /* scan all column column group*/
+  bool allow_hidden_rowkey_cg = false;
 
-  /*get rowkey_cg*/
-  if (OB_FAIL(table_schema.get_column_group_by_name(OB_ROWKEY_COLUMN_GROUP_NAME, rowkey_cg))) {
+  if (OB_FAIL(table_schema.is_column_group_exist(OB_ALL_COLUMN_GROUP_NAME, is_all_cg_exist))) {
+    LOG_WARN("Fail to check whether all column group exist", K(ret));
+  } else if (OB_FAIL(table_schema.is_column_group_exist(OB_EACH_COLUMN_GROUP_NAME, is_each_cg_exist))) {
+    LOG_WARN("Fail to check whether each column group exist", K(ret));
+  } else if (OB_FAIL(check_allow_hidden_rowkey_column_group(table_schema, allow_hidden_rowkey_cg))) {
+    LOG_WARN("fail to check allow hidden rowkey column group", K(ret), K(table_schema));
+  } else {
+    need_rowkey_cg = !is_all_cg_exist && is_each_cg_exist;
+    need_hidden_rowkey_cg = is_all_cg_exist && is_each_cg_exist && allow_hidden_rowkey_cg;
+  }
+  return ret;
+}
+
+int ObSchemaUtils::alter_rowkey_column_group(share::schema::ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+
+  const ObColumnGroupSchema *hidden_rowkey_cg = table_schema.get_hidden_rowkey_column_group();
+  ObColumnGroupSchema *rowkey_cg = nullptr;
+  if (OB_FAIL(table_schema.check_column_group_valid())) {
+    LOG_WARN("fail to check column group valid", K(ret), K(table_schema));
+  } else if (OB_FAIL(table_schema.get_column_group_by_name(OB_ROWKEY_COLUMN_GROUP_NAME, rowkey_cg))) {
     if (OB_HASH_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
-      rowkey_cg = nullptr;
     } else {
-      LOG_WARN("Fail to get rowkey column group", K(ret), K(table_schema));
+      LOG_WARN("fail to get rowkey column group", K(ret), K(table_schema));
+    }
+  } else {
+    rowkey_cg = (nullptr != hidden_rowkey_cg) ? nullptr : rowkey_cg;
+  }
+
+  bool need_rowkey_cg = false;
+  bool need_hidden_rowkey_cg = false;
+  if (FAILEDx(check_need_rowkey_column_group(table_schema, need_rowkey_cg, need_hidden_rowkey_cg))) {
+    LOG_WARN("fail to check need rowkey column group", K(ret), K(table_schema));
+  } else if ((!need_rowkey_cg && nullptr != rowkey_cg)
+          || (!need_hidden_rowkey_cg && nullptr != hidden_rowkey_cg)) {
+    if (OB_FAIL(table_schema.remove_column_group(OB_ROWKEY_COLUMN_GROUP_NAME))) {
+      LOG_WARN("fail to remove rowkey column group", K(ret));
     }
   }
 
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.is_column_group_exist(OB_ALL_COLUMN_GROUP_NAME, is_all_cg_exist))) {
-      LOG_WARN("Fail to check whetehre all column group exist", K(ret));
-    } else if (OB_FAIL(table_schema.is_column_group_exist(OB_EACH_COLUMN_GROUP_NAME, is_each_cg_exist))) {
-      LOG_WARN("Fail to check whether each column group exist", K(ret));
+  if (OB_FAIL(ret)) {
+  } else if ((need_rowkey_cg && nullptr == rowkey_cg)
+          || (need_hidden_rowkey_cg && nullptr == hidden_rowkey_cg)) {
+    ObSEArray<uint64_t, 8> rowkey_ids;
+    ObTableSchema::const_column_iterator iter_begin = table_schema.column_begin();
+    ObTableSchema::const_column_iterator iter_end = table_schema.column_end();
+    for (; OB_SUCC(ret) && iter_begin != iter_end; ++iter_begin) {
+      ObColumnSchemaV2 *column = (*iter_begin);
+      if (OB_ISNULL(column)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column schema should not be null", K(ret));
+      } else if (column->is_rowkey_column()) {
+        if (OB_FAIL(rowkey_ids.push_back(column->get_column_id()))) {
+          LOG_WARN("fail to push back value", K(ret));
+        }
+      }
     }
-  }
 
-
-  if (OB_SUCC(ret)) {
-    /* only when only each exist, rowkey_cg is needed*/
-    if (is_each_cg_exist && (!is_all_cg_exist)) {
-      if (OB_ISNULL(rowkey_cg)) {
-        ObColumnGroupSchema new_rowkey_cg;
-        ObArray<uint64_t> rowkey_ids;
-        ObTableSchema::const_column_iterator iter_begin = table_schema.column_begin();
-        ObTableSchema::const_column_iterator iter_end = table_schema.column_end();
-        for (; OB_SUCC(ret) && iter_begin != iter_end; ++iter_begin) {
-          ObColumnSchemaV2 *column = (*iter_begin);
-          if (OB_ISNULL(column)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("column schema should not be null", K(ret));
-          } else if (column->is_rowkey_column()) {
-            if (OB_FAIL(rowkey_ids.push_back(column->get_column_id()))) {
-              LOG_WARN("fail to push back value", K(ret));
-            }
-          }
-        }
-        bool build_old_version_cg = false;
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(ObSchemaUtils::check_build_old_version_column_group(table_schema, build_old_version_cg))) {
-          LOG_WARN("fail to check build old version column group", K(ret), K(table_schema));
-        } else if (OB_FAIL(ObSchemaUtils::build_column_group(
-                               table_schema, table_schema.get_tenant_id(),ObColumnGroupType::ROWKEY_COLUMN_GROUP,
-                               OB_ROWKEY_COLUMN_GROUP_NAME, rowkey_ids, build_old_version_cg ? table_schema.get_max_used_column_group_id() + 1 : ROWKEY_COLUMN_GROUP_ID, new_rowkey_cg))) {
-          LOG_WARN("fail to build rowkey column group", K(ret));
-        } else if (OB_FAIL(table_schema.add_column_group(new_rowkey_cg))) {
-          LOG_WARN("fail to add rowkey column group to table_schema", K(ret));
-        }
-      } else {
-        /*rowkey cg exist skip*/
-      }
-    } else {
-      /*other situation, rowkey column group should not exist*/
-      if (OB_NOT_NULL(rowkey_cg)) {
-        if (OB_FAIL(table_schema.remove_column_group(rowkey_cg->get_column_group_name()))){
-          LOG_WARN("fail to remove rowkey cg", K(ret));
-        }
-      }
+    ObColumnGroupSchema new_rowkey_cg;
+    bool build_old_version_cg = false;
+    if (FAILEDx(ObSchemaUtils::check_build_old_version_column_group(table_schema, build_old_version_cg))) {
+      LOG_WARN("fail to check build old version column group", K(ret), K(table_schema));
+    } else if (OB_FAIL(ObSchemaUtils::build_column_group(table_schema, table_schema.get_tenant_id(),
+                                                         ObColumnGroupType::ROWKEY_COLUMN_GROUP, OB_ROWKEY_COLUMN_GROUP_NAME, rowkey_ids,
+                                                         build_old_version_cg ? table_schema.get_max_used_column_group_id() + 1 : ROWKEY_COLUMN_GROUP_ID, new_rowkey_cg))) {
+      LOG_WARN("fail to build rowkey column group", K(ret));
+    } else if (OB_FAIL(table_schema.add_column_group(new_rowkey_cg))) {
+      LOG_WARN("fail to add rowkey column group to table_schema", K(ret));
     }
   }
   return ret;
@@ -1629,6 +1642,32 @@ int ObSchemaUtils::check_build_old_version_column_group(const share::schema::ObT
   } else if (data_version < DATA_VERSION_4_3_5_0) {
     build_old_version_cg = true;
   }
+  return ret;
+}
+
+ERRSIM_POINT_DEF(ERRSIM_DISABLE_HIDDEN_ROWKEY_CG);
+int ObSchemaUtils::check_allow_hidden_rowkey_column_group(
+    const share::schema::ObTableSchema &table_schema,
+    bool &allow_hidden_rowkey_cg)
+{
+  int ret = OB_SUCCESS;
+  allow_hidden_rowkey_cg = false;
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema.get_tenant_id(), data_version))) {
+    LOG_WARN("failed to get min data version", K(ret), K(table_schema.get_tenant_id()), K(data_version));
+  } else {
+    if (data_version >= DATA_VERSION_4_6_1_0) {
+      allow_hidden_rowkey_cg = true;
+    }
+
+    if (OB_UNLIKELY(ERRSIM_DISABLE_HIDDEN_ROWKEY_CG)) {
+      allow_hidden_rowkey_cg = false;
+      ret = OB_SUCCESS;
+      FLOG_INFO("ERRSIM_DISABLE_HIDDEN_ROWKEY_CG: disable hidden rowkey cg", K(ret), "table_id", table_schema.get_table_id());
+    }
+  }
+
+  FLOG_INFO("check allow hidden rowkey cg", K(data_version), K(allow_hidden_rowkey_cg));
   return ret;
 }
 

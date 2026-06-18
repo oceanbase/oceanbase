@@ -200,7 +200,7 @@ int ObRowGetter::init_dml_access_param(ObRelativeTable &relative_table,
   relative_table_ = &relative_table;
 
   const share::schema::ObTableSchemaParam *schema_param = relative_table.get_schema_param();
-  if (OB_FAIL(get_table_param_.tablet_iter_.assign(relative_table.tablet_iter_))) {
+  if (OB_FAIL(tablet_read_tables_.tablet_iter_.assign(relative_table.tablet_iter_))) {
     LOG_WARN("assign tablet iterator fail", K(ret));
   }
   for (int32_t i = 0; OB_SUCC(ret) && i < out_col_ids.count(); ++i) {
@@ -357,7 +357,7 @@ bool ObRowGetter::can_use_global_iter_pool(const ObDMLBaseParam &dml_param) cons
   if (access_param_.iter_param_.tablet_id_.is_inner_tablet()) {
   } else if (access_param_.iter_param_.has_lob_column_out_) {
   } else {
-    const int64_t table_cnt = get_table_param_.tablet_iter_.table_iter()->count();
+    const int64_t table_cnt = tablet_read_tables_.tablet_iter_.table_iter()->count();
     const int64_t col_cnt = dml_param.table_param_->get_data_table().get_read_info().get_schema_column_count();
     ObGlobalIteratorPool *iter_pool = MTL(ObGlobalIteratorPool*);
     if (OB_NOT_NULL(iter_pool)) {
@@ -390,7 +390,7 @@ int ObRowGetter::init_single_merge()
       STORAGE_LOG(WARN, "Fail to allocate memory", K(ret));
     } else {
       single_merge_ = new (buf) ObSingleMerge();
-      if (OB_FAIL(single_merge_->init(access_param_, access_ctx_, get_table_param_))) {
+      if (OB_FAIL(single_merge_->init(access_param_, access_ctx_, tablet_read_tables_))) {
         STORAGE_LOG(WARN, "Failed to init multiple merge", K(ret));
       }
       if (OB_FAIL(ret)) {
@@ -401,7 +401,7 @@ int ObRowGetter::init_single_merge()
         cached_iter_node_->set_iter(single_merge_);
       }
     }
-  } else if (OB_FAIL(single_merge_->switch_table(access_param_, access_ctx_, get_table_param_))) {
+  } else if (OB_FAIL(single_merge_->switch_table(access_param_, access_ctx_, tablet_read_tables_))) {
     STORAGE_LOG(WARN, "Failed to switch table", K(ret), K(access_param_));
   }
   return ret;
@@ -430,7 +430,7 @@ int ObRowGetter::init_multi_get_merge()
       STORAGE_LOG(WARN, "Fail to allocate memory", K(ret));
     } else {
       multi_get_merge_ = new (buf) ObMultipleGetMerge();
-      if (OB_FAIL(multi_get_merge_->init(access_param_, access_ctx_, get_table_param_))) {
+      if (OB_FAIL(multi_get_merge_->init(access_param_, access_ctx_, tablet_read_tables_))) {
         STORAGE_LOG(WARN, "Failed to init multiple merge", K(ret));
       }
       if (OB_FAIL(ret)) {
@@ -441,7 +441,7 @@ int ObRowGetter::init_multi_get_merge()
         cached_iter_node_->set_iter(multi_get_merge_);
       }
     }
-  } else if (OB_FAIL(multi_get_merge_->switch_table(access_param_, access_ctx_, get_table_param_))) {
+  } else if (OB_FAIL(multi_get_merge_->switch_table(access_param_, access_ctx_, tablet_read_tables_))) {
     STORAGE_LOG(WARN, "Failed to switch table", K(ret), K(access_param_));
   }
   return ret;

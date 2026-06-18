@@ -257,7 +257,7 @@ int ObPxMultiPartSSTableInsertOp::get_next_row_from_child(ObInsertMonitor *inser
   if (OB_SUCC(ret) && nullptr != insert_monitor && nullptr != ddl_dag_) {
     insert_monitor->inserted_row_cnt_++;
     if (ddl_dag_->get_ddl_table_schema().table_item_.is_column_store_) {
-      const int64_t cg_count = ddl_dag_->get_ddl_table_schema().storage_schema_->get_column_groups().count();
+      const int64_t cg_count = ddl_dag_->get_ddl_table_schema().storage_schema_->get_column_group_count();
       insert_monitor->inserted_cg_row_cnt_ += cg_count;
     }
     if (ddl_dag_->get_ddl_task_param().is_partition_local_
@@ -281,7 +281,7 @@ int ObPxMultiPartSSTableInsertOp::get_next_batch_from_child(const int64_t max_ba
   if (OB_SUCC(ret) && nullptr != insert_monitor && nullptr != ddl_dag_ && nullptr != brs) {
     insert_monitor->inserted_row_cnt_ += brs->size_;
     if (ddl_dag_->get_ddl_table_schema().table_item_.is_column_store_) {
-      const int64_t cg_count = ddl_dag_->get_ddl_table_schema().storage_schema_->get_column_groups().count();
+      const int64_t cg_count = ddl_dag_->get_ddl_table_schema().storage_schema_->get_column_group_count();
       insert_monitor->inserted_cg_row_cnt_ += brs->size_ * cg_count;
     }
     if (ddl_dag_->get_ddl_task_param().is_partition_local_

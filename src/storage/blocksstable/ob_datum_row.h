@@ -342,8 +342,9 @@ struct MultiVersionInfo
   transaction::ObTransID trans_id_;
   ObMultiVersionRowFlag mvcc_row_flag_;
   ObDmlRowFlag dml_row_flag_;
+  ObMergeEngineType merge_engine_type_;
 
-  TO_STRING_KV(K_(dml_row_flag), K_(mvcc_row_flag), K_(trans_id));
+  TO_STRING_KV(K_(dml_row_flag), K_(mvcc_row_flag), K_(trans_id), K_(merge_engine_type));
 };
 
 struct ObDatumRow
@@ -400,12 +401,20 @@ public:
   OB_INLINE bool is_first_multi_version_row() const { return mvcc_row_flag_.is_first_multi_version_row(); }
   OB_INLINE bool is_last_multi_version_row() const { return mvcc_row_flag_.is_last_multi_version_row(); }
   OB_INLINE bool is_shadow_row() const { return mvcc_row_flag_.is_shadow_row(); }
+  OB_INLINE bool is_di_merge_engine_row() const { return ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT == merge_engine_type_; }
+  OB_INLINE bool is_merge_engine_unknown_row() const { return ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN == merge_engine_type_; }
   OB_INLINE void set_compacted_multi_version_row() { mvcc_row_flag_.set_compacted_multi_version_row(true); }
   OB_INLINE void set_first_multi_version_row() { mvcc_row_flag_.set_first_multi_version_row(true); }
   OB_INLINE void set_last_multi_version_row() { mvcc_row_flag_.set_last_multi_version_row(true); }
   OB_INLINE void set_shadow_row() { mvcc_row_flag_.set_shadow_row(true); }
   OB_INLINE void set_uncommitted_row() { mvcc_row_flag_.set_uncommitted_row(true); }
   OB_INLINE void set_multi_version_flag(const ObMultiVersionRowFlag &multi_version_flag) { mvcc_row_flag_ = multi_version_flag; }
+  OB_INLINE void fuse_merge_engine_type(const ObMergeEngineType merge_engine_type)
+  {
+    if (ObMergeEngineType::OB_MERGE_ENGINE_MAX == merge_engine_type_) {
+      merge_engine_type_ = merge_engine_type;
+    }
+  }
   /*
    *row estimate section
    */

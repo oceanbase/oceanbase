@@ -548,6 +548,8 @@ int ObIndexBuildTask::init(
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(index_schema->get_store_column_group_count(target_cg_cnt_))) {
       LOG_WARN("fail to get column group cnt", K(ret), K(index_schema));
+    } else if (nullptr != index_schema->get_hidden_rowkey_column_group()) {
+      ++target_cg_cnt_;
     }
     ddl_tracing_.open();
   }

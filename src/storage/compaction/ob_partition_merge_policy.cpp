@@ -2343,7 +2343,7 @@ int ObCOMajorMergePolicy::decide_major_sstable_status(
     } else if (co_sstable->is_rowkey_cg_base()) {
       status = EACH_CG;
     } else if (co_sstable->is_all_cg_base()) {
-      status = ALL_EACH_CG;
+      status = co_sstable->has_hidden_rowkey_cg() ? ALL_EACH_HIDDEN_CG : ALL_EACH_CG;
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected co sstable", K(ret), KPC(co_sstable));
@@ -2371,6 +2371,9 @@ bool ObCOMajorMergePolicy::is_status_match_schema(
       break;
     case EACH_CG:
       match = !schema_has_all_cg;
+      break;
+    case ALL_EACH_HIDDEN_CG:
+      match = schema.has_hidden_rowkey_column_group();
       break;
     default:
       match = false;

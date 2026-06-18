@@ -571,6 +571,8 @@ int ObSharedMacroBlockMgr::update_tablet(
       LOG_WARN("the sstable is null or invalid", K(ret));
     } else if (OB_FAIL(sstable->get_meta(meta_handle))) {
       LOG_WARN("get meta handle fail", K(ret), KPC(sstable));
+    } else if (sstable->is_column_store_sstable()) {
+      // online row-col switch: tablet is row store now, but major is still column store, just skip
     } else if (sstable->is_small_sstable()) {
       const int64_t data_block_count = meta_handle.get_sstable_meta().get_data_macro_block_count();
       ObMacroIdIterator id_iterator;
@@ -809,15 +811,9 @@ int ObSharedMacroBlockMgr::prepare_data_desc(
     ObStorageSchema *storage_schema = nullptr;
     if (OB_FAIL(tablet.load_storage_schema(tmp_arena, storage_schema))) {
     LOG_WARN("fail to load storage schema", K(ret), K(tablet));
-    } else {
-      if (table_key.is_cg_sstable()) {
-        if (OB_UNLIKELY(cg_idx < 0 || cg_idx >= storage_schema->get_column_group_count())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected cg idx", K(ret), K(cg_idx), KPC(storage_schema));
-        } else {
-          cg_schema = &storage_schema->get_column_groups().at(cg_idx);
-        }
-      }
+    } else if (table_key.is_normal_cg_sstable()
+            && OB_FAIL(storage_schema->get_cg_schema_with_column_group_idx(cg_idx, cg_schema))) {
+      LOG_WARN("failed to get column group schema", K(ret), K(cg_idx));
     }
 
     if (FAILEDx(data_desc.init(

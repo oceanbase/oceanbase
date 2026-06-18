@@ -493,6 +493,11 @@ int ObSSTableSplitWriteHelper::fill_tail_column_datums(
         write_row.storage_datums_[i].set_nop();
       }
     }
+    // old server will not set merge engine type, so we need to set it here.
+    if (OB_SUCC(ret) && write_row.is_merge_engine_unknown_row()
+        && OB_FAIL(context_->tablet_handle_.get_obj()->get_original_merge_engine_type(write_row.merge_engine_type_))) {
+      LOG_WARN("failed to get original merge engine type", K(ret));
+    }
   }
   return ret;
 }
@@ -881,7 +886,7 @@ int ObColSSTableSplitWriteHelper::prepare_index_read_info(
   } else if (OB_UNLIKELY(!init_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(init_param));
-  } else if (init_param.sstable_->is_cg_sstable()) {
+  } else if (init_param.sstable_->is_normal_cg_sstable()) {
     // rowkey cg/all cg.
     if (OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->get_index_read_info(index_read_info_))) {
       LOG_WARN("failed to get index read info from ObTenantCGReadInfoMgr", K(ret));
@@ -905,7 +910,7 @@ int ObColSSTableSplitWriteHelper::prepare_split_rowids(
   } else if (OB_UNLIKELY(!col_init_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(col_init_param));
-  } else if (col_init_param.sstable_->is_cg_sstable()) {
+  } else if (col_init_param.sstable_->is_normal_cg_sstable()) {
     if (OB_FAIL(end_partkey_rowids_.assign(col_init_param.end_partkey_rowids_))) {
       LOG_WARN("failed to assign end partkey rowids", K(ret));
     }
@@ -1003,16 +1008,16 @@ int ObColSSTableSplitWriteHelper::prepare_sstable_cg_infos(
     LOG_WARN("get multi version column descs failed", K(ret), K(clipped_storage_schema));
   } else {
     table_cg_idx = sstable.get_column_group_id();
-    const int64_t column_groups_cnt = clipped_storage_schema.get_column_group_count();
-    if (OB_UNLIKELY(table_cg_idx < 0 || table_cg_idx >= column_groups_cnt)) {
+    if (OB_FAIL(clipped_storage_schema.get_cg_schema_with_column_group_idx(table_cg_idx, cg_schema))) {
+      LOG_WARN("fail to get column group schema", K(ret), K(table_cg_idx), K(clipped_storage_schema));
+    } else if (OB_ISNULL(cg_schema)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected column group id", K(ret), K(table_cg_idx), K(column_groups_cnt), K(clipped_storage_schema));
+      LOG_WARN("get unexpected null cg schema", K(ret), K(table_cg_idx), K(clipped_storage_schema));
     } else if (sstable.is_cg_sstable()) {
-      cg_schema = &clipped_storage_schema.get_column_groups().at(table_cg_idx);
+      // do nothing
     } else {
       const ObCOSSTableV2 &co_sstable = static_cast<const ObCOSSTableV2&>(sstable);
-      cg_schema = &clipped_storage_schema.get_column_groups().at(table_cg_idx);
-      if (cg_schema->is_rowkey_column_group() && co_sstable.is_all_cg_base()) {
+      if (cg_schema->is_rowkey_column_group() && HIDDEN_ROWKEY_COLUMN_GROUP_IDX != table_cg_idx && co_sstable.is_all_cg_base()) {
         cg_schema = nullptr;
         if (OB_UNLIKELY(!co_sstable.is_cgs_empty_co_table())) {
           ret = OB_ERR_UNEXPECTED;

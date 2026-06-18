@@ -56,30 +56,46 @@ public:
 };
 typedef ObPodFix2dArray<ObVecBatchInfo, 1 << 20, common::OB_MALLOC_NORMAL_BLOCK_SIZE> ObVecBatchInfoArr;
 
-struct ObCSRowHeader
+struct ObCSRowMultiVersionHeader
 {
   static ObObjMeta TYPE;
   static ObObjMeta make_type() { ObObjMeta type; type.set_binary(); return type; }
   static constexpr uint8_t VERSION_1 = 0;
-  static constexpr uint8_t CURRENT_VERSION = VERSION_1;
+  static constexpr uint8_t VERSION_2 = 1; // Add merge_engine_type
+  static constexpr uint8_t CURRENT_VERSION = VERSION_2;
+  // ObCSRowMultiVersionHeader only exists in mini/minor sstable.
+  // So there is no need to consider the version compactibility for major merge.
   uint8_t version_;
   uint8_t row_flag_;
   uint8_t mvcc_flag_;
   uint64_t trans_id_;
-  uint8_t reserved_[5];
+  uint8_t merge_engine_type_;
+  uint8_t reserved_[4];
 
-  ObCSRowHeader()
+  ObCSRowMultiVersionHeader()
     : version_(CURRENT_VERSION),
       row_flag_(),
       mvcc_flag_(),
-      trans_id_()
+      trans_id_(),
+      merge_engine_type_(static_cast<uint8_t>(ObMergeEngineType::OB_MERGE_ENGINE_MAX)),
+      reserved_()
   {}
-  ObCSRowHeader(const ObDatumRow &row)
+  ObCSRowMultiVersionHeader(const ObDatumRow &row)
     : version_(CURRENT_VERSION),
       row_flag_(row.row_flag_.get_serialize_flag()),
       mvcc_flag_(row.mvcc_row_flag_.flag_),
-      trans_id_(row.trans_id_.get_id())
+      trans_id_(row.trans_id_.get_id()),
+      merge_engine_type_(static_cast<uint8_t>(row.merge_engine_type_)),
+      reserved_()
   {}
+  ObMergeEngineType get_merge_engine_type() const
+  {
+    if (version_ >= VERSION_2) {
+      return static_cast<ObMergeEngineType>(merge_engine_type_);
+    } else {
+      return ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN;
+    }
+  }
 } __attribute__((packed));
 
 // IS_MULTI_VERSION controls whether to store multi version data fileds(row_flag, mvcc_flag, trans_id)

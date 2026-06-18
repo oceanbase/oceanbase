@@ -967,6 +967,7 @@ int ObTxNode::write(ObTxDesc &tx,
   row.storage_datums_ = cols;
   row.row_flag_ = blocksstable::ObDmlFlag::DF_UPDATE;
   row.trans_id_.reset();
+  row.merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE;
 
   ObTableIterParam param;
   ObTableAccessContext context;
@@ -995,7 +996,8 @@ int ObTxNode::write(ObTxDesc &tx,
                              NULL, /*old_row*/
                              1,    /*row_count*/
                              false /*check_exist*/,
-                             encrypt_meta);
+                             encrypt_meta,
+                             ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE);
   OZ(memtable_->set(param, context, arg));
   int tmp_ret = OB_SUCCESS;
   if (OB_TMP_FAIL(txs_.revert_store_ctx(write_store_ctx))) {
@@ -1087,6 +1089,7 @@ int ObTxNode::write_one_row(ObStoreCtx& write_store_ctx, const int64_t key, cons
   row.row_flag_ = blocksstable::ObDmlFlag::DF_UPDATE;
   row.storage_datums_ = cols;
   row.count_ = 2;
+  row.merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE;
 
   ObTableIterParam param;
   ObTableAccessContext context;
@@ -1113,7 +1116,8 @@ int ObTxNode::write_one_row(ObStoreCtx& write_store_ctx, const int64_t key, cons
                              NULL, /*old_row*/
                              1,    /*row_count*/
                              false /*check_exist*/,
-                             encrypt_meta);
+                             encrypt_meta,
+                             ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE);
 
   OZ(memtable_->set(param, context, arg));
 

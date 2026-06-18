@@ -723,9 +723,11 @@ public:
   virtual inline int64_t get_progressive_merge_round() const { return INVAID_RET; }
   virtual inline int64_t get_progressive_merge_num() const { return INVAID_RET; }
   virtual inline ObMergeEngineType get_merge_engine_type() const { return ObMergeEngineType::OB_MERGE_ENGINE_MAX; }
+  virtual inline ObMergeEngineType get_original_merge_engine_type() const { return ObMergeEngineType::OB_MERGE_ENGINE_MAX; }
+  virtual inline bool is_original_delete_insert_merge_engine() const { return false; }
+  virtual inline bool is_partial_update_merge_engine() const { return true; }
   virtual inline bool is_delete_insert_merge_engine() const { return false; }
   virtual inline bool is_append_only_merge_engine() const { return false; }
-  virtual inline bool is_partial_update_merge_engine() const { return false; }
   virtual inline ObSkipIndexLevel get_skip_index_level() const { return ObSkipIndexLevel::OB_SKIP_INDEX_LEVEL_BASE_ONLY; }
   virtual inline ObTableModeFlag get_table_mode_flag() const { return TABLE_MODE_MAX; }
   virtual inline ObTableType get_table_type() const { return MAX_TABLE_TYPE; }
@@ -1672,6 +1674,8 @@ public:
   bool is_valid() const;
   int check_valid(const bool for_create) const;
   int check_ttl_definition_valid() const;
+  int check_column_group_valid() const;
+
   int get_generated_column_by_define(const common::ObString &col_def,
                                      const bool only_hidden_column,
                                      share::schema::ObColumnSchemaV2 *&gen_col);
@@ -1742,9 +1746,11 @@ public:
   virtual inline common::ObRowStoreType get_row_store_type() const override { return row_store_type_; }
   inline int64_t get_storage_format_version() const { return storage_format_version_; }
   inline virtual ObMergeEngineType get_merge_engine_type() const override { return merge_engine_type_; }
+  inline virtual ObMergeEngineType get_original_merge_engine_type() const override { return merge_engine_upper_version_.get_original_merge_engine_type(); }
+  inline virtual bool is_original_delete_insert_merge_engine() const override { return ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT == get_original_merge_engine_type(); }
+  inline virtual bool is_partial_update_merge_engine() const override { return ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE == merge_engine_type_; }
   inline virtual bool is_delete_insert_merge_engine() const override { return ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT == merge_engine_type_; }
   inline virtual bool is_append_only_merge_engine() const override { return ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY == merge_engine_type_; }
-  inline virtual bool is_partial_update_merge_engine() const override { return ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE == merge_engine_type_; }
   inline virtual ObSkipIndexLevel get_skip_index_level() const override { return skip_index_level_; }
   inline const char *get_tablegroup_name_str() const { return extract_str(tablegroup_name_); }
   inline const common::ObString &get_tablegroup_name() const { return tablegroup_name_; }
@@ -1857,7 +1863,7 @@ public:
   inline int64_t get_column_count() const { return column_cnt_; }
   inline void reset_column_count() { column_cnt_ = 0; }
   void reset_column_group_info();
-  inline int64_t get_column_group_count() const { return column_group_cnt_; }
+  inline int64_t get_column_group_count() const { return (nullptr == hidden_rowkey_column_group_) ? column_group_cnt_ : column_group_cnt_ + 1; }
   int get_is_row_store(bool &is_row_store) const;
   inline void reset_column_group_count() { column_group_cnt_ = 0; }
   inline int64_t get_constraint_count() const { return cst_cnt_; }
@@ -2012,6 +2018,8 @@ public:
   uint64_t get_next_single_column_group_id() const { return max_used_column_group_id_ > ROWKEY_COLUMN_GROUP_ID ? max_used_column_group_id_ + 1 : ROWKEY_COLUMN_GROUP_ID + 1; }
   int check_is_normal_cgs_at_the_end(bool &is_normal_cgs_at_the_end) const;
   void set_max_used_column_group_id(const uint64_t id) { max_used_column_group_id_ = id; }
+  const ObColumnGroupSchema *get_hidden_rowkey_column_group() const { return hidden_rowkey_column_group_; }
+  // the function must be int FUNC(ObjType &obj) so that can be used in deserialize
   int add_column_group(const ObColumnGroupSchema &other);
   // This function is only used when add default cg for sys_schema in 'hard-code' python script
   // or when we need to mock default column group for compatibility
@@ -2023,6 +2031,7 @@ public:
                               const bool filter_empty_cg = true) const;
   int remove_column_group(const common::ObString &column_group_name);
   int has_all_column_group(bool &has_all_column_group) const;
+  int has_column_group(const ObColumnGroupType &cg_type, bool &has_column_group) const;
   int adjust_column_group_array();
   // materialized view log related
   template <typename Allocator>
@@ -2168,7 +2177,6 @@ public:
 
   int get_column_group_by_id(const uint64_t column_group_id, ObColumnGroupSchema *&column_group) const;
   int get_column_group_by_name(const ObString &cg_name, ObColumnGroupSchema *&column_group) const;
-  int get_all_cg_type_column_group(const ObColumnGroupSchema *&column_group) const;
   int get_each_column_group(ObIArray<ObColumnGroupSchema*> &each_cgs) const;
   int is_partition_key_match_rowkey_prefix(bool &is_prefix) const;
   int is_presetting_partition_key_match_rowkey_prefix(bool &is_prefix) const;
@@ -2405,9 +2413,21 @@ public:
   int get_hidden_column_count(int64_t &hidden_column_count) const;
   int get_search_data_index_tid(uint64_t &tid) const;
   int set_merge_engine_upper_version(const common::ObString &upper_version_str);
+  int inherit_merge_engine(const ObMergeEngineUpperVersion &other, const ObMergeEngineType inherit_merge_engine_type);
   inline const ObMergeEngineUpperVersion& get_merge_engine_upper_version() const
   {
     return merge_engine_upper_version_;
+  }
+  int init_merge_engine_upper_version(const ObMergeEngineType merge_engine_type)
+  {
+    return merge_engine_upper_version_.init_upper_version(merge_engine_type);
+  }
+  // upper version must be acquired after locking the table
+  int update_merge_engine_upper_version(const share::SCN &upper_version,
+                                         const ObMergeEngineType origin_merge_engine_type,
+                                         const ObMergeEngineType new_merge_engine_type)
+  {
+    return merge_engine_upper_version_.update_upper_version(get_tenant_id(), upper_version, origin_merge_engine_type, new_merge_engine_type);
   }
 
   DECLARE_VIRTUAL_TO_STRING;
@@ -2425,6 +2445,7 @@ protected:
   int assign_column_group(const ObTableSchema &other);
   int do_add_column_group(const ObColumnGroupSchema &other);
   int add_column_group_to_array(ObColumnGroupSchema *column_group);
+  int alloc_cg_and_register_hash_array(const ObColumnGroupSchema &other, ObColumnGroupSchema *&column_group);
   template <typename KeyType, typename ArrayType>
   int add_column_group_to_hash_array(ObColumnGroupSchema *column_group,
                                      const KeyType &key,

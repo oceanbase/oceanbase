@@ -16,6 +16,7 @@ namespace oceanbase
 {
 namespace storage
 {
+struct ObTabletReadTables;
 
 class ObDDLBlockSampleIterator : public ObBlockSampleIterator
 {
@@ -26,7 +27,7 @@ public:
   int open(ObMultipleScanMerge &scan_merge,
            ObTableAccessContext &access_ctx,
            const blocksstable::ObDatumRange &range,
-           ObGetTableParam &get_table_param,
+           ObTabletReadTables &tablet_read_tables,
            const bool is_reverse_scan);
   virtual void reuse() override;
   virtual void reset() override;

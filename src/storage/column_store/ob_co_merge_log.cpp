@@ -621,6 +621,7 @@ int ObCOMergeLogBufferReader::read_next_piece(ObCOMergeLogPieceHeader *&header)
 int ObCOMergeLogFileMgr::init(
     const common::ObIArray<ObStorageColumnGroupSchema> &cg_array,
     const int64_t file_block_size,
+    const bool has_all_column_group,
     const bool skip_base_cg)
 {
   int ret = OB_SUCCESS;
@@ -641,6 +642,7 @@ int ObCOMergeLogFileMgr::init(
   } else {
     ObCOMergeLogFile* objects = reinterpret_cast<ObCOMergeLogFile*>(
       static_cast<char*>(buf) + sizeof(ObCOMergeLogFile*) * row_file_count_);
+    // TODO(@DanLing) the tmp file is not worked yet, debug later
     for (int64_t i = 0; OB_SUCC(ret) && i < row_file_count_; ++i) {
       row_files_[i] = new (objects + i) ObCOMergeLogFile();
       if (skip_base_cg && row_file_count_ > 1 &&

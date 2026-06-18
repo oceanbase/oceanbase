@@ -37,7 +37,6 @@ public:
 void TestStorageSchema::SetUp()
 {
   ASSERT_EQ(OB_SUCCESS, tenant_base_.init());
-
 }
 void TestStorageSchema::TearDown()
 {
@@ -86,6 +85,33 @@ bool TestStorageSchema::judge_storage_schema_equal(ObStorageSchema &schema1, ObS
     for (int i = 0; equal && i < schema1.skip_idx_attr_array_.count(); ++i) {
       equal = schema1.skip_idx_attr_array_[i].col_idx_ == schema2.skip_idx_attr_array_[i].col_idx_
           && schema1.skip_idx_attr_array_[i].skip_idx_attr_ == schema2.skip_idx_attr_array_[i].skip_idx_attr_;
+    }
+  }
+
+  // check V7 fields: minor_row_store_type_ and skip_index_level_
+  if (equal && schema1.storage_schema_version_ >= ObStorageSchema::STORAGE_SCHEMA_VERSION_V7
+    && schema2.storage_schema_version_ >= ObStorageSchema::STORAGE_SCHEMA_VERSION_V7) {
+    equal = schema1.minor_row_store_type_ == schema2.minor_row_store_type_
+        && schema1.skip_index_level_ == schema2.skip_index_level_;
+  }
+
+  // check V8 fields: hidden_rowkey_column_group_
+  if (equal && schema1.storage_schema_version_ >= ObStorageSchema::STORAGE_SCHEMA_VERSION_V8
+    && schema2.storage_schema_version_ >= ObStorageSchema::STORAGE_SCHEMA_VERSION_V8) {
+    equal = schema1.hidden_rowkey_column_group_.count() == schema2.hidden_rowkey_column_group_.count();
+    for (int i = 0; equal && i < schema1.hidden_rowkey_column_group_.count(); ++i) {
+      equal = schema1.hidden_rowkey_column_group_[i].type_ == schema2.hidden_rowkey_column_group_[i].type_
+          && schema1.hidden_rowkey_column_group_[i].column_cnt_ == schema2.hidden_rowkey_column_group_[i].column_cnt_
+          && schema1.hidden_rowkey_column_group_[i].row_store_type_ == schema2.hidden_rowkey_column_group_[i].row_store_type_;
+    }
+  }
+
+  // check column_group_array_
+  if (equal) {
+    equal = schema1.column_group_array_.count() == schema2.column_group_array_.count();
+    for (int i = 0; equal && i < schema1.column_group_array_.count(); ++i) {
+      equal = schema1.column_group_array_[i].type_ == schema2.column_group_array_[i].type_
+          && schema1.column_group_array_[i].column_cnt_ == schema2.column_group_array_[i].column_cnt_;
     }
   }
 
@@ -290,7 +316,8 @@ TEST_F(TestStorageSchema, test_update_tablet_store_schema)
 
   // schema 2 have large store column cnt
   ObStorageSchema *result_storage_schema = NULL;
-  ret = ObStorageSchemaUtil::update_tablet_storage_schema(ObTabletID(1), allocator_, storage_schema1, storage_schema2, result_storage_schema);
+  ObSSTableArray major_sstables;
+  ret = ObStorageSchemaUtil::update_tablet_storage_schema(ObTabletID(1), false, allocator_, storage_schema1, storage_schema2, major_sstables, result_storage_schema);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(result_storage_schema->schema_version_, storage_schema2.schema_version_);
   ASSERT_EQ(result_storage_schema->store_column_cnt_, storage_schema2.store_column_cnt_);
@@ -304,7 +331,7 @@ TEST_F(TestStorageSchema, test_update_tablet_store_schema)
   ASSERT_EQ(OB_SUCCESS, storage_schema2.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL));
   storage_schema1.store_column_cnt_ -= 1;
   storage_schema2.store_column_cnt_ -= 1;
-  ret = ObStorageSchemaUtil::update_tablet_storage_schema(ObTabletID(1), allocator_, storage_schema1, storage_schema2, result_storage_schema);
+  ret = ObStorageSchemaUtil::update_tablet_storage_schema(ObTabletID(1), false, allocator_, storage_schema1, storage_schema2, major_sstables, result_storage_schema);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(result_storage_schema->schema_version_, storage_schema2.schema_version_);
   ASSERT_EQ(result_storage_schema->store_column_cnt_, storage_schema2.store_column_cnt_);
@@ -315,7 +342,7 @@ TEST_F(TestStorageSchema, test_update_tablet_store_schema)
   ObStorageSchema schema_on_tablet;
   ASSERT_EQ(OB_SUCCESS, schema_on_tablet.init(allocator_, storage_schema1, true/*skip_column_info*/));
 
-  ret = ObStorageSchemaUtil::update_tablet_storage_schema(ObTabletID(1), allocator_, schema_on_tablet, storage_schema1, result_storage_schema);
+  ret = ObStorageSchemaUtil::update_tablet_storage_schema(ObTabletID(1), false, allocator_, schema_on_tablet, storage_schema1, major_sstables, result_storage_schema);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(true, judge_storage_schema_equal(storage_schema1, *result_storage_schema));
   ASSERT_EQ(result_storage_schema->is_column_info_simplified(), false);
@@ -480,6 +507,307 @@ TEST_F(TestStorageSchema, test_update_column_info_fix_column_cnt)
   COMMON_LOG(INFO, "test_update_column_info_fix_column_cnt passed",
       K(storage_schema.column_cnt_), K(storage_schema.store_column_cnt_),
       K(storage_schema.column_array_.count()), K(actual_stored));
+}
+
+TEST_F(TestStorageSchema, test_column_store_with_hidden_rowkey_cg)
+{
+  share::schema::ObTableSchema table_schema;
+  ObStorageSchema storage_schema;
+  TestSchemaPrepare::prepare_schema(table_schema);
+
+  // add all cg, each cg, and hidden rowkey cg
+  TestSchemaPrepare::add_all_each_and_hidden_rowkey_column_group(allocator_, table_schema);
+  ASSERT_EQ(OB_SUCCESS, storage_schema.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL));
+
+  // verify hidden rowkey cg is created
+  ASSERT_EQ(1, storage_schema.hidden_rowkey_column_group_.count());
+  ASSERT_TRUE(storage_schema.hidden_rowkey_column_group_[0].is_rowkey_column_group());
+  ASSERT_TRUE(storage_schema.hidden_rowkey_column_group_[0].is_valid());
+  COMMON_LOG(INFO, "column store schema with hidden rowkey cg", K(storage_schema));
+
+  // test serialize and deserialize
+  const int64_t buf_len = 1024 * 1024;
+  int64_t ser_pos = 0;
+  char buf[buf_len] = "\0";
+  ASSERT_EQ(OB_SUCCESS, storage_schema.serialize(buf, buf_len, ser_pos));
+  ASSERT_EQ(ser_pos, storage_schema.get_serialize_size());
+
+  ObStorageSchema des_storage_schema;
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, des_storage_schema.deserialize(allocator_, buf, ser_pos, pos));
+
+  COMMON_LOG(INFO, "deserialize result", K(storage_schema), K(des_storage_schema));
+  ASSERT_EQ(true, judge_storage_schema_equal(storage_schema, des_storage_schema));
+  ASSERT_EQ(1, des_storage_schema.hidden_rowkey_column_group_.count());
+  ASSERT_TRUE(des_storage_schema.hidden_rowkey_column_group_[0].is_rowkey_column_group());
+}
+
+TEST_F(TestStorageSchema, test_storage_cg_schema_iterator)
+{
+  share::schema::ObTableSchema table_schema;
+  ObStorageSchema storage_schema;
+  TestSchemaPrepare::prepare_schema(table_schema);
+
+  // add all cg, each cg, and hidden rowkey cg
+  TestSchemaPrepare::add_all_each_and_hidden_rowkey_column_group(allocator_, table_schema);
+  ASSERT_EQ(OB_SUCCESS, storage_schema.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL));
+
+  // test ObStorageCGSchemaIterator
+  ObStorageCGSchemaIterator cg_iter(storage_schema);
+  const int64_t normal_cg_cnt = storage_schema.column_group_array_.count();
+  const int64_t special_cg_cnt = storage_schema.hidden_rowkey_column_group_.count();
+  const int64_t total_cg_cnt = cg_iter.get_column_group_count();
+
+  ASSERT_EQ(normal_cg_cnt + special_cg_cnt, total_cg_cnt);
+
+  // iterate all column groups
+  const ObStorageColumnGroupSchema *cg_schema = nullptr;
+  int64_t cg_idx = 0;
+  int64_t iter_idx = 0;
+  int64_t iter_count = 0;
+  int64_t last_iter_idx = 0;
+  while (OB_SUCCESS == cg_iter.next(cg_schema, cg_idx, iter_idx)) {
+    ASSERT_TRUE(nullptr != cg_schema);
+    ASSERT_TRUE(cg_schema->is_valid());
+    iter_count++;
+    last_iter_idx = iter_idx;
+    COMMON_LOG(INFO, "iterate cg", K(iter_count), K(cg_idx), K(last_iter_idx));
+  }
+  ASSERT_EQ(total_cg_cnt, iter_count);
+  ASSERT_EQ(normal_cg_cnt, last_iter_idx);
+
+  // test convert_iter_idx_to_column_group_idx for hidden rowkey cg
+  cg_iter.reset();
+  int64_t converted_cg_idx = 0;
+  ASSERT_EQ(OB_SUCCESS, cg_iter.convert_iter_idx_to_column_group_idx(normal_cg_cnt, converted_cg_idx));
+  ASSERT_EQ(HIDDEN_ROWKEY_COLUMN_GROUP_IDX, converted_cg_idx);
+
+  // test get_cg_schema_with_column_group_idx for hidden rowkey cg
+  cg_schema = nullptr;
+  ASSERT_EQ(OB_SUCCESS, cg_iter.get_cg_schema_with_column_group_idx(HIDDEN_ROWKEY_COLUMN_GROUP_IDX, cg_schema));
+  ASSERT_TRUE(nullptr != cg_schema);
+  ASSERT_TRUE(cg_schema->is_rowkey_column_group());
+}
+
+TEST_F(TestStorageSchema, test_column_store_serialize_and_deserialize)
+{
+  share::schema::ObTableSchema table_schema;
+  ObStorageSchema storage_schema;
+  TestSchemaPrepare::prepare_schema(table_schema);
+
+  // add all cg and each cg (without hidden rowkey cg)
+  TestSchemaPrepare::add_all_and_each_column_group(allocator_, table_schema);
+  ASSERT_EQ(OB_SUCCESS, storage_schema.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL));
+
+  // verify it's column store
+  ASSERT_FALSE(storage_schema.is_row_store());
+  ASSERT_TRUE(storage_schema.has_all_column_group_);
+  ASSERT_EQ(0, storage_schema.hidden_rowkey_column_group_.count());
+  COMMON_LOG(INFO, "column store schema", K(storage_schema));
+
+  // test serialize and deserialize
+  const int64_t buf_len = 1024 * 1024;
+  int64_t ser_pos = 0;
+  char buf[buf_len] = "\0";
+  ASSERT_EQ(OB_SUCCESS, storage_schema.serialize(buf, buf_len, ser_pos));
+  ASSERT_EQ(ser_pos, storage_schema.get_serialize_size());
+
+  ObStorageSchema des_storage_schema;
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, des_storage_schema.deserialize(allocator_, buf, ser_pos, pos));
+
+  COMMON_LOG(INFO, "column store deserialize", K(storage_schema), K(des_storage_schema));
+  ASSERT_EQ(true, judge_storage_schema_equal(storage_schema, des_storage_schema));
+  ASSERT_FALSE(des_storage_schema.is_row_store());
+  ASSERT_TRUE(des_storage_schema.has_all_column_group_);
+}
+
+TEST_F(TestStorageSchema, test_init_from_old_schema_with_cg)
+{
+  share::schema::ObTableSchema table_schema;
+  ObStorageSchema storage_schema1;
+  TestSchemaPrepare::prepare_schema(table_schema);
+
+  // add all cg, each cg, and hidden rowkey cg
+  TestSchemaPrepare::add_all_each_and_hidden_rowkey_column_group(allocator_, table_schema);
+  ASSERT_EQ(OB_SUCCESS, storage_schema1.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL));
+
+  // init storage_schema2 from storage_schema1
+  ObStorageSchema storage_schema2;
+  ASSERT_EQ(OB_SUCCESS, storage_schema2.init(allocator_, storage_schema1, false/*skip_column_info*/));
+
+  COMMON_LOG(INFO, "init from old schema", K(storage_schema1), K(storage_schema2));
+  ASSERT_EQ(true, judge_storage_schema_equal(storage_schema1, storage_schema2));
+  ASSERT_EQ(storage_schema1.hidden_rowkey_column_group_.count(), storage_schema2.hidden_rowkey_column_group_.count());
+  ASSERT_EQ(storage_schema1.column_group_array_.count(), storage_schema2.column_group_array_.count());
+}
+
+TEST_F(TestStorageSchema, test_generate_cs_replica_cg_array)
+{
+  share::schema::ObTableSchema table_schema;
+  ObStorageSchema storage_schema;
+  TestSchemaPrepare::prepare_schema(table_schema);
+  ASSERT_EQ(OB_SUCCESS, storage_schema.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL,
+      false/*skip_column_info*/, DATA_CURRENT_VERSION, true/*generate_cs_replica_cg_array*/));
+
+  // verify cs replica cg array is generated
+  ASSERT_FALSE(storage_schema.is_row_store());
+  ASSERT_TRUE(storage_schema.is_cs_replica_compat_);
+  COMMON_LOG(INFO, "cs replica cg array", K(storage_schema));
+
+  // test serialize and deserialize
+  const int64_t buf_len = 1024 * 1024;
+  int64_t ser_pos = 0;
+  char buf[buf_len] = "\0";
+  ASSERT_EQ(OB_SUCCESS, storage_schema.serialize(buf, buf_len, ser_pos));
+  ASSERT_EQ(ser_pos, storage_schema.get_serialize_size());
+
+  ObStorageSchema des_storage_schema;
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, des_storage_schema.deserialize(allocator_, buf, ser_pos, pos));
+
+  COMMON_LOG(INFO, "cs replica deserialize", K(storage_schema), K(des_storage_schema));
+  ASSERT_EQ(true, judge_storage_schema_equal(storage_schema, des_storage_schema));
+}
+
+TEST_F(TestStorageSchema, test_build_mock_rowkey_cg_schema_for_migration_full)
+{
+  share::schema::ObTableSchema table_schema;
+  ObStorageSchema row_schema;
+  TestSchemaPrepare::prepare_schema(table_schema);
+  ASSERT_EQ(OB_SUCCESS, row_schema.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL));
+  ASSERT_TRUE(row_schema.is_row_store());
+  ASSERT_FALSE(row_schema.is_column_info_simplified());
+
+  ObStorageColumnGroupSchema mock_rowkey;
+  ASSERT_EQ(OB_SUCCESS, row_schema.build_rowkey_column_group_schema(allocator_, mock_rowkey));
+
+  ASSERT_TRUE(mock_rowkey.is_inited());
+  ASSERT_TRUE(mock_rowkey.is_valid());
+  ASSERT_TRUE(mock_rowkey.is_rowkey_column_group());
+  ASSERT_EQ(row_schema.get_rowkey_column_num(), mock_rowkey.schema_column_cnt_);
+  ASSERT_EQ(row_schema.get_rowkey_column_num()
+              + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt(),
+            mock_rowkey.column_cnt_);
+  ASSERT_EQ(mock_rowkey.column_cnt_, mock_rowkey.rowkey_column_cnt_);
+  ASSERT_EQ(ObRowStoreType::CS_ENCODING_ROW_STORE, mock_rowkey.row_store_type_);
+  ASSERT_TRUE(nullptr != mock_rowkey.column_idxs_);
+  for (int64_t i = 0; i < mock_rowkey.column_cnt_; ++i) {
+    ASSERT_EQ(static_cast<uint16_t>(i), mock_rowkey.column_idxs_[i]);
+  }
+}
+
+TEST_F(TestStorageSchema, test_build_mock_rowkey_cg_schema_for_migration_simplified)
+{
+  share::schema::ObTableSchema table_schema;
+  ObStorageSchema row_schema;
+  TestSchemaPrepare::prepare_schema(table_schema);
+  ASSERT_EQ(OB_SUCCESS, row_schema.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL,
+      true /*skip_column_info*/));
+  ASSERT_TRUE(row_schema.is_row_store());
+  ASSERT_TRUE(row_schema.is_column_info_simplified());
+
+  // simplified source must still produce a valid rowkey cg (rowkey columns are
+  // always carried, regardless of column_info_simplified_).
+  ObStorageColumnGroupSchema mock_rowkey;
+  ASSERT_EQ(OB_SUCCESS, row_schema.build_rowkey_column_group_schema(allocator_, mock_rowkey));
+  ASSERT_TRUE(mock_rowkey.is_inited());
+  ASSERT_TRUE(mock_rowkey.is_valid());
+  ASSERT_TRUE(mock_rowkey.is_rowkey_column_group());
+}
+
+TEST_F(TestStorageSchema, test_generate_single_column_group_schema_full)
+{
+  share::schema::ObTableSchema table_schema;
+  ObStorageSchema row_schema;
+  TestSchemaPrepare::prepare_schema(table_schema);
+  ASSERT_EQ(OB_SUCCESS, row_schema.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL));
+  ASSERT_FALSE(row_schema.is_column_info_simplified());
+
+  ObStorageColumnGroupSchema mock_single;
+  const uint16_t expected_fake_idx = static_cast<uint16_t>(
+      row_schema.get_rowkey_column_num() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt());
+  ASSERT_EQ(OB_SUCCESS, row_schema.generate_single_column_group_schema(
+      allocator_, mock_single, expected_fake_idx));
+
+  ASSERT_TRUE(mock_single.is_inited());
+  ASSERT_TRUE(mock_single.is_valid());
+  ASSERT_TRUE(mock_single.is_single_column_group());
+  ASSERT_EQ(1, mock_single.column_cnt_);
+  ASSERT_EQ(1, mock_single.schema_column_cnt_);
+  ASSERT_EQ(0, mock_single.rowkey_column_cnt_);
+  ASSERT_EQ(0, mock_single.schema_rowkey_column_cnt_);
+  ASSERT_EQ(ObRowStoreType::CS_ENCODING_ROW_STORE, mock_single.row_store_type_);
+  ASSERT_TRUE(nullptr != mock_single.column_idxs_);
+  // fake_idx = rowkey_col_cnt + extra_rowkey_col_cnt; in full path this is the
+  // first non-rowkey column's position. The single-template is shared by all
+  // NORMAL_CG sstables on the destination side -- correctness argued in
+  // proposal v3 §2.5(b)(c)(d): col_desc / agg_meta / column_checksums all
+  // either bypass the destination desc or get overwritten from source.
+  ASSERT_EQ(expected_fake_idx, mock_single.column_idxs_[0]);
+}
+
+TEST_F(TestStorageSchema, test_generate_single_column_group_schema_simplified)
+{
+  share::schema::ObTableSchema table_schema;
+  ObStorageSchema row_schema;
+  TestSchemaPrepare::prepare_schema(table_schema);
+  ASSERT_EQ(OB_SUCCESS, row_schema.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL,
+      true /*skip_column_info*/));
+  ASSERT_TRUE(row_schema.is_column_info_simplified());
+
+  ObStorageColumnGroupSchema mock_single;
+  const uint16_t expected_fake_idx = static_cast<uint16_t>(
+      row_schema.get_rowkey_column_num() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt());
+  ASSERT_EQ(OB_SUCCESS, row_schema.generate_single_column_group_schema(
+      allocator_, mock_single, expected_fake_idx));
+  ASSERT_TRUE(mock_single.is_inited());
+  ASSERT_TRUE(mock_single.is_valid());
+  ASSERT_TRUE(mock_single.is_single_column_group());
+  ASSERT_EQ(1, mock_single.column_cnt_);
+  // simplified path: fake_idx should be >= source's multi_version_rowkey
+  // count, so destination's add_col_desc_from_cg_schema falls into the
+  // binary-placeholder branch.
+  ASSERT_EQ(expected_fake_idx, mock_single.column_idxs_[0]);
+}
+
+TEST_F(TestStorageSchema, test_default_mock_cg_schema_is_not_inited)
+{
+  // Default-constructed ObStorageColumnGroupSchema has row_store_type_ =
+  // MAX_ROW_STORE; this drives ObMigrationTabletParam's serialization gate
+  // (skip emitting the cg payload when not inited, only 1 byte for the bool).
+  ObStorageColumnGroupSchema cg;
+  ASSERT_FALSE(cg.is_inited());
+}
+
+TEST_F(TestStorageSchema, test_rowkey_and_each_column_group)
+{
+  share::schema::ObTableSchema table_schema;
+  ObStorageSchema storage_schema;
+  TestSchemaPrepare::prepare_schema(table_schema);
+
+  // add rowkey cg and each cg (without all cg)
+  TestSchemaPrepare::add_rowkey_and_each_column_group(allocator_, table_schema);
+  ASSERT_EQ(OB_SUCCESS, storage_schema.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL));
+
+  // verify it's column store without all cg
+  ASSERT_FALSE(storage_schema.is_row_store());
+  ASSERT_FALSE(storage_schema.has_all_column_group_);
+  COMMON_LOG(INFO, "rowkey and each cg schema", K(storage_schema));
+
+  // test serialize and deserialize
+  const int64_t buf_len = 1024 * 1024;
+  int64_t ser_pos = 0;
+  char buf[buf_len] = "\0";
+  ASSERT_EQ(OB_SUCCESS, storage_schema.serialize(buf, buf_len, ser_pos));
+  ASSERT_EQ(ser_pos, storage_schema.get_serialize_size());
+
+  ObStorageSchema des_storage_schema;
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, des_storage_schema.deserialize(allocator_, buf, ser_pos, pos));
+
+  COMMON_LOG(INFO, "rowkey and each cg deserialize", K(storage_schema), K(des_storage_schema));
+  ASSERT_EQ(true, judge_storage_schema_equal(storage_schema, des_storage_schema));
 }
 
 } // namespace unittest

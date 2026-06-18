@@ -1148,8 +1148,11 @@ bool ObMultiMajorMergeIter::table_need_full_merge(
     // rowkey base cg output all column
     bret = static_cast<const ObCOSSTableV2 &>(table).is_rowkey_cg_base();
   } else {
-    // ALL_CG -> EACH_CG
-    bret = static_cast<const ObCOSSTableV2 &>(table).is_row_store_only_co_table() && !merge_param.get_schema()->has_all_column_group();
+    // after support online row col switch, the input major may be (all cg + each cg + hidden rowkey cg) when the target schema is rowkey cg + each cg
+    // so the related major should do full merge
+    // TODO: we can modify the ObPartitionMergeIter to iter the hidden rowkey cg instead of the all cg
+    const ObCOSSTableV2 &co_sstable = static_cast<const ObCOSSTableV2 &>(table);
+    bret = !merge_param.get_schema()->has_all_column_group() && (co_sstable.is_row_store_only_co_table() || co_sstable.is_all_cg_base());
   }
   return bret;
 }

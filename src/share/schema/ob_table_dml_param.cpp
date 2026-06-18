@@ -346,9 +346,10 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
     if (OB_SUCC(ret)) {
       if (OB_FAIL(tmp_cols_index.push_back(col_index))) {
         LOG_WARN("fail to push_back col_index", K(ret));
-      } else if (use_cs && OB_FAIL(schema->get_column_group_index(*column, false /*need_calculate_cg_idx*/, cg_idx))) {
-        LOG_WARN("Fail to get column group index", K(ret));
-      } else if (use_cs && OB_FAIL(tmp_cg_idxs.push_back(cg_idx))) {
+      // Always add CG IDXs to support potential online COLUMN STORE to ROW STORE switch even if the schema is row store
+      } else if (OB_FAIL(schema->get_column_group_index(*column, !use_cs /*need_calculate_cg_idx*/, cg_idx))) {
+        LOG_WARN("Fail to get column group index", K(ret), KPC(schema));
+      } else if (OB_FAIL(tmp_cg_idxs.push_back(cg_idx))) {
         LOG_WARN("Fail to push back cg idx", K(ret));
       }
     }
@@ -365,12 +366,12 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
                 tmp_col_descs,
                 &tmp_cols_index,
                 &tmp_cols,
-                use_cs ? &tmp_cg_idxs : nullptr,
+                &tmp_cg_idxs, /*Always add CG IDXs to support potential online COLUMN STORE to ROW STORE switch even if the schema is row store*/
                 nullptr/*cols_extend*/,
                 true/*has_all_column_group*/,
                 false/*is_cg_sstable*/,
                 need_truncate_filter,
-                is_delete_insert(),
+                merge_engine_type_,
                 schema->get_micro_block_format_version(),
                 has_ttl_definition))) {
       LOG_WARN("Fail to init read info", K(ret));
@@ -382,7 +383,8 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
   }
   LOG_DEBUG("Generated read info", K_(read_info));
   read_param_version_ = storage::ObCGReadInfo::MIX_READ_INFO_LOCAL_CACHE;
-  if (OB_SUCC(ret) && use_cs && tmp_cg_idxs.count() <= storage::ObCGReadInfo::get_local_max_cg_cnt()) {
+  // Always init CG Read Infos to support potential online COLUMN STORE to ROW STORE switch even if the schema is row store
+  if (OB_SUCC(ret) && tmp_cg_idxs.count() <= storage::ObCGReadInfo::get_local_max_cg_cnt()) {
     // construct cg read infos
     void *tmp_ptr  = nullptr;
     int64_t cg_cnt = tmp_cg_idxs.count();

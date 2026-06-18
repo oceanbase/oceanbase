@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_multiple_mview_merge.h"
 #include "ob_table_scan_iterator.h"
+#include "ob_tablet_read_tables.h"
 
 namespace oceanbase
 {
@@ -114,7 +115,7 @@ void ObMviewIncrMerge::reuse()
 int ObMviewIncrMerge::get_incr_row(
     ObTableAccessParam &param,
     ObTableAccessContext &context,
-    ObGetTableParam &get_table_param,
+    ObTabletReadTables &tablet_read_tables,
     ObMultipleMerge &merge,
     blocksstable::ObDatumRow &row)
 {
@@ -146,7 +147,7 @@ int ObMviewIncrMerge::get_incr_row(
     } else {
       if (OB_FAIL(base_rowkey_.assign(row.storage_datums_, param.iter_param_.get_schema_rowkey_count()))) {
         LOG_WARN("Failed to assign incr rowkey", K(ret));
-      } else if (OB_FAIL(open_base_data_merge(param, context, get_table_param, base_rowkey_))) {
+      } else if (OB_FAIL(open_base_data_merge(param, context, tablet_read_tables, base_rowkey_))) {
         LOG_WARN("Failed to open base data merge", K(ret));
       } else {
         blocksstable::ObDatumRow &base_row = base_data_merge_->get_unprojected_row();
@@ -249,7 +250,7 @@ int ObMviewIncrMerge::generate_output_row(
 int ObMviewIncrMerge::open_base_data_merge(
     ObTableAccessParam &param,
     ObTableAccessContext &context,
-    ObGetTableParam &get_table_param,
+    ObTabletReadTables &tablet_read_tables,
     const ObDatumRowkey &rowkey)
 {
   int ret = OB_SUCCESS;
@@ -263,7 +264,7 @@ int ObMviewIncrMerge::open_base_data_merge(
       LOG_WARN("Failed to alloc base data merge", K(ret));
     } else if (OB_FAIL(base_access_info_->construct_access_ctx(&rowkey_allocator_, context))) {
       LOG_WARN("Failed to cons version range and ctx", K(ret));
-    } else if (OB_FAIL(base_data_merge_->init(param, base_access_info_->access_ctx_, get_table_param))) {
+    } else if (OB_FAIL(base_data_merge_->init(param, base_access_info_->access_ctx_, tablet_read_tables))) {
       LOG_WARN("Failed to init base data merge", K(ret));
     } else if (OB_ISNULL(col_descs_ = param.iter_param_.get_out_col_descs())) {
       ret = OB_ERR_UNEXPECTED;
@@ -278,7 +279,7 @@ int ObMviewIncrMerge::open_base_data_merge(
     LOG_INFO("table store refreshed", K(is_table_store_refreshed_), K(param.iter_param_.tablet_id_));
     if (OB_FAIL(base_access_info_->construct_access_ctx(&rowkey_allocator_, context))) {
       LOG_WARN("Failed to cons version range and ctx", K(ret));
-    } else if (OB_FAIL(base_data_merge_->switch_param(param, base_access_info_->access_ctx_, get_table_param))) {
+    } else if (OB_FAIL(base_data_merge_->switch_param(param, base_access_info_->access_ctx_, tablet_read_tables))) {
       LOG_WARN("Failed to switch param", K(ret));
     } else {
       is_table_store_refreshed_ = false;
@@ -370,12 +371,12 @@ void ObMviewMergeWrapper::reuse()
 int ObMviewMergeWrapper::switch_param(
     ObTableAccessParam &param,
     ObTableAccessContext &context,
-    ObGetTableParam &get_table_param)
+    ObTabletReadTables &tablet_read_tables)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < T_MAX_ITER_TYPE; ++i) {
     if (nullptr != merges_[i] &&
-        OB_FAIL(merges_[i]->switch_param(param, context, get_table_param))) {
+        OB_FAIL(merges_[i]->switch_param(param, context, tablet_read_tables))) {
       LOG_WARN("Failed to switch param", K(ret), K(i));
     }
   }
@@ -385,9 +386,10 @@ int ObMviewMergeWrapper::switch_param(
 int ObMviewMergeWrapper::alloc_mview_merge(
     ObTableAccessParam &param,
     ObTableAccessContext &context,
-    ObGetTableParam &get_table_param,
+    ObTabletReadTables &tablet_read_tables,
     ObTableScanRange &table_scan_range,
     ObTableScanParam &scan_param,
+    const ObQRIterType &iter_type,
     ObMviewMergeWrapper *&merge_wrapper,
     ObMviewMerge *&mview_merge)
 {
@@ -397,7 +399,7 @@ int ObMviewMergeWrapper::alloc_mview_merge(
       OB_ISNULL(merge_wrapper = OB_NEWx(ObMviewMergeWrapper, alloctor))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Failed to alloc mview merge wrapper", K(ret));
-  } else if (OB_FAIL(merge_wrapper->get_mview_merge(param, context, get_table_param, table_scan_range, scan_param, mview_merge))) {
+  } else if (OB_FAIL(merge_wrapper->get_mview_merge(param, context, tablet_read_tables, table_scan_range, scan_param, iter_type, mview_merge))) {
     LOG_WARN("Failed to get mview merge", K(ret));
   }
   return ret;
@@ -406,23 +408,20 @@ int ObMviewMergeWrapper::alloc_mview_merge(
 int ObMviewMergeWrapper::get_mview_merge(
     ObTableAccessParam &param,
     ObTableAccessContext &context,
-    ObGetTableParam &get_table_param,
+    ObTabletReadTables &tablet_read_tables,
     ObTableScanRange &table_scan_range,
     ObTableScanParam &scan_param,
+    const ObQRIterType &iter_type,
     ObMviewMerge *&version_merge)
 {
   int ret = OB_SUCCESS;
-  ObQRIterType merge_type;
   ObMviewMerge *tmp_merge = nullptr;
   version_merge = nullptr;
-  if (OB_FAIL(ObTableScanIterator::calc_query_iter_type(table_scan_range,
-                                                        context.store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx(),
-                                                        scan_param,
-                                                        get_table_param,
-                                                        merge_type))) {
-    LOG_WARN("Failed to get query iter type", K(ret));
-  } else if (nullptr == (tmp_merge = merges_[merge_type])) {
-    switch (merge_type) {
+  if (OB_UNLIKELY(iter_type < 0 || iter_type >= T_MAX_ITER_TYPE)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid iter type", K(ret), K(iter_type));
+  } else if (nullptr == (tmp_merge = merges_[iter_type])) {
+    switch (iter_type) {
       case T_SINGLE_GET: {
         context.use_fuse_row_cache_ = context.mview_scan_info_->is_mv_refresh_query_;
         tmp_merge = OB_NEWx(ObMviewSingleMerge, context.stmt_allocator_);
@@ -450,22 +449,22 @@ int ObMviewMergeWrapper::get_mview_merge(
       }
       default: {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Unexpected merge type", K(ret), K(merge_type));
+        LOG_WARN("Unexpected merge type", K(ret), K(iter_type));
       }
     }
     if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(tmp_merge)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Failed to alloc merge", K(ret));
-    } else if (OB_FAIL(tmp_merge->init(param, context, get_table_param))) {
+    } else if (OB_FAIL(tmp_merge->init(param, context, tablet_read_tables))) {
       LOG_WARN("Failed to init merge", K(ret));
     }
-    LOG_DEBUG("[MVIEW QUERY]: get version range merge", K(ret), K(merge_type), KP(tmp_merge));
+    LOG_DEBUG("[MVIEW QUERY]: get version range merge", K(ret), K(iter_type), KP(tmp_merge));
   }
   if (FAILEDx(tmp_merge->open(table_scan_range))) {
     LOG_WARN("Failed to open mview merge", K(ret));
   } else {
-    merges_[merge_type] = tmp_merge;
+    merges_[iter_type] = tmp_merge;
     version_merge = tmp_merge;
     version_merge->set_iter_del_row(is_mview_need_deleted_row(context.mview_scan_info_->scan_type_));
   }

@@ -963,6 +963,7 @@ TEST_F(TestSSTableMeta, test_sstable_meta_deep_copy)
   ASSERT_EQ(0, MEMCMP(&flat_meta_1->data_root_info_, &flat_meta_2->data_root_info_, sizeof(flat_meta_1->data_root_info_)));
   ASSERT_EQ(0, MEMCMP(&flat_meta_1->macro_info_, &flat_meta_2->macro_info_, sizeof(flat_meta_1->macro_info_)));
   ASSERT_EQ(0, MEMCMP((char*)&flat_meta_1->cg_sstables_, (char*)&flat_meta_2->cg_sstables_, sizeof(flat_meta_1->cg_sstables_)));
+  ASSERT_EQ(0, MEMCMP((char*)&flat_meta_1->hidden_cg_sstable_, (char*)&flat_meta_2->hidden_cg_sstable_, sizeof(flat_meta_1->hidden_cg_sstable_)));
   ASSERT_EQ(0, MEMCMP(flat_meta_1->column_ckm_struct_.column_checksums_,
                       flat_meta_2->column_ckm_struct_.column_checksums_,
                       flat_meta_1->column_ckm_struct_.count_ * sizeof(int64_t)));

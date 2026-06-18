@@ -1897,7 +1897,7 @@ int ObComplementReportReplicaTask::process()
 ObLocalScan::ObLocalScan() : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), table_id_(OB_INVALID_ID),
     dest_table_id_(OB_INVALID_ID), schema_version_(0), extended_gc_(),
     default_row_(), write_row_(), row_iter_(nullptr), scan_merge_(nullptr), ctx_(), access_param_(),
-    access_ctx_(), get_table_param_(), allocator_("ObLocalScan", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    access_ctx_(), tablet_read_tables_(), allocator_("ObLocalScan", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     calc_buf_(ObModIds::OB_SQL_EXPR_CALC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()), col_params_(), read_info_(),
     exist_column_mapping_(allocator_)
 {}
@@ -2173,7 +2173,7 @@ int ObLocalScan::construct_access_param(
 
   /*construct cg_idx*/
   if (OB_FAIL(ret)) {
-  } else if(OB_FAIL(data_table_schema.has_all_column_group(has_all_cg))) {
+  } else if(OB_FAIL(data_table_schema.has_column_group(ObColumnGroupType::ALL_COLUMN_GROUP, has_all_cg))) {
     LOG_WARN("fail to check whether table has all cg", K(ret), K(data_table_schema));
   } else if (!has_all_cg) {
     for (int64_t i = 0; i < col_params_.count(); i++) {
@@ -2257,7 +2257,7 @@ int ObLocalScan::construct_multiple_scan_merge(
   int ret = OB_SUCCESS;
   void *buf = nullptr;
   LOG_INFO("start to do output_store.scan");
-  if (OB_FAIL(get_table_param_.tablet_iter_.assign(table_iter))) {
+  if (OB_FAIL(tablet_read_tables_.tablet_iter_.assign(table_iter))) {
     LOG_WARN("fail to assign tablet iterator", K(ret));
   } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObMultipleScanMerge)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -2265,7 +2265,7 @@ int ObLocalScan::construct_multiple_scan_merge(
   } else if (FALSE_IT(scan_merge_ = new(buf)ObMultipleScanMerge())) {
     ret = OB_ERR_SYS;
     LOG_WARN("fail to do placement new", K(ret));
-  } else if (OB_FAIL(scan_merge_->init(access_param_, access_ctx_, get_table_param_))) {
+  } else if (OB_FAIL(scan_merge_->init(access_param_, access_ctx_, tablet_read_tables_))) {
     LOG_WARN("fail to init scan merge", K(ret), K(access_param_), K(access_ctx_));
   } else if (OB_FAIL(scan_merge_->open(range))) {
     LOG_WARN("fail to open scan merge", K(ret), K(access_param_), K(access_ctx_), K(range));

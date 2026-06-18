@@ -65,7 +65,8 @@ ObTableIterParam::ObTableIterParam()
       is_get_(false),
       is_sample_(false),
       filter_canbe_handle_in_di_(false),
-      reserved_(0)
+      reserved_(0),
+      merge_engine_upper_version_()
 {}
 
 ObTableIterParam::~ObTableIterParam()
@@ -141,6 +142,8 @@ void ObTableIterParam::reset()
   ObSSTableIndexFilterFactory::destroy_sstable_index_filter(sstable_index_filter_);
   need_update_tablet_param_ = nullptr;
   default_row_ = nullptr;
+  merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_MAX;
+  merge_engine_upper_version_.reset();
 }
 
 int ObTableIterParam::refresh_lob_column_out_status()
@@ -392,9 +395,10 @@ int ObTableAccessParam::init(
     iter_param_.limit_prefetch_ = (nullptr == op_filters_ || op_filters_->empty());
     iter_param_.is_mds_query_ = scan_param.is_mds_query_;
 
-    if (iter_param_.is_use_column_store() &&
-        nullptr != table_param.get_read_info().get_cg_idxs() &&
-        !iter_param_.need_fill_group_idx()) { // not use column store in group rescan
+    // for online row-col switch: schema is row store but the major is pure col, should use column store path
+    if ((iter_param_.is_use_column_store() || (nullptr != tablet_handle && tablet_handle->get_obj()->is_last_major_pure_column_store()))
+            && nullptr != table_param.get_read_info().get_cg_idxs()
+            && !iter_param_.need_fill_group_idx()) { // not use column store in group rescan
       iter_param_.set_use_column_store();
     } else {
       iter_param_.set_not_use_column_store();
@@ -410,7 +414,9 @@ int ObTableAccessParam::init(
       iter_param_.disable_blockscan();
     }
 
-    if (OB_FAIL(iter_param_.refresh_lob_column_out_status())) {
+    if (OB_FAIL(iter_param_.merge_engine_upper_version_.assign(table_param.get_merge_engine_upper_version()))) {
+      STORAGE_LOG(WARN, "Failed to assign merge engine upper version", K(ret), K(table_param));
+    } else if (OB_FAIL(iter_param_.refresh_lob_column_out_status())) {
       STORAGE_LOG(WARN, "Failed to refresh lob column out status", K(ret), K(iter_param_));
     } else if (scan_param.use_index_skip_scan() &&
                OB_FAIL(check_skip_scan(scan_param, iter_param_))) {
@@ -480,7 +486,7 @@ int ObTableAccessParam::init_merge_param(
     const common::ObTabletID &tablet_id,
     const ObITableReadInfo &read_info,
     const bool is_multi_version_minor_merge,
-    const ObMergeEngineType merge_engine_type)
+    const ObMergeEngineType original_merge_engine_type)
 {
   int ret = OB_SUCCESS;
 
@@ -493,8 +499,8 @@ int ObTableAccessParam::init_merge_param(
     iter_param_.is_multi_version_minor_merge_ = is_multi_version_minor_merge;
     iter_param_.read_info_ = &read_info;
     iter_param_.rowkey_read_info_ = &read_info;
-    iter_param_.is_delete_insert_ = is_multi_version_minor_merge && merge_engine_type == ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT;
-    iter_param_.merge_engine_type_ = merge_engine_type;
+    iter_param_.is_delete_insert_ = is_multi_version_minor_merge && original_merge_engine_type == ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT;
+    iter_param_.merge_engine_type_ = original_merge_engine_type;
     // merge_query will not goto ddl_merge_query, no need to pass tablet
     is_inited_ = true;
   }

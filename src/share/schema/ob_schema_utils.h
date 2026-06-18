@@ -279,8 +279,13 @@ public:
 
   static int is_drop_column_only(const schema::AlterTableSchema &alter_table_schema, bool &is_drop_col_only);
   static int check_build_old_version_column_group(const share::schema::ObTableSchema &table_schema, bool &build_old_version_cg);
+  static int check_allow_hidden_rowkey_column_group(const share::schema::ObTableSchema &table_schema, bool &allow_hidden_rowkey_cg);
 
 private:
+  static int check_need_rowkey_column_group(
+      const share::schema::ObTableSchema &table_schema,
+      bool &need_rowkey_cg,
+      bool &need_hidden_rowkey_cg);
   static int push_inner_table_schema_(
       const uint64_t tenant_id,
       const bool include_index_and_lob_aux_schemas,

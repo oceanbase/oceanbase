@@ -682,6 +682,8 @@ int ObTscCgService::generate_table_param(const ObLogTableScan &op,
     } else if (FALSE_IT(scan_ctdef.table_param_.set_is_partition_table(table_schema->is_partitioned_table()))) {
     } else if (FALSE_IT(scan_ctdef.table_param_.set_is_mlog_table(table_schema->is_mlog_table()))) {
     } else if (FALSE_IT(scan_ctdef.table_param_.set_plan_enable_rich_format(op.get_plan()->get_optimizer_context().get_enable_rich_vector_format()))) {
+    } else if (OB_FAIL(scan_ctdef.table_param_.set_merge_engine_upper_version(table_schema->get_merge_engine_upper_version()))) {
+      LOG_WARN("set merge engine upper version failed", K(ret), KPC(table_schema));
     } else if (OB_FAIL(extract_das_output_column_ids(op, scan_ctdef, *table_schema, cg_ctx, tsc_out_cols))) {
       LOG_WARN("extract tsc output column ids failed", K(ret));
     } else {

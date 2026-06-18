@@ -34,6 +34,10 @@ public:
   static void add_rowkey_and_each_column_group(
     ObIAllocator &allocator,
     share::schema::ObTableSchema &table_schema);
+
+    static void add_all_each_and_hidden_rowkey_column_group(
+    ObIAllocator &allocator,
+    share::schema::ObTableSchema &table_schema);
   static const int64_t TENANT_ID = 1;
   static const int64_t TABLE_ID = 7777;
   static const int64_t TEST_ROWKEY_COLUMN_CNT = 3;
@@ -123,7 +127,7 @@ void TestSchemaPrepare::add_all_and_each_column_group(
     cg_1_ids[i] = col_ids.at(i).col_id_;
   }
   cg_1.column_id_arr_ = cg_1_ids;
-  cg_1.column_group_name_ = "test_all";
+  cg_1.column_group_name_ = OB_ALL_COLUMN_GROUP_NAME;
   cg_1.row_store_type_ = ObMicroBlockFormatVersionHelper::decide_flat_format(table_schema.get_micro_block_format_version());
   ASSERT_EQ(OB_SUCCESS, table_schema.add_column_group(cg_1));
 
@@ -193,5 +197,40 @@ void TestSchemaPrepare::add_rowkey_and_each_column_group(
   allocator.free(cg_1_ids);
   COMMON_LOG(INFO, "dump stable schema after add_rowkey_and_each_column_group", K(table_schema));
 }
+
+
+// add all cg, each cg, and hidden rowkey cg (used for column store table)
+void TestSchemaPrepare::add_all_each_and_hidden_rowkey_column_group(
+  ObIAllocator &allocator,
+  share::schema::ObTableSchema &table_schema)
+{
+  // reuse add_all_and_each_column_group to add all cg and each cg
+  add_all_and_each_column_group(allocator, table_schema);
+
+  // add hidden rowkey_cg_schema
+  ObArray<share::schema::ObColDesc> rowkey_col_ids;
+  int64_t store_column_count;
+  int64_t rowkey_column_count;
+  ASSERT_EQ(OB_SUCCESS, table_schema.get_store_column_count(store_column_count));
+  ASSERT_EQ(OB_SUCCESS, table_schema.get_rowkey_column_ids(rowkey_col_ids));
+  rowkey_column_count = rowkey_col_ids.count();
+  ObRowStoreType row_store_type = ObMicroBlockFormatVersionHelper::decide_flat_format(table_schema.get_micro_block_format_version());
+
+  share::schema::ObColumnGroupSchema cg_hidden_rowkey;
+  cg_hidden_rowkey.column_group_type_ = share::schema::ObColumnGroupType::ROWKEY_COLUMN_GROUP;
+  cg_hidden_rowkey.column_group_id_ = store_column_count + 1;
+  cg_hidden_rowkey.column_id_cnt_ = rowkey_column_count;
+  uint64_t *cg_rowkey_ids = static_cast<uint64_t *>(allocator.alloc(rowkey_column_count * sizeof(uint64_t)));
+  for(int64_t i = 0; i < rowkey_column_count; i++) {
+    cg_rowkey_ids[i] = rowkey_col_ids.at(i).col_id_;
+  }
+  cg_hidden_rowkey.column_id_arr_ = cg_rowkey_ids;
+  cg_hidden_rowkey.column_group_name_ = "test_hidden_rowkey";
+  cg_hidden_rowkey.row_store_type_ = row_store_type;
+  ASSERT_EQ(OB_SUCCESS, table_schema.add_column_group(cg_hidden_rowkey));
+
+  allocator.free(cg_rowkey_ids);
+}
+
 }
 }

@@ -213,6 +213,14 @@ int ObSchemaRetrieveUtils::retrieve_column_schema(
   return ret;
 }
 
+
+/* when check deleted, the result came from the following sql:
+ *   select * from __all_column_group_history
+ *     where tenant_id = 0 and table_id in (?) and schema_version <= ?
+ *     order by tenant_id desc, table_id desc, column_group_id asc, schema_version asc;
+ * after supporting the online row-col switch, the cg cnt of new schema maybe smaller than the old schema,
+ * for same cgs, we should only use the cg which schema version is max
+ */
 template<typename T>
 int ObSchemaRetrieveUtils::retrieve_column_group_schema(const uint64_t tenant_id,
                                                         const bool check_deleted,
@@ -220,73 +228,76 @@ int ObSchemaRetrieveUtils::retrieve_column_group_schema(const uint64_t tenant_id
                                                         ObArray<ObTableSchema *> &table_schema_array)
 {
   int ret = common::OB_SUCCESS;
-  // cuz column_group_schema does not have table_id, thus we can't use retrieve_schema() directly
-  if (table_schema_array.count() < 1) {
-    ret = common::OB_ERR_UNEXPECTED;
-    SHARE_SCHEMA_LOG(WARN, "table schema array is empty", KR(ret));
-  } else {
-    ObTableSchema *table_schema = nullptr;
-    uint64_t last_table_id = common::OB_INVALID_ID;
-    uint64_t last_schema_id = common::OB_INVALID_ID;
-    // store current_schema and last_schema
-    bool is_last_deleted = false;
-    ObColumnGroupSchema *last_schema = NULL;
-    ObArenaAllocator current_allocator("ColGroScheRetri");
-    ObArenaAllocator another_allocator("ColGroScheRetri");
-    ObColumnGroupSchema tmp_schemas[2] = {ObColumnGroupSchema(&current_allocator),
-                                          ObColumnGroupSchema(&another_allocator)};
-    int64_t tmp_idx = 0;
-    while (OB_SUCC(ret) && OB_SUCC(result.next())) {
-      bool is_deleted = false;
-      uint64_t cur_table_id = common::OB_INVALID_ID;
-      ObColumnGroupSchema &current = tmp_schemas[tmp_idx];
-      current.reset();
-      0 == tmp_idx ? current_allocator.reuse() : another_allocator.reuse();
 
-      if (OB_FAIL(ObSchemaRetrieveUtils::fill_column_group_info(check_deleted, result, current, cur_table_id, is_deleted))) {
-        SHARE_SCHEMA_LOG(WARN, "fail to fill column_group schema", KR(ret));
-      } else if ((cur_table_id == last_table_id) && (current.get_column_group_id() == last_schema_id)) {
-        //the same with last schema, continue;
+  if (OB_UNLIKELY(table_schema_array.empty())) {
+    ret = common::OB_ERR_UNEXPECTED;
+    SHARE_SCHEMA_LOG(WARN, "table schema array is unexpected empty", KR(ret));
+  }
+
+  ObArenaAllocator curr_allocator("ColGroScheRetri");
+  ObArenaAllocator last_allocator("ColGroScheRetri");
+  ObColumnGroupSchema cg_schema_buf[2] = {ObColumnGroupSchema(&curr_allocator),
+                                          ObColumnGroupSchema(&last_allocator)};
+  int64_t cur_idx = 0;
+
+  uint64_t last_table_id = common::OB_INVALID_ID;
+  bool is_last_deleted = false;
+  ObColumnGroupSchema *last_cg_schema = nullptr;
+
+  while (OB_SUCC(ret)) {
+    uint64_t cur_table_id = common::OB_INVALID_ID;
+    bool is_cur_deleted = false;
+    ObColumnGroupSchema *cur_cg_schema = &cg_schema_buf[cur_idx];
+    cur_cg_schema->reset();
+    0 == cur_idx ? curr_allocator.reuse() : last_allocator.reuse();
+
+    if (OB_FAIL(result.next())) {
+      if (common::OB_ITER_END == ret) {
         ret = common::OB_SUCCESS;
       } else {
-        if (OB_ISNULL(last_schema) || is_last_deleted) {
-          //if last schema is INVALID, ignore it
-        } else {
-          table_schema = ObSchemaRetrieveUtils::find_table_schema(last_table_id, table_schema_array);
-          if (OB_ISNULL(table_schema) || table_schema->get_table_id() != last_table_id) {
-            ret = OB_ERR_UNEXPECTED;
-            SHARE_SCHEMA_LOG(WARN, "fail to find table schema", KR(ret), K(last_table_id), KP(table_schema));
-          } else if (OB_FAIL(table_schema->add_column_group(*last_schema))) { // add last schema
-            SHARE_SCHEMA_LOG(WARN, "fail to add last column_group schema", KR(ret), K(last_table_id), K(*last_schema));
-          }
-        }
+        SHARE_SCHEMA_LOG(WARN, "fail to get next row", KR(ret));
       }
-      //save current column_group to last, rotate
-      last_schema = &current;
-      is_last_deleted = is_deleted;
-      last_table_id = cur_table_id;
-      last_schema_id = current.get_column_group_id();
-      tmp_idx = 1 - tmp_idx;
-    }
-    if (OB_ITER_END != ret) {
-      SHARE_SCHEMA_LOG(WARN, "fail to get next row", KR(ret));
-    } else {
-      ret = OB_SUCCESS;
+    } else if (OB_FAIL(ObSchemaRetrieveUtils::fill_column_group_info(check_deleted,
+                                                                     result,
+                                                                     *cur_cg_schema,
+                                                                     cur_table_id,
+                                                                     is_cur_deleted))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to fill column_group schema", KR(ret));
     }
 
-    if (OB_SUCC(ret)) {
-      //add last column_group
-      if (OB_NOT_NULL(last_schema) && !is_last_deleted) {
-        table_schema = ObSchemaRetrieveUtils::find_table_schema(last_table_id, table_schema_array);
-        if (OB_ISNULL(table_schema) || table_schema->get_table_id() != last_table_id) {
-          ret = OB_ERR_UNEXPECTED;
-          SHARE_SCHEMA_LOG(WARN, "fail to find table schema", KR(ret), K(last_table_id), KP(table_schema));
-        } else if (OB_FAIL(table_schema->add_column_group(*last_schema))) {
-          SHARE_SCHEMA_LOG(WARN, "fail to add last column_group schema", KR(ret), K(*last_schema));
-        } else {
-          table_schema = nullptr;
-        }
+    if (OB_FAIL(ret)) {
+    } else if (common::OB_INVALID_ID == last_table_id) {
+      // meet the first res, do nothing
+    } else if (OB_ISNULL(last_cg_schema)) {
+      ret = common::OB_ERR_UNEXPECTED;
+      SHARE_SCHEMA_LOG(WARN, "last cg schema is null", KR(ret));
+    } else if (cur_table_id != last_table_id
+            || cur_cg_schema->get_column_group_id() != last_cg_schema->get_column_group_id()) {
+      // meet a new table or a new cg in one table, deal with the last cg
+
+      ObTableSchema *table_schema = nullptr;
+      if (is_last_deleted) {
+        // the last cg is deleted, no need to add to table schema
+      } else if (OB_UNLIKELY(NULL == (table_schema = ObSchemaRetrieveUtils::find_table_schema(last_table_id, table_schema_array))
+              || table_schema->get_table_id() != last_table_id)) {
+        ret = common::OB_ERR_UNEXPECTED;
+        SHARE_SCHEMA_LOG(WARN, "fail to find table schema", KR(ret), K(last_table_id), KP(table_schema));
+      } else if (OB_FAIL(table_schema->add_column_group(*last_cg_schema))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to add last column_group schema", KR(ret), K(last_table_id), K(*last_cg_schema));
       }
+    } else if (OB_UNLIKELY(check_deleted && cur_cg_schema->get_schema_version() < last_cg_schema->get_schema_version())) {
+      ret = common::OB_ERR_UNEXPECTED;
+      SHARE_SCHEMA_LOG(WARN, "schema version should be asc under one column group", KR(ret), KPC(last_cg_schema), KPC(cur_cg_schema));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (common::OB_INVALID_ID == cur_table_id) {
+      break; // ITER END
+    } else {
+      last_table_id = cur_table_id;
+      is_last_deleted = is_cur_deleted;
+      last_cg_schema = cur_cg_schema;
+      cur_idx = 1 - cur_idx;
     }
   }
   return ret;
@@ -1030,25 +1041,7 @@ int ObSchemaRetrieveUtils::retrieve_recycle_object(
   return ret;
 }
 
-template<typename T>
-int ObSchemaRetrieveUtils::retrieve_column_group_schema(
-    const uint64_t tenant_id,
-    const bool check_deleted,
-    T &result,
-    ObTableSchema *&table_schema)
-{
-  int ret = common::OB_SUCCESS;
-  ObArray<ObTableSchema *> table_schema_array;
-  if (OB_FAIL(table_schema_array.reserve(1))) {
-    LOG_WARN("fail to reserve", KR(ret));
-  } else if (OB_FAIL(table_schema_array.push_back(table_schema))) {
-    LOG_WARN("fail to push back", KR(ret), KP(table_schema));
-  } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_column_group_schema(tenant_id, check_deleted, result, table_schema_array))) {
-    LOG_WARN("fail to retrieve column_group schema", KR(ret), K(tenant_id), K(check_deleted), KP(table_schema));
-  }
-  return ret;
-}
-
+// fill column id in column group schema
 template<typename T>
 int ObSchemaRetrieveUtils::retrieve_column_group_mapping(
     const uint64_t tenant_id,
@@ -1060,75 +1053,72 @@ int ObSchemaRetrieveUtils::retrieve_column_group_mapping(
   if (OB_ISNULL(table_schema)) {
     ret = common::OB_ERR_UNEXPECTED;
     SHARE_SCHEMA_LOG(WARN, "table schema is NULL", KR(ret), K(table_schema));
-  } else {
-    const uint64_t table_id = table_schema->get_table_id();
-    uint64_t last_column_group_id = common::OB_INVALID_ID;
-    uint64_t last_column_id = common::OB_INVALID_ID;
-    bool is_last_deleted = false;
-    uint64_t curr_column_group_id = common::OB_INVALID_ID;
-    uint64_t curr_column_id = common::OB_INVALID_ID;
-    ObColumnGroupSchema *column_group = NULL;
-    while (OB_SUCC(ret) && OB_SUCC(result.next())) {
-      bool is_deleted = false;
-      curr_column_group_id = common::OB_INVALID_ID;
-      curr_column_id = common::OB_INVALID_ID;
-
-      if (check_deleted) {
-        EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
-      }
-      EXTRACT_INT_FIELD_MYSQL(result, "column_group_id", curr_column_group_id, uint64_t);
-      EXTRACT_INT_FIELD_MYSQL(result, "column_id", curr_column_id, uint64_t);
-
-      if (OB_SUCC(ret)) {
-        if ((curr_column_group_id == last_column_group_id)
-            && (curr_column_id == last_column_id)) {
-          //the same with last schema, continue;
-          ret = common::OB_SUCCESS;
-        } else {
-          if ((common::OB_INVALID_ID == last_column_group_id)
-              || (common::OB_INVALID_ID == last_column_id)
-              || is_last_deleted) {
-            //LAST schema IS INVALID, IGNORE
-          } else {
-            if (OB_ISNULL(column_group) || (last_column_group_id != column_group->get_column_group_id())) {
-              if (OB_FAIL(table_schema->get_column_group_by_id(last_column_group_id, column_group))) {
-                LOG_WARN("fail to get column_group by id", KR(ret), K(last_column_group_id), K(table_id));
-              }
-            }
-            if (FAILEDx(column_group->add_column_id(last_column_id))) {
-              LOG_WARN("fail to add column_id", KR(ret), K(last_column_group_id), K(last_column_id),
-                                                         K(curr_column_group_id), K(curr_column_id),
-                                                         K(table_id), KPC(column_group), KPC(table_schema));
-            }
-          }
-        }
-      }
-      //save current info to last
-      last_column_group_id = curr_column_group_id;
-      last_column_id = curr_column_id;
-      is_last_deleted = is_deleted;
-    }
-    if (OB_ITER_END != ret) {
-      SHARE_SCHEMA_LOG(WARN, "fail to get next row", KR(ret));
-    } else {
-      ret = OB_SUCCESS;
-    }
-    if (OB_SUCC(ret)) {
-      //add last column_group
-      if ((common::OB_INVALID_ID != last_column_group_id)
-          && (common::OB_INVALID_ID != last_column_id)
-          && !is_last_deleted) {
-        if (OB_ISNULL(column_group) || (last_column_group_id != column_group->get_column_group_id())) {
-          if (OB_FAIL(table_schema->get_column_group_by_id(last_column_group_id, column_group))) {
-            LOG_WARN("fail to get column_group by id", KR(ret), K(last_column_group_id), K(table_id));
-          }
-        }
-        if (FAILEDx(column_group->add_column_id(last_column_id))) {
-          LOG_WARN("fail to add column_id", KR(ret), K(last_column_group_id), K(last_column_id), K(table_id));
-        }
-      }
-    }
   }
+
+  uint64_t last_column_group_id = common::OB_INVALID_ID;
+  uint64_t last_column_id = common::OB_INVALID_ID;
+  uint64_t last_schema_version = 0;
+  bool last_is_deleted = false;
+  ObColumnGroupSchema *cg_schema = nullptr;
+
+  while (OB_SUCC(ret)) {
+    uint64_t cur_column_group_id = common::OB_INVALID_ID;
+    uint64_t cur_column_id = common::OB_INVALID_ID;
+    uint64_t cur_schema_version = 0;
+    bool cur_is_deleted = false;
+
+    if (OB_FAIL(result.next())) {
+      if (common::OB_ITER_END == ret) {
+        ret = common::OB_SUCCESS;
+      } else {
+        SHARE_SCHEMA_LOG(WARN, "fail to get next row", KR(ret));
+      }
+    } else { // get curr column id info
+      EXTRACT_INT_FIELD_MYSQL(result, "column_group_id", cur_column_group_id, uint64_t);
+      EXTRACT_INT_FIELD_MYSQL(result, "column_id", cur_column_id, uint64_t);
+      if (check_deleted) {
+        EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", cur_is_deleted, bool);
+        EXTRACT_INT_FIELD_MYSQL(result, "schema_version", cur_schema_version, uint64_t);
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (common::OB_INVALID_ID == last_column_group_id) {
+      // first row, do nothing
+    } else if (cur_column_group_id != last_column_group_id || cur_column_id != last_column_id) {
+      // meet a new column group or a new column in one column group
+      if (last_is_deleted) {
+        // last column is deleted in last cg, no need to add to column group, ignore it
+      } else {
+        if (OB_ISNULL(cg_schema) || last_column_group_id != cg_schema->get_column_group_id()) {
+          if (OB_FAIL(table_schema->get_column_group_by_id(last_column_group_id, cg_schema))) {
+            LOG_WARN("fail to get cg schema by id", KR(ret), K(last_column_group_id), "table_id", table_schema->get_table_id());
+          }
+        }
+        if (FAILEDx(cg_schema->add_column_id(last_column_id))) {
+          LOG_WARN("fail to add column_id", KR(ret), K(last_column_group_id), K(last_column_id), "table_id", table_schema->get_table_id());
+        }
+      }
+    } else { // meet the same column in one column group, schema version should be asc
+      if (check_deleted) {
+        if (OB_UNLIKELY(last_schema_version > cur_schema_version)) {
+          ret = common::OB_ERR_UNEXPECTED;
+          LOG_WARN("the order of schema version should be asc", K(ret), K(last_schema_version), K(cur_schema_version),
+                   K(cur_column_id), K(cur_column_group_id), "table_id", table_schema->get_table_id());
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (common::OB_INVALID_ID == cur_column_group_id) {
+      break; // iter end
+    } else {
+      last_column_group_id = cur_column_group_id;
+      last_column_id = cur_column_id;
+      last_schema_version = cur_schema_version;
+      last_is_deleted = cur_is_deleted;
+    }
+  } // end while
   return ret;
 }
 

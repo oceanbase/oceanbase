@@ -20,6 +20,7 @@
 #include "ob_multiple_scan_merge.h"
 #include "ob_single_merge.h"
 #include "ob_multiple_mview_merge.h"
+#include "ob_tablet_read_tables.h"
 #include "storage/tx_storage/ob_access_service.h"
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx/ob_trans_service.h"
@@ -65,14 +66,8 @@ public:
 
   static int tables_are_cross(const int64_t snapshot_version,
                               const ObTableScanParam &scan_param,
-                              ObGetTableParam &get_table_param,
+                              ObTabletReadTables &tablet_read_tables,
                               bool &are_cross);
-
-  static int calc_query_iter_type(const ObTableScanRange &table_scan_range,
-                                  const int64_t snapshot_version,
-                                  const ObTableScanParam &scan_param,
-                                  ObGetTableParam &get_table_param,
-                                  ObQRIterType &type);
 
 public:
   static constexpr int64_t RP_MAX_FREE_LIST_NUM = 1024;
@@ -108,9 +103,7 @@ private:
   int sort_sample_ranges();
   int set_skip_scan_range();
   int check_advance_scan_supported();
-  // use context & param to calc query iter type
-  // may be not same as current_iter_type_
-  int inner_calc_query_iter_type(const ObTableScanParam &scan_param, ObQRIterType &type);
+  int decide_scan_merge_engine(ObQRIterType &iter_type, const bool skip_prepare_table = false);
 
 private:
   bool is_inited_;
@@ -128,7 +121,7 @@ private:
   // we should consider the constructor cost
   ObTableAccessParam main_table_param_;
   ObTableAccessContext main_table_ctx_;
-  ObGetTableParam get_table_param_;
+  ObTabletReadTables tablet_read_tables_;
 
   ObStoreCtxGuard ctx_guard_;
   ObTableScanParam *scan_param_;

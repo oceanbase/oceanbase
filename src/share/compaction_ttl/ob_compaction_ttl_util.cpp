@@ -86,6 +86,7 @@ int ObCompactionTTLUtil::check_table_hbase_valid(const ObTTLFlag &ttl_flag,
 int ObCompactionTTLUtil::check_ttl_column_valid(const ObTableSchema &table_schema,
                                                 const ObString &ttl_definition,
                                                 const ObTTLFlag &ttl_flag,
+                                                const ObMergeEngineType &merge_engine_type,
                                                 const uint64_t tenant_data_version,
                                                 const uint64_t tenant_id)
 {
@@ -117,7 +118,7 @@ int ObCompactionTTLUtil::check_ttl_column_valid(const ObTableSchema &table_schem
           ret = OB_NOT_SUPPORTED;
           COMMON_LOG(WARN, "multi ttl columns count is not supported", K(ret), K(ttl_definition));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "multi ttl columns count in sql mode is");
-        } else if (!table_schema.is_aux_lob_table() && !ObCompactionTTLUtil::is_compaction_ttl_merge_engine(table_schema.get_merge_engine_type())) {
+        } else if (!table_schema.is_aux_lob_table() && !ObCompactionTTLUtil::is_compaction_ttl_merge_engine(merge_engine_type)) {
           // 4. only support delete_insert and append_only merge engine
           //    skip check aux lob table
           ret = OB_NOT_SUPPORTED;
@@ -178,6 +179,103 @@ int ObCompactionTTLUtil::check_ttl_column_valid(const ObTableSchema &table_schem
     }
   }
 
+  return ret;
+}
+
+int ObCompactionTTLUtil::check_alter_merge_engine_valid(const share::schema::ObTableSchema &table_schema,
+                                                        const AlterTableSchema &alter_table_schema,
+                                                        share::schema::ObSchemaGetterGuard &schema_guard)
+{
+  int ret = OB_SUCCESS;
+  if (table_schema.is_append_only_merge_engine() && alter_table_schema.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::DYNAMIC_PARTITION_POLICY)) {
+    ret = OB_NOT_SUPPORTED;
+    COMMON_LOG(WARN, "dynamic partition policy is not supported for append_only table", K(ret), K(table_schema));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "dynamic partition policy for append_only table is");
+  }
+  /*
+   1. append_only table can not have delete/update event trigger
+   2. append_only table can not be alter to other merge engine
+   3. dynamic partition policy is not supported for append_only table
+   4. Compaction TTL table can not alter to partial update merge engine
+   5. Deleting TTL table can not alter to append_only merge engine
+  */
+
+  const bool is_alter_merge_engine = alter_table_schema.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::MERGE_ENGINE_TYPE);
+  if (OB_SUCC(ret) && is_alter_merge_engine) {
+    const bool is_alter_ttl = alter_table_schema.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::TTL_DEFINITION);
+    const bool is_alter_dynamic_partition_policy = alter_table_schema.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::DYNAMIC_PARTITION_POLICY);
+    const bool is_alter_compaction_ttl = is_alter_ttl && alter_table_schema.get_ttl_flag().ttl_type_ == ObTTLDefinition::COMPACTION;
+    const bool is_alter_deleting_ttl = is_alter_ttl && alter_table_schema.get_ttl_flag().ttl_type_ == ObTTLDefinition::DELETING;
+    const bool is_compaction_ttl = table_schema.has_ttl_definition() && table_schema.get_ttl_flag().ttl_type_ == ObTTLDefinition::COMPACTION;
+    const bool is_deleting_ttl = table_schema.has_ttl_definition() && table_schema.get_ttl_flag().ttl_type_ == ObTTLDefinition::DELETING;
+
+    // 1. check alter table schema is valid
+    // 1.1 append_only table does not support dynamic partition policy
+    if (alter_table_schema.is_append_only_merge_engine() && is_alter_dynamic_partition_policy) {
+      ret = OB_NOT_SUPPORTED;
+      COMMON_LOG(WARN, "append_only table does not support dynamic partition policy", K(ret), K(table_schema));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "dynamic partition policy for append_only table is");
+    }
+    // 1.2 compaction ttl table can not be alter to partial update merge engine
+    if (OB_SUCC(ret) && is_alter_compaction_ttl && !is_compaction_ttl_merge_engine(alter_table_schema.get_merge_engine_type())) {
+      ret = OB_NOT_SUPPORTED;
+      COMMON_LOG(WARN, "invalid merge engine with compaction ttl definition", K(ret), K(table_schema));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table merge engine with compaction ttl definition is");
+    }
+    // 1.3 deleting ttl table can not be alter to append_only merge engine
+    if (OB_SUCC(ret) && is_alter_deleting_ttl && !is_deleting_ttl_merge_engine(alter_table_schema.get_merge_engine_type())) {
+      ret = OB_NOT_SUPPORTED;
+      COMMON_LOG(WARN, "invalid merge engine with deleting ttl definition", K(ret), K(table_schema));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table merge engine with deleting ttl definition is");
+    }
+
+    // 2. check alter is valid
+    // 2.1 append_only table can not be alter to other merge engine
+    if (OB_SUCC(ret) && table_schema.is_append_only_merge_engine() && !alter_table_schema.is_append_only_merge_engine()) {
+      ret = OB_NOT_SUPPORTED;
+      COMMON_LOG(WARN, "append_only table can not be alter to other merge engine", K(ret), K(table_schema));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter append_only table to other merge engine is");
+    }
+
+    // 2.2 table with dynamic partition policy can not be alter to append_only table
+    if (OB_SUCC(ret) && table_schema.with_dynamic_partition_policy() && alter_table_schema.is_append_only_merge_engine()) {
+      ret = OB_NOT_SUPPORTED;
+      COMMON_LOG(WARN, "table with dynamic partition policy can not be alter to append_only table", K(ret), K(table_schema));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table with dynamic partition policy to append_only table is");
+    }
+
+    // 2.3 table with trigger can not be alter to append_only table
+    if (OB_SUCC(ret) && alter_table_schema.is_append_only_merge_engine() && table_schema.get_trigger_list().count() > 0) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < table_schema.get_trigger_list().count(); i++) {
+        const ObTriggerInfo *trigger_info = nullptr;
+        if (OB_FAIL(schema_guard.get_trigger_info(table_schema.get_tenant_id(), table_schema.get_trigger_list().at(i), trigger_info))) {
+          COMMON_LOG(WARN, "fail to get trigger info", K(ret), K(table_schema), K(table_schema.get_trigger_list().at(i)));
+        } else if (OB_ISNULL(trigger_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          COMMON_LOG(WARN, "trigger info is null", K(ret), K(table_schema), K(table_schema.get_trigger_list().at(i)));
+        } else if (trigger_info->has_delete_event() || trigger_info->has_update_event()) {
+          ret = OB_NOT_SUPPORTED;
+          COMMON_LOG(WARN, "append_only table can not have delete or update event trigger", K(ret), K(table_schema), K(trigger_info));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table with delete or update event trigger to append_only table is");
+        }
+      }
+    }
+
+    // 2.4 compaction ttl support append_only/delete_insert merge engine, deleting ttl support partial_update/delete_insert merge engine
+    // if alter ttl, we only need to check alter table schema is valid
+    if (OB_SUCC(ret) && !is_alter_ttl) {
+      if (is_compaction_ttl && !is_compaction_ttl_merge_engine(alter_table_schema.get_merge_engine_type())) {
+        ret = OB_NOT_SUPPORTED;
+        COMMON_LOG(WARN, "invalid merge engine with compaction ttl definition", K(ret), K(table_schema));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table merge engine with compaction ttl definition is");
+      }
+      if (OB_SUCC(ret) && is_deleting_ttl && !is_deleting_ttl_merge_engine(alter_table_schema.get_merge_engine_type())) {
+        ret = OB_NOT_SUPPORTED;
+        COMMON_LOG(WARN, "invalid merge engine with deleting ttl definition", K(ret), K(table_schema));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table merge engine with deleting ttl definition is");
+      }
+    }
+  }
   return ret;
 }
 

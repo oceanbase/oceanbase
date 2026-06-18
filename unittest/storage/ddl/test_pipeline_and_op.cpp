@@ -506,21 +506,31 @@ int TestCGMicroMacroWriteOp::initialize_cg_row_temp_file_env()
 int TestCGMicroMacroWriteOp::write_bdrs_into_cg_row_temp_files(const blocksstable::ObBatchDatumRows &bdrs)
 {
   int ret = OB_SUCCESS;
-  const ObIArray<ObStorageColumnGroupSchema> &cg_schemas = storage_schema_->get_column_groups();
   ObBatchDatumRows cg_rows;
   cg_rows.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
   cg_rows.mvcc_row_flag_ = bdrs.mvcc_row_flag_;
   cg_rows.row_count_ = bdrs.row_count_;
   cg_rows.trans_id_ = bdrs.trans_id_;
 
-  for (int64_t cg_idx = 0; OB_SUCC(ret) && cg_idx < cg_schemas.count(); ++cg_idx) {
+  ObStorageCGSchemaIterator cg_iterator(*storage_schema_);
+  while (OB_SUCC(ret)) {
+    const ObStorageColumnGroupSchema *cg_schema = nullptr;
+    int64_t cg_idx = -1;
+    int64_t iter_idx = -1;
+    if (OB_FAIL(cg_iterator.next(cg_schema, cg_idx, iter_idx))) {
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to get next cg schema", K(ret));
+      }
+      break;
+    }
     ObCGRowFile *cg_row_file = nullptr;
-    const ObStorageColumnGroupSchema &cg_schema = cg_schemas.at(cg_idx);
-    if (OB_UNLIKELY(cg_idx >= cg_row_file_arr_.count())) {
+    if (OB_UNLIKELY(iter_idx >= cg_row_file_arr_.count())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cg idx is invalid", K(ret), K(cg_idx), K(cg_row_file_arr_.count()));
+      LOG_WARN("cg idx is invalid", K(ret), K(iter_idx), K(cg_row_file_arr_.count()));
     } else {
-      cg_row_file = cg_row_file_arr_.at(cg_idx);
+      cg_row_file = cg_row_file_arr_.at(iter_idx);
       if (nullptr == cg_row_file) {
         const ObIArray<ObColumnSchemaItem>  &all_column_schema_its = ddl_dag_.ddl_table_schema_.column_items_;
         cg_row_file = OB_NEW(ObCGRowFile, ObMemAttr(MTL_ID(), "CGRowFile"));
@@ -530,22 +540,22 @@ int TestCGMicroMacroWriteOp::write_bdrs_into_cg_row_temp_files(const blocksstabl
         } else if (OB_FAIL(cg_row_file->open(all_column_schema_its,
                                              tablet_id_,
                                              slice_idx_,
-                                             cg_idx,
-                                             cg_schema,
+                                             iter_idx,
+                                             *cg_schema,
                                              BDRS_MAX_BATCH_SIZE))) {
-          LOG_WARN("fail to open cg block file", K(ret), K(tablet_id_), K(slice_idx_), K(cg_idx));
+          LOG_WARN("fail to open cg block file", K(ret), K(tablet_id_), K(slice_idx_), K(iter_idx));
         } else {
-          cg_row_file_arr_.at(cg_idx) = cg_row_file;
+          cg_row_file_arr_.at(iter_idx) = cg_row_file;
         }
       }
     }
     if (OB_SUCC(ret)) {
       cg_rows.vectors_.reuse();
-      for (int64_t j = 0; OB_SUCC(ret) && j < cg_schema.get_column_count(); ++j) {
-        const int64_t column_idx = cg_schema.get_column_idx(j);
+      for (int64_t j = 0; OB_SUCC(ret) && j < cg_schema->get_column_count(); ++j) {
+        const int64_t column_idx = cg_schema->get_column_idx(j);
         if (OB_UNLIKELY(column_idx < 0 || column_idx >= bdrs.vectors_.count())) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("this is invalid column idx", K(ret), K(column_idx), K(cg_schema));
+          LOG_WARN("this is invalid column idx", K(ret), K(column_idx), KPC(cg_schema));
         } else if (OB_FAIL(cg_rows.vectors_.push_back(bdrs.vectors_.at(column_idx)))) {
           LOG_WARN("push back vector failed", K(ret), K(column_idx));
         }

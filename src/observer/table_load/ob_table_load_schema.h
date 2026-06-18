@@ -80,7 +80,7 @@ public:
   bool is_local_unique_index() const { return is_local_unique_index_table(index_type_); }
   TO_STRING_KV(K_(table_name), K_(is_partitioned_table), K_(is_table_without_pk), K_(is_table_with_hidden_pk_column), K_(is_random_part),
                K_(random_partkey_column_id), K_(autoinc_column_id), K_(has_identity_column), K_(has_lob_rowkey), K_(rowkey_column_count), K_(store_column_count),
-               K_(cg_cnt), K_(collation_type), K_(column_descs), K_(is_inited));
+               K_(cg_cnt), K_(collation_type), K_(column_descs), K_(merge_engine_type), K_(is_inited));
 private:
   int init_table_schema(const share::schema::ObTableSchema *table_schema);
   int init_cmp_funcs(const common::ObIArray<share::schema::ObColDesc> &column_descs,
@@ -123,6 +123,7 @@ public:
   blocksstable::ObStorageDatumUtils lob_meta_datum_utils_;
   blocksstable::ObStoreCmpFuncs cmp_funcs_; // for sql statistics
   sql::ObBitVector *col_nullables_;
+  ObMergeEngineType merge_engine_type_;
   bool is_inited_;
 };
 

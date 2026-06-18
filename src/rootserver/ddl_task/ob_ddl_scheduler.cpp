@@ -2938,7 +2938,6 @@ int ObDDLScheduler::create_table_redefinition_task(
     ObDDLTaskRecord &task_record)
 {
   int ret = OB_SUCCESS;
-  int64_t target_cg_cnt = 0;
   SMART_VAR(ObTableRedefinitionTask, redefinition_task) {
     if (OB_UNLIKELY(!is_inited_)) {
       ret = OB_NOT_INIT;
@@ -2946,8 +2945,6 @@ int ObDDLScheduler::create_table_redefinition_task(
     } else if (OB_UNLIKELY(0 == task_id || tenant_data_version <= 0) || OB_ISNULL(alter_table_arg) || OB_ISNULL(src_schema) || OB_ISNULL(dest_schema)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid arguments", K(ret), K(task_id), KP(alter_table_arg), KP(src_schema), KP(dest_schema),  K(tenant_data_version));
-    } else if (OB_FAIL(dest_schema->get_store_column_group_count(target_cg_cnt))) {
-      LOG_WARN("fail to get target_cg_cnt", K(ret), K(dest_schema));
     } else if (OB_FAIL(redefinition_task.init(src_schema,
                                               dest_schema,
                                               parent_task_id,
@@ -2986,7 +2983,6 @@ int ObDDLScheduler::create_drop_primary_key_task(
     ObDDLTaskRecord &task_record)
 {
   int ret = OB_SUCCESS;
-  int64_t target_cg_cnt = 0;
   SMART_VAR(ObDropPrimaryKeyTask, drop_pk_task) {
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -2994,8 +2990,6 @@ int ObDDLScheduler::create_drop_primary_key_task(
   } else if (OB_UNLIKELY(0 == task_id || tenant_data_version <= 0) || OB_ISNULL(alter_table_arg) || OB_ISNULL(src_schema) || OB_ISNULL(dest_schema)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(task_id), KP(alter_table_arg), KP(src_schema), KP(dest_schema), K(tenant_data_version));
-  } else if (OB_FAIL(dest_schema->get_store_column_group_count(target_cg_cnt))) {
-    LOG_WARN("fail to get target_store_cg_cnt", K(ret), KPC(dest_schema));
   } else if (OB_FAIL(drop_pk_task.init(src_schema,
                                        dest_schema,
                                        task_id,
@@ -3188,7 +3182,6 @@ int ObDDLScheduler::create_recover_restore_table_task(
     ObDDLTaskRecord &task_record)
 {
   int ret = OB_SUCCESS;
-  int64_t target_cg_cnt = 0;
   SMART_VAR(ObRecoverRestoreTableTask, redefinition_task) {
     if (OB_UNLIKELY(!is_inited_)) {
       ret = OB_NOT_INIT;
@@ -3197,8 +3190,6 @@ int ObDDLScheduler::create_recover_restore_table_task(
         || OB_ISNULL(alter_table_arg) || OB_ISNULL(src_schema) || OB_ISNULL(dest_schema)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid arguments", K(ret), K(task_id), KP(alter_table_arg), KP(src_schema), KP(dest_schema), K(tenant_data_version));
-    } else if (OB_FAIL(dest_schema->get_store_column_group_count(target_cg_cnt))) {
-      LOG_WARN("fail to get store cg cnt", K(ret), KPC(dest_schema));
     } else if (OB_FAIL(redefinition_task.init(src_schema,
                                               dest_schema,
                                               task_id,

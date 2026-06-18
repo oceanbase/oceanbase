@@ -108,7 +108,7 @@ ObMemtable::ObMemtable()
   :   is_inited_(false),
       transfer_freeze_flag_(false),
       contain_hotspot_row_(false),
-      is_delete_insert_table_(false),
+      original_merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_MAX),
       use_hash_index_(false),
       ls_handle_(),
       local_allocator_(*this),
@@ -2573,7 +2573,7 @@ int ObMemtable::set_(
                                       init_timestamp_,           /*memstore_version*/
                                                                 /* for delete_insert table, delete and insert are the continous trans in update*/
                                                                 /* take two seq cnt, delete takes the former, need -1 in write seq*/
-                                      (is_delete_insert_table() && new_row->row_flag_.is_delete()) ? write_seq - 1 : write_seq,
+                                      (memtable_set_arg.is_delete_insert() && new_row->row_flag_.is_delete()) ? write_seq - 1 : write_seq,
                                       write_epoch,               /*write_epoch*/
                                       column_cnt                 /*column_cnt*/))) {
     // Step2: build and insert the tx node into the active memtable, it will
@@ -2710,7 +2710,7 @@ int ObMemtable::lock_(
   } else if (FALSE_IT(write_epoch = mem_ctx->get_write_epoch())) {
   } else if (OB_FAIL(acc_ctx.get_write_seq(lock_seq))) {
     TRANS_LOG(WARN, "get write seq failed", K(ret));
-  } else if (OB_FAIL(row_writer.write_lock_rowkey(rowkey, col_descs, buf, len))) {
+  } else if (OB_FAIL(row_writer.write_lock_rowkey(rowkey, col_descs, param.merge_engine_type_, buf, len))) {
     TRANS_LOG(WARN, "Failed to writer rowkey", K(ret), K(rowkey));
   } else {
     ObRowData empty_old_row;
@@ -2892,7 +2892,7 @@ int ObMemtable::batch_mvcc_write_(const storage::ObTableIterParam &param,
 
     if (OB_FAIL(ctx.mvcc_acc_ctx_.get_write_seq(write_seq))) {
       TRANS_LOG(WARN, "get write seq failed", K(ret));
-    } else if (is_delete_insert_table() && memtable_set_arg.new_row_[i].row_flag_.is_delete()) {
+    } else if (memtable_set_arg.is_delete_insert() && memtable_set_arg.new_row_[i].row_flag_.is_delete()) {
       // for delete_insert table, delete and insert are the continous trans in update,
       // take two seq cnt, delete takes the former, need -1 in write seq
       write_seq = write_seq - 1;
@@ -3386,14 +3386,16 @@ ObMemtableSetArg::ObMemtableSetArg(const blocksstable::ObDatumRow *new_row,
                                    const blocksstable::ObDatumRow *old_row,
                                    const int64_t row_count,
                                    const bool check_exist,
-                                   const share::ObEncryptMeta *encrypt_meta)
+                                   const share::ObEncryptMeta *encrypt_meta,
+                                   const ObMergeEngineType merge_engine)
   : new_row_(new_row),
     columns_(columns),
     update_idx_(update_idx),
     old_row_(old_row),
     row_count_(row_count),
     encrypt_meta_(encrypt_meta),
-    check_exist_(check_exist)
+    check_exist_(check_exist),
+    merge_engine_(merge_engine)
 {}
 
 bool ObMemtableSetArg::is_valid() const
@@ -3415,6 +3417,16 @@ int64_t ObMemtableSetArg::get_row_count() const
 bool ObMemtableSetArg::need_check_exist() const
 {
   return check_exist_;
+}
+
+bool ObMemtableSetArg::is_delete_insert() const
+{
+  return ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT == merge_engine_;
+}
+
+ObMergeEngineType ObMemtableSetArg::get_merge_engine_type() const
+{
+  return merge_engine_;
 }
 
 blocksstable::ObDmlFlag ObMemtableSetArg::get_dml_flag() const
@@ -3459,7 +3471,10 @@ int ObMemtable::build_row_data_(ObMemtableCtx *mem_ctx,
     // TODO(handora.qc): we can optimize the old row allocation to remove the
     // row writer allocation and old row memcpy
     char *old_row_buf = nullptr;
-    if (OB_FAIL(row_writer.write(rowkey_column_cnt,
+    if (OB_UNLIKELY(!ObMergeEngineStoreFormat::is_merge_engine_valid(old_row.merge_engine_type_))) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "Unexpected merge engine type", K(ret), K(old_row), K(lbt()));
+    } else if (OB_FAIL(row_writer.write(rowkey_column_cnt,
                                  old_row,
                                  // full columns are necessary for old row
                                  nullptr,
@@ -3480,7 +3495,10 @@ int ObMemtable::build_row_data_(ObMemtableCtx *mem_ctx,
   if (OB_SUCC(ret)) {
     const blocksstable::ObDatumRow &new_row = arg.new_row_[index];
     const common::ObIArray<int64_t> *update_idx = arg.update_idx_;
-    if (OB_FAIL(row_writer.write(rowkey_column_cnt,
+    if (OB_UNLIKELY(!ObMergeEngineStoreFormat::is_merge_engine_valid(new_row.merge_engine_type_))) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "Unexpected merge engine type", K(ret), K(new_row), K(lbt()));
+    } else if (OB_FAIL(row_writer.write(rowkey_column_cnt,
                                  new_row,
                                  // only updated column for update new row
                                  update_idx,
@@ -3599,7 +3617,7 @@ int ObMemtable::check_set_row_with_nop_col_(const ObMemtableSetArg &memtable_set
 {
   int ret = OB_SUCCESS;
   // check nop in old row / new row for delete insert tables
-  if (is_delete_insert_table()) {
+  if (memtable_set_arg.is_delete_insert()) {
     const int64_t row_count = memtable_set_arg.row_count_;
     for (int64_t i = 0; OB_SUCC(ret) && i < row_count; ++i) {
       bool has_nop_in_new_row = false;

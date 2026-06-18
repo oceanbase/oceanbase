@@ -97,7 +97,7 @@ int ObSkipIndexSortedness::init_col_idx_in_storage(const ObSSTable &sstable,
   // the storage order of the skip index is the same as that of mvcc_col_desc
   common::ObSEArray<ObColDesc, 32> cols_desc;
 
-  if (sstable.is_cg_sstable()) {
+  if (sstable.is_normal_cg_sstable()) {
     col_idx_in_storage_ = 0;
   } else if (OB_FAIL(schema.get_multi_version_column_descs(cols_desc))) {
     LOG_WARN("Fail to to get cols_desc", KR(ret));

@@ -127,6 +127,7 @@ public:
   void assign(const ObTableStoreCache &other);
   inline bool is_last_major_column_store() const { return ObMajorStoreType::PURE_COLUMN_STORE == last_major_store_type_
                                                        || ObMajorStoreType::REDUNDANT_ROW_STORE == last_major_store_type_; }
+  inline bool is_last_major_pure_column_store() const { return ObMajorStoreType::PURE_COLUMN_STORE == last_major_store_type_; }
   inline bool is_last_major_row_store() const { return ObMajorStoreType::ROW_STORE == last_major_store_type_; }
   inline bool is_major_exit() const { return 0 != major_table_cnt_; }
   int serialize(
@@ -274,6 +275,7 @@ public:
   inline bool is_user_tablet() const { return tablet_meta_.tablet_id_.is_user_tablet(); }
   inline bool is_user_data_table() const { return tablet_meta_.table_store_flag_.is_user_data_table(); }
   inline bool is_last_major_column_store() const { return table_store_cache_.is_last_major_column_store(); }
+  inline bool is_last_major_pure_column_store() const { return table_store_cache_.is_last_major_pure_column_store(); }
   inline bool is_last_major_row_store() const { return table_store_cache_.is_last_major_row_store(); }
   inline bool is_mlog_purge_by_compaction() const { return table_store_cache_.is_mlog_purge_by_compaction(); }
   inline SCN get_min_recycle_scn() const { return table_store_cache_.min_recycle_scn_; }
@@ -649,7 +651,7 @@ public:
   // column store replica
 public:
   bool is_cs_replica_compat() const { return nullptr == rowkey_read_info_ ? false : rowkey_read_info_->is_cs_replica_compat(); }
-  int check_is_delete_insert_table(bool &is_delete_insert_table) const;
+  int get_original_merge_engine_type(ObMergeEngineType &original_merge_engine_type) const;
   int check_is_mv_major_refresh_tablet(bool &val) const;
   int check_micro_block_format_version(int64_t &micro_block_format_version) const;
   int check_row_store_with_co_major(bool &is_row_store_with_co_major) const;
@@ -1154,6 +1156,8 @@ private:
       const ObMigrationTabletParam &param,
       ObTableHandleV2 &mds_mini_sstable);
   int build_migration_tablet_param_storage_schema(
+      ObMigrationTabletParam &mig_tablet_param) const;
+  int build_migration_tablet_param_mock_cg_schemas(
       ObMigrationTabletParam &mig_tablet_param) const;
   int build_migration_tablet_param_last_tablet_status(
       ObMigrationTabletParam &mig_tablet_param) const;

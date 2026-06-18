@@ -31,7 +31,7 @@ int ObMicroBufferFlatWriter<EnableNewFlatFormat>::write_row(const ObDatumRow &ro
   while (OB_SUCC(ret)) {
     if (OB_SUCC(row_writer_.write(rowkey_cnt,
                                   row,
-                                  /* update_array */ nullptr,
+                                  nullptr /* update_array */,
                                   col_descs,
                                   current(),
                                   remain_buffer_size(),

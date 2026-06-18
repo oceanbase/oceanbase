@@ -70,7 +70,6 @@ int ObStaticDataStoreDesc::assign(const ObStaticDataStoreDesc &desc)
   enable_macro_block_bloom_filter_ = desc.enable_macro_block_bloom_filter_;
   micro_block_format_version_ = desc.micro_block_format_version_;
   need_submit_io_ = desc.need_submit_io_;
-  merge_engine_type_ = desc.merge_engine_type_;
   encoding_granularity_ = desc.encoding_granularity_;
   concurrent_cnt_ = desc.concurrent_cnt_;
   reorganization_scn_ = desc.reorganization_scn_;
@@ -207,7 +206,6 @@ int ObStaticDataStoreDesc::init(
         // for mini/minor, use default compressor
         compressor_type_ = DEFAULT_MINOR_COMPRESSOR_TYPE;
       }
-      merge_engine_type_ = merge_schema.get_merge_engine_type();
       (void) init_block_size(merge_schema);
       uint64_t compat_version = 0;
       if (cluster_version > 0) {

@@ -430,9 +430,9 @@ int ObDirectLoadOriginTableAccessor::init_table_access_ctx(bool skip_read_lob)
 int ObDirectLoadOriginTableAccessor::init_get_table_param()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(get_table_param_.tablet_iter_.set_tablet_handle(tablet_handle_))) {
+  if (OB_FAIL(tablet_read_tables_.tablet_iter_.set_tablet_handle(tablet_handle_))) {
     LOG_WARN("Failed to set tablet handle to tablet table iter", K(ret));
-  } else if (OB_FAIL(get_table_param_.tablet_iter_.refresh_read_tables_from_tablet(INT64_MAX,
+  } else if (OB_FAIL(tablet_read_tables_.tablet_iter_.refresh_read_tables_from_tablet(INT64_MAX,
                                                                                    false /*allow_not_ready*/,
                                                                                    false /*major_sstable_only*/,
                                                                                    false /*need_split_src_table*/,
@@ -447,7 +447,7 @@ void ObDirectLoadOriginTableAccessor::reset()
   tablet_handle_.reset();
   tablet_handle_refresh_time_ = 0;
   datum_row_.reset();
-  get_table_param_.reset();
+  tablet_read_tables_.reset();
   table_access_ctx_.reset();
   store_ctx_.reset();
   table_access_param_.reset();
@@ -471,7 +471,7 @@ int ObDirectLoadOriginTableScanner::init(ObDirectLoadOriginTable *origin_table, 
     LOG_WARN("ObDirectLoadOriginTableScanner init twice", KR(ret), KP(this));
   } else if (OB_FAIL(inner_init(origin_table, skip_read_lob))) {
     LOG_WARN("fail to inner init", KR(ret));
-  } else if (OB_FAIL(scan_merge_.init(table_access_param_, table_access_ctx_, get_table_param_))) {
+  } else if (OB_FAIL(scan_merge_.init(table_access_param_, table_access_ctx_, tablet_read_tables_))) {
     LOG_WARN("fail to init scan merge", KR(ret));
   } else {
     if (!skip_del_row) {
@@ -580,7 +580,7 @@ int ObDirectLoadOriginTableGetter::init(ObDirectLoadOriginTable *origin_table, b
   } else if (OB_FAIL(inner_init(origin_table, skip_read_lob))) {
     LOG_WARN("fail to inner init", KR(ret));
   } else if (OB_FAIL(
-               single_merge_.init(table_access_param_, table_access_ctx_, get_table_param_))) {
+               single_merge_.init(table_access_param_, table_access_ctx_, tablet_read_tables_))) {
     LOG_WARN("fail to init multi merge", KR(ret));
   } else {
     is_inited_ = true;

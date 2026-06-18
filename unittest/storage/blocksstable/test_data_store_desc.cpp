@@ -132,7 +132,6 @@ TEST_F(TestObDataStoreDesc, test_col_desc)
 
   ObStaticDataStoreDesc static_desc;
   static_desc.major_working_cluster_version_ = DATA_VERSION_4_3_2_0;
-  static_desc.merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE;
   static_desc.merge_type_ = MAJOR_MERGE;
   ASSERT_FALSE(col_desc.is_valid());
   ASSERT_EQ(OB_SUCCESS, col_desc.init(table_schema, 0/*table_cg_idx*/, static_desc));
@@ -234,33 +233,41 @@ TEST_F(TestObDataStoreDesc, test_cg)
                              0 /*concurrent_cnt*/, share::SCN::min_scn()/*reorganization_scn*/));
   ASSERT_TRUE(static_desc.is_valid());
 
-  const ObIArray<ObStorageColumnGroupSchema> &column_groups = storage_schema.get_column_groups();
-  for (int64_t i = 0 ; i < column_groups.count(); ++i) {
-    const ObStorageColumnGroupSchema &column_group = column_groups.at(i);
-    const ObDataStoreDesc &data_store_desc = data_desc[i].get_desc();
-    if (column_group.is_all_column_group()) {
+  ObStorageCGSchemaIterator cg_iterator(storage_schema);
+  int ret = OB_SUCCESS;
+  while (OB_SUCC(ret)) {
+    const ObStorageColumnGroupSchema *column_group = nullptr;
+    int64_t cg_idx = -1;
+    int64_t iter_idx = -1;
+    ret = cg_iterator.next(column_group, cg_idx, iter_idx);
+    if (OB_SUCCESS != ret) {
+      break;
+    }
+
+    const ObDataStoreDesc &data_store_desc = data_desc[iter_idx].get_desc();
+    if (column_group->is_all_column_group()) {
       continue;
     }
-    ASSERT_EQ(OB_SUCCESS, data_desc[i].init(static_desc, storage_schema, &column_group, i));
+    ASSERT_EQ(OB_SUCCESS, data_desc[iter_idx].init(static_desc, storage_schema, column_group, cg_idx));
 
     // check single cg default skip index
-    ASSERT_EQ(3, data_desc[i].col_desc_.agg_meta_array_.count());
-    ASSERT_EQ(ObSkipIndexColType::SK_IDX_MIN, data_desc[i].col_desc_.agg_meta_array_.at(0).col_type_);
-    ASSERT_EQ(ObSkipIndexColType::SK_IDX_MAX, data_desc[i].col_desc_.agg_meta_array_.at(1).col_type_);
-    ASSERT_EQ(ObSkipIndexColType::SK_IDX_NULL_COUNT, data_desc[i].col_desc_.agg_meta_array_.at(2).col_type_);
+    ASSERT_EQ(3, data_desc[iter_idx].col_desc_.agg_meta_array_.count());
+    ASSERT_EQ(ObSkipIndexColType::SK_IDX_MIN, data_desc[iter_idx].col_desc_.agg_meta_array_.at(0).col_type_);
+    ASSERT_EQ(ObSkipIndexColType::SK_IDX_MAX, data_desc[iter_idx].col_desc_.agg_meta_array_.at(1).col_type_);
+    ASSERT_EQ(ObSkipIndexColType::SK_IDX_NULL_COUNT, data_desc[iter_idx].col_desc_.agg_meta_array_.at(2).col_type_);
 
-    ASSERT_EQ(data_store_desc.get_row_column_count(), column_group.column_cnt_);
-    ASSERT_EQ(data_store_desc.get_full_stored_col_cnt(), column_group.column_cnt_);
-    ASSERT_EQ(data_store_desc.get_schema_rowkey_col_cnt(), column_group.schema_rowkey_column_cnt_);
-    ASSERT_EQ(data_store_desc.get_rowkey_column_count(), column_group.rowkey_column_cnt_);
+    ASSERT_EQ(data_store_desc.get_row_column_count(), column_group->column_cnt_);
+    ASSERT_EQ(data_store_desc.get_full_stored_col_cnt(), column_group->column_cnt_);
+    ASSERT_EQ(data_store_desc.get_schema_rowkey_col_cnt(), column_group->schema_rowkey_column_cnt_);
+    ASSERT_EQ(data_store_desc.get_rowkey_column_count(), column_group->rowkey_column_cnt_);
 
-    COMMON_LOG(INFO, "prepare desc", K(i), K(column_group), K(data_store_desc));
-    ASSERT_EQ(data_store_desc.get_table_cg_idx(), i);
-    ASSERT_EQ(data_store_desc.get_is_row_store(), column_group.is_all_column_group() || column_group.is_rowkey_column_group());
+    COMMON_LOG(INFO, "prepare desc", K(iter_idx), K(column_group), K(data_store_desc));
+    ASSERT_EQ(data_store_desc.get_table_cg_idx(), iter_idx);
+    ASSERT_EQ(data_store_desc.get_is_row_store(), column_group->is_all_column_group() || column_group->is_rowkey_column_group());
     ASSERT_EQ(data_store_desc.get_col_desc_array().count(), data_store_desc.get_row_column_count());
 
-    ASSERT_EQ(OB_SUCCESS, index_desc[i].gen_index_store_desc(data_store_desc));
-    const ObDataStoreDesc &index_store_desc = index_desc[i].get_desc();
+    ASSERT_EQ(OB_SUCCESS, index_desc[iter_idx].gen_index_store_desc(data_store_desc));
+    const ObDataStoreDesc &index_store_desc = index_desc[iter_idx].get_desc();
     ASSERT_EQ(index_store_desc.get_schema_rowkey_col_cnt(), 0);
     ASSERT_EQ(index_store_desc.get_rowkey_column_count(), 1);
     ASSERT_EQ(index_store_desc.get_row_column_count(), data_store_desc.get_row_column_count() + 1);

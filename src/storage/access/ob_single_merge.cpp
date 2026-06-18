@@ -31,11 +31,11 @@ int ObSingleMerge::open(const ObDatumRowkey &rowkey)
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObMultipleMerge::open())) {
     STORAGE_LOG(WARN, "Fail to open ObMultipleMerge, ", K(ret));
-  } else if (OB_ISNULL(get_table_param_)) {
+  } else if (OB_ISNULL(tablet_read_tables_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ObSingleMerge has not been inited", K(ret), K_(get_table_param));
+    LOG_WARN("ObSingleMerge has not been inited", K(ret), K_(tablet_read_tables));
   } else {
-    const ObTabletMeta &tablet_meta = get_table_param_->tablet_iter_.get_tablet()->get_tablet_meta();
+    const ObTabletMeta &tablet_meta = tablet_read_tables_->tablet_iter_.get_tablet()->get_tablet_meta();
     if (!full_row_.is_valid()) {
       if (OB_FAIL(full_row_.init(*long_life_allocator_, access_param_->get_max_out_col_cnt()))) {
         STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
@@ -235,14 +235,14 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
     bool have_uncommited_row = false;
     const StorageScanType scan_type = access_ctx_->get_scan_type();
     const ObITableReadInfo *read_info = access_param_->iter_param_.get_read_info();
-    const ObTabletMeta &tablet_meta = get_table_param_->tablet_iter_.get_tablet()->get_tablet_meta();
+    const ObTabletMeta &tablet_meta = tablet_read_tables_->tablet_iter_.get_tablet()->get_tablet_meta();
     const int64_t read_snapshot_version = access_ctx_->trans_version_range_.snapshot_version_;
     access_ctx_->use_fuse_row_cache_ = access_ctx_->use_fuse_row_cache_ &&
                                        access_param_->iter_param_.enable_fuse_row_cache(access_ctx_->query_flag_, scan_type) &&
                                        (is_mview_table_scan(scan_type) ||
                                        read_snapshot_version >= tablet_meta.snapshot_version_) &&
                                        (!table->is_co_sstable() || static_cast<ObCOSSTableV2 *>(table)->is_all_cg_base()) &&
-                                       OB_ISNULL(get_table_param_->tablet_iter_.get_split_extra_tablet_handles_ptr()) &&
+                                       OB_ISNULL(tablet_read_tables_->tablet_iter_.get_split_extra_tablet_handles_ptr()) &&
                                        !(!tablet_meta.table_store_flag_.with_major_sstable() && tablet_meta.split_info_.get_split_src_tablet_id().is_valid()) && // not split dst tablet
                                        !tablet_meta.has_transfer_table() && // The query in the transfer scenario does not enable fuse row cache
                                        !(access_ctx_->is_inc_major_query_ && access_param_->iter_param_.is_use_column_store()) && // inc major query with co sstables does not use fuse row cache

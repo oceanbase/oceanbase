@@ -1435,6 +1435,19 @@ int ObPartitionExchange::check_table_column_groups_(const ObTableSchema &base_ta
         LOG_WARN("fail to compare two column group schema", K(ret), K(base_table_schema), K(inc_table_schema), KPC(base_cg_schema), KPC(inc_cg_schema), K(is_oracle_mode));
       }
     }
+
+    if (OB_SUCC(ret) && is_equal) {
+      const ObColumnGroupSchema *base_hidden_rowkey_cg = base_table_schema.get_hidden_rowkey_column_group();
+      const ObColumnGroupSchema *inc_hidden_rowkey_cg = inc_table_schema.get_hidden_rowkey_column_group();
+      if (nullptr != base_hidden_rowkey_cg && nullptr != inc_hidden_rowkey_cg) {
+        if (OB_FAIL(compare_two_column_group_schema_(base_table_schema, inc_table_schema, *base_hidden_rowkey_cg, *inc_hidden_rowkey_cg, is_oracle_mode, is_equal))) {
+          LOG_WARN("fail to compare two hidden rowkey column group schema", K(ret), K(base_table_schema), K(inc_table_schema), KPC(base_hidden_rowkey_cg), KPC(inc_hidden_rowkey_cg), K(is_oracle_mode));
+        }
+      } else if (OB_UNLIKELY(nullptr != base_hidden_rowkey_cg || nullptr != inc_hidden_rowkey_cg)) {
+        is_equal = false;
+        LOG_WARN("hidden rowkey cg of exchanging tables are not equal", K(ret), KPC(base_hidden_rowkey_cg), KPC(inc_hidden_rowkey_cg));
+      }
+    }
   }
   if (OB_SUCC(ret) && !is_equal) {
     ret = OB_ERR_PARTITION_EXCHANGE_DIFFERENT_OPTION;

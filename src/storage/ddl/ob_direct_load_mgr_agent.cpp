@@ -123,7 +123,7 @@ int ObDirectLoadMgrAgent::init_for_sn(
     LOG_WARN("tablet handle is null", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_FAIL(tablet_handle.get_obj()->load_storage_schema(tmp_arena, storage_schema))) {
     LOG_WARN("load storage schema failed", K(ret));
-  } else if (OB_FALSE_IT(cgs_count_ = storage_schema->get_column_groups().count())) {
+  } else if (OB_FALSE_IT(cgs_count_ = storage_schema->get_column_group_count())) {
   } else if (OB_LIKELY(mgr_handle_.is_valid())) {
     if (!start_scn_.is_valid_and_not_min() || execution_id_ < 0) {
       ret = OB_ERR_SYS;

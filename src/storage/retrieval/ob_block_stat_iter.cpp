@@ -160,7 +160,7 @@ ObBlockStatIterator::ObBlockStatIterator()
     merged_endkey_allocator_(ObMemAttr(MTL_ID(), "BlkStatKeyIter")),
     stat_collector_(),
     scan_range_(),
-    get_table_param_(),
+    tablet_read_tables_(),
     ctx_guard_(),
     main_table_param_(),
     main_table_ctx_(),
@@ -199,7 +199,7 @@ void ObBlockStatIterator::reset()
   main_table_ctx_.reset();
   main_table_param_.reset();
   ctx_guard_.reset();
-  get_table_param_.reset();
+  tablet_read_tables_.reset();
   scan_range_.reset();
   stat_collector_.reset();
   key_cmp_.reset();
@@ -228,7 +228,7 @@ int ObBlockStatIterator::init(const ObTabletHandle &tablet_handle, ObBlockStatSc
   } else if (FALSE_IT(scan_param_ = &scan_param)) {
   } else if (OB_FAIL(init_scan_range(tablet_handle, scan_param))) {
     LOG_WARN("failed to init scan range", K(ret));
-  } else if (OB_FAIL(get_table_param_.tablet_iter_.set_tablet_handle(tablet_handle))) {
+  } else if (OB_FAIL(tablet_read_tables_.tablet_iter_.set_tablet_handle(tablet_handle))) {
     LOG_WARN("failed to set tablet handle to iter", K(ret));
   } else if (OB_FAIL(init_memtable_access_param(tablet_handle, *table_scan_param))) {
     LOG_WARN("failed to init memtable access param", K(ret));
@@ -353,7 +353,7 @@ int ObBlockStatIterator::init_memtable_access_param(
     trans_version_range.base_version_ = 0;
     trans_version_range.snapshot_version_ = ctx_guard_.get_store_ctx().mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx();
     if (OB_FAIL(main_table_ctx_.init(
-        scan_param, ctx_guard_.get_store_ctx(), trans_version_range, nullptr /*cached_iter_node*/))) {
+        scan_param, ctx_guard_.get_store_ctx(), trans_version_range))) {
       LOG_WARN("failed to init main table ctx", K(ret));
     } else {
       iter_allocator_ = main_table_ctx_.get_long_life_allocator();
@@ -365,7 +365,7 @@ int ObBlockStatIterator::init_memtable_access_param(
 int ObBlockStatIterator::refresh_scan_table_on_demand()
 {
   int ret = OB_SUCCESS;
-  const bool need_refresh = get_table_param_.tablet_iter_.table_iter()->check_store_expire();
+  const bool need_refresh = tablet_read_tables_.tablet_iter_.table_iter()->check_store_expire();
   if (OB_UNLIKELY(need_refresh)) {
     scan_tables_.reuse();
     if (nullptr != curr_endkey_ && OB_FAIL(shrink_scan_range(*curr_endkey_))) {
@@ -393,9 +393,9 @@ int ObBlockStatIterator::refresh_tablet_iter()
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(!get_table_param_.tablet_iter_.is_valid())) {
+  if (OB_UNLIKELY(!tablet_read_tables_.tablet_iter_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet iter is invalid", K(ret), K(get_table_param_.tablet_iter_));
+    LOG_WARN("tablet iter is invalid", K(ret), K(tablet_read_tables_.tablet_iter_));
   } else {
     ObLSHandle ls_handle;
     ObLS *ls = nullptr;
@@ -403,7 +403,7 @@ int ObBlockStatIterator::refresh_tablet_iter()
     main_table_param_.iter_param_.rowkey_read_info_ = nullptr;
     const int64_t remain_timeout = THIS_WORKER.get_timeout_remain();
     const share::ObLSID &ls_id = main_table_ctx_.ls_id_;
-    const common::ObTabletID &tablet_id = get_table_param_.tablet_iter_.get_tablet()->get_tablet_meta().tablet_id_;
+    const common::ObTabletID &tablet_id = tablet_read_tables_.tablet_iter_.get_tablet()->get_tablet_meta().tablet_id_;
     const int64_t snapshot_version = main_table_ctx_.store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx();
     if (OB_UNLIKELY(remain_timeout <= 0)) {
       ret = OB_TIMEOUT;
@@ -418,13 +418,13 @@ int ObBlockStatIterator::refresh_tablet_iter()
         remain_timeout,
         snapshot_version,
         snapshot_version,
-        get_table_param_.tablet_iter_,
+        tablet_read_tables_.tablet_iter_,
         false/*allow_not_ready*/,
         false/*need_split_src_table*/,
         false/*need_split_dst_table*/))) {
-      LOG_WARN("failed to refresh tablet iterator", K(ret), K(ls_id), K_(get_table_param));
+      LOG_WARN("failed to refresh tablet iterator", K(ret), K(ls_id), K_(tablet_read_tables));
     } else {
-      rowkey_read_info_ = &get_table_param_.tablet_iter_.get_tablet_handle().get_obj()->get_rowkey_read_info();
+      rowkey_read_info_ = &tablet_read_tables_.tablet_iter_.get_tablet_handle().get_obj()->get_rowkey_read_info();
       main_table_param_.iter_param_.rowkey_read_info_ = rowkey_read_info_;
     }
   }
@@ -435,7 +435,7 @@ int ObBlockStatIterator::refresh_tablet_iter()
 int ObBlockStatIterator::prepare_scan_tables()
 {
   int ret = OB_SUCCESS;
-  ObTableStoreIterator *table_store_iter = get_table_param_.tablet_iter_.table_iter();
+  ObTableStoreIterator *table_store_iter = tablet_read_tables_.tablet_iter_.table_iter();
   if (OB_UNLIKELY(0 != scan_tables_.count() || !main_table_param_.is_valid() || !main_table_ctx_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected status before prepare  scan tables", K(ret), K(scan_tables_.count()),
@@ -444,19 +444,19 @@ int ObBlockStatIterator::prepare_scan_tables()
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("splitting tablet not supported for block stat iterator", K(ret));
   } else {
-    const bool query_with_frozen_version = get_table_param_.frozen_version_ != -1;
+    const bool query_with_frozen_version = tablet_read_tables_.frozen_version_ != -1;
     const int64_t query_version = query_with_frozen_version
-        ? get_table_param_.frozen_version_
+        ? tablet_read_tables_.frozen_version_
         : main_table_ctx_.store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx();
     const bool major_sstable_only = query_with_frozen_version;
-    if (OB_FAIL(get_table_param_.tablet_iter_.refresh_read_tables_from_tablet(
+    if (OB_FAIL(tablet_read_tables_.tablet_iter_.refresh_read_tables_from_tablet(
         query_version,
         false/*allow_not_ready*/,
         major_sstable_only,
         false/*need_split_src_table*/,
         false/*need_split_dst_table*/))) {
       LOG_WARN("failed to get read tables from tablet", K(ret), K(query_version),
-          K(major_sstable_only), K(get_table_param_), K_(main_table_param), K_(main_table_ctx));
+          K(major_sstable_only), K(tablet_read_tables_), K_(main_table_param), K_(main_table_ctx));
     }
   }
 
@@ -494,7 +494,7 @@ int ObBlockStatIterator::prepare_scan_tables()
     }
   }
 
-  LOG_DEBUG("prepare scan tables", K(ret), K_(scan_tables), K_(get_table_param));
+  LOG_DEBUG("prepare scan tables", K(ret), K_(scan_tables), K_(tablet_read_tables));
 
   return ret;
 }

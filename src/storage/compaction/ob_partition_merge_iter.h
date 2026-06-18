@@ -207,7 +207,7 @@ public:
   OB_INLINE bool is_compacted_row() const
   {
     return is_compact_completed_row() ||
-        (is_delete_insert_merge_ && nullptr != curr_row_ && !curr_row_->is_uncommitted_row());
+        (nullptr != curr_row_ && !curr_row_->is_uncommitted_row() && curr_row_->is_di_merge_engine_row());
   }
   int check_merge_range_cross(const ObDatumRange &data_range, bool &range_cross);
   virtual int64_t to_string(char *buf, const int64_t len) const override;
@@ -275,10 +275,11 @@ protected:
   bool iter_end_;
   common::ObIAllocator &allocator_;
   ObMinorRowkeyOutputState rowkey_state_; // only used in minor merge
-  bool is_delete_insert_merge_;
+  ObMergeEngineType original_merge_engine_type_;
   bool is_ha_compeleted_;
   // for macro range cross
   bool reuse_micro_in_border_macro_;
+  bool decide_merge_by_row_;
   // for batch_scan rowkey compare optimization: skip curr vs border when same micro block
   bool need_prepare_micro_border_;
 };
@@ -449,13 +450,13 @@ protected:
   virtual int compare_multi_version_col(const ObPartitionMergeIter &other,
                                         const int64_t multi_version_col,
                                         int &cmp_ret);
-  bool need_recycle_mv_row() const;
+  int check_need_recycle_mv_row(bool &need_recycle) const;
   int skip_ghost_row();
   int compact_old_row();
   // make sure row_iter_ is valid before call this function
   virtual int get_row_from_iter(const ObDatumRow *&row) { return row_iter_->get_next_row(curr_row_); }
 private:
-  int compact_old_row_for_delete_insert();
+  int compact_old_row_for_delete_insert(bool &curr_rowkey_finish);
 protected:
   ObCompactionFilterHandle &filter_handle_;
   common::ObArenaAllocator obj_copy_allocator_;

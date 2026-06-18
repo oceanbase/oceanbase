@@ -68,13 +68,13 @@ int ObStoreCtx::init_for_read(const ObLSID &ls_id,
   if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
     STORAGE_LOG(WARN, "get_ls from ls service fail.", K(ret), K(*ls_svr));
   } else {
-    tablet_id_ = tablet_id;
-    ret = init_for_read(ls_handle, timeout, tx_lock_timeout, snapshot_version);
+    ret = init_for_read(ls_handle, tablet_id, timeout, tx_lock_timeout, snapshot_version);
   }
   return ret;
 }
 
 int ObStoreCtx::init_for_read(const ObLSHandle &ls_handle,
+                              const common::ObTabletID tablet_id,
                               const int64_t timeout,
                               const int64_t tx_lock_timeout,
                               const SCN &snapshot_version)
@@ -98,6 +98,7 @@ int ObStoreCtx::init_for_read(const ObLSHandle &ls_handle,
     STORAGE_LOG(WARN, "mvcc_acc_ctx init read fail", KR(ret), K(mvcc_acc_ctx_));
   } else {
     ls_id_ = ls->get_ls_id();
+    tablet_id_ = tablet_id;
     timeout_ = timeout;
   }
   return ret;
@@ -242,6 +243,7 @@ void ObStoreRow::reset()
   trans_id_.reset();
   fast_filter_skipped_ = false;
   last_purge_ts_ = 0;
+  merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_MAX;
 }
 
 int ObStoreRow::deep_copy(const ObStoreRow &src, char *buf, const int64_t len, int64_t &pos)
@@ -264,6 +266,7 @@ int ObStoreRow::deep_copy(const ObStoreRow &src, char *buf, const int64_t len, i
     is_sparse_row_ = src.is_sparse_row_;
     trans_id_ = src.trans_id_;
     fast_filter_skipped_ = src.fast_filter_skipped_;
+    merge_engine_type_ = src.merge_engine_type_;
     if (OB_FAIL(row_val_.deep_copy(src.row_val_, buf, len, pos))) {
       STORAGE_LOG(WARN, "failed to deep copy row_val", K(ret));
     }
@@ -284,6 +287,7 @@ int64_t ObStoreRow::to_string(char *buffer, const int64_t length) const
     common::databuff_printf(buffer, length, pos, "trans_id=%ld ", trans_id_.hash());
     common::databuff_printf(buffer, length, pos, "scan_index=%ld ", scan_index_);
     common::databuff_printf(buffer, length, pos, "multi_version_row_flag=%d ", row_type_flag_.flag_);
+    common::databuff_printf(buffer, length, pos, "merge_engine_type=%d ", merge_engine_type_);
     pos += row_type_flag_.to_string(buffer + pos, length - pos);
     common::databuff_printf(buffer, length, pos, " row_val={count=%ld,", row_val_.count_);
     common::databuff_printf(buffer, length, pos, "cells=[");

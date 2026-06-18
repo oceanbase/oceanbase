@@ -372,15 +372,18 @@ int ObSNDDLMergeHelperV2::process_prepare_task(ObIDag *dag,
   } else if (OB_FAIL(ddl_merge_param.init_cg_sstable_array(slice_idxes))) {
     LOG_WARN("fialed to init cg sstable array", K(ret));
   } else {
-    int64_t cg_count = !ObITable::is_column_store_sstable(ddl_merge_param.table_key_.table_type_) ?
-                       1 :tablet_param->storage_schema_->get_column_group_count();
-    for (int64_t cg_idx = 0; OB_SUCC(ret) && cg_idx < cg_count; cg_idx++) {
+    int64_t cg_count = !ObITable::is_column_store_sstable(ddl_merge_param.table_key_.table_type_)
+                     ? 1 : tablet_param->storage_schema_->get_column_group_count();
+    for (int64_t iter_idx = 0; OB_SUCC(ret) && iter_idx < cg_count; iter_idx++) {
       for (hash::ObHashSet<int64_t>::const_iterator iter = slice_idxes.begin();
           OB_SUCC(ret) && iter != slice_idxes.end();
           ++iter) {
         int64_t start_slice_idx = iter->first;
         int64_t end_slice_idx   = 0 == iter->first ? merge_slice_idx : iter->first;
-        if (OB_FAIL(cg_slices.push_back(ObTuple<int64_t, int64_t, int64_t>(cg_idx, start_slice_idx, end_slice_idx)))) {
+        int64_t cg_idx = -1;
+        if (OB_FAIL(tablet_param->storage_schema_->convert_iter_idx_to_column_group_idx(iter_idx, cg_idx))) {
+          LOG_WARN("failed to convert iter idx to cg idx", K(ret), K(iter_idx), K(cg_count));
+        } else if (OB_FAIL(cg_slices.push_back(ObTuple<int64_t, int64_t, int64_t>(cg_idx, start_slice_idx, end_slice_idx)))) {
           LOG_WARN("faield to push back val", K(ret), K(start_slice_idx), K(end_slice_idx));
         }
       }
@@ -511,8 +514,8 @@ int ObSNDDLMergeHelperV2::merge_cg_slice(ObIDag *dag,
                                                                   ddl_param,
                                                                   tablet_param->storage_schema_,
                                                                   ddl_sstables,
-                                                                  cg_idx == merge_param.table_key_.column_group_idx_ ? tablet_handle.get_obj()->get_rowkey_read_info() :
-                                                                                                                       *cg_index_read_info,
+                                                                  (cg_idx == merge_param.table_key_.column_group_idx_ || HIDDEN_ROWKEY_COLUMN_GROUP_IDX == cg_idx) ?
+                                                                       tablet_handle.get_obj()->get_rowkey_read_info() : *cg_index_read_info,
                                                                   arena, tmp_metas))) {
       LOG_WARN("failed to get storted meta array", K(ret));
     } else if (OB_FAIL(ObDDLMergeTaskUtils::check_idempodency(tmp_metas, sorted_metas, &write_stat))) {
@@ -904,8 +907,11 @@ int ObSSDDLMergeHelper::process_prepare_task(ObIDag *dag,
     /* for ss mode, major build from cg meta file, follower not need build major*/
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_param->storage_schema_->get_column_group_count(); i++) {
       /* when build major only one slice is needed */
-      if (OB_FAIL(cg_slices.push_back(ObTuple<int64_t, int64_t, int64_t>(i /* cg_idx */, 0 /* start_slice */, 0 /* end_slice */)))) {
-        LOG_WARN("failed to get slice", K(ret));
+      int64_t cg_idx = -1;
+      if (OB_FAIL(tablet_param->storage_schema_->convert_iter_idx_to_column_group_idx(i, cg_idx))) {
+        LOG_WARN("failed to convert iter idx to cg idx", K(ret), K(i));
+      } else if (OB_FAIL(cg_slices.push_back(ObTuple<int64_t, int64_t, int64_t>(cg_idx, 0 /* start_slice */, 0 /* end_slice */)))) {
+        LOG_WARN("failed to push back slice", K(ret), K(cg_idx));
       }
     }
   }
@@ -1210,20 +1216,22 @@ int ObSSDDLMergeHelper::merge_cg_sstable(ObIDag *dag,
       init_param.cg_cnt_ = storage_schema->get_column_group_count();
       init_param.row_id_offset_ = 0;
 
-      const ObStorageColumnGroupSchema &cg_schema = storage_schema->get_column_groups().at(cg_idx);
-      if (OB_FAIL(data_desc.init(true/*is_ddl*/, *storage_schema,
-                                 ls_id, tablet_id,
-                                 compaction::ObMergeType::MAJOR_MERGE,
-                                 dag_merge_param.table_key_.get_snapshot_version(),
-                                 dag_merge_param.ddl_task_param_.tenant_data_version_,
-                                 tablet_param->is_micro_index_clustered_,
-                                 tablet_param->tablet_transfer_seq_,
-                                 0, /* concurrent_cnt */
-                                 tablet_handle.get_obj()->get_reorganization_scn(),
-                                 SCN::min_scn(),
-                                 &cg_schema,
-                                 cg_idx,
-                                 compaction::ObExecMode::EXEC_MODE_OUTPUT))) {
+      const ObStorageColumnGroupSchema *cg_schema = nullptr;
+      if (OB_FAIL(storage_schema->get_cg_schema_with_column_group_idx(cg_idx, cg_schema))) {
+        LOG_WARN("fail to get column group schema", K(ret), K(cg_idx));
+      } else if (OB_FAIL(data_desc.init(true/*is_ddl*/, *storage_schema,
+                                        ls_id, tablet_id,
+                                        compaction::ObMergeType::MAJOR_MERGE,
+                                        dag_merge_param.table_key_.get_snapshot_version(),
+                                        dag_merge_param.ddl_task_param_.tenant_data_version_,
+                                        tablet_param->is_micro_index_clustered_,
+                                        tablet_param->tablet_transfer_seq_,
+                                        0, /* concurrent_cnt */
+                                        tablet_handle.get_obj()->get_reorganization_scn(),
+                                        SCN::min_scn(),
+                                        cg_schema,
+                                        cg_idx,
+                                        compaction::ObExecMode::EXEC_MODE_OUTPUT))) {
         LOG_WARN("init data store desc failed", K(ret), K(tablet_id));
       } else {
         data_desc.get_static_desc().schema_version_ = storage_schema->get_schema_version();

@@ -90,7 +90,7 @@ void ObMajorWithTTLFilterTest::TearDown() {
 }
 
 void ObMajorWithTTLFilterTest::prepare_merge_context(const ObMergeType &merge_type, const bool is_full_merge, const ObVersionRange &trans_version_range, ObBasicTabletMergeCtx &merge_context) {
-  TestMergeBasic::prepare_merge_context(merge_type, is_full_merge, trans_version_range, &merge_dag_, merge_context, false/*is_delete_insert_merge*/);
+  TestMergeBasic::prepare_merge_context(merge_type, is_full_merge, trans_version_range, &merge_dag_, merge_context);
 }
 
 int ObMajorWithTTLFilterTest::build_micro_block(

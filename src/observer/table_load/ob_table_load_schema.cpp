@@ -460,6 +460,7 @@ ObTableLoadSchema::ObTableLoadSchema()
     lob_inrow_threshold_(-1),
     cg_cnt_(0),
     col_nullables_(nullptr),
+    merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_MAX),
     is_inited_(false)
 {
   allocator_.set_tenant_id(MTL_ID());
@@ -507,6 +508,7 @@ void ObTableLoadSchema::reset()
   cmp_funcs_.reset();
   col_nullables_ = nullptr;
   allocator_.reset();
+  merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_MAX;
   is_inited_ = false;
 }
 
@@ -563,6 +565,7 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
     }
     lob_inrow_threshold_ = table_schema->get_lob_inrow_threshold();
     cg_cnt_ = table_schema->get_column_group_count();
+    merge_engine_type_ = table_schema->get_merge_engine_type();
     if (OB_FAIL(ObTableLoadUtils::deep_copy(table_schema->get_table_name_str(), table_name_,
                                             allocator_))) {
       LOG_WARN("fail to deep copy table name", KR(ret));

@@ -147,6 +147,7 @@ public:
   const int64_t row_count_;
   const share::ObEncryptMeta *encrypt_meta_;
   const bool check_exist_;
+  const ObMergeEngineType merge_engine_;
 
   // initializer for ObMemtable::set/multi_set
   ObMemtableSetArg(const blocksstable::ObDatumRow *new_row,
@@ -155,7 +156,8 @@ public:
                    const blocksstable::ObDatumRow *old_row,
                    const int64_t row_count,
                    const bool check_exist,
-                   const share::ObEncryptMeta *encrypt_meta);
+                   const share::ObEncryptMeta *encrypt_meta,
+                   const ObMergeEngineType merge_engine);
 
   TO_STRING_KV(KPC_(new_row),
                KPC_(columns),
@@ -163,13 +165,16 @@ public:
                KPC_(old_row),
                K_(row_count),
                K_(encrypt_meta),
-               K_(check_exist));
+               K_(check_exist),
+               K_(merge_engine));
 
   // must ensure all or nothing at all.
   bool is_valid() const;
   bool has_old_row() const;
   int64_t get_row_count() const;
   bool need_check_exist() const;
+  bool is_delete_insert() const;
+  ObMergeEngineType get_merge_engine_type() const;
   blocksstable::ObDmlFlag get_dml_flag() const;
   int64_t get_column_cnt() const;
 };
@@ -370,6 +375,7 @@ public:
 
   virtual int get_frozen_schema_version(int64_t &schema_version) const override;
   virtual bool is_inner_tablet() const { return key_.tablet_id_.is_inner_tablet(); }
+  virtual bool is_user_tablet() const { return key_.tablet_id_.is_user_tablet(); }
   int set_snapshot_version(const share::SCN snapshot_version);
   int64_t get_memtable_state() const { return state_; }
   int64_t get_protection_clock() const { return local_allocator_.get_protection_clock(); }
@@ -421,8 +427,8 @@ public:
   }
   inline bool is_transfer_freeze() const { return ATOMIC_LOAD(&transfer_freeze_flag_); }
   inline share::SCN get_transfer_freeze_scn() const { return recommend_snapshot_version_; }
-  virtual void set_delete_insert_flag(const bool rhs) override { is_delete_insert_table_ = rhs; }
-  inline bool is_delete_insert_table() const { return is_delete_insert_table_; }
+  virtual void set_original_merge_engine_type(const ObMergeEngineType merge_engine_type) override { original_merge_engine_type_ = merge_engine_type; }
+  inline ObMergeEngineType get_original_merge_engine_type() const { return original_merge_engine_type_; }
   virtual void set_micro_block_format_version(const int64_t rhs) override { micro_block_format_version_ = rhs; }
   inline int64_t get_micro_block_format_version() const { return micro_block_format_version_; }
   virtual uint32_t get_freeze_flag() override;
@@ -461,7 +467,7 @@ public:
                        K_(ls_id),
                        K_(transfer_freeze_flag),
                        K_(recommend_snapshot_version),
-                       K_(is_delete_insert_table),
+                       K_(original_merge_engine_type),
                        K_(use_hash_index),
                        K_(micro_block_format_version));
 private:
@@ -571,7 +577,7 @@ protected:
   bool is_inited_;
   bool transfer_freeze_flag_;
   bool contain_hotspot_row_;
-  bool is_delete_insert_table_;
+  ObMergeEngineType original_merge_engine_type_;
   bool use_hash_index_;
 
   storage::ObLSHandle ls_handle_;

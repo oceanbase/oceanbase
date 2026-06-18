@@ -91,6 +91,7 @@ public:
   virtual ~ObMerger() { reset(); }
   virtual void reset();
   virtual int basic_prepare(ObBasicTabletMergeCtx &ctx, const int64_t idx);
+  virtual bool use_co_inc_fuser() const { return false; }
 protected:
   int try_filter_row(const blocksstable::ObDatumRow &row, ObICompactionFilter::ObFilterRet &filter_ret);
 public:
@@ -246,7 +247,8 @@ protected:
                              common::ObIArray<int64_t> &iter_idxs);
   virtual int move_and_remove_unused_iters(MERGE_ITER_ARRAY &merge_iters,
                                            MERGE_ITER_ARRAY &minimum_iters,
-                                           common::ObIArray<int64_t> &iter_idxs);
+                                           common::ObIArray<int64_t> &iter_idxs,
+                                           const bool is_delete_insert_merge);
   int skip_shadow_row(MERGE_ITER_ARRAY &merge_iters);
   int check_need_prebuild_bloomfilter();
 private:
@@ -256,7 +258,9 @@ private:
       const compaction::ObMergeType &merge_type,
       compaction::ObPartitionMinorMergeHelper &merge_helper,
       ObBasicTabletMergeCtx &ctx);
-  int check_add_shadow_row(MERGE_ITER_ARRAY &merge_iters, const bool contain_multi_trans, bool &add_shadow_row);
+  int check_add_shadow_row(MERGE_ITER_ARRAY &merge_iters,
+                           const bool contain_multi_trans,
+                           bool &add_shadow_row);
   int merge_single_iter(ObPartitionMergeIter &merge_ite);
   int check_first_committed_row(const MERGE_ITER_ARRAY &merge_iters);
   int set_result_flag(MERGE_ITER_ARRAY &fuse_iters,
@@ -315,14 +319,18 @@ int ObMergerBasic::alloc_row_writer(
     ObTabletMergeInfo **merge_infos = ctx->cg_merge_info_array_;
     const bool need_co_scan = ctx->is_build_all_cg_from_each_cg()
         || (ctx->only_use_row_store() && 0 == cg_idx);
-    if (OB_UNLIKELY(nullptr == merge_infos || nullptr == merge_infos[cg_idx])) {
+    int64_t iter_idx = -1;
+
+    if (OB_FAIL(ctx->get_schema()->convert_column_group_idx_to_iter_idx(cg_idx, iter_idx))) {
+      STORAGE_LOG(WARN, "failed to convert column group idx to iter idx", K(ret), K(cg_idx));
+    } else if (OB_UNLIKELY(nullptr == merge_infos || nullptr == merge_infos[iter_idx])) {
       ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "unexpected nullptr merge info", K(ret), K(merge_infos), K(cg_idx));
+      STORAGE_LOG(WARN, "unexpected nullptr merge info", K(ret), K(merge_infos), K(iter_idx));
     } else if (OB_ISNULL(writer = OB_NEWx(T, &merger_arena_, need_co_scan))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "Failed to allocate memory for ObCOMergeWriter", K(ret));
     } else if (OB_FAIL(writer->init(*ctx, default_row, merge_param_, task_idx_,
-                                    ctx->get_full_read_info(), cg_idx, *merge_infos[cg_idx], tables))) {
+                                    ctx->get_full_read_info(), cg_idx, *merge_infos[iter_idx], tables))) {
       // table->old major, read_info used to read old major
       STORAGE_LOG(WARN, "failed to init writer", K(ret), K(cg_idx), K(default_row), KPC(this));
     }
@@ -334,6 +342,7 @@ int ObMergerBasic::alloc_row_writer(
   }
   return ret;
 }
+
 } //compaction
 } //oceanbase
 

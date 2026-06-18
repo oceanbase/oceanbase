@@ -85,7 +85,8 @@ int ObIncMajorDDLAggregateCGSSTable::init(
                                                       column_group_cnt,
                                                       rowkey_column_cnt,
                                                       column_cnt,
-                                                      row_cnt))) {
+                                                      row_cnt,
+                                                      false))) {
     LOG_WARN("fail to init sstable param", KR(ret), K(table_key),
                                            K(base_table), K(meta_handle),
                                            K(column_group_cnt),
@@ -387,6 +388,7 @@ int ObIncMajorDDLAggregateCOSSTable::init(
     const int64_t column_group_cnt,
     const int64_t column_cnt,
     const ObCOSSTableBaseType co_base_type,
+    const bool has_hidden_rowkey_cg,
     ObIArray<ObITable *> &tables)
 {
   int ret = OB_SUCCESS;
@@ -414,7 +416,8 @@ int ObIncMajorDDLAggregateCOSSTable::init(
                                                       column_group_cnt,
                                                       rowkey_column_cnt_,
                                                       column_cnt,
-                                                      row_cnt_))) {
+                                                      row_cnt_,
+                                                      has_hidden_rowkey_cg))) {
     LOG_WARN("fail to init sstable param", KR(ret), K(table_key), K(base_sstable),
                                            K(column_group_cnt), K(column_cnt), K(row_cnt_));
   } else if (OB_FAIL(ObSSTable::init(sstable_param, &allocator_))) {
@@ -679,19 +682,14 @@ int ObIncMajorDDLAggregateCOSSTable::prepare_before_query()
 int ObIncMajorDDLAggregateCOSSTable::check_all_cg()
 {
   int ret = OB_SUCCESS;
-  ObIncMajorDDLAggregateCGSSTable *cg_sstable = nullptr;
   if (OB_UNLIKELY(cg_sstables_.size() != column_group_cnt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cg cnt has error", KR(ret), K(column_group_cnt_), K(cg_sstables_.size()));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < column_group_cnt_; ++i) {
-      if (OB_FAIL(cg_sstables_.get_refactored(i, cg_sstable))) {
-        LOG_WARN("fail to get cg sstable", KR(ret), K(i), KPC(cg_sstable));
-      } else if (OB_ISNULL(cg_sstable)) {
+    FOREACH_X(it, cg_sstables_, OB_SUCC(ret)) {
+      if (OB_ISNULL(it->second)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("cg sstable is nullptr", KR(ret), K(i));
-      } else {
-        cg_sstable = nullptr;
+        LOG_WARN("cg sstable is nullptr", KR(ret), "cg_idx", it->first);
       }
     }
   }
@@ -738,12 +736,17 @@ int ObIncMajorDDLAggregateCOSSTable::add_ddl_sstable(ObSSTable *sstable)
       if (0 == i) {
         cg_sstable_wrapper.meta_handle_ = co_meta_handle.get_storage_handle();
       }
+      int64_t cg_idx = -1;
       if (OB_FAIL(cg_sstable_wrapper.get_loaded_column_store_sstable(cg_sstable))) {
         LOG_WARN("fail to get loaded column store sstable", KR(ret));
-      } else if (OB_FAIL(add_cg_sstable(i, cg_sstable))) {
-        LOG_WARN("fail to inner add table", KR(ret), K(i), KPC(cg_sstable));
-      } else if (OB_FAIL(add_cg_sstable_wrapper(i, cg_sstable_wrapper))) {
-        LOG_WARN("fail to add_cg_sstable_wrapper", KR(ret), K(i));
+      } else if (OB_ISNULL(cg_sstable)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("cg sstable is nullptr", KR(ret), K(i), K(cg_sstable_wrapper));
+      } else if (FALSE_IT(cg_idx = cg_sstable->get_column_group_id())) {
+      } else if (OB_FAIL(add_cg_sstable(cg_idx, cg_sstable))) {
+        LOG_WARN("fail to inner add table", KR(ret), K(i), K(cg_idx), KPC(cg_sstable));
+      } else if (OB_FAIL(add_cg_sstable_wrapper(cg_idx, cg_sstable_wrapper))) {
+        LOG_WARN("fail to add_cg_sstable_wrapper", KR(ret), K(i), K(cg_idx));
       }
     }
   }
@@ -791,7 +794,7 @@ int ObIncMajorDDLAggregateCOSSTable::add_cg_sstable(
                                           *base_sstable_,
                                           base_sstable_meta_,
                                           column_group_cnt_,
-                                          (0 == cg_idx) ? rowkey_column_cnt_ : 0,
+                                          (0 == cg_idx || cg_idx == HIDDEN_ROWKEY_COLUMN_GROUP_IDX) ? rowkey_column_cnt_ : 0,
                                           column_cnt_,
                                           row_cnt_,
                                           cg_idx))) {
@@ -858,7 +861,7 @@ int ObIncMajorDDLAggregateCOSSTable::fetch_cg_sstable(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (FALSE_IT(real_cg_idx = cg_idx < column_group_cnt_ ? cg_idx : key_.column_group_idx_)) {
+  } else if (FALSE_IT(real_cg_idx = (cg_idx < column_group_cnt_ || cg_idx == HIDDEN_ROWKEY_COLUMN_GROUP_IDX) ? cg_idx : key_.column_group_idx_)) {
   } else if (OB_FAIL(get_cg_sstable(real_cg_idx, cg_wrapper))) {
     LOG_WARN("fail to get cg sstable", KR(ret), K(cg_idx), K(real_cg_idx));
   }
@@ -875,7 +878,7 @@ int ObIncMajorDDLAggregateCOSSTable::get_cg_sstable(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_UNLIKELY(cg_idx >= column_group_cnt_)) {
+  } else if (OB_UNLIKELY(cg_idx >= column_group_cnt_ && HIDDEN_ROWKEY_COLUMN_GROUP_IDX != cg_idx)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("cg idx is invalid", KR(ret), K(cg_idx), K(column_group_cnt_));
   } else if (OB_FAIL(cg_sstables_.get_refactored(cg_idx, cg_sstable))) {
@@ -896,7 +899,8 @@ int ObIncMajorDDLAggregateCOSSTable::get_cg_sstable(
 }
 
 int ObIncMajorDDLAggregateCOSSTable::get_all_tables(
-    common::ObIArray<ObSSTableWrapper> &table_wrappers) const
+    common::ObIArray<ObSSTableWrapper> &table_wrappers,
+    const bool include_hiden_cg) const
 {
   int ret = OB_SUCCESS;
   ObSSTableWrapper cg_wrapper;

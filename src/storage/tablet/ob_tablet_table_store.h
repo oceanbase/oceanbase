@@ -195,20 +195,8 @@ private:
       ObTableStoreIterator &iterator) const;
   int calculate_inc_major_read_tables(
       const int64_t snapshot_version,
-      const ObTablet &tablet,
       ObTableStoreIterator &iterator,
       const ObSSTable *base_table) const;
-  int calculate_inc_major_read_tables_for_sn(
-      const int64_t snapshot_version,
-      ObTableStoreIterator &iterator,
-      const ObSSTable *base_table) const;
-#ifdef OB_BUILD_SHARED_STORAGE
-  int calculate_inc_major_read_tables_for_ss(
-      const int64_t snapshot_version,
-      const ObTablet &tablet,
-      ObTableStoreIterator &iterator,
-      const ObSSTable *base_table) const;
-#endif
   int calculate_read_memtables(const ObTablet &tablet, ObTableStoreIterator &iterator) const;
   bool check_read_tables(
       const ObTablet &tablet,
@@ -498,31 +486,13 @@ private:
       const ObTabletTableStore &old_store,
       const int64_t inc_base_snapshot_version);
 #endif
-  int get_inc_major_cg_info(ObSSTable *first_sstable,
-                            ObDDLKV *first_ddl_kv,
-                            int64_t &column_group_cnt,
-                            int64_t &column_cnt,
-                            ObCOSSTableBaseType &co_base_type) const;
-  int inner_calculate_inc_ddl_row_read_tables(
-      ObLS &ls,
-      const int64_t base_version,
+  int inner_get_next_tx_read_tables(
       const share::SCN &inc_major_end_scn,
-      ObTableStoreIterator &iterator) const;
-  int inner_calculate_inc_ddl_column_read_tables(
-      ObLS &ls,
-      const ObTablet &tablet,
-      const int64_t base_version,
-      const share::SCN &inc_major_end_scn,
-      ObTableStoreIterator &iterator) const;
-  int inner_calculate_inc_ddl_column_read_sstables(
       int64_t &cur_sstable_idx,
-      int64_t &tx_id,
-      ObIArray<ObITable *> &read_tables) const;
-  int inner_calculate_inc_ddl_column_read_memtables(
       int64_t &cur_ddl_kv_idx,
       int64_t &tx_id,
       ObIArray<ObITable *> &read_tables,
-      ObDDLKV *&first_ddl_kv) const;
+      int64_t &ddl_dump_cnt) const;
   int replace_ha_remote_inc_major_tables_(
       common::ObArenaAllocator &allocator,
       const ObBatchUpdateTableStoreParam &param,

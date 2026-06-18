@@ -1043,6 +1043,7 @@ int ObTFMIndexBlockRowIterator::locate_range(const ObDatumRange &range,
   } else if (OB_UNLIKELY(!range.is_valid() || OB_ISNULL(idx_data_header_) || !idx_data_header_->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid range", K(ret), K(range), KPC(idx_data_header_));
+    ob_abort();
   } else if (OB_FAIL(locate_range_by_rowkey_vector(range, is_left_border, is_right_border, is_normal_cg, begin_idx, end_idx))) {
     if (OB_UNLIKELY(OB_BEYOND_THE_RANGE != ret)) {
       LOG_WARN("Failed to locate range by rowkey vector", K(ret));

@@ -220,9 +220,20 @@ int ObCGMicroBlockWriteOp::execute(const ObChunk &input_chunk,
   } else {
     ObArray<ObCGRowFile *> *cg_row_file_arr = input_chunk.cg_row_file_arr_;
     ObDDLIndependentDag *ddl_dag = dynamic_cast<ObDDLIndependentDag *>(get_dag());
+    ObDDLTabletContext *tablet_context = nullptr;
+    ObStorageSchema *storage_schema = nullptr;
     if (OB_UNLIKELY(nullptr == ddl_dag)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ddl dag is null", K(ret));
+    } else if (OB_FAIL(ddl_dag->get_tablet_context(tablet_id_, tablet_context))) {
+      LOG_WARN("fail to get tablet context", K(ret), K(tablet_id_));
+    } else if (OB_UNLIKELY(nullptr == tablet_context)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet context is null", K(ret));
+    } else {
+      storage_schema = tablet_context->tablet_param_.with_cs_replica_
+                     ? tablet_context->tablet_param_.cs_replica_storage_schema_
+                     : tablet_context->tablet_param_.storage_schema_;
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < cg_row_file_arr->count(); ++i) {
       ObCGBlockFile *cg_block_file = nullptr;
@@ -232,21 +243,24 @@ int ObCGMicroBlockWriteOp::execute(const ObChunk &input_chunk,
         LOG_WARN("cg row file is null", K(ret), K(i));
       } else {
         ObWriteMacroParam write_macro_param;
-        const int64_t cg_idx = cg_row_file->get_cg_idx();
-        if (OB_UNLIKELY(cg_idx < 0 || cg_idx >= cg_block_file_arr_.count())) {
+        const int64_t cg_iter_idx = cg_row_file->get_cg_iter_idx();
+        if (OB_UNLIKELY(cg_iter_idx < 0 || cg_iter_idx >= cg_block_file_arr_.count())) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("cg idx is invalid", K(ret), K(cg_idx), K(cg_block_file_arr_.count()));
+          LOG_WARN("cg idx is invalid", K(ret), K(cg_iter_idx), K(cg_block_file_arr_.count()));
+        } else if (OB_ISNULL(storage_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("storage schema is null", K(ret), KPC(tablet_context));
         } else {
-          cg_block_file = cg_block_file_arr_.at(cg_idx);
+          cg_block_file = cg_block_file_arr_.at(cg_iter_idx);
           if (nullptr == cg_block_file) {
             cg_block_file = OB_NEW(ObCGBlockFile, ObMemAttr(MTL_ID(), "CGBlockFile"));
             if (OB_UNLIKELY(nullptr == cg_block_file)) {
               ret = OB_ALLOCATE_MEMORY_FAILED;
               LOG_WARN("fail to new cg block file", K(ret));
-            } else if (OB_FAIL(cg_block_file->open(tablet_id_, slice_idx_, 0/*scan_idx*/, cg_idx))) {
-              LOG_WARN("fail to open cg block file", K(ret), K(tablet_id_), K(slice_idx_), K(cg_idx));
+            } else if (OB_FAIL(cg_block_file->open(tablet_id_, slice_idx_, 0/*scan_idx*/, cg_iter_idx))) {
+              LOG_WARN("fail to open cg block file", K(ret), K(tablet_id_), K(slice_idx_), K(cg_iter_idx));
             } else {
-              cg_block_file_arr_.at(cg_idx) = cg_block_file;
+              cg_block_file_arr_.at(cg_iter_idx) = cg_block_file;
             }
             if (OB_FAIL(ret) && nullptr != cg_block_file) {
               cg_block_file->~ObCGBlockFile();
@@ -254,13 +268,16 @@ int ObCGMicroBlockWriteOp::execute(const ObChunk &input_chunk,
               cg_block_file = nullptr;
             }
           }
-          if (FAILEDx(ObDDLUtil::fill_writer_param(tablet_id_,
-                                                   slice_idx_,
-                                                   cg_idx,
-                                                   ddl_dag,
-                                                   write_macro_param))) {
-            LOG_WARN("fail to fill write macro param",
-                K(ret), KPC(ddl_dag), K(tablet_id_), K(slice_idx_), K(cg_idx));
+
+          int64_t cg_idx = -1;
+          if (FAILEDx(storage_schema->convert_iter_idx_to_column_group_idx(cg_iter_idx, cg_idx))) {
+            LOG_WARN("fail to convert iter idx to column group idx", K(ret), K(cg_iter_idx));
+          } else if (OB_FAIL(ObDDLUtil::fill_writer_param(tablet_id_,
+                                                          slice_idx_,
+                                                          cg_idx,
+                                                          ddl_dag,
+                                                          write_macro_param))) {
+            LOG_WARN("fail to fill write macro param", K(ret), KPC(ddl_dag), K(tablet_id_), K(slice_idx_), K(cg_idx));
           } else if (OB_FAIL(cg_micro_block_writer_.open(write_macro_param, cg_block_file))) {
             LOG_WARN("fail to initialize cg macro block writer", K(ret), K(write_macro_param), KPC(cg_block_file));
           }

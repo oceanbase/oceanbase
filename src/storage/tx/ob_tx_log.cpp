@@ -903,6 +903,9 @@ int ObTxRedoLog::format_row_data_(const memtable::ObRowData &row_data, ObAdminMu
   if (row_data.size_ > 0) {
     if (OB_FAIL(row_reader.read_row(row_data.data_, row_data.size_, nullptr, datum_row))) {
       CLOG_LOG(WARN, "Failed to read datum row", K(ret));
+    } else {
+      arg.writer_ptr_->dump_key("MergeEngineType");
+      arg.writer_ptr_->dump_string(ObMergeEngineStoreFormat::get_merge_engine_type_name(datum_row.merge_engine_type_));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < datum_row.get_column_count(); i++) {
       int64_t pos = 0;

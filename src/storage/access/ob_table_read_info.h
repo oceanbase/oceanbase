@@ -165,6 +165,7 @@ public:
     : ObITableReadInfo(),
       is_inited_(false),
       is_oracle_mode_(false),
+      original_merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN),
       allocator_(nullptr),
       schema_column_count_(0),
       compat_version_(READ_INFO_VERSION_LATEST),
@@ -257,9 +258,10 @@ public:
   }
   virtual bool has_ttl_definition() const override { return has_ttl_definition_; }
   OB_INLINE bool is_cs_replica_compat() const { return is_cs_replica_compat_; }
-  OB_INLINE bool is_delete_insert_table() const { return is_delete_insert_table_; }
+  OB_INLINE bool is_original_delete_insert_table() const { return ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT == original_merge_engine_type_; }
   OB_INLINE bool is_mv_major_refresh_tablet() const { return is_mv_major_refresh_tablet_; }
   OB_INLINE int64_t get_micro_block_format_version() const { return micro_block_format_version_; }
+  OB_INLINE ObMergeEngineType get_original_merge_engine_type() const { return original_merge_engine_type_; }
   DECLARE_VIRTUAL_TO_STRING;
   int generate_for_column_store(ObIAllocator &allocator,
                                 const ObColDesc &desc,
@@ -269,7 +271,7 @@ public:
                        const bool is_oracle_mode,
                        const bool is_cg_sstable,
                        const bool is_cs_replica_compat,
-                       const bool is_delete_insert_table,
+                       const ObMergeEngineType original_merge_engine_type,
                        const bool is_global_index_table,
                        const int64_t micro_block_format_version,
                        const bool is_mv_major_refresh_tablet,
@@ -303,7 +305,7 @@ protected:
       uint32_t schema_column_count_;
       uint16_t compat_version_;
       uint16_t is_cs_replica_compat_   : READ_INFO_ONE_BIT; // only used for rowkey_read_info in ObTablet
-      uint16_t is_delete_insert_table_ : READ_INFO_ONE_BIT;
+      uint16_t is_delete_insert_table_ : READ_INFO_ONE_BIT; // attention!!! only for deserialize old read info after V4.5.2, make sure it is assigned correctly when use it
       uint16_t is_global_index_table_  : READ_INFO_ONE_BIT; // only used for rowkey_read_info in ObTablet
       uint16_t is_mv_major_refresh_tablet_  : READ_INFO_ONE_BIT; // only used for rowkey_read_info in ObTablet
       uint16_t has_ttl_definition_     : READ_INFO_ONE_BIT; // only used for rowkey_read_info in ObTablet
@@ -346,7 +348,7 @@ public:
       const bool has_all_column_group = true,
       const bool is_cg_sstable = false,
       const bool need_truncate_filter = false,
-      const bool is_delete_insert_table = false,
+      const ObMergeEngineType original_merge_engine_type = ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN,
       const int64_t micro_block_format_version = ObMicroBlockFormatVersionHelper::DEFAULT_VERSION,
       const bool has_ttl_definition = false);
   int mock_for_sstable_query(
@@ -460,7 +462,7 @@ public:
       const bool is_cg_sstable = false,
       const bool use_default_compat_version = false,
       const bool is_cs_replica_compat = false,
-      const bool is_delete_insert_table = false,
+      const ObMergeEngineType original_merge_engine_type = ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN,
       const bool is_global_index = false,
       const int64_t micro_block_format_version = ObMicroBlockFormatVersionHelper::DEFAULT_VERSION,
       const bool is_mv_major_refresh_tablet = false,

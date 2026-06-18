@@ -23,7 +23,7 @@ namespace blocksstable
 struct ObBlockCachedCSDecoderHeader;
 struct ObCSDecoderCtxArray;
 class ObIColumnCSDecoder;
-class ObCSRowHeader;
+class ObCSRowMultiVersionHeader;
 
 struct ObColumnCSDecoder final
 {

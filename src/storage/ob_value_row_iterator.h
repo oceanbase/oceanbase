@@ -17,6 +17,7 @@
 #include "blocksstable/ob_datum_rowkey.h"
 #include "blocksstable/ob_datum_row_iterator.h"
 #include "storage/access/ob_table_access_context.h"
+#include "access/ob_tablet_read_tables.h"
 
 namespace oceanbase
 {
@@ -86,7 +87,7 @@ private:
   Projector output_projector_;
   ObTableAccessParam access_param_;
   ObTableAccessContext access_ctx_;
-  ObGetTableParam get_table_param_;
+  ObTabletReadTables tablet_read_tables_;
   ObRelativeTable *relative_table_;
   common::ObIAllocator &allocator_;
   CachedIteratorNode *cached_iter_node_;

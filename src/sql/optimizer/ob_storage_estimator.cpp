@@ -187,19 +187,21 @@ int ObStorageEstimator::storage_estimate_block_count_and_row_count(
                                                                             cg_macro_cnt_arr,
                                                                             cg_micro_cnt_arr))) {
         LOG_WARN("OPT:[STORAGE EST BLOCK COUNT FAILED]", "storage_ret", ret);
-      } else if (OB_UNLIKELY(cg_count != 0 &&
-                             (cg_macro_cnt_arr.count() > cg_count
-                              || cg_micro_cnt_arr.count() > cg_count
-                              || cg_macro_cnt_arr.count() != cg_micro_cnt_arr.count()))) {
+      } else if (OB_UNLIKELY(cg_count != 0 && cg_macro_cnt_arr.count() != cg_micro_cnt_arr.count())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected cg count", K(ret), K(cg_macro_cnt_arr.count()), K(cg_micro_cnt_arr.count()), K(arg.column_group_ids_.count()), K(arg));
+      } else if (FALSE_IT(res.macro_block_count_ = macro_block_count)) {
+      } else if (FALSE_IT(res.micro_block_count_ = micro_block_count)) {
+      } else if (FALSE_IT(res.sstable_row_count_ = sstable_row_count)) {
+      } else if (FALSE_IT(res.memtable_row_count_ = memtable_row_count)) {
+      } else if (cg_macro_cnt_arr.count() > cg_count) {
+        // deal with the online COLUMN STORE switch to ROW STORE scene:
+        // the table schema is ROW STORE, but the MAJOR SSTable is still COLUMN STORE
+        cg_macro_cnt_arr.reset();
+        cg_micro_cnt_arr.reset();
       } else {
         LOG_TRACE("storage estimate block count and row count result", K(macro_block_count),
                 K(micro_block_count), K(sstable_row_count), K(memtable_row_count), K(ret));
-        res.macro_block_count_ = macro_block_count;
-        res.micro_block_count_ = micro_block_count;
-        res.sstable_row_count_ = sstable_row_count;
-        res.memtable_row_count_ = memtable_row_count;
         for (int64_t i = cg_macro_cnt_arr.count(); OB_SUCC(ret) && i < cg_count; i++) {
           if (OB_FAIL(cg_macro_cnt_arr.push_back(0))) {
             LOG_WARN("fail to push macro count", K(ret));

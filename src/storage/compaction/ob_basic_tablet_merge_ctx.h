@@ -146,9 +146,6 @@ struct ObStaticMergeParam final
   int get_co_major_sstable_status(const int64_t index, ObMajorSSTableStatus &status) const;
   int get_sstable_merge_level(const int64_t index, ObMergeLevel &level) const;
   int get_sstable_need_full_merge(const int64_t index, bool &need_full_merge) const;
-
-private:
-  int init_multi_version_column_descs();
 public:
   int64_t to_string(char* buf, const int64_t buf_len) const;
 public:
@@ -156,6 +153,7 @@ public:
   bool is_full_merge_; // global full merge or increment merge
   bool need_parallel_minor_merge_;
   bool is_tenant_major_merge_;
+  ObMergeEngineType original_merge_engine_type_;
   ObMergeEngineType merge_engine_type_;
   bool is_ha_compeleted_; // only used for delete insert minor merge to control multi version row recycle logic, inited from tablet meta
   bool for_unittest_;
@@ -179,6 +177,7 @@ public:
   share::ObScnRange scn_range_;
   const ObRowkeyReadInfo *rowkey_read_info_;
   const ObStorageSchema *schema_;
+  const ObStorageSchema *orig_schema_; // only used for each cg to row store
   ObStorageSnapshotInfo snapshot_info_;
   common::ObSEArray<share::schema::ObColDesc, 2 * OB_ROW_DEFAULT_COLUMNS_COUNT> multi_version_column_descs_;
   share::ObPreWarmerParam pre_warm_param_;
@@ -189,7 +188,6 @@ public:
   common::ObSEArray<ObMajorMergeSSTableStatus, 16> major_merge_sstable_status_array_;
   ObCOStaticMergeParam co_static_param_;
   ObWindowCompactionDecisionLogInfo window_decision_log_info_;
-
   DISALLOW_COPY_AND_ASSIGN(ObStaticMergeParam);
 };
 
@@ -373,6 +371,8 @@ public:
   OB_INLINE int64_t get_concurrent_cnt() const { return parallel_merge_ctx_.get_concurrent_cnt(); }
   OB_INLINE ObMergeType get_inner_table_merge_type() const { return get_is_tenant_major_merge() ? MAJOR_MERGE : get_merge_type(); }
   OB_INLINE const ObStorageSchema *get_schema() const { return static_param_.schema_; }
+  // only used to check row col switch merge
+  OB_INLINE const ObStorageSchema *get_target_schema() const { return nullptr != static_param_.orig_schema_ ? static_param_.orig_schema_ : static_param_.schema_; }
   OB_INLINE ObLS *get_ls() const { return static_param_.ls_handle_.get_ls(); }
   ObTablet *get_tablet() const { return tablet_handle_.get_obj(); }
   OB_INLINE int64_t get_snapshot() const { return static_param_.version_range_.snapshot_version_; }

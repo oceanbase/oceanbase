@@ -86,6 +86,7 @@ public:
   int set_search_index_arr_types(const common::ObIArray<common::ObCollectionArrayType*> &arr_types);
   OB_INLINE void set_inc_pk_doc_id_col_id(const int32_t col_id) { inc_pk_doc_id_col_id_ = col_id; }
   OB_INLINE int32_t get_inc_pk_doc_id_col_id() const { return inc_pk_doc_id_col_id_; }
+  OB_INLINE ObMergeEngineType get_merge_engine_type() const { return merge_engine_type_; }
   OB_INLINE bool is_index_table() const { return share::schema::is_index_table(table_type_); }
   OB_INLINE bool is_lob_meta_table() const { return share::schema::is_aux_lob_meta_table(table_type_); }
   OB_INLINE bool is_materialized_view() const

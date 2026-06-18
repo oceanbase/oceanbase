@@ -390,6 +390,15 @@ public:
     DISALLOW_COPY_AND_ASSIGN(BatchBuildMinorSSTablesParam);
   };
 
+  enum MajorTablesStoreType
+  {
+    INVALID_STORE_TYPE = 0,
+    ONLY_ROW_STORE,
+    ONLY_COLUMN_STORE,
+    HYBRID_STORE,
+    MAX_STORE_TYPE,
+  };
+
 public:
   static int build_tablet_with_major_tables(
       ObLS *ls,
@@ -467,11 +476,10 @@ private:
       const ObTablesHandleArray &co_tables,
       const BatchBuildTabletTablesExtraParam &extra_batch_param);
   static int append_sstable_array_(ObTablesHandleArray &dest_array, const ObTablesHandleArray &src_array);
-  // only allow column store storage schema with row store major tables
-  static int check_hybrid_store(
-      const ObStorageSchema &storage_schema,
+
+  static int get_major_tables_store_type_(
       const ObTablesHandleArray &major_tables,
-      bool &is_hybrid_store);
+      MajorTablesStoreType &store_type);
   static int assemble_and_append_hybrid_store_tables_(
     const ObTablesHandleArray &hybrid_tables,
     ObTablesHandleArray &sstables);

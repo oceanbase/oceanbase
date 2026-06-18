@@ -212,9 +212,14 @@ bool ObMergeParameter::is_full_merge() const
   return static_param_.is_full_merge_;
 }
 
-bool ObMergeParameter::is_delete_insert_merge() const
+bool ObMergeParameter::decide_merge_by_row() const
 {
-  return static_param_.merge_engine_type_ == ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT;
+  return static_param_.get_tablet_id().is_user_tablet() && !compaction::is_mds_merge(static_param_.get_merge_type());
+}
+
+ObMergeEngineType ObMergeParameter::get_original_merge_engine_type() const
+{
+  return static_param_.original_merge_engine_type_;
 }
 
 bool ObMergeParameter::is_ha_compeleted() const
@@ -233,16 +238,17 @@ bool ObMergeParameter::is_empty_table(const ObITable &table) const
   bool bret = table.is_empty();
   if (!bret && table.is_sstable()) {
     const ObSSTable *sstable = static_cast<const ObSSTable *>(&table);
-    if (sstable->is_column_store_sstable()) {
-      const ObDatumRange *merge_rowid_range = nullptr;
-      if (OB_FAIL(get_rowid_range_by_scn_range(sstable->get_key().scn_range_, merge_rowid_range))) { // empty sstable
-        LOG_ERROR("failed to get rowid range by scn range", K(ret), K(sstable->get_key().scn_range_));
-      } else if (merge_rowid_range->start_key_.is_min_rowkey() || merge_rowid_range->end_key_.is_max_rowkey()) {
-        bret = false;
-      } else {
-        const int64_t start_rowid = merge_rowid_range->start_key_.datums_[0].get_int(), end_rowid = merge_rowid_range->end_key_.datums_[0].get_int();
-        bret = end_rowid < start_rowid;
-      }
+    const ObDatumRange *merge_rowid_range = nullptr;
+    if (!sstable->is_column_store_sstable() ||
+        static_param_.schema_->is_row_store()) {
+      // do nothing
+    } else if (OB_FAIL(get_rowid_range_by_scn_range(sstable->get_key().scn_range_, merge_rowid_range))) { // empty sstable
+      LOG_ERROR("failed to get rowid range by scn range", K(ret), K(sstable->get_key().scn_range_));
+    } else if (merge_rowid_range->start_key_.is_min_rowkey() || merge_rowid_range->end_key_.is_max_rowkey()) {
+      bret = false;
+    } else {
+      const int64_t start_rowid = merge_rowid_range->start_key_.datums_[0].get_int(), end_rowid = merge_rowid_range->end_key_.datums_[0].get_int();
+      bret = end_rowid < start_rowid;
     }
   }
   return bret;
@@ -1313,17 +1319,14 @@ int ObTabletMergeTask::process()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTabletMergeTask is not inited", K(ret));
-  } else if (OB_ISNULL(ctx_)) {
+  } else if (OB_UNLIKELY(nullptr == ctx_ || nullptr == merger_)) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Unexpected null merge ctx", K(ret));
+    STORAGE_LOG(WARN, "Unexpected null ctx or merger", K(ret), K(ctx_), K(merger_));
   } else if (OB_UNLIKELY(is_major_merge_type(ctx_->get_merge_type())
-                         && !MERGE_SCHEDULER_PTR->could_major_merge_start())) {
+                      && !MERGE_SCHEDULER_PTR->could_major_merge_start())) {
     ret = OB_CANCELED;
     LOG_INFO("Merge has been paused", K(ret));
     CTX_SET_DIAGNOSE_LOCATION(*ctx_);
-  } else if (OB_ISNULL(merger_)) {
-    ret = OB_ERR_SYS;
-    STORAGE_LOG(WARN, "Unexpected null partition merger", K(ret));
   } else {
     ctx_->mem_ctx_.mem_click();
     if (OB_FAIL(merger_->merge_partition(*ctx_, idx_))) {
@@ -1345,8 +1348,7 @@ int ObTabletMergeTask::process()
       }
     }
 
-    if (OB_FAIL(ret)) {
-    } else {
+    if (OB_SUCC(ret)) {
       ctx_->mem_ctx_.mem_click();
       FLOG_INFO("merge macro blocks ok", K(idx_), "task", *this);
     }

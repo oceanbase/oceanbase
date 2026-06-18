@@ -264,6 +264,7 @@ int ObDirectLoadDagInsertTableBatchRowIterator::do_init()
     datum_rows_.row_flag_ = row_info.row_flag_;
     datum_rows_.mvcc_row_flag_ = row_info.mvcc_row_flag_;
     datum_rows_.trans_id_ = row_info.trans_id_;
+    datum_rows_.merge_engine_type_ = row_info.merge_engine_type_;
     for (int64_t i = 0; i < vectors.count(); ++i) {
       if (i < rowkey_column_count) {
         datum_rows_.vectors_.at(i) = vectors.at(i)->get_vector();

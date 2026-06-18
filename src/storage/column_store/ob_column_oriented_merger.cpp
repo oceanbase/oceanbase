@@ -893,16 +893,15 @@ int ObCOMergeLogReplayer::init_cg_writers(ObIArray<ObITable*> &tables)
   blocksstable::ObDatumRow default_row;
   ObCOTabletMergeCtx *ctx = static_cast<ObCOTabletMergeCtx *>(merge_ctx_);
   ObTabletMergeInfo **merge_infos = ctx->cg_merge_info_array_;
-  const common::ObIArray<ObStorageColumnGroupSchema> &cg_array = ctx->get_schema()->get_column_groups();
-
+  const int64_t cg_schema_cnt = ctx->get_schema()->get_column_group_count();
   if (OB_UNLIKELY(tables.empty() || nullptr == merge_infos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null sstable", K(ret), KP(merge_infos), K(tables));
   } else if (OB_UNLIKELY(end_cg_idx_ <= start_cg_idx_
       || ctx->array_count_ < end_cg_idx_
-      || cg_array.count() != ctx->array_count_)) {
+      || cg_schema_cnt != ctx->array_count_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Invalid merge batch count", K(ret), K(ctx->array_count_), K(start_cg_idx_), K(cg_array.count()));
+    LOG_WARN("Invalid merge batch count", K(ret), K(ctx->array_count_), K(start_cg_idx_), K(cg_schema_cnt));
   } else if (OB_FAIL(ObCOMergeWriter::init_default_row(
       merger_arena_,
       merge_param_,
@@ -910,22 +909,21 @@ int ObCOMergeLogReplayer::init_cg_writers(ObIArray<ObITable*> &tables)
       default_row))) {
     LOG_WARN("failed to init_default_row", K(ret));
   } else if (FALSE_IT(merge_param_.error_location_ = &ctx->info_collector_.error_location_)) {
-  } else if (OB_FAIL(alloc_writers(default_row, cg_array, merge_infos, tables))) {
-    LOG_WARN("fail to alloc writers", K(ret), K(cg_array), K(merge_infos), K(tables), K(default_row));
+  } else if (OB_FAIL(alloc_writers(default_row, merge_infos, tables))) {
+    LOG_WARN("fail to alloc writers", K(ret), K(merge_infos), K(tables), K(default_row));
   }
   return ret;
 }
 
 int ObCOMergeLogReplayer::alloc_writers(
     const blocksstable::ObDatumRow &default_row,
-    const common::ObIArray<ObStorageColumnGroupSchema> &cg_array,
     ObTabletMergeInfo **merge_infos,
     ObIArray<ObITable*> &tables)
 {
   int ret = OB_SUCCESS;
   if (!use_row_to_build_column_ && OB_FAIL(alloc_row_writers<ObCOMergeRowWriter>(default_row, merge_infos, tables))) {
     LOG_WARN("Failed to allocate ObCOMergeRowWriter", K(ret));
-  } else if (use_row_to_build_column_ && OB_FAIL(alloc_single_writer(default_row, cg_array, merge_infos, tables))) {
+  } else if (use_row_to_build_column_ && OB_FAIL(alloc_single_writer(default_row, merge_infos, tables))) {
     LOG_WARN("Failed to allocate ObCOMergeSingleWriter", K(ret));
   }
   return ret;
@@ -933,7 +931,6 @@ int ObCOMergeLogReplayer::alloc_writers(
 
 int ObCOMergeLogReplayer::alloc_single_writer(
     const blocksstable::ObDatumRow &default_row,
-    const common::ObIArray<ObStorageColumnGroupSchema> &cg_array,
     ObTabletMergeInfo **merge_infos,
     ObIArray<ObITable*> &tables)
 {
@@ -945,7 +942,7 @@ int ObCOMergeLogReplayer::alloc_single_writer(
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Failed to allocate memory for ObCOMergeSingleWriter", K(ret));
   } else if (OB_FAIL(writer->init(*merge_ctx_, default_row, merge_param_, ctx->get_full_read_info(), task_idx_,
-      cg_array, merge_infos, tables))) {
+      merge_infos, tables))) {
     LOG_WARN("fail to init writer", K(ret));
   } else if (OB_FAIL(merge_writers_.push_back(writer))) {
     LOG_WARN("failed to push writer", K(ret), K(merge_writers_));
@@ -988,11 +985,16 @@ int ObCOMergeLogReplayer::alloc_row_writers(
       LOG_DEBUG("[RowColSwitch] mock row store cg", K(ctx->mocked_row_store_cg_));
     }
   }
+
   for (uint32_t idx = start_cg_idx_; OB_SUCC(ret) && idx < end_cg_idx_; idx++) {
     T *writer = nullptr;
-    if (need_replay_base_cg_ && idx == base_cg_idx) { // replayed base cg, only nullptr writer to placeholder
-    } else if (OB_FAIL(alloc_row_writer(idx, default_row, tables, writer))) {
-      LOG_WARN("failed to alloc row writer", K(ret), K(idx));
+    int64_t cg_idx = -1;
+    if (need_replay_base_cg_ && idx == base_cg_idx) {
+      // replayed base cg, only nullptr writer to placeholder
+    } else if (OB_FAIL(ctx->get_schema()->convert_iter_idx_to_column_group_idx(idx, cg_idx))) {
+      LOG_WARN("failed to convert iter idx to cg idx", K(ret), K(idx));
+    } else if (OB_FAIL(alloc_row_writer(cg_idx, default_row, tables, writer))) {
+      LOG_WARN("failed to alloc row writer", K(ret), K(idx), K(cg_idx));
     }
     if (FAILEDx(merge_writers_.push_back(writer))) {
       LOG_WARN("failed to push back writer", K(ret));
@@ -1002,8 +1004,7 @@ int ObCOMergeLogReplayer::alloc_row_writers(
       merger_arena_.free(writer);
       writer = nullptr;
     }
-  } // for
-
+  }
   return ret;
 }
 /**

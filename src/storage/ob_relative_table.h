@@ -79,6 +79,7 @@ public:
   int get_spatial_geo_col_id(uint64_t &column_id) const;
   int get_spatial_cellid_col_id(uint64_t &column_id) const;
   int get_spatial_mbr_col_id(uint64_t &column_id) const;
+  ObMergeEngineType get_merge_engine_type() const;
   bool is_index_table() const;
   bool is_lob_meta_table() const;
   bool is_storage_index_table() const;

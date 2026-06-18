@@ -69,6 +69,7 @@ ObDatumRow::ObDatumRow(const uint64_t tenant_id)
     delete_version_(0),
     storage_datums_(nullptr),
     datum_buffer_(),
+    merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_MAX),
     trans_info_(nullptr),
     major_merge_flag_()
 {
@@ -169,6 +170,7 @@ int ObDatumRow::reserve(const int64_t capacity, const bool keep_data)
     snapshot_version_ = 0;
     insert_version_ = 0;
     delete_version_ = 0;
+    merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_MAX;
   }
 
   return ret;
@@ -190,6 +192,7 @@ void ObDatumRow::reset()
   row_flag_.reset();
   count_ = 0;
   local_allocator_.reset();
+  merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_MAX;
   trans_info_ = nullptr;
   major_merge_flag_.reset();
 }
@@ -209,6 +212,7 @@ void ObDatumRow::reuse()
   snapshot_version_ = 0;
   insert_version_ = 0;
   delete_version_ = 0;
+  merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_MAX;
   if (OB_NOT_NULL(trans_info_)) {
     trans_info_[0] = '\0';
   }
@@ -259,6 +263,7 @@ int ObDatumRow::from_store_row(const storage::ObStoreRow &store_row)
     fast_filter_skipped_ = store_row.fast_filter_skipped_;
     insert_version_ = 0;
     delete_version_ = 0;
+    merge_engine_type_ = store_row.merge_engine_type_;
     for (int64_t i = 0; OB_SUCC(ret) && i < count_; i++) {
       if (OB_FAIL(storage_datums_[i].from_obj_enhance(store_row.row_val_.cells_[i]))) {
         STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret), K(i), K(store_row.row_val_.cells_[i]));
@@ -311,6 +316,7 @@ int ObDatumRow::copy_attributes_except_datums(const ObDatumRow &other)
     snapshot_version_ = other.snapshot_version_;
     insert_version_ = other.insert_version_;
     delete_version_ = other.delete_version_;
+    merge_engine_type_ = other.merge_engine_type_;
     major_merge_flag_ = other.major_merge_flag_;
   }
   return ret;
@@ -335,6 +341,7 @@ int ObDatumRow::shallow_copy(const ObDatumRow &other)
     row_flag_ = other.row_flag_;
     read_flag_ = other.read_flag_;
     count_ = other.count_;
+    merge_engine_type_ = other.merge_engine_type_;
     major_merge_flag_ = other.major_merge_flag_;
   }
   return ret;
@@ -423,7 +430,8 @@ DEF_TO_STRING(ObDatumRow)
   J_OBJ_START();
   J_KV(K_(row_flag), K_(trans_id), K_(scan_index), K_(mvcc_row_flag), K_(major_merge_flag), K_(snapshot_version),
        K_(have_uncommited_row), K_(fast_filter_skipped), K_(is_insert_filtered), K_(is_delete_filtered),
-       K_(insert_version), K_(delete_version), K_(group_idx), K_(count), K_(datum_buffer));
+       K_(insert_version), K_(delete_version), K_(group_idx), K_(count), K_(datum_buffer),
+       K_(merge_engine_type));
   if (NULL != buf && buf_len >= 0) {
     if (NULL != storage_datums_) {
       J_COMMA();

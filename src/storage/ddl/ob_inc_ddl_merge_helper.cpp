@@ -627,14 +627,17 @@ int ObIncMajorDDLMergeHelper::process_prepare_task(
     }
 
     int64_t cg_count = ObITable::is_column_store_sstable(ddl_merge_param.table_key_.table_type_) ?
-                      tablet_param->storage_schema_->get_column_group_count() : 1;
-    for (int64_t cg_idx = 0; OB_SUCC(ret) && cg_idx < cg_count; cg_idx++) {
+                           tablet_param->storage_schema_->get_column_group_count() : 1;
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < cg_count; idx++) {
       for (hash::ObHashSet<int64_t>::const_iterator iter = slice_idxes.begin();
           OB_SUCC(ret) && iter != slice_idxes.end();
           ++iter) {
         int64_t start_slice_idx = iter->first;
         int64_t end_slice_idx   = 0 == iter->first ? merge_slice_idx : iter->first;
-        if (OB_FAIL(cg_slices.push_back(ObTuple<int64_t, int64_t, int64_t>(cg_idx, start_slice_idx, end_slice_idx)))) {
+        int64_t cg_idx = -1;
+        if (OB_FAIL(tablet_param->storage_schema_->convert_iter_idx_to_column_group_idx(idx, cg_idx))) {
+          LOG_WARN("failed to convert iter idx to cg idx", K(ret), K(idx), K(cg_count));
+        } else if (OB_FAIL(cg_slices.push_back(ObTuple<int64_t, int64_t, int64_t>(cg_idx, start_slice_idx, end_slice_idx)))) {
           LOG_WARN("failed to push back val", K(ret), K(start_slice_idx), K(end_slice_idx));
         }
       }
@@ -723,7 +726,7 @@ int ObIncMajorDDLMergeHelper::merge_cg_slice(ObIDag *dag,
                                                                   ddl_param,
                                                                   tablet_param->storage_schema_,
                                                                   ddl_sstables,
-                                                                  cg_idx == merge_param.table_key_.column_group_idx_ ?
+                                                                  (cg_idx == merge_param.table_key_.column_group_idx_ || cg_idx == HIDDEN_ROWKEY_COLUMN_GROUP_IDX) ?
                                                                       tablet_handle.get_obj()->get_rowkey_read_info()
                                                                       : *cg_index_read_info,
                                                                   arena, tmp_metas))) {
@@ -1268,10 +1271,15 @@ int ObSSIncMajorDDLMergeHelper::process_prepare_task(
       LOG_WARN("fail to calculate inc major end scn", KR(ret));
     }
     /* for ss mode, inc major build from cg meta file, follower not need build inc major*/
-    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_param->storage_schema_->get_column_group_count(); ++i) {
+    ObStorageCGSchemaIterator cg_iter(*tablet_param->storage_schema_);
+    const int64_t cg_count = cg_iter.get_column_group_count();
+    for (int64_t i = 0; OB_SUCC(ret) && i < cg_count; ++i) {
       /* when build major only one slice is needed */
-      if (OB_FAIL(cg_slices.push_back(ObTuple<int64_t, int64_t, int64_t>(i /* cg_idx */, 0 /* start_slice */, 0 /* end_slice */)))) {
-        LOG_WARN("failed to get slice", K(ret));
+      int64_t cg_idx = -1;
+      if (OB_FAIL(cg_iter.convert_iter_idx_to_column_group_idx(i, cg_idx))) {
+        LOG_WARN("failed to convert iter idx to cg idx", K(ret), K(i), K(cg_count));
+      } else if (OB_FAIL(cg_slices.push_back(ObTuple<int64_t, int64_t, int64_t>(cg_idx, 0 /* start_slice */, 0 /* end_slice */)))) {
+        LOG_WARN("failed to push back slice", K(ret), K(cg_idx));
       }
     }
   }
@@ -1579,10 +1587,13 @@ int ObSSIncMajorDDLMergeHelper::merge_cg_sstable(ObIDag* dag,
     storage::ObDDLIncRedoLogWriterCallback clustered_index_flush_callback;
     ObDDLRedoLogWriterCallbackInitParam init_param;
     ObSSTableMergeRes res;
-    const ObStorageColumnGroupSchema &cg_schema = storage_schema->get_column_groups().at(cg_idx);
+    const ObStorageColumnGroupSchema *cg_schema = nullptr;
     ObMacroDataSeq tmp_seq;
     ObDirectLoadAutoIncSeqData inc_start_seq;
-    if (OB_FAIL(ObDirectLoadAutoIncSeqService::get_start_seq(ls_id, tablet_id, compaction::MACRO_STEP_SIZE, inc_start_seq))) {
+
+    if (OB_FAIL(storage_schema->get_cg_schema_with_column_group_idx(cg_idx, cg_schema))) {
+      LOG_WARN("fail to get column group schema", K(ret), K(cg_idx));
+    } else if (OB_FAIL(ObDirectLoadAutoIncSeqService::get_start_seq(ls_id, tablet_id, compaction::MACRO_STEP_SIZE, inc_start_seq))) {
       LOG_WARN("fail to get start seq", KR(ret), K(ls_id), K(tablet_id), K(inc_start_seq));
     } else {
       tmp_seq.macro_data_seq_ = inc_start_seq.get_seq_val();
@@ -1621,7 +1632,7 @@ int ObSSIncMajorDDLMergeHelper::merge_cg_sstable(ObIDag* dag,
                                       0, /* concurrent_cnt */
                                       tablet_handle.get_obj()->get_reorganization_scn(),
                                       SCN::min_scn(),
-                                      &cg_schema,
+                                      cg_schema,
                                       cg_idx,
                                       compaction::ObExecMode::EXEC_MODE_OUTPUT,
                                       true/*need_submit_io*/,

@@ -225,7 +225,18 @@ public:
       ObLS *ls,
       const ObTabletHandle &local_tablet_handle,
       bool &has_mds_table_for_dump);
+  static int build_adjusted_col_layout_storage_schema(
+      ObIAllocator &allocator,
+      const ObSSTable &src_sstable,
+      const ObStorageSchema &split_mds_storage_schema,
+      const ObStorageSchema *target_storage_schema,
+      const ObStorageSchema *&storage_schema);
 private:
+  static int build_split_base_storage_schema(
+      ObIAllocator &allocator,
+      const ObSSTable &src_sstable,
+      const ObStorageSchema &split_mds_storage_schema,
+      ObStorageSchema *&target_storage_schema);
   static int check_and_determine_mds_end_scn(
       const ObTabletHandle &dest_tablet_handle,
       share::SCN &end_scn);

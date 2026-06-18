@@ -270,6 +270,7 @@ int ObMockIterator::add_row(ObStoreRow *row)
       row_clone->row_type_flag_ = row->row_type_flag_;
       row_clone->is_get_ = row->is_get_;
       row_clone->scan_index_ = row->scan_index_;
+      row_clone->merge_engine_type_ = row->merge_engine_type_;
       if (row->row_type_flag_.is_uncommitted_row()) { // make all row point to the same trans_id
         row_clone->trans_id_ = row->trans_id_.is_valid() ? row->trans_id_ : trans_id_;
       }
@@ -391,7 +392,8 @@ bool ObMockIterator::inner_equals(const blocksstable::ObDatumRow &r1, const bloc
 }
 
 bool ObMockIterator::equals(const blocksstable::ObDatumRow &r1, const blocksstable::ObDatumRow &r2,
-    const bool cmp_multi_version_row_flag, const bool cmp_row_flag, const bool cmp_is_get_and_scan_index)
+    const bool cmp_multi_version_row_flag, const bool cmp_row_flag, const bool cmp_is_get_and_scan_index,
+    const bool cmp_merge_engine_type)
 {
   int ret = OB_SUCCESS;
   bool bool_ret = false;
@@ -410,6 +412,9 @@ bool ObMockIterator::equals(const blocksstable::ObDatumRow &r1, const blocksstab
   } else if (cmp_is_get_and_scan_index
       && (r1.scan_index_ != r2.scan_index_)) {
     STORAGE_LOG(WARN, "scan_index not equals", K(r1), K(r2));
+    bool_ret = false;
+  } else if (cmp_merge_engine_type && r1.merge_engine_type_ != r2.merge_engine_type_) {
+    STORAGE_LOG(WARN, "merge_engine_type not equals", K(r1.merge_engine_type_), K(r2.merge_engine_type_), K(r1), K(r2));
     bool_ret = false;
   } else {
     bool_ret = inner_equals(r1, r2);
@@ -482,7 +487,7 @@ bool ObMockIterator::equals(uint16_t *col_id1, uint16_t *col_id2, const int64_t 
 }
 
 bool ObMockIterator::equals(const ObStoreRow &r1, const ObStoreRow &r2,
-    const bool cmp_multi_version_row_flag, const bool cmp_row_flag, const bool cmp_is_get_and_scan_index)
+    const bool cmp_multi_version_row_flag, const bool cmp_row_flag, const bool cmp_is_get_and_scan_index, const bool cmp_merge_engine_type)
 {
   int ret = OB_SUCCESS;
   bool bool_ret = false;
@@ -502,6 +507,9 @@ bool ObMockIterator::equals(const ObStoreRow &r1, const ObStoreRow &r2,
     bool_ret = false;
   } else if (r1.is_sparse_row_ != r2.is_sparse_row_){
     STORAGE_LOG(WARN, "is_sparse_row not equals", K(r1), K(r2));
+    bool_ret = false;
+  } else if (cmp_merge_engine_type && r1.merge_engine_type_ != r2.merge_engine_type_) {
+    STORAGE_LOG(WARN, "merge_engine_type not equals", K(r1.merge_engine_type_), K(r2.merge_engine_type_), K(r1), K(r2));
     bool_ret = false;
   } else {
     bool_ret = equals(r1.row_val_, r2.row_val_);
@@ -988,6 +996,78 @@ int ObMockIteratorBuilder::parse_obj_number(ObIAllocator *allocator,
   return ret;
 }
 
+int ObMockIteratorBuilder::parse_datum_merge_engine_type(ObIAllocator *allocator,
+                                                         const ObString &word,
+                                                         blocksstable::ObDatumRow &row,
+                                                         int64_t &idx)
+{
+  UNUSEDx(allocator, idx);
+  OB_ASSERT(NULL != word.ptr() && 0 <= word.length());
+
+  int ret = OB_SUCCESS;
+  ObMergeEngineType merge_engine_type = ObMergeEngineType::OB_MERGE_ENGINE_MAX;
+
+  // Parse merge_engine_type: "di" -> DELETE_INSERT, "pu" -> PARTIAL_UPDATE, "io" -> INSERT_ONLY, "uk" -> UNKNOWN
+  if (word.length() == 2) {
+    if (0 == word.case_compare("di")) {
+      merge_engine_type = ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT;
+    } else if (0 == word.case_compare("pu")) {
+      merge_engine_type = ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE;
+    } else if (0 == word.case_compare("io")) {
+      merge_engine_type = ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY;
+    } else if (0 == word.case_compare("uk")) {
+      merge_engine_type = ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN;
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      STORAGE_LOG(WARN, "invalid merge_engine_type value", K(word));
+    }
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid merge_engine_type format", K(word));
+  }
+
+  if (OB_SUCC(ret)) {
+    row.merge_engine_type_ = merge_engine_type;
+  }
+  return ret;
+}
+
+int ObMockIteratorBuilder::parse_obj_merge_engine_type(ObIAllocator *allocator,
+                                                        const ObString &word,
+                                                        storage::ObStoreRow &row,
+                                                        int64_t &idx)
+{
+  UNUSEDx(allocator, idx);
+  OB_ASSERT(NULL != word.ptr() && 0 <= word.length());
+
+  int ret = OB_SUCCESS;
+  ObMergeEngineType merge_engine_type = ObMergeEngineType::OB_MERGE_ENGINE_MAX;
+
+  // Parse merge_engine_type: "di" -> DELETE_INSERT, "pu" -> PARTIAL_UPDATE, "io" -> INSERT_ONLY, "uk" -> UNKNOWN
+  if (word.length() == 2) {
+    if (0 == word.case_compare("di")) {
+      merge_engine_type = ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT;
+    } else if (0 == word.case_compare("pu")) {
+      merge_engine_type = ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE;
+    } else if (0 == word.case_compare("io")) {
+      merge_engine_type = ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY;
+    } else if (0 == word.case_compare("uk")) {
+      merge_engine_type = ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN;
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      STORAGE_LOG(WARN, "invalid merge_engine_type value", K(word), K(word.length()));
+    }
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid merge_engine_type format", K(word), K(word.length()));
+  }
+
+  if (OB_SUCC(ret)) {
+    row.merge_engine_type_ = merge_engine_type;
+  }
+  return ret;
+}
+
 int ObMockIteratorBuilder::parse_dml(ObIAllocator *allocator,
                                      const ObString &word,
                                      storage::ObStoreRow &row,
@@ -1415,7 +1495,10 @@ int ObMockIteratorBuilder::static_init()
                  ObMockIteratorBuilder::parse_datum_scan_index)
              || OB_SUCCESS != str_to_datum_info_parse_func_.set_refactored(
                  ObString::make_string("trans_id"),
-                 ObMockIteratorBuilder::parse_datum_trans_id)) {
+                 ObMockIteratorBuilder::parse_datum_trans_id)
+             || OB_SUCCESS != str_to_datum_info_parse_func_.set_refactored(
+                 ObString::make_string("merge_engine_type"),
+                 ObMockIteratorBuilder::parse_datum_merge_engine_type)) {
     ret = OB_INIT_FAIL;
     STORAGE_LOG(WARN, "info parse func hashtable insert failed");
   } else {
@@ -1443,7 +1526,10 @@ int ObMockIteratorBuilder::static_init()
                  ObMockIteratorBuilder::parse_obj_scan_index)
              || OB_SUCCESS != str_to_info_parse_func_.set_refactored(
                  ObString::make_string("trans_id"),
-                 ObMockIteratorBuilder::parse_obj_trans_id)) {
+                 ObMockIteratorBuilder::parse_obj_trans_id)
+             || OB_SUCCESS != str_to_info_parse_func_.set_refactored(
+                 ObString::make_string("merge_engine_type"),
+                 ObMockIteratorBuilder::parse_obj_merge_engine_type)) {
     ret = OB_INIT_FAIL;
     STORAGE_LOG(WARN, "info parse func hashtable insert failed");
   } else {
@@ -1751,6 +1837,7 @@ int ObMockIteratorBuilder::parse_for_datum(
           for (int64_t i = 0; i < obj_num; ++i) {
             row->storage_datums_[i].set_nop();
           }
+          row->merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN;
           // parse one row
           ret = parse_datum_row(str, pos, header, col_id_array_list, *row);
           if (OB_ITER_END == ret) {
@@ -1810,6 +1897,7 @@ int ObMockIteratorBuilder::parse(
           for (int64_t i = 0; i < obj_num; ++i) {
             row->row_val_.cells_[i].set_nop_value();
           }
+          row->merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN;
           // parse one row
           ret = parse_row(str, pos, header, col_id_array_list, *row);
           if (OB_ITER_END == ret) {
@@ -1998,6 +2086,7 @@ int ObMockIteratorBuilder::parse_datum_with_specified_col_ids(
           for (int64_t i = 0; i < obj_num; ++i) {
             row->storage_datums_[i].set_nop();
           }
+          row->merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN;
           // parse one row
           ret = parse_datum_row(str, pos, header, nullptr, *row);
           if (OB_ITER_END == ret) {
@@ -2068,6 +2157,7 @@ int ObMockIteratorBuilder::parse_with_specified_col_ids(
           for (int64_t i = 0; i < obj_num; ++i) {
             row->row_val_.cells_[i].set_nop_value();
           }
+          row->merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN;
           // parse one row
           ret = parse_row(str, pos, header, nullptr, *row);
           if (OB_ITER_END == ret) {
@@ -2264,7 +2354,7 @@ int ObMockIteratorBuilder::parse_row(const ObString &str,
           OB_ASSERT(false);
       } // end of switch
       if (OB_SUCC(ret) && row.is_sparse_row_) {
-        if (EXT_NOP != ext && parse_obj_flag != fp && parse_obj_multi_version_row_flag != fp && parse_obj_trans_id != fp) {
+        if (EXT_NOP != ext && parse_obj_flag != fp && parse_obj_multi_version_row_flag != fp && parse_obj_trans_id != fp && parse_obj_merge_engine_type != fp) {
           row.column_ids_[idx - 1] = col_id_array_list[col_id_idx++];
         }
       }
@@ -2611,6 +2701,7 @@ int ObMockDirectReadIterator::get_next_row(const storage::ObStoreRow *&row)
     sstable_row_.trans_id_ = row_.trans_id_;
     sstable_row_.row_type_flag_ = row_.mvcc_row_flag_;
     sstable_row_.flag_ = row_.row_flag_;
+    sstable_row_.merge_engine_type_ = row_.merge_engine_type_;
     sstable_row_.row_val_.count_ = count;
     for (int64_t i = 0; i < count; i++) {
       if (row_.storage_datums_[i].is_nop()) {

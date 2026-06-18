@@ -1173,6 +1173,7 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
   // lock table, unlock when ddl trans end
   int lock_table(ObMySQLTransaction &trans,
                  const ObSimpleTableSchemaV2 &table_schema,
+                 const ObTableLockMode lock_mode = EXCLUSIVE,
                  const transaction::tablelock::ObTableLockOwnerID owner_id = ObTableLockOwnerID::default_owner(),
                  const transaction::tablelock::ObTableLockPriority lock_priority
                  = transaction::tablelock::ObTableLockPriority::NORMAL,
@@ -1698,7 +1699,9 @@ int check_will_be_having_domain_index_operation(
                            ObDDLOperator &ddl_operator,
                            common::ObMySQLTransaction &trans,
                            const uint64_t tenant_data_version);
-  int check_alter_column_group(const obrpc::ObAlterTableArg &alter_table_arg, share::ObDDLType &ddl_type) const;
+  int check_alter_column_group(const obrpc::ObAlterTableArg &alter_table_arg,
+                               const share::schema::ObTableSchema &orig_table_schema,
+                               share::ObDDLType &ddl_type) const;
   int alter_column_group(obrpc::ObAlterTableArg &alter_table_arg,
                          const share::schema::ObTableSchema &origin_table_schema,
                          share::schema::ObTableSchema &new_table_schema,
@@ -2265,8 +2268,7 @@ private:
       ObDDLSQLTransaction &trans,
       ObDDLTaskRecord &task_record,
       const int64_t snapshot_version = 0);
-  int adjust_cg_for_offline(ObTableSchema &new_table_schema);
-
+  int rebuild_column_groups(ObTableSchema &new_table_schema);
   int add_column_group(const obrpc::ObAlterTableArg &alter_table_arg,
                        const share::schema::ObTableSchema &ori_table_schema,
                        share::schema::ObTableSchema &new_table_schema);
@@ -2934,7 +2936,7 @@ private:
       ObDDLOperator &ddl_operator,
       ObMySQLTransaction &trans,
       ObSchemaGetterGuard &schema_guard);
-
+  int update_merge_engine_upper_version(ObTableSchema &new_table_schema, const ObMergeEngineType origin_merge_engine_type);
 private:
   bool inited_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;

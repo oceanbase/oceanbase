@@ -460,13 +460,8 @@ int ObMvccRow::unlink_trans_node(const ObMvccTransNode &node)
   return ret;
 }
 
-bool ObMvccRow::need_compact(const bool for_read, const bool for_replay, const bool is_delete_insert)
+bool ObMvccRow::need_compact(const bool for_read, const bool for_replay)
 {
-  if (is_delete_insert) {
-    // return false directly when this is a delete-insert table
-    return false;
-  }
-
   bool bool_ret = false;
   const int32_t updates = ATOMIC_LOAD(&update_since_compact_);
   const int32_t compact_trigger = (for_read || for_replay)

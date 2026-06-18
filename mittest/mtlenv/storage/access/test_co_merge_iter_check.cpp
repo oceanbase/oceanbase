@@ -196,6 +196,7 @@ public:
       OK(data_iter.get_row(i, row));
       ASSERT_TRUE(nullptr != row);
       datum_row.from_store_row(*row);
+      datum_row.merge_engine_type_ = table_schema_.get_merge_engine_type();
       if (nullptr != projector) {
         projector->project(datum_row);
       }
@@ -224,8 +225,9 @@ public:
     ObStorageSchema storage_schema;
     common::ObArray<ObITable *> cg_tables;
     ASSERT_EQ(OB_SUCCESS, storage_schema.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL));
-    const common::ObIArray<ObStorageColumnGroupSchema> &cg_array = storage_schema.get_column_groups();
 
+    ObArray<ObStorageColumnGroupSchema> cg_array;
+    ASSERT_EQ(OB_SUCCESS, storage_schema.get_all_column_group_schemas(cg_array));
     for (int64_t i = 0; i < cg_array.count(); i++) {
       const ObStorageColumnGroupSchema &cg_schema = cg_array.at(i);
       if (is_co_table_without_cgs && !cg_schema.has_multi_version_column()) {

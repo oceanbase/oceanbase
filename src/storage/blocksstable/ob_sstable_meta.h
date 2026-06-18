@@ -215,6 +215,9 @@ public:
   OB_INLINE bool contain_uncommitted_row() const { return basic_meta_.contain_uncommitted_row_; }
   OB_INLINE ObSSTableArray &get_cg_sstables() { return cg_sstables_; }
   OB_INLINE const ObSSTableArray &get_cg_sstables() const { return cg_sstables_; }
+  OB_INLINE ObSSTableArray &get_hidden_rowkey_sstable() { return hidden_cg_sstable_; }
+  OB_INLINE const ObSSTableArray &get_hidden_rowkey_sstable() const { return hidden_cg_sstable_; }
+  OB_INLINE bool has_hidden_rowkey_cg() const { return 1 == hidden_cg_sstable_.count(); }
   OB_INLINE bool is_empty() const {
     return 0 == basic_meta_.data_macro_block_count_;
   }
@@ -357,10 +360,11 @@ private:
   ObSSTableMacroInfo macro_info_;
   ObSSTableArray cg_sstables_;
   ObColumnCkmStruct column_ckm_struct_;
-  ObTxContext tx_ctx_;  // abandon meta !!!
+  ObTxContext tx_ctx_;  // abandoned meta !!!
   compaction::ObMetaUncommitTxInfo uncommit_tx_info_;
   // SSTable level skip index row (aggregated from all macro blocks)
   ObSSTableMetaSkipIndex skip_index_;
+  ObSSTableArray hidden_cg_sstable_; // only used to store hidden rowkey column group
   // The following fields don't to persist
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObSSTableMeta);

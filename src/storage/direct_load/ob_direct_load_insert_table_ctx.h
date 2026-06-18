@@ -43,13 +43,15 @@ public:
       trans_id_(),
       seq_no_(0),
       trans_version_vector_(nullptr),
-      seq_no_vector_(nullptr)
+      seq_no_vector_(nullptr),
+      merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_MAX)
   {
   }
   bool is_valid() const
   {
-    return row_flag_.is_valid() & mvcc_row_flag_.is_valid() &&
-           (INT64_MAX != trans_version_ || (trans_id_.is_valid() && seq_no_ > 0));
+    return row_flag_.is_valid() && mvcc_row_flag_.is_valid() &&
+           (INT64_MAX != trans_version_ || (trans_id_.is_valid() && seq_no_ > 0)) &&
+           ObMergeEngineStoreFormat::is_merge_engine_valid(merge_engine_type_);
   }
   TO_STRING_KV(K_(row_flag),
                K_(mvcc_row_flag),
@@ -57,7 +59,8 @@ public:
                K_(trans_id),
                K_(seq_no),
                KP_(trans_version_vector),
-               KP_(seq_no_vector));
+               KP_(seq_no_vector),
+               K_(merge_engine_type));
 
 public:
   blocksstable::ObDmlRowFlag row_flag_;
@@ -67,6 +70,7 @@ public:
   int64_t seq_no_;
   ObIVector *trans_version_vector_;
   ObIVector *seq_no_vector_;
+  ObMergeEngineType merge_engine_type_;
 };
 
 struct ObDirectLoadInsertTableResult final
@@ -96,7 +100,7 @@ public:
                K_(is_table_without_pk), K_(is_table_with_hidden_pk_column), K_(is_index_table),
                K_(online_opt_stat_gather), K_(is_incremental), K_(is_inc_major), K_(reuse_pk), K_(trans_param), KP_(datum_utils),
                KP_(col_descs), KP_(cmp_funcs), KP_(col_nullables), KP_(lob_column_idxs),
-               K_(online_sample_percent), K_(is_no_logging), K_(max_batch_size), K_(enable_dag), KP_(dag), K_(is_inc_major_log));
+               K_(online_sample_percent), K_(is_no_logging), K_(merge_engine_type), K_(max_batch_size), K_(enable_dag), KP_(dag), K_(is_inc_major_log));
 
 public:
   uint64_t table_id_; // 目标表的table_id, 目前用于填充统计信息收集结果
@@ -126,6 +130,7 @@ public:
   const common::ObIArray<int64_t> *lob_column_idxs_; // 不包含多版本列
   double online_sample_percent_;
   bool is_no_logging_;
+  ObMergeEngineType merge_engine_type_;
   int64_t max_batch_size_;
   bool enable_dag_;
   ObDDLIndependentDag *dag_;
@@ -226,6 +231,8 @@ public:
   DEFINE_INSERT_TABLE_PARAM_GETTER(bool, enable_dag, false);
   DEFINE_INSERT_TABLE_PARAM_GETTER(ObDDLIndependentDag *, dag, nullptr);
   DEFINE_INSERT_TABLE_PARAM_GETTER(bool, is_inc_major_log, false);
+  DEFINE_INSERT_TABLE_PARAM_GETTER(ObMergeEngineType, merge_engine_type, ObMergeEngineType::OB_MERGE_ENGINE_MAX);
+
 #undef DEFINE_INSERT_TABLE_PARAM_GETTER
 
   OB_INLINE bool has_lob_storage() const

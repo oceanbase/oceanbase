@@ -127,10 +127,22 @@ int ObGroupWriteMacroBlockTask::group_write_macro_block(const ObTabletID &tablet
     ObStorageSchema *storage_schema = tablet_context->tablet_param_.with_cs_replica_ ?
                                       tablet_context->tablet_param_.cs_replica_storage_schema_ :
                                       tablet_context->tablet_param_.storage_schema_;
-    const ObIArray<ObStorageColumnGroupSchema> &cg_schemas = storage_schema->get_column_groups();
+    ObStorageCGSchemaIterator cg_iterator(*storage_schema);
     group_write_tasks_.reuse();
-    for (int64_t i = 0; OB_SUCC(ret) && i < cg_schemas.count(); ++i) {
-      int64_t cg_idx = i;
+
+    while (OB_SUCC(ret)) {
+      const ObStorageColumnGroupSchema *cg_schema = nullptr; // placeholder
+      int64_t cg_idx = -1; // will used to fill column group id on table key
+      int64_t iter_idx = -1;
+      if (OB_FAIL(cg_iterator.next(cg_schema, cg_idx, iter_idx))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("fail to get next cg schema", K(ret));
+        } else {
+          ret = OB_SUCCESS;
+        }
+        break;
+      }
+
       int64_t data_size = 0;
       ObArray<ObCGBlockFile *> group_files;
       int64_t start_slice_idx = -1;
@@ -139,7 +151,7 @@ int ObGroupWriteMacroBlockTask::group_write_macro_block(const ObTabletID &tablet
         if (OB_ISNULL(ddl_slices.at(j))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("current ddl slice is nul", K(ret), K(j), KP(ddl_slices.at(j)));
-        } else if (OB_FAIL(ddl_slices.at(j)->get_remain_block(cg_idx, curr_slice_remain))) {
+        } else if (OB_FAIL(ddl_slices.at(j)->get_remain_block(iter_idx, curr_slice_remain))) {
           LOG_WARN("get remain block failed", K(ret), K(tablet_id), K(cg_idx));
         } else if (OB_UNLIKELY(!curr_slice_remain.is_valid())) {
           ret = OB_ERR_UNEXPECTED;

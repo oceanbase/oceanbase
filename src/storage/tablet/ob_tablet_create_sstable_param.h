@@ -157,7 +157,8 @@ public:
                                        const int64_t column_group_cnt,
                                        const int64_t rowkey_column_cnt,
                                        const int64_t column_cnt,
-                                       const int64_t row_cnt);
+                                       const int64_t row_cnt,
+                                       const bool has_hidden_rowkey_cg);
 
   inline const ObITable::TableKey& table_key() const { return table_key_; }
   inline const share::SCN& rec_scn() const { return rec_scn_; };
@@ -229,6 +230,7 @@ public:
       K_(rec_scn),
       K_(upper_trans_version),
       K_(min_merged_trans_version),
+      K_(has_hidden_rowkey_cg),
       K_(sstable_skip_index));
 private:
   static const int64_t DEFAULT_MACRO_BLOCK_CNT = 64;
@@ -264,7 +266,7 @@ public:
   int64_t micro_block_cnt_;
   int64_t use_old_macro_block_count_;
   int64_t row_count_;
-  int64_t column_group_cnt_; // only used for column_store
+  int64_t column_group_cnt_; // only used for column_store, including hidden rowkey cg!
   int32_t co_base_type_; // used for co sstable
   int64_t rowkey_column_cnt_;
   int64_t column_cnt_;
@@ -298,6 +300,7 @@ public:
   share::SCN rec_scn_;
   int64_t upper_trans_version_;
   int64_t min_merged_trans_version_;
+  bool has_hidden_rowkey_cg_;
   // SSTable level skip index row (aggregated from all macro blocks)
   blocksstable::ObSSTableMetaSkipIndex sstable_skip_index_;
 };

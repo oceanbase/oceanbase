@@ -38,34 +38,6 @@ struct ObStorageColumnGroupSchema;
 class ObITabletSliceRowIterator;
 class ObDDLSlice;
 
-// this task is used to directly write cg macro blocks in the scan task.
-// This task uses a macro block writer for each column group (CG) to write macro blocks
-// and can only be used when there is sufficient memory.
-class ObCgMacroBlockWriteTask : public share::ObITaskWithMonitor
-{
-public:
-  ObCgMacroBlockWriteTask(const ObITaskType type);
-  ObCgMacroBlockWriteTask();
-  virtual ~ObCgMacroBlockWriteTask();
-  int init(ObDDLIndependentDag *ddl_dag,
-           ObITabletSliceRowIterator *row_iter,
-           const ObTabletID &tablet_id);
-  int process() override;
-
-private:
-  int project_cg_row(const ObStorageColumnGroupSchema &cg_schema,
-                     const blocksstable::ObDatumRow &row,
-                     blocksstable::ObDatumRow &cg_row);
-  DISABLE_COPY_ASSIGN(ObCgMacroBlockWriteTask);
-
-private:
-  bool is_inited_;
-  ObArenaAllocator allocator_;
-  common::ObTabletID tablet_id_;
-  const ObStorageSchema *storage_schema_;
-  ObITabletSliceRowIterator *row_iter_;
-  ObArray<ObCgMacroBlockWriter *> cg_macro_block_writers_;
-};
 
 class ObDDLScanTask : public share::ObITaskWithMonitor
 {

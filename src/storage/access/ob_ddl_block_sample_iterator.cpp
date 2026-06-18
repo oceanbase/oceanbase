@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_block_sample_iterator.h"
+#include "ob_tablet_read_tables.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/access/ob_ddl_block_sample_iterator.h"
 #include "lib/random/ob_random.h"
@@ -37,7 +38,7 @@ void ObDDLBlockSampleIterator::reset()
 int ObDDLBlockSampleIterator::open(ObMultipleScanMerge &scan_merge,
                                    ObTableAccessContext &access_ctx,
                                    const blocksstable::ObDatumRange &range,
-                                   ObGetTableParam &get_table_param,
+                                   ObTabletReadTables &tablet_read_tables,
                                    const bool is_reverse_scan)
 {
   int ret = OB_SUCCESS;
@@ -45,10 +46,10 @@ int ObDDLBlockSampleIterator::open(ObMultipleScanMerge &scan_merge,
   if (OB_UNLIKELY(is_opened_)) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "the ddl block sample iterator has been initialized", K(ret));
-  } else if (OB_UNLIKELY(!access_ctx.is_valid() || !get_table_param.is_valid())) {
+  } else if (OB_UNLIKELY(!access_ctx.is_valid() || !tablet_read_tables.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "there are invalid argument", K(ret), K(access_ctx), K(get_table_param));
-  }  else if (OB_FAIL(range_iterator_.open(get_table_param,
+    STORAGE_LOG(WARN, "there are invalid argument", K(ret), K(access_ctx), K(tablet_read_tables));
+  }  else if (OB_FAIL(range_iterator_.open(tablet_read_tables,
                                            range,
                                            *access_ctx.stmt_allocator_,
                                            sample_info_->percent_,
@@ -59,7 +60,7 @@ int ObDDLBlockSampleIterator::open(ObMultipleScanMerge &scan_merge,
     scan_merge_ = &scan_merge;
     has_opened_range_ = false;
     access_ctx_ = &access_ctx;
-    read_info_ = &get_table_param.tablet_iter_.get_tablet()->get_rowkey_read_info();
+    read_info_ = &tablet_read_tables.tablet_iter_.get_tablet()->get_rowkey_read_info();
   }
   if (FAILEDx(reservoir_block_sample())) {
     STORAGE_LOG(WARN, "fail to do reservoir sampling", K(ret));

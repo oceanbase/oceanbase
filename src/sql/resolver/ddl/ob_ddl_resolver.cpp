@@ -3293,7 +3293,7 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
           SQL_RESV_LOG(WARN, "option_node child is null", K(ret), K(option_node->num_child_), K(option_node->children_[0]));
         } else {
           ObMergeEngineType merge_engine_type = static_cast<ObMergeEngineType>(option_node->children_[0]->value_);
-          if (OB_LIKELY(stmt::T_CREATE_TABLE == stmt_->get_stmt_type())) {
+          if (stmt::T_CREATE_TABLE == stmt_->get_stmt_type()) {
             ObCreateTableArg &arg = static_cast<ObCreateTableStmt*>(stmt_)->get_create_table_arg();
             if (OB_UNLIKELY(!ObMergeEngineStoreFormat::is_merge_engine_valid(merge_engine_type))) {
               ret = OB_ERR_UNEXPECTED;
@@ -3307,9 +3307,19 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
               arg.schema_.set_merge_engine_type(merge_engine_type);
             }
           } else if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
-            ret = OB_NOT_SUPPORTED;
-            SQL_RESV_LOG(WARN, "alter merge engine table option not supported", K(ret));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter merge engine table option");
+            ObAlterTableArg &arg = static_cast<ObAlterTableStmt*>(stmt_)->get_alter_table_arg();
+            if (tenant_data_version < DATA_VERSION_4_6_1_0) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("alter merge engine table option not supported in data version less than 4.6.1.0", K(ret), K(tenant_data_version));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter merge engine table option in data version less than 4.6.1.0");
+            } else if (OB_UNLIKELY(!ObMergeEngineStoreFormat::is_merge_engine_valid(merge_engine_type))) {
+              ret = OB_ERR_UNEXPECTED;
+              SQL_RESV_LOG(WARN, "unexpected invalid merge engine value", K(ret), K(merge_engine_type));
+            } else if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::MERGE_ENGINE_TYPE))) {
+              SQL_RESV_LOG(WARN, "failed to add member to bitset", K(ret));
+            } else {
+              arg.alter_table_schema_.set_merge_engine_type(merge_engine_type);
+            }
           } else {
             ret = OB_ERR_UNEXPECTED;
             SQL_RESV_LOG(WARN, "get unexpected stmt type", K(ret), K(stmt_->get_stmt_type()));
@@ -14049,7 +14059,7 @@ int ObDDLResolver::parse_column_group(const ParseNode *column_group_node,
   int ret = OB_SUCCESS;
   bool sql_exist_all_column_group = false;
   bool sql_exist_single_column_group = false;
-  ObColumnGroupSchema column_group_schema;
+
   if (OB_ISNULL(column_group_node)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("column gorup node should not be null", K(ret));
@@ -14095,20 +14105,24 @@ int ObDDLResolver::parse_column_group(const ParseNode *column_group_node,
     }
   }
 
-  if (OB_SUCC(ret)
-     && OB_UNLIKELY(sql_exist_all_column_group && !sql_exist_single_column_group && is_alter_column_group_delayed)) {
-     ret = OB_NOT_SUPPORTED;
-     SQL_RESV_LOG(WARN, "alter table add all column groups not supprt",
-                  K(ret), K(sql_exist_all_column_group), K(sql_exist_single_column_group), K(is_alter_column_group_delayed));
+  if (OB_SUCC(ret) && sql_exist_all_column_group && !sql_exist_single_column_group && is_alter_column_group_delayed) {
+    uint64_t tenant_data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema.get_tenant_id(), tenant_data_version))) {
+      LOG_WARN("fail to get tenant data version", K(ret));
+    } else if (tenant_data_version < DATA_VERSION_4_6_1_0) {
+      ret = OB_NOT_SUPPORTED;
+      SQL_RESV_LOG(WARN, "alter table add all column groups not support",
+                   K(ret), K(sql_exist_all_column_group), K(sql_exist_single_column_group), K(is_alter_column_group_delayed));
+    }
   }
 
   /* all column group */
   /* column group in resolver do not use real column group id*/
   /* ddl service use column group name to distingush them*/
   if (OB_SUCC(ret) && sql_exist_all_column_group) {
-    column_group_schema.reset();
+    ObColumnGroupSchema column_group_schema;
     if (OB_FAIL(ObSchemaUtils::build_all_column_group(table_schema, session_info_->get_effective_tenant_id(),
-                                                      dst_table_schema.get_max_used_column_group_id() + 1, // add all cg with id max+1 first, adjust later in adjust_cg_for_offline
+                                                      dst_table_schema.get_max_used_column_group_id() + 1, // add all cg with id max+1 first, adjust later in rebuild_column_groups
                                                       column_group_schema))) {
       SQL_RESV_LOG(WARN, "build all column group failed", K(ret));
     } else if (OB_FAIL(dst_table_schema.add_column_group(column_group_schema))) {

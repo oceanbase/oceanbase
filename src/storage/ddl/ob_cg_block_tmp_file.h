@@ -159,7 +159,7 @@ public:
     tablet_id_(ObTabletID::INVALID_TABLET_ID),
     slice_idx_(-1),
     scan_idx_(-1),
-    cg_idx_(-1),
+    cg_iter_idx_(-1),
     block_store_() { }
   ~ObCGBlockFile()
   {
@@ -170,7 +170,7 @@ public:
   int open(const ObTabletID tablet_id,
            const int64_t slice_idx,
            const int64_t scan_idx,
-           const int64_t cg_idx);
+           const int64_t cg_iter_idx);
   int close();
   int append_cg_block(const ObCGBlock &cg_block);
   int get_next_cg_block(ObCGBlock &cg_block);
@@ -179,10 +179,10 @@ public:
   OB_INLINE ObTabletID get_tablet_id() const { return tablet_id_; }
   OB_INLINE int64_t get_slice_idx() const { return slice_idx_; }
   OB_INLINE int64_t get_scan_idx() const { return scan_idx_; }
-  OB_INLINE int64_t get_cg_idx() const { return cg_idx_; }
+  OB_INLINE int64_t get_cg_iter_idx() const { return cg_iter_idx_; }
   OB_INLINE bool is_opened() const { return is_inited_; }
   TO_STRING_KV(K(is_inited_), K(tablet_id_), K(slice_idx_),
-               K(scan_idx_), K(cg_idx_), K(block_store_));
+               K(scan_idx_), K(cg_iter_idx_), K(block_store_));
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCGBlockFile);
@@ -192,7 +192,7 @@ private:
   common::ObTabletID tablet_id_;
   int64_t slice_idx_;
   int64_t scan_idx_;
-  int64_t cg_idx_;
+  int64_t cg_iter_idx_; // record the iter idx in column group array in storage schema
   BlockStore block_store_;
 };
 

@@ -75,14 +75,14 @@ public:
     const ObVersionRange &trans_version_range,
     ObTabletMergeDag *merge_dag,
     T &merge_context,
-    const bool is_delete_insert_merge = false);
+    const ObMergeEngineType merge_engine_type = ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE);
   void prepare_co_major_merge_context(
       const ObMergeType &merge_type,
       const bool is_full_merge,
       const ObVersionRange &trans_version_range,
       ObTabletMergeDag *merge_dag,
       ObCOTabletMergeCtx &merge_context,
-      const bool is_delete_insert_merge = false);
+      const ObMergeEngineType merge_engine_type = ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE);
   void get_tx_table_guard(ObTxTableGuard &tx_table_guard);
   void insert_tx_data(
     const int64_t tx_id,
@@ -178,11 +178,11 @@ void TestMergeBasic::prepare_merge_context(
   const ObVersionRange &trans_version_range,
   ObTabletMergeDag *merge_dag,
   T &merge_context,
-  const bool is_delete_insert_merge)
+  const ObMergeEngineType merge_engine_type)
 {
   TestMergeBasic::prepare_merge_context(merge_type, is_full_merge, trans_version_range, merge_context);
   bool unused_flag = false;
-  merge_context.static_param_.merge_engine_type_ = is_delete_insert_merge ? ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT : ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE;
+  merge_context.static_param_.original_merge_engine_type_ = merge_engine_type;
   merge_context.merge_dag_ = merge_dag;
   merge_context.static_param_.for_unittest_ = true;
   merge_context.static_param_.need_parallel_minor_merge_ = false;
@@ -195,10 +195,10 @@ void TestMergeBasic::prepare_co_major_merge_context(
   const ObVersionRange &trans_version_range,
   ObTabletMergeDag *merge_dag,
   ObCOTabletMergeCtx &merge_context,
-  const bool is_delete_insert_merge)
+  const ObMergeEngineType merge_engine_type)
 {
   merge_context.static_param_.co_static_param_.co_major_merge_strategy_.set(false/*build_all_cg_only*/, false/*only_use_row_store*/);
-  TestMergeBasic::prepare_merge_context(merge_type, is_full_merge, trans_version_range, merge_dag, merge_context, is_delete_insert_merge);
+  TestMergeBasic::prepare_merge_context(merge_type, is_full_merge, trans_version_range, merge_dag, merge_context, merge_engine_type);
   ObCOMergeDagParam *dag_param = static_cast<ObCOMergeDagParam *>(&merge_context.static_param_.dag_param_);
   dag_param->compat_mode_ = lib::Worker::CompatMode::MYSQL;
   int32_t base_cg_idx = -1;

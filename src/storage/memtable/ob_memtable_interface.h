@@ -76,7 +76,7 @@ struct CreateMemtableArg {
   share::SCN new_clog_checkpoint_scn_;
   bool for_replay_;
   bool for_inc_direct_load_;
-  bool is_delete_insert_;
+  ObMergeEngineType original_merge_engine_type_;
   int64_t micro_block_format_version_;
 
   CreateMemtableArg() { reset(); }
@@ -87,7 +87,7 @@ struct CreateMemtableArg {
     new_clog_checkpoint_scn_.set_min();
     for_replay_ = false;
     for_inc_direct_load_ = false;
-    is_delete_insert_ = false;
+    original_merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_MAX;
     micro_block_format_version_ = ObMicroBlockFormatVersionHelper::DEFAULT_VERSION;
   }
 
@@ -96,7 +96,7 @@ struct CreateMemtableArg {
                K(new_clog_checkpoint_scn_),
                K(for_replay_),
                K(for_inc_direct_load_),
-               K(is_delete_insert_),
+               K(original_merge_engine_type_),
                K(micro_block_format_version_));
 };
 

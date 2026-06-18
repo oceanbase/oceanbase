@@ -299,7 +299,8 @@ public:
       : flag_(), capacity_(0), scan_index_(0), row_type_flag_(),
       is_get_(false), from_base_(false),
       is_sparse_row_(false), column_ids_(NULL), row_val_(), snapshot_version_(0), group_idx_(0),
-      trans_id_(), fast_filter_skipped_(false), last_purge_ts_(0)
+      trans_id_(), fast_filter_skipped_(false), last_purge_ts_(0),
+      merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_MAX)
   {}
   void reset();
   inline bool is_valid() const;
@@ -324,6 +325,12 @@ public:
   OB_INLINE void set_last_multi_version_row() { row_type_flag_.set_last_multi_version_row(true); }
   OB_INLINE void set_shadow_row() { row_type_flag_.set_shadow_row(true); }
   OB_INLINE void set_multi_version_flag(const blocksstable::ObMultiVersionRowFlag &multi_version_flag) { row_type_flag_ = multi_version_flag; }
+  OB_INLINE void fuse_merge_engine_type(const ObMergeEngineType merge_engine_type)
+  {
+    if (ObMergeEngineType::OB_MERGE_ENGINE_MAX == merge_engine_type_) {
+      merge_engine_type_ = merge_engine_type;
+    }
+  }
   int32_t get_delta() const
   {
     int32_t delta = 0;
@@ -457,6 +464,7 @@ struct ObStoreCtx
                     const int64_t lock_timeout_us,
                     const share::SCN &snapshot_version);
   int init_for_read(const storage::ObLSHandle &ls_handle,
+                    const common::ObTabletID tablet_id,
                     const int64_t timeout,
                     const int64_t lock_timeout_us,
                     const share::SCN &snapshot_version);

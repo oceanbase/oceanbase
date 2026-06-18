@@ -252,6 +252,10 @@ private:
   void release_pre_agg_util();
   int agg_micro_block(const ObMicroIndexData &micro_index_data);
   int agg_micro_block(const ObMicroIndexInfo &micro_index_info);
+  int adjust_sql_sequence(const ObDatumRow &row,
+      const int64_t sql_sequence_col_idx,
+      const bool is_delete_insert_merge,
+      int64_t &cur_sql_sequence);
   int build_micro_block_desc(
       const ObMicroBlock &micro_block,
       ObMicroBlockDesc &micro_block_desc,

@@ -2338,7 +2338,8 @@ int ObDDLService::set_new_table_options(
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ObCompactionTTLUtil::check_alter_merge_engine_valid(
                    orig_table_schema,
-                   alter_table_schema))) {
+                   alter_table_schema,
+                   schema_guard))) {
       LOG_WARN("fail to check append_only engine valid", K(ret), K(new_table_schema));
     } else if (OB_FAIL(ObCompactionTTLUtil::check_alter_ttl_schema_valid(
                    orig_table_schema,
@@ -2883,6 +2884,23 @@ int ObDDLService::set_raw_table_options(
           }
           break;
         }
+        case ObAlterTableArg::MERGE_ENGINE_TYPE: {
+          uint64_t compat_version = OB_INVALID_VERSION;
+          if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+            LOG_WARN("get min data_version failed", KR(ret), K(tenant_id));
+          } else if (compat_version < DATA_VERSION_4_6_1_0) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("alter merge engine less than 4.6.1.0 not support", KR(ret), K(compat_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter merge engine less than 4.6.1.0");
+          } else if (OB_UNLIKELY(!ObMergeEngineStoreFormat::is_merge_engine_valid(alter_table_schema.get_merge_engine_type()))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected merge engine type", KR(ret), K(alter_table_schema.get_merge_engine_type()));
+          } else {
+            new_table_schema.set_merge_engine_type(alter_table_schema.get_merge_engine_type());
+            need_update_index_table = true;
+          }
+          break;
+        }
         default: {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Unknown option!", K(i));
@@ -3330,7 +3348,7 @@ int ObDDLService::create_hidden_table_with_pk_changed(
   } else if (is_drop_pk && OB_FAIL(drop_primary_key(new_table_schema))) {
     LOG_WARN("failed to add hidden pk column for heap table", K(ret));
   } else if (!create_user_hidden_table_now) {
-  } else if (OB_FAIL(adjust_cg_for_offline(new_table_schema))) {
+  } else if (OB_FAIL(rebuild_column_groups(new_table_schema))) {
     LOG_WARN("failed to adjust for create hiddent table with pk changed", K(ret));
   } else if (OB_FAIL(get_add_pk_index_name(origin_table_schema,
                                            new_table_schema,
@@ -4688,7 +4706,7 @@ int ObDDLService::add_column_group(const obrpc::ObAlterTableArg &alter_table_arg
         LOG_WARN("fail to alter default column group", K(ret));
       }
     } else {
-      if (OB_FAIL(adjust_cg_for_offline(new_table_schema))) {
+      if (OB_FAIL(rebuild_column_groups(new_table_schema))) {
         LOG_WARN("fail to adjust cg for offline", KR(ret));
       }
     }
@@ -4766,7 +4784,7 @@ int ObDDLService::drop_column_group(const obrpc::ObAlterTableArg &alter_table_ar
         LOG_WARN("fail to alter default column group", K(ret));
       }
     } else {
-      if (OB_FAIL(adjust_cg_for_offline(new_table_schema))) {
+      if (OB_FAIL(rebuild_column_groups(new_table_schema))) {
         LOG_WARN("fail to adjust cg for offline", KR(ret));
       }
     }
@@ -4833,8 +4851,8 @@ int ObDDLService::update_column_group_table_inplace(const share::schema::ObTable
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!origin_table_schema.is_valid()
-                  || !new_table_schema.is_valid()
-                  || !new_table_schema.is_column_store_supported())) {
+               || !new_table_schema.is_valid()
+               || !new_table_schema.is_column_store_supported())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(new_table_schema));
   } else if (OB_FAIL(ddl_operator.update_origin_column_group_with_new_schema(trans,
@@ -4847,7 +4865,7 @@ int ObDDLService::update_column_group_table_inplace(const share::schema::ObTable
   return ret;
 }
 
-int ObDDLService::adjust_cg_for_offline(ObTableSchema &new_table_schema)
+int ObDDLService::rebuild_column_groups(ObTableSchema &new_table_schema)
 {
   /* do adjustment on column group when add or drop column/primary key*/
   int ret = OB_SUCCESS;
@@ -6499,6 +6517,7 @@ int ObDDLService::lock_tablets(ObMySQLTransaction &trans,
 
 int ObDDLService::lock_table(ObMySQLTransaction &trans,
                              const ObSimpleTableSchemaV2 &table_schema,
+                             const ObTableLockMode lock_mode,
                              const ObTableLockOwnerID owner_id,
                              const ObTableLockPriority lock_priority,
                              const int64_t timeout_us)
@@ -6522,7 +6541,7 @@ int ObDDLService::lock_table(ObMySQLTransaction &trans,
              K(lock_priority), K(timeout_us), KPC(conn));
     if (OB_FAIL(ObInnerConnectionLockUtil::lock_table(tenant_id,
                                                       table_id,
-                                                      EXCLUSIVE,
+                                                      lock_mode,
                                                       timeout_us,
                                                       conn,
                                                       owner_id,
@@ -10645,7 +10664,7 @@ int ObDDLService::redistribute_column_ids(
     LOG_WARN("failed to convert new table schema column id", K(ret));
   } else if (OB_FAIL(new_table_schema.sort_column_array_by_column_id())) {
     LOG_WARN("failed to sort column", KR(ret), K(new_table_schema));
-  } else if (OB_FAIL(adjust_cg_for_offline(new_table_schema))) {
+  } else if (OB_FAIL(rebuild_column_groups(new_table_schema))) {
     LOG_WARN("failed to adjust cg after redistribute_column_ids", KR(ret));
   } else if (OB_FAIL(ObCompactionTTLUtil::adjust_ttl_flag_for_offline(new_table_schema, column_id_map))) {
     LOG_WARN("failed to adjust ttl flag for offline", KR(ret));
@@ -12821,7 +12840,7 @@ int ObDDLService::check_need_add_progressive_round(
     // do nothing
   } else if (OB_FAIL(table_schema.get_is_column_store(is_column_store_schema))) {
     LOG_WARN("failed to get is column store", KR(ret));
-  } else if (is_column_store_schema && OB_FAIL(table_schema.has_all_column_group(has_all_column_group))) {
+  } else if (is_column_store_schema && OB_FAIL(table_schema.has_column_group(ObColumnGroupType::ALL_COLUMN_GROUP, has_all_column_group))) {
     LOG_WARN("failed to check has all column group", KR(ret));
   } else {
     AlterColumnSchema *alter_column_schema = nullptr;
@@ -13074,6 +13093,9 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
       ObDDLSQLTransaction trans(schema_service_);
       ObTableLockOwnerID owner_id;
       int64_t timeout_us = 0;
+      bool is_alter_merge_engine = alter_table_schema.alter_option_bitset_.has_member(ObAlterTableArg::MERGE_ENGINE_TYPE) &&
+                                   tenant_data_version >= DATA_VERSION_4_6_1_0 &&
+                                   alter_table_schema.get_merge_engine_type() != orig_table_schema->get_merge_engine_type();
       bool is_rename_and_need_table_lock =
           alter_table_schema.alter_option_bitset_.has_member(ObAlterTableArg::TABLE_NAME) && // is rename table;
           orig_table_schema->is_user_table() && // only user table
@@ -13082,7 +13104,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
 
       bool is_change_to_compaction_ttl_table = ObCompactionTTLUtil::check_change_to_compaction_ttl_table(alter_table_schema, *orig_table_schema);
 
-      bool need_table_lock = is_rename_and_need_table_lock || is_change_to_compaction_ttl_table;
+      bool need_table_lock = is_rename_and_need_table_lock || is_alter_merge_engine || is_change_to_compaction_ttl_table;
       if (OB_FAIL(ret)) {
         //do nothing
       } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
@@ -13109,10 +13131,13 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
       } else if (is_rename_and_need_table_lock &&
                  OB_FAIL(lock_table(trans,
                                     *orig_table_schema,
+                                    EXCLUSIVE,
                                     owner_id,
                                     alter_table_arg.lock_priority_,
                                     timeout_us))) {
         LOG_WARN("failed to get the table_lock of origin table schema for rename op", K(ret), KPC(orig_table_schema));
+      } else if (is_alter_merge_engine && OB_FAIL(lock_table(trans, *orig_table_schema, EXCLUSIVE))) {
+        LOG_WARN("failed to get the table lock of origin table schema for alter merge engine", K(ret), KPC(orig_table_schema));
       } else if (is_change_to_compaction_ttl_table && OB_FAIL(lock_table(trans, *orig_table_schema))) {
         LOG_WARN("failed to get the table lock of origin table schema for alter ttl definition", K(ret), KPC(orig_table_schema));
       } else {
@@ -13134,6 +13159,9 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                                 &global_idx_schema_array))) {
             LOG_WARN("failed to alter table column!", K(*orig_table_schema), K(new_table_schema), K(ret));
           }
+        }
+        if (OB_SUCC(ret) && is_alter_merge_engine && OB_FAIL(update_merge_engine_upper_version(new_table_schema, orig_table_schema->get_merge_engine_type()))) {
+          LOG_WARN("failed to update merge engine upper version", K(ret));
         }
         //table options
         if (OB_SUCC(ret) && is_change_to_compaction_ttl_table && OB_FAIL(ObCompactionTTLUtil::update_being_compaction_ttl_time(new_table_schema))) {
@@ -13382,6 +13410,11 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("compat version not support", K(ret), K(tenant_data_version));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.5, alter column group delayed");
+          } else if (tenant_data_version < DATA_VERSION_4_6_1_0
+                  && OB_DDL_DROP_COLUMN_GROUP == alter_table_arg.alter_table_schema_.alter_type_) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("compat version not support the online drop column group opt", K(ret), K(tenant_data_version), K(alter_table_arg));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.6.1, alter drop column group delayed");
           } else if (has_vec_index) {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("create vector index on table with column store not supported", K(ret), KPC(orig_table_schema));
@@ -13742,23 +13775,56 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
   return ret;
 }
 
-int ObDDLService::check_alter_column_group(const obrpc::ObAlterTableArg &alter_table_arg, ObDDLType &ddl_type) const
+int ObDDLService::check_alter_column_group(
+    const obrpc::ObAlterTableArg &alter_table_arg,
+    const share::schema::ObTableSchema &orig_schema,
+    ObDDLType &ddl_type) const
 {
   int ret = OB_SUCCESS;
-  if (OB_DDL_ADD_COLUMN_GROUP == alter_table_arg.alter_table_schema_.alter_type_ ||
-      OB_DDL_DROP_COLUMN_GROUP == alter_table_arg.alter_table_schema_.alter_type_) {
-    if (true == alter_table_arg.is_alter_column_group_delayed_) {
-      ddl_type = ObDDLType::DDL_ALTER_COLUMN_GROUP_DELAYED;
-    } else  {
-      ddl_type = ObDDLType::DDL_ALTER_COLUMN_GROUP;
-    }
-    if (alter_table_arg.alter_table_schema_.get_column_group_count() <= 0) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument, alter table arg don't have any column group when alter column group",
-               K(ret), K(alter_table_arg.alter_table_schema_));
+  const AlterTableSchema &new_schema = alter_table_arg.alter_table_schema_;
+
+  if (OB_DDL_ADD_COLUMN_GROUP != new_schema.alter_type_ &&
+      OB_DDL_DROP_COLUMN_GROUP != new_schema.alter_type_) {
+    // not alter cg, do nothing
+  } else if (OB_UNLIKELY(new_schema.get_column_group_count() <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument, alter table arg don't have any column group when alter column group",
+             K(ret), K(alter_table_arg.alter_table_schema_));
+  } else if (OB_DDL_ADD_COLUMN_GROUP == new_schema.alter_type_) { // ADD COLUMN GROUP
+    ddl_type = alter_table_arg.is_alter_column_group_delayed_
+             ? ObDDLType::DDL_ALTER_COLUMN_GROUP_DELAYED
+             : ObDDLType::DDL_ALTER_COLUMN_GROUP;
+  } else if (!alter_table_arg.is_alter_column_group_delayed_) { // DROP COLUMN GROUP
+    ddl_type = ObDDLType::DDL_ALTER_COLUMN_GROUP;
+  } else { // DROP COLUMN GROUP DELAYED
+    bool orig_has_all_cg = false;
+    bool orig_has_each_cg = false;
+    bool new_drop_all_cg = false;
+    bool new_drop_each_cg = false;
+
+    if (OB_FAIL(orig_schema.has_column_group(ObColumnGroupType::SINGLE_COLUMN_GROUP, orig_has_each_cg))) {
+      LOG_WARN("failed to check if has each cg", K(ret));
+    } else if (OB_FAIL(orig_schema.has_column_group(ObColumnGroupType::ALL_COLUMN_GROUP, orig_has_all_cg))) {
+      LOG_WARN("failed to check if has all cg", K(ret));
+    } else if (OB_FAIL(new_schema.has_column_group(ObColumnGroupType::SINGLE_COLUMN_GROUP, new_drop_each_cg))) {
+      LOG_WARN("failed to check if drop each cg", K(ret));
+    } else if (OB_FAIL(new_schema.has_column_group(ObColumnGroupType::ALL_COLUMN_GROUP, new_drop_all_cg))) {
+      LOG_WARN("failed to check if drop all cg", K(ret));
+    } else {
+      const bool is_old_redundant_cs_table = orig_has_each_cg
+                                          && orig_has_all_cg
+                                          && (nullptr == orig_schema.get_hidden_rowkey_column_group());
+      const bool is_only_drop_all_cg = new_drop_all_cg && !new_drop_each_cg;
+      if (is_old_redundant_cs_table && is_only_drop_all_cg) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("old all cg && each cg table cannot do online drop all cg ddl with delayed", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "old all cg && each cg table cannot do online drop all cg ddl with delayed");
+      } else {
+        ddl_type = ObDDLType::DDL_ALTER_COLUMN_GROUP_DELAYED;
+      }
     }
   }
-   return ret;
+  return ret;
 }
 
 int ObDDLService::check_long_run_ddl_table_type_(const ObTableSchema &orig_table_schema)
@@ -13901,7 +13967,7 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(check_alter_column_group(alter_table_arg, ddl_type))) {
+      if (OB_FAIL(check_alter_column_group(alter_table_arg, *orig_table_schema, ddl_type))) {
         LOG_WARN("fail to check alter column gorup", K(ret), K(alter_table_arg.alter_table_schema_), K(ddl_type));
       }
     }
@@ -14485,7 +14551,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                               need_redistribute_column_id))) {
             LOG_WARN("failed to alter table column!", KR(ret), K(*orig_table_schema), K(new_table_schema));
           }
-          if (FAILEDx(adjust_cg_for_offline(new_table_schema))) {
+          if (FAILEDx(rebuild_column_groups(new_table_schema))) {
             LOG_WARN("fail to adjust cg  after alter column", KR(ret));
           } else if (alter_table_arg.is_convert_to_character_) {
             LOG_TRACE("for modify column and convert to character set in one sql, create user hidden table in convert_to_character");
@@ -16289,6 +16355,7 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
               } else if (need_table_lock_and_defense &&
                          OB_FAIL(lock_table(trans,
                                             *from_table_schema,
+                                            EXCLUSIVE,
                                             owner_id,
                                             rename_table_arg.lock_priority_,
                                             timeout_us))) {
@@ -17589,7 +17656,7 @@ int ObDDLService::delete_unused_columns_and_redistribute_schema(
   } else {
     // delete unused column from new table schema, column id should delete from column group
     // so column group should rebuild
-    if (OB_FAIL(adjust_cg_for_offline(new_table_schema))) {
+    if (OB_FAIL(rebuild_column_groups(new_table_schema))) {
       LOG_WARN("fail to adjust cg for table", KR(ret));
     }
   }
@@ -18988,7 +19055,7 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
                 }
               }
               if (OB_FAIL(ret)) {
-              } else if (OB_FAIL(adjust_cg_for_offline(new_index_schema))) {
+              } else if (OB_FAIL(rebuild_column_groups(new_index_schema))) {
                 LOG_WARN("fail to adjust column group for index", K(ret));
               } else if (OB_FAIL(new_index_schema.inherit_ttl_definition(hidden_table_schema))) {
                 LOG_WARN("fail to inherit ttl definition for rebuilt index", K(ret), K(new_index_schema.get_table_id()), K(hidden_table_schema.get_ttl_flag()));
@@ -37139,6 +37206,29 @@ int ObDDLService::fill_part_name_if_needed(const SCHEMA &orig_schema,
 // explicit instantiation
 template int ObDDLService::fill_part_name_if_needed<ObTableSchema, AlterTableSchema>(
     const ObTableSchema &, AlterTableSchema &);
+
+int ObDDLService::update_merge_engine_upper_version(ObTableSchema &new_table_schema, const ObMergeEngineType origin_merge_engine_type)
+{
+  int ret = OB_SUCCESS;
+  ObTimeoutCtx ctx;
+  share::SCN upper_version;
+  uint64_t tenant_id = new_table_schema.get_tenant_id();
+  bool is_external_consistent = false;
+  if (OB_UNLIKELY(common::OB_INVALID_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.rpc_timeout))) {
+    LOG_WARN("fail to set timeout ctx", KR(ret));
+  } else if (OB_FAIL(OB_TS_MGR.get_ts_sync(tenant_id,
+                                           ctx.get_timeout(),
+                                           upper_version,
+                                           is_external_consistent))) {
+    LOG_WARN("fail to get gts sync", KR(ret), K(tenant_id), K(ctx.get_timeout()), K(upper_version));
+  } else if (OB_FAIL(new_table_schema.update_merge_engine_upper_version(upper_version, origin_merge_engine_type, new_table_schema.get_merge_engine_type()))) {
+    LOG_WARN("failed to update merge engine upper version", KR(ret), K(upper_version), K(origin_merge_engine_type), K(new_table_schema));
+  }
+  return ret;
+}
 
 } // end namespace rootserver
 } // end namespace oceanbase

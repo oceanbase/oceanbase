@@ -12,6 +12,7 @@
 #include "storage/high_availability/ob_storage_ha_tablet_builder.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
+#include "storage/column_store/ob_column_oriented_sstable.h"
 
 namespace oceanbase
 {
@@ -724,18 +725,46 @@ int ObSSTableCopyFinishTask::prepare_data_store_desc_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(tablet_id));
   } else {
-    const uint16_t cg_idx = sstable_param->table_key_.get_column_group_id();
+    const ObITable::TableKey &table_key = sstable_param->table_key_;
+    const uint16_t cg_idx = table_key.get_column_group_id();
     const ObStorageColumnGroupSchema *cg_schema = nullptr;
-    if (OB_UNLIKELY(cg_idx < 0 || cg_idx >= storage_schema->get_column_group_count())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected cg idx", K(ret), K(cg_idx), KPC(storage_schema));
-    } else {
-      cg_schema = &storage_schema->get_column_groups().at(cg_idx);
-      if (OB_ISNULL(cg_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fail to get cg schema", K(ret), KPC(storage_schema), K(cg_idx));
+    bool use_mock_cg_schema = false;
+
+    if (!storage_schema->is_row_store() || !table_key.is_column_store_sstable()) {
+      int64_t fetch_idx = cg_idx;
+      if (HIDDEN_ROWKEY_COLUMN_GROUP_IDX == cg_idx && !storage_schema->has_hidden_rowkey_column_group()) {
+        fetch_idx = 0; // ALL CG + EACH CG + HIDDEN ROWKEY CG  -->  ROWKEY CG + EACH CG
+      } else if (storage_schema->has_hidden_rowkey_column_group()
+              && table_key.is_co_sstable()
+              && ObCOSSTableBaseType::ROWKEY_CG_TYPE == static_cast<ObCOSSTableBaseType>(sstable_param->co_base_type_)) {
+        fetch_idx = HIDDEN_ROWKEY_COLUMN_GROUP_IDX;
       }
+
+      if (OB_FAIL(storage_schema->get_cg_schema_with_column_group_idx(fetch_idx, cg_schema))) {
+        LOG_WARN("failed to get cg schema from storage_schema", K(ret), K(cg_idx), K(fetch_idx), KPC(storage_schema));
+      }
+    } else if (table_key.is_co_sstable()
+            && ObCOSSTableBaseType::ALL_CG_TYPE == static_cast<ObCOSSTableBaseType>(sstable_param->co_base_type_)) {
+      if (OB_FAIL(storage_schema->get_cg_schema_with_column_group_idx(0/*base cg idx*/, cg_schema))) {
+        LOG_WARN("failed to get base cg schema from storage_schema", K(ret), KPC(storage_schema));
+      }
+    } else if (OB_UNLIKELY(!src_tablet_param->mock_rowkey_cg_schema_.is_valid()
+                        || !src_tablet_param->mock_single_cg_schema_.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected mock cg schemas", K(ret), KPC(src_tablet_param));
+    } else if (HIDDEN_ROWKEY_COLUMN_GROUP_IDX == cg_idx || table_key.is_co_sstable()) {
+      cg_schema = &src_tablet_param->mock_rowkey_cg_schema_;
+    } else {
+      // cannot generate skip index for old co sstable with mocked cg schema
+      use_mock_cg_schema = true;
+      cg_schema = &src_tablet_param->mock_single_cg_schema_;
     }
+
+    if (OB_SUCC(ret) && OB_ISNULL(cg_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get cg schema", K(ret), KPC(storage_schema), K(cg_idx));
+    }
+
     int32_t private_transfer_epoch = -1;
     if (FAILEDx(tablet->get_private_transfer_epoch(private_transfer_epoch))) {
       LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet->get_tablet_meta());
@@ -761,6 +790,10 @@ int ObSSTableCopyFinishTask::prepare_data_store_desc_(
         we always use the col_cnt in sstable_param to re-generate sstable for dst.
         Besides, we fill default chksum array with zeros since there's no need to recalculate*/
       int64_t column_cnt = sstable_param->basic_meta_.column_cnt_;
+      if (use_mock_cg_schema) {
+        desc.get_col_desc().agg_meta_array_.reset();
+        LOG_INFO("cannot generate skip index for old co sstable with mocked cg schema", K(ret), KPC(sstable_param));
+      }
       if (OB_FAIL(desc.get_col_desc().mock_valid_col_default_checksum_array(column_cnt))) {
         LOG_WARN("fail to mock valid col default checksum array", K(ret));
       } else if (OB_FAIL(desc.get_desc().update_basic_info_from_macro_meta(sstable_param->basic_meta_))) {

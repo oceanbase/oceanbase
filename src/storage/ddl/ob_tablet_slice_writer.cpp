@@ -94,19 +94,22 @@ int ObTabletSliceWriter::append_row(const blocksstable::ObDatumRow &row)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(storage_column_count_), K(row));
   } else {
-    const ObIArray<ObStorageColumnGroupSchema> &cg_schemas = storage_schema_->get_column_groups();
     ObDatumRow cg_row;
     cg_row.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
-    for (int64_t cg_idx = 0; OB_SUCC(ret) && cg_idx < cg_schemas.count(); ++cg_idx) {
-      ObCgMacroBlockWriter *cg_macro_block_writer = cg_macro_block_writers_.at(cg_idx);
-      const ObStorageColumnGroupSchema &cg_schema = cg_schemas.at(cg_idx);
-      if (OB_ISNULL(cg_macro_block_writer)) {
+
+    for (int64_t iter_idx = 0; OB_SUCC(ret) && iter_idx < storage_schema_->get_column_group_count(); ++iter_idx) {
+      const ObStorageColumnGroupSchema *cg_schema = nullptr;
+      ObCgMacroBlockWriter *cg_macro_block_writer = nullptr;
+      if (OB_FAIL(storage_schema_->get_cg_schema_with_iter_idx(iter_idx, cg_schema))) {
+        LOG_WARN("fail to get cg schema with iter idx", K(ret), K(iter_idx));
+      } else if (FALSE_IT(cg_macro_block_writer = cg_macro_block_writers_.at(iter_idx))) {
+      } else if (OB_ISNULL(cg_macro_block_writer)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("cg macro block writer is null", K(ret), K(cg_idx));
+        LOG_WARN("cg macro block writer is null", K(ret), K(iter_idx));
       } else {
-        int64_t column_idx = cg_schema.get_column_idx(0);
+        int64_t column_idx = cg_schema->get_column_idx(0);
         cg_row.storage_datums_ = row.storage_datums_ + column_idx;
-        cg_row.count_ = cg_schema.get_column_count();
+        cg_row.count_ = cg_schema->get_column_count();
         if (OB_FAIL(cg_macro_block_writer->append_row(cg_row))) {
           if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret && unique_index_id_ > 0) {
             int report_ret_code = OB_SUCCESS;
@@ -139,26 +142,29 @@ int ObTabletSliceWriter::append_batch(const blocksstable::ObBatchDatumRows &batc
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(storage_column_count_), K(batch_rows));
   } else {
-    const ObIArray<ObStorageColumnGroupSchema> &cg_schemas = storage_schema_->get_column_groups();
     ObBatchDatumRows cg_rows;
     cg_rows.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
     cg_rows.mvcc_row_flag_ = batch_rows.mvcc_row_flag_;
     cg_rows.row_count_ = batch_rows.row_count_;
     cg_rows.trans_id_ = batch_rows.trans_id_;
-    for (int64_t cg_idx = 0; OB_SUCC(ret) && cg_idx < cg_schemas.count(); ++cg_idx) {
-      ObCgMacroBlockWriter *cg_macro_block_writer = cg_macro_block_writers_.at(cg_idx);
-      const ObStorageColumnGroupSchema &cg_schema = cg_schemas.at(cg_idx);
-      if (OB_ISNULL(cg_macro_block_writer)) {
+
+    for (int64_t iter_idx = 0; OB_SUCC(ret) && iter_idx < storage_schema_->get_column_group_count(); ++iter_idx) {
+      const ObStorageColumnGroupSchema *cg_schema = nullptr;
+      ObCgMacroBlockWriter *cg_macro_block_writer = nullptr;
+      if (OB_FAIL(storage_schema_->get_cg_schema_with_iter_idx(iter_idx, cg_schema))) {
+        LOG_WARN("fail to get cg schema with iter idx", K(ret), K(iter_idx));
+      } else if (FALSE_IT(cg_macro_block_writer = cg_macro_block_writers_.at(iter_idx))) {
+      } else if (OB_ISNULL(cg_macro_block_writer)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("cg macro block writer is null", K(ret), K(cg_idx));
+        LOG_WARN("cg macro block writer is null", K(ret), K(iter_idx));
       } else {
         cg_rows.vectors_.reuse();
         // TODO@wenqu: just assign vector pointer and count to opt performance
-        for (int64_t j = 0; OB_SUCC(ret) && j < cg_schema.get_column_count(); ++j) {
-          const int64_t column_idx = cg_schema.get_column_idx(j);
+        for (int64_t j = 0; OB_SUCC(ret) && j < cg_schema->get_column_count(); ++j) {
+          const int64_t column_idx = cg_schema->get_column_idx(j);
           if (OB_UNLIKELY(column_idx < 0 || column_idx >= batch_rows.vectors_.count())) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("invalid column_idx", K(ret), K(j), K(column_idx), K(cg_schema));
+            LOG_WARN("invalid column_idx", K(ret), K(j), K(column_idx), KPC(cg_schema));
           } else if (OB_FAIL(cg_rows.vectors_.push_back(batch_rows.vectors_.at(column_idx)))) {
             LOG_WARN("push back vector failed", K(ret), K(j), K(column_idx));
           }
@@ -234,14 +240,14 @@ int ObTabletSliceWriter::close_and_set_remain_block(
   } else if (OB_FAIL(tablet_context->get_or_create_slice(slice_idx, ddl_slice, is_new_slice))) {
     LOG_WARN("get ddl slice failed", K(ret), K(tablet_id), K(slice_idx));
   }
-  for (int64_t cg_idx = 0; OB_SUCC(ret) && cg_idx < cg_macro_block_writers.count(); ++cg_idx) {
-    ObCgMacroBlockWriter *cg_macro_block_writer = cg_macro_block_writers.at(cg_idx);
-    const int64_t start_seq = start_seqs.at(cg_idx);
+  for (int64_t iter_idx = 0; OB_SUCC(ret) && iter_idx < cg_macro_block_writers.count(); ++iter_idx) {
+    ObCgMacroBlockWriter *cg_macro_block_writer = cg_macro_block_writers.at(iter_idx);
+    const int64_t start_seq = start_seqs.at(iter_idx);
     if (OB_ISNULL(cg_macro_block_writer)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid cg macro block writer", K(ret), K(cg_idx));
+      LOG_WARN("invalid cg macro block writer", K(ret), K(iter_idx));
     } else if (OB_FAIL(cg_macro_block_writer->try_finish_last_micro_block())) {
-      LOG_WARN("failed to try finish", K(ret), K(tablet_id), K(slice_idx), K(cg_idx));
+      LOG_WARN("failed to try finish", K(ret), K(tablet_id), K(slice_idx), K(iter_idx));
     } else if (start_seq == cg_macro_block_writer->get_last_macro_seq()
         && cg_macro_block_writer->get_macro_data_size() < ObTabletSliceWriter::GROUP_WRITE_MACRO_THRESHOLD) {
       ObCGBlockFileWriter temp_file_writer;
@@ -249,15 +255,15 @@ int ObTabletSliceWriter::close_and_set_remain_block(
       ObCGBlockFile *block_file = OB_NEW(ObCGBlockFile, mem_attr);
       if (OB_UNLIKELY(nullptr == block_file)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to new cg block file", K(ret), K(tablet_id), K(slice_idx), K(cg_idx));
-      } else if (OB_FAIL(block_file->open(tablet_id, slice_idx, 0/*scan_idx*/, cg_idx))) {
-        LOG_WARN("fail to open cg block file", K(ret), K(tablet_id), K(slice_idx), K(cg_idx));
+        LOG_WARN("fail to new cg block file", K(ret), K(tablet_id), K(slice_idx), K(iter_idx));
+      } else if (OB_FAIL(block_file->open(tablet_id, slice_idx, 0/*scan_idx*/, iter_idx))) {
+        LOG_WARN("fail to open cg block file", K(ret), K(tablet_id), K(slice_idx), K(iter_idx));
       } else if (OB_FAIL(temp_file_writer.init(block_file))) {
-        LOG_WARN("failed to init", K(ret), K(tablet_id), K(slice_idx), K(cg_idx), KPC(block_file));
+        LOG_WARN("failed to init", K(ret), K(tablet_id), K(slice_idx), K(iter_idx), KPC(block_file));
       } else if (OB_FAIL(cg_macro_block_writer->close(&flusher))) {
-        LOG_WARN("failed to close writer", K(ret), K(tablet_id), K(slice_idx), K(cg_idx));
-      } else if (OB_FAIL(ddl_slice->set_remain_block(cg_idx, block_file))) {
-        LOG_WARN("set remain block file into ddl slice failed", K(ret), K(tablet_id), K(slice_idx), K(cg_idx), KPC(block_file));
+        LOG_WARN("failed to close writer", K(ret), K(tablet_id), K(slice_idx), K(iter_idx));
+      } else if (OB_FAIL(ddl_slice->set_remain_block(iter_idx, block_file))) {
+        LOG_WARN("set remain block file into ddl slice failed", K(ret), K(tablet_id), K(slice_idx), K(iter_idx), KPC(block_file));
       }
       if (OB_FAIL(ret)) {
         OB_DELETE(ObCGBlockFile, mem_attr, block_file);
@@ -265,8 +271,8 @@ int ObTabletSliceWriter::close_and_set_remain_block(
     } else {
       if (OB_FAIL(cg_macro_block_writer->close())) {
         LOG_WARN("fail to close macro block writer", K(ret), K(tablet_id), K(slice_idx), KPC(cg_macro_block_writer));
-      } else if (OB_FAIL(ddl_slice->set_block_flushed(cg_idx))) {
-        LOG_WARN("set block flushed failed", K(ret), K(tablet_id), K(slice_idx), K(cg_idx));
+      } else if (OB_FAIL(ddl_slice->set_block_flushed(iter_idx))) {
+        LOG_WARN("set block flushed failed", K(ret), K(tablet_id), K(slice_idx), K(iter_idx));
       }
     }
   }
@@ -349,6 +355,9 @@ int ObTabletSliceIncWriter::append_row(const ObDatumRow &row)
   } else if (OB_UNLIKELY(!row.is_valid() || row.get_column_count() != storage_column_count_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(storage_column_count_), K(row));
+  } else if (OB_UNLIKELY(!ObMergeEngineStoreFormat::is_merge_engine_valid(row.merge_engine_type_))) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported merge engine type", KR(ret), K(row.merge_engine_type_));
   } else if (OB_FAIL(macro_block_writer_->append_row(row))) {
     LOG_WARN("fail to append row", KR(ret));
   } else {
@@ -367,6 +376,9 @@ int ObTabletSliceIncWriter::append_batch(const ObBatchDatumRows &batch_rows)
                          batch_rows.row_count_ <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(storage_column_count_), K(batch_rows));
+  } else if (OB_UNLIKELY(!ObMergeEngineStoreFormat::is_merge_engine_valid(batch_rows.merge_engine_type_))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported merge engine type", KR(ret), K(batch_rows.merge_engine_type_));
   } else if (OB_FAIL(macro_block_writer_->append_batch(batch_rows))) {
     LOG_WARN("fail to append batch", KR(ret));
   } else {

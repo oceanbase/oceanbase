@@ -454,6 +454,7 @@ public:
   bool only_use_row_store_;
 };
 
+
 class ObIncMajorTxHelper final
 {
 public:

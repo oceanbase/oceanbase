@@ -279,7 +279,11 @@ int ObCOMergeWriter::init_merge_iter(
       LOG_WARN("unexpected merge level", K(ret), K(sstable_idx), K(merge_param));
     } else if (!merge_param.is_empty_table(*table)) {
       const uint64_t compat_version = merge_param.static_param_.data_version_;
-      bool need_co_scan_from_rowkey_base = need_co_scan_ && table->is_column_store_sstable() && static_cast<ObCOSSTableV2 *>(table)->is_rowkey_cg_base();
+      const bool is_rowkey_cg_writer = nullptr != cg_schema && cg_schema->is_rowkey_column_group();
+      bool need_co_scan_from_rowkey_base = need_co_scan_
+                                        && table->is_co_sstable()
+                                        && static_cast<ObCOSSTableV2 *>(table)->is_rowkey_cg_base()
+                                        && !is_rowkey_cg_writer;
       if (add_column) {
         iter = OB_NEWx(ObDefaultRowIter, (&allocator_), default_row_);
       } else if (merge_param.is_full_merge() || need_full_merge) {
@@ -730,9 +734,9 @@ int ObCOMergeRowWriter::get_writer_param(
   ObSSTableWrapper cg_wrapper;
   table = nullptr;
   add_column = false;
-  if (OB_ISNULL(sstable)) {
+  if (OB_ISNULL(sstable) || OB_ISNULL(merge_param.static_param_.schema_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected nullptr sstable", K(ret), KP(sstable));
+    LOG_WARN("unexpected nullptr sstable or schema", K(ret), KP(sstable), KP(merge_param.static_param_.schema_));
   } else if (merge_param.is_empty_table(*sstable)) {
     table = nullptr;
   } else if (!sstable->is_column_store_sstable()) {// TODO + check inc major sstable
@@ -742,8 +746,55 @@ int ObCOMergeRowWriter::get_writer_param(
     LOG_WARN("unexpected nullptr co_sstable", K(ret), KPC(sstable));
   } else if (co_sstable->is_row_store_only_co_table()) {
     table = sstable;
-  } else if (co_sstable->get_cs_meta().column_group_cnt_ <= cg_idx) {
-    if (!cg_schema->is_single_column_group()) {
+  } else {
+    const int64_t normal_cg_cnt = co_sstable->get_column_group_count(false/*include hidden cg*/);
+    int64_t fetch_cg_idx = cg_idx;
+    bool skip_fetch_cg = false;
+    if (merge_param.static_param_.schema_->is_row_store()) {
+      // column store switch to row store: fetch the base CG of this specific CO SSTable
+      // For ALL_CG_BASE: key_.column_group_idx_ points to ALL CG which contains all columns
+      // For ROWKEY_CG_BASE: key_.column_group_idx_ points to ROWKEY CG, cross-CG scan reads all columns
+      fetch_cg_idx = co_sstable->get_key().column_group_idx_;
+      LOG_INFO("[ROW_COL_SWITCH] col to row store, redirect to base cg", K(cg_idx), K(fetch_cg_idx), KPC(co_sstable));
+    } else if (co_sstable->is_all_cg_base() && !merge_param.static_param_.schema_->has_all_column_group()) {
+      // all cg switch to each cg: if cur major has hidden rowkey cg, redirect to hidden rowkey cg, otherwise redirect to base cg
+      if (cg_schema->is_rowkey_column_group()) {
+        if (co_sstable->has_hidden_rowkey_cg()) {
+          fetch_cg_idx = HIDDEN_ROWKEY_COLUMN_GROUP_IDX;
+          LOG_INFO("[ROW_COL_SWITCH] redirect rowkey cg to hidden rowkey cg", K(cg_idx), K(fetch_cg_idx), KPC(co_sstable));
+        } else {
+          fetch_cg_idx = co_sstable->get_key().column_group_idx_;
+          LOG_INFO("[ROW_COL_SWITCH] no hidden rowkey cg, redirect rowkey cg to all cg base", K(cg_idx), K(fetch_cg_idx), KPC(co_sstable));
+        }
+      }
+    } else if (co_sstable->is_rowkey_cg_base()
+            && merge_param.static_param_.schema_->has_all_column_group()
+            && nullptr == merge_param.static_param_.orig_schema_) {
+      // each cg switch to all cg: when fetch hidden rowkey cg
+      if (HIDDEN_ROWKEY_COLUMN_GROUP_IDX == cg_idx) {
+        fetch_cg_idx = co_sstable->get_key().column_group_idx_;
+        LOG_INFO("[ROW_COL_SWITCH] redirect hidden rowkey cg to old rowkey cg", K(cg_idx), K(fetch_cg_idx), KPC(co_sstable));
+      } else if (cg_schema->is_all_column_group()) {
+        skip_fetch_cg = true;
+        LOG_INFO("[ROW_COL_SWITCH] old co has no all cg, skip fetch", K(cg_idx), KPC(co_sstable));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (skip_fetch_cg) {
+      // there is no all cg in old co sstable, set table to nullptr
+      table = nullptr;
+    } else if (fetch_cg_idx < normal_cg_cnt || HIDDEN_ROWKEY_COLUMN_GROUP_IDX == fetch_cg_idx) {
+      if (OB_FAIL(co_sstable->fetch_cg_sstable(fetch_cg_idx, cg_wrapper))) {
+        LOG_WARN("failed to get cg sstable", K(ret), K(fetch_cg_idx), K(cg_idx), K(sstable));
+      } else if (OB_FAIL(cg_wrapper.get_loaded_column_store_sstable(cg_sstable))) {
+        LOG_WARN("failed to get sstable from wrapper", K(ret), K(cg_wrapper));
+      } else if (OB_FAIL(cg_wrappers_.push_back(cg_wrapper))) {
+        LOG_WARN("failed to push cg wrapper", K(ret), K(cg_wrappers_));
+      } else {
+        table = cg_sstable;
+      }
+    } else if (!cg_schema->is_single_column_group()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected cg schema", K(ret), K(cg_idx), K(co_sstable->get_cs_meta().column_group_cnt_), KPC(cg_schema), K(sstable));
     } else {
@@ -751,14 +802,6 @@ int ObCOMergeRowWriter::get_writer_param(
       add_column = true; // for add column, will use ObDefaultRowIter
       LOG_INFO("add column for cg", K(ret), K(cg_idx), K(co_sstable->get_cs_meta().column_group_cnt_), KPC(cg_schema), K(sstable));
     }
-  } else if (OB_FAIL(co_sstable->fetch_cg_sstable(cg_idx, cg_wrapper))) {
-    LOG_WARN("failed to get cg sstable", K(ret), K(sstable));
-  } else if (OB_FAIL(cg_wrapper.get_loaded_column_store_sstable(cg_sstable))) {
-    LOG_WARN("failed to get sstable from wrapper", K(ret), K(cg_wrapper));
-  } else if (OB_FAIL(cg_wrappers_.push_back(cg_wrapper))) {
-    LOG_WARN("failed to push cg wrapper", K(ret), K(cg_wrappers_));
-  } else {
-    table = cg_sstable;
   }
   return ret;
 }
@@ -1098,13 +1141,16 @@ int ObCOMergeRowWriter::end_write(ObCOTabletMergeCtx &co_ctx)
   if (OB_FAIL(ret)) {
   } else {
     ObTabletMergeInfo **merge_infos = co_ctx.cg_merge_info_array_;
+    int64_t iter_idx = -1;
     if (OB_UNLIKELY(nullptr == merge_infos)) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "invalid count or unexpected null merge info array", K(ret), K(merge_infos));
-    } else if (nullptr == merge_infos[cg_idx_]) {
+    } else if (OB_FAIL(co_ctx.get_schema()->convert_column_group_idx_to_iter_idx(cg_idx_, iter_idx))) {
+      STORAGE_LOG(WARN, "failed to convert column group idx to iter idx", K(ret), K(cg_idx_));
+    } else if (nullptr == merge_infos[iter_idx]) {
       ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "unexpected null merge info", K(ret), K(cg_idx_));
-    } else if (OB_FAIL(write_helper_.end_write(*merge_infos[cg_idx_]))) {
+      STORAGE_LOG(WARN, "unexpected null merge info", K(ret), K(cg_idx_), K(iter_idx));
+    } else if (OB_FAIL(write_helper_.end_write(*merge_infos[iter_idx]))) {
       LOG_WARN("failed to end write", K(ret));
     }
   }
@@ -1144,7 +1190,6 @@ int ObCOMergeSingleWriter::init(
     const ObMergeParameter &merge_param,
     const ObITableReadInfo *full_read_info,
     const int64_t parallel_idx,
-    const common::ObIArray<ObStorageColumnGroupSchema> &cg_array,
     ObTabletMergeInfo **merge_infos,
     ObIArray<ObITable*> &tables)
 {
@@ -1161,17 +1206,22 @@ int ObCOMergeSingleWriter::init(
     ignore_base_cg_ = co_ctx.need_replay_base_directly_
         && base_cg_idx_ >= start_cg_idx_
         && base_cg_idx_ < end_cg_idx_;
+
+    ObStorageCGSchemaIterator cg_iterator(*ctx.get_schema());
     for (uint32_t idx = start_cg_idx_; OB_SUCC(ret) && idx < end_cg_idx_; idx++) {
-      const ObStorageColumnGroupSchema &cg_schema = cg_array.at(idx);
+      const ObStorageColumnGroupSchema *cg_schema_ptr = nullptr;
       ObWriteHelper *write_helper = nullptr;
-      if (ignore_base_cg_ && idx == base_cg_idx_) { // only nullptr writer_helper to placeholder
+      if (ignore_base_cg_ && idx == base_cg_idx_) {
+        // only nullptr writer_helper to placeholder
+      } else if (OB_FAIL(co_ctx.get_schema()->get_cg_schema_with_iter_idx(idx, cg_schema_ptr))) {
+        LOG_WARN("fail to get cg schema", K(ret), K(idx));
       } else if (OB_ISNULL(write_helper = alloc_helper<ObWriteHelper>(allocator_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "fail to alloc write helper", K(ret));
       } else if (OB_ISNULL(merge_infos[idx])) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "merge info should not be null", K(ret), K(idx));
-      } else if (OB_FAIL(write_helper->init(ctx, merge_param, parallel_idx, cg_schema, *merge_infos[idx], allocator_))) {
+      } else if (OB_FAIL(write_helper->init(ctx, merge_param, parallel_idx, *cg_schema_ptr, *merge_infos[idx], allocator_))) {
         STORAGE_LOG(WARN, "fail to init write helper", K(ret));
       }
       if (FAILEDx(write_helpers_.push_back(write_helper))) {

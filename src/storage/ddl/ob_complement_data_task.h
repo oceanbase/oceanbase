@@ -8,6 +8,7 @@
 
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "storage/access/ob_table_access_context.h"
+#include "storage/access/ob_tablet_read_tables.h"
 #include "storage/compaction/ob_column_checksum_calculator.h"
 #include "storage/ddl/ob_cg_macro_block_write_task.h"
 #include "storage/ddl/ob_tablet_slice_row_iterator.h"
@@ -478,7 +479,7 @@ private:
   ObStoreCtx ctx_;
   ObTableAccessParam access_param_;
   ObTableAccessContext access_ctx_;
-  ObGetTableParam get_table_param_;
+  ObTabletReadTables tablet_read_tables_;
   common::ObArenaAllocator allocator_;
   common::ObArenaAllocator calc_buf_;
   ObExprCtx expr_ctx_;

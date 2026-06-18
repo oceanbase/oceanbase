@@ -52,7 +52,11 @@ public:
   // TODO use Arena allocator after creating SSTable by Arena Allocator
   // Attention ! should only be called by COSSTable
   int init_empty_array_for_cg(common::ObArenaAllocator &allocator, const int64_t count);
-  int add_tables_for_cg(common::ObArenaAllocator &allocator, const ObIArray<ObITable *> &tables);
+  static int fill_cg_sstables(
+      common::ObArenaAllocator &allocator,
+      const ObIArray<ObITable *> &tables,
+      ObSSTableArray &normal_cgs,
+      ObSSTableArray &hidden_cg);
   int add_tables_for_cg_without_deep_copy(const ObIArray<ObITable *> &tables);
 
   int64_t get_deep_copy_size() const;

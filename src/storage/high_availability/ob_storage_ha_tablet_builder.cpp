@@ -2378,7 +2378,7 @@ int ObStorageHATabletBuilderUtil::build_tablet_with_major_tables(
 }
 
 /*
- *    There may be hybrid type of major sstable in column store replica.
+ *    There may be hybrid type of major sstable in column store replica && online row col switch scene.
  *
  *    Time (evnet)       F replica         C Rreplica
  *    t1 (init)          MAJOR_V0
@@ -2476,26 +2476,38 @@ int ObStorageHATabletBuilderUtil::build_tablet_with_major_tables(
     const BatchBuildTabletTablesExtraParam &extra_param)
 {
   int ret = OB_SUCCESS;
-  bool is_hybrid_store = false;
+  MajorTablesStoreType store_type = INVALID_STORE_TYPE;
 
   if (OB_UNLIKELY(NULL == ls || !tablet_id.is_valid() || !major_sstables_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid argument", K(ret), KP(ls), K(tablet_id), K(major_sstables_param));
-  } else if (major_sstables_param.storage_schema_.is_row_store()) {
-    if (OB_FAIL(ObStorageHATabletBuilderUtil::build_tablet_for_row_store_(ls,
-        tablet_id, major_tables, major_sstables_param, extra_param))) {
-      LOG_WARN("failed to build tablet with major tables", K(ret), K(tablet_id), KPC(ls));
+  } else if (OB_FAIL(get_major_tables_store_type_(major_tables, store_type))) {
+    LOG_WARN("failed to get major tables store type", K(ret), K(major_tables));
+  } else {
+    switch (store_type) {
+      case HYBRID_STORE:
+        if (OB_FAIL(ObStorageHATabletBuilderUtil::build_tablet_for_hybrid_store_(ls,
+            tablet_id, major_tables, major_sstables_param, extra_param))) {
+          LOG_WARN("failed to built tablet with hybrid tables", K(ret), K(tablet_id), KPC(ls));
+        }
+        break;
+      case ONLY_COLUMN_STORE:
+        if (OB_FAIL(ObStorageHATabletBuilderUtil::build_tablet_for_column_store_(ls,
+            tablet_id, major_tables, major_sstables_param, extra_param))) {
+          LOG_WARN("failed to build tablet with co tables", K(ret), K(tablet_id), KPC(ls));
+        }
+        break;
+      case ONLY_ROW_STORE:
+        if (OB_FAIL(ObStorageHATabletBuilderUtil::build_tablet_for_row_store_(ls,
+            tablet_id, major_tables, major_sstables_param, extra_param))) {
+          LOG_WARN("failed to build tablet with row store tables", K(ret), K(tablet_id), KPC(ls));
+        }
+        break;
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected major tables store type", K(ret), K(store_type), K(tablet_id));
+        break;
     }
-  } else if (OB_FAIL(check_hybrid_store(major_sstables_param.storage_schema_, major_tables, is_hybrid_store))) {
-    LOG_WARN("failed to check hybrid store", K(ret), K(major_sstables_param), K(major_tables));
-  } else if (is_hybrid_store) {
-    if (OB_FAIL(ObStorageHATabletBuilderUtil::build_tablet_for_hybrid_store_(ls,
-        tablet_id, major_tables, major_sstables_param, extra_param))) {
-      LOG_WARN("failed to built tablet with hybrid tables", K(ret), K(tablet_id), KPC(ls));
-    }
-  } else if (OB_FAIL(ObStorageHATabletBuilderUtil::build_tablet_for_column_store_(ls,
-        tablet_id, major_tables, major_sstables_param, extra_param))) {
-    LOG_WARN("failed to build tablet with co tables", K(ret), K(tablet_id), KPC(ls));
   }
   return ret;
 }
@@ -3039,26 +3051,32 @@ int ObStorageHATabletBuilderUtil::append_sstable_array_(
   return ret;
 }
 
-int ObStorageHATabletBuilderUtil::check_hybrid_store(
-    const ObStorageSchema &storage_schema,
+int ObStorageHATabletBuilderUtil::get_major_tables_store_type_(
     const ObTablesHandleArray &major_tables,
-    bool &is_hybrid_store)
+    MajorTablesStoreType &store_type)
 {
   int ret = OB_SUCCESS;
-  is_hybrid_store  = false;
-  if (storage_schema.is_row_store()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("storage schema is row store, should not check hybrid store", K(ret), K(storage_schema));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < major_tables.get_count(); ++i) {
-      const ObITable *table = major_tables.get_table(i);
-      if (OB_ISNULL(table) || !table->is_major_sstable()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid null major table", K(ret), K(i), KPC(table), K(major_tables));
-      } else if (!table->is_column_store_sstable()) {
-        is_hybrid_store = true;
-        break;
-      }
+  bool has_row_store_sstable = false;
+  bool has_column_store_sstable = false;
+  store_type = INVALID_STORE_TYPE;
+  for (int64_t i = 0; OB_SUCC(ret) && i < major_tables.get_count(); ++i) {
+    const ObITable *table = major_tables.get_table(i);
+    if (OB_ISNULL(table) || !table->is_major_sstable()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid null major table", K(ret), K(i), KPC(table), K(major_tables));
+    } else if (table->is_column_store_sstable()) {
+      has_column_store_sstable = true;
+    } else {
+      has_row_store_sstable = true;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (has_column_store_sstable && has_row_store_sstable) {
+      store_type = HYBRID_STORE;
+    } else if (has_column_store_sstable) {
+      store_type = ONLY_COLUMN_STORE;
+    } else {
+      store_type = ONLY_ROW_STORE;
     }
   }
   return ret;

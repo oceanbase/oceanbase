@@ -50,7 +50,8 @@ int ObLobMacroBlockWriter::init(const ObWriteMacroParam &param,
   } else if (OB_UNLIKELY(
         !param.is_valid()
         || !data_tablet_id.is_valid()
-        || !start_sequence.is_valid())) {
+        || !start_sequence.is_valid()
+        || OB_ISNULL(param.ddl_table_schema_.lob_meta_storage_schema_))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(param), K(data_tablet_id), K(start_sequence));
   } else {
@@ -90,6 +91,7 @@ int ObLobMacroBlockWriter::init(const ObWriteMacroParam &param,
         lob_meta_row_.mvcc_row_flag_.set_last_multi_version_row(true);
         lob_meta_row_.mvcc_row_flag_.set_uncommitted_row(
             param_.tx_info_.trans_id_.is_valid() && is_incremental_minor_direct_load(param_.direct_load_type_));
+        lob_meta_row_.merge_engine_type_ = param.ddl_table_schema_.lob_meta_storage_schema_->get_merge_engine_type();
       }
     }
 

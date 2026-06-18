@@ -19,6 +19,8 @@ namespace oceanbase
 {
 namespace storage
 {
+struct ObTabletReadTables;
+
 class ObMultipleScanMerge : public ObMultipleMerge
 {
 public:
@@ -29,11 +31,11 @@ public:
   virtual int init(
     ObTableAccessParam &param,
     ObTableAccessContext &context,
-    ObGetTableParam &get_table_param);
+    ObTabletReadTables &tablet_read_tables);
   virtual int switch_table(
     ObTableAccessParam &param,
     ObTableAccessContext &context,
-    ObGetTableParam &get_table_param) override;
+    ObTabletReadTables &tablet_read_tables) override;
   virtual void reset() override;
   virtual void reuse() override;
   virtual void reclaim() override;

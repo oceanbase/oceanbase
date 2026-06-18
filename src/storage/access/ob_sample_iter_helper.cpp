@@ -4,6 +4,7 @@
  */
 
 #include "storage/access/ob_sample_iter_helper.h"
+#include "storage/access/ob_tablet_read_tables.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 
 #define USING_LOG_PREFIX STORAGE
@@ -20,8 +21,8 @@ int ObGetSampleIterHelper::check_scan_range_count(bool &res, ObIArray<ObDatumRan
   if (scan_param_.sample_info_.is_block_sample() ||
       scan_param_.sample_info_.is_ddl_block_sample()) {
     bool retire_to_memtable_row_sample = false;
-    if (!get_table_param_.tablet_iter_.table_iter()->is_valid() &&
-        OB_FAIL(get_table_param_.tablet_iter_.refresh_read_tables_from_tablet(
+    if (!tablet_read_tables_.tablet_iter_.table_iter()->is_valid() &&
+        OB_FAIL(tablet_read_tables_.tablet_iter_.refresh_read_tables_from_tablet(
             main_table_ctx_.store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx(),
             false/*allow_not_ready*/, false/*major_sstable_only*/, true/*need_split_src_table*/, false/*need_split_dst_table*/))) {
       STORAGE_LOG(WARN, "Fail to read tables", K(ret));
@@ -56,22 +57,22 @@ int ObGetSampleIterHelper::can_retire_to_memtable_row_sample_(bool &retire, ObIA
   int ret = OB_SUCCESS;
 
   retire = false;
-  if (get_table_param_.is_valid()) {
+  if (tablet_read_tables_.is_valid()) {
     int64_t memtable_row_count = 0;
     int64_t sstable_row_count = 0;
     common::ObSEArray<memtable::ObMemtable *, 4> memtables;
 
     // iter all tables to estimate row count
-    get_table_param_.tablet_iter_.table_iter()->resume();
+    tablet_read_tables_.tablet_iter_.table_iter()->resume();
     while (OB_SUCC(ret)) {
       ObSSTableMetaHandle sst_meta_hdl;
       ObITable *table = nullptr;
-      if (OB_FAIL(get_table_param_.tablet_iter_.table_iter()->get_next(table))) {
+      if (OB_FAIL(tablet_read_tables_.tablet_iter_.table_iter()->get_next(table))) {
         if (OB_LIKELY(OB_ITER_END == ret)) {
           ret = OB_SUCCESS;
           break;
         } else {
-          STORAGE_LOG(WARN, "Fail to get next table iter", K(ret), K(get_table_param_.tablet_iter_.table_iter()));
+          STORAGE_LOG(WARN, "Fail to get next table iter", K(ret), K(tablet_read_tables_.tablet_iter_.table_iter()));
         }
       } else if (table->is_data_memtable()) {
         memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(table);
@@ -90,7 +91,7 @@ int ObGetSampleIterHelper::can_retire_to_memtable_row_sample_(bool &retire, ObIA
 
     // decide if this block sample need to retire and get sample ranges if need retire
     if (OB_FAIL(ret)) {
-    } else if (FALSE_IT(get_table_param_.tablet_iter_.table_iter()->resume())) {
+    } else if (FALSE_IT(tablet_read_tables_.tablet_iter_.table_iter()->resume())) {
     } else if (sstable_row_count < memtable_row_count && memtable_row_count > 0) {
       if (OB_FAIL(get_memtable_sample_ranges_(memtables, sample_ranges))) {
         STORAGE_LOG(WARN, "get memtable sample ranges failed", KR(ret), K(memtables));
@@ -211,7 +212,7 @@ int ObGetSampleIterHelper::get_sample_iter(ObBlockSampleIterator *&sample_iter,
                          ->open(*scan_merge,
                                 main_table_ctx_,
                                 table_scan_range_.get_ranges().at(0),
-                                get_table_param_,
+                                tablet_read_tables_,
                                 scan_param_.scan_flag_.is_reverse_scan()))) {
     STORAGE_LOG(WARN, "failed to open block_sample_iterator_", K(ret));
   } else {
@@ -232,7 +233,7 @@ int ObGetSampleIterHelper::get_sample_iter(ObDDLBlockSampleIterator *&sample_ite
                          ->open(*scan_merge,
                                 main_table_ctx_,
                                 table_scan_range_.get_ranges().at(0),
-                                get_table_param_,
+                                tablet_read_tables_,
                                 scan_param_.scan_flag_.is_reverse_scan()))) {
     STORAGE_LOG(WARN, "failed to open ddl block sample iterator", K(ret));
   } else {

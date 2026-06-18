@@ -25,7 +25,7 @@ ObMdsRowIterator::ObMdsRowIterator()
     is_inited_(false),
     access_param_(),
     access_ctx_(),
-    get_table_param_(),
+    tablet_read_tables_(),
     table_scan_range_(),
     table_scan_param_(nullptr),
     multiple_merge_(nullptr)
@@ -61,7 +61,7 @@ int ObMdsRowIterator::init(
       LOG_WARN("invalid version range", K(ret), K(scan_param.read_version_range_));
     } else if (OB_FAIL(access_param_.init(scan_param, nullptr/*tablet_handle*/, rowkey_read_info))) {
       LOG_WARN("fail to init access param", K(ret), K(scan_param));
-    } else if (OB_FAIL(access_ctx_.init(scan_param, store_ctx, scan_param.read_version_range_, nullptr/*cached_iter_node*/))) {
+    } else if (OB_FAIL(access_ctx_.init(scan_param, store_ctx, scan_param.read_version_range_))) {
       LOG_WARN("fail to init access ctx", K(ret), K(scan_param), K(store_ctx), K(scan_param.read_version_range_));
     } else if (OB_FAIL(init_get_table_param(scan_param, tablet_handle))) {
       LOG_WARN("fail to init get table param", K(ret), K(scan_param));
@@ -94,7 +94,7 @@ void ObMdsRowIterator::reset()
   }
   access_param_.reset();
   access_ctx_.reset();
-  get_table_param_.reset();
+  tablet_read_tables_.reset();
   table_scan_range_.reset();
   table_scan_param_ = nullptr;
   is_inited_ = false;
@@ -193,11 +193,14 @@ int ObMdsRowIterator::init_get_table_param(
     const ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(get_table_param_.tablet_iter_.set_tablet_handle(tablet_handle))) {
+  tablet_read_tables_.frozen_version_ = scan_param.frozen_version_;
+  tablet_read_tables_.sample_info_ = scan_param.sample_info_;
+  if (OB_FAIL(tablet_read_tables_.tablet_iter_.set_tablet_handle(tablet_handle))) {
     LOG_WARN("fail to set tablet handle", K(ret), K(tablet_handle));
-  } else {
-    get_table_param_.frozen_version_ = scan_param.frozen_version_;
-    get_table_param_.sample_info_ = scan_param.sample_info_;
+  } else if (OB_FAIL(tablet_read_tables_.prepare_candidate_read_tables(access_param_, access_ctx_))) {
+    LOG_WARN("fail to get read tables", K(ret));
+  } else if (OB_UNLIKELY(!tablet_read_tables_.tablet_iter_.table_iter()->is_valid())) {
+    LOG_INFO("empty tablet", KPC(tablet_read_tables_.tablet_iter_.table_iter()));
   }
   return ret;
 }
@@ -249,7 +252,7 @@ int ObMdsRowIterator::init_and_open_single_get_merge(ObTableScanParam &scan_para
   } else {
     ObSingleMerge *single_merge = new (buf) ObSingleMerge();
     const blocksstable::ObDatumRowkey &rowkey = table_scan_range_.get_rowkeys().at(0);
-    if (OB_FAIL(single_merge->init(access_param_, access_ctx_, get_table_param_))) {
+    if (OB_FAIL(single_merge->init(access_param_, access_ctx_, tablet_read_tables_))) {
       LOG_WARN("fail to init single merge", K(ret));
     } else if (OB_FAIL(single_merge->open(rowkey))) {
       LOG_WARN("fail to open single merge", K(ret), K(rowkey));
@@ -278,7 +281,7 @@ int ObMdsRowIterator::init_and_open_multiple_get_merge(ObTableScanParam &scan_pa
   } else {
     ObMultipleGetMerge *multiple_get_merge = new (buf) ObMultipleGetMerge();
     const common::ObIArray<blocksstable::ObDatumRowkey> &rowkeys = table_scan_range_.get_rowkeys();
-    if (OB_FAIL(multiple_get_merge->init(access_param_, access_ctx_, get_table_param_))) {
+    if (OB_FAIL(multiple_get_merge->init(access_param_, access_ctx_, tablet_read_tables_))) {
       LOG_WARN("fail to init multiple get merge", K(ret));
     } else if (OB_FAIL(multiple_get_merge->open(rowkeys))) {
       LOG_WARN("fail to open multiple get merge", K(ret), K(rowkeys));
@@ -307,7 +310,7 @@ int ObMdsRowIterator::init_and_open_multiple_scan_merge(ObTableScanParam &scan_p
   } else {
     ObMultipleScanMerge *multiple_scan_merge = new (buf) ObMultipleScanMerge();
     const blocksstable::ObDatumRange &datum_range = table_scan_range_.get_ranges().at(0);
-    if (OB_FAIL(multiple_scan_merge->init(access_param_, access_ctx_, get_table_param_))) {
+    if (OB_FAIL(multiple_scan_merge->init(access_param_, access_ctx_, tablet_read_tables_))) {
       LOG_WARN("fail to init multiple scan merge", K(ret));
     } else if (OB_FAIL(multiple_scan_merge->open(datum_range))) {
       LOG_WARN("fail to open multiple scan merge", K(ret), K(datum_range));

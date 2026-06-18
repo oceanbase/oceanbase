@@ -35,17 +35,15 @@ int ObWriterArgs::init(const ObWriteMacroParam &param,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected storage schema", K(ret), K(storage_schema));
     } else {
-      const int64_t cg_count = storage_schema->get_column_group_count();
-      if (OB_UNLIKELY(param.cg_idx_ < 0 || param.cg_idx_ >= cg_count)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("the cg idx is invalid", K(ret), K(param.cg_idx_), K(cg_count));
+      const ObStorageColumnGroupSchema *cg_schema = nullptr;
+      if (OB_FAIL(storage_schema->get_cg_schema_with_column_group_idx(param.cg_idx_, cg_schema))) {
+        LOG_WARN("fail to get column group schema", K(ret), K(param.cg_idx_), KPC(storage_schema));
       } else {
         const bool is_inc_major = is_incremental_major_direct_load(param.direct_load_type_);
         const bool is_inc_minor = is_incremental_minor_direct_load(param.direct_load_type_);
         const ObLSID ls_id = param.ls_id_;
         const uint64_t tenant_data_version = param.tenant_data_version_;
         const bool need_submit_io = !with_cs_replica;
-        const ObStorageColumnGroupSchema &cg_schema = storage_schema->get_column_groups().at(param.cg_idx_);
         ObITable::TableKey cg_table_key;
         compaction::ObExecMode exec_mode = GCTX.is_shared_storage_mode() && !is_inc_minor
                                            ? compaction::ObExecMode::EXEC_MODE_OUTPUT
@@ -60,7 +58,7 @@ int ObWriterArgs::init(const ObWriteMacroParam &param,
         cg_table_key.column_group_idx_ = param.cg_idx_;
         if (!with_cs_replica && !param.ddl_table_schema_.table_item_.is_column_store_) {
           cg_table_key.table_type_ = is_inc_major ? ObITable::INC_MAJOR_SSTABLE : ObITable::MAJOR_SSTABLE;
-        } else if (cg_schema.is_rowkey_column_group() || cg_schema.is_all_column_group()) {
+        } else if ((cg_schema->is_rowkey_column_group() && HIDDEN_ROWKEY_COLUMN_GROUP_IDX != param.cg_idx_) || cg_schema->is_all_column_group()) {
           cg_table_key.table_type_ = is_inc_major ? ObITable::INC_COLUMN_ORIENTED_SSTABLE
                                                   : ObITable::COLUMN_ORIENTED_SSTABLE;
           cg_table_key.slice_range_.start_slice_idx_ = param.slice_idx_;
@@ -103,7 +101,7 @@ int ObWriterArgs::init(const ObWriteMacroParam &param,
                                           0/*concurrent_cnt*/,
                                           (is_inc_major || is_inc_minor) ? tablet_param.reorganization_scn_ : SCN::min_scn(),
                                           SCN::min_scn(),
-                                          &cg_schema,
+                                          cg_schema,
                                           param.cg_idx_,
                                           exec_mode,
                                           need_submit_io,

@@ -442,6 +442,7 @@ int ObTableLoadStoreDataTableCtx::init_insert_table_ctx(const ObDirectLoadTransP
     insert_table_param.enable_dag_ = store_ctx_->enable_dag_;
     insert_table_param.dag_ = store_ctx_->dag_exec_ctx_.dag_;
     insert_table_param.is_inc_major_log_ = store_ctx_->ctx_->param_.enable_inc_major_;
+    insert_table_param.merge_engine_type_ = schema_->merge_engine_type_;
     // new ObDirectLoadInsertDataTableContext
     ObDirectLoadInsertDataTableContext *insert_data_table_ctx = nullptr;
     if (OB_ISNULL(insert_table_ctx_ = insert_data_table_ctx =
@@ -531,6 +532,7 @@ int ObTableLoadStoreDataTableCtx::open_insert_table_ctx(
     insert_table_param.enable_dag_ = store_ctx_->enable_dag_;
     insert_table_param.dag_ = store_ctx_->dag_exec_ctx_.dag_;
     insert_table_param.is_inc_major_log_ = store_ctx_->ctx_->param_.enable_inc_major_;
+    insert_table_param.merge_engine_type_ = schema_->merge_engine_type_;
     // new insert_data_table_ctx
     if (OB_ISNULL(insert_data_table_ctx =
                     OB_NEWx(ObDirectLoadInsertDataTableContext, (&allocator)))) {
@@ -792,6 +794,7 @@ int ObTableLoadStoreLobTableCtx::init_insert_table_ctx(const ObDirectLoadTransPa
     insert_table_param.enable_dag_ = store_ctx_->enable_dag_;
     insert_table_param.dag_ = store_ctx_->dag_exec_ctx_.dag_;
     insert_table_param.is_inc_major_log_ = store_ctx_->ctx_->param_.enable_inc_major_;
+    insert_table_param.merge_engine_type_ = schema_->merge_engine_type_;
     // new ObDirectLoadInsertLobTableContext
     ObDirectLoadInsertLobTableContext *insert_lob_table_ctx = nullptr;
     if (OB_ISNULL(data_table_ctx_->insert_table_ctx_)) {
@@ -872,6 +875,7 @@ int ObTableLoadStoreLobTableCtx::open_insert_table_ctx(
     insert_table_param.enable_dag_ = store_ctx_->enable_dag_;
     insert_table_param.dag_ = store_ctx_->dag_exec_ctx_.dag_;
     insert_table_param.is_inc_major_log_ = store_ctx_->ctx_->param_.enable_inc_major_;
+    insert_table_param.merge_engine_type_ = schema_->merge_engine_type_;
     // new ObDirectLoadInsertDataTableContext
     ObDirectLoadInsertDataTableContext *insert_lob_table_ctx = nullptr;
     if (OB_ISNULL(insert_lob_table_ctx =
@@ -1109,6 +1113,7 @@ int ObTableLoadStoreIndexTableCtx::init_insert_table_ctx(const ObDirectLoadTrans
     insert_table_param.enable_dag_ = store_ctx_->enable_dag_;
     insert_table_param.dag_ = store_ctx_->dag_exec_ctx_.dag_;
     insert_table_param.is_inc_major_log_ = store_ctx_->ctx_->param_.enable_inc_major_;
+    insert_table_param.merge_engine_type_ = schema_->merge_engine_type_;
     // new ObDirectLoadInsertDataTableContext
     ObDirectLoadInsertDataTableContext *insert_data_table_ctx = nullptr;
     if (OB_ISNULL(insert_table_ctx_ = insert_data_table_ctx =
@@ -1184,6 +1189,7 @@ int ObTableLoadStoreIndexTableCtx::open_insert_table_ctx(
     insert_table_param.enable_dag_ = store_ctx_->enable_dag_;
     insert_table_param.dag_ = store_ctx_->dag_exec_ctx_.dag_;
     insert_table_param.is_inc_major_log_ = store_ctx_->ctx_->param_.enable_inc_major_;
+    insert_table_param.merge_engine_type_ = schema_->merge_engine_type_;
     // new insert_index_table_ctx
     if (OB_ISNULL(insert_index_table_ctx =
                     OB_NEWx(ObDirectLoadInsertDataTableContext, (&allocator)))) {

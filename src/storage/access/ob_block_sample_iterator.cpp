@@ -4,6 +4,7 @@
  */
 
 #include "ob_block_sample_iterator.h"
+#include "ob_tablet_read_tables.h"
 #include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
@@ -302,7 +303,7 @@ void ObBlockSampleRangeIterator::reset()
 }
 
 int ObBlockSampleRangeIterator::open(
-    ObGetTableParam &get_table_param,
+    ObTabletReadTables &tablet_read_tables,
     const blocksstable::ObDatumRange &range,
     ObIAllocator &allocator,
     const double percent,
@@ -314,18 +315,18 @@ int ObBlockSampleRangeIterator::open(
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "The ObBlockSampleRangeIterator has been inited", K(ret));
-  } else if (OB_UNLIKELY(!get_table_param.is_valid() || !range.is_valid())) {
+  } else if (OB_UNLIKELY(!tablet_read_tables.is_valid() || !range.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument", K(ret), K(get_table_param), K(range));
+    STORAGE_LOG(WARN, "Invalid argument", K(ret), K(tablet_read_tables), K(range));
   } else {
     allocator_ = &allocator;
     sample_range_ = &range;
     is_reverse_scan_ = is_reverse_scan;
-    datum_utils_  = &get_table_param.tablet_iter_.get_tablet()->get_rowkey_read_info().get_datum_utils();
-    schema_rowkey_column_count_ = get_table_param.tablet_iter_.get_tablet()->get_rowkey_read_info().get_schema_rowkey_count();
+    datum_utils_  = &tablet_read_tables.tablet_iter_.get_tablet()->get_rowkey_read_info().get_datum_utils();
+    schema_rowkey_column_count_ = tablet_read_tables.tablet_iter_.get_tablet()->get_rowkey_read_info().get_schema_rowkey_count();
     endkey_comparor_.init(*datum_utils_, is_reverse_scan_);
 
-    if (OB_FAIL(init_and_push_endkey_iterator(get_table_param, sample_method))) {
+    if (OB_FAIL(init_and_push_endkey_iterator(tablet_read_tables, sample_method))) {
       STORAGE_LOG(WARN, "Fail to init and push endkey iterator", K(ret));
     } else if (endkey_iters_.empty()) {
       is_range_iter_end_ = true;
@@ -391,27 +392,27 @@ int ObBlockSampleRangeIterator::get_next_range(const ObDatumRange *&range)
   return ret;
 }
 
-int ObBlockSampleRangeIterator::init_and_push_endkey_iterator(ObGetTableParam &get_table_param,
+int ObBlockSampleRangeIterator::init_and_push_endkey_iterator(ObTabletReadTables &tablet_read_tables,
                                                               const SampleInfo::SampleMethod sample_method)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(!get_table_param.is_valid())) {
+  if (OB_UNLIKELY(!tablet_read_tables.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument", K(get_table_param));
+    STORAGE_LOG(WARN, "Invalid argument", K(tablet_read_tables));
   } else {
-    get_table_param.tablet_iter_.table_iter()->resume();
+    tablet_read_tables.tablet_iter_.table_iter()->resume();
     while (OB_SUCC(ret)) {
       void *buf = nullptr;
       ObITable *table = nullptr;
       ObSSTable *sstable = nullptr;
       ObBlockSampleSSTableEndkeyIterator *iter = nullptr;
-      if (OB_FAIL(get_table_param.tablet_iter_.table_iter()->get_next(table))) {
+      if (OB_FAIL(tablet_read_tables.tablet_iter_.table_iter()->get_next(table))) {
         if (OB_LIKELY(OB_ITER_END == ret)) {
           ret = OB_SUCCESS;
           break;
         } else {
-          STORAGE_LOG(WARN, "Fail to get next table iter", K(ret), K(get_table_param.tablet_iter_.table_iter()));
+          STORAGE_LOG(WARN, "Fail to get next table iter", K(ret), K(tablet_read_tables.tablet_iter_.table_iter()));
         }
       } else if (!table->is_sstable() || table->is_ddl_mem_sstable() || table->is_inc_major_ddl_aggregate_sstable()) {
       } else if (OB_ISNULL(table) || OB_ISNULL(sample_range_) || OB_ISNULL(allocator_)) {
@@ -427,7 +428,7 @@ int ObBlockSampleRangeIterator::init_and_push_endkey_iterator(ObGetTableParam &g
         iter = new (buf) ObBlockSampleSSTableEndkeyIterator();
 
         if (OB_FAIL(iter->open(*sstable, *sample_range_,
-            get_table_param.tablet_iter_.get_tablet()->get_rowkey_read_info(),
+            tablet_read_tables.tablet_iter_.get_tablet()->get_rowkey_read_info(),
             *allocator_, is_reverse_scan_, sample_method))) {
           STORAGE_LOG(WARN, "Fail to open ObBlockSampleSSTableEndkeyIterator", K(ret), KPC(sstable), KPC(sample_range_));
         } else if (OB_FAIL(endkey_iters_.push_back(iter))) {
@@ -445,7 +446,7 @@ int ObBlockSampleRangeIterator::init_and_push_endkey_iterator(ObGetTableParam &g
     }
   }
   if (OB_SUCC(ret)) {
-    get_table_param.tablet_iter_.table_iter()->resume();
+    tablet_read_tables.tablet_iter_.table_iter()->resume();
   }
 
   return ret;
@@ -666,15 +667,15 @@ void ObBlockSampleIterator::reset()
 int ObBlockSampleIterator::open(ObMultipleScanMerge &scan_merge,
                                 ObTableAccessContext &access_ctx,
                                 const blocksstable::ObDatumRange &range,
-                                ObGetTableParam &get_table_param,
+                                ObTabletReadTables &tablet_read_tables,
                                 const bool is_reverse_scan)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(!access_ctx.is_valid() || !get_table_param.is_valid())) {
+  if (OB_UNLIKELY(!access_ctx.is_valid() || !tablet_read_tables.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument", K(ret), K(access_ctx), K(get_table_param));
-  }  else if (OB_FAIL(range_iterator_.open(get_table_param,
+    STORAGE_LOG(WARN, "Invalid argument", K(ret), K(access_ctx), K(tablet_read_tables));
+  }  else if (OB_FAIL(range_iterator_.open(tablet_read_tables,
                                            range,
                                            *access_ctx.stmt_allocator_,
                                            sample_info_->percent_,
@@ -685,7 +686,7 @@ int ObBlockSampleIterator::open(ObMultipleScanMerge &scan_merge,
     scan_merge_ = &scan_merge;
     has_opened_range_ = false;
     access_ctx_ = &access_ctx;
-    read_info_ = &get_table_param.tablet_iter_.get_tablet()->get_rowkey_read_info();
+    read_info_ = &tablet_read_tables.tablet_iter_.get_tablet()->get_rowkey_read_info();
   }
 
   return ret;

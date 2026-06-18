@@ -950,6 +950,28 @@ int ObSSTableMetaPersistHelper::persist_sstable_linked_block_if_need_(ObSSTable 
   return ret;
 }
 
+#define PERSIST_CG_SSTABLES(sstables)                                                                                               \
+  do {                                                                                                                              \
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < sstables.count(); ++idx) {                                                          \
+      if (OB_ISNULL(sstables[idx])) {                                                                                               \
+        ret = OB_ERR_UNEXPECTED;                                                                                                    \
+        STORAGE_LOG(WARN, "unexpected null cg sstable", K(ret), K(idx), KP(sstables[idx]), K(co_sstable));                          \
+      } else if (sstables[idx]->get_addr().is_disked()) {                                                                           \
+        /* do nothing */                                                                                                            \
+      } else if (OB_FAIL(persist_sstable_linked_block_if_need_(*sstables[idx]))) {                                                  \
+        STORAGE_LOG(WARN, "fail to persist sstable linked_block if need", K(ret), K(idx), KPC(sstables[idx]), K(start_macro_seq_)); \
+      }                                                                                                                             \
+                                                                                                                                    \
+      if (FAILEDx(fill_sstable_write_info_and_record_(*sstables[idx],                                                               \
+                                                      false, /*check_has_padding_meta_cache*/                                       \
+                                                      write_infos))) {                                                              \
+        STORAGE_LOG(WARN, "fail to fill sstable write_info", KR(ret), KPC(sstables[idx]), K(idx), K(ctx_));                         \
+      } else {                                                                                                                      \
+        ctx_.cg_sstable_cnt_++;                                                                                                     \
+      }                                                                                                                             \
+    }                                                                                                                               \
+  } while (false)
+
 int ObSSTableMetaPersistHelper::persist_large_co_sstable_(
     ObCOSSTableV2 &co_sstable,
     ObCOSSTableV2 *&out_co_sstable)
@@ -976,28 +998,12 @@ int ObSSTableMetaPersistHelper::persist_large_co_sstable_(
       STORAGE_LOG(WARN, "failed to get co meta handle", K(ret), K(co_sstable));
     } else {
       const ObSSTableArray &cg_sstables = co_meta_handle.get_sstable_meta().get_cg_sstables();
-      for (int64_t idx = 0; OB_SUCC(ret) && idx < cg_sstables.count(); ++idx) {
-        if (OB_ISNULL(cg_sstables[idx])) {
-          ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "unexpected null cg sstable", K(ret), K(idx), KP(cg_sstables[idx]), K(co_sstable));
-        } else if (cg_sstables[idx]->get_addr().is_disked()) {
-          // do nothing
-        } else if (OB_FAIL(persist_sstable_linked_block_if_need_(*cg_sstables[idx]))) {
-          STORAGE_LOG(WARN, "fail to persist sstable linked_block if need", K(ret), K(idx), KPC(cg_sstables[idx]), K(start_macro_seq_));
-        }
-
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(fill_sstable_write_info_and_record_(*cg_sstables[idx],
-                                                              false, /*check_has_padding_meta_cache*/
-                                                              write_infos))) {
-          STORAGE_LOG(WARN, "fail to fill sstable write_info", KR(ret), KPC(cg_sstables[idx]), K(idx), K(ctx_));
-        } else {
-          ctx_.cg_sstable_cnt_++;
-        }
-      }
+      const ObSSTableArray &hidden_cg_sstable = co_meta_handle.get_sstable_meta().get_hidden_rowkey_sstable();
+      PERSIST_CG_SSTABLES(cg_sstables);
+      PERSIST_CG_SSTABLES(hidden_cg_sstable);
 
       if (OB_FAIL(ret)) {
-      } else if (OB_UNLIKELY(cg_sstables.count() != write_infos.count())) {
+      } else if (OB_UNLIKELY(cg_sstables.count() + hidden_cg_sstable.count() != write_infos.count())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "cg_write_infos' count mismatch", K(ret), K(cg_sstables.count()), K(write_infos.count()));
       } else if (write_infos.count() > 0
@@ -1079,6 +1085,36 @@ int ObSSTableMetaPersistHelper::persist_normal_sstable_(ObSSTable &sstable)
   return ret;
 }
 
+#define RECORD_CG_SSTABLES_MACRO_INFO(cg_sstables)                                                                                 \
+  for (int64_t idx = 0; OB_SUCC(ret) && idx < cg_sstables.count(); ++idx) {                                                        \
+    ObSSTable *cg_sstable = cg_sstables[idx];                                                                                      \
+    MacroBlockId block_id;                                                                                                         \
+    const ObMetaDiskAddr &sstable_addr = cg_sstable->get_addr();                                                                   \
+    if (OB_FAIL(ObTabletBlockInfoSetBuilder::copy_sstable_macro_info(*cg_sstable,                                                  \
+                                                                     ctx_.shared_macro_map_,                                       \
+                                                                     ctx_.block_info_set_))) {                                     \
+      STORAGE_LOG(WARN, "fail to call sstable macro info", K(ret));                                                                \
+    } else if (sstable_addr.is_block()) {                                                                                          \
+      /* this cg sstable has been persisted before */                                                                              \
+      int64_t size = 0;                                                                                                            \
+      if (OB_FAIL(sstable_addr.get_macro_block_id(block_id))) {                                                                    \
+        STORAGE_LOG(WARN, "fail to get block id from meta disk addr", K(ret), K(sstable_addr), K(block_id));                       \
+      } else if (OB_FAIL(sstable_addr.get_size_for_tablet_space_usage(size))) {                                                    \
+        STORAGE_LOG(WARN, "fail to get size for tablet space usage", K(ret), K(sstable_addr));                                     \
+      } else if (OB_FAIL(ctx_.block_info_set_.shared_meta_block_info_set_.set_refactored(block_id, 0 /*whether to overwrite*/))) { \
+        if (OB_HASH_EXIST != ret) {                                                                                                \
+          STORAGE_LOG(WARN, "fail to push macro id into set", K(ret), K(sstable_addr));                                            \
+        } else {                                                                                                                   \
+          ret = OB_SUCCESS;                                                                                                        \
+        }                                                                                                                          \
+      }                                                                                                                            \
+                                                                                                                                   \
+      if (OB_SUCC(ret)) {                                                                                                          \
+        cg_sstable_meta_size += size;                                                                                              \
+      }                                                                                                                            \
+    }                                                                                                                              \
+  }
+
 int ObSSTableMetaPersistHelper::record_cg_sstables_macro_(const ObCOSSTableV2 &co_sstable)
 {
   OB_ASSERT(is_ready_for_persist_());
@@ -1091,38 +1127,11 @@ int ObSSTableMetaPersistHelper::record_cg_sstables_macro_(const ObCOSSTableV2 &c
     STORAGE_LOG(WARN, "failed to get co meta handle", K(ret), K(co_sstable));
   } else {
     const ObSSTableArray &cg_sstables = co_meta_handle.get_sstable_meta().get_cg_sstables();
-    ctx_.cg_sstable_cnt_ += cg_sstables.count();
+    const ObSSTableArray &hidden_cg_sstable = co_meta_handle.get_sstable_meta().get_hidden_rowkey_sstable();
+    ctx_.cg_sstable_cnt_ += cg_sstables.count() + hidden_cg_sstable.count();
 
-    ObSSTable *cg_sstable = nullptr;
-    MacroBlockId block_id;
-    for (int64_t idx = 0; OB_SUCC(ret) && idx < cg_sstables.count(); ++idx) {
-      cg_sstable = cg_sstables[idx];
-      block_id.reset();
-      const ObMetaDiskAddr &sstable_addr = cg_sstable->get_addr();
-      if (OB_FAIL(ObTabletBlockInfoSetBuilder::copy_sstable_macro_info(*cg_sstable,
-                                                                       ctx_.shared_macro_map_,
-                                                                       ctx_.block_info_set_))) {
-        STORAGE_LOG(WARN, "fail to call sstable macro info", K(ret));
-      } else if (sstable_addr.is_block()) {
-        // this cg sstable has been persisted before
-        int64_t size = 0;
-        if (OB_FAIL(sstable_addr.get_macro_block_id(block_id))) {
-          STORAGE_LOG(WARN, "fail to get block id from meta disk addr", K(ret), K(sstable_addr), K(block_id));
-        } else if (OB_FAIL(sstable_addr.get_size_for_tablet_space_usage(size))) {
-          STORAGE_LOG(WARN, "fail to get size for tablet space usage", K(ret), K(sstable_addr));
-        } else if (OB_FAIL(ctx_.block_info_set_.shared_meta_block_info_set_.set_refactored(block_id, 0 /*whether to overwrite*/))) {
-          if (OB_HASH_EXIST != ret) {
-            STORAGE_LOG(WARN, "fail to push macro id into set", K(ret), K(sstable_addr));
-          } else {
-            ret = OB_SUCCESS;
-          }
-        }
-
-        if (OB_SUCC(ret)) {
-          cg_sstable_meta_size += size;
-        }
-      }
-    }
+    RECORD_CG_SSTABLES_MACRO_INFO(cg_sstables);
+    RECORD_CG_SSTABLES_MACRO_INFO(hidden_cg_sstable);
   }
   if (OB_SUCC(ret)) {
     ctx_.total_tablet_meta_size_ += upper_align(cg_sstable_meta_size, DIO_READ_ALIGN_SIZE);

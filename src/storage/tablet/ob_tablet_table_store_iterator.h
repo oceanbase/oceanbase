@@ -67,6 +67,8 @@ public:
   int get_next(ObITable *&table);
   int get_next(ObTableHandleV2 &table_handle);
   int get_boundary_table(const bool is_last, ObITable *&table);
+  // if failed, return nullptr
+  blocksstable::ObSSTable *get_major_sstable();
   int set_retire_check();
 
   int add_table(ObITable *table);

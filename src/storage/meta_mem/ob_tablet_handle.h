@@ -138,36 +138,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletTableIterator);
 };
 
-struct ObGetTableParam final
-{
-public:
-  ObGetTableParam() : frozen_version_(-1), sample_info_(), tablet_iter_(), refreshed_merge_(nullptr), need_split_dst_table_(true) {}
-  ~ObGetTableParam() { reset(); }
-  bool is_valid() const { return tablet_iter_.is_valid(); }
-  void reset()
-  {
-    frozen_version_ = -1;
-    sample_info_.reset();
-    tablet_iter_.reset();
-    refreshed_merge_ = nullptr;
-    need_split_dst_table_ = true;
-  }
-  TO_STRING_KV(K_(frozen_version), K_(sample_info), K_(tablet_iter), K_(need_split_dst_table));
-public:
-  int64_t frozen_version_;
-  common::SampleInfo sample_info_;
-  ObTabletTableIterator tablet_iter_;
-
-  // when tablet has been refreshed, to notify other ObMultipleMerge in ObTableScanIterator re-inited
-  // before rescan.
-  void *refreshed_merge_;
-
-  // true means maybe need split dst table, which is always safe because get_read_tables will check by mds again;
-  // false means no need split dst table, which is for optimization and UNSAFE
-  bool need_split_dst_table_;
-  DISALLOW_COPY_AND_ASSIGN(ObGetTableParam);
-};
-
 } // namespace storage
 } // namespace oceanbase
 

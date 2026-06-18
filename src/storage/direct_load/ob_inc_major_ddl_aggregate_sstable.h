@@ -107,6 +107,7 @@ public:
       const int64_t column_group_cnt,
       const int64_t column_cnt,
       const ObCOSSTableBaseType co_base_type,
+      const bool has_hidden_rowkey_cg,
       ObIArray<ObITable *> &tables);
   virtual int get_sstable(const ObSSTable *&sstable) const override;
   virtual int get_sstables(ObIArray<ObSSTable *> &ddl_sstables) const override;
@@ -133,7 +134,7 @@ public:
           const uint32_t cg_idx,
           ObSSTableWrapper &cg_wrapper) const override;
   virtual int get_cg_sstable(const uint32_t cg_idx, ObSSTableWrapper &cg_wrapper) const override;
-  virtual int get_all_tables(common::ObIArray<ObSSTableWrapper> &table_wrappers) const override;
+  virtual int get_all_tables(common::ObIArray<ObSSTableWrapper> &table_wrappers, const bool include_hiden_cg = true) const override;
   int get_trans_id_and_seq_no(transaction::ObTransID &trans_id, transaction::ObTxSEQ &seq_no) const;
   int check_can_access(ObTableAccessContext &context, bool &can_access) const;
 public:

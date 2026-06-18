@@ -538,7 +538,7 @@ int ObMemtableMScanIterator::inner_get_next_row(const ObDatumRow *&row)
 ObMemtableMultiVersionScanIterator::ObMemtableMultiVersionScanIterator()
     : MAGIC_(VALID_MAGIC_NUM),
       is_inited_(false),
-      enable_delete_insert_(false),
+      original_merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_MAX),
       read_info_(NULL),
       start_key_(NULL),
       end_key_(NULL),
@@ -578,9 +578,9 @@ int ObMemtableMultiVersionScanIterator::init(
   const ObDatumRange *range = static_cast<const ObDatumRange *>(query_range);
   ObMemtable *memtable = static_cast<ObMemtable *>(table);
   context_ = &context;
-  if (OB_ISNULL(table) || OB_ISNULL(query_range) || !context.is_valid()) {
+  if (OB_ISNULL(table) || OB_ISNULL(query_range) || !context.is_valid() || !context.tablet_id_.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "table and query range can not be null", KP(table), KP(query_range), K(ret));
+    TRANS_LOG(WARN, "table and query range can not be null, context must be valid", K(ret), KP(table), KP(query_range), KPC_(context));
   } else if (OB_ISNULL(rowkey_columns = param.get_out_col_descs())) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "Unexpected null col descs", K(ret), K(param));
@@ -613,7 +613,7 @@ int ObMemtableMultiVersionScanIterator::init(
       TRANS_LOG(WARN, "Failed to init datum row", K(ret));
     } else {
       TRANS_LOG(TRACE, "multi version scan iterator init succ", K(param.table_id_), K(range), KPC(read_info_), K(row_));
-      enable_delete_insert_ = param.is_delete_insert_;
+      original_merge_engine_type_ = param.merge_engine_type_;
       trans_version_col_idx_ = param.get_schema_rowkey_count();
       sql_sequence_col_idx_ = param.get_schema_rowkey_count() + 1;
       is_inited_ = true;
@@ -655,6 +655,7 @@ int ObMemtableMultiVersionScanIterator::inner_get_next_row(const ObDatumRow *&ro
 {
   int ret = OB_SUCCESS;
   row = nullptr;
+  bool is_delete_insert_merge = false;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -671,7 +672,7 @@ int ObMemtableMultiVersionScanIterator::inner_get_next_row(const ObDatumRow *&ro
           }
           break;
         case SCAN_COMPACT_ROW:
-          if (OB_FAIL(get_compacted_multi_version_row(row))) {
+          if (OB_FAIL(get_compacted_multi_version_row(row, is_delete_insert_merge))) {
             TRANS_LOG(WARN, "failed to get_compacted_multi_version_row", K(ret));
           }
           break;
@@ -690,7 +691,7 @@ int ObMemtableMultiVersionScanIterator::inner_get_next_row(const ObDatumRow *&ro
         default:
           break;
       }
-      if (OB_SUCC(ret) && OB_FAIL(switch_scan_state())) {
+      if (OB_SUCC(ret) && OB_FAIL(switch_scan_state(is_delete_insert_merge))) {
         TRANS_LOG(WARN, "failed to switch scan state", K(ret), K(*this));
       }
     } while (OB_SUCC(ret) && OB_ISNULL(row));
@@ -803,16 +804,17 @@ int ObMemtableMultiVersionScanIterator::set_compacted_row_state(ObDatumRow &row,
   return ret;
 }
 
-int ObMemtableMultiVersionScanIterator::get_compacted_multi_version_row(const ObDatumRow *&row)
+int ObMemtableMultiVersionScanIterator::get_compacted_multi_version_row(const ObDatumRow *&row, bool &is_delete_insert_merge)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", K(ret), KPC(this));
   } else {
+    is_delete_insert_merge = false;
     const ObStoreRowkey *rowkey = NULL;
     key_->get_rowkey(rowkey);
-    if (OB_FAIL(iterate_compacted_row(*rowkey, row_))) {
+    if (OB_FAIL(iterate_compacted_row(*rowkey, row_, is_delete_insert_merge))) {
       TRANS_LOG(WARN, "iterate_row fail", K(ret), KP(key_), KP(value_iter_));
     } else if (row_.row_flag_.is_exist()) {
       row = &row_;
@@ -887,7 +889,7 @@ int ObMemtableMultiVersionScanIterator::switch_to_committed_scan_state()
   return ret;
 }
 
-int ObMemtableMultiVersionScanIterator::switch_scan_state()
+int ObMemtableMultiVersionScanIterator::switch_scan_state(const bool is_delete_insert_merge)
 {
   int ret = OB_SUCCESS;
   switch (scan_state_) {
@@ -898,7 +900,7 @@ int ObMemtableMultiVersionScanIterator::switch_scan_state()
     }
     break;
   case SCAN_COMPACT_ROW:
-    if (enable_delete_insert_ && !value_iter_->has_multi_commit_trans() &&
+    if (is_delete_insert_merge && !value_iter_->has_multi_commit_trans() &&
         !value_iter_->is_last_compact_node()) {
       // ouput all delete_insert rows in single trans
     } else if (!value_iter_->is_multi_version_iter_end()) {
@@ -928,7 +930,7 @@ int ObMemtableMultiVersionScanIterator::switch_scan_state()
 void ObMemtableMultiVersionScanIterator::reset()
 {
   is_inited_ = false;
-  enable_delete_insert_ = false;
+  original_merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_MAX;
   read_info_ = NULL;
   start_key_ = NULL;
   end_key_ = NULL;
@@ -951,6 +953,7 @@ void ObMemtableMultiVersionScanIterator::row_reset()
   for (int64_t i = 0; i < row_.get_column_count(); i++) {
     row_.storage_datums_[i].set_nop();
   }
+  row_.merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_MAX;
 }
 
 OB_INLINE int ObMemtableMultiVersionScanIterator::iterate_multi_version_row(
@@ -968,7 +971,8 @@ OB_INLINE int ObMemtableMultiVersionScanIterator::iterate_multi_version_row(
 
 int ObMemtableMultiVersionScanIterator::iterate_compacted_row(
     const ObStoreRowkey &key,
-    ObDatumRow &row)
+    ObDatumRow &row,
+    bool &is_delete_insert_merge)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(value_iter_)) {
@@ -976,8 +980,8 @@ int ObMemtableMultiVersionScanIterator::iterate_compacted_row(
     TRANS_LOG(WARN, "iterate row get invalid argument", K(ret), KP(value_iter_));
   } else if (OB_FAIL(ObReadRow::iterate_row_key(key, row))) {
     TRANS_LOG(WARN, "iterate_row_key fail", K(ret), K(key));
-  } else if (enable_delete_insert_ && !value_iter_->has_multi_commit_trans()) {
-    if (OB_FAIL(iterate_delete_insert_compacted_row_value_(row))) {
+  } else if (!value_iter_->has_multi_commit_trans()) {
+    if (OB_FAIL(iterate_single_trans_compacted_row_value_(row, is_delete_insert_merge))) {
       TRANS_LOG(WARN, "iterate_delete_insert_row_value fail", K(ret), K(key), KP(value_iter_));
     }
   } else if (OB_FAIL(iterate_compacted_row_value_(row))) {
@@ -1124,7 +1128,7 @@ int ObMemtableMultiVersionScanIterator::iterate_compacted_row_value_(ObDatumRow 
 // insert1 -> delete2-> insert2 -> delete3-> insert3 ==> insert3
 // delete1 -> insert1 -> delete2 -> insert2 -> delete3 ==> delete1
 // insert1 -> delete2 -> insert2 -> delete3 ==> delete3(need output last flag)
-int ObMemtableMultiVersionScanIterator::iterate_delete_insert_compacted_row_value_(blocksstable::ObDatumRow &row)
+int ObMemtableMultiVersionScanIterator::iterate_single_trans_compacted_row_value_(blocksstable::ObDatumRow &row, bool &is_delete_insert_merge)
 {
   int ret = OB_SUCCESS;
   bool read_finished = false;
@@ -1133,14 +1137,12 @@ int ObMemtableMultiVersionScanIterator::iterate_delete_insert_compacted_row_valu
   const ObRowHeader *row_header = nullptr;
   row.row_flag_.set_flag(ObDmlFlag::DF_NOT_EXIST);
   row.snapshot_version_ = 0;
+  bool first_delete_node = value_iter_->is_first_delete_compact_node();
+  bool merge_engine_has_decided = false;
   bitmap_.reuse();
 
   while (OB_SUCC(ret)) {
-    bool first_delete_node = value_iter_->is_first_delete_compact_node();
-    if (first_delete_node && row.row_flag_.is_insert()) {
-      // delete1->insert1->delete2->insert2: cur_node(delete1), cur_row(insert2)
-      break;
-    } else if (OB_FAIL(value_iter_->get_next_node_for_compact(tnode))) {
+    if (OB_FAIL(value_iter_->get_next_node_for_compact(tnode))) {
       if (OB_ITER_END != ret) {
         TRANS_LOG(WARN, "failed to get next node", K(ret), K(*this), K(value_iter_));
       }
@@ -1150,38 +1152,71 @@ int ObMemtableMultiVersionScanIterator::iterate_delete_insert_compacted_row_valu
     } else if (OB_ISNULL(mtd = reinterpret_cast<const ObMemtableDataHeader *>(reinterpret_cast<const ObMvccTransNode *>(tnode)->buf_))) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "transa node value is null", K(ret), KP(tnode), KP(mtd));
-    } else {
+    } else if (context_->tablet_id_.is_user_tablet() && !merge_engine_has_decided) {
+      if (OB_FAIL(row_reader_.read_row_header(mtd->buf_, mtd->buf_len_, row_header))) {
+        TRANS_LOG(WARN, "Failed to read row without rowkey", K(ret));
+      } else {
+        ObMergeEngineType row_merge_engine_type = ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN == row_header->get_merge_engine_type()
+          ? original_merge_engine_type_ : row_header->get_merge_engine_type();
+        if (OB_FAIL(check_is_delete_insert_merge(row_merge_engine_type, is_delete_insert_merge))) {
+          TRANS_LOG(WARN, "Failed to check is delete insert merge", K(ret), K(row));
+        } else {
+          merge_engine_has_decided = true;
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
       set_flag_and_version_for_compacted_row(reinterpret_cast<const ObMvccTransNode *>(tnode), row);
-      if (first_delete_node) {
-        // delete1->insert1->delete2: cur_node(delete1), cur_row(delete2), reset cur_row and read first_delete_node
-        row.row_flag_.set_flag(ObDmlFlag::DF_NOT_EXIST);
-        bitmap_.reuse();
+      if (is_delete_insert_merge) {
+        if (first_delete_node) {
+          // delete1->insert1->delete2: cur_node(delete1), cur_row(delete2), reset cur_row and read first_delete_node
+          row.row_flag_.set_flag(ObDmlFlag::DF_NOT_EXIST);
+          bitmap_.reuse();
+        }
+        read_finished = false;
+      } else if (row.row_flag_.is_not_exist()) {
+        row.row_flag_.set_flag(mtd->dml_flag_);
       }
 
-      read_finished = false;
       if (OB_FAIL(row_reader_.read_memtable_row(mtd->buf_, mtd->buf_len_, *read_info_, row, bitmap_, read_finished, row_header))) {
         TRANS_LOG(WARN, "Failed to read memtable row", K(ret), K(row));
-      } else if (OB_UNLIKELY(!read_finished && read_info_->get_schema_column_count() == row_header->get_column_count())) {
-        ret = OB_ERR_UNEXPECTED;
-        TRANS_LOG(WARN, "Unexpected not empty bitmap", K(ret), K(row), K(read_finished), KPC(row_header), KPC_(read_info));
-      } else {
-        row.set_compacted_multi_version_row();
-        if (row.row_flag_.is_not_exist()) {
-          row.storage_datums_[trans_version_col_idx_].reuse();
-          row.storage_datums_[sql_sequence_col_idx_].reuse();
-          row.storage_datums_[trans_version_col_idx_].set_int(-value_iter_->get_committed_max_trans_version());
-          row.storage_datums_[sql_sequence_col_idx_].set_int(0);
-          row.row_flag_.set_flag(mtd->dml_flag_);
-        }
+      } else if (is_delete_insert_merge) {
+        if (OB_UNLIKELY(!read_finished && read_info_->get_schema_column_count() == row_header->get_column_count())) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(WARN, "Unexpected not empty bitmap", K(ret), K(row), K(read_finished), KPC(row_header), KPC_(read_info));
+        } else {
+          row.set_compacted_multi_version_row();
+          if (row.row_flag_.is_not_exist()) {
+            row.storage_datums_[trans_version_col_idx_].reuse();
+            row.storage_datums_[sql_sequence_col_idx_].reuse();
+            row.storage_datums_[trans_version_col_idx_].set_int(-value_iter_->get_committed_max_trans_version());
+            row.storage_datums_[sql_sequence_col_idx_].set_int(0);
+            row.row_flag_.set_flag(mtd->dml_flag_);
+          }
 
-        if (value_iter_->is_last_compact_node()) {
-          row.mvcc_row_flag_.set_last_multi_version_row(value_iter_->is_multi_version_iter_end());
-          break;
+          if (value_iter_->is_last_compact_node()) {
+            row.mvcc_row_flag_.set_last_multi_version_row(value_iter_->is_multi_version_iter_end());
+            break;
+          }
         }
+      } else if (ObDmlFlag::DF_INSERT == mtd->dml_flag_ || ObDmlFlag::DF_DELETE == mtd->dml_flag_ || read_finished) {
+        if (bitmap_.is_empty() || ObDmlFlag::DF_DELETE == mtd->dml_flag_) {
+          row.set_compacted_multi_version_row();
+        }
+        break;
+      }
+      if (OB_SUCC(ret) && is_delete_insert_merge && (first_delete_node = value_iter_->is_first_delete_compact_node()) && row.row_flag_.is_insert()) {
+        // delete1->insert1->delete2->insert2: cur_node(delete1), cur_row(insert2)
+        break;
       }
     }
   } // while
   ret = (OB_ITER_END == ret) ? OB_SUCCESS : ret;
+  if (OB_SUCC(ret) && !is_delete_insert_merge) {
+    if (OB_FAIL(set_compacted_row_state(row, value_iter_->has_multi_commit_trans()))) { // set state for compated row
+      TRANS_LOG(WARN, "failed to set state for compated row", K(row));
+    }
+  }
   return ret;
 }
 
@@ -1196,18 +1231,18 @@ int ObMemtableMultiVersionScanIterator::iterate_multi_version_row_value_(ObDatum
   const ObVersionRange &version_range = context_->trans_version_range_;
   const ObMemtableDataHeader *mtd = NULL;
   const ObRowHeader *row_header = nullptr;
+  bool first_delete_node = false;
+  bool is_delete_insert_merge = false;
+  bool merge_engine_has_decided = false;
   if (OB_ISNULL(value_iter_)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "Unexpected null value iter", K(ret), K(value_iter_));
+  } else {
+    first_delete_node = value_iter_->is_first_delete_multi_version_node();
+    bitmap_.reuse();
   }
-  bitmap_.reuse();
   while (OB_SUCC(ret)) {
-    bool first_delete_node = value_iter_->is_first_delete_multi_version_node();
-    if (enable_delete_insert_ && first_delete_node && row.row_flag_.is_insert()) {
-      // delete1->insert1->delete2->insert2: cur_node(delete1), cur_row(insert2)
-      // not from update, insert after delete in one trans also need to mark as delete_insert
-      break;
-    } else if (OB_FAIL(value_iter_->get_next_multi_version_node(tnode))) {
+    if (OB_FAIL(value_iter_->get_next_multi_version_node(tnode))) {
       if (OB_ITER_END != ret) {
         TRANS_LOG(WARN, "failed to get next node", K(ret), K(*this), K(value_iter_));
       }
@@ -1217,10 +1252,23 @@ int ObMemtableMultiVersionScanIterator::iterate_multi_version_row_value_(ObDatum
     } else if (OB_ISNULL(mtd = reinterpret_cast<const ObMemtableDataHeader *>(reinterpret_cast<const ObMvccTransNode *>(tnode)->buf_))) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "trans node value is null", K(ret), KP(tnode), KP(mtd));
-    } else {
+    } else if (context_->tablet_id_.is_user_tablet() && !merge_engine_has_decided) {
+      if (OB_FAIL(row_reader_.read_row_header(mtd->buf_, mtd->buf_len_, row_header))) {
+        TRANS_LOG(WARN, "Failed to read row without rowkey", K(ret));
+      } else {
+        ObMergeEngineType row_merge_engine_type = ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN == row_header->get_merge_engine_type()
+          ? original_merge_engine_type_ : row_header->get_merge_engine_type();
+        if (OB_FAIL(check_is_delete_insert_merge(row_merge_engine_type, is_delete_insert_merge))) {
+          TRANS_LOG(WARN, "Failed to check is delete insert merge", K(ret), K(row), K(context_->tablet_id_));
+        } else {
+          merge_engine_has_decided = true;
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
       if (row.row_flag_.is_not_exist()) {
         row.row_flag_.set_flag(mtd->dml_flag_);
-      } else if (enable_delete_insert_ && first_delete_node) {
+      } else if (is_delete_insert_merge && first_delete_node) {
         // delete1->insert1->delete2: cur_node(delete1), cur_row(delete2), reset cur_row and read first_delete_node
         bitmap_.reuse();
         trans_version = INT64_MIN;
@@ -1251,6 +1299,11 @@ int ObMemtableMultiVersionScanIterator::iterate_multi_version_row_value_(ObDatum
       if (trans_version > version_range.multi_version_start_
           && value_iter_->is_cur_multi_version_row_end()) {
         // TODO: @dengzhi.ldz return empty when first row is insert and last row is delete
+        break;
+      }
+      if (is_delete_insert_merge && (first_delete_node = value_iter_->is_first_delete_multi_version_node()) && row.row_flag_.is_insert()) {
+        // delete1->insert1->delete2->insert2: cur_node(delete1), cur_row(insert2)
+        // not from update, insert after delete in one trans also need to mark as delete_insert
         break;
       }
     }

@@ -2265,7 +2265,7 @@ int ObTabletLobSplitUtil::fetch_lob_cg_order_by_col_idx(
     LOG_WARN("get multi version column descs failed", K(ret));
   } else {
     ObSSTableWrapper cg_wrapper;
-    const int64_t column_group_cnt = co_sstable.get_cs_meta().get_column_group_count();
+    const int64_t column_group_cnt = co_sstable.get_column_group_count(true/*include hidden cg*/);
     for (int64_t i = 0; OB_SUCC(ret) && i < lob_col_idxs.count(); i++) { // order by lob col idx.
       cg_wrapper.reset();
       int32_t cg_idx = OB_INVALID_INDEX;

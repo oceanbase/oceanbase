@@ -60,7 +60,8 @@ struct ObMergeParameter {
     return nullptr != mview_merge_param_;
   }
   ObMergeType get_merge_type() const;
-  bool is_delete_insert_merge() const;
+  bool decide_merge_by_row() const;
+  ObMergeEngineType get_original_merge_engine_type() const;
   int get_rowid_range_by_scn_range(const share::ObScnRange &scn_range, const blocksstable::ObDatumRange *&rowid_range) const;
   bool is_ha_compeleted() const;
   const ObVersionRange &get_merge_version_range() const;

@@ -26,7 +26,24 @@ public:
   ~ObMergeEngineUpperVersion() = default;
   void reset();
   int assign(const ObMergeEngineUpperVersion &other);
+  void disable_merge_engine_for_lob();
   int write_string(ObString &str, ObIAllocator &allocator) const;
+  int init_upper_version(const ObMergeEngineType merge_engine_type);
+  int update_upper_version(
+    const uint64_t tenant_id,
+    const share::SCN &upper_version,
+    const ObMergeEngineType origin_merge_engine_type,
+    const ObMergeEngineType new_merge_engine_type);
+  int decide_query_merge_engine(const int64_t major_table_version, ObMergeEngineType &merge_engine_type) const;
+  OB_INLINE bool is_inited() const { return upper_versions_.count() > 0; }
+  OB_INLINE bool is_valid() const
+  {
+    return version_ == MERGE_ENGINE_UPPER_VERSION_V1 &&
+      upper_versions_.count() <= static_cast<int64_t>(ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN) &&
+      ObMergeEngineStoreFormat::is_merge_engine_valid(original_merge_engine_type_);
+  }
+  OB_INLINE ObMergeEngineType get_original_merge_engine_type() const { return original_merge_engine_type_; }
+  OB_INLINE void set_original_merge_engine_type(const ObMergeEngineType merge_engine_type) { original_merge_engine_type_ = merge_engine_type; }
   inline int64_t get_convert_size() const
   {
     int64_t convert_size = sizeof(*this);

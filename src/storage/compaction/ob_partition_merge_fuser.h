@@ -41,7 +41,7 @@ class ObMergeFuser
 public:
   ObMergeFuser(common::ObIAllocator &allocator)
     : is_inited_(false),
-      enable_delete_insert_(false),
+      original_merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_MAX),
       allocator_(allocator),
       column_cnt_(0),
       result_row_(),
@@ -72,7 +72,7 @@ protected:
   virtual int end_fuse_row(const storage::ObNopPos &nop_pos, blocksstable::ObDatumRow &result_row);
 protected:
   bool is_inited_;
-  bool enable_delete_insert_;
+  ObMergeEngineType original_merge_engine_type_;
   common::ObIAllocator &allocator_;
   int64_t column_cnt_;
   bool is_fuse_row_flag_;
@@ -174,19 +174,21 @@ class ObMinorPartitionMergeFuser : public ObIPartitionMergeFuser
 public:
   ObMinorPartitionMergeFuser(common::ObIAllocator &allocator)
     : ObIPartitionMergeFuser(allocator),
-      multi_version_rowkey_column_cnt_(0)
+      multi_version_rowkey_column_cnt_(0),
+      decide_merge_by_row_(false)
   {}
   virtual ~ObMinorPartitionMergeFuser() {}
   virtual bool is_valid() const override;
   void fill_default_value_of_added_columns(blocksstable::ObDatumRow& row);
   INHERIT_TO_STRING_KV("ObIPartitionMergeFuser", ObIPartitionMergeFuser,
-      K_(multi_version_rowkey_column_cnt));
+      K_(multi_version_rowkey_column_cnt), K_(decide_merge_by_row));
 protected:
   virtual int inner_init(const ObMergeParameter &merge_param) override;
   virtual int preprocess_fuse_row(const blocksstable::ObDatumRow &row, bool &is_need_fuse) override;
   virtual int end_fuse_row(const storage::ObNopPos &nop_pos, blocksstable::ObDatumRow &result_row) override;
 protected:
   int64_t multi_version_rowkey_column_cnt_;
+  bool decide_merge_by_row_;
   DISALLOW_COPY_AND_ASSIGN(ObMinorPartitionMergeFuser);
 };
 
@@ -195,7 +197,8 @@ public:
   static int build(const ObMergeParameter &merge_param,
                    const int64_t cluster_version,
                    ObIAllocator &allocator,
-                   ObIPartitionMergeFuser *&partition_fuser);
+                   ObIPartitionMergeFuser *&partition_fuser,
+                   const bool use_co_inc_fuser);
 };
 } //compaction
 } //oceanbase

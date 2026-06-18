@@ -755,6 +755,7 @@ int ObMicroBlockReader<EnableNewFlatFormat>::get_multi_version_info(
     multi_version_info.dml_row_flag_ = row_header->get_row_flag();
     multi_version_info.mvcc_row_flag_ = row_header->get_row_multi_version_flag();
     multi_version_info.trans_id_ = row_header->get_trans_id();
+    multi_version_info.merge_engine_type_ = row_header->get_merge_engine_type();
   }
   return ret;
 }

@@ -1202,12 +1202,14 @@ int ObCOMergeLogReplayTask::process()
     }
   } else {
     ctx->update_execute_time(ObClockGenerator::getClock() - start_time);
-    LOG_INFO("succeed to replay merge log", K(ret), KPC(this));
     if (ctx->is_using_column_tmp_file() &&
         OB_TMP_FAIL(ctx->do_replay_finish(range_idx_, start_cg_idx_, end_cg_idx_))) { // release tmp file
       LOG_WARN("failed to do replay finish", K(tmp_ret));
     }
     (void)exe_dag->finish_replay(range_idx_, start_cg_idx_, end_cg_idx_, all_cg_replay_finished);
+    LOG_INFO("succeed to replay merge log", K(ret), K(all_cg_replay_finished), KPC(this), "tablet_id", ctx->get_tablet_id(),
+             "is_using_column_tmp_file", ctx->is_using_column_tmp_file());
+
     // cg status will not revert after this
     // if failed to generate finish task, dag retry will do it (TODO: add retry logic)
     if (all_cg_replay_finished && OB_FAIL(exe_dag->try_generate_finish_task(this))) {

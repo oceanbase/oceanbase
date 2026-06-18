@@ -13,17 +13,18 @@
 namespace oceanbase {
 namespace storage {
 class ObMultipleMultiScanMerge;
+struct ObTabletReadTables;
 
 class ObGetSampleIterHelper {
 public:
   ObGetSampleIterHelper(const ObTableScanRange &table_scan_range,
                         ObTableAccessContext &main_table_ctx,
                         ObTableScanParam &scan_param,
-                        ObGetTableParam &get_table_param)
+                        ObTabletReadTables &tablet_read_tables)
       : table_scan_range_(table_scan_range),
         main_table_ctx_(main_table_ctx),
         scan_param_(scan_param),
-        get_table_param_(get_table_param)
+        tablet_read_tables_(tablet_read_tables)
   {}
 
   int check_scan_range_count(bool &res, ObIArray<blocksstable::ObDatumRange> &sample_ranges);
@@ -52,7 +53,7 @@ private:
   const ObTableScanRange &table_scan_range_;
   ObTableAccessContext &main_table_ctx_;
   ObTableScanParam &scan_param_;
-  ObGetTableParam &get_table_param_;
+  ObTabletReadTables &tablet_read_tables_;
   bool need_scan_multiple_range_;
 };
 

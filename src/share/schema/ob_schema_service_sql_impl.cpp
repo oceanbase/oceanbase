@@ -1934,6 +1934,12 @@ int ObSchemaServiceSQLImpl::fetch_all_column_group_mapping(
           LOG_WARN("fail to push back column_group id", KR(ret), KPC(column_group));
         }
       }
+      const ObColumnGroupSchema *hidden_rowkey_cg = table_schema->get_hidden_rowkey_column_group();
+      if (OB_SUCC(ret) && nullptr != hidden_rowkey_cg) {
+        if (OB_FAIL(cg_ids.push_back(hidden_rowkey_cg->get_column_group_id()))) {
+          LOG_WARN("fail to push back column_group id", KR(ret), KPC(hidden_rowkey_cg));
+        }
+      }
 
       // get all column_group mapping based on the cg ids
       SMART_VAR(ObMySQLProxy::MySQLResult, res) {

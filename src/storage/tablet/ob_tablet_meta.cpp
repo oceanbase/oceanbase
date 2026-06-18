@@ -1306,6 +1306,8 @@ ObMigrationTabletParam::ObMigrationTabletParam()
     min_ss_tablet_version_(SCN::min_scn()),
     inc_major_snapshot_(0),
     inc_major_replay_scn_(SCN::min_scn()),
+    mock_rowkey_cg_schema_(),
+    mock_single_cg_schema_(),
     allocator_("MigTblParam", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ObCtxIds::DEFAULT_CTX_ID)
 {
 }
@@ -1502,12 +1504,13 @@ int ObMigrationTabletParam::serialize(char *buf, const int64_t len, int64_t &pos
     LOG_WARN("failed to serialize inc_major_snapshot", K(ret), K(len), K(new_pos), K_(inc_major_snapshot));
   } else if (PARAM_VERSION_V3 <= version_ && new_pos - pos < length && OB_FAIL(inc_major_replay_scn_.fixed_serialize(buf, len, new_pos))) {
     LOG_WARN("failed to serialize inc_major_replay_scn", K(ret), K(len), K(new_pos), K_(inc_major_replay_scn));
+  } else if (PARAM_VERSION_V3 <= version_ && new_pos - pos < length && OB_FAIL(serialize_mock_cg_schemas_(buf, len, new_pos))) {
+    LOG_WARN("failed to serialize mock cg schemas", K(ret), K(len), K(new_pos), K_(mock_rowkey_cg_schema), K_(mock_single_cg_schema));
   } else if (OB_UNLIKELY(length != new_pos - pos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("length doesn't match standard length", K(ret), K(new_pos), K(pos), K(length));
   } else {
     pos = new_pos;
-
     LOG_DEBUG("succeed to serialize migration tablet param", K(ret), KPC(this));
   }
 
@@ -1607,6 +1610,8 @@ int ObMigrationTabletParam::deserialize_v2_v3(const char *buf, const int64_t len
     LOG_WARN("failed to deserialize inc_major_snapshot", K(ret), K(len));
   } else if (PARAM_VERSION_V3 <= version_ && new_pos - pos < length && OB_FAIL(inc_major_replay_scn_.fixed_deserialize(buf, len, new_pos))) {
     LOG_WARN("failed to deserialize inc_major_replay_scn", K(ret), K(len), K(new_pos));
+  } else if (PARAM_VERSION_V3 <= version_ && new_pos - pos < length && OB_FAIL(deserialize_mock_cg_schemas_(buf, len, new_pos))) {
+    LOG_WARN("failed to deserialize mock cg schemas", K(ret), K(len), K(new_pos));
   } else if (OB_UNLIKELY(length < new_pos - pos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet's length doesn't match standard length", K(ret), K(new_pos), K(pos), K(length), KPC(this));
@@ -1821,6 +1826,53 @@ int64_t ObMigrationTabletParam::get_serialize_size() const
     size += min_ss_tablet_version_.get_fixed_serialize_size();
     size += serialization::encoded_length_i64(inc_major_snapshot_);
     size += inc_major_replay_scn_.get_fixed_serialize_size();
+    size += get_mock_cg_schemas_serialize_size_();
+  }
+  return size;
+}
+
+int ObMigrationTabletParam::serialize_mock_cg_schemas_(
+    char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  const bool has_mock_cg_schemas = mock_rowkey_cg_schema_.is_valid() && mock_single_cg_schema_.is_valid();
+  if (OB_FAIL(serialization::encode_bool(buf, buf_len, pos, has_mock_cg_schemas))) {
+    LOG_WARN("failed to encode mock_rowkey_cg has flag", K(ret), K(has_mock_cg_schemas), K(buf_len), K(pos));
+  } else if (!has_mock_cg_schemas) {
+    // do nothing
+  } else if (OB_FAIL(mock_rowkey_cg_schema_.serialize(buf, buf_len, pos))) {
+    LOG_WARN("failed to serialize mock_rowkey_cg_schema", K(ret), K(buf_len), K(pos), K_(mock_rowkey_cg_schema));
+  } else if (OB_FAIL(mock_single_cg_schema_.serialize(buf, buf_len, pos))) {
+    LOG_WARN("failed to serialize mock_single_cg_schema", K(ret), K(buf_len), K(pos), K_(mock_single_cg_schema));
+  }
+  return ret;
+}
+
+int ObMigrationTabletParam::deserialize_mock_cg_schemas_(
+    const char *buf, const int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  bool has_mock_cg_schemas = false;
+  if (OB_FAIL(serialization::decode_bool(buf, data_len, pos, &has_mock_cg_schemas))) {
+    LOG_WARN("failed to decode mock_rowkey_cg has flag", K(ret), K(data_len), K(pos));
+  } else if (!has_mock_cg_schemas) {
+    // do nothing
+  } else if (OB_FAIL(mock_rowkey_cg_schema_.deserialize(allocator_, buf, data_len, pos))) {
+    LOG_WARN("failed to deserialize mock_rowkey_cg_schema", K(ret), K(data_len), K(pos));
+  } else if (OB_FAIL(mock_single_cg_schema_.deserialize(allocator_, buf, data_len, pos))) {
+    LOG_WARN("failed to deserialize mock_single_cg_schema", K(ret), K(data_len), K(pos));
+  }
+  return ret;
+}
+
+int64_t ObMigrationTabletParam::get_mock_cg_schemas_serialize_size_() const
+{
+  int64_t size = 0;
+  const bool has_mock_cg_schemas = mock_rowkey_cg_schema_.is_valid() && mock_single_cg_schema_.is_valid();
+  size += serialization::encoded_length_bool(has_mock_cg_schemas);
+  if (has_mock_cg_schemas) {
+    size += mock_rowkey_cg_schema_.get_serialize_size();
+    size += mock_single_cg_schema_.get_serialize_size();
   }
   return size;
 }
@@ -1869,6 +1921,8 @@ void ObMigrationTabletParam::reset()
   min_ss_tablet_version_.set_min();
   inc_major_snapshot_ = 0;
   inc_major_replay_scn_.set_min();
+  mock_rowkey_cg_schema_.destroy(allocator_);
+  mock_single_cg_schema_.destroy(allocator_);
   allocator_.reset();
 }
 
@@ -1934,6 +1988,17 @@ int ObMigrationTabletParam::assign(const ObMigrationTabletParam &param)
       LOG_WARN("failed to assign storage schema", K(ret), K(param));
     } else if (OB_FAIL(medium_info_list_.init(allocator_, &param.medium_info_list_))) {
       LOG_WARN("failed to assign medium info list", K(ret), K(param));
+    }
+
+    if (OB_SUCC(ret) && param.mock_rowkey_cg_schema_.is_valid()) {
+      if (OB_FAIL(mock_rowkey_cg_schema_.deep_copy(param.mock_rowkey_cg_schema_, allocator_))) {
+        LOG_WARN("failed to deep copy mock_rowkey_cg_schema", K(ret), K(param.mock_rowkey_cg_schema_));
+      }
+    }
+    if (OB_SUCC(ret) && param.mock_single_cg_schema_.is_valid()) {
+      if (OB_FAIL(mock_single_cg_schema_.deep_copy(param.mock_single_cg_schema_, allocator_))) {
+        LOG_WARN("failed to deep copy mock_single_cg_schema", K(ret), K(param.mock_single_cg_schema_));
+      }
     }
   }
   return ret;

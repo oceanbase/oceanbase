@@ -143,9 +143,10 @@ ObPartitionMergeIter::ObPartitionMergeIter(ObIAllocator &allocator)
     iter_end_(false),
     allocator_(allocator),
     rowkey_state_(),
-    is_delete_insert_merge_(false),
+    original_merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_MAX),
     is_ha_compeleted_(true),
     reuse_micro_in_border_macro_(false),
+    decide_merge_by_row_(false),
     need_prepare_micro_border_(true)
 {
 }
@@ -180,9 +181,10 @@ void ObPartitionMergeIter::reset()
   iter_end_ = false;
   is_inited_ = false;
   rowkey_state_.reset();
-  is_delete_insert_merge_ = false;
+  original_merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_MAX;
   is_ha_compeleted_ = true;
   reuse_micro_in_border_macro_ = false;
+  decide_merge_by_row_ = false;
   need_prepare_micro_border_ = true;
   ObMergeIter::reset();
 }
@@ -199,11 +201,12 @@ int ObPartitionMergeIter::init_query_base_params(const ObMergeParameter &merge_p
                                                     tablet_id_,
                                                     *read_info_,
                                                     is_multi_version_merge(static_param.get_merge_type()),
-                                                    static_param.schema_->get_merge_engine_type()))) {
+                                                    static_param.schema_->get_original_merge_engine_type()))) {
     LOG_WARN("Failed to init table access param", K(ret), KPC(this));
   } else if (OB_FAIL(snapshot_version.convert_for_tx(static_param.merge_version_range_.snapshot_version_))) {
       LOG_WARN("Failed to convert", K(ret), K_(static_param.merge_version_range_.snapshot_version));
   } else if (OB_FAIL(store_ctx_.init_for_read(static_param.ls_handle_,
+                                              static_param.get_tablet_id(),
                                               INT64_MAX, // query_expire_ts
                                               -1, // lock_timeout_us
                                               snapshot_version))) {
@@ -279,7 +282,7 @@ int ObPartitionMergeIter::common_init(const ObMergeParameter &merge_param)
   curr_row_returned_in_batch_ = false;
   iter_end_ = false;
   rowkey_state_.reset();
-  is_delete_insert_merge_ = false;
+  original_merge_engine_type_ = merge_param.get_original_merge_engine_type();
 
   const blocksstable::ObDatumRange *merge_rowid_range = nullptr;
   if (table_->is_normal_cg_sstable()) {
@@ -462,7 +465,8 @@ int64_t ObPartitionMergeIter::inner_to_string(char *buf, const int64_t buf_len, 
       J_COMMA();
     }
     J_KV(K_(iter_row_count), KPC(curr_row_), K_(iter_row_id),
-      K_(rowkey_state), K_(is_base_iter), K_(is_delete_insert_merge), K_(major_idx), K_(is_ha_compeleted));
+         K_(rowkey_state), K_(is_base_iter), K_(original_merge_engine_type),
+         K_(major_idx), K_(is_ha_compeleted), K_(decide_merge_by_row));
   } else {
     J_KV(K_(is_inited));
   }
@@ -1854,7 +1858,7 @@ int ObPartitionMinorRowMergeIter::common_minor_inner_init(const ObMergeParameter
   int ret = OB_SUCCESS;
   int64_t row_column_cnt = 0;
   void *buf = nullptr;
-  is_delete_insert_merge_ = merge_param.is_delete_insert_merge();
+  decide_merge_by_row_ = merge_param.decide_merge_by_row();
   is_ha_compeleted_ = merge_param.is_ha_compeleted();
   if (OB_FAIL(merge_param.get_schema()->get_stored_column_count_in_sstable(row_column_cnt))) {
     LOG_WARN("Failed to get full store column count", K(ret));
@@ -1882,7 +1886,6 @@ int ObPartitionMinorRowMergeIter::common_minor_inner_init(const ObMergeParameter
 int ObPartitionMinorRowMergeIter::inner_init(const ObMergeParameter &merge_param)
 {
   int ret = OB_SUCCESS;
-
   if (OB_FAIL(common_minor_inner_init(merge_param))) {
     LOG_WARN("Failed to do commont minor inner init", K(ret), K(merge_param));
   } else if (OB_UNLIKELY(NULL == table_
@@ -1947,8 +1950,11 @@ int ObPartitionMinorRowMergeIter::fetch_row_with_filter()
     }
   } // while
   if (OB_SUCC(ret)) {
+    if (curr_row_->is_merge_engine_unknown_row()) {
+      const_cast<blocksstable::ObDatumRow *>(curr_row_)->merge_engine_type_ = original_merge_engine_type_;
+    }
     iter_row_count_++;
-    LOG_TRACE("row iter next row", K(ret), K_(is_delete_insert_merge), KPC_(curr_row), K(*this), K_(filter_handle));
+    LOG_TRACE("row iter next row", K(ret), K_(original_merge_engine_type), KPC_(curr_row), K(*this), K_(filter_handle));
   }
 
   return ret;
@@ -1960,6 +1966,7 @@ int ObPartitionMinorRowMergeIter::check_meet_another_trans(bool &skip_cur_row)
   int64_t trans_version_idx = schema_rowkey_column_cnt_;
   ObDatumRow *last_queue_row = row_queue_.get_last();
   skip_cur_row = false;
+  bool is_delete_insert_merge = false;
 
   if (row_queue_.count() <= 0) {
   } else if (OB_UNLIKELY(nullptr == curr_row_ || nullptr == last_queue_row)) {
@@ -1968,6 +1975,8 @@ int ObPartitionMinorRowMergeIter::check_meet_another_trans(bool &skip_cur_row)
   } else if (curr_row_->is_ghost_row()) {
     // ghost row is a virtual last row
     skip_cur_row = true;
+  } else if (OB_FAIL(check_is_delete_insert_merge(last_queue_row->merge_engine_type_, is_delete_insert_merge, decide_merge_by_row_))) {
+    LOG_WARN("Failed to check is delete insert merge", K(ret), KPC(last_queue_row));
   } else if (curr_row_->storage_datums_[trans_version_idx].get_int() !=
              last_queue_row->storage_datums_[trans_version_idx].get_int()) {
     if (OB_FAIL(row_queue_.add_shadow_row(schema_rowkey_column_cnt_ + 1, obj_copy_allocator_))) {
@@ -1977,7 +1986,7 @@ int ObPartitionMinorRowMergeIter::check_meet_another_trans(bool &skip_cur_row)
         LOG_WARN("Failed to add empty row into row queue", K(ret));
       }
     }
-  } else if (is_delete_insert_merge_) {
+  } else if (is_delete_insert_merge) {
     // compact delete_insert rows in one transaction
     // delete1 -> insert1 -> delete2 -> insert2 -> delete3 -> insert3 ==> delete1 -> insert3
     // insert1 -> delete2-> insert2 -> delete3-> insert3 ==> insert3
@@ -2050,20 +2059,17 @@ int ObPartitionMinorRowMergeIter::check_meet_another_trans(bool &skip_cur_row)
 int ObPartitionMinorRowMergeIter::compact_old_row()
 {
   int ret = OB_SUCCESS;
-  if (is_delete_insert_merge_) {
-    if (OB_FAIL(compact_old_row_for_delete_insert())) {
-      LOG_WARN("Failed to compact old row for delete insert merge", K(ret));
-    }
-  } else {
-    row_queue_.reuse();
-    obj_copy_allocator_.reuse();
-    if (OB_FAIL(row_queue_.add_empty_row(obj_copy_allocator_))) {
+  bool curr_rowkey_finish = false;
+  if (OB_FAIL(compact_old_row_for_delete_insert(curr_rowkey_finish))) {
+    LOG_WARN("Failed to compact old row for delete insert merge", K(ret), K_(curr_row), K_(original_merge_engine_type));
+  } else if (!curr_rowkey_finish) {
+    if (row_queue_.is_empty() && OB_FAIL(row_queue_.add_empty_row(obj_copy_allocator_))) {
       LOG_WARN("Failed to add empty row into row queue", K(ret));
     }
-    while(OB_SUCC(ret)) {
+    while (OB_SUCC(ret)) {
       if (curr_row_->is_shadow_row()) {
-      } else if (OB_FAIL(row_queue_.compact_border_row(curr_row_, false/*last_row*/, nop_pos_[ObRowQueue::QI_FIRST_ROW], obj_copy_allocator_))) {
-        LOG_WARN("Failed to compact first row", K(ret));
+      } else if (OB_FAIL(row_queue_.compact_border_row(curr_row_, true/*last_row*/, nop_pos_[ObRowQueue::QI_LAST_ROW], obj_copy_allocator_))) {
+        LOG_WARN("Failed to compact last row", K(ret));
       }
       if (OB_FAIL(ret)) {
       } else if (curr_row_->is_last_multi_version_row()) { // meet L flag
@@ -2080,7 +2086,7 @@ int ObPartitionMinorRowMergeIter::compact_old_row()
   return ret;
 }
 
-int ObPartitionMinorRowMergeIter::compact_old_row_for_delete_insert()
+int ObPartitionMinorRowMergeIter::compact_old_row_for_delete_insert(bool &curr_rowkey_finish)
 {
   int ret = OB_SUCCESS;
   // the latest dml row is in the left side, which should always be output to avoid transaction version rollback in the case of overlapping sstable data
@@ -2094,7 +2100,12 @@ int ObPartitionMinorRowMergeIter::compact_old_row_for_delete_insert()
   tmp_compaction_row_.row_flag_.set_flag(ObDmlFlag::DF_NOT_EXIST);
   obj_copy_allocator_.reuse();
   while (OB_SUCC(ret)) {
-    if (curr_row_->is_shadow_row()) {
+    bool is_delete_insert_row = false;
+    if (OB_FAIL(storage::check_is_delete_insert_merge(curr_row_->merge_engine_type_, is_delete_insert_row, decide_merge_by_row_))) {
+      LOG_WARN("Failed to check is delete insert merge", K(ret), KPC(curr_row_), K_(original_merge_engine_type));
+    } else if (!is_delete_insert_row) {
+      // should compact old row with partial update logic
+    } else if (curr_row_->is_shadow_row()) {
       // skip shadow row
     } else if (!row_queue_.is_empty() &&
                -curr_row_->storage_datums_[schema_rowkey_column_cnt_].get_int() <= access_context_.trans_version_range_.base_version_) {
@@ -2102,7 +2113,7 @@ int ObPartitionMinorRowMergeIter::compact_old_row_for_delete_insert()
     } else if (row_queue_.is_empty()) { // add placeholder for the latest row
       if (OB_FAIL(row_queue_.add_empty_row(obj_copy_allocator_))) {
         LOG_WARN("Failed to add empty row into row queue", K(ret));
-      } else if (OB_FAIL(row_queue_.compact_border_row(curr_row_, false/*first_row*/, nop_pos_[ObRowQueue::QI_FIRST_ROW], obj_copy_allocator_))) {
+      } else if (OB_FAIL(row_queue_.compact_border_row(curr_row_, false/*last_row*/, nop_pos_[ObRowQueue::QI_FIRST_ROW], obj_copy_allocator_))) {
         LOG_WARN("Failed to compact first row", K(ret));
       }
     } else if (OB_FAIL(tmp_compaction_row_.deep_copy(*curr_row_, obj_copy_allocator_))) {
@@ -2110,29 +2121,33 @@ int ObPartitionMinorRowMergeIter::compact_old_row_for_delete_insert()
     }
 
     if (OB_FAIL(ret)) {
-    } else if (curr_row_->is_last_multi_version_row()) {
-      const ObDatumRow *latest_row = row_queue_.get_first();
-      const ObDatumRow *earliest_row = &tmp_compaction_row_;
-      if ((latest_row->row_flag_.is_insert() && earliest_row->row_flag_.is_delete())
-          || (latest_row->row_flag_.is_delete() && earliest_row->row_flag_.is_delete() && latest_row->storage_datums_[schema_rowkey_column_cnt_].get_int() != earliest_row->storage_datums_[schema_rowkey_column_cnt_].get_int())) {
-        if (OB_FAIL(row_queue_.add_empty_row(obj_copy_allocator_))) {
-          LOG_WARN("Failed to add empty row into row queue", K(ret));
-        } else if (OB_FAIL(row_queue_.compact_border_row(&tmp_compaction_row_, true/*last_row*/, nop_pos_[ObRowQueue::QI_LAST_ROW], obj_copy_allocator_))) {
-          LOG_WARN("Failed to compact last row", K(ret));
+    } else if (curr_row_->is_last_multi_version_row() || !is_delete_insert_row) {
+      if (!row_queue_.is_empty()) {
+        const ObDatumRow *latest_row = row_queue_.get_first();
+        const ObDatumRow *earliest_row = &tmp_compaction_row_;
+        if ((latest_row->row_flag_.is_insert() && earliest_row->row_flag_.is_delete())
+            || (latest_row->row_flag_.is_delete() && earliest_row->row_flag_.is_delete() && latest_row->storage_datums_[schema_rowkey_column_cnt_].get_int() != earliest_row->storage_datums_[schema_rowkey_column_cnt_].get_int())) {
+          if (OB_FAIL(row_queue_.add_empty_row(obj_copy_allocator_))) {
+            LOG_WARN("Failed to add empty row into row queue", K(ret));
+          } else if (OB_FAIL(row_queue_.compact_border_row(&tmp_compaction_row_, true/*last_row*/, nop_pos_[ObRowQueue::QI_LAST_ROW], obj_copy_allocator_))) {
+            LOG_WARN("Failed to compact last row", K(ret));
+          }
+        } else if (latest_row->row_flag_.is_delete() && earliest_row->row_flag_.is_delete() && latest_row->storage_datums_[schema_rowkey_column_cnt_].get_int() == earliest_row->storage_datums_[schema_rowkey_column_cnt_].get_int()) {
+          row_queue_.reuse();
+          if (OB_FAIL(row_queue_.add_empty_row(obj_copy_allocator_))) {
+            LOG_WARN("Failed to add empty row into row queue", K(ret));
+          } else if (OB_FAIL(row_queue_.compact_border_row(&tmp_compaction_row_, true/*last_row*/, nop_pos_[ObRowQueue::QI_LAST_ROW], obj_copy_allocator_))) {
+            LOG_WARN("Failed to compact last row", K(ret));
+          }
         }
-      } else if (latest_row->row_flag_.is_delete() && earliest_row->row_flag_.is_delete() && latest_row->storage_datums_[schema_rowkey_column_cnt_].get_int() == earliest_row->storage_datums_[schema_rowkey_column_cnt_].get_int()) {
-        row_queue_.reuse();
-        if (OB_FAIL(row_queue_.add_empty_row(obj_copy_allocator_))) {
-          LOG_WARN("Failed to add empty row into row queue", K(ret));
-        } else if (OB_FAIL(row_queue_.compact_border_row(&tmp_compaction_row_, true/*last_row*/, nop_pos_[ObRowQueue::QI_LAST_ROW], obj_copy_allocator_))) {
-          LOG_WARN("Failed to compact last row", K(ret));
-        }
-      }
 
-      if (OB_SUCC(ret)) {
-        row_queue_.get_last()->set_last_multi_version_row();
-        if (OB_FAIL(row_queue_.get_next_row(curr_row_))) {
-          LOG_WARN("Failed to get next row from row_queue", K(ret));
+        if (OB_SUCC(ret) && curr_row_->is_last_multi_version_row()) {
+          row_queue_.get_last()->set_last_multi_version_row();
+          if (OB_FAIL(row_queue_.get_next_row(curr_row_))) {
+            LOG_WARN("Failed to get next row from row_queue", K(ret));
+          } else {
+            curr_rowkey_finish = true;
+          }
         }
       }
       break;
@@ -2222,7 +2237,7 @@ int ObPartitionMinorRowMergeIter::try_make_committing_trans_compacted()
       } // end of while
 
       if (OB_SUCC(ret)) {
-        LOG_TRACE("make committing trans compacted", K(ret), K_(is_delete_insert_merge), KPC(curr_row_),
+        LOG_TRACE("make committing trans compacted", K(ret), K_(original_merge_engine_type), KPC(curr_row_),
                     KPC(row_queue_.get_first()), KPC(row_queue_.get_last()), K(row_queue_.count()));
         if (OB_UNLIKELY(!row_queue_.has_next())) { // get row from row_queue
           ret = OB_ERR_UNEXPECTED;
@@ -2249,6 +2264,7 @@ int ObPartitionMinorRowMergeIter::try_make_committing_trans_compacted()
 int ObPartitionMinorRowMergeIter::next()
 {
   int ret = OB_SUCCESS;
+  bool need_recycle = false;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -2290,19 +2306,39 @@ int ObPartitionMinorRowMergeIter::next()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpceted null current row", K(ret), K(*this));
     }
-  } else {
-    bool need_recycle = false;
-    need_recycle = need_recycle_mv_row();
-    if (need_recycle) {
-      if (OB_FAIL(compact_old_row())) {
-        LOG_WARN("Failed to compact_old_row", K(ret));
-      }
-    } else if (OB_FAIL(try_make_committing_trans_compacted())) {
-      LOG_WARN("Failed to make committing trans compacted", K(ret), K(*this));
+  } else if (OB_FAIL(check_need_recycle_mv_row(need_recycle))) {
+    LOG_WARN("Failed to check need recycle mv row", K(ret));
+  } else if (need_recycle) {
+    if (OB_FAIL(compact_old_row())) {
+      LOG_WARN("Failed to compact_old_row", K(ret));
     }
+  } else if (OB_FAIL(try_make_committing_trans_compacted())) {
+    LOG_WARN("Failed to make committing trans compacted", K(ret), KPC(this));
   }
   if (OB_SUCC(ret) && curr_row_ != nullptr) {
-    LOG_DEBUG("ObPartitionMinorRowMergeIter::next", K(ret), K_(rowkey_state), KPC_(curr_row), K(*this));
+    LOG_DEBUG("ObPartitionMinorRowMergeIter::next", K(ret), K_(rowkey_state), KPC_(curr_row), KPC(this));
+  }
+  return ret;
+}
+
+int ObPartitionMinorRowMergeIter::check_need_recycle_mv_row(bool &need_recycle) const
+{
+  int ret = OB_SUCCESS;
+  need_recycle = false;
+  const int64_t base_version = access_context_.trans_version_range_.base_version_;
+  const int64_t multi_version_start = access_context_.trans_version_range_.multi_version_start_;
+  bool is_delete_insert_merge = false;
+  if (nullptr != curr_row_ && !curr_row_->is_uncommitted_row() && !curr_row_->is_last_multi_version_row()) {
+    if (OB_FAIL(storage::check_is_delete_insert_merge(curr_row_->merge_engine_type_, is_delete_insert_merge, decide_merge_by_row_))) {
+      LOG_WARN("Failed to check is delete insert merge", K(ret), KPC(curr_row_), K_(original_merge_engine_type));
+    } else {
+      const int64_t commit_version = -curr_row_->storage_datums_[schema_rowkey_column_cnt_].get_int();
+      if (is_delete_insert_merge && (!is_ha_compeleted_ || base_version <= 0)) {
+        need_recycle = false;
+      } else if (commit_version <= multi_version_start) {
+        need_recycle = true;
+      }
+    }
   }
   return ret;
 }
@@ -2435,23 +2471,6 @@ int64_t ObPartitionMinorRowMergeIter::to_string(char *buf, const int64_t buf_len
     J_OBJ_END();
   }
   return pos;
-}
-
-bool ObPartitionMinorRowMergeIter::need_recycle_mv_row() const
-{
-  bool need_recycle = false;
-  const int64_t base_version = access_context_.trans_version_range_.base_version_;
-  const int64_t multi_version_start = access_context_.trans_version_range_.multi_version_start_;
-  if (nullptr != curr_row_ && !curr_row_->is_uncommitted_row() && !curr_row_->is_last_multi_version_row()) {
-    const int64_t commit_version = -curr_row_->storage_datums_[schema_rowkey_column_cnt_].get_int();
-    if (is_delete_insert_merge_ && (!is_ha_compeleted_ || base_version <= 0)) {
-      need_recycle = false;
-    } else if (commit_version <= multi_version_start) {
-      need_recycle = true;
-    }
-  }
-  LOG_TRACE("need recycle mv row", K(need_recycle), KPC(curr_row_));
-  return need_recycle;
 }
 
 

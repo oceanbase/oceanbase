@@ -19,7 +19,8 @@ class ObBatchDatumRows
 {
 public:
   ObBatchDatumRows()
-    : row_count_(0)
+    : merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_MAX),
+      row_count_(0)
   {
     vectors_.set_tenant_id(MTL_ID());
   }
@@ -28,7 +29,7 @@ public:
 
   OB_INLINE int64_t get_column_count() const { return vectors_.count(); }
 
-  TO_STRING_KV(K_(row_flag), K_(mvcc_row_flag), K_(trans_id), K(vectors_.count()), K_(row_count));
+  TO_STRING_KV(K_(row_flag), K_(mvcc_row_flag), K_(merge_engine_type), K_(trans_id), K(vectors_.count()), K_(row_count));
 
 public:
   // convert vectors_ to datum_row at row idx = idx
@@ -39,6 +40,7 @@ public:
 public:
   ObDmlRowFlag row_flag_;
   ObMultiVersionRowFlag mvcc_row_flag_;
+  ObMergeEngineType merge_engine_type_;
   transaction::ObTransID trans_id_;
   common::ObArray<common::ObIVector *> vectors_;
   int64_t row_count_;

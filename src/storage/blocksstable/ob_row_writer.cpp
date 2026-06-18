@@ -173,7 +173,8 @@ int ObRowWriter::append_row_header(const uint8_t row_flag,
                                    const uint8_t multi_version_flag,
                                    const int64_t trans_id,
                                    const ColumnCnt column_cnt,
-                                   const RowkeyCnt rowkey_cnt)
+                                   const RowkeyCnt rowkey_cnt,
+                                   const ObMergeEngineType merge_engine_type)
 {
   int ret = OB_SUCCESS;
 
@@ -187,8 +188,8 @@ int ObRowWriter::append_row_header(const uint8_t row_flag,
     row_header_->set_rowkey_count(rowkey_cnt);
     row_header_->set_column_count(column_cnt);
     row_header_->clear_header_mask();
-    row_header_->clear_reserved_bits();
     row_header_->set_trans_id(trans_id);
+    row_header_->set_merge_engine_type(merge_engine_type);
     pos_ += sizeof(ObRowHeader);
   }
 
@@ -337,7 +338,8 @@ int ObRowWriter::write(const int64_t rowkey_cnt,
                                        row.mvcc_row_flag_.flag_,
                                        row.trans_id_.get_id(),
                                        row.count_,
-                                       rowkey_cnt))) {
+                                       rowkey_cnt,
+                                       row.merge_engine_type_))) {
     if (OB_BUF_NOT_ENOUGH != ret) {
       LOG_WARN("Fail to write row header", KR(ret), K(row));
     }
@@ -394,6 +396,7 @@ OB_INLINE int ObRowWriter::transform_rowkey_to_datums(const ObStoreRowkey &rowke
 
 int ObRowWriter::write_lock_rowkey(const common::ObStoreRowkey &rowkey,
                                    const ObIArray<ObColDesc> *col_descs,
+                                   const ObMergeEngineType merge_engine_type,
                                    char *&buf,
                                    int64_t &len)
 {
@@ -421,7 +424,8 @@ int ObRowWriter::write_lock_rowkey(const common::ObStoreRowkey &rowkey,
                                            0,
                                            0,
                                            rowkey.get_obj_cnt(),
-                                           rowkey.get_obj_cnt()))) {
+                                           rowkey.get_obj_cnt(),
+                                           merge_engine_type))) {
         if (OB_BUF_NOT_ENOUGH != ret) {
           LOG_WARN("Fail to write row header", KR(ret), K(rowkey));
         }
@@ -938,7 +942,8 @@ int ObRowWriterV0::append_row_header(
     const uint8_t multi_version_flag,
     const int64_t trans_id,
     const int64_t column_cnt,
-    const int64_t rowkey_cnt)
+    const int64_t rowkey_cnt,
+    const ObMergeEngineType merge_engine_type)
 {
   int ret = OB_SUCCESS;
   const int64_t row_header_size = ObRowHeader::get_serialized_size();
@@ -953,9 +958,8 @@ int ObRowWriterV0::append_row_header(
     row_header_->set_column_count(column_cnt);
     row_header_->set_rowkey_count(rowkey_cnt);
     row_header_->clear_header_mask();
-    row_header_->clear_reserved_bits();
     row_header_->set_trans_id(trans_id); // TransID
-
+    row_header_->set_merge_engine_type(merge_engine_type);
     pos_ += row_header_size; // move forward
   }
   return ret;
@@ -976,7 +980,8 @@ int ObRowWriterV0::write(
       row.mvcc_row_flag_.flag_,
       row.trans_id_.get_id(),
       row.count_,
-      rowkey_column_count))) {
+      rowkey_column_count,
+      row.merge_engine_type_))) {
     if (OB_BUF_NOT_ENOUGH != ret) {
       LOG_WARN("row writer fail to append row header", K(ret), K(row), K(buf_size_), K(pos_));
     }
@@ -1006,14 +1011,14 @@ int ObRowWriterV0::alloc_buf_and_init(const bool retry)
   return ret;
 }
 
-int ObRowWriterV0::write_lock_rowkey(const common::ObStoreRowkey &rowkey, char *&buf, int64_t &len)
+int ObRowWriterV0::write_lock_rowkey(const common::ObStoreRowkey &rowkey, const ObMergeEngineType merge_engine_type, char *&buf, int64_t &len)
 {
   int ret = OB_SUCCESS;
   len = 0;
   do {
     if (OB_FAIL(alloc_buf_and_init(OB_BUF_NOT_ENOUGH == ret))) {
       LOG_WARN("row writer fail to alloc and init", K(ret));
-    } else if (OB_FAIL(append_row_header(ObDmlFlag::DF_LOCK, 0, 0, rowkey.get_obj_cnt(), rowkey.get_obj_cnt()))) {
+    } else if (OB_FAIL(append_row_header(ObDmlFlag::DF_LOCK, 0, 0, rowkey.get_obj_cnt(), rowkey.get_obj_cnt(), merge_engine_type))) {
       LOG_WARN("row writer fail to append row header", K(ret));
     } else {
       update_idx_array_ = nullptr;
@@ -1048,7 +1053,8 @@ int ObRowWriterV0::write(const int64_t rowkey_column_cnt, const ObDatumRow &datu
             datum_row.mvcc_row_flag_.flag_,
             datum_row.trans_id_.get_id(),
             datum_row.count_,
-            rowkey_column_cnt))) {
+            rowkey_column_cnt,
+            datum_row.merge_engine_type_))) {
       if (OB_BUF_NOT_ENOUGH != ret) {
         LOG_WARN("row writer fail to append row header", K(ret), K(datum_row));
       }
@@ -1145,7 +1151,8 @@ int ObRowWriterV0::inner_write_row(
           datum_row.mvcc_row_flag_.flag_,
           datum_row.trans_id_.get_id(),
           datum_row.count_,
-          rowkey_column_count))) {
+          rowkey_column_count,
+          datum_row.merge_engine_type_))) {
     if (OB_BUF_NOT_ENOUGH != ret) {
       LOG_WARN("row writer fail to append row header", K(ret), K(datum_row));
     }

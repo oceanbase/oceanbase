@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_multiple_scan_merge.h"
+#include "ob_tablet_read_tables.h"
 
 namespace oceanbase
 {
@@ -54,11 +55,11 @@ int ObMultipleScanMerge::open(const ObDatumRange &range)
 int ObMultipleScanMerge::init(
   ObTableAccessParam &param,
   ObTableAccessContext &context,
-  ObGetTableParam &get_table_param)
+  ObTabletReadTables &tablet_read_tables)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObMultipleMerge::init(param, context, get_table_param))) {
-    STORAGE_LOG(WARN, "failed to init ObMultipleMerge", K(ret), K(param), K(context), K(get_table_param));
+  if (OB_FAIL(ObMultipleMerge::init(param, context, tablet_read_tables))) {
+    STORAGE_LOG(WARN, "failed to init ObMultipleMerge", K(ret), K(param), K(context), K(tablet_read_tables));
   } else {
     const ObITableReadInfo *read_info = nullptr;
     if (OB_ISNULL(read_info = access_param_->iter_param_.get_read_info())) {
@@ -76,14 +77,14 @@ int ObMultipleScanMerge::init(
 int ObMultipleScanMerge::switch_table(
     ObTableAccessParam &param,
     ObTableAccessContext &context,
-    ObGetTableParam &get_table_param)
+    ObTabletReadTables &tablet_read_tables)
 {
   int ret = OB_SUCCESS;
   const ObITableReadInfo *read_info = nullptr;
   if (OB_ISNULL(read_info = param.iter_param_.get_read_info())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Unexpected null read info", K(ret));
-  } else if (OB_FAIL(ObMultipleMerge::switch_table(param, context, get_table_param))) {
+  } else if (OB_FAIL(ObMultipleMerge::switch_table(param, context, tablet_read_tables))) {
     LOG_WARN("Failed to switch table for ObMultipleMerge", K(ret));
   } else if (OB_FAIL(tree_cmp_.init(access_param_->iter_param_.get_schema_rowkey_count(),
                                     read_info->get_datum_utils(),

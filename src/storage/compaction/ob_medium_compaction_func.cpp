@@ -822,127 +822,121 @@ int ObMediumCompactionScheduleFunc::init_parallel_range_and_schema_changed_and_c
   const int64_t tablet_size = medium_info.storage_schema_.get_tablet_size();
   const bool is_column_store_medium_info = !medium_info.storage_schema_.is_row_store();
   const ObSSTable *first_sstable = static_cast<const ObSSTable *>(result.handle_.get_table(0));
+  ObTablet *tablet = tablet_handle_.get_obj();
 
-  ObTablet *tablet = nullptr;
-  if (OB_UNLIKELY(!tablet_handle_.is_valid())) {
+  if (OB_UNLIKELY(!tablet_handle_.is_valid() || nullptr == first_sstable)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid tablet_handle", K(ret), K(tablet_handle_));
-  } else if (FALSE_IT(tablet = tablet_handle_.get_obj())) {
-  } else if (OB_ISNULL(first_sstable)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sstable is unexpected null", K(ret), K(result));
-  } else {
-    const int64_t macro_block_cnt = first_sstable->get_data_macro_block_count();
-    int64_t inc_row_cnt = 0;
-    int64_t inc_macro_cnt = 0;
-    for (int64_t i = 1; OB_SUCC(ret) && i < result.handle_.get_count(); ++i) { // skip first sstable (major) for incremental row cnt
-      inc_row_cnt += static_cast<const ObSSTable*>(result.handle_.get_table(i))->get_row_count();
-      inc_macro_cnt += static_cast<const ObSSTable*>(result.handle_.get_table(i))->get_data_macro_block_count();
+    LOG_WARN("get unexpected invalid tablet or result", K(ret), K(tablet_handle_), K(first_sstable));
+  }
+
+  int64_t inc_row_cnt = 0;
+  int64_t inc_macro_cnt = 0;
+  for (int64_t i = 1; OB_SUCC(ret) && i < result.handle_.get_count(); ++i) {
+    const ObSSTable *inc_sstable = static_cast<const ObSSTable*>(result.handle_.get_table(i));
+    inc_row_cnt += inc_sstable->get_row_count();
+    inc_macro_cnt += inc_sstable->get_data_macro_block_count();
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if ((first_sstable->is_empty() && inc_row_cnt > SCHEDULE_RANGE_ROW_COUNT_THRESHOLD)
+          || (first_sstable->get_row_count() >= SCHEDULE_RANGE_ROW_COUNT_THRESHOLD &&
+              inc_row_cnt >= first_sstable->get_row_count() * SCHEDULE_RANGE_INC_ROW_COUNT_PERCENRAGE_THRESHOLD)
+          || (is_column_store_medium_info && !first_sstable->is_co_sstable())) {
+    const int64_t estimate_macro_cnt = first_sstable->get_data_macro_block_count() + inc_macro_cnt / 5;
+    if (OB_FAIL(ObParallelMergeCtx::get_concurrent_cnt(tablet_size, estimate_macro_cnt, expected_task_count))) {
+      STORAGE_LOG(WARN, "failed to get concurrent cnt", K(ret), K(tablet_size), K(expected_task_count), KPC(first_sstable));
     }
-    if (OB_FAIL(ret)) {
-    } else if ((0 == macro_block_cnt && inc_row_cnt > SCHEDULE_RANGE_ROW_COUNT_THRESHOLD)
-        || (first_sstable->get_row_count() >= SCHEDULE_RANGE_ROW_COUNT_THRESHOLD
-            && inc_row_cnt >= first_sstable->get_row_count() * SCHEDULE_RANGE_INC_ROW_COUNT_PERCENRAGE_THRESHOLD)
-        || (is_column_store_medium_info && !first_sstable->is_co_sstable())) {
-      const int64_t estimate_macro_cnt = macro_block_cnt + inc_macro_cnt / 5;
-      if (OB_FAIL(ObParallelMergeCtx::get_concurrent_cnt(tablet_size, estimate_macro_cnt, expected_task_count))) {
-        STORAGE_LOG(WARN, "failed to get concurrent cnt", K(ret), K(tablet_size), K(expected_task_count),
-          KPC(first_sstable));
-      }
-    } else if (inc_row_cnt == 0) {
-      // there is no reason to do parallel merge for tablet without inc data
-      expected_task_count = 1;
-    }
+  } else if (inc_row_cnt == 0) {
+    // there is no reason to do parallel merge for tablet without inc data
+    expected_task_count = 1;
+  }
 
 #ifdef ERRSIM
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ret = OB_E(EventTable::EN_COMPACTION_MEDIUM_INIT_PARALLEL_RANGE) OB_SUCCESS)) {
-      expected_task_count = 2;
-      LOG_INFO("ERRSIM EN_COMPACTION_MEDIUM_INIT_PARALLEL_RANGE", KPC(this), K(expected_task_count));
-      ret = OB_SUCCESS;
-    } else if (OB_FAIL(ret = OB_E(EventTable::EN_COMPACTION_MEDIUM_INIT_LARGE_PARALLEL_RANGE) OB_SUCCESS)) {
-      expected_task_count = 64;
-      LOG_INFO("ERRSIM EN_COMPACTION_MEDIUM_INIT_LARGE_PARALLEL_RANGE", KPC(this), K(expected_task_count));
-      ret = OB_SUCCESS;
-    } else if (OB_UNLIKELY(EN_COMPACTION_SET_MAJOR_PARALLEL_CNT)) {
-      if (macro_block_cnt >= 50) {
-        expected_task_count = -EN_COMPACTION_SET_MAJOR_PARALLEL_CNT;
-        LOG_INFO("ERRSIM EN_COMPACTION_SET_MAJOR_PARALLEL_CNT", K(expected_task_count));
-        SERVER_EVENT_SYNC_ADD("merge_errsim", "set major parallel cnt", "expected_task_count", expected_task_count);
-      }
-      ret = OB_SUCCESS;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ret = OB_E(EventTable::EN_COMPACTION_MEDIUM_INIT_PARALLEL_RANGE) OB_SUCCESS)) {
+    expected_task_count = 2;
+    LOG_INFO("ERRSIM EN_COMPACTION_MEDIUM_INIT_PARALLEL_RANGE", KPC(this), K(expected_task_count));
+    ret = OB_SUCCESS;
+  } else if (OB_FAIL(ret = OB_E(EventTable::EN_COMPACTION_MEDIUM_INIT_LARGE_PARALLEL_RANGE) OB_SUCCESS)) {
+    expected_task_count = 64;
+    LOG_INFO("ERRSIM EN_COMPACTION_MEDIUM_INIT_LARGE_PARALLEL_RANGE", KPC(this), K(expected_task_count));
+    ret = OB_SUCCESS;
+  } else if (OB_UNLIKELY(EN_COMPACTION_SET_MAJOR_PARALLEL_CNT)) {
+    if (first_sstable->get_data_macro_block_count() >= 50) {
+      expected_task_count = -EN_COMPACTION_SET_MAJOR_PARALLEL_CNT;
+      LOG_INFO("ERRSIM EN_COMPACTION_SET_MAJOR_PARALLEL_CNT", K(expected_task_count));
+      SERVER_EVENT_SYNC_ADD("merge_errsim", "set major parallel cnt", "expected_task_count", expected_task_count);
     }
+    ret = OB_SUCCESS;
   }
 #endif
-    // determine co major type && check if schema changed for sn
-    if (OB_FAIL(ret)) {
-    } else if (is_column_store_medium_info && OB_FAIL(init_co_major_merge_type(result, medium_info))) {
-      STORAGE_LOG(WARN, "failed to init co major merge type", K(ret), K(tablet));
-    } else if (OB_FAIL(check_if_schema_changed(medium_info))) {
-      STORAGE_LOG(WARN, "failed to init schema changed", KR(ret), K(first_sstable));
-    }
 
-    if (OB_FAIL(ret)) {
-    } else if (expected_task_count < 1) {
-      medium_info.clear_parallel_range();
-    } else if (!medium_info.is_inc_major_compaction()) { // only collect parallel merge info for major/medium merge
-      ObTableStoreIterator table_iter;
-      ObArrayArray<ObStoreRange> range_array;
-      ObPartitionMultiRangeSpliter range_spliter;
-      ObSEArray<ObStoreRange, 1> input_range_array;
-      ObStoreRange range;
-      range.set_start_key(ObStoreRowkey::MIN_STORE_ROWKEY);
-      range.set_end_key(ObStoreRowkey::MAX_STORE_ROWKEY);
-      lib::CompatModeGuard guard(tablet->get_tablet_meta().compat_mode_);
-      if (OB_FAIL(prepare_iter(result, table_iter))) {
-        LOG_WARN("failed to get table iter", K(ret), K(range_array));
-      } else if (OB_FAIL(input_range_array.push_back(range))) {
-        LOG_WARN("failed to push back range", K(ret), K(range));
-      } else {
-        bool recalc_count_flag = false;
-        do {
-          if (OB_FAIL(range_spliter.get_split_multi_ranges(
-                  input_range_array,
-                  expected_task_count,
-                  tablet->get_rowkey_read_info(),
-                  table_iter,
-                  allocator_,
-                  range_array))) {
-            LOG_WARN("failed to get split multi range", K(ret), K(range_array));
-          } else if (OB_FAIL(medium_info.gene_parallel_info(range_array))) {
-            LOG_WARN("failed to get parallel ranges", K(ret), K(range_array));
-          } else {
-            int64_t buf_len = ObTabletMediumCompactionInfoRecorder::cal_buf_len(tablet->get_tablet_meta().tablet_id_, medium_info, nullptr/*log_header*/);
+  if (FAILEDx(init_co_major_merge_type(result, medium_info))) {
+    STORAGE_LOG(WARN, "failed to init co major merge type", K(ret), K(tablet));
+  } else if (OB_FAIL(check_if_schema_changed(medium_info))) {
+    STORAGE_LOG(WARN, "failed to init schema changed", KR(ret), K(first_sstable));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (expected_task_count < 1) {
+    medium_info.clear_parallel_range();
+  } else if (!medium_info.is_inc_major_compaction()) { // only collect parallel merge info for major/medium merge
+    ObTableStoreIterator table_iter;
+    ObArrayArray<ObStoreRange> range_array;
+    ObPartitionMultiRangeSpliter range_spliter;
+    ObSEArray<ObStoreRange, 1> input_range_array;
+    ObStoreRange range;
+    range.set_start_key(ObStoreRowkey::MIN_STORE_ROWKEY);
+    range.set_end_key(ObStoreRowkey::MAX_STORE_ROWKEY);
+    lib::CompatModeGuard guard(tablet->get_tablet_meta().compat_mode_);
+    if (OB_FAIL(prepare_iter(result, table_iter))) {
+      LOG_WARN("failed to get table iter", K(ret), K(range_array));
+    } else if (OB_FAIL(input_range_array.push_back(range))) {
+      LOG_WARN("failed to push back range", K(ret), K(range));
+    } else {
+      bool recalc_count_flag = false;
+      do {
+        if (OB_FAIL(range_spliter.get_split_multi_ranges(
+                input_range_array,
+                expected_task_count,
+                tablet->get_rowkey_read_info(),
+                table_iter,
+                allocator_,
+                range_array))) {
+          LOG_WARN("failed to get split multi range", K(ret), K(range_array));
+        } else if (OB_FAIL(medium_info.gene_parallel_info(range_array))) {
+          LOG_WARN("failed to get parallel ranges", K(ret), K(range_array));
+        } else {
+          int64_t buf_len = ObTabletMediumCompactionInfoRecorder::cal_buf_len(tablet->get_tablet_meta().tablet_id_, medium_info, nullptr/*log_header*/);
 #ifdef ERRSIM
-            ret = OB_E(EventTable::EN_COMPACTION_MEDIUM_INIT_LARGE_PARALLEL_RANGE) ret;
-            if (OB_FAIL(ret)) {
-              ret = OB_SUCCESS;
-              if (!recalc_count_flag) {
-                buf_len = common::OB_MAX_LOG_ALLOWED_SIZE;
-              }
+          ret = OB_E(EventTable::EN_COMPACTION_MEDIUM_INIT_LARGE_PARALLEL_RANGE) ret;
+          if (OB_FAIL(ret)) {
+            ret = OB_SUCCESS;
+            if (!recalc_count_flag) {
+              buf_len = common::OB_MAX_LOG_ALLOWED_SIZE;
             }
-#endif
-            if (buf_len < common::OB_MAX_LOG_ALLOWED_SIZE) {
-              LOG_TRACE("success to split ranges", KR(ret), K(buf_len), K(medium_info.parallel_merge_info_), K(range_array), K(medium_info.parallel_merge_info_.get_serialize_size()));
-              break;
-            } else if (recalc_count_flag) {
-              expected_task_count -= MAX(1, expected_task_count / 5);
-            } else {
-              recalc_count_flag = true;
-              // get parallel info serialize size
-              const int64_t parallel_size = medium_info.parallel_merge_info_.get_serialize_size();
-              const double avg_range_size = (parallel_size + 0.0) / range_array.count();
-              const int64_t rest_info_size = buf_len - parallel_size;
-              expected_task_count = MAX(1, (common::OB_MAX_LOG_ALLOWED_SIZE - 1 - rest_info_size) / avg_range_size);
-              expected_task_count = MIN(expected_task_count, MAX_MERGE_THREAD);
-              LOG_INFO("success to recalc ranges", KR(ret), K(buf_len), K(expected_task_count), K(avg_range_size), K(rest_info_size));
-            }
-            medium_info.clear_parallel_range();
-            table_iter.resume();
-            range_array.reuse();
           }
-        } while (OB_SUCC(ret) && !medium_info.contain_parallel_range_ && expected_task_count > 1);
-      }
+#endif
+          if (buf_len < common::OB_MAX_LOG_ALLOWED_SIZE) {
+            LOG_TRACE("success to split ranges", KR(ret), K(buf_len), K(medium_info.parallel_merge_info_), K(range_array), K(medium_info.parallel_merge_info_.get_serialize_size()));
+            break;
+          } else if (recalc_count_flag) {
+            expected_task_count -= MAX(1, expected_task_count / 5);
+          } else {
+            recalc_count_flag = true;
+            // get parallel info serialize size
+            const int64_t parallel_size = medium_info.parallel_merge_info_.get_serialize_size();
+            const double avg_range_size = (parallel_size + 0.0) / range_array.count();
+            const int64_t rest_info_size = buf_len - parallel_size;
+            expected_task_count = MAX(1, (common::OB_MAX_LOG_ALLOWED_SIZE - 1 - rest_info_size) / avg_range_size);
+            expected_task_count = MIN(expected_task_count, MAX_MERGE_THREAD);
+            LOG_INFO("success to recalc ranges", KR(ret), K(buf_len), K(expected_task_count), K(avg_range_size), K(rest_info_size));
+          }
+          medium_info.clear_parallel_range();
+          table_iter.resume();
+          range_array.reuse();
+        }
+      } while (OB_SUCC(ret) && !medium_info.contain_parallel_range_ && expected_task_count > 1);
     }
   }
   return ret;
@@ -953,40 +947,101 @@ int ObMediumCompactionScheduleFunc::init_co_major_merge_type(
     ObMediumCompactionInfo &medium_info)
 {
   int ret = OB_SUCCESS;
-  ObSSTable *first_sstable = static_cast<ObSSTable *>(result.handle_.get_table(0));
-  ObCOSSTableV2 *co_sstable = nullptr;
-  ObTabletTableIterator iter;
-  ObSEArray<ObITable*, OB_DEFAULT_SE_ARRAY_COUNT> tables;
-  ObCOMajorMergeStrategy merge_strategy;
+  const ObStorageSchema &new_schema = medium_info.storage_schema_;
+  const ObSSTable *first_sstable = static_cast<const ObSSTable *>(result.handle_.get_table(0));
+  const ObCOSSTableV2 *base_co_sstable = nullptr;
   if (OB_ISNULL(first_sstable)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("first sstable in tables handle is null or not co sstable", K(ret), K(result.handle_));
-  } else if (ObAdaptiveMergePolicy::REBUILD_COLUMN_GROUP == merge_reason_ || !first_sstable->is_co_sstable()) {
-    // REBUILD_COLUMN_GROUP is requested by user or implicitly required by delayed column group transform
-    // only use row store to build column store
-    merge_strategy.set(false/*build_all_cg_only*/, true/*only_use_row_store*/);
-    LOG_INFO("use row store to build column store", K(ret), K(merge_reason_), K(result.handle_), KPC(first_sstable));
-  } else if (FALSE_IT(co_sstable = static_cast<ObCOSSTableV2 *>(first_sstable))) {
-  } else if (OB_FAIL(iter.set_tablet_handle(tablet_handle_))) {
-    LOG_WARN("failed to set tablet handle", K(ret), K(iter), K(tablet_handle_));
-  } else if (OB_FAIL(iter.get_read_tables_from_tablet(medium_info.medium_snapshot_, false/*allow_no_ready_read*/, false/*major_sstable_only*/, false/*need_split_src_table*/, false/*need_split_dst_table*/, tables))) {
-    LOG_WARN("failed to get read tables for estimate row cnt", K(ret), K(medium_info), K(iter));
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("first sstable is null", K(ret), K(result));
   } else {
-    // Merge strategy will be decided later based on current status and target schema
+    base_co_sstable = first_sstable->is_co_sstable()
+                    ? static_cast<const ObCOSSTableV2 *>(first_sstable)
+                    : nullptr;
+  }
+
+  bool is_each_cg_to_row_store = false;
+  bool is_all_cg_to_row_store = false;
+  bool is_all_cg_to_each_cg = false;
+  bool is_each_cg_to_all_cg = false;
+  bool is_row_to_col_to_row = false;
+  if (OB_FAIL(ret)) {
+  } else if (nullptr == base_co_sstable) {
+    // base is row-store major. If any INC is column-store, this is the row → col → row scenario, should schedule CO DAG
+    if (new_schema.is_row_store()) {
+      for (int64_t i = 1; OB_SUCC(ret) && !is_row_to_col_to_row && i < result.handle_.get_count(); ++i) {
+        const ObITable *cur_table = result.handle_.get_table(i);
+        if (OB_ISNULL(cur_table)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("cur sstable is unexpected null", K(ret), K(i), K(result));
+        } else if (cur_table->is_column_store_sstable()) {
+          is_row_to_col_to_row = true;
+        }
+      }
+    }
+  } else if (new_schema.is_row_store()) {
+    // old major is column store, new schema is row store
+    is_each_cg_to_row_store = base_co_sstable->is_rowkey_cg_base();
+    is_all_cg_to_row_store = base_co_sstable->is_all_cg_base();
+  } else if (base_co_sstable->is_rowkey_cg_base() && new_schema.has_all_column_group()) {
+    // rowkey cg + each cg --> all cg + each cg + hidden rowkey cg
+    is_each_cg_to_all_cg = true;
+  } else if (base_co_sstable->is_all_cg_base()
+          && base_co_sstable->has_hidden_rowkey_cg()
+          && !new_schema.has_all_column_group()) {
+    is_all_cg_to_each_cg = true; // all cg + each cg + hidden rowekey cg --> rowkey cg + each cg
+  }
+
+  ObCOMajorMergeStrategy merge_strategy;
+  if (OB_FAIL(ret)) {
+  } else if (new_schema.is_row_store()) {
+    if (is_each_cg_to_row_store) {
+      merge_strategy.set(true/*build_all_cg_only*/, false/*only_use_row_store*/);
+      medium_info.set_co_major_merge_strategy(merge_strategy);
+      LOG_INFO("[ROW_COL_SWITCH] set merge strategy for each cg switch to row store", K(ret), K(merge_strategy), KPC(first_sstable));
+    } else if (is_all_cg_to_row_store) {
+      merge_strategy.set(true/*build_all_cg_only*/, true/*only_use_row_store*/);
+      medium_info.set_co_major_merge_strategy(merge_strategy);
+      LOG_INFO("[ROW_COL_SWITCH] set merge strategy for all cg switch to row store", K(ret), K(merge_strategy), KPC(first_sstable));
+    } else if (is_row_to_col_to_row) {
+      merge_strategy.set(true/*build_all_cg_only*/, false/*only_use_row_store*/);
+      medium_info.set_co_major_merge_strategy(merge_strategy);
+      LOG_INFO("[ROW_COL_SWITCH] set merge strategy for row-col-row switch", K(ret), K(merge_strategy), K(new_schema), KPC(first_sstable));
+    } else {
+      // row store to row store, do nothing
+    }
+  } else if (is_each_cg_to_all_cg || is_all_cg_to_each_cg) {
+    merge_strategy.set(false/*build_all_cg_only*/, false/*only_use_row_store*/);
+    medium_info.set_co_major_merge_strategy(merge_strategy);
+    LOG_INFO("[ROW_COL_SWITCH] set merge strategy for the switch between all cg and each cg",
+             K(ret), K(merge_strategy), K(new_schema), KPC(first_sstable));
+  } else if (ObAdaptiveMergePolicy::REBUILD_COLUMN_GROUP == merge_reason_ || nullptr == base_co_sstable) {
+    // REBUILD_COLUMN_GROUP is requested by user or implicitly required by delayed column group transform
+    // row store switch to column store, only use row store to build column store
+    merge_strategy.set(false/*build_all_cg_only*/, true/*only_use_row_store*/);
+    medium_info.set_co_major_merge_strategy(merge_strategy);
+    LOG_INFO("use row store to build column store", K(ret), K(merge_reason_), K(base_co_sstable));
+  } else {
+    ObTabletTableIterator iter;
+    ObSEArray<ObITable*, OB_DEFAULT_SE_ARRAY_COUNT> tables;
     ObMajorSSTableStatus current_status = MAJOR_SSTABLE_STATUS_INVALID;
-    if (OB_FAIL(ObCOMajorMergePolicy::decide_major_sstable_status(*co_sstable, current_status))) {
+
+    if (OB_FAIL(iter.set_tablet_handle(tablet_handle_))) {
+      LOG_WARN("failed to set tablet handle", K(ret), K(iter), K(tablet_handle_));
+    } else if (OB_FAIL(iter.get_read_tables_from_tablet(medium_info.medium_snapshot_,
+                                                        false/*allow_no_ready_read*/,
+                                                        false/*major_sstable_only*/,
+                                                        false/*need_split_src_table*/,
+                                                        false/*need_split_dst_table*/,
+                                                        tables))) {
+      LOG_WARN("failed to get read tables for estimate row cnt", K(ret), K(medium_info), K(iter));
+    } else if (OB_FAIL(ObCOMajorMergePolicy::decide_major_sstable_status(*base_co_sstable, current_status))) {
       LOG_WARN("failed to decide major sstable status", K(ret));
     } else if (OB_FAIL(ObCOMajorMergePolicy::decide_merge_strategy(current_status, medium_info.storage_schema_, tables, merge_strategy))) {
       LOG_WARN("failed to decide merge strategy", K(ret));
+    } else {
+      medium_info.set_co_major_merge_strategy(merge_strategy);
+      LOG_INFO("success to decide merge strategy", K(ret), K(merge_reason_), K(merge_strategy), K(medium_info.co_major_merge_type_));
     }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_UNLIKELY(!merge_strategy.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid merge strategy", K(ret), K(merge_strategy));
-  } else {
-    medium_info.set_co_major_merge_strategy(merge_strategy);
-    LOG_INFO("success to decide merge strategy", K(ret), K(merge_reason_), K(merge_strategy), K(medium_info.co_major_merge_type_));
   }
   return ret;
 }

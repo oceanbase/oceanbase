@@ -81,11 +81,16 @@ int ObSSTableWrapper::get_loaded_column_store_sstable(ObSSTable *&table)
     LOG_WARN("failed to get co meta handle", K(ret), KPC(meta_sstable), KPC(sstable_));
   } else {
     const ObSSTableArray &cg_sstables = co_meta_handle.get_sstable_meta().get_cg_sstables();
+    const ObSSTableArray &hidden_cg_sstable = co_meta_handle.get_sstable_meta().get_hidden_rowkey_sstable();
     for (int64_t idx = 0; OB_SUCC(ret) && idx < cg_sstables.count(); ++idx) {
       if (sstable_->get_key() == cg_sstables[idx]->get_key()) {
         table = cg_sstables[idx];
         break;
       }
+    }
+    if (OB_FAIL(ret) || hidden_cg_sstable.empty()) {
+    } else if (sstable_->get_key() == hidden_cg_sstable[0]->get_key()) {
+      table = hidden_cg_sstable[0];
     }
   }
   return ret;
@@ -168,7 +173,7 @@ int ObCOSSTableMeta::serialize(char *buf, const int64_t buf_len, int64_t &pos) c
         data_checksum_,
         column_group_cnt_,
         full_column_cnt_);
-    }
+  }
   return ret;
 }
 
@@ -291,6 +296,8 @@ int ObCOSSTableV2::fill_cg_sstables(
   } else if (OB_FAIL(build_cs_meta())) {
     LOG_WARN("failed to build cs meta", K(ret), KPC(this));
   } else {
+    // hidden_cg_sstable_ count flips from 0 to 1 here; refresh the cached bit.
+    meta_cache_.has_hidden_rowkey_cg_ = meta_->has_hidden_rowkey_cg();
     valid_for_cs_reading_ = true;
     FLOG_INFO("success to init co sstable", K(ret), K_(cs_meta), KPC(this)); // tmp debug code
   }
@@ -311,6 +318,7 @@ int ObCOSSTableV2::set_upper_trans_version(
     LOG_WARN("co sstable must be loaded to update cg upper trans version", K(ret), KPC(this));
   } else {
     const ObSSTableArray &cg_sstables = meta_->get_cg_sstables();
+    const ObSSTableArray &hidden_cg_sstable = meta_->get_hidden_rowkey_sstable();
     for (int64_t i = 0; OB_SUCC(ret) && i < cg_sstables.count(); ++i) {
       ObSSTable *cg_sstable = cg_sstables[i];
       if (OB_ISNULL(cg_sstable)) {
@@ -319,6 +327,13 @@ int ObCOSSTableV2::set_upper_trans_version(
       } else if (OB_FAIL(cg_sstable->set_upper_trans_version(allocator, upper_trans_version))) {
         LOG_WARN("failed to set upper trans version for cg sstable", K(ret), K(i), KPC(cg_sstable));
       }
+    }
+    if (OB_FAIL(ret) || hidden_cg_sstable.empty()) {
+    } else if (OB_ISNULL(hidden_cg_sstable[0])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("hidden cg sstable is null", K(ret), K(hidden_cg_sstable));
+    } else if (OB_FAIL(hidden_cg_sstable[0]->set_upper_trans_version(allocator, upper_trans_version))) {
+      LOG_WARN("failed to set upper trans version for hidden cg sstable", K(ret), KPC(hidden_cg_sstable[0]));
     }
   }
   return ret;
@@ -362,11 +377,18 @@ int ObCOSSTableV2::build_cs_meta()
     LOG_WARN("co table is unexpected not loaded", K(ret), KPC(this));
   } else {
     const ObSSTableArray &cg_sstables = meta_->get_cg_sstables();
-    const int64_t cg_table_cnt = cg_sstables.count() + 1/*base_cg_table*/;
-    cs_meta_.column_group_cnt_ = cg_table_cnt;
+    const ObSSTableArray &hidden_cg_sstable = meta_->get_hidden_rowkey_sstable();
+    const int64_t normal_cg_table_cnt = cg_sstables.count() + 1/*base_cg_table*/;
+    const int64_t hidden_cg_table_cnt = hidden_cg_sstable.count();
+    cs_meta_.column_group_cnt_ = normal_cg_table_cnt + hidden_cg_table_cnt;
 
-    for (int64_t idx = 0; OB_SUCC(ret) && idx < cg_table_cnt; ++idx) {
-      ObSSTable *cg_sstable = (cg_table_cnt - 1 == idx) ? this : cg_sstables[idx];
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < cs_meta_.column_group_cnt_; ++idx) {
+      ObSSTable *cg_sstable = nullptr;
+      if (idx < normal_cg_table_cnt) {
+        cg_sstable = (normal_cg_table_cnt - 1 == idx) ? this : cg_sstables[idx];
+      } else {
+        cg_sstable = hidden_cg_sstable[0];
+      }
       ObSSTableMetaHandle cg_meta_handle;
       if (OB_ISNULL(cg_sstable)) {
         ret = OB_ERR_UNEXPECTED;
@@ -398,6 +420,19 @@ int ObCOSSTableV2::build_cs_meta()
     }
   }
   return ret;
+}
+
+bool ObCOSSTableV2::has_hidden_rowkey_cg() const
+{
+  // empty co placeholder never has hidden rowkey cg
+  return !is_cgs_empty_co_ && meta_cache_.has_hidden_rowkey_cg_;
+}
+
+int64_t ObCOSSTableV2::get_column_group_count(const bool include_hidden_cg) const
+{
+  return (include_hidden_cg || is_cgs_empty_co_ || !meta_cache_.has_hidden_rowkey_cg_)
+       ? cs_meta_.column_group_cnt_
+       : cs_meta_.column_group_cnt_ - 1;
 }
 
 int64_t ObCOSSTableV2::get_serialize_size(const uint64_t data_version) const
@@ -559,11 +594,12 @@ int ObCOSSTableV2::deep_copy(
   ObCOSSTableV2 *new_co_table = nullptr;
   ObIStorageMetaObj *meta_obj = nullptr;
   ObSSTableArray &cg_sstables = meta_->get_cg_sstables();
+  const ObSSTableArray &hidden_cg_sstable = meta_->get_hidden_rowkey_sstable();
 
-  if (OB_UNLIKELY(!valid_for_cs_reading_ || !cg_sstables.is_valid())) {
+  if (OB_UNLIKELY(!valid_for_cs_reading_ || !cg_sstables.is_valid() || !hidden_cg_sstable.is_valid())) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("this co sstable can't set cg table addr", K(ret), K_(valid_for_cs_reading), K(cg_sstables));
-  } else if (OB_UNLIKELY(cg_addrs.count() != cg_sstables.count())) {
+  } else if (OB_UNLIKELY(cg_addrs.count() != cg_sstables.count() + hidden_cg_sstable.count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid arguments", K(ret), K(cg_addrs.count()), K(cg_sstables));
   } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(deep_copy_size)))) {
@@ -586,6 +622,19 @@ int ObCOSSTableV2::deep_copy(
         LOG_WARN("failed to set cg addr", K(ret));
       }
     }
+    ObSSTableArray &new_hidden_cg = new_co_table->meta_->get_hidden_rowkey_sstable();
+    if (OB_FAIL(ret)) {
+    } else if (new_hidden_cg.empty()) {
+      if (OB_UNLIKELY(cg_addrs.count() > cg_sstables.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected empty hidden cg sstable", K(ret), K(new_hidden_cg), K(cg_addrs), K(cg_sstables));
+      }
+    } else if (OB_UNLIKELY(nullptr == new_hidden_cg[0] || cg_addrs.count() == cg_sstables.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected hidden cg sstable", K(ret), K(new_hidden_cg), K(cg_addrs), K(cg_sstables));
+    } else if (OB_FAIL(new_hidden_cg[0]->set_addr(cg_addrs.at(cg_sstables.count())))) {
+      LOG_WARN("failed to set cg addr", K(ret));
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -600,8 +649,10 @@ int ObCOSSTableV2::fetch_cg_sstable(
 {
   int ret = OB_SUCCESS;
   cg_wrapper.reset();
+  const int64_t normal_cg_cnt = get_column_group_count(false/*include hidden cg*/);
+  const uint32_t real_cg_idx = (cg_idx < normal_cg_cnt || cg_idx == HIDDEN_ROWKEY_COLUMN_GROUP_IDX)
+                             ? cg_idx : key_.column_group_idx_;
 
-  uint32_t real_cg_idx = cg_idx < cs_meta_.column_group_cnt_ ? cg_idx : key_.column_group_idx_;
   if (OB_UNLIKELY(is_cgs_empty_co_ && real_cg_idx != key_.get_column_group_id())) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("co sstable is empty, cannot fetch cg sstable", K(ret), K(cg_idx), K(real_cg_idx), KPC(this));
@@ -631,7 +682,8 @@ int ObCOSSTableV2::get_cg_sstable(
   if (OB_UNLIKELY(!is_cs_valid())) {
     ret = OB_NOT_INIT;
     LOG_WARN("co sstable has not inited", K(ret), KPC(this));
-  } else if (cg_idx >= cs_meta_.column_group_cnt_) {
+  } else if (cg_idx >= get_column_group_count(false/*include hidden cg*/)
+          && HIDDEN_ROWKEY_COLUMN_GROUP_IDX != cg_idx) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid arguments", K(ret), K(cg_idx), K(cs_meta_));
   } else if (OB_FAIL(get_meta(co_meta_handle))) {
@@ -641,6 +693,14 @@ int ObCOSSTableV2::get_cg_sstable(
   } else if (OB_UNLIKELY(is_cgs_empty_co_)) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("co sstable is all_cg only, cannot fetch normal cg sstable", K(ret), K(cg_idx), KPC(this));
+  } else if (cg_idx == HIDDEN_ROWKEY_COLUMN_GROUP_IDX) {
+    const ObSSTableArray &hidden_cg_sstable_wrapper = co_meta_handle.get_sstable_meta().get_hidden_rowkey_sstable();
+    if (OB_UNLIKELY(hidden_cg_sstable_wrapper.count() != 1 || nullptr == hidden_cg_sstable_wrapper[0])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected hidden cg sstable wrapper", K(ret), K(hidden_cg_sstable_wrapper));
+    } else {
+      cg_wrapper.sstable_ = hidden_cg_sstable_wrapper[0];
+    }
   } else {
     const ObSSTableArray &cg_sstables = co_meta_handle.get_sstable_meta().get_cg_sstables();
     cg_wrapper.sstable_ = cg_idx < key_.column_group_idx_
@@ -674,7 +734,7 @@ int ObCOSSTableV2::get_cg_sstable(
 /*
  * Returning ObITable* is no longer safe due to the load demand of CG sstable.
  */
-int ObCOSSTableV2::get_all_tables(common::ObIArray<ObSSTableWrapper> &table_wrappers) const
+int ObCOSSTableV2::get_all_tables(common::ObIArray<ObSSTableWrapper> &table_wrappers, const bool include_hiden_cg) const
 {
   int ret = OB_SUCCESS;
   ObSSTableMetaHandle meta_handle;
@@ -695,6 +755,15 @@ int ObCOSSTableV2::get_all_tables(common::ObIArray<ObSSTableWrapper> &table_wrap
       ObSSTableWrapper cg_wrapper;
       if (OB_FAIL(get_cg_sstable(cg_idx, cg_wrapper))) {
         LOG_WARN("failed to get cg sstable", K(ret), K(cg_idx));
+      } else if (OB_FAIL(table_wrappers.push_back(cg_wrapper))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret) && has_hidden_rowkey_cg() && include_hiden_cg) {
+      ObSSTableWrapper cg_wrapper;
+      if (OB_FAIL(get_cg_sstable(HIDDEN_ROWKEY_COLUMN_GROUP_IDX, cg_wrapper))) {
+        LOG_WARN("failed to get cg sstable", K(ret), K(HIDDEN_ROWKEY_COLUMN_GROUP_IDX));
       } else if (OB_FAIL(table_wrappers.push_back(cg_wrapper))) {
         LOG_WARN("failed to push back", K(ret));
       }
@@ -827,12 +896,12 @@ int ObCOSSTableV2::cg_scan(
   } else if (OB_FAIL(fetch_cg_sstable(param.cg_idx_, table_wrapper))) {
     LOG_WARN("failed to fetch cg table wrapper", K(ret), K(param), KPC(this));
   } else if (project_single_row) {
-    if (param.cg_idx_ >= cs_meta_.column_group_cnt_) {
+    if (param.cg_idx_ >= get_column_group_count(false/*include hidden cg*/)) {
       ALLOCATE_CG_ITER(context, param.cg_idx_, ObDefaultCGSingleRowScanner, cg_scanner);
     } else {
       ALLOCATE_CG_ITER(context, param.cg_idx_, ObCGSingleRowScanner, cg_scanner);
     }
-  } else if (param.cg_idx_ >= cs_meta_.column_group_cnt_) {
+  } else if (param.cg_idx_ >= get_column_group_count(false/*include hidden cg*/)) {
     if (param.enable_pd_group_by() && is_projector) {
       ALLOCATE_CG_ITER(context, param.cg_idx_, ObDefaultCGGroupByScanner, cg_scanner);
     } else if (is_projector) {
@@ -960,7 +1029,6 @@ int ObCOSSTableV2::fill_column_ckm_array(
   if (is_all_cg_base()) {
     ret = ObSSTable::fill_column_ckm_array(column_checksums);
   } else {
-    const common::ObIArray<ObStorageColumnGroupSchema> &column_groups = storage_schema.get_column_groups();
     column_checksums.reset();
     const int64_t column_count = get_cs_meta().full_column_cnt_;
     for (int64_t i = 0; OB_SUCC(ret) && i < column_count; i++) {
@@ -982,16 +1050,18 @@ int ObCOSSTableV2::fill_column_ckm_array(
           LOG_WARN("unexpected cg table", K(ret), KPC(cg_sstable));
         } else {
           const uint32_t cg_idx = cg_sstable->get_key().get_column_group_id();
-          const ObStorageColumnGroupSchema &column_group = column_groups.at(cg_idx);
-          if (OB_FAIL(cg_sstable->get_meta(cg_table_meta_hdl))) {
+          const ObStorageColumnGroupSchema *cg_schema = nullptr;
+          if (OB_FAIL(storage_schema.get_cg_schema_with_column_group_idx(cg_idx, cg_schema))) {
+            LOG_WARN("failed to get column group schema", KR(ret), K(cg_idx));
+          } else if (OB_FAIL(cg_sstable->get_meta(cg_table_meta_hdl))) {
             LOG_WARN("fail to get meta", K(ret), KPC(cg_sstable));
-          } else if (OB_UNLIKELY(cg_table_meta_hdl.get_sstable_meta().get_col_checksum_cnt() != column_group.get_column_count())) {
+          } else if (OB_UNLIKELY(cg_table_meta_hdl.get_sstable_meta().get_col_checksum_cnt() != cg_schema->get_column_count())) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected col_checksum_cnt", K(ret),
-                K(cg_table_meta_hdl.get_sstable_meta().get_col_checksum_cnt()), K(column_group.get_column_count()));
+                K(cg_table_meta_hdl.get_sstable_meta().get_col_checksum_cnt()), K(cg_schema->get_column_count()));
           } else {
-            for (int64_t j = 0; j < column_group.get_column_count() && OB_SUCC(ret); j++) {
-              const uint16_t column_idx = column_group.get_column_idx(j);
+            for (int64_t j = 0; j < cg_schema->get_column_count() && OB_SUCC(ret); j++) {
+              const uint16_t column_idx = cg_schema->get_column_idx(j);
               if (OB_UNLIKELY(column_idx >= column_count)) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("unexpected column idx", K(ret), K(column_idx), K(column_count));
