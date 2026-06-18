@@ -517,8 +517,15 @@ int ObDmlCgService::generate_update_ctdef(ObLogDelUpd &op,
                                               index_dml_info,
                                               upd_ctdef.assign_columns_))) {
     LOG_WARN("convert upd assign infos failed", K(ret), K(index_dml_info));
+  // update_split_trace_id is only meaningful for storage DML that writes clog.
+  // An UPDATE on a view that fires an INSTEAD OF trigger does NOT touch storage
+  // (the trigger body does, as an independent statement), and its ref_table_id_
+  // is the view id whose columns have no base_cid -- so mark_key_columns_for_update
+  // would otherwise fail looking up the column schema. Gate the feature off for it
+  // here.
   } else if (FALSE_IT(upd_ctdef.enable_update_split_trace_id_ = enable_update_split_with_unique_id &&
-                                                                index_dml_info.is_primary_index_)) {
+                                                                index_dml_info.is_primary_index_ &&
+                                                                !op.has_instead_of_trigger())) {
   } else if (FALSE_IT(upd_ctdef.dupd_ctdef_.enable_update_split_trace_id_ = upd_ctdef.enable_update_split_trace_id_)) {
   } else if (upd_ctdef.enable_update_split_trace_id_ &&
             OB_FAIL(mark_key_columns_for_update(op, index_dml_info, upd_ctdef.assign_columns_))) {
@@ -3504,23 +3511,28 @@ int ObDmlCgService::mark_key_columns_for_update(ObLogDelUpd &op,
           // whose column_id is renumbered within the view. Translate to the
           // main-table base col_id before schema lookup.
           uint64_t base_cid = OB_INVALID_ID;
+          const ObColumnSchemaV2 *col_schema = nullptr;
           if (OB_FAIL(get_column_ref_base_cid(op, col_expr, base_cid))) {
             LOG_WARN("get base column id failed", K(ret), KPC(col_expr));
+          } else if (OB_INVALID_ID == base_cid) {
+            // A derived view column has no corresponding base-table column (e.g. a
+            // cast column of an instead-of-trigger view). Such an op writes no
+            // storage and its enable_update_split_trace_id_ is already gated off,
+            // so it should never reach here -- this branch is defense-in-depth.
+            // Skip key marking instead of raising -4016 to crash the SQL.
+            LOG_TRACE("skip assign column without base cid for key marking", K(i), K(projector_idx), KPC(col_expr));
+          } else if (OB_ISNULL(col_schema = table_schema->get_column_schema(base_cid))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("column schema is null", K(ret), K(i), K(base_cid), KPC(col_expr));
           } else {
-            const ObColumnSchemaV2 *col_schema = table_schema->get_column_schema(base_cid);
-            if (OB_ISNULL(col_schema)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("column schema is null", K(ret), K(i), K(base_cid), KPC(col_expr));
-            } else {
-              bool is_key = false;
-              if (col_schema->is_rowkey_column() || col_schema->is_part_key_column()) {
-                is_key = true;
-              } else if (has_exist_in_array(uk_rowkey_cids, base_cid)) {
-                is_key = true;
-              }
-              if (is_key) {
-                assign_infos.at(i).is_key_column_ = true;
-              }
+            bool is_key = false;
+            if (col_schema->is_rowkey_column() || col_schema->is_part_key_column()) {
+              is_key = true;
+            } else if (has_exist_in_array(uk_rowkey_cids, base_cid)) {
+              is_key = true;
+            }
+            if (is_key) {
+              assign_infos.at(i).is_key_column_ = true;
             }
           }
         }
