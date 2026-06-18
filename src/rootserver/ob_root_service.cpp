@@ -57,6 +57,7 @@
 #include "rootserver/ob_heartbeat_service.h"
 #include "share/tenant_snapshot/ob_tenant_snapshot_table_operator.h"
 #include "rootserver/restore/ob_tenant_clone_util.h"
+#include "share/ob_tenant_info_proxy.h"
 #include "rootserver/ob_admin_switch_replica_role.h" // ObAdminSwitchReplicaRole
 #include "ob_disaster_recovery_task_utils.h" // DisasterRecoveryUtils
 #include "rootserver/ob_disaster_recovery_worker.h" // ObDRWorker
@@ -5043,15 +5044,12 @@ int ObRootService::clone_tenant(const obrpc::ObCloneTenantArg &arg,
   ObTenantSnapItem tenant_snapshot_item;
   bool is_unit_config_exist = false;
   bool is_resource_pool_exist = false;
+  bool is_primary_source = false;
   ObCStringHelper helper;
 
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_SUCCESS == ERRSIM_DISABLE_CLONE_TENANT) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("clone tenant not supported", KR(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "clone tenant");
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", KR(ret), K(arg));
@@ -5088,6 +5086,16 @@ int ObRootService::clone_tenant(const obrpc::ObCloneTenantArg &arg,
     } else {
       source_tenant_id = source_tenant_schema->get_tenant_id();
     }
+  }
+
+  // TODO: Simple is_primary_tenant check may miss blocking during primary-standby switchover.
+  // Redesign when clone tenant needs full primary-standby support, and add switchover regression tests.
+  if (FAILEDx(ObAllTenantInfoProxy::is_primary_tenant(&sql_proxy_, source_tenant_id, is_primary_source))) {
+    LOG_WARN("fail to check if source tenant is primary", KR(ret), K(source_tenant_id));
+  } else if (is_primary_source && OB_SUCCESS == ERRSIM_DISABLE_CLONE_TENANT) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("clone tenant not supported on primary source tenant", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "clone tenant on primary source tenant");
   }
 
   if (FAILEDx(ObTenantSnapshotUtil::check_source_tenant_info(source_tenant_id,
