@@ -1176,6 +1176,9 @@ int ObHashGroupByVecOp::do_inner_get_next_batch(const int64_t max_row_cnt)
         bypass_ctrl_.start_by_pass();
         bypass_ctrl_.reset_rebuild_times();
         bypass_ctrl_.reset_state();
+        bypass_ctrl_.llc_est_.last_est_cnt_ = bypass_ctrl_.llc_est_.est_cnt_;
+        bypass_ctrl_.llc_est_.est_cnt_at_bypass_start_ = bypass_ctrl_.llc_est_.est_cnt_;
+        bypass_ctrl_.llc_est_.last_downsample_est_ = bypass_ctrl_.llc_est_.est_cnt_;
         by_pass_vec_holder_.restore();
         calc_avg_group_mem();
       }
@@ -2394,6 +2397,7 @@ int ObHashGroupByVecOp::by_pass_prepare_one_batch(const int64_t batch_size)
         by_pass_nth_group_, last_group, by_pass_child_brs_, brs_, batch_size, insert_group_ht))) {
     LOG_WARN("failed to get next permutation row", K(ret));
   }
+  ++bypass_ctrl_.llc_est_.sample_batch_cnt_;
   bool need_llc_sample = brs_.size_ > 0 && bypass_ctrl_.llc_est_.should_sample();
   if (OB_SUCC(ret) &&
       (need_llc_sample || (skew_detection_enabled_ && popular_map_.size() > 0))) {

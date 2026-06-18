@@ -161,7 +161,8 @@ int LlcEstimate::reset()
   last_est_cnt_ = 0;
   sample_batch_cnt_ = 0;
   sample_interval_ = 1;
-  checks_since_last_reduce_ = 0;
+  est_cnt_at_bypass_start_ = 0;
+  last_downsample_est_ = 0;
   return ret;
 }
 
@@ -249,13 +250,15 @@ int ObAdaptiveByPassCtrl::check_llc_ndv()
 
 void ObAdaptiveByPassCtrl::llc_try_increase_sample_interval()
 {
-  ++llc_est_.checks_since_last_reduce_;
-  if (llc_est_.checks_since_last_reduce_ >= LlcEstimate::LLC_NUM_CHECKS_TO_REDUCE) {
-    llc_est_.sample_interval_ = std::min(llc_est_.sample_interval_ * 2,
-                                        LlcEstimate::LLC_SAMPLE_INTERVAL_CAP);
-    llc_est_.checks_since_last_reduce_ = 0;
-    LOG_TRACE("llc sample divisor increased",
-              K(llc_est_.sample_interval_), K(llc_est_.est_cnt_));
+  if (0 < llc_est_.est_cnt_at_bypass_start_
+      && llc_est_.sample_interval_ < LlcEstimate::LLC_SAMPLE_INTERVAL_CAP
+      && llc_est_.est_cnt_ - llc_est_.last_downsample_est_
+           >= llc_est_.est_cnt_at_bypass_start_) {
+    llc_est_.sample_interval_ <<= 1;
+    llc_est_.last_downsample_est_ = llc_est_.est_cnt_;
+    LOG_TRACE("llc sample interval increased by sampled volume",
+              K(llc_est_.sample_interval_), K(llc_est_.est_cnt_),
+              K(llc_est_.est_cnt_at_bypass_start_));
   }
 }
 
@@ -265,7 +268,6 @@ int ObAdaptiveByPassCtrl::llc_add_batch_and_check(const uint64_t *hash_vals,
                                                   bool ready_to_check)
 {
   int ret = OB_SUCCESS;
-  ++llc_est_.sample_batch_cnt_;
   for (int64_t i = 0; OB_SUCC(ret) && llc_est_.enabled_ && i < size; ++i) {
     if (skip != nullptr && skip->exist(i)) { continue; }
     llc_est_.add_value(hash_vals[i]);

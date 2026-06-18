@@ -435,6 +435,8 @@ int ObHashDistinctVecOp::build_distinct_data_for_batch_by_pass(const int64_t bat
                                                    hp_infras_.get_actual_mem_used());
           // Reset last_est_cnt_ so bypass phase starts fresh for LLC check interval
           bypass_ctrl_.llc_est_.last_est_cnt_ = bypass_ctrl_.llc_est_.est_cnt_;
+          bypass_ctrl_.llc_est_.est_cnt_at_bypass_start_ = bypass_ctrl_.llc_est_.est_cnt_;
+          bypass_ctrl_.llc_est_.last_downsample_est_ = bypass_ctrl_.llc_est_.est_cnt_;
           bypass_ctrl_.start_by_pass();
           hp_infras_.reset_hash_table_for_by_pass();
           popular_array_temp_.reuse();
@@ -443,7 +445,11 @@ int ObHashDistinctVecOp::build_distinct_data_for_batch_by_pass(const int64_t bat
               LOG_WARN("failed to resize for popular", K(ret));
             }
           }
-          LOG_TRACE("start by pass here for distinct", K(ret), K(skew_detection_enabled_), K(popular_map_.size()));
+          LOG_TRACE("start by pass here for distinct", K(ret), K(skew_detection_enabled_),
+                    K(bypass_ctrl_.llc_est_.enabled_), K(bypass_ctrl_.llc_est_.est_cnt_),
+                    K(bypass_ctrl_.llc_est_.sample_interval_), K(bypass_ctrl_.llc_est_.avg_group_mem_),
+                    K(bypass_ctrl_.processed_cnt_), K(bypass_ctrl_.probe_cnt_),
+                    K(bypass_ctrl_.rebuild_times_));
         }
       } else {
         // Rebuild: resize bucket array back to initial size when
@@ -691,6 +697,7 @@ int ObHashDistinctVecOp::by_pass_get_next_batch(const int64_t batch_size)
       op_monitor_info_.otherstat_6_value_ = by_pass_rows_;
       op_monitor_info_.otherstat_6_id_ = ObSqlMonitorStatIds::HASH_BY_PASS_AGG_CNT;
     }
+    ++bypass_ctrl_.llc_est_.sample_batch_cnt_;
     bool need_llc_sample = child_brs->size_ > 0 && bypass_ctrl_.llc_est_.should_sample();
     bool need_hash = need_llc_sample
                      || (skew_detection_enabled_ && popular_map_.size() > 0);

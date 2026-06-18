@@ -27,7 +27,8 @@ struct LlcEstimate
 public:
   LlcEstimate()
     : avg_group_mem_(0), llc_map_(), est_cnt_(0), last_est_cnt_(0), enabled_(false),
-      sample_batch_cnt_(0), sample_interval_(1), checks_since_last_reduce_(0)
+      sample_batch_cnt_(0), sample_interval_(1), est_cnt_at_bypass_start_(0),
+      last_downsample_est_(0)
   {}
   int init(common::ObIAllocator &allocator, bool enabled);
   int reset();
@@ -46,9 +47,9 @@ public:
   bool enabled_;
   int64_t sample_batch_cnt_;
   int64_t sample_interval_;
-  int64_t checks_since_last_reduce_;
+  uint64_t est_cnt_at_bypass_start_;
+  uint64_t last_downsample_est_;
   static const int64_t ESTIMATE_MOD_NUM = 4096;
-  static constexpr const int64_t LLC_NUM_CHECKS_TO_REDUCE = 2;
   static constexpr const int64_t LLC_SAMPLE_INTERVAL_CAP = 16;
   static constexpr const double LLC_NDV_RATIO = 0.3;
   static constexpr const double GLOBAL_BOUND_RATIO = 0.8;
