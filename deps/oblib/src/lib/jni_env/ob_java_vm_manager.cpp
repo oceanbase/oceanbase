@@ -62,42 +62,60 @@ constexpr const char* CLASS_NATIVE_METHOD_HELPER_NAME = "com/oceanbase/utils/Nat
 // ---------------------------------------------------------------------------
 // Two JNIEnv providers: HDFS-managed vs self-created JVM
 // ---------------------------------------------------------------------------
-class ObHdfsJniEnvProvider final : public ObJniEnvProvider {
-public:
-  explicit ObHdfsJniEnvProvider(GETJNIENV get_env_fn) : get_env_fn_(get_env_fn) {}
-  int get_env(JNIEnv *&env) override
-  {
-    int ret = OB_SUCCESS;
-    env = get_env_fn_();
-    if (OB_ISNULL(env)) {
-      ret = OB_JNI_ENV_ERROR;
-      LOG_WARN("getJNIEnv returned null", K(ret));
-    }
-    return ret;
-  }
-private:
-  GETJNIENV get_env_fn_;
-};
+ObHdfsJniEnvProvider::ObHdfsJniEnvProvider() : get_env_fn_(nullptr) {}
 
-class ObDirectJvmEnvProvider final : public ObJniEnvProvider {
-public:
-  explicit ObDirectJvmEnvProvider(JavaVM *jvm) : jvm_(jvm) {}
-  int get_env(JNIEnv *&env) override
-  {
-    int ret = OB_SUCCESS;
-    jint jni_ret = jvm_->GetEnv((void **)&env, JNI_VERSION_1_8);
-    if (JNI_EDETACHED == jni_ret) {
-      jni_ret = jvm_->AttachCurrentThread((void **)&env, nullptr);
-    }
-    if (JNI_OK != jni_ret || OB_ISNULL(env)) {
-      ret = OB_JNI_ERROR;
-      LOG_WARN("failed to attach thread to jvm", K(ret), K(jni_ret));
-    }
-    return ret;
+void ObHdfsJniEnvProvider::init(GETJNIENV fn) { get_env_fn_ = fn; }
+
+int ObHdfsJniEnvProvider::get_env(JNIEnv *&env)
+{
+  int ret = OB_SUCCESS;
+  env = get_env_fn_();
+  if (OB_ISNULL(env)) {
+    ret = OB_JNI_ENV_ERROR;
+    LOG_WARN("getJNIEnv returned null", K(ret));
   }
-private:
-  JavaVM *jvm_;
-};
+  return ret;
+}
+
+ObDirectJvmEnvProvider::ObDirectJvmEnvProvider() : jvm_(nullptr) {}
+
+int ObDirectJvmEnvProvider::init(JavaVM *jvm)
+{
+  jvm_ = jvm;
+  return OB_SUCCESS;
+}
+
+int ObDirectJvmEnvProvider::get_env(JNIEnv *&env)
+{
+  int ret = OB_SUCCESS;
+  jint jni_ret = jvm_->GetEnv((void **)&env, JNI_VERSION_1_8);
+  if (JNI_EDETACHED == jni_ret) {
+    jni_ret = jvm_->AttachCurrentThread((void **)&env, nullptr);
+    if (JNI_OK == jni_ret) {
+      // Register a per-thread RAII guard whose destructor fires when the thread
+      // exits (C++ thread_local semantics), calling DetachCurrentThread to free
+      // the JVM's per-thread resources, then nulling the now-invalid env cache.
+      struct AutoDetach {
+        JavaVM  *jvm     = nullptr;
+        JNIEnv **env_ref = nullptr;
+        ~AutoDetach() {
+          if (OB_NOT_NULL(jvm)) {
+            jvm->DetachCurrentThread();
+            *env_ref = nullptr;
+          }
+        }
+      };
+      thread_local AutoDetach detach_guard;
+      detach_guard.jvm     = jvm_;
+      detach_guard.env_ref = &env;  // &env == &ObJavaVmManager::jni_env_ (thread_local)
+    }
+  }
+  if (JNI_OK != jni_ret || OB_ISNULL(env)) {
+    ret = OB_JNI_ERROR;
+    LOG_WARN("failed to attach thread to jvm", K(ret), K(jni_ret));
+  }
+  return ret;
+}
 
 // Minimum remaining stack space required before calling JNI_CreateJavaVM.
 //
@@ -695,11 +713,8 @@ int ObJavaVmManager::init_jni_env() {
     LOG_WARN("failed to open java lib", K(ret));
   } else if (OB_SUCCESS == open_hdfs_lib()) {
     LOG_INFO("libhdfs.so loaded, will use HDFS-managed JVM");
-    env_provider_ = OB_NEW(ObHdfsJniEnvProvider, "JniEnvProv", getJNIEnv);
-    if (OB_ISNULL(env_provider_)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate ObHdfsJniEnvProvider", K(ret));
-    }
+    hdfs_provider_.init(getJNIEnv);
+    env_provider_ = &hdfs_provider_;
   } else {
     LOG_INFO("libhdfs.so not available, will create JVM directly");
     JavaVM *jvm = nullptr;
@@ -716,12 +731,11 @@ int ObJavaVmManager::init_jni_env() {
       if (OB_FAIL(create_jvm_(jvm, jvm_args))) {
         error_msg_ = "failed to create JVM, please check JVM options and available memory";
         LOG_WARN("failed to create jvm directly", K(ret));
+      } else if (OB_FAIL(direct_provider_.init(jvm))) {
+        error_msg_ = "failed to init direct JVM provider";
+        LOG_WARN("failed to init ObDirectJvmEnvProvider", K(ret));
       } else {
-        env_provider_ = OB_NEW(ObDirectJvmEnvProvider, "JniEnvProv", jvm);
-        if (OB_ISNULL(env_provider_)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to allocate ObDirectJvmEnvProvider", K(ret));
-        }
+        env_provider_ = &direct_provider_;
       }
     }
   }
@@ -746,12 +760,11 @@ int ObJavaVmManager::init_classes()
       int res = jni_env_->RegisterNatives(
           native_method_class, java_native_methods,
           sizeof(java_native_methods) / sizeof(java_native_methods[0]));
+      jni_env_->DeleteGlobalRef(native_method_class);
       if (OB_SUCCESS != res) {
         ret = OB_JNI_ERROR;
         LOG_WARN("failed to register native method for ObJavaVmManager",
                  K(ret));
-      } else {
-        jni_env_->DeleteGlobalRef(native_method_class);
       }
     }
   }

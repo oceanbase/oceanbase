@@ -166,6 +166,25 @@ public:
   virtual int get_env(JNIEnv *&env) = 0;
 };
 
+class ObHdfsJniEnvProvider final : public ObJniEnvProvider {
+public:
+  ObHdfsJniEnvProvider();
+  void init(GETJNIENV fn);
+  int get_env(JNIEnv *&env) override;
+  // HDFS manages thread lifecycle internally; no detach needed from our side.
+private:
+  GETJNIENV get_env_fn_;
+};
+
+class ObDirectJvmEnvProvider final : public ObJniEnvProvider {
+public:
+  ObDirectJvmEnvProvider();
+  int init(JavaVM *jvm);
+  int get_env(JNIEnv *&env) override;
+private:
+  JavaVM *jvm_;
+};
+
 // thread local helper
 class ObJavaVmManager {
 public:
@@ -202,8 +221,10 @@ private:
   void* jvm_lib_handle_ = nullptr;
   void* hdfs_lib_handle_ = nullptr;
 
-  // Determined once during init_jni_env(), used for all subsequent get_env() calls
-  ObJniEnvProvider *env_provider_ = nullptr;
+  // Storage for the two possible providers; env_provider_ points to whichever is active.
+  ObHdfsJniEnvProvider   hdfs_provider_;
+  ObDirectJvmEnvProvider direct_provider_;
+  ObJniEnvProvider      *env_provider_ = nullptr;
 
 private:
   lib::ObMutex init_jni_env_lock_;
