@@ -1636,6 +1636,7 @@ void ObPluginVectorIndexLoadScheduler::refresh_adapter_rb_flag()
       ObPluginVectorIndexAdaptor *adapter = iter->second;
       adapter->set_reload_finish(false);
       adapter->reset_complete();
+      adapter->update_can_skip(NOT_INITED);
     }
     LOG_INFO("finish reset adaptor complete and reload finish", K(ret), K(tenant_id_), K(ls_->get_ls_id()));
   }
