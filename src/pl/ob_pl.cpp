@@ -31,6 +31,7 @@
 #include "observer/mysql/ob_async_cmd_driver.h"
 #include "observer/ob_server.h"
 #include "pl/external_routine/ob_java_udf.h"
+#include "observer/mysql/obmp_utils.h"
 namespace oceanbase
 {
 using namespace common;
@@ -1302,6 +1303,12 @@ void ObPLContext::destory(
       ret = OB_SUCCESS == ret ? tmp_ret : ret;
     }
     if (session_info.is_pl_async_commit()) {
+      // if use pl async commit, need seralize package var first which may cause package compile action, compile action will generate inner sql traction
+      int tmp_ret = observer::ObMPUtils::try_add_changed_package_info(session_info, ctx);
+      if (tmp_ret != OB_SUCCESS) {
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
+        LOG_WARN("failed to add changed package info", K(tmp_ret), K(ret));
+      }
       clean_pl_async_commit_state(session_info, ctx, ret);
     }
   }

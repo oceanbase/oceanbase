@@ -33,10 +33,10 @@ int ObMPUtils::try_add_changed_package_info(sql::ObSQLSessionInfo &session,
     if (tmp_ret != OB_SUCCESS) {
       ret = OB_SUCCESS == ret ? tmp_ret : ret;
       LOG_WARN("failed to add changed package info", K(ret));
-    } else {
-      session.reset_all_package_changed_info();
-      exec_ctx.set_need_try_serialize_package_var(false);
     }
+    session.reset_all_package_changed_info();
+    exec_ctx.set_need_try_serialize_package_var(false);
+
     if (need_reset_exec_ctx) {
       session.set_cur_exec_ctx(nullptr);
     }
