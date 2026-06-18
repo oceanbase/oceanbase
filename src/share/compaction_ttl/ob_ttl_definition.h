@@ -131,6 +131,8 @@ public:
 
   OB_INLINE bool was_compaction_ttl() const { return was_compaction_ttl_; }
 
+  OB_INLINE bool is_compaction_ttl() const { return ttl_type_ == ObTTLDefinition::COMPACTION; }
+
   OB_INLINE bool is_user_ttl_column() const { return ttl_column_type_ == TTLColumnType::USER; }
 
   OB_INLINE uint64_t get_curr_ttl_column_id() const

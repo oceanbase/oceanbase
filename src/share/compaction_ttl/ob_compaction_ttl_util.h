@@ -277,6 +277,10 @@ OB_INLINE int ObCompactionTTLUtil::check_create_ttl_schema_valid(const share::sc
     // 4. index must contain the ttl column of data table
     //    [x] (CREATE TABLE) create index for ttl table
     // will checked in ObCompactionTTLUtil::check_create_index_for_ttl_valid, don't need to check again
+
+    // 5. partial update ttl table don't support index
+    //    [x] (CREATE TABLE) create a partial update ttl table with index
+    //    will checked in ObCompactionTTLUtil::check_create_index_for_ttl_valid, don't need to check again
   }
 
   return ret;
@@ -413,6 +417,15 @@ OB_INLINE int ObCompactionTTLUtil::check_create_index_for_ttl_valid(
       ret = OB_NOT_SUPPORTED;
       COMMON_LOG(WARN, "index must contain the ttl column of data table", K(ret), K(table_schema), K(index_table_schema));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "create index for ttl table without ttl column is");
+    }
+
+    // 4. partial update ttl table don't support index
+    //    [x] (WHEN CREATE TABLE) create a partial update ttl table with index
+    //    [x] (WHEN CREATE INDEX) create index for partial update ttl table
+    if (OB_SUCC(ret) && table_schema.is_partial_update_merge_engine()) {
+      ret = OB_NOT_SUPPORTED;
+      COMMON_LOG(WARN, "partial update ttl table don't support index", K(ret), K(table_schema), K(index_type));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "create index on partial update ttl table is");
     }
   }
 
@@ -734,7 +747,15 @@ int ObCompactionTTLUtil::check_aux_table_for_ttl_valid(
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter ttl column when lob meta table exists is");
   }
 
-  // 2. we then check other aux tables
+  // 2. partial update ttl table don't support index
+  //    [x] (ALTER TTL) add ttl to partial update table with index
+  if (OB_SUCC(ret) && table_schema.is_partial_update_merge_engine() && simple_index_infos.count() > 0 && new_ttl_flag.is_compaction_ttl()) {
+    ret = OB_NOT_SUPPORTED;
+    COMMON_LOG(WARN, "partial update table with index can't be ttl table", K(ret), K(table_schema));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "add ttl to partial update table with index is");
+  }
+
+  // 3. we then check other aux tables
   for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
     const ObAuxTableMetaInfo &simple_index_info = simple_index_infos.at(i);
 
