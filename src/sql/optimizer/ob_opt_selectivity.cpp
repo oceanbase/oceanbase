@@ -643,7 +643,8 @@ int OptTableMeta::get_increase_rows_ratio(ObOptimizerContext &ctx, double &incre
   if (real_rows_ >= 0) {
     // do nothing
   } else if (NULL == table_partition_info_ || NULL == base_meta_info_ ||
-             !base_meta_info_->has_opt_stat_ || ctx.use_default_stat()) {
+             !base_meta_info_->has_opt_stat_ || ctx.use_default_stat() ||
+             !ctx.is_storage_estimation_enabled()) {
     const_cast<double &>(real_rows_) = rows_;
   } else {
     ObTableMetaInfo table_meta(ref_table_id_);

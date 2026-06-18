@@ -422,7 +422,7 @@ int ObQueryEngine::sample_rows(Iterator<BtreeRawIterator> *iter,
     TRANS_LOG(WARN, "set key range to btree scan handle failed", KR(ret));
   } else {
     while (OB_SUCC(ret)) {
-      if (OB_FAIL(iter->next())) {
+      if (OB_FAIL(iter->next_internal())) {
         if (OB_ITER_END != ret) {
           TRANS_LOG(WARN, "query engine iter next fail", KR(ret));
         }
@@ -432,7 +432,11 @@ int ObQueryEngine::sample_rows(Iterator<BtreeRawIterator> *iter,
       } else {
         ++sample_row_count;
         ++physical_row_count;
-        if (blocksstable::ObDmlFlag::DF_NOT_EXIST == value->first_dml_flag_ &&
+        if (value->is_empty()) {
+          // Empty rows must still be counted in sample_row_count above; otherwise
+          // the sample limit is never reached and we may scan a large number of
+          // empty rows during sampling.
+        } else if (blocksstable::ObDmlFlag::DF_NOT_EXIST == value->first_dml_flag_ &&
             blocksstable::ObDmlFlag::DF_NOT_EXIST == value->last_dml_flag_) {
           ObMvccTransNode *iter = value->get_list_head();
           if (nullptr != iter && iter->get_tx_id() == tx_id) {
