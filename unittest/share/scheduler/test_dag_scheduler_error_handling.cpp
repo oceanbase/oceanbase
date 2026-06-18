@@ -17,6 +17,9 @@
 #define private public
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
+#include "share/config/ob_server_config.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
+#include "common/ob_clock_generator.h"
 
 int64_t dag_cnt = 1;
 int64_t stress_time= 1; // 100ms
@@ -32,7 +35,19 @@ using namespace omt;
 namespace unittest
 {
 
-
+inline void apply_self_sched_guc(const uint64_t tenant_id, const bool enabled)
+{
+  (void) common::ObClockGenerator::init();
+  (void) omt::ObTenantConfigMgr::get_instance().add_tenant_config(tenant_id);
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    tenant_config->_enable_dag_worker_self_schedule.set_value(enabled ? "True" : "False");
+  }
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
+  if (OB_NOT_NULL(scheduler)) {
+    scheduler->self_sched_enabled_ = enabled;
+  }
+}
 
 class AtomicOperator
 {
@@ -392,7 +407,7 @@ private:
 };
 
 
-class TestDagScheduler : public ::testing::Test
+class TestDagScheduler : public ::testing::TestWithParam<bool>
 {
 public:
   TestDagScheduler()
@@ -425,6 +440,7 @@ public:
 
     ObMallocAllocator *ma = ObMallocAllocator::get_instance();
     ASSERT_EQ(OB_SUCCESS, ma->set_tenant_limit(tenant_id_, 1LL << 30));
+    apply_self_sched_guc(tenant_id_, GetParam());
   }
   void TearDown()
   {
@@ -449,7 +465,7 @@ private:
 };
 
 
-TEST_F(TestDagScheduler, test_error_handling)
+TEST_P(TestDagScheduler, test_error_handling)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -512,6 +528,7 @@ TEST_F(TestDagScheduler, test_error_handling)
   EXPECT_EQ(0, op.value());
 }
 
+INSTANTIATE_TEST_CASE_P(SelfSched, TestDagScheduler, ::testing::Values(false, true));
 
 }
 }

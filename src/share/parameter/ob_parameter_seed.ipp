@@ -1285,6 +1285,11 @@ DEF_BOOL(_ob_enable_background_thread_auto_adapt, OB_TENANT_PARAMETER, "True",
          "specifies whether the tenant's background thread auto adapt is enabled"
          "Value: True:turned on;  False: turned off",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_dag_worker_self_schedule, OB_TENANT_PARAMETER, "False",
+         "specifies whether dag worker self-schedules the next ready task in the same dag "
+         "instead of going through the scheduler thread."
+         "Value: True:turned on;  False: turned off",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(sys_bkgd_migration_retry_num, OB_CLUSTER_PARAMETER, "3", "[3,100]",
         "retry num limit during migration. Range: [3, 100] in integer",

@@ -17,6 +17,9 @@
 #define private public
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
+#include "share/config/ob_server_config.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
+#include "common/ob_clock_generator.h"
 
 int64_t dag_cnt = 1;
 int64_t stress_time= 1; // 100ms
@@ -65,17 +68,31 @@ int ObTenantMetaMemMgr::fetch_tenant_config()
 namespace unittest
 {
 
-class TestDagScheduler : public ::testing::Test
+inline void apply_self_sched_guc(const uint64_t tenant_id, const bool enabled)
+{
+  (void) common::ObClockGenerator::init();
+  (void) omt::ObTenantConfigMgr::get_instance().add_tenant_config(tenant_id);
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    tenant_config->_enable_dag_worker_self_schedule.set_value(enabled ? "True" : "False");
+  }
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
+  if (OB_NOT_NULL(scheduler)) {
+    scheduler->self_sched_enabled_ = enabled;
+  }
+}
+
+class TestDagNetScheduler : public ::testing::TestWithParam<bool>
 {
 public:
-  TestDagScheduler()
+  TestDagNetScheduler()
     : tenant_id_(500),
       tablet_scheduler_(nullptr),
       scheduler_(nullptr),
       dag_history_mgr_(nullptr),
       tenant_base_(500)
   {}
-  ~TestDagScheduler() {}
+  ~TestDagNetScheduler() {}
   void SetUp()
   {
     ObUnitInfoGetter::ObTenantConfig unit_config;
@@ -113,6 +130,7 @@ public:
     if (OB_SUCCESS != (ObSysTaskStatMgr::get_instance().set_self_addr(addr))) {
       COMMON_LOG_RET(WARN, OB_ERROR, "failed to add sys task", K(addr));
     }
+    apply_self_sched_guc(tenant_id_, GetParam());
   }
   void TearDown()
   {
@@ -140,7 +158,7 @@ private:
   ObDagWarningHistoryManager *dag_history_mgr_;
   compaction::ObDiagnoseTabletMgr *diagnose_mgr_;
   ObTenantBase tenant_base_;
-  DISALLOW_COPY_AND_ASSIGN(TestDagScheduler);
+  DISALLOW_COPY_AND_ASSIGN(TestDagNetScheduler);
 };
 
 void wait_scheduler() {
@@ -278,7 +296,7 @@ private:
 };
 
 
-TEST_F(TestDagScheduler, test_task_wait_to_schedule)
+TEST_P(TestDagNetScheduler, test_task_wait_to_schedule)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -447,7 +465,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObDagRetryDag);
 };
 
-TEST_F(TestDagScheduler, test_dag_retry)
+TEST_P(TestDagNetScheduler, test_dag_retry)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -510,7 +528,7 @@ public:
   }
 };
 
-TEST_F(TestDagScheduler, test_dag_retry_failed)
+TEST_P(TestDagNetScheduler, test_dag_retry_failed)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -856,7 +874,7 @@ int ObFatherFinishTask::process()
   return OB_SUCCESS;
 }
 
-TEST_F(TestDagScheduler, test_basic_dag_net)
+TEST_P(TestDagNetScheduler, test_basic_dag_net)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -929,7 +947,7 @@ public:
   }
 };
 
-TEST_F(TestDagScheduler, test_basic_dag_net_with_one_retry_dag)
+TEST_P(TestDagNetScheduler, test_basic_dag_net_with_one_retry_dag)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -1021,7 +1039,7 @@ public:
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, K_(is_inited), K_(type), K_(id), K(task_list_.get_size()), K_(dag_ret));
 };
 
-TEST_F(TestDagScheduler, test_generage_task_failed)
+TEST_P(TestDagNetScheduler, test_generage_task_failed)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -1029,6 +1047,7 @@ TEST_F(TestDagScheduler, test_generage_task_failed)
   ASSERT_TRUE(nullptr != manager);
   ASSERT_EQ(OB_SUCCESS, MTL(ObDagWarningHistoryManager *)->init(true, MTL_ID(), "DagWarnHis"));
 
+  generate_cnt = 1;
   int ret = OB_SUCCESS;
   ObGenerateFailedDag *dag = nullptr;
   for (int i = 0; i < 1; ++i) {
@@ -1042,14 +1061,12 @@ TEST_F(TestDagScheduler, test_generage_task_failed)
   }
 
   wait_scheduler();
-  int warning_info_size = MTL(ObDagWarningHistoryManager *)->size();
-  int max_wait_times = 20; // 2s
-  while (0 == warning_info_size && max_wait_times > 0) {
-    usleep(100000);
-    warning_info_size = MTL(ObDagWarningHistoryManager *)->size();
-    max_wait_times--;
+  // wait for finish_dag_() to complete add_dag_warning_info after erase_dag_
+  int wait_cnt = 0;
+  while (MTL(ObDagWarningHistoryManager *)->size() < 1 && wait_cnt++ < 100) {
+    usleep(10000);
   }
-  ASSERT_EQ(1, warning_info_size);
+  ASSERT_EQ(1, MTL(ObDagWarningHistoryManager *)->size());
 }
 
 //generate next dag
@@ -1369,7 +1386,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObStartGenerateNextDag);
 };
 
-TEST_F(TestDagScheduler, generate_next_dag)
+TEST_P(TestDagNetScheduler, generate_next_dag)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -1400,7 +1417,7 @@ public:
     ObIDag *parent = this->get_dag();
     ObIDagNet *dag_net = get_dag()->get_dag_net();
     ObWaitDag *new_dag = nullptr;
-    for (int64_t i = 0; OB_SUCC(ret) && i < TestDagScheduler::MAX_DAG_CNT + 5; ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < TestDagNetScheduler::MAX_DAG_CNT + 5; ++i) {
       if (OB_FAIL(MTL(ObTenantDagScheduler*)->alloc_dag(new_dag))) {
         COMMON_LOG(WARN, "failed to alloc tablet migration dag ", K(ret));
       } else if (FALSE_IT(new_dag->init(i))) {
@@ -1516,7 +1533,7 @@ public:
   }
 };
 
-TEST_F(TestDagScheduler, test_add_dag_failed_in_generate_dag_net)
+TEST_P(TestDagNetScheduler, test_add_dag_failed_in_generate_dag_net)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -1527,6 +1544,11 @@ TEST_F(TestDagScheduler, test_add_dag_failed_in_generate_dag_net)
   ASSERT_EQ(OB_SUCCESS, scheduler->create_and_add_dag_net<ObCreateDagNet>(nullptr));
 
   wait_scheduler();
+  // wait for finish_dag_() to complete add_dag_warning_info after erase_dag_
+  int wait_cnt = 0;
+  while (MTL(ObDagWarningHistoryManager *)->size() < 1 && wait_cnt++ < 100) {
+    usleep(10000);
+  }
   ASSERT_EQ(1, MTL(ObDagWarningHistoryManager *)->size());
 }
 
@@ -1568,7 +1590,7 @@ public:
   }
 };
 
-TEST_F(TestDagScheduler, test_free_dag_func)
+TEST_P(TestDagNetScheduler, test_free_dag_func)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -1638,7 +1660,7 @@ public:
   }
 };
 
-TEST_F(TestDagScheduler, test_cancel_dag_func)
+TEST_P(TestDagNetScheduler, test_cancel_dag_func)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -1670,7 +1692,7 @@ TEST_F(TestDagScheduler, test_cancel_dag_func)
 
 
 
-TEST_F(TestDagScheduler, test_cancel_dag_net_func)
+TEST_P(TestDagNetScheduler, test_cancel_dag_net_func)
 {
   int ret = OB_SUCCESS;
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
@@ -1744,7 +1766,7 @@ public:
   ObCancelDag *first_dag_;
 };
 
-TEST_F(TestDagScheduler, test_cancel_waiting_dag)
+TEST_P(TestDagNetScheduler, test_cancel_waiting_dag)
 {
   int ret = OB_SUCCESS;
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
@@ -1771,7 +1793,7 @@ TEST_F(TestDagScheduler, test_cancel_waiting_dag)
   wait_scheduler();
 }
 
-TEST_F(TestDagScheduler, test_destroy_when_running) //TODO(renju.rj): fix it
+TEST_P(TestDagNetScheduler, test_destroy_when_running) //TODO(renju.rj): fix it
 {
 //  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
 //  ASSERT_TRUE(nullptr != scheduler);
@@ -1788,7 +1810,7 @@ TEST_F(TestDagScheduler, test_destroy_when_running) //TODO(renju.rj): fix it
 }
 /*
 do not add compaction dag in unittest, some module is not inited like LSService
-TEST_F(TestDagScheduler, test_add_multi_co_merge_dag_net)
+TEST_P(TestDagNetScheduler, test_add_multi_co_merge_dag_net)
 {
   int ret = OB_SUCCESS;
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
@@ -1933,7 +1955,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObLoopDagNet);
 };
 
-TEST_F(TestDagScheduler, loop_dag_net)
+TEST_P(TestDagNetScheduler, loop_dag_net)
 {
   int ret = OB_SUCCESS;
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
@@ -2111,7 +2133,7 @@ static int64_t count_running_dag_net(ObTenantDagScheduler &scheduler,
 // CO_MAJOR cap = dag_limit (MAX_DAG_CNT = 64 in UT) * 90 / 100 = 57.
 // Submit cap + 3 -> expect RUNNING(CO_MAJOR) == cap, dag_net_map(CO_MAJOR) == cap + 3.
 // ---------------------------------------------------------------------------
-TEST_F(TestDagScheduler, test_co_major_cap_limits_running_count)
+TEST_P(TestDagNetScheduler, test_co_major_cap_limits_running_count)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -2120,7 +2142,7 @@ TEST_F(TestDagScheduler, test_co_major_cap_limits_running_count)
   ObHoldingDagNetInitParam param;
   param.exit_flag_ = &exit_flag;
 
-  const int64_t cap = TestDagScheduler::TEST_MAX_CO_MAJOR_RUNNING_CNT;
+  const int64_t cap = TestDagNetScheduler::TEST_MAX_CO_MAJOR_RUNNING_CNT;
   const int64_t submit = cap + 3;
 
   // (a) All submits succeed; nothing is rejected for exceeding the cap
@@ -2152,7 +2174,7 @@ TEST_F(TestDagScheduler, test_co_major_cap_limits_running_count)
 // Previously CO_MAJOR could consume the entire global cap so HA types could not
 // enter RUNNING. After the fix, CO_MAJOR has its own cap; others keep the global path.
 // ---------------------------------------------------------------------------
-TEST_F(TestDagScheduler, test_co_major_flood_does_not_block_other_types)
+TEST_P(TestDagNetScheduler, test_co_major_flood_does_not_block_other_types)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -2161,7 +2183,7 @@ TEST_F(TestDagScheduler, test_co_major_flood_does_not_block_other_types)
   ObHoldingDagNetInitParam param;
   param.exit_flag_ = &exit_flag;
 
-  const int64_t co_major_cap = TestDagScheduler::TEST_MAX_CO_MAJOR_RUNNING_CNT;
+  const int64_t co_major_cap = TestDagNetScheduler::TEST_MAX_CO_MAJOR_RUNNING_CNT;
   const int64_t flood = co_major_cap + 3;
 
   for (int64_t i = 0; i < flood; ++i) {
@@ -2194,6 +2216,8 @@ TEST_F(TestDagScheduler, test_co_major_flood_does_not_block_other_types)
   ATOMIC_STORE(&exit_flag, true);
   wait_scheduler();
 }
+
+INSTANTIATE_TEST_CASE_P(SelfSched, TestDagNetScheduler, ::testing::Values(false, true));
 
 }
 }

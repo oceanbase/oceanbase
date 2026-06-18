@@ -1094,7 +1094,21 @@ private:
 
 int64_t DagSchedulerStressTester::counter_ = 0;
 
-class TestDagScheduler : public ::testing::Test
+inline void apply_self_sched_guc(const uint64_t tenant_id, const bool enabled)
+{
+  (void) common::ObClockGenerator::init();
+  (void) omt::ObTenantConfigMgr::get_instance().add_tenant_config(tenant_id);
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    tenant_config->_enable_dag_worker_self_schedule.set_value(enabled ? "True" : "False");
+  }
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
+  if (OB_NOT_NULL(scheduler)) {
+    scheduler->self_sched_enabled_ = enabled;
+  }
+}
+
+class TestDagScheduler : public ::testing::TestWithParam<bool>
 {
 public:
   TestDagScheduler()
@@ -1127,6 +1141,7 @@ public:
 
     ObMallocAllocator *ma = ObMallocAllocator::get_instance();
     ASSERT_EQ(OB_SUCCESS, ma->set_tenant_limit(tenant_id_, 1LL << 30));
+    apply_self_sched_guc(tenant_id_, GetParam());
   }
   void TearDown()
   {
@@ -1150,7 +1165,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(TestDagScheduler);
 };
 
-TEST_F(TestDagScheduler, test_init)
+TEST_P(TestDagScheduler, test_init)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -1163,7 +1178,7 @@ TEST_F(TestDagScheduler, test_init)
 }
 
 
-TEST_F(TestDagScheduler, basic_test)
+TEST_P(TestDagScheduler, basic_test)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -1315,7 +1330,7 @@ TEST_F(TestDagScheduler, basic_test)
   EXPECT_EQ(8, op.value());
 }
 
-TEST_F(TestDagScheduler, test_cycle)
+TEST_P(TestDagScheduler, test_cycle)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -1373,7 +1388,7 @@ TEST_F(TestDagScheduler, test_cycle)
   EXPECT_EQ(0, op.value());
 }
 
-TEST_F(TestDagScheduler, test_priority)
+TEST_P(TestDagScheduler, test_priority)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -1472,7 +1487,7 @@ TEST_F(TestDagScheduler, test_priority)
   wait_scheduler();
 }
 
-// TEST_F(TestDagScheduler, test_error_handling)
+// TEST_P(TestDagScheduler, test_error_handling)
 // {
 //   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
 //   ASSERT_TRUE(nullptr != scheduler);
@@ -1544,7 +1559,7 @@ void print_state(int64_t idx)
       K(scheduler->prio_sche_[idx].running_task_cnts_));
 }
 
-TEST_F(TestDagScheduler, test_set_concurrency)
+TEST_P(TestDagScheduler, test_set_concurrency)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -1553,17 +1568,24 @@ TEST_F(TestDagScheduler, test_set_concurrency)
   int32_t uplimit = OB_DAG_PRIOS[prio].score_;
   EXPECT_EQ(OB_SUCCESS, scheduler->init(MTL_ID(), time_slice));
 
-  int cnt = 30;
+  const int64_t max_check_concurrency = 5;
+  const int64_t dag_num = MAX(static_cast<int64_t>(uplimit), max_check_concurrency);
+  bool finish_flag[64] = {};
 
   scheduler->dump_dag_status();
-  TestMPDag *dag = NULL;
-  AtomicIncTask *inc_task = NULL;
-  EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(dag));
-  EXPECT_EQ(OB_SUCCESS, dag->init(1));
-  EXPECT_EQ(OB_SUCCESS, alloc_task(*dag, inc_task));
-  EXPECT_EQ(OB_SUCCESS, inc_task->init(1, cnt, dag->get_op(), 10 * sleep_slice));
-  EXPECT_EQ(OB_SUCCESS, dag->add_task(*inc_task));
-  EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag));
+  ASSERT_LE(dag_num, static_cast<int64_t>(ARRAYSIZEOF(finish_flag)));
+  for (int64_t i = 0; i < dag_num; ++i) {
+    TestMPDag *dag = NULL;
+    LoopWaitTask *wait_task = NULL;
+    ASSERT_EQ(OB_SUCCESS, scheduler->alloc_dag(dag));
+    ASSERT_TRUE(nullptr != dag);
+    ASSERT_EQ(OB_SUCCESS, dag->init(i + 1));
+    ASSERT_EQ(OB_SUCCESS, alloc_task(*dag, wait_task));
+    ASSERT_TRUE(nullptr != wait_task);
+    ASSERT_EQ(OB_SUCCESS, wait_task->init(1, 1, finish_flag[i]));
+    ASSERT_EQ(OB_SUCCESS, dag->add_task(*wait_task));
+    ASSERT_EQ(OB_SUCCESS, scheduler->add_dag(dag));
+  }
 
   CHECK_EQ_UTIL_TIMEOUT(OB_DAG_PRIOS[prio].score_, scheduler->prio_sche_[prio].limits_);
   CHECK_EQ_UTIL_TIMEOUT(uplimit, scheduler->prio_sche_[prio].limits_);
@@ -1589,16 +1611,20 @@ TEST_F(TestDagScheduler, test_set_concurrency)
   EXPECT_EQ(OB_SUCCESS, scheduler->set_thread_score(prio, 5));
   print_state(prio);
   EXPECT_EQ(5, scheduler->prio_sche_[prio].limits_);
+  CHECK_EQ_UTIL_TIMEOUT(5, scheduler->get_total_running_task_cnt());
   EXPECT_TRUE(5 <= scheduler->work_thread_num_);
   // set to 0
   EXPECT_EQ(OB_SUCCESS, scheduler->set_thread_score(prio, 0));
   print_state(prio);
   EXPECT_EQ(uplimit, scheduler->prio_sche_[prio].limits_);
   EXPECT_TRUE(uplimit <= scheduler->work_thread_num_);
+  for (int64_t i = 0; i < dag_num; ++i) {
+    finish_flag[i] = true;
+  }
   wait_scheduler();
 }
 
-TEST_F(TestDagScheduler, stress_test)
+TEST_P(TestDagScheduler, stress_test)
 {
 
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
@@ -1613,7 +1639,7 @@ TEST_F(TestDagScheduler, stress_test)
   COMMON_LOG(INFO, "finish running dag", K(finish_time - start_time));
 }
 
-TEST_F(TestDagScheduler, test_get_dag_count)
+TEST_P(TestDagScheduler, test_get_dag_count)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -1664,7 +1690,7 @@ TEST_F(TestDagScheduler, test_get_dag_count)
   EXPECT_EQ(-1, scheduler->get_dag_count(ObDagType::DAG_TYPE_MAX));
 }
 
-TEST_F(TestDagScheduler, test_destroy_when_running)
+TEST_P(TestDagScheduler, test_destroy_when_running)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -1704,7 +1730,7 @@ TEST_F(TestDagScheduler, test_destroy_when_running)
   #endif
 }
 
-TEST_F(TestDagScheduler, test_up_limit)
+TEST_P(TestDagScheduler, test_up_limit)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -1757,7 +1783,7 @@ TEST_F(TestDagScheduler, test_up_limit)
   wait_scheduler();
 }
 
-TEST_F(TestDagScheduler, test_emergency_task)
+TEST_P(TestDagScheduler, test_emergency_task)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -1815,7 +1841,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(TestCompMidCancelDag);
 };
 
-TEST_F(TestDagScheduler, test_check_ls_compaction_dag_exist_with_cancel)
+TEST_P(TestDagScheduler, test_check_ls_compaction_dag_exist_with_cancel)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -1875,7 +1901,7 @@ TEST_F(TestDagScheduler, test_check_ls_compaction_dag_exist_with_cancel)
   EXPECT_EQ(exist, false);
 }
 
-TEST_F(TestDagScheduler, test_cancel_running_dag)
+TEST_P(TestDagScheduler, test_cancel_running_dag)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -1984,7 +2010,7 @@ TEST_F(TestDagScheduler, test_cancel_running_dag)
   scheduler->free_dag(*cancel_dag_key);
 }
 
-TEST_F(TestDagScheduler, test_generate_next_task_failed)
+TEST_P(TestDagScheduler, test_generate_next_task_failed)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -1997,7 +2023,7 @@ TEST_F(TestDagScheduler, test_generate_next_task_failed)
   wait_scheduler();
 }
 
-TEST_F(TestDagScheduler, test_maybe_cycle_tasks)
+TEST_P(TestDagScheduler, test_maybe_cycle_tasks)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -2032,7 +2058,7 @@ TEST_F(TestDagScheduler, test_maybe_cycle_tasks)
   *     3. loop_cnt is different
   *  This Test simply test dag deduplication logic of ObBatchFreezeTabletsDag
  **/
-TEST_F(TestDagScheduler, test_batch_freeze_tablets_dag)
+TEST_P(TestDagScheduler, test_batch_freeze_tablets_dag)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -2095,7 +2121,7 @@ TEST_F(TestDagScheduler, test_batch_freeze_tablets_dag)
   EXPECT_EQ(OB_EAGAIN, scheduler->add_dag(batch_freeze_dag3));
 }
 
-TEST_F(TestDagScheduler, test_max_concurrent_task)
+TEST_P(TestDagScheduler, test_max_concurrent_task)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -2161,10 +2187,12 @@ TEST_F(TestDagScheduler, test_max_concurrent_task)
 }
 
 #ifdef OB_BUILD_SHARED_STORAGE
-TEST_F(TestDagScheduler, test_auto_adaptive)
+TEST_P(TestDagScheduler, test_auto_adaptive)
 {
-  EXPECT_EQ(OB_SUCCESS, ObClockGenerator::init());
-  EXPECT_EQ(OB_SUCCESS, ObTenantConfigMgr::get_instance().add_tenant_config(MTL_ID()));
+  // ObClockGenerator/tenant config are already initialized by apply_self_sched_guc in SetUp,
+  // so a second init() returns OB_INIT_TWICE; ignore the return here.
+  (void) ObClockGenerator::init();
+  (void) ObTenantConfigMgr::get_instance().add_tenant_config(MTL_ID());
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
   ASSERT_EQ(OB_SUCCESS, scheduler->init(MTL_ID(), time_slice));
@@ -2248,7 +2276,7 @@ TEST_F(TestDagScheduler, test_auto_adaptive)
 }
 #endif
 /*
-TEST_F(TestDagScheduler, test_large_thread_cnt)
+TEST_P(TestDagScheduler, test_large_thread_cnt)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -2306,7 +2334,7 @@ TEST_F(TestDagScheduler, test_large_thread_cnt)
   scheduler->destroy();
 }
 
-TEST_F(TestDagScheduler, test_large_thread_cnt_2)
+TEST_P(TestDagScheduler, test_large_thread_cnt_2)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
@@ -2365,6 +2393,9 @@ TEST_F(TestDagScheduler, test_large_thread_cnt_2)
   scheduler->destroy();
 }
 */
+
+INSTANTIATE_TEST_CASE_P(SelfSched, TestDagScheduler, ::testing::Values(false, true));
+
 }
 }
 

@@ -719,26 +719,35 @@ int ObIDag::check_cycle()
 
 bool ObIDag::has_finished()
 {
-  bool bret = false;
   ObMutexGuard guard(lock_);
-  if (ObIDag::DAG_STATUS_NODE_RUNNING == dag_status_) {
-    bret = task_list_.is_empty()
-           && 0 == running_task_cnt_;
-  } else {
-    bret = 0 == running_task_cnt_;
-  }
+  const bool bret = inner_has_finished();
   if (bret) { // when return true, this dag will finish soon
     is_stop_ = true;
   }
   return bret;
 }
 
+bool ObIDag::inner_has_finished()
+{
+  bool bret = false;
+  if (ObIDag::DAG_STATUS_NODE_RUNNING == dag_status_) {
+    bret = task_list_.is_empty()
+           && 0 == running_task_cnt_;
+  } else {
+    bret = 0 == running_task_cnt_;
+  }
+  return bret;
+}
+
 int ObIDag::get_next_ready_task(ObITask *&task)
 {
-  int ret = OB_SUCCESS;
-  bool found = false;
-
   ObMutexGuard guard(lock_);
+  return inner_get_next_ready_task(task) ? OB_SUCCESS : OB_ITER_END;
+}
+
+bool ObIDag::inner_get_next_ready_task(ObITask *&task)
+{
+  bool found = false;
   if (is_stop_ || ObIDag::DAG_STATUS_NODE_RUNNING != dag_status_) {
   } else if (OB_UNLIKELY(max_concurrent_task_cnt_ >= 1 && running_task_cnt_ >= max_concurrent_task_cnt_)) {
     if (REACH_THREAD_TIME_INTERVAL(DUMP_STATUS_INTERVAL)) {
@@ -754,26 +763,81 @@ int ObIDag::get_next_ready_task(ObITask *&task)
         found = true;
         task = cur_task;
         inc_running_task_cnt();
+        // Pre-set task status to RUNNING under lock_ so concurrent callers (worker self-schedule
+        // fast path and scheduler thread) cannot pick the same task twice.
+        task->set_status(ObITask::TASK_STATUS_RUNNING);
       } else {
         cur_task = cur_task->get_next();
       }
     }
   }
-  if (OB_SUCC(ret) && !found) {
-    ret = OB_ITER_END;
-  }
-  return ret;
+  return found;
 }
 
 int ObIDag::finish_task(ObITask *&task)
 {
+  ObMutexGuard guard(lock_);
+  return inner_finish_task(task);
+}
+
+
+// Worker self-schedule fast path: finish cur_task under dag lock_ and try to pick the next ready task of the SAME dag,
+// so the worker can keep running without a scheduler roundtrip.
+// The caller dispatches on the (cur_task, next_task) pair after the call:
+//
+//   cur_task   next_task   meaning                       caller action
+//   ---------  ----------  ----------------------------  ----------------------------------------
+//   non-null   null        fast path declined / failed   fall back to scheduler->deal_with_finish_task
+//   null       non-null    cur finished, next picked     run next_task in place (self-loop)
+//   null       null        cur finished, dag has no more  release this worker only; whoever later
+//                          ready task (maybe dag done)    holds prio_lock_ finalizes the dag
+//
+// NOTE: Finalize must happen while holding ObDagPrioScheduler's prio_lock_ to avoid a worker/scheduler double-free race.
+int ObIDag::try_finish_and_pick_next_same_dag(
+    ObITask *&cur_task,
+    ObITask *&next_task)
+{
   int ret = OB_SUCCESS;
-  // remove finished task from task list and update indegree
+  next_task = nullptr;
+  if (OB_ISNULL(cur_task)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid argument", K(ret));
+  } else if (OB_UNLIKELY(cur_task->get_dag() != this)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "cur_task does not belong to this dag", K(ret), KPC(cur_task), KP(this));
+  } else {
+    ObMutexGuard guard(lock_);
+    if (is_stop_ || is_dag_failed() || ObIDag::DAG_STATUS_NODE_RUNNING != dag_status_) {
+      // directly return back
+    } else if (OB_FAIL(inner_finish_task(cur_task))) {
+      COMMON_LOG(WARN, "failed to finish task", K(ret));
+      set_dag_status(DAG_STATUS_NODE_FAILED);
+      set_dag_ret(ret);
+      cur_task = nullptr; // task ownership consumed; worker should release itself
+      ret = OB_SUCCESS;
+    } else if (OB_NOT_NULL(cur_task)) { // task was freed by inner_finish_task
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(ERROR, "unexpected not null curr task", K(ret));
+    } else if (inner_has_finished()) {
+      // ATTENTION: only set the stop_ flag but not finish this dag here.
+      // Only the thread accuire the lock_ of ObDagPrioScheduler can finish the dag.
+      // This avoids the race between worker and scheduler double-free.
+      is_stop_ = true;
+    } else {
+      (void) inner_get_next_ready_task(next_task);
+    }
+  }
+  return ret;
+}
+
+int ObIDag::inner_finish_task(ObITask *&task)
+{
+  int ret = OB_SUCCESS;
+  // remove finished task from task list and update indegree. caller must hold lock_.
   if (OB_ISNULL(task)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid args", K(ret));
   } else {
-    ObMutexGuard guard(lock_);
     if (OB_ISNULL(task_list_.remove(task))) {
       ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(ERROR, "failed to remove finished task from task_list", K(ret));
@@ -981,6 +1045,16 @@ int ObIDag::set_stop_without_lock()
 void ObIDag::simply_set_stop()
 {
   ObMutexGuard guard(lock_);
+  is_stop_ = true;
+}
+
+void ObIDag::simply_set_stop(const int errcode)
+{
+  ObMutexGuard guard(lock_);
+  set_dag_ret(errcode);
+  if (!is_finish_status(dag_status_)) {
+    set_dag_status(DAG_STATUS_NODE_FAILED);
+  }
   is_stop_ = true;
 }
 
@@ -1843,6 +1917,7 @@ void ObTenantDagWorker::run1()
   int ret = OB_SUCCESS;
   ObIDag *dag = NULL;
   ObITask *cur_task = NULL;
+  ObITask *next_task = NULL;
   lib::set_thread_name("DAG");
   lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
   while (!has_set_stop()) {
@@ -1894,8 +1969,19 @@ void ObTenantDagWorker::run1()
       status_ = DWS_FREE;
       cur_task = task_;
       task_ = NULL;
-      if (OB_FAIL(MTL(ObTenantDagScheduler*)->deal_with_finish_task(cur_task, *this, ret/*task error_code*/))) {
-        COMMON_LOG(WARN, "failed to finish task", K(ret), KPC(cur_task));
+      next_task = NULL;
+      const int task_error_code = ret;
+      ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
+      // Pick the next task in the same dag firstly. If none, wait the scheduler dispatch new task.
+      if (OB_ISNULL(scheduler)) {
+        ret = OB_ERR_UNEXPECTED;
+        COMMON_LOG(WARN, "scheduler is null", K(ret), KPC(cur_task));
+      } else if (OB_FAIL(scheduler->finish_task_and_try_pick_next(cur_task, *this, task_error_code, next_task))) {
+        COMMON_LOG(WARN, "failed to finish task and try pick next", K(ret), KPC(cur_task));
+      } else if (OB_NOT_NULL(next_task)) {
+        set_task(next_task);
+        status_ = DWS_RUNNABLE;
+        continue;
       }
       ObCurTraceId::reset();
       lib::set_thread_name("DAG");
@@ -2214,8 +2300,7 @@ int ObDagPrioScheduler::schedule_one_()
     COMMON_LOG(WARN, "task is null", K(ret));
   } else {
     ObCurTraceId::set(task->get_dag()->get_dag_id());
-    if (ObITask::TASK_STATUS_RETRY != task->get_status()
-        && OB_FAIL(task->generate_next_task())) {
+    if (OB_FAIL(task->generate_next_task())) { // not support retry, generate next task directly.
       task->get_dag()->reset_task_running_status(*task, ObITask::TASK_STATUS_FAILED);
       COMMON_LOG(WARN, "failed to generate_next_task", K(ret));
     } else if (OB_FAIL(scheduler_->dispatch_task(*task, worker, priority_))) {
@@ -2522,11 +2607,20 @@ int ObDagPrioScheduler::pop_task_from_ready_list_(ObITask *&task)
           COMMON_LOG(WARN, "failed to schedule dag", K(ret), KPC(cur));
         }
       } else if ((ObIDag::DAG_STATUS_NODE_FAILED == dag_status || cur->has_set_stop())
-          && 0 == cur->get_running_task_count()) { // no task running failed dag, need free
+          && 0 == cur->get_running_task_count()) { // no task running, dag is ready to be finalized
         tmp_dag = cur;
         cur = cur->get_next();
-        if (OB_FAIL(finish_dag_(ObIDag::DAG_STATUS_ABORT, tmp_dag, true/*try_move_child*/))) { // will report result
-          COMMON_LOG(WARN, "failed to deal with failed dag", K(ret), KPC(tmp_dag));
+        // The worker self-schedule fast path only sets the dag stop flag and never finalizes,
+        // so the scheduler picks up such stopped dags and finalizes them here.
+        // The worker slow path deal_with_finish_task still finalizes its dag directly;
+        // A dag stopped (e.g. force canceled) with remaining unexecuted tasks must be
+        // ABORT rather than FINISH, otherwise the unfinished work would be reported as success.
+        const bool has_remaining_task = tmp_dag->get_task_list_count() > 0;
+        const ObIDag::ObDagStatus final_status = (tmp_dag->is_dag_failed() || tmp_dag->is_dag_net_canceled() || has_remaining_task)
+                                               ? ObIDag::DAG_STATUS_ABORT
+                                               : ObIDag::DAG_STATUS_FINISH;
+        if (OB_FAIL(finish_dag_(final_status, tmp_dag, true/*try_move_child*/))) { // will report result
+          COMMON_LOG(WARN, "failed to finalize dag", K(ret), K(final_status), KPC(tmp_dag));
           ob_abort();
         }
         continue;
@@ -3382,6 +3476,25 @@ int ObDagPrioScheduler::deal_with_finish_task(
   return ret;
 }
 
+int ObDagPrioScheduler::release_worker_only(ObTenantDagWorker &worker,
+                                            const ObDagType::ObDagTypeEnum dag_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(scheduler_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "unexpected null scheduler", K(ret), KP_(scheduler));
+  } else {
+    {
+      ObMutexGuard guard(prio_lock_);
+      --running_task_cnts_;
+      running_workers_.remove(&worker);
+    }
+    scheduler_->sub_running_dag_cnts(dag_type);
+    scheduler_->sub_total_running_task_cnt();
+  }
+  return ret;
+}
+
 int ObDagPrioScheduler::cancel_dag(const ObIDag &dag, const bool force_cancel)
 {
   int ret = OB_SUCCESS;
@@ -4160,6 +4273,7 @@ ObTenantDagScheduler::ObTenantDagScheduler()
     work_thread_num_(0),
     total_running_task_cnt_(0),
     scheduled_task_cnt_(0),
+    self_sched_enabled_(false),
     scheduler_sync_(),
     mem_context_(nullptr),
     ha_mem_context_(nullptr)
@@ -4205,6 +4319,7 @@ void ObTenantDagScheduler::inner_reload_config()
     set_thread_score(ObDagPrio::DAG_PRIO_ATTACH_SHARED_SSTABLE, tenant_config->attach_shared_sstable_thread_score);
 #endif
     set_compaction_dag_limit(tenant_config->compaction_dag_cnt_limit);
+    ATOMIC_STORE(&self_sched_enabled_, static_cast<bool>(tenant_config->_enable_dag_worker_self_schedule));
   }
 }
 
@@ -4352,6 +4467,7 @@ void ObTenantDagScheduler::reset()
   reclaim_util_.reset();
   total_running_task_cnt_ = 0;
   scheduled_task_cnt_ = 0;
+  self_sched_enabled_ = false;
   MEMSET(dag_cnts_, 0, sizeof(dag_cnts_));
   MEMSET(running_dag_cnts_, 0, sizeof(running_dag_cnts_));
   MEMSET(added_dag_cnts_, 0, sizeof(added_dag_cnts_));
@@ -4959,6 +5075,77 @@ void ObTenantDagScheduler::notify_when_dag_net_finish()
   notify();
 }
 
+int ObTenantDagScheduler::finish_task_and_try_pick_next(
+    ObITask *cur_task,
+    ObTenantDagWorker &worker,
+    int task_error_code,
+    ObITask *&next_task)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  next_task = nullptr;
+  ObIDag *dag = nullptr;
+  if (OB_ISNULL(cur_task) || OB_ISNULL(dag = cur_task->get_dag())) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "invalid null arguments", K(ret), KP(cur_task), KP(dag));
+  } else {
+    // The dag may be freed by scheduler thread at any time once it's marked as stopped
+    // when calling dag->try_finish_and_pick_next_same_dag, so need cache priority and dag_type firstly.
+    const int64_t priority = dag->get_priority();
+    const ObDagType::ObDagTypeEnum dag_type = dag->get_type();
+    if (OB_SUCCESS != task_error_code
+        || dag->is_dag_failed()
+        || !is_self_schedule_enabled()) {
+      // dag is failed, or self-schedule is not enabled, take the slow path.
+    } else if (OB_TMP_FAIL(dag->try_finish_and_pick_next_same_dag(cur_task, next_task))) {
+      COMMON_LOG(ERROR, "failed to try finish and pick next", K(tmp_ret), KP(cur_task), KPC(dag));
+    }
+
+    if (OB_NOT_NULL(cur_task)) {
+      if (OB_FAIL(deal_with_finish_task(cur_task, worker, task_error_code))) {
+        COMMON_LOG(WARN, "failed to finish task", K(ret), KPC(cur_task), KPC(dag));
+      }
+    } else if (OB_NOT_NULL(next_task)) {
+      if (OB_FAIL(schedule_next_task_directly_(next_task, worker, priority, dag_type))) {
+        COMMON_LOG(WARN, "failed to schedule next task directly", K(ret));
+      }
+    } else if (OB_FAIL(release_worker_only(worker, priority, dag_type))) {
+      COMMON_LOG(WARN, "failed to release worker only", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTenantDagScheduler::schedule_next_task_directly_(
+    ObITask *&next_task,
+    ObTenantDagWorker &worker,
+    const int64_t priority,
+    const ObDagType::ObDagTypeEnum dag_type)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObIDag *dag = nullptr;
+  if (OB_ISNULL(next_task) || OB_ISNULL(dag = next_task->get_dag())) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "invalid arguments", K(ret), KP(next_task), KP(dag));
+  } else if (OB_FAIL(next_task->generate_next_task())) {
+    // refer to ObDagPrioScheduler::schedule_one_()
+    COMMON_LOG(WARN, "failed to generate next task", K(ret), KPC(next_task));
+    dag->reset_task_running_status(*next_task, ObITask::TASK_STATUS_FAILED);
+    dag->simply_set_stop(ret);
+    // dag is left for the scheduler thread to finalize via pop_task_from_ready_list_.
+    if (OB_TMP_FAIL(release_worker_only(worker, priority, dag_type))) {
+      COMMON_LOG(WARN, "failed to release worker after generate_next_task failed", K(tmp_ret));
+    }
+    next_task = nullptr;
+  } else {
+    // Refer to add_schedule_info_, but the total_running_task_cnt, running_task_cnts_ and running_dag_cnts stay unchanged.
+    add_scheduled_task_cnts(dag_type);
+    add_scheduled_data_size(dag_type, dag->get_data_size());
+  }
+  return ret;
+}
+
 int ObTenantDagScheduler::deal_with_finish_task(ObITask *&task, ObTenantDagWorker &worker, int error_code)
 {
   int ret = OB_SUCCESS;
@@ -4975,18 +5162,42 @@ int ObTenantDagScheduler::deal_with_finish_task(ObITask *&task, ObTenantDagWorke
   } else if (OB_FAIL(prio_sche_[dag->get_priority()].deal_with_finish_task(task, dag, worker, error_code))) {
     COMMON_LOG(WARN, "fail to finish task", K(ret), KPC(dag));
   } else {
-    ObThreadCondGuard guard(scheduler_sync_);
-    if (OB_SUCC(guard.get_ret())) {
-      worker.reset_compaction_thread_locals();
-      free_workers_.add_last(&worker);
-      worker.set_task(NULL);
-      if (OB_FAIL(scheduler_sync_.signal())) {
-        COMMON_LOG(WARN, "Failed to signal", K(ret), KPC(dag));
-      }
+    return_worker_to_pool_(worker);
+  }
+  return ret;
+}
+
+int ObTenantDagScheduler::release_worker_only(ObTenantDagWorker &worker,
+                                              const int64_t priority,
+                                              const ObDagType::ObDagTypeEnum dag_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(priority < 0 || priority >= ObDagPrio::DAG_PRIO_MAX
+               || dag_type < 0 || dag_type >= ObDagType::DAG_TYPE_MAX)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "invalid priority or dag_type", K(ret), K(priority), K(dag_type));
+  } else if (OB_FAIL(prio_sche_[priority].release_worker_only(worker, dag_type))) {
+    COMMON_LOG(WARN, "fail to release worker only", K(ret));
+  } else {
+    return_worker_to_pool_(worker);
+  }
+  return ret;
+}
+
+void ObTenantDagScheduler::return_worker_to_pool_(ObTenantDagWorker &worker)
+{
+  int ret = OB_SUCCESS;
+  ObThreadCondGuard guard(scheduler_sync_);
+  if (OB_FAIL(guard.get_ret())) {
+    COMMON_LOG(ERROR, "failed to acquire scheduler_sync_, worker leaked", K(ret));
+  } else {
+    worker.reset_compaction_thread_locals();
+    free_workers_.add_last(&worker);
+    worker.set_task(NULL);
+    if (OB_FAIL(scheduler_sync_.signal())) {
+      COMMON_LOG(WARN, "Failed to signal", K(ret));
     }
   }
-
-  return ret;
 }
 
 void ObTenantDagScheduler::finish_dag_net(ObIDagNet *dag_net)

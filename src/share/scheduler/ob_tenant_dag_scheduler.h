@@ -486,6 +486,7 @@ public:
   int set_stop();
   int set_stop_without_lock();
   void simply_set_stop(); // do not set dag net cancel.
+  void simply_set_stop(const int errcode); // set dag failed(dag_ret/status) then stop, do not set dag net cancel.
   bool is_dag_net_canceled() const;
   ObIDagNet *get_dag_net() const { return dag_net_; }
   void set_dag_net(ObIDagNet &dag_net)
@@ -557,6 +558,8 @@ public:
   int get_next_ready_task(ObITask *&task);
   int finish_task(ObITask *&task);
   bool has_finished();
+  // worker self-schedule fast path: finish cur_task and pick the next ready task of the same dag.
+  int try_finish_and_pick_next_same_dag(ObITask *&cur_task, ObITask *&next_task);
   virtual int report_result()
   {
     // This func is only used for no need retry to report result.
@@ -595,6 +598,9 @@ public:
 protected:
   void clear_task_list_with_lock();
 
+  int inner_finish_task(ObITask *&task);
+  bool inner_has_finished();
+  bool inner_get_next_ready_task(ObITask *&task);
 #ifdef ERRSIM
 public:
   virtual common::ObErrsimModuleType::TYPE get_module_type() { return ObErrsimModuleType::ERRSIM_MODULE_NONE; }
@@ -1094,6 +1100,9 @@ public:
     int64_t &row_scanned,
     int64_t &row_inserted);
   int deal_with_finish_task(ObITask *&task, ObIDag *&dag, ObTenantDagWorker &worker, int error_code);
+  // After self-schedule finishes a task, only release the worker; never finalize the dag.
+  // Scheduler thread finalizes finished dags later in pop_task_from_ready_list_.
+  int release_worker_only(ObTenantDagWorker &worker, const ObDagType::ObDagTypeEnum dag_type);
   // force_cancel: whether to cancel running dag
   int cancel_dag(const ObIDag &dag, const bool force_cancel = false);
   int check_dag_exist(const ObIDag &dag, bool &exist, bool &is_emergency);
@@ -1327,6 +1336,18 @@ public:
       const ObDagId &dag_id, bool &exist);
   int cancel_dag_net(const ObDagId &dag_id);
   int deal_with_finish_task(ObITask *&task, ObTenantDagWorker &worker, int error_code);
+  // After self-schedule finishes a task, only release the worker; never finalize the dag.
+  int release_worker_only(ObTenantDagWorker &worker,
+                          const int64_t priority,
+                          const ObDagType::ObDagTypeEnum dag_type);
+  // Called by the worker after a task finishes: finalize the current task and, when
+  // self-schedule is enabled, try to pick the next ready task of the same dag so the
+  // worker can keep running it (returned via next_task). The worker only drives its own
+  // status machine; all scheduling decisions live here.
+  int finish_task_and_try_pick_next(ObITask *cur_task,
+                                    ObTenantDagWorker &worker,
+                                    int task_error_code,
+                                    ObITask *&next_task);
   bool try_switch(ObTenantDagWorker &worker);
   int dispatch_task(ObITask &task, ObTenantDagWorker *&ret_worker, const int64_t priority);
   void finish_dag_net(ObIDagNet *dag_net);
@@ -1354,6 +1375,7 @@ public:
   // for unittest
   int get_first_dag_net(ObIDagNet *&dag_net);
 
+  bool is_self_schedule_enabled() const { return ATOMIC_LOAD(&self_sched_enabled_); }
 private:
   static const int64_t SCHEDULER_WAIT_TIME_MS = 1000; // 1s
   static const int64_t DAG_SIZE_LIMIT = 10 << 12;
@@ -1371,6 +1393,11 @@ private:
   int create_worker();
   int try_reclaim_threads();
   void destroy_all_workers();
+  void return_worker_to_pool_(ObTenantDagWorker &worker);
+  int schedule_next_task_directly_(ObITask *&next_task,
+                                   ObTenantDagWorker &worker,
+                                   const int64_t priority,
+                                   const ObDagType::ObDagTypeEnum dag_type);
   int set_thread_score(const int64_t priority, const int64_t concurrency);
   int set_compaction_dag_limit(const int64_t new_val);
   void inner_get_suggestion_reason(const ObDagType::ObDagTypeEnum type, int64_t &reason);
@@ -1406,6 +1433,7 @@ private:
   int64_t scheduled_dag_cnts_[ObDagType::DAG_TYPE_MAX]; // atomic value // interval scheduled dag count
   int64_t scheduled_task_cnts_[ObDagType::DAG_TYPE_MAX]; // atomic value // interval scheduled task count
   int64_t scheduled_data_size_[ObDagType::DAG_TYPE_MAX]; // atomic value // interval scheduled data size
+  bool self_sched_enabled_; // refreshed in inner_reload_config
   ObReclaimUtil reclaim_util_;  // util to help adaptively reclaim worker
   common::ObThreadCond scheduler_sync_;  // Make sure the lock is inside if there are nested locks
   lib::MemoryContext mem_context_;
