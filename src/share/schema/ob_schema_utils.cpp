@@ -2105,6 +2105,37 @@ int check_alter_table_arg_for_parallel(
   return ret;
 }
 
+bool is_drop_column_lob(const ObColumnSchemaV2 &column_schema)
+{
+  return (is_lob_storage(column_schema.get_data_type()) && !column_schema.is_udt_hidden_column())
+         || column_schema.is_xmltype();
+}
+
+int count_drop_column_lob_columns(const ObTableSchema &table_schema,
+                                  int64_t &lob_column_count)
+{
+  int ret = OB_SUCCESS;
+  lob_column_count = 0;
+  const ObColumnSchemaV2 *column_schema = nullptr;
+  ObColumnIterByPrevNextID iter(table_schema);
+  while (OB_SUCC(ret)) {
+    if (OB_FAIL(iter.next(column_schema))) {
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+        break;
+      } else {
+        LOG_WARN("fail to iterate table columns", KR(ret), K(table_schema));
+      }
+    } else if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null column", KR(ret), K(lob_column_count), K(table_schema));
+    } else if (is_drop_column_lob(*column_schema)) {
+      ++lob_column_count;
+    }
+  }
+  return ret;
+}
+
 // Check if all drop columns can go through instant/online DDL path
 // If any condition fails, can_parallel_alter = false and we fall back to serial
 int check_drop_column_can_parallel(const obrpc::ObAlterTableArg &arg,
@@ -2176,10 +2207,7 @@ int check_drop_column_can_parallel(const obrpc::ObAlterTableArg &arg,
                         K(col_name), K(per_col_ddl_type));
             } else if (OB_FAIL(drop_col_ids.push_back(orig_col->get_column_id()))) {
               LOG_WARN("fail to push back column id", KR(ret));
-            } else if (is_lob_storage(orig_col->get_data_type())
-                       && !orig_col->is_udt_hidden_column()) {
-              ++drop_lob_cnt;
-            } else if (orig_col->is_xmltype()) {
+            } else if (is_drop_column_lob(*orig_col)) {
               ++drop_lob_cnt;
             }
           }
@@ -2220,15 +2248,9 @@ int check_drop_column_can_parallel(const obrpc::ObAlterTableArg &arg,
     // 3. Check if dropping all LOB columns
     if (OB_SUCC(ret) && can_parallel_alter && drop_lob_cnt > 0) {
       int64_t table_lob_cnt = 0;
-      for (ObTableSchema::const_column_iterator col_it = orig_table_schema.column_begin();
-           col_it != orig_table_schema.column_end(); ++col_it) {
-        if (OB_NOT_NULL(*col_it)
-            && ((is_lob_storage((*col_it)->get_data_type()) && !(*col_it)->is_udt_hidden_column())
-                || (*col_it)->is_xmltype())) {
-          ++table_lob_cnt;
-        }
-      }
-      if (drop_lob_cnt >= table_lob_cnt) {
+      if (OB_FAIL(count_drop_column_lob_columns(orig_table_schema, table_lob_cnt))) {
+        LOG_WARN("fail to count drop column lob columns", KR(ret), K(orig_table_schema));
+      } else if (drop_lob_cnt >= table_lob_cnt) {
         can_parallel_alter = false;
         reason = "dropping all lob columns";
         LOG_TRACE("dropping all lob columns, fall back to serial");

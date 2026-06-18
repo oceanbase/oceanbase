@@ -3668,24 +3668,9 @@ int ObDDLService::handle_drop_all_lob_columns_(const ObTableSchema &orig_table_s
     // And to drop all lob columns needs to change ddl_type to DDL_TABLE_REDEFINITION,
     // so as to execute offline drop column.
     int64_t lob_cols_cnt_in_table = 0;
-    const ObColumnSchemaV2 *col = nullptr;
-    ObColumnIterByPrevNextID iter(orig_table_schema);
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(iter.next(col))) {
-        if (OB_ITER_END == ret) {
-          ret = OB_SUCCESS;
-          break;
-        } else {
-          LOG_WARN("iter table column failed", KR(ret), K(orig_table_schema));
-        }
-      } else if (OB_ISNULL(col)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null column", KR(ret), K(lob_cols_cnt_in_table), K(orig_table_schema));
-      } else if (is_lob_storage(col->get_data_type())) {
-        lob_cols_cnt_in_table++;
-      }
-    }
-    if (OB_SUCC(ret)) {
+    if (OB_FAIL(share::schema::count_drop_column_lob_columns(orig_table_schema, lob_cols_cnt_in_table))) {
+      LOG_WARN("fail to count drop column lob columns", KR(ret), K(drop_lob_cols_cnt), K(orig_table_schema));
+    } else {
       alter_table_arg.alter_algorithm_ = drop_lob_cols_cnt == lob_cols_cnt_in_table ?
         obrpc::ObAlterTableArg::AlterAlgorithm::INPLACE : alter_table_arg.alter_algorithm_; // to execute offline.
       LOG_TRACE("rewrite algorithm in drop column", K(alter_table_arg.alter_algorithm_), K(drop_lob_cols_cnt), K(lob_cols_cnt_in_table));
@@ -3804,10 +3789,7 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("Heap table primary key column not support drop", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "dropping primary key columns in a heap table is");
-          } else if (is_lob_storage(orig_column_schema->get_data_type())
-                     && !orig_column_schema->is_udt_hidden_column()) {
-            drop_lob_cols_cnt++;
-          } else if (orig_column_schema->is_xmltype()) {
+          } else if (share::schema::is_drop_column_lob(*orig_column_schema)) {
             // The implicitly added lob column will be dropped when drop the xml column.
             drop_lob_cols_cnt++;
           }

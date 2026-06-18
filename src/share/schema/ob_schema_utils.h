@@ -490,6 +490,9 @@ int check_alter_table_arg_for_parallel(const obrpc::ObAlterTableArg &arg,
 int check_non_column_arg_for_parallel(const obrpc::ObAlterTableArg &arg,
                                       bool &can_parallel,
                                       const char *&reason);
+bool is_drop_column_lob(const ObColumnSchemaV2 &column_schema);
+int count_drop_column_lob_columns(const ObTableSchema &table_schema,
+                                  int64_t &lob_column_count);
 int check_drop_column_can_parallel(const obrpc::ObAlterTableArg &arg,
                                    const ObTableSchema &orig_table_schema,
                                    ObSchemaGetterGuard &schema_guard,

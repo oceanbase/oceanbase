@@ -247,6 +247,7 @@ int ObAlterTableDropColumnAction::register_rls_locks_(const ObTableSchema &table
 int ObAlterTableDropColumnAction::register_dep_view_locks_(const ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
+  dep_objs_before_lock_.reset();
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(ObDependencyInfo::collect_all_dep_objs(
