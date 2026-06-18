@@ -209,14 +209,27 @@ int ObPartitionMergeIterGroup<T>::init(
   } else {
     const ObCOSSTableV2 *co_sstable = static_cast<const ObCOSSTableV2 *>(T::table_);
     const ObStaticMergeParam &static_param = merge_param.static_param_;
-    for (int64_t i = 0; i < filter_handle_->filter_col_idxs_->count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < filter_handle_->filter_col_idxs_->count(); ++i) {
       ObPartitionMergeIterGroupItem item;
       void *buf = nullptr;
       ObSSTableWrapper cg_wrapper;
+      bool is_duplicate_col = false;
       const ObCompactionFilterColIdxs::ColIdxCgIdxPair &col_cg_pair = filter_handle_->filter_col_idxs_->at(i);
+      // Multiple TTL rules may target the same column. The MDS distinct mgr keeps them
+      // as separate ObTTLFilterInfo (interleaved versions cannot replace each other),
+      // so filter_col_idxs_ may contain duplicated col_idx. Each group item only needs
+      // to fetch the column value into filter_check_row_ once, so we dedup by col_idx
+      // here to avoid building redundant CG iters and double-writing the same
+      // filter_check_row_ slot (which would otherwise trigger OB_ERR_UNEXPECTED in
+      // fuse_group_item_row).
+      for (int64_t j = 0; !is_duplicate_col && j < iter_group_items_.count(); ++j) {
+        is_duplicate_col = (iter_group_items_.at(j).col_idx_ == col_cg_pair.col_idx_);
+      }
       if (OB_UNLIKELY(!col_cg_pair.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "unexpected invalid col cg pair", KR(ret), K(i), K(col_cg_pair));
+      } else if (is_duplicate_col) {
+        STORAGE_LOG(INFO, "[COMPACTION TTL] skip duplicated filter col idx for group item", K(i), K(col_cg_pair));
       } else if (OB_FAIL(co_sstable->get_cg_sstable(col_cg_pair.cg_idx_, cg_wrapper))) {
         STORAGE_LOG(WARN, "failed to get cg sstable", KR(ret), K(i), K(col_cg_pair));
       } else if (OB_ISNULL(buf = static_cast<void *>(T::allocator_.alloc(sizeof(ObPartitionRowMergeIter) + sizeof(ObCGReadInfoHandle))))) {

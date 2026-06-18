@@ -1143,6 +1143,80 @@ TEST_F(TestMergeIterGroup, test_micro_iter_group_two_columns)
   cleanup_co_env(merger, co_handle, cg_handle_arr);
 }
 
+// ===========================================================================
+// Test 14: duplicated filter col idx must be deduped to a single group item
+//
+// Multiple TTL rules can target the same column. When their (value,
+// commit_version) are interleaved, the MDS distinct mgr cannot let one replace
+// the other, so it keeps BOTH as separate ObTTLFilterInfo and filter_col_idxs_
+// ends up with two entries carrying the SAME col_idx.
+//
+// ObPartitionMergeIterGroup::init must dedup by col_idx and build only ONE
+// group item. Without the dedup, init builds two items for the same col_idx,
+// and the second fuse_group_item_row double-writes the same filter_check_row_
+// slot -> OB_ERR_UNEXPECTED(-4016) (the production crash this test guards).
+// ===========================================================================
+TEST_F(TestMergeIterGroup, test_duplicate_filter_col_idx_dedup)
+{
+  const int64_t snapshot_version = 10;
+  const int64_t row_cnt = 8;
+
+  std::string row_data = generate_single_col_data(row_cnt, snapshot_version);
+
+  ObTabletMergeDagParam param;
+  ObTabletMajorMergeCtx merge_ctx(param, allocator_);
+  ObPartitionMajorMerger merger(local_arena_, merge_ctx.static_param_);
+
+  const int64_t micro_limits[] = {INT64_MAX, INT64_MAX, INT64_MAX};
+  const int64_t macro_limits[] = {INT64_MAX, INT64_MAX, INT64_MAX};
+
+  ObTableHandleV2 co_handle;
+  ObSEArray<ObTableHandleV2, 4> cg_handle_arr;
+  setup_co_env(row_data.c_str(), 1, snapshot_version,
+               micro_limits, macro_limits,
+               merge_ctx, merger, co_handle, cg_handle_arr);
+
+  // setup_co_env already registered one filter col (filter_col, cg 2). Inject a
+  // second entry with the SAME col_idx to simulate two interleaved TTL rules on
+  // the same column. filter_handle_ holds a pointer to the live filter_col_idxs_,
+  // so the duplicate is visible at group->init() time.
+  const int64_t filter_col = schema_rowkey_cnt_ + 2;
+  ASSERT_EQ(OB_SUCCESS, merge_ctx.filter_ctx_.filter_col_idxs_.init_for_unittest(filter_col, 2));
+  ASSERT_EQ(2, merge_ctx.filter_ctx_.filter_col_idxs_.count());
+
+  ObPartitionMergeIterGroup<ObPartitionRowMergeIter> *group =
+      OB_NEWx(ObPartitionMergeIterGroup<ObPartitionRowMergeIter>, (&allocator_), allocator_, merger.filter_handle_);
+  ASSERT_NE(nullptr, group);
+  ObRowkeyReadInfo rowkey_cg_read_info;
+  build_rowkey_cg_read_info(merger.merge_param_, rowkey_cg_read_info);
+
+  // init must succeed and dedup the duplicated col_idx down to ONE group item.
+  ASSERT_EQ(OB_SUCCESS, group->init(merger.merge_param_, 0, &rowkey_cg_read_info));
+  ASSERT_EQ(1, group->get_group_item_count())
+      << "duplicated filter col idx must be deduped to a single group item";
+
+  ObPartitionMergeIter *col_iter = group->iter_group_items_.at(0).iter_;
+  ASSERT_NE(nullptr, col_iter);
+
+  // Every row must fuse without OB_ERR_UNEXPECTED (the original -4016 crash):
+  // get_filter_check_row returns null when fuse_group_item_row fails.
+  int64_t actual_row_cnt = 0;
+  int ret = OB_SUCCESS;
+  while (OB_SUCCESS == (ret = group->next())) {
+    const ObDatumRow *check_row = group->get_filter_check_row();
+    ASSERT_NE(nullptr, check_row)
+        << "get_filter_check_row returned null (fuse failed) at row " << actual_row_cnt;
+    ASSERT_EQ(group->iter_row_id_, col_iter->iter_row_id_);
+    ++actual_row_cnt;
+  }
+  ASSERT_EQ(OB_ITER_END, ret);
+  ASSERT_EQ(row_cnt, actual_row_cnt);
+
+  group->reset();
+  allocator_.free(group);
+  cleanup_co_env(merger, co_handle, cg_handle_arr);
+}
+
 } // namespace storage
 } // namespace oceanbase
 
