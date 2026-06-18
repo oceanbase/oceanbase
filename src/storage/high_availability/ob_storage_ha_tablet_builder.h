@@ -89,6 +89,18 @@ public:
       common::ObIArray<ObLogicTabletID> &sys_tablet_id_list,
       ObTabletCopyDependencyMgr &tablet_dep_mgr
     );
+  // For parallel create tablets. The reader is not thread safe,
+  // caller must serialize calls on the same reader by lock.
+  // Return OB_ITER_END when reader is drained.
+  int fetch_and_modify_next_tablet_infos(
+      ObICopyLSViewInfoReader *reader,
+      common::ObIArray<obrpc::ObCopyTabletInfo> &tablet_infos,
+      const int64_t max_count);
+  // For parallel create tablets. Tablets with different tablet id
+  // can be created concurrently.
+  int batch_create_or_update_tablets(
+      const common::ObIArray<obrpc::ObCopyTabletInfo> &tablet_infos,
+      const bool need_check_tablet_limit);
   // Restore PENDING tablets meta. PENDING tablets will be exist at restore phase RESTORE_SYS_TABLETS,
   // RESTORE_TO_CONSISTENT_SCN, or QUICK_RESTORE. Leader gets the meta from backup, follower gets it from leader.
   // If that tablet meta identified uniquely by transfer sequence exists, replace and update the restore status to EMPTY.

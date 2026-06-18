@@ -320,6 +320,61 @@ int ObStorageHATabletsBuilder::create_all_tablets(
   return ret;
 }
 
+int ObStorageHATabletsBuilder::fetch_and_modify_next_tablet_infos(
+    ObICopyLSViewInfoReader *reader,
+    common::ObIArray<obrpc::ObCopyTabletInfo> &tablet_infos,
+    const int64_t max_count)
+{
+  int ret = OB_SUCCESS;
+  obrpc::ObCopyTabletInfo tablet_info;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("storage ha tablets builder do not init", K(ret));
+  } else if (OB_ISNULL(reader) || max_count <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("fetch and modify next tablet infos get invalid argument",
+        K(ret), KP(reader), K(max_count));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < max_count; ++i) {
+    tablet_info.reset();
+    if (OB_FAIL(reader->get_next_tablet_info(tablet_info))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("failed to fetch tablet info", K(ret));
+      }
+    } else if (OB_FAIL(modified_tablet_info_(tablet_info))) {
+      LOG_WARN("failed to modified tablet info", K(ret), K(tablet_info));
+    } else if (OB_FAIL(tablet_infos.push_back(tablet_info))) {
+      LOG_WARN("failed to push back tablet info", K(ret), K(tablet_info));
+    }
+  }
+  if (OB_ITER_END == ret && tablet_infos.count() > 0) {
+    ret = OB_SUCCESS;
+  }
+  return ret;
+}
+
+int ObStorageHATabletsBuilder::batch_create_or_update_tablets(
+    const common::ObIArray<obrpc::ObCopyTabletInfo> &tablet_infos,
+    const bool need_check_tablet_limit)
+{
+  int ret = OB_SUCCESS;
+  ObLS *ls = nullptr;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("storage ha tablets builder do not init", K(ret));
+  } else if (tablet_infos.empty()) {
+    // nothing to do
+  } else if (OB_ISNULL(ls = param_.ls_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("log stream should not be NULL", K(ret), KP(ls), K(param_));
+  } else if (OB_FAIL(batch_create_or_update_tablets_(tablet_infos, need_check_tablet_limit, ls))) {
+    LOG_WARN("failed to batch create or update tablets", K(ret), K(tablet_infos.count()));
+  }
+  return ret;
+}
+
 int ObStorageHATabletsBuilder::create_all_tablets_with_4_1_rpc(
     ObIDagNet *dag_net,
     common::ObIArray<ObLogicTabletID> &sys_tablet_id_list,
