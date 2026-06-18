@@ -350,6 +350,7 @@ public:
   transaction::ObTransID trans_id_;
   bool fast_filter_skipped_;
   int64_t last_purge_ts_;
+  ObMergeEngineType merge_engine_type_; // just for unittest now
 };
 
 struct ObLockRowChecker{

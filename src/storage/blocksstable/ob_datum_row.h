@@ -7,6 +7,7 @@
 #define OB_STORAGE_BLOCKSSTABLE_DATUM_ROW_H
 
 #include "common/ob_common_types.h"
+#include "common/ob_store_format.h"
 #include "common/ob_tablet_id.h"
 #include "share/datum/ob_datum.h"
 #include "share/datum/ob_datum_funcs.h"
@@ -452,6 +453,7 @@ public:
   ObStorageDatumBuffer datum_buffer_;
   // add by @zimiao ObDatumRow does not care about the free of trans_info_ptr's memory
   // The caller must guarantee the life cycle and release of this memory
+  ObMergeEngineType merge_engine_type_;
   char *trans_info_;
   ObMajorMergeFlag major_merge_flag_;
 };

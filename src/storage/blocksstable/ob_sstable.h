@@ -109,6 +109,7 @@ public:
   share::SCN rec_scn_;
   int32_t length_; //serialize length after SSTABLE_META_CACHE_VERSION_V3
   int64_t min_merged_trans_version_;
+  bool has_hidden_rowkey_cg_;
   // add new variables here, no need to inc version
 };
 

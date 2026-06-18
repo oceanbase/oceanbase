@@ -1300,6 +1300,7 @@ int ObMigrationSSTableParam::serialize_(char *buf, const int64_t buf_len, int64_
   if (FAILEDx(uncommit_tx_info_.serialize(buf, buf_len, pos))) {
     LOG_WARN("fail to serialize uncommit tx info", K(ret), KP(buf), K(buf_len), K(pos));
   }
+  LST_DO_CODE(OB_UNIS_ENCODE, has_hidden_rowkey_cg_);
   return ret;
 }
 
@@ -1369,6 +1370,8 @@ int ObMigrationSSTableParam::deserialize_(const char *buf, const int64_t data_le
   if (OB_FAIL(ret)) {
   } else if (pos < data_len && OB_FAIL(uncommit_tx_info_.deserialize(buf, data_len, pos))) {
     LOG_WARN("fail to deserialize uncommit tx info", K(ret), KP(buf), K(data_len), K(pos));
+  } else if (pos < data_len) {
+    LST_DO_CODE(OB_UNIS_DECODE, has_hidden_rowkey_cg_);
   }
   return ret;
 }
@@ -1401,6 +1404,7 @@ int64_t ObMigrationSSTableParam::get_serialize_size_() const
 
   LST_DO_CODE(OB_UNIS_ADD_LEN, is_meta_root_);
   len += uncommit_tx_info_.get_serialize_size();
+  LST_DO_CODE(OB_UNIS_ADD_LEN, has_hidden_rowkey_cg_);
   return len;
 }
 

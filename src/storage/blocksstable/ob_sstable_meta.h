@@ -421,6 +421,7 @@ public:
   char *data_block_macro_meta_buf_;
   bool is_meta_root_;
   compaction::ObMemUncommitTxInfo uncommit_tx_info_;
+  bool has_hidden_rowkey_cg_;
   OB_UNIS_VERSION(MIGRATION_SSTABLE_PARAM_VERSION);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMigrationSSTableParam);

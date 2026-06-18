@@ -287,12 +287,14 @@ protected:
   static const int64_t READ_INFO_VERSION_V5 = 5; // after V4.3.5 bp3
   static const int64_t READ_INFO_VERSION_V6 = 6; // after V4.4.1
   static const int64_t READ_INFO_VERSION_V7 = 7; // after COMPACTION_TTL_CMP_DATA_VERSION
-  static const int64_t READ_INFO_VERSION_LATEST = READ_INFO_VERSION_V7;
+  static const int64_t READ_INFO_VERSION_V8 = 8; // after DATA_VERSION_4_6_1_0
+  static const int64_t READ_INFO_VERSION_LATEST = READ_INFO_VERSION_V8;
   static const int32_t READ_INFO_ONE_BIT = 1;
   static const int32_t READ_INFO_RESERVED_BITS = 11;
 
   bool is_inited_;
   bool is_oracle_mode_;
+  ObMergeEngineType original_merge_engine_type_;
   ObIAllocator *allocator_;
   // distinguish schema changed by schema column count
   union { //FARM COMPAT WHITELIST

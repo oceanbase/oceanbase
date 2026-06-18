@@ -369,6 +369,7 @@ OB_DEF_SERIALIZE(ObDatumRow)
               group_idx_,
               snapshot_version_);
   OB_UNIS_ENCODE_ARRAY(storage_datums_, count_);
+  OB_UNIS_ENCODE(merge_engine_type_);
   return ret;
 }
 
@@ -397,6 +398,7 @@ OB_DEF_DESERIALIZE(ObDatumRow)
   if (OB_SUCC(ret)) {
     OB_UNIS_DECODE_ARRAY(storage_datums_, count_);
   }
+  OB_UNIS_DECODE(merge_engine_type_);
   return ret;
 }
 
@@ -411,6 +413,7 @@ OB_DEF_SERIALIZE_SIZE(ObDatumRow)
               group_idx_,
               snapshot_version_);
   OB_UNIS_ADD_LEN_ARRAY(storage_datums_, count_);
+  OB_UNIS_ADD_LEN(merge_engine_type_);
   return len;
 }
 

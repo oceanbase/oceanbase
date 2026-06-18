@@ -4226,6 +4226,7 @@ void ObTableSchema::reset()
   column_group_cnt_ = 0;
   column_group_arr_capacity_ = 0;
   column_group_arr_ = NULL;
+  hidden_rowkey_column_group_ = NULL;
   cg_id_hash_arr_ = NULL;
   cg_name_hash_arr_ = NULL;
   mlog_tid_ = OB_INVALID_ID;
@@ -6399,6 +6400,7 @@ void ObTableSchema::reset_column_group_info()
   column_group_cnt_ = 0;
   column_group_arr_capacity_ = 0;
   column_group_arr_ = NULL;
+  hidden_rowkey_column_group_ = NULL;
   cg_id_hash_arr_ = NULL;
   cg_name_hash_arr_ = NULL;
 }
@@ -8077,6 +8079,15 @@ OB_DEF_SERIALIZE(ObTableSchema)
   OB_UNIS_ENCODE(skip_index_level_);
   OB_UNIS_ENCODE(external_file_pattern_type_);
   OB_UNIS_ENCODE(merge_engine_upper_version_);
+  // !!! FOR STATIC CHECKER BEGIN
+  // THE FOLLOWING CODE CANNOT BE DESCRIBED USING SERIALIZE MACROS. THEY ARE EQUIVALENT TO THESE CODES:
+  // OB_UNIS_ENCODE(*hidden_rowkey_column_group_);
+  const bool has_hidden_rowkey_cg = nullptr != hidden_rowkey_column_group_;
+  OB_UNIS_ENCODE(has_hidden_rowkey_cg);
+  if (OB_SUCC(ret) && has_hidden_rowkey_cg) {
+    OB_UNIS_ENCODE(*hidden_rowkey_column_group_);
+  }
+  // !!! FOR STATIC CHECKER END
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -8333,6 +8344,19 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   OB_UNIS_DECODE(skip_index_level_);
   OB_UNIS_DECODE(external_file_pattern_type_);
   OB_UNIS_DECODE(merge_engine_upper_version_);
+  // !!! FOR STATIC CHECKER BEGIN
+  // THE FOLLOWING CODE CANNOT BE DESCRIBED USING SERIALIZE MACROS. THEY ARE EQUIVALENT TO THESE CODES:
+  // OB_UNIS_DECODE(*hidden_rowkey_column_group_);
+  bool has_hidden_rowkey_cg = false;
+  OB_UNIS_DECODE(has_hidden_rowkey_cg);
+  if (OB_SUCC(ret) && has_hidden_rowkey_cg) {
+    ObColumnGroupSchema hidden_rowkey_cg;
+    OB_UNIS_DECODE(hidden_rowkey_cg);
+    if (FAILEDx(do_add_column_group(hidden_rowkey_cg))) {
+      LOG_WARN("fail to add hidden rowkey column group", KR(ret), K(hidden_rowkey_cg));
+    }
+  }
+  // !!! FOR STATIC CHECKER END
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -8489,6 +8513,15 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(skip_index_level_);
   OB_UNIS_ADD_LEN(external_file_pattern_type_);
   OB_UNIS_ADD_LEN(merge_engine_upper_version_);
+  // !!! FOR STATIC CHECKER BEGIN
+  // THE FOLLOWING CODE CANNOT BE DESCRIBED USING SERIALIZE MACROS. THEY ARE EQUIVALENT TO THESE CODES:
+  // OB_UNIS_ADD_LEN(*hidden_rowkey_column_group_);
+  const bool has_hidden_rowkey_cg = nullptr != hidden_rowkey_column_group_;
+  OB_UNIS_ADD_LEN(has_hidden_rowkey_cg);
+  if (has_hidden_rowkey_cg) {
+    OB_UNIS_ADD_LEN(*hidden_rowkey_column_group_);
+  }
+  // !!! FOR STATIC CHECKER END
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员

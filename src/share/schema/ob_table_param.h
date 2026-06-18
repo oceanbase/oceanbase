@@ -447,6 +447,7 @@ private:
   bool plan_enable_rich_format_;
   ObTableType table_type_;
   ObMergeEngineType merge_engine_type_;
+  ObMergeEngineUpperVersion merge_engine_upper_version_;
 };
 } //namespace schema
 } //namespace share

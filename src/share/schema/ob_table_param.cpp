@@ -745,6 +745,7 @@ OB_DEF_SERIALIZE(ObTableParam)
   if (OB_SUCC(ret) && is_fts_index_) {
     OB_UNIS_ENCODE(fts_index_type_);
   }
+  OB_UNIS_ENCODE(merge_engine_upper_version_);
   return ret;
 }
 
@@ -869,6 +870,7 @@ OB_DEF_DESERIALIZE(ObTableParam)
   if (OB_SUCC(ret) && is_fts_index_ && pos < data_len) {
     OB_UNIS_DECODE(fts_index_type_);
   }
+  LST_DO_CODE(OB_UNIS_DECODE, merge_engine_upper_version_);
   return ret;
 }
 
@@ -946,6 +948,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
   if (OB_SUCC(ret) && is_fts_index_) {
     OB_UNIS_ADD_LEN(fts_index_type_);
   }
+  OB_UNIS_ADD_LEN(merge_engine_upper_version_);
   return len;
 }
 

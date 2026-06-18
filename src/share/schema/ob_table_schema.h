@@ -2614,6 +2614,7 @@ protected:
   uint64_t max_used_column_group_id_;
   int64_t column_group_cnt_;
   ObColumnGroupSchema **column_group_arr_;
+  ObColumnGroupSchema *hidden_rowkey_column_group_; // only used for online ddl row-col switch
   int64_t column_group_arr_capacity_;
   CgIdHashArray *cg_id_hash_arr_;
   CgNameHashArray *cg_name_hash_arr_;

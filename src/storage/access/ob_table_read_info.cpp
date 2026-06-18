@@ -648,6 +648,9 @@ int ObTableReadInfo::serialize(
       LOG_WARN("Fail to encode micro block format version", K(ret));
     }
   }
+  if (OB_SUCC(ret) && compat_version_ >= READ_INFO_VERSION_V8) {
+    OB_UNIS_ENCODE(original_merge_engine_type_);
+  }
   return ret;
 }
 
@@ -753,6 +756,16 @@ int ObTableReadInfo::deserialize(
     }
   }
 
+  if (OB_SUCC(ret)) {
+    if (compat_version_ >= READ_INFO_VERSION_V8) {
+      OB_UNIS_DECODE(original_merge_engine_type_);
+    }
+    if (OB_SUCC(ret) && ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN == original_merge_engine_type_) {
+      original_merge_engine_type_ = is_delete_insert_table_ ?
+        ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT : ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE;
+    }
+  }
+
   if (OB_SUCC(ret) && cols_desc_.count() > 0) {
     const bool is_cg_sstable = ObCGReadInfo::is_cg_sstable(schema_rowkey_cnt_, schema_column_count_);
     max_col_index_ = -1;
@@ -817,6 +830,9 @@ int64_t ObTableReadInfo::get_serialize_size() const
   }
   if (OB_SUCC(ret) && compat_version_ >= READ_INFO_VERSION_V6) {
     len += serialization::encoded_length_vi64(micro_block_format_version_);
+  }
+  if (OB_SUCC(ret) && compat_version_ >= READ_INFO_VERSION_V8) {
+    OB_UNIS_ADD_LEN(original_merge_engine_type_);
   }
   return len;
 }
@@ -984,6 +1000,9 @@ int ObRowkeyReadInfo::serialize(
   if (OB_SUCC(ret) && compat_version_ >= READ_INFO_VERSION_V6) {
     OB_UNIS_ENCODE(micro_block_format_version_);
   }
+  if (OB_SUCC(ret) && compat_version_ >= READ_INFO_VERSION_V8) {
+    OB_UNIS_ENCODE(original_merge_engine_type_);
+  }
 
   return ret;
 }
@@ -1010,6 +1029,16 @@ int ObRowkeyReadInfo::deserialize(
     LOG_WARN("Fail to deserialize memtable_cols_index", K(ret), K(data_len), K(pos));
   } else if (compat_version_ >= READ_INFO_VERSION_V6) {
     OB_UNIS_DECODE(micro_block_format_version_);
+  }
+
+  if (OB_SUCC(ret)) {
+    if (compat_version_ >= READ_INFO_VERSION_V8) {
+      OB_UNIS_DECODE(original_merge_engine_type_);
+    }
+    if (OB_SUCC(ret) && ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN == original_merge_engine_type_) {
+      original_merge_engine_type_ = is_delete_insert_table_ ?
+        ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT : ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE;
+    }
   }
 
   if (OB_SUCC(ret) && cols_desc_.count() > 0) {
@@ -1042,6 +1071,9 @@ int64_t ObRowkeyReadInfo::get_serialize_size() const
 
   if (OB_SUCC(ret) && compat_version_ >= READ_INFO_VERSION_V6) {
     OB_UNIS_ADD_LEN(micro_block_format_version_);
+  }
+  if (OB_SUCC(ret) && compat_version_ >= READ_INFO_VERSION_V8) {
+    OB_UNIS_ADD_LEN(original_merge_engine_type_);
   }
 
   return len;

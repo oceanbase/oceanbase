@@ -163,6 +163,8 @@ int ObSSTableMetaCache::serialize(const int64_t data_version, char *buf, const i
       LOG_WARN("fail to encode length", K(ret), K(buf_len), K(pos));
     } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, min_merged_trans_version_))) {
       LOG_WARN("fail to encode min_merged_trans_version", K(ret), K(buf_len), K(pos));
+    } else if (OB_FAIL(serialization::encode_bool(buf, buf_len, pos, has_hidden_rowkey_cg_))) {
+      LOG_WARN("fail to encode has_hidden_rowkey_cg", K(ret), K(buf_len), K(pos));
     } else if (OB_UNLIKELY(pos != old_pos + length)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unxpected length", KR(ret), K(length), K(pos), K(old_pos));
@@ -211,6 +213,9 @@ OB_DEF_DESERIALIZE_SIMPLE(ObSSTableMetaCache)
         LOG_WARN("fail to decode length", K(ret), K(data_len), K(pos));
       } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &min_merged_trans_version_))) {
         LOG_WARN("fail to decode min_merged_trans_version", K(ret), K(data_len), K(pos));
+      } else if (pos < old_pos + length_
+        && OB_FAIL(serialization::decode_bool(buf, data_len, pos, &has_hidden_rowkey_cg_))) {
+        LOG_WARN("fail to decode has_hidden_rowkey_cg", K(ret), K(data_len), K(pos));
       } else if (OB_UNLIKELY(pos != old_pos + length_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unxpected length", KR(ret), K_(length), K(pos), K(old_pos));
@@ -249,6 +254,7 @@ int64_t ObSSTableMetaCache::get_serialize_size(const int64_t data_version) const
   if (new_serialize) {
     len += serialization::encoded_length_i32(length_);
     len += serialization::encoded_length_i64(min_merged_trans_version_);
+    len += serialization::encoded_length_bool(has_hidden_rowkey_cg_);
   }
   return len;
 }

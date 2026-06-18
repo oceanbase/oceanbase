@@ -416,7 +416,7 @@ private:
   int serialize_column_array(char *buf, const int64_t data_len, int64_t &pos) const;
   int deserialize_rowkey_column_array(const char *buf, const int64_t data_len, int64_t &pos);
   int deserialize_column_array(ObIAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
-  int deserialize_column_group_array(ObIAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
+  int deserialize_column_group_array(ObIAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos, const bool is_hidden_rowkey_cg);
   int64_t get_column_array_serialize_length(const common::ObIArray<ObStorageColumnSchema> &array) const;
   int deserialize_skip_idx_attr_array(const char *buf, const int64_t data_len, int64_t &pos);
   int generate_all_column_group_schema(ObStorageColumnGroupSchema &column_group, const ObRowStoreType row_store_type) const;
@@ -448,7 +448,8 @@ public:
   static const int64_t STORAGE_SCHEMA_VERSION_V5 = 5; // add for merge_engine_type_ and semistruct encoding type in 4.3.5 bp2
   static const int64_t STORAGE_SCHEMA_VERSION_V6 = 6; // add for micro_block_format_version and semistruct properties in 4.4.1 bp1
   static const int64_t STORAGE_SCHEMA_VERSION_V7 = 7; // add for minor_row_store_type and skip_index_level in 4.5.1
-  static const int64_t STORAGE_SCHEMA_VERSION_LATEST = STORAGE_SCHEMA_VERSION_V7;
+  static const int64_t STORAGE_SCHEMA_VERSION_V8 = 8; // add hidden rowkey cg and original_merge_engine_type in 4.6.1
+  static const int64_t STORAGE_SCHEMA_VERSION_LATEST = STORAGE_SCHEMA_VERSION_V8;
   common::ObIAllocator *allocator_;
   int64_t storage_schema_version_;
 
@@ -498,6 +499,9 @@ public:
   // the value of minor_row_store_type_ is not based on the schema_version_
   ObRowStoreType minor_row_store_type_;
   ObSkipIndexLevel skip_index_level_;
+  // original_merge_engine_type_ is the merge engine type when create table and never change. it is used to explain MERGE_ENGINE_UNKNOWN for old server compatibility.
+  ObMergeEngineType original_merge_engine_type_;
+  common::ObFixedArray<ObStorageColumnGroupSchema, common::ObIAllocator> hidden_rowkey_column_group_; // if exists, the capacity will be 1
   bool is_inited_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageSchema);

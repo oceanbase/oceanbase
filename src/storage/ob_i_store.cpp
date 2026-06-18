@@ -176,6 +176,7 @@ OB_DEF_SERIALIZE(ObStoreRow)
       OB_UNIS_ENCODE_ARRAY(column_ids_, row_val_.count_);
     }
   }
+  OB_UNIS_ENCODE(merge_engine_type_);
   return ret;
 }
 
@@ -203,6 +204,7 @@ OB_DEF_DESERIALIZE(ObStoreRow)
       }
     }
   }
+  OB_UNIS_DECODE(merge_engine_type_);
   return ret;
 }
 
@@ -220,6 +222,7 @@ OB_DEF_SERIALIZE_SIZE(ObStoreRow)
   if (is_sparse_row_) {
     OB_UNIS_ADD_LEN_ARRAY(column_ids_, row_val_.count_);
   }
+  OB_UNIS_ADD_LEN(merge_engine_type_);
   return len;
 }
 
