@@ -496,9 +496,6 @@ int ObMPStmtPrexecute::resolve_sql_with_params(ObSQLSessionInfo &session)
                    K(retry_ctrl_.need_retry()),
                    K(sql_));
           ret = cli_ret;
-          if (OB_FAIL(ret)) {
-            session.set_session_in_retry(retry_ctrl_.need_retry());
-          }
         }
       }
       if (OB_SUCC(ret)) {
@@ -511,6 +508,13 @@ int ObMPStmtPrexecute::resolve_sql_with_params(ObSQLSessionInfo &session)
                   K(params_num_),
                   K(result.get_stmt_type()));
       }
+    }
+    // on any failure within this iteration, refresh the session retry state, otherwise `in_retry`
+    // could stay stale (set true by a previous retry) when prepare fails before the execute phase
+    // runs and thus has no chance to reset it. covers all failure branches above (result.init /
+    // set_session_active / stmt_prepare / schema guard), not just selected ones.
+    if (OB_FAIL(ret)) {
+      session.set_session_in_retry(retry_ctrl_.need_retry());
     }
   } while (RETRY_TYPE_LOCAL == retry_ctrl_.get_retry_type());
   if (OB_SUCC(ret) && retry_ctrl_.get_retry_times() > 0) {
