@@ -978,7 +978,10 @@ int ObPartitionExchange::check_column_conditions_in_common_(const ObColumnSchema
     LOG_WARN("local session var of exchanging partition tables are not equal", K(ret), K(base_table_col_schema->get_local_session_var()), K(inc_table_col_schema->get_local_session_var()));
   } else if (OB_UNLIKELY(base_table_col_schema->get_skip_index_attr().get_packed_value() != inc_table_col_schema->get_skip_index_attr().get_packed_value())) {
     LOG_WARN("column skip index attr of exchanging partition tables are not equal", K(ret), K(base_table_col_schema->get_skip_index_attr()), K(inc_table_col_schema->get_skip_index_attr()));
-  } else if (OB_UNLIKELY(base_table_col_schema->get_udt_set_id() != inc_table_col_schema->get_udt_set_id())) {
+  } else if (OB_UNLIKELY(!is_oracle_mode && base_table_col_schema->get_udt_set_id() != inc_table_col_schema->get_udt_set_id())) {
+    // udt_set_id only maps udt columns (e.g. xmltype) to their hidden columns inside one table; the stored
+    // tablet data is agnostic to its value. In oracle mode two logically identical tables may carry different
+    // udt_set_id (e.g. add then drop a column advances the column id counter), so it must not block exchange.
     LOG_WARN("column udt set id of exchanging partition tables are not equal", K(ret), K(base_table_col_schema->get_udt_set_id()), K(inc_table_col_schema->get_udt_set_id()));
   } else if (OB_UNLIKELY(base_table_col_schema->is_not_null_rely_column() != inc_table_col_schema->is_not_null_rely_column())) {
     LOG_WARN("is not null rely column attribute of exchanging partition tables are not equal", K(ret), K(base_table_col_schema->is_not_null_rely_column()), K(inc_table_col_schema->is_not_null_rely_column()));
