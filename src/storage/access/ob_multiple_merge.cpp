@@ -46,6 +46,7 @@ ObMultipleMerge::ObMultipleMerge()
       inited_(false),
       iter_del_row_(false),
       read_memtable_only_(false),
+      exist_ddl_kv_(false),
       is_unprojected_row_valid_(false),
       get_table_param_(nullptr),
       block_row_store_(nullptr),
@@ -1189,6 +1190,7 @@ void ObMultipleMerge::inner_reset()
   need_output_row_with_nop_ = false;
   range_idx_delta_ = 0;
   read_memtable_only_ = false;
+  exist_ddl_kv_ = false;
   lob_reader_.reset();
   scan_state_ = ScanState::NONE;
   iter_del_row_ = false;
@@ -1714,6 +1716,7 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
   int ret = OB_SUCCESS;
   int64_t memtable_cnt = 0;
   read_memtable_only_ = false;
+  exist_ddl_kv_ = false;
   bool read_released_memtable = false;
 
   if (OB_UNLIKELY(table_iter.count() == 0)) {
@@ -1757,6 +1760,9 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
         continue;
       } else if (table_ptr->is_memtable()) {
         ++memtable_cnt;
+        if (table_ptr->is_direct_load_memtable()) {
+          exist_ddl_kv_ = true;
+        }
         read_released_memtable = read_released_memtable ||
           TabletMemtableFreezeState::FORCE_RELEASED == (static_cast<ObITabletMemtable *>(table_ptr))->get_freeze_state() ||
           TabletMemtableFreezeState::RELEASED == (static_cast<ObITabletMemtable *>(table_ptr))->get_freeze_state();

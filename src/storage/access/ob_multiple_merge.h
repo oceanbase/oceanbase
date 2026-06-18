@@ -70,6 +70,7 @@ public:
   void disable_output_row_with_nop() { need_output_row_with_nop_ = false; }
   OB_INLINE bool is_inited() { return inited_; }
   OB_INLINE bool is_read_memtable_only() const { return read_memtable_only_; }
+  OB_INLINE bool exist_ddl_kv() const { return exist_ddl_kv_; }
   OB_INLINE const common::ObIArray<share::schema::ObColDesc> &get_out_project_cells() { return out_project_cols_; }
   OB_INLINE ObNopPos &get_nop_pos() { return nop_pos_; }
   OB_INLINE void set_iter_del_row(const bool iter_del_row) { iter_del_row_ = iter_del_row; }
@@ -81,7 +82,7 @@ public:
                        K_(need_padding), K_(need_fill_default),
                        K_(need_output_row_with_nop), K_(inited),
                        K_(iter_del_row), K_(read_memtable_only),
-                       K_(is_unprojected_row_valid), K_(scan_state));
+                       K_(is_unprojected_row_valid), K_(scan_state), K_(exist_ddl_kv));
 
 protected:
   int open();
@@ -191,6 +192,7 @@ protected:
   bool inited_;
   bool iter_del_row_;
   bool read_memtable_only_;
+  bool exist_ddl_kv_; // whether there is a ddl kv(direct load memtable) in read tables, fuse row cache is disabled if true
   bool is_unprojected_row_valid_; // whether unprojected_row_ is ready for refresh_table_on_demand currently
   ObGetTableParam *get_table_param_;
   ObBlockRowStore *block_row_store_;

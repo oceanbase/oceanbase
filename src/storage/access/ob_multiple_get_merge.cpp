@@ -232,6 +232,7 @@ int ObMultipleGetMerge::init_resource()
                                     !(!tablet_meta.table_store_flag_.with_major_sstable() && tablet_meta.split_info_.get_split_src_tablet_id().is_valid()) && // not split dst tablet
                                     !tablet_meta.has_transfer_table() &&
                                     !(access_ctx_->is_inc_major_query_ && access_param_->iter_param_.is_use_column_store()) && // inc major query with co sstables does not use fuse row cache
+                                    !exist_ddl_kv_ && // direct load memtable(ddl kv) does not use fuse row cache
                                     !is_fuse_row_cache_force_disable();
   access_ctx_->query_flag_.set_not_use_row_cache();
   STORAGE_LOG(DEBUG, "multiple get merge start", K(rowkeys_->count()), K(tables_.count()), K(iters_.count()), K(access_ctx_->use_fuse_row_cache_),
