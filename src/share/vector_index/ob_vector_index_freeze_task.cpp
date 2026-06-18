@@ -424,6 +424,8 @@ int ObVecIdxFreezeTask::do_tune_index_if_needed(const ObVecIdxFrozenDataHandle &
       const int64_t start_time_us = ObTimeUtility::fast_current_time();
       const ObVectorIndexAlgorithmType tune_type = index_type;
       // tune_index builds params via construct_vsag_create_param and updates handler index_type on success.
+      lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
+      lib::ObLightBacktraceGuard light_backtrace_guard(false);
       if (OB_FAIL(frozen_data->segment_handle_->tune_index(tune_type))) {
         LOG_WARN("tune index failed", K(ret), KPC(adaptor), K(index_type), K(current_type), K(tune_type));
       } else {
