@@ -479,7 +479,7 @@ ObPluginVectorIndexAdaptor::ObPluginVectorIndexAdaptor(common::ObIAllocator *all
     reload_lock_(common::ObLatchIds::VECTOR_RELOAD_LOCK),
     query_lock_(common::ObLatchIds::VECTOR_QUERY_LOCK), reload_finish_(false),
     last_embedding_time_(ObTimeUtility::fast_current_time()), is_need_vid_(true), sparse_vector_type_(nullptr), index_statistics_updated_(false), replace_scn_(),
-    created_by_segment_merge_(false)
+    created_by_segment_merge_(false), skip_merge_sched_(false)
 {
   ATOMIC_INC(&instacnce_cnt_);
 }

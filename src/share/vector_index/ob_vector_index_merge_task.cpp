@@ -82,6 +82,8 @@ int ObVecIdxMergeTaskExecutor::load_task(uint64_t &task_trace_base_num)
           LOG_TRACE("adapter is not hybrid index, no need merge", K(ret), KPC(adapter));
         } else if (adapter->is_sparse_vector_index_type()) {
           LOG_TRACE("adapter is sparse vector index, no need merge", K(ret), KPC(adapter));
+        } else if (adapter->is_skip_merge_sched()) {
+          LOG_TRACE("incr bitmap incomplete and delta table not empty, skip merge sched until adaptor replaced", K(ret), KPC(adapter));
         } else if (OB_FAIL(adapter->check_need_merge(merge_base_percentage_, need_merge))) {
           LOG_WARN("failed to check need merge", K(ret), KPC(adapter));
         } else if (! need_merge) {
@@ -704,14 +706,15 @@ int ObVecIdxMergeTask::check_and_merge(ObPluginVectorIndexAdapterGuard &adpt_gua
         LOG_INFO("[VECTOR INDEX MERGE] incr bitmap incomplete but delta table empty, can merge from base", KPC(adapter));
       } else if (snap_data->meta_.incrs_.count() <= 1) {
         need_merge = false;
+        adapter->set_skip_merge_sched();
         LOG_INFO("[VECTOR INDEX MERGE] incr bitmap incomplete but delta table not empty, need to wait", KPC(adapter));
       }
     }
   }
   if (OB_FAIL(ret)) {
   } else if (!need_merge) {
-    ret = OB_EAGAIN;
-    LOG_WARN("snapshot data actually is not need to merge in task execution, so retry", K(ret), KPC(adpt_guard.get_adatper()));
+    ret = OB_NO_NEED_MERGE;
+    LOG_INFO("snapshot data actually is not need to merge in task execution", K(ret), KPC(adpt_guard.get_adatper()));
   } else if (OB_FAIL(execute_merge())) {
     LOG_WARN("merge incr fail", K(ret), KPC(ctx_));
   } else if (OB_FAIL(execute_exchange())) {
@@ -1240,6 +1243,10 @@ int ObVecIdxMergeTask::check_and_wait_write()
       LOG_INFO("check success", K(snapshot_version), K(data_tablet_id), K(ts), K(tx_id));
     }
     ++check_cnt;
+  }
+  if (OB_SUCC(ret) && check_cnt >= MAX_WAIT_CNT && ! snapshot_version.is_valid()) {
+    ret = OB_EAGAIN;
+    LOG_WARN("check and wait write timeout, need retry", K(ret), K(data_tablet_id), K(ts), K(tx_id));
   }
   return ret;
 }
