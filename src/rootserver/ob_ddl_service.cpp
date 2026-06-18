@@ -6380,8 +6380,12 @@ int ObDDLService::update_autoinc_schema(obrpc::ObAlterTableArg &alter_table_arg)
             LOG_WARN("cur column schema is null", KR(ret), K(curr_table_schema->get_table_id()),
                                                   K(orig_column_name));
           } else {
+            // TODO: The DDL for all modified columns needs to be organized and consolidated into a unified function.
             new_column_schema->set_autoincrement(alter_column_schema->is_autoincrement());
             new_column_schema->set_nullable(alter_column_schema->is_nullable());
+            new_column_schema->set_column_name(alter_column_schema->get_column_name_str());
+            new_column_schema->set_comment(alter_column_schema->get_comment_str());
+            new_column_schema->set_cur_default_value(alter_column_schema->get_cur_default_value(), alter_column_schema->is_default_expr_v2_column());
             new_table_schema.set_auto_increment(alter_table_schema.get_auto_increment());
             new_table_schema.set_autoinc_column_id(alter_column_schema->get_column_id());
 

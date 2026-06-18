@@ -6708,7 +6708,7 @@ int ObAlterTableResolver::resolve_alter_table_column_definition(AlterColumnSchem
                                                                 ParseNode *node,
                                                                 ObColumnResolveStat &stat,
                                                                 bool &is_modify_column_visibility,
-                                                        ObIArray<ObColumnSchemaV2 *> &resolved_cols,
+                                                                ObIArray<ObColumnSchemaV2 *> &resolved_cols,
                                                                 const bool is_oracle_temp_table,
                                                                 const bool allow_has_default)
 {
