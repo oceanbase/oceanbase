@@ -18,14 +18,17 @@ int SelectItem::deep_copy(ObIRawExprCopier &expr_copier,
   int ret = OB_SUCCESS;
   if (OB_FAIL(expr_copier.copy(other.expr_, expr_))) {
     LOG_WARN("failed to copy expr", K(ret));
+  } else if (OB_FAIL(questions_pos_.assign(other.questions_pos_))){
+    LOG_WARN("failed to assign questions_pos_", K(ret));
+  } else if (OB_FAIL(params_idx_.assign(other.params_idx_))){
+    LOG_WARN("failed to assign params_idx_", K(ret));
+  } else if (OB_FAIL(neg_param_idx_.assign(other.neg_param_idx_))){
+    LOG_WARN("failed to assign neg_param_idx_", K(ret));
   } else {
     is_real_alias_ = other.is_real_alias_;
     alias_name_ = other.alias_name_;
     paramed_alias_name_ = other.paramed_alias_name_;
     expr_name_ = other.expr_name_;
-    questions_pos_ = other.questions_pos_;
-    params_idx_ = other.params_idx_;
-    neg_param_idx_ = other.neg_param_idx_;
     esc_str_flag_ = other.esc_str_flag_;
     need_check_dup_name_ = other.need_check_dup_name_;
     implicit_filled_ = other.implicit_filled_;
