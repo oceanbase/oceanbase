@@ -4740,6 +4740,10 @@ DELTA_WRITE_IO_REQUESTS	bigint(20)	NO
 DELTA_WRITE_IO_BYTES	bigint(20)	NO			
 WEIGHT	bigint(20)	NO			
 IS_WR_WEIGHT_SAMPLE	varchar(1)	NO			
+ROWKEY	varchar(320)	NO			
+HOLDER_SQL_ID	varchar(32)	NO			
+HOLDER_QUERY_SQL	varchar(200)	NO			
+DATABASE_ID	bigint(20)	NO			
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$ACTIVE_SESSION_HISTORY|%') then 2
@@ -4824,6 +4828,10 @@ DELTA_WRITE_IO_REQUESTS	bigint(20)	NO
 DELTA_WRITE_IO_BYTES	bigint(20)	NO			
 WEIGHT	bigint(20)	NO			
 IS_WR_WEIGHT_SAMPLE	varchar(1)	NO			
+ROWKEY	varchar(320)	NO			
+HOLDER_SQL_ID	varchar(32)	NO			
+HOLDER_QUERY_SQL	varchar(200)	NO			
+DATABASE_ID	bigint(20)	NO			
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$ACTIVE_SESSION_HISTORY|%') then 2
@@ -6983,6 +6991,10 @@ DELTA_WRITE_IO_BYTES	bigint(20)	YES
 TABLET_ID	bigint(20)	YES		NULL	
 PROXY_SID	bigint(20)	YES		NULL	
 WEIGHT	double	YES		NULL	
+ROWKEY	varchar(320)	YES		NULL	
+HOLDER_SQL_ID	varchar(32)	YES		NULL	
+HOLDER_QUERY_SQL	varchar(200)	YES		NULL	
+DATABASE_ID	bigint(20)	YES		NULL	
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_WR_ACTIVE_SESSION_HISTORY|%') then 2
@@ -8671,6 +8683,10 @@ DELTA_WRITE_IO_REQUESTS	bigint(20)	NO
 DELTA_WRITE_IO_BYTES	bigint(20)	NO			
 WEIGHT	bigint(20)	NO			
 IS_WR_WEIGHT_SAMPLE	varchar(1)	NO			
+ROWKEY	varchar(320)	YES		NULL	
+HOLDER_SQL_ID	varchar(32)	YES		NULL	
+HOLDER_QUERY_SQL	varchar(200)	YES		NULL	
+DATABASE_ID	bigint(20)	YES		NULL	
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_ACTIVE_SESSION_HISTORY|%') then 2
@@ -8755,6 +8771,10 @@ DELTA_WRITE_IO_REQUESTS	bigint(20)	NO
 DELTA_WRITE_IO_BYTES	bigint(20)	NO			
 WEIGHT	bigint(20)	NO			
 IS_WR_WEIGHT_SAMPLE	varchar(1)	NO			
+ROWKEY	varchar(320)	NO			
+HOLDER_SQL_ID	varchar(32)	NO			
+HOLDER_QUERY_SQL	varchar(200)	NO			
+DATABASE_ID	bigint(20)	NO			
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_ACTIVE_SESSION_HISTORY|%') then 2

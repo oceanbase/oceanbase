@@ -8836,7 +8836,11 @@ def_table_schema(
     ('delta_read_io_bytes', 'int', 'true', '0'),
     ('delta_write_io_requests', 'int', 'true', '0'),
     ('delta_write_io_bytes', 'int', 'true', '0'),
-    ('weight', 'double', 'true')
+    ('weight', 'double', 'true'),
+    ('rowkey', 'varchar:320', 'true'),
+    ('holder_sql_id', 'varchar:32', 'true'),
+    ('holder_query_sql', 'varchar:200', 'true'),
+    ('database_id', 'int', 'true')
   ],
 )
 
@@ -14981,7 +14985,11 @@ def_table_schema(
     ('DELTA_WRITE_IO_REQUESTS', 'int', 'false', '0'),
     ('DELTA_WRITE_IO_BYTES', 'int', 'false', '0'),
     ('WEIGHT', 'int', 'false', '1'),
-    ('IS_WR_WEIGHT_SAMPLE', 'bool', 'false', 'false')
+    ('IS_WR_WEIGHT_SAMPLE', 'bool', 'false', 'false'),
+    ('ROWKEY', 'varchar:320', 'true'),
+    ('HOLDER_SQL_ID', 'varchar:32', 'true'),
+    ('HOLDER_QUERY_SQL', 'varchar:200', 'true'),
+    ('DATABASE_ID', 'int', 'true')
   ],
   partition_columns = ['SVR_IP', 'SVR_PORT'],
   vtable_route_policy = 'distributed',
@@ -31210,7 +31218,11 @@ DELTA_READ_IO_BYTES,
 DELTA_WRITE_IO_REQUESTS,
 DELTA_WRITE_IO_BYTES,
 WEIGHT,
-IS_WR_WEIGHT_SAMPLE
+IS_WR_WEIGHT_SAMPLE,
+ROWKEY,
+HOLDER_SQL_ID,
+HOLDER_QUERY_SQL,
+DATABASE_ID
 FROM oceanbase.GV$OB_ACTIVE_SESSION_HISTORY
 """.replace("\n", " "),
   normal_columns  = [],
@@ -31296,7 +31308,11 @@ DELTA_READ_IO_BYTES,
 DELTA_WRITE_IO_REQUESTS,
 DELTA_WRITE_IO_BYTES,
 WEIGHT,
-IS_WR_WEIGHT_SAMPLE
+IS_WR_WEIGHT_SAMPLE,
+ROWKEY,
+HOLDER_SQL_ID,
+HOLDER_QUERY_SQL,
+DATABASE_ID
 FROM oceanbase.gv$active_session_history WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
   normal_columns  = [],
@@ -36853,7 +36869,11 @@ def_table_schema(
       ASH.DELTA_WRITE_IO_BYTES AS DELTA_WRITE_IO_BYTES,
       ASH.TABLET_ID AS TABLET_ID,
       ASH.PROXY_SID AS PROXY_SID,
-      ASH.WEIGHT AS WEIGHT
+      ASH.WEIGHT AS WEIGHT,
+      ASH.ROWKEY AS ROWKEY,
+      ASH.HOLDER_SQL_ID AS HOLDER_SQL_ID,
+      ASH.HOLDER_QUERY_SQL AS HOLDER_QUERY_SQL,
+      ASH.DATABASE_ID AS DATABASE_ID
   FROM
     (
       oceanbase.__all_virtual_wr_active_session_history_v2 ASH
@@ -36940,7 +36960,11 @@ def_table_schema(
       ASH.DELTA_WRITE_IO_BYTES AS DELTA_WRITE_IO_BYTES,
       ASH.TABLET_ID AS TABLET_ID,
       ASH.PROXY_SID AS PROXY_SID,
-      ASH.WEIGHT AS WEIGHT
+      ASH.WEIGHT AS WEIGHT,
+      ASH.ROWKEY AS ROWKEY,
+      ASH.HOLDER_SQL_ID AS HOLDER_SQL_ID,
+      ASH.HOLDER_QUERY_SQL AS HOLDER_QUERY_SQL,
+      ASH.DATABASE_ID AS DATABASE_ID
   FROM
     (
       oceanbase.__all_virtual_wr_active_session_history_v2 ASH
@@ -40235,7 +40259,11 @@ def_table_schema(
       CAST(DELTA_WRITE_IO_REQUESTS AS SIGNED) AS DELTA_WRITE_IO_REQUESTS,
       CAST(DELTA_WRITE_IO_BYTES AS SIGNED) AS DELTA_WRITE_IO_BYTES,
       CAST(WEIGHT AS SIGNED) AS WEIGHT,
-      CAST(IF (IS_WR_WEIGHT_SAMPLE = 1, 'Y', 'N') AS CHAR(1)) AS IS_WR_WEIGHT_SAMPLE
+      CAST(IF (IS_WR_WEIGHT_SAMPLE = 1, 'Y', 'N') AS CHAR(1)) AS IS_WR_WEIGHT_SAMPLE,
+      CAST(ROWKEY AS CHAR(320)) AS ROWKEY,
+      CAST(HOLDER_SQL_ID AS CHAR(32)) AS HOLDER_SQL_ID,
+      CAST(HOLDER_QUERY_SQL AS CHAR(200)) AS HOLDER_QUERY_SQL,
+      CAST(DATABASE_ID AS SIGNED) AS DATABASE_ID
   FROM oceanbase.__all_virtual_ash ASH LEFT JOIN oceanbase.v$event_name on EVENT_NO = `event#`
 """.replace("\n", " "),
   normal_columns  = [],
@@ -40323,7 +40351,11 @@ def_table_schema(
       DELTA_WRITE_IO_REQUESTS,
       DELTA_WRITE_IO_BYTES,
       WEIGHT,
-      IS_WR_WEIGHT_SAMPLE
+      IS_WR_WEIGHT_SAMPLE,
+      ROWKEY,
+      HOLDER_SQL_ID,
+      HOLDER_QUERY_SQL,
+      DATABASE_ID
       FROM oceanbase.GV$OB_ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
   normal_columns  = [],
@@ -67584,7 +67616,11 @@ def_table_schema(
       ASH.DELTA_WRITE_IO_BYTES AS DELTA_WRITE_IO_BYTES,
       ASH.TABLET_ID AS TABLET_ID,
       ASH.PROXY_SID AS PROXY_SID,
-      ASH.WEIGHT AS WEIGHT
+      ASH.WEIGHT AS WEIGHT,
+      ASH.ROWKEY AS ROWKEY,
+      ASH.HOLDER_SQL_ID AS HOLDER_SQL_ID,
+      ASH.HOLDER_QUERY_SQL AS HOLDER_QUERY_SQL,
+      ASH.DATABASE_ID AS DATABASE_ID
   FROM
     SYS.ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY_V2 ASH
   WHERE
@@ -77002,7 +77038,11 @@ DELTA_READ_IO_BYTES,
 DELTA_WRITE_IO_REQUESTS,
 DELTA_WRITE_IO_BYTES,
 WEIGHT,
-IS_WR_WEIGHT_SAMPLE
+IS_WR_WEIGHT_SAMPLE,
+ROWKEY,
+HOLDER_SQL_ID,
+HOLDER_QUERY_SQL,
+DATABASE_ID
 FROM SYS.GV$OB_ACTIVE_SESSION_HISTORY
 """.replace("\n", " "),
 )
@@ -77090,7 +77130,11 @@ def_table_schema(
       DELTA_WRITE_IO_REQUESTS,
       DELTA_WRITE_IO_BYTES,
       WEIGHT,
-      IS_WR_WEIGHT_SAMPLE
+      IS_WR_WEIGHT_SAMPLE,
+      ROWKEY,
+      HOLDER_SQL_ID,
+      HOLDER_QUERY_SQL,
+      DATABASE_ID
       FROM SYS.GV$ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 )
@@ -79337,7 +79381,11 @@ def_table_schema(
       CAST(DELTA_WRITE_IO_REQUESTS AS NUMBER) AS DELTA_WRITE_IO_REQUESTS,
       CAST(DELTA_WRITE_IO_BYTES AS NUMBER) AS DELTA_WRITE_IO_BYTES,
       CAST(WEIGHT AS NUMBER) AS WEIGHT,
-      CAST(DECODE(IS_WR_WEIGHT_SAMPLE, 1, 'Y', 'N') AS CHAR(1)) AS IS_WR_WEIGHT_SAMPLE
+      CAST(DECODE(IS_WR_WEIGHT_SAMPLE, 1, 'Y', 'N') AS CHAR(1)) AS IS_WR_WEIGHT_SAMPLE,
+      CAST(ROWKEY AS VARCHAR2(320)) AS ROWKEY,
+      CAST(HOLDER_SQL_ID AS VARCHAR2(32)) AS HOLDER_SQL_ID,
+      CAST(HOLDER_QUERY_SQL AS VARCHAR2(200)) AS HOLDER_QUERY_SQL,
+      CAST(DATABASE_ID AS NUMBER) AS DATABASE_ID
     FROM SYS.ALL_VIRTUAL_ASH LEFT JOIN SYS.V$EVENT_NAME on EVENT_NO = "EVENT#"
 """.replace("\n", " "),
 )
@@ -79424,7 +79472,11 @@ DELTA_READ_IO_BYTES,
 DELTA_WRITE_IO_REQUESTS,
 DELTA_WRITE_IO_BYTES,
 WEIGHT,
-IS_WR_WEIGHT_SAMPLE
+IS_WR_WEIGHT_SAMPLE,
+ROWKEY,
+HOLDER_SQL_ID,
+HOLDER_QUERY_SQL,
+DATABASE_ID
 FROM SYS.GV$OB_ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 )

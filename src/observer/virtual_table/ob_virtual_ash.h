@@ -98,6 +98,10 @@ protected:
     DELTA_WRITE_IO_BYTES,
     WEIGHT,
     IS_WR_WEIGHT_SAMPLE,
+    ROWKEY,
+    HOLDER_SQL_ID,
+    HOLDER_QUERY_SQL,
+    DATABASE_ID,
   };
   DISALLOW_COPY_AND_ASSIGN(ObVirtualASH);
   // ash main table scan output rows in reverse order.

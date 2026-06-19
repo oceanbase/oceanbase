@@ -3443,6 +3443,10 @@ DELTA_WRITE_IO_REQUESTS	bigint(20)	NO		0
 DELTA_WRITE_IO_BYTES	bigint(20)	NO		0	
 WEIGHT	bigint(20)	NO		1	
 IS_WR_WEIGHT_SAMPLE	tinyint(4)	NO		0	
+ROWKEY	varchar(320)	YES		NULL	
+HOLDER_SQL_ID	varchar(32)	YES		NULL	
+HOLDER_QUERY_SQL	varchar(200)	YES		NULL	
+DATABASE_ID	bigint(20)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ash;
 IF(count(*) >= 0, 1, 0)
 1
@@ -6638,6 +6642,10 @@ delta_read_io_bytes	bigint(20)	YES		0
 delta_write_io_requests	bigint(20)	YES		0	
 delta_write_io_bytes	bigint(20)	YES		0	
 weight	double	YES		NULL	
+rowkey	varchar(320)	YES		NULL	
+holder_sql_id	varchar(32)	YES		NULL	
+holder_query_sql	varchar(200)	YES		NULL	
+database_id	bigint(20)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_wr_active_session_history_v2;
 IF(count(*) >= 0, 1, 0)
 1
