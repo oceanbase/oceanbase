@@ -84,6 +84,10 @@ public:
 
 private:
   static const int SPATIAL_MBR_COLUMN_MAX_LENGTH = 32;
+  static bool need_strip_generated_column_flags_and_default(
+      const share::schema::ObColumnSchemaV2 &column);
+  static int clear_stored_generated_column_dependency(
+      share::schema::ObColumnSchemaV2 &column);
   static int generate_prefix_column(
       const obrpc::ObColumnSortItem &sort_item,
       const ObSQLMode sql_mode,
@@ -103,7 +107,7 @@ private:
   static int add_shadow_partition_keys(
       const share::schema::ObTableSchema &data_schema,
       common::ObRowDesc &row_desc,
-      share::schema::ObTableSchema &schema);
+      share::schema::ObTableSchema &index_schema);
   static int adjust_spatial_args(
       obrpc::ObCreateIndexArg &arg,
       share::schema::ObTableSchema &data_schema,

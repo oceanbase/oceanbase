@@ -26,6 +26,40 @@ using namespace share::schema;
 using namespace sql;
 namespace share
 {
+bool ObIndexBuilderUtil::need_strip_generated_column_flags_and_default(const ObColumnSchemaV2 &column)
+{
+  return column.is_generated_column()
+      && !column.is_fulltext_column()
+      && !column.is_vec_index_column()
+      && !column.is_spatial_generated_column()
+      && !column.is_multivalue_generated_column()
+      && !column.is_multivalue_generated_array_column();
+}
+
+int ObIndexBuilderUtil::clear_stored_generated_column_dependency(ObColumnSchemaV2 &column)
+{
+  int ret = OB_SUCCESS;
+  if (!column.is_stored_generated_column()
+      || !need_strip_generated_column_flags_and_default(column)) {
+    // do nothing
+  } else {
+    ObSEArray<uint64_t, 5> cascaded_columns;
+    if (OB_FAIL(column.get_cascaded_column_ids(cascaded_columns))) {
+      LOG_WARN("failed to get cascaded_column_ids", K(ret), K(column));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < cascaded_columns.count(); ++i) {
+        if (OB_FAIL(column.del_cascaded_column_id(cascaded_columns.at(i)))) {
+          LOG_WARN("failed to clear cascaded_column_id", K(ret), K(column), K(i),
+                   "column_id", cascaded_columns.at(i));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      column.del_column_flag(GENERATED_DEPS_CASCADE_FLAG);
+    }
+  }
+  return ret;
+}
 
 bool ObIndexBuilderUtil::is_do_create_dense_vec_index(const ObIndexType index_type)
 {
@@ -34,14 +68,7 @@ bool ObIndexBuilderUtil::is_do_create_dense_vec_index(const ObIndexType index_ty
 
 void ObIndexBuilderUtil::del_column_flags_and_default_value(ObColumnSchemaV2 &column)
 {
-  if ((column.is_generated_column() &&
-       !column.is_fulltext_column() &&
-       !column.is_vec_index_column() &&
-       !column.is_spatial_generated_column() &&
-       !column.is_multivalue_generated_column() &&
-       !column.is_multivalue_generated_array_column() &&
-       !column.is_vec_index_column())
-      || column.is_identity_column()) {
+  if (need_strip_generated_column_flags_and_default(column) || column.is_identity_column()) {
     if (column.is_virtual_generated_column()) {
       column.del_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
     } else if (column.is_stored_generated_column()) {
@@ -99,6 +126,8 @@ int ObIndexBuilderUtil::add_column(
     ObColumnSchemaV2 column;
     if (OB_FAIL(column.assign(*data_column))) {
       LOG_WARN("fail to assign column", KR(ret), KPC(data_column));
+    } else if (OB_FAIL(clear_stored_generated_column_dependency(column))) {
+      LOG_WARN("failed to clear stored generated column dependency", K(ret), K(column), KPC(data_column));
     } else {
       column.set_table_id(OB_INVALID_ID);
       column.set_autoincrement(false);
@@ -273,15 +302,15 @@ int ObIndexBuilderUtil::add_shadow_pks(
 int ObIndexBuilderUtil::add_shadow_partition_keys(
   const ObTableSchema &data_schema,
   ObRowDesc &row_desc,
-  ObTableSchema &schema)
+  ObTableSchema &index_schema)
 {
   int ret = OB_SUCCESS;
-  if (!data_schema.is_table_without_pk()) {
+  if (!data_schema.is_table_without_pk() || !index_schema.is_global_index_table()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("only heap table should add shadow partition keys", K(data_schema), K(ret));
+    LOG_WARN("only heap table with global index should add shadow partition keys", K(ret), K(data_schema), K(index_schema));
   } else {
     const bool is_index_column = false;
-    const bool is_rowkey = !schema.is_unique_index();
+    const bool is_rowkey = !index_schema.is_unique_index();
     const ObPartitionKeyInfo &partition_keys = data_schema.get_partition_key_info();
     const ObPartitionKeyInfo &subpartition_keys = data_schema.get_subpartition_key_info();
     const ObColumnSchemaV2 *const_data_column = NULL;
@@ -321,35 +350,41 @@ int ObIndexBuilderUtil::add_shadow_partition_keys(
         } else {
           if (OB_FAIL(data_column.assign(*const_data_column))) {
             LOG_WARN("fail to assign column", KR(ret), KPC(const_data_column));
-          } else if (data_column.get_column_id() > schema.get_max_used_column_id()) {
-            schema.set_max_used_column_id(data_column.get_column_id());
+          } else if (data_column.get_column_id() > index_schema.get_max_used_column_id()) {
+            index_schema.set_max_used_column_id(data_column.get_column_id());
           }
 
           if (FAILEDx(add_column(&data_column, is_index_column, is_rowkey,
-              data_column.get_order_in_rowkey(), row_desc, schema, 
+              data_column.get_order_in_rowkey(), row_desc, index_schema,
               false /* is_hidden */, false /* is_specified_storing_col */))) {
             LOG_WARN("add column failed", "data_column", data_column, K(is_index_column),
                 "order_in_rowkey", data_column.get_order_in_rowkey(),
                 K(row_desc), K(ret));
-          } else if (data_column.is_generated_column()) {
+          } else if (data_column.is_virtual_generated_column()) {
             ObSEArray<uint64_t, 5> cascaded_columns;
             if (OB_FAIL(data_column.get_cascaded_column_ids(cascaded_columns))) {
               LOG_WARN("failed to get cascaded_column_ids", K(data_column));
             }
-            // need to add cascaded columns in global index table for the partition key
+            // Virtual generated partition keys still need their dependent columns in the global index.
             for (int64_t i = 0; OB_SUCC(ret) && i < cascaded_columns.count(); ++i) {
               uint64_t column_id = cascaded_columns.at(i);
               const ObColumnSchemaV2 *cascaded_col_schema = data_schema.get_column_schema(column_id);
               if (OB_ISNULL(cascaded_col_schema)) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("failed to get column", K(data_schema), K(column_id), K(ret));
+              } else if (is_lob_storage(cascaded_col_schema->get_data_type())) {
+                ret = OB_ERR_WRONG_KEY_COLUMN;
+                const ObString &column_name = data_column.get_column_name_str();
+                LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
+                LOG_WARN("virtual generated column depending on lob cannot be used in global index",
+                          K(ret), K(data_column), KPC(cascaded_col_schema));
               } else if (OB_INVALID_INDEX == row_desc.get_idx(
                         cascaded_col_schema->get_table_id(), cascaded_col_schema->get_column_id())) {
-                if (cascaded_col_schema->get_column_id() > schema.get_max_used_column_id()) {
-                    schema.set_max_used_column_id(cascaded_col_schema->get_column_id());
+                if (cascaded_col_schema->get_column_id() > index_schema.get_max_used_column_id()) {
+                    index_schema.set_max_used_column_id(cascaded_col_schema->get_column_id());
                 }
                 if (OB_FAIL(add_column(cascaded_col_schema, is_index_column, is_rowkey,
-                    cascaded_col_schema->get_order_in_rowkey(), row_desc, schema,
+                    cascaded_col_schema->get_order_in_rowkey(), row_desc, index_schema,
                     false /* is_hidden */, false /* is_specified_storing_col */))) {
                   LOG_WARN("add column failed", "column", *cascaded_col_schema, K(is_index_column),
                       "order_in_rowkey", cascaded_col_schema->get_order_in_rowkey(), K(row_desc), K(ret));
