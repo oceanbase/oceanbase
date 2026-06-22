@@ -1790,6 +1790,7 @@ int ObTransformTempTable::inner_create_temp_table(ObSelectStmt *parent_stmt,
     ObSEArray<ObRawExpr *, 8> pushdown_groupby;
     ObSEArray<ObRawExpr *, 8> pushdown_rollup;
     ObSEArray<ObRawExpr *, 8> pushdown_having;
+    ObSEArray<ObRawExpr *, 8> pullup_minmax_having;
     ObSEArray<ObRawExpr *, 8> origin_condition_exprs;
 
     if (common_map_info.is_group_equal_ &&
@@ -1820,8 +1821,10 @@ int ObTransformTempTable::inner_create_temp_table(ObSelectStmt *parent_stmt,
                OB_FAIL(pullup_where_to_having_conds(pushdown_select,
                                                     origin_condition_exprs,
                                                     map_info.cond_property_map_,
-                                                    pushdown_having))) {
+                                                    pullup_minmax_having))) {
       LOG_WARN("failed to pullup where to having conds", K(ret));
+    } else if (OB_FAIL(append(parent_stmt->get_having_exprs(), pullup_minmax_having))) {
+      LOG_WARN("failed to append pullup minmax having", K(ret));
       //下压having
     } else if (parent_stmt->get_having_expr_size() > 0 &&
               OB_FAIL(pushdown_having_conditions(parent_stmt,
