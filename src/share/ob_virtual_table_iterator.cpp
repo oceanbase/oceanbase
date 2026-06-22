@@ -476,6 +476,8 @@ int ObVirtualTableIterator::get_next_row(ObNewRow *&row)
   } else if (OB_ISNULL(table_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("table schema is NULL", K(ret));
+  } else if (!pd_cols_project_.empty()
+    && OB_FALSE_IT(scan_param_->op_->clear_evaluated_flag())) {
   } else if (OB_FAIL(convert_output_row(cur_row, false))) {
     LOG_WARN("failed to convert row", K(ret));
   } else if (OB_FAIL(check_type_and_convert_string(cur_row, false))) {
