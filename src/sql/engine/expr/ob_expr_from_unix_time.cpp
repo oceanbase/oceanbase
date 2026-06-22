@@ -15,6 +15,8 @@
 #include "ob_expr_from_unix_time.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_datum_cast.h"
+#include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "share/ob_cluster_version.h"
 
 namespace oceanbase
 {
@@ -70,13 +72,31 @@ OB_INLINE int ObExprFromUnixTime::set_scale_for_single_param(ObExprResType &type
                                                              const ObExprResType &type1) const
 {
   int ret = OB_SUCCESS;
-  if (type1.is_integer_type()) {
-    type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
-  } else if(type1.is_varchar() || type.is_enum_or_set()) {
-    // 这里是不是有bug，type1.is_enum_or_set() TODO @zongmei.zzm
-    type.set_scale(MAX_SCALE_FOR_TEMPORAL);
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_6) {
+    const ObRawExpr *real_param = NULL;
+    ObRawExpr *raw_expr = get_raw_expr();
+    if (OB_ISNULL(raw_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("raw_expr is null", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::get_real_expr_without_cast(
+                   raw_expr->get_param_expr(0), real_param))) {
+      LOG_WARN("get_real_expr_without_cast failed", K(ret));
+    } else if (real_param->get_result_type().is_string_type() ||
+               real_param->get_result_type().is_enum_or_set()) {
+      type.set_scale(MAX_SCALE_FOR_TEMPORAL);
+    } else {
+      type.set_scale(static_cast<ObScale>(MIN(
+          real_param->get_result_type().get_scale(), MAX_SCALE_FOR_TEMPORAL)));
+    }
   } else {
-    type.set_scale(static_cast<ObScale>(MIN(type1.get_scale(), MAX_SCALE_FOR_TEMPORAL)));
+    if (type1.is_integer_type()) {
+      type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
+    } else if (type1.is_varchar() || type.is_enum_or_set()) {
+      // 这里应该使用 type1.is_enum_or_set()
+      type.set_scale(MAX_SCALE_FOR_TEMPORAL);
+    } else {
+      type.set_scale(static_cast<ObScale>(MIN(type1.get_scale(), MAX_SCALE_FOR_TEMPORAL)));
+    }
   }
   return ret;
 }

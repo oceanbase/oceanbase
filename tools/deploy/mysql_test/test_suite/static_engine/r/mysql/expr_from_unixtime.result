@@ -1281,12 +1281,12 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select from_unixtime(t28) from t;
-+---------------------+
-| from_unixtime(t28)  |
-+---------------------+
-| 1970-01-01 08:00:02 |
-| 1970-01-01 08:00:05 |
-+---------------------+
++----------------------------+
+| from_unixtime(t28)         |
++----------------------------+
+| 1970-01-01 08:00:02.000000 |
+| 1970-01-01 08:00:05.000000 |
++----------------------------+
 explain select from_unixtime(t28) from t;
 Query Plan
 ===============================================
@@ -1322,12 +1322,12 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select from_unixtime(t29) from t;
-+---------------------+
-| from_unixtime(t29)  |
-+---------------------+
-| 1970-01-01 08:00:02 |
-| NULL                |
-+---------------------+
++----------------------------+
+| from_unixtime(t29)         |
++----------------------------+
+| 1970-01-01 08:00:02.000000 |
+| NULL                       |
++----------------------------+
 explain select from_unixtime(t29) from t;
 Query Plan
 ===============================================
