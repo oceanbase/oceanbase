@@ -180,7 +180,8 @@ int ObStaticEngineCG::resolve_vec_hash_algo(const ObSQLSessionInfo *session,
       } else if (cfg.case_compare("murmur2") == 0) {
         algo = common::VEC_HASH_ALGO_MURMUR;
       } else if (cfg.case_compare("crc32") == 0) {
-        algo = common::VEC_HASH_ALGO_CRC;
+        algo = (min_cluster_ver >= CLUSTER_VERSION_4_6_1_0)
+               ? common::VEC_HASH_ALGO_CRC : common::VEC_HASH_ALGO_MURMUR;
       } else {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid _vec_hash_algo value", K(ret), K(cfg));
