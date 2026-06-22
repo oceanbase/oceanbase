@@ -389,8 +389,14 @@ int ObDMLRunningCtx::init_lob_ttl_column_info()
 
     if (OB_FAIL(ret)) {
     } else if (OB_UNLIKELY(user_ttl_column_idx == -1)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("user ttl column id is valid in data table, but not found in column descs", KR(ret), K(user_ttl_column_id), K(data_table));
+      // TODO: data_table doesn't means "primary table", it maybe a index table. We should refactor the variable name.
+      // If we can't find the user ttl column, it must not be a user data table. (After change ttl column, a index table doesn't have to storing ttl column)
+      if (data_table.is_user_data_table()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("user ttl column id is valid in data table, but not found in column descs", KR(ret), K(user_ttl_column_id), K(data_table));
+      } else {
+        lob_ttl_column_info_.reset();
+      }
     } else {
       lob_ttl_column_info_.init_by_column_idx(user_ttl_column_idx, ttl_col_type);
     }

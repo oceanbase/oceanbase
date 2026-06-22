@@ -1472,7 +1472,7 @@ int ObLobCheckTask::add_table_param(common::ObArenaAllocator &allocator, ObTable
     if (OB_SUCC(ret)) {
       is_lob_meta_has_ttl_column_ = table_schema->get_ttl_flag().is_lob_meta_has_ttl_column();
       if (is_lob_meta_has_ttl_column_) {
-        const ObColumnSchemaV2 *col = table_schema->get_column_schema(table_schema->get_ttl_flag().get_curr_user_ttl_column_id());
+        const ObColumnSchemaV2 *col = table_schema->get_column_schema(table_schema->get_ttl_flag().get_last_user_ttl_column_id());
         if (OB_ISNULL(col)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to get ttl column", KR(ret), K(table_schema));
@@ -1549,7 +1549,7 @@ int ObLobCheckTask::build_table_scan_param(common::ObArenaAllocator &allocator,
         is_lob_meta_has_ttl_column_ = table_schema->get_ttl_flag().is_lob_meta_has_ttl_column();
         if (OB_FAIL(ret)) {
         } else if (is_lob_meta_has_ttl_column_) {
-          const ObColumnSchemaV2 *col = table_schema->get_column_schema(table_schema->get_ttl_flag().get_curr_user_ttl_column_id());
+          const ObColumnSchemaV2 *col = table_schema->get_column_schema(table_schema->get_ttl_flag().get_last_user_ttl_column_id());
           if (OB_ISNULL(col)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("failed to get ttl column", KR(ret), K(table_schema));

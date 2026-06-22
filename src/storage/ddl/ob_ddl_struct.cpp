@@ -829,7 +829,7 @@ int ObDDLTableSchema::fill_ddl_table_schema(
     LOG_WARN("get column desc array failed", K(ret));
   } else if (OB_FAIL(table_schema->get_is_column_store(ddl_table_schema.table_item_.is_column_store_))) {
     LOG_WARN("fail to get is column store", K(ret));
-  } else if (table_schema->get_ttl_flag().is_lob_meta_has_ttl_column()) {
+  } else if (table_schema->get_ttl_flag().is_lob_meta_has_ttl_column() && OB_INVALID_ID != table_schema->get_aux_lob_meta_tid()) {
     const ObTTLFlag &ttl_flag = table_schema->get_ttl_flag();
     const ObColumnSchemaV2 *column_schema = nullptr;
     if (OB_FAIL(table_schema->get_column_idx_with_multi_version_col(ttl_flag.get_last_user_ttl_column_id(), ddl_table_schema.table_item_.user_ttl_column_idx_))) {

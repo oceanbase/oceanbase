@@ -279,20 +279,20 @@ int ObCompactionTTLUtil::check_alter_merge_engine_valid(const share::schema::ObT
   return ret;
 }
 
-int ObCompactionTTLUtil::extract_ttl_column_from_schema(const schema::ObTableSchema &table_schema,
-                                                        schema::ObColumnSchemaV2 &ttl_column,
-                                                        const bool for_aux_lob)
+int ObCompactionTTLUtil::extract_lob_meta_ttl_column_from_schema(
+    const schema::ObTableSchema &table_schema,
+    schema::ObColumnSchemaV2 &ttl_column)
 {
   int ret = OB_SUCCESS;
 
-  if (table_schema.get_ttl_flag().is_user_ttl_column()) {
-    const schema::ObColumnSchemaV2 *src_col = table_schema.get_column_schema(table_schema.get_ttl_flag().get_curr_user_ttl_column_id());
+  if (table_schema.get_ttl_flag().is_lob_meta_has_ttl_column()) {
+    const schema::ObColumnSchemaV2 *src_col = table_schema.get_column_schema(table_schema.get_ttl_flag().get_last_user_ttl_column_id());
     if (OB_ISNULL(src_col)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Fail to get ttl column, schema is not consistent", K(ret), K(table_schema));
     } else if (OB_FAIL(ttl_column.assign(*src_col))) {
       LOG_WARN("Fail to assign ttl column schema", K(ret), K(src_col));
-    } else if (for_aux_lob) {
+    } else {
       // For aux lob table, we need reset some fields
       ObObj default_obj;
       default_obj.set_null();
@@ -345,11 +345,11 @@ int ObCompactionTTLUtil::build_aux_lob_table_schema(const schema::ObTableSchema 
 
   if (OB_FAIL(ObInnerTableSchema::all_column_aux_lob_meta_schema(aux_lob_meta_schema))) {
     LOG_WARN("Fail to get all column aux lob meta schema", K(ret), K(data_table_schema));
-  } else if (data_table_schema.get_ttl_flag().is_user_ttl_column()) {
+  } else if (data_table_schema.get_ttl_flag().is_lob_meta_has_ttl_column()) {
     // Compaction TTL Table, should add ttl column to aux lob meta schema
     schema::ObColumnSchemaV2 dst_col;
-    if (OB_FAIL(extract_ttl_column_from_schema(data_table_schema, dst_col))) {
-      LOG_WARN("Fail to extract ttl column from schema", K(ret), K(data_table_schema));
+    if (OB_FAIL(extract_lob_meta_ttl_column_from_schema(data_table_schema, dst_col))) {
+      LOG_WARN("Fail to extract lob meta ttl column from schema", K(ret), K(data_table_schema));
     } else if (OB_FAIL(aux_lob_meta_schema.add_column(dst_col))) {
       LOG_WARN("Fail to add ttl column to aux lob meta schema", K(ret), K(dst_col));
     } else {

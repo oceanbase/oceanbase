@@ -140,9 +140,16 @@ public:
                                       const schema::ObTableSchema &table_schema,
                                       bool &is_compaction_ttl);
 
-  static int extract_ttl_column_from_schema(const schema::ObTableSchema &table_schema,
-                                            schema::ObColumnSchemaV2 &ttl_column,
-                                            const bool for_aux_lob = true);
+  /**
+   * @brief It's different from get_current_user_ttl_column().
+   *        Lob meta table will have ttl column once if the data table became user column compaction
+   * ttl table, which means the data table doesn't need to be user-column compaction ttl table NOW.
+   *
+   * @example create table t1(str mediumblob) TTL str + interval 1 second by compaction;
+   *          alter table t1 remove TTL; --------> Lob meta table still has ttl column
+   */
+  static int extract_lob_meta_ttl_column_from_schema(const schema::ObTableSchema &table_schema,
+                                                     schema::ObColumnSchemaV2 &ttl_column);
 
   static int create_mock_ttl_column_for_aux_lob(const common::ObObjType obj_type,
                                                 schema::ObColumnSchemaV2 &ttl_column);
