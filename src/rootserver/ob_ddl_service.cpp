@@ -12847,8 +12847,8 @@ int ObDDLService::check_need_add_progressive_round(
       } else if (OB_DDL_DROP_COLUMN == alter_column_schema->alter_type_) {
         // Drop column does not need progressive merge
       } else if (OB_ISNULL(orig_column_schema = table_schema.get_column_schema(alter_column_schema->get_origin_column_name()))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("orig column schema is null", KR(ret));
+        // The column not exist check in follower functions. To make the error msg same as follower functions, we just break
+        need_add_progressive_round = true;
       } else {
         need_add_progressive_round = orig_column_schema->need_progressive_merge_if_modify_to(*alter_column_schema);
       }
