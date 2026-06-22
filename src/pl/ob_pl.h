@@ -1799,7 +1799,6 @@ public:
   {}
   ~ObPLExecInfo()
   {
-    cache_obj_.~ObCacheObjGuard();
     sub_routine_function_ = NULL;
     if (phy_plan_ctx_ != NULL) {
       phy_plan_ctx_->~ObPhysicalPlanCtx();
@@ -1830,6 +1829,7 @@ public:
       dec_concurrent_num();
       need_dec_concurrent_num_ = false;
     }
+    cache_obj_.~ObCacheObjGuard();
   }
 
 
