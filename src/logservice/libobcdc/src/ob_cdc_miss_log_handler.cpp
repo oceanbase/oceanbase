@@ -288,7 +288,7 @@ static int do_read_batch_misslog_for_worker(
 
 class MissLogParallelFetcher : public lib::Threads
 {
-  static const int64_t DEFAULT_BATCH_SIZE = 200;
+  static const int64_t DEFAULT_BATCH_SIZE = 1000;
 
   struct WorkerCtx {
     FetchLogSRpc *srpc_;

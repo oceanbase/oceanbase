@@ -686,7 +686,7 @@ public:
   DEF_CAP(print_mod_memory_usage_threshold, OB_CLUSTER_PARAMETER, "0M", "[0M,]", "print mod memory usage threshold");
   DEF_STR(print_mod_memory_usage_label, OB_CLUSTER_PARAMETER, "|", "mod label for print memmory usage");
   T_DEF_INT_INFT(max_chunk_cache_size, OB_CLUSTER_PARAMETER, 0, 0, "chunkmgr max chunk size");
-  DEF_CAP(task_pool_allocator_total_limit, OB_CLUSTER_PARAMETER, "0M", "[0M,]", "task pool allocator total limit");
+  DEF_CAP(task_pool_allocator_total_limit, OB_CLUSTER_PARAMETER, "128G", "[0M,]", "task pool allocator total limit");
 
   // direct load inc
   // Whether to sync the incremental direct load data
