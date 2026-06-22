@@ -1993,7 +1993,8 @@ public:
   template<typename DSTSCHEMA>
   static int set_charset_and_collation_options(common::ObCharsetType src_charset_type,
                                                common::ObCollationType src_collation_type,
-                                               DSTSCHEMA &dst);
+                                               DSTSCHEMA &dst,
+                                               common::ObCharsetCompatType compat_type = common::CHARSET_COMPAT_MYSQL57);
   static common::ObCollationType get_cs_type_with_cmp_mode(const common::ObNameCaseMode mode);
 
   ObSchema *get_buffer() const { return buffer_; }
@@ -2039,7 +2040,8 @@ protected:
 template<typename DSTSCHEMA>
 int ObSchema::set_charset_and_collation_options(common::ObCharsetType src_charset_type,
                                                 common::ObCollationType src_collation_type,
-                                                DSTSCHEMA &dst)
+                                                DSTSCHEMA &dst,
+                                                common::ObCharsetCompatType compat_type)
 {
   int ret = common::OB_SUCCESS;
   if (dst.get_charset_type() == common::CHARSET_INVALID
@@ -2056,7 +2058,7 @@ int ObSchema::set_charset_and_collation_options(common::ObCharsetType src_charse
   } else {
     common::ObCharsetType charset_type = dst.get_charset_type();
     common::ObCollationType collation_type = dst.get_collation_type();
-    if (OB_FAIL(common::ObCharset::check_and_fill_info(charset_type, collation_type))) {
+    if (OB_FAIL(common::ObCharset::check_and_fill_info(charset_type, collation_type, compat_type))) {
       SHARE_SCHEMA_LOG(WARN, "fail to check charset collation",
                        K(charset_type), K(collation_type), K(ret));
     } else {
@@ -5267,12 +5269,12 @@ public:
   inline common::ObIArray<uint64_t> &get_trigger_list() { return trigger_list_; }
   inline const common::ObIArray<uint64_t> &get_trigger_list() const { return trigger_list_; }
   inline void reset_trigger_list() { trigger_list_.reset(); }
-  inline const char *get_old_password() const { return extract_str(old_password_); }
-  inline const common::ObString &get_old_password_str() const { return old_password_; }
-  inline int set_old_password(const char *passwd) { return deep_copy_str(passwd, old_password_); }
-  inline int set_old_password(const common::ObString &passwd) { return deep_copy_str(passwd, old_password_); }
-  inline int64_t get_old_password_start_time() const { return old_password_start_time_; }
+  inline int set_old_password(const char *old_password) { return deep_copy_str(old_password, old_password_); }
+  inline int set_old_password(const common::ObString &old_password) { return deep_copy_str(old_password, old_password_); }
   inline void set_old_password_start_time(int64_t ts) { old_password_start_time_ = ts; }
+  inline const char* get_old_password() const { return extract_str(old_password_); }
+  inline const common::ObString& get_old_password_str() const { return old_password_; }
+  inline int64_t get_old_password_start_time() const { return old_password_start_time_; }
 private:
   int add_proxy_info_(ObProxyInfo **&arr, uint64_t &capacity, uint64_t &cnt, const ObProxyInfo &proxy_info);
   int assign_proxy_info_array_(ObProxyInfo **src_arr,
@@ -6226,6 +6228,7 @@ struct ObNeedPriv
              const common::ObString &catalog = ObString(),
              const common::ObString &sensitive_rule = ObString())
       : db_(db), table_(table), priv_level_(priv_level), priv_set_(priv_set),
+        grantee_id_(common::OB_INVALID_ID),
         is_sys_table_(is_sys_table), obj_type_(share::schema::ObObjectType::INVALID),
         is_for_update_(is_for_update), priv_check_type_(priv_check_type),
         columns_(), check_any_column_priv_(false), catalog_(catalog),
@@ -6243,6 +6246,7 @@ struct ObNeedPriv
             const common::ObString &catalog = ObString(),
             const common::ObString &sensitive_rule = ObString())
     : db_(db), table_(table), priv_level_(priv_level), priv_set_(priv_set),
+      grantee_id_(common::OB_INVALID_ID),
       is_sys_table_(is_sys_table), obj_type_(obj_type),
       is_for_update_(is_for_update), priv_check_type_(priv_check_type),
       columns_(), check_any_column_priv_(false), catalog_(catalog),
@@ -6250,8 +6254,8 @@ struct ObNeedPriv
   { }
 
   ObNeedPriv()
-      : db_(), table_(), priv_level_(OB_PRIV_INVALID_LEVEL), priv_set_(0), is_sys_table_(false),
-        obj_type_(share::schema::ObObjectType::INVALID), is_for_update_(false),
+      : db_(), table_(), priv_level_(OB_PRIV_INVALID_LEVEL), priv_set_(0), grantee_id_(common::OB_INVALID_ID),
+        is_sys_table_(false), obj_type_(share::schema::ObObjectType::INVALID), is_for_update_(false),
         priv_check_type_(OB_PRIV_CHECK_ALL), columns_(), check_any_column_priv_(false),
         catalog_(), sensitive_rule_()
   { }
@@ -6260,6 +6264,7 @@ struct ObNeedPriv
   common::ObString table_;
   ObPrivLevel priv_level_;
   ObPrivSet priv_set_;
+  uint64_t grantee_id_;
   bool is_sys_table_; // May be used to represent the table of schema metadata
   share::schema::ObObjectType obj_type_;
   bool is_for_update_;
@@ -6271,8 +6276,8 @@ struct ObNeedPriv
   // If check_any_column_priv_ true, then check the table has any column with the priv_set.
   common::ObString catalog_;
   common::ObString sensitive_rule_;
-  TO_STRING_KV(K_(db), K_(table), K_(columns), K_(priv_set), K_(priv_level), K_(is_sys_table), K_(is_for_update),
-               K_(priv_check_type), K_(catalog), K_(sensitive_rule));
+  TO_STRING_KV(K_(db), K_(table), K_(columns), K_(priv_set), K_(priv_level), K_(grantee_id),
+               K_(is_sys_table), K_(is_for_update), K_(priv_check_type), K_(catalog), K_(sensitive_rule));
 };
 
 struct ObStmtNeedPrivs
@@ -8665,7 +8670,6 @@ public:
   };
 
 
-  static const int64_t DEFAULT_PARAM_VALUES[MAX_PARAMS];
   static const int64_t INVALID_PARAM_VALUES[MAX_PARAMS];
   static const char *PARAM_VALUE_NAMES[MAX_PARAMS];
 
@@ -8709,11 +8713,8 @@ public:
   inline ObTenantProfileId get_tenant_profile_id() const { return ObTenantProfileId(tenant_id_, profile_id_); }
 
   int set_value(const int64_t type, const int64_t value);
-  int set_default_value(const int64_t type);
-  int set_default_values();
   int set_default_values_v2();
   int set_invalid_values();
-  static int get_default_value(const int64_t type, int64_t &value);
 
   inline const char *get_password_verify_function() const { return extract_str(password_verify_function_); }
   inline const common::ObString &get_password_verify_function_str() const { return password_verify_function_; }

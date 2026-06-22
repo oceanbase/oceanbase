@@ -108,6 +108,11 @@ int ObCreateTenantStmt::set_default_tablegroup_name(const common::ObString &tabl
   return create_tenant_arg_.tenant_schema_.set_default_tablegroup_name(tablegroup_name);
 }
 
+int ObCreateTenantStmt::set_default_tablespace_name(const common::ObString &tablespace_name)
+{
+  return create_tenant_arg_.tenant_schema_.set_default_tablespace_name(tablespace_name);
+}
+
 void ObCreateTenantStmt::set_create_standby_tenant()
 {
   create_tenant_arg_.is_creating_standby_ = true;

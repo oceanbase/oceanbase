@@ -68,6 +68,7 @@ private:
     CREATE_DATABASE_LINK_PRIV,
     CREATE_ROLE_PRIV,
     DROP_ROLE_PRIV,
+    USER_ATTRIBUTES,
   };
 public:
   ObMySQLUserTable();

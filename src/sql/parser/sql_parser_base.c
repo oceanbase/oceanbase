@@ -5,6 +5,7 @@
 
 #include "sql_parser_base.h"
 #include "ob_parser_charset_utils.h"
+#include "ob_parser_fullwidth_converter_c.h"
 
 #define YY_EXTRA_TYPE void *
 #define yyconst const
@@ -176,6 +177,9 @@ int parse_sql(ParseResult *p, const char *buf, size_t input_len)
     ret = OB_PARSER_ERR_EMPTY_QUERY;
   } else {
     const int32_t len = (int32_t)input_len;
+    const char *processed_sql = buf;
+    int32_t processed_len = len;
+    void *full_width_sym_converter = NULL;
     p->input_sql_ = buf;
     p->input_sql_len_ = len;
     p->start_col_ = 1;
@@ -193,16 +197,25 @@ int parse_sql(ParseResult *p, const char *buf, size_t input_len)
       p->question_mark_ctx_.count_ = 0;
     }
 
-    // 删除SQL语句末尾的空格 (外层已做)
-    // while (len > 0 && ISSPACE(buf[len - 1])) {
-    //  --len;
-    // }
+    if (OB_PARSER_SUCCESS != (ret = sql_parser_preprocess_fullwidth_symbols(p,
+                                                                            buf,
+                                                                            len,
+                                                                            &processed_sql,
+                                                                            &processed_len,
+                                                                            &full_width_sym_converter))) {
+      // for error other than NO_MEMORY, we return OB_PARSER_ERR_PARSE_SQL to avoid lost connection.
+      if (OB_PARSER_ERR_NO_MEMORY != ret) {
+        ret = OB_PARSER_ERR_PARSE_SQL;
+      }
+    } else if (OB_UNLIKELY(NULL == processed_sql || processed_len <= 0 || processed_len > INT32_MAX)) {
+      snprintf(p->error_msg_, MAX_ERROR_MSG, "Input SQL is invalid after fullwidth preprocessing");
+      ret = OB_PARSER_ERR_PARSE_SQL;
+    } else {
+      p->input_sql_ = processed_sql;
+      p->input_sql_len_ = processed_len;
+    }
 
-    //if (OB_UNLIKELY(len <= 0)) {
-    // (void)snprintf(p->error_msg_, MAX_ERROR_MSG, "Input SQL can not be white space only");
-    //  ret = OB_PARSER_ERR_EMPTY_QUERY;
-  //  } else {
-    {
+    if (OB_PARSER_SUCCESS == ret) {
       static __thread jmp_buf jmp_buf_;
       p->jmp_buf_ = &jmp_buf_;
       int val = setjmp(*(p->jmp_buf_));
@@ -230,7 +243,7 @@ int parse_sql(ParseResult *p, const char *buf, size_t input_len)
           } else {
             switch(type) {
               case CHARSET_PARSER_TYPE_GB: {
-                YY_BUFFER_STATE bp = obsql_oracle_gbk_yy_scan_bytes(buf, len, p->yyscan_info_);
+                YY_BUFFER_STATE bp = obsql_oracle_gbk_yy_scan_bytes(p->input_sql_, p->input_sql_len_, p->yyscan_info_);
                 obsql_oracle_gbk_yy_switch_to_buffer(bp, p->yyscan_info_);
                 int tmp_ret = -1;
                 if (p->is_fp_) {
@@ -257,7 +270,7 @@ int parse_sql(ParseResult *p, const char *buf, size_t input_len)
                 break;
               }
               case CHARSET_PARSER_TYPE_SINGLE_BYTE: {
-                YY_BUFFER_STATE bp = obsql_oracle_single_byte_yy_scan_bytes(buf, len, p->yyscan_info_);
+                YY_BUFFER_STATE bp = obsql_oracle_single_byte_yy_scan_bytes(p->input_sql_, p->input_sql_len_, p->yyscan_info_);
                 obsql_oracle_single_byte_yy_switch_to_buffer(bp, p->yyscan_info_);
                 int tmp_ret = -1;
                 if (p->is_fp_) {
@@ -284,7 +297,7 @@ int parse_sql(ParseResult *p, const char *buf, size_t input_len)
                 break;
               }
               case CHARSET_PARSER_TYPE_UTF8MB4: {
-                YY_BUFFER_STATE bp = obsql_oracle_utf8_yy_scan_bytes(buf, len, p->yyscan_info_);
+                YY_BUFFER_STATE bp = obsql_oracle_utf8_yy_scan_bytes(p->input_sql_, p->input_sql_len_, p->yyscan_info_);
                 obsql_oracle_utf8_yy_switch_to_buffer(bp, p->yyscan_info_);
                 int tmp_ret = -1;
                 if (p->is_fp_) {
@@ -311,7 +324,7 @@ int parse_sql(ParseResult *p, const char *buf, size_t input_len)
                 break;
               }
               case CHARSET_PARSER_TYPE_HKSCS: {
-                YY_BUFFER_STATE bp = obsql_oracle_hkscs_yy_scan_bytes(buf, len, p->yyscan_info_);
+                YY_BUFFER_STATE bp = obsql_oracle_hkscs_yy_scan_bytes(p->input_sql_, p->input_sql_len_, p->yyscan_info_);
                 obsql_oracle_hkscs_yy_switch_to_buffer(bp, p->yyscan_info_);
                 int tmp_ret = -1;
                 if (p->is_fp_) {
@@ -347,7 +360,7 @@ int parse_sql(ParseResult *p, const char *buf, size_t input_len)
 #ifdef OB_BUILD_ORACLE_PARSER
         } else {
 #endif
-          YY_BUFFER_STATE bp = obsql_mysql_yy_scan_bytes(buf, len, p->yyscan_info_);
+          YY_BUFFER_STATE bp = obsql_mysql_yy_scan_bytes(p->input_sql_, p->input_sql_len_, p->yyscan_info_);
           obsql_mysql_yy_switch_to_buffer(bp, p->yyscan_info_);
           int tmp_ret = -1;
           if (p->is_fp_) {
@@ -375,6 +388,9 @@ int parse_sql(ParseResult *p, const char *buf, size_t input_len)
         }
 #endif
       }
+    }
+    if (OB_PARSER_SUCCESS == ret || OB_PARSER_ERR_PARSE_SQL == ret) {
+      sql_parser_postprocess_fullwidth_symbols(p, full_width_sym_converter, p->input_sql_len_);
     }
   }
   return ret;

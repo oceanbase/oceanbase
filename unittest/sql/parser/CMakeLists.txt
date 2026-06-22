@@ -4,6 +4,7 @@ sql_unittest(test_pl_parser)
 sql_unittest(test_parser)
 sql_unittest(test_multi_parser)
 sql_unittest(test_fts_parser)
+sql_unittest(test_fullwidth_symbols)
 
 add_executable(test_sql_fast_parser test_sql_fast_parser.cpp)
 target_link_libraries(test_sql_fast_parser

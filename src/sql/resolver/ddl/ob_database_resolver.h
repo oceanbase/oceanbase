@@ -12,6 +12,7 @@
 #include "sql/resolver/ob_stmt.h"
 #include "lib/charset/ob_charset.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "sql/resolver/ob_resolver_utils.h"
 namespace oceanbase
 {
 namespace sql
@@ -139,10 +140,16 @@ int ObDatabaseResolver<T>::resolve_database_option(T *stmt, ParseNode *node, ObS
       case T_COLLATION: {
         common::ObCharsetType charset_type = common::CHARSET_INVALID;
         common::ObCollationType collation_type = common::CS_TYPE_INVALID;
-        if (T_CHARSET == option_node->type_) {
+        common::ObCharsetCompatType charset_compat_type = common::CHARSET_COMPAT_MYSQL57;
+        if (OB_ISNULL(session_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("session info is NULL", K(ret));
+        } else if (OB_FAIL(session_info->get_charset_compat_type(charset_compat_type))) {
+          LOG_WARN("fail to get charset compat type", K(ret));
+        } else if (T_CHARSET == option_node->type_) {
           common::ObString charset(option_node->str_len_, option_node->str_value_);
           charset_type = common::ObCharset::charset_type(charset.trim());
-          collation_type = common::ObCharset::get_default_collation(charset_type);
+          collation_type = common::ObCharset::get_default_collation(charset_type, charset_compat_type);
           if (OB_UNLIKELY(common::CHARSET_INVALID == charset_type)) {
             ret = common::OB_ERR_UNKNOWN_CHARSET;
             LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, charset.length(), charset.ptr());
@@ -233,6 +240,30 @@ int ObDatabaseResolver<T>::resolve_database_option(T *stmt, ParseNode *node, ObS
         if (common::OB_SUCCESS == ret && stmt->get_stmt_type() == stmt::T_ALTER_DATABASE) {
           if (OB_FAIL(alter_option_bitset_.add_member(
                   obrpc::ObAlterDatabaseArg::DEFAULT_TABLEGROUP))) {
+            OB_LOG(WARN, "failed to add member to bitset!", K(ret));
+          }
+        }
+        break;
+      }
+      case T_TABLESPACE: {
+        common::ObString tablespace_name;
+        if (OB_FAIL(ObResolverUtils::check_default_tablespace_enable(session_info))) {
+          LOG_WARN("fail to check default tablespace enable", KR(ret));
+        } else if (OB_UNLIKELY(option_node->num_child_ != 1) || OB_ISNULL(option_node->children_)) {
+          ret = common::OB_ERR_UNEXPECTED;
+          OB_LOG(WARN, "invalid tablespace argument", K(ret), "num_child", option_node->num_child_);
+        } else if (OB_NOT_NULL(option_node->children_[0])) {
+          tablespace_name.assign_ptr(option_node->children_[0]->str_value_,
+                                     static_cast<int32_t>(option_node->children_[0]->str_len_));
+        } else {
+          tablespace_name = ObString::make_string("NULL");
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(stmt->set_default_tablespace_name(tablespace_name))) {
+          OB_LOG(WARN, "failed to set default tablespace name", K(ret));
+        } else if (stmt->get_stmt_type() == stmt::T_ALTER_DATABASE) {
+          if (OB_FAIL(alter_option_bitset_.add_member(
+                  obrpc::ObAlterDatabaseArg::DEFAULT_TABLESPACE))) {
             OB_LOG(WARN, "failed to add member to bitset!", K(ret));
           }
         }

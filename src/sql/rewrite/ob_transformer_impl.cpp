@@ -8,7 +8,7 @@
 #include "sql/rewrite/ob_transformer_impl.h"
 #include "sql/rewrite/ob_transform_view_merge.h"
 #include "sql/rewrite/ob_transform_min_max.h"
-#include "sql/rewrite/ob_transform_where_subquery_pullup.h"
+#include "sql/rewrite/ob_transform_subquery_unnest.h"
 #include "sql/rewrite/ob_transform_eliminate_outer_join.h"
 #include "sql/rewrite/ob_transform_simplify_distinct.h"
 #include "sql/rewrite/ob_transform_simplify_expr.h"
@@ -633,7 +633,7 @@ int ObTransformerImpl::transform_rule_set_in_one_iteration(ObDMLStmt *&stmt,
     APPLY_RULE_IF_NEEDED(SIMPLIFY_SET, ObTransformSimplifySet);
     APPLY_RULE_IF_NEEDED(VIEW_MERGE, ObTransformViewMerge);
     APPLY_RULE_IF_NEEDED(COUNT_TO_EXISTS, ObTransformCountToExists);
-    APPLY_RULE_IF_NEEDED(WHERE_SQ_PULL_UP, ObWhereSubQueryPullup);
+    APPLY_RULE_IF_NEEDED(SUBQUERY_UNNEST, ObTransformSubqueryUnnest);
     APPLY_RULE_IF_NEEDED(SIMPLIFY_SUBQUERY, ObTransformSimplifySubquery);
     APPLY_RULE_IF_NEEDED(SEMI_TO_INNER, ObTransformSemiToInner);
     APPLY_RULE_IF_NEEDED(QUERY_PUSH_DOWN, ObTransformQueryPushDown);
@@ -714,13 +714,13 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
     if (func.contain_unpivot_query_) {
       uint64_t unpivot_enable_list = 0;
       ObTransformRule::add_trans_type(unpivot_enable_list, VIEW_MERGE);
-      ObTransformRule::add_trans_type(unpivot_enable_list, WHERE_SQ_PULL_UP);
+      ObTransformRule::add_trans_type(unpivot_enable_list, SUBQUERY_UNNEST);
       ObTransformRule::add_trans_type(unpivot_enable_list, AGGR_SUBQUERY);
       ObTransformRule::add_trans_type(unpivot_enable_list, QUERY_PUSH_DOWN);
       disable_list |= (~unpivot_enable_list);
     }
     if (func.contain_fulltext_search_) {
-      ObTransformRule::add_trans_type(disable_list, WHERE_SQ_PULL_UP);
+      ObTransformRule::add_trans_type(disable_list, SUBQUERY_UNNEST);
       ObTransformRule::add_trans_type(disable_list, AGGR_SUBQUERY);
       ObTransformRule::add_trans_type(disable_list, WIN_MAGIC);
       ObTransformRule::add_trans_type(disable_list, OR_EXPANSION);
@@ -744,7 +744,7 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
         ObTransformRule::add_trans_type(enum_set_enable_list, FASTMINMAX);
         ObTransformRule::add_trans_type(enum_set_enable_list, ELIMINATE_OJ);
         ObTransformRule::add_trans_type(enum_set_enable_list, VIEW_MERGE);
-        ObTransformRule::add_trans_type(enum_set_enable_list, WHERE_SQ_PULL_UP);
+        ObTransformRule::add_trans_type(enum_set_enable_list, SUBQUERY_UNNEST);
         ObTransformRule::add_trans_type(enum_set_enable_list, QUERY_PUSH_DOWN);
         ObTransformRule::add_trans_type(enum_set_enable_list, SIMPLIFY_SET);
         ObTransformRule::add_trans_type(enum_set_enable_list, PROJECTION_PRUNING);
@@ -793,7 +793,7 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
       ObTransformRule::add_trans_type(dblink_enable_list, PREDICATE_MOVE_AROUND);
       ObTransformRule::add_trans_type(dblink_enable_list, VIEW_MERGE);
       ObTransformRule::add_trans_type(dblink_enable_list, COUNT_TO_EXISTS);
-      ObTransformRule::add_trans_type(dblink_enable_list, WHERE_SQ_PULL_UP);
+      ObTransformRule::add_trans_type(dblink_enable_list, SUBQUERY_UNNEST);
       ObTransformRule::add_trans_type(dblink_enable_list, SIMPLIFY_SUBQUERY);
       ObTransformRule::add_trans_type(dblink_enable_list, QUERY_PUSH_DOWN);
       ObTransformRule::add_trans_type(dblink_enable_list, ELIMINATE_OJ);

@@ -10985,6 +10985,20 @@ bool ObRawExprUtils::is_invalid_type_for_compare(const ObRawExprResType &type)
           ObExtendType == type.get_type();
 }
 
+bool ObRawExprUtils::is_audit_log_expr(const ObRawExpr *expr)
+{
+  bool bret = false;
+  if (OB_NOT_NULL(expr)) {
+    bret = T_FUN_SYS_AUDIT_LOG_SET_FILTER == expr->get_expr_type() ||
+           T_FUN_SYS_AUDIT_LOG_REMOVE_FILTER == expr->get_expr_type() ||
+           T_FUN_SYS_AUDIT_LOG_SET_USER == expr->get_expr_type() ||
+           T_FUN_SYS_AUDIT_LOG_REMOVE_USER == expr->get_expr_type() ||
+           T_FUN_SYS_AUDIT_LOG_PASSWORD_SET == expr->get_expr_type() ||
+           T_FUN_SYS_AUDIT_LOG_PASSWORD_GET == expr->get_expr_type();
+  }
+  return bret;
+}
+
 int ObRawExprUtils::build_json_member_of_expr(ObRawExprFactory &expr_factory,
                                                const ObSQLSessionInfo &session,
                                                ObRawExpr *json_val,

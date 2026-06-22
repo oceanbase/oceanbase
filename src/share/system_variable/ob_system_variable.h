@@ -286,7 +286,8 @@ public:
                                            const common::ObString &cs_val,
                                            common::ObString &coll_var_name,
                                            common::ObString &coll_val,
-                                           common::ObCollationType &coll_type);
+                                           common::ObCollationType &coll_type,
+                                           common::ObCharsetCompatType charset_compat_type = common::CHARSET_COMPAT_MYSQL57);
   DECLARE_TO_STRING;
 
 protected:

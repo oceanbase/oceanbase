@@ -2517,7 +2517,7 @@ int ObTenantDDLService::set_new_tenant_options(
   int ret = OB_SUCCESS;
   common::ObArray<common::ObZone> zones_in_pool;
   alter_locality_op = ALTER_LOCALITY_OP_INVALID;
-  if (OB_FAIL(set_raw_tenant_options(arg, new_tenant_schema))) {
+  if (OB_FAIL(set_raw_tenant_options(arg, schema_guard, new_tenant_schema))) {
     LOG_WARN("fail to set raw tenant options", K(ret));
   } else if (arg.alter_option_bitset_.has_member(obrpc::ObModifyTenantArg::LOCALITY)) {
     common::ObArray<share::schema::ObZoneRegion> zone_region_list;
@@ -2794,6 +2794,7 @@ int ObTenantDDLService::check_alter_tenant_locality_type(
 
 int ObTenantDDLService::set_raw_tenant_options(
     const ObModifyTenantArg &arg,
+    ObSchemaGetterGuard &schema_guard,
     ObTenantSchema &new_tenant_schema)
 {
   int ret = OB_SUCCESS;
@@ -2850,6 +2851,26 @@ int ObTenantDDLService::set_raw_tenant_options(
             LOG_WARN("failed to set default tablegroup name", K(ret));
           } else if (OB_FAIL(ddl_service_->set_default_tablegroup_id(new_tenant_schema))) {
             LOG_WARN("failed to set default tablegroup id", K(ret));
+          }
+          break;
+        }
+        case ObModifyTenantArg::DEFAULT_TABLESPACE: {
+          ObSchemaGetterGuard *current_schema_guard = &schema_guard;
+          ObSchemaGetterGuard tenant_schema_guard;
+          if (OB_SYS_TENANT_ID == schema_guard.get_tenant_id() &&
+              schema_guard.get_tenant_id() != new_tenant_schema.get_tenant_id()) {
+            if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(new_tenant_schema.get_tenant_id(), tenant_schema_guard))) {
+              LOG_WARN("failed to get tenant schema guard", K(ret));
+            } else {
+              current_schema_guard = &tenant_schema_guard;
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(new_tenant_schema.set_default_tablespace_name(
+              alter_tenant_schema.get_default_tablespace_name()))) {
+            LOG_WARN("failed to set default tablespace name", K(ret));
+          } else if (OB_FAIL(ddl_service_->set_default_tablespace_id(new_tenant_schema, *current_schema_guard))) {
+            LOG_WARN("failed to set default tablespace id", K(ret));
           }
           break;
         }

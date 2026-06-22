@@ -18,6 +18,7 @@
 #include "sql/optimizer/ob_log_link_scan.h"
 #include "sql/optimizer/ob_log_expand.h"
 #include "sql/optimizer/ob_log_hybrid_fusion.h"
+#include "sql/optimizer/ob_log_subplan_filter.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -3620,6 +3621,11 @@ int ObSelectLogPlan::check_sharding_inherit_from_access_all(ObLogicalOperator* o
         log_join->is_nlj_with_param_down()) {
       is_inherit_from_access_all = true;
     }
+  } else if (log_op_def::LOG_SUBPLAN_FILTER == op->get_type()) {
+    ObLogSubPlanFilter *spf = static_cast<ObLogSubPlanFilter*>(op);
+    if (DIST_BC2HOST_NONE == spf->get_distributed_algo()) {
+      is_inherit_from_access_all = true;
+    }
   }
   for (int64_t i = 0; OB_SUCC(ret) && !is_inherit_from_access_all && i < op->get_num_of_child(); ++i) {
     ObLogicalOperator *child = op->get_child(i);
@@ -6281,17 +6287,41 @@ int ObSelectLogPlan::candi_allocate_subplan_filter_for_select_item()
 {
   int ret = OB_SUCCESS;
   const ObSelectStmt *select_stmt = NULL;
-  ObSEArray<ObRawExpr*, 4> select_exprs;
-  ObSEArray<ObRawExpr*, 4> subquery_exprs;
+  ObSEArray<ObRawExpr*, 1> select_item_exprs;
   if (OB_ISNULL(select_stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null stmt", K(select_stmt), K(ret));
-  } else if (OB_FAIL(select_stmt->get_select_exprs(select_exprs))) {
+  } else if (OB_FAIL(select_stmt->get_select_exprs(select_item_exprs))) {
     LOG_WARN("failed to get select exprs", K(ret));
-  } else if (OB_FAIL(candi_allocate_subplan_filter(select_exprs))) {
-    LOG_WARN("failed to candi allocate subplan filter for exprs", K(ret));
+  } else if (get_optimizer_context().get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_6_1)
+             && get_optimizer_context().enable_separate_spf_for_select_items()) {
+    if (OB_FAIL(candi_allocate_separate_spf_for_select_items(select_item_exprs))) {
+      LOG_WARN("failed to allocate separate spf for select items", K(ret));
+    }
   } else {
-    LOG_TRACE("succeed to allocate subplan filter for select item", K(select_stmt->get_stmt_id()));
+    if (OB_FAIL(candi_allocate_subplan_filter(select_item_exprs))) {
+      LOG_WARN("failed to allocate separate spf for select items", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    LOG_TRACE("succeed to allocate separate spf for select items",
+              K(select_stmt->get_stmt_id()));
+  }
+  return ret;
+}
+
+int ObSelectLogPlan::candi_allocate_separate_spf_for_select_items(
+    const ObIArray<ObRawExpr *> &select_item_exprs)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < select_item_exprs.count(); ++i) {
+    ObRawExpr *item_expr = select_item_exprs.at(i);
+    ObSEArray<ObRawExpr *, 1> single_item;
+    if (OB_FAIL(single_item.push_back(item_expr))) {
+      LOG_WARN("failed to push back single item expr", K(ret), K(i));
+    } else if (OB_FAIL(candi_allocate_subplan_filter(single_item))) {
+      LOG_WARN("failed to allocate subplan filter for select item", K(ret), K(i));
+    }
   }
   return ret;
 }

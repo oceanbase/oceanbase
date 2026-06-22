@@ -1400,8 +1400,22 @@ int ObLogPlan::generate_subplan_for_query_ref(ObQueryRefRawExpr *query_ref,
                                                         get_basic_table_metas(),
                                                         get_selectivity_ctx()))) {
     LOG_WARN("failed to prepare exec param meta", K(ret));
-  } else if (OB_FAIL(SMART_CALL(static_cast<ObSelectLogPlan *>(logical_plan)->generate_raw_plan()))) {
-    LOG_WARN("failed to optimize sub-select", K(ret));
+  } else {
+    bool need_add_serial = !is_initplan &&
+                           !opt_ctx.force_add_serial_path() &&
+                           !opt_ctx.get_query_ctx()->get_query_hint().has_outline_data() &&
+                           is_simple_rescan_subquery(subquery);
+    if (need_add_serial) {
+      opt_ctx.set_force_add_serial_path(true);
+    }
+    if (OB_FAIL(SMART_CALL(static_cast<ObSelectLogPlan *>(logical_plan)->generate_raw_plan()))) {
+      LOG_WARN("failed to optimize sub-select", K(ret));
+    }
+    if (need_add_serial) {
+      opt_ctx.set_force_add_serial_path(false);
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(add_query_ref_meta(query_ref,
                                         logical_plan->get_update_table_metas(),
                                         logical_plan->get_selectivity_ctx()))) {
@@ -8703,7 +8717,8 @@ int ObLogPlan::get_valid_subplan_filter_dist_method(ObIArray<ObLogPlan*> &subpla
   int ret = OB_SUCCESS;
   dist_methods = DIST_BASIC_METHOD | DIST_PULL_TO_LOCAL
                  | DIST_PARTITION_WISE | DIST_PARTITION_NONE
-                 | DIST_NONE_ALL | DIST_HASH_ALL | DIST_RANDOM_ALL;
+                 | DIST_NONE_ALL | DIST_HASH_ALL | DIST_RANDOM_ALL
+                 | DIST_BC2HOST_NONE;
   const ObLogicalOperator *op = NULL;
   bool contain_recursive_cte = false;
   if (OB_ISNULL(get_stmt()) || OB_UNLIKELY(candidates_.candidate_plans_.empty()
@@ -8745,7 +8760,8 @@ int ObLogPlan::get_valid_subplan_filter_dist_method(ObIArray<ObLogPlan*> &subpla
       dist_methods &= ~DIST_NONE_ALL;
       dist_methods &= ~DIST_HASH_ALL;
       dist_methods &= ~DIST_RANDOM_ALL;
-      OPT_TRACE("SPF will not use DIST_NONE_ALL/DIST_HASH_ALL/DIST_RANDOM_ALL method due to onetime subquery");
+      dist_methods &= ~DIST_BC2HOST_NONE;
+      OPT_TRACE("SPF will not use DIST_NONE_ALL/DIST_HASH_ALL/DIST_RANDOM_ALL/DIST_BC2HOST_NONE method due to onetime subquery");
     }
 
     if (OB_FAIL(ret)) {
@@ -9081,7 +9097,8 @@ int ObLogPlan::get_subplan_filter_distributed_method(ObLogicalOperator *&top,
 {
   int ret = OB_SUCCESS;
   bool is_child_ops_match_all = false;
-  bool can_re_parallel = false;
+  bool can_hash_all_re_parallel = false;
+  bool can_bc2host_re_parallel = false;
   ObQueryCtx *query_ctx = NULL;
   if (OB_ISNULL(top) || OB_ISNULL(query_ctx = get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
@@ -9089,11 +9106,24 @@ int ObLogPlan::get_subplan_filter_distributed_method(ObLogicalOperator *&top,
   } else if (OB_FAIL(check_if_all_match_all(subquery_ops, is_child_ops_match_all))) {
     LOG_WARN("failed to check if match none all", K(ret));
   } else {
-    can_re_parallel = top->can_re_parallel()
+    can_hash_all_re_parallel = top->can_re_parallel()
                       && (distributed_methods & DistAlgo::DIST_HASH_ALL)
                       && is_child_ops_match_all
                       && !params.empty()
                       && query_ctx->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP2);
+  }
+
+  if (OB_SUCC(ret) && (distributed_methods & DistAlgo::DIST_BC2HOST_NONE)) {
+    bool is_match_bc2host = false;
+    if (has_onetime) {
+      distributed_methods &= ~DIST_BC2HOST_NONE;
+    } else if (OB_FAIL(check_if_subplan_filter_match_bc2host(top, subquery_ops, is_match_bc2host))) {
+      LOG_WARN("failed to check if match bc2host", K(ret));
+    } else if (!is_match_bc2host) {
+      distributed_methods &= ~DIST_BC2HOST_NONE;
+    } else {
+      can_bc2host_re_parallel = top->can_re_parallel();
+    }
   }
 
   if (OB_SUCC(ret) && (distributed_methods & DistAlgo::DIST_BASIC_METHOD)) {
@@ -9108,12 +9138,19 @@ int ObLogPlan::get_subplan_filter_distributed_method(ObLogicalOperator *&top,
                                                                   is_basic,
                                                                   is_remote))) {
       LOG_WARN("failed to check if match basic sharding info", K(ret));
-    } else if (is_basic && !(is_remote && for_cursor_expr) && !can_re_parallel) {
+    } else if (is_basic && !(is_remote && for_cursor_expr)
+               && !can_hash_all_re_parallel
+               && !can_bc2host_re_parallel) {
       distributed_methods = DistAlgo::DIST_BASIC_METHOD;
       OPT_TRACE("SPF will use basic method");
     } else {
       distributed_methods &= ~DIST_BASIC_METHOD;
     }
+  }
+
+  if (OB_SUCC(ret) && (distributed_methods & DistAlgo::DIST_BC2HOST_NONE)) {
+    distributed_methods = DistAlgo::DIST_BC2HOST_NONE;
+    OPT_TRACE("SPF will use bc2host none method");
   }
 
   if (OB_SUCC(ret) && (distributed_methods & (DistAlgo::DIST_HASH_ALL | DistAlgo::DIST_RANDOM_ALL))) {
@@ -9165,7 +9202,7 @@ int ObLogPlan::get_subplan_filter_distributed_method(ObLogicalOperator *&top,
           distributed_methods &= ~DistAlgo::DIST_RANDOM_ALL;
         }
       }
-    } else if (can_re_parallel) {
+    } else if (can_hash_all_re_parallel) {
       distributed_methods = DistAlgo::DIST_HASH_ALL;
       OPT_TRACE("SPF will use hash all method due to re-parallel");
     } else {
@@ -9300,6 +9337,37 @@ int ObLogPlan::create_subplan_filter_plan(ObLogicalOperator *&top,
                                                       project_refs))) {
       LOG_WARN("failed to allocate subplan filter as top", K(ret));
     } else { /*do nothing*/ }
+  } else if (DistAlgo::DIST_BC2HOST_NONE == dist_algo) {
+    ObLogicalOperator *right_child = subquery_ops.at(0);
+    if (OB_ISNULL(right_child)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid right child", K(ret));
+    } else {
+      exch_info.dist_method_ = ObPQDistributeMethod::BC2HOST;
+      exch_info.parallel_ = top->get_available_parallel();
+      exch_info.server_list_.assign(right_child->get_server_list());
+      exch_info.server_cnt_ = right_child->get_server_cnt();
+      if (exch_info.parallel_ == 1) {
+        exch_info.strong_sharding_ = right_child->get_strong_sharding();
+      } else {
+        exch_info.strong_sharding_ = get_optimizer_context().get_distributed_sharding();
+      }
+    }
+    if (FAILEDx(allocate_exchange_as_top(top, exch_info))) {
+      LOG_WARN("failed to allocate exchange as top", K(ret));
+    } else if (OB_FAIL(allocate_subplan_filter_as_top(top,
+                                                      subquery_ops,
+                                                      query_ref_exprs,
+                                                      params,
+                                                      onetime_exprs,
+                                                      initplan_idxs,
+                                                      onetime_idxs,
+                                                      filters,
+                                                      dist_algo,
+                                                      is_update_set,
+                                                      project_refs))) {
+      LOG_WARN("failed to allocate subplan filter as top", K(ret));
+    }
   } else if (OB_UNLIKELY(DistAlgo::DIST_PULL_TO_LOCAL != dist_algo)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected subplan filter distributed method", K(ret), K(dist_algo));
@@ -9353,39 +9421,6 @@ int ObLogPlan::compute_subplan_filter_random_shuffle_info(ObLogicalOperator* top
   return ret;
 }
 
-int ObLogPlan::init_subplan_filter_child_ops(const ObIArray<ObLogicalOperator*> &subquery_ops,
-                                             const ObIArray<std::pair<int64_t, ObRawExpr*>> &params,
-                                             ObIArray<ObLogicalOperator*> &dist_subquery_ops)
-{
-  int ret = OB_SUCCESS;
-  ObExchangeInfo exch_info;
-  for (int64 i = 0; OB_SUCC(ret) && i < subquery_ops.count(); i++) {
-    bool need_rescan = false;
-    ObLogicalOperator *child = NULL;
-    if (OB_ISNULL(child = subquery_ops.at(i)) || OB_ISNULL(child->get_stmt())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if (child->is_distributed() &&
-               OB_FAIL(allocate_exchange_as_top(child, exch_info))) {
-      LOG_WARN("failed to allocate exchange as top", K(ret));
-    } else if (OB_ISNULL(child)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if (params.empty() && child->get_stmt()->is_contains_assignment() &&
-               OB_FAIL(child->check_exchange_rescan(need_rescan))) {
-      LOG_WARN("failed to check exchange rescan", K(ret));
-    } else if (need_rescan && OB_FAIL(allocate_material_as_top(child))) {
-      LOG_WARN("failed to allocate material as top", K(ret));
-    } else if (OB_ISNULL(child)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if (OB_FAIL(dist_subquery_ops.push_back(child))) {
-      LOG_WARN("failed to push back op", K(ret));
-    } else { /*do nothing*/ }
-  }
-  return ret;
-}
-
 int ObLogPlan::check_if_all_match_all(const ObIArray<ObLogicalOperator*> &ops,
                                       bool &is_all_match_all)
 {
@@ -9398,6 +9433,47 @@ int ObLogPlan::check_if_all_match_all(const ObIArray<ObLogicalOperator*> &ops,
       LOG_WARN("invalid op", K(ret));
     } else if (!op->is_match_all()) {
       is_all_match_all = false;
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::check_if_subplan_filter_match_bc2host(ObLogicalOperator *top,
+                                                     const ObIArray<ObLogicalOperator*> &subquery_ops,
+                                                     bool &is_bc2host_none)
+{
+  int ret = OB_SUCCESS;
+  is_bc2host_none = true;
+  if (OB_ISNULL(top)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_bc2host_none && i < subquery_ops.count(); ++i) {
+    ObLogicalOperator *op = subquery_ops.at(i);
+    if (OB_ISNULL(op)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid op", K(ret));
+    } else if (op->is_exchange_allocated()) {
+      is_bc2host_none = false;
+      OPT_TRACE("SPF will not use bc2host none method because exchange allocated");
+    } else if ((top->get_parallel() <= 1 && !top->can_re_parallel() && op->is_remote()) ||
+               ((top->get_parallel() > 1 || top->can_re_parallel()) && (op->is_local() || op->is_remote()))) {
+      // Serial execution requires subquery at remote; parallel execution allows local or remote.
+      if (i > 0) {
+        bool sharding_equal = false;
+        if (OB_FAIL(ObShardingInfo::is_physically_equal_serverlist(
+                        subquery_ops.at(0)->get_server_list(),
+                        op->get_server_list(),
+                        sharding_equal))) {
+          LOG_WARN("failed to check server list equality", K(ret));
+        } else if (!sharding_equal) {
+          is_bc2host_none = sharding_equal;
+          OPT_TRACE("SPF will not use bc2host none method because sharding not equal");
+        }
+      }
+    } else {
+      is_bc2host_none = false;
+      OPT_TRACE("SPF will not use bc2host none method because of sharding");
     }
   }
   return ret;
@@ -10911,6 +10987,14 @@ int ObLogPlan::compute_plan_relationship(const CandidatePlan &first_candi_plan,
         OPT_TRACE("sharding can not compare");
       }
     }
+    if (OB_SUCC(ret) && get_optimizer_context().force_add_serial_path()) {
+      bool first_is_serial_plan = first_plan->is_single() && !first_plan->is_exchange_allocated();
+      bool second_is_serial_plan = second_plan->is_single() && !second_plan->is_exchange_allocated();
+      if (first_is_serial_plan != second_is_serial_plan) {
+        uncompareable_count++;
+        OPT_TRACE("serial plan can not compare");
+      }
+    }
 
     // compare pipeline operator
     if (OB_SUCC(ret) && stmt->has_limit()) {
@@ -10992,6 +11076,15 @@ int ObLogPlan::compute_rescan_plan_relationship(const ObLogicalOperator &first_p
       LOG_WARN("failed to check need compare batch rescan", K(ret));
     } else if (!need_compare) {
       /* do nothing */
+    } else if (OB_FAIL(first_spf->check_right_is_local_scan(first_right_local_rescan))
+               || OB_FAIL(second_spf->check_right_is_local_scan(second_right_local_rescan))) {
+      LOG_WARN("failed to check right is local rescan", K(ret));
+    } else if (first_right_local_rescan == 0 && second_right_local_rescan > 0) {
+      relation = DominateRelation::OBJ_RIGHT_DOMINATE;
+      OPT_TRACE("right plan dominate left plan because of local rescan subplan filter");
+    } else if (first_right_local_rescan > 0 && second_right_local_rescan == 0) {
+      relation = DominateRelation::OBJ_LEFT_DOMINATE;
+      OPT_TRACE("left plan dominate right plan because of local rescan subplan filter");
     } else if (is_fast_refreshing_mview
                && first_spf->get_parallel() > ObGlobalHint::DEFAULT_PARALLEL
                && second_spf->get_distributed_algo() == DIST_PULL_TO_LOCAL) {
@@ -11008,9 +11101,6 @@ int ObLogPlan::compute_rescan_plan_relationship(const ObLogicalOperator &first_p
     } else if (first_spf->enable_das_group_rescan() && !second_spf->enable_das_group_rescan()) {
       relation = DominateRelation::OBJ_LEFT_DOMINATE;
       OPT_TRACE("left plan dominate right plan because of group rescan subplan filter");
-    } else if (OB_FAIL(first_spf->check_right_is_local_scan(first_right_local_rescan))
-               || OB_FAIL(second_spf->check_right_is_local_scan(second_right_local_rescan))) {
-      LOG_WARN("failed to check right is local rescan", K(ret));
     } else if (first_spf->enable_das_group_rescan() && second_spf->enable_das_group_rescan()) {
       if (first_spf->get_parallel() != second_spf->get_parallel()) {
         /* do nothing */
@@ -18653,4 +18743,22 @@ int ObLogPlan::find_hybrid_search_table_scan(ObLogicalOperator *op, ObLogTableSc
     }
   }
   return ret;
+}
+
+
+bool ObLogPlan::is_simple_rescan_subquery(const ObDMLStmt *stmt) const
+{
+  bool bret = false;
+  if (OB_NOT_NULL(stmt) && 1 == stmt->get_table_size()) {
+    const TableItem *table = stmt->get_table_item(0);
+    int64_t subquery_cnt = stmt->get_subquery_expr_size();
+    if (0 == subquery_cnt) {
+      bret = true;
+    } else if (1 == subquery_cnt) {
+      bret = OB_NOT_NULL(table) && table->is_generated_table() && is_simple_rescan_subquery(table->ref_query_);
+    } else {
+      bret = false;
+    }
+  }
+  return bret;
 }

@@ -683,7 +683,15 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
                   ret = OB_ERR_UNKNOWN_CHARSET;
                   LOG_WARN("unknown charset", K(ret), K(cs_name));
                 } else {
-                  coll_type = ObCharset::get_default_collation(charset_type);
+                  ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
+                  if (OB_ISNULL(ctx_.session_info_)) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("unexpected session info", K(ret));
+                  } else if (OB_FAIL(ctx_.session_info_->get_charset_compat_type(charset_compat_type))) {
+                    LOG_WARN("fail to get charset compat type", K(ret));
+                  } else {
+                    coll_type = ObCharset::get_default_collation(charset_type, charset_compat_type);
+                  }
                 }
               } else if (ctx_.is_in_system_view_) {
                 //for mysql system view, cast char type always has default collation
@@ -1393,7 +1401,7 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
               } else if (OB_ISNULL(obj_access)) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("obj access node is null", K(ret));
-              } else if (OB_FAIL(process_obj_access_node(*obj_access, expr))) {
+              } else if (OB_FAIL(process_obj_access_node(*obj_access, expr, is_root_expr))) {
                 LOG_WARN("failed to process obj access node", K(ret));
                 if (get_udf_param_syntax_err()) {
                   // do nothing ....
@@ -1470,7 +1478,7 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
         break;
       }
       case T_OBJ_ACCESS_REF: {
-        if (OB_FAIL(process_obj_access_node(*node, expr))) {
+        if (OB_FAIL(process_obj_access_node(*node, expr, is_root_expr))) {
           LOG_WARN("process obj access node failed", K(ret));
         }
         break;
@@ -1517,7 +1525,7 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
                 SET_IDENT_INFO("CONNECT_BY_ISCYCLE")
               }
 #undef SET_IDENT_INFO
-              if (OB_FAIL(process_obj_access_node(*access, expr))) {
+              if (OB_FAIL(process_obj_access_node(*access, expr, false))) {
                 LOG_WARN("process obj access node failed", K(ret));
                 ret = OB_ERR_CBY_PSEUDO_COLUMN_NOT_ALLOWED;
               }
@@ -2422,7 +2430,7 @@ int ObRawExprResolverImpl::process_cursor_attr_node(const ParseNode &node, ObRaw
         OB_ERR_UNEXPECTED, node.children_[0]->type_);
     OX (info.set_is_explicit(true));
     OX (info.set_type(node.value_));
-    OZ (process_obj_access_node(*(node.children_[0]), child_expr1));
+    OZ (process_obj_access_node(*(node.children_[0]), child_expr1, false));
     if (OB_SUCC(ret)) {
       if (T_SP_CURSOR_ROWID == node.value_ && NULL != child_expr1) {
         // in current of
@@ -2544,7 +2552,7 @@ int ObRawExprResolverImpl::process_cursor_attr_node(const ParseNode &node, ObRaw
   return ret;
 }
 
-int ObRawExprResolverImpl::process_obj_access_node(const ParseNode &node, ObRawExpr *&expr)
+int ObRawExprResolverImpl::process_obj_access_node(const ParseNode &node, ObRawExpr *&expr, bool is_root_expr)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ctx_.columns_)) {
@@ -2634,7 +2642,7 @@ int ObRawExprResolverImpl::process_obj_access_node(const ParseNode &node, ObRawE
       // Normal obj-access resolution (identifiers, PL vars, UDFs, etc.)
       ObQualifiedName column_ref;
       int64_t child_start = ctx_.columns_->count();
-      if (OB_FAIL(resolve_obj_access_idents(node, column_ref))) {
+      if (OB_FAIL(resolve_obj_access_idents(node, column_ref, is_root_expr))) {
         LOG_WARN("resolve obj access idents failed", K(ret));
       } else {
         column_ref.format_qualified_name(ctx_.case_mode_);
@@ -3029,7 +3037,7 @@ void ObRawExprResolverImpl::get_special_func_ident_name(ObString &ident_name, co
   } else { /* do nothing */}
 }
 
-int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNode &left_node, ObQualifiedName &q_name)
+int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNode &left_node, ObQualifiedName &q_name, bool is_root_expr)
 {
   int ret = OB_SUCCESS;
   const ParseNode &func_node = left_node;
@@ -3150,7 +3158,7 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
           } else if (func_node.type_ == T_FUN_ORA_XMLAGG) {
             OZ (process_agg_node(&func_node, func_expr));
           }else {
-            OZ (process_fun_sys_node(&func_node, func_expr, false));
+            OZ (process_fun_sys_node(&func_node, func_expr, is_root_expr));
           }
           CK (OB_NOT_NULL(func_expr));
           OX (access_ident.sys_func_expr_ = func_expr);
@@ -3261,7 +3269,7 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
   return ret;
 }
 
-int ObRawExprResolverImpl::resolve_left_node_of_obj_access_idents(const ParseNode &left_node, ObQualifiedName &q_name)
+int ObRawExprResolverImpl::resolve_left_node_of_obj_access_idents(const ParseNode &left_node, ObQualifiedName &q_name, bool is_root_expr)
 {
   int ret = OB_SUCCESS;
   if (T_QUESTIONMARK == left_node.type_) {
@@ -3290,7 +3298,7 @@ int ObRawExprResolverImpl::resolve_left_node_of_obj_access_idents(const ParseNod
              || T_FUN_SYS_DBTIMEZONE == left_node.type_
              || T_FUN_SYS_USER == left_node.type_
              || T_FUN_SYS_UID == left_node.type_) {
-    OZ (resolve_func_node_of_obj_access_idents(left_node, q_name));
+    OZ (resolve_func_node_of_obj_access_idents(left_node, q_name, is_root_expr));
   } else if (left_node.type_ == T_LINK_NODE && left_node.value_ == 3) {
     ret = OB_ERR_PARSER_SYNTAX; // array not in object access ref : array[1]
     LOG_WARN("input invalid arguments", K(ret));
@@ -3311,10 +3319,10 @@ int ObRawExprResolverImpl::resolve_right_node_of_obj_access_idents(const ParseNo
       CK (OB_NOT_NULL(right_node.children_[0]));
       CK (OB_NOT_NULL(right_node.children_[1]));
       OZ (SMART_CALL(resolve_right_node_of_obj_access_idents(*(right_node.children_[0]), q_name)));
-      OZ (SMART_CALL(resolve_obj_access_idents(*(right_node.children_[1]), q_name)));
+      OZ (SMART_CALL(resolve_obj_access_idents(*(right_node.children_[1]), q_name, false)));
     } else {
       // example: a(1).b(1), here, we resolve '.b(1)'
-      OZ (SMART_CALL(resolve_obj_access_idents(right_node, q_name)), K(q_name));
+      OZ (SMART_CALL(resolve_obj_access_idents(right_node, q_name, false)), K(q_name));
     }
   } else {
     // example: a(1)(2) here, we resolve '(2)'
@@ -3343,7 +3351,7 @@ int ObRawExprResolverImpl::resolve_right_node_of_obj_access_idents(const ParseNo
   return ret;
 }
 
-int ObRawExprResolverImpl::resolve_obj_access_idents(const ParseNode &node, ObQualifiedName &q_name)
+int ObRawExprResolverImpl::resolve_obj_access_idents(const ParseNode &node, ObQualifiedName &q_name, bool is_root_expr)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(node.type_ != T_OBJ_ACCESS_REF) || OB_UNLIKELY(node.num_child_ != 2)) {
@@ -3352,7 +3360,7 @@ int ObRawExprResolverImpl::resolve_obj_access_idents(const ParseNode &node, ObQu
   } else if (OB_ISNULL(node.children_[0])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("left node of obj access is null", K(ret), K(node.type_), KP(node.children_));
-  } else if (OB_FAIL(resolve_left_node_of_obj_access_idents(*(node.children_[0]), q_name))) {
+  } else if (OB_FAIL(resolve_left_node_of_obj_access_idents(*(node.children_[0]), q_name, is_root_expr))) {
     LOG_WARN("failed to resolve left node of obj access", K(ret), K(q_name));
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(node.children_[1])) {
@@ -3643,6 +3651,7 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
   uint64_t tenant_data_ver = 0;
   bool enable_decimal_int = false;
   ObCompatType compat_type = COMPAT_MYSQL57;
+  ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
   bool enable_mysql_compatible_dates = false;
   if (OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
@@ -3652,6 +3661,8 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
     LOG_WARN("get sys variables failed", K(ret));
   } else if (OB_FAIL(session_info->get_compatibility_control(compat_type))) {
     LOG_WARN("failed to get compat type", K(ret));
+  } else if (OB_FAIL(session_info->get_charset_compat_type(charset_compat_type))) {
+    LOG_WARN("fail to get charset compat type", K(ret));
   } else if (OB_FAIL(ObSQLUtils::check_enable_decimalint(session_info, enable_decimal_int))) {
     LOG_WARN("fail to check enable decimal int", K(ret));
   } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(session_info, false,
@@ -3679,7 +3690,8 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
                                              session_info->get_min_const_integer_precision(),
                                              session_info->get_exec_min_cluster_version(),
                                              nullptr != ctx_.secondary_namespace_,
-                                             ctx_.formalize_const_int_prec_))) {
+                                             ctx_.formalize_const_int_prec_,
+                                             charset_compat_type))) {
     LOG_WARN("failed to resolve const", K(ret));
   } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(lib::is_mysql_mode() && node.type_ == T_NCHAR ?
                                                                               T_VARCHAR : node.type_, c_expr))) {
@@ -4578,7 +4590,7 @@ int ObRawExprResolverImpl::process_column_ref_node(
     OZ (ObRawExprUtils::mock_obj_access_ref_node(ctx_.expr_factory_.get_allocator(),
                                                  obj_access_node, node, ctx_.tg_timing_event_));
     CK (OB_NOT_NULL(obj_access_node));
-    OZ (process_obj_access_node(*obj_access_node, expr));
+    OZ (process_obj_access_node(*obj_access_node, expr, false));
   } else if (OB_FAIL(ObResolverUtils::resolve_column_ref(
             node, ctx_.case_mode_, column_ref))) {
     LOG_WARN("fail to resolve column ref", K(ret));
@@ -8974,10 +8986,7 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node,
   }
 
   if (OB_SUCC(ret)) {
-    if (T_FUN_SYS_AUDIT_LOG_SET_FILTER == func_expr->get_expr_type()
-        || T_FUN_SYS_AUDIT_LOG_REMOVE_FILTER == func_expr->get_expr_type()
-        || T_FUN_SYS_AUDIT_LOG_SET_USER == func_expr->get_expr_type()
-        || T_FUN_SYS_AUDIT_LOG_REMOVE_USER == func_expr->get_expr_type()) {
+    if (ObRawExprUtils::is_audit_log_expr(func_expr)) {
       if (OB_UNLIKELY(!is_root_expr)) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "use audit log function as param is");
@@ -9073,6 +9082,8 @@ int ObRawExprResolverImpl::process_sys_func_params(ObSysFunRawExpr &func_expr, i
     case T_FUN_SYS_AUDIT_LOG_REMOVE_FILTER:
     case T_FUN_SYS_AUDIT_LOG_SET_USER:
     case T_FUN_SYS_AUDIT_LOG_REMOVE_USER:
+    case T_FUN_SYS_AUDIT_LOG_PASSWORD_SET:
+    case T_FUN_SYS_AUDIT_LOG_PASSWORD_GET:
       for (int64_t i = 0; OB_SUCC(ret) && i < func_expr.get_param_count(); ++i) {
         ObRawExpr *param_expr = func_expr.get_param_expr(i);
         if (OB_ISNULL(param_expr)) {

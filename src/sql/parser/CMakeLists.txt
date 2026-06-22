@@ -101,6 +101,10 @@ set(ob_inner_sql_parser_object_list
   ob_char_type.h
   ob_fast_parser.h
   ob_fast_parser.cpp
+  ob_parser_fullwidth_converter.cpp
+  ob_parser_fullwidth_converter_c.cpp
+  ob_parser_fullwidth_converter.h
+  ob_parser_fullwidth_converter_c.h
   ob_parser_charset_utils.cpp
   sql_parser_base.c
   sql_parser_base.h

@@ -347,7 +347,8 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
       evo_plan_guard_(),
       sync_time_(-1),
       evo_plan_set_(nullptr),
-      evolution_plan_(nullptr)
+      evolution_plan_(nullptr),
+      receive_ts_(OB_INVALID_TIMESTAMP)
   {
     cache_node_empty_ = true;
   }
@@ -378,6 +379,7 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
   void set_get_normal_mode(uint64_t v) { plan_hash_value_ = v; handle_cache_mode_ = MODE_GET_NORMAL; }
   void set_get_offset_mode() { handle_cache_mode_ = MODE_GET_OFFSET; }
   void set_get_unaccept_for_update_mode() { handle_cache_mode_ = MODE_GET_UNACCEPT_FOR_UPDATE; }
+  bool has_valid_receive_ts() const { return OB_INVALID_TIMESTAMP != receive_ts_; }
   bool force_get_evolution_plan()
   {
     return STAT_START_EVOLUTION == spm_stat_;
@@ -421,6 +423,7 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
   int64_t sync_time_;
   ObPlanSet *evo_plan_set_;
   ObEvolutionPlan *evolution_plan_;
+  int64_t receive_ts_;
 };
 
 struct EvolutionTaskResult

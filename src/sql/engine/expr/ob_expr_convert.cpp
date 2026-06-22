@@ -9,6 +9,7 @@
 
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -31,8 +32,6 @@ int ObExprConvert::calc_result_type2(ObExprResType &type,
                                      ObExprResType &type2,
                                      ObExprTypeCtx &type_ctx) const
 {
-  UNUSED(type_ctx);
-
   int ret = OB_SUCCESS;
   type.set_type(ObVarcharType); // Only convert (xx using collation) will reach here now. It must be a varchar result.
   type.set_scale(type1.get_scale()); 
@@ -45,12 +44,18 @@ int ObExprConvert::calc_result_type2(ObExprResType &type,
   if (OB_SUCC(ret)) {
     ObString cs_name = dest_collation.get_string();
     ObCharsetType charset_type = CHARSET_INVALID;
+    ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
     if (CHARSET_INVALID == (charset_type = ObCharset::charset_type(cs_name.trim()))) {
       ret = OB_ERR_UNKNOWN_CHARSET;
       LOG_WARN("unknown charset", K(ret), K(cs_name));
+    } else if (OB_ISNULL(type_ctx.get_session())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session is null", K(ret));
+    } else if (OB_FAIL(type_ctx.get_session()->get_charset_compat_type(charset_compat_type))) {
+      LOG_WARN("fail to get charset compat type", K(ret));
     } else {
       type.set_collation_level(CS_LEVEL_IMPLICIT);
-      type.set_collation_type(ObCharset::get_default_collation(charset_type));
+      type.set_collation_type(ObCharset::get_default_collation(charset_type, charset_compat_type));
       //set calc type
       //only set type2 here.
       type2.set_calc_type(ObVarcharType);
@@ -182,12 +187,18 @@ int ObExprConvertOracle::calc_convert_oracle_expr(const ObExpr &expr,
   ObDatum *src_param = NULL;
   ObCollationType src_cs_type = CS_TYPE_INVALID;
   ObCollationType dst_cs_type = CS_TYPE_INVALID;
+  ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
   ObValueChecker<int> charset_checker(CHARSET_INVALID + 1, CHARSET_MAX - 1,
                                       OB_ERR_UNSUPPORTED_CHARACTER_SET);
 
   //param1
   if (OB_FAIL(expr.args_[0]->eval(ctx, src_param))) {
     LOG_WARN("eval arg failed", K(ret));
+  } else if (OB_ISNULL(ctx.exec_ctx_.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else if (OB_FAIL(ctx.exec_ctx_.get_my_session()->get_charset_compat_type(charset_compat_type))) {
+    LOG_WARN("fail to get charset compat type", K(ret));
   }
 
   //param2
@@ -200,7 +211,7 @@ int ObExprConvertOracle::calc_convert_oracle_expr(const ObExpr &expr,
     } else {
       dst_character_set = dst_cs_type_param->get_string();
       dst_cs_type = ObCharset::get_default_collation_by_mode(
-            ObCharset::charset_type_by_name_oracle(dst_character_set), lib::is_oracle_mode());
+            ObCharset::charset_type_by_name_oracle(dst_character_set), lib::is_oracle_mode(), charset_compat_type);
       if (OB_FAIL(charset_checker.validate(ObCharset::charset_type_by_coll(dst_cs_type)))) {
         LOG_WARN("invalid charset value", K(ret), K(dst_character_set));
       }
@@ -218,7 +229,7 @@ int ObExprConvertOracle::calc_convert_oracle_expr(const ObExpr &expr,
       } else {
         src_character_set = src_cs_type_param->get_string();
         src_cs_type = ObCharset::get_default_collation_by_mode(
-              ObCharset::charset_type_by_name_oracle(src_character_set), lib::is_oracle_mode());
+              ObCharset::charset_type_by_name_oracle(src_character_set), lib::is_oracle_mode(), charset_compat_type);
         if (OB_FAIL(charset_checker.validate(ObCharset::charset_type_by_coll(src_cs_type)))) {
           LOG_WARN("invalid charset value", K(ret), K(src_character_set));
         }

@@ -605,10 +605,10 @@ Timestamp{whitespace}?\"[^\"]*\" {
 }
 
 {identifer} {
-  int32_t token = mysql_sql_reserved_keyword_lookup(yytext);
+  int32_t token = mysql_sql_reserved_keyword_lookup_for_pl(yytext);
   if (token < 0) {
     const NonReservedKeyword *word = NULL;
-    if (NULL == (word = mysql_pl_non_reserved_keyword_lookup(yytext)))
+    if (NULL == (word = mysql_pl_keyword_lookup(yytext)))
     {
       token = IDENT;
       ParseNode *node = NULL;

@@ -430,7 +430,7 @@ int ObRawExprInfoExtractor::visit_subquery_node(ObOpRawExpr &expr)
   return ret;
 }
 
-ObItemType ObRawExprInfoExtractor::get_subquery_comparison_type(ObItemType cmp_type) const
+ObItemType ObRawExprInfoExtractor::get_subquery_comparison_type(ObItemType cmp_type)
 {
   ObItemType ret = cmp_type;
   switch (cmp_type) {

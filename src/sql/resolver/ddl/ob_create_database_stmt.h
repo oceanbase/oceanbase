@@ -32,6 +32,7 @@ class ObCreateDatabaseStmt : public ObDDLStmt
     int set_primary_zone(const common::ObString &zone);
     void set_read_only(const bool read_only);
     int set_default_tablegroup_name(const common::ObString &tablegroup_name);
+    int set_default_tablespace_name(const common::ObString &tablespace_name);
     obrpc::ObCreateDatabaseArg &get_create_database_arg();
     virtual bool cause_implicit_commit() const { return true; }
     virtual obrpc::ObDDLArg &get_ddl_arg() { return create_database_arg_; }

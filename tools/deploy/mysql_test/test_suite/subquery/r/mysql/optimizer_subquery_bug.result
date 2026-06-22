@@ -858,11 +858,11 @@ Query Plan
 |0 |SCALAR GROUP BY                    |               |1       |17          |
 |1 |└─MERGE ANTI JOIN                  |               |9       |17          |
 |2 |  ├─TABLE FULL SCAN                |table10_bigint |10      |3           |
-|3 |  └─SUBPLAN SCAN                   |VIEW3          |1       |14          |
+|3 |  └─SUBPLAN SCAN                   |VIEW2          |1       |14          |
 |4 |    └─MERGE ANTI JOIN              |               |1       |14          |
 |5 |      ├─TABLE FULL SCAN            |table2_bigint  |2       |3           |
 |6 |      └─SORT                       |               |2       |11          |
-|7 |        └─SUBPLAN SCAN             |VIEW2          |2       |11          |
+|7 |        └─SUBPLAN SCAN             |VIEW3          |2       |11          |
 |8 |          └─NESTED-LOOP JOIN       |               |2       |11          |
 |9 |            ├─SUBPLAN SCAN         |VIEW4          |1       |5           |
 |10|            │ └─SCALAR GROUP BY    |               |1       |5           |
@@ -875,25 +875,25 @@ Outputs & filters:
   0 - output([T_FUN_SUM(1)]), filter(nil), rowset=256
       group(nil), agg_func([T_FUN_SUM(1)])
   1 - output(nil), filter(nil), rowset=256
-      equal_conds([table10_bigint.pk = VIEW3.pk]), other_conds(nil)
+      equal_conds([table10_bigint.pk = VIEW2.pk]), other_conds(nil)
       merge_directions([ASC])
   2 - output([table10_bigint.pk]), filter(nil), rowset=256
       access([table10_bigint.pk]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([table10_bigint.pk]), range(MIN ; MAX)always true
-  3 - output([VIEW3.pk]), filter(nil), rowset=256
-      access([VIEW3.pk])
+  3 - output([VIEW2.pk]), filter(nil), rowset=256
+      access([VIEW2.pk])
   4 - output([table2_bigint.pk]), filter(nil), rowset=256
-      equal_conds([cast(table2_bigint.pk, DECIMAL_INT(20, 0)) = VIEW2.col_decimal_20_0]), other_conds(nil)
+      equal_conds([cast(table2_bigint.pk, DECIMAL_INT(20, 0)) = VIEW3.col_decimal_20_0]), other_conds(nil)
       merge_directions([ASC])
   5 - output([table2_bigint.pk]), filter(nil), rowset=256
       access([table2_bigint.pk]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([table2_bigint.pk]), range(MIN ; MAX)always true
-  6 - output([VIEW2.col_decimal_20_0]), filter(nil), rowset=256
-      sort_keys([VIEW2.col_decimal_20_0, ASC])
-  7 - output([VIEW2.col_decimal_20_0]), filter(nil), rowset=256
-      access([VIEW2.col_decimal_20_0])
+  6 - output([VIEW3.col_decimal_20_0]), filter(nil), rowset=256
+      sort_keys([VIEW3.col_decimal_20_0, ASC])
+  7 - output([VIEW3.col_decimal_20_0]), filter(nil), rowset=256
+      access([VIEW3.col_decimal_20_0])
   8 - output([table100_bigint.col_decimal_20_0]), filter(nil), rowset=256
       conds([cast(VIEW4.Min(10), DECIMAL_INT(20, 0)) = table100_bigint.col_decimal_20_0]), nl_params_(nil), use_batch=false
   9 - output([VIEW4.Min(10)]), filter(nil), rowset=256
@@ -1054,10 +1054,10 @@ Query Plan
 |3 |│   └─MERGE ANTI JOIN                  |               |9       |19          |
 |4 |│     ├─TABLE FULL SCAN                |table10_bigint |10      |3           |
 |5 |│     └─SORT                           |               |1       |16          |
-|6 |│       └─SUBPLAN SCAN                 |VIEW3          |1       |16          |
+|6 |│       └─SUBPLAN SCAN                 |VIEW2          |1       |16          |
 |7 |│         └─HASH ANTI JOIN NA          |               |1       |16          |
 |8 |│           ├─TABLE FULL SCAN          |table2_bigint  |2       |3           |
-|9 |│           └─SUBPLAN SCAN             |VIEW2          |3       |14          |
+|9 |│           └─SUBPLAN SCAN             |VIEW3          |3       |14          |
 |10|│             └─NESTED-LOOP JOIN       |               |3       |14          |
 |11|│               ├─SUBPLAN SCAN         |VIEW4          |1       |7           |
 |12|│               │ └─SCALAR GROUP BY    |               |1       |7           |
@@ -1076,24 +1076,24 @@ Outputs & filters:
   2 - output([T_FUN_SUM(LENGTH(trim(substr(substr('hizctdn', 1, 20), 1, 20))))]), filter(nil), rowset=256
       group(nil), agg_func([T_FUN_SUM(LENGTH(trim(substr(substr('hizctdn', 1, 20), 1, 20))))])
   3 - output(nil), filter(nil), rowset=256
-      equal_conds([table10_bigint.pk = VIEW3.pk]), other_conds(nil)
+      equal_conds([table10_bigint.pk = VIEW2.pk]), other_conds(nil)
       merge_directions([ASC])
   4 - output([table10_bigint.pk]), filter(nil), rowset=256
       access([table10_bigint.pk]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([table10_bigint.pk]), range(MIN ; MAX)always true
-  5 - output([VIEW3.pk]), filter(nil), rowset=256
-      sort_keys([VIEW3.pk, ASC])
-  6 - output([VIEW3.pk]), filter(nil), rowset=256
-      access([VIEW3.pk])
+  5 - output([VIEW2.pk]), filter(nil), rowset=256
+      sort_keys([VIEW2.pk, ASC])
+  6 - output([VIEW2.pk]), filter(nil), rowset=256
+      access([VIEW2.pk])
   7 - output([table2_bigint.pk]), filter(nil), rowset=256
-      equal_conds([cast(table2_bigint.pk, DECIMAL_INT(20, 0)) = VIEW2.col_decimal_20_0]), other_conds(nil)
+      equal_conds([cast(table2_bigint.pk, DECIMAL_INT(20, 0)) = VIEW3.col_decimal_20_0]), other_conds(nil)
   8 - output([table2_bigint.pk]), filter(nil), rowset=256
       access([table2_bigint.pk]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([table2_bigint.pk]), range(MIN ; MAX)always true
-  9 - output([VIEW2.col_decimal_20_0]), filter(nil), rowset=256
-      access([VIEW2.col_decimal_20_0])
+  9 - output([VIEW3.col_decimal_20_0]), filter(nil), rowset=256
+      access([VIEW3.col_decimal_20_0])
  10 - output([table100_bigint.col_decimal_20_0]), filter(nil), rowset=256
       conds([cast(coalesce(VIEW4.MIN(10), ROUND(FLOOR(62)), 1), DECIMAL_INT(22, 0)) = ROUND(ABS(ROUND(FLOOR(table100_bigint.col_decimal_20_0))))]), nl_params_(nil),
        use_batch=false
@@ -1526,17 +1526,18 @@ FROM
   t2
 WHERE v1.s_c2 >= t2.c2 and v1.c1 = t2.c1;
 Query Plan
-===========================================================
-|ID|OPERATOR             |NAME      |EST.ROWS|EST.TIME(us)|
------------------------------------------------------------
-|0 |NESTED-LOOP JOIN     |          |1       |25          |
-|1 |├─SUBPLAN SCAN       |v1        |1       |7           |
-|2 |│ └─SUBPLAN FILTER   |          |1       |7           |
-|3 |│   ├─TABLE FULL SCAN|t1        |1       |3           |
-|4 |│   ├─TABLE FULL SCAN|t3        |1       |3           |
-|5 |│   └─TABLE FULL SCAN|t3        |1       |3           |
-|6 |└─TABLE RANGE SCAN   |t2(idx_c1)|1       |18          |
-===========================================================
+=============================================================
+|ID|OPERATOR               |NAME      |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |NESTED-LOOP JOIN       |          |1       |25          |
+|1 |├─SUBPLAN SCAN         |v1        |1       |7           |
+|2 |│ └─SUBPLAN FILTER     |          |1       |7           |
+|3 |│   ├─SUBPLAN FILTER   |          |1       |5           |
+|4 |│   │ ├─TABLE FULL SCAN|t1        |1       |3           |
+|5 |│   │ └─TABLE FULL SCAN|t3        |1       |3           |
+|6 |│   └─TABLE FULL SCAN  |t3        |1       |3           |
+|7 |└─TABLE RANGE SCAN     |t2(idx_c1)|1       |18          |
+=============================================================
 Outputs & filters:
 -------------------------------------
   0 - output([v1.c1], [v1.s_c1], [v1.s_c2], [t2.c1], [t2.c2]), filter(nil), rowset=16
@@ -1544,20 +1545,22 @@ Outputs & filters:
   1 - output([v1.s_c2], [v1.c1], [v1.s_c1]), filter(nil), rowset=16
       access([v1.s_c2], [v1.c1], [v1.s_c1])
   2 - output([t1.c1], [:0], [:1]), filter(nil), rowset=16
-      exec_params_(nil), onetime_exprs_([subquery(1)(:0)], [subquery(2)(:1)]), init_plan_idxs_(nil), use_batch=false
-  3 - output([t1.c1]), filter(nil), rowset=16
+      exec_params_(nil), onetime_exprs_([subquery(1)(:1)]), init_plan_idxs_(nil), use_batch=false
+  3 - output([t1.c1], [:0]), filter(nil), rowset=16
+      exec_params_(nil), onetime_exprs_([subquery(1)(:0)]), init_plan_idxs_(nil), use_batch=false
+  4 - output([t1.c1]), filter(nil), rowset=16
       access([t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
-  4 - output([t3.c1]), filter(nil), rowset=16
+  5 - output([t3.c1]), filter(nil), rowset=16
       access([t3.c1]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
-  5 - output([t3.c2]), filter(nil), rowset=16
+  6 - output([t3.c2]), filter(nil), rowset=16
       access([t3.c2]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
-  6 - output([t2.c2], [t2.c1]), filter([:2 >= t2.c2]), rowset=16
+  7 - output([t2.c2], [t2.c1]), filter([:2 >= t2.c2]), rowset=16
       access([GROUP_ID], [t2.__pk_increment], [t2.c2], [t2.c1]), partitions(p0)
       is_index_back=true, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.c1], [t2.__pk_increment]), range(MIN ; MAX), 

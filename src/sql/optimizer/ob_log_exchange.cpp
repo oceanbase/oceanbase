@@ -418,13 +418,17 @@ int ObLogExchange::compute_op_parallel_and_server_info()
     } else {
       static_cast<ObLogExchange*>(child)->set_in_server_cnt(get_server_cnt());
     }
-    if (OB_SUCC(ret) && ObGlobalHint::DEFAULT_PARALLEL > get_parallel()) {
-      if (child->is_single()) {
-        set_parallel(child->get_available_parallel());
-        set_available_parallel(child->get_available_parallel());
+    if (OB_SUCC(ret)) {
+      if (ObGlobalHint::DEFAULT_PARALLEL > get_parallel()) {
+        if (child->is_single()) {
+          set_parallel(child->get_available_parallel());
+          set_available_parallel(child->get_available_parallel());
+        } else {
+          set_parallel(child->get_parallel());
+          set_available_parallel(child->get_available_parallel());
+        }
       } else {
-        set_parallel(child->get_parallel());
-        set_available_parallel(child->get_available_parallel());
+        set_available_parallel(std::max(get_parallel(), child->get_available_parallel()));
       }
     }
   }

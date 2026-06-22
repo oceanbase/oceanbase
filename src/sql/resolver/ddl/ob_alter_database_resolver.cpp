@@ -123,6 +123,15 @@ int ObAlterDatabaseResolver::resolve(const ParseNode &parse_tree)
       }
     }
   }
+  if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
+    OZ (schema_checker_->check_ora_ddl_priv(
+          session_info_->get_effective_tenant_id(),
+          session_info_->get_priv_user_id(),
+          ObString(""),
+          stmt::T_ALTER_DATABASE,
+          session_info_->get_enable_role_array()),
+          session_info_->get_effective_tenant_id(), session_info_->get_user_id());
+  }
   LOG_INFO("resolve alter database finish", K(ret));
   return ret;
 }

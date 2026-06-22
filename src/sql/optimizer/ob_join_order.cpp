@@ -835,6 +835,40 @@ int ObJoinOrder::compute_parallel_and_server_info_for_base_paths(ObIArray<Access
         LOG_WARN("failed to compute base table parallel and server info", K(ret));
       }
     }
+    if (OB_SUCC(ret) && opt_ctx->force_add_serial_path()
+        && OB_FAIL(add_serial_path_for_base_paths(access_paths))) {
+      LOG_WARN("failed to add serial path for base paths", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::add_serial_path_for_base_paths(ObIArray<AccessPath *> &access_paths)
+{
+  int ret = OB_SUCCESS;
+  int64_t orig_count = access_paths.count();
+  for (int64_t i = 0; OB_SUCC(ret) && i < orig_count; i++) {
+    AccessPath *path = access_paths.at(i);
+    if (OB_NOT_NULL(path) && path->parallel_ > ObGlobalHint::DEFAULT_PARALLEL &&
+        path->op_parallel_rule_ != OpParallelRule::OP_HINT_DOP && !path->use_das_ && path->is_single()) {
+      AccessPath *serial_path = NULL;
+      if (OB_ISNULL(serial_path = reinterpret_cast<AccessPath*>(allocator_->alloc(sizeof(AccessPath))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate serial access path", K(ret));
+      } else {
+        serial_path = new(serial_path) AccessPath(OB_INVALID_ID, OB_INVALID_ID, OB_INVALID_ID, NULL, UNORDERED, *allocator_);
+        if (OB_FAIL(serial_path->assign(*path, allocator_))) {
+          LOG_WARN("failed to copy access path", K(ret));
+        } else {
+          serial_path->parallel_ = ObGlobalHint::DEFAULT_PARALLEL;
+          serial_path->available_parallel_ = ObGlobalHint::DEFAULT_PARALLEL;
+          serial_path->op_parallel_rule_ = OpParallelRule::OP_SERIAL_DOP;
+          if (OB_FAIL(access_paths.push_back(serial_path))) {
+            LOG_WARN("failed to push back serial path", K(ret));
+          }
+        }
+      }
+    }
   }
   return ret;
 }
@@ -9086,6 +9120,15 @@ int ObJoinOrder::compute_path_relationship(const Path &first_path,
       OPT_TRACE("sharding can not compare");
       uncompareable_count++;
       relation = DominateRelation::OBJ_UNCOMPARABLE;
+    }
+    if (OB_SUCC(ret) && get_plan()->get_optimizer_context().force_add_serial_path()) {
+      bool first_is_serial_plan = first_path.is_single() && !first_path.exchange_allocated_;
+      bool second_is_serial_plan = second_path.is_single() && !second_path.exchange_allocated_;
+      if (first_is_serial_plan != second_is_serial_plan) {
+        OPT_TRACE("serial plan can not compare");
+        uncompareable_count++;
+        relation = DominateRelation::OBJ_UNCOMPARABLE;
+      }
     }
 
     // check dominate relationship for pipeline info

@@ -57,7 +57,18 @@ ObPLSqlAuditGuard::ObPLSqlAuditGuard(
   }
   session_info_.set_retry_wait_event_begin_time();
   // 监控项统计开始
+#ifdef OB_BUILD_SPM
+  ObSpmCacheCtx &spm_ctx = spi_result_.get_sql_ctx().spm_ctx_;
+  if (spm_ctx.has_valid_receive_ts()) {
+    record_.time_record_.set_send_timestamp(spm_ctx.receive_ts_);
+    record_.exec_timestamp_.multistmt_start_ts_ = ObTimeUtility::current_time();
+  } else {
+    record_.time_record_.set_send_timestamp(ObTimeUtility::current_time());
+    spi_result_.get_sql_ctx().spm_ctx_.receive_ts_ = record_.time_record_.get_receive_timestamp();
+  }
+#else
   record_.time_record_.set_send_timestamp(ObTimeUtility::current_time());
+#endif
   session_info_.get_raw_audit_record().sql_memory_used_ = &sql_used_memory_size_;
   plsql_compile_time_ = session_info_.get_plsql_compile_time();
   session_info_.reset_plsql_compile_time();
@@ -90,6 +101,9 @@ ObPLSqlAuditGuard::~ObPLSqlAuditGuard()
   LOG_TRACE("Start PL/Sql Audit Record"/*, KPC(this)*/ );
 
   if (OB_NOT_NULL(spi_result_.get_result_set())) {
+    if (OB_NOT_NULL(spi_result_.get_result_set()->get_physical_plan())) {
+      spi_result_.get_result_set()->get_physical_plan()->stat_.erase_executing_record(record_.time_record_.get_exec_start_timestamp());
+    }
     if (spi_result_.get_result_set()->is_inited()) {
       if (ObStmt::is_execute_stmt(stmt_type_)) {
         ps_sql_ = session_info_.get_current_query_string();
@@ -99,7 +113,7 @@ ObPLSqlAuditGuard::~ObPLSqlAuditGuard()
       session_info_.get_raw_audit_record().try_cnt_ = retry_ctrl_.get_retry_times();
       session_info_.get_raw_audit_record().pl_trace_id_.set(traceid_guard_.origin_trace_id_);
       session_info_.get_raw_audit_record().parent_trace_id_.set(traceid_guard_.parent_sql_trace_id_);
-      if (ret_ == OB_SUCCESS && is_ps_cursor_open_) {
+      if ((ret_ == OB_SUCCESS && is_ps_cursor_open_) || OB_SQL_RETRY_SPM == ret_) {
         // if ps cursor open succeed, record audit after fill cursor
       } else {
         observer::ObInnerSQLConnection::process_record(*(spi_result_.get_result_set()),
@@ -139,6 +153,15 @@ ObPLSqlAuditGuard::~ObPLSqlAuditGuard()
     session_info_.get_raw_audit_record().sql_memory_used_ = nullptr;
   }
   session_info_.add_plsql_compile_time(plsql_compile_time_);
+}
+
+void ObPLSqlAuditGuard::set_exec_start_timestamp()
+{
+  record_.time_record_.set_exec_start_timestamp(ObTimeUtility::current_time());
+  if (OB_NOT_NULL(spi_result_.get_result_set())
+      && OB_NOT_NULL(spi_result_.get_result_set()->get_physical_plan())) {
+    spi_result_.get_result_set()->get_physical_plan()->stat_.set_executing_record(record_.time_record_.get_exec_start_timestamp());
+  }
 }
 
 } // namespace pl

@@ -269,6 +269,7 @@ ObSimpleDatabaseSchema &ObSimpleDatabaseSchema::operator =(const ObSimpleDatabas
     database_id_ = other.database_id_;
     schema_version_ = other.schema_version_;
     default_tablegroup_id_ = other.default_tablegroup_id_;
+    default_tablespace_id_ = other.default_tablespace_id_;
     name_case_mode_ = other.name_case_mode_;
     if (OB_FAIL(deep_copy_str(other.database_name_, database_name_))) {
       LOG_WARN("Fail to deep copy database_name", K(ret));
@@ -289,6 +290,7 @@ bool ObSimpleDatabaseSchema::operator ==(const ObSimpleDatabaseSchema &other) co
       && database_id_ == other.database_id_
       && schema_version_ == other.schema_version_
       && default_tablegroup_id_ == other.default_tablegroup_id_
+      && default_tablespace_id_ == other.default_tablespace_id_
       && database_name_ == other.database_name_
       && name_case_mode_ == other.name_case_mode_) {
     ret = true;
@@ -304,6 +306,7 @@ void ObSimpleDatabaseSchema::reset()
   database_id_ = OB_INVALID_ID;
   schema_version_ = OB_INVALID_VERSION;
   default_tablegroup_id_ = OB_INVALID_ID;
+  default_tablespace_id_ = OB_INVALID_ID;
   database_name_.reset();
   name_case_mode_ = OB_NAME_CASE_INVALID;
 }
@@ -4594,6 +4597,48 @@ int ObSchemaMgr::check_database_exists_in_tablegroup(
     }
   }
 
+  return ret;
+}
+
+int ObSchemaMgr::check_database_exists_in_tablespace(
+    const uint64_t tenant_id,
+    const uint64_t tablespace_id,
+    bool &not_empty) const
+{
+  int ret = OB_SUCCESS;
+  not_empty = false;
+
+  if (!check_inner_stat()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", K(ret));
+  } else if (OB_INVALID_ID == tenant_id
+             || OB_INVALID_ID == tablespace_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(tablespace_id));
+  } else if (OB_INVALID_TENANT_ID != tenant_id_
+             && tenant_id_ != tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant_id not matched", K(ret), K(tenant_id), K_(tenant_id));
+  } else {
+    ObTenantDatabaseId tenant_database_id_lower(tenant_id, OB_MIN_ID);
+    ConstDatabaseIterator iter =
+        database_infos_.lower_bound(tenant_database_id_lower, compare_with_tenant_database_id);
+    bool is_stop = false;
+    const ObSimpleDatabaseSchema *tmp_schema = NULL;
+    for (; OB_SUCC(ret) && iter != database_infos_.end() && !is_stop; iter++) {
+      if (OB_ISNULL(tmp_schema = *iter)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("NULL ptr", K(tmp_schema), K(ret));
+      } else if (tmp_schema->get_tenant_id() != tenant_id) {
+        is_stop = true;
+      } else if (tmp_schema->get_default_tablespace_id() != tablespace_id) {
+        // do-nothing
+      } else {
+        is_stop = true;
+        not_empty = true;
+      }
+    }
+  }
   return ret;
 }
 

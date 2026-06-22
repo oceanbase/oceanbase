@@ -7353,6 +7353,7 @@ int ObDMLResolver::resolve_str_const(const ParseNode &parse_tree, ObString& path
   ObCharsetType character_set_connection = CHARSET_INVALID;
   bool enable_decimal_int = false;
   ObCompatType compat_type = COMPAT_MYSQL57;
+  ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
   bool enable_mysql_compatible_dates = false;
   if (OB_ISNULL(params_.expr_factory_) || OB_ISNULL(params_.session_info_)) {
     ret = OB_NOT_INIT;
@@ -7369,6 +7370,8 @@ int ObDMLResolver::resolve_str_const(const ParseNode &parse_tree, ObString& path
     LOG_WARN("get sys variables failed", K(ret));
   } else if (OB_FAIL(session_info->get_compatibility_control(compat_type))) {
     LOG_WARN("failed to get compat type", K(ret));
+  } else if (OB_FAIL(session_info->get_charset_compat_type(charset_compat_type))) {
+    LOG_WARN("fail to get charset compat type", K(ret));
   } else if (OB_FAIL(ObSQLUtils::check_enable_decimalint(session_info, enable_decimal_int))) {
     LOG_WARN("fail to check enable decimal int", K(ret));
   } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(session_info, false,
@@ -7389,7 +7392,9 @@ int ObDMLResolver::resolve_str_const(const ParseNode &parse_tree, ObString& path
                                              enable_mysql_compatible_dates,
                                              session_info->get_min_const_integer_precision(),
                                              session_info->get_exec_min_cluster_version(),
-                                             nullptr != params_.secondary_namespace_))) {
+                                             nullptr != params_.secondary_namespace_,
+                                             false,
+                                             charset_compat_type))) {
     LOG_WARN("failed to resolve const", K(ret));
   } else if (OB_ISNULL(buf = static_cast<char*>(allocator_->alloc(val.get_string().length())))) { // deep copy str value
     ret = common::OB_ALLOCATE_MEMORY_FAILED;
@@ -9604,10 +9609,7 @@ int ObDMLResolver::resolve_special_expr(ObRawExpr *&expr, ObStmtScope scope)
     // do nothing
   } else if (stmt->is_select_stmt() && T_FIELD_LIST_SCOPE == scope) {
     // do nothing
-  } else if (T_FUN_SYS_AUDIT_LOG_SET_FILTER == expr->get_expr_type() ||
-             T_FUN_SYS_AUDIT_LOG_REMOVE_FILTER == expr->get_expr_type() ||
-             T_FUN_SYS_AUDIT_LOG_SET_USER == expr->get_expr_type() ||
-             T_FUN_SYS_AUDIT_LOG_REMOVE_USER == expr->get_expr_type()) {
+  } else if (OB_UNLIKELY(ObRawExprUtils::is_audit_log_expr(expr))) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("use audit log function in dml stmt is not supported", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "use audit log function in dml stmt");
@@ -15749,7 +15751,8 @@ int ObDMLResolver::resolve_pseudo_column(
       LOG_WARN("resolve old_new pseudo column failed", K(ret));
     }
   } else if (lib::is_oracle_mode() &&
-             0 == q_name.col_name_.case_compare(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME)) {
+             ((0 == q_name.col_name_.case_compare(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME)) ||
+             (0 == q_name.col_name_.case_compare(OB_HIDDEN_UPDATE_TABLE_ROWID_COLUMN_NAME)))) {
     if (OB_FAIL(resolve_rowid_pseudo_column(q_name, real_ref_expr))) {
       LOG_WARN("resolve rowid pseudo column failed", K(ret));
     }
@@ -15981,41 +15984,42 @@ int ObDMLResolver::resolve_rowid_pseudo_column(
                                                               *table_item,
                                                               real_ref_expr))) {
       LOG_WARN("build empty rowid expr failed", K(ret));
+    } else if (0 == q_name.col_name_.case_compare(OB_HIDDEN_UPDATE_TABLE_ROWID_COLUMN_NAME)) {
+      ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr*>(real_ref_expr);
+      col_expr->set_column_name(OB_HIDDEN_UPDATE_TABLE_ROWID_COLUMN_NAME);
     }
   } else if (OB_FAIL(resolve_rowid_expr(cur_stmt, *table_item, real_ref_expr))) {
     LOG_WARN("resolve rowid expr failed", K(ret));
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_ISNULL(real_ref_expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("real_ref_expr is null", K(ret));
+  } else if (OB_ISNULL(real_ref_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("real_ref_expr is null", K(ret));
+  } else if (0 == q_name.col_name_.case_compare(OB_HIDDEN_UPDATE_TABLE_ROWID_COLUMN_NAME)) {
+    // do nothing
+  } else {
+    ObRawExpr *same_rowid_expr = NULL;
+    if (OB_FAIL(cur_stmt->check_and_get_same_rowid_expr(real_ref_expr, same_rowid_expr))) {
+      LOG_WARN("failed to check and get same rowid expr", K(ret));
+    } else if (same_rowid_expr != NULL) {
+      real_ref_expr = same_rowid_expr;
+      LOG_DEBUG("rowid_expr build success", K(*real_ref_expr));
+    } else if (OB_FAIL(cur_stmt->get_pseudo_column_like_exprs().push_back(real_ref_expr))) {
+      LOG_WARN("failed to push back", K(ret));
     } else {
-      ObRawExpr *same_rowid_expr = NULL;
-      if (OB_FAIL(cur_stmt->check_and_get_same_rowid_expr(real_ref_expr, same_rowid_expr))) {
-        LOG_WARN("failed to check and get same rowid expr", K(ret));
-      } else if (same_rowid_expr != NULL) {
-        real_ref_expr = same_rowid_expr;
-        LOG_DEBUG("rowid_expr build success", K(*real_ref_expr));
-      } else if (OB_FAIL(cur_stmt->get_pseudo_column_like_exprs().push_back(real_ref_expr))) {
-        LOG_WARN("failed to push back", K(ret));
+      LOG_DEBUG("rowid_expr build success", K(*real_ref_expr));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (cur_level != current_level_) {
+      ObRawExpr *exec_param = NULL;
+      if (OB_ISNULL(query_ref_exec_params)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("no subquery is found", K(ret), K(query_ref_exec_params));
+      } else if (OB_FAIL(ObRawExprUtils::get_exec_param_expr(*params_.expr_factory_,
+                                                              query_ref_exec_params,
+                                                              real_ref_expr,
+                                                              exec_param))) {
+        LOG_WARN("failed to get exec param expr", K(ret));
       } else {
-        LOG_DEBUG("rowid_expr build success", K(*real_ref_expr));
-      }
-      if (OB_SUCC(ret)) {
-        if (cur_level != current_level_) {
-          ObRawExpr *exec_param = NULL;
-          if (OB_ISNULL(query_ref_exec_params)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("no subquery is found", K(ret), K(query_ref_exec_params));
-          } else if (OB_FAIL(ObRawExprUtils::get_exec_param_expr(*params_.expr_factory_,
-                                                                  query_ref_exec_params,
-                                                                  real_ref_expr,
-                                                                  exec_param))) {
-            LOG_WARN("failed to get exec param expr", K(ret));
-          } else {
-            real_ref_expr = exec_param;
-          }
-        }
+        real_ref_expr = exec_param;
       }
     }
   }
@@ -17091,7 +17095,7 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
         uint64_t version = 0;
         ObString ver_str(child0->str_len_, child0->str_value_);
         if (ver_str.empty()) {
-          global_hint.merge_opt_features_version_hint(LASTED_COMPAT_VERSION);
+          global_hint.merge_opt_features_version_hint(LATEST_COMPAT_VERSION);
         } else if (OB_FAIL(ObClusterVersion::get_version(ver_str, version))) {
           ret = OB_SUCCESS; // just ignore this invalid hint
           LOG_WARN("failed to get version in hint");
@@ -18113,6 +18117,8 @@ int ObDMLResolver::resolve_pq_subquery_hint(const ParseNode &hint_node,
           dist_algo = DistAlgo::DIST_RANDOM_ALL;
         } else if (T_DISTRIBUTE_HASH == outer && T_DISTRIBUTE_ALL == inner) {
           dist_algo = DistAlgo::DIST_HASH_ALL;
+        } else if (T_DISTRIBUTE_BC2HOST == outer && T_DISTRIBUTE_NONE == inner) {
+          dist_algo = DistAlgo::DIST_BC2HOST_NONE;
         }
       }
     }

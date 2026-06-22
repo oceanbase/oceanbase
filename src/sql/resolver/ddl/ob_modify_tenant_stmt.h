@@ -72,6 +72,7 @@ public:
   const common::ObIArray<ObVariableSetStmt::VariableSetNode> &get_sys_var_nodes() const {return sys_var_nodes_;}
   int assign_variable_nodes(const common::ObIArray<ObVariableSetStmt::VariableSetNode> &other);
   int set_default_tablegroup_name(const common::ObString &tablegroup_name);
+  int set_default_tablespace_name(const common::ObString &tablespace_name);
 
   virtual obrpc::ObDDLArg &get_ddl_arg() { return modify_tenant_arg_; }
   TO_STRING_KV(K_(modify_tenant_arg));

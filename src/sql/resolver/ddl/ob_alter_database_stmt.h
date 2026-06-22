@@ -28,6 +28,7 @@ public:
   int set_primary_zone(const common::ObString &zone);
   void set_read_only(const bool read_only);
   int set_default_tablegroup_name(const common::ObString &tablegroup_name);
+  int set_default_tablespace_name(const common::ObString &tablespace_name);
   void set_alter_option_set(const common::ObBitSet<> &alter_option_set);
   common::ObBitSet<> &get_alter_option_set() { return alter_database_arg_.alter_option_bitset_; }
   obrpc::ObAlterDatabaseArg &get_alter_database_arg();

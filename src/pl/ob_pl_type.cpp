@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX PL
 #include "ob_pl_type.h"
 #include "lib/utility/ob_print_utils.h"
+#include "sql/ob_spi.h"
 #include "observer/mysql/obsm_utils.h"
 #include "src/sql/resolver/ob_resolver_utils.h"
 #include "ob_pl_code_generator.h"
@@ -2470,6 +2471,19 @@ int ObPLCursorInfo::deep_copy(ObPLCursorInfo &src, common::ObIAllocator *allocat
   }
 
   return ret;
+}
+
+void ObPLCursorInfo::open(void *spi_cursor)
+{
+  spi_cursor != NULL ? (void)NULL : reset();
+  isopen_ = true;
+  spi_cursor_ = spi_cursor;
+  is_explicit_ = spi_cursor != NULL;
+  reset_cursor_total_time();
+  if (is_streaming_ && OB_NOT_NULL(spi_cursor)) {
+    sql::ObSPIResultSet *spi_result = static_cast<sql::ObSPIResultSet*>(spi_cursor);
+    spi_result->set_streaming_stat_pending(true);
+  }
 }
 
 int ObPLCursorInfo::close(sql::ObSQLSessionInfo &session, bool is_reuse, bool close_by_open_thread)

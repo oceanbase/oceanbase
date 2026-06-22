@@ -1463,6 +1463,8 @@ int ObModifyTenantArg::check_normal_tenant_can_do(bool &normal_can_do) const
     LOG_WARN("Failed to add member READ_ONLY", K(ret));
   } else if (OB_FAIL(normal_ops.add_member(PRIMARY_ZONE))) {
     LOG_WARN("Failed to add memeber PRIMARY ZONE", K(ret));
+  } else if (OB_FAIL(normal_ops.add_member(DEFAULT_TABLESPACE))) {
+    LOG_WARN("Failed to add memeber DEFAULT TABLESPACE", K(ret));
   } else {
     normal_can_do = alter_option_bitset_.is_subset(normal_ops);
   }

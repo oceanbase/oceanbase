@@ -11686,7 +11686,9 @@ bool ObOptimizerUtil::is_branch_expr(const ObRawExpr *expr)
            || T_FUN_SYS_IFNULL == expr->get_expr_type()
            || T_FUN_SYS_NULLIF == expr->get_expr_type()
            || T_FUN_SYS_COALESCE == expr->get_expr_type()
-           || T_FUN_SYS_ORA_DECODE == expr->get_expr_type();
+           || T_FUN_SYS_ORA_DECODE == expr->get_expr_type()
+           || T_OP_AND == expr->get_expr_type()
+           || T_OP_OR == expr->get_expr_type();
   }
   return bret;
 }

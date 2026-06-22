@@ -5195,7 +5195,10 @@ void ObSQLUtils::record_execute_time(const ObPhyPlanType type,
 int ObSQLUtils::handle_audit_record(bool need_retry,
                                     const ObExecuteMode exec_mode,
                                     ObSQLSessionInfo &session,
-                                    bool is_sensitive)
+                                    bool is_sensitive,
+                                    const ObStmt *stmt,
+                                    ObResultSet *result,
+                                    share::schema::ObSchemaGetterGuard *schema_guard)
 {
   int ret = OB_SUCCESS;
   if (need_retry) {
@@ -5216,7 +5219,10 @@ int ObSQLUtils::handle_audit_record(bool need_retry,
         }
       }
 #ifdef OB_BUILD_AUDIT_SECURITY
-      (void) ObAuditLogUtils::handle_sql_audit_log(session, audit_record, is_sensitive);
+      (void) ObAuditLogUtils::handle_sql_audit_log(session, audit_record, is_sensitive, stmt, result, schema_guard);
+      if (NULL != result) {
+        (void) ObSecurityAuditUtils::handle_security_audit(*result, schema_guard, stmt, "", "", ret, is_sensitive, &audit_record);
+      }
 #endif
     }
   }
@@ -7375,7 +7381,7 @@ int ObSQLUtils::print_identifier_require_quotes(ObCollationType collation_type,
     require = true;
   } else if (require) {
     //do nothing
-  } else if (-1 != mysql_sql_reserved_keyword_lookup(ident.ptr())) {
+  } else if (NULL != mysql_sql_reserved_keyword_lookup(ident.ptr())) {
     require = true;
   }
   return ret;
@@ -7828,6 +7834,7 @@ int ObSQLUtils::construct_mixed_param_store(const ObFastParserResult &fp_result,
   ObCollationType nchar_collation = CS_TYPE_INVALID;
   ObCollationType server_collation = CS_TYPE_INVALID;
   ObCompatType compat_type = COMPAT_MYSQL57;
+  ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
   bool enable_decimal_int = false;
   bool enable_mysql_compatible_dates = false;
   ObString literal_prefix;
@@ -7840,6 +7847,8 @@ int ObSQLUtils::construct_mixed_param_store(const ObFastParserResult &fp_result,
       LOG_WARN("fail to get server collation", K(ret));
     } else if (OB_FAIL(session.get_compatibility_control(compat_type))) {
       LOG_WARN("fail to get compat type", K(ret));
+    } else if (OB_FAIL(session.get_charset_compat_type(charset_compat_type))) {
+      LOG_WARN("fail to get charset compat type", K(ret));
     } else if (OB_FAIL(ObSQLUtils::check_enable_decimalint(&session, enable_decimal_int))) {
       LOG_WARN("fail to check enable decimal int", K(ret));
     } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(&session, false, enable_mysql_compatible_dates))) {
@@ -7898,7 +7907,10 @@ int ObSQLUtils::construct_mixed_param_store(const ObFastParserResult &fp_result,
             compat_type,
             enable_mysql_compatible_dates,
             session.get_min_const_integer_precision(),
-            true))) {
+            true,
+            false,
+            false,
+            charset_compat_type))) {
           LOG_WARN("failed to resolve const and fallback convert", K(ret), K(i), K(node->type_));
         } else if (OB_FAIL(pl_params.push_back(obj_param))) {
           LOG_WARN("failed to push constant param", K(ret), K(i));

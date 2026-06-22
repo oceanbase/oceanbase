@@ -8,6 +8,7 @@
 #include "sql/resolver/ddl/ob_database_resolver.h"
 #include "sql/resolver/dcl/ob_set_password_resolver.h"
 #include "lib/encrypt/ob_encrypted_helper.h"
+#include "sql/resolver/ob_resolver_utils.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -27,7 +28,7 @@ int ObCreateUserResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
   ObCreateUserStmt *create_user_stmt = NULL;
-  if (OB_UNLIKELY(lib::is_oracle_mode() && 5 != parse_tree.num_child_)
+  if (OB_UNLIKELY(lib::is_oracle_mode() && 6 != parse_tree.num_child_)
       || OB_UNLIKELY(lib::is_mysql_mode() && 4 != parse_tree.num_child_)
       || OB_UNLIKELY(T_CREATE_USER != parse_tree.type_)) {
     ret = OB_INVALID_ARGUMENT;
@@ -49,7 +50,8 @@ int ObCreateUserResolver::resolve(const ParseNode &parse_tree)
     ParseNode *require_info = const_cast<ParseNode*>(parse_tree.children_[2]);
     ParseNode *resource_options = !lib::is_oracle_mode() ? const_cast<ParseNode*>(parse_tree.children_[3]) : NULL;
     ParseNode *profile = lib::is_oracle_mode() ? const_cast<ParseNode*>(parse_tree.children_[3]) : NULL;
-    ParseNode *primary_zone = lib::is_oracle_mode() ? const_cast<ParseNode*>(parse_tree.children_[4]) : NULL; 
+    ParseNode *default_tablespace = lib::is_oracle_mode() ? const_cast<ParseNode*>(parse_tree.children_[4]) : NULL;
+    ParseNode *primary_zone = lib::is_oracle_mode() ? const_cast<ParseNode*>(parse_tree.children_[5]) : NULL;
     ParseNode *ssl_infos = NULL;
     create_user_stmt->set_tenant_id(params_.session_info_->get_effective_tenant_id());
 		//resolve if_not_exists
@@ -168,8 +170,26 @@ int ObCreateUserResolver::resolve(const ParseNode &parse_tree)
                                                                profile_id))) {
               LOG_WARN("fail to get profile id", K(ret));
             }
+            if (OB_SUCC(ret)) {
+              create_user_stmt->set_profile_id(profile_id);  //只有oracle模式profile id是有效的
+            }
           }
-          create_user_stmt->set_profile_id(profile_id);  //只有oracle模式profile id是有效的
+          if (OB_SUCC(ret) && NULL != default_tablespace) {
+            uint64_t tablespace_id = OB_INVALID_ID;
+            if (OB_FAIL(ObResolverUtils::check_default_tablespace_enable(params_.session_info_))) {
+              LOG_WARN("fail to check default tablespace enable", K(ret));
+            } else if (OB_UNLIKELY(T_TABLESPACE != default_tablespace->type_)
+                       || OB_UNLIKELY(default_tablespace->num_child_ != 1)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("invalid default_tablespace node", K(ret), K(default_tablespace->type_));
+            } else if (OB_NOT_NULL(default_tablespace->children_[0])) {
+              common::ObString tablespace_name(default_tablespace->children_[0]->str_len_,
+                                               default_tablespace->children_[0]->str_value_);
+              create_user_stmt->set_default_tablespace_name(tablespace_name);
+            } else {
+              create_user_stmt->set_default_tablespace_name(ObString::make_string("NULL"));
+            }
+          }
 
           // check password strength
           if (OB_SUCC(ret) && need_enc) {

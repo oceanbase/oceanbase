@@ -34,6 +34,9 @@
 #include "pl/ob_pl_resolver.h"
 #include "sql/ob_sql_ccl_rule_manager.h"
 #include "share/diagnosis/ob_runtime_profile.h"
+#ifdef OB_BUILD_AUDIT_SECURITY
+#include "sql/audit/ob_audit_log_utils.h"
+#endif
 #include "sql/ob_sql_utils.h"
 
 namespace oceanbase
@@ -260,10 +263,13 @@ int ObSql::fill_result_set(ObResultSet &result_set,
   ObStmt *stmt = &basic_stmt;
   ObExecContext &ectx = result_set.get_exec_context();
   ObPhysicalPlanCtx *pctx = ectx.get_physical_plan_ctx();
+  ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
   if (OB_UNLIKELY(NULL == context) || OB_UNLIKELY(NULL == context->session_info_) || OB_UNLIKELY(NULL == pctx)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(context), K(pctx),
              "session", (context != NULL) ? context->session_info_ : NULL);
+  } else if (OB_FAIL(context->session_info_->get_charset_compat_type(charset_compat_type))) {
+    LOG_WARN("fail to get charset compat type", K(ret));
   } else {
     result_set.set_affected_rows(0);
     result_set.set_warning_count(0);
@@ -277,12 +283,12 @@ int ObSql::fill_result_set(ObResultSet &result_set,
     ObCharsetType result_charset = CHARSET_INVALID;
     ObCollationType collation_type = CS_TYPE_INVALID;
     context->session_info_->get_character_set_results(result_charset);
-    collation_type =
-        ObCharset::get_default_collation_by_mode(result_charset, lib::is_oracle_mode());
+    collation_type = ObCharset::get_default_collation_by_mode(
+      result_charset, lib::is_oracle_mode(), charset_compat_type);
     switch (stmt->get_stmt_type()) {
     case stmt::T_SELECT: {
       if (OB_FAIL(fill_select_result_set(result_set, context, mode, collation_type, type_name,
-                                         basic_stmt, field))) {
+                                        basic_stmt, field))) {
         LOG_WARN("fill select result set failed", K(ret));
       }
       break;
@@ -2347,6 +2353,7 @@ int ObSql::clac_fixed_param_store(const stmt::StmtType stmt_type,
   int64_t server_collation = CS_TYPE_INVALID;
   bool enable_decimal_int = false;
   ObCompatType compat_type = COMPAT_MYSQL57;
+  ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
   bool enable_mysql_compatible_dates = false;
   bool is_pl_stmt = stmt::T_ANONYMOUS_BLOCK == stmt_type || stmt::T_CALL_PROCEDURE == stmt_type;
   if (raw_params.empty()) {
@@ -2359,6 +2366,8 @@ int ObSql::clac_fixed_param_store(const stmt::StmtType stmt_type,
     LOG_WARN("failed to reserve array", K(ret), K(raw_params_idx.count()));
   } else if (OB_FAIL(session.get_compatibility_control(compat_type))) {
     LOG_WARN("failed to get compat type", K(ret));
+  } else if (OB_FAIL(session.get_charset_compat_type(charset_compat_type))) {
+    LOG_WARN("fail to get charset compat type", K(ret));
   } else if (lib::is_oracle_mode() && OB_FAIL(
     session.get_sys_variable(share::SYS_VAR_COLLATION_SERVER, server_collation))) {
     LOG_WARN("get sys variable failed", K(ret));
@@ -2393,7 +2402,9 @@ int ObSql::clac_fixed_param_store(const stmt::StmtType stmt_type,
                                                       enable_mysql_compatible_dates,
                                                       stmt::T_ANONYMOUS_BLOCK == stmt_type,
                                                       session.get_min_const_integer_precision(),
-                                                      session.get_exec_min_cluster_version()))) {
+                                                      session.get_exec_min_cluster_version(),
+                                                      false,
+                                                      charset_compat_type))) {
       SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
     } else if (is_pl_stmt && FALSE_IT(value.set_raw_text_info(static_cast<int32_t>(raw_param->raw_sql_offset_),
                                                 static_cast<int32_t>(raw_param->text_len_)))) {
@@ -3646,9 +3657,11 @@ int ObSql::generate_plan(ParseResult &parse_result,
   } else if (OB_FAIL(ObSecurityAuditUtils::check_allow_audit(
                       *sql_ctx.session_info_, allow_audit))) {
     LOG_WARN("Failed to check allow audit", K(ret));
-  } else if (allow_audit &&
-             OB_FAIL(ObSecurityAuditUtils::get_audit_units(
-                      basic_stmt->get_stmt_type(), basic_stmt, audit_units))) {
+  } else if (!allow_audit && OB_FAIL(ObAuditLogUtils::check_allow_audit(
+                          *sql_ctx.session_info_, allow_audit))) {
+    LOG_WARN("Failed to check allow audit log", K(ret));
+  } else if (allow_audit && OB_FAIL(ObSecurityAuditUtils::get_audit_units(
+                          basic_stmt->get_stmt_type(), basic_stmt, audit_units))) {
     LOG_WARN("Failed to get audit units", K(ret));
 #endif
   } else if (OB_FAIL(sql_ctx.session_info_->get_sys_variable(

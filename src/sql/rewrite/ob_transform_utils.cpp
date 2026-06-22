@@ -11786,6 +11786,7 @@ int ObTransformUtils::check_correlated_exprs_can_pullup_for_set(const ObIArray<O
   * Note: here only check select, where having
   * Calling this interface in other places requires additional attention
   * If new select exprs list is given, the corresponding relationship between the two subqueries separated by spj will be calculated
+  * pass `strict_res_type_check` by `false` to use `equal-transitive` instead of `equal` check for output result types
   */
 int ObTransformUtils::check_correlated_condition_isomorphic(ObSelectStmt *left_query,
                                                             ObSelectStmt *right_query,
@@ -11795,7 +11796,8 @@ int ObTransformUtils::check_correlated_condition_isomorphic(ObSelectStmt *left_q
                                                             ObIArray<ObRawExpr*> &left_new_select_exprs,
                                                             ObIArray<ObRawExpr*> &right_new_select_exprs,
                                                             const bool skip_const_in_select, /* true */
-                                                            const bool skip_const_in_cond    /* true */)
+                                                            const bool skip_const_in_cond,   /* true */
+                                                            const bool strict_res_type_check /* true */)
 {
   int ret = OB_SUCCESS;
   is_valid = true;
@@ -11901,10 +11903,25 @@ int ObTransformUtils::check_correlated_condition_isomorphic(ObSelectStmt *left_q
                                                right_new_select_exprs,
                                                skip_const_in_cond))) {
       LOG_WARN("failed to pullup correlated exprs", K(ret));
-    } else if (OB_FAIL(check_result_type_same(left_new_select_exprs, 
-                                              right_new_select_exprs, 
-                                              is_valid))) {
-      LOG_WARN("failed to check expr result type", K(ret));
+    } else if (strict_res_type_check) {
+      if (OB_FAIL(check_result_type_same(left_new_select_exprs, right_new_select_exprs, is_valid))) {
+        LOG_WARN("failed to check expr result type", K(ret));
+      }
+    } else {
+      // for scenarios that only requires two types are comparable w/o cast
+      // `equal-transitive` is sufficient.
+      is_valid = left_new_select_exprs.count() == right_new_select_exprs.count();
+      for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < left_new_select_exprs.count(); ++i) {
+        if (OB_ISNULL(left_new_select_exprs.at(i)) || OB_ISNULL(right_new_select_exprs.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null expr in new select exprs", K(ret), K(i));
+        } else if (OB_FAIL(ObRelationalExprOperator::is_equal_transitive(
+                           left_new_select_exprs.at(i)->get_result_type(),
+                           right_new_select_exprs.at(i)->get_result_type(),
+                           is_valid))) {
+          LOG_WARN("failed to check is_equal_transitive", K(ret));
+        }
+      }
     }
   }
   return ret;
@@ -16170,9 +16187,16 @@ int ObTransformUtils::do_split_cartesian_tables(ObTransformerCtx *ctx,
     LOG_WARN("unexpected null", K(ret), K(stmt), K(subquery));
   } else if (OB_FAIL(collect_cartesian_tables(ctx, stmt, subquery, outer_conditions,
                                               all_connected_tables, right_tables, new_outer_conds))) {
-      LOG_WARN("fail to collect cartesian tables", K(ret));
-  } else if (OB_FAIL(create_columns_for_view_tables(ctx, stmt, right_tables, new_outer_conds))) {
-    LOG_WARN("fail to create columns", K(ret));
+    LOG_WARN("fail to collect cartesian tables", K(ret));
+  } else if (right_tables.count() != new_outer_conds.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unequal right tables and outer conditions count", K(ret), K(right_tables.count()), K(new_outer_conds.count()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < right_tables.count(); ++i) {
+      if (OB_FAIL(rebuild_columns_for_view_and_conds(ctx, stmt, right_tables.at(i), new_outer_conds.at(i)))) {
+        LOG_WARN("fail to rebuild conditions for view", K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -16355,58 +16379,96 @@ int ObTransformUtils::collect_split_outer_conds(ObSelectStmt *origin_subquery,
   return ret;
 }
 
-int ObTransformUtils::create_columns_for_view_tables(ObTransformerCtx *ctx,
-                                                     ObDMLStmt *stmt,
-                                                     ObIArray<TableItem*> &right_tables,
-                                                     ObIArray<ObSEArray<ObRawExpr*, 4>> &outer_conds)
+// after pulling up a subquery as a view_table,
+// column exprs (usually in pulled-up conditions) that refer to the original subquery
+// should be replaced by the corresponding view_table's column exprs
+int ObTransformUtils::rebuild_columns_for_view_and_conds(ObTransformerCtx *ctx,
+                                                         ObDMLStmt *stmt,
+                                                         TableItem *view_table,
+                                                         ObIArray<ObRawExpr *> &conds,
+                                                         bool keep_orig_select_columns)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(stmt) || OB_ISNULL(ctx) || OB_ISNULL(ctx->expr_factory_)) {
+  ObSelectStmt *subquery = NULL;
+  ObSEArray<ObRawExpr *, 4> subquery_column_exprs;
+  ObSEArray<ObRawExpr *, 4> cond_column_exprs;
+  ObSEArray<ObRawExpr *, 4> view_column_exprs;
+  ObSEArray<ObRawExpr *, 4> new_outer_conditions;
+  ObSEArray<int64_t, 4> subquery_table_ids;
+  ObSEArray<ObQueryRefRawExpr *, 2> query_ref_exprs;
+  if (OB_ISNULL(stmt) || OB_ISNULL(view_table) || OB_ISNULL(ctx) || OB_ISNULL(ctx->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(stmt), K(ctx));
-  } else if (OB_UNLIKELY(right_tables.count() != outer_conds.count())) {
+    LOG_WARN("get unexpected null", K(ret), K(stmt), K(view_table), K(ctx));
+  } else if (OB_ISNULL(subquery = view_table->ref_query_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unequal tables and semi conds count", K(ret), K(right_tables.count()), K(outer_conds.count()));
+    LOG_WARN("split ref query is NULL", K(ret));
+  } else if (OB_FAIL(subquery->get_table_items(subquery_table_ids))) {
+    LOG_WARN("fail to get from tables", K(ret));
+  } else if (subquery->is_set_stmt()
+             && OB_FAIL(ObRawExprUtils::extract_set_op_exprs(conds, cond_column_exprs))) {
+    LOG_WARN("fail to extract set op exprs", K(ret));
+  } else if (!subquery->is_set_stmt()
+             && OB_FAIL(ObRawExprUtils::extract_column_exprs(conds, subquery_table_ids, cond_column_exprs))) {
+    LOG_WARN("fail to extract column exprs", K(ret));
+  } else if (keep_orig_select_columns) {
+    if (OB_FAIL(subquery->get_select_exprs(subquery_column_exprs))) {
+      LOG_WARN("fail to get select exprs", K(ret));
+    } else if (OB_FAIL(append_array_no_dup(subquery_column_exprs, cond_column_exprs))) {
+      LOG_WARN("fail to append array no dup", K(ret));
+    }
+  } else if (OB_FAIL(subquery_column_exprs.assign(cond_column_exprs))) {
+    LOG_WARN("fail to assign column exprs", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FALSE_IT(subquery->get_select_items().reset())) {
+  } else if (subquery_column_exprs.empty()) {
+    // no need to rebuild conditions for view if there is no column expr in subquery
+    if (OB_FAIL(ObTransformUtils::create_dummy_select_item(*subquery, ctx))) {
+      LOG_WARN("fail to create dummy select item", K(ret));
+    }
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < right_tables.count(); ++i) {
-      TableItem *split_right_table = right_tables.at(i);
-      ObIArray<ObRawExpr*> &split_outer_conditions = outer_conds.at(i);
-      ObSelectStmt *split_subquery;
-      ObSEArray<ObRawExpr*, 4> column_exprs;
-      ObSEArray<ObRawExpr*, 4> upper_column_exprs;
-      ObSEArray<ObRawExpr*, 4> new_outer_conditions;
-      ObSEArray<int64_t, 4> subquery_table_ids;
-      ObRawExprCopier copier(*ctx->expr_factory_);
-      if (OB_ISNULL(split_right_table)) {
+    // rebuild conditions by replacing column exprs
+    ObRawExprCopier copier(*ctx->expr_factory_);
+    if (OB_FAIL(ObTransformUtils::create_select_item(*ctx->allocator_, subquery_column_exprs, subquery))) {
+      LOG_WARN("failed to create select item", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx, *view_table, stmt, view_column_exprs))) {
+      LOG_WARN("failed to create columns for view", K(ret));
+    } else if (OB_FAIL(copier.add_replaced_expr(subquery_column_exprs, view_column_exprs))) {
+      LOG_WARN("failed to add replaced pair", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(conds, query_ref_exprs))) {
+      LOG_WARN("failed to extract query ref exprs", K(ret));
+    } else if (OB_FAIL(copier.add_skipped_expr(query_ref_exprs))) {
+      LOG_WARN("failed to add skipped pair", K(ret));
+    } else if (OB_FAIL(copier.copy_on_replace(conds, new_outer_conditions))) {
+      LOG_WARN("failed to copy on replace expr", K(ret));
+    }
+    // column_exprs in exec_params of query_ref_exprs should be processed separately
+    // because `copy_on_replace` did not perform replacement for these exprs
+    for (int64_t i = 0; OB_SUCC(ret) && i < query_ref_exprs.count(); ++i) {
+      ObQueryRefRawExpr *query_ref_expr = query_ref_exprs.at(i);
+      if (OB_ISNULL(query_ref_expr)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("split right table is NULL", K(ret));
-      } else if (OB_ISNULL(split_subquery = split_right_table->ref_query_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("split ref query is NULL", K(ret));
-      } else if (OB_FAIL(split_subquery->get_table_items(subquery_table_ids))) {
-        LOG_WARN("fail to get from tables", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(split_outer_conditions,
-                                                              subquery_table_ids,
-                                                              column_exprs))) {
-        LOG_WARN("fail to extract column exprs", K(ret));
-      } else if (OB_FALSE_IT(split_subquery->get_select_items().reset())) {
-      } else if (column_exprs.empty()) {
-        if (OB_FAIL(ObTransformUtils::create_dummy_select_item(*split_subquery, ctx))) {
-          LOG_WARN("fail to create dummy select item", K(ret));
-        }
-      } else if (OB_FAIL(ObTransformUtils::create_select_item(*ctx->allocator_, column_exprs,
-                                                              split_subquery))) {
-        LOG_WARN("failed to create select item", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx, *split_right_table, stmt,
-                                                                  upper_column_exprs))) {
-        LOG_WARN("failed to create columns for view", K(ret));
-      } else if (OB_FAIL(copier.add_replaced_expr(column_exprs, upper_column_exprs))) {
-        LOG_WARN("failed to add replace pair", K(ret));
-      } else if (OB_FAIL(copier.copy_on_replace(split_outer_conditions, new_outer_conditions))) {
-        LOG_WARN("failed to copy on replace expr", K(ret));
-      } else if (OB_FAIL(split_outer_conditions.assign(new_outer_conditions))) {
-        LOG_WARN("fail to assign semi conditions", K(ret));
+        LOG_WARN("query ref expr is NULL", K(ret));
       }
+      for (int64_t j = 0; OB_SUCC(ret) && j < query_ref_expr->get_exec_params().count(); ++j) {
+        ObExecParamRawExpr *exec_param = query_ref_expr->get_exec_params().at(j);
+        if (OB_ISNULL(exec_param)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("exec param is NULL", K(ret));
+        } else if (OB_FAIL(ObTransformUtils::replace_expr(subquery_column_exprs,
+                                                          view_column_exprs,
+                                                          exec_param->get_ref_expr()))) {
+          LOG_WARN("failed to replace expr", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(query_ref_expr->calc_hash())) {
+        LOG_WARN("failed to calc hash", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(conds.assign(new_outer_conditions))) {
+      LOG_WARN("fail to assign semi conditions", K(ret));
     }
   }
   return ret;
@@ -18595,5 +18657,77 @@ int ObTransformUtils::check_limit_zero_in_stmt(ObTransformerCtx *ctx,
   return ret;
 }
 
-} // namespace sql
-} // namespace oceanbase
+// Iterate branches of the `set_stmt`. For exec_params that share the same outer_expr_,
+// keep only the first one and replace the rest with the first one.
+// Call this function before assigning exec_params (which are collected from the branches of the set stmt)
+// to a newly created set stmt
+int ObTransformUtils::deduplicate_exec_params_for_set_stmt(ObSelectStmt *set_stmt,
+                                                           ObIArray<ObExecParamRawExpr *> &exec_params)
+{
+  int ret = OB_SUCCESS;
+  hash::ObHashMap<uint64_t, uint64_t> expr_param_map;  // outer_expr* -> canonical exec_param*
+  if (OB_ISNULL(set_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (exec_params.count() == 0) {
+    // do nothing
+  } else if (OB_FAIL(expr_param_map.create(exec_params.count(), ObModIds::OB_SQL_COMPILE))) {
+    LOG_WARN("failed to create hash map", K(ret));
+  } else {
+    ObSEArray<ObExecParamRawExpr *, 4> exec_params_dedup;
+    bool need_deduplicate = false;
+    ObStmtExprReplacer replacer;
+    replacer.set_relation_scope();
+    replacer.set_recursive(true);  // must cover all SET branches
+    for (int64_t i = 0; OB_SUCC(ret) && i < exec_params.count(); ++i) {
+      ObExecParamRawExpr *exec_param = exec_params.at(i);
+      ObRawExpr *outer_expr = NULL;
+      uint64_t mapped_exec_param_ptr = 0;
+      if (OB_ISNULL(exec_param)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_ISNULL(outer_expr = exec_param->get_ref_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(expr_param_map.get_refactored(reinterpret_cast<uint64_t>(outer_expr),
+                                                       mapped_exec_param_ptr))) {
+        if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
+          LOG_WARN("failed to get refactored", K(ret));
+        // found the first exec param referring to this outer_expr
+        // mark the outer_expr -> exec_param mapping for replacement
+        } else if (OB_FAIL(expr_param_map.set_refactored(reinterpret_cast<uint64_t>(outer_expr),
+                                                         reinterpret_cast<uint64_t>(exec_param)))) {
+          LOG_WARN("failed to set refactored", K(ret));
+        } else if (OB_FAIL(exec_params_dedup.push_back(exec_param))) {
+          LOG_WARN("failed to push back exec param", K(ret));
+        }
+      // an exec_param referring to this outer_expr already exists; mark the current one as a
+      // duplicate so it will be replaced by the canonical one throughout the stmt tree.
+      } else if (OB_FAIL(replacer.add_replace_expr(exec_param,
+                                                   reinterpret_cast<ObRawExpr *>(mapped_exec_param_ptr)))) {
+        LOG_WARN("failed to add replace expr", K(ret));
+      } else {
+        need_deduplicate = true;
+      }
+    }
+    if (OB_SUCC(ret) && need_deduplicate) {
+      if (OB_FAIL(set_stmt->iterate_stmt_expr(replacer))) {
+        LOG_WARN("failed to iterate stmt expr", K(ret));
+      } else if (FALSE_IT(exec_params.reset())) {
+      } else if (OB_FAIL(exec_params.assign(exec_params_dedup))) {
+        LOG_WARN("failed to assign exec params", K(ret));
+      }
+    }
+  }
+  if (expr_param_map.created()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = expr_param_map.destroy())) {
+      LOG_WARN("failed to destroy expr param map", K(tmp_ret));
+      ret = COVER_SUCC(tmp_ret);
+    }
+  }
+  return ret;
+}
+
+}  // namespace sql
+}  // namespace oceanbase

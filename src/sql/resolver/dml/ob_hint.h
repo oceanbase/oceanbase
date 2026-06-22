@@ -261,6 +261,7 @@ struct ObOptParamHint
     DEF(UDF_COST_FACTOR,)                      \
     DEF(UDF_SELECTIVITY,)                           \
     DEF(ENABLE_PLAN_EXPIRATION_BY_EXEC_FEEDBACK,)                    \
+    DEF(ENABLE_SEPARATE_SPF_FOR_SELECT_ITEMS,)         \
     DEF(ENABLE_PARTITION_SORT,)                   \
 
 
@@ -507,9 +508,9 @@ struct ObGlobalHint {
 #define COMPAT_VERSION_4_5_1      (oceanbase::common::cal_version(4, 5, 1, 0))
 #define COMPAT_VERSION_4_6_0      (oceanbase::common::cal_version(4, 6, 0, 0))
 #define COMPAT_VERSION_4_6_1      (oceanbase::common::cal_version(4, 6, 1, 0))
-#define LASTED_COMPAT_VERSION     COMPAT_VERSION_4_6_1
+#define LATEST_COMPAT_VERSION     COMPAT_VERSION_4_6_1
   static bool is_valid_opt_features_version(uint64_t version)
-  { return COMPAT_VERSION_4_0 <= version && (LASTED_COMPAT_VERSION >= version || CLUSTER_CURRENT_VERSION >= version); }
+  { return COMPAT_VERSION_4_0 <= version && (LATEST_COMPAT_VERSION >= version || CLUSTER_CURRENT_VERSION >= version); }
 
   static constexpr common::ObConsistencyLevel UNSET_CONSISTENCY = common::INVALID_CONSISTENCY;
   static constexpr int64_t UNSET_QUERY_TIMEOUT = -1;

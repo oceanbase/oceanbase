@@ -108,6 +108,11 @@ int ObModifyTenantStmt::set_default_tablegroup_name(const common::ObString &tabl
   return modify_tenant_arg_.tenant_schema_.set_default_tablegroup_name(tablegroup_name);
 }
 
+int ObModifyTenantStmt::set_default_tablespace_name(const common::ObString &tablespace_name)
+{
+  return modify_tenant_arg_.tenant_schema_.set_default_tablespace_name(tablespace_name);
+}
+
 void ObModifyTenantStmt::set_new_tenant_name(const ObString &new_tenant_name)
 {
   modify_tenant_arg_.new_tenant_name_ = new_tenant_name;

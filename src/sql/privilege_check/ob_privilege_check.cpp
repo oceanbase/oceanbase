@@ -238,6 +238,343 @@ int get_view_owner_id(
   return ret;
 }
 
+int add_col_priv_to_need_priv(
+    const ObStmt *basic_stmt,
+    const TableItem &table_item,
+    const uint64_t tenant_id,
+    const uint64_t grantee_id,
+    ObIArray<ObNeedPriv> &need_privs);
+
+int calc_mysql_table_priv_set(
+    const ObDMLStmt *dml_stmt,
+    const TableItem *table_item,
+    const ObPrivSet stmt_priv_set,
+    ObPrivSet &table_priv_set)
+{
+  int ret = OB_SUCCESS;
+  bool has = false;
+  if (OB_ISNULL(dml_stmt) || OB_ISNULL(table_item) || 0 == stmt_priv_set) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(dml_stmt), K(table_item), K(stmt_priv_set));
+  } else {
+    table_priv_set = stmt_priv_set;
+    if ((is_mysql_mode() && table_item->catalog_name_ != OB_INTERNAL_CATALOG_NAME)
+        || (is_oracle_mode() && table_item->catalog_name_ != OB_INTERNAL_CATALOG_NAME_UPPER)) {
+      table_priv_set |= OB_PRIV_USE_CATALOG;
+    }
+    if (stmt::T_SELECT == dml_stmt->get_stmt_type()) {
+      // do nothing
+    } else if (OB_FAIL(static_cast<const ObDelUpdStmt *>(dml_stmt)->has_dml_table_info(table_item->table_id_, has))) {
+      LOG_WARN("failed to check has dml table info", K(ret));
+    } else {
+      table_priv_set = has ? table_priv_set : OB_PRIV_SELECT;
+    }
+    if (OB_SUCC(ret)) {
+      if (table_item->is_view_table_ && !table_item->alias_name_.empty()) {
+        if (table_item->is_oracle_all_or_user_sys_view_for_alias()) {
+          table_priv_set &= ~OB_PRIV_SELECT;
+        }
+      } else if (table_item->is_oracle_all_or_user_sys_view()) {
+        table_priv_set &= ~OB_PRIV_SELECT;
+      }
+    }
+  }
+  return ret;
+}
+
+int add_mysql_external_table_priv(
+    const uint64_t tenant_id,
+    const TableItem *table_item,
+    const uint64_t grantee_id,
+    ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_item)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("table item is null", K(ret));
+  } else if (ObTableType::EXTERNAL_TABLE != table_item->table_type_
+             || common::OB_INVALID_ID == table_item->external_location_id_) {
+    // do nothing
+  } else {
+    ObSchemaGetterGuard schema_guard;
+    CK(GCTX.schema_service_ != NULL);
+    OZ(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard));
+    const ObLocationSchema *location_schema = NULL;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(schema_guard.get_location_schema_by_id(tenant_id,
+                                                              table_item->external_location_id_,
+                                                              location_schema))) {
+      LOG_WARN("failed to get location schema", K(ret));
+    } else if (OB_ISNULL(location_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("location schema is null", K(ret));
+    } else {
+      ObNeedPriv tmp_need_priv;
+      tmp_need_priv.db_ = table_item->database_name_;
+      tmp_need_priv.table_ = location_schema->get_location_name();
+      tmp_need_priv.priv_level_ = OB_PRIV_OBJECT_LEVEL;
+      tmp_need_priv.priv_set_ = OB_PRIV_READ;
+      tmp_need_priv.obj_type_ = ObObjectType::LOCATION;
+      tmp_need_priv.grantee_id_ = grantee_id;
+      ADD_NEED_PRIV(tmp_need_priv);
+    }
+  }
+  return ret;
+}
+
+int get_view_definer(
+    const ObSqlCtx &ctx,
+    const TableItem *view_table_item,
+    uint64_t &definer_user_id)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *view_schema = NULL;
+  if (OB_ISNULL(ctx.session_info_)
+      || OB_ISNULL(ctx.schema_guard_)
+      || OB_ISNULL(view_table_item)
+      || !view_table_item->is_view_table_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ctx.session_info_), K(ctx.schema_guard_), K(view_table_item));
+  // } else if (OB_FAIL(ctx.schema_guard_->get_table_schema(ctx.session_info_->get_login_tenant_id(),
+  //                                                        view_table_item->ref_id_,
+  //                                                        view_schema))) {
+  } else if (OB_FAIL(ctx.schema_guard_->get_table_schema(ctx.session_info_->get_effective_tenant_id(),
+                                                         view_table_item->ref_id_,
+                                                         view_schema))) {
+    LOG_WARN("failed to get view schema", K(ret), KPC(view_table_item));
+  } else if (OB_ISNULL(view_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("view schema is null", K(ret), KPC(view_table_item));
+  } else {
+    definer_user_id = view_schema->get_define_user_id();
+  }
+  return ret;
+}
+
+int get_dml_stmt_need_privs_inner(
+    const ObSessionPrivInfo &session_priv,
+    const ObStmt *basic_stmt,
+    ObIArray<ObNeedPriv> &need_privs,
+    const ObSqlCtx *sql_ctx,
+    const uint64_t grantee_id = OB_INVALID_ID);
+int get_dml_stmt_need_privs_by_stmt(
+    const ObSelectStmt *select_stmt,
+    ObIArray<ObNeedPriv> &need_privs,
+    const ObSqlCtx &sql_ctx,
+    const uint64_t grantee_id);
+int set_updatable_view_write_privs(
+    const ObSqlCtx &ctx,
+    const TableItem *view_table_item,
+    const uint64_t grantee_id,
+    const ObIArray<ObNeedPriv> &view_need_privs,
+    ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *view_schema = NULL;
+  const TableItem *base_table_item = NULL;
+  ObSEArray<ObNeedPriv, 4> mapped_need_privs;
+  const ObSelectStmt *ref_stmt = NULL;
+  if (OB_ISNULL(ctx.session_info_)
+      || OB_ISNULL(view_table_item)
+      || OB_ISNULL(base_table_item = view_table_item->view_base_item_)
+      || OB_ISNULL(ref_stmt = view_table_item->ref_query_)
+      || OB_ISNULL(ctx.schema_guard_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(ctx.session_info_), K(view_table_item), K(ref_stmt), K(ctx.schema_guard_));
+  } else if (OB_FAIL(ctx.schema_guard_->get_table_schema(ctx.session_info_->get_login_tenant_id(),
+                                                         view_table_item->ref_id_,
+                                                         view_schema))) {
+    LOG_WARN("failed to get view schema", K(ret), KPC(view_table_item));
+  } else if (OB_ISNULL(view_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("view schema is null", K(ret), KPC(view_table_item));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < view_need_privs.count(); ++i) {
+    const ObNeedPriv &view_need_priv = view_need_privs.at(i);
+    const ObPrivSet write_priv_set = view_need_priv.priv_set_ & (~OB_PRIV_SELECT);
+    if (0 == write_priv_set) {
+      // do nothing
+    } else {
+      ObNeedPriv mapped_need_priv = view_need_priv;
+      mapped_need_priv.catalog_ = base_table_item->catalog_name_;
+      mapped_need_priv.db_ = base_table_item->database_name_;
+      mapped_need_priv.table_ = base_table_item->table_name_;
+      mapped_need_priv.is_sys_table_ = base_table_item->is_system_table_;
+      mapped_need_priv.is_for_update_ = base_table_item->for_update_;
+      mapped_need_priv.grantee_id_ = grantee_id;
+      mapped_need_priv.priv_set_ = write_priv_set;
+      mapped_need_priv.columns_.reuse();
+      mapped_need_priv.check_any_column_priv_ = false;
+      if (view_need_priv.columns_.empty()) {
+        // Some write privileges (e.g. DELETE) are table-level. Keep propagating.
+      } else {
+        for (int64_t j = 0; OB_SUCC(ret) && j < view_need_priv.columns_.count(); ++j) {
+          const ObString &view_col_name = view_need_priv.columns_.at(j);
+          const ObColumnSchemaV2 *view_col_schema = view_schema->get_column_schema(view_col_name);
+          int64_t select_item_idx = -1;
+          if (OB_ISNULL(view_col_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to get view column schema by name", K(ret), K(view_col_name), K(view_table_item->ref_id_));
+          } else if (FALSE_IT(select_item_idx = static_cast<int64_t>(view_col_schema->get_column_id() - OB_APP_MIN_COLUMN_ID))) {
+          } else if (OB_UNLIKELY(select_item_idx < 0 || select_item_idx >= ref_stmt->get_select_item_size())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to map view write column to select item",
+                      K(ret), K(view_col_name), K(view_col_schema->get_column_id()), K(select_item_idx),
+                      K(ref_stmt->get_select_item_size()));
+          } else {
+            const SelectItem &select_item = ref_stmt->get_select_item(select_item_idx);
+            ObRawExpr *select_expr = select_item.expr_;
+            const ObColumnRefRawExpr *base_col_expr = NULL;
+            if (OB_ISNULL(select_expr) || !select_expr->is_column_ref_expr()) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("view write column is not mapped to base column expr",
+                        K(ret), K(view_col_name), K(select_item_idx), K(select_expr));
+            } else if (OB_ISNULL(base_col_expr = static_cast<const ObColumnRefRawExpr*>(select_expr))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("failed to cast select expr to column ref raw expr", K(ret), K(view_col_name), K(select_item_idx), K(select_expr));
+            } else if (OB_UNLIKELY(base_col_expr->get_table_id() != base_table_item->table_id_
+                                   || base_col_expr->get_column_id() < OB_APP_MIN_COLUMN_ID)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("view write column maps to invalid base column",
+                        K(ret), K(view_col_name), K(select_item_idx),
+                        K(base_col_expr->get_table_id()), K(base_col_expr->get_column_id()),
+                        "base_table_id", base_table_item->table_id_);
+            } else if (OB_FAIL(mapped_need_priv.columns_.push_back(base_col_expr->get_column_name()))) {
+              LOG_WARN("failed to push mapped column", K(ret), K(view_col_name), KPC(base_col_expr));
+            }
+          }
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(mapped_need_privs.push_back(mapped_need_priv))) {
+        LOG_WARN("failed to push mapped view col need priv", K(ret), KPC(view_table_item));
+      } else {
+        ADD_NEED_PRIV(mapped_need_priv);
+      }
+    }
+  }
+
+  // recursively call if base_table_item is also a view table
+  if (OB_FAIL(ret)) {
+  } else if (!base_table_item->is_view_table_) {
+    // do nothing
+  } else if (OB_ISNULL(base_table_item->ref_query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("base table ref stmt is null", K(ret), KPC(base_table_item));
+  } else {
+    uint64_t base_view_definer_id = OB_INVALID_ID;
+    if (OB_FAIL(get_view_definer(ctx, base_table_item, base_view_definer_id))) {
+      LOG_WARN("failed to get base view definer", K(ret), KPC(base_table_item));
+    } else if (OB_FAIL(SMART_CALL(set_updatable_view_write_privs(ctx,
+                                                                 base_table_item,
+                                                                 base_view_definer_id,
+                                                                 mapped_need_privs,
+                                                                 need_privs)))) {
+      LOG_WARN("failed to recursively call set_updatable_view_write_privs", K(ret), KPC(base_table_item));
+    }
+  }
+  return ret;
+}
+
+int get_privs_by_table_item(
+    const ObSqlCtx &ctx,
+    const TableItem *table_item,
+    const ObStmt *basic_stmt,
+    const uint64_t grantee_id,
+    const ObPrivSet priv_set,
+    ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObNeedPriv, 4> view_need_privs;
+  if (OB_ISNULL(table_item) ||
+      OB_ISNULL(ctx.session_info_) ||
+      OB_ISNULL(basic_stmt) ||
+      OB_ISNULL(ctx.schema_guard_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(table_item), K(ctx.session_info_), K(basic_stmt), K(ctx.schema_guard_));
+  } else if (OB_UNLIKELY(!ObStmt::is_dml_stmt(basic_stmt->get_stmt_type()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("basic stmt is not dml stmt", K(ret), K(basic_stmt->get_stmt_type()));
+  } else {
+    if (is_mysql_mode()) {
+      if (table_item->is_view_table_) {
+        if (OB_FAIL(add_col_priv_to_need_priv(basic_stmt,
+                                              *table_item,
+                                              ctx.session_info_->get_priv_tenant_id(),
+                                              grantee_id,
+                                              view_need_privs))) {
+          LOG_WARN("failed to add col priv to view need priv", K(ret));
+        } else if (OB_FAIL(append(need_privs, view_need_privs))) {
+          LOG_WARN("failed to append view col need privs", K(ret));
+        }
+      } else if (OB_FAIL(add_col_priv_to_need_priv(basic_stmt,
+                                                   *table_item,
+                                                   ctx.session_info_->get_priv_tenant_id(),
+                                                   grantee_id,
+                                                   need_privs))) {
+        LOG_WARN("failed to add col priv to need priv", K(ret));
+      }
+    } else {
+      ObNeedPriv need_priv;
+      ObPrivSet table_priv_set = priv_set;
+      need_priv.catalog_ = table_item->catalog_name_;
+      need_priv.db_ = table_item->database_name_;
+      need_priv.table_ = table_item->table_name_;
+      need_priv.is_sys_table_ = table_item->is_system_table_;
+      need_priv.is_for_update_ = table_item->for_update_;
+      need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
+      if ((is_mysql_mode() && need_priv.catalog_ != OB_INTERNAL_CATALOG_NAME)
+          || (is_oracle_mode() && need_priv.catalog_ != OB_INTERNAL_CATALOG_NAME_UPPER)) {
+        need_priv.priv_level_ = OB_PRIV_CATALOG_LEVEL;
+        table_priv_set |= OB_PRIV_USE_CATALOG;
+      }
+      need_priv.priv_set_ = table_priv_set;
+      need_priv.grantee_id_ = grantee_id;
+      ADD_NEED_PRIV(need_priv);
+    }
+  }
+  if (OB_SUCC(ret) && table_item->is_view_table_) {
+    const bool skip_definer_drill_down = is_mysql_mode() && is_sys_view(table_item->ref_id_);
+    uint64_t view_definer_id = OB_INVALID_ID;
+    const ObPrivSet write_priv_set = priv_set & (~OB_PRIV_SELECT);
+    const ObStmt *ref_stmt = table_item->ref_query_;
+    const bool need_select_priv = (0 != (priv_set & OB_PRIV_SELECT));
+    if (skip_definer_drill_down) {
+      // MySQL system views encapsulate internal object access and should not recurse by definer.
+    } else if (OB_ISNULL(ref_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("view ref stmt is null for write-path privilege collection", K(ret), KPC(table_item), K(write_priv_set));
+      // view_definer_id may be invalid, in this case, we will fallback to invoking user id.
+      // Notably, invoker id is represented by invalid id so that plan cache sharing works properly.
+      // So, we don't need to change view_definer_id.
+    } else if (OB_FAIL(get_view_definer(ctx, table_item, view_definer_id))) {
+      LOG_WARN("failed to get view definer", K(ret));
+    }
+    if (OB_FAIL(ret) || skip_definer_drill_down || 0 == write_priv_set) {
+      // do nothing
+    } else if (OB_ISNULL(table_item->view_base_item_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("view_base_item is null for write-path privilege collection",
+                K(ret), KPC(table_item), K(write_priv_set));
+    } else if (OB_FAIL(SMART_CALL(set_updatable_view_write_privs(ctx,
+                                                                 table_item,
+                                                                 view_definer_id,
+                                                                 view_need_privs,
+                                                                 need_privs)))) {
+      LOG_WARN("failed to set mysql updatable view write privs", K(ret));
+    }
+    if (OB_FAIL(ret) || skip_definer_drill_down || !need_select_priv) {
+    } else if (OB_FAIL(get_dml_stmt_need_privs_by_stmt(static_cast<const ObSelectStmt *>(ref_stmt),
+                                                       need_privs,
+                                                       ctx,
+                                                       view_definer_id))) {
+      LOG_WARN("failed to get dml stmt need privs by stmt", K(ret), K(view_definer_id));
+    }
+  }
+  return ret;
+}
+
 #ifdef OB_BUILD_TDE_SECURITY
 template <typename T>
 int add_plainaccess_priv_to_need_priv(ObIArray<T> &need_privs,
@@ -261,6 +598,7 @@ int add_plainaccess_priv_to_need_priv(ObIArray<T> &need_privs,
   } else if (NULL != sensitive_rule && sensitive_rule->get_enabled()) {
     T plainaccess_priv;
     if constexpr (std::is_same_v<T, ObNeedPriv>) {
+      plainaccess_priv.grantee_id_ = user_id;
       plainaccess_priv.priv_level_ = OB_PRIV_SENSITIVE_RULE_LEVEL;
       plainaccess_priv.sensitive_rule_ = sensitive_rule->get_sensitive_rule_name();
       plainaccess_priv.priv_set_ = OB_PRIV_PLAINACCESS;
@@ -487,7 +825,8 @@ int add_col_id_array_to_need_priv(
 int add_col_priv_to_need_priv(
     const ObStmt *basic_stmt,
     const TableItem &table_item,
-    const ObSessionPrivInfo &session_priv,
+    const uint64_t tenant_id,
+    const uint64_t grantee_id,
     ObIArray<ObNeedPriv> &need_privs)
 {
   int ret = OB_SUCCESS;
@@ -498,6 +837,7 @@ int add_col_priv_to_need_priv(
   need_priv.table_ = table_item.table_name_;
   need_priv.is_sys_table_ = table_item.is_system_table_;
   need_priv.is_for_update_ = table_item.for_update_;
+  need_priv.grantee_id_ = grantee_id;
   need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
   if (need_priv.catalog_ != OB_INTERNAL_CATALOG_NAME) {
     need_priv.priv_level_ = OB_PRIV_CATALOG_LEVEL;
@@ -552,9 +892,10 @@ int add_col_priv_to_need_priv(
                       && value_desc->get_column_id() >= OB_APP_MIN_COLUMN_ID) {
               OZ (need_priv.columns_.push_back(value_desc->get_column_name()));
               OZ (add_plainaccess_priv_to_need_priv(need_privs,
-                                                    session_priv.tenant_id_,
+                                                    tenant_id,
                                                     table_item.ref_id_,
-                                                    value_desc->get_column_id()));
+                                                    value_desc->get_column_id(),
+                                                    grantee_id));
             }
           }
           if (OB_SUCC(ret)) {
@@ -579,9 +920,10 @@ int add_col_priv_to_need_priv(
                         && col_expr->get_column_id() >= OB_APP_MIN_COLUMN_ID) {
                   OZ (need_priv.columns_.push_back(col_expr->get_column_name()));
                   OZ (add_plainaccess_priv_to_need_priv(need_privs,
-                                                        session_priv.tenant_id_,
+                                                        tenant_id,
                                                         table_item.ref_id_,
-                                                        col_expr->get_column_id()));
+                                                        col_expr->get_column_id(),
+                                                        grantee_id));
                 }
               }
             }
@@ -626,9 +968,10 @@ int add_col_priv_to_need_priv(
                           && col_expr->get_column_id() >= OB_APP_MIN_COLUMN_ID) {
                     OZ (need_priv.columns_.push_back(col_expr->get_column_name()));
                     OZ (add_plainaccess_priv_to_need_priv(need_privs,
-                                                          session_priv.tenant_id_,
+                                                          tenant_id,
                                                           table_info->ref_table_id_,
-                                                          col_expr->get_column_id()));
+                                                          col_expr->get_column_id(),
+                                                          grantee_id));
                   } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(value_expr, col_exprs))) {
                     LOG_WARN("extract column exprs failed", K(ret));
                   }
@@ -673,9 +1016,10 @@ int add_col_priv_to_need_priv(
                 && (basic_stmt->get_stmt_type() != stmt::T_EXPLAIN)) {
               // need plainaccess privilege for dml stmts except for delete
               OZ (add_plainaccess_priv_to_need_priv(need_privs,
-                                                    session_priv.tenant_id_,
+                                                    tenant_id,
                                                     table_item.ref_id_,
-                                                    col_expr->get_column_id()));
+                                                    col_expr->get_column_id(),
+                                                    grantee_id));
             }
           }
         }
@@ -1558,11 +1902,207 @@ int get_dml_stmt_need_privs(
             }
             if (OB_SUCC(ret)) {
               if (lib::is_mysql_mode()) {
-                if (OB_FAIL(add_col_priv_to_need_priv(basic_stmt, *table_item, session_priv, need_privs))) {
+                if (OB_FAIL(add_col_priv_to_need_priv(basic_stmt,
+                                                      *table_item,
+                                                      session_priv.tenant_id_,
+                                                      session_priv.user_id_,
+                                                      need_privs))) {
                   LOG_WARN("add col id array to need priv failed", K(ret));
                 }
               } else {
                 ADD_NEED_PRIV(need_priv);
+              }
+            }
+          }
+        }
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Stmt type error, should be DML stmt", K(ret), K(stmt_type));
+      }
+    }
+  }
+  return ret;
+}
+
+int get_dml_stmt_need_privs_by_stmt(
+    const ObSelectStmt *select_stmt,
+    ObIArray<ObNeedPriv> &need_privs,
+    const ObSqlCtx &sql_ctx,
+    const uint64_t grantee_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(select_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("select stmt is null", K(ret), K(select_stmt));
+  } else if (OB_UNLIKELY(OB_INVALID_ID == grantee_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("effective grantee id is invalid", K(ret), K(grantee_id));
+  } else if (select_stmt->is_from_show_stmt()) {
+    //do not check priv for show stmt.
+    //现在大部分show 语句都是在执行时过滤掉无权限看到的信息
+  } else {
+    const ObDMLStmt *dml_stmt = static_cast<const ObDMLStmt*>(select_stmt);
+    const ObPrivSet priv_set = OB_PRIV_SELECT;
+    const int64_t table_size = dml_stmt->get_table_size();
+    if (OB_FAIL(add_encrypt_priv_to_need_privs(dml_stmt, need_privs))) {
+      LOG_WARN("failed to add encrypt priv to need privs", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_size; i++) {
+      const TableItem *table_item = dml_stmt->get_table_item(i);
+      if (OB_ISNULL(table_item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table item is null");
+      } else if (table_item->is_link_table()) {
+        // skip link table
+      } else if (TableItem::BASE_TABLE == table_item->type_
+                 || TableItem::ALIAS_TABLE == table_item->type_
+                 || table_item->is_view_table_) {
+        ObPrivSet table_priv_set = 0;
+        if (OB_FAIL(calc_mysql_table_priv_set(dml_stmt, table_item, priv_set, table_priv_set))) {
+          LOG_WARN("failed to calc mysql table priv set", K(ret));
+        } else if (OB_FAIL(add_mysql_external_table_priv(sql_ctx.session_info_->get_login_tenant_id(),
+                                                         table_item,
+                                                         grantee_id,
+                                                         need_privs))) {
+          LOG_WARN("failed to add mysql external table priv", K(ret));
+        } else if (0 != table_priv_set
+                   && OB_FAIL(get_privs_by_table_item(sql_ctx,
+                                                      table_item,
+                                                      select_stmt,
+                                                      grantee_id,
+                                                      table_priv_set,
+                                                      need_privs))) {
+          LOG_WARN("failed to set mysql privs by table item recursively", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int get_dml_stmt_need_privs_inner(
+    const ObSessionPrivInfo &session_priv,
+    const ObStmt *basic_stmt,
+    ObIArray<ObNeedPriv> &need_privs,
+    const ObSqlCtx *sql_ctx,
+    const uint64_t grantee_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(basic_stmt) || OB_ISNULL(sql_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null basic stmt or sql ctx", K(ret), K(basic_stmt), K(sql_ctx));
+  } else {
+    stmt::StmtType stmt_type = basic_stmt->get_stmt_type();
+    switch (stmt_type) {
+      case stmt::T_SELECT : {
+        const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt*>(basic_stmt);
+        if (select_stmt->is_from_show_stmt()) {
+          //do not check priv for show stmt.
+          //现在大部分show 语句都是在执行时过滤掉无权限看到的信息
+          break;
+        }
+      }//fall through for non-show select
+      case stmt::T_INSERT_ALL :
+      case stmt::T_INSERT :
+      case stmt::T_REPLACE :
+      case stmt::T_DELETE :
+      case stmt::T_UPDATE :
+      case stmt::T_MERGE : {
+        ObPrivSet priv_set = 0;
+        ObString op_literal;
+        if (stmt::T_SELECT == stmt_type) {
+          priv_set = OB_PRIV_SELECT;
+          op_literal = ObString::make_string("SELECT");
+          if (static_cast<const ObSelectStmt*>(basic_stmt)->is_select_into_outfile()) {
+            ObNeedPriv need_priv;
+            need_priv.priv_set_ = OB_PRIV_FILE;
+            need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
+            ADD_NEED_PRIV(need_priv);
+          }
+        } else if (stmt::T_INSERT_ALL == stmt_type) {
+          priv_set = OB_PRIV_INSERT;
+          op_literal = ObString::make_string("INSERT ALL");
+        } else if (stmt::T_INSERT == stmt_type) {
+          priv_set = OB_PRIV_INSERT;
+          op_literal = ObString::make_string("INSERT");
+          if (static_cast<const ObInsertStmt*>(basic_stmt)->is_insert_up()) {
+            priv_set |= (OB_PRIV_UPDATE | OB_PRIV_SELECT);
+            op_literal = ObString::make_string("INSERT, UPDATE");
+          }
+        } else if (stmt::T_REPLACE == stmt_type) {
+          priv_set = OB_PRIV_INSERT | OB_PRIV_DELETE;
+          op_literal = ObString::make_string("INSERT, DELETE");
+        } else if (stmt::T_DELETE == stmt_type) {
+          priv_set = OB_PRIV_DELETE | OB_PRIV_SELECT;
+          op_literal = ObString::make_string("DELETE");
+        } else if (stmt::T_UPDATE == stmt_type) {
+          priv_set = OB_PRIV_UPDATE | OB_PRIV_SELECT;
+          op_literal = ObString::make_string("UPDATE");
+        } else if (stmt::T_MERGE == stmt_type) {
+          priv_set = OB_PRIV_INSERT | OB_PRIV_DELETE | OB_PRIV_UPDATE | OB_PRIV_SELECT;
+          op_literal = ObString::make_string("MERGE");
+        } else { } //do nothing
+        const ObDMLStmt *dml_stmt = static_cast<const ObDMLStmt*>(basic_stmt);
+        int64_t table_size = dml_stmt->get_table_size();
+        if (stmt::T_SELECT != stmt_type) {
+          ObSEArray<const ObDmlTableInfo*, 4> table_infos;
+          if (OB_FAIL(static_cast<const ObDelUpdStmt*>(basic_stmt)->get_dml_table_infos(table_infos))) {
+            LOG_WARN("failed to get dml table infos", K(ret));
+          } else if (OB_FAIL(ObPrivilegeCheck::can_do_operation_on_db(session_priv, table_infos, op_literal))) {
+            LOG_WARN("cann't do this operation on this database", K(ret), K(stmt_type));
+          }
+        }
+        if (OB_SUCC(ret) && OB_FAIL(add_encrypt_priv_to_need_privs(dml_stmt, need_privs))) {
+          LOG_WARN("failed to add encrypt priv to need privs", K(ret));
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < table_size; i++) {
+          const TableItem *table_item = dml_stmt->get_table_item(i);
+          if (OB_ISNULL(table_item)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("table item is null");
+          } else if (table_item->is_link_table()) {
+            // skip link table
+          } else if (TableItem::BASE_TABLE == table_item->type_ || TableItem::ALIAS_TABLE == table_item->type_
+                     || table_item->is_view_table_) {
+            ObPrivSet table_priv_set = 0;
+            if (OB_FAIL(calc_mysql_table_priv_set(dml_stmt, table_item, priv_set, table_priv_set))) {
+              LOG_WARN("failed to calc mysql table priv set", K(ret));
+            } else if (OB_FAIL(add_mysql_external_table_priv(session_priv.tenant_id_,
+                                                             table_item,
+                                                             grantee_id,
+                                                             need_privs))) {
+              LOG_WARN("failed to add mysql external table priv", K(ret));
+            } else if (0 != table_priv_set
+                       && OB_FAIL(get_privs_by_table_item(*sql_ctx,
+                                                          table_item,
+                                                          basic_stmt,
+                                                          grantee_id,
+                                                          table_priv_set,
+                                                          need_privs))) {
+              LOG_WARN("failed to set mysql privs by table item recursively", K(ret));
+
+              // no check for information_schema select
+            } else if (stmt::T_SELECT != dml_stmt->get_stmt_type()) {
+              if (OB_FAIL(ObPrivilegeCheck::can_do_operation_on_db(session_priv, table_item->database_name_))) {
+                LOG_WARN("Can not do this operation on the database", K(session_priv),
+                         K(ret), "stmt_type", dml_stmt->get_stmt_type());
+              } else if (ObPrivilegeCheck::is_mysql_org_table(table_item->database_name_, table_item->table_name_)) {
+                ret = OB_ERR_NO_TABLE_PRIVILEGE;
+                LOG_USER_ERROR(OB_ERR_NO_TABLE_PRIVILEGE, op_literal.length(), op_literal.ptr(),
+                               session_priv.user_name_.length(), session_priv.user_name_.ptr(),
+                               session_priv.host_name_.length(),session_priv.host_name_.ptr(),
+                               table_item->table_name_.length(), table_item->table_name_.ptr());
+              }
+            }
+            if (OB_SUCC(ret)) {
+              if (session_priv.is_tenant_changed()
+                  && 0 != table_item->database_name_.case_compare(OB_SYS_DATABASE_NAME)) {
+                ret = OB_ERR_NO_DB_PRIVILEGE;
+                LOG_USER_ERROR(OB_ERR_NO_DB_PRIVILEGE, session_priv.user_name_.length(), session_priv.user_name_.ptr(),
+                               session_priv.host_name_.length(),session_priv.host_name_.ptr(),
+                               table_item->database_name_.length(), table_item->database_name_.ptr());
               }
             }
           }
@@ -2560,8 +3100,17 @@ int get_create_user_privs(
       case stmt::T_RENAME_USER :
       case stmt::T_DROP_USER :
       case stmt::T_CREATE_USER : {
-        if (stmt::T_SET_PASSWORD == stmt_type
+        // For SET PASSWORD, check APPLICATION_PASSWORD_ADMIN or CREATE USER
+        // when modifying own password with RETAIN CURRENT PASSWORD or DISCARD OLD PASSWORD
+        if ((stmt::T_SET_PASSWORD == stmt_type)
             && static_cast<const ObSetPasswordStmt*>(basic_stmt)->get_for_current_user()) {
+          const ObSetPasswordStmt *set_pwd_stmt = static_cast<const ObSetPasswordStmt *>(basic_stmt);
+          if (set_pwd_stmt->get_retain_current_password() || set_pwd_stmt->get_discard_old_password()) {
+            need_priv.priv_set_ = OB_PRIV_APPLICATION_PASSWORD_ADMIN | OB_PRIV_CREATE_USER;
+            need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
+            need_priv.priv_check_type_ = OB_PRIV_CHECK_ANY;
+            ADD_NEED_PRIV(need_priv);
+          }
         } else if (stmt::T_ALTER_USER_PROFILE == stmt_type
                    && lib::is_mysql_mode()
                    && !!static_cast<const ObAlterUserProfileStmt*>(basic_stmt)->get_set_role_flag()) {
@@ -3959,7 +4508,7 @@ int ObPrivilegeCheck::check_privilege(
         LOG_WARN("fail to get session priv info", K(ret));
       } else if (FALSE_IT(session_priv.set_effective_tenant_id(
                                           ctx.session_info_->get_effective_tenant_id()))) {
-      } else if (OB_FAIL(get_stmt_need_privs(session_priv, basic_stmt, tmp_need_privs))) {
+      } else if (OB_FAIL(get_stmt_need_privs(session_priv, basic_stmt, tmp_need_privs, &ctx))) {
         LOG_WARN("Get stmt need privs error", K(ret));
       } else if (OB_FAIL(stmt_need_privs.need_privs_.assign(tmp_need_privs))) {
         LOG_WARN("fail to assign need_privs", K(ret));
@@ -4106,16 +4655,18 @@ int ObPrivilegeCheck::get_stmt_ora_need_privs(
 
 int ObPrivilegeCheck::get_stmt_need_privs(const ObSessionPrivInfo &session_priv,
                                           const ObStmt *basic_stmt,
-                                          ObIArray<ObNeedPriv> &need_privs)
+                                          ObIArray<ObNeedPriv> &need_privs,
+                                          const ObSqlCtx *sql_ctx)
 {
   int ret = OB_SUCCESS;
   const ObDMLStmt *dml_stmt = NULL;
   if (OB_ISNULL(basic_stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Stmt is NULL", K(ret));
-  } else if (OB_FAIL(one_level_stmt_need_priv(session_priv, basic_stmt, need_privs))) {
+  } else if (OB_FAIL(one_level_stmt_need_priv(session_priv, basic_stmt, need_privs, sql_ctx))) {
     LOG_WARN("Failed to get one level stmt need priv", K(ret));
-  } else if (basic_stmt->is_show_stmt()
+  }
+  else if (basic_stmt->is_show_stmt()
              || (stmt::T_SELECT == basic_stmt->get_stmt_type()
                  && static_cast<const ObSelectStmt*>(basic_stmt)->is_from_show_stmt())) {
     //do not check sub-stmt of show_stmt
@@ -4130,8 +4681,8 @@ int ObPrivilegeCheck::get_stmt_need_privs(const ObSessionPrivInfo &session_priv,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Sub-stmt is NULL", K(ret));
       } else if (sub_stmt->is_view_stmt() && ObStmt::is_dml_stmt(basic_stmt->get_stmt_type())) {
-        //do not check privilege of view stmt
-      } else if (OB_FAIL(get_stmt_need_privs(session_priv, sub_stmt, need_privs))) {
+        // do not check privilege of view stmt
+      } else if (OB_FAIL(get_stmt_need_privs(session_priv, sub_stmt, need_privs, sql_ctx))) {
         LOG_WARN("Failed to extract priv info of shild stmts", K(i), K(dml_stmt), K(ret));
       } else {
         //do nothing
@@ -4623,7 +5174,8 @@ int ObPrivilegeCheck::one_level_stmt_ora_need_priv(
 
 int ObPrivilegeCheck::one_level_stmt_need_priv(const ObSessionPrivInfo &session_priv,
                                                const ObStmt *basic_stmt,
-                                               ObIArray<ObNeedPriv> &need_privs)
+                                               ObIArray<ObNeedPriv> &need_privs,
+                                               const ObSqlCtx *sql_ctx)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(basic_stmt)) {
@@ -4633,6 +5185,7 @@ int ObPrivilegeCheck::one_level_stmt_need_priv(const ObSessionPrivInfo &session_
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Session priv is invalid", K(ret), K(session_priv));
   } else {
+    bool need_check_view_definer = true;
     stmt::StmtType stmt_type = basic_stmt->get_stmt_type();
     if (stmt_type < 0
         || stmt::get_stmt_type_idx(stmt_type) >= static_cast<int64_t>(sizeof(priv_check_funcs_) / sizeof(ObGetStmtNeedPrivsFunc))) {
@@ -4647,9 +5200,21 @@ int ObPrivilegeCheck::one_level_stmt_need_priv(const ObSessionPrivInfo &session_
     } else if (OB_ISNULL(priv_check_funcs_[stmt::get_stmt_type_idx(stmt_type)])) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("No stmt privilege check function", K(ret), K(stmt_type));
-    } else if (OB_FAIL(priv_check_funcs_[stmt::get_stmt_type_idx(stmt_type)](session_priv, basic_stmt, need_privs))) {
-      LOG_WARN("Failed to check priv", K(ret), K(stmt_type));
-    } else { }//do nothing
+    } else if (OB_FAIL(get_priv_need_check(session_priv,
+                                           ObCompatFeatureType::MYSQL_VIEW_DEFINER_PRIV_CHECK_ENHANCE,
+                                           need_check_view_definer))) {
+      LOG_WARN("failed to get mysql view definer priv check switch", K(ret));
+    } else if (ObStmt::is_dml_stmt(stmt_type) && sql_ctx != NULL && need_check_view_definer) {
+      // OB_INVALID_ID means: current executor decided at runtime, so shared
+      // stmt_need_privs does not pin the compiling user in plan cache.
+      if (OB_FAIL(get_dml_stmt_need_privs_inner(session_priv, basic_stmt, need_privs, sql_ctx, OB_INVALID_ID))) {
+        LOG_WARN("Failed to check dml priv", K(ret), K(stmt_type));
+      }
+    } else {
+      if (OB_FAIL(priv_check_funcs_[stmt::get_stmt_type_idx(stmt_type)](session_priv, basic_stmt, need_privs))) {
+        LOG_WARN("Failed to check priv", K(ret), K(stmt_type));
+      }
+    }
   }
   return ret;
 }

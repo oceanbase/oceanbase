@@ -264,6 +264,15 @@ int ObTenantSqlService::replace_tenant(
                  KR(ret), K(tenant_schema));
       }
 #endif
+      if (OB_SUCC(ret)) {
+        uint64_t data_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, data_version))) {
+          LOG_WARN("fail to get data version", KR(ret));
+        } else if (data_version >= DATA_VERSION_4_6_1_0 &&
+                   OB_FAIL(dml.add_column("default_tablespace_id", tenant_schema.get_default_tablespace_id()))) {
+          LOG_WARN("fail to add default_tablespace_id column", KR(ret), K(tenant_schema));
+        }
+      }
     }
     // insert into __all_tenant
     if (OB_SUCC(ret)) {

@@ -52,6 +52,14 @@ public:
   void set_max_connections_per_hour(uint64_t val) { max_connections_per_hour_ = val; }
   uint64_t get_max_user_connections() { return max_user_connections_; }
   void set_max_user_connections(uint64_t val) { max_user_connections_ = val; }
+  const common::ObString &get_default_tablespace_name() const
+  {
+    return create_user_arg_.default_tablespace_name_;
+  }
+  void set_default_tablespace_name(const common::ObString &tablespace_name)
+  {
+    create_user_arg_.default_tablespace_name_ = tablespace_name;
+  }
   DECLARE_VIRTUAL_TO_STRING;
 private:
   // data members

@@ -1390,9 +1390,9 @@ public:
   int check_contains_recursive_cte(ObIArray<ObLogicalOperator*> &child_ops,
                                    bool &is_recursive_cte);
 
-  int init_subplan_filter_child_ops(const ObIArray<ObLogicalOperator*> &subquery_ops,
-                                    const ObIArray<std::pair<int64_t, ObRawExpr*>> &params,
-                                    ObIArray<ObLogicalOperator*> &dist_subquery_ops);
+  int check_if_subplan_filter_match_bc2host(ObLogicalOperator *top,
+                                            const ObIArray<ObLogicalOperator*> &subquery_ops,
+                                            bool &is_bc2host_none);
 
   int check_if_subplan_filter_match_partition_wise(ObLogicalOperator *top,
                                                    const ObIArray<ObLogicalOperator*> &subquery_ops,
@@ -1443,6 +1443,9 @@ public:
                                      const ObIArray<ObAliasRefRawExpr *> *project_refs = NULL);
 
   int allocate_subplan_filter_for_on_condition(ObIArray<ObRawExpr*> &subquery_exprs, ObLogicalOperator* &top);
+
+  bool is_simple_rescan_subquery(const ObDMLStmt *stmt) const;
+
 
   int partial_limit_pushdown(ObLogicalOperator *&top,
                              const int64_t limit_count,

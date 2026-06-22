@@ -43,6 +43,7 @@ public:
   const common::ObIArray<ObVariableSetStmt::VariableSetNode> &get_sys_var_nodes() const {return sys_var_nodes_;}
   int assign_variable_nodes(const common::ObIArray<ObVariableSetStmt::VariableSetNode> &other);
   int set_default_tablegroup_name(const common::ObString &tablegroup_name);
+  int set_default_tablespace_name(const common::ObString &tablespace_name);
   virtual obrpc::ObDDLArg &get_ddl_arg() { return create_tenant_arg_; }
   void set_create_standby_tenant();
   void set_log_restore_source(const common::ObString &log_restore_source);

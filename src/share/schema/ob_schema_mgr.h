@@ -225,6 +225,8 @@ public:
   inline int64_t get_schema_version() const { return schema_version_; }
   inline void set_default_tablegroup_id(const uint64_t default_tablegroup_id) { default_tablegroup_id_ = default_tablegroup_id; }
   inline uint64_t get_default_tablegroup_id() const { return default_tablegroup_id_; }
+  inline void set_default_tablespace_id(const uint64_t default_tablespace_id) { default_tablespace_id_ = default_tablespace_id; }
+  inline uint64_t get_default_tablespace_id() const { return default_tablespace_id_; }
   inline int set_database_name(const common::ObString &database_name)
   { return deep_copy_str(database_name, database_name_); }
   inline const char *get_database_name() const { return extract_str(database_name_); }
@@ -238,6 +240,7 @@ private:
   uint64_t database_id_;
   int64_t schema_version_;
   uint64_t default_tablegroup_id_;
+  uint64_t default_tablespace_id_;
   common::ObString database_name_;
   common::ObNameCaseMode name_case_mode_;
 };
@@ -847,6 +850,10 @@ public:
   int check_database_exists_in_tablegroup(
       const uint64_t tenant_id,
       const uint64_t tablegroup_id,
+      bool &not_empty) const;
+  int check_database_exists_in_tablespace(
+      const uint64_t tenant_id,
+      const uint64_t tablespace_id,
       bool &not_empty) const;
   int get_aux_schemas(const uint64_t tenant_id,
                       const uint64_t data_table_id,

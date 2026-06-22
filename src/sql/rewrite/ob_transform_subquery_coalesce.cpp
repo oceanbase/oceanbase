@@ -1496,11 +1496,14 @@ int ObTransformSubqueryCoalesce::transform_or_expr(ObDMLStmt *stmt,
                                                           subqueries, 
                                                           union_stmt))) {
         LOG_WARN("failed to create set stmt", K(ret));
-      } else if (OB_FAIL(first_subquery_expr->get_exec_params().assign(exec_params))) {
-        LOG_WARN("failed to assign exec params", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::deduplicate_exec_params_for_set_stmt(union_stmt,
+                                                                                exec_params))) {
+        LOG_WARN("failed to deduplicate exec params for set stmt", K(ret));
       } else if (OB_ISNULL(first_subquery_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null expr", K(ret));
+      } else if (OB_FAIL(first_subquery_expr->get_exec_params().assign(exec_params))) {
+        LOG_WARN("failed to assign exec params", K(ret));
       } else if (OB_FAIL(add_coalesce_stmts(subqueries))) {
         LOG_WARN("failed to append stmts", K(ret));
       } else {

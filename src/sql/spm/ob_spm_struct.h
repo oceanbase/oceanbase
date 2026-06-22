@@ -51,17 +51,6 @@ public:
     ref_count_ = 0;
   }
 
-  bool check_executing_evo_plan_exists()
-  {
-    bool find = false;
-    for (int i = 0; !find && i < RECORDS_SIZE && 0 != receive_ts_[i]; ++i) {
-      if (true == use_evo_plan_[i] && 0 == elapsed_t_[i]) {
-        find = true;
-      }
-    }
-    return find;
-  }
-
   int32_t get_serialize_size() const {  return 4 + 8 + RECORDS_SIZE * 9; }
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const {
     int ret = OB_SUCCESS;

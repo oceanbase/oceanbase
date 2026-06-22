@@ -490,7 +490,7 @@ Query Plan
 |2 |  └─HASH RIGHT ANTI JOIN               |        |1       |30          |
 |3 |    ├─EXCHANGE IN DISTR                |        |1       |23          |
 |4 |    │ └─EXCHANGE OUT DISTR (PKEY)      |:EX10002|1       |23          |
-|5 |    │   └─SUBPLAN SCAN                 |VIEW2   |1       |23          |
+|5 |    │   └─SUBPLAN SCAN                 |VIEW1   |1       |23          |
 |6 |    │     └─HASH RIGHT ANTI JOIN NA    |        |1       |23          |
 |7 |    │       ├─EXCHANGE IN DISTR        |        |1       |12          |
 |8 |    │       │ └─EXCHANGE OUT DISTR     |:EX10000|1       |11          |
@@ -509,12 +509,12 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t12.c1)]), filter(nil), rowset=16
       dop=1
   2 - output([t12.c1]), filter(nil), rowset=16
-      equal_conds([t12.c1 = VIEW2.c1]), other_conds(nil)
-  3 - output([VIEW2.c1]), filter(nil), rowset=16
-  4 - output([VIEW2.c1]), filter(nil), rowset=16
-      (#keys=1, [VIEW2.c1]), is_single, dop=1
-  5 - output([VIEW2.c1]), filter(nil), rowset=16
-      access([VIEW2.c1])
+      equal_conds([t12.c1 = VIEW1.c1]), other_conds(nil)
+  3 - output([VIEW1.c1]), filter(nil), rowset=16
+  4 - output([VIEW1.c1]), filter(nil), rowset=16
+      (#keys=1, [VIEW1.c1]), is_single, dop=1
+  5 - output([VIEW1.c1]), filter(nil), rowset=16
+      access([VIEW1.c1])
   6 - output([t11.c1]), filter(nil), rowset=16
       equal_conds([t11.c2 = t11.c2]), other_conds(nil)
   7 - output([t11.c2]), filter(nil), rowset=16

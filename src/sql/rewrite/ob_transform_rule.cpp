@@ -104,7 +104,17 @@ const char* ObTransformerCtx::get_trans_type_string(uint64_t trans_type)
     TRANS_TYPE_TO_STR(FASTMINMAX)
     TRANS_TYPE_TO_STR(ELIMINATE_OJ)
     TRANS_TYPE_TO_STR(VIEW_MERGE)
-    TRANS_TYPE_TO_STR(WHERE_SQ_PULL_UP)
+    case SUBQUERY_UNNEST: {
+      // `WHERE_SQ_PULL_UP` is renamed to `SUBQUERY_UNNEST` since version 4.6.1.0
+      // the version control here is to maintain the qb_name for legacy optimizer versions
+      if (OB_ISNULL(stmt_factory_) || OB_ISNULL(stmt_factory_->get_query_ctx())) {
+        return "SUBQUERY_UNNEST"; // should not reach here
+      } else if (stmt_factory_->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_6_1)) {
+        return "SUBQUERY_UNNEST";
+      } else {
+        return "WHERE_SQ_PULL_UP";
+      }
+    }
     TRANS_TYPE_TO_STR(QUERY_PUSH_DOWN)
     TRANS_TYPE_TO_STR(AGGR_SUBQUERY)
     TRANS_TYPE_TO_STR(SIMPLIFY_SET)

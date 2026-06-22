@@ -37,6 +37,8 @@ ObRawExprInfoExtractor()
   virtual int visit(ObPlQueryRefRawExpr &expr);
   virtual int visit(ObMatchFunRawExpr &expr);
   virtual int visit(ObUnpivotRawExpr &expr);
+
+  static ObItemType get_subquery_comparison_type(ObItemType cmp_type);
 private:
   // types and constants
 private:
@@ -52,8 +54,6 @@ private:
   int pull_info(ObRawExpr &expr);
   int add_const(ObRawExpr &expr);
   int add_deterministic(ObRawExpr &expr);
-
-  ObItemType get_subquery_comparison_type(ObItemType cmp_type) const;
   // data members
 };
 

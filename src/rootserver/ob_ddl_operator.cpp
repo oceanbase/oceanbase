@@ -7849,13 +7849,51 @@ int ObDDLOperator::rename_user(
   return ret;
 }
 
+int ObDDLOperator::calc_old_password_info(
+    const bool discard_old_password,
+    const bool retain_current_password,
+    const ObString &plugin,
+    const share::schema::ObUserInfo *user_info,
+    ObString &old_password,
+    int64_t &old_password_start_time)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(user_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("user info is NULL", K(ret));
+  } else {
+    const ObString &current_passwd = user_info->get_passwd_str();
+    const uint64_t user_id = user_info->get_user_id();
+    const int64_t current_ts = ObTimeUtility::current_time();
+    old_password = user_info->get_old_password_str();
+    old_password_start_time = user_info->get_old_password_start_time();
+    if (discard_old_password) {
+      old_password = ObString::make_empty_string();
+      old_password_start_time = common::OB_INVALID_TIMESTAMP;
+    } else if (retain_current_password) {
+      old_password = current_passwd;
+      old_password_start_time = current_ts;
+    } else if (!ObEncryptedHelper::is_same_auth_plugin(plugin, user_info->get_plugin())) {
+      // if plugin is different from old plugin, discard old password
+      old_password = ObString::make_empty_string();
+      old_password_start_time = common::OB_INVALID_TIMESTAMP;
+    } else {
+      old_password = user_info->get_old_password_str();
+      old_password_start_time = user_info->get_old_password_start_time();
+    }
+  }
+  return ret;
+}
+
 int ObDDLOperator::set_passwd(
     const uint64_t tenant_id,
     const uint64_t user_id,
     const common::ObString &passwd,
     const ObString *ddl_stmt_str,
     common::ObMySQLTransaction &trans,
-    const common::ObString &plugin)
+    const common::ObString &plugin,
+    const bool retain_current_password,
+    const bool discard_old_password)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
@@ -7879,17 +7917,33 @@ int ObDDLOperator::set_passwd(
     } else {
       int64_t new_schema_version = OB_INVALID_VERSION;
       ObUserInfo new_user_info;
-      if (OB_FAIL(new_user_info.assign(*user_info))) {
+      const ObString &current_passwd = user_info->get_passwd_str();
+      ObString old_password;
+      int64_t old_password_start_time = common::OB_INVALID_TIMESTAMP;
+      if (OB_FAIL(calc_old_password_info(discard_old_password,
+                                         retain_current_password,
+                                         plugin,
+                                         user_info,
+                                         old_password,
+                                         old_password_start_time))) {
+        LOG_WARN("fail to calc old password info", K(ret), K(tenant_id), K(user_id));
+      } else if (OB_FAIL(new_user_info.assign(*user_info))) {
         LOG_WARN("assign failed", K(ret));
       } else if (OB_FAIL(new_user_info.set_passwd(passwd))) {
         LOG_WARN("set passwd failed", K(ret));
       } else if (OB_FALSE_IT(new_user_info.set_password_last_changed(ObTimeUtility::current_time()))) {
       } else if (!plugin.empty() && OB_FAIL(new_user_info.set_plugin(plugin))) {
         LOG_WARN("set plugin failed", K(ret));
+      } else if (OB_FAIL(new_user_info.set_old_password(old_password))) {
+        LOG_WARN("set old_password failed", K(ret));
+      } else if (OB_FALSE_IT(new_user_info.set_old_password_start_time(old_password_start_time))) {
+        LOG_WARN("set old_password_start_time failed", K(ret));
       } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
         LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
-      } else if (OB_FAIL(schema_sql_service->get_user_sql_service().set_passwd(
-                        new_user_info, new_schema_version, ddl_stmt_str, trans))) {
+      } else if (OB_FAIL(schema_sql_service->get_user_sql_service().set_passwd(new_user_info,
+                                                                               new_schema_version,
+                                                                               ddl_stmt_str,
+                                                                               trans))) {
         LOG_WARN("Failed to set passwd", K(tenant_id), K(user_id), K(ret));
       }
     }
@@ -10183,6 +10237,7 @@ int ObDDLOperator::drop_tablespace(ObTablespaceSchema &tablespace_schema,
   uint64_t tablespace_id = tablespace_schema.get_tablespace_id();
   const uint64_t tenant_id = tablespace_schema.get_tenant_id();
   int64_t new_schema_version = OB_INVALID_VERSION;
+  bool not_empty = false;
   if (OB_ISNULL(schema_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid schema service", K(ret));
@@ -10196,6 +10251,26 @@ int ObDDLOperator::drop_tablespace(ObTablespaceSchema &tablespace_schema,
   } else if (OB_FAIL(schema_guard.get_table_schemas_in_tablespace(tenant_id, tablespace_id, tables))) {
     LOG_WARN("get tables in tablespace failed", K(tenant_id), KT(tablespace_id), K(ret));
   } else if (tables.count() > 0) {
+    not_empty = true;
+  }
+  if (OB_SUCC(ret) && !not_empty) {
+    if (OB_FAIL(schema_guard.check_database_exists_in_tablespace(tenant_id, tablespace_id, not_empty))) {
+      LOG_WARN("failed to check whether database exists in tablespace",
+               K(tenant_id), KT(tablespace_id), K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && !not_empty) {
+    const ObTenantSchema *tenant_schema = NULL;
+    if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
+      LOG_WARN("fail to get tenant info", K(ret), KT(tenant_id));
+    } else if (OB_ISNULL(tenant_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tenant schema is null", K(ret), KT(tenant_id));
+    } else if (tablespace_id == tenant_schema->get_default_tablespace_id()) {
+      not_empty = true;
+    }
+  }
+  if (OB_SUCC(ret) && not_empty) {
     ret = OB_TABLESPACE_DELETE_NOT_EMPTY;
     LOG_WARN("can not delete a tablespace which is not empty", K(ret));
   } else if (OB_FAIL(schema_service->get_tablespace_sql_service().drop_tablespace(
@@ -11301,6 +11376,9 @@ int ObDDLOperator::handle_profile_function(
           if (schema.get_password_grace_time() == ObProfileSchema::INVALID_VALUE) {
             schema.set_password_grace_time(old_schema->get_password_grace_time());
           }
+          if (schema.get_password_rollover_time() == ObProfileSchema::INVALID_VALUE) {
+            schema.set_password_rollover_time(old_schema->get_password_rollover_time());
+          }
         }
         break;
       default:
@@ -11912,6 +11990,7 @@ int ObDDLOperator::init_tenant_profile(int64_t tenant_id,
     profile_schema.set_failed_login_attempts(ObProfileSchema::UNLIMITED_VALUE);
     profile_schema.set_password_life_time(ObProfileSchema::UNLIMITED_VALUE);
     profile_schema.set_password_grace_time(ObProfileSchema::UNLIMITED_VALUE);
+    profile_schema.set_password_rollover_time(0);
     profile_schema.set_password_verify_function("NULL");
     profile_schema.set_profile_name("DEFAULT");
     ObSchemaService *schema_service = schema_service_.get_schema_service();

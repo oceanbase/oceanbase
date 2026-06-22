@@ -24,7 +24,6 @@
 #include "sql/rewrite/ob_transform_simplify_orderby.h"
 #include "sql/rewrite/ob_transform_simplify_limit.h"
 #include "sql/rewrite/ob_transform_view_merge.h"
-#include "sql/rewrite/ob_transform_where_subquery_pullup.h"
 #include "sql/rewrite/ob_transform_eliminate_outer_join.h"
 #include "sql/rewrite/ob_transformer_impl.h"
 #include "sql/rewrite/ob_transform_query_push_down.h"

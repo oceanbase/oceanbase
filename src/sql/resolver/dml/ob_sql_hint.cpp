@@ -1439,7 +1439,7 @@ void ObLogPlanHint::reset()
   table_hints_.reuse();
   join_hints_.reuse();
   normal_hints_.reuse();
-  optimizer_features_enable_version_ = LASTED_COMPAT_VERSION;
+  optimizer_features_enable_version_ = LATEST_COMPAT_VERSION;
 }
 
 #ifndef OB_BUILD_SPM

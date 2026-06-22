@@ -1497,8 +1497,8 @@ ObExprRandCanonical::calc_random_expr_canonical,                    /* 890 */
   NULL, // ObExprCountSubstrings::eval_count_substrings,              /* 901 */
   ObExprCollationTypeToCharset::eval_collation_type_to_charset,       /* 902 */
   ObExprCollationTypeToCollation::eval_collation_type_to_collation,   /* 903 */
-  NULL, // ObExprAuditLogPasswordGet::eval_get_encryption_password,   /* 904 */
-  NULL, // ObExprAuditLogPasswordSet::eval_set_encryption_password,   /* 905 */
+  ObExprAuditLogPasswordGet::eval_get_encryption_password,            /* 904 */
+  ObExprAuditLogPasswordSet::eval_set_encryption_password,            /* 905 */
   ObExprImageType::eval_image_type,                                   /* 906 */
   ObExprRandomPartNextval::eval_nextval,                              /* 907 */
   ObExprGetRoutineParamTypeStr::eval_routine_param_type_str,          /* 908 */

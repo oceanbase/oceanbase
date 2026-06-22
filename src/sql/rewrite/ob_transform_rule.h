@@ -244,7 +244,7 @@ enum TRANSFORM_TYPE {
   FASTMINMAX                    = 10, // select min/max -> select order by limit 1
   ELIMINATE_OJ                  = 11, // 外连接消除
   VIEW_MERGE                    = 12, // 视图合并
-  WHERE_SQ_PULL_UP              = 13, // where子查询 -> semi join
+  SUBQUERY_UNNEST               = 13, // 子查询提升
   QUERY_PUSH_DOWN               = 14, // push down limit
   AGGR_SUBQUERY                 = 15, // JA类型子查询改写
   SIMPLIFY_SET                  = 16, // set相关改写
@@ -376,7 +376,7 @@ public:
       (1L << FASTMINMAX) |
       (1L << ELIMINATE_OJ) |
       (1L << VIEW_MERGE) |
-      (1L << WHERE_SQ_PULL_UP) |
+      (1L << SUBQUERY_UNNEST) |
       (1L << QUERY_PUSH_DOWN) |
       (1L << SIMPLIFY_SET) |
       (1L << PROJECTION_PRUNING) |

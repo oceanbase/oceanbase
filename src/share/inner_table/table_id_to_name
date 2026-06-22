@@ -444,6 +444,7 @@
 # 588: __all_catalog_table_stat
 # 589: __all_catalog_column_stat
 # 590: __all_catalog_table_opt_stat_gather_history
+# 591: __all_audit_log_encryption_password
 # 593: __all_optstat_catalog_user_prefs
 # 594: __all_optstat_catalog_global_prefs
 # 596: __all_table_opt_stat_invalidate_plan
@@ -1414,11 +1415,14 @@
 # 12595: __all_java_policy_history  # BASE_TABLE_NAME1
 # 12596: __all_virtual_catalog_table_opt_stat_gather_history
 # 12596: __all_catalog_table_opt_stat_gather_history  # BASE_TABLE_NAME
+# 12599: __all_virtual_audit_log_encryption_password
+# 12599: __all_audit_log_encryption_password  # BASE_TABLE_NAME
 # 12600: __all_virtual_optstat_catalog_user_prefs
 # 12600: __all_optstat_catalog_user_prefs  # BASE_TABLE_NAME
 # 12602: __all_virtual_optstat_catalog_global_prefs
 # 12602: __all_optstat_catalog_global_prefs  # BASE_TABLE_NAME
 # 12603: __all_virtual_tenant_worker_group
+# 12604: __all_virtual_keyword
 # 12608: __all_virtual_table_opt_stat_invalidate_plan
 # 12608: __all_table_opt_stat_invalidate_plan  # BASE_TABLE_NAME
 # 12616: __all_virtual_mview_dep
@@ -2214,6 +2218,8 @@
 # 15551: __all_java_policy  # BASE_TABLE_NAME
 # 15552: ALL_VIRTUAL_TENANT_WORKER_GROUP
 # 15552: __all_virtual_tenant_worker_group  # BASE_TABLE_NAME
+# 15553: ALL_VIRTUAL_KEYWORD
+# 15553: __all_virtual_keyword  # BASE_TABLE_NAME
 # 15555: ALL_VIRTUAL_TABLE_OPT_STAT_INVALIDATE_PLAN_REAL_AGENT
 # 15555: __all_table_opt_stat_invalidate_plan  # BASE_TABLE_NAME
 # 15556: ALL_VIRTUAL_SYS_VARIABLE_HISTORY
@@ -2830,6 +2836,7 @@
 # 21721: CDB_SCHEDULER_RUNNING_JOBS
 # 21722: CDB_SCHEDULER_JOBS
 # 21723: GV$OB_TENANT_WORKER_GROUPS
+# 21724: V$OB_KEYWORDS
 # 21725: DBA_OB_EXTERNAL_TAB_STATISTICS
 # 21726: DBA_OB_EXTERNAL_TAB_COL_STATISTICS
 # 21727: DBA_OB_EXTERNAL_PART_COL_STATISTICS
@@ -3139,6 +3146,7 @@
 # 25318: USER_OB_SOURCE
 # 25319: DBA_JAVA_POLICY
 # 25320: USER_JAVA_POLICY
+# 25321: V$OB_KEYWORDS
 # 28002: GV$OB_SQL_AUDIT
 # 28003: V$OB_SQL_AUDIT
 # 28004: GV$INSTANCE

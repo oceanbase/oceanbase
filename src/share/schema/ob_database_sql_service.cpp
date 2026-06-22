@@ -28,6 +28,7 @@ int ObDatabaseSqlService::insert_database(const ObDatabaseSchema &database_schem
   ObSqlString sql_string;
   const uint64_t tenant_id = database_schema.get_tenant_id();
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+  uint64_t compat_version = 0;
   if (!database_schema.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("database schema is invalid", K(ret));
@@ -37,6 +38,8 @@ int ObDatabaseSqlService::insert_database(const ObDatabaseSchema &database_schem
   } else if (OB_FAIL(sql::ObSQLUtils::is_collation_data_version_valid(database_schema.get_collation_type(),
                                                                       exec_tenant_id))) {
     LOG_WARN("failed to check collation data version valid", K(database_schema.get_collation_type()), K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
   } else {
     int64_t affected_rows = 0;
     ObDMLSqlSplicer dml;
@@ -55,6 +58,11 @@ int ObDatabaseSqlService::insert_database(const ObDatabaseSchema &database_schem
           || OB_FAIL(dml.add_column("in_recyclebin", database_schema.is_in_recyclebin()))
           || OB_FAIL(dml.add_gmt_modified())) {
         LOG_WARN("add column failed", K(ret));
+      }
+      if (OB_SUCC(ret) && compat_version >= DATA_VERSION_4_6_1_0) {
+        if (OB_FAIL(dml.add_column("default_tablespace_id", database_schema.get_default_tablespace_id()))) {
+          LOG_WARN("add default_tablespace_id column failed", K(database_schema), K(ret));
+        }
       }
     }
     ObDMLExecHelper exec(sql_client, exec_tenant_id);
@@ -109,6 +117,7 @@ int ObDatabaseSqlService::update_database(const ObDatabaseSchema &database_schem
   ObSqlString sql_string;
   const uint64_t tenant_id = database_schema.get_tenant_id();
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+  uint64_t compat_version = 0;
   if (!database_schema.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("database scheam is invalid", K(ret));
@@ -118,6 +127,8 @@ int ObDatabaseSqlService::update_database(const ObDatabaseSchema &database_schem
   } else if (OB_FAIL(sql::ObSQLUtils::is_collation_data_version_valid(database_schema.get_collation_type(),
                                                                       exec_tenant_id))) {
     LOG_WARN("failed to check collation data version valid", K(database_schema.get_charset_type()), K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
   } else {
     int64_t affected_rows = 0;
     ObDMLSqlSplicer dml;
@@ -135,6 +146,11 @@ int ObDatabaseSqlService::update_database(const ObDatabaseSchema &database_schem
           || OB_FAIL(dml.add_column("in_recyclebin", database_schema.is_in_recyclebin()))
           || OB_FAIL(dml.add_gmt_modified())) {
         LOG_WARN("add column failed", K(ret));
+      }
+      if (OB_SUCC(ret) && compat_version >= DATA_VERSION_4_6_1_0) {
+        if (OB_FAIL(dml.add_column("default_tablespace_id", database_schema.get_default_tablespace_id()))) {
+          LOG_WARN("add default_tablespace_id column failed", K(database_schema), K(ret));
+        }
       }
     }
     ObDMLExecHelper exec(sql_client, exec_tenant_id);

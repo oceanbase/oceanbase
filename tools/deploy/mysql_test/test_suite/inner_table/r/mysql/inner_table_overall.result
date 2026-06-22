@@ -375,6 +375,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 588	__all_catalog_table_stat	0	201001	1
 589	__all_catalog_column_stat	0	201001	1
 590	__all_catalog_table_opt_stat_gather_history	0	201001	1
+591	__all_audit_log_encryption_password	0	201001	1
 593	__all_optstat_catalog_user_prefs	0	201001	1
 594	__all_optstat_catalog_global_prefs	0	201001	1
 596	__all_table_opt_stat_invalidate_plan	0	201001	1
@@ -953,9 +954,11 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12594	__all_virtual_java_policy	2	201001	1
 12595	__all_virtual_java_policy_history	2	201001	1
 12596	__all_virtual_catalog_table_opt_stat_gather_history	2	201001	1
+12599	__all_virtual_audit_log_encryption_password	2	201001	1
 12600	__all_virtual_optstat_catalog_user_prefs	2	201001	1
 12602	__all_virtual_optstat_catalog_global_prefs	2	201001	1
 12603	__all_virtual_tenant_worker_group	2	201001	1
+12604	__all_virtual_keyword	2	201001	1
 12608	__all_virtual_table_opt_stat_invalidate_plan	2	201001	1
 12616	__all_virtual_mview_dep	2	201001	1
 12617	__all_virtual_mview_refresh_pending_task	2	201001	1
@@ -1569,6 +1572,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21721	CDB_SCHEDULER_RUNNING_JOBS	1	201001	1
 21722	CDB_SCHEDULER_JOBS	1	201001	1
 21723	GV$OB_TENANT_WORKER_GROUPS	1	201001	1
+21724	V$OB_KEYWORDS	1	201001	1
 21725	DBA_OB_EXTERNAL_TAB_STATISTICS	1	201001	1
 21726	DBA_OB_EXTERNAL_TAB_COL_STATISTICS	1	201001	1
 21727	DBA_OB_EXTERNAL_PART_COL_STATISTICS	1	201001	1

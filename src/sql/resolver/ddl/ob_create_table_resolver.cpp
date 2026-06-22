@@ -3962,7 +3962,11 @@ int ObCreateTableResolver::resolve_table_charset_info(const ParseNode *node) {
   }
 
   if (OB_SUCC(ret)) {
-    if (CHARSET_INVALID == charset_type_ && CS_TYPE_INVALID == collation_type_) {
+    ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
+    if (OB_ISNULL(session_info_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session info is NULL", K(ret));
+    } else if (CHARSET_INVALID == charset_type_ && CS_TYPE_INVALID == collation_type_) {
       // The database character set and collation affect these aspects of server operation:
       //
       // For CREATE TABLE statements, the database character set and collation are used as default
@@ -3983,7 +3987,9 @@ int ObCreateTableResolver::resolve_table_charset_info(const ParseNode *node) {
         charset_type_ = database_schema->get_charset_type();
         collation_type_ = database_schema->get_collation_type();
       }
-    } else if (OB_FAIL(ObCharset::check_and_fill_info(charset_type_, collation_type_))) {
+    } else if (OB_FAIL(session_info_->get_charset_compat_type(charset_compat_type))) {
+      LOG_WARN("fail to get charset compat type", K(ret));
+    } else if (OB_FAIL(ObCharset::check_and_fill_info(charset_type_, collation_type_, charset_compat_type))) {
       SQL_RESV_LOG(WARN, "fail to fill collation info", K(ret));
     }
   }

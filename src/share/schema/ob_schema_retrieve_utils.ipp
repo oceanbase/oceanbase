@@ -1180,6 +1180,9 @@ int ObSchemaRetrieveUtils::fill_tenant_schema(
         ObSchemaService::g_ignore_column_retrieve_error_, default_in_recyclebin);
     EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "arbitration_service_status", arbitration_service_status_str,
         skip_null_error, true/*ignore_column_retrieve_error*/, default_arbitration_service_status_str);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, default_tablespace_id,
+        tenant_schema, uint64_t, skip_null_error, true/*ignore_column_retrieve_error*/,
+        common::OB_INVALID_ID);
     if (OB_SUCC(ret)) {
       if (OB_FAIL(tenant_schema.set_comment(info))) {
         SHARE_SCHEMA_LOG(WARN, "set_comment failed", K(ret));
@@ -1821,6 +1824,9 @@ int ObSchemaRetrieveUtils::fill_database_schema(
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID(result, default_tablegroup_id, db_schema, tenant_id);
     EXTRACT_BOOL_FIELD_TO_CLASS_MYSQL_SKIP_RET(result, in_recyclebin, db_schema);
     db_schema.set_charset_type(ObCharset::charset_type_by_coll(db_schema.get_collation_type()));
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, default_tablespace_id, db_schema,
+        uint64_t, true/*skip_null_error*/, true/*ignore_column_retrieve_error*/,
+        common::OB_INVALID_ID);
   }
   return ret;
 }
@@ -2008,6 +2014,7 @@ int ObSchemaRetrieveUtils::fill_user_schema(
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_ACCESS_AI_MODEL) != 0 ? OB_PRIV_ACCESS_AI_MODEL : 0);
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_CREATE_SENSITIVE_RULE) != 0 ? OB_PRIV_CREATE_SENSITIVE_RULE : 0);
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_PLAINACCESS) != 0 ? OB_PRIV_PLAINACCESS : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_APPLICATION_PASSWORD_ADMIN) != 0 ? OB_PRIV_APPLICATION_PASSWORD_ADMIN : 0);
     if (OB_SUCC(ret)) {
       int64_t default_flags = 0;
       //In user schema def, flag is a int column.
@@ -2019,6 +2026,25 @@ int ObSchemaRetrieveUtils::fill_user_schema(
       ObString default_plugin;
       EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE( result, plugin, user_info,
                                               false, ignore_column_error, default_plugin);
+    }
+    if (OB_SUCC(ret)) {
+      ObString default_old_password;
+      EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result,
+                                                              old_password,
+                                                              user_info,
+                                                              false,
+                                                              ignore_column_error,
+                                                              default_old_password);
+    }
+    if (OB_SUCC(ret)) {
+      int64_t default_old_password_start_time = -1;
+      EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result,
+                                                          old_password_start_time,
+                                                          user_info,
+                                                          int64_t,
+                                                          false,
+                                                          ignore_column_error,
+                                                          default_old_password_start_time);
     }
   }
   return ret;
@@ -4870,6 +4896,9 @@ int ObSchemaRetrieveUtils::fill_database_schema(
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, schema_version, database_schema, int64_t);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID(result, default_tablegroup_id, database_schema, tenant_id);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, database_name, database_schema);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, default_tablespace_id, database_schema,
+        uint64_t, true/*skip_null_error*/, true/*ignore_column_retrieve_error*/,
+        common::OB_INVALID_ID);
   }
   return ret;
 }
@@ -5932,6 +5961,10 @@ int ObSchemaRetrieveUtils::fill_profile_schema(
         int64_t, false, ignore_column_error, INT64_MAX);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, password_grace_time, profile_schema,
         int64_t, false, ignore_column_error, INT64_MAX);
+    int64_t default_password_rollover_time = 0;
+    ignore_column_error = true;
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, password_rollover_time, profile_schema,
+        int64_t, false, ignore_column_error, default_password_rollover_time);
   }
   return ret;
 }

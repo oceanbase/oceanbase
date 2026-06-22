@@ -1065,6 +1065,9 @@ int ObShowGrants::print_privs_to_buff(
         if ((priv_set & OB_PRIV_CREATE_LOCATION) && OB_SUCCESS == ret) {
           ret = BUF_PRINTF(" CREATE LOCATION,");
         }
+        if ((priv_set & OB_PRIV_APPLICATION_PASSWORD_ADMIN) && OB_SUCCESS == ret) {
+          ret = BUF_PRINTF(" APPLICATION_PASSWORD_ADMIN,");
+        }
         if (OB_SUCCESS == ret && pos > 0) {
           pos--; //Delete last ','
         }

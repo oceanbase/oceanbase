@@ -186,7 +186,11 @@ protected:
                                    int64_t &grouping_num);
   int resolve_for_update_clause(const ParseNode *node);
   int resolve_for_update_clause_oracle(const ParseNode &node);
-  int get_cursor_for_update_table(ObSelectStmt *select_stmt, int64_t &for_update_cnt, TableItem *&add_rowid_table_item, uint64_t &base_table_id);
+  int get_cursor_for_update_base_table(ObSelectStmt *select_stmt, int64_t &for_update_cnt, TableItem *&add_rowid_table_item, uint64_t &base_table_id);
+  int remove_empty_update_table_rowid(ObSelectStmt *select_stmt, bool &has_real_rowid);
+  int recursive_add_update_table_rowid(ObSelectStmt *select_stmt, TableItem *target_base_table_item, ObRawExpr *&rowid_expr, uint64_t &rowid_column_id);
+  int resolve_rowid_and_add_to_stmt(ObSelectStmt *stmt, const TableItem &table_item, ObRawExpr *&rowid_expr);
+  int project_update_table_rowid_from_view(TableItem *view_table, ObSelectStmt *current_stmt, ObRawExpr *rowid_expr, uint64_t inner_rowid_column_id);
   int set_for_update_mysql(ObSelectStmt &stmt, const int64_t wait_us, bool skip_locked);
   int set_for_update_oracle(ObSelectStmt &stmt,
                             const int64_t wait_us,

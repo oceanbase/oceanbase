@@ -1769,7 +1769,7 @@ public:
   int check_contain_dist_das(const ObIArray<ObAddr> &exec_server_list,
                              bool &contain_dist_das) const;
 
-  inline bool can_re_parallel() { return !is_distributed() && !is_match_all() && 1 < get_available_parallel() && !get_is_at_most_one_row(); }
+  inline bool can_re_parallel() const { return !is_distributed() && !is_match_all() && 1 < get_available_parallel() && !get_is_at_most_one_row(); }
   int check_op_orderding_used_by_parent(bool &used);
 
   inline void set_is_order_by_plan_top(const bool is_top) { is_order_by_plan_top_ = is_top; }

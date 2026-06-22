@@ -160,6 +160,15 @@ int ObModifyTenantResolver::resolve(const ParseNode &parse_tree)
     modify_tenant_stmt->set_new_tenant_name(new_tenant_name);
   }
 
+  if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
+    OZ (schema_checker_->check_ora_ddl_priv(
+          session_info_->get_effective_tenant_id(),
+          session_info_->get_priv_user_id(),
+          ObString(""),
+          stmt::T_MODIFY_TENANT,
+          session_info_->get_enable_role_array()),
+          session_info_->get_effective_tenant_id(), session_info_->get_user_id());
+  }
   return ret;
 }
 

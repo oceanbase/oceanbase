@@ -480,6 +480,12 @@ public:
                         common::ObIArray<uint64_t> &enable_role_id_array,
                         SSL *ssl_st,
                         const ObUserInfo *&sel_user_info);
+  int try_caching_sha2_fast_auth_verify(
+      const ObUserLoginInfo &login_info,
+      const common::ObString &host_name,
+      uint64_t tenant_id,
+      int64_t password_last_changed_timestamp,
+      bool &fast_auth_success_flag);
   int check_catalog_access(const ObSessionPrivInfo &session_priv,
                            const common::ObIArray<uint64_t> &enable_role_id_array,
                            const common::ObString &catalog_name);
@@ -670,7 +676,10 @@ public:
       const uint64_t tenant_id,
       const uint64_t tablegroup_id,
       bool &not_empty);
-
+  int check_database_exists_in_tablespace(
+      const uint64_t tenant_id,
+      const uint64_t tablespace_id,
+      bool &not_empty);
   // xiyu: just return pointer to save my life.
   const ObUserInfo *get_user_info(const uint64_t tenant_id, const uint64_t user_id);
   const ObTablegroupSchema *get_tablegroup_schema(const uint64_t tenant_id, const uint64_t tablegroup_id);
@@ -1031,6 +1040,9 @@ public:
                                      int64_t &password_last_change,
                                      int64_t &password_life_time,
                                      int64_t &password_grace_time);
+  int get_user_password_rollover_time(const uint64_t tenant_id,
+                                      const uint64_t user_id,
+                                      int64_t &password_rollover_time);
   int get_user_profile_function_name(const uint64_t tenant_id,
                                      const uint64_t profile_id,
                                      common::ObString &function_name);
@@ -1314,6 +1326,12 @@ public:
   int get_ccl_rule_count(const uint64_t tenant_id, uint64_t & count);
 
 private:
+  int verify_user_password_authentication(
+      const ObUserInfo *user_info,
+      const ObUserLoginInfo &login_info,
+      lib::Worker::CompatMode compat_mode,
+      uint64_t tenant_id,
+      bool &is_found);
   int check_ssl_access(const ObUserInfo &user_info,
                        SSL *ssl_st);
   int check_catalog_priv(const ObSessionPrivInfo &session_priv,
@@ -1428,6 +1446,8 @@ private:
       const uint64_t user_id,
       bool print_warn,
       const ObIArray<uint64_t> &role_id_array);
+  int check_ora_restricted_session(const ObSessionPrivInfo &s_priv,
+                                   const common::ObIArray<uint64_t> &enable_role_id_array);
   bool ignore_tenant_not_exist_error(const uint64_t tenant_id);
 
   int check_priv_db_or_(const ObSessionPrivInfo &session_priv,

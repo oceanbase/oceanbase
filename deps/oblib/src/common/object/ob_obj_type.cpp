@@ -736,13 +736,14 @@ int ob_sql_type_str_with_coll(char *buff,
     ObCollationType coll_type,
     const common::ObIArray<ObString> &type_info,
     const uint64_t sub_type/* common::ObGeoType::GEOTYPEMAX */,
-    const bool is_string_lob/* false */)
+    const bool is_string_lob/* false */,
+    ObCharsetCompatType compat_type/* CHARSET_COMPAT_MYSQL57 */)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ob_sql_type_str(buff, buff_length, pos, type, length, precision, scale, coll_type, type_info, sub_type, is_string_lob))) {
     LOG_WARN("fail to get data type str", K(ret), K(sub_type), K(buff), K(buff_length), K(pos));
   } else if (lib::is_mysql_mode() && ob_is_string_type(type) && CS_TYPE_BINARY != coll_type) {
-      if (ObCharset::is_default_collation(coll_type)) {
+      if (ObCharset::is_default_collation(coll_type, compat_type)) {
         if (OB_FAIL(databuff_printf(buff, buff_length, pos, " CHARSET %s", ObCharset::charset_name(coll_type)))) {
           LOG_WARN("fail to concat charset str", K(ret), K(sub_type), K(buff), K(buff_length), K(pos));
         }

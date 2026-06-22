@@ -1053,13 +1053,7 @@ public:
 
   int deep_copy(ObPLCursorInfo &src, common::ObIAllocator *allocator = NULL);
 
-  inline void open(void *spi_cursor = NULL)
-  {
-    spi_cursor != NULL ? (void)NULL : reset();
-    isopen_ = true;
-    spi_cursor_ = spi_cursor;
-    is_explicit_ = spi_cursor != NULL;
-  }
+  void open(void *spi_cursor = NULL);
   virtual int close(sql::ObSQLSessionInfo &session, bool is_reuse = false, bool close_by_open_thread = false);
 
   inline void set_id(int64_t id) { id_ = id; }
@@ -1222,6 +1216,11 @@ public:
   inline void add_cursor_elapsed_time(int64_t time) { cursor_total_elapsed_time_ += time; }
   inline int64_t get_cursor_total_exec_time() const { return cursor_total_exec_time_; }
   inline void add_cursor_exec_time(int64_t time) { cursor_total_exec_time_ += time; }
+  inline void reset_cursor_total_time()
+  {
+    cursor_total_exec_time_ = 0;
+    cursor_total_elapsed_time_ = 0;
+  }
 
   TO_STRING_KV(K_(id),
                K_(magic_num),

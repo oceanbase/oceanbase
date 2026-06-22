@@ -124,13 +124,21 @@ do { \
 } while (0)
 
 #ifdef OB_BUILD_ORACLE_PL
+extern const ReservedKeyword *oracle_pl_reserved_keyword_lookup(const char *word);
 extern const NonReservedKeyword *oracle_pl_latin1_non_reserved_keyword_lookup(const char *word);
 extern const NonReservedKeyword *oracle_pl_utf8_non_reserved_keyword_lookup(const char *word);
 extern const NonReservedKeyword *oracle_pl_gbk_non_reserved_keyword_lookup(const char *word);
 extern const NonReservedKeyword *oracle_pl_hkscs_non_reserved_keyword_lookup(const char *word);
+extern const NonReservedKeyword *oracle_pl_keyword_lookup(const char *word);
+extern const NonReservedKeyword *oracle_pl_latin1_keyword_lookup(const char *word);
+extern const NonReservedKeyword *oracle_pl_utf8_keyword_lookup(const char *word);
+extern const NonReservedKeyword *oracle_pl_gbk_keyword_lookup(const char *word);
+extern const NonReservedKeyword *oracle_pl_hkscs_keyword_lookup(const char *word);
 #endif
 
+extern const ReservedKeyword *mysql_pl_reserved_keyword_lookup(const char *word);
 extern const NonReservedKeyword *mysql_pl_non_reserved_keyword_lookup(const char *word);
+extern const NonReservedKeyword *mysql_pl_keyword_lookup(const char *word);
 
 #define reset_current_location(__f_col, __l_col)                                  \
   do {                                                                            \

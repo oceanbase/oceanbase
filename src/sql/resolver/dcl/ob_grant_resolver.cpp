@@ -1403,6 +1403,12 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("grammar is not support when MIN_DATA_VERSION is below MOCK_DATA_VERSION_4_3_5_3 or MOCK_DATA_VERSION_4_4_2_0 or DATA_VERSION_4_5_1_0", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant create sensitive rule/plainaccess privilege");
+          } else if (!((compat_version >= MOCK_DATA_VERSION_4_4_2_1 && compat_version < DATA_VERSION_4_5_0_0)
+                       || compat_version >= DATA_VERSION_4_6_1_0)
+                     && ((priv_set & OB_PRIV_APPLICATION_PASSWORD_ADMIN) != 0)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("grammar is not support in current DATA_VERSION", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant application_password_admin privilege");
           }
           if (OB_FAIL(ret)) {
           } else {

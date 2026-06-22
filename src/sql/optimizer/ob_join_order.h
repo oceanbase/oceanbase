@@ -2493,6 +2493,7 @@ struct MergeKeyInfoHelper
     int compute_base_table_path_plan_type(AccessPath *access_path);
     int compute_base_table_path_ordering(AccessPath *access_path);
     int compute_parallel_and_server_info_for_base_paths(ObIArray<AccessPath *> &access_paths);
+    int add_serial_path_for_base_paths(ObIArray<AccessPath *> &access_paths);
     int get_base_path_table_dop(uint64_t index_id, int64_t &parallel);
     int compute_access_path_parallel(ObIArray<AccessPath *> &access_paths,
                                      int64_t &parallel);

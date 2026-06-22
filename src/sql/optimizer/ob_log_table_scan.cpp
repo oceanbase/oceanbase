@@ -2679,6 +2679,9 @@ int ObLogTableScan::explain_index_selection_info(char *buf,
       case OpParallelRule::OP_INHERIT_DOP:
         op_parallel_rule_name = "Inherited";
         break;
+      case OpParallelRule::OP_SERIAL_DOP:
+        op_parallel_rule_name = "Serial DOP";
+        break;
       default:
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unknown op parallel rule", K(get_op_parallel_rule()));

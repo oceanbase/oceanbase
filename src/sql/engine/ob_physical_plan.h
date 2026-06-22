@@ -132,7 +132,6 @@ public:
     ATOMIC_STORE(&(stat_.is_evolution_), false);
     ATOMIC_STORE(&(stat_.evolution_stat_.records_), NULL);
   }
-  int64_t get_evo_perf() const;
   int64_t get_cpu_time() const { return stat_.evolution_stat_.cpu_time_; }
   int64_t get_elapsed_time() const { return stat_.evolution_stat_.elapsed_time_; }
   int64_t get_executions() const { return stat_.evolution_stat_.executions_; }
@@ -141,6 +140,9 @@ public:
   inline bool inner_check_if_is_expired(const int64_t first_exec_row_count,
                                         const int64_t current_row_count) const;
   void update_evolution_stat(const ObAuditRecordData &record);
+  void update_evolution_stat_time(const int64_t cpu_time,
+                                  const int64_t elapsed_time,
+                                  const int64_t last_exec_ts);
   bool check_if_is_expired_by_error(const int error_code) const;
   void update_plan_expired_info(const ObAuditRecordData &record,
                                 const bool is_first,
@@ -508,8 +510,6 @@ public:
     return (ObStmt::is_dml_stmt(stmt_type_)
             && (stmt::T_INSERT != stmt_type_ || is_insert_select_)
             && (stmt::T_REPLACE != stmt_type_ || is_insert_select_)
-            // TODO:@yibo inner sql 先不用SPM? pl里面的执行的SQL也是inner sql,
-            && !is_inner_sql_
             && !is_batch_params_execute_
             // TODO:@yibo batch multi stmt relay get_plan to init some structure. But spm may not enter
             // get_plan. Now we disable spm when batch multi stmt exists.

@@ -496,6 +496,8 @@ int ObCreateTableHelper::prefetch_schemas_()
     LOG_WARN("fail to check table name", KR(ret));
   } else if (OB_FAIL(set_tablegroup_id_())) {
     LOG_WARN("fail to set tablegroup id", KR(ret));
+  } else if (OB_FAIL(set_tablespace_id_())) {
+    LOG_WARN("fail to set tablespace id", KR(ret));
   } else if (OB_FAIL(check_and_set_parent_table_id_())) {
     LOG_WARN("fail to check and set parent table id", KR(ret));
   }
@@ -694,6 +696,29 @@ int ObCreateTableHelper::set_tablegroup_id_()
 
   if (OB_SUCC(ret)) {
     (void) const_cast<ObTableSchema&>(table).set_tablegroup_id(tablegroup_id);
+  }
+  return ret;
+}
+
+int ObCreateTableHelper::set_tablespace_id_()
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema &table = arg_.schema_;
+  uint64_t tablespace_id = table.get_tablespace_id();
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_INVALID_ID == tablespace_id) {
+    const uint64_t database_id = table.get_database_id();
+    const ObDatabaseSchema *database_schema = NULL;
+    if (OB_FAIL(schema_guard_wrapper_.get_database_schema(database_id, database_schema))) {
+      LOG_WARN("fail to get database schema", KR(ret), K_(tenant_id), K(database_id));
+    } else if (OB_ISNULL(database_schema)) {
+      ret = OB_ERR_BAD_DATABASE;
+      LOG_WARN("database not exist", KR(ret), K_(tenant_id), K(database_id));
+    } else {
+      tablespace_id = database_schema->get_default_tablespace_id();
+      (void) const_cast<ObTableSchema&>(table).set_tablespace_id(tablespace_id);
+    }
   }
   return ret;
 }

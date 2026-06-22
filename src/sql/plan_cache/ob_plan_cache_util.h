@@ -541,6 +541,28 @@ struct ObPlanExecutingStat
     {
       MEMCPY(exec_start_timestamps_, other.exec_start_timestamps_, MAX_EXECUTING_SIZE * sizeof(int64_t));
     }
+  DECLARE_TO_STRING {
+    int64_t pos = 0;
+    int ret = OB_SUCCESS;
+    bool is_first_timestamp = true;
+    J_OBJ_START();
+    J_KV(K_(exec_cnt));
+    J_COMMA();
+    J_ARRAY_START();
+    for (int64_t i = 0; i < MAX_EXECUTING_SIZE; ++i) {
+      int64_t exec_start_timestamp = ATOMIC_LOAD(&(exec_start_timestamps_[i]));
+      if (0 < exec_start_timestamp) {
+        if (!is_first_timestamp) {
+          J_COMMA();
+        }
+        J_KV(K(exec_start_timestamp));
+        is_first_timestamp = false;
+      }
+    }
+    J_ARRAY_END();
+    J_OBJ_END();
+    return pos;
+  }
   private:
   int64_t exec_cnt_;
   int64_t exec_start_timestamps_[MAX_EXECUTING_SIZE];

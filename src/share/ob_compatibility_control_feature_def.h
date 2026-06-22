@@ -71,6 +71,10 @@ DEF_COMPAT_CONTROL_FEATURE(DEFAULT_CSV_ESCAPE_CHAR_IS_NONE,
 DEF_COMPAT_CONTROL_FEATURE(STANDARD_CSV_FORMAT_IN_EXTERNAL_TABLE,
     "Whether to use standard CSV format in external table (comma delimiter, '\\n' line delimiter, double-quote enclosed, no escape char, preserve trailing empty columns)",
     CLUSTER_VERSION_4_6_1_0)
+
+DEF_COMPAT_CONTROL_FEATURE(UTF8MB4_DEFAULT_COLLATION_COMPAT,
+    "The default collation for utf8mb4 is different in MySQL 5.7 and 8.0",
+    CLUSTER_VERSION_4_6_1_0)
 DEF_COMPAT_CONTROL_FEATURE(DISABLE_CREATE_OR_REPLACE_MLOG,
     "Whether to disable CREATE OR REPLACE MATERIALIZED VIEW LOG syntax",
     MOCK_CLUSTER_VERSION_4_4_2_2, CLUSTER_VERSION_4_5_0_0,

@@ -201,7 +201,8 @@ public:
       enable_streaming_cursor_prefetch_(false),
       cache_(cache),
       use_cache_(use_cache),
-      flags_(0) {
+      flags_(0),
+      streaming_stat_pending_(false) {
       }
   ~ObSPIResultSet()
   {
@@ -244,6 +245,7 @@ public:
     }
     batch_fill_count_ = 1;
     enable_streaming_cursor_prefetch_ = false;
+    streaming_stat_pending_ = false;
     orign_session_value_ = NULL;
     cursor_session_value_ = NULL;
     nested_session_value_ = NULL;
@@ -263,6 +265,7 @@ public:
     mem_context_->get_arena_allocator().reset();
     result_set_ = new (buf_) ObResultSet(session_info, mem_context_->get_arena_allocator());
     result_set_->get_exec_context().get_task_exec_ctx().set_min_cluster_version(session_info.get_exec_min_cluster_version());
+    streaming_stat_pending_ = false;
   }
 
   lib::MemoryContext &get_memory_ctx() { return mem_context_; }
@@ -316,6 +319,7 @@ public:
   }
   void set_enable_streaming_cursor_prefetch(bool enable) { enable_streaming_cursor_prefetch_ = enable; }
   bool enable_streaming_cursor_prefetch() const { return enable_streaming_cursor_prefetch_; }
+  void set_streaming_stat_pending(bool v) { streaming_stat_pending_ = v; }
   char *get_local_param_value_buffer() { return local_param_value_buffer_; }
   int64_t get_local_param_value_buffer_len() { return local_param_value_buffer_len_; }
   void set_flags(bool is_forall, bool is_dynamic_sql, bool is_dbms_sql, bool for_stream_cursor)
@@ -367,6 +371,7 @@ private:
     };
     uint16_t flags_;
   };
+  bool streaming_stat_pending_;
 };
 
 

@@ -236,7 +236,8 @@ public:
   static int check_and_fill_column_charset_info(
       share::schema::ObColumnSchemaV2 &column,
       const common::ObCharsetType table_charset_type,
-      const common::ObCollationType table_collation_type);
+      const common::ObCollationType table_collation_type,
+      common::ObCharsetCompatType charset_compat_type = common::CHARSET_COMPAT_MYSQL57);
   static int check_string_column_length(
       const share::schema::ObColumnSchemaV2 &column,
       const bool is_oracle_mode,

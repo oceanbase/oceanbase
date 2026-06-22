@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX SQL_PARSER
 #include "ob_fast_parser.h"
+#include "ob_parser_fullwidth_converter.h"
 #include "sql/udr/ob_udr_struct.h"
 #include "share/ob_define.h"
 #include "lib/ash/ob_active_session_guard.h"
@@ -24,6 +25,29 @@ do { \
     } \
   } \
 } while (0)
+
+static int preprocess_fullwidth_symbols(const oceanbase::common::ObString &stmt,
+                                        const oceanbase::sql::FPContext &fp_ctx,
+                                        oceanbase::common::ObIAllocator &allocator,
+                                        oceanbase::common::ObString &processed_stmt)
+{
+  int ret = OB_SUCCESS;
+  processed_stmt = stmt;
+  ObCharsetType charset_type = ObCharset::charset_type_by_coll(
+                               fp_ctx.charsets4parser_.string_collation_);
+  // only convert for oracle mode with specific charsets that contain fullwidth symbols
+  if (oceanbase::lib::is_oracle_mode() && ObFullWidthSymbolConverter::need_convert(charset_type, stmt)) {
+    ObFullWidthSymbolConverter full_width_sym_converter(&allocator, charset_type);
+    ObString converted_stmt;
+    if (OB_FAIL(full_width_sym_converter.convert(stmt, converted_stmt))) {
+      LOG_WARN("failed to preprocess fullwidth symbols for fast parser", K(ret), K(stmt));
+    } else if (full_width_sym_converter.has_conversions()) {
+      processed_stmt = converted_stmt;
+      LOG_DEBUG("fullwidth symbols preprocessed in fast parser", K(stmt), K(processed_stmt));
+    }
+  }
+  return ret;
+}
 
 int StringBuffer::resize_buffer(const int64_t size)
 {
@@ -100,8 +124,11 @@ int ObFastParser::parse(const common::ObString &stmt,
     }
   } else {
     ObFastParserOracle fp(allocator, fp_ctx);
-    if (OB_FAIL(fp.parse(stmt, no_param_sql, no_param_sql_len, param_list, param_num, values_token_pos))) {
-      LOG_WARN("failed to fast parser", K(stmt));
+    ObString processed_stmt = stmt;
+    if (OB_FAIL(preprocess_fullwidth_symbols(stmt, fp_ctx, allocator, processed_stmt))) {
+      LOG_WARN("failed to preprocess fullwidth symbols for fast parser", K(ret), K(stmt));
+    } else if (OB_FAIL(fp.parse(processed_stmt, no_param_sql, no_param_sql_len, param_list, param_num, values_token_pos))) {
+      LOG_WARN("failed to fast parser", K(processed_stmt));
     }
     if (OB_ISNULL(fp.param_node_list_)) {
       param_list = NULL;
@@ -138,8 +165,11 @@ int ObFastParser::parse(const common::ObString &stmt,
     }
   } else {
     ObFastParserOracle fp(allocator, fp_ctx);
-    if (OB_FAIL(fp.parse(stmt, no_param_sql, no_param_sql_len, param_list, param_num, values_token_pos))) {
-      LOG_WARN("failed to fast parser", K(stmt));
+    ObString processed_stmt = stmt;
+    if (OB_FAIL(preprocess_fullwidth_symbols(stmt, fp_ctx, allocator, processed_stmt))) {
+      LOG_WARN("failed to preprocess fullwidth symbols for fast parser", K(ret), K(stmt));
+    } else if (OB_FAIL(fp.parse(processed_stmt, no_param_sql, no_param_sql_len, param_list, param_num, values_token_pos))) {
+      LOG_WARN("failed to fast parser", K(processed_stmt));
     } else {
       fp_result.question_mark_ctx_ = fp.get_question_mark_ctx();
     }

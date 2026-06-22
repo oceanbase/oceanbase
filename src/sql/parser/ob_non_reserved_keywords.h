@@ -25,13 +25,6 @@ typedef struct trie_node
   struct trie_node *next[CHAR_LEN];
 } t_node;
 
-extern const NonReservedKeyword *mysql_non_reserved_keyword_lookup(const char *word);
-extern const NonReservedKeyword *oracle_non_reserved_keyword_lookup(const char *word);
-extern int mysql_sql_reserved_keyword_lookup(const char *word);
-extern int oracle_sql_reserved_keyword_lookup(const char *word);
-extern const ReservedKeyword *oracle_pl_reserved_keyword_lookup(const char *word);
-extern const ReservedKeyword *oracle_reserved_keyword_lookup(const char *word);
-extern int window_function_name_compare(const char *dup_value, int *window_fun_idx);
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -42,6 +35,31 @@ extern int add_word(t_node *root, const char *str, const int32_t idx);
 extern const NonReservedKeyword *find_word(const char *word, const t_node *root, const NonReservedKeyword *words);
 extern int32_t get_next_id(char c);
 extern int casesame_cstr(const char *a, const char *b);
+
+/* SQL functions */
+extern const NonReservedKeyword *get_mysql_non_reserved_keywords(int32_t *count);
+extern const NonReservedKeyword *get_oracle_non_reserved_keywords(int32_t *count);
+extern const NonReservedKeyword *mysql_sql_keyword_lookup(const char *word);
+extern const NonReservedKeyword *mysql_sql_non_reserved_keyword_lookup(const char *word);
+extern const NonReservedKeyword *oracle_sql_keyword_lookup(const char *word);
+extern const ReservedKeyword *get_mysql_reserved_keywords(int32_t *count);
+extern const ReservedKeyword *get_oracle_reserved_keywords(int32_t *count);
+extern const ReservedKeyword *mysql_sql_reserved_keyword_lookup(const char *word);
+extern int window_function_name_compare(const char *dup_value, int *window_fun_idx);
+
+/* PL functions */
+extern const NonReservedKeyword *get_mysql_pl_non_reserved_keywords(int32_t *count);
+extern const NonReservedKeyword *get_oracle_pl_non_reserved_keywords(int32_t *count);
+extern const NonReservedKeyword *mysql_pl_keyword_lookup(const char *word);
+extern const NonReservedKeyword *mysql_pl_non_reserved_keyword_lookup(const char *word);
+extern const NonReservedKeyword *oracle_pl_keyword_lookup(const char *word);
+extern const NonReservedKeyword *oracle_pl_non_reserved_keyword_lookup(const char *word);
+extern const ReservedKeyword *get_mysql_pl_reserved_keywords(int32_t *count);
+extern const ReservedKeyword *get_oracle_pl_reserved_keywords(int32_t *count);
+extern const ReservedKeyword *mysql_pl_reserved_keyword_lookup(const char *word);
+extern const ReservedKeyword *oracle_pl_reserved_keyword_lookup(const char *word);
+extern int mysql_sql_reserved_keyword_lookup_for_pl(const char *word);
+extern int oracle_sql_reserved_keyword_lookup_for_pl(const char *word);
 
 #ifdef __cplusplus
 }

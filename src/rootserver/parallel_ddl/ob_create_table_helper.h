@@ -89,6 +89,7 @@ private:
       const ObString &table_name);
   int check_table_name_();
   int set_tablegroup_id_();
+  int set_tablespace_id_();
   int check_and_set_parent_table_id_();
 
   virtual int generate_table_schema_() override;

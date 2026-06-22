@@ -9251,7 +9251,22 @@ def_table_schema(
   ],
 )
 
-# 591: __all_audit_log_encryption_password
+def_table_schema(
+  owner = 'sean.yyj',
+  table_name = '__all_audit_log_encryption_password',
+  table_id = '591',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('pwd_id', 'int')
+  ],
+  in_tenant_space = True,
+
+  normal_columns = [
+      ('password', 'varbinary:OB_MAX_ENCRYPTED_KEY_LENGTH')
+  ],
+)
 # 592: __all_direct_load_stream
 
 def_table_schema(
@@ -12476,7 +12491,7 @@ def_table_schema(
   ('create_database_link_priv', 'varchar:1'),
   ('create_role_priv', 'varchar:1'),
   ('drop_role_priv', 'varchar:1'),
-  # ('user_attributes', 'longtext', 'true', 'NULL'),
+  ('user_attributes', 'longtext', 'true', 'NULL'),
   ],
 )
 
@@ -18577,7 +18592,10 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 
 # 12597: __all_virtual_object_storage_stat
 # 12598: __all_virtual_object_storage_error_record
-# 12599: __all_virtual_audit_log_encryption_password
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12599',
+  table_name = '__all_virtual_audit_log_encryption_password',
+  keywords = all_def_keywords['__all_audit_log_encryption_password']))
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12600',
@@ -18616,7 +18634,25 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
 )
-# 12604: __all_virtual_keyword
+
+def_table_schema(
+  owner = 'zhuangyifeng.zyf',
+  table_name     = '__all_virtual_keyword',
+  table_id       = '12604',
+  table_type = 'VIRTUAL_TABLE',
+  vtable_route_policy='local',
+  gm_columns = [],
+  rowkey_columns = [
+  ],
+  in_tenant_space = True,
+
+  normal_columns = [
+    ('keyword_name', 'varchar:128'),
+    ('keyword_length', 'int'),
+    ('keyword_type', 'varchar:16'),
+    ('reserved', 'int'),
+  ],
+)
 # 12605: __all_virtual_ss_gc_history
 # 12606: __all_virtual_table_archive_history
 # 12607: __all_virtual_log_transport_stat
@@ -19248,7 +19284,8 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15550', all_def_ke
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15551', all_def_keywords['__all_java_policy']))
 
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15552', all_def_keywords['__all_virtual_tenant_worker_group']))
-# 15553: __all_virtual_keyword
+
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15553', all_def_keywords['__all_virtual_keyword']))
 # 15554: ALL_VIRTUAL_LOG_TRANSPORT_STAT
 
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15555', all_def_keywords['__all_table_opt_stat_invalidate_plan']))
@@ -23906,7 +23943,11 @@ SELECT A.TENANT_ID,
         END) AS FLASHBACK_LOG_SCN,
         A.INFO AS COMMENT,
         B.PROTECTION_MODE AS PROTECTION_MODE,
-        B.PROTECTION_LEVEL AS PROTECTION_LEVEL
+        B.PROTECTION_LEVEL AS PROTECTION_LEVEL,
+        (SELECT TS.TABLESPACE_NAME
+           FROM OCEANBASE.__ALL_VIRTUAL_TENANT_TABLESPACE AS TS
+          WHERE TS.TENANT_ID = A.TENANT_ID
+            AND TS.TABLESPACE_ID = A.DEFAULT_TABLESPACE_ID) AS DEFAULT_TABLESPACE
 FROM OCEANBASE.__ALL_VIRTUAL_TENANT_MYSQL_SYS_AGENT AS A
 LEFT JOIN OCEANBASE.__ALL_VIRTUAL_TENANT_INFO AS B
     ON A.TENANT_ID = B.TENANT_ID
@@ -24771,12 +24812,16 @@ def_table_schema(
          C.COLLATION AS COLLATION,
          (CASE D.READ_ONLY WHEN 0 THEN 'NO' ELSE 'YES' END) AS READ_ONLY,
          D.COMMENT AS COMMENT,
-         TG.TABLEGROUP_NAME
+         TG.TABLEGROUP_NAME,
+         (SELECT TS.TABLESPACE_NAME
+            FROM OCEANBASE.__ALL_TENANT_TABLESPACE AS TS
+           WHERE TS.TENANT_ID = D.TENANT_ID
+             AND TS.TABLESPACE_ID = D.DEFAULT_TABLESPACE_ID) AS DEFAULT_TABLESPACE
   FROM OCEANBASE.__ALL_DATABASE AS D
   LEFT JOIN OCEANBASE.__TENANT_VIRTUAL_COLLATION AS C
   ON D.COLLATION_TYPE = C.COLLATION_TYPE
   LEFT JOIN OCEANBASE.__ALL_TABLEGROUP AS TG
-  ON D.DEFAULT_TABLEGROUP_ID = TG.TABLEGROUP_ID
+  ON D.TENANT_ID = TG.TENANT_ID AND D.DEFAULT_TABLEGROUP_ID = TG.TABLEGROUP_ID
   """.replace("\n", " "),
 )
 
@@ -24796,7 +24841,11 @@ def_table_schema(
          C.COLLATION AS COLLATION,
          (CASE D.READ_ONLY WHEN 0 THEN 'NO' ELSE 'YES' END) AS READ_ONLY,
          D.COMMENT AS COMMENT,
-         TG.TABLEGROUP_NAME
+         TG.TABLEGROUP_NAME,
+         (SELECT TS.TABLESPACE_NAME
+            FROM OCEANBASE.__ALL_VIRTUAL_TENANT_TABLESPACE AS TS
+           WHERE TS.TENANT_ID = D.TENANT_ID
+             AND TS.TABLESPACE_ID = D.DEFAULT_TABLESPACE_ID) AS DEFAULT_TABLESPACE
   FROM OCEANBASE.__ALL_VIRTUAL_DATABASE AS D
   LEFT JOIN OCEANBASE.__TENANT_VIRTUAL_COLLATION AS C
   ON D.COLLATION_TYPE = C.COLLATION_TYPE
@@ -47931,7 +47980,25 @@ FROM
     oceanbase.__all_virtual_tenant_worker_group
 """.replace("\n", " ")
 )
-# 21724: V$OB_KEYWORDS
+
+def_table_schema(
+  owner = 'zhuangyifeng.zyf',
+  table_name     = 'V$OB_KEYWORDS',
+  table_id       = '21724',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      keyword_name AS KEYWORD,
+      keyword_length AS LENGTH,
+      keyword_type AS TYPE,
+      reserved AS RESERVED
+    FROM oceanbase.__all_virtual_keyword
+  """.replace("\n", " "),
+)
 
 def_table_schema(
     owner = 'xutengting.xtt',
@@ -50090,7 +50157,10 @@ def_table_schema(
       END AS VARCHAR2(32)) AS ACCOUNT_STATUS,
       CAST(NULL as DATE) AS LOCK_DATE,
       CAST(NULL as DATE) AS EXPIRY_DATE,
-      CAST(NULL as VARCHAR2(30)) AS DEFAULT_TABLESPACE,
+      CAST((SELECT TS.TABLESPACE_NAME
+              FROM SYS.ALL_VIRTUAL_TENANT_TABLESPACE_REAL_AGENT TS
+             WHERE TS.TENANT_ID = B.TENANT_ID
+               AND TS.TABLESPACE_ID = DB.DEFAULT_TABLESPACE_ID) AS VARCHAR2(30)) AS DEFAULT_TABLESPACE,
       CAST(NULL as VARCHAR2(30)) AS TEMPORARY_TABLESPACE,
       CAST(NULL as VARCHAR2(30)) AS LOCAL_TEMP_TABLESPACE,
       CAST(B.GMT_CREATE AS DATE) AS CREATED,
@@ -50113,6 +50183,8 @@ def_table_schema(
       SYS.ALL_VIRTUAL_USER_REAL_AGENT B
       LEFT JOIN SYS.ALL_VIRTUAL_TENANT_PROFILE_REAL_AGENT P
       ON B.TENANT_ID = P.TENANT_ID AND B.PROFILE_ID = P.PROFILE_ID
+      LEFT JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
+      ON B.TENANT_ID = DB.TENANT_ID AND B.USER_NAME = DB.DATABASE_NAME
     WHERE
       B.TYPE = 0
       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -61667,6 +61739,7 @@ def_table_schema(
                 90, 'DROP ANY CCL RULE',
                 91, 'CREATE SENSITIVE RULE',
                 92, 'PLAINACCESS ANY SENSITIVE RULE',
+                93, 'RESTRICTED SESSION',
                 'OTHER') AS VARCHAR(40)) AS PRIVILEGE,
         CASE PRIV_OPTION
           WHEN 0 THEN 'NO'
@@ -61785,6 +61858,7 @@ def_table_schema(
                 90, 'DROP ANY CCL RULE',
                 91, 'CREATE SENSITIVE RULE',
                 92, 'PLAINACCESS ANY SENSITIVE RULE',
+                93, 'RESTRICTED SESSION',
                 'OTHER') AS VARCHAR(40)) AS PRIVILEGE,
         CASE PRIV_OPTION
           WHEN 0 THEN 'NO'
@@ -63072,6 +63146,7 @@ def_table_schema(
                 90, 'DROP ANY CCL RULE',
                 91, 'CREATE SENSITIVE RULE',
                 92, 'PLAINACCESS ANY SENSITIVE RULE',
+                93, 'RESTRICTED SESSION',
                 'OTHER') AS VARCHAR(40)) AS PRIVILEGE ,
        	decode(auth.priv_option, 0, 'NO', 1, 'YES', '') as ADMIN_OPTION
       FROM
@@ -64453,7 +64528,11 @@ def_table_schema(
          C.COLLATION AS COLLATION,
          (CASE D.READ_ONLY WHEN 0 THEN 'NO' ELSE 'YES' END) AS READ_ONLY,
          D."COMMENT" AS "COMMENT",
-         TG.TABLEGROUP_NAME AS TABLEGROUP_NAME
+         TG.TABLEGROUP_NAME AS TABLEGROUP_NAME,
+         (SELECT TS.TABLESPACE_NAME
+            FROM SYS.ALL_VIRTUAL_TENANT_TABLESPACE_REAL_AGENT TS
+           WHERE TS.TENANT_ID = D.TENANT_ID
+             AND TS.TABLESPACE_ID = D.DEFAULT_TABLESPACE_ID) AS DEFAULT_TABLESPACE
   FROM SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT D
   LEFT JOIN SYS.TENANT_VIRTUAL_COLLATION C
   ON D.COLLATION_TYPE = C.COLLATION_TYPE
@@ -66656,7 +66735,11 @@ SELECT A.TENANT_ID,
           ELSE E.LATEST_FLASHBACK_LOG_SCN END) AS FLASHBACK_LOG_SCN,
         A.INFO AS "COMMENT",
         B.PROTECTION_MODE AS PROTECTION_MODE,
-        B.PROTECTION_LEVEL AS PROTECTION_LEVEL
+        B.PROTECTION_LEVEL AS PROTECTION_LEVEL,
+        (SELECT TS.TABLESPACE_NAME
+           FROM SYS.ALL_VIRTUAL_TENANT_TABLESPACE_REAL_AGENT TS
+          WHERE TS.TENANT_ID = A.TENANT_ID
+            AND TS.TABLESPACE_ID = A.DEFAULT_TABLESPACE_ID) AS DEFAULT_TABLESPACE
 FROM SYS.ALL_VIRTUAL_TENANT_SYS_AGENT A
 LEFT JOIN SYS.ALL_VIRTUAL_TENANT_INFO B
     ON A.TENANT_ID = B.TENANT_ID
@@ -69147,7 +69230,10 @@ def_table_schema(
       END AS VARCHAR2(32)) AS ACCOUNT_STATUS,
       CAST(NULL as DATE) AS LOCK_DATE,
       CAST(NULL as DATE) AS EXPIRY_DATE,
-      CAST(NULL as VARCHAR2(30)) AS DEFAULT_TABLESPACE,
+      CAST((SELECT TS.TABLESPACE_NAME
+              FROM SYS.ALL_VIRTUAL_TENANT_TABLESPACE_REAL_AGENT TS
+             WHERE TS.TENANT_ID = B.TENANT_ID
+               AND TS.TABLESPACE_ID = DB.DEFAULT_TABLESPACE_ID) AS VARCHAR2(30)) AS DEFAULT_TABLESPACE,
       CAST(NULL as VARCHAR2(30)) AS TEMPORARY_TABLESPACE,
       CAST(NULL as VARCHAR2(30)) AS LOCAL_TEMP_TABLESPACE,
       CAST(B.GMT_CREATE AS DATE) AS CREATED,
@@ -69165,6 +69251,8 @@ def_table_schema(
       SYS.ALL_VIRTUAL_USER_REAL_AGENT B
       LEFT JOIN SYS.ALL_VIRTUAL_TENANT_PROFILE_REAL_AGENT P
         ON B.TENANT_ID = P.TENANT_ID AND B.PROFILE_ID = P.PROFILE_ID
+      LEFT JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
+        ON B.TENANT_ID = DB.TENANT_ID AND B.USER_NAME = DB.DATABASE_NAME
     WHERE
       B.TYPE = 0
       AND B.USER_NAME = SYS_CONTEXT('USERENV','CURRENT_USER')
@@ -71345,7 +71433,27 @@ def_table_schema(
              """.replace("\n", " ")
 )
 
-# 25321: V$OB_KEYWORDS
+
+def_table_schema(
+  owner = 'zhuangyifeng.zyf',
+  table_name     = 'V$OB_KEYWORDS',
+  name_postfix = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id       = '25321',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  in_tenant_space = True,
+  rowkey_columns = [],
+  normal_columns = [],
+  view_definition = """
+    SELECT
+      CAST(keyword_name AS VARCHAR2(128)) AS KEYWORD,
+      CAST(keyword_length AS NUMBER) AS LENGTH,
+      CAST(keyword_type AS VARCHAR2(16)) AS TYPE,
+      CAST(reserved AS INT) AS RESERVED
+    FROM SYS.ALL_VIRTUAL_KEYWORD
+  """.replace("\n", " "),
+)
 
 #
 # 余留位置（此行之前占位）
@@ -71669,7 +71777,10 @@ def_table_schema(
       CAST(NULL AS NUMBER) THREAD#,
       CAST(NULL AS VARCHAR2(7)) ARCHIVER,
       CAST(NULL AS VARCHAR2(15)) LOG_SWITCH_WAIT,
-      CAST(NULL AS VARCHAR2(10)) LOGINS,
+      CASE WHEN (SELECT VALUE FROM SYS.ALL_VIRTUAL_TENANT_PARAMETER_STAT
+                 WHERE NAME = '_enable_restricted_session' AND
+                 SVR_IP = S.SVR_IP AND SVR_PORT = S.SVR_PORT) = 'True'
+      THEN 'RESTRICTED' ELSE 'ALLOWED' END LOGINS,
       CAST(NULL AS VARCHAR2(3)) SHUTDOWN_PENDING,
       CAST(STATUS AS VARCHAR2(17)) DATABASE_STATUS,
       CAST(NULL AS VARCHAR2(18)) INSTANCE_ROLE,
@@ -71681,7 +71792,7 @@ def_table_schema(
       CAST(NULL AS VARCHAR2(80)) FAMILY,
       CAST(NULL AS VARCHAR2(15)) DATABASE_TYPE
       FROM
-      SYS.ALL_VIRTUAL_SERVER_AGENT WHERE
+      SYS.ALL_VIRTUAL_SERVER_AGENT S WHERE
       IS_SERVING_TENANT(SVR_IP, SVR_PORT, SYS_CONTEXT('USERENV', 'CON_ID')) = 1
 """.replace("\n", " ")
 )
@@ -71709,7 +71820,10 @@ def_table_schema(
       CAST(NULL AS NUMBER) THREAD#,
       CAST(NULL AS VARCHAR2(7)) ARCHIVER,
       CAST(NULL AS VARCHAR2(15)) LOG_SWITCH_WAIT,
-      CAST(NULL AS VARCHAR2(10)) LOGINS,
+      CASE WHEN (SELECT VALUE FROM SYS.ALL_VIRTUAL_TENANT_PARAMETER_STAT
+                 WHERE NAME = '_enable_restricted_session' AND
+                 SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()) = 'True'
+      THEN 'RESTRICTED' ELSE 'ALLOWED' END LOGINS,
       CAST(NULL AS VARCHAR2(3)) SHUTDOWN_PENDING,
       CAST(STATUS AS VARCHAR2(17)) DATABASE_STATUS,
       CAST(NULL AS VARCHAR2(18)) INSTANCE_ROLE,

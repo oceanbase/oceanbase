@@ -6798,10 +6798,16 @@ int ObAlterTableResolver::set_column_collation(AlterColumnSchema &alter_column_s
   if (alter_column_schema.get_meta_type().is_string_type()) {
     ObCharsetType charset_type = alter_column_schema.get_charset_type();
     ObCollationType collation_type = alter_column_schema.get_collation_type();
+    ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
     if (CHARSET_INVALID == charset_type && CS_TYPE_INVALID == collation_type) {
       //do nothing
       //在rootserver会根据表的schema设置正确的collation和charset
-    } else if (OB_FAIL(ObCharset::check_and_fill_info(charset_type, collation_type))){
+    } else if (OB_ISNULL(session_info_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session info is NULL", K(ret));
+    } else if (OB_FAIL(session_info_->get_charset_compat_type(charset_compat_type))) {
+      LOG_WARN("fail to get charset compat type", K(ret));
+    } else if (OB_FAIL(ObCharset::check_and_fill_info(charset_type, collation_type, charset_compat_type))){
       SQL_RESV_LOG(WARN, "fail to fill charset collation info", K(ret));
     } else {
       alter_column_schema.set_charset_type(charset_type);

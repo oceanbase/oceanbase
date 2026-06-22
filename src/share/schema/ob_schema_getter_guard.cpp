@@ -4469,6 +4469,32 @@ int ObSchemaGetterGuard::check_database_exists_in_tablegroup(
   return ret;
 }
 
+int ObSchemaGetterGuard::check_database_exists_in_tablespace(
+    const uint64_t tenant_id,
+    const uint64_t tablespace_id,
+    bool &not_empty)
+{
+  int ret = OB_SUCCESS;
+  const ObSchemaMgr *mgr = NULL;
+  not_empty = false;
+
+  if (!check_inner_stat()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", KR(ret));
+  } else if (OB_INVALID_ID == tenant_id
+             || OB_INVALID_ID == tablespace_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(tablespace_id));
+  } else if (OB_FAIL(check_tenant_schema_guard(tenant_id))) {
+    LOG_WARN("fail to check tenant schema guard", KR(ret), K(tenant_id), K_(tenant_id));
+  } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {
+    LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
+  } else {
+    ret = mgr->check_database_exists_in_tablespace(tenant_id, tablespace_id, not_empty);
+  }
+  return ret;
+}
+
 int ObSchemaGetterGuard::check_tenant_exist(const uint64_t tenant_id,
                                             bool &is_exist)
 {

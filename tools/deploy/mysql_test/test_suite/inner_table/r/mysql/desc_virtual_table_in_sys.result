@@ -2338,6 +2338,7 @@ drop_database_link_priv	varchar(1)	NO		NULL
 create_database_link_priv	varchar(1)	NO		NULL	
 create_role_priv	varchar(1)	NO		NULL	
 drop_role_priv	varchar(1)	NO		NULL	
+user_attributes	longtext	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from mysql.user;
 IF(count(*) >= 0, 1, 0)
 1
@@ -12822,6 +12823,17 @@ select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all
 IF(count(*) >= 0, 1, 0)
 1
 select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_catalog_table_opt_stat_gather_history limit 1;
+desc oceanbase.__all_virtual_audit_log_encryption_password;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+pwd_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+password	varbinary(256)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_audit_log_encryption_password;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_audit_log_encryption_password limit 1;
 desc oceanbase.__all_virtual_optstat_catalog_user_prefs;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	
@@ -12878,6 +12890,16 @@ IF(count(*) >= 0, 1, 0)
 IF(count(*) >= 0, 1, 0)
 1
 select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_tenant_worker_group limit 1;
+desc oceanbase.__all_virtual_keyword;
+Field	Type	Null	Key	Default	Extra
+keyword_name	varchar(128)	NO		NULL	
+keyword_length	bigint(20)	NO		NULL	
+keyword_type	varchar(16)	NO		NULL	
+reserved	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_keyword;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_keyword limit 1;
 desc oceanbase.__all_virtual_table_opt_stat_invalidate_plan;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	

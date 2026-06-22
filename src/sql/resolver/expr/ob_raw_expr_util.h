@@ -1458,6 +1458,7 @@ public:
       common::ObIArray<sql::ObQualifiedName> &q_name,
       bool nullable);
   static bool is_invalid_type_for_compare(const ObRawExprResType &type);
+  static bool is_audit_log_expr(const ObRawExpr *expr);
   static int build_json_member_of_expr(ObRawExprFactory &expr_factory,
                                        const ObSQLSessionInfo &session,
                                        ObRawExpr *json_val,

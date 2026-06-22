@@ -232,6 +232,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     expr_factory_(expr_factory),
     log_plan_factory_(allocator),
     force_serial_set_order_(false),
+    force_add_serial_path_(false),
     parallel_(ObGlobalHint::UNSET_PARALLEL),
     px_parallel_rule_(PXParallelRule::USE_PX_DEFAULT),
     can_use_pdml_(false),
@@ -324,7 +325,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     idp_reduction_threshold_(5000),
     slave_mapping_id_gen_(0),
     udf_cost_factor_(1.0),
-    udf_selectivity_(0.005)
+    udf_selectivity_(0.005),
+    enable_separate_spf_for_select_items_(false)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -398,6 +400,9 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline bool is_pdml_heap_table() const { return is_pdml_heap_table_; }
   inline bool force_serial_set_order() const { return force_serial_set_order_; }
   void set_serial_set_order(bool force_serial_set_order) { force_serial_set_order_ = force_serial_set_order; }
+
+  inline bool force_add_serial_path() const { return force_add_serial_path_; }
+  inline void set_force_add_serial_path(bool v) { force_add_serial_path_ = v; }
 
   inline bool is_storage_estimation_enabled() const { return storage_estimation_enabled_; }
   void set_storage_estimation_enabled(bool storage_estimation_enabled) { storage_estimation_enabled_ = storage_estimation_enabled; }
@@ -865,6 +870,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_max_permutation(uint64_t max_permutation) { max_permutation_ = max_permutation; }
   inline uint64_t get_idp_reduction_threshold() const { return idp_reduction_threshold_; }
   inline void set_idp_reduction_threshold(uint64_t threshold) { idp_reduction_threshold_ = threshold; }
+  inline bool enable_separate_spf_for_select_items() const { return enable_separate_spf_for_select_items_; }
+  inline void set_enable_separate_spf_for_select_items(bool v) { enable_separate_spf_for_select_items_ = v; }
   inline bool get_is_weak_read() const { return is_weak_read_; }
   inline void set_is_weak_read(bool is_weak_read) { is_weak_read_ = is_weak_read; }
   inline int64_t generate_slave_mapping_id() { return ++slave_mapping_id_gen_; }
@@ -884,6 +891,7 @@ private:
   ObRawExprFactory &expr_factory_;
   ObLogPlanFactory log_plan_factory_;
   bool force_serial_set_order_; //to keep a serial execute for set query
+  bool force_add_serial_path_; // force add a serial (parallel=1) access path during plan generation
   int64_t parallel_;
   // 决定计划并行度的规则
   PXParallelRule px_parallel_rule_;
@@ -1017,6 +1025,7 @@ private:
   int64_t slave_mapping_id_gen_; // generate slave mapping id, start from 1
   double udf_cost_factor_;
   double udf_selectivity_;
+  bool enable_separate_spf_for_select_items_;
 };
 }
 }

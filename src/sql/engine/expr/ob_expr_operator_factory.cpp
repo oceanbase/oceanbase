@@ -1313,6 +1313,8 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprAuditLogRemoveFilter, EAGER_EVALUATION);
     REG_OP(ObExprAuditLogSetUser, EAGER_EVALUATION);
     REG_OP(ObExprAuditLogRemoveUser, EAGER_EVALUATION);
+    REG_OP(ObExprAuditLogPasswordGet, EAGER_EVALUATION);
+    REG_OP(ObExprAuditLogPasswordSet, EAGER_EVALUATION);
     REG_OP(ObExprIsEnabledRole, EAGER_EVALUATION);
     REG_OP(ObExprSm3, EAGER_EVALUATION);
     REG_OP(ObExprSm4Encrypt, SHORT_CIRCUIT_EVALUATION);
@@ -1732,6 +1734,8 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprFormatProfile, SHORT_CIRCUIT_EVALUATION);
   REG_OP_ORCL(ObExprCheckLocationAccess, EAGER_EVALUATION);
   REG_OP_ORCL(ObExprEnhancedAesEncrypt, SHORT_CIRCUIT_EVALUATION);
+  REG_OP_ORCL(ObExprAuditLogPasswordGet, EAGER_EVALUATION);
+  REG_OP_ORCL(ObExprAuditLogPasswordSet, EAGER_EVALUATION);
   REG_OP_ORCL(ObExprMaxPt, EAGER_EVALUATION);
   REG_OP_ORCL(ObExprRandomPartNextval, EAGER_EVALUATION);
 }

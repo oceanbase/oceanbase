@@ -175,12 +175,15 @@ int ObUDRUtils::clac_dynamic_param_store(const DynamicParamInfoArray& dynamic_pa
   ObPhysicalPlanCtx *phy_ctx = pc_ctx.exec_ctx_.get_physical_plan_ctx();
   bool enable_decimal_int = false;
   ObCompatType compat_type = COMPAT_MYSQL57;
+  ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
   bool enable_mysql_compatible_dates = false;
   if (OB_ISNULL(session) || OB_ISNULL(phy_ctx)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(session), KP(phy_ctx));
   } else if (OB_FAIL(session->get_compatibility_control(compat_type))) {
     LOG_WARN("failed to get compat type", K(ret));
+  } else if (OB_FAIL(session->get_charset_compat_type(charset_compat_type))) {
+    LOG_WARN("fail to get charset compat type", K(ret));
   } else if (OB_FAIL(param_store.reserve(dynamic_param_list.count()))) {
     LOG_WARN("failed to reserve array", K(ret), K(dynamic_param_list.count()));
   } else if (lib::is_oracle_mode() && OB_FAIL(
@@ -238,7 +241,10 @@ int ObUDRUtils::clac_dynamic_param_store(const DynamicParamInfoArray& dynamic_pa
                                                         compat_type,
                                                         enable_mysql_compatible_dates,
                                                         session->get_min_const_integer_precision(),
-                                                        session->get_exec_min_cluster_version()))) {
+                                                        session->get_exec_min_cluster_version(),
+                                                        false,
+                                                        false,
+                                                        charset_compat_type))) {
         LOG_WARN("fail to resolve const", K(ret));
       } else if (OB_FAIL(add_param_to_param_store(value, param_store))) {
         LOG_WARN("failed to add param to param store", K(ret), K(value), K(param_store));

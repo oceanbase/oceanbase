@@ -1370,7 +1370,6 @@ int check_will_be_having_domain_index_operation(
       const obrpc::ObDropIndexArg &drop_index_arg,
       share::schema::ObSchemaGuardWrapper &schema_guard_wrapper,
       const share::schema::ObTableSchema *&index_table_schema);
-  int set_tablegroup_id(share::schema::ObTableSchema &table_schema);
   int create_index_or_mlog_table_in_trans(share::schema::ObTableSchema &table_schema,
                             const common::ObString *ddl_stmt_str,
                             ObMySQLTransaction *sql_trans,
@@ -1390,6 +1389,7 @@ int check_will_be_having_domain_index_operation(
                               share::schema::ObSchemaGetterGuard &schema_guard,
                               const uint64_t tenant_data_version);
   int set_new_database_options(const obrpc::ObAlterDatabaseArg &arg,
+                               share::schema::ObSchemaGetterGuard &schema_guard,
                                share::schema::ObDatabaseSchema &new_database_schema);
   int set_new_table_options(
       const obrpc::ObAlterTableArg &alter_table_arg,
@@ -1655,6 +1655,7 @@ int check_will_be_having_domain_index_operation(
                                   bool &ddl_need_retry_at_executor);
   int check_convert_to_character(obrpc::ObAlterTableArg &alter_table_arg,
                                  const share::schema::ObTableSchema &orig_table_schema,
+                                 share::schema::ObSchemaGetterGuard &schema_guard,
                                  share::ObDDLType &ddl_type);
 
   bool is_dec_table_lob_inrow_threshold(
@@ -1873,12 +1874,16 @@ int check_will_be_having_domain_index_operation(
       const share::schema::ObTableSchema &new_table_schema,
       ObIArray<share::schema::ObTableSchema> &idx_schemas,
       share::schema::ObSchemaGetterGuard &schema_guard);
+  int get_charset_compat_type(const uint64_t tenant_id,
+                              share::schema::ObSchemaGetterGuard &schema_guard,
+                              common::ObCharsetCompatType &charset_compat_type);
   int fill_column_collation(
       const ObSQLMode sql_mode,
       const bool is_oracle_mode,
       const share::schema::ObTableSchema &table_schema,
       common::ObIAllocator &allocator,
-      share::schema::ObColumnSchemaV2 &alter_column_schema);
+      share::schema::ObColumnSchemaV2 &alter_column_schema,
+      common::ObCharsetCompatType charset_compat_type);
   int resolve_orig_default_value(share::schema::ObColumnSchemaV2 &column_schema,
                                  const common::ObTimeZoneInfoWrap &tz_info_wrap,
                                  const common::ObString *nls_formats,
@@ -2216,6 +2221,8 @@ int check_will_be_having_domain_index_operation(
 public:
   template<typename SCHEMA>
   int set_default_tablegroup_id(SCHEMA &schema);
+  template<typename SCHEMA>
+  int set_default_tablespace_id(SCHEMA &schema, share::schema::ObSchemaGetterGuard &schema_guard);
   int create_aux_index(
       const obrpc::ObCreateAuxIndexArg &arg,
       obrpc::ObCreateAuxIndexRes &result);
@@ -2379,11 +2386,13 @@ private:
   bool is_user_exist(const uint64_t tenant_id, const uint64_t user_id) const;
   int create_user(share::schema::ObUserInfo &user_info,
                   uint64_t creator_id,
-                  uint64_t &user_id);
+                  uint64_t &user_id,
+                  const ObString &default_tablespace_name = ObString());
   int create_user_in_trans(share::schema::ObUserInfo &user_info,
                            uint64_t creator_id,
                            uint64_t &user_id,
-                           share::schema::ObSchemaGetterGuard &schema_guard);
+                           share::schema::ObSchemaGetterGuard &schema_guard,
+                           const ObString &default_tablespace_name = ObString());
 
   int create_mysql_roles_in_trans(const uint64_t tenant_id,
                                   const bool if_not_exist,
@@ -2395,7 +2404,9 @@ private:
                           const common::ObString &new_passwd,
                           const common::ObString *ddl_stmt_str,
                           share::schema::ObSchemaGetterGuard &schema_guard,
-                          const common::ObString &plugin);
+                          const common::ObString &plugin,
+                          const bool retain_current_password = false,
+                          const bool discard_old_password = false);
   int set_max_connection_in_trans(const uint64_t tenant_id,
                                   const uint64_t user_id,
                                   const uint64_t max_connections_per_hour,
@@ -3198,6 +3209,34 @@ int ObDDLService::set_default_tablegroup_id(SCHEMA &schema)
       RS_LOG(WARN, "tablegroup not exist", K(ret), K(tablegroup_name));
     } else {
       schema.set_default_tablegroup_id(tablegroup_id);
+    }
+  }
+  return ret;
+}
+
+template<typename SCHEMA>
+int ObDDLService::set_default_tablespace_id(SCHEMA &schema, share::schema::ObSchemaGetterGuard &schema_guard)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = schema.get_tenant_id();
+  if (OB_FAIL(check_inner_stat())) {
+    RS_LOG(WARN, "variable is not init");
+  } else {
+    const ObString &tablespace_name = schema.get_default_tablespace_name();
+    if (tablespace_name.empty() || 0 == tablespace_name.compare(ObString::make_string("NULL"))) {
+      schema.set_default_tablespace_id(OB_INVALID_ID);
+    } else {
+      const share::schema::ObTablespaceSchema *tablespace_schema = NULL;
+      if (OB_FAIL(schema_guard.get_tablespace_schema_with_name(tenant_id, tablespace_name,
+                                                               tablespace_schema))) {
+        RS_LOG(WARN, "get_tablespace_schema_with_name failed", K(tenant_id),
+               K(tablespace_name), K(ret));
+      } else if (OB_ISNULL(tablespace_schema)) {
+        ret = OB_TABLESPACE_NOT_EXIST;
+        RS_LOG(WARN, "tablespace not exist", K(ret), K(tablespace_name));
+      } else {
+        schema.set_default_tablespace_id(tablespace_schema->get_tablespace_id());
+      }
     }
   }
   return ret;

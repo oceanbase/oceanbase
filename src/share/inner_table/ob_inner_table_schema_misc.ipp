@@ -2380,6 +2380,7 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
 
 case OB_ALL_VIRTUAL_AI_MODEL_TID:
 case OB_ALL_VIRTUAL_AI_MODEL_HISTORY_TID:
+case OB_ALL_VIRTUAL_AUDIT_LOG_ENCRYPTION_PASSWORD_TID:
 case OB_ALL_VIRTUAL_AUDIT_LOG_FILTER_TID:
 case OB_ALL_VIRTUAL_AUDIT_LOG_USER_TID:
 case OB_ALL_VIRTUAL_AUTO_INCREMENT_TID:
@@ -2625,6 +2626,21 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
         SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
       } else if (OB_FAIL(iter->init(OB_ALL_AI_MODEL_HISTORY_TID, index_schema, params))) {
+        SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
+        iter->~ObIterateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
+    case OB_ALL_VIRTUAL_AUDIT_LOG_ENCRYPTION_PASSWORD_TID: {
+      ObIterateVirtualTable *iter = NULL;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_AUDIT_LOG_ENCRYPTION_PASSWORD_TID, index_schema, params))) {
         SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
         iter->~ObIterateVirtualTable();
         allocator.free(iter);
@@ -2889,7 +2905,9 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_COLUMN_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -2904,9 +2922,7 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_COLUMN_GROUP_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -3191,7 +3207,9 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_DATABASE_HISTORY_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -3206,9 +3224,7 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_DATABASE_PRIVILEGE_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -3493,7 +3509,9 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_FOREIGN_KEY_COLUMN_HISTORY_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -3508,9 +3526,7 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_FOREIGN_KEY_HISTORY_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -3795,7 +3811,9 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_MVIEW_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -3810,9 +3828,7 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_MVIEW_DEP_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -4097,7 +4113,9 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_ORI_SCHEMA_VERSION_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -4112,9 +4130,7 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_OUTLINE_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -4399,7 +4415,9 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_RLS_CONTEXT_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -4414,9 +4432,7 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_RLS_CONTEXT_HISTORY_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -4701,7 +4717,9 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_SENSITIVE_COLUMN_HISTORY_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -4716,9 +4734,7 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_SENSITIVE_RULE_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -5003,7 +5019,9 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_TABLE_OPT_STAT_INVALIDATE_PLAN_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -5018,9 +5036,7 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_TABLE_PRIVILEGE_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -5305,7 +5321,9 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_TENANT_OLS_COMPONENT_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -5320,9 +5338,7 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_TENANT_OLS_COMPONENT_HISTORY_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -5607,7 +5623,9 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_TIME_ZONE_NAME_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -5622,9 +5640,7 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_TIME_ZONE_TRANSITION_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -5909,7 +5925,9 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -8906,6 +8924,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_CATALOG_TABLE_STAT_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CATALOG_TABLE_STAT_SCHEMA_VERSION); break;
     case OB_ALL_CATALOG_COLUMN_STAT_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CATALOG_COLUMN_STAT_SCHEMA_VERSION); break;
     case OB_ALL_CATALOG_TABLE_OPT_STAT_GATHER_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CATALOG_TABLE_OPT_STAT_GATHER_HISTORY_SCHEMA_VERSION); break;
+    case OB_ALL_AUDIT_LOG_ENCRYPTION_PASSWORD_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_AUDIT_LOG_ENCRYPTION_PASSWORD_SCHEMA_VERSION); break;
     case OB_ALL_OPTSTAT_CATALOG_USER_PREFS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_OPTSTAT_CATALOG_USER_PREFS_SCHEMA_VERSION); break;
     case OB_ALL_OPTSTAT_CATALOG_GLOBAL_PREFS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_OPTSTAT_CATALOG_GLOBAL_PREFS_SCHEMA_VERSION); break;
     case OB_ALL_TABLE_OPT_STAT_INVALIDATE_PLAN_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_TABLE_OPT_STAT_INVALIDATE_PLAN_SCHEMA_VERSION); break;
@@ -9497,9 +9516,11 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_VIRTUAL_JAVA_POLICY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_JAVA_POLICY_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_JAVA_POLICY_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_JAVA_POLICY_HISTORY_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_CATALOG_TABLE_OPT_STAT_GATHER_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_CATALOG_TABLE_OPT_STAT_GATHER_HISTORY_SCHEMA_VERSION); break;
+    case OB_ALL_VIRTUAL_AUDIT_LOG_ENCRYPTION_PASSWORD_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_AUDIT_LOG_ENCRYPTION_PASSWORD_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_OPTSTAT_CATALOG_USER_PREFS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_OPTSTAT_CATALOG_USER_PREFS_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_OPTSTAT_CATALOG_GLOBAL_PREFS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_OPTSTAT_CATALOG_GLOBAL_PREFS_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_TENANT_WORKER_GROUP_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_TENANT_WORKER_GROUP_SCHEMA_VERSION); break;
+    case OB_ALL_VIRTUAL_KEYWORD_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_KEYWORD_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_TABLE_OPT_STAT_INVALIDATE_PLAN_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_TABLE_OPT_STAT_INVALIDATE_PLAN_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_MVIEW_DEP_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_MVIEW_DEP_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_MVIEW_REFRESH_PENDING_TASK_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_MVIEW_REFRESH_PENDING_TASK_SCHEMA_VERSION); break;
@@ -9866,6 +9887,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_VIRTUAL_EXTERNAL_RESOURCE_REAL_AGENT_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_EXTERNAL_RESOURCE_REAL_AGENT_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_JAVA_POLICY_REAL_AGENT_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_JAVA_POLICY_REAL_AGENT_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_TENANT_WORKER_GROUP_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_TENANT_WORKER_GROUP_ORACLE_SCHEMA_VERSION); break;
+    case OB_ALL_VIRTUAL_KEYWORD_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_KEYWORD_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_TABLE_OPT_STAT_INVALIDATE_PLAN_REAL_AGENT_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_TABLE_OPT_STAT_INVALIDATE_PLAN_REAL_AGENT_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_SYS_VARIABLE_HISTORY_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SYS_VARIABLE_HISTORY_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_MVIEW_REFRESH_PENDING_TASK_REAL_AGENT_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_MVIEW_REFRESH_PENDING_TASK_REAL_AGENT_ORACLE_SCHEMA_VERSION); break;
@@ -10479,6 +10501,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_CDB_SCHEDULER_RUNNING_JOBS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_CDB_SCHEDULER_RUNNING_JOBS_SCHEMA_VERSION); break;
     case OB_CDB_SCHEDULER_JOBS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_CDB_SCHEDULER_JOBS_SCHEMA_VERSION); break;
     case OB_GV_OB_TENANT_WORKER_GROUPS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_GV_OB_TENANT_WORKER_GROUPS_SCHEMA_VERSION); break;
+    case OB_V_OB_KEYWORDS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_V_OB_KEYWORDS_SCHEMA_VERSION); break;
     case OB_DBA_OB_EXTERNAL_TAB_STATISTICS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_OB_EXTERNAL_TAB_STATISTICS_SCHEMA_VERSION); break;
     case OB_DBA_OB_EXTERNAL_TAB_COL_STATISTICS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_OB_EXTERNAL_TAB_COL_STATISTICS_SCHEMA_VERSION); break;
     case OB_DBA_OB_EXTERNAL_PART_COL_STATISTICS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_OB_EXTERNAL_PART_COL_STATISTICS_SCHEMA_VERSION); break;
@@ -10788,6 +10811,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_USER_OB_SOURCE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_USER_OB_SOURCE_ORACLE_SCHEMA_VERSION); break;
     case OB_DBA_JAVA_POLICY_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_JAVA_POLICY_ORACLE_SCHEMA_VERSION); break;
     case OB_USER_JAVA_POLICY_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_USER_JAVA_POLICY_ORACLE_SCHEMA_VERSION); break;
+    case OB_V_OB_KEYWORDS_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_V_OB_KEYWORDS_ORACLE_SCHEMA_VERSION); break;
     case OB_GV_OB_SQL_AUDIT_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_GV_OB_SQL_AUDIT_ORACLE_SCHEMA_VERSION); break;
     case OB_V_OB_SQL_AUDIT_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_V_OB_SQL_AUDIT_ORACLE_SCHEMA_VERSION); break;
     case OB_GV_INSTANCE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_GV_INSTANCE_ORACLE_SCHEMA_VERSION); break;
@@ -11628,6 +11652,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_CATALOG_TABLE_STAT_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CATALOG_TABLE_STAT_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_CATALOG_COLUMN_STAT_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CATALOG_COLUMN_STAT_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_CATALOG_TABLE_OPT_STAT_GATHER_HISTORY_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CATALOG_TABLE_OPT_STAT_GATHER_HISTORY_AUX_LOB_META_SCHEMA_VERSION); break;
+    case OB_ALL_AUDIT_LOG_ENCRYPTION_PASSWORD_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_AUDIT_LOG_ENCRYPTION_PASSWORD_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_OPTSTAT_CATALOG_USER_PREFS_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_OPTSTAT_CATALOG_USER_PREFS_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_OPTSTAT_CATALOG_GLOBAL_PREFS_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_OPTSTAT_CATALOG_GLOBAL_PREFS_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_TABLE_OPT_STAT_INVALIDATE_PLAN_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_TABLE_OPT_STAT_INVALIDATE_PLAN_AUX_LOB_META_SCHEMA_VERSION); break;
@@ -12007,6 +12032,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_CATALOG_TABLE_STAT_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CATALOG_TABLE_STAT_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_CATALOG_COLUMN_STAT_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CATALOG_COLUMN_STAT_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_CATALOG_TABLE_OPT_STAT_GATHER_HISTORY_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CATALOG_TABLE_OPT_STAT_GATHER_HISTORY_AUX_LOB_PIECE_SCHEMA_VERSION); break;
+    case OB_ALL_AUDIT_LOG_ENCRYPTION_PASSWORD_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_AUDIT_LOG_ENCRYPTION_PASSWORD_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_OPTSTAT_CATALOG_USER_PREFS_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_OPTSTAT_CATALOG_USER_PREFS_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_OPTSTAT_CATALOG_GLOBAL_PREFS_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_OPTSTAT_CATALOG_GLOBAL_PREFS_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_TABLE_OPT_STAT_INVALIDATE_PLAN_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_TABLE_OPT_STAT_INVALIDATE_PLAN_AUX_LOB_PIECE_SCHEMA_VERSION); break;

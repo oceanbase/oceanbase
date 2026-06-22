@@ -1579,7 +1579,8 @@ public:
                                                    ObIArray<ObRawExpr*> &left_new_select_exprs,
                                                    ObIArray<ObRawExpr*> &right_new_select_exprs,
                                                    const bool skip_const_in_select = true,
-                                                   const bool skip_const_in_cond = true);
+                                                   const bool skip_const_in_cond = true,
+                                                   const bool strict_res_type_check = true);
 
   static int check_result_type_same(ObIArray<ObRawExpr*> &left_exprs, 
                                     ObIArray<ObRawExpr*> &right_exprs,
@@ -2040,10 +2041,11 @@ public:
                                        ObIArray<ObSEArray<TableItem*, 4>> &all_connected_tables,
                                        ObIArray<TableItem*> &right_tables,
                                        ObIArray<ObSEArray<ObRawExpr*, 4>> &new_outer_conds);
-  static int create_columns_for_view_tables(ObTransformerCtx *ctx,
-                                            ObDMLStmt *stmt,
-                                            ObIArray<TableItem*> &right_tables,
-                                            ObIArray<ObSEArray<ObRawExpr*, 4>> &outer_conds);
+  static int rebuild_columns_for_view_and_conds(ObTransformerCtx *ctx,
+                                                ObDMLStmt *stmt,
+                                                TableItem *view_table,
+                                                ObIArray<ObRawExpr *> &conds,
+                                                bool keep_orig_select_columns = false);
   static int connect_tables(const ObIArray<uint64_t> &table_ids,
                             const ObIArray<TableItem *> &from_tables,
                             UnionFind &uf);
@@ -2174,6 +2176,8 @@ public:
                                       ObDMLStmt *stmt,
                                       bool &is_zero,
                                       ObIArray<ObRawExpr*> &const_constraint_exprs);
+  static int deduplicate_exec_params_for_set_stmt(ObSelectStmt *set_stmt,
+                                                  ObIArray<ObExecParamRawExpr *> &exec_params);
 
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,

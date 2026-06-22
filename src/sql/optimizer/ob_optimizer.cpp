@@ -881,6 +881,7 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
   int64_t rtf_user_min_partition_count = tenant_config.is_valid() ? tenant_config->_rtf_user_min_partition_count : -1;
   bool enable_distributed_das_scan = tenant_config.is_valid() ? tenant_config->_enable_distributed_das_scan : true;
   bool enable_index_merge = tenant_config.is_valid() ? tenant_config->_enable_index_merge : false;
+  bool enable_separate_spf_for_select_items = tenant_config.is_valid() ? tenant_config->_enable_separate_spf_for_select_items : false;
   const ObOptParamHint &opt_params = ctx_.get_global_hint().opt_params_;
   bool aggr_pushdown_allowed = false;
   int64_t udf_cost_factor = 100;
@@ -962,6 +963,8 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     LOG_WARN("failed to get das batch rescan flag", K(ret));
   } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ENABLE_INDEX_MERGE, enable_index_merge))) {
     LOG_WARN("failed to get opt param enable index merge", K(ret));
+  } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ENABLE_SEPARATE_SPF_FOR_SELECT_ITEMS, enable_separate_spf_for_select_items))) {
+    LOG_WARN("failed to get opt param enable separate spf for select items", K(ret));
   } else if (OB_FAIL(session.if_aggr_pushdown_allowed(aggr_pushdown_allowed))) {
     LOG_WARN("failed to get sys var enable aggr pushdown", K(ret));
   } else if (OB_FAIL(session.get_udf_cost_factor(udf_cost_factor))) {
@@ -991,6 +994,7 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     ctx_.set_rtf_creator_max_row_count(rtf_creator_max_row_count);
     ctx_.set_rtf_user_min_partition_count(rtf_user_min_partition_count);
     ctx_.set_enable_index_merge(enable_index_merge);
+    ctx_.set_enable_separate_spf_for_select_items(enable_separate_spf_for_select_items);
     if (query_ctx->get_query_hint().has_outline_data()) {
       ctx_.set_push_join_pred_into_view_enabled(true);
     } else {

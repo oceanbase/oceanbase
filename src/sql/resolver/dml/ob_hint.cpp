@@ -635,10 +635,10 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
   // OPTIMIZER_FEATURES_ENABLE
   if (OB_SUCC(ret) && (has_valid_opt_features_version())) {
     int64_t cur_pos = 0;
-    // if enabled trace point outline valid check tp_no = 551 and opt_features_version_ is LASTED_COMPAT_VERSION,
-    // just print OPTIMIZER_FEATURES_ENABLE('') to avoid mysqltest changed repeatedly after upgrade LASTED_COMPAT_VERSION
+    // if enabled trace point outline valid check tp_no = 551 and opt_features_version_ is LATEST_COMPAT_VERSION,
+    // just print OPTIMIZER_FEATURES_ENABLE('') to avoid mysqltest changed repeatedly after upgrade LATEST_COMPAT_VERSION
     const bool print_empty_str = (OB_SUCCESS != (OB_E(EventTable::EN_EXPLAIN_GENERATE_PLAN_WITH_OUTLINE) OB_SUCCESS)
-                                 && LASTED_COMPAT_VERSION == opt_features_version_);
+                                  && LATEST_COMPAT_VERSION == opt_features_version_);
     if (OB_FAIL(BUF_PRINTF("%s%s(\'", outline_indent, "OPTIMIZER_FEATURES_ENABLE"))) {
       LOG_WARN("failed to print hint", K(ret));
     } else if (!print_empty_str &&
@@ -961,6 +961,7 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
     case OPTIMIZER_BETTER_INLIST_COSTING:
     case OPTIMIZER_GROUP_BY_PLACEMENT:
     case ENABLE_SPF_BATCH_RESCAN:
+    case ENABLE_SEPARATE_SPF_FOR_SELECT_ITEMS:
     case NLJ_BATCHING_ENABLED:
     case ENABLE_PX_ORDERED_COORD:
     case ENABLE_WINDOW_FUNCTION_STREAMING_PROCESS:

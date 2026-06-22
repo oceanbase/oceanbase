@@ -2662,7 +2662,8 @@ int ObResolverUtils::resolve_stmt_type(const ParseResult &result, stmt::StmtType
 int ObResolverUtils::set_string_val_charset(ObIAllocator &allocator,
                                             ObObjParam &val, ObString &charset, ObObj &result_val,
                                             bool is_strict_mode,
-                                            bool return_ret)
+                                            bool return_ret,
+                                            ObCharsetCompatType charset_compat_type)
 {
   int ret = OB_SUCCESS;
   ObCharsetType charset_type = CHARSET_INVALID;
@@ -2671,7 +2672,7 @@ int ObResolverUtils::set_string_val_charset(ObIAllocator &allocator,
     LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, charset.length(), charset.ptr());
   } else {
     // use the default collation of the specified charset
-    ObCollationType collation_type = ObCharset::get_default_collation(charset_type);
+    ObCollationType collation_type = ObCharset::get_default_collation(charset_type, charset_compat_type);
     val.set_collation_type(collation_type);
     LOG_DEBUG("use default collation", K(charset_type), K(collation_type));
     ObLength length = static_cast<ObLength>(ObCharset::strlen_char(val.get_collation_type(),
@@ -2725,7 +2726,8 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
                                    int8_t min_const_integer_precision,
                                    uint64_t exec_min_cluster_version,
                                    bool is_from_pl /* false */,
-                                   bool fmt_int_or_ch_decint /* false */)
+                                   bool fmt_int_or_ch_decint /* false */,
+                                   ObCharsetCompatType charset_compat_type /* CHARSET_COMPAT_MYSQL57 */)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(node) || OB_UNLIKELY(node->type_ < T_INVALID) || OB_UNLIKELY(node->type_ >= T_MAX_CONST)) {
@@ -2800,7 +2802,7 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
           // for STRING without collation, e.g. show tables like STRING;
           if (lib::is_mysql_mode() && is_nchar) {
             ObString charset(strlen("utf8mb4"), "utf8mb4");
-            if (OB_FAIL(set_string_val_charset(allocator, val, charset, result_val, false, false))) {
+            if (OB_FAIL(set_string_val_charset(allocator, val, charset, result_val, false, false, charset_compat_type))) {
               LOG_WARN("set string val charset failed", K(ret));
             }
           } else {
@@ -2821,7 +2823,7 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
             bool is_hex_string = node->num_child_ == 1 ? true : false;
             if (charset_node != NULL) {
               ObString charset(charset_node->str_len_, charset_node->str_value_);
-              if (OB_FAIL(set_string_val_charset(allocator, val, charset, result_val, false, is_hex_string))) {
+              if (OB_FAIL(set_string_val_charset(allocator, val, charset, result_val, false, is_hex_string, charset_compat_type))) {
                 LOG_WARN("set string val charset failed", K(ret));
               }
             }
@@ -11326,11 +11328,14 @@ int ObResolverUtils::resolver_param(ObPlanCacheCtx &pc_ctx,
   int64_t server_collation = CS_TYPE_INVALID;
   obj_param.reset();
   ObCompatType compat_type = COMPAT_MYSQL57;
+  ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
   if (OB_ISNULL(pc_param) || OB_ISNULL(raw_param = pc_param->node_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
   } else if (OB_FAIL(session.get_compatibility_control(compat_type))) {
     LOG_WARN("failed to get compat type", K(ret));
+  } else if (OB_FAIL(session.get_charset_compat_type(charset_compat_type))) {
+    LOG_WARN("fail to get charset compat type", K(ret));
   } else if (not_param_index.has_member(param_idx)) {
     /* do nothing */
     is_param = false;
@@ -11368,7 +11373,8 @@ int ObResolverUtils::resolver_param(ObPlanCacheCtx &pc_ctx,
                        session.get_min_const_integer_precision(),
                        session.get_exec_min_cluster_version(),
                        false, /* is_from_pl */
-                       fmt_int_or_ch_decint_idx.has_member(param_idx)))) {
+                       fmt_int_or_ch_decint_idx.has_member(param_idx),
+                       charset_compat_type))) {
       SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
     } else if (FALSE_IT(obj_param.set_raw_text_info(static_cast<int32_t>(raw_param->raw_sql_offset_),
                                                     static_cast<int32_t>(raw_param->text_len_)))) {
@@ -12321,6 +12327,23 @@ int ObResolverUtils::calc_returning_param_count_recursive(const ParseNode &parse
     }
   } else {
     // pass leaf node
+  }
+  return ret;
+}
+
+int ObResolverUtils::check_default_tablespace_enable(ObSQLSessionInfo *session_info)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  if (OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is null", KR(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info->get_effective_tenant_id(), data_version))) {
+    LOG_WARN("fail to get tenant data version", KR(ret));
+  } else if (OB_UNLIKELY(!(data_version >= DATA_VERSION_4_6_1_0))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("set default tablespace is not supported", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "set default tablespace");
   }
   return ret;
 }

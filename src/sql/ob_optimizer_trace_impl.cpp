@@ -403,6 +403,9 @@ int ObOptimizerTraceImpl::append(const OpParallelRule& rule)
     case OP_INHERIT_DOP:
       ret = append("inherit");
       break;
+    case OP_SERIAL_DOP:
+      ret = append("serial dop");
+      break;
     case OP_DOP_RULE_MAX:
       ret = append("max rule");
       break;

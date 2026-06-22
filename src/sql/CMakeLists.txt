@@ -1728,7 +1728,7 @@ ob_set_subtarget(ob_sql rewrite
   rewrite/ob_transform_utils.cpp
   rewrite/ob_transform_udt_utils.cpp
   rewrite/ob_transform_view_merge.cpp
-  rewrite/ob_transform_where_subquery_pullup.cpp
+  rewrite/ob_transform_subquery_unnest.cpp
   rewrite/ob_transform_win_magic.cpp
   rewrite/ob_transform_expr_pullup.cpp
   rewrite/ob_transformer_impl.cpp

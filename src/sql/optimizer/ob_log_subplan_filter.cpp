@@ -465,6 +465,9 @@ int ObLogSubPlanFilter::get_re_est_cost_infos(const EstimateCostInfo &param,
                                      && !init_plan_idxs_.has_member(i)
                                      && !one_time_idxs_.has_member(i);
       cur_param.rescan_left_server_list_ = &get_server_list();
+      if (DistAlgo::DIST_BC2HOST_NONE == dist_algo_) {
+        cur_param.need_parallel_ = ObGlobalHint::DEFAULT_PARALLEL;
+      }
     }
 
     if (OB_FAIL(ret)) {
@@ -523,6 +526,9 @@ int ObLogSubPlanFilter::allocate_granule_post(AllocGIContext &ctx)
         LOG_TRACE("set right child gi to affinity", K(i));
       }
     }
+  } else if (DistAlgo::DIST_BC2HOST_NONE == dist_algo_) {
+    // do nothing
+    // spf bc2host only support single partition table
   }
   return ret;
 }
@@ -573,6 +579,8 @@ int ObLogSubPlanFilter::compute_sharding_info()
     }
   } else if (DistAlgo::DIST_RANDOM_ALL == dist_algo_) {
     strong_sharding_ = get_plan()->get_optimizer_context().get_distributed_sharding();
+  } else if (DistAlgo::DIST_BC2HOST_NONE == dist_algo_) {
+    strong_sharding_ = get_child(0)->get_strong_sharding();
   } else if (DistAlgo::DIST_PARTITION_WISE == dist_algo_) {
     for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); i++) {
       ObShardingInfo *sharding = NULL;
@@ -697,6 +705,7 @@ int ObLogSubPlanFilter::compute_spf_batch_rescan(bool &can_batch)
              || DistAlgo::DIST_NONE_ALL == dist_algo_
              || DistAlgo::DIST_HASH_ALL == dist_algo_
              || DistAlgo::DIST_RANDOM_ALL == dist_algo_
+             || DistAlgo::DIST_BC2HOST_NONE == dist_algo_
              || (DistAlgo::DIST_PARTITION_WISE == dist_algo_
                  && !left_allocated_exchange)) {
     can_batch = true;
@@ -1026,16 +1035,26 @@ int ObLogSubPlanFilter::compute_op_parallel_and_server_info()
              || DistAlgo::DIST_RANDOM_ALL == dist_algo_
              || DistAlgo::DIST_HASH_ALL == dist_algo_) {
     set_parallel(first_op->get_parallel());
+    set_available_parallel(first_op->get_available_parallel());
     set_server_cnt(first_op->get_server_cnt());
     if (OB_FAIL(get_server_list().assign(first_op->get_server_list()))) {
+      LOG_WARN("failed to assign server list", K(ret));
+    }
+  } else if (DistAlgo::DIST_BC2HOST_NONE == dist_algo_) {
+    set_parallel(first_op->get_available_parallel());
+    set_available_parallel(first_op->get_available_parallel());
+    set_server_cnt(sub_query_op->get_server_cnt());
+    if (OB_FAIL(get_server_list().assign(sub_query_op->get_server_list()))) {
       LOG_WARN("failed to assign server list", K(ret));
     }
   } else if (DistAlgo::DIST_PARTITION_WISE == get_distributed_algo()
              || DistAlgo::DIST_PARTITION_NONE == get_distributed_algo()) {
     int64_t parallel = ObGlobalHint::DEFAULT_PARALLEL;
+    int64_t available_parallel = ObGlobalHint::DEFAULT_PARALLEL;
     for (int64_t i = 0; i < get_num_of_child(); ++i) {
       if (OB_NOT_NULL(child = get_child(i)) && child->get_parallel() > parallel) {
         parallel = child->get_parallel();
+        available_parallel = child->get_available_parallel();
       }
     }
     if (sub_query_op->get_part_cnt() > 0 && sub_query_op->get_part_cnt() < parallel) {
@@ -1043,6 +1062,7 @@ int ObLogSubPlanFilter::compute_op_parallel_and_server_info()
       need_re_est_child_cost_ = true;
     }
     set_parallel(parallel);
+    set_available_parallel(available_parallel);
     set_server_cnt(sub_query_op->get_server_cnt());
     if (OB_FAIL(get_server_list().assign(sub_query_op->get_server_list()))) {
       LOG_WARN("failed to assign server list", K(ret));

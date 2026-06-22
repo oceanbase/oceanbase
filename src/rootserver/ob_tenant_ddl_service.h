@@ -436,6 +436,7 @@ private:
 
   int set_raw_tenant_options(
       const obrpc::ObModifyTenantArg &arg,
+      share::schema::ObSchemaGetterGuard &schema_guard,
       share::schema::ObTenantSchema &new_tenant_schema);
 
   int try_rollback_modify_tenant_locality(

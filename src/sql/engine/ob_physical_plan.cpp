@@ -591,17 +591,27 @@ void ObPhysicalPlan::update_evolution_stat(const ObAuditRecordData &record)
 {
   if (ATOMIC_LOAD(&stat_.is_evolution_)) {
     ATOMIC_INC(&(stat_.evolution_stat_.executions_));
-    // ATOMIC_AAF(&(stat_.evolution_stat_.cpu_time_),
-    //            record.get_elapsed_time() - record.exec_record_.wait_time_end_
-    //            - (record.exec_timestamp_.run_ts_ - record.exec_timestamp_.receive_ts_));
-    ATOMIC_AAF(&(stat_.evolution_stat_.cpu_time_), record.exec_timestamp_.executor_t_);
-    ATOMIC_AAF(&(stat_.evolution_stat_.elapsed_time_), record.get_elapsed_time());
-    ATOMIC_STORE(&(stat_.evolution_stat_.last_exec_ts_), record.exec_timestamp_.executor_end_ts_);
+    if (!record.is_streaming_cursor_record()) {
+      update_evolution_stat_time(record.get_executor_time(),
+                                 record.get_elapsed_time(),
+                                 record.exec_timestamp_.executor_end_ts_);
+    }
     ObEvoRecordsGuard guard;
     stat_.get_evo_records(guard);
     if (NULL != guard.get_evo_records()) {
       guard.get_evo_records()->set_record_for_finish_plan(record.exec_timestamp_.receive_ts_, record.get_elapsed_time());
     }
+  }
+}
+
+void ObPhysicalPlan::update_evolution_stat_time(const int64_t cpu_time,
+                                                const int64_t elapsed_time,
+                                                const int64_t last_exec_ts)
+{
+  if (ATOMIC_LOAD(&stat_.is_evolution_)) {
+    ATOMIC_AAF(&(stat_.evolution_stat_.cpu_time_), cpu_time);
+    ATOMIC_AAF(&(stat_.evolution_stat_.elapsed_time_), elapsed_time);
+    ATOMIC_STORE(&(stat_.evolution_stat_.last_exec_ts_), last_exec_ts);
   }
 }
 
@@ -628,7 +638,7 @@ void ObPhysicalPlan::update_plan_expired_info(const ObAuditRecordData &record,
   } else if (is_first && !is_evolution) {
     ATOMIC_STORE(&(stat_.sample_times_), 0);
     ATOMIC_STORE(&(stat_.first_exec_row_count_), record.exec_record_.get_memstore_read_row_count() + record.exec_record_.get_ssstore_read_row_count());
-    ATOMIC_STORE(&(stat_.first_exec_usec_), record.exec_timestamp_.executor_t_);
+    ATOMIC_STORE(&(stat_.first_exec_usec_), record.get_executor_time());
     if (stat_.table_row_count_first_exec_ != NULL && table_row_count_list != NULL) {
       fill_row_count_info(true, stat_.access_table_num_, stat_.table_row_count_first_exec_, *table_row_count_list);
     }
@@ -636,7 +646,7 @@ void ObPhysicalPlan::update_plan_expired_info(const ObAuditRecordData &record,
     /* in evolution, sampling infos */
     ATOMIC_INC(&(stat_.sample_times_));
     ATOMIC_AAF(&(stat_.sample_exec_row_count_), record.exec_record_.get_memstore_read_row_count() + record.exec_record_.get_ssstore_read_row_count());
-    ATOMIC_AAF(&(stat_.sample_exec_usec_), record.exec_timestamp_.executor_t_);
+    ATOMIC_AAF(&(stat_.sample_exec_usec_), record.get_executor_time());
     if (stat_.table_row_count_first_exec_ != NULL && table_row_count_list != NULL) {
       fill_row_count_info(false, stat_.access_table_num_, stat_.table_row_count_first_exec_, *table_row_count_list);
     }
@@ -679,7 +689,7 @@ void ObPhysicalPlan::update_plan_expired_info(const ObAuditRecordData &record,
     int64_t sample_count = ATOMIC_AAF(&(stat_.sample_times_), 1);
     int64_t sample_exec_row_count = ATOMIC_AAF(&(stat_.sample_exec_row_count_),
                                               record.exec_record_.get_memstore_read_row_count() + record.exec_record_.get_ssstore_read_row_count());
-    int64_t sample_exec_usec = ATOMIC_AAF(&(stat_.sample_exec_usec_), record.exec_timestamp_.executor_t_);
+    int64_t sample_exec_usec = ATOMIC_AAF(&(stat_.sample_exec_usec_), record.get_executor_time());
     if (sample_count >= SLOW_QUERY_SAMPLE_SIZE) {
       ATOMIC_STORE(&(stat_.sample_times_), 0);
       ATOMIC_STORE(&(stat_.sample_exec_row_count_), 0);
@@ -768,17 +778,6 @@ bool ObPhysicalPlan::is_plan_unstable(const int64_t sample_count,
     }
   }
   return bret;
-}
-
-int64_t ObPhysicalPlan::get_evo_perf() const {
-  int64_t v = 0;
-  if (0 == stat_.evolution_stat_.executions_) {
-    v = 0;
-  } else {
-    v = stat_.evolution_stat_.cpu_time_/ stat_.evolution_stat_.executions_;
-  }
-
-  return v;
 }
 
 /**
@@ -1697,7 +1696,7 @@ void ObPhysicalPlan::update_adaptive_pc_info(const ObAuditRecordData &record,
       && !is_outline_plan && !is_evolving) {
     static uint32_t MAX_FEEDBACK_TIMES = 5;
     int64_t get_plan_t = record.exec_timestamp_.get_plan_t_;
-    int64_t executor_t = record.exec_timestamp_.executor_t_;
+    int64_t executor_t = record.get_executor_time();
     bool is_positive_feedback =
       (executor_t >= adpt_pc_conf->pc_adaptive_min_exec_time_threshold_
        && (get_plan_t > 0

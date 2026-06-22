@@ -590,6 +590,7 @@ enum OpParallelRule
   OP_TABLE_DOP, /*+ use table parallel property: create table t1 (...) parallel 3; */
   OP_AUTO_DOP, /*+ DOP is calculated by AUTO_DOP */
   OP_INHERIT_DOP, /*+ inherited from other op or determined by other op in the same DFO */
+  OP_SERIAL_DOP, /*+ serial DOP = 1 */
   OP_DOP_RULE_MAX
 };
 

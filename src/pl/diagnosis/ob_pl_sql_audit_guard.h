@@ -54,7 +54,7 @@ public:
   int64_t get_run_timestamp() const { return get_send_timestamp(); }
   int64_t get_process_timestamp() const { return get_send_timestamp(); }
   int64_t get_single_process_timestamp() const { return get_send_timestamp(); }
-  int64_t get_exec_start_timestamp() const { return get_send_timestamp(); }
+  int64_t get_exec_start_timestamp() const { return 0 == exec_start_timestamp_ ? get_send_timestamp() : exec_start_timestamp_; }
   int64_t get_exec_end_timestamp() const { return exec_end_timestamp_; }
 
 public:
@@ -98,6 +98,8 @@ public:
                     ObPLCursorInfo *cursor = nullptr);
 
   ~ObPLSqlAuditGuard();
+
+  void set_exec_start_timestamp();
 
 private:
   bool enable_perf_event_;

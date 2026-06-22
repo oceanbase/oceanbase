@@ -588,6 +588,7 @@ private:
    */
   //    int process_subplan();
   int candi_allocate_subplan_filter_for_select_item();
+  int candi_allocate_separate_spf_for_select_items(const ObIArray<ObRawExpr *> &select_item_exprs);
 
   struct WinFuncOpHelper
   {

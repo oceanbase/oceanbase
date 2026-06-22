@@ -1614,6 +1614,10 @@ DEF_STR_WITH_CHECKER(audit_log_strategy, OB_TENANT_PARAMETER, "ASYNCHRONOUS",
          "SYNCHRONOUS: Log synchronously.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
          "ASYNCHRONOUS, PERFORMANCE, SYNCHRONOUS");
+DEF_STR_WITH_CHECKER(audit_log_encryption, OB_TENANT_PARAMETER, "NONE",
+         common::ObConfigAuditLogEncryptionChecker,
+         "the type of encryption for the audit log file, values: NONE, AES",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 //ddl 超时时间
 DEF_TIME(_ob_ddl_timeout, OB_CLUSTER_PARAMETER, "1000s", "[1s,3216672000s)",
@@ -1806,6 +1810,9 @@ DEF_BOOL(_enable_px_batch_rescan, OB_TENANT_PARAMETER, "True",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_spf_batch_rescan, OB_TENANT_PARAMETER, "False",
          "enable das batch rescan for subplan filter",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_separate_spf_for_select_items, OB_TENANT_PARAMETER, "True",
+         "enable separate subplan filter for each select item",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_das_keep_order, OB_TENANT_PARAMETER, "True",
          "enable das keep order optimization",
@@ -3469,6 +3476,10 @@ DEF_CAP(syslog_sync_size_threshold, OB_CLUSTER_PARAMETER, "0M", "[0M,)",
         "Value 0 disables this function.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_BOOL(_enable_restricted_session, OB_TENANT_PARAMETER, "False",
+         "specifies whether to enable restricted session",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_BOOL(_ob_mysql_run_definer_pl_as_invoker, OB_TENANT_PARAMETER, "False",
         "in mysql mode, run definer pl as invoker right",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -3577,4 +3588,9 @@ DEF_BOOL(_enable_schema_history_archive, OB_TENANT_PARAMETER, "False",
          "specifies whether to enable schema history archiving into __all_xxx_archive_history "
          "during schema history recycling. If disabled, schema history will be recycled directly "
          "without archiving. Default: False.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+
+DEF_BOOL(_enable_sql_parse_fullwidth_symbols, OB_CLUSTER_PARAMETER, "False",
+         "specifies whether to enable recognizing fullwidth symbols in SQL parser of Oracle mode.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

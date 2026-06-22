@@ -933,6 +933,7 @@ int ObDDLService::add_new_column_to_table_schema(
   ObSchemaGuardWrapper *schema_guard_wrapper_ptr = ext_schema_guard_wrapper;
   bool is_oracle_mode = false;
   bool is_contain_part_key = false;
+  ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
   if (nullptr == schema_guard_wrapper_ptr) {
     if (OB_FAIL(local_schema_guard_wrapper.init(schema_guard))) {
       LOG_WARN("fail to init schema guard wrapper", KR(ret));
@@ -951,11 +952,14 @@ int ObDDLService::add_new_column_to_table_schema(
   }
   // fill column collation
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(get_charset_compat_type(new_table_schema.get_tenant_id(), schema_guard, charset_compat_type))) {
+    LOG_WARN("fail to get compat type", K(ret));
   } else if (OB_FAIL(fill_column_collation(sql_mode,
                                            is_oracle_mode,
                                            new_table_schema,
                                            allocator,
-                                           alter_column_schema))) {
+                                           alter_column_schema,
+                                           charset_compat_type))) {
     LOG_WARN("failed to fill column collation", K(ret));
   } else {
     int64_t max_used_column_id = new_table_schema.get_max_used_column_id();

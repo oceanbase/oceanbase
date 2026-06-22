@@ -8954,6 +8954,9 @@ DEF_TO_STRING(ObPrintPrivSet)
   if ((priv_set_ & OB_PRIV_PLAINACCESS) && OB_SUCCESS == ret) {
     ret = BUF_PRINTF(" PLAINACCESS,");
   }
+  if ((priv_set_ & OB_PRIV_APPLICATION_PASSWORD_ADMIN) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" APPLICATION_PASSWORD_ADMIN,");
+  }
 
   if (OB_SUCCESS == ret && pos > 1) {
     pos--; //Delete last ','
@@ -10264,6 +10267,7 @@ int ObNeedPriv::deep_copy(const ObNeedPriv &other, common::ObIAllocator &allocat
   int ret = OB_SUCCESS;
   priv_level_ = other.priv_level_;
   priv_set_ = other.priv_set_;
+  grantee_id_ = other.grantee_id_;
   is_sys_table_ = other.is_sys_table_;
   is_for_update_ = other.is_for_update_;
   priv_check_type_ = other.priv_check_type_;
@@ -13500,31 +13504,6 @@ int ObProfileSchema::set_value(const int64_t type, const int64_t value)
   return ret;
 }
 
-int ObProfileSchema::set_default_value(const int64_t type)
-{
-  int ret = OB_SUCCESS;
-  if (type < 0 || type >= MAX_PARAMS) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unknown type", K(type));
-  } else if (type == PASSWORD_VERIFY_FUNCTION) {
-    password_verify_function_.reset();
-  } else if (OB_FAIL(set_value(type, DEFAULT_PARAM_VALUES[type]))) {
-    LOG_WARN("fail to set schema default value", K(ret));
-  }
-  return ret;
-}
-
-int ObProfileSchema::set_default_values()
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < MAX_PARAMS; ++i) {
-    if (i != PASSWORD_VERIFY_FUNCTION && OB_FAIL(set_value(i, DEFAULT_PARAM_VALUES[i]))) {
-      LOG_WARN("fail to set schema value", K(ret));
-    }
-  }
-  return ret;
-}
-
 int ObProfileSchema::set_default_values_v2()
 {
   int ret = OB_SUCCESS;
@@ -13549,26 +13528,6 @@ int ObProfileSchema::set_invalid_values()
   return ret;
 }
 
-int ObProfileSchema::get_default_value(const int64_t type, int64_t &value)
-{
-  int ret = OB_SUCCESS;
-  if (type < 0 || type >= MAX_PARAMS || type == PASSWORD_VERIFY_FUNCTION) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unknown type", K(type));
-  } else {
-    value = DEFAULT_PARAM_VALUES[type];
-  }
-  return ret;
-}
-
-const int64_t ObProfileSchema::DEFAULT_PARAM_VALUES[] = {
-  10,                   //times
-  USECS_PER_DAY,        //1 day
-  -1,                   //nouse
-  180 * USECS_PER_DAY,  //180 day
-  7 * USECS_PER_DAY,    //7 day
-  0,                    //no rollover window by default
-};
 const int64_t ObProfileSchema::INVALID_PARAM_VALUES[] = {
   -1,        //times
   -1,        //1 day
@@ -13577,7 +13536,6 @@ const int64_t ObProfileSchema::INVALID_PARAM_VALUES[] = {
   -1,        //1 day
   -1,        //invalid rollover time
 };
-static_assert(ARRAYSIZEOF(ObProfileSchema::DEFAULT_PARAM_VALUES) == ObProfileSchema::MAX_PARAMS, "array size");
 static_assert(ARRAYSIZEOF(ObProfileSchema::INVALID_PARAM_VALUES) == ObProfileSchema::MAX_PARAMS, "array size");
 
 const char* ObProfileSchema::PARAM_VALUE_NAMES[] = {
