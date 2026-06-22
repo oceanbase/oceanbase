@@ -72,6 +72,12 @@ int ObMViewRefreshExecutor::execute(ObExecContext &ctx, const ObMViewRefreshArg 
     LOG_WARN("fail to resolve mview list and method", KR(ret));
   } else if (OB_INVALID_ID == mview_id) {
     // empty list: do nothing, return success
+  } else if (arg.nested_
+             && OB_FAIL(ObMViewExecutorUtil::check_nested_mview_refresh_privilege(ctx, tenant_id_, mview_id))) {
+    LOG_WARN("fail to check nested mview refresh privilege", KR(ret));
+  } else if (!arg.nested_
+             && OB_FAIL(ObMViewExecutorUtil::check_refresh_mview_privilege(ctx, tenant_id_, mview_id))) {
+    LOG_WARN("fail to check refresh privilege", KR(ret));
   } else if (OB_FAIL(ObMViewExecutorUtil::generate_refresh_id(tenant_id_, refresh_id_))) {
     LOG_WARN("fail to generate refresh id", KR(ret));
   } else if (OB_FAIL(ObMViewRefreshHelper::get_current_scn(target_data_sync_scn_))) {

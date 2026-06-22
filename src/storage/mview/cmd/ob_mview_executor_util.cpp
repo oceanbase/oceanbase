@@ -13,10 +13,12 @@
 #include "rootserver/mview/ob_mview_pending_task_manager.h"
 #endif
 #include "share/inner_table/ob_inner_table_schema_constants.h"
+#include "share/ob_compatibility_control.h"
 #include "share/ob_ddl_common.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/ob_sql_utils.h"
 #include "sql/resolver/ob_schema_checker.h"
+#include "sql/resolver/mv/ob_mv_dep_utils.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "storage/ob_common_id_utils.h"
 
@@ -483,6 +485,142 @@ int ObMViewExecutorUtil::load_refresh_run_stats_error_message(sql::ObExecContext
             LOG_WARN("mview refresh failed", KR(ret), K(refresh_id), K(err_msg));
           }
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMViewExecutorUtil::check_kill_refresh_privilege(sql::ObExecContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaChecker schema_checker;
+  if (OB_ISNULL(ctx.get_my_session()) || OB_ISNULL(ctx.get_sql_ctx()) || OB_ISNULL(ctx.get_sql_ctx()->schema_guard_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(ctx.get_my_session()), K(ctx.get_sql_ctx()));
+  } else if (OB_FAIL(schema_checker.init(*(ctx.get_sql_ctx()->schema_guard_)))) {
+    LOG_WARN("fail to init schema checker", KR(ret));
+  } else if (ObSchemaChecker::is_ora_priv_check()) {
+    if (OB_FAIL(schema_checker.check_ora_ddl_priv(ctx.get_my_session()->get_effective_tenant_id(),
+                                                  ctx.get_my_session()->get_priv_user_id(),
+                                                  ObString(""),
+                                                  stmt::T_ALTER_SYSTEM_SET_PARAMETER,
+                                                  ctx.get_my_session()->get_enable_role_array()))) {
+      LOG_WARN("fail to check ora ddl priv", KR(ret));
+    }
+  } else {
+    ObNeedPriv need_priv;
+    ObStmtNeedPrivs stmt_need_privs;
+    ObSessionPrivInfo session_priv;
+    const common::ObIArray<uint64_t> &enable_role_id_array = ctx.get_my_session()->get_enable_role_array();
+    stmt_need_privs.need_privs_.set_allocator(&ctx.get_allocator());
+    need_priv.priv_set_ = OB_PRIV_ALTER_SYSTEM;
+    need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
+    if (OB_FAIL(ctx.get_my_session()->get_session_priv_info(session_priv))) {
+      LOG_WARN("fail to get session priv info", KR(ret));
+    } else if (OB_FAIL(stmt_need_privs.need_privs_.init(1))) {
+      LOG_WARN("fail to init need privs", KR(ret));
+    } else if (OB_FAIL(stmt_need_privs.need_privs_.push_back(need_priv))) {
+      LOG_WARN("fail to push back need priv", KR(ret));
+    } else if (OB_FAIL(schema_checker.check_priv(session_priv, enable_role_id_array, stmt_need_privs))) {
+      LOG_WARN("fail to check priv", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObMViewExecutorUtil::check_refresh_mview_privilege(sql::ObExecContext &ctx,
+                                                       uint64_t tenant_id,
+                                                       uint64_t mview_id)
+{
+  int ret = OB_SUCCESS;
+  bool need_check = false;
+  const ObTableSchema *table_schema = NULL;
+  const ObDatabaseSchema *db_schema = NULL;
+  ObSchemaChecker schema_checker;
+  if (OB_ISNULL(ctx.get_my_session()) || OB_ISNULL(ctx.get_sql_ctx()) || OB_ISNULL(ctx.get_sql_ctx()->schema_guard_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(ctx.get_my_session()->check_feature_enable(
+                 share::ObCompatFeatureType::MVIEW_REFRESH_PRIV_CHECK, need_check))) {
+    LOG_WARN("fail to check feature enable", KR(ret));
+  } else if (!need_check) {
+  } else if (OB_FAIL(schema_checker.init(*(ctx.get_sql_ctx()->schema_guard_),
+                                         ctx.get_my_session()->get_server_sid()))) {
+    LOG_WARN("fail to init schema checker", KR(ret));
+  } else if (OB_FAIL(ctx.get_sql_ctx()->schema_guard_->get_table_schema(tenant_id, mview_id, table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(mview_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_MVIEW_NOT_EXIST;
+    LOG_WARN("mview not exist", KR(ret), K(tenant_id), K(mview_id));
+  } else if (OB_FAIL(ctx.get_sql_ctx()->schema_guard_->get_database_schema(tenant_id,
+                                                                           table_schema->get_database_id(),
+                                                                           db_schema))) {
+    LOG_WARN("fail to get database schema", KR(ret));
+  } else if (OB_ISNULL(db_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("database schema is null", KR(ret));
+  } else {
+    uint64_t owner_id = table_schema->get_define_user_id();
+    uint64_t user_id = ctx.get_my_session()->get_priv_user_id();
+    if (user_id == owner_id) {
+      // owner always has privilege
+    } else if (ObSchemaChecker::is_ora_priv_check()) {
+      // Reuse check_ora_ddl_priv with T_ALTER_TABLE to check ALTER ANY TABLE sys priv
+      // or ALTER object priv on the mview.
+      if (OB_FAIL(schema_checker.check_ora_ddl_priv(tenant_id,
+                                                    user_id,
+                                                    db_schema->get_database_name_str(),
+                                                    mview_id,
+                                                    static_cast<uint64_t>(ObObjectType::TABLE),
+                                                    stmt::T_ALTER_TABLE,
+                                                    ctx.get_my_session()->get_enable_role_array()))) {
+        LOG_WARN("fail to check ora ddl priv", KR(ret));
+      }
+    } else {
+      ObNeedPriv need_priv;
+      ObStmtNeedPrivs stmt_need_privs;
+      ObSessionPrivInfo session_priv;
+      const common::ObIArray<uint64_t> &enable_role_id_array = ctx.get_my_session()->get_enable_role_array();
+      stmt_need_privs.need_privs_.set_allocator(&ctx.get_allocator());
+      need_priv.db_ = db_schema->get_database_name_str();
+      need_priv.table_ = table_schema->get_table_name_str();
+      need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
+      need_priv.priv_set_ = OB_PRIV_ALTER;
+      if (OB_FAIL(ctx.get_my_session()->get_session_priv_info(session_priv))) {
+        LOG_WARN("fail to get session priv info", KR(ret));
+      } else if (OB_FAIL(stmt_need_privs.need_privs_.init(1))) {
+        LOG_WARN("fail to init need privs", KR(ret));
+      } else if (OB_FAIL(stmt_need_privs.need_privs_.push_back(need_priv))) {
+        LOG_WARN("fail to push back need priv", KR(ret));
+      } else if (OB_FAIL(schema_checker.check_priv(session_priv, enable_role_id_array, stmt_need_privs))) {
+        LOG_WARN("fail to check priv", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMViewExecutorUtil::check_nested_mview_refresh_privilege(sql::ObExecContext &ctx,
+                                                              uint64_t tenant_id,
+                                                              uint64_t mview_id)
+{
+  int ret = OB_SUCCESS;
+  common::ObISQLClient *sql_proxy = ctx.get_sql_proxy();
+  ObSEArray<uint64_t, 4> nested_mview_ids;
+  if (OB_ISNULL(sql_proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", KR(ret));
+  } else if (OB_FAIL(sql::ObMVDepUtils::get_mview_ids_in_topo_refresh_order(*sql_proxy,
+                                                                            tenant_id,
+                                                                            mview_id,
+                                                                            nested_mview_ids))) {
+    LOG_WARN("fail to get nested mview ids", KR(ret), K(tenant_id), K(mview_id));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < nested_mview_ids.count(); ++i) {
+      if (OB_FAIL(check_refresh_mview_privilege(ctx, tenant_id, nested_mview_ids.at(i)))) {
+        LOG_WARN("fail to check nested mview refresh privilege",
+                 KR(ret), K(i), "mview_id", nested_mview_ids.at(i));
       }
     }
   }
