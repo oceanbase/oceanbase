@@ -583,6 +583,7 @@ int ObBackupUtils::check_tablet_minor_sstable_validity_(const storage::ObTabletH
   ObTabletID tablet_id;
   SCN start_scn = SCN::min_scn();
   SCN clog_checkpoint_scn = SCN::min_scn();
+  const int64_t emergency_table_cnt = compaction::ObPartitionMergePolicy::OB_EMERGENCY_TABLE_CNT;
   if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid tablet handle", K(ret), K(tablet_handle));
@@ -603,6 +604,11 @@ int ObBackupUtils::check_tablet_minor_sstable_validity_(const storage::ObTabletH
   if (OB_FAIL(ret)) {
   } else if (minor_sstable_array.empty()) {
     // do nothing
+  } else if (minor_sstable_array.count() >= emergency_table_cnt) {
+    ret = OB_TOO_MANY_SSTABLE;
+    LOG_ERROR("too many minor sstables in tablet, cannot backup",
+        K(ret), K(tablet_id), "minor_sstable_count", minor_sstable_array.count(),
+        "limit", emergency_table_cnt);
   } else if (OB_ISNULL(last_table_ptr = minor_sstable_array.at(minor_sstable_array.count() - 1).get_sstable())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid table ptr", K(ret), K(minor_sstable_array));
