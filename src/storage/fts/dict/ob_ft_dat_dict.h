@@ -124,7 +124,8 @@ public:
   }
 
 private:
-  int expand();
+  // Grow base/check arrays. If min_array_size > array_size_, grow to at least min_array_size.
+  int expand(const size_t min_array_size = 0);
 
   int encode(const ObString &single_token, ObFTTokenCode &code);
 
