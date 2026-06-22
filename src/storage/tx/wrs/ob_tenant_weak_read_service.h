@@ -136,15 +136,21 @@ private:
   bool need_self_check_(const int64_t cur_tstamp);
   bool need_force_self_check_(int ret, int64_t affected_rows, bool &need_stop_service);
   void generate_cluster_version_();
-  void print_stat_();
+  void print_stat_(const bool need_print);
   void cluster_service_self_check_();
-  void do_thread_task_(const int64_t begin_tstamp, int64_t &last_print_stat_ts);
+  void do_thread_task_(const int64_t begin_tstamp,
+     int64_t &last_print_stat_ts,
+     int64_t &last_generate_wrs_ts,
+     const int64_t refresh_interval);
+  bool need_generate_wrs_(const int64_t current_time,
+     int64_t &last_generate_wrs_round_ts,
+     const int64_t refresh_interval);
   void set_force_self_check_(bool need_stop_service);
   void set_cluster_service_master_(const common::ObAddr &addr);
   void generate_tenant_weak_read_timestamp_(bool need_print);
   int update_server_version_epoch_tstamp_(const int64_t cur_time);
-  int scan_all_ls_(storage::ObLSService *ls_svr);
-  int handle_ls_(storage::ObLS &ls);
+  int scan_all_ls_(storage::ObLSService *ls_svr, const bool need_print);
+  int handle_ls_(storage::ObLS &ls, const bool need_print);
 
 private:
   struct ModuleInfo

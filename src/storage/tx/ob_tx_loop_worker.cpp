@@ -81,23 +81,37 @@ void ObTxLoopWorker::reset()
   last_palf_kv_gc_interval_ts_ = 0;
 }
 
+int64_t ObTxLoopWorker::get_keep_alive_interval_() const
+{
+  // Cap the scheduling period at LOOP_INTERVAL so that tx gc / retain ctx gc /
+  // start_working retry (all 5s-level) are not delayed when _keepalive_interval
+  // is configured above LOOP_INTERVAL (range allows up to 10s).
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  return tenant_config.is_valid() ?
+      min(tenant_config->_keepalive_interval, LOOP_INTERVAL) : LOOP_INTERVAL;
+}
 void ObTxLoopWorker::run1()
 {
   int ret = OB_SUCCESS;
   int64_t start_time_us = 0;
   int64_t time_used = 0;
+  int64_t last_warn_print_ts = 0;
   lib::set_thread_name("TxLoopWorker");
   bool can_gc_tx = false;
   bool can_gc_retain_ctx = false;
   bool can_check_and_retry_start_working = false;
   bool can_adjust_log_cb_pool =  false;
   bool can_gc_palf_kv = false;
+  int64_t KEEPALIVE_INTERVAL = get_keep_alive_interval_();
 
   while (!has_set_stop()) {
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-    const int64_t KEEPALIVE_INTERVAL = tenant_config.is_valid() ?
-        min(tenant_config->_keepalive_interval, LOOP_INTERVAL) : LOOP_INTERVAL;
+    if (REACH_THREAD_TIME_INTERVAL(5*1000*1000)) {
+      // Refresh the keepalive interval periodically to avoid tenant config access bottleneck.
+      KEEPALIVE_INTERVAL = get_keep_alive_interval_();
+    }
+
     start_time_us = ObTimeUtility::current_time();
+
     if (REACH_TIME_INTERVAL(60000000)) {
       ObLeakChecker::dump();
     }
@@ -155,6 +169,17 @@ void ObTxLoopWorker::run1()
 
     if (time_used < KEEPALIVE_INTERVAL) {
       ob_usleep(KEEPALIVE_INTERVAL - time_used, true/*is_idle_sleep*/);
+    } else {
+      const int64_t LONG_RUN_STAT_INTERVAL = 5000000;
+      const int64_t cur_ts = ObTimeUtility::current_time();
+      if (cur_ts - last_warn_print_ts > LONG_RUN_STAT_INTERVAL) {
+        WRS_LOG(INFO, "[WRS] TxLoopWorker loop cost too much time", "tenant_id", MTL_ID(),
+            K(time_used), K(KEEPALIVE_INTERVAL));
+        last_warn_print_ts = cur_ts;
+      } else {
+        WRS_LOG(TRACE, "[WRS] TxLoopWorker loop cost too much time", "tenant_id", MTL_ID(),
+            K(time_used), K(KEEPALIVE_INTERVAL));
+      }
     }
     can_gc_tx = false;
     can_gc_retain_ctx = false;

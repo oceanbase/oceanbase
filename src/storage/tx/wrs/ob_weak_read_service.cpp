@@ -113,7 +113,7 @@ int ObWeakReadService::get_cluster_version(const uint64_t tenant_id, SCN &versio
     LOG_ERROR("get cluster version succ, but version is not valid snapshot version", K(ret), K(old_ret),
         K(tenant_id), K(version));
   }
-  LOG_INFO("[WRS] get_cluster_version", K(ret), K(tenant_id), K(version));
+  LOG_DEBUG("[WRS] get_cluster_version", K(ret), K(tenant_id), K(version));
 
   return ret;
 }

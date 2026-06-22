@@ -51,6 +51,7 @@ public:
   virtual void run1();
 
 private:
+  int64_t get_keep_alive_interval_() const;
   int scan_all_ls_(bool can_tx_gc, bool can_gc_retain_ctx, bool can_check_and_retry_start_working, bool can_adjust_log_cb_pool, bool can_gc_palf_kv);
   void do_keep_alive_(ObLS *ls, const share::SCN &min_start_scn, MinStartScnStatus status); // 100ms
   void do_tx_gc_(ObLS *ls, share::SCN &min_start_scn, MinStartScnStatus &status);     // 15s

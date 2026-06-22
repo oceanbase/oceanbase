@@ -12,12 +12,13 @@
 #include "ob_weak_read_util.h"                                  // ObWeakReadUtil
 #include "rpc/obrpc/ob_rpc_net_handler.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/tx/ob_ts_mgr.h"                                // OB_TS_MGR
 #include "lib/ash/ob_active_session_guard.h"
 
 #define MOD_STR "[WRS] [TENANT_WEAK_READ_SERVICE] "
 
-#define STAT(level, fmt, args...) TRANS_LOG(level, MOD_STR fmt, ##args);
-#define _STAT(level, fmt, args...) _TRANS_LOG(level, MOD_STR fmt, ##args);
+#define STAT(level, fmt, args...) WRS_LOG(level, MOD_STR fmt, ##args);
+#define _STAT(level, fmt, args...) _WRS_LOG(level, MOD_STR fmt, ##args);
 #define ISTAT(fmt, args...) STAT(INFO, fmt, ##args)
 #define WSTAT(fmt, args...) STAT(WARN, fmt, ##args)
 #define _WSTAT(fmt, args...) _STAT(WARN, fmt, ##args)
@@ -183,7 +184,7 @@ int ObTenantWeakReadService::get_cluster_version(SCN &cur_version)
     } else {
       SCN last_local_cluster_version = local_cluster_version_.atomic_get();
       local_cluster_version_.atomic_set(cur_version);
-      LOG_TRACE("get cluster version", K(cur_version), K(last_local_cluster_version));
+      LOG_INFO("get cluster version", K(cur_version), K(last_local_cluster_version));
     }
   }
   return ret;
@@ -490,10 +491,9 @@ void ObTenantWeakReadService::cluster_service_self_check_()
   ATOMIC_SET(&last_self_check_tstamp_, ObTimeUtility::current_time());
 }
 
-void ObTenantWeakReadService::print_stat_()
+void ObTenantWeakReadService::print_stat_(const bool need_print)
 {
   int get_cluster_version_err = 0;
-  int64_t cur_tstamp = ObTimeUtility::current_time();
   ObTenantWeakReadServerVersionMgr::ServerVersion sv;
   SCN cluster_version;
   SCN min_cluster_version;
@@ -501,51 +501,111 @@ void ObTenantWeakReadService::print_stat_()
   bool in_cluster_service = cluster_service_.is_in_service();
   int64_t weak_read_refresh_interval = GCONF.weak_read_version_refresh_interval;
 
+  int ret = OB_SUCCESS;
+  SCN gts_scn;
+  if (OB_FAIL(OB_TS_MGR.get_gts(tenant_id_, NULL, gts_scn))) {
+    TRANS_LOG(WARN, "get gts cache error", K(tenant_id_));
+  }
+
   svr_version_mgr_.get_version(sv);
   if (in_cluster_service) {
     get_cluster_version_err = cluster_service_.get_cluster_version(cluster_version, min_cluster_version,
         max_cluster_version);
   }
 
-  const bool ignore_invalid = true;
-  ISTAT("[STAT]", K_(tenant_id),
-      "server_version", sv,
-      "server_version_delta", cur_tstamp - sv.version_.convert_to_ts(ignore_invalid),
-      K(in_cluster_service),
-      K(cluster_version),
-      K(min_cluster_version),
-      K(max_cluster_version),
-      K(get_cluster_version_err),
-      "cluster_version_delta", (in_cluster_service ? cur_tstamp - cluster_version.convert_to_ts(ignore_invalid) : -1),
-      K_(cluster_service_master),
-      "cluster_service_tablet_id", cluster_service_.get_cluster_service_tablet_id(),
-      K_(post_cluster_heartbeat_count),
-      K_(succ_cluster_heartbeat_count),
-      K_(cluster_heartbeat_interval),
-      K_(local_cluster_version),
-      "local_cluster_delta", cur_tstamp - local_cluster_version_.convert_to_ts(ignore_invalid),
-      K_(force_self_check),
-      K(weak_read_refresh_interval));
+  if (need_print) {
+    WRS_LOG(INFO, "WRS server version stat", K_(tenant_id), K(gts_scn), "server_version", sv.version_,
+        "server_version_delta", gts_scn.convert_to_ts(true) - sv.version_.convert_to_ts(true));
+    WRS_LOG(INFO, "WRS cluster version stat", K_(tenant_id), K(in_cluster_service),
+        K(gts_scn),
+        K(cluster_version),
+        "cluster_version_delta", (in_cluster_service ? gts_scn.convert_to_ts(true) - cluster_version.convert_to_ts(true) : -1),
+        K(min_cluster_version),
+        K(max_cluster_version),
+        K(get_cluster_version_err),
+        K_(cluster_service_master),
+        K_(post_cluster_heartbeat_count),
+        K_(succ_cluster_heartbeat_count),
+        K_(cluster_heartbeat_interval),
+        K_(local_cluster_version),
+        "local_cluster_delta", gts_scn.convert_to_ts(true) - local_cluster_version_.convert_to_ts(true),
+        K_(force_self_check),
+        K(weak_read_refresh_interval));
+  } else {
+    WRS_LOG(TRACE, "WRS server version stat", K_(tenant_id), K(gts_scn), "server_version", sv.version_,
+        "server_version_delta", gts_scn.convert_to_ts(true) - sv.version_.convert_to_ts(true));
+    WRS_LOG(TRACE, "WRS cluster version stat", K_(tenant_id), K(in_cluster_service),
+        K(gts_scn),
+        K(cluster_version),
+        "cluster_version_delta", (in_cluster_service ? gts_scn.convert_to_ts(true) - cluster_version.convert_to_ts(true) : -1),
+        K(min_cluster_version),
+        K(max_cluster_version),
+        K(get_cluster_version_err),
+        K_(cluster_service_master),
+        K_(post_cluster_heartbeat_count),
+        K_(succ_cluster_heartbeat_count),
+        K_(cluster_heartbeat_interval),
+        K_(local_cluster_version),
+        "local_cluster_delta", gts_scn.convert_to_ts(true) - local_cluster_version_.convert_to_ts(true),
+        K_(force_self_check),
+        K(weak_read_refresh_interval));
+  }
+}
+
+bool ObTenantWeakReadService::need_generate_wrs_(const int64_t current_time,
+   int64_t &last_generate_wrs_round_ts,
+   const int64_t refresh_interval)
+{
+  bool need_generate = false;
+  SCN gts_scn;
+  SCN server_version = get_server_version();
+
+  if (server_version.is_valid_and_not_min()) {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(OB_TS_MGR.get_gts(tenant_id_, NULL, gts_scn))) {
+      TRANS_LOG(WARN, "get gts cache error", K(tenant_id_));
+    } else if (gts_scn.is_valid_and_not_min()) {
+      const int64_t server_version_ts = server_version.convert_to_ts();
+      const int64_t gts_ts = gts_scn.convert_to_ts();
+      const int64_t current_ts = ObClockGenerator::getClock();
+
+      // Generate a new weak read version if the local weak read version lags behind GTS or current
+      // time by more than refresh_interval
+      need_generate = (std::max(gts_ts, current_ts)) - server_version_ts > refresh_interval;
+    }
+  }
+
+  // ignore ret error code
+  if (!need_generate) {
+    // Periodically generate weak read version
+    if (current_time - last_generate_wrs_round_ts > refresh_interval) {
+      need_generate = true;
+    }
+  }
+
+  if (need_generate) {
+    last_generate_wrs_round_ts = current_time;
+  }
+
+  return need_generate;
 }
 
 void ObTenantWeakReadService::do_thread_task_(const int64_t begin_tstamp,
-    int64_t &last_print_stat_ts)
+    int64_t &last_print_stat_ts,
+    int64_t &last_generate_wrs_round_ts,
+    const int64_t refresh_interval)
 {
   bool need_print = false;
   static const int64_t PRINT_INTERVAL = 5 * 1000 * 1000L;
-  if (REACH_TIME_INTERVAL(PRINT_INTERVAL)) {
-    need_print = true;
-  } else {
-    need_print = false;
-  }
 
-  DEFINE_TIME_GUARD("thread_timer_task", THREAD_RUN_INTERVAL);
+  DEFINE_TIME_GUARD("WRS thread_timer_task", refresh_interval);
 
   if (begin_tstamp - last_print_stat_ts > PRINT_INTERVAL) {
-    print_stat_();
     last_print_stat_ts = begin_tstamp;
-    time_guard.click("print_stat");
+    need_print = true;
   }
+
+  print_stat_(need_print);
 
   if (need_cluster_heartbeat_(begin_tstamp)) {
     ObDIActionGuard ag("do_cluster_heartbeat");
@@ -565,7 +625,12 @@ void ObTenantWeakReadService::do_thread_task_(const int64_t begin_tstamp,
   }
 
   // generate weak read timestamp
-  generate_tenant_weak_read_timestamp_(need_print);
+  if (need_generate_wrs_(begin_tstamp, last_generate_wrs_round_ts, refresh_interval)) {
+    generate_tenant_weak_read_timestamp_(need_print);
+    time_guard.click("generate_tenant_weak_read_timestamp");
+  }
+
+  print_stat_(need_print);
 }
 
 void ObTenantWeakReadService::generate_tenant_weak_read_timestamp_(bool need_print)
@@ -579,7 +644,7 @@ void ObTenantWeakReadService::generate_tenant_weak_read_timestamp_(bool need_pri
     LOG_WARN("MTL ObLSService is NULL", KR(ret), KP(ls_svr), K_(tenant_id));
   } else if (OB_FAIL(update_server_version_epoch_tstamp_(start_time))) {
     LOG_WARN("update server version epoch timestmap fail", KR(ret), K(start_time));
-  } else if (OB_FAIL(scan_all_ls_(ls_svr))) {
+  } else if (OB_FAIL(scan_all_ls_(ls_svr, need_print))) {
     LOG_WARN("scan all partition fail", KR(ret));
   } else if (OB_FAIL(generate_server_version(server_version_epoch_tstamp_, need_print))) {
     LOG_WARN("generate server version for tenant fail", KR(ret), K_(tenant_id), K(index),
@@ -599,7 +664,7 @@ int ObTenantWeakReadService::update_server_version_epoch_tstamp_(const int64_t c
   return OB_SUCCESS;
 }
 
-int ObTenantWeakReadService::scan_all_ls_(storage::ObLSService *ls_svr)
+int ObTenantWeakReadService::scan_all_ls_(storage::ObLSService *ls_svr, const bool need_print)
 {
   int ret = OB_SUCCESS;
   common::ObSharedGuard<storage::ObLSIterator> iter;
@@ -626,7 +691,7 @@ int ObTenantWeakReadService::scan_all_ls_(storage::ObLSService *ls_svr)
         LOG_WARN("iterate ls fail", KP(ls));
       } else if (ObReplicaTypeCheck::is_log_replica(ls->get_replica_type())) {
         LOG_TRACE("skip logonly replica", KPC(ls));
-      } else if (OB_FAIL(handle_ls_(*ls))) {
+      } else if (OB_FAIL(handle_ls_(*ls, need_print))) {
         LOG_WARN("handle ls fail", "ls_id", ls->get_ls_id(), K(ret));
         ret = OB_SUCCESS;
       } else {
@@ -652,7 +717,7 @@ int ObTenantWeakReadService::scan_all_ls_(storage::ObLSService *ls_svr)
   return ret;
 }
 
-int ObTenantWeakReadService::handle_ls_(ObLS &ls)
+int ObTenantWeakReadService::handle_ls_(ObLS &ls, const bool need_print)
 {
   int ret = OB_SUCCESS;
   SCN version;
@@ -670,7 +735,8 @@ int ObTenantWeakReadService::handle_ls_(ObLS &ls)
                                                          need_skip,
                                                          is_user_ls,
                                                          version,
-                                                         max_stale_time))) {
+                                                         max_stale_time,
+                                                         need_print))) {
     LOG_WARN("generate ls weak read snapshot version fail", KR(ret), K(ls_id));
   } else if (OB_UNLIKELY(!need_skip && !version.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
@@ -692,13 +758,21 @@ void ObTenantWeakReadService::run1()
   int64_t last_print_stat_ts = 0;
   ISTAT("thread start", K_(tenant_id));
   lib::set_thread_name("TenantWeakReadService");
+  int64_t last_generate_wrs_round_ts = 0;
   while (!has_set_stop()) {
     int64_t weak_read_refresh_interval = GCONF.weak_read_version_refresh_interval;
+    int64_t refresh_interval = std::min(ObWeakReadUtil::replica_keepalive_interval(), weak_read_refresh_interval);
     int64_t begin_tstamp = ObTimeUtility::current_time();
-    do_thread_task_(begin_tstamp, last_print_stat_ts);
+    do_thread_task_(begin_tstamp, last_print_stat_ts, last_generate_wrs_round_ts, refresh_interval);
     int64_t end_tstamp = ObTimeUtility::current_time();
-    int64_t wait_interval = std::min(ObWeakReadUtil::replica_keepalive_interval(),
-                                     weak_read_refresh_interval - (end_tstamp - begin_tstamp));
+
+    // Here we set the thread working period to refresh_interval/2 to ensure that the generated
+    // WRS version lag time remains within refresh_interval.
+    //
+    // For example: if we set weak_read_version_refresh_interval to 100ms, then the thread working period is 50ms,
+    // and the generated WRS version lag time remains around 100ms.
+    int64_t wait_interval = (refresh_interval - (end_tstamp - begin_tstamp))/2;
+
     if (wait_interval > 0) {
       common::ObBKGDSessInActiveGuard inactive_guard;
       thread_cond_.timedwait(wait_interval);

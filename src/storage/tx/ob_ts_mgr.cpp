@@ -461,20 +461,27 @@ void ObTsMgr::destroy()
   }
 }
 
+int64_t ObTsMgr::get_refresh_gts_interval_() const
+{
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  return tenant_config.is_valid() ? tenant_config->_keepalive_interval : REFRESH_GTS_INTERVEL_US;
+}
+
 // 执行gts任务刷新，由一个专门的线程来负责
 void ObTsMgr::run1()
 {
   int ret = OB_SUCCESS;
   ObSEArray<uint64_t, 1> ids;
   ObGtsRefreshFunctor gts_refresh_funtor;
+  int64_t IDLE_US = get_refresh_gts_interval_();
   GetObsoleteTenantFunctor get_obsolete_tenant_functor(TS_SOURCE_INFO_OBSOLETE_TIME, ids);
   // cluster版本小于2.0不会更新gts
   lib::set_thread_name("TsMgr");
   while (!has_set_stop()) {
-    // sleep 100 * 1000 us
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-    const int64_t IDLE_US = tenant_config.is_valid() ?
-        tenant_config->_keepalive_interval : REFRESH_GTS_INTERVEL_US;
+    if (REACH_THREAD_TIME_INTERVAL(5*1000*1000)) {
+      // Refresh the GTS refresh interval periodically to avoid tenant config access bottleneck.
+      IDLE_US = get_refresh_gts_interval_();
+    }
     ob_usleep(IDLE_US, true/*is_idle_sleep*/);
     ts_source_info_map_.for_each(gts_refresh_funtor);
     ts_source_info_map_.for_each(get_obsolete_tenant_functor);

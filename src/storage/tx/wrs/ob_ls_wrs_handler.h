@@ -40,14 +40,20 @@ public:
                                               bool &need_skip,
                                               bool &is_user_ls,
                                               share::SCN &wrs_version,
-                                              const int64_t max_stale_time);
+                                              const int64_t max_stale_time,
+                                              const bool need_print);
   share::SCN get_ls_weak_read_ts() const { return ls_weak_read_ts_; }
   bool can_skip_ls() const { return !is_enabled_; }
 
   TO_STRING_KV(K_(is_inited), K_(is_enabled), K_(ls_id), K_(ls_weak_read_ts));
 
 private:
-  int generate_weak_read_timestamp_(oceanbase::storage::ObLS &ls, const int64_t max_stale_time, share::SCN &timestamp);
+  int generate_weak_read_timestamp_(oceanbase::storage::ObLS &ls,
+                                    const int64_t max_stale_time,
+                                    share::SCN &wrs_scn,
+                                    share::SCN &min_log_service_scn,
+                                    share::SCN &min_tx_service_scn,
+                                    share::SCN &end_scn);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSWRSHandler);

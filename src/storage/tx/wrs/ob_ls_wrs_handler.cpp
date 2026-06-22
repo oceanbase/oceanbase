@@ -72,12 +72,16 @@ int ObLSWRSHandler::online()
 int ObLSWRSHandler::generate_ls_weak_read_snapshot_version(ObLS &ls,
                                                            bool &need_skip,
                                                            bool &is_user_ls,
-                                                           SCN &wrs_version,
-                                                           const int64_t max_stale_time)
+                                                           SCN &ret_wrs_version,
+                                                           const int64_t max_stale_time,
+                                                           const bool need_print)
 {
   int ret = OB_SUCCESS;
-  SCN timestamp;
+  SCN wrs_scn;
   SCN gts_scn;
+  SCN min_log_service_scn;
+  SCN min_tx_service_scn;
+  SCN end_scn;
   need_skip = false;
 
   ObSpinLockGuard guard(lock_);
@@ -86,37 +90,65 @@ int ObLSWRSHandler::generate_ls_weak_read_snapshot_version(ObLS &ls,
     STORAGE_LOG(WARN, "ObLSWRSHandler not init", K(ret), K(is_inited_), K(ls));
   } else if (!is_enabled_) {
     need_skip = true;
-    if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
+    if (need_print || REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
       STORAGE_LOG(INFO, "weak read handler not enabled", K(*this));
     }
-  } else if (OB_FAIL(generate_weak_read_timestamp_(ls, max_stale_time, timestamp))) {
+  } else if (OB_FAIL(OB_TS_MGR.get_gts(MTL_ID(), NULL, gts_scn))) {
+    TRANS_LOG(WARN, "get gts scn error", K(ret), K(max_stale_time), K(*this));
+  } else if (OB_FAIL(generate_weak_read_timestamp_(ls, max_stale_time, wrs_scn, min_log_service_scn, min_tx_service_scn, end_scn))) {
     need_skip = true;
     if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
       STORAGE_LOG(INFO, "fail to generate weak read timestamp", KR(ret), K(max_stale_time));
     }
     ret = OB_SUCCESS;
-  // put check transfer_prepare after generate wrs
-  } else if (ls.get_transfer_status().get_transfer_prepare_enable()) {
-    timestamp.reset();
-    need_skip = true;
-    if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
-      STORAGE_LOG(INFO, "ls in transfer status", K(*this));
-    }
-  } else if (OB_FAIL(OB_TS_MGR.get_gts(MTL_ID(), NULL, gts_scn))) {
-    TRANS_LOG(WARN, "get gts scn error", K(ret), K(max_stale_time), K(*this));
   } else {
+    const bool in_transfer_prepare = ls.get_transfer_status().get_transfer_prepare_enable();
     int64_t snapshot_version_barrier = gts_scn.convert_to_ts() - max_stale_time;
-    if (timestamp.convert_to_ts() <= snapshot_version_barrier) {
+    if (wrs_scn.convert_to_ts() <= snapshot_version_barrier) {
       // rule out these ls to avoid too old weak read timestamp
       need_skip = true;
-      if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
-        STORAGE_LOG(INFO, "wead read timestamp is too old", K(timestamp),
-                                                            K(gts_scn),
-                                                            K(max_stale_time),
-                                                            K(*this));
+      if (!in_transfer_prepare && REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
+        // only print log when not in transfer status
+        WRS_LOG(INFO, "wead read timestamp is too old", K(wrs_scn),
+                                                        K(gts_scn),
+                                                        K(max_stale_time),
+                                                        K(*this));
       }
     } else {
       need_skip = false;
+    }
+
+    uint64_t log_service_delta = gts_scn >= min_log_service_scn ? gts_scn.convert_to_ts(true) - min_log_service_scn.convert_to_ts(true) : 0;
+    uint64_t tx_service_delta = gts_scn >= min_tx_service_scn ? gts_scn.convert_to_ts(true) - min_tx_service_scn.convert_to_ts(true) : 0;
+    uint64_t end_scn_delta = gts_scn >= end_scn ? gts_scn.convert_to_ts(true) - end_scn.convert_to_ts(true) : 0;
+    if (need_print) {
+      WRS_LOG(INFO, "[WRS] generate ls weak read timestamp", "tenant_id",
+              MTL_ID(), "ls_id", ls.get_ls_id(),
+              K(gts_scn), K(wrs_scn), K(end_scn), K(min_log_service_scn), K(min_tx_service_scn),
+              "wrs_delta", gts_scn.convert_to_ts(true) - wrs_scn.convert_to_ts(true),
+              K(end_scn_delta), K(log_service_delta), K(tx_service_delta),
+              K(max_stale_time),
+               K(in_transfer_prepare));
+      // print keep alive info
+      ls.get_keep_alive_ls_handler()->print_stat_info();
+    } else {
+      WRS_LOG(TRACE, "[WRS] generate ls weak read timestamp", "tenant_id",
+              MTL_ID(), "ls_id", ls.get_ls_id(),
+              K(gts_scn), K(wrs_scn), K(end_scn), K(min_log_service_scn), K(min_tx_service_scn),
+              "wrs_delta", gts_scn.convert_to_ts(true) - wrs_scn.convert_to_ts(true),
+              K(end_scn_delta), K(log_service_delta), K(tx_service_delta),
+              K(max_stale_time),
+              K(in_transfer_prepare));
+    }
+  }
+
+  // put check transfer_prepare after generate wrs
+  if (OB_SUCC(ret) && ls.get_transfer_status().get_transfer_prepare_enable()) {
+    wrs_scn.reset();
+    need_skip = true;
+    if (need_print || REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
+      WRS_LOG(INFO, "ls in transfer status, skip it for generate wrs",
+         "tenant_id", MTL_ID(), "ls_id", ls.get_ls_id(), K(*this));
     }
   }
 
@@ -132,22 +164,26 @@ int ObLSWRSHandler::generate_ls_weak_read_snapshot_version(ObLS &ls,
   // update weak read timestamp
   if (OB_SUCC(ret)) {
     if (!need_skip) {
-      wrs_version = timestamp;
+      ret_wrs_version = wrs_scn;
     }
   }
 
-  if (timestamp.is_valid()) {
+  if (wrs_scn.is_valid()) {
     // Update timestamp forcedly no matter how current ls leaves behind or not;
-    ls_weak_read_ts_.inc_update(timestamp);
+    ls_weak_read_ts_.inc_update(wrs_scn);
   }
 
   return ret;
 }
 
-int ObLSWRSHandler::generate_weak_read_timestamp_(ObLS &ls, const int64_t max_stale_time, SCN &timestamp)
+int ObLSWRSHandler::generate_weak_read_timestamp_(ObLS &ls,
+   const int64_t max_stale_time,
+   SCN &wrs_scn,
+   SCN &min_log_service_scn,
+   SCN &min_tx_service_scn,
+   SCN &end_scn)
 {
   int ret = OB_SUCCESS;
-  SCN min_log_service_scn, min_tx_service_ts;
   const ObLSID &ls_id = ls.get_ls_id();
 
   //the order of apply service、trx should not be changed
@@ -160,10 +196,12 @@ int ObLSWRSHandler::generate_weak_read_timestamp_(ObLS &ls, const int64_t max_st
     } else {
       STORAGE_LOG(WARN, "get_max_decided_log_ts_ns error", K(ret), K(ls_id));
     }
+  } else if (OB_FAIL(ls.get_end_scn(end_scn))) {
+    STORAGE_LOG(WARN, "get_end_scn error", K(ret), K(ls_id));
   } else if (OB_FAIL(ls.get_tx_svr()
                        ->get_trans_service()
                        ->get_ls_min_uncommit_prepare_version(ls_id,
-                                                             min_tx_service_ts))) {
+                                                             min_tx_service_scn))) {
     if (OB_PARTITION_NOT_EXIST == ret) {
       if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
         STORAGE_LOG(WARN, "get_min_uncommit_prepare_version error", K(ret), K(ls_id));
@@ -172,18 +210,7 @@ int ObLSWRSHandler::generate_weak_read_timestamp_(ObLS &ls, const int64_t max_st
       STORAGE_LOG(WARN, "get_min_uncommit_prepare_version error", K(ret), K(ls_id));
     }
   } else {
-    timestamp = SCN::min(min_log_service_scn, min_tx_service_ts);
-    const int64_t current_us = ObClockGenerator::getClock();
-    if (current_us - timestamp.convert_to_ts() > 3000 * 1000L /*3s*/
-        || REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
-      TRANS_LOG(INFO, "get wrs ts", K(ls_id),
-                                    "delta", current_us - timestamp.convert_to_ts(),
-                                    "log_service_ts", min_log_service_scn.convert_to_ts(),
-                                    "min_tx_service_ts", min_tx_service_ts.convert_to_ts(),
-                                    K(timestamp));
-      // print keep alive info
-      ls.get_keep_alive_ls_handler()->print_stat_info();
-    }
+    wrs_scn = SCN::min(min_log_service_scn, min_tx_service_scn);
   }
 
   return ret;

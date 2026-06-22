@@ -692,7 +692,9 @@ int ObApplyStatus::get_max_applied_scn(SCN &scn)
   //保证此接口不会被并发调用, 两把锁的顺序不能更改
   RLockGuard rguard(lock_);
   lib::ObMutexGuard guard(mutex_);
-  const SCN last_check_scn = last_check_scn_;
+  const SCN init_max_applied_cb_scn = max_applied_cb_scn_;
+  const SCN init_last_check_scn = last_check_scn_;
+  int64_t apply_not_done_index = -1;
   if (OB_UNLIKELY(IS_NOT_INIT)) {
     ret = OB_NOT_INIT;
     CLOG_LOG(ERROR, "apply status has not been inited", K(ret));
@@ -719,37 +721,54 @@ int ObApplyStatus::get_max_applied_scn(SCN &scn)
       max_applied_cb_scn_ = cur_palf_committed_end_scn;
       CLOG_LOG(INFO, "update max_applied_cb_scn_", K(cur_palf_committed_end_scn), KPC(this));
     }
-  } else if ((!last_check_scn.is_valid()) || last_check_scn == max_applied_cb_scn_) {
-    if (OB_FAIL(update_last_check_scn_())) {
-      CLOG_LOG(ERROR, "update_last_check_scn_ failed", K(ret), KPC(this));
-    } else {
-      //do nothing
-    }
-  } else if (!max_applied_cb_scn_.is_valid() || last_check_scn > max_applied_cb_scn_) {
-    // 检查last_check_scn_是否都已经回调完成
-    bool is_done = true;
-    for (int64_t i = 0; OB_SUCC(ret) && is_done && i < APPLY_TASK_QUEUE_SIZE; ++i) {
-      if (OB_FAIL(cb_queues_[i].is_snapshot_apply_done(is_done))) {
-        CLOG_LOG(WARN, "check is_snapshot_apply_done failed", K(ret), K(ls_id_), K(i));
-      }
-    }
-    if (OB_SUCC(ret) && is_done) {
-      max_applied_cb_scn_ = last_check_scn;
-      CLOG_LOG(TRACE, "is_snapshot_apply_done", K(ret), KPC(this));
+  } else {
+    // LEADER == role_
+    SCN last_check_scn = last_check_scn_;
+
+    if ((!last_check_scn.is_valid()) || last_check_scn == max_applied_cb_scn_) {
       if (OB_FAIL(update_last_check_scn_())) {
         CLOG_LOG(ERROR, "update_last_check_scn_ failed", K(ret), KPC(this));
       } else {
-        //do nothing
+        last_check_scn = last_check_scn_;
       }
     }
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(ERROR, "max_applied_cb_scn_ larger than last_check_scn_, unexpected", K(ret), KPC(this));
+
+    if (OB_FAIL(ret)) {
+    } else if ((!last_check_scn.is_valid()) || last_check_scn == max_applied_cb_scn_) {
+      // do nothing
+    } else if (!max_applied_cb_scn_.is_valid() || last_check_scn > max_applied_cb_scn_) {
+      // 检查last_check_scn_是否都已经回调完成
+      bool is_done = true;
+      for (int64_t i = 0; OB_SUCC(ret) && is_done && i < APPLY_TASK_QUEUE_SIZE; ++i) {
+        if (OB_FAIL(cb_queues_[i].is_snapshot_apply_done(is_done))) {
+          CLOG_LOG(WARN, "check is_snapshot_apply_done failed", K(ret),
+                   K(ls_id_), K(i));
+        } else if (! is_done) {
+          apply_not_done_index = i;
+        }
+      }
+      if (OB_SUCC(ret) && is_done) {
+        max_applied_cb_scn_ = last_check_scn;
+        CLOG_LOG(TRACE, "is_snapshot_apply_done", K(ret), KPC(this));
+        if (OB_FAIL(update_last_check_scn_())) {
+          CLOG_LOG(ERROR, "update_last_check_scn_ failed", K(ret), KPC(this));
+        } else {
+          // do nothing
+        }
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      CLOG_LOG(ERROR, "max_applied_cb_scn_ larger than last_check_scn_, unexpected", K(ret), KPC(this));
+    }
   }
+
   scn = max_applied_cb_scn_;
-  CLOG_LOG(TRACE, "get_max_applied_scn finish", K(ret), KPC(this), K(scn));
+  WRS_LOG(TRACE, "[WRS] get_max_applied_scn finish",
+      "tenant_id", MTL_ID(), K_(ls_id), K(ret), K(scn), K(init_max_applied_cb_scn),
+      K(init_last_check_scn), K(apply_not_done_index), KPC(this));
+
   if (palf_reach_time_interval(5 * 1000 * 1000, get_info_debug_time_)) {
-    CLOG_LOG(INFO, "get_max_applied_scn", K(scn), KPC(this));
+    CLOG_LOG(INFO, "[WRS] get_max_applied_scn", K(scn), K(init_max_applied_cb_scn), K(init_last_check_scn), KPC(this));
   }
   return ret;
 }

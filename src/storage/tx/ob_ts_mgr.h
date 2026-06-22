@@ -413,6 +413,7 @@ private:
   static const int64_t TS_SOURCE_INFO_OBSOLETE_TIME = 120 * 1000 * 1000;
   static const int64_t TS_SOURCE_INFO_CACHE_NUM = 4096;
 private:
+  int64_t get_refresh_gts_interval_() const;
   int get_ts_source_info_opt_(const uint64_t tenant_id, ObTsSourceInfoGuard &guard,
       const bool need_create_tenant, const bool need_update_access_ts);
   int get_ts_source_info_(const uint64_t tenant_id, ObTsSourceInfoGuard &guard,
