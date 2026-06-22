@@ -30,8 +30,6 @@ namespace rootserver
     } else if (OB_UNLIKELY(!GCTX.omt_->has_tenant(OB_SYS_TENANT_ID))) {                   \
       ret = OB_TENANT_NOT_EXIST;                                                          \
       LOG_WARN("local server does not have SYS tenant resource", KR(ret));                \
-    } else if (OB_FAIL(ObDDLUtil::check_local_is_sys_leader())) {                         \
-      LOG_WARN("local is not sys tenant leader", KR(ret));                                \
     } else {                                                                              \
       MTL_SWITCH(OB_SYS_TENANT_ID) {                                                      \
         rootserver::ObDDLScheduler* sys_ddl_scheduler = MTL(rootserver::ObDDLScheduler*); \
