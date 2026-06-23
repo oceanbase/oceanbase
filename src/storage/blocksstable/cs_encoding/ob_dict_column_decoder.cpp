@@ -2187,6 +2187,8 @@ int ObDictColumnDecoder::get_aggregate_result(
   const ObDictColumnDecoderCtx &dict_ctx = col_ctx.dict_ctx_;
   const bool is_const_encoding = dict_ctx.dict_meta_->is_const_encoding_ref();
   const uint64_t dict_val_cnt = dict_ctx.dict_meta_->distinct_val_cnt_;
+  bool agg_null = false;
+  ObStorageDatum storage_datum;
   if (OB_UNLIKELY(!pd_row_id_ctx.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid arguments to get aggregate result", KR(ret), K(pd_row_id_ctx));
@@ -2194,8 +2196,10 @@ int ObDictColumnDecoder::get_aggregate_result(
     bool all_null = false;
     const int64_t row_cap = pd_row_id_ctx.get_row_count();
     if (dict_val_cnt == 0) {
-      // skip if all null
+      // all null
+      agg_null |= row_cap > 0;
     } else if (row_cap == dict_ctx.micro_block_header_->row_count_) { // cover whole microblock
+      agg_null |= dict_ctx.dict_meta_->has_null();
       if (dict_ctx.dict_meta_->is_sorted() && (agg_cell.is_min_agg() || agg_cell.is_max_agg())) { // int dict must be sorted
         ObDictValueIterator res_iter = ObDictValueIterator(&dict_ctx, agg_cell.is_min_agg() ? 0 : dict_val_cnt - 1, col_ctx.is_padding_mode_);
         if (OB_FAIL(agg_cell.eval(*res_iter))) {
@@ -2206,7 +2210,6 @@ int ObDictColumnDecoder::get_aggregate_result(
       }
     } else { // cover partial microblock
       int64_t row_id = 0;
-      ObStorageDatum storage_datum;
       if (OB_FAIL(agg_cell.reserve_bitmap(dict_val_cnt))) {
         LOG_WARN("Failed to reserve memory for bitmap", KR(ret), K(row_cap));
       } else {
@@ -2214,8 +2217,16 @@ int ObDictColumnDecoder::get_aggregate_result(
           row_id = pd_row_id_ctx.get_row_id(i);
           if (OB_FAIL(decode_and_aggregate(col_ctx, row_id, storage_datum, agg_cell))) {
             LOG_WARN("Failed to decode", KR(ret), K(row_id));
+          } else {
+            agg_null |= storage_datum.is_null();
           }
         }
+      }
+    }
+    if (OB_SUCC(ret) && agg_null) {
+      storage_datum.set_null();
+      if (OB_FAIL(agg_cell.eval(storage_datum))) {
+        LOG_WARN("Failed to eval agg cell", KR(ret), K(storage_datum), K(agg_cell));
       }
     }
   }
