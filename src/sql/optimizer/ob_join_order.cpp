@@ -7268,6 +7268,9 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
       } else if (FALSE_IT(log_table_hint = get_plan()->get_log_plan_hint().get_index_hint(table_id))) {
       } else if (NULL != log_table_hint && log_table_hint->is_use_index_hint()) {
         bool is_full_hint = false;
+        bool is_heap_org_table = false;
+        const ObTableSchema *table_schema = NULL;
+        const ObSqlSchemaGuard *schema_guard = opt_ctx->get_sql_schema_guard();
         if (opt_ctx->get_query_ctx()->check_opt_compat_version(
                 COMPAT_VERSION_4_3_5_BP6, COMPAT_VERSION_4_4_0,
                 COMPAT_VERSION_4_4_2_BP2, COMPAT_VERSION_4_5_0,
@@ -7281,7 +7284,15 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
             }
           }
         }
-        if (is_full_hint) {
+        if (OB_ISNULL(schema_guard)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null schema guard", K(ret));
+        } else if (OB_FAIL(schema_guard->get_table_schema(table_id, table_schema))) {
+          LOG_WARN("failed to get table schema", K(table_id), K(ret));
+        } else if (OB_NOT_NULL(table_schema)) {
+          is_heap_org_table = table_schema->is_heap_organized_table();
+        }
+        if (OB_SUCC(ret) && is_full_hint && is_heap_org_table) {
           ObSEArray<ObExprConstraint, 4> saved_constraints;
           if (OB_FAIL(append(saved_constraints, expr_constraints))) {
             LOG_WARN("failed to save expr constraints", K(ret));
