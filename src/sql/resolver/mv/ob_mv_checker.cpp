@@ -637,9 +637,14 @@ int ObMVChecker::check_mav_aggr_item(const ObSelectStmt &stmt,
   if (OB_ISNULL(aggr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(aggr));
-  } else if (aggr->is_param_distinct() || aggr->in_inner_stmt()) { // 这里判断完全没有has_nested_aggr_的时候in_inner_stmt 才会为true
+  } else if (aggr->in_inner_stmt()) {
     is_valid = false;
-    fast_refreshable_error_.assign_fmt("query with nested aggregate functions or distinct keyword is not supported");
+    fast_refreshable_error_.assign_fmt("query with nested aggregate functions is not supported");
+  } else if (!ObMVChecker::is_basic_aggr(*aggr)) {
+    // aggregate functions that cannot be maintained incrementally,
+    // use group recalculate mechanism instead.
+    is_valid = true;
+    check_group_recalculate_constraints(stmt, is_valid);
   } else {
     is_valid = true;
     switch (aggr->get_expr_type()) {
@@ -675,23 +680,8 @@ int ObMVChecker::check_mav_aggr_item(const ObSelectStmt &stmt,
         }
         break;
       }
-      case T_FUN_MAX:
-      case T_FUN_MIN: {
-        if (!stmt.is_single_table_stmt()) {
-          is_valid = false;
-          fast_refreshable_error_.assign_fmt("min/max aggregation function only support for single table query");
-        } else if (stmt.is_scala_group_by()) {
-          is_valid = false;
-          fast_refreshable_error_.assign_fmt("min/max aggregation function not support for scala group by");
-        } else if (need_on_query_computation_) {
-          is_valid = false;
-          fast_refreshable_error_.assign_fmt("on query computation is not supported for min/max aggr");
-        }
-        break;
-      }
-      default : {
+      default: {
         is_valid = false;
-        fast_refreshable_error_.assign_fmt("the aggregate function type is not supported yet (only count/sum/avg/stddev/variance/min/max is supported)");
         break;
       }
     }
@@ -699,14 +689,47 @@ int ObMVChecker::check_mav_aggr_item(const ObSelectStmt &stmt,
   return ret;
 }
 
-bool ObMVChecker::is_basic_aggr(const ObItemType aggr_type)
+void ObMVChecker::check_group_recalculate_constraints(const ObSelectStmt &stmt, bool &is_valid)
 {
-  return  T_FUN_COUNT == aggr_type || T_FUN_SUM == aggr_type;
+  if (!stmt.is_single_table_stmt()) {
+    is_valid = false;
+    fast_refreshable_error_.assign_fmt("group recalculate aggregation like min/max/count(distinct) only support for single table query");
+  } else if (stmt.is_scala_group_by()) {
+    is_valid = false;
+    fast_refreshable_error_.assign_fmt("group recalculate aggregation like min/max/count(distinct) not support for scalar group by");
+  } else if (need_on_query_computation_) {
+    is_valid = false;
+    fast_refreshable_error_.assign_fmt("group recalculate aggregation like min/max/count(distinct) not support for on query computation");
+  }
 }
 
-bool ObMVChecker::is_group_recalculate_aggr(const ObItemType aggr_type)
+bool ObMVChecker::is_basic_aggr(const ObRawExpr &aggr)
 {
-  return  T_FUN_MIN == aggr_type || T_FUN_MAX == aggr_type;
+  return aggr.is_aggr_expr()
+         && (T_FUN_COUNT == aggr.get_expr_type() || T_FUN_SUM == aggr.get_expr_type())
+         && !static_cast<const ObAggFunRawExpr &>(aggr).is_param_distinct();
+}
+
+bool ObMVChecker::is_basic_count(const ObRawExpr &aggr)
+{
+  return aggr.is_aggr_expr()
+         && T_FUN_COUNT == aggr.get_expr_type()
+         && !static_cast<const ObAggFunRawExpr &>(aggr).is_param_distinct();
+}
+
+bool ObMVChecker::is_basic_sum(const ObRawExpr &aggr)
+{
+  return aggr.is_aggr_expr()
+         && T_FUN_SUM == aggr.get_expr_type()
+         && !static_cast<const ObAggFunRawExpr &>(aggr).is_param_distinct();
+}
+
+bool ObMVChecker::is_group_recalculate_aggr(const ObRawExpr &aggr)
+{
+  if (!aggr.is_aggr_expr() || !IS_AGGR_FUN(aggr.get_expr_type())) {
+    return false;
+  }
+  return !is_basic_aggr(aggr);
 }
 
 int ObMVChecker::extract_group_recalculate_aggrs(const ObIArray<ObAggFunRawExpr*> &all_aggrs,
@@ -718,7 +741,7 @@ int ObMVChecker::extract_group_recalculate_aggrs(const ObIArray<ObAggFunRawExpr*
     if (OB_ISNULL(all_aggrs.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret), K(i), K(all_aggrs));
-    } else if (!is_group_recalculate_aggr(all_aggrs.at(i)->get_expr_type())) {
+    } else if (!is_group_recalculate_aggr(*all_aggrs.at(i))) {
       /* do nothing */
     } else if (OB_FAIL(group_recalculate_aggrs.push_back(all_aggrs.at(i)))) {
       LOG_WARN("failed to push back", K(ret));

@@ -124,8 +124,10 @@ class ObMVChecker
   int check_mv_refresh_type();
   int check_mv_stmt_refresh_type(const ObSelectStmt &stmt, ObMVRefreshableType &refresh_type);
   ObMVRefreshableType get_refresh_type() const { return refresh_type_; };
-  static bool is_basic_aggr(const ObItemType aggr_type);
-  static bool is_group_recalculate_aggr(const ObItemType aggr_type);
+  static bool is_basic_aggr(const ObRawExpr &aggr);
+  static bool is_basic_count(const ObRawExpr &aggr);
+  static bool is_basic_sum(const ObRawExpr &aggr);
+  static bool is_group_recalculate_aggr(const ObRawExpr &aggr);
   static int extract_group_recalculate_aggrs(const ObIArray<ObAggFunRawExpr*> &all_aggrs,
                                              ObIArray<ObAggFunRawExpr*> &group_recalculate_aggrs);
   const ObSelectStmt &get_stmt() const {  return stmt_; }
@@ -182,6 +184,8 @@ private:
   int check_mav_aggr_item(const ObSelectStmt &stmt,
                           ObAggFunRawExpr *aggr,
                           bool &is_valid);
+  void check_group_recalculate_constraints(const ObSelectStmt &stmt,
+                                           bool &is_valid);
   int collect_equivalent_count_aggr(const ObSelectStmt &stmt,
                                     const ObRawExpr *count_param);
   static int get_equivalent_null_check_param(const ObRawExpr *param_expr, const ObRawExpr *&check_param);
