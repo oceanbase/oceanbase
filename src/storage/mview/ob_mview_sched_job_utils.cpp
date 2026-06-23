@@ -16,7 +16,9 @@
 #include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_executor.h"
 #include "rootserver/mview/ob_mview_maintenance_service.h"
+#ifdef OB_BUILD_MV_REFRESH_QUEUEING
 #include "rootserver/mview/ob_mview_pending_task_manager.h"
+#endif
 #include "share/ob_global_stat_proxy.h"
 #include "share/backup/ob_backup_data_table_operator.h"
 #include "share/schema/ob_mview_info.h"
@@ -858,6 +860,7 @@ int ObMViewSchedJobUtils::kill_mview_refreshes(
                           const bool is_drop)
 {
   int ret = OB_SUCCESS;
+#ifdef OB_BUILD_MV_REFRESH_QUEUEING
   MTL_SWITCH(tenant_id) {
     rootserver::ObMViewMaintenanceService *svc =
         MTL(rootserver::ObMViewMaintenanceService *);
@@ -877,6 +880,9 @@ int ObMViewSchedJobUtils::kill_mview_refreshes(
       }
     }
   }
+#else
+  UNUSEDx(tenant_id, mview_id, is_drop);
+#endif
   return ret;
 }
 

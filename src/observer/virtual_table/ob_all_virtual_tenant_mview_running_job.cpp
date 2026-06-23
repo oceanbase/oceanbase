@@ -61,10 +61,10 @@ int ObAllVirtualTenantMviewRunningJob::inner_get_next_row(ObNewRow *&row)
         uint64_t cur_tenant_id = tenant_ids.at(i);
         MTL_SWITCH(cur_tenant_id)
         {
-          omt::ObTenantConfigGuard tenant_config(TENANT_CONF(cur_tenant_id));
-          const bool refresh_queuing_enabled = tenant_config.is_valid()
-                                      && tenant_config->_enable_mv_refresh_queuing;
           ObMViewMaintenanceService *mview_service = MTL(ObMViewMaintenanceService *);
+#ifdef OB_BUILD_MV_REFRESH_QUEUEING
+          omt::ObTenantConfigGuard tenant_config(TENANT_CONF(cur_tenant_id));
+          const bool refresh_queuing_enabled = tenant_config.is_valid() && tenant_config->_enable_mv_refresh_queuing;
           // New engine: pending task manager is the source of truth for
           // running jobs; fields not tracked in pending (session_id,
           // read_snapshot, ...) are reported as defaults. Legacy engine: jobs
@@ -89,6 +89,20 @@ int ObAllVirtualTenantMviewRunningJob::inner_get_next_row(ObNewRow *&row)
           } else if (OB_FAIL(pending_task_manager->foreach_running_job(fill_scanner_))) {
             SERVER_LOG(WARN, "foreach pending task running job failed", K(ret), K(cur_tenant_id));
           }
+          // Refresh queuing is closed-source; only the legacy MDS path is available.
+#else
+          if (OB_ISNULL(mview_service)) {
+            ret = OB_ERR_UNEXPECTED;
+            SERVER_LOG(WARN, "mview maintenance service is null", K(ret), K(cur_tenant_id));
+          } else if (OB_FAIL(fill_scanner_.init(cur_tenant_id,
+                                                &scanner_,
+                                                &cur_row_,
+                                                output_column_ids_))) {
+            SERVER_LOG(WARN, "init fill scanner failed", K(ret), K(cur_tenant_id));
+          } else if (OB_FAIL(mview_service->get_mview_mds_op().foreach_refactored(fill_scanner_))) {
+            SERVER_LOG(WARN, "fill mds running jobs failed", K(ret), K(cur_tenant_id));
+          }
+#endif
         }
       }
       if (OB_SUCC(ret)) {
@@ -243,6 +257,7 @@ int ObAllVirtualTenantMviewRunningJob::FillScanner::check_fill_param() const
   return ret;
 }
 
+#ifdef OB_BUILD_MV_REFRESH_QUEUEING
 int ObAllVirtualTenantMviewRunningJob::FillScanner::operator()(
     const ObMViewPendingRunningJobInfo &job_info)
 {
@@ -322,6 +337,7 @@ int ObAllVirtualTenantMviewRunningJob::FillScanner::operator()(
 
   return ret;
 }
+#endif
 
 void ObAllVirtualTenantMviewRunningJob::FillScanner::get_job_type(
     const share::schema::ObMVRefreshMethod refresh_method,

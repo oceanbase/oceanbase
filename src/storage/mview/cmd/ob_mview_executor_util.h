@@ -57,6 +57,7 @@ public:
                                            uint64_t &mview_id,
                                            share::schema::ObMVRefreshMethod &refresh_method);
 
+#ifdef OB_BUILD_MV_REFRESH_QUEUEING
   // Polling helpers for DBMS_MVIEW.REFRESH sync-wait loop.
   // Polls __all_mview_refresh_pending_task until done, then reads
   // __all_mview_refresh_run_stats.result. Returns the task error code on
@@ -65,6 +66,7 @@ public:
                                 uint64_t tenant_id,
                                 int64_t refresh_id,
                                 uint64_t mview_id);
+#endif
 
   static int check_kill_refresh_privilege(sql::ObExecContext &ctx);
   static int check_refresh_mview_privilege(sql::ObExecContext &ctx,

@@ -15,8 +15,10 @@
 #include "storage/mview/cmd/ob_mview_executor_util.h"
 #include "lib/mysqlclient/ob_mysql_result.h"
 #include "rootserver/mview/ob_mview_maintenance_service.h"
+#ifdef OB_BUILD_MV_REFRESH_QUEUEING
 #include "rootserver/mview/ob_mview_pending_task_define.h"
 #include "rootserver/mview/ob_mview_pending_task_manager.h"
+#endif
 #include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/ob_compatibility_control.h"
 #include "share/ob_ddl_common.h"
@@ -349,6 +351,7 @@ int ObMViewExecutorUtil::resolve_mview_list_and_method(ObSchemaGetterGuard *sche
   return ret;
 }
 
+#ifdef OB_BUILD_MV_REFRESH_QUEUEING
 int ObMViewExecutorUtil::wait_mview_refresh(sql::ObExecContext &ctx,
                                            uint64_t tenant_id,
                                            int64_t refresh_id,
@@ -433,6 +436,7 @@ int ObMViewExecutorUtil::wait_mview_refresh(sql::ObExecContext &ctx,
   }
   return ret;
 }
+#endif
 
 int ObMViewExecutorUtil::load_refresh_run_stats_error_message(sql::ObExecContext &ctx,
                                                               uint64_t tenant_id,

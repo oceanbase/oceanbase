@@ -139,6 +139,7 @@ int ObDBMSMViewMysql::refresh(ObExecContext &ctx, ParamStore &params, ObObj &res
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument for materialized view refresh", K(ret));
   }
+#ifdef OB_BUILD_MV_REFRESH_QUEUEING
   // tenant_config must be read after tenant_id is populated (TENANT_CONF(OB_INVALID_TENANT_ID) always returns invalid).
   ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
   const bool refresh_queuing_enabled = (data_version >= DATA_VERSION_4_4_2_2)
@@ -148,7 +149,11 @@ int ObDBMSMViewMysql::refresh(ObExecContext &ctx, ParamStore &params, ObObj &res
   if (OB_SUCC(ret) && nullptr != ctx.get_my_session()->get_job_info()) {
     async = true;
   }
+#else
+  UNUSEDx(async, force);
+#endif
   if (OB_FAIL(ret)) {
+#ifdef OB_BUILD_MV_REFRESH_QUEUEING
   } else if (refresh_queuing_enabled) {
     share::schema::ObMVRefreshMethod refresh_method = share::schema::ObMVRefreshMethod::MAX;
     rootserver::ObMViewMaintenanceService *mview_maintenance_service = MTL(rootserver::ObMViewMaintenanceService*);
@@ -197,6 +202,7 @@ int ObDBMSMViewMysql::refresh(ObExecContext &ctx, ParamStore &params, ObObj &res
         LOG_WARN("fail to wait mview refresh", KR(ret), K(schedule_result.refresh_id_), K(schedule_arg.mview_id_));
       }
       LOG_TRACE("schedule mview refresh", KR(ret), K(schedule_arg), K(schedule_result));
+#endif
   } else {
     ObMViewRefreshArg refresh_params;
     ObMViewRefreshExecutor refresh_executor;
@@ -344,6 +350,12 @@ int ObDBMSMViewMysql::kill(ObExecContext &ctx, ParamStore &params, ObObj &result
 {
   UNUSED(result);
   int ret = OB_SUCCESS;
+#ifndef OB_BUILD_MV_REFRESH_QUEUEING
+  UNUSEDx(ctx, params);
+  ret = OB_NOT_SUPPORTED;
+  LOG_WARN("kill mview refresh is not supported in this build", KR(ret));
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, "kill mview refresh");
+#else
   uint64_t tenant_id = OB_INVALID_TENANT_ID;
   uint64_t data_version = 0;
   if (OB_ISNULL(ctx.get_my_session())) {
@@ -376,6 +388,7 @@ int ObDBMSMViewMysql::kill(ObExecContext &ctx, ParamStore &params, ObObj &result
       }
     }
   }
+#endif
   return ret;
 }
 
