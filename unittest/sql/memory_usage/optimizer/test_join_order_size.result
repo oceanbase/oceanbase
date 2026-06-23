@@ -1,9 +1,9 @@
 | class | sizeof(class) |
 | --- | --- |
-| ObJoinOrder | 1200 |
+| ObJoinOrder | 1232 |
 | Path | 600 |
-| AccessPath | 2168 |
-| JoinPath | 936 |
+| AccessPath | 2176 |
+| JoinPath | 976 |
 | SubQueryPath | 616 |
 | FunctionTablePath | 616 |
 | JsonTablePath | 728 |

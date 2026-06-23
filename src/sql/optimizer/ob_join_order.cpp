@@ -21,12 +21,15 @@
 #include "share/catalog/odps/ob_odps_catalog.h"
 #include "sql/optimizer/ob_lake_table_partition_info.h"
 #include "share/stat/ob_lake_table_stat.h"
+#include "share/external_table/ob_external_table_file_mgr.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "sql/engine/expr/ob_expr_json_utils.h"
+#include "sql/ob_sql_utils.h"
 #include "sql/optimizer/ob_join_order_enum.h"
 #include "sql/hybrid_search/ob_hybrid_search_node.h"
 #include "sql/hybrid_search/ob_hybrid_search_dsl_resolver.h"
 #include "share/search_index/ob_search_index_encoder.h"
+#include "sql/optimizer/ob_select_log_plan.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "sql/engine/expr/ob_expr_json_utils.h"
 
@@ -10813,6 +10816,8 @@ int JoinPath::assign(const JoinPath &other, common::ObIAllocator *allocator)
     LOG_WARN("failed to assign array", K(ret));
   } else if (OB_FAIL(join_filter_infos_.assign(other.join_filter_infos_))) {
     LOG_WARN("failed to assign array", K(ret));
+  } else if (OB_FAIL(cost_join_filter_infos_.assign(other.cost_join_filter_infos_))) {
+    LOG_WARN("failed to assign array", K(ret));
   }
   return ret;
 }
@@ -11971,6 +11976,8 @@ int JoinPath::get_re_estimate_param(EstimateCostInfo &param,
         LOG_WARN("failed to assign join filter infos", K(ret));
       } else if (OB_FAIL(append(right_param.join_filter_infos_, join_filter_infos_))) {
         LOG_WARN("failed to append join filter infos", K(ret));
+      } else if (OB_FAIL(append(right_param.join_filter_infos_, cost_join_filter_infos_))) {
+        LOG_WARN("failed to append cost join filter infos", K(ret));
       }
     }
   }
@@ -12382,6 +12389,8 @@ int JoinPath::cost_hash_join(int64_t join_parallel,
       left_rows /= in_parallel;
       right_rows /= in_parallel;
     }
+    const ObIArray<JoinFilterInfo *> &join_filter_infos
+        = cost_join_filter_infos_.empty() ? join_filter_infos_ : cost_join_filter_infos_;
     ObCostHashJoinInfo est_join_info(left_rows,
                                      left_join_order->get_output_row_size(),
                                      right_rows,
@@ -12392,7 +12401,7 @@ int JoinPath::cost_hash_join(int64_t join_parallel,
                                      equal_join_conditions_,
                                      other_join_conditions_,
                                      filter_,
-                                     join_filter_infos_,
+                                     join_filter_infos,
                                      equal_cond_sel_,
                                      other_cond_sel_,
                                      &plan->get_update_table_metas(),
@@ -12499,6 +12508,7 @@ void JoinPath::reuse()
   equal_join_conditions_.reuse();
   other_join_conditions_.reuse();
   join_filter_infos_.reuse();
+  cost_join_filter_infos_.reuse();
   equal_cond_sel_ = -1.0;
   other_cond_sel_ = -1.0;
   contain_normal_nl_ = false;
@@ -16088,6 +16098,13 @@ int ObJoinOrder::create_and_add_hash_path(const Path *left_path,
                                                   naaj_info.is_naaj_,
                                                   join_path->join_filter_infos_))) {
       LOG_WARN("failed to generate join filter info", K(ret));
+    } else if (OB_FAIL(generate_external_table_cost_join_filter_infos(*left_path,
+                                                                      *right_path,
+                                                                      join_type,
+                                                                      join_dist_algo,
+                                                                      equal_join_conditions,
+                                                                      join_path->cost_join_filter_infos_))) {
+      LOG_WARN("failed to generate external table cost join filter info", K(ret));
     } else if (OB_FAIL(join_path->compute_join_path_property())) {
       LOG_WARN("failed to compute join path property", K(ret));
     } else if (OB_FAIL(create_subplan_filter_for_join_path(join_path,
@@ -16162,6 +16179,91 @@ int ObJoinOrder::generate_join_filter_infos(const Path &left_path,
     LOG_WARN("fail to check hint gen rule", K(ret));
   } else if (OB_FAIL(remove_invalid_join_filter_infos(join_filter_infos))) {
     LOG_WARN("failed to remove invalid join filter info", K(ret));
+  }
+  return ret;
+}
+
+int ObJoinOrder::generate_external_table_cost_join_filter_infos(
+    const Path &left_path,
+    const Path &right_path,
+    const ObJoinType join_type,
+    const DistAlgo join_dist_algo,
+    const ObIArray<ObRawExpr *> &equal_join_conditions,
+    ObIArray<JoinFilterInfo *> &join_filter_infos)
+{
+  int ret = OB_SUCCESS;
+  ObSqlSchemaGuard *schema_guard = NULL;
+  bool has_external_table = false;
+  if (OB_ISNULL(get_plan()) ||
+      OB_ISNULL(get_plan()->get_stmt()) ||
+      OB_ISNULL(OPT_CTX.get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(get_plan()));
+  } else if (!OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_6_0)
+             || DistAlgo::DIST_HASH_HASH != join_dist_algo
+             || (INNER_JOIN != join_type && !IS_SEMI_ANTI_JOIN(join_type))) {
+    // Real runtime filters are generated by the 4.6 pushdown rewriter.  This
+    // path-level copy is only used to cost external-table hash-hash joins.
+  } else if (get_plan()->get_stmt()->is_select_stmt()
+             && OB_FAIL(ObSelectLogPlan::check_external_table_scan(
+                 static_cast<ObSelectStmt *>(const_cast<ObDMLStmt *>(get_plan()->get_stmt())),
+                 has_external_table))) {
+    LOG_WARN("failed to check whether stmt has external table", K(ret));
+  } else if (!has_external_table) {
+    // skip queries without external table
+  } else if (OB_FAIL(find_possible_join_filter_tables(left_path,
+                                                      right_path,
+                                                      join_dist_algo,
+                                                      equal_join_conditions,
+                                                      join_filter_infos))) {
+    LOG_WARN("failed to find possible table scan for bf", K(ret));
+  } else if (OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema guard is null", K(ret));
+  } else {
+    const ObTableSchema *table_schema = NULL;
+    for (int64_t i = join_filter_infos.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
+      JoinFilterInfo *info = join_filter_infos.at(i);
+      table_schema = NULL;
+      if (OB_ISNULL(info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("join filter info is null", K(ret));
+      } else if (OB_INVALID_ID == info->ref_table_id_) {
+        // subquery/temp table join filter info has no ref table id
+        if (OB_FAIL(join_filter_infos.remove(i))) {
+          LOG_WARN("failed to remove join filter info with invalid ref table id", K(ret), K(i));
+        }
+      } else if (OB_FAIL(schema_guard->get_table_schema(info->ref_table_id_, table_schema))) {
+        LOG_WARN("failed to get table schema", K(ret), K(info->ref_table_id_));
+      } else if (OB_ISNULL(table_schema) || !table_schema->is_external_table()) {
+        // remove non external table join filter info
+        if (OB_FAIL(join_filter_infos.remove(i))) {
+          LOG_WARN("failed to remove non external table join filter info", K(ret), K(i));
+        }
+      }
+    }
+    if (OB_SUCC(ret) && !join_filter_infos.empty() &&
+        OB_FAIL(check_partition_join_filter_valid(join_dist_algo,
+                                                  right_path,
+                                                  join_filter_infos))) {
+      LOG_WARN("fail to check hint gen rule", K(ret));
+    }
+    for (int64_t i = join_filter_infos.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
+      JoinFilterInfo *info = join_filter_infos.at(i);
+      double join_filter_sel = 1.0;
+      if (OB_ISNULL(info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("join filter info is null", K(ret));
+      } else if (!info->can_use_join_filter_ || info->lexprs_.empty()) {
+        if (OB_FAIL(join_filter_infos.remove(i))) {
+          LOG_WARN("failed to remove invalid external table join filter info", K(ret), K(i));
+        }
+      } else if (OB_FAIL(calc_join_filter_selectivity(left_path, *info, join_filter_sel))) {
+        LOG_WARN("failed to calc join filter sel", K(ret));
+      } else {
+        info->join_filter_selectivity_ = join_filter_sel;
+      }
+    }
   }
   return ret;
 }
@@ -18569,6 +18671,11 @@ int ObJoinOrder::compute_table_meta_info(const uint64_t table_id,
         table_partition_info_->get_phy_tbl_location_info().get_phy_part_loc_info_list().count();
     table_meta_info_.schema_version_ = table_schema->get_schema_version();
     table_meta_info_.is_broadcast_table_ = table_schema->is_broadcast_table();
+    if (OB_SUCC(ret) && EXTERNAL_TABLE == table_meta_info_.table_type_) {
+      if (OB_FAIL(compute_external_table_meta_info(ref_table_id, table_schema))) {
+        LOG_WARN("failed to compute external table meta info", K(ret));
+      }
+    }
     LOG_TRACE("after compute table meta info", K(table_meta_info_));
   }
   if (OB_SUCC(ret)) {
@@ -18583,6 +18690,76 @@ int ObJoinOrder::compute_table_meta_info(const uint64_t table_id,
     } else {
       if (OB_FAIL(compute_lake_table_meta_info(table_id, ref_table_id))) {
         LOG_WARN("failed to compute lake table meta info", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::compute_external_table_meta_info(const uint64_t ref_table_id,
+                                                  const ObTableSchema *table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_schema) || OB_ISNULL(table_partition_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(table_schema), K(table_partition_info_));
+  } else {
+    ObExternalFileFormat::FormatType format_type = ObExternalFileFormat::INVALID_FORMAT;
+    if (OB_FAIL(ObSQLUtils::get_external_table_type(table_schema, format_type))) {
+      LOG_WARN("failed to get external table type", K(ret));
+    } else {
+      table_meta_info_.external_format_type_ = static_cast<int64_t>(format_type);
+    }
+    if (OB_SUCC(ret) && ObExternalFileFormat::ODPS_FORMAT != format_type) {
+      ObSQLSessionInfo *session_info = OPT_CTX.get_session_info();
+      if (OB_NOT_NULL(session_info)) {
+        uint64_t tenant_id = session_info->get_effective_tenant_id();
+        const ObCandiTabletLocIArray &partitions
+            = table_partition_info_->get_phy_tbl_location_info().get_phy_part_loc_info_list();
+        bool is_local_file_on_disk = ObSQLUtils::is_external_files_on_local_disk(
+            table_schema->get_external_file_location());
+        int64_t total_file_size = 0;
+        int64_t total_file_count = 0;
+        ObArenaAllocator tmp_alloc("ExtFileSize", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
+        for (int64_t i = 0; OB_SUCC(ret) && i < partitions.count(); ++i) {
+          ObSEArray<share::ObExternalFileInfo, 8> ext_files;
+          int64_t part_id = partitions.at(i).get_partition_location().get_partition_id();
+          if (OB_FAIL(
+                  share::ObExternalTableFileManager::get_instance().get_external_files_by_part_id(
+                      tenant_id,
+                      ref_table_id,
+                      part_id,
+                      is_local_file_on_disk,
+                      tmp_alloc,
+                      ext_files))) {
+            LOG_WARN("failed to get external files by part id", K(ret), K(part_id));
+          } else {
+            for (int64_t j = 0; j < ext_files.count(); ++j) {
+              if (ext_files.at(j).file_size_ > 0) {
+                total_file_size += ext_files.at(j).file_size_;
+              }
+              ++total_file_count;
+            }
+          }
+        }
+        if (total_file_size > 0) {
+          table_meta_info_.total_file_size_ = total_file_size;
+        }
+        table_meta_info_.is_local_external_storage_ = is_local_file_on_disk;
+        int64_t schema_row_width = 0;
+        if (OB_FAIL(ObOptEstCost::estimate_width_for_external_table(*table_schema, schema_row_width))) {
+          LOG_WARN("failed to get external table schema row width", K(ret));
+        } else {
+          table_meta_info_.schema_row_width_ = schema_row_width;
+          if (table_meta_info_.average_row_size_ <= 0 && schema_row_width > 0) {
+            table_meta_info_.average_row_size_ = static_cast<double>(schema_row_width);
+          }
+        }
+        LOG_TRACE("external table file size accumulated",
+                  K(total_file_size),
+                  K(total_file_count),
+                  K(table_meta_info_.average_row_size_),
+                  K(schema_row_width));
       }
     }
   }
@@ -19198,10 +19375,19 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
         }
       }
 
-      //3. fallback with default stats temporary
+      // 3. fallback with default stats temporary
       if (OB_SUCC(ret) && table_meta_info_.table_row_count_ <= 0) {
-        table_meta_info_.table_row_count_ =
-              table_schema.is_external_table() ? 100000.0 : ObOptStatManager::get_default_table_row_count();
+        if (table_schema.is_external_table()) {
+          if (table_meta_info_.total_file_size_ > 0 && table_meta_info_.average_row_size_ > 0) {
+            table_meta_info_.table_row_count_ = static_cast<double>(table_meta_info_.total_file_size_)
+                                              / table_meta_info_.average_row_size_;
+          } else {
+            table_meta_info_.table_row_count_ = OB_EST_DEFAULT_VIRTUAL_TABLE_ROW_COUNT;
+          }
+        } else {
+          table_meta_info_.table_row_count_ = ObOptStatManager::get_default_table_row_count();
+        }
+
         table_meta_info_.average_row_size_ = ObOptStatManager::get_default_avg_row_size();
         table_meta_info_.part_size_ = ObOptStatManager::get_default_data_size();
         LOG_TRACE("total rowcount, empty table", K(table_meta_info_.table_row_count_));
@@ -24785,7 +24971,56 @@ int ObJoinOrder::compute_lake_table_meta_info(const uint64_t table_id,
       table_meta_info_.part_count_ = table_partition_info_->get_phy_tbl_location_info().get_phy_part_loc_info_list().count();
       table_meta_info_.schema_version_ = table_schema->get_schema_version();
       table_meta_info_.is_broadcast_table_ = table_schema->is_broadcast_table();
-      LOG_TRACE("after compute table meta info", K(table_meta_info_));
+      const ObCandiTabletLocIArray &partitions
+          = table_partition_info_->get_phy_tbl_location_info().get_phy_part_loc_info_list();
+      int64_t total_file_count = 0;
+      int64_t total_file_size = 0;
+      int64_t iceberg_record_count = 0;
+      bool is_iceberg_table = (ObLakeTableFormat::ICEBERG == table_meta_info_.lake_table_format_);
+      for (int64_t i = 0; OB_SUCC(ret) && i < partitions.count(); ++i) {
+        const ObIArray<ObIOptLakeTableFile *> &files = partitions.at(i).get_opt_lake_table_files();
+        total_file_count += files.count();
+        for (int64_t j = 0; OB_SUCC(ret) && j < files.count(); ++j) {
+          const ObIOptLakeTableFile *file = files.at(j);
+          if (OB_ISNULL(file)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null file", K(ret));
+          } else if (file->is_iceberg_file()) {
+            const ObOptIcebergFile *iceberg_file = static_cast<const ObOptIcebergFile *>(file);
+            total_file_size += iceberg_file->file_size_;
+            iceberg_record_count += iceberg_file->record_count_;
+          } else if (file->is_hive_file()) {
+            const ObOptHiveFile *hive_file = static_cast<const ObOptHiveFile *>(file);
+            total_file_size += hive_file->file_size_;
+          }
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        table_meta_info_.lake_table_file_count_ = total_file_count;
+        table_meta_info_.total_file_size_ = total_file_size;
+        table_meta_info_.is_local_external_storage_ = false;
+        // Iceberg manifest carries exact record count, use it when stats are absent
+        if (is_iceberg_table && iceberg_record_count > 0 && table_meta_info_.table_row_count_ <= 0) {
+          table_meta_info_.table_row_count_ = iceberg_record_count;
+        }
+        int64_t schema_row_width = 0;
+        if (OB_FAIL(ObOptEstCost::estimate_width_for_external_table(*table_schema, schema_row_width))) {
+          LOG_WARN("failed to get external table schema row width", K(ret));
+        } else {
+          table_meta_info_.schema_row_width_ = schema_row_width;
+          // when no stat-derived avg_row_size, fallback to schema_row_width
+          if (table_meta_info_.average_row_size_ <= 0 && schema_row_width > 0) {
+            table_meta_info_.average_row_size_ = static_cast<double>(schema_row_width);
+          }
+        }
+        LOG_TRACE("after compute table meta info",
+                  K(table_meta_info_),
+                  K(total_file_count),
+                  K(total_file_size),
+                  K(iceberg_record_count),
+                  K(schema_row_width));
+      }
     }
   }
   if (OB_SUCC(ret)) {

@@ -63,6 +63,9 @@ public:
     const double DEFAULT_CMP_LOB_COST,
     const double DEFAULT_CMP_ERR_HANDLE_EXPR_COST,
     const double DEFAULT_FUNCTIONAL_LOOKUP_PER_ROW_COST,
+    const double DEFAULT_EXTERNAL_TABLE_CPU_PER_BYTE_COST,
+    const double DEFAULT_EXTERNAL_TABLE_LOCAL_IO_PER_BYTE_COST,
+    const double DEFAULT_EXTERNAL_TABLE_NETWORK_IO_PER_BYTE_COST,
     const double (&comparison_params)[common::ObMaxTC + 1],
 		const double (&hash_params)[common::ObMaxTC + 1],
 		const double (&project_params)[2][2][common::ObMaxTC + 1]
@@ -109,6 +112,9 @@ public:
       CMP_LOB_COST(DEFAULT_CMP_LOB_COST),
       CMP_ERR_HANDLE_EXPR_COST(DEFAULT_CMP_ERR_HANDLE_EXPR_COST),
       FUNCTIONAL_LOOKUP_PER_ROW_COST(DEFAULT_FUNCTIONAL_LOOKUP_PER_ROW_COST),
+      EXTERNAL_TABLE_CPU_PER_BYTE_COST(DEFAULT_EXTERNAL_TABLE_CPU_PER_BYTE_COST),
+      EXTERNAL_TABLE_LOCAL_IO_PER_BYTE_COST(DEFAULT_EXTERNAL_TABLE_LOCAL_IO_PER_BYTE_COST),
+      EXTERNAL_TABLE_NETWORK_IO_PER_BYTE_COST(DEFAULT_EXTERNAL_TABLE_NETWORK_IO_PER_BYTE_COST),
       comparison_params_(comparison_params),
 		  hash_params_(hash_params),
 			project_params_(project_params)
@@ -163,6 +169,9 @@ public:
   double get_cmp_udf_cost(const OptSystemStat& stat) const;
   double get_cmp_err_handle_expr_cost(const OptSystemStat& stat) const;
   double get_functional_lookup_per_row_cost(const OptSystemStat& stat) const;
+  double get_external_table_cpu_per_byte_cost(const OptSystemStat& stat) const;
+  double get_external_table_local_io_per_byte_cost(const OptSystemStat& stat) const;
+  double get_external_table_network_io_per_byte_cost(const OptSystemStat& stat) const;
 
 protected:
   /** 读取一行的CPU开销，基本上只包括get_next_row()操作 */
@@ -246,6 +255,9 @@ protected:
   double CMP_ERR_HANDLE_EXPR_COST;
   //计算一个全文索引 functional lookup 表达式的代价
   double FUNCTIONAL_LOOKUP_PER_ROW_COST;
+  double EXTERNAL_TABLE_CPU_PER_BYTE_COST;
+  double EXTERNAL_TABLE_LOCAL_IO_PER_BYTE_COST;
+  double EXTERNAL_TABLE_NETWORK_IO_PER_BYTE_COST;
 
   const double (&comparison_params_)[common::ObMaxTC + 1];
   const double (&hash_params_)[common::ObMaxTC + 1];  /*

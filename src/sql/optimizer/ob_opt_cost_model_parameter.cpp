@@ -433,3 +433,30 @@ double ObOptCostModelParameter::get_functional_lookup_per_row_cost(const OptSyst
         return FUNCTIONAL_LOOKUP_PER_ROW_COST / stat.get_cpu_speed();
     }
 }
+
+double ObOptCostModelParameter::get_external_table_cpu_per_byte_cost(const OptSystemStat& stat) const
+{
+    if (stat.get_cpu_speed() <= 0) {
+        return EXTERNAL_TABLE_CPU_PER_BYTE_COST;
+    } else {
+        return EXTERNAL_TABLE_CPU_PER_BYTE_COST / stat.get_cpu_speed();
+    }
+}
+
+double ObOptCostModelParameter::get_external_table_local_io_per_byte_cost(const OptSystemStat& stat) const
+{
+    if (stat.get_disk_seq_read_speed() <= 0) {
+        return EXTERNAL_TABLE_LOCAL_IO_PER_BYTE_COST;
+    } else {
+        return EXTERNAL_TABLE_LOCAL_IO_PER_BYTE_COST / stat.get_disk_seq_read_speed();
+    }
+}
+
+double ObOptCostModelParameter::get_external_table_network_io_per_byte_cost(const OptSystemStat& stat) const
+{
+    if (stat.get_network_speed() <= 0) {
+        return EXTERNAL_TABLE_NETWORK_IO_PER_BYTE_COST;
+    } else {
+        return EXTERNAL_TABLE_NETWORK_IO_PER_BYTE_COST / stat.get_network_speed();
+    }
+}

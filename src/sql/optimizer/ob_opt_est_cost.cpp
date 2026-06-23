@@ -13,6 +13,7 @@
 #include "ob_opt_est_cost_model_vector.h"
 #include "ob_opt_est_parameter_normal.h"
 #include "ob_opt_est_parameter_vector.h"
+#include "sql/optimizer/ob_opt_default_stat.h"
 
 #define GET_COST_MODEL()                                                \
       ObOptEstCostModel normal_model(cost_params_normal,                \
@@ -35,6 +36,48 @@ using namespace oceanbase::storage;
 // using share::schema::ObSchemaGetterGuard;
 
 const int64_t ObOptEstCost::MAX_STORAGE_RANGE_ESTIMATION_NUM = 10;
+
+namespace
+{
+// Return a default selectivity for a single filter based on its operator type,
+// used for external tables when column statistics are missing
+double get_default_filter_selectivity_by_op(const ObItemType op_type)
+{
+  double sel = common::DEFAULT_SEL;
+  switch (op_type) {
+    case T_OP_EQ:
+    case T_OP_NSEQ:
+    case T_OP_IN:
+      sel = common::DEFAULT_EQ_SEL;
+      break;
+    case T_OP_NE:
+      sel = 1.0 - common::DEFAULT_EQ_SEL;
+      break;
+    case T_OP_LT:
+    case T_OP_LE:
+    case T_OP_GT:
+    case T_OP_GE:
+      sel = common::OB_DEFAULT_HALF_OPEN_RANGE_SEL;
+      break;
+    case T_OP_BTW:
+      sel = common::OB_DEFAULT_CLOSED_RANGE_SEL;
+      break;
+    case T_OP_NOT_BTW:
+      sel = 1.0 - common::OB_DEFAULT_CLOSED_RANGE_SEL;
+      break;
+    case T_OP_LIKE:
+      sel = common::DEFAULT_LIKE_SEL;
+      break;
+    case T_OP_IS:
+      sel = common::DEFAULT_EQ_SEL;
+      break;
+    default:
+      sel = common::DEFAULT_SEL;
+      break;
+  }
+  return sel;
+}
+}
 
 int ObOptEstCost::cost_nestloop(const ObCostNLJoinInfo &est_cost_info,
                                 double &cost,
@@ -614,6 +657,29 @@ double ObOptEstCost::get_estimate_width_from_type(const ObRawExprResType &type)
   return width;
 }
 
+int ObOptEstCost::estimate_width_for_external_table(const ObTableSchema &table_schema,
+                                                    int64_t &schema_row_width)
+{
+  int ret = OB_SUCCESS;
+  schema_row_width = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_schema.get_column_count(); ++i) {
+    const ObColumnSchemaV2 *col = table_schema.get_column_schema_by_idx(i);
+    if (OB_ISNULL(col)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column schema is null", K(ret), K(i));
+    } else if (col->is_hidden()) {
+      // skip
+    } else {
+      ObRawExprResType res_type;
+      res_type.set_type(col->get_data_type());
+      res_type.set_collation_type(col->get_collation_type());
+      res_type.set_accuracy(col->get_accuracy());
+      schema_row_width += static_cast<int64_t>(get_estimate_width_from_type(res_type));
+    }
+  }
+  return ret;
+}
+
 int ObOptEstCost::construct_scan_range_batch(const ObIArray<ObNewRange> &scan_ranges,
                                              ObSimpleBatch &batch,
                                              SQLScanRange &range,
@@ -721,6 +787,8 @@ int ObOptEstCost::calculate_filter_selectivity(AccessPath &path)
                                                                          est_cost_info.table_filter_sel_,
                                                                          all_predicate_sel))) {
     LOG_WARN("failed to calculate prefix filter sel", K(est_cost_info.table_filters_));
+  } else if (OB_FAIL(calculate_external_table_non_partition_filter_sel(path, est_cost_info))) {
+    LOG_WARN("failed to calculate external table non partition filter sel", K(ret));
   } else {
     est_cost_info.sel_ctx_->clear();
     LOG_TRACE("table filter info", K(est_cost_info.ref_table_id_), K(est_cost_info.index_id_),
@@ -729,6 +797,136 @@ int ObOptEstCost::calculate_filter_selectivity(AccessPath &path)
         K(est_cost_info.prefix_filter_sel_), K(est_cost_info.pushdown_prefix_filter_sel_),
         K(est_cost_info.ss_postfix_range_filters_), K(est_cost_info.ss_postfix_range_filters_sel_),
         K(est_cost_info.postfix_filter_sel_), K(est_cost_info.table_filter_sel_));
+  }
+  return ret;
+}
+
+int ObOptEstCost::calculate_external_table_non_partition_filter_sel(
+    AccessPath &path,
+    ObCostTableScanInfo &est_cost_info)
+{
+  int ret = OB_SUCCESS;
+  // For external tables: compute non-partition-column filter selectivity separately.
+  // Partition-column filters' effect is already reflected in total_file_size via
+  // partition pruning, so we must exclude them to avoid double-reduction.
+  if (OB_NOT_NULL(est_cost_info.table_meta_info_)
+      && EXTERNAL_TABLE == est_cost_info.table_meta_info_->table_type_
+      && est_cost_info.table_filters_.count() > 0 && OB_NOT_NULL(path.parent_)
+      && OB_NOT_NULL(path.parent_->get_plan())) {
+    const ObTableSchema *table_schema = nullptr;
+    ObSqlSchemaGuard *const schema_guard
+        = path.parent_->get_plan()->get_optimizer_context().get_sql_schema_guard();
+    const uint64_t ref_table_id = est_cost_info.table_meta_info_->ref_table_id_;
+    if (OB_ISNULL(schema_guard)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema guard is null", K(ret));
+    } else if (OB_INVALID_ID == ref_table_id) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid external table ref table id", K(ret), K(ref_table_id));
+    } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, table_schema))) {
+      LOG_WARN("failed to get table schema for external table", K(ret), K(ref_table_id));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema is null", K(ret), K(ref_table_id));
+    } else {
+      ObSEArray<uint64_t, 4> partition_col_ids;
+      const common::ObPartitionKeyInfo &part_key_info = table_schema->get_partition_key_info();
+      for (int64_t i = 0; OB_SUCC(ret) && i < part_key_info.get_size(); ++i) {
+        uint64_t col_id = OB_INVALID_ID;
+        if (OB_FAIL(part_key_info.get_column_id(i, col_id))) {
+          LOG_WARN("failed to get partition column id", K(ret), K(i));
+        } else if (OB_FAIL(partition_col_ids.push_back(col_id))) {
+          LOG_WARN("failed to push back partition col id", K(ret));
+        }
+      }
+      ObSEArray<ObRawExpr *, 8> non_partition_filters;
+      ObSEArray<ObRawExpr *, 8> partition_filters;
+      for (int64_t i = 0; OB_SUCC(ret) && i < est_cost_info.table_filters_.count(); ++i) {
+        ObRawExpr *filter = est_cost_info.table_filters_.at(i);
+        ObSEArray<uint64_t, 4> filter_col_ids;
+        bool is_partition_filter = false;
+        if (OB_ISNULL(filter)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("filter is null", K(ret));
+        } else if (OB_FAIL(ObOptimizerUtil::extract_column_ids(filter,
+                                                               est_cost_info.table_id_,
+                                                               filter_col_ids))) {
+          LOG_WARN("failed to extract column ids from filter", K(ret));
+        } else if (filter_col_ids.count() > 0) {
+          // A filter is a partition filter only when ALL columns it references
+          // are partition columns.
+          is_partition_filter = true;
+          for (int64_t j = 0; is_partition_filter && j < filter_col_ids.count(); ++j) {
+            is_partition_filter = has_exist_in_array(partition_col_ids, filter_col_ids.at(j));
+          }
+        }
+        if (OB_SUCC(ret) && OB_NOT_NULL(filter)) {
+          if (is_partition_filter) {
+            if (OB_FAIL(partition_filters.push_back(filter))) {
+              LOG_WARN("failed to push back partition filter", K(ret));
+            }
+          } else {
+            if (OB_FAIL(non_partition_filters.push_back(filter))) {
+              LOG_WARN("failed to push back non-partition filter", K(ret));
+            }
+          }
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (non_partition_filters.empty()) {
+        est_cost_info.non_partition_filter_sel_ = 1.0;
+      } else if (partition_filters.empty()) {
+        est_cost_info.non_partition_filter_sel_ = est_cost_info.table_filter_sel_;
+      } else {
+        // Compute non-partition filter sel per-filter using a fresh local
+        // all_predicate_sel to avoid cache interference. For each filter:
+        // 1) Try ObOptSelectivity::calculate_selectivity (uses column stats if available)
+        // 2) If it returns ~1.0 (typically because column stats are missing),
+        //    fall back to a per-operator default sel based on expr type.
+        ObSEArray<double, 8> non_part_sels;
+        for (int64_t i = 0; OB_SUCC(ret) && i < non_partition_filters.count(); ++i) {
+          const ObRawExpr *filter = non_partition_filters.at(i);
+          double single_sel = 1.0;
+          ObSEArray<ObRawExpr *, 1> single_filter_arr;
+          ObSEArray<ObExprSelPair, 4> fresh_predicate_sel;
+          if (OB_ISNULL(filter)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("filter is null", K(ret));
+          } else if (OB_FAIL(single_filter_arr.push_back(const_cast<ObRawExpr *>(filter)))) {
+            LOG_WARN("failed to push back filter", K(ret));
+          } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(*est_cost_info.table_metas_,
+                                                                     *est_cost_info.sel_ctx_,
+                                                                     single_filter_arr,
+                                                                     single_sel,
+                                                                     fresh_predicate_sel))) {
+            LOG_WARN("failed to calc single non-partition filter sel", K(ret));
+          }
+          // When column statistics are absent, the estimator cannot produce a
+          // meaningful estimate and typically returns ~1.0. Use per-operator
+          // default selectivity instead.
+          if (OB_SUCC(ret) && OB_NOT_NULL(filter)
+              && !est_cost_info.table_meta_info_->has_opt_stat_
+              && single_sel > 0.999) {
+            single_sel = get_default_filter_selectivity_by_op(filter->get_expr_type());
+          }
+          if (OB_SUCC(ret) && OB_NOT_NULL(filter)
+              && OB_FAIL(non_part_sels.push_back(single_sel))) {
+            LOG_WARN("failed to push back single sel", K(ret));
+          }
+        }
+        // Combine per-filter selectivities with the same correlation model the
+        // optimizer uses for internal tables, instead of plain independent multiplication.
+        double non_part_sel = 1.0;
+        if (OB_SUCC(ret)) {
+          non_part_sel
+              = est_cost_info.sel_ctx_->get_correlation_model().combine_filters_selectivity(
+                  non_part_sels);
+          non_part_sel = ObOptSelectivity::revise_between_0_1(non_part_sel);
+        }
+        est_cost_info.non_partition_filter_sel_ = non_part_sel;
+      }
+    }
   }
   return ret;
 }

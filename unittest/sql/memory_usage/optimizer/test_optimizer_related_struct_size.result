@@ -21,9 +21,9 @@
 # cost model
 | class | sizeof(class) |
 | --- | --- |
-| ObTableMetaInfo | 136 |
+| ObTableMetaInfo | 168 |
 | ObIndexMetaInfo | 72 |
-| ObCostTableScanInfo | 1008 |
+| ObCostTableScanInfo | 1016 |
 | ObDSFailTabInfo | 160 |
 | ObDSTableParam | 488 |
 | ObDSResultItem | 472 |

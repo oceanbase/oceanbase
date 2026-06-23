@@ -59,7 +59,11 @@ struct ObTableMetaInfo
       is_broadcast_table_(false),
       lake_table_format_(share::ObLakeTableFormat::INVALID),
       lake_table_file_count_(0),
-      lake_table_snapshot_id_(OB_INVALID_ID)
+      lake_table_snapshot_id_(OB_INVALID_ID),
+      external_format_type_(-1),
+      total_file_size_(0),
+      schema_row_width_(0),
+      is_local_external_storage_(false)
   { }
   virtual ~ObTableMetaInfo()
   { }
@@ -79,6 +83,10 @@ struct ObTableMetaInfo
     micro_block_count_ = 0;
     table_type_ = share::schema::MAX_TABLE_TYPE;
     is_broadcast_table_ = false;
+    external_format_type_ = -1;
+    total_file_size_ = 0;
+    schema_row_width_ = 0;
+    is_local_external_storage_ = false;
   }
 
   void assign(const ObTableMetaInfo &table_meta_info);
@@ -109,6 +117,10 @@ struct ObTableMetaInfo
   share::ObLakeTableFormat lake_table_format_;
   int64_t lake_table_file_count_;
   int64_t lake_table_snapshot_id_;
+  int64_t external_format_type_;
+  int64_t total_file_size_;
+  int64_t schema_row_width_;
+  bool is_local_external_storage_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableMetaInfo);
 };
@@ -261,6 +273,7 @@ struct ObCostTableScanInfo
      pushdown_prefix_filter_sel_(1.0),
      postfix_filter_sel_(1.0),
      table_filter_sel_(1.0),
+     non_partition_filter_sel_(1.0),
      join_filter_sel_(1.0),
      ss_prefix_ndv_(1.0),
      ss_postfix_range_filters_sel_(1.0),
@@ -339,6 +352,7 @@ struct ObCostTableScanInfo
   double pushdown_prefix_filter_sel_;
   double postfix_filter_sel_;
   double table_filter_sel_;
+  double non_partition_filter_sel_;  // non-partition-column filter sel for external tables
   double join_filter_sel_;
   double ss_prefix_ndv_;  // skip scan prefix columns NDV
   double ss_postfix_range_filters_sel_;
@@ -931,6 +945,10 @@ protected:
   int cost_basic_table(const ObCostTableScanInfo &est_cost_info,
                         const double part_cnt_per_dop,
 												double &cost);
+
+  int cost_external_table(const ObCostTableScanInfo &est_cost_info,
+                          int64_t parallel,
+                          double &cost);
 
   int cost_index_scan(const ObCostTableScanInfo &est_cost_info,
                       double row_count,

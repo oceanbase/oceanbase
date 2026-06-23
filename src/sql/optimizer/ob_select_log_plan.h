@@ -39,6 +39,7 @@ public:
   int allocate_link_scan_as_top(ObLogicalOperator *&old_top);
   const ObSelectStmt *get_stmt() const override
   { return reinterpret_cast<const ObSelectStmt*>(stmt_); }
+  static int check_external_table_scan(ObSelectStmt *stmt, bool &has_external_table);
 
   int perform_late_materialization(ObSelectStmt *stmt,
                                    ObLogicalOperator *&op);
@@ -1093,8 +1094,6 @@ int generate_window_functions_plan(WinFuncOpHelper &win_func_helper,
                                     const DistAlgo algo,
                                     bool &ignore_plan,
                                     bool can_ignore_merge = false);
-
-  int check_external_table_scan(ObSelectStmt *stmt, bool &has_external_table);
 
   int contain_enum_set_rowkeys(const ObLogTableScan &table_scan, bool &contain);
   int candi_allocate_order_by_if_losted(ObIArray<OrderItem> &order_items);

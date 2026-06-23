@@ -579,19 +579,23 @@ int ObAccessPathEstimation::check_paths_can_use_storage_estimation(common::ObIAr
 
 int ObAccessPathEstimation::process_external_table_default_estimation(AccessPath *path)
 {
-  //TODO [ExternalTable] need refine
   int ret = OB_SUCCESS;
   double output_row_count = 0.0;
   if (OB_ISNULL(path)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("path is null", K(ret), K(path));
+  } else if (OB_FAIL(ObOptEstCost::calculate_filter_selectivity(*path))) {
+    LOG_WARN("failed to calculate filter selectivity", K(ret));
   } else {
     ObCostTableScanInfo &est_cost_info = path->est_cost_info_;
-    output_row_count = static_cast<double>(OB_EST_DEFAULT_VIRTUAL_TABLE_ROW_COUNT);
-    path->est_cost_info_.logical_query_range_row_count_ = output_row_count;
-    path->est_cost_info_.phy_query_range_row_count_ = output_row_count;
-    path->est_cost_info_.index_back_row_count_ = 0;
-    path->est_cost_info_.output_row_count_ = output_row_count;
+    const ObTableMetaInfo *meta = est_cost_info.table_meta_info_;
+    output_row_count = (OB_NOT_NULL(meta) && meta->table_row_count_ > 0)
+        ? static_cast<double>(meta->table_row_count_)
+        : static_cast<double>(OB_EST_DEFAULT_VIRTUAL_TABLE_ROW_COUNT);
+    est_cost_info.logical_query_range_row_count_ = output_row_count;
+    est_cost_info.phy_query_range_row_count_ = output_row_count;
+    est_cost_info.index_back_row_count_ = 0;
+    est_cost_info.output_row_count_ = output_row_count * est_cost_info.non_partition_filter_sel_;
   }
   return ret;
 }
@@ -1375,10 +1379,15 @@ int ObAccessPathEstimation::fill_cost_table_scan_info(ObOptimizerContext &ctx,
     output_row_count *= row_sample_ratio;
 
     // postfix index filter and table filter
-    output_row_count = output_row_count
-        * est_cost_info.ss_postfix_range_filters_sel_
-        * est_cost_info.postfix_filter_sel_
-        * est_cost_info.table_filter_sel_;
+    if (OB_NOT_NULL(est_cost_info.table_meta_info_)
+        && EXTERNAL_TABLE == est_cost_info.table_meta_info_->table_type_) {
+      output_row_count *= est_cost_info.non_partition_filter_sel_;
+    } else {
+      output_row_count = output_row_count
+          * est_cost_info.ss_postfix_range_filters_sel_
+          * est_cost_info.postfix_filter_sel_
+          * est_cost_info.table_filter_sel_;
+    }
 
   }
   return ret;

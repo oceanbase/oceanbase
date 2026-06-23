@@ -237,12 +237,17 @@ public:
                                                     double &row_count);
 
   static int calculate_filter_selectivity(AccessPath &path);
+  static int calculate_external_table_non_partition_filter_sel(
+      AccessPath &path,
+      ObCostTableScanInfo &est_cost_info);
 
   static int stat_estimate_single_range_rc(const ObCostTableScanInfo &est_cost_info,
                                            const ObNewRange &range,
                                            double &count);
 
   static double get_estimate_width_from_type(const ObRawExprResType &type);
+  static int estimate_width_for_external_table(const share::schema::ObTableSchema &table_schema,
+                                               int64_t &schema_row_width);
   static double calc_pred_cost_per_row(const ObRawExpr *expr,
                                       double card,
                                       double &cost,
