@@ -156,13 +156,20 @@ int ObAlterMviewUtils::resolve_mv_options(const ParseNode &node,
             // REFRESH INTERVAL BRANCH
             int64_t start_time = OB_INVALID_TIMESTAMP;
             ObString next_time_expr;
+            int64_t period_sec = 0;
             if (OB_FAIL(ObMViewResolverHelper::resolve_refresh_interval_node(refresh_interval_node,
                                                                              session_info,
                                                                              allocator,
                                                                              resolver_params,
                                                                              start_time,
-                                                                             next_time_expr))) {
+                                                                             next_time_expr,
+                                                                             period_sec))) {
               LOG_WARN("failed to resolve interval node", KR(ret));
+            } else if ((!next_time_expr.empty())
+                       && OB_FAIL(check_complete_refresh_min_interval(tenant_id,
+                                                                      table_schema->get_table_id(),
+                                                                      period_sec))) {
+              LOG_WARN("failed to check complete refresh min interval", KR(ret), K(period_sec));
             } else {
               alter_mview_arg.set_start_time(start_time);
               if (!next_time_expr.empty()) {
@@ -287,12 +294,14 @@ int ObAlterMviewUtils::resolve_mlog_options(const ParseNode &node,
       } else {
         int64_t start_time = OB_INVALID_TIMESTAMP;
         ObString next_time_expr;
+        int64_t period_sec = 0;
         if (OB_FAIL(ObMViewResolverHelper::resolve_refresh_interval_node(interval_node,
                                                                          session_info,
                                                                          allocator,
                                                                          resolver_params,
                                                                          start_time,
-                                                                         next_time_expr))) {
+                                                                         next_time_expr,
+                                                                         period_sec))) {
           LOG_WARN("failed to resolve interval node", KR(ret));
         } else {
           alter_mlog_arg.set_start_time(start_time);
@@ -321,6 +330,33 @@ int ObAlterMviewUtils::resolve_mlog_options(const ParseNode &node,
     LOG_INFO("[ALTER MLOG] resolve mlog options", KR(ret), K(alter_mlog_arg));
   }
 
+  return ret;
+}
+
+int ObAlterMviewUtils::check_complete_refresh_min_interval(const uint64_t tenant_id,
+                                                           const uint64_t mview_id,
+                                                           const int64_t period_sec)
+{
+  int ret = OB_SUCCESS;
+  share::schema::ObMViewInfo mview_info;
+  int64_t mview_complete_refresh_min_interval = 600;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    mview_complete_refresh_min_interval = tenant_config->_mv_complete_refresh_min_interval / 1000000L;
+  }
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", KR(ret));
+  } else if (OB_FAIL(share::schema::ObMViewInfo::fetch_mview_info(*GCTX.sql_proxy_, tenant_id,
+                                                                  mview_id, mview_info))) {
+    LOG_WARN("fail to fetch mview info", KR(ret), K(tenant_id), K(mview_id));
+  } else if (ObMVRefreshMethod::COMPLETE == mview_info.get_refresh_method()
+             && period_sec < mview_complete_refresh_min_interval) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("the interval of complete refresh is less than the minimum interval", KR(ret),
+             K(period_sec), K(mview_complete_refresh_min_interval));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "the interval of complete refresh is less than the minimum interval");
+  }
   return ret;
 }
 

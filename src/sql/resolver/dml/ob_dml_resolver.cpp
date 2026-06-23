@@ -3874,10 +3874,21 @@ int ObDMLResolver::check_is_table_supported_for_mview(const TableItem &table_ite
                                                       const ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  bool enable_nested_mview = false;
+  if (OB_UNLIKELY((OB_E(EventTable::EN_MVIEW_DEFENSIVE_CHECK) OB_SUCCESS) != OB_SUCCESS)) {
+    enable_nested_mview = true;
+  } else if (tenant_config.is_valid()) {
+    enable_nested_mview = tenant_config->_enable_mv_nested;
+  }
   if (OB_UNLIKELY(!table_item.synonym_name_.empty())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("unsupported synonym in materialized view", K(ret), K(table_schema), K(table_item));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "synonym in materialized view is");
+  } else if (!enable_nested_mview && table_schema.mv_container_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("nested materialized view is disabled", K(ret), K(table_schema), K(table_item));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "nested materialized view is");
   } else if (OB_UNLIKELY(!(table_schema.is_user_table()
                            || table_schema.is_materialized_view()
                            || table_schema.is_external_table()
