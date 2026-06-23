@@ -28,7 +28,7 @@
 #include "lib/string/ob_sql_string.h"
 #include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/ob_server_struct.h"
-#include "share/resource_manager/ob_cgroup_ctrl.h" // OBCG_CLOG
+#include "share/resource_manager/ob_cgroup_ctrl.h" // OBCG_TRANSPORT_SERVICE
 #include "share/ob_log_restore_proxy.h"
 #include "share/ob_sync_standby_dest_parser.h"
 #include "share/ob_sync_standby_dest_operator.h"
@@ -1583,7 +1583,7 @@ int LogTransportStatus::send_log_via_rpc_(const ObLogTransportReq &req)
     if (OB_FAIL(rpc_proxy->to(standby_addr_)
                        .dst_cluster_id(req.standby_cluster_id_)
                        .by(req.standby_tenant_id_)
-                       .group_id(share::OBCG_CLOG)
+                       .group_id(share::OBCG_TRANSPORT_SERVICE)
                        .timeout(timeout_us)
                        .post_log_transport_req(req, &cb))) {
       CLOG_LOG(WARN, "post_log_transport_req failed", K(ret), K(req), K(standby_addr_), K(timeout_us));
