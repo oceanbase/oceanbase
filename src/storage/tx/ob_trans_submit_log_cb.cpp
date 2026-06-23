@@ -116,6 +116,7 @@ void ObTxLogCb::reset()
   if (OB_NOT_NULL(extra_cb_) && need_free_extra_cb_) {
     mtl_free(extra_cb_);
   }
+  extra_cb_ = nullptr;
   need_free_extra_cb_ = false;
 
   // is_callbacking_ = false;
@@ -137,6 +138,7 @@ void ObTxLogCb::reuse()
   if (OB_NOT_NULL(extra_cb_) && need_free_extra_cb_) {
     mtl_free(extra_cb_);
   }
+  extra_cb_ = nullptr;
   need_free_extra_cb_ = false;
 
   first_part_scn_.invalid_scn();

@@ -16,6 +16,7 @@ const int64_t ObDupTableLSLeaseMgr::MIN_LEASE_INTERVAL = ObDupTableLSLeaseMgr::L
 int ObDupTableLSLeaseMgr::init(ObDupTableLSHandler *dup_ls_handle)
 {
   int ret = OB_SUCCESS;
+  TCRWLock::WLockGuard guard(lease_lock_);
 
   if (OB_ISNULL(dup_ls_handle)) {
     ret = OB_INVALID_ARGUMENT;
@@ -26,6 +27,7 @@ int ObDupTableLSLeaseMgr::init(ObDupTableLSHandler *dup_ls_handle)
     dup_ls_handle_ptr_ = dup_ls_handle;
     is_master_ = false;
     is_stopped_ = false;
+    is_lease_blocked_by_migration_ = false;
     ls_id_ = dup_ls_handle->get_ls_id();
   }
 
@@ -38,11 +40,14 @@ int ObDupTableLSLeaseMgr::offline()
   TCRWLock::WLockGuard guard(lease_lock_);
   follower_lease_info_.reset();
   leader_lease_map_.clear();
+  is_lease_blocked_by_migration_ = false;
   return ret;
 }
 
 void ObDupTableLSLeaseMgr::reset()
 {
+  TCRWLock::WLockGuard guard(lease_lock_);
+
   ls_id_.reset();
   is_master_ = false;
   is_stopped_ = true;
@@ -51,6 +56,7 @@ void ObDupTableLSLeaseMgr::reset()
   follower_lease_info_.reset();
   last_lease_req_post_time_ = 0;
   last_lease_req_cache_handle_time_ = 0;
+  is_lease_blocked_by_migration_ = false;
   if (OB_NOT_NULL(lease_diag_info_log_buf_)) {
     ob_free(lease_diag_info_log_buf_);
   }
@@ -408,7 +414,9 @@ int ObDupTableLSLeaseMgr::follower_handle()
     const common::ObAddr self_addr = MTL(ObTransService *)->get_server();
     int64_t loop_start_time = ObTimeUtility::current_time();
 
-    if (OB_ISNULL(location_adapter) || !cur_ls_id.is_valid() || loop_start_time <= 0) {
+    if (is_lease_blocked_by_migration_) {
+      DUP_TABLE_LOG(DEBUG, "skip dup table lease renew for migration", K(ret), K(ls_id_));
+    } else if (OB_ISNULL(location_adapter) || !cur_ls_id.is_valid() || loop_start_time <= 0) {
       ret = OB_INVALID_ARGUMENT;
       DUP_TABLE_LOG(WARN, "invalid arguments", K(ret), KP(location_adapter), K(cur_ls_id),
                     K(loop_start_time));
@@ -435,6 +443,35 @@ int ObDupTableLSLeaseMgr::follower_handle()
       }
     }
   }
+  return ret;
+}
+
+int ObDupTableLSLeaseMgr::block_dup_table_lease_for_migration(bool &is_lease_valid)
+{
+  int ret = OB_SUCCESS;
+  is_lease_valid = false;
+  TCRWLock::WLockGuard guard(lease_lock_);
+
+  // The block records migration intent, not the current role. It is still kept on a
+  // leader so that a later follower role will not renew its duplicated-table lease
+  // before migration explicitly clears the mark. The next leader_takeover() clears it.
+  is_lease_blocked_by_migration_ = true;
+  is_lease_valid =
+      !is_master() && follower_lease_info_.lease_expired_ts_ > ObTimeUtility::current_time();
+
+  DUP_TABLE_LOG(INFO, "block dup table lease renewal for migration", K(ret), K(ls_id_),
+                K(is_lease_valid), K(is_master()), K(follower_lease_info_));
+  return ret;
+}
+
+int ObDupTableLSLeaseMgr::clear_dup_table_lease_block_for_migration()
+{
+  int ret = OB_SUCCESS;
+  TCRWLock::WLockGuard guard(lease_lock_);
+
+  is_lease_blocked_by_migration_ = false;
+  DUP_TABLE_LOG(INFO, "clear dup table lease renewal block for migration", K(ret), K(ls_id_),
+                K(is_master()), K(follower_lease_info_));
   return ret;
 }
 
@@ -524,6 +561,12 @@ int ObDupTableLSLeaseMgr::leader_takeover(bool is_resume)
   int ret = OB_SUCCESS;
 
   TCRWLock::WLockGuard guard(lease_lock_);
+
+  if (is_lease_blocked_by_migration_) {
+    is_lease_blocked_by_migration_ = false;
+    DUP_TABLE_LOG(INFO, "clear dup table lease renewal block on leader takeover", K(ret), K(ls_id_),
+                  K(is_resume));
+  }
 
   // clear follower lease info
   follower_lease_info_.reset();

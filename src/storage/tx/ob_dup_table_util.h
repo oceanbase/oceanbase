@@ -202,6 +202,9 @@ public:
 
   bool is_dup_table_lease_valid();
 
+  int block_dup_table_lease_for_migration(bool &is_lease_valid);
+  int clear_dup_table_lease_block_for_migration();
+
 public:
   int64_t get_dup_tablet_count();
   bool check_tablet_set_exist();

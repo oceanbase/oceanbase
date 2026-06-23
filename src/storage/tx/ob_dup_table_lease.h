@@ -35,7 +35,8 @@ public:
   static int64_t DEFAULT_LEASE_INTERVAL;
   static const int64_t MIN_LEASE_INTERVAL;
 
-  TO_STRING_KV(K(leader_lease_map_.size()), K(follower_lease_info_));
+  TO_STRING_KV(K(leader_lease_map_.size()), K(follower_lease_info_),
+               K(is_lease_blocked_by_migration_));
 
 public:
   ObDupTableLSLeaseMgr() : lease_lock_(common::ObLatchIds::OB_DUP_TABLE_LEASE_LOCK), lease_diag_info_log_buf_(nullptr) { reset(); }
@@ -53,6 +54,12 @@ public:
   int follower_handle();
 
   int follower_try_acquire_lease(const share::SCN &lease_log_scn);
+
+  // Record migration intent to stop future follower lease renewal. The mark is allowed
+  // even when this LS is currently leader or has no duplicated-table tablet yet, so a
+  // later follower renewal path still observes the block until clear/cleanup.
+  int block_dup_table_lease_for_migration(bool &is_lease_valid);
+  int clear_dup_table_lease_block_for_migration();
 
   int receive_lease_request(const ObDupTableLeaseRequest &lease_req);
 
@@ -288,6 +295,8 @@ private:
 
   int64_t last_lease_req_post_time_;
   int64_t last_lease_req_cache_handle_time_;
+
+  bool is_lease_blocked_by_migration_;
 
   char *lease_diag_info_log_buf_;
 };
