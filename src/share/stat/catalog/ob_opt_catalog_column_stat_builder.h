@@ -139,6 +139,14 @@ public:
   {
     return num_distinct_;
   }
+  int64_t get_final_ndv() const
+  {
+    return final_ndv_;
+  }
+  bool is_bitmap_finalized() const
+  {
+    return is_bitmap_finalized_;
+  }
   TO_STRING_KV(K(tenant_id_),
                K(catalog_id_),
                K(database_name_),

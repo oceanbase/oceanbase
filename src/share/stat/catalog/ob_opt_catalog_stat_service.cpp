@@ -842,8 +842,11 @@ int ObOptCatalogStatService::aggregate_single_column_stat_from_partitions(
   bool has_min = false;
   bool has_max = false;
   bool has_stat = false;
+  bool has_bitmap = false;
+  int64_t max_part_ndv = 0;
+  int64_t max_part_rows = 0;
+  int64_t liner_ndv = 0;
   double weighted_len_sum = 0.0;
-  ObGlobalNdvEval ndv_eval;
 
   for (int64_t i = 0; OB_SUCC(ret) && i < partition_col_stats.count(); ++i) {
     const share::ObOptCatalogColumnStat *catalog_stat = partition_col_stats.at(i);
@@ -852,7 +855,16 @@ int ObOptCatalogStatService::aggregate_single_column_stat_from_partitions(
       has_stat = true;
       total_num_null += catalog_stat->get_num_null();
       total_num_not_null += catalog_stat->get_num_not_null();
-      ndv_eval.add(catalog_stat->get_num_distinct(), catalog_stat->get_llc_bitmap());
+      const int64_t part_ndv = catalog_stat->get_num_distinct();
+      const int64_t part_rows = catalog_stat->get_num_null() + catalog_stat->get_num_not_null();
+      liner_ndv += part_ndv;
+      if (part_ndv > max_part_ndv) {
+        max_part_ndv = part_ndv;
+        max_part_rows = part_rows;
+      }
+      if (OB_NOT_NULL(catalog_stat->get_llc_bitmap()) && catalog_stat->get_llc_bitmap_size() > 0) {
+        has_bitmap = true;
+      }
       if (catalog_stat->get_last_analyzed() > col_last_analyzed) {
         col_last_analyzed = catalog_stat->get_last_analyzed();
       }
@@ -880,6 +892,83 @@ int ObOptCatalogStatService::aggregate_single_column_stat_from_partitions(
     column_stat.last_analyzed_ = 0;
   } else {
     const int64_t total_row_count = total_num_null + total_num_not_null;
+    // The per-partition llc_bitmap may be in one of two different formats:
+    //   - a Hive-format sketch (FM/HLL) fetched from the remote HMS, or
+    //   - an OceanBase-native LLC bitmap produced by internal stat collection.
+    // Each format must be merged with its matching merger; mismatching them makes
+    // the cross-partition NDV grossly wrong (e.g. a 1.5B-NDV key collapses to a
+    // few thousand), which misleads group-by placement. Try the Hive sketch merge
+    // first; if the bitmaps are not Hive sketches, fall back to the native LLC
+    // merge; if no usable bitmap exists, use the linear sum of per-partition NDV.
+    int64_t merged_ndv = 0;
+    bool ndv_resolved = false;
+    if (has_bitmap) {
+      // Path 1: Hive-format sketch (remote HMS statistics).
+      ObOptCatalogColumnStatBuilder sketch_builder(alloc);
+      if (OB_FAIL(sketch_builder.set_bitmap_type(ObCatalogBitmapType::HIVE_AUTO_DETECT))) {
+        LOG_WARN("failed to set bitmap type", K(ret));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < partition_col_stats.count(); ++i) {
+          const share::ObOptCatalogColumnStat *catalog_stat = partition_col_stats.at(i);
+          if (OB_ISNULL(catalog_stat) || OB_ISNULL(catalog_stat->get_llc_bitmap())
+              || catalog_stat->get_llc_bitmap_size() <= 0) {
+            // skip partitions without a bitmap
+          } else if (OB_FAIL(sketch_builder.merge_bitmap(catalog_stat->get_llc_bitmap(),
+                                                         catalog_stat->get_llc_bitmap_size()))) {
+            LOG_WARN("failed to merge bitmap", K(ret));
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(sketch_builder.finalize_bitmap())) {
+          LOG_WARN("failed to finalize bitmap", K(ret));
+        } else if (sketch_builder.is_bitmap_finalized() && sketch_builder.get_final_ndv() > 0) {
+          merged_ndv = sketch_builder.get_final_ndv();
+          ndv_resolved = true;
+        }
+      }
+      if (!ndv_resolved) {
+        // Path 2: OceanBase-native LLC bitmap (internal stat collection).
+        ObGlobalNdvEval ndv_eval;
+        for (int64_t i = 0; i < partition_col_stats.count(); ++i) {
+          const share::ObOptCatalogColumnStat *catalog_stat = partition_col_stats.at(i);
+          if (OB_ISNULL(catalog_stat) || OB_ISNULL(catalog_stat->get_llc_bitmap())
+              || catalog_stat->get_llc_bitmap_size() <= 0) {
+            // skip partitions without a bitmap
+          } else {
+            ndv_eval.add(catalog_stat->get_num_distinct(), catalog_stat->get_llc_bitmap());
+          }
+        }
+        const int64_t native_ndv = ndv_eval.get();
+        if (native_ndv > 0) {
+          merged_ndv = native_ndv;
+          ndv_resolved = true;
+        }
+      }
+    }
+    if (!ndv_resolved) {
+      // Path 3: no usable bitmap. Scale the most diverse partition's NDV up to
+      // the whole table, mirroring how internal stats derive a global NDV via
+      // scale_distinct(total_rows, sample_rows, ndv). This matches the optimizer
+      // convention and is more accurate than a plain per-partition NDV sum for
+      // the overlapping non-key columns that typically reach this path. The
+      // linear sum is kept as a lower bound to guard partition-correlated,
+      // low-per-partition-NDV columns that scaling would otherwise underestimate.
+      const int64_t scaled_ndv
+          = (max_part_rows > 0) ? static_cast<int64_t>(
+                ObOptSelectivity::scale_distinct(static_cast<double>(total_row_count),
+                                                 static_cast<double>(max_part_rows),
+                                                 static_cast<double>(max_part_ndv)))
+                                : max_part_ndv;
+      merged_ndv = scaled_ndv;
+    }
+    // Clamp into [max_part_ndv, total_row_count]: the global NDV is at least any
+    // single partition's NDV and at most the total row count.
+    if (merged_ndv < max_part_ndv) {
+      merged_ndv = max_part_ndv;
+    }
+    if (total_row_count > 0 && merged_ndv > total_row_count) {
+      merged_ndv = total_row_count;
+    }
     if (has_min && OB_FAIL(ob_write_obj(alloc, global_min_obj, column_stat.min_val_))) {
       LOG_WARN("failed to deep copy min value", K(ret));
     } else if (has_max && OB_FAIL(ob_write_obj(alloc, global_max_obj, column_stat.max_val_))) {
@@ -887,7 +976,7 @@ int ObOptCatalogStatService::aggregate_single_column_stat_from_partitions(
     } else {
       column_stat.null_count_ = static_cast<int64_t>(total_num_null * scale_ratio);
       column_stat.record_count_ = row_cnt;
-      column_stat.num_distinct_ = ndv_eval.get();
+      column_stat.num_distinct_ = merged_ndv;
       if (scale_ratio < 1.0) {
         column_stat.num_distinct_ = ObOptSelectivity::scale_distinct(
             row_cnt, row_cnt / scale_ratio, column_stat.num_distinct_);
