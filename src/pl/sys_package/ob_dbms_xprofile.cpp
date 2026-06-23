@@ -299,10 +299,8 @@ int ObDbmsXprofile::format_summary_info(const ObMergedProfileItem *compile_profi
       rate = double(cur->max_db_time_) / total_db_time * 100;
       cur->rate_ = rate;
       if (rate < 1) {
-        cur->color_ = ObMergedProfileItem::DEFAULT_COLOR;
         break;
       } else if (rate < 10) {
-        cur->color_ = ObMergedProfileItem::DEFAULT_COLOR;
       } else if (rate >= 10 && rate < 25) {
         cur->color_ = ObMergedProfileItem::COLORS[0]; // yellow
       } else if (rate >= 25 && rate < 40) {
@@ -702,10 +700,6 @@ int ProfilePrefixHelper::append_metric_prefix(PrefixInfo &current_profile,
   if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(buf_len)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocate buffer failed", K(buf_len));
-  } else if (OB_FAIL(BUF_PRINTF("%s", merged_item.color_ != nullptr
-                                          ? merged_item.color_
-                                          : ""))) {
-    LOG_WARN("failed to print color", K(merged_item.color_));
   } else if (!is_full_plan_) {
     for (int64_t j = 0; OB_SUCC(ret) && j <= current_depth; ++j) {
       OZ(BUF_PRINTF("  "));

@@ -95,7 +95,7 @@ struct ObMergedProfileItem
   ObString sql_id_;
   int64_t parallel_{0};
   ObMergedProfile *profile_{nullptr};
-  const char *color_{nullptr}; // for print
+  const char *color_{DEFAULT_COLOR}; // for print
   double rate_{0};
 };
 
