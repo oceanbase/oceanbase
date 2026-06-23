@@ -4515,7 +4515,7 @@ int ObLogPlan::detect_encoded_dup_expr_restype(const ObIArray<ObAggFunRawExpr *>
         }
         case VEC_TC_DEC_INT512: {
           fixed_type = ObDecimalIntType;
-          precision = MAX_PRECISION_DECIMAL_INT_512;
+          precision = OB_MAX_DECIMAL_POSSIBLE_PRECISION;
           break;
         }
         case VEC_TC_TIMESTAMP_TZ: {

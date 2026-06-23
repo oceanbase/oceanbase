@@ -794,7 +794,10 @@ int ObOperator::output_expr_decint_datum_len_check_batch()
     if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("error unexpected, expr is nullptr", K(ret));
-    } else if (!ob_is_decimal_int(expr->datum_meta_.get_type())) {
+    } else if (!ob_is_decimal_int(expr->datum_meta_.get_type()) || expr->type_ == T_PSEUDO_ENCODE_DUP_EXPR) {
+      // encoded expr is projected by transmit op when translation data
+      // its data haven't produced yet
+      // skip checking
       // do nothing
     } else {
       const int16_t precision = expr->datum_meta_.precision_;

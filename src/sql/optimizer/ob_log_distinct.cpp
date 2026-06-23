@@ -372,6 +372,7 @@ int ObLogDistinct::print_outline_data(PlanText &plan_text)
                                 qb_name.ptr()))) {
     LOG_WARN("fail to print buffer", K(ret), K(buf), K(buf_len), K(pos));
   } else if (HASH_AGGREGATE == algo_ &&
+             NULL == grouping_id_ &&
              OB_FAIL(BUF_PRINTF("%s%s(@\"%.*s\")",
                                 ObQueryHint::get_outline_indent(plan_text.is_oneline_),
                                 ObHint::get_hint_name(T_USE_HASH_DISTINCT),
