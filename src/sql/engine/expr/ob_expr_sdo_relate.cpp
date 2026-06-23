@@ -84,28 +84,38 @@ int ObExprSdoRelate::get_params(ObExpr *param_expr, ObArenaAllocator& temp_alloc
     ret = OB_INVALID_MASK;
     LOG_WARN("invalid mask param", K(ret));
   } else {
+    static const int64_t MAX_MASK_LENGTH = 256;
     ObString original_str = param_datum->get_string();
-    ObString upper_str;
-    if (OB_FAIL(ob_simple_low_to_up(temp_allocator, original_str, upper_str))) {
-      LOG_WARN("failed to get upper string", K(ret));
+    if (original_str.length() > MAX_MASK_LENGTH) {
+      ret = OB_INVALID_MASK;
+      LOG_WARN("mask param too long", K(ret), K(original_str.length()));
     } else {
-      char cmp_str[upper_str.length() + 1];
-      cmp_str[upper_str.length()] = '\0';
-      MEMCPY(cmp_str, upper_str.ptr(), upper_str.length());
-      if (nullptr != strstr(cmp_str, ObSdoRelationship::ANYINTERACT) && OB_FALSE_IT(mask.anyinteract_ = 1)) {
-      } else if (mask.anyinteract_ != 1 && nullptr != strstr(cmp_str, ObSdoRelationship::CONTAINS) && OB_FALSE_IT(mask.contains_ = 1)) {
-      } else if ((mask.anyinteract_ != 1 && mask.contains_ != 1)
-                && (strstr(cmp_str, ObSdoRelationship::COVEREDBY)
-                || strstr(cmp_str, ObSdoRelationship::COVERS)
-                || strstr(cmp_str, ObSdoRelationship::EQUAL)
-                || strstr(cmp_str, ObSdoRelationship::ON)
-                || strstr(cmp_str, ObSdoRelationship::OVERLAPBDYDISJOINT)
-                || strstr(cmp_str, ObSdoRelationship::OVERLAPBDYINTERSECT)
-                || strstr(cmp_str, ObSdoRelationship::INSIDE)
-                || strstr(cmp_str, ObSdoRelationship::TOUCH))) {
-        // other spatial relationship not supported yet
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("spatial relationship not supported yet.", K(ret));
+      ObString upper_str;
+      if (OB_FAIL(ob_simple_low_to_up(temp_allocator, original_str, upper_str))) {
+        LOG_WARN("failed to get upper string", K(ret));
+      } else {
+        char *cmp_str = static_cast<char *>(temp_allocator.alloc(upper_str.length() + 1));
+        if (OB_ISNULL(cmp_str)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc memory for cmp_str", K(ret), K(upper_str.length()));
+        } else {
+          cmp_str[upper_str.length()] = '\0';
+          MEMCPY(cmp_str, upper_str.ptr(), upper_str.length());
+          if (nullptr != strstr(cmp_str, ObSdoRelationship::ANYINTERACT) && OB_FALSE_IT(mask.anyinteract_ = 1)) {
+          } else if (mask.anyinteract_ != 1 && nullptr != strstr(cmp_str, ObSdoRelationship::CONTAINS) && OB_FALSE_IT(mask.contains_ = 1)) {
+          } else if ((mask.anyinteract_ != 1 && mask.contains_ != 1)
+                    && (strstr(cmp_str, ObSdoRelationship::COVEREDBY)
+                    || strstr(cmp_str, ObSdoRelationship::COVERS)
+                    || strstr(cmp_str, ObSdoRelationship::EQUAL)
+                    || strstr(cmp_str, ObSdoRelationship::ON)
+                    || strstr(cmp_str, ObSdoRelationship::OVERLAPBDYDISJOINT)
+                    || strstr(cmp_str, ObSdoRelationship::OVERLAPBDYINTERSECT)
+                    || strstr(cmp_str, ObSdoRelationship::INSIDE)
+                    || strstr(cmp_str, ObSdoRelationship::TOUCH))) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("spatial relationship not supported yet.", K(ret));
+          }
+        }
       }
     }
   }
