@@ -679,7 +679,8 @@ int ObDDLChecksumOperator::delete_checksum(
     const uint64_t dest_table_id,
     const int64_t ddl_task_id,
     common::ObMySQLProxy &sql_proxy,
-    const int64_t tablet_task_id)
+    const int64_t tablet_task_id,
+    const bool is_unique_index_checksum)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -692,9 +693,11 @@ int ObDDLChecksumOperator::delete_checksum(
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(execution_id), K(source_table_id), K(dest_table_id));
   } else if (OB_FAIL(DDL_SIM(tenant_id, ddl_task_id, DELETE_DDL_CHECKSUM_FAILED))) {
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(ddl_task_id));
+  } else if (OB_FAIL(remove_tablet_chksum_sql.assign_fmt("AND (task_id %s 0) ", is_unique_index_checksum ? "<" : ">="))) {
+    LOG_WARN("assign fmt failed", K(ret), K(is_unique_index_checksum), K(remove_tablet_chksum_sql));
   } else if (OB_INVALID_INDEX != tablet_task_id
-    && OB_FAIL(remove_tablet_chksum_sql.assign_fmt("AND (task_id >> %ld) = %ld ", ObDDLChecksumItem::PX_SQC_ID_OFFSET, tablet_task_id))) {
-    LOG_WARN("assign fmt failed", K(ret), K(tablet_task_id), K(remove_tablet_chksum_sql));
+    && OB_FAIL(remove_tablet_chksum_sql.append_fmt("AND (task_id >> %ld) = %ld ", ObDDLChecksumItem::PX_SQC_ID_OFFSET, tablet_task_id))) {
+    LOG_WARN("append fmt failed", K(ret), K(tablet_task_id), K(remove_tablet_chksum_sql));
   } else if (OB_FAIL(sql.assign_fmt(
       "DELETE /*+ use_plan_cache(none) */ FROM %s "
       "WHERE tenant_id = 0 AND execution_id = %ld AND ddl_task_id = %ld AND table_id IN (%ld, %ld) %.*s",

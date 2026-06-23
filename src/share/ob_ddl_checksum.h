@@ -126,7 +126,8 @@ public:
       const uint64_t dest_table_id,
       const int64_t ddl_task_id,
       common::ObMySQLProxy &sql_proxy,
-      const int64_t tablet_task_id = OB_INVALID_INDEX);
+      const int64_t tablet_task_id = OB_INVALID_INDEX,
+      const bool is_unique_index_checksum = false);
 private:
   static int fill_one_item(
       const uint64_t data_format_version,

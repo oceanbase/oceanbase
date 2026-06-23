@@ -1111,7 +1111,8 @@ int ObComplementPrepareTask::process()
                                                     0/*use 0 just to avoid clearing target table chksum*/,
                                                     param_->task_id_,
                                                     *GCTX.sql_proxy_,
-                                                    param_->tablet_task_id_))) {
+                                                    param_->tablet_task_id_,
+                                                    false/*is_unique_index_checksum*/))) {
     LOG_WARN("failed to delete checksum", K(ret), KPC(param_));
   } else {
     LOG_INFO("finish the complement prepare task", K(ret), KPC(param_), "ddl_event_info", ObDDLEventInfo());
