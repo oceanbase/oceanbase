@@ -3526,7 +3526,6 @@ int ObPL::get_pl_function(ObExecContext &ctx,
       LOG_DEBUG("get pl function from plan cache success", KPC(routine));
     }
     if (OB_SUCC(ret) && OB_ISNULL(routine)) {  // not in cache, compile it...
-      bool need_update_schema = false;
       {
         // check session status after get lock
         if (OB_FAIL(check_session_alive(*ctx.get_my_session()))){
@@ -3552,7 +3551,6 @@ int ObPL::get_pl_function(ObExecContext &ctx,
             OX (routine->get_stat_for_update().type_ = ObPLCacheObjectType::STANDALONE_ROUTINE_TYPE);
             OZ (add_pl_lib_cache(routine, pc_ctx));
           }
-          OX (need_update_schema = true);
           LOG_DEBUG("get func by compile",
                      K(package_id), K(routine_id), KPC(routine));
         }
@@ -3567,14 +3565,6 @@ int ObPL::get_pl_function(ObExecContext &ctx,
           LOG_WARN("routine info is not exist!", K(ret), K(routine_id));
         }
         OZ (error_info.delete_error(routine_info));
-        if (need_update_schema) {
-          OZ (ObPLCompiler::update_schema_object_dep_info(routine->get_dependency_table(),
-                                                          routine->get_tenant_id(),
-                                                          routine->get_owner(),
-                                                          routine_id,
-                                                          routine_info->get_schema_version(),
-                                                          routine_info->get_object_type()));
-        }
       }
     }
 #ifdef OB_BUILD_ORACLE_PL
