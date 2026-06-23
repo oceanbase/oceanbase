@@ -10313,6 +10313,18 @@ int ObDDLService::alter_dependent_prefix_index_column(
       } else if (new_column_schema.is_nullable()) {
         new_prefix_column.set_nullable(true);
         new_prefix_column.drop_not_null_cst();
+      } else {
+        // base column changed to NOT NULL, sync nullable and NOT NULL constraint
+        // flags to the prefix gen column. is_nullable_ keeps SHOW INDEX /
+        // information_schema.STATISTICS consistent; constraint flags keep the
+        // prefix column's column_flags symmetric with the base column (mainly
+        // matters in oracle mode where add_not_null_cst is used).
+        new_prefix_column.set_nullable(false);
+        if (new_column_schema.has_not_null_constraint()) {
+          new_prefix_column.add_not_null_cst(new_column_schema.is_not_null_rely_column(),
+                                             new_column_schema.is_not_null_enable_column(),
+                                             new_column_schema.is_not_null_validate_column());
+        }
       }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ddl_operator.update_single_column(trans, table_schema, table_schema, new_prefix_column, false/*need_del_stats*/))) {
