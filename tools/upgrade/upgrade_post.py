@@ -2845,30 +2845,6 @@
 #            logging.info("check vector index exist success in tenant {0}".format(tenant_id))
 #
 #
-## 检查共享存储模式下是否允许从4.4.0/4.4.1升级到4.6.0.0
-#def check_shared_storage(query_cur):
-#  min_cluster_version = 0
-#  sql = """select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'"""
-#  (desc, results) = query_cur.exec_query(sql)
-#  if len(results) != 1:
-#    fail_list.append('min_observer_version is not sync')
-#  elif len(results[0]) != 1:
-#    fail_list.append('column cnt not match')
-#  else:
-#    min_cluster_version = get_version(results[0][0])
-#    if (min_cluster_version <= get_version("4.4.1.0") and min_cluster_version >= get_version("4.4.0.0")):
-#      sql = """select count(*) from GV$OB_PARAMETERS  where name='ob_startup_mode' and value='shared_storage'"""
-#      (desc, results) = query_cur.exec_query(sql)
-#      if len(results) != 1:
-#        fail_list.append('ob_startup_mode is not sync')
-#      elif len(results[0]) != 1:
-#        fail_list.append('column cnt not match')
-#      else:
-#        if int(results[0][0]) != 0:
-#          fail_list.append('shared storage cluster(4.4.0/4.4.1) is not allowed to upgrade to current version')
-#        else:
-#          logging.info('current startup mode is {}'.format(results[0][0]))
-#
 ## 开始升级前的检查
 #def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params, cpu_arch):
 #  try:
@@ -2914,7 +2890,6 @@
 #      check_direct_load_job_exist(cur, query_cur)
 #      check_enable_logonly_replica(cur, query_cur)
 #      check_vector_index_exist_on_column_table(query_cur)
-#      check_shared_storage(query_cur)
 #      check_fail_list()
 #      modify_server_permanent_offline_time(cur)
 #    except Exception as e:
