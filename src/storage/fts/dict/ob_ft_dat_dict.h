@@ -107,8 +107,16 @@ template <typename DATA_TYPE = void>
 class ObFTDATBuilder
 {
 public:
+  // Cap try_base probe step growth to avoid geometric explosion on frequent conflicts.
+  static constexpr size_t MAX_TRY_STEP = 4096;
+  // Max base/check slot increment per expand (~2MB for both arrays).
+  static constexpr size_t MAX_EXPAND_SLOT_INCREMENT = 256 * 1024;
+  // Shrink only when trailing waste exceeds this ratio (array_size / compact_size).
+  static constexpr size_t SHRINK_WASTE_RATIO = 2;
+
   ObFTDATBuilder(ObIAllocator &alloc)
-      : alloc_(alloc), dat_(nullptr), map_(nullptr), is_inited_(false), next_code_(1)
+      : alloc_(alloc), dat_(nullptr), map_(nullptr), is_inited_(false), next_code_(1),
+        max_used_index_(0)
   {
   }
 
@@ -127,7 +135,12 @@ private:
   // Grow base/check arrays. If min_array_size > array_size_, grow to at least min_array_size.
   int expand(const size_t min_array_size = 0);
 
+  // Compact base/check to [0, max_used_index_] before putting into cache.
+  int shrink();
+
   int encode(const ObString &single_token, ObFTTokenCode &code);
+
+  void update_max_used_index(const size_t idx);
 
 private:
   common::ObIAllocator &alloc_;
@@ -136,6 +149,7 @@ private:
 
   bool is_inited_;
   int32_t next_code_;
+  size_t max_used_index_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObFTDATBuilder);
