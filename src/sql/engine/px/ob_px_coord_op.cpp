@@ -26,7 +26,7 @@ using namespace sql;
 using namespace sql::dtl;
 namespace sql
 {
-OB_SERIALIZE_MEMBER(ObPxCoordOp::ObPxBatchOpInfo, op_type_, op_id_);
+OB_SERIALIZE_MEMBER(ObPxCoordOp::ObPxBatchOpInfo, op_type_, op_id_, spf_child_idx_);
 
 OB_DEF_SERIALIZE(ObPxCoordSpec)
 {

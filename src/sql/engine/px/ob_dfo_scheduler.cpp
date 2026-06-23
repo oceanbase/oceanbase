@@ -482,8 +482,7 @@ int ObSerialDfoScheduler::dispatch_sqcs(ObExecContext &exec_ctx,
                 // do nothing
               } else if (spf_child_idx <= 0
                          || spf_child_idx > spf_spec->px_rescan_param_positions_per_child_.count()) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("unexpected spf child index", K(ret),
+                LOG_TRACE("spf child index out of range, fallback to send all params",
                          K(spf_child_idx),
                          K(spf_spec->px_rescan_param_positions_per_child_.count()));
               } else if (OB_FAIL(coord_info_.batch_rescan_ctl_->params_.extract_params_by_range(
