@@ -569,7 +569,16 @@ int ObHMSCatalog::fill_partition_stats(const ObILakeTableMetadata *table_metadat
     ObArray<int64_t> modify_times;
 
     for (int64_t i = 0; OB_SUCC(ret) && i < partition_infos.count(); ++i) {
-      OZ(partition_names.push_back(partition_infos.at(i).partition_));
+      const ObString &full_path = partition_infos.at(i).path_;
+      ObString relative_path;
+      if (full_path.length() > location.length() + 1
+          && full_path.prefix_match(location)) {
+        relative_path.assign_ptr(full_path.ptr() + location.length() + 1,
+                                 full_path.length() - location.length() - 1);
+      } else {
+        relative_path = partition_infos.at(i).partition_;
+      }
+      OZ(partition_names.push_back(relative_path));
     }
 
     if (OB_FAIL(ret)) {

@@ -305,6 +305,10 @@ int ObDbmsCatalogStatsLockUnlock::fill_catalog_stat_locked(sql::ObExecContext &c
           LOG_WARN("get unexpected error", K(ret), K(idx), K(stattype_locked_array));
         } else {
           param.part_infos_.at(i).part_stattype_ = stattype_locked_array.at(idx);
+          if (param.part_infos_.at(i).partition_.empty()) {
+            param.gather_options_.stattype_ =
+                static_cast<StatTypeLocked>(stattype_locked_array.at(idx));
+          }
         }
       }
     }

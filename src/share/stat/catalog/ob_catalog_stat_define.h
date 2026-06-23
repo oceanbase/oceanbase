@@ -59,10 +59,12 @@ struct ObCatalogColumnStatParam
   inline void set_is_unique_column() { column_attribute_ |= ColumnAttrFlag::IS_UNIQUE_COL; }
   inline void set_is_not_null_column() { column_attribute_ |= ColumnAttrFlag::IS_NOT_NULL_COL; }
   inline void set_is_text_column() { column_attribute_ |= ColumnAttrFlag::IS_TEXT_COL; }
+  inline void set_is_string_column() { column_attribute_ |= ColumnAttrFlag::IS_STRING_COL; }
   inline bool is_unique_column() const { return column_attribute_ & ColumnAttrFlag::IS_UNIQUE_COL; }
   inline bool is_virtual_column() const { return column_attribute_ & ColumnAttrFlag::IS_VIRTUAL_COL; }
   inline bool is_not_null_column() const { return column_attribute_ & ColumnAttrFlag::IS_NOT_NULL_COL; }
   inline bool is_text_column() const { return column_attribute_ & ColumnAttrFlag::IS_TEXT_COL; }
+  inline bool is_string_column() const { return column_attribute_ & ColumnAttrFlag::IS_STRING_COL; }
   inline void unset_text_column() { column_attribute_ &= ~ColumnAttrFlag::IS_TEXT_COL; }
   inline void set_is_virtual_col() { column_attribute_ |= ColumnAttrFlag::IS_VIRTUAL_COL; }
 

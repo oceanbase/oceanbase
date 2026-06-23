@@ -1008,7 +1008,11 @@ int ObDbmsCatalogStats::init_column_stat_params(const share::schema::ObTableSche
       }
       if (lib::is_mysql_mode()
           && col->get_meta_type().get_type_class() == ColumnTypeClass::ObTextTC) {
-        col_param.set_is_text_column();
+        if (col->is_string_lob()) {
+          col_param.set_is_string_column();
+        } else {
+          col_param.set_is_text_column();
+        }
       }
       if (OB_SUCC(ret) && OB_FAIL(column_params.push_back(col_param))) {
         LOG_WARN("failed to push back column param", K(ret));

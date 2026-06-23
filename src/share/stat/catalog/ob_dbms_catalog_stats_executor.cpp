@@ -764,6 +764,7 @@ int ObDbmsCatalogStatsExecutor::do_gather_catalog_stats(
     temp_table_param.part_level_ = param.stat_level_ == PARTITION_LEVEL
                                        ? share::schema::PARTITION_LEVEL_ONE
                                        : share::schema::PARTITION_LEVEL_ZERO;
+    temp_table_param.gather_options_.stattype_ = param.stattype_;
     // Copy column_params from gather_param which has the correct allocator context
     if (OB_FAIL(temp_table_param.column_params_.assign(param.column_params_))) {
       LOG_WARN("failed to assign column params", K(ret));

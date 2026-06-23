@@ -372,6 +372,7 @@ int ObOptCatalogStatService::fill_missing_catalog_column_statistics(
     const share::schema::ObTableSchema *table_schema,
     const ObIArray<ObString> &partition_values,
     const ObIArray<ObString> &column_names,
+    const bool use_partition_key_ndv,
     ObIAllocator &allocator,
     ObIArray<share::ObOptCatalogColumnStat *> &catalog_column_stats)
 {
@@ -445,7 +446,7 @@ int ObOptCatalogStatService::fill_missing_catalog_column_statistics(
             // Column not found, generate default column stat and add it
             share::ObOptCatalogColumnStatBuilder column_stat_builder(allocator);
             int64_t num_distinct = 0;
-            if (is_partitioned) {
+            if (use_partition_key_ndv && is_partitioned) {
               const share::schema::ObColumnSchemaV2 *col_schema =
                   table_schema->get_column_schema(column_name);
               if (OB_NOT_NULL(col_schema) && col_schema->is_tbl_part_key_column()) {
@@ -564,6 +565,7 @@ int ObOptCatalogStatService::generate_default_catalog_table_statistics(
                                                               table_schema,
                                                               partition_values_to_generate,
                                                               column_names,
+                                                              true, /*use_partition_key_ndv*/
                                                               allocator,
                                                               catalog_column_stats))) {
       LOG_WARN("failed to generate missing external column statistics", K(ret));
@@ -628,11 +630,39 @@ int ObOptCatalogStatService::fetch_catalog_table_statistics_from_catalog(
                                                               catalog_column_stats))) {
           LOG_WARN("failed to generate default catalog table statistics", K(ret));
         }
-      } else {
-        if (catalog_column_stats.empty()) {
+      } else if (!catalog_column_stats.empty()) {
+        // Both table-level and column-level statistics are present, nothing to do.
+      } else if (ObLakeTableFormat::ODPS == lake_table_metadata->get_format_type()) {
+        // ODPS only exposes table-level statistics (row count / data size) and does
+        // not provide per-column statistics. Keep the real table stat and backfill
+        // default column stats with an empty (global) partition value, matching the
+        // ODPS global-cache lookup, instead of treating the empty column stats as an
+        // error and degrading the optimizer to DEFAULT estimation.
+        const share::schema::ObTableSchema *table_schema = nullptr;
+        ObSEArray<ObString, 1> global_partition_values;
+        if (OB_FAIL(schema_guard.get_table_schema(lake_table_metadata->tenant_id_,
+                                                  lake_table_metadata->table_id_,
+                                                  table_schema))) {
+          LOG_WARN("failed to get table schema for odps default column stats",
+                   K(ret), KPC(lake_table_metadata));
+        } else if (OB_ISNULL(table_schema)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("catalog returned empty column statistics", K(ret), K(column_names.count()));
+          LOG_WARN("table schema is null for odps default column stats",
+                   K(ret), KPC(lake_table_metadata));
+        } else if (OB_FAIL(global_partition_values.push_back(ObString()))) {
+          LOG_WARN("failed to push back global partition value", K(ret));
+        } else if (OB_FAIL(fill_missing_catalog_column_statistics(lake_table_metadata,
+                                                                  table_schema,
+                                                                  global_partition_values,
+                                                                  column_names,
+                                                                  false, /*use_partition_key_ndv*/
+                                                                  allocator,
+                                                                  catalog_column_stats))) {
+          LOG_WARN("failed to fill default column statistics for odps", K(ret));
         }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("catalog returned empty column statistics", K(ret), K(column_names.count()));
       }
     }
   }
@@ -1215,6 +1245,7 @@ int ObOptCatalogStatService::fetch_catalog_table_stat_from_system_table(
                                                        table_schema,
                                                        key_partition_values,
                                                        column_names,
+                                                       true, /*use_partition_key_ndv*/
                                                        stat_allocator,
                                                        partition_column_stats))) {
       LOG_WARN("failed to fill missing column statistics", K(ret));

@@ -136,11 +136,16 @@ private:
       ObIArray<share::ObOptCatalogTableStat *> &catalog_table_stats,
       ObIArray<share::ObOptCatalogColumnStat *> &catalog_column_stats);
 
+  // When use_partition_key_ndv is true, partition key columns get a default
+  // num_distinct derived from partition_values.count(). This must be disabled for
+  // formats that backfill defaults with a single synthetic (global) partition value
+  // (e.g. ODPS), otherwise the partition key NDV would be wrongly collapsed to 1.
   int fill_missing_catalog_column_statistics(
       const share::ObILakeTableMetadata *lake_table_metadata,
       const share::schema::ObTableSchema *table_schema,
       const ObIArray<ObString> &partition_values,
       const ObIArray<ObString> &column_names,
+      const bool use_partition_key_ndv,
       ObIAllocator &allocator,
       ObIArray<share::ObOptCatalogColumnStat *> &catalog_column_stats);
 

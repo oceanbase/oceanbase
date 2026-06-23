@@ -162,7 +162,7 @@ int ObBasicCatalogStatsEstimator::estimate(const ObOptCatalogStatGatherParam &pa
     } else if (OB_FAIL(refine_basic_stats(param, dst_opt_catalog_stats))) {
       LOG_WARN("failed to refine basic stats", K(ret));
     } else {
-      LOG_TRACE("basic stats is collected", K(dst_opt_catalog_stats.count()));
+      LOG_TRACE("basic stats is collected", K(dst_opt_catalog_stats.count()), K(raw_sql.string()));
     }
   }
   return ret;
