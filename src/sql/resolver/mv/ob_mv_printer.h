@@ -115,7 +115,8 @@ struct ObMVPrinterCtx {
     stmt_factory_(stmt_factory),
     expr_factory_(expr_factory),
     refresh_info_(refresh_info),
-    marker_idx_(OB_INVALID_INDEX)
+    marker_idx_(OB_INVALID_INDEX),
+    rt_mv_last_refresh_ts_(0)
   {}
   OB_INLINE bool for_rt_expand() const { return NULL == refresh_info_; }
   OB_INLINE bool for_union_all_child_query() const { return OB_INVALID_INDEX != marker_idx_; }
@@ -125,6 +126,8 @@ struct ObMVPrinterCtx {
   ObRawExprFactory &expr_factory_;
   const ObMVPrinterRefreshInfo *refresh_info_;
   int64_t marker_idx_; // for print union all child query
+  // only used for rt_mv to check if mlog covered all columns of base table since last refreshment
+  int64_t rt_mv_last_refresh_ts_;
 };
 
 class ObMVPrinter
@@ -191,10 +194,17 @@ protected:
   int gen_mv_operator_stmts(ObIArray<ObDMLStmt*> &dml_stmts);
   int get_mlog_table_schema(const TableItem *table,
                             const share::schema::ObTableSchema *&mlog_schema) const;
+  int gen_modified_rows_cond_for_table(const TableItem *source_table,
+                                       const TableItem *outer_table,
+                                       const bool is_exists,
+                                       const bool match_old_only,
+                                       const bool use_orig_sel_alias,
+                                       ObRawExpr *&cond_expr);
+  int check_mlog_covers_all_columns(const TableItem &table, bool &covers_all) const;
   int gen_exists_cond_for_table(const TableItem *source_table,
                                 const TableItem *outer_table,
                                 const bool is_exists,
-                                const bool access_new_data,
+                                const bool match_old_only,
                                 const bool use_orig_sel_alias,
                                 ObRawExpr *&exists_expr);
   int gen_pre_scn_filter_for_table(const TableItem &ori_table,

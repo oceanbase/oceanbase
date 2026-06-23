@@ -74,7 +74,7 @@ int ObSimpleMJVPrinter::gen_delete_for_simple_mjv(ObIArray<ObDMLStmt*> &dml_stmt
       } else if (is_table_skip_refresh(*orig_table_items.at(i))
                  || is_table_without_delete(*orig_table_items.at(i))) {
         // do nothing, no need to gen delete stmt
-      } else if (OB_FAIL(gen_exists_cond_for_table(orig_table_items.at(i), mv_table, true, false, true, semi_filter))) {
+      } else if (OB_FAIL(gen_modified_rows_cond_for_table(orig_table_items.at(i), mv_table, true, true, true, semi_filter))) {
         LOG_WARN("failed to create simple column exprs", K(ret));
       } else if (orig_table_items.count() - 1 == i) {
         if (OB_FAIL(base_del_stmt->add_condition_expr(semi_filter))) {
@@ -180,7 +180,7 @@ int ObSimpleMJVPrinter::gen_access_mv_data_for_simple_mjv(ObSelectStmt *&sel_stm
         LOG_WARN("get unexpected null table item", K(ret), K(i));
       } else if (is_table_skip_refresh(*orig_table_items.at(i))) {
         // do nothing, no need to gen exists cond
-      } else if (OB_FAIL(gen_exists_cond_for_table(orig_table_items.at(i), mv_table, false, false, true, anti_filter))) {
+      } else if (OB_FAIL(gen_modified_rows_cond_for_table(orig_table_items.at(i), mv_table, false, true, true, anti_filter))) {
         LOG_WARN("failed to create simple column exprs", K(ret));
       } else if (OB_FAIL(sel_stmt->add_condition_expr(anti_filter))) {
         LOG_WARN("failed to push back", K(ret));
@@ -209,9 +209,13 @@ int ObSimpleMJVPrinter::gen_access_delta_data_for_simple_mjv(ObIArray<ObSelectSt
       LOG_WARN("get unexpected null table item", K(ret), K(i));
     } else if (is_table_skip_refresh(*orig_table_items.at(i))) {
       // do nothing, no need to gen exists cond
-    } else if (OB_FAIL(gen_pre_scn_filter_for_table(*orig_table_items.at(i),
-                                                    anti_filters.at(i)))) {
-      LOG_WARN("failed to generate pre scn filter", K(ret));
+    } else if (OB_FAIL(gen_modified_rows_cond_for_table(orig_table_items.at(i),
+                                                        orig_table_items.at(i),
+                                                        false, /* is_exists */
+                                                        false, /* match_old_only */
+                                                        false, /* use_orig_sel_alias */
+                                                        anti_filters.at(i)))) {
+      LOG_WARN("failed to generate modifed rows filter", K(ret));
     }
   }
 

@@ -19,6 +19,8 @@
 #include "sql/rewrite/ob_expand_aggregate_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/resolver/mv/ob_mv_dep_utils.h"
+#include "share/schema/ob_mview_info.h"
+#include "observer/ob_server_struct.h"
 
 namespace oceanbase
 {
@@ -225,6 +227,7 @@ int ObMVProvider::print_mv_operators(ObSQLSessionInfo *session_info,
   int ret = OB_SUCCESS;
   ObQueryCtx *query_ctx = NULL;
   operators.reuse();
+  int64_t rt_mv_last_refresh_ts = 0;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("mv provider is not inited", K(ret));
@@ -233,13 +236,32 @@ int ObMVProvider::print_mv_operators(ObSQLSessionInfo *session_info,
              || OB_ISNULL(session_info) || OB_ISNULL(query_ctx = mv_def_stmt_->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(mv_def_stmt_), K(mv_schema_), K(mv_container_schema_), K(stmt_factory_), K(expr_factory_), K(session_info), K(query_ctx));
-  } else {
+  } else if (NULL == refresh_info) {
+    // for rt_expand that lacks refresh_info: fetch the mview's last_refresh_scn
+    share::schema::ObMViewInfo mview_info;
+    share::SCN scn;
+    if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sql proxy is null", K(ret));
+    } else if (OB_FAIL(share::schema::ObMViewInfo::fetch_mview_info(*GCTX.sql_proxy_,
+                                                                    session_info->get_effective_tenant_id(),
+                                                                    mview_id_,
+                                                                    mview_info))) {
+      LOG_WARN("failed to fetch mview info", K(ret), K(mview_id_));
+    } else if (OB_FAIL(scn.convert_for_sql(mview_info.get_last_refresh_scn()))) {
+      LOG_WARN("failed to convert scn", K(ret), K(mview_info.get_last_refresh_scn()));
+    } else if (scn.is_valid()) {
+      rt_mv_last_refresh_ts = scn.convert_to_ts();
+    }
+  }
+  if (OB_SUCC(ret)) {
     ObIAllocator &alloc = mem_ctx_->get_arena_allocator();
     ObMVPrinterCtx mv_printer_ctx(alloc,
                                   *session_info,
                                   *stmt_factory_,
                                   *expr_factory_,
                                   refresh_info);
+    mv_printer_ctx.rt_mv_last_refresh_ts_ = rt_mv_last_refresh_ts;
     query_ctx->get_query_hint_for_update().reset();
     switch (refreshable_type_) {
       case OB_MV_FAST_REFRESH_SIMPLE_MAV: {

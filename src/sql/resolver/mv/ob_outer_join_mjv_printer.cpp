@@ -149,7 +149,7 @@ int ObOuterJoinMJVPrinter::gen_delete_for_inner_join(const TableItem *delta_tabl
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(del_stmt), K(mv_table));
   } else if (OB_FALSE_IT(mv_table->database_name_ = mv_db_name_)) {
-  } else if (OB_FAIL(gen_exists_cond_for_table(delta_table, mv_table, true, false, true, semi_filter))) {
+  } else if (OB_FAIL(gen_modified_rows_cond_for_table(delta_table, mv_table, true, true, true, semi_filter))) {
     LOG_WARN("failed to create simple column exprs", K(ret));
   } else if (OB_FAIL(del_stmt->add_condition_expr(semi_filter))) {
     LOG_WARN("failed to push back semi filter", K(ret));
@@ -432,7 +432,7 @@ int ObOuterJoinMJVPrinter::gen_select_for_left_join_first_delete(const TableItem
     LOG_WARN("get unexpected null table item", K(ret), K(in_sel_mv_table));
   } else if (OB_FAIL(gen_format_string_name(INNER_TABLE_FORMAT_NAME, mv_schema_.get_table_name(), in_sel_mv_table->alias_name_))) {
     LOG_WARN("failed to generate format table name", K(ret));
-  } else if (OB_FAIL(gen_exists_cond_for_table(delta_table, in_sel_mv_table, true, false, true, in_sel_cond_expr))) {
+  } else if (OB_FAIL(gen_modified_rows_cond_for_table(delta_table, in_sel_mv_table, true, true, true, in_sel_cond_expr))) {
     LOG_WARN("failed to generate exists cond for mv_stat cond", K(ret));
   } else if (OB_FAIL(in_sel_stmt->add_condition_expr(in_sel_cond_expr))) {
     LOG_WARN("failed to push back semi filter", K(ret));
@@ -646,7 +646,7 @@ int ObOuterJoinMJVPrinter::gen_update_for_left_join(const TableItem *delta_table
   } else if (OB_ISNULL(upd_stmt) || OB_ISNULL(mv_table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(upd_stmt), K(mv_table));
-  } else if (OB_FAIL(gen_exists_cond_for_table(delta_table, mv_table, true, false, true, semi_filter))) {
+  } else if (OB_FAIL(gen_modified_rows_cond_for_table(delta_table, mv_table, true, true, true, semi_filter))) {
     LOG_WARN("failed to gen exists semi filter", K(ret));
   } else if (OB_FAIL(upd_stmt->add_condition_expr(semi_filter))) {
     LOG_WARN("failed to push back semi filter", K(ret));
