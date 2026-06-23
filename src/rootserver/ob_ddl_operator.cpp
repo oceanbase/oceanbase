@@ -4867,7 +4867,9 @@ int ObDDLOperator::update_aux_table(
           new_aux_table_schema.set_block_size(new_table_schema.get_block_size());
           new_aux_table_schema.set_row_store_type(new_table_schema.get_row_store_type());
           new_aux_table_schema.set_store_format(new_table_schema.get_store_format());
-          new_aux_table_schema.set_progressive_merge_round(new_table_schema.get_progressive_merge_round());
+          new_aux_table_schema.set_progressive_merge_round(
+              std::max(new_table_schema.get_progressive_merge_round(),
+                       aux_table_schema->get_progressive_merge_round()));
           new_aux_table_schema.set_storage_format_version(new_table_schema.get_storage_format_version());
           if (aux_table_schema->is_vec_delta_buffer_type() || aux_table_schema->is_vec_index_id_type()) {
             // set TABLE_MODE_QUEUING_EXTREME for delta_buffer and index_id table.
