@@ -344,4 +344,14 @@ else
     generate_parser
 fi
 
+run_keyword_token_mapping_check() {
+  python ../../../src/sql/parser/check_keyword_token_mapping.py plmysql || return 1
+  if [ -d "../../../close_modules/oracle_pl/pl/parser" ]; then
+    python ../../../src/sql/parser/check_keyword_token_mapping.py ploracle || return 1
+  fi
+}
+
+# check token type mapping
+run_keyword_token_mapping_check >&2 || exit 1
+
 rm -rf $TEMP_FILE

@@ -1,9 +1,9 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 """Verify parser token definitions and keyword arrays stay in sync.
 
 How to use:
-  python3 src/sql/parser/check_keyword_token_mapping.py { mysql | oracle | plmysql | ploracle }
+  python src/sql/parser/check_keyword_token_mapping.py { mysql | oracle | plmysql | ploracle }
 
 What this script checks:
   - The reserved/non-reserved keyword token types declared in one yacc file must match the
@@ -31,10 +31,10 @@ Exit code:
 #    > but there is no matching pattern in `MYSQL_NON_RESERVED_KEYWORDS` array of `non_reserved_keywords_mysql_mode.c`
 #    > this could be a historical reason like functionality not implemented
 
+import io
+import os
 import re
 import sys
-from pathlib import Path
-from typing import Iterable, Tuple, Set
 
 
 class KeywordSectionSpec(object):
@@ -53,7 +53,7 @@ class SourceSpec(object):
         self.non_reserved = non_reserved
 
 
-BASE_DIR = Path(__file__).resolve().parents[3]
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 RESERVED_KEYWORD_BEGIN = "//-----------------------------reserved keyword begin-----------------------------------------------"
 RESERVED_KEYWORD_END = "//-----------------------------reserved keyword end-------------------------------------------------"
@@ -62,8 +62,8 @@ NON_RESERVED_KEYWORD_END = "//-----------------------------non_reserved keyword 
 
 SQL_MYSQL_SPEC = SourceSpec(
     source_name="mysql sql",
-    yacc_path=BASE_DIR / "src/sql/parser/sql_parser_mysql_mode.y",
-    c_path=BASE_DIR / "src/sql/parser/non_reserved_keywords_mysql_mode.c",
+    yacc_path=os.path.join(BASE_DIR, "src/sql/parser/sql_parser_mysql_mode.y"),
+    c_path=os.path.join(BASE_DIR, "src/sql/parser/non_reserved_keywords_mysql_mode.c"),
     reserved=KeywordSectionSpec(
         c_array_name="MYSQL_RESERVED_KEYWORDS",
         yacc_only_ignore=(),
@@ -79,8 +79,8 @@ SQL_MYSQL_SPEC = SourceSpec(
 
 SQL_ORACLE_SPEC = SourceSpec(
     source_name="oracle sql",
-    yacc_path=BASE_DIR / "close_modules/oracle_parser/sql/parser/sql_parser_oracle_mode.y",
-    c_path=BASE_DIR / "src/sql/parser/non_reserved_keywords_oracle_mode.c",
+    yacc_path=os.path.join(BASE_DIR, "close_modules/oracle_parser/sql/parser/sql_parser_oracle_mode.y"),
+    c_path=os.path.join(BASE_DIR, "src/sql/parser/non_reserved_keywords_oracle_mode.c"),
     reserved=KeywordSectionSpec(
         c_array_name="ORACLE_RESERVED_KEYWORDS",
         yacc_only_ignore=("FALSE", "TRUE"),
@@ -96,8 +96,8 @@ SQL_ORACLE_SPEC = SourceSpec(
 
 PL_MYSQL_SPEC = SourceSpec(
     source_name="mysql pl",
-    yacc_path=BASE_DIR / "src/pl/parser/pl_parser_mysql_mode.y",
-    c_path=BASE_DIR / "src/pl/parser/pl_non_reserved_keywords_mysql_mode.c",
+    yacc_path=os.path.join(BASE_DIR, "src/pl/parser/pl_parser_mysql_mode.y"),
+    c_path=os.path.join(BASE_DIR, "src/pl/parser/pl_non_reserved_keywords_mysql_mode.c"),
     reserved=KeywordSectionSpec(
         c_array_name="MYSQL_PL_RESERVED_KEYWORDS",
         yacc_only_ignore=("ALTER", "BINARY", "CALL", "CREATE", "DO", "DROP", "INDEX", "INTO", "LOAD", "PROCEDURE", "RENAME", "SELECT", "SET", "TABLE", "TRIGGER"),
@@ -113,8 +113,8 @@ PL_MYSQL_SPEC = SourceSpec(
 
 PL_ORACLE_SPEC = SourceSpec(
     source_name="oracle pl",
-    yacc_path=BASE_DIR / "close_modules/oracle_pl/pl/parser/pl_parser_oracle_mode.y",
-    c_path=BASE_DIR / "close_modules/oracle_pl/pl/parser/pl_non_reserved_keywords_oracle_mode.c",
+    yacc_path=os.path.join(BASE_DIR, "close_modules/oracle_pl/pl/parser/pl_parser_oracle_mode.y"),
+    c_path=os.path.join(BASE_DIR, "close_modules/oracle_pl/pl/parser/pl_non_reserved_keywords_oracle_mode.c"),
     reserved=KeywordSectionSpec(
         c_array_name="ORACLE_PL_RESERVED_KEYWORDS",
         yacc_only_ignore=(),
@@ -136,19 +136,24 @@ MODE_SPECS = {
 }
 
 
-def usage() -> str:
+def usage():
     return (
-        "Usage: python3 src/sql/parser/check_keyword_token_mapping.py "
+        "Usage: python src/sql/parser/check_keyword_token_mapping.py "
         "{mysql|oracle|plmysql|ploracle}"
     )
 
 
-def strip_block_comments(text: str) -> str:
+def read_file(path):
+    with io.open(path, encoding="utf-8") as f:
+        return f.read()
+
+
+def strip_block_comments(text):
     """Remove C-style block comments so commented tokens do not participate in checks."""
     return re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
 
 
-def extract_token_section(text: str, start_marker: str) -> str:
+def extract_token_section(text, start_marker):
     """Extract the body of a %token declaration block.
 
     The block starts at the line exactly matching start_marker and stops when the
@@ -161,7 +166,7 @@ def extract_token_section(text: str, start_marker: str) -> str:
             start_index = index + 1
             break
     if start_index is None:
-        raise ValueError(f"cannot find start marker: {start_marker}")
+        raise ValueError("cannot find start marker: " + start_marker)
 
     section_lines = []
     for line in lines[start_index:]:
@@ -172,7 +177,7 @@ def extract_token_section(text: str, start_marker: str) -> str:
     return "\n".join(section_lines)
 
 
-def extract_marker_annotated_token_block(text: str, begin_marker: str, end_marker: str):
+def extract_marker_annotated_token_block(text, begin_marker, end_marker):
     """Extract token type names from a comment-wrapped yacc %token block.
 
     The body is located strictly between `begin_marker` and `end_marker` lines
@@ -186,14 +191,14 @@ def extract_marker_annotated_token_block(text: str, begin_marker: str, end_marke
             begin_index = i + 1
             break
     if begin_index is None:
-        raise ValueError(f"cannot find begin marker: {begin_marker}")
+        raise ValueError("cannot find begin marker: " + begin_marker)
 
     for j in range(begin_index, len(lines)):
         if lines[j].strip() == end_marker:
             end_index = j
             break
     if end_index is None:
-        raise ValueError(f"cannot find end marker: {end_marker}")
+        raise ValueError("cannot find end marker: " + end_marker)
 
     section = "\n".join(lines[begin_index:end_index])
     # Remove block comments so commented-out tokens do not participate in checks.
@@ -201,36 +206,36 @@ def extract_marker_annotated_token_block(text: str, begin_marker: str, end_marke
     return set(re.findall(r"\b[A-Z_][A-Z0-9_]*\b", section))
 
 
-def extract_yacc_token_block(text: str, start_marker: str):
+def extract_yacc_token_block(text, start_marker):
     """Extract token type names from one yacc %token block after removing comments."""
     section = strip_block_comments(extract_token_section(text, start_marker))
     return set(re.findall(r"\b[A-Z_][A-Z0-9_]*\b", section))
 
 
-def extract_keyword_array_body(text: str, array_name: str) -> str:
+def extract_keyword_array_body(text, array_name):
     """Extract the initializer body of one keyword array from the .c file."""
     match = re.search(
-        rf"static\s+const\s+\w+\s+{array_name}\[\]\s*=\s*\{{(.*?)\}};",
+        r"static\s+const\s+\w+\s+" + array_name + r"\[\]\s*=\s*\{(.*?)\};",
         text,
         flags=re.DOTALL,
     )
     if match is None:
-        raise ValueError(f"cannot find array body: {array_name}")
+        raise ValueError("cannot find array body: " + array_name)
     return strip_block_comments(match.group(1))
 
 
-def extract_keyword_array_entries(text: str, array_name: str):
+def extract_keyword_array_entries(text, array_name):
     """Extract (keyword literal, token type) entries from one keyword array."""
     body = extract_keyword_array_body(text, array_name)
     return re.findall(r'\{\s*"([^"]+)"\s*,\s*([A-Z_][A-Z0-9_]*)\s*\}', body)
 
 
-def extract_keyword_array_token_types(text: str, array_name: str):
+def extract_keyword_array_token_types(text, array_name):
     """Extract token types from one keyword array of {\"word\", TOKEN_TYPE} entries."""
-    return {token_type for _, token_type in extract_keyword_array_entries(text, array_name)}
+    return set(token_type for _, token_type in extract_keyword_array_entries(text, array_name))
 
 
-def auto_detect_aliases(text: str, array_name: str) -> dict:
+def auto_detect_aliases(text, array_name):
     """Infer yacc-token to c-token aliases from keyword array entries.
 
     For entries like {"char", CHARACTER}, lex produces CHARACTER while yacc usually
@@ -245,46 +250,49 @@ def auto_detect_aliases(text: str, array_name: str) -> dict:
     return aliases
 
 
-def normalize_tokens(tokens: Iterable[str], aliases: dict):
+def normalize_tokens(tokens, aliases):
     """Apply alias mapping before comparing token sets."""
-    return {aliases.get(token, token) for token in tokens}
+    return set(aliases.get(token, token) for token in tokens)
 
 
-def render_report_section(title: str, diff_tokens, fix_hint: str):
+def render_report_section(title, diff_tokens, fix_hint):
     if not diff_tokens:
         return None
-    return "\n".join([title + ":", *[f"  - {token}" for token in sorted(diff_tokens)], fix_hint])
+    lines = [title + ":"] + ["  - " + token for token in sorted(diff_tokens)] + [fix_hint]
+    return "\n".join(lines)
 
 
-def build_fix_hint(spec: SourceSpec, section_name: str, report_type: str) -> str:
-    def get_spec_var_name(spec: SourceSpec) -> str:
+def build_fix_hint(spec, section_name, report_type):
+    def get_spec_var_name(spec):
         for name, value in globals().items():
             if name.endswith("_SPEC") and value is spec:
                 return name
-        raise ValueError(f"cannot find SourceSpec variable name for: {spec.source_name}")
+        raise ValueError("cannot find SourceSpec variable name for: " + spec.source_name)
 
     section = getattr(spec, section_name)
     spec_var_name = get_spec_var_name(spec)
-    c_path = spec.c_path.relative_to(BASE_DIR).as_posix()
-    yacc_path = spec.yacc_path.relative_to(BASE_DIR).as_posix()
+    c_path = os.path.relpath(spec.c_path, BASE_DIR).replace("\\", "/")
+    yacc_path = os.path.relpath(spec.yacc_path, BASE_DIR).replace("\\", "/")
     ignore_field = "yacc_only_ignore" if report_type == "yacc-only" else "c_only_ignore"
     return (
-        f"Check if token type matches between `{section.c_array_name}` in {c_path} "
-        f"and the reserved/non-reserved keyword token blocks in {yacc_path}.\n"
-        f"Or you can modify `{spec_var_name}.{section_name}.{ignore_field}` in {Path(__file__).name} "
-        f"(SEE <How to maintain ignore lists?>)"
+        "Check if token type matches between `{array}` in {c_path} "
+        "and the reserved/non-reserved keyword token blocks in {yacc_path}.\n"
+        "Or you can modify `{spec_var}.{section}.{field}` in {script} "
+        "(SEE <How to maintain ignore lists?>)"
+    ).format(
+        array=section.c_array_name,
+        c_path=c_path,
+        yacc_path=yacc_path,
+        spec_var=spec_var_name,
+        section=section_name,
+        field=ignore_field,
+        script=os.path.basename(__file__),
     )
 
 
-def build_report(
-    spec: SourceSpec,
-    yacc_reserved,
-    c_reserved,
-    yacc_non_reserved,
-    c_non_reserved,
-) -> str:
+def build_report(spec, yacc_reserved, c_reserved, yacc_non_reserved, c_non_reserved):
     """Build the final human-readable mismatch report."""
-    c_text = spec.c_path.read_text(encoding="utf-8")
+    c_text = read_file(spec.c_path)
     section_tokens = (
         ("reserved", yacc_reserved, c_reserved),
         ("non_reserved", yacc_non_reserved, c_non_reserved),
@@ -300,12 +308,12 @@ def build_report(
         title_prefix = section_name.replace("_", "-")
         report_sections.extend(filter(None, (
             render_report_section(
-                f"{title_prefix} yacc-only",
+                title_prefix + " yacc-only",
                 normalized_yacc_tokens - c_tokens - yacc_only_ignore,
                 build_fix_hint(spec, section_name, "yacc-only"),
             ),
             render_report_section(
-                f"{title_prefix} c-only",
+                title_prefix + " c-only",
                 c_tokens - normalized_yacc_tokens - c_only_ignore,
                 build_fix_hint(spec, section_name, "c-only"),
             ),
@@ -314,9 +322,9 @@ def build_report(
     return "OK" if not report_sections else "\n\n".join(report_sections)
 
 
-def collect_tokens(spec: SourceSpec):
-    yacc_text = spec.yacc_path.read_text(encoding="utf-8")
-    c_text = spec.c_path.read_text(encoding="utf-8")
+def collect_tokens(spec):
+    yacc_text = read_file(spec.yacc_path)
+    c_text = read_file(spec.c_path)
     section_names = ("reserved", "non_reserved")
     token_sets = []
 
@@ -331,7 +339,7 @@ def collect_tokens(spec: SourceSpec):
                 yacc_text, NON_RESERVED_KEYWORD_BEGIN, NON_RESERVED_KEYWORD_END
             )
         else:
-            raise ValueError(f"unexpected section_name: {section_name}")
+            raise ValueError("unexpected section_name: " + section_name)
         token_sets.extend((
             yacc_token_block,
             extract_keyword_array_token_types(c_text, section.c_array_name),
@@ -349,7 +357,7 @@ def main():
     mode = sys.argv[1].lower()
     spec = MODE_SPECS.get(mode)
     if spec is None:
-        print(f"Unsupported mode: {mode}")
+        print("Unsupported mode: " + mode)
         print(usage())
         return 1
 

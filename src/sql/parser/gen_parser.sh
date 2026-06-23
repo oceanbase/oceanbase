@@ -307,6 +307,15 @@ fi
 echo "$md5sum_value" > $CACHE_MD5_FILE
 }
 
+run_keyword_token_mapping_check() {
+  python ../../../src/sql/parser/check_keyword_token_mapping.py mysql || return 1
+  if [ -d "../../../close_modules/oracle_parser/sql/parser" ]; then
+    python ../../../src/sql/parser/check_keyword_token_mapping.py oracle || return 1
+  fi
+}
+
+# check token type mapping
+run_keyword_token_mapping_check >&2 || exit 1
 
 if [[ -n "$NEED_PARSER_CACHE" && "$NEED_PARSER_CACHE" == "ON" ]]; then
     echo "generate sql parser with cache"
