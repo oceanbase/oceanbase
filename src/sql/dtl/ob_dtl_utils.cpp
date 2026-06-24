@@ -350,6 +350,10 @@ int ObDtlBatchAsyncSender::async_send_batch()
             }
           }
         }
+        if (OB_FAIL(ret)) {
+          // free payload buffers whether send batch msg success or not
+          (void) after_send_batch(slot);
+        }
       }
     }
     if (OB_FAIL(ret)) {
@@ -474,6 +478,7 @@ int ObDtlBatchAsyncSender::after_send_batch(ObDtlPeerCtlBatch &slot)
   for (int64_t i = 0; i < batch_msg_.payload_bufs_.count() && OB_SUCC(ret); ++i) {
     ObDtlLinkedBuffer *&buffer = batch_msg_.payload_bufs_.at(i);
     ch = static_cast<ObDtlBasicChannel *>(batch_msg_.payload_channels_.at(i));
+    // buffer && channel will not be null, since null check already done before append
     if (OB_ISNULL(buffer)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected NULL ptr", K(ret));
@@ -486,6 +491,8 @@ int ObDtlBatchAsyncSender::after_send_batch(ObDtlPeerCtlBatch &slot)
       buffer = nullptr;
     }
   }
+  batch_msg_.payload_bufs_.reset();
+  batch_msg_.payload_channels_.reset();
   return ret;
 }
 

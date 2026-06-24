@@ -27,6 +27,8 @@ int ObDtlBatchMsg::append_payload_buffer(ObDtlLinkedBuffer *buffer, ObDtlChannel
     SQL_DTL_LOG(WARN, "failed to push back buffer", K(ret));
   } else if (OB_FAIL(payload_channels_.push_back(ch))) {
     SQL_DTL_LOG(WARN, "failed to push back channel", K(ret));
+    static_cast<ObDtlBasicChannel *>(ch)->free_linked_buffer(buffer);
+    payload_bufs_.pop_back();
   } else {
     buffer_cnt_++;
     accum_payload_bytes_ += buffer->size();
