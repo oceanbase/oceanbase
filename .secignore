@@ -147,7 +147,7 @@
   http://bazaar.launchpad.net/*
   http://stackoverflow.com/*
   https://stackoverflow.com/*
-  https://cloud.tencent.com/*  
+  https://cloud.tencent.com/*
   
   
   libecb@schmorp.de
@@ -198,6 +198,7 @@
   https://www.contributor-covenant.org/*
   https://github.com/oceanbase/*
   https://openwebapi.oceanbase.com*
+  https://arrow.apache.org/docs/java/cdata.html
 **/Doxyfile
   www.doxygen.org)
   https://www.gnu.org/software/libiconv/
@@ -455,6 +456,7 @@
 /tools/codestyle/**
 /src/objit/deps/googletest/**
 /.git/**
+/test/ci/**
 /deps/oblib/src/lib/compress/**
 --------------------------------------------------------
 # Config the ignored fold to escape the Chinese scan by GLOB wildcard
