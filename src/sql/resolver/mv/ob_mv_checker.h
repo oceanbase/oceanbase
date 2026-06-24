@@ -102,7 +102,8 @@ class ObMVChecker
       marker_idx_(OB_INVALID_INDEX),
       table_referenced_columns_info_(table_referenced_columns_info),
       refresh_dep_columns_(fast_refresh_dependent_columns),
-      stmt_idx_(OB_INVALID_INDEX)
+      stmt_idx_(OB_INVALID_INDEX),
+      enable_simplify_aggr_dep_(false)
     {
     }
   ~ObMVChecker() {}
@@ -146,6 +147,7 @@ class ObMVChecker
   static int get_equivalent_count_aggr(const ObSelectStmt &stmt,
                                        const ObRawExpr *count_param,
                                        ObSQLSessionInfo *session_info,
+                                       const bool enable_simplify_aggr_dep,
                                        int64_t &select_idx);
 private:
   int check_mv_stmt_refresh_type_basic(const ObSelectStmt &stmt, bool &is_valid);
@@ -175,9 +177,10 @@ private:
                               bool &is_valid);
   int check_mav_refresh_type(const ObSelectStmt &stmt, ObMVRefreshableType &refresh_type);
   int check_mav_refresh_type_basic(const ObSelectStmt &stmt, bool &is_valid);
-  int check_is_standard_group_by(const ObSelectStmt &stmt, bool &is_standard);
+  int check_is_valid_mysql_mode_group_by(const ObSelectStmt &stmt, bool &is_valid);
   int is_standard_select_in_group_by(const hash::ObHashSet<uint64_t> &expr_set,
                                      const ObRawExpr *expr,
+                                     const bool is_no_aggr_col_allowed,
                                      bool &is_standard);
   int check_mav_aggr_items(const ObSelectStmt &stmt,
                            bool &is_valid);
@@ -240,6 +243,7 @@ private:
   // for the set query's marker column, ObRawExpr is a const expr(0), int64_t is OB_INVALID_INDEX(-1)
   common::ObIArray<std::pair<ObRawExpr*, int64_t>> &refresh_dep_columns_;
   int64_t stmt_idx_; // union all child mv stmt idx in select list
+  bool enable_simplify_aggr_dep_;
   DISALLOW_COPY_AND_ASSIGN(ObMVChecker);
 };
 

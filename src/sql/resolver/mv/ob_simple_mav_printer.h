@@ -65,6 +65,7 @@ protected:
                           ObAggFunRawExpr &aggr_expr,
                           ObRawExpr *&aggr_print_expr);
   int add_nvl_above_exprs(ObRawExpr *expr, ObRawExpr *default_expr, ObRawExpr *&res_expr);
+  int add_any_value_above_expr(ObRawExpr *expr, ObRawExpr *&res_expr);
   int add_replaced_expr_for_group_recalculate_aggr(const TableItem &source_table, ObRawExprCopier &copier);
   int get_inner_sel_name_for_aggr(const ObAggFunRawExpr &aggr, ObString &sel_name);
   int gen_group_recalculate_aggr_view(ObSelectStmt *&view_stmt);

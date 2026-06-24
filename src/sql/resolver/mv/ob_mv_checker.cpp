@@ -518,8 +518,8 @@ int ObMVChecker::check_mav_refresh_type_basic(const ObSelectStmt &stmt, bool &is
   // Because the existing scalar group by MVs may not have a COUNT(*) column.
   if (!stmt.is_scala_group_by() && OB_FAIL(collect_mav_default_count(stmt))) {
     LOG_WARN("failed to collect default count", K(ret));
-  } else if (lib::is_mysql_mode() && OB_FAIL(check_is_standard_group_by(stmt, is_valid))) {
-    LOG_WARN("failed to check is standard group by", K(ret));
+  } else if (lib::is_mysql_mode() && OB_FAIL(check_is_valid_mysql_mode_group_by(stmt, is_valid))) {
+    LOG_WARN("failed to check is valid mysql mode group by", K(ret));
   } else if (!is_valid) {
     fast_refreshable_error_.assign_fmt("the select item list contains columns that are not in the group by clause");
   } else if (is_valid) {
@@ -540,17 +540,29 @@ int ObMVChecker::check_mav_refresh_type_basic(const ObSelectStmt &stmt, bool &is
   return ret;
 }
 
-// for mysql mode, check is standard group by
-int ObMVChecker::check_is_standard_group_by(const ObSelectStmt &stmt, bool &is_standard)
+// for mysql mode, check is valid group by
+int ObMVChecker::check_is_valid_mysql_mode_group_by(const ObSelectStmt &stmt, bool &is_valid)
 {
   int ret = OB_SUCCESS;
-  is_standard = true;
+  is_valid = true;
   hash::ObHashSet<uint64_t> expr_set;
-  if (OB_FAIL(expr_set.create(32))) {
+  bool enable_fast_refresh_without_only_full_group_by = false;
+  if (OB_ISNULL(stmt.get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(stmt.get_query_ctx()));
+  } else if (OB_FAIL(stmt.get_query_ctx()->get_global_hint().opt_params_.
+             get_bool_opt_param(ObOptParamHint::ENABLE_FAST_REFRESH_WITHOUT_ONLY_FULL_GROUP_BY,
+                                enable_fast_refresh_without_only_full_group_by))) {
+    LOG_WARN("failed to get enable fast refresh without only full group by", K(ret));
+  } else if (OB_FAIL(expr_set.create(32))) {
     LOG_WARN("failed to create expr set", K(ret));
   } else {
     const ObIArray<ObRawExpr*> &group_exprs = stmt.get_group_exprs();
     const ObIArray<SelectItem> &select_items = stmt.get_select_items();
+    const bool is_no_aggr_col_allowed = enable_fast_refresh_without_only_full_group_by
+                                        && !is_child_stmt(&stmt)
+                                        && !need_on_query_computation_;
+    ObRawExpr *expr = NULL;
     for (int64_t i = 0; OB_SUCC(ret) && i < group_exprs.count(); ++i) {
       uint64_t key = reinterpret_cast<uint64_t>(group_exprs.at(i));
       if (OB_FAIL(expr_set.set_refactored(key, 0))) {
@@ -561,11 +573,17 @@ int ObMVChecker::check_is_standard_group_by(const ObSelectStmt &stmt, bool &is_s
         }
       }
     }
-    for (int64_t i = 0; is_standard && OB_SUCC(ret) && i < select_items.count(); ++i) {
-      if (OB_FAIL(is_standard_select_in_group_by(expr_set, select_items.at(i).expr_, is_standard))) {
-        LOG_WARN("failed to push back null safe equal expr", K(ret));
-      } else if (!is_standard) {
-        LOG_TRACE("expr can not use in select for group by", K(is_standard), K(i), KPC(select_items.at(i).expr_));
+    for (int64_t i = 0; is_valid && OB_SUCC(ret) && i < select_items.count(); ++i) {
+      if (OB_ISNULL(expr = select_items.at(i).expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), K(expr));
+      } else if (OB_FAIL(is_standard_select_in_group_by(expr_set,
+                                                        select_items.at(i).expr_,
+                                                        is_no_aggr_col_allowed && !expr->has_flag(CNT_AGG),
+                                                        is_valid))) {
+        LOG_WARN("failed to check is standard select in group by", K(ret));
+      } else if (!is_valid) {
+        LOG_TRACE("expr can not use in select for group by", K(is_valid), K(i), KPC(select_items.at(i).expr_));
       }
     }
     if (OB_SUCC(ret)) {
@@ -579,6 +597,7 @@ int ObMVChecker::check_is_standard_group_by(const ObSelectStmt &stmt, bool &is_s
 
 int ObMVChecker::is_standard_select_in_group_by(const hash::ObHashSet<uint64_t> &expr_set,
                                                 const ObRawExpr *expr,
+                                                const bool is_no_aggr_col_allowed,
                                                 bool &is_standard)
 {
   int ret = OB_SUCCESS;
@@ -597,14 +616,17 @@ int ObMVChecker::is_standard_select_in_group_by(const hash::ObHashSet<uint64_t> 
     ret = tmp_ret;
     LOG_WARN("failed to check hash set exists", K(ret));
   } else if (expr->is_column_ref_expr()) {
-    is_standard = false;
+    is_standard = is_no_aggr_col_allowed;
   } else if (OB_FAIL(expr->is_const_inherit_expr(is_const_inherit, true))) {
     LOG_WARN("failed to check is const inherit expr", K(ret));
   } else if (!is_const_inherit) {
     is_standard = false;
   } else {
     for (int64_t i = 0; is_standard && OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-      if (OB_FAIL(SMART_CALL(is_standard_select_in_group_by(expr_set, expr->get_param_expr(i), is_standard)))) {
+      if (OB_FAIL(SMART_CALL(is_standard_select_in_group_by(expr_set,
+                                                            expr->get_param_expr(i),
+                                                            is_no_aggr_col_allowed,
+                                                            is_standard)))) {
         LOG_WARN("failed to visit first", K(ret));
       }
     }
@@ -617,6 +639,15 @@ int ObMVChecker::check_mav_aggr_items(const ObSelectStmt &stmt,
 {
   int ret = OB_SUCCESS;
   is_valid = true;
+  enable_simplify_aggr_dep_ = false;
+  if (OB_ISNULL(stmt.get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(stmt.get_query_ctx()));
+  } else if (OB_FAIL(stmt.get_query_ctx()->get_global_hint().opt_params_.
+             get_bool_opt_param(ObOptParamHint::ENABLE_FAST_REFRESH_SIMPLIFY_AGGR_DEP,
+                                enable_simplify_aggr_dep_))) {
+    LOG_WARN("failed to get enable fast refresh with cur time", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < stmt.get_aggr_item_size(); ++i) {
     if (OB_FAIL(check_mav_aggr_item(stmt,
                                     stmt.get_aggr_item(i),
@@ -770,6 +801,7 @@ int ObMVChecker::extract_group_recalculate_aggrs(const ObIArray<ObAggFunRawExpr*
 int ObMVChecker::get_equivalent_count_aggr(const ObSelectStmt &stmt,
                                            const ObRawExpr *count_param,
                                            ObSQLSessionInfo *session_info,
+                                           const bool enable_simplify_aggr_dep,
                                            int64_t &select_idx)
 {
   int ret = OB_SUCCESS;
@@ -849,6 +881,17 @@ int ObMVChecker::get_equivalent_count_aggr(const ObSelectStmt &stmt,
     // equivalent count, will build a dependent COUNT(*) expr.
     select_idx = stmt.get_select_item_size();
   }
+  if (OB_SUCC(ret)
+      && -1 == select_idx
+      && T_OP_CASE == count_param->get_expr_type()
+      && enable_simplify_aggr_dep) {
+    /* for case when expr, just use count(*) as dep_aggr temporary */
+    if (OB_FAIL(find_default_count_expr(stmt, select_idx))) {
+      LOG_WARN("failed to find default count expr", K(ret));
+    } else if (-1 == select_idx) {
+      select_idx = stmt.get_select_item_size();
+    }
+  }
   return ret;
 }
 
@@ -861,7 +904,7 @@ int ObMVChecker::collect_equivalent_count_aggr(const ObSelectStmt &stmt,
   const ObRawExpr *check_param = NULL;
   ObAggFunRawExpr *count_expr = NULL;
   int64_t select_idx = -1;
-  if (OB_FAIL(get_equivalent_count_aggr(stmt, count_param, session_info_, select_idx))) {
+  if (OB_FAIL(get_equivalent_count_aggr(stmt, count_param, session_info_, enable_simplify_aggr_dep_, select_idx))) {
     LOG_WARN("failed to get equivalent count aggr", K(ret), KPC(count_param));
   } else if (-1 != select_idx) {
     if (select_idx == stmt.get_select_item_size()
