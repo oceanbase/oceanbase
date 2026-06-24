@@ -1037,9 +1037,7 @@ int ObResultSet::do_close(int *client_ret)
       // ignore ret
       //兼容oracle，这里需要重置session状态
       LOG_WARN("branch fail in global transaction", KPC(my_session_.get_tx_desc()));
-      ObSqlTransControl::clear_xa_branch(my_session_.get_xid(), my_session_.get_tx_desc());
-      my_session_.reset_tx_variable();
-      my_session_.disassociate_xa();
+      ObSqlTransControl::clear_xa_branch(get_exec_context());
     }
   } else if (OB_NOT_NULL(physical_plan_)) {
     //Because of the async close result we need set the partition_hit flag
