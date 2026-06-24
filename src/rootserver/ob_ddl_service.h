@@ -1705,10 +1705,7 @@ int check_will_be_having_domain_index_operation(
                                share::ObDDLType &ddl_type) const;
   int alter_column_group(obrpc::ObAlterTableArg &alter_table_arg,
                          const share::schema::ObTableSchema &origin_table_schema,
-                         share::schema::ObTableSchema &new_table_schema,
-                         share::schema::ObSchemaGetterGuard &schema_guard,
-                         ObDDLOperator &ddl_operator,
-                         common::ObMySQLTransaction &trans);
+                         share::schema::ObTableSchema &new_table_schema);
 
 
   int update_column_group_table_inplace(const share::schema::ObTableSchema &origin_table_schema,

@@ -6,6 +6,7 @@
 #include "share/ob_fts_index_builder_util.h"
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_table_schema.h"
+#include "share/schema/ob_column_group_helper.h"
 #include "share/schema/ob_part_mgr_util.h"
 #include "share/schema/ob_schema_guard_wrapper.h"
 
@@ -2627,54 +2628,8 @@ int ObTableSchema::check_valid(const bool for_create) const
 
 int ObTableSchema::check_column_group_valid() const
 {
-  int ret = OB_SUCCESS;
-  ObColumnGroupSchema *column_group = nullptr;
-  bool arr_exist_all_cg = false;
-  bool arr_exist_each_cg = false;
-  bool arr_exist_rowkey_cg = false;
-
-  for (int64_t i = 0; OB_SUCC(ret) && (i < column_group_cnt_); ++i) {
-    if (OB_ISNULL(column_group = column_group_arr_[i])) {
-      ret = OB_INVALID_ERROR;
-      LOG_WARN_RET(OB_INVALID_ERROR, "column_group should not be null", K(i), K_(column_group_cnt));
-    } else if (!column_group->is_valid()) {
-      ret = OB_INVALID_ERROR;
-      LOG_WARN_RET(OB_INVALID_ERROR, "column_group is invalid", K(i), KPC(column_group));
-    } else if (column_group->get_column_group_id() > max_used_column_group_id_) {
-      ret = OB_INVALID_ERROR;
-      LOG_WARN_RET(OB_INVALID_ERROR, "column_group id should not be greater than max_used_column_group_id",
-                                     "cg_id", column_group->get_column_group_id(), K_(max_used_column_group_id));
-    } else if (ROWKEY_COLUMN_GROUP == column_group->get_column_group_type()) {
-      arr_exist_rowkey_cg = true;
-      if (OB_UNLIKELY(nullptr != hidden_rowkey_column_group_)) {
-        ret = OB_INVALID_ERROR;
-        LOG_WARN_RET(OB_INVALID_ERROR, "rowkey cg and hidden rowkey cg cannot exist at the same time",
-                     KPC(column_group), KPC(hidden_rowkey_column_group_));
-      }
-    } else if (ALL_COLUMN_GROUP == column_group->get_column_group_type()) {
-      arr_exist_all_cg = true;
-    } else if (column_group->is_normal_column_group()) {
-      arr_exist_each_cg = true;
-    }
-  }
-
-  if (OB_FAIL(ret) || nullptr == hidden_rowkey_column_group_) {
-  } else if (!hidden_rowkey_column_group_->is_valid()) {
-    ret = OB_INVALID_ERROR;
-    LOG_WARN_RET(OB_INVALID_ERROR, "hidden rowkey column group is invalid", KPC(hidden_rowkey_column_group_));
-  } else if (hidden_rowkey_column_group_->get_column_group_id() > max_used_column_group_id_) {
-    ret = OB_INVALID_ERROR;
-    LOG_WARN_RET(OB_INVALID_ERROR, "hidden rowkey column group id should not be greater than max_used_column_group_id",
-                                    "cg_id", hidden_rowkey_column_group_->get_column_group_id(), K_(max_used_column_group_id));
-  } else if (arr_exist_all_cg && arr_exist_each_cg && !arr_exist_rowkey_cg) {
-    // hidden rowkey cg only exist when all cg && each cg exists
-    // hidden rowkey cg and the rowkey cg from the arr must not be exist at the same time
-  } else {
-    ret = OB_INVALID_ERROR;
-    LOG_WARN_RET(OB_INVALID_ERROR, "hidden rowkey column group should not exist", KPC(hidden_rowkey_column_group_),
-                 K(arr_exist_all_cg), K(arr_exist_each_cg), K(arr_exist_rowkey_cg), K(column_group_arr_));
-  }
-  return ret;
+  return ObColumnGroupHelper::check_column_group_valid(
+      *this, column_group_arr_, column_group_cnt_, max_used_column_group_id_, hidden_rowkey_column_group_);
 }
 
 bool ObTableSchema::is_valid() const
@@ -10683,121 +10638,28 @@ int ObTableSchema::get_store_column_group_count(
     int64_t &column_group_cnt,
     const bool filter_empty_cg) const
 {
-  int ret = OB_SUCCESS;
-  int64_t tmp_cnt = 0;
-  if (column_group_cnt_ > 0) {
-    if (OB_ISNULL(column_group_arr_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("column_group_array should not be null", KR(ret), K_(column_group_cnt));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && (i < column_group_cnt_); ++i) {
-        if (OB_ISNULL(column_group_arr_[i])) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("column_group should not be null", KR(ret), K(i), K_(column_group_cnt));
-        } else if (filter_empty_cg && (0 == column_group_arr_[i]->get_column_id_count())) {
-          // skip column_group with empty column_ids
-        } else {
-          ++tmp_cnt;
-        }
-      }
-    }
-  }
-  column_group_cnt = tmp_cnt;
-  return ret;
+  return ObColumnGroupHelper::get_store_column_group_count(
+      *this, column_group_arr_, column_group_cnt_, column_group_cnt, filter_empty_cg);
 }
 
 int ObTableSchema::get_store_column_groups(
     ObIArray<const ObColumnGroupSchema *> &column_groups,
     const bool filter_empty_cg) const
 {
-  int ret = OB_SUCCESS;
-  column_groups.reset();
-  if (column_group_cnt_ > 0) {
-    if (OB_ISNULL(column_group_arr_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("column_group_array should not be null", KR(ret), K_(column_group_cnt));
-    } else {
-      if (OB_FAIL(column_groups.reserve(column_group_cnt_))) {
-        LOG_WARN("fail to reserve", KR(ret), K_(column_group_cnt));
-      }
-      for (int64_t i = 0; OB_SUCC(ret) && (i < column_group_cnt_); ++i) {
-        if (OB_ISNULL(column_group_arr_[i])) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("column_group should not be null", KR(ret), K(i), K_(column_group_cnt));
-        } else if (filter_empty_cg && (0 == column_group_arr_[i]->get_column_id_count())) {
-          // skip column_group with empty column_ids
-        } else if (OB_FAIL(column_groups.push_back(column_group_arr_[i]))) {
-          LOG_WARN("fail to push back", KR(ret), K(i), K_(column_group_cnt));
-        }
-      }
-    }
-  }
-  if (OB_FAIL(ret)) {
-    column_groups.reset();
-  }
-  return ret;
+  return ObColumnGroupHelper::get_store_column_groups(
+      *this, column_group_arr_, column_group_cnt_, column_groups, filter_empty_cg);
 }
 
 int ObTableSchema::has_all_column_group(bool &has_all_column_group) const
 {
-  int ret = OB_SUCCESS;
-  int64_t column_group_cnt = 0;
-  has_all_column_group = false;
-  ObSEArray<const ObColumnGroupSchema *, 8> column_group_metas;
-  if (OB_FAIL(get_store_column_group_count(column_group_cnt))) {
-    LOG_WARN("Failed to get column group count", K(ret), KPC(this));
-  } else if (column_group_cnt <= 1) {
-    has_all_column_group = true;
-  } else if (OB_FAIL(get_store_column_groups(column_group_metas))) {
-    LOG_WARN("Failed to get column group metas", K(ret), KPC(this));
-  } else {
-    const ObColumnGroupSchema *cg_schema = nullptr;
-    for (int64_t idx = 0; OB_SUCC(ret) && idx < column_group_metas.count(); ++idx) {
-      if (OB_ISNULL(cg_schema = column_group_metas.at(idx))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Unexpected null cg_schema", K(ret));
-      } else if (cg_schema->get_column_group_type() == ALL_COLUMN_GROUP) {
-        has_all_column_group = true;
-        break;
-      }
-    }
-  }
-  return ret;
+  return ObColumnGroupHelper::has_all_column_group(*this, column_group_arr_, column_group_cnt_, has_all_column_group);
 }
 
 int ObTableSchema::has_column_group(
     const ObColumnGroupType &cg_type,
     bool &has_column_group) const
 {
-  int ret = OB_SUCCESS;
-  has_column_group = false;
-  int64_t no_empty_cg_cnt = 0;
-  ObSEArray<const ObColumnGroupSchema *, 8> no_empty_cg_metas;
-
-  if (OB_UNLIKELY(cg_type >= MAX_COLUMN_GROUP)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(cg_type));
-  } else if (DEFAULT_COLUMN_GROUP == cg_type) {
-    has_column_group = true; // always exists a default cg
-  } else if (OB_FAIL(get_store_column_group_count(no_empty_cg_cnt))) {
-    LOG_WARN("Failed to get column group count", K(ret), KPC(this));
-  } else if (no_empty_cg_cnt <= 1) {
-    has_column_group = ALL_COLUMN_GROUP == cg_type;
-  } else if (OB_FAIL(get_store_column_groups(no_empty_cg_metas))) {
-    LOG_WARN("Failed to get column group metas", K(ret), KPC(this));
-  } else {
-    const ObColumnGroupSchema *cg_schema = nullptr;
-    for (int64_t idx = 0; OB_SUCC(ret) && idx < no_empty_cg_metas.count(); ++idx) {
-      if (OB_ISNULL(cg_schema = no_empty_cg_metas.at(idx))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Unexpected null cg_schema", K(ret));
-      } else if (cg_schema->get_column_group_type() == cg_type) {
-        has_column_group = true;
-        break;
-      }
-    }
-  }
-  return ret;
+  return ObColumnGroupHelper::has_column_group(*this, column_group_arr_, column_group_cnt_, cg_type, has_column_group);
 }
 
 int ObTableSchema::adjust_column_group_array()
@@ -10861,39 +10723,12 @@ int ObTableSchema::get_column_group_by_id(
     const uint64_t column_group_id,
     ObColumnGroupSchema *&column_group) const
 {
-  int ret = OB_SUCCESS;
-  column_group = NULL;
-  const CgIdHashArray *cg_id_arr = get_cg_id_hash_array();
-  if (OB_NOT_NULL(cg_id_arr)) {
-    if (OB_FAIL(cg_id_arr->get_refactored(ObColumnGroupIdKey(column_group_id), column_group))) {
-      column_group = NULL;
-      LOG_WARN("fail to get column_group from hash array", KR(ret), K(column_group_id));
-    } else if (OB_ISNULL(column_group)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("column_group should not be null", KR(ret), K(column_group_id));
-    }
-  }
-  return ret;
+  return ObColumnGroupHelper::get_column_group_by_id(*this, cg_id_hash_arr_, column_group_id, column_group);
 }
 
 int ObTableSchema::get_column_group_by_name(const ObString &cg_name, ObColumnGroupSchema *&column_group) const
 {
-  int ret = OB_SUCCESS;
-  column_group = nullptr;
-  if (cg_name.empty()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(cg_name));
-  } else if (OB_NOT_NULL(cg_name_hash_arr_)) {
-    if (OB_FAIL(cg_name_hash_arr_->get_refactored(ObColumnGroupSchemaHashWrapper(cg_name), column_group))) {
-      column_group = nullptr;
-      if (OB_HASH_NOT_EXIST == ret) {
-        /* skip, hash not exist normal situation no warn*/
-      } else {
-        LOG_WARN("fail to get column_group from hash array", K(ret), K(cg_name));
-      }
-    }
-  }
-  return ret;
+  return ObColumnGroupHelper::get_column_group_by_name(*this, cg_name_hash_arr_, cg_name, column_group);
 }
 
 // used to add default type column_group for sys_schema or mock default column_group
@@ -11092,41 +10927,8 @@ int ObTableSchema::remove_column_group(const common::ObString &column_group_name
 
 int ObTableSchema::is_column_group_exist(const ObString &cg_name, bool &exist) const
 {
-  int ret = OB_SUCCESS;
-  exist = false;
-  if (cg_name.empty()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(cg_name));
-  } else if (column_group_cnt_ > 0) {
-    if (OB_ISNULL(cg_name_hash_arr_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cg_name_hash_array should not be null", KR(ret));
-    } else if (cg_name == OB_EACH_COLUMN_GROUP_NAME) {
-      ObTableSchema::const_column_group_iterator iter_begin = column_group_begin();
-      ObTableSchema::const_column_group_iterator iter_end = column_group_end();
-      for (; OB_SUCC(ret) && iter_begin != iter_end; iter_begin++) {
-        const ObColumnGroupSchema *cg = *iter_begin;
-        if (ObColumnGroupType::SINGLE_COLUMN_GROUP == cg->get_column_group_type()) {
-          exist = true;
-          break;
-        }
-      }
-    } else {
-      ObColumnGroupSchema *column_group = NULL;
-      if (OB_FAIL(cg_name_hash_arr_->get_refactored(ObColumnGroupSchemaHashWrapper(cg_name), column_group))) {
-        exist = false;
-        if (OB_HASH_NOT_EXIST == ret) {
-          /* hash no exist is sucess situation */
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("fail to get refactored from cg_name_hash_arr ", K(ret));
-        }
-      } else{
-        exist = true;
-      }
-    }
-  }
-  return ret;
+  return ObColumnGroupHelper::is_column_group_exist(
+      *this, column_group_arr_, column_group_cnt_, cg_name_hash_arr_, cg_name, exist);
 }
 
 int ObTableSchema::get_column_group_index(
@@ -11134,186 +10936,29 @@ int ObTableSchema::get_column_group_index(
     const bool need_calculate_cg_idx,
     int32_t &cg_idx) const
 {
-  int ret = OB_SUCCESS;
-  const uint64_t column_id = param.get_column_id();
-  cg_idx = -1;
-  if (OB_UNLIKELY(1 >= column_group_cnt_ && !need_calculate_cg_idx)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("No column group exist", K(ret), K(need_calculate_cg_idx), K_(is_column_store_supported), K_(column_group_cnt));
-  } else if (param.is_virtual_gen_col()) {
-    cg_idx = -1;
-  } else if ((column_id < OB_END_RESERVED_COLUMN_ID_NUM || common::OB_MAJOR_REFRESH_MVIEW_OLD_NEW_COLUMN_ID == column_id) &&
-      common::OB_HIDDEN_SESS_CREATE_TIME_COLUMN_ID != column_id &&
-      common::OB_HIDDEN_SESSION_ID_COLUMN_ID != column_id &&
-      common::OB_HIDDEN_PK_INCREMENT_COLUMN_ID != column_id) { // this has its own column group now
-    if (common::OB_HIDDEN_TRANS_VERSION_COLUMN_ID == column_id ||
-        common::OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID == column_id) {
-      if (need_calculate_cg_idx) {
-        cg_idx = OB_CS_COLUMN_REPLICA_ROWKEY_CG_IDX;
-      } else if (OB_FAIL(get_base_rowkey_column_group_index(cg_idx))) {
-        LOG_WARN("Fail to get base/rowkey column group index", K(ret), K(column_id));
-      }
-    } else {
-      // TODO: check the following
-      // TODO: after check, also see ObStorageSchema::get_column_group_index
-      // common::OB_HIDDEN_LOGICAL_ROWID_COLUMN_ID == column_id
-      // common::OB_HIDDEN_GROUP_IDX_COLUMN_ID == column_id
-      cg_idx = -1;
-    }
-  } else if (need_calculate_cg_idx) {
-    if (OB_FAIL(calc_column_group_index_(column_id, cg_idx))) {
-      LOG_WARN("Fail to calc_column_group_index", K(ret), K(column_id));
-    }
-  } else {
-    bool found = false;
-    int64_t cg_column_cnt = 0;
-    int32_t iter_cg_idx = 0;
-    uint64_t *cg_column_ids = nullptr;
-    for (int64_t i = 0; OB_SUCC(ret) && !found && i < column_group_cnt_; i++) {
-      if (OB_ISNULL(column_group_arr_[i])) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("column_group should not be null", K(ret), K(i), K_(column_group_cnt));
-      } else if (FALSE_IT(cg_column_cnt = column_group_arr_[i]->get_column_id_count())) {
-      } else if (0 == cg_column_cnt) {
-        if (column_group_arr_[i]->get_column_group_type() != DEFAULT_COLUMN_GROUP) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Unexpected column group type", K(ret), KPC(column_group_arr_[i]));
-        }
-      } else if (1 < cg_column_cnt || column_group_arr_[i]->get_column_group_type() != ObColumnGroupType::SINGLE_COLUMN_GROUP) {
-        iter_cg_idx++;
-        // ignore column group with more than one column or not each column group cg
-      } else if (OB_ISNULL(cg_column_ids = column_group_arr_[i]->get_column_ids())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Unexpected error for null column ids", K(ret), KPC(column_group_arr_[i]));
-      } else if (cg_column_ids[0] != column_id) {
-        iter_cg_idx++;
-      } else {
-        cg_idx = iter_cg_idx;
-        found = true;
-      }
-    }
-
-    if (OB_SUCC(ret) && !found) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected, can not find cg idx", K(ret), K(column_id), K_(max_used_column_group_id));
-    }
-  }
-  LOG_TRACE("[CS-Replica] get column group index", K(ret), K(need_calculate_cg_idx), K(param), K(cg_idx), KPC(this));
-  return ret;
+  return ObColumnGroupHelper::get_column_group_index(*this, column_group_arr_, column_group_cnt_,
+      column_array_, column_cnt_, max_used_column_group_id_, param, need_calculate_cg_idx, cg_idx);
 }
 
 int ObTableSchema::calc_column_group_index_(const uint64_t column_id, int32_t &cg_idx) const
 {
-  int ret = OB_SUCCESS;
-  cg_idx = -1;
-  int64_t virtual_column_cnt = 0;
-  int64_t nullptr_column_cnt = 0;
-  // for cs replica, constructed cg schemas start with rowkey cg so the cg idx of row key cg is ALWAYS 0
-  // and cg idx of normal cg is shifted by offset 1.
-  for (int64_t i = 0; i < column_cnt_; i++) {
-    ObColumnSchemaV2 *column = column_array_[i];
-    if (OB_ISNULL(column)) {
-      nullptr_column_cnt++;
-    } else if (column->is_virtual_generated_column()) {
-      virtual_column_cnt++;
-    } else if (column->get_column_id() == column_id) {
-      cg_idx = i + 1 - virtual_column_cnt - nullptr_column_cnt;
-      break;
-    }
-  }
-
-  if (OB_UNLIKELY(-1 == cg_idx)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected cg idx", K(ret));
-  }
-
-  return ret;
+  return ObColumnGroupHelper::calc_column_group_index(*this, column_array_, column_cnt_, column_id, cg_idx);
 }
 
 int ObTableSchema::get_base_rowkey_column_group_index(int32_t &cg_idx) const
 {
-  int ret = OB_SUCCESS;
-  cg_idx = -1;
-  if (OB_UNLIKELY(1 >= column_group_cnt_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("No column group exist", K(ret), K_(is_column_store_supported), K_(column_group_cnt));
-  } else {
-    bool found = false;
-    int32_t iter_cg_idx = 0;
-    for (int32_t i = 0; OB_SUCC(ret) && !found && i < column_group_cnt_; i++) {
-      if (OB_ISNULL(column_group_arr_[i])) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("column_group should not be null", K(ret), K(i), K_(column_group_cnt));
-      } else if (0 == column_group_arr_[i]->get_column_id_count()) {
-        if (column_group_arr_[i]->get_column_group_type() != DEFAULT_COLUMN_GROUP) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Unexpected column group type", K(ret), KPC(column_group_arr_[i]));
-        }
-      } else if (ALL_COLUMN_GROUP == column_group_arr_[i]->get_column_group_type() ||
-                 ROWKEY_COLUMN_GROUP == column_group_arr_[i]->get_column_group_type()) {
-        cg_idx = iter_cg_idx;
-        found = true;
-      } else {
-        iter_cg_idx++;
-      }
-    }
-    if (OB_SUCC(ret) && !found) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected not found base/rowkey column group", K(ret));
-    }
-  }
-  return ret;
+  return ObColumnGroupHelper::get_base_rowkey_column_group_index(*this, column_group_arr_, column_group_cnt_, cg_idx);
 }
 
 int ObTableSchema::check_is_normal_cgs_at_the_end(bool &is_normal_cgs_at_the_end) const
 {
-  int ret = OB_SUCCESS;
-  is_normal_cgs_at_the_end = false;
-  if (0 < column_group_cnt_) {
-    bool found_normal_cg = false;
-    for (int64_t i = 0; OB_SUCC(ret) && i < column_group_cnt_; i++) {
-      if (OB_ISNULL(column_group_arr_[i])) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("column_group should not be null", K(ret), K(i), K_(column_group_cnt));
-      } else if (0 == column_group_arr_[i]->get_column_id_count()) {
-        if (column_group_arr_[i]->get_column_group_type() != DEFAULT_COLUMN_GROUP) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Unexpected column group type", K(ret), KPC(column_group_arr_[i]));
-        }
-        // skip default column group
-      } else if (SINGLE_COLUMN_GROUP == column_group_arr_[i]->get_column_group_type() ||
-                 NORMAL_COLUMN_GROUP == column_group_arr_[i]->get_column_group_type()) {
-        found_normal_cg = true;
-      } else {
-        if (!found_normal_cg) {
-          is_normal_cgs_at_the_end = true;
-        }
-        break;
-      }
-    }
-  }
-  return ret;
+  return ObColumnGroupHelper::check_is_normal_cgs_at_the_end(
+      *this, column_group_arr_, column_group_cnt_, is_normal_cgs_at_the_end);
 }
 
 int ObTableSchema::get_each_column_group(ObIArray<ObColumnGroupSchema*> &each_cgs) const
 {
-  int ret = OB_SUCCESS;
-  each_cgs.reset();
-  ObTableSchema::const_column_group_iterator iter_begin = column_group_begin();
-  ObTableSchema::const_column_group_iterator iter_end = column_group_end();
-
-  for (;OB_SUCC(ret) && iter_begin != iter_end; iter_begin++ ) {
-    ObColumnGroupSchema *cg = *iter_begin;
-    if (OB_ISNULL(cg)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("column group should not be null", K(ret), KP(cg));
-    } else if (cg->get_column_group_type() == ObColumnGroupType::SINGLE_COLUMN_GROUP) {
-      if (OB_FAIL(each_cgs.push_back(cg))) {
-        LOG_WARN("fail to add column group pointer to the array", K(ret));
-      }
-    }
-  }
-  return ret;
+  return ObColumnGroupHelper::get_each_column_group(*this, column_group_arr_, column_group_cnt_, each_cgs);
 }
 
 int ObTableSchema::get_all_column_ids(ObIArray<uint64_t> &column_ids) const

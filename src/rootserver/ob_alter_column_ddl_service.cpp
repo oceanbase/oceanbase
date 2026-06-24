@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX RS
 
 #include "rootserver/ob_ddl_service.h"
+#include "rootserver/ob_column_group_ddl_helper.h"
 #include "rootserver/ob_sensitive_rule_ddl_service.h"
 #include "share/schema/ob_schema_utils.h"
 #include "share/ob_ddl_common.h"
@@ -1125,137 +1126,8 @@ int ObDDLService::add_column_to_column_group(
     ObDDLOperator &ddl_operator,
     common::ObMySQLTransaction &trans)
 {
-  int ret = OB_SUCCESS;
-  uint64_t cur_column_group_id = origin_table_schema.get_next_single_column_group_id();
-  ObArray<uint64_t> column_ids;
-  ObTableSchema::const_column_iterator it_begin = alter_table_schema.column_begin();
-  ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
-  AlterColumnSchema *alter_column_schema = nullptr;
-
-  bool build_old_version_cg = false;
-  if (!origin_table_schema.is_valid() ) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(origin_table_schema), K(alter_table_schema));
-  } else if (!new_table_schema.is_column_store_supported()) {
-    /* skip*/
-  } else {
-    if (OB_FAIL(ObSchemaUtils::check_build_old_version_column_group(origin_table_schema, build_old_version_cg))) {
-      LOG_WARN("fail to get next single column group id", K(ret), K(origin_table_schema));
-    } else if (build_old_version_cg) {
-      cur_column_group_id = origin_table_schema.get_max_used_column_group_id() + 1;
-    }
-    for(; OB_SUCC(ret) && it_begin != it_end; it_begin++) {
-      if (OB_ISNULL(alter_column_schema = static_cast<AlterColumnSchema *>(*it_begin))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("*it_begin is NULL", K(ret));
-      } else if (alter_column_schema->alter_type_ == OB_DDL_ADD_COLUMN) {
-        const ObColumnSchemaV2 *column_schema = nullptr;
-        if (OB_ISNULL(column_schema = new_table_schema.get_column_schema(alter_column_schema->get_column_name_str()))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected null column schema", K(ret), KPC(alter_column_schema), K(new_table_schema));
-        } else if (column_schema->is_virtual_generated_column()) {
-          // skip virtual column
-        } else if (OB_FAIL(column_ids.push_back(column_schema->get_column_id()))) {
-          LOG_WARN("fali to push back column id", K(ret));
-        }
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-      /* skip do nothing*/
-    } else if (column_ids.count() == 0){
-      /* do not add column, skip */
-    } else {
-      bool is_all_cg_exist = false;
-      bool is_each_cg_exist = false;
-      if (OB_FAIL(new_table_schema.is_column_group_exist(OB_ALL_COLUMN_GROUP_NAME, is_all_cg_exist))) {
-        LOG_WARN("fail to check whether all cg exist", K(ret), K(new_table_schema));
-      } else if (OB_FAIL(new_table_schema.is_column_group_exist(OB_EACH_COLUMN_GROUP_NAME, is_each_cg_exist))) {
-        LOG_WARN("fail to check whether each cg exist", K(ret), K(new_table_schema));
-      }
-
-      /* update info about each column group*/
-      if (OB_FAIL(ret)) {
-      } else if (is_each_cg_exist) {
-        HEAP_VAR(ObTableSchema, tmp_table) {
-        if (OB_FAIL(tmp_table.assign(new_table_schema))) {
-          LOG_WARN("fail to assign", K(ret), K(new_table_schema), K(tmp_table));
-        }
-        tmp_table.reset_column_group_info();
-        for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); i++) {
-          ObColumnGroupSchema cg_schema;
-          if (OB_FAIL(ObSchemaUtils::build_single_column_group(new_table_schema,
-                                                   new_table_schema.get_column_schema(column_ids.at(i)),
-                                                   new_table_schema.get_tenant_id(),
-                                                   cur_column_group_id++,
-                                                   cg_schema))) {
-            LOG_WARN("fail to build single column group", K(ret), K(new_table_schema), K(column_ids.at(i)));
-          } else if (OB_FAIL(new_table_schema.add_column_group(cg_schema))) {
-            LOG_WARN("fail to add new column group schema to table", K(ret), K(cg_schema));
-          } else if (OB_FAIL(tmp_table.add_column_group(cg_schema))) {
-            LOG_WARN("fail to add new column group schema to tmp_cg", K(ret), K(tmp_table), K(cg_schema));
-          }
-        }
-        if (OB_FAIL(ret)) {
-        } else if (tmp_table.get_column_group_count() == 0){
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("column_group array should not be empty", K(ret), K(tmp_table));
-        } else if (OB_FAIL(ddl_operator.insert_column_groups(trans, tmp_table))) {
-          LOG_WARN("fail to insert new table_schema to each column gorup", K(ret), K(tmp_table));
-        }
-        }
-      }
-      /* update info about all column group*/
-      if (OB_FAIL(ret)) {
-      } else if (is_all_cg_exist) {
-        ObColumnGroupSchema* all_cg = nullptr;
-        if (OB_FAIL(new_table_schema.get_column_group_by_name(OB_ALL_COLUMN_GROUP_NAME, all_cg))) {
-          LOG_WARN("fail to get all column group", K(ret), K(new_table_schema));
-        } else if (OB_ISNULL(all_cg)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("column group should not be null", K(ret));
-        }
-        for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); i++) {
-          if (OB_FAIL(all_cg->add_column_id(column_ids.at(i)))) {
-            LOG_WARN("fail to add column id", K(ret), K(new_table_schema), K(column_ids.at(i)));
-          }
-        }
-        if (OB_FAIL(ret)){
-        } else if (column_ids.count() == 0) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("column_ids should not be empty", K(ret), K(column_ids));
-        } else if (OB_FAIL(ddl_operator.insert_column_ids_into_column_group(trans, new_table_schema, column_ids, *all_cg))) {
-          LOG_WARN("fail to insert column ids into inner table", K(ret), K(new_table_schema),K(column_ids));
-        }
-      }
-
-      /* update info about default column group*/
-      if (OB_FAIL(ret)) {
-      } else if (!is_all_cg_exist && !is_each_cg_exist) {
-        ObColumnGroupSchema *default_cg = nullptr;
-        if (OB_FAIL(new_table_schema.get_column_group_by_name(OB_DEFAULT_COLUMN_GROUP_NAME, default_cg))) {
-          LOG_WARN("fail get default column group", K(ret), K(new_table_schema));
-        } else if (OB_ISNULL(default_cg)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("column group should not be null", K(ret), K(new_table_schema));
-        }
-        for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); i++) {
-          if (OB_FAIL(default_cg->add_column_id(column_ids.at(i)))) {
-            LOG_WARN("fail to add column id", K(ret), K(new_table_schema), K(column_ids.at(i)));
-          }
-        }
-
-        if (OB_FAIL(ret)){
-        } else if (column_ids.count() == 0) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("column_ids should not be empty", K(ret), K(column_ids));
-        } else if (OB_FAIL(ddl_operator.insert_column_ids_into_column_group(trans, new_table_schema, column_ids, *default_cg))) {
-          LOG_WARN("fail to insert column ids into inner table", K(ret), K(new_table_schema));
-        }
-      }
-    }
-  }
-  return ret;
+  return ObColumnGroupDDLHelper::add_column_to_column_group(
+      origin_table_schema, alter_table_schema, new_table_schema, ddl_operator, trans);
 }
 
 int ObDDLService::update_prev_id_for_add_column(const ObTableSchema &origin_table_schema,

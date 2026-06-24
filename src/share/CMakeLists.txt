@@ -605,6 +605,7 @@ ob_set_subtarget(ob_share schema
   schema/ob_table_iter.cpp
   schema/ob_table_param.cpp
   schema/ob_table_sql_service.cpp
+  schema/ob_column_group_helper.cpp
   schema/ob_tablegroup_sql_service.cpp
   schema/ob_tablespace_mgr.cpp
   schema/ob_tablespace_sql_service.cpp

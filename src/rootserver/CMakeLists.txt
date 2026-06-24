@@ -1,5 +1,6 @@
 ob_set_subtarget(ob_rootserver ALONE
   ob_ddl_service.cpp
+  ob_column_group_ddl_helper.cpp
   ob_alter_column_ddl_service.cpp
   ob_alter_partition_ddl_service.cpp
   ob_ddl_service_launcher.cpp
