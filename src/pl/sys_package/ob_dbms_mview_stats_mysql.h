@@ -20,6 +20,8 @@ namespace oceanbase
 namespace pl
 {
 
+class ObPLExecCtx;
+
 class ObDBMSMViewStatsMysql
 {
 public:
@@ -27,7 +29,7 @@ public:
   virtual ~ObDBMSMViewStatsMysql() {}
 
 #define DECLARE_FUNC(func) \
-  static int func(sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result);
+  static int func(ObPLExecCtx &pl_ctx, sql::ParamStore &params, common::ObObj &result);
 
   DECLARE_FUNC(set_system_default);
   DECLARE_FUNC(set_mvref_stats_params);

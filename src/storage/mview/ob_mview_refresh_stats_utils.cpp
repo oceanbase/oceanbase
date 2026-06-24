@@ -182,7 +182,7 @@ int ObMViewRefreshStatsUtils::write_mv_start(sql::ObExecContext &ctx,
         OB_FAIL(refresh_dml.add_time_column("end_time", 0)) ||
         OB_FAIL(refresh_dml.add_column("elapsed_time", 0)) ||
         OB_FAIL(refresh_dml.add_column("final_num_rows", 0)) ||
-        OB_FAIL(refresh_dml.add_column("result", 0)) ||
+        OB_FAIL(refresh_dml.add_column("result", 1)) ||
         OB_FAIL(refresh_dml.add_column("num_steps", num_steps))) {
       LOG_WARN("fail to add refresh stats columns", KR(ret));
     } else if (OB_FAIL(GET_MIN_DATA_VERSION(refresh_param.tenant_id_, data_version))) {
@@ -373,24 +373,6 @@ int ObMViewRefreshStatsUtils::write_stmt_after_step(sql::ObExecContext &ctx,
                                                     int64_t actual_parallelism)
 {
   int ret = OB_SUCCESS;
-  // Conditionally capture execution plan (JSON-serialized tree) before persisting stats.
-  ObSqlString plan_json;
-  if (capture_info.should_capture_ && !capture_info.sql_id().empty()) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(get_mview_stmt_execution_plan(ctx,
-                                                   refresh_param.tenant_id_,
-                                                   capture_info.sql_id(),
-                                                   capture_info.trace_id(),
-                                                   capture_info.svr_ip(),
-                                                   capture_info.svr_port_,
-                                                   capture_info.plan_id_,
-                                                   capture_info.plan_hash_,
-                                                   plan_json))) {
-      LOG_WARN("fail to get stmt execution plan, ignore", KR(tmp_ret));
-    }
-  }
-  const ObString &execution_plan = plan_json.string();
-
   share::ObDMLSqlSplicer dml;
   common::ObSqlString sql;
   int64_t affected_rows = 0;
@@ -402,6 +384,35 @@ int ObMViewRefreshStatsUtils::write_stmt_after_step(sql::ObExecContext &ctx,
     LOG_WARN("invalid args", KR(ret), K(ctx.get_sql_proxy()), K(refresh_param));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(refresh_param.tenant_id_, data_version))) {
     LOG_WARN("fail to get data version", KR(ret), K(refresh_param.tenant_id_));
+  }
+
+  // Best-effort plan capture before DML build — failure does not affect ret
+  ObSqlString plan_json;
+  if (OB_SUCC(ret)) {
+    if (capture_info.is_full_plan() && !capture_info.sql_id().empty()) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(get_mview_stmt_execution_plan(ctx,
+                                                     refresh_param.tenant_id_,
+                                                     capture_info.sql_id(),
+                                                     capture_info.trace_id(),
+                                                     capture_info.svr_ip(),
+                                                     capture_info.svr_port_,
+                                                     capture_info.plan_id_,
+                                                     capture_info.plan_hash_,
+                                                     plan_json))) {
+        LOG_WARN("fail to get stmt execution plan, ignore", KR(tmp_ret));
+      }
+    } else if (capture_info.is_hash_only()) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(build_mview_plan_hash_json(ctx.get_allocator(),
+                                                 capture_info.plan_hash_,
+                                                 plan_json))) {
+        LOG_WARN("fail to build hash-only plan json, ignore", KR(tmp_ret));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(dml.add_pk_column("tenant_id", 0)) ||
              OB_FAIL(dml.add_pk_column("refresh_id", refresh_param.refresh_id_)) ||
              OB_FAIL(dml.add_pk_column("mview_id", refresh_param.mview_id_)) ||
@@ -409,12 +420,12 @@ int ObMViewRefreshStatsUtils::write_stmt_after_step(sql::ObExecContext &ctx,
              OB_FAIL(dml.add_pk_column("step", step)) ||
              OB_FAIL(dml.add_column("execution_time", execution_time)) ||
              OB_FAIL(dml.add_column("result", result)) ||
-             (!execution_plan.empty() &&
-              OB_FAIL(dml.add_column("execution_plan", ObHexEscapeSqlStr(execution_plan))))) {
+             (!plan_json.string().empty() &&
+             OB_FAIL(dml.add_column("execution_plan", ObHexEscapeSqlStr(plan_json.string()))))) {
     LOG_WARN("fail to add update columns", KR(ret), K(step));
   } else if (data_version >= DATA_VERSION_4_4_2_2 &&
              OB_FAIL(dml.add_column("parallelism", actual_parallelism))) {
-    LOG_WARN("fail to add parallelism column for data version 4.4.2.2", KR(ret), K(step));
+    LOG_WARN("fail to add parallelism column", KR(ret), K(step));
   } else if (OB_FAIL(dml.splice_update_sql(OB_ALL_MVIEW_REFRESH_STMT_STATS_TNAME, sql))) {
     LOG_WARN("fail to splice update sql", KR(ret), K(step));
   } else if (OB_FAIL(execute_trans_write(ctx.get_sql_proxy(),

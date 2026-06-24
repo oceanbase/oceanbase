@@ -2156,7 +2156,7 @@ int ObLogicalOperator::add_expr_to_ctx(ObAllocExprContext &ctx,
   // so downstream SPF post-stage can claim them
   if (OB_SUCC(ret) && OB_NOT_NULL(expr) && expr->has_flag(CNT_SUB_QUERY) && OB_NOT_NULL(get_plan())
       && OB_NOT_NULL(get_plan()->get_optimizer_context().get_query_ctx())
-      && get_plan()->get_optimizer_context().get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_2_BP1)) {
+      && get_plan()->get_optimizer_context().get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_2_BP2)) {
     for (int64_t i = 0; OB_SUCC(ret) && i < ctx.branch_subquery_exprs_.count(); ++i) {
       if (OB_ISNULL(raw_expr = ctx.branch_subquery_exprs_.at(i))) {
         ret = OB_ERR_UNEXPECTED;

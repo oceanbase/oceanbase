@@ -51,6 +51,13 @@ int get_mview_stmt_execution_plan(sql::ObExecContext &ctx,
                                   common::ObSqlString &result_json);
 
 /**
+ * Build the minimal execution_plan JSON used when only plan_hash is available.
+ */
+int build_mview_plan_hash_json(common::ObIAllocator &allocator,
+                               uint64_t plan_hash,
+                               common::ObSqlString &result_json);
+
+/**
  * Parse a plan JSON produced by get_mview_stmt_execution_plan() and render
  * it back as the ASCII plan table + operator detail block used in refresh
  * reports.  Allocator is used for string copies during rendering and is
@@ -58,6 +65,7 @@ int get_mview_stmt_execution_plan(sql::ObExecContext &ctx,
  */
 int render_mview_plan_text(common::ObIAllocator &allocator,
                            const common::ObString &plan_json,
+                           uint64_t &plan_hash,
                            common::ObSqlString &result_text);
 
 /**
@@ -77,8 +85,7 @@ int aggregate_mview_plan_resources(common::ObIAllocator &allocator,
                                    int64_t &cpu_time,
                                    int64_t &io_wait_time,
                                    int64_t &disk_reads,
-                                   int64_t &memory_used,
-                                   int64_t &affected_rows);
+                                   int64_t &memory_used);
 
 } // namespace storage
 } // namespace oceanbase

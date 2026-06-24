@@ -16,9 +16,17 @@
 
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "lib/mysqlclient/ob_mysql_result.h"
+#include "lib/string/ob_sql_string.h"
+#include "lib/time/ob_time_utility.h"
 #include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/ob_errno.h"
+#include "share/ob_server_struct.h"
+#include "share/schema/ob_schema_getter_guard.h"
+#include "share/schema/ob_schema_struct.h"
+#include "share/schema/ob_table_schema.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/ob_sql_context.h"
+#include "sql/session/ob_sql_session_info.h"
 #include "storage/mview/cmd/ob_mview_refresh_report_executor.h"
 #include "storage/mview/ob_mview_refresh_plan_format.h"
 
@@ -28,6 +36,7 @@ namespace storage
 {
 using namespace common;
 using namespace sql;
+using namespace share::schema;
 
 static int collect_distinct_mv_ids(const ObIArray<MViewReportMVData> &mv_array, ObIArray<int64_t> &mv_ids)
 {
@@ -39,6 +48,125 @@ static int collect_distinct_mv_ids(const ObIArray<MViewReportMVData> &mv_array, 
       last_id = mv_array.at(i).mview_id_;
       if (OB_FAIL(mv_ids.push_back(last_id))) {
         LOG_WARN("fail to push mv_id", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+static int resolve_table_name(ObSchemaGetterGuard &schema_guard,
+                              const uint64_t tenant_id,
+                              const uint64_t table_id,
+                              ObIAllocator &allocator,
+                              ObString &table_name,
+                              ObString &display_name)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *table_schema = NULL;
+  const ObSimpleDatabaseSchema *db_schema = NULL;
+  ObSqlString tmp_name;
+  uint64_t db_id = 0;
+  if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+  } else if (OB_FAIL(ob_write_string(allocator, table_schema->get_table_name_str(), table_name))) {
+    LOG_WARN("fail to copy table name", KR(ret), K(table_id));
+  } else if (OB_FALSE_IT(db_id = table_schema->get_database_id())) {
+  } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, db_id, db_schema))) {
+    LOG_WARN("fail to get db schema", KR(ret), K(tenant_id), K(db_id));
+  } else if (OB_ISNULL(db_schema)) {
+  } else if (OB_FAIL(tmp_name.assign_fmt("%.*s.%.*s",
+                                         db_schema->get_database_name_str().length(),
+                                         db_schema->get_database_name_str().ptr(),
+                                         table_name.length(),
+                                         table_name.ptr()))) {
+    LOG_WARN("fail to build full name", KR(ret), K(db_id), K(table_name));
+  } else if (OB_FAIL(ob_write_string(allocator, tmp_name.string(), display_name))) {
+    LOG_WARN("fail to copy display name", KR(ret));
+  }
+  return ret;
+}
+
+static int prepare_report_names(ObExecContext &ctx,
+                                const uint64_t target_tenant_id,
+                                MViewReportContext &context)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session_info = NULL;
+  ObSqlCtx *sql_ctx = NULL;
+  ObSchemaGetterGuard *schema_guard = NULL;
+  const ObUserInfo *user_info = NULL;
+  ObIAllocator *allocator = NULL;
+  MViewReportData *data = NULL;
+  ObSchemaGetterGuard tenant_guard;
+  if (OB_ISNULL(sql_ctx = ctx.get_sql_ctx())
+      || OB_ISNULL(session_info = ctx.get_my_session())
+      || OB_ISNULL(allocator = context.allocator_)
+      || OB_ISNULL(data = context.data_)
+      || OB_ISNULL(data->run_data_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_ctx, session, allocator, data or run_data is null", KR(ret));
+  } else if (OB_ISNULL(sql_ctx->schema_guard_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_guard is null", KR(ret));
+  } else if (session_info->get_effective_tenant_id() == target_tenant_id) {
+    schema_guard = sql_ctx->schema_guard_;
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is null", KR(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(target_tenant_id, tenant_guard))) {
+    LOG_WARN("fail to get tenant schema guard", KR(ret), K(target_tenant_id));
+  } else {
+    schema_guard = &tenant_guard;
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (0 != data->run_data_->mview_id_
+             && OB_FAIL(resolve_table_name(*schema_guard,
+                                           target_tenant_id,
+                                           data->run_data_->mview_id_,
+                                           *allocator,
+                                           data->run_data_->mview_name_,
+                                           data->run_data_->mview_display_name_))) {
+    LOG_WARN("fail to resolve target mv name", KR(ret), K(target_tenant_id), K(data->run_data_->mview_id_));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (0 != data->run_data_->run_user_id_) {
+    user_info = schema_guard->get_user_info(target_tenant_id,
+                                            static_cast<uint64_t>(data->run_data_->run_user_id_));
+    if (OB_ISNULL(user_info)) {
+    } else if (OB_FAIL(ob_write_string(*allocator, user_info->get_user_name(), data->run_data_->run_owner_))) {
+      LOG_WARN("fail to copy user name", KR(ret), K(data->run_data_->run_user_id_));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (data->mv_array_.count() > 0) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < data->mv_array_.count(); ++i) {
+      MViewReportMVData &mv = data->mv_array_.at(i);
+      if (OB_FAIL(resolve_table_name(*schema_guard,
+                                     target_tenant_id,
+                                     mv.mview_id_,
+                                     *allocator,
+                                     mv.mv_name_,
+                                     mv.mv_display_name_))) {
+        LOG_WARN("fail to resolve mv name", KR(ret), K(target_tenant_id), K(mv.mview_id_));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (data->change_array_.count() > 0) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < data->change_array_.count(); ++i) {
+      MViewReportChangeData &ch = data->change_array_.at(i);
+      if (OB_FAIL(resolve_table_name(*schema_guard,
+                                     target_tenant_id,
+                                     ch.detail_table_id_,
+                                     *allocator,
+                                     ch.tbl_name_,
+                                     ch.tbl_display_name_))) {
+        LOG_WARN("fail to resolve change table name", KR(ret), K(target_tenant_id), K(ch.detail_table_id_));
       }
     }
   }
@@ -60,14 +188,11 @@ static int fetch_run_data(ObExecContext &ctx,
     LOG_WARN("sql_proxy is null", KR(ret));
   } else {
     ObSqlString sql;
-    if (OB_FAIL(sql.assign_fmt("SELECT s.run_user_id, s.method, s.push_deferred_rpc, s.refresh_after_errors, "
-                               "s.purge_option, s.parallelism, s.heap_size, "
-                               "s.atomic_refresh, s.nested, s.out_of_place, "
-                               "s.number_of_failures, s.start_time, s.end_time, "
-                               "s.elapsed_time, s.log_purge_time, s.complete_stats_avaliable, "
-                               "s.trace_id, s.mview_id, s.data_target_scn "
+    if (OB_FAIL(sql.assign_fmt("SELECT s.run_user_id, s.method, s.parallelism, s.nested, "
+                               "s.start_time, s.end_time, s.elapsed_time, "
+                               "s.trace_id, s.mview_id, s.data_target_scn, s.result, s.error_message "
                                "FROM %s s "
-                               "WHERE s.tenant_id = %lu AND s.refresh_id = %ld AND s.elapsed_time > 0",
+                               "WHERE s.tenant_id = %lu AND s.refresh_id = %ld",
                                OB_ALL_VIRTUAL_MVIEW_REFRESH_RUN_STATS_TNAME,
                                target_tenant_id,
                                refresh_id))) {
@@ -84,30 +209,39 @@ static int fetch_run_data(ObExecContext &ctx,
         } else if (OB_FAIL(sql_result->next())) {
           if (OB_ITER_END == ret) {
             ret = OB_ENTRY_NOT_EXIST;
-            LOG_WARN("refresh has not finished yet or refresh_id not found", KR(ret), K(refresh_id));
-            LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "refresh has not finished yet, no report available");
+            LOG_WARN("refresh_id not found in run_stats", KR(ret), K(refresh_id));
+            LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "refresh_id not found");
           }
         } else {
           ObString tmp_str;
-          EXTRACT_INT_FIELD_MYSQL(*sql_result, "run_user_id", run_data.run_user_id_, int64_t);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*sql_result,
+                                                     "run_user_id",
+                                                     run_data.run_user_id_,
+                                                     int64_t,
+                                                     true,
+                                                     true,
+                                                     0);
           EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(*sql_result, "method", tmp_str);
           if (OB_SUCC(ret) && OB_FAIL(ob_write_string(allocator, tmp_str, run_data.method_))) {
             LOG_WARN("fail to deep copy method", KR(ret));
           }
-          EXTRACT_BOOL_FIELD_MYSQL(*sql_result, "push_deferred_rpc", run_data.push_deferred_rpc_);
-          EXTRACT_BOOL_FIELD_MYSQL(*sql_result, "refresh_after_errors", run_data.refresh_after_errors_);
-          EXTRACT_INT_FIELD_MYSQL(*sql_result, "purge_option", run_data.purge_option_, int64_t);
-          EXTRACT_INT_FIELD_MYSQL(*sql_result, "parallelism", run_data.parallelism_, int64_t);
-          EXTRACT_INT_FIELD_MYSQL(*sql_result, "heap_size", run_data.heap_size_, int64_t);
-          EXTRACT_BOOL_FIELD_MYSQL(*sql_result, "atomic_refresh", run_data.atomic_refresh_);
-          EXTRACT_BOOL_FIELD_MYSQL(*sql_result, "nested", run_data.nested_);
-          EXTRACT_BOOL_FIELD_MYSQL(*sql_result, "out_of_place", run_data.out_of_place_);
-          EXTRACT_INT_FIELD_MYSQL(*sql_result, "number_of_failures", run_data.number_of_failures_, int64_t);
-          EXTRACT_TIMESTAMP_FIELD_MYSQL(*sql_result, "start_time", run_data.start_time_);
-          EXTRACT_TIMESTAMP_FIELD_MYSQL(*sql_result, "end_time", run_data.end_time_);
-          EXTRACT_INT_FIELD_MYSQL(*sql_result, "elapsed_time", run_data.elapsed_time_, int64_t);
-          EXTRACT_INT_FIELD_MYSQL(*sql_result, "log_purge_time", run_data.log_purge_time_, int64_t);
-          EXTRACT_BOOL_FIELD_MYSQL(*sql_result, "complete_stats_avaliable", run_data.complete_stats_available_);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*sql_result,
+                                                     "parallelism",
+                                                     run_data.parallelism_,
+                                                     int64_t,
+                                                     true,
+                                                     true,
+                                                     0);
+          EXTRACT_BOOL_FIELD_MYSQL_SKIP_RET(*sql_result, "nested", run_data.nested_);
+          EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(*sql_result, "start_time", run_data.start_time_);
+          EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(*sql_result, "end_time", run_data.end_time_);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*sql_result,
+                                                     "elapsed_time",
+                                                     run_data.elapsed_time_,
+                                                     int64_t,
+                                                     true,
+                                                     true,
+                                                     0);
           EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(*sql_result, "trace_id", tmp_str);
           if (OB_SUCC(ret) && OB_FAIL(ob_write_string(allocator, tmp_str, run_data.trace_id_))) {
             LOG_WARN("fail to deep copy trace_id", KR(ret));
@@ -126,6 +260,21 @@ static int fetch_run_data(ObExecContext &ctx,
                                                       true,
                                                       true,
                                                       0);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*sql_result,
+                                                     "result",
+                                                     run_data.result_,
+                                                     int64_t,
+                                                     true,
+                                                     true,
+                                                     0);
+          tmp_str.reset();
+          EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(*sql_result, "error_message", tmp_str);
+          if (OB_SUCC(ret) && OB_FAIL(ob_write_string(allocator, tmp_str, run_data.error_message_))) {
+            LOG_WARN("fail to deep copy error_message", KR(ret));
+          }
+          if (OB_SUCC(ret) && run_data.needs_live_elapsed()) {
+            run_data.elapsed_time_ = ObTimeUtility::current_time() - run_data.start_time_;
+          }
           if (OB_SUCC(ret)) {
             run_data.is_valid_ = true;
           }
@@ -153,7 +302,7 @@ static int fetch_mv_data(ObExecContext &ctx,
     ObSqlString sql;
     if (OB_FAIL(sql.assign_fmt("SELECT s.mview_id, s.retry_id, s.refresh_type, "
                                "s.start_time, s.end_time, s.elapsed_time, "
-                               "s.initial_num_rows, s.final_num_rows, s.num_steps, s.result, "
+                               "s.initial_num_rows, s.final_num_rows, s.result, "
                                "s.refresh_scn AS mv_refresh_end_scn, "
                                "s.svr_ip, s.svr_port "
                                "FROM %s s "
@@ -173,18 +322,54 @@ static int fetch_mv_data(ObExecContext &ctx,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("null sql result", KR(ret));
         }
+        const int64_t now = ObTimeUtility::current_time();
         while (OB_SUCC(ret) && OB_SUCC(sql_result->next())) {
           MViewReportMVData mv_data;
-          EXTRACT_INT_FIELD_MYSQL(*sql_result, "mview_id", mv_data.mview_id_, int64_t);
-          EXTRACT_INT_FIELD_MYSQL(*sql_result, "retry_id", mv_data.retry_id_, int64_t);
-          EXTRACT_INT_FIELD_MYSQL(*sql_result, "refresh_type", mv_data.refresh_type_, int64_t);
-          EXTRACT_TIMESTAMP_FIELD_MYSQL(*sql_result, "start_time", mv_data.start_time_);
-          EXTRACT_TIMESTAMP_FIELD_MYSQL(*sql_result, "end_time", mv_data.end_time_);
-          EXTRACT_INT_FIELD_MYSQL(*sql_result, "elapsed_time", mv_data.elapsed_time_, int64_t);
-          EXTRACT_INT_FIELD_MYSQL(*sql_result, "initial_num_rows", mv_data.initial_num_rows_, int64_t);
-          EXTRACT_INT_FIELD_MYSQL(*sql_result, "final_num_rows", mv_data.final_num_rows_, int64_t);
-          EXTRACT_INT_FIELD_MYSQL(*sql_result, "num_steps", mv_data.num_steps_, int64_t);
-          EXTRACT_INT_FIELD_MYSQL(*sql_result, "result", mv_data.result_, int64_t);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*sql_result,
+                                                     "mview_id",
+                                                     mv_data.mview_id_,
+                                                     int64_t,
+                                                     true,
+                                                     true,
+                                                     0);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*sql_result,
+                                                     "retry_id",
+                                                     mv_data.retry_id_,
+                                                     int64_t,
+                                                     true,
+                                                     true,
+                                                     0);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*sql_result,
+                                                     "refresh_type",
+                                                     mv_data.refresh_type_,
+                                                     int64_t,
+                                                     true,
+                                                     true,
+                                                     0);
+          EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(*sql_result, "start_time", mv_data.start_time_);
+          EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(*sql_result, "end_time", mv_data.end_time_);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*sql_result,
+                                                     "elapsed_time",
+                                                     mv_data.elapsed_time_,
+                                                     int64_t,
+                                                     true,
+                                                     true,
+                                                     0);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*sql_result,
+                                                     "initial_num_rows",
+                                                     mv_data.initial_num_rows_,
+                                                     int64_t,
+                                                     true,
+                                                     true,
+                                                     0);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*sql_result,
+                                                     "final_num_rows",
+                                                     mv_data.final_num_rows_,
+                                                     int64_t,
+                                                     true,
+                                                     true,
+                                                     0);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*sql_result, "result", mv_data.result_, int64_t, true, true, 0);
           mv_data.topo_order_ = 0;
           EXTRACT_UINT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*sql_result,
                                                       "mv_refresh_end_scn",
@@ -200,6 +385,9 @@ static int fetch_mv_data(ObExecContext &ctx,
             LOG_WARN("fail to deep copy svr_ip", KR(ret));
           }
           EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*sql_result, "svr_port", mv_data.svr_port_, int64_t, true, true, 0);
+          if (OB_SUCC(ret) && mv_data.needs_live_elapsed()) {
+            mv_data.elapsed_time_ = now - mv_data.start_time_;
+          }
           if (OB_SUCC(ret) && OB_FAIL(mv_array.push_back(mv_data))) {
             LOG_WARN("fail to push mv_data", KR(ret));
           }
@@ -247,36 +435,54 @@ static int fetch_change_data(ObExecContext &ctx,
         }
         while (OB_SUCC(ret) && OB_SUCC(sql_result->next())) {
           MViewReportChangeData change_data;
-          EXTRACT_INT_FIELD_MYSQL(*sql_result, "mview_id", change_data.mview_id_, int64_t);
-          EXTRACT_INT_FIELD_MYSQL(*sql_result, "retry_id", change_data.retry_id_, int64_t);
-          EXTRACT_INT_FIELD_MYSQL(*sql_result, "detail_table_id", change_data.detail_table_id_, int64_t);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*sql_result,
+                                                     "mview_id",
+                                                     change_data.mview_id_,
+                                                     int64_t,
+                                                     true,
+                                                     true,
+                                                     0);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*sql_result,
+                                                     "retry_id",
+                                                     change_data.retry_id_,
+                                                     int64_t,
+                                                     true,
+                                                     true,
+                                                     0);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*sql_result,
+                                                     "detail_table_id",
+                                                     change_data.detail_table_id_,
+                                                     int64_t,
+                                                     true,
+                                                     true,
+                                                     0);
           EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*sql_result,
                                                      "num_rows_ins",
                                                      change_data.num_rows_ins_,
                                                      int64_t,
                                                      true,
-                                                     false,
+                                                     true,
                                                      0);
           EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*sql_result,
                                                      "num_rows_upd",
                                                      change_data.num_rows_upd_,
                                                      int64_t,
                                                      true,
-                                                     false,
+                                                     true,
                                                      0);
           EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*sql_result,
                                                      "num_rows_del",
                                                      change_data.num_rows_del_,
                                                      int64_t,
                                                      true,
-                                                     false,
+                                                     true,
                                                      0);
           EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*sql_result,
                                                      "num_rows",
                                                      change_data.num_rows_,
                                                      int64_t,
                                                      true,
-                                                     false,
+                                                     true,
                                                      0);
           if (OB_SUCC(ret) && OB_FAIL(change_array.push_back(change_data))) {
             LOG_WARN("fail to push change_data", KR(ret));
@@ -306,7 +512,7 @@ static int fetch_stmt_data(ObExecContext &ctx,
   } else {
     ObSqlString sql;
     if (OB_FAIL(sql.assign_fmt("SELECT mview_id, retry_id, step, "
-                               "sqlid, stmt, start_time, execution_time, "
+                               "sqlid, start_time, execution_time, "
                                "execution_plan, result "
                                "FROM %s "
                                "WHERE tenant_id = %lu AND refresh_id = %ld "
@@ -328,34 +534,28 @@ static int fetch_stmt_data(ObExecContext &ctx,
         while (OB_SUCC(ret) && OB_SUCC(sql_result->next())) {
           MViewReportStmtData stmt_data;
           ObString tmp_str;
-          EXTRACT_INT_FIELD_MYSQL(*sql_result, "mview_id", stmt_data.mview_id_, int64_t);
-          EXTRACT_INT_FIELD_MYSQL(*sql_result, "retry_id", stmt_data.retry_id_, int64_t);
-          EXTRACT_INT_FIELD_MYSQL(*sql_result, "step", stmt_data.step_, int64_t);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*sql_result, "mview_id", stmt_data.mview_id_, int64_t, true, true, 0);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*sql_result, "retry_id", stmt_data.retry_id_, int64_t, true, true, 0);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*sql_result, "step", stmt_data.step_, int64_t, true, true, 0);
           EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(*sql_result, "sqlid", tmp_str);
           if (OB_SUCC(ret) && OB_FAIL(ob_write_string(allocator, tmp_str, stmt_data.sqlid_))) {
             LOG_WARN("fail to deep copy sqlid", KR(ret));
           }
-          tmp_str.reset();
-          EXTRACT_VARCHAR_FIELD_MYSQL(*sql_result, "stmt", tmp_str);
-          if (OB_SUCC(ret) && OB_FAIL(ob_write_string(allocator, tmp_str, stmt_data.stmt_))) {
-            LOG_WARN("fail to deep copy stmt", KR(ret));
-          }
           EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(*sql_result, "start_time", stmt_data.start_time_);
-          EXTRACT_INT_FIELD_MYSQL(*sql_result, "execution_time", stmt_data.execution_time_, int64_t);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*sql_result, "execution_time", stmt_data.execution_time_, int64_t, true, true, 0);
           tmp_str.reset();
           EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(*sql_result, "execution_plan", tmp_str);
           if (OB_SUCC(ret) && OB_FAIL(ob_write_string(allocator, tmp_str, stmt_data.execution_plan_))) {
             LOG_WARN("fail to deep copy execution_plan", KR(ret));
           }
-          EXTRACT_INT_FIELD_MYSQL(*sql_result, "result", stmt_data.result_, int64_t);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*sql_result, "result", stmt_data.result_, int64_t, true, true, 0);
           if (OB_SUCC(ret) && !stmt_data.execution_plan_.empty()) {
             int tmp_ret = aggregate_mview_plan_resources(allocator,
                                                          stmt_data.execution_plan_,
                                                          stmt_data.cpu_time_,
                                                          stmt_data.io_wait_time_,
                                                          stmt_data.disk_reads_,
-                                                         stmt_data.memory_used_,
-                                                         stmt_data.affected_rows_);
+                                                         stmt_data.memory_used_);
             if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
               LOG_WARN("fail to aggregate plan resources, skip plan", K(tmp_ret), K(stmt_data.step_));
             }
@@ -473,7 +673,13 @@ int ObMViewRefreshReportFetcher::fetch_all(ObExecContext &ctx,
             while (OB_SUCC(ret) && OB_SUCC(hist_result->next())) {
               int64_t result_mv_id = 0;
               uint64_t hist_scn = 0;
-              EXTRACT_INT_FIELD_MYSQL(*hist_result, "mview_id", result_mv_id, int64_t);
+              EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*hist_result,
+                                                         "mview_id",
+                                                         result_mv_id,
+                                                         int64_t,
+                                                         true,
+                                                         true,
+                                                         0);
               EXTRACT_UINT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*hist_result, "hist_scn", hist_scn, uint64_t, true, true, 0);
               if (OB_SUCC(ret)) {
                 for (int64_t i = 0; i < data.mv_array_.count(); ++i) {
@@ -517,8 +723,8 @@ int ObMViewRefreshReportFetcher::fetch_all(ObExecContext &ctx,
         while (OB_SUCC(ret) && OB_SUCC(dep_result->next())) {
           int64_t child_id = 0;
           int64_t parent_id = 0;
-          EXTRACT_INT_FIELD_MYSQL(*dep_result, "mview_id", child_id, int64_t);
-          EXTRACT_INT_FIELD_MYSQL(*dep_result, "p_obj", parent_id, int64_t);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*dep_result, "mview_id", child_id, int64_t, true, true, 0);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*dep_result, "p_obj", parent_id, int64_t, true, true, 0);
           if (OB_SUCC(ret) && OB_FAIL(data.dep_edges_.push_back(MViewDepEdge(child_id, parent_id)))) {
             LOG_WARN("fail to push dep edge", KR(ret));
           }
@@ -536,6 +742,10 @@ int ObMViewRefreshReportFetcher::fetch_all(ObExecContext &ctx,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(fetch_stmt_data(ctx, conn_tenant_id, target_tenant_id, refresh_id, allocator, data.stmt_array_))) {
     LOG_WARN("fail to fetch stmt data", KR(ret), K(refresh_id));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(prepare_report_names(ctx, target_tenant_id, context))) {
+    LOG_WARN("fail to prepare report names", KR(ret), K(refresh_id));
   }
   }  // end else (context valid)
   return ret;

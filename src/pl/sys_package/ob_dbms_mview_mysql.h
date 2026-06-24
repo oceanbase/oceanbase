@@ -21,6 +21,8 @@ namespace oceanbase
 namespace pl
 {
 
+class ObPLExecCtx;
+
 class ObDBMSMViewMysql
 {
 public:
@@ -50,7 +52,7 @@ public:
   virtual ~ObDBMSMViewMysql() {}
 
 #define DECLARE_FUNC(func) \
-  static int func(sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result);
+  static int func(ObPLExecCtx &pl_ctx, sql::ParamStore &params, common::ObObj &result);
 
   DECLARE_FUNC(purge_log);
   DECLARE_FUNC(refresh);

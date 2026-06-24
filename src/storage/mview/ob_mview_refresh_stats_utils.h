@@ -86,6 +86,13 @@ public:
   bool nested_;
 };
 
+enum class ObMViewPlanCaptureMode : int64_t
+{
+  NONE = 0,
+  HASH_ONLY = 1,
+  FULL_PLAN = 2,
+};
+
 // Snapshot of execution context needed to capture the plan of a single
 // mview-refresh SQL statement.  Populated by the caller right after execution.
 struct ObMViewStmtPlanCaptureInfo
@@ -96,20 +103,22 @@ struct ObMViewStmtPlanCaptureInfo
   int64_t svr_port_;
   uint64_t plan_id_;
   uint64_t plan_hash_;
-  bool should_capture_;
+  ObMViewPlanCaptureMode capture_mode_;
   ObMViewStmtPlanCaptureInfo()
-    : svr_port_(0), plan_id_(0), plan_hash_(0), should_capture_(false)
+    : svr_port_(0), plan_id_(0), plan_hash_(0), capture_mode_(ObMViewPlanCaptureMode::NONE)
   {
     sql_id_buf_[0] = '\0';
     trace_id_buf_[0] = '\0';
     svr_ip_buf_[0] = '\0';
   }
+  bool is_full_plan() const { return ObMViewPlanCaptureMode::FULL_PLAN == capture_mode_; }
+  bool is_hash_only() const { return ObMViewPlanCaptureMode::HASH_ONLY == capture_mode_; }
   common::ObString sql_id() const { return common::ObString(sql_id_buf_); }
   common::ObString trace_id() const { return common::ObString(trace_id_buf_); }
   common::ObString svr_ip() const { return common::ObString(svr_ip_buf_); }
   TO_STRING_KV("sql_id", sql_id_buf_, "trace_id", trace_id_buf_,
                "svr_ip", svr_ip_buf_, K_(svr_port), K_(plan_id),
-               K_(plan_hash), K_(should_capture));
+               K_(plan_hash), K_(capture_mode));
 };
 
 class ObMViewRefreshStatsUtils

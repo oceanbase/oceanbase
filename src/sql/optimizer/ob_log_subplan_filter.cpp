@@ -100,7 +100,7 @@ int ObLogSubPlanFilter::allocate_expr_post(ObAllocExprContext &ctx)
   } else if (OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
-  } else if (!get_plan()->get_optimizer_context().get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_2_BP1)) {
+  } else if (!get_plan()->get_optimizer_context().get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_2_BP2)) {
     // skip for older optimizer version
   } else {
     ObIArray<ExprProducer> &producers = ctx.expr_producers_;
