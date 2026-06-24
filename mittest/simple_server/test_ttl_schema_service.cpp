@@ -391,7 +391,7 @@ TEST_F(ObTTLSchemaServiceTest, append_only_merge_engine_defense_test)
   sql.assign_fmt("alter table append_only_table TTL ora_rowscn + INTERVAL 1 hour BY COMPACTION");
   EXEC_SUCC(sql); // should success
 
-  sql.assign_fmt("create table partial_update_ttl_table2 (c1 int primary key, c2 varchar(200), c3 int, index idx1(c3)) merge_engine=partial_update TTL ora_rowscn + INTERVAL 1 hour BY COMPACTION");
+  sql.assign_fmt("create table partial_update_ttl_table2 (c1 int primary key, c2 varchar(200), c3 int) merge_engine=partial_update TTL ora_rowscn + INTERVAL 1 hour BY COMPACTION");
   EXEC_SUCC(sql); // should success
 }
 
