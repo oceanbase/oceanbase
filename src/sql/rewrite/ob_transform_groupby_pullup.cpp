@@ -117,7 +117,7 @@ int ObTransformGroupByPullup::check_group_by_subset(ObRawExpr *expr,
   } else {
     bret = true;
     int64_t idx = -1;
-    if (expr->has_flag(IS_AGG) || expr->has_flag(IS_CONST)) {
+    if (expr->has_flag(IS_AGG) || expr->is_const_expr()) {
       //do nothing
     } else if (OB_FAIL(ObTransformUtils::get_expr_idx(group_exprs, expr, idx))) {
       LOG_WARN("get expr idx failed", K(ret));
@@ -1416,7 +1416,7 @@ int ObTransformGroupByPullup::get_group_by_subset(ObRawExpr *expr,
     LOG_WARN("expr is null", K(ret));
   } else {
     int64_t idx = -1;
-    if (expr->has_flag(IS_AGG) || expr->has_flag(IS_CONST)) {
+    if (expr->has_flag(IS_AGG) || expr->is_const_expr()) {
       //do nothing
     } else if (OB_FAIL(ObTransformUtils::get_expr_idx(group_exprs, expr, idx))) {
       LOG_WARN("get expr idx failed", K(ret));
