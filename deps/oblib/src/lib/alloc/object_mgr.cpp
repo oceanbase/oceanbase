@@ -202,8 +202,13 @@ SubObjectMgr *ObjectMgr::create_sub_mgr()
     SubObjectMgr &mgr_;
     ObjectSet os_;
   };
-  static SubObjectMgrWrapper root_mgr(static_cast<ObjectMgr&>(ta->get_block_mgr()).root_mgr_);
-  void *ptr = ObTenantCtxAllocator::common_realloc(NULL, sizeof(SubObjectMgr), attr, *(ta.ref_allocator()), root_mgr);
+  // Use aligned buffer + placement new to avoid __cxa_atexit registration.
+  // A static local with a non-trivial destructor would call __cxa_atexit_internal,
+  // which can deadlock with ob_malloc's calloc hook when nested.
+  static char root_mgr_buf[sizeof(SubObjectMgrWrapper)] __attribute__((__aligned__(64)));
+  static SubObjectMgrWrapper *root_mgr = new (root_mgr_buf)
+      SubObjectMgrWrapper(static_cast<ObjectMgr&>(ta->get_block_mgr()).root_mgr_);
+  void *ptr = ObTenantCtxAllocator::common_realloc(NULL, sizeof(SubObjectMgr), attr, *(ta.ref_allocator()), *root_mgr);
   if (OB_NOT_NULL(ptr)) {
     sub_mgr = new (ptr) SubObjectMgr(ta_, enable_no_log_);
   }
