@@ -552,14 +552,12 @@ int ObTransformSimplifySubquery::get_push_down_conditions(ObDMLStmt *stmt,
     } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(join_conds.at(i), query_refs))) {
       LOG_WARN("extract_query_ref_expr failed", K(ret), K(join_conds), K(i));
     } else {
-      bool can_push_down = false;
-      for (int64_t j = 0; OB_SUCC(ret) && j < query_refs.count(); ++j) {
+      bool can_push_down = true; // set to false on the first shared reference
+      for (int64_t j = 0; OB_SUCC(ret) && can_push_down && j < query_refs.count(); ++j) {
         if (OB_ISNULL(query_refs.at(j))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected NULL", K(ret));
-        } else if (query_refs.at(j)->is_non_shared_reference()){
-          can_push_down = true;
-        } else {
+        } else if (!query_refs.at(j)->is_non_shared_reference()) {
           can_push_down = false;
         }
       }
