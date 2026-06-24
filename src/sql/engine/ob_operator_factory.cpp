@@ -119,6 +119,7 @@
 #include "sql/engine/px/exchange/ob_px_reduce_transmit_op.h"
 #include "sql/engine/px/exchange/ob_px_fifo_coord_op.h"
 #include "sql/engine/px/exchange/ob_px_ordered_coord_op.h"
+#include "sql/engine/px/exchange/ob_px_ordered_receive_op.h"
 #include "sql/engine/px/exchange/ob_px_ms_coord_op.h"
 #include "sql/engine/px/exchange/ob_px_ms_coord_vec_op.h"
 #include "sql/engine/aggregate/ob_merge_groupby_op.h"

@@ -75,6 +75,7 @@ class ObGranuleIteratorSpec;
 class ObPxReceiveSpec;
 class ObPxTransmitSpec;
 class ObPxFifoReceiveSpec;
+class ObPxOrderedReceiveSpec;
 class ObPxMSReceiveSpec;
 class ObPxMSReceiveVecSpec;
 class ObPxDistTransmitSpec;
@@ -468,6 +469,7 @@ private:
   int generate_dml_tsc_ids(const ObOpSpec &spec, const ObLogicalOperator &op,
                            ObIArray<int64_t> &dml_tsc_op_ids, ObIArray<int64_t> &dml_tsc_ref_ids);
   int generate_spec(ObLogExchange &op, ObPxFifoReceiveSpec &spec, const bool in_root_job);
+  int generate_spec(ObLogExchange &op, ObPxOrderedReceiveSpec &spec, const bool in_root_job);
   int generate_spec(ObLogExchange &op, ObPxMSReceiveSpec &spec, const bool in_root_job);
   int generate_spec(ObLogExchange &op, ObPxMSReceiveVecSpec &spec, const bool in_root_job);
   int generate_spec(ObLogExchange &op, ObPxDistTransmitSpec &spec, const bool in_root_job);

@@ -661,6 +661,13 @@ REGISTER_OPERATOR(ObLogExchange, PHY_PX_FIFO_RECEIVE, ObPxFifoReceiveSpec,
                   ObPxFifoReceiveOp, ObPxFifoReceiveOpInput, VECTORIZED_OP,
                   0 /*+version*/, SUPPORT_RICH_FORMAT, "PHY_VEC_PX_FIFO_RECEIVE");
 
+class ObPxOrderedReceiveSpec;
+class ObPxOrderedReceiveOp;
+class ObPxOrderedReceiveOpInput;
+REGISTER_OPERATOR(ObLogExchange, PHY_PX_ORDERED_RECEIVE, ObPxOrderedReceiveSpec,
+                  ObPxOrderedReceiveOp, ObPxOrderedReceiveOpInput, VECTORIZED_OP,
+                  0, SUPPORT_RICH_FORMAT, "PHY_VEC_PX_ORDERED_RECEIVE");
+
 class ObLogExchange;
 class ObPxMSReceiveSpec;
 class ObPxMSReceiveOp;

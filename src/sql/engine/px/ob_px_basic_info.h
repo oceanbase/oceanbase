@@ -22,6 +22,7 @@ namespace sql
 // NOTE：可能会有多种 receive op type，这里都需要判断. 目前只有一种
 #define IS_PX_RECEIVE(type) \
      ((type) == PHY_PX_FIFO_RECEIVE || \
+      (type) == PHY_PX_ORDERED_RECEIVE || \
       (type) == PHY_PX_MERGE_SORT_RECEIVE || \
       (type) == PHY_PX_MERGE_SORT_COORD || \
       (type) == PHY_VEC_PX_MERGE_SORT_COORD || \

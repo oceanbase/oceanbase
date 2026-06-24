@@ -21,6 +21,7 @@ namespace sql
 (((type) == PHY_FIFO_RECEIVE) || \
  ((type) == PHY_FIFO_RECEIVE_V2) || \
  ((type) == PHY_PX_FIFO_RECEIVE) || \
+ ((type) == PHY_PX_ORDERED_RECEIVE) || \
  ((type) == PHY_PX_MERGE_SORT_RECEIVE) || \
  ((type) == PHY_VEC_PX_MERGE_SORT_RECEIVE) || \
  ((type) == PHY_PX_FIFO_COORD) || \

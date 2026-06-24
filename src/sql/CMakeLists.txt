@@ -1119,6 +1119,7 @@ ob_set_subtarget(ob_sql engine_px
   engine/px/exchange/ob_px_ms_receive_op.cpp
   engine/px/exchange/ob_px_ms_receive_vec_op.cpp
   engine/px/exchange/ob_px_ordered_coord_op.cpp
+  engine/px/exchange/ob_px_ordered_receive_op.cpp
   engine/px/exchange/ob_px_receive_op.cpp
   engine/px/exchange/ob_px_reduce_transmit_op.cpp
   engine/px/exchange/ob_px_repart_transmit_op.cpp

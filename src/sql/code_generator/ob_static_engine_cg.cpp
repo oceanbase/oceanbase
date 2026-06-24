@@ -68,6 +68,7 @@
 #include "sql/engine/px/exchange/ob_px_reduce_transmit_op.h"
 #include "sql/engine/px/exchange/ob_px_fifo_coord_op.h"
 #include "sql/engine/px/exchange/ob_px_ordered_coord_op.h"
+#include "sql/engine/px/exchange/ob_px_ordered_receive_op.h"
 #include "sql/engine/px/exchange/ob_px_ms_coord_op.h"
 #include "sql/engine/px/exchange/ob_px_ms_coord_vec_op.h"
 #include "sql/engine/connect_by/ob_nl_cnnt_by_with_index_op.h"
@@ -4943,6 +4944,15 @@ int ObStaticEngineCG::init_recieve_dynamic_exprs(const ObIArray<ObExpr *> &child
 // 目前都是假设receive和transmit数据列一致，如果不一致，则拿receive收transmit数据就需要根据child exprs来拿数据
 // 暂时取消这种假设，所以需要额外的child_exprs来获取dtl传过来的数据
 int ObStaticEngineCG::generate_spec(ObLogExchange &op, ObPxFifoReceiveSpec &spec, const bool in_root_job)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(generate_basic_receive_spec(op, spec, in_root_job))) {
+    LOG_WARN("failed to generate basic receive spec", K(ret));
+  }
+  return ret;
+}
+
+int ObStaticEngineCG::generate_spec(ObLogExchange &op, ObPxOrderedReceiveSpec &spec, const bool in_root_job)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(generate_basic_receive_spec(op, spec, in_root_job))) {
@@ -11110,6 +11120,8 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
             LOG_WARN("unexpected plan that has merge sort receive "
                          "with local order in root job", K(ret));
           }
+        } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_6_1_0 && op.is_task_order()) {
+          type = PHY_PX_ORDERED_RECEIVE;
         } else if (op.is_merge_sort()) {
           type = (op.support_rich_format_vectorize()
                   && enable_rich_format.check(PHY_PX_MERGE_SORT_RECEIVE)
