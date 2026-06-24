@@ -202,6 +202,21 @@ public:
      return static_cast<ExprTestSpec &>(select(expr_str));
    }
 
+   ExprTestSpec& sql_mode(SqlMode mode)
+   {
+     // The expression op-test harness builds mock SELECT SQL that is parsed with
+     // MySQL grammar. Apply Oracle mode from resolve/codegen/eval onward.
+     MaterialTestSpec::sql_mode(SqlMode::MYSQL);
+     runtime_sql_mode_ = mode;
+     return *this;
+   }
+
+   ExprTestSpec& expect_error(int error_code)
+   {
+     MaterialTestSpec::expect_error(error_code);
+     return *this;
+   }
+
    /**
     * @brief Code-generate (and execute) the expression as true vectorization 1.0.
     * The expression frame is built without a vector header (vector_header_off_ == UINT32_MAX),

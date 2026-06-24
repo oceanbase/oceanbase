@@ -55,8 +55,9 @@ public:
    * @brief Set SQL compatibility mode. Must be called before init().
    * @param mode MYSQL or ORACLE mode
    */
-  void set_sql_mode(SqlMode mode) { sql_mode_ = mode; }
+  void set_sql_mode(SqlMode mode);
   SqlMode get_sql_mode() const { return sql_mode_; }
+  void apply_sql_mode();
 
   /**
    * @brief Set batch size for vectorized execution. Must be called before generate_exprs().

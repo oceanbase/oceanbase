@@ -104,6 +104,9 @@ public:
   void set_batch_count(int64_t count) { batch_count_ = count; }
   int64_t get_batch_count() const { return batch_count_; }
 
+  void set_ret_code(int ret_code) { ret_code_ = ret_code; }
+  int get_ret_code() const { return ret_code_; }
+
   /**
    * @brief Check if the result is empty.
    */
@@ -415,6 +418,7 @@ public:
 private:
   std::vector<std::vector<std::string>> rows_;
   int64_t batch_count_ = 0;  // Number of get_next_batch calls
+  int ret_code_ = 0;
 
   // For CHECKSUM mode - store checksum instead of all rows
   uint64_t checksum_ = 0;

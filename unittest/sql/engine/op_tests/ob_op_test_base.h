@@ -1267,6 +1267,13 @@ public:
   Derived& sql_mode(SqlMode mode)
   {
     sql_mode_ = mode;
+    runtime_sql_mode_ = mode;
+    return static_cast<Derived&>(*this);
+  }
+
+  Derived& expect_error(int error_code)
+  {
+    expected_error_ = error_code;
     return static_cast<Derived&>(*this);
   }
 
@@ -1403,6 +1410,10 @@ public:
 
     // Step 3.9: Select CG frame format. ObStaticEngineExprCG::use_rich_format() reads the session
     // flag at generate time, so this decides whether the frame allocates a vector header.
+    engine.set_sql_mode(runtime_sql_mode_);
+    if (runtime_sql_mode_ != sql_mode_) {
+      engine.apply_sql_mode();
+    }
     engine.enable_rich_format(expr_cg_rich_format_);
 
     // Step 4: Generate expressions via CG (frame layout follows expr_cg_rich_format_)
@@ -1922,6 +1933,25 @@ public:
 
     // RAII checker: will LOG_ERROR and EXPECT if ret != OB_SUCCESS at scope exit
     FatalErrorChecker error_checker(ret);
+    std::unique_ptr<DisableRetCheckGuard> expected_error_guard;
+    if (OB_SUCCESS != expected_error_) {
+      expected_error_guard.reset(new DisableRetCheckGuard());
+    }
+    struct RuntimeSqlModeGuard {
+      RuntimeSqlModeGuard(OpTestEngine &engine, SqlMode restore_mode, bool active)
+        : engine_(engine), restore_mode_(restore_mode), active_(active)
+      {}
+      ~RuntimeSqlModeGuard()
+      {
+        if (active_) {
+          engine_.set_sql_mode(restore_mode_);
+          engine_.apply_sql_mode();
+        }
+      }
+      OpTestEngine &engine_;
+      SqlMode restore_mode_;
+      bool active_;
+    } runtime_sql_mode_guard(engine, sql_mode_, runtime_sql_mode_ != sql_mode_);
 
     // RAII: push builder's tenant config overrides into TLS, auto-restore on scope exit
     TestParameterGuard param_guard;
@@ -2011,6 +2041,9 @@ public:
     ret = prepare(engine);
     if (OB_FAIL(ret)) {
       LOG_WARN("prepare failed", K(ret));
+      if (OB_SUCCESS != expected_error_) {
+        EXPECT_EQ(expected_error_, ret);
+      }
       return result;
     }
 
@@ -2058,6 +2091,11 @@ public:
       // Single-run mode
       engine.enable_rich_format(rich_format_);
       result = build_and_execute(engine, rich_format_);
+      if (OB_SUCCESS != expected_error_) {
+        EXPECT_EQ(expected_error_, result.get_ret_code());
+      } else {
+        EXPECT_EQ(OB_SUCCESS, result.get_ret_code());
+      }
       if (!rich_format_) {
         // Restore FORCE_ON for subsequent tests
         engine.enable_rich_format(true);
@@ -2388,6 +2426,8 @@ protected:
 
   // SQL mode support
   SqlMode sql_mode_ = SqlMode::MYSQL;
+  SqlMode runtime_sql_mode_ = SqlMode::MYSQL;
+  int expected_error_ = OB_SUCCESS;
 
   // SQL operator dump configuration
   bool enable_sql_operator_dump_ = false;

@@ -704,13 +704,6 @@ static int inner_eval_case_vector(const ObExpr &expr,
     bool else_is_uniform_const = false;
     VectorFormat then_format = VEC_INVALID;
     VecValueTypeClass then_vec_tc = VEC_TC_UNKNOWN;
-    // A const-null else (e.g. `else null`) is semantically identical to having no else:
-    // unmatched rows are set to NULL. When detected, we (1) route those rows to the direct
-    // set_null path (then_expr_idx = -1) instead of touching the const-null else vector, and
-    // (2) exclude the else (VEC_UNIFORM_CONST) from the then/else same-type check, so a
-    // homogeneous CASE like `case when ... then <fixed col> else null end` can take the
-    // specialized set_res_vec fast path instead of the generic ObVectorBase path.
-    bool else_is_null_const = false;
     // For single-line scenarios,
     // the additional allocated memory needs to be as small as possible in order to optimize performance.
     // The following approach consumes at most ObBitVector::BYTES_PER_WORD more byte of memory
@@ -738,29 +731,17 @@ static int inner_eval_case_vector(const ObExpr &expr,
       before_case_when_match->deep_copy(*case_when_match, my_bound.start(), my_bound.end());
       need_eval_mask->deep_copy(*case_when_match, my_bound.start(), my_bound.end());
     }
-    if (OB_SUCC(ret) && has_else) {
-      // Detect a const-null else once. A const expr is single-valued, so eval is cheap and
-      // is_null() of any in-bound row reflects the whole vector.
-      ObExpr *else_expr = expr.args_[expr.arg_cnt_ - 1];
-      if (else_expr->is_const_expr() && !else_expr->is_batch_result()) {
-        if (OB_FAIL(else_expr->eval_vector(ctx, skip, my_bound))) {
-          LOG_WARN("failed to eval else const expr", K(ret));
-        } else {
-          else_is_null_const = else_expr->get_vector(ctx)->is_null(my_bound.start());
-        }
-      }
-    }
     if (OB_SUCC(ret)) {
       if (OB_ISNULL(match_then_expr_idx = static_cast<int64_t *>(alloc_guard.get_allocator().alloc(total_cnt * sizeof(int64_t))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc memory for match_then_expr_idx", K(ret), K(total_cnt));
       } else {
-        if (has_else && !else_is_null_const) {
+        if (has_else) {
           for (int i = 0; i < total_cnt; ++i) {
             match_then_expr_idx[i] = expr.arg_cnt_ - 1;
           }
         } else {
-          // No else, or a const-null else: unmatched rows resolve to NULL directly.
+          // No else: unmatched rows resolve to NULL directly.
           for (int i = 0; i < total_cnt; ++i) {
             match_then_expr_idx[i] = -1;
           }
@@ -814,8 +795,7 @@ static int inner_eval_case_vector(const ObExpr &expr,
       }
     }
     // now set the result of the rest, skip rows already matched (case_when_match)
-    // A const-null else is skipped here: those rows already resolve to NULL via set_null.
-    if (OB_SUCC(ret) && skip_cnt < total_cnt && has_else && !else_is_null_const) {
+    if (OB_SUCC(ret) && skip_cnt < total_cnt && has_else) {
       if (my_bound.get_all_rows_active() && skip_cnt != 0) {
         my_bound.set_all_row_active(false);
       }
@@ -824,8 +804,6 @@ static int inner_eval_case_vector(const ObExpr &expr,
       }
     }
     // Check if all then expressions and else expression have the same type.
-    // A const-null else is excluded (passed has_else=false): it never feeds set_res_vec,
-    // so its VEC_UNIFORM_CONST format must not veto the specialized fast path.
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(check_then_expr_same_type(expr, ctx, has_else, loop,
                                                    then_expr_same_type, then_format, then_vec_tc,

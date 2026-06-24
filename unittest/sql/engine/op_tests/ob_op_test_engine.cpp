@@ -104,6 +104,22 @@ OpTestEngine::~OpTestEngine()
   destroy();
 }
 
+void OpTestEngine::set_sql_mode(SqlMode mode)
+{
+  sql_mode_ = mode;
+}
+
+void OpTestEngine::apply_sql_mode()
+{
+  if (sql_mode_ == SqlMode::ORACLE) {
+    lib::set_compat_mode(lib::Worker::CompatMode::ORACLE);
+    session_info_.set_compatibility_mode(ObCompatibilityMode::ORACLE_MODE);
+  } else {
+    lib::set_compat_mode(lib::Worker::CompatMode::MYSQL);
+    session_info_.set_compatibility_mode(ObCompatibilityMode::MYSQL_MODE);
+  }
+}
+
 void OpTestEngine::init()
 {
   if (inited_) {
@@ -121,15 +137,9 @@ void OpTestEngine::init()
     LOG_INFO("Enabled SQL operator dump", K(enable_sql_operator_dump_));
   }
 
-  // Set compatibility mode in thread-local variable
-  // This is required for lib::is_oracle_mode() / lib::is_mysql_mode() to work correctly
-  if (sql_mode_ == SqlMode::ORACLE) {
-    lib::set_compat_mode(lib::Worker::CompatMode::ORACLE);
-    session_info_.set_compatibility_mode(ObCompatibilityMode::ORACLE_MODE);
-  } else {
-    lib::set_compat_mode(lib::Worker::CompatMode::MYSQL);
-    session_info_.set_compatibility_mode(ObCompatibilityMode::MYSQL_MODE);
-  }
+  // Set compatibility mode in thread-local/session state so lib::is_oracle_mode()
+  // / lib::is_mysql_mode() and resolver/codegen see the requested mode.
+  apply_sql_mode();
 
   // Link execution context to session so that session->get_cur_exec_ctx() works
   // This is required for implicit cast creation during expression type deduction
@@ -1172,7 +1182,9 @@ OpTestResult OpTestEngine::collect_batch_results(ObOperator *op, const ExprFixed
   FatalErrorChecker error_checker(ret);
 
   if (OB_ISNULL(op)) {
-    LOG_WARN("op is null");
+    ret = OB_ERR_UNEXPECTED;
+    result.set_ret_code(ret);
+    LOG_WARN("op is null", K(ret));
     return result;
   }
 
@@ -1958,6 +1970,7 @@ OpTestResult OpTestEngine::collect_batch_results(ObOperator *op, const ExprFixed
   } else if (dump_verify_mode_ == DumpVerifyMode::NONE) {
   }
 
+  result.set_ret_code(OB_ITER_END == ret ? OB_SUCCESS : ret);
   result.set_batch_count(batch_count);
   return result;
 }
@@ -1997,12 +2010,16 @@ OpTestResult OpTestEngine::execute(ObOperator *op, const ExprFixedArray *output_
   // Open operator
   ret = op->open();
   if (OB_FAIL(ret)) {
+    result.set_ret_code(ret);
     LOG_WARN("open operator failed", K(ret));
     return result;
   }
 
   // Collect first result
   OpTestResult first_result = collect_batch_results(op, output_exprs);
+  if (OB_SUCCESS != first_result.get_ret_code()) {
+    ret = first_result.get_ret_code();
+  }
 
   // Rescan memory tracking
   RescanMemoryInfo memory_info;
@@ -2020,6 +2037,10 @@ OpTestResult OpTestEngine::execute(ObOperator *op, const ExprFixedArray *output_
     }
 
     OpTestResult rescan_result = collect_batch_results(op, output_exprs);
+    if (OB_SUCCESS != rescan_result.get_ret_code()) {
+      ret = rescan_result.get_ret_code();
+      break;
+    }
 
     // Verify rescan produces the same results
     if (!first_result.equals(rescan_result)) {
@@ -2076,6 +2097,9 @@ OpTestResult OpTestEngine::execute(ObOperator *op, const ExprFixedArray *output_
   // Close operator
   int close_ret = op->close();
   if (OB_SUCCESS != close_ret) {
+    if (OB_SUCCESS == first_result.get_ret_code()) {
+      first_result.set_ret_code(close_ret);
+    }
     LOG_WARN("close operator failed", K(close_ret));
   }
 

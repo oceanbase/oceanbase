@@ -167,6 +167,13 @@ sql_unittest(test_case_expr
   ob_op_test_data_source.cpp
 )
 
+# CASE WHEN coverage: divisor-zero lazy-eval regression + optimization paths (large data)
+sql_unittest(test_case_expr_coverage_op
+  test_case_expr_coverage_op.cpp
+  ob_op_test_engine.cpp
+  ob_op_test_data_source.cpp
+)
+
 # Expression vectorization 1.0 / 2.0 dual-format tests
 sql_unittest(test_expr_dual_format
   test_expr_dual_format.cpp
