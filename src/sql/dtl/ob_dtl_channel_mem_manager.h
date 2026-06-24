@@ -71,7 +71,7 @@ private:
   uint64_t tenant_id_;
   int64_t size_per_buffer_;
   int64_t seqno_;
-  common::ObLightyQueue free_queue_;
+  common::LightyQueue free_queue_;
   common::ObFIFOAllocator allocator_;
 
   int64_t pre_alloc_cnt_;
