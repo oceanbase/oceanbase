@@ -1158,8 +1158,15 @@ int ObTenantTabletScheduler::schedule_tablet_meta_merge(
     ObGetMergeTablesParam param;
     param.merge_type_ = META_MAJOR_MERGE;
 
-    // check medium list
-    if (OB_FAIL(tablet->read_medium_info_list(allocator, medium_list))) {
+    ObStorageSchema *storage_schema = nullptr;
+    // best-effort early-out for delete_insert table, storage schema may be stale during
+    // online ddl, the final guard is in ObBasicTabletMergeCtx::get_meta_compaction_info
+    if (OB_FAIL(tablet->load_storage_schema(allocator, storage_schema))) {
+      LOG_WARN("failed to load storage schema", K(ret), K(ls_id), K(tablet_id));
+    } else if (storage_schema->is_delete_insert_merge_engine()) {
+      ret = OB_NO_NEED_MERGE;
+      LOG_WARN("delete insert table no need to do meta merge", K(ret), K(ls_id), K(tablet_id));
+    } else if (OB_FAIL(tablet->read_medium_info_list(allocator, medium_list))) {
       LOG_WARN("failed to read medium info list", K(ret), K(ls_id), K(tablet_id));
     } else if (OB_FAIL(ObMediumCompactionScheduleFunc::get_max_sync_medium_scn(
         *tablet, *medium_list, max_sync_medium_scn))) {

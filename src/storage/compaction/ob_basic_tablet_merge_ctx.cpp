@@ -2093,6 +2093,10 @@ int ObBasicTabletMergeCtx::get_meta_compaction_info()
     if (OB_TABLE_IS_DELETED != ret) {
       LOG_WARN("failed to get table schema", KR(ret), KPC(this));
     }
+  } else if (storage_schema->is_delete_insert_merge_engine()) {
+    // final guard with latest table schema, skip meta merge for delete_insert table
+    ret = OB_NO_NEED_MERGE;
+    LOG_INFO("delete insert table no need to do meta merge", K(ret), KPC(tablet), KPC(storage_schema));
   } else if (OB_FAIL(storage_schema->get_stored_column_count_in_sstable(full_stored_col_cnt))) {
     LOG_WARN("failed to get stored column count in sstable", K(ret), KPC(storage_schema));
   } else if (OB_UNLIKELY(tablet->get_last_major_column_count() > full_stored_col_cnt)) {
