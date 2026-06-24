@@ -20,6 +20,7 @@
 #include "src/storage/slog/ob_storage_log_item.h"
 #include "mtlenv/mock_tenant_module_env.h"
 #include "storage/test_tablet_helper.h"
+#include "storage/tx/ob_trans_service.h"
 
 namespace oceanbase
 {
@@ -62,6 +63,44 @@ void TestLSService::SetUpTestCase()
 void TestLSService::TearDownTestCase()
 {
   MockTenantModuleEnv::get_instance().destroy();
+}
+
+// Strengthened, test-only version of ObLSService::check_ls_waiting_safe_destroy.
+//
+// ObLSService::check_ls_waiting_safe_destroy() only reports whether a pending safe
+// destroy task still exists. The safe destroy task may finish before ObLS::destroy()
+// removes the ls tx ctx mgr from the global map: ObLS::destroy() runs when the last
+// ls reference is released (e.g. by a cached tablet in the tenant meta mem mgr), which
+// can be later than the safe destroy task completion. If a re-create of the same ls_id
+// happens in that window, the trailing teardown removes the tx ctx mgr by ls_id and
+// wipes out the freshly created incarnation's one, which makes this test flaky.
+//
+// To keep the fix entirely inside the test (the 4.3.5 release branch does not allow the
+// equivalent observer-side change), the test additionally waits until the ls tx ctx mgr
+// of ls_id is gone from the global map before re-creating the same ls_id.
+int check_ls_waiting_safe_destroy_strict(ObLSService *ls_svr, const ObLSID &ls_id, bool &waiting)
+{
+  int ret = ls_svr->check_ls_waiting_safe_destroy(ls_id, waiting);
+  if (OB_SUCCESS == ret && !waiting) {
+    transaction::ObTransService *tx_svr = MTL(transaction::ObTransService *);
+    transaction::ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
+    if (OB_ISNULL(tx_svr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("trans service is null", K(ret), K(ls_id));
+    } else {
+      const int tmp_ret = tx_svr->get_tx_ctx_mgr().get_ls_tx_ctx_mgr(ls_id, ls_tx_ctx_mgr);
+      if (OB_SUCCESS == tmp_ret) {
+        // an old incarnation is not fully destroyed yet, keep waiting
+        tx_svr->get_tx_ctx_mgr().revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr);
+        waiting = true;
+      } else if (OB_PARTITION_NOT_EXIST != tmp_ret) {
+        // OB_PARTITION_NOT_EXIST means the tx ctx mgr is already gone (expected)
+        ret = tmp_ret;
+        LOG_WARN("check ls tx ctx mgr exist failed", K(ret), K(ls_id));
+      }
+    }
+  }
+  return ret;
 }
 
 TEST_F(TestLSService, basic)
@@ -266,7 +305,7 @@ TEST_F(TestLSService, ls_safe_destroy)
   handle.reset();
   int cnt = 0;
   while (cnt++ < 20) {
-    ASSERT_EQ(OB_SUCCESS, ls_svr->check_ls_waiting_safe_destroy(id_104, waiting));
+    ASSERT_EQ(OB_SUCCESS, check_ls_waiting_safe_destroy_strict(ls_svr, id_104, waiting));
     if (waiting) {
       ::sleep(1);
     } else {
@@ -310,7 +349,7 @@ TEST_F(TestLSService, create_and_clean)
       // wait safe destroy
       cnt = 0;
       while (cnt++ < 20) {
-        ASSERT_EQ(OB_SUCCESS, ls_svr->check_ls_waiting_safe_destroy(id_105, waiting));
+        ASSERT_EQ(OB_SUCCESS, check_ls_waiting_safe_destroy_strict(ls_svr, id_105, waiting));
         if (waiting) {
           ::sleep(1);
         } else {
@@ -333,7 +372,7 @@ TEST_F(TestLSService, create_and_clean)
   }
   cnt = 0;
   while (cnt++ < 20) {
-    ASSERT_EQ(OB_SUCCESS, ls_svr->check_ls_waiting_safe_destroy(id_105, waiting));
+    ASSERT_EQ(OB_SUCCESS, check_ls_waiting_safe_destroy_strict(ls_svr, id_105, waiting));
     if (waiting) {
       ::sleep(1);
     } else {
@@ -379,7 +418,7 @@ TEST_F(TestLSService, test_remove_ls)
     // wait safe destroy
     cnt = 0;
     while (cnt++ < 20) {
-      ASSERT_EQ(OB_SUCCESS, ls_svr->check_ls_waiting_safe_destroy(id_105, waiting));
+      ASSERT_EQ(OB_SUCCESS, check_ls_waiting_safe_destroy_strict(ls_svr, id_105, waiting));
       if (waiting) {
         ::sleep(1);
       } else {
