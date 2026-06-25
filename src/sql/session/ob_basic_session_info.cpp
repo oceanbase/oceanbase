@@ -1343,12 +1343,9 @@ int ObBasicSessionInfo::update_query_sensitive_system_variable(ObSchemaGetterGua
     ret = OB_ERR_UNEXPECTED;
   } else if (schema_version > get_global_vars_version()
              && schema_version > OB_CORE_SCHEMA_VERSION) { //系统变量schema_version有效才更新
-    const ObTenantSchema *tenant_info = NULL;
     bool need_update_version = false;
     const ObSysVariableSchema *sys_variable_schema = NULL;
-    if (OB_FAIL(schema_guard.get_tenant_info(get_effective_tenant_id(), tenant_info))) {
-      LOG_WARN("get tenant info from schema guard failed", K(ret));
-    } else if (OB_FAIL(schema_guard.get_sys_variable_schema(get_effective_tenant_id(), sys_variable_schema))) {
+    if (OB_FAIL(schema_guard.get_sys_variable_schema(get_effective_tenant_id(), sys_variable_schema))) {
       if (OB_TENANT_NOT_EXIST == ret) {
         // 新建租户过程可能获取不到sys_variable_schema，此时先暂时忽略
         LOG_INFO("tenant maybe creating, just skip", K(ret), K(ret));
