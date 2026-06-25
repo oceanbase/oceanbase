@@ -661,6 +661,20 @@ int ObTransformViewMerge::check_can_be_merged(ObDMLStmt *parent_stmt,
       OPT_TRACE("lateral inline view ref outer table, can not merge");
     }
   }
+  // skip if parent has _ST_AsMVT aggregate.
+  if (OB_SUCC(ret) && can_be && parent_stmt->is_select_stmt()) {
+    ObSelectStmt *sel_stmt = static_cast<ObSelectStmt *>(parent_stmt);
+    for (int64_t i = 0; OB_SUCC(ret) && can_be && i < sel_stmt->get_aggr_item_size(); i++) {
+      ObAggFunRawExpr *aggr = sel_stmt->get_aggr_items().at(i);
+      if (OB_ISNULL(aggr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null agg expr", K(ret));
+      } else if (aggr->get_expr_type() == T_FUN_SYS_ST_ASMVT) {
+        can_be = false;
+        OPT_TRACE("stmt has _ST_AsMVT, can not merge view");
+      }
+    }
+  }
   //检查where condition是否存在子查询
   if (OB_SUCC(ret) && can_be && need_check_subquery){
     if (child_stmt->get_semi_infos().count() > 0) {

@@ -7404,6 +7404,9 @@ int ObRawExprUtils::is_expr_comparable(const ObRawExpr *expr, bool &can_be)
             || ob_is_lob_tc(expr->get_data_type())
             || ob_is_json_tc(expr->get_data_type())
             || ob_is_geometry_tc(expr->get_data_type())
+            || ob_is_collection_sql_type(expr->get_data_type())
+            || ob_is_roaringbitmap(expr->get_data_type())
+            || ob_is_user_defined_sql_type(expr->get_data_type())
             || ob_is_extend(expr->get_data_type())) {
     can_be = false;
   }
@@ -10982,7 +10985,8 @@ bool ObRawExprUtils::is_invalid_type_for_compare(const ObRawExprResType &type)
           (is_oracle_mode() && ObJsonType == type.get_type()) ||
           ObRoaringBitmapType == type.get_type() ||
           ObCollectionSQLType == type.get_type() ||
-          ObExtendType == type.get_type();
+          ObExtendType == type.get_type() ||
+          (is_oracle_mode() && ObGeometryType == type.get_type());
 }
 
 bool ObRawExprUtils::is_audit_log_expr(const ObRawExpr *expr)

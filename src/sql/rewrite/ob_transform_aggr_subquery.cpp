@@ -701,9 +701,11 @@ int ObTransformAggrSubquery::check_limit_single_set_validity(const ObSelectStmt 
     if (OB_ISNULL(select_expr = subquery.get_select_item(0).expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("select expr is null", K(ret));
-    } else if (ObLobType == select_expr->get_data_type()
-               || select_expr->is_const_expr()) {
+    } else if (select_expr->is_const_expr()) {
       is_valid = false;
+    } else if (OB_FAIL(ObRawExprUtils::is_expr_comparable(select_expr, is_valid))) {
+      LOG_WARN("failed to check expr comparable", K(ret));
+    } else if (!is_valid) {
     } else if (subquery.has_order_by()) {
       ObStmtCompareContext context;
       const OrderItem& first_order = subquery.get_order_item(0);

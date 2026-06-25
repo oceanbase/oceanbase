@@ -708,7 +708,7 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
     LOG_WARN("failed to check stmt functions", K(ret));
   } else {
     //TODO::unpivot open @xifeng
-    if (func.contain_geometry_values_ || func.contain_vec_index_approx_ || func.contain_hybrid_search_) {
+    if (func.contain_vec_index_approx_ || func.contain_hybrid_search_) {
       disable_list = ObTransformRule::ALL_TRANSFORM_RULES;
     }
     if (func.contain_unpivot_query_) {
@@ -757,6 +757,30 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
         ObTransformRule::add_trans_type(enum_set_enable_list, DISTINCT_AGGREGATE);
       }
       disable_list |= (~enum_set_enable_list);
+    }
+    if (func.contain_geometry_values_) {
+      uint64_t geometry_enable_list = 0;
+      ObTransformRule::add_trans_type(geometry_enable_list, SIMPLIFY_DISTINCT);
+      ObTransformRule::add_trans_type(geometry_enable_list, SIMPLIFY_GROUPBY);
+      ObTransformRule::add_trans_type(geometry_enable_list, SIMPLIFY_WINFUNC);
+      ObTransformRule::add_trans_type(geometry_enable_list, SIMPLIFY_ORDERBY);
+      ObTransformRule::add_trans_type(geometry_enable_list, SIMPLIFY_LIMIT);
+      ObTransformRule::add_trans_type(geometry_enable_list, SIMPLIFY_SUBQUERY);
+      ObTransformRule::add_trans_type(geometry_enable_list, FASTMINMAX);
+      ObTransformRule::add_trans_type(geometry_enable_list, ELIMINATE_OJ);
+      ObTransformRule::add_trans_type(geometry_enable_list, VIEW_MERGE);
+      ObTransformRule::add_trans_type(geometry_enable_list, SUBQUERY_UNNEST);
+      ObTransformRule::add_trans_type(geometry_enable_list, QUERY_PUSH_DOWN);
+      ObTransformRule::add_trans_type(geometry_enable_list, SIMPLIFY_SET);
+      ObTransformRule::add_trans_type(geometry_enable_list, PROJECTION_PRUNING);
+      ObTransformRule::add_trans_type(geometry_enable_list, AGGR_SUBQUERY);
+      ObTransformRule::add_trans_type(geometry_enable_list, PREDICATE_MOVE_AROUND);
+      ObTransformRule::add_trans_type(geometry_enable_list, JOIN_LIMIT_PUSHDOWN);
+      ObTransformRule::add_trans_type(geometry_enable_list, COUNT_TO_EXISTS);
+      ObTransformRule::add_trans_type(geometry_enable_list, CONDITIONAL_AGGR_COALESCE);
+      ObTransformRule::add_trans_type(geometry_enable_list, SEMI_TO_INNER);
+      ObTransformRule::add_trans_type(geometry_enable_list, DISTINCT_AGGREGATE);
+      disable_list |= (~geometry_enable_list);
     }
     if (func.contain_dml_with_doc_id_) {
       uint64_t dml_with_doc_id_enable_list = 0;
