@@ -4647,6 +4647,13 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_CDC_CHANNEL_INVALID__USER_ERROR_MSG "CDC channel %d not in client %ld channel_list"
 #define OB_CDC_INVALID_ARGUMENT__USER_ERROR_MSG "Invalid CDC ACK argument: %.*s"
 #define OB_CDC_METADB_UNAVAILABLE__USER_ERROR_MSG "CDC MetaDB write failed for stream %ld"
+#define OB_CDC_NO_ACTIVE_ONLINE_SERVER__USER_ERROR_MSG "CDC no active online server available for stream resume"
+#define OB_CDC_TOKEN_VERSION_NOT_MATCH__USER_ERROR_MSG "CDC connection rejected due to token version conflict"
+#define OB_CDC_FLOW_CONTROL__USER_ERROR_MSG "CDC flow control triggered"
+#define OB_CDC_EPOCH_MISMATCH__USER_ERROR_MSG "CDC epoch mismatch"
+#define OB_CDC_SEQ_GAP__USER_ERROR_MSG "CDC non-contiguous sequence gap"
+#define OB_CDC_STREAM_RUNTIME_FAILED__USER_ERROR_MSG "CDC stream runtime FAILED, rebalance dispatch retry budget exhausted"
+#define OB_CDC_NOT_LEADER__USER_ERROR_MSG "CDC server is not leader, current leader: %s:%d"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -9746,6 +9753,20 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_CDC_INVALID_ARGUMENT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12009, Invalid CDC ACK argument: %.*s"
 #define OB_CDC_METADB_UNAVAILABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12010, CDC MetaDB write failed for stream %ld"
 #define OB_CDC_METADB_UNAVAILABLE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12010, CDC MetaDB write failed for stream %ld"
+#define OB_CDC_NO_ACTIVE_ONLINE_SERVER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12011, CDC no active online server available for stream resume"
+#define OB_CDC_NO_ACTIVE_ONLINE_SERVER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12011, CDC no active online server available for stream resume"
+#define OB_CDC_TOKEN_VERSION_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12012, CDC connection rejected due to token version conflict"
+#define OB_CDC_TOKEN_VERSION_NOT_MATCH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12012, CDC connection rejected due to token version conflict"
+#define OB_CDC_FLOW_CONTROL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12013, CDC flow control triggered"
+#define OB_CDC_FLOW_CONTROL__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12013, CDC flow control triggered"
+#define OB_CDC_EPOCH_MISMATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12014, CDC epoch mismatch"
+#define OB_CDC_EPOCH_MISMATCH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12014, CDC epoch mismatch"
+#define OB_CDC_SEQ_GAP__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12015, CDC non-contiguous sequence gap"
+#define OB_CDC_SEQ_GAP__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12015, CDC non-contiguous sequence gap"
+#define OB_CDC_STREAM_RUNTIME_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12016, CDC stream runtime FAILED, rebalance dispatch retry budget exhausted"
+#define OB_CDC_STREAM_RUNTIME_FAILED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12016, CDC stream runtime FAILED, rebalance dispatch retry budget exhausted"
+#define OB_CDC_NOT_LEADER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12017, CDC server is not leader, current leader: %s:%d"
+#define OB_CDC_NOT_LEADER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12017, CDC server is not leader, current leader: %s:%d"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR__OBE_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
@@ -9765,7 +9786,7 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 
-extern int g_all_ob_errnos[2548];
+extern int g_all_ob_errnos[2555];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

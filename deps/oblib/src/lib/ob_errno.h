@@ -491,6 +491,13 @@ constexpr int OB_CDC_CLIENT_NOT_ACTIVE = -12007;
 constexpr int OB_CDC_CHANNEL_INVALID = -12008;
 constexpr int OB_CDC_INVALID_ARGUMENT = -12009;
 constexpr int OB_CDC_METADB_UNAVAILABLE = -12010;
+constexpr int OB_CDC_NO_ACTIVE_ONLINE_SERVER = -12011;
+constexpr int OB_CDC_TOKEN_VERSION_NOT_MATCH = -12012;
+constexpr int OB_CDC_FLOW_CONTROL = -12013;
+constexpr int OB_CDC_EPOCH_MISMATCH = -12014;
+constexpr int OB_CDC_SEQ_GAP = -12015;
+constexpr int OB_CDC_STREAM_RUNTIME_FAILED = -12016;
+constexpr int OB_CDC_NOT_LEADER = -12017;
 constexpr int OB_MAX_RAISE_APPLICATION_ERROR         = -20000;
 constexpr int OB_MIN_RAISE_APPLICATION_ERROR         = -20999;
 

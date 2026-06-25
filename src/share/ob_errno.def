@@ -19,6 +19,7 @@
 // OBKV错误码值域：[-10500, -10700)
 // 富客户端错误码，值域：[-10700, -10900)
 // SQL扩展区段1：[-11000, -12000)
+// CDC错误码值域:[-12000, -12500)
 
 //////////////////////////////////// 新增(占位)须知 ////////////////////////////////////
 // 1. 新增错误码需要先在master分支提交，保证master是所有版本的超集，避免出现错误码冲突
@@ -2999,8 +3000,15 @@ DEFINE_ERROR_EXT_DEP(OB_CDC_CLIENT_NOT_ACTIVE, -12007, -1, "HY000", "CDC client 
 DEFINE_ERROR_EXT_DEP(OB_CDC_CHANNEL_INVALID, -12008, -1, "HY000", "CDC channel invalid", "CDC channel %d not in client %ld channel_list");
 DEFINE_ERROR_EXT_DEP(OB_CDC_INVALID_ARGUMENT, -12009, -1, "HY000", "Invalid CDC ACK argument", "Invalid CDC ACK argument: %.*s");
 DEFINE_ERROR_EXT_DEP(OB_CDC_METADB_UNAVAILABLE, -12010, -1, "HY000", "CDC MetaDB unavailable", "CDC MetaDB write failed for stream %ld");
-// CDC错误码值域:[-12000, -12500)
+DEFINE_ERROR_EXT_DEP(OB_CDC_NO_ACTIVE_ONLINE_SERVER, -12011, -1, "HY000", "CDC no active online server available", "CDC no active online server available for stream resume");
+DEFINE_ERROR_DEP(OB_CDC_TOKEN_VERSION_NOT_MATCH, -12012, -1, "HY000", "CDC connection rejected due to token version conflict");
+DEFINE_ERROR_DEP(OB_CDC_FLOW_CONTROL, -12013, -1, "HY000", "CDC flow control triggered");
+DEFINE_ERROR_DEP(OB_CDC_EPOCH_MISMATCH, -12014, -1, "HY000", "CDC epoch mismatch");
+DEFINE_ERROR_DEP(OB_CDC_SEQ_GAP, -12015, -1, "HY000", "CDC non-contiguous sequence gap");
+DEFINE_ERROR_DEP(OB_CDC_STREAM_RUNTIME_FAILED, -12016, -1, "HY000", "CDC stream runtime FAILED, rebalance dispatch retry budget exhausted");
+DEFINE_ERROR_EXT_DEP(OB_CDC_NOT_LEADER, -12017, -1, "HY000", "CDC server is not leader", "CDC server is not leader, current leader: %s:%d");
 // 余留位置
+////////////////////////////////////////////////////////////////
 
 //////////////////////////////////// 新增(占位)须知 ////////////////////////////////////
 // 1. 新增错误码需要先在master分支提交，保证master是所有版本的超集，避免出现错误码冲突
