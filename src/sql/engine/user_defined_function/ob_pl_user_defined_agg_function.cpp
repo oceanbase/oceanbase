@@ -143,9 +143,16 @@ int ObPlAggUdfFunction::call_pl_engine_exectue_udf(ParamStore& udf_params,
     LOG_WARN("get unexpected null", K(pl_engine), K(allocator_), K(exec_ctx_),
                                     K(session_info_), K(routine_info), K(ret));
   } else if (udf_params.count() != routine_info->get_param_count()) {
-    ret = OB_ERR_UNEXPECTED;
+    // The ODCI interface member functions (Initialize/Iterate/Merge/Terminate) have fixed
+    // signatures. A mismatch between the argument count we build per the prescribed signature
+    // and the user-defined formal parameter count means the user-defined ODCI function signature
+    // is invalid. Report ORA-06553 as Oracle does instead of an internal error for a friendlier hint.
+    ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
+    const ObString &func_name = routine_info->get_routine_name();
+    LOG_USER_ERROR(OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE, func_name.length(), func_name.ptr());
     LOG_WARN("udf parameter number is not equal to params desc count",
-                                 K(ret), K(udf_params.count()), K(routine_info->get_param_count()));
+                                 K(ret), K(udf_params.count()), K(routine_info->get_param_count()),
+                                 K(func_name));
   } else if (FALSE_IT(obj_id = share::schema::ObUDTObjectType::mask_object_id(routine_info->get_package_id()))){
   } else if (FALSE_IT(sub_udf_id = (OB_INVALID_ID != routine_info->get_package_id()) ? routine_info->get_subprogram_id()
                                                                                      : routine_info->get_routine_id())) {
