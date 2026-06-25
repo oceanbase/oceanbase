@@ -667,6 +667,202 @@ TEST_F(TestMinorIterInTTLMajor, test_dump_sstable_iter_with_upper_snapshot_filte
   merger.reset();
 }
 
+// Test case: cur_rowkey_exist_new_version_ must not leak across rowkeys when the
+// rowkey emits a real row via the is-last virtual path.
+//
+// snapshot_version = 40, base_version = 20, upper_snapshot = 50.
+//
+// Layout (single micro block, forward scan, version new->old):
+//   rowkey=1: version 45 (>snapshot, <=upper, SCF -> NOT last) sets
+//             cur_rowkey_exist_new_version_=true and version_fit=false.
+//             version 45 (C) -> same path.
+//             version 41 (>snapshot, <=upper, CL -> IS last) -> is-last branch,
+//             version_fit=true, the row is read and tagged
+//             is_virtual_row_for_ttl_major_ (V) in fill_row_version_info.
+//             => rowkey=1 outputs the real -41 row with V flag and
+//                cur_rowkey_exist_new_version_ is reset at the ret_row path.
+//   rowkey=2: version 35 (<=snapshot, LF) -> version_fit=true, NO version beyond
+//             snapshot -> N flag (the flag from rowkey=1 must not leak here as E).
+TEST_F(TestMinorIterInTTLMajor, test_cur_rowkey_exist_new_version_leak_across_rowkey)
+{
+  const int64_t schema_rowkey_cnt = 1;
+  const int64_t last_major_compaction_scn = 20;
+  const int64_t major_compaction_scn = 40;
+  const int64_t upper_snapshot = 50;
+
+  ObTabletMergeDagParam param;
+  ObTabletMajorMergeCtx merge_context(param, allocator_);
+  ObPartitionMajorMerger merger(local_arena_, merge_context.static_param_);
+
+  ObTableHandleV2 major_handle;
+  const char *major_data[1];
+  major_data[0] =
+      "bigint   bigint   bigint   bigint   flag    multi_version_row_flag\n"
+      "1        -10      0        100      EXIST   N\n"
+      "2        -10      0        200      EXIST   N\n";
+
+  ObScnRange scn_range;
+  scn_range.start_scn_.set_min();
+  scn_range.end_scn_.convert_for_tx(last_major_compaction_scn);
+  prepare_table_schema(major_data, schema_rowkey_cnt, scn_range, last_major_compaction_scn);
+  reset_writer(last_major_compaction_scn, MAJOR_MERGE);
+  prepare_one_macro(major_data, 1);
+  prepare_data_end(major_handle, ObITable::MAJOR_SSTABLE);
+  merge_context.static_param_.tables_handle_.add_table(major_handle);
+
+  ObTableHandleV2 dump_handle;
+  const char *dump_data[1];
+  dump_data[0] =
+      "bigint   bigint   bigint   bigint   flag    multi_version_row_flag\n"
+      "1        -45      MIN      145      EXIST   SCF\n"
+      "1        -45      0        145      EXIST   C\n"
+      "1        -41      0        115      EXIST   CL\n"
+      "2        -35      0        235      EXIST   LF\n";
+
+  scn_range.start_scn_.convert_for_tx(last_major_compaction_scn);
+  scn_range.end_scn_.convert_for_tx(50);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(50);
+  prepare_one_macro(dump_data, 1);
+  prepare_data_end(dump_handle);
+  merge_context.static_param_.tables_handle_.add_table(dump_handle);
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = major_compaction_scn;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.base_version_ = last_major_compaction_scn;
+
+  prepare_merge_context(MAJOR_MERGE, false /* is_full_merge */, trans_version_range, merge_context);
+  merge_context.static_param_.ttl_major_for_partial_update_upper_snapshot_ = upper_snapshot;
+
+  ASSERT_EQ(OB_SUCCESS, merger.prepare_merge(merge_context, 0));
+  ASSERT_NE(nullptr, merger.merge_helper_);
+  ASSERT_EQ(2, merger.merge_helper_->get_merge_iters().count());
+
+  ObPartitionMergeIter *iter = merger.merge_helper_->get_merge_iters().at(0);
+  ASSERT_NE(nullptr, iter);
+  ASSERT_EQ(1, iter->get_sstable_idx());
+  ASSERT_FALSE(iter->is_base_sstable_iter());
+  ASSERT_FALSE(iter->is_major_sstable_iter());
+
+  // rowkey=1: last version 41 > snapshot -> output as-is with V flag (is-last virtual path).
+  // rowkey=2: version 35 <= snapshot, NO new version -> N flag (NOT E).
+  const char *result1 =
+      "bigint   bigint   bigint   bigint   flag    multi_version_row_flag   major_merge_flag\n"
+      "1        -41      0        115      EXIST   N                        V\n"
+      "2        -35      0        235      EXIST   N                        N\n";
+
+  ObMockIterator result_iter;
+  ObMockMajorMergeIter major_iter(iter);
+  ASSERT_EQ(OB_SUCCESS, result_iter.from_for_datum(result1));
+  bool is_equal = result_iter.equals<ObMockMajorMergeIter, ObDatumRow>(
+      major_iter, false /* cmp multi version row flag */);
+  ASSERT_TRUE(is_equal);
+
+  major_handle.reset();
+  dump_handle.reset();
+  merger.reset();
+}
+
+// Test case: a rowkey with a new committed version but NO surviving version in
+// (base_version, snapshot] must return a virtual marker row (V), so the new
+// committed version is still signaled downstream and the flag does not leak.
+//
+// snapshot_version = 40, base_version = 20, upper_snapshot = 50.
+//
+// Layout (single micro block, forward scan, version new->old):
+//   rowkey=1: version 45 (>snapshot, <=upper, SCF -> NOT last) sets
+//             cur_rowkey_exist_new_version_=true and version_fit=false.
+//             version 45 (C) -> same path.
+//             version 10 (<=base_version, CL) -> filtered, final_result=true.
+//             => no real row survives, so the filtered boundary row is returned
+//                unchanged except for major_merge_flag_.is_virtual_row_for_ttl_major_
+//                (V); emitting it also resets cur_rowkey_exist_new_version_.
+//   rowkey=2: version 35 (<=snapshot, LF) -> version_fit=true, NO version beyond
+//             snapshot -> N flag (the flag from rowkey=1 must not leak here as E).
+TEST_F(TestMinorIterInTTLMajor, test_reuse_filtered_boundary_row_as_virtual)
+{
+  const int64_t schema_rowkey_cnt = 1;
+  const int64_t last_major_compaction_scn = 20;
+  const int64_t major_compaction_scn = 40;
+  const int64_t upper_snapshot = 50;
+
+  ObTabletMergeDagParam param;
+  ObTabletMajorMergeCtx merge_context(param, allocator_);
+  ObPartitionMajorMerger merger(local_arena_, merge_context.static_param_);
+
+  ObTableHandleV2 major_handle;
+  const char *major_data[1];
+  major_data[0] =
+      "bigint   bigint   bigint   bigint   flag    multi_version_row_flag\n"
+      "1        -10      0        100      EXIST   N\n"
+      "2        -10      0        200      EXIST   N\n";
+
+  ObScnRange scn_range;
+  scn_range.start_scn_.set_min();
+  scn_range.end_scn_.convert_for_tx(last_major_compaction_scn);
+  prepare_table_schema(major_data, schema_rowkey_cnt, scn_range, last_major_compaction_scn);
+  reset_writer(last_major_compaction_scn, MAJOR_MERGE);
+  prepare_one_macro(major_data, 1);
+  prepare_data_end(major_handle, ObITable::MAJOR_SSTABLE);
+  merge_context.static_param_.tables_handle_.add_table(major_handle);
+
+  ObTableHandleV2 dump_handle;
+  const char *dump_data[1];
+  dump_data[0] =
+      "bigint   bigint   bigint   bigint   flag    multi_version_row_flag\n"
+      "1        -45      MIN      145      EXIST   SCF\n"
+      "1        -45      0        145      EXIST   C\n"
+      "1        -10      0        110      EXIST   CL\n"
+      "2        -35      0        235      EXIST   LF\n";
+
+  scn_range.start_scn_.convert_for_tx(last_major_compaction_scn);
+  scn_range.end_scn_.convert_for_tx(50);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(50);
+  prepare_one_macro(dump_data, 1);
+  prepare_data_end(dump_handle);
+  merge_context.static_param_.tables_handle_.add_table(dump_handle);
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = major_compaction_scn;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.base_version_ = last_major_compaction_scn;
+
+  prepare_merge_context(MAJOR_MERGE, false /* is_full_merge */, trans_version_range, merge_context);
+  merge_context.static_param_.ttl_major_for_partial_update_upper_snapshot_ = upper_snapshot;
+
+  ASSERT_EQ(OB_SUCCESS, merger.prepare_merge(merge_context, 0));
+  ASSERT_NE(nullptr, merger.merge_helper_);
+  ASSERT_EQ(2, merger.merge_helper_->get_merge_iters().count());
+
+  ObPartitionMergeIter *iter = merger.merge_helper_->get_merge_iters().at(0);
+  ASSERT_NE(nullptr, iter);
+  ASSERT_EQ(1, iter->get_sstable_idx());
+  ASSERT_FALSE(iter->is_base_sstable_iter());
+  ASSERT_FALSE(iter->is_major_sstable_iter());
+
+  // rowkey=1: version 45 > snapshot (filtered), version 10 <= base_version
+  //           (filtered) -> NO real row survives, so the filtered boundary row
+  //           is returned intact with the V flag.
+  // rowkey=2: version 35 <= snapshot, NO new version -> N flag (NOT E).
+  const char *result1 =
+      "bigint   bigint   bigint   bigint   flag    multi_version_row_flag   major_merge_flag\n"
+      "1        -10      0        110      EXIST   CL                       V\n"
+      "2        -35      0        235      EXIST   N                        N\n";
+
+  ObMockIterator result_iter;
+  ObMockMajorMergeIter major_iter(iter);
+  ASSERT_EQ(OB_SUCCESS, result_iter.from_for_datum(result1));
+  bool is_equal = result_iter.equals<ObMockMajorMergeIter, ObDatumRow>(
+      major_iter, false /* cmp multi version row flag */);
+  ASSERT_TRUE(is_equal);
+
+  major_handle.reset();
+  dump_handle.reset();
+  merger.reset();
+}
+
 } // namespace storage
 } // namespace oceanbase
 

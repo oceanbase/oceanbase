@@ -400,7 +400,44 @@ public:
                        K_(finish_scanning_cur_rowkey), K_(cur_rowkey_exist_new_version));
 
 protected:
+  // The full read+mark decision for a single multi-version row, made BEFORE reading it
+  // out. The action is the single carrier of intent: which ttl-major marker (if any) a
+  // read row will carry is fixed here, so mark_ttl_major_flag is a pure switch on it and
+  // never re-derives the verdict from trans_version/snapshot.
+  //   SKIP                 - filtered by version_range (or unsupported), do not read.
+  //   READ                 - read and emit normally, no ttl-major marker.
+  //   READ_MARK_EXIST_NEW  - read and emit; an earlier version of this rowkey is beyond
+  //                          snapshot -> tag it so downstream knows a newer committed
+  //                          version exists.
+  //   READ_AS_VIRTUAL      - the row is filtered by version_range, but the current rowkey
+  //                          has a newer committed version and produced no surviving row;
+  //                          resurrect the filtered boundary row and emit it purely as a
+  //                          ttl-major virtual marker.
+  enum class RowReadAction { SKIP, READ, READ_MARK_EXIST_NEW, READ_AS_VIRTUAL };
   virtual int inner_get_next_row(const ObDatumRow *&row) override;
+  // ---- ttl-major partial-update semantics live in a small function family ----
+  // Read-side verdict (called before get_row):
+  //   classify_committed_trans_version - generic version_range (base/snapshot) verdict,
+  //       deciding version_fit/final_result. Knows nothing about ttl-major.
+  //   decide_row_read_action_for_ttl - the full read+mark decision (see RowReadAction). The only
+  //       place ttl-major is consulted: it turns the generic verdict into an action that
+  //       carries the marker intent forward, and owns the cur_rowkey_exist_new_version_
+  //       cross-row side effect.
+  // Write-side marking (called after get_row):
+  //   mark_ttl_major_flag - stamps the ttl-major major_merge_flag by switching purely on
+  //       the action, never re-deriving from trans_version/snapshot.
+  // Not const: owns the cur_rowkey_exist_new_version_ cross-row side effect for ttl-major.
+  RowReadAction decide_row_read_action_for_ttl(
+      const int64_t trans_version, const bool version_fit, const bool final_result);
+  // Generic committed-version verdict by version_range (base/snapshot). ttl-major-blind;
+  // shared by all three check_trans_version branches.
+  void classify_committed_trans_version(
+      const int64_t trans_version,
+      bool &version_fit,
+      bool &final_result);
+  // Stamp ttl-major major_merge_flag onto a freshly materialized row.
+  // Precondition: caller guarantees ttl_major_for_partial_update_upper_snapshot_ > 0.
+  int mark_ttl_major_flag(ObDatumRow *row, const RowReadAction action);
   int check_trans_version(
       bool &final_result,
       bool &version_fit,
@@ -409,6 +446,14 @@ protected:
       int64_t &sql_sequence,
       const ObMultiVersionRowFlag &mvcc_row_flag,
       const transaction::ObTransID &trans_id);
+  int get_row_action(
+        bool &final_result,
+        RowReadAction &action,
+        bool &have_uncommited_row,
+        int64_t &trans_version,
+        int64_t &sql_sequence,
+        const ObMultiVersionRowFlag &mvcc_row_flag,
+        const transaction::ObTransID &trans_id);
   int check_foreign_key(
       const int64_t trans_version,
       const int64_t sql_sequence,
@@ -419,7 +464,7 @@ protected:
                           bool &version_fit,
                           bool &final_result,
                           bool &have_uncommitted_row);
-  int fill_row_version_info(ObDatumRow *row, const int64_t trans_version, bool &version_fit);
+  int fill_row_version_info(ObDatumRow *row, const int64_t trans_version, RowReadAction &action);
 
 private:
   void reuse_prev_micro_row();
@@ -449,11 +494,6 @@ private:
   // and it will be destroyed when the life cycle of the rowkey_helper is end.
   // So we have to send it into the function to avoid this situation.
   int get_store_rowkey(ObStoreRowkey &store_rowkey, ObDatumRowkeyHelper &rowkey_helper);
-  void handle_row_exceed_snapshot_version(
-      const int64_t trans_version,
-      const int64_t snapshot_version,
-      const ObMultiVersionRowFlag &mvcc_row_flag,
-      bool &version_fit);
 protected:
   // Use shallow_copy to directly quote the original data of the microblock when compacting,
   // only at the moment (when the dump row format is flat) there is no risk

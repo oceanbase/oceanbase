@@ -1918,8 +1918,8 @@ int ObMultiVersionMicroBlockRowScanner::open(
       LOG_INFO("micro block header not has_min_merged_trans_version_", K(ret), K(block_data));
     } else if (OB_NOT_NULL(sstable_)
         && !block_data.get_micro_header()->contain_uncommitted_rows()
-        && block_data.get_micro_header()->max_merged_trans_version_ <= context_->trans_version_range_.snapshot_version_
-        && block_data.get_micro_header()->get_min_merged_trans_version() > context_->trans_version_range_.base_version_) {
+        && block_data.get_micro_header()->max_merged_trans_version_ <= version_range_.snapshot_version_
+        && block_data.get_micro_header()->get_min_merged_trans_version() > version_range_.base_version_) {
       read_row_direct_flag_ = true;
       can_ignore_multi_version_
           = block_data.get_micro_header()->single_version_rows_
@@ -1927,7 +1927,7 @@ int ObMultiVersionMicroBlockRowScanner::open(
             && !reverse_scan_
             && !(0 == version_range_.base_version_ && IF_NEED_CHECK_BASE_VERSION_FILTER(context_));
       LOG_DEBUG("use direct read", K(ret), K(can_ignore_multi_version_),
-                KPC(block_data.get_micro_header()), K(context_->trans_version_range_));
+                KPC(block_data.get_micro_header()), K(version_range_));
     }
   }
   return ret;
@@ -2262,52 +2262,100 @@ int ObMultiVersionMicroBlockRowScanner::read_and_resolve_row(
   MultiVersionInfo multi_version_info;
 
   ret_row = nullptr;
-  version_fit = false;
   final_result = false;
+  RowReadAction action = RowReadAction::SKIP;
 
   if (OB_FAIL(reader_->get_multi_version_info(current_, schema_rowkey_count_, multi_version_info, trans_version, sql_sequence))) {
     LOG_WARN("fail to get multi version info", K(ret), K_(current), K_(macro_id));
-  } else if (OB_FAIL(check_trans_version(final_result, version_fit, have_uncommitted_row, trans_version, sql_sequence, multi_version_info.mvcc_row_flag_, multi_version_info.trans_id_))) {
-    LOG_WARN("fail to check trans version", K(ret), K_(current), K(version_fit), K(trans_version), K(sql_sequence));
+  // Must be set before get_row_action: decide_row_read_action_for_ttl (called inside it) consults
+  // is_last_multi_version_row_ to pick the ttl-major virtual-row action, so it has to
+  // reflect the current row, not the previous one.
+  } else if (OB_FALSE_IT(is_last_multi_version_row_ = multi_version_info.mvcc_row_flag_.is_last_multi_version_row())) {
+  } else if (OB_FAIL(get_row_action(final_result, action, have_uncommitted_row, trans_version, sql_sequence, multi_version_info.mvcc_row_flag_, multi_version_info.trans_id_))) {
+    LOG_WARN("fail to check trans version", K(ret), K_(current), K(action), K(trans_version), K(sql_sequence));
   } else if (OB_FAIL(check_foreign_key(trans_version, sql_sequence, multi_version_info.trans_id_))) {
     LOG_WARN("fail to check foreign key", K(ret), K_(current), K(trans_version), K(sql_sequence));
-  } else if (OB_FALSE_IT(is_last_multi_version_row_ = multi_version_info.mvcc_row_flag_.is_last_multi_version_row())) {
-  } else if (version_fit) {
+  } else if (RowReadAction::SKIP != action) {
     ObDatumRow *row = nullptr;
     if (is_row_empty(row_)) {
-      row = &row_;
-    } else {
-      tmp_row_.count_ = tmp_row_.get_capacity();
-      tmp_row_.trans_id_.reset();
-      tmp_row_.major_merge_flag_.reset();
-      row = &tmp_row_;
-    }
-
-    if (OB_FAIL(reader_->get_row(current_, *row))) {
-      LOG_WARN("micro block reader fail to get block_row", K(ret), K(current_));
-    } else if (row->row_flag_.is_lock()) {
-      if (OB_FAIL(ObLockRowChecker::check_lock_row_valid(*row, *read_info_))) {
-        LOG_WARN("micro block reader fail to get block_row", K(ret), K(current_), KPC(row), KPC_(read_info));
-      } else if (row->is_uncommitted_row()) {
-        version_fit = false;
-        row->row_flag_.set_flag(ObDmlFlag::DF_NOT_EXIST);
+        row = &row_;
+      } else {
+        tmp_row_.count_ = tmp_row_.get_capacity();
+        tmp_row_.trans_id_.reset();
+        tmp_row_.major_merge_flag_.reset();
+        row = &tmp_row_;
       }
-    }
 
-    if (OB_SUCC(ret) && version_fit) {
-      if (OB_FAIL(fill_row_version_info(row, trans_version, version_fit))) {
+      if (OB_FAIL(reader_->get_row(current_, *row))) {
+        LOG_WARN("micro block reader fail to get block_row", K(ret), K(current_));
+      } else if (row->row_flag_.is_lock()) {
+        if (OB_FAIL(ObLockRowChecker::check_lock_row_valid(*row, *read_info_))) {
+          LOG_WARN("micro block reader fail to get block_row", K(ret), K(current_), KPC(row), KPC_(read_info));
+        } else if (row->is_uncommitted_row()) {
+          action = RowReadAction::SKIP;
+          row->row_flag_.set_flag(ObDmlFlag::DF_NOT_EXIST);
+        }
+      }
+      if (OB_FAIL(ret) || RowReadAction::SKIP == action) {
+      } else if (OB_FAIL(fill_row_version_info(row, trans_version, action))) {
         LOG_WARN("fail to fill row version info", K(ret), K(trans_version));
-      } else if (version_fit) {
+      } else if (RowReadAction::SKIP != action) {
         ret_row = row;
       }
-    }
+  }
+  // What the caller calls version_fit is just "did we emit a row": ret_row is set iff
+  // the read decision survived every downgrade above.
+  if (OB_SUCC(ret)) {
+    version_fit = (nullptr != ret_row);
   }
 
   return ret;
 }
 
+ObMultiVersionMicroBlockRowScanner::RowReadAction
+ObMultiVersionMicroBlockRowScanner::decide_row_read_action_for_ttl(
+    const int64_t trans_version,
+    const bool version_fit,
+    const bool final_result)
+{
+  // The single place ttl-major is consulted: it turns the generic (ttl-blind)
+  // version_range verdict into a full read+mark action, and owns the cross-row
+  // cur_rowkey_exist_new_version_ side effect. mark_ttl_major_flag then only switches on
+  // the returned action and never re-derives anything from trans_version/snapshot.
+  const int64_t snapshot_version = version_range_.snapshot_version_;
+  const int64_t ttl_upper = context_->ttl_major_for_partial_update_upper_snapshot_;
+  RowReadAction action = RowReadAction::SKIP;
+  if (version_fit) {
+    // Passed the read verdict: read it. Pick the ttl-major marker it will carry. Note a
+    // readable row can still sit above snapshot via the iter-uncommitted path, hence the
+    // >snapshot check here as well.
+    action = cur_rowkey_exist_new_version_ ? RowReadAction::READ_MARK_EXIST_NEW : RowReadAction::READ;
+  } else if (trans_version > snapshot_version && trans_version <= ttl_upper) { // cur row beyond snapshot and ttl upper bound
+    // ttl-major overrides the generic verdict: a committed version between snapshot and
+    // the ttl upper bound, which classify_committed_trans_version filtered out.
+    if (is_last_multi_version_row_) {
+      // The L row -> resurrect it (payload kept) and emit it as the virtual marker.
+      action = RowReadAction::READ_AS_VIRTUAL;
+    } else {
+      // Not the L row -> stays filtered, but remember a newer committed version exists so
+      // the rowkey's boundary row can carry the marker.
+      cur_rowkey_exist_new_version_ = true;
+    }
+  } else if (final_result
+             && cur_rowkey_exist_new_version_
+             && is_row_empty(row_)
+             && is_row_empty(prev_micro_row_)) {
+    // ttl-major only: filtered by version_range, but it is the last row of a rowkey
+    // that has a newer committed version and produced no surviving row anywhere
+    // (current block or cross-block cache). Resurrect the filtered boundary row and
+    // emit it purely as a virtual marker.
+    action = RowReadAction::READ_AS_VIRTUAL;
+  }
+  return action;
+}
+
 int ObMultiVersionMicroBlockRowScanner::fill_row_version_info(
-    ObDatumRow *row, const int64_t trans_version, bool &version_fit)
+    ObDatumRow *row, const int64_t trans_version, RowReadAction &action)
 {
   int ret = OB_SUCCESS;
   if (OB_INVALID_INDEX != read_info_->get_trans_col_index()
@@ -2326,24 +2374,15 @@ int ObMultiVersionMicroBlockRowScanner::fill_row_version_info(
       if (OB_FAIL(context_->check_filtered_by_base_version(*row))) {
         LOG_DEBUG("check base version filter fail", K(ret));
       } else if (row->row_flag_.is_not_exist()) {
-        version_fit = false;
+        action = RowReadAction::SKIP;
       }
     }
-    if (OB_SUCC(ret) && context_->ttl_major_for_partial_update_upper_snapshot_ > 0) {
-      if (trans_version > context_->trans_version_range_.snapshot_version_) {
-        row->major_merge_flag_.is_virtual_row_for_ttl_major_ = true;
-        if (OB_UNLIKELY(!row->is_last_multi_version_row())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("row beyond snapshot version is not last multi version row", K(ret), K(trans_version),
-                    K(context_->trans_version_range_.snapshot_version_), KPC(row));
-        }
-      } else if (cur_rowkey_exist_new_version_) {
-        row->major_merge_flag_.exist_new_committed_row_ = true;
-      }
-      LOG_INFO("major merge query, ttl major for partial update", K(ret), K(trans_version),
-               K(context_->trans_version_range_.snapshot_version_),
-               K(context_->ttl_major_for_partial_update_upper_snapshot_), KPC(row)); // remove later
-    }
+  }
+  // Apply the ttl-major marker already encoded in the action. Kept outside the
+  // is_effective_trans_version gate above because a resurrected boundary row
+  // (READ_AS_VIRTUAL) may carry no effective trans_version yet still has to be stamped.
+  if (OB_SUCC(ret) && context_->ttl_major_for_partial_update_upper_snapshot_ > 0) {
+    ret = mark_ttl_major_flag(row, action);
   }
   if (OB_SUCC(ret)) {
     if (!row->mvcc_row_flag_.is_uncommitted_row()
@@ -2353,6 +2392,38 @@ int ObMultiVersionMicroBlockRowScanner::fill_row_version_info(
     } else {
       row->snapshot_version_ = INT64_MAX;
     }
+  }
+  return ret;
+}
+
+int ObMultiVersionMicroBlockRowScanner::mark_ttl_major_flag(
+    ObDatumRow *row, const RowReadAction action)
+{
+  int ret = OB_SUCCESS;
+  ObMajorMergeFlag &major_merge_flag = row->major_merge_flag_;
+  // Pure switch on the action: which marker to stamp was already decided in
+  // decide_row_read_action_for_ttl; nothing is re-derived from trans_version/snapshot here.
+  switch (action) {
+    case RowReadAction::READ_AS_VIRTUAL:
+      // Resurrected boundary row: filtered by version_range and carrying no usable
+      // payload. Wipe stale flags and keep it purely as a marker. It is the L row by
+      // construction (READ_AS_VIRTUAL requires final_result in decide_row_read_action_for_ttl).
+      if (OB_UNLIKELY(!row->is_last_multi_version_row())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("virtual row for ttl major is not last multi version row", K(ret),
+                  K(version_range_.snapshot_version_), KPC(row));
+      } else {
+        major_merge_flag.reset();
+        major_merge_flag.is_virtual_row_for_ttl_major_ = true;
+      }
+      break;
+    case RowReadAction::READ_MARK_EXIST_NEW:
+      // An earlier version of this rowkey is beyond snapshot: tag the in-range row so
+      // downstream knows a newer committed version exists.
+      major_merge_flag.exist_new_committed_row_ = true;
+      break;
+    default:
+      break;  // READ / SKIP carry no ttl-major marker.
   }
   return ret;
 }
@@ -2380,27 +2451,24 @@ int ObMultiVersionMicroBlockRowScanner::read_next_version_row(
   return ret;
 }
 
-void ObMultiVersionMicroBlockRowScanner::handle_row_exceed_snapshot_version(
+void ObMultiVersionMicroBlockRowScanner::classify_committed_trans_version(
     const int64_t trans_version,
-    const int64_t snapshot_version,
-    const ObMultiVersionRowFlag &mvcc_row_flag,
-    bool &version_fit)
+    bool &version_fit,
+    bool &final_result)
 {
-  if (context_->ttl_major_for_partial_update_upper_snapshot_ > 0
-      && trans_version <= context_->ttl_major_for_partial_update_upper_snapshot_) {
-    if (mvcc_row_flag.is_last_multi_version_row()) {
-      version_fit = true;
-      LOG_INFO("major merge query, last multi version row", K(trans_version), K(snapshot_version),
-               K(context_->ttl_major_for_partial_update_upper_snapshot_), K(mvcc_row_flag)); // remove later
-    } else {
-      cur_rowkey_exist_new_version_ = true;
-      version_fit = false;
-      LOG_INFO("major merge query, not last multi version row", K(trans_version), K(snapshot_version),
-               K(context_->ttl_major_for_partial_update_upper_snapshot_), K(mvcc_row_flag)); // remove later
-    }
-  } else {
+  if (trans_version <= version_range_.base_version_) {
+    // filter multi version row whose trans version is smaller than base_version
+    version_fit = false;
+    final_result = true;
+  } else if (trans_version > version_range_.snapshot_version_) {
+    // beyond snapshot: filter it.
     version_fit = false;
   }
+  // In-range (base_version < trans_version <= snapshot_version): leave version_fit
+  // UNTOUCHED. For the committed branch the caller sets it true beforehand; for the
+  // uncommitted branch it must preserve the can_read_ / lock_for_read verdict, so that a
+  // row rolled back to a savepoint (committed trans_version, but can_read_ == false)
+  // stays filtered instead of being resurrected.
 }
 
 int ObMultiVersionMicroBlockRowScanner::check_trans_version(
@@ -2414,7 +2482,7 @@ int ObMultiVersionMicroBlockRowScanner::check_trans_version(
 {
   int ret = OB_SUCCESS;
   bool is_ghost_row_flag = false;
-  const int64_t snapshot_version = context_->trans_version_range_.snapshot_version_;
+  const int64_t snapshot_version = version_range_.snapshot_version_;
   memtable::ObMvccAccessCtx &acc_ctx = context_->store_ctx_->mvcc_acc_ctx_;
 
   if (OB_FAIL(ObGhostRowUtil::is_ghost_row(mvcc_row_flag, is_ghost_row_flag))) {
@@ -2444,13 +2512,7 @@ int ObMultiVersionMicroBlockRowScanner::check_trans_version(
         trans_version = trans_state.trans_version_;
 
         if (transaction::is_effective_trans_version(trans_version)) {
-          if (trans_version <= version_range_.base_version_) {
-            version_fit = false;
-            // filter multi version row whose trans version is smaller than base_version
-            final_result = true;
-          } else if (trans_version > snapshot_version) {
-            handle_row_exceed_snapshot_version(trans_version, snapshot_version, mvcc_row_flag, version_fit);
-          }
+          classify_committed_trans_version(trans_version, version_fit, final_result);
         }
       } else if (OB_FAIL(ret) && OB_HASH_NOT_EXIST != ret) {
         LOG_WARN("fail to get trans state", K(ret), K(trans_id), K(tx_sequence), K_(macro_id));
@@ -2471,13 +2533,7 @@ int ObMultiVersionMicroBlockRowScanner::check_trans_version(
           STORAGE_LOG(WARN, "fail to check transaction status",
                       K(ret), K(mvcc_row_flag), K(trans_id), K_(macro_id));
         } else if (transaction::is_effective_trans_version(trans_version)) {
-          if (trans_version <= version_range_.base_version_) {
-            version_fit = false;
-            // filter multi version row whose trans version is smaller than base_version
-            final_result = true;
-          } else if (trans_version > snapshot_version) {
-            handle_row_exceed_snapshot_version(trans_version, snapshot_version, mvcc_row_flag, version_fit);
-          }
+          classify_committed_trans_version(trans_version, version_fit, final_result);
         }
       }
     } else {
@@ -2485,20 +2541,43 @@ int ObMultiVersionMicroBlockRowScanner::check_trans_version(
       //        whether uncommitted txns are readable
       if (context_->query_flag_.iter_uncommitted_row()) {
         version_fit = true;
-      } else if (trans_version <= version_range_.base_version_) {
-        // filter multi version row whose trans version is smaller than base_version
-        version_fit = false;
-        final_result = true;
-      } else if (trans_version > snapshot_version) {
-        handle_row_exceed_snapshot_version(trans_version, snapshot_version, mvcc_row_flag, version_fit);
-        if (OB_NOT_NULL(context_->get_mds_collector())) {
+      } else {
+        // committed row: in-range is readable, so seed version_fit true and let
+        // classify_committed_trans_version only filter out-of-range versions.
+        version_fit = true;
+        classify_committed_trans_version(trans_version, version_fit, final_result);
+        // mds query side channel: a committed version newer than snapshot exists.
+        if (trans_version > snapshot_version && OB_NOT_NULL(context_->get_mds_collector())) {
           context_->get_mds_collector()->exist_new_committed_node_ = true;
           LOG_TRACE("exist new committed node", KR(ret), K(trans_version), K(snapshot_version), KPC(context_->get_mds_collector()));
         }
-      } else {
-        version_fit = true;
       }
     }
+  }
+  return ret;
+}
+
+int ObMultiVersionMicroBlockRowScanner::get_row_action(
+  bool &final_result,
+  RowReadAction &action,
+  bool &have_uncommited_row,
+  int64_t &trans_version,
+  int64_t &sql_sequence,
+  const ObMultiVersionRowFlag &mvcc_row_flag,
+  const transaction::ObTransID &trans_id)
+{
+  bool version_fit = false;
+  int ret = check_trans_version(final_result, version_fit, have_uncommited_row, trans_version, sql_sequence, mvcc_row_flag, trans_id);
+  if (OB_FAIL(ret)) {
+  } else if (0 == context_->ttl_major_for_partial_update_upper_snapshot_) {
+    // Non ttl-major path: the generic version_range verdict is the whole decision.
+    action = version_fit ? RowReadAction::READ : RowReadAction::SKIP;
+  } else {
+    // ttl-major path: decide_row_read_action_for_ttl is the single place ttl-major is consulted,
+    // and it must run for every row regardless of whether trans_version is effective --
+    // committed rows beyond snapshot carry effective trans_versions yet still need the
+    // virtual-row / exist-new-committed handling.
+    action = decide_row_read_action_for_ttl(trans_version, version_fit, final_result);
   }
   return ret;
 }
@@ -2510,7 +2589,7 @@ int ObMultiVersionMicroBlockRowScanner::check_foreign_key(
 {
   int ret = OB_SUCCESS;
   ObStoreRowLockState lock_state;
-  const int64_t snapshot_version = context_->trans_version_range_.snapshot_version_;
+  const int64_t snapshot_version = version_range_.snapshot_version_;
   memtable::ObMvccAccessCtx &acc_ctx = context_->store_ctx_->mvcc_acc_ctx_;
   bool is_plain_insert_gts_opt = context_->query_flag_.is_plain_insert_gts_opt();
   bool is_for_fk_check = context_->query_flag_.is_for_foreign_key_check();

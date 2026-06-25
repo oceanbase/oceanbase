@@ -1066,6 +1066,120 @@ TEST_F(ObMajorWithTTLFilterTest, co_major_multi_minor_all_virtual_delete_rows)
   newer_minor_handle.reset();
 }
 
+// Test case: a rowkey whose newest committed version is a DELETE that lies BEYOND
+// this merge's snapshot (out of the merge range, only visible via the ttl-major
+// upper snapshot), while its only in-range version is an INSERT that falls within
+// the range the TTL filter would purge.
+//
+// This is the secondary-index corner case where the indexed column changed value:
+// the old-value index rowkey ends up holding INSERT@old (in range, TTL-expired)
+// plus DELETE@new (beyond snapshot, deleting the stale index entry). The newer
+// committed DELETE is emitted as a virtual marker for ttl major, which sets
+// exist_new_committed_row on the fused row, so the merge MUST defer the TTL decision
+// (it cannot see the newer version's true rowscn) and keep the rowkey instead of
+// purging the expired INSERT.
+//
+// base_version = 20, snapshot_version = 40, upper_snapshot = 50, filter_max_version = 40.
+//   rowkey=1:
+//     major  INSERT@15  (<= base_version 20 -> filtered by version range)
+//     minor1 INSERT@35  (in (20,40], 35 <= filter_max 40 -> in range, TTL-expired)
+//     minor2 DELETE@48  (in (40,50] -> newer committed version, beyond merge range,
+//                        emitted as a virtual marker for ttl major)
+//   => the in-range expired INSERT@35 is rescued by exist_new_committed_row: the
+//      rowkey is kept (1 row, FILTER_RET_KEEP), not removed by the TTL filter.
+TEST_F(ObMajorWithTTLFilterTest, co_major_multi_minor_delete_beyond_range_insert_in_ttl_range)
+{
+  int ret = OB_SUCCESS;
+  merge_type_ = MAJOR_MERGE;
+  fake_freeze_info();
+  ObTabletMergeDagParam param;
+  ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
+
+  ObTableHandleV2 major_handle;
+  const char *major_data[1];
+  major_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -15      0        100    EXIST   N    \n";
+
+  int64_t snapshot_version = 20;
+  ObScnRange scn_range;
+  scn_range.start_scn_.set_min();
+  scn_range.end_scn_.convert_for_tx(snapshot_version);
+  prepare_table_schema(major_data, schema_rowkey_cnt_, scn_range, snapshot_version);
+  TestSchemaPrepare::add_rowkey_and_each_column_group(allocator_, table_schema_);
+  reset_writer(snapshot_version, MAJOR_MERGE);
+  prepare_one_macro(major_data, 1);
+  prepare_data_end(major_handle, storage::ObITable::COLUMN_ORIENTED_SSTABLE);
+  merge_context.static_param_.tables_handle_.add_table(major_handle);
+
+  // in-range INSERT@35: 35 in (base_version 20, snapshot 40], and 35 <= filter_max 40,
+  // so the TTL filter would remove it on its own.
+  ObTableHandleV2 older_minor_handle;
+  const char *older_minor_data[1];
+  older_minor_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -35      0        135    EXIST   LF   \n";
+
+  scn_range.start_scn_.convert_for_tx(20);
+  scn_range.end_scn_.convert_for_tx(45);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(45);
+  prepare_one_macro(older_minor_data, 1);
+  prepare_data_end(older_minor_handle);
+  merge_context.static_param_.tables_handle_.add_table(older_minor_handle);
+
+  // beyond-range DELETE@48: 48 in (snapshot 40, upper_snapshot 50], i.e. NOT in this
+  // merge's range -> kept only as a virtual marker for ttl major.
+  ObTableHandleV2 newer_minor_handle;
+  const char *newer_minor_data[1];
+  newer_minor_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -48      0        148    DELETE  LF   \n";
+
+  scn_range.start_scn_.convert_for_tx(45);
+  scn_range.end_scn_.convert_for_tx(50);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(50);
+  prepare_one_macro(newer_minor_data, 1);
+  prepare_data_end(newer_minor_handle);
+  merge_context.static_param_.tables_handle_.add_table(newer_minor_handle);
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 40;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.base_version_ = 20;
+  const int64_t filter_max_version = 40;
+
+  TestMergeBasic::prepare_co_major_merge_context(
+    MAJOR_MERGE, false/*is_full_merge*/, trans_version_range, &merge_dag_, merge_context);
+  merge_context.static_param_.co_static_param_.co_major_merge_strategy_.set(false/*build_all_cg_only*/, false/*only_use_row_store*/);
+  prepare_ttl_filter(filter_max_version, merge_context);
+  merge_context.static_param_.ttl_major_for_partial_update_upper_snapshot_ = 50;
+
+  TestMergeBasic::co_major_merge(
+    local_arena_,
+    ObCOMergeTestConfig(ObCOMergeTestConfig::ObCOMergeTestType::NORMAL, 1/*compaction_batch_size*/),
+    merge_context, 0, 0, 2);
+
+  ObTableHandleV2 table_handle;
+  ASSERT_EQ(2, merge_context.merged_cg_tables_handle_.get_count());
+  merge_context.merged_cg_tables_handle_.get_table(0, table_handle);
+  ObSSTable *merged_sstable = static_cast<ObSSTable *>(table_handle.get_table());
+  ASSERT_NE(nullptr, merged_sstable);
+  // The newer committed DELETE@48 (beyond snapshot) protects the in-range, TTL-expired
+  // INSERT@35 via exist_new_committed_row: the rowkey is kept, not TTL-removed.
+  ASSERT_EQ(1, merged_sstable->get_row_count());
+
+  const ObICompactionFilter::ObFilterStatistics &filter_statistics = merge_context.filter_ctx_.filter_statistics_;
+  LOG_INFO("filter statistics", K(filter_statistics));
+  ASSERT_EQ(filter_statistics.row_cnt_[ObICompactionFilter::ObFilterRet::FILTER_RET_KEEP], 1);
+  ASSERT_EQ(filter_statistics.row_cnt_[ObICompactionFilter::ObFilterRet::FILTER_RET_REMOVE], 0);
+
+  major_handle.reset();
+  older_minor_handle.reset();
+  newer_minor_handle.reset();
+}
+
 TEST_F(ObMajorWithTTLFilterTest, co_major_multi_minor_upper_snapshot_filter)
 {
   int ret = OB_SUCCESS;
