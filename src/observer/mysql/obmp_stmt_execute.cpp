@@ -3136,13 +3136,13 @@ int ObMPStmtExecute::parse_oracle_timestamp_value(const obmysql::EMySQLFieldType
     const char *&data, const ObTimeConvertCtx &cvrt_ctx, ObObj &param, ObPSAnalysisChecker *checker)
 {
   int ret = OB_SUCCESS;
-  int8_t total_len = 0;
+  uint8_t total_len = 0;
   ObObjType obj_type;
   ObOTimestampData ot_data;
   int8_t scale = -1;
   PS_STATIC_DEFENSE_CHECK(checker, 1)
   {
-    ObMySQLUtil::get_int1(data, total_len);
+    ObMySQLUtil::get_uint1(data, total_len);
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObSMUtils::get_ob_type(obj_type, field_type))) {
@@ -3239,11 +3239,11 @@ int ObMPStmtExecute::parse_mysql_time_value(const char *&data, ObObj &param, ObP
 int ObMPStmtExecute::parse_oracle_interval_ds_value(const char *&data, ObObj &param, ObPSAnalysisChecker *checker)
 {
   int ret = OB_SUCCESS;
-  int8_t length = 0;
+  uint8_t length = 0;
   ObScale scale = 0;
   ObIntervalDSValue value;
 
-  ObMySQLUtil::get_int1(data, length);
+  ObMySQLUtil::get_uint1(data, length);
   PS_STATIC_DEFENSE_CHECK(checker, length)
   {
     if (OB_FAIL(ObTimeConverter::decode_interval_ds(data, length, value, scale))) {
@@ -3261,11 +3261,11 @@ int ObMPStmtExecute::parse_oracle_interval_ds_value(const char *&data, ObObj &pa
 int ObMPStmtExecute::parse_oracle_interval_ym_value(const char *&data, ObObj &param, ObPSAnalysisChecker *checker)
 {
   int ret = OB_SUCCESS;
-  int8_t length = 0;
+  uint8_t length = 0;
   ObScale scale = 0;
   ObIntervalYMValue value;
 
-  ObMySQLUtil::get_int1(data, length);
+  ObMySQLUtil::get_uint1(data, length);
   PS_STATIC_DEFENSE_CHECK(checker, length)
   {
     if (OB_FAIL(ObTimeConverter::decode_interval_ym(data, length, value, scale))) {

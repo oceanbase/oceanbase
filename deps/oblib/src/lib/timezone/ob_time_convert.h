@@ -796,7 +796,7 @@ public:
   static int get_round_day_of_isoyear(ObTime &ob_time);
   //mysql binary value encoder/decoder
   static int decode_otimestamp(const ObObjType obj_type, const char *data,
-                               const int64_t total_len, const ObTimeConvertCtx &cvrt_ctx,
+                               const uint64_t total_len, const ObTimeConvertCtx &cvrt_ctx,
                                ObOTimestampData &otimestamp_val, int8_t &scale);
   static int encode_otimestamp(const ObObjType obj_type, char *buf,
                                const int64_t len, int64_t &pos,

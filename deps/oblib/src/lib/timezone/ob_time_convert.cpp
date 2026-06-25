@@ -7503,7 +7503,7 @@ int ObTimeConverter::calc_days_and_months_between_dates(const int64_t date_value
 }
 
 int ObTimeConverter::decode_otimestamp(const ObObjType obj_type,
-    const char *data, const int64_t total_len, const ObTimeConvertCtx &cvrt_ctx,
+    const char *data, const uint64_t total_len, const ObTimeConvertCtx &cvrt_ctx,
     ObOTimestampData &otimestamp_val, int8_t &scale)
 {
   int ret = OB_SUCCESS;
@@ -7517,8 +7517,8 @@ int ObTimeConverter::decode_otimestamp(const ObObjType obj_type,
   int32_t nanosecond = 0;
   int8_t offset_hour = 0;
   int8_t offset_min = 0;
-  int8_t tz_name_length = 0;
-  int8_t tz_abbr_length = 0;
+  uint8_t tz_name_length = 0;
+  uint8_t tz_abbr_length = 0;
   scale = -1;
   ObTime ob_time(DT_TYPE_ORACLE_TIMESTAMP);
   ObString tz_name;
@@ -7526,6 +7526,7 @@ int ObTimeConverter::decode_otimestamp(const ObObjType obj_type,
   const bool is_timestamp_tz = (ObTimestampTZType == obj_type);
 
   const char *old_data_ptr = data;
+  const char *const pkt_end = old_data_ptr + total_len;
   //read local time
   ObMySQLUtil::get_int1(data, year_year);
   ObMySQLUtil::get_int1(data, year_month);
@@ -7541,17 +7542,26 @@ int ObTimeConverter::decode_otimestamp(const ObObjType obj_type,
     ObMySQLUtil::get_int1(data, offset_min);
 
     //read tz_name
-    ObMySQLUtil::get_int1(data, tz_name_length);
-    tz_name.assign_ptr(data, static_cast<ObString::obstr_size_t>(tz_name_length));
-    data += tz_name_length;
+    ObMySQLUtil::get_uint1(data, tz_name_length);
+    if (OB_UNLIKELY(data + tz_name_length > pkt_end)) {
+      ret = OB_ERR_MALFORMED_PS_PACKET;
+      LOG_WARN("tz_name data exceeds packet boundary", K(ret), K(tz_name_length), K(total_len));
+    } else {
+      tz_name.assign_ptr(data, static_cast<ObString::obstr_size_t>(tz_name_length));
+      data += tz_name_length;
+    }
 
     //read tz_abbr
-    ObMySQLUtil::get_int1(data, tz_abbr_length);
+    ObMySQLUtil::get_uint1(data, tz_abbr_length);
+    if (OB_UNLIKELY(data + tz_abbr_length > pkt_end)) {
+      ret = OB_ERR_MALFORMED_PS_PACKET;
+      LOG_WARN("tz_abbr data exceeds packet boundary", K(ret), K(tz_abbr_length), K(total_len));
+    }
     tz_abbr.assign_ptr(data, static_cast<ObString::obstr_size_t>(tz_abbr_length));
     data += tz_abbr_length;
   }
 
-  if (total_len > (data - old_data_ptr)) {
+  if (OB_SUCC(ret) && (total_len > (data - old_data_ptr))) {
     //unknown token, do not use it
     data = old_data_ptr + total_len;
   }
