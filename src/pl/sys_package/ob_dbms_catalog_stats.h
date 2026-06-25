@@ -134,6 +134,10 @@ private:
   static bool is_match_column_option(const ObCatalogColumnStatParam &param,
                                      const ObIArray<ObString> &for_col_list);
 
+  static int check_is_valid_col(const common::ObString &src_str,
+                                const ObIArray<ObCatalogColumnStatParam> &column_params,
+                                const common::ObIArray<common::ObString> &record_cols);
+
   static bool check_column_validity(const share::schema::ObColumnSchemaV2 &col_schema);
 
   static int check_statistic_table_writeable(sql::ObExecContext &ctx);

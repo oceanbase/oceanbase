@@ -1288,6 +1288,7 @@ int ObDbmsCatalogStats::parser_for_columns_clause(const ParseNode *for_col_node,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid argument", K(ret), KP(for_col_node));
   } else {
+    ObSEArray<ObString, 4> record_cols;
     for (int64_t i = 0; OB_SUCC(ret) && i < for_col_node->num_child_; ++i) {
       ParseNode *for_col_item = NULL;
       ObSEArray<ObString, 4> for_col_list;
@@ -1310,8 +1311,13 @@ int ObDbmsCatalogStats::parser_for_columns_clause(const ParseNode *for_col_node,
             || OB_ISNULL(col_node->children_[1])) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid column node", K(ret), KP(col_node));
+        } else if (OB_FAIL(check_is_valid_col(col_node->children_[1]->str_value_,
+                                              column_params, record_cols))) {
+          LOG_WARN("failed to check is valid col", K(ret));
         } else if (OB_FAIL(for_col_list.push_back(col_node->children_[1]->str_value_))) {
           LOG_WARN("failed to push back column", K(ret));
+        } else if (OB_FAIL(record_cols.push_back(col_node->children_[1]->str_value_))) {
+          LOG_WARN("failed to push back record col", K(ret));
         }
       }
       // Match columns and set - 对齐内部表
@@ -1341,6 +1347,38 @@ bool ObDbmsCatalogStats::is_match_column_option(const ObCatalogColumnStatParam &
     }
   }
   return is_match;
+}
+
+int ObDbmsCatalogStats::check_is_valid_col(const ObString &src_str,
+                                           const ObIArray<ObCatalogColumnStatParam> &column_params,
+                                           const ObIArray<ObString> &record_cols)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = false;
+  //check col in table
+  for (int64_t i = 0; !is_valid && i < column_params.count(); ++i) {
+    if (0 == src_str.case_compare(column_params.at(i).column_name_)) {
+      is_valid = true;
+    }
+  }
+  if (is_valid) {
+    //check duplicate => for columns c1 c1
+    for (int64_t i = 0; is_valid && i < record_cols.count(); ++i) {
+      if (0 == src_str.case_compare(record_cols.at(i))) {
+        is_valid = false;
+      }
+    }
+    if (!is_valid) {
+      ret = OB_ERR_COLUMN_DUPLICATE;
+      LOG_WARN("column duplicated", K(src_str), K(ret));
+      LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, src_str.length(), src_str.ptr());
+    }
+  } else {
+    ret = OB_WRONG_COLUMN_NAME;
+    LOG_WARN("column schema is null", K(ret), K(src_str));
+    LOG_USER_ERROR(OB_WRONG_COLUMN_NAME, static_cast<int32_t>(src_str.length()), src_str.ptr());
+  }
+  return ret;
 }
 
 int ObDbmsCatalogStats::parse_catalog_table_stats_params(sql::ParamStore &params,

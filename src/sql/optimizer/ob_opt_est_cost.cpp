@@ -809,10 +809,20 @@ int ObOptEstCost::calculate_external_table_non_partition_filter_sel(
   // For external tables: compute non-partition-column filter selectivity separately.
   // Partition-column filters' effect is already reflected in total_file_size via
   // partition pruning, so we must exclude them to avoid double-reduction.
+  //
+  // Only do this when real optimizer statistics have been collected. Without stats
+  // (use_default_stat()), the synthetic default column meta cannot yield a
+  // meaningful selectivity (ndv is derived from a guessed row count, so e.g.
+  // equality selectivity degenerates to 0), so we keep the pre-cost-model behavior
+  // and leave non_partition_filter_sel_ at its default 1.0 (no row reduction).
+  const OptTableMeta *opt_table_meta = OB_ISNULL(est_cost_info.table_metas_) ? NULL :
+      est_cost_info.table_metas_->get_table_meta_by_table_id(est_cost_info.table_id_);
   if (OB_NOT_NULL(est_cost_info.table_meta_info_)
       && EXTERNAL_TABLE == est_cost_info.table_meta_info_->table_type_
       && est_cost_info.table_filters_.count() > 0 && OB_NOT_NULL(path.parent_)
-      && OB_NOT_NULL(path.parent_->get_plan())) {
+      && OB_NOT_NULL(path.parent_->get_plan())
+      && OB_NOT_NULL(opt_table_meta)
+      && !opt_table_meta->use_default_stat()) {
     const ObTableSchema *table_schema = nullptr;
     ObSqlSchemaGuard *const schema_guard
         = path.parent_->get_plan()->get_optimizer_context().get_sql_schema_guard();
