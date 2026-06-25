@@ -161,12 +161,12 @@ int ObCompactionTTLUtil::check_ttl_column_valid(const ObTableSchema &table_schem
             ret = OB_NOT_SUPPORTED;
             COMMON_LOG(WARN, "mysql date type only support day, month, year interval", K(ret), K(ttl_exprs.at(0).column_name_), K(table_schema));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "date type without day, month, year interval is");
-          } else if (table_schema.is_partial_update_merge_engine() && table_schema.is_heap_organized_table()) {
+          } else if (ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE == merge_engine_type && table_schema.is_heap_organized_table()) {
             // 10. ttl table with partial update merge engine not support heap organized table
             ret = OB_NOT_SUPPORTED;
             COMMON_LOG(WARN, "ttl table with partial update merge engine not support heap organized table", K(ret), K(ttl_exprs.at(0).column_name_), K(table_schema));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "ttl table with partial update merge engine and heap organized table is");
-          } else if (table_schema.is_partial_update_merge_engine() && !column_schema->is_rowkey_column()) {
+          } else if (ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE == merge_engine_type && !column_schema->is_rowkey_column()) {
             // 11. partial update merge engine only support rowkey column ttl
             // TODO(menglan): we disable normal column ttl for partial update merge engine because of the primary key conflict check path.
             //                we should implement fuse logic in this path to support that.
@@ -184,10 +184,16 @@ int ObCompactionTTLUtil::check_ttl_column_valid(const ObTableSchema &table_schem
 
 int ObCompactionTTLUtil::check_alter_merge_engine_valid(const share::schema::ObTableSchema &table_schema,
                                                         const AlterTableSchema &alter_table_schema,
+                                                        const uint64_t tenant_id,
                                                         share::schema::ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
-  if (table_schema.is_append_only_merge_engine() && alter_table_schema.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::DYNAMIC_PARTITION_POLICY)) {
+  uint64_t tenant_data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    COMMON_LOG(WARN, "Fail to get data version", KR(ret));
+  }
+
+  if (OB_SUCC(ret) && table_schema.is_append_only_merge_engine() && alter_table_schema.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::DYNAMIC_PARTITION_POLICY)) {
     ret = OB_NOT_SUPPORTED;
     COMMON_LOG(WARN, "dynamic partition policy is not supported for append_only table", K(ret), K(table_schema));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "dynamic partition policy for append_only table is");
@@ -196,7 +202,7 @@ int ObCompactionTTLUtil::check_alter_merge_engine_valid(const share::schema::ObT
    1. append_only table can not have delete/update event trigger
    2. append_only table can not be alter to other merge engine
    3. dynamic partition policy is not supported for append_only table
-   4. Compaction TTL table can not alter to partial update merge engine
+   4. Compaction TTL table with index or invalid ttl column can not alter to partial update merge engine
    5. Deleting TTL table can not alter to append_only merge engine
   */
 
@@ -261,13 +267,30 @@ int ObCompactionTTLUtil::check_alter_merge_engine_valid(const share::schema::ObT
       }
     }
 
-    // 2.4 compaction ttl support append_only/delete_insert merge engine, deleting ttl support partial_update/delete_insert merge engine
+    // 2.4 compaction ttl support append_only/delete_insert/partial_update(no index and valid ttl column) merge engine, deleting ttl support partial_update/delete_insert merge engine
     // if alter ttl, we only need to check alter table schema is valid
     if (OB_SUCC(ret) && !is_alter_ttl) {
-      if (is_compaction_ttl && !is_compaction_ttl_merge_engine(alter_table_schema.get_merge_engine_type())) {
-        ret = OB_NOT_SUPPORTED;
-        COMMON_LOG(WARN, "invalid merge engine with compaction ttl definition", K(ret), K(table_schema));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table merge engine with compaction ttl definition is");
+      if (is_compaction_ttl) {
+        if (!is_compaction_ttl_merge_engine(alter_table_schema.get_merge_engine_type())) {
+          ret = OB_NOT_SUPPORTED;
+          COMMON_LOG(WARN, "invalid merge engine with compaction ttl definition", K(ret), K(table_schema));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table merge engine with compaction ttl definition is");
+        } else if (alter_table_schema.is_partial_update_merge_engine()) {
+          // 2.4.1 compaction ttl table with index can not alter to partial update merge engine
+          if (table_schema.get_simple_index_infos().count() > 0) {
+            ret = OB_NOT_SUPPORTED;
+            COMMON_LOG(WARN, "compaction ttl table with index can not alter to partial update merge engine", K(ret), K(table_schema));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table merge engine with compaction ttl definition and index is");
+          // 2.4.2 compaction ttl table with invalid ttl column can not alter to partial update merge engine
+          } else if (OB_FAIL(check_ttl_column_valid(table_schema,
+                                                    table_schema.get_ttl_definition(),
+                                                    table_schema.get_ttl_flag(),
+                                                    alter_table_schema.get_merge_engine_type(),
+                                                    tenant_data_version,
+                                                    tenant_id))) {
+            COMMON_LOG(WARN, "fail to check ttl column valid", KR(ret), K(table_schema), K(alter_table_schema));
+          }
+        }
       }
       if (OB_SUCC(ret) && is_deleting_ttl && !is_deleting_ttl_merge_engine(alter_table_schema.get_merge_engine_type())) {
         ret = OB_NOT_SUPPORTED;

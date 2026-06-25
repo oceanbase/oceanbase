@@ -437,6 +437,7 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
       } else if (OB_FAIL(ObCompactionTTLUtil::check_alter_merge_engine_valid(
                      *table_schema_,
                      alter_table_stmt->get_alter_table_arg().alter_table_schema_,
+                     session_info_->get_effective_tenant_id(),
                      *schema_checker_->get_schema_guard()))) {
         LOG_WARN("failed to check append_only engine valid", K(ret));
       }

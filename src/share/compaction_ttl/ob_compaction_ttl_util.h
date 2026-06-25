@@ -75,6 +75,7 @@ public:
   // this function now is just a placeholder for future feature support
   static int check_alter_merge_engine_valid(const share::schema::ObTableSchema &table_schema,
                                             const AlterTableSchema &alter_table_schema,
+                                            const uint64_t tenant_id,
                                             share::schema::ObSchemaGetterGuard &schema_guard);
 
   OB_INLINE static int check_create_ttl_schema_valid(const share::schema::ObTableSchema &table_schema,
@@ -195,6 +196,7 @@ private:
   template <typename Guard>
   static int check_aux_table_for_ttl_valid(const share::schema::ObTableSchema &table_schema,
                                            const ObTTLFlag &new_ttl_flag,
+                                           const ObMergeEngineType &merge_engine_type,
                                            Guard &schema_guard);
 };
 
@@ -303,6 +305,8 @@ int ObCompactionTTLUtil::check_alter_ttl_schema_valid(const share::schema::ObTab
 
   // When altering ttl table, must check the following constraints:
   if (alter_table_schema.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::TTL_DEFINITION)) {
+    const ObMergeEngineType new_merge_engine_type = alter_table_schema.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::MERGE_ENGINE_TYPE)
+          ? alter_table_schema.get_merge_engine_type() : table_schema.get_merge_engine_type();
     if (is_compaction_ttl_type(alter_table_schema)) {
       uint64_t tenant_data_version = 0;
       if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
@@ -356,7 +360,7 @@ int ObCompactionTTLUtil::check_alter_ttl_schema_valid(const share::schema::ObTab
       // 3. aux table of ttl table has some constraints
       //    [x] (ALTER TTL) make a table with aux table be ttl table
       if (OB_SUCC(ret) && alter_table_schema.has_ttl_definition()) {
-        if (OB_FAIL(check_aux_table_for_ttl_valid(table_schema, alter_table_schema.get_ttl_flag(), schema_guard))) {
+        if (OB_FAIL(check_aux_table_for_ttl_valid(table_schema, alter_table_schema.get_ttl_flag(), new_merge_engine_type, schema_guard))) {
           COMMON_LOG(WARN, "fail to check aux table for ttl valid", KR(ret), K(table_schema));
         }
       }
@@ -375,8 +379,6 @@ int ObCompactionTTLUtil::check_alter_ttl_schema_valid(const share::schema::ObTab
       // 6. check ttl column valid
       //    [x] (ALTER TTL) check ttl column valid when alter table
       if (OB_SUCC(ret) && alter_table_schema.has_ttl_definition()) {
-        const ObMergeEngineType new_merge_engine_type = alter_table_schema.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::MERGE_ENGINE_TYPE)
-          ? alter_table_schema.get_merge_engine_type() : table_schema.get_merge_engine_type();
         if (OB_FAIL(check_ttl_column_valid(table_schema, alter_table_schema.get_ttl_definition(), alter_table_schema.get_ttl_flag(), new_merge_engine_type, tenant_data_version, tenant_id))) {
           COMMON_LOG(WARN, "fail to check ttl column valid", KR(ret), K(table_schema), K(alter_table_schema));
         } else if (OB_FAIL(check_exist_user_defined_rowscn_column(alter_table_schema))) {
@@ -740,6 +742,7 @@ template <typename Guard>
 int ObCompactionTTLUtil::check_aux_table_for_ttl_valid(
     const share::schema::ObTableSchema &table_schema,
     const ObTTLFlag &new_ttl_flag,
+    const ObMergeEngineType &merge_engine_type,
     Guard &schema_guard)
 {
   int ret = OB_SUCCESS;
@@ -756,7 +759,8 @@ int ObCompactionTTLUtil::check_aux_table_for_ttl_valid(
 
   // 2. partial update ttl table don't support index
   //    [x] (ALTER TTL) add ttl to partial update table with index
-  if (OB_SUCC(ret) && table_schema.is_partial_update_merge_engine() && simple_index_infos.count() > 0 && new_ttl_flag.is_compaction_ttl()) {
+  //    [x] (ALTER TTL + MERGE ENGINE) alter merge engine to partial_update and add ttl to table with index
+  if (OB_SUCC(ret) && ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE == merge_engine_type && simple_index_infos.count() > 0 && new_ttl_flag.is_compaction_ttl()) {
     ret = OB_NOT_SUPPORTED;
     COMMON_LOG(WARN, "partial update table with index can't be ttl table", K(ret), K(table_schema));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "add ttl to partial update table with index is");

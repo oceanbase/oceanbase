@@ -2273,6 +2273,7 @@ int ObDDLService::set_new_table_options(
     if (OB_FAIL(ObCompactionTTLUtil::check_alter_merge_engine_valid(
                    orig_table_schema,
                    alter_table_schema,
+                   new_table_schema.get_tenant_id(),
                    schema_guard))) {
       LOG_WARN("fail to check append_only engine valid", K(ret), K(new_table_schema));
     } else if (OB_FAIL(ObCompactionTTLUtil::check_alter_ttl_schema_valid(
