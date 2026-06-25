@@ -150,7 +150,6 @@ private:
   int precheck_inc_ddl_capacity_(
       ObTabletHandle &tablet_handle,
       const ObDirectLoadType direct_load_type);
-  int precheck_full_ddl_capacity_(ObTabletHandle &tablet_handle);
 private:
   const ObDDLRedoLog *log_;
 };

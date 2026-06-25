@@ -545,40 +545,6 @@ int ObDDLRedoReplayExecutor::precheck_inc_ddl_capacity_(
   return ret;
 }
 
-int ObDDLRedoReplayExecutor::precheck_full_ddl_capacity_(ObTabletHandle &tablet_handle)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!tablet_handle.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tablet handle", KR(ret));
-  } else {
-    ObDDLKvMgrHandle ddl_kv_mgr_handle;
-    if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-      if (OB_ENTRY_NOT_EXIST == ret) {
-        ret = OB_SUCCESS; // ddl kv mgr not created yet, no capacity concern
-      } else {
-        LOG_WARN("failed to get ddl kv mgr", KR(ret));
-      }
-    } else if (OB_ISNULL(ddl_kv_mgr_handle.get_obj())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ddl kv mgr is null", KR(ret));
-    } else {
-      const int64_t ddl_kv_count = ddl_kv_mgr_handle.get_obj()->get_count();
-      if (ddl_kv_count >= ObTabletDDLKvMgr::MAX_DDL_KV_CNT_IN_STORAGE - 1) {
-        ret = OB_EAGAIN;
-        if (REACH_TIME_INTERVAL(10LL * 1000LL * 1000LL)) {
-          ObTaskController::get().allow_next_syslog();
-          LOG_INFO("full ddl kv slot is full on replay, skip allocating macro block and retry later",
-                   KR(ret), K(ddl_kv_count),
-                   "ls_id", ls_->get_ls_id(),
-                   "tablet_id", tablet_handle.get_obj()->get_tablet_id());
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 int ObDDLRedoReplayExecutor::do_full_replay_(
     ObTabletHandle &tablet_handle,
     blocksstable::ObMacroBlockWriteInfo &write_info,
@@ -595,10 +561,6 @@ int ObDDLRedoReplayExecutor::do_full_replay_(
     }
   } else if (!need_replay) {
     // do nothing
-  } else if (OB_FAIL(precheck_full_ddl_capacity_(tablet_handle))) {
-    if (OB_EAGAIN != ret) {
-      LOG_WARN("failed to precheck full ddl capacity", KR(ret));
-    }
   } else if (OB_FAIL(tablet_handle.get_obj()->fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
   } else if (!table_store_wrapper.get_member()->get_major_sstables().empty()) {
