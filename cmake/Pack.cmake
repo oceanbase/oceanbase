@@ -300,7 +300,6 @@ if (NOT OB_BUILD_OPENSOURCE)
     deps/oblib/src/lib/container/ob_vector.h
     deps/oblib/src/lib/container/ob_vector.ipp
     deps/oblib/src/lib/core_local/ob_core_local_storage.h
-    deps/oblib/src/lib/file/config.h
     deps/oblib/src/lib/file/ob_string_util.h
     deps/oblib/src/lib/hash/mprotect.h
     deps/oblib/src/lib/hash/ob_array_index_hash_set.h

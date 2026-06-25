@@ -187,7 +187,6 @@ echo "/usr/lib/debug/usr/bin/ob_error.debug" >> %{buildroot}/utils_debuginfo_fil
 %{_prefix}/include/alloc_struct.h
 %{_prefix}/include/block_set.h
 %{_prefix}/include/cond.h
-%{_prefix}/include/config.h
 %{_prefix}/include/data_buffer.h
 %{_prefix}/include/libobtable.h
 %{_prefix}/include/mprotect.h
