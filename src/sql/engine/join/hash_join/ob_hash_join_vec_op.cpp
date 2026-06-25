@@ -1724,6 +1724,18 @@ int ObHashJoinVecOp::do_sync_wait_all()
       ret = OB_SUCCESS;
     }
     LOG_TRACE("debug shared hash join wait all to drain", K(ret));
+    if (OB_FAIL(ret)) {
+      ObHashJoinVecInput *hj_input = static_cast<ObHashJoinVecInput*>(input_);
+      if (OB_ISNULL(hj_input)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("unexpected status: hash join input is null", K(ret));
+      } else if (0 == hj_input->shared_hj_info_ || OB_ISNULL(hj_input->get_shared_hj_info())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("unexpected status: hash join shared info is null", K(ret));
+      } else {
+        hj_input->set_error_code(ret);
+      }
+    }
   }
 
   return ret;
