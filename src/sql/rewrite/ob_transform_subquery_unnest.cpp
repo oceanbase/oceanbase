@@ -2753,10 +2753,10 @@ int ObTransformSubqueryUnnest::singlerow_do_unnest_subquery(SingleRowSQParam &pa
     LOG_WARN("failed to get vector assign values", K(ret));
   } else if (!is_vector_assign && OB_FAIL(query_refs.push_back(query_ref_expr))) {
     LOG_WARN("failed to push back query refs", K(ret));
-  } else if (OB_FAIL(subquery->get_select_exprs(select_exprs))) {
-    LOG_WARN("failed to get select exprs", K(ret));
   } else if (OB_FAIL(ObTransformUtils::decorrelate(subquery, query_ref_expr->get_exec_params()))) {
     LOG_WARN("failed to decorrelate subquery", K(ret));
+  } else if (OB_FAIL(subquery->get_select_exprs(select_exprs))) {
+    LOG_WARN("failed to get select exprs", K(ret));
   } else if (param.use_outer_join_ && !param.null_reject_select_idx_.is_empty()
              && OB_FAIL(singlerow_wrap_case_when_for_select_expr(param, select_exprs))) {
     LOG_WARN("failed to wrap case when for select expr", K(ret));
