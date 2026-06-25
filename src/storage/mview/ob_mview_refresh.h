@@ -20,6 +20,13 @@ namespace sql
 {
 class ObExecContext;
 } // namespace sql
+namespace transaction
+{
+namespace tablelock
+{
+struct ObTableLockHolderInfo;
+} // namespace tablelock
+} // namespace transaction
 namespace storage
 {
 class ObMViewRefreshStatsCollection;
@@ -93,6 +100,7 @@ private:
   int gen_complete_refresh_sql_string_(ObString &select_string,
                                        ObIAllocator &str_alloc);
   int check_adaptive_refresh_method(share::schema::ObMVRefreshMethod &adaptive_refresh_method);
+  static bool has_valid_exclusive_holder_(const ObIArray<transaction::tablelock::ObTableLockHolderInfo> &holder_info);
 private:
   sql::ObExecContext *ctx_;
   ObMViewRefreshCtx *refresh_ctx_;

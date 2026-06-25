@@ -34,6 +34,7 @@ using namespace share;
 using namespace rootserver;
 using namespace share::schema;
 using namespace sql;
+using namespace transaction::tablelock;
 
 /**
  * ObMViewRefresher
@@ -140,18 +141,49 @@ int ObMViewRefresher::lock_mview_for_refresh()
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = refresh_param_.tenant_id_;
   const uint64_t mview_id = refresh_param_.mview_id_;
-  if(OB_ISNULL(refresh_ctx_->trans_)) {
+  ObSEArray<ObTableLockHolderInfo, 4> holder_info;
+  if (OB_ISNULL(refresh_ctx_->trans_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null transaction", KR(ret), KPC(refresh_ctx_));
   } else if (OB_FAIL(ObMViewRefreshHelper::lock_mview(*refresh_ctx_->trans_, tenant_id, mview_id,
-                                                true /*try_lock*/))) {
-    if (OB_EAGAIN == ret || OB_TRY_LOCK_ROW_CONFLICT == ret) {
-      ret = OB_TASK_EXIST;
+                                                       true /*try_lock*/, &holder_info))) {
+    if (OB_EAGAIN == ret || OB_TRY_LOCK_ROW_CONFLICT == ret || OB_ERR_EXCLUSIVE_LOCK_CONFLICT == ret) {
+      LOG_WARN("mview lock conflict", KR(ret), K(tenant_id), K(mview_id),
+               "holder_count", holder_info.count(), K(holder_info));
+      // If holder_info contains a valid exclusive holder (non-default owner_id), a concurrent
+      // refresh task is running on this mview. Fast-fail with NOT_SUPPORTED so upper-layer
+      // callers know this is not retryable; otherwise fall back to TASK_EXIST.
+      if (has_valid_exclusive_holder_(holder_info)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("concurrent refresh detected, fast fail", KR(ret), K(tenant_id), K(mview_id));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "concurrent refresh on mview");
+      } else {
+        ret = OB_TASK_EXIST;
+      }
+    } else {
+      LOG_WARN("fail to lock mview for refresh", KR(ret), K(tenant_id), K(mview_id));
     }
-    LOG_WARN("fail to lock mview for refresh", K(ret), K(tenant_id), K(mview_id));
   }
-  DEBUG_SYNC(AFTER_LOCK_MVIEW_IN_REFRESH);
+  if (OB_SUCC(ret)) {
+    // Only hold the sync point after the lock is acquired. Triggering it on the
+    // failure path would trap a refresh that already lost the lock race, waiting
+    // for a signal that the test only sends after this call returns.
+    DEBUG_SYNC(AFTER_LOCK_MVIEW_IN_REFRESH);
+  }
   return ret;
+}
+
+bool ObMViewRefresher::has_valid_exclusive_holder_(
+    const ObIArray<transaction::tablelock::ObTableLockHolderInfo> &holder_info)
+{
+  bool found = false;
+  for (int64_t i = 0; !found && i < holder_info.count(); ++i) {
+    const ObTableLockHolderInfo &info = holder_info.at(i);
+    if (EXCLUSIVE == info.lock_mode_ && !info.owner_id_.is_default()) {
+      found = true;
+    }
+  }
+  return found;
 }
 
 int ObMViewRefresher::prepare_for_refresh()

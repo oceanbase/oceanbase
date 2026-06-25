@@ -109,7 +109,8 @@ public:
       schema_version_(-1),
       is_for_replace_(false),
       lock_priority_(ObTableLockPriority::NORMAL),
-      is_two_phase_lock_(false)
+      is_two_phase_lock_(false),
+      need_holder_info_(false)
   {}
   virtual ~ObLockParam() { reset(); }
   void reset();
@@ -133,7 +134,8 @@ public:
                K_(schema_version),
                K_(lock_priority),
                K_(is_two_phase_lock),
-               K_(is_for_replace));
+               K_(is_for_replace),
+               K_(need_holder_info));
   ObLockID lock_id_;
   ObTableLockMode lock_mode_;
   ObTableLockOwnerID owner_id_;
@@ -150,6 +152,8 @@ public:
   bool is_for_replace_;
   ObTableLockPriority lock_priority_;
   bool is_two_phase_lock_;
+  // when true, the remote side collects lock holder info on conflict
+  bool need_holder_info_;
 };
 
 struct ObReplaceLockParam : public ObLockParam
@@ -676,7 +680,8 @@ public:
     tx_result_ret_code_(common::OB_SUCCESS),
     tx_result_(),
     can_retry_(false),
-    success_pos_(-1) {}
+    success_pos_(-1),
+    holder_info_() {}
   ~ObTableLockTaskResult() {}
 
   int get_ret_code() const { return ret_code_; }
@@ -685,7 +690,7 @@ public:
   bool can_retry() const { return can_retry_; }
   int64_t get_success_pos() const { return success_pos_; }
 
-  TO_STRING_KV(K(ret_code_), K(tx_result_ret_code_), K(tx_result_), K(can_retry_), K(success_pos_));
+  TO_STRING_KV(K(ret_code_), K(tx_result_ret_code_), K(tx_result_), K(can_retry_), K(success_pos_), K_(holder_info));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableLockTaskResult);
 public:
@@ -695,6 +700,8 @@ public:
   // retry param
   bool can_retry_;          // whether we can retry this task or not
   int64_t success_pos_;     // the pos we need begin to retry
+  // best-effort holder info, populated on lock conflict
+  common::ObSEArray<ObTableLockHolderInfo, 1> holder_info_;
 };
 
 // --------------------- used for client request ------------------------------

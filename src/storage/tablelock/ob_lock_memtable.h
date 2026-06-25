@@ -146,7 +146,8 @@ public:
   // try to lock a object.
   int lock(const ObLockParam &param,
            storage::ObStoreCtx &ctx,
-           ObTableLockOp &lock_op);
+           ObTableLockOp &lock_op,
+           ObIArray<ObTableLockHolderInfo> *holder_info = nullptr);
   int unlock(storage::ObStoreCtx &ctx,
              const ObTableLockOp &unlock_op,
              const bool is_try_lock = true,
@@ -310,7 +311,8 @@ private:
 private:
   int lock_(const ObLockParam &param,
             storage::ObStoreCtx &ctx,
-            ObTableLockOp &lock_op);
+            ObTableLockOp &lock_op,
+            ObIArray<ObTableLockHolderInfo> *holder_info = nullptr);
   int unlock_(storage::ObStoreCtx &ctx,
               const ObTableLockOp &unlock_op,
               const bool is_try_lock = true,
