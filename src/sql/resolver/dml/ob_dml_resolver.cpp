@@ -10520,6 +10520,8 @@ int ObDMLResolver::resolve_rowid_pseudo_column(
         LOG_WARN("failed to check and get same rowid expr", K(ret));
       } else if (same_rowid_expr != NULL) {
         real_ref_expr = same_rowid_expr;
+      } else if (OB_FAIL(cur_stmt->get_pseudo_column_like_exprs().push_back(real_ref_expr))) {
+        LOG_WARN("failed to push back", K(ret));
         LOG_DEBUG("rowid_expr build success", K(*real_ref_expr));
       } else {
         LOG_DEBUG("rowid_expr build success", K(*real_ref_expr));
