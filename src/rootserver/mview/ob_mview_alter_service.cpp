@@ -565,7 +565,9 @@ int ObMviewAlterService::rebuild_container_schema_with_new_table(
 {
   int ret = OB_SUCCESS;
   ObSchemaChecker schema_checker;
-  if (OB_FAIL(schema_checker.init(schema_guard, orig_mv_schema.get_tenant_id()))) {
+  ObSqlSchemaGuard sql_schema_guard;
+  sql_schema_guard.set_schema_guard(&schema_guard);
+  if (OB_FAIL(schema_checker.init(sql_schema_guard, orig_mv_schema.get_tenant_id()))) {
     LOG_WARN("fail to init schema checker", K(ret));
   } else if (OB_FAIL(schema_checker.add_ddl_tmp_schema(&new_table_schema))) {
     LOG_WARN("fail to add ddl tmp schema", K(ret));
