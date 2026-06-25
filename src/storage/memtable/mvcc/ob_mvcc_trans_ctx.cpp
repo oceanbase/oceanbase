@@ -132,6 +132,19 @@ int ObITransCallback::log_submitted_cb()
   return ret;
 }
 
+int ObITransCallback::hotspot_log_submitted_cb(const transaction::ObTransID primary_tx_id,
+                                               const share::SCN log_scn,
+                                               const transaction::ObTxSEQ remap_seq)
+{
+  int ret = OB_SUCCESS;
+  if (need_submit_log_) {
+    if (OB_SUCC(hotspot_log_submitted(primary_tx_id, log_scn, remap_seq))) {
+      need_submit_log_ = false;
+    }
+  }
+  return ret;
+}
+
 int ObITransCallback::log_sync_cb(const SCN scn, ObIMemtable *&last_mt)
 {
   int ret = OB_SUCCESS;
@@ -716,6 +729,30 @@ void ObTransCallbackMgr::reset_pdml_stat()
   force_merge_multi_callback_lists();
 }
 
+int ObTransCallbackMgr::remove_callbacks_for_hotspot_redo(const share::SCN stop_scn,
+                                                          share::SCN &last_remove_scn,
+                                                          int64_t &remove_succ_cnt)
+{
+  int ret = OB_SUCCESS;
+
+  RDLockGuard guard(rwlock_);
+
+  if (OB_LIKELY(NULL == callback_lists_)) {
+    ret = callback_list_.remove_callbacks_for_hotspot_redo(stop_scn, last_remove_scn,
+                                                           remove_succ_cnt);
+  } else {
+    CALLBACK_LISTS_FOREACH(idx, list)
+    {
+      if (OB_FAIL(list->remove_callbacks_for_hotspot_redo(stop_scn, last_remove_scn,
+                                                          remove_succ_cnt))) {
+        TRANS_LOG(WARN, "remove callbacks for fast commit fail", K(ret), K(idx), KPC(list));
+      }
+    }
+  }
+
+  return ret;
+}
+
 // only for replay
 // @callback_list_idx: the current replay thread replayed queue
 //            for serial replay, the queue maybe replay logs belongs to other callback-list
@@ -771,6 +808,28 @@ int ObTransCallbackMgr::remove_callbacks_for_fast_commit(const ObCallbackScopeAr
   ARRAY_FOREACH(scopes, i) {
     if (OB_FAIL(scopes.at(i).host_->remove_callbacks_for_fast_commit(stop_scn))) {
       TRANS_LOG(WARN, "remove callbacks for fast commit fail", K(ret), K(i), KPC(scopes.at(i).host_));
+    }
+  }
+  return ret;
+}
+
+// Remove all synced callbacks for hotspot rollback replay.
+// In hotspot aggregation, multiple secondary txs' remapped callbacks coexist
+// in the same callback list, violating the tip-rollback assumption of
+// remove_callbacks_for_rollback_to. This method uses fast commit's callback
+// traversal mechanism to safely remove all callbacks.
+int ObTransCallbackMgr::remove_all_callbacks_for_replay()
+{
+  int ret = OB_SUCCESS;
+  if (need_merge_) { // OLD (before 4.2.4)
+    if (OB_FAIL(callback_list_.remove_all_callbacks_for_replay())) {
+      TRANS_LOG(WARN, "remove all callbacks for replay failed", K(ret));
+    }
+  } else { // NEW (since 4.2.4)
+    CALLBACK_LISTS_FOREACH(idx, list) {
+      if (OB_FAIL(list->remove_all_callbacks_for_replay())) {
+        TRANS_LOG(WARN, "remove all callbacks for replay failed", K(ret), K(idx));
+      }
     }
   }
   return ret;
@@ -1400,15 +1459,86 @@ int ObTransCallbackMgr::log_submitted(const ObCallbackScopeArray &callbacks, int
       }
       if (OB_SUCC(ret)) {
         // update log cursor
-        ret = scope.host_->submit_log_succ(callbacks.at(i));
+        ret = scope.host_->submit_log_succ(scope);
       }
     } else {
+      // ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "empty callback scope", K(ret), K(scope), KPC(this));
+// #ifdef ENABLE_DEBUG_LOG
+//       ob_abort();
+// #endif
+    }
+  }
+  return ret;
+}
+
+int ObTransCallbackMgr::hotspot_log_submitted(const ObTransID primary_tx_id,
+                                              const ObCallbackScope &scope,
+                                              const share::SCN log_scn,
+                                              int &submitted_cnt)
+{
+  int ret = OB_SUCCESS;
+  const bool need_remap = scope.remap_from_seq_.is_valid();
+  transaction::ObTxSEQ cur_remap_seq = scope.remap_from_seq_;
+
+  if (!scope.is_empty()) {
+    int cnt = 0;
+    ObITransCallbackIterator cursor = scope.start_;
+    do {
+      ObITransCallback *iter = *cursor;
+      // Compute per-callback remap_seq: valid only when need_remap, otherwise invalid (no remap).
+      // The remap_seq is passed into hotspot_log_submitted_cb → callback::hotspot_log_submitted(),
+      // where tnode->seq_no_ is modified alongside tnode->tx_id_ and tnode->scn.
+      transaction::ObTxSEQ remap_seq;
+      if (need_remap) {
+        remap_seq = cur_remap_seq;
+        ++cur_remap_seq;
+      }
+      if (!iter->need_submit_log()) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(ERROR, "callback no need submit log", K(ret), KPC(iter), KPC(this));
+#ifdef ENABLE_DEBUG_LOG
+        ob_abort();
+#endif
+      } else if (OB_FAIL(iter->hotspot_log_submitted_cb(primary_tx_id, log_scn, remap_seq))) {
+        TRANS_LOG(ERROR, "fail to log_submitted cb", K(ret), K(remap_seq), KPC(iter));
+#ifdef ENABLE_DEBUG_LOG
+        ob_abort();
+#endif
+      }
+      ++cnt;
+      ++submitted_cnt;
+    } while (OB_SUCC(ret) && cursor++ != scope.end_);
+    // Verify remap seq was fully consumed: cur_remap_seq should be exactly remap_to_seq_ + 1.
+    if (OB_SUCC(ret) && need_remap) {
+      if (cur_remap_seq != scope.remap_to_seq_ + 1) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(ERROR, "hotspot remap: remap seq not fully consumed",
+                  K(ret), K(cur_remap_seq), K(scope.remap_to_seq_),
+                  K(scope), KPC(this));
+#ifdef ENABLE_DEBUG_LOG
+        ob_abort();
+#endif
+      }
+    }
+    if (OB_SUCC(ret) && cnt != scope.cnt_) {
       ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "empty callback scope", K(ret), K(scope), KPC(this));
+      TRANS_LOG(ERROR, "callback scope incorrect", K(ret), "iter_count", cnt, K(scope.cnt_),
+                K(scope), KPC(this));
 #ifdef ENABLE_DEBUG_LOG
       ob_abort();
 #endif
     }
+    if (OB_SUCC(ret)) {
+      // update log cursor
+      ret = scope.host_->submit_log_succ(scope);
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "empty callback scope", K(ret), K(scope), KPC(this));
+#ifdef ENABLE_DEBUG_LOG
+    ob_abort();
+#endif
   }
   return ret;
 }
@@ -1459,6 +1589,88 @@ int ObTransCallbackMgr::log_sync_succ(const ObCallbackScopeArray &callbacks,
     update_serial_sync_scn_(scn);
   }
 
+  return ret;
+}
+
+int ObTransCallbackMgr::hotspot_log_sync_succ(const ObCallbackScopeArray &callbacks,
+                                               const share::SCN scn,
+                                               int &sync_cnt,
+                                               bool &remap_verify_failed)
+{
+  int ret = OB_SUCCESS;
+  sync_cnt = 0;
+  remap_verify_failed = false;
+  ObIMemtable *last_mt = NULL;
+  ARRAY_FOREACH(callbacks, i) {
+    const ObCallbackScope &scope = callbacks.at(i);
+    if (!scope.is_empty()) {
+      const bool need_remap_verify = scope.remap_from_seq_.is_valid();
+      transaction::ObTxSEQ expected_remap_seq = scope.remap_from_seq_;
+      int cnt = 0;
+      ObITransCallbackIterator cursor = scope.start_;
+      do {
+        ObITransCallback *iter = *cursor;
+        if (OB_UNLIKELY(iter->need_submit_log())) {
+          TRANS_LOG(WARN, "NOTICE: callback has not marked submitted", KPC(iter));
+        }
+        if (OB_FAIL(iter->log_sync_cb(scn, last_mt))) {
+          TRANS_LOG(ERROR, "fail to log_sync cb", K(ret), KPC(iter));
+          ob_abort();
+        } else if (check_dup_tablet_(iter)) {
+          // dup table check
+        }
+        // Verify remap invariants inside the safe callback iteration:
+        // 1. callback seq_no must still be in [orig_from, orig_to] (we never modify it)
+        // 2. tnode seq_no must match expected remap seq (we modified it in log_submitted)
+        if (OB_SUCC(ret) && need_remap_verify) {
+          const transaction::ObTxSEQ cb_seq = iter->get_seq_no();
+          if (!cb_seq.is_valid() || cb_seq < scope.orig_from_seq_ || cb_seq > scope.orig_to_seq_) {
+            remap_verify_failed = true;
+            TRANS_LOG(ERROR, "hotspot sync: callback seq out of orig range",
+                      K(ret), K(cb_seq), K(scope), KPC(this));
+          }
+          // Verify tnode remap seq. Table lock and ext info callbacks have no tnode,
+          // their seq remap is done at fill_redo serialization level — skip tnode check
+          // for these known types. For any other callback type, tnode_seq invalid is unexpected.
+          transaction::ObTxSEQ tnode_seq = iter->get_tnode_seq_no();
+          if (tnode_seq.is_valid()) {
+            if (tnode_seq != expected_remap_seq) {
+              remap_verify_failed = true;
+              TRANS_LOG(ERROR, "hotspot sync: tnode remap seq verification failed",
+                        K(ret), K(expected_remap_seq), K(tnode_seq), K(scope), KPC(this));
+            }
+          } else {
+            const MutatorType mt = iter->get_mutator_type();
+            if (mt != MutatorType::MUTATOR_TABLE_LOCK && mt != MutatorType::MUTATOR_ROW_EXT_INFO) {
+              remap_verify_failed = true;
+              TRANS_LOG(ERROR, "hotspot sync: unexpected callback type with invalid tnode seq",
+                        K(ret), K(expected_remap_seq), K(tnode_seq), K(mt), K(scope), KPC(this));
+            }
+          }
+          ++expected_remap_seq;
+        }
+        ++cnt;
+      } while (OB_SUCC(ret) && cursor++ != scope.end_);
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(scope.host_->sync_log_succ(scn, scope.cnt_))) {
+          TRANS_LOG(ERROR, "sync succ fail", K(ret));
+        } else {
+          sync_cnt += scope.cnt_;
+        }
+      }
+      // Verify remap was fully consumed.
+      if (OB_SUCC(ret) && need_remap_verify && !remap_verify_failed) {
+        if (expected_remap_seq != scope.remap_to_seq_ + 1) {
+          remap_verify_failed = true;
+          TRANS_LOG(ERROR, "hotspot sync: remap seq not fully consumed",
+                    K(ret), K(expected_remap_seq), K(scope.remap_to_seq_),
+                    K(scope), KPC(this));
+        }
+      }
+    } else {
+      ob_abort();
+    }
+  }
   return ret;
 }
 
@@ -1821,6 +2033,35 @@ int ObMvccRowCallback::log_submitted()
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "memtable is NULL", K(ret));
   }
+  return ret;
+}
+
+int ObMvccRowCallback::hotspot_log_submitted(const transaction::ObTransID primary_tx_id,
+                                             const share::SCN log_scn,
+                                             const transaction::ObTxSEQ remap_seq)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_NOT_NULL(memtable_)) {
+
+    if (OB_FAIL(dec_unsubmitted_cnt_())) {
+      TRANS_LOG(ERROR, "dec unsubmitted cnt failed", K(ret), K(*this));
+    } else {
+      tnode_->tx_id_ = primary_tx_id;
+      tnode_->fill_scn(log_scn);
+      // Remap tnode seq_no at the same level as tx_id/scn modification.
+      // Only modify tnode->seq_no_, callback's own seq_no_ stays unchanged.
+      if (remap_seq.is_valid()) {
+        tnode_->set_seq_no(remap_seq);
+      }
+    }
+    TRANS_LOG(DEBUG, "fill hotspot tx_id, scn and seq", K(ret), K(primary_tx_id), K(log_scn),
+              K(remap_seq), KPC(tnode_));
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "memtable is NULL", K(ret));
+  }
+
   return ret;
 }
 
@@ -2444,6 +2685,11 @@ int ObMvccRowCallback::dec_unsubmitted_cnt_()
   int ret = OB_SUCCESS;
 
   if (OB_NOT_NULL(memtable_)) {
+    // for debug
+    //if (memtable_->get_unsubmitted_cnt() <= 1) {
+    //  TRANS_LOG(INFO, "try dec last unsubmit cnt", K(ret), KPC(memtable_),
+    //            KPC(this), KPC(tnode_));
+    //}
     ret = memtable_->dec_unsubmitted_cnt();
     ctx_.dec_unsubmitted_cnt();
   }

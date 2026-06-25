@@ -97,6 +97,7 @@ struct ObTxnFreeRouteCtx {
     in_txn_before_handle_request_ = false;
     can_free_route_ = false;
     is_fallbacked_ = false;
+    disabled_by_hint_ = false;
     MEMSET(state_sync_infos_, 0, sizeof(state_sync_infos_));
     reset_changed_();
     calculated_ = true;
@@ -117,6 +118,8 @@ struct ObTxnFreeRouteCtx {
   bool is_idle_released() const { return flag_.is_idle_released(); }
   bool has_calculated() const { return calculated_; }
   void set_calculated() { calculated_ = true; }
+  void set_disabled_by_hint() { disabled_by_hint_ = true; }
+  bool is_disabled_by_hint() const { return disabled_by_hint_; }
   int64_t get_local_version() const { return local_version_; }
   int64_t get_global_version() const { return global_version_; }
   void inc_update_global_version(const int64_t v) { if (global_version_ < v) { global_version_ = v; } }
@@ -142,7 +145,7 @@ struct ObTxnFreeRouteCtx {
       global_version_water_mark_ = version;
     }
   }
-  bool is_support_proxy() const { return is_proxy_support_; }
+  bool is_proxy_support() const { return is_proxy_support_; }
 private:
   void reset_changed_() {
     _changed_ = false;
@@ -202,6 +205,7 @@ private:
   //   reset pre handle request
   //   setup post handle request, remember fallback decision
   bool is_fallbacked_;
+  bool disabled_by_hint_; // disabled by hint, will fallback to fixed route
   // record each state's synced info, used to reject stale and duplicate sync
   struct StateSyncInfo {
     StateSyncInfo(): last_backend_sess_id_(0), last_version_(0) {}
@@ -250,6 +254,7 @@ public:
                K_(in_txn_before_handle_request),
                K_(can_free_route),
                K_(is_fallbacked),
+               K_(disabled_by_hint),
                K_(static_changed),
                K_(dynamic_changed),
                K_(parts_changed),

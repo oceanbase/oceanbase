@@ -43,6 +43,7 @@
 #include "common/storage/ob_sequence.h"
 #include "ob_tx_elr_util.h"
 #include "storage/tx/ob_dup_table_util.h"
+#include "storage/tx/ob_tx_hotspot_define.h"
 #include "ob_tx_free_route.h"
 #include "ob_tx_free_route_msg.h"
 #include "ob_tablet_to_ls_cache.h"
@@ -248,6 +249,18 @@ public:
                            const int64_t buf_len,
                            const int64_t request_id = 0,
                            const ObRegisterMdsFlag &register_flag = ObRegisterMdsFlag());
+
+  int sync_hotspot_legality_validation(const ObTxPart &participant,
+                                       const ObTransID primary_tx_id,
+                                       const ObAggregatedTxIDArray &aggre_members,
+                                       const int64_t stmt_timeout = -1);
+  int hotspot_rollback_to(const ObTxPart &participant,
+                          const ObTransID &primary_tx_id,
+                          const ObIArray<ObTransID> &rollback_tx_ids);
+  int handle_hotspot_dispatch_redo_msg(const ObHotspotDispatchRedoMsg &msg,
+                                            obrpc::ObTransRpcResult &result);
+  int handle_hotspot_submit_other_redo_msg(const ObHotspotSubmitOtherRedoMsg &msg,
+                                           obrpc::ObTransRpcResult &result);
   ObTxELRUtil &get_tx_elr_util() { return elr_util_; }
   int create_tablet(const common::ObTabletID &tablet_id, const share::ObLSID &ls_id)
   {

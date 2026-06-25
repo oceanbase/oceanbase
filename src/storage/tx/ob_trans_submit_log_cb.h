@@ -43,6 +43,7 @@ namespace transaction
 class ObTransService;
 class ObPartTransCtx;
 class ObTxLogCbGroup;
+class ObTxRedoExtractArg;
 }
 
 namespace transaction
@@ -79,6 +80,7 @@ protected:
 };
 
 typedef common::ObSEArray<memtable::ObCallbackScope, 1> ObCallbackScopeArray;
+typedef common::ObSEArray<uint64_t, 4> TxRedoHotspotIndexArray;
 
 class ObTxLogCb : public ObTxBaseLogCb,
                   public common::ObDLinkBase<ObTxLogCb>
@@ -92,6 +94,7 @@ public:
   void reset();
   void reset_tx_op_array();
   void reuse();
+  void reuse_without_busy();
   void destroy() { reset(); }
   ObTxLogType get_last_log_type() const;
   // ObTransCtx *get_ctx() { return ctx_; }
@@ -118,6 +121,8 @@ public:
   void set_callbacked() { ATOMIC_STORE(&is_callbacked_, true); }
   bool is_callbacked() const { return ATOMIC_LOAD(&is_callbacked_); }
   void set_busy() { ATOMIC_STORE(&is_busy_, true); }
+  bool try_acquire_busy() { return ATOMIC_BCAS(&is_busy_, false, true); }
+  void release_busy() { ATOMIC_STORE(&is_busy_, false); }
   bool is_busy() const { return ATOMIC_LOAD(&is_busy_); }
   ObTxLogCbGroup *get_group_ptr() { return group_ptr_; }
   // bool is_dynamic() const { return is_dynamic_; }
@@ -134,9 +139,21 @@ public:
   void set_first_part_scn(const share::SCN &first_part_scn) { first_part_scn_ = first_part_scn; }
   share::SCN get_first_part_scn() const { return first_part_scn_; }
 
+  void set_hotspot_index(const int64_t index) { ATOMIC_STORE(&hotspot_tx_index_,index); }
+  void reset_hotspot_tx();
+  int64_t get_hotspot_index() const { return ATOMIC_LOAD(&hotspot_tx_index_); }
+
+  bool is_idle_hotspot_cb() const;
+  bool is_hotspot_logging() const { return ATOMIC_LOAD(&hotspot_tx_index_) >= 0; }
+  int append_hotspot_arg(const int64_t hotspot_index);
+  int64_t get_hotspot_task(const int64_t i) { return hotspot_tx_task_[i]; }
+
   int copy(const ObTxLogCb &other);
   //bool is_callbacking() const { return is_callbacking_; }
 public:
+
+  static const int64_t MAX_BATCH_HOTSPOT_TX_TASK_COUNT  = 1;
+
   INHERIT_TO_STRING_KV("ObTxBaseLogCb",
                        ObTxBaseLogCb,
                        KP(this),
@@ -148,12 +165,13 @@ public:
                        K(cb_arg_array_),
                        K(first_part_scn_),
                        K(callbacks_.count()),
+                       K(hotspot_tx_index_),
                        KPC(group_ptr_));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTxLogCb);
 
-// private:
-public:
+private:
+// public:
   ObTxLogCbGroup * group_ptr_;
   bool is_callbacked_;
   bool is_busy_;
@@ -170,6 +188,9 @@ public:
   storage::ObTxOpArray *tx_op_array_;
   storage::ObUndoStatusNode *undo_node_;
   //bool is_callbacking_;
+
+  int64_t hotspot_tx_task_[MAX_BATCH_HOTSPOT_TX_TASK_COUNT];
+  int64_t hotspot_tx_index_;
 };
 
 struct ObTxLogCbRecord

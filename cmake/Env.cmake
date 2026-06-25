@@ -155,6 +155,8 @@ if(OB_BUILD_CLOSE_MODULES)
   # 默认使用OB_USE_DRCMSG
   ob_define(OB_USE_DRCMSG ON)
   add_definitions(-DOB_USE_DRCMSG)
+  # 热点行聚合优化功能
+  ob_define(OB_HOTSPOT_GROUP_COMMIT ON)
 endif()
 
 # 下面开始逻辑控制
@@ -200,6 +202,10 @@ endif()
 
 if(OB_BUILD_LOG_STORAGE_COMPRESS)
   add_definitions(-DOB_BUILD_LOG_STORAGE_COMPRESS)
+endif()
+
+if(OB_HOTSPOT_GROUP_COMMIT)
+  add_definitions(-DOB_HOTSPOT_GROUP_COMMIT)
 endif()
 
 if(OB_BUILD_DBLINK)

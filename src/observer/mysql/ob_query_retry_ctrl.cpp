@@ -40,6 +40,15 @@ void ObRetryPolicy::try_packet_retry(ObRetryParam &v) const
   const ObMultiStmtItem &multi_stmt_item = v.ctx_.multi_stmt_item_;
   if (v.force_local_retry_) {
     v.retry_type_ = RETRY_TYPE_LOCAL;
+  } else if (multi_stmt_item.is_batch_group_commit()) {
+    if (v.local_retry_times_ <= 5) {
+      v.retry_type_ = RETRY_TYPE_LOCAL;
+    } else if (!THIS_WORKER.can_retry()) {
+      v.retry_type_ = RETRY_TYPE_LOCAL;
+    } else {
+      v.retry_type_ = RETRY_TYPE_PACKET;
+      THIS_WORKER.set_need_retry();
+    }
   } else if (multi_stmt_item.is_batched_multi_stmt()) {
     // in batch optimization, can't do packet retry
     v.retry_type_ = RETRY_TYPE_LOCAL;
@@ -495,7 +504,6 @@ public:
       if (v.force_local_retry_ || (v.local_retry_times_ <= 1 && !v.result_.is_pl_stmt(v.result_.get_stmt_type()))) {
         v.retry_type_ = RETRY_TYPE_LOCAL;
       } else {
-        const ObMultiStmtItem &multi_stmr_item = v.ctx_.multi_stmt_item_;
         try_packet_retry(v);
       }
     }

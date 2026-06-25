@@ -258,7 +258,12 @@ public:
   bool try_erase() { return 1 == ATOMIC_VCAS(&ref_count_, 1, 0); }
   void set_ps_need_parameterization(bool ps_need_parameterization) { ps_need_parameterization_ = ps_need_parameterization; }
   bool is_ps_need_parameterization() const { return ps_need_parameterization_; }
-
+  void set_is_group_commit(bool is_group_commit) { is_group_commit_ = is_group_commit; }
+  bool is_group_commit() const { return is_group_commit_; }
+  // Group commit pk/uk parameter indices
+  int set_group_commit_key_params_idx(const common::ObIArray<int64_t> &idx_array);
+  const common::ObIArray<int64_t> &get_group_commit_key_params_idx() const { return group_commit_key_params_idx_; }
+  bool has_group_commit_key_params() const { return group_commit_key_params_idx_.count() > 0; }
   DECLARE_VIRTUAL_TO_STRING;
 
 private:
@@ -301,6 +306,8 @@ private:
   ObFixedArray<int64_t, common::ObIAllocator> raw_params_idx_;
   stmt::StmtType literal_stmt_type_;
   bool ps_need_parameterization_;
+  bool is_group_commit_;
+  ObFixedArray<int64_t, common::ObIAllocator> group_commit_key_params_idx_;
 };
 
 struct TypeInfo {
@@ -365,7 +372,8 @@ public:
     ps_stmt_checksum_(0),
     ref_cnt_(0),
     inner_stmt_id_(0),
-    num_of_returning_into_(common::OB_INVALID_STMT_ID) // num_of_returning_into_ init as -1
+    num_of_returning_into_(common::OB_INVALID_STMT_ID), // num_of_returning_into_ init as -1
+    is_group_commit_(false)
   {
     param_types_.set_attr(ObMemAttr(tenant_id, "ParamTypes"));
     param_type_infos_.set_attr(ObMemAttr(tenant_id, "ParamTypesInfo"));
@@ -403,6 +411,16 @@ public:
 
   inline void set_inner_stmt_id(ObPsStmtId id) { inner_stmt_id_ = id; }
   inline ObPsStmtId get_inner_stmt_id() { return inner_stmt_id_; }
+  inline void set_is_group_commit(const bool is_group_commit) { is_group_commit_ = is_group_commit; }
+  inline bool is_group_commit() const { return is_group_commit_; }
+  // Group commit pk/uk parameter indices
+  int set_group_commit_key_params_idx(const common::ObIArray<int64_t> &idx_array) {
+    return group_commit_key_params_idx_.assign(idx_array);
+  }
+  const common::ObSEArray<int64_t, 4> &get_group_commit_key_params_idx() const {
+    return group_commit_key_params_idx_;
+  }
+  bool has_group_commit_key_params() const { return group_commit_key_params_idx_.count() > 0; }
 
   TO_STRING_KV(K_(stmt_id),
                K_(stmt_type),
@@ -410,7 +428,9 @@ public:
                K_(ref_cnt),
                K_(ps_stmt_checksum),
                K_(inner_stmt_id),
-               K_(num_of_returning_into));
+               K_(num_of_returning_into),
+               K_(is_group_commit),
+               K_(group_commit_key_params_idx));
 
 private:
   ObPsStmtId stmt_id_;
@@ -422,6 +442,9 @@ private:
   int64_t ref_cnt_;
   ObPsStmtId inner_stmt_id_;
   int32_t num_of_returning_into_;
+  bool is_group_commit_;
+  ObFixedArray<int32_t, common::ObIAllocator> group_key_param_pos_arr_;
+  common::ObSEArray<int64_t, 4> group_commit_key_params_idx_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPsSessionInfo);
@@ -463,7 +486,9 @@ struct PsCacheInfoCtx
     raw_params_(NULL),
     fixed_param_idx_(NULL),
     stmt_type_(stmt::T_NONE),
-    ps_need_parameterization_(true) {}
+    ps_need_parameterization_(true),
+    is_group_commit_(false),
+    group_commit_param_idx_(NULL) {}
 
 
   TO_STRING_KV(K_(param_cnt),
@@ -474,7 +499,8 @@ struct PsCacheInfoCtx
                K_(raw_sql),
                K_(no_param_sql),
                K_(stmt_type),
-               K_(ps_need_parameterization));
+               K_(ps_need_parameterization),
+               K_(is_group_commit));
 
   int64_t param_cnt_;
   int32_t num_of_returning_into_;
@@ -487,6 +513,8 @@ struct PsCacheInfoCtx
   common::ObIArray<int64_t> *fixed_param_idx_;
   stmt::StmtType stmt_type_;
   bool ps_need_parameterization_;
+  bool is_group_commit_;
+  const common::ObIArray<int64_t> *group_commit_param_idx_;
 };
 
 } //end of namespace sql

@@ -96,6 +96,10 @@ public:
                                 ObUpdRtDef &upd_rtdef,
                                 bool &is_skipped,
                                 ObTableModifyOp &dml_op);
+ static int process_group_commit_update_row(const ObUpdCtDef &upd_ctdef,
+                                            ObUpdRtDef &upd_rtdef,
+                                            bool &is_skipped,
+                                            ObTableModifyOp &dml_op);
   static int insert_row(const ObInsCtDef &ins_ctdef,
                         ObInsRtDef &ins_rtdef,
                         const ObDASTabletLoc *tablet_loc,

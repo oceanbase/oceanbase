@@ -24,7 +24,8 @@ namespace memtable
 // Represents the callbacks in [start_, end_]
 struct ObCallbackScope
 {
-  ObCallbackScope() : start_(nullptr), end_(nullptr), host_(nullptr), cnt_(0), data_size_(0) {}
+  ObCallbackScope() : start_(nullptr), end_(nullptr), host_(nullptr), cnt_(0), data_size_(0),
+      orig_from_seq_(), orig_to_seq_(), remap_from_seq_(), remap_to_seq_() {}
   ~ObCallbackScope() {}
   void reset()
   {
@@ -33,6 +34,10 @@ struct ObCallbackScope
     host_ = nullptr;
     cnt_ = 0;
     data_size_ = 0;
+    orig_from_seq_.reset();
+    orig_to_seq_.reset();
+    remap_from_seq_.reset();
+    remap_to_seq_.reset();
   }
   bool is_empty() const { return (nullptr == *start_) || (nullptr == *end_); }
   ObITransCallbackIterator start_;
@@ -40,7 +45,14 @@ struct ObCallbackScope
   ObTxCallbackList *host_;
   int32_t cnt_;
   int64_t data_size_;
-  TO_STRING_KV("start", OB_P(*start_), "end", OB_P(*end_), K_(cnt), K_(data_size), KP_(host));
+  // Original callback seq range (inclusive), set when seq is remapped
+  transaction::ObTxSEQ orig_from_seq_;
+  transaction::ObTxSEQ orig_to_seq_;
+  // Remapped seq range (inclusive), invalid if not remapped
+  transaction::ObTxSEQ remap_from_seq_;
+  transaction::ObTxSEQ remap_to_seq_;
+  TO_STRING_KV("start", OB_P(*start_), "end", OB_P(*end_), K_(cnt), K_(data_size), KP_(host),
+               K_(orig_from_seq), K_(orig_to_seq), K_(remap_from_seq), K_(remap_to_seq));
 };
 typedef ObIArray<ObCallbackScope> ObCallbackScopeArray;
 struct ObRedoLogSubmitHelper
@@ -87,12 +99,17 @@ struct ObTxFillRedoCtx final
     buf_pos_(-1),
     callback_scopes_(callback_scopes),
     data_size_(0),
+    min_seq_no_(),
     max_seq_no_(),
     fill_count_(0),
     is_all_filled_(false),
     fill_time_(0),
     last_log_blocked_memtable_(NULL),
-    list_log_epoch_arr_()
+    list_log_epoch_arr_(),
+    max_seq_no_limit_(),
+    remapped_next_seq_(),
+    orig_min_seq_no_(),
+    orig_max_seq_no_()
   {
     list_log_epoch_arr_.set_max_print_count(256);
   }
@@ -106,12 +123,25 @@ struct ObTxFillRedoCtx final
   int64_t buf_pos_;
   ObSEArray<ObCallbackScope,1> &callback_scopes_;
   int64_t data_size_;
+  transaction::ObTxSEQ min_seq_no_;
   transaction::ObTxSEQ max_seq_no_;
   int fill_count_;         // number of callbacks was filled
   bool is_all_filled_;     // no remains, all callbacks was filled
   int64_t fill_time_;      // time used
   ObIMemtable *last_log_blocked_memtable_;
   ObSEArray<RedoLogEpoch, 1> list_log_epoch_arr_; // record each list's next log epoch
+  transaction::ObTxSEQ max_seq_no_limit_;
+  // "next-to-assign" remap cursor, following the half-open interval convention [begin, next).
+  // - invalid: remap is not active (normal path)
+  // - valid:   points to the next seq_no to be assigned to a redo entry.
+  //            After each successful append, the cursor advances by 1.
+  //            The last assigned seq is (remapped_next_seq_ - 1).
+  transaction::ObTxSEQ remapped_next_seq_;
+  // Original callback seq_no range (before remap), tracked for debug traceability.
+  // These reflect the secondary tx's own seq space, while min_seq_no_/max_seq_no_
+  // reflect the remapped seq space written into the redo buffer.
+  transaction::ObTxSEQ orig_min_seq_no_;
+  transaction::ObTxSEQ orig_max_seq_no_;
 public:
   bool is_empty() const { return fill_count_ == 0; }
   bool not_empty() const { return fill_count_ > 0; }
@@ -127,7 +157,12 @@ public:
                K_(is_all_filled),
                K_(list_log_epoch_arr),
                KP_(last_log_blocked_memtable),
-               K_(callback_scopes));
+               K_(callback_scopes),
+              K_(min_seq_no),
+               K_(max_seq_no_limit),
+               K_(remapped_next_seq),
+               K_(orig_min_seq_no),
+               K_(orig_max_seq_no));
 };
 
 class ObCallbackListLogGuard

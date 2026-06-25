@@ -39,6 +39,9 @@
 #include "observer/mysql/obmp_process_info.h"
 #include "observer/mysql/obmp_debug.h"
 #include "observer/mysql/obmp_refresh.h"
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+#include "observer/mysql/obmp_stmt_group_execute.h"
+#endif
 
 #include "logservice/palf/log_rpc_processor.h"
 #include "sql/das/ob_das_parallel_handler.h"
@@ -242,7 +245,6 @@ int ObSrvMySQLXlator::translate(rpc::ObRequest &req, ObReqProcessor *&processor)
           MYSQL_PROCESSOR(ObMPChangeUser, gctx_);
           MYSQL_PROCESSOR(ObMPStatistic, gctx_);
           MYSQL_PROCESSOR(ObMPStmtPrepare, gctx_);
-          MYSQL_PROCESSOR(ObMPStmtExecute, gctx_);
           MYSQL_PROCESSOR(ObMPStmtFetch, gctx_);
           MYSQL_PROCESSOR(ObMPStmtReset, gctx_);
           MYSQL_PROCESSOR(ObMPStmtPrexecute, gctx_);
@@ -252,6 +254,19 @@ int ObSrvMySQLXlator::translate(rpc::ObRequest &req, ObReqProcessor *&processor)
           MYSQL_PROCESSOR(ObMPResetConnection, gctx_);
           MYSQL_PROCESSOR(ObMPSetOption, gctx_);
           MYSQL_PROCESSOR(ObMPAuthResponse, gctx_);
+
+          case obmysql::COM_STMT_EXECUTE: {
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+            if (req.has_group_commit_agg_info()) {
+              NEW_MYSQL_PROCESSOR(ObMPStmtGroupExecute, gctx_);
+            } else {
+              NEW_MYSQL_PROCESSOR(ObMPStmtExecute, gctx_);
+            }
+#else
+            NEW_MYSQL_PROCESSOR(ObMPStmtExecute, gctx_);
+#endif
+            break;
+          }
           // ps stmt close request may not response packet.
           // Howerver, in get processor phase, it may report
           // error due to lack of memory and this response error packet.
@@ -434,9 +449,6 @@ int ObSrvXlator::release(ObReqProcessor *processor)
     // here.
     ObRequest *req = const_cast<ObRequest*>(processor->get_ob_request());
     ObRequest::Type req_type = (ObRequest::Type)processor->get_req_type();
-    ObRequest::TransportProto nio_protocol = (ObRequest::TransportProto)processor->get_nio_protocol();
-    bool need_retry = processor->get_need_retry();
-    bool async_resp_used = processor->get_async_resp_used();
     if (ObRequest::OB_TASK == req_type) {
       //Deal with sqltask memory release
       ob_delete(req);

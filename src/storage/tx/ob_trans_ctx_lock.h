@@ -56,6 +56,12 @@ public:
   memtable::ObIMemtableCtx *p_mt_ctx_;
 };
 
+// Lock ordering: ACCESS -> FLUSH_REDO -> CTX (acquisition order)
+// Unlock ordering: CTX -> FLUSH_REDO -> ACCESS (reverse of acquisition)
+//
+// unlock_ctx(CtxLockArg &arg) captures deferred work via before_unlock(arg)
+// while ctx_lock_ is held, then releases ctx_lock_. The caller is responsible
+// for calling after_unlock(arg) after ALL locks are released.
 class CtxLock
 {
 public:
@@ -63,19 +69,27 @@ public:
   ~CtxLock() {}
   int init(ObTransCtx *ctx);
   void reset();
+  // Acquire all three sub-locks in order: ACCESS -> FLUSH_REDO -> CTX
   int lock(const int64_t timeout_us = -1);
   int try_lock();
+  // Release all three sub-locks in reverse order: CTX -> FLUSH_REDO -> ACCESS,
+  // internally creates a stack-local CtxLockArg for before_unlock/after_unlock.
   void unlock();
   int try_rdlock_ctx();
   int wrlock_ctx();
   int wrlock_access();
   int wrlock_flush_redo();
   int rdlock_flush_redo();
-  void unlock_ctx();
+  // Release ctx_lock_ and capture deferred work into @arg via before_unlock().
+  // Caller MUST call after_unlock(arg) after ALL remaining locks are released.
+  void unlock_ctx(CtxLockArg &arg);
   void unlock_access();
   int try_wrlock_flush_redo();
   int try_rdlock_flush_redo();
   void unlock_flush_redo();
+  // Callbacks delegated to ObTransCtx: before_unlock() captures pending work
+  // (callbacks, redo sync, ELR wakeup) while ctx_lock_ is held; after_unlock()
+  // fires that work after all locks are released.
   void before_unlock(CtxLockArg &arg);
   void after_unlock(CtxLockArg &arg);
   ObTransCtx *get_ctx() { return ctx_; }

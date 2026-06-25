@@ -63,8 +63,13 @@ public:
   void set_stmt_id(int32_t id) { stmt_id_ = id; }
   void set_param_num(uint64_t num) { params_num_ = num; }
   sql::ObSQLSessionInfo* get_sess_info_ptr() { return sess_info_; }
+  ObMPPacketSender& get_packet_sender() { return packet_sender_; }
 
 protected:
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+  void handle_sub_tx_callback(int cb_param, bool need_disconnect);
+#endif
+
   ObMPPacketSender packet_sender_;
   sql::ObSQLSessionInfo *sess_info_;
   sql::ObEndTransCbPacketParam pkt_param_;

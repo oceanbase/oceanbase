@@ -390,11 +390,19 @@ int ObPsCache::get_or_add_stmt_info(const PsCacheInfoCtx &info_ctx,
       tmp_stmt_info.set_stmt_type(info_ctx.stmt_type_);
       tmp_stmt_info.set_ps_item(ps_item);
       tmp_stmt_info.set_ps_need_parameterization(info_ctx.ps_need_parameterization_);
+      tmp_stmt_info.set_is_group_commit(info_ctx.is_group_commit_);
       // calc check_sum with normalized sql
       uint64_t ps_stmt_checksum = ob_crc64(info_ctx.normalized_sql_.ptr(),
                                            info_ctx.normalized_sql_.length()); // actual is crc32
       tmp_stmt_info.set_ps_stmt_checksum(ps_stmt_checksum);
-      if (OB_FAIL(schema_guard.get_schema_version(tenant_id_, tenant_version))) {
+      // Set group commit pk/uk parameter indices from info_ctx (directly from stmt)
+      if (info_ctx.is_group_commit_ && OB_NOT_NULL(info_ctx.group_commit_param_idx_)) {
+        if (OB_FAIL(tmp_stmt_info.set_group_commit_key_params_idx(*info_ctx.group_commit_param_idx_))) {
+          LOG_WARN("failed to set group commit key params idx", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id_, tenant_version))) {
         LOG_WARN("fail to get tenant version", K(ret), K(tenant_id_));
       } else if (FALSE_IT(tmp_stmt_info.set_tenant_version(tenant_version))) {
         // do nothing

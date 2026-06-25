@@ -1877,6 +1877,12 @@ private: // member functions
   int adjust_expr_properties_for_external_table(ObRawExpr *col_expr, ObRawExpr *&expr) const;
 
   int compute_duplicate_table_replicas(ObLogicalOperator *op);
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+  int check_group_commit(const ObLogicalOperator *root);
+  int check_table_schema_for_group_commit(const ObLogicalOperator *root,
+                                          const ObLogDelUpd *&update_op);
+#endif
+
 public:
   inline const ObLogPlanHint &get_log_plan_hint() const { return log_plan_hint_; }
   inline bool has_join_order_hint() { return !log_plan_hint_.join_order_.leading_tables_.is_empty(); }
@@ -1922,6 +1928,7 @@ public:
   inline ObRawExprReplacer &gen_col_replacer() { return gen_col_replacer_; }
   bool get_need_accurate_cardinality() const { return need_accurate_cardinality_; }
   void set_need_accurate_cardinality(bool need) { need_accurate_cardinality_ = need; }
+  bool is_group_commit() const { return is_group_commit_; }
 private:
   static const int64_t IDP_PATHNUM_THRESHOLD = 5000;
 protected: // member variable
@@ -2075,6 +2082,8 @@ private:
 
   ObSelectLogPlan *nonrecursive_plan_for_fake_cte_;
   bool need_accurate_cardinality_;
+  bool is_group_commit_;
+
   DISALLOW_COPY_AND_ASSIGN(ObLogPlan);
 };
 

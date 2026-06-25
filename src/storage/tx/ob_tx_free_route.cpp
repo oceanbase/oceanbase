@@ -86,6 +86,7 @@ void ObTxnFreeRouteCtx::init_before_handle_request(ObTxDesc *tx)
     txn_addr_.reset();
     tx_id_.reset();
   }
+  disabled_by_hint_ = false;
   prev_tx_id_.reset();
   reset_changed_();
   ++local_version_;
@@ -947,7 +948,7 @@ int ObTransService::calc_txn_free_route(ObTxDesc *tx, ObTxnFreeRouteCtx &ctx)
             audit_record.svr_flag_ = true;
             if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_1_0_0) {
               TRANS_LOG(DEBUG, "observer not upgrade to 4_1_0_0");
-            } else  if (!need_fallback_(*tx, state_size)) {
+            } else  if (!need_fallback_(*tx, state_size, ctx.disabled_by_hint_)) {
               support_free_route = true;
             } else {
               fallback_happened = true;
@@ -1010,7 +1011,7 @@ int ObTransService::calc_txn_free_route(ObTxDesc *tx, ObTxnFreeRouteCtx &ctx)
     // refer proxy switch to do fallback
     if (self_ == ctx.txn_addr_) {
       if (ctx.can_free_route_ && !ctx.is_fallbacked_) {
-        if (!proxy_support || need_fallback_(*tx, state_size)) {
+        if (!proxy_support || need_fallback_(*tx, state_size, ctx.disabled_by_hint_)) {
           ctx.is_fallbacked_ = true;
           fallback_state_synced = true;
           fallback_happened = true;
@@ -1022,7 +1023,7 @@ int ObTransService::calc_txn_free_route(ObTxDesc *tx, ObTxnFreeRouteCtx &ctx)
     }
     // if on other nodes, refer transaction size to do fallback
     else {
-      if (need_fallback_(*tx, state_size)) {
+      if (need_fallback_(*tx, state_size, ctx.disabled_by_hint_)) {
         if (state_size > MAX_STATE_SIZE) {
           int tmp_ret = OB_SUCCESS;
           if (OB_TMP_FAIL(push_tx_state_to_remote_(*tx, ctx.txn_addr_))) {
@@ -1127,10 +1128,14 @@ int ObTransService::calc_txn_free_route(ObTxDesc *tx, ObTxnFreeRouteCtx &ctx)
   return ret;
 }
 
-bool ObTransService::need_fallback_(ObTxDesc &tx, int64_t &total_size)
+bool ObTransService::need_fallback_(ObTxDesc &tx, int64_t &total_size, const bool disabled_by_hint)
 {
   bool fallback = false;
-  if (tx.with_temporary_table()) {
+  if (disabled_by_hint) {
+    // has disabled tx free route by hint, fallback to fixed route
+    TRANS_LOG(TRACE, "tx free route is disabled, need to fallback");
+    fallback = true;
+  } else if (tx.with_temporary_table()) {
     TRANS_LOG(TRACE, "with tx level temp-table");
     fallback = true;
   } else if (tx.is_xa_trans() && tx.is_xa_tightly_couple()) {

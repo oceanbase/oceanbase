@@ -7082,6 +7082,8 @@ int JoinPath::compute_nlj_batch_rescan()
     LOG_WARN("unexpected null", K(ret), K(parent_), K(plan), K(right_path_));
   } else if (!plan->get_optimizer_context().enable_nlj_batch_rescan()) {
     /* do nothing */
+  } else if (plan->get_optimizer_context().get_global_hint().group_commit_enabled()) {
+    /* group commit must use single row rescan */
   } else if (plan->get_disable_child_batch_rescan()) {
     /* disabled by upper log_plan */
   } else if (NESTED_LOOP_JOIN != join_algo_ || !is_nlj_with_param_down()

@@ -811,6 +811,7 @@ void ObTxExecInfo::reset()
   exec_epoch_ = 0;
   serial_final_scn_.reset();
   serial_final_seq_no_.reset();
+  seq_base_ = -1; // negative value indicates invalid value
 }
 
 void ObTxExecInfo::destroy()
@@ -968,6 +969,7 @@ int ObTxExecInfo::assign(const ObTxExecInfo &exec_info)
     exec_epoch_ = exec_info.exec_epoch_;
     serial_final_scn_ = exec_info.serial_final_scn_;
     serial_final_seq_no_ = exec_info.serial_final_seq_no_;
+    seq_base_ = exec_info.seq_base_;
   }
   return ret;
 }
@@ -1008,7 +1010,8 @@ OB_SERIALIZE_MEMBER(ObTxExecInfo,
                     checksum_,
                     checksum_scn_,
                     serial_final_scn_,
-                    serial_final_seq_no_);
+                    serial_final_seq_no_,
+                    seq_base_);
 
 bool ObMulSourceDataNotifyArg::is_redo_submitted() const { return redo_submitted_; }
 

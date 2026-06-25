@@ -44,7 +44,7 @@ int ObTxLogCbGroup::init(const int64_t group_no)
   return ret;
 }
 
-int ObTxLogCbGroup::occupy_by_tx(ObPartTransCtx *tx_ctx)
+int ObTxLogCbGroup::occupy_by_tx(ObPartTransCtx *tx_ctx, const ObTransID tx_id)
 {
   int ret = OB_SUCCESS;
 
@@ -65,7 +65,7 @@ int ObTxLogCbGroup::occupy_by_tx(ObPartTransCtx *tx_ctx)
       }
     }
     if (OB_SUCC(ret)) {
-      tx_id_ = tx_ctx->get_trans_id();
+      tx_id_ = tx_id;
       tx_ctx_ = tx_ctx;
       ATOMIC_STORE(&occupy_ts_, ObTimeUtility::fast_current_time());
     }

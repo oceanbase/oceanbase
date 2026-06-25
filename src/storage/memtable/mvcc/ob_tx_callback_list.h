@@ -56,6 +56,13 @@ public:
   // implement lazy callback for the correctness. What's more, it will calculate
   // checksum when removing.
   int remove_callbacks_for_fast_commit(const share::SCN stop_scn = share::SCN::invalid_scn());
+  // remove_all_callbacks_for_replay removes all synced callbacks. Used by
+  // hotspot rollback replay to clear callbacks that violate tip-rollback semantics.
+  int remove_all_callbacks_for_replay();
+
+  int remove_callbacks_for_hotspot_redo(const share::SCN stop_scn,
+                                        share::SCN &last_remove_scn,
+                                        int64_t &remove_succ_cnt);
 
   // remove_callbacks_for_remove_memtable will remove all callbacks that is
   // belonged to the specified memtable sets. It will only remove callbacks

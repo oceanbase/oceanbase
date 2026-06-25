@@ -15006,6 +15006,34 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   table_name = '__all_virtual_wr_active_session_history_v2',
   in_tenant_space = True,
   keywords = all_def_keywords['__wr_active_session_history_v2']))
+
+def_table_schema(
+  owner = 'tony.wzh',
+  table_name = '__all_virtual_sql_group_commit_stat',
+  table_id = '12593',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  in_tenant_space = True,
+  rowkey_columns = [
+  ],
+
+  normal_columns = [
+  ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+  ('svr_port', 'int'),
+  ('tenant_id', 'int'),
+  ('sql_text', 'varchar:4000'),
+  ('single_exec_count', 'int'),
+  ('batch_exec_count', 'int'),
+  ('batch_exec_req_cnt', 'int'),
+  ('split_count', 'int'),
+  ('split_exec_req_cnt', 'int'),
+  ('group_value_count', 'int'),
+  ('sql_hash', 'uint'),
+  ],
+
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
 # End of Mysql Virtual Table (10000, 15000]
@@ -15490,7 +15518,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15510'
 def_table_schema(**no_direct_access(gen_sys_agent_virtual_table_def('15524', all_def_keywords['__all_unit'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15533', all_def_keywords['__all_virtual_source']))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15535', all_def_keywords['__all_virtual_wr_active_session_history_v2'])))
-
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15549', all_def_keywords['__all_virtual_sql_group_commit_stat'])))
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
 # - 示例：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))

@@ -32,6 +32,7 @@ enum ObDASIterType : uint32_t
   DAS_ITER_MERGE,
   DAS_ITER_GROUP_FOLD,
   DAS_ITER_LOOKUP,
+  DAS_ITER_GROUP_UPDATE_CACHE,
   // append DASIterType before me
   DAS_ITER_MAX
 };

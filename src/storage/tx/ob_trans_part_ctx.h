@@ -29,6 +29,7 @@
 #include "storage/multi_data_source/buffer_ctx.h"
 #include "storage/tx/ob_tx_log_cb_define.h"
 #include "storage/tx/ob_tx_sby_read_define.h"
+#include "storage/tx/ob_tx_hotspot_define.h"
 
 
 namespace oceanbase
@@ -176,6 +177,7 @@ public:
         standby_part_collected_(reserve_allocator_),
         ask_state_info_interval_(100 * 1000),
         refresh_state_info_interval_(100 * 1000),
+        hotspot_redo_cache_(reserve_allocator_),
         transfer_deleted_(false)
   { /*reset();*/ }
   ~ObPartTransCtx() { destroy(); }
@@ -195,6 +197,7 @@ public:
            ObLSTxCtxMgr *ls_ctx_mgr,
            const bool for_replay,
            const PartCtxSource ctx_source,
+           const int64_t seq_base,
            ObXATransID xid);
   void reset() { }
   int construct_context(const ObTransMsg &msg);
@@ -207,6 +210,7 @@ public:
    */
   int kill(const KillTransArg &arg, ObTxCommitCallback *&cb_list);
   memtable::ObMemtableCtx *get_memtable_ctx() { return &mt_ctx_; }
+  int64_t get_seq_base() const { return exec_info_.seq_base_; }
   int commit(const ObTxCommitParts &parts,
              const MonotonicTs &commit_time,
              const int64_t &expire_ts,
@@ -342,7 +346,8 @@ private:
                 K_(lastest_snapshot),
                 K_(state_info_array),
                 K_(last_request_ts),
-                K_(max_2pc_commit_scn));
+                K_(max_2pc_commit_scn),
+                "redo_flush_status", to_cstr(redo_flush_status_));
 public:
   static const int64_t OP_LOCAL_NUM = 16;
   static const int64_t RESERVED_MEM_SIZE = 256;
@@ -352,7 +357,6 @@ private:
   // Please use it carefully, because it only refer to the downstream_state_
   bool is_in_durable_2pc_() const;
   bool is_logging_() const;
-
   // It is decided based on both durable 2pc state and on the fly logging.
   // So it can be used safely at any time.
   bool is_in_2pc_() const;
@@ -445,6 +449,58 @@ public:
   int submit_redo_after_write(const bool force, const ObTxSEQ &write_seq_no);
   int submit_redo_log_for_freeze(const uint32_t freeze_clock);
   int return_redo_log_cb(ObTxLogCb *log_cb);
+
+  // Hotspot aggregation public surface. CE keeps only the small fallback
+  // methods that generic transaction paths can reach without entering the
+  // hotspot feature.
+  TxRedoFlushStatus get_redo_flush_status() const { return redo_flush_status_; }
+  void reset_hotspot_redo_status();
+  int wait_hotspot_redo_frozen_flushed(const uint32_t freeze_clock,
+                                       bool &submitted_primary_log);
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+  int extract_redo_log_content(memtable::ObTxFillRedoCtx &fill_redo_ctx);
+  int hotspot_log_submitted(const ObTransID primary_tx_id,
+                            const int64_t data_size,
+                            const share::SCN log_scn,
+                            const memtable::ObCallbackScope &scope);
+  int hotspot_log_synced(const share::SCN log_scn,
+                         const memtable::ObCallbackScopeArray &callbacks,
+                         bool &remap_verify_failed);
+  int hotspot_remove_redo_callbacks(const share::SCN stop_scn,
+                                    share::SCN &last_remove_scn,
+                                    int64_t &remove_succ_cnt);
+  int set_redo_migrating();
+  int set_redo_migrated();
+  int set_secondary_hotspot_redo_status(const TxRedoFlushStatus &redo_status);
+  int set_secondary_hotspot_redo_status_by_exit_state(const TxRedoFlushStatus &redo_status);
+  int post_secondary_tx_commit_resp(
+      const int status,
+      const share::SCN commit_version,
+      int64_t &out_part_trans_action);
+  int response_scheduler_for_secondary_tx(const int ret_code, const share::SCN commit_version);
+  int hotspot_rollback_to_for_secondary(const ObTransID &secondary_tx_id,
+                                       const int64_t stmt_timeout_us = INT64_MAX);
+  int hotspot_rollback_to_for_non_hotspot(const int64_t stmt_timeout_us = INT64_MAX);
+  int hotspot_rollback_to_for_secondaries(const ObIArray<ObTransID> &tx_ids,
+                                          const int64_t stmt_timeout_us = INT64_MAX);
+  // Lightweight memtable-only rollback without writing undo action or rollback_to log.
+  // Used by the primary tx's hotspot_redo_cache to clean up a secondary tx's memtable
+  // after the primary has already written the rollback_to log on behalf of the secondary.
+  // In the hotspot scenario:
+  //   - The rollback_to log is owned by the primary tx (already submitted).
+  //   - The secondary tx does not need its own undo action or log entry.
+  //   - Only the secondary's memtable residual data needs cleanup to reduce compaction pressure.
+  // This method is called on the secondary ctx (via other_ctx_ inside the cache).
+  // Does NOT require the caller to hold this ctx's lock_ (mt_ctx_.rollback uses ObByteLockGuard).
+  int rollback_memtable_only(const ObTxSEQ from_seq, const ObTxSEQ to_seq);
+  // Dedicated abort interface for hotspot secondary tx.
+  // Allows abort when part_trans_action_ == COMMIT.
+  int force_abort_secondary_hotspot(const int reason);
+  int dispatch_confirmed_aggregation_group();
+  void on_handling_dispatch_redo_msg() { hotspot_redo_cache_.dec_pending_dispatch_msg_cnt(); }
+  void on_handling_submit_other_redo_msg() { hotspot_redo_cache_.dec_pending_submit_other_redo_msg_cnt(); }
+#endif
+
   int push_replaying_log_ts(const share::SCN log_ts_ns, const int64_t log_entry_no);
   int push_replayed_log_ts(const share::SCN log_ts_ns,
                            const palf::LSN &offset,
@@ -530,6 +586,7 @@ public:
   int switch_to_leader(const share::SCN &start_working_ts);
   int switch_to_follower_gracefully(ObTxCommitCallback *&cb_list);
   int resume_leader(const share::SCN &start_working_ts);
+
   int supplement_tx_op_if_exist_(const bool for_replay, const share::SCN replay_scn);
   int recover_tx_ctx_from_tx_op_(ObTxOpVector &tx_op_list, const share::SCN replay_scn);
 
@@ -568,6 +625,51 @@ public:
 private:
   // ========================================================
   // newly added for 4.0
+
+  // Hotspot helpers used by generic transaction paths in CE and non-CE builds.
+  void clean_hotspot_redo_cache();
+  void reset_hotspot_redo_status_();
+  int transit_redo_status_as_normal_(TxRedoFlushStatus to);
+  int apply_others_hotspot_redo_(ObTxLogCb *invoke_log_cb, const bool sync_result);
+  int release_hotspot_redo_cb_(ObTxLogCb *apply_log_cb, const bool sync_result);
+  virtual bool is_in_active_aggregation_() const override;
+  bool can_not_submit_log_for_hotspot_() const;
+  int handle_primary_aggregation_for_forcedly_(bool &secondaries_aborted);
+  int wait_for_primary_aggregation_gracefully_();
+
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+  // Hotspot aggregation implementation helpers. These are closed-source only.
+  int sync_hotspot_legality_validation(
+      const ObTransID primary_tx_id,
+      const ObAggregatedTxIDArray &aggre_members,
+      const int64_t stmt_timeout);
+  int hotspot_legality_validation_(const bool is_primary);
+  int transit_redo_status_as_primary_(TxRedoFlushStatus to);
+  int transit_redo_status_as_secondary_(TxRedoFlushStatus to);
+  int set_primary_hotspot_migrating_status_();
+  int check_primary_hotspot_migrating_status_(const char *func_name);
+  int submit_redo_log_generated_by_others();
+  int fill_and_submit_hotspot_redo_(ObTxLogCb *log_cb, const bool in_apply);
+  static int sort_secondary_ctxs_by_seq_base_for_hotspot_(ObSEArray<ObPartTransCtx *, 32> &secondary_ctxs);
+  void revert_non_null_hotspot_secondary_ctx_refs_(ObSEArray<ObPartTransCtx *, 32> &secondary_ctxs);
+  int hotspot_log_submitted_(const ObTransID primary_tx_id,
+                             const int64_t data_size,
+                             const share::SCN log_scn,
+                             const memtable::ObCallbackScope &scope);
+  int hotspot_log_synced_(const share::SCN log_scn,
+                          const memtable::ObCallbackScopeArray &callbacks,
+                          bool &remap_verify_failed);
+  int hotspot_remove_redo_callbacks_(const share::SCN stop_scn,
+                                     share::SCN &last_remove_scn,
+                                     int64_t &remove_succ_cnt);
+  int set_secondary_hotspot_redo_status_(const TxRedoFlushStatus &redo_status);
+  int hotspot_delay_rollback_tx_ctx_(const char *reason);
+  int hotspot_rollback_to_for_secondary_(const ObTransID &secondary_tx_id);
+  int hotspot_rollback_to_for_non_hotspot_();
+  int submit_primary_partial_log_for_freeze_(const uint32_t freeze_clock,
+                                             bool &submitted_primary_log);
+#endif
+
   int submit_log_impl_(const ObTxLogType log_type);
   void handle_submit_log_err_(const ObTxLogType log_type, int &ret);
   int submit_log_block_out_(ObTxLogBlock &block,
@@ -617,6 +719,9 @@ private:
                       const int64_t suggested_buf_size = ObTxAdaptiveLogBuf::NORMAL_LOG_BUF_SIZE,
                       const bool serial_final = false,
                       const bool parallel_logging = false);
+  // For hotspot: init with log_entry_no=-1 to reserve max serialize_size, actual value set at seal()
+  int init_log_block_for_hotspot_(ObTxLogBlock &log_block,
+                                   const int64_t suggested_buf_size = ObTxAdaptiveLogBuf::NORMAL_LOG_BUF_SIZE);
   int reuse_log_block_(ObTxLogBlock &log_block);
   int compensate_abort_log_();
   int validate_commit_info_log_(const ObTxCommitInfoLog &commit_info_log);
@@ -788,6 +893,11 @@ private:
                                    bool &is_aborted);
 
   int64_t get_max_transfer_epoch_();
+  bool has_transfer_history_();
+
+  // NOTE: is_secondary_hotspot_tx_() has been removed. It was ambiguous and caused bugs.
+  // For checking if a tx is in secondary status, use is_secondary_status(redo_flush_status_).
+  // For checking if a tx needs abort delay, use is_in_active_aggregation_().
 
   // ========================================================
 
@@ -953,6 +1063,8 @@ public:
    *  is leader, un-terminated, not changing leader, etc.
    */
   int check_status();
+  int check_tx_persisted_status(ObTxState &exit_state, bool &has_redo);
+  int hotspot_delay_rollback_tx_ctx(const char *reason);
   /*
    * start_access - start txn protected resources access
    * @data_seq: the sequence_no of current access will be alloced
@@ -975,6 +1087,7 @@ public:
   int handle_tx_keepalive_response(const int64_t status);
   bool is_transfer_deleted() const { return transfer_deleted_; }
 private:
+  int check_tx_persisted_status_(ObTxState &exit_state, bool &has_redo);
   bool fast_check_need_submit_redo_for_freeze_() const;
   int check_status_();
   int tx_keepalive_response_(const int64_t status);
@@ -983,8 +1096,9 @@ private:
   int rollback_to_savepoint_(const ObTxSEQ from_scn,
                              const ObTxSEQ to_scn,
                              const share::SCN replay_scn = share::SCN::invalid_scn());
-  int submit_rollback_to_log_(const ObTxSEQ from_scn,
-                              const ObTxSEQ to_scn);
+int submit_rollback_to_log_(const ObTxSEQ from_scn,
+                               const ObTxSEQ to_scn,
+                               const ObTransID &secondary_tx_id = ObTransID());
   int set_state_info_array_();
   int update_state_info_array_(const ObStateInfo& state_info);
   int update_state_info_array_with_transfer_parts_(const ObTxCommitParts &parts, const ObLSID &ls_id);
@@ -997,6 +1111,7 @@ private:
   int get_ls_replica_readable_scn_(const ObLSID &ls_id, SCN &snapshot_version);
   int submit_redo_log_for_freeze_(bool &try_submit, const uint32_t freeze_clock);
   void print_first_mvcc_callback_();
+  bool has_multiple_callback_lists_() const;
   bool is_parallel_logging_() const
   {
     return exec_info_.serial_final_scn_.is_valid();
@@ -1007,7 +1122,8 @@ public:
   int prepare_for_submit_redo(ObTxLogCb *&log_cb,
                               ObTxLogBlock &log_block,
                               const bool serial_final,
-                              const bool parallel_logging);
+                              const bool parallel_logging,
+                              const bool for_freeze = false);
   int submit_redo_log_out(ObTxLogBlock &log_block,
                           ObTxLogCb *&log_cb,
                           memtable::ObRedoLogSubmitHelper &helper,
@@ -1111,6 +1227,9 @@ private:
   ObTxLogCbGroup reserve_log_cb_group_;
   TxLogCbGroupList extra_cb_group_list_;
   common::ObDList<ObTxLogCb> free_cbs_;
+  // NOTE: the total busy cb count of a primary tx must include
+  // hotspot_redo_cache_.get_busy_cb_count() as well, because hotspot
+  // redo logs maintain their own separate busy cb list.
   common::ObDList<ObTxLogCb> busy_cbs_;
 
   ObSpinLock log_cb_lock_;
@@ -1182,6 +1301,9 @@ private:
   ObTxSbyStateInfo cache_sby_state_info_;
   CtxPartSbyStateInfoArray parts_sby_info_list_;
   CtxSbyAskOriginList sby_origin_list_;
+
+  TxRedoFlushStatus redo_flush_status_;
+  ObTxHotspotRedoCacheHandle hotspot_redo_cache_;
 
   // for transfer move tx ctx to clean for abort
   bool transfer_deleted_;

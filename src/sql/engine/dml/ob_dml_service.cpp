@@ -982,6 +982,84 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
   return ret;
 }
 
+int ObDMLService::process_group_commit_update_row(const ObUpdCtDef &upd_ctdef,
+                                                  ObUpdRtDef &upd_rtdef,
+                                                  bool &is_skipped,
+                                                  ObTableModifyOp &dml_op)
+{
+  int ret = OB_SUCCESS;
+  is_skipped = false;
+  if (OB_UNLIKELY(upd_ctdef.has_instead_of_trigger_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("group commit must not have instead of trigger", K(ret));
+  } else if (upd_ctdef.is_primary_index_) {
+    uint64_t ref_table_id = upd_ctdef.das_base_ctdef_.index_tid_;
+    if (OB_SUCC(ret) && upd_ctdef.need_check_filter_null_) {
+      bool is_null = false;
+      if (OB_FAIL(check_rowkey_is_null(upd_ctdef.old_row_,
+                                       upd_ctdef.dupd_ctdef_.rowkey_cnt_,
+                                       dml_op.get_eval_ctx(),
+                                       is_null))) {
+        LOG_WARN("check rowkey is null failed", K(ret), K(upd_ctdef), K(upd_rtdef));
+      } else if (is_null) {
+        is_skipped = true;
+      }
+    }
+
+    if (OB_SUCC(ret) && !is_skipped) {
+      if (upd_ctdef.is_heap_table_ &&
+          OB_FAIL(copy_heap_table_hidden_pk(dml_op.get_eval_ctx(), upd_ctdef))) {
+        LOG_WARN("fail to copy heap table hidden pk", K(ret), K(upd_ctdef));
+      }
+    }
+    if (OB_SUCC(ret) && !is_skipped) {
+      bool is_filtered = false;
+      upd_rtdef.is_row_changed_ = true; // always changed in group commit update
+      //first, check assignment column whether matched column type
+      if (OB_FAIL(check_column_type(upd_ctdef.new_row_,
+                                    upd_rtdef.cur_row_num_,
+                                    upd_ctdef.assign_columns_,
+                                    dml_op))) {
+        LOG_WARN("check column type failed", K(ret));
+      } else if (OB_FAIL(check_row_null(upd_ctdef.new_row_,
+                                        dml_op.get_eval_ctx(),
+                                        upd_rtdef.cur_row_num_,
+                                        upd_ctdef.assign_columns_,
+                                        upd_ctdef.dupd_ctdef_.is_ignore(),
+                                        false,
+                                        dml_op))) {
+        LOG_WARN("check row null failed", K(ret), K(upd_ctdef), K(upd_rtdef));
+      } else if (OB_FAIL(filter_row_for_view_check(upd_ctdef.view_check_exprs_, dml_op.get_eval_ctx(), is_filtered))) {
+        LOG_WARN("filter row for view check exprs failed", K(ret));
+      } else if (OB_UNLIKELY(is_filtered)) {
+        ret = OB_ERR_CHECK_OPTION_VIOLATED;
+        LOG_WARN("view check option violated", K(ret));
+      } else if (OB_FAIL(filter_row_for_check_cst(upd_ctdef.check_cst_exprs_, dml_op.get_eval_ctx(), is_filtered))) {
+        LOG_WARN("filter row for check cst failed", K(ret));
+      } else if (OB_UNLIKELY(is_filtered)) {
+        if (is_mysql_mode() && upd_ctdef.dupd_ctdef_.is_ignore()) {
+          is_skipped = true;
+          LOG_USER_WARN(OB_ERR_CHECK_CONSTRAINT_VIOLATED);
+          LOG_WARN("check constraint violated, skip this row", K(ret));
+        } else {
+          ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
+          LOG_WARN("row is filtered by check filters, running is stopped", K(ret));
+        }
+      }
+    }
+  } else {
+    //for global index, only check whether the updated row is changed
+    upd_rtdef.is_row_changed_ = true;
+  }
+  if (OB_SUCC(ret) && !is_skipped) {
+    LOG_DEBUG("process update row", K(ret), K(is_skipped), K(upd_ctdef), K(upd_rtdef),
+                "old_row", ROWEXPR2STR(dml_op.get_eval_ctx(), upd_ctdef.old_row_),
+                "new_row", ROWEXPR2STR(dml_op.get_eval_ctx(), upd_ctdef.new_row_));
+  }
+  return ret;
+}
+
+
 int ObDMLService::insert_row(const ObInsCtDef &ins_ctdef,
                              ObInsRtDef &ins_rtdef,
                              const ObDASTabletLoc *tablet_loc,

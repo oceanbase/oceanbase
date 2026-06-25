@@ -607,7 +607,9 @@ int ObStaticEngineCG::check_vectorize_supported(bool &support,
         support = true;
       }
       // Additional check to overwrite support value
-      if (log_op_def::LOG_TABLE_SCAN == op->get_type()) {
+      if (log_plan->is_group_commit()) {
+        disable_vectorize = true;
+      } else if (log_op_def::LOG_TABLE_SCAN == op->get_type()) {
         // FIXME: bin.lb: disable vectorization for virtual table and virtual column.
         auto tsc = static_cast<ObLogTableScan *>(op);
         const uint64_t table_id = tsc->get_ref_table_id();
@@ -2730,6 +2732,7 @@ int ObStaticEngineCG::generate_update_with_das(ObLogUpdate &op, ObTableUpdateSpe
     spec.is_pdml_ = op.is_pdml();
     spec.plan_->set_das_dop(op.get_das_dop());
     spec.das_dop_ = op.get_das_dop();
+
     if (OB_FAIL(spec.upd_ctdefs_.allocate_array(phy_plan_->get_allocator(),
                                                 table_list.count()))) {
       LOG_WARN("allocate update ctdef array failed", K(ret), K(table_list));
@@ -7568,6 +7571,8 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
     phy_plan.set_is_inner_sql(my_session->is_inner());
     phy_plan.set_is_batch_params_execute(sql_ctx->is_batch_params_execute());
     phy_plan.set_optimizer_features_enable_version(opt_version);
+    phy_plan.set_is_group_commit(log_plan.is_group_commit());
+    phy_plan.set_rollback_on_no_affected_rows(log_plan.get_optimizer_context().get_global_hint().group_commit_hint_.rollback_on_no_affected_rows_);
     // only if all servers's version >= CLUSTER_VERSION_4_2_0_0
     if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0) {
       phy_plan.set_enable_px_fast_reclaim(GCONF._enable_px_fast_reclaim);

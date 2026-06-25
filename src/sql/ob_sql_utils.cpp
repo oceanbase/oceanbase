@@ -123,7 +123,8 @@ bool ObSQLUtils::is_trans_commit_need_disconnect_err(int err)
       || OB_TRANS_NEED_ROLLBACK == err
       || OB_TRANS_ROLLBACKED == err
       || OB_NOT_MASTER == err
-      || OB_TRANS_IS_EXITING == err) {
+      || OB_TRANS_IS_EXITING == err
+      || OB_ROLLBACK_ON_NO_AFFECTED_ROWS == err) {
     bool_ret = false;
   }
   return bool_ret;

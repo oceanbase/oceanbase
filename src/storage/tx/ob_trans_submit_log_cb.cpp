@@ -108,6 +108,14 @@ void ObTxLogCb::reset_undo_node()
   }
 }
 
+void ObTxLogCb::reset_hotspot_tx()
+{
+  hotspot_tx_index_ = -1;
+  for (int i = 0; i < MAX_BATCH_HOTSPOT_TX_TASK_COUNT; i++) {
+    hotspot_tx_task_[i] = -1;
+  }
+}
+
 void ObTxLogCb::reset()
 {
   ObTxBaseLogCb::reset();
@@ -123,15 +131,23 @@ void ObTxLogCb::reset()
   first_part_scn_.invalid_scn();
   reset_tx_op_array();
   reset_undo_node();
+  reset_hotspot_tx();
 }
 
 void ObTxLogCb::reuse()
+{
+  // Keep busy ownership until reusable fields are fully cleaned. For reserved
+  // callbacks, release_busy() is the publication point for the next acquire.
+  reuse_without_busy();
+  release_busy();
+}
+
+void ObTxLogCb::reuse_without_busy()
 {
   ObTxBaseLogCb::reuse();
   tx_data_guard_.reset();
   callbacks_.reset();
   is_callbacked_ = false;
-  is_busy_ = false;
   cb_arg_array_.reset();
   mds_range_.reset();
   first_part_scn_.invalid_scn();
@@ -217,6 +233,41 @@ int ObTxLogCb::on_failure()
     }
     TRANS_LOG(INFO, "ObTxLogCb::on_failure end", KR(ret), K(tx_id), K(ls_id), K(log_ts));
   }
+  return ret;
+}
+
+bool ObTxLogCb::is_idle_hotspot_cb() const
+{
+  //lock by hotspot_redo_cache
+  bool is_idle = true;
+  for (int i = 0; i < MAX_BATCH_HOTSPOT_TX_TASK_COUNT; i++) {
+    if (hotspot_tx_task_[i] >= 0) {
+      is_idle = false;
+      break;
+    }
+  }
+  return is_idle;
+}
+
+int ObTxLogCb::append_hotspot_arg(const int64_t hotspot_index)
+{
+  int ret = OB_SUCCESS;
+
+  //lock by hotspot_redo_cache
+  bool fill_succ = false;
+  for (int i = 0; i < MAX_BATCH_HOTSPOT_TX_TASK_COUNT; i++) {
+    if (hotspot_tx_task_[i] < 0) {
+      hotspot_tx_task_[i] = hotspot_index;
+      fill_succ = true;
+      break;
+    }
+  }
+
+  if (!fill_succ && OB_SUCC(ret)) {
+    ret = OB_SIZE_OVERFLOW;
+    TRANS_LOG(DEBUG, "append a hotspot arg failed ", K(ret), K(fill_succ), K(hotspot_index), KPC(this));
+  }
+
   return ret;
 }
 

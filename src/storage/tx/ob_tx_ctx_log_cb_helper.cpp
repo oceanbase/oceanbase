@@ -30,7 +30,7 @@ int ObPartTransCtx::init_log_cbs_(const share::ObLSID &ls_id, const ObTransID &t
   } else if (OB_FAIL(reserve_log_cb_group_.init(ObTxLogCbGroup::RESERVED_LOG_CB_GROUP_NO))) {
     TRANS_LOG(WARN, "init a log cb group failed", K(ret), K(ls_id), K(tx_id),
               K(reserve_log_cb_group_));
-  } else if (OB_FAIL(reserve_log_cb_group_.occupy_by_tx(this))) {
+  } else if (OB_FAIL(reserve_log_cb_group_.occupy_by_tx(this, tx_id))) {
     TRANS_LOG(WARN, "set tx id in log cb group failed", K(ret), K(ls_id), K(tx_id),
               K(reserve_log_cb_group_));
   } else {
@@ -111,7 +111,7 @@ int ObPartTransCtx::prepare_log_cb_(const bool need_freeze_cb, ObTxLogCb *&log_c
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(get_log_cb_(need_freeze_cb, log_cb)) && REACH_TIME_INTERVAL(100 * 1000)) {
-    TRANS_LOG(WARN, "failed to get log_cb", KR(ret), K(*this));
+    TRANS_LOG(WARN, "failed to get log_cb", KR(ret), K(need_freeze_cb), K(*this));
   }
   return ret;
 }
@@ -133,7 +133,7 @@ int ObPartTransCtx::get_log_cb_(const bool need_freeze_cb, ObTxLogCb *&log_cb)
                         ObTxLogCbGroup::FREEZE_LOG_CB_INDEX))) {
         ret = OB_TX_NOLOGCB;
         TRANS_LOG(WARN, "none freeze log cb ", K(ret), KPC(tmp_cb), K(reserve_log_cb_group_));
-      } else if (tmp_cb->is_busy()) {
+      } else if (!tmp_cb->try_acquire_busy()) {
         ret = OB_TX_NOLOGCB;
         TRANS_LOG(WARN, "the freeze log cb is busy", K(ret), KPC(tmp_cb), K(reserve_log_cb_group_));
       } else {
@@ -169,7 +169,16 @@ int ObPartTransCtx::get_log_cb_(const bool need_freeze_cb, ObTxLogCb *&log_cb)
       if (OB_ISNULL(log_cb = free_cbs_.remove_first())) {
         ret = OB_TX_NOLOGCB;
         TRANS_LOG(WARN, "no free cbs in ctx", KR(ret), K(free_cbs_.get_size()), K(*this));
+      } else if (!log_cb->try_acquire_busy()) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(ERROR, "free log cb is already busy", KR(ret), KPC(log_cb), K(free_cbs_.get_size()),
+                  K(*this));
+        // Restore list membership only. Do not release busy here because the
+        // busy cb may still be owned by another path; report inconsistent state.
+        free_cbs_.add_first(log_cb);
+        log_cb = nullptr;
       } else {
+        ret = OB_SUCCESS;
         TRANS_LOG(DEBUG, "get a extra log cb", K(ret), K(trans_id_), K(ls_id_), KPC(log_cb),
                   K(reserve_log_cb_group_));
       }
@@ -180,8 +189,7 @@ int ObPartTransCtx::get_log_cb_(const bool need_freeze_cb, ObTxLogCb *&log_cb)
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "unexpected log callback", K(ret), K(trans_id_), K(ls_id_), KPC(log_cb));
       } else {
-        log_cb->reuse();
-        log_cb->set_busy();
+        log_cb->reuse_without_busy();
       }
     }
   }

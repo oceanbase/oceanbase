@@ -40,6 +40,8 @@ using namespace observer;
 namespace transaction
 {
 
+ERRSIM_POINT_DEF(ERRSIM_SWITCH_TO_FOLLOWER_GRACEFULLY_RETRY_TIMEOUT_US);
+
 void ObLSTxCtxIterator::reset() {
   is_ready_ = false;
   current_bucket_pos_ = -1;
@@ -471,6 +473,7 @@ int ObLSTxCtxMgr::create_tx_ctx_(const ObTxCreateArg &arg,
                           this,
                           arg.for_replay_,
                           arg.ctx_source_,
+                          arg.seq_base_,
                           arg.xid_))) {
       TRANS_LOG(WARN, "init trans ctx fail", K(ret), "ctx", OB_P(tmp), K(arg));
     // when transfer move active tx ctx, we will create tx ctx when dest_ls has no this tx
@@ -882,6 +885,13 @@ int ObLSTxCtxMgr::switch_to_follower_gracefully()
   StateHelper state_helper(ls_id_, state_);
   int64_t start_time = ObTimeUtility::current_time();
   int64_t process_count = 0;
+  int64_t total_process_count = 0;
+  const int64_t default_retry_timeout_us = 500 * 1000;  // 500ms
+  int64_t retry_timeout_us = default_retry_timeout_us;
+  const int64_t errsim_retry_timeout_us = llabs(ERRSIM_SWITCH_TO_FOLLOWER_GRACEFULLY_RETRY_TIMEOUT_US);
+  if (errsim_retry_timeout_us > 0) {
+    retry_timeout_us = errsim_retry_timeout_us;
+  }
   while (OB_SUCC(ret) && is_pending_()) {
     if (ObTimeUtility::current_time() - start_time >= WAIT_SW_CB_TIMEOUT) {
       ret = OB_TIMEOUT;
@@ -906,26 +916,49 @@ int ObLSTxCtxMgr::switch_to_follower_gracefully()
       TRANS_LOG(WARN, "switch state error", KR(ret), K(tenant_id_), K(ls_id_), K(state_));
     } else {
       timeguard.click();
-      // TODO
-      const int64_t abs_expired_time = INT64_MAX;
-      SwitchToFollowerGracefullyFunctor fn(abs_expired_time, cb_list);
-      if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
-        TRANS_LOG(WARN, "for each tx ctx error", KR(ret), "manager", *this);
-        ret = fn.get_ret();
-      }
-      process_count = fn.get_count();
+      const int64_t retry_start_time = ObTimeUtility::current_time();
+      bool need_retry = false;
+      do {
+        need_retry = false;
+        // this timeout check is handled by outer retry loop.
+        const int64_t abs_expired_time = INT64_MAX;
+        SwitchToFollowerGracefullyFunctor fn(abs_expired_time, cb_list);
+        if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
+          TRANS_LOG(WARN, "for each tx ctx error", KR(ret), "manager", *this);
+          ret = fn.get_ret();
+        }
+        process_count = fn.get_count();
+        total_process_count += process_count;
+        if (OB_NEED_RETRY == ret) {
+          if (ObTimeUtility::current_time() - retry_start_time >= retry_timeout_us) {
+            ret = OB_LS_NEED_REVOKE;
+            TRANS_LOG(WARN, "switch to follower gracefully retry timeout, need force revoke",
+                      KR(ret), K(retry_timeout_us), K(total_process_count), K(*this));
+          } else {
+            need_retry = true;
+            ret = OB_SUCCESS;
+            ob_usleep(WAIT_SW_CB_INTERVAL);
+          }
+        }
+      } while (OB_SUCC(ret) && need_retry);
       timeguard.click();
       if (OB_FAIL(ret)) {
-        int tmp_ret = OB_SUCCESS;
+        const int switch_to_follower_ret = ret;
+        tmp_ret = OB_SUCCESS;
         if (OB_TMP_FAIL(state_helper.switch_state(Ops::RESUME_LEADER))) {
           TRANS_LOG(WARN, "switch state error", KR(ret), K(ls_id_), K(state_));
         } else if (OB_TMP_FAIL(submit_start_working_log_())) {
           TRANS_LOG(WARN, "submit start working log failed", KR(tmp_ret), K(*this));
         }
-        if (OB_SUCCESS != tmp_ret) {
+        if (OB_SUCCESS != tmp_ret || OB_LS_NEED_REVOKE == switch_to_follower_ret) {
           ret = OB_LS_NEED_REVOKE;
+          TRANS_LOG(WARN, "switch to follower failed and force revoke is required",
+                    KR(ret), K(switch_to_follower_ret), KR(tmp_ret),
+                    K(total_process_count), K(*this));
+        } else {
+          ret = switch_to_follower_ret;
+          TRANS_LOG(WARN, "switch to follower failed", KR(ret), KR(tmp_ret), K(*this));
         }
-        TRANS_LOG(WARN, "switch to follower failed", KR(ret), KR(tmp_ret), K(*this));
       } else {
         is_leader_serving_ = false;
         // TRANS_LOG(INFO, "switch to follower gracefully success", K(*this));
@@ -940,7 +973,8 @@ int ObLSTxCtxMgr::switch_to_follower_gracefully()
 
   (void)process_callback_(cb_list);
   timeguard.click();
-  TRANS_LOG(INFO, "[LsTxCtxMgr] switch_to_follower_gracefully", K(ret), KPC(this), K(process_count));
+  TRANS_LOG(INFO, "[LsTxCtxMgr] switch_to_follower_gracefully", K(ret), KPC(this),
+            K(process_count), K(total_process_count), K(retry_timeout_us));
   if (timeguard.get_diff() > 1000000) {
     TRANS_LOG(WARN, "use too much time", K(timeguard), K(process_count));
   }
@@ -1373,12 +1407,17 @@ int ObLSTxCtxMgr::traverse_tx_to_submit_redo_log(ObTransID &fail_tx_id, const ui
   int ret = OB_SUCCESS;
   RLockGuard guard(rwlock_);
   ObTxSubmitLogFunctor fn(ObTxSubmitLogFunctor::SUBMIT_REDO_LOG, freeze_clock);
-  if (!is_follower_() && OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
-    if (OB_SUCCESS != fn.get_result()) {
-      // get real ret code
+  if (!is_follower_()) {
+    if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
+      if (OB_SUCCESS != fn.get_result()) {
+        // get real ret code
+        ret = fn.get_result();
+      }
+      TRANS_LOG(WARN, "failed to submit log", K(ret));
+    } else if (OB_SUCCESS != fn.get_result()) {
+      // for_each succeeds, but functor records non-success result.
       ret = fn.get_result();
     }
-    TRANS_LOG(WARN, "failed to submit log", K(ret));
   }
 
   fail_tx_id = fn.get_fail_tx_id();
@@ -1391,12 +1430,17 @@ int ObLSTxCtxMgr::traverse_tx_to_submit_next_log()
   int ret = OB_SUCCESS;
   RLockGuard guard(rwlock_);
   ObTxSubmitLogFunctor fn(ObTxSubmitLogFunctor::SUBMIT_NEXT_LOG);
-  if (!is_follower_() && OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
-    if (OB_SUCCESS != fn.get_result()) {
-      // get real ret code
+  if (!is_follower_()) {
+    if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
+      if (OB_SUCCESS != fn.get_result()) {
+        // get real ret code
+        ret = fn.get_result();
+      }
+      TRANS_LOG(WARN, "failed to submit log", K(ret));
+    } else if (OB_SUCCESS != fn.get_result()) {
+      // for_each succeeds, but functor records non-success result.
       ret = fn.get_result();
     }
-    TRANS_LOG(WARN, "failed to submit log", K(ret));
   }
 
   return ret;
@@ -2725,6 +2769,10 @@ int ObLSTxCtxMgr::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
                                arg.scheduler_,
                                INT64_MAX, // tx expired time
                                txs_,
+                               // seq_base comes from ObTxDesc via ObTxCreateArg in normal create path.
+                               // Transfer move args do not carry it, and replay/transfer may see it
+                               // as unknown, so keep a negative (invalid) value here.
+                               -1,
                                arg.xid_,
                                arg.epoch_,
                                &arg);

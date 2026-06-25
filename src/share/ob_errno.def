@@ -1826,6 +1826,10 @@ DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_TYPE_OF_JSON_SCHEMA, -6285, ER_INVALID_JSON_T
 // for tx pending log
 DEFINE_ERROR(OB_TX_PENDING_LOG_OVERFLOW, -6288, -1, "HY000", "too many pending log in the trx");
 
+// for hotspot group commit
+DEFINE_ERROR(OB_TX_NOT_SUPPORT_AGGREGATION, -6289, -1, "HY000", "This transaction is not eligible for aggregation");
+DEFINE_ERROR(OB_ROLLBACK_ON_NO_AFFECTED_ROWS, -6290, -1, "HY000", "Transaction rollbacked as no rows were affected")
+
 // for clog
 DEFINE_ERROR(OB_LOG_ID_NOT_FOUND, -6301, -1, "HY000", "log id not found");
 DEFINE_ERROR(OB_LSR_THREAD_STOPPED, -6302, -1, "HY000", "log scan runnable thread stop");

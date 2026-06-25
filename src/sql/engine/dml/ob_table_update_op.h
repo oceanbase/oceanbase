@@ -94,6 +94,7 @@ public:
 protected:
   int inner_open_with_das();
   int update_row_to_das();
+  int update_row_to_group_update_cache();
   int upd_rows_post_proc();
   int calc_tablet_loc(const ObUpdCtDef &upd_ctdef,
                       ObUpdRtDef &upd_rtdef,
@@ -109,6 +110,7 @@ protected:
   virtual int write_row_to_das_buffer() override;
   virtual int write_rows_post_proc(int last_errno) override;
   virtual int check_need_exec_single_row() override;
+  int flush_group_commit_cache() override;
 
 protected:
   UpdRtDef2DArray upd_rtdefs_;  //see the comment of UpdCtDef2DArray

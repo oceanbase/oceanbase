@@ -166,11 +166,18 @@ public:
   int get_session(sql::ObSQLSessionInfo *&sess_info);
   int revert_session(sql::ObSQLSessionInfo *sess_info);
   void disable_response() { req_has_wokenup_ = true; }
+  void enable_response() { req_has_wokenup_ = false; }
   bool is_disable_response() const { return req_has_wokenup_; }
   int clean_buffer();
   bool has_pl();
   int alloc_ezbuf();
   int64_t get_comp_seq() { return comp_context_.seq_; }
+  rpc::ObRequest* get_req() { return req_; }
+  void set_is_group_commit(bool is_group_commit) { is_group_commit_ = is_group_commit; }
+  bool is_group_commit() const { return is_group_commit_; }
+
+  TO_STRING_KV(KP_(req), K_(seq), KP_(read_handle), K_(conn_valid), K_(sessid), K_(req_has_wokenup),
+      K_(query_receive_ts), K_(nio_protocol), KP_(conn), K_(is_group_commit));
 
 private:
   int init_read_handle();
@@ -205,6 +212,7 @@ protected:
   ObSMConnection *conn_;
   common::ObSEArray<obmysql::ObObjKV, 4> extra_info_kvs_;
   common::ObSEArray<obmysql::Obp20Encoder*, 4> extra_info_ecds_;
+  bool is_group_commit_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMPPacketSender);
 };

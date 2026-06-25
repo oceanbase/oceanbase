@@ -43,6 +43,7 @@ namespace sql
 class ObTableScanOp;
 class ObDASScanOp;
 class ObGlobalIndexLookupOpImpl;
+class ObDASGroupUpdateCacheIter;
 
 struct FlashBackItem
 {
@@ -525,6 +526,9 @@ protected:
   {
     return (OB_NOT_NULL(fold_iter_) && output_ == fold_iter_);
   }
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+  int create_group_update_cache_iter();
+#endif
 protected:
   int prepare_das_task();
   int prepare_all_das_tasks();
@@ -670,6 +674,8 @@ protected:
 
   // fold_iter_ is used for group rescan, it folds the output of iter_tree_ according to group_idx.
   ObDASGroupFoldIter *fold_iter_;
+  // group_update_cache_iter_ is used for group commit for hotspot row
+  ObDASGroupUpdateCacheIter *group_update_cache_iter_;
 
   // iter_tree_ is used to produce data,
   // for table scan and local index lookup:

@@ -140,6 +140,7 @@ public:
   _XX(END_STMT_FAIL)                                    \
   _XX(EXPLICIT_ROLLBACK)                                \
   _XX(CREATE_SAVEPOINT_FAIL)                            \
+  _XX(PRIMARY_TX_ABORTED)                               \
   // used for dblink create savepoint
 
 enum ObTxAbortCause

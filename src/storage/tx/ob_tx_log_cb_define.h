@@ -52,7 +52,7 @@ public:
   bool is_occupied() const { return tx_id_.get_id() > 0; }
   bool is_reserved() const { return get_group_no() == RESERVED_LOG_CB_GROUP_NO; }
 
-  int occupy_by_tx(ObPartTransCtx *tx_ctx);
+  int occupy_by_tx(ObPartTransCtx *tx_ctx, const ObTransID tx_id);
 
   int check_and_reset_log_cbs(const bool skip_check);
 

@@ -1181,6 +1181,9 @@ int ObPartTransCtx::post_tx_commit_resp_(const int status)
 #endif
     }
   }
+
+  (void)hotspot_redo_cache_.push_response_task(status, commit_version);
+
   REC_TRANS_TRACE_EXT(tlog_, response_scheduler,
                       OB_ID(ret), ret,
                       OB_ID(tag1), has_skip,

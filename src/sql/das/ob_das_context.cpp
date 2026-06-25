@@ -14,6 +14,9 @@
 #include "ob_das_context.h"
 #include "sql/das/ob_das_utils.h"
 #include "observer/ob_server.h"
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+#include "sql/das/ob_das_group_update_cache.h"
+#endif
 namespace oceanbase
 {
 using namespace common;
@@ -61,6 +64,25 @@ int ObDASCtx::init(const ObPhysicalPlan &plan, ObExecContext &ctx)
   LOG_DEBUG("init das context finish", K(ret), K(normal_locations), K(das_locations), K(table_locs_));
   return ret;
 }
+
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+int ObDASCtx::init_group_update_cache(const ObPhysicalPlan &plan)
+{
+  int ret = OB_SUCCESS;
+  if (!plan.is_batch_group_commit()) {
+    // do nothing
+  } else if (group_update_cache_ == nullptr) {
+    if (OB_ISNULL(group_update_cache_ =
+         OB_NEWx(ObDASGroupUpdateCache, (&allocator_), allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate group update cache failed", K(ret));
+    }
+  } else {
+    group_update_cache_->reuse();
+  }
+  return ret;
+}
+#endif
 
 int ObDASCtx::get_das_tablet_mapper(const uint64_t ref_table_id,
                                     ObDASTabletMapper &tablet_mapper,

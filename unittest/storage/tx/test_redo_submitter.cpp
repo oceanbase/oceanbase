@@ -11,6 +11,8 @@
  */
 
 #include <gmock/gmock.h>
+#include <atomic>
+#include <thread>
 #define private public
 #define protected public
 #include "storage/tx/ob_tx_redo_submitter.h"
@@ -639,6 +641,193 @@ TEST_F(ObTestRedoSubmitter, submit_ROW_SIZE_TOO_LARGE)
       EXPECT_EQ(helper.callbacks_.count(), 0);
     }
   }
+}
+
+// Regression for: when freeze-triggered redo submit asks for the reserved
+// FREEZE_LOG_CB_INDEX cb but that one is already busy, prepare_log_cb_(true)
+// must fall back to a normal cb from free_cbs_ instead of returning
+// OB_TX_NOLOGCB. The fallback path used to leak ret=OB_TX_NOLOGCB into the
+// success branch and dropped the cb after remove_first().
+TEST_F(ObTestRedoSubmitter, prepare_log_cb_freeze_cb_busy_fallback_to_normal)
+{
+  // Mark the freeze-reserved cb as busy.
+  ObTxLogCb *freeze_cb = tx_ctx.reserve_log_cb_group_.get_log_cb_by_index(
+      ObTxLogCbGroup::FREEZE_LOG_CB_INDEX);
+  ASSERT_TRUE(freeze_cb != nullptr);
+  ASSERT_FALSE(freeze_cb->is_busy());
+  freeze_cb->set_busy();
+
+  // At least one normal cb should be available in free_cbs_ from init_log_cbs_.
+  const int64_t free_cnt_before = tx_ctx.free_cbs_.get_size();
+  ASSERT_GT(free_cnt_before, 0);
+
+  // Ask for a freeze cb: must fall back to a normal cb, not return OB_TX_NOLOGCB.
+  ObTxLogCb *log_cb = nullptr;
+  ASSERT_EQ(OB_SUCCESS, tx_ctx.prepare_log_cb_(true /*need_freeze_cb*/, log_cb));
+  ASSERT_TRUE(log_cb != nullptr);
+  // The returned cb must NOT be the freeze-reserved one (that one is busy).
+  ASSERT_NE(freeze_cb, log_cb);
+  // The cb must be marked busy and accounted out of free_cbs_.
+  ASSERT_TRUE(log_cb->is_busy());
+  ASSERT_EQ(free_cnt_before - 1, tx_ctx.free_cbs_.get_size());
+
+  // Cleanup so TearDown does not complain about busy cbs left behind.
+  tx_ctx.return_log_cb_(log_cb);
+  freeze_cb->reuse();
+}
+
+TEST_F(ObTestRedoSubmitter, log_cb_busy_ownership_api_keeps_cleanup_private)
+{
+  ObTxLogCb cb;
+  ASSERT_FALSE(cb.is_busy());
+  ASSERT_TRUE(cb.try_acquire_busy());
+  ASSERT_TRUE(cb.is_busy());
+  ASSERT_FALSE(cb.try_acquire_busy());
+
+  ASSERT_EQ(OB_SUCCESS, cb.get_cb_arg_array().push_back(ObTxCbArg(ObTxLogType::TX_ABORT_LOG, nullptr)));
+  cb.reuse_without_busy();
+  ASSERT_TRUE(cb.is_busy());
+  ASSERT_EQ(0, cb.get_cb_arg_array().count());
+
+  cb.release_busy();
+  ASSERT_FALSE(cb.is_busy());
+  cb.reuse();
+  ASSERT_FALSE(cb.is_busy());
+}
+
+TEST_F(ObTestRedoSubmitter, log_cb_busy_ownership_api_allows_one_concurrent_acquire)
+{
+  ObTxLogCb cb;
+  std::atomic<int64_t> ready(0);
+  std::atomic<int64_t> go(0);
+  std::atomic<int64_t> acquired_count(0);
+  auto worker = [&]() {
+    ready.fetch_add(1);
+    while (0 == go.load()) {
+    }
+    if (cb.try_acquire_busy()) {
+      acquired_count.fetch_add(1);
+    }
+  };
+
+  std::thread thread1(worker);
+  std::thread thread2(worker);
+  while (2 != ready.load()) {
+  }
+  go.store(1);
+  thread1.join();
+  thread2.join();
+
+  ASSERT_TRUE(cb.is_busy());
+  ASSERT_EQ(1, acquired_count.load());
+  cb.release_busy();
+  ASSERT_FALSE(cb.is_busy());
+}
+
+TEST_F(ObTestRedoSubmitter, prepare_log_cb_freeze_cb_cleans_before_release)
+{
+  ObTxLogCb *freeze_cb = tx_ctx.reserve_log_cb_group_.get_log_cb_by_index(
+      ObTxLogCbGroup::FREEZE_LOG_CB_INDEX);
+  ASSERT_TRUE(freeze_cb != nullptr);
+
+  ObTxLogCb *log_cb = nullptr;
+  ASSERT_EQ(OB_SUCCESS, tx_ctx.prepare_log_cb_(true /*need_freeze_cb*/, log_cb));
+  ASSERT_EQ(freeze_cb, log_cb);
+  ASSERT_TRUE(freeze_cb->is_busy());
+  ASSERT_EQ(OB_SUCCESS, freeze_cb->get_cb_arg_array().push_back(
+                            ObTxCbArg(ObTxLogType::TX_ABORT_LOG, nullptr)));
+
+  ASSERT_EQ(OB_SUCCESS, tx_ctx.return_log_cb_(log_cb));
+  ASSERT_FALSE(freeze_cb->is_busy());
+  ASSERT_EQ(0, freeze_cb->get_cb_arg_array().count());
+
+  log_cb = nullptr;
+  ASSERT_EQ(OB_SUCCESS, tx_ctx.prepare_log_cb_(true /*need_freeze_cb*/, log_cb));
+  ASSERT_EQ(freeze_cb, log_cb);
+  ASSERT_TRUE(freeze_cb->is_busy());
+  ASSERT_EQ(0, freeze_cb->get_cb_arg_array().count());
+  ASSERT_EQ(OB_SUCCESS, tx_ctx.return_log_cb_(log_cb));
+}
+
+TEST_F(ObTestRedoSubmitter, prepare_log_cb_freeze_cb_not_reused_while_cleanup_holds_busy)
+{
+  ObTxLogCb *freeze_cb = tx_ctx.reserve_log_cb_group_.get_log_cb_by_index(
+      ObTxLogCbGroup::FREEZE_LOG_CB_INDEX);
+  ASSERT_TRUE(freeze_cb != nullptr);
+  ASSERT_TRUE(freeze_cb->try_acquire_busy());
+  ASSERT_EQ(OB_SUCCESS, freeze_cb->get_cb_arg_array().push_back(
+                            ObTxCbArg(ObTxLogType::TX_ABORT_LOG, nullptr)));
+
+  freeze_cb->reuse_without_busy();
+  ASSERT_TRUE(freeze_cb->is_busy());
+  ASSERT_EQ(0, freeze_cb->get_cb_arg_array().count());
+
+  const int64_t free_cnt_before = tx_ctx.free_cbs_.get_size();
+  ASSERT_GT(free_cnt_before, 0);
+  ObTxLogCb *fallback_cb = nullptr;
+  ASSERT_EQ(OB_SUCCESS, tx_ctx.prepare_log_cb_(true /*need_freeze_cb*/, fallback_cb));
+  ASSERT_TRUE(fallback_cb != nullptr);
+  ASSERT_NE(freeze_cb, fallback_cb);
+  ASSERT_TRUE(fallback_cb->is_busy());
+  ASSERT_EQ(free_cnt_before - 1, tx_ctx.free_cbs_.get_size());
+  ASSERT_EQ(OB_SUCCESS, tx_ctx.return_log_cb_(fallback_cb));
+
+  freeze_cb->release_busy();
+  ObTxLogCb *log_cb = nullptr;
+  ASSERT_EQ(OB_SUCCESS, tx_ctx.prepare_log_cb_(true /*need_freeze_cb*/, log_cb));
+  ASSERT_EQ(freeze_cb, log_cb);
+  ASSERT_EQ(OB_SUCCESS, log_cb->get_cb_arg_array().push_back(
+                            ObTxCbArg(ObTxLogType::TX_ABORT_LOG, nullptr)));
+  ASSERT_EQ(1, log_cb->get_cb_arg_array().count());
+  ASSERT_EQ(ObTxLogType::TX_ABORT_LOG, log_cb->get_last_log_type());
+  ASSERT_EQ(OB_SUCCESS, tx_ctx.return_log_cb_(log_cb));
+}
+
+TEST_F(ObTestRedoSubmitter, prepare_log_cb_normal_cb_reacquires_busy_from_free_list)
+{
+  const int64_t free_cnt_before = tx_ctx.free_cbs_.get_size();
+  ASSERT_GT(free_cnt_before, 0);
+
+  ObTxLogCb *log_cb = nullptr;
+  ASSERT_EQ(OB_SUCCESS, tx_ctx.prepare_log_cb_(false /*need_freeze_cb*/, log_cb));
+  ASSERT_TRUE(log_cb != nullptr);
+  ASSERT_TRUE(log_cb->is_busy());
+  ASSERT_EQ(free_cnt_before - 1, tx_ctx.free_cbs_.get_size());
+
+  ASSERT_EQ(OB_SUCCESS, log_cb->get_cb_arg_array().push_back(
+                            ObTxCbArg(ObTxLogType::TX_ABORT_LOG, nullptr)));
+  ASSERT_EQ(OB_SUCCESS, tx_ctx.return_log_cb_(log_cb));
+  ASSERT_FALSE(log_cb->is_busy());
+  ASSERT_EQ(0, log_cb->get_cb_arg_array().count());
+  ASSERT_EQ(free_cnt_before, tx_ctx.free_cbs_.get_size());
+
+  ObTxLogCb *next_cb = nullptr;
+  ASSERT_EQ(OB_SUCCESS, tx_ctx.prepare_log_cb_(false /*need_freeze_cb*/, next_cb));
+  ASSERT_EQ(log_cb, next_cb);
+  ASSERT_TRUE(next_cb->is_busy());
+  ASSERT_EQ(0, next_cb->get_cb_arg_array().count());
+  ASSERT_EQ(free_cnt_before - 1, tx_ctx.free_cbs_.get_size());
+  ASSERT_EQ(OB_SUCCESS, tx_ctx.return_log_cb_(next_cb));
+}
+
+TEST_F(ObTestRedoSubmitter, prepare_log_cb_normal_cb_busy_in_free_list_keeps_list_membership)
+{
+  const int64_t free_cnt_before = tx_ctx.free_cbs_.get_size();
+  ASSERT_GT(free_cnt_before, 0);
+  ObTxLogCb *free_cb = tx_ctx.free_cbs_.get_first();
+  ASSERT_TRUE(free_cb != nullptr);
+  ASSERT_FALSE(free_cb->is_busy());
+  free_cb->set_busy();
+
+  ObTxLogCb *log_cb = nullptr;
+  ASSERT_EQ(OB_ERR_UNEXPECTED, tx_ctx.prepare_log_cb_(false /*need_freeze_cb*/, log_cb));
+  ASSERT_TRUE(log_cb == nullptr);
+  ASSERT_EQ(free_cnt_before, tx_ctx.free_cbs_.get_size());
+  ASSERT_EQ(free_cb, tx_ctx.free_cbs_.get_first());
+
+  tx_ctx.free_cbs_.remove(free_cb);
+  free_cb->reuse();
+  tx_ctx.free_cbs_.add_first(free_cb);
 }
 
 } // transaction

@@ -285,8 +285,9 @@ ObPsStmtInfo::ObPsStmtInfo(ObIAllocator *inner_allocator)
     raw_params_(inner_allocator),
     raw_params_idx_(inner_allocator),
     literal_stmt_type_(stmt::T_NONE),
-    ps_need_parameterization_(true)
-
+    ps_need_parameterization_(true),
+    is_group_commit_(false),
+    group_commit_key_params_idx_(inner_allocator)
 {
 }
 
@@ -316,13 +317,26 @@ ObPsStmtInfo::ObPsStmtInfo(ObIAllocator *inner_allocator,
     raw_params_(inner_allocator),
     raw_params_idx_(inner_allocator),
     literal_stmt_type_(stmt::T_NONE),
-    ps_need_parameterization_(true)
+    ps_need_parameterization_(true),
+    is_group_commit_(false),
+    group_commit_key_params_idx_(inner_allocator)
 {
 }
 
 bool ObPsStmtInfo::is_valid() const
 {
   return !ps_key_.ps_sql_.empty();
+}
+
+int ObPsStmtInfo::set_group_commit_key_params_idx(const common::ObIArray<int64_t> &idx_array)
+{
+  int ret = OB_SUCCESS;
+  if (idx_array.count() > 0) {
+    if (OB_FAIL(group_commit_key_params_idx_.assign(idx_array))) {
+      LOG_WARN("failed to assign group commit key params idx", K(ret));
+    }
+  }
+  return ret;
 }
 
 int ObPsStmtInfo::assign_no_param_sql(const common::ObString &no_param_sql)
@@ -464,6 +478,7 @@ int ObPsStmtInfo::deep_copy(const ObPsStmtInfo &other)
     is_expired_evicted_ = other.is_expired_evicted_;
     literal_stmt_type_ = other.literal_stmt_type_;
     ps_need_parameterization_ = other.ps_need_parameterization_;
+    is_group_commit_ = other.is_group_commit_;
     if (other.get_dep_objs_cnt() > 0) {
       dep_objs_cnt_ = other.get_dep_objs_cnt();
       if (NULL == (dep_objs_ = reinterpret_cast<ObSchemaObjVersion *>
@@ -488,6 +503,9 @@ int ObPsStmtInfo::deep_copy(const ObPsStmtInfo &other)
       LOG_WARN("deep copy fixed raw params failed", K(other), K(ret));
     } else if (OB_FAIL(ps_sql_meta_.deep_copy(other.get_ps_sql_meta()))) {
       LOG_WARN("deep copy ps sql meta faield", K(ret));
+    } else if (other.has_group_commit_key_params() &&
+               OB_FAIL(group_commit_key_params_idx_.assign(other.get_group_commit_key_params_idx()))) {
+      LOG_WARN("deep copy group commit key params idx failed", K(ret));
     }
   }
   return ret;

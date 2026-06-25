@@ -236,6 +236,7 @@
 #include "observer/virtual_table/ob_all_virtual_kv_client_info.h"
 #include "observer/virtual_table/ob_all_virtual_deadlock_detector_stat.h"
 #include "observer/virtual_table/ob_all_virtual_dba_source.h"
+#include "observer/virtual_table/ob_all_virtual_sql_group_commit_stat.h"
 
 namespace oceanbase
 {
@@ -2825,6 +2826,15 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               SERVER_LOG(ERROR, "ObAllVirtualDeadLockDetectorStat construct fail", K(ret));
             } else {
               vt_iter = static_cast<ObAllVirtualDeadLockDetectorStat *>(deadlock_detector_stat);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_SQL_GROUP_COMMIT_STAT_TID: {
+            ObAllVirtualSqlGroupCommitStat *sql_group_commit_stat = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualSqlGroupCommitStat, sql_group_commit_stat))) {
+              SERVER_LOG(ERROR, "ObAllVirtualSqlGroupCommitStat construct fail", K(ret));
+            } else {
+              vt_iter = static_cast<ObAllVirtualSqlGroupCommitStat *>(sql_group_commit_stat);
             }
             break;
           }

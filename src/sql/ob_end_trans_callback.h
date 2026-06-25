@@ -101,6 +101,9 @@ public:
   }
   void set_diagnostic_info(common::ObDiagnosticInfo *diagnostic_info);
   void reset_diagnostic_info();
+  int inc_session_ref(ObSQLSessionInfo *sess_info);
+  int dec_session_ref(ObSQLSessionInfo *sess_info);
+
 private:
   /* macro */
   observer::ObSqlEndTransCb mysql_end_trans_cb_;

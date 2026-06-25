@@ -1132,6 +1132,7 @@
 # 12571: __all_virtual_source
 # 12576: __all_virtual_wr_active_session_history_v2
 # 12576: __wr_active_session_history_v2  # BASE_TABLE_NAME
+# 12593: __all_virtual_sql_group_commit_stat
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -1790,6 +1791,8 @@
 # 15535: ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY_V2
 # 15535: __wr_active_session_history_v2  # BASE_TABLE_NAME
 # 15535: __all_virtual_wr_active_session_history_v2  # BASE_TABLE_NAME1
+# 15549: ALL_VIRTUAL_SQL_GROUP_COMMIT_STAT
+# 15549: __all_virtual_sql_group_commit_stat  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA

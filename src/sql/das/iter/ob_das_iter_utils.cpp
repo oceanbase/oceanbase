@@ -12,7 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/iter/ob_das_iter_utils.h"
-
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+#include "sql/das/iter/ob_das_group_update_cache_iter.h"
+#endif
 namespace oceanbase
 {
 namespace sql
@@ -193,6 +195,37 @@ int ObDASIterUtils::create_group_fold_iter(const ObTableScanCtDef &tsc_ctdef,
 
   return ret;
 }
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+int ObDASIterUtils::create_group_update_cache_iter(const ObTableScanCtDef &tsc_ctdef,
+                                                   ObEvalCtx &eval_ctx,
+                                                   ObExecContext &exec_ctx,
+                                                   ObDASIter *iter_tree,
+                                                   ObDASGroupUpdateCacheIter *&update_cache_iter)
+{
+  int ret = OB_SUCCESS;
+  ObDASGroupUpdateCacheIter *iter = nullptr;
+  const ObDASScanCtDef *scan_ctdef = &tsc_ctdef.scan_ctdef_;
+  ObDASIterParam param;
+  param.max_size_ = 1;
+  param.eval_ctx_ = &eval_ctx;
+  param.exec_ctx_ = &exec_ctx;
+  param.output_ = &tsc_ctdef.get_das_output_exprs();
+  param.child_ = iter_tree;
+  param.right_ = nullptr;
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(create_das_group_update_cache_iter_help(param,
+                                                        tsc_ctdef,
+                                                        iter_tree,
+                                                        iter))) {
+      LOG_WARN("failed to create das group update cache iter", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    update_cache_iter = iter;
+  }
+  return ret;
+}
+#endif
 
 /***************** private begin *****************/
 int ObDASIterUtils::create_das_merge_iter_help(ObDASIterParam &param,
@@ -350,6 +383,58 @@ int ObDASIterUtils::create_das_group_fold_iter_help(ObDASIterParam &param,
     result = nullptr;
   }
 
+  return ret;
+}
+
+int ObDASIterUtils::create_das_group_update_cache_iter_help(ObDASIterParam &param,
+                                                    const ObTableScanCtDef &tsc_ctdef,
+                                                    ObDASIter *iter_tree,
+                                                    ObDASGroupUpdateCacheIter *&result)
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+  void *iter_buf = nullptr;
+  ObDASGroupUpdateCacheIter *iter = nullptr;
+  if (!param.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid das iter param", K(param), K(ret));
+  } else {
+    ObIAllocator &alloc = param.exec_ctx_->get_allocator();
+
+    if (OB_ISNULL(iter = OB_NEWx(ObDASGroupUpdateCacheIter, &alloc))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory", K(ret));
+    } else {
+      ObDASGroupUpdateCacheIterParam group_update_cache_iter_param;
+      group_update_cache_iter_param.assgin(param);
+      group_update_cache_iter_param.type_ = ObDASIterType::DAS_ITER_GROUP_UPDATE_CACHE;
+      group_update_cache_iter_param.output_ctdef_ =
+          tsc_ctdef.lookup_ctdef_ != nullptr ? tsc_ctdef.lookup_ctdef_ : &tsc_ctdef.scan_ctdef_;
+      group_update_cache_iter_param.group_update_cache_ = param.exec_ctx_->get_das_ctx().get_group_update_cache();
+      group_update_cache_iter_param.iter_tree_ = iter_tree;
+
+      if (OB_FAIL(iter->init(group_update_cache_iter_param))) {
+        LOG_WARN("failed to init das group update", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      result = iter;
+    } else {
+      if (OB_NOT_NULL(iter)) {
+        iter->release();
+        alloc.free(iter);
+        iter = nullptr;
+      }
+    }
+  }
+#else
+  UNUSED(param);
+  UNUSED(tsc_ctdef);
+  UNUSED(iter_tree);
+  result = nullptr;
+  ret = OB_NOT_SUPPORTED;
+#endif
   return ret;
 }
 

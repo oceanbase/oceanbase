@@ -104,6 +104,11 @@ public:
   RPC_AP(PR3 post_ask_state_resp_msg, OB_TX_ASK_STATE_RESP, (transaction::ObAskStateRespMsg), ObTransRpcResult);
   RPC_AP(PR3 post_collect_state_msg, OB_TX_COLLECT_STATE, (transaction::ObCollectStateMsg), ObTransRpcResult);
   RPC_AP(PR3 post_collect_state_resp_msg, OB_TX_COLLECT_STATE_RESP, (transaction::ObCollectStateRespMsg), ObTransRpcResult);
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+  //for hotspot tx
+  RPC_AP(PR3 post_hotspot_redo_dispatch_msg, OB_TX_HOTSPOT_REDO_DISPATCH, (transaction::ObHotspotDispatchRedoMsg), ObTransRpcResult);
+  RPC_AP(PR3 post_hotspot_redo_submit_msg, OB_TX_HOTSPOT_REDO_SUBMIT, (transaction::ObHotspotSubmitOtherRedoMsg), ObTransRpcResult);
+#endif
   // xa
   RPC_AP(PR3 post_sub_prepare_msg, OB_TX_SUB_PREPARE, (transaction::ObTxSubPrepareMsg), ObTransRpcResult);
   RPC_AP(PR3 post_sub_prepare_resp_msg, OB_TX_SUB_PREPARE_RESP, (transaction::ObTxSubPrepareRespMsg), ObTransRpcResult);
@@ -142,6 +147,11 @@ TX_P_(AskState, OB_TX_ASK_STATE);
 TX_P_(AskStateResp, OB_TX_ASK_STATE_RESP);
 TX_P_(CollectState, OB_TX_COLLECT_STATE);
 TX_P_(CollectStateResp, OB_TX_COLLECT_STATE_RESP);
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+//for hotspot
+TX_P_(HotspotDispatchRedo , OB_TX_HOTSPOT_REDO_DISPATCH);
+TX_P_(HotspotSubmitOtherRedo, OB_TX_HOTSPOT_REDO_SUBMIT);
+#endif
 // for xa
 TX_P_(SubPrepare, OB_TX_SUB_PREPARE);
 TX_P_(SubPrepareResp, OB_TX_SUB_PREPARE_RESP);
@@ -434,6 +444,7 @@ public:
   int post_sub_request_msg_(const ObAddr &server, ObTxMsg &msg);
   int post_sub_response_msg_(const ObAddr &server, ObTxMsg &msg);
   int post_standby_msg_(const ObAddr &server, ObTxMsg &msg);
+  int post_hotspot_msg_(const ObAddr &server, ObTxMsg &msg);
   void statistics_();
 private:
   static const int64_t STAT_INTERVAL = 1 * 1000 * 1000;
@@ -455,6 +466,10 @@ private:
   obrpc::ObTxRPCCB<obrpc::OB_TX_ASK_STATE> tx_ask_state_cb_;
   obrpc::ObTxRPCCB<obrpc::OB_TX_ASK_STATE_RESP> tx_ask_state_resp_cb_;
   obrpc::ObTxRPCCB<obrpc::OB_TX_COLLECT_STATE> tx_collect_state_cb_;
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+  obrpc::ObTxRPCCB<obrpc::OB_TX_HOTSPOT_REDO_DISPATCH> tx_hotspot_redo_dispatch_cb_;
+  obrpc::ObTxRPCCB<obrpc::OB_TX_HOTSPOT_REDO_SUBMIT> tx_hotspot_redo_submit_cb_;
+#endif
   obrpc::ObTxRPCCB<obrpc::OB_TX_COLLECT_STATE_RESP> tx_collect_state_resp_cb_;
   obrpc::ObTxRPCCB<obrpc::OB_TX_SUB_PREPARE> tx_sub_prepare_cb_;
   obrpc::ObTxRPCCB<obrpc::OB_TX_SUB_PREPARE_RESP> tx_sub_prepare_resp_cb_;

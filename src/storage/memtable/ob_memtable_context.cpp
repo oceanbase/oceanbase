@@ -439,6 +439,16 @@ int ObMemtableCtx::replay_begin(const bool parallel_replay, const SCN scn)
   return OB_SUCCESS;
 }
 
+int ObMemtableCtx::remove_all_callbacks_for_replay()
+{
+  int ret = OB_SUCCESS;
+  // Remove all synced callbacks for hotspot rollback replay.
+  // This uses the fast commit callback traversal mechanism which is safe
+  // and handles checksum calculation properly.
+  ret = trans_mgr_.remove_all_callbacks_for_replay();
+  return ret;
+}
+
 // callback_list_idx:
 // -1 means all callback-list should do commit/rollback
 int ObMemtableCtx::replay_end(const bool is_replay_succ,
@@ -673,11 +683,37 @@ int ObMemtableCtx::log_submitted(const ObRedoLogSubmitHelper &helper)
   return ret;
 }
 
+int ObMemtableCtx::hotspot_log_submitted(const ObTransID primary_tx_id,
+                                         const int64_t data_size,
+                                         const share::SCN log_scn,
+                                         const memtable::ObCallbackScope &scope)
+{
+  int ret = OB_SUCCESS;
+  int fill_cnt = 0;
+  inc_pending_log_size(-1 * data_size);
+  inc_flushed_log_size(data_size);
+  ret = trans_mgr_.hotspot_log_submitted(primary_tx_id, scope, log_scn, fill_cnt);
+  log_gen_.inc_fill_log_cnt(fill_cnt);
+
+  return ret;
+}
+
 int ObMemtableCtx::sync_log_succ(const SCN scn, const ObCallbackScopeArray &callbacks)
 {
   int sync_cnt = 0;
   lock_mem_ctx_.sync_log_succ(scn);
   int ret = trans_mgr_.log_sync_succ(callbacks, scn, sync_cnt);
+  log_gen_.inc_sync_log_succ_cnt(sync_cnt);
+  return ret;
+}
+
+int ObMemtableCtx::hotspot_sync_log_succ(const SCN scn,
+                                         const ObCallbackScopeArray &callbacks,
+                                         bool &remap_verify_failed)
+{
+  int sync_cnt = 0;
+  lock_mem_ctx_.sync_log_succ(scn);
+  int ret = trans_mgr_.hotspot_log_sync_succ(callbacks, scn, sync_cnt, remap_verify_failed);
   log_gen_.inc_sync_log_succ_cnt(sync_cnt);
   return ret;
 }
@@ -833,6 +869,21 @@ int ObMemtableCtx::rollback(const transaction::ObTxSEQ to_seq_no,
   } else {
     const int64_t elapsed = common::ObClockGenerator::getClock() - start_ts;
     TRANS_LOG(INFO, "memtable handle rollback to successfuly", K(from_seq_no), K(to_seq_no), K(remove_cnt), K(elapsed), KPC(this));
+  }
+  return ret;
+}
+
+int ObMemtableCtx::remove_callbacks_for_hotspot_redo(const share::SCN stop_scn,
+                                                     share::SCN &last_remove_scn,
+                                                     int64_t &remove_succ_cnt)
+{
+  int ret = OB_SUCCESS;
+
+  common::ObTimeGuard timeguard("remove callbacks for hotspot redo", 10 * 1000);
+  ObByteLockGuard guard(lock_, ObWaitEventIds::MEMTABLE_CTX_ACCESS_LOCK);
+  if (OB_FAIL(trans_mgr_.remove_callbacks_for_hotspot_redo(stop_scn, last_remove_scn,
+                                                           remove_succ_cnt))) {
+    TRANS_LOG(WARN, "fail to remove callback for hotspot redo", K(ret), KPC(this));
   }
   return ret;
 }

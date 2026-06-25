@@ -65,6 +65,10 @@ namespace transaction
       TX_FREE_ROUTE_PUSH_STATE       = 80,
       TX_FREE_ROUTE_CHECK_ALIVE      = 81,
       TX_FREE_ROUTE_CHECK_ALIVE_RESP = 82,
+
+      /* for hotspot tx */
+      TX_HOTSPOT_DISPATCH_REDO = 90,
+      TX_HOTSPOT_SUBMIT_OTHER_REDO = 91,
     };
 
     struct ObTxMsg : public obrpc::ObIFill
@@ -587,6 +591,28 @@ namespace transaction
       OB_UNIS_VERSION(1);
     };
 
+    struct ObHotspotDispatchRedoMsg : public ObTxMsg
+    {
+    public:
+      ObHotspotDispatchRedoMsg() : ObTxMsg(TX_HOTSPOT_DISPATCH_REDO) {}
+
+    public:
+      bool is_valid() const { return ObTxMsg::is_valid(); }
+      // INHERIT_TO_STRING_KV("txMsg", ObTxMsg);
+      OB_UNIS_VERSION(1);
+    };
+
+    struct ObHotspotSubmitOtherRedoMsg : public ObTxMsg
+    {
+    public:
+      ObHotspotSubmitOtherRedoMsg() : ObTxMsg(TX_HOTSPOT_SUBMIT_OTHER_REDO) {}
+
+    public:
+      bool is_valid() const { return ObTxMsg::is_valid(); }
+      // INHERIT_TO_STRING_KV("txMsg", ObTxMsg);
+      OB_UNIS_VERSION(1);
+    };
+
     class ObTxMsgTypeChecker
     {
     public:
@@ -596,7 +622,12 @@ namespace transaction
             || (20 <= msg_type && 22 >= msg_type)
             || (40 <= msg_type && 49 >= msg_type)
             || (50 <= msg_type && 53 >= msg_type)
-            || (60 <= msg_type && 67 >= msg_type));
+            || (60 <= msg_type && 67 >= msg_type)
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+            || msg_type == TX_HOTSPOT_DISPATCH_REDO
+            || msg_type == TX_HOTSPOT_SUBMIT_OTHER_REDO
+#endif
+            );
       }
 
       static bool is_2pc_msg_type(const int16_t msg_type)

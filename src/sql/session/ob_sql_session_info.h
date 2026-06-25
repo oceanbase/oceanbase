@@ -1896,6 +1896,9 @@ public:
   void set_txn_free_route(bool txn_free_route);
   int calc_txn_free_route();
   bool can_txn_free_route() const;
+  bool is_proxy_support_txn_free_route() const { return txn_free_route_ctx_.is_proxy_support(); }
+  void disable_txn_free_route_by_hint() { txn_free_route_ctx_.set_disabled_by_hint(); }
+  bool is_txn_free_route_disabled_by_hint() const { return txn_free_route_ctx_.is_disabled_by_hint(); }
   virtual bool is_txn_free_route_temp() const { return tx_desc_ != NULL && txn_free_route_ctx_.is_temp(*tx_desc_); }
   transaction::ObTxnFreeRouteCtx &get_txn_free_route_ctx() { return txn_free_route_ctx_; }
   uint64_t get_txn_free_route_flag() const { return txn_free_route_ctx_.get_audit_record(); }

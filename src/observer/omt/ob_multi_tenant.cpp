@@ -159,6 +159,9 @@
 #include "observer/mysql/ob_query_response_time.h" //ObTenantQueryRespTimeCollector
 #include "lib/stat/ob_diagnostic_info_container.h"
 #include "share/backup/ob_backup_connectivity.h"
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+#include "sql/ob_sql_group_commit_aggregator.h"
+#endif
 #include "lib/thread/thread_mgr_interface.h"
 
 using namespace oceanbase;
@@ -583,6 +586,9 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, ObWorkloadRepositoryContext::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, observer::ObTableQueryASyncMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, observer::ObTenantQueryRespTimeCollector::mtl_init, nullptr, nullptr, nullptr, observer::ObTenantQueryRespTimeCollector::mtl_destroy);
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+    MTL_BIND2(mtl_new_default, ObSqlGroupCommitAggregator::mtl_init, ObSqlGroupCommitAggregator::mtl_start, ObSqlGroupCommitAggregator::mtl_stop, ObSqlGroupCommitAggregator::mtl_wait, mtl_destroy_default);
+#endif
   }
 
   if (OB_SUCC(ret)) {

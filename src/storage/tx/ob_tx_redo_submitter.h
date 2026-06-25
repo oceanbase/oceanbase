@@ -36,6 +36,7 @@ public:
     flush_all_(false),
     serial_final_(false),
     submit_if_not_full_(true),
+    for_freeze_(false),
     flush_freeze_clock_(UINT32_MAX),
     write_seq_no_(),
     submit_cb_list_idx_(-1),
@@ -44,6 +45,7 @@ public:
   {}
   ~ObTxRedoSubmitter();
   int submit_for_freeze(const uint32_t freeze_clock = UINT32_MAX, const bool display_blocked_info = true) {
+    for_freeze_ = true;
     return submit_(true, freeze_clock, false, display_blocked_info);
   }
   int serial_submit(const bool is_final) {
@@ -85,6 +87,7 @@ public:
                K_(write_seq_no),
                K_(serial_final),
                K_(submit_if_not_full),
+               K_(for_freeze),
                K_(submit_out_cnt),
                K_(submit_cb_list_idx));
 private:
@@ -101,6 +104,8 @@ private:
   bool serial_final_ : 1;
   // wheter submit out if log_block is not full filled
   bool submit_if_not_full_ : 1;
+  // whether this submit is triggered by freeze, used to select reserved freeze log_cb
+  bool for_freeze_ : 1;
   // flush memtables before and equals specified freeze_clock
   int64_t flush_freeze_clock_;
   // writer seq_no, used to select logging callback-list
@@ -396,7 +401,7 @@ int ObTxRedoSubmitter::prepare_()
 #endif
   } else {
     const bool parallel_logging = write_seq_no_.is_valid();
-    ret = tx_ctx_.prepare_for_submit_redo(log_cb_, *log_block_, serial_final_, parallel_logging);
+    ret = tx_ctx_.prepare_for_submit_redo(log_cb_, *log_block_, serial_final_, parallel_logging, for_freeze_);
   }
   return ret;
 }

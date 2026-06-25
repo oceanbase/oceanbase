@@ -501,6 +501,7 @@ int ObTransService::handle_tx_commit_result_(ObTxDesc &tx,
     break;
   case OB_TRANS_KILLED:
   case OB_TRANS_ROLLBACKED:
+  case OB_ROLLBACK_ON_NO_AFFECTED_ROWS:
     state = ObTxDesc::State::ROLLED_BACK;
     commit_out = result;
     break;
@@ -1365,6 +1366,7 @@ int ObTransService::create_tx_ctx_(const share::ObLSID &ls_id,
                     tx.addr_,
                     tx.get_expire_ts(),
                     this,
+                    tx.seq_base_,
                     tx.xid_);
   ret = OB_NOT_NULL(ls) ?
     ls->create_tx_ctx(arg, exist, ctx) :

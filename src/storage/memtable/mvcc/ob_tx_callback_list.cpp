@@ -450,6 +450,37 @@ int64_t ObTxCallbackList::calc_need_remove_count_for_fast_commit_()
   return need_remove_count;
 }
 
+int ObTxCallbackList::remove_all_callbacks_for_replay()
+{
+  int ret = OB_SUCCESS;
+  // Remove all callbacks during hotspot rollback replay.
+  // Unlike remove_callbacks_for_rollback_to which assumes tip-rollback semantics,
+  // this removes all callbacks unconditionally, which is needed because hotspot
+  // aggregation puts multiple secondary txs' remapped callbacks in the same list.
+  LockGuard guard(*this, LOCK_MODE::LOCK_ALL);
+  if (length_ <= 0) {
+    // no callbacks to remove
+  } else {
+    // Use a large remove count to ensure all synced callbacks are removed.
+    // Only remove callbacks that have been synced (not need_fill_redo).
+    ObRemoveCallbacksForFastCommitFunctor functor(length_, SCN::max_scn());
+    if (!is_skip_checksum_()) {
+      functor.set_checksumer(checksum_scn_, &batch_checksum_);
+    }
+    if (OB_FAIL(callback_(functor, get_guard()->get_next(), get_log_cursor(), false, guard.state_))) {
+      TRANS_LOG(ERROR, "remove all callbacks for replay failed", K(ret), K(functor));
+    } else {
+      callback_mgr_.add_fast_commit_callback_remove_cnt(functor.get_remove_cnt());
+      ensure_checksum_(functor.get_checksum_last_scn());
+      // Update log_cursor_ since all callbacks were removed
+      set_log_cursor_(&head_);
+      TRANS_LOG(INFO, "removed all callbacks for hotspot rollback replay",
+                "removed_cnt", functor.get_remove_cnt(), KPC(this));
+    }
+  }
+  return ret;
+}
+
 int ObTxCallbackList::remove_callbacks_for_fast_commit(const share::SCN stop_scn)
 {
   int ret = OB_SUCCESS;
@@ -481,6 +512,49 @@ int ObTxCallbackList::remove_callbacks_for_fast_commit(const share::SCN stop_scn
       } else {
         callback_mgr_.add_fast_commit_callback_remove_cnt(functor.get_remove_cnt());
         ensure_checksum_(functor.get_checksum_last_scn());
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTxCallbackList::remove_callbacks_for_hotspot_redo(const share::SCN stop_scn,
+                                                        share::SCN &last_remove_scn,
+                                                        int64_t &remove_succ_cnt)
+{
+  int ret = OB_SUCCESS;
+  // if one thread doing the fast-commit, others give up
+  LockGuard guard(*this, LOCK_MODE::TRY_LOCK_ITERATE);
+  if (guard.is_locked()) {
+    const int64_t fast_commit_conf_count = GCONF._fast_commit_callback_count;
+    const int64_t remove_cnt = OB_MIN(fast_commit_conf_count, length_);
+    if (remove_cnt <= 0) {
+      // no callback can removed
+    } else {
+      share::SCN right_bound;
+      if (!stop_scn.is_valid()) {
+        // unspecified stop_scn, used callback_list's sync_scn_
+        right_bound = sync_scn_;
+      } else if (!sync_scn_.is_min()) {
+        // specified stop_scn, and callback_list's sync_scn_ is valid
+        // use mininum
+        right_bound = SCN::min(stop_scn, sync_scn_);
+      } else {
+        // callback_list's sync_scn is invalid, use stop_scn
+        right_bound = stop_scn;
+      }
+      ObRemoveCallbacksForFastCommitFunctor functor(remove_cnt, right_bound);
+      if (!is_skip_checksum_()) {
+        functor.set_checksumer(checksum_scn_, &batch_checksum_);
+      }
+      if (OB_FAIL(
+              callback_(functor, get_guard()->get_next(), get_log_cursor(), false, guard.state_))) {
+        TRANS_LOG(ERROR, "remove callbacks for fast commit wont report error", K(ret), K(functor));
+      } else {
+        callback_mgr_.add_fast_commit_callback_remove_cnt(functor.get_remove_cnt());
+        ensure_checksum_(functor.get_checksum_last_scn());
+        last_remove_scn = functor.get_checksum_last_scn();
+        remove_succ_cnt = functor.get_remove_cnt();
       }
     }
   }

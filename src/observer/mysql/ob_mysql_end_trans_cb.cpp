@@ -14,8 +14,16 @@
 
 #include "ob_mysql_end_trans_cb.h"
 #include "obmp_stmt_send_piece_data.h"
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+#include "sql/ob_sql_group_commit_aggregator.h"
+#include "sql/ob_sql_group_commit_struct.h"
+#endif
+#include "rpc/ob_request.h"
+
 using namespace oceanbase::common;
 using namespace oceanbase::obmysql;
+using namespace oceanbase::rpc;
+using namespace oceanbase::sql;
 namespace oceanbase
 {
 namespace observer
@@ -76,7 +84,7 @@ void ObSqlEndTransCb::callback(int cb_param)
     bool reuse_tx = OB_SUCCESS == cb_param
       || OB_TRANS_COMMITED == cb_param
       || OB_TRANS_ROLLBACKED == cb_param;
-      ObSqlTransControl::reset_session_tx_state(session_info, reuse_tx);
+    ObSqlTransControl::reset_session_tx_state(session_info, reuse_tx);
     sessid = session_info->get_server_sid();
     proxy_sessid = session_info->get_proxy_sessid();
     // 临界区内检查这些变量，预防并发callback造成的不良影响
@@ -144,6 +152,11 @@ void ObSqlEndTransCb::callback(int cb_param)
     session_info->reset_current_plan_hash();
     session_info->reset_current_plan_id();
     session_info->set_session_sleep();
+
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+    handle_sub_tx_callback(ret, need_disconnect_);
+#endif
+
     if (OB_SUCCESS == ret) {
       if (need_disconnect_) {
         packet_sender_.force_disconnect();
@@ -172,6 +185,43 @@ void ObSqlEndTransCb::callback(int cb_param)
     }
   }
 }
+
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+void ObSqlEndTransCb::handle_sub_tx_callback(int cb_param, bool need_disconnect)
+{
+  int ret = OB_SUCCESS;
+  ObRequest *req = packet_sender_.get_req();
+  if (!req->has_group_commit_agg_info()) {
+    // not group commit or not primary tx, do nothing
+  } else {
+    ObGroupCommitAggInfo *agg_info = req->get_group_commit_agg_info();
+    LOG_DEBUG("handle group commit callback", K(cb_param), K(need_disconnect), KPC(req), KPC(agg_info));
+    if (agg_info->get_sub_req_cnt() == 1) {
+      // single tx group commit, do nothing
+      OB_ASSERT(agg_info->get_head_sub_request()->req_ == req);
+    } else {
+      ObGroupCommitSubRequest *cur =
+          reinterpret_cast<ObGroupCommitSubRequest *>(agg_info->get_head_sub_request()->next_);
+      while (cur != nullptr) {
+        // If the subtransaction has not started, its callback needs to be executed within the primary transaction's callback.
+        if (!cur->is_trans_started_) {
+          LOG_INFO("sub tx not start, need to callback in primary tx", KPC(cur));
+          cur->sess_->get_mysql_end_trans_cb().set_need_disconnect(need_disconnect);
+          if (cur->rollback_on_no_affected_rows_ && cb_param == OB_SUCCESS) {
+            cb_param = OB_ROLLBACK_ON_NO_AFFECTED_ROWS;
+          }
+          cur->sess_->get_mysql_end_trans_cb().callback(cb_param);
+        }
+        cur = reinterpret_cast<ObGroupCommitSubRequest *>(cur->next_);
+      }
+    }
+
+    if (OB_FAIL(ObSqlGroupCommitAggregator::free_agg_request(*req))) {
+      LOG_WARN("failed to free agg request", K(ret));
+    }
+  }
+}
+#endif
 
 void ObSqlEndTransCb::destroy()
 {

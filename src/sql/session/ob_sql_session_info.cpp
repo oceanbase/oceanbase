@@ -1459,6 +1459,9 @@ int ObSQLSessionInfo::prepare_ps_stmt(const ObPsStmtId inner_stmt_id,
         session_info->set_ps_stmt_checksum(stmt_info->get_ps_stmt_checksum());
         session_info->set_inner_stmt_id(inner_stmt_id);
         session_info->set_num_of_returning_into(stmt_info->get_num_of_returning_into());
+        session_info->set_is_group_commit(stmt_info->is_group_commit());
+        session_info->set_group_commit_key_params_idx(stmt_info->get_group_commit_key_params_idx());
+
         if (OB_FAIL(session_info->fill_param_types_with_null_type())) {
           LOG_WARN("fill param types failed", K(ret),
                                         K(stmt_info->get_ps_sql()),

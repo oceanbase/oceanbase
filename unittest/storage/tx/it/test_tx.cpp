@@ -2466,6 +2466,151 @@ TEST_F(ObTestTx, participant_abort_asynchronously)
   EXPECT_EQ(commit_ret, OB_TRANS_ROLLBACKED);
 }
 
+TEST_F(ObTestTx, seq_base_passed_to_part_ctx_and_recovered)
+{
+  int ret = OB_SUCCESS;
+  ObTxNode::reset_localtion_adapter();
+
+  oceanbase::common::ObClusterVersion::get_instance().init(DATA_VERSION_4_2_4_0);
+  auto n1 = new ObTxNode(1, ObAddr(ObAddr::VER::IPV4, "127.0.0.1", 8888), bus_);
+  DEFER(delete(n1));
+
+  ASSERT_EQ(OB_SUCCESS, n1->start());
+
+  ObTxParam tx_param;
+  tx_param.timeout_us_ = 1000000;
+  tx_param.access_mode_ = ObTxAccessMode::RW;
+  tx_param.isolation_ = ObTxIsolationLevel::RC;
+  tx_param.cluster_id_ = 100;
+
+  // Acquire tx and verify seq_base_ is set
+  ObTxDesc *tx_ptr = NULL;
+  ASSERT_EQ(OB_SUCCESS, n1->acquire_tx(tx_ptr));
+  ObTxDesc &tx = *tx_ptr;
+
+  // Verify seq_base_ is set in tx_desc (should be >= 0 for cluster version >= 4.2.4.0)
+  ASSERT_GE(tx.seq_base_, 0);
+
+  ObTxSEQ sp1;
+  {
+    ObTxReadSnapshot snapshot;
+    ASSERT_EQ(OB_SUCCESS, n1->get_read_snapshot(tx,
+                             tx_param.isolation_,
+                             n1->ts_after_ms(100),
+                             snapshot));
+    ASSERT_EQ(OB_SUCCESS, n1->create_implicit_savepoint(tx, tx_param, sp1));
+    ASSERT_EQ(OB_SUCCESS, n1->write(tx, snapshot, 100, 112));
+  }
+
+  // Get tx ctx and verify seq_base_ is passed to exec_info_
+  ObPartTransCtx *part_ctx = NULL;
+  ObLSID ls_id(1);
+  ASSERT_EQ(OB_SUCCESS, n1->get_tx_ctx(ls_id, tx.tx_id_, part_ctx));
+  ASSERT_NE(nullptr, part_ctx);
+  ASSERT_EQ(tx.seq_base_, part_ctx->exec_info_.seq_base_);
+
+  ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
+  ASSERT_EQ(OB_SUCCESS, n1->txs_.tx_ctx_mgr_.get_ls_tx_ctx_mgr(n1->ls_id_, ls_tx_ctx_mgr));
+
+  // Switch to follower gracefully and verify seq_base_ is in TX_ACTIVE_INFO_LOG
+  {
+    int64_t seq_base_before_switch = part_ctx->exec_info_.seq_base_;
+    ASSERT_EQ(OB_SUCCESS, ls_tx_ctx_mgr->switch_to_follower_gracefully());
+    n1->wait_all_redolog_applied();
+
+    // Verify seq_base_ is still valid after switch
+    ASSERT_EQ(seq_base_before_switch, part_ctx->exec_info_.seq_base_);
+
+    // Switch back to leader
+    ASSERT_EQ(OB_SUCCESS, ls_tx_ctx_mgr->switch_to_leader());
+    n1->wait_all_redolog_applied();
+
+    // Verify seq_base_ is still valid after resume
+    ASSERT_EQ(seq_base_before_switch, part_ctx->exec_info_.seq_base_);
+  }
+
+  // Revert the tx ctx reference before commit
+  ASSERT_EQ(OB_SUCCESS, n1->revert_tx_ctx(part_ctx));
+
+  {
+    ASSERT_EQ(OB_SUCCESS, n1->commit_tx(tx, n1->ts_after_ms(500)));
+    ASSERT_EQ(OB_SUCCESS, n1->release_tx(tx));
+  }
+
+  ASSERT_EQ(OB_SUCCESS, n1->wait_all_tx_ctx_is_destoryed());
+  ASSERT_EQ(OB_SUCCESS, n1->txs_.tx_ctx_mgr_.revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr));
+}
+
+TEST_F(ObTestTx, seq_base_invalid_value_handling)
+{
+  int ret = OB_SUCCESS;
+  ObTxNode::reset_localtion_adapter();
+
+  oceanbase::common::ObClusterVersion::get_instance().init(DATA_VERSION_4_2_4_0);
+  auto n1 = new ObTxNode(1, ObAddr(ObAddr::VER::IPV4, "127.0.0.1", 8888), bus_);
+  DEFER(delete(n1));
+
+  ASSERT_EQ(OB_SUCCESS, n1->start());
+
+  ObTxParam tx_param;
+  tx_param.timeout_us_ = 1000000;
+  tx_param.access_mode_ = ObTxAccessMode::RW;
+  tx_param.isolation_ = ObTxIsolationLevel::RC;
+  tx_param.cluster_id_ = 100;
+
+  ObTxDesc *tx_ptr = NULL;
+  ASSERT_EQ(OB_SUCCESS, n1->acquire_tx(tx_ptr));
+  ObTxDesc &tx = *tx_ptr;
+
+  ObTxSEQ sp1;
+  {
+    ObTxReadSnapshot snapshot;
+    ASSERT_EQ(OB_SUCCESS, n1->get_read_snapshot(tx,
+                             tx_param.isolation_,
+                             n1->ts_after_ms(100),
+                             snapshot));
+    ASSERT_EQ(OB_SUCCESS, n1->create_implicit_savepoint(tx, tx_param, sp1));
+    ASSERT_EQ(OB_SUCCESS, n1->write(tx, snapshot, 100, 112));
+  }
+
+  ObPartTransCtx *part_ctx = NULL;
+  ObLSID ls_id(1);
+  ASSERT_EQ(OB_SUCCESS, n1->get_tx_ctx(ls_id, tx.tx_id_, part_ctx));
+  ASSERT_NE(nullptr, part_ctx);
+
+  // Verify that negative seq_base_ is treated as invalid
+  // (should not be serialized in TX_ACTIVE_INFO_LOG when < 0)
+  int64_t original_seq_base = part_ctx->exec_info_.seq_base_;
+
+  // Set to invalid value
+  part_ctx->exec_info_.seq_base_ = -1;
+
+  ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
+  ASSERT_EQ(OB_SUCCESS, n1->txs_.tx_ctx_mgr_.get_ls_tx_ctx_mgr(n1->ls_id_, ls_tx_ctx_mgr));
+
+  // Switch to follower gracefully - should handle invalid seq_base_ gracefully
+  ASSERT_EQ(OB_SUCCESS, ls_tx_ctx_mgr->switch_to_follower_gracefully());
+  n1->wait_all_redolog_applied();
+
+  // Restore original value for cleanup
+  part_ctx->exec_info_.seq_base_ = original_seq_base;
+
+  // Switch back to leader before commit
+  ASSERT_EQ(OB_SUCCESS, ls_tx_ctx_mgr->switch_to_leader());
+  n1->wait_all_redolog_applied();
+
+  // Revert the tx ctx reference before commit
+  ASSERT_EQ(OB_SUCCESS, n1->revert_tx_ctx(part_ctx));
+
+  {
+    ASSERT_EQ(OB_SUCCESS, n1->commit_tx(tx, n1->ts_after_ms(500)));
+    ASSERT_EQ(OB_SUCCESS, n1->release_tx(tx));
+  }
+
+  ASSERT_EQ(OB_SUCCESS, n1->wait_all_tx_ctx_is_destoryed());
+  ASSERT_EQ(OB_SUCCESS, n1->txs_.tx_ctx_mgr_.revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr));
+}
+
 ////
 /// APPEND NEW TEST HERE, USE PRE DEFINED MACRO IN FILE `test_tx.dsl`
 /// SEE EXAMPLE: TEST_F(ObTestTx, rollback_savepoint_timeout)

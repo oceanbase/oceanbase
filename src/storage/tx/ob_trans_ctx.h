@@ -184,6 +184,7 @@ public:
                        K_(stc),
                        K_(ctx_create_time));
 protected:
+  virtual bool is_in_active_aggregation_() const { return false; }
   void set_exiting_();
   void print_trace_log_();
   void print_trace_log_if_necessary_();

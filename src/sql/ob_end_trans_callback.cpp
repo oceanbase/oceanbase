@@ -14,7 +14,13 @@
 
 #include "ob_end_trans_callback.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "sql/session/ob_sql_session_mgr.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+#include "sql/ob_sql_group_commit_struct.h"
+#endif
+
+
 using namespace oceanbase::transaction;
 using namespace oceanbase::common;
 namespace oceanbase
@@ -110,6 +116,70 @@ void ObEndTransAsyncCallback::reset_diagnostic_info()
     common::ObLocalDiagnosticInfo::dec_ref(diagnostic_info_);
     diagnostic_info_ = nullptr;
   }
+}
+
+int ObEndTransAsyncCallback::inc_session_ref(ObSQLSessionInfo *sess_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(GCTX.session_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session mgr is null", K(ret));
+  } else if (OB_FAIL(GCTX.session_mgr_->inc_session_ref(sess_info))) {
+    LOG_WARN("fail to inc session ref", K(ret));
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+  } else if (mysql_end_trans_cb_.get_packet_sender().get_req()->has_group_commit_agg_info()) {
+    ObGroupCommitAggInfo *agg_info = mysql_end_trans_cb_.get_packet_sender().get_req()->get_group_commit_agg_info();
+    ObGroupCommitSubRequest *head = reinterpret_cast<ObGroupCommitSubRequest *>(agg_info->get_head_sub_request()->next_);
+    ObGroupCommitSubRequest *cur = head;
+    while (OB_SUCC(ret) && cur != nullptr) {
+      // If a sub-transaction has not started, its end transaction will be skipped,
+      // and the callback for the sub-transaction will be invoked within the primary transaction's callback.
+      // Therefore, we need to increase the session reference for the sub-transaction here,
+      // to prevent its session from being released too early.
+      if (!cur->is_trans_started_ && OB_FAIL(GCTX.session_mgr_->inc_session_ref(cur->sess_))) {
+        LOG_WARN("fail to inc session ref", K(ret));
+      } else {
+        cur = reinterpret_cast<ObGroupCommitSubRequest *>(cur->next_);
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      ObGroupCommitSubRequest *revert_cur = head;
+      while (revert_cur != cur) {
+        if (!revert_cur->is_trans_started_) {
+          GCTX.session_mgr_->revert_session(revert_cur->sess_);
+        }
+        revert_cur = reinterpret_cast<ObGroupCommitSubRequest *>(revert_cur->next_);
+      }
+    }
+#endif
+  }
+  return ret;
+}
+
+int ObEndTransAsyncCallback::dec_session_ref(ObSQLSessionInfo *sess_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(GCTX.session_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session mgr is null", K(ret));
+  } else {
+    GCTX.session_mgr_->revert_session(sess_info);
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+    if (mysql_end_trans_cb_.get_packet_sender().get_req()->has_group_commit_agg_info()) {
+      ObGroupCommitAggInfo *agg_info = mysql_end_trans_cb_.get_packet_sender().get_req()->get_group_commit_agg_info();
+      ObGroupCommitSubRequest *cur = reinterpret_cast<ObGroupCommitSubRequest *>(agg_info->get_head_sub_request()->next_);
+      while (nullptr != cur) {
+        // see comments in inc_session_ref()
+        if (!cur->is_trans_started_) {
+          GCTX.session_mgr_->revert_session(cur->sess_);
+        }
+        cur = reinterpret_cast<ObGroupCommitSubRequest *>(cur->next_);
+      }
+    }
+#endif
+  }
+  return ret;
 }
 
 }/* ns sql*/

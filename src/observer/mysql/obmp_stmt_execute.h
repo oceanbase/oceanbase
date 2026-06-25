@@ -19,9 +19,27 @@
 #include "observer/mysql/obmp_base.h"
 #include "observer/mysql/ob_query_retry_ctrl.h"
 #include "sql/plan_cache/ob_prepare_stmt_struct.h"
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+#include "sql/ob_sql_group_commit_struct.h"
+#endif
 
 namespace oceanbase
 {
+namespace sql
+{
+#ifndef OB_HOTSPOT_GROUP_COMMIT
+enum ObGroupCommitExecMode : uint8_t
+{
+  GROUP_COMMIT_INVALID = 0,
+  GROUP_COMMIT_SUB_WAIT = 1,
+  GROUP_COMMIT_SUB_EXEC = 2,
+  GROUP_COMMIT_AGG_SINGLE_EXEC = 3,
+  GROUP_COMMIT_AGG_BATCH_EXEC = 4,
+  GROUP_COMMIT_AGG_SPLIT = 5
+};
+#endif
+}
+
 namespace observer
 {
 
@@ -249,11 +267,25 @@ protected:
   int64_t get_curr_sql_idx() { return curr_sql_idx_; }
 
 protected:
+  int process_execute_stmt(const sql::ObMultiStmtItem &multi_stmt_item,
+                           sql::ObSQLSessionInfo &session,
+                           bool has_more_result,
+                           bool fore_sync_resp,
+                           bool &need_disconnect,
+                           bool &async_resp_used);
   int init_arraybinding_field(int64_t column_field_cnt, const ColumnsFieldIArray *column_fields);
   int init_row_for_arraybinding(ObIAllocator &alloc, int64_t array_binding_row_num);
   int construct_execute_param_for_arraybinding(int64_t pos);
+  bool is_batch_group_commit() const
+  {
+    return group_commit_exec_mode_ == sql::GROUP_COMMIT_AGG_BATCH_EXEC;
+  }
+  virtual void disable_response() { packet_sender_.disable_response(); }
 
 private:
+  int create_group_commit_sub_request(ObSQLSessionInfo &session,
+                                      ObPsSessionInfo *ps_session_info,
+                                      bool &need_response_error);
   int check_precondition_for_arraybinding(const ObSQLSessionInfo &session_info);
   int check_param_type_for_arraybinding(sql::ParamTypeInfoArray &param_type_infos);
   int check_param_value_for_arraybinding(ObObjParam &param);
@@ -270,27 +302,27 @@ private:
                         ParamStore *param_store,
                         const bool has_more_result,
                         const bool force_sync_resp,
+                        bool &need_disconnect,
                         bool &async_resp_used);
   int do_process(sql::ObSQLSessionInfo &session,
                  ParamStore *param_store,
                  const bool has_more_result,
                  const bool force_sync_resp,
+                 bool &need_disconnect,
                  bool &async_resp_used);
   int process_retry(sql::ObSQLSessionInfo &session,
                     ParamStore *param_store,
                     bool has_more_result,
                     bool force_sync_resp,
+                    bool &need_disconnect,
                     bool &async_resp_used);
 
-  int process_execute_stmt(const sql::ObMultiStmtItem &multi_stmt_item,
-                           sql::ObSQLSessionInfo &session,
-                           bool has_more_result,
-                           bool fore_sync_resp,
-                           bool &async_resp_used);
 
   int try_batch_multi_stmt_optimization(sql::ObSQLSessionInfo &session,
                                         bool has_more_result,
                                         bool force_sync_resp,
+                                        bool &need_response_error,
+                                        bool &need_disconnect,
                                         bool &async_resp_used,
                                         bool &optimization_done);
 
@@ -381,6 +413,8 @@ protected:
   char *params_value_;
   int64_t curr_sql_idx_; // only for arraybinding
   ObPSAnalysisChecker analysis_checker_;
+  sql::ObGroupCommitExecMode group_commit_exec_mode_;
+  bool is_group_commit_enabled_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMPStmtExecute);
 

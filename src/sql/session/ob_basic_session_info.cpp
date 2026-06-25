@@ -7369,7 +7369,7 @@ intptr_t ObBasicSessionInfo::get_json_pl_mngr()
 }
 
 
-bool ObBasicSessionInfo::has_active_autocommit_trans(transaction::ObTransID & trans_id)
+bool ObBasicSessionInfo::has_active_autocommit_trans(transaction::ObTransID & trans_id) const
 {
   bool ac = false;
   bool ret = false;
@@ -7384,5 +7384,15 @@ bool ObBasicSessionInfo::has_active_autocommit_trans(transaction::ObTransID & tr
   return ret;
 }
 
-}//end of namespace sql
-}//end of namespace oceanbase
+bool ObBasicSessionInfo::has_active_local_started_trans(transaction::ObTransID & trans_id) const
+{
+  bool ret = false;
+  if (tx_desc_ && tx_desc_->in_tx_or_has_extra_state() && !is_txn_free_route_temp()) {
+    trans_id = tx_desc_->get_tx_id();
+    ret = true;
+  }
+  return ret;
+}
+
+} //end of namespace sql
+} //end of namespace oceanbase

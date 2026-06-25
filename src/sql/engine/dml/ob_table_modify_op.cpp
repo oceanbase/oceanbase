@@ -823,7 +823,6 @@ int ObTableModifyOp::replace_implict_cursor(int64_t affected_rows,
   bool is_ins_val_opt = ctx_.get_sql_ctx()->is_do_insert_batch_opt();
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   if (MY_SPEC.ab_stmt_id_ != nullptr && !is_ins_val_opt) {
-    ObDatum *stmt_id_datum = nullptr;
     ObImplicitCursorInfo implicit_cursor;
     if (OB_FAIL(prepare_implict_cursor(affected_rows,
                                        found_rows,
@@ -872,7 +871,6 @@ int ObTableModifyOp::merge_implict_cursor(int64_t affected_rows,
   bool is_ins_val_opt = ctx_.get_sql_ctx()->is_do_insert_batch_opt();
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   if (MY_SPEC.ab_stmt_id_ != nullptr && !is_ins_val_opt) {
-    ObDatum *stmt_id_datum = nullptr;
     ObImplicitCursorInfo implicit_cursor;
     if (OB_FAIL(prepare_implict_cursor(affected_rows,
                                        found_rows,
@@ -1276,6 +1274,10 @@ int ObTableModifyOp::inner_get_next_row()
 
     if (OB_FAIL(ret)) {
       record_err_for_load_data(ret, row_count);
+    } else if (iter_end_ && MY_SPEC.plan_->is_batch_group_commit()) {
+      if (OB_FAIL(flush_group_commit_cache())) {
+        LOG_WARN("flush group update cache failed", K(ret));
+      }
     }
 
     if (OB_SUCC(ret) && iter_end_ && dml_rtctx_.das_ref_.has_task()) {

@@ -753,7 +753,8 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
   const auto &flags = get_filter_before_index_flags();
   if (get_contains_fake_cte() ||
       is_virtual_table(get_ref_table_id()) ||
-      EXTERNAL_TABLE == get_table_type()) {
+      EXTERNAL_TABLE == get_table_type() ||
+      (nullptr != my_plan_ && my_plan_->is_group_commit())) {
     //all filters can not push down to storage
     if (OB_FAIL(nonpushdown_filters.assign(filters))) {
       LOG_WARN("store non-pushdown filters failed", K(ret));

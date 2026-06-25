@@ -197,6 +197,23 @@ struct ObDBLinkHit {
   bool hint_xa_trans_stop_check_lock_;
 };
 
+struct ObGroupCommitHint {
+  ObGroupCommitHint() { reset(); }
+  void reset() {
+    group_commit_enabled_ = false;
+    rollback_on_no_affected_rows_ = false;
+  }
+  TO_STRING_KV(K_(group_commit_enabled), K_(rollback_on_no_affected_rows));
+
+  void merge(const ObGroupCommitHint &other) {
+    group_commit_enabled_ = (group_commit_enabled_ || other.group_commit_enabled_);
+    rollback_on_no_affected_rows_ = (rollback_on_no_affected_rows_ || other.rollback_on_no_affected_rows_);
+  }
+
+  bool group_commit_enabled_;
+  bool rollback_on_no_affected_rows_;
+};
+
 struct ObGlobalHint {
   ObGlobalHint() { reset(); }
   void reset();
@@ -260,7 +277,7 @@ struct ObGlobalHint {
   void merge_opt_features_version_hint(uint64_t opt_features_version);
   void merge_osg_hint(int8_t flag);
   void merge_dynamic_sampling_hint(int64_t dynamic_sampling);
-
+  void merge_group_commit_hint(const ObGroupCommitHint &other);
   void set_has_hint_exclude_concurrent()  { has_hint_exclude_concurrent_ = true;  }
   bool has_hint_exclude_concurrent() const  { return has_hint_exclude_concurrent_;  }
   int print_global_hint(PlanText &plan_text) const;
@@ -317,6 +334,8 @@ struct ObGlobalHint {
   }
   int64_t get_dynamic_sampling() const { return dynamic_sampling_; }
   bool has_dynamic_sampling() const { return UNSET_DYNAMIC_SAMPLING != dynamic_sampling_; }
+  bool group_commit_enabled() const { return group_commit_hint_.group_commit_enabled_; }
+  bool is_rollback_on_no_affected_rows() const { return group_commit_hint_.rollback_on_no_affected_rows_; }
 
   TO_STRING_KV(K_(frozen_version),
                K_(topk_precision),
@@ -327,6 +346,7 @@ struct ObGlobalHint {
                K_(force_trace_log),
                K_(max_concurrent),
                K_(enable_lock_early_release),
+               K_(tx_free_route_disabled),
                K_(force_refresh_lc),
                K_(log_level),
                K_(parallel),
@@ -345,7 +365,8 @@ struct ObGlobalHint {
                K_(has_dbms_stats_hint),
                K_(parallel_das_dml_option),
                K_(dynamic_sampling),
-               K_(dblink_hints));
+               K_(dblink_hints),
+               K_(group_commit_hint));
 
   int64_t frozen_version_;
   int64_t topk_precision_;
@@ -356,6 +377,7 @@ struct ObGlobalHint {
   bool force_trace_log_;
   int64_t max_concurrent_;
   bool enable_lock_early_release_;
+  bool tx_free_route_disabled_;
   bool force_refresh_lc_;
   int64_t table_lock_mode_;
   common::ObString log_level_;
@@ -377,6 +399,7 @@ struct ObGlobalHint {
   ObParallelDASOption parallel_das_dml_option_;
   int64_t dynamic_sampling_;
   ObDBLinkHit dblink_hints_;
+  ObGroupCommitHint group_commit_hint_;
 private:
   bool has_hint_exclude_concurrent_;  // not hint, used to mark weather exists hint exclude max_concurrent
 };
@@ -394,7 +417,10 @@ public:
         log_level_(),
         parallel_(-1),
         monitor_(false),
-        table_lock_mode_(0)
+        table_lock_mode_(0),
+        tx_free_route_disabled_(false)
+
+
   {}
 
   ObPhyPlanHint(const ObGlobalHint &global_hint)
@@ -405,7 +431,8 @@ public:
         log_level_(global_hint.log_level_),
         parallel_(global_hint.parallel_),
         monitor_(global_hint.monitor_),
-        table_lock_mode_(global_hint.table_lock_mode_)
+        table_lock_mode_(global_hint.table_lock_mode_),
+        tx_free_route_disabled_(global_hint.tx_free_route_disabled_)
   {}
 
   int deep_copy(const ObPhyPlanHint &other, common::ObIAllocator &allocator);
@@ -419,7 +446,8 @@ public:
                K_(log_level),
                K_(parallel),
                K_(monitor),
-               K_(table_lock_mode));
+               K_(table_lock_mode),
+               K_(tx_free_route_disabled));
 
   common::ObConsistencyLevel read_consistency_;
   int64_t query_timeout_;
@@ -429,6 +457,7 @@ public:
   int64_t parallel_;
   bool monitor_;
   int64_t table_lock_mode_;
+  bool tx_free_route_disabled_;
 };
 
 struct ObTableInHint

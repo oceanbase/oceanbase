@@ -38,6 +38,10 @@ namespace common
 {
 class ObDiagnosticInfo;
 }
+namespace sql
+{
+class ObGroupCommitAggInfo;
+}
 
 namespace rpc
 {
@@ -80,10 +84,14 @@ public:
         request_arrival_time_(0), traverse_index_(0), recv_mts_(), arrival_push_diff_(0),
         push_pop_diff_(0), pop_process_start_diff_(0),
         process_start_end_diff_(0), process_end_response_diff_(0),
-        trace_id_(), discard_flag_(false), large_retry_flag_(false), retry_times_(0), diagnostic_info_ptr_(nullptr)
+        trace_id_(), discard_flag_(false), large_retry_flag_(false), retry_times_(0), diagnostic_info_ptr_(nullptr),
+        group_commit_agg_info_(nullptr)
   {
   }
-  virtual ~ObRequest() { reset_diagnostic_info(); }  // not guaranteed to call
+  virtual ~ObRequest() {
+    reset_diagnostic_info();
+    reset_group_commit_agg_info();
+  }  // not guaranteed to call
 
   int get_nio_protocol() const { return nio_protocol_; }
   void set_server_handle_context(void* ctx) { handle_ctx_ = ctx; }
@@ -148,6 +156,22 @@ public:
   {
     return diagnostic_info_ptr_;
   };
+  sql::ObGroupCommitAggInfo *get_group_commit_agg_info()
+  {
+    return group_commit_agg_info_;
+  };
+  sql::ObGroupCommitAggInfo *get_group_commit_agg_info() const
+  {
+    return group_commit_agg_info_;
+  };
+  void set_group_commit_agg_info(sql::ObGroupCommitAggInfo *ptr)
+  {
+    group_commit_agg_info_ = ptr;
+  };
+  void reset_group_commit_agg_info() {
+    group_commit_agg_info_ = nullptr;
+  };
+  bool has_group_commit_agg_info() const { return group_commit_agg_info_ != nullptr; }
   void set_diagnostic_info(common::ObDiagnosticInfo *ptr)
   {
     if (OB_NOT_NULL(ptr) && OB_ISNULL(diagnostic_info_ptr_)) {
@@ -209,6 +233,7 @@ protected:
   int32_t retry_times_;
 private:
   common::ObDiagnosticInfo *diagnostic_info_ptr_;
+  sql::ObGroupCommitAggInfo *group_commit_agg_info_;
   DISALLOW_COPY_AND_ASSIGN(ObRequest);
 }; // end of class ObRequest
 

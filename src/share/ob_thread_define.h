@@ -172,5 +172,6 @@ TG_DEF(TntSharedTimer, TntSharedTimer, TIMER)
 TG_DEF(LogFetcherBGWorker, LogFetcherBGW, TIMER)
 TG_DEF(TableGroupCommitMgr, TableGroupCommitMgr, TIMER)
 TG_DEF(TLD_HTimer, TLD_HTimer, TIMER)
+TG_DEF(SqlGroupCommitCheck, SqlGroupCommitCheck, TIMER)
 TG_DEF(OMTProcCpuSampler, OmtProcCpuSampler, THREAD_POOL, 1)
 #endif

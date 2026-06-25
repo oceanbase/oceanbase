@@ -41,7 +41,7 @@ public:
   inline uint64_t get_proxy_version() { return proxy_version_; }
 protected:
   virtual void cleanup() final; // please don't overload cleanup in child class, mark as final
-  virtual int setup_packet_sender();
+  virtual int setup_packet_sender() override;
   virtual int before_process();
   virtual int response(const int retcode) final;
   virtual int after_process(int error_code);
@@ -71,14 +71,14 @@ protected:
   }
 
   /// send a error packet to client
-  int send_error_packet(int err,
+  virtual int send_error_packet(int err,
                         const char* errmsg,
                         bool is_partition_hit = true,
                         void *extra_err_info = NULL);
 
   // send a ok packet to client
-  int send_ok_packet(sql::ObSQLSessionInfo &session, ObOKPParam &ok_param, obmysql::ObMySQLPacket* pkt=NULL);
-  int send_eof_packet(const sql::ObSQLSessionInfo &session, const ObMySQLResultSet &result, ObOKPParam *ok_param = NULL);
+  virtual int send_ok_packet(sql::ObSQLSessionInfo &session, ObOKPParam &ok_param, obmysql::ObMySQLPacket* pkt=NULL);
+  virtual int send_eof_packet(const sql::ObSQLSessionInfo &session, const ObMySQLResultSet &result, ObOKPParam *ok_param = NULL);
 
   int send_null_packet(sql::ObSQLSessionInfo &session, ObOKPParam &ok_param);
 

@@ -118,11 +118,16 @@ int CtxLock::try_rdlock_ctx()
   return ret;
 }
 
+// Unlock order: CTX -> FLUSH_REDO -> ACCESS (reverse of acquisition).
+// unlock_ctx(arg) captures deferred work while ctx_lock_ is held,
+// then after_unlock(arg) fires it after all locks are released.
 void CtxLock::unlock()
 {
-  unlock_access();
+  CtxLockArg arg;
+  unlock_ctx(arg);
   unlock_flush_redo();
-  unlock_ctx();
+  unlock_access();
+  after_unlock(arg);
 }
 
 int CtxLock::wrlock_ctx()
@@ -141,10 +146,17 @@ void CtxLock::unlock_access()
 {
   access_lock_.unlock();
 }
-void CtxLock::unlock_ctx()
+// Release ctx_lock_ and capture deferred work into @arg.
+// before_unlock() is called while ctx_lock_ is still held to safely read
+// ctx state. Caller is responsible for calling after_unlock(arg) after
+// ALL remaining sub-locks are released.
+void CtxLock::unlock_ctx(CtxLockArg &arg)
 {
   const int64_t lock_start_ts = lock_start_ts_;
-  CtxLockArg arg;
+  // Reset arg state flags to avoid stale data from previous cycle
+  arg.has_pending_callback_ = false;
+  arg.need_retry_redo_sync_ = false;
+  arg.p_mt_ctx_ = NULL;
   before_unlock(arg);
   ctx_lock_.unlock();
   if (lock_start_ts > 0) {
@@ -153,7 +165,6 @@ void CtxLock::unlock_ctx()
       TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "ctx lock too much time", K(arg.trans_id_), K(lock_ts), K(lbt()));
     }
   }
-  after_unlock(arg);
 }
 
 int CtxLock::wrlock_flush_redo()
@@ -198,17 +209,25 @@ void CtxLockGuard::set(CtxLock &lock, uint8_t mode)
   do_lock_(true);
 }
 
+// Release held sub-locks in reverse acquisition order: CTX -> FLUSH_REDO -> ACCESS.
+// unlock_ctx(arg) captures deferred work first, after_unlock(arg) fires it
+// after all locks are released.
 void CtxLockGuard::reset()
 {
   if (NULL != lock_) {
-    if (mode_ & MODE::CTX) {
-      lock_->unlock_ctx();
+    CtxLockArg arg;
+    if (mode_ & CTX) {
+      lock_->unlock_ctx(arg);
     }
-    if ((mode_ & MODE::REDO_FLUSH_X) || (mode_ & MODE::REDO_FLUSH_R)) {
+    if ((mode_ & REDO_FLUSH_X) || (mode_ & REDO_FLUSH_R)) {
       lock_->unlock_flush_redo();
     }
-    if (mode_ & MODE::ACCESS) {
+    if (mode_ & ACCESS) {
       lock_->unlock_access();
+    }
+    // Fire deferred work after all locks are released
+    if (mode_ & CTX) {
+      lock_->after_unlock(arg);
     }
     int64_t release_ts = ObClockGenerator::getClock();
     if (release_ts - request_ts_ > 50_ms) {

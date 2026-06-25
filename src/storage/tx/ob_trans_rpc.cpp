@@ -153,6 +153,10 @@ TX_Process(AskState, handle_trans_ask_state);
 TX_Process(AskStateResp, handle_trans_ask_state_response);
 TX_Process(CollectState, handle_trans_collect_state);
 TX_Process(CollectStateResp, handle_trans_collect_state_response);
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+TX_Process(HotspotDispatchRedo, handle_hotspot_dispatch_redo_msg);
+TX_Process(HotspotSubmitOtherRedo, handle_hotspot_submit_other_redo_msg);
+#endif
 TX_Process(SubPrepare, handle_sub_prepare_request);
 TX_Process(SubPrepareResp, handle_sub_prepare_response);
 TX_Process(SubCommit, handle_sub_commit_request);
@@ -374,6 +378,14 @@ int ObTransRpc::post_(const ObAddr &server, ObTxMsg &msg)
       ret = post_standby_msg_(server, msg);
       break;
     }
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+    case TX_HOTSPOT_DISPATCH_REDO:
+    case TX_HOTSPOT_SUBMIT_OTHER_REDO:
+    {
+      ret = post_hotspot_msg_(server, msg);
+      break;
+    }
+#endif
     default:
       ret = OB_NOT_SUPPORTED;
       TRANS_LOG(WARN, "rpc proxy not supported", K(tenant_id), K(server), K(msg));
@@ -664,6 +676,42 @@ int ObTransRpc::post_standby_msg_(const ObAddr &server, ObTxMsg &msg)
       break;
     }
   }
+  return ret;
+}
+
+int ObTransRpc::post_hotspot_msg_(const ObAddr &server, ObTxMsg &msg)
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+  const int64_t msg_type = msg.get_msg_type();
+  const uint64_t tenant_id = msg.tenant_id_;
+  switch (msg_type) {
+  case TX_HOTSPOT_DISPATCH_REDO: {
+    ret = rpc_proxy_.to(server)
+              .by(tenant_id)
+              .timeout(GCONF._ob_trans_rpc_timeout)
+              .post_hotspot_redo_dispatch_msg(static_cast<ObHotspotDispatchRedoMsg &>(msg),
+                                              &tx_hotspot_redo_dispatch_cb_);
+    break;
+  }
+  case TX_HOTSPOT_SUBMIT_OTHER_REDO: {
+    ret = rpc_proxy_.to(server)
+              .by(tenant_id)
+              .timeout(GCONF._ob_trans_rpc_timeout)
+              .post_hotspot_redo_submit_msg(static_cast<ObHotspotSubmitOtherRedoMsg &>(msg),
+                                            &tx_hotspot_redo_submit_cb_);
+    break;
+  }
+  default: {
+    ret = OB_NOT_SUPPORTED;
+    TRANS_LOG(WARN, "rpc proxy not supported", K(tenant_id), K(server), K(msg));
+    break;
+  }
+  }
+#else
+  ret = OB_NOT_SUPPORTED;
+  TRANS_LOG(WARN, "hotspot rpc is not supported in CE", K(server), K(msg));
+#endif
   return ret;
 }
 

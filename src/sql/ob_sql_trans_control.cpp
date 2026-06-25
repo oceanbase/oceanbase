@@ -44,6 +44,9 @@
 #include "sql/das/ob_das_dml_ctx_define.h"
 #include "share/deadlock/ob_deadlock_detector_mgr.h"
 #include "sql/dblink/ob_tm_service.h"
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+#include "sql/ob_sql_group_commit_struct.h"
+#endif
 #ifdef CHECK_SESSION
 #error "redefine macro CHECK_SESSION"
 #else
@@ -228,13 +231,108 @@ int ObSqlTransControl::implicit_end_trans(ObExecContext &exec_ctx,
                                           bool reset_trans_variable)
 {
   return end_trans(exec_ctx.get_my_session(),
-                   exec_ctx.get_need_disconnect_for_update(),
-                   exec_ctx.get_trans_state(),
-                   is_rollback,
-                   false,
-                   callback,
-                   reset_trans_variable);
+                  exec_ctx.get_need_disconnect_for_update(),
+                  exec_ctx.get_trans_state(),
+                  is_rollback,
+                  false,
+                  callback,
+                  reset_trans_variable);
 }
+
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+// 1. To speed up row lock release, process primary trans first,
+//   Otherwise, row locks will be held during end_trans of sub-transactions.
+// 2. If the sub-transaction has started, call the end trans interface of the sub-transaction,
+//    and pass in the callback, the callback will handle the submission or rollback of the sub-transaction.
+//    If the sub-transaction has not started, skip calling the end trans interface, and help the sub-transaction
+//    to return the packet in the callback of the primary transaction.
+// 3. if the primary transaction end_trans failed, the upper layer will send error packet
+//    for both the primary and sub-transactions. During sending error packet,
+//    the uncommitted transactions will be rolled back.
+// 4. if the sub-transaction end_trans failed, force disconnect the sub-transaction.
+int ObSqlTransControl::implicit_end_group_commit_trans(const ObGroupCommitAggInfo &agg_info,
+                                                       ObExecContext &exec_ctx,
+                                                       const bool is_rollback,
+                                                       ObEndTransAsyncCallback *callback,
+                                                       bool reset_trans_variable)
+{
+  int ret = OB_SUCCESS;
+  // Store the sessions of sub-transactions in advance.
+  // Otherwise, if the primary transaction's end_trans releases agg_info in its callback
+  // (which may be invoked synchronously or asynchronously),
+  // the sub-transaction sessions will not be accessible via agg_info.
+  ObSEArray<ObSQLSessionInfo *, 32> sub_sessions;
+  ObGroupCommitSubRequest *cur = reinterpret_cast<ObGroupCommitSubRequest *>(agg_info.get_head_sub_request()->next_);
+  bool need_reset_diagnostic_info = false;
+
+  while (OB_SUCC(ret) && cur != nullptr) {
+    if (!cur->is_trans_started_) {
+      // skip end trans for sub tx which is not started
+      cur = reinterpret_cast<ObGroupCommitSubRequest *>(cur->next_);
+    } else if (OB_FAIL(sub_sessions.push_back(cur->sess_))) {
+      LOG_WARN("fail to push back sub session", K(ret), KPC(cur));
+    } else {
+      // primary request's diagnostic info will be seted in do_end_trans_() from thread-local,
+      // sub request's diagnostic info are setted from connection.
+      ObDiagnosticInfo *di = reinterpret_cast<observer::ObSMConnection *>(SQL_REQ_OP.get_sql_session(cur->req_))->get_diagnostic_info();
+      ObEndTransAsyncCallback *sub_callback = &cur->sess_->get_end_trans_cb();
+
+      if (OB_NOT_NULL(di) && OB_NOT_NULL(sub_callback)) {
+        di->get_ash_stat().in_committing_ = true;
+        di->begin_wait_event(ObWaitEventIds::ASYNC_COMMITTING_WAIT);
+        sub_callback->set_diagnostic_info(di);
+      }
+      cur = reinterpret_cast<ObGroupCommitSubRequest *>(cur->next_);
+    }
+  }
+  if (OB_FAIL(ret)) {
+    need_reset_diagnostic_info = true;
+  } else if (OB_FAIL(end_trans(exec_ctx.get_my_session(),
+                               exec_ctx.get_need_disconnect_for_update(),
+                               exec_ctx.get_trans_state(),
+                               is_rollback,
+                               false,
+                               callback,
+                               reset_trans_variable))) {
+    LOG_WARN("fail to end primary trans", K(ret), K(is_rollback));
+    need_reset_diagnostic_info = true;
+  } else {
+    ObEndTransAsyncCallback *sub_callback = nullptr;
+    TransState trans_state;
+    bool need_disconnect = false;
+    for (int i = 0; OB_SUCC(ret) && i < sub_sessions.count(); i++) {
+      ObSQLSessionInfo *sub_session = sub_sessions.at(i);
+      sub_callback = is_rollback ? nullptr : &sub_session->get_end_trans_cb();
+      if (OB_FAIL(end_trans(sub_session,
+                            need_disconnect,
+                            trans_state,
+                            is_rollback,
+                            false,
+                            sub_callback,
+                            reset_trans_variable))) {
+        // Once the primary transaction commits successfully, all changes from sub-transactions are aggregated and committed together.
+        // If ending a sub-transaction fails at this stage, its modifications can no longer be rolled back individually,
+        // so the connection must be terminated.
+        LOG_WARN("fail to end sub trans, force disconnect", K(ret), K(i), K(sub_session->get_tx_id()),
+            K(need_disconnect), K(is_rollback), K(reset_trans_variable));
+        sub_session->get_mysql_end_trans_cb().get_packet_sender().force_disconnect();
+        ret = OB_SUCCESS; // ignore the error and continue to end the other sub-transactions.
+      } else {
+        LOG_DEBUG("success to end sub trans", K(ret), K(i), K(is_rollback), K(sub_session->get_tx_id()));
+      }
+    }
+  }
+  if (need_reset_diagnostic_info) {
+    for (int64_t i = 0; i < sub_sessions.count(); ++i) {
+      ObSQLSessionInfo *sub_session = sub_sessions.at(i);
+      if (OB_NOT_NULL(sub_session)) {
+        sub_session->get_end_trans_cb().reset_diagnostic_info();
+      }
+    }
+  }
+  return ret;
+}
+#endif
 
 int ObSqlTransControl::explicit_end_trans(ObExecContext &exec_ctx, const bool is_rollback, const ObString hint)
 {
@@ -298,7 +396,7 @@ int ObSqlTransControl::end_trans(ObSQLSessionInfo *session,
   if (OB_FAIL(ret)) {
   } else if (!session->is_in_transaction()) {
     if (!is_rollback && OB_NOT_NULL(callback)) {
-      if (OB_FAIL(inc_session_ref(session))) {
+      if (OB_FAIL(callback->inc_session_ref(session))) {
         LOG_WARN("fail to inc session ref", K(ret));
       } else {
         callback->handout();
@@ -582,7 +680,7 @@ int ObSqlTransControl::do_end_trans_(ObSQLSessionInfo *session,
     } else if (is_rollback) {
       ret = txs->rollback_tx(*tx_ptr);
     } else if (callback) {
-      if (OB_FAIL(inc_session_ref(session))) {
+      if (OB_FAIL(callback->inc_session_ref(session))) {
         LOG_WARN("fail to inc session ref", K(ret));
       } else {
         callback->handout();
@@ -595,7 +693,7 @@ int ObSqlTransControl::do_end_trans_(ObSQLSessionInfo *session,
         if(OB_FAIL(txs->submit_commit_tx(*tx_ptr, expire_ts, *callback, &trace_info))) {
           LOG_WARN("submit commit tx fail", K(ret), KP(callback), K(expire_ts), KPC(tx_ptr));
           callback->reset_diagnostic_info();
-          GCTX.session_mgr_->revert_session(session);
+          callback->dec_session_ref(session);
           if (OB_NOT_NULL(di)) {
             di->get_ash_stat().in_committing_ = false;
             di->end_wait_event(ObWaitEventIds::ASYNC_COMMITTING_WAIT);
@@ -1665,14 +1763,6 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback, co
   if (OB_NOT_NULL(session)) {
     session->get_trans_result().reset();
   }
-  return ret;
-}
-
-int ObSqlTransControl::inc_session_ref(const ObSQLSessionInfo *session)
-{
-  int ret = OB_SUCCESS;
-  CK (OB_NOT_NULL(GCTX.session_mgr_));
-  OZ (GCTX.session_mgr_->inc_session_ref(session));
   return ret;
 }
 

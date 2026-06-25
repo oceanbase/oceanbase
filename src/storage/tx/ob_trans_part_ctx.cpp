@@ -13,6 +13,7 @@
 #include "lib/ob_errno.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/utility/ob_macro_utils.h"
+#include "lib/utility/utility.h"
 #include <cstdint>
 #define USING_LOG_PREFIX TRANS
 #include "ob_trans_part_ctx.h"
@@ -46,6 +47,7 @@
 #include "logservice/ob_log_service.h"
 #include "storage/tablet/ob_tablet_transfer_tx_ctx.h"
 #include "storage/tx/ob_ctx_tx_data.h"
+#include "storage/tx/ob_tx_hotspot_helper.h"
 
 extern int register_logstream_trace(int64_t tenant_id, int64_t ls_id);
 
@@ -95,6 +97,7 @@ int ObPartTransCtx::init(const uint64_t tenant_id,
                          ObLSTxCtxMgr *ls_ctx_mgr,
                          const bool for_replay,
                          const PartCtxSource ctx_source,
+                         const int64_t seq_base,
                          ObXATransID xid)
 {
   int ret = OB_SUCCESS;
@@ -153,6 +156,7 @@ int ObPartTransCtx::init(const uint64_t tenant_id,
     exec_info_.trans_type_ = TransType::SP_TRANS;
     last_ask_scheduler_status_ts_ = ObClockGenerator::getClock();
     cluster_id_ = cluster_id;
+    exec_info_.seq_base_ = seq_base;
     epoch_ = epoch;
     pending_write_ = 0;
     set_role_state(for_replay);
@@ -245,9 +249,9 @@ void ObPartTransCtx::destroy()
     REC_TRANS_TRACE_EXT2(tlog_, destroy);
 
     // Defensive Check 2 : apply service callback
-    if (!busy_cbs_.is_empty()) {
+    if (!busy_cbs_.is_empty() || hotspot_redo_cache_.get_busy_cb_count() > 0) {
       TRANS_LOG(ERROR, "some BUG may happen !!!", K(lbt()), K(*this), K(trans_id_),
-                K(busy_cbs_.get_size()));
+                K(busy_cbs_.get_size()), K(hotspot_redo_cache_.get_busy_cb_count()));
     }
 
 
@@ -294,6 +298,7 @@ void ObPartTransCtx::destroy()
 
     big_segment_info_.reset();
 
+    hotspot_redo_cache_.reset();
     reset_log_cbs_();
 
     if (NULL != tlog_) {
@@ -336,6 +341,7 @@ void ObPartTransCtx::default_init_()
   ObTxCycleTwoPhaseCommitter::reset();
   is_inited_ = false;
   mt_ctx_.reset();
+  exec_info_.seq_base_ = -1; // negative value indicates invalid value, meaning not received from upper layer
   end_log_ts_.set_max();
   trans_expired_time_ = INT64_MAX;
   stmt_expired_time_ = INT64_MAX;
@@ -375,6 +381,8 @@ void ObPartTransCtx::default_init_()
   cache_sby_state_info_.reset();
   parts_sby_info_list_.reset();
   sby_origin_list_.reset();
+  redo_flush_status_ = TxRedoFlushStatus::NORMAL_START;
+  hotspot_redo_cache_.reuse();
 }
 
 // thread-unsafe
@@ -636,9 +644,13 @@ int ObPartTransCtx::handle_timeout(const int64_t delay)
               K(tx_expired),
               K(commit_expired),
               K(delay));
-    if (busy_cbs_.get_size() > 0) {
-      TRANS_LOG(INFO, "trx is waiting log_cb", K(busy_cbs_.get_size()), KPC(busy_cbs_.get_first()),
-                KPC(busy_cbs_.get_last()));
+    if (busy_cbs_.get_size() > 0 || hotspot_redo_cache_.get_busy_cb_count() > 0) {
+      // Safely acquire pointers: return nullptr when list is empty to avoid KPC dereference crash
+      ObTxLogCb *first_cb = busy_cbs_.get_size() > 0 ? busy_cbs_.get_first() : nullptr;
+      ObTxLogCb *last_cb = busy_cbs_.get_size() > 0 ? busy_cbs_.get_last() : nullptr;
+      TRANS_LOG(INFO, "trx is waiting log_cb", K(busy_cbs_.get_size()),
+                K(hotspot_redo_cache_.get_busy_cb_count()),
+                KP(first_cb), KP(last_cb));
     }
   } else {
     TRANS_LOG(WARN, "failed to acquire lock in specified time", K_(trans_id));
@@ -1141,7 +1153,10 @@ bool ObPartTransCtx::is_in_durable_2pc_() const
   return state >= ObTxState::PREPARE || ((is_sub2pc() || exec_info_.is_dup_tx_) && state >= ObTxState::REDO_COMPLETE);
 }
 
-bool ObPartTransCtx::is_logging_() const { return !busy_cbs_.is_empty(); }
+bool ObPartTransCtx::is_logging_() const
+{
+  return !busy_cbs_.is_empty() || hotspot_redo_cache_.get_busy_cb_count() > 0;
+}
 
 bool ObPartTransCtx::need_force_abort_() const
 {
@@ -1628,6 +1643,8 @@ int ObPartTransCtx::recover_tx_ctx_table_info(ObTxCtxTableInfo &ctx_info)
       if (exec_info_.exec_epoch_ > 0) {
         epoch_ = exec_info_.exec_epoch_;
       }
+      // seq_base_ is already restored via exec_info_.assign() above
+      TRANS_LOG(DEBUG, "seq_base_ restored from ctx_table", K(exec_info_.seq_base_), K(*this));
     }
 
 
@@ -1978,9 +1995,14 @@ int ObPartTransCtx::check_can_submit_redo_()
   bool is_tx_committing = ObTxState::INIT != get_downstream_state();
   bool final_log_submitting =
       sub_state_.is_state_log_submitting() || sub_state_.is_state_log_submitted();
+  // Secondary hotspot tx should NEVER submit redo log because its redo is submitted by primary.
+  // Use is_secondary_status() instead of is_secondary_hotspot_tx_() because:
+  // - is_secondary_hotspot_tx_() only checks active aggregation states (PREPARING, MIGRATING)
+  // - All secondary states (PREPARING, MIGRATING, SYNCED, FAILED, SUCCEEDED) cannot submit redo
   if (is_tx_committing
-      ||final_log_submitting
-      || is_force_abort_logging_()) {
+      || final_log_submitting
+      || is_force_abort_logging_()
+      || is_secondary_status(redo_flush_status_)) {
     ret = OB_TRANS_HAS_DECIDED;
   }
   return ret;
@@ -1992,13 +2014,14 @@ int ObPartTransCtx::check_can_submit_redo_()
 int ObPartTransCtx::prepare_for_submit_redo(ObTxLogCb *&log_cb,
                                             ObTxLogBlock &log_block,
                                             const bool serial_final,
-                                            const bool parallel_logging)
+                                            const bool parallel_logging,
+                                            const bool for_freeze)
 {
   int ret = OB_SUCCESS;
   if (!log_block.is_inited()
       && OB_FAIL(init_log_block_(log_block, ObTxAdaptiveLogBuf::NORMAL_LOG_BUF_SIZE, serial_final, parallel_logging))) {
     TRANS_LOG(WARN, "init log block fail", K(ret));
-  } else if (OB_FAIL(prepare_log_cb_(!NEED_FINAL_CB, log_cb)) && OB_TX_NOLOGCB != ret) {
+  } else if (OB_FAIL(prepare_log_cb_(for_freeze, log_cb)) && OB_TX_NOLOGCB != ret) {
     TRANS_LOG(WARN, "prepare log_cb fail", K(ret));
   }
   return ret;
@@ -2028,6 +2051,7 @@ int ObPartTransCtx::submit_redo_log_for_freeze_(bool &submitted, const uint32_t 
   ATOMIC_STORE(&is_submitting_redo_log_for_freeze_, false);
   return ret;
 }
+
 
 bool ObPartTransCtx::fast_check_need_submit_redo_for_freeze_() const
 {
@@ -2226,7 +2250,7 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
     }
     if (log_cb->get_cb_arg_array().count() == 0) {
       ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "cb arg array is empty", K(ret), KPC(this));
+      TRANS_LOG(ERROR, "cb arg array is empty", K(ret), KPC(log_cb), KPC(this));
       print_trace_log_();
       OB_SAFE_ABORT();
     }
@@ -2234,12 +2258,19 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
 #ifndef NDEBUG
       TRANS_LOG(INFO, "cb has been callbacked", KPC(log_cb));
 #endif
-      busy_cbs_.remove(log_cb);
-      return_log_cb_(log_cb);
+      if (!log_cb->is_hotspot_logging()) {
+        busy_cbs_.remove(log_cb);
+        return_log_cb_(log_cb);
+      }
     } else if (is_exiting_) {
       // the TxCtx maybe has been killed forcedly by background GC thread
       // the log_cb process has been skipped
-      if (sub_state_.is_force_abort()) {
+      if (log_cb->is_hotspot_logging()) {
+        if (OB_FAIL(apply_others_hotspot_redo_(log_cb, true /*sync_result*/))) {
+          TRANS_LOG(WARN, "apply others hotspot redo after exiting failed", K(ret), KPC(log_cb),
+                    KPC(this));
+        }
+      } else if (sub_state_.is_force_abort()) {
         TRANS_LOG(WARN, "ctx has been aborted forcedly before log sync successfully", KPC(this));
         print_trace_log_();
         busy_cbs_.remove(log_cb);
@@ -2259,12 +2290,28 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
     } else {
       // save the first error code
       int save_ret = OB_SUCCESS;
-      ObTxLogCb *cur_cb = busy_cbs_.get_first();
+      const bool has_active_hotspot_cache = hotspot_redo_cache_.has_active_cache();
+      const int64_t hotspot_busy_cnt = has_active_hotspot_cache ? hotspot_redo_cache_.get_busy_cb_count() : 0;
+      const int64_t normal_busy_cnt = busy_cbs_.get_size();
+      ObTxLogCb *cur_cb, *hotspot_cb, *normal_cb;
+      cur_cb = hotspot_cb = normal_cb = nullptr;
+      if (normal_busy_cnt > 0) {
+        normal_cb = busy_cbs_.get_first();
+      }
+
       // process all preceding log_cbs
-      for (int64_t i = 0; i < busy_cbs_.get_size(); i++) {
-        if (cur_cb->is_callbacked()) {
+      for (int64_t i = 0; i < hotspot_busy_cnt + normal_busy_cnt; i++) {
+        bool is_hotspot_larger = true;
+        if (normal_cb == busy_cbs_.get_header()) {
+          normal_cb = nullptr;
+        }
+        if (OB_NOT_NULL(normal_cb) && normal_cb->is_callbacked()) {
+          // do nothing
+        } else if (has_active_hotspot_cache &&
+            OB_FALSE_IT(hotspot_redo_cache_.compare_hotspot_cb(normal_cb, hotspot_cb, is_hotspot_larger))) {
           // do nothing
         } else {
+          cur_cb = is_hotspot_larger? normal_cb : hotspot_cb;
           if (OB_FAIL(on_success_ops_(cur_cb))) {
             TRANS_LOG(ERROR, "invoke on_success_ops failed", K(ret), K(*this), K(*cur_cb));
             if (OB_SUCCESS == save_ret) {
@@ -2275,20 +2322,33 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
 
             ob_usleep(1000*1000);
             ob_abort();
+          } else if (!is_hotspot_larger
+                     && OB_FAIL(apply_others_hotspot_redo_(cur_cb, true /*sync_result*/))) {
+            TRANS_LOG(ERROR, "invoke apply_other_hotspot_redo failed", K(ret), K(*this),
+                      K(*cur_cb));
+            if (OB_SUCCESS == save_ret) {
+              save_ret = ret;
+            }
+            // rewrite ret
+            ret = OB_SUCCESS;
+
+            ob_usleep(1000 * 1000);
+            ob_abort();
           }
           // ignore ret and set cur_cb callbacked
           cur_cb->set_callbacked();
         }
         if (cur_cb == log_cb) {
           break;
-        } else {
-          cur_cb = cur_cb->get_next();
+        } else if(is_hotspot_larger) {
+          normal_cb = normal_cb->get_next();
         }
       }
       if (cur_cb != log_cb) {
-        ob_abort();
         ret = OB_ERR_UNEXPECTED;
-        TRANS_LOG(ERROR, "unexpected log callback", K(ret), K(*this), K(*cur_cb), K(*log_cb));
+        TRANS_LOG(ERROR, "unexpected log callback", K(ret), K(*this), KPC(cur_cb), KPC(log_cb),
+                  KP(cur_cb), KP(normal_cb), KP(hotspot_cb));
+        ob_abort();
       } else {
         // return first error code
         ret = save_ret;
@@ -2302,8 +2362,10 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
       }
       handle_fast_commit = !(sub_state_.is_state_log_submitted() || log_cb->get_callbacks().count() == 0);
       try_submit_next_log = !ObTxLogTypeChecker::is_state_log(log_cb->get_last_log_type()) && is_committing_();
-      busy_cbs_.remove(log_cb);
-      need_return_log_cb = true;
+      if (!log_cb->is_hotspot_logging()) {
+        busy_cbs_.remove(log_cb);
+        need_return_log_cb = true;
+      }
     }
 
   }
@@ -2323,6 +2385,12 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
     // in commiting, acquire CTX lock is enough, because redo flushing must finished
     CtxLockGuard guard(lock_, CtxLockGuard::MODE::CTX);
     try_submit_next_log_(false);
+  }
+  if (log_cb->is_hotspot_logging()) {
+    if (OB_SUCCESS != (tmp_ret = release_hotspot_redo_cb_(log_cb, true))) {
+      TRANS_LOG(ERROR, "release hotspot redo cb failed", K(ret), K(tmp_ret), K(trans_id_),
+                K(ls_id_), KPC(log_cb));
+    }
   }
   if (OB_SUCCESS != (tmp_ret = ls_tx_ctx_mgr_->revert_tx_ctx_without_lock(this))) {
     TRANS_LOG(ERROR, "release ctx ref failed", KR(tmp_ret));
@@ -2835,6 +2903,9 @@ int ObPartTransCtx::fix_redo_lsns_(const ObTxLogCb *log_cb)
 int ObPartTransCtx::on_failure(ObTxLogCb *log_cb)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  bool need_release_hotspot_cb = false;
+  ObTxLogCb *hotspot_log_cb = nullptr;
   {
     CtxLockGuard guard(lock_);
 
@@ -2901,16 +2972,29 @@ int ObPartTransCtx::on_failure(ObTxLogCb *log_cb)
         mt_ctx_.elr_trans_revoke();
       }
     }
-    busy_cbs_.remove(log_cb);
-    return_log_cb_(log_cb, true);
-    log_cb = NULL;
+    if (log_cb->is_hotspot_logging()
+        && OB_TMP_FAIL(apply_others_hotspot_redo_(log_cb, false /*sync_result*/))) {
+      TRANS_LOG(WARN, "apply other hotspot redo on failure failed", K(tmp_ret), KPC(log_cb),
+                KPC(this));
+    }
+    if (log_cb->is_hotspot_logging()) {
+      need_release_hotspot_cb = true;
+      hotspot_log_cb = log_cb;
+      log_cb = nullptr;
+    } else {
+      busy_cbs_.remove(log_cb);
+      return_log_cb_(log_cb, true);
+      log_cb = NULL;
+    }
     if (ObTxLogType::TX_COMMIT_INFO_LOG == log_type) {
       sub_state_.clear_info_log_submitted();
     }
-    if (busy_cbs_.is_empty() && get_downstream_state() < ObTxState::PREPARE) {
+    if (busy_cbs_.is_empty() && hotspot_redo_cache_.get_busy_cb_count() == 0
+        && get_downstream_state() < ObTxState::PREPARE) {
       sub_state_.clear_state_log_submitted();
     }
-    if (busy_cbs_.is_empty() && !has_persisted_log_()) {
+    if (busy_cbs_.is_empty() && hotspot_redo_cache_.get_busy_cb_count() == 0
+        && !has_persisted_log_()) {
       // busy callback array is empty and trx has not persisted any log, exit here
       TRANS_LOG(WARN, "log sync failed, txn aborted without persisted log", KPC(this));
       if (OB_FAIL(do_local_tx_end_(TxEndAction::ABORT_TX))) {
@@ -2932,9 +3016,12 @@ int ObPartTransCtx::on_failure(ObTxLogCb *log_cb)
                         OB_ID(log_type), (void*)log_type,
                         OB_ID(t), log_ts,
                         OB_ID(ref), get_ref());
-    TRANS_LOG(INFO, "ObPartTransCtx::on_failure end", KR(ret), K(*this), KPC(log_cb));
+    TRANS_LOG(INFO, "ObPartTransCtx::on_failure end", KR(ret), K(*this), KPC(hotspot_log_cb));
   }
-  int tmp_ret = OB_SUCCESS;
+  if (need_release_hotspot_cb
+      && OB_SUCCESS != (tmp_ret = release_hotspot_redo_cb_(hotspot_log_cb, false /*sync_result*/))) {
+    TRANS_LOG(ERROR, "release hotspot redo cb failed", K(ret), K(tmp_ret), KPC(hotspot_log_cb));
+  }
   if (OB_SUCCESS != (tmp_ret = ls_tx_ctx_mgr_->revert_tx_ctx_without_lock(this))) {
     TRANS_LOG(ERROR, "release ctx ref failed", KR(tmp_ret));
   }
@@ -3189,7 +3276,6 @@ int ObPartTransCtx::submit_parallel_redo_before_commit_() {
 }
 
 // this function is thread safe, not need other lock's protection
-inline
 int ObPartTransCtx::init_log_block_(ObTxLogBlock &log_block,
                                     const int64_t suggested_buf_size,
                                     const bool serial_final,
@@ -3199,6 +3285,15 @@ int ObPartTransCtx::init_log_block_(ObTxLogBlock &log_block,
   // the log_entry_no will be backfill before log-block to be submitted
   header.init(cluster_id_, cluster_version_, parallel_logging ? -1 : exec_info_.next_log_entry_no_, trans_id_, exec_info_.scheduler_);
   if (serial_final) { header.set_serial_final(); }
+  return log_block.init_for_fill(suggested_buf_size);
+}
+
+int ObPartTransCtx::init_log_block_for_hotspot_(ObTxLogBlock &log_block,
+                                                  const int64_t suggested_buf_size)
+{
+  ObTxLogBlockHeader &header = log_block.get_header();
+  // Hotspot path: init with log_entry_no=-1 to reserve max serialize_size, actual value set at seal()
+  header.init(cluster_id_, cluster_version_, -1, trans_id_, exec_info_.scheduler_);
   return log_block.init_for_fill(suggested_buf_size);
 }
 
@@ -3392,6 +3487,7 @@ int ObPartTransCtx::submit_redo_active_info_log_()
                                       cluster_version_,
                                       exec_info_.xid_,
                                       exec_info_.serial_final_seq_no_,
+                                      exec_info_.seq_base_,
                                       prio_op_array);
     ObTxLogCb *log_cb = nullptr;
     if (OB_FAIL(prepare_log_cb_(!NEED_FINAL_CB, log_cb))) {
@@ -4187,6 +4283,10 @@ int ObPartTransCtx::submit_log_block_out_(ObTxLogBlock &log_block,
     // It is safe to merge the intermediate_participants because we will block
     // the persistent state machine with is_2pc_blocking. The detailed design
     // can be found in the implementation of the merge_intermediate_participants.
+  } else if (can_not_submit_log_for_hotspot_() && !log_block.is_hotspot_redo()) {
+    ret = OB_NEED_RETRY;
+    TRANS_LOG(WARN, "waiting hotspot redo flushed", K(ret), "redo_flush_status",
+              to_cstr(redo_flush_status_), K(log_block.get_cb_arg_array()), KPC(this));
   } else if (is_contain_stat_log(log_block.get_cb_arg_array())
              && FALSE_IT(is_2pc_state_log = true)) {
   } else if (is_2pc_state_log
@@ -4211,7 +4311,9 @@ int ObPartTransCtx::submit_log_block_out_(ObTxLogBlock &log_block,
                    log_cb,
                    !is_2pc_state_log, /*nonblock*/
                    ATOMIC_LOAD(&is_submitting_redo_log_for_freeze_) ? 0 : timeout_us))) {
-    busy_cbs_.add_last(log_cb);
+    if (!log_cb->is_hotspot_logging()) {
+      busy_cbs_.add_last(log_cb);
+    }
     log_cb->set_log_size(log_block.get_size());
     ObTxLogCbPool::start_syncing_with_stat(log_cb->get_group_ptr(), log_block.get_size());
   }
@@ -4405,13 +4507,49 @@ int ObPartTransCtx::after_submit_log_(ObTxLogBlock &log_block,
            && OB_FAIL(log_cb->get_cb_arg_array().assign(cb_arg_array))) {
     TRANS_LOG(WARN, "assign cb arg array failed", K(ret));
   } else {
+    bool contain_data_log = false;
     for (int i = 0; i < cb_arg_array.count(); i++) {
       if (cb_arg_array[i].get_log_type() != log_cb->get_cb_arg_array()[i].get_log_type()) {
         TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpectd log type between th log block and the log cb",
                       K(ret), K(i), KPC(log_cb), K(log_block));
       }
+      if (cb_arg_array[i].get_log_type() != ObTxLogType::TX_MULTI_DATA_SOURCE_LOG) {
+        contain_data_log = true;
+      }
       bitmap |= (uint64_t)cb_arg_array.at(i).get_log_type();
     }
+
+    if (contain_data_log && !log_block.is_hotspot_redo()) {
+      if (redo_flush_status_ == TxRedoFlushStatus::NORMAL_START) {
+        if (OB_FAIL(transit_redo_status_as_normal_(TxRedoFlushStatus::NORMAL_FLUSHED))) {
+          TRANS_LOG(WARN, "transit to NORMAL_FLUSHED failed", K(ret), KPC(this));
+        }
+      } else if (redo_flush_status_ == TxRedoFlushStatus::NORMAL_FLUSHED) {
+        // do nothing - already flushed
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+      } else if (redo_flush_status_ == TxRedoFlushStatus::PRIMARY_AGGR_SUCCEEDED) {
+        // Aggregation done + first normal redo flushed = truly completed
+        if (OB_FAIL(transit_redo_status_as_primary_(TxRedoFlushStatus::PRIMARY_COMPLETED))) {
+          TRANS_LOG(WARN, "transit to PRIMARY_COMPLETED failed", K(ret), KPC(this));
+        } else {
+          TRANS_LOG(DEBUG, "primary aggregation fully completed: first normal redo flushed",
+                    "redo_flush_status", to_cstr(redo_flush_status_), KPC(this));
+        }
+#endif
+      } else if (redo_flush_status_ == TxRedoFlushStatus::PRIMARY_COMPLETED
+                 || redo_flush_status_ == TxRedoFlushStatus::PRIMARY_AGGR_FAILED) {
+        // IN-09: These terminal states allow continuing logs:
+        // - PRIMARY_COMPLETED: aggregation complete, own redo/commit logs continue
+        // - PRIMARY_AGGR_FAILED: aggregation failed, abort logs continue
+        // No state transition needed, do nothing
+      } else {
+        // Only truly unexpected states should produce ERROR logs
+        TRANS_LOG(ERROR, "unexpected redo flush status for data log submission",
+                  K(ret), "redo_flush_status", to_cstr(redo_flush_status_),
+                  K(log_block.get_cb_arg_array()), KPC(log_cb), KPC(this));
+      }
+    }
+
     if (bitmap_is_contain(ObTxLogType::TX_REDO_LOG) ||
         bitmap_is_contain(ObTxLogType::TX_ROLLBACK_TO_LOG) ||
         bitmap_is_contain(ObTxLogType::TX_BIG_SEGMENT_LOG) ||
@@ -4555,6 +4693,18 @@ int ObPartTransCtx::get_max_submitting_log_info_(palf::LSN &lsn, SCN &log_ts)
   } else
   {
     lsn.reset();
+  }
+
+  if (OB_SUCC(ret)) {
+    SCN hotspot_max_log_ts;
+    palf::LSN hotspot_max_lsn;
+    hotspot_redo_cache_.get_max_busy_log_ts_and_lsn(hotspot_max_log_ts, hotspot_max_lsn);
+    if (hotspot_max_log_ts.is_valid()) {
+      if (!log_ts.is_valid() || hotspot_max_log_ts > log_ts) {
+        log_ts = hotspot_max_log_ts;
+        lsn = hotspot_max_lsn;
+      }
+    }
   }
 
   return ret;
@@ -5167,6 +5317,17 @@ int ObPartTransCtx::replay_redo_in_ctx(const ObTxRedoLog &redo_log,
         ret = switch_to_parallel_logging_(timestamp, max_seq_no);
       }
     }
+    // Hotspot secondary redo: disable checksum calculation for leader-follower consistency
+    // Rationale: Leader's primary mt_ctx_ doesn't contain secondary callbacks (data is in
+    // secondary's memtable), while follower's mt_ctx_ contains all remapped callbacks.
+    // This causes checksum mismatch if we calculate on follower. Skip checksum ensures
+    // commit log checksum = 0, which follower will also skip verification.
+    // NOTE: This setting is paired with hotspot rollback replay (see replay_rollback_to).
+    // When modifying redo or rollback_to logic, ensure both are updated consistently.
+    if (OB_SUCC(ret) && has_secondary_tx_redo_range(redo_log) && exec_info_.need_checksum_) {
+      exec_info_.need_checksum_ = false;
+      mt_ctx_.set_skip_checksum_calc();
+    }
   }
   if (OB_SUCC(ret)) {
     ObTransStatistic::get_instance().add_redo_log_replay_count(tenant_id_, 1);
@@ -5336,9 +5497,37 @@ int ObPartTransCtx::replay_rollback_to(const ObTxRollbackToLog &log,
   //
   // Step1, add Undo into TxData, both for parallel replay and serial replay
   //
-  if (OB_SUCC(ret) && need_replay && OB_FAIL(rollback_to_savepoint_(log.get_from(), log.get_to(), timestamp))) {
-    TRANS_LOG(WARN, "replay savepoint_rollback fail", K(ret), K(log), K(offset), K(timestamp),
-              KPC(this));
+  // Hotspot rollback: identified by valid secondary_tx_id (per D-05)
+  // For hotspot rollback, skip mt_ctx_.rollback to avoid OB_ERR_UNEXPECTED (per D-06)
+  // and set skip_checksum_calc for consistency during commit replay
+  const bool is_hotspot_rollback = log.get_secondary_tx_id().is_valid();
+  if (OB_SUCC(ret) && need_replay) {
+    if (is_hotspot_rollback) {
+      // Hotspot rollback: replay UndoAction and clear all callbacks
+      // In hotspot aggregation, multiple secondary txs' remapped callbacks coexist
+      // in the same callback list, violating the tip-rollback assumption of
+      // remove_callbacks_for_rollback_to (which expects no callbacks above from_seq).
+      // Our approach: remove all callbacks via reset during replay, then write UndoAction.
+      // Read path will filter rolled-back data via the UndoAction recorded in TxDataTable.
+      ObUndoAction undo_action(log.get_from(), log.get_to());
+      if (OB_FAIL(replay_undo_action_to_tx_table_(undo_action, timestamp))) {
+        TRANS_LOG(WARN, "insert undo action to tx table failed for hotspot rollback",
+                  K(ret), K(log), K(offset), K(timestamp), KPC(this));
+      } else if (OB_FAIL(mt_ctx_.remove_all_callbacks_for_replay())) {
+        TRANS_LOG(WARN, "remove all callbacks for hotspot rollback replay failed",
+                  K(ret), K(log), K(offset), K(timestamp), KPC(this));
+      } else {
+        TRANS_LOG(INFO, "hotspot rollback replayed successfully, callbacks cleared",
+                  K(log.get_secondary_tx_id()), K(log.get_from()), K(log.get_to()),
+                  K(timestamp), KPC(this));
+      }
+    } else {
+      // Non-hotspot rollback: use original logic (per D-09)
+      if (OB_FAIL(rollback_to_savepoint_(log.get_from(), log.get_to(), timestamp))) {
+        TRANS_LOG(WARN, "replay savepoint_rollback fail", K(ret), K(log), K(offset), K(timestamp),
+                  KPC(this));
+      }
+    }
   }
 
   // this is compatible code, since 4.2.4, redo_lsn not collect during replay
@@ -5432,6 +5621,10 @@ int ObPartTransCtx::replay_active_info(const ObTxActiveInfoLog &log,
 
     exec_info_.max_submitted_seq_no_.inc_update(log.get_max_submitted_seq_no());
     exec_info_.serial_final_seq_no_ = log.get_serial_final_seq_no();
+    // restore seq_base_ from log if valid (>= 0), otherwise keep current value (may be negative)
+    if (log.get_seq_base() >= 0) {
+      exec_info_.seq_base_ = log.get_seq_base();
+    }
     exec_info_.data_complete_ = true;
   }
   if (OB_FAIL(ret)) {
@@ -6002,6 +6195,10 @@ int ObPartTransCtx::replay_abort(const ObTxAbortLog &abort_log,
   }
   if (OB_SUCC(ret)) {
     sub_state_.set_state_log_submitted();
+    if(hotspot_redo_cache_.get_hotspot_cache_count() > 0) {
+      clean_hotspot_redo_cache();
+      reset_hotspot_redo_status_();
+    }
   }
   const int64_t used_time = timeguard.get_diff();
   REC_TRANS_TRACE_EXT2(tlog_, replay_abort, OB_ID(ret), ret, OB_ID(used),
@@ -6169,6 +6366,12 @@ const SCN ObPartTransCtx::get_min_undecided_log_ts() const
       log_ts = log_cb->get_log_ts();
     }
   }
+  const SCN hotspot_min_log_ts = hotspot_redo_cache_.get_min_busy_log_ts();
+  if (hotspot_min_log_ts.is_valid()) {
+    if (!log_ts.is_valid() || hotspot_min_log_ts < log_ts) {
+      log_ts = hotspot_min_log_ts;
+    }
+  }
   return log_ts;
 }
 
@@ -6332,7 +6535,7 @@ inline bool ObPartTransCtx::need_callback_scheduler_() {
     && !commit_cb_.is_inited();
 }
 
-// It's possile that a follower-state ctx experiences switch_to_follower_forcedly
+// It's possible that a follower-state ctx experiences switch_to_follower_forcedly
 // 1. in leader state
 // 2. switch graceful and turned into follower state, but another sub-handler fails
 // 3. resume_leader is called
@@ -6341,9 +6544,13 @@ inline bool ObPartTransCtx::need_callback_scheduler_() {
 int ObPartTransCtx::switch_to_follower_forcedly(ObTxCommitCallback *&cb_list_head)
 {
   int ret = OB_SUCCESS;
-  common::ObTimeGuard timeguard("switch_to_follower_forcely", 10 * 1000);
+  // IN-08: Named constant for TimeGuard threshold (10 seconds in milliseconds)
+  static const int64_t SWITCH_TIMEGUARD_TIMEOUT_MS = 10 * 1000;
+  common::ObTimeGuard timeguard("switch_to_follower_forcedly", SWITCH_TIMEGUARD_TIMEOUT_MS);
   CtxLockGuard guard(lock_);
   TxCtxStateHelper state_helper(role_state_);
+  // CR-03: Track whether secondaries were already aborted to prevent double-abort
+  bool secondaries_aborted = false;
 
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObPartTransCtx not inited");
@@ -6356,6 +6563,15 @@ int ObPartTransCtx::switch_to_follower_forcedly(ObTxCommitCallback *&cb_list_hea
     TRANS_LOG(WARN, "switch role state error", KR(ret), K(*this));
   } else {
     (void)unregister_timeout_task_();
+    // D-14/D-15: Handle primary aggregation states before path selection
+    if (is_primary_tx_aggregating(redo_flush_status_)) {
+      if (OB_FAIL(handle_primary_aggregation_for_forcedly_(secondaries_aborted))) {
+        TRANS_LOG(WARN, "failed to handle primary aggregation for forced switch", K(ret), KPC(this));
+      }
+    }
+    // IN-01: Segment timing after aggregation wait to avoid attributing
+    // wait time to subsequent path selection phases.
+    timeguard.click();
     if (!has_persisted_log_() && !is_logging_()) {
       // has not persisted any log, exit here
       bool need_cb_scheduler = need_callback_scheduler_();
@@ -6364,6 +6580,24 @@ int ObPartTransCtx::switch_to_follower_forcedly(ObTxCommitCallback *&cb_list_hea
         // which cause deadlock
         commit_cb_.disable();
       }
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+      // Mark non-terminal secondary hotspot tx as FAILED when forced follower switch.
+      // Non-terminal secondary states: PREPARING, MIGRATING, SYNCED
+      // Terminal secondary states: FAILED, SUCCEEDED (no need to mark again)
+      // Use explicit status check instead of is_secondary_hotspot_tx_() because:
+      // - is_secondary_hotspot_tx_() only checks PREPARING and MIGRATING (via is_in_active_aggregation_)
+      // - SYNCED state also needs to be marked as FAILED (redo migrated but response not sent yet)
+      if (is_secondary_status(redo_flush_status_)
+          && redo_flush_status_ != TxRedoFlushStatus::SECONDARY_MIGRATE_FAILED
+          && redo_flush_status_ != TxRedoFlushStatus::SECONDARY_MIGRATE_SUCCEEDED) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(set_secondary_hotspot_redo_status_(
+                TxRedoFlushStatus::SECONDARY_MIGRATE_FAILED))) {
+          TRANS_LOG(ERROR, "failed to mark secondary hotspot redo as aborted in switch_to_follower_forcedly",
+                    KR(tmp_ret), K_(redo_flush_status), KPC(this));
+        }
+      }
+#endif
       if (OB_FAIL(do_local_tx_end_(TxEndAction::ABORT_TX))) {
         TRANS_LOG(WARN, "do local tx abort failed", K(ret));
       } else if (need_cb_scheduler) {
@@ -6378,9 +6612,23 @@ int ObPartTransCtx::switch_to_follower_forcedly(ObTxCommitCallback *&cb_list_hea
       if (!need_cb_scheduler) {
         notify_scheduler_tx_killed_(ObTxAbortCause::PARTICIPANT_SWITCH_FOLLOWER_FORCEDLY);
       }
-      TRANS_LOG(INFO, "switch to follower forcely, txn aborted without persisted log", KPC(this));
+      TRANS_LOG(INFO, "switch to follower forcedly, txn aborted without persisted log", KPC(this));
     } else {
       // has persisted log, wait new leader to advance it
+      // D-18: Abort secondary TXs even in Path B (has persisted log)
+      // CR-03/WA-04: Skip if secondaries were already aborted in aggregation guard
+      // to prevent double state transitions. abort_secondary_txs() may not be fully
+      // idempotent for all secondary states.
+      if (!secondaries_aborted && hotspot_redo_cache_.get_hotspot_cache_count() > 0) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(hotspot_redo_cache_.abort_secondary_txs(
+                ObTxAbortCause::PARTICIPANT_SWITCH_FOLLOWER_FORCEDLY))) {
+          TRANS_LOG(WARN, "failed to abort secondary txs in force-switch path B",
+                    K(tmp_ret), KPC(this));
+        } else {
+          TRANS_LOG(INFO, "secondary txs aborted in force-switch path B", KPC(this));
+        }
+      }
       if (pending_write_ && OB_FALSE_IT(mt_ctx_.wait_pending_write())) {
         // do nothing
       } else if (OB_FALSE_IT(mt_ctx_.commit_to_replay())) {
@@ -6398,7 +6646,7 @@ int ObPartTransCtx::switch_to_follower_forcedly(ObTxCommitCallback *&cb_list_hea
         if (OB_FAIL(ctx_tx_data_.set_commit_version(share::SCN::invalid_scn()))) {
           TRANS_LOG(ERROR, "reset commit version failed", KR(ret), K(*this));
         } else {
-          TRANS_LOG(INFO, "clear local tx trans version when switch to follower forcely", KP(this));
+          TRANS_LOG(INFO, "clear local tx trans version when switch to follower forcedly", KP(this));
         }
       }
 
@@ -6431,7 +6679,7 @@ int ObPartTransCtx::switch_to_follower_forcedly(ObTxCommitCallback *&cb_list_hea
           TRANS_LOG(WARN, "prepare commit cb fail", K(tmp_ret), KPC(this));
           ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
         } else {
-          TRANS_LOG(INFO, "switch to follower forcely, notify txn commit result to scheduler",
+          TRANS_LOG(INFO, "switch to follower forcedly, notify txn commit result to scheduler",
                     "commit_result", commit_ret, KPC(this));
         }
       }
@@ -6458,7 +6706,8 @@ int ObPartTransCtx::switch_to_follower_gracefully(ObTxCommitCallback *&cb_list_h
   int ret = OB_SUCCESS;
   bool need_submit_log = false;
   ObTxLogType log_type = ObTxLogType::TX_ACTIVE_INFO_LOG;
-  common::ObTimeGuard timeguard("switch_to_follower_gracefully", 10 * 1000);
+  static const int64_t SWITCH_TIMEGUARD_TIMEOUT_MS = 10 * 1000;
+  common::ObTimeGuard timeguard("switch_to_follower_gracefully", SWITCH_TIMEGUARD_TIMEOUT_MS);
   CtxLockGuard guard(lock_);
   timeguard.click();
   TxCtxStateHelper state_helper(role_state_);
@@ -6474,7 +6723,29 @@ int ObPartTransCtx::switch_to_follower_gracefully(ObTxCommitCallback *&cb_list_h
   } else if (OB_FAIL(state_helper.switch_state(TxCtxOps::SWITCH_GRACEFUL))) {
     TRANS_LOG(WARN, "switch role state error", KR(ret), K(*this));
   } else {
-    if (pending_write_) {
+    // D-16/D-17: Handle primary aggregation states during graceful switch
+    // Per D-16: wait for aggregation completion (don't force abort)
+    // Per D-17: secondary TX log flush must complete for data consistency
+    if (is_primary_tx_aggregating(redo_flush_status_)) {
+      ret = wait_for_primary_aggregation_gracefully_();
+      // IN-01: Segment timing after aggregation wait
+      timeguard.click();
+    }
+    // BUGFIX-04 verification (Plan 02, Task 2): The graceful→force revoke path is verified:
+    // 1. ObLSTxCtxMgr::switch_to_follower_gracefully() (ob_trans_ctx_mgr_v4.cpp:879) has a
+    //    500ms retry loop (default_retry_timeout_us). When OB_NEED_RETRY persists past timeout,
+    //    it returns OB_LS_NEED_REVOKE (line 933).
+    // 2. ObRoleChangeService::switch_leader_to_follower_gracefully_() (ob_role_change_service.cpp:713)
+    //    checks OB_LS_NEED_REVOKE and triggers revoke.
+    // 3. The revoke path calls switch_to_follower_forcedly() (ob_role_change_service.cpp:647),
+    //    which now has the aggregation guard from Plan 01 (BUGFIX-01).
+    // Conclusion: BUGFIX-04 is resolved by BUGFIX-01/02 fixes — no additional code needed here.
+
+    // CRITICAL-2: Guard all logic after aggregation wait with OB_FAIL check
+    // to prevent OB_NEED_RETRY from proceeding to scheduler notification
+    if (OB_FAIL(ret)) {
+      // aggregation wait failed or needs retry, skip subsequent logic
+    } else if (pending_write_) {
       TRANS_LOG(INFO, "current tx is executing stmt", K(*this));
       mt_ctx_.wait_pending_write();
       timeguard.click();
@@ -6691,6 +6962,12 @@ int ObPartTransCtx::update_rec_log_ts_(bool for_replay, const SCN &rec_log_ts)
       } else {
         // there may exits if log cbs is empty
       }
+      const SCN hotspot_min_log_ts = hotspot_redo_cache_.get_min_busy_log_ts();
+      if (hotspot_min_log_ts.is_valid()) {
+        if (!rec_log_ts_.is_valid() || hotspot_min_log_ts < rec_log_ts_) {
+          rec_log_ts_ = hotspot_min_log_ts;
+        }
+      }
     }
   }
 
@@ -6725,8 +7002,10 @@ int ObPartTransCtx::refresh_rec_log_ts_()
       // need replay from the on-going log ts.
       if (exec_info_.max_applied_log_ts_ != exec_info_.max_applying_log_ts_) {
         rec_log_ts_ = exec_info_.max_applying_log_ts_;
-      } else if (busy_cbs_.is_empty()) {
+      } else if (busy_cbs_.is_empty() && hotspot_redo_cache_.get_busy_cb_count() == 0) {
         rec_log_ts_.reset();
+      } else if (busy_cbs_.is_empty()) {
+        rec_log_ts_ = hotspot_redo_cache_.get_min_busy_log_ts();
       } else {
         // Case 1.1: As follower, there may also exist log which is proposed
         // while not committed because of the current leader's switch mechinism
@@ -6739,6 +7018,10 @@ int ObPartTransCtx::refresh_rec_log_ts_()
           TRANS_LOG(ERROR, "unexpected null ptr", K(*this));
         } else {
           rec_log_ts_ = log_cb->get_log_ts();
+          const SCN hotspot_min = hotspot_redo_cache_.get_min_busy_log_ts();
+          if (hotspot_min.is_valid() && hotspot_min < rec_log_ts_) {
+            rec_log_ts_ = hotspot_min;
+          }
         }
       }
     } else {
@@ -6746,8 +7029,10 @@ int ObPartTransCtx::refresh_rec_log_ts_()
       // rely on the first lo(we call it FCL later)g hasnot been applied as
       // rec_log_ts if exists or reset it if not because all log of the txn with
       // its log ts in front of the FCL must be contained in the checkpoint.
-      if (busy_cbs_.is_empty()) {
+      if (busy_cbs_.is_empty() && hotspot_redo_cache_.get_busy_cb_count() == 0) {
         rec_log_ts_.reset();
+      } else if (busy_cbs_.is_empty()) {
+        rec_log_ts_ = hotspot_redo_cache_.get_min_busy_log_ts();
       } else {
         const ObTxLogCb *log_cb = busy_cbs_.get_first();
         if (OB_ISNULL(log_cb)) {
@@ -6755,6 +7040,10 @@ int ObPartTransCtx::refresh_rec_log_ts_()
           TRANS_LOG(ERROR, "unexpected null ptr", K(*this));
         } else {
           rec_log_ts_ = log_cb->get_log_ts();
+          const SCN hotspot_min = hotspot_redo_cache_.get_min_busy_log_ts();
+          if (hotspot_min.is_valid() && hotspot_min < rec_log_ts_) {
+            rec_log_ts_ = hotspot_min;
+          }
         }
       }
     }
@@ -7659,7 +7948,8 @@ int ObPartTransCtx::dup_table_tx_redo_sync_(const bool need_retry_by_task)
   share::SCN tmp_max_read_version;
   tmp_max_read_version.set_invalid();
 
-  if (busy_cbs_.get_size() > 0 && get_downstream_state() < ObTxState::REDO_COMPLETE) {
+  if ((busy_cbs_.get_size() > 0 || hotspot_redo_cache_.get_busy_cb_count() > 0)
+      && get_downstream_state() < ObTxState::REDO_COMPLETE) {
     ret = OB_EAGAIN;
     TRANS_LOG(INFO, "start redo sync after the on_success of commit info log ", K(ret), KPC(this));
   } else if (get_downstream_state() != ObTxState::REDO_COMPLETE || !exec_info_.is_dup_tx_) {
@@ -8252,6 +8542,66 @@ int ObPartTransCtx::check_status()
   return check_status_();
 }
 
+int ObPartTransCtx::check_tx_persisted_status(ObTxState &exit_state, bool &has_redo)
+{
+  int ret = OB_SUCCESS;
+  const bool need_lock = !lock_.is_locked_by_self();
+  if (!need_lock) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "ctx lock already held when check rollback status", K(ret), KPC(this));
+    exit_state = ObTxState::UNKNOWN;
+    has_redo = false;
+  }
+
+  CtxLockGuard guard(lock_, need_lock);
+  if (OB_SUCC(ret)) {
+    ret = check_tx_persisted_status_(exit_state, has_redo);
+  }
+
+  return ret;
+}
+
+int ObPartTransCtx::check_tx_persisted_status_(ObTxState &exit_state, bool &has_redo)
+{
+  int ret = OB_SUCCESS;
+  const ObTxState downstream_state = get_downstream_state();
+  exit_state = ObTxState::INIT;
+  has_redo = (exec_info_.redo_lsns_.count() > 0);
+
+  const bool is_exiting_or_exited = (is_exiting()
+      || downstream_state == ObTxState::COMMIT
+      || downstream_state == ObTxState::ABORT
+      || downstream_state == ObTxState::CLEAR);
+
+  if (is_exiting_or_exited) {
+    const int32_t tx_data_state = ctx_tx_data_.get_state();
+    if (ObTxCommitData::TxDataState::COMMIT == tx_data_state
+        || ObTxCommitData::TxDataState::ELR_COMMIT == tx_data_state) {
+      exit_state = ObTxState::COMMIT;
+    } else if (ObTxCommitData::TxDataState::ABORT == tx_data_state) {
+      exit_state = ObTxState::ABORT;
+    } else if (ObTxCommitData::TxDataState::RUNNING == tx_data_state
+               || ObTxCommitData::TxDataState::UNKOWN == tx_data_state) {
+      if (downstream_state == ObTxState::ABORT) {
+        // ctx_tx_data has no valid final state, treat it as in-memory abort without log
+        exit_state = ObTxState::ABORT;
+      } else {
+        exit_state = ObTxState::UNKNOWN;
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(ERROR, "unexpected tx data state for exited ctx",
+                  K(ret), K(tx_data_state), K(downstream_state), KPC(this));
+      }
+    } else {
+      exit_state = ObTxState::UNKNOWN;
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "unexpected tx data state for exited ctx",
+                K(ret), K(tx_data_state), KPC(this));
+    }
+  }
+
+  return ret;
+}
+
 /* check_status_ - check ctx status is health
  *
  * it is used in three situations:
@@ -8337,6 +8687,20 @@ int ObPartTransCtx::start_access(const ObTxDesc &tx_desc,
       }
       if (alloc) {
         data_scn = tx_desc.inc_and_get_tx_seq(branch);
+      }
+      const ObTxSEQ max_sub_tx_seq_no = hotspot_redo_cache_.get_max_sub_tx_seq_no();
+      if (max_sub_tx_seq_no.is_valid()) {
+        const int64_t max_sub_tx_next_seq = max_sub_tx_seq_no.get_seq() + 1;
+        const ObTxSEQ max_sub_tx_next = max_sub_tx_seq_no.support_branch()
+                                          ? ObTxSEQ(max_sub_tx_next_seq, branch)
+                                          : ObTxSEQ::mk_v0(max_sub_tx_next_seq);
+        if (max_sub_tx_next > data_scn) {
+          const ObTxSEQ origin_data_scn = data_scn;
+          data_scn = max_sub_tx_next;
+          TRANS_LOG(DEBUG, "data_scn updated by hotspot max_sub_tx_seq_no",
+                    K(origin_data_scn), K(data_scn), K(max_sub_tx_seq_no), K(max_sub_tx_next),
+                    K(branch), KPC(this));
+        }
       }
       last_scn_ = MAX(data_scn, last_scn_);
       if (!first_scn_.is_valid()) {
@@ -8476,6 +8840,28 @@ int64_t ObPartTransCtx::get_max_transfer_epoch_()
   return max_transfer_epoch;
 }
 
+bool ObPartTransCtx::has_transfer_history_()
+{
+  bool has_history = false;
+  if (exec_info_.transfer_parts_.count() > 0) {
+    has_history = true;
+  } else {
+    for (int64_t idx = 0; idx < exec_info_.commit_parts_.count(); idx++) {
+      if (exec_info_.commit_parts_.at(idx).transfer_epoch_ > 0) {
+        has_history = true;
+        break;
+      }
+    }
+    for (int64_t idx = 0; !has_history && idx < exec_info_.intermediate_participants_.count(); idx++) {
+      if (exec_info_.intermediate_participants_.at(idx).transfer_epoch_ > 0) {
+        has_history = true;
+        break;
+      }
+    }
+  }
+  return has_history;
+}
+
 /*
  * rollback_to_savepoint - rollback to savepoint
  *
@@ -8522,7 +8908,8 @@ int ObPartTransCtx::rollback_to_savepoint(const int64_t op_sn,
       ret = OB_NOT_MASTER;
     }
     TRANS_LOG(WARN, "rollback_to need retry because of logging", K(ret),
-              K(trans_id_), K(ls_id_), K(busy_cbs_.get_size()));
+              K(trans_id_), K(ls_id_), K(busy_cbs_.get_size()),
+              K(hotspot_redo_cache_.get_busy_cb_count()));
   } else if (is_2pc_blocking()) {
     ret = OB_NEED_RETRY;
     TRANS_LOG(WARN, "rollback_to need retry because of 2pc blocking", K(trans_id_), K(ls_id_), KP(this), K(ret));
@@ -8532,14 +8919,39 @@ int ObPartTransCtx::rollback_to_savepoint(const int64_t op_sn,
   } else if (pending_write_ > 0) {
     ret = OB_NEED_RETRY;
     TRANS_LOG(WARN, "has pending write, rollback blocked", K(ret), K(to_scn), K(pending_write_), KPC(this));
-  } else if (last_scn_ <= to_scn) {
-    TRANS_LOG(INFO, "rollback succeed trivially", K(trans_id_), K(ls_id_), K(op_sn), K(to_scn), K_(last_scn));
-  } else if (FALSE_IT(from_scn = to_scn.clone_with_seq(ObSequence::inc_and_get_max_seq_no(), seq_base))) {
-  } else if (OB_FAIL(rollback_to_savepoint_(from_scn, to_scn, share::SCN::invalid_scn()))) {
-    TRANS_LOG(WARN, "rollback_to_savepoint fail", K(ret),
-              K(from_scn), K(to_scn), K(op_sn), KPC(this));
   } else {
-    last_scn_ = to_scn;
+    ObTxSEQ to_scn_local = to_scn;
+    const ObTxSEQ max_sub_tx_seq_no = hotspot_redo_cache_.get_max_sub_tx_seq_no();
+    if (max_sub_tx_seq_no.is_valid()) {
+      const int64_t max_sub_tx_next_seq = max_sub_tx_seq_no.get_seq() + 1;
+      const ObTxSEQ max_sub_tx_next = max_sub_tx_seq_no.support_branch()
+                                        ? ObTxSEQ(max_sub_tx_next_seq, to_scn.get_branch())
+                                        : ObTxSEQ::mk_v0(max_sub_tx_next_seq);
+      if (to_scn_local < max_sub_tx_next) {
+        to_scn_local = max_sub_tx_next;
+      }
+    }
+    if (to_scn_local != to_scn) {
+      TRANS_LOG(INFO, "adjust rollback_to savepoint by max_sub_tx_seq_no", K(to_scn),
+                K(to_scn_local), K(max_sub_tx_seq_no), KPC(this));
+    }
+    const bool need_rollback = last_scn_ > to_scn_local;
+    if (!need_rollback) {
+      TRANS_LOG(INFO, "rollback succeed trivially", K(trans_id_), K(ls_id_), K(op_sn),
+                K(to_scn_local), K_(last_scn), K(max_sub_tx_seq_no));
+    }
+    if (OB_SUCC(ret) && need_rollback) {
+      if (FALSE_IT(from_scn = to_scn_local.clone_with_seq(ObSequence::inc_and_get_max_seq_no(), seq_base))) {
+      } else if (from_scn <= to_scn_local) {
+        from_scn = last_scn_;
+      }
+      if (OB_SUCC(ret) && OB_FAIL(rollback_to_savepoint_(from_scn, to_scn_local, share::SCN::invalid_scn()))) {
+        TRANS_LOG(WARN, "rollback_to_savepoint fail", K(ret),
+                  K(from_scn), K(to_scn_local), K(op_sn), KPC(this), K(max_sub_tx_seq_no));
+      } else if (OB_SUCC(ret)) {
+        last_scn_ = to_scn_local;
+      }
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -8642,11 +9054,12 @@ int ObPartTransCtx::rollback_to_savepoint_(const ObTxSEQ from_scn,
 }
 
 int ObPartTransCtx::submit_rollback_to_log_(const ObTxSEQ from_scn,
-                                            const ObTxSEQ to_scn)
+                                            const ObTxSEQ to_scn,
+                                            const ObTransID &secondary_tx_id)
 {
   int ret = OB_SUCCESS;
   ObTxLogBlock log_block;
-  ObTxRollbackToLog log(from_scn, to_scn);
+  ObTxRollbackToLog log(from_scn, to_scn, secondary_tx_id);
   ObTxLogCb *log_cb = NULL;
   ObUndoStatusNode *undo_node = NULL;
   LogBarrierType barrier = LogBarrierType::NO_NEED_BARRIER;
@@ -8699,7 +9112,7 @@ int ObPartTransCtx::submit_rollback_to_log_(const ObTxSEQ from_scn,
                       OB_ID(ret), ret,
                       OB_ID(from), from_scn.cast_to_int(),
                       OB_ID(to), to_scn.cast_to_int());
-  TRANS_LOG(INFO, "RollbackToLog submit", K(ret), K(from_scn), K(to_scn), KP(log_cb), KPC(this));
+  TRANS_LOG(INFO, "RollbackToLog submit", K(ret), K(from_scn), K(to_scn), K(secondary_tx_id), KP(log_cb), KPC(this));
   return ret;
 }
 
@@ -8708,7 +9121,9 @@ int ObPartTransCtx::abort(const int reason)
   UNUSED(reason);
   int ret = OB_SUCCESS;
   CtxLockGuard guard(lock_);
-  if (OB_UNLIKELY(is_follower_())) {
+  if (is_exiting_) {
+    TRANS_LOG(INFO, "tx is exiting, skip abort", KPC(this));
+  } else if (OB_UNLIKELY(is_follower_())) {
     ret = OB_NOT_MASTER;
     TRANS_LOG(WARN, "not master", KR(ret), KPC(this));
   } else if (OB_UNLIKELY(is_2pc_blocking())) {
@@ -8734,6 +9149,68 @@ int ObPartTransCtx::abort(const int reason)
   }
   return ret;
 }
+
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+int ObPartTransCtx::force_abort_secondary_hotspot(const int reason)
+{
+  int ret = OB_SUCCESS;
+  CtxLockGuard guard(lock_);
+
+  // Defensive check 1: must be a secondary hotspot tx
+  // Use is_secondary_status() instead of is_secondary_hotspot_tx_() because:
+  // - abort_secondary_txs() sets status to SECONDARY_MIGRATE_FAILED before calling this function
+  // - is_secondary_hotspot_tx_() relies on is_in_active_aggregation_() which excludes SECONDARY_MIGRATE_FAILED
+  // - We need to accept all secondary statuses (PREPARING, MIGRATING, SYNCED, FAILED, SUCCEEDED)
+  // - Secondary hotspot tx must have empty hotspot_redo_cache_ (only primary has non-empty cache)
+  if (!is_secondary_status(redo_flush_status_) || hotspot_redo_cache_.get_hotspot_cache_count() > 0) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "force_abort_secondary_hotspot only for secondary hotspot tx",
+              KR(ret), K_(redo_flush_status), "hotspot_cache_count", hotspot_redo_cache_.get_hotspot_cache_count(), KPC(this));
+  } else if (OB_UNLIKELY(is_logging_())) {
+    // Defensive check 2: secondary hotspot tx should not be in logging state
+    // because secondary's redo is submitted by primary, secondary itself does not submit redo log
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "secondary hotspot tx should not be in logging state",
+              KR(ret), "busy_cbs", busy_cbs_.get_size(),
+              "hotspot_busy_cbs", hotspot_redo_cache_.get_busy_cb_count(), KPC(this));
+  } else if (is_exiting_) {
+    TRANS_LOG(DEBUG, "secondary hotspot tx is exiting, skip abort", KPC(this));
+  } else if (OB_UNLIKELY(is_follower_())) {
+    ret = OB_NOT_MASTER;
+    TRANS_LOG(WARN, "not master, cannot abort secondary hotspot tx", KR(ret), KPC(this));
+  } else if (OB_UNLIKELY(is_2pc_blocking())) {
+    ret = OB_EAGAIN;
+    TRANS_LOG(WARN, "2pc blocking, cannot abort secondary hotspot tx", KR(ret), KPC(this));
+  } else if (OB_UNLIKELY(is_committing_())
+             && part_trans_action_ == ObPartTransAction::ABORT) {
+    TRANS_LOG(DEBUG, "secondary hotspot tx already aborting, skip", KPC(this));
+  } else {
+    if (is_committing_()) {
+      TRANS_LOG(INFO, "secondary hotspot tx abort from committing state",
+                K(reason), "part_trans_action", part_trans_action_, KPC(this));
+    }
+    // Disable commit_cb_ to prevent do_local_tx_end_ from invoking the local
+    // scheduler callback in-lock, which deadlocks under primary's role-change
+    // path. post_tx_commit_resp_ falls back to RPC and still notifies scheduler.
+    const bool need_disable_cb = need_callback_scheduler_();
+    if (need_disable_cb) {
+      commit_cb_.disable();
+    }
+    if (OB_FAIL(abort_(reason))) {
+      TRANS_LOG(WARN, "abort secondary hotspot tx failed", KR(ret), K(reason), KPC(this));
+      if (need_disable_cb) {
+        commit_cb_.enable();
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) || is_exiting_) {
+    last_request_ts_ = ObClockGenerator::getClock();
+  }
+
+  return ret;
+}
+#endif
 
 int ObPartTransCtx::handle_tx_keepalive_response(const int64_t status)
 {
@@ -8961,7 +9438,16 @@ int ObPartTransCtx::do_local_abort_tx_()
 
   TRANS_LOG(WARN, "do_local_abort_tx_", KR(ret), K(*this));
 
-  if (has_persisted_log_() || is_logging_()) {
+  if (is_in_active_aggregation_()) {
+    ret = OB_EAGAIN;
+    sub_state_.set_force_abort();
+    TRANS_LOG(WARN, "we can not abort a hotspot tx with a special redo_flush_status", K(ret),
+              KPC(this));
+  } else if (hotspot_redo_cache_.get_hotspot_cache_count() > 0
+             && OB_FAIL(hotspot_redo_cache_.abort_secondary_txs(ObTxAbortCause::PRIMARY_TX_ABORTED))) {
+    sub_state_.set_force_abort();
+    TRANS_LOG(WARN, "abort secondary txs failed", K(ret), KPC(this));
+  } else if (has_persisted_log_() || is_logging_()) {
     // part_trans_action_ = ObPartTransAction::ABORT;
     if (OB_FAIL(compensate_abort_log_())) {
       TRANS_LOG(WARN, "submit abort log failed", KR(ret), K(*this));
@@ -9004,7 +9490,7 @@ int ObPartTransCtx::do_force_kill_tx_()
       TRANS_LOG(WARN, "unregister timer task error", KR(ret), "context", *this);
     }
     sub_state_.set_force_abort();
-    // Ignore ret
+    clean_hotspot_redo_cache();
     set_exiting_();
     TRANS_LOG(INFO, "transaction killed success", "context", *this);
   }
@@ -9088,6 +9574,11 @@ int ObPartTransCtx::on_local_abort_tx_()
   }
 
   if (OB_SUCC(ret)) {
+    // Unify with commit: when has hotspot, enable and push resp task (same flow), resp task will
+    // run and then clean_hotspot_redo_cache to release child tx memory.
+    if (hotspot_redo_cache_.get_hotspot_cache_count() > 0) {
+        hotspot_redo_cache_.push_response_task(OB_TRANS_KILLED, share::SCN::invalid_scn());
+    }
     set_exiting_();
   }
 
@@ -9750,7 +10241,7 @@ int ObPartTransCtx::infer_local_standby_replica_trx_state_(
           || local_replica_trx_state != ObTxCommitData::TxDataState::ABORT) {
         // TODO try to access tx data table for tx data state
         TRANS_LOG_RET(WARN, OB_STATE_NOT_MATCH,
-                      "Unkown tx data state in ctx_tx_data. It is possile that replaying clear log "
+                       "Unknown tx data state in ctx_tx_data. It is possible that replaying clear log "
                       "after replaying abort log",
                       K(ret), K(local_replica_trx_state), K(local_replica_trx_commit_version),
                       KPC(this));
@@ -10383,6 +10874,12 @@ int ObPartTransCtx::collect_tx_ctx(const ObLSID dest_ls_id,
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObPartTransCtx not inited");
     ret = OB_NOT_INIT;
+  } else if (is_in_active_aggregation_()
+             || hotspot_redo_cache_.get_hotspot_cache_count() > 0) {
+    ret = OB_NOT_SUPPORTED;
+    TRANS_LOG(WARN, "transfer not supported for hotspot aggregated tx",
+              KR(ret), K(trans_id_), K(ls_id_), K_(redo_flush_status),
+              "hotspot_cache_count", hotspot_redo_cache_.get_hotspot_cache_count(), KPC(this));
   } else if (is_exiting_) {
     // we should ignore exiting participants
     TRANS_LOG(INFO, "collect_tx_ctx tx skip ctx exiting", K(trans_id_), K(ls_id_));
@@ -10565,7 +11062,8 @@ int ObPartTransCtx::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
     } else if (epoch_ != arg.epoch_ // ctx created by itself
                && exec_info_.next_log_entry_no_ == 0 // no log submitted
                && get_redo_log_no_() == 0 // no log submitted
-               && busy_cbs_.is_empty()) { // no log submitting
+               && busy_cbs_.is_empty()
+               && hotspot_redo_cache_.get_busy_cb_count() == 0) { // no log submitting
       // promise tx log before move log
       if (exec_info_.state_ == ObTxState::INIT) {
         // promise redo log before move log
@@ -10739,6 +11237,11 @@ int ObPartTransCtx::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
 void ObPartTransCtx::print_first_mvcc_callback_()
 {
   mt_ctx_.print_first_mvcc_callback();
+}
+
+bool ObPartTransCtx::has_multiple_callback_lists_() const
+{
+  return mt_ctx_.get_callback_list_count() > 1;
 }
 
 bool ObPartTransCtx::is_exec_complete(ObLSID ls_id, int64_t epoch, int64_t transfer_epoch)
@@ -11069,8 +11572,10 @@ int ObPartTransCtx::get_stat_for_virtual_table(share::ObLSArray &participants, i
   int ret = OB_SUCCESS;
   if (OB_SUCC(lock_.try_rdlock_ctx())) {
     participants.assign(exec_info_.participants_);
-    busy_cbs_cnt = busy_cbs_.get_size();
-    lock_.unlock_ctx();
+    busy_cbs_cnt = busy_cbs_.get_size() + hotspot_redo_cache_.get_busy_cb_count();
+    CtxLockArg arg;
+    lock_.unlock_ctx(arg);
+    lock_.after_unlock(arg);
   }
   return ret;
 }
@@ -11091,6 +11596,12 @@ int ObPartTransCtx::check_need_transfer(
   } else if (!data_end_scn.is_valid() || tablet_list.empty()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid args", KR(ret), K(data_end_scn), K(tablet_list));
+  } else if (is_in_active_aggregation_()
+             || hotspot_redo_cache_.get_hotspot_cache_count() > 0) {
+    ret = OB_NOT_SUPPORTED;
+    TRANS_LOG(WARN, "transfer not supported for hotspot aggregated tx",
+              KR(ret), K(trans_id_), K(ls_id_), K_(redo_flush_status),
+              "hotspot_cache_count", hotspot_redo_cache_.get_hotspot_cache_count(), KPC(this));
   } else if (FALSE_IT(start_scn = get_start_log_ts())) {
   } else if (!start_scn.is_valid() || start_scn > data_end_scn) {
     // filter

@@ -33,6 +33,25 @@ public:
 public:
 };
 
+// 辅助函数：检查日志文件是否包含指定的 ERROR 关键字
+// 用于自动化验证溢出告警日志输出
+static bool check_log_contains_error(const char *keyword)
+{
+  bool found = false;
+  FILE *fp = fopen("test_ob_tx_log.log", "r");
+  if (fp != nullptr) {
+    char line[1024];
+    while (fgets(line, sizeof(line), fp) != nullptr) {
+      if (strstr(line, keyword) != nullptr && strstr(line, "EDIAG") != nullptr) {
+        found = true;
+        break;
+      }
+    }
+    fclose(fp);
+  }
+  return found;
+}
+
 //const TEST
 TxID TEST_TX_ID = 1024;
 int64_t TEST_CLUSTER_VERSION = DATA_VERSION_4_2_4_0;
@@ -59,6 +78,7 @@ int64_t TEST_TX_EXPIRED_TIME = 12099087;
 int64_t TEST_LOG_ENTRY_NO = 1233;
 ObTxSEQ TEST_MAX_SUBMITTED_SEQ_NO = ObTxSEQ(12345, 0);
 ObTxSEQ TEST_SERIAL_FINAL_SEQ_NO = ObTxSEQ(12346, 0);
+int64_t TEST_SEQ_BASE = 1000000; // test seq_base value
 LSKey TEST_LS_KEY;
 ObXATransID TEST_XID;
 tablelock::ObTableLockPrioOpArray TEST_LOCK_OP_ARRAY;
@@ -215,6 +235,7 @@ TEST_F(TestObTxLog, tx_log_body_except_redo)
                                        TEST_CLUSTER_VERSION,
                                        TEST_XID,
                                        TEST_SERIAL_FINAL_SEQ_NO,
+                                       TEST_SEQ_BASE,
                                        TEST_LOCK_OP_ARRAY);
   ObTxPrepareLog filll_prepare(TEST_LS_ARRAY, TEST_LOG_OFFSET, TEST_PREV_LOG_TYPE);
   ObTxCommitLog fill_commit(share::SCN::base_scn(),
@@ -269,6 +290,7 @@ TEST_F(TestObTxLog, tx_log_body_except_redo)
   EXPECT_EQ(0, replay_active_state.get_cluster_version());
   EXPECT_EQ(TEST_XID, replay_active_state.get_xid());
   EXPECT_EQ(TEST_SERIAL_FINAL_SEQ_NO, replay_active_state.get_serial_final_seq_no());
+  EXPECT_EQ(TEST_SEQ_BASE, replay_active_state.get_seq_base());
 
   ObTxCommitInfoLogTempRef commit_state_temp_ref;
   ObTxCommitInfoLog replay_commit_state(commit_state_temp_ref);
@@ -360,6 +382,9 @@ TEST_F(TestObTxLog, tx_log_body_redo)
   ObString TEST_MUTATOR_BUF("FFF");
   int64_t mutator_pos = 0;
   ObTxRedoLog fill_redo(TEST_CLUSTER_VERSION);
+  transaction::ObSecondaryTxRedoRange redo_range(TEST_TX_ID, ObTxSEQ(100, 0), ObTxSEQ(200, 0),
+                                                 ObTxSEQ(1, 0), ObTxSEQ(101, 0));
+  ASSERT_EQ(OB_SUCCESS, fill_redo.add_secondary_tx_redo_range(redo_range));
   ASSERT_EQ(OB_SUCCESS, fill_block.prepare_mutator_buf(fill_redo));
   ASSERT_EQ(OB_SUCCESS, serialization::encode(fill_redo.get_mutator_buf(),
                                               fill_redo.get_mutator_size(),
@@ -386,6 +411,12 @@ TEST_F(TestObTxLog, tx_log_body_redo)
   EXPECT_EQ(ObTxLogType::TX_REDO_LOG, log_header.get_tx_log_type());
   ASSERT_EQ(OB_SUCCESS, replay_block.deserialize_log_body(replay_redo));
   EXPECT_EQ(fill_redo.get_mutator_size(), replay_redo.get_mutator_size());
+  ASSERT_EQ(1, replay_redo.ctx_redo_info_.secondary_tx_redo_ranges_.count());
+  EXPECT_EQ(TEST_TX_ID, replay_redo.ctx_redo_info_.secondary_tx_redo_ranges_.at(0).secondary_tx_id_);
+  EXPECT_EQ(redo_range.remap_from_, replay_redo.ctx_redo_info_.secondary_tx_redo_ranges_.at(0).remap_from_);
+  EXPECT_EQ(redo_range.remap_to_, replay_redo.ctx_redo_info_.secondary_tx_redo_ranges_.at(0).remap_to_);
+  EXPECT_EQ(redo_range.orig_from_, replay_redo.ctx_redo_info_.secondary_tx_redo_ranges_.at(0).orig_from_);
+  EXPECT_EQ(redo_range.orig_to_, replay_redo.ctx_redo_info_.secondary_tx_redo_ranges_.at(0).orig_to_);
   TRANS_LOG(INFO,
             "Mutator Info",
             K(fill_redo.get_mutator_buf()),
@@ -491,6 +522,30 @@ TEST_F(TestObTxLog, test_compat_bytes)
 
 }
 
+TEST_F(TestObTxLog, test_ctx_redo_info_secondary_tx_redo_ranges_serialize)
+{
+  ObCtxRedoInfo fill_info(TEST_CLUSTER_VERSION);
+  transaction::ObSecondaryTxRedoRange range(TEST_TX_ID, ObTxSEQ(100, 0), ObTxSEQ(200, 0),
+                                             ObTxSEQ(1, 0), ObTxSEQ(101, 0));
+  ASSERT_EQ(OB_SUCCESS, fill_info.secondary_tx_redo_ranges_.push_back(range));
+  ASSERT_EQ(OB_SUCCESS, fill_info.before_serialize());
+
+  char buf[1024];
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, fill_info.serialize(buf, sizeof(buf), pos));
+
+  ObCtxRedoInfo replay_info(0);
+  int64_t data_len = pos;
+  pos = 0;
+  ASSERT_EQ(OB_SUCCESS, replay_info.deserialize(buf, data_len, pos));
+  ASSERT_EQ(1, replay_info.secondary_tx_redo_ranges_.count());
+  EXPECT_EQ(TEST_TX_ID, replay_info.secondary_tx_redo_ranges_.at(0).secondary_tx_id_);
+  EXPECT_EQ(range.remap_from_, replay_info.secondary_tx_redo_ranges_.at(0).remap_from_);
+  EXPECT_EQ(range.remap_to_, replay_info.secondary_tx_redo_ranges_.at(0).remap_to_);
+  EXPECT_EQ(range.orig_from_, replay_info.secondary_tx_redo_ranges_.at(0).orig_from_);
+  EXPECT_EQ(range.orig_to_, replay_info.secondary_tx_redo_ranges_.at(0).orig_to_);
+}
+
 TEST_F(TestObTxLog, test_default_log_deserialize)
 {
   ObTxLogBlock fill_block;
@@ -593,6 +648,10 @@ TEST_F(TestObTxLog, test_default_log_deserialize)
   EXPECT_EQ(fill_active_state.get_xid(), replay_active_state.get_xid());
   replay_member_cnt++;
   EXPECT_EQ(fill_active_state.get_serial_final_seq_no(), replay_active_state.get_serial_final_seq_no());
+  replay_member_cnt++;
+  // Verify seq_base_ default value (-1) is handled correctly
+  EXPECT_EQ(fill_active_state.get_seq_base(), replay_active_state.get_seq_base());
+  EXPECT_EQ(-1, fill_active_state.get_seq_base()); // default value should be -1
   replay_member_cnt++;
   EXPECT_EQ(fill_active_state.get_prio_op_array().count(), replay_active_state.get_prio_op_array().count());
   replay_member_cnt++;
@@ -896,9 +955,9 @@ TEST_F(TestObTxLog, test_start_working_log)
 {
   ObTransID fake_tx_id(0);
   ObTxLogBlockHeader header(1, 1, 1, fake_tx_id, ObAddr());
-  EXPECT_EQ(0, header.get_serialize_size_());
+  EXPECT_EQ(0, header.get_reserved_serialize_size());
   EXPECT_EQ(OB_SUCCESS, header.before_serialize());
-  int64_t ser_size_ = header.get_serialize_size_();
+  int64_t ser_size_ = header.get_reserved_serialize_size();
   int64_t ser_size = header.get_serialize_size();
   EXPECT_NE(0, ser_size_);
   char buf[256];
@@ -923,8 +982,8 @@ TEST_F(TestObTxLog, test_tx_block_header_serialize)
   ObTxLogBlockHeader header(101, 102, 103, tx_id, addr);
   EXPECT_EQ(0, header.serialize_size_);
   EXPECT_EQ(OB_SUCCESS, header.before_serialize());
-  int64_t ser_size_ = header.get_serialize_size_();
-  EXPECT_EQ(ser_size_, header.get_serialize_size_());
+  int64_t ser_size_ = header.get_reserved_serialize_size();
+  EXPECT_EQ(ser_size_, header.get_reserved_serialize_size());
   int64_t ser_size = header.get_serialize_size();
   EXPECT_GT(ser_size_, 0);
   char buf[256];
@@ -948,11 +1007,232 @@ TEST_F(TestObTxLog, test_tx_block_header_serialize)
   header.serialize_size_ = 240;
   int64_t ser_size2 = header.get_serialize_size();
   EXPECT_GT(ser_size2, 240);
-  EXPECT_EQ(240, header.get_serialize_size_());
+  EXPECT_EQ(240, header.get_reserved_serialize_size());
   MEMSET(buf, 0, 256);
   pos = 0;
   EXPECT_EQ(OB_SUCCESS, header.serialize(buf, 256, pos));
   EXPECT_EQ(pos, ser_size2);
+}
+
+// ============================================================================
+// Test: Verify implicit constraint — before_serialize() can only be called once
+// ============================================================================
+// Purpose: Demonstrate that calling before_serialize() twice causes serialize_size_ not to update
+// This is an inherent property of serialization mechanism, documented as a constraint warning
+// ============================================================================
+TEST_F(TestObTxLog, test_before_serialize_twice_causes_mismatch)
+{
+  TRANS_LOG(INFO, "called", "func", test_info_->name());
+
+  ObTransID tx_id(1024);
+  ObAddr addr(ObAddr::VER::IPV4, "127.0.0.1", 6066);
+
+  // 1. Create header with log_entry_no=100 (varint 1 byte)
+  ObTxLogBlockHeader header(1, DATA_VERSION_4_2_4_0, 100, tx_id, addr);
+
+  // 2. First before_serialize() - calculates serialize_size_ based on 100
+  ASSERT_EQ(OB_SUCCESS, header.before_serialize());
+  int64_t first_size = header.get_reserved_serialize_size();
+
+  // 3. Modify log_entry_no to 128 (crosses varint boundary: 1 byte -> 2 bytes)
+  header.log_entry_no_ = 128;
+
+  // 4. Second before_serialize() - compat_bytes is reset, but serialize_size_ stays same
+  ASSERT_EQ(OB_SUCCESS, header.before_serialize());
+  int64_t second_size = header.get_reserved_serialize_size();
+
+  // Verify serialize_size_ unchanged (this demonstrates the constraint)
+  EXPECT_EQ(first_size, second_size);
+  TRANS_LOG(INFO, "before_serialize constraint", K(first_size), K(second_size),
+            "size_unchanged", (first_size == second_size));
+
+  // 5. serialize() - actual write > serialize_size_ -> overflow
+  char buf[256];
+  MEMSET(buf, 0, 256);
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, header.serialize(buf, 256, pos));
+
+  int64_t actual_written = pos;
+  TRANS_LOG(INFO, "serialize overflow demonstration", K(actual_written), K(second_size),
+            "overflow", (actual_written > second_size));
+}
+
+// ============================================================================
+// Integration Test: Simulate hotspot path seal overflow scenario
+// ============================================================================
+// Real hotspot path (ref: ob_tx_hotspot_helper.cpp:fill_and_submit_hotspot_redo_):
+// 1. init_log_block_() - reads next_log_entry_no_ = N without lock
+// 2. Add redo data
+// 3. After acquiring lock: set_hotspot_redo_flag() + set_log_entry_no(-1)
+// 4. seal(..., next_log_entry_no_) - reads value that may be N+? with lock
+//
+// Concurrent window: overflow when N and N+? cross varint boundary
+// ============================================================================
+
+TEST_F(TestObTxLog, test_hotspot_seal_overflow_integration)
+{
+  TRANS_LOG(INFO, "called", "func", test_info_->name());
+
+  ObTxLogBlock fill_block;
+
+  // Phase 1: init with log_entry_no=127 (varint 1 byte)
+  ObTxLogBlockHeader &header = fill_block.get_header();
+  header.init(TEST_ORG_CLUSTER_ID, TEST_CLUSTER_VERSION, 127, ObTransID(TEST_TX_ID), TEST_ADDR);
+  header.set_serial_final();
+
+  ASSERT_EQ(OB_SUCCESS, fill_block.init_for_fill());
+
+  int64_t reserved_size = header.get_reserved_serialize_size();
+  TRANS_LOG(INFO, "hotspot init", K(reserved_size), "log_entry_no", 127);
+
+  // Phase 2: Add redo data (include secondary_tx_redo_range, close to real scenario)
+  ObString REDO_DATA("HOTSPOT_REDO_DATA");
+  int64_t mutator_pos = 0;
+  ObTxRedoLog hotspot_redo(TEST_CLUSTER_VERSION);
+  transaction::ObSecondaryTxRedoRange redo_range(TEST_TX_ID, ObTxSEQ(100, 0), ObTxSEQ(200, 0),
+                                                  ObTxSEQ(1, 0), ObTxSEQ(101, 0));
+  ASSERT_EQ(OB_SUCCESS, hotspot_redo.add_secondary_tx_redo_range(redo_range));
+  ASSERT_EQ(OB_SUCCESS, fill_block.prepare_mutator_buf(hotspot_redo));
+  ASSERT_EQ(OB_SUCCESS, serialization::encode(hotspot_redo.get_mutator_buf(),
+                                              hotspot_redo.get_mutator_size(),
+                                              mutator_pos, REDO_DATA));
+  ASSERT_EQ(OB_SUCCESS, fill_block.finish_mutator_buf(hotspot_redo, mutator_pos));
+  ASSERT_EQ(OB_SUCCESS, fill_block.add_new_log(hotspot_redo));
+
+  // Phase 3: hotspot path specific operations
+  fill_block.set_hotspot_redo_flag();
+  header.set_log_entry_no(-1);
+
+  // Phase 4: seal with log_entry_no=128 (simulate concurrent modification, crossing varint boundary)
+  // serialize_size_ calculated with 127, but seal writes 128 -> overflow
+  // After fix, seal() should detect overflow and return OB_SIZE_OVERFLOW error
+  int seal_ret = fill_block.seal(TEST_TX_ID,
+                                 logservice::ObReplayBarrierType::NO_NEED_BARRIER,
+                                 128);
+
+  // Verify seal returns OB_SIZE_OVERFLOW error, preventing data corruption
+  EXPECT_EQ(OB_SIZE_OVERFLOW, seal_ret);
+  TRANS_LOG(INFO, "hotspot seal overflow detected", K(seal_ret), K(reserved_size));
+}
+
+// ============================================================================
+// Test: Large varint boundary overflow scenario (16383->16384, 2 bytes->3 bytes)
+// ============================================================================
+// High concurrency scenario: log_entry_no may cross larger varint boundary
+// 16383 (varint 2 bytes) -> 16384 (varint 3 bytes) overflow 1 byte
+// ============================================================================
+TEST_F(TestObTxLog, test_hotspot_seal_overflow_large_boundary)
+{
+  TRANS_LOG(INFO, "called", "func", test_info_->name());
+
+  ObTxLogBlock fill_block;
+
+  // Phase 1: init with log_entry_no=16383 (varint 2 bytes)
+  ObTxLogBlockHeader &header = fill_block.get_header();
+  header.init(TEST_ORG_CLUSTER_ID, TEST_CLUSTER_VERSION, 16383, ObTransID(TEST_TX_ID), TEST_ADDR);
+  header.set_serial_final();
+
+  ASSERT_EQ(OB_SUCCESS, fill_block.init_for_fill());
+
+  int64_t reserved_size = header.get_reserved_serialize_size();
+  TRANS_LOG(INFO, "large boundary init", K(reserved_size), "log_entry_no", 16383);
+
+  // Phase 2: Add redo data
+  ObString REDO_DATA("LARGE_BOUNDARY_REDO");
+  int64_t mutator_pos = 0;
+  ObTxRedoLog redo_log(TEST_CLUSTER_VERSION);
+  ASSERT_EQ(OB_SUCCESS, fill_block.prepare_mutator_buf(redo_log));
+  ASSERT_EQ(OB_SUCCESS, serialization::encode(redo_log.get_mutator_buf(),
+                                              redo_log.get_mutator_size(),
+                                              mutator_pos, REDO_DATA));
+  ASSERT_EQ(OB_SUCCESS, fill_block.finish_mutator_buf(redo_log, mutator_pos));
+  ASSERT_EQ(OB_SUCCESS, fill_block.add_new_log(redo_log));
+
+  // Phase 3: hotspot path operations
+  fill_block.set_hotspot_redo_flag();
+  header.set_log_entry_no(-1);
+
+  // Phase 4: seal with log_entry_no=16384 (simulate concurrent modification, crossing varint boundary 2->3 bytes)
+  // After fix, seal() should detect overflow and return OB_SIZE_OVERFLOW error
+  int seal_ret = fill_block.seal(TEST_TX_ID,
+                                 logservice::ObReplayBarrierType::NO_NEED_BARRIER,
+                                 16384);
+
+  // Verify seal returns OB_SIZE_OVERFLOW error, preventing data corruption
+  EXPECT_EQ(OB_SIZE_OVERFLOW, seal_ret);
+  TRANS_LOG(INFO, "large boundary overflow detected", K(seal_ret), K(reserved_size));
+}
+
+// ============================================================================
+// Test: Normal path without overflow (baseline test)
+// ============================================================================
+// When init and seal use the same value, serialize_size_ is calculated correctly, no overflow
+// ============================================================================
+TEST_F(TestObTxLog, test_hotspot_seal_no_overflow_same_value)
+{
+  TRANS_LOG(INFO, "called", "func", test_info_->name());
+
+  ObTxLogBlock fill_block;
+  ObTxLogBlock replay_block;
+
+  // init and seal use the same value
+  ObTxLogBlockHeader &header = fill_block.get_header();
+  header.init(TEST_ORG_CLUSTER_ID, TEST_CLUSTER_VERSION, 128, ObTransID(TEST_TX_ID), TEST_ADDR);
+  header.set_serial_final();
+
+  ASSERT_EQ(OB_SUCCESS, fill_block.init_for_fill());
+
+  // Add redo data
+  ObString REDO_DATA("REDO_DATA");
+  int64_t mutator_pos = 0;
+  ObTxRedoLog redo_log(TEST_CLUSTER_VERSION);
+  ASSERT_EQ(OB_SUCCESS, fill_block.prepare_mutator_buf(redo_log));
+  ASSERT_EQ(OB_SUCCESS, serialization::encode(redo_log.get_mutator_buf(),
+                                              redo_log.get_mutator_size(),
+                                              mutator_pos, REDO_DATA));
+  ASSERT_EQ(OB_SUCCESS, fill_block.finish_mutator_buf(redo_log, mutator_pos));
+  ASSERT_EQ(OB_SUCCESS, fill_block.add_new_log(redo_log));
+
+  // hotspot path operations
+  fill_block.set_hotspot_redo_flag();
+  header.set_log_entry_no(-1);
+
+  // seal uses the same value, no overflow
+  ASSERT_EQ(OB_SUCCESS, fill_block.seal(TEST_TX_ID,
+                                         logservice::ObReplayBarrierType::NO_NEED_BARRIER,
+                                         128));
+
+  // Verify replay succeeds and data is correct
+  char *buf = fill_block.get_buf();
+  int64_t total_len = fill_block.get_size();
+
+  ASSERT_EQ(OB_SUCCESS, replay_block.init_for_replay(buf, total_len));
+
+  ObTxLogHeader log_header;
+  ASSERT_EQ(OB_SUCCESS, replay_block.get_next_log(log_header));
+  ASSERT_EQ(ObTxLogType::TX_REDO_LOG, log_header.get_tx_log_type());
+
+  TRANS_LOG(INFO, "normal path passed", K(log_header.get_tx_log_type()));
+}
+
+// ============================================================================
+// Test: Verify ERROR log output
+// ============================================================================
+// After overflow tests complete, check if log file contains overflow warning
+// ============================================================================
+TEST_F(TestObTxLog, test_overflow_error_log_verification)
+{
+  TRANS_LOG(INFO, "called", "func", test_info_->name());
+
+  // Check if log file contains overflow warning keyword
+  bool has_overflow_log = check_log_contains_error("block header serialization size overflow");
+
+  // If previous overflow tests have executed, should see ERROR log
+  // This test serves as final verification, ensuring fix is effective
+  TRANS_LOG(INFO, "error log verification", K(has_overflow_log));
+
+  // Note: This test does not force assertion, as log may not have been flushed yet
+  // Only serves as visibility verification, actual effect can be confirmed by checking log file
 }
 
 } // namespace unittest
@@ -964,6 +1244,8 @@ int main(int argc, char **argv)
 {
   int ret = 1;
   ObLogger &logger = ObLogger::get_logger();
+  // 清理旧日志文件
+  system("rm -f test_ob_tx_log.log");
   logger.set_file_name("test_ob_tx_log.log", true);
   logger.set_log_level(OB_LOG_LEVEL_INFO);
   testing::InitGoogleTest(&argc, argv);

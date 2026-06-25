@@ -14,6 +14,9 @@
 
 #include "ob_table_update_op.h"
 #include "sql/engine/dml/ob_dml_service.h"
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+#include "sql/das/ob_das_group_update_cache.h"
+#endif
 
 namespace oceanbase
 {
@@ -189,7 +192,17 @@ int ObTableUpdateOp::inner_switch_iterator()
 int ObTableUpdateOp::write_row_to_das_buffer()
 {
   int ret = OB_SUCCESS;
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+  if (MY_SPEC.plan_->is_batch_group_commit()) {
+    if (OB_FAIL(update_row_to_group_update_cache())) {
+      LOG_WARN("update row to das group update cache failed", K(ret));
+    }
+  } else {
+    ret = update_row_to_das();
+  }
+#else
   ret = update_row_to_das();
+#endif
   return ret;
 }
 
@@ -398,6 +411,112 @@ OB_INLINE int ObTableUpdateOp::update_row_to_das()
       LOG_WARN("fail to insert_err_log_record", K(ret));
     }
   }
+  return ret;
+}
+int ObTableUpdateOp::update_row_to_group_update_cache()
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+  if (OB_UNLIKELY(MY_SPEC.upd_ctdefs_.count() != 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("update more than one table not supported", K(ret));
+  } else if (OB_UNLIKELY(MY_SPEC.upd_ctdefs_.at(0).count() != 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("update global index not supported", K(ret));
+  } else {
+    const ObUpdCtDef &primary_upd_ctdef = *MY_SPEC.upd_ctdefs_.at(0).at(0);
+    ObUpdRtDef &primary_upd_rtdef = upd_rtdefs_.at(0).at(0);
+    ObDASTabletLoc *old_tablet_loc = nullptr;
+    ObDASTabletLoc *new_tablet_loc = nullptr;
+    ObDASGroupUpdateCache *update_cache = DAS_CTX(ctx_).get_group_update_cache();
+
+    if (OB_ISNULL(update_cache)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("group update cache is null", K(ret));
+    } else if (OB_UNLIKELY(need_after_row_process(primary_upd_ctdef))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("must no need after row process", K(ret));
+    } else if (OB_FAIL(calc_tablet_loc(primary_upd_ctdef, primary_upd_rtdef, old_tablet_loc, new_tablet_loc))) {
+      LOG_WARN("calc partition key failed", K(ret));
+    } else if (OB_UNLIKELY(old_tablet_loc != new_tablet_loc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected tablet loc", K(ret), KPC(old_tablet_loc), KPC(new_tablet_loc));
+    } else if (OB_FAIL(update_cache->update_row(primary_upd_ctdef, eval_ctx_, new_tablet_loc))) {
+      LOG_WARN("update row to group update cache failed", K(ret));
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(merge_implict_cursor(
+          1 /*affected_rows*/, 1 /*found_rows*/, 1 /*match_rows*/, 1 /*duplicated_rows*/))) {
+        LOG_WARN("merge implict cursor failed", K(ret));
+      }
+    }
+  }
+#else
+  ret = OB_NOT_SUPPORTED;
+#endif
+  return ret;
+}
+
+int ObTableUpdateOp::flush_group_commit_cache()
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+  if (OB_UNLIKELY(MY_SPEC.upd_ctdefs_.count() != 1 || MY_SPEC.upd_ctdefs_.at(0).count() != 1)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("update more than one table not supported", K(ret), K(MY_SPEC.upd_ctdefs_.count()));
+  } else {
+    ObUpdCtDef &primary_upd_ctdef = *MY_SPEC.upd_ctdefs_.at(0).at(0);
+    ObUpdRtDef &primary_upd_rtdef = upd_rtdefs_.at(0).at(0);
+    ObDASGroupUpdateCache *update_cache = DAS_CTX(ctx_).get_group_update_cache();
+    bool has_row = false;
+    bool is_skipped = false;
+    const ObDASTabletLoc *tablet_loc = nullptr;
+    ObChunkDatumStore::StoredRow *old_row = nullptr;
+    ObChunkDatumStore::StoredRow *new_row = nullptr;
+    ObChunkDatumStore::StoredRow *full_row = nullptr;
+
+    if (OB_ISNULL(update_cache)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("group update cache is null", K(ret));
+    } else if (OB_FAIL(update_cache->get_flush_row(eval_ctx_, primary_upd_ctdef, tablet_loc, has_row))) {
+      LOG_WARN("flush group commit cache failed", K(ret));
+    }
+
+    if (OB_FAIL(ret) || !has_row) {
+      // do nothing
+    } else if (OB_FAIL(ObDMLService::process_group_commit_update_row(primary_upd_ctdef,
+                                                                     primary_upd_rtdef,
+                                                                     is_skipped,
+                                                                     *this))) {
+        LOG_WARN("process update row failed", K(ret));
+    // 这里调用process_group_commit_update_row主要是为了生成hidden pk,
+    // 理论上不会有skipped的情况, 不支持有约束的场景下的group commit
+    } else if (OB_UNLIKELY(is_skipped)) {
+      LOG_INFO("group commit row is skipped", K(ret));
+    } else if (OB_FAIL(ObDMLService::update_row(primary_upd_ctdef,
+                                                primary_upd_rtdef,
+                                                tablet_loc/*old_tablet_loc*/,
+                                                tablet_loc/*new_tablet_loc*/,
+                                                dml_rtctx_,
+                                                old_row, new_row, full_row))) {
+      LOG_WARN("update row failed", K(ret));
+    } else {
+      primary_upd_rtdef.found_rows_ = 1;
+    }
+  }
+
+  if (is_error_logging_ && OB_SUCCESS != err_log_rt_def_.first_err_ret_ && should_catch_err(ret)) {
+    if (OB_FAIL(err_log_service_.insert_err_log_record(GET_MY_SESSION(ctx_),
+                                                       MY_SPEC.upd_ctdefs_.at(0).at(0)->error_logging_ctdef_,
+                                                       err_log_rt_def_,
+                                                       ObDASOpType::DAS_OP_TABLE_UPDATE))) {
+      LOG_WARN("fail to insert_err_log_record", K(ret));
+    }
+  }
+#else
+  ret = OB_NOT_SUPPORTED;
+#endif
   return ret;
 }
 

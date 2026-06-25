@@ -51,6 +51,9 @@ class ObIEndTransCallback;
 class ObEndTransAsyncCallback;
 class ObNullEndTransCallback;
 class ObIDASTaskOp;
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+class ObGroupCommitAggInfo;
+#endif
 
 class TransState
 {
@@ -191,6 +194,13 @@ public:
                                 const bool is_rollback,
                                 ObEndTransAsyncCallback *callback = NULL,
                                 bool reset_trans_variable = true);
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+  static int implicit_end_group_commit_trans(const ObGroupCommitAggInfo &agg_info,
+                                             ObExecContext &exec_ctx,
+                                             const bool is_rollback,
+                                             ObEndTransAsyncCallback *callback = NULL,
+                                             bool reset_trans_variable = true);
+#endif
   static int end_trans(ObSQLSessionInfo *session,
                        bool &need_disconnect,
                        TransState &trans_state,
@@ -292,7 +302,6 @@ private:
                                          int64_t &trans_timeout_ts);
   static int64_t get_stmt_expire_ts(const ObPhysicalPlanCtx *plan_ctx,
                                            const ObSQLSessionInfo &session);
-  static int inc_session_ref(const ObSQLSessionInfo *session);
   static int acquire_tx_if_need_(transaction::ObTransService *txs, ObSQLSessionInfo &session);
   static int start_hook_if_need_(ObSQLSessionInfo &session,
                                  transaction::ObTransService *txs,

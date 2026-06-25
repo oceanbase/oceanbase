@@ -18,6 +18,8 @@ namespace oceanbase
 namespace transaction
 {
 
+ERRSIM_POINT_DEF(ERRSIM_MIN_LOG_CB_POOL_LIMIT);
+
 int ObTxLogCbPoolMgr::init(const int64_t tenant_id, const ObLSID ls_id)
 {
   int ret = OB_SUCCESS;
@@ -133,6 +135,7 @@ int ObTxLogCbPoolMgr::switch_to_leader(const int64_t active_tx_cnt)
                 + 1;
   int64_t target_log_pool_cnt =
       active_tx_default_log_pool_cnt <= 0 ? 1 : active_tx_default_log_pool_cnt;
+  target_log_pool_cnt = OB_MAX(abs(ERRSIM_MIN_LOG_CB_POOL_LIMIT), target_log_pool_cnt);
 
   if (OB_SUCC(ret)) {
     int64_t pool_list_size = 0;
@@ -140,7 +143,7 @@ int ObTxLogCbPoolMgr::switch_to_leader(const int64_t active_tx_cnt)
       SpinRLockGuard guard(pool_list_rw_lock_);
       const int64_t pool_list_size = pool_list_.get_size();
     }
-    if (target_log_pool_cnt >= pool_list_size) {
+    if (target_log_pool_cnt <= pool_list_size) {
       // do nothing
     } else {
       for (int i = pool_list_size; OB_SUCC(ret) && i < target_log_pool_cnt; i++) {
@@ -289,6 +292,7 @@ int ObTxLogCbPoolMgr::adjust_log_cb_pool(const int64_t active_tx_cnt)
     }
 
     expected_pool_cnt = ceil(expected_pool_float_cnt);
+    expected_pool_cnt = OB_MAX(expected_pool_cnt, abs(ERRSIM_MIN_LOG_CB_POOL_LIMIT));
 
     if (pool_list_size < expected_pool_cnt) {
       for (int64_t i = pool_list_size; i < expected_pool_cnt && OB_SUCC(ret); i++) {
@@ -374,7 +378,7 @@ int ObTxLogCbPoolMgr::acquire_idle_log_cb_group(ObTxLogCbGroup *&group_ptr, ObPa
     }
     TRANS_LOG(WARN, "acquire a log cb group failed", K(ret), K(ref_guard), KPC(group_ptr),
               KPC(this));
-  } else if (OB_FAIL(group_ptr->occupy_by_tx(tx_ctx))) {
+  } else if (OB_FAIL(group_ptr->occupy_by_tx(tx_ctx, tx_ctx->get_trans_id()))) {
     TRANS_LOG(WARN, "occupy log cb group by a tx_ctx failed", K(ret), K(ref_guard), KPC(group_ptr),
               KPC(this));
   } else {

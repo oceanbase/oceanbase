@@ -1063,6 +1063,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>APPEND { return APPEND; }
 <hint>TRACING { return TRACING; }
 <hint>DOP { return DOP; }
+<hint>GROUP_COMMIT { return GROUP_COMMIT; }
 <hint>FORCE_REFRESH_LOCATION_CACHE { return FORCE_REFRESH_LOCATION_CACHE; }
 <hint>STAT { return STAT; }
 <hint>PX_JOIN_FILTER { return PX_JOIN_FILTER; }

@@ -1212,6 +1212,8 @@ public:
   static int check_is_valid_generated_col(ObRawExpr *expr, ObIAllocator &allocator);
 
   static bool is_column_ref_skip_implicit_cast(const ObRawExpr *expr);
+  // unwrap expr and check if the expr is of the given type, expr will be unwraped to point to the inner expression
+  static bool unwrap_implicit_cast_and_check_expr_type(const ObItemType &expr_type, ObRawExpr *&expr);
   static int build_dummy_count_expr(ObRawExprFactory &expr_factory,
                                     const ObSQLSessionInfo *session_info,
                                     ObAggFunRawExpr *&expr);

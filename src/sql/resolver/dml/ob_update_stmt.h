@@ -63,6 +63,20 @@ public:
   virtual int64_t get_instead_of_trigger_column_count() const override;
   virtual int remove_table_item_dml_info(const TableItem* table) override;
   int remove_invalid_assignment();
+  // Primary key parameter indices for group commit (only store param_idx)
+  int add_group_commit_param_idx(int64_t param_idx) {
+    return group_commit_param_idx_.push_back(param_idx);
+  }
+  int set_group_commit_param_idx(const common::ObIArray<int64_t> &param_indices) {
+    group_commit_param_idx_.reset();
+    return group_commit_param_idx_.assign(param_indices);
+  }
+  const common::ObIArray<int64_t> &get_group_commit_param_idx() const {
+    return group_commit_param_idx_;
+  }
+  bool has_group_commit_param_idx() const {
+    return group_commit_param_idx_.count() > 0;
+  }
 
   TO_STRING_KV(N_STMT_TYPE, stmt_type_,
       N_TABLE, table_items_,
@@ -79,6 +93,8 @@ public:
 
 private:
   common::ObSEArray<ObUpdateTableInfo*, 2, common::ModulePageAllocator, true> table_info_;
+  // Primary key parameter indices for group commit (only store param_idx)
+  common::ObSEArray<int64_t, 4, common::ModulePageAllocator, true> group_commit_param_idx_;
 };
 } //namespace sql
 }//namespace oceanbase

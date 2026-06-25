@@ -106,6 +106,7 @@ struct ObTxCreateArg
                 const common::ObAddr &scheduler,
                 const int64_t trans_expired_time,
                 ObTransService *trans_service,
+                const int64_t seq_base = -1,
                 ObXATransID xid = ObXATransID(),
                 int64_t epoch = -1,
                 const ObTxCtxMoveArg *move_arg = NULL)
@@ -122,6 +123,7 @@ struct ObTxCreateArg
         scheduler_(scheduler),
         trans_expired_time_(trans_expired_time),
         trans_service_(trans_service),
+        seq_base_(seq_base),
         xid_(xid),
         epoch_(epoch),
         move_arg_(move_arg) {}
@@ -136,7 +138,7 @@ struct ObTxCreateArg
                K_(tenant_id), K_(tx_id),
                K_(ls_id), K_(cluster_id), K_(cluster_version),
                K_(session_id), K_(client_sid), K_(scheduler), K_(trans_expired_time), KP_(trans_service),
-               K_(epoch), K_(xid), K_(associated_session_id));
+               K_(seq_base), K_(epoch), K_(xid), K_(associated_session_id));
   bool for_replay_;
   PartCtxSource ctx_source_;
   uint64_t tenant_id_;
@@ -150,6 +152,10 @@ struct ObTxCreateArg
   const common::ObAddr &scheduler_;
   int64_t trans_expired_time_;
   ObTransService *trans_service_;
+  // tx_seq base from ObTxDesc; negative means unknown/invalid.
+  // It is passed in normal create_tx_ctx_ from ObTxDesc, while transfer
+  // move args do not carry it, so transfer/replay may keep it invalid.
+  int64_t seq_base_;
   ObXATransID xid_;
   int64_t epoch_;
   const ObTxCtxMoveArg *move_arg_;

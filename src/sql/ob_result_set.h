@@ -243,6 +243,7 @@ public:
   void set_last_insert_id_to_client(const uint64_t last_insert_id);
   uint64_t get_last_insert_id_to_client();
   void set_warning_count(const int64_t &warning_count);
+  void set_group_commit_enabled(bool is_group_commit_enabled);
   ObCacheObjGuard& get_cache_obj_guard();
   void set_cmd(ObICmd *cmd);
   bool is_end_trans_async();
@@ -313,6 +314,7 @@ public:
   int copy_field_columns(const ObPhysicalPlan &plan);
   bool has_implicit_cursor() const;
   int switch_implicit_cursor(int64_t &affected_rows);
+  int switch_implicit_cursor(int64_t &affected_rows, uint64_t &last_insert_id_to_client);
   void reset_implicit_cursor_idx()
   {
     if (get_exec_context().get_physical_plan_ctx() != nullptr)
@@ -362,6 +364,7 @@ public:
     }
     return is_rollback;
   }
+
 private:
   // types and constants
   static const int64_t TRANSACTION_SET_VIOLATION_MAX_RETRY = 3;
@@ -382,6 +385,7 @@ private:
   int on_cmd_execute();
   int auto_end_plan_trans(ObPhysicalPlan& plan, int ret, bool is_tx_active, bool &async);
   int do_close(int *client_ret = NULL);
+  int set_async_cb_ok_packet_param(const ObPhysicalPlan &plan, rpc::ObRequest *req);
   void store_affected_rows(ObPhysicalPlanCtx &plan_ctx);
   void store_found_rows(ObPhysicalPlanCtx &plan_ctx);
   int store_last_insert_id(ObExecContext &ctx);
@@ -405,6 +409,11 @@ private:
     req_timeinfo.update_end_time();
   }
   bool is_will_retry_() const { return will_retry_; }
+  bool need_skip_end_async_plan_trans(const int ret);
+  int implicit_end_plan_trans(ObExecContext &exec_ctx,
+                              const bool is_rollback,
+                              ObEndTransAsyncCallback *callback,
+                              bool reset_trans_variable);
 protected:
   // 区分本ResultSet是为User还是Inner SQL服务, 服务于EndTrans异步回调
   bool is_user_sql_;
@@ -469,6 +478,7 @@ private:
   common::ObString wild_str_;//uesd to save filed wildcard in COM_FIELD_LIST;
   common::ObString ps_sql_; // for sql in pl
   bool is_init_;
+  bool is_group_commit_enabled_;
   common::ParamStore ps_params_; // 文本 ps params 记录，用于填入 sql_audit
   common::ObFunction<void(const int, int&)> close_fail_cb_;
 };
@@ -547,6 +557,7 @@ inline ObResultSet::ObResultSet(ObSQLSessionInfo &session, common::ObIAllocator 
       wild_str_(),
       ps_sql_(),
       is_init_(false),
+      is_group_commit_enabled_(false),
       ps_params_(ObWrapperAllocator(&allocator))
 {
   message_[0] = '\0';
@@ -718,6 +729,10 @@ inline uint64_t ObResultSet::get_last_insert_id_to_client()
 inline void ObResultSet::set_warning_count(const int64_t &warning_count)
 {
   warning_count_ = warning_count;
+}
+inline void ObResultSet::set_group_commit_enabled(bool is_group_commit_enabled)
+{
+  is_group_commit_enabled_ = is_group_commit_enabled;
 }
 
 inline int64_t ObResultSet::to_string(char *buf, const int64_t buf_len) const

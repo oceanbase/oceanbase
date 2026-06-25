@@ -165,6 +165,13 @@ void ObTransCtx::set_exiting_()
       ObTransDeadlockDetectorAdapter::unregister_from_deadlock_detector(trans_id_,
                                       ObTransDeadlockDetectorAdapter::UnregisterPath::DO_END_TRANS);
     }
+
+    if (is_in_active_aggregation_()) {
+      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED,
+                    "we can not abort a hotspot tx with a special redo_flush_status", K(ret),
+                    KPC(this));
+    }
+
     is_exiting_ = true;
     print_trace_log_if_necessary_();
     ls_tx_ctx_mgr_->dec_active_tx_count();

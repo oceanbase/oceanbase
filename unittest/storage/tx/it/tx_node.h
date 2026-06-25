@@ -224,10 +224,16 @@ public:
            const int64_t key,
            int64_t &value);
   int write(ObTxDesc &tx, const int64_t key, const int64_t value, const int16_t branch = 0);
+  int write(ObTxDesc &tx, const int64_t key, const ObObj &value, const int16_t branch = 0);
   int write(ObTxDesc &tx,
             const ObTxReadSnapshot &snapshot,
             const int64_t key,
             const int64_t value,
+            const int16_t branch = 0);
+  int write(ObTxDesc &tx,
+            const ObTxReadSnapshot &snapshot,
+            const int64_t key,
+            const ObObj &value,
             const int16_t branch = 0);
   int get_memtable_key(const int64_t key,
                        const int64_t value,

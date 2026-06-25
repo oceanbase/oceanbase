@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/dml/ob_update_resolver.h"
+#include "lib/string/ob_sql_string.h"
 
 namespace oceanbase
 {
@@ -189,6 +190,23 @@ int ObUpdateResolver::resolve(const ParseNode &parse_tree)
       LOG_WARN("failed to check fulfill safe update mode", K(ret));
     } else { /*do nothing*/ }
   }
+
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+  // Resolve primary key parameter positions if group_commit hint is enabled
+  // Only do this in PS protocol prepare stage
+  if (OB_SUCC(ret) && update_stmt->get_query_ctx()->get_global_hint().group_commit_enabled()) {
+    if (params_.is_prepare_protocol_) {
+      if (params_.is_prepare_stage_ &&OB_FAIL(resolve_group_commit_key_param_infos())) {
+        LOG_WARN("failed to resolve pk param infos for group commit", K(ret));
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "group commit only supported in PS, Explain/Text/PL is not supported");
+      LOG_WARN("group commit is not supported in non-prepare stage", K(ret));
+    }
+  }
+#endif
+
   return ret;
 }
 
@@ -794,6 +812,376 @@ int ObUpdateResolver::resolve_update_constraints()
   }
   return ret;
 }
+
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+// Collect primary key and unique key column sets from table schema
+int ObUpdateResolver::collect_key_sets(const ObTableSchema *table_schema,
+                                       ObSEArray<ObSEArray<uint64_t, 4>, 4> &key_sets,
+                                       int &primary_key_index_in_key_sets)
+{
+  int ret = OB_SUCCESS;
+  primary_key_index_in_key_sets = -1;
+
+  if (OB_ISNULL(table_schema) || OB_ISNULL(schema_checker_) || OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null or schema checker or session info is null", K(ret));
+  }
+
+  // Collect primary key columns
+  if (OB_SUCC(ret) &&!(table_schema->is_heap_table())) {
+    const ObRowkeyInfo &pk_info = table_schema->get_rowkey_info();
+    ObSEArray<uint64_t, 4> pk_cols;
+    for (int64_t i = 0; OB_SUCC(ret) && i < pk_info.get_size(); ++i) {
+      uint64_t col_id = OB_INVALID_ID;
+      if (OB_FAIL(pk_info.get_column_id(i, col_id))) {
+        LOG_WARN("get pk column id fail", K(ret));
+      } else if (OB_FAIL(pk_cols.push_back(col_id))) {
+        LOG_WARN("push back fail", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && pk_cols.count() > 0 && OB_FAIL(key_sets.push_back(pk_cols))) {
+      LOG_WARN("push back pk fail", K(ret));
+    }
+    primary_key_index_in_key_sets = key_sets.count() - 1;
+  }
+
+  // Collect unique key columns
+  if (OB_SUCC(ret)) {
+    ObSEArray<ObAuxTableMetaInfo, 4> index_infos;
+    if (OB_FAIL(table_schema->get_simple_index_infos(index_infos))) {
+      LOG_WARN("get index infos fail", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_infos.count(); ++i) {
+      const ObTableSchema *idx_schema = NULL;
+      if (OB_FAIL(schema_checker_->get_table_schema(
+              session_info_->get_effective_tenant_id(), index_infos.at(i).table_id_, idx_schema))) {
+        ret = OB_SUCCESS;  // ignore missing index
+      } else if (OB_NOT_NULL(idx_schema) && idx_schema->is_unique_index()
+          && is_available_index_status(idx_schema->get_index_status())) {
+        const ObIndexInfo &idx_info = idx_schema->get_index_info();
+        ObSEArray<uint64_t, 4> uk_cols;
+        for (int64_t j = 0; OB_SUCC(ret) && j < idx_info.get_size(); ++j) {
+          uint64_t col_id = OB_INVALID_ID;
+          if (OB_FAIL(idx_info.get_column_id(j, col_id))) {
+            LOG_WARN("get uk column id fail", K(ret));
+          } else if (OB_FAIL(uk_cols.push_back(col_id))) {
+            LOG_WARN("push back fail", K(ret));
+          }
+        }
+        if (OB_SUCC(ret) && uk_cols.count() > 0 && OB_FAIL(key_sets.push_back(uk_cols))) {
+          LOG_WARN("push back uk fail", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+// Build column_id -> param_idx map from WHERE "col = ?" conditions and equal conditions
+int ObUpdateResolver::build_col_to_param_map(ObUpdateStmt *update_stmt,
+                                             TableItem *target_table_item,
+                                             hash::ObHashMap<uint64_t, int64_t> &questionmark_col_to_param,
+                                             hash::ObHashMap<uint64_t, int64_t> &equal_col_to_param)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(update_stmt) || OB_ISNULL(target_table_item)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), KP(update_stmt), KP(target_table_item));
+  } else if (!questionmark_col_to_param.created() || !equal_col_to_param.created()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("questionmark_col_to_param or equal_col_to_param map not created", K(ret));
+  } else {
+    const ObIArray<ObRawExpr*> &conds = update_stmt->get_condition_exprs();
+    for (int64_t i = 0; OB_SUCC(ret) && i < conds.count(); ++i) {
+      ObRawExpr *expr = conds.at(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("condition expr is null", K(ret), K(i));
+        break;
+      }
+      ObColumnRefRawExpr *col = NULL;
+      ObRawExpr *param = NULL;
+
+      const ObItemType expr_type = expr->get_expr_type();
+      bool is_questionmark_condition = false;
+      if (T_OP_EQ == expr_type || T_OP_NSEQ == expr_type) {
+        ObOpRawExpr *op = static_cast<ObOpRawExpr*>(expr);
+        if (OB_UNLIKELY(op->get_param_count() < 2)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("op expr param count unexpected", K(ret), K(op->get_param_count()), K(expr_type));
+          break;
+        }
+        ObRawExpr *left = op->get_param_expr(0);
+        ObRawExpr *right = op->get_param_expr(1);
+        if (OB_ISNULL(left) || OB_ISNULL(right)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("op expr param is null", K(ret), K(expr_type));
+          break;
+        }
+
+        if (ObRawExprUtils::is_column_ref_skip_implicit_cast(left)) {
+          // col = xx
+          if (ObRawExprUtils::unwrap_implicit_cast_and_check_expr_type(T_QUESTIONMARK, right)) {
+            // col = ?
+            is_questionmark_condition = true;
+          }
+          col = static_cast<ObColumnRefRawExpr*>(left);
+          param = right;
+        } else if (ObRawExprUtils::is_column_ref_skip_implicit_cast(right)) {
+          // xx = col
+          if (ObRawExprUtils::unwrap_implicit_cast_and_check_expr_type(T_QUESTIONMARK, left)) {
+            // ? = col
+            is_questionmark_condition = true;
+          }
+          col = static_cast<ObColumnRefRawExpr*>(right);
+          param = left;
+        }
+      }
+
+      if (OB_SUCC(ret) && OB_NOT_NULL(param) && OB_NOT_NULL(col) && col->get_table_id() == target_table_item->table_id_) {
+        int64_t idx = static_cast<ObConstRawExpr*>(param)->get_value().get_unknown();
+        const uint64_t col_id = col->get_column_id();
+        if (OB_FAIL(equal_col_to_param.set_refactored(col_id, idx, 1))) {
+          LOG_WARN("set equal_col_to_param map fail", K(ret));
+        }
+        if (is_questionmark_condition) {
+          if (OB_FAIL(questionmark_col_to_param.set_refactored(col_id, idx, 1))) {
+            LOG_WARN("set questionmark_col_to_param map fail", K(ret));
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+// Check if any matched key columns are being updated in SET clause and report error if found e.g. update id = 1 where id = ?
+int ObUpdateResolver::check_key_columns_updated(ObUpdateStmt *update_stmt,
+                                                const share::schema::ObTableSchema *table_schema,
+                                                TableItem *target_table_item,
+                                                const common::hash::ObHashMap<uint64_t, int64_t> &col_to_param,
+                                                const common::ObSEArray<int64_t, 4> &matched_param_idx_result)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(update_stmt) || OB_ISNULL(table_schema) || OB_ISNULL(target_table_item)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), KP(update_stmt), KP(table_schema), KP(target_table_item));
+  } else if (matched_param_idx_result.count() == 0 || !col_to_param.created()) {
+    // No matched key to check
+  } else {
+    // Get matched key column IDs from matched_param_idx_result
+    ObSEArray<uint64_t, 4> matched_key_col_ids;
+    for (hash::ObHashMap<uint64_t, int64_t>::const_iterator it = col_to_param.begin();
+         OB_SUCC(ret) && it != col_to_param.end(); ++it) {
+      int64_t param_idx = it->second;
+      if (has_exist_in_array(matched_param_idx_result, param_idx)) {
+        uint64_t col_id = it->first;
+        if (OB_FAIL(matched_key_col_ids.push_back(col_id))) {
+          LOG_WARN("push back matched key col id failed", K(ret), K(col_id));
+        }
+      }
+    }
+
+    // Check if any matched key columns are being updated
+    if (OB_SUCC(ret) && matched_key_col_ids.count() > 0) {
+      const ObIArray<ObUpdateTableInfo*> &tables_info = update_stmt->get_update_table_info();
+
+      for (int64_t i = 0; OB_SUCC(ret) && i < tables_info.count(); ++i) {
+        const ObUpdateTableInfo *table_info = tables_info.at(i);
+        if (OB_ISNULL(table_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("table info is null", K(ret), K(i));
+        } else if (table_info->table_id_ == target_table_item->table_id_) {
+          const ObIArray<ObAssignment> &assignments = table_info->assignments_;
+          for (int64_t j = 0; OB_SUCC(ret) && j < assignments.count(); ++j) {
+            const ObAssignment &assign = assignments.at(j);
+            if (OB_ISNULL(assign.column_expr_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("column expr is null", K(ret), K(j));
+            } else if (!assign.is_implicit_) {
+              uint64_t col_id = assign.column_expr_->get_column_id();
+              if (has_exist_in_array(matched_key_col_ids, col_id)) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "updating key columns in group commit");
+                LOG_WARN("group commit does not support updating key columns", K(ret), K(col_id));
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+// Find complete key match from col_to_param map, prefer primary key
+int ObUpdateResolver::find_matched_key(const hash::ObHashMap<uint64_t, int64_t> &questionmark_col_to_param,
+                                       const hash::ObHashMap<uint64_t, int64_t> &equal_col_to_param,
+                                       const ObSEArray<ObSEArray<uint64_t, 4>, 4> &key_sets,
+                                       int primary_key_index_in_key_sets,
+                                       ObSEArray<int64_t, 4> &matched_param_idx_result)
+{
+  int ret = OB_SUCCESS;
+  matched_param_idx_result.reset();
+
+  if (!questionmark_col_to_param.created() || !equal_col_to_param.created() || key_sets.count() == 0) {
+    // No keys or map to check
+  } else {
+    for (int64_t k = 0; OB_SUCC(ret) && k < key_sets.count(); ++k) {
+      const ObIArray<uint64_t> &cols = key_sets.at(k);
+      ObSEArray<int64_t, 4> temp_matched_param_idx_result;
+      for (int64_t c = 0; OB_SUCC(ret) && c < cols.count(); ++c) {
+        int64_t temp_matched_param_idx = -1;
+        if (OB_SUCCESS == questionmark_col_to_param.get_refactored(cols.at(c), temp_matched_param_idx)) {
+          if (OB_FAIL(temp_matched_param_idx_result.push_back(temp_matched_param_idx))) {
+            LOG_WARN("push back failed", K(ret));
+          }
+        } else {
+          break;
+        }
+      }
+      if (temp_matched_param_idx_result.count() == cols.count()) {
+        if (k == primary_key_index_in_key_sets) {
+          // found primary key, assign and break
+          if (OB_FAIL(matched_param_idx_result.assign(temp_matched_param_idx_result))) {
+            LOG_WARN("assign failed", K(ret));
+          }
+          break;
+        }
+        if (matched_param_idx_result.empty()) {
+          // found first unique key, assign
+            if (OB_FAIL(matched_param_idx_result.assign(temp_matched_param_idx_result))) {
+              LOG_WARN("assign failed", K(ret));
+              break;
+            }
+        } else {
+          // found multiple unique key, error
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "multiple unique key matched in where condition");
+          LOG_WARN("multiple unique key matched, error");
+          break;
+        }
+      }
+    }
+
+    if (OB_SUCC(ret) && matched_param_idx_result.count() == 0) {
+      // we can not find any pk/uk in where condition
+      // check if any pk/uk is in where condition but with value
+      int value_matched_param_count = 0;
+      for (int64_t k = 0; OB_SUCC(ret) && k < key_sets.count(); ++k) {
+        const ObIArray<uint64_t> &cols = key_sets.at(k);
+        for (int64_t c = 0; OB_SUCC(ret) && c < cols.count(); ++c) {
+          if (OB_NOT_NULL(equal_col_to_param.get(cols.at(c)))) {
+            value_matched_param_count++;
+          } else {
+            value_matched_param_count = 0;
+            break;
+          }
+        }
+        if (value_matched_param_count == cols.count()) {
+          // find pk/uk in where condition but with value
+          // e.g. prepare stmt from 'update t1 = ? where id = 1'
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "key matched in where condition but with value");
+          LOG_WARN("key matched in where condition but with value, error");
+          break;
+        }
+      }
+    }
+
+    if (OB_SUCC(ret) && matched_param_idx_result.empty()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "no key matched in where condition");
+      LOG_WARN("no key matched, skip");
+    }
+  }
+
+  return ret;
+}
+
+// Resolve primary key parameter positions for group commit
+int ObUpdateResolver::resolve_group_commit_key_param_infos()
+{
+  int ret = OB_SUCCESS;
+  ObUpdateStmt *update_stmt = get_update_stmt();
+  const ObTableSchema *table_schema = NULL;
+  TableItem *target_table_item = NULL;
+  hash::ObHashMap<uint64_t, int64_t> questionmark_col_to_param; // col = ?
+  hash::ObHashMap<uint64_t, int64_t> equal_col_to_param; // WHERE col = rhs (? or literal)
+  ObSEArray<ObSEArray<uint64_t, 4>, 4> key_sets;
+  ObSEArray<int64_t, 4> matched_param_idx_result;
+  int primary_key_index_in_key_sets = -1;
+
+  uint64_t tenant_id = OB_NOT_NULL(session_info_)
+                       ? session_info_->get_effective_tenant_id()
+                       : OB_SERVER_TENANT_ID;
+  key_sets.set_attr(ObMemAttr(tenant_id, "GrpCommitSets"));
+  matched_param_idx_result.set_attr(ObMemAttr(tenant_id, "GrpCommitParams"));
+  if (OB_FAIL(questionmark_col_to_param.create(16, "GrpCommitMap", ObModIds::OB_HASH_NODE, tenant_id))) {
+    LOG_WARN("create questionmark_col_to_param map fail", K(ret));
+  }
+  if (OB_FAIL(equal_col_to_param.create(16, "GrpCommitVMap", ObModIds::OB_HASH_NODE, tenant_id))) {
+    LOG_WARN("create equal_col_to_param map fail", K(ret));
+  }
+
+  if (OB_ISNULL(update_stmt) || OB_ISNULL(schema_checker_) || OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), KP(update_stmt), KP(schema_checker_), KP(session_info_));
+  }
+
+  // Get target table item
+  if (OB_SUCC(ret)) {
+    const ObIArray<TableItem*> &tables = update_stmt->get_table_items();
+    if (1 == tables.count()) {
+      target_table_item = tables.at(0);
+      if (OB_FAIL(schema_checker_->get_table_schema(
+        session_info_->get_effective_tenant_id(), target_table_item->ref_id_, table_schema))) {
+        LOG_WARN("get table schema failed", K(ret));
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "multiple table update or join update");
+      LOG_WARN("does not support multiple table update or join update", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(collect_key_sets(table_schema, key_sets, primary_key_index_in_key_sets))) {
+      LOG_WARN("collect key sets failed", K(ret),K(key_sets), K(primary_key_index_in_key_sets));
+    } else if (OB_FAIL(build_col_to_param_map(update_stmt, target_table_item, questionmark_col_to_param, equal_col_to_param))) {
+      LOG_WARN("build col to param map failed", K(ret), K(questionmark_col_to_param.created()));
+    } else if (OB_FAIL(find_matched_key(questionmark_col_to_param, equal_col_to_param, key_sets, primary_key_index_in_key_sets, matched_param_idx_result))) {
+      LOG_WARN("find matched key failed", K(ret), K(key_sets), K(questionmark_col_to_param.created()), K(primary_key_index_in_key_sets), K(matched_param_idx_result));
+    } else if (OB_FAIL(check_key_columns_updated(update_stmt, table_schema, target_table_item, questionmark_col_to_param, matched_param_idx_result))) {
+      LOG_WARN("check key columns updated failed", K(ret), K(questionmark_col_to_param.created()), K(matched_param_idx_result));
+    } else if (OB_FAIL(update_stmt->set_group_commit_param_idx(matched_param_idx_result))) {
+      LOG_WARN("set group commit param indices failed", K(ret), K(matched_param_idx_result));
+    } else if (questionmark_col_to_param.created()) {
+      questionmark_col_to_param.destroy();
+    } else if (equal_col_to_param.created()) {
+      equal_col_to_param.destroy();
+    }
+  }
+  if (ret == OB_NOT_SUPPORTED) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (!tenant_config.is_valid() || !tenant_config->_enable_hotspot_group_commit) {
+      LOG_INFO("group commit is not supported and tenant config is not enabled, still success", K(ret));
+      ret = OB_SUCCESS;
+    } else {
+      if (tenant_config->_inlist_rewrite_threshold == 1) {
+        LOG_WARN("group commit is not supported maybe because inlist_rewrite_threshold is 1", K(ret));
+      }
+    }
+  }
+  LOG_INFO("resolve group commit key params infos", K(ret), K(update_stmt->get_group_commit_param_idx()));
+  return ret;
+}
+#endif
 
 }  // namespace sql
 }  // namespace oceanbase

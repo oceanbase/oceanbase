@@ -23,6 +23,7 @@ namespace oceanbase
 namespace sql
 {
 class ObDASTabletMapper;
+class ObDASGroupUpdateCache;
 
 struct DmlRowkeyDistCtx
 {
@@ -64,6 +65,7 @@ public:
     : table_locs_(allocator),
       external_table_locs_(allocator),
       sql_ctx_(nullptr),
+      group_update_cache_(nullptr),
       location_router_(allocator),
       das_factory_(allocator),
       related_tablet_map_(allocator),
@@ -102,6 +104,9 @@ public:
   }
 
   int init(const ObPhysicalPlan &plan, ObExecContext &ctx);
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+  int init_group_update_cache(const ObPhysicalPlan &plan);
+#endif
   ObDASTableLoc *get_table_loc_by_id(uint64_t table_loc_id, uint64_t ref_table_id);
   ObDASTableLoc *get_external_table_loc_by_id(uint64_t table_loc_id, uint64_t ref_table_id);
   DASTableLocList &get_table_loc_list() { return table_locs_; }
@@ -109,6 +114,7 @@ public:
   DASDelCtxList& get_das_del_ctx_list() { return del_ctx_list_; }
   DASTableIdList& get_parent_table_set() { return parent_table_set_; }
   DASTableLocList &get_external_table_loc_list() { return external_table_locs_; }
+  ObDASGroupUpdateCache *get_group_update_cache() { return group_update_cache_; }
   int extended_tablet_loc(ObDASTableLoc &table_loc,
                           const common::ObTabletID &tablet_id,
                           ObDASTabletLoc *&tablet_loc,
@@ -182,6 +188,7 @@ private:
    */
   DASTableLocList external_table_locs_;
   ObSqlCtx *sql_ctx_;
+  ObDASGroupUpdateCache *group_update_cache_;
   ObDASLocationRouter location_router_;
   ObDASTaskFactory das_factory_;
   DASRelatedTabletMap related_tablet_map_;

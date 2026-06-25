@@ -524,5 +524,6 @@ GLOBAL_ERRSIM_POINT_DEF(2602, EN_RPC_IO_THREAD_HANG, "make rpc io thread hang fo
 GLOBAL_ERRSIM_POINT_DEF(2603, EN_RPC_DISABLE_RPC_SOCKET_KEEPALIVE, "operating system level disable rpc socket keepalive");
 
 GLOBAL_ERRSIM_POINT_DEF(2701, EN_DUMP_THREAD_LEVEL_MEM_CTX, "Whether enable dump thread-level memory context");
+GLOBAL_ERRSIM_POINT_DEF(2702, EN_SQL_GROUP_COMMIT_RECV_REQUEST_FAIL, "hotspot group commit recv request failed");
 
 #endif /*GLOBAL_ERRSIM_POINT_DEF*/

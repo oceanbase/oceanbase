@@ -58,6 +58,29 @@ private:
   int check_safe_update_mode(ObUpdateStmt *update_stmt);
   int resolve_update_constraints();
   int generate_batched_stmt_info();
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+  // Resolve primary key parameter positions for group commit
+  int resolve_group_commit_key_param_infos();
+
+  // Helper functions for resolve_group_commit_pk_param_infos
+  int collect_key_sets(const share::schema::ObTableSchema *table_schema,
+                       common::ObSEArray<common::ObSEArray<uint64_t, 4>, 4> &key_sets,
+                       int &primary_key_index_in_key_sets);
+  int build_col_to_param_map(ObUpdateStmt *update_stmt,
+                              TableItem *target_table_item,
+                              common::hash::ObHashMap<uint64_t, int64_t> &questionmark_col_to_param,
+                              common::hash::ObHashMap<uint64_t, int64_t> &equal_col_to_param);
+  int check_key_columns_updated(ObUpdateStmt *update_stmt,
+                                 const share::schema::ObTableSchema *table_schema,
+                                 TableItem *target_table_item,
+                                 const common::hash::ObHashMap<uint64_t, int64_t> &questionmark_col_to_param,
+                                 const common::ObSEArray<int64_t, 4> &matched_param_idx_result);
+  int find_matched_key(const common::hash::ObHashMap<uint64_t, int64_t> &questionmark_col_to_param,
+                       const common::hash::ObHashMap<uint64_t, int64_t> &equal_col_to_param,
+                       const common::ObSEArray<common::ObSEArray<uint64_t, 4>, 4> &key_sets,
+                       int primary_key_index_in_key_sets,
+                       common::ObSEArray<int64_t, 4> &matched_param_idx_result);
+#endif
 };
 
 } // namespace sql

@@ -479,6 +479,9 @@ int ObOptimizer::check_pdml_enabled(const ObDMLStmt &stmt,
     LOG_WARN("failed to check pdml supported feature", K(ret));
   } else if (!can_use_pdml || ctx_.is_online_ddl()) {
     // do nothing
+  } else if (ctx_.get_global_hint().group_commit_enabled()) {
+    can_use_pdml = false;
+    ctx_.add_plan_note(PDML_DISABLED_BY_GROUP_COMMIT);
   } else if (ctx_.get_global_hint().get_pdml_option() == ObPDMLOption::ENABLE) {
     // 1. enable parallel dml by hint
   } else if (ctx_.get_global_hint().get_pdml_option() == ObPDMLOption::DISABLE

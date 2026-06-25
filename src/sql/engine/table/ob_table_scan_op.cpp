@@ -33,6 +33,9 @@
 #include "lib/container/ob_array_wrap.h"
 #include "share/index_usage/ob_index_usage_info_mgr.h"
 #include "sql/das/iter/ob_das_iter_utils.h"
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+#include "sql/das/iter/ob_das_group_update_cache_iter.h"
+#endif
 
 namespace oceanbase
 {
@@ -691,6 +694,7 @@ ObTableScanOp::ObTableScanOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOp
     spat_index_(),
     output_   (nullptr),
     fold_iter_(nullptr),
+    group_update_cache_iter_(nullptr),
     iter_tree_(nullptr),
     scan_iter_(nullptr),
     group_rescan_cnt_(0),
@@ -852,7 +856,11 @@ int ObTableScanOp::prepare_all_das_tasks()
         LOG_WARN("prepare das task failed", K(ret));
       }
     } else {
-      int64_t group_size = (output_ == iter_tree_) ?  1: tsc_rtdef_.group_size_;
+      bool is_single_group_output = (output_ == iter_tree_);
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+      is_single_group_output = is_single_group_output || output_ == static_cast<ObDASIter *>(group_update_cache_iter_);
+#endif
+      int64_t group_size = is_single_group_output ? 1 : tsc_rtdef_.group_size_;
       bool need_sort = MY_CTDEF.ordering_used_by_parent_;
       GroupRescanParamGuard grp_guard(tsc_rtdef_, GET_PHY_PLAN_CTX(ctx_)->get_param_store_for_update());
       for (int64_t i = 0; OB_SUCC(ret) && i < group_size; ++i) {
@@ -1127,6 +1135,34 @@ int ObTableScanOp::prepare_batch_scan_range()
   LOG_DEBUG("after prepare batch scan range", K(MY_INPUT.key_ranges_), K(MY_INPUT.ss_key_ranges_));
   return ret;
 }
+
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+int ObTableScanOp::create_group_update_cache_iter()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!MY_SPEC.plan_->is_batch_group_commit())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("must be group commit", K(ret));
+  } else if (OB_UNLIKELY(ctx_.get_das_ctx().get_group_params() != nullptr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("must not batch nlj when group commit", K(ret));
+  } else if (OB_UNLIKELY(!MY_CTDEF.scan_ctdef_.pd_expr_spec_.pushdown_filters_.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("scan pushdown filters must be empty", K(ret));
+  } else if (OB_UNLIKELY(MY_CTDEF.lookup_ctdef_ != nullptr &&
+      !MY_CTDEF.lookup_ctdef_->pd_expr_spec_.pushdown_filters_.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("lookup pushdown filters must be empty", K(ret));
+  } else if (OB_FAIL(ObDASIterUtils::create_group_update_cache_iter(MY_CTDEF,
+                                                               eval_ctx_,
+                                                               ctx_,
+                                                               iter_tree_,
+                                                               group_update_cache_iter_))) {
+    LOG_WARN("failed to create group update cache iter", K(ret));
+  }
+  return ret;
+}
+#endif
 int ObTableScanOp::build_bnlj_params()
 {
   int ret = OB_SUCCESS;
@@ -1450,6 +1486,16 @@ int ObTableScanOp::inner_open()
     }
   }
   output_ = iter_tree_;
+
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+  if (OB_SUCC(ret) && MY_SPEC.plan_->is_batch_group_commit()) {
+    if (OB_FAIL(create_group_update_cache_iter())) {
+      LOG_WARN("failed to create group update cache iter", K(ret));
+    } else {
+      output_ = group_update_cache_iter_;
+    }
+  }
+#endif
   return ret;
 }
 
@@ -1541,6 +1587,12 @@ void ObTableScanOp::destroy()
     fold_iter_->release();
     fold_iter_ = nullptr;
   }
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+  if (OB_NOT_NULL(group_update_cache_iter_)) {
+    group_update_cache_iter_->release();
+    group_update_cache_iter_ = nullptr;
+  }
+#endif
   output_ = nullptr;
   scan_iter_ = nullptr;
   das_tasks_key_.reset();
@@ -1675,6 +1727,17 @@ int ObTableScanOp::inner_rescan_for_tsc()
     reset_iter_tree_for_rescan();
     LOG_TRACE("[group rescan] need perform real rescan", K(group_rescan_cnt_), K(ctx_.get_das_ctx().get_group_rescan_cnt()),
               K(group_id_), K(ctx_.get_das_ctx().get_skip_scan_group_id()), K(spec_.id_));
+
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+    if (nullptr != group_update_cache_iter_) {
+      bool is_first_scan = false;
+      if (OB_FAIL(group_update_cache_iter_->rescan(is_first_scan))) {
+        LOG_WARN("failed to rescan group update cache iter", K(ret), KPC(group_update_cache_iter_));
+      } else if (is_first_scan) {
+        ret = close_and_reopen();
+      }
+    } else
+#endif
     if (is_virtual_table(MY_SPEC.ref_table_id_)
         || (OB_NOT_NULL(scan_iter_) && !scan_iter_->is_all_local_task())
         || (MY_SPEC.use_dist_das_ && nullptr != MY_CTDEF.das_dppr_tbl_)) {

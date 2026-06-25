@@ -377,7 +377,11 @@ public:
             sql_session_info_(NULL), tls_verion_option_(SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3) {
     memset(sess_, 0, sizeof(sess_));
   }
-  ~ObSqlSock() {}
+  ~ObSqlSock()
+  {
+    ObSqlSockSession* sess = reinterpret_cast<ObSqlSockSession*>(sess_);
+    sess->~ObSqlSockSession();
+  }
   int64_t get_remain_sz() const { return read_buffer_.get_remain_sz(); }
   TO_STRING_KV(KP(this), "session_id", get_sql_session_id(), "trace_id", get_trace_id(), "sql_handling_stage", get_sql_request_execute_state(),
              "sql_initiative_shutdown", need_shutdown_, K_(reader), K_(err), K_(last_decode_time), K_(pending_write_task), K_(need_epoll_trigger_write),

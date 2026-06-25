@@ -194,7 +194,7 @@ int ObRemoteTaskExecutor::handle_tx_after_rpc(ObScanner *scanner,
   int ret = OB_SUCCESS;
   auto tx_desc = session->get_tx_desc();
   bool remote_trans =
-    session->get_local_autocommit() && !session->has_explicit_start_trans();
+    session->get_local_autocommit() && !session->has_start_stmt();
   transaction::ObTransService *trans_service = MTL(transaction::ObTransService*);
   if (OB_ISNULL(trans_service)) {
       ret = OB_ERR_UNEXPECTED;

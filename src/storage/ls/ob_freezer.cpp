@@ -1352,7 +1352,7 @@ int ObFreezer::submit_log_for_freeze(bool is_try)
 {
   int ret = OB_SUCCESS;
   share::ObLSID ls_id = get_ls_id();
-  const int64_t start = ObTimeUtility::current_time();
+  const int64_t start = ObClockGenerator::getClock();
   ObTabletID tablet_id(INT64_MAX); // used for diagnose
   bool trace_id_need_reset = false;
   if (!ObCurTraceId::get_trace_id()->is_valid()) {
@@ -1376,7 +1376,7 @@ int ObFreezer::submit_log_for_freeze(bool is_try)
     }
 
     if (OB_FAIL(get_ls_tx_svr()->traverse_trans_to_submit_redo_log(fail_tx_id))) {
-      const int64_t cost_time = ObTimeUtility::current_time() - start;
+      const int64_t cost_time = ObClockGenerator::getClock() - start;
       if (cost_time > 1000 * 1000) {
         if (TC_REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
           TRANS_LOG(WARN, "[Freezer] failed to traverse trans ctx to submit redo log", K(ret),
@@ -1403,6 +1403,14 @@ int ObFreezer::submit_log_for_freeze(bool is_try)
                 "[Freezer] exit submit_log_for_freeze loop due to OB_TX_NOLOGCB",
                 K(ls_id),
                 K(is_try));
+    }
+    if (!need_retry) {
+      TRANS_LOG(INFO,
+                "[Freezer] exit submit_log_for_freeze retry loop",
+                K(ret),
+                K(ls_id),
+                K(is_try),
+                K(fail_tx_id));
     }
   } while (need_retry);
 

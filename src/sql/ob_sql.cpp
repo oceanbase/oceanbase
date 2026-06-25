@@ -1242,6 +1242,7 @@ int ObSql::do_real_prepare(const ObString &sql,
   ObIAllocator &allocator = result.get_mem_pool();
   ObSQLSessionInfo &session = result.get_session();
   ObExecContext &ectx = result.get_exec_context();
+  bool is_group_commit = false;
 
   // normal ps sql also a dynamic sql, we adjust is_dynamic_sql_ for normal ps sql parser.
   context.is_dynamic_sql_ = context.is_dynamic_sql_ || !is_inner_sql;
@@ -1360,9 +1361,23 @@ int ObSql::do_real_prepare(const ObString &sql,
         ectx.set_need_disconnect(false);
       }
       LOG_WARN("failed to match rewrite rule", K(ret));
+    } else {
+      is_group_commit = basic_stmt->get_query_ctx()->get_global_hint().group_commit_enabled();
+      if (is_group_commit) {
+        if (context.is_pre_execute_ || is_from_pl || stmt::T_UPDATE != stmt_type) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "group commit with prexecute or pl or not update dml");
+          LOG_WARN("group commit is not supported prexecute or pl or not update dml",
+              K(ret), K(context.is_pre_execute_), K(is_from_pl), K(stmt_type));
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (ObStmt::is_dml_stmt(stmt_type)
               && NULL == item_guard.get_ref_obj()
               && !ObStmt::is_show_stmt(stmt_type)
+              && !is_group_commit
               && !is_inner_sql
               && !is_from_pl
               && !(ObStmt::is_dml_write_stmt(stmt_type) && // returning into from oci not need parameterization
@@ -1444,6 +1459,15 @@ int ObSql::do_real_prepare(const ObString &sql,
     info_ctx.raw_params_ = &pc_ctx.fp_result_.raw_params_;
     info_ctx.fixed_param_idx_ = &pc_ctx.fixed_param_idx_;
     info_ctx.raw_sql_.assign_ptr(sql.ptr(), sql.length());
+    info_ctx.is_group_commit_ = is_group_commit;
+    // Set group commit param indices directly from stmt
+    if (is_group_commit && basic_stmt->is_update_stmt()) {
+      ObUpdateStmt *dml_stmt = static_cast<ObUpdateStmt*>(basic_stmt);
+      if (dml_stmt->has_group_commit_param_idx()) {
+        info_ctx.group_commit_param_idx_ = &dml_stmt->get_group_commit_param_idx();
+      }
+    }
+
     if (OB_FAIL(do_add_ps_cache(info_ctx, *context.schema_guard_, result))) {
       LOG_WARN("add to ps plan cache failed",
                K(ret), K(info_ctx.normalized_sql_), K(param_cnt));
@@ -2422,8 +2446,7 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
     } else if (OB_FAIL(reconstruct_ps_params_store(
         allocator, context, params, fixed_params, ps_info, ps_params, ps_ab_params))) {
       LOG_WARN("fail to reconstruct_ps_params_store", K(ret));
-    } else if (context.is_batch_params_execute() &&
-        OB_ISNULL(ps_ab_params)) {
+    } else if (context.is_batch_params_execute() && OB_ISNULL(ps_ab_params)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ps_ab_params_store is null", K(ret));
     } else if (OB_FAIL(construct_param_store(ps_params, pctx->get_param_store_for_update()))) {
@@ -3624,7 +3647,7 @@ int ObSql::generate_stmt_with_reconstruct_sql(ObDMLStmt* &stmt,
       OB_ISNULL(stmt) || (OB_ISNULL(stmt->get_query_ctx())) ||
       OB_ISNULL(phy_plan_ctx=pc_ctx->exec_ctx_.get_physical_plan_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get null param", K(ret));
+    LOG_WARN("get null param", K(ret), KP(session), KP(pc_ctx), KP(stmt), KP(phy_plan_ctx));
   } else if ((OB_E(EventTable::EN_GENERATE_PLAN_WITH_RECONSTRUCT_SQL) OB_SUCCESS) == OB_SUCCESS) {
     //do nothing
   } else if (!session->is_user_session()) {
@@ -5861,6 +5884,7 @@ int ObSql::check_need_reroute(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session,
     session.partition_hit().try_set_bool(das_ctx.is_partition_hit());
 
     should_reroute = pc_ctx.sql_ctx_.can_reroute_sql_
+      && !plan->is_group_commit()
       && (OB_PHY_PLAN_REMOTE == plan->get_plan_type()
           || (!das_ctx.is_partition_hit() && !das_ctx.get_table_loc_list().empty()));
     // check inject reroute for test

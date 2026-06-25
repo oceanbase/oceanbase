@@ -1114,7 +1114,9 @@ public:
   static const int64_t ADVANCE_LS_CKPT_TASK = 1;
   static const int64_t STANDBY_CLEANUP_TASK = 2;
   static const int64_t DUP_TABLE_TX_REDO_SYNC_RETRY_TASK = 3;
-  static const int64_t MAX = 4;
+  static const int64_t SECONDARY_TX_RESP_SCHEDULER = 4;
+  static const int64_t HOTSPOT_FREEZE_ACCELERATE = 5;
+  static const int64_t MAX = 6;
 public:
   static bool is_valid(const int64_t task_type)
   { return task_type > UNKNOWN && task_type < MAX; }
@@ -1693,7 +1695,7 @@ struct ObTxExecInfo
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTxExecInfo() {}
+  ObTxExecInfo() : seq_base_(-1) {}
   explicit ObTxExecInfo(TransModulePageAllocator &allocator)
     : participants_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "PARTICIPANT")),
       incremental_participants_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "INC_PART`")),
@@ -1702,7 +1704,8 @@ public:
       multi_data_source_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "MDS_ARRAY")),
       checksum_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "TX_CHECKSUM")),
       checksum_scn_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "TX_CHECKSUM")),
-      prepare_log_info_arr_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "PREPARE_INFO"))
+      prepare_log_info_arr_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "PREPARE_INFO")),
+      seq_base_(-1)
   {
     checksum_.push_back(0);
     checksum_scn_.push_back(share::SCN());
@@ -1759,7 +1762,8 @@ public:
                K_(is_empty_ctx_created_by_transfer),
                K_(exec_epoch),
                K_(serial_final_scn),
-               K_(serial_final_seq_no));
+               K_(serial_final_seq_no),
+               K_(seq_base));
     return pos;
   }
   ObTxState state_;
@@ -1804,6 +1808,9 @@ public:
   // used to decide whether a branch level savepoint rollback log
   // need set pre-barrier to wait previous redo replayed
   ObTxSEQ serial_final_seq_no_;
+  // tx_seq's base value from TxDesc, negative values indicate invalid value
+  // used to calculate absolute value of tx_seq for active transactions
+  int64_t seq_base_;
 };
 
 static const int64_t USEC_PER_SEC = 1000 * 1000;

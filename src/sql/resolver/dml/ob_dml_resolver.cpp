@@ -11255,6 +11255,11 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
             if (!trans_param_str.case_compare("true")) {
               global_hint.enable_lock_early_release_ = true;
             }
+          } else if (!trans_param_str.case_compare("DISABLE_TX_FREE_ROUTE") && stmt_->get_stmt_type() != stmt::T_SELECT) {
+            trans_param_str.assign_ptr(child1->str_value_, static_cast<int32_t>(child1->str_len_));
+            if (!trans_param_str.case_compare("true")) {
+              global_hint.tx_free_route_disabled_ = true;
+            }
           }
         }
       }
@@ -11445,6 +11450,16 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
             child0->value_ <= ObDynamicSamplingLevel::BASIC_DYNAMIC_SAMPLING) {
           global_hint.merge_dynamic_sampling_hint(child0->value_);
         }
+      }
+      break;
+    }
+    case T_GROUP_COMMIT: {
+      CHECK_HINT_PARAM(hint_node, 1) {
+        ObGroupCommitHint group_commit_hint;
+        group_commit_hint.group_commit_enabled_ = true;
+        group_commit_hint.rollback_on_no_affected_rows_ = (child0->value_ != 0);
+        global_hint.merge_group_commit_hint(group_commit_hint);
+        global_hint.merge_parallel_hint(ObGlobalHint::DEFAULT_PARALLEL);
       }
       break;
     }

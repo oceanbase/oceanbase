@@ -133,7 +133,6 @@ ObTxNode::ObTxNode(const int64_t ls_id,
   fake_lock_wait_mgr_.set_req_queue(&req_queue_);
   fake_lock_wait_mgr_.set_req_queue_cond(req_consumer_.get_cond());
   fake_lock_wait_mgr_.set_tenant_id(tenant_id_);
-  fake_part_trans_ctx_pool_.init();
   GCTX.self_addr_seq_.set_addr(addr_);
   addr.to_string(name_buf_, sizeof(name_buf_));
   msg_consumer_.set_name(name_);
@@ -146,6 +145,7 @@ ObTxNode::ObTxNode(const int64_t ls_id,
   tenant_.set(&fake_shared_mem_alloc_mgr_);
   tenant_.set(&fake_lock_wait_mgr_);
   ObTenantEnv::set_tenant(&tenant_);
+  fake_part_trans_ctx_pool_.init();
   ObTableHandleV2 lock_memtable_handle;
   lock_memtable_handle.set_table(&lock_memtable_, &t3m_, ObITable::LOCK_MEMTABLE);
   lock_memtable_.key_.table_type_ = ObITable::LOCK_MEMTABLE;
@@ -521,6 +521,22 @@ int ObTxNode::handle_msg_(MsgPack *pkt)
       TX_MSG_HANDLER__(KEEPALIVE_RESP, ObTxKeepaliveRespMsg, handle_trans_keepalive_response);
       TX_MSG_HANDLER__(ROLLBACK_SAVEPOINT_RESP, ObTxRollbackSPRespMsg, handle_sp_rollback_response);
     #undef TX_MSG_HANDLER__
+      case TX_HOTSPOT_DISPATCH_REDO: {
+        ObHotspotDispatchRedoMsg msg;
+        ObTransRpcResult result;
+        OZ(msg.deserialize(buf, size, pos));
+        TRANS_LOG(TRACE, "handle_msg", K(msg.type_), K(msg), KPC(this));
+        OZ(txs_.handle_hotspot_dispatch_redo_msg(msg, result), msg);
+        break;
+      }
+      case TX_HOTSPOT_SUBMIT_OTHER_REDO: {
+        ObHotspotSubmitOtherRedoMsg msg;
+        ObTransRpcResult result;
+        OZ(msg.deserialize(buf, size, pos));
+        TRANS_LOG(TRACE, "handle_msg", K(msg.type_), KPC(this));
+        OZ(txs_.handle_hotspot_submit_other_redo_msg(msg, result), msg);
+        break;
+      }
       case TX_FREE_ROUTE_CHECK_ALIVE:
         {
           ObTxFreeRouteCheckAliveMsg msg;
@@ -930,6 +946,18 @@ int ObTxNode::write(ObTxDesc &tx, const int64_t key, const int64_t value, const 
   OZ(write(tx, snapshot, key, value, branch));
   return ret;
 }
+
+int ObTxNode::write(ObTxDesc &tx, const int64_t key, const ObObj &value, const int16_t branch)
+{
+  int ret = OB_SUCCESS;
+  ObTxReadSnapshot snapshot;
+  OZ(get_read_snapshot(tx,
+                       tx.isolation_,
+                       ts_after_ms(50),
+                       snapshot));
+  OZ(write(tx, snapshot, key, value, branch));
+  return ret;
+}
 int ObTxNode::write(ObTxDesc &tx,
                     const ObTxReadSnapshot &snapshot,
                     const int64_t key,
@@ -959,6 +987,81 @@ int ObTxNode::write(ObTxDesc &tx,
   ObArenaAllocator allocator;
   ObStoreRow row;
   ObObj cols[2] = {ObObj(key), ObObj(value)};
+  row.capacity_ = 2;
+  row.row_val_.cells_ = cols;
+  row.row_val_.count_ = 2;
+  row.flag_ = blocksstable::ObDmlFlag::DF_UPDATE;
+  row.trans_id_.reset();
+
+  ObTableIterParam param;
+  ObTableAccessContext context;
+  ObVersionRange trans_version_range;
+  const bool read_latest = true;
+  ObQueryFlag query_flag;
+  ObTableReadInfo read_info;
+
+  const int64_t schema_version = 100;
+  read_info.init(allocator, 2, 1, false, columns_, nullptr/*storage_cols_index*/);
+
+  trans_version_range.base_version_ = 0;
+  trans_version_range.multi_version_start_ = 0;
+  trans_version_range.snapshot_version_ = EXIST_READ_SNAPSHOT_VERSION;
+  query_flag.use_row_cache_ = ObQueryFlag::DoNotUseCache;
+  query_flag.read_latest_ = read_latest & ObQueryFlag::OBSF_MASK_READ_LATEST;
+
+  param.table_id_ = 1;
+  param.tablet_id_ = 1;
+  param.read_info_ = &read_info;
+
+  context.init(query_flag, write_store_ctx, allocator, trans_version_range);
+  const ObMemtableSetArg arg(&row,
+                             &columns_,
+                             NULL, /*update_idx*/
+                             NULL, /*old_row*/
+                             1,    /*row_count*/
+                             false /*check_exist*/,
+                             encrypt_meta);
+  OZ(memtable_->set(param, context, arg));
+  int tmp_ret = OB_SUCCESS;
+  if (OB_TMP_FAIL(txs_.revert_store_ctx(write_store_ctx))) {
+    TRANS_LOG(WARN, "revert store ctx failed", KR(tmp_ret), K(write_store_ctx));
+  }
+  delete iter;
+  return ret;
+}
+
+int ObTxNode::write(ObTxDesc &tx,
+                    const ObTxReadSnapshot &snapshot,
+                    const int64_t key,
+                    const ObObj &value,
+                    const int16_t branch)
+{
+  const int32_t value_len = value.get_string_len();
+  TRANS_LOG(INFO, "write", K(key), K(value_len), K(snapshot), K(tx), KPC(this));
+  int ret = OB_SUCCESS;
+  const transaction::ObSerializeEncryptMeta *encrypt_meta = NULL;
+  ObTenantEnv::set_tenant(&tenant_);
+  ObStoreCtx write_store_ctx;
+  auto iter = new ObTableStoreIterator();
+  iter->reset();
+  ObITable *mtb = memtable_;
+  iter->add_table(mtb);
+  write_store_ctx.ls_ = &fake_ls_;
+  write_store_ctx.ls_id_ = ls_id_;
+  write_store_ctx.table_iter_ = iter;
+  write_store_ctx.branch_ = branch;
+  write_store_ctx.timeout_ = tx.get_expire_ts();
+  concurrent_control::ObWriteFlag write_flag;
+  OZ(txs_.get_write_store_ctx(tx,
+                              snapshot,
+                              write_flag,
+                              write_store_ctx));
+  write_store_ctx.mvcc_acc_ctx_.tx_table_guards_.tx_table_guard_.init(&fake_tx_table_);
+  ObArenaAllocator allocator;
+  ObStoreRow row;
+  ObObj cols[2];
+  cols[0].set_int(key);
+  cols[1] = value;
   row.capacity_ = 2;
   row.row_val_.cells_ = cols;
   row.row_val_.count_ = 2;

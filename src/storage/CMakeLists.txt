@@ -333,6 +333,8 @@ ob_set_subtarget(ob_storage tx
   tx/ob_dup_table_dump.cpp
   tx/ob_tx_sby_read_define.cpp
   tx/ob_tx_sby_read_ctx_helper.cpp
+  tx/ob_tx_hotspot_define_ce.cpp
+  tx/ob_tx_hotspot_helper_ce.cpp
   tx/ob_xa_ctx.cpp
   tx/ob_xa_ctx_mgr.cpp
   tx/ob_xa_dblink_service.cpp

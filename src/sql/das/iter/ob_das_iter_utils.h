@@ -22,6 +22,8 @@ namespace oceanbase
 {
 namespace sql
 {
+class ObDASGroupUpdateCacheIter;
+
 class ObDASIterUtils
 {
 public:
@@ -61,6 +63,13 @@ public:
                                     const ObTableScanSpec &spec,
                                     ObDASIter *iter_tree,
                                     ObDASGroupFoldIter *&fold_iter);
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+  static int create_group_update_cache_iter(const ObTableScanCtDef &tsc_ctdef,
+                                            ObEvalCtx &eval_ctx,
+                                            ObExecContext &exec_ctx,
+                                            ObDASIter *iter_tree,
+                                            ObDASGroupUpdateCacheIter *&update_cache_iter);
+#endif
 
 private:
   static int create_das_merge_iter_help(ObDASIterParam &param,
@@ -85,6 +94,10 @@ private:
                                              bool need_check_output_datum,
                                              ObDASIter *iter_tree,
                                              ObDASGroupFoldIter *&result);
+ static int create_das_group_update_cache_iter_help(ObDASIterParam &param,
+                                                    const ObTableScanCtDef &tsc_ctdef,
+                                                    ObDASIter *iter_tree,
+                                                    ObDASGroupUpdateCacheIter *&result);
 
   ObDASIterUtils() = delete;
   ~ObDASIterUtils() = delete;

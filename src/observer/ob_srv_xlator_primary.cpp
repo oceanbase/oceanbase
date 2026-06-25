@@ -170,6 +170,12 @@ void oceanbase::observer::init_srv_xlator_for_transaction(ObSrvRpcXlator *xlator
   RPC_PROCESSOR(ObTxSbyAskDownstreamReqP);
   RPC_PROCESSOR(ObTxSbyStateResultP);
 
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+  // for hotspot
+  RPC_PROCESSOR(ObTxHotspotDispatchRedoP);
+  RPC_PROCESSOR(ObTxHotspotSubmitOtherRedoP);
+#endif
+
   // for tx free route
   RPC_PROCESSOR(ObTxFreeRouteCheckAliveP);
   RPC_PROCESSOR(ObTxFreeRouteCheckAliveRespP);

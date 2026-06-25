@@ -119,6 +119,11 @@ public:
       } else if (callback->is_logging_blocked()) {
         ret = OB_BLOCK_FROZEN;
         ctx_.last_log_blocked_memtable_ = callback->get_memtable();
+      } else if (ctx_.max_seq_no_limit_.is_valid() &&
+                 callback->get_seq_no() > ctx_.max_seq_no_limit_) {
+        ret = OB_BUF_NOT_ENOUGH;
+        TRANS_LOG(INFO, "Exceeds the maximum seq no allowed to be filed",
+                  K(ret), K(callback), K(ctx_));
       } else {
         bool fake_fill = false;
         if (MutatorType::MUTATOR_ROW == callback->get_mutator_type()) {
@@ -137,8 +142,37 @@ public:
             ctx_.fill_count_++;
           }
           data_size += callback->get_data_size() + callback->get_old_row_data_size();
-          max_seq_no = MAX(max_seq_no, callback->get_seq_no());
-          last = callback;
+          const transaction::ObTxSEQ orig_seq = callback->get_seq_no();
+          transaction::ObTxSEQ effective_seq = orig_seq;
+          if (ctx_.remapped_next_seq_.is_valid()) {
+            // The cursor has already been advanced by the fill method (++remapped_next_seq_),
+            // so the seq just written into the redo buffer is (remapped_next_seq_ - 1).
+            effective_seq = ctx_.remapped_next_seq_ + (-1);
+            // MIN/MAX on ObTxSEQ compare only the seq portion, ignoring branch.
+            // All remapped seqs must share the same branch; assert to catch misuse.
+            if (OB_UNLIKELY(ctx_.min_seq_no_.is_valid()
+                            && ctx_.min_seq_no_.get_branch() != effective_seq.get_branch())) {
+              ret = OB_ERR_UNEXPECTED;
+              TRANS_LOG(ERROR, "remapped seq branch mismatch in MIN/MAX",
+                        K(ret), K(ctx_.min_seq_no_), K(effective_seq), K(ctx_));
+            }
+          }
+          if (OB_SUCC(ret)) {
+            if (!ctx_.min_seq_no_.is_valid()) {
+              ctx_.min_seq_no_ = effective_seq;
+            } else {
+              ctx_.min_seq_no_ = MIN(ctx_.min_seq_no_, effective_seq);
+            }
+            max_seq_no = MAX(max_seq_no, effective_seq);
+            // track original callback seq range for debug traceability
+            if (!ctx_.orig_min_seq_no_.is_valid()) {
+              ctx_.orig_min_seq_no_ = orig_seq;
+            } else {
+              ctx_.orig_min_seq_no_ = MIN(ctx_.orig_min_seq_no_, orig_seq);
+            }
+            ctx_.orig_max_seq_no_ = MAX(ctx_.orig_max_seq_no_, orig_seq);
+            last = callback;
+          }
         }
       }
     }
@@ -167,6 +201,11 @@ private:
     } else if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
     } else {
+      // Overwrite redo seq_no with the remapped value (does not modify the callback/tnode).
+      // The cursor is advanced only after a successful append to avoid gaps on retry.
+      if (ctx_.remapped_next_seq_.is_valid()) {
+        redo.seq_no_ = ctx_.remapped_next_seq_;
+      }
       ObMemtable *memtable = static_cast<memtable::ObMemtable *>(riter->get_memtable());
       if (OB_ISNULL(memtable)) {
         TRANS_LOG(ERROR, "memtable is null", K(riter));
@@ -184,6 +223,11 @@ private:
           TRANS_LOG(WARN, "mutator writer append_kv fail", "ret", ret);
         }
       }
+      // Advance cursor only after successful append; on OB_BUF_NOT_ENOUGH the same
+      // callback will be retried and must receive the same seq_no.
+      if (OB_SUCC(ret) && ctx_.remapped_next_seq_.is_valid()) {
+        ++ctx_.remapped_next_seq_;
+      }
     }
     return ret;
   }
@@ -196,9 +240,18 @@ private:
       fake_fill = true;
     } else if (OB_FAIL(titer->get_redo(redo))) {
       TRANS_LOG(ERROR, "get_redo failed.", K(ret));
-    } else if (OB_FAIL(mmw_.append_table_lock_kv(mem_ctx_->get_max_table_version(), redo))) {
-      if (OB_BUF_NOT_ENOUGH != ret) {
-        TRANS_LOG(WARN, "fill table lock redo fail", K(ret));
+    } else {
+      // Overwrite redo seq_no with remapped value; advance cursor only after successful append.
+      if (ctx_.remapped_next_seq_.is_valid()) {
+        redo.seq_no_ = ctx_.remapped_next_seq_;
+      }
+      if (OB_FAIL(mmw_.append_table_lock_kv(mem_ctx_->get_max_table_version(), redo))) {
+        if (OB_BUF_NOT_ENOUGH != ret) {
+          TRANS_LOG(WARN, "fill table lock redo fail", K(ret));
+        }
+      }
+      if (OB_SUCC(ret) && ctx_.remapped_next_seq_.is_valid()) {
+        ++ctx_.remapped_next_seq_;
       }
     }
     TRANS_LOG(DEBUG, "fill table lock redo.", K(ret), KPC(titer), K(redo.lock_id_), K(redo.lock_mode_));
@@ -215,10 +268,19 @@ private:
       } else {
         ret = OB_SUCCESS;
       }
-    } else if (OB_FAIL(mmw_.append_ext_info_log_kv(mem_ctx_->get_max_table_version(),
-                                                  redo, false/*is_big_row*/))) {
-      if (OB_BUF_NOT_ENOUGH != ret) {
-        TRANS_LOG(WARN, "mutator writer append_kv fail", K(ret));
+    } else {
+      // Overwrite redo seq_no with remapped value; advance cursor only after successful append.
+      if (ctx_.remapped_next_seq_.is_valid()) {
+        redo.seq_no_ = ctx_.remapped_next_seq_;
+      }
+      if (OB_FAIL(mmw_.append_ext_info_log_kv(mem_ctx_->get_max_table_version(),
+                                              redo, false/*is_big_row*/))) {
+        if (OB_BUF_NOT_ENOUGH != ret) {
+          TRANS_LOG(WARN, "mutator writer append_kv fail", K(ret));
+        }
+      }
+      if (OB_SUCC(ret) && ctx_.remapped_next_seq_.is_valid()) {
+        ++ctx_.remapped_next_seq_;
       }
     }
     return ret;

@@ -59,6 +59,9 @@ public:
   virtual ObIMemtable* get_memtable() const { return nullptr; }
   virtual uint32_t get_freeze_clock() const { return 0; }
   virtual transaction::ObTxSEQ get_seq_no() const { return transaction::ObTxSEQ::INVL(); }
+  // Get the seq_no stored on the tnode (may differ from callback seq after remap).
+  // Default returns invalid; ObMvccRowCallback overrides to return tnode_->seq_no_.
+  virtual transaction::ObTxSEQ get_tnode_seq_no() const { return transaction::ObTxSEQ::INVL(); }
   virtual int del() { return remove(); }
   virtual bool is_need_free() const { return true; }
   void set_scn(const share::SCN scn);
@@ -73,12 +76,24 @@ public:
   virtual bool is_logging_blocked() const { return false; }
   virtual bool on_frozen_memtable(ObIMemtable *&last_frozen_mt) const { return true; }
   int log_submitted_cb();
+  int hotspot_log_submitted_cb(const transaction::ObTransID primary_tx_id,
+                               const share::SCN log_scn,
+                               const transaction::ObTxSEQ remap_seq);
   int log_sync_cb(const share::SCN scn, ObIMemtable *&last_mt);
   int log_sync_fail_cb();
   // interface should be implement by subclasses
   virtual int before_append(const bool is_replay) { return common::OB_SUCCESS; }
   virtual void after_append_fail(const bool is_replay) {}
   virtual int log_submitted() { return common::OB_SUCCESS; }
+  virtual int hotspot_log_submitted(const transaction::ObTransID primary_tx_id,
+                                    const share::SCN log_scn,
+                                    const transaction::ObTxSEQ remap_seq)
+  {
+    UNUSED(primary_tx_id);
+    UNUSED(log_scn);
+    UNUSED(remap_seq);
+    return common::OB_SUCCESS;
+  }
   virtual int log_sync(const share::SCN scn, ObIMemtable *&last_mt)
   { UNUSED(scn), UNUSED(last_mt); return common::OB_SUCCESS; }
   virtual int log_sync_fail()

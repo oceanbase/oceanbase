@@ -257,10 +257,34 @@ public:
   // there may be added other variables in the future
 };
 
+struct ObSecondaryTxRedoRange
+{
+  ObSecondaryTxRedoRange()
+      : secondary_tx_id_(0), remap_from_(), remap_to_(), orig_from_(), orig_to_() {}
+  ObSecondaryTxRedoRange(const TxID secondary_tx_id,
+                         const ObTxSEQ &remap_from, const ObTxSEQ &remap_to,
+                         const ObTxSEQ &orig_from, const ObTxSEQ &orig_to)
+      : secondary_tx_id_(secondary_tx_id),
+        remap_from_(remap_from), remap_to_(remap_to),
+        orig_from_(orig_from), orig_to_(orig_to)
+  {}
+
+  TO_STRING_KV(K(secondary_tx_id_), K(remap_from_), K(remap_to_), K(orig_from_), K(orig_to_));
+  OB_UNIS_VERSION(1);
+
+  TxID secondary_tx_id_;
+  ObTxSEQ remap_from_;      // remapped seq range in primary tx's seq space (inclusive)
+  ObTxSEQ remap_to_;
+  ObTxSEQ orig_from_;       // original callback seq range in secondary tx's seq space (inclusive)
+  ObTxSEQ orig_to_;
+};
+
+typedef common::ObSEArray<ObSecondaryTxRedoRange, 1> ObSecondaryTxRedoRangeArray;
+
 struct ObCtxRedoInfo
 {
   ObCtxRedoInfo(const int64_t cluster_version)
-      : cluster_version_(cluster_version)
+      : compat_bytes_(), cluster_version_(cluster_version), secondary_tx_redo_ranges_()
   {
   };
   int before_serialize();
@@ -268,9 +292,11 @@ struct ObCtxRedoInfo
   ObTxSerCompatByte compat_bytes_;
   // serialize before mutator_buf by fixed length
   uint64_t cluster_version_;
+  ObSecondaryTxRedoRangeArray secondary_tx_redo_ranges_;
   // remove member variable ObCLogEncryptInfo encrypt_info_
   // there may be added other variables in the future
 
+  TO_STRING_KV(K(cluster_version_), K_(secondary_tx_redo_ranges));
   OB_UNIS_VERSION(1);
 };
 
@@ -300,6 +326,9 @@ public:
   const char *get_replay_mutator_buf() const { return replay_mutator_buf_; }
   const int64_t &get_mutator_size() const { return mutator_size_; }
   const uint64_t &get_cluster_version() const { return ctx_redo_info_.cluster_version_; }
+  int add_secondary_tx_redo_range(const ObSecondaryTxRedoRange &range);
+  static int64_t estimate_serialize_size_with_secondary_tx_range();
+  friend bool has_secondary_tx_redo_range(const ObTxRedoLog &redo_log);
 
   //------------ Only invoke in ObTxLogBlock
   int set_mutator_buf(char *buf);
@@ -325,12 +354,13 @@ public:
       K(mutator_size_),
       // KP(replay_mutator_buf_),
       // K(clog_encrypt_info_),
-      K(ctx_redo_info_.cluster_version_));
+      K_(ctx_redo_info));
 
 public:
   int before_serialize() { return ctx_redo_info_.before_serialize(); }
 private:
   //------------ For ob_admin
+  int format_txctxinfo_for_admin_dump_(char *buf, const int64_t buf_len, int64_t &pos) const;
   int format_mutator_row_(const memtable::ObMemtableMutatorRow &row, share::ObAdminMutatorStringArg &arg);
   int smart_dump_rowkey_(const ObStoreRowkey &rowkey, share::ObAdminMutatorStringArg &arg);
   int format_row_data_(const memtable::ObRowData &row_data, share::ObAdminMutatorStringArg &arg);
@@ -342,6 +372,11 @@ private:
 
   ObCtxRedoInfo ctx_redo_info_;
 };
+
+inline bool has_secondary_tx_redo_range(const ObTxRedoLog &redo_log)
+{
+  return !redo_log.ctx_redo_info_.secondary_tx_redo_ranges_.empty();
+}
 
 // for dist trans write it's multi source data, the same as redo,
 // for simplicity, add a new log type
@@ -402,7 +437,7 @@ public:
         proposal_leader_(temp_ref.proposal_leader_), cur_query_start_time_(0), is_sub2pc_(false),
         is_dup_tx_(false), tx_expired_time_(0), epoch_(0), last_op_sn_(0), first_seq_no_(),
         last_seq_no_(), max_submitted_seq_no_(), serial_final_seq_no_(), cluster_version_(0),
-        xid_(temp_ref.xid_), prio_op_array_(temp_ref.prio_op_array_)
+        seq_base_(-1), xid_(temp_ref.xid_), prio_op_array_(temp_ref.prio_op_array_)
   {
     before_serialize();
   }
@@ -426,6 +461,7 @@ public:
                     uint64_t cluster_version,
                     const ObXATransID &xid,
                     ObTxSEQ serial_final_seq_no,
+                    const int64_t seq_base,
                     tablelock::ObTableLockPrioOpArray &prio_op_array)
       : scheduler_(scheduler), trans_type_(trans_type), session_id_(session_id),
         associated_session_id_(associated_session_id),
@@ -434,7 +470,7 @@ public:
         is_sub2pc_(is_sub2pc), is_dup_tx_(is_dup_tx), tx_expired_time_(tx_expired_time),
         epoch_(epoch), last_op_sn_(last_op_sn), first_seq_no_(first_seq_no), last_seq_no_(last_seq_no),
         max_submitted_seq_no_(max_submitted_seq_no), serial_final_seq_no_(serial_final_seq_no),
-        cluster_version_(cluster_version), xid_(xid), prio_op_array_(prio_op_array)
+        cluster_version_(cluster_version), seq_base_(seq_base), xid_(xid), prio_op_array_(prio_op_array)
   {
     before_serialize();
   };
@@ -458,6 +494,7 @@ public:
   ObTxSEQ get_max_submitted_seq_no() const { return max_submitted_seq_no_; }
   ObTxSEQ get_serial_final_seq_no() const { return serial_final_seq_no_; }
   uint64_t get_cluster_version() const { return cluster_version_; }
+  int64_t get_seq_base() const { return seq_base_; }
   const ObXATransID &get_xid() const { return xid_; }
   const tablelock::ObTableLockPrioOpArray &get_prio_op_array() const { return prio_op_array_; }
   // for ob_admin
@@ -484,6 +521,7 @@ public:
                K(max_submitted_seq_no_),
                K(serial_final_seq_no_),
                K(cluster_version_),
+               K(seq_base_),
                K(xid_),
                K(prio_op_array_));
 
@@ -515,6 +553,7 @@ private:
   ObTxSEQ max_submitted_seq_no_;
   ObTxSEQ serial_final_seq_no_;
   uint64_t cluster_version_;
+  int64_t seq_base_; // tx_seq's base value from TxDesc, negative values indicate invalid value
   ObXATransID xid_;
   tablelock::ObTableLockPrioOpArray &prio_op_array_;
 };
@@ -962,21 +1001,22 @@ private:
 
 class ObTxRollbackToLog
 {
-public:
   OB_UNIS_VERSION(1);
 public:
   ObTxRollbackToLog() = default;
-  ObTxRollbackToLog(const ObTxSEQ from, const ObTxSEQ to)
-    : from_(from), to_(to) {before_serialize();}
+  ObTxRollbackToLog(const ObTxSEQ from, const ObTxSEQ to, const ObTransID &secondary_tx_id = ObTransID())
+    : from_(from), to_(to), secondary_tx_id_(secondary_tx_id) {before_serialize();}
 
 
   ObTxSEQ get_from() const { return from_; }
   ObTxSEQ get_to() const { return to_; }
+  const ObTransID& get_secondary_tx_id() const { return secondary_tx_id_; }
+  void set_secondary_tx_id(const ObTransID& tx_id) { secondary_tx_id_ = tx_id; }
 
   int ob_admin_dump(share::ObAdminMutatorStringArg &arg);
 
   static const ObTxLogType LOG_TYPE;
-  TO_STRING_KV(KP(this), K(LOG_TYPE), K_(from), K_(to));
+  TO_STRING_KV(KP(this), K(LOG_TYPE), K_(from), K_(to), K_(secondary_tx_id));
 
 public:
   int before_serialize();
@@ -984,6 +1024,7 @@ private:
   ObTxSerCompatByte compat_bytes_;
   ObTxSEQ from_;
   ObTxSEQ to_;
+  ObTransID secondary_tx_id_;  // hotspot rollback: ID of the rolled-back secondary tx (append-only, pos<data_len check)
 };
 
 // ============================== Tx Log Blcok ==============================
@@ -1039,6 +1080,8 @@ public:
     serialize_size_ = 0;
   }
   void calc_serialize_size_();
+  // Get the reserved serialize_size_ (calculated in before_serialize())
+  int64_t get_reserved_serialize_size() const { return serialize_size_; }
   uint64_t get_org_cluster_id() const { return org_cluster_id_; }
   int64_t get_cluster_version() const { return cluster_version_; }
   int64_t get_log_entry_no() const { return log_entry_no_; }
@@ -1080,6 +1123,26 @@ public:
     default_buf_[0] = '\0';
   }
   ~ObTxAdaptiveLogBuf() { reset(); }
+
+  void fake_copy()
+  {
+    // do nothing
+    if (buf_ == nullptr) {
+      buf_ = default_buf_;
+      len_ = sizeof(default_buf_);
+    }
+    TRANS_LOG_RET(DEBUG, OB_SUCCESS,
+                  "This structure is a dynamic memory buffer that does not support shallow "
+                  "copying, so bypass any copy operations",
+                  KPC(this));
+  }
+  ObTxAdaptiveLogBuf(const ObTxAdaptiveLogBuf &)
+  {
+    buf_ = nullptr;
+    fake_copy();
+  }
+  void operator=(const ObTxAdaptiveLogBuf &) { fake_copy(); }
+
   int init(const int64_t suggested_buf_size)
   {
     int ret = OB_SUCCESS;
@@ -1144,10 +1207,10 @@ public:
   {
     if (NULL != buf_ && buf_ != default_buf_) {
       free_buf_(buf_);
-      buf_ = NULL;
+      buf_ = default_buf_;
     }
     default_buf_[0] = '\0';
-    len_ = 0;
+    len_ = sizeof(default_buf_);
   }
   char *get_buf()
   {
@@ -1201,6 +1264,7 @@ public:
   static const logservice::ObLogBaseType DEFAULT_LOG_BLOCK_TYPE; // TRANS_LOG
   static const int32_t DEFAULT_BIG_ROW_BLOCK_SIZE;
   static const int64_t BIG_SEGMENT_SPILT_SIZE;
+  static int64_t MAX_OVERHEAD_WITH_SECONDARY_TX_RANGE;
   typedef logservice::ObReplayBarrierType ObReplayBarrierType;
   NEED_SERIALIZE_AND_DESERIALIZE;
   ObTxLogBlock();
@@ -1213,6 +1277,7 @@ public:
   int seal(const int64_t replay_hint, const logservice::ObReplayBarrierType barrier, const int64_t log_entry_no = -1);
   ~ObTxLogBlock() { reset(); }
   bool is_inited() const { return inited_; }
+  static int64_t estimate_max_overhead_with_secondary_tx_range();
   int get_next_log(ObTxLogHeader &header,
                    ObTxBigSegmentBuf *big_segment_buf = nullptr,
                    bool *contain_big_segment = nullptr);
@@ -1241,6 +1306,10 @@ public:
   char *get_buf() { return fill_buf_.get_buf(); }
   const int64_t &get_size() { return pos_; }
 
+  const int64_t &get_buf_length() const { return len_; }
+  void set_hotspot_redo_flag() { is_hotspot_redo_ = true; }
+  bool is_hotspot_redo() const { return is_hotspot_redo_; }
+
   int set_prev_big_segment_scn(const share::SCN prev_scn);
   int acquire_segment_log_buf(const ObTxLogType big_segment_log_type, ObTxBigSegmentBuf *big_segment_buf = nullptr);
 private:
@@ -1259,6 +1328,7 @@ private:
   ObTxCbArgArray cb_arg_array_;
 
   ObTxBigSegmentBuf *big_segment_buf_;
+  bool is_hotspot_redo_;
 };
 
 template <typename T>

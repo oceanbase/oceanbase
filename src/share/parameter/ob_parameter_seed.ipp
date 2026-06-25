@@ -393,6 +393,13 @@ DEF_BOOL(_ob_enable_dynamic_worker, OB_TENANT_PARAMETER, "True",
 DEF_INT(_optimizer_ads_time_limit, OB_TENANT_PARAMETER, "10", "[0, 300]",
         "the maximum optimizer dynamic sampling time limit. Range: [0, 300]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_hotspot_group_commit, OB_TENANT_PARAMETER, "False",
+        "Specifies whether to enable group commit for hotspot updates.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_max_hotspot_group_commit_size, OB_TENANT_PARAMETER, "30", "[1, 500]",
+        "The maximum number of aggregated update statements for hotspot aggregation updates"
+        "Range: [1, 500]",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_hash_join_enabled, OB_TENANT_PARAMETER, "True",
          "enable/disable hash join",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

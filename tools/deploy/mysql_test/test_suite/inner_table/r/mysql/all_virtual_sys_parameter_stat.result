@@ -349,6 +349,7 @@ _enable_hash_join_hasher
 _enable_hash_join_processor
 _enable_hgby_llc_ndv_adaptive
 _enable_hgby_skew_detection
+_enable_hotspot_group_commit
 _enable_inner_session_mgr
 _enable_insertup_direct_update
 _enable_insertup_replace_gts_opt
@@ -417,6 +418,7 @@ _ls_gc_wait_readonly_tx_time
 _ls_migration_wait_completing_timeout
 _max_dblink_conn_per_observer
 _max_elr_dependent_trx_count
+_max_hotspot_group_commit_size
 _max_ls_cnt_per_server
 _max_malloc_sample_interval
 _max_rpc_packet_size

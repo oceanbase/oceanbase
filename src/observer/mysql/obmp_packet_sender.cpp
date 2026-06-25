@@ -69,7 +69,8 @@ ObMPPacketSender::ObMPPacketSender()
       req_has_wokenup_(true),
       query_receive_ts_(0),
       nio_protocol_(0),
-      conn_(NULL)
+      conn_(NULL),
+      is_group_commit_(false)
 {
 }
 
@@ -92,6 +93,7 @@ void ObMPPacketSender::reset()
   req_has_wokenup_ = true;
   query_receive_ts_ = 0;
   conn_ = NULL;
+  is_group_commit_ = false;
 }
 
 int ObMPPacketSender::init(rpc::ObRequest *req)
@@ -118,6 +120,7 @@ int ObMPPacketSender::clone_from(ObMPPacketSender& that, int64_t com_offset)
   } else {
     comp_context_.is_checksum_off_ = that.comp_context_.is_checksum_off_;
     proto20_context_.is_checksum_off_ = that.proto20_context_.is_checksum_off_;
+    is_group_commit_ = that.is_group_commit_;
   }
   return ret;
 }
@@ -281,7 +284,7 @@ int ObMPPacketSender::response_compose_packet(obmysql::ObMySQLPacket &pkt,
 
 int ObMPPacketSender::response_packet(obmysql::ObMySQLPacket &pkt, sql::ObSQLSessionInfo* session)
 {
-  LOG_DEBUG("response-packet", K(proto20_context_.is_proto20_used_), K(lbt()));
+  LOG_DEBUG("response-packet", K(proto20_context_.is_proto20_used_), K(lbt()), KP(this), KP(session), K(pkt.get_mysql_packet_type()), K(is_group_commit_));
   int ret = OB_SUCCESS;
   extra_info_kvs_.reset();
   extra_info_ecds_.reset();
@@ -369,7 +372,7 @@ int ObMPPacketSender::send_error_packet(int err,
   if (OB_ERR_PROXY_REROUTE != err) {
     int client_error = ob_errpkt_errno(err, lib::is_oracle_mode());
     LOG_INFO("sending error packet", "ob_error", err, "client error", client_error,
-            K(extra_err_info), K(lbt()));
+            K(extra_err_info), K_(is_group_commit), K(lbt()));
   }
   OMPKError epacket;
   ObSqlString fin_msg;
@@ -516,19 +519,21 @@ int ObMPPacketSender::send_error_packet(int err,
     }
   }
 
-  // rollback autocommit transaction which is active
+  // rollback (autocommit transaction||group commit transaction) which is active
   if (OB_SUCC(ret) && conn_valid_ && conn_->is_sess_alloc_ && !conn_->is_sess_free_) {
     transaction::ObTransID trans_id;
     if (OB_ISNULL(session) && OB_FAIL(get_session(session))) {
       LOG_WARN("get session failed", K(ret));
     } else {
       ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
-      if (session->has_active_autocommit_trans(trans_id)) {
+      if (session->has_active_autocommit_trans(trans_id) ||
+          (is_group_commit_ && session->has_active_local_started_trans(trans_id))) {
         bool need_disconnect = false;
         if (OB_FAIL(ObSqlTransControl::rollback_trans(session, need_disconnect))) {
-          LOG_WARN("rollback autocommit trans failed", K(ret), K(need_disconnect));
+          LOG_WARN("rollback autocommit trans failed", K(ret), K_(is_group_commit),
+              K(trans_id), K(need_disconnect));
         } else {
-          LOG_INFO("rollback autocommit trans succeed", K(trans_id));
+          LOG_INFO("rollback autocommit trans succeed", K(trans_id), K_(is_group_commit));
         }
       }
     }
@@ -954,7 +959,7 @@ int ObMPPacketSender::try_encode_with(ObMySQLPacket &pkt,
     LOG_ERROR("connection already disconnected", K(ret));
   } else if (OB_UNLIKELY(req_has_wokenup_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("req_has_wokenup, resource maybe has destroy", K(ret));
+    LOG_ERROR("req_has_wokenup, resource maybe has destroy", K(ret), KP(this), K(*this));
   } else if (OB_ISNULL(req_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input", K(ret), KP(req_));
@@ -1023,7 +1028,7 @@ int ObMPPacketSender::flush_buffer(const bool is_last)
     LOG_WARN("connection in error, maybe has disconnected", K(ret));
   } else if (req_has_wokenup_) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("req_has_wokenup, resource maybe has destroy", K(ret));
+    LOG_ERROR("req_has_wokenup, resource maybe has destroy", K(ret), KP(this), K(*this));
   } else if (OB_ISNULL(req_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("req_ is null", KP_(ez_buf), KP_(req), K(ret));

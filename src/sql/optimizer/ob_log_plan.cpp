@@ -143,7 +143,8 @@ ObLogPlan::ObLogPlan(ObOptimizerContext &ctx, const ObDMLStmt *stmt)
     alloc_sfu_list_(),
     onetime_copier_(NULL),
     nonrecursive_plan_for_fake_cte_(NULL),
-    need_accurate_cardinality_(false)
+    need_accurate_cardinality_(false),
+    is_group_commit_(false)
 {
 }
 
@@ -12888,6 +12889,10 @@ int ObLogPlan::do_post_plan_processing()
     LOG_WARN("failed to collect table location", K(ret));
   } else if (OB_FAIL(build_location_related_tablet_ids())) {
     LOG_WARN("build location related tablet ids failed", K(ret));
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+  } else if (OB_FAIL(check_group_commit(root))) {
+    LOG_WARN("failed to check need group commit", K(ret));
+#endif
   } else { /*do nothing*/ }
   return ret;
 }
@@ -13178,6 +13183,153 @@ int ObLogPlan::set_identify_seq_expr_for_recursive_union_all(ObLogicalOperator *
   }
   return ret;
 }
+
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+int ObLogPlan::check_group_commit(const ObLogicalOperator *root)
+{
+  int ret = OB_SUCCESS;
+  ObSqlCtx *sql_ctx = get_optimizer_context().get_exec_ctx()->get_sql_ctx();
+  const ObLogDelUpd *update_op = nullptr;
+  if (OB_ISNULL(root)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null param", K(ret));
+  } else if (OB_ISNULL(sql_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (!get_optimizer_context().get_global_hint().group_commit_hint_.group_commit_enabled_) {
+    // not group commit
+  } else if (OB_FAIL(check_table_schema_for_group_commit(root, update_op))) {
+    LOG_WARN("fail to check table schema for group commit", K(ret));
+  } else if (!sql_ctx->multi_stmt_item_.is_batch_group_commit()) {
+    // Check whether the generated plan satisfies the single row update shape for group commit
+    if (OB_UNLIKELY(update_op->get_num_of_child() != 1 ||
+        update_op->get_child(0)->get_type() != log_op_def::LOG_TABLE_SCAN)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "execution plan doesn't support group commit");
+      LOG_WARN("[check group commit] update_op shape not supported", K(ret));
+    } else {
+      is_group_commit_ = true;
+      LOG_INFO("[check group commit] single row group commit");
+    }
+  } else {
+    // Check whether the generated plan satisfies the batch update shape for group commit
+    if (OB_UNLIKELY(update_op->get_num_of_child() != 1 ||
+        update_op->get_child(0)->get_type() != log_op_def::LOG_JOIN)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "execution plan doesn't support group commit");
+      LOG_WARN("[check group commit] update_op shape not supported", K(ret));
+    } else {
+      ObLogJoin *join = static_cast<ObLogJoin*>(update_op->get_child(0));
+      if (OB_UNLIKELY(join->get_join_algo() != JoinAlgo::NESTED_LOOP_JOIN ||
+          join->can_use_batch_nlj() || join->get_num_of_child() != 2)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "execution plan doesn't support group commit");
+        LOG_WARN("[check group commit] join shape not supported", K(ret),
+           K(join->get_join_algo()), K(join->can_use_batch_nlj()), K(join->get_num_of_child()));
+      } else {
+        ObLogicalOperator *left_child = join->get_child(0);
+        ObLogicalOperator *right_child = join->get_child(1);
+        if (OB_UNLIKELY(left_child->get_type() != log_op_def::LOG_SUBPLAN_SCAN
+            || right_child->get_type() != log_op_def::LOG_TABLE_SCAN)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "execution plan doesn't support group commit");
+          LOG_WARN("[check group commit] nlj shape not supported", K(ret),
+              K(left_child->get_type()), K(right_child->get_type()));
+        } else {
+          ObLogSubPlanScan *sub_plan_scan = static_cast<ObLogSubPlanScan*>(left_child);
+          if (OB_UNLIKELY(sub_plan_scan->get_num_of_child() != 1 ||
+              sub_plan_scan->get_child(0)->get_type() != log_op_def::LOG_EXPR_VALUES)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "execution plan doesn't support group commit");
+            LOG_WARN("[check group commit] sub_plan_scan shape not supported", K(ret));
+          } else {
+            is_group_commit_ = true;
+            LOG_INFO("[check group commit] batch group commit");
+          }
+        }
+      }
+    }
+  }
+  if (ret == OB_NOT_SUPPORTED) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (!tenant_config.is_valid() || !tenant_config->_enable_hotspot_group_commit) {
+      LOG_INFO("group commit is not supported and tenant config is not enabled, still success", K(ret));
+      ret = OB_SUCCESS;
+    } else {
+      if (tenant_config->_inlist_rewrite_threshold == 1) {
+        LOG_WARN("group commit is not supported maybe because inlist_rewrite_threshold is 1", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::check_table_schema_for_group_commit(const ObLogicalOperator *root,
+                                                   const ObLogDelUpd *&update_op)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard *schema_guard = nullptr;
+  ObSQLSessionInfo *session_info = nullptr;
+  const ObTableSchema *table_schema = nullptr;
+  bool has_trigger = false;
+  // may be remote plan, need to get the op below exchange
+  const ObLogicalOperator *op = nullptr;
+  if (root->get_type() == log_op_def::LOG_EXCHANGE) {
+    op = root->get_op_below_exchange();
+    LOG_INFO("[check group commit] remote plan, get the op below exchange",
+        K(root->get_type()), K(get_optimizer_context().get_phy_plan_type()));
+  } else {
+    op = root;
+  }
+  if (OB_UNLIKELY(log_op_def::LOG_UPDATE != op->get_type())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "group commit is not for update statement");
+    LOG_WARN("[check group commit] op type is not update", K(ret), K(op->get_type()));
+  } else {
+    update_op = static_cast<const ObLogDelUpd*>(op);
+    const ObIArray<uint64_t>& table_list = update_op->get_table_list();
+    const IndexDMLInfo *primary_dml_info = update_op->get_primary_dml_info();
+    if (OB_UNLIKELY(table_list.count() != 1)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "group commit update only one table is supported");
+      LOG_WARN("[check group commit] update only one table is supported", K(ret), K(table_list));
+    } else if (OB_UNLIKELY(primary_dml_info == nullptr || primary_dml_info->is_update_primary_key_)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "group commit update primary key");
+      LOG_WARN("[check group commit] update pk not supported", K(ret), KPC(primary_dml_info));
+    } else if (OB_ISNULL(schema_guard = get_optimizer_context().get_schema_guard()) ||
+        OB_ISNULL(session_info = get_optimizer_context().get_session_info())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("[check group commit] schema guard or session info is null", K(ret));
+    } else if (OB_FAIL(schema_guard->get_table_schema(
+               session_info->get_effective_tenant_id(),
+               primary_dml_info->ref_table_id_,
+               table_schema))) {
+      LOG_WARN("[check group commit] failed to get table schema", K(ret), K(primary_dml_info->ref_table_id_));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("[check group commit] table schema is null", K(ret));
+    } else if (!table_schema->get_foreign_key_infos().empty()) { // has fk
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "group commit with foreign key");
+      LOG_WARN("[check group commit] foreign key not supported", K(ret));
+    } else if (OB_FAIL(table_schema->check_has_trigger_on_table(*schema_guard, has_trigger))) {
+      LOG_WARN("[check group commit] failed to check trigger", K(ret));
+    } else if (has_trigger) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "group commit with trigger");
+      LOG_WARN("[check group commit] trigger not supported", K(ret));
+    } else if (OB_UNLIKELY(update_op->get_index_dml_infos().count() > 1)) {
+      // Check if update involves global index
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "group commit update global index");
+      LOG_WARN("[check group commit] update global index not supported", K(ret),
+        K(update_op->get_index_dml_infos().count()));
+    }
+  }
+  return ret;
+}
+#endif
 
 int ObLogPlan::set_identify_seq_expr_for_fake_cte(ObLogicalOperator *op,
                                                   ObRawExpr *identify_seq_expr,

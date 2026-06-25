@@ -395,7 +395,16 @@ public:
   int update_checksum(const ObIArray<uint64_t> &checksum,
                       const ObIArray<share::SCN> &checksum_scn);
   int log_submitted(const ObRedoLogSubmitHelper &helper);
+  int64_t get_unsubmitted_cnt() const { return ATOMIC_LOAD(&unsubmitted_cnt_); }
+  int64_t get_main_list_length() const { return trans_mgr_.get_main_list_length(); }
+  int hotspot_log_submitted(const transaction::ObTransID primary_tx_id,
+                            const int64_t data_size,
+                            const share::SCN log_scn,
+                            const ObCallbackScope &scope);
   int sync_log_succ(const share::SCN scn, const ObCallbackScopeArray &callbacks);
+  int hotspot_sync_log_succ(const share::SCN scn,
+                            const ObCallbackScopeArray &callbacks,
+                            bool &remap_verify_failed);
   void sync_log_fail(const ObCallbackScopeArray &callbacks);
   bool is_slow_query() const;
   virtual void set_trans_ctx(transaction::ObPartTransCtx *ctx);
@@ -407,6 +416,9 @@ public:
   uint64_t get_tenant_id() const;
   inline bool has_row_updated() const { return has_row_updated_; }
   inline void set_row_updated() { has_row_updated_ = true; }
+  int remove_callbacks_for_hotspot_redo(const share::SCN stop_scn,
+                                        share::SCN &last_remove_scn,
+                                        int64_t &remove_succ_cnt);
   int remove_callbacks_for_fast_commit(const ObCallbackScopeArray &callbacks);
   int remove_callbacks_for_fast_commit(const int16_t callback_list_idx, const share::SCN stop_scn);
   int remove_callback_for_uncommited_txn(const memtable::ObMemtableSet *memtable_set);
@@ -422,6 +434,10 @@ public:
   {
     trans_mgr_.set_skip_checksum_calc();
   }
+  // Remove all synced callbacks for hotspot rollback replay.
+  // Uses fast commit's callback traversal mechanism to safely remove all callbacks,
+  // instead of tip-rollback which violates the assumptions in hotspot aggregation.
+  int remove_all_callbacks_for_replay();
   int64_t get_trans_mem_total_size() const { return trans_mem_total_size_; }
   bool pending_log_size_too_large(const transaction::ObTxSEQ &write_seq_no);
   void merge_multi_callback_lists_for_changing_leader();
@@ -482,6 +498,7 @@ public: // callback
   int64_t get_checksum() const { return trans_mgr_.get_checksum(); }
   int64_t get_tmp_checksum() const { return trans_mgr_.get_tmp_checksum(); }
   share::SCN get_checksum_scn() const { return trans_mgr_.get_checksum_scn(); }
+  int get_callback_list_count() const { return trans_mgr_.get_callback_list_count(); }
   int acquire_callback_list(const bool new_epoch, bool need_merge)
   {
     return trans_mgr_.acquire_callback_list(new_epoch, need_merge);

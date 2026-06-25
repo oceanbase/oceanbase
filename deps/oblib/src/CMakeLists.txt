@@ -74,6 +74,12 @@ if(OB_BUILD_LOG_STORAGE_COMPRESS)
   )
 endif()
 
+if(OB_HOTSPOT_GROUP_COMMIT)
+  target_include_directories(
+    oblib_base_without_pass INTERFACE
+    ${CMAKE_SOURCE_DIR}/close_modules/hotspot_group_commit
+  )
+endif()
 
 if(OB_BUILD_ORACLE_PL)
   target_include_directories(

@@ -1335,6 +1335,7 @@ public:
   OPERATOR_V4(ObTxSubmitLogFunctor)
   {
     int ret = OB_SUCCESS;
+    int tmp_ret = OB_SUCCESS;
 
     if (!tx_id.is_valid() || OB_ISNULL(tx_ctx)) {
       ret = OB_INVALID_ARGUMENT;
@@ -1342,6 +1343,24 @@ public:
     } else if (ObTxSubmitLogFunctor::SUBMIT_REDO_LOG == action_) {
       if (OB_FAIL(tx_ctx->submit_redo_log_for_freeze(freeze_clock_))) {
         TRANS_LOG(WARN, "failed to submit redo log", K(ret), K(tx_id));
+        if (OB_NEED_RETRY == ret) {
+          bool submitted_primary_log = false;
+          if (OB_TMP_FAIL(
+                  tx_ctx->wait_hotspot_redo_frozen_flushed(freeze_clock_, submitted_primary_log))) {
+            TRANS_LOG(WARN, "wait hotspot redo frozen flushed failed", K(ret),
+                      K(tmp_ret), K(submitted_primary_log), K(tx_id));
+          } else {
+            if (submitted_primary_log) {
+              // Primary tx submits extra freeze redo in this round, trigger next round
+              // to let affected secondary txs finish quickly.
+              fail_tx_id_ = tx_id;
+              result_ = OB_NEED_RETRY;
+            }
+            ret = OB_SUCCESS;
+            TRANS_LOG(INFO, "wait hotspot redo frozen flushed success", K(ret), K(tmp_ret), K(tx_id),
+                      K(freeze_clock_), K(submitted_primary_log));
+          }
+        }
       }
     } else if (ObTxSubmitLogFunctor::SUBMIT_NEXT_LOG == action_) {
       if (OB_FAIL(tx_ctx->try_submit_next_log())) {

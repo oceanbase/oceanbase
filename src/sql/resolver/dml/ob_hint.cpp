@@ -30,6 +30,7 @@ void ObPhyPlanHint::reset()
   parallel_ = -1;
   monitor_ = false;
   table_lock_mode_ = 0;
+  tx_free_route_disabled_ = false;
 }
 
 OB_SERIALIZE_MEMBER(ObPhyPlanHint,
@@ -52,6 +53,7 @@ int ObPhyPlanHint::deep_copy(const ObPhyPlanHint &other, ObIAllocator &allocator
   parallel_ = other.parallel_;
   monitor_ = other.monitor_;
   table_lock_mode_ = other.table_lock_mode_;
+  tx_free_route_disabled_ = other.tx_free_route_disabled_;
   if (OB_FAIL(ob_write_string(allocator, other.log_level_, log_level_))) {
     LOG_WARN("Failed to deep copy log level", K(ret));
   }
@@ -352,6 +354,7 @@ void ObGlobalHint::reset()
   force_trace_log_ = false;
   max_concurrent_ = UNSET_MAX_CONCURRENT;
   enable_lock_early_release_ = false;
+  tx_free_route_disabled_ = false;
   force_refresh_lc_ = false;
   table_lock_mode_ = 0;
   log_level_.reset();
@@ -374,6 +377,7 @@ void ObGlobalHint::reset()
   dynamic_sampling_ = ObGlobalHint::UNSET_DYNAMIC_SAMPLING;
   dblink_hints_.reset();
   has_hint_exclude_concurrent_ = false;
+  group_commit_hint_.reset();
 }
 
 int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
@@ -384,8 +388,8 @@ int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
   merge_topk_hint(other.topk_precision_, other.sharding_minimum_row_count_);
   merge_query_timeout_hint(other.query_timeout_);
   enable_lock_early_release_ |= other.enable_lock_early_release_;
+  tx_free_route_disabled_ |= other.tx_free_route_disabled_;
   merge_log_level_hint(other.log_level_);
-  enable_lock_early_release_ |= other.enable_lock_early_release_;
   force_refresh_lc_ |= other.force_refresh_lc_;
   merge_plan_cache_hint(other.plan_cache_policy_);
   merge_parallel_dml_hint(other.pdml_option_);
@@ -404,6 +408,7 @@ int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
   merge_parallel_das_dml_hint(other.parallel_das_dml_option_);
   dblink_hints_ = other.dblink_hints_;
   merge_dynamic_sampling_hint(other.dynamic_sampling_);
+  merge_group_commit_hint(other.group_commit_hint_);
   merge_table_lock_mode_hint(other.table_lock_mode_);
   if (OB_FAIL(merge_monitor_hints(other.monitoring_ids_))) {
     LOG_WARN("failed to merge monitor hints", K(ret));
@@ -415,6 +420,10 @@ int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
     LOG_WARN("failed to append ddl_schema_version", K(ret));
   }
   return ret;
+}
+void ObGlobalHint::merge_group_commit_hint(const ObGroupCommitHint &other)
+{
+  group_commit_hint_.merge(other);
 }
 
 int ObGlobalHint::assign(const ObGlobalHint &other)
@@ -500,6 +509,11 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
   }
   if (OB_SUCC(ret) && enable_lock_early_release_) { //TRANS_PARAM
     if (OB_FAIL(BUF_PRINTF("%sTRANS_PARAM(\'ENABLE_EARLY_LOCK_RELEASE\' \'true\')", outline_indent))) {
+      LOG_WARN("failed to print hint TRANS_PARAM hint", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && tx_free_route_disabled_) { //TRANS_PARAM
+    if (OB_FAIL(BUF_PRINTF("%sTRANS_PARAM(\'DISABLE_TX_FREE_ROUTE\' \'true\')", outline_indent))) {
       LOG_WARN("failed to print hint TRANS_PARAM hint", K(ret));
     }
   }
@@ -610,6 +624,13 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
       LOG_WARN("get lock mode string failed", K(ret), K(table_lock_mode_));
     } else if (OB_FAIL(BUF_PRINTF("%s%s(%s)", outline_indent, "TABLE_LOCK_MODE", lock_mode_str))) {
       LOG_WARN("failed to print hint", K(ret), K(table_lock_mode_));
+    }
+  }
+  if (OB_SUCC(ret) && group_commit_enabled()) {
+    if (is_rollback_on_no_affected_rows()) {
+      PRINT_GLOBAL_HINT_STR("GROUP_COMMIT( TRUE )");
+    } else {
+      PRINT_GLOBAL_HINT_STR("GROUP_COMMIT( FALSE )");
     }
   }
   return ret;

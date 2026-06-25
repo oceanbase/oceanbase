@@ -64,6 +64,9 @@ namespace sql {
   class ObPsCache;
   class ObAuditLogger;
   class ObAuditLogUpdater;
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+  class ObSqlGroupCommitAggregator;
+#endif
 }
 namespace blocksstable {
   class ObSharedMacroBlockMgr;
@@ -244,6 +247,11 @@ namespace detector
 #define ObTenantOciEnv
 #endif
 
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+#define SqlGroupCommitAggregator sql::ObSqlGroupCommitAggregator*,
+#else
+#define SqlGroupCommitAggregator
+#endif
 // 在这里列举需要添加的租户局部变量的类型，租户会为每种类型创建一个实例。
 // 实例的初始化和销毁逻辑由MTL_BIND接口指定。
 // 使用MTL接口可以获取实例。
@@ -364,6 +372,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       share::ObWorkloadRepositoryContext*,          \
       observer::ObTableQueryASyncMgr*,              \
       observer::ObTenantQueryRespTimeCollector*,     \
+      SqlGroupCommitAggregator                      \
       share::ObBackupDestIOPermissionMgr*          \
   )
 

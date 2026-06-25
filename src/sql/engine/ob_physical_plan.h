@@ -459,6 +459,12 @@ public:
   inline void set_is_inner_sql(bool v) { is_inner_sql_ = v; }
   inline void set_is_batch_params_execute(bool v) { is_batch_params_execute_ = v; }
   inline bool is_dml_write_stmt() const { return ObStmt::is_dml_write_stmt(stmt_type_); }
+  inline void set_is_group_commit(bool v) { is_group_commit_ = v; }
+  inline bool is_group_commit() const { return is_group_commit_; }
+  inline bool is_batch_group_commit() const { return is_batch_params_execute_ && is_group_commit_; }
+  inline void set_rollback_on_no_affected_rows(bool v) { rollback_on_no_affected_rows_ = v; }
+  inline bool rollback_on_no_affected_rows() const { return rollback_on_no_affected_rows_; }
+
 #ifdef OB_BUILD_SPM
   static bool enable_spm_improve(const uint64_t opt_version) {
     return  COMPAT_VERSION_4_2_5_BP4 <= opt_version;
@@ -728,6 +734,8 @@ public:
   bool insertup_can_do_gts_opt_;
   bool is_inner_sql_;
   bool is_batch_params_execute_;
+  bool is_group_commit_;
+  bool rollback_on_no_affected_rows_;
 private:
   common::ObFixedArray<ObLocalSessionVar, common::ObIAllocator> all_local_session_vars_;
 public:

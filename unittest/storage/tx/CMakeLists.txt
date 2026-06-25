@@ -51,3 +51,36 @@ storage_unittest(test_dup_table_lease)
 storage_unittest(test_redo_submitter)
 storage_unittest(test_trans_callback_mgr_fill_redo)
 storage_unittest(test_misc)
+storage_unittest(test_trans_ctx_lock)
+
+# Phase 02: TxRedoFlushStatus enum refactoring tests
+storage_unittest(test_tx_redo_flush_status_enum)
+storage_unittest(test_tx_redo_flush_status_enum_extended)
+
+# Phase 02: Integration scenario tests (cross-review recommended)
+storage_unittest(test_tx_integration_scenarios)
+
+if(NOT OB_HOTSPOT_GROUP_COMMIT)
+  storage_unittest(test_hotspot_ce_fallback)
+endif()
+
+# Hotspot leader switch extended tests (PREPARING/COLLECTING abort path)
+storage_unittest(test_hotspot_tx_leader_switch_extended)
+
+# Role-safe transit function tests (GAP-01~03, GAP-05~07)
+storage_unittest(test_tx_transit_functions)
+
+# Free hotspot CBs deadlock fix tests
+if(OB_HOTSPOT_GROUP_COMMIT)
+  storage_unittest(test_hotspot_free_cbs_deadlock)
+  # Phase 01: Memory Analysis tests (MEM-01, MEM-02)
+  storage_unittest(test_ob_tx_ctx_memory)
+
+  # Hotspot edge cases and memory management tests (review feedback)
+  storage_unittest(test_hotspot_edge_cases)
+
+  # ObTxHotspotRedoStat correctness (LOG_PLAN §4 / §8.1):
+  # concurrent INC, peak CAS, ts_once, reset, log trigger conditions,
+  # cache-line alignment, negative-bytes guard.
+  storage_unittest(test_hotspot_redo_stat)
+endif()

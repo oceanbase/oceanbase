@@ -30,6 +30,10 @@
 #include "observer/mysql/obmp_stmt_send_piece_data.h"
 #include "sql/plan_cache/ob_ps_cache.h"
 #include "lib/signal/ob_signal_struct.h"
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+#include "sql/ob_sql_group_commit_aggregator.h"
+#include "sql/ob_sql_group_commit_struct.h"
+#endif
 
 void __attribute__((weak)) request_finish_callback();
 namespace oceanbase
@@ -41,6 +45,7 @@ using namespace obmysql;
 using namespace rpc;
 using namespace sql;
 using namespace pl;
+using namespace transaction;
 namespace observer
 {
 inline int ObPSAnalysisChecker::detection(const int64_t len)
@@ -93,7 +98,9 @@ ObMPStmtExecute::ObMPStmtExecute(const ObGlobalContext &gctx)
       params_num_(0),
       params_value_len_(0),
       params_value_(NULL),
-      curr_sql_idx_(0)
+      curr_sql_idx_(0),
+      group_commit_exec_mode_(sql::GROUP_COMMIT_INVALID),
+      is_group_commit_enabled_(false)
 {
   ctx_.exec_type_ = MpQuery;
 }
@@ -502,6 +509,7 @@ int ObMPStmtExecute::after_do_process_for_arraybinding(ObMySQLResultSet &result)
 int ObMPStmtExecute::before_process()
 {
   int ret = OB_SUCCESS;
+  bool need_response_error = true;
   if (OB_FAIL(ObMPBase::before_process())) {
     LOG_WARN("fail to call before process", K(ret));
   } else if ((OB_ISNULL(req_))) {
@@ -512,12 +520,6 @@ int ObMPStmtExecute::before_process()
     LOG_ERROR("invalid request", K(ret), K_(*req));
   } else {
     ObIAllocator &alloc = CURRENT_CONTEXT->get_arena_allocator();
-    if (OB_ISNULL(params_ = static_cast<ParamStore *>(alloc.alloc(sizeof(ParamStore))))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory", K(ret));
-    } else {
-      params_ = new(params_)ParamStore( (ObWrapperAllocator(alloc)) );
-    }
     const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
     const char* pos = pkt.get_cdata();
     // pkt.get_cdata() do not include 1 byte for `request command code`
@@ -548,6 +550,7 @@ int ObMPStmtExecute::before_process()
         OZ (init_for_arraybinding(alloc));
       }
     }
+
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(get_session(session))) {
       LOG_WARN("get session failed");
@@ -558,11 +561,22 @@ int ObMPStmtExecute::before_process()
       ObPsSessionInfo *ps_session_info = nullptr;
       ParamTypeArray param_types;
       ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
-      if (FAILEDx(session->get_ps_session_info(stmt_id_, ps_session_info))) {
+
+      if (OB_FAIL(session->get_ps_session_info(stmt_id_, ps_session_info))) {
         LOG_WARN("get ps_session_info failed", K(stmt_id_));
-      } else if (OB_ISNULL(ps_session_info)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("ps_session_info is null");
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+      } else if (ps_session_info->is_group_commit() &&
+          MTL(ObSqlGroupCommitAggregator*)->is_group_commit_enabled()) {
+        // 设置group commit标志，用于在send_error_packet中判断是否需要回滚事务
+        packet_sender_.set_is_group_commit(true);
+        is_group_commit_enabled_ = true;
+#endif
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(params_ = OB_NEWx(ParamStore, &alloc, ObWrapperAllocator(alloc)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate params", K(ret));
       } else if (OB_FAIL(verify_ps_stmt_checksum(*session, *ps_session_info, ps_stmt_checksum))) {
         LOG_WARN("verify ps_stmt_checksum failed", K(ps_stmt_checksum), KPC(ps_session_info));
       } else if (FALSE_IT(configure_by_stmt_type(ps_session_info->get_stmt_type()))) {
@@ -579,29 +593,117 @@ int ObMPStmtExecute::before_process()
           LOG_WARN("fail to execute assignment", K(assignment.ret_));
         }
       }
+
+      if (OB_FAIL(ret)) {
+        if (OB_ERR_PREPARE_STMT_CHECKSUM == ret) {
+          force_disconnect();
+          LOG_WARN("prepare stmt checksum error, disconnect connection", K(ret));
+        } else if (need_response_error) {
+          send_error_packet(ret, NULL);
+          flush_buffer(true);
+        }
+      }
     }
+
     if (session != NULL) {
       revert_session(session);
     }
   }
-  if (OB_FAIL(ret)) {
-    send_error_packet(ret, NULL);
-    if (OB_ERR_PREPARE_STMT_CHECKSUM == ret) {
-      force_disconnect();
-      LOG_WARN("prepare stmt checksum error, disconnect connection", K(ret));
-    }
-    flush_buffer(true);
-  }
 
   return ret;
 }
+
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+int ObMPStmtExecute::create_group_commit_sub_request(ObSQLSessionInfo &session,
+                                                     ObPsSessionInfo *ps_session_info,
+                                                     bool &need_response_error)
+{
+  int ret = OB_SUCCESS;
+  ObPsStmtInfoGuard guard;
+  ObPsStmtInfo *ps_info = NULL;
+  ObGroupSqlKey group_sql_key;
+  ObGroupKey group_key;
+  ParamTypeArray &param_types = ps_session_info->get_param_types();
+  ObSEArray<ObObjParam, 4> group_key_params;
+  ObGroupCommitSubRequest *sub_req = nullptr;
+  need_response_error = true;
+  // 由于子请求被聚合，不会独立提交，所有没有机会构造end_trans_cb，但是又需要进行回调，
+  // 所以这里提前将子请求的end_trans_cb准备好. 如果该子请求作为聚合请求(head请求),
+  // 在后续提交的时候需要判断如果是group commit, 直接使用这里已经init好的end_trans_cb,
+  // 不需要重新init.
+  ObSqlEndTransCb &sql_end_cb = session.get_mysql_end_trans_cb();
+  if (OB_FAIL(sql_end_cb.init(packet_sender_, &session, stmt_id_, params_num_, 0))) {
+    LOG_WARN("failed to init sql end callback", K(ret));
+  } else if (OB_FAIL(session.get_ps_cache()->get_stmt_info_guard(
+      ps_session_info->get_inner_stmt_id(), guard))) {
+    LOG_WARN("get stmt info guard failed", K(ret), K(ps_session_info->get_inner_stmt_id()));
+  } else if (OB_ISNULL(ps_info = guard.get_stmt_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get stmt info is null", K(ret));
+  } else {
+    const common::ObIArray<int64_t> &key_param_pos_array = ps_session_info->get_group_commit_key_params_idx();
+    int64_t key_param_cnt = key_param_pos_array.count();
+    for (int64_t i = 0; OB_SUCC(ret) && i < key_param_cnt; ++i) {
+      if (key_param_pos_array.at(i) < 0 || key_param_pos_array.at(i) >= params_->count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("key param pos is out of range", K(ret), K(i), K(key_param_pos_array.at(i)), K(params_->count()));
+      } else if (OB_FAIL(group_key_params.push_back(params_->at(key_param_pos_array.at(i))))) {
+        LOG_WARN("fail to push back group key param", K(ret), K(i));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(group_key_params.count() == 0)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("group key params count is 0, group commit is not supported", K(ret));
+  } else if (OB_FAIL(MTL(ObSqlGroupCommitAggregator*)->alloc_sub_request(sub_req))) {
+    LOG_WARN("fail to alloc group commit sub request", K(ret));
+  } else if (OB_FAIL(sub_req->deep_copy_params(*params_))) {
+    LOG_WARN("fail to deep copy params", K(ret), KPC(params_));
+  } else {
+    group_sql_key.shallow_copy(ps_info->get_sql_key(), &param_types.at(0), param_types.count());
+    group_key.shallow_copy(&group_key_params.at(0), group_key_params.count());
+
+    sub_req->req_ = req_;
+    sub_req->sess_ = &session;
+    sub_req->ps_client_stmt_id_ = stmt_id_;
+    bool direct_execute = false;
+    if (OB_FAIL(MTL(ObSqlGroupCommitAggregator*)->add_sub_request(
+        group_sql_key, group_key, sub_req, direct_execute, need_response_error))) {
+      LOG_WARN("fail to add sub request", K(ret), K(need_response_error));
+    } else if (direct_execute) {
+      group_commit_exec_mode_ = GROUP_COMMIT_SUB_EXEC;
+      ObGroupCommitAggInfo *agg_info = sub_req->req_->get_group_commit_agg_info();
+      if (OB_NOT_NULL(agg_info) && OB_NOT_NULL(agg_info->get_sql_value())) {
+        agg_info->get_sql_value()->inc_single_exec_count();
+      }
+    } else {
+      group_commit_exec_mode_ = GROUP_COMMIT_SUB_WAIT;
+    }
+    // add sub request之后 sub_req就不能再被使用，因为已经被别的请求触发执行了，执行完已经被析构了
+    LOG_TRACE("finish create group commit sub request", K(ret), K(group_sql_key),
+        K(group_key), K_(params_num), K_(group_commit_exec_mode), K(need_response_error));
+  }
+
+  if (OB_FAIL(ret)) {
+    if (sub_req != nullptr) {
+      MTL(ObSqlGroupCommitAggregator*)->free_sub_request(sub_req);
+      sub_req = nullptr;
+    }
+  }
+  return ret;
+}
+#endif
 
 int ObMPStmtExecute::after_process(int error_code)
 {
   int ret = OB_SUCCESS;
   reset_complex_param_memory(arraybinding_params_);
   reset_complex_param_memory(params_);
-  if (OB_FAIL(ObMPBase::after_process(error_code))) {
+  if (group_commit_exec_mode_ == GROUP_COMMIT_SUB_WAIT) {
+    ObFLTUtils::clean_flt_env();
+  } else if (OB_FAIL(ObMPBase::after_process(error_code))) {
     LOG_WARN("after process fail", K(ret));
   }
   return ret;
@@ -1111,6 +1213,7 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
       ctx_.cur_sql_ = ps_info->get_ps_sql();
     }
   }
+
   if OB_FAIL(ret) {
     // do nothing
   } else if (is_execute_ps_cursor()) {
@@ -1210,6 +1313,30 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
     if (OB_ERR_PROXY_REROUTE == ret && !is_arraybinding_) {
       need_response_error = true;
     }
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+    // batch group commit复用batch stmt优化，但是batch stmt优化可能因为关闭plan cache失败，
+    // 导致返回OB_BATCHED_MULTI_STMT_ROLLBACK，这种情况处理成上层可以重试的错误码
+    if (OB_BATCHED_MULTI_STMT_ROLLBACK == ret && is_batch_group_commit()) {
+      ObGroupCommitAggInfo *agg_info = req_->get_group_commit_agg_info();
+      if (!agg_info->is_trans_aggregated()) {
+        ret = OB_TX_NOT_SUPPORT_AGGREGATION;
+        LOG_WARN("failed to batch group commit", K(ret));
+        need_response_error = false;
+      } else {
+        LOG_WARN("can't do batch opt but trans has been aggregated", K(ret), KPC(agg_info));
+      }
+    }
+#endif
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+  } else if (is_group_commit_enabled_ &&
+      OB_FAIL(ObSqlGroupCommitAggregator::aggregate_group_commit_trans(session, result.get_physical_plan()))) {
+    LOG_WARN("failed to aggregate group commit trans", K(ret));
+    if (OB_TX_NOT_SUPPORT_AGGREGATION == ret) {
+      need_response_error = false;
+    } else {
+      LOG_WARN("failed to aggregate group commit trans", K(ret));
+    }
+#endif
   } else {
     //监控项统计开始
     exec_start_timestamp_ = ObTimeUtility::current_time();
@@ -1220,7 +1347,6 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
     session.reset_plsql_exec_time();
     // 本分支内如果出错，全部会在response_result内部处理妥当
     // 无需再额外处理回复错误包
-
     need_response_error = false;
     is_diagnostics_stmt = ObStmt::is_diagnostic_stmt(result.get_literal_stmt_type());
     ctx_.is_show_trace_stmt_ = ObStmt::is_show_trace_stmt(result.get_literal_stmt_type());
@@ -1246,10 +1372,12 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
   }
   return ret;
 }
+
 int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
                                  ParamStore *param_store,
                                  const bool has_more_result,
                                  const bool force_sync_resp,
+                                 bool &need_disconnect,
                                  bool &async_resp_used)
 {
   int ret = OB_SUCCESS;
@@ -1289,6 +1417,10 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
       }
       result.set_has_more_result(has_more_result);
       result.set_ps_protocol();
+      // init need_disconnect to false, will be set to true in execute_response if needed
+      result.get_exec_context().set_need_disconnect(false);
+      result.set_group_commit_enabled(is_group_commit_enabled_);
+
       ObTaskExecutorCtx *task_ctx = result.get_exec_context().get_task_executor_ctx();
       if (OB_ISNULL(task_ctx)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1349,6 +1481,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
           }
         }
       }
+      need_disconnect = result.get_exec_context().need_disconnect();
       //监控项统计结束
       exec_end_timestamp_ = ObTimeUtility::current_time();
       if (OB_NOT_NULL(result.get_physical_plan())) {
@@ -1531,9 +1664,11 @@ int ObMPStmtExecute::response_result(
   if (OB_LIKELY(NULL != result.get_physical_plan())) {
     if (need_trans_cb) {
       ObAsyncPlanDriver drv(gctx_, ctx_, session, retry_ctrl_, *this, is_prexecute());
-      // NOTE: sql_end_cb必须在drv.response_result()之前初始化好
+      // NOTE: sql_end_cb必须在drv.response_result()之前初始化好,
+      // 对于group commit已经在子请求的before_process中初始化好了, 所以这里不需要再初始化
       ObSqlEndTransCb &sql_end_cb = session.get_mysql_end_trans_cb();
-      if (OB_FAIL(sql_end_cb.init(packet_sender_, &session,
+      if (!is_group_commit_enabled_ &&
+            OB_FAIL(sql_end_cb.init(packet_sender_, &session,
                                     stmt_id_, params_num_,
                                     is_prexecute() ? packet_sender_.get_comp_seq() : 0))) {
         LOG_WARN("failed to init sql end callback", K(ret));
@@ -1588,6 +1723,7 @@ OB_NOINLINE int ObMPStmtExecute::process_retry(ObSQLSessionInfo &session,
                                                ParamStore *param_store,
                                                bool has_more_result,
                                                bool force_sync_resp,
+                                               bool &need_disconnect,
                                                bool &async_resp_used)
 {
   int ret = OB_SUCCESS;
@@ -1604,6 +1740,7 @@ OB_NOINLINE int ObMPStmtExecute::process_retry(ObSQLSessionInfo &session,
                      param_store,
                      has_more_result,
                      force_sync_resp,
+                     need_disconnect,
                      async_resp_used);
     ctx_.clear();
   }
@@ -1614,6 +1751,7 @@ int ObMPStmtExecute::do_process_single(ObSQLSessionInfo &session,
                                        ParamStore *param_store,
                                        bool has_more_result,
                                        bool force_sync_resp,
+                                       bool &need_disconnect,
                                        bool &async_resp_used)
 {
   int ret = OB_SUCCESS;
@@ -1637,18 +1775,20 @@ int ObMPStmtExecute::do_process_single(ObSQLSessionInfo &session,
     OX (retry_ctrl_.set_sys_local_schema_version(sys_version));
 
     if (OB_SUCC(ret) && !is_send_long_data()) {
-      if (OB_LIKELY(session.get_is_in_retry()) 
+      if (OB_LIKELY(session.get_is_in_retry())
             || (is_arraybinding_ && (prepare_packet_sent_ || !is_prexecute()))) {
         ret = process_retry(session,
 				                    param_store,
                             has_more_result,
                             force_sync_resp,
+                            need_disconnect,
                             async_resp_used);
       } else {
         ret = do_process(session,
 						             param_store,
                          has_more_result,
                          force_sync_resp,
+                         need_disconnect,
                          async_resp_used);
         ctx_.clear();
       }
@@ -1695,6 +1835,8 @@ int ObMPStmtExecute::is_arraybinding_returning(sql::ObSQLSessionInfo &session, b
 int ObMPStmtExecute::try_batch_multi_stmt_optimization(ObSQLSessionInfo &session,
                                                        bool has_more_result,
                                                        bool force_sync_resp,
+                                                       bool &need_response_error,
+                                                       bool &need_disconnect,
                                                        bool &async_resp_used,
                                                        bool &optimization_done)
 {
@@ -1704,44 +1846,53 @@ int ObMPStmtExecute::try_batch_multi_stmt_optimization(ObSQLSessionInfo &session
   optimization_done = false;
   ctx_.multi_stmt_item_.set_ps_mode(true);
   ctx_.multi_stmt_item_.set_ab_cnt(arraybinding_size_);
+  ctx_.multi_stmt_item_.set_batch_group_commit(is_batch_group_commit());
   bool is_ab_returning = false;
   ParamStore *array_binding_params = NULL;
   bool enable_batch_opt = session.is_enable_batched_multi_statement();
   bool use_plan_cache = session.get_local_ob_enable_plan_cache();
   ObIAllocator &alloc = CURRENT_CONTEXT->get_arena_allocator();
 
-  if (!enable_batch_opt) {
+  if (!enable_batch_opt && !is_batch_group_commit()) {
     // 不支持做batch执行
     LOG_TRACE("not open the batch optimization");
   } else if (!use_plan_cache) {
-    LOG_TRACE("not enable the plan_cache", K(use_plan_cache));
+    LOG_WARN("not enable the plan_cache", K(use_plan_cache));
     // plan_cache开关没打开
-  } else if (!is_prexecute()) {
-    // 只对二合一协议开启batch优化
+  } else if (!is_prexecute() && !is_batch_group_commit()) {
+    // 只对二合一协议和group commit开启batch优化
   } else if (is_pl_stmt(stmt_type_)) {
     LOG_TRACE("is pl execution, can't do the batch optimization");
   } else if (1 == arraybinding_size_) {
-    LOG_TRACE("arraybinding size is 1, not need d batch");
+    LOG_TRACE("arraybinding size is 1, not need do batch");
   } else if (is_save_exception_) {
     LOG_TRACE("is save exception mode, not supported batch optimization");
   } else if (OB_FAIL(is_arraybinding_returning(session, is_ab_returning))) {
     LOG_WARN("failed to check is arraybinding returning", K(ret));
   } else if (is_ab_returning) {
     LOG_TRACE("returning not support the batch optimization");
-  } else if (OB_FAIL(ObSQLUtils::transform_pl_ext_type(*arraybinding_params_,
+  } else if (!is_batch_group_commit() && OB_FAIL(ObSQLUtils::transform_pl_ext_type(
+                                                       *arraybinding_params_,
                                                        arraybinding_size_,
                                                        alloc,
                                                        array_binding_params))) {
     LOG_WARN("fail to trans_form extend type params_store", K(ret), K(arraybinding_size_));
-  } else if (OB_FAIL(do_process_single(session, array_binding_params, has_more_result, force_sync_resp, async_resp_used))) {
+  } else if (is_batch_group_commit() && FALSE_IT(array_binding_params = arraybinding_params_)) {
+  } else if (FALSE_IT(need_response_error = false)) { // 设置为false, 交给do_process_single内部进行处理
+  } else if (OB_FAIL(do_process_single(session, array_binding_params,
+      has_more_result, force_sync_resp, need_disconnect, async_resp_used))) {
     // 调用do_single接口
     if (THIS_WORKER.need_retry()) {
       // just go back to large query queue and retry
+    } else if (is_batch_group_commit()) {
+      if (OB_TX_NOT_SUPPORT_AGGREGATION == ret) {
+        ret = OB_SUCCESS;
+        LOG_WARN("failed to aggregate, will split into individual requests for retry", K(ret));
+      }
     } else if (OB_BATCHED_MULTI_STMT_ROLLBACK == ret) {
-      LOG_TRACE("batched multi_stmt needs rollback", K(ret));
       ret = OB_SUCCESS;
     } else {
-      // 无论什么报错，都走单行执行一次，用于容错
+      // 对于arraybinding，无论什么报错，都走单行执行一次，用于容错
       int ret_tmp = ret;
       ret = OB_SUCCESS;
       LOG_WARN("failed to process batch stmt, cover the error code, reset retry flag, then execute with single row",
@@ -1751,7 +1902,8 @@ int ObMPStmtExecute::try_batch_multi_stmt_optimization(ObSQLSessionInfo &session
     optimization_done = true;
   }
   LOG_TRACE("after try batched multi-stmt optimization", K(ret), K(stmt_type_), K(use_plan_cache),
-      K(optimization_done), K(enable_batch_opt), K(is_ab_returning), K(THIS_WORKER.need_retry()), K(arraybinding_size_));
+      K(optimization_done), K(enable_batch_opt), K(is_ab_returning), K(group_commit_exec_mode_),
+      K(THIS_WORKER.need_retry()), K(arraybinding_size_), K(need_disconnect));
   return ret;
 }
 
@@ -1759,6 +1911,7 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
                                           ObSQLSessionInfo &session,
                                           bool has_more_result,
                                           bool force_sync_resp,
+                                          bool &need_disconnect,
                                           bool &async_resp_used)
 {
   int ret = OB_SUCCESS;
@@ -1780,7 +1933,7 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
       LOG_WARN("failed to check_and_refresh_schema", K(ret));
     } else if (OB_FAIL(session.update_timezone_info())) {
       LOG_WARN("fail to update time zone info", K(ret));
-    } else if (is_arraybinding_) {
+    } else if (is_arraybinding_ || is_batch_group_commit()) {
       bool optimization_done = false;
       if (ctx_.can_reroute_sql_) {
         ctx_.can_reroute_sql_ = false;
@@ -1794,39 +1947,69 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
       } else if (OB_FAIL(try_batch_multi_stmt_optimization(session,
                                                            has_more_result,
                                                            force_sync_resp,
-                                                           async_resp_used, optimization_done))) {
+                                                           need_response_error,
+                                                           need_disconnect,
+                                                           async_resp_used,
+                                                           optimization_done))) {
         LOG_WARN("fail to try_batch_multi_stmt_optimization", K(ret));
       } else if (!optimization_done) {
         need_response_error = false;
-        ctx_.multi_stmt_item_.set_ps_mode(true);
-        ctx_.multi_stmt_item_.set_ab_cnt(0);
-        for (int64_t i = 0; OB_SUCC(ret) && i < arraybinding_size_; ++i) {
-          set_curr_sql_idx(i);
-          OZ (construct_execute_param_for_arraybinding(i));
-          OZ (do_process_single(session, params_, has_more_result, force_sync_resp, async_resp_used));
-          if (OB_FAIL(ret)) {
-            if (is_save_exception_ && !is_prexecute()) {
-              // The old ps protocol will only collect error information here,
-              // and the new one has already done fault tolerance in the front
-              ret = save_exception_for_arraybinding(i, ret, exception_array);
-              ret = OB_SUCCESS;
-            }
+        need_disconnect = false;
+        if (is_arraybinding_) {
+          ctx_.multi_stmt_item_.set_ps_mode(true);
+          ctx_.multi_stmt_item_.set_ab_cnt(0);
+          for (int64_t i = 0; OB_SUCC(ret) && i < arraybinding_size_; ++i) {
+            set_curr_sql_idx(i);
+            OZ (construct_execute_param_for_arraybinding(i));
+            OZ (do_process_single(session, params_, has_more_result,
+                force_sync_resp, need_disconnect, async_resp_used));
             if (OB_FAIL(ret)) {
-              // If there is still an error in the new ps protocol,
-              // then send an err package,
-              // indicating that the server has an error that is not expected by the customer
-              need_response_error = true;
-              break;
+              if (is_save_exception_ && !is_prexecute()) {
+                // The old ps protocol will only collect error information here,
+                // and the new one has already done fault tolerance in the front
+                ret = save_exception_for_arraybinding(i, ret, exception_array);
+                ret = OB_SUCCESS;
+              }
+              if (OB_FAIL(ret)) {
+                // If there is still an error in the new ps protocol,
+                // then send an err package,
+                // indicating that the server has an error that is not expected by the customer
+                need_response_error = true;
+                break;
+              }
             }
           }
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+        } else {
+          sql::ObGroupCommitAggInfo *split_agg_info = req_->get_group_commit_agg_info();
+          sql::ObGroupSqlValue *split_sql_value = OB_NOT_NULL(split_agg_info) ? split_agg_info->get_sql_value() : nullptr;
+          if (OB_NOT_NULL(split_sql_value)) {
+            split_sql_value->inc_split_count();
+            split_sql_value->inc_split_exec_req_cnt(split_agg_info->get_sub_req_cnt());
+          }
+          // For group commit, if it can't aggregate tx, split into individual requests for retry
+          if (OB_FAIL(ObSqlGroupCommitAggregator::split_agg_request(*req_, need_response_error))) {
+            // 只能打印req_的地址，因为req_已经在内部回包，可能已经被释放
+            LOG_ERROR("fail to split agg request", K(ret), K(need_response_error), KP(req_));
+            if (need_response_error == false) {
+              // 拆分报错, 但是内部已经回包, 不需要外层回包，仍然设置成拆分模式，避免外层重复flush_buffer以及free_agg_request
+              group_commit_exec_mode_ = GROUP_COMMIT_AGG_SPLIT;
+            }
+          } else {
+            group_commit_exec_mode_ = GROUP_COMMIT_AGG_SPLIT;
+          }
+#endif
         }
       }
-      // 释放数组内存避免内存泄漏
-
-      OZ (response_result_for_arraybinding(session, exception_array));
+      // 执行成功只需要对arraybinding的场景回包，group commit的回包在response_result中处理
+      if (OB_SUCC(ret) && is_arraybinding_) {
+        if (OB_FAIL(response_result_for_arraybinding(session, exception_array))) {
+          LOG_WARN("fail to response result for arraybinding", K(ret));
+        }
+      }
     } else {
       need_response_error = false;
-      if (OB_FAIL(do_process_single(session, params_, has_more_result, force_sync_resp, async_resp_used))) {
+      if (OB_FAIL(do_process_single(session, params_, has_more_result, force_sync_resp, need_disconnect, async_resp_used))) {
         LOG_WARN("fail to do process", K(ret), K(ctx_.cur_sql_));
       }
 
@@ -1844,6 +2027,7 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
         // ret = OB_SUCC(bak_ret) ? ret : bak_ret;
       }
     }
+
     ObThreadLogLevelUtils::clear();
     const int64_t debug_sync_timeout = GCONF.debug_sync_timeout;
     if (debug_sync_timeout > 0) {
@@ -1871,7 +2055,6 @@ int ObMPStmtExecute::process()
 {
   int ret = OB_SUCCESS;
   int flush_ret = OB_SUCCESS;
-  trace::UUID ps_execute_span_id;
   ObSQLSessionInfo *sess = NULL;
   bool need_response_error = true;
   bool need_disconnect = true;
@@ -1915,6 +2098,8 @@ int ObMPStmtExecute::process()
     const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
     int64_t packet_len = pkt.get_clen();
     const bool enable_flt = session.get_control_info().is_valid();
+    ObPsSessionInfo *ps_session_info = nullptr;
+
     if (OB_UNLIKELY(!session.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("invalid session", K_(stmt_id), K(ret));
@@ -1961,6 +2146,19 @@ int ObMPStmtExecute::process()
     } else if (is_arraybinding_ && OB_FAIL(check_precondition_for_arraybinding(session))) {
       need_disconnect = false;
       LOG_WARN("precondition for arraybinding is not satisfied", K(ret));
+    } else if (OB_FAIL(session.get_ps_session_info(stmt_id_, ps_session_info))) {
+      LOG_WARN("get ps_session_info failed", K(stmt_id_));
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+    } else if (is_group_commit_enabled_ &&
+        OB_FAIL(create_group_commit_sub_request(session, ps_session_info, need_response_error))) {
+      LOG_WARN("fail to create group commit sub request", K(ret), K(need_response_error), K(group_commit_exec_mode_));
+      need_disconnect = false;
+      if (!need_response_error) {
+        disable_response();
+      }
+    } else if (group_commit_exec_mode_ == GROUP_COMMIT_SUB_WAIT) {
+      disable_response();
+#endif
     } else {
       FLTSpanGuardIfEnable(ps_execute, enable_flt);
       if (enable_flt) {
@@ -1986,6 +2184,7 @@ int ObMPStmtExecute::process()
                                  session,
                                  false, // has_mode
                                  false, // force_sync_resp
+                                 need_disconnect,
                                  async_resp_used);
 
       // 退出前打印出SQL语句，便于定位各种问题
@@ -1999,7 +2198,8 @@ int ObMPStmtExecute::process()
         }
       }
     }
-    session.check_and_reset_retry_info(*cur_trace_id, THIS_WORKER.need_retry());
+    session.check_and_reset_retry_info(*cur_trace_id,
+        THIS_WORKER.need_retry() || group_commit_exec_mode_ == GROUP_COMMIT_SUB_WAIT);
     session.set_last_trace_id(ObCurTraceId::get_trace_id());
     ObQueryRetryAshGuard::reset_info();
 
@@ -2057,13 +2257,19 @@ int ObMPStmtExecute::process()
   if (!THIS_WORKER.need_retry()) {
     if (async_resp_used) {
       async_resp_used_ = true;
-      packet_sender_.disable_response();
+      disable_response();
     } else {
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+      if (group_commit_exec_mode_ == GROUP_COMMIT_SUB_EXEC) {
+        ObSqlGroupCommitAggregator::free_agg_request(*req_);
+      }
+#endif
       flush_ret = flush_buffer(true);
     }
   } else {
     need_retry_ = true;
   }
+
 
   THIS_WORKER.set_session(NULL);
   if (sess != NULL) {
@@ -3308,6 +3514,7 @@ int ObMPStmtExecute::response_query_header(ObSQLSessionInfo &session, pl::ObDbms
   }
   return ret;
 }
+
 
 } //end of namespace observer
 } //end of namespace oceanbase

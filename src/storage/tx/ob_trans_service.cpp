@@ -560,7 +560,70 @@ void ObTransService::handle(void *task)
       if (OB_FAIL(redo_sync_task->iter_tx_retry_redo_sync())) {
         TRANS_LOG(WARN, "execute redo sync task failed", K(ret));
       }
-    } else {
+    }
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+    else if (ObTransRetryTaskType::SECONDARY_TX_RESP_SCHEDULER == trans_task->get_task_type()) {
+      ObHotspotSchedulerResponseTask *resp_task =
+          static_cast<ObHotspotSchedulerResponseTask *>(trans_task);
+      if (OB_FAIL(resp_task->handle())) {
+        TRANS_LOG(WARN, "handle hotspot resp task failed", K(ret), KPC(resp_task));
+      } else {
+        TRANS_LOG(DEBUG, "response all secondary schedulers", K(ret), KPC(resp_task));
+      }
+
+      if (OB_EAGAIN == ret) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(push(resp_task))) {
+          int reset_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(resp_task->set_in_queue(false))) {
+            TRANS_LOG(ERROR, "clear hotspot resp task in_queue failed", K(reset_ret),
+                      K(tmp_ret), K(ret), KPC(resp_task));
+          }
+          TRANS_LOG(ERROR, "retry to push hotspot resp task failed", K(tmp_ret), K(ret),
+                    KPC(resp_task));
+        }
+      } else {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(resp_task->set_in_queue(false))) {
+          TRANS_LOG(ERROR, "clear hotspot resp task in_queue failed", K(tmp_ret),
+                    K(ret), KPC(resp_task));
+        }
+        resp_task->reset();
+      }
+    } else if (ObTransRetryTaskType::HOTSPOT_FREEZE_ACCELERATE == trans_task->get_task_type()) {
+      ObHotspotFreezeAccelerateTask *freeze_task =
+          static_cast<ObHotspotFreezeAccelerateTask *>(trans_task);
+      if (OB_FAIL(freeze_task->handle())) {
+        TRANS_LOG(WARN, "handle hotspot freeze accelerate task failed", K(ret), KPC(freeze_task));
+      } else {
+        TRANS_LOG(DEBUG, "hotspot freeze accelerate task handled", K(ret), KPC(freeze_task));
+      }
+
+      // Check if need retry for blocked transactions
+      if (OB_SUCC(ret) && freeze_task->need_retry()) {
+        freeze_task->inc_retry_cnt();
+        // Set retry interval to delay execution without blocking thread
+        freeze_task->set_retry_interval_us(ObHotspotFreezeAccelerateTask::RETRY_INTERVAL_US,
+                                            ObHotspotFreezeAccelerateTask::RETRY_INTERVAL_US);
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(push(freeze_task))) {
+          TRANS_LOG(WARN, "retry push hotspot freeze accelerate task failed", K(tmp_ret),
+                    K(freeze_task->get_retry_cnt()), KPC(freeze_task));
+          freeze_task->~ObHotspotFreezeAccelerateTask();
+          mtl_free(freeze_task);
+        } else {
+          TRANS_LOG(DEBUG, "retry push hotspot freeze accelerate task",
+                    K(freeze_task->get_retry_cnt()), K(freeze_task->get_retry_tx_count()), KPC(freeze_task));
+        }
+      } else {
+        // Free dynamically allocated task
+        freeze_task->~ObHotspotFreezeAccelerateTask();
+        mtl_free(freeze_task);
+        freeze_task = nullptr;
+      }
+    }
+#endif
+    else {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "unexpected trans task type!!!", KR(ret), K(*trans_task));
     }
@@ -1093,6 +1156,160 @@ int ObTransService::register_mds_into_ctx_(ObTxDesc &tx_desc,
   }
   TRANS_LOG(DEBUG, "register multi source data on participant", KR(ret), K(tx_desc), K(ls_id),
             K(type));
+  return ret;
+}
+
+int ObTransService::sync_hotspot_legality_validation(const ObTxPart &participant,
+                                                     const ObTransID primary_tx_id,
+                                                     const ObAggregatedTxIDArray &aggre_members,
+                                                     const int64_t stmt_timeout)
+{
+  int ret = OB_SUCCESS;
+
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+  share::ObLSID ls_id = participant.id_;
+
+  ObPartTransCtx *ctx = NULL;
+  if (OB_FAIL(get_tx_ctx_(ls_id, primary_tx_id, ctx))) {
+    TRANS_LOG(WARN, "[HOTSPOT_TX] fail to get tx context", K(ret), K(primary_tx_id), K(ls_id), K(participant));
+  } else if (OB_FAIL(ctx->sync_hotspot_legality_validation(primary_tx_id, aggre_members, stmt_timeout))) {
+    TRANS_LOG(WARN, "[HOTSPOT_TX] fail to sync hotspot legality validation", K(ret), K(ls_id), K(primary_tx_id),
+              K(aggre_members), K(participant));
+  }
+  if (OB_NOT_NULL(ctx)) {
+    revert_tx_ctx_(ctx);
+  }
+#else
+  UNUSED(participant);
+  UNUSED(primary_tx_id);
+  UNUSED(aggre_members);
+  UNUSED(stmt_timeout);
+  ret = OB_NOT_SUPPORTED;
+#endif
+  return ret;
+}
+
+int ObTransService::hotspot_rollback_to(const ObTxPart &participant,
+                                        const ObTransID &primary_tx_id,
+                                        const ObIArray<ObTransID> &rollback_tx_ids)
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+  share::ObLSID ls_id = participant.id_;
+  ObPartTransCtx *ctx = NULL;
+  if (rollback_tx_ids.count() <= 0) {
+    // nothing to rollback
+    TRANS_LOG(INFO, "[HOTSPOT_TX] empty rollback tx set", KR(ret), K(primary_tx_id), K(ls_id),
+              K(rollback_tx_ids));
+  } else if (OB_FAIL(get_tx_ctx_(ls_id, primary_tx_id, ctx))) {
+    TRANS_LOG(WARN, "[HOTSPOT_TX] get primary tx ctx failed", KR(ret), K(primary_tx_id), K(ls_id));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < rollback_tx_ids.count(); ++i) {
+      const ObTransID &tx_id = rollback_tx_ids.at(i);
+      if (tx_id == primary_tx_id) {
+        if (OB_FAIL(ctx->hotspot_rollback_to_for_non_hotspot())) {
+          TRANS_LOG(WARN, "[HOTSPOT_TX] rollback_to for non-hotspot failed", KR(ret),
+                    K(primary_tx_id), K(ls_id));
+        }
+      } else {
+        if (OB_FAIL(ctx->hotspot_rollback_to_for_secondary(tx_id))) {
+          TRANS_LOG(WARN, "[HOTSPOT_TX] rollback_to for secondary failed", KR(ret),
+                    K(primary_tx_id), K(tx_id), K(ls_id));
+        }
+      }
+    }
+  }
+  if (OB_NOT_NULL(ctx)) {
+    revert_tx_ctx_(ctx);
+  }
+#else
+  UNUSED(participant);
+  UNUSED(primary_tx_id);
+  UNUSED(rollback_tx_ids);
+  ret = OB_NOT_SUPPORTED;
+#endif
+  return ret;
+}
+
+int ObTransService::handle_hotspot_dispatch_redo_msg(const ObHotspotDispatchRedoMsg &msg,
+                                                          obrpc::ObTransRpcResult &result)
+{
+  int ret = OB_SUCCESS;
+
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+  // Hotspot aggregation is local-only: primary and secondary transactions
+  // must reside on the same observer. Cross-machine messages may occur during
+  // leader switch (sender was old leader's addr, receiver is new leader's addr).
+  // Ignore such stale messages gracefully instead of treating as error.
+  if (msg.get_sender_addr() != GCONF.self_addr_) {
+    TRANS_LOG(INFO, "ignore cross-machine hotspot msg during leader switch",
+              "sender_addr", msg.get_sender_addr(),
+              "self_addr", GCONF.self_addr_, K(msg));
+  } else {
+    ObTransID tx_id = msg.get_trans_id();
+    share::ObLSID ls_id = msg.get_receiver();
+    ObPartTransCtx *ctx = NULL;
+    if (OB_FAIL(get_tx_ctx_(ls_id, tx_id, ctx))) {
+      TRANS_LOG(INFO, "fail to get tx context", K(ret), K(tx_id), K(ls_id));
+    } else {
+      ctx->on_handling_dispatch_redo_msg();
+      if (OB_FAIL(ctx->dispatch_confirmed_aggregation_group())) {
+        TRANS_LOG(WARN, "fail to handle hotspot dispatch redo msg", K(ret), K(ls_id), K(tx_id), K(msg));
+      }
+    }
+    if (OB_NOT_NULL(ctx)) {
+      revert_tx_ctx_(ctx);
+    }
+  }
+  result.reset();
+  result.init(ret, msg.get_timestamp());
+#else
+  ret = OB_NOT_SUPPORTED;
+  result.reset();
+  result.init(ret, msg.get_timestamp());
+#endif
+
+  return ret;
+}
+
+int ObTransService::handle_hotspot_submit_other_redo_msg(const ObHotspotSubmitOtherRedoMsg &msg,
+                                                         obrpc::ObTransRpcResult &result)
+{
+  int ret = OB_SUCCESS;
+
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+  // Hotspot aggregation is local-only: primary and secondary transactions
+  // must reside on the same observer. Cross-machine messages may occur during
+  // leader switch (sender was old leader's addr, receiver is new leader's addr).
+  // Ignore such stale messages gracefully instead of treating as error.
+  if (msg.get_sender_addr() != GCONF.self_addr_) {
+    TRANS_LOG(INFO, "ignore cross-machine hotspot msg during leader switch",
+              "sender_addr", msg.get_sender_addr(),
+              "self_addr", GCONF.self_addr_, K(msg));
+  } else {
+    ObTransID tx_id = msg.get_trans_id();
+    share::ObLSID ls_id = msg.get_receiver();
+    ObPartTransCtx *ctx = NULL;
+    if (OB_FAIL(get_tx_ctx_(ls_id, tx_id, ctx))) {
+      TRANS_LOG(INFO, "fail to get tx context", K(ret), K(tx_id), K(ls_id));
+    } else {
+      ctx->on_handling_submit_other_redo_msg();
+      if (OB_FAIL(ctx->submit_redo_log_generated_by_others())) {
+        TRANS_LOG(WARN, "fail to handle submit_other_redo msg", K(ret), K(ls_id), K(tx_id), K(msg));
+      }
+    }
+    if (OB_NOT_NULL(ctx)) {
+      revert_tx_ctx_(ctx);
+    }
+  }
+  result.reset();
+  result.init(ret, msg.get_timestamp());
+#else
+  ret = OB_NOT_SUPPORTED;
+  result.reset();
+  result.init(ret, msg.get_timestamp());
+#endif
+
   return ret;
 }
 

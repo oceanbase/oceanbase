@@ -59,6 +59,8 @@ OB_SERIALIZE_MEMBER(ObTxMsg,
 #define ObAskStateRespMsg_V1_MEMBERS state_info_array_
 #define ObCollectStateMsg_V1_MEMBERS snapshot_
 #define ObCollectStateRespMsg_V1_MEMBERS state_info_
+#define ObHotspotDispatchRedoMsg_V1_MEMBERS
+#define ObHotspotSubmitOtherRedoMsg_V1_MEMBERS
 
 #define CONCAT_REF(b) it_.b
 #define APPLY_FUNC_(f, ...) f(__VA_ARGS__)
@@ -127,6 +129,8 @@ OB_TX_MSG_SERDE(ObAskStateMsg, ObTxMsg, snapshot_, ori_ls_id_, ori_addr_);
 OB_TX_MSG_SERDE(ObAskStateRespMsg, ObTxMsg, state_info_array_);
 OB_TX_MSG_SERDE(ObCollectStateMsg, ObTxMsg, snapshot_, check_info_);
 OB_TX_MSG_SERDE(ObCollectStateRespMsg, ObTxMsg, state_info_, transfer_parts_);
+OB_TX_MSG_SERDE(ObHotspotDispatchRedoMsg, ObTxMsg);
+OB_TX_MSG_SERDE(ObHotspotSubmitOtherRedoMsg, ObTxMsg);
 OB_SERIALIZE_MEMBER((ObTxRollbackSPRespMsg, ObTxMsg), ret_, orig_epoch_, downstream_parts_, output_transfer_epoch_);
 
 OB_DEF_SERIALIZE_SIZE(ObTxRollbackSPMsg)

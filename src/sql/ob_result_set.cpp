@@ -51,6 +51,9 @@
 #include "sql/dblink/ob_tm_service.h"
 #include "storage/tx/ob_xa_ctx.h"
 #include "sql/engine/dml/ob_link_op.h"
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+#include "sql/ob_sql_group_commit_struct.h"
+#endif
 #include <cctype>
 
 using namespace oceanbase::sql;
@@ -157,6 +160,13 @@ OB_INLINE int ObResultSet::open_plan()
           }
         }
       }
+      if (OB_SUCC(ret)) { // disable tx free route by hint for current transaction
+        if (physical_plan_->get_phy_plan_hint().tx_free_route_disabled_) {
+          my_session_.disable_txn_free_route_by_hint();
+        }
+      }
+
+
     }
   }
 
@@ -371,9 +381,10 @@ int ObResultSet::start_stmt()
     }
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (ObSqlTransUtil::is_remote_trans(
+    } else if (!is_group_commit_enabled_ && ObSqlTransUtil::is_remote_trans(
                 ac, in_trans, phy_plan->get_plan_type())) {
-      // pass
+      // 对于group commit, 由于需要在控制端进行rollack_on_no_affected_rows的判断，因此即使是ac=1的远程执行，也要在控制端开启事务.
+      // 否则事务在远程提交后，无法在控制端回滚。只要在控制端开启了事务，远程会检查到in_trans为true，从而跳过远程开始事务。
     } else if (OB_LIKELY(phy_plan->is_need_trans())) {
       if (get_trans_state().is_start_stmt_executed()) {
         ret = OB_ERR_UNEXPECTED;
@@ -590,6 +601,10 @@ OB_INLINE int ObResultSet::do_open_plan(ObExecContext &ctx)
       LOG_WARN("fail init exec phy op ctx", K(ret));
     } else if (OB_FAIL(ctx.init_expr_op(physical_plan_->get_expr_operator_size()))) {
       LOG_WARN("fail init exec expr op ctx", K(ret));
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+    } else if (OB_FAIL(DAS_CTX(ctx).init_group_update_cache(*physical_plan_))) {
+      LOG_WARN("fail to init group update cache", K(ret));
+#endif
     }
   }
 
@@ -894,6 +909,7 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
     } else {
       err_ignored = plan_ctx->is_error_ignored();
     }
+
     bool rollback = need_rollback(ret, errcode, err_ignored);
     get_exec_context().set_errcode(errcode);
     sret = end_stmt(rollback || OB_SUCCESS != pret);
@@ -934,8 +950,7 @@ int ObResultSet::do_close(int *client_ret)
   int do_close_plan_ret = OB_SUCCESS;
   ObPhysicalPlan* physical_plan_ = static_cast<ObPhysicalPlan*>(cache_obj_guard_.get_cache_obj());
   if (OB_LIKELY(NULL != physical_plan_)) {
-    if (OB_FAIL(my_session_.reset_tx_variable_if_remote_trans(
-                physical_plan_->get_plan_type()))) {
+    if (OB_FAIL(my_session_.reset_tx_variable_if_remote_trans(physical_plan_->get_plan_type()))) {
       LOG_WARN("fail to reset tx_read_only if it is remote trans", K(ret));
     } else {
       my_session_.set_last_plan_id(physical_plan_->get_plan_id());
@@ -1011,28 +1026,24 @@ int ObResultSet::do_close(int *client_ret)
       my_session_.disassociate_xa();
     }
   } else if (OB_NOT_NULL(physical_plan_)) {
-    //Because of the async close result we need set the partition_hit flag
-    //to the call back param, than close the result.
-    //But the das framwork set the partition_hit after result is closed.
-    //So we need to set the partition info at here.
-    if (is_end_trans_async()) {
-      ObCurTraceId::TraceId *cur_trace_id = NULL;
-      if (OB_ISNULL(cur_trace_id = ObCurTraceId::get_trace_id())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("current trace id is NULL", K(ret));
-        set_end_trans_async(false);
-      } else {
-        observer::ObSqlEndTransCb &sql_end_cb = my_session_.get_mysql_end_trans_cb();
-        ObEndTransCbPacketParam pkt_param;
-        int fill_ret = OB_SUCCESS;
-        fill_ret = sql_end_cb.set_packet_param(pkt_param.fill(*this, my_session_, *cur_trace_id));
-        if (OB_SUCCESS != fill_ret) {
-          LOG_WARN("fail set packet param", K(ret));
+    if (need_skip_end_async_plan_trans(ret)) {
+      LOG_WARN("group commit rollback", K(ret), K(is_group_commit_enabled_));
+    } else {
+      if (is_end_trans_async()) {
+        // 走到这里说明是async plan, 如果ret成功，则设置packet param, 如果ret失败,
+        // 会走同步的回滚事务接口, 用不上callback, 所以跳过set_async_cb_ok_packet_param
+        rpc::ObRequest *req = my_session_.get_mysql_end_trans_cb().get_packet_sender().get_req();
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(set_async_cb_ok_packet_param(*physical_plan_, req))) {
+            LOG_WARN("fail set async cb ok packet param", K(ret));
+            set_end_trans_async(false);
+          }
+        } else {
           set_end_trans_async(false);
         }
       }
+      ret = auto_end_plan_trans(*physical_plan_, ret, is_tx_active, async);
     }
-    ret = auto_end_plan_trans(*physical_plan_, ret, is_tx_active, async);
   }
 
   if (is_user_sql_ && my_session_.need_reset_package()) {
@@ -1057,6 +1068,155 @@ int ObResultSet::do_close(int *client_ret)
   return ret;  // 后面所有的操作都通过callback来完成
 }
 
+
+// 理论上ac=0的场景需要用sync plan driver执行dml, 然后再执行commit进行提交。
+// 但是由于group commit包含自动隐式提交的语义， 所以在执行dml时使用了async plan driver,
+// 而当前的async plan driver是为了ac=1的场景设计的，所以需要处理重试的场景，不能无脑end_trans。
+bool ObResultSet::need_skip_end_async_plan_trans(const int ret)
+{
+  bool skip_end_trans = false;
+  if (OB_SUCCESS == ret) { // 执行成功，无论是否是group commit，都要隐式提交
+    skip_end_trans = false;
+  } else if (!is_group_commit_enabled_) { // 对于非group commit的async plan trans，需要自动隐式提交
+    skip_end_trans = false;
+  } else if (will_retry_) { // 对于需要重试的group commit，需要跳过自动的隐式提交
+    skip_end_trans = true;
+    LOG_WARN("group commit need retry, skip auto end trans", K(ret));
+  } else { // 不能重试的错误，在end trans中进行回滚事务
+    skip_end_trans = false;
+  }
+  return skip_end_trans;
+}
+
+int ObResultSet::set_async_cb_ok_packet_param(const ObPhysicalPlan &plan, rpc::ObRequest *req)
+{
+  int ret = OB_SUCCESS;
+  ObCurTraceId::TraceId *cur_trace_id = NULL;
+  if (OB_ISNULL(req)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("request is null", K(ret));
+  } else if (OB_ISNULL(cur_trace_id = ObCurTraceId::get_trace_id())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("current trace id is NULL", K(ret));
+  } else if (!req->has_group_commit_agg_info()) {
+    observer::ObSqlEndTransCb &sql_end_cb = my_session_.get_mysql_end_trans_cb();
+    ObEndTransCbPacketParam pkt_param;
+    if (OB_FAIL(sql_end_cb.set_packet_param(pkt_param.fill(*this, my_session_, *cur_trace_id)))) {
+      LOG_WARN("fail set packet param", K(ret));
+    }
+  } else {
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+    ObGroupCommitAggInfo *agg_info = req->get_group_commit_agg_info();
+    // 减少锁并发数, 触发新聚合请求的执行，放在这个位置会在事务提交之前执行，大概率当前事务写commit日志比较快,
+    // 写完commit日志会提前解行锁，这样可以让请求并行执行，同时不会有锁冲突.
+    // 这里失败不影响当前事务的结果，所以不关心错误码.
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(agg_info->dec_lock_concurrency())) {
+      LOG_WARN("fail to dec lock concurrency in advance", K(ret), K(tmp_ret), KPC(agg_info));
+    }
+
+    const int64_t sub_req_cnt = agg_info->get_sub_req_cnt();
+    bool need_rollback_on_no_affected_rows = plan.rollback_on_no_affected_rows();
+    if (sub_req_cnt == 1) {
+      if (need_rollback_on_no_affected_rows && get_affected_rows() == 0) {
+        ret = OB_ROLLBACK_ON_NO_AFFECTED_ROWS;
+        LOG_WARN("single rollback on no affected rows", K(ret));
+      } else {
+        observer::ObSqlEndTransCb &sql_end_cb = my_session_.get_mysql_end_trans_cb();
+        ObEndTransCbPacketParam pkt_param;
+        if (OB_FAIL(sql_end_cb.set_packet_param(pkt_param.fill(*this, my_session_, *cur_trace_id)))) {
+          LOG_WARN("fail set packet param", K(ret));
+        }
+      }
+    } else {
+      reset_implicit_cursor_idx();
+      int64_t curr_affected_row = 0;
+      ObGroupCommitSubRequest *cur = agg_info->get_head_sub_request();
+      uint64_t last_insert_id_to_client = 0;
+      // 对于多行的group commit，需要遍历cursor，设置packet param, cursor里的idx是和子事务顺序对应的,
+      // 这是因为在生成array binding params是根据子事务的idx顺序来生成的.
+      ObSEArray<ObTransID, 16> need_rollback_tx_ids;
+      int64_t need_rollback_stmt_cnt = 0;
+      while (OB_SUCC(ret) && OB_SUCC(switch_implicit_cursor(curr_affected_row, last_insert_id_to_client))) {
+        ObEndTransCbPacketParam pkt_param;
+        ObSQLSessionInfo *sess_info = cur->sess_;
+        pkt_param.fill(get_message(),
+                       curr_affected_row,
+                       last_insert_id_to_client,
+                       my_session_.partition_hit().get_bool(),
+                       *cur_trace_id); // 使用主事务的trace_id
+        if (OB_FAIL(sess_info->get_mysql_end_trans_cb().set_packet_param(pkt_param))) {
+          LOG_WARN("fail set packet param", K(ret), K(pkt_param), KPC(agg_info));
+        } else {
+          if (need_rollback_on_no_affected_rows && curr_affected_row == 0) {
+            need_rollback_stmt_cnt++;
+            if (!sess_info->is_in_transaction()) {
+              // 子事务未开启，用这个标记通知子事务在handle_sub_tx_callback中进行回滚。
+              cur->rollback_on_no_affected_rows_ = true;
+            } else {
+              const ObTransID &tx_id = sess_info->get_tx_id();
+              if (OB_UNLIKELY(!tx_id.is_valid())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("tx id is not valid", K(ret), K(tx_id), KPC(sess_info));
+              } else if (OB_FAIL(need_rollback_tx_ids.push_back(tx_id))) {
+                LOG_WARN("fail to push back need rollback tx id", K(ret), KPC(cur));
+              }
+            }
+          }
+          cur = reinterpret_cast<ObGroupCommitSubRequest *>(cur->next_);
+        }
+      }
+      if (OB_FAIL(ret) && OB_ITER_END != ret) {
+        LOG_WARN("fail set async cb ok packet param", K(ret), KPC(agg_info));
+      } else if (OB_ITER_END == ret) {
+        if (OB_UNLIKELY(cur != nullptr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("implicit cursor amount is not match", K(ret), KPC(agg_info));
+        } else {
+          ret = OB_SUCCESS;
+        }
+      }
+
+      if (OB_SUCC(ret) && need_rollback_stmt_cnt > 0) {
+        // 所有语句都需要回滚，只要回滚主事务即可。
+        if (need_rollback_stmt_cnt == sub_req_cnt) {
+          ret = OB_ROLLBACK_ON_NO_AFFECTED_ROWS;
+          LOG_WARN("total rollback on no affected rows", K(ret), K(need_rollback_stmt_cnt),
+              K(sub_req_cnt), K(need_rollback_tx_ids.count()));
+        } else if (need_rollback_tx_ids.count() > 0) {
+          // 调用事务的接口, 通知这些子事务的数据需要被局部回滚掉, 但是所有的事务还是正常调用end_trans接口进行提交,
+          // 事务层回调callback时，会根据rollback_tx_ids来决定是否需要回滚。
+          transaction::ObTxDesc *primary_tx_desc = my_session_.get_tx_desc();
+          transaction::ObTransID primary_tx_id = primary_tx_desc->get_tx_id();
+          transaction::ObTxPartList primary_tx_parts;
+          if (OB_FAIL(primary_tx_desc->get_parts_copy(primary_tx_parts))) {
+            LOG_WARN("fail to get parts copy", K(ret));
+          } else if (OB_UNLIKELY(primary_tx_parts.count() == 0)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("has no primary tx part", K(ret), K(primary_tx_parts.count()), KPC(primary_tx_desc));
+          } else if (OB_UNLIKELY(primary_tx_parts.at(0).addr_ != GCONF.self_addr_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("primary tx is not on this server", K(ret), K(primary_tx_parts.at(0)), K(GCONF.self_addr_));
+          } else if (OB_FAIL(MTL(transaction::ObTransService*)->hotspot_rollback_to(
+              primary_tx_parts.at(0), primary_tx_id, need_rollback_tx_ids))) {
+            LOG_WARN("hotspot rollback to failed", K(ret), K(primary_tx_id), K(need_rollback_tx_ids));
+          } else {
+            LOG_WARN("partial rollback on no affected rows", K(ret), K(primary_tx_parts.at(0)), K(primary_tx_id),
+              K(need_rollback_stmt_cnt), K(sub_req_cnt), K(need_rollback_tx_ids.count()), K(need_rollback_tx_ids));
+          }
+        } else {
+          // 需要回滚的子事务没有开启，这种情况继续提交即可, 不会有残留的子事务数据。
+        }
+      }
+    }
+#else
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("hotspot group commit is not supported", K(ret));
+#endif
+  }
+  return ret;
+}
+
 // 异步调用end_trans
 // 1. 仅仅针对AC=1的phy plan，不针对cmd (除了还没实现的commit/rollback)
 // 2. TODO:对于commit/rollback这个cmd，后面也需要走这个路径。现在还是走同步Callback。
@@ -1076,7 +1236,7 @@ OB_INLINE int ObResultSet::auto_end_plan_trans(ObPhysicalPlan& plan,
             K(in_trans), K(ac), K(explicit_trans),
             K(is_async_end_trans_submitted()));
   // explicit start trans will disable auto-commit
-  if (!explicit_trans && ac) {
+  if ((!explicit_trans && ac) || is_group_commit_enabled_) {
     // Query like `select 1` will keep next scope set transaction xxx valid
     // for example:
     // set session transaction read only;
@@ -1125,10 +1285,10 @@ OB_INLINE int ObResultSet::auto_end_plan_trans(ObPhysicalPlan& plan,
         // 如果没有设置end_trans_cb，就走同步接口。这个主要是为了InnerSQL提供的。
         // 因为InnerSQL没有走Obmp_query接口，而是直接操作ResultSet
         int save_ret = ret;
-        if (OB_FAIL(ObSqlTransControl::implicit_end_trans(get_exec_context(),
-                                                          is_rollback,
-                                                          NULL,
-                                                          reset_tx_variable))) {
+        if (OB_FAIL(implicit_end_plan_trans(get_exec_context(),
+                                            is_rollback,
+                                            NULL,
+                                            reset_tx_variable))) {
           if (OB_REPLICA_NOT_READABLE != ret) {
               LOG_WARN("sync end trans callback return an error!", K(ret),
                        K(is_rollback), KPC(my_session_.get_tx_desc()));
@@ -1157,10 +1317,10 @@ OB_INLINE int ObResultSet::auto_end_plan_trans(ObPhysicalPlan& plan,
 #endif
         int save_ret = ret;
         my_session_.get_end_trans_cb().set_last_error(ret);
-        ret = ObSqlTransControl::implicit_end_trans(get_exec_context(),
-                                                    is_rollback,
-                                                    &my_session_.get_end_trans_cb(),
-                                                    reset_tx_variable);
+        ret = implicit_end_plan_trans(get_exec_context(),
+                                      is_rollback,
+                                      &my_session_.get_end_trans_cb(),
+                                      reset_tx_variable);
         // NOTE: async callback client will not issued if:
         // 1) it is a rollback, which will succeed immediately
         // 2) the commit submit/starting failed, in this case
@@ -1176,10 +1336,42 @@ OB_INLINE int ObResultSet::auto_end_plan_trans(ObPhysicalPlan& plan,
   NG_TRACE(auto_end_plan_end);
   LOG_DEBUG("auto_end_plan_trans.end", K(ret),
             K(in_trans), K(ac), K(explicit_trans), K(plan.is_need_trans()),
-            K(is_rollback),  K(async),
-            K(is_async_end_trans_submitted()));
+            K(is_rollback),  K(async), K(plan.get_plan_id()), K(is_group_commit_enabled_),
+            K(plan.is_group_commit()), K(plan.is_batch_group_commit()),
+            K(is_async_end_trans_submitted()), K_(will_retry));
   return ret;
 }
+
+int ObResultSet::implicit_end_plan_trans(ObExecContext &exec_ctx,
+                                         const bool is_rollback,
+                                         ObEndTransAsyncCallback *callback,
+                                         bool reset_trans_variable)
+{
+  int ret = OB_SUCCESS;
+  if (!is_group_commit_enabled_) {
+    if (OB_FAIL(ObSqlTransControl::implicit_end_trans(
+        exec_ctx, is_rollback, callback, reset_trans_variable))) {
+      LOG_WARN("fail to end trans", K(ret));
+    }
+  } else {
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+    rpc::ObRequest *req = my_session_.get_mysql_end_trans_cb().get_packet_sender().get_req();
+    ObGroupCommitAggInfo *agg_info = req->get_group_commit_agg_info();
+    if (OB_ISNULL(agg_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("group commit agg info is null", K(ret), KP(req));
+    } else if (OB_FAIL(ObSqlTransControl::implicit_end_group_commit_trans(
+        *agg_info, exec_ctx, is_rollback, callback, reset_trans_variable))) {
+      LOG_WARN("fail to end group commit trans", K(ret), KPC(agg_info));
+    }
+#else
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("hotspot group commit is not supported", K(ret));
+#endif
+  }
+  return ret;
+}
+
 
 void ObResultSet::set_statement_name(const common::ObString name)
 {
@@ -1337,6 +1529,9 @@ bool ObResultSet::need_end_trans_callback() const
     // temporary table will be committed synchronously, and then drop_temp_tables will be called to delete the data.
     need = false;
   } else if (stmt::T_END_TRANS == get_stmt_type()) {
+    need = true;
+  } else if (is_group_commit_enabled_) {
+    //由于group commit包含自动隐式提交的语义，在执行dml时使用async plan driver进行隐式提交, 因此需要callback.
     need = true;
   } else {
     bool explicit_start_trans = my_session_.has_explicit_start_trans();
@@ -1957,6 +2152,26 @@ int ObResultSet::switch_implicit_cursor(int64_t &affected_rows)
     if (OB_FAIL(set_mysql_info())) {
       LOG_WARN("set mysql info failed", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObResultSet::switch_implicit_cursor(int64_t &affected_rows, uint64_t &last_insert_id_to_client)
+{
+  int ret = OB_SUCCESS;
+  affected_rows = 0;
+  last_insert_id_to_client = 0;
+  ObPhysicalPlanCtx *plan_ctx = get_exec_context().get_physical_plan_ctx();
+  if (OB_ISNULL(plan_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("plan_ctx is null", K(ret));
+  } else if (OB_FAIL(plan_ctx->switch_implicit_cursor())) {
+    if (OB_ITER_END != ret) {
+      LOG_WARN("cursor_idx is invalid", K(ret));
+    }
+  } else {
+    affected_rows = plan_ctx->get_affected_rows();
+    last_insert_id_to_client = plan_ctx->get_last_insert_id_to_client();
   }
   return ret;
 }

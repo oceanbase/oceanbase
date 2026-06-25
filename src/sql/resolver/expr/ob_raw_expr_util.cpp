@@ -9567,6 +9567,22 @@ bool ObRawExprUtils::is_column_ref_skip_implicit_cast(const ObRawExpr *expr)
   return bret;
 }
 
+bool ObRawExprUtils::unwrap_implicit_cast_and_check_expr_type(const ObItemType &expr_type, ObRawExpr * &expr)
+{
+  bool bret = false;
+  if (OB_NOT_NULL(expr)) {
+    const ObItemType expr_t = expr->get_expr_type();
+    if (expr_t == expr_type) {
+      bret = true;
+    } else if (T_FUN_SYS_CAST == expr_t &&
+               expr->has_flag(IS_INNER_ADDED_EXPR)) {
+      expr = expr->get_param_expr(0);
+      bret = unwrap_implicit_cast_and_check_expr_type(expr_type, expr);
+    }
+  }
+  return bret;
+}
+
 int ObRawExprUtils::build_dummy_count_expr(ObRawExprFactory &expr_factory,
                                            const ObSQLSessionInfo *session_info,
                                            ObAggFunRawExpr *&expr)

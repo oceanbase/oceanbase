@@ -253,8 +253,12 @@ public:
                   int64_t &remove_cnt);
   void set_for_replay(const bool for_replay);
   bool is_for_replay() const { return ATOMIC_LOAD(&for_replay_); }
+  int remove_callbacks_for_hotspot_redo(const share::SCN stop_scn,
+                                        share::SCN &last_remove_scn,
+                                        int64_t &remove_succ_cnt);
   int remove_callbacks_for_fast_commit(const int16_t callback_list_idx, const share::SCN stop_scn);
   int remove_callbacks_for_fast_commit(const ObCallbackScopeArray &callbacks_arr);
+  int remove_all_callbacks_for_replay();
   int remove_callback_for_uncommited_txn(const memtable::ObMemtableSet *memtable_set);
   int get_memtable_key_arr(transaction::ObMemtableKeyArray &memtable_key_arr);
   int acquire_callback_list(const bool new_epoch, const bool need_merge);
@@ -269,7 +273,15 @@ public:
   bool is_logging_blocked(bool &has_pending_log) const;
   int fill_log(ObTxFillRedoCtx &ctx, ObITxFillRedoFunctor &func);
   int log_submitted(const ObCallbackScopeArray &callbacks, int &submitted);
+  int hotspot_log_submitted(const transaction::ObTransID primary_tx_id,
+                            const ObCallbackScope &scope,
+                            const share::SCN log_scn,
+                            int &submitted_cnt);
   int log_sync_succ(const ObCallbackScopeArray &callbacks, const share::SCN scn, int &sync_cnt);
+  int hotspot_log_sync_succ(const ObCallbackScopeArray &callbacks,
+                            const share::SCN scn,
+                            int &sync_cnt,
+                            bool &remap_verify_failed);
   int log_sync_fail(const ObCallbackScopeArray &callbacks, int &removed_cnt);
   void check_all_redo_flushed();
   int calc_checksum_before_scn(const share::SCN scn,
@@ -510,12 +522,19 @@ public:
   bool is_logging_blocked() const override;
   uint32_t get_freeze_clock() const override;
   transaction::ObTxSEQ get_seq_no() const { return seq_no_; }
+  transaction::ObTxSEQ get_tnode_seq_no() const override
+  {
+    return (OB_NOT_NULL(tnode_)) ? tnode_->get_seq_no() : transaction::ObTxSEQ::INVL();
+  }
   int get_trans_id(transaction::ObTransID &trans_id) const;
   int get_cluster_version(uint64_t &cluster_version) const override;
   transaction::ObPartTransCtx *get_trans_ctx() const;
   int64_t to_string(char *buf, const int64_t buf_len) const;
   virtual int before_append(const bool is_replay) override;
   virtual int log_submitted() override;
+  virtual int hotspot_log_submitted(const transaction::ObTransID primary_tx_id,
+                                    const share::SCN log_scn,
+                                    const transaction::ObTxSEQ remap_seq);
   virtual void after_append_fail(const bool is_replay) override;
   virtual int get_holder_info(RowHolderInfo &holder_info) const override final;
   virtual int64_t get_old_row_data_size() override
