@@ -3302,7 +3302,7 @@ DEF_BOOL(_enable_foreign_key_gts_opt, OB_TENANT_PARAMETER, "False",
 DEF_BOOL(_enable_nested_sql_local_optimize, OB_TENANT_PARAMETER, "False",
          "enable or disable nested sql use local plan first",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(_enable_mv_refresh_queuing, OB_TENANT_PARAMETER, "True",
+DEF_BOOL(_enable_mv_refresh_queuing, OB_TENANT_PARAMETER, "False",
         "Enable the new MV refresh engine based on pending task scheduling. "
         "When set to True, refresh requests are submitted to the pending task queue and executed asynchronously. "
         "When set to False, the legacy synchronous refresh engine is used.",
