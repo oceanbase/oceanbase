@@ -224,7 +224,7 @@ int ObPxTaskProcess::process()
       ObPhysicalPlan *phy_plan = arg_.des_phy_plan_;
       ObString sql = ObString::make_string("");
       sqlstat_record.set_is_plan_cache_hit(arg_.exec_ctx_->get_sql_ctx()->plan_cache_hit_);
-      sqlstat_record.set_is_muti_query(session->get_capability().cap_flags_.OB_CLIENT_MULTI_STATEMENTS);
+      sqlstat_record.set_is_muti_query(arg_.exec_ctx_->get_sql_ctx()->multi_stmt_item_.is_part_of_multi_stmt());
       if (OB_NOT_NULL(arg_.exec_ctx_->get_sql_ctx()) && OB_NOT_NULL(arg_.exec_ctx_->get_sql_ctx())) {
         sqlstat_record.set_is_muti_query_batch(arg_.exec_ctx_->get_sql_ctx()->multi_stmt_item_.is_batched_multi_stmt());
       }

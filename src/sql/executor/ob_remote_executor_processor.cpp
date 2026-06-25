@@ -785,7 +785,7 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
     if (enable_sqlstat && OB_NOT_NULL(exec_ctx_.get_sql_ctx())) {
       sqlstat_record.record_sqlstat_end_value();
       sqlstat_record.set_is_plan_cache_hit(exec_ctx_.get_sql_ctx()->plan_cache_hit_);
-      sqlstat_record.set_is_muti_query(session->get_capability().cap_flags_.OB_CLIENT_MULTI_STATEMENTS);
+      sqlstat_record.set_is_muti_query(exec_ctx_.get_sql_ctx()->multi_stmt_item_.is_part_of_multi_stmt());
       if (OB_NOT_NULL(exec_ctx_.get_sql_ctx()) && OB_NOT_NULL(exec_ctx_.get_sql_ctx())) {
         sqlstat_record.set_is_muti_query_batch(exec_ctx_.get_sql_ctx()->multi_stmt_item_.is_batched_multi_stmt());
       }
@@ -1117,7 +1117,7 @@ int ObRpcRemoteExecuteP::process()
     if (enable_sqlstat && OB_NOT_NULL(exec_ctx_.get_sql_ctx())) {
       sqlstat_record.record_sqlstat_end_value();
       sqlstat_record.set_is_plan_cache_hit(exec_ctx_.get_sql_ctx()->plan_cache_hit_);
-      sqlstat_record.set_is_muti_query(session->get_capability().cap_flags_.OB_CLIENT_MULTI_STATEMENTS);
+      sqlstat_record.set_is_muti_query(exec_ctx_.get_sql_ctx()->multi_stmt_item_.is_part_of_multi_stmt());
       if (OB_NOT_NULL(exec_ctx_.get_sql_ctx()) && OB_NOT_NULL(exec_ctx_.get_sql_ctx())) {
         sqlstat_record.set_is_muti_query_batch(exec_ctx_.get_sql_ctx()->multi_stmt_item_.is_batched_multi_stmt());
       }
