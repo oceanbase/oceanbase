@@ -714,6 +714,11 @@ bool ObRefreshSchemaInfo::is_valid() const
   return true;
 }
 
+bool ObRefreshSchemaInfo::less_than(const ObRefreshSchemaInfo &l, const ObRefreshSchemaInfo &r)
+{
+  return l.get_sequence_id() < r.get_sequence_id();
+}
+
 OB_SERIALIZE_MEMBER(ObRefreshSchemaInfo, tenant_id_, schema_version_, sequence_id_);
 
 OB_SERIALIZE_MEMBER(ObSchemaObjVersion, object_id_, version_, object_type_);
