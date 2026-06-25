@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "ob_tablet_merge_task.h"
+#include "logservice/ob_log_service.h"
 #include "storage/compaction/ob_partition_merger.h"
 #include "storage/blocksstable/ob_datum_row.h"
 #include "storage/lob/ob_lob_manager.h"
@@ -19,6 +20,7 @@
 #include "storage/compaction/ob_tenant_compaction_progress.h"
 #include "storage/compaction/filter/ob_tx_data_minor_filter.h"
 #include "storage/compaction/vectorization/ob_compaction_batch_merger.h"
+#include "storage/ob_tenant_tablet_stat_mgr.h"
 
 namespace oceanbase
 {
@@ -1146,6 +1148,21 @@ int ObTabletMergeFinishTask::process()
   if (OB_SUCC(ret)) {
     (void)report_checkpoint_info(*ctx_ptr);
     (void)record_tx_data_info(*ctx_ptr);
+  }
+  if (OB_SUCC(ret) && is_major_merge_type(ctx_ptr->get_merge_type())) {
+    // clear the follower's accumulated tablet stat after a major/medium merge finishes.
+    // the leader is excluded since it clears in the medium schedule path.
+    ObRole role = INVALID_ROLE;
+    int64_t proposal_id = OB_INVALID_TIMESTAMP;
+    if (OB_TMP_FAIL(MTL(logservice::ObLogService *)->get_palf_role(ctx_ptr->get_ls_id(), role, proposal_id))) {
+      if (OB_LS_NOT_EXIST != tmp_ret) {
+        LOG_WARN("failed to get palf role for clearing tablet stat", K(tmp_ret), KPC(ctx_ptr));
+      }
+    } else if (!is_leader_by_election(role)) {
+      if (OB_TMP_FAIL(MTL(ObTenantTabletStatMgr *)->clear_tablet_stat(ctx_ptr->get_ls_id(), ctx_ptr->get_tablet_id()))) {
+        LOG_WARN("failed to clear tablet stat after merge", K(tmp_ret), KPC(ctx_ptr));
+      }
+    }
   }
 
   return ret;
