@@ -200,6 +200,11 @@ int handle_ask_tx_state_for_4377(const ObAskTxStateFor4377Msg &msg,
                                  bool &is_alive);
 
 int check_ls_status(const share::ObLSID &ls_id);
+// Check whether the ObLSTxCtxMgr of ls_id still exists in the global map.
+// Used to detect an old ls incarnation whose ObLS::destroy() (which removes the
+// tx ctx mgr by ls_id) has not finished yet, so that a re-create of the same
+// ls_id can keep waiting instead of racing with the trailing teardown.
+int check_ls_tx_ctx_mgr_exist(const share::ObLSID &ls_id, bool &exist);
 int tx_sanity_check(ObTxDesc &tx);
 
 // for dblink tx promotion

@@ -1518,20 +1518,41 @@ int ObLSService::check_ls_waiting_safe_destroy(const share::ObLSID &ls_id, bool 
   } else if (OB_UNLIKELY(!ls_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id));
-  } else if (ATOMIC_LOAD(&safe_ls_destroy_task_cnt_) == 0) {
-    // there is no ls waiting safe destroy
   } else {
-    ObGarbageCollector *gc_service = MTL(logservice::ObGarbageCollector *);
-    ObSafeDestroyCheckLSExist fn(ls_id);
-    if (OB_ISNULL(gc_service)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("gc service is null", K(ret));
-    } else if (OB_FAIL(gc_service->safe_destroy_task_for_each(fn))) {
-      LOG_WARN("check ls waiting safe destroy failed", K(ret), K(ls_id));
-    } else if (OB_FAIL(fn.get_ret_code())) {
-      LOG_WARN("the check process failed", K(ret), K(ls_id));
-    } else {
-      waiting = fn.is_exist();
+    // 1. check whether there is a pending safe destroy task for the ls.
+    if (ATOMIC_LOAD(&safe_ls_destroy_task_cnt_) != 0) {
+      ObGarbageCollector *gc_service = MTL(logservice::ObGarbageCollector *);
+      ObSafeDestroyCheckLSExist fn(ls_id);
+      if (OB_ISNULL(gc_service)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("gc service is null", K(ret));
+      } else if (OB_FAIL(gc_service->safe_destroy_task_for_each(fn))) {
+        LOG_WARN("check ls waiting safe destroy failed", K(ret), K(ls_id));
+      } else if (OB_FAIL(fn.get_ret_code())) {
+        LOG_WARN("the check process failed", K(ret), K(ls_id));
+      } else {
+        waiting = fn.is_exist();
+      }
+    }
+    // 2. The safe destroy task may finish before ObLS::destroy() removes the ls
+    //    transaction context manager from the global map. ObLS::destroy() runs when
+    //    the last ls reference is released (e.g. by a cached tablet in the tenant
+    //    meta mem mgr), which can be later than the safe destroy task completion.
+    //    If the tx ctx mgr of the same ls_id still exists, an old incarnation is not
+    //    fully destroyed yet. Keep reporting waiting so that a re-create of the same
+    //    ls_id will not race with the trailing teardown, which removes the tx ctx mgr
+    //    by ls_id and would otherwise wipe out the freshly created incarnation's one.
+    if (OB_SUCC(ret) && !waiting) {
+      transaction::ObTransService *tx_svr = MTL(transaction::ObTransService *);
+      bool tx_ctx_mgr_exist = false;
+      if (OB_ISNULL(tx_svr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("trans service is null", K(ret), K(ls_id));
+      } else if (OB_FAIL(tx_svr->check_ls_tx_ctx_mgr_exist(ls_id, tx_ctx_mgr_exist))) {
+        LOG_WARN("check ls tx ctx mgr exist failed", K(ret), K(ls_id));
+      } else if (tx_ctx_mgr_exist) {
+        waiting = true;
+      }
     }
   }
   return ret;
