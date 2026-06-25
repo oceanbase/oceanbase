@@ -188,11 +188,10 @@ OB_DECLARE_DEFAULT_CODE         (__VA_ARGS__) \
 OB_DECLARE_AVX512_SPECIFIC_CODE (__VA_ARGS__)
 
 // OB_DISPATCH_MULTITARGET_CODE
+// AVX512 is not dispatched here to avoid turbo downclock on older Intel Xeon.
 #if OB_USE_MULTITARGET_CODE
 #define OB_DISPATCH_MULTITARGET_CODE(func, ...)                                   \
-  (oceanbase::common::is_arch_supported(oceanbase::common::ObTargetArch::AVX512)  \
-     ? oceanbase::common::specific::avx512::func(__VA_ARGS__)                     \
-   : oceanbase::common::is_arch_supported(oceanbase::common::ObTargetArch::AVX2)  \
+  (oceanbase::common::is_arch_supported(oceanbase::common::ObTargetArch::AVX2)    \
      ? oceanbase::common::specific::avx2::func(__VA_ARGS__)                       \
    : oceanbase::common::is_arch_supported(oceanbase::common::ObTargetArch::SSE42) \
      ? oceanbase::common::specific::sse42::func(__VA_ARGS__)                      \
