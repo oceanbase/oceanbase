@@ -1072,11 +1072,387 @@ TEST_F(TestLSBalanceHelper, ls_group_location_balance)
   ASSERT_EQ(1005, balance_job.ls_group_array_.at(3)->target_unit_list_.at(2).id());
   ASSERT_EQ(1008, balance_job.ls_group_array_.at(3)->target_unit_list_.at(3).id());
 
-  ASSERT_EQ(1002, balance_job.ls_group_array_.at(4)->target_unit_list_.at(0).id());
+  // 非倍数缩容优化：lg 1005 在 z2 上的 unit 1003 已是 DELETING（仅在 z2 上有 unit），
+  // 在 z2 同构 zone 组下属于 deleting-only LSG。
+  // z2 normal UG 个数为 2，但 deleting-only LSG 个数为 1，非整除，
+  // 改造后保留 unit_list 不动，等 LSGroupCountBalance 通过 split 凑齐倍数。
+  ASSERT_EQ(1003, balance_job.ls_group_array_.at(4)->target_unit_list_.at(0).id());
 
   ASSERT_EQ(1002, balance_job.ls_group_array_.at(5)->target_unit_list_.at(1).id());
 
+}
 
+TEST_F(TestLSBalanceHelper, balance_strategy_count_to_location_no_cancel)
+{
+  // 非倍数缩容优化：LSGroupCountBalance 完成 split 后回到 LSGroupLocationBalance，
+  // 不应被识别为 strategy rollback 而 CANCELING。
+  ObBalanceStrategy s_location(ObBalanceStrategy::LB_LS_GROUP_LOCATION);
+  ObBalanceStrategy s_count(ObBalanceStrategy::LB_LS_GROUP_COUNT);
+  ObBalanceStrategy s_unit_group(ObBalanceStrategy::LB_UNIT_GROUP);
+  // count -> location 允许（本优化新增）
+  ASSERT_TRUE(s_location.can_be_next_ls_balance_strategy(s_count));
+  // location -> count 仍然允许（前进）
+  ASSERT_TRUE(s_count.can_be_next_ls_balance_strategy(s_location));
+  // count -> unit_group 不允许（旧的回退）
+  ASSERT_FALSE(s_unit_group.can_be_next_ls_balance_strategy(s_count));
+  // location -> location 不允许（自身相等）
+  ASSERT_FALSE(s_location.can_be_next_ls_balance_strategy(s_location));
+}
+
+
+TEST_F(TestLSBalanceHelper, non_divisible_shrink_location_balance)
+{
+  // unit 布局（build_units(uzl_4x4) 生成，缩容前）：
+  //   z1(4): unit 1000(ug2000), 1001(ug2001), 1002(ug2002), 1003(ug2003)
+  //   z2(4): unit 1004(ug2000), 1005(ug2001), 1006(ug2002), 1007(ug2003)
+  // 稳态 4 个 LSG（build_4x4_ls 构建）：
+  //   lg 1001 on ug2000: unit_list={1000,1004}
+  //   lg 1002 on ug2001: unit_list={1001,1005}
+  //   lg 1003 on ug2002: unit_list={1002,1006}
+  //   lg 1004 on ug2003: unit_list={1003,1007}
+  // job_desc 的 zone_list 用缩容后的 pool unit_cnt（不含 DELETING）
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = 500;
+  ObArenaAllocator allocator("TntLSBalance", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
+  ObTenantRole primary_role(ObTenantRole::Role::PRIMARY_TENANT);
+  ObMySQLProxy sql_proxy;
+  share::ObBalanceJob job;
+  common::ObArray<share::ObBalanceTask> task_array;
+  common::ObArray<share::ObLSGroupUnitListOp> lsg_op_array;
+  common::ObArray<share::ObUnitUGOp> unit_op_array;
+  ObArray<ObUnit> unit_array;
+  ObArray<ObLSStatusInfo> ls_array;
+
+  auto construct_ls = [&ret, &ls_array, &tenant_id]
+      (const uint64_t ls_id, const int64_t ls_group_id, const char *pz, const std::initializer_list<int64_t> unit_ids)
+  {
+    ObUnitIDList unit_id_list;
+    for (const auto& uid : unit_ids) {
+      ret = unit_id_list.push_back(ObDisplayUnitID(uid));
+    }
+    ObLSStatusInfo ls_status;
+    ls_status.init(tenant_id, ObLSID(ls_id), ls_group_id, share::OB_LS_NORMAL, 0,
+        ObZone(pz), share::ObLSFlag::NORMAL_FLAG, unit_id_list);
+    ret = ls_array.push_back(ls_status);
+  };
+  auto find_lg = [](ObTenantLSBalanceInfo &bj, uint64_t lg_id) -> ObLSGroupStat* {
+    for (int64_t i = 0; i < bj.ls_group_array_.count(); ++i) {
+      if (bj.ls_group_array_.at(i)->lg_id_ == lg_id) return bj.ls_group_array_.at(i);
+    }
+    return nullptr;
+  };
+  auto has_unit = [](const ObUnitIDList &list, uint64_t uid) -> bool {
+    for (int64_t i = 0; i < list.count(); ++i) {
+      if (list.at(i).id() == uid) return true;
+    }
+    return false;
+  };
+  auto build_units = [&](const ObZoneUnitCntList &zl) {
+    ObArray<ObLSStatusInfo> unused;
+    unit_array.reset();
+    ret = construct_unit_ls_array(zl, unit_array, unused);
+    ASSERT_EQ(OB_SUCCESS, ret);
+  };
+  auto build_4x4_ls = [&]() {
+    ls_array.reset();
+    construct_ls(1, 0, "zone1", {});
+    construct_ls(1001, 1001, "zone1", {1000, 1004});
+    construct_ls(2001, 1001, "zone2", {1000, 1004});
+    construct_ls(1002, 1002, "zone1", {1001, 1005});
+    construct_ls(2002, 1002, "zone2", {1001, 1005});
+    construct_ls(1003, 1003, "zone1", {1002, 1006});
+    construct_ls(2003, 1003, "zone2", {1002, 1006});
+    construct_ls(1004, 1004, "zone1", {1003, 1007});
+    construct_ls(2004, 1004, "zone2", {1003, 1007});
+  };
+  ObZoneUnitCntList uzl_4x4;
+  ASSERT_EQ(OB_SUCCESS, uzl_4x4.push_back(ObDisplayZoneUnitCnt("zone1", 4)));
+  ASSERT_EQ(OB_SUCCESS, uzl_4x4.push_back(ObDisplayZoneUnitCnt("zone2", 4)));
+
+  // ===== 1.1 生效场景 =====
+
+  // 场景 A: 同构 DELETING 4→3
+  // unit z1(4),z2(4), ug2003 DELETING, job_desc z1(3),z2(3) → target=3
+  // lg 1004 ({1003,1007}) deleting-only, 1%3≠0 → preserved
+  {
+    build_units(uzl_4x4);
+    unit_array.at(3).status_ = ObUnit::UNIT_STATUS_DELETING;
+    unit_array.at(7).status_ = ObUnit::UNIT_STATUS_DELETING;
+    build_4x4_ls();
+
+    ObZoneUnitCntList zl;
+    ASSERT_EQ(OB_SUCCESS, zl.push_back(ObDisplayZoneUnitCnt("zone1", 3)));
+    ASSERT_EQ(OB_SUCCESS, zl.push_back(ObDisplayZoneUnitCnt("zone2", 3)));
+    ObBalanceJobDesc jd;
+    ret = jd.init_without_job(tenant_id, zl, 1, 1, true, true, false);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ObTenantLSBalanceInfo bj(allocator);
+    ret = bj.init_tenant_ls_balance_info(tenant_id, ls_array, jd, unit_array, primary_role);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    lsg_op_array.reset();
+    ObLSGroupLocationBalance lb(&bj, &sql_proxy, ObBalanceJobID(), &job, &task_array, &lsg_op_array, &unit_op_array);
+    ASSERT_EQ(OB_SUCCESS, lb.balance(true));
+    ObLSGroupStat *lg = find_lg(bj, 1004);
+    ASSERT_TRUE(OB_NOT_NULL(lg));
+    ASSERT_TRUE(has_unit(lg->target_unit_list_, 1003));
+    ASSERT_TRUE(has_unit(lg->target_unit_list_, 1007));
+    LOG_INFO("scenario A-1 (preserved) passed", KPC(lg));
+
+    // A-2: split 后凑成倍数，LocationBalance 正常分配
+    // 补 2 个 LSG 凑成 3 个 deleting-only, 3%3==0
+    construct_ls(1005, 1005, "zone1", {1003, 1007});
+    construct_ls(2005, 1005, "zone2", {1003, 1007});
+    construct_ls(1006, 1006, "zone1", {1003, 1007});
+    construct_ls(2006, 1006, "zone2", {1003, 1007});
+
+    ObTenantLSBalanceInfo bj2(allocator);
+    ret = bj2.init_tenant_ls_balance_info(tenant_id, ls_array, jd, unit_array, primary_role);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    lsg_op_array.reset();
+    ObLSGroupLocationBalance lb2(&bj2, &sql_proxy, ObBalanceJobID(), &job, &task_array, &lsg_op_array, &unit_op_array);
+    ASSERT_EQ(OB_SUCCESS, lb2.balance(true));
+    ObLSGroupStat *lg4 = find_lg(bj2, 1004);
+    ObLSGroupStat *lg5 = find_lg(bj2, 1005);
+    ObLSGroupStat *lg6 = find_lg(bj2, 1006);
+    ASSERT_TRUE(OB_NOT_NULL(lg4) && OB_NOT_NULL(lg5) && OB_NOT_NULL(lg6));
+    ASSERT_FALSE(has_unit(lg4->target_unit_list_, 1003));
+    ASSERT_FALSE(has_unit(lg5->target_unit_list_, 1003));
+    ASSERT_FALSE(has_unit(lg6->target_unit_list_, 1003));
+    LOG_INFO("scenario A-2 (split then allocate) passed");
+  }
+
+  // 场景 B: 异构 DELETING 4:4→4:3 (only z2 shrinks)
+  // unit z1(4),z2(4), only unit 1007(z2) DELETING
+  // job_desc z1(4),z2(3) → hetero, target=LCM(4,3)=12
+  // lg 1004: z2 组 deleting-only, 1%3≠0 → preserved
+  {
+    build_units(uzl_4x4);
+    unit_array.at(7).status_ = ObUnit::UNIT_STATUS_DELETING;
+    build_4x4_ls();
+
+    ObZoneUnitCntList zl;
+    ASSERT_EQ(OB_SUCCESS, zl.push_back(ObDisplayZoneUnitCnt("zone1", 4)));
+    ASSERT_EQ(OB_SUCCESS, zl.push_back(ObDisplayZoneUnitCnt("zone2", 3)));
+    ObBalanceJobDesc jd;
+    ret = jd.init_without_job(tenant_id, zl, 1, 1, true, true, false);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ObTenantLSBalanceInfo bj(allocator);
+    ret = bj.init_tenant_ls_balance_info(tenant_id, ls_array, jd, unit_array, primary_role);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    lsg_op_array.reset();
+    ObLSGroupLocationBalance lb(&bj, &sql_proxy, ObBalanceJobID(), &job, &task_array, &lsg_op_array, &unit_op_array);
+    ASSERT_EQ(OB_SUCCESS, lb.balance(true));
+    ObLSGroupStat *lg = find_lg(bj, 1004);
+    ASSERT_TRUE(OB_NOT_NULL(lg));
+    ASSERT_TRUE(has_unit(lg->target_unit_list_, 1007));
+    LOG_INFO("scenario B-1 (preserved) passed", KPC(lg));
+
+    // B-2: split 后凑成倍数，LocationBalance 正常分配
+    // 补 2 个 LSG 凑成 3 个 deleting-only, 3%3==0
+    construct_ls(1005, 1005, "zone1", {1003, 1007});
+    construct_ls(2005, 1005, "zone2", {1003, 1007});
+    construct_ls(1006, 1006, "zone1", {1003, 1007});
+    construct_ls(2006, 1006, "zone2", {1003, 1007});
+
+    ObTenantLSBalanceInfo bj2(allocator);
+    ret = bj2.init_tenant_ls_balance_info(tenant_id, ls_array, jd, unit_array, primary_role);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    lsg_op_array.reset();
+    ObLSGroupLocationBalance lb2(&bj2, &sql_proxy, ObBalanceJobID(), &job, &task_array, &lsg_op_array, &unit_op_array);
+    ASSERT_EQ(OB_SUCCESS, lb2.balance(true));
+    ObLSGroupStat *lg4 = find_lg(bj2, 1004);
+    ObLSGroupStat *lg5 = find_lg(bj2, 1005);
+    ObLSGroupStat *lg6 = find_lg(bj2, 1006);
+    ASSERT_TRUE(OB_NOT_NULL(lg4) && OB_NOT_NULL(lg5) && OB_NOT_NULL(lg6));
+    ASSERT_FALSE(has_unit(lg4->target_unit_list_, 1007));
+    ASSERT_FALSE(has_unit(lg5->target_unit_list_, 1007));
+    ASSERT_FALSE(has_unit(lg6->target_unit_list_, 1007));
+    LOG_INFO("scenario B-2 (split then allocate) passed");
+  }
+
+  // 场景 C: GTS 独占 同构 4→3
+  // unit z1(4),z2(4), enable_gts=true → target=LCM(3,3)=3
+  // 手动设各 zone 最后一个 unit 为 gts_standalone → valid=3
+  // lg 1004 deleting-only (gts units), 1%3≠0 → preserved
+  {
+    build_units(uzl_4x4);
+    build_4x4_ls();
+
+    ObBalanceJobDesc jd;
+    ret = jd.init_without_job(tenant_id, uzl_4x4, 1, 1, true, true, true);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ObTenantLSBalanceInfo bj(allocator);
+    ret = bj.init_tenant_ls_balance_info(tenant_id, ls_array, jd, unit_array, primary_role);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ARRAY_FOREACH(bj.zone_array_, zidx) {
+      ObZoneLSStat *zs = bj.zone_array_.at(zidx);
+      if (OB_NOT_NULL(zs) && zs->is_in_locality_ && zs->valid_unit_array_.count() > 0) {
+        ObUnitLSStat *last = zs->valid_unit_array_.at(zs->valid_unit_array_.count() - 1);
+        ret = zs->set_unit_gts_standalone(*last);
+        ASSERT_EQ(OB_SUCCESS, ret);
+      }
+    }
+    lsg_op_array.reset();
+    ObLSGroupLocationBalance lb(&bj, &sql_proxy, ObBalanceJobID(), &job, &task_array, &lsg_op_array, &unit_op_array);
+    ASSERT_EQ(OB_SUCCESS, lb.balance(true));
+    ObLSGroupStat *lg = find_lg(bj, 1004);
+    ASSERT_TRUE(OB_NOT_NULL(lg));
+    ASSERT_TRUE(has_unit(lg->target_unit_list_, 1003));
+    ASSERT_TRUE(has_unit(lg->target_unit_list_, 1007));
+    LOG_INFO("scenario C (GTS) passed", KPC(lg));
+  }
+
+  // ===== 1.2 不生效场景 =====
+  // 基于 unit z1(4),z2(4) + ug2003 DELETING + job_desc z1(3),z2(3) 逐个切换条件
+
+  // 场景 D: 非 deleting-only（LSG 同时在 normal UG 上有 unit）
+  // lg 1004 unit_list={1003,1004}，unit 1004 在 ug2000(normal) → NOT deleting-only
+  // lg 1005 unit_list={1008}，unit 1008 在 zone3 上，不在 locality 内 → NOT deleting-only
+  {
+    ObZoneUnitCntList uzl_4x4x1 = uzl_4x4;
+    uzl_4x4x1.push_back(ObDisplayZoneUnitCnt("zone3", 1));
+    build_units(uzl_4x4x1);
+    unit_array.at(3).status_ = ObUnit::UNIT_STATUS_DELETING;
+    unit_array.at(7).status_ = ObUnit::UNIT_STATUS_DELETING;
+    build_4x4_ls();
+    // 覆盖 lg 1004 的两个 LS，让 unit_list 包含 normal UG 的 unit
+    ls_array.pop_back();
+    ls_array.pop_back();
+    construct_ls(1004, 1004, "zone1", {1003, 1004});
+    construct_ls(2004, 1004, "zone2", {1003, 1004});
+    // 再加一个 unit_list 仅在非 locality zone 的 lg 1005, unit_list: 1008(z3)
+    construct_ls(1005, 1005, "zone3", {1008});
+
+    ObZoneUnitCntList zl;  // 新 zl 不包含 z3, 仅包含 locality 内的 z1, z2
+    ASSERT_EQ(OB_SUCCESS, zl.push_back(ObDisplayZoneUnitCnt("zone1", 3)));
+    ASSERT_EQ(OB_SUCCESS, zl.push_back(ObDisplayZoneUnitCnt("zone2", 3)));
+    ObBalanceJobDesc jd;
+    ret = jd.init_without_job(tenant_id, zl, 1, 1, true, true, false);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ObTenantLSBalanceInfo bj(allocator);
+    ret = bj.init_tenant_ls_balance_info(tenant_id, ls_array, jd, unit_array, primary_role);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    lsg_op_array.reset();
+    ObLSGroupLocationBalance lb(&bj, &sql_proxy, ObBalanceJobID(), &job, &task_array, &lsg_op_array, &unit_op_array);
+    ASSERT_EQ(OB_SUCCESS, lb.balance(true));
+    ObLSGroupStat *lg = find_lg(bj, 1004);
+    ASSERT_TRUE(OB_NOT_NULL(lg));
+    ASSERT_FALSE(has_unit(lg->target_unit_list_, 1003));
+    lg = find_lg(bj, 1005); // 1005 被修改，多补了一个 locality 内的 unit_list
+    ASSERT_TRUE(OB_NOT_NULL(lg));
+    ASSERT_TRUE(has_unit(lg->target_unit_list_, 1008));
+    ASSERT_TRUE(lg->target_unit_list_.count() == 2);
+    LOG_INFO("scenario D passed", KPC(lg));
+  }
+
+  // 场景 E: del_only_cnt 整除 normal_ug (倍数缩容) (2%2==0 → need_split=false)
+  // unit z1(4),z2(4), ug2002+ug2003 DELETING → valid=2
+  // job_desc z1(2),z2(2) → target=2, 4 LSG ≠ 2
+  // 2 deleting-only LSG, 2%2==0 → need_split=false → re-allocated
+  {
+    build_units(uzl_4x4);
+    unit_array.at(2).status_ = ObUnit::UNIT_STATUS_DELETING;
+    unit_array.at(3).status_ = ObUnit::UNIT_STATUS_DELETING;
+    unit_array.at(6).status_ = ObUnit::UNIT_STATUS_DELETING;
+    unit_array.at(7).status_ = ObUnit::UNIT_STATUS_DELETING;
+    build_4x4_ls();
+
+    ObZoneUnitCntList zl;
+    ASSERT_EQ(OB_SUCCESS, zl.push_back(ObDisplayZoneUnitCnt("zone1", 2)));
+    ASSERT_EQ(OB_SUCCESS, zl.push_back(ObDisplayZoneUnitCnt("zone2", 2)));
+    ObBalanceJobDesc jd;
+    ret = jd.init_without_job(tenant_id, zl, 1, 1, true, true, false);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ObTenantLSBalanceInfo bj(allocator);
+    ret = bj.init_tenant_ls_balance_info(tenant_id, ls_array, jd, unit_array, primary_role);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    lsg_op_array.reset();
+    ObLSGroupLocationBalance lb(&bj, &sql_proxy, ObBalanceJobID(), &job, &task_array, &lsg_op_array, &unit_op_array);
+    ASSERT_EQ(OB_SUCCESS, lb.balance(true));
+    ObLSGroupStat *lg = find_lg(bj, 1003);
+    ASSERT_TRUE(OB_NOT_NULL(lg));
+    ASSERT_FALSE(has_unit(lg->target_unit_list_, 1002));
+    ASSERT_FALSE(has_unit(lg->target_unit_list_, 1006));
+    LOG_INFO("scenario E passed", KPC(lg));
+  }
+
+  // 场景 F: 备库 → need_split=false → re-allocated
+  {
+    build_units(uzl_4x4);
+    unit_array.at(3).status_ = ObUnit::UNIT_STATUS_DELETING;
+    unit_array.at(7).status_ = ObUnit::UNIT_STATUS_DELETING;
+    build_4x4_ls();
+
+    ObZoneUnitCntList zl;
+    ASSERT_EQ(OB_SUCCESS, zl.push_back(ObDisplayZoneUnitCnt("zone1", 3)));
+    ASSERT_EQ(OB_SUCCESS, zl.push_back(ObDisplayZoneUnitCnt("zone2", 3)));
+    ObBalanceJobDesc jd;
+    ret = jd.init_without_job(tenant_id, zl, 1, 1, true, true, false);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ObTenantRole standby_role(ObTenantRole::Role::STANDBY_TENANT);
+    ObTenantLSBalanceInfo bj(allocator);
+    ret = bj.init_tenant_ls_balance_info(tenant_id, ls_array, jd, unit_array, standby_role);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    lsg_op_array.reset();
+    ObLSGroupLocationBalance lb(&bj, &sql_proxy, ObBalanceJobID(), &job, &task_array, &lsg_op_array, &unit_op_array);
+    ASSERT_EQ(OB_SUCCESS, lb.balance(true));
+    ObLSGroupStat *lg = find_lg(bj, 1004);
+    ASSERT_TRUE(OB_NOT_NULL(lg));
+    ASSERT_FALSE(has_unit(lg->target_unit_list_, 1003));
+    ASSERT_FALSE(has_unit(lg->target_unit_list_, 1007));
+    LOG_INFO("scenario F passed", KPC(lg));
+  }
+
+  // 场景 G: enable_transfer=false → need_split=false → re-allocated
+  {
+    build_units(uzl_4x4);
+    unit_array.at(3).status_ = ObUnit::UNIT_STATUS_DELETING;
+    unit_array.at(7).status_ = ObUnit::UNIT_STATUS_DELETING;
+    build_4x4_ls();
+
+    ObZoneUnitCntList zl;
+    ASSERT_EQ(OB_SUCCESS, zl.push_back(ObDisplayZoneUnitCnt("zone1", 3)));
+    ASSERT_EQ(OB_SUCCESS, zl.push_back(ObDisplayZoneUnitCnt("zone2", 3)));
+    ObBalanceJobDesc jd;
+    ret = jd.init_without_job(tenant_id, zl, 1, 1, true, false, false);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ObTenantLSBalanceInfo bj(allocator);
+    ret = bj.init_tenant_ls_balance_info(tenant_id, ls_array, jd, unit_array, primary_role);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    lsg_op_array.reset();
+    ObLSGroupLocationBalance lb(&bj, &sql_proxy, ObBalanceJobID(), &job, &task_array, &lsg_op_array, &unit_op_array);
+    ASSERT_EQ(OB_SUCCESS, lb.balance(true));
+    ObLSGroupStat *lg = find_lg(bj, 1004);
+    ASSERT_TRUE(OB_NOT_NULL(lg));
+    ASSERT_FALSE(has_unit(lg->target_unit_list_, 1003));
+    ASSERT_FALSE(has_unit(lg->target_unit_list_, 1007));
+    LOG_INFO("scenario G passed", KPC(lg));
+  }
+
+  // 场景 H: LSG count == target → need_split=false → re-allocated
+  // job_desc z1(4),z2(4) → target=LCM(4,4)=4 = LSG 数
+  {
+    build_units(uzl_4x4);
+    unit_array.at(3).status_ = ObUnit::UNIT_STATUS_DELETING;
+    unit_array.at(7).status_ = ObUnit::UNIT_STATUS_DELETING;
+    build_4x4_ls();
+
+    ObBalanceJobDesc jd;
+    ret = jd.init_without_job(tenant_id, uzl_4x4, 1, 1, true, true, false);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ObTenantLSBalanceInfo bj(allocator);
+    ret = bj.init_tenant_ls_balance_info(tenant_id, ls_array, jd, unit_array, primary_role);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_EQ(4, bj.ls_group_array_.count());
+    lsg_op_array.reset();
+    ObLSGroupLocationBalance lb(&bj, &sql_proxy, ObBalanceJobID(), &job, &task_array, &lsg_op_array, &unit_op_array);
+    ASSERT_EQ(OB_SUCCESS, lb.balance(true));
+    ObLSGroupStat *lg = find_lg(bj, 1004);
+    ASSERT_TRUE(OB_NOT_NULL(lg));
+    ASSERT_FALSE(has_unit(lg->target_unit_list_, 1003));
+    ASSERT_FALSE(has_unit(lg->target_unit_list_, 1007));
+    LOG_INFO("scenario H passed", KPC(lg));
+  }
 }
 
 TEST_F(TestLSBalanceHelper, large_cluster_tenant_ls_balance_info)

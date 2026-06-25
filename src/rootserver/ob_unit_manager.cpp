@@ -6890,6 +6890,7 @@ int ObUnitManager::get_tenant_gts_unit_ids(
 }
 
 int ObUnitManager::fill_delete_unit_ptr_array(
+    ObISQLClient &client,
     share::ObResourcePool *pool,
     const common::ObIArray<uint64_t> &delete_unit_id_array,
     const int64_t new_unit_num,
@@ -6916,6 +6917,22 @@ int ObUnitManager::fill_delete_unit_ptr_array(
     if (OB_UNLIKELY(NULL == pool)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid argument", K(ret), KP(pool));
+    } else {
+      // refresh unit_group_id from inner table to avoid stale in-memory values
+      ObArray<ObUnit> table_units;
+      if (OB_FAIL(ut_operator_.get_units_by_pool_id(client, pool->resource_pool_id_, table_units))) {
+        LOG_WARN("fail to get units from table", KR(ret), K(pool->resource_pool_id_));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < table_units.count(); ++i) {
+        ObUnit *mem_unit = nullptr;
+        if (OB_FAIL(get_unit_by_id(table_units.at(i).unit_id_, mem_unit))) {
+          LOG_WARN("fail to get unit by id", KR(ret), K(table_units.at(i).unit_id_));
+        } else if (OB_NOT_NULL(mem_unit)) {
+          mem_unit->unit_group_id_ = table_units.at(i).unit_group_id_;
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (pool->is_granted_to_tenant()
         && OB_FAIL(get_tenant_gts_unit_ids(pool->tenant_id_, gts_unit_ids))) {
       LOG_WARN("fail to get tenant gts unit ids", KR(ret), KPC(pool));
@@ -6986,7 +7003,7 @@ int ObUnitManager::shrink_pool_unit_num_(
     } else if (OB_FAIL(check_shrink_unit_num_zone_condition(pool, new_unit_num, delete_unit_id_array))) {
       LOG_WARN("fail to check shrink unit num zone condition", K(ret));
     } else if (OB_FAIL(fill_delete_unit_ptr_array(
-            pool, delete_unit_id_array, new_unit_num, output_delete_unit_ptr_array))) {
+            trans, pool, delete_unit_id_array, new_unit_num, output_delete_unit_ptr_array))) {
       LOG_WARN("fail to fill delete unit id array", K(ret));
     } else if (output_delete_unit_ptr_array.count() <= 0) {
       ret = OB_ERR_UNEXPECTED;

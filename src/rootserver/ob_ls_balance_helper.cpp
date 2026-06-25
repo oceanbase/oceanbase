@@ -2305,7 +2305,7 @@ int ObLSBalanceStrategy::do_reorganize_sys_ls_unit_list_(const bool need_remove_
     ObArray<ObZone> valid_zone;
     // 1. remove unit not in locality, and also unit in deleting status if need_remove_deleting_unit
     ObArray<ObUnitLSStat*> unit_stat_array;
-    if (OB_FAIL(convert_unit_list_to_unit_stat_(curr_unit_list, unit_stat_array))) {
+    if (OB_FAIL(convert_unit_list_to_unit_stat_in_locality_(curr_unit_list, unit_stat_array))) {
       LOG_WARN("failed to convert unit list to unit stat array", KR(ret), K(curr_unit_list));
     } else {
       target_unit_list.reset();
@@ -2632,12 +2632,21 @@ int ObLSGroupLocationBalance::balance(const bool only_job_strategy)
     if (OB_FAIL(tenant_info_->split_hetero_zone_to_homo_unit_group(hetero_ug))) {
       LOG_WARN("failed to get homo unit group", KR(ret));
     }
+    ObArray<ObArray<ObLSGroupStat*>> deleting_only_lsg;
+    ObSEArray<bool, 2> need_split_del_only_lsg;
+    if (FAILEDx(get_deleting_only_lsg_by_ug_array_(hetero_ug, deleting_only_lsg))) {
+      LOG_WARN("failed to get deleting only lsg", KR(ret), K(hetero_ug.count()));
+    } else if (OB_FAIL(check_need_split_deleting_only_lsg_(
+        hetero_ug, deleting_only_lsg, need_split_del_only_lsg))) {
+      LOG_WARN("failed to check need split", KR(ret), K(hetero_ug.count()));
+    }
+    // 主遍历
     ARRAY_FOREACH(ls_group_array, idx) {
       ObLSGroupStat *ls_group = ls_group_array.at(idx);
       CK(OB_NOT_NULL(ls_group))
       ObArray<ObUnitLSStat*> unit_stat_array;
       ObArray<uint64_t> target_ug_ids;
-      if (FAILEDx(convert_unit_list_to_unit_stat_(ls_group->current_unit_list_, unit_stat_array))) {
+      if (FAILEDx(convert_unit_list_to_unit_stat_in_locality_(ls_group->current_unit_list_, unit_stat_array))) {
         LOG_WARN("failed to convert unit to unit group", KR(ret), KPC(ls_group));
       } else if (unit_stat_array.empty()) {
         // 这个ls_group没有unit在locality中, 预期只有单副本容灾，locality中原来的zone改为新zone这种情形会走到
@@ -2664,7 +2673,7 @@ int ObLSGroupLocationBalance::balance(const bool only_job_strategy)
         ARRAY_FOREACH(hetero_ug, idx) {
           ObUGArray &ug = hetero_ug.at(idx);
           uint64_t ug_id = 0;
-          if (OB_FAIL(choose_unit_group_from_ug_array_(unit_stat_array, ug, ug_id))) {
+          if (OB_FAIL(choose_unit_group_from_ug_array_(unit_stat_array, ug, need_split_del_only_lsg.at(idx), ug_id))) {
             LOG_WARN("failed to choose unit group from ug", KR(ret), K(unit_stat_array));
           } else if (UINT64_MAX == ug_id) {
             LOG_INFO("not valid unit group, no need push back", KPC(ls_group), K(ug));
@@ -2699,8 +2708,115 @@ int ObLSGroupLocationBalance::balance(const bool only_job_strategy)
   return ret;
 }
 
+// deleting-only：LSG 在该组 UG 覆盖的 zone 上有 unit，但全部位于非 valid（DELETING 或 gts 独占）的 UG 上。
+// 按 hetero_ug 各组分别收集 deleting-only LSG。
+int ObLSBalanceStrategy::get_deleting_only_lsg_by_ug_array_(
+    const ObHeteroUGArray &hetero_ug,
+    ObArray<ObArray<ObLSGroupStat*>> &deleting_only_lsg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("inner stat error", KR(ret));
+  } else {
+    deleting_only_lsg.reset();
+    for (int64_t j = 0; OB_SUCC(ret) && j < hetero_ug.count(); ++j) {
+      if (OB_FAIL(deleting_only_lsg.push_back(ObArray<ObLSGroupStat*>()))) {
+        LOG_WARN("failed to push back", KR(ret));
+      }
+    }
+    ARRAY_FOREACH(tenant_info_->ls_group_array_, idx) {
+      ObLSGroupStat *lsg = tenant_info_->ls_group_array_.at(idx);
+      CK(OB_NOT_NULL(lsg))
+      ObArray<ObUnitLSStat*> unit_stat_array;
+      if (FAILEDx(convert_unit_list_to_unit_stat_in_locality_(lsg->current_unit_list_, unit_stat_array))) {
+        LOG_WARN("failed to convert unit list", KR(ret), KPC(lsg));
+      } else if (unit_stat_array.empty()) {
+        // normally this should not happen, unless unit_list is manually modified (or
+        // single replica recovery in Shared-Storage mode).
+        LOG_INFO("ls group has no unit in locality, no need collect deleting-only lsg", KPC(lsg),
+            K(unit_stat_array), KPC(tenant_info_));
+      } else {
+        ARRAY_FOREACH(hetero_ug, j) {
+          common::hash::ObHashMap<uint64_t, int64_t> ug_map;
+          ObArray<const ObUnitLSStat*> unit_in_ug;
+          if (OB_FAIL(stat_unit_in_homo_ug_array_(unit_stat_array,
+              hetero_ug.at(j), ug_map, unit_in_ug))) {
+            LOG_WARN("failed to get unit info", KR(ret), K(unit_stat_array), K(hetero_ug.at(j)));
+          } else if (0 == ug_map.size() && !unit_in_ug.empty()) {
+            // lsg unit_list has units on this homo zone array,
+            // but no units on normal UGs, all deleting/gts-standalone units.
+            // Then this is deleting-only lsg for this homo UG array.
+            if (OB_FAIL(deleting_only_lsg.at(j).push_back(lsg))) {
+              LOG_WARN("failed to push back", KR(ret), KPC(lsg));
+            }
+          } else {
+            // lsg unit_list has no unit in this homo zone array
+            // or has units on normal UGs, not deleting-only lsg.
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLSBalanceStrategy::check_need_split_deleting_only_lsg_(
+    const ObHeteroUGArray &hetero_ug,
+    const ObArray<ObArray<ObLSGroupStat*>> &deleting_only_lsg,
+    ObIArray<bool> &need_split_del_only_lsg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("inner stat error", KR(ret));
+  } else if (OB_UNLIKELY(hetero_ug.count() != deleting_only_lsg.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("count mismatch", KR(ret), K(hetero_ug.count()), K(deleting_only_lsg.count()));
+  }
+  // initialize need_split_del_only_lsg to false
+  need_split_del_only_lsg.reset();
+  ARRAY_FOREACH(hetero_ug, i) {
+    if (OB_FAIL(need_split_del_only_lsg.push_back(false))) {
+      LOG_WARN("failed to push back", KR(ret));
+    }
+  }
+  int64_t target_lg_cnt = 0;
+  if (OB_FAIL(ret)) {
+  } else if (!tenant_info_->is_primary()
+      || !tenant_info_->job_desc_.get_enable_transfer()) {
+    // standby tenant / transfer is disabled, can not split
+    LOG_INFO("standby tenant / transfer is disabled, can not split deleting-only lsg", KPC(tenant_info_));
+  } else if (OB_FAIL(tenant_info_->job_desc_.get_unit_lcm_count(target_lg_cnt))) {
+    LOG_WARN("failed to get unit lcm count", KR(ret));
+  } else if (tenant_info_->ls_group_array_.count() == target_lg_cnt) {
+    // LSG count matches target, no need to split.
+    // Note: considering occasion to expand one unit_num and enable gts_standalone,
+    //   we don't want the lsg on gts ug to be split.
+    LOG_INFO("LSG count matches target, no need to split deleting-only lsg", KPC(tenant_info_), K(target_lg_cnt));
+  } else {
+    // check if deleting-only lsg count is divisible by normal ug count
+    // if not, we need to split the deleting-only lsg.
+    ARRAY_FOREACH(hetero_ug, i) {
+      const int64_t normal_ug_count = hetero_ug.at(i).count();
+      const int64_t del_only_cnt = deleting_only_lsg.at(i).count();
+      if (OB_UNLIKELY(normal_ug_count <= 0)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("normal ug count should not be zero", KR(ret), K(i), K(normal_ug_count));
+      } else if (del_only_cnt <= 0 || 0 == del_only_cnt % normal_ug_count) {
+        // deleting-only lsg count is already divisible by normal ug count, no need to split
+        LOG_INFO("deleting-only lsg count is already divisible by normal ug count, no need to split",
+            KR(ret), K(i), K(normal_ug_count), K(del_only_cnt), "deleting_only lsg", deleting_only_lsg.at(i));
+      } else {
+        need_split_del_only_lsg.at(i) = true;
+        LOG_INFO("deleting-only lsg count is not divisible by normal ug count, need to split",
+            KR(ret), K(i), K(normal_ug_count), K(del_only_cnt), "deleting_only lsg", deleting_only_lsg.at(i));
+      }
+    }
+  }
+  return ret;
+}
+
 // convert unit_id to unit_stat and filter out units not in locality
-int ObLSBalanceStrategy::convert_unit_list_to_unit_stat_(
+int ObLSBalanceStrategy::convert_unit_list_to_unit_stat_in_locality_(
     const ObUnitIDList &unit_list, ObArray<ObUnitLSStat*> &unit_stat_array)
 {
   int ret = OB_SUCCESS;
@@ -2731,9 +2847,14 @@ int ObLSBalanceStrategy::convert_unit_list_to_unit_stat_(
 //日志流组的一组unit分别分布在u1和u4,不在同一个组unit_group内
 //需要从两个unit_group中，这里会挑选出合适的unit_group；
 //要么使用unit_group1，要么使用unit_group2
+// need_split_del_only_lsg：deleting-only LSG 是否需要 CountBalance split。
+//   true：返回 UINT64_MAX，LocationBalance 不分配，等 CountBalance split
+//   false：通过 get_min_ug 分配目标 UG
 int ObLSGroupLocationBalance::choose_unit_group_from_ug_array_(
     const ObArray<ObUnitLSStat*> &unit_stat_array,
-    ObUGArray &ug_array, uint64_t &unit_group_id)
+    ObUGArray &ug_array,
+    const bool need_split_del_only_lsg,
+    uint64_t &unit_group_id)
 {
   int ret = OB_SUCCESS;
   unit_group_id = 0;
@@ -2746,7 +2867,7 @@ int ObLSGroupLocationBalance::choose_unit_group_from_ug_array_(
     //检查unit_group_id是否在这个ug_array中存在多个，如果存在多个，则需要根据状态移除一个
     common::hash::ObHashMap<uint64_t, int64_t> ug_map;
     ObArray<const ObUnitLSStat*> dup_unit_group;
-    if (OB_FAIL(get_unit_info_in_ug_array_(unit_stat_array, ug_array, ug_map, dup_unit_group))) {
+    if (OB_FAIL(stat_unit_in_homo_ug_array_(unit_stat_array, ug_array, ug_map, dup_unit_group))) {
       LOG_WARN("failed to get unit info in ug", KR(ret), K(unit_stat_array), K(ug_array));
     } else if (dup_unit_group.empty()) {
       unit_group_id = UINT64_MAX;
@@ -2756,10 +2877,16 @@ int ObLSGroupLocationBalance::choose_unit_group_from_ug_array_(
       LOG_INFO("only one unit group can be choose", K(unit_group_id), K(unit_stat_array));
     } else if (0 == ug_map.size()) {
       //当前日志流组在这个同构zone上有资源，但是都不在可用的unit上面，需要重新选择
-      if (OB_FAIL(get_min_ug_in_ug_array_(ug_array, unit_group_id))) {
-        LOG_WARN("failed to get min ug", KR(ret), K(ug_array));
+      if (need_split_del_only_lsg) {
+        unit_group_id = UINT64_MAX;
+        LOG_INFO("deleting-only lsg need split, keep unchanged", K(unit_stat_array), K(ug_array));
+      } else {
+        if (OB_FAIL(get_min_ug_in_ug_array_(ug_array, unit_group_id))) {
+          LOG_WARN("failed to get min ug", KR(ret), K(ug_array));
+        } else {
+          LOG_INFO("distribute deleting-only lsg to min ug", K(unit_group_id));
+        }
       }
-      LOG_INFO("the unit not in right unit group, choose new unit group", K(unit_group_id));
     } else {
       //这里进入的情况ug_map大于1，都要对zone_stat进行排序，找出第一优先级
       ChooseUGCmp ug_cmp;
@@ -2855,34 +2982,40 @@ int ObLSGroupLocationBalance::get_min_ug_in_unit_list_(
   return ret;
 
 }
-int ObLSGroupLocationBalance::get_unit_info_in_ug_array_(
+
+// Stat unit_stat_array (usually converted from unit_list of LSG) with homo_ug_array, output:
+// - ug_unit_count_map: count of units in unit_stat_array that are in each UG.
+//   UG without units in unit_stat_array will not be in the map. (ONLY stat valid units)
+// - unit_in_homo_zones: units that are in the homo zones of homo_ug_array. Valid and Deleting units are
+//   all included.
+int ObLSBalanceStrategy::stat_unit_in_homo_ug_array_(
     const ObArray<ObUnitLSStat*> &unit_stat_array,
-    const ObUGArray &ug_array,
-    common::hash::ObHashMap<uint64_t, int64_t> &ug_map,
-    ObArray<const ObUnitLSStat*> &unit_in_ug)
+    const ObUGArray &homo_ug_array,
+    common::hash::ObHashMap<uint64_t, int64_t> &ug_unit_count_map,
+    ObArray<const ObUnitLSStat*> &unit_in_homo_zones)
 {
   int ret = OB_SUCCESS;
   ObArray<ObZone> zone_array;
-  ug_map.reuse();
-  unit_in_ug.reset();
+  ug_unit_count_map.reuse();
+  unit_in_homo_zones.reset();
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("inner stat error", KR(ret));
-  } else if (OB_UNLIKELY(unit_stat_array.empty() || ug_array.empty()
-        || OB_ISNULL(ug_array.at(0)))) {
+  } else if (OB_UNLIKELY(unit_stat_array.empty() || homo_ug_array.empty()
+        || OB_ISNULL(homo_ug_array.at(0)))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(unit_stat_array), K(ug_array));
-  } else if (OB_FAIL(ug_array.at(0)->get_zone_array(zone_array))) {
-    LOG_WARN("failed to get zone array", KR(ret), "unit group", ug_array.at(0));
-  } else if (OB_FAIL(ug_map.create(10, "LSBalance"))) {
+    LOG_WARN("invalid argument", KR(ret), K(unit_stat_array), K(homo_ug_array));
+  } else if (OB_FAIL(homo_ug_array.at(0)->get_zone_array(zone_array))) {
+    LOG_WARN("failed to get zone array", KR(ret), "unit group", homo_ug_array.at(0));
+  } else if (OB_FAIL(ug_unit_count_map.create(10, "LSBalance"))) {
     LOG_WARN("failed to create hash map", KR(ret));
   } else {
-    int64_t unit_group_count = 0;
+    int64_t unit_count_in_ug = 0;
     ARRAY_FOREACH(unit_stat_array, idx) {
-      unit_group_count = 0;
+      unit_count_in_ug = 0;
       const ObUnitLSStat* unit = unit_stat_array.at(idx);
       CK(OB_NOT_NULL(unit), OB_NOT_NULL(unit->unit_))
       if (OB_SUCC(ret) && has_exist_in_array(zone_array, unit->unit_->zone_)) {
-        if (OB_FAIL(unit_in_ug.push_back(unit))) {
+        if (OB_FAIL(unit_in_homo_zones.push_back(unit))) {
           LOG_WARN("failed to push back", KR(ret), K(idx));
         }
       }
@@ -2891,17 +3024,17 @@ int ObLSGroupLocationBalance::get_unit_info_in_ug_array_(
       } else if (OB_ISNULL(unit->unit_group_stat_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unit is valid, but unit group is null", KR(ret), KPC(unit));
-      } else if (has_exist_in_array(ug_array, unit->unit_group_stat_)) {
-        ret = ug_map.get_refactored(unit->unit_group_stat_->ug_id_, unit_group_count);
+      } else if (has_exist_in_array(homo_ug_array, unit->unit_group_stat_)) {
+        ret = ug_unit_count_map.get_refactored(unit->unit_group_stat_->ug_id_, unit_count_in_ug);
         if (OB_HASH_NOT_EXIST == ret) {
-          unit_group_count = 1;
+          unit_count_in_ug = 1;
           ret = OB_SUCCESS;
         } else if (OB_FAIL(ret)) {
           LOG_WARN("failed to get unit group count", KR(ret), KPC(unit));
         } else {
-          unit_group_count++;
+          unit_count_in_ug++;
         }
-        if (FAILEDx(ug_map.set_refactored(unit->unit_group_stat_->ug_id_, unit_group_count, 1))) {
+        if (FAILEDx(ug_unit_count_map.set_refactored(unit->unit_group_stat_->ug_id_, unit_count_in_ug, 1))) {
           LOG_WARN("failed to set", KR(ret), KPC(unit));
         }
       }
@@ -2914,6 +3047,8 @@ int ObLSGroupLocationBalance::get_unit_info_in_ug_array_(
 //unit_stat_array仅包含ls_group当前已有的unit_list中还在locality中的unit.
 //如果这个ls_group在这个zone上没有资源，不会给他加进去, 防止后续的均衡导致这个操作是浪费的。
 //如果这个zone已经不在locality了，还是会修改unit_list
+// 某组 UG 未找到目标 unit 时（target_unit==NULL），保留该 zone 原有 unit_list 不变。
+// 如果目标 UG 为空，则只过滤掉不在 locality 中的 unit 即可，其他保持不变
 int ObLSGroupLocationBalance::reorganize_new_unit_list_(
     const ObArray<uint64_t> &unit_group_array, ObArray<ObUnitLSStat*> &unit_stat_array,
     ObLSGroupStat &ls_group)
@@ -2921,7 +3056,7 @@ int ObLSGroupLocationBalance::reorganize_new_unit_list_(
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("inner stat error", KR(ret));
-  } else if (OB_UNLIKELY(unit_stat_array.empty() || unit_group_array.empty()
+  } else if (OB_UNLIKELY(unit_stat_array.empty()
                          || !ls_group.is_valid() || unit_group_array.count() > 2)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(ls_group), K(unit_stat_array), K(unit_group_array));
@@ -2962,8 +3097,13 @@ int ObLSGroupLocationBalance::reorganize_new_unit_list_(
               }
             }//end for
           }
-          CK(OB_NOT_NULL(target_unit), OB_NOT_NULL(target_unit->unit_));
-          if (FAILEDx(ls_group.target_unit_list_.push_back(ObDisplayUnitID(target_unit->unit_id_)))) {
+          if (OB_FAIL(ret)) {
+          } else if (OB_ISNULL(target_unit)) {
+            // 指定的 unit group 未覆盖此 zone，保留原 unit
+            if (OB_FAIL(ls_group.target_unit_list_.push_back(ObDisplayUnitID(unit->unit_id_)))) {
+              LOG_WARN("failed to push back", KR(ret), K(idx), KPC(unit));
+            }
+          } else if (OB_FAIL(ls_group.target_unit_list_.push_back(ObDisplayUnitID(target_unit->unit_id_)))) {
             LOG_WARN("failed to push back", KR(ret), KPC(target_unit));
           }
         }
@@ -3108,14 +3248,12 @@ int ObLSGroupMatrixCell::get_ls_count(int64_t &ls_count) const
 }
 
 int ObLSGroupCountBalance::construct_ls_group_matrix_to_do_balance_(
+    const ObHeteroUGArray &hetero_ug_array,
     LSGroupMatrix &ls_group_matrix)
 {
   int ret = OB_SUCCESS;
-  ObHeteroUGArray hetero_ug_array;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("inner stat error", KR(ret));
-  } else if (OB_FAIL(tenant_info_->split_hetero_zone_to_homo_unit_group(hetero_ug_array))) {
-    LOG_WARN("fail to split hetero zone to homo unit group", KR(ret), KPC(tenant_info_));
   } else if (OB_UNLIKELY(1 != hetero_ug_array.count())
              && OB_UNLIKELY(2 != hetero_ug_array.count())) {
     ret = OB_INVALID_ARGUMENT;
@@ -3472,47 +3610,77 @@ int ObLSGroupCountBalance::build_matrix_cell_(
   return ret;
 }
 
+static bool is_deleting_only_lsg_empty(const ObArray<ObArray<ObLSGroupStat*>> &deleting_only_lsg)
+{
+  bool is_empty = true;
+  for (int64_t i = 0; is_empty && i < deleting_only_lsg.count(); ++i) {
+    if (!deleting_only_lsg.at(i).empty()) {
+      is_empty = false;
+    }
+  }
+  return is_empty;
+}
+
 int ObLSGroupCountBalance::balance(const bool only_job_strategy)
 {
   int ret = OB_SUCCESS;
+  ObHeteroUGArray hetero_ug;
   int64_t target_lg_cnt = 0;
-  bool need_balance = true;
+  ObArray<ObArray<ObLSGroupStat*>> deleting_only_lsg;
+  bool need_balance = false;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("inner stat error", KR(ret));
-  } else if (OB_FAIL(check_can_balance_ls_group_(need_balance, target_lg_cnt))) {
-    LOG_WARN("failed to check can balance in ls group", KR(ret), K(need_balance));
+  } else if (OB_FAIL(tenant_info_->split_hetero_zone_to_homo_unit_group(hetero_ug))) {
+    LOG_WARN("failed to get homo unit group", KR(ret));
+  } else if (OB_FAIL(tenant_info_->job_desc_.get_unit_lcm_count(target_lg_cnt))) {
+    LOG_WARN("failed to get unit lcm count", KR(ret));
+  } else if (OB_FAIL(get_deleting_only_lsg_by_ug_array_(hetero_ug, deleting_only_lsg))) {
+    LOG_WARN("failed to get deleting only lsg", KR(ret), K(hetero_ug));
+  } else if (OB_FAIL(check_can_balance_ls_group_(
+      hetero_ug, deleting_only_lsg, target_lg_cnt, need_balance))) {
+    LOG_WARN("failed to check can balance in ls group", KR(ret), K(hetero_ug), K(deleting_only_lsg), K(target_lg_cnt));
   } else if (!need_balance) {
   } else {
-    LSGroupMatrix ls_group_matrix;
     share::ObBalanceStrategy balance_strate(share::ObBalanceStrategy::LB_LS_GROUP_COUNT);
     if (OB_FAIL(generate_balance_job(balance_strate, only_job_strategy))) {
       LOG_WARN("failed to generate balance job", KR(ret), K(balance_strate));
     } else if (only_job_strategy) {
-    } else if (OB_FAIL(construct_ls_group_matrix_to_do_balance_(ls_group_matrix))) {
-      LOG_WARN("fail to construct ls group matrix to do balance", KR(ret));
     } else {
-      //构造以两组同构ug为行列的ls_group信息的二维数组
-      const int64_t row_cnt = ls_group_matrix.get_row_count();
-      const int64_t target_lg_count_each_ug = target_lg_cnt / row_cnt;
-      const int64_t target_ls_count_each_ug = target_lg_count_each_ug *
-        tenant_info_->job_desc_.get_ls_cnt_in_group();
-      LOG_INFO("need balance", K(target_lg_cnt), K(row_cnt), K(target_lg_count_each_ug));
+      // target_ls_count is used for init tenant_ls_bg_info_, as bucket count for round-robin partition distribution.
+      // Using this value is not accurate because expand/shrink are only in single cell / row of matrix.
+      // But it's still a good approximation and works well in most cases.
+      const int64_t target_ls_count = target_lg_cnt * tenant_info_->job_desc_.get_ls_cnt_in_group();
       if (tenant_info_->job_desc_.get_enable_transfer()) {
         ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
         if (OB_ISNULL(schema_service)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("schema service is null", KR(ret), K(schema_service));
-        } else if (OB_FAIL(tenant_ls_bg_info_.init(tenant_info_->tenant_id_, target_ls_count_each_ug))) {
+          LOG_WARN("schema service is null", KR(ret), KP(schema_service));
+        } else if (OB_FAIL(tenant_ls_bg_info_.init(tenant_info_->tenant_id_, target_ls_count))) {
           LOG_WARN("init tenant LS balance group info fail", KR(ret), K(tenant_info_->tenant_id_),
-              K(target_ls_count_each_ug));
+              K(target_ls_count));
         } else if (OB_FAIL(tenant_ls_bg_info_.build("LS_GROUP_COUNT_BALANCE",
                 *sql_proxy_, *schema_service))) {
           LOG_WARN("build tenant all balance group info for all LS fail", KR(ret));
         }
       }
-      for (int64_t i = 0; OB_SUCC(ret) && i < row_cnt; ++i) {
-        if (OB_FAIL(balance_each_unit_group_by_row_(ls_group_matrix, i, target_lg_count_each_ug))) {
-          LOG_WARN("failed to balance each unit group", KR(ret), K(i), K(target_lg_count_each_ug));
+      if (OB_FAIL(ret)) {
+      } else if (!is_deleting_only_lsg_empty(deleting_only_lsg)) {
+        if (OB_FAIL(try_split_deleting_only_ls_groups_(hetero_ug, deleting_only_lsg))) {
+          LOG_WARN("failed to try split deleting only ls groups", KR(ret));
+        }
+      } else {
+        LSGroupMatrix ls_group_matrix;
+        if (OB_FAIL(construct_ls_group_matrix_to_do_balance_(hetero_ug, ls_group_matrix))) {
+          LOG_WARN("fail to construct ls group matrix", KR(ret));
+        } else {
+          const int64_t row_cnt = ls_group_matrix.get_row_count();
+          const int64_t target_lg_count_each_ug = target_lg_cnt / row_cnt;
+          LOG_INFO("need balance", K(target_lg_cnt), K(row_cnt), K(target_lg_count_each_ug));
+          for (int64_t i = 0; OB_SUCC(ret) && i < row_cnt; ++i) {
+            if (OB_FAIL(balance_each_unit_group_by_row_(ls_group_matrix, i, target_lg_count_each_ug))) {
+              LOG_WARN("failed to balance each unit group", KR(ret), K(i), K(target_lg_count_each_ug));
+            }
+          }
         }
       }
     }
@@ -3521,11 +3689,14 @@ int ObLSGroupCountBalance::balance(const bool only_job_strategy)
 }
 
 int ObLSGroupCountBalance::check_can_balance_ls_group_(
-    bool &need_balance, int64_t &target_lg_cnt) const
+    const ObHeteroUGArray &hetero_ug,
+    const ObArray<ObArray<ObLSGroupStat*>> &deleting_only_lsg,
+    const int64_t target_lg_cnt,
+    bool &need_balance)
 {
   int ret = OB_SUCCESS;
-  target_lg_cnt = 0;
   need_balance = false;
+  ObArray<bool> need_split_del_only_lsg;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("inner stat error", KR(ret));
   } else if (!tenant_info_->is_primary()) {
@@ -3536,8 +3707,21 @@ int ObLSGroupCountBalance::check_can_balance_ls_group_(
   } else if (!tenant_info_->job_desc_.get_enable_rebalance()) {
     need_balance = false;
     LOG_INFO("tenant can not rebalance, no need do ls group count balance");
-  } else if (OB_FAIL(tenant_info_->job_desc_.get_unit_lcm_count(target_lg_cnt))) {
-    LOG_WARN("failed to get unit lcm count", KR(ret), "job_desc", tenant_info_->job_desc_);
+  // If deleting-only lsg exist, handle it first
+  } else if (!is_deleting_only_lsg_empty(deleting_only_lsg)) {
+    if (OB_FAIL(check_need_split_deleting_only_lsg_(
+        hetero_ug, deleting_only_lsg, need_split_del_only_lsg))) {
+      LOG_WARN("failed to check need split", KR(ret), K(hetero_ug), K(deleting_only_lsg));
+    } else if (!has_exist_in_array(need_split_del_only_lsg, true)) {
+      // Unexpected, if need_split is false, deleting-only lsg should have been
+      //   reallocated to normal ug in LSG Location Balance
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("deleting-only lsg exist, but no need split, unexpected in LSG Count Balance",
+          KR(ret), K(hetero_ug), K(deleting_only_lsg));
+    } else {
+      // need to split deleting-only ls groups
+      need_balance = true;
+    }
   } else if (tenant_info_->ls_group_array_.count() == target_lg_cnt) {
     need_balance = false;
     LOG_INFO("ls group count is match with unit", K(target_lg_cnt));
@@ -3678,38 +3862,60 @@ int ObLSGroupCountBalance::expand_ls_group_cnt_(
       ObLSGroupMatrixCell *cell = lg_matrix.get(row_index, j);
       CK(OB_NOT_NULL(cell))
       if (OB_SUCC(ret) && cell->get_expand_shrink_cnt() > 0) {
-        //对于每个需要扩容出来的cell分别做下面的操作
-        ObArray<ObLSGroupStat*> target_lg_array;
-        //构造出这个cell上所有的lg_array，target_lg_array 包含了现有的和即将扩容出来的lg的指针
-        if (OB_FAIL(get_cell_expand_lg_(*cell, target_lg_array))) {
-          LOG_WARN("failed to get cell expand lg", KR(ret), KPC(cell));
-        } else if (tenant_info_->job_desc_.get_enable_transfer()) {
-          bool is_ls_count_balanced = true;
-          ARRAY_FOREACH_X(cell->get_ls_groups(), idx, cnt, OB_SUCC(ret) && is_ls_count_balanced) {
-            const ObLSGroupStat* lg = cell->get_ls_groups().at(idx);
-            CK(OB_NOT_NULL(lg))
-            if (OB_SUCC(ret) && lg->ls_count_in_group() != tenant_info_->job_desc_.get_ls_cnt_in_group()) {
-              is_ls_count_balanced = false;
-            }
-          }
-          if (OB_FAIL(ret)) {
-          } else if (!is_ls_count_balanced
-              && OB_FAIL(expand_ls_group_cnt_in_cell_by_alter_(target_lg_array))) {
-            LOG_WARN("failed to expand ls group cnt in cell by alter", KR(ret), K(target_lg_array));
-          } else if (OB_FAIL(expand_ls_group_cnt_in_cell_by_transfer_(target_lg_array))) {
-            LOG_WARN("failed to expand ls in empty lsg by transfer", KR(ret), K(target_lg_array));
-          }
-        } else {
-          if (OB_FAIL(expand_ls_group_cnt_in_cell_by_alter_(target_lg_array))) {
-            LOG_WARN("failed to expand ls group cnt in cell by alter", KR(ret), K(target_lg_array));
-          }
+        if (OB_FAIL(expand_ls_group_cnt_in_cell_(*cell))) {
+          LOG_WARN("failed to expand ls group cnt in cell", KR(ret), KPC(cell));
         }
-        LOG_INFO("after expand", K(target_lg_array));
       }
     }
   }
   return ret;
 }
+
+int ObLSGroupCountBalance::expand_ls_group_cnt_in_cell_(ObLSGroupMatrixCell &cell)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("inner stat error", KR(ret));
+  } else if (OB_UNLIKELY(cell.get_ls_group_count() <= 0
+      || cell.get_target_lg_cnt() <= cell.get_ls_group_count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(cell));
+  } else {
+    //对于每个需要扩容出来的cell分别做下面的操作
+    ObArray<ObLSGroupStat*> target_lg_array;
+    //构造出这个cell上所有的lg_array，target_lg_array 包含了现有的和即将扩容出来的lg的指针
+    if (OB_FAIL(get_cell_expand_lg_(cell, target_lg_array))) {
+      LOG_WARN("failed to get cell expand lg", KR(ret), K(cell));
+    } else if (tenant_info_->job_desc_.get_enable_transfer()) {
+      // If ls count in each src lsg are balanced, then expand by transfer directly.
+      // If not balanced, then expand by alter first, then expand by transfer to fill
+      //   remained empty lsg (if exist). (For avoiding unnecessary split in imbalance occasions.)
+      bool is_ls_count_balanced = true;
+      ARRAY_FOREACH_X(cell.get_ls_groups(), idx, cnt, OB_SUCC(ret) && is_ls_count_balanced) {
+        const ObLSGroupStat* lg = cell.get_ls_groups().at(idx);
+        CK(OB_NOT_NULL(lg))
+        if (OB_SUCC(ret) && lg->ls_count_in_group() != tenant_info_->job_desc_.get_ls_cnt_in_group()) {
+          is_ls_count_balanced = false;
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (!is_ls_count_balanced
+          && OB_FAIL(expand_ls_group_cnt_in_cell_by_alter_(target_lg_array))) {
+        LOG_WARN("failed to expand ls group cnt in cell by alter", KR(ret), K(target_lg_array));
+      } else if (OB_FAIL(expand_ls_group_cnt_in_cell_by_transfer_(target_lg_array))) {
+        LOG_WARN("failed to expand ls in empty lsg by transfer", KR(ret), K(target_lg_array));
+      }
+    } else {
+      // enable transfer is disabled, expand by alter directly.
+      if (OB_FAIL(expand_ls_group_cnt_in_cell_by_alter_(target_lg_array))) {
+        LOG_WARN("failed to expand ls group cnt in cell by alter", KR(ret), K(target_lg_array));
+      }
+    }
+    LOG_INFO("after expand ls group cnt in cell", K(cell),K(target_lg_array));
+  }
+  return ret;
+}
+
 /*
  * 设置每个单元格应该扩容出来的个数，对于每个要扩容出来的lg选择出那个扩容后每个日志流
  * 组均值最大的单元格
@@ -4716,6 +4922,91 @@ int ObLSGroupCountBalance::generate_shrink_lg_disable_transfer_(
         }
       }//end for each ls
     }//end for each lg
+  }
+  return ret;
+}
+
+int ObLSGroupCountBalance::try_split_deleting_only_ls_groups_(
+    const ObHeteroUGArray &hetero_ug,
+    const ObArray<ObArray<ObLSGroupStat*>> &deleting_only_lsg)
+{
+  int ret = OB_SUCCESS;
+  ObArray<bool> need_split_del_only_lsg;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("inner stat error", KR(ret));
+  } else if (OB_UNLIKELY(hetero_ug.count() != deleting_only_lsg.count()
+    || is_deleting_only_lsg_empty(deleting_only_lsg))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(hetero_ug.count()), K(deleting_only_lsg.count()));
+  } else if (OB_FAIL(check_need_split_deleting_only_lsg_(
+      hetero_ug, deleting_only_lsg, need_split_del_only_lsg))) {
+    LOG_WARN("failed to check need split", KR(ret), K(hetero_ug), K(deleting_only_lsg));
+  } else {
+    // STEP 1: compute multiplier (how many ls groups should each deleting-only ls group split to)
+
+    // Example 1: z1:z2 = 20:20 -> 15:15
+    //   z1,z2: normal_ug_cnt = 15, del_only_lsg_count = 5, multiplier = 15 / gcd(5, 15) = 15 / 5 = 3
+    // by this multiplier, after split:
+    //   z1,z2: 5 * 3 = 15 can be divided by 15;
+
+    // Example 2: z1:z2 = 10:10 -> 7:6,
+    //   z1: normal_ug_cnt = 7, del_only_lsg_count = 3, multiplier1 = 7 / gcd(3, 7) = 7 / 1 = 7
+    //   z2; normal_ug_cnt = 6, del_only_lsg_count = 4, multiplier2 = 6 / gcd(4, 6) = 6 / 2 = 3
+    // then multiplier = lcm(multiplier1, multiplier2) = lcm(7, 3) = 21
+    // by this multiplier, after split:
+    //   z1: 3 * 21 = 63 can be divided by 7;
+    //   z2: 4 * 21 = 126 can be divided by 6.
+    int64_t multiplier = 1;
+    ObArray<ObLSGroupStat*> deleting_only_lsg_to_split;
+    ARRAY_FOREACH(hetero_ug, i) {
+      const int64_t ug_count = hetero_ug.at(i).count();
+      const int64_t del_only_lsg_count = deleting_only_lsg.at(i).count();
+      if (OB_UNLIKELY(ug_count <= 0)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("ug count should not be zero", KR(ret), K(i), K(ug_count));
+      } else if (del_only_lsg_count <= 0) {
+        // skip
+      } else if (!need_split_del_only_lsg.at(i)) { // defense check
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("deleting-only lsg exist, but no need split, unexpected in LSG Count Balance",
+            KR(ret), K(hetero_ug), K(deleting_only_lsg), K(need_split_del_only_lsg), K(i));
+      } else if (OB_FAIL(append_array_no_dup(deleting_only_lsg_to_split, deleting_only_lsg.at(i)))) {
+        LOG_WARN("failed to append", KR(ret));
+      } else {
+        // compute multiplier, ensure that:
+        // after split, deleting-only lsg count should be divisible by normal ug count.
+        multiplier = lcm(multiplier, ug_count / gcd(del_only_lsg_count, ug_count));
+      }
+    }
+    CK(multiplier > 1 && !deleting_only_lsg_to_split.empty());
+
+    // STEP 2: generate split task for each deleting-only lsg
+    ARRAY_FOREACH(deleting_only_lsg_to_split, i) {
+      ObLSGroupStat *src_lsg = deleting_only_lsg_to_split.at(i);
+      CK(OB_NOT_NULL(src_lsg))
+      if (OB_FAIL(ret)) {
+      } else if (OB_UNLIKELY(src_lsg->ls_count_in_group() <= 0)) {
+        LOG_WARN("skip deleting-only lsg with no ls, unexpected", KPC(src_lsg));
+      } else {
+        // construct temp cell for each deleting-only lsg, and set expand_cnt to (multiplier - 1),
+        // so that we can reuse the in-cell expand logic.
+        ObLSGroupMatrixCell temp_cell;
+        ObSEArray<ObLSGroupStat*, 1> src_array;
+        if (OB_FAIL(src_array.push_back(src_lsg))) {
+          LOG_WARN("failed to push back", KR(ret));
+        } else if (OB_FAIL(temp_cell.init_ls_groups(src_array))) {
+          LOG_WARN("failed to init temp_cell", KR(ret));
+        } else {
+          // target_lg_cnt is 1 initially, expand to multiplier.
+          temp_cell.inc_expand_cnt(multiplier - 1);
+        }
+        if (FAILEDx(expand_ls_group_cnt_in_cell_(temp_cell))) {
+          LOG_WARN("failed to expand ls group cnt in cell", KR(ret), K(temp_cell));
+        }
+      }
+    }
+    FLOG_INFO("split deleting-only ls groups", K(multiplier),
+        K(deleting_only_lsg_to_split), K(need_split_del_only_lsg));
   }
   return ret;
 }

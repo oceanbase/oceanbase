@@ -275,6 +275,17 @@
       DEF_EVENT(SCHEMA_HISTORY_RECYCLER, BATCH_RECYCLE_BY_TENANT, "batch_recycle_by_tenant",
                 recycle_schema_version);
   };
+
+  class BALANCE {
+    public:
+      DEF_MODULE(BALANCE, "BALANCE");
+      DEF_EVENT(BALANCE, UPDATE_JOB_STRATEGY, "UPDATE JOB STRATEGY",
+                job_id,
+                status,
+                old_strategy,
+                new_strategy);
+  };
+
 #endif
 #endif
 ////////////////////////////////////////////////////////////////

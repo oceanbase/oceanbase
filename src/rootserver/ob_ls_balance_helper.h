@@ -473,7 +473,7 @@ public:
       ObIArray<ObSplitLSParamArray> &dest_split_array);
   int filter_unit_list_in_locality_(const ObUnitIDList &unit_list, ObUnitIDList &tgt_unit_list, ObArray<ObZone> &tgt_zone_list);
   //把日志流组的unit_list转换成unit_group_id
-  int convert_unit_list_to_unit_stat_(const ObUnitIDList &unit_list,
+  int convert_unit_list_to_unit_stat_in_locality_(const ObUnitIDList &unit_list,
                                   ObArray<ObUnitLSStat*> &unit_stat_array);
   int reorganize_sys_ls_unit_list_();
   int do_reorganize_sys_ls_unit_list_(const bool need_remove_deleting_unit);
@@ -482,6 +482,22 @@ public:
                       const ObUnitIDList &valid_unit_list, ObUnitLSStat* &unit);
   int sort_ls_array_by_primary_zone_round_robin(const ObIArray<ObLSStatusInfo*> &ls_array,
     ObArray<ObLSStatusInfo*> &sorted_ls_array);
+  int stat_unit_in_homo_ug_array_(const ObArray<ObUnitLSStat*> &unit_stat_array,
+                                  const ObUGArray &homo_ug_array,
+                                  common::hash::ObHashMap<uint64_t, int64_t> &ug_unit_count_map,
+                                  ObArray<const ObUnitLSStat*> &unit_in_homo_zones);
+  // Collect deleting-only LSGs for each homo UG array in hetero_ug
+  int get_deleting_only_lsg_by_ug_array_(
+      const ObHeteroUGArray &hetero_ug,
+      ObArray<ObArray<ObLSGroupStat*>> &deleting_only_lsg);
+  // Check if deleting-only LSGs need to be split by LSGroupCountBalance
+  // If true, LSGroupLocationBalance will not assign deleting-only LSGs to any UG
+  // and wait for LSGroupCountBalance to split to a number of LSGs that is
+  // divisible by normal UG count in each homo UG array.
+  int check_need_split_deleting_only_lsg_(
+      const ObHeteroUGArray &hetero_ug,
+      const ObArray<ObArray<ObLSGroupStat*>> &deleting_only_lsg,
+      ObIArray<bool> &need_split_del_only_lsg);
 protected:
   struct CompareByPrimaryZone
   {
@@ -565,11 +581,8 @@ public:
 private:
   int choose_unit_group_from_ug_array_(const ObArray<ObUnitLSStat*> &unit_stat_array,
                                        ObUGArray &ug_array,
+                                       const bool need_split_del_only_lsg,
                                        uint64_t &unit_group_id);
-  int get_unit_info_in_ug_array_(const ObArray<ObUnitLSStat*> &unit_stat_array,
-                                 const ObUGArray &ug_array,
-                                 common::hash::ObHashMap<uint64_t, int64_t> &ug_map,
-                                 ObArray<const ObUnitLSStat*> &unit_in_ug);
   int reorganize_new_unit_list_(const ObArray<uint64_t> &unit_group_array,
                                 ObArray<ObUnitLSStat*> &unit_stat_array,
                                 ObLSGroupStat &ls_group);
@@ -607,9 +620,9 @@ public:
   {
     return fabs(target_lg_cnt_ - get_ls_group_count()) ;
   }
-  void inc_expand_cnt()
+  void inc_expand_cnt(const int64_t delta = 1)
   {
-    target_lg_cnt_++;
+    target_lg_cnt_ += delta;
   }
   void inc_shrink_cnt()
   {
@@ -639,9 +652,13 @@ public:
   ~ObLSGroupCountBalance() {}
   int balance(const bool only_job_strategy);
 private:
-  int check_can_balance_ls_group_(bool &need_balance,
-      int64_t &target_lg_count) const;
+  int check_can_balance_ls_group_(
+      const ObHeteroUGArray &hetero_ug,
+      const ObArray<ObArray<ObLSGroupStat*>> &deleting_only_lsg,
+      const int64_t target_lg_cnt,
+      bool &need_balance);
   int construct_ls_group_matrix_to_do_balance_(
+      const ObHeteroUGArray &hetero_ug_array,
       LSGroupMatrix &ls_group_matrix);
   int construct_ls_group_matrix_with_homo_deployed_(
       const ObHeteroUGArray &hetero_ug_array,
@@ -670,6 +687,7 @@ private:
       const int64_t row_index, const int64_t target_lg_cnt);
   int expand_ls_group_cnt_(LSGroupMatrix &lg_matrix,
       const int64_t row_index, const int64_t target_lg_cnt, const int64_t curr_lg_cnt);
+  int expand_ls_group_cnt_in_cell_(ObLSGroupMatrixCell &cell);
   int set_cell_expand_lg_cnt_(LSGroupMatrix &lg_matrix,
       const int64_t row_index, const int64_t target_lg_cnt, const int64_t curr_lg_cnt);
   int expand_empty_row_by_create_(LSGroupMatrix &lg_matrix, const int64_t row_index, const int64_t target_lg_cnt);
@@ -697,6 +715,9 @@ private:
       ObArray<ObLSGroupStat*> &shrink_lg);
   int construct_ls_shrink_task_(const ObSplitLSParamArray &src_split_param,
                                 const ObLSStatusInfo &ls_status_info);
+  int try_split_deleting_only_ls_groups_(
+      const ObHeteroUGArray &hetero_ug,
+      const ObArray<ObArray<ObLSGroupStat*>> &deleting_only_lsg);
 };
 
 //日志流组内均衡
