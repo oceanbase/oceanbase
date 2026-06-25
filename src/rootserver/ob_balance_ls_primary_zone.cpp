@@ -53,7 +53,11 @@ int ObBalanceLSPrimaryZone::inner_try_adjust_user_ls_primary_zone_(
                    tenant_schema, multi_level_primary_zone_array))) {
     LOG_WARN("failed to get tenant primary zone array", KR(ret), K(tenant_schema));
   } else if (OB_FAIL(status_op.get_ls_primary_zone_info_by_order_ls_group(
-          tenant_id, info_array, *GCTX.sql_proxy_))) {
+          tenant_id, info_array, *GCTX.sql_proxy_,
+          true/*skip_dropping_and_offline*/))) {
+    // Ignore LS in DROPPING or WAIT_OFFLINE status, which may be residual from last balance task
+    // and will be deleted by GC. These status can not fallback, no need to take care.
+    // We don't want these LS to affect primary_zone balance and cause unnecessary primary zone change.
     LOG_WARN("failed to get ls primary zone info array", KR(ret), K(tenant_id));
   } else if (OB_FAIL(old_to_new_pz_index_map.create(DEFAULT_ZONE_COUNT, "LSPZMap"))) {
     LOG_WARN("failed to create old_to_new_pz_index_map", KR(ret));

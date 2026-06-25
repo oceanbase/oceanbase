@@ -1467,8 +1467,11 @@ int ObLSStatusOperator::get_ls_primary_zone_info(const uint64_t tenant_id, const
   return ret;
 }
 
-int ObLSStatusOperator::get_ls_primary_zone_info_by_order_ls_group(const uint64_t tenant_id,
-                               ObLSPrimaryZoneInfoIArray &primary_zone_info_array, ObISQLClient &client)
+int ObLSStatusOperator::get_ls_primary_zone_info_by_order_ls_group(
+    const uint64_t tenant_id,
+    ObLSPrimaryZoneInfoIArray &primary_zone_info_array,
+    ObISQLClient &client,
+    const bool skip_dropping_and_offline)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
@@ -1478,7 +1481,13 @@ int ObLSStatusOperator::get_ls_primary_zone_info_by_order_ls_group(const uint64_
     common::ObSqlString sql;
     if (OB_FAIL(construct_ls_primary_info_sql_(sql))) {
       LOG_WARN("failed to construct sql", KR(ret), K(sql));
-    } else if (OB_FAIL(sql.append_fmt(" where a.tenant_id = %lu order by a.ls_group_id", tenant_id))) {
+    } else if (OB_FAIL(sql.append_fmt(" where a.tenant_id = %lu", tenant_id))) {
+      LOG_WARN("failed to assign sql", KR(ret), K(tenant_id), K(sql));
+    } else if (skip_dropping_and_offline
+        && OB_FAIL(sql.append_fmt(" and a.status != '%s' and a.status != '%s'",
+            ls_status_to_str(OB_LS_DROPPING), ls_status_to_str(OB_LS_WAIT_OFFLINE)))) {
+      LOG_WARN("failed to assign sql", KR(ret), K(tenant_id), K(sql));
+    } else if (OB_FAIL(sql.append(" order by a.ls_group_id"))) {
       LOG_WARN("failed to assign sql", KR(ret), K(tenant_id), K(sql));
     } else if (OB_FAIL(exec_read(tenant_id, sql, client, this, primary_zone_info_array))) {
       LOG_WARN("failed to read ls recovery", KR(ret), K(tenant_id), K(sql));

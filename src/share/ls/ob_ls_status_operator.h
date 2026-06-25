@@ -570,9 +570,11 @@ public:
                 share::ObLSPrimaryZoneInfo &status_info);
   int get_ls_primary_zone_info(const uint64_t tenant_id, const ObLSID &id,
                                ObLSPrimaryZoneInfo &primary_zone_info, ObISQLClient &client);
-  int get_ls_primary_zone_info_by_order_ls_group(const uint64_t tenant_id,
-                                         ObLSPrimaryZoneInfoIArray &primary_zone_info_array,
-                                         ObISQLClient &client);
+  int get_ls_primary_zone_info_by_order_ls_group(
+      const uint64_t tenant_id,
+      ObLSPrimaryZoneInfoIArray &primary_zone_info_array,
+      ObISQLClient &client,
+      const bool skip_dropping_and_offline = false);
   /*
    * description: get user tenant max ls id, only for compatible
    * @param[in] tenant_id
