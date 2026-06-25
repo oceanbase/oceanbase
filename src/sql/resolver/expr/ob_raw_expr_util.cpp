@@ -8501,7 +8501,8 @@ bool ObRawExprUtils::is_pseudo_column_like_expr(const ObRawExpr &expr)
   bool bret = false;
   if (ObRawExpr::EXPR_PSEUDO_COLUMN == expr.get_expr_class() ||
       T_FUN_SYS_ROWNUM == expr.get_expr_type() ||
-      T_FUN_SYS_SEQ_NEXTVAL == expr.get_expr_type()) {
+      T_FUN_SYS_SEQ_NEXTVAL == expr.get_expr_type() ||
+      T_FUN_SYS_CALC_UROWID == expr.get_expr_type()) {
     bret = true;
   }
   return bret;
