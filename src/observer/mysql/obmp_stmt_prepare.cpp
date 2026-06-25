@@ -507,8 +507,8 @@ int ObMPStmtPrepare::do_process(ObSQLSessionInfo &session,
       sqlstat_record.set_partition_cnt(result.get_exec_context().get_das_ctx().get_related_tablet_cnt());
       sqlstat_record.set_is_route_miss(result.get_session().partition_hit().get_bool()? 0 : 1);
       sqlstat_record.set_is_plan_cache_hit(ctx_.plan_cache_hit_);
-      sqlstat_record.set_is_muti_query(session.get_capability().cap_flags_.OB_CLIENT_MULTI_STATEMENTS);
       if (OB_NOT_NULL(session.get_cur_exec_ctx()) && OB_NOT_NULL(session.get_cur_exec_ctx()->get_sql_ctx())) {
+        sqlstat_record.set_is_muti_query(session.get_cur_exec_ctx()->get_sql_ctx()->multi_stmt_item_.is_part_of_multi_stmt());
         sqlstat_record.set_is_muti_query_batch(session.get_cur_exec_ctx()->get_sql_ctx()->multi_stmt_item_.is_batched_multi_stmt());
       }
       if (OB_NOT_NULL(result.get_physical_plan())) {

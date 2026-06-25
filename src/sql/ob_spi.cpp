@@ -1762,7 +1762,8 @@ int ObSPIService::spi_end_trans(ObPLExecCtx *ctx, const char *sql, bool is_rollb
         audit_record.is_executor_rpc_ = false;
         audit_record.is_inner_sql_ = false;
         audit_record.is_hit_plan_cache_ = false;
-        audit_record.is_multi_stmt_ = my_session->get_capability().cap_flags_.OB_CLIENT_MULTI_STATEMENTS;
+        audit_record.is_multi_stmt_ =
+            ctx->exec_ctx_->get_sql_ctx()->multi_stmt_item_.is_part_of_multi_stmt();
         audit_record.is_batched_multi_stmt_ = ctx->exec_ctx_->get_sql_ctx()->multi_stmt_item_.is_batched_multi_stmt();
         audit_record.is_perf_event_closed_ = !lib::is_diagnose_info_enabled();
         audit_record.plsql_exec_time_ = my_session->get_plsql_exec_time();
