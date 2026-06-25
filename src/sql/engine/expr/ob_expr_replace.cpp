@@ -591,8 +591,14 @@ int ObExprReplace::replace_vector_inner(VECTOR_EVAL_FUNC_ARG_DECL)
   bool is_text_tc = ob_is_text_tc(expr.datum_meta_.type_);
 
 #if OB_USE_MULTITARGET_CODE
-  ObStringSearcher string_searcher_entity;
-  void *string_searcher = &string_searcher_entity;
+  void *string_searcher = nullptr;
+  char tmp_buf[sizeof(ObStringSearcher)] = {0};
+  if (common::is_arch_supported(ObTargetArch::AVX2)) {
+    ObStringSearcher *string_searcher_entity = new (tmp_buf) ObStringSearcher();
+    string_searcher = string_searcher_entity;
+  } else {
+    string_searcher = nullptr;
+  }
 #else
   void *string_searcher = nullptr;
 #endif
