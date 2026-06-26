@@ -160,7 +160,7 @@ int ObDtlTenantMemManager::free(ObDtlLinkedBuffer *buf)
         K(mem_mgr->get_free_queue_length()), K(mem_mgr->queue_cnt()),
         K(mem_mgr->get_alloc_cnt()), K(mem_mgr->get_free_cnt()));
       // buffer_status();
-      if (OB_SIZE_OVERFLOW == ret) {
+      if (OB_SIZE_OVERFLOW == ret || OB_TIMEOUT == ret) {
         LOG_TRACE("overflow queue capacity", K(ret), K(hash_val));
         ret = OB_SUCCESS;
       }
