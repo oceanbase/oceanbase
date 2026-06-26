@@ -1810,7 +1810,7 @@ int ObResolverUtils::get_routine(pl::ObPLPackageGuard &package_guard,
         ObSynonymChecker synonym_checker;
         bool routine_name_is_synonym = package_name.empty();
         const ObString &synonym_name = routine_name_is_synonym ? routine_name : package_name;
-        OZ (schema_checker.init(resolve_ctx.schema_guard_));
+        OZ (schema_checker.init(resolve_ctx.schema_guard_, resolve_ctx.session_info_.get_sessid_for_table()));
         OZ (schema_checker.get_database_id(tenant_id, (db_name.empty() ? current_database : db_name), database_id));
         OZ (resolve_synonym_object_recursively(schema_checker, synonym_checker, tenant_id, database_id,
                                                synonym_name, object_db_id, object_name, exist));
@@ -1888,7 +1888,7 @@ int ObResolverUtils::get_routine(const pl::ObPLResolveCtx &resolve_ctx,
   ObSchemaChecker schema_checker;
   routine = NULL;
   uint64_t udt_id = OB_INVALID_ID;
-  OZ (schema_checker.init(resolve_ctx.schema_guard_));
+  OZ (schema_checker.init(resolve_ctx.schema_guard_, resolve_ctx.session_info_.get_sessid_for_table()));
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(get_candidate_routines(schema_checker,
                                      tenant_id,
