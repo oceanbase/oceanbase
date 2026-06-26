@@ -95,61 +95,40 @@ void ObTenantCtxAllocator::free(void *ptr)
 int ObTenantCtxAllocatorV2::iter_label(VisitFunc func) const
 {
   int ret = OB_SUCCESS;
-  struct ItemWrapper
-  {
-    ObLabel label_;
-    LabelItem *item_;
-  };
-  auto &mem_dump = ObMemoryDump().get_instance();
+  ObMemoryDump &mem_dump = ObMemoryDump().get_instance();
   if (OB_UNLIKELY(!mem_dump.is_inited())) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "mem dump not inited", K(ret));
   } else {
     ObLatchRGuard guard(mem_dump.iter_lock_, common::ObLatchIds::MEM_DUMP_ITER_LOCK);
-    const int item_cap = 1024;
-    SMART_VAR(ItemWrapper[item_cap], items) {
-      LabelItem mb_item;
-      int64_t item_cnt = 0;
-      auto *up_litems = mem_dump.r_stat_->up2date_items_;
-      auto &tcrs = mem_dump.r_stat_->tcrs_;
-      int tcr_cnt = mem_dump.r_stat_->tcr_cnt_;
-      auto it = std::lower_bound(tcrs, tcrs + tcr_cnt, std::make_pair(tenant_id_, ctx_id_),
-                                  &ObMemoryDump::TenantCtxRange::compare);
-      if (ObCtxIds::KVSTORE_CACHE_ID == ctx_id_) {
-        items[item_cnt].label_ = ObNewModIds::OB_KVSTORE_CACHE_MB;
-        int len = strlen(ObNewModIds::OB_KVSTORE_CACHE_MB);
-        MEMCPY(mb_item.str_, ObNewModIds::OB_KVSTORE_CACHE_MB, len);
-        mb_item.str_[len] = '\0';
-        mb_item.str_len_ = len;
+    LabelItem mb_item;
+    LabelItem *up_litems = mem_dump.r_stat_->up2date_items_;
+    int32_t *up_items_sorted_ids = mem_dump.r_stat_->up_items_sorted_ids_;
+    ObMemoryDump::TenantCtxRange *tcrs = mem_dump.r_stat_->tcrs_;
+    int tcr_cnt = mem_dump.r_stat_->tcr_cnt_;
+    ObMemoryDump::TenantCtxRange *tcr = std::lower_bound(tcrs, tcrs + tcr_cnt, std::make_pair(tenant_id_, ctx_id_),
+                                        &ObMemoryDump::TenantCtxRange::compare);
+    if (ObCtxIds::KVSTORE_CACHE_ID == ctx_id_) {
+      int len = strlen(ObNewModIds::OB_KVSTORE_CACHE_MB);
+      MEMCPY(mb_item.str_, ObNewModIds::OB_KVSTORE_CACHE_MB, len);
+      mb_item.str_[len] = '\0';
+      mb_item.str_len_ = len;
 
-        IGNORE_RETURN with_resource_handle_invoke([&](const ObTenantMemoryMgr *mgr) {
-          mb_item.hold_ += mgr->get_cache_hold();
-          mb_item.count_ += mgr->get_cache_item_count();
-          return OB_SUCCESS;
-        });
-        items[item_cnt++].item_ = &mb_item;
-      }
-      if (it != tcrs + tcr_cnt &&
-          it->tenant_id_ == tenant_id_ &&
-          it->ctx_id_ == ctx_id_) {
-        auto &tcr = *it;
-        for (int64_t j = tcr.start_;
-              OB_SUCC(ret) && j < tcr.end_ && item_cnt < item_cap;
-              ++j) {
-          items[item_cnt].label_ = up_litems[j].str_;
-          items[item_cnt].item_ = &up_litems[j];
-          item_cnt++;
-        }
-      }
-      if (OB_SUCC(ret)) {
-        lib::ob_sort(items, items + item_cnt,
-            [](ItemWrapper &l, ItemWrapper &r)
-            {
-              return (l.item_->hold_  > r.item_->hold_);
-            });
-        for (int64_t i = 0; OB_SUCC(ret) && i < item_cnt; ++i) {
-          ret = func(items[i].label_, items[i].item_);
-        }
+      IGNORE_RETURN with_resource_handle_invoke([&](const ObTenantMemoryMgr *mgr) {
+        mb_item.hold_ += mgr->get_cache_hold();
+        mb_item.count_ += mgr->get_cache_item_count();
+        return OB_SUCCESS;
+      });
+      ObLabel label = mb_item.str_;
+      ret = func(label, &mb_item);
+    }
+    if (tcr != tcrs + tcr_cnt &&
+        tcr->tenant_id_ == tenant_id_ &&
+        tcr->ctx_id_ == ctx_id_) {
+      for (int64_t j = tcr->start_; OB_SUCC(ret) && j < tcr->end_; ++j) {
+        LabelItem *item = &up_litems[up_items_sorted_ids[j]];
+        ObLabel label = item->str_;
+        ret = func(label, item);
       }
     }
   }

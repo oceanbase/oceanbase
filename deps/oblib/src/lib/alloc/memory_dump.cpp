@@ -233,7 +233,7 @@ int ObMemoryDump::check_sql_memory_leak()
   return ret;
 }
 
-void ObMemoryDump::print_malloc_sample_info()
+void ObMemoryDump::print_malloc_sample_info(uint64_t min_print_size)
 {
   int ret = OB_SUCCESS;
   typedef ObSortedVector<ObMallocSamplePair*> MallocSamplePairVector;
@@ -245,47 +245,75 @@ void ObMemoryDump::print_malloc_sample_info()
     MallocSamplePairVector::iterator pos;
     ret = vector.insert(&(*it), pos, ObMallocSamplePairCmp());
   }
-  int64_t log_pos = 0;
-  int64_t tenant_id = OB_SERVER_TENANT_ID;
-  int64_t ctx_id = ObCtxIds::DEFAULT_CTX_ID;
-  const char *label = "";
-  int64_t bt_cnt = 0;
   const int64_t MAX_LABEL_BT_CNT = 5;
-  const int64_t MIN_PRINT_SIZE = 1 << 21; // 2M
-  for (MallocSamplePairVector::iterator it = vector.begin(); OB_SUCC(ret) && it != vector.end(); ++it) {
-    if ((*it)->first.tenant_id_ != tenant_id || (*it)->first.ctx_id_ != ctx_id) {
-      if (log_pos > 0) {
-        _LOG_INFO("\n[MEMORY][BT] tenant_id=%5ld ctx_id=%25s\n%.*s",
-              tenant_id, get_global_ctx_info().get_ctx_name(ctx_id), static_cast<int>(log_pos), log_buf_);
-        log_pos = 0;
-      }
-      tenant_id = (*it)->first.tenant_id_;
-      ctx_id = (*it)->first.ctx_id_;
-      label = (*it)->first.label_;
-      bt_cnt = 0;
-    } else if (0 != STRCMP(label, (*it)->first.label_)) {
-      label = (*it)->first.label_;
-      bt_cnt = 0;
+  const int64_t MAX_TOP_LABELS = 3;
+  int64_t log_pos = 0;
+  char top_labels[MAX_TOP_LABELS][lib::AOBJECT_LABEL_SIZE + 1];
+  TenantCtxRange *tcrs = r_stat_->tcrs_;
+  TenantCtxRange *tcrs_end = tcrs + r_stat_->tcr_cnt_;
+  LabelItem *items = r_stat_->up2date_items_;
+  int32_t *sorted_ids = r_stat_->up_items_sorted_ids_;
+  MallocSamplePairVector::iterator vec_it = vector.begin();
+  for (TenantCtxRange *tcr_it = tcrs; OB_SUCC(ret) && tcr_it != tcrs_end; ++tcr_it) {
+    uint64_t tenant_id = tcr_it->tenant_id_;
+    uint64_t ctx_id = tcr_it->ctx_id_;
+    // skip vector entries with (tenant_id, ctx_id) < current tcr
+    while (vec_it != vector.end() &&
+           ((uint64_t)(*vec_it)->first.tenant_id_ < tenant_id ||
+            ((uint64_t)(*vec_it)->first.tenant_id_ == tenant_id &&
+             (uint64_t)(*vec_it)->first.ctx_id_ < ctx_id))) {
+      ++vec_it;
     }
-    if (bt_cnt < MAX_LABEL_BT_CNT) {
-      if ((*it)->second.alloc_bytes_ < MIN_PRINT_SIZE) {
+    // collect top-N labels from pre-sorted indices
+    int64_t range_len = tcr_it->end_ - tcr_it->start_;
+    int64_t top_label_cnt = 0;
+    for (; top_label_cnt < MAX_TOP_LABELS && top_label_cnt < range_len; ++top_label_cnt) {
+      int32_t idx = sorted_ids[tcr_it->start_ + top_label_cnt];
+      if (items[idx].hold_ < min_print_size) {
+        break;
+      }
+      STRNCPY(top_labels[top_label_cnt], items[idx].str_, lib::AOBJECT_LABEL_SIZE);
+      top_labels[top_label_cnt][lib::AOBJECT_LABEL_SIZE] = '\0';
+    }
+    if (top_label_cnt == 0) {
+      continue;
+    }
+    // iterate vector entries matching this (tenant_id, ctx_id)
+    const char *label = "";
+    int64_t bt_cnt = 0;
+    bool in_top = false;
+    while (OB_SUCC(ret) && vec_it != vector.end() &&
+           (uint64_t)(*vec_it)->first.tenant_id_ == tenant_id &&
+           (uint64_t)(*vec_it)->first.ctx_id_ == ctx_id) {
+      if (0 != STRCMP(label, (*vec_it)->first.label_)) {
+        label = (*vec_it)->first.label_;
+        bt_cnt = 0;
+        in_top = false;
+        for (int64_t i = 0; i < top_label_cnt; ++i) {
+          if (0 == STRCMP(top_labels[i], label)) { in_top = true; break; }
+        }
+      }
+      if (!in_top || bt_cnt >= MAX_LABEL_BT_CNT) {
+        ++vec_it;
         continue;
       }
       char bt[MAX_BACKTRACE_LENGTH];
-      parray(bt, sizeof(bt), (int64_t*)(*it)->first.bt_, AOBJECT_BACKTRACE_COUNT);
+      parray(bt, sizeof(bt), (int64_t*)(*vec_it)->first.bt_, AOBJECT_BACKTRACE_COUNT);
       ret = databuff_printf(log_buf_, LOG_BUF_LEN, log_pos, "[MEMORY][BT] mod=%15s, alloc_bytes=% '15ld, alloc_count=% '15ld, bt=%s\n",
-            label, (*it)->second.alloc_bytes_, (*it)->second.alloc_count_, bt);
+            label, (*vec_it)->second.alloc_bytes_, (*vec_it)->second.alloc_count_, bt);
       if (OB_SUCC(ret) && log_pos > LOG_BUF_LEN / 2) {
         _LOG_INFO("\n[MEMORY][BT] tenant_id=%5ld ctx_id=%25s\n%.*s",
             tenant_id, get_global_ctx_info().get_ctx_name(ctx_id), static_cast<int>(log_pos), log_buf_);
         log_pos = 0;
       }
       bt_cnt++;
+      ++vec_it;
     }
-  }
-  if (OB_SUCC(ret) && log_pos > 0) {
-    _LOG_INFO("\n[MEMORY][BT] tenant_id=%5ld ctx_id=%25s\n%.*s",
-        tenant_id, get_global_ctx_info().get_ctx_name(ctx_id), static_cast<int>(log_pos), log_buf_);
+    if (OB_SUCC(ret) && log_pos > 0) {
+      _LOG_INFO("\n[MEMORY][BT] tenant_id=%5ld ctx_id=%25s\n%.*s",
+          tenant_id, get_global_ctx_info().get_ctx_name(ctx_id), static_cast<int>(log_pos), log_buf_);
+      log_pos = 0;
+    }
   }
 }
 
@@ -634,6 +662,14 @@ void ObMemoryDump::handle(void *task)
           tcr.ctx_id_ = ctx_id;
           tcr.start_ = orig_item_used;
           tcr.end_ = item_used;
+          for (int64_t i = tcr.start_; i < tcr.end_; ++i) {
+            w_stat->up_items_sorted_ids_[i] = i;
+          }
+          ob_sort(w_stat->up_items_sorted_ids_ + tcr.start_,
+                  w_stat->up_items_sorted_ids_ + tcr.end_,
+                  [w_stat](const int32_t &l, const int32_t &r) {
+                    return w_stat->up2date_items_[l].hold_ > w_stat->up2date_items_[r].hold_;
+                  });
         }
         if (segv_cnt > 128) {
           LOG_WARN("too many sigsegv, maybe there is a low-level bug", K(segv_cnt));
@@ -685,10 +721,7 @@ void ObMemoryDump::handle(void *task)
       ma->print_tenant_ctx_memory_usage(tenant_id, m_task->min_print_size_);
     }
     print_capture_memory_info();
-
-#ifdef FATAL_ERROR_HANG
-    print_malloc_sample_info();
-#endif
+    print_malloc_sample_info(m_task->min_print_size_);
   } else {
     int fd = -1;
     if (-1 == (fd = ::open(LOG_FILE,

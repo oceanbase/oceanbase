@@ -159,6 +159,7 @@ struct TenantCtxRange
 
 struct Stat {
   LabelItem up2date_items_[MAX_LABEL_ITEM_CNT];
+  int32_t up_items_sorted_ids_[MAX_LABEL_ITEM_CNT];
   TenantCtxRange tcrs_[MAX_TENANT_CNT * ObCtxIds::MAX_CTX_ID];
   lib::ObMallocSampleMap  malloc_sample_map_;
   int tcr_cnt_ = 0;
@@ -223,7 +224,7 @@ private:
   void run1() override;
   void handle(void *task);
 
-  void print_malloc_sample_info();
+  void print_malloc_sample_info(uint64_t min_print_size);
 private:
   AChunk *find_chunk(void *ptr);
 private:
