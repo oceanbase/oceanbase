@@ -1242,11 +1242,8 @@ int ObShowGrants::calc_show_user_id(uint64_t &show_user_id, ObIArray<uint64_t> &
               show_user_id = start_key_obj_ptr[0].get_int();
             }
           } else {
-            ret = OB_ERR_UNEXPECTED;
-            SERVER_LOG(WARN, "Start key and end key obj type should be ObIntType",
-                K(ret),
-                "start type", start_key_obj_ptr[0].get_type(),
-                "end type", end_key_obj_ptr[0].get_type());
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "show grants requires an exact user_id value");
           }
         }
       }
