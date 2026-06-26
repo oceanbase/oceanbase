@@ -2173,14 +2173,27 @@ int ObDDLRedefinitionTask::sync_column_stats_info_accross_tenant(common::ObMySQL
     if (OB_FAIL(ret)) {
     } else if (target_column_stats.empty()) {
       LOG_INFO("column stats are empty, no need to sync", K_(tenant_id), K_(dst_tenant_id), K_(object_id), K_(target_object_id));
-    } else if (OB_FAIL(stat_svr.update_column_stat(dst_tenant_schema_guard,
+    } else {
+      const int64_t BATCH_SIZE = 256;
+      ObSEArray<ObOptColumnStat *, 256> batch_column_stats;
+      for (int64_t i = 0; OB_SUCC(ret) && i < target_column_stats.count(); i++) {
+        if (OB_FAIL(batch_column_stats.push_back(target_column_stats.at(i)))) {
+          LOG_WARN("failed to push back column stat", K(ret));
+        } else if (batch_column_stats.count() >= BATCH_SIZE || i == target_column_stats.count() - 1) {
+          if (OB_FAIL(stat_svr.update_column_stat(dst_tenant_schema_guard,
                                                    dst_tenant_id_,
                                                    allocator,
                                                    trans.get_connection(),
-                                                   target_column_stats,
+                                                   batch_column_stats,
                                                    ObTimeUtility::current_time(),
                                                    false /* need update histogram table */))) {
-      LOG_WARN("failed to update column stats", K(ret), K_(dst_tenant_id), K_(target_object_id));
+            LOG_WARN("failed to update column stats", K(ret), K_(dst_tenant_id), K_(target_object_id),
+                     K(i), K(target_column_stats.count()));
+          } else {
+            batch_column_stats.reuse();
+          }
+        }
+      }
     }
   }
 
