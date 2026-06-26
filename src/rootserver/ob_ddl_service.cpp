@@ -2070,8 +2070,14 @@ int ObDDLService::start_mview_complete_refresh_task(
                                                                          arg.based_schema_object_infos_,
                                                                          arg.direct_dep_cnt_))) {
     LOG_WARN("fail to collect based schema object infos", KR(ret), K(tenant_id), K(tenant_data_version));
+  } else if (OB_FAIL(ObMViewRefresher::calc_create_mv_refresh_parallelism(schema_guard,
+                                                                          tenant_id,
+                                                                          ddl_parallel_hint,
+                                                                          mv_refresh_info->refresh_dop_,
+                                                                          arg.parallelism_))) {
+    LOG_WARN("fail to calc create mv refresh parallelism", KR(ret), K(tenant_id),
+             K(ddl_parallel_hint), K(mv_refresh_info->refresh_dop_));
   } else {
-    arg.parallelism_ = (ddl_parallel_hint > 0 ? ddl_parallel_hint : mv_refresh_info->refresh_dop_);
     arg.tz_info_ =  arg.tz_info_wrap_.get_tz_info_offset();
     arg.nls_formats_[ObNLSFormatEnum::NLS_DATE] = data_format_schema->get_value();
     arg.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP] = nls_timestamp_format->get_value();

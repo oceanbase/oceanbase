@@ -179,6 +179,45 @@ int ObMViewRefresher::calc_mv_refresh_parallelism(const int64_t refresh_param_do
   return ret;
 }
 
+int ObMViewRefresher::calc_create_mv_refresh_parallelism(ObSchemaGetterGuard &schema_guard,
+                                                         const uint64_t tenant_id,
+                                                         const int64_t ddl_parallel_hint,
+                                                         const int64_t refresh_dop,
+                                                         int64_t &refresh_parallelism)
+{
+  int ret = OB_SUCCESS;
+  refresh_parallelism = 0;
+  uint64_t session_var_refresh_dop = 0;
+  const ObSysVarSchema *mview_refresh_dop_schema = nullptr;
+  if (ddl_parallel_hint > 0) {
+    refresh_parallelism = ddl_parallel_hint;
+  } else if (refresh_dop > 0) {
+    refresh_parallelism = refresh_dop;
+  } else if (OB_FAIL(schema_guard.get_tenant_system_variable(tenant_id,
+                                                             share::SYS_VAR_MVIEW_REFRESH_DOP,
+                                                             mview_refresh_dop_schema))) {
+    LOG_WARN("fail to get tenant system variable mview_refresh_dop", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(mview_refresh_dop_schema)) {
+    refresh_parallelism = 1;
+  } else {
+    ObArenaAllocator allocator("MViewRefresh");
+    ObObj value_obj;
+    if (OB_FAIL(mview_refresh_dop_schema->get_value(&allocator, NULL, value_obj))) {
+      LOG_WARN("fail to get value of mview_refresh_dop", KR(ret));
+    } else {
+      session_var_refresh_dop = value_obj.get_uint64();
+      if (session_var_refresh_dop > 0) {
+        refresh_parallelism = session_var_refresh_dop;
+      } else {
+        refresh_parallelism = 1;
+      }
+    }
+  }
+  LOG_TRACE("calc create mv refresh parallelism", K(ddl_parallel_hint), K(refresh_dop),
+            K(session_var_refresh_dop), K(refresh_parallelism));
+  return ret;
+}
+
 // purge mlog, to removed in future
 int ObMViewRefresher::purge_mlog(const ObIArray<ObMLogInfo> &mlog_infos,
                                  const ObIArray<ObDependencyInfo> &dependency_infos)
