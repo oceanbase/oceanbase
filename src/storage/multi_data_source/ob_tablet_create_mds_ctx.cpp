@@ -148,6 +148,18 @@ int ObTabletCreateMdsCtx::deserialize(const char *buf, const int64_t buf_len, in
   return ret;
 }
 
+int ObTabletCreateMdsCtx::assign(const ObTabletCreateMdsCtx &rhs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(MdsCtx::assign(rhs))) {
+    LOG_WARN("failed to assign mds ctx", K(ret));
+  } else {
+    version_ = rhs.version_;
+    ls_id_ = rhs.ls_id_;
+  }
+  return ret;
+}
+
 int64_t ObTabletCreateMdsCtx::get_serialize_size() const
 {
   int64_t size = 0;

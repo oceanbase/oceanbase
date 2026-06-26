@@ -51,6 +51,7 @@ public:
   virtual int64_t get_serialize_size(void) const override;
 public:
   void set_ls_id(const share::ObLSID &ls_id) { ls_id_ = ls_id; }
+  int assign(const ObStartTransferInMdsCtx &rhs);
 private:
   ObStartTransferInMdsCtxVersion::VERSION version_;
   share::ObLSID ls_id_;

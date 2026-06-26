@@ -76,6 +76,18 @@ void ObStartTransferInMdsCtx::on_abort(const share::SCN &abort_scn)
   }
 }
 
+int ObStartTransferInMdsCtx::assign(const ObStartTransferInMdsCtx &rhs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(MdsCtx::assign(rhs))) {
+    LOG_WARN("failed to assign mds ctx", K(ret));
+  } else {
+    version_ = rhs.version_;
+    ls_id_ = rhs.ls_id_;
+  }
+  return ret;
+}
+
 int ObStartTransferInMdsCtx::serialize(char *buf, const int64_t len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;

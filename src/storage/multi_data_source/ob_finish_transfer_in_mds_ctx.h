@@ -52,6 +52,7 @@ public:
 
   virtual void on_redo(const share::SCN &redo_scn) override;
   share::SCN &get_redo_scn() { return redo_scn_; }
+  int assign(const ObFinishTransferInMdsCtx &rhs);
 
   INHERIT_TO_STRING_KV("MdsCtx", MdsCtx, K_(version), K_(redo_scn));
 private:

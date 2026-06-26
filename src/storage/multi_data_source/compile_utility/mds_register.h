@@ -314,6 +314,8 @@ class ObTabletTruncateMdsCtx : public MdsCtx
 {
 public:
   using MdsCtx::MdsCtx;
+  int assign(const ObTabletTruncateMdsCtx &rhs)
+  { return OB_SUCCESS; }
 };
 } // namespace mds
 } // namespace storage

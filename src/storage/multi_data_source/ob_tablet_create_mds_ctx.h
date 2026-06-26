@@ -28,6 +28,7 @@ public:
   virtual int64_t get_serialize_size() const override;
 public:
   void set_ls_id(const share::ObLSID &ls_id);
+  int assign(const ObTabletCreateMdsCtx &rhs);
 private:
   static constexpr int32_t MAGIC = 0xdead;
   static constexpr int32_t VERSION = 1;

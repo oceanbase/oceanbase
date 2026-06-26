@@ -58,6 +58,21 @@ public:\
   static constexpr bool value = type::value;\
 };
 
+#define REGISTER_STRICT_FUNCTION_TRAIT(function_name) \
+template<typename, typename>\
+struct has_##function_name {};\
+template<typename C, typename Ret, typename... Args>\
+struct has_##function_name<C, Ret(Args...)> {\
+private:\
+  template<typename T>\
+  static constexpr auto check(T*)\
+  -> decltype( static_cast<Ret(T::*)(Args...)>(&T::function_name), std::true_type() );\
+  template<typename>\
+  static constexpr std::false_type check(...);\
+public:\
+  static constexpr bool value = decltype(check<C>(0))::value;\
+};
+
 template<typename, typename>
 struct is_function_like {};
 template<typename C, typename Ret, typename... Args>
@@ -119,7 +134,7 @@ REGISTER_FUNCTION_TRAIT(destroy)
 REGISTER_FUNCTION_TRAIT(start)
 REGISTER_FUNCTION_TRAIT(stop)
 REGISTER_FUNCTION_TRAIT(wait)
-REGISTER_FUNCTION_TRAIT(assign)
+REGISTER_STRICT_FUNCTION_TRAIT(assign)
 REGISTER_FUNCTION_TRAIT(to_string)
 REGISTER_FUNCTION_TRAIT(serialize)
 REGISTER_FUNCTION_TRAIT(deserialize)
