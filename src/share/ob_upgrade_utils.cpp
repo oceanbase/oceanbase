@@ -102,7 +102,8 @@ const uint64_t ObUpgradeChecker::UPGRADE_PATH[] = {
   CALC_VERSION(4UL, 5UL, 1UL, 0UL),  // 4.5.1.0
   CALC_VERSION(4UL, 6UL, 0UL, 0UL),  // 4.6.0.0
   CALC_VERSION(4UL, 6UL, 0UL, 1UL),  // 4.6.0.1
-  CALC_VERSION(4UL, 6UL, 1UL, 0UL),  // 4.6.1.0
+  CALC_VERSION(5UL, 0UL, 0UL, 0UL),  // 5.0.0.0
+  CALC_VERSION(5UL, 0UL, 1UL, 0UL),  // 5.0.1.0
 };
 
 int ObUpgradeChecker::get_data_version_by_cluster_version(
@@ -165,7 +166,8 @@ int ObUpgradeChecker::get_data_version_by_cluster_version(
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_5_1_0, DATA_VERSION_4_5_1_0)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_6_0_0, DATA_VERSION_4_6_0_0)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_6_0_1, MOCK_DATA_VERSION_4_6_0_1)
-    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_6_1_0, DATA_VERSION_4_6_1_0)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_5_0_0_0, DATA_VERSION_5_0_0_0)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_5_0_1_0, DATA_VERSION_5_0_1_0)
 #undef CONVERT_CLUSTER_VERSION_TO_DATA_VERSION
     default: {
       ret = OB_INVALID_ARGUMENT;
@@ -847,7 +849,8 @@ int ObUpgradeProcesserSet::init(
     INIT_PROCESSOR_BY_VERSION(4, 5, 1, 0);
     INIT_PROCESSOR_BY_VERSION(4, 6, 0, 0);
     INIT_PROCESSOR_BY_VERSION(4, 6, 0, 1);
-    INIT_PROCESSOR_BY_VERSION(4, 6, 1, 0);
+    INIT_PROCESSOR_BY_VERSION(5, 0, 0, 0);
+    INIT_PROCESSOR_BY_VERSION(5, 0, 1, 0);
 #undef INIT_PROCESSOR_BY_NAME_AND_VERSION
 #undef INIT_PROCESSOR_BY_VERSION
     inited_ = true;
@@ -2893,8 +2896,8 @@ int ObUpgradeFor4510Processor::grant_priv(const ObPrivSet user_priv_set,
 
 /* =========== 4510 upgrade processor end ============= */
 
-/* =========== 4610 upgrade processor start ============= */
-int ObUpgradeFor4610Processor::post_upgrade()
+/* =========== 5010 upgrade processor start ============= */
+int ObUpgradeFor5010Processor::post_upgrade()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
@@ -2907,7 +2910,7 @@ int ObUpgradeFor4610Processor::post_upgrade()
   return ret;
 }
 
-int ObUpgradeFor4610Processor::post_upgrade_for_schema_history_recycle_()
+int ObUpgradeFor5010Processor::post_upgrade_for_schema_history_recycle_()
 {
   int ret = OB_SUCCESS;
   bool is_primary_tenant = false;
@@ -2945,7 +2948,7 @@ int ObUpgradeFor4610Processor::post_upgrade_for_schema_history_recycle_()
   return ret;
 }
 
-int ObUpgradeFor4610Processor::post_upgrade_for_inspection_jobs_()
+int ObUpgradeFor5010Processor::post_upgrade_for_inspection_jobs_()
 {
   int ret = OB_SUCCESS;
   bool is_primary_tenant = false;
@@ -2980,7 +2983,7 @@ int ObUpgradeFor4610Processor::post_upgrade_for_inspection_jobs_()
   }
   return ret;
 }
-/* =========== 4610 upgrade processor end ============= */
+/* =========== 5010 upgrade processor end ============= */
 
 } // end share
 } // end oceanbase

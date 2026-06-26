@@ -186,7 +186,7 @@ public:
              const uint64_t cluster_version,
              uint64_t &data_version);
 public:
-  static const int64_t DATA_VERSION_NUM = 50;
+  static const int64_t DATA_VERSION_NUM = 51;
   static const uint64_t UPGRADE_PATH[];
 };
 
@@ -447,11 +447,13 @@ DEF_SIMPLE_UPGRARD_PROCESSER(4, 6, 0, 0)
 
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 6, 0, 1)
 
-class ObUpgradeFor4610Processor : public ObBaseUpgradeProcessor
+DEF_SIMPLE_UPGRARD_PROCESSER(5, 0, 0, 0)
+
+class ObUpgradeFor5010Processor : public ObBaseUpgradeProcessor
 {
 public:
-  ObUpgradeFor4610Processor() : ObBaseUpgradeProcessor() {}
-  virtual ~ObUpgradeFor4610Processor() {}
+  ObUpgradeFor5010Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor5010Processor() {}
   virtual int pre_upgrade() override { return common::OB_SUCCESS; }
   virtual int post_upgrade() override;
   virtual int finish_upgrade() override { return common::OB_SUCCESS; }

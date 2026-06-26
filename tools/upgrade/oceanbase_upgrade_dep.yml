@@ -138,6 +138,10 @@
 
 - version: 4.6.0.0
   can_be_upgraded_to:
-      - 4.6.1.0
+      - 5.0.0.0
 
-- version: 4.6.1.0
+- version: 5.0.0.0
+  can_be_upgraded_to:
+      - 5.0.1.0
+
+- version: 5.0.1.0
