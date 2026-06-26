@@ -1822,10 +1822,18 @@ int ObMultipleMerge::refresh_table_on_demand()
       STORAGE_LOG(WARN, "fail to prepare read tables", K(ret));
     } else if (use_di_merge_scan() && OB_FAIL(di_base_sstable_row_scanner_->check_di_base_changed(tables_))) {
       STORAGE_LOG(WARN, "di base snapshot version changed", K(ret));
-    } else if (access_ctx_->has_mds_filter() && nullptr != block_row_store_ && OB_FAIL(block_row_store_->open(access_param_->iter_param_))) {
-      // mds filter will change after refresh table, so we need to recalc filter param
-      // TODO: we should separate filter info and block_row_store for clearer logic.
-      STORAGE_LOG(WARN, "fail to open block row store", K(ret));
+    } else if (access_ctx_->has_mds_filter() && nullptr != block_row_store_) {
+      if (access_param_->iter_param_.sstable_index_filter_ != nullptr) {
+        ObSSTableIndexFilterFactory::destroy_sstable_index_filter(access_param_->iter_param_.sstable_index_filter_);
+      }
+      if (OB_FAIL(block_row_store_->open(access_param_->iter_param_))) {
+        // mds filter will change after refresh table, so we need to recalc filter param
+        // TODO: we should separate filter info and block_row_store for clearer logic.
+        STORAGE_LOG(WARN, "fail to open block row store", K(ret));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(reset_tables())) {
       STORAGE_LOG(WARN, "fail to reset tables", K(ret));
     } else if (nullptr != block_row_store_ && OB_FAIL(block_row_store_->reuse_for_refresh_table())) {
