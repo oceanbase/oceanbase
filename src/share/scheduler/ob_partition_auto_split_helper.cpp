@@ -2261,8 +2261,8 @@ int ObAutoSplitArgBuilder::acquire_schema_info_of_tablet_(const uint64_t tenant_
   } else if (OB_FAIL(guard.get_table_schema(tenant_id, table_id, table_schema))){
     LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id), K(tablet_id));
   } else if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", KR(ret), K(tenant_id), K(table_id), K(tablet_id));
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exist", KR(ret), K(tenant_id), K(table_id), K(tablet_id));
   } else if (OB_FAIL(arg.based_schema_object_infos_.push_back(ObBasedSchemaObjectInfo(table_schema->get_table_id(),
       schema::TABLE_SCHEMA, table_schema->get_schema_version(), table_schema->get_tenant_id())))) {
     LOG_WARN("fail to push back into based_schema_object_infos_", K(ret));
