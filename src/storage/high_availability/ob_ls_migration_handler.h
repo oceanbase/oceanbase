@@ -123,6 +123,7 @@ private:
   int cancel_current_task_();
 
   int do_init_status_();
+  int block_and_wait_dup_table_lease_expire_();
   int do_prepare_ls_status_();
   int do_build_ls_status_();
   int do_complete_ls_status_();

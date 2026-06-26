@@ -15,6 +15,7 @@
 #include "ob_rebuild_service.h"
 #include "observer/omt/ob_tenant.h"
 #include "ob_ha_rebuild_tablet.h"
+#include "storage/tx/ob_dup_table_lease.h"
 
 namespace oceanbase
 {
@@ -819,6 +820,8 @@ int ObLSMigrationHandler::do_init_status_()
           LOG_WARN("failed to check before do task", K(ret), KPC(ls_));
         } else if (OB_FAIL(get_ls_migration_task_(task))) {
           LOG_WARN("failed to get ls migration task", K(ret), KPC(ls_));
+        } else if (OB_FAIL(block_and_wait_dup_table_lease_expire_())) {
+          LOG_WARN("failed to block and wait dup table lease expire", K(ret), KPC(ls_));
         } else {
           SERVER_EVENT_ADD("storage_ha", "ls_ha_start",
               "tenant_id", ls_->get_tenant_id(),
@@ -829,7 +832,7 @@ int ObLSMigrationHandler::do_init_status_()
               "is_failed", OB_SUCCESS,
               ObMigrationOpType::get_str(task.arg_.type_));
           wakeup_();
-        }
+	}
       }
 
       // INIT -> PREPARE_LS
@@ -839,6 +842,44 @@ int ObLSMigrationHandler::do_init_status_()
     }
   }
 
+  return ret;
+}
+
+int ObLSMigrationHandler::block_and_wait_dup_table_lease_expire_()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  bool is_lease_valid = false;
+  static const int64_t WAIT_INTERVAL_US = 200 * 1000; // 200ms
+  static const int64_t MAX_WAIT_US = transaction::ObDupTableLSLeaseMgr::DEFAULT_LEASE_INTERVAL;
+
+  if (OB_FAIL(ls_->block_dup_table_lease_for_migration(is_lease_valid))) {
+    LOG_WARN("failed to block dup table lease for migration", K(ret), KPC(ls_));
+  } else if (!is_lease_valid) {
+    LOG_INFO("block dup table lease for migration, lease already expired",
+        "ls_id", ls_->get_ls_id());
+  } else {
+    const int64_t wait_start = ObTimeUtility::current_time();
+    while (is_lease_valid
+           && ObTimeUtility::current_time() - wait_start < MAX_WAIT_US) {
+      ob_usleep(WAIT_INTERVAL_US);
+      if (OB_TMP_FAIL(ls_->block_dup_table_lease_for_migration(is_lease_valid))) {
+        LOG_WARN("failed to recheck dup table lease during wait", K(tmp_ret), KPC(ls_));
+        ret = tmp_ret;
+        break;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (is_lease_valid) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("dup table lease still valid after max wait",
+          K(ret), "ls_id", ls_->get_ls_id(), K(is_lease_valid));
+    } else {
+      LOG_INFO("dup table lease expired, migration can proceed",
+          "ls_id", ls_->get_ls_id(),
+          "waited_us", ObTimeUtility::current_time() - wait_start);
+    }
+  }
   return ret;
 }
 
@@ -996,6 +1037,13 @@ int ObLSMigrationHandler::do_finish_status_()
   } else if (OB_FAIL(report_result_())) {
     LOG_WARN("failed to report result", K(ret), KPC(ls_));
   } else {
+    int tmp_ret = OB_SUCCESS;
+    // Clear the migration lease block on the single terminal exit, so it covers both
+    // success and failure. If the replica is still a follower, it resumes lease renewal;
+    // if it became leader, leader_takeover() has already cleared the flag (idempotent).
+    if (OB_TMP_FAIL(ls_->clear_dup_table_lease_block_for_migration())) {
+      LOG_WARN("failed to clear dup table lease block for migration", K(tmp_ret), KPC(ls_));
+    }
     if (ObMigrationOpType::REBUILD_LS_OP == task.arg_.type_ && OB_SUCCESS != result) {
       wakeup_();
     }
