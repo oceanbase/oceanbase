@@ -1315,9 +1315,6 @@ constexpr int OB_ERR_EXCLUSIVE_LOCK_CONFLICT = -6003;
 constexpr int OB_ERR_SHARED_LOCK_CONFLICT = -6004;
 constexpr int OB_TRY_LOCK_ROW_CONFLICT = -6005;
 constexpr int OB_ERR_EXCLUSIVE_LOCK_CONFLICT_NOWAIT = -6006;
-constexpr int OB_ERR_MISSING_EXPRESSION = -6007;
-constexpr int OB_ERR_MISSING_RIGHT_PARENTHESIS = -6008;
-constexpr int OB_ERR_INVALID_RELATIONAL_OPERATOR = -6009;
 constexpr int OB_CLOCK_OUT_OF_ORDER = -6201;
 constexpr int OB_TRANS_HAS_DECIDED = -6204;
 constexpr int OB_TRANS_INVALID_STATE = -6205;
@@ -1968,6 +1965,9 @@ constexpr int OB_ERR_JAVA_SESSION_STATE_CHANGED = -9839;
 constexpr int OB_ERR_OBJECT_HAS_TYPE_OR_TABLE_DEPENDENT = -9840;
 constexpr int OB_ERR_PL_DOM_HANDLE_INVALID = -9841;
 constexpr int OB_ERR_PL_PARSER_HANDLE_INVALID = -9842;
+constexpr int OB_ERR_MISSING_EXPRESSION = -9843;
+constexpr int OB_ERR_MISSING_RIGHT_PARENTHESIS = -9844;
+constexpr int OB_ERR_INVALID_RELATIONAL_OPERATOR = -9845;
 constexpr int OB_ERR_KV_GLOBAL_INDEX_ROUTE = -10500;
 constexpr int OB_TTL_NOT_ENABLE = -10501;
 constexpr int OB_TTL_COLUMN_NOT_EXIST = -10502;
@@ -2099,8 +2099,8 @@ constexpr int OB_ERR_UPDATE_TWICE = -30926;
 constexpr int OB_ERR_FLASHBACK_QUERY_WITH_UPDATE = -32491;
 constexpr int OB_ERR_UPDATE_ON_EXPR = -38104;
 constexpr int OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS = -38105;
-constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
+constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 
 
 #define OB_SUCCESS__USER_ERROR_MSG "Success"
@@ -3644,9 +3644,6 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_SHARED_LOCK_CONFLICT__USER_ERROR_MSG "Statement is timeout"
 #define OB_TRY_LOCK_ROW_CONFLICT__USER_ERROR_MSG "Try lock row conflict"
 #define OB_ERR_EXCLUSIVE_LOCK_CONFLICT_NOWAIT__USER_ERROR_MSG "Lock wait timeout exceeded; try restarting transaction"
-#define OB_ERR_MISSING_EXPRESSION__USER_ERROR_MSG "missing expression"
-#define OB_ERR_MISSING_RIGHT_PARENTHESIS__USER_ERROR_MSG "missing right parenthesis"
-#define OB_ERR_INVALID_RELATIONAL_OPERATOR__USER_ERROR_MSG "invalid relational operator"
 #define OB_CLOCK_OUT_OF_ORDER__USER_ERROR_MSG "Clock out of order"
 #define OB_SWITCHING_TO_FOLLOWER_GRACEFULLY__USER_ERROR_MSG "%s"
 #define OB_MASK_SET_NO_NODE__USER_ERROR_MSG "Mask set has no node"
@@ -4475,6 +4472,9 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_OBJECT_HAS_TYPE_OR_TABLE_DEPENDENT__USER_ERROR_MSG "cannot change object with type or table dependents"
 #define OB_ERR_PL_DOM_HANDLE_INVALID__USER_ERROR_MSG "PL/SQL DOM handle accesses node that is no longer available"
 #define OB_ERR_PL_PARSER_HANDLE_INVALID__USER_ERROR_MSG "invalid PL/SQL XML parser handle"
+#define OB_ERR_MISSING_EXPRESSION__USER_ERROR_MSG "missing expression"
+#define OB_ERR_MISSING_RIGHT_PARENTHESIS__USER_ERROR_MSG "missing right parenthesis"
+#define OB_ERR_INVALID_RELATIONAL_OPERATOR__USER_ERROR_MSG "invalid relational operator"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__USER_ERROR_MSG "incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__USER_ERROR_MSG "TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__USER_ERROR_MSG "TTL column '%.*s' not exists"
@@ -4661,8 +4661,8 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_FLASHBACK_QUERY_WITH_UPDATE__USER_ERROR_MSG "snapshot expression not allowed here"
 #define OB_ERR_UPDATE_ON_EXPR__USER_ERROR_MSG "Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__USER_ERROR_MSG "specified row no longer exists"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__USER_ERROR_MSG "Data too long for column '%.*s' at row %ld"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
 
 
 #define OB_SUCCESS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: 0, Success"
@@ -7747,12 +7747,6 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_TRY_LOCK_ROW_CONFLICT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -6005, Try lock row conflict"
 #define OB_ERR_EXCLUSIVE_LOCK_CONFLICT_NOWAIT__ORA_USER_ERROR_MSG "ORA-00054: resource busy and acquire with NOWAIT specified or timeout expired"
 #define OB_ERR_EXCLUSIVE_LOCK_CONFLICT_NOWAIT__OBE_USER_ERROR_MSG "OBE-00054: resource busy and acquire with NOWAIT specified or timeout expired"
-#define OB_ERR_MISSING_EXPRESSION__ORA_USER_ERROR_MSG "ORA-00936: missing expression"
-#define OB_ERR_MISSING_EXPRESSION__OBE_USER_ERROR_MSG "OBE-00936: missing expression"
-#define OB_ERR_MISSING_RIGHT_PARENTHESIS__ORA_USER_ERROR_MSG "ORA-00907: missing right parenthesis"
-#define OB_ERR_MISSING_RIGHT_PARENTHESIS__OBE_USER_ERROR_MSG "OBE-00907: missing right parenthesis"
-#define OB_ERR_INVALID_RELATIONAL_OPERATOR__ORA_USER_ERROR_MSG "ORA-00920: invalid relational operator"
-#define OB_ERR_INVALID_RELATIONAL_OPERATOR__OBE_USER_ERROR_MSG "OBE-00920: invalid relational operator"
 #define OB_CLOCK_OUT_OF_ORDER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6201, Clock out of order"
 #define OB_CLOCK_OUT_OF_ORDER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -6201, Clock out of order"
 #define OB_SWITCHING_TO_FOLLOWER_GRACEFULLY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6202, %s"
@@ -9409,6 +9403,12 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_PL_DOM_HANDLE_INVALID__OBE_USER_ERROR_MSG "OBE-31181: PL/SQL DOM handle accesses node that is no longer available"
 #define OB_ERR_PL_PARSER_HANDLE_INVALID__ORA_USER_ERROR_MSG "ORA-64500: invalid PL/SQL XML parser handle"
 #define OB_ERR_PL_PARSER_HANDLE_INVALID__OBE_USER_ERROR_MSG "OBE-64500: invalid PL/SQL XML parser handle"
+#define OB_ERR_MISSING_EXPRESSION__ORA_USER_ERROR_MSG "ORA-00936: missing expression"
+#define OB_ERR_MISSING_EXPRESSION__OBE_USER_ERROR_MSG "OBE-00936: missing expression"
+#define OB_ERR_MISSING_RIGHT_PARENTHESIS__ORA_USER_ERROR_MSG "ORA-00907: missing right parenthesis"
+#define OB_ERR_MISSING_RIGHT_PARENTHESIS__OBE_USER_ERROR_MSG "OBE-00907: missing right parenthesis"
+#define OB_ERR_INVALID_RELATIONAL_OPERATOR__ORA_USER_ERROR_MSG "ORA-00920: invalid relational operator"
+#define OB_ERR_INVALID_RELATIONAL_OPERATOR__OBE_USER_ERROR_MSG "OBE-00920: invalid relational operator"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10501, TTL feature is not enabled"
@@ -9781,12 +9781,12 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_UPDATE_ON_EXPR__OBE_USER_ERROR_MSG "OBE-38104: Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__ORA_USER_ERROR_MSG "ORA-08006: specified row no longer exists"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__OBE_USER_ERROR_MSG "OBE-08006: specified row no longer exists"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2555];
+extern int g_all_ob_errnos[2558];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

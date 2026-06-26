@@ -2779,6 +2779,9 @@ DEFINE_ORACLE_ERROR_EXT(OB_ERR_JAVA_SESSION_STATE_CHANGED, -9839, -1, "HY000", "
 DEFINE_ORACLE_ERROR(OB_ERR_OBJECT_HAS_TYPE_OR_TABLE_DEPENDENT, -9840, -1, "HY000", "cannot change object with type or table dependents", 22933, "cannot change object with type or table dependents");
 DEFINE_ORACLE_ERROR(OB_ERR_PL_DOM_HANDLE_INVALID, -9841, -1, "HY000", "PL/SQL DOM handle accesses node that is no longer available", 31181, "PL/SQL DOM handle accesses node that is no longer available");
 DEFINE_ORACLE_ERROR(OB_ERR_PL_PARSER_HANDLE_INVALID, -9842, -1, "HY000", "invalid PL/SQL XML parser handle", 64500, "invalid PL/SQL XML parser handle");
+DEFINE_ORACLE_ERROR(OB_ERR_MISSING_EXPRESSION, -9843, -1, "HY000", "missing expression", 936, "missing expression");
+DEFINE_ORACLE_ERROR(OB_ERR_MISSING_RIGHT_PARENTHESIS, -9844, -1, "HY000", "missing right parenthesis", 907, "missing right parenthesis");
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_RELATIONAL_OPERATOR, -9845, -1, "HY000", "invalid relational operator", 920, "invalid relational operator");
 
 // 余留位置
 ////////////////////////////////////////////////////////////////
