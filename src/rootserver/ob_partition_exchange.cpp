@@ -756,6 +756,18 @@ int ObPartitionExchange::check_table_conditions_in_common_(
       LOG_WARN("partition schema version of exchanging partition tables are not equal", K(ret), K(base_table_schema.get_partition_schema_version()), K(inc_table_schema.get_partition_schema_version()));
     } else if (OB_UNLIKELY(base_table_schema.get_storage_format_version() != inc_table_schema.get_storage_format_version())) {
       LOG_WARN("storage format version of exchanging partition tables are not equal", K(ret), K(base_table_schema.get_storage_format_version()), K(inc_table_schema.get_storage_format_version()));
+    } else if (OB_UNLIKELY(base_table_schema.has_mlog_table() || inc_table_schema.has_mlog_table())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "exchange partition on a table with materialized view log");
+      LOG_WARN("exchange partition is not supported on tables with materialized view log", K(ret),
+          "base_has_mlog", base_table_schema.has_mlog_table(),
+          "inc_has_mlog", inc_table_schema.has_mlog_table());
+    } else if (OB_UNLIKELY(base_table_schema.table_referenced_by_mv() || inc_table_schema.table_referenced_by_mv())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "exchange partition on a table referenced by materialized view");
+      LOG_WARN("exchange partition is not supported on tables referenced by materialized view", K(ret),
+          "base_referenced_by_mv", base_table_schema.table_referenced_by_mv(),
+          "inc_referenced_by_mv", inc_table_schema.table_referenced_by_mv());
     } else if (OB_UNLIKELY(base_table_schema.get_table_mode() != inc_table_schema.get_table_mode())) {
       LOG_WARN("table mode of exchanging partition tables are not equal", K(ret), K(base_table_schema.get_table_mode()), K(inc_table_schema.get_table_mode()));
     } else if (OB_UNLIKELY(0 != base_table_schema.get_encryption_str().compare(inc_table_schema.get_encryption_str()))) {
