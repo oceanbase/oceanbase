@@ -348,6 +348,9 @@ private:
       const char *table_name,
       share::ObDMLSqlSplicer &dml,
       const int64_t new_version);
+  int check_semi_sync_cfg_allowed_(ObMySQLTransaction &trans,
+      const uint64_t tenant_id,
+      const obrpc::ObAdminSetConfigItem &item);
   int inner_update_tenant_config_for_others_(
       const uint64_t tenant_id,
       const char *svr_ip,

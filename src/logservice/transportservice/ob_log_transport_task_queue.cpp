@@ -166,6 +166,7 @@ ObLogTransportTaskQueue::ObLogTransportTaskQueue()
     cached_bytes_(0),
     max_cached_bytes_(DEFAULT_MAX_CACHED_BYTES),
     lock_(common::ObLatchIds::TRANSPORT_SERVICE_TASK_LOCK),
+    queued_end_lock_(common::ObLatchIds::TRANSPORT_SERVICE_TASK_LOCK),
     drop_duplicate_cnt_(0),
     early_drop_far_lsn_cnt_(0),
     total_inserted_cnt_(0),
@@ -199,6 +200,8 @@ int ObLogTransportTaskQueue::init(const int64_t id, const int64_t queue_size)
     ATOMIC_STORE(&is_stopped_, false);
     id_ = id;
     next_submit_lsn_.reset();
+    queued_end_lsn_.reset();
+    queued_end_scn_.reset();
     cached_bytes_ = 0;
     max_cached_bytes_ = DEFAULT_MAX_CACHED_BYTES;
     drop_duplicate_cnt_ = 0;
@@ -236,6 +239,11 @@ void ObLogTransportTaskQueue::destroy()
     ATOMIC_STORE(&is_stopped_, true);
     id_ = 0;
     next_submit_lsn_.reset();
+    {
+      common::ObSpinLockGuard end_guard(queued_end_lock_);
+      queued_end_lsn_.reset();
+      queued_end_scn_.reset();
+    }
     queue_size_ = OB_INVALID_SIZE;
     cached_bytes_ = 0;
     max_cached_bytes_ = DEFAULT_MAX_CACHED_BYTES;
@@ -259,6 +267,11 @@ void ObLogTransportTaskQueue::switch_to_follower()
     CLOG_LOG(WARN, "not init", KR(ret));
   } else {
     next_submit_lsn_.reset();
+    {
+      common::ObSpinLockGuard end_guard(queued_end_lock_);
+      queued_end_lsn_.reset();
+      queued_end_scn_.reset();
+    }
     task_map_.clear();
     ATOMIC_STORE(&cached_bytes_, 0);
   }
@@ -274,6 +287,11 @@ void ObLogTransportTaskQueue::switch_to_leader(const palf::LSN &end_lsn)
     CLOG_LOG(WARN, "not init", KR(ret));
   } else {
     next_submit_lsn_.atomic_store(end_lsn);
+    {
+      common::ObSpinLockGuard end_guard(queued_end_lock_);
+      queued_end_lsn_ = end_lsn;
+      queued_end_scn_.reset();
+    }
   }
   CLOG_LOG(INFO, "switch to leader", KR(ret), KP(this), KPC(this));
 }
@@ -323,6 +341,20 @@ int ObLogTransportTaskQueue::push(const ObLogTransportReq *task)
     add_container_cached_bytes_(&cached_bytes_, task->log_size_);
     ATOMIC_AAF(&total_inserted_cnt_, 1);
     ATOMIC_AAF(&total_inserted_bytes_, task->log_size_);
+    // Semi-sync: advance queued_end_ to the running MAX end position across the current
+    // log and everything already accepted into the queue. This may be non-continuous:
+    // a task that lands past a hole still advances the high-water-mark, and a later push
+    // that fills the hole below the max must NOT lower it. The early ACK is optimistic;
+    // holes are healed by retransmit and the durable position is the contiguous
+    // next_submit_lsn_ tracked by the flush-ACK path.
+    {
+      common::ObSpinLockGuard end_guard(queued_end_lock_);
+      if (queued_end_lsn_.is_valid() && task->end_lsn_ > queued_end_lsn_) {
+        queued_end_lsn_ = task->end_lsn_;
+        queued_end_scn_ = task->scn_;
+      }
+      // Below current max or uninitialized: do NOT advance, wait for switch_to_leader
+    }
   }
 
   CLOG_LOG(TRACE, "push transport task", KR(ret), KPC(task), K(handle));

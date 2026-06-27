@@ -356,6 +356,10 @@ public:
   // @retval OB_ERR_OUT_OF_UPPER_BOUND   task end lsn larger than queue limit
   // @retval other code          unexpected error
   int submit_transport_task(const ObLogTransportReq &req);
+  void get_queued_end_position(palf::LSN &lsn, share::SCN &scn) const
+  {
+    transport_task_queue_.get_queued_end_position(lsn, scn);
+  }
   // 处理该日志流的 transport tasks：排序后按序调用 raw_write
   // @param[in] batch_size 每次处理的任务数量，控制排序开销
   // @retval OB_SUCCESS     处理成功

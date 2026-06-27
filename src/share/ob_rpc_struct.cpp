@@ -8320,6 +8320,18 @@ OB_SERIALIZE_MEMBER(ObAlterTableRes, index_table_id_, constriant_id_, schema_ver
 res_arg_array_, ddl_type_, task_id_, ddl_res_array_, ddl_need_retry_at_executor_);
 OB_SERIALIZE_MEMBER(ObGetTenantSchemaVersionArg, tenant_id_);
 OB_SERIALIZE_MEMBER(ObGetTenantSchemaVersionResult, schema_version_);
+int ObCheckTenantConfigAndInfoArg::init(const uint64_t tenant_id,
+                                      const share::ObAllTenantInfo &expected_tenant_info,
+                                      const int64_t tenant_info_ora_rowscn)
+{
+  tenant_id_ = tenant_id;
+  expected_tenant_info_.assign(expected_tenant_info);
+  tenant_info_ora_rowscn_ = tenant_info_ora_rowscn;
+  return OB_SUCCESS;
+}
+OB_SERIALIZE_MEMBER(ObCheckTenantConfigAndInfoArg, tenant_id_, expected_tenant_info_,
+                    tenant_info_ora_rowscn_);
+OB_SERIALIZE_MEMBER(ObCheckTenantConfigAndInfoResult, loaded_version_, tenant_info_refresh_ok_);
 OB_SERIALIZE_MEMBER(ObTenantMemoryArg, tenant_id_, memory_size_, refresh_interval_);
 OB_SERIALIZE_MEMBER((ObKeystoreDDLArg, ObDDLArg), schema_, type_, is_kms_);
 

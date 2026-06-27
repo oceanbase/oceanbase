@@ -18,6 +18,7 @@
 #include "ob_root_service.h"
 #include "logservice/leader_coordinator/table_accessor.h"
 #include "rootserver/freeze/ob_major_freeze_helper.h"
+#include "rootserver/standby/ob_protection_mode_utils.h"
 #include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
 #include "share/ob_inspection_service.h"
 namespace oceanbase
@@ -931,7 +932,7 @@ int ObAdminSetConfig::inner_update_tenant_config_(
     ci = *(tenant_config->get_container().get(
                           ObConfigStringKey(item.name_.ptr())));
     const ObString compatible_cfg(COMPATIBLE);
-    if (OB_FAIL(build_dml_before_update_(tenant_id, item, *ci, svr_ip, svr_port,
+    if (FAILEDx(build_dml_before_update_(tenant_id, item, *ci, svr_ip, svr_port,
                     table_name, new_version, dml))) {
       LOG_WARN("fail to build dml", KR(ret), K(tenant_id), K(item), K(svr_ip), K(svr_port),
                K(table_name), K(new_version));
@@ -976,6 +977,10 @@ int ObAdminSetConfig::inner_update_tenant_config_for_others_(
              KP(svr_ip), KP(table_name));
   } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, exec_tenant_id))) {
     LOG_WARN("fail to start trans", KR(ret), K(exec_tenant_id));
+  } else if (0 == ObString(ENABLE_STANDBY_SEMI_SYNC).case_compare(item.name_.ptr())
+             && OB_FAIL(check_semi_sync_cfg_allowed_(trans, tenant_id, item))) {
+    LOG_WARN("enable_standby_semi_sync modification not allowed",
+             KR(ret), K(tenant_id), K(item));
   } else if (OB_FAIL(check_with_lock_before_update_(
                          trans, svr_ip, svr_port, tenant_id, exec_tenant_id,
                          item, table_name, new_version))) {
@@ -2619,6 +2624,47 @@ int ObAdminSyncRewriteRules::call_server(const common::ObAddr &server,
                                      .as(arg.tenant_id_)
                                      .sync_rewrite_rules(arg))) {
     LOG_WARN("request server sync rewrite rules failed", KR(ret), K(server));
+  }
+  return ret;
+}
+
+int ObAdminSetConfig::check_semi_sync_cfg_allowed_(
+    ObMySQLTransaction &trans,
+    const uint64_t tenant_id,
+    const obrpc::ObAdminSetConfigItem &item)
+{
+  int ret = OB_SUCCESS;
+  ObAllTenantInfo tenant_info;
+  ObProtectionStat protection_stat;
+  bool semi_sync_enabled = false;
+  if (!is_valid_tenant_id(tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else if (!item.zone_.is_empty() || item.server_.is_valid()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("enable_standby_semi_sync cannot be set for specific zone or server",
+             KR(ret), K(tenant_id), K(item));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW,
+        "enable_standby_semi_sync can only be set tenant-wide, ZONE/SERVER scope");
+  } else if (OB_FAIL(standby::ObProtectionModeUtils::check_tenant_data_version_for_semi_sync(
+      tenant_id, semi_sync_enabled))) {
+    LOG_WARN("failed to check tenant data version for semi sync", KR(ret), K(tenant_id));
+  } else if (!semi_sync_enabled) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("enable_standby_semi_sync is not supported before 4.4.2.2",
+        KR(ret), K(tenant_id));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "enable_standby_semi_sync before version 4.4.2.2");
+  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, &trans,
+      true/* for_update */, tenant_info))) {
+    LOG_WARN("failed to load tenant info for update", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(protection_stat.init(tenant_info))) {
+    LOG_WARN("failed to init protection stat", KR(ret), K(tenant_info));
+  } else if (!protection_stat.get_protection_mode().is_maximum_performance()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("enable_standby_semi_sync can only be modified in MAXIMUM PERFORMANCE mode",
+             KR(ret), K(tenant_id), K(protection_stat));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW,
+        "modify enable_standby_semi_sync when protection_mode not in MAXIMUM PERFORMANCE");
   }
   return ret;
 }

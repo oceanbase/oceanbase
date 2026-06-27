@@ -172,6 +172,32 @@ int ObLogStandbyTransportWorker::submit_transport_task(const ObLogTransportReq &
   return ret;
 }
 
+int ObLogStandbyTransportWorker::get_queued_end_position(const share::ObLSID &ls_id,
+    palf::LSN &queued_end_lsn, share::SCN &queued_end_scn)
+{
+  int ret = OB_SUCCESS;
+  queued_end_lsn.reset();
+  queued_end_scn.reset();
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  ObLogRestoreHandler *restore_handler = nullptr;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(ERROR, "ObLogStandbyTransportWorker not init", K(ret));
+  } else if (OB_FAIL(ls_svr_->get_ls(ls_id, ls_handle, ObLSGetMod::LOG_MOD))) {
+    CLOG_LOG(WARN, "get ls failed", K(ret), K(ls_id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(ERROR, "ls is null", K(ret), K(ls_id));
+  } else if (OB_ISNULL(restore_handler = ls->get_log_restore_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(ERROR, "log restore handler is null", K(ret), K(ls_id));
+  } else {
+    restore_handler->get_queued_end_position(queued_end_lsn, queued_end_scn);
+  }
+  return ret;
+}
+
 void ObLogStandbyTransportWorker::run1()
 {
   int ret = OB_SUCCESS;

@@ -52,6 +52,7 @@ public:
   static int check_ls_status_for_upgrade_protection_level(const uint64_t user_tenant_id,
       ObISQLClient &client);
   static int check_tenant_data_version_for_protection_mode(const uint64_t tenant_id, bool &enable);
+  static int check_tenant_data_version_for_semi_sync(const uint64_t tenant_id, bool &enable);
   static int wait_protection_stat_steady(const uint64_t tenant_id,
       const share::ObProtectionMode &expected_protection_mode,
       common::ObMySQLProxy *sql_proxy);

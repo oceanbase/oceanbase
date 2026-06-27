@@ -54,6 +54,10 @@ public:
   // @retval other code          unexpected error
   int submit_transport_task(const ObLogTransportReq &req);
 
+  // 获取指定LS的queued_end_lsn/scn（半同步提前ACK用）
+  int get_queued_end_position(const share::ObLSID &ls_id,
+      palf::LSN &queued_end_lsn, share::SCN &queued_end_scn);
+
   // 检查是否需要停止接收日志（failover时）
   bool need_stop() const { return ATOMIC_LOAD(&stop_flag_); }
 

@@ -93,6 +93,8 @@
 #include "src/rootserver/ob_common_ls_service.h"
 #include "rootserver/mview/ob_mview_maintenance_service.h"
 #include "share/ob_inspection_service.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
+#include "share/config/ob_system_config.h"
 
 namespace oceanbase
 {
@@ -2384,6 +2386,61 @@ int ObGetTenantSchemaVersionP::process()
     LOG_ERROR("invalid arguments", K(ret), KP(gctx_.ob_service_));
   } else {
     ret = gctx_.ob_service_->get_tenant_refreshed_schema_version(arg_, result_);
+  }
+  return ret;
+}
+
+int ObCheckTenantConfigAndInfoP::process()
+{
+  int ret = OB_SUCCESS;
+  result_.reset();
+  result_.set_loaded_version(common::ObSystemConfig::INIT_VERSION);
+  if (!arg_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K_(arg));
+  } else {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(arg_.get_tenant_id()));
+    if (!tenant_config.is_valid()) {
+      result_.set_loaded_version(common::ObSystemConfig::INIT_VERSION);
+      LOG_INFO("tenant config not valid yet, report init version",
+          K_(arg), "loaded_version", result_.get_loaded_version());
+    } else {
+      result_.set_loaded_version(tenant_config->get_read_version());
+    }
+
+    MTL_SWITCH(arg_.get_tenant_id()) {
+      rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
+      share::ObAllTenantInfo tenant_info;
+      const share::ObAllTenantInfo &expected_tenant_info = arg_.get_expected_tenant_info();
+      if (OB_ISNULL(tenant_info_loader)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tenant info loader is null in convergence rpc", KR(ret), K_(arg));
+      } else if (OB_FAIL(tenant_info_loader->update_tenant_info_cache(
+          arg_.get_tenant_info_ora_rowscn(), expected_tenant_info,
+          0 /* finish_data_version */, SCN::min_scn()))) {
+        LOG_WARN("failed to update tenant info cache in convergence rpc", KR(ret), K_(arg));
+      } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
+        LOG_WARN("failed to get tenant info after cache update", KR(ret), K_(arg));
+      } else if (expected_tenant_info.get_protection_mode().is_valid()
+                 && expected_tenant_info.get_protection_level().is_valid()
+                 && tenant_info.get_protection_mode() == expected_tenant_info.get_protection_mode()
+                 && tenant_info.get_protection_level() == expected_tenant_info.get_protection_level()
+                 && tenant_info.get_switchover_epoch() == expected_tenant_info.get_switchover_epoch()) {
+        result_.set_tenant_info_refresh_ok(true);
+        LOG_INFO("tenant info matched after refresh in convergence rpc",
+            K_(arg), K(tenant_info), K(expected_tenant_info));
+      } else {
+        LOG_INFO("tenant info mismatch after refresh in convergence rpc",
+            K_(arg), K(tenant_info), K(expected_tenant_info));
+      }
+    }
+    if (OB_TENANT_NOT_IN_SERVER == ret) {
+      ret = OB_SUCCESS;
+      result_.set_tenant_info_refresh_ok(true);
+      LOG_INFO("tenant context not in this server, skip tenant_info refresh", K_(arg));
+    } else if (OB_FAIL(ret)) {
+      LOG_WARN("failed to switch to tenant", KR(ret), K_(arg));
+    }
   }
   return ret;
 }

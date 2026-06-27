@@ -245,6 +245,8 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
 
     RPC_PROCESSOR(rootserver::ObBroadcastSchemaP, *gctx_.root_service_);
 
+    // tenant config and tenant info convergence
+    RPC_PROCESSOR(ObCheckTenantConfigAndInfoP, gctx_);
 
     //for upgrade
     RPC_PROCESSOR(ObGetTenantSchemaVersionP, gctx_);

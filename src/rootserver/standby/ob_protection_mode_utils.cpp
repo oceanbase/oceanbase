@@ -123,6 +123,22 @@ int ObProtectionModeUtils::check_tenant_data_version_for_protection_mode(const u
   return ret;
 }
 
+int ObProtectionModeUtils::check_tenant_data_version_for_semi_sync(const uint64_t tenant_id, bool &enable)
+{
+  int ret = OB_SUCCESS;
+  uint64_t user_data_version = 0;
+  enable = false;
+  if (!is_user_tenant(tenant_id) || !is_valid_tenant_id(tenant_id)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("no user tenant", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, user_data_version))) {
+    LOG_WARN("failed to get user data version", KR(ret), K(tenant_id));
+  } else {
+    enable = (user_data_version >= DATA_VERSION_4_4_2_2);
+  }
+  return ret;
+}
+
 int ObProtectionModeUtils::need_pass_sys_ls_pre_async_log_scn(const uint64_t tenant_id, bool &need_pass)
 {
   int ret = OB_SUCCESS;

@@ -39,6 +39,9 @@
 #include "share/ob_rpc_struct.h"
 #include "share/schema/ob_schema_struct.h"
 #include "rootserver/ob_rs_async_rpc_proxy.h"
+#include "share/ob_all_server_tracer.h" // SVR_TRACER
+#include "share/config/ob_config_helper.h" // ObConfigBoolParser
+#include "share/config/ob_server_config.h" // ENABLE_STANDBY_SEMI_SYNC
 
 namespace oceanbase
 {
@@ -190,9 +193,317 @@ int ObRecoveryLSService::process_thread0_(const ObAllTenantInfo &tenant_info)
     LOG_WARN("failed to process ls balance task", KR(ret), KR(tmp_ret));
   }
   (void)try_tenant_upgrade_end_();
+  //TODO(ziqi): notify by thread1
+  if (OB_TMP_FAIL(promote_pre_mpt_level_())) {
+    ret = OB_SUCC(ret) ? tmp_ret : ret;
+    LOG_WARN("failed to promote pre mpt level", KR(ret), KR(tmp_ret), K_(tenant_id));
+  }
 
   return ret;
 }
+
+int ObRecoveryLSService::promote_pre_mpt_level_()
+{
+  int ret = OB_SUCCESS;
+  ObAllTenantInfo tenant_info;
+  int64_t tenant_info_ora_rowscn = 0;
+  if (OB_UNLIKELY(!inited_) || OB_ISNULL(proxy_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K_(inited), KP_(proxy));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id_, proxy_,
+      false/* for_update */, tenant_info_ora_rowscn, tenant_info))) {
+    LOG_WARN("failed to get tenant info", KR(ret), K_(tenant_id));
+  } else if (!tenant_info.get_protection_level().is_pre_maximum_protection()) {
+    // Fast-path: current level is not PRE_MPT, nothing to promote.
+  } else {
+    bool target_value = false;
+    int64_t target_ver = OB_INVALID_VERSION;
+    bool has_target_config = false;
+    bool can_promote = false;
+    if (OB_FAIL(get_semi_sync_target_config_(target_value, target_ver, has_target_config))) {
+      LOG_WARN("failed to get semi sync target config", KR(ret), K_(tenant_id));
+    } else if (!has_target_config) {
+      // No tenant-level override exists. The cluster-wide default is false and there is
+      // no target config version to wait for, so only the transactional PRE_MPT recheck
+      // in do_promote_to_steady_level_ is needed before leaving the wait state.
+      can_promote = true;
+    } else if (OB_UNLIKELY(OB_INVALID_VERSION == target_ver)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid semi sync config version", KR(ret), K_(tenant_id), K(target_value), K(target_ver));
+    } else if (target_value) {
+      // If enable_standby_semi_sync is true, keep PRE_MPT.
+      // If it is false, leave PRE_MPT only after all servers have loaded the target config.
+      LOG_INFO("enable_standby_semi_sync is true, stay in PRE_MPT",
+          K_(tenant_id), K(target_value), K(target_ver));
+    } else if (OB_FAIL(check_all_server_cfg_converged_(target_ver, tenant_info, tenant_info_ora_rowscn, can_promote))) {
+      LOG_WARN("convergence check failed", KR(ret), K_(tenant_id), K(target_ver), K(target_value));
+    }
+
+    if (OB_SUCC(ret)) {
+      if (!can_promote) {
+        LOG_INFO("not converged, stay in PRE_MPT",
+            K_(tenant_id), K(target_value), K(target_ver), K(has_target_config));
+      } else if (OB_FAIL(do_promote_to_steady_level_(tenant_info))) {
+        LOG_WARN("failed to promote PRE_MPT to steady level",
+            KR(ret), K_(tenant_id), K(target_ver), K(has_target_config));
+      } else {
+        LOG_INFO("promoted PRE_MPT to steady level",
+            K_(tenant_id), K(target_value), K(target_ver), K(has_target_config));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::do_promote_to_steady_level_(const share::ObAllTenantInfo &expected_tenant_info)
+{
+  int ret = OB_SUCCESS;
+  ObAllTenantInfo tenant_info;
+  int64_t new_switchover_epoch = OB_INVALID_VERSION;
+  const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id_);
+  if (OB_UNLIKELY(!expected_tenant_info.is_valid()
+                  || !expected_tenant_info.get_protection_level().is_pre_maximum_protection()
+                  || OB_INVALID_VERSION == expected_tenant_info.get_switchover_epoch())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid expected tenant info for PRE_MPT promotion",
+        KR(ret), K_(tenant_id), K(expected_tenant_info));
+  } else {
+    START_TRANSACTION(proxy_, exec_tenant_id);
+    if (FAILEDx(ObAllTenantInfoProxy::load_tenant_info(tenant_id_, &trans,
+        true/* for_update */, tenant_info))) {
+      LOG_WARN("failed to load tenant info for update", KR(ret), K_(tenant_id));
+    } else if (tenant_info.get_tenant_role() != expected_tenant_info.get_tenant_role()
+               || tenant_info.get_protection_mode() != expected_tenant_info.get_protection_mode()
+               || tenant_info.get_protection_level() != expected_tenant_info.get_protection_level()
+               || tenant_info.get_switchover_epoch() != expected_tenant_info.get_switchover_epoch()) {
+      LOG_INFO("tenant info changed after convergence check, skip PRE_MPT promotion",
+          K_(tenant_id), K(tenant_info), K(expected_tenant_info));
+    } else {
+      const share::ObProtectionMode &mode = tenant_info.get_protection_mode();
+      ObProtectionLevel target_level;
+      if (mode.is_maximum_protection()) {
+        target_level = ObProtectionLevel::MAXIMUM_PROTECTION_LEVEL;
+      } else if (mode.is_maximum_availability()) {
+        target_level = ObProtectionLevel::MAXIMUM_AVAILABILITY_LEVEL;
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected mode for PRE_MPT promotion", KR(ret), K(mode), K_(tenant_id));
+      }
+
+      if (OB_SUCC(ret) && OB_FAIL(ObAllTenantInfoProxy::update_tenant_protection_mode_and_level(
+          tenant_id_, tenant_info.get_tenant_role(), &trans, tenant_info.get_switchover_epoch(),
+          tenant_info.get_protection_mode(), target_level, tenant_info.get_switchover_epoch(),
+          new_switchover_epoch, true /* force_inc_switchover_epoch */))) {
+        LOG_WARN("failed to promote protection level", KR(ret), K_(tenant_id), K(mode), K(target_level));
+      }
+    }
+    END_TRANSACTION(trans);
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::get_semi_sync_target_config_(
+    bool &target_value,
+    int64_t &target_ver,
+    bool &has_target_config)
+{
+  int ret = OB_SUCCESS;
+  target_value = false;
+  target_ver = OB_INVALID_VERSION;
+  has_target_config = false;
+  // __tenant_parameter holds value and config_version in the same row, written atomically by
+  // ALTER SYSTEM SET, so it is the authoritative latest config. Rows for a user tenant live
+  // under its meta tenant, so read under the meta tenant id.
+  const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id_);
+  if (OB_ISNULL(proxy_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("sql proxy is null", KR(ret), K_(tenant_id));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, result) {
+      ObSqlString sql;
+      sqlclient::ObMySQLResult *mysql_result = NULL;
+      if (OB_FAIL(sql.assign_fmt(
+              "select value, config_version from %s where tenant_id = %lu and name = '%s'",
+              OB_TENANT_PARAMETER_TNAME, tenant_id_, ENABLE_STANDBY_SEMI_SYNC))) {
+        LOG_WARN("fail to generate sql", KR(ret), K_(tenant_id));
+      } else if (OB_FAIL(proxy_->read(result, exec_tenant_id, sql.ptr()))) {
+        LOG_WARN("read enable_standby_semi_sync from __tenant_parameter failed",
+            KR(ret), K_(tenant_id), K(exec_tenant_id), K(sql));
+      } else if (OB_ISNULL(mysql_result = result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", KR(ret), K_(tenant_id), K(sql));
+      } else if (OB_FAIL(mysql_result->next())) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          target_value = false;
+          LOG_INFO("no enable_standby_semi_sync row, treat as default false", K_(tenant_id));
+        } else {
+          LOG_WARN("get result next failed", KR(ret), K_(tenant_id), K(sql));
+        }
+      } else {
+        ObString value_str;
+        EXTRACT_VARCHAR_FIELD_MYSQL(*mysql_result, "value", value_str);
+        EXTRACT_INT_FIELD_MYSQL(*mysql_result, "config_version", target_ver, int64_t);
+        if (OB_FAIL(ret)) {
+          LOG_WARN("failed to extract enable_standby_semi_sync config", KR(ret), K_(tenant_id));
+        } else if (OB_FAIL(parse_bool_config_value_(value_str, target_value))) {
+          LOG_WARN("failed to parse enable_standby_semi_sync value", KR(ret), K_(tenant_id), K(value_str));
+        } else {
+          has_target_config = true;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+// 是否有现成方法解析bool value
+int ObRecoveryLSService::parse_bool_config_value_(
+    const common::ObString &value_str,
+    bool &value)
+{
+  int ret = OB_SUCCESS;
+  char value_buf[common::OB_MAX_CONFIG_VALUE_LEN + 1] = {0};
+  bool valid = false;
+  value = false;
+  if (OB_UNLIKELY(value_str.length() > common::OB_MAX_CONFIG_VALUE_LEN)) {
+    ret = OB_INVALID_CONFIG;
+    LOG_WARN("bool config value is too long", KR(ret), K_(tenant_id), K(value_str));
+  } else {
+    if (value_str.length() > 0) {
+      MEMCPY(value_buf, value_str.ptr(), value_str.length());
+    }
+    value_buf[value_str.length()] = '\0';
+    value = common::ObConfigBoolParser::get(value_buf, valid);
+    if (!valid) {
+      ret = OB_INVALID_CONFIG;
+      LOG_WARN("invalid bool config value", KR(ret), K_(tenant_id), K(value_str));
+    }
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::get_all_servers_for_cfg_convergence_(common::ObIArray<common::ObAddr> &servers)
+{
+  int ret = OB_SUCCESS;
+  common::ObZone empty_zone;
+  if (OB_FAIL(SVR_TRACER.get_servers_of_zone(empty_zone, servers))) {
+    LOG_WARN("failed to get all servers for cfg convergence", KR(ret), K_(tenant_id));
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::check_server_cfg_converged_result_(
+    const common::ObAddr &server,
+    const int64_t target_version,
+    const obrpc::ObCheckTenantConfigAndInfoResult &res,
+    bool &converged)
+{
+  int ret = OB_SUCCESS;
+  converged = false;
+  if (res.get_loaded_version() < target_version) {
+    LOG_INFO("server cfg version behind target, not converged",
+        K(server), "loaded_version", res.get_loaded_version(), K(target_version));
+  } else if (!res.get_tenant_info_refresh_ok()) {
+    LOG_INFO("server tenant_info refresh not ok, not converged",
+        K(server), K_(tenant_id), K(res));
+  } else {
+    converged = true;
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::check_all_server_cfg_converged_(
+    const int64_t target_version,
+    const share::ObAllTenantInfo &expected_tenant_info,
+    const int64_t expected_tenant_info_ora_rowscn,
+    bool &converged)
+{
+  int ret = OB_SUCCESS;
+  converged = false;
+  ObArray<ObAddr> servers;
+  if (OB_ISNULL(GCTX.srv_rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("srv rpc proxy is null", KR(ret), KP(GCTX.srv_rpc_proxy_));
+  } else if (!expected_tenant_info.is_valid()
+             || !expected_tenant_info.get_protection_level().is_pre_maximum_protection()
+             || 0 == expected_tenant_info_ora_rowscn) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid expected tenant info for semi sync convergence",
+        KR(ret), K_(tenant_id), K(expected_tenant_info), K(expected_tenant_info_ora_rowscn));
+  } else if (OB_FAIL(get_all_servers_for_cfg_convergence_(servers))) {
+    LOG_WARN("failed to get all servers for cfg convergence", KR(ret), K_(tenant_id));
+  } else if (0 == servers.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("no server found, cannot confirm convergence", K_(tenant_id), K(target_version));
+  } else {
+    // STRICT convergence: every server from SVR_TRACER must have loaded target
+    // config and either refreshed tenant_info or confirmed the tenant is absent.
+    // Unreachable servers block promotion until they recover.
+    ObTimeoutCtx ctx;
+    if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.rpc_timeout))) {
+      LOG_WARN("failed to set default timeout ctx", KR(ret), K_(tenant_id));
+    } else {
+      ObCheckTenantConfigAndInfoProxy proxy(
+          *GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::check_tenant_config_and_info);
+      ObArray<int> return_code_array;
+      obrpc::ObCheckTenantConfigAndInfoArg arg;
+      int tmp_ret = OB_SUCCESS;
+      converged = true;
+
+      if (OB_FAIL(arg.init(tenant_id_, expected_tenant_info, expected_tenant_info_ora_rowscn))) {
+        LOG_WARN("failed to init convergence rpc arg", KR(ret), K_(tenant_id), K(expected_tenant_info));
+      }
+
+      for (int64_t i = 0; OB_SUCC(ret) && i < servers.count(); ++i) {
+        if (OB_FAIL(proxy.call(servers.at(i), ctx.get_timeout(), OB_SYS_TENANT_ID, arg))) {
+          converged = false;
+          LOG_WARN("failed to send check_tenant_config_and_info rpc, not converged",
+              KR(tmp_ret), "server", servers.at(i), K_(tenant_id), K(target_version));
+        }
+      }
+
+      // 需要等所有rpc返回
+      if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
+        LOG_WARN("failed to wait all check_tenant_config_and_info rpc", KR(ret), KR(tmp_ret), K_(tenant_id));
+      } else if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(proxy.check_return_cnt(return_code_array.count()))) {
+        LOG_WARN("failed to check return count for check_tenant_config_and_info rpc",
+            KR(ret), K(return_code_array));
+      }
+
+      for (int64_t i = 0; OB_SUCC(ret) && converged && i < return_code_array.count(); ++i) {
+        bool server_converged = false;
+        const int rpc_ret = return_code_array.at(i);
+        const common::ObAddr &server = proxy.get_dests().at(i);
+        const obrpc::ObCheckTenantConfigAndInfoResult *res = proxy.get_results().at(i);
+        if (OB_SUCCESS != rpc_ret) {
+          LOG_WARN("check_tenant_config_and_info rpc failed, not converged",
+              KR(rpc_ret), K(server), K_(tenant_id));
+        } else if (OB_ISNULL(res)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("check_tenant_config_and_info result is null", KR(ret), K(server), K_(tenant_id));
+        } else if (OB_FAIL(check_server_cfg_converged_result_(server, target_version, *res, server_converged))) {
+          LOG_WARN("failed to check server cfg convergence",
+              KR(ret), K(server), K_(tenant_id));
+        }
+
+        if (OB_SUCC(ret) && !server_converged) {
+          converged = false;
+        }
+      }
+    }
+
+    if (OB_SUCC(ret) && converged) {
+      LOG_INFO("all servers cfg converged with tenant_info cache refreshed",
+          K_(tenant_id), K(target_version), "server_count", servers.count(),
+          K(expected_tenant_info));
+    }
+  }
+  return ret;
+}
+
 ERRSIM_POINT_DEF(ERRSIM_RECOVERY_LS_THREAD1);
 int ObRecoveryLSService::process_thread1_(const ObAllTenantInfo &tenant_info,
      share::SCN &start_scn,
@@ -894,15 +1205,47 @@ int ObRecoveryLSService::set_protection_stat_(const share::ObSyncStandbyStatusAt
     ObProtectionStat current_protection_stat;
     ObProtectionStat next_protection_stat = attr.get_protection_stat();
     bool need_update = false;
+    bool semi_sync_enabled = false;
+
     if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id_, &trans, true/* for_update */,
       tenant_info))) {
       LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id_));
     } else if (OB_FAIL(current_protection_stat.init(tenant_info))) {
       LOG_WARN("failed to init protection stat", KR(ret), K(tenant_info));
+    } else if (OB_FAIL(standby::ObProtectionModeUtils::check_tenant_data_version_for_semi_sync(
+        tenant_id_, semi_sync_enabled))) {
+      LOG_WARN("failed to check tenant data version for semi sync", KR(ret), K_(tenant_id));
+    } else if (!semi_sync_enabled) {
+      LOG_INFO("tenant data version does not support semi sync, skip PRE_MPT intercept",
+          K_(tenant_id));
+    } else {
+      // Semi-sync intercept: Thread1 does not decide from local TENANT_CONF, because
+      // cfg reload is distributed and asynchronous. When replay reaches an MPT/MA
+      // steady target, write PRE_MPT first unless the table is already at that
+      // steady state. Thread0 is the single owner that verifies all servers have
+      // refreshed cfg and tenant_info before promoting PRE_MPT to MPT/MA.
+      const ObProtectionLevel next_level = next_protection_stat.get_protection_level();
+      const ObProtectionLevel current_level = current_protection_stat.get_protection_level();
+      const ObProtectionMode next_mode = next_protection_stat.get_protection_mode();
+      const int64_t next_epoch = next_protection_stat.get_switchover_epoch();
+      if ((next_level.is_maximum_protection() || next_level.is_maximum_availability())
+          && !current_level.is_maximum_protection()
+          && !current_level.is_maximum_availability()) {
+        const ObProtectionLevel pre_mpt_level(ObProtectionLevel::PRE_MAXIMUM_PROTECTION_LEVEL);
+        next_protection_stat.reset();
+        if (OB_FAIL(next_protection_stat.init(next_mode, pre_mpt_level, next_epoch))) {
+          LOG_WARN("failed to re-init after PRE_MPT intercept",
+                   KR(ret), K(next_mode), K(pre_mpt_level), K(next_epoch));
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (current_protection_stat.get_protection_mode() == next_protection_stat.get_protection_mode()
         && current_protection_stat.get_protection_level() == next_protection_stat.get_protection_level()) {
       LOG_INFO("protection mode and level is same, no need to update", KR(ret), K(tenant_info),
           K(current_protection_stat));
+    // TODO(ziqi): 补充卡住thread0 线程，然后升降级的场景
     } else if (current_protection_stat.is_sync_to_async()) {
       // strong sync accept pre-async log will be pre-mpf
       // pre-mpf should process sync standby status
@@ -922,10 +1265,14 @@ int ObRecoveryLSService::set_protection_stat_(const share::ObSyncStandbyStatusAt
         tenant_id_, tenant_info.get_tenant_role(), &trans, tenant_info.get_switchover_epoch(),
         next_protection_stat.get_protection_mode(),
         next_protection_stat.get_protection_level(),
-        tenant_info.get_switchover_epoch(), new_switchover_epoch))) {
+        next_protection_stat.get_switchover_epoch(), new_switchover_epoch,
+        true/* force_inc_switchover_epoch */))) {
         LOG_WARN("failed to update tenant protection mode and level", KR(ret), K(tenant_id_), K(next_protection_stat),
           K(tenant_info.get_switchover_epoch()), K(new_switchover_epoch));
       } else {
+        if (next_protection_stat.get_protection_level().is_pre_maximum_protection()) {
+          wakeup();
+        }
         LOG_INFO("finish to process sync standby status log", KR(ret), K(tenant_id_), K(next_protection_stat));
       }
     }
@@ -1921,5 +2268,3 @@ int ObRecoveryLSService::refresh_restore_source_()
 
 }//end of namespace rootserver
 }//end of namespace oceanbase
-
-

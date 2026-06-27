@@ -142,6 +142,7 @@ public:
     MAXIMUM_PROTECTION_LEVEL = 3,
     RESYNCHRONIZATION_LEVEL = 4,
     PRE_MAXIMUM_PERFORMANCE_LEVEL = 5,
+    PRE_MAXIMUM_PROTECTION_LEVEL = 6,
     PROTECTION_LEVEL_MAX,
   };
 public:
@@ -171,6 +172,7 @@ public:
   bool is_maximum_protection() const { return MAXIMUM_PROTECTION_LEVEL == level_; }
   bool is_resynchronization() const { return RESYNCHRONIZATION_LEVEL == level_; }
   bool is_pre_maximum_performance() const { return PRE_MAXIMUM_PERFORMANCE_LEVEL == level_; }
+  bool is_pre_maximum_protection() const { return PRE_MAXIMUM_PROTECTION_LEVEL == level_; }
 
   bool is_sync_level() const { return is_maximum_protection() || is_maximum_availability(); }
 

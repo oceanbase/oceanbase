@@ -85,7 +85,8 @@ static const char *protection_level_strs[] = { "INVALID PROTECTION LEVEL",
                                                        "MAXIMUM AVAILABILITY",
                                                        "MAXIMUM PROTECTION",
                                                        "RESYNCHRONIZATION",
-                                                       "PRE MAXIMUM PERFORMANCE"};
+                                                       "PRE MAXIMUM PERFORMANCE",
+                                                       "PRE MAXIMUM PROTECTION"};
 
 ObProtectionMode::ObProtectionMode(const ObString &str)
 {
@@ -156,15 +157,17 @@ bool is_protection_mode_level_match(const ObProtectionMode &protection_mode,
 {
   bool bret = true;
   if (protection_mode.is_maximum_performance()) {
-    // 最大性能/降级
+    // 最大性能/降级: PRE_MPT not allowed in MPF mode
     bret = protection_level.is_maximum_performance() || protection_level.is_pre_maximum_performance();
   } else if (protection_mode.is_maximum_protection()) {
-    // 最大保护/升级
-    bret = protection_level.is_maximum_protection() || protection_level.is_maximum_performance();
+    // 最大保护/升级: allow MPT and PRE_MPT (standby-local overlay on MPT)
+    bret = protection_level.is_maximum_protection() || protection_level.is_maximum_performance()
+      || protection_level.is_pre_maximum_protection();
   } else if (protection_mode.is_maximum_availability()) {
-    // 最大可用/最大可用升级/最大可用等同步/最大可用降级
+    // 最大可用/最大可用升级/最大可用等同步/最大可用降级: allow PRE_MPT (standby-local overlay on MA)
     bret = protection_level.is_maximum_availability() || protection_level.is_maximum_performance()
-      || protection_level.is_resynchronization() || protection_level.is_pre_maximum_performance();
+      || protection_level.is_resynchronization() || protection_level.is_pre_maximum_performance()
+      || protection_level.is_pre_maximum_protection();
   } else {
     bret = false;
   }

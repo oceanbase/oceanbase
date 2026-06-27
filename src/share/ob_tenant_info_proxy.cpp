@@ -873,7 +873,8 @@ int ObAllTenantInfoProxy::update_tenant_protection_mode_and_level(
     const ObProtectionMode &new_protection_mode,
     const ObProtectionLevel &new_protection_level,
     const int64_t min_switchover_epoch,
-    int64_t &new_switchover_epoch)
+    int64_t &new_switchover_epoch,
+    const bool force_inc_switchover_epoch)
 {
   int ret = OB_SUCCESS;
   int64_t begin_time = ObTimeUtility::current_time();
@@ -887,7 +888,7 @@ int ObAllTenantInfoProxy::update_tenant_protection_mode_and_level(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(switchover_epoch), K(new_protection_mode),
       K(new_protection_level), KP(proxy), K(tenant_role));
-  } else if (tenant_role.is_primary()) {
+  } else if (tenant_role.is_primary() || force_inc_switchover_epoch) {
     new_switchover_epoch = common::max(min_switchover_epoch,
         common::max(switchover_epoch + 1, ObTimeUtility::current_time()));
   } else {
@@ -1213,4 +1214,3 @@ int ObAllTenantInfoProxy::update_tenant_restore_data_mode(
 
 }
 }
-

@@ -270,6 +270,7 @@ private:
      * @param[in] new_protection_level : target protection level to be update
      * @param[in] min_switchover_epoch : the min_switchover_epoch this function will return
      * @param[out] new_switchover_epoch : new switchover epoch
+     * @param[in] force_inc_switchover_epoch : force switchover_epoch to move forward for concurrency fencing
      * return :
      *   OB_SUCCESS update tenant protection mode and level successfully
      *   OB_NEED_RETRY switchover_epoch or new_protection_mode or new_protection_level not match, need retry
@@ -280,7 +281,8 @@ private:
         const ObProtectionMode &new_protection_mode,
         const ObProtectionLevel &new_protection_level,
         const int64_t min_switchover_epoch,
-        int64_t &new_switchover_epoch);
+        int64_t &new_switchover_epoch,
+        const bool force_inc_switchover_epoch = false);
 
     /**
      * @description: update tenant status in trans

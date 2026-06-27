@@ -15,6 +15,7 @@
 
 #include "lib/atomic/ob_atomic.h"
 #include "lib/lock/ob_spin_rwlock.h"
+#include "lib/lock/ob_spin_lock.h"
 #include "lib/hash/ob_linear_hash_map.h"
 #include "share/ob_ls_id.h"
 #include "share/scn.h"
@@ -109,11 +110,20 @@ public:
   uint64_t count() const;
   void clear_stats();
 
+  void get_queued_end_position(palf::LSN &lsn, share::SCN &scn) const
+  {
+    common::ObSpinLockGuard guard(queued_end_lock_);
+    lsn = queued_end_lsn_;
+    scn = queued_end_scn_;
+  }
+
   TO_STRING_KV(KP(this),
                "is_inited", ATOMIC_LOAD(&is_inited_),
                "is_stopped", ATOMIC_LOAD(&is_stopped_),
                K_(id),
                K_(next_submit_lsn),
+               K_(queued_end_lsn),
+               K_(queued_end_scn),
                "task_count", task_map_.count(),
                "task_load_factor", task_map_.get_load_factor(),
                "task_bkt_count", task_map_.get_bkt_cnt(),
@@ -191,7 +201,14 @@ private:
   // approximate and not used for actual control
   int64_t cached_bytes_;
   int64_t max_cached_bytes_;
-  common::SpinRWLock lock_;
+  mutable common::SpinRWLock lock_;
+
+  // semi-sync: running MAX enqueued end LSN/SCN (may be non-continuous across holes),
+  // used as the optimistic early-ACK position. Advanced on any push past the current max.
+  // Protected by queued_end_lock_ for atomicity of LSN+SCN pair under concurrent push/read.
+  mutable common::ObSpinLock queued_end_lock_;
+  palf::LSN queued_end_lsn_;
+  share::SCN queued_end_scn_;
 
   // stats
   int64_t drop_duplicate_cnt_;

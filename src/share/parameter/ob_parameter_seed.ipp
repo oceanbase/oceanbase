@@ -363,6 +363,12 @@ DEF_TIME_WITH_CHECKER(max_stale_time_for_weak_consistency, OB_TENANT_PARAMETER, 
 DEF_BOOL(enable_monotonic_weak_read, OB_TENANT_PARAMETER, "false",
          "specifies observer supportting atomicity and monotonic order read",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(enable_standby_semi_sync, OB_TENANT_PARAMETER, "False",
+         "Enable semi-sync replication for standby tenant. When enabled, "
+         "standby ACKs log receipt immediately without waiting for disk flush, "
+         "reducing primary apply latency at the cost of potential data loss on failover. "
+         "Can only be modified when protection_mode is MAXIMUM PERFORMANCE.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_DBL(server_cpu_quota_min, OB_CLUSTER_PARAMETER, "0", "[0,16]",
         "the number of minimal vCPUs allocated to the server tenant"
         "(a special internal tenant that exists on every observer). 0 stands for adaptive. Range: [0, 16]",

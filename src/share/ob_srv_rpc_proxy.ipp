@@ -159,6 +159,8 @@
       ObHaGtsChangeMemberResponse);
   RPC_S(PR5 get_tenant_refreshed_schema_version, OB_GET_TENANT_REFRESHED_SCHEMA_VERSION,
         (ObGetTenantSchemaVersionArg), ObGetTenantSchemaVersionResult);
+  RPC_AP(PR5 check_tenant_config_and_info, OB_CHECK_TENANT_CONFIG_AND_INFO,
+        (obrpc::ObCheckTenantConfigAndInfoArg), obrpc::ObCheckTenantConfigAndInfoResult);
   RPC_S(PR5 update_tenant_memory, OB_UPDATE_TENANT_MEMORY, (obrpc::ObTenantMemoryArg));
   RPC_S(PR5 renew_in_zone_hb, OB_RENEW_IN_ZONE_HB, (share::ObInZoneHbRequest), share::ObInZoneHbResponse);
   RPC_S(PR5 pre_process_server_status, OB_PRE_PROCESS_SERVER, (obrpc::ObPreProcessServerArg));

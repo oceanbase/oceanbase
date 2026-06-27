@@ -13,6 +13,8 @@
 #ifndef OCEANBASE_ROOTSERVER_OB_RECCOVERY_LS_SERVICE_H
 #define OCEANBASE_ROOTSERVER_OB_RECCOVERY_LS_SERVICE_H
 #include "lib/thread/ob_reentrant_thread.h"//ObRsReentrantThread
+#include "lib/container/ob_iarray.h"//ObIArray
+#include "lib/net/ob_addr.h"//ObAddr
 #include "logservice/ob_log_base_type.h"//ObIRoleChangeSubHandler ObICheckpointSubHandler ObIReplaySubHandler
 #include "logservice/palf/lsn.h"//palf::LSN
 #include "logservice/restoreservice/ob_log_restore_handler.h"//RestoreStatusInfo
@@ -20,12 +22,14 @@
 #include "lib/lock/ob_spin_lock.h" //ObSpinLock
 #include "share/restore/ob_log_restore_source.h" //ObLogRestoreSourceItem
 #include "storage/tx/ob_multi_data_source.h" //ObTxBufferNode
+#include "share/ob_tenant_role.h" //ObProtectionStat
 
 namespace oceanbase
 {
 namespace obrpc
 {
 class  ObSrvRpcProxy;
+struct ObCheckTenantConfigAndInfoResult;
 }
 namespace common
 {
@@ -88,6 +92,20 @@ public:
   DEFINE_MTL_FUNC(ObRecoveryLSService)
 private:
  int process_thread0_(const ObAllTenantInfo &tenant_info);
+ // PRE_MPT promotion: promote PRE_MPT_LEVEL to MPT/MA after all-server cfg convergence.
+ int promote_pre_mpt_level_();
+ int do_promote_to_steady_level_(const share::ObAllTenantInfo &expected_tenant_info);
+ int get_semi_sync_target_config_(bool &target_value, int64_t &target_ver, bool &has_target_config);
+ int parse_bool_config_value_(const common::ObString &value_str, bool &value);
+ int get_all_servers_for_cfg_convergence_(common::ObIArray<common::ObAddr> &servers);
+ int check_server_cfg_converged_result_(const common::ObAddr &server,
+     const int64_t target_ver,
+     const obrpc::ObCheckTenantConfigAndInfoResult &result,
+     bool &converged);
+ int check_all_server_cfg_converged_(const int64_t target_ver,
+     const share::ObAllTenantInfo &expected_tenant_info,
+     const int64_t expected_tenant_info_ora_rowscn,
+     bool &converged);
  int process_thread1_(const ObAllTenantInfo &tenant_info,
      share::SCN &start_scn,
      palf::PalfBufferIterator &iterator);

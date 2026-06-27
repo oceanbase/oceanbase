@@ -10332,6 +10332,51 @@ public:
   int64_t schema_version_;
 };
 
+struct ObCheckTenantConfigAndInfoArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCheckTenantConfigAndInfoArg()
+    : tenant_id_(common::OB_INVALID_TENANT_ID),
+      expected_tenant_info_(),
+      tenant_info_ora_rowscn_(0)
+  {}
+  int init(const uint64_t tenant_id,
+           const share::ObAllTenantInfo &expected_tenant_info,
+           const int64_t tenant_info_ora_rowscn);
+  bool is_valid() const { return common::OB_INVALID_TENANT_ID != tenant_id_; }
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  const share::ObAllTenantInfo &get_expected_tenant_info() const { return expected_tenant_info_; }
+  int64_t get_tenant_info_ora_rowscn() const { return tenant_info_ora_rowscn_; }
+  TO_STRING_KV(K_(tenant_id), K_(expected_tenant_info), K_(tenant_info_ora_rowscn));
+private:
+  uint64_t tenant_id_;
+  share::ObAllTenantInfo expected_tenant_info_;
+  int64_t tenant_info_ora_rowscn_;
+};
+
+struct ObCheckTenantConfigAndInfoResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCheckTenantConfigAndInfoResult()
+    : loaded_version_(0),
+      tenant_info_refresh_ok_(false) {}
+  void set_loaded_version(const int64_t v) { loaded_version_ = v; }
+  int64_t get_loaded_version() const { return loaded_version_; }
+  void set_tenant_info_refresh_ok(const bool ok) { tenant_info_refresh_ok_ = ok; }
+  bool get_tenant_info_refresh_ok() const { return tenant_info_refresh_ok_; }
+  void reset()
+  {
+    loaded_version_ = 0;
+    tenant_info_refresh_ok_ = false;
+  }
+  TO_STRING_KV(K_(loaded_version), K_(tenant_info_refresh_ok));
+private:
+  int64_t loaded_version_;
+  bool tenant_info_refresh_ok_;
+};
+
 struct ObTenantMemoryArg
 {
   OB_UNIS_VERSION(1);

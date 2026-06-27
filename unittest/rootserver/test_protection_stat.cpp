@@ -31,6 +31,15 @@ namespace share {
 #define L_MPT ObProtectionLevel::MAXIMUM_PROTECTION_LEVEL
 #define L_RE ObProtectionLevel::RESYNCHRONIZATION_LEVEL
 #define L_PRE_MPF ObProtectionLevel::PRE_MAXIMUM_PERFORMANCE_LEVEL
+#define L_PRE_MPT ObProtectionLevel::PRE_MAXIMUM_PROTECTION_LEVEL
+
+#define STAT_WITH_EPOCH(mode, level, epoch) ({\
+  ObProtectionStat tmp; \
+  tmp.protection_mode_ = mode; \
+  tmp.protection_level_ = level; \
+  tmp.switchover_epoch_ = epoch; \
+  tmp; \
+})
 
 #define STAT(mode, level) ({\
   ObProtectionStat tmp; \
@@ -121,6 +130,46 @@ TEST_F(TestProtectionStat, get_next_protection_stat_with_change_protection_mode)
   ASSERT_TRUE(check_next_protection_stat(STAT(M_MA, L_PRE_MPF), M_MPT, tmp, true/*fail*/));
   ASSERT_TRUE(check_next_protection_stat(STAT(M_MA, L_RE), M_MPF, STAT(M_MPF, L_MPF)));
   ASSERT_TRUE(check_next_protection_stat(STAT(M_MA, L_RE), M_MPT, STAT(M_MPT, L_MPF)));
+}
+
+TEST_F(TestProtectionStat, pre_mpt_level_validity)
+{
+  // PRE_MPT is legal under MA and MPT, illegal under MPF.
+  ASSERT_TRUE(STAT(M_MA,  L_PRE_MPT).is_valid());
+  ASSERT_TRUE(STAT(M_MPT, L_PRE_MPT).is_valid());
+  ASSERT_FALSE(STAT(M_MPF, L_PRE_MPT).is_valid());
+
+  // is_pre_maximum_protection() detection
+  ASSERT_TRUE(ObProtectionLevel(L_PRE_MPT).is_pre_maximum_protection());
+  ASSERT_FALSE(ObProtectionLevel(L_MA).is_pre_maximum_protection());
+  ASSERT_FALSE(ObProtectionLevel(L_MPT).is_pre_maximum_protection());
+
+  // PRE_MPT is transient and not a converged sync level.
+  ASSERT_TRUE(ObProtectionLevel(L_MPT).is_sync_level());
+  ASSERT_TRUE(ObProtectionLevel(L_MA).is_sync_level());
+  ASSERT_FALSE(ObProtectionLevel(L_PRE_MPT).is_sync_level());
+  ASSERT_FALSE(ObProtectionLevel(L_MPF).is_sync_level());
+  ASSERT_FALSE(ObProtectionLevel(L_RE).is_sync_level());
+
+  // PRE_MPT is NOT steady (transient waiting state)
+  ASSERT_FALSE(STAT(M_MPT, L_PRE_MPT).is_steady());
+  ASSERT_FALSE(STAT(M_MA,  L_PRE_MPT).is_steady());
+}
+
+TEST_F(TestProtectionStat, pre_mpt_thread0_blocked_upgrade_downgrade_sequence)
+{
+  ObProtectionStat tmp;
+
+  // MPT -> MPF downgrade follows the original unconditional PRE_MPF path.
+  ASSERT_TRUE(check_next_protection_stat(STAT(M_MPT, L_PRE_MPT), M_MPF, STAT(M_MPF, L_PRE_MPF)));
+  ASSERT_TRUE(check_next_protection_stat(STAT(M_MPF, L_PRE_MPF), STAT(M_MPF, L_MPF)));
+
+  // Re-upgrade from the completed downgrade starts from MPF, then Thread1 can
+  // overlay the steady sync target to PRE_MPT again on standby.
+  ASSERT_TRUE(check_next_protection_stat(STAT(M_MPF, L_MPF), M_MPT, STAT(M_MPT, L_MPF)));
+
+  // Existing PRE_MPF -> MPT blocked transition remains unchanged.
+  ASSERT_TRUE(check_next_protection_stat(STAT(M_MPF, L_PRE_MPF), M_MPT, tmp, true/*fail*/));
 }
 
 } // namespace test
