@@ -636,6 +636,13 @@ int ObTransportServiceInitTask::calc_start_point_(LogTransportStatus *transport_
   share::SCN last_sent_scn = transport_status->last_sent_scn_.atomic_load();
   start_lsn = last_sent_lsn.is_valid() ? last_sent_lsn : base_lsn;
   start_scn = last_sent_scn.is_valid() ? last_sent_scn : base_scn;
+  if (start_lsn.is_valid() && standby_end_lsn.is_valid() && start_lsn < standby_end_lsn) {
+    CLOG_LOG(INFO, "adjust transport start point to standby committed end",
+             K(ls_id_), K(start_lsn), K(start_scn), K(standby_end_lsn), K(standby_end_scn),
+             K(last_sent_lsn), K(last_sent_scn), K(base_lsn), K(base_scn), K(palf_end_lsn), K(palf_end_scn));
+    start_lsn = standby_end_lsn;
+    start_scn = standby_end_scn;
+  }
   if (!start_scn.is_valid()) {
     start_scn.set_min();
   }
