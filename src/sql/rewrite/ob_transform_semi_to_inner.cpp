@@ -422,7 +422,7 @@ int ObTransformSemiToInner::split_join_condition(ObDMLStmt& stmt,
         if (OB_FAIL(other_conds.push_back(expr))) {
           LOG_WARN("failed to push back expr", K(ret));
         }
-      } else if (T_OP_EQ != expr->get_expr_type()) {
+      } else if (T_OP_EQ != expr->get_expr_type() && T_OP_NSEQ != expr->get_expr_type()) {
         bool less_or_greater = is_less_or_greater_expr(expr->get_expr_type());
         if (less_or_greater && OB_FAIL(cmp_join_conds.push_back(expr))) {
           LOG_WARN("failed to push back expr", K(ret));
