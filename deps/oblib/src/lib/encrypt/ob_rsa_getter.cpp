@@ -226,175 +226,131 @@ int ObRsaGetter::get_public_key(ObString &public_key, ObIAllocator &allocator)
   return ret;
 }
 
-int ObRsaGetter::decrypt_with_private_key(
-    const unsigned char *ciphertext,
-    const int64_t ciphertext_len,
-    unsigned char *plaintext,
-    int64_t &plaintext_len,
-    const int64_t max_plaintext_len)
+int ObRsaGetter::decrypt_with_padding(EVP_PKEY *pkey,
+                                      const unsigned char *ciphertext,
+                                      const int64_t ciphertext_len,
+                                      unsigned char *plaintext,
+                                      int64_t &plaintext_len,
+                                      const int64_t max_plaintext_len,
+                                      const int padding_mode,
+                                      const char *padding_name,
+                                      const bool need_oaep_sha1)
 {
   int ret = OB_SUCCESS;
-  EVP_PKEY *pkey = nullptr;
-  BIO *bio = nullptr;
-  EVP_PKEY_CTX *key_ctx = nullptr;
+  EVP_PKEY_CTX *key_ctx = NULL;
+  size_t out_len = static_cast<size_t>(max_plaintext_len);
 
+  ERR_clear_error();
+  if (NULL == pkey || NULL == ciphertext || ciphertext_len <= 0 || NULL == plaintext || max_plaintext_len <= 0
+      || NULL == padding_name) {
+    ret = OB_INVALID_ARGUMENT;
+    LIB_LOG(WARN, "invalid argument", K(ret));
+  } else if (NULL == (key_ctx = EVP_PKEY_CTX_new(pkey, NULL))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LIB_LOG(WARN, "failed to create EVP_PKEY_CTX", K(ret), K(padding_name));
+  } else if (EVP_PKEY_decrypt_init(key_ctx) <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LIB_LOG(WARN, "failed to initialize EVP_PKEY_CTX for decryption", K(ret), K(padding_name));
+  } else if (EVP_PKEY_CTX_set_rsa_padding(key_ctx, padding_mode) <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LIB_LOG(WARN, "failed to set RSA padding mode", K(ret), K(padding_name));
+  } else if (need_oaep_sha1 && EVP_PKEY_CTX_set_rsa_oaep_md(key_ctx, EVP_sha1()) <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LIB_LOG(WARN, "failed to set RSA OAEP hash algorithm to SHA-1", K(ret), K(padding_name));
+  } else if (need_oaep_sha1 && EVP_PKEY_CTX_set_rsa_mgf1_md(key_ctx, EVP_sha1()) <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LIB_LOG(WARN, "failed to set RSA MGF1 hash algorithm to SHA-1", K(ret), K(padding_name));
+  } else if (EVP_PKEY_decrypt(key_ctx, plaintext, &out_len, ciphertext, static_cast<size_t>(ciphertext_len)) <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LIB_LOG(TRACE, "failed to decrypt RSA", K(ret), K(padding_name));
+  } else {
+    plaintext_len = static_cast<int64_t>(out_len);
+  }
+
+  if (NULL != key_ctx) {
+    EVP_PKEY_CTX_free(key_ctx);
+  }
+  return ret;
+}
+
+int ObRsaGetter::decrypt_with_private_key(const unsigned char *ciphertext,
+                                          const int64_t ciphertext_len,
+                                          unsigned char *plaintext,
+                                          int64_t &plaintext_len,
+                                          const int64_t max_plaintext_len)
+{
+  int ret = OB_SUCCESS;
+  int oaep_ret = OB_SUCCESS;
+  int pkcs1_ret = OB_SUCCESS;
+  EVP_PKEY *pkey = NULL;
+  BIO *bio = NULL;
+
+  plaintext_len = 0;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LIB_LOG(WARN, "ObRsaGetter not inited", K(ret));
-  } else if (ciphertext == nullptr || ciphertext_len <= 0 ||
-             plaintext == nullptr || max_plaintext_len <= 0) {
+  } else if (NULL == ciphertext || ciphertext_len <= 0 || NULL == plaintext || max_plaintext_len <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    LIB_LOG(WARN, "invalid argument", K(ret), KP(ciphertext), K(ciphertext_len),
-            KP(plaintext), K(max_plaintext_len));
+    LIB_LOG(WARN, "invalid argument", K(ret), KP(ciphertext), K(ciphertext_len), KP(plaintext), K(max_plaintext_len));
   } else if (!rsa_key_.is_valid()) {
-    // Key data doesn't exist, report error
     ret = OB_ERR_UNEXPECTED;
     LIB_LOG(ERROR, "RSA key not loaded, should be initialized in observer init phase", K(ret));
   } else {
-    // Load private key from PEM format
     bio = BIO_new_mem_buf(rsa_key_.private_key_, static_cast<int>(rsa_key_.private_key_len_));
-    if (bio == nullptr) {
+    if (NULL == bio) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LIB_LOG(WARN, "failed to create BIO", K(ret));
     } else {
-      pkey = PEM_read_bio_PrivateKey(bio, nullptr, nullptr, nullptr);
-      if (pkey == nullptr) {
+      pkey = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL);
+      if (NULL == pkey) {
         ret = OB_ERR_UNEXPECTED;
         LIB_LOG(WARN, "failed to read RSA private key", K(ret));
       } else {
-        // 创建 EVP_PKEY_CTX 上下文
-        key_ctx = EVP_PKEY_CTX_new(pkey, nullptr);
-        if (key_ctx == nullptr) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LIB_LOG(WARN, "failed to create EVP_PKEY_CTX", K(ret));
-        } else if (EVP_PKEY_decrypt_init(key_ctx) <= 0) {
-          ret = OB_ERR_UNEXPECTED;
-          LIB_LOG(WARN, "failed to initialize EVP_PKEY_CTX for decryption", K(ret));
-        } else if (EVP_PKEY_CTX_set_rsa_padding(key_ctx, RSA_PKCS1_OAEP_PADDING) <= 0) {
-          ret = OB_ERR_UNEXPECTED;
-          LIB_LOG(WARN, "failed to set RSA padding mode", K(ret));
-        } else if (EVP_PKEY_CTX_set_rsa_oaep_md(key_ctx, EVP_sha1()) <= 0) {
-          ret = OB_ERR_UNEXPECTED;
-          LIB_LOG(WARN, "failed to set RSA OAEP hash algorithm to SHA-1", K(ret));
-        } else if (EVP_PKEY_CTX_set_rsa_mgf1_md(key_ctx, EVP_sha1()) <= 0) {
-          ret = OB_ERR_UNEXPECTED;
-          LIB_LOG(WARN, "failed to set RSA MGF1 hash algorithm to SHA-1", K(ret));
+        oaep_ret = decrypt_with_padding(pkey,
+                                        ciphertext,
+                                        ciphertext_len,
+                                        plaintext,
+                                        plaintext_len,
+                                        max_plaintext_len,
+                                        RSA_PKCS1_OAEP_PADDING,
+                                        "RSA_PKCS1_OAEP_PADDING",
+                                        true);
+        if (OB_SUCCESS == oaep_ret) {
+          ret = OB_SUCCESS;
+          LIB_LOG(TRACE,
+                  "RSA decryption successful",
+                  "padding",
+                  "RSA_PKCS1_OAEP_PADDING");
         } else {
-          size_t out_len = static_cast<size_t>(max_plaintext_len);
-          if (EVP_PKEY_decrypt(key_ctx, plaintext, &out_len, ciphertext,
-                               static_cast<size_t>(ciphertext_len)) <= 0) {
-            ret = OB_ERR_UNEXPECTED;
-            // 获取第一个错误的详细信息（使用peek不会清除错误队列）
-            const unsigned long ssl_err = ERR_peek_error();
-            if (ssl_err != 0) {
-              // 获取完整的错误字符串描述
-              char err_buf[256] = {0};
-              ERR_error_string_n(ssl_err, err_buf, sizeof(err_buf));
-              // 获取错误的各个组成部分
-              const char *err_lib = ERR_lib_error_string(ssl_err);      // 错误所在的库
-              const char *err_func = ERR_func_error_string(ssl_err);    // 错误所在的函数
-              const char *err_reason = ERR_reason_error_string(ssl_err); // 错误原因
-              // 提取错误码的各个部分
-              int err_lib_num = ERR_GET_LIB(ssl_err);
-              int err_reason_num = ERR_GET_REASON(ssl_err);
-
-              // 获取RSA密钥信息
-              RSA *rsa_temp = EVP_PKEY_get0_RSA(pkey);
-              const BIGNUM *n = (rsa_temp != nullptr) ? RSA_get0_n(rsa_temp) : nullptr;
-              const BIGNUM *e = (rsa_temp != nullptr) ? RSA_get0_e(rsa_temp) : nullptr;
-              int modulus_bits = (n != nullptr) ? BN_num_bits(n) : 0;
-              int exponent_bits = (e != nullptr) ? BN_num_bits(e) : 0;
-              char *n_hex = (n != nullptr) ? BN_bn2hex(n) : nullptr;
-              char modulus_prefix[17] = {0}; // print small prefix to avoid leaking key
-              if (n_hex != nullptr) {
-                snprintf(modulus_prefix, sizeof(modulus_prefix), "%.16s", n_hex);
-                OPENSSL_free(n_hex);
-              }
-
-              // 计算期望的密文大小和实际大小的差异
-              int expected_cipher_size = EVP_PKEY_size(pkey);
-              const char *size_match = "UNKNOWN";
-              if (expected_cipher_size > 0) {
-                size_match = (ciphertext_len == expected_cipher_size) ? "MATCH" : "MISMATCH";
-              }
-
-              // 记录第一个错误的详细信息（不打印敏感信息ciphertext）
-              LIB_LOG(WARN, "RSA decryption failed - primary error",
-                      K(ret),
-                      K(ciphertext_len),
-                      K(ciphertext),
-                      K(max_plaintext_len),
-                      K(modulus_bits),
-                      K(exponent_bits),
-                      K(modulus_prefix),
-                      "rsa_size", expected_cipher_size,
-                      "cipher_size_match", size_match,
-                      "padding", "RSA_PKCS1_OAEP_PADDING",
-                      "ssl_err_code", ssl_err,
-                      "err_lib", (err_lib ? err_lib : "NULL"),
-                      "err_func", (err_func ? err_func : "NULL"),
-                      "err_reason", (err_reason ? err_reason : "NULL"),
-                      "err_lib_num", err_lib_num,
-                      "err_reason_num", err_reason_num,
-                      "err_full_string", err_buf);
-              LIB_LOG(DEBUG, "ciphertext", K(ciphertext), K(ciphertext_len));
-
-              // 遍历并打印OpenSSL错误栈中的所有错误（跳过第一个，避免重复）
-              unsigned long err_code;
-              int err_count = 0;
-              bool first_error_skipped = false;
-              while ((err_code = ERR_get_error()) != 0) {
-                if (!first_error_skipped) {
-                  // 跳过第一个错误（已经在上面打印过了）
-                  first_error_skipped = true;
-                } else {
-                  err_count++;
-                  char err_detail[256] = {0};
-                  ERR_error_string_n(err_code, err_detail, sizeof(err_detail));
-
-                  LIB_LOG(WARN, "RSA decryption - error stack detail",
-                          "error_index", err_count,
-                          "err_code", err_code,
-                          "err_detail", err_detail,
-                          "err_lib", ERR_GET_LIB(err_code),
-                          "err_reason", ERR_GET_REASON(err_code));
-                }
-              }
-            } else {
-              // 错误栈为空，只记录基本信息
-              int expected_cipher_size = EVP_PKEY_size(pkey);
-              const char *size_match = "UNKNOWN";
-              if (expected_cipher_size > 0) {
-                size_match = (ciphertext_len == expected_cipher_size) ? "MATCH" : "MISMATCH";
-              }
-              LIB_LOG(WARN, "RSA decryption failed but no OpenSSL error in stack",
-                      K(ret),
-                      K(ciphertext_len),
-                      K(max_plaintext_len),
-                      "rsa_size", expected_cipher_size,
-                      "cipher_size_match", size_match,
-                      "padding", "RSA_PKCS1_OAEP_PADDING");
-            }
+          pkcs1_ret = decrypt_with_padding(pkey,
+                                           ciphertext,
+                                           ciphertext_len,
+                                           plaintext,
+                                           plaintext_len,
+                                           max_plaintext_len,
+                                           RSA_PKCS1_PADDING,
+                                           "RSA_PKCS1_PADDING",
+                                           false);
+          if (OB_SUCCESS == pkcs1_ret) {
+            ret = OB_SUCCESS;
+            LIB_LOG(TRACE,
+                    "RSA decryption fallback successful",
+                    "padding",
+                    "RSA_PKCS1_PADDING");
           } else {
-            plaintext_len = static_cast<int64_t>(out_len);
-            LIB_LOG(DEBUG, "RSA decryption successful", K(ciphertext_len), K(plaintext_len));
+            ret = oaep_ret;
+            LIB_LOG(WARN, "both OAEP and PKCS1 padding decryption failed", K(ret));
           }
         }
       }
     }
-
-    // Clean up resources
-    if (key_ctx != nullptr) {
-      EVP_PKEY_CTX_free(key_ctx);
-    }
-    if (pkey != nullptr) {
+    if (NULL != pkey) {
       EVP_PKEY_free(pkey);
     }
-    if (bio != nullptr) {
+    if (NULL != bio) {
       BIO_free(bio);
     }
   }
-
   return ret;
 }
 

@@ -443,10 +443,12 @@ int ObMPConnect::process()
         case OB_PASSWORD_WRONG:
         case OB_ERR_INVALID_TENANT_NAME: {
           ret = OB_PASSWORD_WRONG;
+          const bool using_password = (NULL != session) ? !session->get_login_info().passwd_.empty()
+                                                        : !hsr_.get_auth_response().empty();
           snprintf(buf, OB_MAX_ERROR_MSG_LEN, ob_errpkt_str_user_error(ret, lib::is_oracle_mode()),
                    user_name_.length(), user_name_.ptr(),
                    host_name.length(), host_name.ptr(),
-                   (hsr_.get_auth_response().empty() ? "NO" : "YES"));
+                   (using_password ? "YES" : "NO"));
           break;
         }
         case OB_CLUSTER_NO_MATCH: {
@@ -735,6 +737,12 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
                                                                      ssl_st,
                                                                      asr_mem_pool_))) {
                 LOG_WARN("failed to handle caching_sha2_password authentication", K(ret));
+              }
+            }
+            // Update session login_info with the updated password after auth switch/caching_sha2
+            if (OB_SUCC(ret)) {
+              if (OB_FAIL(session.set_login_info(login_info))) {
+                LOG_WARN("failed to update login_info after auth switch", K(ret));
               }
             }
           }

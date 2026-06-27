@@ -23,6 +23,8 @@ namespace oceanbase
 {
 namespace observer
 {
+static const uint64_t OBJDBC_CHANGE_USER_AUTHSWITCH_MIN_VERSION = oceanbase::common::cal_version(2, 4, 0, 18);
+
 int ObMPChangeUser::deserialize()
 {
   int ret = OB_SUCCESS;
@@ -198,8 +200,10 @@ int ObMPChangeUser::process()
   bool need_response_error = true;
   const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
   int64_t query_timeout = 0;
-  // jinmao TODO: Allow client to send auth switch packet during change user process based on client version.
-  bool support_auth_switch = (get_conn()->client_type_ == common::OB_CLIENT_NON_STANDARD);
+  bool support_auth_switch = true;
+  if (get_conn()->client_type_ == common::OB_CLIENT_JDBC) {
+    support_auth_switch = get_conn()->client_version_ >= OBJDBC_CHANGE_USER_AUTHSWITCH_MIN_VERSION;
+  }
   if (OB_FAIL(get_session(session))) {
     LOG_ERROR("get session  fail", K(ret));
   } else if (OB_ISNULL(session)) {

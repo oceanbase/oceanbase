@@ -914,18 +914,27 @@ int ObMPBase::handle_auth_switch_if_needed(
 {
   int ret = OB_SUCCESS;
   bool is_empty_passwd = false;
+  ObString client_plugin = ObEncryptedHelper::convert_plugin_name_from_client(hsr.get_auth_plugin_name());
+  // When the client's auth plugin is caching_sha2_password, force auth switch to send a new scramble.
+  // Most clients (mysql8, obclient, etc.) do not use the scramble from the initial handshake
+  // to generate the password hash for caching_sha2_password; they require an explicit auth switch.
+  // This applies uniformly to all connections (direct and proxy).
+  bool force_auth_switch = ObEncryptedHelper::is_caching_sha2_password_plugin(client_plugin);
   if (OB_FAIL(schema_guard.is_user_empty_passwd(login_info, is_empty_passwd))) {
     LOG_WARN("failed to check if user account has empty password", K(ret), K(login_info.passwd_));
-  } else if (conn->is_proxy_ && ObEncryptedHelper::is_caching_sha2_password_plugin(required_plugin)) {
+  } else if (conn->is_proxy_
+             && ObEncryptedHelper::is_caching_sha2_password_plugin(required_plugin)
+             && conn->proxy_version_ < PROXY_VERSION_4_4_0_0) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("caching_sha2_password is not supported in current proxy version", K(ret));
-  } else if (!is_empty_passwd &&
+    LOG_WARN("caching_sha2_password is not supported below 4.4.0 proxy version",
+             K(ret), K(conn->proxy_version_));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "caching_sha2_password is not supported below 4.4.0 proxy version");
+  } else if ((!is_empty_passwd || force_auth_switch) &&
              GCONF._enable_auth_switch &&
              !hsr.get_auth_plugin_name().empty() && // keep compatibility with old clients, empty plugin name means mysql_native_password
              (!conn->is_proxy_ || conn->proxy_version_ >= PROXY_VERSION_4_3_3_0)) {
-    ObString client_plugin = ObEncryptedHelper::convert_plugin_name_from_client(hsr.get_auth_plugin_name());
     // If client plugin does not match user's required plugin, send AuthSwitchRequest
-    if (ObEncryptedHelper::is_same_auth_plugin(client_plugin, required_plugin)) {
+    if (ObEncryptedHelper::is_same_auth_plugin(client_plugin, required_plugin) && !force_auth_switch) {
       // do nothing
     } else if (!support_auth_switch) {
       ret = OB_NOT_SUPPORTED;
@@ -1025,11 +1034,17 @@ int ObMPBase::receive_auth_switch_response(
     }
 
     if (OB_FAIL(ret)) {
-    } else if (expected_auth_data_len != auth_data_len) {
+    } else if (expected_auth_data_len != auth_data_len
+               && 0 != auth_data_len
+               && 1 != auth_data_len) {
       ret = OB_PASSWORD_WRONG;
       LOG_WARN("invalid length of authentication response data",
                K(ret), K(auth_data_len), K(expected_auth_data_len),
                K(required_plugin), K(ObString(auth_data_len, auth_data)));
+    } else if (0 == auth_data_len || 1 == auth_data_len) {
+      // Empty password: client sends 0-byte (empty packet) or 1-byte (\0 terminator)
+      login_info.scramble_str_.assign_ptr(conn->scramble_result_buf_, ObSMConnection::SCRAMBLE_BUF_SIZE);
+      login_info.passwd_ = ObString::make_empty_string();
     } else {
       void *auth_buf = mem_pool.alloc(auth_data_len);
       if (OB_ISNULL(auth_buf)) {
@@ -1069,19 +1084,18 @@ int ObMPBase::handle_caching_sha2_authentication_if_need(
   } else {
     bool need_full_auth = false;
     if (login_info.passwd_.length() == 0) {
-      // Empty password case
       need_full_auth = false;
     } else if (login_info.passwd_.length() != OB_SHA256_DIGEST_LENGTH) {
       // Unexpected length, need full auth
       need_full_auth = true;
-      LOG_TRACE("caching_sha2_password: unexpected auth data length, need full auth",
+      LOG_WARN("caching_sha2_password: unexpected auth data length, need full auth",
                 K(login_info.passwd_.length()));
     } else if (OB_FAIL(try_caching_sha2_fast_auth(login_info, conn, session,
                                                   matched_user_info, need_full_auth))) {
       LOG_WARN("failed to try fast auth", K(ret));
     }
     // Perform full authentication if needed
-    if (OB_SUCC(ret) && need_full_auth && login_info.passwd_.length() > 0) {
+    if (OB_SUCC(ret) && need_full_auth) {
       if (OB_FAIL(perform_caching_sha2_full_auth(login_info, conn, session, ssl_st, mem_pool))) {
         LOG_WARN("failed to perform full auth", K(ret));
       }
@@ -1175,37 +1189,41 @@ int ObMPBase::perform_caching_sha2_full_auth(
   SSL *ssl_st,
   obmysql::ObICSMemPool &mem_pool)
 {
-int ret = OB_SUCCESS;
-bool is_secure = (conn->is_in_ssl_connect_phase() || OB_NOT_NULL(ssl_st));
-// Send perform_full_authentication flag (0x04)
-OMPKCachingSha2Response full_auth_response(PERFORM_FULL_AUTHENTICATION);
-if (OB_FAIL(packet_sender_.response_packet(full_auth_response, &session))) {
-  ret = OB_ERR_UNEXPECTED;
-  LOG_WARN("failed to send perform_full_authentication flag", K(ret));
-} else if (OB_FAIL(packet_sender_.flush_buffer(false))) {
-  ret = OB_ERR_UNEXPECTED;
-  LOG_WARN("failed to flush perform_full_authentication flag", K(ret));
-} else {
-  // Set connection to auth_switch phase before reading client response
+  int ret = OB_SUCCESS;
+  bool is_secure = (conn->is_in_ssl_connect_phase() || OB_NOT_NULL(ssl_st));
+  // Send perform_full_authentication flag (0x04)
+  OMPKCachingSha2Response full_auth_response(PERFORM_FULL_AUTHENTICATION);
+  // Set auth_switch phase BEFORE flush so that flush_buffer's compensation mechanism
+  // sets OB_IS_LAST_PACKET=true in OB 2.0 protocol, while keeping is_last=false
+  // to allow continued packet reading via EASY_AGAIN in the transport layer.
   conn->set_auth_switch_phase();
-  // Choose different authentication paths based on connection security
-  if (is_secure) {
-    LOG_INFO("caching_sha2_password: performing SSL full authentication");
-    // SSL/TLS secure connection: receive plaintext password
-    if (OB_FAIL(perform_ssl_full_auth(login_info, mem_pool))) {
-      LOG_WARN("failed to perform SSL full authentication", K(ret));
-    }
+  if (OB_FAIL(packet_sender_.response_packet(full_auth_response, &session))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to send perform_full_authentication flag", K(ret));
+  } else if (OB_FAIL(packet_sender_.flush_buffer(false))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to flush perform_full_authentication flag", K(ret));
   } else {
-    // Insecure connection: use RSA encrypted authentication
-    LOG_INFO("caching_sha2_password: performing RSA full authentication");
-    if (OB_FAIL(perform_rsa_full_auth(login_info, session, mem_pool))) {
-      LOG_WARN("failed to perform RSA full authentication", K(ret));
+    // Choose different authentication paths based on connection security
+    if (is_secure) {
+      LOG_INFO("caching_sha2_password: performing SSL full authentication");
+      // SSL/TLS secure connection: receive plaintext password
+      if (OB_FAIL(perform_ssl_full_auth(login_info, mem_pool))) {
+        LOG_WARN("failed to perform SSL full authentication", K(ret));
+      }
+    } else {
+      // Insecure connection: use RSA encrypted authentication
+      LOG_INFO("caching_sha2_password: performing RSA full authentication");
+      if (OB_FAIL(perform_rsa_full_auth(login_info, session, mem_pool))) {
+        LOG_WARN("failed to perform RSA full authentication", K(ret));
+      }
     }
   }
-  // Reset connection state to auth phase
+  // Restore auth phase after all intermediate packet exchanges are done.
+  // This ensures send_error_packet takes the authed_phase branch which
+  // composes error+ok correctly for proxy via send_ok_packet.
   conn->set_auth_phase();
-}
-return ret;
+  return ret;
 }
 
 int ObMPBase::perform_ssl_full_auth(
@@ -1448,26 +1466,18 @@ int ObMPBase::decrypt_rsa_password(
   int ret = OB_SUCCESS;
   unsigned char decrypted_pwd[OB_RSA_MAX_DECRYPT_SIZE];
   int64_t decrypted_len = 0;
-  if (OB_FAIL(ObRsaGetter::instance().decrypt_with_private_key(
-          reinterpret_cast<const unsigned char*>(client_data),
-          client_data_len,
-          decrypted_pwd,
-          decrypted_len,
-          sizeof(decrypted_pwd)))) {
-    // 打印 client_data 的 hex 串
-    char hex_buf[OB_RSA_MAX_DECRYPT_SIZE * 2 + 1] = {0};
-    int hex_pos = 0;
-    for (int64_t i = 0; i < client_data_len && hex_pos < static_cast<int64_t>(sizeof(hex_buf)) - 2; ++i) {
-      hex_pos += snprintf(hex_buf + hex_pos, sizeof(hex_buf) - hex_pos, "%02x", static_cast<unsigned char>(client_data[i]));
-    }
+  if (OB_FAIL(ObRsaGetter::instance().decrypt_with_private_key(reinterpret_cast<const unsigned char *>(client_data),
+                                                               client_data_len,
+                                                               decrypted_pwd,
+                                                               decrypted_len,
+                                                               sizeof(decrypted_pwd)))) {
     LOG_WARN("failed to decrypt password with RSA private key",
              K(ret),
-             K(hex_buf),
              K(client_data_len),
              K(decrypted_len),
              K(login_info.user_name_),
-             "is_passwd_plaintext", login_info.is_passwd_plaintext_,
-             "padding", "RSA_PKCS1_OAEP_PADDING");
+             "is_passwd_plaintext",
+             login_info.is_passwd_plaintext_);
   } else {
     // XOR with scramble to get plaintext password
     const char *scramble = login_info.scramble_str_.ptr();

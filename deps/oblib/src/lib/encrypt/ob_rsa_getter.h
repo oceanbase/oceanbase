@@ -158,6 +158,16 @@ private:
    */
   int create_wallet_directory(const char *wallet_path);
 
+  int decrypt_with_padding(EVP_PKEY *pkey,
+                           const unsigned char *ciphertext,
+                           const int64_t ciphertext_len,
+                           unsigned char *plaintext,
+                           int64_t &plaintext_len,
+                           const int64_t max_plaintext_len,
+                           const int padding_mode,
+                           const char *padding_name,
+                           const bool need_oaep_sha1);
+
 private:
   static const char *DEFAULT_WALLET_PATH;        // Default wallet path
   static const char *RSA_PRIVATE_KEY_FILE;       // Private key file name
