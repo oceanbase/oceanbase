@@ -8885,41 +8885,6 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node,
           }
         } //end for
 
-        if (OB_SUCC(ret) && lib::is_oracle_mode()
-            && 0 == func_name.case_compare(N_LNNVL)) {
-          int32_t cnt = func_expr->get_param_count();
-          if (cnt > 1) {
-            ret = OB_ERR_MISSING_RIGHT_PARENTHESIS;
-            LOG_USER_ERROR(OB_ERR_MISSING_RIGHT_PARENTHESIS);
-          } else {
-            ObRawExpr *param = func_expr->get_param_expr(0);
-            if (OB_NOT_NULL(param)) {
-              switch (param->get_expr_type()) {
-                case T_FUN_SYS_LNNVL:
-                case T_FUN_SYS_REGEXP_LIKE:
-                case T_OP_EXISTS:
-                case T_OP_IS:
-                case T_OP_IS_NOT:
-                case T_OP_LIKE:
-                case T_OP_NOT_LIKE:
-                case T_OP_IN:
-                case T_OP_NOT_IN:
-                case T_OP_LE:
-                case T_OP_LT:
-                case T_OP_EQ:
-                case T_OP_GE:
-                case T_OP_GT:
-                case T_OP_NE:
-                  break;
-                default:
-                  ret = OB_ERR_INVALID_RELATIONAL_OPERATOR;
-                  LOG_USER_ERROR(OB_ERR_INVALID_RELATIONAL_OPERATOR);
-              }
-            }
-          }
-        }
-
-
         //
         // check param count
         if (ret != OB_SUCCESS) {
@@ -8934,13 +8899,8 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node,
           if (ret == OB_SUCCESS) {
             ret = temp_ret;
           }
-          if (lib::is_oracle_mode()
-              && 0 == func_name.case_compare(N_LNNVL)
-              && func_expr->get_param_count() > 1) {
-            ret = OB_ERR_MISSING_RIGHT_PARENTHESIS;
-            LOG_USER_ERROR(OB_ERR_MISSING_RIGHT_PARENTHESIS);
-          }
         }
+
         if (OB_SUCC(ret)) {
           if (OB_FAIL(process_sys_func_params(*func_expr, current_columns_count))) {
             LOG_WARN("fail process sys func params", K(ret));
@@ -8951,12 +8911,7 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node,
   }
 
   if (OB_SUCC(ret)) {
-    if (lib::is_oracle_mode()
-        && 0 == func_name.case_compare(N_LNNVL)
-        && 1 == node->num_child_) {
-      ret = OB_ERR_MISSING_EXPRESSION;
-      LOG_USER_ERROR(OB_ERR_MISSING_EXPRESSION);
-    } else if (OB_FAIL(ObRawExprUtils::function_alias(ctx_.expr_factory_, func_expr))) {
+    if (OB_FAIL(ObRawExprUtils::function_alias(ctx_.expr_factory_, func_expr))) {
       LOG_WARN("failed to do function alias", K(ret), K(func_expr));
     } else if (OB_FAIL(func_expr->check_param_num())) {
       if (OB_ERR_FUNCTION_UNKNOWN != ret) {
