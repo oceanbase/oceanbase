@@ -311,7 +311,7 @@ int ObMViewResolverHelper::resolve_mv_refresh_info(ParseNode *refresh_info_node,
       refresh_info.refresh_method_ = ObMVRefreshMethod::NEVER;
       refresh_info.refresh_mode_ = ObMVRefreshMode::NEVER;
     } else if (refresh_info_node->int32_values_[0] == 0) {
-      if (OB_UNLIKELY(4 != refresh_info_node->num_child_)) {
+      if (OB_UNLIKELY(5 != refresh_info_node->num_child_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected refresh info node", K(ret), K(refresh_info_node->type_), K(refresh_info_node->num_child_));
       } else {
@@ -320,6 +320,7 @@ int ObMViewResolverHelper::resolve_mv_refresh_info(ParseNode *refresh_info_node,
         ParseNode *nested_refresh_node = refresh_info_node->children_[1];
         ParseNode *refresh_on_node = refresh_info_node->children_[2];
         ParseNode *refresh_interval_node = refresh_info_node->children_[3];
+        ParseNode *compat_version_node = refresh_info_node->children_[4];
         // refresh method
         if (OB_FAIL(resolve_refresh_method(refresh_method,
                                            refresh_info.refresh_method_))) {
@@ -388,6 +389,18 @@ int ObMViewResolverHelper::resolve_mv_refresh_info(ParseNode *refresh_info_node,
             refresh_info.start_time_.reset();
             refresh_info.next_time_expr_.reset();
           }
+        }
+        // compat version
+        if (OB_FAIL(ret)) {
+        } else if (!((data_version >= MOCK_DATA_VERSION_4_4_2_2 && data_version < DATA_VERSION_4_5_0_0)
+                     || (data_version >= DATA_VERSION_4_6_1_0))) {
+          refresh_info.compat_version_ = 0;
+        } else if (NULL == compat_version_node) {
+          refresh_info.compat_version_ = GET_MIN_CLUSTER_VERSION();
+        } else if (OB_FAIL(resolve_compat_version_node(compat_version_node,
+                                                        resolver.session_info_->get_effective_tenant_id(),
+                                                        refresh_info.compat_version_))) {
+          LOG_WARN("failed to resolve compat version node", KR(ret));
         }
       }
     } else {
@@ -559,6 +572,31 @@ int ObMViewResolverHelper::resolve_refresh_interval_node(const ParseNode *refres
           LOG_WARN("fail to write string", KR(ret));
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObMViewResolverHelper::resolve_compat_version_node(const ParseNode *compat_version_node,
+                                                       const uint64_t tenant_id,
+                                                       uint64_t &compat_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(compat_version_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null compat version node", KR(ret));
+  } else {
+    ObString version_str(compat_version_node->str_len_, compat_version_node->str_value_);
+    uint64_t version_val = 0;
+    if (OB_FAIL(ObClusterVersion::get_version(version_str, version_val))) {
+      LOG_WARN("failed to parse compat version", KR(ret), K(version_str));
+    } else if (OB_FAIL(ObCompatControl::check_compat_version(tenant_id, version_val))) {
+      LOG_WARN("failed to check compat version", KR(ret), K(tenant_id), K(version_val));
+    } else {
+      compat_version = version_val;
+    }
+    if (OB_INVALID_ARGUMENT == ret) {
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "compat version");
     }
   }
   return ret;

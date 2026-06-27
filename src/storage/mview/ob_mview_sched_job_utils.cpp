@@ -422,6 +422,7 @@ int ObMViewSchedJobUtils::add_mview_info_and_refresh_job(ObISQLClient &sql_clien
     mview_info.set_refresh_job(refresh_job);
     mview_info.set_refresh_dop(refresh_info->refresh_dop_);
     mview_info.set_nested_refresh_mode(refresh_info->nested_refresh_mode_);
+    mview_info.set_compat_version(refresh_info->compat_version_);
     mview_info.set_last_refresh_scn(0);
     mview_info.set_schema_version(schema_version);
     if (refresh_info->start_time_.is_timestamp()) {

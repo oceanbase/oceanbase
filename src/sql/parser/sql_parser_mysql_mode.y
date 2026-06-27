@@ -288,7 +288,7 @@ GLOBAL_ALIAS SESSION_ALIAS WITH_COLUMN_GROUP
 
         CACHE CALIBRATION CALIBRATION_INFO CANCEL CASCADED CAST CATALOG CATALOGS CATALOG_NAME CHAIN CHANGED CHARSET CHECKSUM CHECKPOINT CHUNK CIPHER
         CLASS_ORIGIN CLEAN CLEAR CLIENT CLONE CLOG CLOSE CLUSTER CLUSTERING CLUSTER_ID CLUSTER_NAME COALESCE COLUMN_BLOOM_FILTER COLUMN_STAT
-        CODE COLLATION COLLECT_STATISTICS_ON_CREATE COLUMN_FORMAT COLUMN_INDEX_TYPE COLUMN_NAME COLUMN_NAME_CASE_SENSITIVE COLUMNS COMMENT COMMIT COMMITTED COMPILE COMPACT COMPACTION COMPLETION COMPLETE
+        CODE COLLATION COLLECT_STATISTICS_ON_CREATE COLUMN_FORMAT COLUMN_INDEX_TYPE COLUMN_NAME COLUMN_NAME_CASE_SENSITIVE COLUMNS COMMENT COMMIT COMMITTED COMPILE COMPACT COMPACTION COMPAT COMPLETION COMPLETE
         COMPRESSED COMPRESSION COMPRESSION_BLOCK_SIZE COMPRESSION_CODE COMPUTATION COMPUTE CONCURRENT CONCURRENT_LIMITING_RULE CONDENSED CONDITIONAL CONFIGS CONNECTION CONSISTENT CONSTRAINT_CATALOG
         CONSTRAINT_NAME CONSTRAINT_SCHEMA CONTAINS CONTEXT CONTRIBUTORS COPY COSINE COUNT CPU CREATE_TIMESTAMP CREDENTIAL
         CTXCAT CTX_ID CUBE CURDATE CURRENT STACKED CURTIME CURSOR_NAME CUME_DIST CYCLE CALC_PARTITION_ID CONNECT CACHE_REFRESH_INTERVAL_SEC
@@ -512,7 +512,7 @@ GLOBAL_ALIAS SESSION_ALIAS WITH_COLUMN_GROUP
 %type <node> /*frozen_type*/ opt_binary
 %type <node> ip_port
 %type <node> create_view_stmt view_name opt_column_list opt_mv_column_list mv_column_list opt_table_id opt_tablet_id view_select_stmt opt_check_option opt_tablet_id_no_empty policy_status_type alter_view_compile_action
-%type <node> create_mview_stmt create_mview_opts mview_refresh_opt mv_refresh_on_clause mv_refresh_mode mv_refresh_interval mv_start_clause mv_next_clause mv_nested_refresh_opt mview_nested_refresh_mode
+%type <node> create_mview_stmt create_mview_opts mview_refresh_opt mv_refresh_on_clause mv_refresh_mode mv_refresh_interval mv_start_clause mv_next_clause mv_nested_refresh_opt mview_nested_refresh_mode opt_mv_compat_version mv_compat_version
 %type <ival> mv_refresh_method mview_enable_disable
 %type <node> name_list opt_name_list
 %type <node> partition_role ls_role zone_desc opt_zone_desc server_or_zone opt_server_or_zone opt_partitions opt_subpartitions add_or_alter_zone_options alter_or_change_or_modify
@@ -10774,10 +10774,10 @@ DISABLE
 ;
 
 mview_refresh_opt:
-REFRESH mv_refresh_method parallel_option_opt mv_nested_refresh_opt mv_refresh_on_clause mv_refresh_interval
+REFRESH mv_refresh_method parallel_option_opt mv_nested_refresh_opt mv_refresh_on_clause mv_refresh_interval opt_mv_compat_version
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_MV_REFRESH_INFO,
-                           4, $3, $4, $5, $6);
+                           5, $3, $4, $5, $6, $7);
   $$->int32_values_[0] = 0;
   $$->int32_values_[1] = $2[0];
 }
@@ -10899,6 +10899,24 @@ $$ = $2;
 $$ = NULL;
 };
 
+opt_mv_compat_version:
+mv_compat_version
+{
+  $$ = $1;
+}
+|
+{
+  $$ = NULL;
+}
+;
+
+mv_compat_version:
+COMPAT VERSION opt_equal_mark STRING_VALUE
+{
+  (void)$3;
+  $$ = $4;
+};
+
 alter_mview_stmt:
 alter_with_opt_hint MATERIALIZED VIEW view_name alter_mview_actions
 {
@@ -10953,7 +10971,7 @@ mview_enable_disable ON QUERY COMPUTATION
 | REFRESH mv_refresh_method
 {
   ParseNode *refresh_info = NULL;
-  malloc_non_terminal_node(refresh_info, result->malloc_pool_, T_MV_REFRESH_INFO, 4, NULL, NULL, NULL, NULL);
+  malloc_non_terminal_node(refresh_info, result->malloc_pool_, T_MV_REFRESH_INFO, 5, NULL, NULL, NULL, NULL, NULL);
   refresh_info->int32_values_[0] = 0;
   refresh_info->int32_values_[1] = $2[0];
   malloc_non_terminal_node($$, result->malloc_pool_, T_MV_OPTIONS, 1, refresh_info);
@@ -10970,7 +10988,7 @@ mview_enable_disable ON QUERY COMPUTATION
 | REFRESH parallel_option
 {
   ParseNode *refresh_info = NULL;
-  malloc_non_terminal_node(refresh_info, result->malloc_pool_, T_MV_REFRESH_INFO, 4, $2, NULL, NULL, NULL);
+  malloc_non_terminal_node(refresh_info, result->malloc_pool_, T_MV_REFRESH_INFO, 5, $2, NULL, NULL, NULL, NULL);
   refresh_info->int32_values_[0] = 0;
   refresh_info->int32_values_[1] = -1;
   malloc_non_terminal_node($$, result->malloc_pool_, T_MV_OPTIONS, 1, refresh_info);
@@ -10979,7 +10997,7 @@ mview_enable_disable ON QUERY COMPUTATION
 | REFRESH mview_nested_refresh_mode
 {
   ParseNode *refresh_info = NULL;
-  malloc_non_terminal_node(refresh_info, result->malloc_pool_, T_MV_REFRESH_INFO, 4, NULL, $2, NULL, NULL);
+  malloc_non_terminal_node(refresh_info, result->malloc_pool_, T_MV_REFRESH_INFO, 5, NULL, $2, NULL, NULL, NULL);
   refresh_info->int32_values_[0] = 0;
   refresh_info->int32_values_[1] = -1;
   malloc_non_terminal_node($$, result->malloc_pool_, T_MV_OPTIONS, 1, refresh_info);
@@ -10988,7 +11006,16 @@ mview_enable_disable ON QUERY COMPUTATION
 | REFRESH mv_refresh_interval
 {
   ParseNode *refresh_info = NULL;
-  malloc_non_terminal_node(refresh_info, result->malloc_pool_, T_MV_REFRESH_INFO, 4, NULL, NULL, NULL, $2);
+  malloc_non_terminal_node(refresh_info, result->malloc_pool_, T_MV_REFRESH_INFO, 5, NULL, NULL, NULL, $2, NULL);
+  refresh_info->int32_values_[0] = 0;
+  refresh_info->int32_values_[1] = -1;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MV_OPTIONS, 1, refresh_info);
+  $$->int32_values_[0] = 0;
+}
+| REFRESH mv_compat_version
+{
+  ParseNode *refresh_info = NULL;
+  malloc_non_terminal_node(refresh_info, result->malloc_pool_, T_MV_REFRESH_INFO, 5, NULL, NULL, NULL, NULL, $2);
   refresh_info->int32_values_[0] = 0;
   refresh_info->int32_values_[1] = -1;
   malloc_non_terminal_node($$, result->malloc_pool_, T_MV_OPTIONS, 1, refresh_info);
@@ -28498,6 +28525,7 @@ ACCESS_INFO
 |       COMPILE
 |       COMPACT
 |       COMPACTION
+|       COMPAT
 |       COMPLETE
 |       COMPLETION
 |       COMPRESSED

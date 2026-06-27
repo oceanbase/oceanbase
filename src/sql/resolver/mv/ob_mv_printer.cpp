@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/mv/ob_mv_printer.h"
+#include "sql/resolver/mv/ob_mv_compat_control.h"
 #include "share/schema/ob_schema_service.h"
 #include "share/schema/ob_table_schema.h"
 #include "sql/optimizer/ob_optimizer_util.h"
@@ -1502,6 +1503,34 @@ int ObMVPrinter::add_mv_rowkey_into_select(ObSelectStmt *stmt,
       sel_item->is_real_alias_ = true;
       sel_item->alias_name_ = static_cast<const ObColumnRefRawExpr*>(mv_rowkey_exprs.at(i))->get_column_name();
     }
+  }
+  return ret;
+}
+
+int ObMVPrinter::add_semi_to_inner_hint(ObDMLStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  bool is_disabled = false;
+  ObSemiToInnerHint *semi_to_inner_hint = NULL;
+  ObSEArray<ObItemType, 1> conflict_hints;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(stmt));
+  } else if (OB_FAIL(ObMVCompatControl::check_feature_enable(ctx_.compat_version_,
+                                                              ObMVCompatFeatureType::DISABLE_SEMI_TO_INNER_HINT,
+                                                              is_disabled))) {
+    LOG_WARN("failed to check mv compat feature", K(ret));
+  } else if (is_disabled) {
+    // do nothing
+  } else if (OB_FAIL(ObQueryHint::create_hint(&ctx_.alloc_, T_SEMI_TO_INNER, semi_to_inner_hint))) {
+    LOG_WARN("failed to create semi to inner hint", K(ret));
+  } else if (OB_ISNULL(semi_to_inner_hint)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("semi to inner hint is null", K(ret), K(semi_to_inner_hint));
+  } else if (OB_FAIL(stmt->get_stmt_hint().merge_hint(*semi_to_inner_hint,
+                                                      ObHintMergePolicy::HINT_DOMINATED_EQUAL,
+                                                      conflict_hints))) {
+    LOG_WARN("failed to merge hint", K(ret));
   }
   return ret;
 }

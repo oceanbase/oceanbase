@@ -79,6 +79,8 @@ int ObSimpleMJVPrinter::gen_delete_for_simple_mjv(ObIArray<ObDMLStmt*> &dml_stmt
       } else if (orig_table_items.count() - 1 == i) {
         if (OB_FAIL(base_del_stmt->add_condition_expr(semi_filter))) {
           LOG_WARN("failed to push back semi filter", K(ret));
+        } else if (OB_FAIL(add_semi_to_inner_hint(base_del_stmt))) {
+          LOG_WARN("failed to add semi to inner hint", K(ret));
         } else if (NULL != marker_filter
                    && OB_FAIL(base_del_stmt->add_condition_expr(marker_filter))) {
           LOG_WARN("failed to push back maker filter", K(ret));
@@ -92,6 +94,8 @@ int ObSimpleMJVPrinter::gen_delete_for_simple_mjv(ObIArray<ObDMLStmt*> &dml_stmt
         LOG_WARN("failed to assign structure", K(ret));
       } else if (OB_FAIL(del_stmt->add_condition_expr(semi_filter))) {
         LOG_WARN("failed to push back semi filter", K(ret));
+      } else if (OB_FAIL(add_semi_to_inner_hint(del_stmt))) {
+        LOG_WARN("failed to add semi to inner hint", K(ret));
       } else if (NULL != marker_filter
                  && OB_FAIL(del_stmt->add_condition_expr(marker_filter))) {
         LOG_WARN("failed to push back maker filter", K(ret));

@@ -190,6 +190,9 @@ int ObMViewInfo::gen_insert_mview_dml(const uint64_t exec_tenant_id, ObDMLSqlSpl
               || (data_version >= MOCK_DATA_VERSION_4_4_2_0 && data_version < DATA_VERSION_4_5_0_0)
               || (data_version >= DATA_VERSION_4_5_1_0)) && OB_FAIL(dml.add_column("nested_refresh_mode", nested_refresh_mode_))) {
     LOG_WARN("fail to add nested refresh mode", K(ret));
+  } else if (((data_version >= MOCK_DATA_VERSION_4_4_2_2 && data_version < DATA_VERSION_4_5_0_0)
+              || (data_version >= DATA_VERSION_4_6_1_0)) && OB_FAIL(dml.add_uint64_column("compat_version", compat_version_))) {
+    LOG_WARN("fail to add compat_version", K(ret));
   }
   return ret;
 }
@@ -267,6 +270,9 @@ int ObMViewInfo::gen_update_mview_attribute_dml(const uint64_t exec_tenant_id,
               || (data_version >= MOCK_DATA_VERSION_4_4_2_0 && data_version < DATA_VERSION_4_5_0_0)
               || (data_version >= DATA_VERSION_4_5_1_0)) && OB_FAIL(dml.add_column("nested_refresh_mode", nested_refresh_mode_))) {
     LOG_WARN("fail to add nested_refresh_mode", K(ret));
+  } else if (((data_version >= MOCK_DATA_VERSION_4_4_2_2 && data_version < DATA_VERSION_4_5_0_0)
+              || (data_version >= DATA_VERSION_4_6_1_0)) && OB_FAIL(dml.add_uint64_column("compat_version", compat_version_))) {
+    LOG_WARN("fail to add compat_version", K(ret));
   }
   return ret;
 }
@@ -430,6 +436,9 @@ int ObMViewInfo::gen_update_mview_last_refresh_info_dml(const uint64_t exec_tena
               || (data_version >= MOCK_DATA_VERSION_4_4_2_0 && data_version < DATA_VERSION_4_5_0_0)
               || (data_version >= DATA_VERSION_4_5_1_0)) && OB_FAIL(dml.add_column("nested_refresh_mode", nested_refresh_mode_))) {
     LOG_WARN("fail to add nested_refresh_mode", KR(ret));
+  } else if (((data_version >= MOCK_DATA_VERSION_4_4_2_2 && data_version < DATA_VERSION_4_5_0_0)
+              || (data_version >= DATA_VERSION_4_6_1_0)) && OB_FAIL(dml.add_uint64_column("compat_version", compat_version_))) {
+    LOG_WARN("fail to add compat_version", KR(ret));
   }
   return ret;
 }
@@ -790,6 +799,7 @@ int ObMViewInfo::extract_mview_info(common::sqlclient::ObMySQLResult *result,
                                                          true /*ignore null*/, true /*ignore column error*/, false);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(*result, nested_refresh_mode, mview_info,
                                                         ObMVNestedRefreshMode, true, true, 0);
+    EXTRACT_UINT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(*result, compat_version, mview_info, uint64_t, true, true, 0);
   }
   return ret;
 }

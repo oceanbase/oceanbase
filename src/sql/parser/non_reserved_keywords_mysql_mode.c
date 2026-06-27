@@ -393,6 +393,7 @@ static const NonReservedKeyword MYSQL_NON_RESERVED_KEYWORDS[] =
   {"committed", COMMITTED},
   {"compact", COMPACT},
   {"compaction", COMPACTION},
+  {"compat", COMPAT},
   {"compile", COMPILE},
   {"complete", COMPLETE},
   {"completion", COMPLETION},

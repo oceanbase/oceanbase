@@ -196,6 +196,12 @@ int ObMviewAlterService::alter_mview_attributes(
             need_alter_mview_refresh_job = true;
           }
         }
+        if (mv_arg.is_alter_compat_version()) {
+          if (mv_arg.get_compat_version() != mview_info.get_compat_version()) {
+            mview_info.set_compat_version(mv_arg.get_compat_version());
+            need_alter_mview_info = true;
+          }
+        }
 
         ObSchemaGuardWrapper schema_guard_wrapper(tenant_id, &ddl_operator.get_multi_schema_service());
         if (OB_FAIL(schema_guard_wrapper.init(schema_guard))) {
