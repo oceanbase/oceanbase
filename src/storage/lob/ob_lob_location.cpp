@@ -9,6 +9,7 @@
 #include "observer/ob_server.h"
 #include "sql/das/ob_das_utils.h"
 #include "storage/tablet/ob_tablet_to_global_temporary_table_operator.h"
+#include "storage/tx/ob_trans_service.h"
 
 namespace oceanbase
 {
@@ -201,10 +202,52 @@ int ObLobLocationUtil::lob_refresh_location(ObLobAccessParam &param, int last_er
                  K(param.tablet_id_), K(param.ls_id_), K(tablet_loc.ls_id_), K(last_err), K(retry_cnt));
         param.ls_id_ = tablet_loc.ls_id_;
         location_info->ls_id_ = tablet_loc.ls_id_.id();
+        if (OB_FAIL(fix_stale_local_leader(loc_meta, tablet_loc, router, param, location_info))) {
+          LOG_WARN("fail to fix stale local leader", K(ret), K(param), K(tablet_loc));
+        }
       }
     }
   }
   LOG_TRACE("[LOB RETRY] after do fresh location", K(ret), K(last_err), K(retry_cnt), K(has_retry_info), K(param));
+  return ret;
+}
+
+// transfer may leave location cache stale and route a leader read back to local
+// follower; when self is not the real leader, block renew to the real leader.
+int ObLobLocationUtil::fix_stale_local_leader(
+    const sql::ObDASTableLocMeta &loc_meta,
+    const sql::ObDASTabletLoc &tablet_loc,
+    sql::ObDASLocationRouter &router,
+    ObLobAccessParam &param,
+    ObMemLobLocationInfo *location_info)
+{
+  int ret = OB_SUCCESS;
+  const ObAddr &self_addr = MYADDR;
+  transaction::ObTransService *trans_service = MTL(transaction::ObTransService *);
+  share::ObLSID local_ls_id;
+  bool is_local_leader = false;
+  if (!loc_meta.select_leader_ || param.addr_ != self_addr) {
+    // keep current location
+  } else if (OB_ISNULL(trans_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("trans service is null", K(ret), K(param));
+  } else if (OB_FAIL(trans_service->check_and_get_ls_info(param.tablet_id_, local_ls_id, is_local_leader))) {
+    LOG_WARN("failed to check local ls info", K(ret), K(param));
+  } else if (local_ls_id == tablet_loc.ls_id_ && is_local_leader) {
+    // self is the real leader, keep current location
+  } else {
+    share::ObLSLocation ls_loc;
+    ObAddr leader;
+    if (OB_FAIL(router.block_renew_tablet_location(param.tablet_id_, ls_loc))) {
+      LOG_WARN("failed to renew tablet location after transfer", K(ret), K(param));
+    } else if (OB_FAIL(ls_loc.get_leader(leader))) {
+      LOG_WARN("failed to get leader from renewed location", K(ret), K(param), K(ls_loc));
+    } else {
+      param.addr_ = leader;
+      param.ls_id_ = ls_loc.get_ls_id();
+      location_info->ls_id_ = param.ls_id_.id();
+    }
+  }
   return ret;
 }
 
@@ -257,7 +300,6 @@ int ObLobLocationUtil::get_ls_leader(ObLobAccessParam& param)
   }
   return ret;
 }
-
 
 }  // end namespace storage
 }  // end namespace oceanbase

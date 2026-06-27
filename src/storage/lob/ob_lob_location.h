@@ -8,9 +8,16 @@
 
 #include "storage/lob/ob_lob_access_param.h"
 #include "observer/ob_server_struct.h"
+#include "share/location_cache/ob_location_struct.h"
 
 namespace oceanbase
 {
+namespace sql
+{
+struct ObDASTableLocMeta;
+struct ObDASTabletLoc;
+class ObDASLocationRouter;
+}
 namespace storage
 {
 
@@ -27,6 +34,14 @@ public:
 
   static int lob_refresh_location(ObLobAccessParam &param, int last_err, int retry_cnt);
   static int get_ls_leader(ObLobAccessParam& param);
+
+private:
+  static int fix_stale_local_leader(
+      const sql::ObDASTableLocMeta &loc_meta,
+      const sql::ObDASTabletLoc &tablet_loc,
+      sql::ObDASLocationRouter &router,
+      ObLobAccessParam &param,
+      common::ObMemLobLocationInfo *location_info);
 
 };
 
