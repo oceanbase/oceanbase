@@ -3203,12 +3203,14 @@ int ObBackupSetTaskMgr::generate_backup_meta_info_file_list_()
   } else if (OB_FAIL(backup::ObBackupFileListWriterUtil::add_file_to_file_list_info(file_path,
                                                               *backup_set_dest.get_storage_info(), file_list_info))) {
     LOG_WARN("[DATA_BACKUP]failed to add ls meta infos", K(ret), K(file_path));
+#ifdef OB_BUILD_TDE_SECURITY
   } else if (FALSE_IT(file_path.reset())) {
   } else if (OB_FAIL(ObBackupPathUtil::get_backup_root_key_path(backup_set_dest, file_path))) {
     LOG_WARN("[DATA_BACKUP]failed to get backup root key path", K(ret), K(backup_set_dest));
   } else if (OB_FAIL(backup::ObBackupFileListWriterUtil::add_file_to_file_list_info(file_path,
                                                               *backup_set_dest.get_storage_info(), file_list_info))) {
     LOG_WARN("[DATA_BACKUP]failed to add backup root key", K(ret), K(file_path));
+#endif
   } else {
     for (int64_t i = 1; OB_SUCC(ret) && i <= turn_id; ++i) {
       file_path.reset();
