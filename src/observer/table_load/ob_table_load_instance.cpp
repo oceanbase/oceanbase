@@ -122,10 +122,13 @@ int ObTableLoadInstance::init(ObTableLoadParam &param,
       } else if (OB_ISNULL(table_schema)) {
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("table schema is nullptr", KR(ret), K(param.table_id_));
-      } else if (OB_FAIL(table_schema->get_tablet_ids(cur_tablet_ids))) {
-        LOG_WARN("failed to get tablet ids", K(ret));
-      } else {
-        exec_tablet_ids = &cur_tablet_ids;
+      } else if (table_schema->is_random_part()) {
+        // only partitioned table can lock tablets because transfer only lock table for non-partitioned table
+        if (OB_FAIL(table_schema->get_tablet_ids(cur_tablet_ids))) {
+          LOG_WARN("failed to get tablet ids", K(ret));
+        } else {
+          exec_tablet_ids = &cur_tablet_ids;
+        }
       }
     }
     if (OB_FAIL(ret)) {}

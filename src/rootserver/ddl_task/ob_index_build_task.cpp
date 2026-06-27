@@ -1427,8 +1427,6 @@ int ObIndexBuildTask::wait_local_index_data_complement()
     }
   }
 
-  DEBUG_SYNC(CREATE_INDEX_REPLICA_BUILD);
-
   if (OB_SUCC(ret) && !state_finished && is_sstable_complete_task_submitted()) {
     int end_ret = OB_SUCCESS;
     if (OB_FAIL(check_build_local_index_single_replica(is_request_end, end_ret))) {
@@ -1444,6 +1442,9 @@ int ObIndexBuildTask::wait_local_index_data_complement()
       LOG_WARN("fail to send single partition replica task", K(ret), KPC(this));
     }
   }
+
+  DEBUG_SYNC(CREATE_INDEX_REPLICA_BUILD);
+
   if (OB_SUCC(ret) && state_finished && !create_index_arg_.is_spatial_index() && !create_index_arg_.is_multivalue_index()
                                      && !create_index_arg_.is_vec_index()
                                      && !create_index_arg_.is_search_index()) {
