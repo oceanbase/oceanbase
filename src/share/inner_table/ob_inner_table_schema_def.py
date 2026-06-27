@@ -18688,6 +18688,8 @@ def_table_schema(**gen_iterate_virtual_table_def(
   keywords = all_def_keywords['__all_mview_refresh_pending_task'],
   in_tenant_space = True))
 
+# 12618: __all_virtual_ai_gateway_endpoint_stat
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -48213,6 +48215,9 @@ def_table_schema(
     AND   (C.table_mode >> 24 & 1 ) = 0
 """.replace("\n", " ")
 )
+
+# 21747: GV$OB_AI_GATEWAY_ENDPOINT_STAT
+# 21748: V$OB_AI_GATEWAY_ENDPOINT_STAT
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
