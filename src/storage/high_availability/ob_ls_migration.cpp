@@ -2998,7 +2998,8 @@ int ObTabletMigrationTask::generate_migration_tasks_()
   } else if (OB_FAIL(dag_->add_task(*tablet_finish_migration_task))) {
     LOG_WARN("failed to add tablet finish migration task", K(ret));
   } else {
-    LOG_INFO("generate sstable migration tasks", KPC(copy_tablet_ctx_), K(copy_table_key_array_));
+    LOG_INFO("generate sstable migration tasks", KPC(copy_tablet_ctx_),
+        "copy_table_key_array", ObTableKeyArrayLogWrap(copy_table_key_array_));
   }
   return ret;
 }
@@ -3246,7 +3247,8 @@ int ObTabletMigrationTask::build_copy_table_key_info_()
     // sort copy table key array by snapshot version, copy major sstable from low version to high version
   } else if (FALSE_IT(ObStorageHAUtils::sort_table_key_array_by_snapshot_version(copy_table_key_array_))) {
   } else {
-    LOG_INFO("succeed to build copy table key info", K(copy_table_key_array_));
+    LOG_INFO("succeed to build copy table key info",
+        "copy_table_key_array", ObTableKeyArrayLogWrap(copy_table_key_array_));
   }
   return ret;
 }
@@ -3261,7 +3263,8 @@ int ObTabletMigrationTask::build_copy_sstable_info_mgr_()
     ret = OB_NOT_INIT;
     LOG_WARN("tablet migration task do not init", K(ret));
   } else if (OB_FAIL(get_need_copy_sstable_info_key_(copy_table_key_array_, filter_table_key_array))) {
-    LOG_WARN("failed to get need copy sstable info key", K(ret), K(copy_table_key_array_));
+    LOG_WARN("failed to get need copy sstable info key", K(ret),
+        "copy_table_key_array", ObTableKeyArrayLogWrap(copy_table_key_array_));
   } else if (OB_FAIL(param.copy_table_key_array_.assign(filter_table_key_array))) {
     LOG_WARN("failed to assign copy table key info array", K(ret), K(filter_table_key_array));
   } else {
@@ -3637,7 +3640,9 @@ int ObTabletMigrationTask::get_need_copy_sstable_info_key_(
       }
     }
     if (OB_SUCC(ret)) {
-      LOG_INFO("succeed get need copy sstable info key", K(copy_table_key_array), K(filter_table_key_array));
+      LOG_INFO("succeed get need copy sstable info key",
+          "copy_table_key_array", ObTableKeyArrayLogWrap(copy_table_key_array),
+          "filter_table_key_array", ObTableKeyArrayLogWrap(filter_table_key_array));
     }
   }
   return ret;

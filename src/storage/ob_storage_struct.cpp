@@ -367,7 +367,6 @@ bool ObDDLTableStoreParam::is_valid() const
 UpdateUpperTransParam::UpdateUpperTransParam()
   : new_upper_trans_(nullptr),
     last_minor_end_scn_(),
-    ss_new_upper_trans_(nullptr),
     gc_inc_major_ddl_scns_(nullptr)
 {
   last_minor_end_scn_.set_min();
@@ -382,7 +381,6 @@ void UpdateUpperTransParam::reset()
 {
   new_upper_trans_ = nullptr;
   last_minor_end_scn_.set_min();
-  ss_new_upper_trans_ = nullptr;
   gc_inc_major_ddl_scns_ = nullptr;
 }
 

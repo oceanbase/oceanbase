@@ -23,9 +23,20 @@ public:
   int assign(const ObTabletCompactionScoreDynamicInfo &other);
   void gen_info(const int64_t compat_version, char* buf, const int64_t buf_len, int64_t &pos) const;
   bool is_valid() const { return cg_merge_batch_cnt_ > 0; }
-  TO_STRING_KV(K_(queuing_mode), K_(is_hot_tablet), K_(is_insert_mostly), K_(is_update_or_delete_mostly), K_(has_slow_query),
-               K_(has_accumulated_delete), K_(need_recycle_mds), K_(need_progressive_merge), K_(cg_merge_batch_cnt),
-               K_(query_cnt), K_(read_amplification_factor));
+  int64_t to_string(char *buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    if (!is_valid()) {
+      BUF_PRINTF("empty");
+    } else {
+      J_KV(K_(queuing_mode), K_(is_hot_tablet), K_(is_insert_mostly), K_(is_update_or_delete_mostly), K_(has_slow_query),
+           K_(has_accumulated_delete), K_(need_recycle_mds), K_(need_progressive_merge), K_(cg_merge_batch_cnt),
+           K_(query_cnt), K_(read_amplification_factor));
+    }
+    J_OBJ_END();
+    return pos;
+  }
   OB_UNIS_VERSION(1);
 public:
   static constexpr uint32_t TCSDI_ONE_BIT = 1;

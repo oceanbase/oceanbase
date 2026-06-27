@@ -358,7 +358,9 @@ public:
   void reset();
   int assign(const ObCopySSTableMacroRangeInfoArg &arg);
 
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(copy_table_key_array), K_(macro_range_max_marco_count));
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id),
+      "copy_table_key_array", ObTableKeyArrayLogWrap(copy_table_key_array_),
+      K_(macro_range_max_marco_count));
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;

@@ -3189,7 +3189,8 @@ int ObCopySSTableMacroObProducer::init(
       || copy_table_key_array.empty() || macro_range_max_marco_count <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("init copy sstable macro ob producer get invalid argument", K(ret), K(tenant_id),
-        K(ls_id), K(tablet_id), K(copy_table_key_array), K(macro_range_max_marco_count));
+        K(ls_id), K(tablet_id), "copy_table_key_array", ObTableKeyArrayLogWrap(copy_table_key_array),
+        K(macro_range_max_marco_count));
   } else if (OB_FAIL(guard.switch_to(tenant_id))) {
     LOG_WARN("switch tenant failed", K(ret), K(tenant_id));
   } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
@@ -3203,7 +3204,8 @@ int ObCopySSTableMacroObProducer::init(
   } else if (OB_FAIL(ls->ha_get_tablet(tablet_id, tablet_handle_))) {
     LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
   } else if (OB_FAIL(copy_table_key_array_.assign(copy_table_key_array))) {
-    LOG_WARN("failed to assign sstable array", K(ret), K(tenant_id), K(ls_id), K(tablet_id), K(copy_table_key_array));
+    LOG_WARN("failed to assign sstable array", K(ret), K(tenant_id), K(ls_id), K(tablet_id),
+        "copy_table_key_array", ObTableKeyArrayLogWrap(copy_table_key_array));
   } else {
     macro_range_max_marco_count_ = macro_range_max_marco_count;
     sstable_index_ = 0;
@@ -3225,7 +3227,8 @@ int ObCopySSTableMacroObProducer::get_next_sstable_macro_range_info(
   } else if (sstable_index_ == copy_table_key_array_.count()) {
     ret = OB_ITER_END;
   } else if (OB_FAIL(get_next_sstable_macro_range_info_(macro_range_info_header))) {
-    LOG_WARN("failed to get next sstable macro range info", K(ret), K(copy_table_key_array_), K(sstable_index_));
+    LOG_WARN("failed to get next sstable macro range info", K(ret),
+        "copy_table_key_array", ObTableKeyArrayLogWrap(copy_table_key_array_), K(sstable_index_));
   } else {
     sstable_index_++;
   }

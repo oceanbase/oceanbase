@@ -2617,7 +2617,7 @@ int ObTabletRestoreTask::generate_restore_task_(
           LOG_INFO("succeed to generate sstable restore task", "is_leader",
               tablet_restore_ctx_->is_leader_, "src", src_info_, K(copy_table_key),
               "restore_action", tablet_restore_ctx_->action_, K(is_right_type),
-              K(copy_table_key_array_), K(i));
+              "copy_table_key_array", ObTableKeyArrayLogWrap(copy_table_key_array_), K(i));
         }
       }
     }
@@ -2636,7 +2636,8 @@ int ObTabletRestoreTask::build_copy_table_key_info_()
     LOG_WARN("failed to get copy table keys", K(ret), KPC(tablet_restore_ctx_));
   } else if (FALSE_IT(ObStorageHAUtils::sort_table_key_array_by_snapshot_version(copy_table_key_array_))) {
   } else {
-    LOG_INFO("succeed to build copy table key info", K(copy_table_key_array_));
+    LOG_INFO("succeed to build copy table key info",
+        "copy_table_key_array", ObTableKeyArrayLogWrap(copy_table_key_array_));
   }
   return ret;
 }
@@ -2651,7 +2652,8 @@ int ObTabletRestoreTask::build_copy_sstable_info_mgr_()
     ret = OB_NOT_INIT;
     LOG_WARN("tablet restore task do not init", K(ret));
   } else if (OB_FAIL(param.copy_table_key_array_.assign(copy_table_key_array_))) {
-    LOG_WARN("failed to assign copy table key info array", K(ret), K(copy_table_key_array_));
+    LOG_WARN("failed to assign copy table key info array", K(ret),
+        "copy_table_key_array", ObTableKeyArrayLogWrap(copy_table_key_array_));
   } else {
     param.tenant_id_ = tablet_restore_ctx_->tenant_id_;
     param.ls_id_ = tablet_restore_ctx_->ls_id_;
@@ -2928,7 +2930,7 @@ int ObTabletRestoreTask::check_src_sstable_exist_()
       } else if (table_key.is_remote_logical_minor_sstable()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("copy table key should not contain remote logical minor sstable, unexpected",
-            K(ret), K(copy_table_key_array_));
+            K(ret), "copy_table_key_array", ObTableKeyArrayLogWrap(copy_table_key_array_));
       }
     }
 
@@ -2936,7 +2938,8 @@ int ObTabletRestoreTask::check_src_sstable_exist_()
       if (ObTabletRestoreAction::is_restore_all(tablet_restore_ctx_->action_)) {
         if (!is_major_sstable_exist && tablet->get_tablet_meta().table_store_flag_.with_major_sstable()) {
           ret = OB_SSTABLE_NOT_EXIST;
-          LOG_WARN("src restore sstable do not exist", K(ret), K(copy_table_key_array_), KPC(tablet_restore_ctx_));
+          LOG_WARN("src restore sstable do not exist", K(ret),
+              "copy_table_key_array", ObTableKeyArrayLogWrap(copy_table_key_array_), KPC(tablet_restore_ctx_));
         }
       } else if (ObTabletRestoreAction::is_restore_major(tablet_restore_ctx_->action_)) {
         if (!is_major_sstable_exist && tablet->get_tablet_meta().table_store_flag_.with_major_sstable()) {
@@ -2945,7 +2948,8 @@ int ObTabletRestoreTask::check_src_sstable_exist_()
             LOG_WARN("fail to fetch table store", K(ret));
           } else if (table_store_wrapper.get_member()->get_major_sstables().empty()) {
             ret = OB_SSTABLE_NOT_EXIST;
-            LOG_WARN("src restore sstable do not exist", K(ret), K(copy_table_key_array_), KPC(tablet_restore_ctx_));
+            LOG_WARN("src restore sstable do not exist", K(ret),
+              "copy_table_key_array", ObTableKeyArrayLogWrap(copy_table_key_array_), KPC(tablet_restore_ctx_));
           }
         }
       }

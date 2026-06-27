@@ -221,14 +221,12 @@ private:
   int build_mds_minor_tables(
       common::ObArenaAllocator &allocator,
       const blocksstable::ObSSTable *new_sstable,
-      const ObSSTableArray &old_mds_tables,
-      const bool allow_adjust_next_start_scn);
+      const ObSSTableArray &old_mds_tables);
   int inner_process_minor_tables(
       common::ObArenaAllocator &allocator,
       const ObITable *new_table,
       const ObSSTableArray &old_tables,
       const bool is_mds,
-      const bool allow_adjust_next_start_scn,
       ObArray<ObITable *> &sstables);
   int build_meta_major_table(
       common::ObArenaAllocator &allocator,
@@ -435,10 +433,6 @@ private:
       const ObIArray<ObITable *> *replace_sstable_array,
       const ObSSTableArray &old_tables,
       ObSSTableArray &new_tables) const;
-  int build_major_checksum_info(
-    const ObTabletTableStore &old_store,
-    const ObUpdateTableStoreParam *param,
-    ObArenaAllocator &allocator);
   int replace_ha_remote_sstables_(
       const common::ObIArray<ObITable *> &old_store_sstables,
       const ObTablesHandleArray &new_tables_handle,
@@ -449,43 +443,6 @@ private:
       const ObTabletTableStore &old_store,
       const ObIArray<ObITable *> &tables_array,
       int64_t &inc_base_snapshot_version);
-  static int adjust_sstable_start_scn_(
-      ObSSTable &sstable,
-      ObArenaAllocator &allocator,
-      const share::SCN start_scn,
-      ObSSTable *&copied_sstable);
-#ifdef OB_BUILD_SHARED_STORAGE
-  int process_minor_sstables_for_ss_(
-      ObArenaAllocator &allocator,
-      const UpdateUpperTransParam &upper_trans_param,
-      ObArray<ObITable *> &sstables,
-      const int64_t inc_base_snapshot_version,
-      int64_t &inc_pos);
-  int cut_minor_sstables_for_ss_(
-      ObArenaAllocator &allocator,
-      const share::SCN &cut_scn,
-      ObArray<ObITable *> &sstables,
-      int64_t &inc_pos);
-  int process_minor_sstables_upper_trans_for_ss_(
-      ObArenaAllocator &allocator,
-      const ObIArray<UpdateUpperTransParam::SCNAndVersion> &new_upper_trans,
-      ObArray<ObITable *> &sstables,
-      const int64_t inc_base_snapshot_version,
-      int64_t &inc_pos);
-#endif
-  // inc major direct load
-  int inner_build_inc_major_tables_for_sn(
-      common::ObArenaAllocator &allocator,
-      const ObUpdateTableStoreParam &param,
-      const ObTabletTableStore &old_store,
-      const int64_t inc_base_snapshot_version);
-#ifdef OB_BUILD_SHARED_STORAGE
-  int inner_build_inc_major_tables_for_ss(
-      common::ObArenaAllocator &allocator,
-      const ObUpdateTableStoreParam &param,
-      const ObTabletTableStore &old_store,
-      const int64_t inc_base_snapshot_version);
-#endif
   int inner_get_next_tx_read_tables(
       const share::SCN &inc_major_end_scn,
       int64_t &cur_sstable_idx,

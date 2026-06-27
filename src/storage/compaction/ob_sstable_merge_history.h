@@ -93,8 +93,18 @@ struct PartTableInfo {
     end_scn_ = 0;
   }
   void fill_info(char *buf, const int64_t buf_len) const;
-  TO_STRING_KV(K_(is_major_merge), K_(table_cnt), K_(inc_major_cnt), K_(snapshot_version),
-               K_(inc_major_start_scn), K_(inc_major_end_scn), K_(start_scn), K_(end_scn));
+  int64_t to_string(char *buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(is_major_merge), K_(table_cnt), K_(snapshot_version), K_(start_scn), K_(end_scn));
+    if (inc_major_cnt_ > 0) {
+      J_COMMA();
+      J_KV(K_(inc_major_cnt), K_(inc_major_start_scn), K_(inc_major_end_scn));
+    }
+    J_OBJ_END();
+    return pos;
+  }
   bool is_major_merge_;
   int32_t table_cnt_;
   int32_t inc_major_cnt_;

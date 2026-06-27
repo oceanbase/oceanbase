@@ -1538,9 +1538,6 @@ private:
   ObDagPrioScheduler::WorkerList free_workers_; // free workers who have not been assigned to any task // locked by scheduler_sync_
   ObDagNetScheduler dag_net_sche_;
   ObDagPrioScheduler prio_sche_[ObDagPrio::DAG_PRIO_MAX];
-#ifdef OB_BUILD_SHARED_STORAGE
-  #include "share/scheduler/ob_tenant_ss_dag_scheduler.h"
-#endif
 };
 
 // ATTENTION! when alloc task success, the task is already added into task_list_!!!

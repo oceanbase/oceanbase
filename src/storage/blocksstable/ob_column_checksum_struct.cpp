@@ -166,15 +166,19 @@ int64_t ObColumnCkmStruct::to_string(char *buf, const int64_t buf_len) const
   } else {
     J_OBJ_START();
     J_KV(K_(count));
-    if (count_ > 0) {
-      J_COMMA();
-    }
+    // only print non-zero checksums: meaningful checksums show up with their
+    // column index, while an empty / unpopulated ckm (e.g. empty sstable, or co
+    // base sstable whose ckm is not filled) is collapsed into an explicit
+    // all_zero marker instead of flooding the log. single pass, no extra scan.
+    bool has_nonzero = false;
     for (int i = 0; i < count_; ++i) {
-      if (count_ - 1 != i) {
-        common::databuff_printf(buf, buf_len, pos, "%d:%ld,", i, column_checksums_[i]);
-      } else {
-        common::databuff_printf(buf, buf_len, pos, "%d:%ld", i, column_checksums_[i]);
+      if (0 != column_checksums_[i]) {
+        has_nonzero = true;
+        common::databuff_printf(buf, buf_len, pos, ", %d:%ld", i, column_checksums_[i]);
       }
+    }
+    if (count_ > 0 && !has_nonzero) {
+      common::databuff_printf(buf, buf_len, pos, ", all_zero:true");
     }
     J_OBJ_END();
   }

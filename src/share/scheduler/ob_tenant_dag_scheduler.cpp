@@ -659,12 +659,6 @@ int ObITask::add_child(ObITask &child, const bool check_child_task_status /* = t
     COMMON_LOG(WARN, "can not add self loop", K(ret));
   } else {
     if (check_child_task_status && ObITask::TASK_STATUS_INITING != OB_UNLIKELY(child.get_status())) {
-#ifdef OB_BUILD_SHARED_STORAGE
-      // TASK_STATUS_INITING means child has not been added into dag, which promise child can't be scheduled before this action.
-      // If you add a child task into dag before its parent call ObITask::add_child, the child may be scheduled if its indegree is 0. It is memory dangerous.
-      // Unfortunatly, there are many misuses in the sequence of ObITask::add_child and ObIDag::add_task, and many cases in the core-test will fail, so here do not return error code.
-      // Please check it. If you can make sure the child will not be scheduled(like copy children of other task), you can skip this check.
-#endif
       ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(ERROR, "ATTENTION!!! child task status is not valid, please check it", K(ret), K(child));
     } else {
@@ -2195,11 +2189,7 @@ void ObTenantDagWorker::set_task(ObITask *task)
 
   ObIDag *dag = nullptr;
   if (OB_NOT_NULL(task_) && OB_NOT_NULL(dag = task_->get_dag())) {
-    hold_by_compaction_dag_ = is_compaction_dag(dag->get_type())
-#ifdef OB_BUILD_SHARED_STORAGE
-      || (dag->get_type() == ObDagType::DAG_TYPE_INC_SSTABLE_UPLOAD)
-#endif
-      ;
+    hold_by_compaction_dag_ = is_compaction_dag(dag->get_type());
   }
 }
 
@@ -2901,7 +2891,7 @@ int ObDagPrioScheduler::finish_dag_(
         COMMON_LOG(WARN, "failed to add dag warning info", K(tmp_ret), K(dag));
       } else if (is_batch_exec_dag(dag->get_type())) {
         // do nothing
-      } else {
+      } else if (is_compaction_dag(dag->get_type())) {
         compaction::ObTabletMergeDag &merge_dag = static_cast<compaction::ObTabletMergeDag &>(*dag);
         if (OB_SUCCESS != dag->get_dag_ret() && OB_NO_NEED_MERGE != dag->get_dag_ret()) {
           if (OB_TMP_FAIL(MTL(compaction::ObDiagnoseTabletMgr *)->add_diagnose_tablet(

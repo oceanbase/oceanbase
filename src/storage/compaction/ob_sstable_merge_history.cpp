@@ -206,7 +206,11 @@ int64_t ObMergeStaticInfo::to_string(char* buf, const int64_t buf_len) const
       }
     }
     J_COMMA();
-    J_KV(K_(kept_snapshot_info), K_(participant_table_info), K_(mds_filter_info_str), K_(window_decision_log_info));
+    J_KV(K_(kept_snapshot_info), K_(participant_table_info), K_(window_decision_log_info));
+    if ('\0' != mds_filter_info_str_[0]) {
+      J_COMMA();
+      J_KV(K_(mds_filter_info_str));
+    }
     J_OBJ_END();
   }
   return pos;

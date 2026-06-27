@@ -1004,7 +1004,8 @@ int ObWholeDataStoreDesc::init(
   } else if (OB_FAIL(inner_init(merge_schema, cg_schema, table_cg_idx))) {
     STORAGE_LOG(WARN, "failed to init", KR(ret), K(merge_schema), K(cg_schema), K(table_cg_idx));
   } else {
-    STORAGE_LOG(INFO, "success to init data store desc", KR(ret), K(cg_schema), K(table_cg_idx), KPC(this));
+    STORAGE_LOG(INFO, "success to init data store desc", KR(ret), K(cg_schema), K(table_cg_idx),
+        KPC(this));
   }
   return ret;
 }
@@ -1126,8 +1127,19 @@ int64_t ObSimplePrintDataStoreDesc::to_string(char *buf, const int64_t buf_len) 
   if (OB_ISNULL(buf) || buf_len <= 0) {
   } else {
     J_OBJ_START();
-    if (nullptr != desc_.get_col_desc()) {
-      J_KV("col_desc", *desc_.get_col_desc());
+    const ObColDataStoreDesc *col_desc = desc_.get_col_desc();
+    if (nullptr != col_desc) {
+      // only print the column summary, omit the heavy col_desc_array /
+      // col_default_checksum_array / agg_meta_array (the full column schema is
+      // already logged once when the merged tablet is inited).
+      J_KV("col_desc", "summarized",
+           "is_row_store", col_desc->is_row_store_,
+           "table_cg_idx", col_desc->table_cg_idx_,
+           "row_column_count", col_desc->row_column_count_,
+           "rowkey_column_count", col_desc->rowkey_column_count_,
+           "schema_rowkey_col_cnt", col_desc->schema_rowkey_col_cnt_,
+           "full_stored_col_cnt", col_desc->full_stored_col_cnt_,
+           "col_desc_cnt", col_desc->col_desc_array_.count());
     } else {
       J_KV("col_desc", "nullptr");
     }

@@ -146,7 +146,7 @@ int ObMergeFuser::fuse_row(MERGE_ITER_ARRAY &macro_row_iters, bool &append_row_f
       STORAGE_LOG(WARN, "failed to end fuse row", K(ret), KPC(this));
     } else {
       result_row_.major_merge_flag_.exist_new_committed_row_ |= exist_new_committed_row;
-      STORAGE_LOG(INFO, "fuse row success", K(ret), K(result_row_));
+      STORAGE_LOG(TRACE, "fuse row success", K(ret), K(result_row_));
     }
   }
   return ret;

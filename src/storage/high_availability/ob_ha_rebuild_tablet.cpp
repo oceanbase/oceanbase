@@ -1449,7 +1449,8 @@ int ObTabletRebuildMajorTask::generate_tablet_rebuild_tasks_()
   } else if (OB_FAIL(dag_->add_task(*tablet_copy_finish_task))) {
     LOG_WARN("failed to add tablet copy finish task", K(ret), KPC(ctx_));
   } else {
-    LOG_INFO("generate tablet rebuild major tasks", KPC(copy_tablet_ctx_), K(copy_table_key_array_));
+    LOG_INFO("generate tablet rebuild major tasks", KPC(copy_tablet_ctx_),
+        "copy_table_key_array", ObTableKeyArrayLogWrap(copy_table_key_array_));
   }
   return ret;
 }
@@ -1612,7 +1613,8 @@ int ObTabletRebuildMajorTask::build_copy_sstable_info_mgr_()
     ret = OB_NOT_INIT;
     LOG_WARN("tablet rebuild major task do not init", K(ret));
   } else if (OB_FAIL(param.copy_table_key_array_.assign(copy_table_key_array_))) {
-    LOG_WARN("failed to assign copy table key info array", K(ret), K(copy_table_key_array_));
+    LOG_WARN("failed to assign copy table key info array", K(ret),
+        "copy_table_key_array", ObTableKeyArrayLogWrap(copy_table_key_array_));
   } else {
     param.tenant_id_ = ctx_->tenant_id_;
     param.ls_id_ = ctx_->arg_.ls_id_;

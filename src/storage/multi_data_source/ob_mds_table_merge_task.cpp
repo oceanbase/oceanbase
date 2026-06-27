@@ -8,9 +8,6 @@
 #include "storage/multi_data_source/ob_mds_table_merge_dag.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/incremental/ob_ls_inc_sstable_uploader.h"
-#endif
 #define USING_LOG_PREFIX MDS
 
 using namespace oceanbase::common;
@@ -112,9 +109,6 @@ int ObMdsTableMergeTask::process()
     mds::MdsTableHandle mds_table;
     const int64_t mds_construct_sequence = mds_merge_dag_->get_mds_construct_sequence();
     ObTableHandleV2 &table_handle = ctx.merged_table_handle_;
-#ifdef OB_BUILD_SHARED_STORAGE
-    ObSSTableUploadRegHandle upload_reg_handle;
-#endif
     if (OB_FAIL(ctx.get_ls_and_tablet())) {
       LOG_WARN("failed to get ls and tablet", KR(ret), K(ctx), KPC(mds_merge_dag_));
     } else if (OB_ISNULL(ls = ctx.get_ls())) {
@@ -145,11 +139,6 @@ int ObMdsTableMergeTask::process()
           KPC(mds_merge_dag_));
       ctx.time_guard_click(ObStorageCompactionTimeGuard::EXECUTE);
       share::dag_yield();
-#ifdef OB_BUILD_SHARED_STORAGE
-      // prepare for register mini sstable upload
-    } else if (GCTX.is_shared_storage_mode() && OB_FAIL(ls->prepare_register_sstable_upload(upload_reg_handle))) {
-      LOG_WARN("prepare mini sstable upload register fail", K(ret));
-#endif
     } else if (FALSE_IT(ctx.static_param_.scn_range_.start_scn_ = tablet->get_mds_checkpoint_scn())) {
     } else if (OB_FAIL(tablet->get_private_transfer_epoch(ctx.static_desc_.private_transfer_epoch_))) {
       LOG_WARN("fail to get private transfer epoch", K(ret), "tablet_meta", tablet->get_tablet_meta());
@@ -184,24 +173,6 @@ int ObMdsTableMergeTask::process()
       LOG_WARN("failed to build new tablet from mds table", K(ret), K(ctx), K(ls_id), K(tablet_id),
               K(flush_scn), KPC(mds_merge_dag_));
     }
-
-#ifdef OB_BUILD_SHARED_STORAGE
-    // scheduler mds mini upload for shared-storage
-    if (OB_SUCC(ret) && GCTX.is_shared_storage_mode()) {
-      ObSSTable *sstable = NULL;
-      if (!table_handle.is_valid()) {
-        FLOG_INFO("no mds sstable need upload. skip register", K(ls_id), K(tablet_id));
-      } else if (OB_FAIL(table_handle.get_sstable(sstable))) {
-        LOG_WARN("get sstable fail", K(ret));
-      } else {
-        ASYNC_UPLOAD_INC_SSTABLE(SSIncSSTableType::MDS_SSTABLE,
-                                 upload_reg_handle,
-                                 sstable->get_key(),
-                                 sstable->get_rec_scn(),
-                                 SCN::min_scn() /* mds_sstable no need snapstho_version */);
-      }
-    }
-#endif
 
     if (OB_SUCC(ret)) {
       ctx.time_guard_click(ObStorageCompactionTimeGuard::EXECUTE);
@@ -239,9 +210,7 @@ void ObMdsTableMergeTask::try_schedule_compaction_after_mds_mini(compaction::ObT
   const share::ObLSID &ls_id = ctx.get_ls_id();
   const common::ObTabletID &tablet_id = ctx.get_tablet_id();
   bool during_restore = false;
-  if (GCTX.is_shared_storage_mode()) {
-    // minor disabled in shared storage mode
-  } else if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || !tablet_handle.is_valid())) {
+  if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || !tablet_handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(ls_id), K(tablet_id), K(tablet_handle), KPC(mds_merge_dag_));
   // when restoring, some log stream may be not ready,

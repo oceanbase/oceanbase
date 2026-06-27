@@ -307,7 +307,8 @@ int ObPartitionMerger::inner_open_macro_writer(
       STORAGE_LOG(WARN, "Failed to open macro block writer", K(ret),
                   K(macro_seq_param), K(data_store_desc_), KP(object_cleaner));
     } else {
-      STORAGE_LOG(INFO, "success to open macro writer with pre warmer", K(data_store_desc_), K(macro_seq_param),
+      STORAGE_LOG(INFO, "success to open macro writer with pre warmer",
+        K(blocksstable::ObSimplePrintDataStoreDesc(data_store_desc_)), K(macro_seq_param),
         KPC(macro_writer_), K(ctx.get_pre_warm_param()), K_(validator));
     }
 
@@ -686,7 +687,7 @@ int ObPartitionMajorMerger::inner_process(
   }
 
   if (OB_SUCC(ret)) {
-    STORAGE_LOG(INFO, "Success to virtual append row to major macro writer", K(ret), K(row));
+    STORAGE_LOG(DEBUG, "Success to append row to major macro writer", K(ret), K(row));
   }
   return ret;
 }

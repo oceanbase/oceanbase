@@ -665,6 +665,18 @@ inline int64_t ObITable::dec_ref()
   return cnt;
 }
 
+// Compact log wrapper for an array of table keys. Consecutive entries that are
+// identical except for column_group_idx (e.g. the long run of NORMAL_COL_GROUP
+// keys of a wide column-store tablet) are collapsed into a single entry that
+// prints only [start_cg_idx, end_cg_idx], to avoid flooding the log.
+struct ObTableKeyArrayLogWrap
+{
+  explicit ObTableKeyArrayLogWrap(const common::ObIArray<ObITable::TableKey> &table_keys)
+    : table_keys_(table_keys) {}
+  int64_t to_string(char *buf, const int64_t buf_len) const;
+  const common::ObIArray<ObITable::TableKey> &table_keys_;
+};
+
 class ObTableHandleV2 final
 {
   friend class ObTablesHandleArray;

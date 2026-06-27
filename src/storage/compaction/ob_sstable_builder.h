@@ -89,7 +89,15 @@ public:
   }
   blocksstable::ObSSTableIndexBuilder *get_index_builder() { return &index_builder_; }
   blocksstable::ObWholeDataStoreDesc& get_data_desc() { return data_store_desc_; }
-  TO_STRING_KV(K_(data_store_desc), K_(index_builder), KP_(index_read_info), KPC_(rebuilder_ptr));
+  int64_t to_string(char *buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV("data_store_desc", blocksstable::ObSimplePrintDataStoreDesc(data_store_desc_.get_desc()),
+         K_(index_builder));
+    J_OBJ_END();
+    return pos;
+  }
 protected:
   ObArenaAllocator allocator_;
   blocksstable::ObSSTableIndexBuilder index_builder_;

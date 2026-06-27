@@ -1047,7 +1047,15 @@ int64_t ObMediumCompactionInfo::to_string(char* buf, const int64_t buf_len) cons
     J_KV("compaction_type", ObMediumCompactionInfo::get_compaction_type_str((ObCompactionType)compaction_type_),
       "merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(medium_merge_reason_),
       K_(medium_snapshot), K_(last_medium_snapshot), K_(tenant_id), K_(cluster_id),
-      K_(medium_compat_version), K_(data_version), K_(is_schema_changed), K_(storage_schema));
+      K_(medium_compat_version), K_(data_version), K_(is_schema_changed));
+    // only print storage schema summary here to avoid dumping the full column array,
+    // which is already logged once when the merged tablet is inited.
+    J_COMMA();
+    J_KV("storage_schema", "summarized",
+      "schema_version", storage_schema_.get_schema_version(),
+      "schema_column_cnt", storage_schema_.get_column_count(),
+      "schema_rowkey_cnt", storage_schema_.get_rowkey_column_num(),
+      "schema_cg_cnt", storage_schema_.get_column_group_count());
       if (MEDIUM_COMPAT_VERSION_V6 <= medium_compat_version_) {
         J_COMMA();
         J_KV(K_(co_major_merge_strategy));

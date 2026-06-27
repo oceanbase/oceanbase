@@ -285,7 +285,8 @@ struct ObStorageHACopySSTableParam final
   void reset();
   int assign(const ObStorageHACopySSTableParam &param);
 
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(copy_table_key_array),
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id),
+      "copy_table_key_array", ObTableKeyArrayLogWrap(copy_table_key_array_),
       K_(src_info), K_(src_ls_rebuild_seq), K_(need_check_seq), K_(is_leader_restore),
       K_(restore_action), K_(ha_svc_ctx));
 

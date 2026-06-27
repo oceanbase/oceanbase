@@ -984,3 +984,47 @@ int64_t ObTablesHandleArray::to_string(char *buf, const int64_t buf_len) const
   }
   return pos;
 }
+
+// two keys are mergeable for logging iff they are identical except column_group_idx
+static bool is_same_table_key_except_cg(const ObITable::TableKey &a, const ObITable::TableKey &b)
+{
+  ObITable::TableKey tmp = a;
+  tmp.column_group_idx_ = b.column_group_idx_;
+  return tmp == b;
+}
+
+int64_t ObTableKeyArrayLogWrap::to_string(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  const int64_t count = table_keys_.count();
+  common::databuff_printf(buf, buf_len, pos, "{count:%ld, table_keys:[", count);
+  int64_t i = 0;
+  while (i < count) {
+    // advance j over the run of consecutive keys that differ only by column_group_idx
+    int64_t j = i + 1;
+    while (j < count && is_same_table_key_except_cg(table_keys_.at(i), table_keys_.at(j))) {
+      ++j;
+    }
+    const ObITable::TableKey &key = table_keys_.at(i);
+    if (i > 0) {
+      common::databuff_printf(buf, buf_len, pos, ", ");
+    }
+    if (j - i > 1) {
+      // collapse the run: print the cg index range instead of every single key
+      common::databuff_printf(buf, buf_len, pos, "{tablet_id:");
+      (void)common::databuff_print_obj(buf, buf_len, pos, key.tablet_id_);
+      common::databuff_printf(buf, buf_len, pos, ", start_cg_idx:%u, end_cg_idx:%u, slice_range:",
+          key.get_column_group_id(), table_keys_.at(j - 1).get_column_group_id());
+      (void)common::databuff_print_obj(buf, buf_len, pos, key.slice_range_);
+      common::databuff_printf(buf, buf_len, pos, ", table_type:\"%s\", scn_range:",
+          ObITable::get_table_type_name(key.table_type_));
+      (void)common::databuff_print_obj(buf, buf_len, pos, key.scn_range_);
+      common::databuff_printf(buf, buf_len, pos, "}");
+    } else {
+      (void)common::databuff_print_obj(buf, buf_len, pos, key);
+    }
+    i = j;
+  }
+  common::databuff_printf(buf, buf_len, pos, "]}");
+  return pos;
+}

@@ -187,7 +187,18 @@ public:
   bool is_inited() const { return is_inited_; }
   int assign(const ObWindowCompactionDecisionLogInfo &other);
   void gen_info(char* buf, const int64_t buf_len, int64_t &pos) const;
-  TO_STRING_KV(K_(score), K_(base_inc_row_cnt), K_(dynamic_info), K_(is_inited), K_(compat_version));
+  int64_t to_string(char *buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    if (!is_inited()) {
+      J_KV(K_(is_inited));
+    } else {
+      J_KV(K_(score), K_(base_inc_row_cnt), K_(dynamic_info), K_(is_inited), K_(compat_version));
+    }
+    J_OBJ_END();
+    return pos;
+  }
   OB_UNIS_VERSION(1);
 public:
   static constexpr uint32_t MAX_TABLET_SCORE = UINT32_MAX;
