@@ -1008,7 +1008,6 @@ class Path
       equal_join_conditions_(allocator),
       other_join_conditions_(allocator),
       join_filter_infos_(allocator),
-      cost_join_filter_infos_(allocator),
       equal_cond_sel_(-1.0),
       other_cond_sel_(-1.0),
       contain_normal_nl_(false),
@@ -1226,7 +1225,6 @@ class Path
                  K_(equal_join_conditions),
                  K_(other_join_conditions),
                  K_(join_filter_infos),
-                 K_(cost_join_filter_infos),
                  K_(exchange_allocated),
                  K_(contain_normal_nl),
                  K_(can_use_batch_nlj),
@@ -1255,7 +1253,6 @@ class Path
     ObSqlArray<ObRawExpr*> equal_join_conditions_;
     ObSqlArray<ObRawExpr*> other_join_conditions_;
     ObSqlArray<JoinFilterInfo*> join_filter_infos_;
-    ObSqlArray<JoinFilterInfo*> cost_join_filter_infos_; // only for cost model of external table
     // for hash join only, used to simplify the re-estimate phase
     double equal_cond_sel_;
     double other_cond_sel_;
@@ -2685,14 +2682,6 @@ struct MergeKeyInfoHelper
                                   const ObIArray<ObRawExpr*> &equal_join_conditions,
                                   const bool is_left_naaj_na,
                                   ObIArray<JoinFilterInfo*> &join_filter_infos);
-
-    int generate_external_table_cost_join_filter_infos(
-        const Path &left_path,
-        const Path &right_path,
-        const ObJoinType join_type,
-        const DistAlgo join_dist_algo,
-        const ObIArray<ObRawExpr *> &equal_join_conditions,
-        ObIArray<JoinFilterInfo *> &join_filter_infos);
 
     int find_possible_join_filter_tables(const Path &left_path,
                                         const Path &right_path,

@@ -1415,7 +1415,7 @@ int ObOptEstCostModel::cost_external_table(const ObCostTableScanInfo &est_cost_i
         int64_t access_bytes = 0;
         for (int64_t i = 0; i < est_cost_info.access_column_items_.count(); ++i) {
           const ColumnItem &col_item = est_cost_info.access_column_items_.at(i);
-          if (OB_ISNULL(col_item.expr_) || !col_item.expr_->is_explicited_reference()
+          if (OB_ISNULL(col_item.expr_) || !col_item.expr_->is_referred_by_normal()
               || col_item.expr_->is_hidden_column()) {
             // skip non-user columns
           } else {
