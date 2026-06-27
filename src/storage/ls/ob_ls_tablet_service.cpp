@@ -4793,6 +4793,10 @@ int ObLSTabletService::inner_batch_create_or_update_migration_tablets_without_lo
                                                            new_tablet_hdls,
                                                            time_guard))) {
     LOG_WARN("fail to safe create or update cas migration tablets", K(ret));
+  } else if (OB_FAIL(after_migrate_tablets_persistence_finished_(total_tablet_cnt,
+                                                                 tablet_cas_params,
+                                                                 new_tablet_hdls))) {
+    LOG_WARN("failure has occurred after migrate tablets persistence finished", K(ret));
   }
 
   // rollback if some errs happened
@@ -4811,6 +4815,41 @@ int ObLSTabletService::inner_batch_create_or_update_migration_tablets_without_lo
       } else if (OB_TMP_FAIL(rollback_remove_tablet_without_lock(ls_id, cas_param.tablet_id_))) {
         LOG_ERROR("fail to rollback remove tablet", K(ret), K(ls_id), K(cas_param));
       }
+    }
+  }
+  return ret;
+}
+
+int ObLSTabletService::after_migrate_tablets_persistence_finished_(
+    const int64_t total_tablet_cnt,
+    const ObIArray<MigTabletCASParam> &cas_params,
+    const ObTabletHandle *tablet_hdls)
+{
+  int ret = OB_SUCCESS;
+  const ObLSID ls_id = ls_->get_ls_id();
+  ObTransService *tx_svr = MTL(ObTransService *);
+
+  if (OB_ISNULL(tx_svr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ObTransService", K(ret), KPC(tx_svr));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < total_tablet_cnt; ++i) {
+    const MigTabletCASParam &cas_param = cas_params.at(i);
+    const ObTabletID &tablet_id = cas_param.tablet_id_;
+    const bool is_update = cas_param.is_update_;
+    const ObTabletHandle &tablet_hdl = tablet_hdls[i];
+    ObTablet *tablet = tablet_hdl.get_obj();
+
+    if (OB_ISNULL(tablet)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null tablet", K(ret), K(tablet_hdl), K(cas_param));
+    } else if (OB_UNLIKELY(tablet_id != tablet->get_tablet_id())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cas param mismatches with tablet", K(ret), K(tablet->get_tablet_id()), K(cas_param));
+    } else if (OB_FAIL(tablet->start_direct_load_task_if_need())) {
+      LOG_WARN("failed to start direct load task if need", K(ret), K(cas_param));
+    } else if (!is_update && OB_FAIL(tx_svr->create_tablet(tablet_id, ls_id))) {
+      LOG_WARN("failed to create tablet at ObTransService", K(ret), K(cas_param));
     }
   }
   return ret;

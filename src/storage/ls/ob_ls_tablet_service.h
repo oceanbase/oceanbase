@@ -871,6 +871,12 @@ private:
   int inner_batch_create_or_update_migration_tablets_without_lock_(
       const common::ObIArray<ObMigrationTabletParam> &mig_tablet_params,
       ObTimeGuard &time_guard);
+  /// @brief: start tablet's direct load task if need
+  /// register tablet at tx svr if tablet is newly created
+  int after_migrate_tablets_persistence_finished_(
+      const int64_t total_tablet_cnt,
+      const ObIArray<ObLSTabletService::MigTabletCASParam> &cas_params,
+      const ObTabletHandle *tablet_hdls);
   int acquire_or_create_migration_tablet(
       const uint64_t data_version,
       const ObMigrationTabletParam &mig_param,

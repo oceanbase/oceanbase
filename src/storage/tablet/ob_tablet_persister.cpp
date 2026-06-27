@@ -509,7 +509,6 @@ int ObTabletPersister::convert_secondary_meta_to_write_batch(
   ObTabletTransformArg &arg = ctx.transform_arg_;
   arg.reset();
   ctx.pool_type_ = ObTabletPoolType::TP_MAX;
-  ObMultiTimeStats *time_stats = nullptr;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   ObStorageSchema *storage_schema = nullptr;
   const ObTablet &old_tablet = ctx.tablet_;
