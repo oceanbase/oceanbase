@@ -5209,8 +5209,7 @@ int ObParquetTableRowIterator::calc_meta_column_convert(const int64_t read_count
         conv_expr->set_evaluated_projected(eval_ctx);
       }
       if (OB_SUCC(ret)) {
-        OZ(col_expr->get_vector_header(eval_ctx).assign(conv_expr->get_vector_header(eval_ctx)));
-        col_expr->set_evaluated_projected(eval_ctx);
+        OZ(assign_column_convert_expr_result(eval_ctx, conv_expr, col_expr, read_count));
       }
     }
   }
@@ -5261,6 +5260,39 @@ bool ObParquetTableRowIterator::is_enable_rg_parquet_page_mgr() const
          && (rg_page_index_reader_ != NULL);
 }
 
+int ObParquetTableRowIterator::assign_column_convert_expr_result(ObEvalCtx &eval_ctx,
+                                                                 ObExpr *from,
+                                                                 ObExpr *to,
+                                                                 const int64_t read_count)
+{
+  int ret = OB_SUCCESS;
+  VectorHeader &to_vec_header = to->get_vector_header(eval_ctx);
+  VectorHeader &from_vec_header = from->get_vector_header(eval_ctx);
+  if (from_vec_header.format_ == VEC_UNIFORM_CONST) {
+    ObDatum *from_datum = static_cast<ObUniformBase *>(from->get_vector(eval_ctx))->get_datums();
+    OZ(to->init_vector(eval_ctx, VEC_UNIFORM, read_count));
+    ObUniformBase *to_vec = static_cast<ObUniformBase *>(to->get_vector(eval_ctx));
+    ObDatum *to_datums = to_vec->get_datums();
+    for (int64_t j = 0; j < read_count && OB_SUCC(ret); j++) {
+      to_datums[j] = *from_datum;
+    }
+  } else if (from_vec_header.format_ == VEC_UNIFORM) {
+    ObUniformBase *uni_vec = static_cast<ObUniformBase *>(from->get_vector(eval_ctx));
+    ObDatum *src = uni_vec->get_datums();
+    ObDatum *dst = to->locate_batch_datums(eval_ctx);
+    if (src != dst) {
+      MEMCPY(dst, src, read_count * sizeof(ObDatum));
+    }
+    OZ(to->init_vector(eval_ctx, VEC_UNIFORM, read_count));
+  } else if (OB_FAIL(to_vec_header.assign(from_vec_header))) {
+    LOG_WARN("assign vector header failed", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    to->set_evaluated_projected(eval_ctx);
+  }
+  return ret;
+}
+
 int ObParquetTableRowIterator::calc_column_convert(const int64_t read_count,
                                                    const bool is_eager,
                                                    ObEvalCtx &eval_ctx)
@@ -5269,46 +5301,25 @@ int ObParquetTableRowIterator::calc_column_convert(const int64_t read_count,
   const ExprFixedArray &column_conv_exprs = *(scan_param_->ext_column_dependent_exprs_);
   int64_t column_cnt = is_eager ? get_eager_count() : get_lazy_access_count();
   for (int i = 0; OB_SUCC(ret) && i < column_cnt; i++) {
-    int64_t cur_col_id = is_eager ? mapping_column_ids_.at(eager_columns_.at(i)).second : get_lazy_column_id(i);
+    int64_t cur_col_id
+        = is_eager ? mapping_column_ids_.at(eager_columns_.at(i)).second : get_lazy_column_id(i);
     if (cur_col_id == OB_INVALID_ID || column_need_conv_.at(cur_col_id)) {
-      //column_conv_exprs is 1-1 mapped to column_exprs
-      //calc gen column exprs
+      // column_conv_exprs is 1-1 mapped to column_exprs
+      // calc gen column exprs
       if (!column_conv_exprs.at(cur_col_id)->get_eval_info(eval_ctx).is_evaluated(eval_ctx)) {
-        OZ (column_conv_exprs.at(cur_col_id)->init_vector_default(eval_ctx, read_count));
-        OZ (column_conv_exprs.at(cur_col_id)->eval_vector(eval_ctx, *bit_vector_cache_, read_count, true));
+        OZ(column_conv_exprs.at(cur_col_id)->init_vector_default(eval_ctx, read_count));
+        OZ(column_conv_exprs.at(cur_col_id)
+               ->eval_vector(eval_ctx, *bit_vector_cache_, read_count, true));
         column_conv_exprs.at(cur_col_id)->set_evaluated_projected(eval_ctx);
       }
-      //assign gen column exprs value to column exprs(output exprs)
+      // assign gen column exprs value to column exprs(output exprs)
       if (OB_SUCC(ret)) {
         ObExpr *to = column_exprs_.at(cur_col_id);
         ObExpr *from = column_conv_exprs.at(cur_col_id);
-        VectorHeader &to_vec_header = to->get_vector_header(eval_ctx);
-        VectorHeader &from_vec_header = from->get_vector_header(eval_ctx);
-        if (from_vec_header.format_ == VEC_UNIFORM_CONST) {
-          ObDatum *from_datum =
-            static_cast<ObUniformBase *>(from->get_vector(eval_ctx))->get_datums();
-          OZ(to->init_vector(eval_ctx, VEC_UNIFORM, read_count));
-          ObUniformBase *to_vec = static_cast<ObUniformBase *>(to->get_vector(eval_ctx));
-          ObDatum *to_datums = to_vec->get_datums();
-          for (int64_t j = 0; j < read_count && OB_SUCC(ret); j++) {
-            to_datums[j] = *from_datum;
-          }
-        } else if (from_vec_header.format_ == VEC_UNIFORM) {
-          ObUniformBase *uni_vec = static_cast<ObUniformBase *>(from->get_vector(eval_ctx));
-          ObDatum *src = uni_vec->get_datums();
-          ObDatum *dst = to->locate_batch_datums(eval_ctx);
-          if (src != dst) {
-            MEMCPY(dst, src, read_count * sizeof(ObDatum));
-          }
-          OZ(to->init_vector(eval_ctx, VEC_UNIFORM, read_count));
-        } else if (OB_FAIL(to_vec_header.assign(from_vec_header))) {
-          LOG_WARN("assign vector header failed", K(ret));
-        }
-        column_exprs_.at(cur_col_id)->set_evaluated_projected(eval_ctx);
+        OZ(assign_column_convert_expr_result(eval_ctx, from, to, read_count));
       }
     } else {
       // do nothing
-
     }
   }
   return ret;
