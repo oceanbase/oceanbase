@@ -23,12 +23,9 @@ namespace storage
 using namespace common;
 
 // ====== Display constants — shared between TEXT and JSON formatters ======
-static constexpr const char *STATUS_SUCCESS = "SUCCESS";
-static constexpr const char *STATUS_FAILED = "FAILED";
-static constexpr const char *TYPE_FAST = "FAST";
-static constexpr const char *TYPE_COMPLETE = "COMPLETE";
+static constexpr const char *STATUS_RUNNING = "RUNNING";
+static constexpr const char *STATUS_PENDING = "PENDING";
 static constexpr const char *ROLE_TGT = "TGT";
-static constexpr const char *ROLE_DEP = "DEP";
 static constexpr const char *NA_STRING = "N/A";
 
 // ====== Table layout — single-source column descriptors ======
@@ -97,12 +94,47 @@ static constexpr int64_t CHG_TBL_NCOL = ARRAYSIZEOF(CHG_TBL_COLS);
 // Buffer sizes for heap-allocated formatting buffers (per coding standard:
 // stack variables must not exceed 256 bytes).
 static constexpr int64_t TBL_SEP_BUF_LEN = 256;
-static constexpr int64_t TBL_FULL_BUF_LEN = 512;
 static constexpr int64_t RESULT_DETAIL_BUF_LEN = 128;
+static constexpr int64_t RESULT_WITH_MSG_BUF_LEN = OB_MAX_ERROR_MSG_LEN + 32;
 static constexpr int64_t FMT_BUF_LEN = 64;
 static constexpr int64_t SMALL_BUF_LEN = 32;
 // Extra bytes for ":<port>" suffix in server column ("<ip>:<port>").
 static constexpr int64_t SVR_PORT_FMT_EXTRA = 21;
+
+static const MViewReportMVData &get_final_mv(const ObIArray<MViewReportMVData> &mv_array,
+                                             const MViewReportMVGroup &group)
+{
+  return mv_array.at(group.attempt_range_.last_);
+}
+
+static double get_elapsed_pct(const MViewReportMVData &mv, const int64_t total_elapsed)
+{
+  double elapsed_pct = 0.0;
+  if (total_elapsed > 0) {
+    elapsed_pct = static_cast<double>(mv.elapsed_time_) / static_cast<double>(total_elapsed) * 100.0;
+  }
+  return elapsed_pct;
+}
+
+static bool try_get_throughput(const MViewReportMVData &mv, const int64_t changes, double &throughput)
+{
+  bool known = false;
+  const double elapsed_s = static_cast<double>(mv.elapsed_time_) / 1000000.0;
+  if (elapsed_s > 0.0 && changes > 0) {
+    throughput = static_cast<double>(changes) / elapsed_s;
+    known = true;
+  } else {
+    throughput = 0.0;
+  }
+  return known;
+}
+
+static bool is_slowest_group(const int64_t group_idx,
+                             const int64_t group_count,
+                             const MViewReportSummaryInfo &summary)
+{
+  return group_idx == summary.slowest_grp_ && group_count > 1;
+}
 
 // ====== TEXT report shared constants ======
 static constexpr const char
@@ -111,6 +143,203 @@ static constexpr const char
 *SECTION_LINE = "--------------------------------------------------------------------------------\n";
 
 // ====== Low-level formatting utilities ======
+
+static int format_run_result(char *buf,
+                             const int64_t buf_len,
+                             const MViewReportRunData &run_data)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_ISNULL(buf) || buf_len <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret));
+  } else if (run_data.is_success()) {
+    ret = databuff_printf(buf, buf_len, "OK");
+  } else if (run_data.is_running()) {
+    ret = databuff_printf(buf, buf_len, "%s", STATUS_RUNNING);
+  } else if (!run_data.error_message_.empty()) {
+    ret = databuff_printf(buf,
+                          buf_len,
+                          "FAIL(%ld, %s) -- %.*s",
+                          run_data.result_,
+                          ob_error_name(static_cast<int>(run_data.result_)),
+                          run_data.error_message_.length(),
+                          run_data.error_message_.ptr());
+  } else {
+    ret = databuff_printf(buf,
+                          buf_len,
+                          "FAIL(%ld, %s)",
+                          run_data.result_,
+                          ob_error_name(static_cast<int>(run_data.result_)));
+  }
+  return ret;
+}
+
+static int format_parallelism(char *buf,
+                              const int64_t buf_len,
+                              const MViewReportRunData &run_data)
+{
+  int ret = OB_SUCCESS;
+  if (run_data.is_default_parallelism()) {
+    ret = databuff_printf(buf, buf_len, "default");
+  } else {
+    ret = databuff_printf(buf, buf_len, "%ld", run_data.parallelism_);
+  }
+  return ret;
+}
+
+static int format_mv_table_result(char *buf,
+                                  const int64_t buf_len,
+                                  const MViewReportMVData &mv,
+                                  const int64_t num_retries,
+                                  const bool is_slowest)
+{
+  int ret = OB_SUCCESS;
+  const char *retry_tag = (num_retries > 0) ? "[R]" : "";
+  const char *slow_tag = is_slowest ? "[S]" : "";
+  if (mv.is_success()) {
+    ret = databuff_printf(buf, buf_len, "OK%s%s", retry_tag, slow_tag);
+  } else if (mv.is_running()) {
+    ret = databuff_printf(buf, buf_len, "%s%s", STATUS_RUNNING, slow_tag);
+  } else {
+    ret = databuff_printf(buf, buf_len, "FAIL(%ld)%s%s", mv.result_, retry_tag, slow_tag);
+  }
+  return ret;
+}
+
+static int format_mv_detail_result(char *buf,
+                                   const int64_t buf_len,
+                                   const MViewReportMVData &mv)
+{
+  int ret = OB_SUCCESS;
+  if (mv.is_success()) {
+    ret = databuff_printf(buf, buf_len, "SUCCESS");
+  } else if (mv.is_running()) {
+    ret = databuff_printf(buf, buf_len, "%s", STATUS_RUNNING);
+  } else {
+    ret = databuff_printf(buf,
+                          buf_len,
+                          "FAILED (%ld, %s)",
+                          mv.result_,
+                          ob_error_name(static_cast<int>(mv.result_)));
+  }
+  return ret;
+}
+
+static int format_mv_attempt_result(char *buf,
+                                    const int64_t buf_len,
+                                    const MViewReportMVData &mv)
+{
+  int ret = OB_SUCCESS;
+  if (mv.is_success()) {
+    ret = databuff_printf(buf, buf_len, "OK");
+  } else if (mv.is_running()) {
+    ret = databuff_printf(buf, buf_len, "%s", STATUS_RUNNING);
+  } else {
+    ret = databuff_printf(buf, buf_len, "FAIL(%ld)", mv.result_);
+  }
+  return ret;
+}
+
+static int format_stmt_result(char *buf,
+                              const int64_t buf_len,
+                              const MViewReportStmtData &stmt)
+{
+  int ret = OB_SUCCESS;
+  if (stmt.is_success()) {
+    ret = databuff_printf(buf, buf_len, "OK");
+  } else if (stmt.is_running()) {
+    ret = databuff_printf(buf, buf_len, "%s", STATUS_PENDING);
+  } else {
+    ret = databuff_printf(buf, buf_len, "FAIL(%ld)", stmt.result_);
+  }
+  return ret;
+}
+
+static bool is_valid_json_object_or_array(const ObString &json_str)
+{
+  bool is_valid = false;
+  const char *json_ptr = json_str.ptr();
+  const int64_t json_len = json_str.length();
+  int64_t first = 0;
+  int64_t last = json_len - 1;
+  if (OB_NOT_NULL(json_ptr) && json_len > 0) {
+    for (; first < json_len && isspace(json_ptr[first]); ++first) {
+      /* skip leading whitespace */
+    }
+    for (; last >= 0 && isspace(json_ptr[last]); --last) {
+      /* skip trailing whitespace */
+    }
+    if (first <= last) {
+      is_valid = (('{' == json_ptr[first]) && ('}' == json_ptr[last]))
+                 || (('[' == json_ptr[first]) && (']' == json_ptr[last]));
+    }
+  }
+  return is_valid;
+}
+
+static int append_text_execution_plan(ObIAllocator &allocator,
+                                      const MViewReportStmtData &stmt,
+                                      ObSqlString &report_text)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString plan_text;
+  uint64_t plan_hash = 0;
+  if (stmt.execution_plan_.empty()) {
+  } else if (OB_FAIL(render_mview_plan_text(allocator, stmt.execution_plan_, plan_hash, plan_text))) {
+    LOG_WARN("fail to render plan text", KR(ret));
+  } else if (plan_hash != 0 && OB_FAIL(report_text.append_fmt("      Plan Hash Value: %lu\n", plan_hash))) {
+    LOG_WARN("fail to append plan hash", KR(ret));
+  } else if (plan_text.empty()) {
+    // Hash-only mode: no operator tree to render.
+  } else if (OB_FAIL(report_text.append("      Execution Plan:\n"))) {
+    LOG_WARN("fail to append plan header", KR(ret));
+  } else {
+    // Indent each rendered plan line with 8 spaces so the whole block
+    // aligns visually under the "Execution Plan:" header above.
+    const char *buf = plan_text.ptr();
+    const int64_t len = plan_text.length();
+    int64_t line_start = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < len; ++i) {
+      if (buf[i] == '\n') {
+        if (OB_FAIL(report_text.append_fmt("        %.*s\n",
+                                           static_cast<int>(i - line_start),
+                                           buf + line_start))) {
+          LOG_WARN("fail to append plan line", KR(ret));
+        } else {
+          line_start = i + 1;
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (line_start < len
+               && OB_FAIL(report_text.append_fmt("        %.*s\n",
+                                                 static_cast<int>(len - line_start),
+                                                 buf + line_start))) {
+      LOG_WARN("fail to append plan tail line", KR(ret));
+    }
+  }
+  return ret;
+}
+
+static int append_json_execution_plan(ObSqlString &report_text,
+                                      const MViewReportStmtData &stmt)
+{
+  int ret = OB_SUCCESS;
+  if (stmt.execution_plan_.empty()) {
+  } else if (is_valid_json_object_or_array(stmt.execution_plan_)) {
+    if (OB_FAIL(report_text.append(", \"execution_plan\": "))) {
+      LOG_WARN("fail to append plan key", KR(ret));
+    } else if (OB_FAIL(report_text.append(stmt.execution_plan_))) {
+      LOG_WARN("fail to append plan body", KR(ret));
+    }
+  } else {
+    LOG_WARN("execution_plan_ is not valid JSON, fallback to null");
+    if (OB_FAIL(report_text.append(", \"execution_plan\": null"))) {
+      LOG_WARN("fail to append null plan", KR(ret));
+    }
+  }
+  return ret;
+}
 
 static int build_tbl_sep(const ColDescriptor *cols, int64_t ncols, int64_t indent, char *buf, int64_t buf_len)
 {
@@ -253,11 +482,6 @@ static int format_number(int64_t val, char *buf, int64_t buf_len)
   return ret;
 }
 
-static bool scn_is_unknown(uint64_t scn)
-{
-  return 0 == scn || share::OB_INVALID_SCN_VAL == scn;
-}
-
 // Format an SCN raw value with a human-readable nanosecond timestamp appended.
 // Output: "N/A" if unknown, or "1234567890 (YYYY-MM-DD HH:MM:SS.fffffffff)".
 static int format_scn_with_ts(uint64_t scn_val, const ObTimeZoneInfo *sys_tz_info, char *buf, int64_t buf_len)
@@ -273,6 +497,8 @@ static int format_scn_with_ts(uint64_t scn_val, const ObTimeZoneInfo *sys_tz_inf
   } else if (OB_FAIL(databuff_printf(raw_buf, sizeof(raw_buf), "%lu", scn_val))) {
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s (", raw_buf))) {
   } else if (OB_FAIL(ObTimeConverter::scn_to_str(scn_val, sys_tz_info, buf, buf_len, pos))) {
+    LOG_WARN("scn_to_str failed, fallback to raw scn", KR(ret));
+    ret = OB_SUCCESS;
     if (OB_FAIL(databuff_printf(buf, buf_len, "%lu", scn_val))) {
       LOG_WARN("buf overflow in format_scn_with_ts", KR(ret));
     }
@@ -442,20 +668,6 @@ static const char *safe_ptr_str(const common::ObString &s)
   return s.empty() ? "" : s.ptr();
 }
 
-static bool is_target_not_refreshed(const MViewReportRunData &run_data, const ObIArray<MViewReportMVData> &mv_array)
-{
-  bool not_refreshed = false;
-  if (run_data.nested_ && run_data.mview_id_ > 0) {
-    not_refreshed = true;
-    for (int64_t i = 0; not_refreshed && i < mv_array.count(); ++i) {
-      if (mv_array.at(i).mview_id_ == run_data.mview_id_) {
-        not_refreshed = false;
-      }
-    }
-  }
-  return not_refreshed;
-}
-
 // ====== TEXT report section functions ======
 
 static int build_text_header(const MViewReportRunData &run_data, ObSqlString &report_text, ObIAllocator &allocator)
@@ -496,11 +708,12 @@ static int build_text_summary(const MViewRefreshReport &report,
   const int64_t total_retries = summary.total_retries_;
   const int64_t num_distinct_mvs = summary.num_distinct_mvs_;
   const bool has_retry_overhead = total_retry_overhead > 0;
-  const bool target_not_refreshed = is_target_not_refreshed(run_data, mv_array);
-  const int64_t total_mv_count = num_distinct_mvs + (target_not_refreshed ? 1 : 0);
-  const char *target_name = run_data.mview_name_.empty() ? NA_STRING : safe_ptr_str(run_data.mview_name_);
-  int64_t target_name_len = run_data.mview_name_.empty() ? static_cast<int64_t>(strlen(NA_STRING))
-                                                         : run_data.mview_name_.length();
+  const bool target_mv_missing = is_target_mv_missing(run_data, mv_array);
+  const int64_t total_mv_count = num_distinct_mvs + (target_mv_missing ? 1 : 0);
+  const ObString &target_mv_name = run_data.display_mview_name();
+  const char *target_name = run_data.has_target_mview() ? safe_ptr_str(target_mv_name) : NA_STRING;
+  int64_t target_name_len = run_data.has_target_mview() ? target_mv_name.length()
+                                                         : static_cast<int64_t>(strlen(NA_STRING));
 
   char *ts_buf = static_cast<char *>(report.allocator_->alloc(FMT_BUF_LEN));
   char *elapsed_buf = static_cast<char *>(report.allocator_->alloc(FMT_BUF_LEN));
@@ -532,7 +745,7 @@ static int build_text_summary(const MViewRefreshReport &report,
     LOG_WARN("fail to format end_time", KR(ret));
   } else if (OB_FAIL(report_text.append_fmt("  End Time:             %s\n", ts_buf))) {
     LOG_WARN("fail to append end_time", KR(ret));
-  } else if (OB_FAIL(format_elapsed(run_data.end_time_ - run_data.start_time_, elapsed_buf, FMT_BUF_LEN))) {
+  } else if (OB_FAIL(format_elapsed(summary.elapsed_us_, elapsed_buf, FMT_BUF_LEN))) {
     LOG_WARN("fail to format elapsed", KR(ret));
   } else if (OB_FAIL(report_text.append_fmt("  Elapsed Time:         %s\n", elapsed_buf))) {
     LOG_WARN("fail to append elapsed", KR(ret));
@@ -551,32 +764,44 @@ static int build_text_summary(const MViewRefreshReport &report,
   } else if (OB_FAIL(report_text.append_fmt("  Total Sched Overhead: %s  (sum of MV scheduling delays)\n",
                                             elapsed_buf))) {
     LOG_WARN("fail to append sched overhead", KR(ret));
+  } else if (run_data.is_failed() && 0 == num_failures) {
+    if (OB_FAIL(report_text.append_fmt("  Status:               %s\n", summary.status_str_))) {
+      LOG_WARN("fail to append status", KR(ret));
+    }
   } else if (OB_FAIL(report_text.append_fmt("  Status:               %s (%ld failures, %ld retries)\n",
-                                            (0 == num_failures) ? STATUS_SUCCESS : STATUS_FAILED,
+                                            summary.status_str_,
                                             num_failures,
                                             total_retries))) {
     LOG_WARN("fail to append status", KR(ret));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (run_data.is_failed()) {
+    char *run_result_buf = static_cast<char *>(report.allocator_->alloc(RESULT_WITH_MSG_BUF_LEN));
+    if (OB_ISNULL(run_result_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc run_result_buf", KR(ret));
+    } else if (OB_FAIL(format_run_result(run_result_buf,
+                                         RESULT_WITH_MSG_BUF_LEN,
+                                         run_data))) {
+      LOG_WARN("fail to format run result", KR(ret), K(run_data.result_));
+    } else if (OB_FAIL(report_text.append_fmt("  Result:               %s\n", run_result_buf))) {
+      LOG_WARN("fail to append run result", KR(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(report_text.append_fmt("  Refresh Method:       %s\n",
                                             summary.method_display_ != NULL ? summary.method_display_ : "AUTO"))) {
     LOG_WARN("fail to append method", KR(ret));
-  } else if (scn_is_unknown(run_data.data_target_scn_)
-             && OB_FAIL(report_text.append("  Target Data SCN:      N/A\n"))) {
-    LOG_WARN("fail to append target data scn na", KR(ret));
-  } else if (!scn_is_unknown(run_data.data_target_scn_)
-             && OB_FAIL(format_scn_with_ts(run_data.data_target_scn_, sys_tz_info, scn_buf, FMT_BUF_LEN))) {
+  } else if (OB_FAIL(format_scn_with_ts(run_data.data_target_scn_, sys_tz_info, scn_buf, FMT_BUF_LEN))) {
     LOG_WARN("fail to format target data scn", KR(ret));
-  } else if (!scn_is_unknown(run_data.data_target_scn_)
-             && OB_FAIL(report_text.append_fmt("  Target Data SCN:      %s\n", scn_buf))) {
+  } else if (OB_FAIL(report_text.append_fmt("  Target Data SCN:      %s\n", scn_buf))) {
     LOG_WARN("fail to append target data scn", KR(ret));
   } else {
     para_buf = static_cast<char *>(report.allocator_->alloc(SMALL_BUF_LEN));
     if (OB_ISNULL(para_buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc para_buf", KR(ret));
-    } else if (run_data.parallelism_ > 0
-               && OB_FAIL(databuff_printf(para_buf, SMALL_BUF_LEN, "%ld", run_data.parallelism_))) {
-      LOG_WARN("para_buf overflow", KR(ret));
-    } else if (run_data.parallelism_ <= 0 && OB_FAIL(databuff_printf(para_buf, SMALL_BUF_LEN, "default"))) {
+    } else if (OB_FAIL(format_parallelism(para_buf, SMALL_BUF_LEN, run_data))) {
       LOG_WARN("para_buf overflow", KR(ret));
     } else if (OB_FAIL(report_text.append_fmt("  Number of MVs:        %ld\n"
                                               "  Parallelism:          %s\n"
@@ -610,10 +835,11 @@ static int build_text_mv_table(const MViewRefreshReport &report, ObSqlString &re
   const MViewReportRunData &run_data = *report.run_data_;
   const ObIArray<MViewReportMVData> &mv_array = *report.mv_array_;
   const MViewReportSummaryInfo &summary = report.summary_;
-  const ObIArray<MViewReportPerMVComputed> &per_mv_computed = report.per_mv_computed_;
+  const ObIArray<MViewReportMVGroup> &mv_groups = report.mv_groups_;
 
   const int64_t num_distinct_mvs = summary.num_distinct_mvs_;
-  const int64_t slowest_grp = summary.slowest_grp_;
+  const bool target_mv_missing = is_target_mv_missing(run_data, mv_array);
+  const bool has_mv_rows = num_distinct_mvs > 0 || target_mv_missing;
 
   // Local copy of column descriptors for dynamic string-column widths.
   ColDescriptor mv_local_cols[MV_TBL_NCOL];
@@ -622,21 +848,25 @@ static int build_text_mv_table(const MViewRefreshReport &report, ObSqlString &re
   }
 
   if (OB_FAIL(ret)) {
-  } else if (num_distinct_mvs > 0) {
+  } else if (has_mv_rows) {
     int64_t mv_name_w = MV_TBL_COLS[2].width;
     int64_t server_w = MV_TBL_COLS[11].width;
     for (int64_t gi = 0; gi < num_distinct_mvs; ++gi) {
-      const MViewReportPerMVComputed &comp_scan = per_mv_computed.at(gi);
-      const MViewReportMVData &mv_scan = mv_array.at(comp_scan.last_idx_);
-      if (mv_scan.mv_name_.length() > mv_name_w) {
-        mv_name_w = mv_scan.mv_name_.length();
+      const MViewReportMVGroup &group_scan = mv_groups.at(gi);
+      const MViewReportMVData &mv_scan = get_final_mv(mv_array, group_scan);
+      const int64_t full_mv_name_len = mv_scan.display_name().length();
+      if (full_mv_name_len > mv_name_w) {
+        mv_name_w = full_mv_name_len;
       }
-      if (!mv_scan.svr_ip_.empty()) {
+      if (mv_scan.has_server()) {
         int64_t srv_len = mv_scan.svr_ip_.length() + SVR_PORT_FMT_EXTRA;
         if (srv_len > server_w) {
           server_w = srv_len;
         }
       }
+    }
+    if (target_mv_missing && run_data.display_mview_name().length() > mv_name_w) {
+      mv_name_w = run_data.display_mview_name().length();
     }
     mv_local_cols[2].width = mv_name_w;
     mv_local_cols[11].width = server_w;
@@ -671,60 +901,54 @@ static int build_text_mv_table(const MViewRefreshReport &report, ObSqlString &re
   }
 
   for (int64_t gi = 0; OB_SUCC(ret) && gi < num_distinct_mvs; ++gi) {
-    const MViewReportPerMVComputed &comp = per_mv_computed.at(gi);
-    const int64_t idx = comp.last_idx_;
-    const MViewReportMVData &mv = mv_array.at(idx);
-    const int64_t display_num = comp.display_num_;
-    const char *type_str = comp.type_short_;
-    const char *role_str = comp.role_;
-    const int64_t mv_changes = comp.changes_;
-    const bool is_slowest = comp.slowest_;
-    const int64_t num_table_retries = comp.last_idx_ - comp.first_idx_;
+    const MViewReportMVGroup &group = mv_groups.at(gi);
+    const MViewReportMVData &mv = get_final_mv(mv_array, group);
+    const int64_t display_num = gi + 1;
+    const char *type_str = mv.type_short_name();
+    const char *role_str = run_data.mv_role_label(mv.mview_id_);
+    const int64_t mv_changes = group.changes_;
+    const bool is_slowest = is_slowest_group(gi, num_distinct_mvs, summary);
+    const int64_t num_table_retries = group.num_retries();
+    const int64_t sched_delay = mv.sched_delay_us();
+    const double elapsed_pct = get_elapsed_pct(mv, summary.elapsed_us_);
+    double throughput = 0.0;
+    const bool throughput_known = try_get_throughput(mv, group.changes_, throughput);
     start_hms[0] = '\0';
     end_hms[0] = '\0';
     if (OB_FAIL(format_timestamp(mv.start_time_, start_hms, SMALL_BUF_LEN))) {
       LOG_WARN("fail to format mv start", KR(ret));
     } else if (OB_FAIL(format_timestamp(mv.end_time_, end_hms, SMALL_BUF_LEN))) {
       LOG_WARN("fail to format mv end", KR(ret));
-    } else if (comp.sched_delay_us_ > 0 && OB_FAIL(format_elapsed(comp.sched_delay_us_, sched_buf, SMALL_BUF_LEN))) {
+    } else if (sched_delay >= 0 && OB_FAIL(format_elapsed(sched_delay, sched_buf, SMALL_BUF_LEN))) {
       LOG_WARN("fail to format sched delay", KR(ret));
-    } else if (comp.sched_delay_us_ <= 0 && OB_FAIL(databuff_printf(sched_buf, SMALL_BUF_LEN, "0 us"))) {
+    } else if (sched_delay < 0 && OB_FAIL(databuff_printf(sched_buf, SMALL_BUF_LEN, "0 us"))) {
       LOG_WARN("sched_buf overflow", KR(ret));
     } else if (OB_FAIL(format_elapsed(mv.elapsed_time_, elapsed_buf, FMT_BUF_LEN))) {
       LOG_WARN("fail to format mv elapsed", KR(ret));
-    } else if (comp.throughput_per_sec_ < 0.0 && OB_FAIL(databuff_printf(thpt_buf, SMALL_BUF_LEN, "N/A"))) {
+    } else if (!throughput_known && OB_FAIL(databuff_printf(thpt_buf, SMALL_BUF_LEN, "N/A"))) {
       LOG_WARN("thpt_buf overflow", KR(ret));
-    } else if (comp.throughput_per_sec_ >= 0.0
+    } else if (throughput_known
                && OB_FAIL(databuff_printf(thpt_buf,
                                           SMALL_BUF_LEN,
                                           "%ld/s",
-                                          static_cast<int64_t>(comp.throughput_per_sec_)))) {
+                                          static_cast<int64_t>(throughput)))) {
       LOG_WARN("thpt_buf overflow", KR(ret));
     } else if (OB_FAIL(databuff_printf(elapsed_pct_buf,
                                        SMALL_BUF_LEN,
                                        "%s (%.*f%%)",
                                        elapsed_buf,
-                                       (comp.elapsed_pct_ >= 10.0) ? 0 : 1,
-                                       comp.elapsed_pct_))) {
+                                       (elapsed_pct >= 10.0) ? 0 : 1,
+                                       elapsed_pct))) {
       LOG_WARN("elapsed_pct_buf overflow", KR(ret));
-    } else if (0 == mv.result_
-               && OB_FAIL(databuff_printf(result_buf,
-                                          FMT_BUF_LEN,
-                                          "OK%s%s",
-                                          (num_table_retries > 0) ? "[R]" : "",
-                                          is_slowest ? "[S]" : ""))) {
-      LOG_WARN("result_buf overflow", KR(ret));
-    } else if (0 != mv.result_
-               && OB_FAIL(databuff_printf(result_buf,
-                                          FMT_BUF_LEN,
-                                          "FAIL(%ld)%s%s",
-                                          mv.result_,
-                                          (num_table_retries > 0) ? "[R]" : "",
-                                          is_slowest ? "[S]" : ""))) {
+    } else if (OB_FAIL(format_mv_table_result(result_buf,
+                                              FMT_BUF_LEN,
+                                              mv,
+                                              num_table_retries,
+                                              is_slowest))) {
       LOG_WARN("result_buf overflow", KR(ret));
     } else if (OB_FAIL(format_number(mv_changes, num_buf, FMT_BUF_LEN))) {
       LOG_WARN("fail to format changes", KR(ret));
-    } else if (!mv.svr_ip_.empty()
+    } else if (mv.has_server()
                && OB_FAIL(databuff_printf(server_buf,
                                           FMT_BUF_LEN,
                                           "%.*s:%ld",
@@ -732,7 +956,7 @@ static int build_text_mv_table(const MViewRefreshReport &report, ObSqlString &re
                                           safe_ptr_str(mv.svr_ip_),
                                           mv.svr_port_))) {
       LOG_WARN("server_buf overflow", KR(ret));
-    } else if (mv.svr_ip_.empty() && OB_FAIL(databuff_printf(server_buf, FMT_BUF_LEN, "-"))) {
+    } else if (!mv.has_server() && OB_FAIL(databuff_printf(server_buf, FMT_BUF_LEN, "-"))) {
       LOG_WARN("server_buf overflow", KR(ret));
     } else if (OB_FAIL(report_text.append_fmt("  | %*ld | %-*s | %-*.*s | %-*s | %-*.*s | %-*.*s | %*s | %*s | %*s "
                                               "| %*s | %-*s | %-*s |\n",
@@ -741,8 +965,8 @@ static int build_text_mv_table(const MViewRefreshReport &report, ObSqlString &re
                                               mv_local_cols[1].width,
                                               role_str,
                                               mv_local_cols[2].width,
-                                              mv.mv_name_.length(),
-                                              safe_ptr_str(mv.mv_name_),
+                                              mv.display_name().length(),
+                                              safe_ptr_str(mv.display_name()),
                                               mv_local_cols[3].width,
                                               type_str,
                                               mv_local_cols[4].width,
@@ -767,45 +991,43 @@ static int build_text_mv_table(const MViewRefreshReport &report, ObSqlString &re
     }
   }
 
-  if (OB_SUCC(ret)) {
-    const bool target_not_refreshed = is_target_not_refreshed(run_data, mv_array);
-    const int64_t total_mv_count = num_distinct_mvs + (target_not_refreshed ? 1 : 0);
-    if (target_not_refreshed) {
-      const int64_t placeholder_num = total_mv_count;
-      if (OB_FAIL(report_text.append_fmt("  | %*ld | %-*s | %-*.*s | %-*s | %-*.*s | %-*.*s | %*s | %*s | %*s | %*s "
-                                         "| %-*s | %-*s |\n",
-                                         mv_local_cols[0].width,
-                                         placeholder_num,
-                                         mv_local_cols[1].width,
-                                         ROLE_TGT,
-                                         mv_local_cols[2].width,
-                                         run_data.mview_name_.length(),
-                                         safe_ptr_str(run_data.mview_name_),
-                                         mv_local_cols[3].width,
-                                         NA_STRING,
-                                         mv_local_cols[4].width,
-                                         mv_local_cols[4].width,
-                                         NA_STRING,
-                                         mv_local_cols[5].width,
-                                         mv_local_cols[5].width,
-                                         NA_STRING,
-                                         mv_local_cols[6].width,
-                                         NA_STRING,
-                                         mv_local_cols[7].width,
-                                         NA_STRING,
-                                         mv_local_cols[8].width,
-                                         NA_STRING,
-                                         mv_local_cols[9].width,
-                                         "N/A",
-                                         mv_local_cols[10].width,
-                                         "N/A",
-                                         mv_local_cols[11].width,
-                                         "N/A"))) {
-        LOG_WARN("fail to append target placeholder row", KR(ret));
-      }
+  if (OB_SUCC(ret) && target_mv_missing) {
+    const int64_t placeholder_num = num_distinct_mvs + 1;
+    if (OB_FAIL(report_text.append_fmt("  | %*ld | %-*s | %-*.*s | %-*s | %-*.*s | %-*.*s | %*s | %*s | %*s | %*s "
+                                       "| %-*s | %-*s |\n",
+                                       mv_local_cols[0].width,
+                                       placeholder_num,
+                                       mv_local_cols[1].width,
+                                       ROLE_TGT,
+                                       mv_local_cols[2].width,
+                                       static_cast<int>(run_data.display_mview_name().length()),
+                                       safe_ptr_str(run_data.display_mview_name()),
+                                       mv_local_cols[3].width,
+                                       NA_STRING,
+                                       mv_local_cols[4].width,
+                                       mv_local_cols[4].width,
+                                       NA_STRING,
+                                       mv_local_cols[5].width,
+                                       mv_local_cols[5].width,
+                                       NA_STRING,
+                                       mv_local_cols[6].width,
+                                       NA_STRING,
+                                       mv_local_cols[7].width,
+                                       NA_STRING,
+                                       mv_local_cols[8].width,
+                                       NA_STRING,
+                                       mv_local_cols[9].width,
+                                       "N/A",
+                                       mv_local_cols[10].width,
+                                       "N/A",
+                                       mv_local_cols[11].width,
+                                       "N/A"))) {
+      LOG_WARN("fail to append target placeholder row", KR(ret));
     }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(build_tbl_sep(mv_local_cols, MV_TBL_NCOL, 2, mv_tbl_sep, TBL_SEP_BUF_LEN))) {
+  }
+  if (OB_FAIL(ret)) {
+  } else if (has_mv_rows) {
+    if (OB_FAIL(build_tbl_sep(mv_local_cols, MV_TBL_NCOL, 2, mv_tbl_sep, TBL_SEP_BUF_LEN))) {
       LOG_WARN("fail to build mv tbl sep", KR(ret));
     } else if (OB_FAIL(report_text.append(mv_tbl_sep))) {
       LOG_WARN("fail to append table footer", KR(ret));
@@ -834,11 +1056,11 @@ static int build_text_resource_overview(const MViewRefreshReport &report, ObSqlS
   }
 
   const ObIArray<MViewReportMVData> &mv_array = *report.mv_array_;
-  const ObIArray<MViewReportStmtData> &stmt_array = *report.stmt_array_;
   const MViewReportSummaryInfo &summary = report.summary_;
   const MViewReportResourceOverview &resources = report.resources_;
-  const ObIArray<MViewReportPerMVComputed> &per_mv_computed = report.per_mv_computed_;
+  const ObIArray<MViewReportMVGroup> &mv_groups = report.mv_groups_;
 
+  const int64_t total_steps = resources.total_steps_;
   const int64_t total_cpu = resources.total_cpu_us_;
   const int64_t total_io_wait = resources.total_io_wait_us_;
   const int64_t total_disk_reads = resources.total_disk_reads_;
@@ -846,7 +1068,7 @@ static int build_text_resource_overview(const MViewRefreshReport &report, ObSqlS
   const int64_t num_distinct_mvs = summary.num_distinct_mvs_;
 
   if (OB_FAIL(ret)) {
-  } else if (stmt_array.count() > 0) {
+  } else if (total_steps > 0) {
     cpu_buf = static_cast<char *>(report.allocator_->alloc(FMT_BUF_LEN));
     io_buf = static_cast<char *>(report.allocator_->alloc(FMT_BUF_LEN));
     if (OB_ISNULL(cpu_buf) || OB_ISNULL(io_buf)) {
@@ -863,7 +1085,7 @@ static int build_text_resource_overview(const MViewRefreshReport &report, ObSqlS
     } else if (OB_FAIL(report_text.append_fmt("\n  Resource Overview:\n"
                                               "    Total SQL Steps: %ld    CPU: %s    IO Wait: %s\n"
                                               "    Disk IO: %s     Max Memory: %s\n",
-                                              stmt_array.count(),
+                                              total_steps,
                                               cpu_buf,
                                               io_buf,
                                               num_buf,
@@ -875,10 +1097,11 @@ static int build_text_resource_overview(const MViewRefreshReport &report, ObSqlS
     } else if (num_distinct_mvs > 0) {
       int64_t res_name_w = RES_TBL_COLS[0].width;
       for (int64_t gi = 0; gi < num_distinct_mvs; ++gi) {
-        const MViewReportPerMVComputed &comp_scan = per_mv_computed.at(gi);
-        const MViewReportMVData &mv_scan = mv_array.at(comp_scan.last_idx_);
-        if (mv_scan.mv_name_.length() > res_name_w) {
-          res_name_w = mv_scan.mv_name_.length();
+        const MViewReportMVGroup &group_scan = mv_groups.at(gi);
+        const MViewReportMVData &mv_scan = get_final_mv(mv_array, group_scan);
+        const int64_t full_mv_name_len = mv_scan.display_name().length();
+        if (full_mv_name_len > res_name_w) {
+          res_name_w = full_mv_name_len;
         }
       }
       ColDescriptor res_local_cols[RES_TBL_NCOL];
@@ -915,12 +1138,12 @@ static int build_text_resource_overview(const MViewRefreshReport &report, ObSqlS
       }
 
       for (int64_t gi = 0; OB_SUCC(ret) && gi < num_distinct_mvs; ++gi) {
-        const MViewReportPerMVComputed &comp = per_mv_computed.at(gi);
-        const MViewReportMVData &mv = mv_array.at(comp.last_idx_);
-        const int64_t mv_cpu = comp.cpu_time_us_;
-        const int64_t mv_io = comp.io_wait_time_us_;
-        const int64_t mv_dr = comp.disk_reads_;
-        const int64_t mv_mem = comp.max_memory_bytes_;
+        const MViewReportMVGroup &group = mv_groups.at(gi);
+        const MViewReportMVData &mv = get_final_mv(mv_array, group);
+        const int64_t mv_cpu = group.cpu_time_us_;
+        const int64_t mv_io = group.io_wait_time_us_;
+        const int64_t mv_dr = group.disk_reads_;
+        const int64_t mv_mem = group.max_memory_bytes_;
         if (OB_FAIL(format_elapsed(mv_cpu, mv_cpu_buf, FMT_BUF_LEN))) {
           LOG_WARN("fail to format", KR(ret));
         } else if (OB_FAIL(format_elapsed(mv_io, mv_io_buf, FMT_BUF_LEN))) {
@@ -931,8 +1154,8 @@ static int build_text_resource_overview(const MViewRefreshReport &report, ObSqlS
           LOG_WARN("fail to format memory", KR(ret));
         } else if (OB_FAIL(report_text.append_fmt("  | %-*.*s | %*s | %*s | %*s | %*s |\n",
                                                   res_local_cols[0].width,
-                                                  mv.mv_name_.length(),
-                                                  safe_ptr_str(mv.mv_name_),
+                                                  mv.display_name().length(),
+                                                  safe_ptr_str(mv.display_name()),
                                                   res_local_cols[1].width,
                                                   mv_cpu_buf,
                                                   res_local_cols[2].width,
@@ -948,6 +1171,10 @@ static int build_text_resource_overview(const MViewRefreshReport &report, ObSqlS
       } else if (OB_FAIL(report_text.append(res_tbl_sep))) {
         LOG_WARN("fail to append per-mv footer", KR(ret));
       }
+    }
+  } else if (report.run_data_->is_failed() || report.run_data_->is_running()) {
+    if (OB_FAIL(report_text.append("\n  Resource Overview: N/A (job did not execute any refresh steps)\n"))) {
+      LOG_WARN("fail to append resource na", KR(ret));
     }
   } else if (OB_FAIL(report_text.append("\n  Resource Overview: N/A (no step-level data)\n"
                                         "    Hint: step-level metrics (CPU, IO, Plan) require ADVANCED collection "
@@ -971,7 +1198,6 @@ static int build_text_per_mv_detail(const MViewRefreshReport &report,
   char *rows_buf = static_cast<char *>(report.allocator_->alloc(FMT_BUF_LEN));
   char *result_detail_buf = NULL;
   char *tbl_sep_buf = NULL;
-  char *tbl_full_buf = NULL;
   char para_buf[SMALL_BUF_LEN];
   if (OB_ISNULL(ts_buf) || OB_ISNULL(num_buf) || OB_ISNULL(elapsed_buf) || OB_ISNULL(rows_buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -983,12 +1209,12 @@ static int build_text_per_mv_detail(const MViewRefreshReport &report,
   const ObIArray<MViewReportChangeData> &change_array = *report.change_array_;
   const ObIArray<MViewReportStmtData> &stmt_array = *report.stmt_array_;
   const MViewReportSummaryInfo &summary = report.summary_;
-  const ObIArray<MViewReportPerMVComputed> &per_mv_computed = report.per_mv_computed_;
+  const ObIArray<MViewReportMVGroup> &mv_groups = report.mv_groups_;
 
   const int64_t num_distinct_mvs = summary.num_distinct_mvs_;
 
   // COMPLETE refresh has no per-MV detail data worth showing.
-  bool skip_per_mv = (num_distinct_mvs == 0) || (0 == mv_array.at(0).refresh_type_);
+  const bool skip_per_mv = should_skip_per_mv_detail(num_distinct_mvs, mv_array);
   if (OB_FAIL(ret)) {
   } else if (!skip_per_mv && OB_FAIL(report_text.append_fmt("\nPER-MVIEW DETAIL\n%s", SECTION_LINE))) {
     LOG_WARN("fail to append section title", KR(ret));
@@ -1010,58 +1236,48 @@ static int build_text_per_mv_detail(const MViewRefreshReport &report,
   char *mem_buf = static_cast<char *>(report.allocator_->alloc(FMT_BUF_LEN));
   char *pct_buf = static_cast<char *>(report.allocator_->alloc(SMALL_BUF_LEN));
   tbl_sep_buf = static_cast<char *>(report.allocator_->alloc(TBL_SEP_BUF_LEN));
-  tbl_full_buf = static_cast<char *>(report.allocator_->alloc(TBL_FULL_BUF_LEN));
   result_detail_buf = static_cast<char *>(report.allocator_->alloc(RESULT_DETAIL_BUF_LEN));
   if (OB_ISNULL(retry_elapsed) || OB_ISNULL(retry_result) || OB_ISNULL(retry_start) || OB_ISNULL(retry_end)
       || OB_ISNULL(start_hms) || OB_ISNULL(end_hms) || OB_ISNULL(sched_detail_buf) || OB_ISNULL(changes_buf)
       || OB_ISNULL(thpt_detail_buf) || OB_ISNULL(s_str) || OB_ISNULL(step_result) || OB_ISNULL(cpu_buf)
       || OB_ISNULL(io_buf) || OB_ISNULL(mem_buf) || OB_ISNULL(pct_buf) || OB_ISNULL(tbl_sep_buf)
-      || OB_ISNULL(tbl_full_buf) || OB_ISNULL(result_detail_buf)) {
+      || OB_ISNULL(result_detail_buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc loop bufs", KR(ret));
   }
 
   for (int64_t gi = 0; OB_SUCC(ret) && gi < num_distinct_mvs; ++gi) {
-    const MViewReportPerMVComputed &pmv = per_mv_computed.at(gi);
-    const int64_t last_idx = pmv.last_idx_;
-    const int64_t first_idx = pmv.first_idx_;
-    const MViewReportMVData &mv = mv_array.at(last_idx);
-    const int64_t display_num = pmv.display_num_;
-    const char *type_str = pmv.type_;
-    const int64_t mv_changes = pmv.changes_;
-    const int64_t num_retries = last_idx - first_idx;
-    const bool has_changes = (pmv.change_group_first_ >= 0);
-    const bool has_stmts = (pmv.stmt_group_first_ >= 0);
-    const int64_t slowest_step_idx = pmv.slowest_stmt_idx_;
+    const MViewReportMVGroup &group = mv_groups.at(gi);
+    const int64_t last_idx = group.attempt_range_.last_;
+    const int64_t first_idx = group.attempt_range_.first_;
+    const MViewReportMVData &mv = get_final_mv(mv_array, group);
+    const int64_t display_num = gi + 1;
+    const char *type_str = mv.type_name();
+    const int64_t mv_changes = group.changes_;
+    const int64_t num_retries = group.num_retries();
+    const bool has_changes = group.has_changes();
+    const bool has_stmts = group.has_stmts();
+    const int64_t slowest_step_idx = group.slowest_stmt_idx_;
+    const double mv_pct = get_elapsed_pct(mv, summary.elapsed_us_);
+    double throughput = 0.0;
+    const bool throughput_known = try_get_throughput(mv, group.changes_, throughput);
     const char *result_str = NULL;
-    if (0 == mv.result_) {
-      result_str = "SUCCESS";
-    } else if (OB_FAIL(databuff_printf(result_detail_buf,
-                                       RESULT_DETAIL_BUF_LEN,
-                                       "FAILED (%ld, %s)",
-                                       mv.result_,
-                                       ob_error_name(static_cast<int>(mv.result_))))) {
+    if (OB_FAIL(format_mv_detail_result(result_detail_buf, RESULT_DETAIL_BUF_LEN, mv))) {
       LOG_WARN("result_detail_buf overflow", KR(ret), K(mv.result_));
     } else {
       result_str = result_detail_buf;
     }
-    const char *role_str = "";
-    if (run_data.nested_) {
-      role_str = (mv.mview_id_ == run_data.mview_id_) ? " (TGT)" : " (DEP)";
-    }
-    const double mv_pct = pmv.elapsed_pct_;
+    const char *role_str = run_data.nested_role_suffix(mv.mview_id_);
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(format_elapsed(mv.elapsed_time_, elapsed_buf, FMT_BUF_LEN))) {
       LOG_WARN("fail to format mv elapsed", KR(ret));
-    } else if (OB_FAIL(report_text.append_fmt("\n  #%ld  %.*s.%.*s%s                            [%.1f%% of total]\n"
+    } else if (OB_FAIL(report_text.append_fmt("\n  #%ld  %.*s%s                            [%.1f%% of total]\n"
                                               "  "
                                               "........................................................................"
                                               "\n",
                                               display_num,
-                                              mv.mv_owner_.length(),
-                                              safe_ptr_str(mv.mv_owner_),
-                                              mv.mv_name_.length(),
-                                              safe_ptr_str(mv.mv_name_),
+                                              mv.display_name().length(),
+                                              safe_ptr_str(mv.display_name()),
                                               role_str,
                                               mv_pct))) {
       LOG_WARN("fail to append mv detail header", KR(ret));
@@ -1069,7 +1285,7 @@ static int build_text_per_mv_detail(const MViewRefreshReport &report,
 
     // Retry timeline: show all attempts when this MV was retried.
     if (OB_FAIL(ret)) {
-    } else if (first_idx < last_idx) {
+    } else if (group.num_retries() > 0) {
       if (OB_FAIL(build_tbl_sep(RETRY_TBL_COLS, RETRY_TBL_NCOL, 4, tbl_sep_buf, TBL_SEP_BUF_LEN))) {
         LOG_WARN("fail to build retry tbl sep", KR(ret));
       } else if (OB_FAIL(report_text.append("\n    Retry History:\n"))) {
@@ -1089,10 +1305,7 @@ static int build_text_per_mv_detail(const MViewRefreshReport &report,
       for (int64_t ri = first_idx; OB_SUCC(ret) && ri <= last_idx; ++ri) {
         const MViewReportMVData &rv = mv_array.at(ri);
         if (OB_FAIL(ret)) {
-        } else if (0 == rv.result_ && OB_FAIL(databuff_printf(retry_result, SMALL_BUF_LEN, "OK"))) {
-          LOG_WARN("retry_result buffer overflow", KR(ret));
-        } else if (0 != rv.result_
-                   && OB_FAIL(databuff_printf(retry_result, SMALL_BUF_LEN, "FAIL(%ld)", rv.result_))) {
+        } else if (OB_FAIL(format_mv_attempt_result(retry_result, SMALL_BUF_LEN, rv))) {
           LOG_WARN("retry_result buffer overflow", KR(ret));
         } else if (OB_FAIL(format_timestamp(rv.start_time_, retry_start, FMT_BUF_LEN))) {
           LOG_WARN("fail to format retry start", KR(ret));
@@ -1147,21 +1360,22 @@ static int build_text_per_mv_detail(const MViewRefreshReport &report,
     }
     if (OB_FAIL(ret)) {
     } else {
-      const int64_t sched_delay = (pmv.sched_delay_us_ >= 0) ? pmv.sched_delay_us_ : 0;
-      if (OB_FAIL(format_elapsed(sched_delay, sched_detail_buf, SMALL_BUF_LEN))) {
+      const int64_t sched_delay = mv.sched_delay_us();
+      const int64_t sched_delay_display = sched_delay >= 0 ? sched_delay : 0;
+      if (OB_FAIL(format_elapsed(sched_delay_display, sched_detail_buf, SMALL_BUF_LEN))) {
         LOG_WARN("fail to format sched delay", KR(ret));
       }
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(format_number(mv_changes, changes_buf, FMT_BUF_LEN))) {
       LOG_WARN("fail to format changes", KR(ret));
-    } else if (pmv.throughput_per_sec_ < 0.0 && OB_FAIL(databuff_printf(thpt_detail_buf, SMALL_BUF_LEN, "N/A"))) {
+    } else if (!throughput_known && OB_FAIL(databuff_printf(thpt_detail_buf, SMALL_BUF_LEN, "N/A"))) {
       LOG_WARN("thpt_detail_buf overflow", KR(ret));
-    } else if (pmv.throughput_per_sec_ >= 0.0
+    } else if (throughput_known
                && OB_FAIL(databuff_printf(thpt_detail_buf,
                                           SMALL_BUF_LEN,
                                           "%ld/s",
-                                          static_cast<int64_t>(pmv.throughput_per_sec_)))) {
+                                          static_cast<int64_t>(throughput)))) {
       LOG_WARN("thpt_detail_buf overflow", KR(ret));
     } else if (OB_FAIL(report_text.append_fmt("    Start: %s  End: %s  Sched Delay: %s\n"
                                               "    Changes: %s    Throughput: %s\n",
@@ -1175,7 +1389,7 @@ static int build_text_per_mv_detail(const MViewRefreshReport &report,
 
     // Initial / Final rows.
     if (OB_FAIL(ret)) {
-    } else if (0 == mv.result_) {
+    } else if (mv.is_success()) {
       if (OB_FAIL(format_number(mv.initial_num_rows_, num_buf, FMT_BUF_LEN))) {
         LOG_WARN("fail to format initial rows", KR(ret));
       } else if (OB_FAIL(format_number(mv.final_num_rows_, rows_buf, FMT_BUF_LEN))) {
@@ -1189,10 +1403,7 @@ static int build_text_per_mv_detail(const MViewRefreshReport &report,
 
     // Parallelism.
     if (OB_FAIL(ret)) {
-    } else if (run_data.parallelism_ > 0
-               && OB_FAIL(databuff_printf(para_buf, SMALL_BUF_LEN, "%ld", run_data.parallelism_))) {
-      LOG_WARN("para_buf overflow", KR(ret));
-    } else if (run_data.parallelism_ <= 0 && OB_FAIL(databuff_printf(para_buf, SMALL_BUF_LEN, "default"))) {
+    } else if (OB_FAIL(format_parallelism(para_buf, SMALL_BUF_LEN, run_data))) {
       LOG_WARN("para_buf overflow", KR(ret));
     } else if (OB_FAIL(report_text.append_fmt("    Parallelism:            %s\n", para_buf))) {
       LOG_WARN("fail to append parallelism", KR(ret));
@@ -1200,28 +1411,19 @@ static int build_text_per_mv_detail(const MViewRefreshReport &report,
 
     // SCN fields: current data, last refresh, current refresh.
     if (OB_FAIL(ret)) {
-    } else if (scn_is_unknown(mv.base_table_start_scn_) && OB_FAIL(databuff_printf(s_str, FMT_BUF_LEN, "N/A"))) {
-      LOG_WARN("s_str buffer overflow", KR(ret));
-    } else if (!scn_is_unknown(mv.base_table_start_scn_)
-               && OB_FAIL(format_scn_with_ts(mv.base_table_start_scn_, sys_tz_info, s_str, FMT_BUF_LEN))) {
+    } else if (OB_FAIL(format_scn_with_ts(mv.base_table_start_scn_, sys_tz_info, s_str, FMT_BUF_LEN))) {
       LOG_WARN("fail to format current data scn", KR(ret));
     } else if (OB_FAIL(report_text.append_fmt("    Current Data SCN:       %s\n", s_str))) {
       LOG_WARN("fail to append current data scn", KR(ret));
     }
     if (OB_FAIL(ret)) {
-    } else if (scn_is_unknown(mv.mv_refresh_start_scn_) && OB_FAIL(databuff_printf(s_str, FMT_BUF_LEN, "N/A"))) {
-      LOG_WARN("s_str buffer overflow", KR(ret));
-    } else if (!scn_is_unknown(mv.mv_refresh_start_scn_)
-               && OB_FAIL(format_scn_with_ts(mv.mv_refresh_start_scn_, sys_tz_info, s_str, FMT_BUF_LEN))) {
+    } else if (OB_FAIL(format_scn_with_ts(mv.mv_refresh_start_scn_, sys_tz_info, s_str, FMT_BUF_LEN))) {
       LOG_WARN("fail to format last refresh scn", KR(ret));
     } else if (OB_FAIL(report_text.append_fmt("    Last Refresh SCN:       %s\n", s_str))) {
       LOG_WARN("fail to append last refresh scn", KR(ret));
     }
     if (OB_FAIL(ret)) {
-    } else if (scn_is_unknown(mv.mv_refresh_end_scn_) && OB_FAIL(databuff_printf(s_str, FMT_BUF_LEN, "N/A"))) {
-      LOG_WARN("s_str buffer overflow", KR(ret));
-    } else if (!scn_is_unknown(mv.mv_refresh_end_scn_)
-               && OB_FAIL(format_scn_with_ts(mv.mv_refresh_end_scn_, sys_tz_info, s_str, FMT_BUF_LEN))) {
+    } else if (OB_FAIL(format_scn_with_ts(mv.mv_refresh_end_scn_, sys_tz_info, s_str, FMT_BUF_LEN))) {
       LOG_WARN("fail to format current refresh scn", KR(ret));
     } else if (OB_FAIL(report_text.append_fmt("    Current Refresh SCN:    %s\n", s_str))) {
       LOG_WARN("fail to append current refresh scn", KR(ret));
@@ -1230,9 +1432,11 @@ static int build_text_per_mv_detail(const MViewRefreshReport &report,
     if (OB_FAIL(ret)) {
     } else if (has_changes) {
       int64_t chg_name_w = CHG_TBL_COLS[0].width;
-      for (int64_t ci = pmv.change_group_first_; ci <= pmv.change_group_last_ && ci < change_array.count(); ++ci) {
+      for (int64_t ci = group.final_change_range_.first_;
+           ci <= group.final_change_range_.last_ && ci < change_array.count();
+           ++ci) {
         const MViewReportChangeData &ch_scan = change_array.at(ci);
-        int64_t full_len = ch_scan.tbl_owner_.length() + 1 + ch_scan.tbl_name_.length();
+        int64_t full_len = ch_scan.display_name().length();
         if (full_len > chg_name_w) {
           chg_name_w = full_len;
         }
@@ -1258,30 +1462,22 @@ static int build_text_per_mv_detail(const MViewRefreshReport &report,
         LOG_WARN("fail to append chg sep", KR(ret));
       }
 
-      for (int64_t ci = pmv.change_group_first_;
-           OB_SUCC(ret) && ci <= pmv.change_group_last_ && ci < change_array.count();
+      for (int64_t ci = group.final_change_range_.first_;
+           OB_SUCC(ret) && ci <= group.final_change_range_.last_ && ci < change_array.count();
            ++ci) {
         const MViewReportChangeData &ch = change_array.at(ci);
-        if (OB_FAIL(databuff_printf(tbl_full_buf,
-                                    TBL_FULL_BUF_LEN,
-                                    "%.*s.%.*s",
-                                    ch.tbl_owner_.length(),
-                                    safe_ptr_str(ch.tbl_owner_),
-                                    ch.tbl_name_.length(),
-                                    safe_ptr_str(ch.tbl_name_)))) {
-          LOG_WARN("fail to format tbl_full", KR(ret), K(TBL_FULL_BUF_LEN));
-        } else if (OB_FAIL(report_text.append_fmt("    | %-*.*s | %*ld | %*ld | %*ld | %*ld |\n",
-                                                  chg_local_cols[0].width,
-                                                  chg_local_cols[0].width,
-                                                  tbl_full_buf,
-                                                  chg_local_cols[1].width,
-                                                  ch.num_rows_ins_,
-                                                  chg_local_cols[2].width,
-                                                  ch.num_rows_upd_,
-                                                  chg_local_cols[3].width,
-                                                  ch.num_rows_del_,
-                                                  chg_local_cols[4].width,
-                                                  ch.num_rows_))) {
+        if (OB_FAIL(report_text.append_fmt("    | %-*.*s | %*ld | %*ld | %*ld | %*ld |\n",
+                                           chg_local_cols[0].width,
+                                           static_cast<int>(ch.display_name().length()),
+                                           safe_ptr_str(ch.display_name()),
+                                           chg_local_cols[1].width,
+                                           ch.num_rows_ins_,
+                                           chg_local_cols[2].width,
+                                           ch.num_rows_upd_,
+                                           chg_local_cols[3].width,
+                                           ch.num_rows_del_,
+                                           chg_local_cols[4].width,
+                                           ch.num_rows_))) {
           LOG_WARN("fail to append change row", KR(ret));
         }
       }
@@ -1309,7 +1505,8 @@ static int build_text_per_mv_detail(const MViewRefreshReport &report,
         LOG_WARN("fail to append sep", KR(ret));
       }
 
-      for (int64_t si = pmv.stmt_group_first_; OB_SUCC(ret) && si <= pmv.stmt_group_last_ && si < stmt_array.count();
+      for (int64_t si = group.final_stmt_range_.first_;
+           OB_SUCC(ret) && si <= group.final_stmt_range_.last_ && si < stmt_array.count();
            ++si) {
         const MViewReportStmtData &st = stmt_array.at(si);
         double step_pct = (mv.elapsed_time_ > 0)
@@ -1323,9 +1520,7 @@ static int build_text_per_mv_detail(const MViewRefreshReport &report,
         }
         const char *slowest_mark = (si == slowest_step_idx) ? "  <- SLOWEST" : "";
         if (OB_FAIL(ret)) {
-        } else if (0 == st.result_ && OB_FAIL(databuff_printf(step_result, SMALL_BUF_LEN, "OK"))) {
-          LOG_WARN("step_result buffer overflow", KR(ret));
-        } else if (0 != st.result_ && OB_FAIL(databuff_printf(step_result, SMALL_BUF_LEN, "FAIL(%ld)", st.result_))) {
+        } else if (OB_FAIL(format_stmt_result(step_result, SMALL_BUF_LEN, st))) {
           LOG_WARN("step_result buffer overflow", KR(ret));
         } else if (OB_FAIL(databuff_printf(pct_buf, SMALL_BUF_LEN, "%.1f%%", step_pct))) {
           LOG_WARN("fail to format step pct", KR(ret), K(step_pct));
@@ -1353,64 +1548,32 @@ static int build_text_per_mv_detail(const MViewRefreshReport &report,
         LOG_WARN("fail to append step footer", KR(ret));
       }
 
-      // Show resource usage for the slowest step plus the SQL text and the
-      // rendered execution plan.
-      if (OB_FAIL(ret)) {
-      } else if (slowest_step_idx >= 0 && slowest_step_idx < stmt_array.count()) {
-        const MViewReportStmtData &sl = stmt_array.at(slowest_step_idx);
-        if (OB_FAIL(format_elapsed(sl.cpu_time_, cpu_buf, FMT_BUF_LEN))) {
+      // Show resource usage and the rendered execution plan for every step
+      // that has plan data (either full plan or hash-only).
+      for (int64_t si = group.final_stmt_range_.first_;
+           OB_SUCC(ret) && si <= group.final_stmt_range_.last_ && si < stmt_array.count();
+           ++si) {
+        const MViewReportStmtData &st = stmt_array.at(si);
+        if (st.execution_plan_.empty()) {
+        } else if (OB_FAIL(report_text.append_fmt("\n    Step (#%ld, SQL_ID: %.*s):\n",
+                                                  st.step_,
+                                                  st.sqlid_.length(),
+                                                  safe_ptr_str(st.sqlid_)))) {
+          LOG_WARN("fail to append step header", KR(ret));
+        } else if (OB_FAIL(format_elapsed(st.cpu_time_, cpu_buf, FMT_BUF_LEN))) {
           LOG_WARN("fail to format cpu", KR(ret));
-        } else if (OB_FAIL(format_elapsed(sl.io_wait_time_, io_buf, FMT_BUF_LEN))) {
+        } else if (OB_FAIL(format_elapsed(st.io_wait_time_, io_buf, FMT_BUF_LEN))) {
           LOG_WARN("fail to format io", KR(ret));
-        } else if (OB_FAIL(format_memory(sl.disk_reads_, num_buf, FMT_BUF_LEN))) {
+        } else if (OB_FAIL(format_memory(st.disk_reads_, num_buf, FMT_BUF_LEN))) {
           LOG_WARN("fail to format disk io", KR(ret));
-        } else if (OB_FAIL(format_memory(sl.memory_used_, mem_buf, FMT_BUF_LEN))) {
+        } else if (OB_FAIL(format_memory(st.memory_used_, mem_buf, FMT_BUF_LEN))) {
           LOG_WARN("fail to format memory", KR(ret));
-        } else if (OB_FAIL(report_text.append_fmt("\n    Slowest Step (#%ld, SQL_ID: %.*s):\n"
-                                                  "      Resource Usage:  CPU %s | IO Wait %s | Disk IO %s | Memory "
-                                                  "%s\n",
-                                                  sl.step_,
-                                                  sl.sqlid_.length(),
-                                                  safe_ptr_str(sl.sqlid_),
-                                                  cpu_buf,
-                                                  io_buf,
-                                                  num_buf,
-                                                  mem_buf))) {
-          LOG_WARN("fail to append slowest detail", KR(ret));
-        }
-
-        if (OB_FAIL(ret)) {
-        } else if (!sl.execution_plan_.empty()) {
-          ObSqlString plan_text;
-          if (OB_FAIL(render_mview_plan_text(*report.allocator_, sl.execution_plan_, plan_text))) {
-            LOG_WARN("fail to render plan text", KR(ret));
-          } else if (OB_FAIL(report_text.append("      Execution Plan:\n"))) {
-            LOG_WARN("fail to append plan header", KR(ret));
-          } else {
-            // Indent each rendered plan line with 8 spaces so the whole block
-            // aligns visually under the "Execution Plan:" header above.
-            const char *buf = plan_text.ptr();
-            const int64_t len = plan_text.length();
-            int64_t line_start = 0;
-            for (int64_t i = 0; OB_SUCC(ret) && i < len; ++i) {
-              if (buf[i] == '\n') {
-                if (OB_FAIL(report_text.append_fmt("        %.*s\n",
-                                                   static_cast<int>(i - line_start),
-                                                   buf + line_start))) {
-                  LOG_WARN("fail to append plan line", KR(ret));
-                } else {
-                  line_start = i + 1;
-                }
-              }
-            }
-            if (OB_FAIL(ret)) {
-            } else if (line_start < len
-                       && OB_FAIL(report_text.append_fmt("        %.*s\n",
-                                                         static_cast<int>(len - line_start),
-                                                         buf + line_start))) {
-              LOG_WARN("fail to append plan tail line", KR(ret));
-            }
-          }
+        } else if (OB_FAIL(report_text.append_fmt(
+                       "      Resource Usage:  CPU %s | IO Wait %s | Disk IO %s | Memory %s\n",
+                       cpu_buf, io_buf, num_buf, mem_buf))) {
+          LOG_WARN("fail to append resource usage", KR(ret));
+        } else if (OB_FAIL(append_text_execution_plan(*report.allocator_, st, report_text))) {
+          LOG_WARN("fail to append execution plan", KR(ret));
         }
       }
     }
@@ -1473,22 +1636,21 @@ static int build_json_summary(const MViewRefreshReport &report, ObSqlString &rep
 
   const MViewReportRunData &run_data = *report.run_data_;
   const ObIArray<MViewReportMVData> &mv_array = *report.mv_array_;
-  const ObIArray<MViewReportStmtData> &stmt_array = *report.stmt_array_;
   const MViewReportSummaryInfo &summary = report.summary_;
   const MViewReportResourceOverview &resources = report.resources_;
-  const ObIArray<MViewReportPerMVComputed> &per_mv_computed = report.per_mv_computed_;
+  const ObIArray<MViewReportMVGroup> &mv_groups = report.mv_groups_;
 
   const int64_t total_execute_time = summary.total_execute_time_us_;
   const int64_t total_cpu = resources.total_cpu_us_;
   const int64_t total_io_wait = resources.total_io_wait_us_;
   const int64_t total_disk_reads = resources.total_disk_reads_;
   const int64_t max_memory = resources.max_memory_bytes_;
+  const int64_t total_steps = resources.total_steps_;
   const int64_t total_retry_overhead = summary.total_retry_overhead_us_;
   const int64_t num_distinct_mvs = summary.num_distinct_mvs_;
   const int64_t total_sched_overhead = summary.total_sched_overhead_us_;
   const int64_t num_failures = summary.num_failures_;
-  const int64_t slowest_grp = summary.slowest_grp_;
-  const bool has_target_mv = !run_data.mview_name_.empty();
+  const bool has_target_mv = run_data.has_target_mview();
 
   char *gen_buf = static_cast<char *>(report.allocator_->alloc(FMT_BUF_LEN));
   result_json_buf = static_cast<char *>(report.allocator_->alloc(RESULT_DETAIL_BUF_LEN));
@@ -1526,11 +1688,11 @@ static int build_json_summary(const MViewRefreshReport &report, ObSqlString &rep
                                             ", \"total_sched_overhead_us\": %ld"
                                             ", \"retry_overhead_us\": %ld"
                                             ", \"status\": \"%s\"",
-                                            run_data.end_time_ - run_data.start_time_,
+                                            summary.elapsed_us_,
                                             total_execute_time,
                                             total_sched_overhead,
                                             total_retry_overhead,
-                                            (0 == num_failures) ? STATUS_SUCCESS : STATUS_FAILED))) {
+                                            summary.status_str_))) {
     LOG_WARN("fail to append time/status", KR(ret));
   } else if (OB_FAIL(report_text.append(", \"refresh_method\": "))) {
     LOG_WARN("fail to append key", KR(ret));
@@ -1538,9 +1700,9 @@ static int build_json_summary(const MViewRefreshReport &report, ObSqlString &rep
                                         summary.method_display_ != NULL ? summary.method_display_ : "AUTO",
                                         -1))) {
     LOG_WARN("fail to append method", KR(ret));
-  } else if (scn_is_unknown(run_data.data_target_scn_) && OB_FAIL(report_text.append(", \"target_data_scn\": null"))) {
+  } else if (!run_data.data_target_scn_known() && OB_FAIL(report_text.append(", \"target_data_scn\": null"))) {
     LOG_WARN("fail to append null target data scn", KR(ret));
-  } else if (!scn_is_unknown(run_data.data_target_scn_)
+  } else if (run_data.data_target_scn_known()
              && OB_FAIL(report_text.append_fmt(", \"target_data_scn\": %lu", run_data.data_target_scn_))) {
     LOG_WARN("fail to append target data scn", KR(ret));
   } else if (OB_FAIL(report_text.append_fmt(", \"num_mvs\": %ld"
@@ -1552,7 +1714,7 @@ static int build_json_summary(const MViewRefreshReport &report, ObSqlString &rep
     LOG_WARN("fail to append params", KR(ret));
   } else if (has_target_mv && OB_FAIL(report_text.append(", \"target_mv\": "))) {
     LOG_WARN("fail to append key", KR(ret));
-  } else if (has_target_mv && OB_FAIL(append_json_string(report_text, run_data.mview_name_))) {
+  } else if (has_target_mv && OB_FAIL(append_json_string(report_text, run_data.display_mview_name()))) {
     LOG_WARN("fail to append target_mv", KR(ret));
   } else if (!has_target_mv && OB_FAIL(report_text.append(", \"target_mv\": null"))) {
     LOG_WARN("fail to append null target", KR(ret));
@@ -1563,16 +1725,17 @@ static int build_json_summary(const MViewRefreshReport &report, ObSqlString &rep
   }
 
   for (int64_t gi = 0; OB_SUCC(ret) && gi < num_distinct_mvs; ++gi) {
-    const MViewReportPerMVComputed &comp = per_mv_computed.at(gi);
-    const int64_t idx = comp.last_idx_;
-    const MViewReportMVData &mv = mv_array.at(idx);
+    const MViewReportMVGroup &group = mv_groups.at(gi);
+    const MViewReportMVData &mv = get_final_mv(mv_array, group);
     if (gi > 0 && OB_FAIL(report_text.append(", "))) {
       LOG_WARN("fail to append comma", KR(ret));
     }
     // result_str setup (may set ret on failure)
     const char *result_str = NULL;
-    if (0 == mv.result_) {
+    if (mv.is_success()) {
       result_str = "OK";
+    } else if (mv.is_running()) {
+      result_str = STATUS_RUNNING;
     } else if (OB_FAIL(databuff_printf(result_json_buf,
                                        RESULT_DETAIL_BUF_LEN,
                                        "FAIL(%ld) %s",
@@ -1582,27 +1745,21 @@ static int build_json_summary(const MViewRefreshReport &report, ObSqlString &rep
     } else {
       result_str = result_json_buf;
     }
-    const char *role_str = comp.role_;
-    const int64_t display_num = comp.display_num_;
-    const char *type_str = comp.type_;
-    const int64_t changes = comp.changes_;
-    const double throughput = comp.throughput_per_sec_;
+    const char *role_str = run_data.mv_role_label(mv.mview_id_);
+    const int64_t display_num = gi + 1;
+    const char *type_str = mv.type_name();
+    const int64_t changes = group.changes_;
+    double throughput = 0.0;
+    const bool throughput_known = try_get_throughput(mv, group.changes_, throughput);
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(report_text.append_fmt("{\"topo_order\": %ld, \"role\": \"%s\"", display_num, role_str))) {
       LOG_WARN("fail to append topo/role", KR(ret));
     }
     if (OB_FAIL(ret)) {
     } else {
-      ObSqlString full_name;
-      if (OB_FAIL(full_name.assign_fmt("%.*s.%.*s",
-                                       mv.mv_owner_.length(),
-                                       safe_ptr_str(mv.mv_owner_),
-                                       mv.mv_name_.length(),
-                                       safe_ptr_str(mv.mv_name_)))) {
-        LOG_WARN("fail to build full_name", KR(ret));
-      } else if (OB_FAIL(report_text.append(", \"mv_name\": "))) {
+      if (OB_FAIL(report_text.append(", \"mv_name\": "))) {
         LOG_WARN("fail to append key", KR(ret));
-      } else if (OB_FAIL(append_json_string(report_text, full_name.ptr(), full_name.length()))) {
+      } else if (OB_FAIL(append_json_string(report_text, mv.display_name()))) {
         LOG_WARN("fail to append mv_name", KR(ret));
       } else if (OB_FAIL(report_text.append_fmt(", \"refresh_type\": \"%s\"", type_str))) {
         LOG_WARN("fail to append type", KR(ret));
@@ -1625,11 +1782,11 @@ static int build_json_summary(const MViewRefreshReport &report, ObSqlString &rep
       LOG_WARN("fail to append end_time", KR(ret));
     }
     if (OB_FAIL(ret)) {
-    } else if (mv.deps_ready_time_ > 0 && OB_FAIL(format_timestamp(mv.deps_ready_time_, ts_buf, FMT_BUF_LEN))) {
+    } else if (mv.has_deps_ready_time() && OB_FAIL(format_timestamp(mv.deps_ready_time_, ts_buf, FMT_BUF_LEN))) {
       LOG_WARN("fail to format deps_ready_time", KR(ret));
     }
     if (OB_FAIL(ret)) {
-    } else if (mv.deps_ready_time_ > 0) {
+    } else if (mv.has_deps_ready_time()) {
       if (OB_FAIL(report_text.append(", \"deps_ready_time\": "))) {
         LOG_WARN("fail to append key", KR(ret));
       } else if (OB_FAIL(append_json_string(report_text, ts_buf, -1))) {
@@ -1639,9 +1796,10 @@ static int build_json_summary(const MViewRefreshReport &report, ObSqlString &rep
       LOG_WARN("fail to append null deps_ready", KR(ret));
     }
     {
-      const int64_t sched_delay = (comp.sched_delay_us_ >= 0) ? comp.sched_delay_us_ : 0;
-      const double elapsed_pct = comp.elapsed_pct_;
-      const bool is_slowest = comp.slowest_;
+      const int64_t raw_sched_delay = mv.sched_delay_us();
+      const int64_t sched_delay = raw_sched_delay >= 0 ? raw_sched_delay : 0;
+      const double elapsed_pct = get_elapsed_pct(mv, summary.elapsed_us_);
+      const bool is_slowest = is_slowest_group(gi, num_distinct_mvs, summary);
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(report_text.append_fmt(", \"elapsed_time_us\": %ld"
                                                 ", \"sched_delay_us\": %ld"
@@ -1653,7 +1811,7 @@ static int build_json_summary(const MViewRefreshReport &report, ObSqlString &rep
                                                 elapsed_pct,
                                                 changes))) {
         LOG_WARN("fail to append mv summary start", KR(ret));
-      } else if (throughput >= 0.0) {
+      } else if (throughput_known) {
         ret = report_text.append_fmt("%.1f", throughput);
       } else {
         ret = report_text.append("null");
@@ -1664,7 +1822,7 @@ static int build_json_summary(const MViewRefreshReport &report, ObSqlString &rep
                                                 ", \"retried\": %s"
                                                 ", \"slowest\": %s}",
                                                 result_str,
-                                                (mv.retry_id_ > 0) ? "true" : "false",
+                                                (group.num_retries() > 0) ? "true" : "false",
                                                 is_slowest ? "true" : "false"))) {
         LOG_WARN("fail to append rest", KR(ret));
       }
@@ -1673,8 +1831,8 @@ static int build_json_summary(const MViewRefreshReport &report, ObSqlString &rep
 
   // When the target MV was not refreshed, add a placeholder entry.
   if (OB_FAIL(ret)) {
-  } else if (run_data.nested_ && run_data.mview_id_ > 0) {
-    if (is_target_not_refreshed(run_data, mv_array)) {
+  } else if (run_data.has_nested_target()) {
+    if (is_target_mv_missing(run_data, mv_array)) {
       const int64_t placeholder_num = num_distinct_mvs + 1;
       if (num_distinct_mvs > 0 && OB_FAIL(report_text.append(", "))) {
         LOG_WARN("fail to append comma", KR(ret));
@@ -1682,7 +1840,7 @@ static int build_json_summary(const MViewRefreshReport &report, ObSqlString &rep
         LOG_WARN("fail to append placeholder header", KR(ret));
       } else if (OB_FAIL(report_text.append(", \"mv_name\": "))) {
         LOG_WARN("fail to append mv_name key", KR(ret));
-      } else if (OB_FAIL(append_json_string(report_text, run_data.mview_name_))) {
+      } else if (OB_FAIL(append_json_string(report_text, run_data.display_mview_name()))) {
         LOG_WARN("fail to append mv_name", KR(ret));
       } else if (OB_FAIL(report_text.append(", \"refresh_type\": null"
                                             ", \"start_time\": null"
@@ -1704,14 +1862,14 @@ static int build_json_summary(const MViewRefreshReport &report, ObSqlString &rep
     LOG_WARN("fail to close mv_refresh_summary", KR(ret));
   }
   if (OB_FAIL(ret)) {
-  } else if (stmt_array.count() > 0) {
+  } else if (total_steps > 0) {
     if (OB_FAIL(report_text.append_fmt(", \"resource_overview\": {"
                                        "\"total_steps\": %ld"
                                        ", \"cpu_time_us\": %ld"
                                        ", \"io_wait_time_us\": %ld"
                                        ", \"disk_reads\": %ld"
                                        ", \"max_memory_bytes\": %ld}",
-                                       stmt_array.count(),
+                                       total_steps,
                                        total_cpu,
                                        total_io_wait,
                                        total_disk_reads,
@@ -1727,19 +1885,19 @@ static int build_json_summary(const MViewRefreshReport &report, ObSqlString &rep
 
       bool first_mv_res = true;
       for (int64_t gi = 0; OB_SUCC(ret) && gi < num_distinct_mvs; ++gi) {
-        const MViewReportPerMVComputed &pmv_res = per_mv_computed.at(gi);
-        const MViewReportMVData &mv = mv_array.at(pmv_res.last_idx_);
+        const MViewReportMVGroup &group_res = mv_groups.at(gi);
+        const MViewReportMVData &mv = get_final_mv(mv_array, group_res);
         if (!first_mv_res && OB_FAIL(report_text.append(", "))) {
           LOG_WARN("fail to append comma", KR(ret));
         }
-        const int64_t mv_cpu = pmv_res.cpu_time_us_;
-        const int64_t mv_io = pmv_res.io_wait_time_us_;
-        const int64_t mv_dr = pmv_res.disk_reads_;
-        const int64_t mv_mem = pmv_res.max_memory_bytes_;
+        const int64_t mv_cpu = group_res.cpu_time_us_;
+        const int64_t mv_io = group_res.io_wait_time_us_;
+        const int64_t mv_dr = group_res.disk_reads_;
+        const int64_t mv_mem = group_res.max_memory_bytes_;
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(report_text.append("{\"mv_name\": "))) {
           LOG_WARN("fail to append key", KR(ret));
-        } else if (OB_FAIL(append_json_string(report_text, mv.mv_name_))) {
+        } else if (OB_FAIL(append_json_string(report_text, mv.display_name()))) {
           LOG_WARN("fail to append mv_name", KR(ret));
         } else if (OB_FAIL(report_text.append_fmt(", \"cpu_time_us\": %ld"
                                                   ", \"io_wait_time_us\": %ld"
@@ -1783,11 +1941,11 @@ static int build_json_per_mv_detail(const MViewRefreshReport &report, ObSqlStrin
   const ObIArray<MViewReportChangeData> &change_array = *report.change_array_;
   const ObIArray<MViewReportStmtData> &stmt_array = *report.stmt_array_;
   const MViewReportSummaryInfo &summary = report.summary_;
-  const ObIArray<MViewReportPerMVComputed> &per_mv_computed = report.per_mv_computed_;
+  const ObIArray<MViewReportMVGroup> &mv_groups = report.mv_groups_;
 
   const int64_t num_distinct_mvs = summary.num_distinct_mvs_;
 
-  bool skip_per_mv = (num_distinct_mvs == 0) || (0 == mv_array.at(0).refresh_type_);
+  const bool skip_per_mv = should_skip_per_mv_detail(num_distinct_mvs, mv_array);
   if (OB_FAIL(ret)) {
   } else if (skip_per_mv) {
   } else if (OB_FAIL(report_text.append(", \"per_mv_detail\": ["))) {
@@ -1795,29 +1953,22 @@ static int build_json_per_mv_detail(const MViewRefreshReport &report, ObSqlStrin
   }
 
   for (int64_t gi = 0; OB_SUCC(ret) && !skip_per_mv && gi < num_distinct_mvs; ++gi) {
-    const MViewReportPerMVComputed &pmv = per_mv_computed.at(gi);
-    const int64_t last_idx = pmv.last_idx_;
-    const int64_t first_idx = pmv.first_idx_;
+    const MViewReportMVGroup &group = mv_groups.at(gi);
+    const int64_t last_idx = group.attempt_range_.last_;
+    const int64_t first_idx = group.attempt_range_.first_;
     const MViewReportMVData &mv = mv_array.at(last_idx);
     if (gi > 0 && OB_FAIL(report_text.append(", "))) {
       LOG_WARN("fail to append comma", KR(ret));
     }
     // per-MV object opening + basic fields + rows.
     {
-      const int64_t display_num = pmv.display_num_;
-      const char *type_str = pmv.type_;
-      const char *role_str = pmv.role_;
-      ObSqlString full_name;
+      const int64_t display_num = gi + 1;
+      const char *type_str = mv.type_name();
+      const char *role_str = run_data.mv_role_label(mv.mview_id_);
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(full_name.assign_fmt("%.*s.%.*s",
-                                              mv.mv_owner_.length(),
-                                              safe_ptr_str(mv.mv_owner_),
-                                              mv.mv_name_.length(),
-                                              safe_ptr_str(mv.mv_name_)))) {
-        LOG_WARN("fail to build full_name", KR(ret));
       } else if (OB_FAIL(report_text.append("{\"mv_name\": "))) {
         LOG_WARN("fail to open per_mv obj", KR(ret));
-      } else if (OB_FAIL(append_json_string(report_text, full_name.ptr(), full_name.length()))) {
+      } else if (OB_FAIL(append_json_string(report_text, mv.display_name()))) {
         LOG_WARN("fail to append mv_name", KR(ret));
       } else if (OB_FAIL(report_text.append_fmt(", \"display_order\": %ld"
                                                 ", \"topo_order\": %ld"
@@ -1834,7 +1985,7 @@ static int build_json_per_mv_detail(const MViewRefreshReport &report, ObSqlStrin
         LOG_WARN("fail to append per_mv basics", KR(ret));
       }
       if (OB_FAIL(ret)) {
-      } else if (0 == mv.result_) {
+      } else if (mv.is_success()) {
         if (OB_FAIL(report_text.append_fmt(", \"initial_num_rows\": %ld"
                                            ", \"final_num_rows\": %ld",
                                            mv.initial_num_rows_,
@@ -1849,7 +2000,7 @@ static int build_json_per_mv_detail(const MViewRefreshReport &report, ObSqlStrin
 
     // Retry history.
     if (OB_FAIL(ret)) {
-    } else if (first_idx < last_idx) {
+    } else if (group.num_retries() > 0) {
       if (OB_FAIL(report_text.append(", \"retry_history\": ["))) {
         LOG_WARN("fail to open retry_history", KR(ret));
       }
@@ -1860,7 +2011,7 @@ static int build_json_per_mv_detail(const MViewRefreshReport &report, ObSqlStrin
           LOG_WARN("fail to append comma", KR(ret));
         }
         if (OB_FAIL(ret)) {
-        } else if (0 == rv.result_
+        } else if (rv.is_success()
                    && OB_FAIL(report_text.append_fmt("{\"retry_id\": %ld"
                                                      ", \"elapsed_time_us\": %ld"
                                                      ", \"result\": \"OK\""
@@ -1868,7 +2019,16 @@ static int build_json_per_mv_detail(const MViewRefreshReport &report, ObSqlStrin
                                                      rv.retry_id_,
                                                      rv.elapsed_time_))) {
           LOG_WARN("fail to append retry", KR(ret));
-        } else if (0 != rv.result_
+        } else if (rv.is_running()
+                   && OB_FAIL(report_text.append_fmt("{\"retry_id\": %ld"
+                                                     ", \"elapsed_time_us\": %ld"
+                                                     ", \"result\": \"%s\""
+                                                     ", \"error_code\": null}",
+                                                     rv.retry_id_,
+                                                     rv.elapsed_time_,
+                                                     STATUS_RUNNING))) {
+          LOG_WARN("fail to append retry", KR(ret));
+        } else if (rv.is_failed()
                    && OB_FAIL(report_text.append_fmt("{\"retry_id\": %ld"
                                                      ", \"elapsed_time_us\": %ld"
                                                      ", \"result\": \"FAIL\""
@@ -1887,35 +2047,35 @@ static int build_json_per_mv_detail(const MViewRefreshReport &report, ObSqlStrin
 
     // SCN fields.
     if (OB_FAIL(ret)) {
-    } else if (scn_is_unknown(mv.base_table_start_scn_)
+    } else if (!mv.base_table_start_scn_known()
                && OB_FAIL(report_text.append(", \"current_data_scn\": null"))) {
       LOG_WARN("fail to append null current data scn", KR(ret));
-    } else if (!scn_is_unknown(mv.base_table_start_scn_)
+    } else if (mv.base_table_start_scn_known()
                && OB_FAIL(report_text.append_fmt(", \"current_data_scn\": %lu", mv.base_table_start_scn_))) {
       LOG_WARN("fail to append current data scn", KR(ret));
     }
     if (OB_FAIL(ret)) {
-    } else if (scn_is_unknown(mv.mv_refresh_start_scn_)
+    } else if (!mv.mv_refresh_start_scn_known()
                && OB_FAIL(report_text.append(", \"last_refresh_scn\": null"))) {
       LOG_WARN("fail to append null last refresh scn", KR(ret));
-    } else if (!scn_is_unknown(mv.mv_refresh_start_scn_)
+    } else if (mv.mv_refresh_start_scn_known()
                && OB_FAIL(report_text.append_fmt(", \"last_refresh_scn\": %lu", mv.mv_refresh_start_scn_))) {
       LOG_WARN("fail to append last refresh scn", KR(ret));
     }
     if (OB_FAIL(ret)) {
-    } else if (scn_is_unknown(mv.mv_refresh_end_scn_)
+    } else if (!mv.mv_refresh_end_scn_known()
                && OB_FAIL(report_text.append(", \"current_refresh_scn\": null"))) {
       LOG_WARN("fail to append null current refresh scn", KR(ret));
-    } else if (!scn_is_unknown(mv.mv_refresh_end_scn_)
+    } else if (mv.mv_refresh_end_scn_known()
                && OB_FAIL(report_text.append_fmt(", \"current_refresh_scn\": %lu", mv.mv_refresh_end_scn_))) {
       LOG_WARN("fail to append current refresh scn", KR(ret));
     }
 
     // Server info.
     if (OB_FAIL(ret)) {
-    } else if (mv.svr_ip_.empty() && OB_FAIL(report_text.append(", \"svr_ip\": null, \"svr_port\": null"))) {
+    } else if (!mv.has_server() && OB_FAIL(report_text.append(", \"svr_ip\": null, \"svr_port\": null"))) {
       LOG_WARN("fail to append null svr", KR(ret));
-    } else if (!mv.svr_ip_.empty()) {
+    } else if (mv.has_server()) {
       if (OB_FAIL(report_text.append(", \"svr_ip\": "))) {
         LOG_WARN("fail to append key", KR(ret));
       } else if (OB_FAIL(append_json_string(report_text, mv.svr_ip_))) {
@@ -1931,26 +2091,19 @@ static int build_json_per_mv_detail(const MViewRefreshReport &report, ObSqlStrin
       LOG_WARN("fail to open changes", KR(ret));
     }
     if (OB_FAIL(ret)) {
-    } else if (pmv.change_group_first_ >= 0) {
+    } else if (group.has_changes()) {
       bool first_ch = true;
-      for (int64_t ci = pmv.change_group_first_;
-           OB_SUCC(ret) && ci <= pmv.change_group_last_ && ci < change_array.count();
+      for (int64_t ci = group.final_change_range_.first_;
+           OB_SUCC(ret) && ci <= group.final_change_range_.last_ && ci < change_array.count();
            ++ci) {
         const MViewReportChangeData &ch = change_array.at(ci);
         if (!first_ch && OB_FAIL(report_text.append(", "))) {
           LOG_WARN("fail to append comma", KR(ret));
         }
-        ObSqlString tbl_full;
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(tbl_full.assign_fmt("%.*s.%.*s",
-                                               ch.tbl_owner_.length(),
-                                               safe_ptr_str(ch.tbl_owner_),
-                                               ch.tbl_name_.length(),
-                                               safe_ptr_str(ch.tbl_name_)))) {
-          LOG_WARN("fail to build tbl_full", KR(ret));
         } else if (OB_FAIL(report_text.append("{\"table\": "))) {
           LOG_WARN("fail to append key", KR(ret));
-        } else if (OB_FAIL(append_json_string(report_text, tbl_full.ptr(), tbl_full.length()))) {
+        } else if (OB_FAIL(append_json_string(report_text, ch.display_name()))) {
           LOG_WARN("fail to append table", KR(ret));
         } else if (OB_FAIL(report_text.append_fmt(", \"ins\": %ld, \"upd\": %ld, \"del\": %ld, \"base_rows\": %ld}",
                                                   ch.num_rows_ins_,
@@ -1967,16 +2120,17 @@ static int build_json_per_mv_detail(const MViewRefreshReport &report, ObSqlStrin
       LOG_WARN("fail to close changes", KR(ret));
     }
 
-    // Steps — mark slowest per MV with extra resource fields.
-    int64_t mv_slowest_idx = pmv.slowest_stmt_idx_;
+    // Steps — mark slowest per MV and include captured plans for every step.
+    int64_t mv_slowest_idx = group.slowest_stmt_idx_;
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(report_text.append(", \"steps\": ["))) {
       LOG_WARN("fail to open steps", KR(ret));
     }
     if (OB_FAIL(ret)) {
-    } else if (pmv.stmt_group_first_ >= 0) {
+    } else if (group.has_stmts()) {
       bool first_st = true;
-      for (int64_t si = pmv.stmt_group_first_; OB_SUCC(ret) && si <= pmv.stmt_group_last_ && si < stmt_array.count();
+      for (int64_t si = group.final_stmt_range_.first_;
+           OB_SUCC(ret) && si <= group.final_stmt_range_.last_ && si < stmt_array.count();
            ++si) {
         const MViewReportStmtData &st = stmt_array.at(si);
         if (!first_st && OB_FAIL(report_text.append(", "))) {
@@ -2007,42 +2161,12 @@ static int build_json_per_mv_detail(const MViewRefreshReport &report, ObSqlStrin
                                              st.memory_used_))) {
             LOG_WARN("fail to append slowest resources", KR(ret));
           }
-          // Embed execution_plan as a nested JSON object (verbatim) when the
-          // captured plan is non-empty and structurally valid JSON.
-          if (OB_FAIL(ret)) {
-          } else if (!st.execution_plan_.empty()) {
-            // Lightweight structural check: first non-whitespace char must
-            // be '{' or '[', last non-whitespace char must be '}' or ']'.
-            const char *plan_ptr = st.execution_plan_.ptr();
-            const int64_t plan_len = st.execution_plan_.length();
-            int64_t first = 0;
-            int64_t last = plan_len - 1;
-            for (; first < plan_len && isspace(plan_ptr[first]); ++first) {
-              /* skip leading whitespace */
-            }
-            for (; last >= 0 && isspace(plan_ptr[last]); --last) {
-              /* skip trailing whitespace */
-            }
-            bool plan_valid = false;
-            if (first <= last) {
-              plan_valid = (('{' == plan_ptr[first]) && ('}' == plan_ptr[last]))
-                           || (('[' == plan_ptr[first]) && (']' == plan_ptr[last]));
-            }
-            if (plan_valid) {
-              if (OB_FAIL(report_text.append(", \"execution_plan\": "))) {
-                LOG_WARN("fail to append plan key", KR(ret));
-              } else if (OB_FAIL(report_text.append(st.execution_plan_))) {
-                LOG_WARN("fail to append plan body", KR(ret));
-              }
-            } else {
-              LOG_WARN("execution_plan_ is not valid JSON, fallback to null");
-              if (OB_FAIL(report_text.append(", \"execution_plan\": null"))) {
-                LOG_WARN("fail to append null plan", KR(ret));
-              }
-            }
-          }
         } else if (OB_FAIL(report_text.append(", \"slowest\": false"))) {
           LOG_WARN("fail to append slowest false", KR(ret));
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(append_json_execution_plan(report_text, st))) {
+          LOG_WARN("fail to append step execution plan", KR(ret));
         }
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(report_text.append("}"))) {

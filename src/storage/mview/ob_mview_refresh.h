@@ -89,6 +89,11 @@ private:
   int complete_refresh();
   int fast_refresh(const ObIArray<ObString> &refresh_sqls);
   int do_fast_refresh(const ObIArray<ObString> &refresh_sqls);
+  int prepare_plan_capture_info(sql::ObSQLSessionInfo *exec_session_info,
+                                 const ObString &fast_refresh_sql,
+                                 int exec_ret,
+                                 int64_t execution_time,
+                                 ObMViewStmtPlanCaptureInfo &capture_info);
   int purge_mlog(const ObIArray<share::schema::ObMLogInfo> &mlog_infos,
                  const ObIArray<share::schema::ObDependencyInfo> &dependency_infos);
   int calc_mv_refresh_parallelism(const int64_t refresh_param_dop,

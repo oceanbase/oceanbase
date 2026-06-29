@@ -342,7 +342,7 @@ int ObMLogPurger::update_mlog_info(int64_t start_time, int64_t end_time,
     char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
     mlog_info_.set_last_purge_scn(purge_scn_.get_val_for_inner_table_field());
     mlog_info_.set_last_purge_date(start_time);
-    mlog_info_.set_last_purge_time((end_time - start_time) / 1000 / 1000);
+    mlog_info_.set_last_purge_time(end_time - start_time);
     mlog_info_.set_last_purge_rows(total_affected_rows);
     if (OB_FAIL(mlog_info_.set_last_purge_trace_id(
             ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf))))) {

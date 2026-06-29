@@ -36,44 +36,45 @@ struct ColDescriptor
   int width;
 };
 
-// ====== Shared computed values (per-MV dimension) ======
-// Both MVSummaryRow and PerMVDetail reference this structure via index.
-// Negative sentinel values (-1 / -1.0) denote "not applicable" (N/A).
-struct MViewReportPerMVComputed
+struct MViewReportIndexRange
 {
-  MViewReportPerMVComputed()
-    : mv_(NULL), display_num_(0), role_(NULL), type_(NULL), type_short_(NULL),
-      changes_(0), elapsed_pct_(0.0), throughput_per_sec_(-1.0), sched_delay_us_(-1),
-      result_(0), first_idx_(0), last_idx_(0),
-      change_group_first_(-1), change_group_last_(-1),
-      stmt_group_first_(-1), stmt_group_last_(-1),
-      slowest_stmt_idx_(-1), cpu_time_us_(0), io_wait_time_us_(0),
-      disk_reads_(0), max_memory_bytes_(0),
-      slowest_(false)
+  MViewReportIndexRange() : first_(-1), last_(-1) {}
+  explicit MViewReportIndexRange(const int64_t idx) : first_(idx), last_(idx) {}
+  bool is_valid() const { return first_ >= 0 && last_ >= first_; }
+  int64_t count() const { return is_valid() ? last_ - first_ + 1 : 0; }
+
+  int64_t first_;
+  int64_t last_;
+};
+
+// ====== Per-MV group view ======
+// One entry per logical MV. It stores stable ranges into sorted raw report
+// arrays and a small set of scan-time aggregates for the final attempt.
+struct MViewReportMVGroup
+{
+  MViewReportMVGroup()
+    : changes_(0), cpu_time_us_(0), io_wait_time_us_(0),
+      disk_reads_(0), max_memory_bytes_(0), slowest_stmt_idx_(-1)
   {}
-  const MViewReportMVData *mv_;
-  int64_t display_num_;
-  const char *role_;              // "TGT" / "DEP"
-  const char *type_;              // "FAST" / "COMPLETE"
-  const char *type_short_;        // "FAST" / "COMPL"
-  int64_t changes_;
-  double elapsed_pct_;
-  double throughput_per_sec_;     // -1.0 = N/A
-  int64_t sched_delay_us_;        // -1 = N/A
-  int64_t result_;
-  int64_t first_idx_;
-  int64_t last_idx_;
-  int64_t change_group_first_;
-  int64_t change_group_last_;
-  int64_t stmt_group_first_;
-  int64_t stmt_group_last_;
-  int64_t slowest_stmt_idx_;
-  int64_t cpu_time_us_;
-  int64_t io_wait_time_us_;
-  int64_t disk_reads_;
-  int64_t max_memory_bytes_;
-  bool slowest_;
-  TO_STRING_KV(K_(display_num), K_(changes), K_(elapsed_pct));
+  int64_t num_retries() const { return attempt_range_.count() > 0 ? attempt_range_.count() - 1 : 0; }
+  bool has_changes() const { return final_change_range_.is_valid(); }
+  bool has_stmts() const { return final_stmt_range_.is_valid(); }
+
+  // mv_array_ — all retry attempts sharing this mview_id; last_ is the final attempt.
+  MViewReportIndexRange attempt_range_;
+  // change_array_ — base-table DML stats of the final attempt only.
+  MViewReportIndexRange final_change_range_;
+  // stmt_array_ — SQL step stats of the final attempt only.
+  MViewReportIndexRange final_stmt_range_;
+
+  int64_t changes_;               // total DML changes (ins+upd+del) on base tables
+  int64_t cpu_time_us_;           // sum of cpu_time_ over all steps of final attempt
+  int64_t io_wait_time_us_;       // sum of io_wait_time_ over all steps of final attempt
+  int64_t disk_reads_;            // sum of disk_reads_ over all steps of final attempt
+  int64_t max_memory_bytes_;      // peak memory_used_ across all steps of final attempt
+  int64_t slowest_stmt_idx_;      // stmt_array_ index of the slowest step; -1 = N/A
+
+  TO_STRING_KV(K_(changes), K_(cpu_time_us), K_(io_wait_time_us));
 };
 
 // ====== Summary section ======
@@ -131,7 +132,7 @@ struct MViewRefreshReport
 {
   MViewReportSummaryInfo summary_;
   MViewReportResourceOverview resources_;
-  common::ObSEArray<MViewReportPerMVComputed, 4> per_mv_computed_;
+  common::ObSEArray<MViewReportMVGroup, 4> mv_groups_;
 
   // Raw data refs — set by build() from fetcher output.
   const MViewReportRunData *run_data_;
@@ -143,7 +144,7 @@ struct MViewRefreshReport
   common::ObIAllocator *allocator_;
 
   explicit MViewRefreshReport(common::ObIAllocator &allocator)
-    : per_mv_computed_(OB_MALLOC_NORMAL_BLOCK_SIZE, common::ModulePageAllocator(allocator, "MvRptPMC")),
+    : mv_groups_(OB_MALLOC_NORMAL_BLOCK_SIZE, common::ModulePageAllocator(allocator, "MvRptGrp")),
       run_data_(NULL),
       mv_array_(NULL),
       change_array_(NULL),

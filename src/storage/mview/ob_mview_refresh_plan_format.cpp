@@ -34,7 +34,10 @@ namespace
 
 // Column indices for the JOIN query result, must match SELECT order.
 // Only columns actually used by format_merged_plan_table() are selected.
-enum PlanColumnIdx
+// FARM COMPAT WHITELIST: this enum is a file-local index into the JOIN result
+// columns and is never serialized, so cross-version ID placeholders are not
+// required.
+enum PlanColumnIdx // FARM COMPAT WHITELIST
 {
   // Plan structure from __ALL_VIRTUAL_SQL_PLAN
   COL_OPERATOR = 0,  // A.OPERATOR (varchar)
@@ -77,7 +80,15 @@ enum PlanColumnIdx
   COL_OTHERSTAT_10_ID,
   COL_OTHERSTAT_10_VALUE,
   // Server addresses from monitor subquery (GROUP_CONCAT of SVR_IP:SVR_PORT)
-  COL_SERVER
+  COL_SERVER,
+  // Predicates and plan-level info from __ALL_VIRTUAL_SQL_PLAN
+  COL_FILTER_PREDICATES,
+  COL_STARTUP_PREDICATES,
+  COL_SPECIAL_PREDICATES,
+  COL_OTHER_XML,
+  COL_OPTIMIZER,
+  COL_PARTITION_START,
+  COL_PARTITION_STOP
 };
 
 // Per-operator monitor data (timestamps, DOP, skew metrics) from plan monitor,
@@ -139,6 +150,15 @@ static const char *const g_mview_col_names[] = {
 static const int64_t MVIEW_COL_COUNT = ARRAYSIZEOF(g_mview_col_names);
 static const int64_t PLAN_INDENT_PER_DEPTH = 2;
 
+// Unicode box-drawing characters for plan tree, matching display_cursor output.
+// Each prefix unit is 2 display characters wide.
+static const char TREE_VERTICAL[] = "│ ";
+static const int64_t TREE_VERTICAL_LEN = ARRAYSIZEOF(TREE_VERTICAL) - 1;
+static const char TREE_BRANCH[]   = "├─";
+static const int64_t TREE_BRANCH_LEN = ARRAYSIZEOF(TREE_BRANCH) - 1;
+static const char TREE_CORNER[]   = "└─";
+static const int64_t TREE_CORNER_LEN = ARRAYSIZEOF(TREE_CORNER) - 1;
+
 // Number of OTHERSTAT slots per operator in __ALL_VIRTUAL_SQL_PLAN_MONITOR
 // (fixed at 10 by ObMonitorNode definition).
 static const int64_t OTHERSTAT_SLOT_COUNT = 10;
@@ -189,11 +209,33 @@ enum MergedCol
 
 struct MViewPlanRowVals {
   const char *vals_[MVIEW_COL_COUNT];
+  // OPERATOR column uses Unicode tree chars whose byte length exceeds display
+  // width. operator_extra_bytes_ = (byte_length - display_width), used to
+  // compensate %-*s padding by bytes.
+  int64_t operator_extra_bytes_;
 
-  MViewPlanRowVals() { MEMSET(vals_, 0, sizeof(vals_)); }
+  MViewPlanRowVals() : operator_extra_bytes_(0) { MEMSET(vals_, 0, sizeof(vals_)); }
 
   TO_STRING_KV("col_count", static_cast<int64_t>(MVIEW_COL_COUNT));
 };
+
+static int64_t get_plan_row_display_len(const MViewPlanRowVals &row, int64_t col)
+{
+  int64_t display_len = OB_NOT_NULL(row.vals_[col]) ? static_cast<int64_t>(STRLEN(row.vals_[col])) : 0;
+  if (MCOL_OPERATOR == col) {
+    display_len -= row.operator_extra_bytes_;
+  }
+  return display_len;
+}
+
+static int get_plan_row_pad_width(const MViewPlanRowVals &row, int64_t col, int col_width)
+{
+  int pad_width = col_width;
+  if (MCOL_OPERATOR == col) {
+    pad_width += static_cast<int>(row.operator_extra_bytes_);
+  }
+  return pad_width;
+}
 
 struct MViewPlanOtherStat {
   int64_t ids_[OTHERSTAT_SLOT_COUNT];
@@ -343,6 +385,34 @@ static int mview_read_plan_info_from_result(common::ObIAllocator &allocator,
     LOG_WARN("fail to read max_wa_mem", KR(ret));
   } else if (OB_FAIL(read_result_varchar(allocator, mysql_result, COL_SERVER, server_str, server_len))) {
     LOG_WARN("fail to read server", KR(ret));
+  } else if (OB_FAIL(read_result_varchar(allocator, mysql_result, COL_FILTER_PREDICATES,
+                                         plan_info.filter_predicates_,
+                                         plan_info.filter_predicates_len_))) {
+    LOG_WARN("fail to read filter_predicates", KR(ret));
+  } else if (OB_FAIL(read_result_varchar(allocator, mysql_result, COL_STARTUP_PREDICATES,
+                                         plan_info.startup_predicates_,
+                                         plan_info.startup_predicates_len_))) {
+    LOG_WARN("fail to read startup_predicates", KR(ret));
+  } else if (OB_FAIL(read_result_varchar(allocator, mysql_result, COL_SPECIAL_PREDICATES,
+                                         plan_info.special_predicates_,
+                                         plan_info.special_predicates_len_))) {
+    LOG_WARN("fail to read special_predicates", KR(ret));
+  } else if (OB_FAIL(read_result_varchar(allocator, mysql_result, COL_OTHER_XML,
+                                         plan_info.other_xml_,
+                                         plan_info.other_xml_len_))) {
+    LOG_WARN("fail to read other_xml", KR(ret));
+  } else if (OB_FAIL(read_result_varchar(allocator, mysql_result, COL_OPTIMIZER,
+                                         plan_info.optimizer_,
+                                         plan_info.optimizer_len_))) {
+    LOG_WARN("fail to read optimizer", KR(ret));
+  } else if (OB_FAIL(read_result_varchar(allocator, mysql_result, COL_PARTITION_START,
+                                         plan_info.partition_start_,
+                                         plan_info.partition_start_len_))) {
+    LOG_WARN("fail to read partition_start", KR(ret));
+  } else if (OB_FAIL(read_result_varchar(allocator, mysql_result, COL_PARTITION_STOP,
+                                         plan_info.partition_stop_,
+                                         plan_info.partition_stop_len_))) {
+    LOG_WARN("fail to read partition_stop", KR(ret));
   }
 
   for (int64_t s = 0; OB_SUCC(ret) && s < OTHERSTAT_SLOT_COUNT; ++s) {
@@ -394,25 +464,133 @@ static int alloc_time_string(common::ObIAllocator &allocator, int64_t usec, cons
   return ret;
 }
 
-static int alloc_indented_string(common::ObIAllocator &allocator,
-                                 int64_t indent,
-                                 const char *text,
-                                 int64_t text_len,
-                                 const char *&out)
+/**
+ * Derive is_last_child_ for every item in plan_infos from the depth sequence.
+ * Walk pre-order with a stack of indices.
+ */
+static int compute_is_last_child(const ObIArray<ObSqlPlanItem *> &plan_infos)
 {
   int ret = OB_SUCCESS;
-  int64_t total = indent + text_len;
-  char *buf = NULL;
-  if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(total + 1)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc indented string buf", KR(ret));
-  } else {
-    MEMSET(buf, ' ', indent);
-    if (text_len > 0 && text != NULL) {
-      MEMCPY(buf + indent, text, text_len);
+  common::ObSEArray<int64_t, 64> stack;
+  int prev_depth = -1;
+  for (int64_t i = 0; OB_SUCC(ret) && i < plan_infos.count(); ++i) {
+    ObSqlPlanItem *item = plan_infos.at(i);
+    if (OB_ISNULL(item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null plan item", KR(ret), K(i));
+    } else if (OB_UNLIKELY(item->depth_ < 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected negative plan depth", KR(ret), K(i), KPC(item));
+    } else if (OB_UNLIKELY(0 == i && 0 != item->depth_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected root plan depth", KR(ret), K(i), KPC(item));
+    } else if (OB_UNLIKELY(i > 0 && item->depth_ > prev_depth + 1)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected discontinuous plan depth", KR(ret), K(i), K(prev_depth), KPC(item));
+    } else {
+      int d = item->depth_;
+      bool done = false;
+      for (; OB_SUCC(ret) && stack.count() > 0 && !done; ) {
+        int64_t top_idx = stack.at(stack.count() - 1);
+        ObSqlPlanItem *top = plan_infos.at(top_idx);
+        if (OB_NOT_NULL(top) && top->depth_ < d) {
+          done = true;
+        } else if (OB_NOT_NULL(top)) {
+          if (top->depth_ == d) {
+            top->is_last_child_ = false;
+          } else {
+            top->is_last_child_ = true;
+          }
+          stack.pop_back();
+        } else {
+          stack.pop_back();
+        }
+      }
+      item->is_last_child_ = true;
+      if (OB_FAIL(stack.push_back(i))) {
+        LOG_WARN("fail to push plan depth stack", KR(ret), K(i));
+      } else {
+        prev_depth = d;
+      }
     }
-    buf[total] = '\0';
-    out = buf;
+  }
+  for (int64_t s = 0; OB_SUCC(ret) && s < stack.count(); ++s) {
+    ObSqlPlanItem *node = plan_infos.at(stack.at(s));
+    if (OB_ISNULL(node)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null plan item in stack", KR(ret), K(s));
+    } else {
+      node->is_last_child_ = true;
+    }
+  }
+  return ret;
+}
+
+/**
+ * Prepend Unicode tree-drawing prefix (│ ├─ └─) to operator text.
+ * ancestor_indices[0..depth] is the ancestor chain; the node at depth is self.
+ * Returns operator_extra_bytes = byte_len - display_width for %-*s compensation.
+ */
+static int alloc_tree_prefix_string(common::ObIAllocator &allocator,
+                                    const ObIArray<ObSqlPlanItem *> &plan_infos,
+                                    const int64_t *ancestor_indices,
+                                    int64_t depth,
+                                    const char *text,
+                                    int64_t text_len,
+                                    const char *&out,
+                                    int64_t &extra_bytes)
+{
+  int ret = OB_SUCCESS;
+  extra_bytes = 0;
+  if (OB_ISNULL(ancestor_indices) || OB_UNLIKELY(depth < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid tree prefix argument", KR(ret), KP(ancestor_indices), K(depth));
+  } else {
+    // Each depth level occupies 2 display chars but variable bytes in UTF-8.
+    // When depth==0 the loop below is skipped and pos stays 0 (no prefix).
+    int64_t max_prefix_bytes = static_cast<int64_t>(depth) * TREE_CORNER_LEN;
+    int64_t alloc_size = max_prefix_bytes + text_len + 1;
+    char *buf = NULL;
+    if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(alloc_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc tree prefix buf", KR(ret));
+    } else {
+      int64_t pos = 0;
+      for (int64_t level = 1; OB_SUCC(ret) && level <= depth; ++level) {
+        int64_t anc_idx = ancestor_indices[level];
+        const ObSqlPlanItem *anc = NULL;
+        bool last = false;
+        if (OB_UNLIKELY(anc_idx < 0 || anc_idx >= plan_infos.count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid ancestor index", KR(ret), K(level), K(anc_idx), K(plan_infos.count()));
+        } else if (OB_ISNULL(anc = plan_infos.at(anc_idx))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null ancestor item", KR(ret), K(level), K(anc_idx));
+        } else if (OB_FALSE_IT(last = anc->is_last_child_)) {
+        } else if (level == depth) {
+          const char *ch = last ? TREE_CORNER : TREE_BRANCH;
+          int64_t ch_len = last ? TREE_CORNER_LEN : TREE_BRANCH_LEN;
+          MEMCPY(buf + pos, ch, ch_len);
+          pos += ch_len;
+        } else if (last) {
+          buf[pos]     = ' ';
+          buf[pos + 1] = ' ';
+          pos += 2;
+        } else {
+          MEMCPY(buf + pos, TREE_VERTICAL, TREE_VERTICAL_LEN);
+          pos += TREE_VERTICAL_LEN;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        int64_t display_width = static_cast<int64_t>(depth) * PLAN_INDENT_PER_DEPTH;
+        extra_bytes = pos - display_width;
+        if (text_len > 0 && OB_NOT_NULL(text)) {
+          MEMCPY(buf + pos, text, text_len);
+        }
+        buf[pos + text_len] = '\0';
+        out = buf;
+      }
+    }
   }
   return ret;
 }
@@ -444,6 +622,8 @@ static int alloc_skew_string(common::ObIAllocator &allocator,
  * (together with g_mview_col_names[] and MergedCol enum).
  */
 static int fill_plan_row_vals(common::ObIAllocator &allocator,
+                              const ObIArray<ObSqlPlanItem *> &plan_infos,
+                              const int64_t *ancestor_indices,
                               const ObSqlPlanItem &item,
                               const MViewPlanMonitorTime &mtime,
                               MViewPlanRowVals &row)
@@ -452,11 +632,14 @@ static int fill_plan_row_vals(common::ObIAllocator &allocator,
 
   if (OB_FAIL(alloc_int64_string(allocator, item.id_, row.vals_[MCOL_ID]))) {
     LOG_WARN("fail to alloc id string", KR(ret));
-  } else if (OB_FAIL(alloc_indented_string(allocator,
-                                           item.depth_ * PLAN_INDENT_PER_DEPTH,
-                                           item.operation_,
-                                           item.operation_ != NULL ? item.operation_len_ : 0,
-                                           row.vals_[MCOL_OPERATOR]))) {
+  } else if (OB_FAIL(alloc_tree_prefix_string(allocator,
+                                              plan_infos,
+                                              ancestor_indices,
+                                              static_cast<int64_t>(item.depth_),
+                                              item.operation_,
+                                              item.operation_ != NULL ? item.operation_len_ : 0,
+                                              row.vals_[MCOL_OPERATOR],
+                                              row.operator_extra_bytes_))) {
     LOG_WARN("fail to alloc operator string", KR(ret));
   } else if (OB_FAIL(alloc_cstring(allocator,
                                    item.object_alias_,
@@ -611,7 +794,12 @@ static int format_merged_plan_table(common::ObIAllocator &allocator,
                                     ObSqlString &result)
 {
   int ret = OB_SUCCESS;
+  int prev_depth = -1;
 
+  // ancestor_indices[level] = index of the most recent node at each depth.
+  // Pre-order guarantees that the most recent node at level < current_depth
+  // is the current node's ancestor at that level.
+  common::ObSEArray<int64_t, 128> ancestor_indices;
   ObSEArray<MViewPlanRowVals, 1> all_rows;
   if (plan_infos.count() != monitor_times.count()) {
     ret = OB_ERR_UNEXPECTED;
@@ -625,12 +813,34 @@ static int format_merged_plan_table(common::ObIAllocator &allocator,
     if (OB_ISNULL(item)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null plan item", KR(ret), K(i));
+    } else if (OB_UNLIKELY(item->depth_ < 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected negative plan depth", KR(ret), K(i), KPC(item));
+    } else if (OB_UNLIKELY(0 == i && 0 != item->depth_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected root plan depth", KR(ret), K(i), KPC(item));
+    } else if (OB_UNLIKELY(i > 0 && item->depth_ > prev_depth + 1)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected discontinuous plan depth", KR(ret), K(i), K(prev_depth), KPC(item));
     } else {
-      MViewPlanRowVals row;
-      if (OB_FAIL(fill_plan_row_vals(allocator, *item, monitor_times.at(i), row))) {
-        LOG_WARN("fail to fill plan row vals", KR(ret), K(i));
-      } else if (OB_FAIL(all_rows.push_back(row))) {
-        LOG_WARN("fail to push back row vals", KR(ret));
+      int64_t d = item->depth_;
+      for (int64_t g = ancestor_indices.count(); OB_SUCC(ret) && g <= d; ++g) {
+        if (OB_FAIL(ancestor_indices.push_back(-1))) {
+          LOG_WARN("fail to grow ancestor_indices", KR(ret), K(g));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        ancestor_indices.at(d) = i;
+        MViewPlanRowVals row;
+        if (OB_FAIL(fill_plan_row_vals(allocator, plan_infos,
+                                       &ancestor_indices.at(0),
+                                       *item, monitor_times.at(i), row))) {
+          LOG_WARN("fail to fill plan row vals", KR(ret), K(i));
+        } else if (OB_FAIL(all_rows.push_back(row))) {
+          LOG_WARN("fail to push back row vals", KR(ret));
+        } else {
+          prev_depth = d;
+        }
       }
     }
   }
@@ -644,10 +854,10 @@ static int format_merged_plan_table(common::ObIAllocator &allocator,
   for (int64_t i = 0; OB_SUCC(ret) && i < all_rows.count(); ++i) {
     const MViewPlanRowVals &row = all_rows.at(i);
     for (int64_t c = 0; c < MVIEW_COL_COUNT; ++c) {
-      int len = NULL != row.vals_[c] ? static_cast<int>(STRLEN(row.vals_[c])) : 0;
-      if (len > col_widths[c]) {
-        total_width += static_cast<int64_t>(len - col_widths[c]);
-        col_widths[c] = len;
+      int display_len = static_cast<int>(get_plan_row_display_len(row, c));
+      if (display_len > col_widths[c]) {
+        total_width += static_cast<int64_t>(display_len - col_widths[c]);
+        col_widths[c] = display_len;
       }
     }
   }
@@ -678,7 +888,8 @@ static int format_merged_plan_table(common::ObIAllocator &allocator,
     }
     for (int64_t c = 0; OB_SUCC(ret) && c < MVIEW_COL_COUNT; ++c) {
       const char *val = NULL != row.vals_[c] ? row.vals_[c] : "";
-      if (OB_FAIL(result.append_fmt("%-*s|", col_widths[c], val))) {
+      int pad = get_plan_row_pad_width(row, c, col_widths[c]);
+      if (OB_FAIL(result.append_fmt("%-*s|", pad, val))) {
         LOG_WARN("fail to append row value", KR(ret), K(i), K(c));
       }
     }
@@ -730,6 +941,14 @@ static const char *const JK_MAX_WA_MEM = "max_wa_mem";
 static const char *const JK_SERVER = "server";
 static const char *const JK_OTHER_STATS = "other_stats";
 static const char *const JK_VALUE = "value";
+static const char *const JK_OUTLINE_DATA = "outline_data";
+static const char *const JK_OPTIMIZATION_INFO = "optimization_info";
+static const char *const JK_FILTER_PREDICATES = "filter_predicates";
+static const char *const JK_STARTUP_PREDICATES = "startup_predicates";
+static const char *const JK_SPECIAL_PREDICATES = "special_predicates";
+static const char *const JK_PARTITION_START = "partition_start";
+static const char *const JK_PARTITION_STOP = "partition_stop";
+static const char *const JK_IS_LAST_CHILD = "is_last_child";
 
 static int add_int_member(common::ObIAllocator &alloc,
                           ObJsonObject *obj,
@@ -904,6 +1123,36 @@ static int add_string_member(common::ObIAllocator &alloc,
   return ret;
 }
 
+} // namespace
+
+int build_mview_plan_hash_json(common::ObIAllocator &allocator,
+                               uint64_t plan_hash,
+                               ObSqlString &result_json)
+{
+  int ret = OB_SUCCESS;
+  ObJsonObject *root = OB_NEWx(ObJsonObject, &allocator, &allocator);
+  ObJsonArray *ops = OB_NEWx(ObJsonArray, &allocator, &allocator);
+  if (OB_ISNULL(root) || OB_ISNULL(ops)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc hash-only plan json containers", KR(ret), KP(root), KP(ops));
+  } else if (OB_FAIL(add_uint_member(allocator, root, JK_PLAN_HASH, plan_hash))) {
+    LOG_WARN("fail to add plan_hash", KR(ret));
+  } else if (OB_FAIL(root->add(ObString::make_string(JK_OPERATORS), ops))) {
+    LOG_WARN("fail to add operators", KR(ret));
+  } else {
+    ObJsonBuffer j_buf(&allocator);
+    if (OB_FAIL(root->print(j_buf, false /*is_quoted*/))) {
+      LOG_WARN("fail to print hash-only plan json", KR(ret));
+    } else if (OB_FAIL(result_json.append(j_buf.ptr(), j_buf.length()))) {
+      LOG_WARN("fail to append hash-only plan json", KR(ret));
+    }
+  }
+  return ret;
+}
+
+namespace
+{
+
 static int format_merged_plan_json(common::ObIAllocator &alloc,
                                    uint64_t plan_hash,
                                    const ObIArray<ObSqlPlanItem *> &plan_infos,
@@ -944,6 +1193,8 @@ static int format_merged_plan_json(common::ObIAllocator &alloc,
         LOG_WARN("fail to alloc json op objects", KR(ret));
       } else if (OB_FAIL(add_int_member(alloc, op, JK_ID, item->id_))) {
       } else if (OB_FAIL(add_int_member(alloc, op, JK_DEPTH, item->depth_))) {
+      } else if (OB_FAIL(add_int_member(alloc, op, JK_IS_LAST_CHILD,
+                                        item->is_last_child_ ? 1 : 0))) {
       } else if (OB_FAIL(add_string_member(alloc, op, JK_OPERATION,
                                            item->operation_,
                                            item->operation_ != NULL ? item->operation_len_ : 0))) {
@@ -968,6 +1219,31 @@ static int format_merged_plan_json(common::ObIAllocator &alloc,
                  && OB_FAIL(add_string_member(alloc, op, JK_SERVER, server_str,
                                               strlen(server_str)))) {
         LOG_WARN("fail to add server to op", KR(ret));
+      } else if (OB_NOT_NULL(item->filter_predicates_) && item->filter_predicates_len_ > 0
+                 && OB_FAIL(add_string_member(alloc, op, JK_FILTER_PREDICATES,
+                                              item->filter_predicates_,
+                                              item->filter_predicates_len_))) {
+        LOG_WARN("fail to add filter_predicates", KR(ret));
+      } else if (OB_NOT_NULL(item->startup_predicates_) && item->startup_predicates_len_ > 0
+                 && OB_FAIL(add_string_member(alloc, op, JK_STARTUP_PREDICATES,
+                                              item->startup_predicates_,
+                                              item->startup_predicates_len_))) {
+        LOG_WARN("fail to add startup_predicates", KR(ret));
+      } else if (OB_NOT_NULL(item->special_predicates_) && item->special_predicates_len_ > 0
+                 && OB_FAIL(add_string_member(alloc, op, JK_SPECIAL_PREDICATES,
+                                              item->special_predicates_,
+                                              item->special_predicates_len_))) {
+        LOG_WARN("fail to add special_predicates", KR(ret));
+      } else if (OB_NOT_NULL(item->partition_start_) && item->partition_start_len_ > 0
+                 && OB_FAIL(add_string_member(alloc, op, JK_PARTITION_START,
+                                              item->partition_start_,
+                                              item->partition_start_len_))) {
+        LOG_WARN("fail to add partition_start", KR(ret));
+      } else if (OB_NOT_NULL(item->partition_stop_) && item->partition_stop_len_ > 0
+                 && OB_FAIL(add_string_member(alloc, op, JK_PARTITION_STOP,
+                                              item->partition_stop_,
+                                              item->partition_stop_len_))) {
+        LOG_WARN("fail to add partition_stop", KR(ret));
       }
       for (int64_t s = 0; OB_SUCC(ret) && s < OTHERSTAT_SLOT_COUNT; ++s) {
         if (0 != ostat.ids_[s] || 0 != ostat.values_[s]) {
@@ -993,7 +1269,47 @@ static int format_merged_plan_json(common::ObIAllocator &alloc,
   if (OB_SUCC(ret)) {
     if (OB_FAIL(root->add(ObString::make_string(JK_OPERATORS), ops))) {
       LOG_WARN("fail to add operators to root", KR(ret));
-    } else {
+    }
+    // Root-level outline_data from first operator's other_xml.
+    if (OB_SUCC(ret) && plan_infos.count() > 0 && OB_NOT_NULL(plan_infos.at(0))) {
+      const ObSqlPlanItem *first = plan_infos.at(0);
+      if (OB_NOT_NULL(first->other_xml_) && first->other_xml_len_ > 0) {
+        if (OB_FAIL(add_string_member(alloc, root, JK_OUTLINE_DATA,
+                                      first->other_xml_, first->other_xml_len_))) {
+          LOG_WARN("fail to add outline_data to root", KR(ret));
+        }
+      }
+    }
+    // optimization_info: only TABLE SCAN operators carry optimizer_, so
+    // collect from all plan items instead of just the first one.
+    if (OB_SUCC(ret)) {
+      ObSqlString opt_buf;
+      for (int64_t i = 0; OB_SUCC(ret) && i < plan_infos.count(); ++i) {
+        if (OB_NOT_NULL(plan_infos.at(i))
+            && OB_NOT_NULL(plan_infos.at(i)->optimizer_)
+            && plan_infos.at(i)->optimizer_len_ > 0) {
+          if (!opt_buf.empty()
+              && OB_FAIL(opt_buf.append("\n"))) {
+            LOG_WARN("fail to append optimizer info separator", KR(ret), K(i));
+          } else if (OB_FAIL(opt_buf.append(plan_infos.at(i)->optimizer_,
+                                            plan_infos.at(i)->optimizer_len_))) {
+            LOG_WARN("fail to append optimizer info", KR(ret), K(i));
+          }
+        }
+      }
+      if (OB_SUCC(ret) && !opt_buf.empty()) {
+        // opt_buf is an ObSqlString on ObMalloc whose scope ends before
+        // root->print(), so copy it onto the arena to keep it valid.
+        const char *opt_str = NULL;
+        if (OB_FAIL(alloc_cstring(alloc, opt_buf.ptr(), opt_buf.length(), opt_str))) {
+          LOG_WARN("fail to copy optimization_info to arena", KR(ret));
+        } else if (OB_FAIL(add_string_member(alloc, root, JK_OPTIMIZATION_INFO,
+                                             opt_str, opt_buf.length()))) {
+          LOG_WARN("fail to add optimization_info to root", KR(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
       ObJsonBuffer j_buf(&alloc);
       if (OB_FAIL(root->print(j_buf, false /*is_quoted*/))) {
         LOG_WARN("fail to print json", KR(ret));
@@ -1083,13 +1399,27 @@ static int read_json_string_member(common::ObIAllocator &alloc,
   return ret;
 }
 
+// Root-level metadata extracted from plan JSON for rendering.
+struct MViewPlanRootInfo {
+  char *outline_data_;
+  int64_t outline_data_len_;
+  char *optimization_info_;
+  int64_t optimization_info_len_;
+  MViewPlanRootInfo()
+    : outline_data_(NULL), outline_data_len_(0),
+      optimization_info_(NULL), optimization_info_len_(0)
+  {}
+};
+
 // Inverse of format_merged_plan_json(): populate plan_infos/monitor_times/other_stats from JSON.
 static int parse_merged_plan_json(common::ObIAllocator &alloc,
                                   const ObString &plan_json,
                                   uint64_t &plan_hash,
                                   ObIArray<ObSqlPlanItem *> &plan_infos,
                                   ObIArray<MViewPlanMonitorTime> &monitor_times,
-                                  ObIArray<MViewPlanOtherStat> &other_stats)
+                                  ObIArray<MViewPlanOtherStat> &other_stats,
+                                  MViewPlanRootInfo *root_info,
+                                  bool need_predicates)
 {
   int ret = OB_SUCCESS;
   plan_hash = 0;
@@ -1105,7 +1435,19 @@ static int parse_merged_plan_json(common::ObIAllocator &alloc,
     ObJsonObject *root_obj = static_cast<ObJsonObject *>(root_node);
     if (OB_FAIL(read_json_uint_member(root_obj, JK_PLAN_HASH, plan_hash))) {
       LOG_WARN("fail to read plan_hash", KR(ret));
-    } else {
+    }
+    if (OB_SUCC(ret) && OB_NOT_NULL(root_info)) {
+      if (OB_FAIL(read_json_string_member(alloc, root_obj, JK_OUTLINE_DATA,
+                                          root_info->outline_data_,
+                                          root_info->outline_data_len_))) {
+        LOG_WARN("fail to read outline_data", KR(ret));
+      } else if (OB_FAIL(read_json_string_member(alloc, root_obj, JK_OPTIMIZATION_INFO,
+                                                  root_info->optimization_info_,
+                                                  root_info->optimization_info_len_))) {
+        LOG_WARN("fail to read optimization_info", KR(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
       ObJsonNode *ops_node = root_obj->get_value(ObString::make_string(JK_OPERATORS));
       if (OB_ISNULL(ops_node) || ObJsonNodeType::J_ARRAY != ops_node->json_type()) {
         ret = OB_INVALID_ARGUMENT;
@@ -1135,6 +1477,8 @@ static int parse_merged_plan_json(common::ObIAllocator &alloc,
               } else if (OB_FALSE_IT(item->id_ = static_cast<int>(int_val))) {
               } else if (OB_FAIL(read_json_int_member(op_obj, JK_DEPTH, int_val))) {
               } else if (OB_FALSE_IT(item->depth_ = static_cast<int>(int_val))) {
+              } else if (OB_FAIL(read_json_int_member(op_obj, JK_IS_LAST_CHILD, int_val))) {
+              } else if (OB_FALSE_IT(item->is_last_child_ = (int_val != 0))) {
               } else if (OB_FAIL(read_json_string_member(alloc, op_obj, JK_OPERATION,
                                                         item->operation_,
                                                         item->operation_len_))) {
@@ -1155,6 +1499,26 @@ static int parse_merged_plan_json(common::ObIAllocator &alloc,
               } else if (OB_FAIL(read_json_int_member(op_obj, JK_STARTS, mtime.starts_))) {
               } else if (OB_FAIL(read_json_int_member(op_obj, JK_MAX_WA_MEM, mtime.max_wa_mem_))) {
               } else if (OB_FAIL(read_json_string_member(alloc, op_obj, JK_SERVER, mtime.server_, server_len))) {
+              } else if (need_predicates
+                         && OB_FAIL(read_json_string_member(alloc, op_obj, JK_FILTER_PREDICATES,
+                                                            item->filter_predicates_,
+                                                            item->filter_predicates_len_))) {
+              } else if (need_predicates
+                         && OB_FAIL(read_json_string_member(alloc, op_obj, JK_STARTUP_PREDICATES,
+                                                            item->startup_predicates_,
+                                                            item->startup_predicates_len_))) {
+              } else if (need_predicates
+                         && OB_FAIL(read_json_string_member(alloc, op_obj, JK_SPECIAL_PREDICATES,
+                                                            item->special_predicates_,
+                                                            item->special_predicates_len_))) {
+              } else if (need_predicates
+                         && OB_FAIL(read_json_string_member(alloc, op_obj, JK_PARTITION_START,
+                                                            item->partition_start_,
+                                                            item->partition_start_len_))) {
+              } else if (need_predicates
+                         && OB_FAIL(read_json_string_member(alloc, op_obj, JK_PARTITION_STOP,
+                                                            item->partition_stop_,
+                                                            item->partition_stop_len_))) {
               }
               if (OB_SUCC(ret)) {
                 ObJsonNode *os_node = op_obj->get_value(ObString::make_string(JK_OTHER_STATS));
@@ -1219,6 +1583,69 @@ static bool is_dml_operator(const ObSqlPlanItem &item)
   return matched;
 }
 
+static int append_predicate(common::ObSqlString &result,
+                            const ObSqlPlanItem &item,
+                            const char *predicate,
+                            int64_t predicate_len,
+                            bool &has_header,
+                            bool &has_predicate)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(predicate) || predicate_len <= 0) {
+  } else {
+    if (!has_header) {
+      if (OB_FAIL(result.append("\nPredicate Information:\n"))) {
+        LOG_WARN("fail to append predicate header", KR(ret));
+      } else {
+        has_header = true;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (has_predicate && OB_FAIL(result.append(",\n      "))) {
+      LOG_WARN("fail to append predicate sep", KR(ret));
+    } else if (!has_predicate && OB_FAIL(result.append_fmt("  [%d] ", item.id_))) {
+      LOG_WARN("fail to append operator id", KR(ret));
+    } else if (OB_FAIL(result.append_fmt("%.*s", static_cast<int>(predicate_len), predicate))) {
+      LOG_WARN("fail to append predicate content", KR(ret));
+    } else {
+      has_predicate = true;
+    }
+  }
+  return ret;
+}
+
+static int format_predicate_information(const ObIArray<ObSqlPlanItem *> &plan_infos,
+                                        ObSqlString &result)
+{
+  int ret = OB_SUCCESS;
+  bool has_header = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < plan_infos.count(); ++i) {
+    const ObSqlPlanItem *item = plan_infos.at(i);
+    if (OB_NOT_NULL(item)) {
+      bool has_predicate = false;
+      if (OB_FAIL(append_predicate(result, *item, item->filter_predicates_,
+                                   item->filter_predicates_len_, has_header, has_predicate))) {
+        LOG_WARN("fail to append filter predicates", KR(ret));
+      } else if (OB_FAIL(append_predicate(result, *item, item->startup_predicates_,
+                                          item->startup_predicates_len_, has_header, has_predicate))) {
+        LOG_WARN("fail to append startup predicates", KR(ret));
+      } else if (OB_FAIL(append_predicate(result, *item, item->special_predicates_,
+                                          item->special_predicates_len_, has_header, has_predicate))) {
+        LOG_WARN("fail to append special predicates", KR(ret));
+      } else if (OB_FAIL(append_predicate(result, *item, item->partition_start_,
+                                          item->partition_start_len_, has_header, has_predicate))) {
+        LOG_WARN("fail to append partition_start", KR(ret));
+      } else if (OB_FAIL(append_predicate(result, *item, item->partition_stop_,
+                                          item->partition_stop_len_, has_header, has_predicate))) {
+        LOG_WARN("fail to append partition_stop", KR(ret));
+      } else if (has_predicate && OB_FAIL(result.append("\n"))) {
+        LOG_WARN("fail to append newline", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 // Aggregate per-operator data into step-level resource metrics. See header.
 static int aggregate_resources_from_arrays(const ObIArray<ObSqlPlanItem *> &plan_infos,
                                            const ObIArray<MViewPlanMonitorTime> &monitor_times,
@@ -1226,15 +1653,13 @@ static int aggregate_resources_from_arrays(const ObIArray<ObSqlPlanItem *> &plan
                                            int64_t &cpu_time,
                                            int64_t &io_wait_time,
                                            int64_t &disk_reads,
-                                           int64_t &memory_used,
-                                           int64_t &affected_rows)
+                                           int64_t &memory_used)
 {
   int ret = OB_SUCCESS;
   cpu_time = 0;
   io_wait_time = 0;
   disk_reads = 0;
   memory_used = 0;
-  affected_rows = 0;
   if (plan_infos.count() != monitor_times.count()
       || plan_infos.count() != other_stats.count()) {
     ret = OB_ERR_UNEXPECTED;
@@ -1253,9 +1678,6 @@ static int aggregate_resources_from_arrays(const ObIArray<ObSqlPlanItem *> &plan
       io_wait_time += item->io_cost_;
       if (mtime.max_wa_mem_ > memory_used) {
         memory_used = mtime.max_wa_mem_;
-      }
-      if (is_dml_operator(*item) && item->real_cardinality_ > affected_rows) {
-        affected_rows = item->real_cardinality_;
       }
       for (int64_t s = 0; s < OTHERSTAT_SLOT_COUNT; ++s) {
         if (sql::ObSqlMonitorStatIds::IO_READ_BYTES == ostat.ids_[s]) {
@@ -1312,20 +1734,22 @@ int get_mview_stmt_execution_plan(ObExecContext &ctx,
                                     "IFNULL(D.OS8_ID, 0), IFNULL(D.OS8_VAL, 0), "
                                     "IFNULL(D.OS9_ID, 0), IFNULL(D.OS9_VAL, 0), "
                                     "IFNULL(D.OS10_ID, 0), IFNULL(D.OS10_VAL, 0), "
-                                    "D.SERVER "
+                                    "D.SERVER, "
+                                    "A.FILTER_PREDICATES, A.STARTUP_PREDICATES, "
+                                    "A.SPECIAL_PREDICATES, A.OTHER_XML, A.OPTIMIZER, "
+                                    "A.PARTITION_START, A.PARTITION_STOP "
                                     "FROM OCEANBASE.__ALL_VIRTUAL_SQL_PLAN A "
                                     "LEFT JOIN "
                                     "(SELECT PLAN_LINE_ID, "
                                     " CAST(SUM(OUTPUT_ROWS) AS SIGNED) REAL_CARD, "
-                                    " CAST(MAX(DB_TIME) AS SIGNED) CPU_COST, "
+                                    " CAST(MAX(GREATEST((DB_TIME - USER_IO_WAIT_TIME), 0)) AS SIGNED) CPU_COST, "
                                     " CAST(MAX(USER_IO_WAIT_TIME) AS SIGNED) IO_COST, "
-                                    " CAST((UNIX_TIMESTAMP(MAX(LAST_CHANGE_TIME)) - "
-                                    "  UNIX_TIMESTAMP(MIN(FIRST_CHANGE_TIME)))*1000000 AS SIGNED) REAL_COST, "
+                                    " CAST((UNIX_TIMESTAMP(MAX(LAST_CHANGE_TIME)) - UNIX_TIMESTAMP(MIN(FIRST_CHANGE_TIME))) * 1000000 AS SIGNED) REAL_COST, "
                                     " CAST(UNIX_TIMESTAMP(MIN(FIRST_REFRESH_TIME))*1000000 AS SIGNED) OPEN_TIME, "
                                     " CAST(UNIX_TIMESTAMP(MAX(LAST_REFRESH_TIME))*1000000 AS SIGNED) CLOSE_TIME, "
                                     " CAST(COUNT(*) AS SIGNED) DOP, "
                                     " CAST(MAX(OUTPUT_ROWS) AS SIGNED) MAX_ROWS, "
-                                    " CAST(SUM(DB_TIME) AS SIGNED) SUM_DB_TIME, "
+                                    " CAST(SUM(GREATEST((DB_TIME - USER_IO_WAIT_TIME), 0)) AS SIGNED) SUM_DB_TIME, "
                                     " CAST(SUM(STARTS) AS SIGNED) STARTS, "
                                     " CAST(MAX(WORKAREA_MAX_MEM) AS SIGNED) MAX_WA_MEM, "
                                     " CAST(MAX(OTHERSTAT_1_ID) AS SIGNED) OS1_ID, CAST(SUM(OTHERSTAT_1_VALUE) AS "
@@ -1408,13 +1832,15 @@ int get_mview_stmt_execution_plan(ObExecContext &ctx,
     }
 
     if (OB_SUCC(ret) && plan_infos.count() > 0) {
-      if (OB_FAIL(format_merged_plan_json(allocator,
-                                          plan_hash,
-                                          plan_infos,
-                                          monitor_times,
-                                          other_stats,
-                                          server_strs,
-                                          result_json))) {
+      if (OB_FAIL(compute_is_last_child(plan_infos))) {
+        LOG_WARN("fail to compute plan tree child flags", KR(ret));
+      } else if (OB_FAIL(format_merged_plan_json(allocator,
+                                                 plan_hash,
+                                                 plan_infos,
+                                                 monitor_times,
+                                                 other_stats,
+                                                 server_strs,
+                                                 result_json))) {
         LOG_WARN("fail to format plan json", KR(ret));
       }
     }
@@ -1425,25 +1851,46 @@ int get_mview_stmt_execution_plan(ObExecContext &ctx,
 
 int render_mview_plan_text(common::ObIAllocator &allocator,
                            const ObString &plan_json,
+                           uint64_t &plan_hash,
                            ObSqlString &result_text)
 {
   int ret = OB_SUCCESS;
-  uint64_t plan_hash = 0;
+  plan_hash = 0;
   ObSEArray<ObSqlPlanItem *, 16> plan_infos;
   ObSEArray<MViewPlanMonitorTime, 2> monitor_times;
   ObSEArray<MViewPlanOtherStat, 1> other_stats;
+  MViewPlanRootInfo root_info;
   if (OB_FAIL(parse_merged_plan_json(allocator, plan_json, plan_hash,
-                                     plan_infos, monitor_times, other_stats))) {
+                                     plan_infos, monitor_times, other_stats,
+                                     &root_info,
+                                     true /*need_predicates*/))) {
     LOG_WARN("fail to parse plan json", KR(ret));
   } else if (0 == plan_infos.count()) {
-    // No operators parsed — leave result_text untouched so caller can fall
-    // back to its own "N/A" handling.
-  } else if (OB_FAIL(result_text.append_fmt("Plan Hash Value: %lu\n", plan_hash))) {
-    LOG_WARN("fail to append plan hash", KR(ret));
+    // Hash-only: operators array is empty, plan_hash returned via out param.
+  } else if (OB_FAIL(compute_is_last_child(plan_infos))) {
+    LOG_WARN("fail to compute plan tree child flags", KR(ret));
   } else if (OB_FAIL(format_merged_plan_table(allocator, plan_infos, monitor_times, result_text))) {
     LOG_WARN("fail to format merged plan table", KR(ret));
   } else if (OB_FAIL(format_operator_detail_stats(plan_infos, other_stats, result_text))) {
     LOG_WARN("fail to format operator detail stats", KR(ret));
+  } else if (OB_FAIL(format_predicate_information(plan_infos, result_text))) {
+    LOG_WARN("fail to format predicate information", KR(ret));
+  } else {
+    if (OB_NOT_NULL(root_info.outline_data_) && root_info.outline_data_len_ > 0) {
+      if (OB_FAIL(result_text.append_fmt("\nOutline Data:\n  %.*s\n",
+                                         static_cast<int>(root_info.outline_data_len_),
+                                         root_info.outline_data_))) {
+        LOG_WARN("fail to append outline data", KR(ret));
+      }
+    }
+    if (OB_SUCC(ret) && OB_NOT_NULL(root_info.optimization_info_)
+        && root_info.optimization_info_len_ > 0) {
+      if (OB_FAIL(result_text.append_fmt("\nOptimization Info:\n  %.*s\n",
+                                         static_cast<int>(root_info.optimization_info_len_),
+                                         root_info.optimization_info_))) {
+        LOG_WARN("fail to append optimization info", KR(ret));
+      }
+    }
   }
   return ret;
 }
@@ -1453,25 +1900,25 @@ int aggregate_mview_plan_resources(common::ObIAllocator &allocator,
                                    int64_t &cpu_time,
                                    int64_t &io_wait_time,
                                    int64_t &disk_reads,
-                                   int64_t &memory_used,
-                                   int64_t &affected_rows)
+                                   int64_t &memory_used)
 {
   int ret = OB_SUCCESS;
   cpu_time = 0;
   io_wait_time = 0;
   disk_reads = 0;
   memory_used = 0;
-  affected_rows = 0;
   uint64_t plan_hash = 0;
   ObSEArray<ObSqlPlanItem *, 16> plan_infos;
   ObSEArray<MViewPlanMonitorTime, 2> monitor_times;
   ObSEArray<MViewPlanOtherStat, 1> other_stats;
   if (OB_FAIL(parse_merged_plan_json(allocator, plan_json, plan_hash,
-                                     plan_infos, monitor_times, other_stats))) {
+                                     plan_infos, monitor_times, other_stats,
+                                     NULL,
+                                     false /*need_predicates*/))) {
     LOG_WARN("fail to parse plan json for aggregation", KR(ret));
   } else if (OB_FAIL(aggregate_resources_from_arrays(plan_infos, monitor_times, other_stats,
                                                     cpu_time, io_wait_time, disk_reads,
-                                                    memory_used, affected_rows))) {
+                                                    memory_used))) {
     LOG_WARN("fail to aggregate resources", KR(ret));
   }
   return ret;

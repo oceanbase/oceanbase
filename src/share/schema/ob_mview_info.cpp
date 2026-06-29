@@ -331,7 +331,7 @@ int ObMViewInfo::set_last_refresh_info(ObISQLClient &sql_client,
     set_last_refresh_scn(last_refresh_scn);
     set_last_refresh_type(refresh_type);
     set_last_refresh_date(start_time);
-    set_last_refresh_time((end_time - start_time) / 1000 / 1000);
+    set_last_refresh_time(end_time - start_time);
     set_data_sync_scn(real_target_data_sync_scn);
     set_is_synced(is_synced);
   }

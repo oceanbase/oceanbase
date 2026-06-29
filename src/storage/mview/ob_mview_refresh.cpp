@@ -796,6 +796,44 @@ int ObMViewRefresher::fast_refresh(const ObIArray<ObString> &refresh_sqls)
   return ret;
 }
 
+int ObMViewRefresher::prepare_plan_capture_info(sql::ObSQLSessionInfo *exec_session_info,
+                                                 const ObString &fast_refresh_sql,
+                                                 int exec_ret,
+                                                 int64_t execution_time,
+                                                 ObMViewStmtPlanCaptureInfo &capture_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(exec_session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec_session_info is null", KR(ret));
+  } else {
+    const int64_t SLOW_SQL_THRESHOLD_US = 60L * 1000L * 1000L; // 1 min
+    capture_info.capture_mode_ =
+        (ObMVRefreshStatsCollectionLevel::ADVANCED == collection_level_
+         || (ObMVRefreshStatsCollectionLevel::TYPICAL == collection_level_
+             && (OB_SUCCESS != exec_ret || execution_time > SLOW_SQL_THRESHOLD_US)))
+        ? ObMViewPlanCaptureMode::FULL_PLAN
+        : ObMViewPlanCaptureMode::HASH_ONLY;
+    // Always capture server identity for per-step observability.
+    GCTX.self_addr().ip_to_string(capture_info.svr_ip_buf_, sizeof(capture_info.svr_ip_buf_));
+    capture_info.svr_port_ = GCTX.self_addr().get_port();
+    // Always capture plan_hash; full-plan mode additionally needs sql_id/trace_id/plan_id.
+    capture_info.plan_hash_ = exec_session_info->get_current_plan_hash();
+    if (capture_info.is_full_plan()) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(sql::ObSQLUtils::gen_sql_id_from_sql_string(*exec_session_info,
+                                                                  fast_refresh_sql,
+                                                                  capture_info.sql_id_buf_,
+                                                                  sizeof(capture_info.sql_id_buf_)))) {
+        LOG_WARN("fail to calc sql_id for plan capture, ignore", KR(tmp_ret));
+      }
+      ObCurTraceId::get_trace_id_str(capture_info.trace_id_buf_, sizeof(capture_info.trace_id_buf_));
+      capture_info.plan_id_ = exec_session_info->get_last_plan_id();
+    }
+  }
+  return ret;
+}
+
 int ObMViewRefresher::do_fast_refresh(const ObIArray<ObString> &refresh_sqls)
 {
   int ret = OB_SUCCESS;
@@ -850,9 +888,6 @@ int ObMViewRefresher::do_fast_refresh(const ObIArray<ObString> &refresh_sqls)
   }
   const int64_t last_refresh_date = mview_info_.get_last_refresh_date();
   const int64_t refresh_exec_start_time = ObTimeUtil::current_time();
-  // TODO: 这里应该用一个准确的刷新周期时间，而不是临时算出来的值
-  const int64_t scheduling_period = (last_refresh_date > 0) ? (refresh_exec_start_time - last_refresh_date) : 0;
-  const int64_t SLOW_SQL_THRESHOLD_US = 60L * 1000L * 1000L; // 1 min
 
   DEBUG_SYNC(BEFORE_MV_EXECUTE_REFRESH_SQL);
 
@@ -870,27 +905,13 @@ int ObMViewRefresher::do_fast_refresh(const ObIArray<ObString> &refresh_sqls)
     const int64_t execution_time = exec_end_time - exec_start_time;
 
     ObMViewStmtPlanCaptureInfo capture_info;
-    capture_info.should_capture_ = (ObMVRefreshStatsCollectionLevel::ADVANCED == collection_level_)
-                                   || (OB_SUCCESS != ret)
-                                   || (scheduling_period > 0 && execution_time > SLOW_SQL_THRESHOLD_US
-                                       && execution_time > scheduling_period);
-    // Always capture server identity for per-step observability.
-    GCTX.self_addr().ip_to_string(capture_info.svr_ip_buf_, sizeof(capture_info.svr_ip_buf_));
-    capture_info.svr_port_ = GCTX.self_addr().get_port();
-    if (capture_info.should_capture_) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(sql::ObSQLUtils::gen_sql_id_from_sql_string(*exec_session_info,
-                                                                  fast_refresh_sql,
-                                                                  capture_info.sql_id_buf_,
-                                                                  sizeof(capture_info.sql_id_buf_)))) {
-        LOG_WARN("fail to calc sql_id for plan capture, ignore", KR(tmp_ret));
-      }
-      ObCurTraceId::get_trace_id_str(capture_info.trace_id_buf_, sizeof(capture_info.trace_id_buf_));
-      capture_info.plan_id_ = exec_session_info->get_last_plan_id();
-      capture_info.plan_hash_ = exec_session_info->get_current_plan_hash();
-    }
     int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(prepare_plan_capture_info(exec_session_info, fast_refresh_sql,
+                                              ret, execution_time, capture_info))) {
+      LOG_WARN("fail to prepare plan capture info", KR(tmp_ret), K(i));
+    }
     LOG_INFO("mview_refresh", K(tenant_id), K(mview_id), K(parallelism), K(i), K(fast_refresh_sql), "time", execution_time);
+    tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(ObMViewRefreshStatsUtils::write_stmt_after_step(ctx_, param_, i + 1, execution_time, ret, capture_info, parallelism))) {
       LOG_WARN("fail to write stmt after step", KR(tmp_ret), K(i));
     }

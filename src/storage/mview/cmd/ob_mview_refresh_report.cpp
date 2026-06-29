@@ -8,6 +8,7 @@
 #include "storage/mview/cmd/ob_mview_refresh_report.h"
 
 #include "lib/container/ob_se_array.h"
+#include "lib/time/ob_time_utility.h"
 #include "share/ob_errno.h"
 #include "share/scn.h"
 #include "storage/mview/cmd/ob_mview_refresh_report_executor.h"
@@ -36,10 +37,74 @@ struct MViewTopoEdge
   int64_t next_;
 };
 
-static bool has_multiple_mviews(const ObIArray<MViewReportMVData> &mv_array)
+bool is_target_mv_missing(const MViewReportRunData &run_data, const ObIArray<MViewReportMVData> &mv_array)
 {
-  return mv_array.count() > 1
-         && mv_array.at(0).mview_id_ != mv_array.at(mv_array.count() - 1).mview_id_;
+  bool target_mv_missing = false;
+  if (run_data.has_nested_target()) {
+    target_mv_missing = true;
+    for (int64_t i = 0; target_mv_missing && i < mv_array.count(); ++i) {
+      if (mv_array.at(i).mview_id_ == run_data.mview_id_) {
+        target_mv_missing = false;
+      }
+    }
+  }
+  return target_mv_missing;
+}
+
+int resolve_method_display(const MViewReportRunData &run_data,
+                           ObIAllocator &allocator,
+                           const ObIArray<MViewReportMVData> &mv_array,
+                           const char *&method_display)
+{
+  int ret = OB_SUCCESS;
+  static constexpr int64_t METHOD_DISPLAY_BUF_LEN = 64;
+  char *method_buf = static_cast<char *>(allocator.alloc(METHOD_DISPLAY_BUF_LEN));
+  method_display = NULL;
+  if (OB_ISNULL(method_buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc method_display", KR(ret));
+  } else if (!run_data.method_.empty()) {
+    int64_t pos = 0;
+    bool first = true;
+    for (int64_t i = 0; OB_SUCC(ret) && i < run_data.method_.length(); ++i) {
+      const char *name = NULL;
+      const char ch = run_data.method_.ptr()[i];
+      if ('f' == ch || 'F' == ch) {
+        name = "FAST";
+      } else if ('c' == ch || 'C' == ch) {
+        name = "COMPLETE";
+      } else if ('?' == ch) {
+        name = "FORCE";
+      } else if ('p' == ch || 'P' == ch) {
+        name = "PCT";
+      }
+      if (NULL != name) {
+        if (OB_FAIL(databuff_printf(method_buf, METHOD_DISPLAY_BUF_LEN, pos, "%s%s", first ? "" : " ", name))) {
+          LOG_WARN("method_buf overflow", KR(ret));
+        } else {
+          first = false;
+        }
+      }
+    }
+    if (OB_SUCC(ret) && first) {
+      if (OB_FAIL(databuff_printf(method_buf, METHOD_DISPLAY_BUF_LEN, "AUTO"))) {
+        LOG_WARN("method_buf overflow", KR(ret));
+      }
+    }
+  } else if (mv_array.count() > 0) {
+    if (OB_FAIL(databuff_printf(method_buf,
+                                METHOD_DISPLAY_BUF_LEN,
+                                "AUTO (executed %s)",
+                                mv_array.at(0).type_name()))) {
+      LOG_WARN("method_buf overflow", KR(ret));
+    }
+  } else if (OB_FAIL(databuff_printf(method_buf, METHOD_DISPLAY_BUF_LEN, "AUTO"))) {
+    LOG_WARN("method_buf overflow", KR(ret));
+  }
+  if (OB_SUCC(ret)) {
+    method_display = method_buf;
+  }
+  return ret;
 }
 
 static int find_mv_id_index(const ObIArray<int64_t> &mv_ids, const int64_t mv_id, int64_t &idx)
@@ -90,14 +155,14 @@ static bool stmt_is_earlier(const MViewReportStmtData &stmt_data,
 
 // ====== Phase 1: Topology ======
 
-static int build_phase1_topology(MViewReportContext &ctx)
+static int build_mv_topology(MViewReportContext &ctx)
 {
   int ret = OB_SUCCESS;
   MViewReportData &data = *ctx.data_;
   if (OB_ISNULL(data.run_data_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("run_data is null", KR(ret));
-  } else if (!has_multiple_mviews(data.mv_array_) || 0 == data.dep_edges_.count()) {
+  } else if (!has_distinct_mviews(data.mv_array_) || 0 == data.dep_edges_.count()) {
     for (int64_t i = 0; i < data.mv_array_.count(); ++i) {
       data.mv_array_.at(i).topo_order_ = 1;
       data.mv_array_.at(i).deps_ready_time_ = data.run_data_->start_time_;
@@ -213,16 +278,16 @@ static int build_phase1_topology(MViewReportContext &ctx)
 // ====== Phase 2: Group identification + per-MV computed skeleton ======
 // Single pass over mv_array_:
 //   - sums total_execute_time
-//   - identifies group boundaries (first_idx_ / last_idx_ on per_mv_computed_)
+//   - identifies retry-attempt ranges on mv_groups_
 //   - tracks slowest group, num_failures, retries, retry overhead, sched overhead
 
-static int build_phase2_groups(MViewReportContext &ctx, MViewRefreshReport &report)
+static int build_mv_groups(MViewReportContext &ctx, MViewRefreshReport &report)
 {
   int ret = OB_SUCCESS;
   const MViewReportData &data = *ctx.data_;
   const ObIArray<MViewReportMVData> &mv_array = data.mv_array_;
   MViewReportSummaryInfo &summary = report.summary_;
-  ObIArray<MViewReportPerMVComputed> &per_mv_computed = report.per_mv_computed_;
+  ObIArray<MViewReportMVGroup> &mv_groups = report.mv_groups_;
 
   int64_t total_execute_time = 0;
   int64_t prev_mv_id = OB_INVALID_ID;
@@ -230,49 +295,49 @@ static int build_phase2_groups(MViewReportContext &ctx, MViewRefreshReport &repo
     total_execute_time += mv_array.at(i).elapsed_time_;
     if (mv_array.at(i).mview_id_ != prev_mv_id) {
       if (OB_INVALID_ID != prev_mv_id) {
-        per_mv_computed.at(per_mv_computed.count() - 1).last_idx_ = i - 1;
+        mv_groups.at(mv_groups.count() - 1).attempt_range_.last_ = i - 1;
       }
-      MViewReportPerMVComputed comp;
-      comp.first_idx_ = i;
-      comp.last_idx_ = i;
-      if (OB_FAIL(per_mv_computed.push_back(comp))) {
-        LOG_WARN("fail to push per_mv_computed", KR(ret));
+      MViewReportMVGroup group;
+      group.attempt_range_ = MViewReportIndexRange(i);
+      if (OB_FAIL(mv_groups.push_back(group))) {
+        LOG_WARN("fail to push mv group", KR(ret));
       } else {
         prev_mv_id = mv_array.at(i).mview_id_;
       }
     }
   }
-  if (OB_SUCC(ret) && mv_array.count() > 0 && per_mv_computed.count() > 0) {
-    per_mv_computed.at(per_mv_computed.count() - 1).last_idx_ = mv_array.count() - 1;
+  if (OB_SUCC(ret) && mv_array.count() > 0 && mv_groups.count() > 0) {
+    mv_groups.at(mv_groups.count() - 1).attempt_range_.last_ = mv_array.count() - 1;
   }
   summary.total_execute_time_us_ = total_execute_time;
-  summary.num_distinct_mvs_ = per_mv_computed.count();
+  summary.num_distinct_mvs_ = mv_groups.count();
 
   int64_t total_retries = 0;
   int64_t total_retry_overhead = 0;
   int64_t num_failures = 0;
   int64_t total_sched_overhead = 0;
   int64_t slowest_grp = 0;
-  for (int64_t group_idx = 0; OB_SUCC(ret) && group_idx < per_mv_computed.count(); ++group_idx) {
-    const int64_t last = per_mv_computed.at(group_idx).last_idx_;
-    const int64_t first = per_mv_computed.at(group_idx).first_idx_;
-    const int64_t slow_last = per_mv_computed.at(slowest_grp).last_idx_;
+  for (int64_t group_idx = 0; OB_SUCC(ret) && group_idx < mv_groups.count(); ++group_idx) {
+    const int64_t last = mv_groups.at(group_idx).attempt_range_.last_;
+    const int64_t first = mv_groups.at(group_idx).attempt_range_.first_;
+    const int64_t slow_last = mv_groups.at(slowest_grp).attempt_range_.last_;
     if (mv_array.at(last).elapsed_time_ > mv_array.at(slow_last).elapsed_time_) {
       slowest_grp = group_idx;
     }
     total_retries += last - first;
     if (last != first) {
-      const int64_t overhead_end = (0 != mv_array.at(last).result_) ? last : (last - 1);
+      const int64_t overhead_end = mv_array.at(last).is_failed() ? last : (last - 1);
       for (int64_t i = first; i <= overhead_end; ++i) {
         total_retry_overhead += mv_array.at(i).elapsed_time_;
       }
     }
-    if (0 != mv_array.at(last).result_) {
+    if (mv_array.at(last).is_failed()) {
       ++num_failures;
     }
     const MViewReportMVData &mv = mv_array.at(last);
-    if (mv.deps_ready_time_ > 0 && mv.start_time_ > mv.deps_ready_time_) {
-      total_sched_overhead += mv.start_time_ - mv.deps_ready_time_;
+    const int64_t delay = mv.sched_delay_us();
+    if (delay >= 0) {
+      total_sched_overhead += delay;
     }
   }
   summary.total_retries_ = total_retries;
@@ -285,40 +350,42 @@ static int build_phase2_groups(MViewReportContext &ctx, MViewRefreshReport &repo
 
 // ====== Phase 3: Resource totals ======
 
-static void build_phase3_resources(const MViewReportData &data,
-                                   const ObIArray<MViewReportPerMVComputed> &per_mv_computed,
+static void aggregate_mv_resources(const ObIArray<MViewReportMVGroup> &mv_groups,
                                    MViewReportResourceOverview &resources)
 {
+  int64_t total_steps = 0;
   int64_t total_cpu = 0;
   int64_t total_io_wait = 0;
   int64_t total_disk_reads = 0;
   int64_t max_memory = 0;
-  for (int64_t i = 0; i < per_mv_computed.count(); ++i) {
-    total_cpu += per_mv_computed.at(i).cpu_time_us_;
-    total_io_wait += per_mv_computed.at(i).io_wait_time_us_;
-    total_disk_reads += per_mv_computed.at(i).disk_reads_;
-    if (per_mv_computed.at(i).max_memory_bytes_ > max_memory) {
-      max_memory = per_mv_computed.at(i).max_memory_bytes_;
+  for (int64_t i = 0; i < mv_groups.count(); ++i) {
+    const MViewReportMVGroup &group = mv_groups.at(i);
+    total_steps += group.final_stmt_range_.count();
+    total_cpu += group.cpu_time_us_;
+    total_io_wait += group.io_wait_time_us_;
+    total_disk_reads += group.disk_reads_;
+    if (group.max_memory_bytes_ > max_memory) {
+      max_memory = group.max_memory_bytes_;
     }
   }
-  resources.total_steps_ = data.stmt_array_.count();
+  resources.total_steps_ = total_steps;
   resources.total_cpu_us_ = total_cpu;
   resources.total_io_wait_us_ = total_io_wait;
   resources.total_disk_reads_ = total_disk_reads;
   resources.max_memory_bytes_ = max_memory;
 }
 
-// ====== Phase 4: Per-MV change/stmt cursor scan ======
+// ====== Phase 4: Per-MV change/stmt range indexing ======
 
-static int build_phase4_per_mv_cursors(const MViewReportData &data,
-                                       ObIArray<MViewReportPerMVComputed> &per_mv_computed)
+static int index_mv_group_ranges(const MViewReportData &data,
+                                 ObIArray<MViewReportMVGroup> &mv_groups)
 {
   int ret = OB_SUCCESS;
   int64_t change_cursor = 0;
   int64_t stmt_cursor = 0;
-  for (int64_t group_idx = 0; OB_SUCC(ret) && group_idx < per_mv_computed.count(); ++group_idx) {
-    MViewReportPerMVComputed &comp = per_mv_computed.at(group_idx);
-    const int64_t mv_idx = comp.last_idx_;
+  for (int64_t group_idx = 0; OB_SUCC(ret) && group_idx < mv_groups.count(); ++group_idx) {
+    MViewReportMVGroup &group = mv_groups.at(group_idx);
+    const int64_t mv_idx = group.attempt_range_.last_;
     const MViewReportMVData &mv = data.mv_array_.at(mv_idx);
     const int64_t mview_id = mv.mview_id_;
     const int64_t retry_id = mv.retry_id_;
@@ -332,11 +399,11 @@ static int build_phase4_per_mv_cursors(const MViewReportData &data,
            && data.change_array_.at(change_cursor).mview_id_ == mview_id
            && data.change_array_.at(change_cursor).retry_id_ == retry_id) {
       const MViewReportChangeData &change = data.change_array_.at(change_cursor);
-      if (comp.change_group_first_ < 0) {
-        comp.change_group_first_ = change_cursor;
+      if (!group.final_change_range_.is_valid()) {
+        group.final_change_range_.first_ = change_cursor;
       }
-      comp.change_group_last_ = change_cursor;
-      comp.changes_ += change.num_rows_ins_ + change.num_rows_upd_ + change.num_rows_del_;
+      group.final_change_range_.last_ = change_cursor;
+      group.changes_ += change.total_changes();
       ++change_cursor;
     }
 
@@ -348,19 +415,19 @@ static int build_phase4_per_mv_cursors(const MViewReportData &data,
            && data.stmt_array_.at(stmt_cursor).mview_id_ == mview_id
            && data.stmt_array_.at(stmt_cursor).retry_id_ == retry_id) {
       const MViewReportStmtData &stmt_stat = data.stmt_array_.at(stmt_cursor);
-      if (comp.stmt_group_first_ < 0) {
-        comp.stmt_group_first_ = stmt_cursor;
+      if (!group.final_stmt_range_.is_valid()) {
+        group.final_stmt_range_.first_ = stmt_cursor;
       }
-      comp.stmt_group_last_ = stmt_cursor;
-      comp.cpu_time_us_ += stmt_stat.cpu_time_;
-      comp.io_wait_time_us_ += stmt_stat.io_wait_time_;
-      comp.disk_reads_ += stmt_stat.disk_reads_;
-      if (stmt_stat.memory_used_ > comp.max_memory_bytes_) {
-        comp.max_memory_bytes_ = stmt_stat.memory_used_;
+      group.final_stmt_range_.last_ = stmt_cursor;
+      group.cpu_time_us_ += stmt_stat.cpu_time_;
+      group.io_wait_time_us_ += stmt_stat.io_wait_time_;
+      group.disk_reads_ += stmt_stat.disk_reads_;
+      if (stmt_stat.memory_used_ > group.max_memory_bytes_) {
+        group.max_memory_bytes_ = stmt_stat.memory_used_;
       }
       if (stmt_stat.execution_time_ > slowest_stmt_time) {
         slowest_stmt_time = stmt_stat.execution_time_;
-        comp.slowest_stmt_idx_ = stmt_cursor;
+        group.slowest_stmt_idx_ = stmt_cursor;
       }
       ++stmt_cursor;
     }
@@ -388,96 +455,19 @@ int MViewRefreshReport::build(MViewReportContext &ctx)
     stmt_array_ = &data.stmt_array_;
     summary_.run_ = &run_data;
 
-    if (OB_FAIL(build_phase1_topology(ctx))) {
+    if (OB_FAIL(build_mv_topology(ctx))) {
       LOG_WARN("fail to compute topology", KR(ret));
-    } else if (OB_FAIL(build_phase2_groups(ctx, *this))) {
+    } else if (OB_FAIL(build_mv_groups(ctx, *this))) {
       LOG_WARN("fail to compute groups", KR(ret));
-    } else if (OB_FAIL(build_phase4_per_mv_cursors(data, per_mv_computed_))) {
-      LOG_WARN("fail to scan per-mv cursors", KR(ret));
+    } else if (OB_FAIL(index_mv_group_ranges(data, mv_groups_))) {
+      LOG_WARN("fail to index mv group ranges", KR(ret));
     } else {
-      build_phase3_resources(data, per_mv_computed_, resources_);
+      aggregate_mv_resources(mv_groups_, resources_);
 
-      const int64_t total_elapsed = run_data.end_time_ - run_data.start_time_;
-      summary_.elapsed_us_ = total_elapsed;
-      summary_.status_str_ = (0 == run_data.number_of_failures_) ? "SUCCESS" : "FAILED";
-
-      // Resolve method display name
-      static constexpr int64_t METHOD_DISPLAY_BUF_LEN = 64;
-      char *method_buf = static_cast<char *>(ctx.allocator_->alloc(METHOD_DISPLAY_BUF_LEN));
-      if (OB_ISNULL(method_buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to alloc method_display", KR(ret));
-      } else if (!run_data.method_.empty()) {
-        int64_t pos = 0;
-        bool first = true;
-        for (int64_t i = 0; OB_SUCC(ret) && i < run_data.method_.length(); ++i) {
-          const char *name = NULL;
-          const char ch = run_data.method_.ptr()[i];
-          if ('f' == ch || 'F' == ch) {
-            name = "FAST";
-          } else if ('c' == ch || 'C' == ch) {
-            name = "COMPLETE";
-          } else if ('?' == ch) {
-            name = "FORCE";
-          } else if ('p' == ch || 'P' == ch) {
-            name = "PCT";
-          }
-          if (NULL != name) {
-            if (OB_FAIL(databuff_printf(method_buf, METHOD_DISPLAY_BUF_LEN, pos,
-                                        "%s%s", first ? "" : " ", name))) {
-              LOG_WARN("method_buf overflow", KR(ret));
-            } else {
-              first = false;
-            }
-          }
-        }
-        if (OB_SUCC(ret) && first) {
-          if (OB_FAIL(databuff_printf(method_buf, METHOD_DISPLAY_BUF_LEN, "AUTO"))) {
-            LOG_WARN("method_buf overflow", KR(ret));
-          }
-        }
-      } else if (mv_array.count() > 0) {
-        if (OB_FAIL(databuff_printf(method_buf, METHOD_DISPLAY_BUF_LEN, "%s",
-                 (0 == mv_array.at(0).refresh_type_) ? "AUTO (executed COMPLETE)" : "AUTO (executed FAST)"))) {
-          LOG_WARN("method_buf overflow", KR(ret));
-        }
-      } else {
-        if (OB_FAIL(databuff_printf(method_buf, METHOD_DISPLAY_BUF_LEN, "AUTO"))) {
-          LOG_WARN("method_buf overflow", KR(ret));
-        }
-      }
-      summary_.method_display_ = method_buf;
-
-      // Per-MV derived fields (role, type, throughput, elapsed_pct, sched_delay)
-      const int64_t num_mvs = per_mv_computed_.count();
-      for (int64_t i = 0; OB_SUCC(ret) && i < num_mvs; ++i) {
-        MViewReportPerMVComputed &comp = per_mv_computed_.at(i);
-        const MViewReportMVData &mv = mv_array.at(comp.last_idx_);
-        comp.mv_ = &mv;
-        comp.display_num_ = i + 1;
-        comp.slowest_ = (i == summary_.slowest_grp_ && num_mvs > 1);
-        comp.result_ = mv.result_;
-        comp.type_ = (0 == mv.refresh_type_) ? "COMPLETE" : "FAST";
-        comp.type_short_ = (0 == mv.refresh_type_) ? "COMPL" : "FAST";
-        if (!run_data.nested_ || mv.mview_id_ == run_data.mview_id_) {
-          comp.role_ = "TGT";
-        } else {
-          comp.role_ = "DEP";
-        }
-        comp.elapsed_pct_ = (total_elapsed > 0)
-          ? (static_cast<double>(mv.elapsed_time_) / static_cast<double>(total_elapsed) * 100.0)
-          : 0.0;
-        const double elapsed_s = static_cast<double>(mv.elapsed_time_) / 1000000.0;
-        if (elapsed_s > 0.0 && comp.changes_ > 0) {
-          comp.throughput_per_sec_ = static_cast<double>(comp.changes_) / elapsed_s;
-        } else {
-          comp.throughput_per_sec_ = -1.0;
-        }
-        if (mv.deps_ready_time_ > 0 && mv.start_time_ > mv.deps_ready_time_) {
-          comp.sched_delay_us_ = mv.start_time_ - mv.deps_ready_time_;
-        } else {
-          comp.sched_delay_us_ = -1;
-        }
+      summary_.elapsed_us_ = run_data.elapsed_us();
+      summary_.status_str_ = run_data.summary_status();
+      if (OB_FAIL(resolve_method_display(run_data, *ctx.allocator_, mv_array, summary_.method_display_))) {
+        LOG_WARN("fail to resolve method display", KR(ret));
       }
     }
   }

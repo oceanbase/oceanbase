@@ -60,8 +60,6 @@ int ObMViewRefreshReportExecutor::execute(ObExecContext &ctx,
       uint64_t conn_tenant_id = session_info->get_effective_tenant_id();
       if (OB_FAIL(ObMViewRefreshReportFetcher::fetch_all(ctx, conn_tenant_id, arg.tenant_id_, refresh_id, context))) {
         LOG_WARN("fail to fetch report data", KR(ret), K(refresh_id));
-      } else if (OB_FAIL(resolve_names(ctx, arg.tenant_id_, context))) {
-        LOG_WARN("fail to resolve names", KR(ret), K(refresh_id));
       } else {
         MViewRefreshReport *report = NULL;
         void *mem = allocator.alloc(sizeof(MViewRefreshReport));
@@ -147,7 +145,7 @@ int ObMViewRefreshReportExecutor::resolve_refresh_id_(ObExecContext &ctx,
       const uint64_t conn_tenant_id = session_info->get_effective_tenant_id();
       ObSqlString sql;
       if (OB_FAIL(sql.assign_fmt("SELECT refresh_id FROM %s "
-                                 "WHERE tenant_id = %lu AND mview_id = %lu AND elapsed_time > 0 "
+                                 "WHERE tenant_id = %lu AND mview_id = %lu AND result != 1 "
                                  "ORDER BY end_time DESC LIMIT 1",
                                  OB_ALL_VIRTUAL_MVIEW_REFRESH_RUN_STATS_TNAME,
                                  arg.tenant_id_,
@@ -229,104 +227,6 @@ int ObMViewRefreshReportExecutor::resolve_refresh_id_(ObExecContext &ctx,
       }
     }
   }
-  return ret;
-}
-
-int ObMViewRefreshReportExecutor::resolve_names(ObExecContext &ctx, uint64_t tenant_id, MViewReportContext &context)
-{
-  int ret = OB_SUCCESS;
-  ObSQLSessionInfo *session_info = NULL;
-  ObSqlCtx *sql_ctx = NULL;
-  ObSchemaGetterGuard *schema_guard = NULL;
-  const ObTableSchema *table_schema = NULL;
-  ObIAllocator *allocator = NULL;
-  MViewReportData *data = NULL;
-  ObSchemaGetterGuard tenant_guard;
-  if (OB_ISNULL(sql_ctx = ctx.get_sql_ctx())
-      || OB_ISNULL(session_info = ctx.get_my_session())
-      || OB_ISNULL(allocator = context.allocator_) || OB_ISNULL(data = context.data_) || OB_ISNULL(data->run_data_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql_ctx, session, allocator, data or run_data is null", KR(ret));
-  } else if (OB_ISNULL(sql_ctx->schema_guard_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema_guard is null", KR(ret));
-  } else if (session_info->get_effective_tenant_id() == tenant_id) {
-    schema_guard = sql_ctx->schema_guard_;
-  } else if (OB_ISNULL(GCTX.schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema_service is null", KR(ret));
-  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, tenant_guard))) {
-    LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
-  } else {
-    schema_guard = &tenant_guard;
-  }
-  if (OB_FAIL(ret)) {
-  } else if (0 == data->run_data_->mview_id_) {
-  } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id, data->run_data_->mview_id_, table_schema))) {
-    LOG_WARN("fail to get target mv schema", KR(ret), K(tenant_id), K(data->run_data_->mview_id_));
-  } else if (OB_ISNULL(table_schema)) {
-  } else if (OB_FAIL(ob_write_string(*allocator, table_schema->get_table_name(), data->run_data_->mview_name_))) {
-    LOG_WARN("fail to copy target mv name", KR(ret));
-  }
-
-  // Resolve run owner name via schema, analogous to table name resolution above.
-  if (OB_FAIL(ret)) {
-  } else if (0 != data->run_data_->run_user_id_) {
-    const ObUserInfo *user_info = schema_guard->get_user_info(tenant_id,
-                                                              static_cast<uint64_t>(data->run_data_->run_user_id_));
-    if (OB_ISNULL(user_info)) {
-    } else if (OB_FAIL(ob_write_string(*allocator, user_info->get_user_name(), data->run_data_->run_owner_))) {
-      LOG_WARN("fail to copy user name", KR(ret), K(data->run_data_->run_user_id_));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (data->mv_array_.count() > 0) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < data->mv_array_.count(); ++i) {
-      MViewReportMVData &mv = data->mv_array_.at(i);
-      const ObTableSchema *mv_table_schema = NULL;
-      if (OB_FAIL(schema_guard->get_table_schema(tenant_id, mv.mview_id_, mv_table_schema))) {
-        LOG_WARN("fail to get mv schema", KR(ret), K(tenant_id), K(mv.mview_id_));
-      } else if (OB_ISNULL(mv_table_schema)) {
-      } else if (OB_FAIL(ob_write_string(*allocator, mv_table_schema->get_table_name(), mv.mv_name_))) {
-        LOG_WARN("fail to copy mv name", KR(ret));
-      } else {
-        const ObSimpleDatabaseSchema *db_schema = NULL;
-        uint64_t db_id = mv_table_schema->get_database_id();
-        if (OB_FAIL(schema_guard->get_database_schema(tenant_id, db_id, db_schema))) {
-          LOG_WARN("fail to get db schema", KR(ret), K(tenant_id), K(db_id));
-        } else if (OB_ISNULL(db_schema)) {
-        } else if (OB_FAIL(ob_write_string(*allocator, db_schema->get_database_name_str(), mv.mv_owner_))) {
-          LOG_WARN("fail to copy db name", KR(ret));
-        }
-      }
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (data->change_array_.count() > 0) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < data->change_array_.count(); ++i) {
-      MViewReportChangeData &ch = data->change_array_.at(i);
-      const ObTableSchema *ch_table_schema = NULL;
-      if (OB_FAIL(schema_guard->get_table_schema(tenant_id, ch.detail_table_id_, ch_table_schema))) {
-        LOG_WARN("fail to get change table schema", KR(ret), K(tenant_id), K(ch.detail_table_id_));
-      } else if (OB_ISNULL(ch_table_schema)) {
-      } else if (OB_FAIL(ob_write_string(*allocator, ch_table_schema->get_table_name(), ch.tbl_name_))) {
-        LOG_WARN("fail to copy change tbl name", KR(ret));
-      }
-      if (OB_SUCC(ret) && OB_NOT_NULL(ch_table_schema)) {
-        const ObSimpleDatabaseSchema *db_schema = NULL;
-        uint64_t db_id = ch_table_schema->get_database_id();
-        if (OB_FAIL(schema_guard->get_database_schema(tenant_id, db_id, db_schema))) {
-          LOG_WARN("fail to get db schema", KR(ret), K(tenant_id), K(db_id));
-        } else if (OB_ISNULL(db_schema)) {
-        } else if (OB_FAIL(ob_write_string(*allocator, db_schema->get_database_name_str(), ch.tbl_owner_))) {
-          LOG_WARN("fail to copy change db name", KR(ret));
-        }
-      }
-    }
-  }
-
   return ret;
 }
 
