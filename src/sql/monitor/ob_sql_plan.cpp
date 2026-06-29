@@ -1128,10 +1128,12 @@ int ObSqlPlan::print_constraint_info(char *buf,
 void ObSqlPlan::filter_rescan_op(ObIArray<ObSqlPlanItem*> &sql_plan_infos)
 {
   int64_t rescan_idx = -1;
+  // length of "RESCAN"
+  const int64_t rescan_name_len = 6;
   ObSqlPlanItem *rescan_item = NULL;
   for (int i = 0; i < sql_plan_infos.count(); i++) {
     ObSqlPlanItem *plan_item = sql_plan_infos.at(i);
-    if (0 == MEMCMP(log_op_def::get_op_name(log_op_def::LOG_RESCAN), plan_item->operation_, plan_item->operation_len_)) {
+    if (OB_NOT_NULL(plan_item->operation_) && plan_item->operation_len_ == rescan_name_len && 0 == MEMCMP(log_op_def::get_op_name(log_op_def::LOG_RESCAN), plan_item->operation_, rescan_name_len)) {
       rescan_item = plan_item;
       rescan_idx = i;
 
