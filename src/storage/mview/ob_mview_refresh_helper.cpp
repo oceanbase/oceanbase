@@ -9,6 +9,9 @@
 #include "sql/engine/ob_exec_context.h"
 #include "storage/mview/ob_mview_transaction.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
+#include "storage/tablelock/ob_table_lock_rpc_struct.h"
+#include "storage/tablelock/ob_table_lock_service.h"
+#include "observer/ob_inner_sql_result.h"
 #include "share/schema/ob_mview_info.h"
 
 namespace oceanbase
@@ -45,7 +48,8 @@ int ObMViewRefreshHelper::get_current_scn(SCN &current_scn)
 }
 
 int ObMViewRefreshHelper::lock_mview(ObMViewTransaction &trans, const uint64_t tenant_id,
-                                     const uint64_t mview_id, const bool try_lock)
+                                     const uint64_t mview_id, const bool try_lock,
+                                     ObIArray<ObTableLockHolderInfo> *holder_info)
 {
   int ret = OB_SUCCESS;
   ObTableLockOwnerID owner_id;
@@ -80,10 +84,68 @@ int ObMViewRefreshHelper::lock_mview(ObMViewTransaction &trans, const uint64_t t
     }
     if (OB_SUCC(ret)) {
       LOG_DEBUG("lock obj start", K(lock_arg));
-      if (OB_FAIL(ObInnerConnectionLockUtil::lock_obj(tenant_id, lock_arg, conn))) {
-        LOG_WARN("fail to lock obj", KR(ret));
+      if (nullptr != holder_info) {
+        ret = lock_mview_with_holder_(conn, tenant_id, lock_arg, holder_info);
+      } else if (OB_FAIL(ObInnerConnectionLockUtil::lock_obj(tenant_id, lock_arg, conn))) {
+        LOG_WARN("fail to lock obj", KR(ret), K(tenant_id), K(mview_id));
       }
       LOG_DEBUG("lock obj end", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObMViewRefreshHelper::lock_mview_with_holder_(ObInnerSQLConnection *conn,
+                                            const uint64_t tenant_id,
+                                            const ObLockObjRequest &arg,
+                                            ObIArray<ObTableLockHolderInfo> *holder_info)
+{
+  int ret = OB_SUCCESS;
+  observer::ObReqTimeGuard req_timeinfo_guard;
+  bool local_execute = false;
+  if (OB_ISNULL(conn) || OB_ISNULL(holder_info) || OB_INVALID_TENANT_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(conn), KP(holder_info), K(tenant_id));
+  } else if (OB_FALSE_IT(local_execute = conn->is_local_execute(GCONF.cluster_id, tenant_id))) {
+  } else if (OB_UNLIKELY(!conn->is_in_trans())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("inner conn must be already in trans", K(ret));
+  } else if (!local_execute) {
+    ret = OB_TENANT_NOT_IN_SERVER;
+    LOG_WARN("tenant not in server", K(ret), K(tenant_id), K(arg));
+  } else {
+    SMART_VAR(ObInnerSQLResult, res, conn->get_session(), conn->is_inner_session(), conn->get_diagnostic_info())
+    {
+      if (OB_FAIL(conn->switch_tenant(tenant_id))) {
+        LOG_WARN("switch tenant failed", K(ret), K(tenant_id));
+      } else if (OB_FAIL(res.init(true /*local_execute*/))) {
+        LOG_WARN("init result set", K(ret));
+      } else {
+        transaction::ObTxDesc *tx_desc = nullptr;
+        if (OB_ISNULL(tx_desc = conn->get_session().get_tx_desc())) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid tx_desc", K(ret));
+        } else {
+          transaction::ObTxParam tx_param;
+          tx_param.access_mode_ = transaction::ObTxAccessMode::RW;
+          tx_param.isolation_ = conn->get_session().get_tx_isolation();
+          tx_param.cluster_id_ = GCONF.cluster_id;
+          conn->get_session().get_tx_timeout(tx_param.timeout_us_);
+          tx_param.lock_timeout_us_ = conn->get_session().get_trx_lock_timeout();
+          MTL_SWITCH(tenant_id)
+          {
+            ObLockObjsRequest lock_objs_req;
+            if (OB_FAIL(lock_objs_req.assign(arg))) {
+              LOG_WARN("assign lock_objs_req failed", K(ret), K(arg));
+            } else if (OB_FAIL(MTL(ObTableLockService *)->lock(*tx_desc, tx_param,
+                     lock_objs_req, false /*is_from_leader*/, false /*is_replay*/, holder_info))) {
+              LOG_WARN("lock with holder failed", K(ret), K(tenant_id), K(arg));
+            } else if (OB_FAIL(res.close())) {
+              LOG_WARN("close result set failed", K(ret), K(tenant_id));
+            }
+          }
+        }
+      }
     }
   }
   return ret;

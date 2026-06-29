@@ -146,7 +146,8 @@ int ObOBJLock::slow_lock(
     const ObTableLockOp &lock_op,
     const uint64_t lock_mode_cnt_in_same_trans[],
     ObMalloc &allocator,
-    ObTxIDSet &conflict_tx_set)
+    ObTxIDSet &conflict_tx_set,
+    ObIArray<ObTableLockHolderInfo> *holder_info)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -222,7 +223,8 @@ int ObOBJLock::slow_lock(
                                        conflict_with_dml_lock,
                                        true,  /* include_finish_tx */
                                        false, /* only_check_dml_lock */
-                                       param.is_for_replace_))) {
+                                       param.is_for_replace_,
+                                       holder_info))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("check allow lock failed", K(ret), K(lock_op));
     }
@@ -494,7 +496,8 @@ int ObOBJLock::update_lock_status(const ObTableLockOp &lock_op,
 int ObOBJLock::try_fast_lock_(
     const ObTableLockOp &lock_op,
     const uint64_t lock_mode_cnt_in_same_trans[],
-    ObTxIDSet &conflict_tx_set)
+    ObTxIDSet &conflict_tx_set,
+    ObIArray<ObTableLockHolderInfo> *holder_info)
 {
   int ret = OB_SUCCESS;
   bool unused_conflict_with_dml_lock = false;
@@ -506,7 +509,11 @@ int ObOBJLock::try_fast_lock_(
   } else if (OB_FAIL(check_allow_lock_(lock_op,
                                        lock_mode_cnt_in_same_trans,
                                        conflict_tx_set,
-                                       unused_conflict_with_dml_lock))) {
+                                       unused_conflict_with_dml_lock,
+                                       true,  /* include_finish_tx */
+                                       false, /* only_check_dml_lock */
+                                       false, /* check_for_replace */
+                                       holder_info))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("check allow lock failed", K(ret), K(lock_op));
     }
@@ -550,7 +557,8 @@ int ObOBJLock::fast_lock(
     const ObTableLockOp &lock_op,
     const uint64_t lock_mode_cnt_in_same_trans[],
     ObMalloc &allocator,
-    ObTxIDSet &conflict_tx_set)
+    ObTxIDSet &conflict_tx_set,
+    ObIArray<ObTableLockHolderInfo> *holder_info)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -610,7 +618,8 @@ int ObOBJLock::fast_lock(
       // do nothing
     } else if (OB_FAIL(try_fast_lock_(lock_op,
                                       lock_mode_cnt_in_same_trans,
-                                      conflict_tx_set))) {
+                                      conflict_tx_set,
+                                      holder_info))) {
       if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_EAGAIN != ret) {
         LOG_WARN("try fast lock failed", KR(ret), K(lock_op));
       }
@@ -641,7 +650,8 @@ int ObOBJLock::lock(
     const ObTableLockOp &lock_op,
     const uint64_t lock_mode_cnt_in_same_trans[],
     ObMalloc &allocator,
-    ObTxIDSet &conflict_tx_set)
+    ObTxIDSet &conflict_tx_set,
+    ObIArray<ObTableLockHolderInfo> *holder_info)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -661,7 +671,8 @@ int ObOBJLock::lock(
                             lock_op,
                             lock_mode_cnt_in_same_trans,
                             allocator,
-                            conflict_tx_set))) {
+                            conflict_tx_set,
+                            holder_info))) {
         if (ret != OB_TRY_LOCK_ROW_CONFLICT &&
             ret != OB_EAGAIN) {
           LOG_WARN("lock failed.", K(ret), K(lock_op));
@@ -671,7 +682,8 @@ int ObOBJLock::lock(
                                  lock_op,
                                  lock_mode_cnt_in_same_trans,
                                  allocator,
-                                 conflict_tx_set))) {
+                                 conflict_tx_set,
+                                 holder_info))) {
       if (ret != OB_TRY_LOCK_ROW_CONFLICT &&
           ret != OB_EAGAIN) {
         LOG_WARN("lock failed.", K(ret), K(lock_op));
@@ -1379,7 +1391,8 @@ int ObOBJLock::check_allow_lock_(
     bool &conflict_with_dml_lock,
     const bool include_finish_tx,
     const bool only_check_dml_lock,
-    const bool check_for_replace)
+    const bool check_for_replace,
+    ObIArray<ObTableLockHolderInfo> *holder_info)
 {
   int ret = OB_SUCCESS;
   int64_t conflict_modes = 0;
@@ -1431,6 +1444,39 @@ int ObOBJLock::check_allow_lock_(
     conflict_with_dml_lock = ((conflict_modes & ROW_SHARE && row_share_) ||
                               (conflict_modes & ROW_EXCLUSIVE && row_exclusive_));
   }
+  // best-effort collect holder info for diagnosis
+  if (OB_TRY_LOCK_ROW_CONFLICT == ret && OB_NOT_NULL(holder_info) && conflict_modes != 0) {
+    int tmp_ret = OB_SUCCESS;
+    ObTableLockHolderInfo holder;
+    for (int64_t i = 0;
+         OB_SUCCESS == tmp_ret && holder_info->count() < MAX_HOLDER_INFO_COUNT && i < TABLE_LOCK_MODE_COUNT;
+         ++i) {
+      ObTableLockMode curr_mode = get_lock_mode_by_index(i);
+      if (!(curr_mode & conflict_modes)) {
+        // skip lock modes not in conflict
+      } else if (OB_ISNULL(map_[i])) {
+        // skip empty lock mode list
+      } else {
+        DLIST_FOREACH_X(curr_node, *map_[i], OB_SUCCESS == tmp_ret && holder_info->count() < MAX_HOLDER_INFO_COUNT)
+        {
+          if (OB_ISNULL(curr_node)) {
+            // skip null node
+          } else if (!include_finish_tx && curr_node->lock_op_.lock_op_status_ != LOCK_OP_DOING) {
+            // skip non-doing lock ops when not including finished tx
+          } else if (lock_op.create_trans_id_ == curr_node->lock_op_.create_trans_id_) {
+            // skip lock op owned by the requesting transaction
+          } else if (OB_TMP_FAIL(holder.assign_from_lock_op(curr_node->lock_op_))) {
+            LOG_WARN("failed to assign holder from lock_op", K(tmp_ret), K(curr_node->lock_op_));
+          } else if (OB_TMP_FAIL(holder_info->push_back(holder))) {
+            LOG_WARN("failed to push back holder info", K(tmp_ret), K(holder));
+          }
+        }
+      }
+    }
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("failed to collect table lock holder info", KR(tmp_ret), K(lock_op));
+    }
+  }
   LOG_DEBUG("check_allow_lock", K(ret), K(curr_lock_mode),
             K(lock_op.lock_mode_), K(lock_op), K(conflict_modes), K(conflict_tx_set));
   return ret;
@@ -1444,7 +1490,8 @@ int ObOBJLock::check_allow_lock(
     const int64_t expired_time,
     ObMalloc &allocator,
     const bool include_finish_tx,
-    const bool only_check_dml_lock)
+    const bool only_check_dml_lock,
+    ObIArray<ObTableLockHolderInfo> *holder_info)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!lock_op.is_valid())) {
@@ -1468,7 +1515,9 @@ int ObOBJLock::check_allow_lock(
                               conflict_tx_set,
                               conflict_with_dml_lock,
                               include_finish_tx,
-                              only_check_dml_lock);
+                              only_check_dml_lock,
+                              false, /*check_for_replace*/
+                              holder_info);
     }
   }
   return ret;
@@ -2851,7 +2900,8 @@ int ObOBJLockMap::lock(
     ObStoreCtx &ctx,
     const ObTableLockOp &lock_op,
     const uint64_t lock_mode_cnt_in_same_trans[],
-    ObTxIDSet &conflict_tx_set)
+    ObTxIDSet &conflict_tx_set,
+    ObIArray<ObTableLockHolderInfo> *holder_info)
 {
   int ret = OB_SUCCESS;
   ObOBJLock *obj_lock = NULL;
@@ -2873,7 +2923,8 @@ int ObOBJLockMap::lock(
                                         lock_op,
                                         lock_mode_cnt_in_same_trans,
                                         allocator_,
-                                        conflict_tx_set))) {
+                                        conflict_tx_set,
+                                        holder_info))) {
         if (ret != OB_EAGAIN &&
             ret != OB_TRY_LOCK_ROW_CONFLICT &&
             ret != OB_OBJ_LOCK_EXIST) {
@@ -3081,7 +3132,8 @@ int ObOBJLockMap::check_allow_lock(
     ObTxIDSet &conflict_tx_set,
     const int64_t expired_time,
     const bool include_finish_tx,
-    const bool only_check_dml_lock)
+    const bool only_check_dml_lock,
+    ObIArray<ObTableLockHolderInfo> *holder_info)
 {
   int ret = OB_SUCCESS;
   ObOBJLock *obj_lock = NULL;
@@ -3110,7 +3162,8 @@ int ObOBJLockMap::check_allow_lock(
                                                 expired_time,
                                                 allocator_,
                                                 include_finish_tx,
-                                                only_check_dml_lock))) {
+                                                only_check_dml_lock,
+                                                holder_info))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("obj_lock check_allow_lock failed",
                K(ret), K(lock_op));

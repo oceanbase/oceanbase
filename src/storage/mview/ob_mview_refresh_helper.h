@@ -11,6 +11,7 @@
 #include "share/ob_table_range.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/ob_rpc_struct.h"
+#include "storage/tablelock/ob_table_lock_common.h"
 
 namespace oceanbase
 {
@@ -22,6 +23,10 @@ namespace common
 {
 class ObSqlString;
 } // namespace common
+namespace observer
+{
+class ObInnerSQLConnection;
+} // namespace observer
 namespace transaction
 {
 namespace tablelock
@@ -39,7 +44,8 @@ public:
   static int get_current_scn(share::SCN &current_scn);
 
   static int lock_mview(ObMViewTransaction &trans, const uint64_t tenant_id,
-                        const uint64_t mview_id, const bool try_lock = false);
+                        const uint64_t mview_id, const bool try_lock = false,
+                        common::ObIArray<transaction::tablelock::ObTableLockHolderInfo> *holder_info = nullptr);
 
   static int generate_purge_mlog_sql(share::schema::ObSchemaGetterGuard &schema_guard,
                                      const uint64_t tenant_id, const uint64_t mlog_id,
@@ -60,6 +66,11 @@ public:
   static int sync_get_min_target_data_sync_scn(const uint64_t tenant_id,
                                                const uint64_t mview_id,
                                                share::SCN &min_target_scn);
+private:
+  static int lock_mview_with_holder_(observer::ObInnerSQLConnection *conn,
+                                     const uint64_t tenant_id,
+                                     const transaction::tablelock::ObLockObjRequest &arg,
+                                     common::ObIArray<transaction::tablelock::ObTableLockHolderInfo> *holder_info);
 };
 
 } // namespace storage

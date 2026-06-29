@@ -125,6 +125,8 @@ private:
     // use to kill the whole lock table stmt.
     transaction::ObTxSEQ stmt_savepoint_;
     bool is_for_replace_;
+    // best-effort diagnostic output: populated with holder info on lock conflict
+    ObIArray<ObTableLockHolderInfo> *holder_info_;
 
     TO_STRING_KV(K(task_type_), K(is_in_trans_), K(table_id_), K(partition_id_),
                  K(tablet_list_), K(obj_list_), K(lock_op_type_),
@@ -267,7 +269,8 @@ public:
            const ObTxParam &tx_param,
            const ObLockRequest &arg,
            const bool is_for_replace = false,
-           const bool force_use_priority = false);
+           const bool force_use_priority = false,
+           ObIArray<ObTableLockHolderInfo> *holder_info = nullptr);
   int unlock(ObTxDesc &tx_desc,
              const ObTxParam &tx_param,
              const ObUnLockRequest &arg);

@@ -522,7 +522,8 @@ int ObLockTable::check_lock_conflict(
 
 int ObLockTable::lock(
     ObStoreCtx &ctx,
-    const ObLockParam &param)
+    const ObLockParam &param,
+    ObIArray<ObTableLockHolderInfo> *holder_info)
 {
   int ret = OB_SUCCESS;
   ObLockMemtable *memtable = nullptr;
@@ -558,7 +559,8 @@ int ObLockTable::lock(
                           param.schema_version_);
     if (OB_FAIL(memtable->lock(param,
                                ctx,
-                               lock_op))) {
+                               lock_op,
+                               holder_info))) {
       if (ret != OB_TRY_LOCK_ROW_CONFLICT) {
         LOG_WARN("lock failed.", K(ret), K(lock_op));
       }

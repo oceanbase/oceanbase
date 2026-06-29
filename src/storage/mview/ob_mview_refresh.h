@@ -21,6 +21,13 @@ namespace sql
 class ObExecContext;
 class ObMVDepInfo;
 } // namespace sql
+namespace transaction
+{
+namespace tablelock
+{
+struct ObTableLockHolderInfo;
+} // namespace tablelock
+} // namespace transaction
 namespace storage
 {
 
@@ -140,6 +147,7 @@ private:
                                              ObIArray<uint64_t> &tables_without_insert,
                                              bool &reached_complete_refresh_threshold) const;
   bool reached_detail_complete_refresh_threshold(const ObMViewDetailTableChangeStats &data) const;
+  static bool has_valid_exclusive_holder_(const ObIArray<transaction::tablelock::ObTableLockHolderInfo> &holder_info);
 
 private:
   sql::ObExecContext &ctx_;
