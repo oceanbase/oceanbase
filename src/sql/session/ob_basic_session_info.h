@@ -2869,7 +2869,6 @@ protected:
   // Configurations that will influence execution plan.
   ObConfigInfoInPC inf_pc_configs_;
   common::ObString client_identifier_;
-  common::ObSEArray<uint64_t, 4> enable_role_ids_;
 
   //为了性能做的系统变量本地缓存值
 public:
