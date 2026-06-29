@@ -1150,8 +1150,14 @@ int ObTenantTabletScheduler::schedule_tablet_meta_merge(
     param.merge_type_ = META_MAJOR_MERGE;
     ObGetMergeTablesResult result;
 
+    bool is_delete_insert_table = false;
     // check medium list
-    if (OB_FAIL(tablet->read_medium_info_list(allocator, medium_list))) {
+    if (OB_FAIL(tablet->check_is_delete_insert_table(is_delete_insert_table))) {
+      LOG_WARN("failed to check is delete insert table", K(ret), K(ls_id), K(tablet_id));
+    } else if (is_delete_insert_table) {
+      ret = OB_NO_NEED_MERGE;
+      LOG_WARN("delete insert table no need meta merge", K(ret), K(ls_id), K(tablet_id));
+    } else if (OB_FAIL(tablet->read_medium_info_list(allocator, medium_list))) {
       LOG_WARN("failed to read medium info list", K(ret), K(ls_id), K(tablet_id));
     } else if (OB_FAIL(ObMediumCompactionScheduleFunc::get_max_sync_medium_scn(
         *tablet, *medium_list, max_sync_medium_scn))) {

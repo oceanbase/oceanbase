@@ -1428,11 +1428,17 @@ int ObBasicTabletMergeCtx::get_meta_compaction_info()
   ObStorageSchema *storage_schema = nullptr;
   bool is_building_index = false; // placeholder
   uint64_t min_data_version = 0;
+  bool is_delete_insert_table = false;
 
   if (OB_UNLIKELY(!is_meta_major_merge(get_merge_type())
-               || nullptr != static_param_.schema_)) {
+                  || nullptr != static_param_.schema_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected static param", K(ret), K(static_param_), KPC(static_param_.schema_));
+  } else if (OB_FAIL(tablet->check_is_delete_insert_table(is_delete_insert_table))) {
+    LOG_WARN("failed to check is delete insert table", K(ret));
+  } else if (is_delete_insert_table) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("delete insert table not allowed meta merge", K(ret), K(tablet->get_tablet_id()));
   } else if (OB_FAIL(ObStorageSchemaUtil::alloc_storage_schema(mem_ctx_.get_allocator(), storage_schema))) {
     LOG_WARN("failed to alloc storage schema", K(ret));
   } else if (OB_ISNULL(schema_service = MTL(ObTenantSchemaService *)->get_schema_service())) {
