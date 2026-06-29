@@ -838,10 +838,6 @@ int ObJoinOrder::compute_parallel_and_server_info_for_base_paths(ObIArray<Access
         LOG_WARN("failed to compute base table parallel and server info", K(ret));
       }
     }
-    if (OB_SUCC(ret) && opt_ctx->force_add_serial_path()
-        && OB_FAIL(add_serial_path_for_base_paths(access_paths))) {
-      LOG_WARN("failed to add serial path for base paths", K(ret));
-    }
   }
   return ret;
 }
@@ -850,24 +846,31 @@ int ObJoinOrder::add_serial_path_for_base_paths(ObIArray<AccessPath *> &access_p
 {
   int ret = OB_SUCCESS;
   int64_t orig_count = access_paths.count();
-  for (int64_t i = 0; OB_SUCC(ret) && i < orig_count; i++) {
-    AccessPath *path = access_paths.at(i);
-    if (OB_NOT_NULL(path) && path->parallel_ > ObGlobalHint::DEFAULT_PARALLEL &&
-        path->op_parallel_rule_ != OpParallelRule::OP_HINT_DOP && !path->use_das_ && path->is_single()) {
-      AccessPath *serial_path = NULL;
-      if (OB_ISNULL(serial_path = reinterpret_cast<AccessPath*>(allocator_->alloc(sizeof(AccessPath))))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate serial access path", K(ret));
-      } else {
-        serial_path = new(serial_path) AccessPath(OB_INVALID_ID, OB_INVALID_ID, OB_INVALID_ID, NULL, UNORDERED, *allocator_);
-        if (OB_FAIL(serial_path->assign(*path, allocator_))) {
-          LOG_WARN("failed to copy access path", K(ret));
+  ObOptimizerContext *opt_ctx = NULL;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null param", K(ret));
+  } else if (opt_ctx->force_add_serial_path()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < orig_count; i++) {
+      AccessPath *path = access_paths.at(i);
+      if (OB_NOT_NULL(path) && path->parallel_ > ObGlobalHint::DEFAULT_PARALLEL &&
+          path->op_parallel_rule_ != OpParallelRule::OP_HINT_DOP && !path->use_das_ &&
+          path->is_single() && !path->is_index_merge_path()) {
+        AccessPath *serial_path = NULL;
+        if (OB_ISNULL(serial_path = reinterpret_cast<AccessPath*>(allocator_->alloc(sizeof(AccessPath))))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate serial access path", K(ret));
         } else {
-          serial_path->parallel_ = ObGlobalHint::DEFAULT_PARALLEL;
-          serial_path->available_parallel_ = ObGlobalHint::DEFAULT_PARALLEL;
-          serial_path->op_parallel_rule_ = OpParallelRule::OP_SERIAL_DOP;
-          if (OB_FAIL(access_paths.push_back(serial_path))) {
-            LOG_WARN("failed to push back serial path", K(ret));
+          serial_path = new(serial_path) AccessPath(OB_INVALID_ID, OB_INVALID_ID, OB_INVALID_ID, NULL, UNORDERED, *allocator_);
+          if (OB_FAIL(serial_path->assign(*path, allocator_))) {
+            LOG_WARN("failed to copy access path", K(ret));
+          } else {
+            serial_path->parallel_ = ObGlobalHint::DEFAULT_PARALLEL;
+            serial_path->available_parallel_ = ObGlobalHint::DEFAULT_PARALLEL;
+            serial_path->op_parallel_rule_ = OpParallelRule::OP_SERIAL_DOP;
+            if (OB_FAIL(access_paths.push_back(serial_path))) {
+              LOG_WARN("failed to push back serial path", K(ret));
+            }
           }
         }
       }
@@ -9568,6 +9571,8 @@ int oceanbase::sql::Path::assign(const Path &other, common::ObIAllocator *alloca
   is_nl_style_pipelined_path_ = other.is_nl_style_pipelined_path_;
   is_valid_inner_path_ = other.is_valid_inner_path_;
   path_number_ = other.path_number_;
+  interesting_order_info_ = other.interesting_order_info_;
+  inherit_sharding_index_ = other.inherit_sharding_index_;
 
   if (OB_FAIL(ordering_.assign(other.ordering_))) {
     LOG_WARN("failed to assign nested loop params", K(ret));
@@ -9583,6 +9588,14 @@ int oceanbase::sql::Path::assign(const Path &other, common::ObIAllocator *alloca
     LOG_WARN("failed to assign nested loop params", K(ret));
   } else if (OB_FAIL(weak_sharding_.assign(other.weak_sharding_))) {
     LOG_WARN("failed to assign nested loop params", K(ret));
+  } else if (OB_FAIL(equal_param_constraints_.assign(other.equal_param_constraints_))) {
+    LOG_WARN("failed to assign equal param constraints", K(ret));
+  } else if (OB_FAIL(const_param_constraints_.assign(other.const_param_constraints_))) {
+    LOG_WARN("failed to assign const param constraints", K(ret));
+  } else if (OB_FAIL(expr_constraints_.assign(other.expr_constraints_))) {
+    LOG_WARN("failed to assign expr constraints", K(ret));
+  } else if (OB_FAIL(ambient_card_.assign(other.ambient_card_))) {
+    LOG_WARN("failed to assign ambient card", K(ret));
   }
   return ret;
 }
@@ -9781,10 +9794,15 @@ int AccessPath::assign(const AccessPath &other, common::ObIAllocator *allocator)
   if (OB_ISNULL(allocator)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("NULL pointer error", K(allocator), K(ret));
+  } else if (OB_UNLIKELY(is_index_merge_path() != other.is_index_merge_path())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("assign index merge path to non-index merge path is not allowed", K(ret), K(other));
   } else if (OB_FAIL(Path::assign(other, allocator))) {
     LOG_WARN("copy path error", K(ret));
   } else if (OB_FAIL(index_keys_.assign(other.index_keys_))) {
     LOG_WARN("Failed to assign re_est_param", K(ret));
+  } else if (OB_FAIL(domain_idx_info_.assign(other.domain_idx_info_))) {
+    LOG_WARN("Failed to assign domain idx info", K(ret));
   } else if (OB_FAIL(est_cost_info_.assign(other.est_cost_info_))) {
     LOG_WARN("Failed to assign re_est_param", K(ret));
   } else if (OB_FAIL(est_records_.assign(other.est_records_))) {
@@ -10796,6 +10814,7 @@ int JoinPath::assign(const JoinPath &other, common::ObIAllocator *allocator)
   right_path_ = other.right_path_;
   join_algo_ = other.join_algo_;
   join_dist_algo_ = other.join_dist_algo_;
+  use_hybrid_hash_dm_ = other.use_hybrid_hash_dm_;
   join_type_ = other.join_type_;
   need_mat_ = other.need_mat_;
   left_need_sort_ = other.left_need_sort_;
@@ -13167,6 +13186,8 @@ int ObJoinOrder::generate_base_table_paths(PathHelper &helper)
     LOG_WARN("failed to pruning unstable access path", K(ret));
   } else if (OB_FAIL(compute_parallel_and_server_info_for_base_paths(access_paths))) {
     LOG_WARN("failed to compute", K(ret));
+  } else if (OB_FAIL(add_serial_path_for_base_paths(access_paths))) {
+    LOG_WARN("failed to add serial path for base paths", K(ret));
   } else if (OB_FAIL(compute_sharding_info_for_base_paths(access_paths))) {
     LOG_WARN("failed to calc sharding info", K(ret));
   } else if (OB_FAIL(compute_cost_and_prune_access_path(helper, access_paths))) {

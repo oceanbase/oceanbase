@@ -351,6 +351,28 @@ struct DomainIndexAccessInfo
     match_index_ids_.reset();
   }
 
+  int assign(const DomainIndexAccessInfo &other)
+  {
+    int ret = OB_SUCCESS;
+    domain_idx_type_ = other.domain_idx_type_;
+    if (OB_FAIL(index_scan_exprs_.assign(other.index_scan_exprs_))) {
+      SQL_LOG(WARN, "failed to assign index scan exprs", K(ret));
+    } else if (OB_FAIL(index_scan_filters_.assign(other.index_scan_filters_))) {
+      SQL_LOG(WARN, "failed to assign index scan filters", K(ret));
+    } else if (OB_FAIL(index_scan_index_ids_.assign(other.index_scan_index_ids_))) {
+      SQL_LOG(WARN, "failed to assign index scan index ids", K(ret));
+    } else if (OB_FAIL(func_lookup_exprs_.assign(other.func_lookup_exprs_))) {
+      SQL_LOG(WARN, "failed to assign func lookup exprs", K(ret));
+    } else if (OB_FAIL(func_lookup_index_ids_.assign(other.func_lookup_index_ids_))) {
+      SQL_LOG(WARN, "failed to assign func lookup index ids", K(ret));
+    } else if (OB_FAIL(match_exprs_.assign(other.match_exprs_))) {
+      SQL_LOG(WARN, "failed to assign match exprs", K(ret));
+    } else if (OB_FAIL(match_index_ids_.assign(other.match_index_ids_))) {
+      SQL_LOG(WARN, "failed to assign match index ids", K(ret));
+    }
+    return ret;
+  }
+
   bool has_ir_scan() const { return index_scan_exprs_.count() != 0 && domain_idx_type_ == DomainIndexType::FTS_INDEX; }
   bool has_func_lookup() const { return func_lookup_exprs_.count() != 0 && domain_idx_type_ == DomainIndexType::FTS_INDEX; }
   bool has_es_match() const { return match_exprs_.count() != 0 && domain_idx_type_ == DomainIndexType::FTS_INDEX; }

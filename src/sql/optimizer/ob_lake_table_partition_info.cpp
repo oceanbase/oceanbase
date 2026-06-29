@@ -52,6 +52,8 @@ int ObLakeTablePartitionInfo::assign(const ObTablePartitionInfo &other)
         LOG_WARN("failed to allocate memory for file_pruner");
       } else if (OB_FAIL(file_pruner_->assign(*info.file_pruner_))) {
         LOG_WARN("failed to assign file prunner");
+      } else if (OB_FAIL(iceberg_file_descs_.assign(info.iceberg_file_descs_))) {
+        LOG_WARN("failed to assign iceberg file descs");
       } else {
         is_hash_aggregate_ = info.is_hash_aggregate_;
         hash_count_ = info.hash_count_;

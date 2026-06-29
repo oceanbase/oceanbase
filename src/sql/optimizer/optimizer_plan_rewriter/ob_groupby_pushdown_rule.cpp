@@ -73,6 +73,8 @@ int ObGroupByPushdownContext::assign(const ObGroupByPushdownContext &other)
     LOG_WARN("failed to assign aggr exprs", K(ret));
   } else if (OB_FAIL(groupby_exprs_.assign(other.groupby_exprs_))) {
     LOG_WARN("failed to assign groupby exprs", K(ret));
+  } else if (OB_FAIL(mask_aggr_infos_.assign(other.mask_aggr_infos_))) {
+    LOG_WARN("failed to assign mask aggr infos", K(ret));
   } else {
     need_count_ = other.need_count_;
     enable_reshuffle_ = other.enable_reshuffle_;

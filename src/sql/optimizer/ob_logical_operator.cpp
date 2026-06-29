@@ -190,6 +190,7 @@ int ObExchangeInfo::assign(const ObExchangeInfo &other)
     server_cnt_ = other.server_cnt_;
     use_scatter_channel_for_pkey_hash_ = other.use_scatter_channel_for_pkey_hash_;
     popular_values_ratio_ = other.popular_values_ratio_;
+    is_ordered_agg_ = other.is_ordered_agg_;
   }
   return ret;
 }

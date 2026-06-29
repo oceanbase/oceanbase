@@ -12,6 +12,7 @@
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "sql/optimizer/ob_optimizer_util.h"
+#include "sql/table_format/iceberg/ob_iceberg_utils.h"
 #include "sql/table_format/iceberg/scan/conversions.h"
 #include "sql/table_format/iceberg/scan/delete_file_index.h"
 
@@ -108,6 +109,7 @@ int ObPartFieldBound::assign(const ObPartFieldBound &other)
   int ret = OB_SUCCESS;
   if (this != &other){
     column_id_ = other.column_id_;
+    transform_type_ = other.transform_type_;
     is_whole_range_ = other.is_whole_range_;
     is_always_false_ = other.is_always_false_;
     if (OB_FAIL(bounds_.assign(other.bounds_))) {

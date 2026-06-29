@@ -73,6 +73,7 @@ int ObGroupingSetInfo::assign(const ObGroupingSetInfo &other)
     LOG_WARN("assign array failed", K(ret));
   } else {
     grouping_set_id_ = other.grouping_set_id_;
+    hash_val_expr_ = other.hash_val_expr_;
   }
   return ret;
 }

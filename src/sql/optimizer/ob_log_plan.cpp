@@ -18749,13 +18749,17 @@ int ObLogPlan::find_hybrid_search_table_scan(ObLogicalOperator *op, ObLogTableSc
 bool ObLogPlan::is_simple_rescan_subquery(const ObDMLStmt *stmt) const
 {
   bool bret = false;
-  if (OB_NOT_NULL(stmt) && 1 == stmt->get_table_size()) {
-    const TableItem *table = stmt->get_table_item(0);
-    int64_t subquery_cnt = stmt->get_subquery_expr_size();
-    if (0 == subquery_cnt) {
+  const TableItem *table = nullptr;
+  if (OB_NOT_NULL(stmt) &&
+      stmt->is_select_stmt() &&
+      !static_cast<const ObSelectStmt*>(stmt)->is_set_stmt() &&
+      1 == stmt->get_table_size() &&
+      0 == stmt->get_subquery_expr_size() &&
+      OB_NOT_NULL(table = stmt->get_table_item(0))) {
+    if (table->is_basic_table()) {
       bret = true;
-    } else if (1 == subquery_cnt) {
-      bret = OB_NOT_NULL(table) && table->is_generated_table() && is_simple_rescan_subquery(table->ref_query_);
+    } else if (table->is_generated_table()) {
+      bret = is_simple_rescan_subquery(table->ref_query_);
     } else {
       bret = false;
     }

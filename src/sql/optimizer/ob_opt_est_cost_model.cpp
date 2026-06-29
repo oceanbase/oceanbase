@@ -67,6 +67,14 @@ int ObCostTableScanInfo::assign(const ObCostTableScanInfo &est_cost_info)
     LOG_WARN("failed to to assign column group infos", K(ret));
   } else if (OB_FAIL(index_back_column_group_infos_.assign(est_cost_info.index_back_column_group_infos_))) {
     LOG_WARN("failed to to assign column group infos", K(ret));
+  } else if (OB_FAIL(real_range_exprs_.assign(est_cost_info.real_range_exprs_))) {
+    LOG_WARN("failed to assign real range exprs", K(ret));
+  } else if (OB_FAIL(precise_range_filters_.assign(est_cost_info.precise_range_filters_))) {
+    LOG_WARN("failed to assign precise range filters", K(ret));
+  } else if (OB_FAIL(unprecise_range_filters_.assign(est_cost_info.unprecise_range_filters_))) {
+    LOG_WARN("failed to assign unprecise range filters", K(ret));
+  } else if (OB_FAIL(functional_lookup_exprs_.assign(est_cost_info.functional_lookup_exprs_))) {
+    LOG_WARN("failed to assign functional lookup exprs", K(ret));
   } else {
     table_id_ = est_cost_info.table_id_;
     ref_table_id_ = est_cost_info.ref_table_id_;
@@ -102,6 +110,7 @@ int ObCostTableScanInfo::assign(const ObCostTableScanInfo &est_cost_info)
     rescan_server_list_ = est_cost_info.rescan_server_list_;
     limit_rows_ = est_cost_info.limit_rows_;
     total_range_cnt_ = est_cost_info.total_range_cnt_;
+    unique_range_rowcnt_ = est_cost_info.unique_range_rowcnt_;
     // no need to copy table scan param
   }
   return ret;
@@ -122,6 +131,7 @@ void ObTableMetaInfo::assign(const ObTableMetaInfo &table_meta_info)
   has_opt_stat_ = table_meta_info.has_opt_stat_;
   micro_block_count_ = table_meta_info.micro_block_count_;
   table_type_ = table_meta_info.table_type_;
+  is_broadcast_table_ = table_meta_info.is_broadcast_table_;
   lake_table_format_ = table_meta_info.lake_table_format_;
   lake_table_file_count_ = table_meta_info.lake_table_file_count_;
   lake_table_snapshot_id_ = table_meta_info.lake_table_snapshot_id_;
@@ -178,11 +188,14 @@ void ObIndexMetaInfo::assign(const ObIndexMetaInfo &index_meta_info)
   index_micro_block_size_ = index_meta_info.index_micro_block_size_;
   index_part_count_ = index_meta_info.index_part_count_;
   index_part_size_ = index_meta_info.index_part_size_;
-  index_part_count_ = index_meta_info.index_part_count_;
   index_column_count_ = index_meta_info.index_column_count_;
   is_index_back_ = index_meta_info.is_index_back_;
   is_unique_index_ = index_meta_info.is_unique_index_;
   is_global_index_ = index_meta_info.is_global_index_;
+  is_geo_index_ = index_meta_info.is_geo_index_;
+  is_fulltext_index_ = index_meta_info.is_fulltext_index_;
+  is_multivalue_index_ = index_meta_info.is_multivalue_index_;
+  is_vector_index_ = index_meta_info.is_vector_index_;
   index_micro_block_count_ = index_meta_info.index_micro_block_count_;
   is_search_index_ = index_meta_info.is_search_index_;
 }
