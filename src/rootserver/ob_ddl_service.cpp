@@ -29967,7 +29967,7 @@ int ObDDLService::revoke(const ObRevokeUserArg &arg)
       if (OB_FAIL(schema_guard.get_user_info(tenant_id, role_id, role_info))) {
         LOG_WARN("Failed to get role info", K(ret), K(tenant_id), K(role_id));
       } else if (NULL == role_info) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_ROLE_NOT_EXIST;
         LOG_WARN("role doesn't exist", K(ret), K(role_id));
       } else {
         // Determine whether the current role is granted to the user; otherwise, it will not be processed
@@ -31152,7 +31152,7 @@ int ObDDLService::revoke_role_inner_trans(
       if (OB_FAIL(schema_guard.get_user_info(tenant_id, role_id, role_info))) {
         LOG_WARN("Failed to get role info", K(ret), K(tenant_id), K(role_id));
       } else if (NULL == role_info) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_ROLE_NOT_EXIST;
         LOG_WARN("role doesn't exist", K(ret), K(role_id));
       } else {
         // Determine whether the current role is granted to the user; otherwise, it will not be processed
