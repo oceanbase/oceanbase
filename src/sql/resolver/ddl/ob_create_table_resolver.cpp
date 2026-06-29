@@ -19,6 +19,7 @@
 #include "share/ob_license_utils.h"
 #include "share/search_index/ob_search_index_builder_util.h"
 #include "share/compaction_ttl/ob_compaction_ttl_util.h"
+#include "share/compaction/ob_compaction_queuing_utils.h"
 #include "share/search_index/ob_search_index_config_filter.h"
 
 namespace oceanbase
@@ -888,6 +889,10 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
               SQL_RESV_LOG(WARN, "set default skip index level failed", K(ret));
             } else if (OB_FAIL(resolve_table_options(create_table_node->children_[4], false))) {
               SQL_RESV_LOG(WARN, "resolve table options failed", K(ret));
+            } else if (FALSE_IT(share::ObCompactionQueuingUtil::assign_random_table_mode_for_test(
+                user_specified_table_mode_, is_external_table_, is_oracle_temp_table_,
+                OB_ISNULL(session_info_) ? OB_INVALID_TENANT_ID : session_info_->get_effective_tenant_id(),
+                table_mode_, table_schema))) {
             }
             // merge_engine must be decided before set_default_delta_format,
             // because default_delta_format 'encoding' does not take effect on partial_update merge engine table

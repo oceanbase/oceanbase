@@ -1209,6 +1209,7 @@ protected:
   share::ObDuplicateScope duplicate_scope_;
   share::ObDuplicateReadConsistency duplicate_read_consistency_;
   bool enable_row_movement_;
+  bool user_specified_table_mode_;
   share::schema::ObTableMode table_mode_;
   common::ObString encryption_;
   int64_t tablespace_id_;

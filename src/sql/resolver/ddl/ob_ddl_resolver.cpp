@@ -103,6 +103,7 @@ ObDDLResolver::ObDDLResolver(ObResolverParams &params)
     duplicate_scope_(share::ObDuplicateScope::DUPLICATE_SCOPE_NONE),
     duplicate_read_consistency_(share::ObDuplicateReadConsistency::STRONG),
     enable_row_movement_(false),
+    user_specified_table_mode_(false),
     encryption_(),
     tablespace_id_(OB_INVALID_ID),
     table_dop_(DEFAULT_TABLE_DOP),
@@ -2151,6 +2152,7 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
           }
           if (OB_FAIL(ret)) {
             SQL_RESV_LOG(WARN, "failed to resolve table mode str!", K(ret));
+          } else if (FALSE_IT(user_specified_table_mode_ = true)) {
           } else if (not_compat_for_queuing_mode(tenant_data_version)
                  && is_new_queuing_mode(static_cast<ObTableModeFlag>(table_mode_.mode_flag_))) {
             ret = OB_NOT_SUPPORTED;
@@ -6025,6 +6027,7 @@ void ObDDLResolver::reset() {
   locality_.reset();
   is_random_primary_zone_ = false;
   enable_row_movement_ = false;
+  user_specified_table_mode_ = false;
   table_mode_.reset();
   encryption_.reset();
   tablespace_id_ = OB_INVALID_ID;

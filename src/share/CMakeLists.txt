@@ -435,6 +435,7 @@ ob_set_subtarget(ob_share common_mixed
   compaction/ob_new_micro_info.cpp
   compaction/ob_schedule_daily_maintenance_window.cpp
   compaction/ob_compaction_resource_manager.cpp
+  compaction/ob_compaction_queuing_utils.cpp
   storage/ob_i_pre_warmer.cpp
   storage/ob_ha_inflight_diag.cpp
   storage_cache_policy/ob_storage_cache_common.cpp
