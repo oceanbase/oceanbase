@@ -194,7 +194,11 @@ int ObInnerSQLConnection::init(ObInnerSQLConnectionPool *pool,
     is_resource_conn_ = is_resource_conn;
     if (NULL == extern_session || 0 != EVENT_CALL(EventTable::EN_INNER_SQL_CONN_LEAK_CHECK)) {
       // Only backtrace internal used connection to avoid performance problems.
-      bt_size_ = ob_backtrace(bt_addrs_, MAX_BT_SIZE);
+      if (lib::is_memleak_light_backtrace_enabled()) {
+        bt_size_ = light_backtrace(bt_addrs_, MAX_BT_SIZE);
+      } else {
+        bt_size_ = 0;
+      }
     }
     config_ = config;
     associated_client_ = client_addr;
