@@ -405,7 +405,10 @@ int ObPartitionMerger::get_macro_block_count_to_rewrite(const ObMergeParameter &
     int64_t rewrite_macro_cnt = 0, reduce_macro_cnt = 0, rewrite_block_cnt_for_progressive = 0;
     bool last_is_small_data_macro = false;
     const int64_t progressive_merge_num = merge_ctx_->progressive_merge_num_;
-    const bool need_calc_progressive_merge = is_major_merge_type(merge_param.merge_type_) && merge_ctx_->progressive_merge_step_ < progressive_merge_num;
+    // meta merge should consider progressive merge round, so it will rewrites old-schema macro blocks
+    // instead of reusing them and persisting NOP (such as online adding column).
+    // But do not need check macro merge, since the key point of meta merge is to accelerate query, not for less disk space.
+    const bool need_calc_progressive_merge = is_major_or_meta_merge_type(merge_param.merge_type_) && merge_ctx_->progressive_merge_step_ < progressive_merge_num;
     const bool need_check_macro_merge = !is_major_merge_type(merge_param.merge_type_) || data_store_desc_.major_working_cluster_version_ >= DATA_VERSION_4_1_0_0;
     if (OB_ISNULL(first_sstable = static_cast<ObSSTable *>(merge_ctx_->tables_handle_.get_table(0)))) {
       ret = OB_ERR_UNEXPECTED;
@@ -624,7 +627,10 @@ int ObPartitionMajorMerger::merge_partition(
     bool has_incremental_data = false;
     if (merge_helper.is_iter_end()) {
       ret = OB_ITER_END;
-    } else if (is_major_merge_type(merge_param.merge_type_)
+    } else if ((is_major_merge_type(merge_param.merge_type_)
+                // Force meta merge through rewrite only when progressive merge is unfinished.
+                // If progressive merge is over (step >= num), meta do not need rewrite macro blocks.
+                || (is_meta_major_merge(merge_param.merge_type_) && merge_ctx_->progressive_merge_step_ < merge_ctx_->progressive_merge_num_))
         && OB_FAIL(get_macro_block_count_to_rewrite(merge_param, need_rewrite_block_cnt_))) {
       STORAGE_LOG(WARN, "Failed to compute the count of macro block to rewrite", K(ret));
     } else if (OB_FAIL(merge_helper.has_incremental_data(has_incremental_data))) {
@@ -824,10 +830,19 @@ int ObPartitionMajorMerger::reuse_base_sstable(ObPartitionMajorMergeHelper &merg
       } else if (base_iter->is_macro_block_opened()) { // opend for cross range
         // flush all row in curr macro block
         while (OB_SUCC(ret) && base_iter->is_macro_block_opened()) {
-          if (OB_ISNULL(base_iter->get_curr_row())) {
+          const blocksstable::ObDatumRow *curr_row = base_iter->get_curr_row();
+          if (OB_ISNULL(curr_row)) {
             ret = OB_ERR_UNEXPECTED;
             STORAGE_LOG(WARN, "curr row is unexpected null", K(ret), KPC(base_iter));
-          } else if (OB_FAIL(process(*base_iter->get_curr_row()))) {
+          } else if (OB_FAIL(check_row_no_nop_for_reuse(*curr_row))) {
+            // This boundary branch flushes base rows directly, bypassing the fuser.
+            // A NOP sentinel here would be persisted verbatim into the output major
+            // sstable and later crash pushdown comparison.
+            STORAGE_LOG(ERROR, "invalid nop row during reuse", K(ret), KPC(curr_row), KPC(base_iter));
+            if (GCONF._enable_compaction_diagnose) {
+              ObPartitionMergeDumper::print_error_info(ret, minimum_iters, *merge_ctx_);
+            }
+          } else if (OB_FAIL(process(*curr_row))) {
             STORAGE_LOG(WARN, "Failed to process row", K(ret), K(*partition_fuser_->get_result_row()));
             if (GCONF._enable_compaction_diagnose) {
               ObPartitionMergeDumper::print_error_info(ret, minimum_iters, *merge_ctx_);
@@ -853,6 +868,18 @@ int ObPartitionMajorMerger::reuse_base_sstable(ObPartitionMajorMergeHelper &merg
     }
   }
 
+  return ret;
+}
+
+int ObPartitionMajorMerger::check_row_no_nop_for_reuse(const blocksstable::ObDatumRow &row) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < row.get_column_count(); ++i) {
+    if (OB_UNLIKELY(row.storage_datums_[i].is_nop())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected nop datum in reuse row", K(ret), K(i), K(row));
+    }
+  }
   return ret;
 }
 

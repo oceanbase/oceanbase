@@ -116,6 +116,7 @@ protected:
 private:
   int merge_micro_block_iter(ObPartitionMergeIter &iter, int64_t &reuse_row_cnt);
   int reuse_base_sstable(ObPartitionMajorMergeHelper &merge_helper);
+  int check_row_no_nop_for_reuse(const blocksstable::ObDatumRow &row) const;
 private:
   int64_t rewrite_block_cnt_;
   int64_t need_rewrite_block_cnt_;
