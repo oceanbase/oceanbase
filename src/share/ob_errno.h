@@ -1522,6 +1522,8 @@ constexpr int OB_ERR_COMPARE_VARRAY_LOB_ATTR = -7432;
 constexpr int OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD = -7433;
 constexpr int OB_ERR_CONVERSION_OF_UNIT = -7434;
 constexpr int OB_ERR_PARAM_OUT_OF_RANGE = -7435;
+constexpr int OB_ERR_XML_WRONG_DOCUMENT = -7436;
+constexpr int OB_ERR_XML_VALUE_TOO_LARGE_FOR_TYPE = -7437;
 constexpr int OB_ERR_BAD_VEC_INDEX_COLUMN = -7601;
 constexpr int OB_ERR_VSAG_MEM_LIMIT_EXCEEDED = -7603;
 constexpr int OB_ERR_VSAG_RETURN_ERROR = -7604;
@@ -3960,6 +3962,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD__USER_ERROR_MSG "Parent %.*s already contains child entry %s%.*s"
 #define OB_ERR_CONVERSION_OF_UNIT__USER_ERROR_MSG "conversion error between the specified unit and standard unit"
 #define OB_ERR_PARAM_OUT_OF_RANGE__USER_ERROR_MSG "value is out of range"
+#define OB_ERR_XML_WRONG_DOCUMENT__USER_ERROR_MSG "A node is used in a different document than the one that created it"
+#define OB_ERR_XML_VALUE_TOO_LARGE_FOR_TYPE__USER_ERROR_MSG "attribute or element value is larger than specified in type"
 #define OB_ERR_INVALID_VECTOR_DIM__USER_ERROR_MSG "inconsistent dimension: expected %u got %u"
 #define OB_ERR_BAD_VEC_INDEX_COLUMN__USER_ERROR_MSG "Column '%.*s' cannot be part of VECTOR index"
 #define OB_ERR_ARRAY_TYPE_MISMATCH__USER_ERROR_MSG "array type mismatch found between definition(%.*s) and data(%.*s)"
@@ -8379,6 +8383,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_CONVERSION_OF_UNIT__OBE_USER_ERROR_MSG "OBE-13291: conversion error between the specified unit and standard unit"
 #define OB_ERR_PARAM_OUT_OF_RANGE__ORA_USER_ERROR_MSG "ORA-13011: value is out of range"
 #define OB_ERR_PARAM_OUT_OF_RANGE__OBE_USER_ERROR_MSG "OBE-13011: value is out of range"
+#define OB_ERR_XML_WRONG_DOCUMENT__ORA_USER_ERROR_MSG "ORA-31013: A node is used in a different document than the one that created it"
+#define OB_ERR_XML_WRONG_DOCUMENT__OBE_USER_ERROR_MSG "OBE-31013: A node is used in a different document than the one that created it"
+#define OB_ERR_XML_VALUE_TOO_LARGE_FOR_TYPE__ORA_USER_ERROR_MSG "ORA-22814: attribute or element value is larger than specified in type"
+#define OB_ERR_XML_VALUE_TOO_LARGE_FOR_TYPE__OBE_USER_ERROR_MSG "OBE-22814: attribute or element value is larger than specified in type"
 #define OB_ERR_INVALID_VECTOR_DIM__ORA_USER_ERROR_MSG "ORA-00932: inconsistent dimension: expected %u got %u"
 #define OB_ERR_INVALID_VECTOR_DIM__OBE_USER_ERROR_MSG "OBE-00932: inconsistent dimension: expected %u got %u"
 #define OB_ERR_BAD_VEC_INDEX_COLUMN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7601, Column '%.*s' cannot be part of VECTOR index"
@@ -9786,7 +9794,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2558];
+extern int g_all_ob_errnos[2560];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

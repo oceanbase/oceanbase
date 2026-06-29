@@ -2157,6 +2157,8 @@ DEFINE_ORACLE_ERROR(OB_ERR_COMPARE_VARRAY_LOB_ATTR, -7432, -1, "42000", "cannot 
 DEFINE_ORACLE_ERROR(OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD, -7433, -1, "42000", "Parent %.*s already contains child entry %s%.*s", 31003, "Parent %.*s already contains child entry %s%.*s");
 DEFINE_ORACLE_ERROR(OB_ERR_CONVERSION_OF_UNIT, -7434, -1, "42000", "conversion error between the specified unit and standard unit", 13291, "conversion error between the specified unit and standard unit");
 DEFINE_ORACLE_ERROR(OB_ERR_PARAM_OUT_OF_RANGE, -7435, -1, "42000", "value is out of range", 13011, "value is out of range");
+DEFINE_ORACLE_ERROR(OB_ERR_XML_WRONG_DOCUMENT, -7436, -1, "42000", "A node is used in a different document than the one that created it", 31013, "A node is used in a different document than the one that created it");
+DEFINE_ORACLE_ERROR(OB_ERR_XML_VALUE_TOO_LARGE_FOR_TYPE, -7437, -1, "HY000", "attribute or element value is larger than specified in type", 22814, "attribute or element value is larger than specified in type");
 
 // 余留位置
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
