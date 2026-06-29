@@ -84,6 +84,8 @@ public:
 
 private:
   static const int SPATIAL_MBR_COLUMN_MAX_LENGTH = 32;
+  static bool need_strip_generated_column_flags_and_default(
+      const share::schema::ObColumnSchemaV2 &column);
   static int generate_prefix_column(
       const obrpc::ObColumnSortItem &sort_item,
       const ObSQLMode sql_mode,
