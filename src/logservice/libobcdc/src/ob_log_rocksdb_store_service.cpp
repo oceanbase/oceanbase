@@ -134,19 +134,26 @@ int RocksDbStoreService::init_database_(const std::string &path)
   m_options_.env->SetBackgroundThreads(compaction_threads, rocksdb::Env::LOW);
 
   // Shared block cache across all column families for unified memory control.
-  // Created once here and reused in every create_column_family call.
+  // Created once here and reused in every create_column_family call. Size 0
+  // means libobcdc does not configure block cache explicitly.
   // std::shared_ptr is unavoidable: RocksDB API (BlockBasedTableOptions::block_cache,
   // Options::write_buffer_manager) requires shared ownership.
   size_t block_cache_size = TCONF.rocksdb_block_cache_size.get();
-  shared_block_cache_ = rocksdb::NewLRUCache(block_cache_size, 16);
+  const bool enable_block_cache = (block_cache_size > 0);
+  if (enable_block_cache) {
+    shared_block_cache_ = rocksdb::NewLRUCache(block_cache_size, 16);
+  } else {
+    shared_block_cache_.reset();
+  }
 
   // WriteBufferManager caps total memtable memory across all CFs.
   // Only charge memtable to block cache when the cache is large enough to
   // absorb it; otherwise the dummy entries would evict all real cache data.
   const int64_t rocksdb_write_buffer_size = TCONF.rocksdb_write_buffer_size;
+
   size_t total_write_buffer_limit =
       static_cast<size_t>(rocksdb_write_buffer_size) * _M_ * 9;
-  bool charge_to_cache = (block_cache_size > total_write_buffer_limit);
+  bool charge_to_cache = enable_block_cache && (block_cache_size > total_write_buffer_limit);
   m_options_.write_buffer_manager.reset(
       new rocksdb::WriteBufferManager(
           total_write_buffer_limit,
@@ -167,10 +174,11 @@ int RocksDbStoreService::init_database_(const std::string &path)
   } else {
     _LOG_INFO("RocksDbStoreService database init success, path:%s, num_cpus=%d, "
         "flush_threads=%d, compaction_threads=%d, max_subcompactions=%u, "
-        "block_cache_size=%zu, write_buffer_limit=%zu, charge_memtable_to_cache=%d",
+        "block_cache_size=%zu, block_cache_enabled=%d, write_buffer_limit=%zu, "
+        "charge_memtable_to_cache=%d",
         m_db_path_.c_str(), cpu_count,
         flush_threads, compaction_threads, m_options_.max_subcompactions,
-        block_cache_size, total_write_buffer_limit, charge_to_cache);
+        block_cache_size, enable_block_cache, total_write_buffer_limit, charge_to_cache);
   }
 
   return ret;
@@ -617,11 +625,15 @@ int RocksDbStoreService::create_column_family(const std::string& column_family_n
   cf_options.min_blob_size = 1024;
   cf_options.blob_file_size = 256 * 1024 * 1024;
   cf_options.enable_blob_garbage_collection = true;
-  cf_options.blob_cache = shared_block_cache_;
-  cf_options.prepopulate_blob_cache = rocksdb::PrepopulateBlobCache::kFlushOnly;
+  if (shared_block_cache_) {
+    cf_options.blob_cache = shared_block_cache_;
+    cf_options.prepopulate_blob_cache = rocksdb::PrepopulateBlobCache::kFlushOnly;
+  }
 
   rocksdb::BlockBasedTableOptions table_options;
-  table_options.block_cache = shared_block_cache_;
+  if (shared_block_cache_) {
+    table_options.block_cache = shared_block_cache_;
+  }
 
   // Ribbon filter: ~30% smaller than Bloom at same accuracy.
   // bloom_before_level=0: Bloom for flushes (fast build), Ribbon for L1+ (space efficient).
@@ -629,15 +641,16 @@ int RocksDbStoreService::create_column_family(const std::string& column_family_n
     rocksdb::NewRibbonFilterPolicy(16, 0)
   );
 
-  // Put index/filter in block cache for bounded memory across many CFs
-  table_options.cache_index_and_filter_blocks = true;
-  table_options.cache_index_and_filter_blocks_with_high_priority = true;
-  table_options.pin_l0_filter_and_index_blocks_in_cache = true;
+  if (shared_block_cache_) {
+    // Put index/filter in block cache for bounded memory across many CFs.
+    table_options.cache_index_and_filter_blocks = true;
+    table_options.cache_index_and_filter_blocks_with_high_priority = true;
+    table_options.pin_l0_filter_and_index_blocks_in_cache = true;
 
-  // Pre-populate block cache on flush to avoid read-after-write disk IO
-  // (CDC writes redo, reads it back soon after — this eliminates the read)
-  table_options.prepopulate_block_cache =
-      rocksdb::BlockBasedTableOptions::PrepopulateBlockCache::kFlushOnly;
+    // Pre-populate block cache on flush to avoid read-after-write disk IO.
+    table_options.prepopulate_block_cache =
+        rocksdb::BlockBasedTableOptions::PrepopulateBlockCache::kFlushOnly;
+  }
 
   table_options.block_size = 32 * 1024;
   table_options.enable_index_compression = false;
