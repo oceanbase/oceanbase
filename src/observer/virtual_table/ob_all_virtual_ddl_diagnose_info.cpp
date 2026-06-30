@@ -60,13 +60,25 @@ int ObAllVirtualDDLDiagnoseInfo::process()
     LOG_WARN("empty tenant ids", KR(ret));
   } else {
     ObSqlString scan_sql;
-    if (OB_FAIL(scan_sql.assign_fmt("SELECT task_id, tenant_id, object_id, ddl_type, execution_id, time_to_usec(gmt_create) as GMT_CREATE, NULL as GMT_MODIFIED FROM %s "
-                                    "WHERE ddl_type IN (5, 10, 1001, 1002, 1004, 1005, 1010) ",
-                                    OB_ALL_VIRTUAL_DDL_TASK_STATUS_TNAME))) {
+    // Only the sys tenant is allowed to inspect DDL diagnose info of the whole cluster;
+    // non-sys tenants are restricted to their own tenant to avoid cross-tenant leakage.
+    ObSqlString tenant_filter;
+    if (OB_FAIL(tenant_filter.assign(""))) {
+      LOG_WARN("failed to init tenant filter", K(ret));
+    } else if (!is_sys_tenant(effective_tenant_id_)
+               && OB_FAIL(tenant_filter.append_fmt("AND tenant_id = %lu ", effective_tenant_id_))) {
+      LOG_WARN("failed to append tenant filter", K(ret), K_(effective_tenant_id));
+    } else if (OB_FAIL(scan_sql.assign_fmt("SELECT task_id, tenant_id, object_id, ddl_type, execution_id, time_to_usec(gmt_create) as GMT_CREATE, NULL as GMT_MODIFIED FROM %s "
+                                    "WHERE ddl_type IN (5, 10, 1001, 1002, 1004, 1005, 1010) %s",
+                                    OB_ALL_VIRTUAL_DDL_TASK_STATUS_TNAME,
+                                    tenant_filter.ptr()))) {
       LOG_WARN("failed to assign sql", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
         const uint64_t tenant_id = tenant_ids.at(i);
+        if (!is_sys_tenant(effective_tenant_id_) && tenant_id != effective_tenant_id_) {
+          continue;
+        }
         if (OB_FAIL(scan_sql.append_fmt("UNION ALL "
                                       "SELECT task_id, tenant_id, object_id, ddl_type, NULL as execution_id, GMT_CREATE, GMT_MODIFIED FROM "
                                       "(SELECT task_id, tenant_id, object_id, ddl_type, time_to_usec(gmt_create) as GMT_CREATE, time_to_usec(gmt_modified) as GMT_MODIFIED "
@@ -97,6 +109,7 @@ int ObAllVirtualDDLDiagnoseInfoI1::process()
   int ret = OB_SUCCESS;
   ObSqlString scan_sql;
   ObSqlString task_id;
+  ObSqlString tenant_filter;
   int index_count = 0;
   if (OB_FAIL(set_index_ids(key_ranges_))) {
     LOG_WARN("failed to set index ids", K(ret));
@@ -124,16 +137,23 @@ int ObAllVirtualDDLDiagnoseInfoI1::process()
     } else if (index_count <= 0) {
     } else if (OB_FAIL(task_id.append_fmt(") "))) {
       LOG_WARN("failed to assign sql", K(ret));
+    } else if (OB_FAIL(tenant_filter.assign(""))) {
+      // Only the sys tenant is allowed to inspect DDL diagnose info of the whole cluster;
+      // non-sys tenants are restricted to their own tenant to avoid cross-tenant leakage.
+      LOG_WARN("failed to init tenant filter", K(ret));
+    } else if (!is_sys_tenant(effective_tenant_id_)
+               && OB_FAIL(tenant_filter.append_fmt("AND tenant_id = %lu ", effective_tenant_id_))) {
+      LOG_WARN("failed to append tenant filter", K(ret), K_(effective_tenant_id));
     } else if (OB_FAIL(scan_sql.assign_fmt("SELECT task_id, tenant_id, object_id, ddl_type, execution_id, time_to_usec(gmt_create) as GMT_CREATE, NULL as GMT_MODIFIED "
-                                          "FROM %s WHERE task_id in %s "
+                                          "FROM %s WHERE task_id in %s %s "
                                           "UNION "
                                           "SELECT task_id, tenant_id, object_id, ddl_type, NULL AS execution_id, time_to_usec(gmt_create) as GMT_CREATE, time_to_usec(gmt_modified) as GMT_MODIFIED "
-                                          "FROM %s WHERE user_message = 'Successful ddl' AND task_id in %s "
+                                          "FROM %s WHERE user_message = 'Successful ddl' AND task_id in %s %s "
                                           "ORDER BY task_id DESC, tenant_id DESC ",
                                           OB_ALL_VIRTUAL_DDL_TASK_STATUS_TNAME,
-                                          task_id.ptr(),
+                                          task_id.ptr(), tenant_filter.ptr(),
                                           OB_ALL_VIRTUAL_DDL_ERROR_MESSAGE_TNAME,
-                                          task_id.ptr()))) {
+                                          task_id.ptr(), tenant_filter.ptr()))) {
       LOG_WARN("failed to assign sql", K(ret));
     } else if (OB_FAIL(collect_ddl_info(scan_sql))) {
       LOG_WARN("failed to collect ddl info", K(ret));
