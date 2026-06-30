@@ -8224,8 +8224,11 @@ int ObTransformPreProcess::transform_udt_columns(const ObIArray<ObParentDMLStmt>
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is NULL", K(ret), K(ctx_), K(ctx_->session_info_));
-  } else if (is_mysql_mode() || ctx_->session_info_->get_ddl_info().is_ddl()) {
+  } else if (is_mysql_mode()) {
     // do nothing
+  } else if (ctx_->session_info_->get_ddl_info().is_ddl()
+             && ctx_->session_info_->get_ddl_info().is_dest_table_hidden()) {
+    // online DDL data movement to hidden table: skip all UDT transforms
   } else if (OB_FAIL(ObTransformUdtUtils::transform_query_udt_columns_exprs(ctx_, parent_stmts, stmt, trans_happened))) {
     LOG_WARN("failed to do query udt exprs transform", K(ret));
   } else if (OB_FAIL(ObTransformUdtUtils::transform_udt_columns_constraint_exprs(ctx_, stmt, trans_happened))) {
