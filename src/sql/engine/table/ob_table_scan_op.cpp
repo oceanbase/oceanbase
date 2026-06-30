@@ -3264,24 +3264,8 @@ int ObTableScanOp::reassign_task_ranges(ObGranuleTaskInfo &info, bool &is_false_
       MY_INPUT.mbr_filters_.reuse();
     } else if (!MY_INPUT.get_need_extract_query_range()) {
       is_false_range = info.ranges_.empty();
-      if (!is_false_range && MY_CTDEF.enable_new_false_range_) {
-        MY_INPUT.key_ranges_.reuse();
-        for (int64_t i = 0; OB_SUCC(ret) && i < info.ranges_.count(); ++i) {
-          const ObNewRange &range = info.ranges_.at(i);
-          if (OB_UNLIKELY(range.empty())) {
-            // do nothing
-          } else if (OB_FAIL(MY_INPUT.key_ranges_.push_back(range))) {
-            LOG_WARN("failed to push back filter range", K(ret));
-          }
-        }
-        if (OB_SUCC(ret)) {
-          is_false_range = MY_INPUT.key_ranges_.empty();
-        }
-      } else if (OB_FAIL(MY_INPUT.key_ranges_.assign(info.ranges_))) {
-        LOG_WARN("assign the range info failed", K(ret), K(info));
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(MY_INPUT.ss_key_ranges_.assign(info.ss_ranges_))) {
+      if (OB_FAIL(MY_INPUT.key_ranges_.assign(info.ranges_)) ||
+          OB_FAIL(MY_INPUT.ss_key_ranges_.assign(info.ss_ranges_))) {
         LOG_WARN("assign the range info failed", K(ret), K(info));
       } else if (MY_SPEC.is_vt_mapping_) {
         if (OB_FAIL(vt_result_converter_->convert_key_ranges(MY_INPUT.key_ranges_))) {
