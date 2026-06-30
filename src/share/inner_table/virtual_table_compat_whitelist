@@ -12,3 +12,4 @@ table_name oceanbase.__all_virtual_server table_id 12276
 table_name oceanbase.__all_virtual_ss_ls_meta table_id 11125
 table_name oceanbase.__tenant_virtual_list_file table_id 12546
 table_name oceanbase.__all_mview_refresh_pending_task table_id 604
+table_name oceanbase.__all_virtual_mview_refresh_pending_task table_id 12617
