@@ -1116,10 +1116,31 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
                                create_table_stmt->get_create_table_arg().schema_))) {
         LOG_WARN("fail to resolve hint", K(ret));
       }
+      // Merge SELECT-side append/direct hints into the CREATE stmt.
+      // The SELECT sub-tree has already been resolved; its fully-merged hints
+      // are stored in params_.query_ctx_->query_hint_.get_global_hint().
+      // We read them back here rather than re-running resolve_hints(),
+      // which would overwrite the CREATE-level parallel hint.
+      if (OB_SUCC(ret)) {
+        if (OB_ISNULL(params_.query_ctx_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("query ctx is null when merging select-side append/direct hint", K(ret));
+        } else {
+          const ObGlobalHint &sel_global_hint = params_.query_ctx_->query_hint_.get_global_hint();
+          // has_direct_load() already encodes no_direct's precedence over append/direct,
+          // so the CTAS decision stays in sync with ObGlobalHint and with the inner
+          // INSERT...SELECT we generate (which carries this same global hint).
+          if (sel_global_hint.has_direct_load()) {
+            if (sel_global_hint.has_append()) {
+              create_table_stmt->set_has_append_hint(true);
+            }
+            create_table_stmt->set_direct_load_hint(sel_global_hint.direct_load_hint_);
+          }
+        }
+      }
     }
 
-    // check storage cache policy for partitioned table
-    // because we only know the if the table is partitioned table after resolve_table_options
+    // Storage cache policy check (only know partition status after resolve_table_options)
     if (OB_SUCC(ret) && GCTX.is_shared_storage_mode() && is_mysql_mode) {
       ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
       if (OB_FAIL(check_create_stmt_storage_cache_policy(table_schema.get_storage_cache_policy(), &table_schema))) {
