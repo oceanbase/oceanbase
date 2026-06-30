@@ -2829,10 +2829,10 @@ int ObDDLService::set_raw_table_options(
           uint64_t compat_version = OB_INVALID_VERSION;
           if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
             LOG_WARN("get min data_version failed", KR(ret), K(tenant_id));
-          } else if (compat_version < DATA_VERSION_4_6_1_0) {
+          } else if (compat_version < DATA_VERSION_5_0_1_0) {
             ret = OB_NOT_SUPPORTED;
-            LOG_WARN("alter merge engine less than 4.6.1.0 not support", KR(ret), K(compat_version));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter merge engine less than 4.6.1.0");
+            LOG_WARN("alter merge engine less than 5.0.1.0 not support", KR(ret), K(compat_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter merge engine less than 5.0.1.0");
           } else if (OB_UNLIKELY(!ObMergeEngineStoreFormat::is_merge_engine_valid(alter_table_schema.get_merge_engine_type()))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected merge engine type", KR(ret), K(alter_table_schema.get_merge_engine_type()));
@@ -12829,7 +12829,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
       ObTableLockOwnerID owner_id;
       int64_t timeout_us = 0;
       bool is_alter_merge_engine = alter_table_schema.alter_option_bitset_.has_member(ObAlterTableArg::MERGE_ENGINE_TYPE) &&
-                                   tenant_data_version >= DATA_VERSION_4_6_1_0 &&
+                                   tenant_data_version >= DATA_VERSION_5_0_1_0 &&
                                    alter_table_schema.get_merge_engine_type() != orig_table_schema->get_merge_engine_type();
       bool is_rename_and_need_table_lock =
           alter_table_schema.alter_option_bitset_.has_member(ObAlterTableArg::TABLE_NAME) && // is rename table;
@@ -12895,7 +12895,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
             LOG_WARN("failed to alter table column!", K(*orig_table_schema), K(new_table_schema), K(ret));
           }
         }
-        if (OB_SUCC(ret) && is_alter_merge_engine && OB_FAIL(update_merge_engine_upper_version(new_table_schema, orig_table_schema->get_merge_engine_type()))) {
+        if (OB_SUCC(ret) && is_alter_merge_engine && OB_FAIL(ObMergeEngineUtil::update_merge_engine_upper_version(new_table_schema, tenant_data_version, orig_table_schema->get_merge_engine_type()))) {
           LOG_WARN("failed to update merge engine upper version", K(ret));
         }
         //table options
@@ -36940,29 +36940,6 @@ int ObDDLService::fill_part_name_if_needed(const SCHEMA &orig_schema,
 // explicit instantiation
 template int ObDDLService::fill_part_name_if_needed<ObTableSchema, AlterTableSchema>(
     const ObTableSchema &, AlterTableSchema &);
-
-int ObDDLService::update_merge_engine_upper_version(ObTableSchema &new_table_schema, const ObMergeEngineType origin_merge_engine_type)
-{
-  int ret = OB_SUCCESS;
-  ObTimeoutCtx ctx;
-  share::SCN upper_version;
-  uint64_t tenant_id = new_table_schema.get_tenant_id();
-  bool is_external_consistent = false;
-  if (OB_UNLIKELY(common::OB_INVALID_ID == tenant_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.rpc_timeout))) {
-    LOG_WARN("fail to set timeout ctx", KR(ret));
-  } else if (OB_FAIL(OB_TS_MGR.get_ts_sync(tenant_id,
-                                           ctx.get_timeout(),
-                                           upper_version,
-                                           is_external_consistent))) {
-    LOG_WARN("fail to get gts sync", KR(ret), K(tenant_id), K(ctx.get_timeout()), K(upper_version));
-  } else if (OB_FAIL(new_table_schema.update_merge_engine_upper_version(upper_version, origin_merge_engine_type, new_table_schema.get_merge_engine_type()))) {
-    LOG_WARN("failed to update merge engine upper version", KR(ret), K(upper_version), K(origin_merge_engine_type), K(new_table_schema));
-  }
-  return ret;
-}
 
 } // end namespace rootserver
 } // end namespace oceanbase

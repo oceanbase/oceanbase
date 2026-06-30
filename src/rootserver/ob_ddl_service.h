@@ -2944,7 +2944,6 @@ private:
       ObDDLOperator &ddl_operator,
       ObMySQLTransaction &trans,
       ObSchemaGetterGuard &schema_guard);
-  int update_merge_engine_upper_version(ObTableSchema &new_table_schema, const ObMergeEngineType origin_merge_engine_type);
 private:
   bool inited_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;

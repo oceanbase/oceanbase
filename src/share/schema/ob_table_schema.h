@@ -2412,22 +2412,17 @@ public:
   int check_identity_column_for_interval_part() const;
   int get_hidden_column_count(int64_t &hidden_column_count) const;
   int get_search_data_index_tid(uint64_t &tid) const;
-  int set_merge_engine_upper_version(const common::ObString &upper_version_str);
-  int inherit_merge_engine(const ObMergeEngineUpperVersion &other, const ObMergeEngineType inherit_merge_engine_type);
+  int set_merge_engine_upper_version(const common::ObString &upper_version_str)
+  {
+    return merge_engine_upper_version_.construct(upper_version_str, get_merge_engine_type());
+  }
   inline const ObMergeEngineUpperVersion& get_merge_engine_upper_version() const
   {
     return merge_engine_upper_version_;
   }
-  int init_merge_engine_upper_version(const ObMergeEngineType merge_engine_type)
+  inline ObMergeEngineUpperVersion& get_merge_engine_upper_version_for_update()
   {
-    return merge_engine_upper_version_.init_upper_version(merge_engine_type);
-  }
-  // upper version must be acquired after locking the table
-  int update_merge_engine_upper_version(const share::SCN &upper_version,
-                                         const ObMergeEngineType origin_merge_engine_type,
-                                         const ObMergeEngineType new_merge_engine_type)
-  {
-    return merge_engine_upper_version_.update_upper_version(get_tenant_id(), upper_version, origin_merge_engine_type, new_merge_engine_type);
+    return merge_engine_upper_version_;
   }
 
   DECLARE_VIRTUAL_TO_STRING;

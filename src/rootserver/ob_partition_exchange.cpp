@@ -691,10 +691,16 @@ int ObPartitionExchange::check_table_conditions_in_common_(
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("table is physical or logical split can not split", K(ret), K(base_table_schema), K(inc_table_schema));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "table is in physial or logical split, ddl operation");
-  } else if (base_table_schema.is_delete_insert_merge_engine() != inc_table_schema.is_delete_insert_merge_engine()) {
+  } else if (data_version_ < DATA_VERSION_5_0_1_0
+             && base_table_schema.is_delete_insert_merge_engine() != inc_table_schema.is_delete_insert_merge_engine()) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("merge engine type of exchanging partition and table is not equal", K(ret), K(base_table_schema), K(inc_table_schema));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "merge engine type of exchanging partition and table is not equal");
+  } else if (data_version_ >= DATA_VERSION_5_0_1_0
+             && base_table_schema.get_original_merge_engine_type() != inc_table_schema.get_original_merge_engine_type()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("original merge engine type of exchanging partition and table is not equal", K(ret), K(base_table_schema), K(inc_table_schema));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "original merge engine type of exchanging partition and table is not equal");
   } else if (OB_UNLIKELY(share::ObDuplicateScope::DUPLICATE_SCOPE_NONE != base_table_schema.get_duplicate_scope() || share::ObDuplicateScope::DUPLICATE_SCOPE_NONE != inc_table_schema.get_duplicate_scope())) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("can't support exchanging parition between duplicate tables", K(ret), K(base_table_schema.get_duplicate_scope()), K(inc_table_schema.get_duplicate_scope()));
@@ -2338,6 +2344,8 @@ int ObPartitionExchange::update_exchange_table_level_attributes_(const uint64_t 
         LOG_WARN("fail to create tablet to table history", K(ret), K(tenant_id), K(partitioned_table_schema));
       } else if (OB_FAIL(ObTabletToTableHistoryOperator::create_tablet_to_table_history(trans, tenant_id, non_partitioned_table_schema.get_schema_version(), inc_pairs))) {
         LOG_WARN("fail to create tablet to table history", K(ret), K(tenant_id), K(non_partitioned_table_schema));
+      } else if (OB_FAIL(ObMergeEngineUtil::merge_exchange_merge_engine_upper_version(partitioned_table_schema, non_partitioned_table_schema, data_version_))) {
+        LOG_WARN("fail to merge merge_engine_upper_version for exchange", K(ret), K(partitioned_table_schema), K(non_partitioned_table_schema));
       } else if (OB_FAIL(update_table_attribute_(non_partitioned_table_schema, trans))) {
         LOG_WARN("fail to update table attribute", K(ret), K(non_partitioned_table_schema));
       } else if (OB_FAIL(update_table_attribute_(partitioned_table_schema, trans))) {

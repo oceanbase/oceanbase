@@ -11288,40 +11288,6 @@ int ObTableSchema::set_ttl_definition(const common::ObString &input_ttl_definiti
   return ret;
 }
 
-int ObTableSchema::set_merge_engine_upper_version(const common::ObString &upper_version_str)
-{
-  int ret = OB_SUCCESS;
-  int64_t pos = 0;
-  if (upper_version_str.empty()) {
-    merge_engine_upper_version_.reset();
-    // no ddl change the merge engine type, so set the original merge engine type to the current merge engine type
-    merge_engine_upper_version_.set_original_merge_engine_type(get_merge_engine_type());
-  } else if (OB_FAIL(merge_engine_upper_version_.deserialize(upper_version_str.ptr(), upper_version_str.length(), pos))) {
-    SHARE_SCHEMA_LOG(WARN, "Failed to deserialize merge engine upper version", K(ret), KPHEX(upper_version_str.ptr(), upper_version_str.length()));
-  } else if (!merge_engine_upper_version_.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    SHARE_SCHEMA_LOG(WARN, "Merge engine upper version is not valid", K(ret), K_(merge_engine_upper_version));
-  }
-  return ret;
-}
-
-int ObTableSchema::inherit_merge_engine(const ObMergeEngineUpperVersion &other, const ObMergeEngineType inherit_merge_engine_type)
-{
-  int ret = OB_SUCCESS;
-  if (is_fts_index() || is_vec_index()) {
-    // fts index and vec index are always partial-update merge engine and never change
-    set_merge_engine_type(ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE);
-  } else if (OB_FAIL(merge_engine_upper_version_.assign(other))) {
-    SHARE_SCHEMA_LOG(WARN, "fail to assign merge engine upper version", K(ret), K(other));
-  } else if (is_aux_lob_table()) {
-    merge_engine_upper_version_.disable_merge_engine_for_lob();
-    set_merge_engine_type(ObMergeEngineStoreFormat::get_lob_aux_inherit_merge_engine_type(inherit_merge_engine_type));
-  } else {
-    set_merge_engine_type(inherit_merge_engine_type);
-  }
-  return ret;
-}
-
 int ObTableSchema::inherit_ttl_definition(const ObTableSchema &data_table_schema)
 {
   int ret = OB_SUCCESS;

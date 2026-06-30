@@ -3293,7 +3293,7 @@ int ObTableSqlService::gen_table_dml_without_check(
   } else if (data_version >= ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION
              && OB_FAIL(table.get_ttl_flag().write_string(allocator, ttl_flag_str))) {
     LOG_WARN("fail to write ttl flag str", K(ret));
-  } else if (data_version >= DATA_VERSION_4_6_1_0
+  } else if (data_version >= DATA_VERSION_5_0_1_0
              && OB_FAIL(table.get_merge_engine_upper_version().write_string(merge_engine_upper_version_str, allocator))) {
     LOG_WARN("fail to write merge engine upper version", K(ret));
   } else if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
@@ -3448,7 +3448,7 @@ int ObTableSqlService::gen_table_dml_without_check(
           && OB_FAIL(dml.add_column("mview_expand_definition", ObHexEscapeSqlStr(table.get_view_schema().get_expand_view_definition_for_mv()))))
       || (data_version >= DATA_VERSION_4_6_1_0
           && OB_FAIL(dml.add_column("external_file_pattern_type", table.get_external_file_pattern_type())))
-      || (data_version >= DATA_VERSION_4_6_1_0
+      || (data_version >= DATA_VERSION_5_0_1_0
           && OB_FAIL(dml.add_column("merge_engine_upper_version", ObHexEscapeSqlStr(merge_engine_upper_version_str))))
       ) {
         LOG_WARN("add column failed", K(ret));

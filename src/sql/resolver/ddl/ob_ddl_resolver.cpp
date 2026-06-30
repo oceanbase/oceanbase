@@ -3323,10 +3323,10 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
             }
           } else if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
             ObAlterTableArg &arg = static_cast<ObAlterTableStmt*>(stmt_)->get_alter_table_arg();
-            if (tenant_data_version < DATA_VERSION_4_6_1_0) {
+            if (tenant_data_version < DATA_VERSION_5_0_1_0) {
               ret = OB_NOT_SUPPORTED;
-              LOG_WARN("alter merge engine table option not supported in data version less than 4.6.1.0", K(ret), K(tenant_data_version));
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter merge engine table option in data version less than 4.6.1.0");
+              LOG_WARN("alter merge engine table option not supported in data version less than 5.0.1.0", K(ret), K(tenant_data_version));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter merge engine table option in data version less than 5.0.1.0");
             } else if (OB_UNLIKELY(!ObMergeEngineStoreFormat::is_merge_engine_valid(merge_engine_type))) {
               ret = OB_ERR_UNEXPECTED;
               SQL_RESV_LOG(WARN, "unexpected invalid merge engine value", K(ret), K(merge_engine_type));
