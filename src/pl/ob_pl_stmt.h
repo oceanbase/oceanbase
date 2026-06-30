@@ -1850,7 +1850,6 @@ public:
   inline bool has_return() { return has_return_; }
   inline void set_has_incomplete_rt_dep_error(bool has_incomplete_rt_dep_error) { has_incomplete_rt_dep_error_ = has_incomplete_rt_dep_error; }
   inline bool has_incomplete_rt_dep_error() { return has_incomplete_rt_dep_error_; }
-
   INHERIT_TO_STRING_KV("compile", ObPLCompileUnitAST, K(NULL));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPLFunctionAST);

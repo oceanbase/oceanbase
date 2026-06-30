@@ -1074,6 +1074,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "ob_enable_index_direct_select",
   "ob_enable_jit",
   "ob_enable_parameter_anonymous_block",
+  "ob_enable_pl_async_commit",
   "ob_enable_pl_cache",
   "ob_enable_plan_cache",
   "ob_enable_rich_error_msg",
@@ -1903,6 +1904,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_OB_ENABLE_INDEX_DIRECT_SELECT,
   SYS_VAR_OB_ENABLE_JIT,
   SYS_VAR_OB_ENABLE_PARAMETER_ANONYMOUS_BLOCK,
+  SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT,
   SYS_VAR_OB_ENABLE_PL_CACHE,
   SYS_VAR_OB_ENABLE_PLAN_CACHE,
   SYS_VAR_OB_ENABLE_RICH_ERROR_MSG,
@@ -3024,7 +3026,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "port",
   "socket",
   "enable_optimizer_rowgoal",
-  "_push_join_predicate"
+  "_push_join_predicate",
+  "ob_enable_pl_async_commit"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -4055,6 +4058,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarSocket)
         + sizeof(ObSysVarEnableOptimizerRowgoal)
         + sizeof(ObSysVarPushJoinPredicate)
+        + sizeof(ObSysVarObEnablePlAsyncCommit)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -11495,6 +11499,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__PUSH_JOIN_PREDICATE))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarPushJoinPredicate));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnablePlAsyncCommit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObEnablePlAsyncCommit", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObEnablePlAsyncCommit));
       }
     }
 
@@ -20590,6 +20603,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPushJoinPredicate())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarPushJoinPredicate", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObEnablePlAsyncCommit)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObEnablePlAsyncCommit)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnablePlAsyncCommit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObEnablePlAsyncCommit", K(ret));
       }
       break;
     }

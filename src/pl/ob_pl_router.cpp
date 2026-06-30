@@ -171,6 +171,9 @@ int ObPLRouter::simple_resolve(ObPLFunctionAST &func_ast)
   if (routine_info_.is_udt_routine()) {
       func_ast.set_is_udt_routine();
   }
+  if (routine_info_.is_async_commit()) {
+    func_ast.set_async_commit();
+  }
   //添加参数列表
   for (int64_t i = 0; OB_SUCC(ret) && i < routine_info_.get_routine_params().count(); ++i) {
     ObRoutineParam *param = routine_info_.get_routine_params().at(i);

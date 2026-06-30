@@ -445,6 +445,9 @@ int ObPLCompiler::compile(
     if (routine.is_pipelined()) {
       func_ast.set_pipelined();
     }
+    if (routine.is_async_commit()) {
+      func_ast.set_async_commit();
+    }
     if (routine.is_procedure()
         && (ROUTINE_PROCEDURE_TYPE == routine.get_routine_type()
             || ROUTINE_UDT_TYPE == routine.get_routine_type())) {
@@ -1093,6 +1096,9 @@ int ObPLCompiler::init_function(const share::schema::ObRoutineInfo *routine, ObP
       func.set_priv_user(routine->get_priv_user());
       if (routine->is_invoker_right()) {
         func.set_invoker_right();
+      }
+      if (routine->is_async_commit()) {
+        func.set_async_commit();
       }
       // 对于function而言，输出参数也在params里面，这里不能简单的按照param_count进行遍历
       for (int64_t i = 0; OB_SUCC(ret) && i < routine->get_routine_params().count(); ++i) {

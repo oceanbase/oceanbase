@@ -2643,6 +2643,7 @@ typedef enum ObItemType
   T_FORMAT_OBJECT_NAME_DISPLAY = 4909,
   T_TABLE_LOCK_MODE_HINT = 4920,
   T_GROUP_COMMIT = 4967,
+  T_SP_ASYNC_COMMIT = 4993,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

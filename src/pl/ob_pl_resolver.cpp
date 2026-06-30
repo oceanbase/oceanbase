@@ -5973,7 +5973,12 @@ int ObPLResolver::check_and_record_stmt_type(ObPLFunctionAST &func,
     case stmt::T_PREPARE:
     case stmt::T_EXECUTE:
     case stmt::T_DEALLOCATE: {
-      if (func.is_function() || in_tg) {
+      if (func.is_async_commit() && is_mysql_mode()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                       "ASYNC COMMIT procedure: prepared statement");
+        LOG_WARN("prepared statement is not allowed in ASYNC COMMIT procedure", K(ret), K(type));
+      } else if (func.is_function() || in_tg) {
         ret = OB_ER_STMT_NOT_ALLOWED_IN_SF_OR_TRG;
         LOG_WARN("Dynamic SQL is not allowed in stored function", K(ret));
         LOG_USER_ERROR(OB_ER_STMT_NOT_ALLOWED_IN_SF_OR_TRG, "Dynamic SQL");
@@ -6053,6 +6058,12 @@ int ObPLResolver::check_and_record_stmt_type(ObPLFunctionAST &func,
         } else {
           func.set_has_commit_or_rollback();
         }
+      }
+      if (OB_SUCC(ret) && func.is_async_commit() && is_mysql_mode()
+          && ObStmt::is_ddl_stmt(type, false)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "ASYNC COMMIT procedure: DDL SQL");
+        LOG_WARN("ASYNC COMMIT procedure: DDL SQL is not allowed", K(ret), K(type));
       }
     }
     break;
@@ -14108,6 +14119,29 @@ int ObPLResolver::resolve_sf_clause(
             routine_info->set_modifies_sql_data();
           } else if (SP_CONTAINS_SQL == child->value_) {
             routine_info->set_contains_sql();
+          }
+        }
+      } else if (T_SP_ASYNC_COMMIT == child->type_) {
+        if (!lib::is_mysql_mode()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "ASYNC COMMIT in Oracle mode");
+          LOG_WARN("ASYNC COMMIT is not supported in Oracle mode", K(ret));
+        } else if (ObProcType::STANDALONE_PROCEDURE != routine_type) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "ASYNC COMMIT for function or trigger");
+          LOG_WARN("ASYNC COMMIT is only supported for procedure", K(ret));
+        } else {
+          ObRoutineInfo *schema_routine_info = dynamic_cast<ObRoutineInfo*>(routine_info);
+          CK (OB_NOT_NULL(schema_routine_info));
+          if (OB_FAIL(ret)) {
+          } else if (schema_routine_info->is_async_commit()) {
+            ret = OB_ERR_DECL_MORE_THAN_ONCE;
+            LOG_USER_ERROR(OB_ERR_DECL_MORE_THAN_ONCE,
+                           static_cast<int>(strlen("ASYNC COMMIT")), "ASYNC COMMIT");
+            LOG_WARN("PLS-00371: at most one declaration for 'ASYNC COMMIT' is permitted",
+                     K(ret), K(child->type_));
+          } else {
+            schema_routine_info->set_async_commit();
           }
         }
       }

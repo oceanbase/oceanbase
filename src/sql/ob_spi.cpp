@@ -1625,6 +1625,39 @@ int ObSPIService::recreate_implicit_savapoint_if_need(sql::ObExecContext &ctx, i
   return ret;
 }
 
+int ObSPIService::check_pl_async_commit_eligible(pl::ObPLExecCtx *ctx,
+                                                  bool is_rollback,
+                                                  bool &eligible)
+{
+  int ret = OB_SUCCESS;
+  eligible = false;
+  if (!is_rollback && OB_NOT_NULL(ctx) && OB_NOT_NULL(ctx->exec_ctx_) && OB_NOT_NULL(ctx->pl_ctx_)) {
+    ObSQLSessionInfo *session = ctx->exec_ctx_->get_my_session();
+    pl::ObPLContext *pl_ctx = ctx->pl_ctx_;
+    pl::ObPLFunction *cur_func = ctx->func_;
+    if (OB_NOT_NULL(cur_func) && cur_func->is_async_commit()
+        && lib::is_mysql_mode() && pl_ctx->is_pl_async_commit_pending()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "ASYNC COMMIT procedure: more than one COMMIT");
+      LOG_WARN("ASYNC COMMIT procedure: only one COMMIT is allowed", K(ret));
+    } else if (OB_SUCC(ret) && OB_NOT_NULL(session) && OB_NOT_NULL(cur_func)
+        && 1 == pl_ctx->get_exec_stack().count()
+        && cur_func->is_async_commit()
+        && session->get_local_ob_enable_pl_async_commit()) {
+      if (session->associated_xa()) {
+        LOG_INFO("pl async commit fallback to sync commit: XA transaction is not supported",
+                 K(ret), K(session->get_tx_id()));
+      } else if (pl_ctx->has_output_arguments()) {
+        LOG_INFO("pl async commit fallback to sync commit: procedure with OUT parameters is not supported",
+                 K(ret));
+      } else {
+        eligible = true;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSPIService::spi_end_trans(ObPLExecCtx *ctx, const char *sql, bool is_rollback)
 {
   int ret = OB_SUCCESS;
@@ -1690,15 +1723,22 @@ int ObSPIService::spi_end_trans(ObPLExecCtx *ctx, const char *sql, bool is_rollb
 #endif
         } else {
           DISABLE_SQL_MEMLEAK_GUARD;
-          // PL内部的提交使用同步提交
-          OZ (sql::ObSqlTransControl::end_trans(ctx->exec_ctx_->get_my_session(),
-                                                ctx->exec_ctx_->get_need_disconnect_for_update(),
-                                                ctx->exec_ctx_->get_trans_state(),
-                                                is_rollback,
-                                                true));
-          // 如果发生过提交禁止PL整体重试
-          if (!is_rollback) {
-            OX (ctx->exec_ctx_->get_my_session()->set_pl_can_retry(false));
+          bool eligible = false;
+          OZ (check_pl_async_commit_eligible(ctx, is_rollback, eligible));
+          if (OB_FAIL(ret)) {
+          } else if (eligible) {
+            ctx->pl_ctx_->set_pl_async_commit_pending(true);
+            LOG_INFO("pl async commit deferred to destroy", K(ret), K(eligible));
+            OX (my_session->set_pl_can_retry(false));
+          } else {
+            OZ (sql::ObSqlTransControl::end_trans(my_session,
+                                                  ctx->exec_ctx_->get_need_disconnect_for_update(),
+                                                  ctx->exec_ctx_->get_trans_state(),
+                                                  is_rollback,
+                                                  true));
+            if (!is_rollback) {
+              OX (my_session->set_pl_can_retry(false));
+            }
           }
         }
       }
@@ -1828,6 +1868,30 @@ ObPLSPITraceIdGuard::~ObPLSPITraceIdGuard()
   }
 }
 
+int ObSPIService::check_async_commit_stmt_legal(pl::ObPLExecCtx *ctx, const ObString &sql, stmt::StmtType stmt_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(ctx) && OB_NOT_NULL(ctx->func_) && OB_NOT_NULL(ctx->pl_ctx_)
+      && lib::is_mysql_mode() && ctx->func_->is_async_commit()) {
+    if (ctx->pl_ctx_->is_pl_async_commit_pending()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "ASYNC COMMIT procedure: SQL statement after COMMIT");
+      LOG_WARN("ASYNC COMMIT procedure: SQL statement after COMMIT", K(ret), K(sql), K(stmt_type));
+    } else if (stmt::T_PREPARE == stmt_type ||
+               stmt::T_EXECUTE == stmt_type ||
+               stmt::T_DEALLOCATE == stmt_type) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "ASYNC COMMIT procedure: prepared statement");
+      LOG_WARN("ASYNC COMMIT procedure: prepared statement is not allowed", K(ret), K(sql), K(stmt_type));
+    } else if (ObStmt::is_ddl_stmt(stmt_type, false)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "ASYNC COMMIT procedure: DDL SQL");
+      LOG_WARN("ASYNC COMMIT procedure: DDL SQL is not allowed", K(ret), K(sql), K(stmt_type));
+    }
+  }
+  return ret;
+}
+
 // common sql execute interface (static-sql & dynamic-sql & dbms-sql-execute)
 int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
                                     ObIAllocator &out_param_alloc,
@@ -1875,6 +1939,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
         LOG_TRACE("cannot batch execute", K(ret), K(sql), K(type));
       }
       OZ (check_system_trigger_legal(ctx, sql, stmt_type));
+      OZ (check_async_commit_stmt_legal(ctx, sql, stmt_type));
       OZ (spi_result.init(*session));
       OZ (spi_result.start_nested_stmt_if_need(ctx, sqlstr, stmt_type, for_update));
       OX (spi_result.get_sql_ctx().is_dbms_sql_ = is_dbms_sql);

@@ -48,6 +48,7 @@ public:
         question_mark_idx_(),
         db_name_(),
         is_udt_routine_(false),
+        is_async_commit_(false),
         enum_set_ctx_(allocator_) {
   }
 
@@ -100,6 +101,8 @@ public:
 
   void set_is_udt_routine(bool v) { is_udt_routine_ = v; }
   bool is_udt_routine() const { return is_udt_routine_; }
+  void set_is_async_commit(bool v) { is_async_commit_ = v; }
+  bool is_async_commit() const { return is_async_commit_; }
   pl::ObPLEnumSetCtx& get_enum_set_ctx() { return enum_set_ctx_; };
 
   int prepare_expression(const common::ObIArray<sql::ObRawExpr*> &params);
@@ -123,7 +126,8 @@ public:
                K_(out_client_params),
                K_(out_param_id),
                K_(question_mark_idx),
-               K_(is_udt_routine));
+               K_(is_udt_routine),
+               K_(is_async_commit));
 private:
   bool can_direct_use_param_;
   uint64_t package_id_;
@@ -153,6 +157,7 @@ private:
   ParamTypeInfoArray in_type_infos_;
   ObString db_name_;
   bool is_udt_routine_;
+  bool is_async_commit_;
   pl::ObPLEnumSetCtx enum_set_ctx_;
 
   DISALLOW_COPY_AND_ASSIGN(ObCallProcedureInfo);

@@ -120,6 +120,7 @@ class ObPLFunctionBase
   static const int64_t HAS_OPEN_EXTERNAL_REF_CURSOR = 8; // A SUBPROGRAM MAY OPEN PARENT REF CURSOR
   static const int64_t IS_UDT_CONS = 9; // udt constructor
   static const int64_t HAS_DEBUG_PRIV = 10;
+  static const int64_t IS_ASYNC_COMMIT = 11;
 
 public:
   ObPLFunctionBase()
@@ -172,6 +173,8 @@ public:
   inline bool get_has_set_autocommit_stmt() const { return flag_.has_member(HAS_SET_AUTOCOMMIT_STMT); }
   inline void set_autonomous() { flag_.add_member(IS_AUTONOMOUS_TRANSACTION); }
   inline bool is_autonomous() const { return flag_.has_member(IS_AUTONOMOUS_TRANSACTION); }
+  inline void set_async_commit() { flag_.add_member(IS_ASYNC_COMMIT); }
+  inline bool is_async_commit() const { return flag_.has_member(IS_ASYNC_COMMIT); }
 
   inline const ObPLDataType &get_ret_type() const { return ret_type_; }
   inline void set_ret_type(const ObPLDataType &ret_type) { ret_type_ = ret_type; }
@@ -944,6 +947,7 @@ public:
     old_priv_user_id_ = OB_INVALID_ID;
     old_in_definer_ = false;
     has_output_arguments_ = false;
+    pl_async_commit_pending_ = false;
 #ifdef OB_BUILD_ORACLE_PL
     if (call_stack_trace_ != nullptr) {
       call_stack_trace_->~ObPLCallStackTrace();
@@ -1079,6 +1083,8 @@ public:
   {
     has_output_arguments_ = has_output_arguments;
   }
+  void set_pl_async_commit_pending(bool v) { pl_async_commit_pending_ = v; }
+  bool is_pl_async_commit_pending() const { return pl_async_commit_pending_; }
   static int implicit_end_trans(
     sql::ObSQLSessionInfo &session, sql::ObExecContext &ctx, bool is_rollback, bool can_async = false);
 
@@ -1147,6 +1153,7 @@ private:
   bool need_reset_role_id_array_;
 
   bool has_output_arguments_;
+  bool pl_async_commit_pending_;
 
   int64_t old_worker_timeout_ts_;
   int64_t old_phy_plan_timeout_ts_;

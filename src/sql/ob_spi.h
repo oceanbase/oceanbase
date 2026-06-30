@@ -825,7 +825,8 @@ public:
   static int spi_clear_diagnostic_area(pl::ObPLExecCtx *ctx);
 
   static int spi_end_trans(pl::ObPLExecCtx *ctx, const char *sql, bool is_rollback);
-
+  static int check_pl_async_commit_eligible(pl::ObPLExecCtx *ctx, bool is_rollback, bool &eligible);
+  static int check_async_commit_stmt_legal(pl::ObPLExecCtx *ctx, const ObString &sql, stmt::StmtType stmt_type);
   static int spi_pad_char_or_varchar(ObSQLSessionInfo *session_info, const ObSqlExpression *expr,
                                      ObIAllocator *allocator, ObObj *result);
   static int spi_pad_char_or_varchar(ObSQLSessionInfo *session_info, const ObRawExpr *expr,

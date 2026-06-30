@@ -4250,6 +4250,9 @@ int ObSchemaPrinter::print_routine_definition_v1(const ObRoutineInfo *routine_in
         routine_info->is_deterministic() ? "\nDETERMINISTIC" : ""));
     OZ (databuff_printf(buf, buf_len, pos, "%s",
         routine_info->is_invoker_right() ? "\nINVOKER" : ""));
+    if (OB_SUCC(ret) && routine_info->is_async_commit()) {
+      OZ (databuff_printf(buf, buf_len, pos, "\nASYNC_COMMIT"));
+    }
     if (OB_SUCC(ret) && OB_NOT_NULL(routine_info->get_comment())) {
       OZ (databuff_printf(buf, buf_len, pos, "\nCOMMENT "));
       OZ (print_identifier(buf, buf_len, pos, routine_info->get_comment(), false));
@@ -4528,6 +4531,9 @@ int ObSchemaPrinter::print_routine_definition_v2_mysql(
         routine_info.is_deterministic() ? "\n    DETERMINISTIC" : ""));
     OZ (databuff_printf(buf, buf_len, pos, "%s",
         routine_info.is_invoker_right() ? "\n    SQL SECURITY INVOKER" : ""));
+    if (OB_SUCC(ret) && routine_info.is_async_commit()) {
+      OZ (databuff_printf(buf, buf_len, pos, "\n    ASYNC_COMMIT"));
+    }
     if (OB_SUCC(ret) && OB_NOT_NULL(routine_info.get_comment())) {
       OZ (databuff_printf(buf, buf_len, pos, "\n    COMMENT '%.*s'",
           routine_info.get_comment().length(),

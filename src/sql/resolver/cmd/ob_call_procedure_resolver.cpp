@@ -428,6 +428,9 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
       if (OB_SUCC(ret) && proc_info->is_udt_routine()) {
         call_proc_info->set_is_udt_routine(true);
       }
+      if (OB_SUCC(ret) && proc_info->is_async_commit()) {
+        call_proc_info->set_is_async_commit(true);
+      }
       if (OB_SUCC(ret)) {
         ObSchemaObjVersion obj_version;
         obj_version.object_id_ = proc_info->get_routine_id();

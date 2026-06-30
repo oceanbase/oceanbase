@@ -218,7 +218,7 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
 /* non reserved key words */
 %token <non_reserved_keyword>
 //-----------------------------non_reserved keyword begin-------------------------------------------
-      AFTER AT AUTHID BEGIN_KEY BINARY_INTEGER BODY C CATALOG_NAME CLASS_ORIGIN CLOSE COLUMN_NAME COMMENT COMPLETION
+      AFTER ASYNC_COMMIT AT AUTHID BEGIN_KEY BINARY_INTEGER BODY C CATALOG_NAME CLASS_ORIGIN CLOSE COLUMN_NAME COMMENT COMPLETION
       CONSTRAINT_CATALOG CONSTRAINT_NAME CONSTRAINT_ORIGIN CONSTRAINT_SCHEMA CONTAINS COUNT CURSOR_NAME
       DATA DATE DAY DEFINER DISABLE ENABLE ENDS END_KEY EVENT EVERY EXTEND FOLLOWS FOUND FUNCTION HANDLER HOUR INTERFACE INVOKER JSON LANGUAGE
       MESSAGE_TEXT MINUTE MONTH MYSQL_ERRNO NATIONAL NEXT NO OF OPEN PACKAGE PRAGMA PRECEDES PRESERVE RECORD RETURNS ROW ROWTYPE
@@ -771,6 +771,7 @@ ident:
 
 unreserved_keyword:
     AFTER
+  | ASYNC_COMMIT
   | AT
   | AUTHID
   | BEGIN_KEY %prec LOWER_PARENS
@@ -1505,6 +1506,10 @@ sp_chistic:
   {
     malloc_terminal_node($$, parse_ctx->mem_pool_, T_SP_INVOKE);
     $$->value_ = SP_INVOKER;
+  }
+  | ASYNC_COMMIT
+  {
+    malloc_terminal_node($$, parse_ctx->mem_pool_, T_SP_ASYNC_COMMIT);
   }
 ;
 

@@ -1079,10 +1079,10 @@ void ObPLContext::destory(
           }
         }
         ret = OB_SUCCESS == ret ? tmp_ret : ret;
-      } else if (!is_autonomous_ && reset_autocommit_ && !in_nested_sql_ctrl() &&
-                (lib::is_oracle_mode() || (lib::is_mysql_mode() && is_function_or_trigger_))) {
+      } else if (!is_autonomous_ && (reset_autocommit_ || pl_async_commit_pending_) && !in_nested_sql_ctrl() &&
+                (lib::is_oracle_mode() || (lib::is_mysql_mode() && (is_function_or_trigger_ || pl_async_commit_pending_)))) {
                 /* 非dml出发点的udf, 如set @a= f1(), 需要在udf内部提交 */
-        if (has_implicit_savepoint_) {
+        if (has_implicit_savepoint_ && !pl_async_commit_pending_) {
           // reset_autocommit_ && has_implicit_savepoint_ equal to scene of ac=1 && explict transaction.
           // no need to commit
         } else if (!session_info.associated_xa()) {
@@ -4368,6 +4368,18 @@ int ObPLExecState::init(const ParamStore *params, bool is_anonymous)
     OX (parent->set_loc(this->get_loc()));
     OX (this->set_loc(0));
   }
+  if (OB_SUCC(ret) && lib::is_mysql_mode()) {
+    ObIArray<ObPLExecState *> &stack = top_context_->get_exec_stack();
+    if (stack.count() > 0) {
+      ObPLFunction &top_func = stack.at(0)->get_function();
+      if (func_.is_async_commit() || top_func.is_async_commit()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                       "ASYNC COMMIT procedure: nested routine call");
+        LOG_WARN("nested routine call is not allowed for ASYNC COMMIT procedure", K(ret));
+      }
+    }
+  }
   OZ (top_context_->get_exec_stack().push_back(this));
 
   OZ (init_params(params, is_anonymous));
@@ -4680,6 +4692,11 @@ int ObPL::simple_execute(ObPLExecCtx *ctx, int64_t argc, int64_t *argv)
       ObPLSqlInfo &sql_info = sql_infos.at(i);
       OZ (ObSPIService::spi_update_location(ctx, sql_info.loc_));
       if (OB_FAIL(ret)) {
+      } else if (stmt::T_END_TRANS == sql_info.stmt_type_
+                 && func->is_async_commit()) {
+        bool is_rollback = sql_info.sql_.length() >= 8
+                           && 0 == STRNCASECMP(sql_info.sql_.ptr(), "rollback", 8);
+        OZ (ObSPIService::spi_end_trans(ctx, sql_info.sql_.ptr(), is_rollback));
       } else if (sql_info.params_.empty()) {
         OZ (ObSPIService::spi_query(
           ctx, sql_infos.at(i).sql_.ptr(), sql_infos.at(i).stmt_type_,

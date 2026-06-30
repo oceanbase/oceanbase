@@ -5973,6 +5973,13 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR__PUSH_JOIN_PREDICATE; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(825); }
 };
+class ObSysVarObEnablePlAsyncCommit : public ObBoolSysVar
+{
+public:
+  ObSysVarObEnablePlAsyncCommit() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(826); }
+};
 
 
 class ObSysVarFactory
@@ -5996,7 +6003,7 @@ private:
 
 public:
   const static int64_t MYSQL_SYS_VARS_COUNT = 99;
-  const static int64_t OB_SYS_VARS_COUNT = 727;
+  const static int64_t OB_SYS_VARS_COUNT = 728;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
   const static int64_t INVALID_MAX_READ_STALE_TIME = -1;
 

@@ -15,6 +15,7 @@
 #include "observer/mysql/obmp_query.h"
 
 #include "share/ob_resource_limit.h"
+#include "sql/resolver/cmd/ob_call_procedure_stmt.h"
 #include "observer/mysql/ob_sync_plan_driver.h"
 #include "observer/mysql/ob_sync_cmd_driver.h"
 #include "observer/mysql/ob_async_cmd_driver.h"
@@ -1670,8 +1671,13 @@ OB_INLINE int ObMPQuery::response_result(ObMySQLResultSet &result,
       ObAsyncCmdDriver drv(gctx_, ctx_, session, retry_ctrl_, *this); \
       if (OB_FAIL(sql_end_cb.init(packet_sender_, &session))) { \
         LOG_WARN("failed to init sql end callback", K(ret)); \
-      } else if (OB_FAIL(drv.response_result(result))) { \
-        LOG_WARN("fail response async result", K(ret)); \
+      } else { \
+        session.set_pl_query_sender(&drv); \
+        session.set_ps_protocol(result.is_ps_protocol()); \
+        if (OB_FAIL(drv.response_result(result))) { \
+          LOG_WARN("fail response async result", K(ret)); \
+        } \
+        session.set_pl_query_sender(NULL); \
       } \
       async_resp_used = result.is_async_end_trans_submitted(); \
     } else { \
@@ -1684,6 +1690,19 @@ OB_INLINE int ObMPQuery::response_result(ObMySQLResultSet &result,
 
     if (result.is_pl_stmt(result.get_stmt_type())) {
       ENABLE_SQL_MEMLEAK_GUARD;
+      if(lib::is_mysql_mode() &&
+        !force_sync_resp &&
+        stmt::T_CALL_PROCEDURE == result.get_stmt_type() &&
+        session.get_local_ob_enable_pl_async_commit() &&
+        !result.is_with_rows()) {
+        ObCallProcedureStmt *call_stmt =
+            static_cast<ObCallProcedureStmt *>(result.get_cmd());
+        if (OB_NOT_NULL(call_stmt) &&
+            OB_NOT_NULL(call_stmt->get_call_proc_info()) &&
+            call_stmt->get_call_proc_info()->is_async_commit()) {
+          need_trans_cb = true;
+        }
+      }
       CMD_EXEC;
     } else {
       CMD_EXEC;

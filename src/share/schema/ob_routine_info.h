@@ -86,6 +86,9 @@ enum ObRoutineFlag
   SP_FLAG_HAS_SEQUENCE = SP_FLAG_RPS * 2,
   SP_FLAG_HAS_OUT_PARAM = SP_FLAG_HAS_SEQUENCE * 2,
   SP_FLAG_EXTERNAL_STATE = SP_FLAG_HAS_OUT_PARAM * 2,
+  SP_FLAG_MYSQL_UDTF = SP_FLAG_EXTERNAL_STATE * 2,
+  SP_FLAG_SQL_TRANSPILER_ELIGIBLE = SP_FLAG_MYSQL_UDTF * 2,
+  SP_FLAG_ASYNC_COMMIT = SP_FLAG_SQL_TRANSPILER_ELIGIBLE * 2,
 };
 
 namespace oceanbase
@@ -531,6 +534,8 @@ public:
   OB_INLINE void set_has_sequence() { flag_ |= SP_FLAG_HAS_SEQUENCE;}
   OB_INLINE void set_has_out_param() { flag_ |= SP_FLAG_HAS_OUT_PARAM;}
   OB_INLINE void set_external_state() { flag_ |= SP_FLAG_EXTERNAL_STATE;}
+  OB_INLINE void set_async_commit() { flag_ |= SP_FLAG_ASYNC_COMMIT;}
+  OB_INLINE bool is_async_commit() const { return SP_FLAG_ASYNC_COMMIT == (flag_ & SP_FLAG_ASYNC_COMMIT); }
 
   OB_INLINE bool is_aggregate() const { return SP_FLAG_AGGREGATE == (flag_ & SP_FLAG_AGGREGATE); }
 
