@@ -194,13 +194,13 @@ struct ObSysVarInPC
     for (int32_t i = 0; OB_SUCC(ret) && i < sys_var_cnt; ++i) {
       size = 0;
       if (OB_FAIL(system_variables_.at(i).print_plain_str_literal(buf + pos, buf_len - pos, size))) {
-        SQL_PC_LOG(WARN, "fail to encode obj", K(i), K(buf + pos), K(buf_len), K(pos), K(system_variables_.at(i)), K(ret));
+        SQL_PC_LOG(WARN, "fail to encode obj", K(i), K(buf_len), K(pos), K(system_variables_.at(i)), K(ret));
       } else {
         pos += size;
         if (i != sys_var_cnt - 1) { //输出间隔符
           if (buf_len - pos <= 0) {
             ret = common::OB_ERR_UNEXPECTED;
-            SQL_PC_LOG(WARN, "fail to databuf print", K(buf), K(pos));
+            SQL_PC_LOG(WARN, "fail to databuf print", K(buf_len), K(pos));
           } else {
             char delimiter = ',';
             memcpy(buf+pos, &delimiter, sizeof(delimiter));
