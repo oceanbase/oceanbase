@@ -180,9 +180,16 @@ int ObErrorInfo::add_error(common::ObISQLClient & sql_client,
           LOG_WARN("execute insert failed", K(ret));
         }
       }
-      if (OB_SUCC(ret) && !is_single_row(affected_rows)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("affected_rows unexpected to be one", K(affected_rows), K(ret));
+      if (OB_SUCC(ret)) {
+        if (is_replace) {
+          if (!is_zero_row(affected_rows) && !is_single_row(affected_rows)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("affected_rows unexpected", K(affected_rows), K(ret));
+          }
+        } else if (!is_single_row(affected_rows)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("affected_rows unexpected to be one", K(affected_rows), K(ret));
+        }
       }
     }
   }
