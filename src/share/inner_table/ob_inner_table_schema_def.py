@@ -9032,7 +9032,7 @@ def_table_schema(
     ('refresh_method', 'int', 'false', '0'),
     ('refresh_parallel', 'int', 'false', '0'),
     ('target_data_sync_scn', 'uint', 'false', '0'),
-    ('expire_time', 'timestamp', 'true'),
+    ('timeout_us', 'int', 'false', '0'),
     ('status', 'int', 'false', '0'),
     ('flags', 'int', 'false', '0'),
     ('skip_cnt', 'int', 'false', '0'),
