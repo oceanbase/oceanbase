@@ -7087,6 +7087,8 @@ int ObAlterTableResolver::check_alter_part_key_allowed(const ObTableSchema &tabl
       LOG_WARN("get null part expr", K(ret));
     } else if (OB_FAIL(alter_column_expr_in_part_expr(src_col_schema, dst_col_schema, part_expr))) {
       LOG_WARN("fail to alter column expr in part expr", K(ret), KPC(part_expr));
+    } else if (OB_FAIL(ObRawExprUtils::erase_operand_implicit_cast(part_expr, part_expr))) {
+      LOG_WARN("fail to erase operand implicit cast", K(ret), KPC(part_expr));
     }
     OZ (part_expr->formalize(session_info_));
     if (OB_FAIL(ret)) {
