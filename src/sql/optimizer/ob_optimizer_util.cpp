@@ -7146,12 +7146,21 @@ int ObOptimizerUtil::gen_set_target_list(ObIAllocator *allocator,
   UNUSED(allocator);
   ObSelectStmt *child_stmt = NULL;
   ObSEArray<ObExprResType, 8> res_types;
+  share::ObCompatType compat_type = share::COMPAT_MYSQL57;
+  bool aggregate_collation_for_comparison = false;
   if (OB_ISNULL(session_info) || OB_ISNULL(expr_factory) || OB_ISNULL(select_stmt)
       || OB_UNLIKELY(select_stmt->get_set_query().empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret));
+  } else if (lib::is_mysql_mode() &&
+             OB_FAIL(session_info->get_compatibility_control(compat_type))) {
+    LOG_WARN("failed to get compatibility control", K(ret));
+  } else if (FALSE_IT(aggregate_collation_for_comparison = lib::is_mysql_mode()
+                                                         && share::COMPAT_MYSQL8 == compat_type)) {
   } else if (OB_FAIL(get_set_res_types(allocator, session_info, need_merge_type,
-                                       select_stmt->get_set_query(), res_types))) {
+                                       select_stmt->get_set_query(),
+                                       aggregate_collation_for_comparison,
+                                       res_types))) {
     LOG_WARN("failed to get set res types", K(ret));
   } else if (OB_ISNULL(child_stmt = select_stmt->get_set_query(0))) {
     ret = OB_ERR_UNEXPECTED;
@@ -7194,6 +7203,7 @@ int ObOptimizerUtil::get_set_res_types(ObIAllocator *allocator,
                                        ObSQLSessionInfo *session_info,
                                        const bool need_merge_type, /* generally true */
                                        ObIArray<ObSelectStmt*> &child_querys,
+                                       const bool aggregate_collation_for_comparison,
                                        ObIArray<ObExprResType> &res_types)
 {
   int ret = OB_SUCCESS;
@@ -7228,6 +7238,10 @@ int ObOptimizerUtil::get_set_res_types(ObIAllocator *allocator,
             OB_ISNULL(expr = cur_stmt->get_select_item(idx).expr_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected child stmt", K(ret), K(cur_stmt), K(expr));
+        } else if (aggregate_collation_for_comparison) {
+          if (OB_FAIL(types.push_back(ObExprResType(expr->get_result_type())))) {
+            LOG_WARN("failed to push back expr type", K(ret), K(expr->get_result_type()));
+          }
         } else if (OB_FAIL(add_var_to_array_no_dup(types, ObExprResType(expr->get_result_type())))) {
           LOG_WARN("failed to add var", K(ret), K(expr->get_result_type()));
         } else if (!is_all_not_null) {
@@ -7264,6 +7278,10 @@ int ObOptimizerUtil::get_set_res_types(ObIAllocator *allocator,
                                                     types.count(), is_oracle_mode(),
                                                     type_ctx, need_merge_type))) {
         LOG_WARN("failed to aggregate result type for merge", K(ret));
+      } else if (aggregate_collation_for_comparison && res_type.is_string_or_lob_locator_type() &&
+                 OB_FAIL(ObExprOperator::aggregate_charsets_for_string_result_with_comparison(
+                     res_type, &types.at(0), types.count(), type_ctx))) {
+        LOG_WARN("failed to aggregate charset for set operator", K(ret));
       } else if (OB_FAIL(res_types.push_back(res_type))) {
         LOG_WARN("failed to pushback res type", K(ret));
       }
@@ -7421,8 +7439,10 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
   } else if (left_stmts.empty() || right_stmts.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("empty left/right stmts", K(ret), K(left_stmts), K(right_stmts));
-  } else if (OB_FAIL(get_set_res_types(allocator, session_info, need_merge_type, left_stmts, left_types)) ||
-             OB_FAIL(get_set_res_types(allocator, session_info, need_merge_type, right_stmts, right_types))) {
+  } else if (OB_FAIL(get_set_res_types(allocator, session_info, need_merge_type,
+                                       left_stmts, false, left_types)) ||
+             OB_FAIL(get_set_res_types(allocator, session_info, need_merge_type,
+                                       right_stmts, false, right_types))) {
     LOG_WARN("failed to get set res types", K(ret));
   } else if (OB_UNLIKELY(left_types.count() != right_types.count())) {
     ret = OB_ERR_COLUMN_SIZE;

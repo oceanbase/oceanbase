@@ -1206,6 +1206,7 @@ public:
                                ObSQLSessionInfo *session_info,
                                const bool need_merge_type,
                                ObIArray<ObSelectStmt*> &child_querys,
+                               const bool aggregate_collation_for_comparison,
                                ObIArray<ObExprResType> &res_types);
 
   static int try_add_cast_to_set_child_list(ObIAllocator *allocator,
