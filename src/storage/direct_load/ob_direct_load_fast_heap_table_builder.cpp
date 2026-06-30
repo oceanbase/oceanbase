@@ -138,6 +138,7 @@ int ObDirectLoadFastHeapTableBuilder::switch_sstable_slice()
     LOG_WARN("fail to close sstable slice builder", KR(ret));
   } else {
     slice_writer_->~ObSSTableInsertSliceWriter();
+    slice_writer_ = nullptr;
     slice_writer_allocator_.reuse();
     if (OB_FAIL(init_sstable_slice_ctx())) {
       LOG_WARN("fail to init sstable slice ctx", KR(ret));
