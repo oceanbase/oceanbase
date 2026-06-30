@@ -8,6 +8,7 @@
 #include <regex>
 #include "ob_json_bin.h"
 #include "ob_json_parse.h"
+#include "common/ob_smart_call.h"
 
 namespace oceanbase {
 namespace common {
@@ -112,7 +113,7 @@ int ObJsonSchemaTree::build_schema_tree(ObIJsonBase *json_doc)
   } else if (OB_FAIL(schema_map_->append(ref_))) {
     LOG_WARN("fail to push schema root.", K(ret));
   } else if (OB_FALSE_IT(++serial_num_)) {
-  } else if (OB_FAIL(inner_build_schema_tree(origin_json, false))) {
+  } else if (OB_FAIL(SMART_CALL(inner_build_schema_tree(origin_json, false)))) {
     LOG_WARN("fail to build schema.", K(ret));
   }
   return ret;
@@ -196,7 +197,7 @@ int ObJsonSchemaTree::handle_ref_keywords(ObJsonObject* origin_schema, ObIArray<
         }
       } else {
         ObJsonSchemaTree ref_schema_tree(allocator_, root_doc_, origin_ref);
-        if (OB_FAIL(ref_schema_tree.build_schema_tree(ref_val))) {
+        if (OB_FAIL(SMART_CALL(ref_schema_tree.build_schema_tree(ref_val)))) {
           LOG_WARN("fail to build schema.", K(ret));
         } else if (OB_ISNULL(ref_schema_tree.schema_map_)) {
         } else if (OB_FAIL(ref_->add(origin_ref, ref_schema_tree.schema_map_, true, false, false))) {
@@ -1355,7 +1356,7 @@ int ObJsonSchemaTree::handle_unnested_dependencies(ObJsonObject* json_schema)
       } else if (OB_ISNULL(comp_array = OB_NEWx(ObJsonArray, allocator_, allocator_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc comp_array failed.", K(i), K(ret));
-      } else if (OB_FAIL(inner_build_schema_tree(origin_schema, true, comp_array))) {
+      } else if (OB_FAIL(SMART_CALL(inner_build_schema_tree(origin_schema, true, comp_array)))) {
         LOG_WARN("recursive failed. ", K(i), K(ret));
       } else if (OB_FAIL(dep_schema_value->add(key, comp_array, true, true, false))) {
         LOG_WARN("fail to add dep_schema_value.", K(i), K(ret));
@@ -1399,7 +1400,7 @@ int ObJsonSchemaTree::handle_nested_dependencies(ObJsonObject* json_schema, ObJs
       } else if (OB_ISNULL(sub_dep_array = OB_NEWx(ObJsonArray, allocator_, allocator_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc comp_array failed.", K(i), K(ret));
-      } else if (OB_FAIL(inner_build_schema_tree(origin_schema, true, sub_dep_array))) {
+      } else if (OB_FAIL(SMART_CALL(inner_build_schema_tree(origin_schema, true, sub_dep_array)))) {
         LOG_WARN("recursion failed. ", K(i), K(ret));
       } else if (OB_FAIL(dep_value->add(key, sub_dep_array, true, false, false))) {
         LOG_WARN("json schema stk move to key failed", K(i), K(key), K(ret));
@@ -1435,7 +1436,7 @@ int ObJsonSchemaTree::handle_properties(ObJsonObject*& json_schema, bool is_comp
       } else if (OB_FALSE_IT(origin_schema = static_cast<ObJsonObject*>(value))) {
       } else if (OB_FAIL(json_schema_move_to_key(key))) {
         LOG_WARN("json schema stk move to key failed.", K(i), K(key), K(ret));
-      } else if (OB_FAIL(inner_build_schema_tree(origin_schema, is_composition, comp_array))) {
+      } else if (OB_FAIL(SMART_CALL(inner_build_schema_tree(origin_schema, is_composition, comp_array)))) {
         LOG_WARN("recursion failed. ", K(i), K(ret));
       } else if (OB_FAIL(json_schema_back_to_parent())) {
         LOG_WARN("fail to back. ", K(i), K(ret));
@@ -1482,7 +1483,7 @@ int ObJsonSchemaTree::handle_pattern_properties(ObJsonObject* json_schema, ObJso
       } else if (OB_NOT_NULL(pro_schema) && pro_array.count() > 0
                 && OB_FAIL(add_pattern_pro_to_schema(pro_schema, pro_array, key))) {
         LOG_WARN("fail to add patter properties.", K(i), K(ret));
-      } else if (OB_FAIL(inner_build_schema_tree(origin_schema, is_composition, comp_array))) {
+      } else if (OB_FAIL(SMART_CALL(inner_build_schema_tree(origin_schema, is_composition, comp_array)))) {
         LOG_WARN("recursion failed.", K(i), K(ret));
       } else {
         while (origin_schema_stk_size < cur_schema_stk_.size()) {
@@ -1513,7 +1514,7 @@ int ObJsonSchemaTree::handle_additional_properties(ObJsonSubSchemaKeywords& key_
     LOG_WARN("json doc move to key failed", K(ret));
   } else if (OB_FAIL(json_schema_move_to_array(ObJsonSchemaItem::ADDITIONAL_PRO, pro_array))) {
     LOG_WARN("json schema stk move to key failed", K(ret));
-  } else if (OB_FAIL(inner_build_schema_tree(json_schema, is_composition, comp_array))) {
+  } else if (OB_FAIL(SMART_CALL(inner_build_schema_tree(json_schema, is_composition, comp_array)))) {
     LOG_WARN("recursion failed.", K(ret));
   } else if (OB_FAIL(json_schema_back_to_grandpa())) {
     LOG_WARN("fail to back.", K(ret));
@@ -1529,7 +1530,7 @@ int ObJsonSchemaTree::handle_array_schema(ObJsonObject* json_schema, bool is_com
   if (!is_additonal) {
     if (OB_FAIL(all_move_to_key(key_word, json_schema))) {
       LOG_WARN("fail to move to properties.", K(ret));
-    } else if (OB_FAIL(inner_build_schema_tree(json_schema, is_composition, comp_array))) {
+    } else if (OB_FAIL(SMART_CALL(inner_build_schema_tree(json_schema, is_composition, comp_array)))) {
       LOG_WARN("recursion failed.", K(ret));
     } else if (OB_FAIL(json_schema_back_to_parent())) {
       LOG_WARN("fail to back.", K(ret));
@@ -1555,7 +1556,7 @@ int ObJsonSchemaTree::handle_array_schema(ObJsonObject* json_schema, bool is_com
         LOG_WARN("fail to get key", K(buf), K(ret));
       } else if (OB_FAIL(json_schema_move_to_key(ObString(buf.length(), buf.ptr())))) {
         LOG_WARN("json schema stk move to key failed.", K(buf), K(ret));
-      } else if (OB_FAIL(inner_build_schema_tree(json_schema, is_composition, comp_array))) {
+      } else if (OB_FAIL(SMART_CALL(inner_build_schema_tree(json_schema, is_composition, comp_array)))) {
         LOG_WARN("recursion failed. ", K(ret));
       } else if (OB_FAIL(json_schema_back_to_parent())) {
         LOG_WARN("fail to back. ", K(ret));
@@ -1598,7 +1599,7 @@ int ObJsonSchemaTree::handle_array_tuple_schema(ObJsonObject* json_schema, bool 
         LOG_WARN("fail to get key", K(i), K(buf), K(ret));
       } else if (OB_FAIL(json_schema_move_to_key(ObString(buf.length(), buf.ptr())))) {
         LOG_WARN("json schema stk move to key failed.", K(i), K(buf), K(ret));
-      } else if (OB_FAIL(inner_build_schema_tree(origin_schema, is_composition, comp_array))) {
+      } else if (OB_FAIL(SMART_CALL(inner_build_schema_tree(origin_schema, is_composition, comp_array)))) {
         LOG_WARN("recursion failed. ", K(i), K(ret));
       } else if (OB_FAIL(json_schema_back_to_parent())) {
         LOG_WARN("fail to back. ", K(i), K(ret));
@@ -1637,7 +1638,7 @@ int ObJsonSchemaTree::handle_unnested_composition(const ObString& key_word, ObJs
       } else if (OB_ISNULL(comp_array = OB_NEWx(ObJsonArray, allocator_, allocator_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc comp_array failed.", K(i), K(ret));
-      } else if (OB_FAIL(inner_build_schema_tree(origin_schema, true, comp_array))) {
+      } else if (OB_FAIL(SMART_CALL(inner_build_schema_tree(origin_schema, true, comp_array)))) {
         LOG_WARN("recursion failed.", K(i), K(ret));
       } else if (OB_FAIL(json_schema_add_comp_value(key_word, comp_array))) {
         LOG_WARN("json schema stk move to key failed", K(i), K(key_word), K(ret));
@@ -1657,7 +1658,7 @@ int ObJsonSchemaTree::handle_unnested_not(ObJsonObject* json_schema)
     if (OB_ISNULL(comp_array = OB_NEWx(ObJsonArray, allocator_, allocator_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc comp_array failed.", K(ret));
-    } else if (OB_FAIL(inner_build_schema_tree(json_schema, true, comp_array))) {
+    } else if (OB_FAIL(SMART_CALL(inner_build_schema_tree(json_schema, true, comp_array)))) {
       LOG_WARN("recursion failed.", K(ret));
     } else {
       int size = cur_schema_stk_.size();
@@ -1720,7 +1721,7 @@ int ObJsonSchemaTree::handle_nested_composition(const ObString& key_word, ObJson
       } else if (OB_ISNULL(sub_comp_array = OB_NEWx(ObJsonArray, allocator_, allocator_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc comp_array failed.", K(i), K(ret));
-      } else if (OB_FAIL(inner_build_schema_tree(origin_schema, true, sub_comp_array))) {
+      } else if (OB_FAIL(SMART_CALL(inner_build_schema_tree(origin_schema, true, sub_comp_array)))) {
         LOG_WARN("recursion failed. ", K(i), K(ret));
       } else if (OB_FAIL(nested_value->append(sub_comp_array))) {
         LOG_WARN("json schema stk move to key failed", K(i), K(ret));
@@ -1750,7 +1751,7 @@ int ObJsonSchemaTree::handle_nested_not(ObJsonObject* json_schema, ObJsonArray* 
     LOG_WARN("alloc nested_value failed.", K(ret));
   } else if (OB_FAIL(nested_key->add(ObJsonSchemaItem::NOT, nested_value, true, false, false))) {
     LOG_WARN("fail to add nested node.", K(ret));
-  } else if (OB_FAIL(inner_build_schema_tree(json_schema, true, nested_value))) {
+  } else if (OB_FAIL(SMART_CALL(inner_build_schema_tree(json_schema, true, nested_value)))) {
     LOG_WARN("recursion failed. ", K(ret));
   } else if (OB_FAIL(comp_array->append(nested_key))) {
     LOG_WARN("fail to add nested key.", K(ret));
