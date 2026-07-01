@@ -109,7 +109,7 @@ int ObPLDataType::get_pkg_type_by_name(uint64_t tenant_id,
                                        ObPLResolveCache *resolve_cache)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator;
+  ObArenaAllocator allocator("GetPkgType", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   const share::schema::ObPackageInfo *package_info = NULL;
   int64_t compatible_mode = lib::is_oracle_mode() ? COMPATIBLE_ORACLE_MODE
                                                   : COMPATIBLE_MYSQL_MODE;
@@ -220,7 +220,7 @@ int ObPLDataType::get_table_type_by_name(uint64_t tenant_id,
                                          ObPLResolveCache *resolve_cache)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator;
+  ObArenaAllocator allocator("GetTableType", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   const ObTableSchema *table_info = NULL;
   ObPLPackageGuard dummy_guard(session_info.get_effective_tenant_id());
   ObMySQLProxy dummy_proxy;
@@ -1165,7 +1165,7 @@ int ObPLDataType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
   } else {
     const ObUserDefinedType *user_type = NULL;
     const ObUDTTypeInfo *udt_info = NULL;
-    ObArenaAllocator local_allocator;
+    ObArenaAllocator local_allocator("SerUdtType", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     const uint64_t tenant_id = get_tenant_id_by_object_id(get_user_type_id());
     if (!is_udt_type()) {
       ret = OB_NOT_SUPPORTED;
@@ -1207,7 +1207,7 @@ int ObPLDataType::deserialize(ObSchemaGetterGuard &schema_guard,
     uint16_t flags;
     ObScale num_decimals;
     ObObj param;
-    ObArenaAllocator local_allocator;
+    ObArenaAllocator local_allocator("DeserUdtType", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     if (OB_FAIL(get_size(PL_TYPE_INIT_SIZE, init_size))) {
       LOG_WARN("get base type init size failed", K(ret));
     } else if (OB_ISNULL(dst) || (dst_len - dst_pos < init_size)) {
@@ -1238,7 +1238,7 @@ int ObPLDataType::deserialize(ObSchemaGetterGuard &schema_guard,
   } else {
     const ObUserDefinedType *user_type = NULL;
     const ObUDTTypeInfo *udt_info = NULL;
-    ObArenaAllocator local_allocator;
+    ObArenaAllocator local_allocator("DeserUdtType", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     const uint64_t tenant_id = get_tenant_id_by_object_id(get_user_type_id());
     ObObj *obj = reinterpret_cast<ObObj *>(dst + dst_pos);
     int64_t new_dst_len = 0;
