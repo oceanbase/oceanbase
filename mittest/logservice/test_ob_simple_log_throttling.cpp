@@ -25,6 +25,31 @@ class TestObSimpleLogClusterLogThrottling : public ObSimpleLogClusterTestEnv
 public:
   TestObSimpleLogClusterLogThrottling() :  ObSimpleLogClusterTestEnv()
   {}
+
+  void wait_log_io_worker_until_idle(LogIOWorker *log_io_worker)
+  {
+    int ret = OB_SUCCESS;
+    int64_t print_log_time = OB_INVALID_TIMESTAMP;
+    bool has_seen_idle = false;
+    while (true) {
+      const bool is_working = OB_INVALID_TIMESTAMP != log_io_worker->get_last_working_time();
+      const int64_t queue_size = log_io_worker->queue_.size();
+      // ObLightyQueue::size() can be negative while the worker is waiting in pop().
+      if (!is_working && queue_size <= 0) {
+        if (has_seen_idle) {
+          break;
+        } else {
+          has_seen_idle = true;
+        }
+      } else {
+        has_seen_idle = false;
+      }
+      ob_usleep(10_ms);
+      if (palf_reach_time_interval(1 * 1000 * 1000, print_log_time)) {
+        PALF_LOG(WARN, "wait log io worker until idle", KPC(log_io_worker), K(queue_size), K(is_working));
+      }
+    }
+  }
 };
 
 int64_t ObSimpleLogClusterTestBase::member_cnt_ = 1;
@@ -165,6 +190,8 @@ TEST_F(TestObSimpleLogClusterLogThrottling, test_throttling_basic)
   const int64_t log_size = end_lsn - before_lsn;
   max_lsn_1 = leader.palf_handle_impl_->sw_.get_max_lsn();
   wait_lsn_until_flushed(max_lsn_1, leader);
+  // max_flushed_end_lsn may be advanced before LogIOWorker runs after_append_log().
+  wait_log_io_worker_until_idle(log_io_worker);
   PALF_LOG(INFO, "case 3: after submit_log", K(before_lsn), K(end_lsn), K(max_lsn_1));
   ASSERT_EQ(throttle_options, throttle->throttling_options_);
   ASSERT_EQ(true, throttle->need_throttling_not_guarded_by_lock_(log_io_worker->need_purging_throttling_func_));
@@ -183,6 +210,8 @@ TEST_F(TestObSimpleLogClusterLogThrottling, test_throttling_basic)
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 1 * MB));
   max_lsn_1 = leader.palf_handle_impl_->sw_.get_max_lsn();
   wait_lsn_until_flushed(max_lsn_1, leader);
+  // max_flushed_end_lsn may be advanced before LogIOWorker runs after_append_log().
+  wait_log_io_worker_until_idle(log_io_worker);
   ASSERT_EQ(invalid_throttle_options, throttle->throttling_options_);
   ASSERT_EQ(false, throttle->need_throttling_not_guarded_by_lock_(log_io_worker->need_purging_throttling_func_));
   ASSERT_EQ(true, throttle->stat_.has_ever_throttled());
@@ -201,6 +230,8 @@ TEST_F(TestObSimpleLogClusterLogThrottling, test_throttling_basic)
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 1 * MB));
   max_lsn_1 = leader.palf_handle_impl_->sw_.get_max_lsn();
   wait_lsn_until_flushed(max_lsn_1, leader);
+  // max_flushed_end_lsn may be advanced before LogIOWorker runs after_append_log().
+  wait_log_io_worker_until_idle(log_io_worker);
   ASSERT_EQ(throttle_options, throttle->throttling_options_);
   ASSERT_EQ(true, throttle->need_throttling_not_guarded_by_lock_(log_io_worker->need_purging_throttling_func_));
   ASSERT_EQ(true, throttle->stat_.has_ever_throttled());
@@ -218,6 +249,8 @@ TEST_F(TestObSimpleLogClusterLogThrottling, test_throttling_basic)
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 1 * MB));
   max_lsn_1 = leader.palf_handle_impl_->sw_.get_max_lsn();
   wait_lsn_until_flushed(max_lsn_1, leader);
+  // max_flushed_end_lsn may be advanced before LogIOWorker runs after_append_log().
+  wait_log_io_worker_until_idle(log_io_worker);
   ASSERT_EQ(invalid_throttle_options, throttle->throttling_options_);
   ASSERT_EQ(false, throttle->need_throttling_not_guarded_by_lock_(log_io_worker->need_purging_throttling_func_));
   ASSERT_EQ(true, throttle->stat_.has_ever_throttled());
