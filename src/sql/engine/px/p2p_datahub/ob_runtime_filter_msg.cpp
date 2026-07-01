@@ -597,7 +597,12 @@ int ObRFBloomFilterMsg::merge(ObP2PDatahubMsgBase &msg)
 {
   int ret = OB_SUCCESS;
   ObRFBloomFilterMsg &bf_msg = static_cast<ObRFBloomFilterMsg &>(msg);
-  if (bf_msg.is_empty_) {
+  if (OB_UNLIKELY(bf_msg.bloom_filter_.get_bits_count() != bloom_filter_.get_bits_count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("bloom filter's bits count not match", K(bf_msg.bloom_filter_.get_bits_count()),
+        K(bloom_filter_.get_bits_count()));
+    is_active_ = false;
+  } else if (bf_msg.is_empty_) {
   } else if (OB_FAIL(bloom_filter_.merge_filter(&bf_msg.bloom_filter_))) {
     LOG_WARN("fail to merge bloom filter msg", K(ret));
   } else {

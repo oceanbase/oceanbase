@@ -6340,6 +6340,8 @@ int ObLogicalOperator::allocate_normal_join_filter(ObIArray<JoinFilterInfo*> &in
           valied_join_filter_count++;
           last_valid_join_filter_info_idx = i;
           join_filter_create->get_jf_material_control_info().enable_material_ = true;
+          join_filter_create->get_jf_material_control_info().each_sqc_has_full_data_ =
+              DIST_BC2HOST_NONE == join_dist_algo;
           if (join_filter_create->get_join_exprs().count()
               != static_cast<ObLogJoin *>(this)->get_equal_join_conditions().count()) {
             // if hash key is different, need to calculate new hash value

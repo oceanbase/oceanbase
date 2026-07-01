@@ -451,6 +451,12 @@ private:
                                      const RowMeta &row_meta);
   static int group_merge_and_send_join_filter(ObJoinFilterOp *join_filter_op);
 
+  static int group_check_hash_shuffle_join_filter(ObJoinFilterOp *join_filter_op, bool &has_shuffle)
+  {
+    has_shuffle = has_shuffle || get_my_spec(*join_filter_op).is_shuffle_;
+    return OB_SUCCESS;
+  }
+
 private:
   static const int64_t ADAPTIVE_BF_WINDOW_ORG_SIZE = 4096;
   static constexpr double ACCEPTABLE_FILTER_RATE = 0.98;

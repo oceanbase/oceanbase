@@ -738,7 +738,31 @@ int ObJoinFilterOp::inner_drain_exch()
 int ObJoinFilterOp::do_drain_exch()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObOperator::do_drain_exch())) {
+  bool need_get_data = false;
+  const ObBatchRows *brs = nullptr;
+  if (exch_drained_) {
+  } else if (MY_SPEC.is_material_controller() && !has_sent_runtime_filter_
+      && MY_SPEC.jf_material_control_info_.each_sqc_has_full_data_
+      && (ctx_.get_sqc_handler()->get_sqc_proxy().get_sqc_id() == 0)) {
+    /*
+      For plan like below, sqc0 is responsible for building and sending the runtime filter,
+      we must ensure that the runtime filter sent is complete, so that consumers can use it correctly.
+              shared hash join
+            |                 |
+        join filter create    ...
+                              exchange
+                                 |
+                           join filter use
+    */
+    bool has_shuffle = false;
+    (void) group_controller_->apply(group_check_hash_shuffle_join_filter, has_shuffle);
+    need_get_data = has_shuffle;
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (need_get_data && OB_FAIL(get_next_batch(MY_SPEC.max_batch_size_, brs))) {
+    LOG_WARN("failed to get next batch in drain", K(spec_.get_id()));
+  } else if (OB_FAIL(ObOperator::do_drain_exch())) {
     LOG_WARN("failed to basic do_drain_exch");
   } else if (MY_SPEC.is_material_controller()) {
     // if one worker is drained without send_datahub_count_row_msg, other workers who has
