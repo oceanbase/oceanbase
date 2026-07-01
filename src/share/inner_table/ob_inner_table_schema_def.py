@@ -18689,6 +18689,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
   in_tenant_space = True))
 
 # 12618: __all_virtual_ai_gateway_endpoint_stat
+# 12619: __all_virtual_replay_queue_stat
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
