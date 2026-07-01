@@ -62,9 +62,9 @@ int ObRenameUserResolver::resolve(const ParseNode &parse_tree)
             ret = OB_ERR_NO_PRIVILEGE;
             LOG_WARN("__oceanbase_inner_restore_user is reserved", K(ret));
           } else if (from_user.length() > OB_MAX_USER_NAME_LENGTH) {
-            LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, from_user.length(), from_user.ptr());
+            LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, from_user.length(), from_user.ptr(), OB_MAX_USER_NAME_LENGTH);
           } else if (to_user.length() > OB_MAX_USER_NAME_LENGTH) {
-            LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, to_user.length(), to_user.ptr());
+            LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, to_user.length(), to_user.ptr(), OB_MAX_USER_NAME_LENGTH);
           } else if (OB_FAIL(check_dcl_on_inner_user(node->type_,
                                                      session_info_->get_priv_user_id(),
                                                      from_user,

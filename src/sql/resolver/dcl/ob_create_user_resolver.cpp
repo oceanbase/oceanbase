@@ -9,6 +9,7 @@
 #include "sql/resolver/dcl/ob_set_password_resolver.h"
 #include "lib/encrypt/ob_encrypted_helper.h"
 #include "sql/resolver/ob_resolver_utils.h"
+#include "share/ob_compatibility_control.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -205,9 +206,19 @@ int ObCreateUserResolver::resolve(const ParseNode &parse_tree)
 
           // check user name and password length
           if (OB_SUCC(ret)) {
-            if (user_name.length() > OB_MAX_USER_NAME_LENGTH) {
+            int64_t max_user_name_len = OB_MAX_USER_NAME_LENGTH;
+            if (lib::is_mysql_mode()) {
+              bool use_32_limit = false;
+              if (OB_FAIL(params_.session_info_->check_feature_enable(ObCompatFeatureType::MYSQL_USERNAME_LENGTH_32,
+                                                                      use_32_limit))) {
+                LOG_WARN("failed to check username length compat feature", K(ret));
+              } else if (use_32_limit) {
+                max_user_name_len = OB_MAX_USERNAME_LENGTH;
+              }
+            }
+            if (OB_SUCC(ret) && user_name.length() > max_user_name_len) {
               ret = OB_WRONG_USER_NAME_LENGTH;
-              LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, user_name.length(), user_name.ptr());
+              LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, user_name.length(), user_name.ptr(), max_user_name_len);
             } else if (password.length() > OB_MAX_PASSWORD_LENGTH) {
               if (lib::is_oracle_mode()) {
                 ret = OB_ERR_MISSING_OR_INVALID_PASSWORD;

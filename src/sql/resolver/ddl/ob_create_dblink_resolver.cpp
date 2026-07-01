@@ -133,7 +133,7 @@ int ObCreateDbLinkResolver::resolve(const ParseNode &parse_tree)
       // do nothing
     } else if (user_name.length() > OB_MAX_USER_NAME_LENGTH) {
       ret = OB_WRONG_USER_NAME_LENGTH;
-      LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, user_name.length(), user_name.ptr());
+      LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, user_name.length(), user_name.ptr(), OB_MAX_USER_NAME_LENGTH);
     } else if (OB_FAIL(create_dblink_stmt->set_user_name(user_name))) {
       LOG_WARN("set user name failed", K(ret));
     }

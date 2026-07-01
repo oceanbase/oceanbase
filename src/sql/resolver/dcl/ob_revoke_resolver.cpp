@@ -550,7 +550,7 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
                 }
                 if (user_name.length() > OB_MAX_USER_NAME_LENGTH) {
                   ret = OB_WRONG_USER_NAME_LENGTH;
-                  LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, user_name.length(), user_name.ptr());
+                  LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, user_name.length(), user_name.ptr(), OB_MAX_USER_NAME_LENGTH);
                 } else if (OB_FAIL(revoke_stmt->add_grantee(user_name))) {
                   SQL_RESV_LOG(WARN, "fail to add grantee", K(ret), K(user_name), K(host_name));
                 } else if (OB_FAIL(
@@ -995,7 +995,7 @@ int ObRevokeResolver::resolve_revoke_obj_priv_inner(const ParseNode *node,
             }
             if (user_name.length() > OB_MAX_USER_NAME_LENGTH) {
               ret = OB_WRONG_USER_NAME_LENGTH;
-              LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, user_name.length(), user_name.ptr());
+              LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, user_name.length(), user_name.ptr(), OB_MAX_USER_NAME_LENGTH);
             }
           }
           if (OB_SUCC(ret)) {

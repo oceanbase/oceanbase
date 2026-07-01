@@ -1166,7 +1166,7 @@ int ObGrantResolver::resolve_grant_obj_privileges(
         if (OB_SUCC(ret)) {
           if (user_name.length() > OB_MAX_USER_NAME_LENGTH) {
             ret = OB_WRONG_USER_NAME_LENGTH;
-            LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, user_name.length(), user_name.ptr());
+            LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, user_name.length(), user_name.ptr(), OB_MAX_USER_NAME_LENGTH);
           } else if (OB_FAIL(ObEncryptedHelper::check_data_version_for_auth_plugin(plugin,
             params_.session_info_->get_effective_tenant_id(), is_plugin_supported))) {
             LOG_WARN("failed to check data version for auth plugin", K(ret));
@@ -1539,7 +1539,7 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
               if (OB_SUCC(ret)) {
                 if (user_name.length() > OB_MAX_USER_NAME_LENGTH) {
                   ret = OB_WRONG_USER_NAME_LENGTH;
-                  LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, user_name.length(), user_name.ptr());
+                  LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, user_name.length(), user_name.ptr(), OB_MAX_USER_NAME_LENGTH);
                 } else if (OB_FAIL(ObEncryptedHelper::check_data_version_for_auth_plugin(plugin,
                   params_.session_info_->get_effective_tenant_id(), is_plugin_supported))) {
                   LOG_WARN("failed to check data version for auth plugin", K(ret));
