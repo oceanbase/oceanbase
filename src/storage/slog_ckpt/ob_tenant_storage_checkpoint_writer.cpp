@@ -387,7 +387,7 @@ int ObTenantStorageCheckpointWriter::batch_compare_and_swap_tablet(const bool is
 
 bool ObTenantStorageCheckpointWriter::ignore_ret(int ret)
 {
-  return OB_ALLOCATE_MEMORY_FAILED == ret || OB_DISK_HUNG == ret || OB_TIMEOUT == ret || OB_BUF_NOT_ENOUGH == ret;
+  return OB_ALLOCATE_MEMORY_FAILED == ret || OB_DISK_HUNG == ret || OB_TIMEOUT == ret || OB_BUF_NOT_ENOUGH == ret || OB_EAGAIN == ret;
 }
 
 int ObTenantStorageCheckpointWriter::rollback()

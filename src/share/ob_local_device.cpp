@@ -1081,7 +1081,7 @@ int ObLocalDevice::io_setup(
     ObLocalIOContext *local_context = nullptr;
     local_context = new (buf) ObLocalIOContext();
     if (0 != (sys_ret = ::io_setup(max_events, &(local_context->io_context_)))) {
-      ret = OB_IO_ERROR;
+      ret = convert_sys_errno();
       SHARE_LOG(WARN, "Fail to setup io context, ", K(ret), K(sys_ret), KERRMSG);
     } else {
       io_context = local_context;
@@ -1111,7 +1111,7 @@ int ObLocalDevice::io_destroy(common::ObIOContext *io_context)
   } else {
     int sys_ret = 0;
     if ((sys_ret = ::io_destroy(local_io_context->io_context_)) != 0) {
-      ret = OB_IO_ERROR;
+      ret = convert_sys_errno();
       SHARE_LOG(WARN, "Fail to destroy io context, ", K(ret), K(sys_ret), KERRMSG);
     } else {
       allocator_.free(io_context);
@@ -1216,7 +1216,7 @@ int ObLocalDevice::io_submit(
     int submit_ret = ::io_submit(local_io_context->io_context_, 1, &iocbp);
     time_guard.click("LocalDevice_submit");
     if (1 != submit_ret) {
-      ret = OB_IO_ERROR;
+      ret = convert_sys_errno();
       SHARE_LOG(WARN, "Fail to submit aio, ", K(ret), K(submit_ret), K(errno), KERRMSG);
     }
   }
@@ -1247,7 +1247,7 @@ int ObLocalDevice::io_cancel(
   } else {
     int sys_ret = 0;
     if ((sys_ret = ::io_cancel(local_io_context->io_context_, &(local_iocb->iocb_), &local_event)) < 0) {
-      ret = OB_IO_ERROR;
+      ret = convert_sys_errno();
       SHARE_LOG(DEBUG, "Fail to cancel aio, ", K(ret), K(sys_ret), KERRMSG);
     }
   }
