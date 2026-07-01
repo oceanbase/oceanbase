@@ -669,10 +669,19 @@ int ObIHashPartInfrastructure::calc_hash_value_for_batch(const common::ObIArray<
     // do nothing
   } else if (0 != sort_collations_->count()) {
     // from child op, need eval
-    for (int64_t j = start_idx; OB_SUCC(ret) && j < sort_collations_->count(); ++j) {
-      const int64_t idx = sort_collations_->at(j).field_idx_;
-      if (OB_FAIL(exprs.at(idx)->eval_vector(*eval_ctx_, skip, size, all_rows_active))) {
-        SQL_ENG_LOG(WARN, "failed to eval batch", K(ret), K(j));
+    // eval extra exprs not covered by sort_collations to ensure valid vector format
+    if (exprs.count() != sort_collations_->count()) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
+        if (OB_FAIL(exprs.at(i)->eval_vector(*eval_ctx_, skip, size, all_rows_active))) {
+          SQL_ENG_LOG(WARN, "failed to eval vector for extra expr", K(ret), K(i));
+        }
+      }
+    } else {
+      for (int64_t j = start_idx; OB_SUCC(ret) && j < sort_collations_->count(); ++j) {
+        const int64_t idx = sort_collations_->at(j).field_idx_;
+        if (OB_FAIL(exprs.at(idx)->eval_vector(*eval_ctx_, skip, size, all_rows_active))) {
+          SQL_ENG_LOG(WARN, "failed to eval batch", K(ret), K(j));
+        }
       }
     }
     if (OB_SUCC(ret)) {
