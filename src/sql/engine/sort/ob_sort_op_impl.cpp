@@ -1100,6 +1100,12 @@ int ObSortOpImpl::preprocess_dump(bool &dumped)
           }
         } else { }
       }
+      if (OB_SUCC(ret) && dumped && 0 == get_rows_count()) {
+        dumped = false; //no data to dump, try to add a batch of data directly
+        LOG_TRACE("Insufficient memory, unable to store a batch of data",
+                  K(mem_context_->used()), K(get_memory_limit()),
+                  K(profile_.get_cache_size()), K(profile_.get_expect_size()));
+      }
       LOG_INFO("trace sort need dump", K(dumped), K(mem_context_->used()),
         K(get_ht_bucket_size()), K(get_memory_limit()),
         K(profile_.get_cache_size()), K(profile_.get_expect_size()),
