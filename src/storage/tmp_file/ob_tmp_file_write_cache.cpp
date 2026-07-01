@@ -606,7 +606,12 @@ int ObTmpFileWriteCache::alloc_page(
       }
 
       int64_t real_timeout_ms = min(timeout_ms, OB_IO_MANAGER.get_object_storage_io_timeout_ms(MTL_ID()));
-      if (FAILEDx(swap_page_(real_timeout_ms))) {
+      if (OB_FAIL(ret)) {
+      } else if (cal_flush_page_cnt_() < SWAP_PAGE_NUM_PER_BATCH) {
+        // swap_page_() waits on flush but does not trigger it; skip swap when the watermark
+        // would not free enough pages, to avoid blocking until job timeout under concurrency.
+        continue;
+      } else if (OB_FAIL(swap_page_(real_timeout_ms))) {
         LOG_WARN("fail to swap page", KR(ret), K(page_key), K(real_timeout_ms));
       } else {
         trigger_swap_page = true;
