@@ -7042,7 +7042,7 @@ seq	bigint(20)	NO		0
 refresh_method	bigint(20)	NO		0	
 refresh_parallel	bigint(20)	NO		0	
 target_data_sync_scn	bigint(20) unsigned	NO		0	
-expire_time	timestamp(6)	YES		NULL	
+timeout_us	bigint(20)	NO		0	
 status	bigint(20)	NO		0	
 flags	bigint(20)	NO		0	
 skip_cnt	bigint(20)	NO		0	
