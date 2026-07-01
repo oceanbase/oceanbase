@@ -832,7 +832,7 @@ public:
   static int branch_id_offset() { return MAX_CALLBACK_LIST_COUNT; }
   static bool is_alloced_branch_id(int branch_id) { return branch_id >= branch_id_offset(); }
   int alloc_branch_id(const int64_t count, int16_t &branch_id);
-  void reset_conflict_info_array() { conflict_info_array_.reset(); }
+  void reset_conflict_info_array();
   int fetch_conflict_info_array(ObIArray<storage::ObRowConflictInfo> &array);
   int fetch_conflict_txs_array(ObIArray<ObTransIDAndAddr> &array);
   ObSArray<storage::ObRowConflictInfo> &get_conflict_info_array() { return conflict_info_array_; }
