@@ -1289,21 +1289,23 @@ Timestamp{whitespace}?\"[^\"]*\" {
 }
 
 <hint>{btbegin} {
-  BEGIN(hint_bt); /*fast parameterize don't handle connent in ``*/
-  if (IS_FAST_PARAMETERIZE) {
-    COPY_WRITE();
-  } else {
-    check_value(yylval);
-    ParseResult *p = (ParseResult *)yyextra;
-    p->start_col_ = yylloc->first_column;
-    char **tmp_literal = &p->tmp_literal_;
-    if (NULL == *tmp_literal)
-    {
-      *tmp_literal = (char *)parse_malloc(p->input_sql_len_ + 1, p->malloc_pool_);
-      check_malloc(*tmp_literal);
+  ParseResult *p = (ParseResult *)yyextra;
+  if(!p->is_ignore_token_){
+    BEGIN(hint_bt); /*fast parameterize don't handle connent in ``*/
+    if (IS_FAST_PARAMETERIZE) {
+      COPY_WRITE();
+    } else {
+      check_value(yylval);
+      p->start_col_ = yylloc->first_column;
+      char **tmp_literal = &p->tmp_literal_;
+      if (NULL == *tmp_literal)
+      {
+        *tmp_literal = (char *)parse_malloc(p->input_sql_len_ + 1, p->malloc_pool_);
+        check_malloc(*tmp_literal);
+      }
+      malloc_new_node(yylval->node, p->malloc_pool_, T_IDENT, 0);
+      yylval->node->str_len_ = 0;
     }
-    malloc_new_node(yylval->node, p->malloc_pool_, T_IDENT, 0);
-    yylval->node->str_len_ = 0;
   }
 }
 
