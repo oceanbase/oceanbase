@@ -59,7 +59,11 @@ int serialize_inc_schema(
                                                                                table_schemas,
                                                                                buf,
                                                                                buf_len,
-                                                                               pos))) {
+                                                                               pos,
+                                                                               &trans))) {
+    // pass the in-flight trans as sql_client so the GTT v2 session tablet ids are read
+    // within this transaction; the create/drop session tablet rows it just wrote are
+    // not committed yet and a fresh GCTX.sql_proxy_ query would not see them.
     LOG_WARN("fail to serialize inc schemas", KR(ret), K(table_schema));
   } else if (OB_ISNULL(buf) || OB_UNLIKELY(pos > buf_len) || OB_UNLIKELY(pos < 0)) {
     ret = OB_ERR_UNEXPECTED;

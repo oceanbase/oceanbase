@@ -1064,7 +1064,8 @@ DEFINE_GET_SERIALIZE_SIZE(ObDictTableMeta)
   return len;
 }
 
-int ObDictTableMeta::init(const schema::ObTableSchema &table_schema, const int64_t schema_version)
+int ObDictTableMeta::init(const schema::ObTableSchema &table_schema, const int64_t schema_version,
+    common::ObISQLClient *sql_client)
 {
   int ret = OB_SUCCESS;
 
@@ -1091,12 +1092,21 @@ int ObDictTableMeta::init(const schema::ObTableSchema &table_schema, const int64
       const uint64_t table_id = table_schema.get_table_id();
       ObArray<common::ObTableID> table_ids;
       ObArray<storage::ObSessionTabletInfo> session_tablet_infos;
-      if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
+      // Prefer the caller-supplied sql_client so the session tablet query can read
+      // the uncommitted rows written within the same transaction (e.g. the create /
+      // drop session tablet trans registers this inc schema dict before commit).
+      // Fall back to GCTX.sql_proxy_ for callers (e.g. CDC dict dump) that read
+      // already-committed data without an outer transaction.
+      common::ObISQLClient *sql_proxy = (OB_NOT_NULL(sql_client)) ? sql_client : GCTX.sql_proxy_;
+      if (OB_ISNULL(sql_proxy)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("sql_proxy is null", KR(ret), KP(sql_client), KP(GCTX.sql_proxy_));
+      } else if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid table_id to get_session_tablet_ids_by_table_id", KR(ret), K(table_id));
       } else if (OB_INVALID_VERSION != schema_version) {
         if (OB_FAIL(share::ObTabletToGlobalTmpTableOperator::get_tablet_ids_by_table_id_with_schema_version(
-                                                                                          *GCTX.sql_proxy_,
+                                                                                          *sql_proxy,
                                                                                           schema_version,
                                                                                           tenant_id,
                                                                                           ObTableID(table_id),
@@ -1106,7 +1116,7 @@ int ObDictTableMeta::init(const schema::ObTableSchema &table_schema, const int64
         }
       } else if (OB_FAIL(table_ids.push_back(table_id))) {
         LOG_WARN("push_back table_id failed", KR(ret), K(tenant_id), K(table_id));
-      } else if (OB_FAIL(share::ObTabletToGlobalTmpTableOperator::batch_get_by_table_ids(*GCTX.sql_proxy_,
+      } else if (OB_FAIL(share::ObTabletToGlobalTmpTableOperator::batch_get_by_table_ids(*sql_proxy,
                                                                                          tenant_id,
                                                                                          table_ids,
                                                                                          session_tablet_infos))) {
