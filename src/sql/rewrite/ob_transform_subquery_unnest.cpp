@@ -1649,26 +1649,38 @@ int ObTransformSubqueryUnnest::anyall_collect_or_branch_infos(ObRawExpr *expr,
         info.output_column_cnt_ = subquery->get_select_item_size();
       }
     } else if (IS_COMMON_COMPARISON_OP(expr->get_expr_type()) && expr->get_expr_type() != T_OP_NSEQ) {
-      if (T_OP_ROW == left->get_expr_type()
-          && (T_OP_ROW != right->get_expr_type()
-              || left->get_param_count() != right->get_param_count())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected row expr", K(ret), K(left), K(right));
+      bool is_right_const = right->is_const_expr();
+      info.type_ = OrBranchInfo::SCALAR_CMP;
+      info.left_expr_ = is_right_const ? left : right;
+      info.right_expr_ = is_right_const ? right : left;
+      info.scalar_cmp_type_ = is_right_const ? expr->get_expr_type() : get_opposite_compare_type(expr->get_expr_type());
+      // in MySQL:  `(1,2) = (1,2)` is equivalent to `(1,2) = ((1,2))`
+      //    both of the exprs will be resolved as `ROW(1,2) = ROW(1,2)`
+      // in Oracle: `(1,2) = (1,2)` is invalid, only `(1,2) = ((1,2))` is valid
+      //    the later is resolved as `ROW(1,2) = ROW(ROW(1,2))`
+      // we need to remove the outer `ROW` expr in oracle mode
+      // to align the representations of the right exprs between both modes
+      if (lib::is_oracle_mode()
+          && T_OP_ROW == info.left_expr_->get_expr_type()
+          && T_OP_ROW == info.right_expr_->get_expr_type()
+          && 1 == info.right_expr_->get_param_count()
+          && NULL != info.right_expr_->get_param_expr(0)
+          && T_OP_ROW == info.right_expr_->get_param_expr(0)->get_expr_type()) {
+        info.right_expr_ = info.right_expr_->get_param_expr(0);
+      }
+      if (T_OP_ROW == info.left_expr_->get_expr_type()
+          && (T_OP_ROW != info.right_expr_->get_expr_type()
+              || info.left_expr_->get_param_count() != info.right_expr_->get_param_count())) {
+        trans_param.can_transform_ = false;
+        OPT_TRACE("OR subquery expansion: unsupported row expr", expr);
       } else {
-        // Normalize so that the const operand is on the right, to align the left
-        // expr across OR branches with an ANY_SUBQUERY anchor.
-        bool is_right_const = right->is_const_expr();
-        info.type_ = OrBranchInfo::SCALAR_CMP;
-        info.left_expr_ = is_right_const ? left : right;
-        info.right_expr_ = is_right_const ? right : left;
-        info.scalar_cmp_type_ = is_right_const ? expr->get_expr_type() : get_opposite_compare_type(expr->get_expr_type());
         info.output_column_cnt_ = (T_OP_ROW == info.left_expr_->get_expr_type())
                                   ? info.left_expr_->get_param_count() : 1;
       }
     } else if (T_OP_IN == expr->get_expr_type()) {
       if (T_OP_ROW != right->get_expr_type()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected row expr", K(ret), K(right));
+        trans_param.can_transform_ = false;
+        OPT_TRACE("OR subquery expansion: unsupported IN expr", expr);
       } else {
         info.type_ = OrBranchInfo::INLIST;
         info.left_expr_ = left;
