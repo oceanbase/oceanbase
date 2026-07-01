@@ -120,6 +120,45 @@ TEST_F(StringSearcherTest, AVX2_Instr)
   EXPECT_TRUE(find);
   EXPECT_EQ(10, pos);
 }
+
+TEST_F(StringSearcherTest, AVX2_Memequal_AllLengths)
+{
+  // Regression for the SIMD memequal tail. With SIMD_SIZE == 32, a pattern whose
+  // length leaves a 1..7 byte tail after the 32-byte blocks (e.g. 34) used to do a
+  // forward 8-byte read that over-ran the buffer and compared wrong bytes (false
+  // negative); lengths in [17,31] left an uncompared middle gap (false positive).
+  // Exercise every length with an exact match and every single-byte difference.
+  for (size_t len = 1; len <= 200; ++len) {
+    char buf[256];
+    for (size_t i = 0; i < len; ++i) { buf[i] = static_cast<char>((i * 131 + 7) & 0xff); }
+    specific::avx2::ObStringSearcher searcher;
+    ASSERT_EQ(OB_SUCCESS, searcher.init(buf, len));
+    bool res = false;
+    ASSERT_EQ(OB_SUCCESS, searcher.equal(buf, buf + len, res));
+    EXPECT_TRUE(res) << "equal failed at len=" << len;
+    for (size_t p = 0; p < len; ++p) {
+      char mut[256];
+      memcpy(mut, buf, len);
+      mut[p] = static_cast<char>(mut[p] ^ 0xff);
+      bool r2 = true;
+      ASSERT_EQ(OB_SUCCESS, searcher.equal(mut, mut + len, r2));
+      EXPECT_FALSE(r2) << "diff missed at len=" << len << " pos=" << p;
+    }
+  }
+}
+
+TEST_F(StringSearcherTest, AVX2_StartWith_LongPrefix)
+{
+  // Exact reported case: LIKE 'insert into t1(c1,c2,c3,c5) values%' (prefix len 34,
+  // leaving a 2-byte tail) must match a row beginning with that prefix.
+  const char *pattern = "insert into t1(c1,c2,c3,c5) values";
+  const char *text = "insert into t1(c1,c2,c3,c5) values(?,?,?,?)";
+  specific::avx2::ObStringSearcher searcher;
+  ASSERT_EQ(OB_SUCCESS, searcher.init(pattern, strlen(pattern)));
+  bool res = false;
+  ASSERT_EQ(OB_SUCCESS, searcher.start_with(text, text + strlen(text), res));
+  EXPECT_TRUE(res);
+}
 #endif
 
 #if defined(__aarch64__) && defined(__ARM_NEON)
@@ -242,6 +281,40 @@ TEST_F(StringSearcherTest, NEON_LongText)
   bool res = false;
   int ret = searcher.is_substring(text, text + strlen(text), res);
   EXPECT_EQ(OB_SUCCESS, ret);
+  EXPECT_TRUE(res);
+}
+
+TEST_F(StringSearcherTest, NEON_Memequal_AllLengths)
+{
+  // Regression for the SIMD memequal tail (see AVX2_Memequal_AllLengths). With
+  // SIMD_SIZE == 16 the over-read affected a 1..7 byte tail after the 16-byte blocks.
+  for (size_t len = 1; len <= 200; ++len) {
+    char buf[256];
+    for (size_t i = 0; i < len; ++i) { buf[i] = static_cast<char>((i * 131 + 7) & 0xff); }
+    specific::neon::ObStringSearcher searcher;
+    ASSERT_EQ(OB_SUCCESS, searcher.init(buf, len));
+    bool res = false;
+    ASSERT_EQ(OB_SUCCESS, searcher.equal(buf, buf + len, res));
+    EXPECT_TRUE(res) << "equal failed at len=" << len;
+    for (size_t p = 0; p < len; ++p) {
+      char mut[256];
+      memcpy(mut, buf, len);
+      mut[p] = static_cast<char>(mut[p] ^ 0xff);
+      bool r2 = true;
+      ASSERT_EQ(OB_SUCCESS, searcher.equal(mut, mut + len, r2));
+      EXPECT_FALSE(r2) << "diff missed at len=" << len << " pos=" << p;
+    }
+  }
+}
+
+TEST_F(StringSearcherTest, NEON_StartWith_LongPrefix)
+{
+  const char *pattern = "insert into t1(c1,c2,c3,c5) values";
+  const char *text = "insert into t1(c1,c2,c3,c5) values(?,?,?,?)";
+  specific::neon::ObStringSearcher searcher;
+  ASSERT_EQ(OB_SUCCESS, searcher.init(pattern, strlen(pattern)));
+  bool res = false;
+  ASSERT_EQ(OB_SUCCESS, searcher.start_with(text, text + strlen(text), res));
   EXPECT_TRUE(res);
 }
 #endif

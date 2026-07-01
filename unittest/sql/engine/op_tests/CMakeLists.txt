@@ -228,3 +228,10 @@ sql_unittest(test_case_expr_op
   ob_op_test_engine.cpp
   ob_op_test_data_source.cpp
 )
+
+# LIKE 'prefix%' SIMD memequal_opt tail regression (false negative + middle gap)
+sql_unittest(test_expr_like_op
+  test_expr_like_op.cpp
+  ob_op_test_engine.cpp
+  ob_op_test_data_source.cpp
+)

@@ -285,9 +285,23 @@ bool ObStringSearcherImpl<SimdTraits>::memequal_opt(const char *s1, const char *
     n -= SIMD_SIZE;
   }
 
+  // Compare the remaining n bytes (n in [1, SIMD_SIZE)). A single pair of 8-byte
+  // overlapping reads only covers up to 16 bytes, so for AVX2 (SIMD_SIZE == 32) the
+  // tail can be up to 31 bytes and would leave an uncompared middle gap; meanwhile a
+  // plain forward 8-byte read overshoots the buffer when n < 8. Walk full 8-byte
+  // words from the front, then issue one final 8-byte read anchored at the region end
+  // (s1 + n) for the last < 8 bytes. When n < 8 that final read reaches back into the
+  // >= SIMD_SIZE bytes already compared above, so it stays within both buffers.
   if (n > 0) {
-    return memequal_plain<int64_t>(s1, s2) &&
-           (n <= 8 || memequal_plain<int64_t>(s1 + n - 8, s2 + n - 8));
+    bool eq = true;
+    size_t i = 0;
+    for (; eq && i + 8 <= n; i += 8) {
+      eq = memequal_plain<int64_t>(s1 + i, s2 + i);
+    }
+    if (eq && i < n) {
+      eq = memequal_plain<int64_t>(s1 + n - 8, s2 + n - 8);
+    }
+    return eq;
   }
   return true;
 }
