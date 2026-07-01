@@ -235,6 +235,7 @@ int ObStaticEngineCG::generate(const ObLogPlan &log_plan, ObPhysicalPlan &phy_pl
   bool check_eval_once = true;
   ObCompressorType compress_type = NONE_COMPRESSOR;
   int64_t disable_op_rich_format_flags = 0;
+  bool enable_adaptive_auto_dop = GCONF._enable_adaptive_auto_dop;
   if (OB_FAIL(generate_disable_rich_format_flags(disable_op_rich_format_flags))) {
     LOG_WARN("generate global hint flags failed", K(ret));
   } else if (OB_FAIL(resolve_vec_hash_algo(opt_ctx_->get_session_info(),
@@ -260,9 +261,13 @@ int ObStaticEngineCG::generate(const ObLogPlan &log_plan, ObPhysicalPlan &phy_pl
   } else if (OB_ISNULL(root_spec)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("generated root spec is NULL", K(ret));
+  } else if (opt_ctx_->is_use_auto_dop() &&
+             OB_FAIL(opt_ctx_->get_global_hint().opt_params_.get_bool_opt_param(
+                            ObOptParamHint::ENABLE_ADAPTIVE_AUTO_DOP, enable_adaptive_auto_dop))) {
+    LOG_WARN("failed to get enable_adaptive_auto_dop opt param", K(ret));
   } else {
     phy_plan.set_root_op_spec(root_spec);
-    phy_plan.set_is_use_auto_dop(opt_ctx_->is_use_auto_dop());
+    phy_plan.set_is_enable_adaptive_auto_dop(opt_ctx_->is_use_auto_dop() && enable_adaptive_auto_dop);
     if (OB_FAIL(set_properties_post(log_plan, phy_plan))) {
       LOG_WARN("set other properties failed", K(ret));
     }

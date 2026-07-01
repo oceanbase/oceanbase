@@ -265,6 +265,7 @@ struct ObOptParamHint
     DEF(ENABLE_PLAN_EXPIRATION_BY_EXEC_FEEDBACK,)                    \
     DEF(ENABLE_SEPARATE_SPF_FOR_SELECT_ITEMS,)         \
     DEF(ENABLE_PARTITION_SORT,)                   \
+    DEF(ENABLE_ADAPTIVE_AUTO_DOP,)                \
 
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
