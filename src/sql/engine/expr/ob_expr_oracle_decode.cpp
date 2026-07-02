@@ -45,6 +45,15 @@ int ObExprOracleDecode::calc_result_typeN(ObExprResType &type,
     LOG_WARN("invalid params", K(param_num), K(RESULT_TYPE_INDEX), K(LEAST_PARAM_NUMS), K(CALC_TYPE_INDEX));
     ret = OB_INVALID_ARGUMENT;
   } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < param_num; ++i) {
+      if (ob_is_collection_sql_type(types_stack[i].get_type())) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "-",
+                    ob_obj_type_str(types_stack[i].get_type()));
+        LOG_WARN("invalid type of parameter, collection not allowed in DECODE",
+                 K(ret), K(i), K(types_stack[i]));
+      }
+    }
     //除了返回值， 其他参数不能为lob或roaringbitmap类型
     if (types_stack[0].is_lob() || types_stack[0].is_roaringbitmap()) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
