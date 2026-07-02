@@ -1717,7 +1717,8 @@ int ObStorageSchema::generate_cs_replica_cg_array()
    if (OB_UNLIKELY(column_info_simplified_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "column info is simplified", K(ret), KPC(this));
-  } else if (FALSE_IT(column_group_array_.reset())) {
+  } else if (FALSE_IT(reset_column_group_array())) {
+  } else if (FALSE_IT(has_all_column_group_ = false)) {
   } else if (OB_FAIL(column_group_array_.reserve(store_column_cnt_ + 1))) {
     STORAGE_LOG(WARN, "failed to reserve for column group array", K(ret), K_(store_column_cnt));
   } else if (OB_FAIL(build_rowkey_column_group_schema(*allocator_, column_group))) {
