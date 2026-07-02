@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_EXE
 
 #include "share/ob_cluster_version.h"
+#include "share/ob_debug_sync.h"
 #include "sql/resolver/ob_cmd.h"
 #include "sql/executor/ob_cmd_executor.h"
 #include "lib/ob_name_def.h"
@@ -252,6 +253,11 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
   }
   if (OB_SUCC(ret)) {
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(my_session->get_effective_tenant_id()));
+    bool has_global_variable = false;
+    if (stmt::T_VARIABLE_SET == static_cast<stmt::StmtType>(cmd.get_cmd_type())
+        && static_cast<ObVariableSetStmt*>(&cmd)->has_global_variable()) {
+      has_global_variable = true;
+    }
     if (OB_ISNULL(omt)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("omt is null", K(ret));
@@ -265,13 +271,14 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tenant is null", K(ret));
     } else if (!my_session->is_inner() && tenant_config.is_valid() && tenant_config->_enable_ddl_worker_isolation
-              && ObStmt::is_ddl_stmt(static_cast<stmt::StmtType>(cmd.get_cmd_type()), true)) {
+              && ObStmt::is_ddl_stmt(static_cast<stmt::StmtType>(cmd.get_cmd_type()), has_global_variable)) {
       if (tenant->check_ddl_thread_is_limit()) {
         ret = OB_ERR_DDL_RESOURCE_NOT_ENOUGH;
         LOG_WARN("tenant ddl task larger than limit, need retry", KR(ret), K(tenant->cur_ddl_thread_count()));
       } else {
         lib::Thread::set_doing_ddl(true);
         tenant->inc_ddl_thread_count();
+        DEBUG_SYNC(AFTER_INC_DDL_THREAD_COUNT);
       }
     }
   }
