@@ -236,7 +236,7 @@ int ObSSTableRowScanner<PrefetchType>::init_micro_scanner()
   if (sstable_->is_multi_version_minor_sstable()) {
     if (iter_param_->is_delete_insert_) {
       INIT_MICRO_DATA_SCANNER(mv_di_micro_data_scanner_, ObMultiVersionDIMicroBlockRowScanner);
-    } else if (iter_param_->is_append_only_can_blockscan()) {
+    } else if (iter_param_->enable_append_only_blockscan_) {
       INIT_MICRO_DATA_SCANNER(mv_io_micro_data_scanner_, ObMultiVersionIOMicroBlockRowScanner);
     } else {
       INIT_MICRO_DATA_SCANNER(mv_micro_data_scanner_, ObMultiVersionMicroBlockRowScanner);
@@ -1101,7 +1101,8 @@ int ObSSTableRowScanner<PrefetchType>::get_next_rowkey(int64_t &curr_scan_index,
   rowkey.reset();
   block_row_store_->disable();
   bool is_delete_insert = iter_param_->is_delete_insert_; // save is_delete_insert_
-  const_cast<ObTableIterParam*>(iter_param_)->is_delete_insert_ = false;  // to avoid using the blockscan path
+  bool enable_append_only_blockscan = iter_param_->enable_append_only_blockscan_; // save enable_append_only_blockscan_
+  const_cast<ObTableIterParam*>(iter_param_)->disable_delete_insert();  // to avoid using the blockscan path
 
   // get next row
   if (OB_FAIL(get_next_row(row))) {
@@ -1129,6 +1130,7 @@ int ObSSTableRowScanner<PrefetchType>::get_next_rowkey(int64_t &curr_scan_index,
   }
 
   const_cast<ObTableIterParam*>(iter_param_)->is_delete_insert_ = is_delete_insert; // restore is_delete_insert_
+  const_cast<ObTableIterParam*>(iter_param_)->enable_append_only_blockscan_ = enable_append_only_blockscan; // restore enable_append_only_blockscan_
   return ret;
 }
 

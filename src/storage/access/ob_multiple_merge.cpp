@@ -156,7 +156,7 @@ int ObMultipleMerge::init(
     unprojected_row_.count_ = 0;
     tablet_read_tables_ = &tablet_read_tables;
     if (access_ctx_->is_mview_query()) {
-      access_param_->iter_param_.is_delete_insert_ = false;
+      access_param_->iter_param_.disable_delete_insert();
     }
     if (access_ctx_->query_flag_.is_reverse_scan()) {
       access_param_->iter_param_.pd_storage_flag_.set_enable_inc_skip_index(false);
@@ -1743,7 +1743,7 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
           access_ctx_->query_flag_.set_not_use_row_cache();
         }
         if (!table_ptr->is_inc_major_type_sstable()) {
-          access_param_->iter_param_.is_delete_insert_ = false;
+          access_param_->iter_param_.disable_delete_insert();
         }
       }
       if (OB_FAIL(tables_.push_back(table_ptr))) {

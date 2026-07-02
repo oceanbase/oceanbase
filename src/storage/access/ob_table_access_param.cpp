@@ -65,6 +65,7 @@ ObTableIterParam::ObTableIterParam()
       is_get_(false),
       is_sample_(false),
       filter_canbe_handle_in_di_(false),
+      enable_append_only_blockscan_(false),
       reserved_(0),
       merge_engine_upper_version_()
 {}
@@ -133,6 +134,7 @@ void ObTableIterParam::reset()
   is_tablet_spliting_ = false;
   is_column_replica_table_ = false;
   is_delete_insert_ = false;
+  enable_append_only_blockscan_ = false;
   merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_MAX;
   is_get_ = false;
   is_sample_ = false;
@@ -142,7 +144,6 @@ void ObTableIterParam::reset()
   ObSSTableIndexFilterFactory::destroy_sstable_index_filter(sstable_index_filter_);
   need_update_tablet_param_ = nullptr;
   default_row_ = nullptr;
-  merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_MAX;
   merge_engine_upper_version_.reset();
 }
 
@@ -424,6 +425,7 @@ int ObTableAccessParam::init(
       iter_param_.is_get_ = scan_param.is_get_;
       iter_param_.is_sample_ = !scan_param.sample_info_.is_no_sample();
       iter_param_.filter_canbe_handle_in_di_ = table_param.is_safe_filter_with_di();
+      iter_param_.enable_append_only_blockscan_ = iter_param_.is_append_only_can_blockscan();
 
       if (iter_param_.can_use_delete_insert_query_path(scan_param.scan_flag_.scan_order_)) {
         iter_param_.is_delete_insert_ = true;

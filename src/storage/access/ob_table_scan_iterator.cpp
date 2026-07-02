@@ -657,17 +657,19 @@ int ObTableScanIterator::decide_scan_merge_engine(ObQRIterType &iter_type, const
       LOG_TRACE("empty tablet", KPC(table_store_iter));
     } else if (OB_FAIL(table_store_iter->get_boundary_table(false, table_ptr))) {
       LOG_WARN("fail to get boundary table", K(ret));
-    } else if (main_table_param_.iter_param_.is_delete_insert_ && main_table_param_.iter_param_.need_adjust_query_merge_engine()) { // TODO@wenye: support more merge engine types
-      const int64_t major_table_version = (nullptr != table_ptr && table_ptr->is_major_sstable()) ?
-                                          table_ptr->get_snapshot_version() : 0;
-      ObMergeEngineType merge_engine_type;
-      if (OB_FAIL(merge_engine_upper_version.decide_query_merge_engine(major_table_version, merge_engine_type))) {
-        LOG_WARN("decide query merge engine fail", K(ret), K(major_table_version), K(merge_engine_upper_version));
-      } else {
-        // support append only merge engine later
-        main_table_param_.iter_param_.is_delete_insert_ = (ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT == merge_engine_type
+    } else if (main_table_param_.iter_param_.need_adjust_query_merge_engine()) {
+      if (main_table_param_.iter_param_.is_delete_insert_ || main_table_param_.iter_param_.enable_append_only_blockscan_) {
+        const int64_t major_table_version = (nullptr != table_ptr && table_ptr->is_major_sstable()) ? table_ptr->get_snapshot_version() : 0;
+        ObMergeEngineType merge_engine_type = ObMergeEngineType::OB_MERGE_ENGINE_MAX;
+        if (OB_FAIL(merge_engine_upper_version.decide_query_merge_engine(major_table_version, merge_engine_type))) {
+          LOG_WARN("decide query merge engine fail", K(ret), K(major_table_version), K(merge_engine_upper_version));
+        } else {
+          main_table_param_.iter_param_.is_delete_insert_ &= (ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT == merge_engine_type
                                                            || ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY == merge_engine_type);
-        LOG_TRACE("decide query merge engine", K(ret), K(major_table_version), K(merge_engine_type), K(merge_engine_upper_version));
+          main_table_param_.iter_param_.enable_append_only_blockscan_ &= (ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY == merge_engine_type);
+        }
+        LOG_TRACE("decide query merge engine", K(ret), K(major_table_version), K(merge_engine_type),
+          K(merge_engine_upper_version), K(main_table_param_.iter_param_));
       }
     }
   }
