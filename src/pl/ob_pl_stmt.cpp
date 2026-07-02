@@ -1488,7 +1488,7 @@ int ObPLExternalNS::resolve_synonym(uint64_t object_db_id,
   const ObDatabaseSchema *db_schema = nullptr;
   ObSchemaChecker schema_checker;
   ObSchemaObjVersion obj_version;
-  if (OB_FAIL(schema_checker.init(schema_guard))) {
+  if (OB_FAIL(schema_checker.init(schema_guard, resolve_ctx_.session_info_.get_sessid_for_table()))) {
     LOG_WARN("fail to init shcema checker", K(ret));
   } else if (OB_FAIL(schema_checker.get_database_schema(tenant_id, object_db_id, db_schema))) {
     LOG_WARN("fail to get db schema", K(ret));
@@ -1926,7 +1926,7 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
         }
 
         if (OB_SUCC(ret) && OB_INVALID_ID != db_id) {
-          OZ (schema_checker.init(schema_guard));
+          OZ (schema_checker.init(schema_guard, resolve_ctx_.session_info_.get_sessid_for_table()));
           OZ (ObResolverUtils::resolve_synonym_object_recursively(
             schema_checker, synonym_checker,
             tenant_id, db_id, name, object_db_id, object_name, exist, OB_INVALID_INDEX == parent_id));
