@@ -168,9 +168,14 @@ int ObSchemaChecker::check_db_access(share::schema::ObSessionPrivInfo &s_priv,
     ret = OB_NOT_INIT;
     LOG_WARN("schema checker is not inited", K(is_inited_), K(ret));
   } else if (is_internal_catalog_id(catalog_id)) {
-    ret = check_db_access(s_priv, enable_role_id_array, database_name);
+    if (OB_UNLIKELY(!s_priv.is_valid() || database_name.empty())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid arguments", K(s_priv), K(database_name), K(ret));
+    } else if (OB_FAIL(schema_mgr_->check_db_access(s_priv, enable_role_id_array, database_name))) {
+      LOG_WARN("failed to check_db_access", K(s_priv), K(enable_role_id_array), K(database_name), K(ret));
+    }
   } else if (is_external_catalog_id(catalog_id)) {
-    ret = schema_mgr_->check_catalog_db_access(s_priv, enable_role_id_array, catalog_id, database_name);
+    ret = schema_mgr_->check_db_access(s_priv, enable_role_id_array, catalog_id, database_name);
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected", K(ret));

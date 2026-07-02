@@ -54,6 +54,7 @@ private:
 private:
   uint64_t tenant_id_;
   uint64_t database_id_;
+  uint64_t catalog_id_;
   common::ObString database_name_;
   common::ObSEArray<const share::schema::ObSimpleTableSchemaV2 *, 128> table_schemas_;
   int64_t table_schema_idx_;

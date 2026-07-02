@@ -512,17 +512,26 @@ int ObSchemaGetterGuard::check_catalog_show(const ObSessionPrivInfo &session_pri
 int ObSchemaGetterGuard::check_catalog_db_access(const ObSessionPrivInfo &session_priv,
                                                  const common::ObIArray<uint64_t> &enable_role_id_array,
                                                  const common::ObString &catalog_name,
-                                                 const common::ObString &database_name)
+                                                 const common::ObString &database_name,
+                                                 ObPrivSet &db_priv_set)
 {
-  // do not to support to check database's privilege now, support in the future
+  int ret = OB_SUCCESS;
+  db_priv_set = OB_PRIV_SET_EMPTY;
+  // Catalog access currently acts as the current external db privilege cache.
   UNUSED(database_name);
-  return check_catalog_access(session_priv, enable_role_id_array, catalog_name);
+  if (OB_FAIL(check_catalog_access(session_priv, enable_role_id_array, catalog_name))) {
+    LOG_WARN("check catalog access failed", K(ret), K(catalog_name));
+  } else {
+    db_priv_set = OB_PRIV_DB_ACC;
+  }
+  return ret;
 }
 
 int ObSchemaGetterGuard::check_catalog_db_access(const ObSessionPrivInfo &session_priv,
                                                  const common::ObIArray<uint64_t> &enable_role_id_array,
                                                  const uint64_t catalog_id,
-                                                 const common::ObString &database_name)
+                                                 const common::ObString &database_name,
+                                                 ObPrivSet &db_priv_set)
 {
   int ret = OB_SUCCESS;
   const ObCatalogSchema *catalog_schema = NULL;
@@ -531,7 +540,11 @@ int ObSchemaGetterGuard::check_catalog_db_access(const ObSessionPrivInfo &sessio
   } else if (OB_ISNULL(catalog_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
-  } else if (OB_FAIL(check_catalog_db_access(session_priv, enable_role_id_array, catalog_schema->get_catalog_name_str(), database_name))) {
+  } else if (OB_FAIL(check_catalog_db_access(session_priv,
+                                             enable_role_id_array,
+                                             catalog_schema->get_catalog_name_str(),
+                                             database_name,
+                                             db_priv_set))) {
     LOG_WARN("check catalog db access failed", K(ret), K(catalog_id), K(database_name));
   }
   return ret;
@@ -546,7 +559,7 @@ int ObSchemaGetterGuard::check_db_access(ObSessionPrivInfo &s_priv,
   if (is_internal_catalog_id(catalog_id)) {
     ret = check_db_access(s_priv, enable_role_id_array, database_name);
   } else if (is_external_catalog_id(catalog_id)) {
-    ret = check_catalog_db_access(s_priv, enable_role_id_array, catalog_id, database_name);
+    ret = check_catalog_db_access(s_priv, enable_role_id_array, catalog_id, database_name, s_priv.db_priv_set_);
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected", K(ret));
@@ -589,11 +602,12 @@ int ObSchemaGetterGuard::check_table_show(const ObSessionPrivInfo &session_priv,
                                           bool &allow_show)
 {
   int ret = OB_SUCCESS;
+  ObPrivSet db_priv_set = OB_PRIV_SET_EMPTY;
   if (is_internal_catalog_id(catalog_id)) {
     ret = check_table_show(session_priv, enable_role_id_array, db, table, allow_show);
   } else if (is_external_catalog_id(catalog_id)) {
     allow_show = true;
-    if (OB_FAIL(check_catalog_db_access(session_priv, enable_role_id_array, catalog_id, db))) {
+    if (OB_FAIL(check_catalog_db_access(session_priv, enable_role_id_array, catalog_id, db, db_priv_set))) {
       allow_show = false;
       LOG_WARN("check catalog table show priv failed", K(ret));
     }

@@ -495,11 +495,13 @@ public:
   int check_catalog_db_access(const ObSessionPrivInfo &session_priv,
                               const common::ObIArray<uint64_t> &enable_role_id_array,
                               const common::ObString &catalog_name,
-                              const common::ObString &database_name);
+                              const common::ObString &database_name,
+                              ObPrivSet &db_priv_set);
   int check_catalog_db_access(const ObSessionPrivInfo &session_priv,
                               const common::ObIArray<uint64_t> &enable_role_id_array,
                               const uint64_t catalog_id,
-                              const common::ObString &database_name);
+                              const common::ObString &database_name,
+                              ObPrivSet &db_priv_set);
   int check_catalog_show(const ObSessionPrivInfo &session_priv,
                          const common::ObIArray<uint64_t> &enable_role_id_array,
                          const common::ObString &catalog_name,
