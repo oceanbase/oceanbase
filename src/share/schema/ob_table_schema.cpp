@@ -9029,7 +9029,7 @@ int ObTableSchema::check_primary_key_cover_partition_column(ObSchemaGuardWrapper
   bool table_with_logic_pk = false;
   if (OB_FAIL(is_table_with_logic_pk(schema_guard, table_with_logic_pk))) {
     LOG_WARN("Failed to check if table with logic pk", K(ret));
-  } else if (!is_partitioned_table() || !table_with_logic_pk) {
+  } else if (!is_partitioned_table() || !table_with_logic_pk || is_mlog_table()) {
     //nothing todo
   } else {
     ObSEArray<uint64_t, 8> logic_pk_column_ids;
