@@ -541,6 +541,9 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
                           LOG_WARN("failed to add ref obj version", K(ret));
                         }
                       }
+                      if (OB_SUCC(ret) && OB_NOT_NULL(ctx_.stmt_->get_query_ctx())) {
+                        ctx_.stmt_->get_query_ctx()->disable_udf_parallel_ |= true;
+                      }
                     }
                   }
                 } else if (OB_NOT_NULL(ctx_.stmt_)) {
