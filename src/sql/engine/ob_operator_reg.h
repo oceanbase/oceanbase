@@ -620,7 +620,8 @@ class ObLogMonitoringDump;
 class ObMonitoringDumpSpec;
 class ObMonitoringDumpOp;
 REGISTER_OPERATOR(ObLogMonitoringDump, PHY_MONITORING_DUMP, ObMonitoringDumpSpec,
-                  ObMonitoringDumpOp, NOINPUT, VECTORIZED_OP);
+                  ObMonitoringDumpOp, NOINPUT, VECTORIZED_OP, 0 /*+version*/,
+                  SUPPORT_RICH_FORMAT);
 
 class ObLogSequence;
 class ObSequenceSpec;

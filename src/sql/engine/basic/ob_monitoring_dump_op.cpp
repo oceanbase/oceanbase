@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_monitoring_dump_op.h"
+#include "lib/utility/ob_tracepoint.h"
 #include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
@@ -13,6 +14,19 @@ using namespace common;
 using namespace share;
 namespace sql
 {
+
+struct MonitorDumpLogGuard
+{
+  MonitorDumpLogGuard()
+  {
+    int tmp_ret = OB_E(EventTable::EN_FORCE_MONITORING_DUMP_ROWS) OB_SUCCESS;
+    if (tmp_ret != OB_SUCCESS) {
+      // NOTE: the free function common::allow_next_syslog(int64_t) only has a weak
+      // empty impl; call ObTaskController directly so force-allow actually takes effect.
+      ObTaskController::get().allow_next_syslog();
+    }
+  }
+};
 
 ObMonitoringDumpSpec::ObMonitoringDumpSpec(ObIAllocator &alloc, const ObPhyOperatorType type)
     : ObOpSpec(alloc, type),
@@ -32,7 +46,8 @@ ObMonitoringDumpOp::ObMonitoringDumpOp(ObExecContext &exec_ctx, const ObOpSpec &
     first_row_time_(0),
     last_row_time_(0),
     first_row_fetched_(false),
-    output_hash_(exec_ctx.get_allocator())
+    output_hash_(exec_ctx.get_allocator()),
+    batch_hash_values_(exec_ctx.get_allocator())
 {
 }
 
@@ -53,13 +68,22 @@ int ObMonitoringDumpOp::inner_open()
       LOG_WARN("failed to convert datum from obj", K(ret));
     } else if (OB_FAIL(output_hash_.init(output.count()))) {
       LOG_WARN("init output hash array failed", K(ret));
+    } else if (OB_FAIL(batch_hash_values_.init(MY_SPEC.max_batch_size_))) {
+      LOG_WARN("init batch hash array failed", K(ret), K(MY_SPEC.max_batch_size_));
     } else {
       for (int64_t i = 0; i < output.count() && OB_SUCC(ret); i++) {
         if (OB_FAIL(output_hash_.push_back(0))) {
           LOG_WARN("push back failed", K(ret));
         }
       }
-      open_time_ = ObTimeUtility::current_time();
+      for (int64_t i = 0; i < MY_SPEC.max_batch_size_ && OB_SUCC(ret); i++) {
+        if (OB_FAIL(batch_hash_values_.push_back(0))) {
+          LOG_WARN("push back batch hash value failed", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        open_time_ = ObTimeUtility::current_time();
+      }
     }
   }
   return ret;
@@ -165,6 +189,62 @@ int ObMonitoringDumpOp::calc_hash_value()
   return ret;
 }
 
+int ObMonitoringDumpOp::calc_hash_value_batch(const ObBatchRows &brs)
+{
+  int ret = OB_SUCCESS;
+  const ExprFixedArray &output = MY_SPEC.output_;
+  const int64_t batch_size = brs.size_;
+  const uint64_t seed = 0;
+  if (OB_UNLIKELY(batch_size > batch_hash_values_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("batch hash array is not enough", K(ret), K(batch_size), K(batch_hash_values_.count()));
+  } else if (batch_size > 0) {
+    EvalBound bound(batch_size, brs.all_rows_active_);
+    uint64_t *batch_hash_values = &batch_hash_values_.at(0);
+    for (int64_t i = 0; i < output.count() && OB_SUCC(ret); i++) {
+      ObExpr *expr = output.at(i);
+      ObIVector *vec = NULL;
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is null", K(ret), K(i));
+      } else if (OB_FAIL(expr->eval_vector(eval_ctx_, *brs.skip_, bound))) {
+        LOG_WARN("eval vector failed", K(ret), K(i));
+      } else if (OB_ISNULL(vec = expr->get_vector(eval_ctx_))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("vector is null", K(ret), K(i));
+      } else if (OB_FAIL(vec->default_hash(*expr, batch_hash_values, *brs.skip_, bound,
+                                           &seed, false /* is_batch_seed */))) {
+        LOG_WARN("do vector hash failed", K(ret), K(i));
+      } else {
+        uint64_t output_hash = output_hash_.at(i);
+        for (int64_t row_idx = 0; row_idx < batch_size; row_idx++) {
+          if (!brs.skip_->at(row_idx)) {
+            output_hash += batch_hash_values[row_idx];
+          }
+        }
+        output_hash_.at(i) = output_hash;
+      }
+    }
+  }
+  return ret;
+}
+
+void ObMonitoringDumpOp::print_batch_vector_headers(const ObBatchRows &brs)
+{
+  const ExprFixedArray &output = MY_SPEC.output_;
+  const EvalBound bound(brs.size_, brs.all_rows_active_);
+  MonitorDumpLogGuard guard;
+  ToStrExprVecFmt expr_fmts_row(output, eval_ctx_, *brs.skip_, bound);
+  if (!tracefile_identifier_.null_ && tracefile_identifier_.len_ > 0) {
+    LOG_INFO("monitoring dump vector header", K(tracefile_identifier_.get_string()),
+             K(op_name_.get_string()), K(expr_fmts_row),
+             K(MY_SPEC.dst_op_id_));
+  } else {
+    LOG_INFO("monitoring dump vector header", K(op_name_.get_string()),
+             K(expr_fmts_row), K(MY_SPEC.dst_op_id_));
+  }
+}
+
 int ObMonitoringDumpOp::inner_get_next_batch(const int64_t max_row_cnt)
 {
   LOG_DEBUG("MonitoringDumpOp get_next_batch start");
@@ -178,23 +258,43 @@ int ObMonitoringDumpOp::inner_get_next_batch(const int64_t max_row_cnt)
     LOG_WARN("child_op failed to get next row", K(ret));
   } else {
     ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
-    batch_info_guard.set_batch_size(batch_cnt);
+    batch_info_guard.set_batch_size(child_brs->size_);
+    if (MY_SPEC.use_rich_format_
+        && child_brs->size_ > 0
+        && OB_FAIL(calc_hash_value_batch(*child_brs))) {
+      LOG_WARN("calc hash value batch failed", K(ret));
+    } else if (MY_SPEC.use_rich_format_
+               && child_brs->size_ > 0
+               && (MY_SPEC.flags_ & ObAllocOpHint::OB_MONITOR_TRACING)) {
+      print_batch_vector_headers(*child_brs);
+    }
     for (int64_t i = 0; i < child_brs->size_ && OB_SUCC(ret); ++i) {
       if (child_brs->skip_->exist(i)) {
         ++skip_cnt;
       } else {
         ++rows_;
         batch_info_guard.set_batch_idx(i);
-        if (OB_FAIL(calc_hash_value())) {
+        if (!MY_SPEC.use_rich_format_ && OB_FAIL(calc_hash_value())) {
           LOG_WARN("calc hash value failed", K(ret));
         } else {
+          MonitorDumpLogGuard guard;
+          VEC_ROWEXPR2STR row(eval_ctx_, MY_SPEC.output_);
           if (MY_SPEC.flags_ & ObAllocOpHint::OB_MONITOR_TRACING) {
-            if (!tracefile_identifier_.null_ && tracefile_identifier_.len_ > 0) {
-              LOG_INFO("", K(tracefile_identifier_.get_string()), K(op_name_.get_string()),
-                K(ObToStringExprRow(eval_ctx_, MY_SPEC.output_)), K(MY_SPEC.dst_op_id_));
+            if (MY_SPEC.use_rich_format_) {
+              if (!tracefile_identifier_.null_ && tracefile_identifier_.len_ > 0) {
+                LOG_INFO("", K(tracefile_identifier_.get_string()), K(op_name_.get_string()),
+                         K(row));
+              } else {
+                LOG_INFO("", K(op_name_.get_string()), K(row), K(MY_SPEC.dst_op_id_));
+              }
             } else {
-              LOG_INFO("", K(op_name_.get_string()), K(ObToStringExprRow(eval_ctx_, MY_SPEC.output_)),
-                K(MY_SPEC.dst_op_id_));
+              if (!tracefile_identifier_.null_ && tracefile_identifier_.len_ > 0) {
+                LOG_INFO("", K(tracefile_identifier_.get_string()), K(op_name_.get_string()),
+                  K(ObToStringExprRow(eval_ctx_, MY_SPEC.output_)), K(MY_SPEC.dst_op_id_));
+              } else {
+                LOG_INFO("", K(op_name_.get_string()), K(ObToStringExprRow(eval_ctx_, MY_SPEC.output_)),
+                  K(MY_SPEC.dst_op_id_));
+              }
             }
           }
           if (!first_row_fetched_) {

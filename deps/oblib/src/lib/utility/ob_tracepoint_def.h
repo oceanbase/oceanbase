@@ -638,6 +638,7 @@ GLOBAL_ERRSIM_POINT_DEF(2211, EN_ENABLE_RANDOM_TSC, "wether to randomize batch_s
 GLOBAL_ERRSIM_POINT_DEF(2212, EN_LOCK_CONFLICT_RETRY_THEN_REROUTE, "force reroute sql when lock conflict and retry a few times");
 GLOBAL_ERRSIM_POINT_DEF(2213, EN_DISABLE_VEC_MERGE_GBY, "Used to control whether to turn off the vectorization 2.0 merge group by operator. It is turned on by default.");
 GLOBAL_ERRSIM_POINT_DEF(2214, EN_DISABLE_VEC_MERGE_JOIN, "Used to control whether to turn off the vectorization 2.0 when use Merge Join Operator");
+GLOBAL_ERRSIM_POINT_DEF(2215, EN_FORCE_MONITORING_DUMP_ROWS, "Used to force dump output rows in monitoring dump operator.");
 // WR && ASH
 GLOBAL_ERRSIM_POINT_DEF(2301, EN_CLOSE_ASH, "");
 GLOBAL_ERRSIM_POINT_DEF(2302, EN_DISABLE_HASH_BASE_DISTINCT, "");

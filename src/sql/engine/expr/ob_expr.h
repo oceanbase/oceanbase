@@ -1336,6 +1336,21 @@ private:
   int to_string_helper(const VectorHeader &header, char *buf, const int64_t buf_len) const;
 };
 
+struct ToStrExprVecFmt
+{
+  ToStrExprVecFmt(const ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx, const ObBitVector &skip,
+                  const EvalBound &bound) :
+    exprs_(exprs),
+    eval_ctx_(eval_ctx), skip_(skip), bound_(bound)
+  {}
+  DECLARE_TO_STRING;
+private:
+  const ObIArray<ObExpr *> &exprs_;
+  ObEvalCtx &eval_ctx_;
+  const ObBitVector &skip_;
+  const EvalBound &bound_;
+};
+
 struct ToStringExprRowVec {
   ToStringExprRowVec(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &ctx,
       const ObBitVector *skip, const EvalBound &bound, const int64_t &batch_size)

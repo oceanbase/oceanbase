@@ -38,6 +38,27 @@ using oceanbase::share::schema::ObSchemaGetterGuard;
 using oceanbase::share::schema::ObTableSchema;
 using oceanbase::share::schema::ObColumnSchemaV2;
 
+namespace
+{
+bool is_expand_below_first_stage_hash_gby(const ObLogicalOperator *op)
+{
+  bool bret = false;
+  const ObLogicalOperator *parent = OB_ISNULL(op) ? NULL : op->get_parent();
+  if (OB_NOT_NULL(op)
+      && LOG_EXPAND == op->get_type()
+      && OB_NOT_NULL(parent)
+      && LOG_GROUP_BY == parent->get_type()) {
+    const ObLogGroupBy *group_by = static_cast<const ObLogGroupBy *>(parent);
+    // The first-stage group by consumes hash values and grouping metadata
+    // directly from the expand operator. Wrapper operators between them break
+    // that execution contract; ordered expansion has the same adjacency need.
+    bret = HASH_AGGREGATE == group_by->get_algo()
+           && OB_NOT_NULL(group_by->get_first_stage_hash_val_expr());
+  }
+  return bret;
+}
+}
+
 int ObExchangeInfo::init_calc_part_id_expr(ObOptimizerContext &opt_ctx)
 {
   int ret = OB_SUCCESS;
@@ -5176,6 +5197,7 @@ int ObLogicalOperator::allocate_material_node_above()
       || (NULL != get_parent() && log_op_def::LOG_MATERIAL == get_parent()->type_)
       || (log_op_def::LOG_EXCHANGE == get_type()
           && static_cast<ObLogExchange *>(this)->is_producer())
+      || is_expand_below_first_stage_hash_gby(this)
       || (LOG_JOIN_FILTER == get_type()
           && static_cast<ObLogJoinFilter *>(this)->use_realistic_runtime_bloom_filter_size())) {
     /*do nothing*/
@@ -5222,6 +5244,8 @@ int ObLogicalOperator::allocate_monitoring_dump_node_above(uint64_t flags, uint6
   if (OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Get unexpected null", K(ret), K(get_plan()));
+  } else if (is_expand_below_first_stage_hash_gby(this)) {
+    /*do nothing*/
   } else if (LOG_EXCHANGE == get_type() &&
              (static_cast<ObLogExchange*>(this)->is_producer() ||
              (static_cast<ObLogExchange*>(this)->is_consumer() && static_cast<ObLogExchange*>(this)->get_is_remote()))) {

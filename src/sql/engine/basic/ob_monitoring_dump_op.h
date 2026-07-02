@@ -46,6 +46,10 @@ public:
   }
 
 private:
+  int calc_hash_value_batch(const ObBatchRows &brs);
+  void print_batch_vector_headers(const ObBatchRows &brs);
+
+private:
   common::ObDatum op_name_;
   common::ObDatum tracefile_identifier_;
   uint64_t open_time_;
@@ -54,6 +58,7 @@ private:
   uint64_t last_row_time_;
   bool first_row_fetched_;
   common::ObFixedArray<uint64_t, common::ObIAllocator> output_hash_;
+  common::ObFixedArray<uint64_t, common::ObIAllocator> batch_hash_values_;
 };
 
 }

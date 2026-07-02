@@ -1906,6 +1906,59 @@ DEF_TO_STRING(ToStrVectorHeader)
   return pos;
 }
 
+DEF_TO_STRING(ToStrExprVecFmt)
+{
+  int64_t pos = 0;
+  int ret = OB_SUCCESS;
+  J_ARRAY_START();
+  for (int i = 0; OB_SUCC(ret) && i < exprs_.count(); i++) {
+    ObExpr *expr = exprs_.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid null expr", K(ret));
+    } else if (OB_FAIL(expr->eval_vector(eval_ctx_, skip_, bound_))) {
+      LOG_WARN("eval vector failed", K(ret));
+    } else {
+      J_OBJ_START();
+      J_KV(KP(expr));
+      J_COMMA();
+      VectorFormat fmt = expr->get_format(eval_ctx_);
+      switch (fmt) {
+        case VEC_FIXED: {
+          J_KV("format", "VEC_FIXED");
+          break;
+        }
+        case VEC_DISCRETE: {
+          J_KV("format", "VEC_DISCRETE");
+          break;
+        }
+        case VEC_CONTINUOUS: {
+          J_KV("format", "VEC_CONTINUOUS");
+          break;
+        }
+        case VEC_UNIFORM: {
+          J_KV("format", "VEC_UNIFORM");
+          break;
+        }
+        case VEC_UNIFORM_CONST: {
+          J_KV("format", "VEC_UNIFORM_CONST");
+          break;
+        }
+        default: {
+          J_KV("format", "VEC_INVALID");
+          break;
+        }
+      }
+      J_OBJ_END();
+    }
+    if (OB_SUCC(ret) && i != exprs_.count() - 1) {
+      J_COMMA();
+    }
+  }
+  J_ARRAY_END();
+  return pos;
+}
+
 DEF_TO_STRING(ToStringExprRowVec)
 {
   int64_t pos = 0;
