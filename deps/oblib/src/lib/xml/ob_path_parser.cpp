@@ -4,6 +4,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
+#include "common/ob_smart_call.h"
 #include "lib/xml/ob_path_parser.h"
 #include "lib/xml/ob_xml_util.h"
 #include <rapidjson/memorystream.h>
@@ -2278,7 +2279,7 @@ int ObPathParser::parse_filter_node(ObPathNode*& filter, ObPathArgType patharg_t
               }
               minus = (count_minus % 2 == 0) ? false : true;
             }
-            if (OB_FAIL(parse_arg(arg, patharg_type, true, minus))) {
+            if (OB_FAIL(SMART_CALL(parse_arg(arg, patharg_type, true, minus)))) {
               LOG_WARN("fail to parse filter arg", K(ret), K(index_), K(expression_));
             } else if (OB_FAIL(node_stack.push_back(arg))) {
               LOG_WARN("fail to push arg", K(ret), K(index_), K(expression_));

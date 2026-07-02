@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "ob_xpath.h"
+#include "common/ob_smart_call.h"
 #include "lib/xml/ob_path_parser.h"
 #include "lib/xml/ob_xml_util.h"
 #include "rpc/obmysql/ob_mysql_global.h" // DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE
@@ -3107,7 +3108,7 @@ int ObPathUtil::get_filter_node_result(ObPathCtx &ctx, ObLibTreeNodeBase* filter
   } else {
     ObSeekResult seek_result;
     filter_node->is_seeked_ = false;
-    if (OB_FAIL(filter_node->eval_node(ctx, seek_result))) {
+    if (OB_FAIL(SMART_CALL(filter_node->eval_node(ctx, seek_result)))) {
       LOG_WARN("filter node eval node fail", K(ret));
     } else if (!seek_result.is_scalar_) {
       ret = OB_ERR_UNEXPECTED;

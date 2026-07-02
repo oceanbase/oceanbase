@@ -3167,6 +3167,49 @@ TEST_F(TestXPath, test_merge_ns)
   }
 }
 
+// Regression test: deeply nested XPath predicate must not crash the process.
+// Before fix (SMART_CALL), ~500 levels of [. nesting caused SIGSEGV via stack overflow.
+// After fix, SMART_CALL handles the deep recursion gracefully—the parse may succeed or
+// return an error, but must never crash. No assertion on the return value is made here;
+// reaching the end of the test without SIGSEGV is the pass condition.
+TEST_F(TestXPath, test_deeply_nested_predicate_no_crash)
+{
+  ObString default_ns;
+  ObArenaAllocator allocator(ObModIds::TEST);
+  ObMulModeMemCtx* ctx = nullptr;
+  ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
+
+  // Build: /r/a[.[.[... (500 levels) ...]]]
+  const int N = 500;
+  std::string xpath_str = "/r/a";
+  for (int i = 0; i < N; i++) xpath_str += "[.";
+  for (int i = 0; i < N; i++) xpath_str += "]";
+
+  ObString xpath(xpath_str.size(), xpath_str.data());
+  ObPathParser test_path(ctx, ObParserType::PARSER_XML_PATH, xpath, default_ns, nullptr);
+  test_path.parse_path();
+}
+
+// Sanity check: shallow nesting should still parse successfully after the fix.
+TEST_F(TestXPath, test_shallow_nested_predicate_ok)
+{
+  ObString default_ns;
+  ObArenaAllocator allocator(ObModIds::TEST);
+  ObMulModeMemCtx* ctx = nullptr;
+  ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
+
+  // Build: /r/a[.[.[.]]]  (3 levels, well within any reasonable limit)
+  const int N = 3;
+  std::string xpath_str = "/r/a";
+  for (int i = 0; i < N; i++) xpath_str += "[.";
+  for (int i = 0; i < N; i++) xpath_str += "]";
+
+  ObString xpath(xpath_str.size(), xpath_str.data());
+  ObPathParser test_path(ctx, ObParserType::PARSER_XML_PATH, xpath, default_ns, nullptr);
+  int ret = test_path.parse_path();
+  ASSERT_EQ(OB_SUCCESS, ret);
+}
+
 int main(int argc, char** argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
