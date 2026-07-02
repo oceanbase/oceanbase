@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "ob_json_path.h"
 #include "ob_json_parse.h"
+#include "common/ob_smart_call.h"
 
 namespace oceanbase {
 namespace common {
@@ -2634,7 +2635,11 @@ bool ObJsonPathUtil::is_utf8_unicode_charator(const char* ori, uint64_t& start, 
   int ret = OB_SUCCESS;
   int32_t well_formed_error = 0;
   int64_t well_formed_len = 0;
-  if (OB_FAIL(ObCharset::well_formed_len(CS_TYPE_UTF8MB4_BIN, ori + start, len, well_formed_len, well_formed_error))) {
+  // Guard against a non-positive length, which can be produced by an underflow at the
+  // caller, otherwise well_formed_len() would scan far beyond the buffer (CWE-125).
+  if (OB_ISNULL(ori) || len <= 0) {
+    ret_bool = false;
+  } else if (OB_FAIL(ObCharset::well_formed_len(CS_TYPE_UTF8MB4_BIN, ori + start, len, well_formed_len, well_formed_error))) {
     ret_bool = false;
   } else {
     ret_bool = true;
@@ -2650,6 +2655,7 @@ bool ObJsonPathUtil::is_letter(unsigned codepoint, const char* ori, uint64_t sta
   if (ret_bool) {
   } else if (!ret_bool && (codepoint >= UNICODE_EXTEND_MARK_MIN
              && codepoint <= UNICODE_EXTEND_MARK_MAX
+             && end >= start
              && ObJsonPathUtil::is_utf8_unicode_charator(ori, start, end - start))) {
     ret_bool = true;
   }
@@ -2708,7 +2714,10 @@ bool ObJsonPathUtil::is_ecmascript_identifier(const char* name, uint64_t length)
 
     // a unicode letter
     uint64_t curr_pos = input_stream.Tell();
-    if (is_letter(codepoint, name, last_pos, curr_pos - last_pos)
+    // NOTE: the 4th argument is the END position of the current character, not its length.
+    // Passing the length here would make is_letter() compute (length - start), which
+    // underflows when start > 0 and leads to an out-of-bound scan in well_formed_len().
+    if (is_letter(codepoint, name, last_pos, curr_pos)
         || codepoint == 0x24 || codepoint == 0x5F ) {
       // $ is ok, _ is ok
     } else if (first_codepoint) {
@@ -4103,7 +4112,7 @@ int ObJsonPath::parse_comp_exist(ObJsonPathFilterNode* filter_comp_node)
         } else {
           spath = new (spath) ObJsonPath(exist_subpath, allocator_);
           spath->set_subpath_arg(is_lax_);
-          if (OB_FAIL(spath->parse_path())) {
+          if (OB_FAIL(SMART_CALL(spath->parse_path()))) {
             LOG_WARN("fail to parse sub_path",K(ret), K(spath->bad_index_), K(exist_subpath));
           } else {
             if (OB_FAIL(filter_comp_node->init_right_comp_path(spath))) {
@@ -4149,7 +4158,7 @@ int ObJsonPath::parse_comp_half(ObJsonPathFilterNode* filter_comp_node, bool lef
       } else {
         spath = new (spath) ObJsonPath(path_string, allocator_);
         spath->set_subpath_arg(is_lax_);
-        if (OB_FAIL(spath->parse_path())) {
+        if (OB_FAIL(SMART_CALL(spath->parse_path()))) {
           LOG_WARN("fail to parse sub_path",K(ret), K(spath->bad_index_), K(path_string));
         } else {
           if (left) {
