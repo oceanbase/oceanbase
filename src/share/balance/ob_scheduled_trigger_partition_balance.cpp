@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_scheduled_trigger_partition_balance.h"
+#include "lib/charset/ob_charset.h"
 #include "share/stat/ob_dbms_stats_maintenance_window.h" // ObDbmsStatsMaintenanceWindow
 #include "observer/dbms_scheduler/ob_dbms_sched_table_operator.h" // ObDBMSSchedTableOperator
 
@@ -216,39 +217,51 @@ int ObScheduledTriggerPartitionBalance::parse_repeat_interval(
   } else if (OB_FAIL(ob_strip_space(allocator, repeat_interval_str, tmp_str))) {
     LOG_WARN("ob_strip_space failed", KR(ret), K(repeat_interval_str));
   } else {
-    char *freq_str = NULL;
-    char *interval_str = NULL;
+    ObString freq_str = tmp_str.split_on(';');
+    ObString interval_str = tmp_str;
     int64_t freq_ts = 0;
-    freq_str = strtok_r((NULL == freq_str ? tmp_str.ptr() : NULL), ";", &interval_str);
-    if (OB_ISNULL(freq_str) || OB_ISNULL(interval_str)) {
+    int64_t interval_val = 0;
+    if (OB_UNLIKELY(freq_str.empty() || interval_str.empty())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid repeat interval", KR(ret), K(repeat_interval_str));
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "REPEAT_INTERVAL. The format should be \'FREQ=x; INTERVAL=x\'");
     } else {
-      // Compare freq_str against "FREQ=<KEYWORD>" without copying the value into a fixed
-      // stack buffer, otherwise an unbounded sscanf would overflow it on long inputs.
       const char *FREQ_PREFIX = "FREQ=";
       const int64_t FREQ_PREFIX_LEN = 5;
-      ObString freq_token(freq_str);
-      int32_t interval_val = 0;
-      errno = 0;
-      if (OB_UNLIKELY(!freq_token.prefix_match(FREQ_PREFIX)
-                      || freq_token.length() <= FREQ_PREFIX_LEN)) {
+      const char *INTERVAL_PREFIX = "INTERVAL=";
+      const int64_t INTERVAL_PREFIX_LEN = 9;
+      if (OB_UNLIKELY(!freq_str.prefix_match(FREQ_PREFIX)
+                      || freq_str.length() <= FREQ_PREFIX_LEN)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid FREQ str", KR(ret), K(freq_str));
         LOG_USER_ERROR(OB_INVALID_ARGUMENT, "FREQ. The format should be \'FREQ=x; INTERVAL=x\'");
-      } else if (OB_UNLIKELY(1 != sscanf(interval_str, "INTERVAL=%d", &interval_val))) {
+      } else if (OB_UNLIKELY(!interval_str.prefix_match(INTERVAL_PREFIX)
+                             || interval_str.length() <= INTERVAL_PREFIX_LEN)) {
         ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid INTERVAL str", KR(ret), K(interval_val), K(errno), KERRMSG);
+        LOG_WARN("invalid INTERVAL str", KR(ret), K(interval_str));
         LOG_USER_ERROR(OB_INVALID_ARGUMENT, "INTERVAL. The format should be \'FREQ=x; INTERVAL=x\'");
-      } else if (OB_UNLIKELY(interval_val <= 0)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid INTERVAL", KR(ret), K(interval_val));
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "INTERVAL. The value can not be 0 and should be less than INT32_MAX");
       } else {
-        ObString frequency(freq_token.length() - FREQ_PREFIX_LEN,
-                           freq_token.ptr() + FREQ_PREFIX_LEN);
-        if (0 == frequency.case_compare("MINUTELY")) {
+        ObString frequency(freq_str.length() - FREQ_PREFIX_LEN,
+                           freq_str.ptr() + FREQ_PREFIX_LEN);
+        ObString interval_num_str(interval_str.length() - INTERVAL_PREFIX_LEN,
+                                  interval_str.ptr() + INTERVAL_PREFIX_LEN);
+        char *end_ptr = NULL;
+        int err = 0;
+        interval_val = ObCharset::strntoll(interval_num_str.ptr(),
+                                           interval_num_str.length(),
+                                           10,
+                                           &end_ptr,
+                                           &err);
+        if (OB_UNLIKELY(0 != err
+                        || end_ptr != interval_num_str.ptr() + interval_num_str.length())) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid INTERVAL str", KR(ret), K(interval_num_str), K(err));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "INTERVAL. The format should be \'FREQ=x; INTERVAL=x\'");
+        } else if (OB_UNLIKELY(interval_val <= 0 || interval_val > INT32_MAX)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid INTERVAL", KR(ret), K(interval_val));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "INTERVAL. The value can not be 0 and should be less than INT32_MAX");
+        } else if (0 == frequency.case_compare("MINUTELY")) {
           freq_ts = SECS_PER_MIN;
         } else if (0 == frequency.case_compare("HOURLY")) {
           freq_ts = SECS_PER_HOUR;
