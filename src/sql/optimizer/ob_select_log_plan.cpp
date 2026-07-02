@@ -1254,13 +1254,11 @@ int ObSelectLogPlan::candi_allocate_normal_group_by(const bool ignore_transform_
                                                     ObIArray<CandidatePlan> &groupby_plans)
 {
   int ret = OB_SUCCESS;
-  CandidatePlan candidate_plan;
   bool use_hash_valid = false;
   bool use_merge_valid = false;
   bool part_sort_valid = false;
   bool normal_sort_valid = false;
   ObSEArray<ObRawExpr*, 1> dummy_exprs;
-  bool trans_distinct_agg_valid = false;
   if (OB_FAIL(get_valid_aggr_algo(group_by_exprs,
                                   dummy_exprs,
                                   groupby_helper,
@@ -1271,6 +1269,7 @@ int ObSelectLogPlan::candi_allocate_normal_group_by(const bool ignore_transform_
     LOG_WARN("failed to get valid aggr algo", K(ret));
   } else if (!ignore_transform_distinct_agg) {
     ObSEArray<ObRawExpr *, 4> distinct_params;
+    bool trans_distinct_agg_valid = false;
     if (OB_FAIL(can_transform_distinct_agg(groupby_helper, aggr_items, distinct_params, trans_distinct_agg_valid))) {
       LOG_WARN("check transform distinct agg failed", K(ret));
     } else if (trans_distinct_agg_valid
@@ -1280,99 +1279,129 @@ int ObSelectLogPlan::candi_allocate_normal_group_by(const bool ignore_transform_
       LOG_WARN("create transform distinct agg plans failed", K(ret));
     }
   }
-  // create three stage group by plans
-  if (OB_SUCC(ret) && groupby_helper.can_three_stage_pushdown_ && !trans_distinct_agg_valid) {
-    ObSEArray<CandidatePlan, 4> best_candi_plans;
-    if (OB_FAIL(get_minimal_cost_candidates(candi_plans, best_candi_plans))) {
-      LOG_WARN("failed to get minimal cost plans", K(ret));
+  // generate normal group by plans only when create_transform_distinct_agg_plan did not generate any
+  if (OB_SUCC(ret) && groupby_plans.empty()) {
+    ObSEArray<ObSEArray<CandidatePlan, 16>, 8> candidate_list;
+    if (OB_FAIL(classify_candidates_based_on_sharding(candi_plans, candidate_list))) {
+      LOG_WARN("failed to classify candidates based on sharding", K(ret));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < best_candi_plans.count(); i++) {
-      OPT_TRACE("start to generate three stage group by plan:");
-      uint64_t group_dist_methods = 0;
-      candidate_plan = best_candi_plans.at(i);
-      if (OB_FAIL(get_distribute_group_by_method(candidate_plan.plan_tree_,
-                                                groupby_helper,
-                                                reduce_exprs,
-                                                group_dist_methods,
-                                                true))) {
-        LOG_WARN("failed to get distribute method", K(ret));
-      } else if (!(DistAlgo::DIST_HASH_HASH & group_dist_methods)) {
-        OPT_TRACE("basic or partition wise can not use three stage group by");
-      } else if (groupby_helper.enable_distinct_with_expansion_
-                 && OB_FAIL(create_three_stage_expansion_plan(
-                   group_by_exprs, having_exprs, groupby_helper, candidate_plan.plan_tree_))) {
-        LOG_WARN("failed to create three stage expansion plan", K(ret));
-      } else if (!groupby_helper.enable_distinct_with_expansion_
-                 && OB_FAIL(create_three_stage_group_plan(
-                   group_by_exprs, having_exprs, groupby_helper, candidate_plan.plan_tree_))) {
-        LOG_WARN("failed to candi allocate three stage group by", K(ret));
-      } else if (NULL != candidate_plan.plan_tree_
-                 && OB_FAIL(groupby_plans.push_back(candidate_plan))) {
-        LOG_WARN("failed to push merge group by", K(ret));
-      } else {
-        OPT_TRACE("succeed to generate three stage group by plan:", candidate_plan.plan_tree_);
+    for (int64_t i = 0; OB_SUCC(ret) && i < candidate_list.count(); i++) {
+      if (OB_FAIL(generate_group_by_plans_for_sharding_group(
+                    reduce_exprs, group_by_exprs, group_directions,
+                    having_exprs, aggr_items, groupby_helper,
+                    candidate_list.at(i), groupby_plans,
+                    use_hash_valid, use_merge_valid,
+                    part_sort_valid, normal_sort_valid))) {
+        LOG_WARN("failed to generate group by plans for sharding group", K(ret));
       }
     }
   }
-  if (OB_SUCC(ret) && !groupby_plans.empty()) {
-    //force use three stage group plan
+  return ret;
+}
+
+int ObSelectLogPlan::generate_group_by_plans_for_sharding_group(const ObIArray<ObRawExpr*> &reduce_exprs,
+                                                                const ObIArray<ObRawExpr*> &group_by_exprs,
+                                                                const ObIArray<ObOrderDirection> &group_directions,
+                                                                const ObIArray<ObRawExpr*> &having_exprs,
+                                                                const ObIArray<ObAggFunRawExpr*> &aggr_items,
+                                                                GroupingOpHelper &groupby_helper,
+                                                                const ObIArray<CandidatePlan> &candidates,
+                                                                ObIArray<CandidatePlan> &groupby_plans,
+                                                                bool use_hash_valid,
+                                                                bool use_merge_valid,
+                                                                bool part_sort_valid,
+                                                                bool normal_sort_valid)
+{
+  int ret = OB_SUCCESS;
+  CandidatePlan candidate_plan;
+  CandidatePlan best_candidate;
+  bool plan_generated = false;
+  if (OB_FAIL(get_minimal_cost_candidate(candidates, best_candidate))) {
+    LOG_WARN("failed to get minimal cost candidate", K(ret));
+  }
+  // try three-stage group by from the best plan
+  if (OB_SUCC(ret) && groupby_helper.can_three_stage_pushdown_) {
+    OPT_TRACE("start to generate three stage group by plan for", static_cast<void*>(best_candidate.plan_tree_));
+    uint64_t group_dist_methods = 0;
+    candidate_plan = best_candidate;
+    if (OB_FAIL(get_distribute_group_by_method(candidate_plan.plan_tree_,
+                                              groupby_helper,
+                                              reduce_exprs,
+                                              group_dist_methods,
+                                              true))) {
+      LOG_WARN("failed to get distribute method", K(ret));
+    } else if (!(DistAlgo::DIST_HASH_HASH & group_dist_methods)) {
+      OPT_TRACE("basic or partition wise can not use three stage group by");
+    } else if (groupby_helper.enable_distinct_with_expansion_
+               && OB_FAIL(create_three_stage_expansion_plan(
+                 group_by_exprs, having_exprs, groupby_helper, candidate_plan.plan_tree_))) {
+      LOG_WARN("failed to create three stage expansion plan", K(ret));
+    } else if (!groupby_helper.enable_distinct_with_expansion_
+               && OB_FAIL(create_three_stage_group_plan(
+                 group_by_exprs, having_exprs, groupby_helper, candidate_plan.plan_tree_))) {
+      LOG_WARN("failed to candi allocate three stage group by", K(ret));
+    } else if (NULL != candidate_plan.plan_tree_
+               && OB_FAIL(groupby_plans.push_back(candidate_plan))) {
+      LOG_WARN("failed to push merge group by", K(ret));
+    } else {
+      plan_generated = (NULL != candidate_plan.plan_tree_);
+      OPT_TRACE("succeed to generate three stage group by plan:", candidate_plan.plan_tree_);
+    }
+  }
+  if (OB_SUCC(ret) && plan_generated) {
     use_hash_valid = false;
     use_merge_valid = false;
+    OPT_TRACE("three stage group by plan generated, skip hash and merge group by");
   }
-  // create hash group by plans
+  // try hash group by from the best plan
   if (OB_SUCC(ret) && use_hash_valid) {
-    ObSEArray<CandidatePlan, 4> best_candi_plans;
-    if (OB_FAIL(get_minimal_cost_candidates(candi_plans, best_candi_plans))) {
-      LOG_WARN("failed to get minimal cost plans", K(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < best_candi_plans.count(); i++) {
-      OPT_TRACE("start to generate hash group by plan:");
-      uint64_t group_dist_methods = 0;
-      if (OB_FAIL(get_distribute_group_by_method(best_candi_plans.at(i).plan_tree_,
-                                                groupby_helper,
-                                                reduce_exprs,
-                                                group_dist_methods))) {
-        LOG_WARN("failed to get distribute method", K(ret));
-      }
-      for (int64_t j = DistAlgo::DIST_BASIC_METHOD;
-          OB_SUCC(ret) && j < DistAlgo::DIST_MAX_JOIN_METHOD; j = (j << 1)) {
-        if (group_dist_methods & j) {
-          DistAlgo group_dist_method = get_dist_algo(j);
-          candidate_plan = best_candi_plans.at(i);
-          if (OB_FAIL(create_hash_group_plan(reduce_exprs,
-                                              group_by_exprs,
-                                              aggr_items,
-                                              having_exprs,
+    OPT_TRACE("start to generate hash group by plan for", static_cast<void*>(best_candidate.plan_tree_));
+    uint64_t group_dist_methods = 0;
+    if (OB_FAIL(get_distribute_group_by_method(best_candidate.plan_tree_,
                                               groupby_helper,
-                                              candidate_plan.plan_tree_,
-                                              group_dist_method))) {
-            LOG_WARN("failed to create hash group by plan", K(ret));
-          } else if (NULL != candidate_plan.plan_tree_ &&
-                      OB_FAIL(groupby_plans.push_back(candidate_plan))) {
-            LOG_WARN("failed to push merge group by", K(ret));
-          } else {
-            OPT_TRACE("succeed to generate hash group by plan:", candidate_plan.plan_tree_);
-          }
+                                              reduce_exprs,
+                                              group_dist_methods))) {
+      LOG_WARN("failed to get distribute method", K(ret));
+    }
+    for (int64_t j = DistAlgo::DIST_BASIC_METHOD;
+        OB_SUCC(ret) && j < DistAlgo::DIST_MAX_JOIN_METHOD; j = (j << 1)) {
+      if (group_dist_methods & j) {
+        DistAlgo group_dist_method = get_dist_algo(j);
+        candidate_plan = best_candidate;
+        if (OB_FAIL(create_hash_group_plan(reduce_exprs,
+                                            group_by_exprs,
+                                            aggr_items,
+                                            having_exprs,
+                                            groupby_helper,
+                                            candidate_plan.plan_tree_,
+                                            group_dist_method))) {
+          LOG_WARN("failed to create hash group by plan", K(ret));
+        } else if (NULL != candidate_plan.plan_tree_ &&
+                    OB_FAIL(groupby_plans.push_back(candidate_plan))) {
+          LOG_WARN("failed to push merge group by", K(ret));
+        } else {
+          plan_generated |= (NULL != candidate_plan.plan_tree_);
+          OPT_TRACE("succeed to generate hash group by plan:", candidate_plan.plan_tree_);
         }
       }
     }
   }
   if (OB_SUCC(ret) && get_stmt()->has_rollup() && groupby_helper.grouping_set_info_ != nullptr) {
-    if (!groupby_plans.empty()) {
+    if (plan_generated) {
       use_merge_valid = false;
+      OPT_TRACE("hash group by plan generated, skip merge group by");
     }
     if (normal_sort_valid && part_sort_valid) {
       normal_sort_valid = false;
     }
   }
-  // create merge group by plans
+  // try merge group by from all plans in the group
   if (OB_SUCC(ret) && use_merge_valid) {
-    bool can_ignore_merge_plan = !groupby_plans.empty();
-    for (int64_t i = 0; OB_SUCC(ret) && i < candi_plans.count(); i++) {
-      bool is_needed = false;
-      OPT_TRACE("start to generate merge group by plan:");
+    bool can_ignore_merge_plan = plan_generated;
+    for (int64_t i = 0; OB_SUCC(ret) && i < candidates.count(); i++) {
+      OPT_TRACE("start to generate merge group by plan for", static_cast<void*>(candidates.at(i).plan_tree_));
       uint64_t group_dist_methods = 0;
-      if (OB_FAIL(get_distribute_group_by_method(candi_plans.at(i).plan_tree_,
+      if (OB_FAIL(get_distribute_group_by_method(candidates.at(i).plan_tree_,
                                                 groupby_helper,
                                                 reduce_exprs,
                                                 group_dist_methods))) {
@@ -1382,7 +1411,7 @@ int ObSelectLogPlan::candi_allocate_normal_group_by(const bool ignore_transform_
           OB_SUCC(ret) && j < DistAlgo::DIST_MAX_JOIN_METHOD; j = (j << 1)) {
         if (group_dist_methods & j) {
           DistAlgo group_dist_method = get_dist_algo(j);
-          candidate_plan = candi_plans.at(i);
+          candidate_plan = candidates.at(i);
           if (OB_FAIL(create_merge_group_plan(reduce_exprs,
                                               group_by_exprs,
                                               group_directions,
