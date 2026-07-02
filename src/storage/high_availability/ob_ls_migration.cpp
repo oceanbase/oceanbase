@@ -136,12 +136,15 @@ void ObMigrationCtx::reuse()
 /******************ObCopyTabletCtx*********************/
 ObCopyTabletCtx::ObCopyTabletCtx()
   : tablet_id_(),
+    tablet_allocator_(),
     tablet_handle_(),
     macro_block_reuse_mgr_(),
     extra_info_(),
     lock_(common::ObLatchIds::MIGRATE_LOCK),
     status_(ObCopyTabletStatus::MAX_STATUS)
 {
+  ObMemAttr attr(MTL_ID(), "HaTabletHdl");
+  tablet_allocator_.set_attr(attr);
 }
 
 ObCopyTabletCtx::~ObCopyTabletCtx()
@@ -160,6 +163,7 @@ void ObCopyTabletCtx::reset()
 {
   tablet_id_.reset();
   tablet_handle_.reset();
+  tablet_allocator_.reset();
   status_ = ObCopyTabletStatus::MAX_STATUS;
   extra_info_.reset();
 }
@@ -2338,15 +2342,24 @@ int ObTabletMigrationDag::init(
     LOG_WARN("failed to check copy tablet exist", K(ret), K(tablet_id));
   } else if (FALSE_IT(status = is_exist ? ObCopyTabletStatus::TABLET_EXIST : ObCopyTabletStatus::TABLET_NOT_EXIST)) {
   } else if (FALSE_IT(copy_tablet_ctx_.tablet_id_ = tablet_id)) {
-  } else if (FALSE_IT(copy_tablet_ctx_.tablet_handle_ = tablet_handle)) {
-  } else if (OB_FAIL(copy_tablet_ctx_.set_copy_tablet_status(status))) {
-    LOG_WARN("failed to set copy tablet status", K(ret), K(status), K(tablet_id));
-  } else if (FALSE_IT(ha_dag_net_ctx_ = ctx)) {
   } else {
-    compat_mode_ = copy_tablet_ctx_.tablet_handle_.get_obj()->get_tablet_meta().compat_mode_;
-    tablet_group_ctx_ = tablet_group_ctx;
-    tablet_type_ = tablet_type;
-    is_inited_ = true;
+    // LS rebuild keeps the dest tablet serving writes; pinning the in-place handle in ctx for
+    // the dag-net lifetime would block memtable memory release after dump. Take a memtable-stripped
+    // copy. Migration/add path also passes through, but its dest tablet is PENDING and produces
+    // no new memtables, so the extra alloc is harmless.
+    const ObTabletMapKey map_key(ctx->arg_.ls_id_, tablet_id);
+    if (OB_FAIL(ls->ha_get_tablet_without_memtables(WashTabletPriority::WTP_LOW,
+        map_key, copy_tablet_ctx_.tablet_allocator_, copy_tablet_ctx_.tablet_handle_))) {
+      LOG_WARN("failed to get tablet without memtables", K(ret), K(map_key), K(tablet_handle));
+    } else if (OB_FAIL(copy_tablet_ctx_.set_copy_tablet_status(status))) {
+      LOG_WARN("failed to set copy tablet status", K(ret), K(status), K(tablet_id));
+    } else if (FALSE_IT(ha_dag_net_ctx_ = ctx)) {
+    } else {
+      compat_mode_ = copy_tablet_ctx_.tablet_handle_.get_obj()->get_tablet_meta().compat_mode_;
+      tablet_group_ctx_ = tablet_group_ctx;
+      tablet_type_ = tablet_type;
+      is_inited_ = true;
+    }
   }
   return ret;
 }
@@ -2598,12 +2611,15 @@ int ObTabletMigrationDag::inner_reset_status_for_retry()
 
     if (OB_SUCC(ret)) {
       copy_tablet_ctx_.tablet_handle_.reset();
+      copy_tablet_ctx_.tablet_allocator_.reset();
       copy_tablet_ctx_.extra_info_.reset();
       copy_tablet_ctx_.macro_block_reuse_mgr_.reset();
+      const ObTabletMapKey map_key(ctx->arg_.ls_id_, copy_tablet_ctx_.tablet_id_);
       if (OB_ISNULL(ls = ls_handle_.get_ls())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ls should not be NULL", K(ret), K(copy_tablet_ctx_));
-      } else if (OB_FAIL(ls->ha_get_tablet(copy_tablet_ctx_.tablet_id_, copy_tablet_ctx_.tablet_handle_))) {
+      } else if (OB_FAIL(ls->ha_get_tablet_without_memtables(WashTabletPriority::WTP_LOW,
+          map_key, copy_tablet_ctx_.tablet_allocator_, copy_tablet_ctx_.tablet_handle_))) {
         if (OB_TABLET_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
           const ObCopyTabletStatus::STATUS status = ObCopyTabletStatus::TABLET_NOT_EXIST;
@@ -2613,7 +2629,7 @@ int ObTabletMigrationDag::inner_reset_status_for_retry()
             FLOG_INFO("tablet in dest is deleted, set copy status not exist", K(copy_tablet_ctx_));
           }
         } else {
-          LOG_WARN("failed to get tablet", K(ret), K(copy_tablet_ctx_));
+          LOG_WARN("failed to get tablet without memtables", K(ret), K(copy_tablet_ctx_));
         }
       }
     }

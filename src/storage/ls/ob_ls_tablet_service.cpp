@@ -7493,14 +7493,38 @@ int ObLSTabletService::ha_get_tablet_without_memtables(
 {
   int ret = OB_SUCCESS;
   ObTablet *tablet = nullptr;
+  // The shared cached handle is held for the caller's whole (dag) lifetime, which pins the
+  // cached tablet object in t3m and blocks memtable/meta memory release. For a tablet with no
+  // memtables and a small data footprint that pin is harmless, so we can skip the expensive
+  // deep-copy-and-strip. A large tablet is better deep-copied into the caller's allocator so
+  // t3m can still wash out the cached object. Both get_memtable_count() and the space usage
+  // read below are pure in-memory accessors (no IO).
+  const int64_t DEEP_COPY_TABLET_SIZE_THRESHOLD = 512LL * 1024 * 1024; // 512MB
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_FAIL(get_tablet_without_memtables(priority, key, allocator, handle))) {
-    LOG_WARN("failed to get tablet without memtables", K(ret), K(priority), K(key));
+  } else if (OB_FAIL(direct_get_tablet(key.tablet_id_, handle))) {
+    if (OB_TABLET_NOT_EXIST != ret) {
+      LOG_WARN("failed to direct get tablet", K(ret), K(key));
+    }
   } else if (OB_ISNULL(tablet = handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(key));
+  } else if (tablet->get_memtable_count() > 0
+      || tablet->get_tablet_meta().space_usage_.all_sstable_data_required_size_ > DEEP_COPY_TABLET_SIZE_THRESHOLD) {
+    // has memtables, or is large enough that pinning the cached object is not worthwhile;
+    // fall back to the deep-copy-and-strip path
+    handle.reset();
+    tablet = nullptr;
+    if (OB_FAIL(get_tablet_without_memtables(priority, key, allocator, handle))) {
+      LOG_WARN("failed to get tablet without memtables", K(ret), K(priority), K(key));
+    } else if (OB_ISNULL(tablet = handle.get_obj())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet should not be NULL", K(ret), K(key));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (tablet->is_empty_shell()) {
     // treat empty shell as tablet not exist.
     ret = OB_TABLET_NOT_EXIST;
