@@ -1,4 +1,4 @@
-# owner: fenggu.yh
+# owner: chaser.ch
 # description: create column_store encoding table and add column
 
 --disable_query_log

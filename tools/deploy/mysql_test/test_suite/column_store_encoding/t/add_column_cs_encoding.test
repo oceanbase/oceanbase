@@ -1,4 +1,4 @@
-# owner: fenggu.yh
+# owner: chaser.ch
 # description: add_column test for filter pushdown correctness in column_store encoding
 
 --disable_query_log
