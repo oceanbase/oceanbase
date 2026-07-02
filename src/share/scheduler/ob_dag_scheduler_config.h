@@ -42,7 +42,7 @@ DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_MAX,            0, "INVALID", MAX_FUNCTION_N
 #endif
 
 #ifdef DAG_SCHEDULER_DAG_TYPE_DEF
-// DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_ENUM, DAG_DEFAULT_PRIO, SYS_TASK_TYPE, DAG_TYPE_STR, DAG_MODULE_STR, DIAGNOSE_WITH_COMMENT, DIAGNOSE_PRIORITY, DIAGNOSE_INT_INFO_CNT, DIAGNOSE_INT_FMT_STR)
+// DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_ENUM, DAG_DEFAULT_PRIO, SYS_TASK_TYPE, DAG_TYPE_STR, DAG_MODULE_STR, DIAGNOSE_WITH_COMMENT, DIAGNOSE_INT_INFO_CNT, DIAGNOSE_INT_FMT_STR)
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_MINI_MERGE, ObDagPrio::DAG_PRIO_COMPACTION_HIGH, ObSysTaskType::SSTABLE_MINI_MERGE_TASK, "MINI_MERGE", "COMPACTION",
     true, 3, {"ls_id", "tablet_id", "compaction_scn"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_MERGE_EXECUTE, ObDagPrio::DAG_PRIO_COMPACTION_MID, ObSysTaskType::SSTABLE_MINOR_MERGE_TASK, "MINOR_EXECUTE", "COMPACTION",
@@ -56,7 +56,7 @@ DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_CO_MERGE_PREPARE, ObDagPrio::DAG_PRIO_COMPAC
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_CO_MERGE_SCHEDULE, ObDagPrio::DAG_PRIO_COMPACTION_LOW, ObSysTaskType::SSTABLE_MAJOR_MERGE_TASK, "CO_MERGE_SCHEDULE", "COMPACTION",
     true, 3, {"ls_id", "tablet_id", "compaction_scn"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_TX_TABLE_MERGE, ObDagPrio::DAG_PRIO_COMPACTION_HIGH, ObSysTaskType::SPECIAL_TABLE_MERGE_TASK, "TX_TABLE_MERGE", "COMPACTION",
-    false, 3, {"ls_id", "tablet_id", "compaction_scn"})
+    true, 3, {"ls_id", "tablet_id", "compaction_scn"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_MDS_MINI_MERGE, ObDagPrio::DAG_PRIO_MDS_COMPACTION_HIGH, ObSysTaskType::MDS_MINI_MERGE_TASK, "MDS_MINI_MERGE", "COMPACTION",
     false, 3, {"ls_id", "tablet_id", "flush_scn"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_MDS_MINOR_MERGE, ObDagPrio::DAG_PRIO_MDS_COMPACTION_MID, ObSysTaskType::SSTABLE_MINOR_MERGE_TASK, "MDS_MINOR_MERGE", "COMPACTION",
@@ -71,7 +71,7 @@ DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_BATCH_FREEZE_TABLETS, ObDagPrio::DAG_PRIO_CO
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_DDL, ObDagPrio::DAG_PRIO_DDL, ObSysTaskType::DDL_TASK, "DDL_COMPLEMENT", "DDL",
     true, 7, {"ls_id", "source_tablet_id", "dest_tablet_id", "data_table_id", "target_table_id", "schema_version", "snapshot_version"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_UNIQUE_CHECKING, ObDagPrio::DAG_PRIO_DDL, ObSysTaskType::DDL_TASK, "UNIQUE_CHECK", "DDL",
-    true, 2, {"tablet_id", "index_id"})
+    false, 2, {"tablet_id", "index_id"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_SQL_BUILD_INDEX, ObDagPrio::DAG_PRIO_DDL, ObSysTaskType::DDL_TASK, "SQL_BUILD_INDEX", "DDL",
     true, 0, {})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_DDL_KV_MERGE, ObDagPrio::DAG_PRIO_DDL_HIGH, ObSysTaskType::DDL_KV_MERGE_TASK, "DDL_KV_MERGE", "DDL",
@@ -151,13 +151,13 @@ DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_BACKUP_LS_LOG_GROUP_FINISH, ObDagPrio::DAG_P
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_BACKUP_LS_LOG, ObDagPrio::DAG_PRIO_HA_LOW, ObSysTaskType::BACKUP_TASK, "BACKUP_COMPLEMENT_LOG_LS", "BACKUP",
     false, 3, {"tenant_id", "backup_set_id", "ls_id"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_INITIAL_BACKUP_FUSE, ObDagPrio::DAG_PRIO_HA_LOW, ObSysTaskType::BACKUP_TASK, "INITIAL_BACKUP_FUSE", "BACKUP",
-    false, 0, {})
+    false, 2, {"ls_id", "backup_set_id"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_START_BACKUP_FUSE, ObDagPrio::DAG_PRIO_HA_LOW, ObSysTaskType::BACKUP_TASK, "START_BACKUP_FUSE", "BACKUP",
-    false, 0, {})
+    false, 2, {"ls_id", "backup_set_id"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_BACKUP_TABLET_FUSE, ObDagPrio::DAG_PRIO_HA_LOW, ObSysTaskType::BACKUP_TASK, "BACKUP_TABLET_FUSE", "BACKUP",
-    false, 0, {})
+    false, 2, {"ls_id", "tablet_id"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_FINISH_BACKUP_FUSE, ObDagPrio::DAG_PRIO_HA_LOW, ObSysTaskType::BACKUP_TASK, "FINISH_BACKUP_FUSE", "BACKUP",
-    false, 0, {})
+    false, 2, {"ls_id", "backup_set_id"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_SS_BACKUP_META, ObDagPrio::DAG_PRIO_HA_LOW, ObSysTaskType::BACKUP_TASK, "BACKUP_SS_META", "BACKUP",
     true, 2, {"tenant_id", "ls_id"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_SS_INITIAL_LS_BACKUP, ObDagPrio::DAG_PRIO_HA_LOW, ObSysTaskType::BACKUP_TASK, "INITIAL_LS_BACKUP", "BACKUP",
@@ -219,7 +219,7 @@ DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_TRANSFER_BACKFILL_TX, ObDagPrio::DAG_PRIO_HA
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_TRANSFER_REPLACE_TABLE, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::TRANSFER_TASK, "TRANSFER_REPLACE_TABLE", "TRANSFER",
     true, 2, {"tenant_id", "desc_ls_id"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_TRANSFER_BUILD_TABLET_INFO, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::TRANSFER_TASK, "TRANSFER_BUILD_TABLET_INFO", "TRANSFER",
-    false, 0, {})
+    true, 2, {"tenant_id", "ls_id"})
 // DAG_TYPE_TRANSFER END
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_TTL, ObDagPrio::DAG_PRIO_TTL, ObSysTaskType::TABLE_API_TTL_TASK, "TTL_DELTE_DAG", "TTL",
     false, 4, {"tenant_id", "ls_id", "table_id", "tablet_id"})
@@ -232,13 +232,13 @@ DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_VECTOR_INDEX, ObDagPrio::DAG_PRIO_TTL, ObSys
 
 // DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_REBUILD_TABLET, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::REBUILD_TABLET_TASK, "REBUILD_TABLET", "REBUILD_TABLET")
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_INITIAL_REBUILD_TABLET, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::REBUILD_TABLET_TASK, "INITIAL_REBUILD_TBALET", "REBUILD_TABLET",
-    false, 3, {"tenant_id", "ls_id", "op_type"})
+    false, 0, {})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_START_REBUILD_TABLET, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::REBUILD_TABLET_TASK, "START_REBUILD_TABLET", "REBUILD_TABLET",
-    false, 3, {"tenant_id", "ls_id", "op_type"})
+    false, 0, {})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_FINISH_REBUILD_TABLET, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::REBUILD_TABLET_TASK, "FINISH_REBUILD_TABLET", "REBUILD_TABLET",
-    false, 3, {"tenant_id", "ls_id", "op_type"})
+    false, 0, {})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_TABLET_REBUILD, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::REBUILD_TABLET_TASK, "TABLET_REBUILD", "REBUILD_TABLET",
-    false, 3, {"tenant_id", "ls_id", "op_type"})
+    false, 0, {})
 // DAG_TYPE_REBUILD_TABLET END
 
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_MAX, ObDagPrio::DAG_PRIO_MAX, ObSysTaskType::MAX_SYS_TASK_TYPE, "DAG_TYPE_MAX", "INVALID", false, 0, {})
@@ -335,14 +335,14 @@ struct ObDagType
 {
   enum ObDagTypeEnum : uint8_t
   {
-#define DAG_SCHEDULER_DAG_TYPE_DEF(dag_type, init_dag_prio, sys_task_type, dag_type_str, dag_module_str, diagnose_with_comment, diagnose_priority, diagnose_int_info_cnt, ...) dag_type,
+#define DAG_SCHEDULER_DAG_TYPE_DEF(dag_type, init_dag_prio, sys_task_type, dag_type_str, dag_module_str, diagnose_with_comment, diagnose_int_info_cnt, ...) dag_type,
 #include "ob_dag_scheduler_config.h"
 #undef DAG_SCHEDULER_DAG_TYPE_DEF
   };
 };
 
 static constexpr ObDagTypeStruct OB_DAG_TYPES[] = {
-#define DAG_SCHEDULER_DAG_TYPE_DEF(dag_type, init_dag_prio, sys_task_type, dag_type_str, dag_module_str, diagnose_with_comment, diagnose_priority, diagnose_int_info_cnt, ...) \
+#define DAG_SCHEDULER_DAG_TYPE_DEF(dag_type, init_dag_prio, sys_task_type, dag_type_str, dag_module_str, diagnose_with_comment, diagnose_int_info_cnt, ...) \
     {init_dag_prio, sys_task_type, dag_type_str, dag_module_str},
 #include "ob_dag_scheduler_config.h"
 #undef DAG_SCHEDULER_DAG_TYPE_DEF
