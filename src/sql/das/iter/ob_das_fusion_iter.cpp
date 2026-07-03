@@ -530,21 +530,20 @@ int ObDASFusionIter::merge_range_parallel_path_rows(
     common::ObIArray<ObDASFusionMaterializedRow> &path_rows)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(top_k_limit < 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("range parallel top k limit is invalid", KR(ret), K(path_idx), K(top_k_limit));
-  } else {
-    if (path_rows.count() > 1) {
-      lib::ob_sort(path_rows.get_data(), path_rows.get_data() + path_rows.count(),
-                   ObDASFusionMaterializedRowCmp());
-    }
-    const int64_t emit_cnt = OB_MIN(top_k_limit, path_rows.count());
-    for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < emit_cnt; ++row_idx) {
-      const ObDASFusionMaterializedRow &row = path_rows.at(row_idx);
-      if (OB_FAIL(find_or_create_doc(row.rowkey_, path_idx, row.score_))) {
-        LOG_WARN("failed to merge range parallel path row",
-                 KR(ret), K(path_idx), K(top_k_limit), K(row_idx), K(row));
-      }
+  // top_k_limit < 0 means TopK was not pushed down into the search iter (e.g. upper SORT
+  // is on a non-score column). Match serial semantics: emit all rows without sort and let
+  // the upper operator handle ordering / limiting.
+  const bool no_limit = (top_k_limit < 0);
+  if (!no_limit && path_rows.count() > 1) {
+    lib::ob_sort(path_rows.get_data(), path_rows.get_data() + path_rows.count(),
+                 ObDASFusionMaterializedRowCmp());
+  }
+  const int64_t emit_cnt = no_limit ? path_rows.count() : OB_MIN(top_k_limit, path_rows.count());
+  for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < emit_cnt; ++row_idx) {
+    const ObDASFusionMaterializedRow &row = path_rows.at(row_idx);
+    if (OB_FAIL(find_or_create_doc(row.rowkey_, path_idx, row.score_))) {
+      LOG_WARN("failed to merge range parallel path row",
+               KR(ret), K(path_idx), K(top_k_limit), K(row_idx), K(row));
     }
   }
   return ret;

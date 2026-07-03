@@ -400,15 +400,16 @@ int ObHybridSearchGenerator::init_fusion_iter_exec_mode(const ObDSLQueryInfo *qu
   int ret = OB_SUCCESS;
   double min_score_value = 0;
   ObConstRawExpr *min_score_expr = nullptr;
-  if (OB_ISNULL(query_info) || OB_ISNULL(fusion_node)) {
+  if (OB_ISNULL(query_info) || OB_ISNULL(fusion_node) || OB_ISNULL(plan_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), KP(query_info), KP(fusion_node));
+    LOG_WARN("unexpected null", K(ret), KP(query_info), KP(fusion_node), KP(plan_));
   } else if (OB_ISNULL(min_score_expr = static_cast<ObConstRawExpr*>(query_info->min_score_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("min score expr is null", K(ret));
   } else if (OB_FAIL(min_score_expr->get_value().get_double(min_score_value))) {
     LOG_WARN("failed to get double value from min score expr", K(ret));
   } else {
+    const bool enable_parallel = plan_->get_optimizer_context().is_enable_hybrid_search_parallel_execution();
     fusion_node->fusion_iter_exec_mode_ = ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS;
     bool is_top_k_score_query = !(query_info->result_mode_ == ObDSLResultMode::COUNT_AGG ||
                                   query_info->result_mode_ == ObDSLResultMode::BUCKET_AGG ||
@@ -421,14 +422,14 @@ int ObHybridSearchGenerator::init_fusion_iter_exec_mode(const ObDSLQueryInfo *qu
       }
     } else if (query_info->result_mode_ == ObDSLResultMode::COUNT_AGG ||
                query_info->result_mode_ == ObDSLResultMode::BUCKET_AGG) {
-      if (query_info->queries_.count() > 1) {
+      if (query_info->queries_.count() > 1 || enable_parallel) {
         fusion_node->fusion_iter_exec_mode_ = ObFusionIterExecMode::ROWKEY_DISTINCT_ONLY;
       } else {
         fusion_node->fusion_iter_exec_mode_ = ObFusionIterExecMode::SKIP_FUSION_ITER;
       }
     } else if (query_info->has_dsl_sort_ ||
                (query_info->has_dsl_collapse_ && !query_info->has_dsl_rank_)) {
-      if (query_info->queries_.count() > 1) {
+      if (query_info->queries_.count() > 1 || enable_parallel) {
         fusion_node->fusion_iter_exec_mode_ = ObFusionIterExecMode::ROWKEY_SCORE_FULL_RECALL;
       } else {
         fusion_node->fusion_iter_exec_mode_ = ObFusionIterExecMode::SKIP_FUSION_ITER;

@@ -2572,9 +2572,6 @@ TEST_F(ObDASFusionIterMergeEdgeCaseTest, merge_negative_range_top_k_limit)
   ctx_param.set_mem_attr(500, "TestFusion", ObCtxIds::DEFAULT_CTX_ID);
   ASSERT_EQ(OB_SUCCESS, ROOT_CONTEXT->CREATE_CONTEXT(iter.fusion_memctx_, ctx_param));
 
-  // Negative range_top_k_limit_ should cause OB_ERR_UNEXPECTED in Phase 3
-  EXPECT_EQ(OB_ERR_UNEXPECTED, iter.merge_parallel_results());
-
   iter.parallel_ctx_.child_runtimes_.reset();
   if (OB_NOT_NULL(iter.fusion_memctx_)) {
     DESTROY_CONTEXT(iter.fusion_memctx_);
