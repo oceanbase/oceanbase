@@ -111,7 +111,18 @@ public:
   // LB_DUP_LS -> LB_UNIT_GROUP -> LB_LS_GROUP_LOCATION -> LB_LS_GROUP_COUNT -> LB_UNIT_LIST -> LB_LS_COUNT
   bool can_be_next_ls_balance_strategy(const ObBalanceStrategy &old_strategy) const
   {
-    return is_new_ls_balance_strategy() && val_ > old_strategy.val_;
+    bool b_ret = false;
+    if (!is_new_ls_balance_strategy()) {
+      b_ret = false;
+    } else if (val_ > old_strategy.val_) {
+      b_ret = true;
+    } else if (LB_LS_GROUP_LOCATION == val_ && LB_LS_GROUP_COUNT == old_strategy.val_) {
+      // 非倍数缩容优化中，LSGroupCountBalance 完成 deleting-only LSG 的 split 后，
+      // 下一轮均衡需要回到 LSGroupLocationBalance 做平均迁移，
+      // 这是预期内的"回退一档"，不应被 CANCELING。
+      b_ret = true;
+    }
+    return b_ret;
   }
   bool can_be_next_partition_balance_strategy(const ObBalanceStrategy &old_strategy) const;
   ObBalanceStrategy &operator=(const STRATEGY &val);

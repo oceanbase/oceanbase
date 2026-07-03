@@ -657,6 +657,7 @@ private:
       const int64_t new_unit_num,
       const common::ObIArray<uint64_t> &delete_unit_id_array);
   int fill_delete_unit_ptr_array(
+      common::ObISQLClient &client,
       share::ObResourcePool *pool,
       const common::ObIArray<uint64_t> &delete_unit_id_array,
       const int64_t new_unit_num,

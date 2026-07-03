@@ -96,6 +96,7 @@ int TestBalanceOperator::construct_unit_array(const ObZoneUnitCntList &unit_list
     ObArray<ObUnit> &unit_array)
 {
   int ret = OB_SUCCESS;
+  unit_array.reset();
   int64_t unit_id = 1000;
   int64_t ug_id = 2000;
   int64_t last_cnt = 0;
@@ -315,6 +316,317 @@ TEST_F(TestBalanceOperator, BalanceTask)
     ASSERT_EQ(OB_SUCCESS, result->get_time("create_time", start_time));
     ASSERT_EQ(OB_SUCCESS, result->get_time("finish_time", finish_time));
     LOG_INFO("[MITTEST]balance_task", K(start_time), K(finish_time));
+  }
+}
+
+TEST_F(TestBalanceOperator, non_divisible_shrink_count_balance)
+{
+  uint64_t tenant_id = 1002;
+  ObArenaAllocator allocator("TntLSBalance", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
+  int ret = OB_SUCCESS;
+  common::ObMySQLProxy *sql_proxy = get_curr_observer().get_gctx().sql_proxy_;
+  common::ObArray<share::ObLSGroupUnitListOp> lsg_op_array;
+  common::ObArray<share::ObUnitUGOp> unit_op_array;
+  ObArray<ObUnit> unit_array;
+  ObArray<ObLSStatusInfo> ls_array;
+  ObTenantRole tenant_role(ObTenantRole::Role::PRIMARY_TENANT);
+
+  auto construct_ls = [&ret, &ls_array, &tenant_id]
+      (const uint64_t ls_id, const int64_t ls_group_id, const std::initializer_list<int64_t> unit_ids)
+  {
+    ObUnitIDList unit_id_list;
+    for (const auto& unit_id : unit_ids) {
+      ret = unit_id_list.push_back(ObDisplayUnitID(unit_id));
+      ASSERT_EQ(OB_SUCCESS, ret);
+    }
+    ObLSStatusInfo ls_status;
+    ls_status.init(tenant_id, ObLSID(ls_id), ls_group_id, share::OB_LS_NORMAL, 0,
+        ObZone("zone1"), share::ObLSFlag::NORMAL_FLAG, unit_id_list);
+    ret = ls_array.push_back(ls_status);
+    ASSERT_EQ(OB_SUCCESS, ret);
+  };
+
+  // ===== 2.1 生效场景 =====
+
+  // 场景 A: 同构 DELETING 3→2
+  // z1(3),z2(3), unit 1002+1005 DELETING (ug2002 全 DELETING)
+  // normal UG=2, 1 个 deleting-only LSG (lg 3001) 含 3 个 LS
+  // multiplier = lcm(1, 2/gcd(1,2)) = 2
+  // 期望：每个 LS split 出 1 个 dest → 3 SPLIT + 3 ALTER = 6 tasks
+  {
+    ObDisplayZoneUnitCnt z1("zone1", 3);
+    ObDisplayZoneUnitCnt z2("zone2", 3);
+    ObZoneUnitCntList zone_list;
+    ASSERT_EQ(OB_SUCCESS, zone_list.push_back(z1));
+    ASSERT_EQ(OB_SUCCESS, zone_list.push_back(z2));
+    unit_array.reuse();
+    ret = construct_unit_array(zone_list, unit_array);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    unit_array.at(2).status_ = ObUnit::UNIT_STATUS_DELETING;
+    unit_array.at(5).status_ = ObUnit::UNIT_STATUS_DELETING;
+
+    ls_array.reuse();
+    construct_ls(1, 0, {});
+    construct_ls(1001, 1001, {1000, 1003});
+    construct_ls(1002, 1001, {1000, 1003});
+    construct_ls(1003, 1001, {1000, 1003});
+    construct_ls(1004, 1002, {1001, 1004});
+    construct_ls(1005, 1002, {1001, 1004});
+    construct_ls(1006, 1002, {1001, 1004});
+    construct_ls(3001, 3001, {1002, 1005});
+    construct_ls(3002, 3001, {1002, 1005});
+    construct_ls(3003, 3001, {1002, 1005});
+
+    ObBalanceJobDesc job_desc;
+    ret = job_desc.init_without_job(tenant_id, zone_list, 1, 1, true, true, false);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    MTL_SWITCH(tenant_id) {
+      ObTenantLSBalanceInfo bj_a(allocator);
+      ret = bj_a.init_tenant_ls_balance_info(tenant_id, ls_array, job_desc, unit_array, tenant_role);
+      ASSERT_EQ(OB_SUCCESS, ret);
+      share::ObBalanceJob job_a;
+      common::ObArray<share::ObBalanceTask> task_array_a;
+      lsg_op_array.reuse();
+      unit_op_array.reuse();
+      ObLSGroupCountBalance lg_cnt_a(&bj_a, sql_proxy, ObBalanceJobID(), &job_a, &task_array_a, &lsg_op_array, &unit_op_array);
+
+      ASSERT_EQ(OB_SUCCESS, lg_cnt_a.balance(true));
+      job_a.reset();
+      ASSERT_EQ(OB_SUCCESS, lg_cnt_a.balance(false));
+      ASSERT_TRUE(job_a.is_valid());
+
+      int64_t split_cnt = 0, alter_cnt = 0;
+      ARRAY_FOREACH(task_array_a, i) {
+        const ObBalanceTaskType &tt = task_array_a.at(i).get_task_type();
+        if (ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_SPLIT) == tt) ++split_cnt;
+        else if (ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_ALTER) == tt) ++alter_cnt;
+      }
+      ASSERT_EQ(3, split_cnt);
+      ASSERT_EQ(3, alter_cnt);
+      for (int64_t i = 0; i < task_array_a.count(); ++i) {
+        if (ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_SPLIT) == task_array_a.at(i).get_task_type()) {
+          ASSERT_EQ(3001, task_array_a.at(i).get_ls_group_id());
+        }
+      }
+      LOG_INFO("non_divisible case A passed", K(task_array_a.count()), K(split_cnt), K(alter_cnt));
+    }
+  }
+
+  // 场景 B: 异构 DELETING 3:3→3:2
+  // z1(3),z2(3), only unit 1005(z2) DELETING → z1 valid=3, z2 valid=2 → hetero
+  // deleting-only LSG (lg 3001) 在 z2 组上 deleting-only
+  // z2 组: normal UG=2, del_only=1, multiplier=2
+  {
+    ObDisplayZoneUnitCnt z1("zone1", 3);
+    ObDisplayZoneUnitCnt z2("zone2", 3);
+    ObZoneUnitCntList zone_list;
+    ASSERT_EQ(OB_SUCCESS, zone_list.push_back(z1));
+    ASSERT_EQ(OB_SUCCESS, zone_list.push_back(z2));
+    unit_array.reuse();
+    ret = construct_unit_array(zone_list, unit_array);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    unit_array.at(5).status_ = ObUnit::UNIT_STATUS_DELETING;
+
+    ls_array.reuse();
+    construct_ls(1, 0, {});
+    construct_ls(1001, 1001, {1000, 1003});
+    construct_ls(1002, 1001, {1000, 1003});
+    construct_ls(1003, 1001, {1000, 1003});
+    construct_ls(1004, 1002, {1001, 1004});
+    construct_ls(1005, 1002, {1001, 1004});
+    construct_ls(1006, 1002, {1001, 1004});
+    construct_ls(3001, 3001, {1002, 1005});
+    construct_ls(3002, 3001, {1002, 1005});
+    construct_ls(3003, 3001, {1002, 1005});
+
+    ObBalanceJobDesc job_desc;
+    ret = job_desc.init_without_job(tenant_id, zone_list, 1, 1, true, true, false);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    ret = OB_SUCCESS;
+    MTL_SWITCH(tenant_id) {
+      ObTenantLSBalanceInfo bj_b(allocator);
+      ret = bj_b.init_tenant_ls_balance_info(tenant_id, ls_array, job_desc, unit_array, tenant_role);
+      ASSERT_EQ(OB_SUCCESS, ret);
+      share::ObBalanceJob job;
+      common::ObArray<share::ObBalanceTask> task_array;
+      lsg_op_array.reuse();
+      unit_op_array.reuse();
+      ObLSGroupCountBalance lg_cnt(&bj_b, sql_proxy, ObBalanceJobID(), &job, &task_array, &lsg_op_array, &unit_op_array);
+
+      ASSERT_EQ(OB_SUCCESS, lg_cnt.balance(true));
+      job.reset();
+      ASSERT_EQ(OB_SUCCESS, lg_cnt.balance(false));
+      ASSERT_TRUE(job.is_valid());
+
+      int64_t split_cnt = 0, alter_cnt = 0;
+      ARRAY_FOREACH(task_array, i) {
+        const ObBalanceTaskType &tt = task_array.at(i).get_task_type();
+        if (ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_SPLIT) == tt) ++split_cnt;
+        else if (ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_ALTER) == tt) ++alter_cnt;
+      }
+      ASSERT_EQ(3, split_cnt);
+      ASSERT_EQ(3, alter_cnt);
+      LOG_INFO("non_divisible case B passed", K(task_array.count()), K(split_cnt), K(alter_cnt));
+    }
+  }
+
+  // 场景 C: 同构 DELETING 4→3
+  // z1(4),z2(4), unit 1003+1007 DELETING (ug2003 全 DELETING)
+  // normal UG=3, 1 个 deleting-only LSG (lg 3001) 含 2 个 LS
+  // multiplier = lcm(1, 3/gcd(1,3)) = 3 → 每 LS split 成 3 → 2 SPLIT + 2 ALTER per LS = 4 SPLIT + 4 ALTER
+  {
+    ObDisplayZoneUnitCnt z1("zone1", 4);
+    ObDisplayZoneUnitCnt z2("zone2", 4);
+    ObZoneUnitCntList zone_list;
+    ASSERT_EQ(OB_SUCCESS, zone_list.push_back(z1));
+    ASSERT_EQ(OB_SUCCESS, zone_list.push_back(z2));
+    unit_array.reuse();
+    ret = construct_unit_array(zone_list, unit_array);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    unit_array.at(3).status_ = ObUnit::UNIT_STATUS_DELETING;
+    unit_array.at(7).status_ = ObUnit::UNIT_STATUS_DELETING;
+
+    ls_array.reuse();
+    construct_ls(1, 0, {});
+    construct_ls(1001, 1001, {1000, 1004});
+    construct_ls(1002, 1001, {1000, 1004});
+    construct_ls(1003, 1002, {1001, 1005});
+    construct_ls(1004, 1002, {1001, 1005});
+    construct_ls(1005, 1003, {1002, 1006});
+    construct_ls(1006, 1003, {1002, 1006});
+    construct_ls(3001, 3001, {1003, 1007});
+    construct_ls(3002, 3001, {1003, 1007});
+
+    ObBalanceJobDesc job_desc;
+    ret = job_desc.init_without_job(tenant_id, zone_list, 1, 1, true, true, false);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    ret = OB_SUCCESS;
+    MTL_SWITCH(tenant_id) {
+      ObTenantLSBalanceInfo bj_c(allocator);
+      ret = bj_c.init_tenant_ls_balance_info(tenant_id, ls_array, job_desc, unit_array, tenant_role);
+      ASSERT_EQ(OB_SUCCESS, ret);
+      share::ObBalanceJob job;
+      common::ObArray<share::ObBalanceTask> task_array;
+      lsg_op_array.reuse();
+      unit_op_array.reuse();
+      ObLSGroupCountBalance lg_cnt(&bj_c, sql_proxy, ObBalanceJobID(), &job, &task_array, &lsg_op_array, &unit_op_array);
+
+      ASSERT_EQ(OB_SUCCESS, lg_cnt.balance(true));
+      job.reset();
+      ASSERT_EQ(OB_SUCCESS, lg_cnt.balance(false));
+      ASSERT_TRUE(job.is_valid());
+
+      int64_t split_cnt = 0, alter_cnt = 0;
+      ARRAY_FOREACH(task_array, i) {
+        const ObBalanceTaskType &tt = task_array.at(i).get_task_type();
+        if (ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_SPLIT) == tt) ++split_cnt;
+        else if (ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_ALTER) == tt) ++alter_cnt;
+      }
+      ASSERT_EQ(4, split_cnt);
+      ASSERT_EQ(4, alter_cnt);
+      LOG_INFO("non_divisible case C passed", K(task_array.count()), K(split_cnt), K(alter_cnt));
+    }
+  }
+
+  // ===== 2.2 异常场景 =====
+
+  // 场景 D: del_only 存在但 need_split=false → OB_ERR_UNEXPECTED
+  // z1(4),z2(4), ug2002+ug2003 DELETING → normal UG=2
+  // 2 个 deleting-only LSG → del_only=2, 2%2==0 → need_split=false → unexpected
+  {
+    ObDisplayZoneUnitCnt z1("zone1", 4);
+    ObDisplayZoneUnitCnt z2("zone2", 4);
+    ObZoneUnitCntList zone_list;
+    ASSERT_EQ(OB_SUCCESS, zone_list.push_back(z1));
+    ASSERT_EQ(OB_SUCCESS, zone_list.push_back(z2));
+    unit_array.reuse();
+    ret = construct_unit_array(zone_list, unit_array);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    unit_array.at(2).status_ = ObUnit::UNIT_STATUS_DELETING;
+    unit_array.at(3).status_ = ObUnit::UNIT_STATUS_DELETING;
+    unit_array.at(6).status_ = ObUnit::UNIT_STATUS_DELETING;
+    unit_array.at(7).status_ = ObUnit::UNIT_STATUS_DELETING;
+
+    ls_array.reuse();
+    construct_ls(1, 0, {});
+    construct_ls(1001, 1001, {1000, 1004});
+    construct_ls(1002, 1001, {1000, 1004});
+    construct_ls(1003, 1002, {1001, 1005});
+    construct_ls(1004, 1002, {1001, 1005});
+    construct_ls(3001, 3001, {1002, 1006});
+    construct_ls(3002, 3001, {1002, 1006});
+    construct_ls(3003, 3002, {1003, 1007});
+    construct_ls(3004, 3002, {1003, 1007});
+
+    ObBalanceJobDesc job_desc;
+    ret = job_desc.init_without_job(tenant_id, zone_list, 1, 1, true, true, false);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    ret = OB_SUCCESS;
+    MTL_SWITCH(tenant_id) {
+      ObTenantLSBalanceInfo bj_d(allocator);
+      ret = bj_d.init_tenant_ls_balance_info(tenant_id, ls_array, job_desc, unit_array, tenant_role);
+      ASSERT_EQ(OB_SUCCESS, ret);
+      share::ObBalanceJob job;
+      common::ObArray<share::ObBalanceTask> task_array;
+      lsg_op_array.reuse();
+      unit_op_array.reuse();
+      ObLSGroupCountBalance lg_cnt(&bj_d, sql_proxy, ObBalanceJobID(), &job, &task_array, &lsg_op_array, &unit_op_array);
+
+      ret = lg_cnt.balance(false);
+      ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
+      LOG_INFO("non_divisible case D passed (OB_ERR_UNEXPECTED)", KR(ret));
+    }
+  }
+
+  // 场景 E: enable_transfer=false → need_split=false → OB_ERR_UNEXPECTED
+  // 同场景 A 拓扑但 enable_transfer=false
+  {
+    ObDisplayZoneUnitCnt z1("zone1", 3);
+    ObDisplayZoneUnitCnt z2("zone2", 3);
+    ObZoneUnitCntList zone_list;
+    ASSERT_EQ(OB_SUCCESS, zone_list.push_back(z1));
+    ASSERT_EQ(OB_SUCCESS, zone_list.push_back(z2));
+    unit_array.reuse();
+    ret = construct_unit_array(zone_list, unit_array);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    unit_array.at(2).status_ = ObUnit::UNIT_STATUS_DELETING;
+    unit_array.at(5).status_ = ObUnit::UNIT_STATUS_DELETING;
+
+    ls_array.reuse();
+    construct_ls(1, 0, {});
+    construct_ls(1001, 1001, {1000, 1003});
+    construct_ls(1002, 1001, {1000, 1003});
+    construct_ls(1003, 1001, {1000, 1003});
+    construct_ls(1004, 1002, {1001, 1004});
+    construct_ls(1005, 1002, {1001, 1004});
+    construct_ls(1006, 1002, {1001, 1004});
+    construct_ls(3001, 3001, {1002, 1005});
+    construct_ls(3002, 3001, {1002, 1005});
+    construct_ls(3003, 3001, {1002, 1005});
+
+    ObBalanceJobDesc job_desc;
+    ret = job_desc.init_without_job(tenant_id, zone_list, 1, 1, true, false, false);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    ret = OB_SUCCESS;
+    MTL_SWITCH(tenant_id) {
+      ObTenantLSBalanceInfo bj_e(allocator);
+      ret = bj_e.init_tenant_ls_balance_info(tenant_id, ls_array, job_desc, unit_array, tenant_role);
+      ASSERT_EQ(OB_SUCCESS, ret);
+      share::ObBalanceJob job;
+      common::ObArray<share::ObBalanceTask> task_array;
+      lsg_op_array.reuse();
+      unit_op_array.reuse();
+      ObLSGroupCountBalance lg_cnt(&bj_e, sql_proxy, ObBalanceJobID(), &job, &task_array, &lsg_op_array, &unit_op_array);
+
+      ret = lg_cnt.balance(false);
+      ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
+      LOG_INFO("non_divisible case E passed (OB_ERR_UNEXPECTED)", KR(ret));
+    }
   }
 }
 
