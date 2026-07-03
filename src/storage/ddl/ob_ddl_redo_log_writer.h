@@ -45,30 +45,26 @@ class ObLogHandler;
 namespace storage
 {
 class ObLSHandle;
+
 class ObDDLNeedStopWriteChecker
 {
 public:
-  virtual bool check_need_stop_write() = 0;
-};
-
-class ObDDLFullNeedStopWriteChecker : public ObDDLNeedStopWriteChecker
-{
+  ObDDLNeedStopWriteChecker();
+  ~ObDDLNeedStopWriteChecker() {}
+  int init(const uint64_t tenant_id,
+           const int64_t task_id,
+           const ObDirectLoadType direct_load_type,
+           const ObTabletHandle &tablet_handle);
+  int check_status(const int64_t loop_cnt, bool &is_need_stop_write);
+  bool check_need_stop_write();
 public:
-  ObDDLFullNeedStopWriteChecker(ObDDLKvMgrHandle &ddl_kv_mgr_handle) : ddl_kv_mgr_handle_(ddl_kv_mgr_handle) {}
-  virtual ~ObDDLFullNeedStopWriteChecker() {}
-  virtual bool check_need_stop_write() override;
-public:
-  ObDDLKvMgrHandle &ddl_kv_mgr_handle_;
-};
-
-class ObDDLIncNeedStopWriteChecker : public ObDDLNeedStopWriteChecker
-{
-public:
-  ObDDLIncNeedStopWriteChecker(ObTablet &tablet) : tablet_(tablet) {}
-  virtual ~ObDDLIncNeedStopWriteChecker() {}
-  virtual bool check_need_stop_write() override;
-public:
-  ObTablet &tablet_;
+  uint64_t tenant_id_;
+  int64_t task_id_;
+  ObDirectLoadType direct_load_type_;
+  ObTabletHandle tablet_handle_;
+  ObDDLKvMgrHandle ddl_kv_mgr_handle_;
+  ObProtectedMemtableMgrHandle *memtable_mgr_handle_;
+  bool is_inited_;
 };
 
 // control the write speed of ddl clog for 4.0 . More detailly,

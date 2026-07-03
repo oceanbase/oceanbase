@@ -462,11 +462,11 @@ int ObDDLIncRedoLogWriter::local_write_inc_redo_log(
     ObTxDesc *tx_desc)
 {
   int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
   ObDDLRedoLog log;
   ObStoreCtxGuard ctx_guard;
   ObLS *ls = nullptr;
   ObTabletHandle tablet_handle;
-  ObTablet *tablet = nullptr;
   ObDDLIncRedoClogCb *cb = nullptr;
   ObDDLMacroBlockRedoInfo tmp_redo_info;
   int64_t pos = 0;
@@ -481,21 +481,20 @@ int ObDDLIncRedoLogWriter::local_write_inc_redo_log(
     LOG_WARN("fail to get_write_store_ctx_guard", K(ret), K(ls_id_));
   } else if (OB_FAIL(ls->get_tablet(redo_info.table_key_.tablet_id_, tablet_handle, ObTabletCommon::DEFAULT_GET_TABLET_NO_WAIT, ObMDSGetTabletMode::READ_ALL_COMMITED))) {
     LOG_WARN("get tablet_handle failed", K(ret), K(redo_info));
-  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet is null", K(ret), K(tablet_handle));
   } else {
-    ObDDLIncNeedStopWriteChecker checker(*tablet);
+    ObDDLNeedStopWriteChecker checker;
     int tmp_ret = OB_SUCCESS;
     int64_t real_sleep_us = 0;
     buffer_size = log.get_serialize_size();
-    if (OB_TMP_FAIL(ObDDLCtrlSpeedHandle::get_instance().limit_and_sleep(MTL_ID(), ls_id_, buffer_size, task_id, checker, real_sleep_us))) {
-      LOG_WARN("fail to limit and sleep", K(tmp_ret), K(MTL_ID()), K(task_id), K(ls_id_), K(buffer_size), K(real_sleep_us));
+    if (OB_FAIL(checker.init(tenant_id, task_id, DIRECT_LOAD_INCREMENTAL, tablet_handle))) {
+      LOG_WARN("fail to init stop write checker", KR(ret));
+    } else if (OB_TMP_FAIL(ObDDLCtrlSpeedHandle::get_instance().limit_and_sleep(tenant_id, ls_id_, buffer_size, task_id, checker, real_sleep_us))) {
+      LOG_WARN("fail to limit and sleep", K(tmp_ret), K(tenant_id), K(task_id), K(ls_id_), K(buffer_size), K(real_sleep_us));
     }
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(cb = OB_NEW(ObDDLIncRedoClogCb, ObMemAttr(MTL_ID(), "DDL_IRLW")))) {
+  } else if (OB_ISNULL(cb = OB_NEW(ObDDLIncRedoClogCb, ObMemAttr(tenant_id, "DDL_IRLW")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(ret));
   } else if (FALSE_IT(buffer_size = redo_info.get_serialize_size())) {
