@@ -28,11 +28,16 @@
 struct ObCharsetInfo;
 #include "parse_malloc.h"
 
+enum {
+  FTS_MAX_BOOLEAN_NESTING_DEPTH = 256,
+};
+
 enum FtsError {
   FTS_OK = 0,
   FTS_ERROR_MEMORY = 1,
   FTS_ERROR_SYNTAX = 2,
   FTS_ERROR_OTHER = 3,
+  FTS_ERROR_INVALID_ARGUMENT = 4,
 };
 
 enum FtsNodeType {

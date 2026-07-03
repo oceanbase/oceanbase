@@ -214,6 +214,9 @@ int ObDASTextRetrievalMergeIter::build_query_tokens(const ObDASIRScanCtDef *ir_c
         ret = OB_ALLOCATE_MEMORY_FAILED;
       } else if (FTS_ERROR_SYNTAX == fts_parser->ret_) {
         ret = OB_ERR_PARSER_SYNTAX;
+      } else if (FTS_ERROR_INVALID_ARGUMENT == fts_parser->ret_) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, fts_parser->err_info_.str_);
       } else if (FTS_ERROR_OTHER == fts_parser->ret_) {
         ret = OB_ERR_UNEXPECTED;
       }
