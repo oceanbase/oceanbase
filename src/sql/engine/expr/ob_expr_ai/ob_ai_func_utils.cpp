@@ -3609,14 +3609,20 @@ int ObAIModelConfigInfoManager::init()
     common::ObSpinLockGuard guard(lock_);
     if (ATOMIC_LOAD(&is_inited_)) {
       // already initialized
-    } else if (OB_FAIL(config_map_.create(bucket_num, "AIModelCfgMap", "AIModelCfgNode", OB_SERVER_TENANT_ID))) {
-      LOG_WARN("failed to create ai model config map", K(ret), K(bucket_num));
-    } else if (OB_FAIL(register_default_model_configs_())) {
-      LOG_WARN("failed to register default model configs", K(ret));
-      reset();
     } else {
-      // Publish initialized state only after config_map_ is fully populated.
-      ATOMIC_SET(&is_inited_, true);
+      ObMemAttr bucket_attr(OB_SERVER_TENANT_ID, "AIModelCfgMap");
+      ObMemAttr node_attr(OB_SERVER_TENANT_ID, "AIModelCfgNode");
+      SET_USE_500(bucket_attr);
+      SET_USE_500(node_attr);
+      if (OB_FAIL(config_map_.create(bucket_num, bucket_attr, node_attr))) {
+        LOG_WARN("failed to create ai model config map", K(ret), K(bucket_num));
+      } else if (OB_FAIL(register_default_model_configs_())) {
+        LOG_WARN("failed to register default model configs", K(ret));
+        reset();
+      } else {
+        // Publish initialized state only after config_map_ is fully populated.
+        ATOMIC_SET(&is_inited_, true);
+      }
     }
   }
   return ret;
