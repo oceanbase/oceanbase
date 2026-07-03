@@ -422,10 +422,17 @@ OB_INLINE int ObIDASSearchOp::close()
 OB_INLINE int ObIDASSearchOp::rescan()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(open_profile())) {
+  // for vector index search, in post-iterative filter mode, we can reuse the old profile in the same tablet execution
+  // otherwise, every iteration will create a new profile, which will overwhelm the profile output
+  bool is_vec_index_search = search_ctx_.is_vec_index_search();
+  if (!is_vec_index_search && OB_FAIL(open_profile())) {
     LOG_WARN("failed to open profile", KR(ret));
   } else {
     common::ObProfileSwitcher switcher(profile_);
+    if (is_vec_index_search) {
+      // only if in the same tablet execution, we can reuse the old profile and record on it
+      INC_METRIC_VAL(common::ObMetricId::HS_SAME_OP_SCAN_TIMES, 1);
+    }
     min_competitive_score_ = 0.0;
     if (OB_FAIL(do_rescan())) {
       LOG_WARN("failed to rescan impl", KR(ret));

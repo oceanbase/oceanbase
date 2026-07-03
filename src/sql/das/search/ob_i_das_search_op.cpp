@@ -451,6 +451,7 @@ int ObIDASSearchOp::open_profile()
       SET_METRIC_VAL(common::ObMetricId::HS_OUTPUT_ROW_COUNT, 0);
       SET_METRIC_VAL(common::ObMetricId::HS_TOTAL_TIME, 0);
       SET_METRIC_VAL(common::ObMetricId::HS_OP_ID, op_id_);
+      SET_METRIC_VAL(common::ObMetricId::HS_SAME_OP_SCAN_TIMES, 1);
     }
   }
   return ret;

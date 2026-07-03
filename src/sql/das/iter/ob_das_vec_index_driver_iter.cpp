@@ -40,8 +40,7 @@ int ObDASVecIndexDriverIter::do_table_scan()
   } else {
     profile_ = my_profile;
     common::ObProfileSwitcher switcher(my_profile);
-    SET_METRIC_VAL(common::ObMetricId::HS_VEC_INDEX_TYPE, vec_index_type_);
-    SET_METRIC_VAL(common::ObMetricId::HS_VEC_FILTER_MODE, static_cast<uint64_t>(filter_mode_));
+    SET_METRIC_VAL(common::ObMetricId::HS_VEC_INDEX_PATH, static_cast<uint64_t>(get_vec_index_path_type()));
     if (OB_FAIL(vec_index_scan_iter_->do_table_scan())) {
       LOG_WARN("failed to do table scan", K(ret));
     } else if (OB_NOT_NULL(filter_iter_) && OB_FAIL(filter_iter_->do_table_scan())) {
@@ -66,8 +65,7 @@ int ObDASVecIndexDriverIter::rescan()
   } else {
     profile_ = my_profile;
     common::ObProfileSwitcher switcher(my_profile);
-    SET_METRIC_VAL(common::ObMetricId::HS_VEC_INDEX_TYPE, vec_index_type_);
-    SET_METRIC_VAL(common::ObMetricId::HS_VEC_FILTER_MODE, static_cast<uint64_t>(filter_mode_));
+    SET_METRIC_VAL(common::ObMetricId::HS_VEC_INDEX_PATH, static_cast<uint64_t>(get_vec_index_path_type()));
     if (OB_FAIL(vec_index_scan_iter_->rescan())) {
       LOG_WARN("failed to rescan vec index scan iter", K(ret));
     } else if (OB_NOT_NULL(filter_iter_) && OB_FAIL(filter_iter_->rescan())) {
@@ -416,6 +414,7 @@ int ObDASVecIndexDriverIter::inner_get_next_rows(int64_t &count, int64_t capacit
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("adaptor is null", K(ret));
         } else {
+          common::ScopedTimer timer(common::ObMetricId::HS_VEC_DRIVER_TOTAL_SEARCH_TIME);
           vec_index_scan_iter_->set_adaptor(adaptor);
           if (is_pre_filter()) {
             if (OB_FAIL(process_pre_filter_mode(adaptor, count, capacity))) {
@@ -474,7 +473,7 @@ int ObDASVecIndexDriverIter::build_bitmap_from_filter_iter(share::ObPluginVector
                             min(eval_ctx->max_batch_size_, ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE) :
                             ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE;
   bool index_end = false;
-
+  common::ScopedTimer timer(common::ObMetricId::HS_VEC_DRIVER_FILTER_TIME);
   while (OB_SUCC(ret) && !index_end) {
     int64_t scan_row_cnt = 0;
     filter_iter_->clear_evaluated_flag();
@@ -488,6 +487,7 @@ int ObDASVecIndexDriverIter::build_bitmap_from_filter_iter(share::ObPluginVector
     if (OB_FAIL(ret) && OB_ITER_END != ret) {
     } else if (scan_row_cnt > 0) {
       ret = OB_SUCCESS;
+      INC_METRIC_VAL(common::ObMetricId::HS_VEC_DRIVER_PRE_FILTER_ITER_SCANNED, static_cast<uint64_t>(scan_row_cnt));
     }
 
     ObExpr *vid_expr = nullptr;
@@ -550,6 +550,7 @@ int ObDASVecIndexDriverIter::process_pre_filter_mode(share::ObPluginVectorIndexA
   } else if (bitmap_.get_valid_cnt() == 0) {
     ret = OB_ITER_END;
   } else {
+    common::ScopedTimer timer(common::ObMetricId::HS_VEC_DRIVER_VEC_INDEX_TIME);
     vec_index_scan_iter_->set_bitmap(&bitmap_);
     vec_index_scan_iter_->clear_evaluated_flag();
     int64_t dummy_count = 0;
@@ -585,12 +586,16 @@ int ObDASVecIndexDriverIter::process_iterative_filter_mode(share::ObPluginVector
   if (OB_FAIL(adjust_vector_query_condition(first_search))) {
     LOG_WARN("failed to adjust vector query condition", K(ret));
   } else {
+    search_ctx_->set_is_vec_index_search(true);
     while (OB_SUCC(ret) && !end_search) {
+      INC_METRIC_VAL(common::ObMetricId::HS_VEC_DRIVER_ITER_FILTER_ROUND, 1);
       if (OB_FAIL(fetch_vids_from_vec_index(adaptor, count, capacity))) {
         LOG_WARN("failed to fetch vids from vec index", K(ret));
       } else if (filter_mode_ == ObVecFilterMode::VEC_FILTER_MODE_EXPR_FILTER) {
         if (OB_FAIL(post_query_vid_with_expr_filter())) {
           LOG_WARN("failed to post query vid with expr filter", K(ret));
+        } else {
+          INC_METRIC_VAL(common::ObMetricId::HS_VEC_DRIVER_ITER_TOTAL_ROW_COUNT, iter_added_cnt_);
         }
       } else {
         if (!first_search && OB_FAIL(filter_iter_->reuse())) {
@@ -601,6 +606,8 @@ int ObDASVecIndexDriverIter::process_iterative_filter_mode(share::ObPluginVector
           LOG_WARN("failed to set bitmap to filter iter", K(ret));
         } else if (OB_FAIL(post_query_vid_with_filter())) {
           LOG_WARN("failed to post query vid with filter", K(ret));
+        } else if (iter_unfiltered_vid_cnt_ > 0) {
+          INC_METRIC_VAL(common::ObMetricId::HS_VEC_DRIVER_ITER_TOTAL_ROW_COUNT, iter_added_cnt_);
         }
       }
 
@@ -615,6 +622,7 @@ int ObDASVecIndexDriverIter::process_iterative_filter_mode(share::ObPluginVector
     if (ret == OB_ITER_END) {
       ret = OB_SUCCESS;
     }
+    search_ctx_->set_is_vec_index_search(false);
   }
 
   return ret;
@@ -700,11 +708,14 @@ int ObDASVecIndexDriverIter::fetch_vids_from_vec_index(share::ObPluginVectorInde
     share::ObVectorQueryVidIterator *adaptor_vid_iter = nullptr;
     int64_t dummy_count = 0;
     vec_index_scan_iter_->clear_evaluated_flag();
-    if (OB_FAIL(vec_index_scan_iter_->get_next_rows(dummy_count, capacity))) {
-      if (OB_ITER_END != ret) {
-        LOG_WARN("failed to get next rows from vec index scan iter to trigger init", K(ret));
-      } else {
-        ret = OB_SUCCESS;
+    {
+      common::ScopedTimer timer(common::ObMetricId::HS_VEC_DRIVER_VEC_INDEX_TIME);
+      if (OB_FAIL(vec_index_scan_iter_->get_next_rows(dummy_count, capacity))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("failed to get next rows from vec index scan iter to trigger init", K(ret));
+        } else {
+          ret = OB_SUCCESS;
+        }
       }
     }
     adaptor_vid_iter = vec_index_scan_iter_->get_adaptor_vid_iter();
@@ -713,6 +724,7 @@ int ObDASVecIndexDriverIter::fetch_vids_from_vec_index(share::ObPluginVectorInde
       int64_t total_count = adaptor_vid_iter->get_total();
       iter_unfiltered_vid_cnt_ = total_count;
       iter_scan_total_num_ += total_count;
+      INC_METRIC_VAL(common::ObMetricId::HS_VEC_DRIVER_VID_SCANNED, static_cast<uint64_t>(total_count));
 
       bool need_bitmap = filter_mode_ == ObVecFilterMode::VEC_FILTER_MODE_SEARCH_DRIVER_FILTER
                          && nullptr != filter_iter_;
@@ -818,67 +830,70 @@ int ObDASVecIndexDriverIter::post_query_vid_with_filter()
       LOG_WARN("failed to allocate all pairs", K(ret), K(allocated_capacity));
     } else {
       bool filter_end = false;
-      while (OB_SUCC(ret) && !filter_end) {
-        int64_t scan_row_cnt = 0;
-        filter_iter_->clear_evaluated_flag();
+      {
+        common::ScopedTimer timer(common::ObMetricId::HS_VEC_DRIVER_FILTER_TIME);
+        while (OB_SUCC(ret) && !filter_end) {
+          int64_t scan_row_cnt = 0;
+          filter_iter_->clear_evaluated_flag();
 
-        if (OB_FAIL(filter_iter_->get_next_rows(scan_row_cnt, batch_row_count))) {
-          if (OB_UNLIKELY(OB_ITER_END != ret)) {
-            LOG_WARN("failed to get next rows from filter iter", K(ret));
-          } else {
-            filter_end = true;
-            ret = OB_SUCCESS;
-          }
-        }
-
-        if (OB_SUCC(ret) && scan_row_cnt > 0) {
-          ObExpr *vid_expr = nullptr;
-          if (OB_ISNULL(search_ctx_) || OB_UNLIKELY(search_ctx_->get_rowid_exprs().count() <= 0)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("search ctx or rowid exprs is invalid", K(ret));
-          } else if (OB_ISNULL(vid_expr = search_ctx_->get_rowid_exprs().at(0))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("vid expr is null", K(ret));
-          } else {
-            ObEvalCtx::BatchInfoScopeGuard guard(*eval_ctx);
-            guard.set_batch_size(scan_row_cnt);
-
-            int64_t filtered_vid = 0;
-            bool use_rich_format = vid_expr->enable_rich_format() && is_valid_format(vid_expr->get_format(*eval_ctx));
-            ObIVector *vec = nullptr;
-            ObDatum *vid_datums = nullptr;
-
-            if (use_rich_format) {
-              if (OB_ISNULL(vec = vid_expr->get_vector(*eval_ctx))) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("vector is null", K(ret));
-              }
+          if (OB_FAIL(filter_iter_->get_next_rows(scan_row_cnt, batch_row_count))) {
+            if (OB_UNLIKELY(OB_ITER_END != ret)) {
+              LOG_WARN("failed to get next rows from filter iter", K(ret));
             } else {
-              if (OB_ISNULL(vid_datums = vid_expr->locate_batch_datums(*eval_ctx))) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("vid datums is null", K(ret));
-              }
+              filter_end = true;
+              ret = OB_SUCCESS;
             }
+          }
 
-            if (OB_SUCC(ret)) {
-              for (int64_t i = 0; OB_SUCC(ret) && i < scan_row_cnt; ++i) {
-                if (use_rich_format) {
-                  filtered_vid = vec->get_uint64(i);
-                } else {
-                  guard.set_batch_idx(i);
-                  filtered_vid = vid_datums[i].get_uint64();
-                }
+          if (OB_SUCC(ret) && scan_row_cnt > 0) {
+            ObExpr *vid_expr = nullptr;
+            if (OB_ISNULL(search_ctx_) || OB_UNLIKELY(search_ctx_->get_rowid_exprs().count() <= 0)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("search ctx or rowid exprs is invalid", K(ret));
+            } else if (OB_ISNULL(vid_expr = search_ctx_->get_rowid_exprs().at(0))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("vid expr is null", K(ret));
+            } else {
+              ObEvalCtx::BatchInfoScopeGuard guard(*eval_ctx);
+              guard.set_batch_size(scan_row_cnt);
 
-                float distance = 0.0f;
-                if (OB_FAIL(vid_to_distance_.get_refactored(filtered_vid, distance))) {
-                  LOG_WARN("failed to get distance from hash map", K(ret), K(filtered_vid));
-                } else if (OB_UNLIKELY(valid_total_cnt >= allocated_capacity)) {
+              int64_t filtered_vid = 0;
+              bool use_rich_format = vid_expr->enable_rich_format() && is_valid_format(vid_expr->get_format(*eval_ctx));
+              ObIVector *vec = nullptr;
+              ObDatum *vid_datums = nullptr;
+
+              if (use_rich_format) {
+                if (OB_ISNULL(vec = vid_expr->get_vector(*eval_ctx))) {
                   ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("valid total cnt is greater than allocated capacity", K(ret), K(valid_total_cnt), K(allocated_capacity));
-                } else {
-                  all_pairs[valid_total_cnt].vid = filtered_vid;
-                  all_pairs[valid_total_cnt].distance = distance;
-                  valid_total_cnt++;
+                  LOG_WARN("vector is null", K(ret));
+                }
+              } else {
+                if (OB_ISNULL(vid_datums = vid_expr->locate_batch_datums(*eval_ctx))) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("vid datums is null", K(ret));
+                }
+              }
+
+              if (OB_SUCC(ret)) {
+                for (int64_t i = 0; OB_SUCC(ret) && i < scan_row_cnt; ++i) {
+                  if (use_rich_format) {
+                    filtered_vid = vec->get_uint64(i);
+                  } else {
+                    guard.set_batch_idx(i);
+                    filtered_vid = vid_datums[i].get_uint64();
+                  }
+
+                  float distance = 0.0f;
+                  if (OB_FAIL(vid_to_distance_.get_refactored(filtered_vid, distance))) {
+                    LOG_WARN("failed to get distance from hash map", K(ret), K(filtered_vid));
+                  } else if (OB_UNLIKELY(valid_total_cnt >= allocated_capacity)) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("valid total cnt is greater than allocated capacity", K(ret), K(valid_total_cnt), K(allocated_capacity));
+                  } else {
+                    all_pairs[valid_total_cnt].vid = filtered_vid;
+                    all_pairs[valid_total_cnt].distance = distance;
+                    valid_total_cnt++;
+                  }
                 }
               }
             }
@@ -1225,6 +1240,7 @@ int ObDASVecIndexDriverIter::get_single_row_from_filter_iter(bool is_vectorized)
   int ret = OB_SUCCESS;
 
   filter_iter_->clear_evaluated_flag();
+  common::ScopedTimer timer(common::ObMetricId::HS_VEC_DRIVER_FILTER_TIME);
   if (is_vectorized) {
     int64_t scan_row_cnt = 0;
     ret = filter_iter_->get_next_rows(scan_row_cnt, 1);
@@ -1233,6 +1249,33 @@ int ObDASVecIndexDriverIter::get_single_row_from_filter_iter(bool is_vectorized)
   }
 
   return ret;
+}
+
+ObVecPathType ObDASVecIndexDriverIter::get_vec_index_path_type()
+{
+  ObVecPathType vec_path_type = ObVecPathType::VEC_PATH_INVALID;
+  if (is_pre_filter()) {
+    if (vec_index_scan_iter_->is_brute_force()) {
+      vec_path_type = ObVecPathType::VEC_PATH_PRE_BRUTE;
+    } else {
+      vec_path_type = ObVecPathType::VEC_PATH_PRE_KNN;
+    }
+  } else if (is_iter_filter()) {
+    if (filter_mode_ == ObVecFilterMode::VEC_FILTER_MODE_SEARCH_DRIVER_FILTER) {
+      vec_path_type = ObVecPathType::VEC_PATH_POST_ITERATIVE_FILTER_SEARCH_DRIVER_MODE;
+    } else if (filter_mode_ == ObVecFilterMode::VEC_FILTER_MODE_EXPR_FILTER) {
+      vec_path_type = ObVecPathType::VEC_PATH_POST_ITERATIVE_FILTER_EXPR_FILTER_MODE;
+    }
+  } else if (is_post_filter()) {
+    if (is_post_without_filter()) {
+      vec_path_type = ObVecPathType::VEC_PATH_POST_WITHOUT_FILTER;
+    } else if (filter_mode_ == ObVecFilterMode::VEC_FILTER_MODE_SEARCH_DRIVER_FILTER) {
+      vec_path_type = ObVecPathType::VEC_PATH_POST_FILTER_SEARCH_DRIVER_MODE;
+    } else if (filter_mode_ == ObVecFilterMode::VEC_FILTER_MODE_EXPR_FILTER) {
+      vec_path_type = ObVecPathType::VEC_PATH_POST_FILTER_EXPR_FILTER_MODE;
+    }
+  }
+  return vec_path_type;
 }
 
 
