@@ -3771,8 +3771,7 @@ int ObFtsIndexSchemaPrinter::print_fts_index_params_info(
 int ObFtsIndexBuilderUtil::record_fts_dict_table_dependencies(
     const share::schema::ObTableSchema &index_schema,
     const obrpc::ObIndexOption &index_option,
-    common::ObMySQLTransaction &trans,
-    share::schema::ObSchemaGetterGuard &schema_guard)
+    common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   if (!index_schema.is_fts_index_aux()) {
@@ -3808,15 +3807,15 @@ int ObFtsIndexBuilderUtil::record_fts_dict_table_dependencies(
           LOG_WARN("fail to parse parser properties", K(ret), K(parser_properties));
         } else if (OB_FAIL(process_dict_table(props, share::OB_FT_DICT_TYPE_MAIN, index_schema,
                                               &storage::ObFTParserJsonProps::config_get_dict_table_id,
-                                              schema_guard, dep_infos))) {
+                                              dep_infos))) {
           LOG_WARN("fail to process dict table", K(ret));
         } else if (OB_FAIL(process_dict_table(props, share::OB_FT_DICT_TYPE_STOPWORD, index_schema,
                                               &storage::ObFTParserJsonProps::config_get_stopword_table_id,
-                                              schema_guard, dep_infos))) {
+                                              dep_infos))) {
           LOG_WARN("fail to process stopword table", K(ret));
         } else if (OB_FAIL(process_dict_table(props, share::OB_FT_DICT_TYPE_QUANTIFIER, index_schema,
                                               &storage::ObFTParserJsonProps::config_get_quantifier_table_id,
-                                              schema_guard, dep_infos))) {
+                                              dep_infos))) {
           LOG_WARN("fail to process quantifier table", K(ret));
         }
 
@@ -3863,7 +3862,6 @@ int ObFtsIndexBuilderUtil::process_dict_table(
     const uint64_t property,
     const share::schema::ObTableSchema &index_schema,
     int (storage::ObFTParserJsonProps::*get_func)(uint64_t &) const,
-    const share::schema::ObSchemaGetterGuard &schema_guard,
     common::ObArray<share::schema::ObDependencyInfo> &dep_infos)
 {
   int ret = OB_SUCCESS;

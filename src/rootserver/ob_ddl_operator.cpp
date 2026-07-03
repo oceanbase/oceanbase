@@ -3418,7 +3418,7 @@ int ObDDLOperator::alter_table_create_index(const share::schema::ObTableSchema &
       // Record dictionary table dependency relationships for FTS index
       if (OB_SUCC(ret) && index_option != nullptr
           && OB_FAIL(share::ObFtsIndexBuilderUtil::record_fts_dict_table_dependencies(
-              index_schema, *index_option, trans, schema_guard))) {
+              index_schema, *index_option, trans))) {
         LOG_WARN("fail to record fts dict table dependencies", K(ret), K(index_schema.get_table_id()));
       }
     }

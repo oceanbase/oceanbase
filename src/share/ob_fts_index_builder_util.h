@@ -192,8 +192,7 @@ public:
   static int record_fts_dict_table_dependencies(
       const share::schema::ObTableSchema &index_schema,
       const obrpc::ObIndexOption &index_option,
-      common::ObMySQLTransaction &trans,
-      share::schema::ObSchemaGetterGuard &schema_guard);
+      common::ObMySQLTransaction &trans);
   static int check_fulltext_dict_schema(
       const share::schema::ObTableSchema &table,
       const uint64_t tenant_id,
@@ -367,6 +366,12 @@ private:
       obrpc::ObCreateIndexArg &arg,
       ObIAllocator &allocator);
   static int add_skip_index_for_index_column(schema::ObColumnSchemaV2 &column_schema);
+  static int process_dict_table(
+      const storage::ObFTParserJsonProps &props,
+      const uint64_t property,
+      const share::schema::ObTableSchema &index_schema,
+      int (storage::ObFTParserJsonProps::*get_func)(uint64_t &) const,
+      common::ObArray<share::schema::ObDependencyInfo> &dep_infos);
 
 private:
   enum class FTSColumnType {

@@ -355,7 +355,7 @@ int ObDDLService::create_inner_expr_index(ObMySQLTransaction &trans,
         // record the create index operation when index enables rather than schema generates.
         LOG_WARN("failed to create index schema", K(ret));
       } else if (OB_FAIL(share::ObFtsIndexBuilderUtil::record_fts_dict_table_dependencies(
-                     index_schema, arg.index_option_, trans, schema_guard))) {
+                     index_schema, arg.index_option_, trans))) {
         LOG_WARN("fail to record fts dict table dependencies", K(ret), K(index_schema.get_table_id()));
       }
     }
@@ -471,7 +471,7 @@ int ObDDLService::create_index_table(
 ddl_stmt_str, &sql_trans, schema_guard, true/*need_check_tablet_cnt*/, tenant_data_version, is_table_empty, arg.parallelism_))) {
         LOG_WARN("create_table_in_trans failed", KR(ret), K(arg), K(table_schema));
       } else if (OB_FAIL(share::ObFtsIndexBuilderUtil::record_fts_dict_table_dependencies(
-                     table_schema, arg.index_option_, sql_trans, schema_guard))) {
+                     table_schema, arg.index_option_, sql_trans))) {
         LOG_WARN("fail to record fts dict table dependencies", K(ret), K(table_schema.get_table_id()));
       }
     }
