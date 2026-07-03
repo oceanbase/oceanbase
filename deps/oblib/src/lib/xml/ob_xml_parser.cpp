@@ -494,6 +494,8 @@ static int parse_name_value(const char* str,
   OB_PARSE_XML_DECL_SKIP_SPACE
   if (idx + name.length() <= length && MEMCMP(name.ptr(), str+idx, name.length()) == 0) {
     idx += name.length();
+    // XML spec: Eq ::= S? '=' S? — allow whitespace before '='
+    OB_PARSE_XML_DECL_SKIP_SPACE
     if (idx < length && str[idx] == '=') {
       idx += 1;
       OB_PARSE_XML_DECL_SKIP_SPACE
