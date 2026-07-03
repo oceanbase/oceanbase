@@ -531,6 +531,10 @@ private:
                          std::shared_ptr<parquet::RowGroupReader> rg_reader,
                          std::shared_ptr<parquet::RowGroupReader> eager_rg_reader);
   void dynamic_switch_calc_mode();
+  int assign_column_convert_expr_result(ObEvalCtx &eval_ctx,
+                                        ObExpr *from,
+                                        ObExpr *to,
+                                        const int64_t read_count);
   int calc_column_convert(const int64_t read_count, const bool is_eager, ObEvalCtx &eval_ctx);
   int init_filter_evaluated_datums(ObPushdownFilterExecutor *curr_filter);
   int ensure_filter_eval_inited_once(ObPushdownFilterExecutor *root_filter);
