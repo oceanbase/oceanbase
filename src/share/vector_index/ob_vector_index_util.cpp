@@ -5351,7 +5351,13 @@ int ObVectorIndexUtil::reconstruct_ivf_index_schema_in_rebuild(
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(old_cid_column)) {
   } else if (OB_ISNULL(new_cid_column)) {
-    if (OB_FAIL(construct_new_column_schema_from_exist(old_cid_column, new_cid_column, IVF_CENTER_ID_COL, new_column_for_cid, available_col_id))) {
+    // Only create the corresponding virtual generated columns on the main table
+    // if the current aux-table schema (new_index_schema) actually references the old column.
+    // This prevents one aux-table rebuild from creating all IVF-PQ virtual columns.
+    const ObColumnSchemaV2 *aux_old_cid_column = new_index_schema.get_column_schema(old_cid_column->get_column_id());
+    if (OB_ISNULL(aux_old_cid_column)) {
+      // current aux-table doesn't use this main-table column => skip creating the new one.
+    } else if (OB_FAIL(construct_new_column_schema_from_exist(old_cid_column, new_cid_column, IVF_CENTER_ID_COL, new_column_for_cid, available_col_id))) {
       LOG_WARN("failed to construct new column schema from exist", K(ret), K(new_column_for_cid), KPC(old_cid_column));
     } else if (OB_FAIL(ddl_operator.insert_single_column(trans, data_table_schema, new_column_for_cid))) {
       LOG_WARN("failed to insert single column", K(new_column_for_cid));
@@ -5360,7 +5366,10 @@ int ObVectorIndexUtil::reconstruct_ivf_index_schema_in_rebuild(
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(old_pq_cids_column)) {
   } else if (OB_ISNULL(new_pq_cids_column)) {
-    if (OB_FAIL(construct_new_column_schema_from_exist(old_pq_cids_column, new_pq_cids_column, IVF_PQ_CENTER_IDS_COL, new_column_for_pq_cids, available_col_id))) {
+    const ObColumnSchemaV2 *aux_old_pq_cids_column = new_index_schema.get_column_schema(old_pq_cids_column->get_column_id());
+    if (OB_ISNULL(aux_old_pq_cids_column)) {
+      // current aux-table doesn't use this main-table column => skip creating the new one.
+    } else if (OB_FAIL(construct_new_column_schema_from_exist(old_pq_cids_column, new_pq_cids_column, IVF_PQ_CENTER_IDS_COL, new_column_for_pq_cids, available_col_id))) {
       LOG_WARN("failed to construct new column schema from exist", K(ret), K(new_column_for_pq_cids), KPC(old_pq_cids_column));
     } else if (OB_FAIL(ddl_operator.insert_single_column(trans, data_table_schema, new_column_for_pq_cids))) {
       LOG_WARN("failed to insert single column", K(new_column_for_pq_cids));
@@ -5369,7 +5378,10 @@ int ObVectorIndexUtil::reconstruct_ivf_index_schema_in_rebuild(
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(old_data_vec_column)) {
   } else if (OB_ISNULL(new_data_vec_column)) {
-    if (OB_FAIL(construct_new_column_schema_from_exist(old_data_vec_column, new_data_vec_column, IVF_SQ8_DATA_VECTOR_COL, new_column_for_data_vec, available_col_id))) {
+    const ObColumnSchemaV2 *aux_old_data_vec_column = new_index_schema.get_column_schema(old_data_vec_column->get_column_id());
+    if (OB_ISNULL(aux_old_data_vec_column)) {
+      // current aux-table doesn't use this main-table column => skip creating the new one.
+    } else if (OB_FAIL(construct_new_column_schema_from_exist(old_data_vec_column, new_data_vec_column, IVF_SQ8_DATA_VECTOR_COL, new_column_for_data_vec, available_col_id))) {
       LOG_WARN("failed to construct new column schema from exist", K(ret), K(new_column_for_data_vec), KPC(old_data_vec_column));
     } else if (OB_FAIL(ddl_operator.insert_single_column(trans, data_table_schema, new_column_for_data_vec))) {
       LOG_WARN("failed to insert single column", K(new_column_for_data_vec));
@@ -5378,7 +5390,10 @@ int ObVectorIndexUtil::reconstruct_ivf_index_schema_in_rebuild(
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(old_center_vec_column)) {
   } else if (OB_ISNULL(new_center_vec_column)) {
-    if (OB_FAIL(construct_new_column_schema_from_exist(old_center_vec_column, new_center_vec_column, IVF_PQ_CENTER_VECTOR_COL, new_column_for_center_vec, available_col_id))) {
+    const ObColumnSchemaV2 *aux_old_center_vec_column = new_index_schema.get_column_schema(old_center_vec_column->get_column_id());
+    if (OB_ISNULL(aux_old_center_vec_column)) {
+      // current aux-table doesn't use this main-table column => skip creating the new one.
+    } else if (OB_FAIL(construct_new_column_schema_from_exist(old_center_vec_column, new_center_vec_column, IVF_PQ_CENTER_VECTOR_COL, new_column_for_center_vec, available_col_id))) {
       LOG_WARN("failed to construct new column schema from exist", K(ret), K(new_column_for_center_vec), KPC(old_center_vec_column));
     } else if (OB_FAIL(ddl_operator.insert_single_column(trans, data_table_schema, new_column_for_center_vec))) {
       LOG_WARN("failed to insert single column", K(new_column_for_center_vec));
