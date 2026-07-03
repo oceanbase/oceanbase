@@ -88,8 +88,16 @@ int ObAIGatewayDDLOperator::check_endpoint_provider_exists(const ObAIGatewaySche
   ObIJsonBase *json_root = nullptr;
   const ObString endpoints_str = gateway_schema.get_endpoints();
 
+  static constexpr int64_t MAX_ENDPOINTS_LEN = 32767;
+  static constexpr uint64_t MAX_GATEWAY_ENDPOINTS = 5;
+
   if (endpoints_str.empty()) {
     // nothing to check
+  } else if (endpoints_str.length() > MAX_ENDPOINTS_LEN) {
+    ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+    LOG_WARN("endpoints exceeds 32767 bytes",
+             K(ret), "length", endpoints_str.length(), K(MAX_ENDPOINTS_LEN));
+    LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, 9, "endpoints");
   } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator,
                                                        endpoints_str,
                                                        ObJsonInType::JSON_TREE,
@@ -104,6 +112,12 @@ int ObAIGatewayDDLOperator::check_endpoint_provider_exists(const ObAIGatewaySche
     LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, 9, "endpoints");
   } else {
     const uint64_t count = json_root->element_count();
+    if (count > MAX_GATEWAY_ENDPOINTS) {
+      ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+      LOG_WARN("endpoints count exceeds limit",
+               K(ret), K(count), K(MAX_GATEWAY_ENDPOINTS));
+      LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, 9, "endpoints");
+    }
     for (uint64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
       ObIJsonBase *elem = nullptr;
       if (OB_FAIL(json_root->get_array_element(i, elem))) {

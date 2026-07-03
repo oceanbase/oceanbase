@@ -28,19 +28,19 @@ public:
                                                  const ObString &ai_model_name, common::ObNameCaseMode name_case_mode, ObAiModelEndpointInfo &endpoint);
   static int check_ai_endpoint_exists(const uint64_t tenant_id, common::ObArenaAllocator &allocator, ObISQLClient &sql_proxy, const ObString &name, bool &is_exists);
 
-  // ai model parameter
-  static int select_ai_model_parameter(const uint64_t tenant_id, common::ObArenaAllocator &allocator, ObISQLClient &sql_proxy,
+  // ai model profile
+  static int select_ai_model_profile(const uint64_t tenant_id, common::ObArenaAllocator &allocator, ObISQLClient &sql_proxy,
                                        const ObString &provider_name, const ObString &model_name,
-                                       int64_t &model_parameter_id, ObString &model_params, ObString &model_options,
+                                       int64_t &model_profile_id, ObString &model_config, ObString &run_config,
                                        bool &exists);
-  static int insert_ai_model_parameter(const uint64_t tenant_id, ObMySQLTransaction &trans,
-                                       const int64_t model_parameter_id, const ObString &provider_name,
-                                       const ObString &model_name, const ObString &model_params,
-                                       const ObString &model_options);
-  static int update_ai_model_parameter(const uint64_t tenant_id, ObMySQLTransaction &trans,
-                                       const int64_t model_parameter_id, const ObString &model_params,
-                                       const ObString &model_options);
-  static int delete_ai_model_parameter(const uint64_t tenant_id, ObMySQLTransaction &trans,
+  static int insert_ai_model_profile(const uint64_t tenant_id, ObMySQLTransaction &trans,
+                                       const int64_t model_profile_id, const ObString &provider_name,
+                                       const ObString &model_name, const ObString &model_config,
+                                       const ObString &run_config);
+  static int update_ai_model_profile(const uint64_t tenant_id, ObMySQLTransaction &trans,
+                                       const int64_t model_profile_id, const ObString &model_config,
+                                       const ObString &run_config);
+  static int delete_ai_model_profile(const uint64_t tenant_id, ObMySQLTransaction &trans,
                                        const ObString &provider_name, const ObString &model_name);
 
 private:

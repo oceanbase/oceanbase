@@ -16348,7 +16348,7 @@ int ObInnerTableSchema::all_ai_model_provider_idx_ai_model_provider_name_schema(
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      128, //column_length
+      256, //column_length
       -1, //column_precision
       -1, //column_scale
       false,//is_nullable
@@ -16483,7 +16483,7 @@ int ObInnerTableSchema::all_ai_model_profile_idx_ai_model_profile_name_schema(Ob
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      128, //column_length
+      256, //column_length
       -1, //column_precision
       -1, //column_scale
       false,//is_nullable
@@ -16555,7 +16555,7 @@ int ObInnerTableSchema::all_ai_model_profile_idx_ai_model_profile_name_schema(Ob
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("model_parameter_id", //column_name
+    ADD_COLUMN_SCHEMA("model_profile_id", //column_name
       column_id + 2, //column_id
       0, //rowkey_id
       0, //index_id
@@ -16633,7 +16633,7 @@ int ObInnerTableSchema::all_ai_gateway_idx_ai_gateway_name_schema(ObTableSchema 
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      128, //column_length
+      256, //column_length
       -1, //column_precision
       -1, //column_scale
       false,//is_nullable

@@ -12734,10 +12734,10 @@ tenant_id	bigint(20)	NO	PRI	NULL
 provider_id	bigint(20)	NO	PRI	NULL	
 gmt_create	timestamp(6)	NO		NULL	
 gmt_modified	timestamp(6)	NO		NULL	
-name	varchar(128)	NO		NULL	
-protocol	varchar(64)	NO		NULL	
+name	varchar(256)	NO		NULL	
+protocol	varchar(256)	NO		NULL	
 base_url	varchar(2048)	NO		NULL	
-access_key	varchar(2048)	YES		NULL	
+access_key	varchar(2048)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ai_model_provider;
 IF(count(*) >= 0, 1, 0)
 1
@@ -12745,13 +12745,13 @@ select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_ai_model_prov
 desc oceanbase.__all_virtual_ai_model_profile;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	
-model_parameter_id	bigint(20)	NO	PRI	NULL	
+model_profile_id	bigint(20)	NO	PRI	NULL	
 gmt_create	timestamp(6)	NO		NULL	
 gmt_modified	timestamp(6)	NO		NULL	
-provider_name	varchar(128)	NO		NULL	
+provider_name	varchar(256)	NO		NULL	
 model_name	varchar(256)	NO		NULL	
-model_params	varchar(2048)	YES		NULL	
-model_options	varchar(2048)	YES		NULL	
+model_config	varchar(4096)	YES		NULL	
+run_config	varchar(4096)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ai_model_profile;
 IF(count(*) >= 0, 1, 0)
 1
@@ -12762,9 +12762,9 @@ tenant_id	bigint(20)	NO	PRI	NULL
 gateway_id	bigint(20)	NO	PRI	NULL	
 gmt_create	timestamp(6)	NO		NULL	
 gmt_modified	timestamp(6)	NO		NULL	
-name	varchar(128)	NO		NULL	
-endpoints	longtext	NO		NULL	
-circuit_breaker	varchar(2048)	YES		NULL	
+name	varchar(256)	NO		NULL	
+endpoints	varchar(32767)	NO		NULL	
+circuit_breaker	varchar(4096)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ai_gateway;
 IF(count(*) >= 0, 1, 0)
 1
@@ -12823,8 +12823,8 @@ schema_version	bigint(20)	NO	PRI	NULL
 gmt_create	timestamp(6)	NO		NULL	
 gmt_modified	timestamp(6)	NO		NULL	
 is_deleted	bigint(20)	NO		NULL	
-name	varchar(128)	YES		NULL	
-protocol	varchar(64)	YES		NULL	
+name	varchar(256)	YES		NULL	
+protocol	varchar(256)	YES		NULL	
 base_url	varchar(2048)	YES		NULL	
 access_key	varchar(2048)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ai_model_provider_history;
@@ -12839,9 +12839,9 @@ schema_version	bigint(20)	NO	PRI	NULL
 gmt_create	timestamp(6)	NO		NULL	
 gmt_modified	timestamp(6)	NO		NULL	
 is_deleted	bigint(20)	NO		NULL	
-name	varchar(128)	YES		NULL	
-endpoints	longtext	YES		NULL	
-circuit_breaker	varchar(2048)	YES		NULL	
+name	varchar(256)	YES		NULL	
+endpoints	varchar(32767)	YES		NULL	
+circuit_breaker	varchar(4096)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ai_gateway_history;
 IF(count(*) >= 0, 1, 0)
 1

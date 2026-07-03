@@ -9125,10 +9125,10 @@ all_ai_model_provider_def = dict(
     is_cluster_private = False,
     meta_record_in_sys = False,
     normal_columns = [
-        ('name', 'varchar:128', 'false'),
-        ('protocol', 'varchar:64', 'false'),
+        ('name', 'varchar:256', 'false'),
+        ('protocol', 'varchar:256', 'false'),
         ('base_url', 'varchar:2048', 'false'),
-        ('access_key', 'varchar:2048', 'true'),
+        ('access_key', 'varchar:2048', 'false'),
     ]
 )
 
@@ -9143,16 +9143,16 @@ all_ai_model_profile_def = dict(
     gm_columns = ['gmt_create', 'gmt_modified'],
     rowkey_columns = [
       ('tenant_id', 'int'),
-      ('model_parameter_id', 'int'),
+      ('model_profile_id', 'int'),
     ],
     in_tenant_space = True,
     is_cluster_private = False,
     meta_record_in_sys = False,
     normal_columns = [
-        ('provider_name', 'varchar:128', 'false'),
+        ('provider_name', 'varchar:256', 'false'),
         ('model_name', 'varchar:256', 'false'),
-        ('model_params', 'varchar:2048', 'true'),
-        ('model_options', 'varchar:2048', 'true'),
+        ('model_config', 'varchar:4096', 'true'),
+        ('run_config', 'varchar:4096', 'true'),
     ]
 )
 
@@ -9172,9 +9172,9 @@ all_ai_gateway_def = dict(
     is_cluster_private = False,
     meta_record_in_sys = False,
     normal_columns = [
-        ('name', 'varchar:128', 'false'),
-        ('endpoints', 'longtext', 'false'),
-        ('circuit_breaker', 'varchar:2048', 'true'),
+        ('name', 'varchar:256', 'false'),
+        ('endpoints', 'varchar:32767', 'false'),
+        ('circuit_breaker', 'varchar:4096', 'true'),
     ]
 )
 
@@ -47256,7 +47256,6 @@ def_table_schema(
   view_definition =
   """
     SELECT
-      provider_id AS PROVIDER_ID,
       name AS PROVIDER_NAME,
       protocol AS PROTOCOL,
       base_url AS BASE_URL,
@@ -47280,7 +47279,6 @@ def_table_schema(
   """
     SELECT
       tenant_id AS TENANT_ID,
-      provider_id AS PROVIDER_ID,
       name AS PROVIDER_NAME,
       protocol AS PROTOCOL,
       base_url AS BASE_URL,
@@ -47303,14 +47301,12 @@ def_table_schema(
   view_definition =
   """
     SELECT
-      model_parameter_id AS MODEL_PARAMETER_ID,
       CONCAT(provider_name, '/', model_name) AS MODEL,
-      model_params AS MODEL_PARAMS,
-      model_options AS MODEL_OPTIONS,
+      model_config AS MODEL_CONFIG,
+      run_config AS RUN_CONFIG,
       gmt_create AS CREATE_TIME,
       gmt_modified AS UPDATE_TIME
     FROM oceanbase.__all_ai_model_profile
-
   """.replace("\n", " ")
 )
 
@@ -47327,10 +47323,9 @@ def_table_schema(
   """
     SELECT
       tenant_id AS TENANT_ID,
-      model_parameter_id AS MODEL_PARAMETER_ID,
       CONCAT(provider_name, '/', model_name) AS MODEL,
-      model_params AS MODEL_PARAMS,
-      model_options AS MODEL_OPTIONS,
+      model_config AS MODEL_CONFIG,
+      run_config AS RUN_CONFIG,
       gmt_create AS CREATE_TIME,
       gmt_modified AS UPDATE_TIME
     FROM oceanbase.__all_virtual_ai_model_profile
@@ -47349,14 +47344,12 @@ def_table_schema(
   view_definition =
   """
     SELECT
-      gateway_id AS GATEWAY_ID,
       name AS GATEWAY_NAME,
       endpoints AS ENDPOINTS,
       circuit_breaker AS CIRCUIT_BREAKER,
       gmt_create AS CREATE_TIME,
       gmt_modified AS UPDATE_TIME
     FROM oceanbase.__all_ai_gateway
-
   """.replace("\n", " ")
 )
 
@@ -47373,7 +47366,6 @@ def_table_schema(
   """
     SELECT
       tenant_id AS TENANT_ID,
-      gateway_id AS GATEWAY_ID,
       name AS GATEWAY_NAME,
       endpoints AS ENDPOINTS,
       circuit_breaker AS CIRCUIT_BREAKER,
@@ -47394,8 +47386,7 @@ def_table_schema(
   in_tenant_space = True,
   view_definition =
   """
-    SELECT g.gateway_id AS GATEWAY_ID,
-           g.name AS GATEWAY_NAME,
+    SELECT g.name AS GATEWAY_NAME,
            jt.ep_name AS ENDPOINT_NAME,
            jt.ep_model AS MODEL,
            COALESCE(jt.ep_weight, 0) AS WEIGHT,
@@ -47403,8 +47394,8 @@ def_table_schema(
            g.gmt_modified AS UPDATE_TIME
     FROM oceanbase.__all_ai_gateway g,
     JSON_TABLE(CAST(g.endpoints AS JSON), '$[*]' COLUMNS (
-      ep_name VARCHAR(128) PATH '$.name',
-      ep_model VARCHAR(512) PATH '$.model',
+      ep_name VARCHAR(256) PATH '$.name',
+      ep_model VARCHAR(513) PATH '$.model',
       ep_weight INT PATH '$.weight'
     )) jt
   """.replace("\n", " ")
@@ -47422,7 +47413,6 @@ def_table_schema(
   view_definition =
   """
     SELECT g.tenant_id AS TENANT_ID,
-           g.gateway_id AS GATEWAY_ID,
            g.name AS GATEWAY_NAME,
            jt.ep_name AS ENDPOINT_NAME,
            jt.ep_model AS MODEL,
@@ -47431,8 +47421,8 @@ def_table_schema(
            g.gmt_modified AS UPDATE_TIME
     FROM oceanbase.__all_virtual_ai_gateway g,
     JSON_TABLE(CAST(g.endpoints AS JSON), '$[*]' COLUMNS (
-      ep_name VARCHAR(128) PATH '$.name',
-      ep_model VARCHAR(512) PATH '$.model',
+      ep_name VARCHAR(256) PATH '$.name',
+      ep_model VARCHAR(513) PATH '$.model',
       ep_weight INT PATH '$.weight'
     )) jt
   """.replace("\n", " ")

@@ -559,7 +559,7 @@ int ObDBMSAiService::unregister_provider(ObPLExecCtx &ctx, sql::ParamStore &para
   return ret;
 }
 
-int ObDBMSAiService::alter_model_parameter(ObPLExecCtx &ctx, sql::ParamStore &params, common::ObObj &result)
+int ObDBMSAiService::alter_model_profile(ObPLExecCtx &ctx, sql::ParamStore &params, common::ObObj &result)
 {
   int ret = OB_SUCCESS;
   ObString model_str;
@@ -569,7 +569,7 @@ int ObDBMSAiService::alter_model_parameter(ObPLExecCtx &ctx, sql::ParamStore &pa
     LOG_WARN("failed to pre check", K(ret));
   } else if (OB_FAIL(ObDBMSAiService::check_ai_model_privilege_(ctx, OB_PRIV_ALTER_AI_MODEL))) {
     if (OB_ERR_NO_PRIVILEGE == ret) {
-      LOG_USER_ERROR(OB_ERR_NO_PRIVILEGE, "alter model parameter");
+      LOG_USER_ERROR(OB_ERR_NO_PRIVILEGE, "alter model profile");
     }
   } else if (OB_FAIL(params.at(0).get_string(model_str))) {
     LOG_WARN("failed to get model string", K(ret), K(params.at(0)));
@@ -586,14 +586,14 @@ int ObDBMSAiService::alter_model_parameter(ObPLExecCtx &ctx, sql::ParamStore &pa
     ObIJsonBase *j_base = nullptr;
     if (OB_FAIL(get_json_base_(tmp_allocator, params, j_base))) {
       LOG_WARN("failed to get json base", K(ret), K(params));
-    } else if (OB_FAIL(ObAiServiceExecutor::alter_ai_model_parameter(tmp_allocator, model_str, *j_base))) {
-      LOG_WARN("failed to alter ai model parameter", K(ret), K(model_str));
+    } else if (OB_FAIL(ObAiServiceExecutor::alter_ai_model_profile(tmp_allocator, model_str, *j_base))) {
+      LOG_WARN("failed to alter ai model profile", K(ret), K(model_str));
     }
   }
   return ret;
 }
 
-int ObDBMSAiService::drop_model_parameter(ObPLExecCtx &ctx, sql::ParamStore &params, common::ObObj &result)
+int ObDBMSAiService::drop_model_profile(ObPLExecCtx &ctx, sql::ParamStore &params, common::ObObj &result)
 {
   int ret = OB_SUCCESS;
   ObString model_str;
@@ -602,7 +602,7 @@ int ObDBMSAiService::drop_model_parameter(ObPLExecCtx &ctx, sql::ParamStore &par
     LOG_WARN("failed to pre check", K(ret));
   } else if (OB_FAIL(ObDBMSAiService::check_ai_model_privilege_(ctx, OB_PRIV_DROP_AI_MODEL))) {
     if (OB_ERR_NO_PRIVILEGE == ret) {
-      LOG_USER_ERROR(OB_ERR_NO_PRIVILEGE, "drop model parameter");
+      LOG_USER_ERROR(OB_ERR_NO_PRIVILEGE, "drop model profile");
     }
   } else if (OB_FAIL(params.at(0).get_string(model_str))) {
     LOG_WARN("failed to get model string", K(ret), K(params.at(0)));
@@ -610,8 +610,8 @@ int ObDBMSAiService::drop_model_parameter(ObPLExecCtx &ctx, sql::ParamStore &par
     ret = OB_AI_FUNC_PARAM_EMPTY;
     ObString var_name = "model";
     LOG_USER_ERROR(OB_AI_FUNC_PARAM_EMPTY, var_name.length(), var_name.ptr());
-  } else if (OB_FAIL(ObAiServiceExecutor::drop_ai_model_parameter(model_str))) {
-    LOG_WARN("failed to drop ai model parameter", K(ret), K(model_str));
+  } else if (OB_FAIL(ObAiServiceExecutor::drop_ai_model_profile(model_str))) {
+    LOG_WARN("failed to drop ai model profile", K(ret), K(model_str));
   }
   return ret;
 }

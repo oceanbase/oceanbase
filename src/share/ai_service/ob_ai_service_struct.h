@@ -221,8 +221,8 @@ public:
                                       const common::ObString &full_service_url);
   int merge_default_config(ObIAllocator &allocator, const ObAIModelConfigItem &default_config);
   int apply_profile_params(ObIAllocator &allocator,
-                           const ObString &model_params,
-                           const ObString &model_options);
+                           const ObString &model_config,
+                           const ObString &run_config);
   const ObString &get_model_key() const { return model_key_; }
   const ObString &get_model_name() const { return model_name_; }
   EndpointType::TYPE get_model_type() const { return model_type_; }

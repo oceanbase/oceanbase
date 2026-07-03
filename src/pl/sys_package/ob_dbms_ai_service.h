@@ -45,9 +45,9 @@ public:
   static int alter_ai_gateway(ObPLExecCtx &ctx, sql::ParamStore &params, common::ObObj &result);
   static int drop_ai_gateway(ObPLExecCtx &ctx, sql::ParamStore &params, common::ObObj &result);
 
-  // ai model parameter (upsert via ALTER only)
-  static int alter_model_parameter(ObPLExecCtx &ctx, sql::ParamStore &params, common::ObObj &result);
-  static int drop_model_parameter(ObPLExecCtx &ctx, sql::ParamStore &params, common::ObObj &result);
+  // ai model profile (upsert via ALTER only)
+  static int alter_model_profile(ObPLExecCtx &ctx, sql::ParamStore &params, common::ObObj &result);
+  static int drop_model_profile(ObPLExecCtx &ctx, sql::ParamStore &params, common::ObObj &result);
 private:
   static int precheck_version_and_param_count_(int expect_param_count, sql::ParamStore &params);
   static int precheck_version_and_param_count_v2(int expect_param_count, sql::ParamStore &params);

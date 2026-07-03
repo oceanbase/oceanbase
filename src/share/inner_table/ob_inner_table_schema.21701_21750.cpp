@@ -869,7 +869,7 @@ int ObInnerTableSchema::dba_ob_ai_model_providers_schema(ObTableSchema &table_sc
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       provider_id AS PROVIDER_ID,       name AS PROVIDER_NAME,       protocol AS PROTOCOL,       base_url AS BASE_URL,       access_key AS ACCESS_KEY,       gmt_create AS CREATE_TIME,       gmt_modified AS UPDATE_TIME     FROM oceanbase.__all_ai_model_provider   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       name AS PROVIDER_NAME,       protocol AS PROTOCOL,       base_url AS BASE_URL,       access_key AS ACCESS_KEY,       gmt_create AS CREATE_TIME,       gmt_modified AS UPDATE_TIME     FROM oceanbase.__all_ai_model_provider   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -920,7 +920,7 @@ int ObInnerTableSchema::cdb_ob_ai_model_providers_schema(ObTableSchema &table_sc
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       tenant_id AS TENANT_ID,       provider_id AS PROVIDER_ID,       name AS PROVIDER_NAME,       protocol AS PROTOCOL,       base_url AS BASE_URL,       access_key AS ACCESS_KEY,       gmt_create AS CREATE_TIME,       gmt_modified AS UPDATE_TIME     FROM oceanbase.__all_virtual_ai_model_provider   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       tenant_id AS TENANT_ID,       name AS PROVIDER_NAME,       protocol AS PROTOCOL,       base_url AS BASE_URL,       access_key AS ACCESS_KEY,       gmt_create AS CREATE_TIME,       gmt_modified AS UPDATE_TIME     FROM oceanbase.__all_virtual_ai_model_provider   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -971,7 +971,7 @@ int ObInnerTableSchema::dba_ob_ai_model_profiles_schema(ObTableSchema &table_sch
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       model_parameter_id AS MODEL_PARAMETER_ID,       CONCAT(provider_name, '/', model_name) AS MODEL,       model_params AS MODEL_PARAMS,       model_options AS MODEL_OPTIONS,       gmt_create AS CREATE_TIME,       gmt_modified AS UPDATE_TIME     FROM oceanbase.__all_ai_model_profile    )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CONCAT(provider_name, '/', model_name) AS MODEL,       model_config AS MODEL_CONFIG,       run_config AS RUN_CONFIG,       gmt_create AS CREATE_TIME,       gmt_modified AS UPDATE_TIME     FROM oceanbase.__all_ai_model_profile   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1022,7 +1022,7 @@ int ObInnerTableSchema::cdb_ob_ai_model_profiles_schema(ObTableSchema &table_sch
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       tenant_id AS TENANT_ID,       model_parameter_id AS MODEL_PARAMETER_ID,       CONCAT(provider_name, '/', model_name) AS MODEL,       model_params AS MODEL_PARAMS,       model_options AS MODEL_OPTIONS,       gmt_create AS CREATE_TIME,       gmt_modified AS UPDATE_TIME     FROM oceanbase.__all_virtual_ai_model_profile   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       tenant_id AS TENANT_ID,       CONCAT(provider_name, '/', model_name) AS MODEL,       model_config AS MODEL_CONFIG,       run_config AS RUN_CONFIG,       gmt_create AS CREATE_TIME,       gmt_modified AS UPDATE_TIME     FROM oceanbase.__all_virtual_ai_model_profile   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1073,7 +1073,7 @@ int ObInnerTableSchema::dba_ob_ai_gateways_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       gateway_id AS GATEWAY_ID,       name AS GATEWAY_NAME,       endpoints AS ENDPOINTS,       circuit_breaker AS CIRCUIT_BREAKER,       gmt_create AS CREATE_TIME,       gmt_modified AS UPDATE_TIME     FROM oceanbase.__all_ai_gateway    )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       name AS GATEWAY_NAME,       endpoints AS ENDPOINTS,       circuit_breaker AS CIRCUIT_BREAKER,       gmt_create AS CREATE_TIME,       gmt_modified AS UPDATE_TIME     FROM oceanbase.__all_ai_gateway   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1124,7 +1124,7 @@ int ObInnerTableSchema::cdb_ob_ai_gateways_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       tenant_id AS TENANT_ID,       gateway_id AS GATEWAY_ID,       name AS GATEWAY_NAME,       endpoints AS ENDPOINTS,       circuit_breaker AS CIRCUIT_BREAKER,       gmt_create AS CREATE_TIME,       gmt_modified AS UPDATE_TIME     FROM oceanbase.__all_virtual_ai_gateway   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       tenant_id AS TENANT_ID,       name AS GATEWAY_NAME,       endpoints AS ENDPOINTS,       circuit_breaker AS CIRCUIT_BREAKER,       gmt_create AS CREATE_TIME,       gmt_modified AS UPDATE_TIME     FROM oceanbase.__all_virtual_ai_gateway   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1175,7 +1175,7 @@ int ObInnerTableSchema::dba_ob_ai_gateway_endpoints_schema(ObTableSchema &table_
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT g.gateway_id AS GATEWAY_ID,            g.name AS GATEWAY_NAME,            jt.ep_name AS ENDPOINT_NAME,            jt.ep_model AS MODEL,            COALESCE(jt.ep_weight, 0) AS WEIGHT,            g.gmt_create AS CREATE_TIME,            g.gmt_modified AS UPDATE_TIME     FROM oceanbase.__all_ai_gateway g,     JSON_TABLE(CAST(g.endpoints AS JSON), '$[*]' COLUMNS (       ep_name VARCHAR(128) PATH '$.name',       ep_model VARCHAR(512) PATH '$.model',       ep_weight INT PATH '$.weight'     )) jt   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT g.name AS GATEWAY_NAME,            jt.ep_name AS ENDPOINT_NAME,            jt.ep_model AS MODEL,            COALESCE(jt.ep_weight, 0) AS WEIGHT,            g.gmt_create AS CREATE_TIME,            g.gmt_modified AS UPDATE_TIME     FROM oceanbase.__all_ai_gateway g,     JSON_TABLE(CAST(g.endpoints AS JSON), '$[*]' COLUMNS (       ep_name VARCHAR(256) PATH '$.name',       ep_model VARCHAR(513) PATH '$.model',       ep_weight INT PATH '$.weight'     )) jt   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1226,7 +1226,7 @@ int ObInnerTableSchema::cdb_ob_ai_gateway_endpoints_schema(ObTableSchema &table_
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT g.tenant_id AS TENANT_ID,            g.gateway_id AS GATEWAY_ID,            g.name AS GATEWAY_NAME,            jt.ep_name AS ENDPOINT_NAME,            jt.ep_model AS MODEL,            COALESCE(jt.ep_weight, 0) AS WEIGHT,            g.gmt_create AS CREATE_TIME,            g.gmt_modified AS UPDATE_TIME     FROM oceanbase.__all_virtual_ai_gateway g,     JSON_TABLE(CAST(g.endpoints AS JSON), '$[*]' COLUMNS (       ep_name VARCHAR(128) PATH '$.name',       ep_model VARCHAR(512) PATH '$.model',       ep_weight INT PATH '$.weight'     )) jt   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT g.tenant_id AS TENANT_ID,            g.name AS GATEWAY_NAME,            jt.ep_name AS ENDPOINT_NAME,            jt.ep_model AS MODEL,            COALESCE(jt.ep_weight, 0) AS WEIGHT,            g.gmt_create AS CREATE_TIME,            g.gmt_modified AS UPDATE_TIME     FROM oceanbase.__all_virtual_ai_gateway g,     JSON_TABLE(CAST(g.endpoints AS JSON), '$[*]' COLUMNS (       ep_name VARCHAR(256) PATH '$.name',       ep_model VARCHAR(513) PATH '$.model',       ep_weight INT PATH '$.weight'     )) jt   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

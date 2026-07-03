@@ -3222,8 +3222,8 @@ int ObAIFuncUtils::get_model_config_info(ObIAllocator &allocator,
           ObString dispatch_tag;
           ObString full_url;
           ObArenaAllocator profile_allocator("AIProfile");
-          ObString profile_model_params;
-          ObString profile_model_options;
+          ObString profile_model_config;
+          ObString profile_run_config;
           int64_t profile_id = OB_INVALID_ID;
           bool profile_exists = false;
           const bool is_vl_for_url = (share::EndpointType::DENSE_EMBEDDING == op_type)
@@ -3244,12 +3244,12 @@ int ObAIFuncUtils::get_model_config_info(ObIAllocator &allocator,
             LOG_WARN("init from inline provider failed", K(ret));
           } else if (OB_ISNULL(GCTX.sql_proxy_)) {
             // sql_proxy not ready, skip profile lookup
-          } else if (OB_FAIL(share::ObAiServiceProxy::select_ai_model_parameter(
+          } else if (OB_FAIL(share::ObAiServiceProxy::select_ai_model_profile(
                          tenant_id, profile_allocator, *GCTX.sql_proxy_,
                          provider_part, model_part,
-                         profile_id, profile_model_params, profile_model_options, profile_exists))) {
-            LOG_WARN("failed to select ai model parameter", K(ret), K(provider_part), K(model_part));
-          } else if (profile_exists && OB_FAIL(config.apply_profile_params(allocator, profile_model_params, profile_model_options))) {
+                         profile_id, profile_model_config, profile_run_config, profile_exists))) {
+            LOG_WARN("failed to select ai model profile", K(ret), K(provider_part), K(model_part));
+          } else if (profile_exists && OB_FAIL(config.apply_profile_params(allocator, profile_model_config, profile_run_config))) {
             LOG_WARN("failed to apply profile params", K(ret));
           }
         }

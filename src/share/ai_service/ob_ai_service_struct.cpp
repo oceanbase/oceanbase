@@ -640,23 +640,23 @@ int ObAIModelConfigInfo::init_from_inline_provider_model(common::ObIAllocator &a
 }
 
 int ObAIModelConfigInfo::apply_profile_params(ObIAllocator &allocator,
-                                              const ObString &model_params,
-                                              const ObString &model_options)
+                                              const ObString &model_config,
+                                              const ObString &run_config)
 {
   int ret = OB_SUCCESS;
-  if (!model_options.empty()) {
+  if (!run_config.empty()) {
     // use a temporary allocator: we only extract integer values and do not keep the JSON tree
     ObArenaAllocator tmp_allocator("AIProfileOpt");
     ObIJsonBase *options_base = nullptr;
     if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_allocator,
-                                                  model_options,
+                                                  run_config,
                                                   ObJsonInType::JSON_TREE,
                                                   ObJsonInType::JSON_TREE,
                                                   options_base))) {
-      LOG_WARN("failed to parse model_options", K(ret), K(model_options));
+      LOG_WARN("failed to parse run_config", K(ret), K(run_config));
     } else if (OB_ISNULL(options_base) || options_base->json_type() != ObJsonNodeType::J_OBJECT) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("model_options should be json object", K(ret), K(model_options));
+      LOG_WARN("run_config should be json object", K(ret), K(run_config));
     } else {
       int64_t batch_size = 0;
       int64_t max_image_size = 0;
@@ -684,23 +684,23 @@ int ObAIModelConfigInfo::apply_profile_params(ObIAllocator &allocator,
       }
     }
   }
-  if (OB_SUCC(ret) && !model_params.empty()) {
-    // deep-copy model_params into allocator so the JSON tree's ObString nodes
+  if (OB_SUCC(ret) && !model_config.empty()) {
+    // deep-copy model_config into allocator so the JSON tree's ObString nodes
     // reference allocator-owned memory and do not dangle after the caller's
     // temporary profile_allocator is destroyed
-    ObString params_copy;
+    ObString config_copy;
     ObIJsonBase *params_base = nullptr;
-    if (OB_FAIL(ob_write_string(allocator, model_params, params_copy))) {
-      LOG_WARN("failed to copy model_params", K(ret));
+    if (OB_FAIL(ob_write_string(allocator, model_config, config_copy))) {
+      LOG_WARN("failed to copy model_config", K(ret));
     } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator,
-                                                         params_copy,
+                                                         config_copy,
                                                          ObJsonInType::JSON_TREE,
                                                          ObJsonInType::JSON_TREE,
                                                          params_base))) {
-      LOG_WARN("failed to parse model_params", K(ret), K(params_copy));
+      LOG_WARN("failed to parse model_config", K(ret), K(config_copy));
     } else if (OB_ISNULL(params_base) || params_base->json_type() != ObJsonNodeType::J_OBJECT) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("model_params should be json object", K(ret), K(params_copy));
+      LOG_WARN("model_config should be json object", K(ret), K(config_copy));
     } else {
       message_parameters_ = static_cast<ObJsonObject *>(params_base);
     }

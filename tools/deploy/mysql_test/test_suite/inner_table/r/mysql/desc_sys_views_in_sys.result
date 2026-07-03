@@ -17032,11 +17032,10 @@ cnt
 1
 desc oceanbase.DBA_OB_AI_MODEL_PROVIDERS;
 Field	Type	Null	Key	Default	Extra
-PROVIDER_ID	bigint(20)	NO		NULL	
-PROVIDER_NAME	varchar(128)	NO		NULL	
-PROTOCOL	varchar(64)	NO		NULL	
+PROVIDER_NAME	varchar(256)	NO		NULL	
+PROTOCOL	varchar(256)	NO		NULL	
 BASE_URL	varchar(2048)	NO		NULL	
-ACCESS_KEY	varchar(2048)	YES		NULL	
+ACCESS_KEY	varchar(2048)	NO		NULL	
 CREATE_TIME	timestamp(6)	YES			
 UPDATE_TIME	timestamp(6)	YES			
 set @query_type = (select 
@@ -17052,11 +17051,10 @@ cnt
 desc oceanbase.CDB_OB_AI_MODEL_PROVIDERS;
 Field	Type	Null	Key	Default	Extra
 TENANT_ID	bigint(20)	NO		NULL	
-PROVIDER_ID	bigint(20)	NO		NULL	
-PROVIDER_NAME	varchar(128)	NO		NULL	
-PROTOCOL	varchar(64)	NO		NULL	
+PROVIDER_NAME	varchar(256)	NO		NULL	
+PROTOCOL	varchar(256)	NO		NULL	
 BASE_URL	varchar(2048)	NO		NULL	
-ACCESS_KEY	varchar(2048)	YES		NULL	
+ACCESS_KEY	varchar(2048)	NO		NULL	
 CREATE_TIME	timestamp(6)	NO		NULL	
 UPDATE_TIME	timestamp(6)	NO		NULL	
 set @query_type = (select 
@@ -17071,10 +17069,9 @@ cnt
 1
 desc oceanbase.DBA_OB_AI_MODEL_PROFILES;
 Field	Type	Null	Key	Default	Extra
-MODEL_PARAMETER_ID	bigint(20)	NO		NULL	
-MODEL	varchar(385)	NO		NULL	
-MODEL_PARAMS	varchar(2048)	YES		NULL	
-MODEL_OPTIONS	varchar(2048)	YES		NULL	
+MODEL	varchar(513)	NO		NULL	
+MODEL_CONFIG	varchar(4096)	YES		NULL	
+RUN_CONFIG	varchar(4096)	YES		NULL	
 CREATE_TIME	timestamp(6)	YES			
 UPDATE_TIME	timestamp(6)	YES			
 set @query_type = (select 
@@ -17090,10 +17087,9 @@ cnt
 desc oceanbase.CDB_OB_AI_MODEL_PROFILES;
 Field	Type	Null	Key	Default	Extra
 TENANT_ID	bigint(20)	NO		NULL	
-MODEL_PARAMETER_ID	bigint(20)	NO		NULL	
-MODEL	varchar(385)	NO		NULL	
-MODEL_PARAMS	varchar(2048)	YES		NULL	
-MODEL_OPTIONS	varchar(2048)	YES		NULL	
+MODEL	varchar(513)	NO		NULL	
+MODEL_CONFIG	varchar(4096)	YES		NULL	
+RUN_CONFIG	varchar(4096)	YES		NULL	
 CREATE_TIME	timestamp(6)	NO		NULL	
 UPDATE_TIME	timestamp(6)	NO		NULL	
 set @query_type = (select 
@@ -17108,10 +17104,9 @@ cnt
 1
 desc oceanbase.DBA_OB_AI_GATEWAYS;
 Field	Type	Null	Key	Default	Extra
-GATEWAY_ID	bigint(20)	NO		NULL	
-GATEWAY_NAME	varchar(128)	NO		NULL	
-ENDPOINTS	longtext	NO		NULL	
-CIRCUIT_BREAKER	varchar(2048)	YES		NULL	
+GATEWAY_NAME	varchar(256)	NO		NULL	
+ENDPOINTS	varchar(32767)	NO		NULL	
+CIRCUIT_BREAKER	varchar(4096)	YES		NULL	
 CREATE_TIME	timestamp(6)	YES			
 UPDATE_TIME	timestamp(6)	YES			
 set @query_type = (select 
@@ -17127,10 +17122,9 @@ cnt
 desc oceanbase.CDB_OB_AI_GATEWAYS;
 Field	Type	Null	Key	Default	Extra
 TENANT_ID	bigint(20)	NO		NULL	
-GATEWAY_ID	bigint(20)	NO		NULL	
-GATEWAY_NAME	varchar(128)	NO		NULL	
-ENDPOINTS	longtext	NO		NULL	
-CIRCUIT_BREAKER	varchar(2048)	YES		NULL	
+GATEWAY_NAME	varchar(256)	NO		NULL	
+ENDPOINTS	varchar(32767)	NO		NULL	
+CIRCUIT_BREAKER	varchar(4096)	YES		NULL	
 CREATE_TIME	timestamp(6)	NO		NULL	
 UPDATE_TIME	timestamp(6)	NO		NULL	
 set @query_type = (select 
@@ -17145,10 +17139,9 @@ cnt
 1
 desc oceanbase.DBA_OB_AI_GATEWAY_ENDPOINTS;
 Field	Type	Null	Key	Default	Extra
-GATEWAY_ID	bigint(20)	NO		NULL	
-GATEWAY_NAME	varchar(128)	NO		NULL	
-ENDPOINT_NAME	varchar(128)	NO			
-MODEL	varchar(512)	NO			
+GATEWAY_NAME	varchar(256)	NO		NULL	
+ENDPOINT_NAME	varchar(256)	NO			
+MODEL	varchar(513)	NO			
 WEIGHT	bigint(20)	NO			
 CREATE_TIME	timestamp(6)	YES			
 UPDATE_TIME	timestamp(6)	YES			
@@ -17165,10 +17158,9 @@ cnt
 desc oceanbase.CDB_OB_AI_GATEWAY_ENDPOINTS;
 Field	Type	Null	Key	Default	Extra
 TENANT_ID	bigint(20)	NO		NULL	
-GATEWAY_ID	bigint(20)	NO		NULL	
-GATEWAY_NAME	varchar(128)	NO		NULL	
-ENDPOINT_NAME	varchar(128)	NO			
-MODEL	varchar(512)	NO			
+GATEWAY_NAME	varchar(256)	NO		NULL	
+ENDPOINT_NAME	varchar(256)	NO			
+MODEL	varchar(513)	NO			
 WEIGHT	bigint(20)	NO			
 CREATE_TIME	timestamp(6)	NO		NULL	
 UPDATE_TIME	timestamp(6)	NO		NULL	

@@ -136,7 +136,7 @@ int ObInnerTableSchema::all_ai_gateway_schema(ObTableSchema &table_schema)
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      128, //column_length
+      256, //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable
@@ -149,9 +149,9 @@ int ObInnerTableSchema::all_ai_gateway_schema(ObTableSchema &table_schema)
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
-      ObLongTextType, //column_type
+      ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      0, //column_length
+      32767, //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable
@@ -166,7 +166,7 @@ int ObInnerTableSchema::all_ai_gateway_schema(ObTableSchema &table_schema)
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      2048, //column_length
+      4096, //column_length
       -1, //column_precision
       -1, //column_scale
       true, //is_nullable
@@ -334,7 +334,7 @@ int ObInnerTableSchema::all_ai_gateway_history_schema(ObTableSchema &table_schem
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      128, //column_length
+      256, //column_length
       -1, //column_precision
       -1, //column_scale
       true, //is_nullable
@@ -347,9 +347,9 @@ int ObInnerTableSchema::all_ai_gateway_history_schema(ObTableSchema &table_schem
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
-      ObLongTextType, //column_type
+      ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      0, //column_length
+      32767, //column_length
       -1, //column_precision
       -1, //column_scale
       true, //is_nullable
@@ -364,7 +364,7 @@ int ObInnerTableSchema::all_ai_gateway_history_schema(ObTableSchema &table_schem
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      2048, //column_length
+      4096, //column_length
       -1, //column_precision
       -1, //column_scale
       true, //is_nullable

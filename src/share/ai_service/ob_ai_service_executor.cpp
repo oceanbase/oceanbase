@@ -365,17 +365,17 @@ int ObAiServiceExecutor::insert_special_endpoint_for_version(ObMySQLTransaction 
   return ret;
 }
 
-int ObAiServiceExecutor::alter_ai_model_parameter(ObArenaAllocator &allocator, const ObString &model_str, const ObIJsonBase &alter_jbase)
+int ObAiServiceExecutor::alter_ai_model_profile(ObArenaAllocator &allocator, const ObString &model_str, const ObIJsonBase &alter_jbase)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = gen_meta_tenant_id(MTL_ID());
   uint64_t user_tenant_id = MTL_ID();
   ObString provider_name;
   ObString model_name;
-  ObSqlString model_params;
-  ObSqlString model_options;
-  bool has_model_params = false;
-  bool has_model_options = false;
+  ObSqlString model_config;
+  ObSqlString run_config;
+  bool has_model_config = false;
+  bool has_run_config = false;
 
   // parse "provider/model" from model_str
   const char *slash = static_cast<const char *>(MEMCHR(model_str.ptr(), '/', model_str.length()));
@@ -388,33 +388,33 @@ int ObAiServiceExecutor::alter_ai_model_parameter(ObArenaAllocator &allocator, c
     model_name.assign_ptr(slash + 1, static_cast<int32_t>(model_str.length() - (slash - model_str.ptr()) - 1));
   }
 
-  // parse JSON: model_params, model_options, reject access_key
+  // parse JSON: model_config, run_config, reject access_key
   if (OB_SUCC(ret)) {
     JsonObjectIterator iter = alter_jbase.object_iterator();
     while (OB_SUCC(ret) && !iter.end()) {
       ObJsonObjPair elem;
       if (OB_FAIL(iter.get_elem(elem))) {
         LOG_WARN("failed to get json element", KR(ret));
-      } else if (0 == elem.first.case_compare("model_params")) {
-        has_model_params = true;
+      } else if (0 == elem.first.case_compare("model_config")) {
+        has_model_config = true;
         if (elem.second->json_type() != ObJsonNodeType::J_OBJECT) {
           ret = OB_AI_FUNC_PARAM_TYPE_INVALID;
-          LOG_USER_ERROR(OB_AI_FUNC_PARAM_TYPE_INVALID, (int)strlen("model_params"), "model_params", (int)strlen("JSON_OBJECT"), "JSON_OBJECT");
+          LOG_USER_ERROR(OB_AI_FUNC_PARAM_TYPE_INVALID, (int)strlen("model_config"), "model_config", (int)strlen("JSON_OBJECT"), "JSON_OBJECT");
         } else {
           common::ObStringBuffer buf(&allocator);
           if (OB_FAIL(elem.second->print(buf, false))) {
-            LOG_WARN("failed to serialize model_params", K(ret));
+            LOG_WARN("failed to serialize model_config", K(ret));
           } else {
-            model_params.assign(buf.ptr());
+            model_config.assign(buf.ptr());
           }
         }
-      } else if (0 == elem.first.case_compare("model_options")) {
-        has_model_options = true;
+      } else if (0 == elem.first.case_compare("run_config")) {
+        has_run_config = true;
         if (elem.second->json_type() != ObJsonNodeType::J_OBJECT) {
           ret = OB_AI_FUNC_PARAM_TYPE_INVALID;
-          LOG_USER_ERROR(OB_AI_FUNC_PARAM_TYPE_INVALID, (int)strlen("model_options"), "model_options", (int)strlen("JSON_OBJECT"), "JSON_OBJECT");
+          LOG_USER_ERROR(OB_AI_FUNC_PARAM_TYPE_INVALID, (int)strlen("run_config"), "run_config", (int)strlen("JSON_OBJECT"), "JSON_OBJECT");
         } else {
-          // validate model_options fields
+          // validate run_config fields
           bool has_min_concurrency = false;
           bool has_max_concurrency = false;
           int64_t min_concurrency = 0;
@@ -423,7 +423,7 @@ int ObAiServiceExecutor::alter_ai_model_parameter(ObArenaAllocator &allocator, c
           while (OB_SUCC(ret) && !opt_iter.end()) {
             ObJsonObjPair opt_elem;
             if (OB_FAIL(opt_iter.get_elem(opt_elem))) {
-              LOG_WARN("failed to get model_options element", KR(ret));
+              LOG_WARN("failed to get run_config element", KR(ret));
             } else if (0 == opt_elem.first.case_compare("batch_size")) {
               if (opt_elem.second->json_type() != ObJsonNodeType::J_INT && opt_elem.second->json_type() != ObJsonNodeType::J_UINT) {
                 ret = OB_AI_FUNC_PARAM_TYPE_INVALID;
@@ -475,9 +475,9 @@ int ObAiServiceExecutor::alter_ai_model_parameter(ObArenaAllocator &allocator, c
           if (OB_SUCC(ret)) {
             common::ObStringBuffer buf(&allocator);
             if (OB_FAIL(elem.second->print(buf, false))) {
-              LOG_WARN("failed to serialize model_options", K(ret));
+              LOG_WARN("failed to serialize run_config", K(ret));
             } else {
-              model_options.assign(buf.ptr());
+              run_config.assign(buf.ptr());
             }
           }
         }
@@ -528,40 +528,40 @@ int ObAiServiceExecutor::alter_ai_model_parameter(ObArenaAllocator &allocator, c
 
       // SELECT existing → INSERT or UPDATE
       bool exists = false;
-      int64_t old_model_parameter_id = OB_INVALID_ID;
-      ObString old_model_params;
-      ObString old_model_options;
+      int64_t old_model_profile_id = OB_INVALID_ID;
+      ObString old_model_config;
+      ObString old_run_config;
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObAiServiceProxy::select_ai_model_parameter(user_tenant_id, allocator, trans,
-          provider_name, model_name, old_model_parameter_id, old_model_params, old_model_options, exists))) {
-        LOG_WARN("failed to select ai model parameter", K(ret), K(provider_name), K(model_name));
+      } else if (OB_FAIL(ObAiServiceProxy::select_ai_model_profile(user_tenant_id, allocator, trans,
+          provider_name, model_name, old_model_profile_id, old_model_config, old_run_config, exists))) {
+        LOG_WARN("failed to select ai model profile", K(ret), K(provider_name), K(model_name));
       } else if (exists) {
         // Empty JSON object {}: no field to merge; skip UPDATE. Otherwise a no-op UPDATE can
-        // return affected_rows=0 while update_ai_model_parameter requires exactly one row changed.
-        if (has_model_params || has_model_options) {
-          ObString update_model_params = has_model_params ? ObString(model_params.length(), model_params.ptr()) : old_model_params;
-          ObString update_model_options = has_model_options ? ObString(model_options.length(), model_options.ptr()) : old_model_options;
-          const bool params_unchanged = (0 == update_model_params.case_compare(old_model_params));
-          const bool options_unchanged = (0 == update_model_options.case_compare(old_model_options));
-          if (!params_unchanged || !options_unchanged) {
-            if (OB_FAIL(ObAiServiceProxy::update_ai_model_parameter(user_tenant_id, trans, old_model_parameter_id,
-                update_model_params, update_model_options))) {
-              LOG_WARN("failed to update ai model parameter", K(ret));
+        // return affected_rows=0 while update_ai_model_profile requires exactly one row changed.
+        if (has_model_config || has_run_config) {
+          ObString update_model_config = has_model_config ? ObString(model_config.length(), model_config.ptr()) : old_model_config;
+          ObString update_run_config = has_run_config ? ObString(run_config.length(), run_config.ptr()) : old_run_config;
+          const bool config_unchanged = (0 == update_model_config.case_compare(old_model_config));
+          const bool run_unchanged = (0 == update_run_config.case_compare(old_run_config));
+          if (!config_unchanged || !run_unchanged) {
+            if (OB_FAIL(ObAiServiceProxy::update_ai_model_profile(user_tenant_id, trans, old_model_profile_id,
+                update_model_config, update_run_config))) {
+              LOG_WARN("failed to update ai model profile", K(ret));
             }
           }
         }
       } else {
         // INSERT
-        uint64_t new_model_parameter_id = OB_INVALID_ID;
+        uint64_t new_model_profile_id = OB_INVALID_ID;
         ObMaxIdFetcher fetcher(*GCTX.sql_proxy_);
-        if (OB_FAIL(fetcher.fetch_new_max_id(user_tenant_id, OB_MAX_USED_AI_MODEL_PROFILE_ID_TYPE, new_model_parameter_id, 0))) {
-          LOG_WARN("failed to fetch new ai model parameter id", KR(ret), K(user_tenant_id));
+        if (OB_FAIL(fetcher.fetch_new_max_id(user_tenant_id, OB_MAX_USED_AI_MODEL_PROFILE_ID_TYPE, new_model_profile_id, 0))) {
+          LOG_WARN("failed to fetch new ai model profile id", KR(ret), K(user_tenant_id));
         } else {
-          ObString insert_model_params = has_model_params ? ObString(model_params.length(), model_params.ptr()) : ObString();
-          ObString insert_model_options = has_model_options ? ObString(model_options.length(), model_options.ptr()) : ObString();
-          if (OB_FAIL(ObAiServiceProxy::insert_ai_model_parameter(user_tenant_id, trans, new_model_parameter_id,
-              provider_name, model_name, insert_model_params, insert_model_options))) {
-            LOG_WARN("failed to insert ai model parameter", K(ret));
+          ObString insert_model_config = has_model_config ? ObString(model_config.length(), model_config.ptr()) : ObString();
+          ObString insert_run_config = has_run_config ? ObString(run_config.length(), run_config.ptr()) : ObString();
+          if (OB_FAIL(ObAiServiceProxy::insert_ai_model_profile(user_tenant_id, trans, new_model_profile_id,
+              provider_name, model_name, insert_model_config, insert_run_config))) {
+            LOG_WARN("failed to insert ai model profile", K(ret));
           }
         }
       }
@@ -576,7 +576,7 @@ int ObAiServiceExecutor::alter_ai_model_parameter(ObArenaAllocator &allocator, c
   return ret;
 }
 
-int ObAiServiceExecutor::drop_ai_model_parameter(const ObString &model_str)
+int ObAiServiceExecutor::drop_ai_model_profile(const ObString &model_str)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = gen_meta_tenant_id(MTL_ID());
@@ -598,8 +598,8 @@ int ObAiServiceExecutor::drop_ai_model_parameter(const ObString &model_str)
     ObMySQLTransaction trans;
     if (OB_FAIL(trans.start(GCTX.sql_proxy_, user_tenant_id))) {
       LOG_WARN("failed to start transaction", KR(ret));
-    } else if (OB_FAIL(ObAiServiceProxy::delete_ai_model_parameter(user_tenant_id, trans, provider_name, model_name))) {
-      LOG_WARN("failed to delete ai model parameter", K(ret), K(provider_name), K(model_name));
+    } else if (OB_FAIL(ObAiServiceProxy::delete_ai_model_profile(user_tenant_id, trans, provider_name, model_name))) {
+      LOG_WARN("failed to delete ai model profile", K(ret), K(provider_name), K(model_name));
     }
 
     int tmp_ret = OB_SUCCESS;
