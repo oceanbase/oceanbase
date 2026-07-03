@@ -742,7 +742,8 @@ int ObTenantTabletStatMgr::report_stat(
   } else if (OB_UNLIKELY(!stat.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid arguments", K(ret), K(stat));
-  } else if (!stat.check_need_report()) {
+  } else if (!stat.is_clear_mark_ && !stat.check_need_report()) {
+    // clear-mark signal bypasses check_need_report; normal stats keep the original filter.
   } else {
     uint64_t pending_cur = pending_cursor_;
     if (pending_cur - report_cursor_ >= DEFAULT_MAX_PENDING_CNT) { // first check full queue with dirty read
@@ -758,6 +759,22 @@ int ObTenantTabletStatMgr::report_stat(
       report_queue_[pending_cur % DEFAULT_MAX_PENDING_CNT] = stat;
       succ_report = true;
     }
+  }
+  return ret;
+}
+
+int ObTenantTabletStatMgr::report_clear_tablet_stat(
+    const int64_t ls_id,
+    const uint64_t tablet_id,
+    bool &succ_report)
+{
+  int ret = OB_SUCCESS;
+  ObTabletStat clear_stat;
+  clear_stat.ls_id_ = ls_id;
+  clear_stat.tablet_id_ = tablet_id;
+  clear_stat.is_clear_mark_ = true;
+  if (OB_FAIL(report_stat(clear_stat, succ_report))) {
+    LOG_WARN("failed to report clear tablet stat", K(ret), K(ls_id), K(tablet_id));
   }
   return ret;
 }
@@ -814,10 +831,9 @@ int ObTenantTabletStatMgr::clear_tablet_stat(
     ObBucketHashWLockGuard lock_guard(bucket_lock_, key.hash());
     if (OB_FAIL(inner_clear_tablet_stat(key))) {
       LOG_WARN("failed to clear tablet stat", K(ret), K(key));
+    } else {
+      FLOG_INFO("clear tablet stat", K(ls_id), K(tablet_id));
     }
-  }
-  if (OB_SUCC(ret)) {
-    FLOG_INFO("clear tablet stat", K(ret), K(ls_id), K(tablet_id));
   }
   return ret;
 }
@@ -1034,6 +1050,10 @@ void ObTenantTabletStatMgr::process_stats()
       const ObTabletStat &cur_stat = report_queue_[i % DEFAULT_MAX_PENDING_CNT];
       if (OB_UNLIKELY(!cur_stat.is_valid())) {
         // allow dirty read
+      } else if (cur_stat.is_clear_mark_) {
+        if (OB_FAIL(clear_tablet_stat(ObLSID(cur_stat.ls_id_), ObTabletID(cur_stat.tablet_id_)))) {
+          LOG_WARN_RET(ret, "failed to clear tablet stat for clear mark", K(ret), K(cur_stat));
+        }
       } else if (OB_FAIL(update_tablet_stream(cur_stat))) {
         LOG_WARN_RET(ret, "failed to update tablet stat", K(ret), K(cur_stat));
       }

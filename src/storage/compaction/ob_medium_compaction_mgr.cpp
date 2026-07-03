@@ -15,6 +15,7 @@
 #include "ob_medium_compaction_mgr.h"
 #include "src/logservice/replayservice/ob_tablet_replay_executor.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
+#include "storage/ob_tenant_tablet_stat_mgr.h"
 
 namespace oceanbase
 {
@@ -284,7 +285,14 @@ int ObTabletMediumCompactionInfoRecorder::inner_replay_clog(
         LOG_WARN("failed to replay medium info", K(ret), K(replay_medium_info));
       }
     } else {
-      FLOG_INFO("success to save medium info", K(ret), K_(tablet_id), K_(ls_id), K(scn), K(replay_medium_info), K(max_saved_version_));
+      // report a lock-free clear signal to reset the tablet stat after replaying medium info.
+      // best-effort; the merge-finish path clears it again as a backstop.
+      int tmp_ret = OB_SUCCESS;
+      bool succ_report = false;
+      if (OB_TMP_FAIL(MTL(ObTenantTabletStatMgr *)->report_clear_tablet_stat(ls_id_.id(), tablet_id_.id(), succ_report))) {
+        LOG_WARN("failed to report clear tablet stat signal after replay medium info", K(tmp_ret), K_(ls_id), K_(tablet_id));
+      }
+      FLOG_INFO("success to save medium info", K(ret), K_(tablet_id), K_(ls_id), K(scn), K(replay_medium_info), K(max_saved_version_), K(succ_report));
     }
   }
 
