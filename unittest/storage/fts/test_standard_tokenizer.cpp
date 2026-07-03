@@ -33,6 +33,16 @@ protected:
   }
 };
 
+class ObStandardTokenizerTestAccessor : public ObStandardTokenizer
+{
+public:
+  static int call_check_script_compatibility(
+      UScriptCode &segment_script, const UChar32 codepoint, bool &is_compatible)
+  {
+    return check_script_compatibility(segment_script, codepoint, is_compatible);
+  }
+};
+
 TEST_F(FTStandardTokenizerTest, basic_cases)
 {
   common::ObArenaAllocator allocator(ObModIds::TEST);
@@ -338,6 +348,81 @@ TEST_F(FTStandardTokenizerTest, composite_and_compatibility_characters)
       tokenizer,
       u8"ﬁancée café 😊 ﬁle résumé 👨‍👩‍👧‍👦",
       {u8"ﬁancée", u8"café", u8"😊", u8"ﬁle", u8"résumé", u8"👨‍👩‍👧‍👦"});
+}
+
+TEST_F(FTStandardTokenizerTest, mixed_scripts)
+{
+  common::ObArenaAllocator allocator(ObModIds::TEST);
+  ObStandardTokenizerSpec spec;
+
+  ObStandardTokenizer tokenizer;
+  ASSERT_EQ(OB_SUCCESS, tokenizer.init(spec, allocator));
+
+  FTAnalyzerTestHelper::assert_tokenizer_output(
+      "mixed scripts 1",
+      tokenizer,
+      u8"computer science计算机科学Информатика",
+      {u8"computer", u8"science", u8"计算", u8"机", u8"科学", u8"Информатика"});
+
+  FTAnalyzerTestHelper::assert_tokenizer_output(
+      "mixed scripts with punctuations 1",
+      tokenizer,
+      u8"'computer science'计算机科学(Информатика)",
+      {u8"computer", u8"science", u8"计算", u8"机", u8"科学", u8"Информатика"});
+
+  FTAnalyzerTestHelper::assert_tokenizer_output(
+      "mixed scripts with punctuations 2",
+      tokenizer,
+      u8"computer science《计算机科学》Информатика",
+      {u8"computer", u8"science", u8"计算", u8"机", u8"科学", u8"Информатика"});
+
+  FTAnalyzerTestHelper::assert_tokenizer_output(
+      "mixed letters",
+      tokenizer,
+      u8"HelloПриветΓειάσου",
+      {u8"Hello", u8"Привет", u8"Γειάσου"});
+
+  FTAnalyzerTestHelper::assert_tokenizer_output(
+      "half-width digits",
+      tokenizer,
+      u8"今日气温25.3度。Today's temperature is 25.3 degrees.",
+      {u8"今日", u8"气温", u8"25.3", u8"度", u8"Today's", u8"temperature", u8"is", u8"25.3", u8"degrees"});
+
+  FTAnalyzerTestHelper::assert_tokenizer_output(
+      "full-width digits",
+      tokenizer,
+      u8"今日气温２５．３度。Today's temperature is ２５．３ degrees.",
+      {u8"今日", u8"气温", u8"２５．３", u8"度", u8"Today's", u8"temperature", u8"is", u8"２５．３", u8"degrees"});
+
+  FTAnalyzerTestHelper::assert_tokenizer_output(
+      "decomposed diacritics",
+      tokenizer,
+      u8"café咖啡água",
+      {u8"café", u8"咖啡", u8"água"});
+
+  FTAnalyzerTestHelper::assert_tokenizer_output(
+      "mixed-width letters",
+      tokenizer,
+      u8"ABCＡＢＣａｂｃabc",
+      {u8"ABCＡＢＣａｂｃabc"});
+
+  FTAnalyzerTestHelper::assert_tokenizer_output(
+      "mixed-width digits",
+      tokenizer,
+      u8"123１２３456",
+      {u8"123１２３456"});
+
+  FTAnalyzerTestHelper::assert_tokenizer_output(
+      "punctuations",
+      tokenizer,
+      u8"..., '!'",
+      {});
+
+  FTAnalyzerTestHelper::assert_tokenizer_output(
+      "digits with punctuations",
+      tokenizer,
+      u8"...123!?",
+      {u8"123"});
 }
 
 TEST_F(FTStandardTokenizerTest, max_token_length_cases)
@@ -657,6 +742,20 @@ TEST_F(FTStandardTokenizerTest, edge_cases_should_succeed)
 
     tokenizer.reset();
     tokenizer.reset();
+  }
+}
+
+TEST_F(FTStandardTokenizerTest, unicode_script_verification)
+{
+  for (UChar32 codepoint = 0; codepoint < 128; ++codepoint) {
+    UScriptCode segment_script = USCRIPT_COMMON;
+    bool is_compatible = false;
+    UErrorCode status = U_ZERO_ERROR;
+    ASSERT_EQ(OB_SUCCESS, ObStandardTokenizerTestAccessor::call_check_script_compatibility(
+                             segment_script, codepoint, is_compatible));
+    UScriptCode script = uscript_getScript(codepoint, &status);
+    ASSERT_FALSE(U_FAILURE(status));
+    ASSERT_EQ(segment_script, script) << "codepoint=" << codepoint;
   }
 }
 

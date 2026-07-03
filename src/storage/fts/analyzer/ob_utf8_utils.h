@@ -38,13 +38,13 @@ public:
   // Returns whether a token represents an emoji character or sequence.
   static int is_emoji(const char *str, const int32_t len, bool &is_emoji);
 
-private:
   // Decodes the next Unicode codepoint and advances the byte offset.
   static int next_codepoint(const char *str,
                             const int32_t len,
                             int32_t &offset,
                             UChar32 &codepoint);
 
+private:
   // These codepoints are treated as emoji only when followed by an emoji presentation selector
   // or keycap.
   static bool is_emoji_rk(const UChar32 codepoint);
