@@ -553,6 +553,8 @@ int ObEmbeddingTask::start_async_work()
       ObArray<ObString> contents;
       ObJsonObject *config = nullptr;
       ObJsonInt *dim_json = nullptr;
+      ObJsonString *encoding_format_json = nullptr;
+      ObString encoding_format_value = BASE64_FORMAT;
       ObJsonObject *body = nullptr;
       ObString json_str;
       ObString input_type_str;
@@ -600,6 +602,13 @@ int ObEmbeddingTask::start_async_work()
       } else if (dimension_ > 0 && OB_NOT_NULL(dim_json)
                  && OB_FAIL(config->add("dimensions", dim_json))) {
         LOG_WARN("failed to add dimensions to config", K(ret));
+      } else if (use_base64_format_
+                 && OB_FAIL(ObAIFuncJsonUtils::get_json_string(
+                        allocator_, encoding_format_value, encoding_format_json))) {
+        LOG_WARN("failed to get json string for encoding format", K(ret));
+      } else if (use_base64_format_ && OB_NOT_NULL(encoding_format_json)
+                 && OB_FAIL(config->add(ENCODING_FORMAT_NAME, encoding_format_json))) {
+        LOG_WARN("failed to add encoding format to config", K(ret));
       } else if (OB_ISNULL(embed_provider_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("embed_provider_ is null", K(ret));
