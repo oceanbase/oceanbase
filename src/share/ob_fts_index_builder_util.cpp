@@ -3897,10 +3897,16 @@ int ObFtsIndexBuilderUtil::process_dict_table(
 
 int ObFtsIndexBuilderUtil::check_fulltext_dict_schema(
     const share::schema::ObTableSchema &table,
-    const uint64_t tenant_id)
+    const uint64_t tenant_id,
+    const int64_t inline_index_cnt)
 {
   int ret = OB_SUCCESS;
   if (!table.is_fulltext_dict()) {
+  } else if (inline_index_cnt > 0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create inline index on fulltext dictionary table is");
+    LOG_WARN("create inline index on fulltext dictionary table not supported",
+             K(ret), K(inline_index_cnt), K(tenant_id));
   } else if (table.is_partitioned_table()) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "partitioning fulltext dictionary table");

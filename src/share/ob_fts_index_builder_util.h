@@ -196,7 +196,8 @@ public:
       share::schema::ObSchemaGetterGuard &schema_guard);
   static int check_fulltext_dict_schema(
       const share::schema::ObTableSchema &table,
-      const uint64_t tenant_id);
+      const uint64_t tenant_id,
+      const int64_t inline_index_cnt = 0);
   // Check if dictionary table can be dropped
   static int check_can_drop_dict_table(
       uint64_t tenant_id,
