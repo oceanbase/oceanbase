@@ -359,9 +359,7 @@ int ObVecIndexBuildTask::check_health()
     LOG_WARN("invalid argument", KR(ret), KP(GCTX.schema_service_));
   } else {
     ObSchemaGetterGuard schema_guard;
-    const ObTableSchema *index_schema = nullptr;
     bool is_data_table_exist = false;
-    bool is_all_indexes_exist = false;
     if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_,
                                                        schema_guard))) {
       LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id_));
@@ -369,23 +367,9 @@ int ObVecIndexBuildTask::check_health()
                                                       object_id_,
                                                       is_data_table_exist))) {
       LOG_WARN("check data table exist failed", K(ret), K(tenant_id_), K(object_id_));
-    } else if (OB_FAIL(check_aux_table_schemas_exist(is_all_indexes_exist))) {
-      LOG_WARN("check aux index table exist failed", K(ret), K(tenant_id_));
-    } else if (status != ObDDLTaskStatus::FAIL && (!is_data_table_exist || !is_all_indexes_exist)) {
+    } else if (status != ObDDLTaskStatus::FAIL && (!is_data_table_exist)) {
       ret = OB_TABLE_NOT_EXIST;
-      LOG_WARN("data table or index table not exist", K(ret), K(is_data_table_exist),
-          K(is_all_indexes_exist));
-    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_,
-                                                     index_table_id_,
-                                                     index_schema))) {
-      LOG_WARN("get table schema failed", K(ret), K(tenant_id_), K(index_table_id_));
-    } else if (OB_ISNULL(index_schema)) {
-      ret = OB_SCHEMA_ERROR;
-      LOG_WARN("fail to get index_schema", K(ret), K(index_table_id_));
-    } else if (ObIndexStatus::INDEX_STATUS_INDEX_ERROR == index_schema->get_index_status()) {
-      ret = OB_SUCCESS == ret_code_ ? OB_ERR_ADD_INDEX : ret_code_;
-      LOG_WARN("index status error", K(ret), K(index_table_id_),
-          K(index_schema->get_index_status()));
+      LOG_WARN("data table not exist", K(ret), K(is_data_table_exist));
     }
     #ifdef ERRSIM
       if (OB_SUCC(ret)) {
