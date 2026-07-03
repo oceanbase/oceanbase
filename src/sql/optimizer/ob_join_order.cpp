@@ -22601,9 +22601,11 @@ int ObJoinOrder::extract_scan_match_expr_candidates(const ObIArray<ObRawExpr *> 
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null param expr for bool op", K(ret));
       } else if (param_expr->has_flag(IS_MATCH_EXPR)) {
+        const int64_t old_match_expr_cnt = scan_match_exprs.count();
         if (OB_FAIL(add_var_to_array_no_dup(scan_match_exprs, static_cast<ObMatchFunRawExpr*>(param_expr)))) {
           LOG_WARN("failed to append match expr to array", K(ret));
-        } else if (OB_FAIL(scan_match_filters.push_back(filter))) {
+        } else if (scan_match_exprs.count() > old_match_expr_cnt
+                   && OB_FAIL(scan_match_filters.push_back(filter))) {
           LOG_WARN("failed to append match filter to array", K(ret));
         }
       }
