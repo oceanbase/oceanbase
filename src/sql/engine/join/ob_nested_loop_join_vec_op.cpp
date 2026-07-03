@@ -864,7 +864,7 @@ int ObNestedLoopJoinVecOp::store_child_batch(const int64_t l_idx, const ObBatchR
     r_start_id = right_row_store_.get_row_cnt();
     ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
     batch_info_guard.set_batch_size(right_brs->size_);
-    for (int i = 0; i < right_brs->size_; ++i) {
+    for (int i = 0; OB_SUCC(ret) && i < right_brs->size_; ++i) {
       if (OB_LIKELY(!right_brs->skip_->exist(i))) {
          batch_info_guard.set_batch_idx(i);
          if (OB_FAIL(right_row_store_.add_row(right_->get_spec().output_,
