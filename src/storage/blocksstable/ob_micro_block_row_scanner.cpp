@@ -1201,6 +1201,10 @@ int ObIMicroBlockRowScanner::get_next_border_rows(const ObDatumRowkey &rowkey)
                                               res))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("Failed to fill rows", K(ret), K_(current), K_(last), K_(step), K(res));
+      } else {
+        // Fix issue 2026061500116751171
+        // end_of_block() governs micro block completion, not fill_rows()
+        ret = OB_SUCCESS;
       }
     }
     if (OB_SUCC(ret)) {
