@@ -39,6 +39,7 @@ public:
   void clean_up();
   void reset();
   void set_timeout_sec(int64_t timeout_sec) { timeout_sec_ = timeout_sec; }
+  void set_max_retry_times(int64_t max_retry_times) { max_retry_times_ = max_retry_times; }
   // Check if HTTP status code is retryable (network failure, rate limited, or server error)
   static bool is_retryable_status_code(int64_t http_code);
   static bool is_retryable_curl_code(int curl_code);
@@ -65,7 +66,7 @@ public:
   int get_batch_result(ObArray<ObJsonObject *> &responses);
   int get_batch_result(ObArray<ObAIBatchItemResult> &results);
 private:
-  int error_handle(CURLcode res);
+  int error_handle(CURLcode res, int64_t http_code, ObStringBuffer &response_buf);
   int send_post(ObJsonObject *data, ObJsonObject *&response);
   int send_post_batch(ObArray<ObJsonObject *> &data_array, ObArray<ObJsonObject *> &responses);
   // Core batch send implementation, returns individual results

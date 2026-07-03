@@ -383,6 +383,15 @@ int ObExprAIRerank::inner_eval_ai_rerank(ObIAllocator &allocator,
   ObJsonObject *http_response = nullptr;
   ObIJsonBase *response = nullptr;
   ObAIFuncClient ai_client;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    ai_client.set_timeout_sec(tenant_config->model_request_timeout / 1000000);
+    ai_client.set_max_retry_times(tenant_config->model_max_retries);
+  } else {
+    SHARE_LOG_RET(WARN, OB_INVALID_CONFIG, "init model request timeout and max retries config with default value");
+    ai_client.set_timeout_sec(60);
+    ai_client.set_max_retry_times(2);
+  }
   if (OB_FAIL(ObAIFuncUtils::get_rerank_body(allocator, info, endpoint_info, query, document_array, config_json, body))) {
     LOG_WARN("fail to get body", K(ret));
   } else if (OB_FAIL(ai_client.send_post(allocator, endpoint_info.get_url(), header_array, body, http_response))) {

@@ -2374,8 +2374,8 @@ DEF_TIME(model_request_timeout, OB_TENANT_PARAMETER, "60s", "[1s,)",
         "Used to control the HTTP timeout for accessing the  model. Especially, the default value is 60s.",
         ObParameterAttr(Section::AI, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_INT(model_max_retries, OB_TENANT_PARAMETER, "2", "[1,)",
-    "Used to control the retry times after a failed model interaction. Especially, the default value is 2",
+DEF_INT(model_max_retries, OB_TENANT_PARAMETER, "2", "[0,)",
+    "Used to control the retry times after a failed model interaction. Especially, the default value is 2. 0 means always retry.",
     ObParameterAttr(Section::AI, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(_enable_semantic_index, OB_TENANT_PARAMETER, "False",

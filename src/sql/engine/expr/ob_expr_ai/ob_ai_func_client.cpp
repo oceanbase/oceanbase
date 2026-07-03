@@ -6,11 +6,46 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_ai_func_client.h"
 #include <algorithm>
+#include "lib/random/ob_random.h"
 
 namespace oceanbase
 {
 namespace common
 {
+
+namespace
+{
+
+const char *get_sync_curl_error_msg(const CURLcode res)
+{
+  const char *err_msg = nullptr;
+  switch (res) {
+    case CURLE_OPERATION_TIMEDOUT:
+      err_msg = "Timeout was reached";
+      break;
+    case CURLE_COULDNT_CONNECT:
+      err_msg = "Could not connect to server";
+      break;
+    case CURLE_COULDNT_RESOLVE_HOST:
+      err_msg = "Could not resolve hostname";
+      break;
+    case CURLE_SEND_ERROR:
+      err_msg = "Failed sending data to the peer";
+      break;
+    case CURLE_RECV_ERROR:
+      err_msg = "Failure when receiving data from the peer";
+      break;
+    case CURLE_GOT_NOTHING:
+      err_msg = "Server returned nothing";
+      break;
+    default:
+      err_msg = curl_easy_strerror(res);
+      break;
+  }
+  return err_msg;
+}
+
+} // namespace
 
 const int64_t ObAIFuncClient::CURL_MAX_TIMEOUT_SEC = INT_MAX/1000;
 ObAIFuncClient::ObAIFuncClient()
@@ -101,25 +136,22 @@ int ObAIFuncClient::init(common::ObIAllocator &allocator, const common::ObString
   return ret;
 }
 
-int ObAIFuncClient::error_handle(CURLcode res)
+int ObAIFuncClient::error_handle(CURLcode res, int64_t http_code, ObStringBuffer &response_buf)
 {
   int ret = OB_SUCCESS;
-  switch (res) {
-    case CURLE_URL_MALFORMAT:{
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("url malformat", K(res));
-      char http_code_str[1024] = "error url format";
-      FORWARD_USER_ERROR(ret, http_code_str);
-      break;
-    }
-    default:{
-      ret = OB_CURL_ERROR;
-      LOG_WARN("curl error, error code is ", K(res));
-      char http_code_str[1024] = "curl error, curl error code is ";
-      snprintf(http_code_str, sizeof(http_code_str), "curl error, curlerror code is %d", res);
-      FORWARD_USER_ERROR(ret, http_code_str);
-      break;
-    }
+  if (res != CURLE_OK) {
+    ret = (res == CURLE_URL_MALFORMAT) ? OB_INVALID_ARGUMENT : OB_CURL_ERROR;
+    const char *curl_err_msg = get_sync_curl_error_msg(res);
+    LOG_WARN("curl request failed", K(ret), K(res), K(curl_err_msg));
+    FORWARD_USER_ERROR_MSG(ret, "curl error: %s (code %d)", curl_err_msg, res);
+  } else if ((http_code / 100) != 2) {
+    ret = OB_CURL_ERROR;
+    ObString err_msg = response_buf.string();
+    const char *err_ptr = (err_msg.ptr() != nullptr) ? err_msg.ptr() : "";
+    const int err_len = (err_msg.ptr() != nullptr) ? std::min(static_cast<int>(err_msg.length()), 450) : 0;
+    LOG_WARN("http request to AI service failed", K(ret), K(http_code), K(err_msg));
+    FORWARD_USER_ERROR_MSG(ret, "http status code: %ld, error message: %.*s",
+        http_code, err_len, err_ptr);
   }
   return ret;
 }
@@ -144,45 +176,33 @@ int ObAIFuncClient::send_post(ObJsonObject *data, ObJsonObject *&response)
     if (OB_FAIL(init_easy_handle(curl_, data, response_buf))) {
       LOG_WARN("fail to init easy handle", K(ret));
     }
-    // retry if need
-    for (int64_t i = 0; OB_SUCC(ret) && i <= max_retry_times_; ++i) {
+    bool need_retry = true;
+    for (int64_t i = 0; OB_SUCC(ret) && need_retry && (0 == max_retry_times_ || i <= max_retry_times_); ++i) {
       http_code = 0;
       if (CURLE_OK != (res = curl_easy_perform(curl_))) {
         LOG_WARN("perform curl failed", K(res));
       } else if (CURLE_OK != (res = curl_easy_getinfo(curl_, CURLINFO_RESPONSE_CODE, &http_code))) {
         LOG_WARN("curl get response code failed", K(res));
       }
-      if (res != CURLE_OK) {
-        // retry
-      } else if (!is_retryable_status_code(http_code)) {
-        break;
-      } else {
-        LOG_WARN("retryable http status code", K(http_code), K(i));
-        int64_t delay_ms = 1000 * (1 << i) + rand() % 1000;
-        ob_usleep(delay_ms * 1000);
+      need_retry = (res != CURLE_OK) ? is_retryable_curl_code(res) : is_retryable_status_code(http_code);
+      if (need_retry && is_timeout()) {
+        ret = OB_TIMEOUT;
+        const char *curl_err_msg = get_sync_curl_error_msg(res);
+        LOG_WARN("AI service request timeout, skip retry", K(ret), K(i), K(res), K(http_code));
+        FORWARD_USER_ERROR_MSG(ret, "AI service request timeout after %ld retries, "
+            "last error: %s (curl code %d, http code %ld). "
+            "please increase ob_query_timeout, example: set ob_query_timeout = 1000000000",
+            i, curl_err_msg, res, http_code);
+      } else if (need_retry) {
+        LOG_WARN("retrying AI service request", K(i), K(res), K(http_code));
+        const int64_t delay_ms = static_cast<int64_t>(1000)
+            * (static_cast<int64_t>(1) << MIN(i, static_cast<int64_t>(4))) + ObRandom::rand(0, 1000);
+        ob_usleep(MIN(delay_ms, static_cast<int64_t>(10000)) * 1000);
         response_buf.reset();
       }
     }
-    if (OB_SUCC(ret)) {
-      if (res != CURLE_OK && OB_FAIL(error_handle(res))) {
-        LOG_WARN("fail to handle error", K(ret), K(res));
-      } else if ((http_code / 100) != 2) { // http status code 2xx means success
-        ret = OB_CURL_ERROR;
-        char http_code_str[1024];
-        ObString err_msg = response_buf.string();
-        int64_t copy_len = std::min(static_cast<int64_t>(err_msg.length()),
-                                    static_cast<int64_t>(sizeof(http_code_str) - 64));
-        if (copy_len > 0) {
-          snprintf(http_code_str, sizeof(http_code_str), "http status code: %ld, error message: %.*s",
-                   http_code, static_cast<int>(copy_len), err_msg.ptr());
-        } else {
-          snprintf(http_code_str, sizeof(http_code_str), "http status code: %ld", http_code);
-        }
-        ObString ob_http_code_str;
-        ob_http_code_str.assign_ptr(http_code_str, static_cast<int32_t>(strlen(http_code_str)));
-        LOG_WARN("unexpected http status code", K(ret), K(http_code), K(ob_http_code_str));
-        FORWARD_USER_ERROR(ret, "http request to AI service failed");
-      }
+    if (OB_SUCC(ret) && OB_FAIL(error_handle(res, http_code, response_buf))) {
+      LOG_WARN("AI service request failed", K(ret), K(res), K(http_code));
     }
 
     if (OB_SUCC(ret)) {
@@ -342,7 +362,8 @@ int ObAIFuncClient::send_post_batch(common::ObIAllocator &allocator,
       if (OB_CURL_ERROR == ret && i < max_retry_times_ - 1) {
         ret = OB_SUCCESS;
         LOG_WARN("need retry", K(ret), K(i));
-        int64_t delay_ms = 1000 * (1 << i) + rand() % 1000;
+        int64_t delay_ms = static_cast<int64_t>(1000)
+            * (static_cast<int64_t>(1) << MIN(i, static_cast<int64_t>(4))) + ObRandom::rand(0, 1000);
         ob_usleep(delay_ms * 1000);
       } else if (OB_SUCC(ret)) {
         break;

@@ -2928,6 +2928,15 @@ int ObAIFuncModel::call_dense_embedding_vector_v2(ObArray<ObString> &content, Ob
   ObAIFuncIEmbed *embed_provider = nullptr;
   ObString result_str;
   ObAIFuncClient client;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    client.set_timeout_sec(tenant_config->model_request_timeout / 1000000);
+    client.set_max_retry_times(tenant_config->model_max_retries);
+  } else {
+    SHARE_LOG_RET(WARN, OB_INVALID_CONFIG, "init model request timeout and max retries config with default value");
+    client.set_timeout_sec(60);
+    client.set_max_retry_times(2);
+  }
   ObString unencrypted_access_key;
   ObString request_model_name = get_request_model_name();
   bool is_multi_model = ObAIFuncUtils::is_multi_model(request_model_name);
@@ -3009,6 +3018,15 @@ int ObAIFuncModel::call_rerank(ObString &query, ObJsonArray *contents, ObJsonArr
   ObIJsonBase *result_base = nullptr;
   ObAIFuncIRerank *rerank_provider = nullptr;
   ObAIFuncClient client;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    client.set_timeout_sec(tenant_config->model_request_timeout / 1000000);
+    client.set_max_retry_times(tenant_config->model_max_retries);
+  } else {
+    SHARE_LOG_RET(WARN, OB_INVALID_CONFIG, "init model request timeout and max retries config with default value");
+    client.set_timeout_sec(60);
+    client.set_max_retry_times(2);
+  }
   ObString unencrypted_access_key;
   ObString request_model_name = get_request_model_name();
   if (!is_rerank_type()) {
@@ -3104,6 +3122,15 @@ int ObAIServiceClient::call_completion(ObString &prompt,
   ObIJsonBase *result_base = nullptr;
   ObString result_str;
   ObAIFuncClient client;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    client.set_timeout_sec(tenant_config->model_request_timeout / 1000000);
+    client.set_max_retry_times(tenant_config->model_max_retries);
+  } else {
+    SHARE_LOG_RET(WARN, OB_INVALID_CONFIG, "init model request timeout and max retries config with default value");
+    client.set_timeout_sec(60);
+    client.set_max_retry_times(2);
+  }
   ObAIFuncIComplete *complete_provider = nullptr;
   ObAIFuncIVLComplete *vl_complete_provider = nullptr;
   ObString system_prompt;
