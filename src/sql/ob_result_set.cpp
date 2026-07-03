@@ -680,7 +680,7 @@ OB_INLINE void ObResultSet::store_affected_rows(ObPhysicalPlanCtx &plan_ctx)
 {
   int64_t affected_row = 0;
   if (lib::is_oracle_mode() && stmt::T_ANONYMOUS_BLOCK == get_stmt_type()) {
-    affected_row = get_affected_rows();
+    affected_row = my_session_.get_affected_rows();
   } else if (!ObStmt::is_dml_stmt(get_stmt_type())
       && (lib::is_oracle_mode() || !is_pl_stmt(get_stmt_type()))) {
     affected_row = 0;
