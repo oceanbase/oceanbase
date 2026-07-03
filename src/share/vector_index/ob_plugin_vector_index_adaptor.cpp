@@ -5233,9 +5233,15 @@ int ObPluginVectorIndexAdaptor::print_adapter_info(char *buf, int64_t buf_len, i
     int64_t meta_scn = 0;
     int64_t incr_count = 0;
     int64_t base_count = 0;
+    bool can_read_index = false;
 
     if (snap_data_.is_valid() && snap_data_->is_inited()) {
-      if (OB_FAIL(get_snap_index_row_cnt_safe(snap_row_cnt))) {
+      if (OB_FAIL(check_snapshot_table_can_read_index(can_read_index))) {
+        LOG_WARN("fail to check snapshot table can read index", KR(ret), K_(tenant_id), KPC(this));
+        ret = OB_SUCCESS;
+      } else if (!can_read_index) {
+        LOG_INFO("snapshot table can not read index, skip print snap info", K_(tenant_id), KPC(this));
+      } else if (OB_FAIL(get_snap_index_row_cnt_safe(snap_row_cnt))) {
         LOG_WARN("failed to get snap index row cnt", K(ret));
       } else if (OB_FAIL(get_snap_vbitmap_cnt_safe(sbitmap_insert_cnt, sbitmap_delete_cnt))) {
         LOG_WARN("failed to get snap vbitmap cnt", K(ret));

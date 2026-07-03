@@ -393,15 +393,15 @@ int ObVecMemSyncExecutor::log_tablets_need_memdata_sync(ObPluginVectorIndexMgr *
           // do nothing
         } else if (tablet_id_array.count() >= ObVecMemSyncLogCb::VECTOR_INDEX_MAX_SYNC_COUNT) {
           // do nothing, wait for next schedule
-        } else if (!need_refresh_ && OB_FAIL(adapter->check_need_sync_to_follower_or_do_opt_task(index_ls_mgr, is_leader, need_sync))) {
-          LOG_WARN("fail to check need memdata sync", KR(ret), K_(tenant_id), K_(ls_handle));
-        } else if (need_refresh_ && OB_FAIL(adapter->check_snapshot_table_can_read_index(can_read_index))) {
+        } else if (OB_FAIL(adapter->check_snapshot_table_can_read_index(can_read_index))) {
           LOG_WARN("fail to check snapshot table can read index", KR(ret),
               K_(tenant_id), K_(ls_handle), KPC(adapter));
           ret = OB_SUCCESS;
-        } else if (need_refresh_ && !can_read_index) {
-          LOG_INFO("snapshot table not ready, skip refresh memdata sync", K_(tenant_id),
+        } else if (!can_read_index) {
+          LOG_INFO("snapshot table not ready, skip memdata sync", K_(tenant_id),
               K_(ls_handle), KPC(adapter));
+        } else if (!need_refresh_ && OB_FAIL(adapter->check_need_sync_to_follower_or_do_opt_task(index_ls_mgr, is_leader, need_sync))) {
+          LOG_WARN("fail to check need memdata sync", KR(ret), K_(tenant_id), K_(ls_handle));
         } else if ((need_refresh_ || need_sync) && is_leader) {
           if (OB_FAIL(tablet_id_array.push_back(iter->first))) {
             LOG_WARN("fail to push tablet id", KR(ret));
