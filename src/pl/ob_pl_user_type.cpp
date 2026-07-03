@@ -2395,7 +2395,7 @@ int ObRecordType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
       } else if (type->is_collection_type()) {
 #ifdef OB_BUILD_ORACLE_PL
         char *coll_src = reinterpret_cast<char*>(obj->get_ext());
-        ObPLNestedTable *coll_table = reinterpret_cast<ObPLNestedTable *>(coll_src);
+        ObPLCollection *coll_table = reinterpret_cast<ObPLCollection *>(coll_src);
         CK (obj->is_ext());
         CK (OB_NOT_NULL(coll_table));
         CK (OB_NOT_NULL(coll_src));
@@ -3298,7 +3298,7 @@ int ObCollectionType::serialize(share::schema::ObSchemaGetterGuard &schema_guard
 {
   int ret = OB_SUCCESS;
   ObObj *src_obj = NULL;
-  ObPLNestedTable *table = NULL;
+  ObPLCollection *table = NULL;
   if (OB_ISNULL(src_obj = reinterpret_cast<ObObj*>(src))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("src is null", K(ret), KP(src_obj), KPC(this));
@@ -3306,7 +3306,7 @@ int ObCollectionType::serialize(share::schema::ObSchemaGetterGuard &schema_guard
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("src obj not pl extend", K(ret), KPC(src_obj), KPC(this));
   } else if (OB_ISNULL(table
-      = reinterpret_cast<ObPLNestedTable *>(src_obj->get_ext()))) {
+      = reinterpret_cast<ObPLCollection *>(src_obj->get_ext()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table is null", K(ret), KPC(table), KPC(this));
   } else if (!table->is_inited()) {
@@ -3359,7 +3359,7 @@ int ObCollectionType::serialize(share::schema::ObSchemaGetterGuard &schema_guard
         LOG_WARN("set text protocol prefix info fail.", K(ret), K(get_name()));
       } else if (element_type_.is_collection_type()) {
         char *coll_src = reinterpret_cast<char *>(obj->get_ext());
-        ObPLNestedTable *coll_table = reinterpret_cast<ObPLNestedTable *>(coll_src);
+        ObPLCollection *coll_table = reinterpret_cast<ObPLCollection *>(coll_src);
         OV (obj->is_ext(), OB_ERR_UNEXPECTED, KP(obj), KP(data), K(i));
         CK (OB_NOT_NULL(coll_src));
         CK (OB_NOT_NULL(coll_table));
@@ -3440,7 +3440,7 @@ int ObCollectionType::deserialize(ObSchemaGetterGuard &schema_guard,
   } else if (OB_FAIL(element_type_.get_field_count(ObPLUDTNS(schema_guard), field_cnt))) {
     LOG_WARN("get field count failed", K(ret));
   } else {
-    ObPLNestedTable *table = reinterpret_cast<ObPLNestedTable *>(dst + dst_pos);
+    ObPLCollection *table = reinterpret_cast<ObPLCollection *>(dst + dst_pos);
     ObPLAllocator1 *collection_allocator = NULL;
     if (OB_ISNULL(table)) {
       ret = OB_ERR_UNEXPECTED;
@@ -3521,7 +3521,7 @@ int ObCollectionType::deserialize(ObSchemaGetterGuard &schema_guard,
             K(src), K(table_data), K(table_data_len), K(table_data_pos));
         }
         if (OB_FAIL(ret)) {
-          table->set_type(PL_NESTED_TABLE_TYPE);
+          table->set_type(get_type());
           table->set_allocator(collection_allocator);
           if (OB_NOT_NULL(table_data)) {
             table->set_count(n + 1);
@@ -3536,7 +3536,7 @@ int ObCollectionType::deserialize(ObSchemaGetterGuard &schema_guard,
       }
       if (OB_SUCC(ret)) {
         ObElemDesc elem_desc;
-        table->set_type(PL_NESTED_TABLE_TYPE);
+        table->set_type(get_type());
         table->set_allocator(collection_allocator);
         table->set_count(max_count);
         table->set_first(1);
