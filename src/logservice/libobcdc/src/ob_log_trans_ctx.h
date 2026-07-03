@@ -217,7 +217,9 @@ public:
   int64_t get_ready_participant_count() const { return ready_participant_count_; }
 
   int64_t get_total_br_count() const { return ATOMIC_LOAD(&total_br_count_); }
+  OB_INLINE int64_t inc_total_br_count_and_get_() { return ATOMIC_AAF(&total_br_count_, 1); }
   void inc_total_br_count_() { ATOMIC_INC(&total_br_count_); }
+  void dec_total_br_count_() { ATOMIC_DEC(&total_br_count_); }
   void set_total_br_count(const int64_t total_br_count) { ATOMIC_SET(&total_br_count_, total_br_count); }
   OB_INLINE bool is_all_br_committed() const
   {

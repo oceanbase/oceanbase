@@ -2,7 +2,6 @@
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
  */
-
 #define USING_LOG_PREFIX OBLOG_TAILF
 
 #include "obcdc_main.h"
@@ -265,7 +264,6 @@ int ObLogMain::parse_args_(int argc, char **argv)
         LOG_STD("verify_begin_trans_id\n");
         break;
       }
-
       default:
         ret = OB_ERROR;
         LOG_ERROR("unknown parameters", K(opt), K(opt_string));
@@ -286,7 +284,7 @@ void ObLogMain::print_usage(const char *prog_name)
       "   -h, --help                          display this help\n"
       "   -H, --heartbeat_file                heartbeat file used to store heartbeat data\n"
       "   -o, --print_console                 output result to stderr or stdout, default not output\n"
-      "   -V, --verify_mode                   start verify mode\n"
+      "   -V, --verify_mode                   enable tx_id/row_index verification and DDL unique_id output\n"
       "   -t, --start_timestamp               start timestamp in second, default current timestamp\n"
       "   -T, --start_timestamp_usec          start timestamp in micro second, default current timestamp\n"
       "   -r, --enable_reentrant              enable reentrant after stop, default disable\n"
