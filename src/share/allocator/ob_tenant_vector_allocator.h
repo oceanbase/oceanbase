@@ -58,6 +58,8 @@ public:
   int64_t get_left_pre_alloc_size();
   int64_t get_pre_alloc_mem_size() const { return pre_alloc_mem_size_; }
 
+  /// Tenant total memory threshold for small vs large default percentage split in get_vector_mem_limit_percentage().
+  static constexpr int64_t SMALL_TENANT_MEMORY_LIMIT_BYTES = 8LL * 1024 * 1024 * 1024;
   static void get_vector_mem_config(int64_t &resource_limit, int64_t &max_duration);
   static int64_t get_vector_mem_limit_percentage(omt::ObTenantConfigGuard &tenant_config, uint64_t tenant_id = MTL_ID());
   TO_STRING_KV(K(is_inited_), KP(throttle_tool_), KP(memory_context_.ref_context()), K_(pre_alloc_mem_size));
