@@ -5,6 +5,10 @@
 #define USING_LOG_PREFIX SERVER
 #include <gtest/gtest.h>
 #include <iostream>
+#include <atomic>
+#include <random>
+#include <thread>
+#include <vector>
 #define private public
 #define protected public
 
@@ -15,6 +19,9 @@
 #include "share/vector_index/ob_plugin_vector_index_scheduler.h"
 #include "share/vector_index/ob_plugin_vector_index_adaptor.h"
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
+#include "share/vector_index/ob_plugin_vector_index_serialize.h"
+#include "storage/lob/ob_lob_util.h"
+#include "storage/tx/ob_trans_service.h"
 
 namespace oceanbase {
 namespace unittest {
@@ -61,6 +68,7 @@ TEST_F(TestVectorIndexFreeze, simple_test)
   uint64_t tenant_id = R.tenant_id_;
   LOGI("create tenant finish");
 
+  ASSERT_EQ(OB_SUCCESS, get_curr_simple_server().get_sql_proxy().write("alter system set_tp tp_name = ERRSIM_VEC_DISABLE_MERGE, error_code = 1, frequency = 1", affected_rows));
   ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();
   sqlclient::ObISQLConnection *connection = nullptr;
   ASSERT_EQ(OB_SUCCESS, sql_proxy.acquire(connection));
@@ -68,7 +76,6 @@ TEST_F(TestVectorIndexFreeze, simple_test)
   const std::string table_name = "t1";
   int ret = OB_SUCCESS;
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write("alter system set _persist_vector_index_incremental = true", affected_rows));
-  ASSERT_EQ(OB_SUCCESS, sql_proxy.write("alter system set ob_vector_index_active_segment_max_size='50MB'", affected_rows));
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write("create table t1 (c1 int auto_increment, embedding vector(512), primary key(c1), vector index vec_idx1(embedding) with (distance=cosine,type=hnsw_bq,lib=vsag))", affected_rows));
   int64_t inc_tablet_id = 0;
   ASSERT_EQ(OB_SUCCESS, SSH::select_int64(
@@ -151,7 +158,7 @@ TEST_F(TestVectorIndexFreeze, simple_test)
             connection, "select count(*) val from t1",
             total_cnt));
   ASSERT_EQ(total_cnt, 18500);
-
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write("call dbms_vector.flush_index('t1', 'vec_idx1')", affected_rows));
   sleep(10);
 
   ObString statistics;
@@ -211,7 +218,7 @@ TEST_F(TestVectorIndexFreeze, simple_test)
             connection, "select count(*) val from t1",
             total_cnt));
   ASSERT_EQ(total_cnt, 37000);
-
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write("call dbms_vector.flush_index('t1', 'vec_idx1')", affected_rows));
   sleep(10);
 
   ASSERT_EQ(OB_SUCCESS, SSH::select_varchar(
@@ -259,6 +266,7 @@ TEST_F(TestVectorIndexFreeze, simple_test)
     my_thread.join();
   }
   select_threads.clear();
+  ASSERT_EQ(OB_SUCCESS, get_curr_simple_server().get_sql_proxy().write("alter system set_tp tp_name = ERRSIM_VEC_DISABLE_MERGE, error_code = 0, frequency = 0", affected_rows));
   sleep(10);
 
   ASSERT_EQ(OB_SUCCESS, SSH::select_varchar(
@@ -329,7 +337,6 @@ TEST_F(TestVectorIndexFreeze, heap_table)
   int ret = OB_SUCCESS;
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write("alter system set vector_index_optimize_duty_time='[24:00:00, 24:00:00]'", affected_rows));
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write("drop table if exists t1", affected_rows));
-  ASSERT_EQ(OB_SUCCESS, sql_proxy.write("alter system set ob_vector_index_active_segment_max_size='50MB'", affected_rows));
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write("create table t1 (c1 int auto_increment, embedding vector(512), primary key(c1), vector index vec_idx1(embedding) with (distance=cosine,type=hnsw_bq,lib=vsag)) ORGANIZATION HEAP", affected_rows));
   int64_t inc_tablet_id = 0;
   ASSERT_EQ(OB_SUCCESS, SSH::select_int64(
@@ -412,7 +419,7 @@ TEST_F(TestVectorIndexFreeze, heap_table)
             connection, "select count(*) val from t1",
             total_cnt));
   ASSERT_EQ(total_cnt, 18500);
-
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write("call dbms_vector.flush_index('t1', 'vec_idx1')", affected_rows));
   sleep(10);
 
   ObString statistics;
@@ -472,7 +479,7 @@ TEST_F(TestVectorIndexFreeze, heap_table)
             connection, "select count(*) val from t1",
             total_cnt));
   ASSERT_EQ(total_cnt, 37000);
-
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write("call dbms_vector.flush_index('t1', 'vec_idx1')", affected_rows));
   sleep(10);
 
   ASSERT_EQ(OB_SUCCESS, SSH::select_varchar(
@@ -590,7 +597,6 @@ TEST_F(TestVectorIndexFreeze, partition_table)
   int ret = OB_SUCCESS;
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write("alter system set vector_index_optimize_duty_time='[24:00:00, 24:00:00]'", affected_rows));
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write("drop table if exists t1", affected_rows));
-  ASSERT_EQ(OB_SUCCESS, sql_proxy.write("alter system set ob_vector_index_active_segment_max_size='0MB'", affected_rows));
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write("create table t1 (c1 int auto_increment, embedding vector(512), primary key(c1), vector index vec_idx1(embedding) with (distance=cosine,type=hnsw_bq,lib=vsag)) partition by key(c1) partitions 2", affected_rows));
   int64_t inc_tablet_id = 0;
   ASSERT_EQ(OB_SUCCESS, SSH::select_int64(
@@ -652,9 +658,7 @@ TEST_F(TestVectorIndexFreeze, partition_table)
     my_thread.join();
   }
   worker_threads.clear();
-  ASSERT_EQ(OB_SUCCESS, sql_proxy.write("alter system set ob_vector_index_active_segment_max_size='1MB'", affected_rows));
   sleep(10);
-  ASSERT_EQ(OB_SUCCESS, sql_proxy.write("alter system set ob_vector_index_active_segment_max_size='0MB'", affected_rows));
   ASSERT_EQ(check_vector_index_task_finished(), OB_SUCCESS);
   ASSERT_EQ(check_vector_index_task_success(), OB_SUCCESS);
 
@@ -678,7 +682,7 @@ TEST_F(TestVectorIndexFreeze, partition_table)
             connection, "select count(*) val from t1",
             total_cnt));
   ASSERT_EQ(total_cnt, 18500);
-
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write("call dbms_vector.flush_index('t1', 'vec_idx1')", affected_rows));
   sleep(10);
 
   ObString statistics;
@@ -733,12 +737,11 @@ TEST_F(TestVectorIndexFreeze, partition_table)
     my_thread.join();
   }
   worker_threads.clear();
-  ASSERT_EQ(OB_SUCCESS, sql_proxy.write("alter system set ob_vector_index_active_segment_max_size='1MB'", affected_rows));
   ASSERT_EQ(OB_SUCCESS, SSH::select_int64(
             connection, "select count(*) val from t1",
             total_cnt));
   ASSERT_EQ(total_cnt, 37000);
-
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write("call dbms_vector.flush_index('t1', 'vec_idx1')", affected_rows));
   sleep(10);
 
   ASSERT_EQ(OB_SUCCESS, SSH::select_varchar(
@@ -831,6 +834,185 @@ TEST_F(TestVectorIndexFreeze, partition_table)
   check_thread->join();
   ASSERT_EQ(check_ret, OB_SUCCESS);
   delete check_thread;
+}
+
+/*
+ * Stress ObPluginVectorIndexAdaptor::add_snap_index (mem_data_rwlock_) vs
+ * serialize_snapshot (snap_data_->complete_lock_) on the same adaptor.
+ * Covers the multi-threaded buffer/build path documented in add_snap_index (SQ/BQ buffer mode).
+ */
+TEST_F(TestVectorIndexFreeze, concurrent_add_snap_and_serialize_snapshot)
+{
+  int ret = OB_SUCCESS;
+
+  const char* tenant_name = "vdb";
+  LOGI("create tenant begin");
+  int64_t affected_rows = 0;
+  // 创建普通租户tt1
+  ASSERT_EQ(OB_SUCCESS, create_tenant(tenant_name, "12G", "16G", false, 10));
+  // 获取租户tt1的tenant_id
+  ASSERT_EQ(OB_SUCCESS, get_tenant_id(R.tenant_id_, tenant_name));
+  ASSERT_NE(0, R.tenant_id_);
+  // 初始化普通租户tt1的sql proxy
+  ASSERT_EQ(OB_SUCCESS, get_curr_simple_server().init_sql_proxy2(tenant_name));
+  uint64_t tenant_id = R.tenant_id_;
+  LOGI("create tenant finish");
+
+  ASSERT_EQ(OB_SUCCESS, get_tenant_id(R.tenant_id_, tenant_name));
+  ASSERT_NE(0, R.tenant_id_);
+  ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();
+  sqlclient::ObISQLConnection *connection = nullptr;
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.acquire(connection));
+  ASSERT_NE(nullptr, connection);
+
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write("alter system set vector_index_optimize_duty_time='[24:00:00, 24:00:00]'", affected_rows));
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write("drop table if exists t1", affected_rows));
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(
+      "create table t1 (c1 int auto_increment, embedding vector(512), primary key(c1), vector index vec_idx1(embedding) with (distance=cosine,type=hnsw_bq,lib=vsag)) ORGANIZATION HEAP",
+      affected_rows));
+  int64_t inc_tablet_id = 0;
+  ASSERT_EQ(OB_SUCCESS, SSH::select_int64(
+      connection,
+      "select t2.tablet_id val from oceanbase.__all_table t1 join oceanbase.__all_tablet_to_ls t2 on t1.table_id = t2.table_id where t1.table_name like '__idx_%_vec_idx1' limit 1",
+      inc_tablet_id));
+  ASSERT_GT(inc_tablet_id, 0);
+  int64_t table_ls_id = 0;
+  ASSERT_EQ(OB_SUCCESS, SSH::select_int64(
+      connection,
+      "select ls_id val from oceanbase.__all_tablet_to_ls where tablet_id in (select tablet_id from oceanbase.__all_table where table_name like '__idx_%_vec_idx1')",
+      table_ls_id));
+  ASSERT_GT(table_ls_id, 0);
+  ASSERT_EQ(0, sql_proxy.close(connection, true));
+
+  sleep(10);
+
+  constexpr int64_t kDim = 512;
+  constexpr int kBatch = 1000;
+  constexpr int kRounds = 48;
+  std::vector<float> vec_buf(static_cast<size_t>(kDim * kBatch));
+  std::mt19937 rng(42);
+  std::uniform_real_distribution<float> dist(0.0F, 1.0F);
+  for (size_t i = 0; i < vec_buf.size(); ++i) {
+    vec_buf[i] = dist(rng);
+  }
+
+  std::atomic<int32_t> add_snap_fail(0);
+  std::atomic<int32_t> serialize_infra_fail(0);
+
+  MTL_SWITCH(R.tenant_id_) {
+    ObPluginVectorIndexService *vec_index_service = MTL(ObPluginVectorIndexService *);
+    const ObTabletID inc_tid(inc_tablet_id);
+    const ObLSID ls_id(table_ls_id);
+    {
+      ObPluginVectorIndexAdapterGuard adaptor_guard;
+      ASSERT_EQ(OB_SUCCESS, vec_index_service->get_adapter_inst_guard(ls_id, inc_tid, adaptor_guard));
+      ObPluginVectorIndexAdaptor *adaptor = adaptor_guard.get_adatper();
+      ASSERT_NE(nullptr, adaptor);
+      ASSERT_TRUE(adaptor->is_complete());
+      ASSERT_EQ(OB_SUCCESS, adaptor->init_snap_data_for_build(false));
+      ASSERT_EQ(OB_SUCCESS, adaptor->set_snapshot_key_prefix(
+          adaptor->get_snap_tablet_id().id(),
+          static_cast<uint64_t>(ObTimeUtility::fast_current_time()),
+          256));
+    }
+
+    std::vector<std::thread> workers;
+    const int kAddThreads = 4;
+    const int kSerThreads = 2;
+    for (int t = 0; t < kAddThreads; ++t) {
+      workers.emplace_back([&, inc_tid, ls_id, t]() {
+        int local_fail = 0;
+        std::vector<int64_t> local_vids(static_cast<size_t>(kBatch));
+        MTL_SWITCH(R.tenant_id_) {
+          ObPluginVectorIndexService *svc = MTL(ObPluginVectorIndexService *);
+          ObPluginVectorIndexAdapterGuard guard;
+          int ret = svc->get_adapter_inst_guard(ls_id, inc_tid, guard);
+          if (OB_SUCCESS != ret) {
+            local_fail++;
+          } else {
+            ObPluginVectorIndexAdaptor *adp = guard.get_adatper();
+            for (int r = 0; r < kRounds; ++r) {
+              for (int b = 0; b < kBatch; ++b) {
+                local_vids[static_cast<size_t>(b)] =
+                    static_cast<int64_t>(t) * 1000000L + static_cast<int64_t>(r) * kBatch + b;
+              }
+              ret = adp->add_snap_index(vec_buf.data(), local_vids.data(), nullptr, 0, kBatch);
+              if (OB_SUCCESS != ret) {
+                local_fail++;
+              }
+            }
+          }
+        }
+        add_snap_fail.fetch_add(local_fail);
+      });
+    }
+    sleep(10);
+    for (int st = 0; st < kSerThreads; ++st) {
+      (void)st;
+      workers.emplace_back([&, inc_tid, ls_id]() {
+        int infra_fail = 0;
+        MTL_SWITCH(R.tenant_id_) {
+          ObPluginVectorIndexService *svc = MTL(ObPluginVectorIndexService *);
+          ObPluginVectorIndexAdapterGuard guard;
+          int ret = svc->get_adapter_inst_guard(ls_id, inc_tid, guard);
+          if (OB_SUCCESS != ret) {
+            infra_fail++;
+          } else {
+            ObPluginVectorIndexAdaptor *adp = guard.get_adatper();
+            ObArenaAllocator arena("VecIdxSerT", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+            transaction::ObTxDesc *tx_desc = nullptr;
+            transaction::ObTxReadSnapshot snapshot;
+            const int64_t timeout_ts =
+                ObTimeUtility::fast_current_time() + storage::ObInsertLobColumnHelper::LOB_ACCESS_TX_TIMEOUT;
+            ret = storage::ObInsertLobColumnHelper::start_trans(ls_id, false, timeout_ts, tx_desc);
+            if (OB_SUCCESS != ret) {
+              infra_fail++;
+            } else {
+              transaction::ObTransService *txs = MTL(transaction::ObTransService *);
+              if (OB_ISNULL(txs)) {
+                infra_fail++;
+              } else {
+                ret = txs->get_ls_read_snapshot(
+                    *tx_desc, transaction::ObTxIsolationLevel::RC, ls_id, timeout_ts, snapshot);
+                if (OB_SUCCESS != ret) {
+                  infra_fail++;
+                } else {
+                  for (int r = 0; r < kRounds; ++r) {
+                    ObVecIdxSnapshotDataWriteCtx vctx;
+                    vctx.get_ls_id() = ls_id;
+                    vctx.get_data_tablet_id() = adp->get_data_tablet_id();
+                    vctx.get_snap_tablet_id() = adp->get_snap_tablet_id();
+                    vctx.get_lob_meta_tablet_id() = adp->get_snap_tablet_id();
+                    vctx.get_lob_piece_tablet_id() = adp->get_snap_tablet_id();
+                    ObHNSWSerializeCallback::CbParam param;
+                    param.vctx_ = &vctx;
+                    param.allocator_ = &arena;
+                    param.tmp_allocator_ = &arena;
+                    param.tx_desc_ = tx_desc;
+                    param.snapshot_ = &snapshot;
+                    param.timeout_ = timeout_ts;
+                    param.lob_inrow_threshold_ = 8192;
+                    param.tablet_id_ = adp->get_snap_tablet_id();
+                    param.snapshot_version_ = ObTimeUtility::fast_current_time() + r;
+                    param.is_vec_tablet_rebuild_ = false;
+                    (void)adp->serialize_snapshot(param);
+                  }
+                  ret = storage::ObInsertLobColumnHelper::end_trans(tx_desc, true, timeout_ts);
+                  if (OB_SUCCESS != ret) {
+                    infra_fail++;
+                  }
+                }
+              }
+            }
+          }
+        }
+        serialize_infra_fail.fetch_add(infra_fail);
+      });
+    }
+    for (auto &th : workers) {
+      th.join();
+    }
+  }
 }
 
 

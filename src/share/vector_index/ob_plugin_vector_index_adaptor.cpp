@@ -2119,9 +2119,6 @@ int ObPluginVectorIndexAdaptor::add_snap_index(float *vectors, int64_t *vids, Ob
         param->type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF) {
       if (OB_FAIL(init_snap_data_for_build(param, false/*is_buffer_mode*/))) {
         LOG_WARN("init snap index failed.", K(ret));
-      } else if (OB_ISNULL(segment_builder = snap_data_->builder_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("segment builder is null", K(ret), K(snap_data_));
       } else if (num == 0 || OB_ISNULL(vectors)) {
         // do nothing
       } else if (OB_ISNULL(vids)) {
@@ -2140,7 +2137,15 @@ int ObPluginVectorIndexAdaptor::add_snap_index(float *vectors, int64_t *vids, Ob
         } else {
           lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
           lib::ObLightBacktraceGuard light_backtrace_guard(false);
-          if (!is_sparse_vector_index_type()) {
+          // avoid concurrent with serialize_snapshot
+          TCRLockGuard snap_complete_lock_guard(snap_data_->complete_lock_);
+          if (OB_ISNULL(segment_builder = snap_data_->builder_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("segment builder is null", K(ret), K(snap_data_));
+          } else if (! segment_builder->is_inited()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("segment builder is not inited now, may be build finished", K(ret), KP(this), KPC(segment_builder));
+          } else if (!is_sparse_vector_index_type()) {
             if (OB_FAIL(segment_builder->add_index(vectors, vids, dim, extra_info_buf, num, param->extra_info_actual_size_))) {
               LOG_WARN("failed to add index.", K(ret), K(dim), K(num));
             }
@@ -2156,9 +2161,6 @@ int ObPluginVectorIndexAdaptor::add_snap_index(float *vectors, int64_t *vids, Ob
         || param->type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF_SQ) {
       if (OB_FAIL(init_snap_data_for_build(param, true/*is_buffer_mode*/))) {
         LOG_WARN("init snap index failed.", K(ret));
-      } else if (OB_ISNULL(segment_builder = snap_data_->builder_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("segment builder is null", K(ret), K(snap_data_));
       } else if (num == 0 || OB_ISNULL(vectors)) {
         // do nothing
       } else if (OB_ISNULL(vids)) {
@@ -2176,7 +2178,15 @@ int ObPluginVectorIndexAdaptor::add_snap_index(float *vectors, int64_t *vids, Ob
                                                        param->extra_info_actual_size_, num, extra_info_buf))) {
           LOG_WARN("failed to encode extra info.", K(ret), K(param->extra_info_actual_size_));
         } else {
-          if (segment_builder->has_build_) {
+          // avoid concurrent with serialize_snapshot
+          TCRLockGuard snap_complete_lock_guard(snap_data_->complete_lock_);
+          if (OB_ISNULL(segment_builder = snap_data_->builder_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("segment builder is null", K(ret), K(snap_data_));
+          } else if (! segment_builder->is_inited()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("segment builder is not inited now, may be build finished", K(ret), KP(this), KPC(segment_builder));
+          } else if (segment_builder->has_build_) {
             // directly write into index
             if (!is_sparse_vector_index_type()) {
               if (OB_FAIL(segment_builder->add_index(vectors, vids, dim, extra_info_buf, num, param->extra_info_actual_size_))) {
@@ -2454,7 +2464,8 @@ int ObPluginVectorIndexAdaptor::check_snap_index()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("segment builder is null", K(ret), K(snap_data_));
   } else if (! segment_builder->has_build_) {
-    TCWLockGuard lock_guard(snap_data_->mem_data_rwlock_);
+    TCWLockGuard lock_guard(snap_data_->complete_lock_);
+    TCWLockGuard mem_data_lock_guard(snap_data_->mem_data_rwlock_);
     if (segment_builder->is_empty_buffer()) {
       // do nothing :maybe null data
     } else if (is_sparse_vector_index_type()) {
@@ -2481,6 +2492,7 @@ int ObPluginVectorIndexAdaptor::check_snap_index()
       }
     }
   } else {
+    TCWLockGuard lock_guard(snap_data_->complete_lock_);
     // maybe retry
     int64_t vec_cnt = 0;
     if (OB_FAIL(segment_builder->segment_handle_->get_index_number(vec_cnt))) {
@@ -3412,7 +3424,6 @@ int ObPluginVectorIndexAdaptor::prepare_delta_mem_data(roaring::api::roaring64_b
   return ret;
 }
 
-// thread unsafe
 int ObPluginVectorIndexAdaptor::serialize_snapshot(ObHNSWSerializeCallback::CbParam &param)
 {
   int ret = OB_SUCCESS;
@@ -3429,62 +3440,68 @@ int ObPluginVectorIndexAdaptor::serialize_snapshot(ObHNSWSerializeCallback::CbPa
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("segment builder is null", K(ret), K(snap_data_));
   } else if (OB_ISNULL(index_param = static_cast<ObVectorIndexParam*>(algo_data_))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to get index param.", K(ret));
-  } else if ((snap_data_->builder_->seg_type_ == ObVectorIndexSegmentType::INCR_MERGE || snap_data_->builder_->seg_type_ == ObVectorIndexSegmentType::VSAG_MERGE)
-      && snap_data_->builder_->add_cnt_ == 0) {
-    // store vbitmap for empty merge result
-    if (! snap_data_->builder_->segment_handle_.is_valid()
-        && OB_FAIL(ObVectorIndexSegment::create(snap_data_->builder_->segment_handle_,
-            tenant_id_, *get_allocator(), *index_param, index_param->type_, index_param->m_, this))) {
-      LOG_WARN("failed to create vsag index.", K(ret));
-    } else if (OB_FALSE_IT(snap_data_->builder_->seg_type_ = ObVectorIndexSegmentType::EMPTY)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get index param.", K(ret));
+  } else {
+    // add lock here to avoid concurrent serialize snapshot
+    TCWLockGuard lock_guard(snap_data_->complete_lock_);
+    if ((snap_data_->builder_->seg_type_ == ObVectorIndexSegmentType::INCR_MERGE
+            || snap_data_->builder_->seg_type_ == ObVectorIndexSegmentType::VSAG_MERGE)
+        && snap_data_->builder_->add_cnt_ == 0) {
+      // store vbitmap for empty merge result
+      if (!snap_data_->builder_->segment_handle_.is_valid()
+          && OB_FAIL(ObVectorIndexSegment::create(snap_data_->builder_->segment_handle_,
+              tenant_id_, *get_allocator(), *index_param, index_param->type_, index_param->m_, this))) {
+        LOG_WARN("failed to create vsag index.", K(ret));
+      } else if (OB_FALSE_IT(snap_data_->builder_->seg_type_ = ObVectorIndexSegmentType::EMPTY)) {
+      } else if (OB_FAIL(snap_data_->builder_->serialize(tenant_id_, param))) {
+        LOG_WARN("serialize segment fail", K(ret));
+      } else if (OB_FAIL(build_snap_meta(param.tablet_id_, param.snapshot_version_, vctx->vals_.count()))) {
+        LOG_WARN("build meta data fail", K(ret));
+      } else if (OB_FAIL(snap_data_->build_finished(*get_allocator()))) {
+        LOG_WARN("build_finished fail", K(ret));
+      } else {
+        LOG_INFO("build empty segment sucess", KPC(this));
+      }
+    } else if (!snap_data_->builder_->segment_handle_.is_valid()) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("build segment is not init, empty index", K(ret), K(snap_data_));
+    } else if (OB_FAIL(snap_data_->builder_->segment_handle_->get_index_number(vec_cnt))) {
+      LOG_WARN("failed to get snap index number.", K(ret));
+    } else if (vec_cnt == 0) {
+      // do nothing
+      LOG_INFO("[vec index] empty snap index, do not need to serialize", K(lbt()));
+    } else if (OB_FAIL(snap_data_->builder_->segment_handle_->get_vid_bound(min_vid, max_vid))) {
+      LOG_WARN("failed to get snap index number.", K(ret));
+      // push empty meta block data as fisrt element of vals
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
+      LOG_WARN("get tenant data version failed", K(ret));
+    } else if (param.is_vec_tablet_rebuild_
+        || !ObPluginVectorIndexHelper::enable_persist_vector_index_incremental(tenant_id_)
+        || tenant_data_version < DATA_VERSION_4_5_1_0) {
+      if (OB_FAIL(snap_data_->builder_->serialize(tenant_id_, param))) {
+        LOG_WARN("serialize segment fail", K(ret));
+      } else if (OB_FAIL(build_snap_meta(param.tablet_id_, param.snapshot_version_, vctx->vals_.count()))) {
+        LOG_WARN("build meta data fail", K(ret));
+      } else if (OB_FAIL(snap_data_->build_finished(*get_allocator()))) {
+        LOG_WARN("build_finished fail", K(ret));
+      } else {
+        snap_data_->meta_.is_persistent_ = false;
+        LOG_INFO("build without meta sucess", KPC(this));
+      }
+    } else if (OB_FAIL(vctx->vals_.push_back(ObVecIdxSnapshotBlockData(true/*is_meta*/, ObString())))) {
+      LOG_WARN("push back fail", K(ret));
     } else if (OB_FAIL(snap_data_->builder_->serialize(tenant_id_, param))) {
       LOG_WARN("serialize segment fail", K(ret));
-    } else if (OB_FAIL(build_snap_meta(param.tablet_id_, param.snapshot_version_, vctx->vals_.count()))) {
+    } else if (OB_FAIL(build_and_serialize_meta_data(
+        param.tablet_id_, param.snapshot_version_, vctx->vals_.count() - 1, *param.allocator_,
+        vctx->vals_.at(0).get_data()))) {
       LOG_WARN("build meta data fail", K(ret));
     } else if (OB_FAIL(snap_data_->build_finished(*get_allocator()))) {
       LOG_WARN("build_finished fail", K(ret));
     } else {
-      LOG_INFO("build empty segment sucess", KP(this));
+      LOG_INFO("build with meta row sucess", KPC(this));
     }
-  } else if (! snap_data_->builder_->segment_handle_.is_valid()) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("build segment is not init, empty index", K(ret), K(snap_data_));
-  } else if (OB_FAIL(snap_data_->builder_->segment_handle_->get_index_number(vec_cnt))) {
-    LOG_WARN("failed to get snap index number.", K(ret));
-  } else if (vec_cnt == 0) {
-    // do nothing
-    LOG_INFO("[vec index] empty snap index, do not need to serialize", K(lbt()));
-  } else if (OB_FAIL(snap_data_->builder_->segment_handle_->get_vid_bound(min_vid, max_vid))) {
-    LOG_WARN("failed to get snap index number.", K(ret));
-  // push empty meta block data as fisrt element of vals
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
-    LOG_WARN("get tenant data version failed", K(ret));
-  } else if (param.is_vec_tablet_rebuild_
-      || ! ObPluginVectorIndexHelper::enable_persist_vector_index_incremental(tenant_id_)
-      || tenant_data_version < DATA_VERSION_4_5_1_0) {
-    if (OB_FAIL(snap_data_->builder_->serialize(tenant_id_, param))) {
-      LOG_WARN("serialize segment fail", K(ret));
-    } else if (OB_FAIL(build_snap_meta(param.tablet_id_, param.snapshot_version_, vctx->vals_.count()))) {
-      LOG_WARN("build meta data fail", K(ret));
-    } else if (OB_FAIL(snap_data_->build_finished(*get_allocator()))) {
-      LOG_WARN("build_finished fail", K(ret));
-    } else {
-      snap_data_->meta_.is_persistent_ = false;
-      LOG_INFO("build without meta sucess", KP(this));
-    }
-  } else if (OB_FAIL(vctx->vals_.push_back(ObVecIdxSnapshotBlockData(true/*is_meta*/, ObString())))) {
-    LOG_WARN("push back fail", K(ret));
-  } else if (OB_FAIL(snap_data_->builder_->serialize(tenant_id_, param))) {
-    LOG_WARN("serialize segment fail", K(ret));
-  } else if (OB_FAIL(build_and_serialize_meta_data(
-      param.tablet_id_, param.snapshot_version_, vctx->vals_.count() - 1, *param.allocator_, vctx->vals_.at(0).get_data()))) {
-    LOG_WARN("build meta data fail", K(ret));
-  } else if (OB_FAIL(snap_data_->build_finished(*get_allocator()))) {
-    LOG_WARN("build_finished fail", K(ret));
-  } else {
-    LOG_INFO("build with meta row sucess", KP(this));
   }
   LOG_INFO("serialize_snapshot finish", K(ret), K(vec_cnt), K(min_vid), K(max_vid), KPC(this));
   return ret;
