@@ -415,6 +415,7 @@ public:
   static constexpr char ALIYUN[20] = "ALIYUN-OPENAI";
   static constexpr char DASHSCOPE[20] = "ALIYUN-DASHSCOPE";
   static constexpr char SILICONFLOW[20] = "SILICONFLOW";
+  static constexpr char COHERE[20] = "COHERE";
   static constexpr char HUNYUAN[20] = "HUNYUAN-OPENAI";
   static constexpr char DEEPSEEK[20] = "DEEPSEEK";
 

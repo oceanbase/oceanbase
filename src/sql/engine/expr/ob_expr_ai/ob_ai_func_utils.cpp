@@ -2240,14 +2240,15 @@ int ObAIFuncUtils::get_rerank_provider(ObIAllocator &allocator, const ObString &
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("provider is empty", K(ret));
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_function, provider is empty");
-  } else if (ob_provider_check(provider, ObAIFuncProviderUtils::SILICONFLOW)) {
+  } else if (ob_provider_check(provider, ObAIFuncProviderUtils::SILICONFLOW)
+          || ob_provider_check(provider, ObAIFuncProviderUtils::COHERE)) {
     rerank_provider = OB_NEWx(ObSiliconflowUtils::ObSiliconflowRerank, &allocator);
   } else if (ob_provider_check(provider, ObAIFuncProviderUtils::DASHSCOPE)) {
     rerank_provider = OB_NEWx(ObDashscopeUtils::ObDashscopeRerank, &allocator);
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("this provider current not support", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "rerank support siliconflow and ailiyun-dashscope, this provider current is");
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "rerank support siliconflow, cohere and ailiyun-dashscope, this provider current is");
   }
   if (OB_SUCC(ret) && OB_ISNULL(rerank_provider)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
