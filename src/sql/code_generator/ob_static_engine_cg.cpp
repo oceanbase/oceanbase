@@ -1033,11 +1033,18 @@ int ObStaticEngineCG::generate_calc_exprs(
         }
 
         if (OB_FAIL(ret)) {
-        } else if (raw_expr->is_vector_sort_expr() && raw_expr->has_flag(IS_CUT_CALC_EXPR)) {
-          raw_expr->set_is_calculated(true);
-          FLOG_INFO("for distance needn't calc", K(ret));
-        } else if (OB_FAIL(calc_raw_exprs.push_back(raw_expr))) {
-          LOG_WARN("fail to push output expr", K(ret));
+        } else {
+          if (raw_expr->is_vector_sort_expr() && raw_expr->has_flag(IS_CUT_CALC_EXPR)) {
+            // Still add it to calc_raw_exprs so that clear_evaluated_flag() covers it.
+            // Without this, after Sort rescan frees topn_heap_, datum.ptr_ set by attach_rows() becomes dangling
+            // while projected_=true persists (never cleared by eval_infos_),
+            // causing eval() to read freed memory (use-after-free).
+            raw_expr->set_is_calculated(true);
+            FLOG_INFO("for distance needn't calc", K(ret));
+          }
+          if (OB_FAIL(calc_raw_exprs.push_back(raw_expr))) {
+            LOG_WARN("fail to push output expr", K(ret));
+          }
         }
       }
     }
