@@ -19,9 +19,14 @@
 
 namespace oceanbase
 {
+namespace storage
+{
+class ObTableScanIterator;
+}
 namespace share
 {
 class ObPluginVectorIndexAdaptor;
+class ObVecIndexAsyncTaskCtx;
 
 class ObVectorIndexDeltaTableHandler
 {
@@ -122,6 +127,12 @@ public:
   int insert_segment_data(
       ObIArray<ObVecIdxSnapshotBlockData> &data_blocks, transaction::ObTxDesc *tx_desc, transaction::ObTxReadSnapshot &snapshot,
       const int64_t snapshot_version, const ObVectorIndexAlgorithmType index_type, const int64_t timeout);
+  int delete_segment_data(
+      ObPluginVectorIndexAdaptor *adaptor,
+      ObTableScanIterator *table_scan_iter,
+      transaction::ObTxDesc *tx_desc,
+      transaction::ObTxReadSnapshot &snapshot,
+      const int64_t timeout);
 
 private:
   static int prepare_snapshot_table_column_info(
@@ -140,10 +151,19 @@ private:
       int64_t &data_col_id,
       int64_t &visible_col_id);
 
+  int prepare_delete_iter(
+      ObPluginVectorIndexAdaptor *adaptor,
+      transaction::ObTxDesc *tx_desc,
+      ObTableScanIterator *table_scan_iter,
+      storage::ObValueRowIterator &row_iter,
+      transaction::ObTxReadSnapshot &snapshot);
   int prepare_insert_iter(
       ObIArray<ObVecIdxSnapshotBlockData> &data_blocks, const int64_t snapshot_version,
       const ObVectorIndexAlgorithmType index_type, storage::ObValueRowIterator &row_iter);
   int do_insert(
+      storage::ObValueRowIterator &row_iter, transaction::ObTxDesc *tx_desc,
+      transaction::ObTxReadSnapshot &snapshot, const int64_t timeout);
+  int do_delete(
       storage::ObValueRowIterator &row_iter, transaction::ObTxDesc *tx_desc,
       transaction::ObTxReadSnapshot &snapshot, const int64_t timeout);
   int inner_insertup_meta_row(

@@ -2636,13 +2636,28 @@ int ObVecIndexAsyncTask::get_ls_leader_addr(
 }
 
 int ObVecIndexAsyncTask::execute_inner_sql(
-    const ObTableSchema &data_schema, const int64_t data_table_id, const int64_t dest_table_id,
-    const int64_t task_id, const int64_t parallelism, ObString &partition_names, share::SCN &current_scn)
+  const ObTableSchema &data_schema, const int64_t data_table_id, const int64_t dest_table_id,
+  const int64_t task_id, const int64_t parallelism, ObString &partition_names, share::SCN &current_scn)
+{
+  int ret = OB_SUCCESS;
+  bool need_padding = false;
+  if (OB_FAIL(data_schema.is_need_padding_for_generated_column(need_padding))) {
+    LOG_WARN("fail to check need padding", K(ret));
+  } else if (OB_FAIL(execute_inner_sql(data_schema.get_schema_version(), data_schema.is_user_hidden_table(), need_padding,
+        data_table_id, dest_table_id, task_id, parallelism, partition_names, current_scn))) {
+    LOG_WARN("fail to execute inner sql", K(ret));
+  }
+  return ret;
+}
+
+int ObVecIndexAsyncTask::execute_inner_sql(
+    const int64_t schema_version, const bool is_user_hidden_table, const bool need_padding,
+    const int64_t data_table_id, const int64_t dest_table_id,
+    const int64_t task_id, const int64_t parallelism, const ObString &partition_names, share::SCN &current_scn)
 {
   int ret = OB_SUCCESS;
 
   ObSqlString sql_string;
-  bool need_padding = false;
   common::ObAddr ls_leader_addr;
   int ret_code = -1;
   bool inner_sql_running_marked = false;
@@ -2652,21 +2667,19 @@ int ObVecIndexAsyncTask::execute_inner_sql(
     LOG_WARN("invalid argument", K(ret), K(data_table_id), K(dest_table_id), K(parallelism), K(current_scn));
   } else if (OB_FAIL(ObDDLUtil::generate_build_replica_sql(tenant_id_, data_table_id,
                                                     dest_table_id,
-                                                    data_schema.get_schema_version(),
+                                                    schema_version,
                                                     current_scn.get_val_for_sql(),
                                                     1, /* execution_id */
                                                     task_id,
                                                     parallelism,
                                                     false/*use_heap_table_ddl*/,
-                                                    !data_schema.is_user_hidden_table()/*use_schema_version_hint_for_src_table*/,
+                                                    !is_user_hidden_table/*use_schema_version_hint_for_src_table*/,
                                                     nullptr,
                                                     partition_names,
                                                     false/*is_alter_clustering_key_tbl_partition_by*/,
                                                     filter_sql_str_.string(),
                                                     sql_string))) {
     LOG_WARN("fail to generate build replica sql", K(ret));
-  } else if (OB_FAIL(data_schema.is_need_padding_for_generated_column(need_padding))) {
-    LOG_WARN("fail to check need padding", K(ret));
   } else if (OB_FAIL(get_ls_leader_addr(tenant_id_, ls_id_, ls_leader_addr))) {
     LOG_WARN("fail to get ls leader addr", K(ret), K(tenant_id_), K(ls_id_));
   } else if (MYADDR != ls_leader_addr) {
@@ -4153,6 +4166,9 @@ int ObVecIndexAsyncTask::execute_write_snap_index(
   } else if (OB_ISNULL(new_adapter_) || !ls_id_.is_valid() || tenant_id_ == OB_INVALID_TENANT_ID) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr", K(ret), KP(new_adapter_), K(ls_id_), K(tenant_id_));
+  } else if (new_adapter_->is_created_by_segment_merge()) {
+    LOG_INFO("[VECTOR INDEX MERGE] skip execute_write_snap_index, defer serialize and insert to execute_exchange",
+        K(tablet_id), K(snapshot_version), KPC(new_adapter_));
   } else {
     const ObTableSchema *data_table_schema = nullptr;
     const ObTableSchema *snapshot_table_schema = nullptr;

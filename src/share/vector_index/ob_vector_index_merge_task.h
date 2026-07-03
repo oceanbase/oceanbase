@@ -47,27 +47,27 @@ private:
   int check_and_merge(ObPluginVectorIndexAdapterGuard &adpt_guard);
   int execute_merge();
   int execute_exchange();
+  int serialize_and_insert_snap_index(
+      transaction::ObTxDesc *tx_desc,
+      transaction::ObTxReadSnapshot &snapshot,
+      const uint64_t timeout_us);
   int prepare_merge_segment(const ObVecIdxSnapshotDataHandle& old_snap_data);
   int upadte_task_merge_segments_info();
   int upadte_task_result_segments_info(const ObVectorIndexSegmentMeta *new_meta);
   int calculate_max_merge_vec_cnt(int64_t &max_merge_vec_cnt, int64_t incr_count);
   int build_filter_clause(const ObTableSchema &data_table_schema, const ObTableSchema &snapshot_table_schema);
   int merge_bitmap(ObPluginVectorIndexAdaptor *adaptor);
-  int execute_insert(const ObTableSchema *data_schema);
+  int execute_insert(
+      const uint64_t data_schema_version,
+      const bool is_user_hidden_table,
+      const bool is_need_padding,
+      const ObString &partition_names);
   int clean_snap_index_rows(
-      const ObTableSchema &data_table_schema, const ObTableSchema &snapshot_table_schema,
       transaction::ObTxDesc *tx_desc, transaction::ObTxReadSnapshot &snapshot, const uint64_t timeout_us);
   int rescan(
       const ObVectorIndexSegmentMeta& seg_meta, storage::ObTableScanParam &scan_param,
       const uint64_t timeout, ObTableScanIterator *table_scan_iter);
   int build_rowkey_range(const ObVectorIndexSegmentMeta& seg_meta, ObNewRange &range);
-  int delete_segment_rows(
-      const ObVectorIndexSegmentMeta& seg_meta, storage::ObTableScanParam &scan_param,
-      const uint64_t timeout, ObTableScanIterator *table_scan_iter,
-      ObIArray<uint64_t> &dml_column_ids, ObIArray<uint64_t> &extra_column_idxs,
-      transaction::ObTxDesc *tx_desc, transaction::ObTxReadSnapshot &snapshot,
-      share::schema::ObTableDMLParam &table_dml_param, const ObTabletID &tablet_id,
-      const uint64_t schema_version);
   int exchange_snap_index_rows(
       const ObVectorIndexSegmentMeta& seg_meta,
       const ObTableSchema &data_table_schema,
