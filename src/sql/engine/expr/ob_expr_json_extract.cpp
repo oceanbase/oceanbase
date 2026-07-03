@@ -100,10 +100,10 @@ int ObExprJsonExtract::eval_json_extract_fast_path(const ObExpr &expr,
   } else if (json_datum->is_null()) {
     res.set_null();
   } else {
-    const ObLobCommon& lob = json_datum->get_lob_data();
     ObString path_str;
     ObItemType pick_type = static_cast<ObItemType>(expr.extra_);
     bool is_null_path = false;
+    ObString json_data;
     common::ObJsonPathCache *path_cache =
       ObJsonExprHelper::get_path_cache_ctx(expr.expr_ctx_id_, &ctx.exec_ctx_);
 
@@ -111,7 +111,7 @@ int ObExprJsonExtract::eval_json_extract_fast_path(const ObExpr &expr,
       LOG_WARN("fail to get path string", K(ret));
     } else if (is_null_path) {
       res.set_null();
-    } else if (!(json_datum->len_ != 0 && !lob.is_mem_loc_ && lob.in_row_) || OB_ISNULL(path_cache)) {
+    } else if (OB_ISNULL(path_cache)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not supported fast path", K(ret));
     } else if (path_cache->is_fast_path_unchecked()
@@ -120,14 +120,15 @@ int ObExprJsonExtract::eval_json_extract_fast_path(const ObExpr &expr,
     } else if (path_cache->is_fast_path_unsupported()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not supported fast path because path cache is not inited", K(ret));
+    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(
+        tmp_allocator, *json_datum, expr.args_[0]->datum_meta_,
+        expr.args_[0]->obj_meta_.has_lob_header(), json_data, &ctx.exec_ctx_))) {
+      LOG_WARN("fail to get real data.", K(ret));
     } else {
       ObJsonBinFastLocator fast_locator;
-      ObString json_data;
       char *res_ptr = nullptr;
       int64_t res_len = 0;
       uint8_t res_type = 0;
-      json_data.assign_ptr(lob.get_inrow_data_ptr(),
-                            static_cast<int32_t>(lob.get_byte_size(json_datum->len_)));
 
       const ObSEArray<ObJsonPathCache::ObMultiPathEntry, 4> &path_keys_arr = path_cache->get_multi_path_keys();
       if (path_keys_arr.empty()) {

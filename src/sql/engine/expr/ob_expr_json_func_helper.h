@@ -612,6 +612,11 @@ private:
                          int64_t max_len);
   static int decode_vi64(ObString &json_str, int64_t &offset, int64_t *val);
   static uint64_t get_var_local(const char *ptr, uint8_t type);
+  // extend_seg_offset_ pointing past the doc indicates an extension segment is present
+  static inline bool has_extend_segment(const ObJsonBinDocHeader *doc_header, int64_t length)
+  {
+    return doc_header->extend_seg_offset_ != static_cast<uint64_t>(length);
+  }
 
   static constexpr int64_t DOC_HEADER_SIZE = sizeof(ObJsonBinDocHeader);
   static constexpr int64_t BIN_HEADER_SIZE = sizeof(ObJsonBinHeader);
