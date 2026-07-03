@@ -235,6 +235,7 @@ public:
   ObDASVecIndexScanIter *get_vec_index_scan_iter() const { return vec_index_scan_iter_; }
   void set_search_ctx(ObDASSearchCtx *search_ctx) { search_ctx_ = search_ctx; }
   void set_ls_id(const share::ObLSID &ls_id) { ls_id_ = ls_id; }
+  const ObDASVecIndexDriverCtDef *get_driver_ctdef() const { return vec_index_driver_ctdef_; }
 
   static const uint64_t VSAG_MAX_EF_SEARCH = 160000;
   static constexpr double FIXED_MAGNIFICATION_RATIO = 2.0;
