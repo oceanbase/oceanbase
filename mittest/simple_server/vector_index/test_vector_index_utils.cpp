@@ -54,12 +54,11 @@ void TestVectorIndexBase::insert_data(const int64_t idx, const int64_t insert_cn
   LOGI("start fill data", K(idx));
   std::mt19937 rng;
   rng.seed(idx);
-  const int dim = 512;
   const int cnt = insert_cnt;
   std::uniform_real_distribution<> distrib_real;
   for (int i = 0; i < cnt; ++i) {
     std::string insert_sql = "insert into t1(embedding) values('[";
-    for (int i = 0; i < dim; ++i) {
+    for (int i = 0; i < kDim; ++i) {
       if (i > 0) insert_sql += ",";
       insert_sql += std::to_string(distrib_real(rng));
     }
@@ -84,13 +83,12 @@ void TestVectorIndexBase::search_data(const int64_t idx, const int64_t select_cn
   // LOGI("start search data", K(idx));
   std::mt19937 rng;
   rng.seed(idx);
-  const int dim = 512;
   const int cnt = select_cnt;
   std::uniform_real_distribution<> distrib_real;
   for (int i = 0; i < cnt; ++i) {
 
     std::string vec = "'[";
-    for (int i = 0; i < dim; ++i) {
+    for (int i = 0; i < kDim; ++i) {
       if (i > 0) vec += ",";
       vec += std::to_string(distrib_real(rng));
     }
@@ -287,28 +285,42 @@ int TestVectorIndexBase::check_segment_meta_row(ObPluginVectorIndexAdaptor *adap
   return ret;
 }
 
-int TestVectorIndexBase::check_vector_index_task_finished()
+int TestVectorIndexBase::check_vector_index_task_finished(
+    const int64_t max_wait_us,
+    const int64_t poll_interval_us)
 {
   int ret = OB_SUCCESS;
   int64_t task_cnt = 0;
   ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();
   sqlclient::ObISQLConnection *connection = nullptr;
+  const int64_t start_us = ObTimeUtility::fast_current_time();
   if (OB_FAIL(sql_proxy.acquire(connection))) {
     LOG_WARN("acquire fail", K(ret));
   } else {
-      while (OB_SUCC(ret)) {
+    while (OB_SUCC(ret)) {
+      const int64_t elapsed_us = ObTimeUtility::fast_current_time() - start_us;
+      if (elapsed_us >= max_wait_us) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("wait vector index task timeout", K(max_wait_us), K(task_cnt), K(elapsed_us));
+        break;
+      }
       if (OB_FAIL(
-          SSH::select_int64(sql_proxy, "select count(*) val from oceanbase.__all_vector_index_task", task_cnt))) {
+              SSH::select_int64(sql_proxy, "select count(*) val from oceanbase.__all_vector_index_task", task_cnt))) {
         LOG_WARN("select vector index task count fail", K(ret));
       } else if (task_cnt != 0) {
         if (REACH_TIME_INTERVAL(10 * 1000000)) {  // 10s
           LOGI("vector index task not finished: %ld", task_cnt);
         }
-         ob_usleep(1000 * 1000);
+        ob_usleep(poll_interval_us);
       } else {
         break;
       }
     }
+    const int close_ret = sql_proxy.close(connection, true);
+    if (OB_SUCCESS != close_ret) {
+      LOG_WARN("close sql connection failed", K(close_ret));
+    }
+    connection = nullptr;
   }
   return ret;
 }

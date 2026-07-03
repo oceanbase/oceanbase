@@ -24,6 +24,11 @@ namespace unittest
   ASSERT_EQ(OB_SUCCESS, conn->execute_write(OB_SYS_TENANT_ID, sql.ptr(), affected_rows));
 
 class TestVectorIndexBase : public ObSimpleClusterTestBase {
+
+protected:
+  const static int kDim = 18;
+  const static int kFreezeRowsPerWorker = 1000;
+  const static int kFreezeSearchIters = 1000;
 public:
   TestVectorIndexBase()
       : ObSimpleClusterTestBase("test_vector_index", "20G", "20G")
@@ -40,7 +45,9 @@ public:
   void search_data(const int64_t idx, const int64_t select_cnt);
   int get_snapshot_metadata(ObPluginVectorIndexAdaptor* adaptor, const ObLSID &ls_id, ObVectorIndexMeta &meta);
   int check_segment_meta_row(ObPluginVectorIndexAdaptor *adaptor, const ObLSID& ls_id, ObVectorIndexSegmentMeta &seg_meta);
-  int check_vector_index_task_finished();
+  int check_vector_index_task_finished(
+      const int64_t max_wait_us = 180LL * 1000 * 1000,
+      const int64_t poll_interval_us = 200LL * 1000);
   int check_vector_index_task_success();
   int check_vector_index_task_count(const int64_t expected_cnt);
 
