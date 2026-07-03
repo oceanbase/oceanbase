@@ -1615,8 +1615,12 @@ int ObDropTableHelper::drop_table_(const ObTableSchema &table_schema, const ObSt
       LOG_WARN("fail to sync version for cascade tables", KR(ret), K_(tenant_id));
     } else if (OB_FAIL(sync_version_for_cascade_mock_fk_parent_table_(table_schema.get_depend_mock_fk_parent_table_ids()))) {
       LOG_WARN("fail to sync version for cascade mock fk parent table", KR(ret), K_(tenant_id));
+    } else if (table_schema.is_fts_index_aux()
+               && OB_FAIL(ObDependencyInfo::delete_schema_object_dependency(
+                                            get_trans_(), tenant_id_, table_schema.get_table_id(),
+                                            table_schema.get_schema_version(), ObObjectType::INDEX))) {
+      LOG_WARN("fail to delete schema object dependency for fts index", KR(ret), K_(tenant_id), K(table_schema.get_table_id()));
     }
-
     // delete audit
     if (OB_SUCC(ret) && (table_schema.is_user_table() || table_schema.is_external_table())) {
       ObArray<ObSAuditSchema> audit_schemas;
