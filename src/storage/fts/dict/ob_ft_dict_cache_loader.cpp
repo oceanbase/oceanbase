@@ -387,7 +387,7 @@ int ObFTDictCacheLoaderBase::build_ranges(const ObFTDictDesc &desc,
 {
   int ret = OB_SUCCESS;
   bool build_next_range = true;
-  int32_t range_id = 0;
+  int32_t range_id = (nullptr != partial_ranges) ? partial_ranges->at(0).start_range_id_ : 0;
   const int32_t partial_range_count = (nullptr != partial_ranges) ? partial_ranges->count() : 0;
   int32_t cur_range_idx = 0;
   ObFTDAT *pending_dat_buff = nullptr;
@@ -411,21 +411,26 @@ int ObFTDictCacheLoaderBase::build_ranges(const ObFTDictDesc &desc,
     }
   }
 
-  const int32_t valid_range_count = range_container.get_handles().size();
+  const int32_t total_range_count = range_container.get_handles().size();
+  const int32_t expected_end_id = (partial_range_count > 0)
+      ? partial_ranges->at(partial_range_count - 1).start_range_id_
+        + static_cast<int32_t>(partial_ranges->at(partial_range_count - 1).range_count_)
+      : total_range_count;
   if (OB_FAIL(ret)) {
-  } else if (partial_range_count + valid_range_count != range_id) {
+  } else if (expected_end_id != range_id) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Range count is not consistent", K(ret), K(partial_range_count), K(valid_range_count), K(range_id), K(desc));
+    LOG_WARN("Range count is not consistent", K(ret), K(partial_range_count),
+             K(total_range_count), K(range_id), K(expected_end_id), K(desc));
   } else if (partial_range_count <= 0) {
-    if (0 == valid_range_count) {
+    if (0 == total_range_count) {
       // empty table, nothing to do
     } else if (OB_ISNULL(pending_dat_buff)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Failed to get first data buffer", K(ret));
-    } else if (OB_FAIL(update_first_range_cache(desc, pending_dat_buff, snapshot_version, valid_range_count, range_container))) {
+    } else if (OB_FAIL(update_first_range_cache(desc, pending_dat_buff, snapshot_version, total_range_count, range_container))) {
       LOG_WARN("Failed to put first range with range_count", K(ret));
     } else {
-      LOG_INFO("Dict cache built successfully", K(desc), K(valid_range_count));
+      LOG_INFO("Dict cache built successfully", K(desc), K(total_range_count));
     }
   }
 
