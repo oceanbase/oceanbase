@@ -3908,6 +3908,9 @@ int ObFtsIndexBuilderUtil::check_fulltext_dict_schema(
   } else if (table.is_partitioned_table()) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "partitioning fulltext dictionary table");
+  } else if (table.is_heap_organized_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "heap organization for fulltext dictionary table is");
   } else if (table.get_column_count() != 1) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "fulltext dictionary table contains more than one column, ");
