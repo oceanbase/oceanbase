@@ -1746,11 +1746,34 @@ int ObTokenStreamFactory::create_char_filter(
       LOG_WARN("failed to allocate tokenizer", K(ret), K(type));                       \
     } else {                                                                           \
       TokenizerClass *t = new (buf) TokenizerClass();                                  \
-      if (OB_FAIL(t->init(spec, scratch_alloc))) {                                     \
+      if (OB_FAIL(t->init(spec, alloc))) {                                             \
         LOG_WARN("failed to init tokenizer", K(ret), K(type));                         \
         t->~TokenizerClass();                                                          \
         alloc.free(t);                                                                 \
       } else {                                                                         \
+        tokenizer = t;                                                                 \
+      }                                                                                \
+    }                                                                                  \
+  } while (0)
+
+// Legacy tokenizers wrap an ObIFTParser instance whose lifetime must outlive any
+// per-call reuse of scratch_alloc. The base init() captures alloc as metadata_alloc_
+// (long-lived, owns the parser instance); set_scratch_alloc() supplies the per-call
+// arena forwarded as ObFTParserParam::scratch_alloc_.
+#define CREATE_LEGACY_TOKENIZER(TokenizerClass)                                        \
+  do {                                                                                 \
+    void *buf = nullptr;                                                               \
+    if (OB_ISNULL(buf = alloc.alloc(sizeof(TokenizerClass)))) {                        \
+      ret = OB_ALLOCATE_MEMORY_FAILED;                                                 \
+      LOG_WARN("failed to allocate tokenizer", K(ret), K(type));                       \
+    } else {                                                                           \
+      TokenizerClass *t = new (buf) TokenizerClass();                                  \
+      if (OB_FAIL(t->init(spec, alloc))) {                                             \
+        LOG_WARN("failed to init tokenizer", K(ret), K(type));                         \
+        t->~TokenizerClass();                                                          \
+        alloc.free(t);                                                                 \
+      } else {                                                                         \
+        t->set_scratch_alloc(scratch_alloc);                                           \
         tokenizer = t;                                                                 \
       }                                                                                \
     }                                                                                  \
@@ -1766,15 +1789,15 @@ int ObTokenStreamFactory::create_tokenizer(
   const ObTokenizerType type = spec.type_;
 
   if (ObTokenizerType::TOKENIZER_TYPE_SPACE == type) {
-    CREATE_TOKENIZER(ObSpaceTokenizer);
+    CREATE_LEGACY_TOKENIZER(ObSpaceTokenizer);
   } else if (ObTokenizerType::TOKENIZER_TYPE_NGRAM == type) {
-    CREATE_TOKENIZER(ObNgramTokenizer);
+    CREATE_LEGACY_TOKENIZER(ObNgramTokenizer);
   } else if (ObTokenizerType::TOKENIZER_TYPE_BENG == type) {
-    CREATE_TOKENIZER(ObBengTokenizer);
+    CREATE_LEGACY_TOKENIZER(ObBengTokenizer);
   } else if (ObTokenizerType::TOKENIZER_TYPE_IK == type) {
-    CREATE_TOKENIZER(ObIKTokenizer);
+    CREATE_LEGACY_TOKENIZER(ObIKTokenizer);
   } else if (ObTokenizerType::TOKENIZER_TYPE_NGRAM2 == type) {
-    CREATE_TOKENIZER(ObNgram2Tokenizer);
+    CREATE_LEGACY_TOKENIZER(ObNgram2Tokenizer);
   } else if (ObTokenizerType::TOKENIZER_TYPE_STANDARD == type) {
     CREATE_TOKENIZER(ObStandardTokenizer);
   } else if (ObTokenizerType::TOKENIZER_TYPE_KEYWORD == type) {
@@ -1788,6 +1811,7 @@ int ObTokenStreamFactory::create_tokenizer(
 }
 
 #undef CREATE_TOKENIZER
+#undef CREATE_LEGACY_TOKENIZER
 
 #define CREATE_TOKEN_FILTER_WITH_SPEC(FilterClass, filter_name, init_spec)               \
   do {                                                                                   \

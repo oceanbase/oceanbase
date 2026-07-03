@@ -7,14 +7,23 @@
 
 #include "storage/fts/analyzer/char_filter/ob_legacy_char_filter.h"
 
+#include "share/rc/ob_tenant_base.h"
+
 namespace oceanbase
 {
 namespace storage
 {
 
+ObLegacyLowercaseCharFilter::ObLegacyLowercaseCharFilter()
+  : is_inited_(false),
+    coll_type_(common::CS_TYPE_INVALID),
+    tolower_arena_(lib::ObMemAttr(MTL_ID(), "LegacyLcChrFlt"), OB_MALLOC_NORMAL_BLOCK_SIZE)
+{}
+
 int ObLegacyLowercaseCharFilter::init(const ObCharFilterSpec &spec, common::ObIAllocator &alloc)
 {
   int ret = OB_SUCCESS;
+  UNUSED(alloc);
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("lowercase char filter already initialized", K(ret));
@@ -24,7 +33,6 @@ int ObLegacyLowercaseCharFilter::init(const ObCharFilterSpec &spec, common::ObIA
   } else {
     const ObLegacyLowercaseCharFilterSpec &lc_spec =
         static_cast<const ObLegacyLowercaseCharFilterSpec &>(spec);
-    alloc_ = &alloc;
     coll_type_ = lc_spec.coll_type_;
     is_inited_ = true;
   }
@@ -47,23 +55,19 @@ int ObLegacyLowercaseCharFilter::filter(
   } else if (OB_UNLIKELY(common::CS_TYPE_INVALID == coll_type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("collation type not set before filter", K(ret));
-  } else if (OB_ISNULL(alloc_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("allocator not set before filter", K(ret));
   } else {
+    tolower_arena_.reuse();
     common::ObString src(input_len, input);
     common::ObString dst;
     const ObCharsetInfo *cs = nullptr;
     if (OB_ISNULL(cs = ObCharset::get_charset(coll_type_))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, charset info is nullptr", K(ret), K(coll_type_));
+    } else if (OB_FAIL(common::ObCharset::tolower(cs, src, dst, tolower_arena_))) {
+      LOG_WARN("fail to tolower text", K(ret), K(coll_type_));
     } else {
-      if (OB_FAIL(common::ObCharset::tolower(cs, src, dst, *alloc_))) {
-        LOG_WARN("fail to tolower text", K(ret), K(coll_type_));
-      } else {
-        output = dst.ptr();
-        output_len = dst.length();
-      }
+      output = dst.ptr();
+      output_len = dst.length();
     }
   }
   return ret;
@@ -73,12 +77,19 @@ void ObLegacyLowercaseCharFilter::reset()
 {
   is_inited_ = false;
   coll_type_ = common::CS_TYPE_INVALID;
-  alloc_ = nullptr;
+  tolower_arena_.reset();
 }
+
+ObUtf8mb4BinCharFilter::ObUtf8mb4BinCharFilter()
+  : is_inited_(false),
+    src_collation_(common::CS_TYPE_INVALID),
+    convert_arena_(lib::ObMemAttr(MTL_ID(), "Utf8mb4BinChFlt"), OB_MALLOC_NORMAL_BLOCK_SIZE)
+{}
 
 int ObUtf8mb4BinCharFilter::init(const ObCharFilterSpec &spec, common::ObIAllocator &alloc)
 {
   int ret = OB_SUCCESS;
+  UNUSED(alloc);
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("utf8mb4 bin char filter already initialized", K(ret));
@@ -90,7 +101,6 @@ int ObUtf8mb4BinCharFilter::init(const ObCharFilterSpec &spec, common::ObIAlloca
     LOG_WARN("invalid source collation for utf8mb4 bin filter", K(ret), K(spec));
   } else {
     src_collation_ = static_cast<const ObUtf8mb4BinCharFilterSpec &>(spec).src_collation_;
-    alloc_ = &alloc;
     is_inited_ = true;
   }
   return ret;
@@ -113,14 +123,12 @@ int ObUtf8mb4BinCharFilter::filter(
     LOG_WARN("input is null but input_len is positive", K(ret), K(input_len));
   } else if (OB_ISNULL(input) || OB_UNLIKELY(input_len <= 0)) {
     // Empty or zero-length input: pass through as-is.
-  } else if (OB_ISNULL(alloc_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("allocator not set before filter", K(ret));
   } else if (CHARSET_UTF8MB4 != common::ObCharset::charset_type_by_coll(src_collation_)) {
+    convert_arena_.reuse();
     common::ObString src(input_len, input);
     common::ObString converted;
     if (OB_FAIL(common::ObCharset::charset_convert(
-            *alloc_, src, src_collation_, common::CS_TYPE_UTF8MB4_BIN, converted))) {
+            convert_arena_, src, src_collation_, common::CS_TYPE_UTF8MB4_BIN, converted))) {
       LOG_WARN("fail to convert text charset to utf8mb4 for analyzer", K(ret), K_(src_collation));
     } else {
       output = converted.ptr();
@@ -134,7 +142,7 @@ void ObUtf8mb4BinCharFilter::reset()
 {
   is_inited_ = false;
   src_collation_ = common::CS_TYPE_INVALID;
-  alloc_ = nullptr;
+  convert_arena_.reset();
 }
 
 } // namespace storage

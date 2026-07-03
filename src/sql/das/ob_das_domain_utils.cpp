@@ -10,6 +10,7 @@
 
 #include "ob_das_domain_utils.h"
 #include "lib/geo/ob_geo_utils.h"
+#include "storage/fts/analyzer/ob_analyzer.h"
 #include "storage/fts/analyzer/ob_token_stream.h"
 #include "sql/das/ob_das_utils.h"
 #include "sql/das/ob_das_dml_vec_iter.h"
@@ -130,26 +131,12 @@ int ObFTIndexRowCache::segment(const common::ObObjMeta &ft_obj_meta,
     ret = OB_ITER_END;
   } else if (OB_FAIL(create_ft_token_map(ft_token_bkt_cnt))) {
     LOG_WARN("fail to create ft token map", K(ret), K(ft_token_bkt_cnt));
+  } else if (OB_ISNULL(fts_analyzer_) && OB_FAIL(prepare_analyzer(ft_obj_meta))) {
+    LOG_WARN("fail to prepare fts analyzer", K(ret));
   } else {
-    storage::ObFTAnalyzerParam analyzer_param;
-    analyzer_param.legacy_tokenizer_type_ = helper_.get_parser_name().to_tokenizer_type();
-    analyzer_param.parser_property_ = &helper_.get_parser_property();
-    analyzer_param.fts_index_type_ = fts_index_type_;
-    analyzer_param.process_token_flag_ = helper_.get_process_token_flags();
-    analyzer_param.meta_ = ft_obj_meta;
-    analyzer_param.alloc_ = &scratch_allocator_;
-    analyzer_param.is_ddl_mode_ = helper_.is_ddl_mode();
-    analyzer_param.need_casedown_ = helper_.get_process_token_flags().casedown_token();
-
-    storage::ObFTSAnalyzer *fts_analyzer = nullptr;
     storage::ObITokenStream *token_stream = nullptr;
-    if (OB_FAIL(helper_.create_analyzer(analyzer_param, fts_analyzer))) {
-      LOG_WARN("fail to create fts analyzer", K(ret));
-    } else if (OB_ISNULL(fts_analyzer)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fts analyzer is null", K(ret));
-    } else if (OB_FAIL(fts_analyzer->analyze(fulltext.ptr(), fulltext.length(),
-                                              scratch_allocator_, token_stream))) {
+    if (OB_FAIL(fts_analyzer_->analyze(fulltext.ptr(), fulltext.length(),
+                                       scratch_allocator_, token_stream))) {
       LOG_WARN("fail to analyze text via analyzer", K(ret));
     } else if (OB_ISNULL(token_stream)) {
       ret = OB_ERR_UNEXPECTED;
@@ -184,11 +171,6 @@ int ObFTIndexRowCache::segment(const common::ObObjMeta &ft_obj_meta,
           datum_row_.storage_datums_[DOC_LEN_COL_IDX].set_uint(doc_length);
         }
       }
-    }
-    if (OB_NOT_NULL(fts_analyzer)) {
-      fts_analyzer->~ObFTSAnalyzer();
-      scratch_allocator_.free(fts_analyzer);
-      fts_analyzer = nullptr;
     }
   }
 
@@ -269,6 +251,15 @@ void ObFTIndexRowCache::reset()
   }
   token_iterator_ = nullptr;
   chars_per_token_ = 0;
+  // Destroy fts_analyzer_ before metadata_allocator_.reset(): the analyzer and its
+  // owned components (char filters, tokenizer, token filters) were allocated from
+  // metadata_allocator_, and resetting the arena before running their destructors
+  // would skip the per-component cleanup (e.g. IK parser tearing down its dict caches).
+  if (OB_NOT_NULL(fts_analyzer_)) {
+    fts_analyzer_->~ObFTSAnalyzer();
+    metadata_allocator_.free(fts_analyzer_);
+    fts_analyzer_ = nullptr;
+  }
   datum_row_.reset();
   token_arr_.reset();
   helper_.reset();
@@ -291,6 +282,36 @@ void ObFTIndexRowCache::reuse()
 }
 
 /* private func start */
+int ObFTIndexRowCache::prepare_analyzer(const common::ObObjMeta &ft_obj_meta)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr != fts_analyzer_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fts analyzer already exists", K(ret), KP(fts_analyzer_));
+  } else {
+    storage::ObFTAnalyzerParam analyzer_param;
+    analyzer_param.legacy_tokenizer_type_ = helper_.get_parser_name().to_tokenizer_type();
+    analyzer_param.parser_property_ = &helper_.get_parser_property();
+    analyzer_param.fts_index_type_ = fts_index_type_;
+    analyzer_param.process_token_flag_ = helper_.get_process_token_flags();
+    analyzer_param.meta_ = ft_obj_meta;
+    // Allocate the analyzer (and its owned char filters / tokenizer / token filters)
+    // from metadata_allocator_ so they survive across rows. scratch_allocator_ is
+    // reset per row in reuse() and would invalidate the analyzer.
+    analyzer_param.alloc_ = &metadata_allocator_;
+    analyzer_param.is_ddl_mode_ = helper_.is_ddl_mode();
+    analyzer_param.need_casedown_ = helper_.get_process_token_flags().casedown_token();
+
+    if (OB_FAIL(helper_.create_analyzer(analyzer_param, fts_analyzer_))) {
+      LOG_WARN("fail to create fts analyzer", K(ret));
+    } else if (OB_ISNULL(fts_analyzer_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fts analyzer is null after create", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObFTIndexRowCache::prepare_parser(const common::ObObjMeta &ft_obj_meta,
                                       const char *fulltext,
                                       const int64_t fulltext_len)

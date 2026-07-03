@@ -44,15 +44,20 @@ int ObLegacyParserTokenizer::set_input(
     LOG_WARN("failed to get charset info", K(ret), K(coll_type));
   } else {
     position_ = 0;
-    if (OB_NOT_NULL(legacy_parser_)) {
-      destroy_parser_impl();
-    }
-    // text_len == 0 means the char filter produced an empty string (e.g. invalid UTF-8
-    // bytes like 0xFF stripped by tolower). Skip parser creation and return OB_ITER_END
-    // from get_next_token(), matching the original segment() behavior that silently
-    // discarded empty regularized_ft_str without error.
-    if (OB_SUCC(ret) && text_len > 0
-        && OB_FAIL(create_parser_impl(cs, text, text_len))) {
+    empty_input_ = false;
+    if (text_len <= 0) {
+      // Mark empty input so get_next_token() returns OB_ITER_END directly.
+      // Keep the parser alive to avoid expensive teardown/rebuild on subsequent
+      // non-empty rows (e.g. IK dict reload).
+      empty_input_ = true;
+    } else if (OB_NOT_NULL(legacy_parser_)) {
+      // Reuse the existing parser to avoid expensive re-init (e.g. IK dict reload
+      // would otherwise do a full table scan of the dict table per row in DDL mode).
+      // Tokenizer is bound to a fixed source collation at create time, so reusing is safe.
+      if (OB_FAIL(legacy_parser_->reuse_parser(text, text_len))) {
+        LOG_WARN("failed to reuse legacy parser", K(ret), K(text_len));
+      }
+    } else if (OB_FAIL(create_parser_impl(cs, text, text_len))) {
       LOG_WARN("failed to create parser", K(ret), K(text_len));
     }
   }
@@ -70,8 +75,7 @@ int ObLegacyParserTokenizer::get_next_token(ObTokenAttr &token)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tokenizer is not initialized", K(ret));
-  } else if (OB_ISNULL(legacy_parser_)) {
-    // set_input() was called with text_len == 0; produce an empty token stream.
+  } else if (empty_input_ || OB_ISNULL(legacy_parser_)) {
     ret = OB_ITER_END;
   } else if (OB_FAIL(legacy_parser_->get_next_token(word, word_len, char_len, word_freq))) {
     if (OB_ITER_END != ret) {
@@ -87,19 +91,21 @@ int ObLegacyParserTokenizer::get_next_token(ObTokenAttr &token)
 void ObLegacyParserTokenizer::reset()
 {
   destroy_parser_impl();
-  alloc_ = nullptr;
+  metadata_alloc_ = nullptr;
+  scratch_alloc_ = nullptr;
   position_ = 0;
   is_inited_ = false;
+  empty_input_ = false;
 }
 
 void ObLegacyParserTokenizer::destroy_parser_impl()
 {
   if (OB_NOT_NULL(legacy_parser_)) {
     legacy_parser_->~ObIFTParser();
-    if (OB_NOT_NULL(alloc_)) {
-      alloc_->free(legacy_parser_);
+    if (OB_NOT_NULL(metadata_alloc_)) {
+      metadata_alloc_->free(legacy_parser_);
     } else {
-      LOG_WARN_RET(OB_ERR_UNEXPECTED, "legacy_parser_ not null but alloc_ is null, potential leak", KP(legacy_parser_));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "legacy_parser_ not null but metadata_alloc_ is null, potential leak", KP(legacy_parser_));
     }
     legacy_parser_ = nullptr;
   }
@@ -138,7 +144,7 @@ int ObSpaceTokenizer::init(const ObTokenizerSpec &spec, common::ObIAllocator &al
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tokenizer type for space tokenizer", K(ret), K(spec.type_));
   } else {
-    alloc_ = &alloc;
+    metadata_alloc_ = &alloc;
     is_inited_ = true;
   }
   return ret;
@@ -149,7 +155,10 @@ int ObSpaceTokenizer::create_parser_impl(
 {
   int ret = OB_SUCCESS;
   ObSpaceFTParser *parser = nullptr;
-  if (OB_ISNULL(parser = OB_NEWx(ObSpaceFTParser, alloc_))) {
+  if (OB_ISNULL(metadata_alloc_) || OB_ISNULL(scratch_alloc_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tokenizer allocators not initialized", K(ret), KP(metadata_alloc_), KP(scratch_alloc_));
+  } else if (OB_ISNULL(parser = OB_NEWx(ObSpaceFTParser, metadata_alloc_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate space parser", K(ret));
   } else {
@@ -158,12 +167,12 @@ int ObSpaceTokenizer::create_parser_impl(
     param.fulltext_ = text;
     param.ft_length_ = text_len;
     param.parser_version_ = ANALYZER_PARSER_VERSION_PLACEHOLDER;
-    param.metadata_alloc_ = alloc_;
-    param.scratch_alloc_ = alloc_;
+    param.metadata_alloc_ = metadata_alloc_;
+    param.scratch_alloc_ = scratch_alloc_;
     if (OB_FAIL(parser->init(&param))) {
       LOG_WARN("failed to init space parser", K(ret));
       parser->~ObSpaceFTParser();
-      alloc_->free(parser);
+      metadata_alloc_->free(parser);
     } else {
       legacy_parser_ = parser;
     }
@@ -187,7 +196,7 @@ int ObNgramTokenizer::init(const ObTokenizerSpec &spec, common::ObIAllocator &al
   } else {
     const ObNgramTokenizerSpec &ngram_spec = static_cast<const ObNgramTokenizerSpec &>(spec);
     ngram_token_size_ = ngram_spec.ngram_token_size_;
-    alloc_ = &alloc;
+    metadata_alloc_ = &alloc;
     is_inited_ = true;
   }
   return ret;
@@ -198,7 +207,10 @@ int ObNgramTokenizer::create_parser_impl(
 {
   int ret = OB_SUCCESS;
   ObNgramFTParser *parser = nullptr;
-  if (OB_ISNULL(parser = OB_NEWx(ObNgramFTParser, alloc_))) {
+  if (OB_ISNULL(metadata_alloc_) || OB_ISNULL(scratch_alloc_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tokenizer allocators not initialized", K(ret), KP(metadata_alloc_), KP(scratch_alloc_));
+  } else if (OB_ISNULL(parser = OB_NEWx(ObNgramFTParser, metadata_alloc_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate ngram parser", K(ret));
   } else {
@@ -207,13 +219,13 @@ int ObNgramTokenizer::create_parser_impl(
     param.fulltext_ = text;
     param.ft_length_ = text_len;
     param.parser_version_ = ANALYZER_PARSER_VERSION_PLACEHOLDER;
-    param.metadata_alloc_ = alloc_;
-    param.scratch_alloc_ = alloc_;
+    param.metadata_alloc_ = metadata_alloc_;
+    param.scratch_alloc_ = scratch_alloc_;
     param.ngram_token_size_ = ngram_token_size_;
     if (OB_FAIL(parser->init(&param))) {
       LOG_WARN("failed to init ngram parser", K(ret));
       parser->~ObNgramFTParser();
-      alloc_->free(parser);
+      metadata_alloc_->free(parser);
     } else {
       legacy_parser_ = parser;
     }
@@ -235,7 +247,7 @@ int ObBengTokenizer::init(const ObTokenizerSpec &spec, common::ObIAllocator &all
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tokenizer type for beng tokenizer", K(ret), K(spec.type_));
   } else {
-    alloc_ = &alloc;
+    metadata_alloc_ = &alloc;
     is_inited_ = true;
   }
   return ret;
@@ -246,7 +258,10 @@ int ObBengTokenizer::create_parser_impl(
 {
   int ret = OB_SUCCESS;
   ObBEngFTParser *parser = nullptr;
-  if (OB_ISNULL(parser = OB_NEWx(ObBEngFTParser, alloc_, *alloc_, *alloc_))) {
+  if (OB_ISNULL(metadata_alloc_) || OB_ISNULL(scratch_alloc_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tokenizer allocators not initialized", K(ret), KP(metadata_alloc_), KP(scratch_alloc_));
+  } else if (OB_ISNULL(parser = OB_NEWx(ObBEngFTParser, metadata_alloc_, *metadata_alloc_, *scratch_alloc_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate beng parser", K(ret));
   } else {
@@ -255,12 +270,12 @@ int ObBengTokenizer::create_parser_impl(
     param.fulltext_ = text;
     param.ft_length_ = text_len;
     param.parser_version_ = ANALYZER_PARSER_VERSION_PLACEHOLDER;
-    param.metadata_alloc_ = alloc_;
-    param.scratch_alloc_ = alloc_;
+    param.metadata_alloc_ = metadata_alloc_;
+    param.scratch_alloc_ = scratch_alloc_;
     if (OB_FAIL(parser->init(&param))) {
       LOG_WARN("failed to init beng parser", K(ret));
       parser->~ObBEngFTParser();
-      alloc_->free(parser);
+      metadata_alloc_->free(parser);
     } else {
       legacy_parser_ = parser;
     }
@@ -292,7 +307,7 @@ int ObIKTokenizer::init(const ObTokenizerSpec &spec, common::ObIAllocator &alloc
     main_dict_name_ = ik_spec.main_dict_name_;
     quan_dict_name_ = ik_spec.quan_dict_name_;
     stopword_dict_name_ = ik_spec.stopword_dict_name_;
-    alloc_ = &alloc;
+    metadata_alloc_ = &alloc;
     is_inited_ = true;
   }
   return ret;
@@ -304,7 +319,10 @@ int ObIKTokenizer::create_parser_impl(
   int ret = OB_SUCCESS;
   ObIKFTParser *parser = nullptr;
 
-  if (OB_ISNULL(parser = OB_NEWx(ObIKFTParser, alloc_, *alloc_))) {
+  if (OB_ISNULL(metadata_alloc_) || OB_ISNULL(scratch_alloc_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tokenizer allocators not initialized", K(ret), KP(metadata_alloc_), KP(scratch_alloc_));
+  } else if (OB_ISNULL(parser = OB_NEWx(ObIKFTParser, metadata_alloc_, *metadata_alloc_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate ik parser", K(ret));
   } else {
@@ -314,8 +332,8 @@ int ObIKTokenizer::create_parser_impl(
     param.fulltext_ = text;
     param.ft_length_ = text_len;
     param.parser_version_ = ANALYZER_PARSER_VERSION_PLACEHOLDER;
-    param.metadata_alloc_ = alloc_;
-    param.scratch_alloc_ = alloc_;
+    param.metadata_alloc_ = metadata_alloc_;
+    param.scratch_alloc_ = scratch_alloc_;
     param.is_ddl_mode_ = is_ddl_mode_;
     param.need_casedown_ = need_casedown_;
     param.ik_param_.mode_ = ik_mode_smart_
@@ -330,7 +348,7 @@ int ObIKTokenizer::create_parser_impl(
     if (OB_FAIL(parser->init(param))) {
       LOG_WARN("failed to init ik parser", K(ret));
       parser->~ObIKFTParser();
-      alloc_->free(parser);
+      metadata_alloc_->free(parser);
     } else {
       legacy_parser_ = parser;
     }
@@ -363,7 +381,7 @@ int ObNgram2Tokenizer::init(const ObTokenizerSpec &spec, common::ObIAllocator &a
     } else {
       min_ngram_size_ = ngram2_spec.min_ngram_size_;
       max_ngram_size_ = ngram2_spec.max_ngram_size_;
-      alloc_ = &alloc;
+      metadata_alloc_ = &alloc;
       is_inited_ = true;
     }
   }
@@ -375,7 +393,10 @@ int ObNgram2Tokenizer::create_parser_impl(
 {
   int ret = OB_SUCCESS;
   ObNgram2FTParser *parser = nullptr;
-  if (OB_ISNULL(parser = OB_NEWx(ObNgram2FTParser, alloc_))) {
+  if (OB_ISNULL(metadata_alloc_) || OB_ISNULL(scratch_alloc_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tokenizer allocators not initialized", K(ret), KP(metadata_alloc_), KP(scratch_alloc_));
+  } else if (OB_ISNULL(parser = OB_NEWx(ObNgram2FTParser, metadata_alloc_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate ngram2 parser", K(ret));
   } else {
@@ -384,14 +405,14 @@ int ObNgram2Tokenizer::create_parser_impl(
     param.fulltext_ = text;
     param.ft_length_ = text_len;
     param.parser_version_ = ANALYZER_PARSER_VERSION_PLACEHOLDER;
-    param.metadata_alloc_ = alloc_;
-    param.scratch_alloc_ = alloc_;
+    param.metadata_alloc_ = metadata_alloc_;
+    param.scratch_alloc_ = scratch_alloc_;
     param.min_ngram_size_ = min_ngram_size_;
     param.max_ngram_size_ = max_ngram_size_;
     if (OB_FAIL(parser->init(&param))) {
       LOG_WARN("failed to init ngram2 parser", K(ret));
       parser->~ObNgram2FTParser();
-      alloc_->free(parser);
+      metadata_alloc_->free(parser);
     } else {
       legacy_parser_ = parser;
     }

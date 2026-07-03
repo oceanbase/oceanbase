@@ -89,15 +89,25 @@ class ObLegacyParserTokenizer : public ObITokenizer
 {
 public:
   ObLegacyParserTokenizer()
-    : alloc_(nullptr),
+    : metadata_alloc_(nullptr),
+      scratch_alloc_(nullptr),
       legacy_parser_(nullptr),
       position_(0),
-      is_inited_(false)
+      is_inited_(false),
+      empty_input_(false)
   {}
   virtual ~ObLegacyParserTokenizer() { reset(); }
 
-  // init() is subclass-specific
+  // init() is subclass-specific; the alloc parameter is captured as metadata_alloc_
+  // (long-lived allocator that owns the parser instance and any state surviving
+  // across analyze() calls). The factory must additionally call set_scratch_alloc()
+  // to supply the per-call scratch arena — see ObFTSAnalyzer::alloc_ vs scratch_alloc_.
   virtual int init(const ObTokenizerSpec &spec, common::ObIAllocator &alloc) override = 0;
+  // Inject the per-call scratch arena. Must be called by the factory after init()
+  // and before set_input(); create_parser_impl() forwards it as
+  // ObFTParserParam::scratch_alloc_ for short-lived buffers (e.g. BEng's per-token
+  // word buffer). The analyzer reuses this arena at the start of every analyze().
+  void set_scratch_alloc(common::ObIAllocator &scratch_alloc) { scratch_alloc_ = &scratch_alloc; }
   // set_input() uses shared reuse logic, delegates parser creation to subclass
   virtual int set_input(const char *text, int64_t text_len, ObCollationType coll_type) override;
   virtual int get_next_token(ObTokenAttr &token) override;
@@ -111,10 +121,20 @@ protected:
   // Default implementation works for all legacy parsers; subclasses may override if needed.
   virtual void destroy_parser_impl();
 
-  common::ObIAllocator *alloc_;
+  // Long-lived allocator (the analyzer's alloc_): owns the parser instance itself
+  // and any state that must survive across analyze() calls. Captured from init()'s
+  // alloc parameter.
+  common::ObIAllocator *metadata_alloc_;
+  // Per-call scratch arena (the analyzer's scratch_alloc_): injected by the factory
+  // via set_scratch_alloc(). The analyzer reuses this arena at the start of every
+  // analyze() call, so parser implementations may use it for short-lived buffers
+  // (e.g. BEng's per-token word buffer) but must not retain references across
+  // reuse_parser()/get_next_token() boundaries.
+  common::ObIAllocator *scratch_alloc_;
   ObIFTParser          *legacy_parser_;
   int32_t               position_;
   bool                  is_inited_;
+  bool                  empty_input_;
 
 private:
   int convert_token(const char *word, int64_t word_len, ObTokenAttr &token);

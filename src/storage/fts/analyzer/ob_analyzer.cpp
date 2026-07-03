@@ -34,6 +34,15 @@ int ObFTSAnalyzer::analyze(
   } else if (OB_ISNULL(text) || OB_UNLIKELY(text_len < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(text), K(text_len));
+  } else {
+    // Release per-call scratch buffers produced during the previous analyze() call
+    // (e.g. BEng parser's per-token word buffers, legacy char filter conversion
+    // results before they were moved to component-owned arenas). Components must
+    // not retain references into scratch_alloc_ across analyze() boundaries — see
+    // the field doc on scratch_alloc_ in ob_analyzer.h. Long-lived state (parser
+    // instance, char filter / tokenizer / token filter objects) lives on alloc_
+    // and is unaffected.
+    scratch_alloc_.reuse();
   }
 
   // Step 1: apply char filters sequentially

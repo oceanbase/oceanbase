@@ -6,6 +6,7 @@
 #ifndef OCEANBASE_STORAGE_OB_LEGACY_CHAR_FILTER_H_
 #define OCEANBASE_STORAGE_OB_LEGACY_CHAR_FILTER_H_
 
+#include "lib/allocator/page_arena.h"
 #include "storage/fts/analyzer/ob_i_char_filter.h"
 
 namespace oceanbase
@@ -24,11 +25,7 @@ struct ObLegacyLowercaseCharFilterSpec : public ObCharFilterSpec
 class ObLegacyLowercaseCharFilter : public ObICharFilter
 {
 public:
-  ObLegacyLowercaseCharFilter()
-    : is_inited_(false),
-      coll_type_(common::CS_TYPE_INVALID),
-      alloc_(nullptr)
-  {}
+  ObLegacyLowercaseCharFilter();
   virtual ~ObLegacyLowercaseCharFilter() = default;
   virtual int init(const ObCharFilterSpec &spec, common::ObIAllocator &alloc) override;
   virtual int filter(const char *input, const int64_t input_len,
@@ -38,10 +35,11 @@ public:
 private:
   bool is_inited_;
   common::ObCollationType coll_type_;
-  // TODO: @yilan.zyn Currently, this memory allocator allocates new space on each analysis.
-  // The memory is released together when the arena provided is destroyed.
-  // For reusable char filters, allocate a dedicated arena for use during analysis and release it when analysis completes.
-  common::ObIAllocator *alloc_;
+  // Self-owned arena reused on every filter() call. Required because the analyzer
+  // (and therefore this filter) is reused across rows in DDL segment paths; sharing
+  // the analyzer's scratch_alloc_ would let tolower buffers accumulate indefinitely
+  // alongside the tokenizer's long-lived state (e.g. IK dict caches).
+  common::ObArenaAllocator tolower_arena_;
   DISALLOW_COPY_AND_ASSIGN(ObLegacyLowercaseCharFilter);
 };
 
@@ -61,29 +59,25 @@ struct ObUtf8mb4BinCharFilterSpec : public ObCharFilterSpec
 // so downstream analyzer tokenizers can operate on a single charset/collation.
 //
 // Output lifetime: when charset conversion is required, filter() allocates the converted
-// buffer from alloc_ (the analyzer's scratch_alloc_). Caller (ObFTSAnalyzer) guarantees
-// this allocator is not reset until tokenization completes. Do not use the output pointer
-// after the owning analyzer resets its scratch allocator.
+// buffer from a self-owned arena that is reused on every filter() call. The output is valid
+// until the next filter() invocation on the same instance.
 class ObUtf8mb4BinCharFilter : public ObICharFilter
 {
 public:
-  ObUtf8mb4BinCharFilter()
-    : is_inited_(false),
-      src_collation_(common::CS_TYPE_INVALID),
-      alloc_(nullptr)
-  {}
+  ObUtf8mb4BinCharFilter();
   virtual ~ObUtf8mb4BinCharFilter() = default;
   virtual int init(const ObCharFilterSpec &spec, common::ObIAllocator &alloc) override;
   virtual int filter(const char *input, const int64_t input_len,
                      const char *&output, int64_t &output_len) override;
   virtual void reset() override;
-  VIRTUAL_TO_STRING_KV(K_(is_inited), K_(src_collation), KP_(alloc));
+  VIRTUAL_TO_STRING_KV(K_(is_inited), K_(src_collation));
 private:
   bool is_inited_;
   // Original collation captured at analyzer construction time; not passed through filter().
   common::ObCollationType src_collation_;
-  // Scratch allocator owned by the analyzer, used when charset conversion needs a new buffer.
-  common::ObIAllocator *alloc_;
+  // Self-owned arena reused on every filter() call. See the same rationale on
+  // ObLegacyLowercaseCharFilter::tolower_arena_.
+  common::ObArenaAllocator convert_arena_;
   DISALLOW_COPY_AND_ASSIGN(ObUtf8mb4BinCharFilter);
 };
 

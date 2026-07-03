@@ -16,6 +16,10 @@
 
 namespace oceanbase
 {
+namespace storage
+{
+class ObFTSAnalyzer;
+}
 namespace sql
 {
 
@@ -49,7 +53,8 @@ public:
       scratch_allocator_(),
       meta_(),
       ft_token_processor_(scratch_allocator_),
-      all_ft_exprs_() { }
+      all_ft_exprs_(),
+      fts_analyzer_(nullptr) { }
 
   ~ObFTIndexRowCache()
   {
@@ -120,6 +125,8 @@ private:
                      const char *fulltext,
                      const int64_t fulltext_len);
 
+  int prepare_analyzer(const common::ObObjMeta &ft_obj_meta);
+
   int create_ft_token_map(const int64_t ft_token_bkt_cnt);
 
   /**
@@ -169,6 +176,10 @@ private:
   ObFTTokenProcessor ft_token_processor_;
   common::ObSEArray<ObExpr *, ALL_EXPR_COUNT> all_ft_exprs_;
   common::ObSEArray<ObExpr *, ALL_EXPR_COUNT> other_exprs_;
+  // Analyzer is reused across rows within a DDL segment session. Built lazily on the
+  // first segment() call and torn down in reset(). Allocated from metadata_allocator_
+  // because scratch_allocator_ is reused per-row.
+  storage::ObFTSAnalyzer *fts_analyzer_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObFTIndexRowCache);

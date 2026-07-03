@@ -146,8 +146,19 @@ private:
   common::ObFixedArray<ObITokenFilter*, common::ObIAllocator> token_filters_;  // post-tokenization token filters, applied in order
   ObITokenStream *tail_;                   // tail of the filter chain, points to the last token filter or the tokenizer if no filters
   bool is_inited_;                         // whether the analyzer has been fully constructed by the factory
-  common::ObIAllocator *alloc_;            // allocator used for owned components, set during construction
-  common::ObArenaAllocator scratch_alloc_; // internal scratch arena, reused per analyze() call for temporary buffers (tolower, parser state, etc.)
+  // Long-lived allocator: owns every object that must survive across analyze() calls —
+  // the char filter / tokenizer / token filter instances, and (for legacy tokenizers)
+  // the underlying ObIFTParser instance plus any parser-side metadata. Set at
+  // construction and freed in reset(). Must NOT be used for per-call scratch buffers.
+  common::ObIAllocator *alloc_;
+  // Per-call scratch arena: reused (ObArenaAllocator::reuse()) at the start of every
+  // analyze() call. Use for short-lived buffers produced inside one analyze() call
+  // (e.g. legacy char filter tolower output staged before being moved to the filter's
+  // own arena, BEng parser's per-token word buffer). Components MUST NOT retain
+  // pointers into this arena beyond a single analyze() call. Forwarded to legacy
+  // parsers via ObFTParserParam::scratch_alloc_; see ObLegacyParserTokenizer for the
+  // metadata_alloc_/scratch_alloc_ split.
+  common::ObArenaAllocator scratch_alloc_;
 
   friend class ObTokenStreamFactory;
   DISALLOW_COPY_AND_ASSIGN(ObFTSAnalyzer);
