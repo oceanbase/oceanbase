@@ -1174,6 +1174,7 @@ public:
       obrpc::ObAlterTableArg &alter_table_arg);
 
   static int generate_ddl_schema_hint_str(
+      const ObString &database_name,
       const ObString &table_name,
       const int64_t schema_version,
       const bool is_oracle_mode,

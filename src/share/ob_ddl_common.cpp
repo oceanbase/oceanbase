@@ -886,21 +886,29 @@ int ObDDLUtil::generate_column_name_str(
 }
 
 int ObDDLUtil::generate_ddl_schema_hint_str(
+    const ObString &database_name,
     const ObString &table_name,
     const int64_t schema_version,
     const bool is_oracle_mode,
     ObSqlString &sql_string)
 {
   int ret = OB_SUCCESS;
-  if (is_oracle_mode) {
-    if (OB_FAIL(sql_string.append_fmt("ob_ddl_schema_version(\"%.*s\", %ld)",
+  if (OB_UNLIKELY(database_name.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("database_name is empty, ddl schema hint without database name may cause "
+             "schema version mismatch when tables with same name exist in different databases",
+             K(ret), K(table_name), K(schema_version));
+  } else if (is_oracle_mode) {
+    if (OB_FAIL(sql_string.append_fmt("ob_ddl_schema_version(\"%.*s\".\"%.*s\", %ld)",
+        static_cast<int>(database_name.length()), database_name.ptr(),
         static_cast<int>(table_name.length()), table_name.ptr(), schema_version))) {
-      LOG_WARN("append origin column name failed", K(ret));
+      LOG_WARN("append ddl schema hint with database name failed", K(ret));
     }
   } else {
-    if (OB_FAIL(sql_string.append_fmt("ob_ddl_schema_version(`%.*s`, %ld)",
+    if (OB_FAIL(sql_string.append_fmt("ob_ddl_schema_version(`%.*s`.`%.*s`, %ld)",
+        static_cast<int>(database_name.length()), database_name.ptr(),
         static_cast<int>(table_name.length()), table_name.ptr(), schema_version))) {
-      LOG_WARN("append origin column name failed", K(ret));
+      LOG_WARN("append ddl schema hint with database name failed", K(ret));
     }
   }
   return ret;
@@ -1339,7 +1347,7 @@ int ObDDLUtil::generate_build_replica_sql(
           LOG_WARN("fail to generate new name with escape character",
                     K(ret), K(source_table_name));
         } else if (use_schema_version_hint_for_src_table) {
-          if (OB_FAIL(generate_ddl_schema_hint_str(new_source_table_name, schema_version, oracle_mode, src_table_schema_version_hint_sql_string))) {
+          if (OB_FAIL(generate_ddl_schema_hint_str(new_source_database_name, new_source_table_name, schema_version, oracle_mode, src_table_schema_version_hint_sql_string))) {
             LOG_WARN("failed to generated ddl schema hint", K(ret));
           }
         }
@@ -3839,7 +3847,7 @@ int ObDDLUtil::check_table_empty(
         LOG_WARN("failed to set default timeout ctx", K(ret), K(timeout_ctx));
       } else if (OB_FAIL(connection->set_ddl_info(&session_param.ddl_info_))) {
         LOG_WARN("fail to set ddl info", K(ret), K(session_param.ddl_info_));
-      } else if (OB_FAIL(ObDDLUtil::generate_ddl_schema_hint_str(table_name, table_schema.get_schema_version(), true, ddl_schema_hint_str))) {
+      } else if (OB_FAIL(ObDDLUtil::generate_ddl_schema_hint_str(new_database_name, new_table_name, table_schema.get_schema_version(), true, ddl_schema_hint_str))) {
         LOG_WARN("failed to generate ddl schema hint str", K(ret));
       } else if (OB_FAIL(sql_string.assign_fmt(
                          format_str,
