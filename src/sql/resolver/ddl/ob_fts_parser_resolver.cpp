@@ -52,14 +52,6 @@ int ObFTParserResolverHelper::resolve_dict_table_name_and_id(const common::ObStr
       const int64_t table_name_len = table_name.length() - db_name_len - 1;
       database_name.assign_ptr(table_name.ptr(), static_cast<ObString::obstr_size_t>(db_name_len));
       parsed_table_name.assign_ptr(dot_pos + 1, static_cast<ObString::obstr_size_t>(table_name_len));
-
-      // Cross-database check: user-specified database_name must match index_database_name (if check enabled)
-      if (check_database_name && !index_database_name.empty() && database_name != index_database_name) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("custom dictionary table must be in the same database as index table",
-                 K(ret), K(database_name), K(index_database_name), K(parsed_table_name));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "custom dictionary table is not in the same database as index table");
-      }
     } else if (index_database_name.empty()) {
       ret = OB_ERR_NO_DB_SELECTED;
       LOG_WARN("index database name is empty", K(ret));
@@ -85,6 +77,12 @@ int ObFTParserResolverHelper::resolve_dict_table_name_and_id(const common::ObStr
         LOG_WARN("table not found", K(ret), K(database_name), K(parsed_table_name));
         LOG_USER_ERROR(OB_ERR_UNKNOWN_TABLE, parsed_table_name.length(), parsed_table_name.ptr(),
                       database_name.length(), database_name.ptr());
+      } else if (OB_NOT_NULL(dot_pos) && check_database_name && !index_database_name.empty() &&
+                 database_name != index_database_name && !is_inner_table(table_id)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("custom dictionary table must be in the same database as index table",
+                 K(ret), K(database_name), K(index_database_name), K(parsed_table_name));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "custom dictionary table is not in the same database as index table");
       }
     }
 
