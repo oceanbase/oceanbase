@@ -416,7 +416,7 @@ int ObDASReqOptOp::inner_get_next_row_with_block_max_pruning(
       curr_score = curr_req_score;
     } else if (OB_FAIL(optional_->advance_to(curr_req_id, curr_opt_id_, curr_opt_score_))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
-      LOG_WARN("failed to advance to optional op", K(ret));
+        LOG_WARN("failed to advance to optional op", K(ret));
       } else if (is_conjunctive_) {
         // early termination
       } else {
@@ -428,6 +428,9 @@ int ObDASReqOptOp::inner_get_next_row_with_block_max_pruning(
     } else if (cmp_ret == 0) {
       curr_score = curr_req_score + curr_opt_score_;
       same_id = true;
+    } else if (cmp_ret < 0) {
+      // optional has advanced past curr_req_id; keep req-only score.
+      curr_score = curr_req_score;
     }
 
     if (OB_FAIL(ret)) {

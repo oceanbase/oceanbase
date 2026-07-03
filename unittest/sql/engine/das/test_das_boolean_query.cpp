@@ -20,6 +20,7 @@
 #include "sql/hybrid_search/ob_hybrid_search_node.h"
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "sql/das/search/ob_das_search_define.h"
+#include "sql/das/search/ob_das_req_opt_op.h"
 #undef private
 
 using namespace oceanbase;
@@ -2228,6 +2229,37 @@ TEST_F(ObDASBooleanQueryCgTest, generate_ctdef_no_positive_clauses)
   ObDASBooleanQueryCtDef *ctdef = nullptr;
   ObLogTableScan *op = nullptr;
   EXPECT_EQ(OB_INVALID_ARGUMENT, cg_service_.generate_ctdef(*op, &node, ctdef));
+}
+
+// Regression for Dima 2026051500116116702 problem 2: inside block_max_pruning, when optional
+// has advanced past the current required row (cmp_ret < 0 after advance_to), req-only score
+// must be kept; otherwise curr_score stays 0 and high-scoring required rows are dropped.
+TEST_F(ObDASBooleanQueryTest, req_opt_op_block_max_pruning_req_only_after_optional_advance)
+{
+  SearchCtxSetup ctx_setup(allocator_);
+  // required: low-score row 50 then high-score row 100 (enters block_max_pruning on first row).
+  // optional: row 50 stays current after row 50 is processed; for row 100, advance_to(100)
+  // jumps to 200 so the second compare hits cmp_ret < 0 (the buggy branch before fix).
+  MockSearchOp *required = OB_NEWx(MockSearchOp, &allocator_, ctx_setup.search_ctx_,
+      std::vector<uint64_t>{50, 100}, std::vector<double>{5.0, 61.0});
+  MockSearchOp *optional = OB_NEWx(MockSearchOp, &allocator_, ctx_setup.search_ctx_,
+      std::vector<uint64_t>{50, 200}, std::vector<double>{3.0, 8.0});
+
+  ObDASReqOptOp req_opt_op(ctx_setup.search_ctx_);
+  ObDASReqOptOpParam param(required, optional, true);
+  ASSERT_EQ(OB_SUCCESS, req_opt_op.init(param));
+  ASSERT_EQ(OB_SUCCESS, req_opt_op.open());
+  req_opt_op.max_score_calculated_ = true;
+  req_opt_op.required_max_score_ = 61.0;
+  req_opt_op.optional_max_score_ = 8.0;
+  req_opt_op.min_competitive_score_ = 20.0;
+
+  ObDASRowID next_id;
+  double score = 0.0;
+  ASSERT_EQ(OB_SUCCESS, req_opt_op.next_rowid(next_id, score));
+  EXPECT_EQ(100ULL, next_id.get_uint64());
+  EXPECT_DOUBLE_EQ(61.0, score);
+  EXPECT_EQ(OB_ITER_END, req_opt_op.next_rowid(next_id, score));
 }
 
 
