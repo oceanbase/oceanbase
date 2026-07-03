@@ -241,6 +241,54 @@ TEST_F(FTParserTest, test_cache)
   ASSERT_EQ(new_value->dat_block_->mem_block_size_, dat.mem_block_size_);
 }
 
+TEST_F(FTParserTest, long_word_dat_expand)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(ObModIds::TEST);
+  ObFTTrie<void> trie(allocator, CS_TYPE_UTF8MB4_GENERAL_CI);
+
+  ret = trie.insert(ObString("OceanBase"), {});
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = trie.insert(ObString("分布式数据库"), {});
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = trie.insert(ObString("全文索引"), {});
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // Dima 2026052900116418086: long IK dict word; keep moderate length for unittest memory.
+  static const int64_t LONG_CHAR_CNT = 120;
+  std::string long_word = "火星数据库内核";
+  for (int64_t i = 0; i < LONG_CHAR_CNT; ++i) {
+    long_word += "文";
+  }
+  ret = trie.insert(ObString(long_word.length(), long_word.c_str()), {});
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  const size_t initial_array_size = trie.node_num() * 6;
+  ObFTDATBuilder<void> builder(allocator);
+  ret = builder.init(trie);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObFTDAT *mem = nullptr;
+  builder.get_mem_block(mem);
+  ASSERT_NE(nullptr, mem);
+  ASSERT_EQ(initial_array_size, mem->array_size_);
+
+  ret = builder.build_from_trie(trie);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  builder.get_mem_block(mem);
+  ASSERT_NE(nullptr, mem);
+
+  ObFTCacheDict cache_dict(CS_TYPE_UTF8MB4_GENERAL_CI, mem);
+  ret = cache_dict.init();
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  bool is_match = false;
+  ret = cache_dict.match(ObString(long_word.length(), long_word.c_str()), is_match);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_TRUE(is_match);
+}
+
 TEST_F(FTParserTest, test_trie)
 {
   std::vector<std::string> dict = {
