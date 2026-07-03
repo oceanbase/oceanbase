@@ -21,6 +21,14 @@ namespace oceanbase
 namespace storage
 {
 template <typename DATA_TYPE>
+void ObFTDATBuilder<DATA_TYPE>::update_max_used_index(const size_t idx)
+{
+  if (idx > max_used_index_) {
+    max_used_index_ = idx;
+  }
+}
+
+template <typename DATA_TYPE>
 int ObFTDATBuilder<DATA_TYPE>::init(ObFTTrie<DATA_TYPE> &trie)
 {
   int ret = OB_SUCCESS;
@@ -46,6 +54,9 @@ int ObFTDATBuilder<DATA_TYPE>::init(ObFTTrie<DATA_TYPE> &trie)
       map_ = dat_->get_map();
       if (OB_FAIL(map_->init(trie.node_num()))) {
         LOG_WARN("fail to init map", K(ret));
+      } else {
+        max_used_index_ = ObFTDAT::FIRST_INDEX;
+        is_inited_ = true;
       }
     }
   }
@@ -90,6 +101,8 @@ int ObFTDATBuilder<DATA_TYPE>::build_from_trie(ObFTTrie<DATA_TYPE> &trie)
         level = node->dat_build_info_.level_;
         next_base_offset = 0;
       }
+
+      update_max_used_index(static_cast<size_t>(rootIdx));
 
       if (node->is_empty()) {
         // nothing
@@ -154,6 +167,9 @@ int ObFTDATBuilder<DATA_TYPE>::build_from_trie(ObFTTrie<DATA_TYPE> &trie)
                 break;
               }
               try_step = MAX(1, (try_base - start) / 20);
+              if (try_step > MAX_TRY_STEP) {
+                try_step = MAX_TRY_STEP;
+              }
             }
           }
 
@@ -200,6 +216,7 @@ int ObFTDATBuilder<DATA_TYPE>::build_from_trie(ObFTTrie<DATA_TYPE> &trie)
               child_index.child_->dat_build_info_.state_index_ =
                   static_cast<uint32_t>(my_index);
               check[my_index] = rootIdx;
+              update_max_used_index(my_index);
               dfs_queue.push_back(child_index.child_);
             }
           }
@@ -210,6 +227,8 @@ int ObFTDATBuilder<DATA_TYPE>::build_from_trie(ObFTTrie<DATA_TYPE> &trie)
 
     if (OB_FAIL(ret)) {
       // already logged
+    } else if (OB_FAIL(shrink())) {
+      LOG_WARN("Failed to shrink dat mem block", K(ret));
     } else if (OB_FAIL(trie.get_start_token(dat_->start_token_))) {
       LOG_WARN("fail to get start token", K(ret));
     } else if (OB_FAIL(trie.get_end_token(dat_->end_token_))) {
@@ -230,6 +249,10 @@ int ObFTDATBuilder<DATA_TYPE>::expand(const size_t min_array_size)
   int ret = OB_SUCCESS;
   const size_t array_size = dat_->array_size_;
   size_t new_array_size = array_size * 2;
+  const size_t capped_size = array_size + MAX_EXPAND_SLOT_INCREMENT;
+  if (capped_size < new_array_size) {
+    new_array_size = capped_size;
+  }
   if (new_array_size < min_array_size) {
     new_array_size = min_array_size;
   }
@@ -255,6 +278,55 @@ int ObFTDATBuilder<DATA_TYPE>::expand(const size_t min_array_size)
     alloc_.free(dat_);
     dat_ = new_dat;
     map_ = dat_->get_map();
+  }
+  return ret;
+}
+
+template <typename DATA_TYPE>
+int ObFTDATBuilder<DATA_TYPE>::shrink()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(dat_) || OB_ISNULL(dat_->buff)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dat_ or dat_->buff is null on shrink", K(ret));
+  } else {
+    const size_t compact_array_size = max_used_index_ + 1;
+    if (compact_array_size >= dat_->array_size_
+        || dat_->array_size_ < compact_array_size * SHRINK_WASTE_RATIO) {
+      // Trailing waste is not significant enough to pay for a copy.
+    } else {
+      const size_t map_size = dat_->base_offset_;
+      const size_t compact_base_size = compact_array_size * sizeof(int32_t);
+      const size_t compact_check_size = compact_array_size * sizeof(int32_t);
+      const size_t new_buffer_size =
+          sizeof(ObFTDAT) + map_size + compact_base_size + compact_check_size;
+      const int64_t old_mem_block_size = dat_->mem_block_size_;
+      const size_t old_array_size = dat_->array_size_;
+
+      ObFTDAT *new_dat = nullptr;
+      if (OB_ISNULL(new_dat = static_cast<ObFTDAT *>(alloc_.alloc(new_buffer_size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("Failed to alloc shrunk dat mem block", K(ret), K(new_buffer_size));
+      } else {
+        MEMCPY(new_dat, dat_, sizeof(ObFTDAT) - 1 + map_size);
+        MEMCPY(new_dat->buff + map_size,
+               dat_->buff + dat_->base_offset_,
+               compact_base_size);
+        MEMCPY(new_dat->buff + map_size + compact_base_size,
+               dat_->buff + dat_->check_offset_,
+               compact_check_size);
+        new_dat->mem_block_size_ = static_cast<int64_t>(new_buffer_size);
+        new_dat->array_size_ = compact_array_size;
+        new_dat->base_offset_ = map_size;
+        new_dat->check_offset_ = map_size + compact_base_size;
+        alloc_.free(dat_);
+        dat_ = new_dat;
+        map_ = dat_->get_map();
+        LOG_INFO("shrink ft dat mem block",
+                 K(old_mem_block_size), K(new_dat->mem_block_size_),
+                 K(old_array_size), K(compact_array_size), K(max_used_index_));
+      }
+    }
   }
   return ret;
 }
