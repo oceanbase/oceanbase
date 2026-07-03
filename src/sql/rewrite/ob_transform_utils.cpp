@@ -9622,7 +9622,7 @@ int ObTransformUtils::convert_select_expr_to_column_expr(const common::ObIArray<
       LOG_WARN("expr is null", K(ret), K(expr));
     }
     for (int64_t j = 0; OB_SUCC(ret) && !find && j < inner_stmt.get_select_item_size(); ++j) {
-      if (expr == inner_stmt.get_select_item(j).expr_) {
+      if (ObOptimizerUtil::is_expr_equivalent(expr, inner_stmt.get_select_item(j).expr_)) {
         find = true;
         idx = j;
       }
