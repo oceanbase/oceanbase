@@ -905,7 +905,6 @@ ob_set_subtarget(ob_share ai_service
   ai_service/ob_ai_service_struct.cpp
   ai_service/ob_ai_service_proxy.cpp
   ai_service/ob_ai_service_executor.cpp
-  ai_service/ob_ai_provider_importer.cpp
   ai_service/ob_ai_exec_struct.cpp
   ai_service/ob_ai_system_table_manager.cpp
   ai_service/ob_ai_table_poller.cpp

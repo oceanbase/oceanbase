@@ -23,6 +23,7 @@ public:
 
   int register_provider(const obrpc::ObRegisterProviderArg &arg);
   int unregister_provider(const obrpc::ObUnregisterProviderArg &arg);
+  int alter_provider(const obrpc::ObAlterProviderArg &arg);
 private:
   ObDDLService &ddl_service_;
 };

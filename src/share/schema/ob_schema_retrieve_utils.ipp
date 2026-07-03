@@ -2533,6 +2533,10 @@ int ObSchemaRetrieveUtils::fill_obj_mysql_priv_schema (
     if ((all_priv & 1) != 0) { obj_mysql_priv.set_priv(OB_PRIV_READ); }
     if ((all_priv & 2) != 0) { obj_mysql_priv.set_priv(OB_PRIV_WRITE); }
     if ((all_priv & 4) != 0) { obj_mysql_priv.set_priv(OB_PRIV_GRANT); }
+    if ((all_priv & 8) != 0) { obj_mysql_priv.set_priv(OB_PRIV_SELECT); }
+    if ((all_priv & 16) != 0) { obj_mysql_priv.set_priv(OB_PRIV_ALTER); }
+    if ((all_priv & 32) != 0) { obj_mysql_priv.set_priv(OB_PRIV_CREATE); }
+    if ((all_priv & 64) != 0) { obj_mysql_priv.set_priv(OB_PRIV_DROP); }
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, schema_version, obj_mysql_priv, int64_t);
   }
   return ret;

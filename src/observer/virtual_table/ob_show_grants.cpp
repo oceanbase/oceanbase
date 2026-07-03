@@ -438,6 +438,24 @@ int ObShowGrants::inner_get_next_row(common::ObNewRow *&row)
               OZ (scanner_.add_row(cur_row_));
             }
           }
+
+          // ai provider / ai gateway
+          for (PRIV_MAP::const_iterator iter = priv_map.begin(); OB_SUCC(ret) && iter != priv_map.end(); ++iter) {
+            const PrivKey &priv_key = iter->first;
+            const ObPrivSet &privs = iter->second;
+            if (is_ai_object_type(priv_key.obj_type_)) {
+              pos = 0;
+              have_priv.priv_level_ = OB_PRIV_OBJECT_LEVEL;
+              have_priv.priv_set_ = privs;
+              have_priv.table_ = priv_key.table_name_;
+              have_priv.obj_type_ = priv_key.obj_type_;
+
+              OZ (get_grants_string(buf, PRIV_BUF_LENGTH, pos, have_priv, user_name, host_name));
+              OX (result.assign_ptr(buf, static_cast<int32_t>(pos)));
+              OZ (fill_row_cells(show_user_id, result));
+              OZ (scanner_.add_row(cur_row_));
+            }
+          }
         }
 
         if (OB_SUCC(ret) && lib::is_oracle_mode()) {
@@ -740,7 +758,8 @@ int ObShowGrants::get_grants_string(
   } else if (OB_FAIL(print_privs_to_buff(buf, buf_len, pos,
                                          have_priv.priv_level_,
                                          have_priv.priv_set_,
-                                         priv_key_array))) {
+                                         priv_key_array,
+                                         have_priv.obj_type_))) {
     SERVER_LOG(WARN, "Fill privs to buffer failed", K(ret));
   } else if (OB_FAIL(priv_level_printf(buf, buf_len, pos, have_priv))) {
     SERVER_LOG(WARN, "Fill privs to buffer failed", K(ret));
@@ -766,7 +785,10 @@ int ObShowGrants::get_grants_string(
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(grant_priv_to_buff(buf, buf_len, pos, have_priv.priv_set_))) {
+    if (is_ai_object_type(have_priv.obj_type_) && (have_priv.priv_set_ & OB_PRIV_GRANT)) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "AI object should not have GRANT OPTION", K(have_priv.priv_set_), K(have_priv.obj_type_));
+    } else if (OB_FAIL(grant_priv_to_buff(buf, buf_len, pos, have_priv.priv_set_))) {
       SERVER_LOG(WARN, "Fill priv to buffer failed", K(ret));
     } else {
       //do nothing
@@ -843,7 +865,8 @@ int ObShowGrants::print_privs_to_buff(
     int64_t &pos,
     const ObPrivLevel priv_level,
     const ObPrivSet priv_set,
-    ObIArray<std::pair<PrivKey, ObPrivSet>> *priv_key_array)
+    ObIArray<std::pair<PrivKey, ObPrivSet>> *priv_key_array,
+    ObObjectType obj_type)
 {
   int ret = OB_SUCCESS;
   ObPrivSet priv_all = 0;
@@ -862,7 +885,12 @@ int ObShowGrants::print_privs_to_buff(
     priv_all = OB_PRIV_ALL;
   } else if (OB_PRIV_OBJ_ORACLE_LEVEL == priv_level) {
   } else if (OB_PRIV_OBJECT_LEVEL == priv_level) {
-    priv_all = OB_PRIV_OBJECT_ACC;
+    if (is_ai_object_type(obj_type)) {
+      priv_all = (ObObjectType::AI_PROVIDER == obj_type)
+                 ? OB_PRIV_AI_PROVIDER_ACC : OB_PRIV_AI_GATEWAY_ACC;
+    } else {
+      priv_all = OB_PRIV_OBJECT_ACC;
+    }
   } else if (OB_PRIV_SENSITIVE_RULE_LEVEL == priv_level) {
     priv_all = OB_PRIV_SENSITIVE_RULE_ACC;
   } else {
@@ -879,14 +907,17 @@ int ObShowGrants::print_privs_to_buff(
       if (0 == (priv_set & (priv_all | OB_PRIV_ENCRYPT | OB_PRIV_DECRYPT | OB_PRIV_PLAINACCESS))
           && (priv_key_array == NULL || priv_key_array->empty())) {
         ret = databuff_printf(buf, buf_len, pos, " USAGE");
-      } else if (priv_all == (priv_set & priv_all)) {
+      } else if (priv_all == (priv_set & priv_all)
+                 && !is_ai_object_type(obj_type)) {
         ret = databuff_printf(buf, buf_len, pos, " ALL PRIVILEGES");
       } else {
+        const bool is_ai = is_ai_object_type(obj_type);
+        const bool is_provider = (ObObjectType::AI_PROVIDER == obj_type);
         if ((priv_set & OB_PRIV_ALTER) && OB_SUCCESS == ret) {
           ret = BUF_PRINTF(" ALTER,");
         }
         if ((priv_set & OB_PRIV_CREATE) && OB_SUCCESS == ret) {
-          ret = BUF_PRINTF(" CREATE,");
+          ret = BUF_PRINTF(is_provider ? " REGISTER," : " CREATE,");
         }
         if ((priv_set & OB_PRIV_CREATE_USER) && OB_SUCCESS == ret) {
           ret = BUF_PRINTF(" CREATE USER,");
@@ -895,7 +926,7 @@ int ObShowGrants::print_privs_to_buff(
           ret = BUF_PRINTF(" DELETE,");
         }
         if ((priv_set & OB_PRIV_DROP) && OB_SUCCESS == ret) {
-          ret = BUF_PRINTF(" DROP,");
+          ret = BUF_PRINTF(is_provider ? " UNREGISTER," : " DROP,");
         }
         if ((priv_set & OB_PRIV_INSERT) && OB_SUCCESS == ret) {
           ret = BUF_PRINTF(" INSERT,");
@@ -912,7 +943,7 @@ int ObShowGrants::print_privs_to_buff(
           LOG_WARN("print column privs to buff failed", K(ret));
         }
         if ((priv_set & OB_PRIV_SELECT) && OB_SUCCESS == ret) {
-          ret = BUF_PRINTF(" SELECT,");
+          ret = BUF_PRINTF(is_ai ? " ACCESS," : " SELECT,");
         }
         if (OB_SUCC(ret) && priv_key_array != NULL && OB_FAIL(print_column_privs_to_buff(buf, buf_len, pos,
                                                                                 *priv_key_array, OB_PRIV_SELECT))) {
@@ -1159,6 +1190,14 @@ int ObShowGrants::priv_level_printf(
   } else if (OB_PRIV_OBJECT_LEVEL == have_priv.priv_level_) {
     if (ObObjectType::LOCATION == have_priv.obj_type_) {
       if (OB_FAIL(databuff_printf(buf, buf_len, pos, " ON LOCATION `%.*s`", have_priv.table_.length(), have_priv.table_.ptr()))) {
+        SERVER_LOG(WARN, "Fill privs to buffer failed", K(ret));
+      }
+    } else if (ObObjectType::AI_PROVIDER == have_priv.obj_type_) {
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos, " ON AI PROVIDER *"))) {
+        SERVER_LOG(WARN, "Fill privs to buffer failed", K(ret));
+      }
+    } else if (ObObjectType::AI_GATEWAY == have_priv.obj_type_) {
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos, " ON AI GATEWAY *"))) {
         SERVER_LOG(WARN, "Fill privs to buffer failed", K(ret));
       }
     }

@@ -361,15 +361,19 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
                         grant_level,
                         *allocator_,
                         catalog,
-                        sensitive_rule))) {
+                        sensitive_rule,
+                        priv_object_node))) {
               LOG_WARN("Resolve priv_level node error", K(ret));
             } else {
               revoke_stmt->set_grant_level(grant_level);
             }
 
+            const bool is_ai_obj = (priv_object_node != NULL
+                && (priv_object_node->value_ == 7 || priv_object_node->value_ == 8));
             if (OB_SUCC(ret)
                 && grant_level != OB_PRIV_CATALOG_LEVEL
-                && grant_level != OB_PRIV_SENSITIVE_RULE_LEVEL) {
+                && grant_level != OB_PRIV_SENSITIVE_RULE_LEVEL
+                && !is_ai_obj) {
               if (OB_FAIL(check_and_convert_name(db, table))) {
                 LOG_WARN("Check and convert name error", K(db), K(table), K(ret));
               } else if (OB_FAIL(revoke_stmt->set_database_name(db))) {
@@ -495,6 +499,32 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("grammar is not support when MIN_DATA_VERSION is below MOCK_DATA_VERSION_4_3_5_3 or MOCK_DATA_VERSION_4_4_2_0 or DATA_VERSION_4_5_1_0", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "revoke create sensitive rule/plainaccess privilege");
+          } else if (compat_version < DATA_VERSION_4_6_0_1
+                     && is_ai_object_type(revoke_stmt->get_object_type())) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_6_0_1", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "revoke ai provider/gateway privilege");
+          }
+          // precise validation of AI object privilege combination
+          if (OB_SUCC(ret) && is_ai_object_type(revoke_stmt->get_object_type())) {
+            ObPrivSet valid_privs = 0;
+            share::schema::ObObjectType object_type = revoke_stmt->get_object_type();
+            if (object_type == ObObjectType::AI_PROVIDER) {
+              valid_privs = OB_PRIV_AI_PROVIDER_ACC;
+            } else if (object_type == ObObjectType::AI_GATEWAY) {
+              valid_privs = OB_PRIV_AI_GATEWAY_ACC;
+            }
+            if (valid_privs != 0 && (priv_set & ~(valid_privs | OB_PRIV_GRANT)) != 0) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("invalid privilege for this AI object type", K(ret), K(object_type), K(priv_set));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "this privilege combination on the specified AI object type");
+            }
+            if (OB_SUCC(ret) && (priv_set & OB_PRIV_GRANT)) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("grant option is not supported for AI provider/gateway privilege",
+                       K(ret), K(object_type), K(priv_set));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "GRANT OPTION on AI provider/gateway");
+            }
           }
           if (OB_FAIL(ret)) {
           } else {

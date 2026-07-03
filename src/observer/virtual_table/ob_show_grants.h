@@ -128,7 +128,8 @@ private:
   // @brief append privileges info without considering grant_option
   int print_privs_to_buff(char *buf, const int64_t buf_len, int64_t &pos,
                           share::schema::ObPrivLevel priv_level, const ObPrivSet priv_set,
-                          ObIArray<std::pair<PrivKey, ObPrivSet>> *priv_key_array = NULL);
+                          ObIArray<std::pair<PrivKey, ObPrivSet>> *priv_key_array = NULL,
+                          ObObjectType obj_type = ObObjectType::INVALID);
   int priv_level_printf(char *buf, const int64_t buf_len, int64_t &pos,
                         share::schema::ObNeedPriv &have_priv);
   // @brief append grant option info

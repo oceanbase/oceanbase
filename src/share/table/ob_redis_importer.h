@@ -29,7 +29,6 @@ public:
     REDIS,
     TIMEZONE,
     GIS,
-    AI_PROVIDER,
     MAX_MOD
   };
   ObModuleDataArg() :

@@ -305,7 +305,7 @@ END_P SET_VAR DELIMITER
         FOUND FREEZE FREQUENCY FUNCTION FOLLOWING FLASHBACK FULL FRAGMENTATION FREQ_THRESHOLD FROZEN FILE_ID FILTER
         FIELD_OPTIONALLY_ENCLOSED_BY FIELD_DELIMITER FIELD_ENCLOSED_BY FILE_EXTENSION FULLTEXT_DICT FTS_INDEX_TYPE
 
-        GENERAL GEOMETRY GEOMCOLLECTION GEOMETRYCOLLECTION GET_FORMAT GLOBAL GRANTS GRANULARITY GROUPCONCAT GROUP_CONCAT GROUPING GROUPING_ID GTS
+        GATEWAY GENERAL GEOMETRY GEOMCOLLECTION GEOMETRYCOLLECTION GET_FORMAT GLOBAL GRANTS GRANULARITY GROUPCONCAT GROUP_CONCAT GROUPING GROUPING_ID GTS
         GLOBAL_NAME GLOBAL_ALIAS
 
         HANDLER HASH HEAP HELP HISTOGRAM HOST HOSTS HOT_RETENTION MIXED_RETENTION HOUR HIDDEN HTTP_TIMEOUT HTTP_KEEPALIVE_TIME HYBRID HYBRID_HIST HYBRID_SEARCH HMS_CATALOG_NAME
@@ -345,13 +345,13 @@ END_P SET_VAR DELIMITER
         PACK_KEYS PAGE PARALLEL PARAMETERS PARSER PARSER_PROPERTIES PARTIAL PARTITION_ID PARTITIONING PARTITIONS PASSWORD PATH PAUSE PAXOS_REPLICA_NUM PER PERCENTAGE PICK
         PERCENT_RANK PERCENTILE_CONT PHASE PHRASE PHRASE_MATCH PHYSICAL PLAN PLAINACCESS PLANREGRESS PLUGIN PLUGIN_DIR PLUGINS POINT POLICY_STATUS POLYGON PERFORMANCE
         PREFIX PARALLEL_PARSE_FILE_SIZE_THRESHOLD PARALLEL_PARSE_ON_SINGLE_FILE PRINCIPAL PROTECTION PROJECT_NAME PRIORITY PL POLICY POOL PORT POSITION PREPARE PRESERVE PRETTY PRETTY_COLOR PREV PRIMARY_ZONE PRIVILEGES PROCESS
-        PROCESSLIST PROCTIME PROFILE PROFILES PROPERTIES PROXY PRECEDING PCTFREE P_ENTITY P_CHUNK
+        PROCESSLIST PROCTIME PROFILE PROFILES PROPERTIES PROVIDER PROXY PRECEDING PCTFREE P_ENTITY P_CHUNK
         PUBLIC PROGRESSIVE_MERGE_NUM PREVIEW PS PLUS PATTERN PARTITION_TYPE FILES PARTIAL_UPDATE PRECREATE_TIME ON_ERROR
 
         QUANTIFIER_TABLE QUARTER QUERY QUERY_RESPONSE_TIME QUEUE_TIME QUICK QUOTA_NAME
 
         RANGE RB_AND_AGG RB_AND_CARDINALITY_AGG RB_BUILD_AGG RB_ITERATE RB_OR_AGG RB_OR_CARDINALITY_AGG REBUILD RECOVER RECOVERY_WINDOW RECYCLE REDO_BUFFER_SIZE REDOFILE REDUNDANCY REDUNDANT REFRESH REGION RELAY RELAYLOG
-        RELAY_LOG_FILE RELAY_LOG_POS RELAY_THREAD RELOAD REMAP REMOVE REORGANIZE REPAIR REPEATABLE REPLICA
+        REGISTER RELAY_LOG_FILE RELAY_LOG_POS RELAY_THREAD RELOAD REMAP REMOVE REORGANIZE REPAIR REPEATABLE REPLICA
         REPLICA_NUM REPLICA_TYPE REPLICATION REPORT RESET RESOURCE RESOURCE_POOL RESOURCE_POOL_LIST RESPECT RESTART
         RESTORE RESUME RETURNED_SQLSTATE RETURNS RETURNING REVERSE REWRITE ROLLBACK ROLLUP ROOT
         ROARINGBITMAP ROOTTABLE ROOTSERVICE ROOTSERVICE_LIST ROUTINE ROW ROLLING ROWID ROW_COUNT ROW_FORMAT ROW_GROUP_SIZE ROW_INDEX_STRIDE ROWS RTREE RUN
@@ -382,7 +382,7 @@ END_P SET_VAR DELIMITER
         TABLEGROUP_ID TENANT_ID THROTTLE TIME_ZONE_INFO TOP_K_FRE_HIST TIMES TRIM_SPACE TTL
         TRANSFER TUNNEL_ENDPOINT TENANT_STS_CREDENTIAL TABLETS TIME_UNIT TIME_ZONE TOKEN
 
-        UNCOMMITTED UNCONDITIONAL UNDEFINED UNDO_BUFFER_SIZE UNDOFILE UNNEST UNICODE UNINSTALL UNIT UNIT_GROUP UNIT_LIST UNIT_NUM UNLOCKED UNTIL UNIQ
+        UNCOMMITTED UNCONDITIONAL UNDEFINED UNDO_BUFFER_SIZE UNDOFILE UNNEST UNICODE UNINSTALL UNIT UNIT_GROUP UNIT_LIST UNIT_NUM UNLOCKED UNREGISTER UNTIL UNIQ
 
         UNUSUAL UPGRADE URL USE_BLOOM_FILTER UNKNOWN USE_FRM USER USERNAME USERPASSWORD USER_RESOURCES UNBOUNDED UP UNLIMITED USER_SPECIFIED URI
 
@@ -500,7 +500,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_when check_state constraint_definition
 %type <node> create_mlog_stmt opt_mlog_option_list opt_mlog_options mlog_option opt_mlog_with mlog_with_values mlog_with_special_columns mlog_with_reference_columns mlog_with_special_column_list mlog_with_reference_column_list mlog_with_special_column mlog_with_reference_column opt_mlog_new_values mlog_including_or_excluding opt_mlog_purge mlog_purge_values mlog_purge_immediate_sync_or_async mlog_purge_start mlog_purge_next
 %type <node> drop_mlog_stmt
-%type <non_reserved_keyword> unreserved_keyword unreserved_keyword_normal unreserved_keyword_special unreserved_keyword_extra unreserved_keyword_ambiguous_roles unreserved_keyword_for_role_name unreserved_keyword_adb_compatible
+%type <non_reserved_keyword> unreserved_keyword unreserved_keyword_normal unreserved_keyword_special unreserved_keyword_ambiguous_roles unreserved_keyword_for_role_name unreserved_keyword_adb_compatible
 %type <reserved_keyword> mysql_reserved_keyword
 %type <ival> audit_by_session_access_option audit_whenever_option audit_or_noaudit
 %type <ival> consistency_level use_plan_cache_type
@@ -19579,6 +19579,32 @@ role_with_host
   malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
   $$->value_ = OB_PRIV_PLAINACCESS;
 }
+| REGISTER
+{
+  /* REGISTER reuses the CREATE bit; str_value_ carries the keyword identity so
+     the resolver can enforce "REGISTER only on AI PROVIDER" and pick the right
+     display name by obj_type. */
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
+  $$->value_ = OB_PRIV_REGISTER;
+  $$->str_value_ = parse_strdup("REGISTER", result->malloc_pool_, &($$->str_len_));
+}
+| UNREGISTER
+{
+  /* UNREGISTER reuses the DROP bit; str_value_ carries the keyword identity so
+     the resolver can enforce "UNREGISTER only on AI PROVIDER" and pick the right
+     display name by obj_type. */
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
+  $$->value_ = OB_PRIV_UNREGISTER;
+  $$->str_value_ = parse_strdup("UNREGISTER", result->malloc_pool_, &($$->str_len_));
+}
+| ACCESS
+{
+  /* ACCESS reuses the SELECT bit; str_value_ carries the keyword identity so
+     the resolver can enforce "ACCESS only on AI PROVIDER/GATEWAY". */
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
+  $$->value_ = OB_PRIV_ACCESS;
+  $$->str_value_ = parse_strdup("ACCESS", result->malloc_pool_, &($$->str_len_));
+}
 ;
 
 opt_privilege:
@@ -19622,6 +19648,16 @@ TABLE
 {
   malloc_terminal_node($$, result->malloc_pool_, T_PRIV_OBJECT);
   $$->value_ = 6;
+}
+| AI PROVIDER
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_OBJECT);
+  $$->value_ = 7;
+}
+| AI GATEWAY
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_OBJECT);
+  $$->value_ = 8;
 }
 ;
 
@@ -28131,7 +28167,6 @@ unreserved_keyword_for_role_name { $$=$1;}
 unreserved_keyword_for_role_name:
 unreserved_keyword_normal { $$=$1;}
 | unreserved_keyword_special { $$=$1;}
-| unreserved_keyword_extra { $$=$1;}
 | unreserved_keyword_adb_compatible { $$=$1;}
 ;
 
@@ -28435,6 +28470,7 @@ ACCESS_INFO
 |       FUNCTION
 |       FULL %prec HIGHER_PARENS
 |       FULLTEXT_DICT
+|       GATEWAY
 |       GENERAL
 |       GEOMETRY
 |       GEOMCOLLECTION
@@ -29115,6 +29151,7 @@ ACCESS_INFO
 |       AVAILABILITY
 |       PERFORMANCE
 |       PROTECTION
+|       PROVIDER
 |       OAUTH2_SVR_URI
 |       OBSOLETE
 |       HIDDEN
@@ -29156,10 +29193,6 @@ ACCESS_INFO
 unreserved_keyword_special:
 PASSWORD
 ;
-unreserved_keyword_extra:
-ACCESS
-;
-
 unreserved_keyword_adb_compatible:
 MAXVALUE
 |       RANGE
@@ -29183,6 +29216,9 @@ unreserved_keyword_ambiguous_roles:
 |       SHUTDOWN
 |       ENCRYPT
 |       DECRYPT
+|       REGISTER
+|       UNREGISTER
+|       ACCESS
 ;
 
 /*注释掉的关键字有规约冲突暂时注释了,都是一些sql中常用的关键字,后面按需打开,增加这块代码逻辑是为了支持在mysql中允许以

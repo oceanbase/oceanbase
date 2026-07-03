@@ -14,6 +14,8 @@
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/schema/ob_ai_provider_mgr.h"
 #include "share/ai_service/ob_ai_service_proxy.h"
+#include "sql/session/ob_sql_session_info.h"
+#include "lib/worker.h"
 
 namespace oceanbase
 {
@@ -3219,16 +3221,52 @@ int ObAIFuncUtils::get_model_config_info(ObIAllocator &allocator,
       ObString model_part;
       const bool split_ok = try_split_inline_provider_model_key(model_key, provider_part, model_part);
       if (!split_ok) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("ai model schema is null", KR(ret), K(tenant_id), K(model_key));
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_function, ai model not found, please check if the model exists");
+        // gateway path: check ACCESS privilege before reporting error
+        sql::ObSQLSessionInfo *session = THIS_WORKER.get_session();
+        if (OB_NOT_NULL(session)) {
+          share::schema::ObSessionPrivInfo session_priv;
+          const common::ObIArray<uint64_t> &enable_role_id_array = session->get_enable_role_array();
+          if (OB_FAIL(guard.get_session_priv_info(session->get_priv_tenant_id(),
+                                                   session->get_priv_user_id(),
+                                                   session->get_database_name(),
+                                                   session_priv))) {
+            LOG_WARN("failed to get session priv info", K(ret));
+          } else if (OB_FAIL(guard.check_ai_gateway_access(session_priv, enable_role_id_array, OB_PRIV_ACCESS))) {
+            LOG_WARN("no ACCESS privilege on AI gateway", K(ret));
+          }
+        }
+        // session is NULL: background thread, pass through
+        if (OB_SUCC(ret)) {
+          // privilege check passed but gateway feature not fully implemented
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("ai model schema is null", KR(ret), K(tenant_id), K(model_key));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_function, ai model not found, please check if the model exists");
+        }
       } else if (share::EndpointType::MAX_TYPE == op_type) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("inline provider/model requires endpoint type", K(ret), K(model_key));
         LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_function, inline provider/model lookup needs caller endpoint type");
       } else {
+        // provider/model path: check ACCESS privilege
+        sql::ObSQLSessionInfo *session = THIS_WORKER.get_session();
+        if (OB_NOT_NULL(session)) {
+          share::schema::ObSessionPrivInfo session_priv;
+          const common::ObIArray<uint64_t> &enable_role_id_array = session->get_enable_role_array();
+          if (OB_FAIL(guard.get_session_priv_info(session->get_priv_tenant_id(),
+                                                   session->get_priv_user_id(),
+                                                   session->get_database_name(),
+                                                   session_priv))) {
+            LOG_WARN("failed to get session priv info", K(ret));
+          } else if (OB_FAIL(guard.check_ai_provider_access(session_priv, enable_role_id_array, OB_PRIV_ACCESS))) {
+            LOG_WARN("no ACCESS privilege on AI provider", K(ret));
+          }
+        }
+        // session is NULL: background thread (e.g. semantic index build), pass through
+
         const schema::ObAIProviderSchema *provider_schema = nullptr;
-        if (OB_FAIL(guard.get_ai_provider_schema(tenant_id, provider_part, provider_schema))) {
+        if (OB_FAIL(ret)) {
+          // privilege check failed, skip
+        } else if (OB_FAIL(guard.get_ai_provider_schema(tenant_id, provider_part, provider_schema))) {
           LOG_WARN("fail to get ai provider schema", KR(ret), K(tenant_id), K(provider_part));
         } else if (OB_ISNULL(provider_schema)) {
           ret = OB_INVALID_ARGUMENT;

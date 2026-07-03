@@ -747,6 +747,7 @@ public:
   //----Functions for managing ai provider----
   int register_provider(const obrpc::ObRegisterProviderArg &arg);
   int unregister_provider(const obrpc::ObUnregisterProviderArg &arg);
+  int alter_provider(const obrpc::ObAlterProviderArg &arg);
   //----End of functions for managing ai provider----
 
   //----Functions for managing ai gateway----

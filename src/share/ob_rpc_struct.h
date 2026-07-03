@@ -15285,6 +15285,26 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObUnregisterProviderArg);
 };
 
+struct ObAlterProviderArg : public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObAlterProviderArg() : ObDDLArg(), has_base_url_(false), has_access_key_(false) {}
+  ~ObAlterProviderArg() {}
+  int check_valid() const;
+  int assign(const ObAlterProviderArg &other);
+  virtual bool contain_sensitive_data() const { return true; }
+  TO_STRING_KV(K_(provider_name), K_(base_url),
+               "access_key", access_key_.empty() ? ObString() : ObString(OB_MASKED_STR));
+  ObString provider_name_;
+  ObString base_url_;
+  ObString access_key_;   // encrypted form
+  bool has_base_url_;
+  bool has_access_key_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObAlterProviderArg);
+};
+
 struct ObCreateAiGatewayArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);

@@ -1299,7 +1299,11 @@ int ObPrivSqlService::gen_obj_mysql_priv_dml(
   } else {
     if ((priv_set & OB_PRIV_READ) != 0) { all_priv |= 1; }
     if ((priv_set & OB_PRIV_WRITE) != 0) { all_priv |= 2; }
-    if ((priv_set & OB_PRIV_GRANT) != 0) {all_priv |= 4; }
+    if ((priv_set & OB_PRIV_GRANT) != 0) { all_priv |= 4; }
+    if ((priv_set & OB_PRIV_SELECT) != 0) { all_priv |= 8; }
+    if ((priv_set & OB_PRIV_ALTER) != 0) { all_priv |= 16; }
+    if ((priv_set & OB_PRIV_CREATE) != 0) { all_priv |= 32; }
+    if ((priv_set & OB_PRIV_DROP) != 0) { all_priv |= 64; }
     if (OB_FAIL(dml.add_pk_column("tenant_id", 0))
         || OB_FAIL(dml.add_pk_column("user_id", obj_mysql_priv_key.user_id_))
         || OB_FAIL(dml.add_pk_column("obj_name", ObHexEscapeSqlStr(obj_mysql_priv_key.object_name_)))

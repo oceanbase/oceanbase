@@ -1082,6 +1082,15 @@ public:
                           bool &allow_show);
   // location function end
 
+  // ai provider/gateway function begin
+  int check_ai_provider_access(const ObSessionPrivInfo &session_priv,
+                               const common::ObIArray<uint64_t> &enable_role_id_array,
+                               ObPrivSet required_priv);
+  int check_ai_gateway_access(const ObSessionPrivInfo &session_priv,
+                              const common::ObIArray<uint64_t> &enable_role_id_array,
+                              ObPrivSet required_priv);
+  // ai provider/gateway function end
+
   // rls function begin
   int get_rls_policy_schema_by_name(const uint64_t tenant_id,
                                     const uint64_t table_id,
@@ -1348,6 +1357,10 @@ private:
                             const uint64_t uid,
                             const ObOraNeedPriv &need_priv,
                             const common::ObIArray<uint64_t> &role_id_array);
+  int check_ai_object_access(const ObSessionPrivInfo &session_priv,
+                             const common::ObIArray<uint64_t> &enable_role_id_array,
+                             const ObObjectType obj_type,
+                             ObPrivSet required_priv);
 
   // for privilege
   int add_role_id_recursively(const uint64_t tenant_id,

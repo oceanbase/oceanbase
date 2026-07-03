@@ -13,6 +13,7 @@
 #include "share/ob_license_utils.h"
 #include "src/pl/ob_pl.h"
 #include "sql/privilege_check/ob_ai_model_priv_util.h"
+#include "share/schema/ob_schema_getter_guard.h"
 #include "lib/container/ob_se_array.h"
 
 using namespace oceanbase::share;
@@ -82,6 +83,52 @@ int ObDBMSAiService::check_ai_model_privilege_(ObPLExecCtx &ctx, ObPrivSet requi
   }
 
   return ret;
+}
+
+int ObDBMSAiService::check_ai_object_priv_(ObPLExecCtx &ctx, ObPrivSet required_priv, bool is_provider)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ctx.exec_ctx_) || OB_ISNULL(ctx.exec_ctx_->get_my_session())
+      || OB_ISNULL(ctx.exec_ctx_->get_sql_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec_ctx, session or sql_ctx is null", K(ret));
+  } else {
+    share::schema::ObSchemaGetterGuard *schema_guard = ctx.exec_ctx_->get_sql_ctx()->schema_guard_;
+    if (OB_ISNULL(schema_guard)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema guard is null", K(ret));
+    } else {
+      share::schema::ObSessionPrivInfo session_priv;
+      const common::ObIArray<uint64_t> &enable_role_id_array =
+          ctx.exec_ctx_->get_my_session()->get_enable_role_array();
+      if (OB_FAIL(schema_guard->get_session_priv_info(
+              ctx.exec_ctx_->get_my_session()->get_priv_tenant_id(),
+              ctx.exec_ctx_->get_my_session()->get_priv_user_id(),
+              ctx.exec_ctx_->get_my_session()->get_database_name(),
+              session_priv))) {
+        LOG_WARN("failed to get session priv info", K(ret));
+      } else if (is_provider) {
+        if (OB_FAIL(schema_guard->check_ai_provider_access(session_priv, enable_role_id_array, required_priv))) {
+          LOG_WARN("no privilege for AI provider operation", K(ret), K(required_priv));
+        }
+      } else {
+        if (OB_FAIL(schema_guard->check_ai_gateway_access(session_priv, enable_role_id_array, required_priv))) {
+          LOG_WARN("no privilege for AI gateway operation", K(ret), K(required_priv));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDBMSAiService::check_ai_provider_priv_(ObPLExecCtx &ctx, ObPrivSet required_priv)
+{
+  return check_ai_object_priv_(ctx, required_priv, true /*is_provider*/);
+}
+
+int ObDBMSAiService::check_ai_gateway_priv_(ObPLExecCtx &ctx, ObPrivSet required_priv)
+{
+  return check_ai_object_priv_(ctx, required_priv, false /*is_provider*/);
 }
 
 int ObDBMSAiService::create_ai_model_endpoint(ObPLExecCtx &ctx, sql::ParamStore &params, common::ObObj &result)
@@ -409,7 +456,7 @@ int ObDBMSAiService::register_provider(ObPLExecCtx &ctx, sql::ParamStore &params
 
   if (OB_FAIL(precheck_version_and_param_count_v2(2, params))) {
     LOG_WARN("failed to pre check", K(ret));
-  } else if (OB_FAIL(ObDBMSAiService::check_ai_model_privilege_(ctx, OB_PRIV_CREATE_AI_MODEL))) {
+  } else if (OB_FAIL(ObDBMSAiService::check_ai_provider_priv_(ctx, OB_PRIV_REGISTER))) {
     if (OB_ERR_NO_PRIVILEGE == ret) {
       LOG_USER_ERROR(OB_ERR_NO_PRIVILEGE, "register provider");
     }
@@ -419,6 +466,10 @@ int ObDBMSAiService::register_provider(ObPLExecCtx &ctx, sql::ParamStore &params
     ret = OB_AI_FUNC_PARAM_EMPTY;
     ObString var_name = "name";
     LOG_USER_ERROR(OB_AI_FUNC_PARAM_EMPTY, var_name.length(), var_name.ptr());
+  } else if (provider_name == ObString::make_string("*")) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("'*' is a reserved name for AI provider", K(ret));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "provider name '*' is reserved and cannot be used");
   } else if (params.at(1).is_null()) {
     ret = OB_AI_FUNC_PARAM_EMPTY;
     ObString var_name = "PARAMS";
@@ -521,7 +572,7 @@ int ObDBMSAiService::unregister_provider(ObPLExecCtx &ctx, sql::ParamStore &para
 
   if (OB_FAIL(precheck_version_and_param_count_v2(1, params))) {
     LOG_WARN("failed to pre check", K(ret));
-  } else if (OB_FAIL(ObDBMSAiService::check_ai_model_privilege_(ctx, OB_PRIV_DROP_AI_MODEL))) {
+  } else if (OB_FAIL(ObDBMSAiService::check_ai_provider_priv_(ctx, OB_PRIV_UNREGISTER))) {
     if (OB_ERR_NO_PRIVILEGE == ret) {
       LOG_USER_ERROR(OB_ERR_NO_PRIVILEGE, "unregister provider");
     }
@@ -559,6 +610,122 @@ int ObDBMSAiService::unregister_provider(ObPLExecCtx &ctx, sql::ParamStore &para
   return ret;
 }
 
+int ObDBMSAiService::alter_provider(ObPLExecCtx &ctx, sql::ParamStore &params, common::ObObj &result)
+{
+  int ret = OB_SUCCESS;
+  ObString provider_name;
+  ctx.set_is_sensitive(true);
+
+  if (OB_FAIL(precheck_version_and_param_count_v2(2, params))) {
+    LOG_WARN("failed to pre check", K(ret));
+  } else if (OB_FAIL(ObDBMSAiService::check_ai_provider_priv_(ctx, OB_PRIV_ALTER))) {
+    if (OB_ERR_NO_PRIVILEGE == ret) {
+      LOG_USER_ERROR(OB_ERR_NO_PRIVILEGE, "alter provider");
+    }
+  } else if (OB_FAIL(params.at(0).get_string(provider_name))) {
+    LOG_WARN("failed to get name string", K(ret), K(params.at(0)));
+  } else if (provider_name.empty()) {
+    ret = OB_AI_FUNC_PARAM_EMPTY;
+    ObString var_name = "name";
+    LOG_USER_ERROR(OB_AI_FUNC_PARAM_EMPTY, var_name.length(), var_name.ptr());
+  } else if (params.at(1).is_null()) {
+    ret = OB_AI_FUNC_PARAM_EMPTY;
+    ObString var_name = "PARAMS";
+    LOG_USER_ERROR(OB_AI_FUNC_PARAM_EMPTY, var_name.length(), var_name.ptr());
+  } else if (OB_ISNULL(ctx.exec_ctx_) || OB_ISNULL(ctx.exec_ctx_->get_sql_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec_ctx or sql_ctx is null", K(ret));
+  } else {
+    ObArenaAllocator tmp_allocator(ObMemAttr(MTL_ID(), "AiAlterProv"));
+    ObIJsonBase *j_base = nullptr;
+    if (OB_FAIL(get_json_base_(tmp_allocator, params, j_base))) {
+      LOG_WARN("failed to get json base", K(ret), K(params));
+    } else {
+      JsonObjectIterator iter = j_base->object_iterator();
+      ObString base_url;
+      ObString access_key;
+      ObString storage_access_key;
+      bool has_base_url = false;
+      bool has_access_key = false;
+      while (OB_SUCC(ret) && !iter.end()) {
+        ObJsonObjPair elem;
+        if (OB_FAIL(iter.get_elem(elem))) {
+          LOG_WARN("failed to get json element", KR(ret));
+        } else if (0 == elem.first.case_compare("protocol")) {
+          // protocol cannot be modified
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "modifying protocol via alter_provider");
+          LOG_WARN("protocol modification is not supported in alter_provider", K(ret));
+        } else if (0 == elem.first.case_compare("base_url")) {
+          if (elem.second->json_type() != ObJsonNodeType::J_STRING) {
+            ret = OB_AI_FUNC_PARAM_TYPE_INVALID;
+            LOG_USER_ERROR(OB_AI_FUNC_PARAM_TYPE_INVALID, elem.first.length(), elem.first.ptr(), (int)strlen("STRING"), "STRING");
+          } else { base_url = ObString(elem.second->get_data_length(), elem.second->get_data()); has_base_url = true; }
+        } else if (0 == elem.first.case_compare("access_key")) {
+          if (elem.second->json_type() != ObJsonNodeType::J_STRING) {
+            ret = OB_AI_FUNC_PARAM_TYPE_INVALID;
+            LOG_USER_ERROR(OB_AI_FUNC_PARAM_TYPE_INVALID, elem.first.length(), elem.first.ptr(), (int)strlen("STRING"), "STRING");
+          } else { access_key = ObString(elem.second->get_data_length(), elem.second->get_data()); has_access_key = true; }
+        } else {
+          ret = OB_AI_FUNC_PARAM_INVALID;
+          LOG_USER_ERROR(OB_AI_FUNC_PARAM_INVALID, elem.first.length(), elem.first.ptr());
+        }
+        if (OB_SUCC(ret)) { iter.next(); }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (!has_base_url && !has_access_key) {
+        // empty JSON or no modifiable fields
+        ret = OB_AI_FUNC_PARAM_EMPTY;
+        ObString var_name = "base_url or access_key";
+        LOG_USER_ERROR(OB_AI_FUNC_PARAM_EMPTY, var_name.length(), var_name.ptr());
+        LOG_WARN("alter_provider requires at least one field to modify", K(ret));
+      } else if (has_access_key && access_key.empty()) {
+        ret = OB_AI_FUNC_PARAM_EMPTY;
+        ObString var_name = "access_key";
+        LOG_USER_ERROR(OB_AI_FUNC_PARAM_EMPTY, var_name.length(), var_name.ptr());
+      } else if (has_access_key && OB_FAIL(ObAiModelEndpointInfo::encrypt_access_key_to_storage_format(
+                  tmp_allocator, access_key, storage_access_key))) {
+        LOG_WARN("failed to encrypt provider access key for storage", K(ret));
+      } else {
+        obrpc::ObAlterProviderArg arg;
+        arg.exec_tenant_id_ = MTL_ID();
+        arg.provider_name_ = provider_name;
+        if (has_base_url) {
+          arg.base_url_ = base_url;
+          arg.has_base_url_ = true;
+        }
+        if (has_access_key) {
+          arg.access_key_ = storage_access_key;
+          arg.has_access_key_ = true;
+        }
+        char masked_stmt_buf[OB_MAX_SQL_LENGTH] = {0};
+        int64_t masked_pos = 0;
+        ObTaskExecutorCtx *task_exec_ctx = nullptr;
+        obrpc::ObCommonRpcProxy *common_rpc_proxy = nullptr;
+        if (OB_FAIL(databuff_printf(masked_stmt_buf, sizeof(masked_stmt_buf), masked_pos,
+            "call DBMS_AI_SERVICE.ALTER_PROVIDER('%.*s', <params masked>)",
+            provider_name.length(), provider_name.ptr()))) {
+          LOG_WARN("failed to format masked ddl_stmt", K(ret), K(provider_name));
+        } else if (FALSE_IT(arg.ddl_stmt_str_ = ObString(masked_pos, masked_stmt_buf))) {
+        } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(*ctx.exec_ctx_))) {
+          ret = OB_NOT_INIT;
+          LOG_WARN("get task executor context failed", K(ret));
+        } else if (OB_FAIL(task_exec_ctx->get_common_rpc(common_rpc_proxy))) {
+          LOG_WARN("get common rpc proxy failed", K(ret));
+        } else if (OB_ISNULL(common_rpc_proxy)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("common rpc proxy should not be null", K(ret));
+        } else if (OB_FAIL(arg.check_valid())) {
+          LOG_WARN("invalid alter provider arg", K(ret), K(arg));
+        } else if (OB_FAIL(common_rpc_proxy->alter_provider(arg))) {
+          LOG_WARN("failed to alter provider", K(ret), K(arg));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDBMSAiService::alter_model_profile(ObPLExecCtx &ctx, sql::ParamStore &params, common::ObObj &result)
 {
   int ret = OB_SUCCESS;
@@ -567,7 +734,7 @@ int ObDBMSAiService::alter_model_profile(ObPLExecCtx &ctx, sql::ParamStore &para
 
   if (OB_FAIL(precheck_version_and_param_count_v2(2, params))) {
     LOG_WARN("failed to pre check", K(ret));
-  } else if (OB_FAIL(ObDBMSAiService::check_ai_model_privilege_(ctx, OB_PRIV_ALTER_AI_MODEL))) {
+  } else if (OB_FAIL(ObDBMSAiService::check_ai_provider_priv_(ctx, OB_PRIV_ALTER))) {
     if (OB_ERR_NO_PRIVILEGE == ret) {
       LOG_USER_ERROR(OB_ERR_NO_PRIVILEGE, "alter model profile");
     }
@@ -600,7 +767,7 @@ int ObDBMSAiService::drop_model_profile(ObPLExecCtx &ctx, sql::ParamStore &param
 
   if (OB_FAIL(precheck_version_and_param_count_v2(1, params))) {
     LOG_WARN("failed to pre check", K(ret));
-  } else if (OB_FAIL(ObDBMSAiService::check_ai_model_privilege_(ctx, OB_PRIV_DROP_AI_MODEL))) {
+  } else if (OB_FAIL(ObDBMSAiService::check_ai_provider_priv_(ctx, OB_PRIV_UNREGISTER))) {
     if (OB_ERR_NO_PRIVILEGE == ret) {
       LOG_USER_ERROR(OB_ERR_NO_PRIVILEGE, "drop model profile");
     }
@@ -788,7 +955,7 @@ int ObDBMSAiService::create_ai_gateway(ObPLExecCtx &ctx, sql::ParamStore &params
 
   if (OB_FAIL(precheck_version_and_param_count_v2(2, params))) {
     LOG_WARN("failed to pre check", K(ret));
-  } else if (OB_FAIL(ObDBMSAiService::check_ai_model_privilege_(ctx, OB_PRIV_CREATE_AI_MODEL))) {
+  } else if (OB_FAIL(ObDBMSAiService::check_ai_gateway_priv_(ctx, OB_PRIV_CREATE))) {
     if (OB_ERR_NO_PRIVILEGE == ret) {
       LOG_USER_ERROR(OB_ERR_NO_PRIVILEGE, "create ai gateway");
     }
@@ -798,6 +965,10 @@ int ObDBMSAiService::create_ai_gateway(ObPLExecCtx &ctx, sql::ParamStore &params
     ret = OB_AI_FUNC_PARAM_EMPTY;
     ObString var_name = "name";
     LOG_USER_ERROR(OB_AI_FUNC_PARAM_EMPTY, var_name.length(), var_name.ptr());
+  } else if (gateway_name == ObString::make_string("*")) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("'*' is a reserved name for AI gateway", K(ret));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "gateway name '*' is reserved and cannot be used");
   } else if (params.at(1).is_null()) {
     ret = OB_AI_FUNC_PARAM_EMPTY;
     ObString var_name = "PARAMS";
@@ -849,7 +1020,7 @@ int ObDBMSAiService::alter_ai_gateway(ObPLExecCtx &ctx, sql::ParamStore &params,
 
   if (OB_FAIL(precheck_version_and_param_count_v2(2, params))) {
     LOG_WARN("failed to pre check", K(ret));
-  } else if (OB_FAIL(ObDBMSAiService::check_ai_model_privilege_(ctx, OB_PRIV_ALTER_AI_MODEL))) {
+  } else if (OB_FAIL(ObDBMSAiService::check_ai_gateway_priv_(ctx, OB_PRIV_ALTER))) {
     if (OB_ERR_NO_PRIVILEGE == ret) {
       LOG_USER_ERROR(OB_ERR_NO_PRIVILEGE, "alter ai gateway");
     }
@@ -912,7 +1083,7 @@ int ObDBMSAiService::drop_ai_gateway(ObPLExecCtx &ctx, sql::ParamStore &params, 
 
   if (OB_FAIL(precheck_version_and_param_count_v2(1, params))) {
     LOG_WARN("failed to pre check", K(ret));
-  } else if (OB_FAIL(ObDBMSAiService::check_ai_model_privilege_(ctx, OB_PRIV_DROP_AI_MODEL))) {
+  } else if (OB_FAIL(ObDBMSAiService::check_ai_gateway_priv_(ctx, OB_PRIV_DROP))) {
     if (OB_ERR_NO_PRIVILEGE == ret) {
       LOG_USER_ERROR(OB_ERR_NO_PRIVILEGE, "drop ai gateway");
     }

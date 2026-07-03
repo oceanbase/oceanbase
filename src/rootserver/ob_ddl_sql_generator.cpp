@@ -19,23 +19,26 @@ namespace rootserver
 
 static const char *IF_NOT_EXIST = "if not exists";
 
-int ObDDLSqlGenerator::get_priv_name(const int64_t priv, const char *&name)
+int ObDDLSqlGenerator::get_priv_name(const int64_t priv, const char *&name,
+                                     ObObjectType obj_type)
 {
   int ret = OB_SUCCESS;
   name = NULL;
+  const bool is_provider = (obj_type == ObObjectType::AI_PROVIDER);
+  const bool is_ai = is_ai_object_type(obj_type);
   switch (priv) {
     case 0:
       name = "USAGE"; break; //usage means no privilege
     case OB_PRIV_ALTER:
       name = "ALTER"; break;
     case OB_PRIV_CREATE:
-      name = "CREATE"; break;
+      name = is_provider ? "REGISTER" : "CREATE"; break;
     case OB_PRIV_CREATE_USER:
       name = "CREATE USER"; break;
     case OB_PRIV_DELETE:
       name = "DELETE"; break;
     case OB_PRIV_DROP:
-      name = "DROP"; break;
+      name = is_provider ? "UNREGISTER" : "DROP"; break;
     case OB_PRIV_GRANT:
       name = "GRANT OPTION"; break;
     case OB_PRIV_INSERT:
@@ -43,7 +46,7 @@ int ObDDLSqlGenerator::get_priv_name(const int64_t priv, const char *&name)
     case OB_PRIV_UPDATE:
       name = "UPDATE"; break;
     case OB_PRIV_SELECT:
-      name = "SELECT"; break;
+      name = is_ai ? "ACCESS" : "SELECT"; break;
     case OB_PRIV_INDEX:
       name = "INDEX"; break;
     case OB_PRIV_CREATE_VIEW:
@@ -555,7 +558,8 @@ int ObDDLSqlGenerator::gen_rename_user_sql(const ObAccountArg &old_account,
   return ret;
 }
 
-int ObDDLSqlGenerator::priv_to_name(const ObPrivSet priv, ObSqlString &priv_str)
+int ObDDLSqlGenerator::priv_to_name(const ObPrivSet priv, ObSqlString &priv_str,
+                                    ObObjectType obj_type)
 {
   int ret = OB_SUCCESS;
   priv_str.reset();
@@ -575,7 +579,7 @@ int ObDDLSqlGenerator::priv_to_name(const ObPrivSet priv, ObSqlString &priv_str)
         OB_SUCC(ret) && i < OB_PRIV_SHIFT::OB_PRIV_MAX_SHIFT_PLUS_ONE; ++i) {
       if (OB_PRIV_HAS_ANY(priv, OB_PRIV_GET_TYPE(i))) {
         const char* priv_name = NULL;
-        if (OB_FAIL(get_priv_name(OB_PRIV_GET_TYPE(i), priv_name))) {
+        if (OB_FAIL(get_priv_name(OB_PRIV_GET_TYPE(i), priv_name, obj_type))) {
           LOG_WARN("get priv name failed", K(i), K(ret));
         } else if (OB_ISNULL(priv_name)) {
           ret = OB_ERR_UNEXPECTED;
@@ -1152,11 +1156,28 @@ int ObDDLSqlGenerator::gen_object_priv_sql(const obrpc::ObAccountArg &account,
   } else if (need_priv.priv_level_ != OB_PRIV_OBJECT_LEVEL) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("priv level is invalid", K(need_priv), K(ret));
+  } else if (share::schema::is_ai_object_type(need_priv.obj_type_)) {
+    ObPrivSet valid_privs = 0;
+    if (need_priv.obj_type_ == share::schema::ObObjectType::AI_PROVIDER) {
+      valid_privs = OB_PRIV_AI_PROVIDER_ACC;
+    } else if (need_priv.obj_type_ == share::schema::ObObjectType::AI_GATEWAY) {
+      valid_privs = OB_PRIV_AI_GATEWAY_ACC;
+    }
+    if (need_priv.priv_set_ & (~(valid_privs | OB_PRIV_GRANT))) {
+      ret = OB_ILLEGAL_GRANT_FOR_TABLE;
+      LOG_WARN("Grant/Revoke privilege than can not be used",
+              "priv_type", ObPrintPrivSet(need_priv.priv_set_), K(ret));
+    } else if (need_priv.priv_set_ & OB_PRIV_GRANT) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("grant option is not supported for AI provider/gateway privilege",
+               K(ret), K(need_priv));
+    }
   } else if (need_priv.priv_set_ & (~(OB_PRIV_OBJECT_ACC | OB_PRIV_GRANT))) {
     ret = OB_ILLEGAL_GRANT_FOR_TABLE;
     LOG_WARN("Grant/Revoke privilege than can not be used",
             "priv_type", ObPrintPrivSet(need_priv.priv_set_), K(ret));
-  } else if (OB_FAIL(priv_to_name(need_priv.priv_set_, priv_string))) {
+  }
+  if (OB_SUCC(ret) && OB_FAIL(priv_to_name(need_priv.priv_set_, priv_string, need_priv.obj_type_))) {
     LOG_WARN("get priv to name failed", K(ret));
   }
   if (OB_SUCC(ret)) {

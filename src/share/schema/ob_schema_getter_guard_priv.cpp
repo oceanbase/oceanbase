@@ -1450,13 +1450,17 @@ int ObSchemaGetterGuard::check_obj_mysql_priv(const ObSessionPrivInfo &session_p
       if (is_obj_mysql_priv_empty) {
         if (obj_mysql_need_priv.obj_type_ == ObObjectType::LOCATION) {
           ret = OB_ERR_LOCATION_ACCESS_DENIED;
+        } else if (is_ai_object_type(obj_mysql_need_priv.obj_type_)) {
+          ret = OB_ERR_NO_PRIVILEGE;
         }
-        LOG_WARN("No privilege, cannot find location priv info",
+        LOG_WARN("No privilege, cannot find obj priv info",
                  "tenant_id", session_priv.tenant_id_,
                  "user_id", session_priv.user_id_, K(obj_mysql_need_priv));
       } else if (!OB_TEST_PRIVS(obj_mysql_priv_set, obj_mysql_need_priv.priv_set_)) {
         if (obj_mysql_need_priv.obj_type_ == ObObjectType::LOCATION) {
           ret = OB_ERR_LOCATION_ACCESS_DENIED;
+        } else if (is_ai_object_type(obj_mysql_need_priv.obj_type_)) {
+          ret = OB_ERR_NO_PRIVILEGE;
         }
         LOG_WARN("No privilege", "tenant_id", session_priv.tenant_id_,
             "user_id", session_priv.user_id_,
@@ -2159,6 +2163,47 @@ int ObSchemaGetterGuard::check_location_access(const ObSessionPrivInfo &session_
   }
 
   return ret;
+}
+
+int ObSchemaGetterGuard::check_ai_object_access(
+    const ObSessionPrivInfo &session_priv,
+    const common::ObIArray<uint64_t> &enable_role_id_array,
+    const ObObjectType obj_type,
+    ObPrivSet required_priv)
+{
+  int ret = OB_SUCCESS;
+  ObNeedPriv tmp_need_priv;
+  tmp_need_priv.db_ = session_priv.db_;
+  tmp_need_priv.table_ = ObString::make_string("*");
+  tmp_need_priv.priv_level_ = OB_PRIV_OBJECT_LEVEL;
+  tmp_need_priv.priv_set_ = required_priv;
+  tmp_need_priv.obj_type_ = obj_type;
+
+  if (!session_priv.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid arguments", K(session_priv), K(ret));
+  } else if (OB_FAIL(check_obj_mysql_priv(session_priv, enable_role_id_array, tmp_need_priv))) {
+    LOG_WARN("No privilege to access AI object", K(session_priv), K(obj_type), K(ret));
+  }
+  return ret;
+}
+
+int ObSchemaGetterGuard::check_ai_provider_access(
+    const ObSessionPrivInfo &session_priv,
+    const common::ObIArray<uint64_t> &enable_role_id_array,
+    ObPrivSet required_priv)
+{
+  return check_ai_object_access(session_priv, enable_role_id_array,
+                                ObObjectType::AI_PROVIDER, required_priv);
+}
+
+int ObSchemaGetterGuard::check_ai_gateway_access(
+    const ObSessionPrivInfo &session_priv,
+    const common::ObIArray<uint64_t> &enable_role_id_array,
+    ObPrivSet required_priv)
+{
+  return check_ai_object_access(session_priv, enable_role_id_array,
+                                ObObjectType::AI_GATEWAY, required_priv);
 }
 
 int ObSchemaGetterGuard::check_location_show(const ObSessionPrivInfo &session_priv,

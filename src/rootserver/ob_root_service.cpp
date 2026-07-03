@@ -11553,6 +11553,25 @@ int ObRootService::unregister_provider(const obrpc::ObUnregisterProviderArg &arg
   return ret;
 }
 
+int ObRootService::alter_provider(const obrpc::ObAlterProviderArg &arg)
+{
+  int ret = OB_SUCCESS;
+  LOG_TRACE("receive alter provider arg", K(arg));
+  ObAIProviderDDLService provider_ddl_service(ddl_service_);
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(arg.check_valid())) {
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (OB_FAIL(provider_ddl_service.alter_provider(arg))) {
+    LOG_WARN("failed to alter provider", K(ret), K(arg));
+  }
+
+  LOG_TRACE("finish alter provider", K(ret), K(arg));
+
+  return ret;
+}
+
 int ObRootService::create_ai_gateway(const obrpc::ObCreateAiGatewayArg &arg)
 {
   int ret = OB_SUCCESS;

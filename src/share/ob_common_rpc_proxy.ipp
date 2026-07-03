@@ -339,6 +339,7 @@
   //----Functions for managing ai provider----
   RPC_S(PRD register_provider, obrpc::OB_REGISTER_PROVIDER, (ObRegisterProviderArg));
   RPC_S(PRD unregister_provider, obrpc::OB_UNREGISTER_PROVIDER, (ObUnregisterProviderArg));
+  RPC_S(PRD alter_provider, obrpc::OB_ALTER_PROVIDER, (ObAlterProviderArg));
   //----End of functions for managing ai provider----
 
   //----Functions for managing ai gateway----

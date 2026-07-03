@@ -80,7 +80,8 @@ public:
       share::schema::ObPrivLevel &grant_level,
       ObIAllocator &allocator,
       common::ObString &catalog,
-      common::ObString &sensitive_rule);
+      common::ObString &sensitive_rule,
+      const ParseNode *priv_object_node = NULL);
 
   static int resolve_priv_level_with_object_type(const ObSQLSessionInfo *session_info,
                                                  const ParseNode *priv_object_node,
@@ -198,6 +199,8 @@ private:
   int resolve_grant_role_or_sys_to_user_ora(const ParseNode *grant_system_privileges,
                                             ObGrantStmt *grant_stmt);
   int resolve_grantee_clause(const ParseNode *grantee_clause, ObGrantStmt *grant_stmt);
+  static int validate_ai_priv_keyword(share::schema::ObObjectType obj_type,
+                                      const ParseNode *priv_node);
 
 private:
   // disallow copy
@@ -274,7 +277,12 @@ int ObGrantResolver::resolve_priv_set(
     for (int i = 0; i < privs_node->num_child_ && OB_SUCCESS == ret; ++i) {
       if (OB_NOT_NULL(privs_node->children_[i]) && T_PRIV_TYPE == privs_node->children_[i]->type_) {
         const ObPrivType priv_type = privs_node->children_[i]->value_;
-        if (OB_PRIV_USER_LEVEL == grant_level) {
+        if (privs_node->children_[i]->str_value_ != nullptr
+            && !share::schema::is_ai_object_type(grant_stmt->get_object_type())) {
+          ret = OB_NOT_SUPPORTED;
+          SQL_RESV_LOG(WARN, "REGISTER/UNREGISTER/ACCESS privilege is only valid on AI objects", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "REGISTER/UNREGISTER/ACCESS privilege on non-AI object");
+        } else if (OB_PRIV_USER_LEVEL == grant_level) {
           priv_set |= priv_type;
         } else if (OB_PRIV_DB_LEVEL == grant_level) {
           if (OB_PRIV_ALL == priv_type) {
@@ -333,14 +341,31 @@ int ObGrantResolver::resolve_priv_set(
             priv_set |= priv_type;
           }
         } else if (OB_PRIV_OBJECT_LEVEL == grant_level) {
-          if (OB_PRIV_ALL == priv_type) {
-            priv_set |= OB_PRIV_OBJECT_ACC;
-          } else if (priv_type & (~(OB_PRIV_OBJECT_ACC | OB_PRIV_GRANT))) {
-            ret = OB_ILLEGAL_GRANT_FOR_TABLE;
-            SQL_RESV_LOG(WARN, "Grant/Revoke privilege than can not be used",
-                      "priv_type", ObPrintPrivSet(priv_type), K(ret));
+          if (share::schema::is_ai_object_type(grant_stmt->get_object_type())) {
+            if (OB_PRIV_ALL == priv_type) {
+              ret = OB_NOT_SUPPORTED;
+              SQL_RESV_LOG(WARN, "GRANT ALL is not supported for AI provider/gateway", K(ret));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "GRANT ALL on AI provider/gateway");
+            } else if (priv_type & (~(OB_PRIV_AI_PROVIDER_ACC | OB_PRIV_AI_GATEWAY_ACC | OB_PRIV_GRANT))) {
+              ret = OB_NOT_SUPPORTED;
+              SQL_RESV_LOG(WARN, "invalid privilege for AI object", "priv_type", ObPrintPrivSet(priv_type), K(ret));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "this privilege on AI provider/gateway");
+            } else if (OB_FAIL(validate_ai_priv_keyword(grant_stmt->get_object_type(),
+                                                        privs_node->children_[i]))) {
+              SQL_RESV_LOG(WARN, "invalid privilege for AI object", "priv_type", ObPrintPrivSet(priv_type), K(ret));
+            } else {
+              priv_set |= priv_type;
+            }
           } else {
-            priv_set |= priv_type;
+            if (OB_PRIV_ALL == priv_type) {
+              priv_set |= OB_PRIV_OBJECT_ACC;
+            } else if (priv_type & (~(OB_PRIV_OBJECT_ACC | OB_PRIV_GRANT))) {
+              ret = OB_ILLEGAL_GRANT_FOR_TABLE;
+              SQL_RESV_LOG(WARN, "Grant/Revoke privilege than can not be used",
+                        "priv_type", ObPrintPrivSet(priv_type), K(ret));
+            } else {
+              priv_set |= priv_type;
+            }
           }
         } else {
           //do nothing
@@ -426,6 +451,12 @@ int ObGrantResolver::resolve_priv_object(const ParseNode *priv_object_node,
       } else {
         grant_stmt->set_sensitive_rule_name(sensitive_rule);
       }
+    } else if (priv_object_node->value_ == 7) {
+      object_type = ObObjectType::AI_PROVIDER;
+      grant_stmt->set_table_name(table);
+    } else if (priv_object_node->value_ == 8) {
+      object_type = ObObjectType::AI_GATEWAY;
+      grant_stmt->set_table_name(table);
     }
   } else {
     ObString object_db_name;

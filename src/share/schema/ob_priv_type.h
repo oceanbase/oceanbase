@@ -150,6 +150,12 @@ enum OB_PRIV_SHIFT
 #define OB_PRIV_CREATE_SENSITIVE_RULE   OB_PRIV_GET_TYPE(OB_PRIV_CREATE_SENSITIVE_RULE_SHIFT)
 #define OB_PRIV_PLAINACCESS             OB_PRIV_GET_TYPE(OB_PRIV_PLAINACCESS_SHIFT)
 
+// REGISTER/UNREGISTER reuse the CREATE/DROP bits for AI PROVIDER objects.
+// ACCESS reuses the SELECT bit for AI PROVIDER/GATEWAY objects.
+#define OB_PRIV_REGISTER      OB_PRIV_CREATE
+#define OB_PRIV_UNREGISTER    OB_PRIV_DROP
+#define OB_PRIV_ACCESS        OB_PRIV_SELECT
+
 #define OB_PRIV_ALL                                                             \
   (OB_PRIV_ALTER | OB_PRIV_CREATE | OB_PRIV_CREATE_USER | OB_PRIV_DELETE |      \
    OB_PRIV_DROP | OB_PRIV_INSERT | OB_PRIV_UPDATE | OB_PRIV_SELECT |            \
@@ -200,6 +206,12 @@ enum OB_PRIV_SHIFT
 #define OB_PRIV_AI_MODEL_ACC                                                    \
   (OB_PRIV_CREATE_AI_MODEL | OB_PRIV_ALTER_AI_MODEL | OB_PRIV_DROP_AI_MODEL |  \
    OB_PRIV_ACCESS_AI_MODEL)
+#define OB_PRIV_AI_PROVIDER_ACC \
+  (OB_PRIV_REGISTER | OB_PRIV_ALTER | OB_PRIV_UNREGISTER | OB_PRIV_ACCESS)
+
+#define OB_PRIV_AI_GATEWAY_ACC \
+  (OB_PRIV_CREATE | OB_PRIV_ALTER | OB_PRIV_DROP | OB_PRIV_ACCESS)
+
 // CREATE_SENSITIVE_RULE is not actually a sensitive-rule level priv
 // This is to prevent setting ALL_PRIVILEGES = PLAINACCESS when processing sensitive-rule level privs
 #define OB_PRIV_SENSITIVE_RULE_ACC \

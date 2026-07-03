@@ -30,7 +30,6 @@
 #include "share/table/ob_redis_importer.h"
 #include "share/ob_timezone_importer.h"
 #include "share/ob_srs_importer.h"
-#include "share/ai_service/ob_ai_provider_importer.h"
 #include "share/ob_license_utils.h"
 #include "lib/string/ob_sensitive_string.h"
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -3720,18 +3719,11 @@ int ObModuleDataExecutor::execute(ObExecContext &ctx, ObModuleDataStmt &stmt)
         }
         break;
       }
-      case table::ObModuleDataArg::AI_PROVIDER: {
-        table::ObAiProviderImporter importer(arg.target_tenant_id_, ctx);
-        if (OB_FAIL(importer.exec_op(arg.op_))) {
-          LOG_WARN("fail to exec op", K(ret), K(arg.op_));
-        }
-        break;
-      }
       // add other module before here
       default: {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "specified module");
-        LOG_WARN("modules except 'redis'/'gis'/'timezone'/'ai_provider' are not supported yet", K(ret), K(arg.module_));
+        LOG_WARN("modules except 'redis'/'gis'/'timezone' are not supported yet", K(ret), K(arg.module_));
       }
     }
   }

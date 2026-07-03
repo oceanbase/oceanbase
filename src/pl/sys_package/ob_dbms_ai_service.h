@@ -39,6 +39,7 @@ public:
   // ai provider
   static int register_provider(ObPLExecCtx &ctx, sql::ParamStore &params, common::ObObj &result);
   static int unregister_provider(ObPLExecCtx &ctx, sql::ParamStore &params, common::ObObj &result);
+  static int alter_provider(ObPLExecCtx &ctx, sql::ParamStore &params, common::ObObj &result);
 
   // ai gateway
   static int create_ai_gateway(ObPLExecCtx &ctx, sql::ParamStore &params, common::ObObj &result);
@@ -53,6 +54,9 @@ private:
   static int precheck_version_and_param_count_v2(int expect_param_count, sql::ParamStore &params);
   static int get_json_base_(ObArenaAllocator &allocator, sql::ParamStore &params, common::ObIJsonBase *&j_base);
   static int check_ai_model_privilege_(ObPLExecCtx &ctx, ObPrivSet required_priv);
+  static int check_ai_object_priv_(ObPLExecCtx &ctx, ObPrivSet required_priv, bool is_provider);
+  static int check_ai_provider_priv_(ObPLExecCtx &ctx, ObPrivSet required_priv);
+  static int check_ai_gateway_priv_(ObPLExecCtx &ctx, ObPrivSet required_priv);
   static int validate_gateway_endpoint_json_(common::ObIAllocator &allocator,
                                              common::ObIJsonBase &j_base,
                                              common::ObString &endpoints_str,

@@ -805,6 +805,7 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_AI_MODEL, ObRpcDropAiModelP, drop_ai_
 // ai provider ddl
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REGISTER_PROVIDER, ObRpcRegisterProviderP, register_provider(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_UNREGISTER_PROVIDER, ObRpcUnregisterProviderP, unregister_provider(arg_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_ALTER_PROVIDER, ObRpcAlterProviderP, alter_provider(arg_));
 
 // ai gateway ddl
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_AI_GATEWAY, ObRpcCreateAiGatewayP, create_ai_gateway(arg_));

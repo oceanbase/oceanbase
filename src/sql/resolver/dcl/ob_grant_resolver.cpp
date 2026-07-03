@@ -1298,7 +1298,8 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
                                                 grant_level,
                                                 *allocator_,
                                                 catalog,
-                                                sensitive_rule))) {
+                                                sensitive_rule,
+                                                priv_object_node))) {
             LOG_WARN("Resolve priv_level node error", K(ret));
           } else {
             grant_stmt->set_grant_level(grant_level);
@@ -1403,6 +1404,32 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("grammar is not support when MIN_DATA_VERSION is below MOCK_DATA_VERSION_4_3_5_3 or MOCK_DATA_VERSION_4_4_2_0 or DATA_VERSION_4_5_1_0", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant create sensitive rule/plainaccess privilege");
+          } else if (compat_version < DATA_VERSION_4_6_0_1
+                     && is_ai_object_type(grant_stmt->get_object_type())) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_6_0_1", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant ai provider/gateway privilege");
+          }
+          // precise validation of AI object privilege combination
+          if (OB_SUCC(ret) && is_ai_object_type(grant_stmt->get_object_type())) {
+            ObPrivSet valid_privs = 0;
+            share::schema::ObObjectType object_type = grant_stmt->get_object_type();
+            if (object_type == ObObjectType::AI_PROVIDER) {
+              valid_privs = OB_PRIV_AI_PROVIDER_ACC;
+            } else if (object_type == ObObjectType::AI_GATEWAY) {
+              valid_privs = OB_PRIV_AI_GATEWAY_ACC;
+            }
+            if (valid_privs != 0 && (priv_set & ~(valid_privs | OB_PRIV_GRANT)) != 0) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("invalid privilege for this AI object type", K(ret), K(object_type), K(priv_set));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "this privilege combination on the specified AI object type");
+            }
+            if (OB_SUCC(ret) && (priv_set & OB_PRIV_GRANT)) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("grant option is not supported for AI provider/gateway privilege",
+                       K(ret), K(object_type), K(priv_set));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "WITH GRANT OPTION on AI provider/gateway");
+            }
           }
           if (OB_FAIL(ret)) {
           } else {
@@ -1615,6 +1642,14 @@ int ObGrantResolver::resolve_priv_level_with_object_type(const ObSQLSessionInfo 
       } else {
         grant_level = OB_PRIV_SENSITIVE_RULE_LEVEL;
       }
+    } else if (priv_object_node->value_ == 7 || priv_object_node->value_ == 8) {
+      if (compat_version < DATA_VERSION_4_6_0_1) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("grant on AI provider/gateway is not support below DATA_VERSION_4_6_0_1", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant privilege on AI provider/gateway in this version");
+      } else {
+        grant_level = OB_PRIV_OBJECT_LEVEL;
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected obj type", K(ret), K(priv_object_node->value_));
@@ -1636,9 +1671,12 @@ int ObGrantResolver::resolve_priv_level(
     ObPrivLevel &grant_level,
     ObIAllocator &allocator,
     ObString &catalog,
-    ObString &sensitive_rule)
+    ObString &sensitive_rule,
+    const ParseNode *priv_object_node)
 {
   int ret = OB_SUCCESS;
+  const bool is_ai_obj = (priv_object_node != NULL
+      && (priv_object_node->value_ == 7 || priv_object_node->value_ == 8));
   bool is_grant_routine = (grant_level == OB_PRIV_ROUTINE_LEVEL);
   bool is_grant_object = (grant_level == OB_PRIV_OBJECT_LEVEL);
   if (OB_ISNULL(node)) {
@@ -1677,6 +1715,17 @@ int ObGrantResolver::resolve_priv_level(
     } else {
       ret = OB_ERR_PARSE_SQL;
       LOG_WARN("sql_parser parse grant_stmt error", K(ret));
+    }
+  } else if (OB_PRIV_OBJECT_LEVEL == grant_level && is_ai_obj) {
+    if (0 == node->num_child_ && T_STAR == node->type_) {
+      table = ObString::make_string("*");
+    } else if (0 == node->num_child_ && T_IDENT == node->type_) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("named AI object grant not supported in this version", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "named AI provider/gateway grant in this version");
+    } else {
+      ret = OB_ERR_PARSE_SQL;
+      LOG_WARN("invalid priv_level for AI object", K(ret));
     }
   } else {
     CK (guard != NULL);
@@ -2527,6 +2576,49 @@ bool ObGrantResolver::exec_obj_priv_exist(const ParseNode *privs_node, bool &has
           LOG_DEBUG("Found OB_PRIV_EXECUTE", K(priv_type_node->value_));
           has_exec_priv = true;
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObGrantResolver::validate_ai_priv_keyword(ObObjectType obj_type,
+                                              const ParseNode *priv_node)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(priv_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "priv node is null", K(ret));
+  } else {
+    const ObPrivType priv_type = priv_node->value_;
+    const char *str_value = priv_node->str_value_;
+    const int32_t str_len = priv_node->str_len_;
+    const ObString keyword(str_len, str_value);
+    const bool is_register = (str_value != nullptr && str_len == 8
+        && 0 == strncasecmp(str_value, "REGISTER", 8));
+    const bool is_unregister = (str_value != nullptr && str_len == 10
+        && 0 == strncasecmp(str_value, "UNREGISTER", 10));
+    const bool is_access = (str_value != nullptr && str_len == 6
+        && 0 == strncasecmp(str_value, "ACCESS", 6));
+    if (obj_type == ObObjectType::AI_PROVIDER) {
+      if (!(is_register || is_unregister || is_access || OB_PRIV_ALTER == priv_type)) {
+        ret = OB_NOT_SUPPORTED;
+        SQL_RESV_LOG(WARN, "invalid privilege for AI PROVIDER",
+                     K(ret), K(priv_type), K(keyword));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "this privilege on AI PROVIDER");
+      }
+    } else if (obj_type == ObObjectType::AI_GATEWAY) {
+      if (is_register || is_unregister) {
+        ret = OB_NOT_SUPPORTED;
+        SQL_RESV_LOG(WARN, "REGISTER/UNREGISTER is only valid on AI PROVIDER",
+                     K(ret), K(keyword));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "REGISTER/UNREGISTER privilege on AI GATEWAY");
+      } else if (!(is_access || OB_PRIV_CREATE == priv_type
+                   || OB_PRIV_DROP == priv_type || OB_PRIV_ALTER == priv_type)) {
+        ret = OB_NOT_SUPPORTED;
+        SQL_RESV_LOG(WARN, "invalid privilege for AI GATEWAY",
+                     K(ret), K(priv_type), K(keyword));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "this privilege on AI GATEWAY");
       }
     }
   }

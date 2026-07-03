@@ -134,8 +134,10 @@ public:
                                  const bool is_oracle_mode);
   
 private:
-  static int get_priv_name(const int64_t priv, const char *&name);
-  static int priv_to_name(const ObPrivSet priv, common::ObSqlString &priv_str);
+  static int get_priv_name(const int64_t priv, const char *&name,
+                           share::schema::ObObjectType obj_type = share::schema::ObObjectType::INVALID);
+  static int priv_to_name(const ObPrivSet priv, common::ObSqlString &priv_str,
+                          share::schema::ObObjectType obj_type = share::schema::ObObjectType::INVALID);
   static char *adjust_ddl_format_str(char *ori_format_str, const bool is_oracle_mode);
   DISALLOW_COPY_AND_ASSIGN(ObDDLSqlGenerator);
 };

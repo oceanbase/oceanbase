@@ -1611,8 +1611,16 @@ enum class ObObjectType {
   LOCATION        = 18,
   AI_MODEL        = 19,
   SENSITIVE_RULE  = 20,
+  AI_PROVIDER     = 21,
+  AI_GATEWAY      = 22,
   MAX_TYPE,
 };
+
+inline bool is_ai_object_type(ObObjectType obj_type)
+{
+  return ObObjectType::AI_PROVIDER == obj_type || ObObjectType::AI_GATEWAY == obj_type;
+}
+
 struct ObSchemaObjVersion
 {
   ObSchemaObjVersion()

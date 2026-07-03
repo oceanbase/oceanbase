@@ -306,6 +306,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcDropAiModelP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcRegisterProviderP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcUnregisterProviderP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcAlterProviderP, *gctx_.root_service_);
     // ai gateway ddl
     RPC_PROCESSOR(rootserver::ObRpcCreateAiGatewayP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAlterAiGatewayP, *gctx_.root_service_);
