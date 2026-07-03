@@ -2984,8 +2984,9 @@ int ObPluginVectorIndexAdaptor::check_index_id_table_readnext_status(ObVectorQue
             } else if (ctx->vec_data_.count_ > 0) {
               ctx->status_ = PVQ_COM_DATA;
             }
-          } else {
-            // no need to complete just unlcok
+          }
+          // Unlock locally if the complete delta lock is not transferred to ctx.
+          if (ctx->get_complete_delta_lock() != &incr_data_->complete_lock_) {
             if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = incr_data_->complete_lock_.wrunlock()))) {
               FLOG_INFO("[VEC_INDEX][COMPLETE_DELTA] fail to unlock complete delta lock", K(tmp_ret), K(&incr_data_->complete_lock_), KPC(this), K(lbt()));
             } else {
