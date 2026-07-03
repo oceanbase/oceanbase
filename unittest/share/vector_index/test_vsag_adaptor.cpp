@@ -378,7 +378,7 @@ TEST_F(TestVsagAdaptor, test_construct_vsag_create_param_hnsw_family)
   EXPECT_STREQ(
       "{\"dim\":128,\"dtype\":\"float32\",\"metric_type\":\"l2\",\"use_old_serial_format\":true,"
       "\"index_param\":{\"ef_construction\":100,\"max_degree\":32,\"store_raw_vector\":true,"
-      "\"base_quantization_type\":\"fp32\",\"build_thread_count\":0}}",
+      "\"base_quantization_type\":\"fp32\",\"build_thread_count\":0,\"label_remap_type\":\"robin\"}}",
       buf);
 
   memset(buf, 0, sizeof(buf));
@@ -402,7 +402,7 @@ TEST_F(TestVsagAdaptor, test_construct_vsag_create_param_hnsw_family)
   EXPECT_STREQ(
       "{\"dim\":128,\"dtype\":\"float32\",\"metric_type\":\"l2\",\"use_old_serial_format\":true,"
       "\"index_param\":{\"ef_construction\":100,\"max_degree\":32,\"base_quantization_type\":\"sq8\","
-      "\"build_thread_count\":0}}",
+      "\"build_thread_count\":0,\"label_remap_type\":\"robin\"}}",
       buf);
 
   memset(buf, 0, sizeof(buf));
@@ -426,7 +426,7 @@ TEST_F(TestVsagAdaptor, test_construct_vsag_create_param_hnsw_family)
   EXPECT_STREQ(
       "{\"dim\":128,\"dtype\":\"float32\",\"metric_type\":\"l2\",\"use_old_serial_format\":true,"
       "\"index_param\":{\"ef_construction\":100,\"max_degree\":32,\"base_quantization_type\":\"rabitq\","
-      "\"build_thread_count\":0,\"use_reorder\":true,\"ignore_reorder\":true,"
+      "\"build_thread_count\":0,\"label_remap_type\":\"robin\",\"use_reorder\":true,\"ignore_reorder\":true,"
       "\"precise_quantization_type\":\"fp32\",\"precise_io_type\":\"block_memory_io\","
       "\"rabitq_bits_per_dim_query\":32,\"rabitq_use_fht\":true}}",
       buf);
@@ -450,7 +450,7 @@ TEST_F(TestVsagAdaptor, test_construct_vsag_create_param_hnsw_family)
     EXPECT_STREQ(
         "{\"dim\":128,\"dtype\":\"float32\",\"metric_type\":\"l2\",\"use_old_serial_format\":true,"
         "\"index_param\":{\"ef_construction\":100,\"max_degree\":32,\"base_quantization_type\":\"rabitq\","
-        "\"build_thread_count\":0,"
+        "\"build_thread_count\":0,\"label_remap_type\":\"robin\","
         "\"precise_quantization_type\":\"fp32\",\"precise_io_type\":\"block_memory_io\","
         "\"rabitq_bits_per_dim_query\":32,\"rabitq_use_fht\":false}}",
         buf);
