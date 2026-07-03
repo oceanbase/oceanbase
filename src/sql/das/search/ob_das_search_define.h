@@ -294,10 +294,12 @@ public:
       fusion_method_(ObFusionMethod::WEIGHT_SUM),
       has_hybrid_fusion_op_(false),
       enable_parallel_(false),
-      query_dop_(1)
+      query_dop_(1),
+      track_score_(true),
+      fusion_iter_exec_mode_(ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS)
   {}
   ~ObDASFusionCtDef() {}
-  INHERIT_TO_STRING_KV("ObDASFusionCtDef", ObDASAttachCtDef, K(search_index_), K(has_search_subquery_), K(has_vector_subquery_), K(rowid_exprs_), K(score_exprs_), K(rank_exprs_), K(weight_exprs_), KPC_(size_expr), KPC_(offset_expr), KPC_(rank_window_size_expr), KPC_(rank_constant_expr), KPC_(min_score_expr), K(fusion_method_));
+  INHERIT_TO_STRING_KV("ObDASFusionCtDef", ObDASAttachCtDef, K(search_index_), K(has_search_subquery_), K(has_vector_subquery_), K(rowid_exprs_), K(score_exprs_), K(rank_exprs_), K(weight_exprs_), KPC_(size_expr), KPC_(offset_expr), KPC_(rank_window_size_expr), KPC_(rank_constant_expr), KPC_(min_score_expr), K(fusion_method_), K(enable_parallel_), K(query_dop_));
 
   int init(
     int64_t search_index,
@@ -317,7 +319,9 @@ public:
     const common::ObIArray<ObExpr *> &score_exprs,
     const common::ObIArray<ObExpr *> &result_output_exprs,
     const common::ObIArray<ObExpr *> &weight_exprs,
-    const common::ObIArray<ObExpr *> &path_top_k_limit_exprs);
+    const common::ObIArray<ObExpr *> &path_top_k_limit_exprs,
+    bool track_score,
+    ObFusionIterExecMode fusion_iter_exec_mode = ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS);
 
   // Getter methods for backward compatibility
   OB_INLINE ObExpr *get_search_score_expr() const
@@ -334,7 +338,7 @@ public:
   OB_INLINE bool need_search_score() const { return get_search_score_expr() != nullptr; }
   OB_INLINE bool has_search_subquery() const { return has_search_subquery_; }
   OB_INLINE bool has_vector_subquery() const { return has_vector_subquery_; }
-  OB_INLINE bool need_topk() const { return need_search_score() && nullptr != size_expr_ && nullptr != offset_expr_; }
+  OB_INLINE bool need_topk() const { return need_search_score() && nullptr != size_expr_ && nullptr != offset_expr_ && fusion_iter_exec_mode_ == ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS; }
 
   OB_INLINE int64_t get_search_idx() const { return search_index_; }
   OB_INLINE void set_search_index(int64_t index) { search_index_ = index; }
@@ -371,6 +375,8 @@ public:
   bool has_hybrid_fusion_op_;
   bool enable_parallel_;
   int64_t query_dop_;
+  bool track_score_;
+  ObFusionIterExecMode fusion_iter_exec_mode_;
 };
 
 struct ObDASFusionRtDef : ObDASAttachRtDef

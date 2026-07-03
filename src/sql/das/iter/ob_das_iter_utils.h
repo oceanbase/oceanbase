@@ -339,6 +339,12 @@ private:
       const ObDASVecIndexDriverCtDef *vec_index_driver_ctdef,
       ObDASVecIndexDriverRtDef *vec_index_driver_rtdef,
       ObDASIter *&vec_search_iter);
+  static int create_das_iter_tree_without_fusion_iter(
+      DAS_ITER_TREE_SIGNATURE,
+      const ObDASFusionCtDef *fusion_ctdef,
+      ObDASFusionRtDef *fusion_rtdef,
+      ObDASIter *&index_iter,
+      const char *path_desc);
 
   static int create_fusion_iter_tree(
       DAS_ITER_TREE_SIGNATURE,

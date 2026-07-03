@@ -17,7 +17,7 @@ namespace sql
 
 ERRSIM_POINT_DEF(EN_FORCE_PRIMARY_ROR_SCAN, "Force to use primary ror scan");
 
-OB_SERIALIZE_MEMBER((ObDASScalarCtDef, ObIDASSearchCtDef), has_main_scan_, has_index_scan_);
+OB_SERIALIZE_MEMBER((ObDASScalarCtDef, ObIDASSearchCtDef), has_main_scan_, has_index_scan_, boost_);
 
 OB_SERIALIZE_MEMBER((ObDASScalarRtDef, ObIDASSearchRtDef));
 
@@ -44,7 +44,8 @@ OB_DEF_SERIALIZE(ObDASScalarScanRtDef)
               sql_mode_,
               scan_flag_,
               key_ranges_,
-              really_need_rowkey_order_);
+              really_need_rowkey_order_,
+              boost_weight_);
   return ret;
 }
 
@@ -58,7 +59,8 @@ OB_DEF_DESERIALIZE(ObDASScalarScanRtDef)
               sql_mode_,
               scan_flag_,
               key_ranges_,
-              really_need_rowkey_order_);
+              really_need_rowkey_order_,
+              boost_weight_);
   if (OB_SUCC(ret)) {
     (void)ObSQLUtils::adjust_time_by_ntp_offset(timeout_ts_);
   }
@@ -75,7 +77,8 @@ OB_DEF_SERIALIZE_SIZE(ObDASScalarScanRtDef)
               sql_mode_,
               scan_flag_,
               key_ranges_,
-              really_need_rowkey_order_);
+              really_need_rowkey_order_,
+              boost_weight_);
   return len;
 }
 
@@ -106,6 +109,26 @@ const ObDASScalarScanCtDef* ObDASScalarCtDef::get_main_scan_ctdef() const
     }
   }
   return main_scan_ctdef;
+}
+
+int ObDASScalarCtDef::eval_boost(ObEvalCtx *eval_ctx, double &boost_weight) const
+{
+  int ret = OB_SUCCESS;
+  boost_weight = 0.0;
+  if (!is_scoring() || OB_ISNULL(boost_)) {
+    // do nothing
+  } else {
+    ObDatum *datum = nullptr;
+    if (OB_FAIL(boost_->eval(*eval_ctx, datum))) {
+      LOG_WARN("failed to eval scalar boost", K(ret));
+    } else if (OB_ISNULL(datum) || datum->is_null()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null scalar boost datum", K(ret));
+    } else {
+      boost_weight = datum->get_double();
+    }
+  }
+  return ret;
 }
 
 ObDASScalarScanRtDef* ObDASScalarRtDef::get_index_scan_rtdef() const
@@ -165,12 +188,23 @@ int ObDASScalarRtDef::generate_op(ObDASSearchCost lead_cost, ObDASSearchCtx &sea
   } else if (OB_FAIL(get_cost(search_ctx, cost))) {
     LOG_WARN("failed to compute cost", K(ret));
   } else {
+    double boost_weight = 0.0;
     ObDASScalarScanRtDef *index_scan_rtdef = get_index_scan_rtdef();
     const ObDASScalarScanCtDef *index_scan_ctdef = scalar_ctdef->get_index_scan_ctdef();
     ObDASScalarScanRtDef *primary_scan_rtdef = get_main_scan_rtdef();
     const ObDASScalarScanCtDef *primary_scan_ctdef = scalar_ctdef->get_main_scan_ctdef();
-
-    if (scalar_ctdef->has_index_scan() && scalar_ctdef->has_main_scan()) {
+    if (OB_FAIL(scalar_ctdef->eval_boost(eval_ctx_, boost_weight))) {
+      LOG_WARN("failed to eval scalar boost weight", K(ret));
+    } else {
+      if (OB_NOT_NULL(index_scan_rtdef)) {
+        index_scan_rtdef->set_boost_weight(boost_weight);
+      }
+      if (OB_NOT_NULL(primary_scan_rtdef)) {
+        primary_scan_rtdef->set_boost_weight(boost_weight);
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (scalar_ctdef->has_index_scan() && scalar_ctdef->has_main_scan()) {
       // choose the scan with lower cost
       // If 8 times the lead_cost is less than the index scan cost, it is considered that scanning the primary table has a lower cost.
       // This is because the primary table can directly provide the primary key order without extra processing,

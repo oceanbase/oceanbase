@@ -119,7 +119,8 @@ public:
     bitmap_(nullptr),
     bitmap_iter_(),
     rowid_expr_(nullptr),
-    scan_op_(nullptr)
+    scan_op_(nullptr),
+    boost_weight_(0.0)
   { }
   virtual ~ObDASBitmapOp() {}
 
@@ -134,6 +135,8 @@ private:
   int do_rescan() override;
   int do_advance_to(const ObDASRowID &target, ObDASRowID &curr_id, double &score) override;
   int do_next_rowid(ObDASRowID &next_id, double &score) override;
+  int do_advance_shallow(const ObDASRowID &target, const bool inclusive, const MaxScoreTuple *&max_score_tuple) override;
+  int do_calc_max_score(double &threshold) override;
 
 private:
   int build_bitmap();
@@ -163,6 +166,7 @@ private:
   ObFastBitmap::Iterator bitmap_iter_;
   ObExpr *rowid_expr_;
   ObDASScalarScanOp *scan_op_;
+  double boost_weight_;
 };
 
 } // namespace sql

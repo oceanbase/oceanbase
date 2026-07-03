@@ -131,6 +131,7 @@ int ObDASIterUtils::init_fusion_param(common::ObIAllocator &alloc,
     fusion_param.exec_ctx_ = &fusion_rtdef->eval_ctx_->exec_ctx_;
     fusion_param.output_ = &fusion_ctdef->result_output_;
     fusion_param.has_hybrid_fusion_op_ = fusion_ctdef->has_hybrid_fusion_op_;
+    fusion_param.fusion_iter_exec_mode_ = fusion_ctdef->fusion_iter_exec_mode_;
     fusion_param.search_ctx_ = search_ctx;
     fusion_param.fusion_rtdef_ = fusion_rtdef;
     // to do: when fusion iter is removed, we need to pass offset and size to fusion iter
@@ -4187,31 +4188,95 @@ int ObDASIterUtils::create_vec_lookup_tree(ObTableScanParam &scan_param,
   return ret;
 }
 
+int ObDASIterUtils::create_das_iter_tree_without_fusion_iter(
+    DAS_ITER_TREE_SIGNATURE,
+    const ObDASFusionCtDef *fusion_ctdef,
+    ObDASFusionRtDef *fusion_rtdef,
+    ObDASIter *&index_iter,
+    const char *path_desc)
+{
+  int ret = OB_SUCCESS;
+  common::ObLimitParam top_k_limit_param;
+  top_k_limit_param.limit_ = -1;
+  ObExpr *fusion_score_expr = fusion_ctdef->get_fusion_score_expr();
+  if (OB_ISNULL(fusion_score_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fusion score expr is null in single-path shortcut", K(ret), K(path_desc), KPC(fusion_ctdef));
+  } else if (fusion_ctdef->has_search_subquery_) {
+    ObIDASSearchRtDef *search_root_rtdef = fusion_rtdef->get_search_rtdef();
+    ObDASSearchDriverIter *search_iter = nullptr;
+    if (OB_ISNULL(search_root_rtdef)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("search root rtdef is null in single-path shortcut", K(ret), K(path_desc), KPC(fusion_rtdef));
+    } else if (OB_FAIL(create_search_driver_iter(alloc, search_root_rtdef, search_ctx,
+                                                 top_k_limit_param, search_iter, fusion_score_expr))) {
+      LOG_WARN("failed to create search driver iter", K(ret), K(path_desc));
+    } else {
+      index_iter = search_iter;
+    }
+  } else if (fusion_ctdef->has_vector_subquery_) {
+    const int64_t vec_idx = 0;
+    const ObDASVecIndexDriverCtDef *vec_index_driver_ctdef = nullptr;
+    ObDASVecIndexDriverRtDef *vec_index_driver_rtdef = nullptr;
+    if (OB_ISNULL(vec_index_driver_ctdef = static_cast<const ObDASVecIndexDriverCtDef *>(fusion_ctdef->children_[vec_idx]))
+        || OB_ISNULL(vec_index_driver_rtdef = static_cast<ObDASVecIndexDriverRtDef *>(fusion_rtdef->children_[vec_idx]))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("vec_index_driver_ctdef or vec_index_driver_rtdef is null in single-path shortcut",
+               K(ret), K(path_desc), K(vec_idx), KP(vec_index_driver_ctdef), KP(vec_index_driver_rtdef));
+    } else if (OB_FAIL(create_vec_search_iter(alloc, search_ctx, scan_param.ls_id_, trans_desc, snapshot, fusion_score_expr, vec_index_driver_ctdef, vec_index_driver_rtdef, index_iter))) {
+      LOG_WARN("failed to create vec search iter", K(ret), K(path_desc), K(vec_idx));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("neither search nor vector subquery exists in single-path shortcut", K(ret), K(path_desc), KPC(fusion_ctdef));
+  }
+  return ret;
+}
+
 int ObDASIterUtils::create_hybrid_search_tree(DAS_ITER_TREE_SIGNATURE, ObDASIter *&iter_tree)
 {
   int ret = OB_SUCCESS;
+  const bool has_lookup = OB_NOT_NULL(attach_ctdef) &&
+      (attach_ctdef->op_type_ == DAS_OP_INDEX_PROJ_LOOKUP || attach_ctdef->op_type_ == DAS_OP_TABLE_LOOKUP);
   ObDASTableLookupRtDef *table_lookup_rtdef = nullptr;
   const ObDASTableLookupCtDef *table_lookup_ctdef = nullptr;
   ObDASFusionRtDef *fusion_rtdef = nullptr;
   const ObDASFusionCtDef *fusion_ctdef = nullptr;
   ObDASIter *index_iter = nullptr;
-  if (OB_ISNULL(attach_rtdef) || OB_ISNULL(attach_ctdef) ||
-      (DAS_OP_INDEX_PROJ_LOOKUP != attach_rtdef->op_type_ && DAS_OP_TABLE_LOOKUP != attach_rtdef->op_type_) ||
-      OB_ISNULL(table_lookup_rtdef = static_cast<ObDASTableLookupRtDef *>(attach_rtdef)) ||
-      OB_ISNULL(table_lookup_ctdef = static_cast<const ObDASTableLookupCtDef *>(attach_ctdef))) {
+  if (OB_ISNULL(attach_rtdef) || OB_ISNULL(attach_ctdef)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected attach rtdef in hybrid search", K(ret), KPC(attach_rtdef));
-  } else if (OB_ISNULL(table_lookup_rtdef->get_rowkey_scan_rtdef()) ||
-             table_lookup_rtdef->get_rowkey_scan_rtdef()->op_type_ != DAS_OP_FUSION_QUERY ||
-             OB_ISNULL(fusion_rtdef = static_cast<ObDASFusionRtDef *>(table_lookup_rtdef->get_rowkey_scan_rtdef())) ||
-             OB_ISNULL(table_lookup_ctdef->get_rowkey_scan_ctdef()) ||
-             table_lookup_ctdef->get_rowkey_scan_ctdef()->op_type_ != DAS_OP_FUSION_QUERY ||
-             OB_ISNULL(fusion_ctdef = static_cast<const ObDASFusionCtDef *>(table_lookup_ctdef->get_rowkey_scan_ctdef()))) {
+    LOG_WARN("unexpected nullptr in hybrid search", K(ret), KPC(attach_rtdef), KPC(attach_ctdef));
+  } else if (has_lookup) {
+    if ((DAS_OP_INDEX_PROJ_LOOKUP != attach_rtdef->op_type_ && DAS_OP_TABLE_LOOKUP != attach_rtdef->op_type_) ||
+        OB_ISNULL(table_lookup_rtdef = static_cast<ObDASTableLookupRtDef *>(attach_rtdef)) ||
+        OB_ISNULL(table_lookup_ctdef = static_cast<const ObDASTableLookupCtDef *>(attach_ctdef))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected attach rtdef in hybrid search", K(ret), KPC(attach_rtdef), KPC(attach_ctdef));
+    } else if (OB_ISNULL(table_lookup_rtdef->get_rowkey_scan_rtdef()) ||
+               table_lookup_rtdef->get_rowkey_scan_rtdef()->op_type_ != DAS_OP_FUSION_QUERY ||
+               OB_ISNULL(fusion_rtdef = static_cast<ObDASFusionRtDef *>(table_lookup_rtdef->get_rowkey_scan_rtdef())) ||
+               OB_ISNULL(table_lookup_ctdef->get_rowkey_scan_ctdef()) ||
+               table_lookup_ctdef->get_rowkey_scan_ctdef()->op_type_ != DAS_OP_FUSION_QUERY ||
+               OB_ISNULL(fusion_ctdef = static_cast<const ObDASFusionCtDef *>(table_lookup_ctdef->get_rowkey_scan_ctdef()))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected fusion rtdef/ctdef in hybrid search", K(ret), KPC(table_lookup_rtdef), KPC(table_lookup_ctdef));
+    }
+  } else if (attach_rtdef->op_type_ != DAS_OP_FUSION_QUERY ||
+             attach_ctdef->op_type_ != DAS_OP_FUSION_QUERY ||
+             OB_ISNULL(fusion_rtdef = static_cast<ObDASFusionRtDef *>(attach_rtdef)) ||
+             OB_ISNULL(fusion_ctdef = static_cast<const ObDASFusionCtDef *>(attach_ctdef))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected fusion rtdef/ctdef in hybrid search", K(ret), KPC(table_lookup_rtdef), KPC(table_lookup_ctdef));
-  } else if (fusion_ctdef->is_top_k_query_) {
-    if (OB_FAIL(create_fusion_iter_tree(DAS_ITER_TREE_ARGS, fusion_ctdef, fusion_rtdef, index_iter))) {
-      LOG_WARN("failed to create fusion iter", K(ret));
+    LOG_WARN("unexpected fusion attach root in hybrid search", K(ret), KPC(attach_rtdef), KPC(attach_ctdef));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (fusion_ctdef->fusion_iter_exec_mode_ == ObFusionIterExecMode::SKIP_FUSION_ITER) {
+    if (OB_FAIL(create_das_iter_tree_without_fusion_iter(DAS_ITER_TREE_ARGS,
+                                                        fusion_ctdef,
+                                                        fusion_rtdef,
+                                                        index_iter,
+                                                        "skip-fusion path"))) {
+      LOG_WARN("failed to create single path iter for skip-fusion", K(ret));
     }
   } else if (!fusion_ctdef->is_top_k_query_) {
     common::ObLimitParam top_k_limit_param;
@@ -4226,10 +4291,12 @@ int ObDASIterUtils::create_hybrid_search_tree(DAS_ITER_TREE_SIGNATURE, ObDASIter
     } else {
       index_iter = search_iter;
     }
+  } else if (OB_FAIL(create_fusion_iter_tree(DAS_ITER_TREE_ARGS, fusion_ctdef, fusion_rtdef, index_iter))) {
+    LOG_WARN("failed to create fusion iter", K(ret));
   }
 
   if (OB_SUCC(ret)) {
-    if (DAS_OP_INDEX_PROJ_LOOKUP == attach_ctdef->op_type_) {
+    if (has_lookup && DAS_OP_INDEX_PROJ_LOOKUP == attach_ctdef->op_type_) {
       ObDASCacheLookupIter *lookup_iter = nullptr;
       if (OB_FAIL(create_cache_lookup_sub_tree(scan_param, alloc, attach_ctdef, attach_rtdef,
         trans_desc, snapshot, index_iter, related_tablet_ids, lookup_iter, true /* lookup need keep order */))) {
@@ -4237,7 +4304,7 @@ int ObDASIterUtils::create_hybrid_search_tree(DAS_ITER_TREE_SIGNATURE, ObDASIter
       } else {
         iter_tree = lookup_iter;
       }
-    } else if (DAS_OP_TABLE_LOOKUP == attach_ctdef->op_type_) {
+    } else if (has_lookup && DAS_OP_TABLE_LOOKUP == attach_ctdef->op_type_) {
       ObDASLocalLookupIter *lookup_iter = nullptr;
       if (OB_FAIL(create_local_lookup_sub_tree(scan_param, alloc, fusion_ctdef, fusion_rtdef,
         table_lookup_ctdef->get_lookup_scan_ctdef(), table_lookup_rtdef->get_lookup_scan_rtdef(),
@@ -4246,6 +4313,8 @@ int ObDASIterUtils::create_hybrid_search_tree(DAS_ITER_TREE_SIGNATURE, ObDASIter
       } else {
         iter_tree = lookup_iter;
       }
+    } else {
+      iter_tree = index_iter;
     }
   }
 
@@ -4320,7 +4389,6 @@ int ObDASIterUtils::create_fusion_iter_tree(
     ObDASIter **&children = iter->get_children();
     ObDASSearchDriverIter *search_iter = nullptr;
     common::ObLimitParam top_k_limit_param;
-    top_k_limit_param.limit_ = fusion_param.rank_window_size_;
     for (int64_t i = 0; OB_SUCC(ret) && i < children_cnt; ++i) {
       const ObDASBaseCtDef *child_ctdef = fusion_ctdef->children_[i];
       if (OB_ISNULL(child_ctdef)) {
@@ -4328,6 +4396,7 @@ int ObDASIterUtils::create_fusion_iter_tree(
         LOG_WARN("child ctdef is null", K(ret), K(i));
       } else if (fusion_ctdef->is_search_index(i)) {
         ObIDASSearchRtDef *search_rtdef = static_cast<ObIDASSearchRtDef *>(fusion_rtdef->children_[i]);
+        top_k_limit_param.limit_ = fusion_ctdef->fusion_iter_exec_mode_ != ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS ? -1 : fusion_param.rank_window_size_;
         if (OB_ISNULL(search_rtdef)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected search rtdef in fusion", K(ret), KPC(fusion_rtdef));
@@ -4344,7 +4413,8 @@ int ObDASIterUtils::create_fusion_iter_tree(
         if (OB_ISNULL(vec_index_driver_ctdef) || OB_ISNULL(vec_index_driver_rtdef)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("vec_index_driver_ctdef or vec_index_driver_rtdef is null", K(ret), K(i), KP(vec_index_driver_ctdef), KP(vec_index_driver_rtdef));
-        } else if (OB_FAIL(create_vec_search_iter(alloc, search_ctx, scan_param.ls_id_, trans_desc, snapshot, score_expr, vec_index_driver_ctdef, vec_index_driver_rtdef, vec_search_iter))) {
+        } else if (OB_FAIL(create_vec_search_iter(alloc, search_ctx, scan_param.ls_id_, trans_desc, snapshot, score_expr,
+                                                  vec_index_driver_ctdef, vec_index_driver_rtdef, vec_search_iter))) {
           LOG_WARN("failed to create vec_search_iter for path", K(ret), K(i));
         } else if (OB_ISNULL(vec_search_iter)) {
           ret = OB_ERR_UNEXPECTED;
@@ -4607,33 +4677,41 @@ int ObDASIterUtils::create_vec_search_iter(
 
       ObEvalCtx *eval_ctx = vec_index_driver_rtdef->eval_ctx_;
       ObDASVecIndexDriverIterParam vec_index_driver_param;
-      vec_index_driver_param.max_size_ = eval_ctx->is_vectorized() ? eval_ctx->max_batch_size_ : 1;
-      vec_index_driver_param.ls_id_ = ls_id;
-      vec_index_driver_param.tx_desc_ = trans_desc;
-      vec_index_driver_param.snapshot_ = snapshot;
-      vec_index_driver_param.vec_index_scan_iter_ = vec_index_scan_iter;
-      vec_index_driver_param.filter_iter_ = filter_iter;
-      vec_index_driver_param.pre_filter_iter_ = pre_filter_iter;
-      vec_index_driver_param.post_filter_iter_ = post_filter_iter;
-      vec_index_driver_param.vec_index_driver_ctdef_ = vec_index_driver_ctdef;
-      vec_index_driver_param.vec_index_driver_rtdef_ = vec_index_driver_rtdef;
-      vec_index_driver_param.vec_index_type_ = vec_index_type;
-      vec_index_driver_param.vec_idx_try_path_ = vec_index_path;
-      vec_index_driver_param.sort_expr_ = vec_index_driver_ctdef->sort_expr_;
-      vec_index_driver_param.limit_expr_ = vec_index_driver_ctdef->limit_expr_;
-      vec_index_driver_param.offset_expr_ = vec_index_driver_ctdef->offset_expr_;
-      vec_index_driver_param.dim_ = vec_index_driver_ctdef->dim_;
-      vec_index_driver_param.search_ctx_ = search_ctx;
-      vec_index_driver_param.score_expr_ = score_expr;
-      vec_index_driver_param.filter_mode_ = filter_mode;
-      vec_index_driver_param.scalar_scan_ctdef_ = scalar_scan_ctdef;
-      vec_index_driver_param.scalar_scan_rtdef_ = scalar_scan_rtdef;
-      vec_index_driver_param.filter_rtdef_for_reeval_ = filter_rtdef_for_reeval;
-      vec_index_driver_param.go_brute_force_ = go_brute_force;
-      vec_index_scan_iter->set_vec_index_type(vec_index_type, vec_index_path, go_brute_force);
+      if (OB_ISNULL(eval_ctx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("vec index driver rtdef eval ctx is null", K(ret), KPC(vec_index_driver_rtdef));
+      } else {
+        vec_index_driver_param.max_size_ = eval_ctx->is_vectorized() ? eval_ctx->max_batch_size_ : 1;
+        vec_index_driver_param.eval_ctx_ = eval_ctx;
+        vec_index_driver_param.exec_ctx_ = &eval_ctx->exec_ctx_;
+        vec_index_driver_param.output_ = &vec_index_driver_ctdef->result_output_;
+        vec_index_driver_param.ls_id_ = ls_id;
+        vec_index_driver_param.tx_desc_ = trans_desc;
+        vec_index_driver_param.snapshot_ = snapshot;
+        vec_index_driver_param.vec_index_scan_iter_ = vec_index_scan_iter;
+        vec_index_driver_param.filter_iter_ = filter_iter;
+        vec_index_driver_param.pre_filter_iter_ = pre_filter_iter;
+        vec_index_driver_param.post_filter_iter_ = post_filter_iter;
+        vec_index_driver_param.vec_index_driver_ctdef_ = vec_index_driver_ctdef;
+        vec_index_driver_param.vec_index_driver_rtdef_ = vec_index_driver_rtdef;
+        vec_index_driver_param.vec_index_type_ = vec_index_type;
+        vec_index_driver_param.vec_idx_try_path_ = vec_index_path;
+        vec_index_driver_param.sort_expr_ = vec_index_driver_ctdef->sort_expr_;
+        vec_index_driver_param.limit_expr_ = vec_index_driver_ctdef->limit_expr_;
+        vec_index_driver_param.offset_expr_ = vec_index_driver_ctdef->offset_expr_;
+        vec_index_driver_param.dim_ = vec_index_driver_ctdef->dim_;
+        vec_index_driver_param.search_ctx_ = search_ctx;
+        vec_index_driver_param.score_expr_ = score_expr;
+        vec_index_driver_param.filter_mode_ = filter_mode;
+        vec_index_driver_param.scalar_scan_ctdef_ = scalar_scan_ctdef;
+        vec_index_driver_param.scalar_scan_rtdef_ = scalar_scan_rtdef;
+        vec_index_driver_param.filter_rtdef_for_reeval_ = filter_rtdef_for_reeval;
+        vec_index_driver_param.go_brute_force_ = go_brute_force;
+        vec_index_scan_iter->set_vec_index_type(vec_index_type, vec_index_path, go_brute_force);
+      }
 
       ObDASVecIndexDriverIter *vec_driver_iter = nullptr;
-      if (OB_FAIL(create_das_iter(alloc, vec_index_driver_param, vec_driver_iter))) {
+      if (FAILEDx(create_das_iter(alloc, vec_index_driver_param, vec_driver_iter))) {
         LOG_WARN("failed to create vec index driver iter", K(ret));
       } else {
         vec_search_iter = vec_driver_iter;

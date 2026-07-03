@@ -25119,6 +25119,9 @@ int ObJoinOrder::create_hybrid_search_node_path(const uint64_t table_id,
   has_valid_path = false;
   if (node->is_hybrid_scalar_node()) {
     if (node->is_hybrid_scalar_node_with_index()) {
+      ObScalarQueryNode *scalar_node = static_cast<ObScalarQueryNode *>(node);
+      bool is_imprecise_range = false;
+      bool is_imprecise_wildcard_varchar_col = false; // hybrid search wildcard a varchar column with index
       if (OB_FAIL(build_access_path_for_scan_node(table_id,
                                                   ref_table_id,
                                                   helper,
@@ -25133,10 +25136,17 @@ int ObJoinOrder::create_hybrid_search_node_path(const uint64_t table_id,
       } else if (OB_ISNULL(node->ap_) || OB_ISNULL(node->ap_->get_query_range_provider())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("access path of scan node is null", K(ret), KPC(node));
-      } else if (!node->ap_->is_new_query_range_with_precise_expr()) {
+      } else if (OB_FALSE_IT(is_imprecise_range = !node->ap_->is_new_query_range_with_precise_expr())) {
+      } else if (OB_FALSE_IT(is_imprecise_wildcard_varchar_col = is_imprecise_range
+                                                                 && scalar_node->can_keep_imprecise_range())) {
+      } else if (is_imprecise_range && !is_imprecise_wildcard_varchar_col) {
         // In hybrid search, if the index range is not precise, set the access path to null to use
         // primary table scan
+        // but allow hybrid search using wildcard to query string column with imprecise range
         node->ap_ = NULL;
+      } else if (is_imprecise_wildcard_varchar_col // precise range wildcard has no need to add pushdown filter
+                 && OB_FAIL(scalar_node->add_pd_filter_for_imprecise_range())) {
+        LOG_WARN("failed to add imprecise like filter to index scan", K(ret), KPC(node));
       } else if (node->ap_->is_search_index_path() && OB_FAIL(build_search_index_scalar_params(node))) {
         LOG_WARN("failed to build search index scalar params", K(ret));
       } else if (ref_table_id == node->ap_->get_index_table_id()) {

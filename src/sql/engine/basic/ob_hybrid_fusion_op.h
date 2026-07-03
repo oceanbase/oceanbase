@@ -106,15 +106,22 @@ public:
   common::ObFixedArray<ObExpr*, common::ObIAllocator> score_exprs_;
   common::ObFixedArray<ObExpr*, common::ObIAllocator> path_top_k_limit_exprs_;
   common::ObFixedArray<int64_t, common::ObIAllocator> score_expr_output_indices_;
+
+  int64_t search_index_;
+  ObFusionIterExecMode fusion_iter_exec_mode_;
 };
 
 class ObHybridFusionOp : public ObOperator
 {
 public:
+  enum FullRecallPhase { PHASE_STREAMING = 0, PHASE_OUTPUT_KNN = 1 };
+
   ObHybridFusionOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input) :
     ObOperator(exec_ctx, spec, input), spec_(static_cast<const ObHybridFusionSpec&>(spec)),
     is_data_ready_(false), top_k_limit_(10), size_(10), offset_(0), min_score_(0.0),
-    output_idx_(0), path_count_(0), profile_(ObSqlWorkAreaType::HASH_WORK_AREA),
+    rank_constant_(0), output_idx_(0), path_count_(0), fusion_iter_exec_mode_(ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS),
+    search_index_(-1), full_recall_phase_(PHASE_STREAMING),
+    profile_(ObSqlWorkAreaType::HASH_WORK_AREA),
     sql_mem_processor_(profile_, op_monitor_info_) {}
 
   virtual ~ObHybridFusionOp() {}
@@ -132,12 +139,33 @@ public:
 
 private:
   int collect_all_data_batch();
+  int get_next_batch_score_topk_query(const int64_t max_row_cnt);
+  int get_next_batch_knn_only(const int64_t max_row_cnt);
+  int get_next_batch_query_and_knn(const int64_t max_row_cnt);
+  int fetch_next_child_batch(const int64_t batch_cnt,
+                             const ObBatchRows *&child_brs,
+                             bool &is_iter_end);
+  void enter_output_knn_phase_if_needed(const bool is_iter_end);
+  int get_query_score_expr(ObExpr *&query_score_expr,
+                                bool &has_query_path,
+                                int64_t &child_output_cnt);
+  int prepare_batch_doc_indices(const int64_t batch_size);
+  int classify_child_batch_rows(const ObBatchRows *child_brs,
+                                ObExpr *query_score_expr,
+                                const bool has_query_path,
+                                const int64_t child_output_cnt,
+                                bool &has_output);
+  int push_scores_to_path_heaps(const ObBatchRows *child_brs,
+                                const int64_t child_output_cnt);
+  int prepare_output_knn_materialization();
+  int compute_knn_only_topk();
 
   int init_path_heaps();
   int try_push_to_heaps(const ObBatchRows *child_brs, const int64_t start_row_store_idx);
   int add_top_k_info(ObTopKHeap *heap, double score, int64_t stored_row_idx, int64_t start_index, int64_t top_k_limit);
 
   int store_batch_rows(const ObBatchRows *child_brs);
+  int store_batch_rows_knn_only(const ObBatchRows *child_brs);
   int get_min_max_score();
 
   int rescore();
@@ -149,6 +177,7 @@ private:
 
   // Output
   int compute_fusion_topk();
+  int emit_output_batch(const int64_t max_row_cnt);
   int get_store_row_batch(int64_t batch_size, const ObCompactRow **&stored_rows);
   int output_row_batch(const int64_t max_row_cnt, int64_t count);
 
@@ -177,6 +206,9 @@ private:
   int64_t rank_constant_;
   int64_t output_idx_;
   int64_t path_count_;
+  ObFusionIterExecMode fusion_iter_exec_mode_;
+  int64_t search_index_;
+  FullRecallPhase full_recall_phase_;
   ObRATempRowStore row_store_;
   ObRATempRowStore::RAReader row_store_reader_;
   common::ObSEArray<ObFusionDocInfo, 10> fusion_docs_;
@@ -189,6 +221,7 @@ private:
   ObScoreEntryCompare fusion_score_comparer_;
   common::ObSEArray<ObTopKHeap*, 4> path_heaps_;
   hash::ObHashSet<int64_t> top_k_doc_indices_;
+  common::ObSEArray<int64_t, 64> passthrough_doc_indices_;
   common::ObSEArray<const ObCompactRow*, 1024> stored_rows_buffer_;
 
   // SQL memory managements

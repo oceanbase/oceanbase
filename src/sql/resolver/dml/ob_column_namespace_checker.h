@@ -124,6 +124,7 @@ private:
                            const ObQualifiedName &q_name,
                            const TableItem *&found_table,
                            bool &need_check_unique);
+  static bool is_hybrid_search_pseudo_column(const TableItem &table_item, const common::ObString &col_name);
   bool hit_join_table_using_name(const JoinedTable &joined_table, const ObQualifiedName &q_name);
   int check_column_existence_in_using_clause(const uint64_t table_id,
                                              const common::ObString &column_name,

@@ -6790,12 +6790,18 @@ int ObDMLResolver::resolve_table_column_expr(const ObQualifiedName &q_name, ObRa
           LOG_WARN("resolve join table column item failed", K(ret));
         }
       } else {
-        if (OB_SUCC(ret) && table_item->is_hybrid_search_table() && q_name.col_name_.case_compare(OB_HYBRID_SEARCH_SCORE_COLUMN_NAME) == 0) {
-          if (OB_FAIL(ObDSLResolver::resolve_hybrid_search_score_column_ref_expr(
-                *table_item, q_name, *get_stmt(), real_ref_expr))) {
-            LOG_WARN("failed to resolve hybrid search score column", K(ret), K(q_name));
+        if (table_item->is_hybrid_search_table()
+            && OB_FAIL(ObDSLResolver::resolve_hybrid_search_pseudo_column_ref_expr(
+                   const_cast<TableItem &>(*table_item),
+                   q_name, *get_stmt(), *params_.expr_factory_,
+                   session_info_, real_ref_expr))) {
+          if (OB_ERR_BAD_FIELD_ERROR == ret) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("failed to resolve hybrid search pseudo column", K(ret), K(q_name));
           }
-        } else {
+        }
+        if (OB_SUCC(ret) && NULL == real_ref_expr) {
           ColumnItem *col_item = NULL;
           if (OB_FAIL(resolve_single_table_column_item(*table_item, q_name.col_name_, false, col_item))) {
             LOG_WARN("resolve single table column item failed", K(ret));

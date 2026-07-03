@@ -104,6 +104,8 @@ int ObDASScalarROROp::do_advance_to(const ObDASRowID &target, ObDASRowID &curr_i
   if (OB_SUCC(ret)) {
     if (OB_FAIL(rowid_store_iter_.get_cur_rowid(curr_id))) {
       LOG_WARN("failed to get rowid", K(ret));
+    } else {
+      score = is_scoring_ ? scalar_rtdef_->get_boost_weight() : 0.0;
     }
   } else if (OB_UNLIKELY(OB_ITER_END != ret)) {
     LOG_WARN("falied to find lower bound in store", K(ret));
@@ -141,6 +143,7 @@ int ObDASScalarROROp::do_advance_to(const ObDASRowID &target, ObDASRowID &curr_i
           LOG_WARN("failed to get rowid", K(ret));
         } else {
           reached = true;
+          score = is_scoring_ ? scalar_rtdef_->get_boost_weight() : 0.0;
         }
       }
     }
@@ -164,6 +167,8 @@ int ObDASScalarROROp::do_next_rowid(ObDASRowID &next_id, double &score)
   } else if (!rowid_store_iter_.is_empty()) {
     if (OB_FAIL(rowid_store_iter_.get_cur_rowid(next_id))) {
       LOG_WARN("failed to get next rowid", K(ret));
+    } else {
+      score = is_scoring_ ? scalar_rtdef_->get_boost_weight() : 0.0;
     }
   } else {
     // there is no more rowid in store, fetch next batch
@@ -187,10 +192,35 @@ int ObDASScalarROROp::do_next_rowid(ObDASRowID &next_id, double &score)
       } else if (FALSE_IT(rowid_store_iter_.reuse())) {
       } else if (OB_FAIL(rowid_store_iter_.get_cur_rowid(next_id))) {
         LOG_WARN("failed to get next rowid", K(ret));
+      } else {
+        score = is_scoring_ ? scalar_rtdef_->get_boost_weight() : 0.0;
       }
     }
   }
 
+  return ret;
+}
+
+int ObDASScalarROROp::do_advance_shallow(const ObDASRowID &target, const bool inclusive, const MaxScoreTuple *&max_score_tuple)
+{
+  int ret = OB_SUCCESS;
+  const double boost_weight = scalar_rtdef_->get_boost_weight();
+  if (OB_UNLIKELY(!target.is_normal())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid target rowid", K(ret), K(target));
+  } else if (inclusive) {
+    max_score_tuple_.set(target, target, is_scoring_ ? boost_weight : 0.0);
+    max_score_tuple = &max_score_tuple_;
+  } else if (OB_FAIL(ObIDASSearchOp::do_advance_shallow(target, inclusive, max_score_tuple))) {
+    LOG_WARN("failed to advance shallow", K(ret), K(target));
+  }
+  return ret;
+}
+
+int ObDASScalarROROp::do_calc_max_score(double &threshold)
+{
+  int ret = OB_SUCCESS;
+  threshold = is_scoring_ ? scalar_rtdef_->get_boost_weight() : 0.0;
   return ret;
 }
 

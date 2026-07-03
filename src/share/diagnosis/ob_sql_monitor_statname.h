@@ -195,6 +195,7 @@ SQL_MONITOR_STATNAME_DEF(HS_TABLET_ID, metric::Unit::INT, "tablet id", "tablet i
 SQL_MONITOR_STATNAME_DEF(HS_VEC_INDEX_TYPE, metric::Unit::INT, "vec index type", "vec index type", M_FIRST_VAL, metric::Level::STANDARD)
 SQL_MONITOR_STATNAME_DEF(HS_VEC_FILTER_MODE , metric::Unit::INT, "vec filter mode", "vec filter mode", M_FIRST_VAL, metric::Level::STANDARD)
 SQL_MONITOR_STATNAME_DEF(HS_OP_ID , metric::Unit::INT, "op id", "op id", M_FIRST_VAL, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(HS_FUSION_EXEC_MODE, metric::Unit::INT, "fusion exec mode", "fusion iter exec mode: 0 skip, 1 distinct_only, 2 full_recall, 3 top_k", M_FIRST_VAL, metric::Level::STANDARD)
 SQL_MONITOR_STATNAME_DEF(HS_FUSION_METHOD, metric::Unit::INT, "fusion method", "fusion method", M_FIRST_VAL, metric::Level::STANDARD)
 SQL_MONITOR_STATNAME_DEF(HS_FUSION_OFFSET, metric::Unit::INT, "fusion offset", "fusion offset", M_FIRST_VAL, metric::Level::STANDARD)
 SQL_MONITOR_STATNAME_DEF(HS_FUSION_SIZE, metric::Unit::INT, "fusion size", "fusion size", M_FIRST_VAL, metric::Level::STANDARD)

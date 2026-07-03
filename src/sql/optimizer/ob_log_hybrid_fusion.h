@@ -27,6 +27,7 @@ public:
   void set_fusion_node(ObFusionNode *fusion_node) { fusion_node_ = fusion_node; }
   void set_has_hybrid_fusion_op();
   bool has_search_subquery() const;
+  int64_t get_search_index() const;
   ObFusionMethod get_fusion_algo() const;
   ObRawExpr* get_fusion_score_expr() const;
   ObRawExpr* get_rank_window_size_expr() const;

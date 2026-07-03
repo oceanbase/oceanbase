@@ -1700,11 +1700,43 @@ int ObLogTableScan::add_mapping_column_for_vt(ObColumnRefRawExpr *col_expr,
   return ret;
 }
 
+bool ObLogTableScan::is_pure_hybrid_count_query() const
+{
+  bool is_pure_count = false;
+  const ObSelectStmt *select_stmt = nullptr;
+  const ObAggFunRawExpr *aggr_expr = nullptr;
+  const IndexMergePath *path = nullptr;
+  const ObFusionNode *fusion_node = nullptr;
+  if (is_hybrid_search()
+      && is_dsl_query_path(access_path_)
+      && OB_NOT_NULL(path = static_cast<const IndexMergePath *>(access_path_))
+      && OB_NOT_NULL(path->root_)
+      && INDEX_MERGE_HYBRID_FUSION_SEARCH == path->root_->node_type_
+      && OB_NOT_NULL(fusion_node = static_cast<const ObFusionNode *>(path->root_))
+      && fusion_node->is_top_k_query_
+      && 0 == get_filter_exprs().count()
+      && 0 == get_pushdown_filter_exprs().count()
+      && OB_NOT_NULL(get_stmt())
+      && get_stmt()->is_select_stmt()) {
+    select_stmt = static_cast<const ObSelectStmt *>(get_stmt());
+    if (select_stmt->is_scala_group_by()
+        && 1 == select_stmt->get_aggr_item_size()
+        && 1 == select_stmt->get_select_item_size()
+        && OB_NOT_NULL(aggr_expr = select_stmt->get_aggr_item(0))
+        && select_stmt->get_select_item(0).expr_ == aggr_expr
+        && T_FUN_COUNT == aggr_expr->get_expr_type()
+        && 0 == aggr_expr->get_real_param_count()) {
+      is_pure_count = true;
+    }
+  }
+  return is_pure_count;
+}
+
 int ObLogTableScan::index_back_check()
 {
   int ret = OB_SUCCESS;
   bool column_found = true;
-  if (use_index_merge()) {
+  if (use_index_merge() && !is_pure_hybrid_count_query()) {
     // force set index back when index merge
     column_found = false;
   } else if (!is_index_scan()) {

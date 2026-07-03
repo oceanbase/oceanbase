@@ -39,6 +39,59 @@ bool ObHybridSearchGenerator::in_merge_expr_whitelist(const ObRawExpr *expr)
   return is_match;
 }
 
+int ObHybridSearchGenerator::build_merged_boost_expr(const ObConstRawExpr *boost1,
+                                                     const ObConstRawExpr *boost2,
+                                                     ObConstRawExpr *&merged_boost_expr)
+{
+  int ret = OB_SUCCESS;
+  double boost1_val = 0.0;
+  double boost2_val = 0.0;
+  if (OB_ISNULL(boost1) || OB_ISNULL(boost2) || OB_ISNULL(plan_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("boost1 or boost2 or plan is null", K(ret), KP(boost1), KP(boost2), KP(plan_));
+  } else if (OB_FAIL(boost1->get_value().get_double(boost1_val))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get double value from boost1", K(ret), KP(boost1));
+  } else if (OB_FAIL(boost2->get_value().get_double(boost2_val))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get double value from boost2", K(ret), KP(boost2));
+  } else if (OB_FAIL(ObRawExprUtils::build_const_double_expr(plan_->get_optimizer_context().get_expr_factory(),
+                                                             ObDoubleType,
+                                                             boost1_val + boost2_val,
+                                                             merged_boost_expr))) {
+    LOG_WARN("failed to build merged boost", K(ret), K(boost1_val), K(boost2_val));
+  }
+  return ret;
+}
+
+int ObHybridSearchGenerator::build_split_boost_expr(const ObDSLScalarQuery *scalar_query,
+                                                    const int64_t element_count,
+                                                    ObConstRawExpr *&split_boost_expr)
+{
+  int ret = OB_SUCCESS;
+  split_boost_expr = nullptr;
+  if (OB_ISNULL(scalar_query) || OB_ISNULL(plan_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), KP(scalar_query), KP(plan_));
+  } else if (element_count <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected split element count", K(ret), K(element_count));
+  } else if (1 == element_count) {
+    split_boost_expr = scalar_query->boost_;
+  } else {
+    double origin_boost_val = 0.0;
+    if (OB_FAIL(scalar_query->boost_->get_value().get_double(origin_boost_val))) {
+      LOG_WARN("failed to get double value from boost", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_const_double_expr(plan_->get_optimizer_context().get_expr_factory(),
+                                                               ObDoubleType,
+                                                               origin_boost_val / element_count,
+                                                               split_boost_expr))) {
+      LOG_WARN("failed to build per-element boost for split", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObHybridSearchGenerator::deal_table_scan_filters(ObIndexMergeNode *hybrid_search_tree,
                                                      ObIArray<ObRawExpr*> &table_filters,
                                                      bool &ingore_normal_access_path)
@@ -311,6 +364,8 @@ int ObHybridSearchGenerator::init_fusion_node(const ObDSLQueryInfo *query_info, 
   fusion_node->rank_const_ = query_info->rank_info_.rank_const_;
   fusion_node->is_top_k_query_ = query_info->is_top_k_query_;
   fusion_node->query_dop_ = query_info->query_dop_;
+  fusion_node->fusion_iter_exec_mode_ = ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS;
+  fusion_node->track_score_ = query_info->track_score_;
   for (int i = 0; i < query_info->rowkey_cols_.count() && OB_SUCC(ret); i++) {
     if (OB_FAIL(fusion_node->rowkey_cols_.push_back(query_info->rowkey_cols_.at(i)))) {
       LOG_WARN("failed to append rowkey expr", K(ret));
@@ -322,7 +377,53 @@ int ObHybridSearchGenerator::init_fusion_node(const ObDSLQueryInfo *query_info, 
     }
   }
   if (OB_SUCC(ret)) {
+    if (OB_FAIL(init_fusion_iter_exec_mode(query_info, fusion_node))) {
+      LOG_WARN("failed to init fusion iter exec mode", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
     fusion_node_ = fusion_node;
+  }
+  return ret;
+}
+
+int ObHybridSearchGenerator::init_fusion_iter_exec_mode(const ObDSLQueryInfo *query_info, ObFusionNode *fusion_node)
+{
+  int ret = OB_SUCCESS;
+  double min_score_value = 0;
+  ObConstRawExpr *min_score_expr = nullptr;
+  if (OB_ISNULL(query_info) || OB_ISNULL(fusion_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), KP(query_info), KP(fusion_node));
+  } else if (OB_ISNULL(min_score_expr = static_cast<ObConstRawExpr*>(query_info->min_score_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("min score expr is null", K(ret));
+  } else if (OB_FAIL(min_score_expr->get_value().get_double(min_score_value))) {
+    LOG_WARN("failed to get double value from min score expr", K(ret));
+  } else {
+    fusion_node->fusion_iter_exec_mode_ = ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS;
+    bool is_top_k_score_query = !(query_info->result_mode_ == ObDSLResultMode::COUNT_AGG ||
+                                  query_info->result_mode_ == ObDSLResultMode::BUCKET_AGG ||
+                                  query_info->has_dsl_sort_ || query_info->has_dsl_collapse_);
+    if (min_score_value > 0) {
+      if (!is_top_k_score_query && !query_info->has_dsl_rank_) {
+        fusion_node->fusion_iter_exec_mode_ = ObFusionIterExecMode::ROWKEY_SCORE_FULL_RECALL;
+      }
+    } else if (query_info->result_mode_ == ObDSLResultMode::COUNT_AGG ||
+               query_info->result_mode_ == ObDSLResultMode::BUCKET_AGG) {
+      if (query_info->queries_.count() > 1) {
+        fusion_node->fusion_iter_exec_mode_ = ObFusionIterExecMode::ROWKEY_DISTINCT_ONLY;
+      } else {
+        fusion_node->fusion_iter_exec_mode_ = ObFusionIterExecMode::SKIP_FUSION_ITER;
+      }
+    } else if (query_info->has_dsl_sort_ ||
+               (query_info->has_dsl_collapse_ && !query_info->has_dsl_rank_)) {
+      if (query_info->queries_.count() > 1) {
+        fusion_node->fusion_iter_exec_mode_ = ObFusionIterExecMode::ROWKEY_SCORE_FULL_RECALL;
+      } else {
+        fusion_node->fusion_iter_exec_mode_ = ObFusionIterExecMode::SKIP_FUSION_ITER;
+      }
+    }
   }
   return ret;
 }
@@ -345,6 +446,7 @@ int ObHybridSearchGenerator::generate_node(const ObDSLQuery *query,
       }
       break;
     }
+    case ObEsQueryItem::QUERY_ITEM_WILDCARD :
     case ObEsQueryItem::QUERY_ITEM_RANGE :
     case ObEsQueryItem::QUERY_ITEM_TERM :
     case ObEsQueryItem::QUERY_ITEM_TERMS :
@@ -916,8 +1018,7 @@ int ObHybridSearchGenerator::try_merge_nodes(const ObDSLQuery *query, ObIArray<O
   ObSEArray<uint64_t, 4> filter_column_ids;
   merge_happened = false;
   // first check if the query is allowed to be merged
-  if (query->need_cal_score_ ||
-      (query->query_type_ != QUERY_ITEM_TERM && query->query_type_ != QUERY_ITEM_RANGE)) {
+  if (query->query_type_ != QUERY_ITEM_TERM && query->query_type_ != QUERY_ITEM_RANGE) {
     // do nothing
   } else if (!scalar_query->scalar_expr_->has_flag(IS_SIMPLE_COND) &&
              !scalar_query->scalar_expr_->has_flag(IS_RANGE_COND) &&
@@ -974,6 +1075,7 @@ int ObHybridSearchGenerator::try_merge_nodes(const ObDSLQuery *query, ObIArray<O
           }
         }
         if (OB_SUCC(ret)) {
+          ObConstRawExpr *merged_boost = nullptr;
           if (OB_ISNULL(whitelist_expr1) && OB_ISNULL(whitelist_expr2)) {
             merge_happened = true;
           } else if (OB_NOT_NULL(whitelist_expr1) && OB_NOT_NULL(whitelist_expr2) &&
@@ -987,6 +1089,10 @@ int ObHybridSearchGenerator::try_merge_nodes(const ObDSLQuery *query, ObIArray<O
           // this ensures that the condition is properly applied during the scalar query execution.
           } else if (OB_FAIL(scalar_node->pri_table_query_params_.pushdown_filters_.push_back(scalar_query->scalar_expr_))) {
             LOG_WARN("failed to push back pushdown filter", K(ret));
+          } else if (OB_FAIL(build_merged_boost_expr(scalar_node->boost_, scalar_query->boost_, merged_boost))) {
+            LOG_WARN("failed to build merged boost expr", K(ret));
+          } else {
+            scalar_node->boost_ = merged_boost;
           }
         }
       }
@@ -1602,38 +1708,40 @@ int ObFusionNode::explain_info(char *buf, int64_t buf_len, int64_t &pos, Explain
 {
   int ret = OB_SUCCESS;
   if (is_top_k_query_) {
-    ObRawExpr *limit = size_;
-    ObRawExpr *window_size = window_size_;
-    ObRawExpr *min_score = min_score_;
-    ObRawExpr *rank_const = rank_const_;
-    const char *method_str = nullptr;
-    if (method_ == ObFusionMethod::WEIGHT_SUM) {
-      method_str = "WEIGHT_SUM";
-    } else if (method_ == ObFusionMethod::RRF) {
-      method_str = "RRF";
-    } else if (method_ == ObFusionMethod::MINMAX_NORMALIZER) {
-      method_str = "MINMAX_NORMALIZER";
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected fusion method", K(ret), K(method_));
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(BUF_PRINTF("fusion node:"))) {
+    if (OB_FAIL(BUF_PRINTF("fusion node:"))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
-    } else if (OB_FAIL(BUF_PRINTF(" method=%s", method_str))) {
-      LOG_WARN("BUF_PRINTF fails", K(ret));
-    } else if (OB_FAIL(BUF_PRINTF(", "))) {
-      LOG_WARN("BUF_PRINTF fails", K(ret));
-    } else if (FALSE_IT(EXPLAIN_PRINT_EXPR(limit, type))) {
-    } else if (OB_FAIL(BUF_PRINTF(", "))) {
-      LOG_WARN("BUF_PRINTF fails", K(ret));
-    } else if (FALSE_IT(EXPLAIN_PRINT_EXPR(window_size, type))) {
-    } else if (OB_NOT_NULL(rank_const) && OB_FAIL(BUF_PRINTF(", "))) {
-      LOG_WARN("BUF_PRINTF fails", K(ret));
-    } else if (OB_NOT_NULL(rank_const) && FALSE_IT(EXPLAIN_PRINT_EXPR(rank_const, type))) {
-    } else if (OB_FAIL(BUF_PRINTF(", "))) {
-      LOG_WARN("BUF_PRINTF fails", K(ret));
-    } else if (FALSE_IT(EXPLAIN_PRINT_EXPR(min_score, type))) {
+    } else if (fusion_iter_exec_mode_ == ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS) {
+      ObRawExpr *limit = size_;
+      ObRawExpr *window_size = window_size_;
+      ObRawExpr *min_score = min_score_;
+      ObRawExpr *rank_const = rank_const_;
+      const char *method_str = nullptr;
+      if (method_ == ObFusionMethod::WEIGHT_SUM) {
+        method_str = "WEIGHT_SUM";
+      } else if (method_ == ObFusionMethod::RRF) {
+        method_str = "RRF";
+      } else if (method_ == ObFusionMethod::MINMAX_NORMALIZER) {
+        method_str = "MINMAX_NORMALIZER";
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected fusion method", K(ret), K(method_));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(BUF_PRINTF(" method=%s", method_str))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      } else if (OB_FAIL(BUF_PRINTF(", "))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      } else if (FALSE_IT(EXPLAIN_PRINT_EXPR(limit, type))) {
+      } else if (OB_FAIL(BUF_PRINTF(", "))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      } else if (FALSE_IT(EXPLAIN_PRINT_EXPR(window_size, type))) {
+      } else if (OB_NOT_NULL(rank_const) && OB_FAIL(BUF_PRINTF(", "))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      } else if (OB_NOT_NULL(rank_const) && FALSE_IT(EXPLAIN_PRINT_EXPR(rank_const, type))) {
+      } else if (OB_FAIL(BUF_PRINTF(", "))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      } else if (FALSE_IT(EXPLAIN_PRINT_EXPR(min_score, type))) {
+      }
     }
   } else {
     if (OB_FAIL(BUF_PRINTF("search index:"))) {
@@ -1870,6 +1978,42 @@ int ObScalarQueryNode::extract_filter(ObRawExprFactory &expr_factory, ObRawExpr 
   return ret;
 }
 
+bool ObScalarQueryNode::can_keep_imprecise_range() const
+{
+  bool can_keep = false;
+  const ObRawExpr *filter = nullptr;
+  const ObRawExpr *column_expr = nullptr;
+  const ObRawExpr *pattern_expr = nullptr;
+  if (ap_->is_search_index_path()) {
+    // search index can not extract range for like expression
+  } else if (filter_.count() == 1
+             && OB_NOT_NULL(filter = filter_.at(0))
+             && filter->get_expr_type() == T_OP_LIKE
+             && filter->get_param_count() >= 2
+             && OB_NOT_NULL(column_expr = ObRawExprUtils::skip_inner_added_expr(filter->get_param_expr(0)))
+             && OB_NOT_NULL(pattern_expr = ObRawExprUtils::skip_inner_added_expr(filter->get_param_expr(1)))
+             && column_expr->is_column_ref_expr()
+             && pattern_expr->is_const_expr()
+             && column_expr->get_result_type().is_string_or_lob_locator_type()
+             && pattern_expr->get_result_type().is_string_or_lob_locator_type()) {
+    can_keep = true;
+  }
+  return can_keep;
+}
+
+int ObScalarQueryNode::add_pd_filter_for_imprecise_range()
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *filter = nullptr;
+  if (OB_UNLIKELY(filter_.count() != 1) || OB_ISNULL(filter = filter_.at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected hybrid scalar filter", K(ret), K(filter_.count()), KPC(filter));
+  } else if (OB_FAIL(add_var_to_array_no_dup(index_table_query_params_.pushdown_filters_, filter))) {
+    LOG_WARN("failed to add imprecise like filter to index scan", K(ret), KPC(filter));
+  }
+  return ret;
+}
+
 int ObVecSearchNode::explain_info(char *buf, int64_t buf_len, int64_t &pos, ExplainType type, int blank_space_count)
 {
   int ret = OB_SUCCESS;
@@ -1882,11 +2026,14 @@ int ObVecSearchNode::explain_info(char *buf, int64_t buf_len, int64_t &pos, Expl
   } else if (search_option_ != nullptr) {
     if (OB_FAIL(BUF_PRINTF(", filter_mode=%d", search_option_->filter_mode_))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (search_option_->is_set_num_candidates_ &&
+               OB_FAIL(BUF_PRINTF(", num_candidates=%d", search_option_->num_candidates_))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
     } else if (search_option_->param_.is_set_ef_search_ &&
-      OB_FAIL(BUF_PRINTF(", ef_search=%d", search_option_->param_.ef_search_))) {
+               OB_FAIL(BUF_PRINTF(", ef_search=%d", search_option_->param_.ef_search_))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else if (search_option_->param_.is_set_refine_k_ &&
-      OB_FAIL(BUF_PRINTF(", refine_k=%f", search_option_->param_.refine_k_))) {
+               OB_FAIL(BUF_PRINTF(", refine_k=%f", search_option_->param_.refine_k_))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
     }
   }
@@ -2062,11 +2209,17 @@ int ObHybridSearchGenerator::split_json_contains(const ObDSLScalarQuery *scalar_
         // json_contains(doc, json_extract('[1,2,3]', '$[2]'))
         const int64_t element_count = j_base->element_count();
         ObBooleanQueryNode *bool_node = nullptr;
+        ObSqlArray<ObIndexMergeNode*> *split_bool_slot = nullptr;
+        ObConstRawExpr *split_boost_expr = nullptr;
         if (OB_ISNULL(bool_node = OB_NEWx(ObBooleanQueryNode, allocator_, *allocator_))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to allocate boolean node", K(ret));
         } else {
           bool_node->origin_expr_ = filter_expr;
+          split_bool_slot = scalar_query->need_cal_score_ ? &bool_node->must_nodes_ : &bool_node->filter_nodes_;
+          if (OB_FAIL(build_split_boost_expr(scalar_query, element_count, split_boost_expr))) {
+            LOG_WARN("failed to build split boost expr", K(ret));
+          }
         }
         for (int64_t i = 0; OB_SUCC(ret) && i < element_count; ++i) {
           ObRawExpr *json_extract_expr = nullptr;
@@ -2103,13 +2256,13 @@ int ObHybridSearchGenerator::split_json_contains(const ObDSLScalarQuery *scalar_
               K(child_node->pri_table_query_params_.pushdown_filters_.count()));
           } else if (FALSE_IT(child_node->pri_table_query_params_.pushdown_filters_.at(0) = filter_expr)) {
             // replace the pushdown filter with the original filter
-          } else if (OB_FAIL(bool_node->filter_nodes_.push_back(child_node))) {
+          } else if (OB_FAIL(split_bool_slot->push_back(child_node))) {
             LOG_WARN("failed to push back child node", K(ret));
           } else {
             ObHybridSearchNodeBase *new_node = static_cast<ObHybridSearchNodeBase *>(child_node);
             new_node->is_scoring_ = scalar_query->need_cal_score_;
-            new_node->is_top_level_scoring_ = scalar_query->is_top_level_score_;
-            new_node->boost_ = scalar_query->boost_;
+            new_node->is_top_level_scoring_ = false;
+            new_node->boost_ = split_boost_expr;
           }
         }
         if (OB_SUCC(ret)) {
@@ -2205,14 +2358,20 @@ int ObHybridSearchGenerator::split_array_contains_all(const ObDSLScalarQuery *sc
         } else if (!can_extract) {
           // do nothing
         } else {
+          const int64_t element_count = arr_obj->size();
           ObBooleanQueryNode *bool_node = nullptr;
+          ObSqlArray<ObIndexMergeNode*> *split_bool_slot = nullptr;
+          ObConstRawExpr *split_boost_expr = nullptr;
           if (OB_ISNULL(bool_node = OB_NEWx(ObBooleanQueryNode, allocator_, *allocator_))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("failed to allocate boolean node", K(ret));
           } else {
             bool_node->origin_expr_ = filter_expr;
+            split_bool_slot = scalar_query->need_cal_score_ ? &bool_node->must_nodes_ : &bool_node->filter_nodes_;
+            if (OB_FAIL(build_split_boost_expr(scalar_query, element_count, split_boost_expr))) {
+              LOG_WARN("failed to build split boost expr", K(ret));
+            }
           }
-          const int64_t element_count = arr_obj->size();
           for (int64_t i = 0; OB_SUCC(ret) && i < element_count; ++i) {
             ObConstRawExpr *idx_expr = nullptr;
             ObSysFunRawExpr *element_at_expr = nullptr;
@@ -2239,13 +2398,13 @@ int ObHybridSearchGenerator::split_array_contains_all(const ObDSLScalarQuery *sc
             } else if (OB_FALSE_IT(new_expr->set_is_inner_split_contains_expr(true))) {
             } else if (OB_FAIL(generate_scalar_node(new_expr, child_node))) {
               LOG_WARN("failed to generate scalar node", K(ret));
-            } else if (OB_FAIL(bool_node->filter_nodes_.push_back(child_node))) {
+            } else if (OB_FAIL(split_bool_slot->push_back(child_node))) {
               LOG_WARN("failed to push back child node", K(ret));
             } else {
               ObHybridSearchNodeBase *new_node = static_cast<ObHybridSearchNodeBase *>(child_node);
               new_node->is_scoring_ = scalar_query->need_cal_score_;
-              new_node->is_top_level_scoring_ = scalar_query->is_top_level_score_;
-              new_node->boost_ = scalar_query->boost_;
+              new_node->is_top_level_scoring_ = false;
+              new_node->boost_ = split_boost_expr;
             }
           }
           if (OB_SUCC(ret)) {

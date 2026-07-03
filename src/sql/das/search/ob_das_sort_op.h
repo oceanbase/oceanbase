@@ -42,7 +42,8 @@ public:
     sort_impl_(nullptr),
     sort_collations_(ctx_allocator()),
     sort_cmp_funcs_(ctx_allocator()),
-    sort_memctx_()
+    sort_memctx_(),
+    boost_weight_(0.0)
   { }
   virtual ~ObDASSortOp() {}
 
@@ -53,6 +54,8 @@ private:
   int do_rescan() override;
   int do_advance_to(const ObDASRowID &target, ObDASRowID &curr_id, double &score) override;
   int do_next_rowid(ObDASRowID &next_id, double &score) override;
+  int do_advance_shallow(const ObDASRowID &target, const bool inclusive, const MaxScoreTuple *&max_score_tuple) override;
+  int do_calc_max_score(double &threshold) override;
 
 private:
   int do_sort();
@@ -67,6 +70,7 @@ private:
   ObSortCollations sort_collations_;
   ObSortFuncs sort_cmp_funcs_;
   lib::MemoryContext sort_memctx_;
+  double boost_weight_;
 };
 
 } // namespace sql

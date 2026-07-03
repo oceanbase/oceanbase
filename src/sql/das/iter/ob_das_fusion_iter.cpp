@@ -41,6 +41,7 @@ int ObDASFusionIter::inner_init(ObDASIterParam &param)
     rank_window_size_ = fusion_param.rank_window_size_;
     rank_constant_ = fusion_param.rank_constant_;
     has_hybrid_fusion_op_ = fusion_param.has_hybrid_fusion_op_;
+    fusion_iter_exec_mode_ = fusion_param.fusion_iter_exec_mode_;
     offset_ = fusion_param.offset_;
     size_ = fusion_param.size_;
     min_score_ = fusion_param.min_score_;
@@ -63,6 +64,24 @@ int ObDASFusionIter::inner_init(ObDASIterParam &param)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fusion_ctdef is null", K(ret));
     } else {
+      const int64_t children_cnt_for_estimate = OB_MAX(1L, static_cast<int64_t>(fusion_ctdef_->children_cnt_));
+      const int64_t base_estimate = (rank_window_size_ > 0 && rank_window_size_ > INT64_MAX / children_cnt_for_estimate)
+                                     ? INT64_MAX : rank_window_size_ * children_cnt_for_estimate;
+      expected_doc_count_ = OB_MAX(64L, base_estimate);
+      int64_t estimated_doc_count = 0;
+      for (int64_t i = 0; i < path_top_k_limits_.count(); ++i) {
+        const int64_t path_top_k_limit = path_top_k_limits_.at(i);
+        if (path_top_k_limit > 0) {
+          if (estimated_doc_count > INT64_MAX - path_top_k_limit) {
+            estimated_doc_count = INT64_MAX;
+          } else {
+            estimated_doc_count += path_top_k_limit;
+          }
+        }
+      }
+      if (estimated_doc_count > 0) {
+        expected_doc_count_ = OB_MAX(expected_doc_count_, estimated_doc_count);
+      }
       score_exprs_ = &fusion_ctdef_->get_score_exprs();
       lib::ContextParam context_param;
       context_param.set_mem_attr(MTL_ID(), "DASFusionIter", ObCtxIds::DEFAULT_CTX_ID)
@@ -73,8 +92,11 @@ int ObDASFusionIter::inner_init(ObDASIterParam &param)
         LOG_WARN("failed to check rowkey type", K(ret));
       } else {
         const int64_t children_cnt = fusion_ctdef_->children_cnt_;
-        const int64_t fusion_docs_capacity = OB_MAX(rank_window_size_ * children_cnt, 64);
-        const int64_t sorted_indices_capacity = rank_window_size_;
+        const int64_t default_capacity = OB_MAX(rank_window_size_ * children_cnt, 64);
+        const int64_t fusion_docs_capacity = OB_MAX(expected_doc_count_, default_capacity);
+        const int64_t sorted_indices_capacity = fusion_iter_exec_mode_ == ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS
+                                                  ? OB_MAX(rank_window_size_, 64L)
+                                                  : fusion_docs_capacity;
         if (OB_FAIL(fusion_docs_.reserve(fusion_docs_capacity))) {
           LOG_WARN("failed to reserve fusion_docs_", K(ret), K(fusion_docs_capacity));
         } else if (OB_FAIL(sorted_doc_indices_.reserve(sorted_indices_capacity))) {
@@ -192,6 +214,7 @@ int ObDASFusionIter::do_table_scan()
     SET_METRIC_VAL(common::ObMetricId::HS_FUSION_SIZE, size_);
     SET_METRIC_VAL(common::ObMetricId::HS_RANK_WINDOW_SIZE, rank_window_size_);
     SET_METRIC_VAL(common::ObMetricId::HS_FUSION_METHOD, static_cast<uint64_t>(fusion_method_));
+    SET_METRIC_VAL(common::ObMetricId::HS_FUSION_EXEC_MODE, static_cast<uint64_t>(fusion_iter_exec_mode_));
     if (enable_parallel_ && OB_FAIL(do_parallel_table_scan(false /* use_rescan */))) {
       LOG_WARN("failed to do parallel table scan", KR(ret));
     } else if (!enable_parallel_ && OB_FAIL(do_serial_table_scan(false /* use_rescan */))) {
@@ -229,6 +252,7 @@ int ObDASFusionIter::inner_get_next_row()
 {
   int ret = OB_SUCCESS;
   common::ObProfileSwitcher switcher(fusion_profile_);
+  common::ScopedTimer total_timer(common::ObMetricId::HS_TOTAL_TIME);
   if (limit_param_.limit_ >= 0 && output_row_cnt_ >= limit_param_.limit_) {
     ret = OB_ITER_END;
   } else if (!fusion_finished_ && OB_FAIL(do_fusion(false /* is_vectorized */))) {
@@ -251,8 +275,9 @@ int ObDASFusionIter::inner_get_next_rows(int64_t &count, int64_t capacity)
 {
   int ret = OB_SUCCESS;
   common::ObProfileSwitcher switcher(fusion_profile_);
+  common::ScopedTimer total_timer(common::ObMetricId::HS_TOTAL_TIME);
   count = 0;
-  if (size_ == 0 || rank_window_size_ == 0) {
+  if (fusion_iter_exec_mode_ == ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS && rank_window_size_ == 0) {
     ret = OB_ITER_END;
   } else if (!fusion_finished_ && OB_FAIL(do_fusion(true /* is_vectorized */))) {
     LOG_WARN("failed to do fusion", K(ret));
@@ -749,7 +774,12 @@ int ObDASFusionIter::init_rowid_map()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("rowid_map already initialized, should not call init_rowid_map again", K(ret));
   } else {
-    const int64_t bucket_cnt = rank_window_size_ * children_cnt_ > 0 ? rank_window_size_ * children_cnt_ : 1;
+    const int64_t default_bucket_cnt = rank_window_size_ * children_cnt_ > 0 ? rank_window_size_ * children_cnt_ : 1;
+    const int64_t estimated_bucket_cnt = expected_doc_count_ > INT64_MAX / MAP_BUCKET_RATIO
+                                           ? INT64_MAX
+                                           : expected_doc_count_ * MAP_BUCKET_RATIO;
+    const int64_t bucket_cnt = OB_MIN(OB_MAX(estimated_bucket_cnt, default_bucket_cnt),
+                                       MAX_ROWID_MAP_BUCKET_CNT);
     if (rowkey_is_uint64_) {
       if (OB_FAIL(uint64_rowid_doc_map_.create(bucket_cnt,
                                                 lib::ObLabel("DASFusU64Map"),
@@ -931,13 +961,22 @@ int ObDASFusionIter::finish_fusion()
   if (OB_UNLIKELY(is_sorted_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("already sorted", K(ret));
-  } else if (need_sorted()) {
+  } else if (fusion_iter_exec_mode_ == ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS && need_sorted()) {
     if (OB_FAIL(calculate_fusion_score())) {
       LOG_WARN("failed to calculate fusion score", K(ret));
     } else if (OB_FAIL(build_topk_heap())) {
       LOG_WARN("failed to build topk heap", K(ret));
     } else if (OB_FAIL(sort_topk_results())) {
       LOG_WARN("failed to sort topk results", K(ret));
+    }
+  } else if (fusion_iter_exec_mode_ == ObFusionIterExecMode::ROWKEY_SCORE_FULL_RECALL) {
+    if (fusion_method_ != ObFusionMethod::WEIGHT_SUM) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("it is not expected to calculate fusion score for non-weight_sum fusion method in full recall mode", K(ret), K(fusion_method_));
+    } else if (OB_FAIL(calculate_fusion_score())) {
+      LOG_WARN("failed to calculate fusion score", K(ret));
+    } else if (OB_FAIL(build_all_path_topk_doc_indices())) {
+      LOG_WARN("failed to build all path topk doc indices", K(ret));
     }
   } else {
     if (OB_FAIL(build_all_path_topk_doc_indices())) {
@@ -1155,7 +1194,7 @@ int ObDASFusionIter::sort_topk_results()
   }
   // Reverse to get descending order (highest score first)
   if (OB_SUCC(ret)) {
-    if (!has_hybrid_fusion_op()) {
+    if (!has_hybrid_fusion_op() && fusion_iter_exec_mode_ == ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS) {
       const int64_t trim_count = OB_MIN(offset_, sorted_doc_indices_.count());
       for (int64_t i = 0; i < trim_count; ++i) {
         sorted_doc_indices_.pop_back();
@@ -1168,7 +1207,7 @@ int ObDASFusionIter::sort_topk_results()
       sorted_doc_indices_[i] = sorted_doc_indices_[j];
       sorted_doc_indices_[j] = temp;
     }
-    if (!has_hybrid_fusion_op()) {
+    if (!has_hybrid_fusion_op() && fusion_iter_exec_mode_ == ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS) {
       while (sorted_doc_indices_.count() > size_) {
         sorted_doc_indices_.pop_back();
       }
@@ -1799,11 +1838,15 @@ int ObDASFusionIter::set_rowkey_is_uint64_flag()
 int ObDASFusionIter::build_all_path_topk_doc_indices()
 {
   int ret = OB_SUCCESS;
-  if (need_sorted()) {
+  bool need_filter_min_score = !(fusion_iter_exec_mode_ == ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS && !need_sorted());
+  if (need_sorted() && fusion_iter_exec_mode_ == ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("is_distributed_ is false", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < fusion_docs_.count(); ++i) {
+      if (need_filter_min_score && fusion_docs_.at(i).fusion_score_ < min_score_) {
+        continue;
+      }
       if (OB_FAIL(sorted_doc_indices_.push_back(i))) {
         LOG_WARN("failed to push back sorted doc index", K(ret), K(i));
       }

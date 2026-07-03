@@ -71,6 +71,10 @@ public:
                                   ObDASBaseCtDef &search_ctdef,
                                   ObDASBaseCtDef *&root_ctdef);
   int generate_main_scan_ctdef(ObLogTableScan &op, ObDASScanCtDef *&main_scan_ctdef);
+  int prepare_main_scan_access_ctdef(ObLogTableScan &op,
+                                     ObDASScanCtDef &scan_ctdef,
+                                     ObIArray<ObRawExpr *> &non_pushdown_filters,
+                                     ObIArray<ObRawExpr *> &lookup_pushdown_filters);
   int extract_column_ids(const ObIArray<ObRawExpr *> &column_exprs, ObIArray<uint64_t> &column_ids);
 
 private:

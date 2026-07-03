@@ -20,6 +20,7 @@ struct ObDASScalarCtDef : ObIDASSearchCtDef
 public:
   ObDASScalarCtDef(common::ObIAllocator &alloc)
     : ObIDASSearchCtDef(alloc, DAS_OP_SCALAR_QUERY),
+      boost_(nullptr),
       has_index_scan_(false),
       has_main_scan_(false)
   { }
@@ -32,6 +33,9 @@ public:
 
   const ObDASScalarScanCtDef* get_index_scan_ctdef() const;
   const ObDASScalarScanCtDef* get_main_scan_ctdef() const;
+  int eval_boost(ObEvalCtx *eval_ctx, double &boost_weight) const;
+
+  ObExpr *boost_;
 
 private:
   bool has_index_scan_;
@@ -134,7 +138,8 @@ public:
       stmt_allocator_("StmtScanAlloc"),
       scan_allocator_("TableScanAlloc"),
       key_ranges_(),
-      really_need_rowkey_order_(true)
+      really_need_rowkey_order_(true),
+      boost_weight_(0.0)
   { }
   virtual ~ObDASScalarScanRtDef() {}
 
@@ -150,7 +155,8 @@ public:
                         K_(sql_mode),
                         K_(scan_flag),
                         K_(key_ranges),
-                        K_(really_need_rowkey_order));
+                        K_(really_need_rowkey_order),
+                        K_(boost_weight));
 
   storage::ObRow2ExprsProjector *p_row2exprs_projector_;
   ObPushdownOperator *p_pd_expr_op_;
@@ -168,7 +174,11 @@ public:
   // for example, the vector index pre-filtering scenario.
   bool really_need_rowkey_order_;
 
+  OB_INLINE double get_boost_weight() const { return boost_weight_; }
+  OB_INLINE void set_boost_weight(const double boost_weight) { boost_weight_ = boost_weight; }
+
 private:
+  double boost_weight_;
   union {
     storage::ObRow2ExprsProjector row2exprs_projector_;
   };

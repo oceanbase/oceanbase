@@ -7973,7 +7973,9 @@ int ObLogPlan::create_hybrid_fusion_plan(ObLogicalOperator *&top)
         } else if (OB_ISNULL(fusion_node)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("fusion node not found", K(ret));
-        } else if (!fusion_node->is_top_k_query_){
+        } else if (!fusion_node->is_top_k_query_ ||
+                  (fusion_node->fusion_iter_exec_mode_ != ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS &&
+                  !fusion_node->has_vector_subquery_)) {
           /*do nothing*/
         } else if (need_px && OB_FAIL(allocate_exchange_as_top(top, exch_info))) {
           LOG_WARN("failed to allocate exchange as top", K(ret));

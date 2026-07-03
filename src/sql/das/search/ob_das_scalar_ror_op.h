@@ -36,6 +36,8 @@ protected:
   int do_rescan() override;
   int do_advance_to(const ObDASRowID &target, ObDASRowID &curr_id, double &score) override;
   int do_next_rowid(ObDASRowID &next_id, double &score) override;
+  int do_advance_shallow(const ObDASRowID &target, const bool inclusive, const MaxScoreTuple *&max_score_tuple) override;
+  int do_calc_max_score(double &threshold) override;
   virtual int advance_skip_scan(const ObDASRowID &target) = 0;
   virtual int prepare_scan_ranges(const ObDASScalarScanRtDef *rtdef);
   int narrow_scan_ranges_by_docid_range();

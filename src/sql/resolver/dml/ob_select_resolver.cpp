@@ -20,6 +20,7 @@
 #include "sql/resolver/mv/ob_major_refresh_mjv_printer.h"
 #include "sql/privilege_check/ob_privilege_check.h"
 #include "sql/hybrid_search/ob_hybrid_search_dsl_resolver.h"
+#include "sql/rewrite/ob_expand_aggregate_utils.h"
 #include "share/external_table/ob_external_table_utils.h"
 
 #include "sql/executor/ob_memory_tracker.h"
@@ -1397,6 +1398,12 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
     }
   }
 
+  if (OB_SUCC(ret) && OB_NOT_NULL(select_stmt) && select_stmt->is_hybrid_search()) {
+    if (OB_FAIL(ObDSLResolver::register_collapse_exprs(select_stmt))) {
+      LOG_WARN("failed to register collapse exprs", K(ret));
+    }
+  }
+
   OZ( select_stmt->formalize_stmt(session_info_) );
 
   if (OB_SUCC(ret) && has_nested_aggr_) {
@@ -1486,8 +1493,8 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
   if (OB_SUCC(ret)) {
     if (OB_FAIL(check_audit_log_stmt(select_stmt))) {
       LOG_WARN("failed to check audit log stmt");
-    } else if (OB_FAIL(check_hybrid_search_stmt(select_stmt))) {
-      LOG_WARN("failed to check hybrid search stmt", K(ret));
+    } else if (select_stmt->is_hybrid_search() && OB_FAIL(check_hybrid_search_stmt(select_stmt))) {
+      LOG_WARN("failed to check hybrid search dsl stmt", K(ret));
     }
   }
   return ret;
@@ -8617,21 +8624,11 @@ int ObSelectResolver::check_audit_log_stmt(ObSelectStmt *select_stmt)
 int ObSelectResolver::check_hybrid_search_stmt(ObSelectStmt *select_stmt)
 {
   int ret = OB_SUCCESS;
-  bool is_contain = false;
-  if (OB_ISNULL(select_stmt)) {
+  if (!select_stmt->is_hybrid_search()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (!select_stmt->is_hybrid_search()) {
-    // do nothing
-  } else if (select_stmt->get_condition_size() > 0) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "use hybrid search with where condition");
-  } else if (select_stmt->has_limit()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "use hybrid search with limit");
-  } else if (select_stmt->has_order_by()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "use hybrid search with order by");
+    LOG_WARN("is not hybrid search stmt", K(ret));
+  } else if (OB_FAIL(ObDSLResolver::check_hybrid_search_stmt(select_stmt))) {
+    LOG_WARN("failed to check hybrid search stmt", K(ret));
   }
   return ret;
 }

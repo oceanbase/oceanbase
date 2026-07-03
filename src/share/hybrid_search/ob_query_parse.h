@@ -46,11 +46,12 @@ enum ObEsQueryItem : int8_t {
   QUERY_ITEM_ARRAY_CONTAINS,
   QUERY_ITEM_ARRAY_CONTAINS_ALL,
   QUERY_ITEM_ARRAY_OVERLAPS,
+  QUERY_ITEM_WILDCARD, // FARM COMPAT WHITELIST
 };
 
 #define IS_QUERY_ITEM_BOOL(query_item) (query_item == QUERY_ITEM_BOOL)
 #define IS_QUERY_ITEM_KNN(query_item) (query_item == QUERY_ITEM_KNN)
-#define IS_QUERY_ITEM_SCALAR(query_item) (query_item == QUERY_ITEM_TERM || query_item == QUERY_ITEM_TERMS || query_item == QUERY_ITEM_RANGE)
+#define IS_QUERY_ITEM_SCALAR(query_item) (query_item == QUERY_ITEM_TERM || query_item == QUERY_ITEM_TERMS || query_item == QUERY_ITEM_RANGE || query_item == QUERY_ITEM_WILDCARD)
 #define IS_QUERY_ITEM_FULLTEXT(query_item) (query_item == QUERY_ITEM_MATCH || query_item == QUERY_ITEM_MULTI_MATCH || query_item == QUERY_ITEM_QUERY_STRING || query_item == QUERY_ITEM_MATCH_PHRASE)
 #define IS_QUERY_ITEM_JSON(query_item) (query_item == QUERY_ITEM_JSON_CONTAINS || query_item == QUERY_ITEM_JSON_OVERLAPS || query_item == QUERY_ITEM_JSON_MEMBER_OF)
 #define IS_QUERY_ITEM_ARRAY(query_item) (query_item == QUERY_ITEM_ARRAY_CONTAINS || query_item == QUERY_ITEM_ARRAY_CONTAINS_ALL || query_item == QUERY_ITEM_ARRAY_OVERLAPS)
@@ -60,6 +61,22 @@ enum ObFusionMethod
   WEIGHT_SUM = 0,
   RRF,
   MINMAX_NORMALIZER,
+};
+
+/*
+ * ObFusionIterExecMode is used to control the execution mode of the fusion iterator.
+ * It is used to determine the execution mode of the fusion iterator.
+ * - SKIP_FUSION_ITER: skip the fusion iterator.
+ * - ROWKEY_DISTINCT_ONLY: only collect the distinct rowkey.
+ * - ROWKEY_SCORE_FULL_RECALL: collect the rowkey and score.
+ * - SCORE_TOP_K_QUERY_HITS: collect the score and top k hits.
+ */
+enum class ObFusionIterExecMode
+{
+  SKIP_FUSION_ITER = 0,
+  ROWKEY_DISTINCT_ONLY,
+  ROWKEY_SCORE_FULL_RECALL,
+  SCORE_TOP_K_QUERY_HITS,
 };
 
 enum ObMsmApplyType : int8_t {

@@ -707,6 +707,8 @@ public:
   //should check index back after project pruning.Get final index back.
   virtual int index_back_check();
 
+  bool is_pure_hybrid_count_query() const;
+
   /**
    *  Get access expressions
    */

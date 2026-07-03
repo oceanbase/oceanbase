@@ -3,10 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "lib/utility/utility.h"
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/hybrid_search/ob_hybrid_search_dsl_resolver.h"
+#include "common/object/ob_obj_type.h"
+#include "common/object/ob_object.h"
+#include "lib/number/ob_number_v2.h"
+#include "lib/timezone/ob_time_convert.h"
 #include "sql/hybrid_search/ob_fulltext_search_query.h"
+#include "sql/resolver/dml/ob_select_stmt.h"
+#include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "sql/rewrite/ob_expand_aggregate_utils.h"
 
 namespace oceanbase
 {
@@ -16,6 +24,33 @@ namespace sql
 const ObString ObDSLResolver::FTS_SCORE_NAME("__fts_score");
 const ObString ObDSLResolver::VS_SCORE_PREFIX("__vs_score_");
 const int64_t ObDSLResolver::KNN_K_VALUE_MAX;
+
+int ObDSLQueryInfo::deep_copy_sort_items(const ObDSLQueryInfo &src, ObIRawExprCopier &expr_copier)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < src.sort_items_.count(); ++i) {
+    const ObDSLSortItem &src_sort_item = src.sort_items_.at(i);
+    ObDSLSortItem dst_sort_item;
+    ObRawExpr *copied_field_expr = nullptr;
+    ObRawExpr *copied_missing_literal = nullptr;
+    if (OB_FAIL(expr_copier.copy(src_sort_item.field_expr_, copied_field_expr))) {
+      LOG_WARN("failed to copy sort field expr", K(ret), K(i));
+    } else if (OB_FALSE_IT(dst_sort_item.field_expr_ = copied_field_expr)) {
+    } else if (OB_FALSE_IT(dst_sort_item.is_asc_ = src_sort_item.is_asc_)) {
+    } else if (OB_FALSE_IT(dst_sort_item.missing_mode_ = src_sort_item.missing_mode_)) {
+    } else if (OB_NOT_NULL(src_sort_item.missing_literal_)
+               && OB_FAIL(expr_copier.copy(static_cast<ObRawExpr *>(src_sort_item.missing_literal_),
+                                           copied_missing_literal))) {
+      LOG_WARN("failed to copy sort missing literal", K(ret), K(i));
+    } else if (OB_FALSE_IT(dst_sort_item.missing_literal_ =
+                             static_cast<ObConstRawExpr *>(copied_missing_literal))) {
+    } else if (OB_FALSE_IT(dst_sort_item.is_score_sort_ = src_sort_item.is_score_sort_)) {
+    } else if (OB_FAIL(sort_items_.push_back(dst_sort_item))) {
+      LOG_WARN("failed to push back sort item", K(ret), K(i));
+    }
+  }
+  return ret;
+}
 
 int ObDSLResolver::resolve_hybrid_search_score_column_ref_expr(
     const TableItem &table_item,
@@ -59,6 +94,172 @@ int ObDSLResolver::resolve_hybrid_search_score_column_ref_expr(
     }
   }
 
+  return ret;
+}
+
+int ObDSLResolver::resolve_hybrid_search_pseudo_column_ref_expr(
+    TableItem &table_item,
+    const ObQualifiedName &q_name,
+    ObDMLStmt &stmt,
+    ObRawExprFactory &expr_factory,
+    ObSQLSessionInfo *session_info,
+    ObRawExpr *&real_ref_expr)
+{
+  int ret = OB_SUCCESS;
+  real_ref_expr = nullptr;
+  if (!table_item.is_hybrid_search_table()) {
+    ret = OB_ERR_BAD_FIELD_ERROR;
+    LOG_WARN("not a hybrid search table", K(ret), K(table_item));
+  } else if (OB_FAIL(resolve_hybrid_search_score_column_ref_expr(
+                 table_item, q_name, stmt, real_ref_expr))) {
+    if (OB_ERR_BAD_FIELD_ERROR == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to resolve hybrid search score column", K(ret), K(q_name));
+    }
+  }
+  if (OB_SUCC(ret) && OB_ISNULL(real_ref_expr)) {
+    if (OB_FAIL(resolve_hybrid_search_aggs_bucket_column_ref_expr(
+                    table_item, q_name, stmt, expr_factory, session_info, real_ref_expr))) {
+      if (OB_ERR_BAD_FIELD_ERROR == ret) {
+        ret = OB_SUCCESS;
+        // not a pseudo column — caller falls back to normal column resolution
+      } else {
+        LOG_WARN("failed to resolve hybrid search aggs bucket column", K(ret), K(q_name));
+      }
+    }
+  }
+  // add new pseudo column resolvers here
+  return ret;
+}
+
+int ObDSLResolver::find_aggs_bucket_item(
+    const TableItem &table_item,
+    const ObQualifiedName &q_name,
+    const ObDMLStmt &stmt,
+    ObDSLAggTermsItem *&bucket_item)
+{
+  int ret = OB_SUCCESS;
+  bucket_item = nullptr;
+  if (!table_item.is_hybrid_search_table()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("not a hybrid search table", K(ret), K(table_item));
+  } else if (!stmt.is_select_stmt()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("hybrid_search aggs pseudo column only supported in select stmt", K(ret));
+  } else if (OB_ISNULL(table_item.dsl_query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("hybrid search table has null dsl_query_", K(ret), K(table_item));
+  } else {
+    ObIArray<ObDSLAggTermsItem> &agg_items = table_item.dsl_query_->agg_items_;
+    for (int64_t i = 0; OB_SUCC(ret) && NULL == bucket_item && i < agg_items.count(); ++i) {
+      if (0 == q_name.col_name_.case_compare(agg_items.at(i).agg_name_)) {
+        bucket_item = &agg_items.at(i);
+      }
+    }
+    if (OB_SUCC(ret) && OB_ISNULL(bucket_item)) {
+      ret = OB_ERR_BAD_FIELD_ERROR;
+      LOG_WARN("column is not a hybrid_search aggs bucket name", K(ret), K(q_name));
+    }
+  }
+  return ret;
+}
+
+int ObDSLResolver::resolve_terms_bucket_expr(
+    ObDSLAggTermsItem &bucket_item,
+    ObRawExpr *&real_ref_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(bucket_item.count_expr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("terms agg count expr not injected yet", K(ret));
+  } else {
+    real_ref_expr = bucket_item.count_expr_;
+  }
+  return ret;
+}
+
+int ObDSLResolver::resolve_cardinality_bucket_expr(
+    ObDSLAggTermsItem &bucket_item,
+    ObDMLStmt &stmt,
+    ObRawExprFactory &expr_factory,
+    ObSQLSessionInfo *session_info,
+    ObRawExpr *&real_ref_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(bucket_item.count_expr_)) {
+    real_ref_expr = bucket_item.count_expr_;
+  } else {
+    ObSelectStmt *select_stmt = static_cast<ObSelectStmt *>(&stmt);
+    ObAggFunRawExpr *agg_expr = nullptr;
+    if (OB_ISNULL(bucket_item.field_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cardinality field is null", K(ret));
+    } else if (OB_FAIL(expr_factory.create_raw_expr(T_FUN_COUNT, agg_expr))) {
+      LOG_WARN("fail to create count expr", K(ret));
+    } else if (OB_ISNULL(agg_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("agg expr is null", K(ret));
+    } else if (OB_FAIL(agg_expr->add_real_param_expr(bucket_item.field_))) {
+      LOG_WARN("fail to add real param for count distinct", K(ret));
+    } else if (OB_FALSE_IT(agg_expr->set_param_distinct(true))) {
+    } else if (OB_FAIL(agg_expr->formalize(session_info))) {
+      LOG_WARN("formalize cardinality count expr failed", K(ret));
+    } else {
+      ObAggFunRawExpr *same_aggr = nullptr;
+      if (OB_FAIL(select_stmt->check_and_get_same_aggr_item(agg_expr, same_aggr))) {
+        LOG_WARN("check same aggr failed", K(ret));
+      } else if (OB_NOT_NULL(same_aggr)) {
+        bucket_item.count_expr_ = same_aggr;
+        real_ref_expr = same_aggr;
+      } else if (OB_FAIL(select_stmt->add_agg_item(*agg_expr))) {
+        LOG_WARN("add agg item for cardinality failed", K(ret));
+      } else {
+        bucket_item.count_expr_ = agg_expr;
+        real_ref_expr = agg_expr;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDSLResolver::resolve_hybrid_search_aggs_bucket_column_ref_expr(
+    TableItem &table_item,
+    const ObQualifiedName &q_name,
+    ObDMLStmt &stmt,
+    ObRawExprFactory &expr_factory,
+    ObSQLSessionInfo *session_info,
+    ObRawExpr *&real_ref_expr)
+{
+  int ret = OB_SUCCESS;
+  real_ref_expr = nullptr;
+  ObDSLAggTermsItem *bucket_item = nullptr;
+  if (OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else if (OB_FAIL(find_aggs_bucket_item(table_item, q_name, stmt, bucket_item))) {
+    if (OB_ERR_BAD_FIELD_ERROR == ret) {
+      // do nothing, caller falls back
+    } else {
+      LOG_WARN("failed to find aggs bucket item", K(ret), K(q_name));
+    }
+  } else if (bucket_item->name_conflicts_with_user_column_) {
+    ret = OB_ERR_COLUMN_DUPLICATE;
+    LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, q_name.col_name_.length(), q_name.col_name_.ptr());
+    LOG_WARN("aggs bucket name conflicts with user column", K(ret), K(q_name));
+  } else if (bucket_item->agg_type_ == ObDSLAggTermsItem::TERMS) {
+    if (OB_FAIL(resolve_terms_bucket_expr(*bucket_item, real_ref_expr))) {
+      LOG_WARN("fail to resolve terms bucket", K(ret));
+    }
+  } else if (bucket_item->agg_type_ == ObDSLAggTermsItem::CARDINALITY) {
+    if (OB_FAIL(resolve_cardinality_bucket_expr(
+            *bucket_item, stmt, expr_factory, session_info, real_ref_expr))) {
+      LOG_WARN("fail to resolve cardinality bucket", K(ret));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected agg type for bucket column", K(ret), K(bucket_item->agg_type_));
+  }
   return ret;
 }
 
@@ -168,6 +369,7 @@ int ObDSLQueryInfo::check_column_in_dsl(ObIArray<TableItem*> &table_items, ObCol
 int ObDSLQueryInfo::deep_copy(const ObDSLQueryInfo& src, ObIRawExprCopier &expr_copier, ObIAllocator* allocator)
 {
   int ret = OB_SUCCESS;
+  ObRawExpr *copied_collapse_field = nullptr;
   if (OB_ISNULL(allocator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected param, invalid param", K(ret));
@@ -187,6 +389,8 @@ int ObDSLQueryInfo::deep_copy(const ObDSLQueryInfo& src, ObIRawExprCopier &expr_
     LOG_WARN("failed to copy score cols", K(ret));
   } else if (OB_FAIL(expr_copier.copy(src.dsl_exprs_, dsl_exprs_))) {
     LOG_WARN("failed to copy dsl exprs", K(ret));
+  } else if (OB_FAIL(deep_copy_sort_items(src, expr_copier))) {
+    LOG_WARN("failed to deep copy sort items", K(ret));
   } else if (OB_FALSE_IT(rank_info_.method_ = src.rank_info_.method_)) {
   } else if (OB_FAIL(expr_copier.copy(src.rank_info_.window_size_, rank_info_.window_size_))) {
     LOG_WARN("failed to copy window_size expr", K(ret));
@@ -195,6 +399,23 @@ int ObDSLQueryInfo::deep_copy(const ObDSLQueryInfo& src, ObIRawExprCopier &expr_
   } else if (OB_FAIL(ob_write_string(*allocator, src.raw_dsl_param_str_, raw_dsl_param_str_))) {
     LOG_WARN("failed to copy raw dsl param string", K(ret));
   } else if (FALSE_IT(query_dop_ = src.query_dop_)) {
+  } else if (OB_NOT_NULL(src.collapse_info_.field_) && OB_FAIL(expr_copier.copy(src.collapse_info_.field_, copied_collapse_field))) {
+    LOG_WARN("failed to copy collapse field", K(ret));
+  } else if (OB_FALSE_IT(collapse_info_.field_ = static_cast<ObColumnRefRawExpr*>(copied_collapse_field))) {
+  } else if (OB_NOT_NULL(src.collapse_info_.win_func_expr_)
+             && OB_FAIL(expr_copier.copy(reinterpret_cast<ObRawExpr*>(src.collapse_info_.win_func_expr_),
+                                         reinterpret_cast<ObRawExpr*&>(collapse_info_.win_func_expr_)))) {
+    LOG_WARN("failed to copy collapse win_func_expr", K(ret));
+  } else if (OB_NOT_NULL(src.collapse_info_.qualify_expr_)
+             && OB_FAIL(expr_copier.copy(src.collapse_info_.qualify_expr_, collapse_info_.qualify_expr_))) {
+    LOG_WARN("failed to copy collapse qualify_expr", K(ret));
+  } else if (OB_FALSE_IT(is_top_k_query_ = src.is_top_k_query_)) {
+  } else if (OB_FALSE_IT(result_mode_ = src.result_mode_)) {
+  } else if (OB_FALSE_IT(has_dsl_sort_ = src.has_dsl_sort_)) {
+  } else if (OB_FALSE_IT(has_dsl_aggs_ = src.has_dsl_aggs_)) {
+  } else if (OB_FALSE_IT(has_dsl_rank_ = src.has_dsl_rank_)) {
+  } else if (OB_FALSE_IT(track_score_ = src.track_score_)) {
+  } else if (OB_FALSE_IT(has_dsl_collapse_ = src.has_dsl_collapse_)) {
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < src.queries_.count(); ++i) {
       ObDSLQuery *copied_query = nullptr;
@@ -205,6 +426,32 @@ int ObDSLQueryInfo::deep_copy(const ObDSLQueryInfo& src, ObIRawExprCopier &expr_
         LOG_WARN("failed to deep copy query", K(ret), K(i));
       } else if (OB_FAIL(queries_.push_back(copied_query))) {
         LOG_WARN("failed to push back copied query", K(ret));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < src.agg_items_.count(); ++i) {
+      ObDSLAggTermsItem copied;
+      ObRawExpr *field_raw = nullptr;
+      ObRawExpr *count_raw = nullptr;
+      if (OB_FAIL(ob_write_string(*allocator, src.agg_items_.at(i).agg_name_, copied.agg_name_))) {
+        LOG_WARN("failed to copy agg name", K(ret), K(i));
+      } else if (OB_NOT_NULL(src.agg_items_.at(i).field_)
+                 && OB_FAIL(expr_copier.copy(static_cast<const ObRawExpr *>(src.agg_items_.at(i).field_), field_raw))) {
+        LOG_WARN("failed to copy agg field", K(ret), K(i));
+      } else if (OB_NOT_NULL(src.agg_items_.at(i).count_expr_)
+                 && OB_FAIL(expr_copier.copy(static_cast<const ObRawExpr *>(src.agg_items_.at(i).count_expr_), count_raw))) {
+        LOG_WARN("failed to copy agg count_expr", K(ret), K(i));
+      } else {
+        copied.agg_type_ = src.agg_items_.at(i).agg_type_;
+        copied.field_ = static_cast<ObColumnRefRawExpr *>(field_raw);
+        copied.count_expr_ = static_cast<ObAggFunRawExpr *>(count_raw);
+        copied.size_ = src.agg_items_.at(i).size_;
+        copied.min_doc_count_ = src.agg_items_.at(i).min_doc_count_;
+        copied.order_by_ = src.agg_items_.at(i).order_by_;
+        copied.order_asc_ = src.agg_items_.at(i).order_asc_;
+        copied.name_conflicts_with_user_column_ = src.agg_items_.at(i).name_conflicts_with_user_column_;
+        if (OB_FAIL(agg_items_.push_back(copied))) {
+          LOG_WARN("failed to push back copied agg item", K(ret), K(i));
+        }
       }
     }
   }
@@ -344,6 +591,7 @@ int ObDSLQueryInfo::deep_copy_query_knn(const ObDSLKnnQuery *src, ObDSLKnnQuery 
   ObRawExpr *k_expr = nullptr;
   ObRawExpr *query_vector_expr = nullptr;
   ObRawExpr *distance_expr = nullptr;
+  ObDSLKnnQuery::SearchOption *search_option = nullptr;
   if (OB_ISNULL(src) || OB_ISNULL(allocator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null param", K(ret), KP(src), KP(allocator));
@@ -355,8 +603,14 @@ int ObDSLQueryInfo::deep_copy_query_knn(const ObDSLKnnQuery *src, ObDSLKnnQuery 
     LOG_WARN("failed to copy query vector", K(ret));
   } else if (OB_FAIL(expr_copier.copy(src->distance_, distance_expr))) {
     LOG_WARN("failed to copy distance", K(ret));
+  } else if (OB_NOT_NULL(src->search_option_) &&
+             OB_ISNULL(search_option = OB_NEWx(ObDSLKnnQuery::SearchOption, allocator))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate search option", K(ret));
   } else if (OB_FAIL(ObDSLKnnQuery::create(*allocator, dst, src->outer_query_type_))) {
     LOG_WARN("failed to create knn query", K(ret));
+  } else if (OB_NOT_NULL(search_option)) {
+    *search_option = *src->search_option_;
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < src->filter_.count(); ++i) {
     ObDSLQuery *copied_query = nullptr;
@@ -375,6 +629,7 @@ int ObDSLQueryInfo::deep_copy_query_knn(const ObDSLKnnQuery *src, ObDSLKnnQuery 
     dst->k_ = static_cast<ObConstRawExpr*>(k_expr);
     dst->query_vector_ = static_cast<ObConstRawExpr*>(query_vector_expr);
     dst->distance_ = distance_expr;
+    dst->search_option_ = search_option;
   }
   return ret;
 }
@@ -526,6 +781,164 @@ int ObDSLResolver::add_dsl_expr_recursive(ObDSLQuery *query)
   return ret;
 }
 
+int ObDSLResolver::build_array_intersects_expr(ObColumnRefRawExpr *col_expr,
+                                               const ObIArray<ObRawExpr*> &value_exprs,
+                                               ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObRawExprFactory *expr_factory = params_.expr_factory_;
+  const ObSqlCollectionInfo *coll_info = nullptr;
+  ObSysFunRawExpr *func_expr = nullptr;
+  if (OB_FAIL(ObRawExprUtils::get_expr_collection_info(col_expr, session_info_->get_cur_exec_ctx(), coll_info))) {
+    LOG_WARN("fail to get collection meta for column", K(ret), KPC(col_expr));
+  } else if (OB_ISNULL(coll_info) || OB_ISNULL(coll_info->collection_meta_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("collection info is null", K(ret), KPC(col_expr));
+  } else if (coll_info->collection_meta_->type_id_ != ObNestedType::OB_ARRAY_TYPE) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column is not an array type", K(ret), KPC(col_expr));
+  } else {
+    uint32_t nest_depth = 0;
+    UNUSED(coll_info->get_basic_meta(nest_depth));
+    if (nest_depth > 1) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "term/terms query on nested array column");
+      LOG_WARN("term/terms query on nested array column not supported", K(ret), K(nest_depth), KPC(col_expr));
+    }
+  }
+  // to get the intersection of column array and values:
+  //   for single value, build ARRAY_CONTAINS(col, scalar) with better execution performance
+  //   for multiple values, build ARRAY_OVERLAPS(col, array)
+  if (OB_FAIL(ret)) {
+  } else if (value_exprs.count() == 1) {
+    if (OB_FAIL(expr_factory->create_raw_expr(T_FUNC_SYS_ARRAY_CONTAINS, func_expr))) {
+      LOG_WARN("fail to create array contains expr", K(ret));
+    } else if (OB_FALSE_IT(func_expr->set_func_name(N_ARRAY_CONTAINS))) {
+    } else if (OB_FAIL(func_expr->set_param_exprs(col_expr, value_exprs.at(0)))) {
+      LOG_WARN("fail to set param exprs for array contains", K(ret));
+    } else {
+      expr = func_expr;
+    }
+  } else {
+    ObSysFunRawExpr *array_expr = nullptr;
+    if (OB_FAIL(expr_factory->create_raw_expr(T_FUN_SYS_ARRAY, array_expr))) {
+      LOG_WARN("fail to create array expr", K(ret));
+    } else if (OB_FALSE_IT(array_expr->set_func_name(N_ARRAY))) {
+    } else if (OB_FAIL(array_expr->init_param_exprs(value_exprs.count()))) {
+      LOG_WARN("fail to init param exprs for array", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < value_exprs.count(); ++i) {
+        if (OB_FAIL(array_expr->add_param_expr(value_exprs.at(i)))) {
+          LOG_WARN("fail to add param expr to array", K(ret), K(i));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(expr_factory->create_raw_expr(T_FUNC_SYS_ARRAY_OVERLAPS, func_expr))) {
+      LOG_WARN("fail to create array overlaps expr", K(ret));
+    } else if (OB_FALSE_IT(func_expr->set_func_name(N_ARRAY_OVERLAPS))) {
+    } else if (OB_FAIL(func_expr->set_param_exprs(col_expr, array_expr))) {
+      LOG_WARN("fail to set param exprs for array overlaps", K(ret));
+    } else {
+      expr = func_expr;
+    }
+  }
+  return ret;
+}
+
+int ObDSLResolver::build_field_expr_with_path(ObColumnRefRawExpr *col_expr, const ObString &path_str, const ObEsQueryItem query_type, ObRawExpr *&field_expr)
+{
+  int ret = OB_SUCCESS;
+  if (path_str.empty() ||
+      (query_type == QUERY_ITEM_JSON_MEMBER_OF && path_str.compare_equal("$"))) {
+    // use column expr without json_extract if any of the following conditions is met:
+    // (1) no path
+    // (2) json member of with root array path
+    if (!col_expr->get_result_type().is_json() && OB_FAIL(dsl_query_info_->dsl_cols.push_back(col_expr))) {
+      LOG_WARN("failed to push back scalar query column expr", K(ret));
+    } else {
+      field_expr = col_expr;
+    }
+  } else if (OB_FAIL(build_json_extract_expr(col_expr, path_str, field_expr))) {
+    LOG_WARN("fail to build json_extract expr", K(ret), K(path_str), K(query_type));
+  }
+  return ret;
+}
+
+int ObDSLResolver::build_json_contains_scalar_expr(ObRawExpr *target_expr, ObIJsonBase &json_node, ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObRawExprFactory *expr_factory = params_.expr_factory_;
+  ObJsonBuffer j_buf(allocator_);
+  ObString candidate_str;
+  ObConstRawExpr *candidate_expr = nullptr;
+  if (OB_FAIL(print_json_node(json_node, j_buf))) {
+    LOG_WARN("fail to build json_contains candidate text from dsl json node", K(ret));
+  } else if (OB_FAIL(j_buf.get_result_string(candidate_str))) {
+    LOG_WARN("fail to get json candidate string", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::build_const_string_expr(*expr_factory,
+                                                             ObVarcharType,
+                                                             candidate_str,
+                                                             CS_TYPE_UTF8MB4_BIN,
+                                                             candidate_expr))) {
+    LOG_WARN("fail to build const string expr for json_contains candidate", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::build_json_contains_expr(*expr_factory, *session_info_, target_expr, candidate_expr, expr))) {
+    LOG_WARN("fail to build json_contains expr", K(ret));
+  }
+  return ret;
+}
+
+int ObDSLResolver::build_json_extract_expr(ObRawExpr *col_expr, const ObString &json_path, ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObRawExprFactory *expr_factory = params_.expr_factory_;
+  ObRawExpr *path_expr = nullptr;
+  ObSysFunRawExpr *json_extract_expr = nullptr;
+  if (OB_FAIL(construct_string_expr(json_path, path_expr, col_expr->get_collation_type()))) {
+    LOG_WARN("fail to create path expr", K(ret), K(json_path), K(col_expr->get_collation_type()));
+  } else if (OB_FAIL(expr_factory->create_raw_expr(T_FUN_SYS_JSON_EXTRACT, json_extract_expr))) {
+    LOG_WARN("fail to create json_extract expr", K(ret));
+  } else if (OB_FALSE_IT(json_extract_expr->set_func_name(N_JSON_EXTRACT))) {
+  } else if (OB_FAIL(json_extract_expr->set_param_exprs(col_expr, path_expr))) {
+    LOG_WARN("fail to set param exprs for json_extract", K(ret));
+  } else {
+    expr = json_extract_expr;
+  }
+  return ret;
+}
+
+int ObDSLResolver::build_json_overlaps_array_expr(ObRawExpr *target_expr,
+                                                  const ObIArray<ObRawExpr*> &value_exprs,
+                                                  ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObRawExprFactory *expr_factory = params_.expr_factory_;
+  ObSysFunRawExpr *json_array_expr = nullptr;
+  ObSysFunRawExpr *json_overlaps_expr = nullptr;
+  if (OB_FAIL(expr_factory->create_raw_expr(T_FUN_SYS_JSON_ARRAY, json_array_expr))) {
+    LOG_WARN("fail to create json array expr", K(ret));
+  } else if (OB_FALSE_IT(json_array_expr->set_func_name(N_JSON_ARRAY))) {
+  } else if (OB_FAIL(json_array_expr->init_param_exprs(value_exprs.count()))) {
+    LOG_WARN("fail to init param exprs for json array", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < value_exprs.count(); ++i) {
+      if (OB_FAIL(json_array_expr->add_param_expr(value_exprs.at(i)))) {
+        LOG_WARN("fail to add param expr to json array", K(ret), K(i));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(expr_factory->create_raw_expr(T_FUN_SYS_JSON_OVERLAPS, json_overlaps_expr))) {
+    LOG_WARN("fail to create json overlaps expr", K(ret));
+  } else if (OB_FALSE_IT(json_overlaps_expr->set_func_name(N_JSON_OVERLAPS))) {
+  } else if (OB_FAIL(json_overlaps_expr->set_param_exprs(target_expr, json_array_expr))) {
+    LOG_WARN("fail to set param exprs for json overlaps", K(ret));
+  } else {
+    expr = json_overlaps_expr;
+  }
+  return ret;
+}
+
 int ObDSLResolver::check_fields_collation_types(const ObIArray<ObColumnRefRawExpr*> &fields, bool &compatible)
 {
   int ret = OB_SUCCESS;
@@ -587,6 +1000,9 @@ int ObDSLResolver::collect_exprs()
   } else if (OB_NOT_NULL(dsl_query_info_->query_top_level_boost_) &&
              OB_FAIL(add_dsl_expr(dsl_query_info_->query_top_level_boost_))) {
     LOG_WARN("fail to add query top level boost expr", K(ret));
+  } else if (OB_NOT_NULL(dsl_query_info_->collapse_info_.field_) &&
+           OB_FAIL(add_dsl_expr(dsl_query_info_->collapse_info_.field_))) {
+    LOG_WARN("fail to add collapse field expr", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < dsl_query_info_->queries_.count(); i++) {
       if (OB_FAIL(add_dsl_expr_recursive(dsl_query_info_->queries_.at(i)))) {
@@ -803,6 +1219,110 @@ int ObDSLResolver::construct_string_expr(const ObString &str_value, ObRawExpr *&
   return ret;
 }
 
+int ObDSLResolver::append_wildcard_pattern_char(char *buf, const int64_t max_len, int64_t &pos, const char ch)
+{
+  int ret = OB_SUCCESS;
+  if (pos >= max_len) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("wildcard pattern buffer overflow", K(ret), K(max_len), K(pos), K(ch));
+  } else {
+    buf[pos++] = ch;
+  }
+  return ret;
+}
+
+int ObDSLResolver::append_wildcard_like_escaped_char(char *buf, const int64_t max_len, int64_t &pos, const char ch)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(append_wildcard_pattern_char(buf, max_len, pos, '\\'))) {
+    LOG_WARN("failed to append wildcard escaped char", K(ret));
+  } else if (OB_FAIL(append_wildcard_pattern_char(buf, max_len, pos, ch))) {
+    LOG_WARN("failed to append wildcard pattern char", K(ret));
+  }
+  return ret;
+}
+
+int ObDSLResolver::convert_wildcard_pattern_to_like(const ObString &src, ObString &dst)
+{
+  int ret = OB_SUCCESS;
+  const int64_t max_len = src.length() * 2 + 1;
+  char *buf = nullptr;
+  int64_t pos = 0;
+  if (OB_ISNULL(buf = static_cast<char *>(allocator_->alloc(max_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate wildcard conversion buffer", K(ret), K(src.length()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < src.length(); ++i) {
+      const char ch = src.ptr()[i];
+      if (ch == '\\') {
+        if (i + 1 >= src.length()) {
+          // Example: "abc\" -> "abc\\"
+          if (OB_FAIL(append_wildcard_like_escaped_char(buf, max_len, pos, '\\'))) {
+            LOG_WARN("failed to append wildcard escaped char", K(ret));
+          }
+        } else {
+          const char next = src.ptr()[i + 1];
+          switch (next) {
+            case '*':
+            case '?': {
+              // Example: "\*" -> "*", "\?" -> "?"
+              if (OB_FAIL(append_wildcard_pattern_char(buf, max_len, pos, next))) {
+                LOG_WARN("failed to append wildcard pattern char", K(ret));
+              } else {
+                ++i;
+              }
+              break;
+            }
+            case '%':
+            case '_':
+            case '\\': {
+              // Example: "\%" -> "\%", "\_" -> "\_", "\\" -> "\\"
+              if (OB_FAIL(append_wildcard_like_escaped_char(buf, max_len, pos, next))) {
+                LOG_WARN("failed to append wildcard escaped char", K(ret));
+              } else {
+                ++i;
+              }
+              break;
+            }
+            default: {
+              // Example: "\a" -> "\\a"
+              if (OB_FAIL(append_wildcard_like_escaped_char(buf, max_len, pos, '\\'))) {
+                LOG_WARN("failed to append wildcard escaped char", K(ret));
+              }
+              break;
+            }
+          }
+        }
+      } else if (ch == '*') {
+        // Example: "ab*cd" -> "ab%cd"
+        if (OB_FAIL(append_wildcard_pattern_char(buf, max_len, pos, '%'))) {
+          LOG_WARN("failed to append wildcard pattern char", K(ret));
+        }
+      } else if (ch == '?') {
+        // Example: "ab?cd" -> "ab_cd"
+        if (OB_FAIL(append_wildcard_pattern_char(buf, max_len, pos, '_'))) {
+          LOG_WARN("failed to append wildcard pattern char", K(ret));
+        }
+      } else if (ch == '%' || ch == '_') {
+        // Example: "a%b" -> "a\%b", "a_b" -> "a\_b"
+        if (OB_FAIL(append_wildcard_like_escaped_char(buf, max_len, pos, ch))) {
+          LOG_WARN("failed to append wildcard escaped char", K(ret));
+        }
+      } else {
+        // Example: "abc" -> "abc"
+        if (OB_FAIL(append_wildcard_pattern_char(buf, max_len, pos, ch))) {
+          LOG_WARN("failed to append wildcard pattern char", K(ret));
+        }
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else {
+    dst.assign_ptr(buf, pos);
+  }
+  return ret;
+}
+
 int ObDSLResolver::resolve_query_string_expr(const ObString &str_value, const ObCollationType target_coll, ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
@@ -978,6 +1498,7 @@ int ObDSLResolver::get_fulltext_index_schema(const ObString &col_name, const ObT
   int ret = OB_SUCCESS;
   ObColumnIndexInfo *idx_info = nullptr;
   if (OB_FAIL(get_col_idx_info(col_name, idx_info))) {
+    LOG_WARN("fail to get col idx info", K(ret), K(col_name));
   } else if (OB_ISNULL(idx_info)) {
     // do nothing
   } else if (OB_ISNULL(idx_info->index_schema_)) {
@@ -1321,6 +1842,46 @@ int ObDSLResolver::init_resolver()
   return ret;
 }
 
+int ObDSLResolver::is_array_column(ObColumnRefRawExpr *col_expr, bool &is_array_col)
+{
+  int ret = OB_SUCCESS;
+  const ObSqlCollectionInfo *coll_info = nullptr;
+  is_array_col = false;
+  if (!col_expr->get_result_type().is_collection_sql_type()) {
+  } else if (OB_FAIL(ObRawExprUtils::get_expr_collection_info(col_expr, session_info_->get_cur_exec_ctx(), coll_info))) {
+    LOG_WARN("fail to get collection meta for column", K(ret), KPC(col_expr));
+  } else if (OB_ISNULL(coll_info) || OB_ISNULL(coll_info->collection_meta_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("collection info or meta is null", K(ret), KPC(col_expr));
+  } else if (coll_info->collection_meta_->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
+    is_array_col = true;
+  }
+  return ret;
+}
+
+// a lightweight wrapper to convert JSON node to string
+int ObDSLResolver::print_json_node(ObIJsonBase &node, ObJsonBuffer &j_buf)
+{
+  int ret = OB_SUCCESS;
+  bool is_quoted = false;
+  const ObJsonNodeType json_type = node.json_type();
+  if (json_type == ObJsonNodeType::J_STRING) {
+    is_quoted = true;
+  } else if (ObIJsonBase::is_json_number_type(json_type) ||
+             json_type == ObJsonNodeType::J_BOOLEAN ||
+             json_type == ObJsonNodeType::J_OBJECT) {
+    is_quoted = false;
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("unsupported json node to print string", K(ret), K(json_type));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(node.print(j_buf, is_quoted))) {
+    LOG_WARN("fail to print json node to string", K(ret), K(json_type));
+  }
+  return ret;
+}
+
 int ObDSLResolver::resolve_array_contains(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSLQuery *parent_query, ObEsQueryItem outer_query_type)
 {
   return resolve_array_expr(req_node, query, parent_query, outer_query_type, QUERY_ITEM_ARRAY_CONTAINS);
@@ -1339,10 +1900,13 @@ int ObDSLResolver::resolve_array_expr(ObIJsonBase &req_node, ObDSLQuery *&query,
   ObString col_name;
   ObString expr_name;
   ObJsonNodeType args_type = ObJsonNodeType::J_MAX_TYPE;
+  bool is_array_col = false;
   ObIJsonBase *param_node = nullptr;
+  ObIJsonBase *arg_node = nullptr;
   ObColumnRefRawExpr *col_expr = nullptr;
   ObRawExpr *args_expr = nullptr;
   ObSysFunRawExpr *array_expr = nullptr;
+  ObConstRawExpr *boost_expr = nullptr;
   ObDSLScalarQuery *array_query = nullptr;
   if (ObDSLQuery::check_need_cal_score_in_bool(outer_query_type, parent_query)) {
     ret = OB_NOT_SUPPORTED;
@@ -1356,11 +1920,35 @@ int ObDSLResolver::resolve_array_expr(ObIJsonBase &req_node, ObDSLQuery *&query,
     LOG_WARN("array expr should have exactly one element", K(ret));
   } else if (OB_FAIL(req_node.get_object_value(0, col_name, param_node))) {
     LOG_WARN("fail to get value", K(ret));
-  } else if (OB_FALSE_IT(args_type = (query_type == QUERY_ITEM_ARRAY_CONTAINS) ? param_node->json_type() : ObJsonNodeType::J_ARRAY)) {
-  } else if (OB_FAIL(resolve_const(*param_node, args_expr, args_type, query_type))) {
-    LOG_WARN("fail to resolve arg expr", K(ret));
+  } else if (param_node->json_type() == ObJsonNodeType::J_OBJECT) {
+    for (uint64_t i = 0; OB_SUCC(ret) && i < param_node->element_count(); i++) {
+      ObString key;
+      ObIJsonBase *sub_node = nullptr;
+      if (OB_FAIL(param_node->get_object_value(i, key, sub_node))) {
+        LOG_WARN("fail to get value", K(ret));
+      } else if (key.case_compare("arg") == 0) {
+        arg_node = sub_node;
+      } else if (key.case_compare("boost") == 0) {
+        if (OB_FAIL(resolve_boost(*sub_node, boost_expr, query_type, outer_query_type))) {
+          LOG_WARN("fail to resolve boost", K(ret));
+        }
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "keys other than 'arg' and 'boost' in array query");
+        LOG_WARN("unsupported key in array query", K(ret), K(key), K(query_type));
+      }
+    }
+  } else {
+    arg_node = param_node;
   }
   if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(arg_node)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "array query, arg not exists");
+    LOG_WARN("arg not exists in array query", K(ret));
+  } else if (OB_FALSE_IT(args_type = (query_type == QUERY_ITEM_ARRAY_CONTAINS) ? arg_node->json_type() : ObJsonNodeType::J_ARRAY)) {
+  } else if (OB_FAIL(resolve_const(*arg_node, args_expr, args_type, query_type))) {
+    LOG_WARN("fail to resolve arg expr", K(ret));
   } else if (query_type == QUERY_ITEM_ARRAY_CONTAINS) {
     expr_type = T_FUNC_SYS_ARRAY_CONTAINS;
     expr_name = N_ARRAY_CONTAINS;
@@ -1381,7 +1969,9 @@ int ObDSLResolver::resolve_array_expr(ObIJsonBase &req_node, ObDSLQuery *&query,
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "array expression, column not exists");
     }
     LOG_WARN("fail to get user column expr", K(ret), K(col_name));
-  } else if (!col_expr->get_result_type().is_collection_sql_type()) {
+  } else if (OB_FAIL(is_array_column(col_expr, is_array_col))) {
+    LOG_WARN("fail to check if column is array", K(ret), KPC(col_expr));
+  } else if (!is_array_col) {
     ret = OB_INVALID_ARGUMENT;
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "array expression, column is not an array type");
     LOG_WARN("array expression for non-array column", K(ret), K(col_name));
@@ -1395,7 +1985,7 @@ int ObDSLResolver::resolve_array_expr(ObIJsonBase &req_node, ObDSLQuery *&query,
   } else {
     array_query->field_ = col_expr;
     array_query->scalar_expr_ = array_expr;
-    array_query->boost_ = setup_boost(nullptr);
+    array_query->boost_ = setup_boost(boost_expr);
     query = array_query;
   }
   return ret;
@@ -1410,6 +2000,8 @@ int ObDSLResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
   ObJsonNode *j_node = nullptr;
+  ObIJsonBase *dsl_sort_node = nullptr;
+  ObIJsonBase *dsl_collapse_node = nullptr;
   const char *syntaxerr = nullptr;
   uint64_t err_offset = 0;
   ObString req_str;
@@ -1451,6 +2043,17 @@ int ObDSLResolver::resolve(const ParseNode &parse_tree)
         // do nothing
       } else if (key.case_compare("min_score") == 0) {
         // do nothing
+      } else if (key.case_compare("sort") == 0) {
+        dsl_sort_node = req_node;
+        dsl_query_info_->has_dsl_sort_ = true;
+      } else if (key.case_compare("collapse") == 0) {
+        dsl_collapse_node = req_node;
+        dsl_query_info_->has_dsl_collapse_ = true;
+      } else if (key.case_compare("aggs") == 0) {
+        dsl_query_info_->has_dsl_aggs_ = true;
+        if (OB_FAIL(resolve_aggs(*req_node))) {
+          LOG_WARN("fail to resolve aggs", K(ret), K(i));
+        }
       } else {
         ret = OB_ERR_PARSER_SYNTAX;
         LOG_USER_ERROR(OB_ERR_PARSER_SYNTAX, "invalid search param, unsupported key");
@@ -1461,18 +2064,598 @@ int ObDSLResolver::resolve(const ParseNode &parse_tree)
       ret = OB_INVALID_ARGUMENT;
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "invalid search param, must contain at least one query");
       LOG_WARN("invalid search param, must contain at least one query", K(ret));
+    } else if (OB_SUCC(ret) && dsl_query_info_->has_dsl_aggs_ && dsl_query_info_->has_dsl_sort_) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "aggs with sort");
+      LOG_WARN("aggs and sort cannot be used together", K(ret));
+    } else if (OB_SUCC(ret) && dsl_query_info_->has_dsl_aggs_ && dsl_query_info_->has_dsl_collapse_) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "aggs with collapse");
+      LOG_WARN("aggs and collapse cannot be used together", K(ret));
     }
   }
 
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(init_result_mode_and_track_score())) {
+    LOG_WARN("failed to init result mode and track score", K(ret));
   } else if (OB_FAIL(construct_rowkey_columns())) {
     LOG_WARN("fail to construct rowkey columns", K(ret));
   } else if (OB_FAIL(construct_score_columns())) {
     LOG_WARN("fail to construct score columns", K(ret));
+  } else if (OB_NOT_NULL(dsl_sort_node) && OB_FAIL(resolve_sort(*dsl_sort_node))) {
+    LOG_WARN("fail to resolve dsl sort", K(ret));
+  } else if (OB_NOT_NULL(dsl_collapse_node) && OB_FAIL(resolve_collapse(*dsl_collapse_node))) {
+    LOG_WARN("fail to resolve collapse", K(ret));
+  } else if (dsl_query_info_->has_dsl_collapse_ && OB_FAIL(inject_collapse_stmt_rewrites())) {
+    LOG_WARN("fail to inject collapse stmt rewrites", K(ret));
+  } else if (dsl_query_info_->has_dsl_aggs_ && OB_FAIL(inject_agg_stmt_rewrites())) {
+    LOG_WARN("fail to inject agg stmt rewrites", K(ret));
   } else if (OB_FAIL(collect_exprs())) {
     LOG_WARN("fail to collect exprs", K(ret));
   } else if (OB_FAIL(formalize_exprs())) {
     LOG_WARN("fail to formalize exprs", K(ret));
+  }
+  return ret;
+}
+
+ int ObDSLResolver::set_stmt_limit_offset(ObDSLQueryInfo *dsl_query_info, ObSelectStmt &select_stmt)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *offset_expr = nullptr;
+  if (OB_ISNULL(dsl_query_info) || OB_ISNULL(dsl_query_info->size_) || OB_ISNULL(dsl_query_info->from_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dsl query info or size expr or from expr is null", K(ret), KP(dsl_query_info));
+  } else if (!dsl_query_info->from_->is_const_raw_expr()) {
+    ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("from expr should be a const raw expr", K(ret), KPC(dsl_query_info->from_));
+  } else {
+    int64_t from_value = 0;
+    const ObConstRawExpr *from_expr = static_cast<const ObConstRawExpr *>(dsl_query_info->from_);
+    if (OB_FAIL(from_expr->get_value().get_int(from_value))) {
+      LOG_WARN("failed to get from value", K(ret));
+    } else if (from_value > 0) {
+      offset_expr = dsl_query_info->from_;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    select_stmt.set_limit_offset(dsl_query_info->size_, offset_expr);
+  }
+  return ret;
+}
+
+
+int ObDSLResolver::resolve_sort(ObIJsonBase &req_node)
+{
+  int ret = OB_SUCCESS;
+  ObSelectStmt *select_stmt = nullptr;
+  if (OB_ISNULL(params_.expr_factory_) || OB_ISNULL(stmt_) || !stmt_->is_select_stmt()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid state for resolve_sort", K(ret));
+  } else if (dsl_query_info_->has_dsl_rank_) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "sort with rank");
+    LOG_WARN("sort is not supported when rank is specified", K(ret));
+  } else if (FALSE_IT(select_stmt = static_cast<ObSelectStmt *>(stmt_))) {
+  } else if (req_node.json_type() != ObJsonNodeType::J_ARRAY) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sort, expected a JSON array");
+    LOG_WARN("sort value must be a JSON array", K(ret));
+  } else if (req_node.element_count() == 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sort, array must not be empty");
+    LOG_WARN("sort array is empty", K(ret));
+  } else {
+    const uint64_t sort_count = req_node.element_count();
+    for (uint64_t i = 0; OB_SUCC(ret) && i < sort_count; ++i) {
+      ObIJsonBase *sort_item = nullptr;
+      if (OB_FAIL(req_node.get_array_element(i, sort_item))) {
+        LOG_WARN("fail to get sort array element", K(ret), K(i));
+      } else if (OB_ISNULL(sort_item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("sort item is null", K(ret), K(i));
+      } else if (OB_FAIL(resolve_sort_item(*sort_item, *select_stmt))) {
+        LOG_WARN("failed to resolve sort item", K(ret), K(i));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      dsl_query_info_->has_dsl_sort_ = true;
+      if (OB_FAIL(set_stmt_limit_offset(dsl_query_info_, *select_stmt))) {
+        LOG_WARN("failed to set stmt limit for hybrid sort", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDSLResolver::resolve_sort_item(ObIJsonBase &sort_item, ObSelectStmt &select_stmt)
+{
+  int ret = OB_SUCCESS;
+  if (sort_item.json_type() == ObJsonNodeType::J_STRING) {
+    ObString field_name(sort_item.get_data_length(), sort_item.get_data());
+    if (OB_FAIL(resolve_sort_string_item(field_name, select_stmt))) {
+      LOG_WARN("failed to resolve shorthand sort item", K(ret), K(field_name));
+    }
+  } else if (sort_item.json_type() == ObJsonNodeType::J_OBJECT) {
+    if (OB_FAIL(resolve_sort_object_item(sort_item, select_stmt))) {
+      LOG_WARN("failed to resolve object sort item", K(ret));
+    }
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sort item, must be a string or object");
+    LOG_WARN("invalid sort item type", K(ret));
+  }
+  return ret;
+}
+
+int ObDSLResolver::resolve_sort_string_item(const ObString &field_name, ObSelectStmt &select_stmt)
+{
+  int ret = OB_SUCCESS;
+  ObDSLSortItem dsl_sort_item;
+  if (OB_FAIL(resolve_sort_field(field_name, false, dsl_sort_item))) {
+    LOG_WARN("failed to resolve sort field", K(ret), K(field_name));
+  } else if (OB_FAIL(add_sort_order_item(select_stmt, dsl_sort_item))) {
+    LOG_WARN("failed to add shorthand sort item", K(ret), K(field_name), K(dsl_sort_item));
+  } else if (OB_FAIL(dsl_query_info_->sort_items_.push_back(dsl_sort_item))) {
+    LOG_WARN("failed to push back shorthand sort item", K(ret), K(dsl_sort_item));
+  }
+  return ret;
+}
+
+int ObDSLResolver::resolve_sort_object_item(ObIJsonBase &sort_item, ObSelectStmt &select_stmt)
+{
+  int ret = OB_SUCCESS;
+  if (sort_item.element_count() != 1) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sort item, expected exactly one field");
+    LOG_WARN("sort item object must have exactly one key", K(ret));
+  } else {
+    ObString field_name;
+    ObIJsonBase *field_opts = nullptr;
+    ObDSLSortItem dsl_sort_item;
+    if (OB_FAIL(sort_item.get_object_value(static_cast<uint64_t>(0), field_name, field_opts))) {
+      LOG_WARN("fail to get sort item field", K(ret));
+    } else if (OB_FAIL(resolve_sort_field(field_name, true, dsl_sort_item))) {
+      LOG_WARN("failed to resolve sort field", K(ret), K(field_name));
+    } else if (OB_FAIL(resolve_sort_options(field_opts, dsl_sort_item))) {
+      LOG_WARN("failed to resolve sort options", K(ret), K(field_name));
+    } else if (OB_FAIL(add_sort_order_item(select_stmt, dsl_sort_item))) {
+      LOG_WARN("failed to add object sort item", K(ret), K(field_name), K(dsl_sort_item));
+    } else if (OB_FAIL(dsl_query_info_->sort_items_.push_back(dsl_sort_item))) {
+      LOG_WARN("failed to push back object sort item", K(ret), K(dsl_sort_item));
+    }
+  }
+  return ret;
+}
+
+int ObDSLResolver::resolve_sort_options(ObIJsonBase *field_opts, ObDSLSortItem &dsl_sort_item)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(field_opts)) {
+    // no options, use defaults
+  } else if (field_opts->json_type() != ObJsonNodeType::J_OBJECT) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sort field options, expected a JSON object");
+    LOG_WARN("sort field options must be an object", K(ret));
+  } else {
+    const uint64_t count = field_opts->element_count();
+    for (uint64_t i = 0; OB_SUCC(ret) && i < count; i++) {
+      ObString key;
+      ObIJsonBase *val = nullptr;
+      if (OB_FAIL(field_opts->get_object_value(i, key, val))) {
+        LOG_WARN("fail to get sort option key", K(ret), K(i));
+      } else if (key.case_compare("order") == 0) {
+        if (val->json_type() != ObJsonNodeType::J_STRING) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sort order, must be a string");
+          LOG_WARN("sort order must be a string", K(ret));
+        } else {
+          ObString order_str(val->get_data_length(), val->get_data());
+          if (order_str.case_compare("desc") == 0) {
+            dsl_sort_item.is_asc_ = false;
+          } else if (order_str.case_compare("asc") == 0) {
+            dsl_sort_item.is_asc_ = true;
+          } else {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sort order, must be 'asc' or 'desc'");
+            LOG_WARN("invalid sort order", K(ret), K(order_str));
+          }
+        }
+      } else if (key.case_compare("missing") == 0) {
+        if (OB_ISNULL(val)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null missing node", K(ret));
+        } else if (val->json_type() == ObJsonNodeType::J_NULL) {
+          // "missing": null means no special handling, skip
+        } else if (val->json_type() == ObJsonNodeType::J_STRING) {
+          ObString missing_str(val->get_data_length(), val->get_data());
+          if (missing_str.case_compare("_first") == 0) {
+            dsl_sort_item.missing_mode_ = ObDSLSortItem::MissingMode::FIRST;
+          } else if (missing_str.case_compare("_last") == 0) {
+            dsl_sort_item.missing_mode_ = ObDSLSortItem::MissingMode::LAST;
+          } else if (OB_FAIL(resolve_sort_missing_literal(*val, dsl_sort_item))) {
+            LOG_WARN("failed to resolve string sort missing literal", K(ret), K(missing_str), K(dsl_sort_item));
+          } else {
+            dsl_sort_item.missing_mode_ = ObDSLSortItem::MissingMode::LITERAL;
+          }
+        } else if (OB_FAIL(resolve_sort_missing_literal(*val, dsl_sort_item))) {
+          LOG_WARN("failed to resolve sort missing literal", K(ret), KPC(val), K(dsl_sort_item));
+        } else {
+          dsl_sort_item.missing_mode_ = ObDSLSortItem::MissingMode::LITERAL;
+        }
+      } else {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sort field option, unknown key");
+        LOG_WARN("unknown sort field option key", K(ret), K(key));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDSLResolver::build_sort_missing_string_literal(ObIJsonBase &missing_node, ObDSLSortItem &dsl_sort_item)
+{
+  int ret = OB_SUCCESS;
+  ObConstRawExpr *lit = nullptr;
+  if (missing_node.json_type() != ObJsonNodeType::J_STRING) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sort missing value for string column, expected a string literal");
+    LOG_WARN("sort missing for string column must be string json", K(ret), K(missing_node.json_type()));
+  } else if (OB_ISNULL(dsl_sort_item.field_expr_) || !dsl_sort_item.field_expr_->is_column_ref_expr()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected sort field for string missing literal", K(ret), KP(dsl_sort_item.field_expr_));
+  } else {
+    const ObColumnRefRawExpr *col_expr = static_cast<const ObColumnRefRawExpr *>(dsl_sort_item.field_expr_);
+    const ObObjType str_type = col_expr->get_result_type().get_type();
+    const ObCollationType cs_type = col_expr->get_result_type().get_collation_type();
+    const ObString str_val(missing_node.get_data_length(), missing_node.get_data());
+    if (OB_FAIL(ObRawExprUtils::build_const_string_expr(
+            *params_.expr_factory_, str_type, str_val, cs_type, lit))) {
+      LOG_WARN("failed to build const string for sort missing", K(ret), K(str_type), K(str_val));
+    } else {
+      dsl_sort_item.missing_literal_ = lit;
+    }
+  }
+  return ret;
+}
+
+int ObDSLResolver::build_sort_missing_temporal_literal(ObIJsonBase &missing_node, ObDSLSortItem &dsl_sort_item)
+{
+  int ret = OB_SUCCESS;
+  ObConstRawExpr *lit = nullptr;
+  if (missing_node.json_type() != ObJsonNodeType::J_STRING) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sort missing value for temporal column, expected a string literal");
+    LOG_WARN("sort missing for temporal column must be string json", K(ret), K(missing_node.json_type()));
+  } else if (OB_ISNULL(dsl_sort_item.field_expr_) || !dsl_sort_item.field_expr_->is_column_ref_expr()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected sort field for temporal missing literal", K(ret), KP(dsl_sort_item.field_expr_));
+  } else {
+    const ObColumnRefRawExpr *col_expr = static_cast<const ObColumnRefRawExpr *>(dsl_sort_item.field_expr_);
+    const ObObjType col_type = col_expr->get_result_type().get_type();
+    const ObString time_str(missing_node.get_data_length(), missing_node.get_data());
+    ObDateSqlMode date_sql_mode;
+    date_sql_mode.init(session_info_->get_sql_mode());
+    date_sql_mode.allow_invalid_dates_ = false;
+    const ObTimeZoneInfo *tz_info = session_info_->get_timezone_info();
+    if (col_type == ObDateType) {
+      int32_t dval = 0;
+      if (OB_FAIL(ObTimeConverter::str_to_date(time_str, dval, date_sql_mode))) {
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sort missing date string");
+        LOG_WARN("failed to parse sort missing as date", K(ret), K(time_str));
+      } else if (OB_FAIL(ObRawExprUtils::build_const_date_expr(*params_.expr_factory_, dval, lit))) {
+        LOG_WARN("failed to build const date expr for sort missing", K(ret));
+      }
+    } else if (col_type == ObMySQLDateType) {
+      ObMySQLDate mdate;
+      if (OB_FAIL(ObTimeConverter::str_to_mdate(time_str, mdate, date_sql_mode))) {
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sort missing mysql date string");
+        LOG_WARN("failed to parse sort missing as mysql date", K(ret), K(time_str));
+      } else {
+        ObObj obj;
+        obj.set_mysql_date(mdate);
+        if (OB_FAIL(ObRawExprUtils::build_const_obj_expr(*params_.expr_factory_, obj, lit))) {
+          LOG_WARN("failed to build const mysql date expr for sort missing", K(ret));
+        }
+      }
+    } else if (col_type == ObDateTimeType || col_type == ObTimestampType) {
+      int64_t dt_val = 0;
+      int16_t scale = 0;
+      const bool is_ts = (col_type == ObTimestampType);
+      ObTimeConvertCtx cvrt_ctx(tz_info, is_ts);
+      if (OB_FAIL(ObTimeConverter::str_to_datetime(time_str, cvrt_ctx, dt_val, &scale, date_sql_mode))) {
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sort missing datetime string");
+        LOG_WARN("failed to parse sort missing as datetime", K(ret), K(time_str));
+      } else if (OB_FAIL(ObRawExprUtils::build_const_datetime_expr(*params_.expr_factory_, dt_val, lit))) {
+        LOG_WARN("failed to build const datetime expr for sort missing", K(ret));
+      }
+    } else if (col_type == ObMySQLDateTimeType) {
+      ObMySQLDateTime mdt;
+      int16_t scale = 0;
+      ObTimeConvertCtx cvrt_ctx(tz_info, false);
+      if (OB_FAIL(ObTimeConverter::str_to_mdatetime(time_str, cvrt_ctx, mdt, &scale, date_sql_mode))) {
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sort missing mysql datetime string");
+        LOG_WARN("failed to parse sort missing as mysql datetime", K(ret), K(time_str));
+      } else {
+        ObObj obj;
+        obj.set_mysql_datetime(mdt);
+        if (OB_FAIL(ObRawExprUtils::build_const_obj_expr(*params_.expr_factory_, obj, lit))) {
+          LOG_WARN("failed to build const mysql datetime expr for sort missing", K(ret));
+        }
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "sort missing literal for this temporal column type");
+      LOG_WARN("missing literal not supported for temporal column", K(ret), K(col_type));
+    }
+    if (OB_SUCC(ret)) {
+      dsl_sort_item.missing_literal_ = lit;
+    }
+  }
+  return ret;
+}
+
+int ObDSLResolver::resolve_sort_missing_literal(ObIJsonBase &missing_node, ObDSLSortItem &dsl_sort_item)
+{
+  int ret = OB_SUCCESS;
+  dsl_sort_item.missing_literal_ = nullptr;
+  if (OB_ISNULL(params_.expr_factory_) || OB_ISNULL(dsl_sort_item.field_expr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null expr factory or sort field", K(ret), KP(params_.expr_factory_),
+             KP(dsl_sort_item.field_expr_));
+  } else if (dsl_sort_item.is_score_sort_) {
+    ObRawExpr *expr = nullptr;
+    if (OB_FAIL(resolve_const(missing_node, expr, ObJsonNodeType::J_DOUBLE))) {
+      LOG_WARN("failed to resolve sort missing literal for _score", K(ret));
+    } else {
+      dsl_sort_item.missing_literal_ = static_cast<ObConstRawExpr *>(expr);
+    }
+  } else if (!dsl_sort_item.field_expr_->is_column_ref_expr()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sort missing literal only supports user columns", K(ret));
+  } else {
+    const ObColumnRefRawExpr *col_expr = static_cast<const ObColumnRefRawExpr *>(dsl_sort_item.field_expr_);
+    const ObObjType col_type = col_expr->get_result_type().get_type();
+    const ObObjTypeClass tc = ob_obj_type_class(col_type);
+    ObConstRawExpr *lit = nullptr;
+    if (ObStringTC == tc) {
+      if (OB_FAIL(build_sort_missing_string_literal(missing_node, dsl_sort_item))) {
+        LOG_WARN("failed to build string sort missing literal", K(ret));
+      }
+    } else if (ObDateTC == tc || ObDateTimeTC == tc || ObMySQLDateTimeTC == tc || ObMySQLDateTC == tc) {
+      if (OB_FAIL(build_sort_missing_temporal_literal(missing_node, dsl_sort_item))) {
+        LOG_WARN("failed to build temporal sort missing literal", K(ret));
+      }
+    } else if (ObIntTC == tc) {
+      int64_t ivalue = 0;
+      if (OB_FAIL(missing_node.to_int(ivalue, true, true))) {
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sort missing value for integer column");
+        LOG_WARN("failed to convert json to int for sort missing", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*params_.expr_factory_, col_type, ivalue, lit))) {
+        LOG_WARN("failed to build const int for sort missing", K(ret), K(col_type));
+      } else {
+        dsl_sort_item.missing_literal_ = lit;
+      }
+    } else if (ObUIntTC == tc) {
+      uint64_t uvalue = 0;
+      if (OB_FAIL(missing_node.to_uint(uvalue, false, true))) {
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sort missing value for unsigned integer column");
+        LOG_WARN("failed to convert json to uint for sort missing", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::build_const_uint_expr(*params_.expr_factory_, col_type, uvalue, lit))) {
+        LOG_WARN("failed to build const uint for sort missing", K(ret), K(col_type));
+      } else {
+        dsl_sort_item.missing_literal_ = lit;
+      }
+    } else if (ObFloatTC == tc) {
+      double dv = 0.0;
+      if (OB_FAIL(missing_node.to_double(dv))) {
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sort missing value for float column");
+        LOG_WARN("failed to convert json to double for sort missing", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::build_const_float_expr(
+                  *params_.expr_factory_, col_type, static_cast<float>(dv), lit))) {
+        LOG_WARN("failed to build const float for sort missing", K(ret), K(col_type));
+      } else {
+        dsl_sort_item.missing_literal_ = lit;
+      }
+    } else if (ObDoubleTC == tc) {
+      double dv = 0.0;
+      if (OB_FAIL(missing_node.to_double(dv))) {
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sort missing value for double column");
+        LOG_WARN("failed to convert json to double for sort missing", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::build_const_double_expr(*params_.expr_factory_, col_type, dv, lit))) {
+        LOG_WARN("failed to build const double for sort missing", K(ret), K(col_type));
+      } else {
+        dsl_sort_item.missing_literal_ = lit;
+      }
+    } else if (ObNumberTC == tc) {
+      number::ObNumber num;
+      if (OB_FAIL(missing_node.to_number(allocator_, num))) {
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sort missing value for decimal column");
+        LOG_WARN("failed to convert json to number for sort missing", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::build_const_number_expr(*params_.expr_factory_, col_type, num, lit))) {
+        LOG_WARN("failed to build const number for sort missing", K(ret), K(col_type));
+      } else {
+        dsl_sort_item.missing_literal_ = lit;
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "sort missing literal for this column type");
+      LOG_WARN("missing literal not supported for column type", K(ret), K(col_type), K(tc));
+    }
+  }
+  return ret;
+}
+
+int ObDSLResolver::resolve_sort_field(ObString field_name,
+                                      bool validate_sort_type,
+                                      ObDSLSortItem &dsl_sort_item)
+{
+  int ret = OB_SUCCESS;
+  dsl_sort_item.is_score_sort_ = (field_name.case_compare("__score") == 0);
+  dsl_sort_item.is_asc_ = !dsl_sort_item.is_score_sort_;
+  if (dsl_sort_item.is_score_sort_) {
+    if (dsl_query_info_->score_cols_.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("score columns not available for __score sort", K(ret));
+    } else {
+      dsl_sort_item.field_expr_ = dsl_query_info_->score_cols_.at(dsl_query_info_->score_cols_.count() - 1);
+    }
+  } else {
+    ObColumnRefRawExpr *col_expr = nullptr;
+    if (OB_FAIL(get_user_column_expr(field_name, col_expr))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_ERR_BAD_FIELD_ERROR;
+        LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, field_name.length(), field_name.ptr(),
+                       table_item_.get_table_name().length(), table_item_.get_table_name().ptr());
+      }
+      LOG_WARN("fail to resolve sort field", K(ret), K(field_name));
+    } else if (validate_sort_type
+               && (col_expr->get_result_type().is_lob()
+                   || col_expr->get_result_type().is_json()
+                   || col_expr->get_result_type().is_geometry()
+                   || col_expr->get_result_type().is_roaringbitmap()
+                   || col_expr->get_result_type().is_collection_sql_type()
+                   || col_expr->get_result_type().is_user_defined_sql_type()
+                   || ob_is_extend(col_expr->get_result_type().get_type()))) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "sort by this column type");
+      LOG_WARN("unsupported sort column type", K(ret), K(field_name),
+               K(col_expr->get_result_type().get_type()));
+    } else {
+      ObColumnIndexInfo *idx_info = nullptr;
+      if (OB_FAIL(get_col_idx_info(col_expr->get_column_name(), idx_info))) {
+        LOG_WARN("fail to get col idx info for sort field", K(ret), K(field_name));
+      } else if (OB_NOT_NULL(idx_info)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "sort by fulltext/vector index column");
+        LOG_WARN("sort on domain index column not supported", K(ret), K(field_name));
+      } else if (validate_sort_type
+                 && (col_expr->get_result_type().is_lob()
+                     || col_expr->get_result_type().is_json()
+                     || col_expr->get_result_type().is_geometry())) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "sort by text/json/geometry column type");
+        LOG_WARN("unsupported sort column type", K(ret), K(field_name));
+      } else {
+        dsl_sort_item.field_expr_ = col_expr;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDSLResolver::add_sort_order_item(ObSelectStmt &select_stmt, const ObDSLSortItem &dsl_sort_item)
+{
+  int ret = OB_SUCCESS;
+  ObRawExprFactory *expr_factory = params_.expr_factory_;
+  ObRawExpr *sort_expr = dsl_sort_item.field_expr_;
+  if (OB_ISNULL(expr_factory)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr factory is null", K(ret));
+  } else if (OB_ISNULL(sort_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sort expr is null", K(ret), K(dsl_sort_item));
+  } else if (dsl_sort_item.missing_mode_ == ObDSLSortItem::MissingMode::LITERAL
+             && !dsl_sort_item.is_score_sort_) {
+    ObSysFunRawExpr *coalesce_expr = nullptr;
+    if (OB_ISNULL(dsl_sort_item.missing_literal_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("missing literal is null", K(ret), K(dsl_sort_item));
+    } else if (OB_FAIL(expr_factory->create_raw_expr(T_FUN_SYS_COALESCE, coalesce_expr))) {
+      LOG_WARN("fail to create coalesce expr", K(ret));
+    } else if (OB_FAIL(coalesce_expr->set_param_exprs(dsl_sort_item.field_expr_,
+                                                      static_cast<ObRawExpr *>(dsl_sort_item.missing_literal_)))) {
+      LOG_WARN("fail to set coalesce params", K(ret));
+    } else {
+      coalesce_expr->set_func_name(ObString::make_string("coalesce"));
+      sort_expr = coalesce_expr;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObOrderDirection direction = NULLS_LAST_ASC;
+    if (dsl_sort_item.missing_mode_ == ObDSLSortItem::MissingMode::FIRST) {
+      direction = dsl_sort_item.is_asc_ ? NULLS_FIRST_ASC : NULLS_FIRST_DESC;
+    } else {
+      direction = dsl_sort_item.is_asc_ ? NULLS_LAST_ASC : NULLS_LAST_DESC;
+    }
+    OrderItem order_item(sort_expr, direction);
+    if (OB_FAIL(select_stmt.add_order_item(order_item))) {
+      LOG_WARN("fail to add order item", K(ret));
+    }
+  }
+  return ret;
+}
+
+void ObDSLResolver::set_track_score(ObDSLQueryInfo *dsl_query_info)
+{
+  dsl_query_info->track_score_ =
+      (dsl_query_info->result_mode_ != ObDSLResultMode::COUNT_AGG
+       && dsl_query_info->result_mode_ != ObDSLResultMode::BUCKET_AGG);
+}
+
+int ObDSLResolver::init_result_mode_and_track_score()
+{
+  int ret = OB_SUCCESS;
+  const ObSelectStmt *select_stmt = nullptr;
+  if (dsl_query_info_->result_mode_ != ObDSLResultMode::SEARCH_HITS) {
+  } else if (OB_ISNULL(stmt_) || !stmt_->is_select_stmt()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt_ is not select stmt", K(ret), KP(stmt_));
+  } else if (FALSE_IT(select_stmt = static_cast<const ObSelectStmt *>(stmt_))) {
+  } else if (!select_stmt->is_scala_group_by() || select_stmt->get_aggr_item_size() != 1) {
+  } else {
+    const ObAggFunRawExpr *aggr_expr = select_stmt->get_aggr_item(0);
+    if (OB_ISNULL(aggr_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("aggregate expr is null", K(ret));
+    } else if (aggr_expr->get_expr_type() == T_FUN_COUNT) {
+      dsl_query_info_->result_mode_ = ObDSLResultMode::COUNT_AGG;
+    }
+  }
+  if (OB_SUCC(ret) && dsl_query_info_->has_dsl_aggs_ && !dsl_query_info_->agg_items_.empty()) {
+    const ObDSLAggTermsItem &agg_item = dsl_query_info_->agg_items_.at(0);
+    if (agg_item.agg_type_ == ObDSLAggTermsItem::TERMS) {
+      dsl_query_info_->result_mode_ = ObDSLResultMode::BUCKET_AGG;
+    } else if (agg_item.agg_type_ == ObDSLAggTermsItem::CARDINALITY) {
+      dsl_query_info_->result_mode_ = ObDSLResultMode::COUNT_AGG;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    set_track_score(dsl_query_info_);
+  }
+  return ret;
+}
+
+int ObDSLResolver::refresh_result_mode_after_select_resolved(const ObSelectStmt *select_stmt,
+                                                             ObDSLQueryInfo *dsl_query_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(select_stmt) || OB_ISNULL(dsl_query_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), KP(select_stmt), KP(dsl_query_info));
+  } else {
+    if (dsl_query_info->result_mode_ != ObDSLResultMode::SEARCH_HITS) {
+    } else if (!select_stmt->is_scala_group_by() || select_stmt->get_aggr_item_size() != 1) {
+    } else {
+      const ObAggFunRawExpr *aggr_expr = select_stmt->get_aggr_item(0);
+      if (OB_ISNULL(aggr_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("aggregate expr is null", K(ret));
+      } else if (aggr_expr->get_expr_type() == T_FUN_COUNT) {
+        dsl_query_info->result_mode_ = ObDSLResultMode::COUNT_AGG;
+      }
+    }
+    if (OB_SUCC(ret) && dsl_query_info->has_dsl_aggs_ && !dsl_query_info->agg_items_.empty()) {
+      const ObDSLAggTermsItem &agg_item = dsl_query_info->agg_items_.at(0);
+      if (agg_item.agg_type_ == ObDSLAggTermsItem::TERMS) {
+        dsl_query_info->result_mode_ = ObDSLResultMode::BUCKET_AGG;
+      } else if (agg_item.agg_type_ == ObDSLAggTermsItem::CARDINALITY) {
+        dsl_query_info->result_mode_ = ObDSLResultMode::COUNT_AGG;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      set_track_score(dsl_query_info);
+    }
   }
   return ret;
 }
@@ -1482,7 +2665,14 @@ int ObDSLResolver::resolve_boost(ObIJsonBase &req_node, ObConstRawExpr *&boost_e
   int ret = OB_SUCCESS;
   ObRawExpr *expr = nullptr;
   double boost_value = 0.0;
-  if (OB_FAIL(resolve_const(req_node, expr, ObJsonNodeType::J_DOUBLE))) {
+  const uint64_t cluster_version = GET_MIN_CLUSTER_VERSION();
+  if (!HYBRID_SEARCH_SUPPORT_SCALAR_SCORING(cluster_version) &&
+      (IS_QUERY_ITEM_ARRAY(query_type) ||
+       IS_QUERY_ITEM_JSON(query_type) ||
+       IS_QUERY_ITEM_SCALAR(query_type))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("boost value not supported in this version", K(ret), K(query_type), K(cluster_version));
+  } else if (OB_FAIL(resolve_const(req_node, expr, ObJsonNodeType::J_DOUBLE))) {
     LOG_WARN("fail to resolve boost value", K(ret));
   } else if (OB_ISNULL(boost_expr = static_cast<ObConstRawExpr*>(expr))) {
     ret = OB_ERR_UNEXPECTED;
@@ -1556,14 +2746,10 @@ int ObDSLResolver::resolve_match(ObIJsonBase &req_node, ObDSLQuery *&query, ObDS
         }
       } else if (key.case_compare("boost") == 0) {
         if (OB_FAIL(resolve_boost(*sub_node, boost_expr, QUERY_ITEM_MATCH, outer_query_type))) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "boost in match query");
-          LOG_WARN("fail to parse boost value", K(ret));
+          LOG_WARN("fail to resolve boost", K(ret));
         }
       } else if (key.case_compare("minimum_should_match") == 0) {
         if (OB_FAIL(resolve_minimum_should_match(*sub_node, min_should_match))) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "minimum_should_match in match query");
           LOG_WARN("fail to resolve minimum should match", K(ret));
         }
       } else if (key.case_compare("operator") == 0) {
@@ -1664,14 +2850,10 @@ int ObDSLResolver::resolve_match_phrase(ObIJsonBase &req_node,
         }
       } else if (key.case_compare("boost") == 0) {
         if (OB_FAIL(resolve_boost(*sub_node, boost_expr, QUERY_ITEM_MATCH_PHRASE, outer_query_type))) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "boost in match_phrase query");
-          LOG_WARN("fail to parse boost value", K(ret));
+          LOG_WARN("fail to resolve boost", K(ret));
         }
       } else if (key.case_compare("slop") == 0) {
         if (OB_FAIL(resolve_slop(*sub_node, slop))) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "slop in match_phrase query");
           LOG_WARN("fail to resolve slop", K(ret));
         }
       } else {
@@ -1717,6 +2899,9 @@ int ObDSLResolver::resolve_knn(ObIJsonBase &req_node, ObDSLQuery *&query)
   ObRawExpr *k_expr = nullptr;
   ObRawExpr *query_vector_expr = nullptr;
   ObRawExpr *distance_expr = nullptr;
+  int64_t k_value = 0;
+  int64_t num_candidates = 0;
+  bool has_num_candidates = false;
   ObSEArray<ObDSLQuery*, 4, ModulePageAllocator, true> filter_queries;
   ObConstRawExpr *boost_expr = nullptr;
   ObDSLKnnQuery::SearchOption *search_option = nullptr;
@@ -1753,7 +2938,6 @@ int ObDSLResolver::resolve_knn(ObIJsonBase &req_node, ObDSLQuery *&query)
       }
     } else if (key.case_compare("k") == 0) {
       ObConstRawExpr *const_expr = nullptr;
-      int64_t k_value = 0;
       if (OB_FAIL(resolve_const(*sub_node, k_expr, ObJsonNodeType::J_INT))) {
         LOG_WARN("fail to resolve k constant", K(ret));
       } else if (OB_ISNULL(const_expr = static_cast<ObConstRawExpr*>(k_expr))) {
@@ -1773,6 +2957,23 @@ int ObDSLResolver::resolve_knn(ObIJsonBase &req_node, ObDSLQuery *&query)
         LOG_WARN("fail to resolve query vector", K(ret));
       } else if (OB_FAIL(required_params.erase_refactored(ObString("query_vector")))) {
         LOG_WARN("fail to erase set", K(ret));
+      }
+    } else if (key.case_compare("num_candidates") == 0) {
+      if (has_num_candidates) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "duplicate field num_candidates");
+        LOG_WARN("duplicate field num_candidates", K(ret));
+      } else if (sub_node->json_type() != ObJsonNodeType::J_INT) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("num_candidates should be int type", K(ret), K(sub_node->json_type()));
+      } else if (OB_FAIL(sub_node->to_int(num_candidates))) {
+        LOG_WARN("fail to get int value from num_candidates", K(ret));
+      } else if (OB_ISNULL(search_option) &&
+                 OB_ISNULL(search_option = OB_NEWx(ObDSLKnnQuery::SearchOption, allocator_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate memory for search option", K(ret));
+      } else {
+        has_num_candidates = true;
       }
     } else if (key.case_compare("boost") == 0) {
       if (OB_FAIL(resolve_boost(*sub_node, boost_expr, QUERY_ITEM_KNN, QUERY_ITEM_UNKNOWN))) {
@@ -1826,6 +3027,10 @@ int ObDSLResolver::resolve_knn(ObIJsonBase &req_node, ObDSLQuery *&query)
     ret = OB_INVALID_ARGUMENT;
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "knn query, required params \"field\", \"query_vector\", \"k\" are missed");
     LOG_WARN("knn required params are missed", K(ret), K(required_params.begin()->first));
+  } else if (has_num_candidates && (num_candidates < k_value || num_candidates > 10000)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "num_candidates, num_candidates value should be in range [k, 10000]");
+    LOG_WARN("num_candidates value should be in range [k, 10000]", K(ret), K(num_candidates), K(k_value));
   } else if (OB_NOT_NULL(search_option) &&
              search_option->param_.is_set_similarity_threshold_ == 1 &&
              dist_algo == ObVectorIndexDistAlgorithm::VIDA_IP) {
@@ -1837,6 +3042,12 @@ int ObDSLResolver::resolve_knn(ObIJsonBase &req_node, ObDSLQuery *&query)
   } else if (OB_FAIL(construct_dist_expr(field_expr, query_vector_expr, dist_algo, distance_expr))) {
     LOG_WARN("fail to construct distance expr", K(ret));
   } else {
+    if (has_num_candidates) {
+      search_option->is_set_num_candidates_ = true;
+      search_option->num_candidates_ = static_cast<int32_t>(num_candidates);
+      search_option->param_.ef_search_ = static_cast<int32_t>(num_candidates);
+      search_option->param_.is_set_ef_search_ = 1;
+    }
     knn_query->dist_algo_ = dist_algo;
     knn_query->field_ = field_expr;
     knn_query->k_ = static_cast<ObConstRawExpr*>(k_expr);
@@ -2212,6 +3423,7 @@ int ObDSLResolver::resolve_default_params(ObIJsonBase &req_node)
     } else {
       LOG_WARN("fail to get rank node", K(ret));
     }
+  } else if (OB_FALSE_IT(dsl_query_info_->has_dsl_rank_ = true)) {
   } else if (OB_FAIL(resolve_rank(*rank_node))) {
     LOG_WARN("fail to resolve rank", K(ret));
   }
@@ -2365,10 +3577,9 @@ int ObDSLResolver::resolve_json_expr(ObIJsonBase &req_node, ObDSLQuery *&query, 
   ObIJsonBase *param_node = nullptr;
   ObColumnRefRawExpr *col_expr = nullptr;
   ObRawExpr *candidate_expr = nullptr;
-  ObRawExpr *path_expr = nullptr;
   ObRawExpr *target_expr = nullptr;
   ObSysFunRawExpr *json_expr = nullptr;
-  ObSysFunRawExpr *json_extract_expr = nullptr;
+  ObConstRawExpr *boost_expr = nullptr;
   ObDSLScalarQuery *json_query = nullptr;
   if (OB_FAIL(ret)) {
   } else if (query_type == QUERY_ITEM_JSON_CONTAINS) {
@@ -2425,15 +3636,15 @@ int ObDSLResolver::resolve_json_expr(ObIJsonBase &req_node, ObDSLQuery *&query, 
         } else if (OB_FALSE_IT(path_str.assign_ptr(sub_node->get_data(), sub_node->get_data_length()))) {
         } else if (OB_FAIL(common::ob_strip_space(*allocator_, path_str, path_str))) {
           LOG_WARN("fail to remove whitespace", K(ret), K(path_str));
-        } else if (query_type == QUERY_ITEM_JSON_MEMBER_OF && path_str.compare_equal("$")) {
-          // for json member of, if path is "$", it means the root node is array, so no need to designate a path
-        } else if (OB_FAIL(construct_string_expr(path_str, path_expr))) {
-          LOG_WARN("fail to create path expr", K(ret), K(path_str));
+        }
+      } else if (key.case_compare("boost") == 0) {
+        if (OB_FAIL(resolve_boost(*sub_node, boost_expr, query_type, outer_query_type))) {
+          LOG_WARN("fail to resolve boost", K(ret));
         }
       } else {
         ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "invalid key in json query");
-        LOG_WARN("unsupported key in json query", K(ret), K(key));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "keys other than 'candidate', 'path' and 'boost' in json query");
+        LOG_WARN("unsupported key in json query", K(ret), K(key), K(query_type));
       }
     }
   }
@@ -2451,20 +3662,11 @@ int ObDSLResolver::resolve_json_expr(ObIJsonBase &req_node, ObDSLQuery *&query, 
     ret = OB_INVALID_ARGUMENT;
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "json expression, column is not a json type");
     LOG_WARN("json expression for non-json column", K(ret), K(col_name));
+  } else if (OB_FAIL(build_field_expr_with_path(col_expr, path_str, query_type, target_expr))) {
+    LOG_WARN("fail to build field expr with path for json query", K(ret));
   } else if (OB_FAIL(expr_factory->create_raw_expr(expr_type, json_expr))) {
     LOG_WARN("fail to create json expr", K(ret));
   } else if (OB_FALSE_IT(json_expr->set_func_name(expr_name))) {
-  } else if (OB_ISNULL(path_expr)) {
-    target_expr = col_expr;
-  } else if (OB_FAIL(expr_factory->create_raw_expr(T_FUN_SYS_JSON_EXTRACT, json_extract_expr))) {
-    LOG_WARN("fail to create json extract expr", K(ret));
-  } else if (OB_FALSE_IT(json_extract_expr->set_func_name(N_JSON_EXTRACT))) {
-  } else if (OB_FAIL(json_extract_expr->set_param_exprs(col_expr, path_expr))) {
-    LOG_WARN("fail to set param exprs for json_extract", K(ret));
-  } else {
-    target_expr = json_extract_expr;
-  }
-  if (OB_FAIL(ret)) {
   } else if (query_type == QUERY_ITEM_JSON_MEMBER_OF) {
     if (OB_FAIL(json_expr->set_param_exprs(candidate_expr, target_expr))) {
       LOG_WARN("fail to set param exprs", K(ret), K(query_type));
@@ -2481,7 +3683,7 @@ int ObDSLResolver::resolve_json_expr(ObIJsonBase &req_node, ObDSLQuery *&query, 
   } else {
     json_query->field_ = target_expr;
     json_query->scalar_expr_ = json_expr;
-    json_query->boost_ = setup_boost(nullptr);
+    json_query->boost_ = setup_boost(boost_expr);
     query = json_query;
   }
   return ret;
@@ -2520,12 +3722,16 @@ int ObDSLResolver::resolve_search_options(ObIJsonBase &req_node, ObDSLKnnQuery::
     if (OB_FAIL(req_node.get_object_value(i, key, sub_node))) {
       LOG_WARN("fail to get value", K(ret), K(i));
     } else if (key.case_compare("ef_search") == 0) {
-      if (sub_node->json_type() != ObJsonNodeType::J_INT) {
+      if (search_option->param_.is_set_ef_search_) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "duplicate field ef_search in search options");
+        LOG_WARN("duplicate field ef_search in search options", K(ret));
+      } else if (sub_node->json_type() != ObJsonNodeType::J_INT) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("ef_search should be int type", K(ret), K(sub_node->json_type()));
       } else if (OB_FAIL(sub_node->to_int(ef_search))) {
         LOG_WARN("fail to get int value from ef_search", K(ret));
-      } else if (ef_search < 1 || ef_search > 1000) {
+      } else if (ef_search < 1 || ef_search > 10000) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("ef_search value not in valid range", K(ret), K(ef_search));
       } else {
@@ -2615,6 +3821,10 @@ int ObDSLResolver::dispatch_query_type(const ObString &key, ObIJsonBase &sub_nod
     if (OB_FAIL(resolve_term(sub_node, query, parent_query, outer_query_type))) {
       LOG_WARN("fail to resolve term", K(ret));
     }
+  } else if (key.case_compare("wildcard") == 0) {
+    if (OB_FAIL(resolve_wildcard(sub_node, query, parent_query, outer_query_type))) {
+      LOG_WARN("fail to resolve wildcard", K(ret));
+    }
   } else if (key.case_compare("terms") == 0) {
     if (OB_FAIL(resolve_terms(sub_node, query, parent_query, outer_query_type))) {
       LOG_WARN("fail to resolve terms", K(ret));
@@ -2688,6 +3898,7 @@ int ObDSLResolver::resolve_single_term(ObIJsonBase &req_node, ObDSLQuery *&query
     if (OB_FAIL(setup_top_level_score(query))) {
       LOG_WARN("fail to setup top level score", K(ret));
     } else {
+      //TODO 优化
       dsl_query_info_->query_top_level_boost_ = query->boost_;
       query->boost_ = static_cast<ObConstRawExpr *>(dsl_query_info_->one_const_expr_);
       if (OB_FAIL(try_push_nested_boost_to_leaf_query(query, 1.0))) {
@@ -2721,12 +3932,10 @@ int ObDSLResolver::resolve_slop(ObIJsonBase &req_node, int32_t &slop)
     LOG_WARN("slop should be number or string type", K(ret), K(json_type));
   } else if (OB_FAIL(req_node.to_double(slop_double))) {
     LOG_WARN("fail to get double value from slop", K(ret));
-  } else if (slop_double < 0.0 || slop_double != static_cast<int64_t>(slop_double)) {
+  } else if (slop_double < 0.0 || slop_double != static_cast<int64_t>(slop_double) || slop_double > INT32_MAX) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("slop must be a non-negative integer", K(ret), K(slop_double));
-  } else if (slop_double > INT32_MAX) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("slop exceeds int32_t max value", K(ret), K(slop_double));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "slop, should be a non-negative integer and less than INT32_MAX");
+    LOG_WARN("slop must be a non-negative integer and less than INT32_MAX", K(ret), K(slop_double));
   } else {
     slop = static_cast<int32_t>(slop_double);
   }
@@ -2737,8 +3946,15 @@ int ObDSLResolver::resolve_min_score(ObIJsonBase &req_node)
 {
   int ret = OB_SUCCESS;
   ObRawExpr *min_score_expr = nullptr;
+  ObConstRawExpr *const_min_score_expr = nullptr;
+  double min_score_value = 0.0;
   if (OB_FAIL(resolve_const(req_node, min_score_expr, ObJsonNodeType::J_DOUBLE))) {
     LOG_WARN("fail to resolve min score value", K(ret));
+  } else if (OB_ISNULL(const_min_score_expr = static_cast<ObConstRawExpr *>(min_score_expr))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("min score expr must be const expr", K(ret));
+  } else if (OB_FAIL(const_min_score_expr->get_value().get_double(min_score_value))) {
+    LOG_WARN("fail to get double value from min score expr", K(ret));
   } else {
     dsl_query_info_->min_score_ = min_score_expr;
   }
@@ -2853,8 +4069,6 @@ int ObDSLResolver::resolve_multi_match(ObIJsonBase &req_node, ObDSLQuery *&query
       }
     } else if (key.case_compare("boost") == 0) {
       if (OB_FAIL(resolve_boost(*sub_node, boost_expr, QUERY_ITEM_MULTI_MATCH, outer_query_type))) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "boost in multi_match query");
         LOG_WARN("fail to resolve boost", K(ret));
       }
     } else {
@@ -2886,7 +4100,6 @@ int ObDSLResolver::resolve_multi_fields_query_param(
     hash::ObHashSet<int32_t> &resolved_field_idx_set)
 {
   int ret = OB_SUCCESS;
-
   ObSEArray<ObColumnRefRawExpr*, 4, ModulePageAllocator, true> fields;
   ObSEArray<ObConstRawExpr*, 4, ModulePageAllocator, true> field_boosts;
   ObMatchFieldsType type = ObDSLFullTextMultiFieldQueryParam::DEFAULT_FIELD_TYPE;
@@ -2922,8 +4135,7 @@ int ObDSLResolver::resolve_multi_fields_query_param(
         if (OB_NOT_SUPPORTED == ret) {
           LOG_USER_ERROR(OB_NOT_SUPPORTED,
               is_multi_match ? "Type in multi_match query" : "Type in query_string query");
-        } else {
-          ret = OB_INVALID_ARGUMENT;
+        } else if (OB_INVALID_ARGUMENT == ret) {
           LOG_USER_ERROR(OB_INVALID_ARGUMENT,
               is_multi_match ? "type in multi_match query" : "type in query_string query");
         }
@@ -2943,10 +4155,6 @@ int ObDSLResolver::resolve_multi_fields_query_param(
       }
     } else if (key.case_compare("minimum_should_match") == 0) {
       if (OB_FAIL(resolve_minimum_should_match(*sub_node, minimum_should_match))) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT,
-            is_multi_match ? "minimum_should_match in multi_match query"
-                           : "minimum_should_match in query_string query");
         LOG_WARN("fail to resolve minimum_should_match", K(ret));
       }
     } else {
@@ -3133,8 +4341,6 @@ int ObDSLResolver::resolve_query_string(ObIJsonBase &req_node, ObDSLQuery *&quer
       }
     } else if (key.case_compare("boost") == 0) {
       if (OB_FAIL(resolve_boost(*sub_node, boost_expr, QUERY_ITEM_QUERY_STRING, outer_query_type))) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "boost in query_string query");
         LOG_WARN("fail to resolve boost", K(ret));
       }
     } else {
@@ -3298,11 +4504,10 @@ int ObDSLResolver::resolve_range(ObIJsonBase &req_node, ObDSLQuery *&query, ObDS
   ObString path_str;
   ObIJsonBase *sub_node = nullptr;
   ObColumnRefRawExpr *col_expr = nullptr;
-  ObRawExpr *path_expr = nullptr;
-  ObSysFunRawExpr *json_extract_expr = nullptr;
   ObRawExpr *field_expr = nullptr;
   ObRawExpr *scalar_expr = nullptr;
   ObSEArray<ObRawExpr*, 4, ModulePageAllocator, true> condition_exprs;
+  ObConstRawExpr *boost_expr = nullptr;
   ObDSLScalarQuery *range_query = nullptr;
   if (ObDSLQuery::check_need_cal_score_in_bool(outer_query_type, parent_query)) {
     ret = OB_NOT_SUPPORTED;
@@ -3322,21 +4527,8 @@ int ObDSLResolver::resolve_range(ObIJsonBase &req_node, ObDSLQuery *&query, ObDS
     LOG_WARN("unexpectd range condition", K(ret));
   } else if (OB_FAIL(get_field_expr_and_path(col_name, col_expr, path_str))) {
     LOG_WARN("fail to get field expr and path", K(ret), K(col_name));
-  } else if (path_str.empty()) {
-    if (OB_FAIL(dsl_query_info_->dsl_cols.push_back(col_expr))) {
-      LOG_WARN("failed to push back scalar query column expr", K(ret));
-    } else {
-      field_expr = col_expr;
-    }
-  } else if (OB_FAIL(construct_string_expr(path_str, path_expr))) {
-    LOG_WARN("fail to create path expr", K(ret), K(path_str));
-  } else if (OB_FAIL(expr_factory->create_raw_expr(T_FUN_SYS_JSON_EXTRACT, json_extract_expr))) {
-    LOG_WARN("fail to create json_extract expr", K(ret));
-  } else if (OB_FALSE_IT(json_extract_expr->set_func_name(N_JSON_EXTRACT))) {
-  } else if (OB_FAIL(json_extract_expr->set_param_exprs(col_expr, path_expr))) {
-    LOG_WARN("fail to set param exprs for json_extract", K(ret));
-  } else {
-    field_expr = json_extract_expr;
+  } else if (OB_FAIL(build_field_expr_with_path(col_expr, path_str, QUERY_ITEM_RANGE, field_expr))) {
+    LOG_WARN("fail to build field expr with path for range", K(ret));
   }
   for (uint64_t i = 0; OB_SUCC(ret) && i < count; i++) {
     ObString key;
@@ -3355,10 +4547,16 @@ int ObDSLResolver::resolve_range(ObIJsonBase &req_node, ObDSLQuery *&query, ObDS
       type = T_OP_LT;
     } else if (key.case_compare("lte") == 0) {
       type = T_OP_LE;
+    } else if (key.case_compare("boost") == 0) {
+      if (OB_FAIL(resolve_boost(*var_node, boost_expr, QUERY_ITEM_RANGE, outer_query_type))) {
+        LOG_WARN("fail to resolve boost", K(ret));
+      } else {
+        continue;
+      }
     } else {
       ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "invalid key in range query");
-      LOG_WARN("not supported syntax in query", K(ret), K(key));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "keys other than 'gt', 'gte', 'lt', 'lte' and 'boost' in range query");
+      LOG_WARN("unsupported key in range query", K(ret), K(key));
     }
     if (OB_FAIL(ret)) {
     } else if (!IS_RANGE_CMP_OP(type)) {
@@ -3396,7 +4594,7 @@ int ObDSLResolver::resolve_range(ObIJsonBase &req_node, ObDSLQuery *&query, ObDS
   } else {
     range_query->field_ = field_expr;
     range_query->scalar_expr_ = scalar_expr;
-    range_query->boost_ = setup_boost(nullptr);
+    range_query->boost_ = setup_boost(boost_expr);
     query = range_query;
   }
   return ret;
@@ -3496,14 +4694,14 @@ int ObDSLResolver::resolve_term(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSL
   ObString col_name;
   ObString path_str;
   ObJsonNodeType value_type = ObJsonNodeType::J_MAX_TYPE;
+  bool is_array_col = false;
   ObIJsonBase *col_para = nullptr;
   ObIJsonBase *value_node = nullptr;
   ObColumnRefRawExpr *col_expr = nullptr;
-  ObRawExpr *path_expr = nullptr;
-  ObSysFunRawExpr *json_extract_expr = nullptr;
   ObRawExpr *field_expr = nullptr;
   ObRawExpr *value_expr = nullptr;
-  ObRawExpr *eq_expr = nullptr;
+  ObRawExpr *expr = nullptr;
+  ObConstRawExpr *boost_expr = nullptr;
   ObDSLScalarQuery *term_query = nullptr;
   if (ObDSLQuery::check_need_cal_score_in_bool(outer_query_type, parent_query)) {
     ret = OB_NOT_SUPPORTED;
@@ -3522,11 +4720,6 @@ int ObDSLResolver::resolve_term(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSL
   } else if (is_scalar_json_type(col_para->json_type())) {
     value_node = col_para;
   } else if (col_para->json_type() == ObJsonNodeType::J_OBJECT) {
-    if (col_para->element_count() == 0) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "param of term, should not be empty");
-      LOG_WARN("param of term should not be empty", K(ret));
-    }
     for (uint64_t i = 0; OB_SUCC(ret) && i < col_para->element_count(); i++) {
       ObString key;
       ObIJsonBase *sub_node = nullptr;
@@ -3534,10 +4727,14 @@ int ObDSLResolver::resolve_term(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSL
         LOG_WARN("fail to get value", K(ret));
       } else if (key.case_compare("value") == 0) {
         value_node = sub_node;
+      } else if (key.case_compare("boost") == 0) {
+        if (OB_FAIL(resolve_boost(*sub_node, boost_expr, QUERY_ITEM_TERM, outer_query_type))) {
+          LOG_WARN("fail to resolve boost", K(ret));
+        }
       } else {
         ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "invalid key in term expr");
-        LOG_WARN("unsupported key in term expr", K(ret), K(key));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "keys other than 'value' and 'boost' in term query");
+        LOG_WARN("unsupported key in term query", K(ret), K(key));
       }
     }
   } else {
@@ -3546,13 +4743,12 @@ int ObDSLResolver::resolve_term(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSL
   }
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(value_node)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null value node", K(ret));
-  } else if (!col_expr->get_result_type().is_json() &&
-             !col_expr->get_result_type().is_collection_sql_type() &&
-             !is_scalar_json_type(value_node->json_type())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "value in term query, should be string or number for non-json and non-array column");
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "term query, value not exists");
+    LOG_WARN("value not exists in term query", K(ret));
+  } else if (!is_scalar_json_type(value_node->json_type())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "value in term query, should be scalar like string, number, boolean, etc.");
     LOG_WARN("invalid value type in term query", K(ret), K(col_expr->get_result_type()), K(value_node->json_type()));
   } else if (col_expr->get_result_type().get_type() == ObTinyIntType &&
              col_expr->get_result_type().get_precision() == DEFAULT_PRECISION_FOR_BOOL) {
@@ -3561,34 +4757,153 @@ int ObDSLResolver::resolve_term(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSL
     value_type = value_node->json_type();
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(resolve_const(*value_node, value_expr, value_type))) {
+  } else if (!col_expr->get_result_type().is_json() &&
+             OB_FAIL(resolve_const(*value_node, value_expr, value_type))) {
     LOG_WARN("fail to resolve const value", K(ret));
-  } else if (path_str.empty()) {
-    if (OB_FAIL(dsl_query_info_->dsl_cols.push_back(col_expr))) {
-      LOG_WARN("failed to push back scalar query column expr", K(ret));
-    } else {
-      field_expr = col_expr;
+  } else if (OB_FAIL(is_array_column(col_expr, is_array_col))) {
+      LOG_WARN("fail to check if column is array", K(ret), KPC(col_expr));
+  } else if (is_array_col) {
+    ObSEArray<ObRawExpr*, 1, ModulePageAllocator, true> value_exprs;
+    if (OB_FAIL(value_exprs.push_back(value_expr))) {
+      LOG_WARN("fail to push value expr for array_contains", K(ret));
+    } else if (OB_FAIL(build_array_intersects_expr(col_expr, value_exprs, expr))) {
+      LOG_WARN("fail to build array intersects expr for term", K(ret));
     }
-  } else if (OB_FAIL(construct_string_expr(path_str, path_expr))) {
-    LOG_WARN("fail to create path expr", K(ret), K(path_str));
-  } else if (OB_FAIL(expr_factory->create_raw_expr(T_FUN_SYS_JSON_EXTRACT, json_extract_expr))) {
-    LOG_WARN("fail to create json_extract expr", K(ret));
-  } else if (OB_FALSE_IT(json_extract_expr->set_func_name(N_JSON_EXTRACT))) {
-  } else if (OB_FAIL(json_extract_expr->set_param_exprs(col_expr, path_expr))) {
-    LOG_WARN("fail to set param exprs for json_extract", K(ret));
-  } else {
-    field_expr = json_extract_expr;
+  } else if (OB_FAIL(build_field_expr_with_path(col_expr, path_str, QUERY_ITEM_TERM, field_expr))) {
+    LOG_WARN("fail to build field expr with path for term", K(ret));
+  } else if (col_expr->get_result_type().is_json()) {
+    if (OB_FAIL(build_json_contains_scalar_expr(field_expr, *value_node, expr))) {
+      LOG_WARN("fail to build json contains scalar expr for term", K(ret));
+    }
+  } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*expr_factory, T_OP_EQ, field_expr, value_expr, expr))) {
+    LOG_WARN("fail to build equal expr", K(ret));
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*expr_factory, T_OP_EQ, field_expr, value_expr, eq_expr))) {
-    LOG_WARN("fail to build equal expr", K(ret));
   } else if (OB_FAIL(ObDSLScalarQuery::create(*allocator_, term_query, QUERY_ITEM_TERM, outer_query_type, parent_query))) {
     LOG_WARN("fail to create term query", K(ret));
   } else {
     term_query->field_ = field_expr;
-    term_query->scalar_expr_ = eq_expr;
-    term_query->boost_ = setup_boost(nullptr);
+    term_query->scalar_expr_ = expr;
+    term_query->boost_ = setup_boost(boost_expr);
     query = term_query;
+  }
+  return ret;
+}
+
+int ObDSLResolver::resolve_wildcard(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSLQuery *parent_query, ObEsQueryItem outer_query_type)
+{
+  int ret = OB_SUCCESS;
+  ObRawExprFactory *expr_factory = params_.expr_factory_;
+  ObString col_name;
+  ObString path_str;
+  ObIJsonBase *col_para = nullptr;
+  ObIJsonBase *pattern_node = nullptr;
+  ObColumnRefRawExpr *col_expr = nullptr;
+  ObRawExpr *path_expr = nullptr;
+  ObSysFunRawExpr *json_extract_expr = nullptr;
+  ObSysFunRawExpr *json_unquote_expr = nullptr;
+  ObRawExpr *field_expr = nullptr;
+  ObRawExpr *pattern_expr = nullptr;
+  ObRawExpr *escape_raw_expr = nullptr;
+  ObConstRawExpr *escape_expr = nullptr;
+  ObOpRawExpr *like_expr = nullptr;
+  ObConstRawExpr *boost_expr = nullptr;
+  ObDSLScalarQuery *wildcard_query = nullptr;
+  ObCollationType target_coll = CS_TYPE_INVALID;
+  ObString like_pattern;
+  if (ObDSLQuery::check_need_cal_score_in_bool(outer_query_type, parent_query)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "scalar wildcard query in must/should clause");
+    LOG_WARN("scalar wildcard query cannot be scored or exist in must/should clause", K(ret), K(outer_query_type));
+  } else if (req_node.json_type() != ObJsonNodeType::J_OBJECT) {
+    ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
+    LOG_WARN("wildcard expr should be object", K(ret));
+  } else if (req_node.element_count() != 1) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "wildcard, wildcard query doesn't support multiple fields");
+    LOG_WARN("wildcard query doesn't support multiple fields", K(ret));
+  } else if (OB_FAIL(req_node.get_object_value(0, col_name, col_para))) {
+    LOG_WARN("failed to get wildcard field", K(ret));
+  } else if (OB_FAIL(get_field_expr_and_path(col_name, col_expr, path_str))) {
+    LOG_WARN("failed to get field expr and path", K(ret), K(col_name));
+  } else if (path_str.empty() && !ob_is_string_or_lob_type(col_expr->get_result_type().get_type())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "field in wildcard query, should be string column");
+    LOG_WARN("wildcard only supports string or lob column", K(ret), K(col_name), K(col_expr->get_result_type()));
+  } else if (col_para->json_type() == ObJsonNodeType::J_STRING) {
+    pattern_node = col_para;
+  } else if (col_para->json_type() == ObJsonNodeType::J_OBJECT) {
+    if (col_para->element_count() == 0) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "param of wildcard, should not be empty");
+      LOG_WARN("param of wildcard should not be empty", K(ret));
+    }
+    for (uint64_t i = 0; OB_SUCC(ret) && i < col_para->element_count(); ++i) {
+      ObString key;
+      ObIJsonBase *sub_node = nullptr;
+      if (OB_FAIL(col_para->get_object_value(i, key, sub_node))) {
+        LOG_WARN("failed to get wildcard param", K(ret), K(i));
+      } else if (key.case_compare("value") == 0 || key.case_compare("wildcard") == 0) {
+        if (sub_node->json_type() != ObJsonNodeType::J_STRING) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "value type in wildcard query, should be string");
+          LOG_WARN("value type in wildcard query should be string", K(ret), K(key), K(sub_node->json_type()));
+        } else {
+          pattern_node = sub_node;
+        }
+      } else if (key.case_compare("boost") == 0) {
+        if (OB_FAIL(resolve_boost(*sub_node, boost_expr, QUERY_ITEM_WILDCARD, outer_query_type))) {
+          LOG_WARN("fail to resolve boost", K(ret));
+        }
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "keys other than 'value', 'wildcard' and 'boost' in wildcard expr");
+        LOG_WARN("unsupported key in wildcard query", K(ret), K(key));
+      }
+    }
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "wildcard field value should be string or object");
+    LOG_WARN("wildcard field value should be string or object", K(ret), K(col_para->json_type()));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(pattern_node)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "wildcard query, required param \"value\" or \"wildcard\" is missed");
+    LOG_WARN("wildcard pattern is missing", K(ret));
+  } else if (OB_FAIL(convert_wildcard_pattern_to_like(
+                 ObString(pattern_node->get_data_length(), pattern_node->get_data()), like_pattern))) {
+    LOG_WARN("failed to convert wildcard pattern", K(ret));
+  } else if (OB_FAIL(build_field_expr_with_path(col_expr, path_str, QUERY_ITEM_WILDCARD, field_expr))) {
+    LOG_WARN("failed to build field expr with path for wildcard", K(ret), K(path_str));
+  } else if (path_str.empty()) {
+  } else if (OB_FAIL(expr_factory->create_raw_expr(T_FUN_SYS_JSON_UNQUOTE, json_unquote_expr))) {
+    LOG_WARN("failed to create json_unquote expr", K(ret));
+  } else if (OB_FALSE_IT(json_unquote_expr->set_func_name(N_JSON_UNQUOTE))) {
+  } else if (OB_FAIL(json_unquote_expr->set_param_expr(field_expr))) {
+    LOG_WARN("failed to set param exprs for json_unquote", K(ret));
+  } else {
+    field_expr = json_unquote_expr;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FALSE_IT(target_coll = field_expr->get_collation_type())) {
+  } else if (OB_FAIL(construct_string_expr(like_pattern, pattern_expr, target_coll))) {
+    LOG_WARN("failed to create wildcard pattern expr", K(ret), K(like_pattern), K(target_coll));
+  } else if (OB_FAIL(construct_string_expr(ObString::make_string("\\"), escape_raw_expr,
+                                           target_coll))) {
+    LOG_WARN("failed to create escape expr", K(ret));
+  } else if (OB_ISNULL(escape_expr = static_cast<ObConstRawExpr *>(escape_raw_expr))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("escape expr must be const expr", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::build_like_expr(*expr_factory, session_info_, field_expr, pattern_expr, escape_expr, like_expr))) {
+    LOG_WARN("failed to build like expr", K(ret));
+  } else if (OB_FAIL(ObDSLScalarQuery::create(*allocator_, wildcard_query, QUERY_ITEM_WILDCARD, outer_query_type, parent_query))) {
+    LOG_WARN("failed to create wildcard query", K(ret));
+  } else {
+    wildcard_query->field_ = field_expr;
+    wildcard_query->scalar_expr_ = like_expr;
+    wildcard_query->boost_ = setup_boost(boost_expr);
+    query = wildcard_query;
   }
   return ret;
 }
@@ -3600,12 +4915,13 @@ int ObDSLResolver::resolve_terms(ObIJsonBase &req_node, ObDSLQuery *&query, ObDS
   ObEsQueryItem query_type = QUERY_ITEM_TERMS;
   uint64_t count = 0;
   ObString path_str;
+  bool is_array_col = false;
   ObColumnRefRawExpr *col_expr = nullptr;
-  ObRawExpr *path_expr = nullptr;
-  ObSysFunRawExpr *json_extract_expr = nullptr;
   ObRawExpr *field_expr = nullptr;
+  ObIJsonBase *array_elem_node = nullptr; // array element in terms param array
   ObSEArray<ObRawExpr*, 4, ModulePageAllocator, true> value_exprs;
-  ObRawExpr *in_expr = nullptr;
+  ObRawExpr *expr = nullptr;
+  ObConstRawExpr *boost_expr = nullptr;
   ObDSLScalarQuery *terms_query = nullptr;
   if (ObDSLQuery::check_need_cal_score_in_bool(outer_query_type, parent_query)) {
     ret = OB_NOT_SUPPORTED;
@@ -3614,19 +4930,27 @@ int ObDSLResolver::resolve_terms(ObIJsonBase &req_node, ObDSLQuery *&query, ObDS
   } else if (req_node.json_type() != ObJsonNodeType::J_OBJECT) {
     ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
     LOG_WARN("terms expr should be object", K(ret));
-  } else if (FALSE_IT(count = req_node.element_count())) {
-  } else if (count != 1) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("terms expr only supports field and boost", K(ret));
+  } else {
+    count = req_node.element_count();
   }
   for (uint64_t i = 0; OB_SUCC(ret) && i < count; i++) {
     ObString key;
     ObIJsonBase *sub_node = nullptr;
     if (OB_FAIL(req_node.get_object_value(i, key, sub_node))) {
       LOG_WARN("fail to get value", K(ret));
+    } else if (key.case_compare("boost") == 0) {
+      if (OB_FAIL(resolve_boost(*sub_node, boost_expr, QUERY_ITEM_TERMS, outer_query_type))) {
+        LOG_WARN("fail to resolve boost", K(ret));
+      }
     } else if (OB_NOT_NULL(col_expr)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("terms expr only supports one field", K(ret));
+      if (count == 1) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("col_expr not null but count is 1", K(ret));
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "keys other than field name and 'boost' in terms query");
+        LOG_WARN("unsupported key in terms query", K(ret), K(key));
+      }
     } else if (sub_node->json_type() != ObJsonNodeType::J_ARRAY) {
       ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
       LOG_WARN("unexpected value type, should be array", K(ret), K(sub_node->json_type()));
@@ -3636,10 +4960,17 @@ int ObDSLResolver::resolve_terms(ObIJsonBase &req_node, ObDSLQuery *&query, ObDS
       uint64_t array_count = sub_node->element_count();
       if (array_count == 0) {
         ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "terms param array, should have at least one element");
         LOG_WARN("keyword array should have at least one element", K(ret));
       } else if (col_expr->get_result_type().is_json()) {
-        query_type = QUERY_ITEM_JSON_OVERLAPS;
-      } else if (col_expr->get_result_type().is_collection_sql_type()) {
+        if (array_count == 1) {
+          query_type = QUERY_ITEM_JSON_CONTAINS;
+        } else {
+          query_type = QUERY_ITEM_JSON_OVERLAPS;
+        }
+      } else if (OB_FAIL(is_array_column(col_expr, is_array_col))) {
+        LOG_WARN("fail to check if column is array", K(ret), KPC(col_expr));
+      } else if (is_array_col) {
         query_type = QUERY_ITEM_ARRAY_CONTAINS;
       }
       for (uint64_t j = 0; OB_SUCC(ret) && j < array_count; j++) {
@@ -3648,12 +4979,20 @@ int ObDSLResolver::resolve_terms(ObIJsonBase &req_node, ObDSLQuery *&query, ObDS
         ObRawExpr *value_expr = nullptr;
         if (OB_FAIL(sub_node->get_array_element(j, element))) {
           LOG_WARN("fail to get array element", K(ret), K(j));
-        } else if (!col_expr->get_result_type().is_json() &&
-                   !col_expr->get_result_type().is_collection_sql_type() &&
-                   !is_scalar_json_type(element->json_type())) {
+        } else if (!is_scalar_json_type(element->json_type()) &&
+                   (element->json_type() != ObJsonNodeType::J_OBJECT || !col_expr->get_result_type().is_json())) {
           ret = OB_INVALID_ARGUMENT;
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "value in terms query, should be scalar for non-json and non-array column");
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "value in terms query, should be scalar like string, number, boolean, etc.");
           LOG_WARN("invalid value type in terms query", K(ret), K(col_expr->get_result_type()), K(element->json_type()));
+        } else if (query_type == QUERY_ITEM_JSON_CONTAINS) {
+          if (array_count != 1) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("json contains terms should have only one element", K(ret));
+          } else {
+            // for json_contains, record the only element node for special handling later and break
+            array_elem_node = element;
+            break;
+          }
         } else if (col_expr->get_result_type().get_type() == ObTinyIntType &&
                    col_expr->get_result_type().get_precision() == DEFAULT_PRECISION_FOR_BOOL) {
           element_type = ObJsonNodeType::J_BOOLEAN;
@@ -3672,77 +5011,28 @@ int ObDSLResolver::resolve_terms(ObIJsonBase &req_node, ObDSLQuery *&query, ObDS
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(col_expr)) {
     ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "terms query, it should have field at least");
     LOG_WARN("terms expr should have field", K(ret));
-  } else if (path_str.empty()) {
-    if (OB_FAIL(dsl_query_info_->dsl_cols.push_back(col_expr))) {
-      LOG_WARN("failed to push back scalar query column expr", K(ret));
-    } else {
-      field_expr = col_expr;
+  } else if (is_array_col) {
+    if (OB_FAIL(build_array_intersects_expr(col_expr, value_exprs, expr))) {
+      LOG_WARN("fail to build array intersects expr for terms", K(ret));
     }
-  } else if (OB_FAIL(construct_string_expr(path_str, path_expr))) {
-    LOG_WARN("fail to create path expr", K(ret), K(path_str));
-  } else if (OB_FAIL(expr_factory->create_raw_expr(T_FUN_SYS_JSON_EXTRACT, json_extract_expr))) {
-    LOG_WARN("fail to create json_extract expr", K(ret));
-  } else if (OB_FALSE_IT(json_extract_expr->set_func_name(N_JSON_EXTRACT))) {
-  } else if (OB_FAIL(json_extract_expr->set_param_exprs(col_expr, path_expr))) {
-    LOG_WARN("fail to set param exprs for json_extract", K(ret));
-  } else {
-    field_expr = json_extract_expr;
-  }
-  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(build_field_expr_with_path(col_expr, path_str, query_type, field_expr))) {
+    LOG_WARN("fail to build field expr with path for terms", K(ret));
+  } else if (col_expr->get_result_type().is_json()) {
+    // for single-value, JSON_CONTAINS is closer to ES with a narrow performance gap compared to JSON_OVERLAPS
+    // for multiple values, JSON_OVERLAPS is approximately ES-compatible, but has better performance
+    if (query_type == QUERY_ITEM_JSON_CONTAINS) {
+      if (OB_FAIL(build_json_contains_scalar_expr(field_expr, *array_elem_node, expr))) {
+        LOG_WARN("fail to build json contains scalar expr for terms on json column", K(ret));
+      }
+    } else if (OB_FAIL(build_json_overlaps_array_expr(field_expr, value_exprs, expr))) {
+      LOG_WARN("fail to build json intersects array expr for terms on json column", K(ret));
+    }
   } else if (value_exprs.count() == 1) {
     query_type = QUERY_ITEM_TERM;
-    if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*expr_factory, T_OP_EQ, field_expr, value_exprs.at(0), in_expr))) {
+    if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*expr_factory, T_OP_EQ, field_expr, value_exprs.at(0), expr))) {
       LOG_WARN("fail to build equal expr", K(ret));
-    }
-  } else if (col_expr->get_result_type().is_collection_sql_type()) {
-    ObSysFunRawExpr *array_expr = nullptr;
-    ObSysFunRawExpr *array_contains_expr = nullptr;
-    // for an array column, use array_contains to replace in operator
-    if (OB_FAIL(expr_factory->create_raw_expr(T_FUN_SYS_ARRAY, array_expr))) {
-      LOG_WARN("fail to create array expr", K(ret));
-    } else if (OB_FALSE_IT(array_expr->set_func_name(N_ARRAY))) {
-    } else if (OB_FAIL(array_expr->init_param_exprs(value_exprs.count()))) {
-      LOG_WARN("fail to init param exprs for array", K(ret));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < value_exprs.count(); ++i) {
-        if (OB_FAIL(array_expr->add_param_expr(value_exprs.at(i)))) {
-          LOG_WARN("fail to add param expr to array", K(ret), K(i));
-        }
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(expr_factory->create_raw_expr(T_FUNC_SYS_ARRAY_CONTAINS, array_contains_expr))) {
-      LOG_WARN("fail to create array contains expr", K(ret));
-    } else if (OB_FALSE_IT(array_contains_expr->set_func_name(N_ARRAY_CONTAINS))) {
-    } else if (OB_FAIL(array_contains_expr->set_param_exprs(array_expr, col_expr))) {
-      LOG_WARN("fail to set param exprs for array contains", K(ret));
-    } else {
-      in_expr = array_contains_expr;
-    }
-  } else if (col_expr->get_result_type().is_json()) {
-    ObSysFunRawExpr *json_array_expr = nullptr;
-    ObSysFunRawExpr *json_overlaps_expr = nullptr;
-    if (OB_FAIL(expr_factory->create_raw_expr(T_FUN_SYS_JSON_ARRAY, json_array_expr))) {
-      LOG_WARN("fail to create json array expr", K(ret));
-    } else if (OB_FALSE_IT(json_array_expr->set_func_name(N_JSON_ARRAY))) {
-    } else if (OB_FAIL(json_array_expr->init_param_exprs(value_exprs.count()))) {
-      LOG_WARN("fail to init param exprs for json array", K(ret));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < value_exprs.count(); ++i) {
-        if (OB_FAIL(json_array_expr->add_param_expr(value_exprs.at(i)))) {
-          LOG_WARN("fail to add param expr to json array", K(ret), K(i));
-        }
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(expr_factory->create_raw_expr(T_FUN_SYS_JSON_OVERLAPS, json_overlaps_expr))) {
-      LOG_WARN("fail to create json overlaps expr", K(ret));
-    } else if (OB_FALSE_IT(json_overlaps_expr->set_func_name(N_JSON_OVERLAPS))) {
-    } else if (OB_FAIL(json_overlaps_expr->set_param_exprs(field_expr, json_array_expr))) {
-      LOG_WARN("fail to set param exprs for json overlaps", K(ret));
-    } else {
-      in_expr = json_overlaps_expr;
     }
   } else {
     ObOpRawExpr *row_expr = nullptr;
@@ -3750,10 +5040,10 @@ int ObDSLResolver::resolve_terms(ObIJsonBase &req_node, ObDSLQuery *&query, ObDS
       LOG_WARN("fail to create row expr", K(ret));
     } else if (OB_FAIL(row_expr->set_param_exprs(value_exprs))) {
       LOG_WARN("fail to set param exprs for row expr", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*expr_factory, T_OP_IN, field_expr, row_expr, in_expr))) {
+    } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*expr_factory, T_OP_IN, field_expr, row_expr, expr))) {
       LOG_WARN("fail to build in expr", K(ret));
     } else {
-      static_cast<ObOpRawExpr*>(in_expr)->set_add_implicit_cast_for_in_param(true);
+      static_cast<ObOpRawExpr*>(expr)->set_add_implicit_cast_for_in_param(true);
     }
   }
   if (OB_FAIL(ret)) {
@@ -3761,8 +5051,8 @@ int ObDSLResolver::resolve_terms(ObIJsonBase &req_node, ObDSLQuery *&query, ObDS
     LOG_WARN("fail to create terms query", K(ret));
   } else {
     terms_query->field_ = field_expr;
-    terms_query->scalar_expr_ = in_expr;
-    terms_query->boost_ = setup_boost(nullptr);
+    terms_query->scalar_expr_ = expr;
+    terms_query->boost_ = setup_boost(boost_expr);
     query = terms_query;
   }
   return ret;
@@ -3830,35 +5120,30 @@ int ObDSLResolver::setup_top_level_score(ObDSLQuery *query)
     query->is_top_level_score_ = true;
   } else if (IS_QUERY_ITEM_BOOL(query->query_type_)) {
     ObDSLBoolQuery *bool_query = static_cast<ObDSLBoolQuery*>(query);
-    if (OB_ISNULL(bool_query)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("bool query is null", K(ret));
-    } else {
-      ObDSLQuery *only_score_query = nullptr;
-      for (int64_t i = 0; i < bool_query->must_.count(); i++) {
-        if (bool_query->must_.at(i)->need_cal_score_) {
-          if (OB_ISNULL(only_score_query)) {
-            only_score_query = bool_query->must_.at(i);
-          } else {
-            query->is_top_level_score_ = true;
-            break;
-          }
+    ObDSLQuery *only_score_query = nullptr;
+    for (int64_t i = 0; i < bool_query->must_.count(); i++) {
+      if (bool_query->must_.at(i)->need_cal_score_) {
+        if (OB_ISNULL(only_score_query)) {
+          only_score_query = bool_query->must_.at(i);
+        } else {
+          query->is_top_level_score_ = true;
+          break;
         }
       }
-      for (int64_t i = 0; !query->is_top_level_score_ && i < bool_query->should_.count(); i++) {
-        if (bool_query->should_.at(i)->need_cal_score_) {
-          if (OB_ISNULL(only_score_query)) {
-            only_score_query = bool_query->should_.at(i);
-          } else {
-            query->is_top_level_score_ = true;
-            break;
-          }
+    }
+    for (int64_t i = 0; !query->is_top_level_score_ && i < bool_query->should_.count(); i++) {
+      if (bool_query->should_.at(i)->need_cal_score_) {
+        if (OB_ISNULL(only_score_query)) {
+          only_score_query = bool_query->should_.at(i);
+        } else {
+          query->is_top_level_score_ = true;
+          break;
         }
       }
-      if (OB_ISNULL(only_score_query) || query->is_top_level_score_) {
-      } else if (OB_FAIL(setup_top_level_score(only_score_query))) {
-        LOG_WARN("fail to setup top level score for score query", K(ret));
-      }
+    }
+    if (OB_ISNULL(only_score_query) || query->is_top_level_score_) {
+    } else if (OB_FAIL(setup_top_level_score(only_score_query))) {
+      LOG_WARN("fail to setup top level score for score query", K(ret));
     }
   }
   return ret;
@@ -3925,40 +5210,35 @@ int ObDSLResolver::try_push_nested_boost_to_leaf_query(ObDSLQuery *query, const 
   if (OB_ISNULL(query)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("query is null", K(ret));
-  } else if (IS_QUERY_ITEM_FULLTEXT(query->query_type_)) {
-    // update leaf query boost
-    ObDSLFullTextQuery *fulltext_query = static_cast<ObDSLFullTextQuery*>(query);
-    if (OB_ISNULL(fulltext_query->boost_)) {
+  } else if (IS_QUERY_ITEM_FULLTEXT(query->query_type_) ||
+             IS_QUERY_ITEM_ARRAY(query->query_type_) ||
+             IS_QUERY_ITEM_JSON(query->query_type_) ||
+             IS_QUERY_ITEM_SCALAR(query->query_type_)) {
+    if (OB_ISNULL(query->boost_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null boost expr", K(ret));
     } else {
-      const double new_boost = cumulative_boost * fulltext_query->boost_->get_value().get_double();
+      const double new_boost = cumulative_boost * query->boost_->get_value().get_double();
       // if boost_ is the shared one_const_expr_, we need to create a new expression
       // instead of modifying the shared one, to avoid affecting other queries that use it
-      if (fulltext_query->boost_ == dsl_query_info_->one_const_expr_) {
+      if (query->boost_ == dsl_query_info_->one_const_expr_) {
         ObConstRawExpr *new_boost_expr = nullptr;
         ObRawExprFactory *expr_factory = params_.expr_factory_;
         if (OB_FAIL(ObRawExprUtils::build_const_double_expr(*expr_factory, ObDoubleType, new_boost, new_boost_expr))) {
           LOG_WARN("fail to create new boost expr", K(ret));
         } else {
-          fulltext_query->boost_ = new_boost_expr;
+          query->boost_ = new_boost_expr;
         }
       } else {
         ObObj new_boost_obj;
         new_boost_obj.set_double(new_boost);
-        fulltext_query->boost_->set_value(new_boost_obj);
+        query->boost_->set_value(new_boost_obj);
       }
     }
   } else if (IS_QUERY_ITEM_BOOL(query->query_type_)) {
     // accumulate & propagate boost
     ObDSLBoolQuery *bool_query = static_cast<ObDSLBoolQuery*>(query);
-    double new_boost = 0;
-    if (OB_ISNULL(bool_query->boost_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null boost expr", K(ret));
-    } else {
-      new_boost = cumulative_boost * bool_query->boost_->get_value().get_double();
-    }
+    double new_boost = cumulative_boost * bool_query->boost_->get_value().get_double();
     for (int64_t i = 0; OB_SUCC(ret) && i < bool_query->must_.count(); i++) {
       if (OB_FAIL(try_push_nested_boost_to_leaf_query(bool_query->must_.at(i), new_boost))) {
         LOG_WARN("fail to push nested boost to leaf query", K(ret));
@@ -3974,6 +5254,795 @@ int ObDSLResolver::try_push_nested_boost_to_leaf_query(ObDSLQuery *query, const 
     }
   } else {
     // query types irrelevant to nested boost
+  }
+  return ret;
+}
+
+bool ObDSLResolver::is_groupable_type(ObObjType type)
+{
+  return ob_is_numeric_type(type) || ob_is_temporal_type(type)
+      || ob_is_otimestamp_type(type) || ob_is_string_or_enumset_type(type);
+}
+
+int ObDSLResolver::resolve_collapse(ObIJsonBase &req_node)
+{
+  int ret = OB_SUCCESS;
+  ObString field_name;
+  ObIJsonBase *field_node = nullptr;
+  ObColumnRefRawExpr *col_expr = nullptr;
+  if (OB_ISNULL(stmt_) || !stmt_->is_select_stmt()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid state for resolve_collapse", K(ret));
+  } else if (req_node.json_type() != ObJsonNodeType::J_OBJECT) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "collapse, expected a JSON object");
+    LOG_WARN("collapse value must be an object", K(ret));
+  } else if (req_node.element_count() == 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "collapse, object must not be empty");
+    LOG_WARN("collapse object is empty", K(ret));
+  } else if (req_node.element_count() != 1) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "collapse options other than field");
+    LOG_WARN("collapse only supports field option", K(ret), K(req_node.element_count()));
+  } else if (OB_FAIL(req_node.get_object_value(static_cast<uint64_t>(0), field_name, field_node))) {
+    LOG_WARN("fail to get collapse option", K(ret));
+  } else if (field_name.case_compare("field") != 0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "collapse options other than field");
+    LOG_WARN("unsupported collapse option", K(ret), K(field_name));
+  } else if (OB_ISNULL(field_node) || field_node->json_type() != ObJsonNodeType::J_STRING) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "collapse.field, expected a string");
+    LOG_WARN("collapse field must be a string", K(ret));
+  } else if (FALSE_IT(field_name.assign_ptr(field_node->get_data(), field_node->get_data_length()))) {
+  } else if (field_name.case_compare("__score") == 0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "collapse by __score");
+    LOG_WARN("collapse by __score is not supported", K(ret));
+  } else if (OB_FAIL(get_user_column_expr(field_name, col_expr))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_ERR_BAD_FIELD_ERROR;
+      LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, field_name.length(), field_name.ptr(),
+                     table_item_.get_table_name().length(), table_item_.get_table_name().ptr());
+    }
+    LOG_WARN("fail to resolve collapse field", K(ret), K(field_name));
+  } else {
+    ObColumnIndexInfo *idx_info = nullptr;
+    if (OB_FAIL(get_col_idx_info(col_expr->get_column_name(), idx_info))) {
+      LOG_WARN("fail to get col idx info for collapse field", K(ret), K(field_name));
+    } else if (OB_NOT_NULL(idx_info)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "collapse by fulltext/vector index column");
+      LOG_WARN("collapse on domain index column not supported", K(ret), K(field_name));
+    } else if (!is_groupable_type(col_expr->get_result_type().get_type())
+               || col_expr->get_result_type().is_lob()
+               || col_expr->get_result_type().is_json()
+               || col_expr->get_result_type().is_geometry()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "collapse by text/json/geometry column type");
+      LOG_WARN("unsupported collapse column type", K(ret), K(field_name),
+               K(col_expr->get_result_type()));
+    } else {
+      dsl_query_info_->collapse_info_.field_ = col_expr;
+    }
+  }
+  return ret;
+}
+
+int ObDSLResolver::inject_collapse_stmt_rewrites()
+{
+  int ret = OB_SUCCESS;
+  ObRawExprFactory *expr_factory = params_.expr_factory_;
+  ObSelectStmt *select_stmt = nullptr;
+  ObWinFunRawExpr *row_num_expr = nullptr;
+  ObConstRawExpr *one_expr = nullptr;
+  ObRawExpr *qualify_expr = nullptr;
+  ObRawExpr *fusion_score_expr = nullptr;
+  ObSEArray<ObRawExpr *, 1> partition_exprs;
+  if (!dsl_query_info_->has_dsl_collapse_) {
+    return ret;
+  } else if (OB_ISNULL(expr_factory) || OB_ISNULL(stmt_) || !stmt_->is_select_stmt()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid state for inject_collapse_stmt_rewrites", K(ret));
+  } else if (dsl_query_info_->has_dsl_aggs_
+             || dsl_query_info_->result_mode_ != ObDSLResultMode::SEARCH_HITS) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "use collapse with aggs");
+    LOG_WARN("collapse and aggs cannot be used together", K(ret));
+  } else if (OB_ISNULL(dsl_query_info_->collapse_info_.field_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("collapse field is null", K(ret));
+  } else if (FALSE_IT(select_stmt = static_cast<ObSelectStmt *>(stmt_))) {
+  } else if (OB_FAIL(partition_exprs.push_back(dsl_query_info_->collapse_info_.field_))) {
+    LOG_WARN("fail to push back collapse partition expr", K(ret));
+  } else if (select_stmt->get_order_item_size() == 0) {
+    if (dsl_query_info_->score_cols_.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("score columns not available for collapse", K(ret));
+    } else if (OB_ISNULL(fusion_score_expr = dsl_query_info_->score_cols_.at(dsl_query_info_->score_cols_.count() - 1))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fusion score expr is null", K(ret));
+    } else {
+      OrderItem default_order_item(fusion_score_expr, NULLS_LAST_DESC);
+      if (OB_FAIL(select_stmt->add_order_item(default_order_item))) {
+        LOG_WARN("fail to add default order item for collapse", K(ret));
+      } else if (OB_FAIL(set_stmt_limit_offset(dsl_query_info_, *select_stmt))) {
+        LOG_WARN("failed to set stmt limit for collapse", K(ret));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(expr_factory->create_raw_expr(T_WINDOW_FUNCTION, row_num_expr))) {
+    LOG_WARN("failed to create row_number window expr", K(ret));
+  } else if (select_stmt->get_order_item_size() <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("collapse order items should not be empty", K(ret));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(row_num_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("row_number expr is null", K(ret), K(row_num_expr));
+  } else if (OB_FAIL(row_num_expr->set_partition_exprs(partition_exprs))) {
+    LOG_WARN("fail to set collapse partition exprs", K(ret));
+  } else if (OB_FALSE_IT(row_num_expr->set_func_type(T_WIN_FUN_ROW_NUMBER))) {
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_order_item_size(); ++i) {
+      if (OB_FAIL(row_num_expr->get_order_items().push_back(select_stmt->get_order_item(i)))) {
+        LOG_WARN("fail to push back collapse order item", K(ret), K(i));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*expr_factory, ObIntType, 1, one_expr))) {
+    LOG_WARN("fail to build const expr for collapse filter", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*expr_factory, T_OP_EQ,
+                                                                 row_num_expr, one_expr,
+                                                                 qualify_expr))) {
+    LOG_WARN("fail to build qualify expr for collapse", K(ret));
+  } else {
+    dsl_query_info_->collapse_info_.win_func_expr_ = row_num_expr;
+    dsl_query_info_->collapse_info_.qualify_expr_ = qualify_expr;
+  }
+  return ret;
+}
+
+int ObDSLResolver::check_aggs_bucket_name_conflict(const ObString &agg_name, bool &is_conflict)
+{
+  int ret = OB_SUCCESS;
+  ObString lower_agg_name;
+  const ObColumnSchemaV2 *col_schema = nullptr;
+  is_conflict = false;
+  if (agg_name.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("agg name is empty", K(ret));
+  } else if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is null", K(ret));
+  } else if (!col_schema_map_.created()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column schema map is not initialized", K(ret));
+  } else if (OB_FAIL(ObCharset::tolower(CS_TYPE_UTF8MB4_GENERAL_CI, agg_name, lower_agg_name, *allocator_))) {
+    LOG_WARN("failed to normalize agg bucket name", K(ret), K(agg_name));
+  } else if (OB_FAIL(col_schema_map_.get_refactored(lower_agg_name, col_schema))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to lookup agg bucket name in column map", K(ret), K(agg_name));
+    }
+  } else {
+    is_conflict = true;
+  }
+  return ret;
+}
+
+int ObDSLResolver::resolve_aggs(ObIJsonBase &aggs_node)
+{
+  int ret = OB_SUCCESS;
+  if (aggs_node.json_type() != ObJsonNodeType::J_OBJECT || aggs_node.element_count() == 0) {
+    ret = OB_ERR_PARSER_SYNTAX;
+    LOG_USER_ERROR(OB_ERR_PARSER_SYNTAX, "aggs must be a non-empty object");
+    LOG_WARN("aggs must be a non-empty object", K(ret));
+  } else if (aggs_node.element_count() > 1) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "multiple aggregations in single query");
+    LOG_WARN("multiple aggregations not supported", K(ret));
+  } else {
+    for (uint64_t i = 0; OB_SUCC(ret) && i < aggs_node.element_count(); i++) {
+      ObString agg_name;
+      ObIJsonBase *agg_body = nullptr;
+      if (OB_FAIL(aggs_node.get_object_value(i, agg_name, agg_body))) {
+        LOG_WARN("fail to get agg body", K(ret), K(i));
+      } else if (OB_ISNULL(agg_body) || agg_body->json_type() != ObJsonNodeType::J_OBJECT
+                 || agg_body->element_count() == 0) {
+        ret = OB_ERR_PARSER_SYNTAX;
+        LOG_USER_ERROR(OB_ERR_PARSER_SYNTAX, "aggregation body must be a non-empty object");
+        LOG_WARN("aggregation body must be a non-empty object", K(ret), K(agg_name));
+      } else {
+        ObString type_key;
+        ObIJsonBase *type_body = nullptr;
+        if (OB_FAIL(agg_body->get_object_value(static_cast<uint64_t>(0), type_key, type_body))) {
+          LOG_WARN("fail to get aggregation type", K(ret), K(agg_name));
+        } else if (type_key.case_compare("terms") == 0) {
+          if (OB_FAIL(resolve_agg_terms(agg_name, *type_body))) {
+            LOG_WARN("fail to resolve agg terms", K(ret), K(agg_name));
+          }
+        } else if (type_key.case_compare("cardinality") == 0) {
+          if (OB_FAIL(resolve_agg_cardinality(agg_name, *type_body))) {
+            LOG_WARN("fail to resolve agg cardinality", K(ret), K(agg_name));
+          }
+        } else {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "only terms/cardinality aggregation is supported");
+          LOG_WARN("unsupported aggregation type", K(ret), K(type_key));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDSLResolver::resolve_agg_terms(const ObString &agg_name, ObIJsonBase &terms_node)
+{
+  int ret = OB_SUCCESS;
+  if (terms_node.json_type() != ObJsonNodeType::J_OBJECT) {
+    ret = OB_ERR_PARSER_SYNTAX;
+    LOG_USER_ERROR(OB_ERR_PARSER_SYNTAX, "terms body must be an object");
+    LOG_WARN("terms body must be an object", K(ret));
+  } else {
+    ObDSLAggTermsItem item;
+    bool name_conflicts_with_user_column = false;
+    if (OB_FAIL(ob_write_string(*allocator_, agg_name, item.agg_name_))) {
+      LOG_WARN("fail to write agg name", K(ret), K(agg_name));
+    } else if (OB_FAIL(check_aggs_bucket_name_conflict(agg_name, name_conflicts_with_user_column))) {
+      LOG_WARN("failed to check agg bucket name conflict", K(ret), K(agg_name));
+    } else {
+      item.name_conflicts_with_user_column_ = name_conflicts_with_user_column;
+    }
+    bool has_field = false;
+    for (uint64_t i = 0; OB_SUCC(ret) && i < terms_node.element_count(); i++) {
+      ObString key;
+      ObIJsonBase *val = nullptr;
+      if (OB_FAIL(terms_node.get_object_value(i, key, val))) {
+        LOG_WARN("fail to get terms param", K(ret), K(i));
+      } else if (OB_ISNULL(val)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("terms param value is null", K(ret), K(i));
+      } else if (key.case_compare("field") == 0) {
+        if (val->json_type() != ObJsonNodeType::J_STRING) {
+          ret = OB_ERR_PARSER_SYNTAX;
+          LOG_USER_ERROR(OB_ERR_PARSER_SYNTAX, "terms.field must be a string");
+          LOG_WARN("terms.field must be a string", K(ret));
+        } else {
+          ObString field_name(val->get_data_length(), val->get_data());
+          ObColumnRefRawExpr *col_expr = nullptr;
+          ObColumnIndexInfo *idx_info = nullptr;
+          if (OB_FAIL(get_user_column_expr(field_name, col_expr))) {
+            if (OB_HASH_NOT_EXIST == ret) {
+              ret = OB_ERR_BAD_FIELD_ERROR;
+              LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, field_name.length(), field_name.ptr(),
+                             (int)strlen("terms aggregation"), "terms aggregation");
+            }
+            LOG_WARN("fail to get column expr for terms field", K(ret), K(field_name));
+          } else if (OB_ISNULL(col_expr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("column expr is null", K(ret), K(field_name));
+          } else if (OB_FAIL(get_col_idx_info(col_expr->get_column_name(), idx_info))) {
+            LOG_WARN("fail to get col idx info", K(ret), K(field_name));
+          } else if (OB_NOT_NULL(idx_info)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "terms aggregation on fulltext/vector index column");
+            LOG_WARN("terms on domain index column not supported", K(ret), K(field_name));
+          } else if (!is_groupable_type(col_expr->get_data_type())) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "terms aggregation on this column type");
+            LOG_WARN("column type not groupable", K(ret), K(field_name), K(col_expr->get_data_type()));
+          } else {
+            item.field_ = col_expr;
+            has_field = true;
+          }
+        }
+      } else if (key.case_compare("size") == 0) {
+        if (val->json_type() != ObJsonNodeType::J_INT) {
+          ret = OB_ERR_PARSER_SYNTAX;
+          LOG_USER_ERROR(OB_ERR_PARSER_SYNTAX, "terms.size must be an integer");
+          LOG_WARN("terms.size must be an integer", K(ret));
+        } else {
+          item.size_ = val->get_int();
+          if (item.size_ <= 0) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "terms.size must be > 0");
+            LOG_WARN("terms.size must be > 0", K(ret), K(item.size_));
+          }
+        }
+      } else if (key.case_compare("min_doc_count") == 0) {
+        if (val->json_type() != ObJsonNodeType::J_INT) {
+          ret = OB_ERR_PARSER_SYNTAX;
+          LOG_USER_ERROR(OB_ERR_PARSER_SYNTAX, "terms.min_doc_count must be an integer");
+          LOG_WARN("terms.min_doc_count must be an integer", K(ret));
+        } else {
+          item.min_doc_count_ = val->get_int();
+          if (item.min_doc_count_ < 0) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "terms.min_doc_count must be >= 0");
+            LOG_WARN("terms.min_doc_count must be >= 0", K(ret), K(item.min_doc_count_));
+          } else if (item.min_doc_count_ == 0) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "terms.min_doc_count = 0");
+            LOG_WARN("min_doc_count=0 not supported in MVP", K(ret));
+          }
+        }
+      } else if (key.case_compare("order") == 0) {
+        if (val->json_type() != ObJsonNodeType::J_OBJECT || val->element_count() != 1) {
+          ret = OB_ERR_PARSER_SYNTAX;
+          LOG_USER_ERROR(OB_ERR_PARSER_SYNTAX, "terms.order must be a single-key object");
+          LOG_WARN("terms.order must be a single-key object", K(ret));
+        } else {
+          ObString order_key;
+          ObIJsonBase *order_val = nullptr;
+          if (OB_FAIL(val->get_object_value(static_cast<uint64_t>(0), order_key, order_val))) {
+            LOG_WARN("fail to get order key", K(ret));
+          } else if (order_key.case_compare("_count") == 0) {
+            item.order_by_ = ObDSLAggTermsItem::BY_COUNT;
+          } else if (order_key.case_compare("_key") == 0) {
+            item.order_by_ = ObDSLAggTermsItem::BY_KEY;
+          } else {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "terms.order only supports _count and _key");
+            LOG_WARN("unsupported order key", K(ret), K(order_key));
+          }
+          if (OB_SUCC(ret) && OB_NOT_NULL(order_val)
+              && order_val->json_type() == ObJsonNodeType::J_STRING) {
+            ObString dir_str(order_val->get_data_length(), order_val->get_data());
+            if (dir_str.case_compare("asc") == 0) {
+              item.order_asc_ = true;
+            } else if (dir_str.case_compare("desc") == 0) {
+              item.order_asc_ = false;
+            } else {
+              ret = OB_ERR_PARSER_SYNTAX;
+              LOG_USER_ERROR(OB_ERR_PARSER_SYNTAX, "order direction must be asc or desc");
+              LOG_WARN("invalid order direction", K(ret), K(dir_str));
+            }
+          }
+        }
+      } else if (key.case_compare("shard_size") == 0
+              || key.case_compare("shard_min_doc_count") == 0
+              || key.case_compare("show_term_doc_count_error") == 0
+              || key.case_compare("collect_mode") == 0
+              || key.case_compare("execution_hint") == 0) {
+        LOG_INFO("terms aggregation parameter not supported, ignored", K(key));
+      } else if (key.case_compare("include") == 0
+              || key.case_compare("exclude") == 0
+              || key.case_compare("missing") == 0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "terms.include/exclude/missing");
+        LOG_WARN("terms parameter not yet supported", K(ret), K(key));
+      } else {
+        ret = OB_ERR_PARSER_SYNTAX;
+        LOG_USER_ERROR(OB_ERR_PARSER_SYNTAX, "unknown terms aggregation parameter");
+        LOG_WARN("unknown terms param", K(ret), K(key));
+      }
+    }
+    if (OB_SUCC(ret) && !has_field) {
+      ret = OB_ERR_PARSER_SYNTAX;
+      LOG_USER_ERROR(OB_ERR_PARSER_SYNTAX, "terms aggregation requires field parameter");
+      LOG_WARN("terms aggregation requires field parameter", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(dsl_query_info_->agg_items_.push_back(item))) {
+        LOG_WARN("fail to push back agg item", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDSLResolver::resolve_agg_cardinality(const ObString &agg_name, ObIJsonBase &cardinality_node)
+{
+  int ret = OB_SUCCESS;
+  if (cardinality_node.json_type() != ObJsonNodeType::J_OBJECT) {
+    ret = OB_ERR_PARSER_SYNTAX;
+    LOG_USER_ERROR(OB_ERR_PARSER_SYNTAX, "cardinality body must be an object");
+    LOG_WARN("cardinality body must be an object", K(ret));
+  } else {
+    ObDSLAggTermsItem item;
+    bool name_conflicts_with_user_column = false;
+    item.agg_type_ = ObDSLAggTermsItem::CARDINALITY;
+    if (OB_FAIL(ob_write_string(*allocator_, agg_name, item.agg_name_))) {
+      LOG_WARN("fail to write agg name", K(ret), K(agg_name));
+    } else if (OB_FAIL(check_aggs_bucket_name_conflict(agg_name, name_conflicts_with_user_column))) {
+      LOG_WARN("failed to check agg bucket name conflict", K(ret), K(agg_name));
+    } else {
+      item.name_conflicts_with_user_column_ = name_conflicts_with_user_column;
+    }
+    bool has_field = false;
+    for (uint64_t i = 0; OB_SUCC(ret) && i < cardinality_node.element_count(); i++) {
+      ObString key;
+      ObIJsonBase *val = nullptr;
+      if (OB_FAIL(cardinality_node.get_object_value(i, key, val))) {
+        LOG_WARN("fail to get cardinality param", K(ret), K(i));
+      } else if (OB_ISNULL(val)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("cardinality param value is null", K(ret), K(i));
+      } else if (key.case_compare("field") == 0) {
+        if (val->json_type() != ObJsonNodeType::J_STRING) {
+          ret = OB_ERR_PARSER_SYNTAX;
+          LOG_USER_ERROR(OB_ERR_PARSER_SYNTAX, "cardinality.field must be a string");
+          LOG_WARN("cardinality.field must be a string", K(ret));
+        } else {
+          ObString field_name(val->get_data_length(), val->get_data());
+          ObColumnRefRawExpr *col_expr = nullptr;
+          ObColumnIndexInfo *idx_info = nullptr;
+          if (OB_FAIL(get_user_column_expr(field_name, col_expr))) {
+            if (OB_HASH_NOT_EXIST == ret) {
+              ret = OB_ERR_BAD_FIELD_ERROR;
+              LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, field_name.length(), field_name.ptr(),
+                             (int)strlen("cardinality aggregation"), "cardinality aggregation");
+            }
+            LOG_WARN("fail to get column expr for cardinality field", K(ret), K(field_name));
+          } else if (OB_ISNULL(col_expr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("column expr is null", K(ret), K(field_name));
+          } else if (OB_FAIL(get_col_idx_info(col_expr->get_column_name(), idx_info))) {
+            LOG_WARN("fail to get col idx info", K(ret), K(field_name));
+          } else if (OB_NOT_NULL(idx_info)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "cardinality aggregation on fulltext/vector index column");
+            LOG_WARN("cardinality on domain index column not supported", K(ret), K(field_name));
+          } else if (!is_groupable_type(col_expr->get_data_type())) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "cardinality aggregation on this column type");
+            LOG_WARN("column type not supported for cardinality", K(ret), K(field_name), K(col_expr->get_data_type()));
+          } else {
+            item.field_ = col_expr;
+            has_field = true;
+          }
+        }
+      } else if (key.case_compare("precision_threshold") == 0
+                 || key.case_compare("execution_hint") == 0) {
+        LOG_INFO("cardinality parameter ignored under exact DISTINCT semantics", K(key));
+      } else if (key.case_compare("missing") == 0
+                 || key.case_compare("script") == 0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "cardinality.missing/script");
+        LOG_WARN("cardinality parameter not yet supported", K(ret), K(key));
+      } else {
+        ret = OB_ERR_PARSER_SYNTAX;
+        LOG_USER_ERROR(OB_ERR_PARSER_SYNTAX, "unknown cardinality aggregation parameter");
+        LOG_WARN("unknown cardinality param", K(ret), K(key));
+      }
+    }
+    if (OB_SUCC(ret) && !has_field) {
+      ret = OB_ERR_PARSER_SYNTAX;
+      LOG_USER_ERROR(OB_ERR_PARSER_SYNTAX, "cardinality aggregation requires field parameter");
+      LOG_WARN("cardinality aggregation requires field parameter", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(dsl_query_info_->agg_items_.push_back(item))) {
+        LOG_WARN("fail to push back agg item", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDSLResolver::inject_agg_stmt_rewrites()
+{
+  int ret = OB_SUCCESS;
+  if (dsl_query_info_->agg_items_.empty()) {
+    // no aggs, nothing to do
+  } else if (OB_ISNULL(params_.expr_factory_) || OB_ISNULL(stmt_) || !stmt_->is_select_stmt()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid state for inject_agg_stmt_rewrites", K(ret));
+  } else if (dsl_query_info_->has_dsl_sort_) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "use aggs with sort");
+    LOG_WARN("aggs and sort cannot be used together", K(ret));
+  } else {
+    ObRawExprFactory *expr_factory = params_.expr_factory_;
+    ObSelectStmt *select_stmt = static_cast<ObSelectStmt *>(stmt_);
+    ObDSLAggTermsItem &item = dsl_query_info_->agg_items_.at(0);
+
+    if (item.agg_type_ == ObDSLAggTermsItem::TERMS) {
+      // 1. GROUP BY field
+      if (OB_FAIL(select_stmt->add_group_expr(item.field_))) {
+        LOG_WARN("fail to add group expr", K(ret));
+      }
+
+      // 2. COUNT(*)
+      ObAggFunRawExpr *count_expr = nullptr;
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(ObRawExprUtils::build_dummy_count_expr(*expr_factory, session_info_, count_expr))) {
+          LOG_WARN("fail to build count expr", K(ret));
+        } else {
+          item.count_expr_ = count_expr;
+          if (OB_FAIL(select_stmt->add_agg_item(*count_expr))) {
+            LOG_WARN("fail to add agg item", K(ret));
+          }
+        }
+      }
+
+      // 3. HAVING COUNT(*) >= min_doc_count
+      if (OB_SUCC(ret) && item.min_doc_count_ > 0) {
+        ObConstRawExpr *min_doc_expr = nullptr;
+        ObRawExpr *having_expr = nullptr;
+        if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*expr_factory, ObIntType,
+                                                         item.min_doc_count_, min_doc_expr))) {
+          LOG_WARN("fail to build min_doc_count expr", K(ret));
+        } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*expr_factory, T_OP_GE,
+                                                                        count_expr, min_doc_expr,
+                                                                        having_expr))) {
+          LOG_WARN("fail to build having expr", K(ret));
+        } else if (OB_FAIL(select_stmt->add_having_expr(having_expr))) {
+          LOG_WARN("fail to add having expr", K(ret));
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        ObRawExpr *not_null_expr = nullptr;
+        if (OB_FAIL(ObRawExprUtils::build_is_not_null_expr(*expr_factory, item.field_,
+                                                           true /*is_not_null*/, not_null_expr))) {
+          LOG_WARN("fail to build is not null expr for terms agg field", K(ret));
+        } else if (OB_FAIL(select_stmt->add_having_expr(not_null_expr))) {
+          LOG_WARN("fail to add not null having for terms agg field", K(ret));
+        }
+      }
+
+      // 4. ORDER BY (_key or _count, with tie-breaker to match ES behavior)
+      if (OB_SUCC(ret)) {
+        ObRawExpr *order_expr = nullptr;
+        if (item.order_by_ == ObDSLAggTermsItem::BY_KEY) {
+          order_expr = item.field_;
+        } else {
+          order_expr = item.count_expr_;
+        }
+        ObOrderDirection direction = item.order_asc_ ? NULLS_LAST_ASC : NULLS_FIRST_DESC;
+        OrderItem order_item(order_expr, direction);
+        if (OB_FAIL(select_stmt->add_order_item(order_item))) {
+          LOG_WARN("fail to add order item for aggs", K(ret));
+        } else if (item.order_by_ == ObDSLAggTermsItem::BY_COUNT) {
+          // ES tie-breaker: when counts are equal, sort by _key asc
+          OrderItem tiebreak_item(item.field_, NULLS_LAST_ASC);
+          if (OB_FAIL(select_stmt->add_order_item(tiebreak_item))) {
+            LOG_WARN("fail to add tiebreak order item for aggs", K(ret));
+          }
+        }
+      }
+
+      // 5. LIMIT size
+      if (OB_SUCC(ret) && item.size_ > 0) {
+        ObConstRawExpr *limit_expr = nullptr;
+        if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*expr_factory, ObIntType,
+                                                         item.size_, limit_expr))) {
+          LOG_WARN("fail to build limit expr", K(ret));
+        } else {
+          select_stmt->set_limit_offset(limit_expr, nullptr);
+        }
+      }
+    } else if (item.agg_type_ == ObDSLAggTermsItem::CARDINALITY) {
+      // DISTINCT semantics are provided by the user-visible SELECT item
+      // (COUNT(DISTINCT field)); the DSL here mainly validates the syntax.
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected agg type", K(ret), K(item.agg_type_));
+    }
+  }
+  return ret;
+}
+
+int ObDSLResolver::check_hybrid_search_clause_compat(ObSelectStmt *select_stmt)
+{
+  int ret = OB_SUCCESS;
+  bool has_dsl_order_by = false;
+  bool has_dsl_limit = false;
+  for (int64_t i = 0; i < select_stmt->get_table_size(); ++i) {
+    const TableItem *ti = select_stmt->get_table_item(i);
+    if (OB_NOT_NULL(ti) && ti->is_hybrid_search_table() && OB_NOT_NULL(ti->dsl_query_)) {
+      if (ti->dsl_query_->has_dsl_sort_ || ti->dsl_query_->has_dsl_collapse_) {
+        has_dsl_order_by = true;
+        has_dsl_limit = true;
+      }
+      if (ti->dsl_query_->has_dsl_aggs_) {
+        for (int64_t j = 0; j < ti->dsl_query_->agg_items_.count(); ++j) {
+          if (ti->dsl_query_->agg_items_.at(j).agg_type_ == ObDSLAggTermsItem::TERMS) {
+            has_dsl_order_by = true;
+            has_dsl_limit = true;
+          }
+        }
+      }
+    }
+  }
+  if (select_stmt->get_condition_size() > 0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "use hybrid search with where condition");
+  } else if (select_stmt->has_order_by() && !has_dsl_order_by) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "use hybrid search with order by");
+  } else if (select_stmt->has_limit() && !has_dsl_limit) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "use hybrid search with limit");
+  }
+  return ret;
+}
+
+int ObDSLResolver::check_hybrid_search_cardinality_agg(ObSelectStmt *select_stmt)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_table_size(); ++i) {
+    TableItem *table_item = select_stmt->get_table_item(i);
+    if (OB_ISNULL(table_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table item is null", K(ret), K(i));
+    } else if (!table_item->is_hybrid_search_table()) {
+      // do nothing
+    } else if (OB_ISNULL(table_item->dsl_query_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("dsl query info is null", K(ret), K(i));
+    } else {
+      const ObDSLAggTermsItem *cardinality_item = nullptr;
+      for (int64_t j = 0; OB_ISNULL(cardinality_item) && j < table_item->dsl_query_->agg_items_.count(); ++j) {
+        if (table_item->dsl_query_->agg_items_.at(j).agg_type_ == ObDSLAggTermsItem::CARDINALITY) {
+          cardinality_item = &table_item->dsl_query_->agg_items_.at(j);
+        }
+      }
+      if (OB_SUCC(ret) && OB_NOT_NULL(cardinality_item)) {
+        const ObAggFunRawExpr *aggr_expr = nullptr;
+        ObRawExpr *distinct_param = nullptr;
+        if (!select_stmt->is_scala_group_by() || select_stmt->get_aggr_item_size() != 1) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "cardinality aggregation requires the aggs bucket pseudo column or COUNT(DISTINCT field) matching cardinality.field");
+          LOG_WARN("invalid select shape for cardinality agg", K(ret),
+                   K(select_stmt->is_scala_group_by()), K(select_stmt->get_aggr_item_size()));
+        } else if (OB_ISNULL(aggr_expr = select_stmt->get_aggr_item(0))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("aggregate expr is null", K(ret));
+        } else if (aggr_expr->get_expr_type() != T_FUN_COUNT
+                   || !aggr_expr->is_param_distinct()
+                   || aggr_expr->get_real_param_count() != 1) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "cardinality aggregation requires the aggs bucket pseudo column or COUNT(DISTINCT field) matching cardinality.field");
+          LOG_WARN("aggregate expr does not match COUNT(DISTINCT field)", K(ret), KPC(aggr_expr));
+        } else if (OB_ISNULL(distinct_param = aggr_expr->get_real_param_exprs().at(0))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("distinct param is null", K(ret));
+        } else if (OB_ISNULL(cardinality_item->field_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("cardinality field is null", K(ret));
+        } else if (!distinct_param->same_as(*cardinality_item->field_)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "cardinality aggregation requires the aggs bucket pseudo column or COUNT(DISTINCT field) matching cardinality.field");
+          LOG_WARN("distinct param does not match cardinality field", K(ret),
+                   KPC(distinct_param), KPC(cardinality_item->field_));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDSLResolver::check_hybrid_search_stmt(ObSelectStmt *select_stmt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(select_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (!select_stmt->is_hybrid_search()) {
+    // do nothing
+  } else if (OB_FAIL(refresh_result_modes(select_stmt))) {
+    LOG_WARN("failed to refresh hybrid search result modes", K(ret));
+  } else if (OB_FAIL(check_hybrid_search_clause_compat(select_stmt))) {
+    LOG_WARN("hybrid search clause compatibility check failed", K(ret));
+  } else if (OB_FAIL(check_hybrid_search_cardinality_agg(select_stmt))) {
+    LOG_WARN("hybrid search cardinality aggregation check failed", K(ret));
+  }
+  return ret;
+}
+
+bool ObDSLResolver::is_hybrid_search_count_star_stmt(const ObSelectStmt &select_stmt,
+                                                     const ObAggFunRawExpr *&aggr_expr)
+{
+  bool is_count_star = false;
+  aggr_expr = nullptr;
+  if (select_stmt.get_select_item_size() == 1) {
+    const SelectItem &select_item = select_stmt.get_select_item(0);
+    aggr_expr = OB_NOT_NULL(select_item.expr_) && select_item.expr_->is_aggr_expr()
+                    ? static_cast<const ObAggFunRawExpr *>(select_item.expr_)
+                    : nullptr;
+    is_count_star = OB_NOT_NULL(aggr_expr)
+                    && aggr_expr->get_expr_type() == T_FUN_COUNT
+                    && !aggr_expr->is_param_distinct()
+                    && aggr_expr->get_real_param_count() == 0;
+  }
+  return is_count_star;
+}
+
+int ObDSLResolver::ignore_count_star_dsl_rewrites(ObSelectStmt &select_stmt,
+                                                  ObDSLQueryInfo &dsl_query_info)
+{
+  int ret = OB_SUCCESS;
+  const ObAggFunRawExpr *const_aggr_expr = nullptr;
+  ObAggFunRawExpr *aggr_expr = nullptr;
+  if (!ObDSLResolver::is_hybrid_search_count_star_stmt(select_stmt, const_aggr_expr)) {
+    // do nothing
+  } else if (OB_ISNULL(aggr_expr = const_cast<ObAggFunRawExpr *>(const_aggr_expr))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("aggregate expr is null", K(ret));
+  } else {
+    // select count(*) means "count raw query/knn hits"; ignore all DSL-level
+    // reshaping operators such as aggs, sort, collapse and pagination.
+    select_stmt.clear_aggr_item();
+    if (OB_FAIL(select_stmt.add_agg_item(*aggr_expr))) {
+      LOG_WARN("failed to restore outer count(*) aggregate", K(ret));
+    } else {
+      select_stmt.get_order_items().reset();
+      select_stmt.get_group_exprs().reset();
+      select_stmt.get_having_exprs().reset();
+      select_stmt.set_limit_offset(nullptr, nullptr);
+      select_stmt.get_window_func_exprs().reset();
+      select_stmt.get_qualify_filters().reset();
+
+      dsl_query_info.has_dsl_sort_ = false;
+      dsl_query_info.sort_items_.reset();
+      dsl_query_info.has_dsl_collapse_ = false;
+      dsl_query_info.collapse_info_.win_func_expr_ = nullptr;
+      dsl_query_info.collapse_info_.qualify_expr_ = nullptr;
+      dsl_query_info.has_dsl_aggs_ = false;
+      dsl_query_info.agg_items_.reset();
+      dsl_query_info.result_mode_ = ObDSLResultMode::COUNT_AGG;
+      set_track_score(&dsl_query_info);
+    }
+  }
+  return ret;
+}
+
+int ObDSLResolver::register_collapse_exprs(ObSelectStmt *select_stmt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(select_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_table_size(); ++i) {
+    TableItem *ti = select_stmt->get_table_item(i);
+    if (OB_ISNULL(ti)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table item is null", K(ret), K(i));
+    } else if (!ti->is_hybrid_search_table() || OB_ISNULL(ti->dsl_query_)
+               || !ti->dsl_query_->has_dsl_collapse_
+               || OB_ISNULL(ti->dsl_query_->collapse_info_.win_func_expr_)) {
+      // skip: no collapse on this table
+    } else if (OB_FAIL(ObExpandAggregateUtils::add_win_expr(
+                   select_stmt->get_window_func_exprs(),
+                   ti->dsl_query_->collapse_info_.win_func_expr_))) {
+      LOG_WARN("fail to register collapse window expr", K(ret));
+    } else if (OB_NOT_NULL(ti->dsl_query_->collapse_info_.qualify_expr_)
+               && OB_FAIL(select_stmt->get_qualify_filters().push_back(
+                              ti->dsl_query_->collapse_info_.qualify_expr_))) {
+      LOG_WARN("fail to add qualify filter for collapse", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDSLResolver::refresh_result_modes(ObSelectStmt *select_stmt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(select_stmt) || !select_stmt->is_hybrid_search()) {
+    // do nothing
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_table_size(); ++i) {
+      TableItem *ti = select_stmt->get_table_item(i);
+      if (OB_NOT_NULL(ti) && ti->is_hybrid_search_table() && OB_NOT_NULL(ti->dsl_query_)) {
+        if (OB_FAIL(ObDSLResolver::refresh_result_mode_after_select_resolved(select_stmt, ti->dsl_query_))) {
+          LOG_WARN("failed to refresh result mode after select resolved", K(ret));
+        } else if (OB_FAIL(ObDSLResolver::ignore_count_star_dsl_rewrites(*select_stmt, *ti->dsl_query_))) {
+          LOG_WARN("failed to ignore dsl rewrites for count(*)", K(ret));
+        }
+      }
+    }
   }
   return ret;
 }

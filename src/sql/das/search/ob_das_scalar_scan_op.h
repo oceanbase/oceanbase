@@ -43,6 +43,7 @@ public:
   { }
   int get_next_rows(int64_t &count, const int64_t max_batch_size);
   const ObDASScalarScanCtDef *get_scalar_ctdef() const { return scalar_ctdef_; }
+  const ObDASScalarScanRtDef *get_scalar_scan_rtdef() const { return scalar_rtdef_; }
 
 private:
   int do_init(const ObIDASSearchOpParam &op_param) override;

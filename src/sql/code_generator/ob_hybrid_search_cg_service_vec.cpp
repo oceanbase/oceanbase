@@ -95,7 +95,9 @@ int ObHybridSearchCgService::generate_ctdef(ObLogTableScan &op, const ObFusionNo
         score_exprs,
         result_output_exprs,
         weight_exprs,
-        path_top_k_limit_exprs))) {
+        path_top_k_limit_exprs,
+        fusion_node->track_score_,
+        fusion_node->fusion_iter_exec_mode_))) {
       LOG_WARN("failed to init fusion ctdef", K(ret));
     } else {
       fusion_ctdef = new_fusion_ctdef;

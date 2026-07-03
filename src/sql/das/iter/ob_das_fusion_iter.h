@@ -198,6 +198,7 @@ public:
       offset_(0),
       min_score_(0.0),
       has_hybrid_fusion_op_(false),
+      fusion_iter_exec_mode_(ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS),
       search_ctx_(nullptr),
       fusion_rtdef_(nullptr)
   {}
@@ -217,6 +218,7 @@ public:
   int64_t offset_;
   double min_score_;
   bool has_hybrid_fusion_op_;
+  ObFusionIterExecMode fusion_iter_exec_mode_;
   ObDASSearchCtx *search_ctx_;
   ObDASFusionRtDef *fusion_rtdef_;
   common::ObSEArray<double, 2> weights_;
@@ -266,10 +268,12 @@ public:
       uint64_rowid_map_inited_(false),
       is_sorted_(false),
       rowkey_is_uint64_(false),
+      expected_doc_count_(64),
       output_idx_(0),
       input_row_cnt_(0),
       output_row_cnt_(0),
       fusion_profile_(nullptr),
+      fusion_iter_exec_mode_(ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS),
       enable_parallel_(false),
       search_ctx_(nullptr),
       fusion_rtdef_(nullptr),
@@ -412,24 +416,41 @@ private:
   common::ObSEArray<int64_t, 64> sorted_doc_indices_;
 
   // Row ID to doc_idx mapping
+  static const int64_t MAP_EXTEND_RATIO = 2;
+  static const int64_t MAP_BUCKET_RATIO = 2;
+  static const int64_t MAX_ROWID_MAP_BUCKET_CNT = 1024 * 1024;
   typedef common::hash::ObHashMap<common::ObRowkey, int64_t,
-                                   common::hash::NoPthreadDefendMode> RowIdDocMap;
+                                   common::hash::NoPthreadDefendMode,
+                                   common::hash::hash_func<common::ObRowkey>,
+                                   common::hash::equal_to<common::ObRowkey>,
+                                   common::hash::SimpleAllocer<common::hash::HashMapTypes<common::ObRowkey, int64_t>::AllocType>,
+                                   common::hash::NormalPointer,
+                                   oceanbase::common::ObMalloc,
+                                   MAP_EXTEND_RATIO> RowIdDocMap;
   RowIdDocMap rowid_doc_map_;
   bool rowid_map_inited_;
 
   typedef common::hash::ObHashMap<uint64_t, int64_t,
-                                   common::hash::NoPthreadDefendMode> Uint64RowIdDocMap;
+                                   common::hash::NoPthreadDefendMode,
+                                   common::hash::hash_func<uint64_t>,
+                                   common::hash::equal_to<uint64_t>,
+                                   common::hash::SimpleAllocer<common::hash::HashMapTypes<uint64_t, int64_t>::AllocType>,
+                                   common::hash::NormalPointer,
+                                   oceanbase::common::ObMalloc,
+                                   MAP_EXTEND_RATIO> Uint64RowIdDocMap;
   Uint64RowIdDocMap uint64_rowid_doc_map_;
   bool uint64_rowid_map_inited_;
 
   // State
   bool is_sorted_;
   bool rowkey_is_uint64_;
+  int64_t expected_doc_count_;
   int64_t output_idx_;
 
   int64_t input_row_cnt_;
   int64_t output_row_cnt_;
   common::ObOpProfile<common::ObMetric> *fusion_profile_;
+  ObFusionIterExecMode fusion_iter_exec_mode_;
 
   // Parallel execution fields
   bool enable_parallel_;

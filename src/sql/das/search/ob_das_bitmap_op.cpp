@@ -269,6 +269,8 @@ int ObDASBitmapOp::do_init(const ObIDASSearchOpParam &op_param)
   } else if (OB_ISNULL(rowid_expr_ = scan_op_->get_scalar_ctdef()->rowkey_exprs_.at(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected rowkey expr", K(ret), KPC(rowid_expr_));
+  } else {
+    boost_weight_ = scan_op_->get_scalar_scan_rtdef()->get_boost_weight();
   }
   return ret;
 }
@@ -385,6 +387,7 @@ int ObDASBitmapOp::do_close()
 int ObDASBitmapOp::do_advance_to(const ObDASRowID &target, ObDASRowID &curr_id, double &score)
 {
   int ret = OB_SUCCESS;
+  score = 0.0;
   if (!bitmap_built_ && OB_FAIL(build_bitmap())) {
     LOG_WARN("failed to build bitmap", K(ret));
   } else if (exhausted_) {
@@ -425,6 +428,9 @@ int ObDASBitmapOp::do_advance_to(const ObDASRowID &target, ObDASRowID &curr_id, 
         curr_id.set_uint64(val);
       }
     }
+    if (OB_SUCC(ret)) {
+      score = is_scoring_ ? boost_weight_ : 0.0;
+    }
   }
   return ret;
 }
@@ -457,8 +463,31 @@ int ObDASBitmapOp::do_next_rowid(ObDASRowID &next_id, double &score)
       ret = OB_ITER_END;
     } else {
       next_id.set_uint64(val);
+      score = is_scoring_ ? boost_weight_ : 0.0;
     }
   }
+  return ret;
+}
+
+int ObDASBitmapOp::do_advance_shallow(const ObDASRowID &target, const bool inclusive, const MaxScoreTuple *&max_score_tuple)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!target.is_normal())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid target rowid", K(ret), K(target));
+  } else if (inclusive) {
+    max_score_tuple_.set(target, target, is_scoring_ ? boost_weight_ : 0.0);
+    max_score_tuple = &max_score_tuple_;
+  } else if (OB_FAIL(ObIDASSearchOp::do_advance_shallow(target, inclusive, max_score_tuple))) {
+    LOG_WARN("failed to advance shallow", K(ret), K(target));
+  }
+  return ret;
+}
+
+int ObDASBitmapOp::do_calc_max_score(double &threshold)
+{
+  int ret = OB_SUCCESS;
+  threshold = is_scoring_ ? boost_weight_ : 0.0;
   return ret;
 }
 

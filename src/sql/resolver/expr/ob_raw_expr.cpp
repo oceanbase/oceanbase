@@ -1112,7 +1112,8 @@ int ObRawExpr::is_const_inherit_expr(bool &is_const_inherit,
       || T_FUN_SYS_IS_USED_LOCK == type_
       || T_FUN_SYS_RELEASE_LOCK == type_
       || T_FUN_SYS_RELEASE_ALL_LOCKS == type_
-      || T_FUN_ES_MATCH == type_) {
+      || T_FUN_ES_MATCH == type_
+      || T_HYBRID_SEARCH_SCORE == type_) {
      is_const_inherit = false;
   }
   if (is_const_inherit && T_OP_GET_USER_VAR == type_) {

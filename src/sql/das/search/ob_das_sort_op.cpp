@@ -42,6 +42,10 @@ int ObDASSortOp::do_init(const ObIDASSearchOpParam &op_param)
   } else if (OB_ISNULL(scan_op_ = static_cast<ObDASScalarScanOp *>(sort_op_param.get_child()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected scan op", K(ret));
+  } else {
+    boost_weight_ = scan_op_->get_scalar_scan_rtdef()->get_boost_weight();
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(sort_collations_.init(get_rowid_exprs().count()))) {
     LOG_WARN("failed to init sort collations", K(ret));
   } else if (OB_FAIL(sort_cmp_funcs_.init(get_rowid_exprs().count()))) {
@@ -175,6 +179,8 @@ int ObDASSortOp::do_advance_to(const ObDASRowID &target, ObDASRowID &curr_id, do
     if (OB_SUCC(ret)) {
       if (OB_FAIL(rowid_store_iter_.get_cur_rowid(curr_id))) {
         LOG_WARN("failed to get rowid", K(ret));
+      } else {
+        score = is_scoring_ ? boost_weight_ : 0.0;
       }
     } else if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("falied to find lower bound in store", K(ret));
@@ -207,6 +213,7 @@ int ObDASSortOp::do_advance_to(const ObDASRowID &target, ObDASRowID &curr_id, do
               LOG_WARN("failed to get rowid", K(ret));
             } else {
               reached = true;
+              score = is_scoring_ ? boost_weight_ : 0.0;
             }
           }
         }
@@ -229,6 +236,8 @@ int ObDASSortOp::do_next_rowid(ObDASRowID &next_id, double &score)
   } else if (!rowid_store_iter_.is_empty()) {
     if (OB_FAIL(rowid_store_iter_.get_cur_rowid(next_id))) {
       LOG_WARN("failed to get next rowid", K(ret));
+    } else {
+      score = is_scoring_ ? boost_weight_ : 0.0;
     }
   } else {
     int64_t storage_count = 0;
@@ -250,9 +259,33 @@ int ObDASSortOp::do_next_rowid(ObDASRowID &next_id, double &score)
       } else if (FALSE_IT(rowid_store_iter_.reuse())) {
       } else if (OB_FAIL(rowid_store_iter_.get_cur_rowid(next_id))) {
         LOG_WARN("failed to get next rowid", K(ret));
+      } else {
+        score = is_scoring_ ? boost_weight_ : 0.0;
       }
     }
   }
+  return ret;
+}
+
+int ObDASSortOp::do_advance_shallow(const ObDASRowID &target, const bool inclusive, const MaxScoreTuple *&max_score_tuple)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!target.is_normal())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid target rowid", K(ret), K(target));
+  } else if (inclusive) {
+    max_score_tuple_.set(target, target, is_scoring_ ? boost_weight_ : 0.0);
+    max_score_tuple = &max_score_tuple_;
+  } else if (OB_FAIL(ObIDASSearchOp::do_advance_shallow(target, inclusive, max_score_tuple))) {
+    LOG_WARN("failed to advance shallow", K(ret), K(target));
+  }
+  return ret;
+}
+
+int ObDASSortOp::do_calc_max_score(double &threshold)
+{
+  int ret = OB_SUCCESS;
+  threshold = is_scoring_ ? boost_weight_ : 0.0;
   return ret;
 }
 

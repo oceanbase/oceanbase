@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "ob_column_namespace_checker.h"
 #include "sql/resolver/dml/ob_dml_resolver.h"
+#include "sql/hybrid_search/ob_hybrid_search_dsl_resolver.h"
 
 namespace oceanbase
 {
@@ -294,7 +295,7 @@ int ObColumnNamespaceChecker::check_column_exists(const TableItem &table_item, c
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params_.session_info_ is null", K(ret));
   } else if (table_item.is_basic_table()) {
-    if (table_item.is_hybrid_search_table() && 0 == col_name.case_compare(OB_HYBRID_SEARCH_SCORE_COLUMN_NAME)) {
+    if (is_hybrid_search_pseudo_column(table_item, col_name)) {
       is_exist = true;
     } else if (0 == col_name.case_compare("ORA_ROWSCN") || 0 == col_name.case_compare(OB_MLOG_OLD_NEW_COLUMN_NAME)) {
       //only basic table has ora_rowscn
@@ -721,6 +722,27 @@ int ObColumnNamespaceChecker::check_rowid_existence_in_joined_table(const ObSQLS
     //do nothing
   }
   return ret;
+}
+
+bool ObColumnNamespaceChecker::is_hybrid_search_pseudo_column(const TableItem &table_item,
+                                                              const ObString &col_name)
+{
+  bool is_pseudo = false;
+  if (table_item.is_hybrid_search_table()) {
+    if (0 == col_name.case_compare(OB_HYBRID_SEARCH_SCORE_COLUMN_NAME)) {
+      is_pseudo = true;
+    } else if (OB_NOT_NULL(table_item.dsl_query_)) {
+      for (int64_t ai = 0; !is_pseudo && ai < table_item.dsl_query_->agg_items_.count(); ++ai) {
+        const ObDSLAggTermsItem &agg_it = table_item.dsl_query_->agg_items_.at(ai);
+        if ((agg_it.agg_type_ == ObDSLAggTermsItem::TERMS
+             || agg_it.agg_type_ == ObDSLAggTermsItem::CARDINALITY)
+            && 0 == col_name.case_compare(agg_it.agg_name_)) {
+          is_pseudo = true;
+        }
+      }
+    }
+  }
+  return is_pseudo;
 }
 
 }  // namespace sql

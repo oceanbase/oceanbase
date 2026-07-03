@@ -515,7 +515,8 @@ public:
                                   empty_score_exprs,
                                   empty_result_output_exprs,
                                   empty_weight_exprs,
-                                  empty_path_top_k_limit_exprs))) {
+                                  empty_path_top_k_limit_exprs,
+                                  false))) {
         LOG_WARN("failed to init fusion ctdef", K(ret));
       } else if (OB_FAIL(out_ctdef->result_output_.assign(output_exprs))) {
         LOG_WARN("failed to assign result output", K(ret));

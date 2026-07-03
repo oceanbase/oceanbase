@@ -70,7 +70,8 @@ public:
     from_(nullptr), size_(nullptr), min_score_(nullptr), window_size_(nullptr), rank_const_(nullptr),
     rowkey_cols_(allocator), score_cols_(allocator), weight_cols_(allocator), path_top_k_limit_(allocator),
     contains_vec_node_(false), search_index_(-1), has_search_subquery_(false), has_vector_subquery_(false),
-    is_top_k_query_(true), has_hybrid_fusion_op_(false), query_dop_(1)
+    is_top_k_query_(true), has_hybrid_fusion_op_(false), query_dop_(1),
+    track_score_(true), fusion_iter_exec_mode_(ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS)
     { node_type_ = INDEX_MERGE_HYBRID_FUSION_SEARCH; }
   virtual ~ObFusionNode() {}
   virtual inline bool contains_vector_node() const { return contains_vec_node_; }
@@ -95,6 +96,8 @@ public:
   bool is_top_k_query_;
   bool has_hybrid_fusion_op_;
   int64_t query_dop_;
+  bool track_score_;
+  ObFusionIterExecMode fusion_iter_exec_mode_;
 };
 
 class ObScalarQueryNode : public ObHybridSearchNodeBase
@@ -115,6 +118,8 @@ public:
   virtual int explain_info(char *buf, int64_t buf_len, int64_t &pos, ExplainType type, int blank_space_count);
   virtual int extract_filter(ObRawExprFactory &expr_factory, ObRawExpr *&extracted_expr) override;
   inline bool has_index() const { return has_valid_index_; }
+  bool can_keep_imprecise_range() const; // only support for wildcard querying varchar column
+  int add_pd_filter_for_imprecise_range(); // only support for wildcard querying varchar column
 
 public:
   struct ScalarQueryParams
@@ -245,6 +250,7 @@ private:
                                         bool &has_search_index,
                                         uint8_t &cons_encode_type);
   int init_fusion_node(const ObDSLQueryInfo *query_info, ObFusionNode *fusion_node);
+  int init_fusion_iter_exec_mode(const ObDSLQueryInfo *query_info, ObFusionNode *fusion_node);
   int get_vector_index_tid_from_expr(ObColumnRefRawExpr *field, uint64_t& vec_index_tid);
   bool is_search_subquery(ObIndexMergeNode *node) const;
   bool is_knn_subquery(ObIndexMergeNode *node) const;
@@ -266,6 +272,12 @@ private:
                                ObRawExpr *filter_expr,
                                ObIndexMergeNode *&split_node);
   static bool in_merge_expr_whitelist(const ObRawExpr *expr);
+  int build_merged_boost_expr(const ObConstRawExpr *boost1,
+                              const ObConstRawExpr *boost2,
+                              ObConstRawExpr *&merged_boost_expr);
+  int build_split_boost_expr(const ObDSLScalarQuery *scalar_query,
+                             const int64_t element_count,
+                             ObConstRawExpr *&split_boost_expr);
 private :
   common::ObIAllocator *allocator_;
   ObLogPlan *plan_;

@@ -9811,6 +9811,8 @@ int ObStaticEngineCG::generate_spec(ObLogHybridFusion &op,
   int ret = OB_SUCCESS;
   UNUSED(in_root_job);
   spec.fusion_method_ = op.get_fusion_algo();
+  spec.search_index_ = op.get_search_index();
+  spec.fusion_iter_exec_mode_ = op.get_fusion_node()->fusion_iter_exec_mode_;
   const ObIArray<ObRawExpr*> &score_exprs = op.get_score_exprs();
   const ObIArray<ObRawExpr*> &weights_exprs = op.get_weights_exprs();
   const ObIArray<ObRawExpr*> &path_top_k_limit_exprs = op.path_top_k_limit_exprs();

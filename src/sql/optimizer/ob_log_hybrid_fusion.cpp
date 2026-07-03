@@ -16,6 +16,11 @@ namespace sql
 void ObLogHybridFusion::set_has_hybrid_fusion_op()
 {
   fusion_node_->has_hybrid_fusion_op_ = true;
+  // hybrid fusion op needs path_scores computed by the fusion iter,
+  // so SKIP_FUSION_ITER (single-query shortcut) is not valid for partitioned tables
+  if (fusion_node_->fusion_iter_exec_mode_ == ObFusionIterExecMode::SKIP_FUSION_ITER) {
+    fusion_node_->fusion_iter_exec_mode_ = ObFusionIterExecMode::ROWKEY_SCORE_FULL_RECALL;
+  }
 }
 
 ObFusionMethod ObLogHybridFusion::get_fusion_algo() const
@@ -71,6 +76,11 @@ const ObIArray<ObRawExpr*>& ObLogHybridFusion::path_top_k_limit_exprs() const
 bool ObLogHybridFusion::has_search_subquery() const
 {
   return fusion_node_->has_search_subquery_;
+}
+
+int64_t ObLogHybridFusion::get_search_index() const
+{
+  return fusion_node_->search_index_;
 }
 
 ObLogHybridFusion::ObLogHybridFusion(ObLogPlan &plan)

@@ -103,9 +103,21 @@ int ObHybridSearchCgService::generate_hybrid_search_ctdef(ObLogTableScan &op,
     } else if (search_ctdef->op_type_ == DAS_OP_FUSION_QUERY
         && OB_FAIL(try_alloc_topk_collect_ctdef(static_cast<ObDASFusionCtDef*>(search_ctdef)))) {
       LOG_WARN("failed to try alloc topk collect ctdef", K(ret));
+    } else if (!op.get_index_back()) {
+      ObArray<ObRawExpr *> non_pushdown_filters;
+      ObArray<ObRawExpr *> lookup_pushdown_filters;
+      if (OB_FAIL(prepare_main_scan_access_ctdef(op,
+                                                 tsc_ctdef.scan_ctdef_,
+                                                 non_pushdown_filters,
+                                                 lookup_pushdown_filters))) {
+        LOG_WARN("failed to prepare main scan access ctdef", K(ret));
+      } else {
+        root_ctdef = search_ctdef;
+      }
     } else if (OB_FAIL(generate_final_lookup_ctdef(op, tsc_ctdef, *search_ctdef, root_ctdef))) {
       LOG_WARN("failed to generate final lookup ctdef", K(ret));
-    } else if (OB_FAIL(mock_das_scan_ctdef(op, tsc_ctdef.scan_ctdef_))) {
+    }
+    if (OB_SUCC(ret) && OB_FAIL(mock_das_scan_ctdef(op, tsc_ctdef.scan_ctdef_))) {
       LOG_WARN("failed to mock das scan ctdef", K(ret));
     }
   }
@@ -262,6 +274,8 @@ int ObHybridSearchCgService::generate_ctdef(ObLogTableScan &op, const ObScalarQu
       } else {
         scalar_index_scan_ctdef->is_primary_table_scan_ = false;
         scalar_index_scan_ctdef->is_search_index_ = is_search_index_path;
+        scalar_index_scan_ctdef->set_is_scoring(scalar_query_node->is_scoring_);
+        scalar_index_scan_ctdef->set_is_top_level_scoring(scalar_query_node->is_top_level_scoring_);
       }
     }
   }
@@ -310,6 +324,9 @@ int ObHybridSearchCgService::generate_ctdef(ObLogTableScan &op, const ObScalarQu
       } else if (OB_ISNULL(scalar_main_scan_ctdef)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("main scan ctdef is null", K(ret));
+      } else {
+        scalar_main_scan_ctdef->set_is_scoring(scalar_query_node->is_scoring_);
+        scalar_main_scan_ctdef->set_is_top_level_scoring(scalar_query_node->is_top_level_scoring_);
       }
     }
   }
@@ -351,7 +368,11 @@ int ObHybridSearchCgService::generate_ctdef(ObLogTableScan &op, const ObScalarQu
     LOG_WARN("unexpected case", K(ret));
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_NOT_NULL(scalar_query_node->boost_) &&
+             OB_FAIL(cg_.generate_rt_expr(*scalar_query_node->boost_, new_scalar_ctdef->boost_))) {
+    LOG_WARN("failed to generate rt expr for scalar boost", K(ret));
+  } else {
     new_scalar_ctdef->set_is_top_level_scoring(scalar_query_node->is_top_level_scoring_);
     new_scalar_ctdef->set_is_scoring(scalar_query_node->is_scoring_);
     scalar_ctdef = new_scalar_ctdef;
@@ -893,10 +914,39 @@ int ObHybridSearchCgService::generate_final_lookup_ctdef(ObLogTableScan &op,
     } else if (DAS_OP_INDEX_PROJ_LOOKUP == lookup_ctdef->op_type_) {
       // DSL query need to project the result output of the search ctdef
       ObDASIndexProjLookupCtDef *index_proj_lookup_ctdef = static_cast<ObDASIndexProjLookupCtDef *>(lookup_ctdef);
-      if (OB_FAIL(index_proj_lookup_ctdef->index_scan_proj_exprs_.assign(
-        static_cast<ObDASAttachCtDef &>(search_ctdef).result_output_))) {
+      const ObDASFusionCtDef *fusion_ctdef = static_cast<const ObDASFusionCtDef *>(&search_ctdef);
+      if (fusion_ctdef->has_hybrid_fusion_op_) {
+        // hybrid fusion op needs all path scores, always project full result_output
+        if (OB_FAIL(index_proj_lookup_ctdef->index_scan_proj_exprs_.assign(
+            static_cast<ObDASAttachCtDef &>(search_ctdef).result_output_))) {
+          LOG_WARN("failed to assign full result output for hybrid fusion op", K(ret));
+        }
+      } else if (fusion_ctdef->fusion_iter_exec_mode_ == ObFusionIterExecMode::SKIP_FUSION_ITER) {
+        const int64_t proj_expr_cnt = fusion_ctdef->rowid_exprs_.count() + (fusion_ctdef->track_score_ ? 1 : 0);
+        index_proj_lookup_ctdef->index_scan_proj_exprs_.set_capacity(proj_expr_cnt);
+        for (int64_t i = 0; OB_SUCC(ret) && i < fusion_ctdef->rowid_exprs_.count(); ++i) {
+          if (OB_FAIL(index_proj_lookup_ctdef->index_scan_proj_exprs_.push_back(fusion_ctdef->rowid_exprs_.at(i)))) {
+            LOG_WARN("failed to push back rowid expr for skip-fusion path", K(ret), K(i));
+          }
+        }
+        if (OB_SUCC(ret) && fusion_ctdef->track_score_) {
+          ObExpr *fusion_score_expr = fusion_ctdef->get_fusion_score_expr();
+          if (OB_ISNULL(fusion_score_expr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fusion score expr is null in skip-fusion path", K(ret), KPC(fusion_ctdef));
+          } else if (OB_FAIL(index_proj_lookup_ctdef->index_scan_proj_exprs_.push_back(fusion_score_expr))) {
+            LOG_WARN("failed to push back fusion score expr for skip-fusion path", K(ret));
+          }
+        }
+      } else if (!fusion_ctdef->track_score_) {
+        if (OB_FAIL(index_proj_lookup_ctdef->index_scan_proj_exprs_.assign(fusion_ctdef->rowid_exprs_))) {
+          LOG_WARN("failed to assign rowid exprs for non-score path", K(ret));
+        }
+      } else if (OB_FAIL(index_proj_lookup_ctdef->index_scan_proj_exprs_.assign(
+          static_cast<ObDASAttachCtDef &>(search_ctdef).result_output_))) {
         LOG_WARN("failed to assign index scan project column exprs", K(ret));
-      } else if (OB_FAIL(append_array_no_dup(result_outputs, index_proj_lookup_ctdef->index_scan_proj_exprs_))) {
+      }
+      if (OB_SUCC(ret) && OB_FAIL(append_array_no_dup(result_outputs, index_proj_lookup_ctdef->index_scan_proj_exprs_))) {
         LOG_WARN("failed to append final result outputs", K(ret));
       }
     }
@@ -929,69 +979,13 @@ int ObHybridSearchCgService::generate_main_scan_ctdef(ObLogTableScan &op, ObDASS
     LOG_WARN("scan ctdef is null", K(ret));
   } else {
     common::ObTableID ref_table_id = op.get_real_ref_table_id();
-    scan_ctdef->ref_table_id_ = ref_table_id;
-    ObArray<ObRawExpr *> filters;
     ObArray<ObRawExpr *> lookup_pushdown_filters;
     ObArray<ObRawExpr *> non_pushdown_filters;
-    ObArray<ObRawExpr *> access_exprs;
-    const bool is_dsl_query = is_dsl_query_path(op.get_access_path());
-    if (is_dsl_query) {
-      if (!op.get_filter_exprs().empty()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("dsl query should not have additional filters", K(ret), K(ref_table_id));
-      }
-    } else {
-      if (OB_FAIL(filters.assign(op.get_filter_exprs()))) {
-        LOG_WARN("failed to assign filters", K(ret));
-      } else if (OB_FAIL(op.extract_nonpushdown_filters(filters, non_pushdown_filters, lookup_pushdown_filters))) {
-        LOG_WARN("failed to extract pushdown filters", K(ret));
-      }
-    }
-
-    // extract access exprs
-    if (OB_SUCC(ret)) {
-      ObArray<ObRawExpr *> filter_columns;
-      if (OB_FAIL(access_exprs.assign(op.get_access_exprs()))) {
-        LOG_WARN("failed to assign access exprs", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(filters, filter_columns))) {
-        LOG_WARN("failed to extract filter columns", K(ret));
-      } else if (OB_FAIL(append_array_no_dup(access_exprs, filter_columns))) {
-        LOG_WARN("failed to append filter columns", K(ret));
-      } else if (OB_NOT_NULL(op.get_auto_split_filter())) {
-        ObArray<ObRawExpr *> auto_split_filter_columns;
-        ObRawExpr *auto_split_expr = const_cast<ObRawExpr *>(op.get_auto_split_filter());
-        if (OB_FAIL(ObRawExprUtils::extract_column_exprs(auto_split_expr,
-                                                         auto_split_filter_columns))) {
-          LOG_WARN("extract column exprs failed", K(ret));
-        } else if (OB_FAIL(append_array_no_dup(access_exprs, auto_split_filter_columns))) {
-          LOG_WARN("append filter column to access exprs failed", K(ret));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(ObTscCgService::remove_virtual_generated_access_exprs(op, cg_, access_exprs))) {
-          LOG_WARN("failed to remove virtual generated access exprs", K(ret));
-        }
-      }
-      LOG_TRACE("main scan access exprs", K(ret), K(ref_table_id), K(access_exprs));
-    }
-
-    // generate access column ids
-    if (OB_SUCC(ret)) {
-      ObArray<uint64_t> access_column_ids;
-      if (OB_FAIL(extract_column_ids(access_exprs, access_column_ids))) {
-        LOG_WARN("failed to extract access column ids", K(ret));
-      } else if (OB_FAIL(check_column_ids_accessible(ref_table_id, *schema_guard, access_column_ids))) {
-        LOG_WARN("column ids are not accessible", K(ret));
-      } else {
-        if (OB_FAIL(cg_.generate_rt_exprs(access_exprs, scan_ctdef->pd_expr_spec_.access_exprs_))) {
-          LOG_WARN("failed to generate access exprs", K(ret));
-        } else if (OB_FAIL(cg_.mark_expr_self_produced(access_exprs))) {
-          LOG_WARN("makr expr self produced failed", K(ret), K(access_exprs));
-        } else if (OB_FAIL(scan_ctdef->access_column_ids_.assign(access_column_ids))) {
-          LOG_WARN("assign output column ids failed", K(ret));
-        }
-        LOG_TRACE("main scan access column ids", K(ret), K(ref_table_id), K(access_column_ids));
-      }
+    if (OB_FAIL(prepare_main_scan_access_ctdef(op,
+                                               *scan_ctdef,
+                                               non_pushdown_filters,
+                                               lookup_pushdown_filters))) {
+      LOG_WARN("failed to prepare main scan access ctdef", K(ret));
     }
 
     // generate auto split exprs
@@ -1234,6 +1228,76 @@ int ObHybridSearchCgService::try_alloc_topk_collect_ctdef(ObDASFusionCtDef *fusi
       topk_collect_ctdef->children_[0] = fusion_ctdef->children_[search_idx];
       topk_collect_ctdef->children_cnt_ = 1;
       fusion_ctdef->children_[search_idx] = topk_collect_ctdef;
+    }
+  }
+  return ret;
+}
+
+int ObHybridSearchCgService::prepare_main_scan_access_ctdef(ObLogTableScan &op,
+                                                            ObDASScanCtDef &scan_ctdef,
+                                                            ObIArray<ObRawExpr *> &non_pushdown_filters,
+                                                            ObIArray<ObRawExpr *> &lookup_pushdown_filters)
+{
+  int ret = OB_SUCCESS;
+  ObSqlSchemaGuard *schema_guard = nullptr;
+  common::ObTableID ref_table_id = op.get_real_ref_table_id();
+  ObArray<ObRawExpr *> filters;
+  ObArray<ObRawExpr *> access_exprs;
+  const bool is_dsl_query = is_dsl_query_path(op.get_access_path());
+  scan_ctdef.ref_table_id_ = ref_table_id;
+  if (OB_ISNULL(cg_.opt_ctx_) || OB_ISNULL(schema_guard = cg_.opt_ctx_->get_sql_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret), K(cg_.opt_ctx_), K(schema_guard));
+  } else if (is_dsl_query) {
+    if (!op.get_filter_exprs().empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("dsl query should not have additional filters", K(ret), K(ref_table_id));
+    }
+  } else if (OB_FAIL(filters.assign(op.get_filter_exprs()))) {
+    LOG_WARN("failed to assign filters", K(ret));
+  } else if (OB_FAIL(op.extract_nonpushdown_filters(filters, non_pushdown_filters, lookup_pushdown_filters))) {
+    LOG_WARN("failed to extract pushdown filters", K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    ObArray<ObRawExpr *> filter_columns;
+    if (OB_FAIL(access_exprs.assign(op.get_access_exprs()))) {
+      LOG_WARN("failed to assign access exprs", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(filters, filter_columns))) {
+      LOG_WARN("failed to extract filter columns", K(ret));
+    } else if (OB_FAIL(append_array_no_dup(access_exprs, filter_columns))) {
+      LOG_WARN("failed to append filter columns", K(ret));
+    } else if (OB_NOT_NULL(op.get_auto_split_filter())) {
+      ObArray<ObRawExpr *> auto_split_filter_columns;
+      ObRawExpr *auto_split_expr = const_cast<ObRawExpr *>(op.get_auto_split_filter());
+      if (OB_FAIL(ObRawExprUtils::extract_column_exprs(auto_split_expr,
+                                                       auto_split_filter_columns))) {
+        LOG_WARN("extract column exprs failed", K(ret));
+      } else if (OB_FAIL(append_array_no_dup(access_exprs, auto_split_filter_columns))) {
+        LOG_WARN("append filter column to access exprs failed", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) &&
+        OB_FAIL(ObTscCgService::remove_virtual_generated_access_exprs(op, cg_, access_exprs))) {
+      LOG_WARN("failed to remove virtual generated access exprs", K(ret));
+    }
+    LOG_TRACE("main scan access exprs", K(ret), K(ref_table_id), K(access_exprs));
+  }
+
+  if (OB_SUCC(ret)) {
+    ObArray<uint64_t> access_column_ids;
+    if (OB_FAIL(extract_column_ids(access_exprs, access_column_ids))) {
+      LOG_WARN("failed to extract access column ids", K(ret));
+    } else if (OB_FAIL(check_column_ids_accessible(ref_table_id, *schema_guard, access_column_ids))) {
+      LOG_WARN("column ids are not accessible", K(ret));
+    } else if (OB_FAIL(cg_.generate_rt_exprs(access_exprs, scan_ctdef.pd_expr_spec_.access_exprs_))) {
+      LOG_WARN("failed to generate access exprs", K(ret));
+    } else if (OB_FAIL(cg_.mark_expr_self_produced(access_exprs))) {
+      LOG_WARN("mark expr self produced failed", K(ret), K(access_exprs));
+    } else if (OB_FAIL(scan_ctdef.access_column_ids_.assign(access_column_ids))) {
+      LOG_WARN("assign output column ids failed", K(ret));
+    } else {
+      LOG_TRACE("main scan access column ids", K(ret), K(ref_table_id), K(access_column_ids));
     }
   }
   return ret;
