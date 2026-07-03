@@ -1756,7 +1756,15 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::r
       }
     }
   }
-  if (OB_SUCC(ret) && can_blockscan_) {
+  if (OB_FAIL(ret)) {
+  } else if (!can_blockscan_) {
+    for (int16_t level = 0; level < index_tree_height_; level++) {
+      if (tree_handles_[level].can_blockscan_) {
+        LOG_INFO("[BLOCKSCAN] unexpected state, tree handle can_blockscan_ is true", K(level), K(border_rowkey));
+        tree_handles_[level].can_blockscan_ = false;
+      }
+    }
+  } else {
     // 2. update blockscan status in the TreeLevelHandle
     for (int16_t level = 0; OB_SUCC(ret) && level < index_tree_height_; level++) {
       tree_handles_[level].can_blockscan_ = true;
