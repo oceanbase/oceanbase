@@ -1166,6 +1166,12 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
       is_valid = varchar_to_double(val, dval) && dval >= 0.0 && dval <= 1.0;
       break;
     }
+    case PARTITION_ORDERED: {
+      is_valid = val.is_varchar()
+                 && (0 == val.get_varchar().case_compare("asc")
+                     || 0 == val.get_varchar().case_compare("desc"));
+      break;
+    }
     default:
       LOG_TRACE("invalid opt param val", K(param_type), K(val));
       break;

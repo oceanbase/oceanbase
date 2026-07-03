@@ -531,6 +531,7 @@
 
 #include "sql/engine/expr/ob_expr_lock_func.h"
 #include "sql/engine/expr/ob_expr_format_profile.h"
+#include "sql/engine/expr/ob_expr_max_pt.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -1347,6 +1348,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprCollectFileList, SHORT_CIRCUIT_EVALUATION);
     REG_OP(ObExprVoid, EAGER_EVALUATION);
     REG_OP(ObExprToSingleByte, EAGER_EVALUATION);
+    REG_OP(ObExprMaxPt, EAGER_EVALUATION);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath, EAGER_EVALUATION);
@@ -1707,6 +1709,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprWordSegment, EAGER_EVALUATION);
   REG_OP_ORCL(ObExprWordCount, EAGER_EVALUATION);
   REG_OP_ORCL(ObExprBM25, SHORT_CIRCUIT_EVALUATION);
+  REG_OP_ORCL(ObExprMaxPt, EAGER_EVALUATION);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

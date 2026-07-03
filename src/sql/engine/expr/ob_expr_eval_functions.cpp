@@ -466,6 +466,7 @@
 #include "ob_expr_md5_concat_ws.h"
 #include "ob_expr_vector_similarity.h"
 #include "ob_expr_get_routine_param_type_str.h"
+#include "ob_expr_max_pt.h"
 
 namespace oceanbase
 {
@@ -1444,7 +1445,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprVectorSimilarity::calc_similarity,                            /* 874 */
   NULL, // ObExprVecVisible::generate_vec_visible                     /* 875 */
   NULL, // ObExprArrayContains::eval_array_contains_int32_t           /* 876 */
-  NULL, // ObExprMaxPt::eval_max_pt,                                  /* 877 */
+  ObExprMaxPt::eval_max_pt,                                           /* 877 */
   NULL, // ObExprDateTrunc::eval_date_trunc,                          /* 878 */
   NULL, // ObExprToDate::calc_to_date_with_format                     /* 879 */
   NULL, // ObExprEditDistance::calc_edit_distance,                    /* 880 */

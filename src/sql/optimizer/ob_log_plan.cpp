@@ -8476,6 +8476,8 @@ int ObLogPlan::create_limit_plan(ObLogicalOperator *&top,
                                                offset_expr,
                                                is_pushed))) {
       LOG_WARN("failed to push limit into table scan", K(ret));
+    } else if (OB_FAIL(create_partition_ordered_plan(top))) {
+      LOG_WARN("failed to create order by hint", K(ret));
     } else if (top->is_single() && is_pushed) {
       // pushed into table-scan
       // add partial limit
@@ -20274,5 +20276,121 @@ int ObLogPlan::extend_rollup_to_groupset(const ObIArray<ObRawExpr *> &gby_exprs,
     }
   }
   LOG_TRACE("extend rollup to groupset", K(groupset_exprs), K(rollup_exprs), K(gby_exprs));
+  return ret;
+}
+
+int ObLogPlan::create_partition_ordered_plan(ObLogicalOperator *&top)
+{
+  int ret = OB_SUCCESS;
+  ObQueryCtx *query_ctx = get_optimizer_context().get_query_ctx();
+  const ObDMLStmt *stmt = NULL;
+  bool has_partition_ordered = false;
+  ObObj order_direction;
+  if (OB_ISNULL(top)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_ISNULL(stmt = get_stmt()) || OB_ISNULL(query_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.has_opt_param(
+               ObOptParamHint::PARTITION_ORDERED, has_partition_ordered))) {
+    LOG_WARN("failed to get partition iterator ordered hint", K(ret));
+  } else if (!has_partition_ordered || !stmt->has_limit() || !stmt->is_select_stmt()) {
+    // do nothing
+  } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_opt_param(
+               ObOptParamHint::PARTITION_ORDERED, order_direction))) {
+    LOG_WARN("failed to get partition iterator ordered hint", K(ret));
+  } else {
+    ObSEArray<ObRawExpr*, 2> select_exprs;
+    ObSEArray<ObRawExpr*, 2> part_exprs;
+    const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt*>(stmt);
+    bool is_single_table = select_stmt->is_single_table_stmt();
+    bool has_condition = stmt->get_condition_size() > 0;
+    bool has_group_by = select_stmt->has_group_by();
+    bool has_window_function = select_stmt->has_window_function();
+    bool has_distinct = select_stmt->has_distinct();
+    bool has_order_by = select_stmt->has_order_by();
+    bool has_having = select_stmt->has_having();
+    bool can_partition_ordered = is_single_table && !has_condition && !has_group_by &&
+                       !has_window_function && !has_distinct && !has_order_by && !has_having;
+    const ObIArray<PartExprItem> &part_items = select_stmt->get_part_exprs();
+    for (int64_t i = 0; OB_SUCC(ret) && i < part_items.count(); ++i) {
+      if (part_items.at(i).part_expr_ != NULL &&
+          OB_FAIL(part_exprs.push_back(part_items.at(i).part_expr_))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL((select_stmt->get_select_exprs(select_exprs)))) {
+      LOG_WARN("failed to get select exprs", K(ret));
+    } else if (!can_partition_ordered || !ObOptimizerUtil::same_exprs(select_exprs, part_exprs)) {
+      // do nothing
+    } else {
+      bool need_sort = false;
+      int64_t prefix_pos = 0;
+      ObSEArray<ObRawExpr*, 4> order_by_exprs;
+      ObSEArray<ObOrderDirection, 4> directions;
+      ObSEArray<OrderItem, 8> candi_order_items;
+      ObSEArray<OrderItem, 8> order_items;
+      ObRawExpr *topn_expr = NULL;
+      bool is_fetch_with_ties = false;
+      bool need_limit = true;
+      bool is_at_most_one_row = top->get_is_at_most_one_row();
+      ObExchangeInfo exch_info;
+      exch_info.dist_method_ = (NULL != top && top->is_single()) ?
+                              ObPQDistributeMethod::NONE : ObPQDistributeMethod::LOCAL;
+      for (int64_t i = 0; OB_SUCC(ret) && i < part_exprs.count(); i++) {
+        if (OB_ISNULL(part_exprs.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (OB_FAIL(order_by_exprs.push_back(part_exprs.at(i)))) {
+          LOG_WARN("failed to add order by expr", K(ret));
+        } else {
+          ret = directions.push_back(order_direction.get_string().case_compare("ASC") == 0 ?
+                                     default_asc_direction() : default_desc_direction());
+        }
+      }
+      if (OB_FAIL(ret) || order_by_exprs.empty()) {
+        // do nothing
+      } else if (OB_FAIL(make_order_items(order_by_exprs, directions, order_items))) {
+        LOG_WARN("failed to make order items", K(ret));
+      } else if (OB_FAIL(ObOptimizerUtil::simplify_ordered_exprs(top->get_fd_item_set(),
+                                                                 top->get_output_equal_sets(),
+                                                                 top->get_output_const_exprs(),
+                                                                 onetime_query_refs_,
+                                                                 order_items,
+                                                                 candi_order_items))) {
+        LOG_WARN("failed to simplify ordered exprs", K(ret));
+      } else if (order_items.empty()) {
+        OPT_TRACE("this plan has interesting order, no need allocate order by");
+      } else if (OB_FAIL(get_order_by_topn_expr(top->get_card(),
+                                                topn_expr,
+                                                is_fetch_with_ties,
+                                                need_limit))) {
+        LOG_WARN("failed to get order by top-n expr", K(ret));
+      } else if (OB_FAIL(ObOptimizerUtil::check_need_sort(order_items,
+                                                          top->get_op_ordering(),
+                                                          top->get_fd_item_set(),
+                                                          top->get_output_equal_sets(),
+                                                          top->get_output_const_exprs(),
+                                                          onetime_query_refs_,
+                                                          is_at_most_one_row,
+                                                          need_sort,
+                                                          prefix_pos))) {
+        LOG_WARN("failed to check need sort", K(ret));
+      } else if (OB_FAIL(allocate_sort_and_exchange_as_top(top,
+                                                          exch_info,
+                                                          order_items,
+                                                          need_sort,
+                                                          prefix_pos,
+                                                          top->get_is_local_order(),
+                                                          topn_expr,
+                                                          false))) {
+        LOG_WARN("failed to allocate sort as top", K(ret));
+      } else {
+        top->set_is_order_by_plan_top(true);
+      }
+    }
+  }
   return ret;
 }

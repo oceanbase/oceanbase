@@ -1015,6 +1015,7 @@ public:
                                 const ObIArray<ObRawExpr *> &rollup_exprs,
                                 ObLogicalOperator &top,
                                 ObIArray<ObGroupbyExpr> &groupset_exprs);
+  int create_partition_ordered_plan(ObLogicalOperator *&top);
 
   int compute_groupby_dop_by_auto_dop(const ObIArray<ObRawExpr*> &group_exprs,
                                       const ObIArray<ObRawExpr*> &rollup_exprs,
