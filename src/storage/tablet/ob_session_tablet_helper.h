@@ -143,7 +143,7 @@ public:
   ~ObSessionTabletDeleteHelper() = default;
   int do_work();
   static int delete_session_tablets_by_table_id(
-      common::ObISQLClient &sql_proxy,
+      sql::ObSQLSessionInfo &session_info,
       const uint64_t tenant_id,
       const uint64_t table_id);
   /// @brief Delete session tablets with GC-oriented batch(For GC only).
@@ -173,6 +173,12 @@ private:
       const hash::ObHashSet<uint64_t> &failed_data_tb_id_set,
       /*out*/common::ObIArray<ObTabletID> &tablet_ids_for_delete,
       /*out*/common::ObIArray<const ObTableSchema *> &table_schemas_for_delete);
+  // Gather the main GTT v2 session table id together with its local index
+  // tables and lob aux tables so they can be dropped atomically in a single
+  // broadcast / inner transaction. See dispatch_drop_gtt_v2_session_tablet_on_creator.
+  static int collect_oracle_temp_table_v2_related_ids(
+      const share::schema::ObTableSchema &table_schema,
+      common::ObIArray<uint64_t> &table_ids);
 private:
   int lock_table_for_delete(
       const ObTableSchema &table_schema,
@@ -256,15 +262,6 @@ private:
   static bool need_check_table(
     const share::schema::ObSimpleTableSchemaV2 *schema,
     const obrpc::ObAlterTableArg *alter_table_arg);
-  /// @brief fetch all relative tables' id by @param primary_table_id
-  /// @param[out] table_ids: append-only array(won't be reset in this method)
-  static int fetch_all_relative_table_ids(
-    const uint64_t tenant_id,
-    const uint64_t primary_table_id,
-    const int64_t schema_version,
-    common::ObMySQLProxy &sql_proxy,
-    ObSchemaService &schema_svr,
-    /*out*/common::ObIArray<common::ObTableID> &table_ids);
   static int check_if_any_table_has_active_session(
     const uint64_t tenant_id,
     common::ObMySQLProxy &sql_proxy,
@@ -275,6 +272,15 @@ private:
     const uint64_t table_id,
     const int64_t schema_version,
     bool &has_active_session);
+  /// @brief fetch all relative tables' id by @param primary_table_id
+  /// @param[out] table_ids: append-only array(won't be reset in this method)
+  static int fetch_all_relative_table_ids(
+    const uint64_t tenant_id,
+    const uint64_t primary_table_id,
+    const int64_t schema_version,
+    common::ObMySQLProxy &sql_proxy,
+    ObSchemaService &schema_svr,
+    /*out*/common::ObIArray<common::ObTableID> &table_ids);
   // Group session tablet infos by session_id and sequence
   static int group_by_session_and_seq(
     const ObIArray<storage::ObSessionTabletInfo *> &session_tablet_infos_for_delete,

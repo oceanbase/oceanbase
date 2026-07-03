@@ -249,13 +249,6 @@ public:
   int execute(ObExecContext &ctx, ObTruncateTableStmt &stmt);
 private:
   int check_use_parallel_truncate(const obrpc::ObTruncateTableArg &arg, bool &use_parallel_truncate);
-  // Gather the main GTT v2 session table id together with its local index
-  // tables and lob aux tables so they can be dropped atomically in a single
-  // broadcast / inner transaction. See dispatch_drop_gtt_v2_session_tablet_on_creator.
-  int collect_oracle_temp_table_v2_related_ids(
-      const share::schema::ObTableSchema &table_schema,
-      common::ObIArray<uint64_t> &table_ids);
-
 };
 
 class ObCreateTableLikeStmt;
