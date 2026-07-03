@@ -86,6 +86,23 @@ int ObFTParserResolverHelper::resolve_dict_table_name_and_id(const common::ObStr
       }
     }
 
+    // Step 3.5: Validate the referenced table is a fulltext dictionary table
+    if (OB_SUCC(ret) && table_id >= common::OB_MAX_INNER_TABLE_ID) {
+      const share::schema::ObTableSchema *table_schema = nullptr;
+      if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+        LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(table_id));
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("table schema is null", K(ret), K(table_id));
+      } else if (!table_schema->is_fulltext_dict()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("referenced table is not a fulltext dictionary table", K(ret), K(table_id),
+                 K(database_name), K(parsed_table_name));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                       "using a non-fulltext-dictionary table as dictionary reference is");
+      }
+    }
+
     // Step 4: Allocate memory and concatenate database.table_name
     if (OB_SUCC(ret)) {
       // Add extra space for '.' separator and null terminator

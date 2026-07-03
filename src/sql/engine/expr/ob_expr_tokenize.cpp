@@ -200,9 +200,11 @@ int ObExprTokenize::TokenizeParam::parse_json_param(const ObIJsonBase *obj, cons
       ObString json_str;
       if (OB_FAIL(ObFTParserJsonProps::tokenize_array_to_props_json(allocator_, val, database_name, tenant_id, json_str))) {
         LOG_WARN("Fail to tokenize array to props json", K(ret));
-        ObSqlString message;
-        message.append_fmt("format in %s form", ADDITIONAL_ARGS_STR);
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT, message.ptr());
+        if (OB_INVALID_ARGUMENT == ret) {
+          ObSqlString message;
+          message.append_fmt("format in %s form", ADDITIONAL_ARGS_STR);
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, message.ptr());
+        }
       } else {
         properties_ = json_str;
         has_additional_args_ = true;
