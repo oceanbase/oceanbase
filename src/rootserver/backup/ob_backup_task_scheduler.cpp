@@ -454,12 +454,9 @@ int ObBackupTaskSchedulerQueue::clear_wait_list_set_tasks_disk_full_()
 int ObBackupTaskSchedulerQueue::pop_task(ObBackupScheduleTask *&output_task, common::ObArenaAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  ObBackupScheduleTask *task = nullptr;
   output_task = nullptr;
   ObArray<ObBackupServer> all_servers;
   ObArray<ObBackupServer> disk_filtered_servers;
-  ObAddr dst;
-  bool can_schedule = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup scheduler queue not init", K(ret));
@@ -497,62 +494,152 @@ int ObBackupTaskSchedulerQueue::pop_task(ObBackupScheduleTask *&output_task, com
       if (OB_TMP_FAIL(clear_wait_list_set_tasks_disk_full_())) {
         LOG_WARN("[BACKUP] clear_wait_list_set_tasks_disk_full_ failed", K(tmp_ret));
       }
-      ObMutexGuard guard(mutex_);
-      DLIST_FOREACH(t, wait_list_)
-      {
-        if (OB_FAIL(choose_dst_(t, disk_filtered_servers, dst, can_schedule))) {
-          LOG_WARN("fail to choose servers from all servers", K(ret), KPC(t));
-        }
-        if (OB_SUCC(ret) && can_schedule) {
-          task = t;
-          break;
-        }
-      }
-      if (OB_SUCC(ret) && nullptr != task) {
-        if (!dst.is_valid()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("error dst", K(ret), KPC(task), K(dst));
-        } else if (OB_FAIL(task->set_schedule(dst))) {
-          LOG_WARN("fail to set schedule", K(ret), K(dst), KPC(task));
-        } else if (OB_FAIL(set_server_stat_(dst, task->get_type()))) {
-          LOG_WARN("set server stat faled", K(ret), K(dst));
-        } else {
-          wait_list_.remove(task);
-          if (OB_FAIL(task->update_dst_and_doing_status(*sql_proxy_))) {
-            LOG_WARN("fail to update task dst in internal table", K(ret), KPC(task), K(dst));
-          } else if (!schedule_list_.add_last(task)) { // This step must be successful
-            ret = OB_ERR_UNEXPECTED;
-            LOG_ERROR("fail to add task to schedule list", K(ret), KPC(task));
-          }
-          if (OB_FAIL(ret)) {
-            int tmp_ret = OB_SUCCESS;
-            //if ret != OB_SUCCESS, clean_server_ref_ and add_last must execute
-            if (OB_SUCCESS != (tmp_ret = clean_server_ref_(dst, task->get_type()))) {
-              LOG_ERROR("fail to clean server ref", K(ret), KPC(task));
-            }
-            if (!wait_list_.add_last(task)) {
-              LOG_ERROR("fail to add task to wait list", KPC(task));
-            }
-          }
-        }
-        if (OB_FAIL(ret)) {
-          task->clear_schedule();
-          task = nullptr;
-        }
-      }
 
-      if (OB_FAIL(ret) || OB_ISNULL(task)) {
-      } else {
-        if (OB_FAIL(task->clone(allocator, output_task))) {
-          LOG_WARN("fail to clone input task", K(ret));
-        } else if (OB_ISNULL(output_task)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("input task ptr is null", K(ret));
-        } else {
-          task->set_executor_time(ObTimeUtility::current_time());
+      // Split scheduling into three phases so the SQL IO is issued outside mutex_,
+      // keeping the critical section (and observer-side execute_over) unblocked.
+      ObSEArray<DestExtEntry, 4> ext_entries;
+      if (OB_FAIL(collect_distinct_dest_ext_entries_(ext_entries))) {       // phase 1 (locked)
+        LOG_WARN("fail to collect distinct dest ext entries", K(ret));
+      } else if (OB_FAIL(prefetch_dest_extensions_(ext_entries))) {         // phase 2 (lock-free)
+        LOG_WARN("fail to prefetch dest extensions", K(ret));
+      } else if (OB_FAIL(select_and_schedule_task_(disk_filtered_servers,   // phase 3 (locked)
+                                                   ext_entries, allocator, output_task))) {
+        LOG_WARN("fail to select and schedule task", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBackupTaskSchedulerQueue::collect_distinct_dest_ext_entries_(ObIArray<DestExtEntry> &ext_entries)
+{
+  int ret = OB_SUCCESS;
+  ext_entries.reset();
+  ObMutexGuard guard(mutex_);
+  DLIST_FOREACH(t, wait_list_) {
+    const uint64_t tid = t->get_tenant_id();
+    const int64_t did = t->get_dest_id();
+    if (OB_NOT_NULL(find_prefetched_extension_(ext_entries, tid, did))) {
+      // already collected
+    } else {
+      DestExtEntry entry;
+      entry.tenant_id_ = tid;
+      entry.dest_id_ = did;
+      if (OB_FAIL(ext_entries.push_back(entry))) {
+        LOG_WARN("fail to push back dest ext entry", K(ret), K(tid), K(did));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBackupTaskSchedulerQueue::prefetch_dest_extensions_(ObIArray<DestExtEntry> &ext_entries)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < ext_entries.count(); ++i) {
+    DestExtEntry &entry = ext_entries.at(i);
+    if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest_extension(
+            entry.tenant_id_, entry.dest_id_, entry.extension_, sizeof(entry.extension_)))) {
+      LOG_WARN("fail to pre-fetch backup dest extension", K(ret),
+               K(entry.tenant_id_), K(entry.dest_id_));
+    }
+  }
+  return ret;
+}
+
+const char *ObBackupTaskSchedulerQueue::find_prefetched_extension_(
+    const ObIArray<DestExtEntry> &ext_entries, const uint64_t tenant_id, const int64_t dest_id) const
+{
+  const char *extension = nullptr;
+  for (int64_t i = 0; i < ext_entries.count(); ++i) {
+    if (ext_entries.at(i).tenant_id_ == tenant_id && ext_entries.at(i).dest_id_ == dest_id) {
+      extension = ext_entries.at(i).extension_;
+      break;
+    }
+  }
+  return extension;
+}
+
+int ObBackupTaskSchedulerQueue::select_and_schedule_task_(
+    const ObIArray<ObBackupServer> &servers,
+    const ObIArray<DestExtEntry> &ext_entries,
+    ObArenaAllocator &allocator,
+    ObBackupScheduleTask *&output_task)
+{
+  int ret = OB_SUCCESS;
+  ObBackupScheduleTask *task = nullptr;
+  ObAddr dst;
+  bool can_schedule = false;
+
+  // Phase 3a (locked): pick the first schedulable task and mark it via set_schedule.
+  // The task stays on wait_list_ so rollback is just clear_schedule (no add_last risk).
+  {
+    ObMutexGuard guard(mutex_);
+    DLIST_FOREACH(t, wait_list_) {
+      const char *ext = find_prefetched_extension_(ext_entries, t->get_tenant_id(), t->get_dest_id());
+      if (OB_ISNULL(ext)) {
+      } else if (OB_FAIL(choose_dst_with_extension_(t, servers, ext, dst, can_schedule))) {
+        LOG_WARN("fail to choose servers from all servers", K(ret), KPC(t));
+      } else if (can_schedule) {
+        task = t;
+        break;
+      }
+    }
+    if (OB_SUCC(ret) && nullptr != task) {
+      if (!dst.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error dst", K(ret), KPC(task), K(dst));
+      } else if (OB_FAIL(task->set_schedule(dst))) {
+        LOG_WARN("fail to set schedule", K(ret), K(dst), KPC(task));
+      } else if (OB_FAIL(set_server_stat_(dst, task->get_type()))) {
+        LOG_WARN("set server stat faled", K(ret), K(dst));
+      }
+      if (OB_FAIL(ret)) {
+        task->clear_schedule();
+        task = nullptr;
+      }
+    }
+  }
+
+  // Phase 3b (lock-free): update the internal table via SQL.
+  if (OB_SUCC(ret) && nullptr != task) {
+    if (OB_FAIL(task->update_dst_and_doing_status(*sql_proxy_))) {
+      LOG_WARN("fail to update task dst in internal table", K(ret), KPC(task), K(dst));
+    }
+  }
+
+  // Phase 3c (locked): on success, move task from wait_list_ to schedule_list_;
+  // on failure, just clear the mark — task is still on wait_list_.
+  if (nullptr != task) {
+    ObMutexGuard guard(mutex_);
+    if (OB_SUCC(ret)) {
+      wait_list_.remove(task);
+      if (!schedule_list_.add_last(task)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("fail to add task to schedule list", K(ret), KPC(task));
+        if (!wait_list_.add_last(task)) {
+          LOG_ERROR("fail to add task back to wait list", KPC(task));
         }
       }
     }
+    if (OB_FAIL(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = clean_server_ref_(dst, task->get_type()))) {
+        LOG_ERROR("fail to clean server ref", K(ret), KPC(task));
+      }
+      task->clear_schedule();
+      task = nullptr;
+    }
+  }
+
+  if (OB_FAIL(ret) || OB_ISNULL(task)) {
+  } else if (OB_FAIL(task->clone(allocator, output_task))) {
+    LOG_WARN("fail to clone input task", K(ret));
+  } else if (OB_ISNULL(output_task)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("input task ptr is null", K(ret));
+  } else {
+    task->set_executor_time(ObTimeUtility::current_time());
   }
   return ret;
 }
@@ -753,27 +840,47 @@ int ObBackupTaskSchedulerQueue::choose_dst_(
     ObAddr &dst,
     bool &can_schedule)
 {
+  // Fetch the backup dest extension (an SQL query against __all_backup_storage_info)
+  // and delegate the in-memory server selection to choose_dst_with_extension_, so the
+  // two entry points share a single implementation. Callers that need to keep the SQL
+  // out of a critical section should pre-fetch the extension and call
+  // choose_dst_with_extension_ directly (see pop_task).
+  int ret = OB_SUCCESS;
+  can_schedule = false;
+  dst.reset();
+  char extension[OB_MAX_BACKUP_EXTENSION_LENGTH] = {0};
+  if (servers.empty() || OB_ISNULL(task)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(servers), KP(task));
+  } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest_extension(
+                 task->get_tenant_id(), task->get_dest_id(), extension, sizeof(extension)))) {
+    LOG_WARN("fail to get backup dest extension", K(ret), KPC(task));
+  } else if (OB_FAIL(choose_dst_with_extension_(task, servers, extension, dst, can_schedule))) {
+    LOG_WARN("fail to choose dst with extension", K(ret), KPC(task));
+  }
+  return ret;
+}
+
+int ObBackupTaskSchedulerQueue::choose_dst_with_extension_(
+    ObBackupScheduleTask *task,
+    const ObIArray<ObBackupServer> &servers,
+    const char *extension,
+    ObAddr &dst,
+    bool &can_schedule)
+{
   int ret = OB_SUCCESS;
   can_schedule = false;
   dst.reset();
   ObArray<ObAddr> alternative_servers;
   ObArray<ObBackupServer> tmp_optional_servers;
 
-  if(servers.empty() || OB_ISNULL(task)) {
+  if(servers.empty() || OB_ISNULL(task) || OB_ISNULL(extension)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("servers is empty", K(ret), K(servers), KP(task));
+    LOG_WARN("invalid argument", K(ret), K(servers), KP(task), KP(extension));
   } else {
     ObBackupSrcInfo src_info;
-    char extension[OB_MAX_BACKUP_EXTENSION_LENGTH] = {0};
-    const int64_t dest_id = task->get_dest_id();
-    const uint64_t tenant_id = task->get_tenant_id();
-    ObArray<ObBackupServer> connectivity_servers;
     src_info.reset();
-    MEMSET(extension, 0, sizeof(extension));
-    if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest_extension(tenant_id, dest_id,
-                                                                          extension, sizeof(extension)))) {
-      LOG_WARN("fail to get backup dest extension", K(ret), K(dest_id), K(tenant_id));
-    } else if (OB_FAIL(ObBackupDestIOPermissionMgr::get_src_info_from_extension(extension, src_info))) {
+    if (OB_FAIL(ObBackupDestIOPermissionMgr::get_src_info_from_extension(extension, src_info))) {
       LOG_WARN("failed to check locality info valid", K(ret), K(extension));
     } else if (!src_info.is_empty()) {
       // Backup destination has zone/idc/region constraints: first filter servers by connectivity,
@@ -825,7 +932,7 @@ int ObBackupTaskSchedulerQueue::choose_dst_(
   return ret;
 }
 
-int ObBackupTaskSchedulerQueue::get_alternative_servers_(    
+int ObBackupTaskSchedulerQueue::get_alternative_servers_(
     const ObBackupScheduleTask &task, 
     const ObIArray<ObBackupServer> &servers,
     ObArray<ObAddr> &alternative_servers) 

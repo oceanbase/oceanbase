@@ -89,6 +89,11 @@ private:
                   const ObIArray<share::ObBackupServer> &servers,
                   ObAddr &dst,
                   bool &can_schedule);
+  int choose_dst_with_extension_(ObBackupScheduleTask *task,
+                                 const ObIArray<share::ObBackupServer> &servers,
+                                 const char *extension,
+                                 ObAddr &dst,
+                                 bool &can_schedule);
   int get_alternative_servers_(const ObBackupScheduleTask &task, 
                                const ObIArray<share::ObBackupServer> &servers,
                                ObArray<ObAddr> &alternative_servers);
@@ -144,6 +149,34 @@ private:
   // streak restarts the wait timer from zero instead of accumulating against
   // a long-stale first_disk_full_ts_. Best-effort: errors are logged only.
   int clear_wait_list_set_tasks_disk_full_();
+  // Dedup entry for pop_task's lock-splitting optimization: a distinct
+  // (tenant_id, dest_id) pair found in wait_list_ together with its backup dest
+  // extension pre-fetched from __all_backup_storage_info.
+  struct DestExtEntry
+  {
+    uint64_t tenant_id_;
+    int64_t dest_id_;
+    char extension_[common::OB_MAX_BACKUP_EXTENSION_LENGTH];
+    DestExtEntry() : tenant_id_(OB_INVALID_ID), dest_id_(OB_INVALID_ID) { extension_[0] = '\0'; }
+    TO_STRING_KV(K_(tenant_id), K_(dest_id));
+  };
+  // pop_task phase 1: walk wait_list_ and emit one entry per distinct
+  // (tenant_id, dest_id). Caller must hold mutex_ for the traversal.
+  int collect_distinct_dest_ext_entries_(common::ObIArray<DestExtEntry> &ext_entries);
+  // pop_task phase 2: fill each entry's extension via an inner-table query. Runs
+  // outside mutex_ so observer-side execute_over is not blocked by the SQL IO.
+  int prefetch_dest_extensions_(common::ObIArray<DestExtEntry> &ext_entries);
+  // pop_task phase 3: pick the first schedulable task using the pre-fetched
+  // extensions, move it from wait_list_ to schedule_list_ and clone it into
+  // output_task. Caller must hold mutex_.
+  int select_and_schedule_task_(const common::ObIArray<share::ObBackupServer> &servers,
+                                const common::ObIArray<DestExtEntry> &ext_entries,
+                                common::ObArenaAllocator &allocator,
+                                ObBackupScheduleTask *&output_task);
+  // Linear lookup of the extension pre-fetched for (tenant_id, dest_id); returns
+  // nullptr when no matching entry exists (e.g. task added after phase 1).
+  const char *find_prefetched_extension_(const common::ObIArray<DestExtEntry> &ext_entries,
+                                         const uint64_t tenant_id, const int64_t dest_id) const;
 
 private:
   bool is_inited_;
