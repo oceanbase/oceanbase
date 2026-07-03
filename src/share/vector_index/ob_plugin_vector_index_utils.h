@@ -255,6 +255,11 @@ private:
                                        SCN &target_scn,
                                        ObIAllocator &allocator,
                                        ObPluginVectorIndexTaskCtx *task_ctx = nullptr);
+  static int create_refresh_adaptor(ObLSID &ls_id,
+                                    ObPluginVectorIndexService *vector_index_service,
+                                    ObPluginVectorIndexAdaptor *old_adapter,
+                                    ObPluginVectorIndexAdaptor *&new_adapter,
+                                    void *&adpt_buff);
   static int find_segment_in_old_meta(ObVectorIndexSegmentMeta &new_seg_meta,
                                       const ObVectorIndexMeta &old_meta);
   static int fill_mem_context_detail_info(ObPluginVectorIndexService *service, ObIArray<ObLSTabletPair> &tablet_ids, char *buf, int64_t buf_len, int64_t &pos);
