@@ -24,7 +24,7 @@ using namespace share;
 namespace sql
 {
 
-OB_SERIALIZE_MEMBER((ObDASVecIndexDriverCtDef, ObDASAttachCtDef), sort_expr_, limit_expr_, offset_expr_, vec_index_param_, query_param_, vector_index_param_, algorithm_type_, vec_type_, row_count_, dim_);
+OB_SERIALIZE_MEMBER((ObDASVecIndexDriverCtDef, ObDASAttachCtDef), sort_expr_, limit_expr_, offset_expr_, vec_index_param_, query_param_, vector_index_param_, algorithm_type_, vec_type_, row_count_, dim_, filter_mode_);
 OB_SERIALIZE_MEMBER((ObDASVecIndexDriverRtDef, ObDASAttachRtDef));
 
 int ObDASVecIndexDriverIter::do_table_scan()
