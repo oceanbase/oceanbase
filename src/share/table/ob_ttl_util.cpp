@@ -225,8 +225,10 @@ bool ObTTLUtil::extract_val(const char* ptr, uint64_t len, int& val)
     if (ptr[i] == ' ') {
       continue;
     } else if (ptr[i] >= '0' && ptr[i] <= '9') {
-      bool_ret = true;
-      MEMCPY(buffer, ptr + i, len - i > 2 ? len - i : 2);
+      if (len - i < sizeof(buffer)) {
+        bool_ret = true;
+        MEMCPY(buffer, ptr + i, len - i > 2 ? len - i : 2);
+      }
       break;
     }
   }

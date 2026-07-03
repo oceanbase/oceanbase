@@ -686,3 +686,15 @@ drop table if exists test_ts_index$cf5;
 drop table if exists test_ts_index$cf6;
 drop table if exists test_idx$cf4;
 drop table if exists test_idx$cf5;
+####################################CASE####################################
+# an over-long numeric field in duty_duration must be rejected with a
+# config error (OB_INVALID_CONFIG) rather than silently accepted
+############################################################################
+alter system set kv_ttl_duty_duration='[11111111111111111111111111111111111111111111111111111111111111111111111:00:00,00:00:00]';
+ERROR HY000: Invalid config
+alter system set vector_index_optimize_duty_time='[11111111111111111111111111111111111111111111111111111111111111111111111:00:00,00:00:00]';
+ERROR HY000: Invalid config
+alter system set kv_ttl_duty_duration='[02:00:00,04:00:00]';
+kv_ttl_duty_duration=[02:00:00,04:00:00]
+alter system set kv_ttl_duty_duration='';
+alter system set vector_index_optimize_duty_time='[00:00:00, 24:00:00]';
