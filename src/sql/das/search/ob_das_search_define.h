@@ -253,6 +253,8 @@ public:
 
 public:
   int get_cost(ObDASSearchCtx &search_ctx, ObDASSearchCost &cost);
+  void reset_cost() { cost_.reset(); }
+  void reset_cost_recursive();
   virtual int generate_op(ObDASSearchCost lead_cost, ObDASSearchCtx &search_ctx, ObIDASSearchOp *&op) = 0;
   virtual int compute_cost(ObDASSearchCtx &search_ctx, ObDASSearchCost &cost) = 0;
   virtual int can_pushdown_filter_to_bmm(bool &can_pushdown);

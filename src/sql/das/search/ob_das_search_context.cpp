@@ -35,22 +35,8 @@ int ObDASSearchCtx::init(
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
-  int64_t logical_row_cnt = -1;
-  int64_t physical_row_cnt = -1;
-  const ObAccessService *access_service = nullptr;
-  const ObDASScanCtDef *scan_ctdef = nullptr;
-  ObDASScanRtDef *scan_rtdef = nullptr;
-  const int64_t timeout_us = THIS_WORKER.get_timeout_remain();
-  const common::ObTabletID &tablet_id = root_das_task_.get_scan_param().tablet_id_;
-  common::ObNewRange scan_range;
-  ObSimpleBatch batch;
-  ObTableScanParam est_param;
-  ObSEArray<ObEstRowCountRecord, 1> est_records;
-  ObTableScanRange table_scan_range;
-  if (OB_ISNULL(scan_rtdef = static_cast<ObDASScanRtDef *>(root_das_task_.get_rtdef())) ||
-      OB_ISNULL(scan_ctdef = static_cast<const ObDASScanCtDef *>(root_das_task_.get_ctdef())) ||
-      OB_ISNULL(eval_ctx_ = root_das_task_.get_rtdef()->eval_ctx_) ||
-      OB_ISNULL(access_service = MTL(ObAccessService *))) {
+  if (OB_ISNULL(root_das_task_.get_rtdef()) ||
+      OB_ISNULL(eval_ctx_ = root_das_task_.get_rtdef()->eval_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr", K(ret));
   } else if (OB_FAIL(rowid_meta_.init(rowid_exprs, 0))) {
@@ -65,8 +51,46 @@ int ObDASSearchCtx::init(
     output_ = &output;
     use_dynamic_pruning_ = use_dynamic_pruning;
     rowid_type_ = DAS_ROWID_TYPE_UINT64; // TODO: determine by actual rowid type
+    if (OB_FAIL(refresh_table_row_count())) {
+      LOG_WARN("failed to estimate table row count", K(ret));
+    } else if (!is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected invalid search ctx", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    eval_ctx_ = nullptr;
+    mock_skip_ = nullptr;
+    rowid_exprs_ = nullptr;
+    output_ = nullptr;
+    table_row_count_.reset();
+    rowid_meta_.reset();
+  }
+  return ret;
+}
 
-    // tablet full row count estimation
+int ObDASSearchCtx::refresh_table_row_count()
+{
+  int ret = OB_SUCCESS;
+  int64_t logical_row_cnt = -1;
+  int64_t physical_row_cnt = -1;
+  const ObAccessService *access_service = nullptr;
+  const ObDASScanCtDef *scan_ctdef = nullptr;
+  ObDASScanRtDef *scan_rtdef = nullptr;
+  const int64_t timeout_us = THIS_WORKER.get_timeout_remain();
+  const common::ObTabletID &tablet_id = root_das_task_.get_scan_param().tablet_id_;
+  common::ObNewRange scan_range;
+  ObSimpleBatch batch;
+  ObTableScanParam est_param;
+  ObSEArray<ObEstRowCountRecord, 1> est_records;
+  ObTableScanRange table_scan_range;
+
+  if (OB_ISNULL(scan_rtdef = static_cast<ObDASScanRtDef *>(root_das_task_.get_rtdef())) ||
+      OB_ISNULL(scan_ctdef = static_cast<const ObDASScanCtDef *>(root_das_task_.get_ctdef())) ||
+      OB_ISNULL(access_service = MTL(ObAccessService *))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr in refresh_table_row_count", K(ret));
+  } else {
     est_param.index_id_ = scan_ctdef->ref_table_id_;
     est_param.scan_flag_ = scan_rtdef->scan_flag_;
     est_param.tablet_id_ = tablet_id;
@@ -77,15 +101,14 @@ int ObDASSearchCtx::init(
     scan_range.set_whole_range();
     batch.type_ = ObSimpleBatch::T_SCAN;
     batch.range_ = &scan_range;
-
     if (OB_FAIL(table_scan_range.init(est_param, batch, allocator_))) {
-      LOG_WARN("failed to init table scan range", K(ret));
-    } else if (OB_FAIL(access_service->estimate_row_count(est_param, table_scan_range, timeout_us, est_records, logical_row_cnt, physical_row_cnt))) {
-      LOG_WARN("failed to estimate row count", K(ret));
-    } else if (FALSE_IT(table_row_count_ = ObDASSearchCost(logical_row_cnt))) {
-    } else if (!is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected invalid search ctx", K(ret));
+      LOG_WARN("failed to init table scan range for partition row count", K(ret), K(tablet_id));
+    } else if (OB_FAIL(access_service->estimate_row_count(
+                       est_param, table_scan_range, timeout_us, est_records,
+                       logical_row_cnt, physical_row_cnt))) {
+      LOG_WARN("failed to estimate partition row count", K(ret), K(tablet_id));
+    } else {
+      table_row_count_ = ObDASSearchCost(logical_row_cnt);
     }
   }
   return ret;

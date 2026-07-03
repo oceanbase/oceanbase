@@ -82,6 +82,8 @@ public:
       snapshot_(nullptr),
       vec_index_scan_iter_(nullptr),
       filter_iter_(nullptr),
+      pre_filter_iter_(nullptr),
+      post_filter_iter_(nullptr),
       vec_index_driver_ctdef_(nullptr),
       vec_index_driver_rtdef_(nullptr),
       vec_index_type_(ObVecIndexType::VEC_INDEX_INVALID),
@@ -94,7 +96,9 @@ public:
       dim_(0),
       filter_mode_(ObVecFilterMode::VEC_FILTER_MODE_INVALID),
       scalar_scan_ctdef_(nullptr),
-      scalar_scan_rtdef_(nullptr) {}
+      scalar_scan_rtdef_(nullptr),
+      filter_rtdef_for_reeval_(nullptr),
+      go_brute_force_(false) {}
 
   virtual ~ObDASVecIndexDriverIterParam() {}
 
@@ -112,6 +116,8 @@ public:
   TO_STRING_KV(K_(vec_index_driver_ctdef),
               K_(vec_index_driver_rtdef),
               K_(filter_iter),
+              K_(pre_filter_iter),
+              K_(post_filter_iter),
               K_(vec_index_scan_iter),
               K_(vec_index_type),
               K_(vec_idx_try_path),
@@ -123,6 +129,8 @@ public:
 
   ObDASVecIndexScanIter *vec_index_scan_iter_;
   ObDASIter *filter_iter_;
+  ObDASIter *pre_filter_iter_;
+  ObDASIter *post_filter_iter_;
 
   const ObDASVecIndexDriverCtDef *vec_index_driver_ctdef_;
   ObDASVecIndexDriverRtDef *vec_index_driver_rtdef_;
@@ -142,6 +150,8 @@ public:
   ObVecFilterMode filter_mode_;
   const ObDASScalarScanCtDef *scalar_scan_ctdef_;
   ObDASScalarScanRtDef *scalar_scan_rtdef_;
+  ObIDASSearchRtDef *filter_rtdef_for_reeval_;
+  bool go_brute_force_;
 };
 
 
@@ -157,6 +167,8 @@ public:
       vec_op_alloc_("VecIdxDriver", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       vec_index_scan_iter_(nullptr),
       filter_iter_(nullptr),
+      pre_filter_iter_(nullptr),
+      post_filter_iter_(nullptr),
       bitmap_(nullptr),
       vec_index_driver_ctdef_(nullptr),
       vec_index_driver_rtdef_(nullptr),
@@ -186,6 +198,8 @@ public:
       filter_mode_(ObVecFilterMode::VEC_FILTER_MODE_INVALID),
       scalar_scan_ctdef_(nullptr),
       scalar_scan_rtdef_(nullptr),
+      filter_rtdef_for_reeval_(nullptr),
+      go_brute_force_(false),
       profile_(nullptr) {}
 
   virtual ~ObDASVecIndexDriverIter() {}
@@ -252,6 +266,10 @@ private:
 
   ObVecPathType get_vec_index_path_type();
 
+  int evaluate_partition_path();
+  void switch_to_pre_filter();
+  void switch_to_post_filter();
+
   OB_INLINE bool is_pre_filter() const { return vec_index_type_ == ObVecIndexType::VEC_INDEX_PRE; }
   OB_INLINE bool is_iter_filter() const { return vec_index_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER; }
   OB_INLINE bool is_post_filter() const { return is_post_without_filter() || is_post_with_filter(); }
@@ -271,6 +289,8 @@ private:
 
   ObDASVecIndexScanIter *vec_index_scan_iter_;
   ObDASIter *filter_iter_;
+  ObDASIter *pre_filter_iter_;
+  ObDASIter *post_filter_iter_;
   ObVecIndexBitmap bitmap_;
 
   const ObDASVecIndexDriverCtDef *vec_index_driver_ctdef_;
@@ -312,6 +332,8 @@ private:
   ObVecFilterMode filter_mode_;
   const ObDASScalarScanCtDef *scalar_scan_ctdef_;
   ObDASScalarScanRtDef *scalar_scan_rtdef_;
+  ObIDASSearchRtDef *filter_rtdef_for_reeval_;
+  bool go_brute_force_;
   common::ObObj vid_obj_for_lookup_;
   common::ObOpProfile<common::ObMetric> *profile_;
 };

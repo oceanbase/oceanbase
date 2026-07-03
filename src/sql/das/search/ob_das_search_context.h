@@ -96,6 +96,7 @@ public:
 
   OB_INLINE ObDASRowIDType get_rowid_type() const { return rowid_type_; }
   OB_INLINE const ObDASSearchCost &get_row_count() const { return table_row_count_; }
+  int refresh_table_row_count();
   OB_INLINE void set_is_vec_index_search(bool is_vec_index_search) { is_vec_index_search_ = is_vec_index_search; }
   OB_INLINE bool is_vec_index_search() { return is_vec_index_search_; }
   int lower_bound_in_frame(const ObDASRowID &target, const ObIArray<ObExpr *> *rowid_exprs,
