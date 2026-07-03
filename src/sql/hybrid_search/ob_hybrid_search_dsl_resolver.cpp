@@ -2164,24 +2164,30 @@ int ObDSLResolver::resolve_sort_options(ObIJsonBase *field_opts, ObDSLSortItem &
           LOG_WARN("invalid sort order", K(ret), K(order_str));
         }
       } else if (key.case_compare("missing") == 0) {
-        if (val->json_type() == ObJsonNodeType::J_STRING) {
+        ObJsonNodeType json_type = val->json_type();
+        if (json_type == ObJsonNodeType::J_NULL) {
+          // "missing": null means no special handling, skip
+        } else if (json_type == ObJsonNodeType::J_STRING) {
           ObString missing_str = ObString(val->get_data_length(), val->get_data());
           if (missing_str.case_compare("_first") == 0) {
             dsl_sort_item.missing_mode_ = ObDSLSortItem::MissingMode::FIRST;
           } else if (missing_str.case_compare("_last") == 0) {
             dsl_sort_item.missing_mode_ = ObDSLSortItem::MissingMode::LAST;
+          } else if (OB_FAIL(resolve_sort_missing_literal(*val, dsl_sort_item))) {
+            LOG_WARN("failed to resolve sort missing string literal", K(ret), KPC(val), K(dsl_sort_item));
+          } else {
+            dsl_sort_item.missing_mode_ = ObDSLSortItem::MissingMode::LITERAL;
           }
-        }
-        if (OB_FAIL(ret)) {
-        } else if (val->json_type() == ObJsonNodeType::J_NULL) {
-          // "missing": null means no special handling, skip
-        } else if (dsl_sort_item.missing_mode_ == ObDSLSortItem::MissingMode::FIRST ||
-                   dsl_sort_item.missing_mode_ == ObDSLSortItem::MissingMode::LAST) {
-          // already set as FIRST or LAST, do nothing
-        } else if (OB_FAIL(resolve_sort_missing_literal(*val, dsl_sort_item))) {
-          LOG_WARN("failed to resolve sort missing literal", K(ret), KPC(val), K(dsl_sort_item));
+        } else if (val->is_json_scalar(json_type)) {
+          if (OB_FAIL(resolve_sort_missing_literal(*val, dsl_sort_item))) {
+            LOG_WARN("failed to resolve sort missing literal", K(ret), KPC(val), K(dsl_sort_item));
+          } else {
+            dsl_sort_item.missing_mode_ = ObDSLSortItem::MissingMode::LITERAL;
+          }
         } else {
-          dsl_sort_item.missing_mode_ = ObDSLSortItem::MissingMode::LITERAL;
+          ret = OB_INVALID_ARGUMENT;
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sort.missing, should be a scalar value, \"_first\", or \"_last\"");
+          LOG_WARN("sort missing value must be a supported scalar", K(ret), K(json_type));
         }
       } else {
         ret = OB_NOT_SUPPORTED;
@@ -2326,9 +2332,16 @@ int ObDSLResolver::resolve_sort_missing_literal(ObIJsonBase &missing_node, ObDSL
       }
     } else if (ObIntTC == tc) {
       int64_t ivalue = 0;
-      if (OB_FAIL(missing_node.to_int(ivalue, true, true))) {
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sort missing value for integer column");
+      uint64_t unused_uint = 0;
+      if (missing_node.json_type() == ObJsonNodeType::J_DOUBLE) {
+        if (OB_FAIL(trunc_json_float_to_int(missing_node, false, ivalue, unused_uint))) {
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sort missing value for integer column, out of range");
+          LOG_WARN("sort missing float value out of int64 range", K(ret));
+        }
+      } else if (OB_FAIL(missing_node.to_int(ivalue, true, true))) {
         LOG_WARN("failed to convert json to int for sort missing", K(ret));
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*params_.expr_factory_, col_type, ivalue, lit))) {
         LOG_WARN("failed to build const int for sort missing", K(ret), K(col_type));
       } else {
@@ -2336,9 +2349,16 @@ int ObDSLResolver::resolve_sort_missing_literal(ObIJsonBase &missing_node, ObDSL
       }
     } else if (ObUIntTC == tc) {
       uint64_t uvalue = 0;
-      if (OB_FAIL(missing_node.to_uint(uvalue, false, true))) {
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sort missing value for unsigned integer column");
+      int64_t unused_int = 0;
+      if (missing_node.json_type() == ObJsonNodeType::J_DOUBLE) {
+        if (OB_FAIL(trunc_json_float_to_int(missing_node, true, unused_int, uvalue))) {
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sort missing value for unsigned integer column, out of range");
+          LOG_WARN("sort missing float value out of uint64 range", K(ret));
+        }
+      } else if (OB_FAIL(missing_node.to_uint(uvalue, false, true))) {
         LOG_WARN("failed to convert json to uint for sort missing", K(ret));
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObRawExprUtils::build_const_uint_expr(*params_.expr_factory_, col_type, uvalue, lit))) {
         LOG_WARN("failed to build const uint for sort missing", K(ret), K(col_type));
       } else {
@@ -2347,8 +2367,11 @@ int ObDSLResolver::resolve_sort_missing_literal(ObIJsonBase &missing_node, ObDSL
     } else if (ObFloatTC == tc) {
       double dv = 0.0;
       if (OB_FAIL(missing_node.to_double(dv))) {
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sort missing value for float column");
         LOG_WARN("failed to convert json to double for sort missing", K(ret));
+      } else if (isnan(dv) || isinf(dv)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sort missing value for float column, NaN/Inf not allowed");
+        LOG_WARN("sort missing float value is nan or inf", K(ret), K(dv));
       } else if (OB_FAIL(ObRawExprUtils::build_const_float_expr(*params_.expr_factory_, col_type, static_cast<float>(dv), lit))) {
         LOG_WARN("failed to build const float for sort missing", K(ret), K(col_type));
       } else {
@@ -2357,19 +2380,21 @@ int ObDSLResolver::resolve_sort_missing_literal(ObIJsonBase &missing_node, ObDSL
     } else if (ObDoubleTC == tc) {
       double dv = 0.0;
       if (OB_FAIL(missing_node.to_double(dv))) {
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sort missing value for double column");
         LOG_WARN("failed to convert json to double for sort missing", K(ret));
+      } else if (isnan(dv) || isinf(dv)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sort missing value for double column, NaN/Inf not allowed");
+        LOG_WARN("sort missing double value is nan or inf", K(ret), K(dv));
       } else if (OB_FAIL(ObRawExprUtils::build_const_double_expr(*params_.expr_factory_, col_type, dv, lit))) {
         LOG_WARN("failed to build const double for sort missing", K(ret), K(col_type));
       } else {
         dsl_sort_item.missing_literal_ = lit;
       }
-    } else if (ObNumberTC == tc) {
+    } else if (ObNumberTC == tc || ObDecimalIntTC == tc) {
       number::ObNumber num;
       if (OB_FAIL(missing_node.to_number(allocator_, num))) {
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sort missing value for decimal column");
         LOG_WARN("failed to convert json to number for sort missing", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::build_const_number_expr(*params_.expr_factory_, col_type, num, lit))) {
+      } else if (OB_FAIL(ObRawExprUtils::build_const_number_expr(*params_.expr_factory_, ObNumberType, num, lit))) {
         LOG_WARN("failed to build const number for sort missing", K(ret), K(col_type));
       } else {
         dsl_sort_item.missing_literal_ = lit;
@@ -5651,6 +5676,54 @@ int ObDSLResolver::has_user_column_name(const ObString &col_name, bool &exists, 
   return ret;
 }
 
+// JSON DSL text parsing produces J_DOUBLE for floating-point numbers.
+// Truncate JSON double to int64/uint64 using trunc() (toward zero), aligned with ES cast-to-long.
+// Upper bound uses >= because LLONG_MAX/ULLONG_MAX round up in double precision.
+int ObDSLResolver::trunc_json_float_to_int(ObIJsonBase &json_node, bool is_unsigned,
+                                           int64_t &int_val, uint64_t &uint_val)
+{
+  int ret = OB_SUCCESS;
+  double dv = json_node.get_double();
+  dv = trunc(dv);
+  if (isnan(dv) || isinf(dv)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("float value is nan or inf", K(ret), K(dv));
+  } else if (is_unsigned) {
+    if (dv < 0 || dv >= static_cast<double>(ULLONG_MAX)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("float value out of uint64 range", K(ret), K(dv));
+    } else {
+      uint_val = static_cast<uint64_t>(dv);
+    }
+  } else {
+    if (dv < static_cast<double>(LLONG_MIN) || dv >= static_cast<double>(LLONG_MAX)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("float value out of int64 range", K(ret), K(dv));
+    } else {
+      int_val = static_cast<int64_t>(dv);
+    }
+  }
+  return ret;
+}
+
+int ObDSLResolver::check_aggs_bucket_name(const ObString &agg_name)
+{
+  int ret = OB_SUCCESS;
+  bool name_conflicts = false;
+  if (agg_name.length() >= 2 && agg_name.ptr()[0] == '_' && agg_name.ptr()[1] == '_') {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "aggs bucket name, names starting with \"__\" are reserved");
+    LOG_WARN("aggs bucket name with __ prefix is reserved", K(ret), K(agg_name));
+  } else if (OB_FAIL(has_user_column_name(agg_name, name_conflicts))) {
+    LOG_WARN("failed to check agg bucket name conflict", K(ret), K(agg_name));
+  } else if (name_conflicts) {
+    ret = OB_ERR_COLUMN_DUPLICATE;
+    LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, agg_name.length(), agg_name.ptr());
+    LOG_WARN("aggs bucket name conflicts with user column", K(ret), K(agg_name));
+  }
+  return ret;
+}
+
 int ObDSLResolver::resolve_aggs(ObIJsonBase &aggs_node)
 {
   int ret = OB_SUCCESS;
@@ -5735,13 +5808,8 @@ int ObDSLResolver::resolve_aggs_terms_or_cardinality(const ObString &agg_name,
     LOG_WARN("agg body should be object", K(ret));
   } else {
     ObDSLAggTermsItem item;
-    bool name_conflicts = false;
-    if (OB_FAIL(has_user_column_name(agg_name, name_conflicts))) {
-      LOG_WARN("failed to check agg bucket name conflict", K(ret), K(agg_name));
-    } else if (name_conflicts) {
-      ret = OB_ERR_COLUMN_DUPLICATE;
-      LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, agg_name.length(), agg_name.ptr());
-      LOG_WARN("aggs bucket name conflicts with user column", K(ret), K(agg_name));
+    if (OB_FAIL(check_aggs_bucket_name(agg_name))) {
+      LOG_WARN("aggs bucket name check failed", K(ret), K(agg_name));
     } else {
       item.agg_type_ = agg_type;
       // agg_name points into the JSON buffer allocated from allocator_ (statement-level arena),

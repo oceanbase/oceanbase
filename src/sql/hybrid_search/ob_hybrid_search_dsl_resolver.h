@@ -470,6 +470,9 @@ private :
   int get_json_string_from_node(const ParseNode *node, ObString &json_str);
   int get_user_column_expr(ObString &col_name, ObColumnRefRawExpr *&col_expr);
   int has_user_column_name(const ObString &col_name, bool &exists, ObColumnRefRawExpr **col_expr = nullptr);
+  int check_aggs_bucket_name(const ObString &agg_name);
+  static int trunc_json_float_to_int(ObIJsonBase &json_node, bool is_unsigned,
+                                     int64_t &int_val, uint64_t &uint_val);
   int init_bool_info(ObIJsonBase &req_node, ObConstRawExpr *&msm_expr, ObConstRawExpr *&boost_expr);
   /// Compact int snapshot for `ObDSLBoolQuery::msm_` from the already-built const MSM expr (bool query).
   static int dsl_bool_msm_snapshot_from_msm_expr(ObConstRawExpr *msm_expr, int32_t &msm_snapshot);
