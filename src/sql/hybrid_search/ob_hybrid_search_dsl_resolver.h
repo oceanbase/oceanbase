@@ -303,6 +303,7 @@ private :
   int construct_string_expr(const ObString &str_value, ObRawExpr *&expr, ObCollationType collation_type = CS_TYPE_INVALID);
   int resolve_query_string_expr(const ObString &str_value, const ObCollationType target_coll, ObRawExpr *&expr);
   int formalize_exprs();
+  int get_col_idx_info(const ObString &col_name, ObColumnIndexInfo *&idx_info);
   int get_dist_algo_type(ObColumnRefRawExpr *field_expr, ObVectorIndexDistAlgorithm &algo_type);
   int get_field_expr_and_path(const ObString &field_name, ObColumnRefRawExpr *&col_expr, ObString &path_str);
   int get_fulltext_index_schema(const ObString &field_name, const ObTableSchema *&index_schema);
