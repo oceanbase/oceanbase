@@ -368,8 +368,10 @@ int ObDASVecIndexDriverIter::evaluate_partition_path()
     LOG_WARN("unexpected null in evaluate_partition_path", K(ret),
              KP(search_ctx_), KP(vec_index_driver_ctdef_));
   } else if (ObVecIndexType::VEC_INDEX_INVALID != vec_index_driver_ctdef_->vec_type_
-             && ObKnnFilterMode::PRE_ADAPTIVE != vec_index_driver_ctdef_->filter_mode_) {
-    // User forced a specific sub-path (pre-knn/pre-brute); skip per-partition evaluation.
+             && ObKnnFilterMode::PRE_ADAPTIVE != vec_index_driver_ctdef_->filter_mode_
+             && ObKnnFilterMode::POST_FILTER != vec_index_driver_ctdef_->filter_mode_
+             && ObKnnFilterMode::POST_INDEX_MERGE != vec_index_driver_ctdef_->filter_mode_) {
+    // User forced a specific PRE sub-path (pre-knn/pre-brute); skip per-partition evaluation.
   } else if (OB_FALSE_IT(filter_rtdef_for_reeval_->reset_cost_recursive())) {
   } else if (OB_FAIL(search_ctx_->refresh_table_row_count())) {
     LOG_WARN("failed to refresh partition row count", K(ret));
@@ -380,41 +382,49 @@ int ObDASVecIndexDriverIter::evaluate_partition_path()
     LOG_WARN("invalid filter cost or partition row count", K(ret), K(p_cost), K(search_ctx_->get_row_count()));
   } else {
     int64_t partition_row_count = search_ctx_->get_row_count().cost();
-    const bool is_pre_adaptive = (ObKnnFilterMode::PRE_ADAPTIVE == vec_index_driver_ctdef_->filter_mode_);
-    ObVecIndexType new_type = is_pre_adaptive
-        ? ObVecIndexType::VEC_INDEX_PRE
-        : ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER;
-    bool new_bf = false;
-    if (p_cost.cost() <= static_cast<int64_t>(ObVecIdxExtraInfo::MAX_HNSW_BRUTE_FORCE_SIZE)) {
-      new_type = ObVecIndexType::VEC_INDEX_PRE;
-      new_bf = true;
-    } else if (partition_row_count > 0
-               && static_cast<double>(p_cost.cost()) / static_cast<double>(partition_row_count)
-                      <= ObVecIdxExtraInfo::DEFAULT_PRE_RATE_FILTER_WITH_IDX) {
-      new_type = ObVecIndexType::VEC_INDEX_PRE;
-    }
-
-    const bool choose_pre = (ObVecIndexType::VEC_INDEX_PRE == new_type);
-    if (choose_pre && OB_ISNULL(pre_filter_iter_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("PRE path chosen but pre_filter_iter_ is null", K(ret));
-    } else if (!choose_pre && OB_ISNULL(post_filter_iter_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("POST path chosen but post_filter_iter_ is null", K(ret));
-    } else {
-      const ObVecIndexType old_type = vec_index_type_;
-      const bool old_bf = go_brute_force_;
-      if (choose_pre && vec_index_type_ != ObVecIndexType::VEC_INDEX_PRE) {
-        switch_to_pre_filter();
-      } else if (!choose_pre && vec_index_type_ != ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER) {
-        switch_to_post_filter();
-      }
-      go_brute_force_ = new_bf;
+    const bool user_forced_post = (ObKnnFilterMode::POST_FILTER == vec_index_driver_ctdef_->filter_mode_
+                                   || ObKnnFilterMode::POST_INDEX_MERGE == vec_index_driver_ctdef_->filter_mode_);
+    if (user_forced_post) {
       last_partition_row_count_ = partition_row_count;
       last_filter_est_row_count_ = p_cost.cost();
-      vec_index_scan_iter_->set_vec_index_type(vec_index_type_, vec_idx_try_path_, go_brute_force_);
-      LOG_TRACE("partition path result",
-                K(old_type), K(vec_index_type_), K(old_bf), K(new_bf), K(p_cost.cost()), K(partition_row_count));
+      LOG_TRACE("partition estimation for forced post path", K(p_cost.cost()), K(partition_row_count));
+    } else {
+      const bool is_pre_adaptive = (ObKnnFilterMode::PRE_ADAPTIVE == vec_index_driver_ctdef_->filter_mode_);
+      ObVecIndexType new_type = is_pre_adaptive
+          ? ObVecIndexType::VEC_INDEX_PRE
+          : ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER;
+      bool new_bf = false;
+      if (p_cost.cost() <= static_cast<int64_t>(ObVecIdxExtraInfo::MAX_HNSW_BRUTE_FORCE_SIZE)) {
+        new_type = ObVecIndexType::VEC_INDEX_PRE;
+        new_bf = true;
+      } else if (partition_row_count > 0
+                && static_cast<double>(p_cost.cost()) / static_cast<double>(partition_row_count)
+                        <= ObVecIdxExtraInfo::DEFAULT_PRE_RATE_FILTER_WITH_IDX) {
+        new_type = ObVecIndexType::VEC_INDEX_PRE;
+      }
+
+      const bool choose_pre = (ObVecIndexType::VEC_INDEX_PRE == new_type);
+      if (choose_pre && OB_ISNULL(pre_filter_iter_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("PRE path chosen but pre_filter_iter_ is null", K(ret));
+      } else if (!choose_pre && OB_ISNULL(post_filter_iter_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("POST path chosen but post_filter_iter_ is null", K(ret));
+      } else {
+        const ObVecIndexType old_type = vec_index_type_;
+        const bool old_bf = go_brute_force_;
+        if (choose_pre && vec_index_type_ != ObVecIndexType::VEC_INDEX_PRE) {
+          switch_to_pre_filter();
+        } else if (!choose_pre && vec_index_type_ != ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER) {
+          switch_to_post_filter();
+        }
+        go_brute_force_ = new_bf;
+        last_partition_row_count_ = partition_row_count;
+        last_filter_est_row_count_ = p_cost.cost();
+        vec_index_scan_iter_->set_vec_index_type(vec_index_type_, vec_idx_try_path_, go_brute_force_);
+        LOG_TRACE("partition path result",
+                  K(old_type), K(vec_index_type_), K(old_bf), K(new_bf), K(p_cost.cost()), K(partition_row_count));
+      }
     }
   }
 
@@ -1302,7 +1312,19 @@ int ObDASVecIndexDriverIter::do_expr_filter_batch()
       int64_t batch_cnt = 0;
       const int64_t batch_start = processed;
 
-      for (int64_t i = processed; OB_SUCC(ret) && i < total_count && batch_cnt < batch_size; ++i) {
+      const int64_t needed = adaptor_vid_iter_->get_alloc_size() - adaptor_vid_iter_->get_total();
+      int64_t effective_batch = batch_size;
+      if (needed > 0) {
+        double selectivity = 0;
+        if (last_partition_row_count_ > 0 && last_filter_est_row_count_ > 0
+            && last_filter_est_row_count_ < last_partition_row_count_) {
+          selectivity = static_cast<double>(last_filter_est_row_count_)
+                        / static_cast<double>(last_partition_row_count_);
+        }
+        effective_batch = ObDasVecScanUtils::calc_effective_batch(needed, selectivity, batch_size);
+      }
+
+      for (int64_t i = processed; OB_SUCC(ret) && i < total_count && batch_cnt < effective_batch; ++i) {
         int64_t vid = vids[i];
         ObNewRange look_range;
         new (&vid_objs[batch_cnt]) ObObj();
