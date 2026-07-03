@@ -430,6 +430,7 @@ _enable_compaction_diagnose
 _enable_compatible_monotonic
 _enable_constant_type_demotion
 _enable_convert_real_to_decimal
+_enable_custom_dict_table
 _enable_das_batch_rescan_flag
 _enable_das_keep_order
 _enable_data_based_sqc_dop

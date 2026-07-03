@@ -3112,10 +3112,18 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
           LOG_WARN("custom fulltext dictionary table is not supported in the alter table statement", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "custom fulltext dictionary table in the alter table statement");
         } else if (stmt_->get_stmt_type() == stmt::T_CREATE_TABLE) {
+          omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
           ObCreateTableArg &arg = static_cast<ObCreateTableStmt*>(stmt_)->get_create_table_arg();
           ObString tmp_str(static_cast<int32_t>(option_node->children_[0]->str_len_),
                               (char *)(option_node->children_[0]->str_value_));
-          if (0 == tmp_str.case_compare("Y")) {
+          if (OB_UNLIKELY(!tenant_config.is_valid())) {
+            ret = OB_EAGAIN;
+            LOG_WARN("tenant_config has not been loaded", K(ret), K(tenant_id));
+          } else if (!tenant_config->_enable_custom_dict_table) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("custom fulltext dictionary table is not enabled", K(ret), K(tenant_id));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "_enable_custom_dict_table is not enabled, creating custom fulltext dictionary table is");
+          } else if (0 == tmp_str.case_compare("Y")) {
             arg.schema_.set_fulltext_dict();
           } else {
             ret = OB_ERR_PARSER_SYNTAX;
