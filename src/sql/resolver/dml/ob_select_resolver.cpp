@@ -1493,7 +1493,7 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
   if (OB_SUCC(ret)) {
     if (OB_FAIL(check_audit_log_stmt(select_stmt))) {
       LOG_WARN("failed to check audit log stmt");
-    } else if (select_stmt->is_hybrid_search() && OB_FAIL(check_hybrid_search_stmt(select_stmt))) {
+    } else if (select_stmt->is_hybrid_search() && OB_FAIL(ObDSLResolver::check_hybrid_search_stmt(select_stmt))) {
       LOG_WARN("failed to check hybrid search dsl stmt", K(ret));
     }
   }
@@ -8617,18 +8617,6 @@ int ObSelectResolver::check_audit_log_stmt(ObSelectStmt *select_stmt)
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "use audit log function in complex query");
       }
     }
-  }
-  return ret;
-}
-
-int ObSelectResolver::check_hybrid_search_stmt(ObSelectStmt *select_stmt)
-{
-  int ret = OB_SUCCESS;
-  if (!select_stmt->is_hybrid_search()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("is not hybrid search stmt", K(ret));
-  } else if (OB_FAIL(ObDSLResolver::check_hybrid_search_stmt(select_stmt))) {
-    LOG_WARN("failed to check hybrid search stmt", K(ret));
   }
   return ret;
 }

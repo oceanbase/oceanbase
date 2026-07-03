@@ -198,13 +198,14 @@ struct ObDSLRerankInfo {
 
 struct ObDSLRankInfo {
   ObDSLRankInfo()
-    : method_(ObFusionMethod::WEIGHT_SUM), window_size_(nullptr), rank_const_(nullptr), rerank_info_(nullptr) {}
+    : method_(ObFusionMethod::WEIGHT_SUM), window_size_(nullptr), rank_const_(nullptr), rerank_info_(nullptr), has_rank_(false) {}
   ~ObDSLRankInfo() {}
   ObFusionMethod method_;
   ObRawExpr *window_size_;
   ObRawExpr *rank_const_;
   ObDSLRerankInfo *rerank_info_;
-  TO_STRING_KV(K(method_), K(window_size_), K(rank_const_), KP(rerank_info_));
+  bool has_rank_;
+  TO_STRING_KV(K(method_), K(window_size_), K(rank_const_), KP(rerank_info_), K(has_rank_));
 };
 
 enum class ObDSLResultMode
@@ -229,7 +230,7 @@ struct ObDSLSortItem
       missing_literal_(nullptr), is_score_sort_(false) {}
   ~ObDSLSortItem() {}
 
-  ObRawExpr *field_expr_;         // `_score` sort uses the final score expr
+  ObRawExpr *field_expr_;         // `__score` sort uses the final score expr
   bool is_asc_;
   MissingMode missing_mode_;      // NONE/FIRST/LAST/LITERAL for DSL missing handling
   ObConstRawExpr *missing_literal_; // used when missing_mode_ == LITERAL
@@ -251,8 +252,7 @@ struct ObDSLAggTermsItem {
   enum OrderByType { BY_COUNT, BY_KEY };
   ObDSLAggTermsItem()
     : agg_type_(TERMS), agg_name_(), field_(nullptr), size_(10),
-      min_doc_count_(1), order_by_(BY_COUNT), order_asc_(false),
-      count_expr_(nullptr), name_conflicts_with_user_column_(false) {}
+      min_doc_count_(1), order_by_(BY_COUNT), order_asc_(false), count_expr_(nullptr) {}
   AggType              agg_type_;
   ObString             agg_name_;
   ObColumnRefRawExpr  *field_;
@@ -261,18 +261,16 @@ struct ObDSLAggTermsItem {
   OrderByType          order_by_;
   bool                 order_asc_;
   ObAggFunRawExpr     *count_expr_;
-  bool                 name_conflicts_with_user_column_;
   TO_STRING_KV(K(agg_type_), K(agg_name_), KPC(field_), K(size_), K(min_doc_count_),
-               K(order_by_), K(order_asc_), KPC(count_expr_), K(name_conflicts_with_user_column_));
+               K(order_by_), K(order_asc_), KPC(count_expr_));
 };
 
 struct ObDSLQueryInfo
 {
   ObDSLQueryInfo()
     : queries_(), from_(nullptr), size_(nullptr), min_score_(nullptr), one_const_expr_(nullptr),
-      query_top_level_boost_(nullptr), sort_items_(), raw_dsl_param_str_(),
-      is_top_k_query_(true), query_dop_(1), result_mode_(ObDSLResultMode::SEARCH_HITS), has_dsl_sort_(false),
-      has_dsl_aggs_(false), has_dsl_rank_(false), has_dsl_collapse_(false), track_score_(true) {}
+      query_top_level_boost_(nullptr), raw_dsl_param_str_(), is_top_k_query_(true), query_dop_(1), result_mode_(ObDSLResultMode::SEARCH_HITS),
+      track_score_(true) {}
   static int check_column_in_dsl(ObIArray<TableItem*> &table_items, ObColumnRefRawExpr *col_expr, bool &in_dsl);
   int deep_copy(const ObDSLQueryInfo& src, ObIRawExprCopier &expr_copier, ObIAllocator* allocator);
   static int deep_copy_query(const ObDSLQuery *src, ObDSLQuery *&dst,
@@ -287,6 +285,10 @@ struct ObDSLQueryInfo
                                     ObIRawExprCopier &expr_copier, ObIAllocator* allocator, ObDSLQuery *parent);
   int deep_copy_sort_items(const ObDSLQueryInfo &src, ObIRawExprCopier &expr_copier);
   int init_default_params(ObRawExprFactory &expr_factory, bool is_top_k_query = true);
+  bool has_dsl_aggs() const { return !agg_items_.empty(); }
+  bool has_dsl_collapse() const { return nullptr != collapse_info_.field_; }
+  bool has_dsl_rank() const { return rank_info_.has_rank_; }
+  bool has_dsl_sort() const { return !sort_items_.empty(); }
 
   ObSEArray<ObDSLQuery*, 4, ModulePageAllocator, true> queries_;
   ObRawExpr *from_;
@@ -304,18 +306,13 @@ struct ObDSLQueryInfo
   bool is_top_k_query_;
   int64_t query_dop_;
   ObDSLResultMode result_mode_;
-  bool has_dsl_sort_;
-  bool has_dsl_aggs_;
-  bool has_dsl_rank_;
-  bool has_dsl_collapse_;
   bool track_score_;
   ObDSLCollapseInfo collapse_info_;
   ObSEArray<ObDSLAggTermsItem, 2, ModulePageAllocator, true> agg_items_;
-  TO_STRING_KV(K(queries_), K(from_), K(size_), K(min_score_), K(query_top_level_boost_),
-               K(rank_info_), K(rowkey_cols_), K(dsl_cols), K(score_cols_), K(sort_items_),
-               K(dsl_exprs_), K(raw_dsl_param_str_), K(is_top_k_query_), K(query_dop_),
-               K(result_mode_), K(has_dsl_sort_), K(has_dsl_aggs_), K(has_dsl_rank_), K(track_score_),
-               K(has_dsl_collapse_), K(collapse_info_), K(agg_items_));
+  TO_STRING_KV(K(queries_), K(from_), K(size_), K(min_score_), K(one_const_expr_),
+               K(query_top_level_boost_), K(rank_info_), K(rowkey_cols_), K(dsl_cols), K(score_cols_),
+               K(dsl_exprs_), K(sort_items_), K(raw_dsl_param_str_), K(is_top_k_query_), K(query_dop_),
+               K(result_mode_), K(track_score_), K(collapse_info_), K(agg_items_));
 };
 
 class ObDSLResolver
@@ -345,7 +342,7 @@ public :
 
   int resolve(const ParseNode &parse_tree);
 
-  // Unified entry point for resolving hybrid_search pseudo columns (_score, aggs buckets, etc.).
+  // Unified entry point for resolving hybrid_search pseudo columns (__score, aggs buckets, etc.).
   // Returns OB_ERR_BAD_FIELD_ERROR when the column is not a recognized pseudo column.
   static int resolve_hybrid_search_pseudo_column_ref_expr(
       TableItem &table_item,
@@ -355,12 +352,12 @@ public :
       ObSQLSessionInfo *session_info,
       ObRawExpr *&real_ref_expr);
 
+private:
   static int resolve_hybrid_search_score_column_ref_expr(
       const TableItem &table_item,
       const ObQualifiedName &q_name,
       ObDMLStmt &stmt,
       ObRawExpr *&real_ref_expr);
-
   // Returns OB_ERR_BAD_FIELD_ERROR when the column name is not an aggs bucket name.
   static int resolve_hybrid_search_aggs_bucket_column_ref_expr(
       TableItem &table_item,
@@ -369,12 +366,9 @@ public :
       ObRawExprFactory &expr_factory,
       ObSQLSessionInfo *session_info,
       ObRawExpr *&real_ref_expr);
-
-private:
   static int find_aggs_bucket_item(
       const TableItem &table_item,
       const ObQualifiedName &q_name,
-      const ObDMLStmt &stmt,
       ObDSLAggTermsItem *&bucket_item);
   static int resolve_terms_bucket_expr(
       ObDSLAggTermsItem &bucket_item,
@@ -387,15 +381,14 @@ private:
       ObRawExpr *&real_ref_expr);
   static int check_hybrid_search_clause_compat(ObSelectStmt *select_stmt);
   static int check_hybrid_search_cardinality_agg(ObSelectStmt *select_stmt);
-  static bool is_hybrid_search_count_star_stmt(const ObSelectStmt &select_stmt,
-                                                const ObAggFunRawExpr *&aggr_expr);
-  static int ignore_count_star_dsl_rewrites(ObSelectStmt &select_stmt,
-                                              ObDSLQueryInfo &dsl_query_info);
+  static int refresh_result_modes(ObSelectStmt *select_stmt);
+  static int ignore_count_star_dsl_rewrites(ObSelectStmt &select_stmt, ObDSLQueryInfo &dsl_query_info);
+  static bool is_hybrid_search_count_star_stmt(const ObSelectStmt &select_stmt, const ObAggFunRawExpr *&aggr_expr);
 
 public:
 
-  // Add `_score` pseudo column to select list for `hybrid_search(table ...)` in `SELECT *` expansion.
-  // This function checks if `_score` already exists in target_list, and if not, adds it.
+  // Add `__score` pseudo column to select list for `hybrid_search(table ...)` in `SELECT *` expansion.
+  // This function checks if `__score` already exists in target_list, and if not, adds it.
   static int add_hybrid_search_score_to_select_list(
       const TableItem &table_item,
       ObDMLStmt &stmt,
@@ -403,12 +396,10 @@ public:
 
   static int check_hybrid_search_stmt(ObSelectStmt *select_stmt);
   static int register_collapse_exprs(ObSelectStmt *select_stmt);
-  static int refresh_result_modes(ObSelectStmt *select_stmt);
 
   // FROM is resolved before SELECT in MySQL mode, so aggregate items are missing during dsl resolve().
   // Call after select list is resolved to set COUNT_AGG / track_score for scalar count(*).
-  static int refresh_result_mode_after_select_resolved(const ObSelectStmt *select_stmt,
-                                                       ObDSLQueryInfo *dsl_query_info);
+  static int refresh_result_mode_after_select_resolved(const ObSelectStmt *select_stmt, ObDSLQueryInfo *dsl_query_info);
   // for a column expr in scalar filter, whether it could be merged can be easily checked,
   // but for other exprs, we need to check if it is in the whitelist
   inline static bool in_merge_node_whitelist(const ObRawExpr *expr)
@@ -474,6 +465,7 @@ private :
   int get_fulltext_index_schema(const ObString &col_name, const ObTableSchema *&index_schema);
   int get_json_string_from_node(const ParseNode *node, ObString &json_str);
   int get_user_column_expr(ObString &col_name, ObColumnRefRawExpr *&col_expr);
+  int has_user_column_name(const ObString &col_name, bool &exists, ObColumnRefRawExpr **col_expr = nullptr);
   int init_bool_info(ObIJsonBase &req_node, ObConstRawExpr *&msm_expr, ObConstRawExpr *&boost_expr);
   /// Compact int snapshot for `ObDSLBoolQuery::msm_` from the already-built const MSM expr (bool query).
   static int dsl_bool_msm_snapshot_from_msm_expr(ObConstRawExpr *msm_expr, int32_t &msm_snapshot);
@@ -482,7 +474,6 @@ private :
   int init_resolver();
   int is_array_column(ObColumnRefRawExpr *col_expr, bool &is_array_col);
   int print_json_node(ObIJsonBase &node, ObJsonBuffer &j_buf);
-  int check_aggs_bucket_name_conflict(const ObString &agg_name, bool &is_conflict);
   int resolve_array_contains(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSLQuery *parent_query, ObEsQueryItem outer_query_type);
   int resolve_array_contains_all(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSLQuery *parent_query, ObEsQueryItem outer_query_type);
   int resolve_array_expr(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSLQuery *parent_query, ObEsQueryItem outer_query_type, ObEsQueryItem query_type);
@@ -559,8 +550,8 @@ private :
 
   // aggs
   int resolve_aggs(ObIJsonBase &aggs_node);
-  int resolve_agg_terms(const ObString &agg_name, ObIJsonBase &terms_node);
-  int resolve_agg_cardinality(const ObString &agg_name, ObIJsonBase &cardinality_node);
+  int resolve_aggs_field(ObIJsonBase &field_val, ObColumnRefRawExpr *&col_expr);
+  int resolve_aggs_terms_or_cardinality(const ObString &agg_name, ObIJsonBase &agg_node, ObDSLAggTermsItem::AggType agg_type);
   int inject_agg_stmt_rewrites();
 
   inline ObConstRawExpr *setup_boost(ObConstRawExpr *boost_expr)
@@ -572,8 +563,11 @@ private :
     col_expr->set_lob_column(col_expr->get_result_type().is_lob_storage());
     col_expr->set_database_name(table_item_.database_name_);
   }
+  static inline bool is_groupable_type(ObObjType type)
+  {
+    return ob_is_numeric_type(type) || ob_is_temporal_type(type) || ob_is_otimestamp_type(type) || ob_is_string_or_enumset_type(type);
+  }
   static int set_const_long_text_prefix_len(ObRawExpr *src_expr, ObIArray<ObRawExpr*> &longtext_exprs, ObIArray<int32_t> &origin_lens);
-  static bool is_groupable_type(ObObjType type);
   static int set_stmt_limit_offset(ObDSLQueryInfo *dsl_query_info, ObSelectStmt &select_stmt);
 
   ObIAllocator *allocator_;

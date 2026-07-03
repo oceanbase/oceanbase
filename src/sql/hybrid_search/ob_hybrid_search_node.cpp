@@ -413,11 +413,11 @@ int ObHybridSearchGenerator::init_fusion_iter_exec_mode(const ObDSLQueryInfo *qu
     fusion_node->fusion_iter_exec_mode_ = ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS;
     bool is_top_k_score_query = !(query_info->result_mode_ == ObDSLResultMode::COUNT_AGG ||
                                   query_info->result_mode_ == ObDSLResultMode::BUCKET_AGG ||
-                                  query_info->has_dsl_sort_ || query_info->has_dsl_collapse_);
+                                  query_info->has_dsl_sort() || query_info->has_dsl_collapse());
     if (fusion_node->has_rerank()) {
       // rerank requires topk candidates, keep SCORE_TOP_K_QUERY_HITS
     } else if (min_score_value > 0) {
-      if (!is_top_k_score_query && !query_info->has_dsl_rank_) {
+      if (!is_top_k_score_query && !query_info->has_dsl_rank()) {
         fusion_node->fusion_iter_exec_mode_ = ObFusionIterExecMode::ROWKEY_SCORE_FULL_RECALL;
       }
     } else if (query_info->result_mode_ == ObDSLResultMode::COUNT_AGG ||
@@ -427,9 +427,9 @@ int ObHybridSearchGenerator::init_fusion_iter_exec_mode(const ObDSLQueryInfo *qu
       } else {
         fusion_node->fusion_iter_exec_mode_ = ObFusionIterExecMode::SKIP_FUSION_ITER;
       }
-    } else if (query_info->has_dsl_sort_ ||
-               (query_info->has_dsl_collapse_ && !query_info->has_dsl_rank_)) {
-      if (query_info->queries_.count() > 1 || enable_parallel) {
+    } else if (query_info->has_dsl_sort() ||
+               (query_info->has_dsl_collapse() && !query_info->has_dsl_rank())) {
+      if (query_info->queries_.count() > 1) {
         fusion_node->fusion_iter_exec_mode_ = ObFusionIterExecMode::ROWKEY_SCORE_FULL_RECALL;
       } else {
         fusion_node->fusion_iter_exec_mode_ = ObFusionIterExecMode::SKIP_FUSION_ITER;
