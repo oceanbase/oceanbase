@@ -7,15 +7,23 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/basic/ob_hybrid_fusion_op.h"
+#include "sql/engine/expr/ob_expr_ai/ob_ai_func_utils.h"
+#include "sql/engine/expr/ob_expr_ai/ob_expr_ai_rerank.h"
+#include "sql/engine/expr/ob_expr_util.h"
+#include "observer/omt/ob_tenant_ai_service.h"
+#include "lib/json_type/ob_json_tree.h"
+#include "share/diagnosis/ob_runtime_profile.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
 using namespace common;
 namespace sql
 {
-
 // Constants
 static const double EPSILON = 1e-6;
+
+OB_SERIALIZE_MEMBER(ObHybridFusionRerankSpec, has_rerank_, model_key_expr_, query_expr_, field_idx_, window_size_expr_);
 
 ObHybridFusionSpec::ObHybridFusionSpec(ObIAllocator &alloc, const ObPhyOperatorType type)
   : ObOpSpec(alloc, type),
@@ -30,7 +38,8 @@ ObHybridFusionSpec::ObHybridFusionSpec(ObIAllocator &alloc, const ObPhyOperatorT
     path_top_k_limit_exprs_(alloc),
     score_expr_output_indices_(alloc),
     search_index_(-1),
-    fusion_iter_exec_mode_(ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS)
+    fusion_iter_exec_mode_(ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS),
+    is_single_partition_(false)
 {
 }
 
@@ -46,7 +55,68 @@ OB_SERIALIZE_MEMBER((ObHybridFusionSpec, ObOpSpec),
                      path_top_k_limit_exprs_,
                      score_expr_output_indices_,
                      search_index_,
-                     fusion_iter_exec_mode_);
+                     fusion_iter_exec_mode_,
+                     rerank_spec_,
+                     is_single_partition_);
+
+int ObHybridFusionOp::normalize_rerank_info_to_utf8(common::ObIAllocator &allocator,
+                                                    const common::ObString &src,
+                                                    const common::ObCollationType src_coll,
+                                                    common::ObString &dst)
+{
+  int ret = OB_SUCCESS;
+  if (src.empty()
+      || src_coll == CS_TYPE_BINARY
+      || ObCharset::charset_type_by_coll(src_coll) == CHARSET_UTF8MB4) {
+    dst = src;
+  } else if (OB_FAIL(ObExprUtil::convert_utf8_charset(allocator, src_coll, src, dst))) {
+    LOG_WARN("failed to convert rerank text to utf8", K(ret), K(src_coll), K(src));
+  }
+  return ret;
+}
+
+// Rerank HTTP JSON: only accept explicit numeric JSON types (no blind static_cast).
+int ObHybridFusionOp::rerank_json_index_to_int64(const ObJsonNode *node, int64_t &out)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rerank result index node is null", K(ret));
+  } else {
+    const ObJsonNodeType jt = node->json_type();
+    if (ObJsonNodeType::J_INT == jt) {
+      out = static_cast<const ObJsonInt *>(node)->value();
+    } else if (ObJsonNodeType::J_UINT == jt) {
+      out = static_cast<int64_t>(static_cast<const ObJsonUint *>(node)->value());
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("rerank result index has invalid json type", K(ret), K(jt));
+    }
+  }
+  return ret;
+}
+
+int ObHybridFusionOp::rerank_json_score_to_double(const ObJsonNode *node, double &out)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rerank result score node is null", K(ret));
+  } else {
+    const ObJsonNodeType jt = node->json_type();
+    if (ObJsonNodeType::J_DOUBLE == jt) {
+      out = static_cast<const ObJsonDouble *>(node)->value();
+    } else if (ObJsonNodeType::J_INT == jt) {
+      out = static_cast<double>(static_cast<const ObJsonInt *>(node)->value());
+    } else if (ObJsonNodeType::J_UINT == jt) {
+      out = static_cast<double>(static_cast<const ObJsonUint *>(node)->value());
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("rerank result score has invalid json type", K(ret), K(jt));
+    }
+  }
+  return ret;
+}
 
 int ObHybridFusionOp::inner_open()
 {
@@ -88,7 +158,7 @@ int ObHybridFusionOp::inner_open()
     if (OB_SUCC(ret)) {
       if (OB_FAIL(init_constant_params())) {
         LOG_WARN("failed to init constant exprs", K(ret));
-      } else if (OB_FAIL(init_path_heaps())) {
+      } else if (!spec_.is_single_partition_ && OB_FAIL(init_path_heaps())) {
         LOG_WARN("failed to init path heaps", K(ret));
       } else if (OB_FAIL(batch_doc_indices_.prepare_allocate(max_batch_size))) {
         LOG_WARN("failed to allocate batch_doc_indices", K(ret));
@@ -196,13 +266,31 @@ int ObHybridFusionOp::get_next_batch_score_topk_query(const int64_t max_row_cnt)
   } else if (!is_data_ready_) {
     if (OB_FAIL(collect_all_data_batch())) {
       LOG_WARN("failed to collect all data batch", K(ret));
-    } else if (OB_FAIL(get_top_k_doc_indices())) {
-      LOG_WARN("failed to get top k doc indices", K(ret));
-    } else if (OB_FAIL(rescore())) {
-      LOG_WARN("failed to rescore", K(ret));
-    } else if (OB_FAIL(compute_fusion_topk())) {
-      LOG_WARN("failed to compute final topk", K(ret));
+    } else if (spec_.is_single_partition_) {
+      if (OB_UNLIKELY(!spec_.rerank_spec_.has_rerank_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("hybrid fusion with single partition but no rerank configured", K(ret));
+      } else if (OB_FAIL(build_fusion_docs_from_stored_order())) {
+        LOG_WARN("failed to build fusion docs from stored order", K(ret));
+      } else if (OB_FAIL(call_rerank())) {
+        LOG_WARN("failed to call ai rerank", K(ret));
+      } else if (OB_FAIL(sort_and_finalize())) {
+        LOG_WARN("failed to sort and finalize", K(ret));
+      }
     } else {
+      if (OB_FAIL(get_top_k_doc_indices())) {
+        LOG_WARN("failed to get top k doc indices", K(ret));
+      } else if (OB_FAIL(rescore())) {
+        LOG_WARN("failed to rescore", K(ret));
+      } else if (OB_FAIL(compute_fusion_topk())) {
+        LOG_WARN("failed to compute final topk", K(ret));
+      } else if (spec_.rerank_spec_.has_rerank_ && OB_FAIL(call_rerank())) {
+        LOG_WARN("failed to call ai rerank", K(ret));
+      } else if (OB_FAIL(sort_and_finalize())) {
+        LOG_WARN("failed to sort and finalize", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
       is_data_ready_ = true;
       output_idx_ = 0;
     }
@@ -864,7 +952,7 @@ int ObHybridFusionOp::store_batch_rows(const ObBatchRows *child_brs)
               NULL,
               0))) {
     LOG_WARN("failed to add batch to store", K(ret));
-  } else if (OB_FAIL(try_push_to_heaps(child_brs, start_row_store_idx))) {
+  } else if (!spec_.is_single_partition_ && OB_FAIL(try_push_to_heaps(child_brs, start_row_store_idx))) {
     LOG_WARN("failed to push to heaps", K(ret));
   }
   return ret;
@@ -1141,15 +1229,15 @@ int ObHybridFusionOp::compute_fusion_topk()
 {
   int ret = OB_SUCCESS;
   int64_t topk = top_k_limit_;
+  // Collect all candidate doc indices into sorted_doc_indices_ (no min_score filter here;
+  // min_score is applied uniformly in sort_and_finalize() after optional rerank).
   for (hash::ObHashSet<int64_t>::iterator iter = top_k_doc_indices_.begin(); OB_SUCC(ret) && iter != top_k_doc_indices_.end(); ++iter) {
     int64_t doc_idx = iter->first;
-    const ObFusionDocInfo &doc = fusion_docs_.at(doc_idx);
-    if (doc.fusion_score_ >= min_score_) {
-      if (OB_FAIL(sorted_doc_indices_.push_back(doc_idx))) {
-        LOG_WARN("failed to push doc index", K(ret), K(doc_idx));
-      }
+    if (OB_FAIL(sorted_doc_indices_.push_back(doc_idx))) {
+      LOG_WARN("failed to push doc index", K(ret), K(doc_idx));
     }
   }
+  // Truncate to topk (by fusion_score_ descending) to limit the candidate set size.
   if (OB_SUCC(ret) && sorted_doc_indices_.count() > 0) {
     struct DocIndexCompare {
       const common::ObSEArray<ObFusionDocInfo, 10> &fusion_docs_;
@@ -1166,24 +1254,9 @@ int ObHybridFusionOp::compute_fusion_topk()
       LOG_WARN("sorted_doc_indices_ data is null", K(ret));
     } else {
       lib::ob_sort(begin, begin + sorted_doc_indices_.count(), cmp);
-      topk = top_k_limit_ > sorted_doc_indices_.count() ? sorted_doc_indices_.count() : top_k_limit_;
+      topk = OB_MIN(topk, sorted_doc_indices_.count());
       while (sorted_doc_indices_.count() > topk) {
         sorted_doc_indices_.pop_back();
-      }
-      if (spec_.fusion_iter_exec_mode_ == ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS) {
-        const int64_t total_count = sorted_doc_indices_.count();
-        const int64_t start = OB_MIN(offset_, total_count);
-        int64_t end = total_count;
-        if (size_ >= 0) {
-          end = OB_MIN(start + size_, total_count);
-        }
-        const int64_t new_count = end - start;
-        for (int64_t i = 0; i < new_count; ++i) {
-          sorted_doc_indices_[i] = sorted_doc_indices_[start + i];
-        }
-        while (sorted_doc_indices_.count() > new_count) {
-          sorted_doc_indices_.pop_back();
-        }
       }
     }
   }
@@ -1321,6 +1394,301 @@ int ObHybridFusionOp::output_row_batch(const int64_t max_row_cnt, int64_t count)
   return ret;
 }
 
+int ObHybridFusionOp::build_fusion_docs_from_stored_order()
+{
+  int ret = OB_SUCCESS;
+  const int64_t row_cnt = row_store_.get_row_cnt();
+  fusion_docs_.reset();
+  sorted_doc_indices_.reset();
+  if (OB_FAIL(fusion_docs_.prepare_allocate(row_cnt))) {
+    LOG_WARN("failed to prepare allocate fusion_docs", K(ret), K(row_cnt));
+  } else if (OB_FAIL(sorted_doc_indices_.prepare_allocate(row_cnt))) {
+    LOG_WARN("failed to prepare allocate sorted_doc_indices", K(ret), K(row_cnt));
+  } else {
+    for (int64_t i = 0; i < row_cnt; ++i) {
+      fusion_docs_.at(i).row_store_idx_ = i;
+      fusion_docs_.at(i).fusion_score_ = 0.0;
+      sorted_doc_indices_.at(i) = i;
+    }
+  }
+  return ret;
+}
+
+// Unified post-processing: sort by fusion_score_ desc → min_score filter → offset/limit.
+// Called once at the end of both single-partition and multi-partition paths.
+int ObHybridFusionOp::sort_and_finalize()
+{
+  int ret = OB_SUCCESS;
+  if (sorted_doc_indices_.count() > 0) {
+    // 1. Sort by fusion_score_ descending.
+    struct DocIndexCompare {
+      const common::ObSEArray<ObFusionDocInfo, 10> &docs_;
+      explicit DocIndexCompare(const common::ObSEArray<ObFusionDocInfo, 10> &d) : docs_(d) {}
+      bool operator()(const int64_t a, const int64_t b) const {
+        return docs_.at(a).fusion_score_ > docs_.at(b).fusion_score_;
+      }
+    };
+    DocIndexCompare cmp(fusion_docs_);
+    int64_t *begin = sorted_doc_indices_.get_data();
+    if (OB_ISNULL(begin)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sorted_doc_indices_ data is null", K(ret));
+    } else {
+      lib::ob_sort(begin, begin + sorted_doc_indices_.count(), cmp);
+    }
+
+    // 2. Filter by min_score.
+    if (OB_SUCC(ret) && min_score_ > 0.0) {
+      int64_t write_pos = 0;
+      for (int64_t i = 0; i < sorted_doc_indices_.count(); ++i) {
+        if (fusion_docs_.at(sorted_doc_indices_.at(i)).fusion_score_ >= min_score_) {
+          sorted_doc_indices_.at(write_pos++) = sorted_doc_indices_.at(i);
+        }
+      }
+      while (sorted_doc_indices_.count() > write_pos) {
+        sorted_doc_indices_.pop_back();
+      }
+    }
+
+    // 3. Apply offset / limit.
+    if (OB_SUCC(ret)) {
+      const int64_t total_count = sorted_doc_indices_.count();
+      const int64_t start = OB_MIN(offset_, total_count);
+      const int64_t end = OB_MIN(start + size_, total_count);
+      const int64_t new_count = end - start;
+      for (int64_t i = 0; i < new_count; ++i) {
+        sorted_doc_indices_.at(i) = sorted_doc_indices_.at(start + i);
+      }
+      while (sorted_doc_indices_.count() > new_count) {
+        sorted_doc_indices_.pop_back();
+      }
+    }
+  }
+  return ret;
+}
+
+// Pure AI rerank: call the rerank model to re-score documents.
+// Only updates fusion_score_ in sorted_doc_indices_; does NOT sort/filter/paginate.
+int ObHybridFusionOp::call_rerank()
+{
+  int ret = OB_SUCCESS;
+
+  // Profile: create AI Rerank profile scope
+  ObProfileSwitcher profile_switcher(ObProfileId::AI_RERANK);
+  ScopedTimer rerank_timer(ObMetricId::AI_RERANK_ELAPSE_TIME);
+
+  if (OB_UNLIKELY(rerank_window_size_ < 0 || rerank_window_size_ > 10000)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rerank_window_size out of valid range [0, 10000]", K(ret), K(rerank_window_size_));
+  }
+  const int64_t total = sorted_doc_indices_.count();
+  const int64_t rerank_cnt = OB_MIN(rerank_window_size_, total);
+
+  // Profile: record document count
+  INC_METRIC_VAL(ObMetricId::AI_RERANK_DOCUMENT_COUNT, rerank_cnt);
+  ObEvalCtx::BatchInfoScopeGuard batch_guard(eval_ctx_);
+  batch_guard.set_batch_size(1);
+  ObDatum *model_key_datum = nullptr;
+  ObDatum *query_datum = nullptr;
+  const int64_t field_idx = spec_.rerank_spec_.field_idx_;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(spec_.rerank_spec_.model_key_expr_->eval(eval_ctx_, model_key_datum)) ||
+      OB_FAIL(spec_.rerank_spec_.query_expr_->eval(eval_ctx_, query_datum))) {
+    LOG_WARN("failed to eval rerank model_key or query", K(ret));
+  } else if (OB_ISNULL(model_key_datum) || OB_ISNULL(query_datum) ||
+      model_key_datum->is_null() || query_datum->is_null()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rerank model_key or query is null", K(ret));
+  } else if (OB_UNLIKELY(field_idx < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid field_idx for ai rerank", K(ret), K(field_idx));
+  } else if (OB_ISNULL(ctx_.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else {
+    ObString model_key_str = model_key_datum->get_string();
+    ObString query_str = query_datum->get_string();
+    const RowMeta &row_meta = row_store_.get_row_meta();
+    const uint64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
+    common::ObArenaAllocator tmp_alloc("HFRerank", common::OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
+    common::ObArenaAllocator batch_alloc("HFRerankBatch", common::OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
+    common::ObAIFuncExprInfo *info = nullptr;
+    omt::ObTenantAiService *ai_service = MTL(omt::ObTenantAiService *);
+    omt::ObAiServiceGuard ai_guard;
+    const share::ObAiModelEndpointInfo *endpoint_info = nullptr;
+    common::ObJsonArray *batch_docs = nullptr;
+    static constexpr int64_t RERANK_BATCH_SIZE = ObExprAIRerank::RERANK_DEFAULT_BATCH_SIZE;
+    const int64_t batch_size = RERANK_BATCH_SIZE;
+    if (OB_FAIL(normalize_rerank_info_to_utf8(
+            tmp_alloc, model_key_str, spec_.rerank_spec_.model_key_expr_->datum_meta_.cs_type_, model_key_str))) {
+      LOG_WARN("failed to normalize rerank model key",
+               K(ret), K(model_key_str), K(spec_.rerank_spec_.model_key_expr_->datum_meta_.cs_type_));
+    } else if (OB_FAIL(normalize_rerank_info_to_utf8(
+                   tmp_alloc, query_str, spec_.rerank_spec_.query_expr_->datum_meta_.cs_type_, query_str))) {
+      LOG_WARN("failed to normalize rerank query",
+               K(ret), K(query_str), K(spec_.rerank_spec_.query_expr_->datum_meta_.cs_type_));
+    } else if (OB_FAIL(common::ObAIFuncUtils::get_ai_func_info(tmp_alloc, model_key_str, info))) {
+      LOG_WARN("failed to get ai func info", K(ret), K(model_key_str));
+    } else if (OB_ISNULL(ai_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ai service is null", K(ret));
+    } else if (OB_FAIL(ai_service->get_ai_service_guard(ai_guard))) {
+      LOG_WARN("failed to get ai service guard", K(ret));
+    } else if (OB_FAIL(ai_guard.get_ai_endpoint_by_ai_model_name(model_key_str, endpoint_info))) {
+      LOG_WARN("failed to get endpoint by model name", K(ret), K(model_key_str));
+    } else if (OB_ISNULL(endpoint_info) || OB_ISNULL(info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("endpoint or info is null", K(ret));
+    } else if (OB_FAIL(common::ObAIFuncJsonUtils::get_json_array(tmp_alloc, batch_docs))) {
+      LOG_WARN("failed to create batch doc array", K(ret));
+    } else if (OB_ISNULL(batch_docs)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("batch docs is null", K(ret));
+    }
+    // Init fusion_score_ to -1.0 for all docs (un-reranked docs sink to bottom after sort).
+    if (OB_SUCC(ret)) {
+      for (int64_t i = 0; i < total; ++i) {
+        fusion_docs_.at(sorted_doc_indices_.at(i)).fusion_score_ = -1.0;
+      }
+    }
+    // Batch rerank loop: directly update fusion_score_ in-place.
+    ObString index_key("index");
+    ObString score_key("relevance_score");
+    int64_t api_call_count = 0;
+    // Maps batch-local index to position in sorted_doc_indices_, needed because
+    // NULL-field documents are skipped and not sent to the rerank API.
+    ObSEArray<int64_t, 64> batch_pos_map;
+    // Tracks positions of NULL-field documents to remove after reranking (ES-aligned:
+    // NULL-field docs are excluded from results entirely, not backfilled).
+    ObSEArray<int64_t, 16> null_field_positions;
+    for (int64_t start = 0; OB_SUCC(ret) && start < rerank_cnt; start += batch_size) {
+      const int64_t end = OB_MIN(start + batch_size, rerank_cnt);
+      batch_alloc.reuse();
+      batch_docs->clear();
+      batch_pos_map.reuse();
+      for (int64_t j = start; OB_SUCC(ret) && j < end; ++j) {
+        int64_t doc_idx = sorted_doc_indices_.at(j);
+        const ObFusionDocInfo &doc = fusion_docs_.at(doc_idx);
+        const ObCompactRow *row = nullptr;
+        if (OB_FAIL(row_store_reader_.get_row(doc.row_store_idx_, row))) {
+          LOG_WARN("failed to get row for rerank", K(ret), K(doc.row_store_idx_));
+        } else if (OB_ISNULL(row)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("row is null after get_row success", K(ret), K(doc.row_store_idx_));
+        } else if (row->is_null(field_idx)) {
+          // NULL field: exclude from reranking and final results (aligned with ES behavior).
+          if (OB_FAIL(null_field_positions.push_back(j))) {
+            LOG_WARN("failed to record null field position", K(ret), K(j));
+          }
+        } else {
+          ObString text_str;
+          ObString utf8_text_str;
+          const ObDatum &d = row->get_datum(row_meta, field_idx);
+          ObExpr *field_expr = child_->get_spec().output_.at(field_idx);
+          if (is_lob_storage(field_expr->datum_meta_.type_)) {
+            if (OB_FAIL(ObTextStringHelper::read_real_string_data(
+                    batch_alloc, d, field_expr->datum_meta_,
+                    field_expr->obj_meta_.has_lob_header(), text_str, &ctx_))) {
+              LOG_WARN("failed to read lob data for rerank field", K(ret), K(j));
+            }
+          } else {
+            text_str = d.get_string();
+          }
+          common::ObJsonString *str_node = nullptr;
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(normalize_rerank_info_to_utf8(
+                         batch_alloc, text_str, field_expr->datum_meta_.cs_type_, utf8_text_str))) {
+            LOG_WARN("failed to normalize rerank document text", K(ret), K(j), K(field_expr->datum_meta_.cs_type_));
+          } else if (OB_FAIL(common::ObAIFuncJsonUtils::get_json_string(batch_alloc, utf8_text_str, str_node))) {
+            LOG_WARN("failed to create json string for doc", K(ret), K(j));
+          } else if (OB_FAIL(batch_docs->append(str_node))) {
+            LOG_WARN("failed to append doc to batch", K(ret));
+          } else if (OB_FAIL(batch_pos_map.push_back(j))) {
+            LOG_WARN("failed to record batch position mapping", K(ret), K(j));
+          }
+        }
+      }
+      // Skip API call if all documents in this batch had NULL fields.
+      if (OB_SUCC(ret) && batch_docs->element_count() > 0) {
+        // Profile: HTTP request profile scope
+        ObProfileSwitcher http_profile(ObProfileId::AI_RERANK_HTTP_REQUEST);
+        ScopedTimer http_timer(ObMetricId::AI_RERANK_HTTP_ELAPSE_TIME);
+
+        common::ObJsonArray *batch_result = nullptr;
+        common::ObJsonObject *rerank_config = nullptr;
+        common::ObJsonBoolean *return_doc_obj = nullptr;
+        common::ObAIFuncModel model(tmp_alloc, *info, *endpoint_info);
+        if (OB_FAIL(common::ObAIFuncJsonUtils::get_json_object(tmp_alloc, rerank_config))) {
+          LOG_WARN("failed to construct rerank config", K(ret));
+        } else if (OB_FAIL(common::ObAIFuncJsonUtils::get_json_boolean(tmp_alloc, false, return_doc_obj))) {
+          LOG_WARN("failed to construct return_documents config", K(ret));
+        } else if (OB_FAIL(rerank_config->add("return_documents", return_doc_obj))) {
+          LOG_WARN("failed to set return_documents config", K(ret));
+        } else if (OB_FAIL(model.call_rerank(query_str, batch_docs, batch_result, rerank_config))) {
+          LOG_WARN("failed to call rerank", K(ret));
+        } else if (OB_ISNULL(batch_result)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("batch result is null", K(ret));
+        } else {
+          // Directly update fusion_score_ in-place from rerank results.
+          // Use batch_pos_map to translate batch-local index back to sorted_doc_indices_ position.
+          for (int64_t k = 0; OB_SUCC(ret) && k < batch_result->element_count(); ++k) {
+            common::ObJsonNode *val = batch_result->get_value(k);
+            if (OB_ISNULL(val) || val->json_type() != ObJsonNodeType::J_OBJECT) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("rerank result element is not object", K(ret), K(k));
+            } else {
+              common::ObJsonObject *obj = static_cast<common::ObJsonObject *>(val);
+              common::ObJsonNode *idx_node = obj->get_value(index_key);
+              common::ObJsonNode *score_node = obj->get_value(score_key);
+              if (OB_ISNULL(idx_node) || OB_ISNULL(score_node)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("rerank result missing index or score", K(ret), K(k));
+              } else {
+                int64_t batch_idx = 0;
+                double score = 0.0;
+                if (OB_FAIL(rerank_json_index_to_int64(idx_node, batch_idx))) {
+                  LOG_WARN("failed to parse rerank result index", K(ret), K(k));
+                } else if (OB_FAIL(rerank_json_score_to_double(score_node, score))) {
+                  LOG_WARN("failed to parse rerank result score", K(ret), K(k));
+                } else if (batch_idx < 0 || batch_idx >= batch_pos_map.count()) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("rerank result index out of range for batch",
+                           K(ret), K(k), K(batch_idx), K(batch_pos_map.count()));
+                } else {
+                  int64_t pos = batch_pos_map.at(batch_idx);
+                  int64_t doc_idx = sorted_doc_indices_.at(pos);
+                  fusion_docs_.at(doc_idx).fusion_score_ = score;
+                }
+              }
+            }
+          }
+        }
+        api_call_count++;
+      }
+    }
+    // Profile: record API call count
+    INC_METRIC_VAL(ObMetricId::AI_RERANK_API_CALL_COUNT, api_call_count);
+
+    // Remove NULL-field documents from sorted_doc_indices_ (reverse order to keep indices valid).
+    // ES-aligned: NULL-field docs are excluded entirely, not backfilled from beyond the window.
+    for (int64_t i = null_field_positions.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
+      if (OB_FAIL(sorted_doc_indices_.remove(null_field_positions.at(i)))) {
+        LOG_WARN("failed to remove null field doc from sorted indices", K(ret), K(i));
+      }
+    }
+    // Trim docs beyond the rerank window (they have score -1.0, were never sent to API).
+    if (OB_SUCC(ret)) {
+      const int64_t effective_cnt = OB_MAX(0, rerank_cnt - null_field_positions.count());
+      while (sorted_doc_indices_.count() > effective_cnt) {
+        sorted_doc_indices_.pop_back();
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObHybridFusionOp::init_constant_params()
 {
   int ret = OB_SUCCESS;
@@ -1407,6 +1775,20 @@ int ObHybridFusionOp::init_constant_params()
       LOG_WARN("rank constant datum is null", K(ret));
     } else {
       rank_constant_ = rank_constant_datum->get_int();
+    }
+  }
+  if (OB_SUCC(ret) && spec_.rerank_spec_.has_rerank_) {
+    ObDatum *rerank_window_datum = nullptr;
+    if (OB_ISNULL(spec_.rerank_spec_.window_size_expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("rerank window size expr is null", K(ret));
+    } else if (OB_FAIL(spec_.rerank_spec_.window_size_expr_->eval(eval_ctx_, rerank_window_datum))) {
+      LOG_WARN("failed to eval rerank window size", K(ret));
+    } else if (OB_ISNULL(rerank_window_datum) || rerank_window_datum->is_null()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("rerank window size datum is null", K(ret));
+    } else {
+      rerank_window_size_ = rerank_window_datum->get_int();
     }
   }
   return ret;

@@ -70,13 +70,16 @@ public:
     from_(nullptr), size_(nullptr), min_score_(nullptr), window_size_(nullptr), rank_const_(nullptr),
     rowkey_cols_(allocator), score_cols_(allocator), weight_cols_(allocator), path_top_k_limit_(allocator),
     contains_vec_node_(false), search_index_(-1), has_search_subquery_(false), has_vector_subquery_(false),
-    is_top_k_query_(true), has_hybrid_fusion_op_(false), query_dop_(1),
-    track_score_(true), fusion_iter_exec_mode_(ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS)
+    is_top_k_query_(true), has_hybrid_fusion_op_(false), query_dop_(1), track_score_(true),
+    fusion_iter_exec_mode_(ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS), is_single_partition_(true)
     { node_type_ = INDEX_MERGE_HYBRID_FUSION_SEARCH; }
   virtual ~ObFusionNode() {}
   virtual inline bool contains_vector_node() const { return contains_vec_node_; }
   virtual int explain_info(char *buf, int64_t buf_len, int64_t &pos, ExplainType type, int blank_space_count);
   ObRawExpr *get_fusion_score_expr() const {return score_cols_.empty() ? nullptr : score_cols_.at(score_cols_.count() - 1);}
+  bool has_rerank() const { return rerank_info_.has_rerank(); }
+  void set_is_single_partition(bool v) { is_single_partition_ = v; }
+  bool get_is_single_partition() const { return is_single_partition_; }
 
   ObFusionMethod method_;
   ObRawExpr *from_;
@@ -88,7 +91,6 @@ public:
   ObSqlArray<ObRawExpr*> score_cols_;
   ObSqlArray<ObRawExpr*> weight_cols_;
   ObSqlArray<ObRawExpr*> path_top_k_limit_;
-
   bool contains_vec_node_;
   int64_t search_index_;
   bool has_search_subquery_;
@@ -98,6 +100,8 @@ public:
   int64_t query_dop_;
   bool track_score_;
   ObFusionIterExecMode fusion_iter_exec_mode_;
+  bool is_single_partition_;  // true when non-partitioned table: DAS fusion iter already did fusion
+  ObDSLRerankInfo rerank_info_;
 };
 
 class ObScalarQueryNode : public ObHybridSearchNodeBase

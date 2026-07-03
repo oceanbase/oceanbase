@@ -363,6 +363,14 @@ int ObHybridSearchGenerator::init_fusion_node(const ObDSLQueryInfo *query_info, 
   fusion_node->window_size_ = query_info->rank_info_.window_size_;
   fusion_node->rank_const_ = query_info->rank_info_.rank_const_;
   fusion_node->is_top_k_query_ = query_info->is_top_k_query_;
+  if (OB_NOT_NULL(query_info->rank_info_.rerank_info_)) {
+    const ObDSLRerankInfo *src = query_info->rank_info_.rerank_info_;
+    fusion_node->rerank_info_.model_ = src->model_;
+    fusion_node->rerank_info_.query_ = src->query_;
+    fusion_node->rerank_info_.field_ = src->field_;
+    fusion_node->rerank_info_.rank_window_size_ = src->rank_window_size_;
+    fusion_node->has_hybrid_fusion_op_ = true;
+  }
   fusion_node->query_dop_ = query_info->query_dop_;
   fusion_node->fusion_iter_exec_mode_ = ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS;
   fusion_node->track_score_ = query_info->track_score_;
@@ -405,7 +413,9 @@ int ObHybridSearchGenerator::init_fusion_iter_exec_mode(const ObDSLQueryInfo *qu
     bool is_top_k_score_query = !(query_info->result_mode_ == ObDSLResultMode::COUNT_AGG ||
                                   query_info->result_mode_ == ObDSLResultMode::BUCKET_AGG ||
                                   query_info->has_dsl_sort_ || query_info->has_dsl_collapse_);
-    if (min_score_value > 0) {
+    if (fusion_node->has_rerank()) {
+      // rerank requires topk candidates, keep SCORE_TOP_K_QUERY_HITS
+    } else if (min_score_value > 0) {
       if (!is_top_k_score_query && !query_info->has_dsl_rank_) {
         fusion_node->fusion_iter_exec_mode_ = ObFusionIterExecMode::ROWKEY_SCORE_FULL_RECALL;
       }

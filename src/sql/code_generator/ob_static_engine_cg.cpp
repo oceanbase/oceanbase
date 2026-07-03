@@ -9811,6 +9811,7 @@ int ObStaticEngineCG::generate_spec(ObLogHybridFusion &op,
   int ret = OB_SUCCESS;
   UNUSED(in_root_job);
   spec.fusion_method_ = op.get_fusion_algo();
+  spec.is_single_partition_ = op.get_is_single_partition();
   spec.search_index_ = op.get_search_index();
   spec.fusion_iter_exec_mode_ = op.get_fusion_node()->fusion_iter_exec_mode_;
   const ObIArray<ObRawExpr*> &score_exprs = op.get_score_exprs();
@@ -9857,6 +9858,41 @@ int ObStaticEngineCG::generate_spec(ObLogHybridFusion &op,
   if (OB_SUCC(ret) && spec.fusion_method_ == ObFusionMethod::RRF) {
     if (OB_FAIL(generate_rt_expr(*op.get_rank_constant_expr(), spec.rank_constant_expr_))) {
       LOG_WARN("failed to generate rt expr for rank constant", K(ret));
+    }
+  }
+  // AI rerank
+  if (OB_SUCC(ret) && op.has_rerank()) {
+    ObHybridFusionRerankSpec &rerank = spec.rerank_spec_;
+    rerank.has_rerank_ = true;
+    ObRawExpr *model_key_raw = op.get_rerank_model_key_expr();
+    ObRawExpr *query_raw = op.get_rerank_query_expr();
+    ObRawExpr *field_raw = op.get_rerank_field_expr();
+    ObRawExpr *window_size_raw = op.get_rerank_window_size_expr();
+    if (OB_ISNULL(model_key_raw) || OB_ISNULL(query_raw) || OB_ISNULL(field_raw) || OB_ISNULL(window_size_raw)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ai rerank expr is null", K(ret), KP(model_key_raw), KP(query_raw), KP(field_raw), KP(window_size_raw));
+    } else if (OB_FAIL(generate_rt_expr(*model_key_raw, rerank.model_key_expr_))) {
+      LOG_WARN("failed to generate rt expr for rerank model key", K(ret));
+    } else if (OB_FAIL(generate_rt_expr(*query_raw, rerank.query_expr_))) {
+      LOG_WARN("failed to generate rt expr for rerank query", K(ret));
+    } else if (OB_FAIL(generate_rt_expr(*window_size_raw, rerank.window_size_expr_))) {
+      LOG_WARN("failed to generate rt expr for rerank window size", K(ret));
+    } else if (OB_ISNULL(op.get_child(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("child is null", K(ret));
+    } else {
+      const ObIArray<ObRawExpr*> &child_output_exprs = op.get_child(0)->get_output_exprs();
+      rerank.field_idx_ = -1;
+      for (int64_t j = 0; j < child_output_exprs.count(); ++j) {
+        if (child_output_exprs.at(j) == field_raw) {
+          rerank.field_idx_ = j;
+          break;
+        }
+      }
+      if (rerank.field_idx_ < 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("rerank field expr not found in child output", K(ret), KPC(field_raw));
+      }
     }
   }
   return ret;

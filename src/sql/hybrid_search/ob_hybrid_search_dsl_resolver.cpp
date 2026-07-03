@@ -677,24 +677,21 @@ int ObDSLQueryInfo::init_default_params(ObRawExprFactory &expr_factory, bool is_
 {
   int ret = OB_SUCCESS;
   ObConstRawExpr *one_const_expr = nullptr;
-  // no need to create these exprs for top k query, they would be set when resolving dsl
-  if (!is_top_k_query) {
-    ObConstRawExpr *from_expr = nullptr;
-    ObConstRawExpr *size_expr = nullptr;
-    ObConstRawExpr *min_score_expr = nullptr;
-    if (OB_FAIL(ObRawExprUtils::build_const_int_expr(expr_factory, ObIntType, ObDSLResolver::FROM_DEFAULT, from_expr))) {
-      LOG_WARN("failed to create from const expr", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(expr_factory, ObIntType, ObDSLResolver::SIZE_DEFAULT, size_expr))) {
-      LOG_WARN("failed to create size const expr", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::build_const_double_expr(expr_factory, ObDoubleType, ObDSLResolver::MIN_SCORE_DEFAULT, min_score_expr))) {
-      LOG_WARN("failed to create min score const expr", K(ret));
-    } else {
-      from_ = from_expr;
-      size_ = size_expr;
-      min_score_ = min_score_expr;
-      rank_info_.method_ = ObFusionMethod::WEIGHT_SUM;
-      rank_info_.window_size_ = size_expr;
-    }
+  ObConstRawExpr *from_expr = nullptr;
+  ObConstRawExpr *size_expr = nullptr;
+  ObConstRawExpr *min_score_expr = nullptr;
+  if (OB_FAIL(ObRawExprUtils::build_const_int_expr(expr_factory, ObIntType, ObDSLResolver::FROM_DEFAULT, from_expr))) {
+    LOG_WARN("failed to create from const expr", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(expr_factory, ObIntType, ObDSLResolver::SIZE_DEFAULT, size_expr))) {
+    LOG_WARN("failed to create size const expr", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::build_const_double_expr(expr_factory, ObDoubleType, ObDSLResolver::MIN_SCORE_DEFAULT, min_score_expr))) {
+    LOG_WARN("failed to create min score const expr", K(ret));
+  } else {
+    from_ = from_expr;
+    size_ = size_expr;
+    min_score_ = min_score_expr;
+    rank_info_.method_ = ObFusionMethod::WEIGHT_SUM;
+    rank_info_.window_size_ = size_expr;
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObRawExprUtils::build_const_double_expr(expr_factory, ObDoubleType, 1.0, one_const_expr))) {
@@ -2043,6 +2040,8 @@ int ObDSLResolver::resolve(const ParseNode &parse_tree)
         // do nothing
       } else if (key.case_compare("min_score") == 0) {
         // do nothing
+      } else if (key.case_compare("rerank") == 0) {
+        // do nothing
       } else if (key.case_compare("sort") == 0) {
         dsl_sort_node = req_node;
         dsl_query_info_->has_dsl_sort_ = true;
@@ -3369,10 +3368,12 @@ int ObDSLResolver::resolve_default_params(ObIJsonBase &req_node)
   const ObString from_key = "from";
   const ObString rank_key = "rank";
   const ObString min_score_key = "min_score";
+  const ObString rerank_key = "rerank";
   ObIJsonBase *size_node = nullptr;
   ObIJsonBase *from_node = nullptr;
   ObIJsonBase *rank_node = nullptr;
   ObIJsonBase *min_score_node = nullptr;
+  ObIJsonBase *rerank_node = nullptr;
   ObRawExprFactory *expr_factory = params_.expr_factory_;
   if (OB_FAIL(req_node.get_object_value(size_key, size_node))) {
     if (OB_SEARCH_NOT_FOUND == ret) {
@@ -3427,33 +3428,51 @@ int ObDSLResolver::resolve_default_params(ObIJsonBase &req_node)
   } else if (OB_FAIL(resolve_rank(*rank_node))) {
     LOG_WARN("fail to resolve rank", K(ret));
   }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(req_node.get_object_value(rerank_key, rerank_node))) {
+    if (OB_SEARCH_NOT_FOUND == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to get rerank node", K(ret));
+    }
+  } else if (OB_FAIL(resolve_rerank(*rerank_node))) {
+    LOG_WARN("fail to resolve rerank", K(ret));
+  }
 
-  bool has_rank_window_size = false;
+  bool has_from_node = OB_NOT_NULL(from_node);
+  bool has_rank_node = OB_NOT_NULL(rank_node);
+  bool has_rerank_node = OB_NOT_NULL(rerank_node);
+  bool has_size_node = OB_NOT_NULL(size_node);
+
   // 1) Set size and rank_window_size (defaults where not provided).
+  // ES behavior:
+  // - Only rank (no rerank): size = rank.rws
+  // - Only rerank (no rank node): size = rerank.rws, rank.rws = rerank.rws
+  // - Both (rank node + rerank): size = rerank.rws, rank.rws = 10 (fixed if not specified)
+  // Key insight: size always inherits from rerank.rws when rerank exists
   if (OB_SUCC(ret)) {
-    if (OB_ISNULL(dsl_query_info_->size_) && OB_ISNULL(dsl_query_info_->rank_info_.window_size_)) {
-      ObConstRawExpr *size_expr = nullptr;
-      if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*expr_factory, ObIntType, SIZE_DEFAULT, size_expr))) {
-        LOG_WARN("fail to create const expr for default size", K(ret));
-      } else if (OB_FALSE_IT(dsl_query_info_->size_ = size_expr)) {
-      } else if (OB_FAIL(set_default_rank_window_size())) {
-        LOG_WARN("fail to set default rank_window_size", K(ret));
-      }
-    } else if (OB_ISNULL(dsl_query_info_->size_) && OB_NOT_NULL(dsl_query_info_->rank_info_.window_size_)) {
-      dsl_query_info_->size_ = dsl_query_info_->rank_info_.window_size_;
-      has_rank_window_size = true;
-    } else if (OB_NOT_NULL(dsl_query_info_->size_) && OB_ISNULL(dsl_query_info_->rank_info_.window_size_)) {
+    if (!has_rank_node && !has_rerank_node) {
       if (OB_FAIL(set_default_rank_window_size())) {
-        LOG_WARN("fail to set default rank_window_size", K(ret));
+        LOG_WARN("fail to set default rank window size", K(ret));
+      }
+    } else if (!has_rank_node && has_rerank_node) {
+      dsl_query_info_->rank_info_.window_size_ = dsl_query_info_->rank_info_.rerank_info_->rank_window_size_;
+    }
+    if (OB_SUCC(ret) && !has_size_node) {
+      if (has_rerank_node) {
+        dsl_query_info_->size_ = dsl_query_info_->rank_info_.rerank_info_->rank_window_size_;
+      } else if (has_rank_node) {
+        dsl_query_info_->size_ = dsl_query_info_->rank_info_.window_size_;
       }
     }
   }
 
-  // 2) Get from/size/rank_window_size values and validate them.
+  // 2) Get from/size/rank_window_size/rerank_window_size values and validate them.
   if (OB_SUCC(ret)) {
     int64_t from_value = 0;
     int64_t size_value = 0;
     int64_t rank_window_size_value = 0;
+    int64_t rerank_window_size_value = 0;
     ObConstRawExpr *from_expr = static_cast<ObConstRawExpr *>(dsl_query_info_->from_);
     ObConstRawExpr *size_expr = static_cast<ObConstRawExpr *>(dsl_query_info_->size_);
     ObConstRawExpr *rank_window_size_expr = static_cast<ObConstRawExpr *>(dsl_query_info_->rank_info_.window_size_);
@@ -3467,31 +3486,61 @@ int ObDSLResolver::resolve_default_params(ObIJsonBase &req_node)
       LOG_WARN("fail to get int value from size expr", K(ret));
     } else if (OB_FAIL(rank_window_size_expr->get_value().get_int(rank_window_size_value))) {
       LOG_WARN("fail to get int value from rank_window_size expr", K(ret));
-    } else if (from_value < 0) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "from, from value should be a non-negative integer");
-      LOG_WARN("from value should be a non-negative integer", K(ret), K(from_value));
-    } else if (size_value < 0) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "size, size value should be a non-negative integer");
-      LOG_WARN("size value should be a non-negative integer", K(ret), K(size_value));
-    } else if (rank_window_size_value < 0) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "rank_window_size, rank_window_size value should be a non-negative integer");
-      LOG_WARN("rank_window_size value should be a non-negative integer", K(ret), K(rank_window_size_value));
-    } else if (rank_window_size_value < size_value) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "rank_window_size, rank_window_size value should be greater than or equal to size value");
-      LOG_WARN("rank_window_size value should be greater than or equal to size value",
-               K(ret), K(rank_window_size_value), K(size_value));
-    } else if (has_rank_window_size && rank_window_size_value > SIZE_VALUE_MAX) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "rank_window_size, rank_window_size value should be in range [0, 10000]");
-      LOG_WARN("rank_window_size value should be in range [0, 10000]", K(ret), K(rank_window_size_value));
-    } else if (from_value + size_value > SIZE_VALUE_MAX) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "from or size, from + size value should be in range [0, 10000]");
-      LOG_WARN("from + size value should be in range [0, 10000]", K(ret), K(from_value), K(size_value));
+    } else if (has_rerank_node) {
+      ObDSLRerankInfo *rerank_info = dsl_query_info_->rank_info_.rerank_info_;
+      ObConstRawExpr *rerank_window_size_expr = static_cast<ObConstRawExpr *>(rerank_info->rank_window_size_);
+      if (OB_FAIL(rerank_window_size_expr->get_value().get_int(rerank_window_size_value))) {
+        LOG_WARN("fail to get int value from rerank rank_window_size expr", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (has_rank_node && has_rerank_node && has_size_node) {
+        // size <= rerank_window_size <= rank_window_size
+        if (size_value > rerank_window_size_value) {
+          ret = OB_INVALID_CONFIG;
+          LOG_USER_ERROR(OB_INVALID_CONFIG,
+                         "hybrid search DSL: size must be <= rerank.rank_window_size");
+          LOG_WARN("size is greater than rerank.rank_window_size", K(ret), K(size_value), K(rerank_window_size_value));
+        } else if (rerank_window_size_value > rank_window_size_value) {
+          ret = OB_INVALID_CONFIG;
+          LOG_USER_ERROR(OB_INVALID_CONFIG,
+                         "hybrid search DSL: rerank.rank_window_size must be <= rank.rank_window_size");
+          LOG_WARN("rerank.rank_window_size is greater than rank.rank_window_size", K(ret), K(rerank_window_size_value), K(rank_window_size_value));
+        }
+      } else if (has_rank_node && has_rerank_node) {
+        // rerank_window_size <= rank_window_size
+        if (rerank_window_size_value > rank_window_size_value) {
+          ret = OB_INVALID_CONFIG;
+          LOG_USER_ERROR(OB_INVALID_CONFIG,
+                         "hybrid search DSL: rerank.rank_window_size must be <= rank.rank_window_size");
+          LOG_WARN("rerank.rank_window_size is greater than rank.rank_window_size", K(ret), K(rerank_window_size_value), K(rank_window_size_value));
+        }
+      } else if (has_rank_node && has_size_node) {
+        // size <= rank_window_size
+        if (size_value > rank_window_size_value) {
+          ret = OB_INVALID_CONFIG;
+          LOG_USER_ERROR(OB_INVALID_CONFIG,
+                         "hybrid search DSL: size must be <= rank.rank_window_size");
+          LOG_WARN("size is greater than rank.rank_window_size", K(ret), K(size_value), K(rank_window_size_value));
+        }
+      } else if (has_rerank_node && has_size_node) {
+        // size <= rerank_window_size
+        if (size_value > rerank_window_size_value) {
+          ret = OB_INVALID_CONFIG;
+          LOG_USER_ERROR(OB_INVALID_CONFIG,
+                         "hybrid search DSL: size must be <= rerank.rank_window_size");
+          LOG_WARN("size is greater than rerank.rank_window_size", K(ret), K(size_value), K(rerank_window_size_value));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (size_value + from_value > SIZE_VALUE_MAX) {
+        ret = OB_INVALID_CONFIG;
+        LOG_USER_ERROR(OB_INVALID_CONFIG,
+                        "hybrid search DSL: from + size must be in range [0, 10000]");
+        LOG_WARN("from+size out of range", K(ret), K(from_value), K(size_value), K(from_value + size_value));
+      }
     }
   }
   return ret;
@@ -3556,6 +3605,22 @@ int ObDSLResolver::resolve_from(ObIJsonBase &req_node)
   if (OB_FAIL(resolve_const(req_node, from_expr, ObJsonNodeType::J_INT))) {
     LOG_WARN("fail to resolve from value", K(ret));
   } else {
+    int64_t from_value = 0;
+    ObConstRawExpr *from_const = static_cast<ObConstRawExpr *>(from_expr);
+    if (OB_FAIL(from_const->get_value().get_int(from_value))) {
+      LOG_WARN("fail to get int value from from expr", K(ret));
+    } else if (from_value < 0) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "from, from value should be a non-negative integer");
+      LOG_WARN("from value should be a non-negative integer", K(ret), K(from_value));
+    } else if (from_value > SIZE_VALUE_MAX) {
+      ret = OB_INVALID_CONFIG;
+      LOG_USER_ERROR(OB_INVALID_CONFIG,
+        "hybrid search DSL: from + size must be in range [0, 10000]");
+      LOG_WARN("from value should be in range [0, 10000]", K(ret), K(from_value));
+    }
+  }
+  if (OB_SUCC(ret)) {
     dsl_query_info_->from_ = from_expr;
   }
   return ret;
@@ -3916,6 +3981,22 @@ int ObDSLResolver::resolve_size(ObIJsonBase &req_node)
   if (OB_FAIL(resolve_const(req_node, size_expr, ObJsonNodeType::J_INT))) {
     LOG_WARN("fail to resolve size value", K(ret));
   } else {
+    int64_t size_value = 0;
+    ObConstRawExpr *size_const = static_cast<ObConstRawExpr *>(size_expr);
+    if (OB_FAIL(size_const->get_value().get_int(size_value))) {
+      LOG_WARN("fail to get int value from size expr", K(ret));
+    } else if (size_value < 0) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "size, size value should be a non-negative integer");
+      LOG_WARN("size value should be a non-negative integer", K(ret), K(size_value));
+    } else if (size_value > SIZE_VALUE_MAX) {
+      ret = OB_INVALID_CONFIG;
+      LOG_USER_ERROR(OB_INVALID_CONFIG,
+                     "hybrid search DSL: from + size must be in range [0, 10000]");
+      LOG_WARN("size value should be in range [0, 10000]", K(ret), K(size_value));
+    }
+  }
+  if (OB_SUCC(ret)) {
     dsl_query_info_->size_ = size_expr;
   }
   return ret;
@@ -4626,6 +4707,211 @@ int ObDSLResolver::resolve_rank(ObIJsonBase &req_node)
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "invalid rank method");
     LOG_WARN("unsupported rank method", K(ret), K(key));
   }
+  if (OB_SUCC(ret)) {
+    int64_t window_size_value = 0;
+    ObConstRawExpr *window_size_expr = static_cast<ObConstRawExpr *>(dsl_query_info_->rank_info_.window_size_);
+    if (OB_FAIL(window_size_expr->get_value().get_int(window_size_value))) {
+      LOG_WARN("fail to get int value from window size expr", K(ret));
+    } else if (window_size_value < 0) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "window_size, window_size value should be a non-negative integer");
+      LOG_WARN("window_size value should be a non-negative integer", K(ret), K(window_size_value));
+    } else if (window_size_value > SIZE_VALUE_MAX) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT,
+                     "rank.rank_window_size, rank.rank_window_size should be in range [0, 10000]");
+      LOG_WARN("window_size value should be in range [0, 10000]", K(ret), K(window_size_value));
+    }
+  }
+  return ret;
+}
+
+// Resolve "rerank" JSON: { "model_name", "field", "query", "rank_window_size" }
+// req_node: the rerank object node from top-level DSL param
+int ObDSLResolver::resolve_rerank(ObIJsonBase &req_node)
+{
+  int ret = OB_SUCCESS;
+  ObIJsonBase *model_key_node = nullptr;
+  ObIJsonBase *field_node = nullptr;
+  ObIJsonBase *query_node = nullptr;
+  ObIJsonBase *rank_window_size_node = nullptr;
+  ObRawExprFactory *expr_factory = params_.expr_factory_;
+  ObDSLRerankInfo *rerank_info = nullptr;
+  const ObString model_key_key("model");
+  const ObString field_key("field");
+  const ObString query_key("query");
+  const ObString rank_window_size_key("rank_window_size");
+
+  if (req_node.json_type() != ObJsonNodeType::J_OBJECT) {
+    ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
+    LOG_WARN("rerank must be json object", K(ret), K(req_node.json_type()));
+  } else if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is null", K(ret));
+  } else if (OB_ISNULL(rerank_info = OB_NEWx(ObDSLRerankInfo, allocator_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate ObDSLRerankInfo", K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(req_node.get_object_value(model_key_key, model_key_node))) {
+      if (OB_SEARCH_NOT_FOUND == ret) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "rerank, model is required");
+      }
+      LOG_WARN("fail to get model_name", K(ret));
+    } else if (model_key_node->json_type() != ObJsonNodeType::J_STRING) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "rerank, model must be string");
+      LOG_WARN("model must be string", K(ret), K(model_key_node->json_type()));
+    } else if (model_key_node->get_data_length() == 0) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "rerank, model must not be empty");
+      LOG_WARN("model is empty string", K(ret));
+    } else if (OB_FAIL(resolve_const(*model_key_node, rerank_info->model_, ObJsonNodeType::J_STRING))) {
+      LOG_WARN("fail to resolve model", K(ret));
+    }
+  }
+
+  // Parse "query" (required, string)
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(req_node.get_object_value(query_key, query_node))) {
+      if (OB_SEARCH_NOT_FOUND == ret) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "rerank, query is required");
+      }
+      LOG_WARN("fail to get query", K(ret));
+    } else if (query_node->json_type() != ObJsonNodeType::J_STRING) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "rerank, query must be string");
+      LOG_WARN("query must be string", K(ret), K(query_node->json_type()));
+    } else if (query_node->get_data_length() == 0) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "rerank, query must not be empty");
+      LOG_WARN("query is empty string", K(ret));
+    } else if (OB_FAIL(resolve_const(*query_node, rerank_info->query_, ObJsonNodeType::J_STRING))) {
+      LOG_WARN("fail to resolve query", K(ret));
+    }
+  }
+
+  // Parse "field" (required, string -> column ref)
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(req_node.get_object_value(field_key, field_node))) {
+      if (OB_SEARCH_NOT_FOUND == ret) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "rerank, field is required");
+      }
+      LOG_WARN("fail to get field", K(ret));
+    } else if (field_node->json_type() != ObJsonNodeType::J_STRING) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "rerank, field must be string");
+      LOG_WARN("field must be string", K(ret));
+    } else {
+      ObString field_name(field_node->get_data_length(), field_node->get_data());
+      if (OB_FAIL(get_user_column_expr(field_name, rerank_info->field_))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_ERR_BAD_FIELD_ERROR;
+          LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, field_name.length(), field_name.ptr(),
+                         table_item_.get_table_name().length(), table_item_.get_table_name().ptr());
+        }
+        LOG_WARN("fail to resolve field column", K(ret), K(field_name));
+      } else if (OB_ISNULL(rerank_info->field_)) {
+        ret = OB_ERR_BAD_FIELD_ERROR;
+        LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, field_name.length(), field_name.ptr(),
+                       table_item_.get_table_name().length(), table_item_.get_table_name().ptr());
+        LOG_WARN("rerank field column not found", K(ret), K(field_name));
+      } else if (!ob_is_string_type(rerank_info->field_->get_result_type().get_type())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "rerank, field must be string or text column");
+        LOG_WARN("rerank field must be string or text type", K(ret), K(rerank_info->field_->get_result_type().get_type()));
+      }
+    }
+  }
+
+  // Parse "rank_window_size" (optional, int; default e.g. 10)
+  if (OB_SUCC(ret) && OB_FAIL(req_node.get_object_value(rank_window_size_key, rank_window_size_node))) {
+    if (OB_SEARCH_NOT_FOUND == ret) {
+      ret = OB_SUCCESS;
+      ObConstRawExpr *default_window = nullptr;
+      if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*expr_factory, ObIntType, RANK_WINDOW_SIZE_DEFAULT, default_window))) {
+        LOG_WARN("fail to build default rank_window_size", K(ret));
+      } else {
+        rerank_info->rank_window_size_ = default_window;
+      }
+    } else {
+      LOG_WARN("fail to get rank_window_size", K(ret));
+    }
+  } else if (OB_SUCC(ret) && OB_FAIL(resolve_const(*rank_window_size_node, rerank_info->rank_window_size_, ObJsonNodeType::J_INT))) {
+    LOG_WARN("fail to resolve rank_window_size", K(ret));
+  }
+
+  // Parse "type" (optional, string; default "model")
+  if (OB_SUCC(ret)) {
+    ObIJsonBase *type_node = nullptr;
+    const ObString type_key("type");
+    if (OB_FAIL(req_node.get_object_value(type_key, type_node))) {
+      if (OB_SEARCH_NOT_FOUND == ret) {
+        ret = OB_SUCCESS;
+        ObRawExpr *default_type = nullptr;
+        if (OB_FAIL(construct_string_expr(ObString("model"), default_type))) {
+          LOG_WARN("fail to build default rerank type", K(ret));
+        } else {
+          rerank_info->type_ = default_type;
+        }
+      } else {
+        LOG_WARN("fail to get type", K(ret));
+      }
+    } else if (type_node->json_type() != ObJsonNodeType::J_STRING) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "rerank, type must be string");
+      LOG_WARN("type must be string", K(ret), K(type_node->json_type()));
+    } else if (type_node->get_data_length() == 0) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "rerank, type must not be empty");
+      LOG_WARN("type is empty string", K(ret));
+    } else if (OB_FAIL(resolve_const(*type_node, rerank_info->type_, ObJsonNodeType::J_STRING))) {
+      LOG_WARN("fail to resolve type", K(ret));
+    } else if (OB_ISNULL(rerank_info->type_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("resolve_const succeeded but type_ is null", K(ret));
+    } else {
+      const char *data = type_node->get_data();
+      if (OB_ISNULL(data)) {
+        ret = OB_ERR_UNEXPECTED;
+        rerank_info->type_ = nullptr;
+        LOG_WARN("type_node get_data returns null", K(ret));
+      } else {
+        ObString type_val(type_node->get_data_length(), data);
+        if (0 != type_val.case_compare("model")) {
+          ret = OB_INVALID_ARGUMENT;
+          rerank_info->type_ = nullptr;
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "rerank, type only supports \"model\"");
+          LOG_WARN("unsupported rerank type", K(ret), K(type_val));
+        }
+      }
+    }
+  }
+
+  // 5.1) Validate rerank rank_window_size range [0, SIZE_VALUE_MAX]
+  if (OB_SUCC(ret) && OB_NOT_NULL(rerank_info->rank_window_size_)) {
+    ObConstRawExpr *rws_expr = static_cast<ObConstRawExpr *>(rerank_info->rank_window_size_);
+    int64_t rws_value = 0;
+    if (OB_FAIL(rws_expr->get_value().get_int(rws_value))) {
+      LOG_WARN("fail to get int value from rerank rank_window_size expr", K(ret));
+    } else if (rws_value < 0) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "rerank rank_window_size, value should be a non-negative integer");
+      LOG_WARN("rerank rank_window_size should be non-negative", K(ret), K(rws_value));
+    } else if (rws_value > SIZE_VALUE_MAX) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "rerank rank_window_size, value should be in range [0, 10000]");
+      LOG_WARN("rerank rank_window_size out of range", K(ret), K(rws_value));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    dsl_query_info_->rank_info_.rerank_info_ = rerank_info;
+  }
   return ret;
 }
 
@@ -5153,27 +5439,20 @@ int ObDSLResolver::set_default_rank_window_size()
 {
   int ret = OB_SUCCESS;
   ObRawExprFactory *expr_factory = params_.expr_factory_;
-  if (OB_ISNULL(dsl_query_info_->from_) ||
-      OB_ISNULL(dsl_query_info_->size_) ||
-      OB_NOT_NULL(dsl_query_info_->rank_info_.window_size_) ||
-      OB_ISNULL(expr_factory)) {
+  int64_t size_val = 0;
+  int64_t from_val = 0;
+  ObConstRawExpr *sum_expr = nullptr;
+  if (OB_ISNULL(expr_factory) || OB_ISNULL(dsl_query_info_->size_) || OB_ISNULL(dsl_query_info_->from_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null from or size expr or expr factory", K(ret));
+    LOG_WARN("expr factory or size/from expr is null", K(ret));
+  } else if (OB_FAIL(static_cast<ObConstRawExpr *>(dsl_query_info_->size_)->get_value().get_int(size_val))) {
+    LOG_WARN("failed to get size const value", K(ret));
+  } else if (OB_FAIL(static_cast<ObConstRawExpr *>(dsl_query_info_->from_)->get_value().get_int(from_val))) {
+    LOG_WARN("failed to get from const value", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*expr_factory, ObIntType, size_val + from_val, sum_expr))) {
+    LOG_WARN("failed to build size+from const expr", K(ret));
   } else {
-    ObConstRawExpr *size_const = static_cast<ObConstRawExpr *>(dsl_query_info_->size_);
-    ObConstRawExpr *from_const = static_cast<ObConstRawExpr *>(dsl_query_info_->from_);
-    int64_t size_val = 0;
-    int64_t from_val = 0;
-    ObConstRawExpr *sum_expr = nullptr;
-    if (OB_FAIL(size_const->get_value().get_int(size_val))) {
-      LOG_WARN("failed to get size const value", K(ret));
-    } else if (OB_FAIL(from_const->get_value().get_int(from_val))) {
-      LOG_WARN("failed to get from const value", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*expr_factory, ObIntType, size_val + from_val, sum_expr))) {
-      LOG_WARN("failed to build size+from const expr", K(ret));
-    } else {
-      dsl_query_info_->rank_info_.window_size_ = sum_expr;
-    }
+    dsl_query_info_->rank_info_.window_size_ = sum_expr;
   }
   return ret;
 }

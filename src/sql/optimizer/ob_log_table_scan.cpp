@@ -689,7 +689,9 @@ int ObLogTableScan::generate_access_exprs()
     LOG_WARN("failed to copy vec idx scan exprs", K(ret));
   } else if (is_hybrid_search() && OB_FAIL(prepare_vector_node_access_exprs())) {
     LOG_WARN("failed to get hybrid search exprs", K(ret));
-  }  else if (is_tsc_with_domain_id() && OB_FAIL(prepare_rowkey_domain_id_dep_exprs())) {
+  } else if (is_hybrid_search() && OB_FAIL(add_rerank_field_access_expr())) {
+    LOG_WARN("failed to add ai rerank field to access exprs", K(ret));
+  } else if (is_tsc_with_domain_id() && OB_FAIL(prepare_rowkey_domain_id_dep_exprs())) {
     LOG_WARN("failed to prepare table scan with doc id info", K(ret));
   } else if ((has_func_lookup() || (is_vec_idx_scan() && (is_text_retrieval_scan() || get_merge_tr_infos().count() > 0))) && OB_FAIL(prepare_func_lookup_dep_exprs())) {
     LOG_WARN("failed to prepare functional lookup dependent exprs", K(ret));
@@ -1714,6 +1716,7 @@ bool ObLogTableScan::is_pure_hybrid_count_query() const
       && INDEX_MERGE_HYBRID_FUSION_SEARCH == path->root_->node_type_
       && OB_NOT_NULL(fusion_node = static_cast<const ObFusionNode *>(path->root_))
       && fusion_node->is_top_k_query_
+      && !fusion_node->has_rerank()
       && 0 == get_filter_exprs().count()
       && 0 == get_pushdown_filter_exprs().count()
       && OB_NOT_NULL(get_stmt())
@@ -6947,6 +6950,33 @@ int ObLogTableScan::collect_hybrid_search_exprs(const AccessPath *path)
         LOG_WARN("failed to generate access exprs", K(ret));
       } else if (OB_FAIL(hybrid_node->collect_hybrid_search_exprs(hybrid_search_exprs_, hybrid_search_scores_))) {
         LOG_WARN("get unexpected null", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogTableScan::add_rerank_field_access_expr()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(access_path_) || OB_UNLIKELY(!access_path_->is_index_merge_path())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null access path", K(ret));
+  } else {
+    const IndexMergePath *merge_path = static_cast<const IndexMergePath *>(access_path_);
+    if (OB_ISNULL(merge_path->root_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null root", K(ret));
+    } else if (merge_path->root_->node_type_ == INDEX_MERGE_HYBRID_FUSION_SEARCH) {
+      const ObFusionNode *fusion = static_cast<const ObFusionNode *>(merge_path->root_);
+      if (fusion->has_rerank()) {
+        if (OB_ISNULL(fusion->rerank_info_.field_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null ai rerank field", K(ret));
+        } else if (OB_FAIL(add_var_to_array_no_dup(access_exprs_,
+                    static_cast<ObRawExpr *>(fusion->rerank_info_.field_)))) {
+          LOG_WARN("failed to add ai rerank field", K(ret));
+        }
       }
     }
   }

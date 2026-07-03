@@ -7950,6 +7950,7 @@ static int get_fusion_node_from_tsc(const ObLogTableScan *hybrid_tsc, ObFusionNo
 int ObLogPlan::create_hybrid_fusion_plan(ObLogicalOperator *&top)
 {
   int ret = OB_SUCCESS;
+  ObFusionNode *fusion_node = nullptr;
   if (OB_ISNULL(top)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -7958,29 +7959,31 @@ int ObLogPlan::create_hybrid_fusion_plan(ObLogicalOperator *&top)
   } else if (log_op_def::LOG_TABLE_SCAN == top->get_type()) {
     ObLogTableScan *tsc = static_cast<ObLogTableScan*>(top);
     if (tsc->is_hybrid_search()) {
-      ObFusionNode *fusion_node = nullptr;
-      ObExchangeInfo exch_info;
-      ObTablePartitionInfo *part_info = tsc->get_table_partition_info();
-      bool is_part_table = (part_info != nullptr
-          && part_info->get_part_level() != share::schema::PARTITION_LEVEL_ZERO);
-      bool is_distributed = tsc->is_distributed();
-      bool use_das = tsc->use_das();
-      bool need_fusion = is_distributed || (use_das && is_part_table);
-      bool need_px = (!use_das) && is_distributed;
-      if (need_fusion) {
-        if (OB_FAIL(get_fusion_node_from_tsc(tsc, fusion_node))) {
-          LOG_WARN("failed to get fusion node from table scan", K(ret));
-        } else if (OB_ISNULL(fusion_node)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("fusion node not found", K(ret));
-        } else if (!fusion_node->is_top_k_query_ ||
-                  (fusion_node->fusion_iter_exec_mode_ != ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS &&
-                  !fusion_node->has_vector_subquery_)) {
-          /*do nothing*/
-        } else if (need_px && OB_FAIL(allocate_exchange_as_top(top, exch_info))) {
-          LOG_WARN("failed to allocate exchange as top", K(ret));
-        } else if (OB_FAIL(allocate_hybrid_fusion_as_top(top, fusion_node))) {
-          LOG_WARN("failed to allocate hybrid fusion as top", K(ret));
+      if (OB_FAIL(get_fusion_node_from_tsc(static_cast<ObLogTableScan*>(top), fusion_node))) {
+        LOG_WARN("failed to get fusion node from table scan", K(ret));
+      } else if (OB_ISNULL(fusion_node)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fusion node not found", K(ret));
+      } else if (!fusion_node->is_top_k_query_ ||
+                (fusion_node->fusion_iter_exec_mode_ != ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS &&
+                !fusion_node->has_vector_subquery_)) {
+        /*do nothing*/
+      } else {
+        ObExchangeInfo exch_info;
+        ObTablePartitionInfo *part_info = tsc->get_table_partition_info();
+        bool is_part_table = (part_info != nullptr
+            && part_info->get_part_level() != share::schema::PARTITION_LEVEL_ZERO);
+        bool is_distributed = tsc->is_distributed();
+        bool use_das = tsc->use_das();
+        bool need_fusion = is_distributed || (use_das && is_part_table) || fusion_node->has_rerank();
+        bool need_px = (!use_das) && is_distributed;
+        fusion_node->set_is_single_partition(!is_distributed && !is_part_table);
+        if (need_fusion) {
+          if (need_px && OB_FAIL(allocate_exchange_as_top(top, exch_info))) {
+            LOG_WARN("failed to allocate exchange as top", K(ret));
+          } else if (OB_FAIL(allocate_hybrid_fusion_as_top(top, fusion_node))) {
+            LOG_WARN("failed to allocate hybrid fusion as top", K(ret));
+          }
         }
       }
     }

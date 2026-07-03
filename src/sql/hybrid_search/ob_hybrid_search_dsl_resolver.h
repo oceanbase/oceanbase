@@ -181,15 +181,28 @@ private:
       scalar_expr_(nullptr) {}
 };
 
+// Rerank config; used in resolver (ObDSLQueryInfo) and optimizer (ObFusionNode).
+struct ObDSLRerankInfo {
+  ObDSLRerankInfo()
+    : model_(nullptr), field_(nullptr), query_(nullptr), rank_window_size_(nullptr), type_(nullptr) {}
+  ObRawExpr *model_;
+  ObColumnRefRawExpr *field_;  // text column ref: "text"
+  ObRawExpr *query_;           // string constant: rerank query
+  ObRawExpr *rank_window_size_;
+  ObRawExpr *type_;            // "model" by default, reserved for "tensor" etc.
+  bool has_rerank() const { return model_ != nullptr; }
+  TO_STRING_KV(K(model_), K(field_), K(query_), K(rank_window_size_), K(type_));
+};
+
 struct ObDSLRankInfo {
   ObDSLRankInfo()
-    : method_(ObFusionMethod::WEIGHT_SUM), window_size_(nullptr), rank_const_(nullptr) {}
+    : method_(ObFusionMethod::WEIGHT_SUM), window_size_(nullptr), rank_const_(nullptr), rerank_info_(nullptr) {}
   ~ObDSLRankInfo() {}
   ObFusionMethod method_;
   ObRawExpr *window_size_;
   ObRawExpr *rank_const_;
-  //TODO: ai_rerank_info_
-  TO_STRING_KV(K(method_), K(window_size_), K(rank_const_));
+  ObDSLRerankInfo *rerank_info_;
+  TO_STRING_KV(K(method_), K(window_size_), K(rank_const_), KP(rerank_info_));
 };
 
 enum class ObDSLResultMode
@@ -422,6 +435,7 @@ public:
 
   static const int64_t FROM_DEFAULT = 0;
   static const int64_t SIZE_DEFAULT = 10;
+  static const int64_t RANK_WINDOW_SIZE_DEFAULT = 10;
   static const int64_t SIZE_VALUE_MIN = 0;
   static const int64_t SIZE_VALUE_MAX = 10000;
   static const int64_t KNN_K_VALUE_MAX = 16384;
@@ -501,6 +515,7 @@ private :
   int resolve_query_string_type(ObIJsonBase &req_node, ObMatchFieldsType &type);
   int resolve_range(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSLQuery *parent_query, ObEsQueryItem outer_query_type);
   int resolve_rank(ObIJsonBase &req_node);
+  int resolve_rerank(ObIJsonBase &req_node);
   int resolve_rrf(ObIJsonBase &req_node);
   int resolve_search_options(ObIJsonBase &req_node, ObDSLKnnQuery::SearchOption *&search_option);
   int resolve_single_term(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSLQuery *parent_query, ObEsQueryItem outer_query_type);

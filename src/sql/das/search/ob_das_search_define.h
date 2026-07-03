@@ -296,10 +296,12 @@ public:
       enable_parallel_(false),
       query_dop_(1),
       track_score_(true),
-      fusion_iter_exec_mode_(ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS)
+      fusion_iter_exec_mode_(ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS),
+      is_single_partition_(false),
+      rerank_window_size_expr_(nullptr)
   {}
   ~ObDASFusionCtDef() {}
-  INHERIT_TO_STRING_KV("ObDASFusionCtDef", ObDASAttachCtDef, K(search_index_), K(has_search_subquery_), K(has_vector_subquery_), K(rowid_exprs_), K(score_exprs_), K(rank_exprs_), K(weight_exprs_), KPC_(size_expr), KPC_(offset_expr), KPC_(rank_window_size_expr), KPC_(rank_constant_expr), KPC_(min_score_expr), K(fusion_method_), K(enable_parallel_), K(query_dop_));
+  INHERIT_TO_STRING_KV("ObDASFusionCtDef", ObDASAttachCtDef, K(search_index_), K(has_search_subquery_), K(has_vector_subquery_), K(rowid_exprs_), K(score_exprs_), K(rank_exprs_), K(weight_exprs_), KPC_(size_expr), KPC_(offset_expr), KPC_(rank_window_size_expr), KPC_(rank_constant_expr), KPC_(min_score_expr), K(fusion_method_), K(is_single_partition_));
 
   int init(
     int64_t search_index,
@@ -308,11 +310,13 @@ public:
     bool is_top_k_query,
     ObFusionMethod fusion_method,
     bool has_hybrid_fusion_op,
+    bool is_single_partition,
     bool enable_parallel,
     int64_t query_dop,
     ObExpr *size_expr,
     ObExpr *offset_expr,
     ObExpr *rank_window_size_expr,
+    ObExpr *rerank_window_size_expr,
     ObExpr *rank_constant_expr,
     ObExpr *min_score_expr,
     const common::ObIArray<ObExpr *> &rowid_exprs,
@@ -377,6 +381,8 @@ public:
   int64_t query_dop_;
   bool track_score_;
   ObFusionIterExecMode fusion_iter_exec_mode_;
+  bool is_single_partition_;
+  ObExpr *rerank_window_size_expr_;
 };
 
 struct ObDASFusionRtDef : ObDASAttachRtDef

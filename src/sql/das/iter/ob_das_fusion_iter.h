@@ -193,6 +193,7 @@ public:
       fusion_method_(ObFusionMethod::WEIGHT_SUM),
       fusion_score_expr_(nullptr),
       rank_window_size_(10),
+      rerank_window_size_(-1),
       rank_constant_(60),
       size_(10),
       offset_(0),
@@ -200,7 +201,8 @@ public:
       has_hybrid_fusion_op_(false),
       fusion_iter_exec_mode_(ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS),
       search_ctx_(nullptr),
-      fusion_rtdef_(nullptr)
+      fusion_rtdef_(nullptr),
+      is_single_partition_(false)
   {}
   virtual ~ObDASFusionIterParam() {}
 
@@ -213,6 +215,7 @@ public:
   ObFusionMethod fusion_method_;
   ObExpr *fusion_score_expr_;
   int64_t rank_window_size_;
+  int64_t rerank_window_size_;
   int64_t rank_constant_;
   int64_t size_;
   int64_t offset_;
@@ -221,6 +224,7 @@ public:
   ObFusionIterExecMode fusion_iter_exec_mode_;
   ObDASSearchCtx *search_ctx_;
   ObDASFusionRtDef *fusion_rtdef_;
+  bool is_single_partition_;
   common::ObSEArray<double, 2> weights_;
   common::ObSEArray<int64_t, 2> path_top_k_limits_;
 };
@@ -255,6 +259,7 @@ public:
       score_exprs_(nullptr),
       fusion_method_(ObFusionMethod::WEIGHT_SUM),
       rank_window_size_(10),
+      rerank_window_size_(-1),
       rank_constant_(60),
       size_(10),
       offset_(0),
@@ -384,8 +389,10 @@ private:
   int get_next_batch_from_store(const common::ObIArray<ObExpr *> &exprs, int64_t capacity, int64_t &count);
 
   int set_rowkey_is_uint64_flag();
-  bool need_sorted() const { return !(has_hybrid_fusion_op_ && (fusion_method_ == MINMAX_NORMALIZER)); }
+  bool need_sorted() const { return is_single_partition_ || (fusion_method_ != MINMAX_NORMALIZER); }
   bool has_hybrid_fusion_op() const { return has_hybrid_fusion_op_; }
+  bool is_single_partition() const { return is_single_partition_; }
+  bool has_rerank() const { return rerank_window_size_ > 0; }
 
 private:
   lib::MemoryContext fusion_memctx_;
@@ -396,11 +403,13 @@ private:
   // Fusion parameters (extracted from ObDASFusionIterParam to avoid copying entire struct)
   ObFusionMethod fusion_method_;
   int64_t rank_window_size_;
+  int64_t rerank_window_size_;
   int64_t rank_constant_;
   int64_t size_;
   int64_t offset_;
   double min_score_;
   bool has_hybrid_fusion_op_;
+  bool is_single_partition_;
   common::ObSEArray<double, 2> weights_;
   common::ObSEArray<int64_t, 2> path_top_k_limits_;
 

@@ -24,6 +24,10 @@ namespace oceanbase { namespace sql { class ObHybridFusionOpCollectTestHelper; }
 
 namespace oceanbase
 {
+namespace common
+{
+class ObJsonNode;
+}
 namespace sql
 {
 struct ObFusionDocInfo
@@ -89,6 +93,23 @@ private:
 
 typedef common::ObBinaryHeap<ObPathScoreEntry, ObScoreEntryCompare, 10> ObTopKHeap;
 
+// AI rerank params for hybrid fusion (runtime spec); all nullptr / -1 when not used.
+struct ObHybridFusionRerankSpec
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObHybridFusionRerankSpec()
+    : has_rerank_(false), model_key_expr_(nullptr), query_expr_(nullptr),
+      field_idx_(-1), window_size_expr_(nullptr) {}
+  bool has_rerank_;
+  ObExpr *model_key_expr_;
+  ObExpr *query_expr_;
+  int64_t field_idx_;  // index of text column in child output
+  ObExpr *window_size_expr_;
+
+  TO_STRING_KV(K_(has_rerank), K_(field_idx));
+};
+
 class ObHybridFusionSpec : public ObOpSpec
 {
   OB_UNIS_VERSION_V(1);
@@ -109,6 +130,8 @@ public:
 
   int64_t search_index_;
   ObFusionIterExecMode fusion_iter_exec_mode_;
+  ObHybridFusionRerankSpec rerank_spec_;
+  bool is_single_partition_;
 };
 
 class ObHybridFusionOp : public ObOperator
@@ -120,9 +143,8 @@ public:
     ObOperator(exec_ctx, spec, input), spec_(static_cast<const ObHybridFusionSpec&>(spec)),
     is_data_ready_(false), top_k_limit_(10), size_(10), offset_(0), min_score_(0.0),
     rank_constant_(0), output_idx_(0), path_count_(0), fusion_iter_exec_mode_(ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS),
-    search_index_(-1), full_recall_phase_(PHASE_STREAMING),
-    profile_(ObSqlWorkAreaType::HASH_WORK_AREA),
-    sql_mem_processor_(profile_, op_monitor_info_) {}
+    search_index_(-1), full_recall_phase_(PHASE_STREAMING), rerank_window_size_(0),
+    profile_(ObSqlWorkAreaType::HASH_WORK_AREA), sql_mem_processor_(profile_, op_monitor_info_) {}
 
   virtual ~ObHybridFusionOp() {}
 
@@ -197,6 +219,16 @@ private:
   int output_row_rich_format(int64_t batch_size, const ObCompactRow **stored_rows);
   int output_row_non_rich_format(int64_t batch_size, const ObCompactRow **stored_rows);
 
+  int build_fusion_docs_from_stored_order();
+  static int normalize_rerank_info_to_utf8(common::ObIAllocator &allocator,
+                                           const common::ObString &src,
+                                           const common::ObCollationType src_coll,
+                                           common::ObString &dst);
+  static int rerank_json_index_to_int64(const common::ObJsonNode *node, int64_t &out);
+  static int rerank_json_score_to_double(const common::ObJsonNode *node, double &out);
+  int call_rerank();
+  int sort_and_finalize();
+
   const ObHybridFusionSpec &spec_;
   bool is_data_ready_;
   int64_t top_k_limit_;
@@ -223,6 +255,9 @@ private:
   hash::ObHashSet<int64_t> top_k_doc_indices_;
   common::ObSEArray<int64_t, 64> passthrough_doc_indices_;
   common::ObSEArray<const ObCompactRow*, 1024> stored_rows_buffer_;
+
+  // AI rerank (when spec_.rerank_spec_.has_rerank_)
+  int64_t rerank_window_size_;
 
   // SQL memory managements
   ObSqlWorkAreaProfile profile_;

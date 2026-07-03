@@ -41,10 +41,14 @@ int ObDASFusionIter::inner_init(ObDASIterParam &param)
     rank_window_size_ = fusion_param.rank_window_size_;
     rank_constant_ = fusion_param.rank_constant_;
     has_hybrid_fusion_op_ = fusion_param.has_hybrid_fusion_op_;
+    is_single_partition_ = fusion_param.is_single_partition_;
     fusion_iter_exec_mode_ = fusion_param.fusion_iter_exec_mode_;
     offset_ = fusion_param.offset_;
     size_ = fusion_param.size_;
     min_score_ = fusion_param.min_score_;
+    if (OB_NOT_NULL(fusion_ctdef_->rerank_window_size_expr_)) {
+      rerank_window_size_ = fusion_param.rerank_window_size_;
+    }
     search_ctx_ = fusion_param.search_ctx_;
     fusion_rtdef_ = fusion_param.fusion_rtdef_;
 
@@ -53,7 +57,7 @@ int ObDASFusionIter::inner_init(ObDASIterParam &param)
       int64_t path_top_k_limit = fusion_param.path_top_k_limits_.at(i);
       if (OB_FAIL(path_top_k_limits_.push_back(path_top_k_limit))) {
         LOG_WARN("failed to push back path top k limit", K(ret), K(i));
-      } else if (has_hybrid_fusion_op_ && path_top_k_limit > rank_window_size_) {
+      } else if (!is_single_partition() && path_top_k_limit > rank_window_size_) {
         rank_window_size_ = path_top_k_limit;
       }
     }
@@ -1185,30 +1189,35 @@ int ObDASFusionIter::sort_topk_results()
       } else if (entry.doc_idx_ < 0 || entry.doc_idx_ >= fusion_docs_.count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid doc_idx", K(ret), K(entry.doc_idx_), K(fusion_docs_.count()));
-      } else if (!has_hybrid_fusion_op() && entry.score_ < min_score_) {
+      } else if (!has_rerank() && entry.score_ < min_score_) {
         // do nothing
       } else if (OB_FAIL(sorted_doc_indices_.push_back(entry.doc_idx_))) {
         LOG_WARN("failed to push doc index", K(ret), K(entry.doc_idx_));
       }
     }
   }
-  // Reverse to get descending order (highest score first)
+  // sorted_doc_indices_ is in ascending score order; convert to descending and apply offset/limit
   if (OB_SUCC(ret)) {
-    if (!has_hybrid_fusion_op() && fusion_iter_exec_mode_ == ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS) {
-      const int64_t trim_count = OB_MIN(offset_, sorted_doc_indices_.count());
-      for (int64_t i = 0; i < trim_count; ++i) {
+    bool need_trim = !has_rerank() && is_single_partition_ && fusion_iter_exec_mode_ == ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS;
+    // 1) Skip first offset_ in final order: drop the last offset_ elements (highest in ascending)
+    if (need_trim) {
+      const int64_t to_trim = OB_MIN(offset_, sorted_doc_indices_.count());
+      for (int64_t i = 0; i < to_trim; ++i) {
         sorted_doc_indices_.pop_back();
       }
     }
-    int64_t count = sorted_doc_indices_.count();
+    // 2) Reverse to descending order (highest score first)
+    const int64_t count = sorted_doc_indices_.count();
     for (int64_t i = 0; i < count / 2; ++i) {
-      int64_t j = count - 1 - i;
-      int64_t temp = sorted_doc_indices_[i];
+      const int64_t j = count - 1 - i;
+      int64_t tmp = sorted_doc_indices_[i];
       sorted_doc_indices_[i] = sorted_doc_indices_[j];
-      sorted_doc_indices_[j] = temp;
+      sorted_doc_indices_[j] = tmp;
     }
-    if (!has_hybrid_fusion_op() && fusion_iter_exec_mode_ == ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS) {
-      while (sorted_doc_indices_.count() > size_) {
+    // 3) Cap result size: keep only top N (size_ for normal; rerank_window_size_ for rerank)
+    if (is_single_partition_ && fusion_iter_exec_mode_ == ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS) {
+      int64_t cap = has_rerank() ? rerank_window_size_ : size_;
+      while (sorted_doc_indices_.count() > cap) {
         sorted_doc_indices_.pop_back();
       }
     }

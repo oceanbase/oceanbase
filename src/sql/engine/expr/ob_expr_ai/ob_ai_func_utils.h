@@ -586,7 +586,10 @@ public:
    int call_dense_embedding_vector(ObArray<ObString> &contents, ObJsonObject *config, ObArray<ObString> &results);
    int call_dense_embedding_vector_v2(ObArray<ObString> &contents, ObJsonObject *config, ObArray<ObString> &results);
    // rerank
-   int call_rerank(ObString &query, ObJsonArray *contents, ObJsonArray *&results);
+   int call_rerank(ObString &query,
+                   ObJsonArray *contents,
+                   ObJsonArray *&results,
+                   ObJsonObject *config = nullptr);
  private:
    // Private accessors that dispatch to either config_ptr_ or info_/endpoint_info_.
    share::EndpointType::TYPE get_type_() const;

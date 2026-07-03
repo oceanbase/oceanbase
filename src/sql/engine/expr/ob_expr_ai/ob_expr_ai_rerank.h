@@ -30,6 +30,9 @@ public:
                       ObExpr &rt_expr) const override;
   virtual bool need_rt_ctx() const override { return true; }
 
+  /** Max batch size for rerank API calls (used by ai_rerank expr and hybrid fusion rerank). */
+  static constexpr int64_t RERANK_DEFAULT_BATCH_SIZE = 20;
+
 private:
   static int inner_eval_ai_rerank(common::ObIAllocator &allocator,
                                   const common::ObString &provider,

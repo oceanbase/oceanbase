@@ -29,6 +29,7 @@ int ObHybridSearchCgService::generate_ctdef(ObLogTableScan &op, const ObFusionNo
   ObExpr *window_size_expr = nullptr;
   ObExpr *rank_constant_expr = nullptr;
   ObExpr *min_score_expr = nullptr;
+  ObExpr *rerank_window_size_expr = nullptr;
   ObSEArray<ObExpr*, 8> result_output_exprs;
   ObSEArray<ObExpr*, 8> score_exprs;
   ObSEArray<ObExpr*, 8> weight_exprs;
@@ -60,6 +61,8 @@ int ObHybridSearchCgService::generate_ctdef(ObLogTableScan &op, const ObFusionNo
     LOG_WARN("failed to generate weight calc exprs", K(ret));
   } else if (OB_FAIL(cg_.generate_rt_exprs(fusion_node->score_cols_, score_exprs))) {
     LOG_WARN("failed to generate score calc exprs", K(ret));
+  } else if (fusion_node->has_rerank() && OB_FAIL(cg_.generate_rt_expr(*fusion_node->rerank_info_.rank_window_size_, rerank_window_size_expr))) {
+    LOG_WARN("failed to generate ai rerank window size rt expr", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < score_exprs.count(); ++i) {
       if (OB_FAIL(result_output_exprs.push_back(score_exprs.at(i)))) {
@@ -84,11 +87,13 @@ int ObHybridSearchCgService::generate_ctdef(ObLogTableScan &op, const ObFusionNo
         fusion_node->is_top_k_query_,
         fusion_node->method_,
         fusion_node->has_hybrid_fusion_op_,
+        fusion_node->get_is_single_partition(),
         enable_parallel,
         query_dop,
         size_expr,
         offset_expr,
         window_size_expr,
+        rerank_window_size_expr,
         rank_constant_expr,
         min_score_expr,
         rowkey_exprs,

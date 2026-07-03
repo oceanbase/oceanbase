@@ -58,7 +58,7 @@ void ObIDASSearchRtDef::set_pushdown_filter(const bool query_optional, ObIDASSea
   UNUSED(query_optional);
 }
 
-OB_SERIALIZE_MEMBER((ObDASFusionCtDef, ObDASAttachCtDef), search_index_, rowid_exprs_, score_exprs_, rank_exprs_, weight_exprs_, path_top_k_limit_exprs_, size_expr_, offset_expr_, rank_window_size_expr_, rank_constant_expr_, min_score_expr_, has_search_subquery_, has_vector_subquery_, is_top_k_query_, fusion_method_, has_hybrid_fusion_op_, enable_parallel_, query_dop_, track_score_, fusion_iter_exec_mode_);
+OB_SERIALIZE_MEMBER((ObDASFusionCtDef, ObDASAttachCtDef), search_index_, rowid_exprs_, score_exprs_, rank_exprs_, weight_exprs_, path_top_k_limit_exprs_, size_expr_, offset_expr_, rank_window_size_expr_, rank_constant_expr_, min_score_expr_, has_search_subquery_, has_vector_subquery_, is_top_k_query_, fusion_method_, has_hybrid_fusion_op_, enable_parallel_, query_dop_, track_score_, fusion_iter_exec_mode_, is_single_partition_, rerank_window_size_expr_);
 
 OB_SERIALIZE_MEMBER((ObDASFusionRtDef, ObDASAttachRtDef));
 
@@ -69,11 +69,13 @@ int ObDASFusionCtDef::init(
     bool is_top_k_query,
     ObFusionMethod fusion_method,
     bool has_hybrid_fusion_op,
+    bool is_single_partition,
     bool enable_parallel,
     int64_t query_dop,
     ObExpr *size_expr,
     ObExpr *offset_expr,
     ObExpr *rank_window_size_expr,
+    ObExpr *rerank_window_size_expr,
     ObExpr *rank_constant_expr,
     ObExpr *min_score_expr,
     const common::ObIArray<ObExpr *> &rowid_exprs,
@@ -102,11 +104,13 @@ int ObDASFusionCtDef::init(
     is_top_k_query_ = is_top_k_query;
     fusion_method_ = fusion_method;
     has_hybrid_fusion_op_ = has_hybrid_fusion_op;
+    is_single_partition_ = is_single_partition;
     enable_parallel_ = enable_parallel;
     query_dop_ = query_dop;
     size_expr_ = size_expr;
     offset_expr_ = offset_expr;
     rank_window_size_expr_ = rank_window_size_expr;
+    rerank_window_size_expr_ = rerank_window_size_expr;
     rank_constant_expr_ = rank_constant_expr;
     min_score_expr_ = min_score_expr;
     track_score_ = track_score;

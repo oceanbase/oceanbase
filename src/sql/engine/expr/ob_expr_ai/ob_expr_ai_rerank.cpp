@@ -8,6 +8,7 @@
 #include "lib/utility/utility.h"
 #include "lib/json_type/ob_json_common.h"
 #include "observer/omt/ob_tenant_ai_service.h"
+#include "share/diagnosis/ob_runtime_profile.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -101,6 +102,10 @@ int ObExprAIRerank::eval_ai_rerank(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_rerank, model id or query or documents is null");
     res.set_null();
   } else {
+    // Profile: create AI Rerank profile scope
+    ObProfileSwitcher profile_switcher(ObProfileId::AI_RERANK);
+    ScopedTimer total_timer(ObMetricId::AI_RERANK_ELAPSE_TIME);
+
     ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
     uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
     MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
@@ -189,6 +194,14 @@ int ObExprAIRerank::eval_ai_rerank(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
         ObJsonArray *compact_array = nullptr;
         ObJsonArray *batch_result_array = nullptr;
         ObJsonArray *batch_document_array = nullptr;
+        int64_t api_call_count = 0;
+        int64_t total_doc_count = document_array->element_count();
+
+        // Profile: record document count and batch count
+        INC_METRIC_VAL(ObMetricId::AI_RERANK_DOCUMENT_COUNT, total_doc_count);
+        int64_t expected_batch_count = (total_doc_count + batch_size - 1) / batch_size;
+        INC_METRIC_VAL(ObMetricId::AI_RERANK_BATCH_COUNT, expected_batch_count);
+
         for (int64_t i = 0; OB_SUCC(ret) && i < document_array->element_count(); i += batch_size) {
           end_idx = i + batch_size;
           if (end_idx > document_array->element_count()) {
@@ -208,8 +221,12 @@ int ObExprAIRerank::eval_ai_rerank(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
             LOG_WARN("fail to compact json array", K(ret));
           } else {
             result_array = compact_array;
+            api_call_count++;
           }
         }
+
+        // Profile: record API call count
+        INC_METRIC_VAL(ObMetricId::AI_RERANK_API_CALL_COUNT, api_call_count);
       }
       if (OB_SUCC(ret)) {
         ObString raw_str;
@@ -381,6 +398,7 @@ int ObExprAIRerank::inner_eval_ai_rerank(ObIAllocator &allocator,
                                           ObJsonArray *&result_array)
 {
   INIT_SUCC(ret);
+
   ObJsonArray *res = nullptr;
   ObJsonObject *config_json = nullptr;
   ObJsonObject *body = nullptr;
@@ -412,6 +430,7 @@ int ObExprAIRerank::inner_eval_ai_rerank(ObIAllocator &allocator,
   } else {
     result_array = res;
   }
+
   return ret;
 }
 

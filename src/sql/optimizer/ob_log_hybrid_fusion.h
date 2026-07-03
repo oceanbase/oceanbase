@@ -22,10 +22,12 @@ public:
   virtual ~ObLogHybridFusion() {}
 
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+  virtual int allocate_expr_post(ObAllocExprContext &ctx) override;
   int generate_access_exprs();
   virtual bool is_block_op() const override { return true; }
   void set_fusion_node(ObFusionNode *fusion_node) { fusion_node_ = fusion_node; }
   void set_has_hybrid_fusion_op();
+  bool get_is_single_partition() const;
   bool has_search_subquery() const;
   int64_t get_search_index() const;
   ObFusionMethod get_fusion_algo() const;
@@ -39,6 +41,13 @@ public:
   const ObIArray<ObRawExpr*>& get_weights_exprs() const;
   const ObIArray<ObRawExpr*>& get_score_exprs() const;
   const ObIArray<ObRawExpr*>& path_top_k_limit_exprs() const;
+
+  // AI rerank (optional)
+  bool has_rerank() const;
+  ObRawExpr* get_rerank_model_key_expr() const;
+  ObRawExpr* get_rerank_query_expr() const;
+  ObRawExpr* get_rerank_field_expr() const;
+  ObRawExpr* get_rerank_window_size_expr() const;
 
 private:
   ObFusionNode *fusion_node_;

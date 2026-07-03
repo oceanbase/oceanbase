@@ -73,6 +73,31 @@ const ObIArray<ObRawExpr*>& ObLogHybridFusion::path_top_k_limit_exprs() const
   return fusion_node_->path_top_k_limit_;
 }
 
+bool ObLogHybridFusion::has_rerank() const
+{
+  return fusion_node_->rerank_info_.has_rerank();
+}
+
+ObRawExpr* ObLogHybridFusion::get_rerank_model_key_expr() const
+{
+  return fusion_node_->rerank_info_.model_;
+}
+
+ObRawExpr* ObLogHybridFusion::get_rerank_query_expr() const
+{
+  return fusion_node_->rerank_info_.query_;
+}
+
+ObRawExpr* ObLogHybridFusion::get_rerank_field_expr() const
+{
+  return static_cast<ObRawExpr*>(fusion_node_->rerank_info_.field_);
+}
+
+ObRawExpr* ObLogHybridFusion::get_rerank_window_size_expr() const
+{
+  return fusion_node_->rerank_info_.rank_window_size_;
+}
+
 bool ObLogHybridFusion::has_search_subquery() const
 {
   return fusion_node_->has_search_subquery_;
@@ -86,6 +111,11 @@ int64_t ObLogHybridFusion::get_search_index() const
 ObLogHybridFusion::ObLogHybridFusion(ObLogPlan &plan)
   : ObLogicalOperator(plan),
     fusion_node_(nullptr) {}
+
+bool ObLogHybridFusion::get_is_single_partition() const
+{
+  return fusion_node_->get_is_single_partition();
+}
 
 int ObLogHybridFusion::generate_access_exprs()
 {
@@ -101,19 +131,69 @@ int ObLogHybridFusion::generate_access_exprs()
       LOG_WARN("failed to add score expr", K(ret), K(i));
     }
   }
+  // AI rerank: only the text column (field) is read from child rows; model_key/query/rank_window_size are constants.
+  if (OB_SUCC(ret) && has_rerank()) {
+    ObRawExpr *field_expr = get_rerank_field_expr();
+    if (OB_NOT_NULL(field_expr) && OB_FAIL(add_var_to_array_no_dup(access_exprs_, field_expr))) {
+      LOG_WARN("failed to add ai rerank field expr", K(ret));
+    }
+  }
   return ret;
 }
 
 int ObLogHybridFusion::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
 {
   int ret = OB_SUCCESS;
-  // Generate access_exprs_ if not already done
   if (OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
     LOG_WARN("failed to get op exprs from parent", K(ret));
   } else if (access_exprs_.empty() && OB_FAIL(generate_access_exprs())) {
     LOG_WARN("failed to generate access exprs", K(ret));
   } else if (OB_FAIL(append(all_exprs, access_exprs_))) {
     LOG_WARN("failed to append access exprs", K(ret));
+  } else if (has_rerank()) {
+    // So that CG can construct rt_expr_ for rerank params (model_key, query, window_size)
+    ObRawExpr *model_key = get_rerank_model_key_expr();
+    ObRawExpr *query = get_rerank_query_expr();
+    ObRawExpr *window_size = get_rerank_window_size_expr();
+    if (OB_NOT_NULL(model_key) && OB_FAIL(add_var_to_array_no_dup(all_exprs, model_key))) {
+      LOG_WARN("failed to add rerank model_key to op exprs", K(ret));
+    } else if (OB_NOT_NULL(query) && OB_FAIL(add_var_to_array_no_dup(all_exprs, query))) {
+      LOG_WARN("failed to add rerank query to op exprs", K(ret));
+    } else if (OB_NOT_NULL(window_size) && OB_FAIL(add_var_to_array_no_dup(all_exprs, window_size))) {
+      LOG_WARN("failed to add rerank window_size to op exprs", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogHybridFusion::allocate_expr_post(ObAllocExprContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  if (has_rerank()) {
+    ObRawExpr *field_expr = get_rerank_field_expr();
+    ObLogicalOperator *child = get_child(ObLogicalOperator::first_child);
+    if (OB_NOT_NULL(field_expr) && OB_NOT_NULL(child)) {
+      if (!ObOptimizerUtil::find_item(child->get_output_exprs(), field_expr)
+          && OB_FAIL(child->get_output_exprs().push_back(field_expr))) {
+        LOG_WARN("failed to add ai rerank field to child output", K(ret));
+      }
+      if (OB_SUCC(ret)) {
+        uint64_t child_branch_id = branch_id_;
+        for (int64_t i = 0; i < ctx.expr_producers_.count(); ++i) {
+          if (ctx.expr_producers_.at(i).producer_id_ == child->get_operator_id()
+              && OB_INVALID_ID != ctx.expr_producers_.at(i).producer_branch_) {
+            child_branch_id = ctx.expr_producers_.at(i).producer_branch_;
+            break;
+          }
+        }
+        if (OB_FAIL(mark_expr_produced(field_expr, child_branch_id, child->get_operator_id(), ctx))) {
+          LOG_WARN("failed to mark ai rerank field as produced by child", K(ret));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(ObLogicalOperator::allocate_expr_post(ctx))) {
+    LOG_WARN("failed to allocate expr post", K(ret));
   }
   return ret;
 }

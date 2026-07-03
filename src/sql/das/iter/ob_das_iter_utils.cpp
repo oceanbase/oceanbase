@@ -81,6 +81,7 @@ int ObDASIterUtils::init_fusion_param(common::ObIAllocator &alloc,
   ObDatum *size_datum = nullptr;
   ObDatum *offset_datum = nullptr;
   ObDatum *rank_window_size_datum = nullptr;
+  ObDatum *rerank_window_size_datum = nullptr;
   ObDatum *min_score_datum = nullptr;
   ObDASFusionIterParam &fusion_param = static_cast<ObDASFusionIterParam &>(param);
   if (OB_ISNULL(fusion_ctdef) || OB_ISNULL(fusion_rtdef)) {
@@ -118,6 +119,13 @@ int ObDASIterUtils::init_fusion_param(common::ObIAllocator &alloc,
   } else if (OB_ISNULL(min_score_datum) || min_score_datum->is_null()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("min score datum is null", K(ret));
+  } else if (OB_NOT_NULL(fusion_ctdef->rerank_window_size_expr_) &&
+             OB_FAIL(fusion_ctdef->rerank_window_size_expr_->eval(*fusion_rtdef->eval_ctx_, rerank_window_size_datum))) {
+    LOG_WARN("failed to eval ai rerank window size expr", K(ret));
+  } else if (OB_NOT_NULL(fusion_ctdef->rerank_window_size_expr_) &&
+            (OB_ISNULL(rerank_window_size_datum) || rerank_window_size_datum->is_null())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ai rerank window size datum is null", K(ret));
   } else {
     fusion_param.size_ = size_datum->get_int();
     fusion_param.offset_ = offset_datum->get_int();
@@ -131,6 +139,10 @@ int ObDASIterUtils::init_fusion_param(common::ObIAllocator &alloc,
     fusion_param.exec_ctx_ = &fusion_rtdef->eval_ctx_->exec_ctx_;
     fusion_param.output_ = &fusion_ctdef->result_output_;
     fusion_param.has_hybrid_fusion_op_ = fusion_ctdef->has_hybrid_fusion_op_;
+    fusion_param.is_single_partition_ = fusion_ctdef->is_single_partition_;
+    if (OB_NOT_NULL(fusion_ctdef->rerank_window_size_expr_)) {
+      fusion_param.rerank_window_size_ = rerank_window_size_datum->get_int();
+    }
     fusion_param.fusion_iter_exec_mode_ = fusion_ctdef->fusion_iter_exec_mode_;
     fusion_param.search_ctx_ = search_ctx;
     fusion_param.fusion_rtdef_ = fusion_rtdef;

@@ -3348,7 +3348,10 @@ int ObAIFuncModel::call_dense_embedding_vector_v2(ObArray<ObString> &content, Ob
   return ret;
 }
 
-int ObAIFuncModel::call_rerank(ObString &query, ObJsonArray *contents, ObJsonArray *&results)
+int ObAIFuncModel::call_rerank(ObString &query,
+                               ObJsonArray *contents,
+                               ObJsonArray *&results,
+                               ObJsonObject *config)
 {
   int ret = OB_SUCCESS;
   ObArray<ObString> headers;
@@ -3378,7 +3381,7 @@ int ObAIFuncModel::call_rerank(ObString &query, ObJsonArray *contents, ObJsonArr
     LOG_WARN("Failed to get unencrypted access key", K(ret));
   } else if (OB_FAIL(rerank_provider->get_header(*allocator_, unencrypted_access_key, headers))) {
     LOG_WARN("Failed to get header", K(ret));
-  } else if (OB_FAIL(rerank_provider->get_body(*allocator_, request_model_name, query, contents, nullptr, body))) {
+  } else if (OB_FAIL(rerank_provider->get_body(*allocator_, request_model_name, query, contents, config, body))) {
     LOG_WARN("Failed to get body", K(ret));
   } else if (OB_FAIL(client.send_post(*allocator_, get_url_(), headers, body, response))) {
     LOG_WARN("Failed to send post", K(ret));

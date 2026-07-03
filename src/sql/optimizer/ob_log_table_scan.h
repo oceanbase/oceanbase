@@ -920,6 +920,7 @@ public:
   int get_hybrid_search_exprs(ObIArray<ObRawExpr *> &all_exprs);
   int get_hybrid_search_index_name_list(ObIArray<ObString> &name_list);
   int prepare_vector_node_access_exprs();
+  int add_rerank_field_access_expr();
   int generate_dynamic_id_filter(ObIndexMergeNode *node, ObIArray<ObRawExpr*> &scan_pushdown_filters);
   inline common::ObIArray<ObRawExpr*> &get_range_conditions() { return range_conds_; }
   const common::ObIArray<ObRawExpr*> &get_range_conditions() const { return range_conds_; }
