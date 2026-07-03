@@ -253,10 +253,23 @@ int ObDASSearchCtx::estimate_row_count(const ObDASScalarScanCtDef *ctdef, const 
     est_param.ls_id_ = ls_id_;
     est_param.schema_version_ = ctdef->schema_version_;
     est_param.frozen_version_ = GET_BATCH_ROWS_READ_SNAPSHOT_VERSION;
-    batch.type_ = ObSimpleBatch::T_SCAN;
-    batch.range_ = &rtdef->key_ranges_.at(0);
+    common::SQLScanRangeArray scan_range_array;
+    if (1 == rtdef->key_ranges_.count()) {
+      batch.type_ = ObSimpleBatch::T_SCAN;
+      batch.range_ = &rtdef->key_ranges_.at(0);
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < rtdef->key_ranges_.count(); ++i) {
+        if (OB_FAIL(scan_range_array.push_back(rtdef->key_ranges_.at(i)))) {
+          LOG_WARN("failed to push back key range for estimate", K(ret), K(i));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        batch.type_ = ObSimpleBatch::T_MULTI_SCAN;
+        batch.ranges_ = &scan_range_array;
+      }
+    }
 
-    if (OB_FAIL(table_scan_range.init(est_param, batch, allocator_))) {
+    if (FAILEDx(table_scan_range.init(est_param, batch, allocator_))) {
       LOG_WARN("failed to init table scan range", K(ret));
     } else if (OB_FAIL(access_service->estimate_row_count(est_param, table_scan_range, timeout_us, est_records, logical_row_cnt, physical_row_cnt))) {
       LOG_WARN("failed to estimate row count", K(ret));
