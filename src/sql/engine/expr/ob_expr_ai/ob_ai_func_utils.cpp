@@ -699,54 +699,64 @@ int ObOpenAIUtils::ObOpenAIEmbed::encode_batch_line(common::ObIAllocator &alloca
 {
   int ret = OB_SUCCESS;
   line.reset();
-  line.method_ = common::ObString::make_string("POST");
-  line.url_ = common::ObString::make_string("/v1/embeddings");
-
-  char tmp_buf[64];
-  int64_t tmp_len = snprintf(tmp_buf, sizeof(tmp_buf), "%ld", index);
-  char *cid_buf = static_cast<char*>(allocator.alloc(tmp_len));
-  if (OB_ISNULL(cid_buf)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to alloc custom_id", K(ret));
+  if (OB_UNLIKELY(input_text.length() > ObAiBatchFileConstraints::MAX_LINE_SIZE_BYTES)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("[BATCH-FILE] input_text exceeds max line size, skip to avoid large allocation",
+             K(ret), K(input_text.length()), K(ObAiBatchFileConstraints::MAX_LINE_SIZE_BYTES));
   } else {
-    MEMCPY(cid_buf, tmp_buf, tmp_len);
-    line.custom_id_.assign_ptr(cid_buf, static_cast<int32_t>(tmp_len));
-  }
+    line.method_ = common::ObString::make_string("POST");
+    line.url_ = common::ObString::make_string("/v1/embeddings");
 
-  if (OB_SUCC(ret)) {
-    common::ObArenaAllocator tmp_alloc("BatchBodyTmp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-    common::ObJsonBuffer model_jbuf(&tmp_alloc);
-    common::ObJsonBuffer text_jbuf(&tmp_alloc);
-    if (OB_FAIL(common::ObJsonBaseUtil::add_double_quote(
-            model_jbuf, model.ptr(), model.length()))) {
-      LOG_WARN("failed to escape model name", K(ret));
-    } else if (OB_FAIL(common::ObJsonBaseUtil::add_double_quote(
-            text_jbuf, input_text.ptr(), input_text.length()))) {
-      LOG_WARN("failed to escape input text", K(ret));
+    const int64_t cid_buf_len = 21; // int64 decimal: at most 20 digits + sign
+    char *cid_buf = static_cast<char*>(allocator.alloc(cid_buf_len));
+    if (OB_ISNULL(cid_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc custom_id", K(ret));
     } else {
-      const int64_t body_len = model_jbuf.length() + text_jbuf.length() + 64;
-      char *body_buf = static_cast<char*>(allocator.alloc(body_len));
-      if (OB_ISNULL(body_buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc body buffer", K(ret), K(body_len));
+      int64_t tmp_len = snprintf(cid_buf, cid_buf_len, "%ld", index);
+      if (OB_UNLIKELY(tmp_len <= 0 || tmp_len >= cid_buf_len)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("snprintf failed for custom_id", K(ret), K(index), K(tmp_len));
       } else {
-        int64_t pos = snprintf(body_buf, body_len,
-            "{\"model\":%.*s,\"input\":%.*s,\"encoding_format\":\"float\"}",
-            static_cast<int>(model_jbuf.length()), model_jbuf.ptr(),
-            static_cast<int>(text_jbuf.length()), text_jbuf.ptr());
-        if (pos <= 0 || pos >= body_len) {
-          ret = OB_SIZE_OVERFLOW;
-          LOG_WARN("body snprintf overflow", K(ret), K(pos), K(body_len));
+        line.custom_id_.assign_ptr(cid_buf, static_cast<int32_t>(tmp_len));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      common::ObArenaAllocator tmp_alloc("BatchBodyTmp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+      common::ObJsonBuffer model_jbuf(&tmp_alloc);
+      common::ObJsonBuffer text_jbuf(&tmp_alloc);
+      if (OB_FAIL(common::ObJsonBaseUtil::add_double_quote(
+              model_jbuf, model.ptr(), model.length()))) {
+        LOG_WARN("failed to escape model name", K(ret));
+      } else if (OB_FAIL(common::ObJsonBaseUtil::add_double_quote(
+              text_jbuf, input_text.ptr(), input_text.length()))) {
+        LOG_WARN("failed to escape input text", K(ret));
+      } else {
+        const int64_t body_len = model_jbuf.length() + text_jbuf.length() + 64;
+        char *body_buf = static_cast<char*>(allocator.alloc(body_len));
+        if (OB_ISNULL(body_buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc body buffer", K(ret), K(body_len));
         } else {
-          line.body_.assign_ptr(body_buf, static_cast<int32_t>(pos));
+          int64_t pos = snprintf(body_buf, body_len,
+              "{\"model\":%.*s,\"input\":%.*s,\"encoding_format\":\"float\"}",
+              static_cast<int>(model_jbuf.length()), model_jbuf.ptr(),
+              static_cast<int>(text_jbuf.length()), text_jbuf.ptr());
+          if (pos <= 0 || pos >= body_len) {
+            ret = OB_SIZE_OVERFLOW;
+            LOG_WARN("body snprintf overflow", K(ret), K(pos), K(body_len));
+          } else {
+            line.body_.assign_ptr(body_buf, static_cast<int32_t>(pos));
+          }
         }
       }
     }
-  }
 
-  if (OB_SUCC(ret)) {
-    line.line_size_ = line.custom_id_.length() + line.method_.length() +
-                      line.url_.length() + line.body_.length() + 100;
+    if (OB_SUCC(ret)) {
+      line.line_size_ = line.custom_id_.length() + line.method_.length() +
+                        line.url_.length() + line.body_.length() + 100;
+    }
   }
   return ret;
 }
@@ -1509,54 +1519,64 @@ int ObDashscopeUtils::ObDashscopeEmbed::encode_batch_line(common::ObIAllocator &
 {
   int ret = OB_SUCCESS;
   line.reset();
-  line.method_ = common::ObString::make_string("POST");
-  line.url_ = common::ObString::make_string("/v1/embeddings");
-
-  char tmp_buf[64];
-  int64_t tmp_len = snprintf(tmp_buf, sizeof(tmp_buf), "%ld", index);
-  char *cid_buf = static_cast<char*>(allocator.alloc(tmp_len));
-  if (OB_ISNULL(cid_buf)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to alloc custom_id", K(ret));
+  if (OB_UNLIKELY(input_text.length() > ObAiBatchFileConstraints::MAX_LINE_SIZE_BYTES)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("[BATCH-FILE] input_text exceeds max line size, skip to avoid large allocation",
+             K(ret), K(input_text.length()), K(ObAiBatchFileConstraints::MAX_LINE_SIZE_BYTES));
   } else {
-    MEMCPY(cid_buf, tmp_buf, tmp_len);
-    line.custom_id_.assign_ptr(cid_buf, static_cast<int32_t>(tmp_len));
-  }
+    line.method_ = common::ObString::make_string("POST");
+    line.url_ = common::ObString::make_string("/v1/embeddings");
 
-  if (OB_SUCC(ret)) {
-    common::ObArenaAllocator tmp_alloc("BatchBodyTmp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-    common::ObJsonBuffer model_jbuf(&tmp_alloc);
-    common::ObJsonBuffer text_jbuf(&tmp_alloc);
-    if (OB_FAIL(common::ObJsonBaseUtil::add_double_quote(
-            model_jbuf, model.ptr(), model.length()))) {
-      LOG_WARN("failed to escape model name", K(ret));
-    } else if (OB_FAIL(common::ObJsonBaseUtil::add_double_quote(
-            text_jbuf, input_text.ptr(), input_text.length()))) {
-      LOG_WARN("failed to escape input text", K(ret));
+    const int64_t cid_buf_len = 21; // int64 decimal: at most 20 digits + sign
+    char *cid_buf = static_cast<char*>(allocator.alloc(cid_buf_len));
+    if (OB_ISNULL(cid_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc custom_id", K(ret));
     } else {
-      const int64_t body_len = model_jbuf.length() + text_jbuf.length() + 64;
-      char *body_buf = static_cast<char*>(allocator.alloc(body_len));
-      if (OB_ISNULL(body_buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc body buffer", K(ret), K(body_len));
+      int64_t tmp_len = snprintf(cid_buf, cid_buf_len, "%ld", index);
+      if (OB_UNLIKELY(tmp_len <= 0 || tmp_len >= cid_buf_len)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("snprintf failed for custom_id", K(ret), K(index), K(tmp_len));
       } else {
-        int64_t pos = snprintf(body_buf, body_len,
-            "{\"model\":%.*s,\"input\":%.*s,\"encoding_format\":\"float\"}",
-            static_cast<int>(model_jbuf.length()), model_jbuf.ptr(),
-            static_cast<int>(text_jbuf.length()), text_jbuf.ptr());
-        if (pos <= 0 || pos >= body_len) {
-          ret = OB_SIZE_OVERFLOW;
-          LOG_WARN("body snprintf overflow", K(ret), K(pos), K(body_len));
+        line.custom_id_.assign_ptr(cid_buf, static_cast<int32_t>(tmp_len));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      common::ObArenaAllocator tmp_alloc("BatchBodyTmp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+      common::ObJsonBuffer model_jbuf(&tmp_alloc);
+      common::ObJsonBuffer text_jbuf(&tmp_alloc);
+      if (OB_FAIL(common::ObJsonBaseUtil::add_double_quote(
+              model_jbuf, model.ptr(), model.length()))) {
+        LOG_WARN("failed to escape model name", K(ret));
+      } else if (OB_FAIL(common::ObJsonBaseUtil::add_double_quote(
+              text_jbuf, input_text.ptr(), input_text.length()))) {
+        LOG_WARN("failed to escape input text", K(ret));
+      } else {
+        const int64_t body_len = model_jbuf.length() + text_jbuf.length() + 64;
+        char *body_buf = static_cast<char*>(allocator.alloc(body_len));
+        if (OB_ISNULL(body_buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc body buffer", K(ret), K(body_len));
         } else {
-          line.body_.assign_ptr(body_buf, static_cast<int32_t>(pos));
+          int64_t pos = snprintf(body_buf, body_len,
+              "{\"model\":%.*s,\"input\":%.*s,\"encoding_format\":\"float\"}",
+              static_cast<int>(model_jbuf.length()), model_jbuf.ptr(),
+              static_cast<int>(text_jbuf.length()), text_jbuf.ptr());
+          if (pos <= 0 || pos >= body_len) {
+            ret = OB_SIZE_OVERFLOW;
+            LOG_WARN("body snprintf overflow", K(ret), K(pos), K(body_len));
+          } else {
+            line.body_.assign_ptr(body_buf, static_cast<int32_t>(pos));
+          }
         }
       }
     }
-  }
 
-  if (OB_SUCC(ret)) {
-    line.line_size_ = line.custom_id_.length() + line.method_.length() +
-                      line.url_.length() + line.body_.length() + 100;
+    if (OB_SUCC(ret)) {
+      line.line_size_ = line.custom_id_.length() + line.method_.length() +
+                        line.url_.length() + line.body_.length() + 100;
+    }
   }
   return ret;
 }

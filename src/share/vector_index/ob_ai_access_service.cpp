@@ -36,9 +36,7 @@ namespace oceanbase
 namespace vector_index
 {
 
-// Import share namespace types for table poller
-using share::ObSystemTablePoller;
-using share::ObSystemTablePollerFactory;
+using namespace share;
 
 // Forward declaration
 class ObAiTaskScheduler;
@@ -3063,7 +3061,9 @@ int ObAiAccessService::register_task_object(const common::ObString &task_id,
     }
     if (OB_FAIL(ret) && task_inserted) {
       if (OB_SUCCESS != task_map_.erase_refactored(task_id)) {
-        LOG_WARN("failed to rollback registered task object from map", K(ret), K(task_id));
+        LOG_WARN("failed to rollback registered task object from map, marking abandoned",
+                 K(ret), K(task_id));
+        task->set_abandoned();
         task_in_map = true;
       }
     }

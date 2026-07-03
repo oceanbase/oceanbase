@@ -98,6 +98,7 @@ int ObAiBatchTaskWriter::init(vector_index::ObAiAccessService *service,
     ddl_task_id_ = ddl_task_id;
     dir_id_ = dir_id;
     tenant_id_ = tenant_id;
+    line_alloc_.set_tenant_id(tenant_id);
     current_line_count_ = 0;
     is_committed_ = false;
     is_inited_ = true;
@@ -123,7 +124,7 @@ int ObAiBatchTaskWriter::append(const common::ObAiBatchFileLine &line)
   } else if (current_line_count_ >= common::ObAiBatchFileConstraints::MAX_LINES_PER_FILE
              || jsonl_writer_.get_size() + line.line_size_ > common::ObAiBatchFileConstraints::MAX_FILE_SIZE_BYTES) {
     ret = OB_ITER_END;
-    LOG_INFO("[BATCH-FILE] threshold reached, need commit+re-open",
+    LOG_DEBUG("[BATCH-FILE] threshold reached, need commit+re-open",
              K_(current_line_count), "file_size", jsonl_writer_.get_size(), K(line.line_size_),
              K_(ddl_task_id));
   } else {

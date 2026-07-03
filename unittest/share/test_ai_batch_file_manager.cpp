@@ -20,6 +20,7 @@
 #include "lib/ob_define.h"
 #include "lib/allocator/page_arena.h"
 #include "lib/utility/ob_print_utils.h"
+#include "share/ai_service/ob_ai_func_provider.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -245,6 +246,121 @@ TEST_F(TestAiBatchFileManager, batch_status_mapping)
             ObAiBatchFileManagerUtils::str_to_batch_status(ObString::make_string("cancelling")));
   EXPECT_EQ(OB_AI_BATCH_FILE_STATUS_CANCELLED,
             ObAiBatchFileManagerUtils::str_to_batch_status(ObString::make_string("cancelled")));
+}
+
+// ==================== to_json tests ====================
+
+TEST_F(TestAiBatchFileManager, to_json_basic)
+{
+  ObArenaAllocator allocator("TestToJson");
+  ObAiBatchFileLine line;
+  line.custom_id_ = ObString::make_string("42");
+  line.method_ = ObString::make_string("POST");
+  line.url_ = ObString::make_string("/v1/embeddings");
+  line.body_ = ObString::make_string("{\"model\":\"m\",\"input\":\"hello\"}");
+
+  ObString json_str;
+  ASSERT_EQ(OB_SUCCESS, line.to_json(allocator, json_str));
+  ASSERT_GT(json_str.length(), 0);
+
+  ObString expected = ObString::make_string(
+      "{\"custom_id\":\"42\",\"method\":\"POST\","
+      "\"url\":\"/v1/embeddings\","
+      "\"body\":{\"model\":\"m\",\"input\":\"hello\"}}");
+  EXPECT_EQ(0, expected.compare(json_str));
+}
+
+TEST_F(TestAiBatchFileManager, to_json_empty_body)
+{
+  ObArenaAllocator allocator("TestToJson");
+  ObAiBatchFileLine line;
+  line.custom_id_ = ObString::make_string("1");
+  line.method_ = ObString::make_string("POST");
+  line.url_ = ObString::make_string("/v1/embeddings");
+  // body_ left empty
+
+  ObString json_str;
+  ASSERT_EQ(OB_INVALID_ARGUMENT, line.to_json(allocator, json_str));
+}
+
+TEST_F(TestAiBatchFileManager, to_json_injection_custom_id_with_quote)
+{
+  ObArenaAllocator allocator("TestToJson");
+  ObAiBatchFileLine line;
+  line.custom_id_ = ObString::make_string("1\",\"evil\":\"x");
+  line.method_ = ObString::make_string("POST");
+  line.url_ = ObString::make_string("/v1/embeddings");
+  line.body_ = ObString::make_string("{\"model\":\"m\",\"input\":\"hello\"}");
+
+  ObString json_str;
+  ASSERT_EQ(OB_INVALID_ARGUMENT, line.to_json(allocator, json_str));
+}
+
+TEST_F(TestAiBatchFileManager, to_json_injection_custom_id_with_backslash)
+{
+  ObArenaAllocator allocator("TestToJson");
+  ObAiBatchFileLine line;
+  line.custom_id_ = ObString::make_string("1\\\"evil");
+  line.method_ = ObString::make_string("POST");
+  line.url_ = ObString::make_string("/v1/embeddings");
+  line.body_ = ObString::make_string("{\"model\":\"m\",\"input\":\"hello\"}");
+
+  ObString json_str;
+  ASSERT_EQ(OB_INVALID_ARGUMENT, line.to_json(allocator, json_str));
+}
+
+TEST_F(TestAiBatchFileManager, to_json_injection_method_with_quote)
+{
+  ObArenaAllocator allocator("TestToJson");
+  ObAiBatchFileLine line;
+  line.custom_id_ = ObString::make_string("1");
+  line.method_ = ObString::make_string("POST\",\"injected\":\"true");
+  line.url_ = ObString::make_string("/v1/embeddings");
+  line.body_ = ObString::make_string("{\"model\":\"m\",\"input\":\"hello\"}");
+
+  ObString json_str;
+  ASSERT_EQ(OB_INVALID_ARGUMENT, line.to_json(allocator, json_str));
+}
+
+TEST_F(TestAiBatchFileManager, to_json_injection_url_with_quote)
+{
+  ObArenaAllocator allocator("TestToJson");
+  ObAiBatchFileLine line;
+  line.custom_id_ = ObString::make_string("1");
+  line.method_ = ObString::make_string("POST");
+  line.url_ = ObString::make_string("/v1/embeddings\",\"url\":\"/admin/drop");
+  line.body_ = ObString::make_string("{\"model\":\"m\",\"input\":\"hello\"}");
+
+  ObString json_str;
+  ASSERT_EQ(OB_INVALID_ARGUMENT, line.to_json(allocator, json_str));
+}
+
+TEST_F(TestAiBatchFileManager, to_json_control_char_in_custom_id)
+{
+  ObArenaAllocator allocator("TestToJson");
+  ObAiBatchFileLine line;
+  line.custom_id_ = ObString(4, "ab\nc");
+  line.method_ = ObString::make_string("POST");
+  line.url_ = ObString::make_string("/v1/embeddings");
+  line.body_ = ObString::make_string("{\"model\":\"m\",\"input\":\"hello\"}");
+
+  ObString json_str;
+  ASSERT_EQ(OB_INVALID_ARGUMENT, line.to_json(allocator, json_str));
+}
+
+TEST_F(TestAiBatchFileManager, to_json_custom_id_exceeds_max_length)
+{
+  ObArenaAllocator allocator("TestToJson");
+  ObAiBatchFileLine line;
+  char long_id[300];
+  memset(long_id, 'a', sizeof(long_id));
+  line.custom_id_ = ObString(sizeof(long_id), long_id);
+  line.method_ = ObString::make_string("POST");
+  line.url_ = ObString::make_string("/v1/embeddings");
+  line.body_ = ObString::make_string("{\"model\":\"m\",\"input\":\"hello\"}");
+
+  ObString json_str;
+  ASSERT_EQ(OB_INVALID_ARGUMENT, line.to_json(allocator, json_str));
 }
 
 }  // namespace unittest

@@ -20,6 +20,17 @@ namespace oceanbase
 namespace common
 {
 
+static bool contains_json_unsafe_char(const common::ObString &str)
+{
+  for (int64_t i = 0; i < str.length(); ++i) {
+    const unsigned char c = static_cast<unsigned char>(str.ptr()[i]);
+    if (c <= 0x1f || c == 0x7f || c == '"' || c == '\\') {
+      return true;
+    }
+  }
+  return false;
+}
+
 int ObAiBatchFileLine::to_json(common::ObIAllocator &allocator, common::ObString &json_str) const
 {
   int ret = OB_SUCCESS;
@@ -30,6 +41,16 @@ int ObAiBatchFileLine::to_json(common::ObIAllocator &allocator, common::ObString
     LOG_WARN("[BATCH-FILE] body is empty or null, cannot produce valid JSONL",
              K(ret), K(body_.length()), KP(body_.ptr()),
              K(custom_id_), K(method_), K(url_));
+  } else if (OB_UNLIKELY(custom_id_.length() > ObAiBatchFileConstraints::MAX_CUSTOM_ID_LENGTH)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("[BATCH-FILE] custom_id exceeds max length",
+             K(ret), K(custom_id_.length()), K(ObAiBatchFileConstraints::MAX_CUSTOM_ID_LENGTH));
+  } else if (OB_UNLIKELY(contains_json_unsafe_char(custom_id_)
+                          || contains_json_unsafe_char(method_)
+                          || contains_json_unsafe_char(url_))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("[BATCH-FILE] custom_id/method/url contains JSON-unsafe characters",
+             K(ret), K(custom_id_), K(method_), K(url_));
   } else {
     const int64_t buf_size = 256 + custom_id_.length() + method_.length()
                              + url_.length() + body_.length();

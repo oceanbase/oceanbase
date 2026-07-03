@@ -260,8 +260,9 @@ int ObSystemTablePoller::cleanup_remote_files_()
       common::ObString task_id_;
       common::ObString model_name_;
       common::ObString input_file_id_;
+      common::ObString output_file_id_;
       common::ObString error_file_id_;
-      TO_STRING_KV(K(task_id_), K(model_name_), K(input_file_id_), K(error_file_id_));
+      TO_STRING_KV(K(task_id_), K(model_name_), K(input_file_id_), K(output_file_id_), K(error_file_id_));
     };
     common::ObArenaAllocator collect_alloc("BatchFileGC", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     common::ObSEArray<FileCleanupTask, 8> cleanup_tasks;
@@ -270,6 +271,7 @@ int ObSystemTablePoller::cleanup_remote_files_()
     SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
       common::sqlclient::ObMySQLResult *result = nullptr;
       ObSqlString select_sql;
+      select_sql.set_attr(ObMemAttr(MTL_ID(), "BatchFileGC"));
       if (OB_FAIL(select_sql.assign_fmt(
           "SELECT task_id, model_name, remote_file_ids, batch_id FROM %s "
           "WHERE tenant_id = %lu",
@@ -278,8 +280,9 @@ int ObSystemTablePoller::cleanup_remote_files_()
         LOG_WARN("failed to build select sql", K(ret));
       } else if (OB_FAIL(sql_proxy_->read(res, tenant_id, select_sql.ptr()))) {
         LOG_WARN("failed to execute select", K(ret));
-      } else if (nullptr == (result = res.get_result())) {
-        // No results
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("null result set from remote file cleanup select", K(ret));
       } else {
         while (OB_SUCC(ret)) {
           if (OB_FAIL(result->next())) {
@@ -311,6 +314,8 @@ int ObSystemTablePoller::cleanup_remote_files_()
               LOG_WARN("[BATCH-FILE-GC] failed to copy model_name", K(tmp_ret), K(task_id));
             } else if (OB_SUCCESS != (tmp_ret = ob_write_string(collect_alloc, rf_view.input_file_id_, ct.input_file_id_))) {
               LOG_WARN("[BATCH-FILE-GC] failed to copy input_file_id", K(tmp_ret), K(task_id));
+            } else if (OB_SUCCESS != (tmp_ret = ob_write_string(collect_alloc, rf_view.output_file_id_, ct.output_file_id_))) {
+              LOG_WARN("[BATCH-FILE-GC] failed to copy output_file_id", K(tmp_ret), K(task_id));
             } else if (OB_SUCCESS != (tmp_ret = ob_write_string(collect_alloc, rf_view.error_file_id_, ct.error_file_id_))) {
               LOG_WARN("[BATCH-FILE-GC] failed to copy error_file_id", K(tmp_ret), K(task_id));
             } else if (OB_SUCCESS != (tmp_ret = cleanup_tasks.push_back(ct))) {
@@ -361,6 +366,16 @@ int ObSystemTablePoller::cleanup_remote_files_()
                    K(ct.task_id_), K(ct.error_file_id_), K(ct.model_name_));
         }
       }
+      if (!ct.output_file_id_.empty() && batch_file_manager.is_inited()) {
+        int del_ret = batch_file_manager.delete_file(ct.output_file_id_);
+        if (OB_SUCCESS != del_ret) {
+          LOG_WARN("[BATCH-FILE-GC] failed to delete remote output file",
+                   K(del_ret), K(ct.task_id_), K(ct.output_file_id_), K(ct.model_name_));
+        } else {
+          LOG_INFO("[BATCH-FILE-GC] deleted remote output file",
+                   K(ct.task_id_), K(ct.output_file_id_), K(ct.model_name_));
+        }
+      }
     }
   }
   return ret;
@@ -383,6 +398,7 @@ int ObSystemTablePoller::handle_abandoned_tasks_()
     if (OB_FAIL(service_->collect_abandoned_tasks(abandoned_tasks, abandoned_task_ids))) {
       LOG_WARN("handle_abandoned_tasks_: failed to collect abandoned tasks", K(ret));
     } else {
+      common::ObArenaAllocator archive_alloc("AiPollerArch", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
       int64_t idx = 0;
       for (; OB_SUCC(ret) && idx < abandoned_tasks.count(); ++idx) {
         vector_index::ObAiAccessTask *task = abandoned_tasks.at(idx);
@@ -401,7 +417,28 @@ int ObSystemTablePoller::handle_abandoned_tasks_()
             }
           }
           task->unpin();
-        } else if (task->is_terminal_state()) {
+        } else {
+          if (!task->is_terminal_state()) {
+            char abandon_msg[128];
+            int64_t msg_pos = snprintf(abandon_msg, sizeof(abandon_msg),
+                "Task abandoned in non-terminal state (state=%d), marked FAILED by GC",
+                static_cast<int>(task->get_state()));
+            if (msg_pos < 0 || msg_pos >= static_cast<int64_t>(sizeof(abandon_msg))) {
+              abandon_msg[sizeof(abandon_msg) - 1] = '\0';
+            }
+            int tmp_ret = table_manager_->update_task_status(
+                task_id, OB_AI_TASK_STATUS_FAILED, 0, OB_CANCELED,
+                ObString::make_string(abandon_msg),
+                0, ObString(), *sql_proxy_);
+            if (OB_SUCCESS != tmp_ret && OB_ENTRY_NOT_EXIST != tmp_ret) {
+              LOG_WARN("[BATCH-FILE-GC] failed to fail abandoned unscheduled task, will retry",
+                       K(tmp_ret), K(task_id), "state", task->get_state());
+              task->unpin();
+              continue;
+            } else {
+              task->set_state(OB_AI_TASK_STATUS_FAILED);
+            }
+          }
           if (task->is_archived()) {
             // Already archived in a previous round; cleanup_terminal_tasks_() will free.
             task->unpin();
@@ -410,34 +447,52 @@ int ObSystemTablePoller::handle_abandoned_tasks_()
           // Remote batch cancel is handled by complete_with_cancel_() in the
           // Scheduler thread.  initiate_cancel() on a terminal task is a no-op.
           // Phase 2: archive + destroy
-          char token_usage[512] = "";
-          char provider_timeline[512] = "";
+          // token_usage: {"completion_tokens":%ld,"prompt_tokens":%ld,"total_tokens":%ld}
+          // provider_timeline: {"created_at":%ld,"in_progress_at":%ld,"finalizing_at":%ld,
+          //   "completed_at":%ld,"failed_at":%ld,"expired_at":%ld,"expires_at":%ld,
+          //   "cancelling_at":%ld,"cancelled_at":%ld}  DB column max 1024
+          const int64_t token_usage_len = 128;
+          const int64_t provider_timeline_len = 1024;
+          char *token_usage = static_cast<char*>(archive_alloc.alloc(token_usage_len));
+          char *provider_timeline = static_cast<char*>(archive_alloc.alloc(provider_timeline_len));
+          if (OB_ISNULL(token_usage) || OB_ISNULL(provider_timeline)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_ERROR("failed to alloc archive buffers from local arena, tenant may be under memory pressure",
+                      K(ret));
+            // Do not unpin here: the tail loop below unpins from idx so each task
+            // is unpinned exactly once (collect_abandoned_tasks pins once per task).
+            break;
+          }
           int64_t completion_tokens = task->get_accumulated_completion_tokens();
           int64_t prompt_tokens = task->get_accumulated_prompt_tokens();
           int64_t total_tokens = task->get_accumulated_total_tokens();
           int64_t model_wait_us = task->get_model_wait_time_us();
-          snprintf(token_usage, sizeof(token_usage),
+          token_usage[0] = '\0';
+          provider_timeline[0] = '\0';
+          snprintf(token_usage, token_usage_len,
                    "{\"completion_tokens\":%ld,\"prompt_tokens\":%ld,\"total_tokens\":%ld}",
                    completion_tokens, prompt_tokens, total_tokens);
           if (model_wait_us > 0) {
-            snprintf(provider_timeline, sizeof(provider_timeline),
+            snprintf(provider_timeline, provider_timeline_len,
                      "{\"model_wait_time_us\":%ld}", model_wait_us);
           }
-          if (OB_FAIL(table_manager_->archive_task_to_history(
-                  task_id, ObString::make_string(token_usage),
-                  ObString::make_string(provider_timeline), *sql_proxy_))) {
-            if (OB_ENTRY_NOT_EXIST == ret) {
+          int archive_ret = table_manager_->archive_task_to_history(
+              task_id, ObString::make_string(token_usage),
+              ObString::make_string(provider_timeline), *sql_proxy_);
+          if (OB_SUCCESS != archive_ret) {
+            if (OB_ENTRY_NOT_EXIST == archive_ret) {
               // Record already gone from main table (archived by another path such as
               // release_task whose transaction committed but returned an error).
               // Treat as already archived so cleanup_terminal_tasks_() can free the object.
-              ret = OB_SUCCESS;
               if (task->set_archived()) {
                 LOG_INFO("[BATCH-FILE-GC] abandoned task already archived, marked for cleanup",
                          K(task_id));
               }
             } else {
+              // Single-task failure must not abort the loop; the next round of
+              // collect_abandoned_tasks() will pick this task up again for retry.
               LOG_WARN("[BATCH-FILE-GC] failed to archive abandoned task, will retry next round",
-                       K(ret), K(task_id));
+                       K(archive_ret), K(task_id));
             }
             task->unpin();
           } else {
@@ -449,12 +504,11 @@ int ObSystemTablePoller::handle_abandoned_tasks_()
             task->unpin();
             // cleanup_terminal_tasks_() will erase from map and free once pin_count==0
           }
-        } else {
-          task->unpin();
+          archive_alloc.reuse();
         }
       }
-      // Best-effort unpin any tasks that were collected but not processed due to
-      // early loop exit (e.g. archive_task_to_history or initiate_cancel error).
+      // Best-effort unpin any tasks that were collected but not unpinned yet due to
+      // early loop exit (e.g. archive_alloc OOM).
       for (; idx < abandoned_tasks.count(); ++idx) {
         if (OB_NOT_NULL(abandoned_tasks.at(idx))) {
           abandoned_tasks.at(idx)->unpin();
@@ -521,6 +575,7 @@ int ObSystemTablePoller::recover_running_tasks_after_restart_()
     SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
       common::sqlclient::ObMySQLResult *result = nullptr;
       ObSqlString select_sql;
+      select_sql.set_attr(ObMemAttr(MTL_ID(), "AiRecover"));
       if (OB_FAIL(select_sql.assign_fmt(
           "SELECT task_id FROM %s "
           "WHERE tenant_id = %lu AND status = %d",
@@ -530,8 +585,9 @@ int ObSystemTablePoller::recover_running_tasks_after_restart_()
         LOG_WARN("failed to build recovery select SQL", K(ret));
       } else if (OB_FAIL(sql_proxy_->read(res, tenant_id, select_sql.ptr()))) {
         LOG_WARN("failed to execute recovery select", K(ret));
-      } else if (nullptr == (result = res.get_result())) {
-        // No candidates
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("null result set from recovery select", K(ret));
       } else {
         while (OB_SUCC(ret)) {
           if (OB_FAIL(result->next())) {
@@ -676,6 +732,7 @@ int ObSystemTablePoller::recover_running_tasks_after_restart_()
       SMART_VAR(common::ObMySQLProxy::MySQLResult, c3_res) {
         common::sqlclient::ObMySQLResult *c3_result = nullptr;
         ObSqlString c3_sql;
+        c3_sql.set_attr(ObMemAttr(MTL_ID(), "AiTermOrphan"));
         if (OB_FAIL(c3_sql.assign_fmt(
                 "SELECT task_id FROM %s "
                 "WHERE tenant_id = %lu AND status IN (%d, %d, %d)",
@@ -687,8 +744,9 @@ int ObSystemTablePoller::recover_running_tasks_after_restart_()
           LOG_WARN("failed to build C3 recovery select SQL", K(ret));
         } else if (OB_FAIL(sql_proxy_->read(c3_res, tenant_id, c3_sql.ptr()))) {
           LOG_WARN("failed to execute C3 recovery select", K(ret));
-        } else if (nullptr == (c3_result = c3_res.get_result())) {
-          // No candidates
+        } else if (OB_ISNULL(c3_result = c3_res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("null result set from C3 recovery select", K(ret));
         } else {
           while (OB_SUCC(ret)) {
             if (OB_FAIL(c3_result->next())) {

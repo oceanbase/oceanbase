@@ -14,6 +14,7 @@
 
 #include "share/ai_service/ob_ai_system_table_manager.h"
 #include "share/ai_service/ob_ai_exec_struct.h"
+#include "lib/allocator/page_arena.h"
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "lib/mysqlclient/ob_mysql_transaction.h"
@@ -161,10 +162,13 @@ int ObAiSystemTableManager::update_task_status(const ObString &task_id,
     int64_t affected_rows = 0;
 
     // Build error_detail JSON: {"ob_error_code":N,"model_http_code":N,"message":"..."}
-    char error_buf[OB_AI_MAX_ERROR_DETAIL_LENGTH];
-
-    if (OB_FAIL(ObAiExecUtils::build_error_detail_json(error_code, http_error_code, error_message,
-                                                       error_buf, sizeof(error_buf)))) {
+    ObArenaAllocator tmp_alloc("AiSysTable", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_);
+    char *error_buf = static_cast<char*>(tmp_alloc.alloc(OB_AI_MAX_ERROR_DETAIL_LENGTH));
+    if (OB_ISNULL(error_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc error_buf", K(ret));
+    } else if (OB_FAIL(ObAiExecUtils::build_error_detail_json(error_code, http_error_code, error_message,
+                                                              error_buf, OB_AI_MAX_ERROR_DETAIL_LENGTH))) {
       LOG_WARN("failed to build error_detail json", K(ret), K(error_code), K(http_error_code));
     } else if (OB_FAIL(sql.add_pk_column(ObAiTaskTableColumns::TASK_ID, ObHexEscapeSqlStr(task_id)))) {
       LOG_WARN("failed to add task_id column", K(ret));
@@ -188,8 +192,8 @@ int ObAiSystemTableManager::update_task_status(const ObString &task_id,
       ret = OB_ENTRY_NOT_EXIST;
       LOG_WARN("task not found", K(ret), K(task_id));
     } else {
-      LOG_INFO("[BATCH-FILE] updated task status", K(task_id), K(status), K(requests_handled),
-               K(remote_file_ids));
+      LOG_DEBUG("[BATCH-FILE] updated task status", K(task_id), K(status), K(requests_handled),
+              K(remote_file_ids));
     }
   }
   return ret;
@@ -212,17 +216,22 @@ int ObAiSystemTableManager::query_task_status(const ObString &task_id,
       ObSqlString select_sql;
       task_info.reset();
 
-      char escaped_task_id[512];
-      const int64_t escaped_len = ObHexEscapeSqlStr(task_id).to_string(escaped_task_id, sizeof(escaped_task_id));
-      if (OB_FAIL(select_sql.assign_fmt(
+      ObDMLSqlSplicer where_splicer;
+      ObSqlString where_clause;
+      if (OB_FAIL(where_splicer.add_pk_column(ObAiTaskTableColumns::TASK_ID, ObHexEscapeSqlStr(task_id)))) {
+        LOG_WARN("failed to add task_id pk column", K(ret));
+      } else if (OB_FAIL(where_splicer.add_pk_column(ObAiTaskTableColumns::TENANT_ID, tenant_id_))) {
+        LOG_WARN("failed to add tenant_id pk column", K(ret));
+      } else if (OB_FAIL(where_splicer.splice_predicates(where_clause))) {
+        LOG_WARN("failed to splice where predicates", K(ret));
+      } else if (OB_FAIL(select_sql.assign_fmt(
           "SELECT model_name, command_type, status, requests_handled, total_requests, "
           "task_create_time, task_update_time, "
           "batch_id, remote_file_ids, local_file_metadata, error_detail, "
           "ddl_task_id "
-          "FROM %s WHERE task_id = '%.*s' AND tenant_id = %lu",
+          "FROM %s WHERE %s",
           OB_ALL_AI_BATCH_TASK_TNAME,
-          static_cast<int>(escaped_len), escaped_task_id,
-          tenant_id_))) {
+          where_clause.ptr()))) {
         LOG_WARN("failed to build select sql", K(ret));
       } else if (OB_FAIL(sql_client.read(res, tenant_id_, select_sql.ptr()))) {
         LOG_WARN("failed to execute select", K(ret), K(select_sql));

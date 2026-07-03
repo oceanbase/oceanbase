@@ -321,6 +321,15 @@ private:
   void setup_curl_common_(CURL *curl, int64_t timeout_us);
   static bool is_success_http_code_(int64_t actual, int64_t expected);
 
+  // Build error_detail JSON string from allocator. Returns OB_SUCCESS or error code.
+  // Caller decides whether to pollute its own ret: use tmp_ret in error-recovery paths
+  // where the primary error must be preserved, or OB_FAIL where ret is still OB_SUCCESS.
+  static int build_error_detail_(common::ObIAllocator &allocator,
+                                 int ob_error_code,
+                                 int64_t http_code,
+                                 const common::ObString &message,
+                                 common::ObString &error_detail);
+
   static size_t curl_write_callback_(void *contents, size_t size, size_t nmemb, void *userp);
   static size_t curl_mime_read_callback_(char *buffer, size_t size, size_t nitems, void *arg);
   static size_t curl_tmpfile_write_callback_(void *contents, size_t size, size_t nmemb, void *userp);

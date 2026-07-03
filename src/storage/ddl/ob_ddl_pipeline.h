@@ -1052,7 +1052,10 @@ private:
   static const int64_t CHECK_INTERVAL_US = 2 * 1000 * 1000; // 2 seconds
   static const int64_t DRAIN_LOG_INTERVAL = 30;             // Log every 30 iterations
 #else
-  static const int64_t DEFAULT_SLICE_SIZE = 10000;           // 10000 rows per task
+  // Aligned with share::ObAiBatchFileConstraints::MAX_LINES_PER_FILE; size
+  // is independently capped by the writer at MAX_FILE_SIZE_BYTES (100MB),
+  // whichever threshold is reached first triggers a slice via OB_ITER_END.
+  static const int64_t DEFAULT_SLICE_SIZE = 50000;           // 50000 rows per task
   static const int64_t CHECK_INTERVAL_US = 10 * 1000 * 1000; // 10 seconds
   static const int64_t DRAIN_LOG_INTERVAL = 30;             // Log every 30 iterations
 #endif

@@ -14,6 +14,7 @@
 
 #include "share/ai_service/ob_ai_batch_file_manager.h"
 #include "lib/allocator/ob_malloc.h"
+#include "lib/alloc/alloc_struct.h"
 #include "lib/json/ob_json.h"
 #include "lib/time/ob_time_utility.h"
 #include "lib/oblog/ob_log_module.h"
@@ -117,45 +118,49 @@ int ObAiBatchFileManager::upload_from_tmpfile(int64_t fd,
                                                ObAiFileUploadResult &result)
 {
   int ret = OB_SUCCESS;
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "AiBatchFile"));
   result.reset();
 
-  if (OB_UNLIKELY(!is_inited_)) {
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObAiBatchFileManager not initialized", K(ret));
   } else if (OB_UNLIKELY(fd < 0 || file_size <= 0 || file_name.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(fd), K(file_size), K(file_name));
   } else {
-    char url_buf[512];
+    ObArenaAllocator tmp_alloc("AiBatchFile", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    const int64_t url_buf_len = base_url_.length() + 6 + 1; // base_url + "/files" + '\0'
+    char *url_buf = static_cast<char*>(tmp_alloc.alloc(url_buf_len));
+    const int64_t purpose_buf_len = purpose.length() + 1; // purpose + '\0'
+    char *purpose_buf = static_cast<char*>(tmp_alloc.alloc(purpose_buf_len));
+    const int64_t file_name_buf_len = file_name.length() + 1; // file_name + '\0'
+    char *file_name_buf = static_cast<char*>(tmp_alloc.alloc(file_name_buf_len));
     struct curl_slist *headers = nullptr;
     CURL *curl = nullptr;
-    if (OB_FAIL(init_authenticated_curl_("/files", DEFAULT_HTTP_TIMEOUT_US,
-                                         url_buf, sizeof(url_buf), headers, curl))) {
+    if (OB_ISNULL(url_buf) || OB_ISNULL(purpose_buf) || OB_ISNULL(file_name_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc buffers for upload", K(ret));
+    } else if (OB_FAIL(init_authenticated_curl_("/files", DEFAULT_HTTP_TIMEOUT_US,
+                                                url_buf, url_buf_len, headers, curl))) {
       LOG_WARN("failed to init authenticated curl for upload", K(ret));
     } else {
-      char purpose_buf[256];
-      char file_name_buf[256];
+      if (!purpose.empty()) {
+        MEMCPY(purpose_buf, purpose.ptr(), purpose.length());
+      }
+      purpose_buf[purpose.length()] = '\0';
+      MEMCPY(file_name_buf, file_name.ptr(), file_name.length());
+      file_name_buf[file_name.length()] = '\0';
 
-      if (purpose.length() >= sizeof(purpose_buf)) {
-        ret = OB_SIZE_OVERFLOW;
-        LOG_WARN("purpose too long", K(ret), K(purpose.length()));
-      } else if (file_name.length() >= sizeof(file_name_buf)) {
-        ret = OB_SIZE_OVERFLOW;
-        LOG_WARN("file_name too long", K(ret), K(file_name.length()));
+      // Create iterator for streaming read from TmpFileManager
+      ObBatchFileJsonlIterator iter;
+      if (OB_FAIL(iter.init(fd, 0, file_size, tenant_id))) {
+        LOG_WARN("failed to init iterator for upload", K(ret), K(fd), K(file_size));
       } else {
-        if (!purpose.empty()) {
-          MEMCPY(purpose_buf, purpose.ptr(), purpose.length());
-        }
-        purpose_buf[purpose.length()] = '\0';
-        MEMCPY(file_name_buf, file_name.ptr(), file_name.length());
-        file_name_buf[file_name.length()] = '\0';
-
-        // Create iterator for streaming read from TmpFileManager
-        ObBatchFileJsonlIterator iter;
-        if (OB_FAIL(iter.init(fd, 0, file_size, tenant_id))) {
-          LOG_WARN("failed to init iterator for upload", K(ret), K(fd), K(file_size));
+        curl_mime *form = curl_mime_init(curl);
+        if (OB_ISNULL(form)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("curl_mime_init returned null", K(ret));
         } else {
-          curl_mime *form = curl_mime_init(curl);
           curl_mimepart *field;
 
           // Add purpose field
@@ -195,8 +200,8 @@ int ObAiBatchFileManager::upload_from_tmpfile(int64_t fd,
               LOG_WARN("failed to parse upload response", K(ret));
             }
           }
-          curl_mime_free(form);
         }
+        curl_mime_free(form);
       }
       if (OB_NOT_NULL(curl)) {
         curl_easy_cleanup(curl);
@@ -208,9 +213,12 @@ int ObAiBatchFileManager::upload_from_tmpfile(int64_t fd,
   }
 
   if (OB_FAIL(ret)) {
-    char err_buf[OB_AI_MAX_ERROR_DETAIL_LENGTH];
-    ObAiExecUtils::build_error_detail_json(ret, 0, ObString(), err_buf, sizeof(err_buf));
-    ob_write_string(local_allocator_, ObString::make_string(err_buf), result.error_detail_, true);
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(build_error_detail_(local_allocator_, ret, http_status_code_,
+                                          ObString::make_string("internal error"),
+                                          result.error_detail_))) {
+      LOG_WARN("failed to build error_detail", K(tmp_ret), K(ret));
+    }
   }
   return ret;
 }
@@ -220,9 +228,10 @@ int ObAiBatchFileManager::download_to_tmpfile(const common::ObString &file_id,
                                                ObBatchFileDataSegment &segment)
 {
   int ret = OB_SUCCESS;
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "AiBatchFile"));
   segment.reset();
 
-  if (OB_UNLIKELY(!is_inited_)) {
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObAiBatchFileManager not initialized", K(ret));
   } else if (OB_UNLIKELY(file_id.empty())) {
@@ -232,19 +241,32 @@ int ObAiBatchFileManager::download_to_tmpfile(const common::ObString &file_id,
     ret = OB_NOT_INIT;
     LOG_WARN("writer not initialized", K(ret));
   } else {
-    char url_buf[512];
-    char endpoint_buf[128];
-    int ep_len = snprintf(endpoint_buf, sizeof(endpoint_buf), "/files/%.*s/content",
-                          static_cast<int>(file_id.length()), file_id.ptr());
-    if (OB_UNLIKELY(ep_len < 0 || ep_len >= static_cast<int>(sizeof(endpoint_buf)))) {
-      ret = OB_SIZE_OVERFLOW;
-      LOG_WARN("endpoint_buf overflow for download", K(ret), K(file_id.length()));
-    }
+    ObArenaAllocator tmp_alloc("AiBatchFile", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    const int64_t ep_buf_len = 7 + file_id.length() + 8 + 1; // "/files/" + id + "/content" + '\0'
+    char *endpoint_buf = static_cast<char*>(tmp_alloc.alloc(ep_buf_len));
+    char *url_buf = nullptr;
+    int64_t url_buf_len = 0;
     struct curl_slist *headers = nullptr;
     CURL *curl = nullptr;
+    if (OB_ISNULL(endpoint_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc endpoint_buf", K(ret));
+    } else {
+      int ep_written = snprintf(endpoint_buf, ep_buf_len, "/files/%.*s/content",
+                                static_cast<int>(file_id.length()), file_id.ptr());
+      if (OB_UNLIKELY(ep_written < 0 || ep_written >= static_cast<int>(ep_buf_len))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("endpoint snprintf failed", K(ret), K(file_id.length()));
+      } else {
+        url_buf_len = base_url_.length() + ep_written + 1; // base_url + endpoint + '\0'
+      }
+    }
     if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(url_buf = static_cast<char*>(tmp_alloc.alloc(url_buf_len)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc url_buf", K(ret));
     } else if (OB_FAIL(init_authenticated_curl_(endpoint_buf, DOWNLOAD_HTTP_TIMEOUT_US,
-                                         url_buf, sizeof(url_buf), headers, curl))) {
+                                         url_buf, url_buf_len, headers, curl))) {
       LOG_WARN("failed to init authenticated curl for download", K(ret), K(file_id));
     } else {
       curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
@@ -321,9 +343,10 @@ int ObAiBatchFileManager::submit_batch(const common::ObString &input_file_id,
                                         ObAiBatchSubmitResult &result)
 {
   int ret = OB_SUCCESS;
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "AiBatchFile"));
   result.reset();
 
-  if (OB_UNLIKELY(!is_inited_)) {
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObAiBatchFileManager not initialized", K(ret));
   } else if (OB_UNLIKELY(input_file_id.empty() || endpoint.empty())) {
@@ -351,25 +374,33 @@ int ObAiBatchFileManager::submit_batch(const common::ObString &input_file_id,
                K(input_file_id), K(endpoint), K(completion_window));
     }
     // Build URL: /v1/batches
-    char url_buf[512];
+    ObArenaAllocator tmp_alloc("SubmitBody", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    const int64_t url_buf_len = base_url_.length() + 8 + 1; // base_url + "/batches" + '\0'
+    char *url_buf = static_cast<char*>(tmp_alloc.alloc(url_buf_len));
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(build_url_("/batches", url_buf, sizeof(url_buf)))) {
+    } else if (OB_ISNULL(url_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc url_buf", K(ret));
+    } else if (OB_FAIL(build_url_("/batches", url_buf, url_buf_len))) {
       LOG_WARN("failed to build url", K(ret));
     } else {
-      char body_buf[1024];
-      int64_t pos = 0;
-      pos = snprintf(body_buf, sizeof(body_buf),
-                     "{\"input_file_id\":\"%.*s\",\"endpoint\":\"%.*s\",\"completion_window\":\"%.*s\"}",
-                     static_cast<int>(input_file_id.length()), input_file_id.ptr(),
-                     static_cast<int>(endpoint.length()), endpoint.ptr(),
-                     static_cast<int>(completion_window.length()), completion_window.ptr());
-
-      if (pos < 0 || pos >= static_cast<int64_t>(sizeof(body_buf))) {
-        ret = OB_SIZE_OVERFLOW;
-        LOG_WARN("body too large", K(ret));
+      const int64_t body_buf_len = 128 + input_file_id.length() + endpoint.length()
+                                   + completion_window.length();
+      char *body_buf = static_cast<char*>(tmp_alloc.alloc(body_buf_len));
+      if (OB_ISNULL(body_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory for body buffer", K(ret));
       } else {
-        if (OB_FAIL(execute_authenticated_request_(url_buf, "POST", body_buf, pos,
-                                                   200, "submit batch", true))) {
+        int64_t pos = snprintf(body_buf, body_buf_len,
+                       "{\"input_file_id\":\"%.*s\",\"endpoint\":\"%.*s\",\"completion_window\":\"%.*s\"}",
+                       static_cast<int>(input_file_id.length()), input_file_id.ptr(),
+                       static_cast<int>(endpoint.length()), endpoint.ptr(),
+                       static_cast<int>(completion_window.length()), completion_window.ptr());
+        if (OB_UNLIKELY(pos < 0 || pos >= body_buf_len)) {
+          ret = OB_SIZE_OVERFLOW;
+          LOG_WARN("body too large", K(ret));
+        } else if (OB_FAIL(execute_authenticated_request_(url_buf, "POST", body_buf, pos,
+                                                          200, "submit batch", true))) {
           LOG_WARN("submit batch failed", K(ret));
         } else if (OB_FAIL(parse_batch_response_(response_buffer_, response_buffer_size_, result))) {
           LOG_WARN("failed to parse batch submit response", K(ret));
@@ -379,9 +410,12 @@ int ObAiBatchFileManager::submit_batch(const common::ObString &input_file_id,
   }
 
   if (OB_FAIL(ret)) {
-    char err_buf[OB_AI_MAX_ERROR_DETAIL_LENGTH];
-    ObAiExecUtils::build_error_detail_json(ret, 0, ObString(), err_buf, sizeof(err_buf));
-    ob_write_string(local_allocator_, ObString::make_string(err_buf), result.error_detail_, true);
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(build_error_detail_(local_allocator_, ret, http_status_code_,
+                                          ObString::make_string("internal error"),
+                                          result.error_detail_))) {
+      LOG_WARN("failed to build error_detail", K(tmp_ret), K(ret));
+    }
   }
   return ret;
 }
@@ -390,9 +424,10 @@ int ObAiBatchFileManager::poll_batch_status(const common::ObString &batch_id,
                                              ObAiBatchSubmitResult &result)
 {
   int ret = OB_SUCCESS;
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "AiBatchFile"));
   result.reset();
 
-  if (OB_UNLIKELY(!is_inited_)) {
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObAiBatchFileManager not initialized", K(ret));
   } else if (OB_UNLIKELY(batch_id.empty())) {
@@ -400,29 +435,43 @@ int ObAiBatchFileManager::poll_batch_status(const common::ObString &batch_id,
     LOG_WARN("invalid batch_id", K(ret));
   } else {
     // Build URL: /v1/batches/{batch_id}
-    char url_buf[512];
-    char endpoint_buf[128];
-    int ep_len = snprintf(endpoint_buf, sizeof(endpoint_buf), "/batches/%.*s",
-                          static_cast<int>(batch_id.length()), batch_id.ptr());
-    if (OB_UNLIKELY(ep_len < 0 || ep_len >= static_cast<int>(sizeof(endpoint_buf)))) {
-      ret = OB_SIZE_OVERFLOW;
-      LOG_WARN("endpoint_buf overflow for poll batch status", K(ret), K(batch_id.length()));
-    } else if (OB_FAIL(build_url_(endpoint_buf, url_buf, sizeof(url_buf)))) {
-      LOG_WARN("failed to build url", K(ret));
+    ObArenaAllocator tmp_alloc("AiBatchFile", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    const int64_t ep_buf_len = 9 + batch_id.length() + 1; // "/batches/" + id + '\0'
+    char *endpoint_buf = static_cast<char*>(tmp_alloc.alloc(ep_buf_len));
+    if (OB_ISNULL(endpoint_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc endpoint_buf", K(ret));
     } else {
-      if (OB_FAIL(execute_authenticated_request_(url_buf, "GET", nullptr, 0,
-                                                 200, "poll batch status"))) {
-        LOG_WARN("poll batch status failed", K(ret), K(batch_id));
-      } else if (OB_FAIL(parse_batch_response_(response_buffer_, response_buffer_size_, result))) {
-        LOG_WARN("failed to parse poll batch status response", K(ret));
+      int ep_written = snprintf(endpoint_buf, ep_buf_len, "/batches/%.*s",
+                                static_cast<int>(batch_id.length()), batch_id.ptr());
+      if (OB_UNLIKELY(ep_written < 0 || ep_written >= ep_buf_len)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("endpoint snprintf failed", K(ret), K(batch_id.length()));
+      } else {
+        const int64_t url_buf_len = base_url_.length() + ep_written + 1; // base_url + endpoint + '\0'
+        char *url_buf = static_cast<char*>(tmp_alloc.alloc(url_buf_len));
+        if (OB_ISNULL(url_buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc url_buf", K(ret));
+        } else if (OB_FAIL(build_url_(endpoint_buf, url_buf, url_buf_len))) {
+          LOG_WARN("failed to build url", K(ret));
+        } else if (OB_FAIL(execute_authenticated_request_(url_buf, "GET", nullptr, 0,
+                                                          200, "poll batch status"))) {
+          LOG_WARN("poll batch status failed", K(ret), K(batch_id));
+        } else if (OB_FAIL(parse_batch_response_(response_buffer_, response_buffer_size_, result))) {
+          LOG_WARN("failed to parse poll batch status response", K(ret));
+        }
       }
     }
   }
 
   if (OB_FAIL(ret)) {
-    char err_buf[OB_AI_MAX_ERROR_DETAIL_LENGTH];
-    ObAiExecUtils::build_error_detail_json(ret, 0, ObString(), err_buf, sizeof(err_buf));
-    ob_write_string(local_allocator_, ObString::make_string(err_buf), result.error_detail_, true);
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(build_error_detail_(local_allocator_, ret, http_status_code_,
+                                          ObString::make_string("internal error"),
+                                          result.error_detail_))) {
+      LOG_WARN("failed to build error_detail", K(tmp_ret), K(ret));
+    }
   }
   return ret;
 }
@@ -461,8 +510,9 @@ int ObAiBatchFileManager::parse_jsonl_results_from_buffer(common::ObIAllocator &
 int ObAiBatchFileManager::cancel_batch(const common::ObString &batch_id)
 {
   int ret = OB_SUCCESS;
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "AiBatchFile"));
 
-  if (OB_UNLIKELY(!is_inited_)) {
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObAiBatchFileManager not initialized", K(ret));
   } else if (OB_UNLIKELY(batch_id.empty())) {
@@ -470,18 +520,31 @@ int ObAiBatchFileManager::cancel_batch(const common::ObString &batch_id)
     LOG_WARN("invalid batch_id", K(ret));
   } else {
     // Build URL: /v1/batches/{batch_id}/cancel
-    char url_buf[512];
-    char endpoint_buf[128];
-    int ep_len = snprintf(endpoint_buf, sizeof(endpoint_buf), "/batches/%.*s/cancel",
-                          static_cast<int>(batch_id.length()), batch_id.ptr());
-    if (OB_UNLIKELY(ep_len < 0 || ep_len >= static_cast<int>(sizeof(endpoint_buf)))) {
-      ret = OB_SIZE_OVERFLOW;
-      LOG_WARN("endpoint_buf overflow for cancel batch", K(ret), K(batch_id.length()));
-    } else if (OB_FAIL(build_url_(endpoint_buf, url_buf, sizeof(url_buf)))) {
-      LOG_WARN("failed to build url", K(ret));
-    } else if (OB_FAIL(execute_authenticated_request_(url_buf, "POST", nullptr, 0,
-                                                      200, "cancel batch"))) {
-      LOG_WARN("cancel batch request failed", K(ret), K(batch_id));
+    ObArenaAllocator tmp_alloc("AiBatchFile", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    const int64_t ep_buf_len = 9 + batch_id.length() + 7 + 1; // "/batches/" + id + "/cancel" + '\0'
+    char *endpoint_buf = static_cast<char*>(tmp_alloc.alloc(ep_buf_len));
+    if (OB_ISNULL(endpoint_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc endpoint_buf", K(ret));
+    } else {
+      int ep_written = snprintf(endpoint_buf, ep_buf_len, "/batches/%.*s/cancel",
+                                static_cast<int>(batch_id.length()), batch_id.ptr());
+      if (OB_UNLIKELY(ep_written < 0 || ep_written >= ep_buf_len)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("endpoint snprintf failed", K(ret), K(batch_id.length()));
+      } else {
+        const int64_t url_buf_len = base_url_.length() + ep_written + 1; // base_url + endpoint + '\0'
+        char *url_buf = static_cast<char*>(tmp_alloc.alloc(url_buf_len));
+        if (OB_ISNULL(url_buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc url_buf", K(ret));
+        } else if (OB_FAIL(build_url_(endpoint_buf, url_buf, url_buf_len))) {
+          LOG_WARN("failed to build url", K(ret));
+        } else if (OB_FAIL(execute_authenticated_request_(url_buf, "POST", nullptr, 0,
+                                                          200, "cancel batch"))) {
+          LOG_WARN("cancel batch request failed", K(ret), K(batch_id));
+        }
+      }
     }
   }
   return ret;
@@ -490,30 +553,44 @@ int ObAiBatchFileManager::cancel_batch(const common::ObString &batch_id)
 int ObAiBatchFileManager::delete_file(const common::ObString &file_id)
 {
   int ret = OB_SUCCESS;
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "AiBatchFile"));
 
-  if (OB_UNLIKELY(!is_inited_)) {
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObAiBatchFileManager not initialized", K(ret));
   } else if (OB_UNLIKELY(file_id.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid file_id", K(ret));
   } else {
-    char url_buf[512];
-    char endpoint_buf[128];
-    int ep_len = snprintf(endpoint_buf, sizeof(endpoint_buf), "/files/%.*s",
-                          static_cast<int>(file_id.length()), file_id.ptr());
-    if (OB_UNLIKELY(ep_len < 0 || ep_len >= static_cast<int>(sizeof(endpoint_buf)))) {
-      ret = OB_SIZE_OVERFLOW;
-      LOG_WARN("endpoint_buf overflow for delete file", K(ret), K(file_id.length()));
-    } else if (OB_FAIL(build_url_(endpoint_buf, url_buf, sizeof(url_buf)))) {
-      LOG_WARN("failed to build url", K(ret));
-    } else if (OB_FAIL(execute_authenticated_request_(url_buf, "DELETE", nullptr, 0,
-                                           200, "delete file"))) {
-      if (OB_LIKELY(http_status_code_ == 404)) {
-        ret = OB_SUCCESS;
-        LOG_INFO("remote file already deleted", K(file_id));
+    ObArenaAllocator tmp_alloc("AiBatchFile", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    const int64_t ep_buf_len = 7 + file_id.length() + 1; // "/files/" + id + '\0'
+    char *endpoint_buf = static_cast<char*>(tmp_alloc.alloc(ep_buf_len));
+    if (OB_ISNULL(endpoint_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc endpoint_buf", K(ret));
+    } else {
+      int ep_written = snprintf(endpoint_buf, ep_buf_len, "/files/%.*s",
+                                static_cast<int>(file_id.length()), file_id.ptr());
+      if (OB_UNLIKELY(ep_written < 0 || ep_written >= ep_buf_len)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("endpoint snprintf failed", K(ret), K(file_id.length()));
       } else {
-        LOG_WARN("delete file request failed", K(ret), K(file_id), K(http_status_code_));
+        const int64_t url_buf_len = base_url_.length() + ep_written + 1; // base_url + endpoint + '\0'
+        char *url_buf = static_cast<char*>(tmp_alloc.alloc(url_buf_len));
+        if (OB_ISNULL(url_buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc url_buf", K(ret));
+        } else if (OB_FAIL(build_url_(endpoint_buf, url_buf, url_buf_len))) {
+          LOG_WARN("failed to build url", K(ret));
+        } else if (OB_FAIL(execute_authenticated_request_(url_buf, "DELETE", nullptr, 0,
+                                               200, "delete file"))) {
+          if (OB_LIKELY(http_status_code_ == 404)) {
+            ret = OB_SUCCESS;
+            LOG_INFO("remote file already deleted", K(file_id));
+          } else {
+            LOG_WARN("delete file request failed", K(ret), K(file_id), K(http_status_code_));
+          }
+        }
       }
     }
   }
@@ -645,11 +722,13 @@ int ObAiBatchFileManager::init_authenticated_curl_(const char *endpoint,
 #define BATCH_EXTRACT_JSON_STR(_obj, _key, _allocator, _dst)                                  \
   do {                                                                                         \
     if (OB_SUCC(ret)) {                                                                        \
-      common::ObJsonNode *_node = (_obj)->get_value(_key);                                     \
-      if (OB_NOT_NULL(_node) && _node->json_type() == common::ObJsonNodeType::J_STRING) {      \
-        common::ObJsonString *_str = static_cast<common::ObJsonString*>(_node);                \
-        if (OB_FAIL(ob_write_string((_allocator), _str->value(), (_dst), true))) {             \
-          LOG_WARN("failed to deep copy json string field", K(ret), "key", (_key));            \
+      if (OB_NOT_NULL(_obj)) {                                                                  \
+        common::ObJsonNode *_node = (_obj)->get_value(_key);                                   \
+        if (OB_NOT_NULL(_node) && _node->json_type() == common::ObJsonNodeType::J_STRING) {    \
+          common::ObJsonString *_str = static_cast<common::ObJsonString*>(_node);              \
+          if (OB_FAIL(ob_write_string((_allocator), _str->value(), (_dst), true))) {           \
+            LOG_WARN("failed to deep copy json string field", K(ret), "key", (_key));          \
+          }                                                                                    \
         }                                                                                      \
       }                                                                                        \
     }                                                                                          \
@@ -658,9 +737,11 @@ int ObAiBatchFileManager::init_authenticated_curl_(const char *endpoint,
 #define BATCH_EXTRACT_JSON_INT(_obj, _key, _dst)                                              \
   do {                                                                                         \
     if (OB_SUCC(ret)) {                                                                        \
-      common::ObJsonNode *_node = (_obj)->get_value(_key);                                     \
-      if (OB_NOT_NULL(_node) && _node->json_type() == common::ObJsonNodeType::J_INT) {         \
-        (_dst) = static_cast<common::ObJsonInt*>(_node)->value();                              \
+      if (OB_NOT_NULL(_obj)) {                                                                  \
+        common::ObJsonNode *_node = (_obj)->get_value(_key);                                   \
+        if (OB_NOT_NULL(_node) && _node->json_type() == common::ObJsonNodeType::J_INT) {       \
+          (_dst) = static_cast<common::ObJsonInt*>(_node)->value();                            \
+        }                                                                                      \
       }                                                                                        \
     }                                                                                          \
   } while (0)
@@ -711,10 +792,13 @@ int ObAiBatchFileManager::parse_upload_response_(const char *response,
           common::ObString error_msg;
           BATCH_EXTRACT_JSON_STR(error_obj, "message", local_allocator_, error_msg);
           if (OB_SUCC(ret)) {
-            char err_buf[OB_AI_MAX_ERROR_DETAIL_LENGTH];
-            ObAiExecUtils::build_error_detail_json(OB_RPC_POST_ERROR, 0, error_msg,
-                                                   err_buf, sizeof(err_buf));
-            ob_write_string(local_allocator_, ObString::make_string(err_buf), result.error_detail_, true);
+            int tmp_ret = OB_SUCCESS;
+            if (OB_TMP_FAIL(build_error_detail_(local_allocator_,
+                                                OB_RPC_POST_ERROR, 0,
+                                                error_msg,
+                                                result.error_detail_))) {
+              LOG_WARN("failed to build error_detail json", K(tmp_ret));
+            }
           }
         }
       }
@@ -780,10 +864,13 @@ int ObAiBatchFileManager::parse_batch_response_(const char *response,
                 common::ObString err_msg;
                 BATCH_EXTRACT_JSON_STR(err_obj, "message", local_allocator_, err_msg);
                 if (OB_SUCC(ret)) {
-                  char err_buf[OB_AI_MAX_ERROR_DETAIL_LENGTH];
-                  ObAiExecUtils::build_error_detail_json(OB_RPC_POST_ERROR, 0, err_msg,
-                                                         err_buf, sizeof(err_buf));
-                  ob_write_string(local_allocator_, ObString::make_string(err_buf), result.error_detail_, true);
+                  int tmp_ret = OB_SUCCESS;
+                  if (OB_TMP_FAIL(build_error_detail_(local_allocator_,
+                                                      OB_RPC_POST_ERROR, 0,
+                                                      err_msg,
+                                                      result.error_detail_))) {
+                    LOG_WARN("failed to build error_detail json", K(tmp_ret));
+                  }
                 }
               }
             }
@@ -791,18 +878,14 @@ int ObAiBatchFileManager::parse_batch_response_(const char *response,
         }
       }
 
-      LOG_INFO("[BATCH-FILE] parse_batch_response result",
-               K(result.batch_id_), K(result.status_),
-               K(result.input_file_id_), K(result.output_file_id_), K(result.error_file_id_),
-               K(result.request_counts_total_), K(result.request_counts_completed_), K(result.request_counts_failed_),
-               K(result.error_detail_));
-      // When batch fails, dump the full raw response for diagnosis
       if (OB_AI_BATCH_FILE_STATUS_FAILED == result.status_ ||
           OB_AI_BATCH_FILE_STATUS_EXPIRED == result.status_ ||
           OB_AI_BATCH_FILE_STATUS_CANCELLED == result.status_) {
-        LOG_WARN("[BATCH-FILE] batch terminal state, raw response",
+        LOG_WARN("[BATCH-FILE] batch terminal state",
                  K(result.batch_id_), K(result.status_),
-                 "raw_response", common::ObString(response_len, response));
+                 K(result.input_file_id_), K(result.output_file_id_), K(result.error_file_id_),
+                 K(result.request_counts_total_), K(result.request_counts_completed_),
+                 K(result.request_counts_failed_), K(result.error_detail_));
       }
     }
   }
@@ -874,10 +957,13 @@ int ObAiBatchFileManager::parse_jsonl_line_(common::ObIAllocator &allocator,
             BATCH_EXTRACT_JSON_STR(err_obj, "message", allocator, err_msg);
           }
           if (OB_SUCC(ret)) {
-            char err_buf[OB_AI_MAX_ERROR_DETAIL_LENGTH];
-            ObAiExecUtils::build_error_detail_json(OB_RPC_POST_ERROR, 0, err_msg,
-                                                   err_buf, sizeof(err_buf));
-            ob_write_string(allocator, ObString::make_string(err_buf), result.error_detail_, true);
+            int tmp_ret = OB_SUCCESS;
+            if (OB_TMP_FAIL(build_error_detail_(allocator,
+                                                OB_RPC_POST_ERROR, 0,
+                                                err_msg,
+                                                result.error_detail_))) {
+              LOG_WARN("failed to build error_detail json", K(tmp_ret));
+            }
           }
         }
       }
@@ -888,6 +974,32 @@ int ObAiBatchFileManager::parse_jsonl_line_(common::ObIAllocator &allocator,
 
 #undef BATCH_EXTRACT_JSON_STR
 #undef BATCH_EXTRACT_JSON_INT
+
+int ObAiBatchFileManager::build_error_detail_(common::ObIAllocator &allocator,
+                                              int ob_error_code,
+                                              int64_t http_code,
+                                              const common::ObString &message,
+                                              common::ObString &error_detail)
+{
+  static const char FALLBACK[] = "{\"ob_error_code\":-1,\"message\":\"build_error_detail failed\"}";
+  int ret = OB_SUCCESS;
+  char *err_buf = static_cast<char*>(allocator.alloc(OB_AI_MAX_ERROR_DETAIL_LENGTH));
+  if (OB_ISNULL(err_buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc error_detail buffer", K(ret));
+    error_detail = ObString::make_string(FALLBACK);
+  } else if (OB_FAIL(ObAiExecUtils::build_error_detail_json(ob_error_code,
+                                                         http_code,
+                                                         message,
+                                                         err_buf,
+                                                         OB_AI_MAX_ERROR_DETAIL_LENGTH))) {
+    LOG_WARN("failed to build error_detail json", K(ret));
+    error_detail = ObString::make_string(FALLBACK);
+  } else {
+    error_detail = ObString::make_string(err_buf);
+  }
+  return ret;
+}
 
 int ObAiBatchFileManager::build_url_(const char *endpoint, char *buf, int64_t buf_len)
 {
@@ -911,17 +1023,24 @@ int ObAiBatchFileManager::build_url_(const char *endpoint, char *buf, int64_t bu
 int ObAiBatchFileManager::build_auth_headers_(struct curl_slist *&headers)
 {
   int ret = OB_SUCCESS;
-  char auth_header[256];
-  int written = snprintf(auth_header, sizeof(auth_header), "Authorization: Bearer %.*s",
-                         static_cast<int>(api_key_.length()), api_key_.ptr());
-  if (written < 0 || written >= static_cast<int>(sizeof(auth_header))) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("api key too long for auth header buffer", K(ret), K(api_key_.length()));
+  ObArenaAllocator tmp_alloc("AuthHdr", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  const int64_t buf_len = 22 + api_key_.length() + 1; // "Authorization: Bearer " + key + '\0'
+  char *auth_header = static_cast<char*>(tmp_alloc.alloc(buf_len));
+  if (OB_ISNULL(auth_header)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory for auth header", K(ret));
   } else {
-    headers = curl_slist_append(headers, auth_header);
-    if (OB_ISNULL(headers)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to append auth header", K(ret));
+    int written = snprintf(auth_header, buf_len, "Authorization: Bearer %.*s",
+                           static_cast<int>(api_key_.length()), api_key_.ptr());
+    if (written < 0 || written >= buf_len) {
+      ret = OB_SIZE_OVERFLOW;
+      LOG_WARN("auth header snprintf overflow", K(ret), K(api_key_.length()));
+    } else {
+      headers = curl_slist_append(headers, auth_header);
+      if (OB_ISNULL(headers)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to append auth header", K(ret));
+      }
     }
   }
   return ret;

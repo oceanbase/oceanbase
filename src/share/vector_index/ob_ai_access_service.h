@@ -43,7 +43,6 @@ class ObSystemTablePoller;
 
 namespace vector_index
 {
-using namespace share;
 
 // Forward declarations
 class ObAiTaskScheduler;
@@ -223,7 +222,7 @@ public:
   ObAiDimensionKey() { reset(); }
   explicit ObAiDimensionKey(const common::ObString &model_name,
                              const common::ObString &provider,
-                             ObAiAccessMode access_mode)
+                             share::ObAiAccessMode access_mode)
     : model_name_(model_name),
       provider_(provider),
       ai_execution_mode_(access_mode)
@@ -234,13 +233,13 @@ public:
   {
     model_name_.reset();
     provider_.reset();
-    ai_execution_mode_ = OB_AI_ACCESS_MODE_INVALID;
+    ai_execution_mode_ = share::OB_AI_ACCESS_MODE_INVALID;
   }
 
   bool is_valid() const
   {
     return !model_name_.empty() && !provider_.empty() &&
-           ai_execution_mode_ != OB_AI_ACCESS_MODE_INVALID;
+           ai_execution_mode_ != share::OB_AI_ACCESS_MODE_INVALID;
   }
 
   uint64_t hash() const
@@ -264,7 +263,7 @@ public:
 public:
   common::ObString model_name_;
   common::ObString provider_;
-  ObAiAccessMode ai_execution_mode_;
+  share::ObAiAccessMode ai_execution_mode_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAiDimensionKey);
@@ -403,7 +402,7 @@ class ObAiSchedulableTask
 {
 public:
   ObAiSchedulableTask()
-    : state_(OB_AI_TASK_STATUS_PENDING),
+    : state_(share::OB_AI_TASK_STATUS_PENDING),
       priority_(OB_AI_TASK_PRIORITY_NORMAL),
       task_type_(OB_AI_SCHEDULABLE_TASK_TYPE_INVALID),
       is_inited_(false),
@@ -418,15 +417,15 @@ public:
 
   virtual void reset()
   {
-    state_ = OB_AI_TASK_STATUS_PENDING;
+    state_ = share::OB_AI_TASK_STATUS_PENDING;
     priority_ = OB_AI_TASK_PRIORITY_NORMAL;
     task_type_ = OB_AI_SCHEDULABLE_TASK_TYPE_INVALID;
     is_inited_ = false;
     scheduler_ = nullptr;
   }
 
-  ObAiTaskStatus get_state() const { return state_; }
-  void set_state(ObAiTaskStatus state) { state_ = state; }
+  share::ObAiTaskStatus get_state() const { return ATOMIC_LOAD(&state_); }
+  void set_state(share::ObAiTaskStatus state) { ATOMIC_STORE(&state_, state); }
   ObAiTaskPriority get_priority() const { return priority_; }
   ObAiSchedulableTaskType get_task_type() const { return task_type_; }
   bool is_inited() const { return is_inited_; }
@@ -438,45 +437,47 @@ public:
 
   virtual int on_cancelled()
   {
-    set_state(OB_AI_TASK_STATUS_CANCELLED);
+    set_state(share::OB_AI_TASK_STATUS_CANCELLED);
     return OB_SUCCESS;
   }
 
   virtual int on_finished()
   {
-    set_state(OB_AI_TASK_STATUS_FINISHED);
+    set_state(share::OB_AI_TASK_STATUS_FINISHED);
     return OB_SUCCESS;
   }
 
   virtual int on_failed(int error_code)
   {
     UNUSED(error_code);
-    set_state(OB_AI_TASK_STATUS_FAILED);
+    set_state(share::OB_AI_TASK_STATUS_FAILED);
     return OB_SUCCESS;
   }
 
   bool is_running_state() const
   {
-    return state_ == OB_AI_TASK_STATUS_RUNNING;
+    return get_state() == share::OB_AI_TASK_STATUS_RUNNING;
   }
 
   bool is_terminal_state() const
   {
-    return state_ == OB_AI_TASK_STATUS_FINISHED ||
-           state_ == OB_AI_TASK_STATUS_FAILED ||
-           state_ == OB_AI_TASK_STATUS_CANCELLED;
+    const share::ObAiTaskStatus s = get_state();
+    return s == share::OB_AI_TASK_STATUS_FINISHED ||
+           s == share::OB_AI_TASK_STATUS_FAILED ||
+           s == share::OB_AI_TASK_STATUS_CANCELLED;
   }
 
   bool can_execute() const
   {
-    return state_ == OB_AI_TASK_STATUS_PENDING ||
-           state_ == OB_AI_TASK_STATUS_RUNNING;
+    const share::ObAiTaskStatus s = get_state();
+    return s == share::OB_AI_TASK_STATUS_PENDING ||
+           s == share::OB_AI_TASK_STATUS_RUNNING;
   }
 
   TO_STRING_KV(K_(state), K_(priority), K_(task_type), K_(is_inited));
 
 protected:
-  ObAiTaskStatus state_;
+  share::ObAiTaskStatus state_;
   ObAiTaskPriority priority_;
   ObAiSchedulableTaskType task_type_;
   bool is_inited_;
@@ -559,16 +560,16 @@ private:
 class ObAiAccessTaskPhaseManager
 {
 public:
-  static bool is_valid_transition(ObAiTaskPhase from_phase, ObAiTaskPhase to_phase);
-  static const char* get_phase_str(ObAiTaskPhase phase);
-  static ObAiTaskStatus map_phase_to_status(ObAiTaskPhase phase, int result_code);
+  static bool is_valid_transition(share::ObAiTaskPhase from_phase, share::ObAiTaskPhase to_phase);
+  static const char* get_phase_str(share::ObAiTaskPhase phase);
+  static share::ObAiTaskStatus map_phase_to_status(share::ObAiTaskPhase phase, int result_code);
 
 private:
-  static const ObAiTaskPhase VALID_TRANSITIONS_FROM_INIT[];
-  static const ObAiTaskPhase VALID_TRANSITIONS_FROM_HTTP_SENT[];
-  static const ObAiTaskPhase VALID_TRANSITIONS_FROM_HTTP_COMPLETED[];
-  static const ObAiTaskPhase VALID_TRANSITIONS_FROM_PARSED[];
-  static const ObAiTaskPhase VALID_TRANSITIONS_FROM_DONE[];
+  static const share::ObAiTaskPhase VALID_TRANSITIONS_FROM_INIT[];
+  static const share::ObAiTaskPhase VALID_TRANSITIONS_FROM_HTTP_SENT[];
+  static const share::ObAiTaskPhase VALID_TRANSITIONS_FROM_HTTP_COMPLETED[];
+  static const share::ObAiTaskPhase VALID_TRANSITIONS_FROM_PARSED[];
+  static const share::ObAiTaskPhase VALID_TRANSITIONS_FROM_DONE[];
 };
 
 // HTTP response data holder
@@ -620,12 +621,12 @@ public:
                    ObAiSchedulableTaskType task_type) override;
 
   int init(common::ObIAllocator &allocator,
-           ObAiAccessMode access_mode,
-           ObAiCommandType command_type,
+           share::ObAiAccessMode access_mode,
+           share::ObAiCommandType command_type,
            int64_t total_count,
-           const ObAiModelEndpointInfo &endpoint_info,
+           const share::ObAiModelEndpointInfo &endpoint_info,
            const common::ObString &task_id,
-           ObAiSystemTableManager *table_manager = nullptr,
+           share::ObAiSystemTableManager *table_manager = nullptr,
            common::ObISQLClient *sql_client = nullptr,
            bool allow_null_on_failure = false);
 
@@ -639,9 +640,9 @@ public:
   virtual bool need_reschedule() const override;
   virtual int64_t get_reschedule_delay_us() const override;
 
-  ObAiTaskPhase get_phase() const { return ATOMIC_LOAD(&phase_); }
-  ObAiAccessMode get_ai_execution_mode() const { return ai_execution_mode_; }
-  ObAiCommandType get_command_type() const { return command_type_; }
+  share::ObAiTaskPhase get_phase() const { return ATOMIC_LOAD(&phase_); }
+  share::ObAiAccessMode get_ai_execution_mode() const { return ai_execution_mode_; }
+  share::ObAiCommandType get_command_type() const { return command_type_; }
   bool is_all_processed() const { return current_offset_ >= total_count_; }
   int64_t get_processed_count() const { return current_offset_; }
   int64_t get_total_count() const { return total_count_; }
@@ -698,22 +699,22 @@ private:
     int64_t result_line_count_;
   };
 
-  int set_phase_(ObAiTaskPhase new_phase);
-  void log_phase_transition_(ObAiTaskPhase from_phase, ObAiTaskPhase to_phase);
+  int set_phase_(share::ObAiTaskPhase new_phase);
+  void log_phase_transition_(share::ObAiTaskPhase from_phase, share::ObAiTaskPhase to_phase);
 
   int handle_done_phase_();
   int advance_current_mode_();
   int advance_batch_file_mode_();
 
-  int complete_terminal_(ObAiTaskStatus status, int error_code_for_table,
+  int complete_terminal_(share::ObAiTaskStatus status, int error_code_for_table,
                          const common::ObString &error_msg);
   int complete_with_error_(int error_code, const common::ObString &error_msg);
   int complete_with_degraded_finish_(int error_code, const common::ObString &error_msg);
   int complete_with_cancel_();
   int complete_successfully_();
   int ensure_batch_file_manager_();
-  int transition_to_phase_(ObAiTaskPhase phase, const char *phase_name);
-  int update_system_task_status_(ObAiTaskStatus status,
+  int transition_to_phase_(share::ObAiTaskPhase phase, const char *phase_name);
+  int update_system_task_status_(share::ObAiTaskStatus status,
                                  int64_t progress,
                                  int error_code,
                                  const common::ObString &error_msg);
@@ -723,7 +724,7 @@ private:
   int persist_task_file_metadata_(int64_t result_fd,
                                   int64_t result_size,
                                   int64_t result_line_count);
-  int transition_to_terminal_state_(ObAiTaskStatus status);
+  int transition_to_terminal_state_(share::ObAiTaskStatus status);
   int cleanup_jsonl_tmp_file_();
 
   int handle_batch_file_init_phase_();
@@ -743,7 +744,7 @@ private:
   RemoteAssetView build_remote_asset_view_() const;
   LocalMaterializationView build_local_materialization_view_() const;
 
-  bool is_batch_file_mode_() const { return OB_AI_ACCESS_MODE_BATCH_FILE == ai_execution_mode_; }
+  bool is_batch_file_mode_() const { return share::OB_AI_ACCESS_MODE_BATCH_FILE == ai_execution_mode_; }
   void parse_and_accumulate_tokens_(const common::ObString &response_body);
   void cleanup_tmp_files_();  // Clean up TmpFileManager fds on terminal state
 
@@ -751,15 +752,15 @@ private:
   int64_t calculate_retry_delay_us_(int error_code) const;
 
 private:
-  ObAiAccessMode ai_execution_mode_;
-  ObAiCommandType command_type_;
+  share::ObAiAccessMode ai_execution_mode_;
+  share::ObAiCommandType command_type_;
   int64_t http_timeout_us_;
   int64_t batch_size_;
   common::ObAIFuncBase *provider_;
 
-  ObAiTaskPhase phase_;
+  share::ObAiTaskPhase phase_;
 
-  ObAiSystemTableManager *table_manager_;
+  share::ObAiSystemTableManager *table_manager_;
   common::ObISQLClient *sql_client_;
 
   common::ObString task_id_;
@@ -779,7 +780,7 @@ private:
 
   ObAiAccessService *service_;
 
-  ObAiBatchFileManager *batch_file_manager_;
+  share::ObAiBatchFileManager *batch_file_manager_;
   common::ObString current_file_id_;
   common::ObString current_batch_id_;
   common::ObString output_file_id_;
@@ -793,7 +794,7 @@ private:
   int64_t result_size_;         // Result data size
   int64_t result_line_count_;   // Result line count
   int64_t last_poll_time_us_;
-  ObAiBatchFileStatus batch_status_;
+  share::ObAiBatchFileStatus batch_status_;
 
   // Streaming result read members (TmpFileManager-based)
   share::ObBatchFileJsonlIterator *result_iter_;  // Iterator for streaming result reads
@@ -898,7 +899,7 @@ public:
   void destroy();
 
   int query_task_status(const common::ObString &task_id,
-                        ObAiTaskInfo &task_info);
+                        share::ObAiTaskInfo &task_info);
 
   /**
    * @brief Release a FINISHED task after DDL has consumed all results.
@@ -926,8 +927,8 @@ public:
    * @param allow_null_on_failure If true, exhausted retries degrade to FINISHED+NULL
    * @return OB_SUCCESS on success
    */
-  int open_batch_task(const ObAiModelEndpointInfo &endpoint_info,
-                      ObAiCommandType command_type,
+  int open_batch_task(const share::ObAiModelEndpointInfo &endpoint_info,
+                      share::ObAiCommandType command_type,
                       int64_t ddl_task_id,
                       share::ObAiBatchTaskWriter &writer,
                       bool allow_null_on_failure = false);
@@ -958,8 +959,8 @@ public:
   // Called by ObAiBatchTaskWriter::commit() to finalize and submit a batch task
   int commit_batch_task_(const share::ObBatchFileDataSegment &segment,
                          int64_t ddl_task_id,
-                         const ObAiModelEndpointInfo &endpoint_info,
-                         ObAiCommandType command_type,
+                         const share::ObAiModelEndpointInfo &endpoint_info,
+                         share::ObAiCommandType command_type,
                          common::ObString &task_id,
                          bool allow_null_on_failure = false);
 
@@ -1002,7 +1003,7 @@ public:
   uint64_t get_tenant_id() const { return tenant_id_; }
 
   ObAiTaskScheduler &get_scheduler() { return scheduler_; }
-  ObAiSystemTableManager &get_table_manager() { return table_manager_; }
+  share::ObAiSystemTableManager &get_table_manager() { return table_manager_; }
 
   void set_sql_client(common::ObISQLClient *sql_client) { sql_client_ = sql_client; }
 
@@ -1019,7 +1020,7 @@ private:
   common::ObMySQLProxy *sql_proxy_;
 
   ObAiTaskScheduler scheduler_;
-  ObAiSystemTableManager table_manager_;
+  share::ObAiSystemTableManager table_manager_;
 
   share::ObSystemTablePoller *table_poller_;
 
