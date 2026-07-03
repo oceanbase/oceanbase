@@ -108,6 +108,8 @@ struct SchemaKey
     uint64_t external_resource_id_;
     uint64_t location_id_;
     uint64_t ai_model_id_;
+    uint64_t ai_provider_id_;
+    uint64_t ai_gateway_id_;
     uint64_t ccl_rule_id_;
     uint64_t sensitive_rule_id_;
   };
@@ -367,6 +369,14 @@ struct SchemaKey
   {
     return ObTenantAiModelId(tenant_id_, ai_model_id_);
   }
+  ObTenantAIProviderId get_ai_provider_key() const
+  {
+    return ObTenantAIProviderId(tenant_id_, ai_provider_id_);
+  }
+  ObTenantAIGatewayId get_ai_gateway_key() const
+  {
+    return ObTenantAIGatewayId(tenant_id_, ai_gateway_id_);
+  }
   ObTenantCCLRuleId get_ccl_rule_key() const
   {
     return ObTenantCCLRuleId(tenant_id_, ccl_rule_id_);
@@ -527,6 +537,8 @@ public:
   SCHEMA_KEY_FUNC(catalog);
   SCHEMA_KEY_FUNC(external_resource);
   SCHEMA_KEY_FUNC(ai_model);
+  SCHEMA_KEY_FUNC(ai_provider);
+  SCHEMA_KEY_FUNC(ai_gateway);
   SCHEMA_KEY_FUNC(ccl_rule);
   SCHEMA_KEY_FUNC(sensitive_rule);
   #undef SCHEMA_KEY_FUNC
@@ -905,6 +917,8 @@ public:
   SCHEMA_KEYS_DEF(catalog_priv, CatalogPrivKeys);
   SCHEMA_KEYS_DEF(external_resource, ExternalResourceKeys);
   SCHEMA_KEYS_DEF(ai_model, AiModelKeys);
+  SCHEMA_KEYS_DEF(ai_provider, AiProviderKeys);
+  SCHEMA_KEYS_DEF(ai_gateway, AiGatewayKeys);
   SCHEMA_KEYS_DEF(ccl_rule, CCLRuleKeys);
   SCHEMA_KEYS_DEF(sensitive_rule, SensitiveRuleKeys);
   SCHEMA_KEYS_DEF(sensitive_rule_priv, SensitiveRulePrivKeys);
@@ -1062,6 +1076,12 @@ public:
     // ai model
     AiModelKeys new_ai_model_keys_;
     AiModelKeys del_ai_model_keys_;
+    // ai provider
+    AiProviderKeys new_ai_provider_keys_;
+    AiProviderKeys del_ai_provider_keys_;
+    // ai gateway
+    AiGatewayKeys new_ai_gateway_keys_;
+    AiGatewayKeys del_ai_gateway_keys_;
     //ccl_rule
     CCLRuleKeys new_ccl_rule_keys_;
     CCLRuleKeys del_ccl_rule_keys_;
@@ -1131,6 +1151,8 @@ public:
     common::ObArray<ObTableSchema *> non_sys_tables_;
     common::ObArray<ObSimpleExternalResourceSchema> simple_external_resource_schemas_;
     common::ObArray<ObAiModelSchema> simple_ai_model_schemas_;
+    common::ObArray<ObAIProviderSchema> simple_ai_provider_schemas_;
+    common::ObArray<ObAIGatewaySchema> simple_ai_gateway_schemas_;
     common::ObArenaAllocator allocator_;
   };
 
@@ -1327,6 +1349,8 @@ private:
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(catalog);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(external_resource);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(ai_model);
+  GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(ai_provider);
+  GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(ai_gateway);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(ccl_rule);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(sensitive_rule);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(sensitive_rule_priv);
@@ -1380,6 +1404,8 @@ private:
   APPLY_SCHEMA_TO_CACHE(catalog, ObSchemaMgr);
   APPLY_SCHEMA_TO_CACHE(external_resource, ObExternalResourceMgr);
   APPLY_SCHEMA_TO_CACHE(ai_model, ObSchemaMgr);
+  APPLY_SCHEMA_TO_CACHE(ai_provider, ObSchemaMgr);
+  APPLY_SCHEMA_TO_CACHE(ai_gateway, ObSchemaMgr);
   APPLY_SCHEMA_TO_CACHE(ccl_rule, ObSchemaMgr);
   APPLY_SCHEMA_TO_CACHE(sensitive_rule, ObSchemaMgr);
   APPLY_SCHEMA_TO_CACHE(sensitive_column, ObSensitiveRuleMgr);

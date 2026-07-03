@@ -802,6 +802,15 @@ DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_PARALLEL_HTABLE_DDL, ObRpcParallelHTa
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_AI_MODEL, ObRpcCreateAiModelP, create_ai_model(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_AI_MODEL, ObRpcDropAiModelP, drop_ai_model(arg_));
 
+// ai provider ddl
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REGISTER_PROVIDER, ObRpcRegisterProviderP, register_provider(arg_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_UNREGISTER_PROVIDER, ObRpcUnregisterProviderP, unregister_provider(arg_));
+
+// ai gateway ddl
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_AI_GATEWAY, ObRpcCreateAiGatewayP, create_ai_gateway(arg_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_ALTER_AI_GATEWAY, ObRpcAlterAiGatewayP, alter_ai_gateway(arg_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_AI_GATEWAY, ObRpcDropAiGatewayP, drop_ai_gateway(arg_));
+
 // sensitive rule
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_HANDLE_SENSITIVE_RULE_DDL, ObRpcHandleSensitiveRuleDDLP, handle_sensitive_rule_ddl(arg_));
 // for drop database and purge database

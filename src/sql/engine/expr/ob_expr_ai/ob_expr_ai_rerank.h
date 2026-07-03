@@ -32,16 +32,16 @@ public:
 
 private:
   static int inner_eval_ai_rerank(common::ObIAllocator &allocator,
-                                  const common::ObAIFuncExprInfo &info,
-                                  const share::ObAiModelEndpointInfo &endpoint_info,
+                                  const common::ObString &provider,
+                                  const common::ObString &request_model_name,
+                                  const common::ObString &url,
                                   common::ObArray<common::ObString> &header_array,
                                   common::ObString &query,
                                   common::ObJsonArray *document_array,
                                   common::ObJsonArray *&result_array);
-
   static int eval_ai_rerank_with_doc_key(const ObExpr &expr, ObEvalCtx &ctx, common::ObIAllocator &allocator,
-                                         common::ObString &model_id, common::ObString &query, common::ObJsonArray *document_array,
-                                         common::ObString &doc_key, const common::ObAIFuncExprInfo &info, const share::ObAiModelEndpointInfo &endpoint_info, ObDatum &res);
+                                         common::ObString &query, common::ObJsonArray *document_array,
+                                         common::ObString &doc_key, const share::ObAIModelConfigInfo &config, ObDatum &res);
   static int get_doc_array_from_documents_array_with_key(ObIAllocator &allocator, ObJsonArray *document_object_array, ObString &doc_key, ObJsonArray *&doc_array);
   static int sort_document_array_by_model_result(common::ObIAllocator &allocator, common::ObJsonArray *document_array, common::ObJsonArray *model_result_array, common::ObJsonArray *&sorted_document_array);
   static int construct_config_json(common::ObIAllocator &allocator, int64_t top_k, int64_t return_doc, common::ObJsonObject *&config_json);

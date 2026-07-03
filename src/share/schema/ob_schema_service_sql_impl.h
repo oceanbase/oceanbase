@@ -39,6 +39,8 @@
 #include "share/schema/ob_external_resource_sql_service.h"
 #include "share/schema/ob_location_sql_service.h"
 #include "share/schema/ob_ai_model_sql_service.h"
+#include "share/schema/ob_ai_provider_sql_service.h"
+#include "share/schema/ob_ai_gateway_sql_service.h"
 #include "share/schema/ob_ccl_rule_sql_service.h"
 #include "share/schema/ob_sensitive_rule_sql_service.h"
 #ifdef OB_BUILD_TDE_SECURITY
@@ -134,6 +136,8 @@ public:
   GET_DDL_SQL_SERVICE_FUNC(ExternalResource, external_resource)
   GET_DDL_SQL_SERVICE_FUNC(Location, location)
   GET_DDL_SQL_SERVICE_FUNC(AiModel, ai_model)
+  GET_DDL_SQL_SERVICE_FUNC(AIProvider, ai_provider)
+  GET_DDL_SQL_SERVICE_FUNC(AIGateway, ai_gateway)
   GET_DDL_SQL_SERVICE_FUNC(CCLRule, ccl_rule)
   GET_DDL_SQL_SERVICE_FUNC(SensitiveRule, sensitive_rule)
 
@@ -251,6 +255,8 @@ public:
   GET_ALL_SCHEMA_FUNC_DECLARE(location, ObLocationSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE(obj_mysql_priv, ObObjMysqlPriv);
   GET_ALL_SCHEMA_FUNC_DECLARE(ai_model, ObAiModelSchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE(ai_provider, ObAIProviderSchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE(ai_gateway, ObAIGatewaySchema);
   GET_ALL_SCHEMA_FUNC_DECLARE(ccl_rule, ObSimpleCCLRuleSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE(sensitive_rule, ObSensitiveRuleSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE(sensitive_rule_priv, ObSensitiveRulePriv);
@@ -345,6 +351,8 @@ public:
 //                               common::ObISQLClient *sql_client);
 
   virtual int fetch_new_ai_model_id(const uint64_t tenant_id, uint64_t &new_ai_model_id);
+  virtual int fetch_new_ai_provider_id(const uint64_t tenant_id, uint64_t &new_ai_provider_id);
+  virtual int fetch_new_ai_gateway_id(const uint64_t tenant_id, uint64_t &new_ai_gateway_id);
   virtual int fetch_new_ccl_rule_id(const uint64_t tenant_id, uint64_t &new_ccl_rule_id);
 
   virtual int get_tablegroup_schema(const ObRefreshSchemaStatus &schema_status,
@@ -414,6 +422,8 @@ public:
   GET_BATCH_SCHEMAS_FUNC_DECLARE(location, ObLocationSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(obj_mysql_priv, ObObjMysqlPriv);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(ai_model, ObAiModelSchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE(ai_provider, ObAIProviderSchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE(ai_gateway, ObAIGatewaySchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(ccl_rule, ObSimpleCCLRuleSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(sensitive_rule, ObSensitiveRuleSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(sensitive_rule_priv, ObSensitiveRulePriv);
@@ -515,6 +525,8 @@ public:
   FETCH_SCHEMAS_FUNC_DECLARE(location, ObLocationSchema);
   FETCH_SCHEMAS_FUNC_DECLARE(obj_mysql_priv, ObObjMysqlPriv);
   FETCH_SCHEMAS_FUNC_DECLARE(ai_model, ObAiModelSchema);
+  FETCH_SCHEMAS_FUNC_DECLARE(ai_provider, ObAIProviderSchema);
+  FETCH_SCHEMAS_FUNC_DECLARE(ai_gateway, ObAIGatewaySchema);
   FETCH_SCHEMAS_FUNC_DECLARE(ccl_rule, ObSimpleCCLRuleSchema);
   FETCH_SCHEMAS_FUNC_DECLARE(sensitive_rule, ObSensitiveRuleSchema);
   FETCH_SCHEMAS_FUNC_DECLARE(sensitive_rule_priv, ObSensitiveRulePriv);
@@ -1378,6 +1390,8 @@ private:
   ObCatalogSqlService catalog_service_;
   ObExternalResourceSqlService external_resource_service_;
   ObAiModelSqlService ai_model_service_;
+  ObAIProviderSqlService ai_provider_service_;
+  ObAIGatewaySqlService ai_gateway_service_;
   ObCCLRuleSqlService ccl_rule_service_;
   ObSensitiveRuleSqlService sensitive_rule_service_;
 

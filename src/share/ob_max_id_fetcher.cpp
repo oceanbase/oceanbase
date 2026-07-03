@@ -78,7 +78,11 @@ const char *ObMaxIdFetcher::max_id_name_info_[OB_MAX_ID_TYPE][2] = {
   { "ob_max_sensitive_rule_id", "max sensitive rule id"},
   { "ob_max_used_ai_model_id", "max used ai model id"},
   { "ob_max_used_ai_model_endpoint_id", "max used ai model endpoint id"},
-  { "ob_max_used_java_policy_id", "max used java policy id"}};
+  { "ob_max_used_java_policy_id", "max used java policy id"},
+  { "ob_max_used_ai_model_provider_id", "max used ai model provider id"},
+  { "ob_max_used_ai_gateway_id", "max used ai gateway id"},
+  { "ob_max_used_ai_model_profile_id", "max used ai model profile id"}
+};
 
 ObMaxIdFetcher::ObMaxIdFetcherMutexWrapper ObMaxIdFetcher::mutex_bucket_[MAX_TENANT_MUTEX_BUCKET_CNT];
 
@@ -159,6 +163,9 @@ int ObMaxIdFetcher::convert_id_type(
     case OB_MAX_USED_CATALOG_ID_TYPE:
     case OB_MAX_USED_EXTERNAL_RESOURCE_ID_TYPE:
     case OB_MAX_USED_AI_MODEL_ID_TYPE:
+    case OB_MAX_USED_AI_PROVIDER_ID_TYPE:
+    case OB_MAX_USED_AI_GATEWAY_ID_TYPE:
+    case OB_MAX_USED_AI_MODEL_PROFILE_ID_TYPE:
     case OB_MAX_USED_LOCATION_ID_TYPE:
     case OB_MAX_USED_CCL_RULE_ID_TYPE:
     case OB_MAX_USED_SENSITIVE_RULE_ID_TYPE: {
@@ -604,6 +611,9 @@ int ObMaxIdFetcher::check_id_valid(const ObMaxIdType &max_id_type, const uint64_
       case OB_MAX_USED_SERVICE_NAME_ID_TYPE:
       case OB_MAX_USED_AI_MODEL_ID_TYPE:
       case OB_MAX_USED_AI_MODEL_ENDPOINT_ID_TYPE:
+      case OB_MAX_USED_AI_PROVIDER_ID_TYPE:
+      case OB_MAX_USED_AI_GATEWAY_ID_TYPE:
+      case OB_MAX_USED_AI_MODEL_PROFILE_ID_TYPE:
       case OB_MAX_USED_TTL_TASK_ID_TYPE: {
         // won't check other id
         break;

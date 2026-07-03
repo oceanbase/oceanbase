@@ -296,7 +296,7 @@ TEST_F(TestAiService, test_get_model_config_info)
   // 3. get model config and verify endpoint overrides
   {
     ObAIModelConfigInfo config;
-    ASSERT_EQ(OB_SUCCESS, common::ObAIFuncUtils::get_model_config_info(allocator, model_key, config));
+    ASSERT_EQ(OB_SUCCESS, common::ObAIFuncUtils::get_model_config_info(allocator, model_key, share::EndpointType::DENSE_EMBEDDING, config));
     ASSERT_EQ(0, config.get_model_key().compare(model_key));
     ASSERT_EQ(0, config.get_model_name().compare(model_name));
     ASSERT_EQ(0, config.get_provider().case_compare("ALIYUN-DASHSCOPE"));
@@ -311,7 +311,7 @@ TEST_F(TestAiService, test_get_model_config_info)
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   {
     ObAIModelConfigInfo config;
-    ASSERT_EQ(OB_SUCCESS, common::ObAIFuncUtils::get_model_config_info(allocator, model_key, config));
+    ASSERT_EQ(OB_SUCCESS, common::ObAIFuncUtils::get_model_config_info(allocator, model_key, share::EndpointType::DENSE_EMBEDDING, config));
     ASSERT_EQ(3, config.get_batch_size());
     ASSERT_EQ(5 * MB, config.get_max_image_size());
   }
@@ -322,7 +322,7 @@ TEST_F(TestAiService, test_get_model_config_info)
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   {
     ObAIModelConfigInfo config;
-    ASSERT_EQ(OB_SUCCESS, common::ObAIFuncUtils::get_model_config_info(allocator, model_key, config));
+    ASSERT_EQ(OB_SUCCESS, common::ObAIFuncUtils::get_model_config_info(allocator, model_key, share::EndpointType::DENSE_EMBEDDING, config));
     ASSERT_EQ(5, config.get_batch_size());
     ASSERT_EQ(5 * MB, config.get_max_image_size());
   }
@@ -333,7 +333,7 @@ TEST_F(TestAiService, test_get_model_config_info)
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   {
     ObAIModelConfigInfo config;
-    ASSERT_EQ(OB_SUCCESS, common::ObAIFuncUtils::get_model_config_info(allocator, model_key, config));
+    ASSERT_EQ(OB_SUCCESS, common::ObAIFuncUtils::get_model_config_info(allocator, model_key, share::EndpointType::DENSE_EMBEDDING, config));
     ASSERT_EQ(0, config.get_provider().case_compare("aliyun-dashscope"));
     ASSERT_EQ(0, config.get_request_model_name().case_compare("QWEN3-VL-EMBEDDING"));
     ASSERT_EQ(5, config.get_batch_size());
@@ -359,7 +359,7 @@ TEST_F(TestAiService, test_get_model_config_info_negative)
   // 1. empty model key
   {
     ObAIModelConfigInfo config;
-    ASSERT_EQ(OB_INVALID_ARGUMENT, common::ObAIFuncUtils::get_model_config_info(allocator, ObString(), config));
+    ASSERT_EQ(OB_INVALID_ARGUMENT, common::ObAIFuncUtils::get_model_config_info(allocator, ObString(), share::EndpointType::DENSE_EMBEDDING, config));
   }
 
   // 2. model key not exists
@@ -368,6 +368,7 @@ TEST_F(TestAiService, test_get_model_config_info_negative)
     ASSERT_EQ(OB_INVALID_ARGUMENT,
               common::ObAIFuncUtils::get_model_config_info(allocator,
                                                            ObString::make_string("model_key_not_exists"),
+                                                           share::EndpointType::DENSE_EMBEDDING,
                                                            config));
   }
 
@@ -382,7 +383,7 @@ TEST_F(TestAiService, test_get_model_config_info_negative)
 
   {
     ObAIModelConfigInfo config;
-    ASSERT_EQ(OB_AI_FUNC_ENDPOINT_NOT_FOUND, common::ObAIFuncUtils::get_model_config_info(allocator, model_key, config));
+    ASSERT_EQ(OB_AI_FUNC_ENDPOINT_NOT_FOUND, common::ObAIFuncUtils::get_model_config_info(allocator, model_key, share::EndpointType::DENSE_EMBEDDING, config));
   }
 
   sql.assign_fmt("call DBMS_AI_SERVICE.DROP_AI_MODEL ('%s')", model_key.ptr());

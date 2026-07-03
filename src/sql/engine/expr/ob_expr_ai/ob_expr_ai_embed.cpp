@@ -118,10 +118,7 @@ int ObExprAIEmbed::eval_ai_embed(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
     uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
     MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
     lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, N_AI_EMBED));
-    ObAIFuncExprInfo *info = nullptr;
-    omt::ObAiServiceGuard ai_service_guard;
-    omt::ObTenantAiService *ai_service = MTL(omt::ObTenantAiService*);
-    const share::ObAiModelEndpointInfo *endpoint_info = nullptr;
+    share::ObAIModelConfigInfo model_config;
     ObString model_id = arg_model_id->get_string();
     ObString content = arg_content->get_string();
     // Read real content for LOB/BLOB columns (e.g. image_binary); get_string() only gives locator
@@ -131,6 +128,17 @@ int ObExprAIEmbed::eval_ai_embed(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
                 expr.args_[CONTENT_IDX]->obj_meta_.has_lob_header(),
                 content, &ctx.exec_ctx_))) {
       LOG_WARN("fail to read content for ai_embed", K(ret));
+    }
+    // Fail fast on empty model_id before calling get_model_config_info,
+    // to preserve the original error message "model id or input is empty".
+    if (OB_SUCC(ret) && model_id.empty()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("model id or input is empty", K(ret));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_embed, model id or input is empty");
+    }
+    if (OB_SUCC(ret) &&
+        OB_FAIL(ObAIFuncUtils::get_model_config_info(temp_allocator, model_id, oceanbase::share::EndpointType::DENSE_EMBEDDING, model_config))) {
+      LOG_WARN("fail to get model config info", K(ret));
     }
 
     ObAiEmbedInputType input_type = ObAiEmbedInputType::INPUT_TYPE_TEXT;
@@ -153,18 +161,13 @@ int ObExprAIEmbed::eval_ai_embed(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
             is_url = true;
           }
         }
-        if (!is_url) {
-          // Binary image: enforce max_image_size from model config
-          share::ObAIModelConfigInfo model_config;
-          if (OB_FAIL(ObAIFuncUtils::get_model_config_info(temp_allocator, model_id, model_config))) {
-            LOG_WARN("fail to get model config for max_image_size check", K(ret));
-          } else if (model_config.get_max_image_size() > 0 &&
-                     content.length() > static_cast<int64_t>(model_config.get_max_image_size())) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("image binary size exceeds model max_image_size limit", K(ret),
-                     K(content.length()), K(model_config.get_max_image_size()));
-            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_embed, image binary size exceeds max_image_size limit");
-          }
+        if (!is_url &&
+            model_config.get_max_image_size() > 0 &&
+            content.length() > static_cast<int64_t>(model_config.get_max_image_size())) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("image binary size exceeds model max_image_size limit", K(ret),
+                   K(content.length()), K(model_config.get_max_image_size()));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_embed, image binary size exceeds max_image_size limit");
         }
         if (OB_SUCC(ret) &&
             OB_FAIL(process_image_input(temp_allocator, content, is_url, processed_content))) {
@@ -198,21 +201,8 @@ int ObExprAIEmbed::eval_ai_embed(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
           LOG_WARN("fail to add dimensions", K(ret));
         }
       }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObAIFuncUtils::get_ai_func_info(temp_allocator, model_id, info))) {
-        LOG_WARN("fail to get ai func info", K(ret));
-      } else if (OB_ISNULL(ai_service)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ai service is null", K(ret));
-      } else if (OB_FAIL(ai_service->get_ai_service_guard(ai_service_guard))) {
-        LOG_WARN("failed to get ai service guard", K(ret));
-      } else if (OB_FAIL(ai_service_guard.get_ai_endpoint_by_ai_model_name(model_id, endpoint_info))) {
-        LOG_WARN("failed to get endpoint info", K(ret), K(model_id));
-      } else if (OB_ISNULL(endpoint_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("endpoint info is null", K(ret));
-      } else {
-        ObAIFuncModel model(temp_allocator, *info, *endpoint_info);
+      if (OB_SUCC(ret)) {
+        ObAIFuncModel model(temp_allocator, model_config);
         // Set input_type based on parsed options
         ObString input_type_str = (input_type == ObAiEmbedInputType::INPUT_TYPE_IMAGE) ? ObString("image") : ObString("text");
         model.set_input_type(input_type_str);
@@ -229,71 +219,9 @@ int ObExprAIEmbed::eval_ai_embed(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
 }
 
 
-int ObExprAIEmbed::pack_json_array_to_res_vector(const ObExpr &expr,
-                                                ObEvalCtx &ctx,
-                                                ObIAllocator &allocator,
-                                                ObArray<ObJsonObject *> &responses,
-                                                const ObBitVector &skip,
-                                                const EvalBound &bound,
-                                                const ObAiModelEndpointInfo &endpoint_info,
-                                                ObIVector *res_vec)
-{
-  int ret = OB_SUCCESS;
-  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
-  ObJsonObject *response_obj = nullptr;
-  ObIJsonBase *output = nullptr;
-  int64_t idx = bound.start();
-  int64_t current_batch_size = 0;
-  int64_t response_size = responses.count();
-  for (int64_t i = 0; OB_SUCC(ret) && i < response_size; ++i) {
-    if (OB_ISNULL(response_obj = responses.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("response_obj is null", K(ret), K(i));
-    } else if (OB_FAIL(ObAIFuncUtils::parse_embed_output(allocator, endpoint_info, response_obj, output))) {
-      LOG_WARN("fail to parse output", K(ret), K(i));
-    } else if (OB_ISNULL(output)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("output is null", K(ret), K(i));
-    } else if (output->json_type() == ObJsonNodeType::J_ARRAY) {
-      ObJsonArray *embeddings_array = static_cast<ObJsonArray *>(output);
-      ObString raw_str;
-      ObIJsonBase *embedding = nullptr;
-      for (int64_t j = 0; OB_SUCC(ret) && j < embeddings_array->element_count(); ++j) {
-        ObStringBuffer embedding_buf(&allocator);
-        if (idx < bound.end()) {
-          if (OB_ISNULL(embedding = embeddings_array->get_value(j))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("embedding is null", K(ret));
-          } else if (OB_FAIL(embedding->print(embedding_buf, 0))) {
-            LOG_WARN("fail to print embedding", K(ret));
-          } else if (OB_ISNULL(raw_str = embedding_buf.string())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("fail to get embedding string", K(ret));
-          } else if (OB_FAIL(ObAIFuncJsonUtils::inner_pack_raw_str_to_res(raw_str, expr, ctx, res_vec, idx))) {
-            LOG_WARN("fail to pack json result", K(ret));
-          }
-          idx++;
-        }
-        current_batch_size++;
-      }
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("output is not array", K(ret), K(i));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (current_batch_size != bound.batch_size()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("current_batch_size not equal to batch_size", K(ret), K(current_batch_size), K(bound.batch_size()));
-    }
-  }
-  return ret;
-}
-
 int ObExprAIEmbed::enqueue_group_to_pending(ObIAllocator &allocator,
                                             const ObExpr &expr,
                                             ObEvalCtx &ctx,
-                                            omt::ObAiServiceGuard &ai_service_guard,
                                             ObIVector *res_vec,
                                             ObBitVector &eval_flags,
                                             const ObString &grp_model_id,
@@ -334,12 +262,9 @@ int ObExprAIEmbed::enqueue_group_to_pending(ObIAllocator &allocator,
 
   if (OB_FAIL(ret)) {
   } else if (!pending.initialized_) {
-    const share::ObAiModelEndpointInfo *endpoint_info = nullptr;
-    if (OB_FAIL(ai_service_guard.get_ai_endpoint_by_ai_model_name(grp_model_id, endpoint_info))) {
-      LOG_WARN("fail to get endpoint info", K(ret), K(grp_model_id));
-    } else if (OB_FAIL(ObAIFuncBatchUtils::init_pending_state(
-                   allocator, grp_model_id, endpoint_info, pending,
-                   ObAIFuncUtils::check_info_type_dense_embedding))) {
+    if (OB_FAIL(ObAIFuncBatchUtils::init_pending_state(
+                   allocator, grp_model_id, oceanbase::share::EndpointType::DENSE_EMBEDDING,
+                   pending, ObAIFuncUtils::check_config_type_dense_embedding))) {
       LOG_WARN("fail to init pending state", K(ret), K(grp_model_id));
     } else {
       pending_dim = grp_dim;
@@ -367,10 +292,7 @@ int ObExprAIEmbed::enqueue_group_to_pending(ObIAllocator &allocator,
       // DashScope qwen2.x-vl models forbid duplicate types in one `contents` array:
       // "Each type can appear at most once." Send each row as its own request.
       // qwen3+ VL models do support batching multiple same-type items.
-      ObString request_model_name = pending.info_->model_;
-      if (!pending.endpoint_info_->get_request_model_name().empty()) {
-        request_model_name = pending.endpoint_info_->get_request_model_name();
-      }
+      ObString request_model_name = pending.config_.get_request_model_name();
       const bool is_vl_model = ObAIFuncUtils::is_multi_model(request_model_name);
       const bool needs_individual = is_vl_model &&
                                     ObAIFuncUtils::vl_model_needs_individual_requests(request_model_name);
@@ -402,8 +324,9 @@ int ObExprAIEmbed::enqueue_group_to_pending(ObIAllocator &allocator,
             ObString item_type = grp_input_types.at(i);
             if (OB_FAIL(single_content.push_back(grp_contents_in_batch.at(i)))) {
               LOG_WARN("fail to push single content", K(ret), K(i));
-            } else if (OB_FAIL(ObAIFuncUtils::get_embed_body(allocator, *pending.info_,
-                                                              *pending.endpoint_info_,
+            } else if (OB_FAIL(ObAIFuncUtils::get_embed_body(allocator,
+                                                              pending.config_.get_provider(),
+                                                              pending.config_.get_request_model_name(),
                                                               single_content, item_config,
                                                               item_type, item_body))) {
               LOG_WARN("fail to get embed body for vl item", K(ret), K(i));
@@ -434,8 +357,10 @@ int ObExprAIEmbed::enqueue_group_to_pending(ObIAllocator &allocator,
         if (OB_FAIL(ret)) {
         } else if (allow_mixed && has_text && has_image) {
           // VL model with mixed text/image: use input_type_array version
-          if (OB_FAIL(ObAIFuncUtils::get_embed_body(allocator, *pending.info_,
-                                                     *pending.endpoint_info_, grp_contents_in_batch,
+          if (OB_FAIL(ObAIFuncUtils::get_embed_body(allocator,
+                                                     pending.config_.get_provider(),
+                                                     pending.config_.get_request_model_name(),
+                                                     grp_contents_in_batch,
                                                      config, grp_input_types, body))) {
             LOG_WARN("fail to get embed body for mixed types", K(ret));
           }
@@ -444,8 +369,10 @@ int ObExprAIEmbed::enqueue_group_to_pending(ObIAllocator &allocator,
           if (has_image) {
             grp_input_type = ObString("image");
           }
-          if (OB_FAIL(ObAIFuncUtils::get_embed_body(allocator, *pending.info_,
-                                                          *pending.endpoint_info_, grp_contents_in_batch,
+          if (OB_FAIL(ObAIFuncUtils::get_embed_body(allocator,
+                                                          pending.config_.get_provider(),
+                                                          pending.config_.get_request_model_name(),
+                                                          grp_contents_in_batch,
                                                           config, grp_input_type, body))) {
             LOG_WARN("fail to get embed body", K(ret));
           }
@@ -529,15 +456,6 @@ int ObExprAIEmbed::eval_ai_embed_vector(const ObExpr &expr, ObEvalCtx &ctx,
       bool const_dim_ready = false;
       ObAiEmbedInputType const_input_type = ObAiEmbedInputType::INPUT_TYPE_TEXT;
       bool const_options_ready = false;
-
-      omt::ObAiServiceGuard ai_service_guard;
-      omt::ObTenantAiService *ai_service = MTL(omt::ObTenantAiService*);
-      if (OB_ISNULL(ai_service)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ai service is null", K(ret));
-      } else if (OB_FAIL(ai_service->get_ai_service_guard(ai_service_guard))) {
-        LOG_WARN("failed to get ai service guard", K(ret));
-      }
 
       // Current in-flight group: rows grouped by (model_id, dim), flushed when key changes,
       // batch size is reached, or adding the row would exceed 100MB total bytes.
@@ -629,7 +547,7 @@ int ObExprAIEmbed::eval_ai_embed_vector(const ObExpr &expr, ObEvalCtx &ctx,
           // Fetch model config when model changes (for batch_size and max_image_size)
           if (OB_SUCC(ret) && (!cur_grp_initialized || cur_grp_model_id != model_id_i)) {
             share::ObAIModelConfigInfo model_config;
-            if (OB_FAIL(ObAIFuncUtils::get_model_config_info(temp_allocator, model_id_i, model_config))) {
+            if (OB_FAIL(ObAIFuncUtils::get_model_config_info(temp_allocator, model_id_i, oceanbase::share::EndpointType::DENSE_EMBEDDING, model_config))) {
               LOG_WARN("fail to get model config for batch_size/max_image_size", K(ret), K(model_id_i));
             } else {
               cur_batch_size_limit = model_config.get_batch_size() > 0
@@ -737,7 +655,7 @@ int ObExprAIEmbed::eval_ai_embed_vector(const ObExpr &expr, ObEvalCtx &ctx,
               }
             } else {
               if (cur_grp_initialized &&
-                  OB_FAIL(enqueue_group_to_pending(batch_arena, expr, ctx, ai_service_guard,
+                  OB_FAIL(enqueue_group_to_pending(batch_arena, expr, ctx,
                                                    res_vec, eval_flags, cur_grp_model_id, cur_grp_dim,
                                                    cur_contents, cur_input_types,
                                                    cur_bound_idxs, pending, pending_dim))) {
@@ -763,7 +681,7 @@ int ObExprAIEmbed::eval_ai_embed_vector(const ObExpr &expr, ObEvalCtx &ctx,
 
       if (OB_FAIL(ret)) {
       } else if (cur_grp_initialized &&
-                 OB_FAIL(enqueue_group_to_pending(batch_arena, expr, ctx, ai_service_guard,
+                 OB_FAIL(enqueue_group_to_pending(batch_arena, expr, ctx,
                                                   res_vec, eval_flags, cur_grp_model_id, cur_grp_dim,
                                                   cur_contents, cur_input_types,
                                                   cur_bound_idxs, pending, pending_dim))) {
@@ -781,36 +699,12 @@ int ObExprAIEmbed::eval_ai_embed_vector(const ObExpr &expr, ObEvalCtx &ctx,
   return ret;
 }
 
-int ObExprAIEmbed::pack_json_object_to_res_vector(const ObExpr &expr,
-                                                ObEvalCtx &ctx,
-                                                ObIAllocator &allocator,
-                                                ObJsonObject *response,
-                                                const ObBitVector &skip,
-                                                const EvalBound &bound,
-                                                const ObAiModelEndpointInfo &endpoint_info,
-                                                ObIVector *res_vec)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(response)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("response is null", K(ret));
-  } else {
-    ObArray<ObJsonObject *> responses;
-    if (OB_FAIL(responses.push_back(response))) {
-      LOG_WARN("fail to push back response", K(ret));
-    } else if (OB_FAIL(pack_json_array_to_res_vector(expr, ctx, allocator, responses, skip, bound, endpoint_info, res_vec))) {
-      LOG_WARN("fail to pack json to res", K(ret));
-    }
-  }
-  return ret;
-}
-
 int ObExprAIEmbed::pack_embed_response_to_indices(const ObExpr &expr,
                                                   ObEvalCtx &ctx,
                                                   ObIAllocator &allocator,
                                                   ObJsonObject *response,
                                                   const ObArray<int64_t> &row_indices,
-                                                  const ObAiModelEndpointInfo &endpoint_info,
+                                                  const share::ObAIModelConfigInfo &config,
                                                   ObIVector *res_vec)
 {
   int ret = OB_SUCCESS;
@@ -819,7 +713,7 @@ int ObExprAIEmbed::pack_embed_response_to_indices(const ObExpr &expr,
     LOG_WARN("response or res_vec is null", K(ret));
   } else {
     ObIJsonBase *output = nullptr;
-    if (OB_FAIL(ObAIFuncUtils::parse_embed_output(allocator, endpoint_info, response, output))) {
+    if (OB_FAIL(ObAIFuncUtils::parse_embed_output(allocator, config, response, output))) {
       LOG_WARN("fail to parse embed output", K(ret));
     } else if (OB_ISNULL(output)) {
       ret = OB_ERR_UNEXPECTED;

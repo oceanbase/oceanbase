@@ -21,6 +21,8 @@
 #include "share/schema/ob_location_schema_struct.h"
 #include "share/schema/ob_objpriv_mysql_schema_struct.h"
 #include "share/schema/ob_ai_model_mgr.h"
+#include "share/schema/ob_ai_provider_mgr.h"
+#include "share/schema/ob_ai_gateway_mgr.h"
 #include "share/schema/ob_ccl_schema_struct.h"
 #include "share/schema/ob_ccl_rule_mgr.h"
 #include "share/schema/ob_sensitive_rule_schema_struct.h"
@@ -1277,6 +1279,24 @@ public:
   int get_ai_model_schema(const uint64_t tenant_id,
                           const ObString &ai_model_name,
                           const ObAiModelSchema *&ai_model_schema);
+
+  // ai provider
+  int get_ai_provider_schema(const uint64_t tenant_id,
+                             const uint64_t provider_id,
+                             const ObAIProviderSchema *&provider_schema);
+
+  int get_ai_provider_schema(const uint64_t tenant_id,
+                             const ObString &provider_name,
+                             const ObAIProviderSchema *&provider_schema);
+
+  // ai gateway
+  int get_ai_gateway_schema(const uint64_t tenant_id,
+                             const uint64_t gateway_id,
+                             const ObAIGatewaySchema *&gateway_schema);
+
+  int get_ai_gateway_schema(const uint64_t tenant_id,
+                             const ObString &gateway_name,
+                             const ObAIGatewaySchema *&gateway_schema);
 
   int get_ccl_rule_with_name(const uint64_t tenant_id,
                              const common::ObString &name,

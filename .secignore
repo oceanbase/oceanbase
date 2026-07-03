@@ -450,6 +450,27 @@
   xingxing4@163.com
   xingxing5@163.com
   14844887@sina.com
+**/src/share/ai_service/ob_ai_builtin_provider.h
+  https://dashscope.aliyuncs.com/compatible-mode/v1
+  https://dashscope.aliyuncs.com/api/v1
+  https://api.deepseek.com
+  https://api.siliconflow.cn/v1
+  https://api.openai.com/v1
+  https://api.cohere.com/v2
+  https://api.hunyuan.cloud.tencent.com/v1
+**/tools/deploy/mysql_test/test_suite/ai_function/**
+  https://new.example.com/v1
+  https://dashscope.aliyuncs.com/compatible-mode/v1
+  https://dashscope.aliyuncs.com/api/v1
+  https://api.deepseek.com
+  https://api.siliconflow.cn/v1
+  https://api.openai.com/v1
+  https://api.cohere.com/v2
+  https://api.hunyuan.cloud.tencent.com/v1
+  https://int.example.com/v1
+  https://int2.example.com/v1
+  https://int3.example.com/v1
+  https://load-after.example.com/v1
 --------------------------------------------------------
 # Should use GLOB wildcard to config and analysis the ignored folder
 # The root patch should start with '/'

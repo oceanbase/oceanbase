@@ -9102,6 +9102,83 @@ def_table_schema(
 # 594: __all_optstat_catalog_global_prefs
 # 595: __all_ss_gc_history
 
+# 597: __all_ai_model_provider
+# 598: __all_ai_model_provider_history
+# 599: __all_ai_model_profile
+
+# 600: __all_ai_gateway
+# 601: __all_ai_gateway_history
+
+all_ai_model_provider_def = dict(
+    owner = 'maochongxin.mcx',
+    table_name = '__all_ai_model_provider',
+    table_id = '597',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('provider_id', 'int'),
+    ],
+    in_tenant_space = True,
+    is_cluster_private = False,
+    meta_record_in_sys = False,
+    normal_columns = [
+        ('name', 'varchar:128', 'false'),
+        ('protocol', 'varchar:64', 'false'),
+        ('base_url', 'varchar:2048', 'false'),
+        ('access_key', 'varchar:2048', 'true'),
+    ]
+)
+
+def_table_schema(**all_ai_model_provider_def)
+def_table_schema(**gen_history_table_def(598, all_ai_model_provider_def))
+
+all_ai_model_profile_def = dict(
+    owner = 'maochongxin.mcx',
+    table_name = '__all_ai_model_profile',
+    table_id = '599',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('model_parameter_id', 'int'),
+    ],
+    in_tenant_space = True,
+    is_cluster_private = False,
+    meta_record_in_sys = False,
+    normal_columns = [
+        ('provider_name', 'varchar:128', 'false'),
+        ('model_name', 'varchar:256', 'false'),
+        ('model_params', 'varchar:2048', 'true'),
+        ('model_options', 'varchar:2048', 'true'),
+    ]
+)
+
+def_table_schema(**all_ai_model_profile_def)
+
+all_ai_gateway_def = dict(
+    owner = 'maochongxin.mcx',
+    table_name = '__all_ai_gateway',
+    table_id = '600',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('gateway_id', 'int'),
+    ],
+    in_tenant_space = True,
+    is_cluster_private = False,
+    meta_record_in_sys = False,
+    normal_columns = [
+        ('name', 'varchar:128', 'false'),
+        ('endpoints', 'longtext', 'false'),
+        ('circuit_breaker', 'varchar:2048', 'true'),
+    ]
+)
+
+def_table_schema(**all_ai_gateway_def)
+def_table_schema(**gen_history_table_def(601, all_ai_gateway_def))
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -18277,6 +18354,32 @@ def_table_schema(
 # 12602: __all_virtual_optstat_catalog_global_prefs
 # 12603: __all_virtual_tenant_worker_group
 # 12604: __all_virtual_keyword
+
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12609',
+  table_name = '__all_virtual_ai_model_provider',
+  keywords = all_def_keywords['__all_ai_model_provider']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12610',
+  table_name = '__all_virtual_ai_model_profile',
+  keywords = all_def_keywords['__all_ai_model_profile']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12611',
+  table_name = '__all_virtual_ai_gateway',
+  keywords = all_def_keywords['__all_ai_gateway']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12614',
+  table_name = '__all_virtual_ai_model_provider_history',
+  keywords = all_def_keywords['__all_ai_model_provider_history']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12615',
+  table_name = '__all_virtual_ai_gateway_history',
+  keywords = all_def_keywords['__all_ai_gateway_history']))
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -47061,6 +47164,209 @@ def_table_schema(
 # 21722: CDB_SCHEDULER_JOBS
 # 21723: GV$OB_TENANT_WORKER_GROUPS
 # 21724: V$OB_KEYWORDS
+# 21725: DBA_OB_EXTERNAL_TAB_STATISTICS
+# 21726: DBA_OB_EXTERNAL_TAB_COL_STATISTICS
+# 21727: DBA_OB_EXTERNAL_PART_COL_STATISTICS
+# 21728: GV$OB_LS_LOG_REPLAY_STAT
+# 21729: V$OB_LS_LOG_REPLAY_STAT
+# 21730: GV$OB_LS_LOG_TRANSPORT_STAT
+# 21731: V$OB_LS_LOG_TRANSPORT_STAT
+
+
+
+def_table_schema(
+  owner = 'maochongxin.mcx',
+  table_name      = 'DBA_OB_AI_MODEL_PROVIDERS',
+  table_id        = '21732',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+    SELECT
+      provider_id AS PROVIDER_ID,
+      name AS PROVIDER_NAME,
+      protocol AS PROTOCOL,
+      base_url AS BASE_URL,
+      access_key AS ACCESS_KEY,
+      gmt_create AS CREATE_TIME,
+      gmt_modified AS UPDATE_TIME
+    FROM oceanbase.__all_ai_model_provider
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'maochongxin.mcx',
+  table_name      = 'CDB_OB_AI_MODEL_PROVIDERS',
+  table_id        = '21733',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = False,
+  view_definition =
+  """
+    SELECT
+      tenant_id AS TENANT_ID,
+      provider_id AS PROVIDER_ID,
+      name AS PROVIDER_NAME,
+      protocol AS PROTOCOL,
+      base_url AS BASE_URL,
+      access_key AS ACCESS_KEY,
+      gmt_create AS CREATE_TIME,
+      gmt_modified AS UPDATE_TIME
+    FROM oceanbase.__all_virtual_ai_model_provider
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'maochongxin.mcx',
+  table_name      = 'DBA_OB_AI_MODEL_PROFILES',
+  table_id        = '21734',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+    SELECT
+      model_parameter_id AS MODEL_PARAMETER_ID,
+      CONCAT(provider_name, '/', model_name) AS MODEL,
+      model_params AS MODEL_PARAMS,
+      model_options AS MODEL_OPTIONS,
+      gmt_create AS CREATE_TIME,
+      gmt_modified AS UPDATE_TIME
+    FROM oceanbase.__all_ai_model_profile
+
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'maochongxin.mcx',
+  table_name      = 'CDB_OB_AI_MODEL_PROFILES',
+  table_id        = '21735',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = False,
+  view_definition =
+  """
+    SELECT
+      tenant_id AS TENANT_ID,
+      model_parameter_id AS MODEL_PARAMETER_ID,
+      CONCAT(provider_name, '/', model_name) AS MODEL,
+      model_params AS MODEL_PARAMS,
+      model_options AS MODEL_OPTIONS,
+      gmt_create AS CREATE_TIME,
+      gmt_modified AS UPDATE_TIME
+    FROM oceanbase.__all_virtual_ai_model_profile
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'maochongxin.mcx',
+  table_name      = 'DBA_OB_AI_GATEWAYS',
+  table_id        = '21736',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+    SELECT
+      gateway_id AS GATEWAY_ID,
+      name AS GATEWAY_NAME,
+      endpoints AS ENDPOINTS,
+      circuit_breaker AS CIRCUIT_BREAKER,
+      gmt_create AS CREATE_TIME,
+      gmt_modified AS UPDATE_TIME
+    FROM oceanbase.__all_ai_gateway
+
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'maochongxin.mcx',
+  table_name      = 'CDB_OB_AI_GATEWAYS',
+  table_id        = '21737',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = False,
+  view_definition =
+  """
+    SELECT
+      tenant_id AS TENANT_ID,
+      gateway_id AS GATEWAY_ID,
+      name AS GATEWAY_NAME,
+      endpoints AS ENDPOINTS,
+      circuit_breaker AS CIRCUIT_BREAKER,
+      gmt_create AS CREATE_TIME,
+      gmt_modified AS UPDATE_TIME
+    FROM oceanbase.__all_virtual_ai_gateway
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'maochongxin.mcx',
+  table_name      = 'DBA_OB_AI_GATEWAY_ENDPOINTS',
+  table_id        = '21738',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+    SELECT g.gateway_id AS GATEWAY_ID,
+           g.name AS GATEWAY_NAME,
+           jt.ep_name AS ENDPOINT_NAME,
+           jt.ep_model AS MODEL,
+           COALESCE(jt.ep_weight, 0) AS WEIGHT,
+           g.gmt_create AS CREATE_TIME,
+           g.gmt_modified AS UPDATE_TIME
+    FROM oceanbase.__all_ai_gateway g,
+    JSON_TABLE(CAST(g.endpoints AS JSON), '$[*]' COLUMNS (
+      ep_name VARCHAR(128) PATH '$.name',
+      ep_model VARCHAR(512) PATH '$.model',
+      ep_weight INT PATH '$.weight'
+    )) jt
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'maochongxin.mcx',
+  table_name      = 'CDB_OB_AI_GATEWAY_ENDPOINTS',
+  table_id        = '21739',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = False,
+  view_definition =
+  """
+    SELECT g.tenant_id AS TENANT_ID,
+           g.gateway_id AS GATEWAY_ID,
+           g.name AS GATEWAY_NAME,
+           jt.ep_name AS ENDPOINT_NAME,
+           jt.ep_model AS MODEL,
+           COALESCE(jt.ep_weight, 0) AS WEIGHT,
+           g.gmt_create AS CREATE_TIME,
+           g.gmt_modified AS UPDATE_TIME
+    FROM oceanbase.__all_virtual_ai_gateway g,
+    JSON_TABLE(CAST(g.endpoints AS JSON), '$[*]' COLUMNS (
+      ep_name VARCHAR(128) PATH '$.name',
+      ep_model VARCHAR(512) PATH '$.model',
+      ep_weight INT PATH '$.weight'
+    )) jt
+  """.replace("\n", " ")
+)
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -83240,6 +83546,30 @@ def_sys_index_table(
   index_using_type = 'USING_BTREE',
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_tenant_macro_block_ha_task'])
+
+def_sys_index_table(
+  index_name = 'idx_ai_model_provider_name',
+  index_table_id = 101126,
+  index_columns = ['name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_UNIQUE_LOCAL',
+  keywords = all_def_keywords['__all_ai_model_provider'])
+
+def_sys_index_table(
+  index_name = 'idx_ai_model_profile_name',
+  index_table_id = 101127,
+  index_columns = ['provider_name', 'model_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_UNIQUE_LOCAL',
+  keywords = all_def_keywords['__all_ai_model_profile'])
+
+def_sys_index_table(
+  index_name = 'idx_ai_gateway_name',
+  index_table_id = 101128,
+  index_columns = ['name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_UNIQUE_LOCAL',
+  keywords = all_def_keywords['__all_ai_gateway'])
 
 # 余留位置（此行之前占位）
 # 索引表占位建议：基于基表（数据表）表名来占位，其他方式包括：索引名（index_name）、索引表表名

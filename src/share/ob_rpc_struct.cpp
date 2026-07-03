@@ -15089,6 +15089,119 @@ int ObDropAiModelArg::assign(const ObDropAiModelArg &other)
   return ret;
 }
 
+OB_SERIALIZE_MEMBER((ObRegisterProviderArg, ObDDLArg), provider_name_, protocol_, base_url_, access_key_, has_protocol_, has_base_url_);
+OB_SERIALIZE_MEMBER((ObUnregisterProviderArg, ObDDLArg), provider_name_);
+OB_SERIALIZE_MEMBER((ObCreateAiGatewayArg, ObDDLArg), gateway_name_, endpoints_, circuit_breaker_);
+OB_SERIALIZE_MEMBER((ObAlterAiGatewayArg, ObDDLArg), gateway_name_, endpoints_, circuit_breaker_);
+OB_SERIALIZE_MEMBER((ObDropAiGatewayArg, ObDDLArg), gateway_name_);
+
+int ObRegisterProviderArg::check_valid() const
+{
+  int ret = OB_SUCCESS;
+  if (exec_tenant_id_ == OB_INVALID_TENANT_ID) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", K(exec_tenant_id_));
+  } else if (provider_name_.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid provider name", K(ret), K(provider_name_));
+  }
+  return ret;
+}
+
+int ObRegisterProviderArg::assign(const ObRegisterProviderArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", KR(ret), K(other));
+  } else {
+    provider_name_ = other.provider_name_;
+    protocol_ = other.protocol_;
+    base_url_ = other.base_url_;
+    access_key_ = other.access_key_;
+    has_protocol_ = other.has_protocol_;
+    has_base_url_ = other.has_base_url_;
+  }
+  return ret;
+}
+
+int ObUnregisterProviderArg::assign(const ObUnregisterProviderArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", KR(ret), K(other));
+  } else {
+    provider_name_ = other.provider_name_;
+  }
+  return ret;
+}
+
+int ObCreateAiGatewayArg::check_valid() const
+{
+  int ret = OB_SUCCESS;
+  if (exec_tenant_id_ == OB_INVALID_TENANT_ID) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", K(ret), K(exec_tenant_id_));
+  } else if (gateway_name_.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid gateway name", K(ret), K(gateway_name_));
+  }
+  return ret;
+}
+
+int ObCreateAiGatewayArg::assign(const ObCreateAiGatewayArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", KR(ret), K(other));
+  } else {
+    gateway_name_ = other.gateway_name_;
+    endpoints_ = other.endpoints_;
+    circuit_breaker_ = other.circuit_breaker_;
+  }
+  return ret;
+}
+
+int ObAlterAiGatewayArg::check_valid() const
+{
+  int ret = OB_SUCCESS;
+  if (exec_tenant_id_ == OB_INVALID_TENANT_ID) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", K(ret), K(exec_tenant_id_));
+  } else if (gateway_name_.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid gateway name", K(ret), K(gateway_name_));
+  }
+  return ret;
+}
+
+int ObAlterAiGatewayArg::assign(const ObAlterAiGatewayArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", KR(ret), K(other));
+  } else {
+    gateway_name_ = other.gateway_name_;
+    endpoints_ = other.endpoints_;
+    circuit_breaker_ = other.circuit_breaker_;
+  }
+  return ret;
+}
+
+int ObDropAiGatewayArg::assign(const ObDropAiGatewayArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", KR(ret), K(other));
+  } else {
+    gateway_name_ = other.gateway_name_;
+  }
+  return ret;
+}
 
 OB_SERIALIZE_MEMBER(ObCheckBackupDestRWConsistencyArg, tenant_id_, backup_dest_str_, data_checksum_, file_len_);
 bool ObCheckBackupDestRWConsistencyArg::is_valid() const

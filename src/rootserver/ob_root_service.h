@@ -744,6 +744,17 @@ public:
   int drop_ai_model(const obrpc::ObDropAiModelArg &arg);
   //----End of functions for managing ai model----
 
+  //----Functions for managing ai provider----
+  int register_provider(const obrpc::ObRegisterProviderArg &arg);
+  int unregister_provider(const obrpc::ObUnregisterProviderArg &arg);
+  //----End of functions for managing ai provider----
+
+  //----Functions for managing ai gateway----
+  int create_ai_gateway(const obrpc::ObCreateAiGatewayArg &arg);
+  int alter_ai_gateway(const obrpc::ObAlterAiGatewayArg &arg);
+  int drop_ai_gateway(const obrpc::ObDropAiGatewayArg &arg);
+  //----End of functions for managing ai gateway----
+
   //----Functions for managing CCL rules----
   int create_ccl_rule_ddl(const obrpc::ObCreateCCLRuleArg &arg);
   int drop_ccl_rule_ddl(const obrpc::ObDropCCLRuleArg &arg);

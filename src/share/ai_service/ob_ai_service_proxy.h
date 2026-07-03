@@ -28,6 +28,21 @@ public:
                                                  const ObString &ai_model_name, common::ObNameCaseMode name_case_mode, ObAiModelEndpointInfo &endpoint);
   static int check_ai_endpoint_exists(const uint64_t tenant_id, common::ObArenaAllocator &allocator, ObISQLClient &sql_proxy, const ObString &name, bool &is_exists);
 
+  // ai model parameter
+  static int select_ai_model_parameter(const uint64_t tenant_id, common::ObArenaAllocator &allocator, ObISQLClient &sql_proxy,
+                                       const ObString &provider_name, const ObString &model_name,
+                                       int64_t &model_parameter_id, ObString &model_params, ObString &model_options,
+                                       bool &exists);
+  static int insert_ai_model_parameter(const uint64_t tenant_id, ObMySQLTransaction &trans,
+                                       const int64_t model_parameter_id, const ObString &provider_name,
+                                       const ObString &model_name, const ObString &model_params,
+                                       const ObString &model_options);
+  static int update_ai_model_parameter(const uint64_t tenant_id, ObMySQLTransaction &trans,
+                                       const int64_t model_parameter_id, const ObString &model_params,
+                                       const ObString &model_options);
+  static int delete_ai_model_parameter(const uint64_t tenant_id, ObMySQLTransaction &trans,
+                                       const ObString &provider_name, const ObString &model_name);
+
 private:
   // ai endpoint
   static int build_ai_endpoint_(common::ObArenaAllocator &allocator, common::sqlclient::ObMySQLResult &result, ObAiModelEndpointInfo &endpoint);

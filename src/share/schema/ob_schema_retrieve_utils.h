@@ -461,6 +461,8 @@ public:
   RETRIEVE_SCHEMA_FUNC_DECLARE(catalog);
   RETRIEVE_SCHEMA_FUNC_DECLARE(ccl_rule);
   RETRIEVE_SCHEMA_FUNC_DECLARE(ai_model);
+  RETRIEVE_SCHEMA_FUNC_DECLARE(ai_provider);
+  RETRIEVE_SCHEMA_FUNC_DECLARE(ai_gateway);
 
   template <typename T>
   static int retrieve_external_resource_schema(const uint64_t tenant_id, T &result, ObIArray<ObSimpleExternalResourceSchema> &schema_array);
@@ -579,6 +581,8 @@ public:
   FILL_SCHEMA_FUNC_DECLARE(external_resource, ObSimpleExternalResourceSchema);
   // ai model
   FILL_SCHEMA_FUNC_DECLARE(ai_model, ObAiModelSchema);
+  FILL_SCHEMA_FUNC_DECLARE(ai_provider, ObAIProviderSchema);
+  FILL_SCHEMA_FUNC_DECLARE(ai_gateway, ObAIGatewaySchema);
 
   // ccl
   FILL_SCHEMA_FUNC_DECLARE(ccl_rule, ObCCLRuleSchema);

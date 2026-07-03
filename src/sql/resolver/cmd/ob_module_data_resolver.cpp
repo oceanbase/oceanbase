@@ -45,6 +45,8 @@ int ObModuleDataResolver::resolve_module(const ParseNode *node, table::ObModuleD
         mod = ObModuleDataArg::GIS;
       } else if (module_name.case_compare("timezone") == 0) {
         mod = ObModuleDataArg::TIMEZONE;
+      } else if (module_name.case_compare("ai_provider") == 0) {
+        mod = ObModuleDataArg::AI_PROVIDER;
       } else {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid module str", K(ret), K(module_name));

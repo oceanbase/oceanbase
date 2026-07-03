@@ -477,17 +477,54 @@ public:
                              ObJsonObject *config,
                              ObJsonObject *&body);
   static int parse_complete_output(ObIAllocator &allocator,
-                                   const ObAiModelEndpointInfo &endpoint_info,
+                                   const share::ObAIModelConfigInfo &config,
                                    ObJsonObject *http_response,
                                    ObIJsonBase *&result);
   static int parse_embed_output(ObIAllocator &allocator,
-                                const ObAiModelEndpointInfo &endpoint_info,
+                                const share::ObAIModelConfigInfo &config,
                                 ObJsonObject *http_response,
                                 ObIJsonBase *&result);
+  static int get_header(ObIAllocator &allocator,
+                        share::EndpointType::TYPE model_type,
+                        const ObString &provider,
+                        const ObString &api_key,
+                        const ObString &request_model_name,
+                        ObArray<ObString> &headers);
+  static int get_complete_body(ObIAllocator &allocator,
+                              const ObString &provider,
+                              const ObString &request_model_name,
+                              ObString &prompt,
+                              ObString &content,
+                              ObJsonObject *user_config,
+                              ObJsonObject *&body);
+  static int get_embed_body(ObIAllocator &allocator,
+                            const ObString &provider,
+                            const ObString &request_model_name,
+                            ObArray<ObString> &contents,
+                            ObJsonObject *user_config,
+                            ObString input_type,
+                            ObJsonObject *&body);
+  static int get_embed_body(ObIAllocator &allocator,
+                            const ObString &provider,
+                            const ObString &request_model_name,
+                            ObArray<ObString> &contents,
+                            ObJsonObject *user_config,
+                            ObArray<ObString> &input_type_array,
+                            ObJsonObject *&body);
+  static int get_rerank_body(ObIAllocator &allocator,
+                             const ObString &provider,
+                             const ObString &request_model_name,
+                             ObString &query,
+                             ObJsonArray *document_array,
+                             ObJsonObject *user_config,
+                             ObJsonObject *&body);
   static int parse_rerank_output(ObIAllocator &allocator,
-                                 const ObAiModelEndpointInfo &endpoint_info,
+                                 const ObString &provider,
                                  ObJsonObject *http_response,
                                  ObIJsonBase *&result);
+  static int check_config_type_dense_embedding(const share::ObAIModelConfigInfo &config);
+  static int check_config_type_rerank(const share::ObAIModelConfigInfo &config);
+  static int check_config_type_completion(const share::ObAIModelConfigInfo &config);
   static int set_string_result(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res, ObString &res_str);
   static int get_ai_func_info(ObIAllocator &allocator, const ObString &model_id, ObAIFuncExprInfo *&info);
   static bool is_provider_support_base64(const ObString &provider);
@@ -497,7 +534,10 @@ public:
                                           ObJsonReaderHelper &json_reader, const int64_t dimension, float *&vector);
   static int get_ai_func_info(ObIAllocator &allocator, const ObString &model_id,
                               share::schema::ObSchemaGetterGuard &guard, ObAIFuncExprInfo *&info);
-  static int get_model_config_info(ObIAllocator &allocator, const ObString &model_key, ObAIModelConfigInfo &config);
+  static int get_model_config_info(ObIAllocator &allocator,
+                                   const ObString &model_key,
+                                   const share::EndpointType::TYPE op_type,
+                                   share::ObAIModelConfigInfo &config);
   // URL security check for preventing SSRF attacks
   static int check_url_security(const ObString &url);
   // True if model name contains "vl" or "flush" (case-insensitive); used for multi-modal message format.
@@ -520,11 +560,21 @@ private:
 class ObAIFuncModel
 {
 public:
-  ObAIFuncModel(ObIAllocator &allocator, const ObAIFuncExprInfo &info, const ObAiModelEndpointInfo &endpoint_info)
-  : allocator_(&allocator),
-    info_(info),
-    endpoint_info_(endpoint_info),
-    input_type_()
+  // Original constructor: info + endpoint_info backed.
+  ObAIFuncModel(ObIAllocator &allocator, const ObAIFuncExprInfo &info,
+                const ObAiModelEndpointInfo &endpoint_info)
+      : allocator_(&allocator),
+        info_(&info),
+        endpoint_info_(&endpoint_info),
+        config_ptr_(nullptr),
+        input_type_()
+  {}
+  ObAIFuncModel(ObIAllocator &allocator, const share::ObAIModelConfigInfo &config)
+      : allocator_(&allocator),
+        info_(nullptr),
+        endpoint_info_(nullptr),
+        config_ptr_(&config),
+        input_type_()
   {}
    virtual ~ObAIFuncModel() {}
    void set_input_type(const ObString &input_type) { input_type_ = input_type; }
@@ -538,13 +588,20 @@ public:
    // rerank
    int call_rerank(ObString &query, ObJsonArray *contents, ObJsonArray *&results);
  private:
-   bool is_completion_type() {return info_.type_ == share::EndpointType::COMPLETION;}
-   bool is_dense_embedding_type() {return info_.type_ == share::EndpointType::DENSE_EMBEDDING;}
-   bool is_rerank_type() {return info_.type_ == share::EndpointType::RERANK;}
+   // Private accessors that dispatch to either config_ptr_ or info_/endpoint_info_.
+   share::EndpointType::TYPE get_type_() const;
+   const ObString &get_provider_() const;
+   int get_access_key_(ObString &key) const;
+   const ObString &get_url_() const;
+
+   bool is_completion_type() { return get_type_() == share::EndpointType::COMPLETION; }
+   bool is_dense_embedding_type() { return get_type_() == share::EndpointType::DENSE_EMBEDDING; }
+   bool is_rerank_type() { return get_type_() == share::EndpointType::RERANK; }
    const ObString get_request_model_name();
    ObIAllocator *allocator_;
-   const ObAIFuncExprInfo &info_;
-   const ObAiModelEndpointInfo &endpoint_info_;
+   const ObAIFuncExprInfo *info_;
+   const ObAiModelEndpointInfo *endpoint_info_;
+   const share::ObAIModelConfigInfo *config_ptr_;
    ObString input_type_;
    DISALLOW_COPY_AND_ASSIGN(ObAIFuncModel);
 };
@@ -559,7 +616,7 @@ public:
   {}
   virtual ~ObAIServiceClient() {}
   // init by model_key: look up config internally
-  int init(const ObString &model_key);
+  int init(const ObString &model_key, const share::EndpointType::TYPE op_type);
   // init by externally provided config pointer (caller manages lifetime)
   int init(share::ObAIModelConfigInfo *model_config_info);
   // completion
@@ -711,8 +768,7 @@ struct ObAIFuncBatchState
 {
   bool initialized_;
   ObString model_id_;
-  ObAIFuncExprInfo *info_;
-  const share::ObAiModelEndpointInfo *endpoint_info_;
+  share::ObAIModelConfigInfo config_;
   int64_t min_concurrency_;
   int64_t max_concurrency_;
   ObArray<ObString> headers_;
@@ -723,8 +779,6 @@ struct ObAIFuncBatchState
 
   ObAIFuncBatchState()
       : initialized_(false),
-        info_(nullptr),
-        endpoint_info_(nullptr),
         min_concurrency_(share::ObAIModelConfigItem::DEFAULT_MIN_CONCURRENCY),
         max_concurrency_(share::ObAIModelConfigItem::DEFAULT_MAX_CONCURRENCY) {}
 
@@ -732,8 +786,7 @@ struct ObAIFuncBatchState
   {
     initialized_ = false;
     model_id_.reset();
-    info_ = nullptr;
-    endpoint_info_ = nullptr;
+    config_.reset();
     min_concurrency_ = share::ObAIModelConfigItem::DEFAULT_MIN_CONCURRENCY;
     max_concurrency_ = share::ObAIModelConfigItem::DEFAULT_MAX_CONCURRENCY;
     headers_.reuse();
@@ -745,13 +798,14 @@ struct ObAIFuncBatchState
 };
 
 typedef int (*CheckModelTypeFn)(const ObAIFuncExprInfo *info);
+typedef int (*CheckModelTypeFromConfigFn)(const share::ObAIModelConfigInfo &config);
 
 typedef int (*ParseBatchResponseFn)(const sql::ObExpr &expr,
                                     sql::ObEvalCtx &ctx,
                                     ObIAllocator &allocator,
                                     ObJsonObject *response,
                                     const ObArray<int64_t> &row_indices,
-                                    const share::ObAiModelEndpointInfo &endpoint_info,
+                                    const share::ObAIModelConfigInfo &config,
                                     ObIVector *res_vec);
 
 class ObAIFuncBatchUtils
@@ -767,9 +821,9 @@ public:
 
   static int init_pending_state(ObIAllocator &allocator,
                                 const ObString &model_id,
-                                const share::ObAiModelEndpointInfo *endpoint_info,
+                                const share::EndpointType::TYPE op_type,
                                 ObAIFuncBatchState &pending,
-                                CheckModelTypeFn check_fn);
+                                CheckModelTypeFromConfigFn check_fn);
 private:
   // AIMD concurrency adjustment: increase on success, decrease on failure
   static int64_t adjust_concurrency(int64_t current, int64_t min_concurrency,

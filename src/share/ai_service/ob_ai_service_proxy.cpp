@@ -389,3 +389,194 @@ int ObAiServiceProxy::check_ai_endpoint_exists(const uint64_t tenant_id, ObArena
   }
   return ret;
 }
+
+int ObAiServiceProxy::select_ai_model_parameter(const uint64_t tenant_id, ObArenaAllocator &allocator, ObISQLClient &sql_proxy,
+                                                 const ObString &provider_name, const ObString &model_name,
+                                                 int64_t &model_parameter_id, ObString &model_params, ObString &model_options,
+                                                 bool &exists)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  ObTimeoutCtx ctx;
+  const int64_t default_timeout = GCONF.internal_sql_execute_timeout;
+  uint64_t user_tenant_id = gen_user_tenant_id(tenant_id);
+  uint64_t data_version = 0;
+  exists = false;
+  model_parameter_id = OB_INVALID_ID;
+  model_params.reset();
+  model_options.reset();
+
+  if (OB_FAIL(GET_MIN_DATA_VERSION(user_tenant_id, data_version))) {
+    LOG_WARN("fail to get data version", K(ret), K(user_tenant_id));
+  } else if (data_version < DATA_VERSION_4_6_0_1) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("data version less than 4.6.0.1 is not supported", K(ret), K(user_tenant_id), K(data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "data version less than 4.6.0.1");
+  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, default_timeout))) {
+    LOG_WARN("failed to set timeout ctx", KR(ret), K(ctx), K(default_timeout));
+  } else if (OB_FAIL(sql.assign_fmt("SELECT model_parameter_id, model_params, model_options FROM %s WHERE tenant_id = %lu AND provider_name = ",
+      OB_ALL_AI_MODEL_PROFILE_TNAME, user_tenant_id))) {
+    LOG_WARN("sql assign_fmt failed", KR(ret));
+  } else if (OB_FAIL(sql_append_hex_escape_str(provider_name, sql))) {
+    LOG_WARN("failed to append provider_name", KR(ret), K(provider_name));
+  } else if (OB_FAIL(sql.append(" AND model_name = "))) {
+    LOG_WARN("failed to append sql", KR(ret));
+  } else if (OB_FAIL(sql_append_hex_escape_str(model_name, sql))) {
+    LOG_WARN("failed to append model_name", KR(ret), K(model_name));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      ObMySQLResult *result = NULL;
+      if (OB_FAIL(sql_proxy.read(res, tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", K(sql), KR(ret));
+      } else if (NULL == (result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("execute sql failed", K(sql), KR(ret));
+      } else if (OB_FAIL(result->next())) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          exists = false;
+        } else {
+          LOG_WARN("failed to get next result", KR(ret));
+        }
+      } else {
+        exists = true;
+        ObString tmp_params;
+        ObString tmp_options;
+        EXTRACT_INT_FIELD_MYSQL(*result, "model_parameter_id", model_parameter_id, int64_t);
+        EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "model_params", tmp_params, true, false, "");
+        EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "model_options", tmp_options, true, false, "");
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(deep_copy_ob_string(allocator, tmp_params, model_params))) {
+          LOG_WARN("failed to deep copy model_params", KR(ret));
+        } else if (OB_FAIL(deep_copy_ob_string(allocator, tmp_options, model_options))) {
+          LOG_WARN("failed to deep copy model_options", KR(ret));
+        } else {
+          int tmp_ret = OB_SUCCESS;
+          if (OB_ITER_END != (tmp_ret = result->next())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get more row than one", KR(ret), KR(tmp_ret), K(sql));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAiServiceProxy::insert_ai_model_parameter(const uint64_t tenant_id, ObMySQLTransaction &trans,
+                                                 const int64_t model_parameter_id, const ObString &provider_name,
+                                                 const ObString &model_name, const ObString &model_params,
+                                                 const ObString &model_options)
+{
+  int ret = OB_SUCCESS;
+  int64_t affected_rows = 0;
+  ObDMLSqlSplicer sql;
+  ObSqlString buffer;
+  uint64_t user_tenant_id = gen_user_tenant_id(tenant_id);
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(user_tenant_id, data_version))) {
+    LOG_WARN("fail to get data version", K(ret), K(user_tenant_id));
+  } else if (data_version < DATA_VERSION_4_6_0_1) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("data version less than 4.6.0.1 is not supported", K(ret), K(user_tenant_id), K(data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "data version less than 4.6.0.1");
+  } else if (OB_FAIL(sql.add_pk_column("tenant_id", user_tenant_id))) {
+    LOG_WARN("failed to add column", K(ret), K(user_tenant_id));
+  } else if (OB_FAIL(sql.add_pk_column("model_parameter_id", model_parameter_id))) {
+    LOG_WARN("failed to add column", K(ret), K(model_parameter_id));
+  } else if (OB_FAIL(sql.add_column("provider_name", ObHexEscapeSqlStr(provider_name)))) {
+    LOG_WARN("failed to add column", K(ret), K(provider_name));
+  } else if (OB_FAIL(sql.add_column("model_name", ObHexEscapeSqlStr(model_name)))) {
+    LOG_WARN("failed to add column", K(ret), K(model_name));
+  } else if (!model_params.empty() && OB_FAIL(sql.add_column("model_params", ObHexEscapeSqlStr(model_params)))) {
+    LOG_WARN("failed to add column", K(ret));
+  } else if (!model_options.empty() && OB_FAIL(sql.add_column("model_options", ObHexEscapeSqlStr(model_options)))) {
+    LOG_WARN("failed to add column", K(ret));
+  } else if (OB_FAIL(sql.splice_insert_sql(OB_ALL_AI_MODEL_PROFILE_TNAME, buffer))) {
+    LOG_WARN("failed to splice_insert_sql", K(ret));
+  } else if (OB_FAIL(trans.write(tenant_id, buffer.ptr(), affected_rows))) {
+    LOG_WARN("failed to write sql", KR(ret), K(tenant_id), K(buffer));
+  } else if (1 != affected_rows) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("affected_rows should be one", KR(ret), K(affected_rows));
+  }
+
+  if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
+    ret = OB_ENTRY_EXIST;
+    LOG_USER_ERROR(OB_ENTRY_EXIST, "model parameter already exists");
+    LOG_WARN("ai model parameter already exists", KR(ret), K(tenant_id));
+  }
+  LOG_DEBUG("insert ai model parameter", K(tenant_id), K(model_parameter_id), K(provider_name), K(model_name), K(buffer), KR(ret));
+  return ret;
+}
+
+int ObAiServiceProxy::update_ai_model_parameter(const uint64_t tenant_id, ObMySQLTransaction &trans,
+                                                 const int64_t model_parameter_id, const ObString &model_params,
+                                                 const ObString &model_options)
+{
+  int ret = OB_SUCCESS;
+  ObDMLSqlSplicer sql;
+  ObSqlString buffer;
+  int64_t affected_rows = 0;
+  uint64_t user_tenant_id = gen_user_tenant_id(tenant_id);
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(user_tenant_id, data_version))) {
+    LOG_WARN("fail to get data version", K(ret), K(user_tenant_id));
+  } else if (data_version < DATA_VERSION_4_6_0_1) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("data version less than 4.6.0.1 is not supported", K(ret), K(user_tenant_id), K(data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "data version less than 4.6.0.1");
+  } else if (OB_FAIL(sql.add_pk_column("tenant_id", user_tenant_id))) {
+    LOG_WARN("failed to add column", K(ret), K(user_tenant_id));
+  } else if (OB_FAIL(sql.add_pk_column("model_parameter_id", model_parameter_id))) {
+    LOG_WARN("failed to add column", K(ret), K(model_parameter_id));
+  } else if (!model_params.empty() && OB_FAIL(sql.add_column("model_params", ObHexEscapeSqlStr(model_params)))) {
+    LOG_WARN("failed to add column", K(ret));
+  } else if (!model_options.empty() && OB_FAIL(sql.add_column("model_options", ObHexEscapeSqlStr(model_options)))) {
+    LOG_WARN("failed to add column", K(ret));
+  } else if (OB_FAIL(sql.splice_update_sql(OB_ALL_AI_MODEL_PROFILE_TNAME, buffer))) {
+    LOG_WARN("failed to splice_update_sql", K(ret));
+  } else if (OB_FAIL(trans.write(tenant_id, buffer.ptr(), affected_rows))) {
+    LOG_WARN("failed to write sql", KR(ret), K(buffer));
+  } else if (1 != affected_rows) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("affected_rows should be one", KR(ret), K(affected_rows));
+  }
+  LOG_DEBUG("update ai model parameter", K(tenant_id), K(model_parameter_id), K(buffer), KR(ret));
+  return ret;
+}
+
+int ObAiServiceProxy::delete_ai_model_parameter(const uint64_t tenant_id, ObMySQLTransaction &trans,
+                                                 const ObString &provider_name, const ObString &model_name)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  uint64_t user_tenant_id = gen_user_tenant_id(tenant_id);
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(user_tenant_id, data_version))) {
+    LOG_WARN("fail to get data version", K(ret), K(user_tenant_id));
+  } else if (data_version < DATA_VERSION_4_6_0_1) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("data version less than 4.6.0.1 is not supported", K(ret), K(user_tenant_id), K(data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "data version less than 4.6.0.1");
+  } else if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE tenant_id = %lu AND provider_name = ",
+      OB_ALL_AI_MODEL_PROFILE_TNAME, user_tenant_id))) {
+    LOG_WARN("failed to assign sql", KR(ret), K(user_tenant_id));
+  } else if (OB_FAIL(sql_append_hex_escape_str(provider_name, sql))) {
+    LOG_WARN("failed to append provider_name", KR(ret), K(provider_name));
+  } else if (OB_FAIL(sql.append(" AND model_name = "))) {
+    LOG_WARN("failed to append sql", KR(ret));
+  } else if (OB_FAIL(sql_append_hex_escape_str(model_name, sql))) {
+    LOG_WARN("failed to append model_name", KR(ret), K(model_name));
+  } else if (OB_FAIL(trans.write(tenant_id, sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to write sql", KR(ret), K(sql));
+  } else if (0 == affected_rows) {
+    ret = OB_AI_FUNC_MODEL_NOT_FOUND;
+    LOG_USER_ERROR(OB_AI_FUNC_MODEL_NOT_FOUND, model_name.length(), model_name.ptr());
+  } else if (1 != affected_rows) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("affected_rows should be one", KR(ret), K(affected_rows));
+  }
+  return ret;
+}

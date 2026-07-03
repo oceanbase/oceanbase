@@ -946,6 +946,16 @@ int ObSchemaHistoryRecycler::try_recycle_schema_history(
                          model_id);
     ret = OB_SUCCESS; // overwrite ret
 
+    // --------------------------- ai_provider --------------------------------------------------
+    RECYCLE_FIRST_SCHEMA(RECYCLE_AND_COMPRESS, ai_model_provider, OB_ALL_AI_MODEL_PROVIDER_HISTORY_TNAME,
+                         provider_id);
+    ret = OB_SUCCESS; // overwrite ret
+
+    // --------------------------- ai_gateway --------------------------------------------------
+    RECYCLE_FIRST_SCHEMA(RECYCLE_AND_COMPRESS, ai_gateway, OB_ALL_AI_GATEWAY_HISTORY_TNAME,
+                         gateway_id);
+    ret = OB_SUCCESS; // overwrite ret
+
     // -------------------------- object priv --------------------------------------------
     // (RECYCLE_AND_COMPRESS)
     RECYCLE_CUSTOM_SCHEMA(ObObjectPrivMysqlRecycleSchemaExecutor, object_priv_mysql, OB_ALL_TENANT_OBJAUTH_MYSQL_HISTORY_TNAME);

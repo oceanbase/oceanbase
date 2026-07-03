@@ -15216,6 +15216,121 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObDropAiModelArg);
 };
 
+struct ObRegisterProviderArg : public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObRegisterProviderArg() : ObDDLArg(), has_protocol_(false), has_base_url_(false) {}
+  ObRegisterProviderArg(const uint64_t tenant_id, const ObString &provider_name)
+  : ObDDLArg(),
+    provider_name_(provider_name),
+    has_protocol_(false),
+    has_base_url_(false)
+  {
+    exec_tenant_id_ = tenant_id;
+  }
+  ~ObRegisterProviderArg() {}
+  int check_valid() const;
+  int assign(const ObRegisterProviderArg &other);
+  virtual bool contain_sensitive_data() const { return true; }
+  TO_STRING_KV(K_(provider_name), K_(protocol), K_(base_url),
+               "access_key", access_key_.empty() ? ObString() : ObString(OB_MASKED_STR));
+  ObString provider_name_;
+  ObString protocol_;
+  ObString base_url_;
+  ObString access_key_;
+  bool has_protocol_;
+  bool has_base_url_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObRegisterProviderArg);
+};
+
+struct ObUnregisterProviderArg : public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObUnregisterProviderArg() : ObDDLArg(), provider_name_() {}
+  ObUnregisterProviderArg(const uint64_t tenant_id, const ObString &provider_name)
+  : ObDDLArg(),
+    provider_name_(provider_name)
+  {
+    exec_tenant_id_ = tenant_id;
+  }
+  ~ObUnregisterProviderArg() {}
+  bool is_valid() const { return exec_tenant_id_ != OB_INVALID_TENANT_ID && !provider_name_.empty(); }
+  const ObString &get_provider_name() const { return provider_name_; }
+  int assign(const ObUnregisterProviderArg &other);
+  TO_STRING_KV(K_(provider_name));
+  ObString provider_name_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObUnregisterProviderArg);
+};
+
+struct ObCreateAiGatewayArg : public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCreateAiGatewayArg() : ObDDLArg() {}
+  ObCreateAiGatewayArg(const uint64_t tenant_id, const ObString &gateway_name)
+  : ObDDLArg(),
+    gateway_name_(gateway_name)
+  {
+    exec_tenant_id_ = tenant_id;
+  }
+  ~ObCreateAiGatewayArg() {}
+  int check_valid() const;
+  int assign(const ObCreateAiGatewayArg &other);
+  TO_STRING_KV(K_(gateway_name), K_(endpoints), K_(circuit_breaker));
+  ObString gateway_name_;
+  ObString endpoints_;
+  ObString circuit_breaker_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObCreateAiGatewayArg);
+};
+
+struct ObAlterAiGatewayArg : public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObAlterAiGatewayArg() : ObDDLArg() {}
+  ObAlterAiGatewayArg(const uint64_t tenant_id, const ObString &gateway_name)
+  : ObDDLArg(),
+    gateway_name_(gateway_name)
+  {
+    exec_tenant_id_ = tenant_id;
+  }
+  ~ObAlterAiGatewayArg() {}
+  int check_valid() const;
+  int assign(const ObAlterAiGatewayArg &other);
+  TO_STRING_KV(K_(gateway_name), K_(endpoints), K_(circuit_breaker));
+  ObString gateway_name_;
+  ObString endpoints_;
+  ObString circuit_breaker_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObAlterAiGatewayArg);
+};
+
+struct ObDropAiGatewayArg : public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDropAiGatewayArg() : ObDDLArg(), gateway_name_() {}
+  ObDropAiGatewayArg(const uint64_t tenant_id, const ObString &gateway_name)
+  : ObDDLArg(),
+    gateway_name_(gateway_name)
+  {
+    exec_tenant_id_ = tenant_id;
+  }
+  ~ObDropAiGatewayArg() {}
+  bool is_valid() const { return exec_tenant_id_ != OB_INVALID_TENANT_ID && !gateway_name_.empty(); }
+  const ObString &get_gateway_name() const { return gateway_name_; }
+  int assign(const ObDropAiGatewayArg &other);
+  TO_STRING_KV(K_(gateway_name));
+  ObString gateway_name_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObDropAiGatewayArg);
+};
+
 struct ObCheckBackupDestRWConsistencyArg
 {
   OB_UNIS_VERSION(1);

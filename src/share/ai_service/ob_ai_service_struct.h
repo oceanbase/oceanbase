@@ -19,6 +19,7 @@ namespace share
 namespace schema
 {
 class ObAiModelSchema;
+class ObAIProviderSchema;
 }
 
 struct EndpointType final
@@ -111,6 +112,8 @@ public:
   const ObString &get_url() const { return url_; }
   const ObString &get_encrypted_access_key() const { return access_key_; }
   int get_unencrypted_access_key(common::ObIAllocator &allocator, ObString &unencrypted_access_key) const;
+  // For decrypting access_key stored in __all_ai_model_provider (same format as endpoint table).
+  int assign_storage_access_key_only(common::ObIAllocator &allocator, const ObString &encrypted_access_key_from_table);
   const ObString &get_ai_model_name() const { return ai_model_name_; }
   const ObString &get_request_model_name() const { return request_model_name_; }
   const ObString &get_provider() const { return provider_; }
@@ -119,6 +122,9 @@ public:
   const ObString &get_response_transform_fn() const { return response_transform_fn_; }
   uint64_t get_endpoint_id() const { return endpoint_id_; }
   void set_endpoint_id(uint64_t endpoint_id) { endpoint_id_ = endpoint_id; }
+  static int encrypt_access_key_to_storage_format(common::ObIAllocator &allocator,
+                                                  const common::ObString &plain_access_key,
+                                                  common::ObString &storage_access_key);
 
   TO_STRING_KV(K_(name),
                K_(scope),
@@ -188,6 +194,7 @@ public:
     url_.reset();
     api_key_.reset();
     request_model_name_.reset();
+    provider_base_url_.reset();
     message_parameters_ = nullptr;
     batch_size_ = 0;
     max_image_size_ = 0;
@@ -196,13 +203,25 @@ public:
   }
 
   int init(ObIAllocator &allocator, const schema::ObAiModelSchema &ai_model_schema, const ObAiModelEndpointInfo &endpoint_info);
+  // New syntax: provider/model from __all_ai_model_provider + optional __all_ai_model_profile (caller supplies full HTTP URL).
+  int init_from_inline_provider_model(common::ObIAllocator &allocator,
+                                      const common::ObString &inline_model_key,
+                                      const schema::ObAIProviderSchema &provider_schema,
+                                      const common::ObString &request_model_name,
+                                      const EndpointType::TYPE model_type,
+                                      const common::ObString &dispatch_provider_tag,
+                                      const common::ObString &full_service_url);
   int merge_default_config(ObIAllocator &allocator, const ObAIModelConfigItem &default_config);
+  int apply_profile_params(ObIAllocator &allocator,
+                           const ObString &model_params,
+                           const ObString &model_options);
   const ObString &get_model_key() const { return model_key_; }
   const ObString &get_model_name() const { return model_name_; }
   EndpointType::TYPE get_model_type() const { return model_type_; }
   const ObString &get_provider() const { return provider_; }
   const ObString &get_url() const { return url_; }
   const ObString &get_api_key() const { return api_key_; }
+  const ObString &get_provider_base_url() const { return provider_base_url_; }
   const ObString &get_request_model_name() const { return request_model_name_; }
   common::ObJsonObject* get_message_parameters() const { return message_parameters_; }
   int64_t get_batch_size() const { return batch_size_; }
@@ -215,6 +234,7 @@ public:
                K_(model_type),
                K_(provider),
                K_(url),
+               K_(provider_base_url),
                K_(request_model_name),
                K_(message_parameters),
                K_(batch_size),
@@ -232,12 +252,20 @@ private:
   ObString url_;
   ObString api_key_;
   ObString request_model_name_;
+  ObString provider_base_url_; // only set for inline provider/model; empty for DDL-created models
   common::ObJsonObject* message_parameters_;
   int64_t batch_size_;
   int64_t max_image_size_;
   int64_t min_concurrency_;
   int64_t max_concurrency_;
 };
+
+inline bool is_supported_ai_provider_protocol(const common::ObString &protocol)
+{
+  return 0 == protocol.case_compare("openai")
+      || 0 == protocol.case_compare("dashscope")
+      || 0 == protocol.case_compare("cohere");
+}
 
 } // namespace share
 } // namespace oceanbase

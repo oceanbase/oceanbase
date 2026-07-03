@@ -45,6 +45,8 @@ class ObTriggerInfo;
 class ObUDTTypeInfo;
 class ObSimpleExternalResourceSchema;
 class ObAiModelSchema;
+class ObAIProviderSchema;
+class ObAIGatewaySchema;
 
 enum ObSchemaOperationCategory
 {
@@ -400,6 +402,16 @@ enum ObSchemaOperationCategory
   ACT(OB_DDL_DROP_JAVA_POLICY,)                                  \
   ACT(OB_DDL_MODIFY_JAVA_POLICY,)                                \
   ACT(OB_DDL_JAVA_POLICY_OPERATION_END, = 2170)                  \
+  ACT(OB_DDL_AI_PROVIDER_OPERATION_BEGIN, = 2171)                \
+  ACT(OB_DDL_CREATE_AI_PROVIDER, )                               \
+  ACT(OB_DDL_ALTER_AI_PROVIDER, )                                \
+  ACT(OB_DDL_DROP_AI_PROVIDER, )                                 \
+  ACT(OB_DDL_AI_PROVIDER_OPERATION_END, = 2180)                  \
+  ACT(OB_DDL_AI_GATEWAY_OPERATION_BEGIN, = 2181)                \
+  ACT(OB_DDL_CREATE_AI_GATEWAY, )                               \
+  ACT(OB_DDL_ALTER_AI_GATEWAY, )                                \
+  ACT(OB_DDL_DROP_AI_GATEWAY, )                                 \
+  ACT(OB_DDL_AI_GATEWAY_OPERATION_END, = 2190)                  \
   ACT(OB_DDL_MAX_OP,)
 
 DECLARE_ENUM(ObSchemaOperationType, op_type, OP_TYPE_DEF);
@@ -454,6 +466,8 @@ IS_DDL_TYPE(EXTERNAL_RESOURCE, external_resource)
 IS_DDL_TYPE(AI_MODEL, ai_model)
 IS_DDL_TYPE(CCL_RULE, ccl_rule)
 IS_DDL_TYPE(SENSITIVE_RULE, sensitive_rule)
+IS_DDL_TYPE(AI_PROVIDER, ai_provider)
+IS_DDL_TYPE(AI_GATEWAY, ai_gateway)
 
 struct ObSchemaOperation
 {
@@ -508,6 +522,8 @@ public:
     uint64_t external_resource_id_;
     uint64_t ai_model_id_;
     uint64_t sensitive_rule_id_;
+    uint64_t ai_provider_id_;
+    uint64_t ai_gateway_id_;
   };
   union {
     common::ObString table_name_;
@@ -523,6 +539,8 @@ public:
     common::ObString external_resource_name_;
     common::ObString ai_model_name_;
     common::ObString sensitive_rule_name_;
+    common::ObString ai_provider_name_;
+    common::ObString ai_gateway_name_;
   };
   ObSchemaOperationType op_type_;
   common::ObString ddl_stmt_str_;
@@ -814,6 +832,8 @@ class ObContextSqlService;
 class ObCatalogSqlService;
 class ObExternalResourceSqlService;
 class ObAiModelSqlService;
+class ObAIProviderSqlService;
+class ObAIGatewaySqlService;
 class ObCCLRuleSqlService;
 class ObSensitiveRuleSqlService;
 class ObSchemaService
@@ -878,6 +898,8 @@ public:
   //DECLARE_GET_DDL_SQL_SERVICE_FUNC(sys_priv, priv);
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(ExternalResource, external_resource);
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(AiModel, ai_model);
+  DECLARE_GET_DDL_SQL_SERVICE_FUNC(AIProvider, ai_provider);
+  DECLARE_GET_DDL_SQL_SERVICE_FUNC(AIGateway, ai_gateway);
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(CCLRule, ccl_rule);
 
 
@@ -1034,6 +1056,8 @@ public:
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(catalog, ObCatalogSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(external_resource, ObSimpleExternalResourceSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(ai_model, ObAiModelSchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(ai_provider, ObAIProviderSchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(ai_gateway, ObAIGatewaySchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(ccl_rule, ObSimpleCCLRuleSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(sensitive_rule, ObSensitiveRuleSchema);
 
@@ -1119,6 +1143,8 @@ public:
   virtual int fetch_new_catalog_id(const uint64_t tenant_id, uint64_t &new_catalog_id) = 0;
   virtual int fetch_new_external_resource_id(const uint64_t tenant_id, uint64_t &new_external_resource_id) = 0;
   virtual int fetch_new_ai_model_id(const uint64_t tenant_id, uint64_t &new_ai_model_id) = 0;
+  virtual int fetch_new_ai_provider_id(const uint64_t tenant_id, uint64_t &new_ai_provider_id) = 0;
+  virtual int fetch_new_ai_gateway_id(const uint64_t tenant_id, uint64_t &new_ai_gateway_id) = 0;
   virtual int fetch_new_ccl_rule_id(const uint64_t tenant_id, uint64_t &new_ccl_rule_id) = 0;
   virtual int fetch_new_sensitive_rule_id(const uint64_t tenant_id, uint64_t &new_sensitive_rule_id) = 0;
 
@@ -1180,6 +1206,8 @@ public:
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(catalog, ObCatalogSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(external_resource, ObSimpleExternalResourceSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(ai_model, ObAiModelSchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(ai_provider, ObAIProviderSchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(ai_gateway, ObAIGatewaySchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(ccl_rule, ObSimpleCCLRuleSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(sensitive_rule, ObSensitiveRuleSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(sensitive_rule_priv, ObSensitiveRulePriv);

@@ -20,6 +20,8 @@
 
 #include "ob_external_resource_schema_getter_guard.ipp"
 #include "ob_ai_model_schema_getter_guard.ipp"
+#include "ob_ai_provider_schema_getter_guard.ipp"
+#include "ob_ai_gateway_schema_getter_guard.ipp"
 namespace oceanbase
 {
 using namespace common;

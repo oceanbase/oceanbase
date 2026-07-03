@@ -11,6 +11,8 @@
 #include "observer/ob_inner_sql_connection.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
 #include "share/restore/ob_import_util.h"
+#include "lib/mysqlclient/ob_mysql_result.h"
+#include "share/inner_table/ob_inner_table_schema_constants.h"
 
 #define USING_LOG_PREFIX SHARE
 
@@ -359,6 +361,252 @@ int ObAiServiceExecutor::insert_special_endpoint_for_version(ObMySQLTransaction 
   } else if (1 != affected_rows) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("affected_rows should be one", KR(ret), K(affected_rows));
+  }
+  return ret;
+}
+
+int ObAiServiceExecutor::alter_ai_model_parameter(ObArenaAllocator &allocator, const ObString &model_str, const ObIJsonBase &alter_jbase)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = gen_meta_tenant_id(MTL_ID());
+  uint64_t user_tenant_id = MTL_ID();
+  ObString provider_name;
+  ObString model_name;
+  ObSqlString model_params;
+  ObSqlString model_options;
+  bool has_model_params = false;
+  bool has_model_options = false;
+
+  // parse "provider/model" from model_str
+  const char *slash = static_cast<const char *>(MEMCHR(model_str.ptr(), '/', model_str.length()));
+  if (OB_ISNULL(slash) || slash == model_str.ptr() || slash == model_str.ptr() + model_str.length() - 1) {
+    ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+    LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, 5, "model");
+    LOG_WARN("model string must be in provider/model format", K(ret), K(model_str));
+  } else {
+    provider_name.assign_ptr(model_str.ptr(), static_cast<int32_t>(slash - model_str.ptr()));
+    model_name.assign_ptr(slash + 1, static_cast<int32_t>(model_str.length() - (slash - model_str.ptr()) - 1));
+  }
+
+  // parse JSON: model_params, model_options, reject access_key
+  if (OB_SUCC(ret)) {
+    JsonObjectIterator iter = alter_jbase.object_iterator();
+    while (OB_SUCC(ret) && !iter.end()) {
+      ObJsonObjPair elem;
+      if (OB_FAIL(iter.get_elem(elem))) {
+        LOG_WARN("failed to get json element", KR(ret));
+      } else if (0 == elem.first.case_compare("model_params")) {
+        has_model_params = true;
+        if (elem.second->json_type() != ObJsonNodeType::J_OBJECT) {
+          ret = OB_AI_FUNC_PARAM_TYPE_INVALID;
+          LOG_USER_ERROR(OB_AI_FUNC_PARAM_TYPE_INVALID, (int)strlen("model_params"), "model_params", (int)strlen("JSON_OBJECT"), "JSON_OBJECT");
+        } else {
+          common::ObStringBuffer buf(&allocator);
+          if (OB_FAIL(elem.second->print(buf, false))) {
+            LOG_WARN("failed to serialize model_params", K(ret));
+          } else {
+            model_params.assign(buf.ptr());
+          }
+        }
+      } else if (0 == elem.first.case_compare("model_options")) {
+        has_model_options = true;
+        if (elem.second->json_type() != ObJsonNodeType::J_OBJECT) {
+          ret = OB_AI_FUNC_PARAM_TYPE_INVALID;
+          LOG_USER_ERROR(OB_AI_FUNC_PARAM_TYPE_INVALID, (int)strlen("model_options"), "model_options", (int)strlen("JSON_OBJECT"), "JSON_OBJECT");
+        } else {
+          // validate model_options fields
+          bool has_min_concurrency = false;
+          bool has_max_concurrency = false;
+          int64_t min_concurrency = 0;
+          int64_t max_concurrency = 0;
+          JsonObjectIterator opt_iter = elem.second->object_iterator();
+          while (OB_SUCC(ret) && !opt_iter.end()) {
+            ObJsonObjPair opt_elem;
+            if (OB_FAIL(opt_iter.get_elem(opt_elem))) {
+              LOG_WARN("failed to get model_options element", KR(ret));
+            } else if (0 == opt_elem.first.case_compare("batch_size")) {
+              if (opt_elem.second->json_type() != ObJsonNodeType::J_INT && opt_elem.second->json_type() != ObJsonNodeType::J_UINT) {
+                ret = OB_AI_FUNC_PARAM_TYPE_INVALID;
+                LOG_USER_ERROR(OB_AI_FUNC_PARAM_TYPE_INVALID, (int)strlen("batch_size"), "batch_size", (int)strlen("INT"), "INT");
+              } else if (opt_elem.second->get_int() <= 0) {
+                ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+                LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, (int)strlen("batch_size"), "batch_size");
+              }
+            } else if (0 == opt_elem.first.case_compare("max_image_size")) {
+              if (opt_elem.second->json_type() != ObJsonNodeType::J_INT && opt_elem.second->json_type() != ObJsonNodeType::J_UINT) {
+                ret = OB_AI_FUNC_PARAM_TYPE_INVALID;
+                LOG_USER_ERROR(OB_AI_FUNC_PARAM_TYPE_INVALID, (int)strlen("max_image_size"), "max_image_size", (int)strlen("INT"), "INT");
+              } else if (opt_elem.second->get_int() <= 0) {
+                ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+                LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, (int)strlen("max_image_size"), "max_image_size");
+              }
+            } else if (0 == opt_elem.first.case_compare("min_concurrency")) {
+              if (opt_elem.second->json_type() != ObJsonNodeType::J_INT && opt_elem.second->json_type() != ObJsonNodeType::J_UINT) {
+                ret = OB_AI_FUNC_PARAM_TYPE_INVALID;
+                LOG_USER_ERROR(OB_AI_FUNC_PARAM_TYPE_INVALID, (int)strlen("min_concurrency"), "min_concurrency", (int)strlen("INT"), "INT");
+              } else if (opt_elem.second->get_int() <= 0) {
+                ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+                LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, (int)strlen("min_concurrency"), "min_concurrency");
+              } else {
+                has_min_concurrency = true;
+                min_concurrency = opt_elem.second->get_int();
+              }
+            } else if (0 == opt_elem.first.case_compare("max_concurrency")) {
+              if (opt_elem.second->json_type() != ObJsonNodeType::J_INT && opt_elem.second->json_type() != ObJsonNodeType::J_UINT) {
+                ret = OB_AI_FUNC_PARAM_TYPE_INVALID;
+                LOG_USER_ERROR(OB_AI_FUNC_PARAM_TYPE_INVALID, (int)strlen("max_concurrency"), "max_concurrency", (int)strlen("INT"), "INT");
+              } else if (opt_elem.second->get_int() <= 0) {
+                ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+                LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, (int)strlen("max_concurrency"), "max_concurrency");
+              } else {
+                has_max_concurrency = true;
+                max_concurrency = opt_elem.second->get_int();
+              }
+            } else {
+              ret = OB_AI_FUNC_PARAM_INVALID;
+              LOG_USER_ERROR(OB_AI_FUNC_PARAM_INVALID, opt_elem.first.length(), opt_elem.first.ptr());
+            }
+            if (OB_SUCC(ret)) { opt_iter.next(); }
+          }
+          if (OB_SUCC(ret) && has_min_concurrency && has_max_concurrency && min_concurrency > max_concurrency) {
+            ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+            LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, (int)strlen("min_concurrency"), "min_concurrency");
+          }
+          if (OB_SUCC(ret)) {
+            common::ObStringBuffer buf(&allocator);
+            if (OB_FAIL(elem.second->print(buf, false))) {
+              LOG_WARN("failed to serialize model_options", K(ret));
+            } else {
+              model_options.assign(buf.ptr());
+            }
+          }
+        }
+      } else if (0 == elem.first.case_compare("access_key")) {
+        ret = OB_AI_FUNC_PARAM_INVALID;
+        LOG_USER_ERROR(OB_AI_FUNC_PARAM_INVALID, (int)strlen("access_key"), "access_key");
+      } else {
+        ret = OB_AI_FUNC_PARAM_INVALID;
+        LOG_USER_ERROR(OB_AI_FUNC_PARAM_INVALID, elem.first.length(), elem.first.ptr());
+      }
+      if (OB_SUCC(ret)) { iter.next(); }
+    }
+  }
+
+  // execute SQL: check provider → SELECT existing → INSERT or UPDATE
+  if (OB_SUCC(ret)) {
+    ObMySQLTransaction trans;
+    if (OB_FAIL(trans.start(GCTX.sql_proxy_, user_tenant_id))) {
+      LOG_WARN("failed to start transaction", KR(ret));
+    } else {
+      // check provider exists via SQL (not schema_guard, which can be stale after DDL)
+      ObSqlString check_sql;
+      if (OB_FAIL(check_sql.assign_fmt(
+          "SELECT count(*) as cnt FROM %s WHERE tenant_id = 0 AND name = ",
+          OB_ALL_AI_MODEL_PROVIDER_TNAME))) {
+        LOG_WARN("failed to assign check sql", KR(ret));
+      } else if (OB_FAIL(sql_append_hex_escape_str(provider_name, check_sql))) {
+        LOG_WARN("failed to append provider_name", KR(ret), K(provider_name));
+      } else {
+        SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+          int64_t cnt = 0;
+          if (OB_FAIL(trans.read(res, user_tenant_id, check_sql.ptr()))) {
+            LOG_WARN("failed to read provider table", K(ret));
+          } else if (OB_ISNULL(res.get_result())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null result", K(ret));
+          } else if (OB_FAIL(res.get_result()->next())) {
+            LOG_WARN("failed to get next", K(ret));
+          } else if (OB_FAIL(res.get_result()->get_int("cnt", cnt))) {
+            LOG_WARN("failed to get int", K(ret));
+          } else if (cnt == 0) {
+            ret = OB_AI_FUNC_MODEL_NOT_FOUND;
+            LOG_USER_ERROR(OB_AI_FUNC_MODEL_NOT_FOUND, provider_name.length(), provider_name.ptr());
+            LOG_WARN("provider not found", K(ret), K(provider_name));
+          }
+        }
+      }
+
+      // SELECT existing → INSERT or UPDATE
+      bool exists = false;
+      int64_t old_model_parameter_id = OB_INVALID_ID;
+      ObString old_model_params;
+      ObString old_model_options;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObAiServiceProxy::select_ai_model_parameter(user_tenant_id, allocator, trans,
+          provider_name, model_name, old_model_parameter_id, old_model_params, old_model_options, exists))) {
+        LOG_WARN("failed to select ai model parameter", K(ret), K(provider_name), K(model_name));
+      } else if (exists) {
+        // Empty JSON object {}: no field to merge; skip UPDATE. Otherwise a no-op UPDATE can
+        // return affected_rows=0 while update_ai_model_parameter requires exactly one row changed.
+        if (has_model_params || has_model_options) {
+          ObString update_model_params = has_model_params ? ObString(model_params.length(), model_params.ptr()) : old_model_params;
+          ObString update_model_options = has_model_options ? ObString(model_options.length(), model_options.ptr()) : old_model_options;
+          const bool params_unchanged = (0 == update_model_params.case_compare(old_model_params));
+          const bool options_unchanged = (0 == update_model_options.case_compare(old_model_options));
+          if (!params_unchanged || !options_unchanged) {
+            if (OB_FAIL(ObAiServiceProxy::update_ai_model_parameter(user_tenant_id, trans, old_model_parameter_id,
+                update_model_params, update_model_options))) {
+              LOG_WARN("failed to update ai model parameter", K(ret));
+            }
+          }
+        }
+      } else {
+        // INSERT
+        uint64_t new_model_parameter_id = OB_INVALID_ID;
+        ObMaxIdFetcher fetcher(*GCTX.sql_proxy_);
+        if (OB_FAIL(fetcher.fetch_new_max_id(user_tenant_id, OB_MAX_USED_AI_MODEL_PROFILE_ID_TYPE, new_model_parameter_id, 0))) {
+          LOG_WARN("failed to fetch new ai model parameter id", KR(ret), K(user_tenant_id));
+        } else {
+          ObString insert_model_params = has_model_params ? ObString(model_params.length(), model_params.ptr()) : ObString();
+          ObString insert_model_options = has_model_options ? ObString(model_options.length(), model_options.ptr()) : ObString();
+          if (OB_FAIL(ObAiServiceProxy::insert_ai_model_parameter(user_tenant_id, trans, new_model_parameter_id,
+              provider_name, model_name, insert_model_params, insert_model_options))) {
+            LOG_WARN("failed to insert ai model parameter", K(ret));
+          }
+        }
+      }
+
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("failed to end trans", KR(ret));
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAiServiceExecutor::drop_ai_model_parameter(const ObString &model_str)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = gen_meta_tenant_id(MTL_ID());
+  ObString provider_name;
+  ObString model_name;
+
+  const char *slash = static_cast<const char *>(MEMCHR(model_str.ptr(), '/', model_str.length()));
+  if (OB_ISNULL(slash) || slash == model_str.ptr() || slash == model_str.ptr() + model_str.length() - 1) {
+    ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+    LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, 5, "model");
+    LOG_WARN("model string must be in provider/model format", K(ret), K(model_str));
+  } else {
+    provider_name.assign_ptr(model_str.ptr(), static_cast<int32_t>(slash - model_str.ptr()));
+    model_name.assign_ptr(slash + 1, static_cast<int32_t>(model_str.length() - (slash - model_str.ptr()) - 1));
+  }
+
+  if (OB_SUCC(ret)) {
+    uint64_t user_tenant_id = MTL_ID();
+    ObMySQLTransaction trans;
+    if (OB_FAIL(trans.start(GCTX.sql_proxy_, user_tenant_id))) {
+      LOG_WARN("failed to start transaction", KR(ret));
+    } else if (OB_FAIL(ObAiServiceProxy::delete_ai_model_parameter(user_tenant_id, trans, provider_name, model_name))) {
+      LOG_WARN("failed to delete ai model parameter", K(ret), K(provider_name), K(model_name));
+    }
+
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("failed to end trans", KR(ret));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    }
   }
   return ret;
 }

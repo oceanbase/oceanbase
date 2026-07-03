@@ -38,7 +38,7 @@ private:
                                                common::ObIAllocator &allocator,
                                                common::ObJsonObject *response,
                                                const common::ObArray<int64_t> &row_indices,
-                                               const share::ObAiModelEndpointInfo &endpoint_info,
+                                               const share::ObAIModelConfigInfo &config,
                                                common::ObIVector *res_vec);
   static constexpr int MODEL_IDX = 0;
   static constexpr int PROMPT_IDX = 1;

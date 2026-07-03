@@ -73,6 +73,8 @@
 #include "storage/ddl/ob_tablet_split_util.h"
 #include "share/compaction_ttl/ob_compaction_ttl_util.h"
 #include "rootserver/ob_ai_model_ddl_service.h"
+#include "rootserver/ob_ai_provider_ddl_service.h"
+#include "rootserver/ob_ai_gateway_ddl_service.h"
 #include "parallel_ddl/ob_drop_tablegroup_helper.h" // ObDropTableGroupHelper
 #include "parallel_ddl/ob_create_tablegroup_helper.h" // ObCreateTableGroupHelper
 #include "share/table/ob_ttl_util.h"
@@ -11504,6 +11506,97 @@ int ObRootService::drop_ai_model(const obrpc::ObDropAiModelArg &arg)
 
   LOG_TRACE("finish drop ai model", K(ret), K(arg));
 
+  return ret;
+}
+
+int ObRootService::register_provider(const obrpc::ObRegisterProviderArg &arg)
+{
+  int ret = OB_SUCCESS;
+  LOG_TRACE("receive register provider arg", K(arg));
+  ObAIProviderDDLService provider_ddl_service(ddl_service_);
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(arg.check_valid())) {
+    LOG_WARN("invalid arg", K(ret), K(arg));
+  } else if (OB_FAIL(provider_ddl_service.register_provider(arg))) {
+    LOG_WARN("failed to register provider", K(ret), K(arg));
+  }
+
+  LOG_TRACE("finish register provider", K(ret), K(arg));
+
+  return ret;
+}
+
+int ObRootService::unregister_provider(const obrpc::ObUnregisterProviderArg &arg)
+{
+  int ret = OB_SUCCESS;
+  LOG_TRACE("receive unregister provider arg", K(arg));
+  ObAIProviderDDLService provider_ddl_service(ddl_service_);
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (OB_FAIL(provider_ddl_service.unregister_provider(arg))) {
+    LOG_WARN("failed to unregister provider", K(ret), K(arg));
+  }
+
+  LOG_TRACE("finish unregister provider", K(ret), K(arg));
+
+  return ret;
+}
+
+int ObRootService::create_ai_gateway(const obrpc::ObCreateAiGatewayArg &arg)
+{
+  int ret = OB_SUCCESS;
+  LOG_TRACE("receive create ai gateway arg", K(arg));
+  ObAIGatewayDDLService gateway_ddl_service(ddl_service_);
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(arg.check_valid())) {
+    LOG_WARN("invalid arg", K(ret), K(arg));
+  } else if (OB_FAIL(gateway_ddl_service.create_gateway(arg))) {
+    LOG_WARN("failed to create ai gateway", K(ret), K(arg));
+  }
+  LOG_TRACE("finish create ai gateway", K(ret), K(arg));
+  return ret;
+}
+
+int ObRootService::alter_ai_gateway(const obrpc::ObAlterAiGatewayArg &arg)
+{
+  int ret = OB_SUCCESS;
+  LOG_TRACE("receive alter ai gateway arg", K(arg));
+  ObAIGatewayDDLService gateway_ddl_service(ddl_service_);
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(arg.check_valid())) {
+    LOG_WARN("invalid arg", K(ret), K(arg));
+  } else if (OB_FAIL(gateway_ddl_service.alter_gateway(arg))) {
+    LOG_WARN("failed to alter ai gateway", K(ret), K(arg));
+  }
+  LOG_TRACE("finish alter ai gateway", K(ret), K(arg));
+  return ret;
+}
+
+int ObRootService::drop_ai_gateway(const obrpc::ObDropAiGatewayArg &arg)
+{
+  int ret = OB_SUCCESS;
+  LOG_TRACE("receive drop ai gateway arg", K(arg));
+  ObAIGatewayDDLService gateway_ddl_service(ddl_service_);
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (OB_FAIL(gateway_ddl_service.drop_gateway(arg))) {
+    LOG_WARN("failed to drop ai gateway", K(ret), K(arg));
+  }
+  LOG_TRACE("finish drop ai gateway", K(ret), K(arg));
   return ret;
 }
 

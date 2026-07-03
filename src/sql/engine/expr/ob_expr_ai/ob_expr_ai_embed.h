@@ -35,34 +35,17 @@ public:
                       ObExpr &rt_expr) const override;
   virtual bool need_rt_ctx() const override { return true; }
 private:
-  static int pack_json_array_to_res_vector(const ObExpr &expr,
-                                          ObEvalCtx &ctx,
-                                          ObIAllocator &allocator,
-                                          ObArray<ObJsonObject *> &responses,
-                                          const ObBitVector &skip,
-                                          const EvalBound &bound,
-                                          const ObAiModelEndpointInfo &endpoint_info,
-                                          ObIVector *res_vec);
-  static int pack_json_object_to_res_vector(const ObExpr &expr,
-                                            ObEvalCtx &ctx,
-                                            ObIAllocator &allocator,
-                                            ObJsonObject *response,
-                                            const ObBitVector &skip,
-                                            const EvalBound &bound,
-                                            const ObAiModelEndpointInfo &endpoint_info,
-                                            ObIVector *res_vec);
   static int pack_embed_response_to_indices(const ObExpr &expr,
                                             ObEvalCtx &ctx,
                                             ObIAllocator &allocator,
                                             ObJsonObject *response,
                                             const ObArray<int64_t> &row_indices,
-                                            const ObAiModelEndpointInfo &endpoint_info,
+                                            const share::ObAIModelConfigInfo &config,
                                             ObIVector *res_vec);
 
   static int enqueue_group_to_pending(ObIAllocator &allocator,
                                       const ObExpr &expr,
                                       ObEvalCtx &ctx,
-                                      omt::ObAiServiceGuard &ai_service_guard,
                                       ObIVector *res_vec,
                                       ObBitVector &eval_flags,
                                       const ObString &grp_model_id,

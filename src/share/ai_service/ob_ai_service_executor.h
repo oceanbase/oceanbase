@@ -26,6 +26,10 @@ public:
   static int read_ai_endpoint(ObArenaAllocator &allocator, const ObString &endpoint_name, ObAiModelEndpointInfo &endpoint_info);
   static int read_ai_endpoint_by_ai_model_name(ObArenaAllocator &allocator, const ObString &ai_model_name, ObAiModelEndpointInfo &endpoint_info);
 
+  // ai model parameter
+  static int alter_ai_model_parameter(ObArenaAllocator &allocator, const ObString &model_str, const ObIJsonBase &alter_jbase);
+  static int drop_ai_model_parameter(const ObString &model_str);
+
 private:
   static const int64_t SPECIAL_ENDPOINT_ID_FOR_VERSION;
   static const int64_t INIT_ENDPOINT_VERSION;

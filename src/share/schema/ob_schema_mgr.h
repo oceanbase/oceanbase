@@ -37,6 +37,8 @@
 #include "share/schema/ob_catalog_mgr.h"
 #include "share/schema/ob_external_resource_mgr.h"
 #include "share/schema/ob_ai_model_mgr.h"
+#include "share/schema/ob_ai_provider_mgr.h"
+#include "share/schema/ob_ai_gateway_mgr.h"
 #include "share/schema/ob_ccl_rule_mgr.h"
 #include "share/schema/ob_sensitive_rule_mgr.h"
 
@@ -783,6 +785,28 @@ public:
       const common::ObNameCaseMode &case_mode,
       const ObAiModelSchema *&ai_model_schema) const;
 
+  // ai provider
+  int get_ai_provider_schema(
+      const uint64_t &tenant_id,
+      const uint64_t &provider_id,
+      const ObAIProviderSchema *&provider_schema) const;
+  int get_ai_provider_schema(
+      const uint64_t &tenant_id,
+      const ObString &provider_name,
+      const common::ObNameCaseMode &case_mode,
+      const ObAIProviderSchema *&provider_schema) const;
+
+  // ai gateway
+  int get_ai_gateway_schema(
+      const uint64_t &tenant_id,
+      const uint64_t &gateway_id,
+      const ObAIGatewaySchema *&gateway_schema) const;
+  int get_ai_gateway_schema(
+      const uint64_t &tenant_id,
+      const ObString &gateway_name,
+      const common::ObNameCaseMode &case_mode,
+      const ObAIGatewaySchema *&gateway_schema) const;
+
   // other
   int get_tenant_schemas(common::ObIArray<const ObSimpleTenantSchema *> &tenant_schemas) const;
    int get_tenant_ids(common::ObIArray<uint64_t> &tenant_ids) const;
@@ -965,6 +989,14 @@ private:
   int add_ai_models(const common::ObIArray<ObAiModelSchema> &ai_model_schemas);
   int add_ai_model(const ObAiModelSchema &ai_model_schema);
   int del_ai_model(const ObTenantAiModelId &tenant_ai_model_id);
+  // ai provider
+  int add_ai_providers(const common::ObIArray<ObAIProviderSchema> &ai_provider_schemas);
+  int add_ai_provider(const ObAIProviderSchema &ai_provider_schema);
+  int del_ai_provider(const ObTenantAIProviderId &tenant_ai_provider_id);
+  // ai gateway
+  int add_ai_gateways(const common::ObIArray<ObAIGatewaySchema> &ai_gateway_schemas);
+  int add_ai_gateway(const ObAIGatewaySchema &ai_gateway_schema);
+  int del_ai_gateway(const ObTenantAIGatewayId &tenant_ai_gateway_id);
   // ccl
   int add_ccl_rules(const common::ObIArray<ObSimpleCCLRuleSchema> &ccl_schemas);
   int add_ccl_rule(const ObSimpleCCLRuleSchema &ccl_schema);
@@ -1039,6 +1071,8 @@ private:
   TableInfos mlog_infos_;
   ObExternalResourceMgr external_resource_mgr_;
   ObAiModelMgr ai_model_mgr_;
+  ObAIProviderMgr ai_provider_mgr_;
+  ObAIGatewayMgr ai_gateway_mgr_;
 };
 
 }//end of namespace schema

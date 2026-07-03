@@ -369,6 +369,11 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 580	__all_lob_check_exception_result	0	201001	1
 583	__all_routine_load_job	0	201001	1
 584	__all_ss_gc_reserved_snapshot	0	201001	1
+597	__all_ai_model_provider	0	201001	1
+598	__all_ai_model_provider_history	0	201001	1
+599	__all_ai_model_profile	0	201001	1
+600	__all_ai_gateway	0	201001	1
+601	__all_ai_gateway_history	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1
@@ -940,6 +945,11 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12590	__all_virtual_ss_local_cache_diagnose_info	2	201001	1
 12591	__all_virtual_ddl_dag_monitor	2	201001	1
 12592	__all_virtual_vector_segment_info	2	201001	1
+12609	__all_virtual_ai_model_provider	2	201001	1
+12610	__all_virtual_ai_model_profile	2	201001	1
+12611	__all_virtual_ai_gateway	2	201001	1
+12614	__all_virtual_ai_model_provider_history	2	201001	1
+12615	__all_virtual_ai_gateway_history	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
@@ -1544,6 +1554,14 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21715	V$OB_SINDI_INDEX_INFO	1	201001	1
 21716	GV$OB_HNSW_INDEX_SEGMENT_INFO	1	201001	1
 21717	V$OB_HNSW_INDEX_SEGMENT_INFO	1	201001	1
+21732	DBA_OB_AI_MODEL_PROVIDERS	1	201001	1
+21733	CDB_OB_AI_MODEL_PROVIDERS	1	201001	1
+21734	DBA_OB_AI_MODEL_PROFILES	1	201001	1
+21735	CDB_OB_AI_MODEL_PROFILES	1	201001	1
+21736	DBA_OB_AI_GATEWAYS	1	201001	1
+21737	CDB_OB_AI_GATEWAYS	1	201001	1
+21738	DBA_OB_AI_GATEWAY_ENDPOINTS	1	201001	1
+21739	CDB_OB_AI_GATEWAY_ENDPOINTS	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

@@ -17030,6 +17030,158 @@ end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_HNSW_INDEX_SEGMENT_INFO limit 1);
 cnt
 1
+desc oceanbase.DBA_OB_AI_MODEL_PROVIDERS;
+Field	Type	Null	Key	Default	Extra
+PROVIDER_ID	bigint(20)	NO		NULL	
+PROVIDER_NAME	varchar(128)	NO		NULL	
+PROTOCOL	varchar(64)	NO		NULL	
+BASE_URL	varchar(2048)	NO		NULL	
+ACCESS_KEY	varchar(2048)	YES		NULL	
+CREATE_TIME	timestamp(6)	YES			
+UPDATE_TIME	timestamp(6)	YES			
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|DBA_OB_AI_MODEL_PROVIDERS|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|DBA_OB_AI_MODEL_PROVIDERS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_AI_MODEL_PROVIDERS|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_AI_MODEL_PROVIDERS limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_AI_MODEL_PROVIDERS;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+PROVIDER_ID	bigint(20)	NO		NULL	
+PROVIDER_NAME	varchar(128)	NO		NULL	
+PROTOCOL	varchar(64)	NO		NULL	
+BASE_URL	varchar(2048)	NO		NULL	
+ACCESS_KEY	varchar(2048)	YES		NULL	
+CREATE_TIME	timestamp(6)	NO		NULL	
+UPDATE_TIME	timestamp(6)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|CDB_OB_AI_MODEL_PROVIDERS|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|CDB_OB_AI_MODEL_PROVIDERS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|CDB_OB_AI_MODEL_PROVIDERS|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_AI_MODEL_PROVIDERS limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_AI_MODEL_PROFILES;
+Field	Type	Null	Key	Default	Extra
+MODEL_PARAMETER_ID	bigint(20)	NO		NULL	
+MODEL	varchar(385)	NO		NULL	
+MODEL_PARAMS	varchar(2048)	YES		NULL	
+MODEL_OPTIONS	varchar(2048)	YES		NULL	
+CREATE_TIME	timestamp(6)	YES			
+UPDATE_TIME	timestamp(6)	YES			
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|DBA_OB_AI_MODEL_PROFILES|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|DBA_OB_AI_MODEL_PROFILES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_AI_MODEL_PROFILES|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_AI_MODEL_PROFILES limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_AI_MODEL_PROFILES;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+MODEL_PARAMETER_ID	bigint(20)	NO		NULL	
+MODEL	varchar(385)	NO		NULL	
+MODEL_PARAMS	varchar(2048)	YES		NULL	
+MODEL_OPTIONS	varchar(2048)	YES		NULL	
+CREATE_TIME	timestamp(6)	NO		NULL	
+UPDATE_TIME	timestamp(6)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|CDB_OB_AI_MODEL_PROFILES|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|CDB_OB_AI_MODEL_PROFILES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|CDB_OB_AI_MODEL_PROFILES|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_AI_MODEL_PROFILES limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_AI_GATEWAYS;
+Field	Type	Null	Key	Default	Extra
+GATEWAY_ID	bigint(20)	NO		NULL	
+GATEWAY_NAME	varchar(128)	NO		NULL	
+ENDPOINTS	longtext	NO		NULL	
+CIRCUIT_BREAKER	varchar(2048)	YES		NULL	
+CREATE_TIME	timestamp(6)	YES			
+UPDATE_TIME	timestamp(6)	YES			
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|DBA_OB_AI_GATEWAYS|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|DBA_OB_AI_GATEWAYS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_AI_GATEWAYS|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_AI_GATEWAYS limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_AI_GATEWAYS;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+GATEWAY_ID	bigint(20)	NO		NULL	
+GATEWAY_NAME	varchar(128)	NO		NULL	
+ENDPOINTS	longtext	NO		NULL	
+CIRCUIT_BREAKER	varchar(2048)	YES		NULL	
+CREATE_TIME	timestamp(6)	NO		NULL	
+UPDATE_TIME	timestamp(6)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|CDB_OB_AI_GATEWAYS|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|CDB_OB_AI_GATEWAYS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|CDB_OB_AI_GATEWAYS|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_AI_GATEWAYS limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_AI_GATEWAY_ENDPOINTS;
+Field	Type	Null	Key	Default	Extra
+GATEWAY_ID	bigint(20)	NO		NULL	
+GATEWAY_NAME	varchar(128)	NO		NULL	
+ENDPOINT_NAME	varchar(128)	NO			
+MODEL	varchar(512)	NO			
+WEIGHT	bigint(20)	NO			
+CREATE_TIME	timestamp(6)	YES			
+UPDATE_TIME	timestamp(6)	YES			
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|DBA_OB_AI_GATEWAY_ENDPOINTS|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|DBA_OB_AI_GATEWAY_ENDPOINTS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_AI_GATEWAY_ENDPOINTS|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_AI_GATEWAY_ENDPOINTS limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_AI_GATEWAY_ENDPOINTS;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+GATEWAY_ID	bigint(20)	NO		NULL	
+GATEWAY_NAME	varchar(128)	NO		NULL	
+ENDPOINT_NAME	varchar(128)	NO			
+MODEL	varchar(512)	NO			
+WEIGHT	bigint(20)	NO			
+CREATE_TIME	timestamp(6)	NO		NULL	
+UPDATE_TIME	timestamp(6)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|CDB_OB_AI_GATEWAY_ENDPOINTS|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|CDB_OB_AI_GATEWAY_ENDPOINTS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|CDB_OB_AI_GATEWAY_ENDPOINTS|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_AI_GATEWAY_ENDPOINTS limit 1);
+cnt
+1
 select case cnt when 0 then NULL else 'UNEXPECTED ERROR: It is expected to be an empty set, which means that all GV$ and V$ view column names are defined consistently' end ERROR_INFO from (select /*+no_rewrite*/ count(*) cnt from
 (SELECT t.table_name,
 group_concat(c.column_name) as column_name_list

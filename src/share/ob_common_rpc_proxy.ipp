@@ -336,6 +336,17 @@
   RPC_S(PRD drop_ai_model, obrpc::OB_DROP_AI_MODEL, (ObDropAiModelArg));
   //----End of functions for managing ai model----
 
+  //----Functions for managing ai provider----
+  RPC_S(PRD register_provider, obrpc::OB_REGISTER_PROVIDER, (ObRegisterProviderArg));
+  RPC_S(PRD unregister_provider, obrpc::OB_UNREGISTER_PROVIDER, (ObUnregisterProviderArg));
+  //----End of functions for managing ai provider----
+
+  //----Functions for managing ai gateway----
+  RPC_S(PRD create_ai_gateway, obrpc::OB_CREATE_AI_GATEWAY, (ObCreateAiGatewayArg));
+  RPC_S(PRD alter_ai_gateway, obrpc::OB_ALTER_AI_GATEWAY, (ObAlterAiGatewayArg));
+  RPC_S(PRD drop_ai_gateway, obrpc::OB_DROP_AI_GATEWAY, (ObDropAiGatewayArg));
+  //----End of functions for managing ai gateway----
+
   // htable ddl
   RPC_S(PRD parallel_htable_ddl, obrpc::OB_PARALLEL_HTABLE_DDL, (ObHTableDDLArg), ObHTableDDLRes);
 

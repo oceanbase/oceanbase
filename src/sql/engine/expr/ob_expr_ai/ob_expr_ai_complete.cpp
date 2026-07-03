@@ -102,7 +102,7 @@ int ObExprAIComplete::eval_ai_complete(const ObExpr &expr,
     ObExpr *arg_expr_prompt = expr.args_[PROMPT_IDX];
 
     share::ObAIModelConfigInfo model_config;
-    if (OB_FAIL(ObAIFuncUtils::get_model_config_info(temp_allocator, model_id, model_config))) {
+    if (OB_FAIL(ObAIFuncUtils::get_model_config_info(temp_allocator, model_id, oceanbase::share::EndpointType::COMPLETION, model_config))) {
       LOG_WARN("failed to get model config info", K(ret), K(model_id));
     } else if ( OB_ISNULL(arg_expr_prompt) ) {
       ret = OB_ERR_UNEXPECTED;
@@ -200,13 +200,13 @@ int ObExprAIComplete::pack_complete_response_to_indices(const ObExpr &expr,
                                                         common::ObIAllocator &allocator,
                                                         common::ObJsonObject *response,
                                                         const common::ObArray<int64_t> &row_indices,
-                                                        const share::ObAiModelEndpointInfo &endpoint_info,
+                                                        const share::ObAIModelConfigInfo &config,
                                                         common::ObIVector *res_vec)
 {
   int ret = OB_SUCCESS;
   common::ObIJsonBase *output = nullptr;
   ObString raw_str;
-  if (OB_FAIL(ObAIFuncUtils::parse_complete_output(allocator, endpoint_info, response, output))) {
+  if (OB_FAIL(ObAIFuncUtils::parse_complete_output(allocator, config, response, output))) {
     LOG_WARN("fail to parse complete output", K(ret));
   } else if (OB_ISNULL(output)) {
     ret = OB_ERR_UNEXPECTED;
@@ -247,19 +247,9 @@ int ObExprAIComplete::eval_ai_complete_vector(const ObExpr &expr, ObEvalCtx &ctx
 
     ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
     uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
-    MultimodeAlloctor batch_arena(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
-    ObArenaAllocator const_arena(lib::ObMemAttr(tenant_id, "AIComplConst"));
+    MultimodeAlloctor const_arena(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+    ObArenaAllocator batch_arena(lib::ObMemAttr(tenant_id, "AIComplbatch"));
     lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, N_AI_COMPLETE));
-
-    omt::ObAiServiceGuard ai_service_guard;
-    omt::ObTenantAiService *ai_service = MTL(omt::ObTenantAiService*);
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(ai_service)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ai service is null", K(ret));
-    } else if (OB_FAIL(ai_service->get_ai_service_guard(ai_service_guard))) {
-      LOG_WARN("failed to get ai service guard", K(ret));
-    }
 
     ObString const_model_id;
     ObString const_config_str;
@@ -280,7 +270,7 @@ int ObExprAIComplete::eval_ai_complete_vector(const ObExpr &expr, ObEvalCtx &ctx
                    expr.args_[MODEL_IDX]->obj_meta_.has_lob_header(),
                    const_model_id, bound.start()))) {
       LOG_WARN("fail to read const model_id", K(ret));
-    } else if (OB_FAIL(ObAIFuncUtils::get_model_config_info(batch_arena, const_model_id, cur_model_config))) {
+    } else if (OB_FAIL(ObAIFuncUtils::get_model_config_info(batch_arena, const_model_id, oceanbase::share::EndpointType::COMPLETION, cur_model_config))) {
       LOG_WARN("fail to get model config info for const model", K(ret), K(const_model_id));
     } else {
       cur_model_id = const_model_id;
@@ -344,7 +334,7 @@ int ObExprAIComplete::eval_ai_complete_vector(const ObExpr &expr, ObEvalCtx &ctx
       // Refresh model config after arena reuse (must be after flush+reuse)
       if (OB_FAIL(ret)) {
       } else if (cur_model_id != model_id_i) {
-        if (OB_FAIL(ObAIFuncUtils::get_model_config_info(batch_arena, model_id_i, cur_model_config))) {
+        if (OB_FAIL(ObAIFuncUtils::get_model_config_info(batch_arena, model_id_i, oceanbase::share::EndpointType::COMPLETION, cur_model_config))) {
           LOG_WARN("fail to get model config info", K(ret), K(model_id_i));
         } else {
           cur_model_id = model_id_i;
@@ -451,12 +441,9 @@ int ObExprAIComplete::eval_ai_complete_vector(const ObExpr &expr, ObEvalCtx &ctx
 
       if (OB_FAIL(ret)) {
       } else if (!pending.initialized_) {
-        const share::ObAiModelEndpointInfo *endpoint_info = nullptr;
-        if (OB_FAIL(ai_service_guard.get_ai_endpoint_by_ai_model_name(model_id_i, endpoint_info))) {
-          LOG_WARN("fail to get endpoint info", K(ret), K(model_id_i));
-        } else if (OB_FAIL(ObAIFuncBatchUtils::init_pending_state(
-                       batch_arena, model_id_i, endpoint_info, pending,
-                       ObAIFuncUtils::check_info_type_completion))) {
+        if (OB_FAIL(ObAIFuncBatchUtils::init_pending_state(
+                       batch_arena, model_id_i, oceanbase::share::EndpointType::COMPLETION,
+                       pending, ObAIFuncUtils::check_config_type_completion))) {
           LOG_WARN("fail to init pending state", K(ret), K(model_id_i));
         }
       }
@@ -474,12 +461,9 @@ int ObExprAIComplete::eval_ai_complete_vector(const ObExpr &expr, ObEvalCtx &ctx
           LOG_WARN("fail to set default enable_thinking", K(ret), K(idx));
         } else if (is_vl) {
           ObAIFuncIVLComplete *vl_provider = nullptr;
-          ObString request_model_name = pending.info_->model_;
-          if (!pending.endpoint_info_->get_request_model_name().empty()) {
-            request_model_name = pending.endpoint_info_->get_request_model_name();
-          }
+          ObString request_model_name = pending.config_.get_request_model_name();
           if (OB_FAIL(ObAIFuncUtils::get_vl_complete_provider(batch_arena,
-                                                              pending.endpoint_info_->get_provider(),
+                                                              pending.config_.get_provider(),
                                                               vl_provider))) {
             LOG_WARN("fail to get vl complete provider", K(ret), K(idx));
           } else if (OB_FAIL(vl_provider->get_body(batch_arena, request_model_name, prompt_str,
@@ -487,8 +471,10 @@ int ObExprAIComplete::eval_ai_complete_vector(const ObExpr &expr, ObEvalCtx &ctx
             LOG_WARN("fail to get vl body", K(ret), K(idx));
           }
         } else {
-          if (OB_FAIL(ObAIFuncUtils::get_complete_body(batch_arena, *pending.info_,
-                                                       *pending.endpoint_info_, system_prompt,
+          if (OB_FAIL(ObAIFuncUtils::get_complete_body(batch_arena,
+                                                       pending.config_.get_provider(),
+                                                       pending.config_.get_request_model_name(),
+                                                       system_prompt,
                                                        prompt_str, merged_config, body))) {
             LOG_WARN("fail to get complete body", K(ret), K(idx));
           }

@@ -576,10 +576,13 @@ ob_set_subtarget(ob_share schema
   schema/ob_schema_macro_define.cpp
   schema/ob_schema_mem_mgr.cpp
   schema/ob_schema_mgr.cpp
+  schema/ob_schema_mgr_for_ai.cpp
   schema/ob_schema_mgr_cache.cpp
   schema/ob_schema_printer.cpp
   schema/ob_schema_printer_external_table.cpp
   schema/ob_schema_retrieve_utils.ipp
+  schema/ob_schema_retrieve_utils_for_ai.ipp
+  schema/ob_schema_service_sql_impl_for_ai.ipp
   schema/ob_schema_service.cpp
   schema/ob_schema_service_rpc_proxy.cpp
   schema/ob_schema_store.cpp
@@ -647,6 +650,10 @@ ob_set_subtarget(ob_share schema
   schema/ob_schema_getter_guard_location.cpp
   schema/ob_ai_model_mgr.cpp
   schema/ob_ai_model_sql_service.cpp
+  schema/ob_ai_provider_mgr.cpp
+  schema/ob_ai_provider_sql_service.cpp
+  schema/ob_ai_gateway_mgr.cpp
+  schema/ob_ai_gateway_sql_service.cpp
   schema/ob_ccl_schema_struct.cpp
   schema/ob_ccl_rule_mgr.cpp
   schema/ob_ccl_rule_sql_service.cpp
@@ -897,6 +904,7 @@ ob_set_subtarget(ob_share ai_service
   ai_service/ob_ai_service_struct.cpp
   ai_service/ob_ai_service_proxy.cpp
   ai_service/ob_ai_service_executor.cpp
+  ai_service/ob_ai_provider_importer.cpp
 )
 
 ob_set_subtarget(ob_share compaction_ttl

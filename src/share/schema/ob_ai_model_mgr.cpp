@@ -172,7 +172,8 @@ int ObAiModelMgr::get_ai_model_schema_count(int64_t &schema_count) const
   int ret = OB_SUCCESS;
 
   if (!is_inited_) {
-    LOG_WARN("ai model mgr not init");
+    ret = OB_NOT_INIT;
+    LOG_WARN("ai model mgr not init", K(ret));
   } else {
     schema_count = ai_model_infos_.size();
   }

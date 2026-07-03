@@ -8,6 +8,7 @@
 #include "share/ob_encryption_util.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/schema/ob_ai_model_mgr.h"
+#include "share/schema/ob_ai_provider_mgr.h"
 
 #define USING_LOG_PREFIX SHARE
 
@@ -276,6 +277,14 @@ int ObAiModelEndpointInfo::merge_delta_endpoint(common::ObArenaAllocator &alloca
   return ret;
 }
 
+int ObAiModelEndpointInfo::encrypt_access_key_to_storage_format(ObIAllocator &allocator,
+                                                                const ObString &plain_access_key,
+                                                                ObString &storage_access_key)
+{
+  ObAiModelEndpointInfo holder;
+  return holder.encrypt_access_key_(allocator, plain_access_key, storage_access_key);
+}
+
 int ObAiModelEndpointInfo::encrypt_access_key_(ObIAllocator &allocator, const ObString &access_key, ObString &encrypted_access_key)
 {
 #ifdef OB_BUILD_TDE_SECURITY
@@ -414,6 +423,17 @@ int ObAiModelEndpointInfo::get_unencrypted_access_key(common::ObIAllocator &allo
   return ret;
 }
 
+int ObAiModelEndpointInfo::assign_storage_access_key_only(common::ObIAllocator &allocator,
+                                                        const ObString &encrypted_access_key_from_table)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  if (OB_FAIL(ob_write_string(allocator, encrypted_access_key_from_table, access_key_, true))) {
+    LOG_WARN("failed to copy encrypted access key", K(ret));
+  }
+  return ret;
+}
+
 int ObAiServiceModelInfo::parse_from_json_base(const ObString &name, const common::ObIJsonBase &params_jbase)
 {
   int ret = OB_SUCCESS;
@@ -533,6 +553,112 @@ int ObAIModelConfigInfo::init(ObIAllocator &allocator,
           }
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObAIModelConfigInfo::init_from_inline_provider_model(common::ObIAllocator &allocator,
+                                                         const common::ObString &inline_model_key,
+                                                         const schema::ObAIProviderSchema &provider_schema,
+                                                         const common::ObString &request_model_name,
+                                                         const EndpointType::TYPE model_type,
+                                                         const common::ObString &dispatch_provider_tag,
+                                                         const common::ObString &full_service_url)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  ObAiModelEndpointInfo key_holder;
+  if (provider_schema.get_access_key().empty()) {
+    ret = OB_AI_FUNC_PARAM_EMPTY;
+    const ObString var_name("access_key");
+    LOG_USER_ERROR(OB_AI_FUNC_PARAM_EMPTY, var_name.length(), var_name.ptr());
+    LOG_WARN("provider access_key is empty, register provider first", K(ret), K(inline_model_key));
+  } else if (OB_FAIL(ob_write_string(allocator, inline_model_key, model_key_, true))) {
+    LOG_WARN("failed to deep copy model key", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, request_model_name, model_name_, true))) {
+    LOG_WARN("failed to deep copy model name", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, request_model_name, request_model_name_, true))) {
+    LOG_WARN("failed to deep copy request model name", K(ret));
+  } else if (OB_FALSE_IT(model_type_ = model_type)) {
+  } else if (OB_FAIL(ob_write_string(allocator, dispatch_provider_tag, provider_, true))) {
+    LOG_WARN("failed to deep copy dispatch provider", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, full_service_url, url_, true))) {
+    LOG_WARN("failed to deep copy url", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, provider_schema.get_base_url(), provider_base_url_, true))) {
+    LOG_WARN("failed to deep copy provider base url", K(ret));
+  } else if (OB_FAIL(key_holder.assign_storage_access_key_only(allocator, provider_schema.get_access_key()))) {
+    LOG_WARN("failed to assign encrypted access key", K(ret));
+  } else if (OB_FAIL(key_holder.get_unencrypted_access_key(allocator, api_key_))) {
+    LOG_WARN("failed to decrypt access key", K(ret));
+  }
+  return ret;
+}
+
+int ObAIModelConfigInfo::apply_profile_params(ObIAllocator &allocator,
+                                              const ObString &model_params,
+                                              const ObString &model_options)
+{
+  int ret = OB_SUCCESS;
+  if (!model_options.empty()) {
+    // use a temporary allocator: we only extract integer values and do not keep the JSON tree
+    ObArenaAllocator tmp_allocator("AIProfileOpt");
+    ObIJsonBase *options_base = nullptr;
+    if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_allocator,
+                                                  model_options,
+                                                  ObJsonInType::JSON_TREE,
+                                                  ObJsonInType::JSON_TREE,
+                                                  options_base))) {
+      LOG_WARN("failed to parse model_options", K(ret), K(model_options));
+    } else if (OB_ISNULL(options_base) || options_base->json_type() != ObJsonNodeType::J_OBJECT) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("model_options should be json object", K(ret), K(model_options));
+    } else {
+      int64_t batch_size = 0;
+      int64_t max_image_size = 0;
+      int64_t min_concurrency = 0;
+      int64_t max_concurrency = 0;
+      JsonObjectIterator iter = options_base->object_iterator();
+      while (!iter.end() && OB_SUCC(ret)) {
+        ObJsonObjPair elem;
+        if (OB_FAIL(iter.get_elem(elem))) {
+          LOG_WARN("failed to get elem", K(ret));
+        } else {
+          EXTRACT_JSON_ELEM_INT("batch_size", batch_size)
+          EXTRACT_JSON_ELEM_INT("max_image_size", max_image_size)
+          EXTRACT_JSON_ELEM_INT("min_concurrency", min_concurrency)
+          EXTRACT_JSON_ELEM_INT("max_concurrency", max_concurrency)
+          EXTRACT_JSON_ELEM_NO_CHECK_END()
+        }
+        iter.next();
+      }
+      if (OB_SUCC(ret)) {
+        if (batch_size > 0) { batch_size_ = batch_size; }
+        if (max_image_size > 0) { max_image_size_ = max_image_size; }
+        if (min_concurrency > 0) { min_concurrency_ = min_concurrency; }
+        if (max_concurrency > 0) { max_concurrency_ = max_concurrency; }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !model_params.empty()) {
+    // deep-copy model_params into allocator so the JSON tree's ObString nodes
+    // reference allocator-owned memory and do not dangle after the caller's
+    // temporary profile_allocator is destroyed
+    ObString params_copy;
+    ObIJsonBase *params_base = nullptr;
+    if (OB_FAIL(ob_write_string(allocator, model_params, params_copy))) {
+      LOG_WARN("failed to copy model_params", K(ret));
+    } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator,
+                                                         params_copy,
+                                                         ObJsonInType::JSON_TREE,
+                                                         ObJsonInType::JSON_TREE,
+                                                         params_base))) {
+      LOG_WARN("failed to parse model_params", K(ret), K(params_copy));
+    } else if (OB_ISNULL(params_base) || params_base->json_type() != ObJsonNodeType::J_OBJECT) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("model_params should be json object", K(ret), K(params_copy));
+    } else {
+      message_parameters_ = static_cast<ObJsonObject *>(params_base);
     }
   }
   return ret;
