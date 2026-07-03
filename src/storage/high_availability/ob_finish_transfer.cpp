@@ -99,7 +99,6 @@ int ObTxFinishTransfer::do_tx_transfer_doing_(const ObTransferTaskID &task_id, c
   observer::ObInnerSQLConnection *conn = NULL;
   SCN start_scn;
   SCN finish_scn;
-  bool is_majority_passed = false;
   share::ObRsMgr *rs_mgr = GCTX.rs_mgr_;
   obrpc::ObSrvRpcProxy *svr_rpc_proxy = GCTX.srv_rpc_proxy_;
   int64_t result = OB_SUCCESS;
@@ -108,7 +107,6 @@ int ObTxFinishTransfer::do_tx_transfer_doing_(const ObTransferTaskID &task_id, c
   ObLSLocation ls_location;
   bool is_leader = false;
   bool is_ready = false;
-  bool src_is_ready = false;
   ObTransferService *transfer_service = NULL;
   const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L;
   ObLSHandle ls_handle;
@@ -248,18 +246,8 @@ int ObTxFinishTransfer::do_tx_transfer_doing_(const ObTransferTaskID &task_id, c
         // incremented (in TX_START_TRASNFER_IN)
         if (FAILEDx(wait_transfer_tablet_status_normal_(tenant_id, dest_ls_id, tablet_list, start_scn, timeout_ctx, finish_scn))) {
           LOG_WARN("failed to wait tablet status normal", K(ret), K(tenant_id), K(dest_ls_id), K(tablet_list));
-        } else if (OB_FAIL(wait_all_ls_replica_replay_scn_(task_id, tenant_id, dest_ls_id,
-            addr_list, finish_scn, timeout_ctx, is_majority_passed))) {
-          LOG_WARN("failed to check ls replica replay scn",
-              K(ret),
-              K(tenant_id),
-              K(dest_ls_id),
-              K(addr_list),
-              K(finish_scn));
-        } else if (!is_majority_passed) {
-          ret = OB_TIMEOUT;
-          LOG_WARN("majority replay scn not passed", K(ret));
         }
+
         // 6. The leader of dest_ls registers a multi-source transaction,
         // and the type is TX_FINISH_TRANSFER_OUT. The contents of the log are src_ls_id, dest_ls_id, finish_scn, and
         // tablet_id_list.
@@ -1139,7 +1127,6 @@ int ObTxFinishTransfer::check_addr_list_is_match_(
       }
     }
   }
-
   return ret;
 }
 

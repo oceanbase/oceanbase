@@ -2089,6 +2089,8 @@ int ObWaitDataReadyTask::update_ls_migration_status_wait_()
   ObLS *ls = nullptr;
   ObMigrationStatus wait_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
 
+  DEBUG_SYNC(BEFORE_UPDATE_LS_MIGRATION_STATUS_WAIT);
+
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("wait data ready task do not init", K(ret));
