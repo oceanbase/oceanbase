@@ -973,10 +973,7 @@ int ObDASFusionIter::finish_fusion()
       LOG_WARN("failed to sort topk results", K(ret));
     }
   } else if (fusion_iter_exec_mode_ == ObFusionIterExecMode::ROWKEY_SCORE_FULL_RECALL) {
-    if (fusion_method_ != ObFusionMethod::WEIGHT_SUM) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("it is not expected to calculate fusion score for non-weight_sum fusion method in full recall mode", K(ret), K(fusion_method_));
-    } else if (OB_FAIL(calculate_fusion_score())) {
+    if (OB_FAIL(calculate_fusion_score())) {
       LOG_WARN("failed to calculate fusion score", K(ret));
     } else if (OB_FAIL(build_all_path_topk_doc_indices())) {
       LOG_WARN("failed to build all path topk doc indices", K(ret));

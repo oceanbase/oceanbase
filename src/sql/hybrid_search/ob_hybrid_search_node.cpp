@@ -422,14 +422,16 @@ int ObHybridSearchGenerator::init_fusion_iter_exec_mode(const ObDSLQueryInfo *qu
       }
     } else if (query_info->result_mode_ == ObDSLResultMode::COUNT_AGG ||
                query_info->result_mode_ == ObDSLResultMode::BUCKET_AGG) {
-      if (query_info->queries_.count() > 1 || enable_parallel) {
+      if (query_info->output_score_) {
+        fusion_node->fusion_iter_exec_mode_ = ObFusionIterExecMode::ROWKEY_SCORE_FULL_RECALL;
+      } else if (query_info->queries_.count() > 1 || enable_parallel) {
         fusion_node->fusion_iter_exec_mode_ = ObFusionIterExecMode::ROWKEY_DISTINCT_ONLY;
       } else {
         fusion_node->fusion_iter_exec_mode_ = ObFusionIterExecMode::SKIP_FUSION_ITER;
       }
     } else if (query_info->has_dsl_sort() ||
                (query_info->has_dsl_collapse() && !query_info->has_dsl_rank())) {
-      if (query_info->queries_.count() > 1) {
+      if (query_info->output_score_ || query_info->queries_.count() > 1 || enable_parallel) {
         fusion_node->fusion_iter_exec_mode_ = ObFusionIterExecMode::ROWKEY_SCORE_FULL_RECALL;
       } else {
         fusion_node->fusion_iter_exec_mode_ = ObFusionIterExecMode::SKIP_FUSION_ITER;

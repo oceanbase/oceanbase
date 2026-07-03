@@ -361,6 +361,7 @@ int ObDSLQueryInfo::deep_copy(const ObDSLQueryInfo& src, ObIRawExprCopier &expr_
   } else if (OB_FALSE_IT(is_top_k_query_ = src.is_top_k_query_)) {
   } else if (OB_FALSE_IT(result_mode_ = src.result_mode_)) {
   } else if (OB_FALSE_IT(track_score_ = src.track_score_)) {
+  } else if (OB_FALSE_IT(output_score_ = src.output_score_)) {
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < src.queries_.count(); ++i) {
       ObDSLQuery *copied_query = nullptr;
@@ -2486,6 +2487,24 @@ void ObDSLResolver::set_track_score(ObDSLQueryInfo *dsl_query_info)
        && dsl_query_info->result_mode_ != ObDSLResultMode::BUCKET_AGG);
 }
 
+int ObDSLResolver::refresh_output_score_after_select_resolved(const ObSelectStmt *select_stmt,
+                                                              ObDSLQueryInfo *dsl_query_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(select_stmt) || OB_ISNULL(dsl_query_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), KP(select_stmt), KP(dsl_query_info));
+  } else {
+    dsl_query_info->output_score_ = false;
+    for (int64_t i = 0; !dsl_query_info->output_score_ && i < select_stmt->get_select_item_size(); ++i) {
+      const SelectItem &select_item = select_stmt->get_select_item(i);
+      dsl_query_info->output_score_ =
+          (0 == select_item.expr_name_.case_compare(OB_HYBRID_SEARCH_SCORE_COLUMN_NAME));
+    }
+  }
+  return ret;
+}
+
 int ObDSLResolver::init_result_mode_and_track_score()
 {
   int ret = OB_SUCCESS;
@@ -2512,6 +2531,7 @@ int ObDSLResolver::init_result_mode_and_track_score()
   }
   if (OB_SUCC(ret)) {
     set_track_score(dsl_query_info_);
+    dsl_query_info_->output_score_ = false;
   }
   return ret;
 }
@@ -2544,6 +2564,10 @@ int ObDSLResolver::refresh_result_mode_after_select_resolved(const ObSelectStmt 
     }
     if (OB_SUCC(ret)) {
       set_track_score(dsl_query_info);
+    }
+    if (OB_SUCC(ret)
+        && OB_FAIL(refresh_output_score_after_select_resolved(select_stmt, dsl_query_info))) {
+      LOG_WARN("failed to refresh output score after select resolved", K(ret));
     }
   }
   return ret;
@@ -5806,14 +5830,9 @@ int ObDSLResolver::resolve_aggs_terms_or_cardinality(const ObString &agg_name,
           LOG_WARN("unsupported key in aggs.terms", K(ret), K(key));
         }
       } else { // CARDINALITY
-        if (key.case_compare("precision_threshold") == 0
-            || key.case_compare("execution_hint") == 0) {
-          LOG_INFO("cardinality parameter ignored under exact DISTINCT semantics", K(key));
-        } else {
-          ret = OB_NOT_SUPPORTED;
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "keys other than \"field\", \"precision_threshold\" and \"execution_hint\" in aggs.cardinality");
-          LOG_WARN("unsupported cardinality parameter", K(ret), K(key));
-        }
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "keys other than \"field\" in aggs.cardinality");
+        LOG_WARN("unsupported cardinality parameter", K(ret), K(key));
       }
     }
     if (OB_FAIL(ret)) {
@@ -6060,6 +6079,37 @@ bool ObDSLResolver::is_hybrid_search_count_star_stmt(const ObSelectStmt &select_
   return is_count_star;
 }
 
+int ObDSLResolver::rewrite_size_to_rank_window_for_agg_query(ObDSLQueryInfo &dsl_query_info)
+{
+  int ret = OB_SUCCESS;
+  ObConstRawExpr *min_score_expr = nullptr;
+  ObConstRawExpr *from_expr = nullptr;
+  double min_score_value = 0.0;
+
+  if ((dsl_query_info.result_mode_ == ObDSLResultMode::COUNT_AGG ||
+       dsl_query_info.result_mode_ == ObDSLResultMode::BUCKET_AGG) &&
+       dsl_query_info.has_dsl_rank()) {
+    if (OB_ISNULL(min_score_expr = static_cast<ObConstRawExpr *>(dsl_query_info.min_score_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("min score expr is null", K(ret));
+    } else if (OB_FAIL(min_score_expr->get_value().get_double(min_score_value))) {
+      LOG_WARN("failed to get double value from min score expr", K(ret));
+    } else if (min_score_value > 0) {
+      if (OB_ISNULL(dsl_query_info.rank_info_.window_size_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("rank window size expr is null", K(ret));
+      } else if (OB_ISNULL(from_expr = static_cast<ObConstRawExpr *>(dsl_query_info.from_))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("from expr is null", K(ret));
+      } else {
+        dsl_query_info.size_ = dsl_query_info.rank_info_.window_size_;
+        from_expr->get_value().set_int(0);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDSLResolver::ignore_count_star_dsl_rewrites(ObSelectStmt &select_stmt,
                                                   ObDSLQueryInfo &dsl_query_info)
 {
@@ -6091,6 +6141,9 @@ int ObDSLResolver::ignore_count_star_dsl_rewrites(ObSelectStmt &select_stmt,
       dsl_query_info.agg_items_.reset();
       dsl_query_info.result_mode_ = ObDSLResultMode::COUNT_AGG;
       set_track_score(&dsl_query_info);
+      if (OB_FAIL(refresh_output_score_after_select_resolved(&select_stmt, &dsl_query_info))) {
+        LOG_WARN("failed to refresh output score after count(*) rewrites", K(ret));
+      }
     }
   }
   return ret;
@@ -6128,6 +6181,7 @@ int ObDSLResolver::register_collapse_exprs(ObSelectStmt *select_stmt)
 int ObDSLResolver::refresh_result_modes(ObSelectStmt *select_stmt)
 {
   int ret = OB_SUCCESS;
+
   for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_table_size(); ++i) {
     const TableItem *table_item = select_stmt->get_table_item(i);
     if (OB_ISNULL(table_item)) {
@@ -6139,6 +6193,8 @@ int ObDSLResolver::refresh_result_modes(ObSelectStmt *select_stmt)
       LOG_WARN("failed to refresh result mode after select resolved", K(ret));
     } else if (OB_FAIL(ObDSLResolver::ignore_count_star_dsl_rewrites(*select_stmt, *table_item->dsl_query_))) {
       LOG_WARN("failed to ignore dsl rewrites for count(*)", K(ret));
+    } else if (OB_FAIL(ObDSLResolver::rewrite_size_to_rank_window_for_agg_query(*table_item->dsl_query_))) {
+      LOG_WARN("failed to rewrite size for aggregation query with rank and min_score", K(ret));
     }
   }
   return ret;

@@ -270,7 +270,7 @@ struct ObDSLQueryInfo
   ObDSLQueryInfo()
     : queries_(), from_(nullptr), size_(nullptr), min_score_(nullptr), one_const_expr_(nullptr),
       query_top_level_boost_(nullptr), raw_dsl_param_str_(), is_top_k_query_(true), query_dop_(1), result_mode_(ObDSLResultMode::SEARCH_HITS),
-      track_score_(true) {}
+      track_score_(true), output_score_(false) {}
   static int check_column_in_dsl(ObIArray<TableItem*> &table_items, ObColumnRefRawExpr *col_expr, bool &in_dsl);
   int deep_copy(const ObDSLQueryInfo& src, ObIRawExprCopier &expr_copier, ObIAllocator* allocator);
   static int deep_copy_query(const ObDSLQuery *src, ObDSLQuery *&dst,
@@ -307,12 +307,13 @@ struct ObDSLQueryInfo
   int64_t query_dop_;
   ObDSLResultMode result_mode_;
   bool track_score_;
+  bool output_score_;
   ObDSLCollapseInfo collapse_info_;
   ObSEArray<ObDSLAggTermsItem, 2, ModulePageAllocator, true> agg_items_;
   TO_STRING_KV(K(queries_), K(from_), K(size_), K(min_score_), K(one_const_expr_),
                K(query_top_level_boost_), K(rank_info_), K(rowkey_cols_), K(dsl_cols), K(score_cols_),
                K(dsl_exprs_), K(sort_items_), K(raw_dsl_param_str_), K(is_top_k_query_), K(query_dop_),
-               K(result_mode_), K(track_score_), K(collapse_info_), K(agg_items_));
+               K(result_mode_), K(track_score_), K(output_score_), K(collapse_info_), K(agg_items_));
 };
 
 class ObDSLResolver
@@ -379,11 +380,14 @@ private:
       ObRawExprFactory &expr_factory,
       ObSQLSessionInfo *session_info,
       ObRawExpr *&real_ref_expr);
+
   static int check_hybrid_search_clause_compat(ObSelectStmt *select_stmt);
   static int check_hybrid_search_cardinality_agg(ObSelectStmt *select_stmt);
   static int refresh_result_modes(ObSelectStmt *select_stmt);
   static int ignore_count_star_dsl_rewrites(ObSelectStmt &select_stmt, ObDSLQueryInfo &dsl_query_info);
   static bool is_hybrid_search_count_star_stmt(const ObSelectStmt &select_stmt, const ObAggFunRawExpr *&aggr_expr);
+  static int refresh_output_score_after_select_resolved(const ObSelectStmt *select_stmt, ObDSLQueryInfo *dsl_query_info);
+  static int rewrite_size_to_rank_window_for_agg_query(ObDSLQueryInfo &dsl_query_info);
 
 public:
 
