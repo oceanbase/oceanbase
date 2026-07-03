@@ -2119,9 +2119,19 @@ int ObSqlTransControl::lock_table(ObExecContext &exec_ctx,
   return ret;
 }
 
-void ObSqlTransControl::clear_xa_branch(const ObXATransID &xid, ObTxDesc *&tx_desc)
+void ObSqlTransControl::clear_xa_branch(ObExecContext &exec_ctx)
 {
-  MTL(ObXAService *)->clear_xa_branch(xid, tx_desc);
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *my_session = GET_MY_SESSION(exec_ctx);
+  if (OB_ISNULL(my_session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid param", K(ret), KP(my_session));
+  } else {
+    ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
+    MTL(ObXAService *)->clear_xa_branch(my_session->get_xid(), my_session->get_tx_desc());
+    my_session->reset_tx_variable();
+    my_session->disassociate_xa();
+  }
 }
 
 
