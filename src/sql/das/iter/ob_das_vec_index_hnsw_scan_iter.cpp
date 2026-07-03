@@ -327,7 +327,7 @@ int ObDASVecIndexHNSWScanIter::process_adaptor_state_pre_filter_brute_force_not_
   ObVecIdxQueryResult dist_result;
 
   uint64_t limit = limit_;
-  uint64_t capacity = limit > brute_cnt ? brute_cnt : limit;
+  const uint64_t capacity = (brute_cnt <= 0) ? 0 : min(limit, static_cast<uint64_t>(brute_cnt));
   ObArenaAllocator &allocator = mem_context_->get_arena_allocator();
   ObSimpleMaxHeap max_heap(&allocator, capacity);
   if (capacity == 0) {
@@ -464,7 +464,7 @@ int ObDASVecIndexHNSWScanIter::query_brute_force_distances(ObPluginVectorIndexAd
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(adaptor), KP(brute_vids), K(brute_cnt));
   } else {
-    dist_result.brute_cnt = brute_cnt;
+    dist_result.brute_cnt = static_cast<int>(brute_cnt);
     if (OB_FAIL(adaptor->vsag_query_vids(reinterpret_cast<float *>(const_cast<char*>(search_vec.ptr())),
                                          brute_vids, brute_cnt, dist_result, search_vec.length()))) {
       LOG_WARN("failed to brute force query", K(ret), K(brute_cnt));
@@ -627,7 +627,7 @@ int ObDASVecIndexHNSWScanIter::process_adaptor_state_pre_filter_brute_force_bq(
   if (OB_FAIL(init_brute_force_params(ada_ctx, adaptor, ctx))) {
     LOG_WARN("failed to init brute force params", K(ret));
   } else {
-    uint64_t capacity = ctx.limit > brute_cnt ? brute_cnt : ctx.limit;
+    const uint64_t capacity = (brute_cnt <= 0) ? 0 : min(ctx.limit, static_cast<uint64_t>(brute_cnt));
     if (capacity == 0) {
       ret = OB_ITER_END;
     } else {
@@ -727,7 +727,11 @@ int ObDASVecIndexHNSWScanIter::init_pre_filter(ObVectorQueryAdaptorResultContext
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("bitmap is null", K(ret));
   } else if (bitmap_->type_ == ObVecIndexBitmap::VIDS) {
-    if (OB_FAIL(bitmap_->upgrade_to_byte_array())) {
+    if (bitmap_->min_vid_ < bitmap_->min_vid_bound_ || bitmap_->max_vid_ > bitmap_->max_vid_bound_) {
+      if (OB_FAIL(bitmap_->upgrade_to_roaring_bitmap())) {
+        LOG_WARN("failed to upgrade to roaring bitmap", K(ret));
+      }
+    } else if (OB_FAIL(bitmap_->upgrade_to_byte_array())) {
       LOG_WARN("failed to upgrade to byte array", K(ret));
     }
   }
@@ -739,8 +743,11 @@ int ObDASVecIndexHNSWScanIter::init_pre_filter(ObVectorQueryAdaptorResultContext
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("bitmap_ is null", K(ret));
     } else {
-      uint64_t capacity = (bitmap_->max_vid_ - bitmap_->min_vid_ + 7) / 8 * 8;
-      if (OB_FAIL(ada_ctx->init_prefilter(bitmap_->bitmap_, bitmap_->min_vid_, bitmap_->max_vid_, capacity, bitmap_->valid_cnt_))) {
+      const uint64_t vid_range = static_cast<uint64_t>(bitmap_->max_vid_bound_)
+                               - static_cast<uint64_t>(bitmap_->min_vid_bound_) + 1;
+      const uint64_t bitmap_size = (vid_range + 7) / 8;
+      const uint64_t capacity = bitmap_size * 8;
+      if (OB_FAIL(ada_ctx->init_prefilter(bitmap_->bitmap_, bitmap_->min_vid_bound_, bitmap_->max_vid_bound_, capacity, bitmap_->valid_cnt_))) {
         LOG_WARN("init prefilter with byte array bitmap failed", K(ret));
       }
     }
