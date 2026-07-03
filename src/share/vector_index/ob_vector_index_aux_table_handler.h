@@ -53,6 +53,7 @@ public:
       transaction::ObTxDesc *tx_desc, const int64_t timeout,
       const share::SCN& frozen_scn, const ObVectorIndexRoaringBitMap *bitmap,
       ObVecIndexAsyncTaskCtx *task_ctx = nullptr);
+  int check_delta_table_empty(bool &is_empty);
 
 private:
   int prepare_dml_param(

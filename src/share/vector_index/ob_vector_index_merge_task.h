@@ -36,6 +36,7 @@ public:
   ObVecIdxMergeTask() :
     ObVecIndexAsyncTask(ObMemAttr(MTL_ID(), "VecMergTask")),
     no_need_replace_adaptor_(false),
+    can_merge_from_base_(false),
     merge_from_base_(false),
     pre_alloc_size_(0)
   {}
@@ -84,6 +85,9 @@ private:
       const ObVectorIndexMeta &old_meta);
   int refresh_adaptor();
   int check_and_wait_write();
+  int check_delta_table_empty(ObPluginVectorIndexAdaptor *adapter,
+      const share::SCN &check_scn,
+      bool &is_empty);
 
 private:
   int64_t min_vid_ {INT64_MAX};
@@ -92,6 +96,7 @@ private:
   ObArray<ObObj> rowkey_objs_;
   ObSEArray<const ObVectorIndexSegmentMeta *, 10> merge_segments_;
   bool no_need_replace_adaptor_;
+  bool can_merge_from_base_;
   bool merge_from_base_;
   int64_t pre_alloc_size_;
 
