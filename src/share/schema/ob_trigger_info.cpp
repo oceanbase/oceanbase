@@ -1082,7 +1082,8 @@ int ObTriggerInfo::gen_procedure_source(const common::ObString &trigger_database
   OX (tg_body.assign_ptr(parse_node.str_value_, static_cast<int32_t>(parse_node.str_len_)));
   // OZ (ObSQLUtils::convert_sql_text_to_schema_for_storing(*alloc, dtc_params, tg_body));
   if (OB_SUCC(ret)) {
-    proc_params_size = get_trigger_name().length() +
+    proc_params_size = trigger_database.length() +
+                       get_trigger_name().length() +
                        base_object_database.length() * 2 +
                        base_object_name.length() * 2 +
                        param_new_inout_len;
