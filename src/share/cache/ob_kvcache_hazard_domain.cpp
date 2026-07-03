@@ -292,8 +292,15 @@ int HazptrHolder::hazptr_assign(const HazptrHolder& other)
     } else {
       is_shared_ = true;
       HazptrHolder& nc_other = const_cast<HazptrHolder&>(other);
-      nc_other.is_shared_ = true;
+      // SharedHazptr::make() above has transferred ownership of other's raw hazard
+      // pointer into the newly created ControlPointer. other.hazptr_ aliases
+      // other.shared_hazptr_.ctrl_ptr_ in the union, so the raw slot must be cleared
+      // before the assignment below. Otherwise SharedHazptr::operator=() would call
+      // reset() on the still-live HazardPointer*, reinterpreting it as a ControlPointer*
+      // and corrupting it (decrementing/freeing through HazardPointer::next_).
+      nc_other.hazptr_ = nullptr;
       nc_other.shared_hazptr_ = this->shared_hazptr_;
+      nc_other.is_shared_ = true;
     }
   }
   return ret;
