@@ -242,17 +242,34 @@ void ObVecIdxAsyncTaskScheduler::run_timer_task()
     }
   } else if (check_can_do_work()) {
     ObTimeGuard tg("VecIdxScheduler::run_timer_task", VEC_INDEX_LOAD_TIME_NORMAL_THRESHOLD);
-    if (!is_first_round_done_) {
-      const int64_t now = ObTimeUtility::fast_current_time();
-      if (0 == last_startup_cleanup_retry_ts_
+    uint64_t data_version = 0;
+    const int64_t now = ObTimeUtility::fast_current_time();
+    int tmp_ret = OB_SUCCESS;
+    if (!is_first_startup_round_done_ || !is_first_update_round_done_) {
+      bool skip_startup_clean = false;
+      if (OB_TMP_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
+        last_startup_cleanup_retry_ts_ = now;
+        LOG_WARN("fail to get tenant data version", KR(tmp_ret), K_(tenant_id));
+      } else if (data_version < DATA_VERSION_4_6_0_1) {
+        // binary upgrade and restart, not task in schedule, skip startup cleanup
+        skip_startup_clean = true;
+      }
+
+      if (OB_TMP_FAIL(tmp_ret)) {
+        // skip for error
+      } else if (skip_startup_clean) {
+        // skip cleanup
+        is_first_startup_round_done_ = true;
+      } else if (0 == last_startup_cleanup_retry_ts_
           || now - last_startup_cleanup_retry_ts_ >= STARTUP_CLEANUP_RETRY_INTERVAL_US) {
         bool cleanup_done = false;
-        int tmp_ret = cleanup_stale_tasks_on_startup_(cleanup_done);
+        tmp_ret = cleanup_stale_tasks_on_startup_(cleanup_done, is_first_startup_round_done_);
         if (OB_SUCCESS != tmp_ret) {
           last_startup_cleanup_retry_ts_ = now;
           LOG_WARN("fail to cleanup stale tasks on startup", KR(tmp_ret), K_(tenant_id));
         } else if (cleanup_done) {
-          is_first_round_done_ = true;
+          is_first_startup_round_done_ = true;
+          is_first_update_round_done_ = true;
           LOG_INFO("[VEC_ASYNC_TASK] startup cleanup done",
                    K_(tenant_id), K_(startup_cleanup_cutoff_ts), K_(startup_cleanup_total_rows));
         } else {
@@ -261,7 +278,10 @@ void ObVecIdxAsyncTaskScheduler::run_timer_task()
                    K_(tenant_id), K_(startup_cleanup_cutoff_ts), K_(startup_cleanup_total_rows));
         }
       }
-      if (!is_first_round_done_) {
+
+      if (skip_startup_clean) {
+        // skip cleanup allow to schedule
+      } else if (!is_first_startup_round_done_ || !is_first_update_round_done_) {
         // Do not load/schedule inner-table tasks until stale self-owned rows are swept;
         // otherwise a later retry might cancel a task that this observer just resumed.
         return;
@@ -410,17 +430,13 @@ void ObVecIdxAsyncTaskScheduler::schedule_finish()
   }
 }
 
-int ObVecIdxAsyncTaskScheduler::cleanup_stale_tasks_on_startup_(bool &cleanup_done)
+int ObVecIdxAsyncTaskScheduler::cleanup_stale_tasks_on_startup_(bool &cleanup_done, const bool skip_startup_clean)
 {
   int ret = OB_SUCCESS;
-  uint64_t data_version = 0;
   cleanup_done = false;
-  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
-    LOG_WARN("fail to get tenant data version", KR(ret), K_(tenant_id));
-  } else if (data_version < DATA_VERSION_4_6_0_1) {
-    // just print_log clean task is skip this time, need to recheck in next timer tick
-    LOG_INFO("skip cleanup stale tasks, data version < 4.6.0.1", K_(tenant_id), K(data_version));
-  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+  bool startup_cleanup_done = false;
+  bool update_cleanup_done = false;
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy is null", KR(ret), K_(tenant_id));
   } else {
@@ -432,81 +448,18 @@ int ObVecIdxAsyncTaskScheduler::cleanup_stale_tasks_on_startup_(bool &cleanup_do
     const int64_t now = ObTimeUtility::current_time();
     ObSqlString sql;
     ObSEArray<ObStartupCleanupTaskKey, STARTUP_CLEANUP_BATCH_SIZE> task_keys;
-    if (OB_FAIL(sql.assign_fmt(
-            "SELECT tenant_id, table_id, tablet_id, task_id FROM %s"
-            " WHERE tenant_id = %ld AND exec_addr = '%s'"
-            " AND status IN (%ld, %ld, %ld, %ld, %ld, %ld)"
-            " AND gmt_modified < usec_to_time(%ld)"
-            " ORDER BY tenant_id, table_id, tablet_id, task_id LIMIT %ld",
-            OB_ALL_VECTOR_INDEX_TASK_TNAME,
-            ObSchemaUtils::get_extract_tenant_id(tenant_id_, tenant_id_),
-            addr_buf,
-            static_cast<int64_t>(ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE),
-            static_cast<int64_t>(ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_QUEUE),
-            static_cast<int64_t>(ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_RUNNING),
-            static_cast<int64_t>(ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_EXCHANGE),
-            static_cast<int64_t>(ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_CLEAN),
-            static_cast<int64_t>(ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_CANCEL),
-            startup_cleanup_cutoff_ts_,
-            STARTUP_CLEANUP_BATCH_SIZE))) {
-      LOG_WARN("fail to assign sql", KR(ret));
+    if (skip_startup_clean) {
+      // skip startup cleanup
+      startup_cleanup_done = true;
     } else {
-      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-        sqlclient::ObMySQLResult *result = nullptr;
-        if (OB_FAIL(GCTX.sql_proxy_->read(res, tenant_id_, sql.ptr()))) {
-          LOG_WARN("fail to query startup cleanup tasks", KR(ret), K(sql), K_(tenant_id));
-        } else if (OB_ISNULL(result = res.get_result())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("query result is null", KR(ret), K_(tenant_id));
-        } else {
-          while (OB_SUCC(ret)) {
-            if (OB_FAIL(result->next())) {
-              if (OB_ITER_END != ret) {
-                LOG_WARN("fail to get next startup cleanup row", KR(ret), K(sql));
-              }
-            } else {
-              uint64_t task_tenant_id = OB_INVALID_TENANT_ID;
-              uint64_t table_id = OB_INVALID_ID;
-              uint64_t tablet_id = 0;
-              int64_t task_id = 0;
-              EXTRACT_INT_FIELD_MYSQL(*result, "tenant_id", task_tenant_id, uint64_t);
-              EXTRACT_INT_FIELD_MYSQL(*result, "table_id", table_id, uint64_t);
-              EXTRACT_INT_FIELD_MYSQL(*result, "tablet_id", tablet_id, uint64_t);
-              EXTRACT_INT_FIELD_MYSQL(*result, "task_id", task_id, int64_t);
-              if (OB_FAIL(ret)) {
-              } else if (OB_FAIL(task_keys.push_back(
-                          ObStartupCleanupTaskKey(task_tenant_id, table_id, tablet_id, task_id)))) {
-                LOG_WARN("fail to push startup cleanup task key", KR(ret),
-                         K(task_tenant_id), K(table_id), K(tablet_id), K(task_id));
-              }
-            }
-          }
-          if (OB_ITER_END == ret) {
-            ret = OB_SUCCESS;
-          }
-        }
-      }
-    }
-    int64_t batch_cleanup_rows = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && i < task_keys.count(); ++i) {
-      int64_t affect_rows = 0;
-      const ObStartupCleanupTaskKey &key = task_keys.at(i);
       if (OB_FAIL(sql.assign_fmt(
-              "UPDATE %s SET status = %ld, ret_code = %d,"
-              " err_msg = 'task cancelled due to observer restart',"
-              " end_time = usec_to_time(%ld)"
-              " WHERE tenant_id = %ld AND table_id = %ld AND tablet_id = %ld AND task_id = %ld"
-              " AND exec_addr = '%s'"
+              "SELECT tenant_id, table_id, tablet_id, task_id FROM %s"
+              " WHERE tenant_id = %ld AND exec_addr = '%s'"
               " AND status IN (%ld, %ld, %ld, %ld, %ld, %ld)"
-              " AND gmt_modified < usec_to_time(%ld)",
+              " AND gmt_modified < usec_to_time(%ld)"
+              " ORDER BY tenant_id, table_id, tablet_id, task_id LIMIT %ld",
               OB_ALL_VECTOR_INDEX_TASK_TNAME,
-              static_cast<int64_t>(ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH),
-              OB_CANCELED,
-              now,
-              key.tenant_id_,
-              key.table_id_,
-              key.tablet_id_,
-              key.task_id_,
+              ObSchemaUtils::get_extract_tenant_id(tenant_id_, tenant_id_),
               addr_buf,
               static_cast<int64_t>(ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE),
               static_cast<int64_t>(ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_QUEUE),
@@ -514,31 +467,90 @@ int ObVecIdxAsyncTaskScheduler::cleanup_stale_tasks_on_startup_(bool &cleanup_do
               static_cast<int64_t>(ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_EXCHANGE),
               static_cast<int64_t>(ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_CLEAN),
               static_cast<int64_t>(ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_CANCEL),
-              startup_cleanup_cutoff_ts_))) {
-        LOG_WARN("fail to assign cleanup update sql", KR(ret), K(key));
-      } else if (OB_FAIL(GCTX.sql_proxy_->write(tenant_id_, sql.ptr(), affect_rows))) {
-        LOG_WARN("fail to execute startup cleanup update sql", KR(ret), K(sql), K(key));
+              startup_cleanup_cutoff_ts_,
+              STARTUP_CLEANUP_BATCH_SIZE))) {
+        LOG_WARN("fail to assign sql", KR(ret));
       } else {
-        batch_cleanup_rows += affect_rows;
+        SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+          sqlclient::ObMySQLResult *result = nullptr;
+          if (OB_FAIL(GCTX.sql_proxy_->read(res, tenant_id_, sql.ptr()))) {
+            LOG_WARN("fail to query startup cleanup tasks", KR(ret), K(sql), K_(tenant_id));
+          } else if (OB_ISNULL(result = res.get_result())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("query result is null", KR(ret), K_(tenant_id));
+          } else {
+            while (OB_SUCC(ret)) {
+              if (OB_FAIL(result->next())) {
+                if (OB_ITER_END != ret) {
+                  LOG_WARN("fail to get next startup cleanup row", KR(ret), K(sql));
+                }
+              } else {
+                uint64_t task_tenant_id = OB_INVALID_TENANT_ID;
+                uint64_t table_id = OB_INVALID_ID;
+                uint64_t tablet_id = 0;
+                int64_t task_id = 0;
+                EXTRACT_INT_FIELD_MYSQL(*result, "tenant_id", task_tenant_id, uint64_t);
+                EXTRACT_INT_FIELD_MYSQL(*result, "table_id", table_id, uint64_t);
+                EXTRACT_INT_FIELD_MYSQL(*result, "tablet_id", tablet_id, uint64_t);
+                EXTRACT_INT_FIELD_MYSQL(*result, "task_id", task_id, int64_t);
+                if (OB_FAIL(ret)) {
+                } else if (OB_FAIL(task_keys.push_back(
+                            ObStartupCleanupTaskKey(task_tenant_id, table_id, tablet_id, task_id)))) {
+                  LOG_WARN("fail to push startup cleanup task key", KR(ret),
+                           K(task_tenant_id), K(table_id), K(tablet_id), K(task_id));
+                }
+              }
+            }
+            if (OB_ITER_END == ret) {
+              ret = OB_SUCCESS;
+            }
+          }
+        }
+      }
+      int64_t batch_cleanup_rows = 0;
+      for (int64_t i = 0; OB_SUCC(ret) && i < task_keys.count(); ++i) {
+        int64_t affect_rows = 0;
+        const ObStartupCleanupTaskKey &key = task_keys.at(i);
+        if (OB_FAIL(sql.assign_fmt(
+                "UPDATE %s SET status = %ld, ret_code = %d,"
+                " err_msg = 'task cancelled due to observer restart',"
+                " end_time = usec_to_time(%ld)"
+                " WHERE tenant_id = %ld AND table_id = %ld AND tablet_id = %ld AND task_id = %ld"
+                " AND exec_addr = '%s'"
+                " AND status IN (%ld, %ld, %ld, %ld, %ld, %ld)"
+                " AND gmt_modified < usec_to_time(%ld)",
+                OB_ALL_VECTOR_INDEX_TASK_TNAME,
+                static_cast<int64_t>(ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH),
+                OB_CANCELED,
+                now,
+                key.tenant_id_,
+                key.table_id_,
+                key.tablet_id_,
+                key.task_id_,
+                addr_buf,
+                static_cast<int64_t>(ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE),
+                static_cast<int64_t>(ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_QUEUE),
+                static_cast<int64_t>(ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_RUNNING),
+                static_cast<int64_t>(ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_EXCHANGE),
+                static_cast<int64_t>(ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_CLEAN),
+                static_cast<int64_t>(ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_CANCEL),
+                startup_cleanup_cutoff_ts_))) {
+          LOG_WARN("fail to assign cleanup update sql", KR(ret), K(key));
+        } else if (OB_FAIL(GCTX.sql_proxy_->write(tenant_id_, sql.ptr(), affect_rows))) {
+          LOG_WARN("fail to execute startup cleanup update sql", KR(ret), K(sql), K(key));
+        } else {
+          batch_cleanup_rows += affect_rows;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        startup_cleanup_total_rows_ += batch_cleanup_rows;
+        startup_cleanup_done = (task_keys.count() < STARTUP_CLEANUP_BATCH_SIZE);
+        LOG_INFO("[VEC_ASYNC_TASK] cleanup stale tasks on startup",
+                 K_(tenant_id), K(addr_buf), K(task_keys.count()), K(batch_cleanup_rows),
+                 K_(startup_cleanup_cutoff_ts));
       }
     }
     if (OB_SUCC(ret)) {
-      startup_cleanup_total_rows_ += batch_cleanup_rows;
-      cleanup_done = (task_keys.count() < STARTUP_CLEANUP_BATCH_SIZE);
-      LOG_INFO("[VEC_ASYNC_TASK] cleanup stale tasks on startup",
-               K_(tenant_id), K(addr_buf), K(task_keys.count()), K(batch_cleanup_rows),
-               K_(startup_cleanup_cutoff_ts));
-    }
-    // Stage 2 (mixed-version compat): cancel rows written by the legacy 460
-    // ObPluginVectorIndexLoadScheduler that were left orphaned after the upgrade.
-    // Those rows are identifiable by exec_addr IS NULL because the legacy INSERT
-    // never populated this column (introduced in 4_6_0_1). Skip STANDBY rows: a
-    // freshly inserted MANUAL task by DBMS_VECTOR also has exec_addr IS NULL until
-    // claim_triggered_task_ promotes it to RUNNING — it must be left alone so
-    // process_triggered_tasks_ can pick it up.
-    // Only proceed once stage 1 has finished draining; otherwise we may interleave
-    // with self-addr cleanup paging.
-    if (OB_SUCC(ret) && cleanup_done) {
       int64_t legacy_cleanup_rows = 0;
       if (OB_FAIL(sql.assign_fmt(
               "UPDATE %s SET status = %ld, ret_code = %d,"
@@ -570,15 +582,14 @@ int ObVecIdxAsyncTaskScheduler::cleanup_stale_tasks_on_startup_(bool &cleanup_do
         // so the next timer tick continues the loop. Concurrent observers running the
         // same UPDATE are idempotent: rows already advanced to FINISH no longer match
         // the WHERE clause.
-        if (legacy_cleanup_rows >= STARTUP_CLEANUP_BATCH_SIZE) {
-          cleanup_done = false;
-        }
-        LOG_INFO("[VEC_ASYNC_TASK] cleanup legacy 460 stale tasks on startup",
-                 K_(tenant_id), K(legacy_cleanup_rows), K(cleanup_done),
+        update_cleanup_done = (legacy_cleanup_rows < STARTUP_CLEANUP_BATCH_SIZE);
+        LOG_INFO("[VEC_ASYNC_TASK] cleanup legacy 460 stale tasks on update",
+                 K_(tenant_id), K(legacy_cleanup_rows), K(update_cleanup_done),
                  K_(startup_cleanup_cutoff_ts));
       }
     }
   }
+  cleanup_done = startup_cleanup_done && update_cleanup_done;
   return ret;
 }
 
@@ -2624,7 +2635,7 @@ int ObVecIdxAsyncTaskScheduler::check_and_schedule_leader_ls_tasks(
       }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::clear_task_ctxs(task_opt, task_ctx_array))) {
-        LOG_WARN("fail to clean map", KR(ret), K(task_ctx_array));
+        LOG_WARN("fail to clean map", KR(ret));
       }
     }
   }
@@ -2847,7 +2858,7 @@ int ObVecIdxAsyncTaskScheduler::check_and_schedule_follower_ls_tasks(
       }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::clear_task_ctxs(task_opt, task_ctx_array))) {
-        LOG_WARN("fail to clean map", KR(ret), K(task_ctx_array));
+        LOG_WARN("fail to clean map", KR(ret));
       }
     }
   }

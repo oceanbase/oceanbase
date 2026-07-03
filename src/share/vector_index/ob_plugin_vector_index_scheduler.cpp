@@ -36,6 +36,19 @@ int ObPluginVectorIndexLoadScheduler::init(uint64_t tenant_id, ObLS *ls, int ttl
     cb_.scheduler_ = this;
     if (OB_FAIL(TG_SCHEDULE(ttl_timer_tg_id, *this, basic_period_, true))) {
       LOG_WARN("fail to schedule periodic task", KR(ret), K(ttl_timer_tg_id));
+    } else {
+      // reset vec idx async executor bind flag
+      ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
+      if (OB_FAIL(vector_index_service_->acquire_vector_index_mgr(ls_->get_ls_id(), index_ls_mgr))) {
+        LOG_WARN("fail to get vector index ls mgr", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
+      } else if (OB_ISNULL(index_ls_mgr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get invalid vector index ls mgr", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
+      } else {
+        index_ls_mgr->reset_vec_idx_async_executor_bind();
+        index_ls_mgr->set_need_refresh_memdata(true);
+        index_ls_mgr->get_async_task_opt().reset_stop();
+      }
     }
   }
   return ret;

@@ -228,6 +228,7 @@ public:
   ObVecIndexAsyncTaskOption &get_async_task_opt() { return async_task_opt_; }
   // ObVecIdxAsyncTaskScheduler must not re-bind per-LS executors (SHARE_MOD) after LoadScheduler::stop().
   void stop_vec_idx_async_executor_bind() { ATOMIC_STORE(&vec_idx_async_bind_stopped_, true); }
+  void reset_vec_idx_async_executor_bind() { ATOMIC_STORE(&vec_idx_async_bind_stopped_, false); }
   bool is_vec_idx_async_executor_bind_stopped() const
   {
     return ATOMIC_LOAD(&vec_idx_async_bind_stopped_);

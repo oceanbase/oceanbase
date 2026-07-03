@@ -702,6 +702,7 @@ public:
   bool is_valid() { return (is_inc_tablet_valid() || is_vbitmap_tablet_valid() || is_snap_tablet_valid()) && is_data_tablet_valid(); }
   bool is_complete();
   void set_need_cancel_task() { ATOMIC_STORE(&need_cancel_task_, true); }
+  void reset_need_cancel_task() { ATOMIC_STORE(&need_cancel_task_, false); }
   bool is_need_cancel_task() { return ATOMIC_LOAD(&need_cancel_task_); }
   void inc_ref();
   bool dec_ref_and_check_release();

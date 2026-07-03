@@ -563,6 +563,7 @@ public:
     }
     ATOMIC_STORE(&stop_, true);
   }
+  void reset_stop() { ATOMIC_STORE(&stop_, false); }
   bool is_stop() { return ATOMIC_LOAD(&stop_); }
   VecIndexAsyncTaskMap &get_async_task_map() { return task_ctx_map_; }
   ObIAllocator *get_allocator() { return &allocator_; }

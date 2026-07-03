@@ -143,7 +143,8 @@ public:
       current_memory_config_(0),
       local_schema_version_(OB_INVALID_VERSION),
       is_tenant_cancel_done_(false),
-      is_first_round_done_(false),
+      is_first_startup_round_done_(false),
+      is_first_update_round_done_(false),
       startup_cleanup_cutoff_ts_(0),
       last_startup_cleanup_retry_ts_(0),
       startup_cleanup_total_rows_(0),
@@ -348,12 +349,13 @@ private:
   // (if any) do not hit TOCTOU. Stays false while any per-ctx cancel failed so the next
   // scheduler tick retries.
   bool is_tenant_cancel_done_;
-  bool is_first_round_done_;
+  bool is_first_startup_round_done_;
+  bool is_first_update_round_done_;
   int64_t startup_cleanup_cutoff_ts_;
   int64_t last_startup_cleanup_retry_ts_;
   int64_t startup_cleanup_total_rows_;
 
-  int cleanup_stale_tasks_on_startup_(bool &cleanup_done);
+  int cleanup_stale_tasks_on_startup_(bool &cleanup_done, const bool skip_startup_clean);
 
   // --- Task disable list (emergency) ---
   struct DisableEntry {
