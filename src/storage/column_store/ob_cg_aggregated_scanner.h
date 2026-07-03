@@ -28,6 +28,10 @@ public:
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
       ObSSTableWrapper &wrapper) override final;
+  virtual int switch_context(
+      const ObTableIterParam &iter_param,
+      ObTableAccessContext &access_ctx,
+      ObSSTableWrapper &wrapper) override final;
   virtual int locate(
       const ObCSRange &range,
       const ObCGBitmap *bitmap = nullptr) override final;

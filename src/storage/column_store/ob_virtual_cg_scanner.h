@@ -144,6 +144,10 @@ public:
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
       ObSSTableWrapper &wrapper) override;
+  virtual int switch_context(
+      const ObTableIterParam &iter_param,
+      ObTableAccessContext &access_ctx,
+      ObSSTableWrapper &wrapper) override;
   virtual int init_group_by_info() override;
   virtual ObCGIterType get_type() override
   { return OB_CG_GROUP_BY_DEFAULT_SCANNER; }

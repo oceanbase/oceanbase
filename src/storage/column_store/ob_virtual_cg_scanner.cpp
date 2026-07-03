@@ -82,6 +82,8 @@ int ObVirtualCGScanner::switch_context(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObVirtualCGScanner not inited", K(ret));
+  } else if (OB_FAIL(init_agg_group(iter_param, access_ctx))) {
+    LOG_WARN("Fail to init agg group", K(ret));
   } else {
     iter_param_ = &iter_param;
     access_ctx_ = &access_ctx;
@@ -201,7 +203,12 @@ int ObVirtualCGScanner::init_agg_group(const ObTableIterParam &iter_param, ObTab
   } else {
     ObAggregatedStore *agg_store = static_cast<ObAggregatedStore *>(access_ctx.block_row_store_);
     ObCGAggCells *agg_cells = nullptr;
-    agg_cells = OB_NEWx(ObCGAggCells, access_ctx.stmt_allocator_);
+    if (nullptr == agg_group_) {
+      agg_cells = OB_NEWx(ObCGAggCells, access_ctx.stmt_allocator_);
+    } else {
+      agg_cells = static_cast<ObCGAggCells *>(agg_group_);
+      agg_cells->reuse();
+    }
     if (OB_ISNULL(agg_cells)) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Failed to alloc memory", K(ret));
@@ -326,7 +333,12 @@ int ObDefaultCGScanner::init_agg_group(const ObTableIterParam &iter_param, ObTab
   } else {
     ObAggregatedStore *agg_store = static_cast<ObAggregatedStore *>(access_ctx.block_row_store_);
     ObCGAggCells *agg_cells = nullptr;
-    agg_cells = OB_NEWx(ObCGAggCells, access_ctx.stmt_allocator_);
+    if (nullptr == agg_group_) {
+      agg_cells = OB_NEWx(ObCGAggCells, access_ctx.stmt_allocator_);
+    } else {
+      agg_cells = static_cast<ObCGAggCells *>(agg_group_);
+      agg_cells->reuse();
+    }
     if (OB_ISNULL(agg_cells)) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed to alloc mermory", K(ret));
@@ -433,6 +445,8 @@ int ObDefaultCGScanner::switch_context(
     LOG_WARN("unexpected state, agg group is null", K(ret), K(iter_param));
   } else if (OB_FAIL(wrapper.get_merge_row_cnt(iter_param, total_row_count_))) {
     STORAGE_LOG(WARN, "fail to get ddl merge row cnt", K(ret), K(iter_param), K(total_row_count_), K(wrapper));
+  } else if (OB_FAIL(init_agg_group(iter_param, access_ctx))) {
+    LOG_WARN("Fail to init agg group", K(ret));
   } else {
     query_range_valid_row_count_ = 0;
     iter_param_ = &iter_param;
@@ -658,6 +672,21 @@ int ObDefaultCGGroupByScanner::init(
     output_exprs_ = iter_param.output_exprs_;
     group_by_cell_ = (static_cast<ObVectorStore*>(access_ctx.block_row_store_))->get_group_by_cell();
     set_cg_idx(iter_param.cg_idx_);
+  }
+  return ret;
+}
+
+int ObDefaultCGGroupByScanner::switch_context(
+    const ObTableIterParam &iter_param,
+    ObTableAccessContext &access_ctx,
+    ObSSTableWrapper &wrapper)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDefaultCGScanner::switch_context(iter_param, access_ctx, wrapper))) {
+    LOG_WARN("Fail to switch context for cg row scanner", K(ret));
+  } else {
+    // point to valid group by cell in block row store, can not ignore this assignment
+    group_by_cell_ = (static_cast<ObVectorStore*>(access_ctx.block_row_store_))->get_group_by_cell();
   }
   return ret;
 }

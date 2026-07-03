@@ -88,6 +88,27 @@ int ObCGAggregatedScanner::init(
   return ret;
 }
 
+int ObCGAggregatedScanner::switch_context(
+    const ObTableIterParam &iter_param,
+    ObTableAccessContext &access_ctx,
+    ObSSTableWrapper &wrapper)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObCGAggregatedScanner not init", K(ret));
+  } else if (OB_FAIL(check_need_access_data(iter_param, access_ctx))) {
+    LOG_WARN("Fail to check need access data", K(ret));
+  } else if (need_access_data_ || need_get_row_ids_) {
+    if (OB_FAIL(ObCGRowScanner::switch_context(iter_param, access_ctx, wrapper))) {
+      LOG_WARN("Fail to switch context for cg row scanner", K(ret));
+    } else if (iter_param.enable_base_skip_index()) {
+      prefetcher_.set_agg_group(agg_group_);
+    }
+  }
+  return ret;
+}
+
 int ObCGAggregatedScanner::locate(
     const ObCSRange &range,
     const ObCGBitmap *bitmap)
@@ -282,7 +303,12 @@ int ObCGAggregatedScanner::check_need_access_data(const ObTableIterParam &iter_p
   } else {
     ObAggregatedStore *agg_store = static_cast<ObAggregatedStore *>(access_ctx.block_row_store_);
     ObCGAggCells *agg_cells = nullptr;
-    agg_cells = OB_NEWx(ObCGAggCells, access_ctx.stmt_allocator_);
+    if (nullptr == agg_group_) {
+      agg_cells = OB_NEWx(ObCGAggCells, access_ctx.stmt_allocator_);
+    } else {
+      agg_cells = static_cast<ObCGAggCells *>(agg_group_);
+      agg_cells->reuse();
+    }
     if (OB_ISNULL(agg_cells)) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Failed to alloc memory", K(ret));
