@@ -19,7 +19,9 @@
 #include "storage/fts/dict/ob_ft_dat_dict.h"
 #include "storage/fts/dict/ob_ft_dict.h"
 #include "storage/fts/dict/ob_ft_dict_def.h"
+#define private public
 #include "storage/fts/dict/ob_ft_range_dict.h"
+#undef private
 #include "storage/fts/dict/ob_ft_trie.h"
 #include "storage/fts/dict/ob_ik_dic.h"
 #define private public
@@ -41,6 +43,7 @@
 #include "share/rc/ob_tenant_base.h"
 
 #include <alloca.h>
+#include <algorithm>
 #include <chrono>
 #include <gtest/gtest.h>
 #include <iostream>
@@ -68,6 +71,10 @@ public:
     dict_mgr_ = MTL(ObFTDictMgr*);
     tenant_id_ = MTL_ID();
   }
+
+  using ObFTDictCacheLoaderBase::build_ranges;
+  using ObFTDictCacheLoaderBase::collect_missing_ranges;
+  using ObFTDictCacheLoaderBase::handle_missing_ranges;
 
   int load_cache(const ObFTDictDesc &desc, ObFTCacheRangeContainer &range_container) override
   {
@@ -102,6 +109,143 @@ public:
     return ret;
   }
 };
+
+class FilteredDictIterator : public ObIFTDictIterator
+{
+public:
+  FilteredDictIterator() : pos_(-1) {}
+  ~FilteredDictIterator() override {}
+
+  int init(const ObIKDictLoader::RawDict &dict_text,
+           const ObString &start_token,
+           const ObString &end_token)
+  {
+    int ret = OB_SUCCESS;
+    words_.clear();
+    pos_ = -1;
+    for (int64_t i = 0; OB_SUCC(ret) && i < dict_text.array_size_; ++i) {
+      const char *word_ptr = dict_text.data_[i];
+      ObString word(word_ptr);
+      int64_t first_char_len = 0;
+      if (OB_FAIL(ObCharset::first_valid_char(ObCollationType::CS_TYPE_UTF8MB4_BIN,
+                                              word.ptr(),
+                                              word.length(),
+                                              first_char_len))) {
+        LOG_WARN("failed to get first char", K(ret), K(word));
+        break;
+      }
+      const ObString first_char(static_cast<int32_t>(first_char_len), word.ptr());
+      const bool after_start = start_token.empty()
+          || ObCharset::strcmp(ObCollationType::CS_TYPE_UTF8MB4_BIN, first_char, start_token) > 0;
+      const bool before_end = end_token.empty()
+          || ObCharset::strcmp(ObCollationType::CS_TYPE_UTF8MB4_BIN, word, end_token) < 0;
+      if (after_start && before_end) {
+        words_.push_back(std::string(word.ptr(), word.length()));
+      }
+    }
+    std::sort(words_.begin(), words_.end());
+    words_.erase(std::unique(words_.begin(), words_.end()), words_.end());
+    if (words_.empty()) {
+      ret = OB_ITER_END;
+    } else {
+      pos_ = 0;
+    }
+    return ret;
+  }
+
+  int next() override
+  {
+    int ret = OB_SUCCESS;
+    ++pos_;
+    if (pos_ < 0 || pos_ >= static_cast<int64_t>(words_.size())) {
+      ret = OB_ITER_END;
+    }
+    return ret;
+  }
+
+  int get_key(ObString &str) override
+  {
+    int ret = OB_SUCCESS;
+    if (pos_ < 0 || pos_ >= static_cast<int64_t>(words_.size())) {
+      ret = OB_ITER_END;
+    } else {
+      str.assign_ptr(words_[pos_].data(), static_cast<int32_t>(words_[pos_].length()));
+    }
+    return ret;
+  }
+
+  int get_value() override { return OB_SUCCESS; }
+
+private:
+  std::vector<std::string> words_;
+  int64_t pos_;
+};
+
+static int collect_words_in_dat(const ObCollationType coll_type,
+                                const ObFTDAT *dat,
+                                const ObIKDictLoader::RawDict &dict_text,
+                                std::vector<std::string> &words)
+{
+  int ret = OB_SUCCESS;
+  words.clear();
+  if (OB_ISNULL(dat)) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    ObFTCacheDict cache_dict(coll_type, dat);
+    for (int64_t i = 0; OB_SUCC(ret) && i < dict_text.array_size_; ++i) {
+      ObString word(dict_text.data_[i]);
+      bool is_match = false;
+      if (OB_FAIL(cache_dict.match(word, is_match))) {
+        LOG_WARN("failed to match word in dat", K(ret), K(word));
+      } else if (is_match) {
+        words.emplace_back(word.ptr(), word.length());
+      }
+    }
+    std::sort(words.begin(), words.end());
+    words.erase(std::unique(words.begin(), words.end()), words.end());
+  }
+  return ret;
+}
+
+static bool is_handles_sorted_by_range_id(const ObFTCacheRangeContainer &container)
+{
+  int32_t prev_range_id = -1;
+  for (ObList<ObFTCacheRangeHandle *, ObIAllocator>::const_iterator iter = container.get_handles().begin();
+       iter != container.get_handles().end();
+       ++iter) {
+    const int32_t range_id = (*iter)->key_.get_range_id();
+    if (range_id <= prev_range_id) {
+      return false;
+    }
+    prev_range_id = range_id;
+  }
+  return true;
+}
+
+static const ObFTCacheRangeHandle *find_handle_by_range_id(const ObFTCacheRangeContainer &container,
+                                                           const int32_t range_id)
+{
+  for (ObList<ObFTCacheRangeHandle *, ObIAllocator>::const_iterator iter = container.get_handles().begin();
+       iter != container.get_handles().end();
+       ++iter) {
+    if ((*iter)->key_.get_range_id() == range_id) {
+      return *iter;
+    }
+  }
+  return nullptr;
+}
+
+static bool is_range_dict_sorted_by_start_token(const ObFTRangeDict &range_dict)
+{
+  for (int64_t i = 1; i < range_dict.range_dicts_.size(); ++i) {
+    if (ObCharset::strcmp(ObCollationType::CS_TYPE_UTF8MB4_BIN,
+                          range_dict.range_dicts_[i - 1].start_.get_token(),
+                          range_dict.range_dicts_[i].start_.get_token()) > 0) {
+      return false;
+    }
+  }
+  return true;
+}
 
 class FTParserTest : public ::testing::Test
 {
@@ -804,8 +948,9 @@ TEST_F(FTParserTest, test_append_where_clause)
   {
     std::string s(sql.string().ptr(), sql.string().length());
     ASSERT_TRUE(s.find("WHERE") != std::string::npos);
-    ASSERT_TRUE(s.find("word >") != std::string::npos);
+    ASSERT_TRUE(s.find("LEFT(word, 1) >") != std::string::npos);
     ASSERT_TRUE(s.find("word <") != std::string::npos);
+    ASSERT_TRUE(s.find("LEFT(word, 1) <") == std::string::npos);
     ASSERT_TRUE(s.find("AND") != std::string::npos);
   }
 
@@ -818,8 +963,9 @@ TEST_F(FTParserTest, test_append_where_clause)
   ASSERT_EQ(OB_SUCCESS, ret);
   {
     std::string s(sql.string().ptr(), sql.string().length());
-    ASSERT_TRUE(s.find("word >") != std::string::npos);
+    ASSERT_TRUE(s.find("LEFT(word, 1) >") != std::string::npos);
     ASSERT_TRUE(s.find("word <") == std::string::npos);
+    ASSERT_TRUE(s.find("LEFT(word, 1) <") == std::string::npos);
   }
 
   ranges.reset();
@@ -832,7 +978,8 @@ TEST_F(FTParserTest, test_append_where_clause)
   {
     std::string s(sql.string().ptr(), sql.string().length());
     ASSERT_TRUE(s.find("word <") != std::string::npos);
-    ASSERT_TRUE(s.find("word >") == std::string::npos);
+    ASSERT_TRUE(s.find("LEFT(word, 1) <") == std::string::npos);
+    ASSERT_TRUE(s.find("LEFT(word, 1) >") == std::string::npos);
   }
 
   ranges.reset();
@@ -944,6 +1091,296 @@ TEST_F(FTParserTest, test_handle_missing_ranges)
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_GE(missing_ranges.count(), 1);
   ASSERT_EQ(1, missing_ranges.at(0).start_range_id_);
+}
+
+TEST_F(FTParserTest, test_partial_rebuild_each_range_matches_full_build)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator alloc(ObModIds::TEST);
+  ObFTDictDesc desc(ObCharsetType::CHARSET_UTF8MB4,
+                    ObCollationType::CS_TYPE_UTF8MB4_BIN,
+                    share::OB_FT_DICT_IK_UTF8_TID,
+                    ObString(ObFTSLiteral::FT_DEFAULT_IK_DICT_UTF8_TABLE));
+  TestFTDictCacheLoaderExec loader;
+  ObFTCacheRangeContainer full_container(alloc);
+  ASSERT_EQ(OB_SUCCESS, loader.load_cache(desc, full_container));
+  ASSERT_FALSE(full_container.get_handles().empty());
+
+  const ObFTCacheRangeHandle *first_handle = *full_container.get_handles().begin();
+  ASSERT_NE(nullptr, first_handle);
+  ASSERT_NE(nullptr, first_handle->value_);
+  const int32_t full_range_count = first_handle->value_->get_range_count();
+  if (full_range_count < 5) {
+    // The builtin IK dict normally has 6 ranges. Keep this test harmless if the fixture changes.
+    return;
+  }
+
+  struct RangeSnapshot
+  {
+    size_t word_num_;
+    int64_t mem_block_size_;
+    std::string start_token_;
+    std::string end_token_;
+    std::vector<std::string> words_;
+  };
+
+  ObIKDictLoader::RawDict dict_text = ObIKDictLoader::dict_text();
+  std::vector<RangeSnapshot> full_ranges(full_range_count);
+  for (int32_t range_id = 0; range_id < full_range_count; ++range_id) {
+    ObDictCacheKey key(desc.table_id_, MTL_ID(), range_id);
+    ObFTCacheRangeHandle tmp;
+    ASSERT_EQ(OB_SUCCESS, ObDictCache::get_instance().get_dict(key, tmp.value_, tmp.handle_));
+    ASSERT_NE(nullptr, tmp.value_);
+    const ObFTDAT *dat = tmp.value_->get_dat_block();
+    ASSERT_NE(nullptr, dat);
+    full_ranges[range_id].word_num_ = dat->word_num_;
+    full_ranges[range_id].mem_block_size_ = dat->mem_block_size_;
+    full_ranges[range_id].start_token_.assign(dat->start_token_.get_token().ptr(),
+                                              dat->start_token_.get_token().length());
+    full_ranges[range_id].end_token_.assign(dat->end_token_.get_token().ptr(),
+                                            dat->end_token_.get_token().length());
+    ASSERT_EQ(OB_SUCCESS, collect_words_in_dat(desc.coll_type_, dat, dict_text,
+                                               full_ranges[range_id].words_));
+    ASSERT_FALSE(full_ranges[range_id].words_.empty());
+  }
+
+  const int64_t snapshot_version = first_handle->value_->get_snapshot_version();
+  for (int32_t missing_range_id = 1; missing_range_id < full_range_count; ++missing_range_id) {
+    ObFTCacheRangeContainer gap_container(alloc);
+    for (int32_t range_id = 0; range_id < full_range_count; ++range_id) {
+      if (missing_range_id == range_id) {
+        continue;
+      }
+      ObDictCacheKey key(desc.table_id_, MTL_ID(), range_id);
+      ObFTCacheRangeHandle tmp;
+      ObFTCacheRangeHandle *info = nullptr;
+      ASSERT_EQ(OB_SUCCESS, ObDictCache::get_instance().get_dict(key, tmp.value_, tmp.handle_));
+      ASSERT_EQ(OB_SUCCESS, gap_container.fetch_info_for_dict(info));
+      info->move_from(tmp);
+      info->key_ = key;
+    }
+
+    ObSEArray<ObMissingRangeInfo, 1> missing_ranges;
+    ASSERT_EQ(OB_SUCCESS, loader.handle_missing_ranges(
+        gap_container, full_range_count, snapshot_version, &missing_ranges));
+    ASSERT_EQ(1, missing_ranges.count());
+    ASSERT_EQ(missing_range_id, missing_ranges.at(0).start_range_id_);
+    ASSERT_EQ(1, missing_ranges.at(0).range_count_);
+
+    FilteredDictIterator partial_iter;
+    ASSERT_EQ(OB_SUCCESS, partial_iter.init(dict_text,
+                                            missing_ranges.at(0).start_token_.get_token(),
+                                            missing_ranges.at(0).end_token_.get_token()));
+
+    ret = loader.build_ranges(desc, partial_iter, gap_container, snapshot_version, &missing_ranges);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_EQ(full_range_count, gap_container.get_handles().size());
+
+    ObDictCacheKey missing_key(desc.table_id_, MTL_ID(), missing_range_id);
+    ObFTCacheRangeHandle rebuilt_tmp;
+    ASSERT_EQ(OB_SUCCESS, ObDictCache::get_instance().get_dict(
+        missing_key, rebuilt_tmp.value_, rebuilt_tmp.handle_));
+    ASSERT_NE(nullptr, rebuilt_tmp.value_);
+    const ObFTDAT *rebuilt_dat = rebuilt_tmp.value_->get_dat_block();
+    ASSERT_NE(nullptr, rebuilt_dat);
+
+    std::vector<std::string> rebuilt_words;
+    ASSERT_EQ(OB_SUCCESS, collect_words_in_dat(desc.coll_type_, rebuilt_dat, dict_text, rebuilt_words));
+
+    const RangeSnapshot &full_range = full_ranges[missing_range_id];
+    ASSERT_EQ(full_range.word_num_, rebuilt_dat->word_num_) << "range_id=" << missing_range_id;
+    ASSERT_EQ(full_range.mem_block_size_, rebuilt_dat->mem_block_size_) << "range_id=" << missing_range_id;
+    ASSERT_EQ(full_range.start_token_,
+              std::string(rebuilt_dat->start_token_.get_token().ptr(),
+                          rebuilt_dat->start_token_.get_token().length())) << "range_id=" << missing_range_id;
+    ASSERT_EQ(full_range.end_token_,
+              std::string(rebuilt_dat->end_token_.get_token().ptr(),
+                          rebuilt_dat->end_token_.get_token().length())) << "range_id=" << missing_range_id;
+    ASSERT_EQ(full_range.words_, rebuilt_words) << "range_id=" << missing_range_id;
+
+    ObFTRangeDict range_dict(&gap_container, desc);
+    bool is_match = false;
+    ASSERT_EQ(OB_SUCCESS, range_dict.init());
+    ASSERT_EQ(OB_SUCCESS, range_dict.match(
+        ObString(static_cast<int32_t>(full_range.words_.front().length()), full_range.words_.front().data()),
+        is_match)) << "range_id=" << missing_range_id;
+    ASSERT_TRUE(is_match) << "range_id=" << missing_range_id;
+  }
+}
+
+TEST_F(FTParserTest, test_partial_rebuild_out_of_order_handles_range_dict_sorted)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator alloc(ObModIds::TEST);
+  ObFTDictDesc desc(ObCharsetType::CHARSET_UTF8MB4,
+                    ObCollationType::CS_TYPE_UTF8MB4_BIN,
+                    share::OB_FT_DICT_IK_UTF8_TID,
+                    ObString(ObFTSLiteral::FT_DEFAULT_IK_DICT_UTF8_TABLE));
+  TestFTDictCacheLoaderExec loader;
+  ObFTCacheRangeContainer full_container(alloc);
+  ASSERT_EQ(OB_SUCCESS, loader.load_cache(desc, full_container));
+
+  const ObFTCacheRangeHandle *first_handle = *full_container.get_handles().begin();
+  ASSERT_NE(nullptr, first_handle);
+  ASSERT_NE(nullptr, first_handle->value_);
+  const int32_t full_range_count = first_handle->value_->get_range_count();
+  if (full_range_count < 4) {
+    return;
+  }
+
+  std::vector<std::string> sample_words(full_range_count);
+  ObIKDictLoader::RawDict dict_text = ObIKDictLoader::dict_text();
+  for (int32_t range_id = 0; range_id < full_range_count; ++range_id) {
+    ObDictCacheKey key(desc.table_id_, MTL_ID(), range_id);
+    ObFTCacheRangeHandle tmp;
+    ASSERT_EQ(OB_SUCCESS, ObDictCache::get_instance().get_dict(key, tmp.value_, tmp.handle_));
+    std::vector<std::string> words;
+    ASSERT_EQ(OB_SUCCESS, collect_words_in_dat(desc.coll_type_, tmp.value_->get_dat_block(),
+                                               dict_text, words));
+    ASSERT_FALSE(words.empty());
+    sample_words[range_id] = words.front();
+  }
+
+  const int32_t missing_range_id = 2;
+  const int64_t snapshot_version = first_handle->value_->get_snapshot_version();
+  ObFTCacheRangeContainer gap_container(alloc);
+  for (int32_t range_id = 0; range_id < full_range_count; ++range_id) {
+    if (missing_range_id == range_id) {
+      continue;
+    }
+    ObDictCacheKey key(desc.table_id_, MTL_ID(), range_id);
+    ObFTCacheRangeHandle tmp;
+    ObFTCacheRangeHandle *info = nullptr;
+    ASSERT_EQ(OB_SUCCESS, ObDictCache::get_instance().get_dict(key, tmp.value_, tmp.handle_));
+    ASSERT_EQ(OB_SUCCESS, gap_container.fetch_info_for_dict(info));
+    info->move_from(tmp);
+    info->key_ = key;
+  }
+
+  ObSEArray<ObMissingRangeInfo, 1> missing_ranges;
+  ASSERT_EQ(OB_SUCCESS, loader.handle_missing_ranges(
+      gap_container, full_range_count, snapshot_version, &missing_ranges));
+  ASSERT_EQ(1, missing_ranges.count());
+  ASSERT_EQ(missing_range_id, missing_ranges.at(0).start_range_id_);
+
+  FilteredDictIterator partial_iter;
+  ASSERT_EQ(OB_SUCCESS, partial_iter.init(dict_text,
+                                          missing_ranges.at(0).start_token_.get_token(),
+                                          missing_ranges.at(0).end_token_.get_token()));
+  ret = loader.build_ranges(desc, partial_iter, gap_container, snapshot_version, &missing_ranges);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_FALSE(is_handles_sorted_by_range_id(gap_container));
+
+  ObFTRangeDict range_dict(&gap_container, desc);
+  ASSERT_EQ(OB_SUCCESS, range_dict.init());
+  ASSERT_TRUE(is_range_dict_sorted_by_start_token(range_dict));
+
+  bool is_match = false;
+  ASSERT_EQ(OB_SUCCESS, range_dict.match(
+      ObString(static_cast<int32_t>(sample_words[missing_range_id].length()),
+               sample_words[missing_range_id].data()),
+      is_match));
+  ASSERT_TRUE(is_match);
+  ASSERT_EQ(OB_SUCCESS, range_dict.match(
+      ObString(static_cast<int32_t>(sample_words[full_range_count - 1].length()),
+               sample_words[full_range_count - 1].data()),
+      is_match));
+  ASSERT_TRUE(is_match);
+}
+
+TEST_F(FTParserTest, test_put_and_fetch_cache_entry_sets_handle_key)
+{
+  ObArenaAllocator alloc(ObModIds::TEST);
+  ObFTDictDesc desc(ObCharsetType::CHARSET_UTF8MB4,
+                    ObCollationType::CS_TYPE_UTF8MB4_BIN,
+                    share::OB_FT_DICT_IK_UTF8_TID,
+                    ObString(ObFTSLiteral::FT_DEFAULT_IK_DICT_UTF8_TABLE));
+  TestFTDictCacheLoaderExec loader;
+  ObFTCacheRangeContainer range_container(alloc);
+  ASSERT_EQ(OB_SUCCESS, loader.load_cache(desc, range_container));
+  ASSERT_FALSE(range_container.get_handles().empty());
+
+  const ObFTCacheRangeHandle *first_handle = *range_container.get_handles().begin();
+  ASSERT_NE(nullptr, first_handle);
+  ASSERT_NE(nullptr, first_handle->value_);
+  const int32_t full_range_count = first_handle->value_->get_range_count();
+  const int64_t snapshot_version = first_handle->value_->get_snapshot_version();
+  const int32_t target_range_id = full_range_count > 2 ? 2 : 1;
+
+  ObDictCacheKey src_key(desc.table_id_, MTL_ID(), target_range_id);
+  ObFTCacheRangeHandle src_handle;
+  ASSERT_EQ(OB_SUCCESS, ObDictCache::get_instance().get_dict(
+      src_key, src_handle.value_, src_handle.handle_));
+  ASSERT_NE(nullptr, src_handle.value_);
+  const ObFTDAT *dat = src_handle.value_->get_dat_block();
+  ASSERT_NE(nullptr, dat);
+
+  ObFTCacheRangeHandle rebuilt_handle;
+  ASSERT_EQ(OB_SUCCESS, ObFTCacheDict::put_and_fetch_cache_entry(
+      desc.table_id_, MTL_ID(), target_range_id, dat, snapshot_version, full_range_count,
+      rebuilt_handle));
+  ASSERT_EQ(target_range_id, rebuilt_handle.key_.get_range_id());
+  ASSERT_NE(nullptr, rebuilt_handle.value_);
+}
+
+TEST_F(FTParserTest, test_partial_rebuild_put_handle_sets_key)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator alloc(ObModIds::TEST);
+  ObFTDictDesc desc(ObCharsetType::CHARSET_UTF8MB4,
+                    ObCollationType::CS_TYPE_UTF8MB4_BIN,
+                    share::OB_FT_DICT_IK_UTF8_TID,
+                    ObString(ObFTSLiteral::FT_DEFAULT_IK_DICT_UTF8_TABLE));
+  TestFTDictCacheLoaderExec loader;
+  ObFTCacheRangeContainer full_container(alloc);
+  ASSERT_EQ(OB_SUCCESS, loader.load_cache(desc, full_container));
+
+  const ObFTCacheRangeHandle *first_handle = *full_container.get_handles().begin();
+  ASSERT_NE(nullptr, first_handle);
+  ASSERT_NE(nullptr, first_handle->value_);
+  const int32_t full_range_count = first_handle->value_->get_range_count();
+  if (full_range_count < 3) {
+    return;
+  }
+
+  const int32_t missing_range_id = 1;
+  const int64_t snapshot_version = first_handle->value_->get_snapshot_version();
+  ObFTCacheRangeContainer gap_container(alloc);
+  for (int32_t range_id = 0; range_id < full_range_count; ++range_id) {
+    if (missing_range_id == range_id) {
+      continue;
+    }
+    ObDictCacheKey key(desc.table_id_, MTL_ID(), range_id);
+    ObFTCacheRangeHandle tmp;
+    ObFTCacheRangeHandle *info = nullptr;
+    ASSERT_EQ(OB_SUCCESS, ObDictCache::get_instance().get_dict(key, tmp.value_, tmp.handle_));
+    ASSERT_EQ(OB_SUCCESS, gap_container.fetch_info_for_dict(info));
+    info->move_from(tmp);
+    info->key_ = key;
+  }
+
+  ObSEArray<ObMissingRangeInfo, 1> missing_ranges;
+  ASSERT_EQ(OB_SUCCESS, loader.handle_missing_ranges(
+      gap_container, full_range_count, snapshot_version, &missing_ranges));
+  ASSERT_EQ(1, missing_ranges.count());
+
+  ObIKDictLoader::RawDict dict_text = ObIKDictLoader::dict_text();
+  FilteredDictIterator partial_iter;
+  ASSERT_EQ(OB_SUCCESS, partial_iter.init(dict_text,
+                                          missing_ranges.at(0).start_token_.get_token(),
+                                          missing_ranges.at(0).end_token_.get_token()));
+  ret = loader.build_ranges(desc, partial_iter, gap_container, snapshot_version, &missing_ranges);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  const ObFTCacheRangeHandle *rebuilt_handle = find_handle_by_range_id(gap_container, missing_range_id);
+  ASSERT_NE(nullptr, rebuilt_handle);
+  ASSERT_EQ(missing_range_id, rebuilt_handle->key_.get_range_id());
+  ASSERT_NE(nullptr, rebuilt_handle->value_);
+
+  ObSEArray<ObMissingRangeInfo, 1> missing_ranges_again;
+  ASSERT_EQ(OB_SUCCESS, loader.handle_missing_ranges(
+      gap_container, full_range_count, snapshot_version, &missing_ranges_again));
+  ASSERT_EQ(0, missing_ranges_again.count());
 }
 
 TEST_F(FTParserTest, test_try_load_cache_invalid_table_id)
