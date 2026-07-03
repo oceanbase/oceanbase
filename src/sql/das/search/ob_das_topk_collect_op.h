@@ -91,6 +91,7 @@ private:
   ObFixedArray<ObDocIdExt, ObIAllocator> id_cache_;
   ObDASRowID curr_id_;
   int64_t limit_;
+  bool dynamic_pruning_enabled_;
   bool is_loaded_;
   bool is_inited_;
 };

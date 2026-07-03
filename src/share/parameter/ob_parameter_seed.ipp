@@ -1010,6 +1010,11 @@ DEF_BOOL(_enable_hybrid_search_parallel_execution, OB_TENANT_PARAMETER, "False",
          "including multi-path parallelism and intra-query-path range parallelism. "
          "Set to False to force serial execution as a kill switch.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_hybrid_search_topk_dynamic_pruning_level, OB_TENANT_PARAMETER, "1", "[0, 2]",
+        "specifies the level of score-based dynamic pruning for hybrid search queries. "
+        "0 for disabling dynamic pruning; 1 for enabling dynamic pruning except for match phrase "
+        "queries; 2 for enabling dynamic pruning for all queries.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_tx_result_retention, OB_TENANT_PARAMETER, "300", "[0, 36000]",
         "The tx data can be recycled after at least _tx_result_retention seconds. "
         "Range: [0, 36000]",

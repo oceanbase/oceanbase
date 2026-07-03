@@ -78,6 +78,7 @@ ObDASTopKCollectOp::ObDASTopKCollectOp(ObDASSearchCtx &search_ctx)
     id_cache_(),
     curr_id_(),
     limit_(-1),
+    dynamic_pruning_enabled_(false),
     is_loaded_(false),
     is_inited_(false)
 {}
@@ -96,6 +97,12 @@ int ObDASTopKCollectOp::do_init(const ObIDASSearchOpParam &op_param)
   } else if (OB_FAIL(id_cache_.init(param.limit_))) {
     LOG_WARN("failed to init id cache", K(ret));
   } else {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    int64_t dynamic_pruning_level = HYBRID_SEARCH_TOPK_DYNAMIC_PRUNING_BASIC;
+    if (tenant_config.is_valid()) {
+      dynamic_pruning_level = tenant_config->_hybrid_search_topk_dynamic_pruning_level;
+    }
+    dynamic_pruning_enabled_ = dynamic_pruning_level >= HYBRID_SEARCH_TOPK_DYNAMIC_PRUNING_BASIC;
     child_ = param.child_;
     limit_ = param.limit_;
     is_inited_ = true;
@@ -176,7 +183,8 @@ int ObDASTopKCollectOp::load_results()
         LOG_WARN("failed to pop from heap", K(ret));
       } else if (OB_FAIL(heap_.push(ObDASTopKItem{score, cache_idx}))) {
         LOG_WARN("failed to push item onto heap", K(ret));
-      } else if (OB_FAIL(child_->set_min_competitive_score(heap_.top().score_))) {
+      } else if (dynamic_pruning_enabled_
+          && OB_FAIL(child_->set_min_competitive_score(heap_.top().score_))) {
         LOG_WARN("failed to set min competitive score", K(ret));
       }
     }

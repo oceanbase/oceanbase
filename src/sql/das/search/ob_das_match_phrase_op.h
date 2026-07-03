@@ -102,7 +102,7 @@ private:
   int evaluate(double &score);
   int select_lead_idx();
   int calculate_total_token_weight_on_demand();
-  int estimate_bm25_param_on_demand();
+  int estimate_bm25_param();
   int init_block_max_iters_on_demand();
 private:
   ObArenaAllocator allocator_;
@@ -112,7 +112,6 @@ private:
   ObFixedArray<ObDASTokenOpHelper *, ObIAllocator> token_helpers_;
   ObFixedArray<ObTextRetrievalBlockMaxIter *, ObIAllocator> token_iters_;
   ObBM25IndexParamEstimator estimator_;
-  bool bm25_param_estimated_;
   bool block_max_inited_;
   double total_token_weight_;
   ObFTSPositionListStore *decoder_;
@@ -122,6 +121,7 @@ private:
   bool use_rich_format_;
   int64_t lead_idx_;
   ObDASRowID curr_id_;
+  bool dynamic_pruning_enabled_;
   bool is_inited_;
 };
 
