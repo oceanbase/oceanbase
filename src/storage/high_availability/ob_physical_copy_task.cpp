@@ -76,11 +76,20 @@ int ObPhysicalCopyTask::process()
   ObCopyTabletStatus::STATUS status = ObCopyTabletStatus::MAX_STATUS;
   ObTabletCopyFinishTask *tablet_finish_task = nullptr;
 
+  bool is_ha_status_failed = false;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("physical copy task do not init", K(ret));
   } else if (copy_ctx_->ha_dag_->get_ha_dag_net_ctx()->is_failed()) {
     FLOG_INFO("ha dag net is already failed, skip physical copy task", KPC(copy_ctx_));
+  } else if (OB_FAIL(ObStorageHADagUtils::check_ls_ha_status_failed(copy_ctx_->ls_id_, is_ha_status_failed))) {
+    LOG_WARN("failed to check ls ha status", K(ret), KPC(copy_ctx_));
+  } else if (is_ha_status_failed) {
+    ret = OB_CANCELED;
+    SERVER_EVENT_ADD("storage_ha", "ha_dag_perceive_failed",
+        "tenant_id", copy_ctx_->tenant_id_, "ls_id", copy_ctx_->ls_id_.id(),
+        "tablet_id", copy_ctx_->tablet_id_.id());
+    FLOG_INFO("ls ha status is failed, cancel physical copy task", K(ret), KPC(copy_ctx_));
   } else if (OB_FAIL(finish_task_->get_tablet_finish_task(tablet_finish_task))) {
     LOG_WARN("failed to get tablet finish task", K(ret), KPC(copy_ctx_));
   } else if (OB_FAIL(tablet_finish_task->get_tablet_status(status))) {
@@ -90,6 +99,16 @@ int ObPhysicalCopyTask::process()
   } else {
     if (copy_ctx_->tablet_id_.is_inner_tablet() || copy_ctx_->tablet_id_.is_ls_inner_tablet()) {
     } else {
+#ifdef ERRSIM
+      // Record that a user tablet restore copy task has reached the fetch point(and is
+      // about to be blocked at the debug sync below), so that the test can deterministically
+      // wait for it before injecting the restore-failed state.
+      if (copy_ctx_->is_leader_restore_) {
+        SERVER_EVENT_ADD("storage_ha", "before_fetch_macro_block",
+            "tenant_id", copy_ctx_->tenant_id_, "ls_id", copy_ctx_->ls_id_.id(),
+            "tablet_id", copy_ctx_->tablet_id_.id());
+      }
+#endif
       DEBUG_SYNC(FETCH_MACRO_BLOCK);
     }
 

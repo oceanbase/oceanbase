@@ -8,6 +8,8 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/high_availability/ob_cs_replica_migration.h"
 #include "storage/high_availability/ob_storage_ha_src_provider.h"
+#include "storage/ls/ob_ls.h"
+#include "share/restore/ob_ls_restore_status.h"
 
 namespace oceanbase
 {
@@ -411,6 +413,46 @@ int ObStorageHADagUtils::get_ls(const share::ObLSID &ls_id, ObLSHandle &ls_handl
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream should not be NULL", KR(ret), K(ls_id), KP(ls));
   }
+  return ret;
+}
+
+int ObStorageHADagUtils::check_ls_ha_status_failed(
+    const share::ObLSID &ls_id,
+    bool &is_failed)
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  share::ObLSRestoreStatus restore_status;
+  ObMigrationStatus migration_status = OB_MIGRATION_STATUS_MAX;
+  is_failed = false;
+  if (!ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("check ls ha status failed get invalid argument", K(ret), K(ls_id));
+  } else if (OB_FAIL(get_ls(ls_id, ls_handle))) {
+    LOG_WARN("failed to get ls", K(ret), K(ls_id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), K(ls_id));
+  } else if (OB_FAIL(ls->get_restore_status(restore_status))) {
+    LOG_WARN("failed to get restore status", K(ret), K(ls_id));
+  } else if (restore_status.is_failed()) {
+    is_failed = true;
+  } else if (OB_FAIL(ls->get_migration_status(migration_status))) {
+    LOG_WARN("failed to get migration status", K(ret), K(ls_id));
+  } else if (ObMigrationStatusHelper::check_migration_status_is_fail(migration_status)) {
+    is_failed = true;
+  }
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret) && !is_failed) {
+    int tmp_ret = OB_E(EventTable::EN_RESTORE_DAG_NET_PERCEIVE_FAILED) OB_SUCCESS;
+    if (OB_SUCCESS != tmp_ret) {
+      is_failed = true;
+      LOG_INFO("[ERRSIM] fake ha dag net perceive failed", K(ls_id));
+    }
+  }
+#endif
   return ret;
 }
 

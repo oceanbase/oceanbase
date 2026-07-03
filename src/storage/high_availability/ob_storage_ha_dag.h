@@ -153,6 +153,13 @@ public:
   static int get_ls(
       const share::ObLSID &ls_id,
       ObLSHandle &ls_handle);
+  // Check whether the HA status of the given log stream indicates failure,
+  // including restore failure (LS restore status is RESTORE_FAILED) and
+  // migration failure (LS migration status is *_FAIL). Used by HA DAGs/tasks
+  // to actively perceive failure and exit in time.
+  static int check_ls_ha_status_failed(
+      const share::ObLSID &ls_id,
+      bool &is_failed);
   static int check_self_is_valid_member(
       const share::ObLSID &ls_id,
       bool &is_valid_member);

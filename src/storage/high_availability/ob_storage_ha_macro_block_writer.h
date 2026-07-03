@@ -69,6 +69,13 @@ protected:
 private:
   int check_macro_block_(
       const blocksstable::ObBufferReader &data);
+  // Throttled check of whether the HA status of ls_id_ indicates failure
+  // (restore failed or migration failed), so that the copy loop can perceive
+  // failure and stop in time. last_check_ts is updated in place to limit frequency.
+  int check_ha_status_failed_(
+      ObIHADagNetCtx &ha_dag_net_ctx,
+      int64_t &last_check_ts,
+      bool &is_failed);
   bool check_can_flush_small_sstable(const blocksstable::ObBufferReader &data) const;
   int write_macro_block_(
       const ObStorageObjectOpt &opt,

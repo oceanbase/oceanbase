@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_storage_ha_macro_block_writer.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {
@@ -148,6 +149,8 @@ int ObStorageHAMacroBlockWriter::process(
   bool is_cancel = false;
   int64_t data_checksum = 0;
   int32_t result = OB_SUCCESS;
+  bool is_ha_status_failed = false;
+  int64_t last_check_ha_status_ts = 0;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -167,6 +170,18 @@ int ObStorageHAMacroBlockWriter::process(
         ret = OB_CANCELED;
         STORAGE_LOG(WARN, "copy task has been canceled, skip remaining macro blocks",
           K(ret), K_(dag_id), "finished_macro_block_count", copied_ctx.macro_block_list_.count());
+        break;
+      } else if (OB_FAIL(check_ha_status_failed_(ha_dag_net_ctx, last_check_ha_status_ts, is_ha_status_failed))) {
+        STORAGE_LOG(WARN, "failed to check ls ha status", K(ret), K_(ls_id));
+      } else if (is_ha_status_failed) {
+        ret = OB_CANCELED;
+        if (OB_SUCCESS != (tmp_ret = ha_dag_net_ctx.set_result(ret, false/*need_retry*/))) {
+          LOG_WARN("failed to set dag net result", K(tmp_ret), K(ha_dag_net_ctx));
+        }
+        SERVER_EVENT_ADD("storage_ha", "ha_dag_perceive_failed",
+            "tenant_id", tenant_id_, "ls_id", ls_id_.id(), "tablet_id", tablet_id_.id());
+        STORAGE_LOG(WARN, "ls ha status is failed, stop copy macro block",
+          K(ret), K_(ls_id), K_(dag_id), "finished_macro_block_count", copied_ctx.macro_block_list_.count());
         break;
       } else if (OB_FAIL(ObStorageHAUtils::check_disk_space())) {
         STORAGE_LOG(WARN, "failed to check disk space", K(ret));
@@ -264,6 +279,25 @@ int ObStorageHAMacroBlockWriter::process(
                 K(cost_time_ms), "read_size_B", data_size, K(write_size), K(total_speed_KB), K(write_speed_KB));
   }
 
+  return ret;
+}
+
+int ObStorageHAMacroBlockWriter::check_ha_status_failed_(
+    ObIHADagNetCtx &ha_dag_net_ctx,
+    int64_t &last_check_ts,
+    bool &is_failed)
+{
+  int ret = OB_SUCCESS;
+  const int64_t CHECK_HA_STATUS_INTERVAL_US = 1 * 1000 * 1000L; // 1s
+  const int64_t cur_ts = ObTimeUtility::current_time();
+  is_failed = false;
+  if (ha_dag_net_ctx.is_failed()) {
+    is_failed = true;
+  } else if (cur_ts - last_check_ts < CHECK_HA_STATUS_INTERVAL_US) {
+  } else if (FALSE_IT(last_check_ts = cur_ts)) {
+  } else if (OB_FAIL(ObStorageHADagUtils::check_ls_ha_status_failed(ls_id_, is_failed))) {
+    LOG_WARN("failed to check ls ha status", K(ret), K_(ls_id));
+  }
   return ret;
 }
 
