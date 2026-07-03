@@ -1445,36 +1445,17 @@ int ObResolverUtils::pick_routine(ObIArray<ObRoutineMatchInfo> &match_infos,
   // 选择一个不需要Cast即可匹配的Routine
   ObSEArray<ObRoutineMatchInfo, 16> tmp_match_infos;
   if (OB_SUCC(ret) && OB_ISNULL(routine_info)) {
-    int64_t routine_info_idx = -1;  // index of the first selected routine in match_infos
     for (int64_t i = 0; OB_SUCC(ret) && i < match_infos.count(); ++i) {
       if (!match_infos.at(i).need_cast()) {
         if (match_infos.at(i).match_same_type()) {
           if (OB_NOT_NULL(routine_info)) {
-            // Two exact-match candidates conflict. Tolerate when the only
-            // distinguishing parameters are ObExtendType (collection sub-types
-            // that JDBC cannot distinguish) — just pick the first candidate.
-            bool extend_ambiguity_only = false;
-            int64_t param_cnt = match_infos.at(routine_info_idx).match_info_.count();
-            for (int64_t k = 0; k < param_cnt; ++k) {
-              ObObjType t1 = match_infos.at(routine_info_idx).match_info_.at(k).dest_type_;
-              ObObjType t2 = match_infos.at(i).match_info_.at(k).dest_type_;
-              if (t1 != t2) {
-                extend_ambiguity_only = false;
-                break;
-              } else if (ObExtendType == t1) {
-                extend_ambiguity_only = true;
-              }
-            }
-            if (!extend_ambiguity_only) {
-              ret = OB_ERR_FUNC_DUP;
-              LOG_USER_ERROR(OB_ERR_FUNC_DUP, match_infos.at(0).routine_info_->get_routine_name().length(),
-                             match_infos.at(0).routine_info_->get_routine_name().ptr());
-              LOG_WARN("PLS-00307: too many declarations of 'string' match this call",
-                       K(ret), K(match_infos));
-            }
+            ret = OB_ERR_FUNC_DUP;
+            LOG_USER_ERROR(OB_ERR_FUNC_DUP, match_infos.at(0).routine_info_->get_routine_name().length(),
+                           match_infos.at(0).routine_info_->get_routine_name().ptr());
+            LOG_WARN("PLS-00307: too many declarations of 'string' match this call",
+                     K(ret), K(match_infos));
           } else {
             routine_info = match_infos.at(i).routine_info_;
-            routine_info_idx = i;
           }
         } else {
           OZ (tmp_match_infos.push_back(match_infos.at(i)));
@@ -1600,9 +1581,9 @@ int ObResolverUtils::pick_routine(const pl::ObPLResolveCtx &resolve_ctx,
       OZ (match_infos.push_back(match_info));
     }
   }
-  if (common::OB_OCI_CLIENT_MODE == resolve_ctx.session_info_.get_client_mode()) {
+
     OZ (check_anonymous_associative_array(match_infos));
-  }
+
   if (OB_FAIL(ret)) {
   } else if (0 == match_infos.count()) { // 没有匹配的routine直接报错
     ret = OB_ERR_SP_WRONG_ARG_NUM;
