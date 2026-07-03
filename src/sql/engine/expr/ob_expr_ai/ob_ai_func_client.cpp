@@ -116,7 +116,7 @@ int ObAIFuncClient::init(common::ObIAllocator &allocator, const common::ObString
       url_ = url_str.ptr();
       LOG_DEBUG("ai_function, url_", K(url_str));
     }
-    timeout_sec_ = std::min(std::max(60L, remain_timeout_us / 1000000), CURL_MAX_TIMEOUT_SEC);
+    timeout_sec_ = std::min(std::max(1L, remain_timeout_us / 1000000), CURL_MAX_TIMEOUT_SEC);
     abs_timeout_ts_ = remain_timeout_us + ObTimeUtility::current_time();
     if (OB_SUCC(ret)){
       const uint32_t num_headers = headers.count();
