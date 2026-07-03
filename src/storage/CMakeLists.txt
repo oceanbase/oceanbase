@@ -253,9 +253,10 @@ ob_set_subtarget(ob_storage analyzer
   fts/analyzer/filter/ob_icu_normalizer2_filter.cpp
   fts/analyzer/filter/ob_snowball_filter.cpp
   fts/analyzer/filter/ob_decimal_digit_filter.cpp
-  fts/analyzer/filter/ob_english_possessive_filter.cpp
+  fts/analyzer/filter/ob_possessive_english_filter.cpp
   fts/analyzer/filter/ob_lower_case_filter.cpp
   fts/analyzer/filter/ob_stop_word_filter.cpp
+  fts/analyzer/filter/ob_charset_convert_filter.cpp
   fts/analyzer/ob_analyzer.cpp
   fts/analyzer/ob_token_stream_factory.cpp
   fts/analyzer/tokenizer/ob_legacy_parser_tokenizer.cpp

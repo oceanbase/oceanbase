@@ -18,9 +18,10 @@
 #include "storage/fts/analyzer/filter/ob_stop_word_filter.h"
 #include "storage/fts/analyzer/filter/ob_lower_case_filter.h"
 #include "storage/fts/analyzer/filter/ob_decimal_digit_filter.h"
-#include "storage/fts/analyzer/filter/ob_english_possessive_filter.h"
+#include "storage/fts/analyzer/filter/ob_possessive_english_filter.h"
 #include "storage/fts/analyzer/filter/ob_snowball_filter.h"
 #include "storage/fts/analyzer/filter/ob_icu_normalizer2_filter.h"
+#include "storage/fts/analyzer/filter/ob_charset_convert_filter.h"
 #include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "storage/fts/ob_fts_literal.h"
 #include "storage/fts/ob_fts_plugin_helper.h"
@@ -506,6 +507,14 @@ int ObAnalyzerSpecFactory::create_custom_analyzer_spec_(
     }
   }
 
+  // 10. Append the trailing charset_convert token filter as the LAST filter, so the
+  //     analyzer's outgoing tokens are converted from utf8mb4_bin back to source.
+  if (OB_SUCC(ret) && OB_NOT_NULL(analyzer_spec)) {
+    if (OB_FAIL(append_charset_convert_token_filter_spec_(allocator, *analyzer_spec))) {
+      LOG_WARN("failed to append charset convert filter spec", K(ret));
+    }
+  }
+
   return ret;
 }
 
@@ -518,12 +527,16 @@ bool ObAnalyzerSpecFactory::is_builtin_tokenizer_type_(const common::ObString &n
 
 bool ObAnalyzerSpecFactory::is_builtin_token_filter_name_(const common::ObString &name)
 {
+  // Built-in token filters have default specs and can be referenced directly by name
+  // in the analyzer "filter" array without an explicit top-level filter definition.
   return 0 == name.case_compare("lowercase")
-      || 0 == name.case_compare("english_possessive")
+      || 0 == name.case_compare("possessive_english")
+      || 0 == name.case_compare("stop")
       || 0 == name.case_compare("decimal_digit")
       || 0 == name.case_compare("icu_normalizer")
       || 0 == name.case_compare("icu_folding")
-      || 0 == name.case_compare("porter_stem");
+      || 0 == name.case_compare("porter_stem")
+      || 0 == name.case_compare("snowball");
 }
 
 int ObAnalyzerSpecFactory::resolve_builtin_tokenizer_spec_(
@@ -672,7 +685,7 @@ int ObAnalyzerSpecFactory::resolve_custom_token_filter_spec_(
     common::ObString type_str(static_cast<int32_t>(type_val->get_data_length()),
                               type_val->get_data());
     if (0 == type_str.case_compare("stop")) {
-      ObStopWordLanguageKind language = ObStopWordLanguageKind::LANGUAGE_NONE;
+      ObStopWordLanguageKind language = ObStopWordLanguageKind::LANGUAGE_ENGLISH;
       common::ObIJsonBase *sw_val = nullptr;
       common::ObString sw_key("stopwords");
       if (OB_FAIL(tf_def_json.get_object_value(sw_key, sw_val))) {
@@ -714,14 +727,15 @@ int ObAnalyzerSpecFactory::resolve_custom_token_filter_spec_(
         }
       }
     } else if (0 == type_str.case_compare("snowball")) {
-      ObSnowballFilterSpec::Algorithm lang = ObSnowballFilterSpec::Algorithm::INVALID;
+      // Align with Elasticsearch: when "language" is omitted, snowball defaults to English.
+      ObSnowballFilterSpec::Algorithm lang = ObSnowballFilterSpec::Algorithm::ENGLISH;
       common::ObIJsonBase *lang_val = nullptr;
       common::ObString lang_key = "language";
       if (OB_FAIL(tf_def_json.get_object_value(lang_key, lang_val))) {
-        LOG_WARN("failed to get language parameter", K(ret));
         if (OB_SEARCH_NOT_FOUND == ret) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "snowball filter: parameter 'language' is required");
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to get language parameter", K(ret));
         }
       } else if (OB_ISNULL(lang_val) || common::ObJsonNodeType::J_STRING != lang_val->json_type()) {
         ret = OB_INVALID_ARGUMENT;
@@ -872,7 +886,7 @@ int ObAnalyzerSpecFactory::resolve_custom_token_filter_spec_(
         }
       }
     } else if (0 == type_str.case_compare("lowercase")
-        || 0 == type_str.case_compare("english_possessive")
+        || 0 == type_str.case_compare("possessive_english")
         || 0 == type_str.case_compare("decimal_digit")
         || 0 == type_str.case_compare("icu_folding")
         || 0 == type_str.case_compare("porter_stem")) {
@@ -902,12 +916,21 @@ int ObAnalyzerSpecFactory::resolve_builtin_token_filter_spec_(
     } else {
       token_filter_spec = new (buf) ObLowerCaseFilterSpec();
     }
-  } else if (0 == filter_name.case_compare("english_possessive")) {
-    if (OB_ISNULL(buf = allocator.alloc(sizeof(ObEnglishPossessiveFilterSpec)))) {
+  } else if (0 == filter_name.case_compare("possessive_english")) {
+    if (OB_ISNULL(buf = allocator.alloc(sizeof(ObPossessiveEnglishFilterSpec)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory for english possessive filter spec", K(ret));
     } else {
-      token_filter_spec = new (buf) ObEnglishPossessiveFilterSpec();
+      token_filter_spec = new (buf) ObPossessiveEnglishFilterSpec();
+    }
+  } else if (0 == filter_name.case_compare("stop")) {
+    if (OB_ISNULL(buf = allocator.alloc(sizeof(ObStopWordFilterSpec)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for stop filter spec", K(ret));
+    } else {
+      ObStopWordFilterSpec *stop_spec = new (buf) ObStopWordFilterSpec();
+      stop_spec->language_ = ObStopWordLanguageKind::LANGUAGE_ENGLISH;
+      token_filter_spec = stop_spec;
     }
   } else if (0 == filter_name.case_compare("decimal_digit")) {
     if (OB_ISNULL(buf = allocator.alloc(sizeof(ObDecimalDigitFilterSpec)))) {
@@ -939,6 +962,13 @@ int ObAnalyzerSpecFactory::resolve_builtin_token_filter_spec_(
       LOG_WARN("failed to allocate memory for snowball filter spec", K(ret));
     } else {
       token_filter_spec = new (buf) ObSnowballFilterSpec(ObSnowballFilterSpec::Algorithm::PORTER);
+    }
+  } else if (0 == filter_name.case_compare("snowball")) {
+    if (OB_ISNULL(buf = allocator.alloc(sizeof(ObSnowballFilterSpec)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for snowball filter spec", K(ret));
+    } else {
+      token_filter_spec = new (buf) ObSnowballFilterSpec(ObSnowballFilterSpec::Algorithm::ENGLISH);
     }
   } else {
     ret = OB_INVALID_ARGUMENT;
@@ -1040,11 +1070,13 @@ int ObAnalyzerSpecFactory::init_default_filter_specs_(
       allocator.free(utf8_spec);
     }
   }
-  // Prepend the optional MinMax token filter and reserve room for extra filters.
+  // Prepend the optional MinMax token filter and reserve room for extra filters
+  // plus a trailing charset_convert token filter that callers append at the end of
+  // the pipeline.
   if (OB_SUCC(ret)) {
     int64_t min_max_token_filter_count = need_min_max_token_filter ? 1 : 0;
     if (OB_FAIL(analyzer_spec.token_filter_specs_.init(
-            extra_token_filter_count + min_max_token_filter_count))) {
+            extra_token_filter_count + min_max_token_filter_count + 1))) {
       LOG_WARN("failed to init token filter specs", K(ret), K(extra_token_filter_count));
     } else if (need_min_max_token_filter
         && OB_FAIL(append_min_max_token_filter_spec_(allocator, analyzer_spec))) {
@@ -1066,11 +1098,13 @@ int ObAnalyzerSpecFactory::build_standard_analyzer_spec_(
     LOG_WARN("failed to init default filter specs", K(ret));
   } else if (OB_FAIL(append_lowercase_filter_spec_(allocator, analyzer_spec))) {
     LOG_WARN("failed to append lowercase filter spec", K(ret));
+  } else if (OB_FAIL(append_charset_convert_token_filter_spec_(allocator, analyzer_spec))) {
+    LOG_WARN("failed to append charset convert filter spec", K(ret));
   }
   return ret;
 }
 
-// Pipeline: StandardTokenizer + EnglishPossessiveFilter + LowerCaseFilter + StopFilter(english) + SnowballFilter(english)
+// Pipeline: StandardTokenizer + PossessiveEnglishFilter + LowerCaseFilter + StopFilter(english) + SnowballFilter(english)
 int ObAnalyzerSpecFactory::build_english_analyzer_spec_(
     common::ObIAllocator &allocator,
     ObAnalyzerSpec &analyzer_spec)
@@ -1080,7 +1114,7 @@ int ObAnalyzerSpecFactory::build_english_analyzer_spec_(
     LOG_WARN("failed to create standard tokenizer spec", K(ret));
   } else if (OB_FAIL(init_default_filter_specs_(0, 4, false, allocator, analyzer_spec))) {
     LOG_WARN("failed to init default filter specs", K(ret));
-  } else if (OB_FAIL(append_english_possessive_filter_spec_(allocator, analyzer_spec))) {
+  } else if (OB_FAIL(append_possessive_english_filter_spec_(allocator, analyzer_spec))) {
     LOG_WARN("failed to append english possessive filter spec", K(ret));
   } else if (OB_FAIL(append_lowercase_filter_spec_(allocator, analyzer_spec))) {
     LOG_WARN("failed to append lowercase filter spec", K(ret));
@@ -1090,6 +1124,8 @@ int ObAnalyzerSpecFactory::build_english_analyzer_spec_(
   } else if (OB_FAIL(append_snowball_filter_spec_(
       allocator, analyzer_spec, ObSnowballFilterSpec::Algorithm::ENGLISH))) {
     LOG_WARN("failed to append english stem filter spec", K(ret));
+  } else if (OB_FAIL(append_charset_convert_token_filter_spec_(allocator, analyzer_spec))) {
+    LOG_WARN("failed to append charset convert filter spec", K(ret));
   }
   return ret;
 }
@@ -1111,6 +1147,8 @@ int ObAnalyzerSpecFactory::build_thai_analyzer_spec_(
   } else if (OB_FAIL(append_stop_filter_spec_(allocator, analyzer_spec,
                                               ObStopWordLanguageKind::LANGUAGE_THAI))) {
     LOG_WARN("failed to append thai stop filter spec", K(ret));
+  } else if (OB_FAIL(append_charset_convert_token_filter_spec_(allocator, analyzer_spec))) {
+    LOG_WARN("failed to append charset convert filter spec", K(ret));
   }
   return ret;
 }
@@ -1127,6 +1165,8 @@ int ObAnalyzerSpecFactory::build_vietnamese_analyzer_spec_(
     LOG_WARN("failed to init default filter specs", K(ret));
   } else if (OB_FAIL(append_icu_folding_filter_spec_(allocator, analyzer_spec))) {
     LOG_WARN("failed to append icu folding filter spec", K(ret));
+  } else if (OB_FAIL(append_charset_convert_token_filter_spec_(allocator, analyzer_spec))) {
+    LOG_WARN("failed to append charset convert filter spec", K(ret));
   }
   return ret;
 }
@@ -1149,6 +1189,8 @@ int ObAnalyzerSpecFactory::build_indonesian_analyzer_spec_(
   } else if (OB_FAIL(append_snowball_filter_spec_(
       allocator, analyzer_spec, ObSnowballFilterSpec::Algorithm::INDONESIAN))) {
     LOG_WARN("failed to append indonesian snowball filter spec", K(ret));
+  } else if (OB_FAIL(append_charset_convert_token_filter_spec_(allocator, analyzer_spec))) {
+    LOG_WARN("failed to append charset convert filter spec", K(ret));
   }
   return ret;
 }
@@ -1165,6 +1207,8 @@ int ObAnalyzerSpecFactory::build_malay_analyzer_spec_(
     LOG_WARN("failed to init default filter specs", K(ret));
   } else if (OB_FAIL(append_lowercase_filter_spec_(allocator, analyzer_spec))) {
     LOG_WARN("failed to append lowercase filter spec", K(ret));
+  } else if (OB_FAIL(append_charset_convert_token_filter_spec_(allocator, analyzer_spec))) {
+    LOG_WARN("failed to append charset convert filter spec", K(ret));
   }
   return ret;
 }
@@ -1192,20 +1236,20 @@ int ObAnalyzerSpecFactory::append_min_max_token_filter_spec_(
   return ret;
 }
 
-int ObAnalyzerSpecFactory::append_english_possessive_filter_spec_(
+int ObAnalyzerSpecFactory::append_possessive_english_filter_spec_(
     common::ObIAllocator &allocator,
     ObAnalyzerSpec &analyzer_spec)
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
-  if (OB_ISNULL(buf = allocator.alloc(sizeof(ObEnglishPossessiveFilterSpec)))) {
+  if (OB_ISNULL(buf = allocator.alloc(sizeof(ObPossessiveEnglishFilterSpec)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate english possessive filter spec", K(ret));
   } else {
-    ObEnglishPossessiveFilterSpec *english_spec = new (buf) ObEnglishPossessiveFilterSpec();
+    ObPossessiveEnglishFilterSpec *english_spec = new (buf) ObPossessiveEnglishFilterSpec();
     if (OB_FAIL(analyzer_spec.token_filter_specs_.push_back(english_spec))) {
       LOG_WARN("failed to append english possessive filter spec", K(ret));
-      english_spec->~ObEnglishPossessiveFilterSpec();
+      english_spec->~ObPossessiveEnglishFilterSpec();
       allocator.free(english_spec);
     }
   }
@@ -1338,6 +1382,28 @@ int ObAnalyzerSpecFactory::append_icu_folding_filter_spec_(
   return ret;
 }
 
+int ObAnalyzerSpecFactory::append_charset_convert_token_filter_spec_(
+    common::ObIAllocator &allocator,
+    ObAnalyzerSpec &analyzer_spec)
+{
+  int ret = OB_SUCCESS;
+  void *buf = nullptr;
+  if (OB_ISNULL(buf = allocator.alloc(sizeof(ObCharsetConvertFilterSpec)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate charset convert filter spec", K(ret));
+  } else {
+    // target_collation_ is left as CS_TYPE_INVALID here; create_token_filter() patches
+    // it with the runtime source collation before instantiating the filter.
+    ObCharsetConvertFilterSpec *cc_spec = new (buf) ObCharsetConvertFilterSpec();
+    if (OB_FAIL(analyzer_spec.token_filter_specs_.push_back(cc_spec))) {
+      LOG_WARN("failed to append charset convert filter spec", K(ret));
+      cc_spec->~ObCharsetConvertFilterSpec();
+      allocator.free(cc_spec);
+    }
+  }
+  return ret;
+}
+
 int ObTokenStreamFactory::create_analyzer(
     const ObAnalyzerSpec &spec,
     const common::ObCollationType source_collation,
@@ -1404,7 +1470,8 @@ int ObTokenStreamFactory::create_analyzer(
       if (OB_ISNULL(spec.token_filter_specs_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("token filter spec is null", K(ret), K(i));
-      } else if (OB_FAIL(create_token_filter(*spec.token_filter_specs_.at(i), alloc, scratch_alloc, tf))) {
+      } else if (OB_FAIL(create_token_filter(*spec.token_filter_specs_.at(i),
+                                              source_collation, alloc, scratch_alloc, tf))) {
         LOG_WARN("failed to create token filter", K(ret), K(i));
       } else if (OB_FAIL(analyzer->token_filters_.push_back(tf))) {
         LOG_WARN("failed to push back token filter", K(ret), K(i));
@@ -1722,7 +1789,7 @@ int ObTokenStreamFactory::create_tokenizer(
 
 #undef CREATE_TOKENIZER
 
-#define CREATE_TOKEN_FILTER(FilterClass, filter_name)                                    \
+#define CREATE_TOKEN_FILTER_WITH_SPEC(FilterClass, filter_name, init_spec)               \
   do {                                                                                   \
     void *buf = nullptr;                                                                 \
     if (OB_ISNULL(buf = alloc.alloc(sizeof(FilterClass)))) {                             \
@@ -1730,7 +1797,7 @@ int ObTokenStreamFactory::create_tokenizer(
       LOG_WARN("failed to allocate " filter_name, K(ret), K(type));                      \
     } else {                                                                             \
       FilterClass *filter = new (buf) FilterClass();                                     \
-      if (OB_FAIL(filter->init(spec, scratch_alloc))) {                                  \
+      if (OB_FAIL(filter->init(init_spec, scratch_alloc))) {                             \
         LOG_WARN("failed to init " filter_name, K(ret), K(type));                        \
         filter->~FilterClass();                                                          \
         alloc.free(filter);                                                              \
@@ -1740,8 +1807,12 @@ int ObTokenStreamFactory::create_tokenizer(
     }                                                                                    \
   } while (0)
 
+#define CREATE_TOKEN_FILTER(FilterClass, filter_name)                                    \
+  CREATE_TOKEN_FILTER_WITH_SPEC(FilterClass, filter_name, spec)
+
 int ObTokenStreamFactory::create_token_filter(
     const ObTokenFilterSpec &spec,
+    const common::ObCollationType source_collation,
     common::ObIAllocator &alloc,
     common::ObIAllocator &scratch_alloc,
     ObITokenFilter *&token_filter)
@@ -1759,8 +1830,8 @@ int ObTokenStreamFactory::create_token_filter(
     CREATE_TOKEN_FILTER(ObLowerCaseFilter, "lowercase filter");
   } else if (ObTokenFilterType::TOKEN_FILTER_TYPE_DECIMAL_DIGIT == type) {
     CREATE_TOKEN_FILTER(ObDecimalDigitFilter, "decimal digit filter");
-  } else if (ObTokenFilterType::TOKEN_FILTER_TYPE_ENGLISH_POSSESSIVE == type) {
-    CREATE_TOKEN_FILTER(ObEnglishPossessiveFilter, "english possessive filter");
+  } else if (ObTokenFilterType::TOKEN_FILTER_TYPE_POSSESSIVE_ENGLISH == type) {
+    CREATE_TOKEN_FILTER(ObPossessiveEnglishFilter, "english possessive filter");
   } else if (ObTokenFilterType::TOKEN_FILTER_TYPE_SNOWBALL == type) {
     CREATE_TOKEN_FILTER(ObSnowballFilter, "snowball filter");
   } else if (ObTokenFilterType::TOKEN_FILTER_TYPE_ICU_NORMALIZATION == type) {
@@ -1769,6 +1840,13 @@ int ObTokenStreamFactory::create_token_filter(
     // ICU folding shares the same Normalizer2-based filter implementation;
     // ObICUNormalizer2Filter::init() selects the folding ICU data by spec.type_.
     CREATE_TOKEN_FILTER(ObICUNormalizer2Filter, "icu folding filter");
+  } else if (ObTokenFilterType::TOKEN_FILTER_TYPE_CHARSET_CONVERT == type) {
+    // The spec carries a placeholder target_collation_ (CS_TYPE_INVALID) set at DDL
+    // time; patch it with the runtime source collation before init.
+    ObCharsetConvertFilterSpec patched_spec =
+        static_cast<const ObCharsetConvertFilterSpec &>(spec);
+    patched_spec.target_collation_ = source_collation;
+    CREATE_TOKEN_FILTER_WITH_SPEC(ObCharsetConvertFilter, "charset convert filter", patched_spec);
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("token filter type not yet implemented", K(ret), K(type));
@@ -1777,6 +1855,7 @@ int ObTokenStreamFactory::create_token_filter(
 }
 
 #undef CREATE_TOKEN_FILTER
+#undef CREATE_TOKEN_FILTER_WITH_SPEC
 
 void ObTokenStreamFactory::reset_analyzer(ObFTSAnalyzer *analyzer)
 {

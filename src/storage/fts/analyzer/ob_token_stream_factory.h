@@ -93,7 +93,7 @@ private:
   // Individual filter spec append helpers
   static int append_min_max_token_filter_spec_(common::ObIAllocator &allocator,
                                                ObAnalyzerSpec &analyzer_spec);
-  static int append_english_possessive_filter_spec_(common::ObIAllocator &allocator,
+  static int append_possessive_english_filter_spec_(common::ObIAllocator &allocator,
                                                     ObAnalyzerSpec &analyzer_spec);
   static int append_lowercase_filter_spec_(common::ObIAllocator &allocator,
                                            ObAnalyzerSpec &analyzer_spec);
@@ -114,6 +114,12 @@ private:
                                                     UNormalization2Mode::UNORM2_COMPOSE);
   static int append_icu_folding_filter_spec_(common::ObIAllocator &allocator,
                                              ObAnalyzerSpec &analyzer_spec);
+  // Must be the LAST token filter appended to the pipeline so that all upstream
+  // filters operate on utf8mb4 bytes. Spec carries a placeholder target_collation_
+  // (CS_TYPE_INVALID); ObTokenStreamFactory patches it with the runtime source
+  // collation when creating the filter instance.
+  static int append_charset_convert_token_filter_spec_(common::ObIAllocator &allocator,
+                                                       ObAnalyzerSpec &analyzer_spec);
 };
 
 // Factory class responsible for converting ObAnalyzerSpec into a fully assembled ObFTSAnalyzer.
@@ -142,6 +148,7 @@ private:
                               common::ObIAllocator &scratch_alloc,
                               ObITokenizer *&tokenizer);
   static int create_token_filter(const ObTokenFilterSpec &spec,
+                                 const common::ObCollationType source_collation,
                                  common::ObIAllocator &alloc,
                                  common::ObIAllocator &scratch_alloc,
                                  ObITokenFilter *&token_filter);

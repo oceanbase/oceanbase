@@ -71,7 +71,7 @@ TEST(LowerCaseFilterTest, init_wrong_type)
   common::ObArenaAllocator allocator;
   ObLowerCaseFilter filter;
   ObTokenFilterSpec spec;
-  spec.type_ = ObTokenFilterType::TOKEN_FILTER_TYPE_ENGLISH_POSSESSIVE;
+  spec.type_ = ObTokenFilterType::TOKEN_FILTER_TYPE_POSSESSIVE_ENGLISH;
   ASSERT_EQ(OB_INVALID_ARGUMENT, filter.init(spec, allocator));
 }
 

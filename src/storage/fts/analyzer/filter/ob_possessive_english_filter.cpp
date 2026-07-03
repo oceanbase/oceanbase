@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "storage/fts/analyzer/filter/ob_english_possessive_filter.h"
+#include "storage/fts/analyzer/filter/ob_possessive_english_filter.h"
 
 #include "lib/alloc/alloc_assist.h"
 #include "lib/oblog/ob_log_module.h"
@@ -21,22 +21,22 @@ static const unsigned char UTF8_U2019[] = {0xE2, 0x80, 0x99};
 static const unsigned char UTF8_UFF07[] = {0xEF, 0xBC, 0x87};
 static const int32_t UTF8_APOS_SEQ_LEN = 3;
 
-ObEnglishPossessiveFilter::ObEnglishPossessiveFilter()
+ObPossessiveEnglishFilter::ObPossessiveEnglishFilter()
   : is_inited_(false)
 {}
 
-ObEnglishPossessiveFilter::~ObEnglishPossessiveFilter()
+ObPossessiveEnglishFilter::~ObPossessiveEnglishFilter()
 {
   reset();
 }
 
-int ObEnglishPossessiveFilter::init(const ObTokenFilterSpec &spec, common::ObIAllocator &alloc)
+int ObPossessiveEnglishFilter::init(const ObTokenFilterSpec &spec, common::ObIAllocator &alloc)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("english possessive filter init twice", K(ret));
-  } else if (OB_UNLIKELY(ObTokenFilterType::TOKEN_FILTER_TYPE_ENGLISH_POSSESSIVE != spec.type_)) {
+  } else if (OB_UNLIKELY(ObTokenFilterType::TOKEN_FILTER_TYPE_POSSESSIVE_ENGLISH != spec.type_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid token filter spec type for english possessive filter", K(ret), K(spec.type_));
   } else {
@@ -46,7 +46,7 @@ int ObEnglishPossessiveFilter::init(const ObTokenFilterSpec &spec, common::ObIAl
   return ret;
 }
 
-bool ObEnglishPossessiveFilter::calc_stripped_len(const char *data, const int32_t len, int32_t &new_len)
+bool ObPossessiveEnglishFilter::calc_stripped_len(const char *data, const int32_t len, int32_t &new_len)
 {
   bool stripped = false;
   if (OB_UNLIKELY(0 >= len)) {
@@ -78,7 +78,7 @@ bool ObEnglishPossessiveFilter::calc_stripped_len(const char *data, const int32_
   return stripped;
 }
 
-int ObEnglishPossessiveFilter::get_next_token(ObTokenAttr &token)
+int ObPossessiveEnglishFilter::get_next_token(ObTokenAttr &token)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT || OB_ISNULL(input_)) {
@@ -114,7 +114,7 @@ int ObEnglishPossessiveFilter::get_next_token(ObTokenAttr &token)
   return ret;
 }
 
-void ObEnglishPossessiveFilter::reset()
+void ObPossessiveEnglishFilter::reset()
 {
   if (OB_NOT_NULL(input_) || IS_INIT) {
     input_ = nullptr;

@@ -5,7 +5,7 @@
 
 #include "lib/allocator/page_arena.h"
 #include "lib/ob_errno.h"
-#include "storage/fts/analyzer/filter/ob_english_possessive_filter.h"
+#include "storage/fts/analyzer/filter/ob_possessive_english_filter.h"
 #include "storage/fts/analyzer/ob_token_stream.h"
 
 #include <gtest/gtest.h>
@@ -95,11 +95,11 @@ static void assert_token_utf8(const ObTokenAttr &tok, const char *expected_utf8,
 
 } // namespace
 
-TEST(EnglishPossessiveFilterTest, strip_apostrophe_s)
+TEST(PossessiveEnglishFilterTest, strip_apostrophe_s)
 {
   common::ObArenaAllocator allocator;
-  ObEnglishPossessiveFilter filter;
-  ObEnglishPossessiveFilterSpec spec;
+  ObPossessiveEnglishFilter filter;
+  ObPossessiveEnglishFilterSpec spec;
   ASSERT_EQ(OB_SUCCESS, filter.init(spec, allocator));
 
   MockTokenStream mock;
@@ -113,11 +113,11 @@ TEST(EnglishPossessiveFilterTest, strip_apostrophe_s)
   ASSERT_EQ(OB_ITER_END, filter.get_next_token(tok));
 }
 
-TEST(EnglishPossessiveFilterTest, strip_apostrophe_s_uppercase_s)
+TEST(PossessiveEnglishFilterTest, strip_apostrophe_s_uppercase_s)
 {
   common::ObArenaAllocator allocator;
-  ObEnglishPossessiveFilter filter;
-  ObEnglishPossessiveFilterSpec spec;
+  ObPossessiveEnglishFilter filter;
+  ObPossessiveEnglishFilterSpec spec;
   ASSERT_EQ(OB_SUCCESS, filter.init(spec, allocator));
 
   MockTokenStream mock;
@@ -129,11 +129,11 @@ TEST(EnglishPossessiveFilterTest, strip_apostrophe_s_uppercase_s)
   assert_token_text(tok, "John");
 }
 
-TEST(EnglishPossessiveFilterTest, strip_unicode_u2019_apostrophe_s)
+TEST(PossessiveEnglishFilterTest, strip_unicode_u2019_apostrophe_s)
 {
   common::ObArenaAllocator allocator;
-  ObEnglishPossessiveFilter filter;
-  ObEnglishPossessiveFilterSpec spec;
+  ObPossessiveEnglishFilter filter;
+  ObPossessiveEnglishFilterSpec spec;
   ASSERT_EQ(OB_SUCCESS, filter.init(spec, allocator));
 
   MockTokenStream mock;
@@ -149,11 +149,11 @@ TEST(EnglishPossessiveFilterTest, strip_unicode_u2019_apostrophe_s)
 }
 
 // U+FF07 FULLWIDTH APOSTROPHE ＇ (e.g. CJK input method)
-TEST(EnglishPossessiveFilterTest, strip_fullwidth_uff07_apostrophe_s)
+TEST(PossessiveEnglishFilterTest, strip_fullwidth_uff07_apostrophe_s)
 {
   common::ObArenaAllocator allocator;
-  ObEnglishPossessiveFilter filter;
-  ObEnglishPossessiveFilterSpec spec;
+  ObPossessiveEnglishFilter filter;
+  ObPossessiveEnglishFilterSpec spec;
   ASSERT_EQ(OB_SUCCESS, filter.init(spec, allocator));
 
   MockTokenStream mock;
@@ -165,11 +165,11 @@ TEST(EnglishPossessiveFilterTest, strip_fullwidth_uff07_apostrophe_s)
   assert_token_utf8(tok, "John", 4);
 }
 
-TEST(EnglishPossessiveFilterTest, strip_unicode_u2019_trailing_plural_possessive)
+TEST(PossessiveEnglishFilterTest, strip_unicode_u2019_trailing_plural_possessive)
 {
   common::ObArenaAllocator allocator;
-  ObEnglishPossessiveFilter filter;
-  ObEnglishPossessiveFilterSpec spec;
+  ObPossessiveEnglishFilter filter;
+  ObPossessiveEnglishFilterSpec spec;
   ASSERT_EQ(OB_SUCCESS, filter.init(spec, allocator));
 
   MockTokenStream mock;
@@ -181,11 +181,11 @@ TEST(EnglishPossessiveFilterTest, strip_unicode_u2019_trailing_plural_possessive
   assert_token_utf8(tok, "dogs", 4);
 }
 
-TEST(EnglishPossessiveFilterTest, strip_trailing_fullwidth_uff07_plural)
+TEST(PossessiveEnglishFilterTest, strip_trailing_fullwidth_uff07_plural)
 {
   common::ObArenaAllocator allocator;
-  ObEnglishPossessiveFilter filter;
-  ObEnglishPossessiveFilterSpec spec;
+  ObPossessiveEnglishFilter filter;
+  ObPossessiveEnglishFilterSpec spec;
   ASSERT_EQ(OB_SUCCESS, filter.init(spec, allocator));
 
   MockTokenStream mock;
@@ -197,11 +197,11 @@ TEST(EnglishPossessiveFilterTest, strip_trailing_fullwidth_uff07_plural)
   assert_token_utf8(tok, "dogs", 4);
 }
 
-TEST(EnglishPossessiveFilterTest, strip_unicode_u2019_apostrophe_s_after_multibyte_letter)
+TEST(PossessiveEnglishFilterTest, strip_unicode_u2019_apostrophe_s_after_multibyte_letter)
 {
   common::ObArenaAllocator allocator;
-  ObEnglishPossessiveFilter filter;
-  ObEnglishPossessiveFilterSpec spec;
+  ObPossessiveEnglishFilter filter;
+  ObPossessiveEnglishFilterSpec spec;
   ASSERT_EQ(OB_SUCCESS, filter.init(spec, allocator));
 
   MockTokenStream mock;
@@ -214,11 +214,11 @@ TEST(EnglishPossessiveFilterTest, strip_unicode_u2019_apostrophe_s_after_multiby
   assert_token_utf8(tok, reinterpret_cast<const char *>(u8"\u00C9mile"), 6);
 }
 
-TEST(EnglishPossessiveFilterTest, unchanged_when_u2019_inside_word_not_suffix)
+TEST(PossessiveEnglishFilterTest, unchanged_when_u2019_inside_word_not_suffix)
 {
   common::ObArenaAllocator allocator;
-  ObEnglishPossessiveFilter filter;
-  ObEnglishPossessiveFilterSpec spec;
+  ObPossessiveEnglishFilter filter;
+  ObPossessiveEnglishFilterSpec spec;
   ASSERT_EQ(OB_SUCCESS, filter.init(spec, allocator));
 
   MockTokenStream mock;
@@ -230,11 +230,11 @@ TEST(EnglishPossessiveFilterTest, unchanged_when_u2019_inside_word_not_suffix)
   assert_token_utf8(tok, reinterpret_cast<const char *>(u8"rock\u2019n\u2019roll"), 15);
 }
 
-TEST(EnglishPossessiveFilterTest, strip_trailing_apostrophe_plural_possessive)
+TEST(PossessiveEnglishFilterTest, strip_trailing_apostrophe_plural_possessive)
 {
   common::ObArenaAllocator allocator;
-  ObEnglishPossessiveFilter filter;
-  ObEnglishPossessiveFilterSpec spec;
+  ObPossessiveEnglishFilter filter;
+  ObPossessiveEnglishFilterSpec spec;
   ASSERT_EQ(OB_SUCCESS, filter.init(spec, allocator));
 
   MockTokenStream mock;
@@ -246,11 +246,11 @@ TEST(EnglishPossessiveFilterTest, strip_trailing_apostrophe_plural_possessive)
   assert_token_text(tok, "dogs");
 }
 
-TEST(EnglishPossessiveFilterTest, unchanged_plain_word)
+TEST(PossessiveEnglishFilterTest, unchanged_plain_word)
 {
   common::ObArenaAllocator allocator;
-  ObEnglishPossessiveFilter filter;
-  ObEnglishPossessiveFilterSpec spec;
+  ObPossessiveEnglishFilter filter;
+  ObPossessiveEnglishFilterSpec spec;
   ASSERT_EQ(OB_SUCCESS, filter.init(spec, allocator));
 
   MockTokenStream mock;
@@ -262,11 +262,11 @@ TEST(EnglishPossessiveFilterTest, unchanged_plain_word)
   assert_token_text(tok, "hello");
 }
 
-TEST(EnglishPossessiveFilterTest, unchanged_malformed_u2019_suffix_bytes)
+TEST(PossessiveEnglishFilterTest, unchanged_malformed_u2019_suffix_bytes)
 {
   common::ObArenaAllocator allocator;
-  ObEnglishPossessiveFilter filter;
-  ObEnglishPossessiveFilterSpec spec;
+  ObPossessiveEnglishFilter filter;
+  ObPossessiveEnglishFilterSpec spec;
   ASSERT_EQ(OB_SUCCESS, filter.init(spec, allocator));
 
   MockTokenStream mock;
@@ -280,11 +280,11 @@ TEST(EnglishPossessiveFilterTest, unchanged_malformed_u2019_suffix_bytes)
   assert_token_utf8(tok, malformed, 3);
 }
 
-TEST(EnglishPossessiveFilterTest, strip_two_char_apostrophe_s_and_skip_empty_result)
+TEST(PossessiveEnglishFilterTest, strip_two_char_apostrophe_s_and_skip_empty_result)
 {
   common::ObArenaAllocator allocator;
-  ObEnglishPossessiveFilter filter;
-  ObEnglishPossessiveFilterSpec spec;
+  ObPossessiveEnglishFilter filter;
+  ObPossessiveEnglishFilterSpec spec;
   ASSERT_EQ(OB_SUCCESS, filter.init(spec, allocator));
 
   MockTokenStream mock;
@@ -298,11 +298,11 @@ TEST(EnglishPossessiveFilterTest, strip_two_char_apostrophe_s_and_skip_empty_res
   ASSERT_EQ(1, tok.pos_inc_);
 }
 
-TEST(EnglishPossessiveFilterTest, skip_invalid_upstream_token)
+TEST(PossessiveEnglishFilterTest, skip_invalid_upstream_token)
 {
   common::ObArenaAllocator allocator;
-  ObEnglishPossessiveFilter filter;
-  ObEnglishPossessiveFilterSpec spec;
+  ObPossessiveEnglishFilter filter;
+  ObPossessiveEnglishFilterSpec spec;
   ASSERT_EQ(OB_SUCCESS, filter.init(spec, allocator));
 
   MockTokenStream mock;
@@ -316,11 +316,11 @@ TEST(EnglishPossessiveFilterTest, skip_invalid_upstream_token)
   ASSERT_EQ(1, tok.pos_inc_);
 }
 
-TEST(EnglishPossessiveFilterTest, empty_after_strip_folds_pos_inc)
+TEST(PossessiveEnglishFilterTest, empty_after_strip_folds_pos_inc)
 {
   common::ObArenaAllocator allocator;
-  ObEnglishPossessiveFilter filter;
-  ObEnglishPossessiveFilterSpec spec;
+  ObPossessiveEnglishFilter filter;
+  ObPossessiveEnglishFilterSpec spec;
   ASSERT_EQ(OB_SUCCESS, filter.init(spec, allocator));
 
   MockTokenStream mock;
@@ -334,11 +334,11 @@ TEST(EnglishPossessiveFilterTest, empty_after_strip_folds_pos_inc)
   ASSERT_EQ(2, tok.pos_inc_);
 }
 
-TEST(EnglishPossessiveFilterTest, multiple_tokens_sequence)
+TEST(PossessiveEnglishFilterTest, multiple_tokens_sequence)
 {
   common::ObArenaAllocator allocator;
-  ObEnglishPossessiveFilter filter;
-  ObEnglishPossessiveFilterSpec spec;
+  ObPossessiveEnglishFilter filter;
+  ObPossessiveEnglishFilterSpec spec;
   ASSERT_EQ(OB_SUCCESS, filter.init(spec, allocator));
 
   MockTokenStream mock;
@@ -354,29 +354,29 @@ TEST(EnglishPossessiveFilterTest, multiple_tokens_sequence)
   ASSERT_EQ(OB_ITER_END, filter.get_next_token(tok));
 }
 
-TEST(EnglishPossessiveFilterTest, init_wrong_spec_type)
+TEST(PossessiveEnglishFilterTest, init_wrong_spec_type)
 {
   common::ObArenaAllocator allocator;
-  ObEnglishPossessiveFilter filter;
+  ObPossessiveEnglishFilter filter;
   ObTokenFilterSpec bad_spec;
   bad_spec.type_ = ObTokenFilterType::TOKEN_FILTER_TYPE_LOWERCASE;
   ASSERT_EQ(OB_INVALID_ARGUMENT, filter.init(bad_spec, allocator));
 }
 
-TEST(EnglishPossessiveFilterTest, init_twice_fails)
+TEST(PossessiveEnglishFilterTest, init_twice_fails)
 {
   common::ObArenaAllocator allocator;
-  ObEnglishPossessiveFilter filter;
-  ObEnglishPossessiveFilterSpec spec;
+  ObPossessiveEnglishFilter filter;
+  ObPossessiveEnglishFilterSpec spec;
   ASSERT_EQ(OB_SUCCESS, filter.init(spec, allocator));
   ASSERT_EQ(OB_INIT_TWICE, filter.init(spec, allocator));
 }
 
-TEST(EnglishPossessiveFilterTest, get_next_without_upstream)
+TEST(PossessiveEnglishFilterTest, get_next_without_upstream)
 {
   common::ObArenaAllocator allocator;
-  ObEnglishPossessiveFilter filter;
-  ObEnglishPossessiveFilterSpec spec;
+  ObPossessiveEnglishFilter filter;
+  ObPossessiveEnglishFilterSpec spec;
   ASSERT_EQ(OB_SUCCESS, filter.init(spec, allocator));
 
   ObTokenAttr tok;

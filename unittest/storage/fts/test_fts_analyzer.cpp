@@ -57,6 +57,8 @@
 #include "storage/fts/analyzer/ob_token_stream.h"
 #include "storage/fts/analyzer/ob_token_stream_factory.h"
 #include "storage/fts/analyzer/char_filter/ob_legacy_char_filter.h"
+#include "storage/fts/analyzer/filter/ob_snowball_filter.h"
+#include "storage/fts/analyzer/filter/ob_stop_word_filter.h"
 #include "storage/fts/dict/ob_ft_cache.h"
 #include "storage/fts/dict/ob_ft_dict_def.h"
 #include "storage/fts/dict/ob_ft_dict_mgr.h"
@@ -343,9 +345,11 @@ TEST_F(TestAnalysisJsonResolverSpec, builtin_analyzer)
     ASSERT_EQ(1, spec->char_filter_specs_.count());
     ASSERT_EQ(ObCharFilterType::CHAR_FILTER_TYPE_UTF8MB4_BIN,
               spec->char_filter_specs_.at(0)->type_);
-    ASSERT_EQ(1, spec->token_filter_specs_.count());
+    ASSERT_EQ(2, spec->token_filter_specs_.count());
     ASSERT_EQ(ObTokenFilterType::TOKEN_FILTER_TYPE_LOWERCASE,
               spec->token_filter_specs_.at(0)->type_);
+    ASSERT_EQ(ObTokenFilterType::TOKEN_FILTER_TYPE_CHARSET_CONVERT,
+              spec->token_filter_specs_.at(1)->type_);
     reset_spec();
   }
   {
@@ -374,7 +378,7 @@ TEST_F(TestAnalysisJsonResolverSpec, builtin_analyzer_support)
     ObAnalyzerType expected_type;
     ObTokenizerType expected_tokenizer_type;
     int64_t expected_token_filter_count;
-    ObTokenFilterType expected_token_filter_types[4];
+    ObTokenFilterType expected_token_filter_types[5];
     const char *desc;
   };
   Case cases[] = {
@@ -382,50 +386,56 @@ TEST_F(TestAnalysisJsonResolverSpec, builtin_analyzer_support)
      OB_SUCCESS,
      ObAnalyzerType::ANALYZER_TYPE_STANDARD,
      ObTokenizerType::TOKENIZER_TYPE_STANDARD,
-     1,
-     {ObTokenFilterType::TOKEN_FILTER_TYPE_LOWERCASE},
+     2,
+     {ObTokenFilterType::TOKEN_FILTER_TYPE_LOWERCASE,
+      ObTokenFilterType::TOKEN_FILTER_TYPE_CHARSET_CONVERT},
      "standard"},
     {"{\"analyzer\": \"english\"}",
      OB_SUCCESS,
      ObAnalyzerType::ANALYZER_TYPE_ENGLISH,
      ObTokenizerType::TOKENIZER_TYPE_STANDARD,
-     4,
-     {ObTokenFilterType::TOKEN_FILTER_TYPE_ENGLISH_POSSESSIVE,
+     5,
+     {ObTokenFilterType::TOKEN_FILTER_TYPE_POSSESSIVE_ENGLISH,
       ObTokenFilterType::TOKEN_FILTER_TYPE_LOWERCASE,
       ObTokenFilterType::TOKEN_FILTER_TYPE_STOP,
-      ObTokenFilterType::TOKEN_FILTER_TYPE_SNOWBALL},
+      ObTokenFilterType::TOKEN_FILTER_TYPE_SNOWBALL,
+      ObTokenFilterType::TOKEN_FILTER_TYPE_CHARSET_CONVERT},
      "english"},
     {"{\"analyzer\": \"thai\"}",
      OB_SUCCESS,
      ObAnalyzerType::ANALYZER_TYPE_THAI,
      ObTokenizerType::TOKENIZER_TYPE_STANDARD,
-     3,
+     4,
      {ObTokenFilterType::TOKEN_FILTER_TYPE_LOWERCASE,
       ObTokenFilterType::TOKEN_FILTER_TYPE_DECIMAL_DIGIT,
-      ObTokenFilterType::TOKEN_FILTER_TYPE_STOP},
+      ObTokenFilterType::TOKEN_FILTER_TYPE_STOP,
+      ObTokenFilterType::TOKEN_FILTER_TYPE_CHARSET_CONVERT},
      "thai"},
     {"{\"analyzer\": \"vietnamese\"}",
      OB_SUCCESS,
      ObAnalyzerType::ANALYZER_TYPE_VIETNAMESE,
      ObTokenizerType::TOKENIZER_TYPE_STANDARD,
-     1,
-     {ObTokenFilterType::TOKEN_FILTER_TYPE_ICU_FOLDING},
+     2,
+     {ObTokenFilterType::TOKEN_FILTER_TYPE_ICU_FOLDING,
+      ObTokenFilterType::TOKEN_FILTER_TYPE_CHARSET_CONVERT},
      "vietnamese"},
     {"{\"analyzer\": \"indonesian\"}",
      OB_SUCCESS,
      ObAnalyzerType::ANALYZER_TYPE_INDONESIAN,
      ObTokenizerType::TOKENIZER_TYPE_STANDARD,
-     3,
+     4,
      {ObTokenFilterType::TOKEN_FILTER_TYPE_LOWERCASE,
       ObTokenFilterType::TOKEN_FILTER_TYPE_STOP,
-      ObTokenFilterType::TOKEN_FILTER_TYPE_SNOWBALL},
+      ObTokenFilterType::TOKEN_FILTER_TYPE_SNOWBALL,
+      ObTokenFilterType::TOKEN_FILTER_TYPE_CHARSET_CONVERT},
      "indonesian"},
     {"{\"analyzer\": \"malay\"}",
      OB_SUCCESS,
      ObAnalyzerType::ANALYZER_TYPE_MALAY,
      ObTokenizerType::TOKENIZER_TYPE_STANDARD,
-     1,
-     {ObTokenFilterType::TOKEN_FILTER_TYPE_LOWERCASE},
+     2,
+     {ObTokenFilterType::TOKEN_FILTER_TYPE_LOWERCASE,
+      ObTokenFilterType::TOKEN_FILTER_TYPE_CHARSET_CONVERT},
      "malay"},
     {"{\"analyzer\": \"unknown_lang\"}",
      OB_NOT_SUPPORTED,
@@ -484,7 +494,50 @@ TEST_F(TestAnalysisJsonResolverSpec, custom_analyzer_object)
   ASSERT_EQ(1, spec_->char_filter_specs_.count());
   ASSERT_EQ(ObCharFilterType::CHAR_FILTER_TYPE_UTF8MB4_BIN,
             spec_->char_filter_specs_.at(0)->type_);
-  ASSERT_EQ(0, spec_->token_filter_specs_.count());
+  ASSERT_EQ(1, spec_->token_filter_specs_.count());
+  ASSERT_EQ(ObTokenFilterType::TOKEN_FILTER_TYPE_CHARSET_CONVERT,
+            spec_->token_filter_specs_.at(0)->type_);
+#endif
+}
+
+TEST_F(TestAnalysisJsonResolverSpec, stop_filter_default_stopwords)
+{
+  ObString json("{\"analyzer\":{\"a\":{\"type\":\"custom\",\"tokenizer\":\"standard\","
+                "\"filter\":[\"lowercase\",\"stop\"]}}}");
+#ifdef OB_BUILD_PACKAGE
+  ASSERT_EQ(OB_NOT_SUPPORTED, create_spec(json));
+#else
+  ASSERT_EQ(OB_SUCCESS, create_spec(json));
+  ASSERT_TRUE(OB_NOT_NULL(spec_));
+  ASSERT_EQ(3, spec_->token_filter_specs_.count());
+  ASSERT_EQ(ObTokenFilterType::TOKEN_FILTER_TYPE_LOWERCASE, spec_->token_filter_specs_.at(0)->type_);
+  ASSERT_EQ(ObTokenFilterType::TOKEN_FILTER_TYPE_STOP, spec_->token_filter_specs_.at(1)->type_);
+  ASSERT_EQ(ObTokenFilterType::TOKEN_FILTER_TYPE_CHARSET_CONVERT,
+            spec_->token_filter_specs_.at(2)->type_);
+  ObStopWordFilterSpec *stop_spec =
+      static_cast<ObStopWordFilterSpec *>(spec_->token_filter_specs_.at(1));
+  ASSERT_EQ(ObStopWordLanguageKind::LANGUAGE_ENGLISH, stop_spec->language_);
+#endif
+}
+
+TEST_F(TestAnalysisJsonResolverSpec, snowball_default_language)
+{
+  // Aligned with Elasticsearch: when "language" is omitted, snowball defaults to English.
+  ObString json("{\"analyzer\":{\"a\":{\"type\":\"custom\",\"tokenizer\":\"standard\","
+                "\"filter\":[\"my_sb\"]}},\"filter\":{\"my_sb\":{\"type\":\"snowball\"}}}");
+#ifdef OB_BUILD_PACKAGE
+  ASSERT_EQ(OB_NOT_SUPPORTED, create_spec(json));
+#else
+  ASSERT_EQ(OB_SUCCESS, create_spec(json));
+  ASSERT_TRUE(OB_NOT_NULL(spec_));
+  ASSERT_EQ(2, spec_->token_filter_specs_.count());
+  ASSERT_EQ(ObTokenFilterType::TOKEN_FILTER_TYPE_SNOWBALL,
+            spec_->token_filter_specs_.at(0)->type_);
+  ASSERT_EQ(ObTokenFilterType::TOKEN_FILTER_TYPE_CHARSET_CONVERT,
+            spec_->token_filter_specs_.at(1)->type_);
+  ObSnowballFilterSpec *snowball_spec =
+      static_cast<ObSnowballFilterSpec *>(spec_->token_filter_specs_.at(0));
+  ASSERT_EQ(ObSnowballFilterSpec::Algorithm::ENGLISH, snowball_spec->algo_);
 #endif
 }
 
@@ -494,21 +547,23 @@ TEST_F(TestAnalysisJsonResolverSpec, thai_malay_analyzer_support)
     const char *json;
     ObAnalyzerType expected_type;
     int64_t expected_token_filter_count;
-    ObTokenFilterType expected_token_filter_types[3];
+    ObTokenFilterType expected_token_filter_types[4];
     const char *desc;
   };
   Case cases[] = {
     {"{\"analyzer\": \"thai\"}",
      ObAnalyzerType::ANALYZER_TYPE_THAI,
-     3,
+     4,
      {ObTokenFilterType::TOKEN_FILTER_TYPE_LOWERCASE,
       ObTokenFilterType::TOKEN_FILTER_TYPE_DECIMAL_DIGIT,
-      ObTokenFilterType::TOKEN_FILTER_TYPE_STOP},
+      ObTokenFilterType::TOKEN_FILTER_TYPE_STOP,
+      ObTokenFilterType::TOKEN_FILTER_TYPE_CHARSET_CONVERT},
      "thai"},
     {"{\"analyzer\": \"malay\"}",
      ObAnalyzerType::ANALYZER_TYPE_MALAY,
-     1,
-     {ObTokenFilterType::TOKEN_FILTER_TYPE_LOWERCASE},
+     2,
+     {ObTokenFilterType::TOKEN_FILTER_TYPE_LOWERCASE,
+      ObTokenFilterType::TOKEN_FILTER_TYPE_CHARSET_CONVERT},
      "malay"},
   };
 

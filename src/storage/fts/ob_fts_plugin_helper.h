@@ -306,7 +306,7 @@ private:
   ObFTParserJsonProps props_;
   ObFTParserProperty parser_property_;
   common::ObString analysis_json_;   // for "analyzer" parser: raw analysis JSON
-  ObAnalyzerSpec *analyzer_spec_;
+  ObAnalyzerSpec *analyzer_spec_;    // for non-legacy analyzers
   share::schema::ObFTSIndexType fts_index_type_;
   bool is_ddl_mode_;
   bool is_inited_;

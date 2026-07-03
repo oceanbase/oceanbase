@@ -31,11 +31,12 @@ enum class ObTokenFilterType
   TOKEN_FILTER_TYPE_STOP,               // remove stop words
   TOKEN_FILTER_TYPE_SNOWBALL,           // Snowball stemming algorithm
   TOKEN_FILTER_TYPE_DECIMAL_DIGIT,      // normalize decimal digits to ASCII 0-9
-  TOKEN_FILTER_TYPE_ENGLISH_POSSESSIVE, // remove English possessive endings ('s)
+  TOKEN_FILTER_TYPE_POSSESSIVE_ENGLISH, // remove possessive English endings ('s)
   TOKEN_FILTER_TYPE_ICU_NORMALIZATION,  // ICU normalization
   TOKEN_FILTER_TYPE_ICU_FOLDING,        // ICU folding
   TOKEN_FILTER_TYPE_MIN_MAX,            // min/max token length filter
   TOKEN_FILTER_TYPE_LEGACY_STOP,        // legacy stop word filter
+  TOKEN_FILTER_TYPE_CHARSET_CONVERT,    // convert tokens from utf8mb4_bin to source collation
   TOKEN_FILTER_TYPE_MAX
 };
 

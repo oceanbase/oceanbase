@@ -147,7 +147,11 @@ int ObExprTokenize::TokenizeParam::parse_json_param(const ObIJsonBase *obj, cons
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Json args should be an object", K(ret));
   } else if (obj->element_count() == 0) {
-    // no data
+    if (storage::ObFTParser::is_analyzer_parser_name(parser_name_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("empty analyzer option is not allowed", K(ret), K(parser_name_));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "empty analyzer option");
+    }
   } else if (OB_FAIL(obj->get_object_value(0, str, val))) {
     LOG_WARN("Failed to take para key from json object.", K(ret));
   } else if (0 == str.case_compare(CASE_INDICATOR_STR)) {
@@ -179,17 +183,28 @@ int ObExprTokenize::TokenizeParam::parse_json_param(const ObIJsonBase *obj, cons
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "stopwords");
   } else if (0 == str.case_compare(ANALYSIS_STR)) {
-    if (ObJsonNodeType::J_STRING != val->json_type()) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("Analysis should be a string", K(ret));
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "analysis should be a JSON string");
-    } else {
+    if (ObJsonNodeType::J_STRING == val->json_type()) {
       ObString analysis_val(val->get_data_length(), val->get_data());
       if (OB_FAIL(ob_write_string(allocator_, analysis_val, properties_))) {
         LOG_WARN("Fail to copy analysis string", K(ret));
       } else {
         has_analysis_ = true;
       }
+    } else if (ObJsonNodeType::J_OBJECT == val->json_type()) {
+      common::ObJsonBuffer analysis_buf(&allocator_);
+      ObString analysis_val;
+      if (OB_FAIL(val->print(analysis_buf, true))) {
+        LOG_WARN("Fail to serialize analysis json object", K(ret));
+      } else if (OB_FAIL(analysis_buf.get_result_string(analysis_val))) {
+        LOG_WARN("Fail to get analysis json string", K(ret));
+      } else {
+        properties_ = analysis_val;
+        has_analysis_ = true;
+      }
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("Analysis should be a string or object", K(ret), K(val->json_type()));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "analysis should be a JSON string or object");
     }
   } else if (0 == str.case_compare(ADDITIONAL_ARGS_STR)) {
     if (ObJsonNodeType::J_ARRAY != val->json_type()) {
@@ -481,10 +496,6 @@ int ObExprTokenize::TokenizeParam::validate_parser_properties() const
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("additional_args cannot be used with analyzer parser", K(ret), K(parser_name_));
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "additional_args cannot be used with analyzer parser");
-    } else if (!has_analysis_) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("analysis is required for analyzer parser", K(ret), K(parser_name_));
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "analysis is required for analyzer parser");
     }
   } else if (has_analysis_) {
     ret = OB_INVALID_ARGUMENT;
@@ -499,7 +510,11 @@ int ObExprTokenize::TokenizeParam::reform_parser_properties(const ObString &prop
   int ret = OB_SUCCESS;
 
   if (storage::ObFTParser::is_analyzer_parser_name(parser_name_)) {
-    // analyzer path: properties_ already holds the raw analysis JSON, skip legacy validation
+    // Align TOKENIZE analyzer with Elasticsearch _analyze: missing analysis uses standard analyzer.
+    if (properties_.empty()
+        && OB_FAIL(ob_write_string(allocator_, ObString::make_string("{\"analyzer\":\"standard\"}"), properties_))) {
+      LOG_WARN("fail to set default analyzer properties", K(ret));
+    }
   } else {
     storage::ObFTParserJsonProps parser_properties;
     if (OB_FAIL(parser_properties.init())) {
