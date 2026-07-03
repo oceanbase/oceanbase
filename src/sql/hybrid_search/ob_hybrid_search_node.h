@@ -220,7 +220,19 @@ public:
                               ObIArray<ObRawExpr*> &table_filters,
                               bool &ingore_normal_access_path);
   int move_bool_nodes_to_children(ObIndexMergeNode* node);
+  int extract_partition_filters_from_tree(
+      ObIndexMergeNode *node,
+      const common::ObIArray<uint64_t> &part_col_ids,
+      common::ObIArray<ObRawExpr*> &partition_filters);
 private:
+  static int extract_partition_related_filters(
+      const common::ObIArray<ObRawExpr*> &filters,
+      const common::ObIArray<uint64_t> &part_col_ids,
+      common::ObIArray<ObRawExpr*> &partition_filters);
+  int build_or_partition_filter(
+      const common::ObIArray<ObRawExpr*> &left_filters,
+      const common::ObIArray<ObRawExpr*> &right_filters,
+      common::ObIArray<ObRawExpr*> &result);
   int generate_node(const ObDSLQuery *query, ObIndexMergeNode *&node);
   int generate_boolean_node(const ObDSLBoolQuery *dsl_query, ObBooleanQueryNode *&bool_node);
   int generate_scalar_node(ObRawExpr *filter, ObScalarQueryNode *&scalar_node);
