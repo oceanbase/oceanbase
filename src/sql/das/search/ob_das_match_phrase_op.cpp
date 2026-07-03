@@ -99,8 +99,10 @@ int ObDASMatchPhraseOp::do_init(const ObIDASSearchOpParam &op_param)
     if (tenant_config.is_valid()) {
       dynamic_pruning_level = tenant_config->_hybrid_search_topk_dynamic_pruning_level;
     }
-    dynamic_pruning_enabled_
-        = dynamic_pruning_level >= HYBRID_SEARCH_TOPK_DYNAMIC_PRUNING_WITH_MATCH_PHRASE;
+    // dynamic pruning disabled in the absence of inv_scan_token_cnt_col_
+    // for compatibility with pre-4.6.0 plan caches
+    dynamic_pruning_enabled_ = (nullptr != ir_ctdef_->inv_scan_token_cnt_col_)
+        && dynamic_pruning_level >= HYBRID_SEARCH_TOPK_DYNAMIC_PRUNING_WITH_MATCH_PHRASE;
     is_inited_ = true;
   }
   return ret;
@@ -257,7 +259,10 @@ int ObDASMatchPhraseOp::pre_evaluate(bool &is_candidate)
   double avg_doc_token_cnt = 0.0;
   int64_t doc_length = 0;
   int64_t lead_tf = 0;
-  if (OB_FAIL(estimator_.get_bm25_param(total_doc_cnt, avg_doc_token_cnt))) {
+  if (OB_UNLIKELY(!dynamic_pruning_enabled_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected pre-evaluation when dynamic pruning disabled", K(ret));
+  } else if (OB_FAIL(estimator_.get_bm25_param(total_doc_cnt, avg_doc_token_cnt))) {
     LOG_WARN("failed to get bm25 param", K(ret));
   } else if (OB_FAIL(token_iters_[lead_idx_]->get_curr_doc_length(doc_length))) {
     LOG_WARN("failed to get curr doc length", K(ret));

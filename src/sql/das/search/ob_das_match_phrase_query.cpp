@@ -65,12 +65,11 @@ int ObDASMatchPhraseRtDef::generate_op(
     } else {
       op = dummy_op;
     }
-  } else if (OB_ISNULL(ctdef->get_ir_ctdef()->inv_scan_token_cnt_col_)) {
+  } else if (OB_ISNULL(ctdef->get_ir_ctdef()->inv_scan_doc_length_col_)
+      || OB_ISNULL(ctdef->get_ir_ctdef()->inv_scan_pos_list_col_)) {
+    // tolerate null inv_scan_token_cnt_col_ for compatibility with pre-4.6.0 plan caches
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("missing token count column in index", K(ret));
-  } else if (OB_ISNULL(ctdef->get_ir_ctdef()->inv_scan_pos_list_col_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("missing pos list column in index", K(ret));
+    LOG_WARN("unexpected nullptr", K(ret), K(ctdef->get_ir_ctdef()));
   } else if (OB_FAIL(ctdef->boost_->eval(*eval_ctx_, boost_datum))) {
     LOG_WARN("failed to eval boost", K(ret));
   } else if (OB_FAIL(ctdef->slop_->eval(*eval_ctx_, slop_datum))) {
