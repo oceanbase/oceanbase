@@ -22,7 +22,8 @@ public:
     : ObIDASSearchCtDef(alloc, DAS_OP_SCALAR_QUERY),
       boost_(nullptr),
       has_index_scan_(false),
-      has_main_scan_(false)
+      has_main_scan_(false),
+      primary_get_ratio_(0)
   { }
   virtual ~ObDASScalarCtDef() {}
 
@@ -39,6 +40,7 @@ public:
 private:
   bool has_index_scan_;
   bool has_main_scan_;
+  int64_t primary_get_ratio_;
 };
 
 struct ObDASScalarRtDef : ObIDASSearchRtDef
