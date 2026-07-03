@@ -2207,7 +2207,34 @@ int ObTableLocation::set_location_calc_node(const ObDMLStmt &stmt,
   ObSEArray<ColumnItem, 3> gen_cols;
   const ObRawExpr *part_raw_expr = NULL;
   ObQueryCtx *query_ctx = NULL;
-  if (OB_ISNULL(exec_ctx) || OB_ISNULL(query_ctx = stmt.get_query_ctx())) {
+  bool fallback_scan_all_parts = false;
+
+  if ((PARTITION_LEVEL_ONE == part_level &&
+        NULL == stmt.get_part_expr(loc_meta_.table_loc_id_, loc_meta_.ref_table_id_)) ||
+      (PARTITION_LEVEL_TWO == part_level &&
+        NULL == stmt.get_subpart_expr(loc_meta_.table_loc_id_, loc_meta_.ref_table_id_))) {
+    const TableItem *table_item = stmt.get_table_item_by_id(loc_meta_.table_loc_id_);
+    if (OB_NOT_NULL(table_item)
+        && table_item->is_index_table_
+        && stmt.is_select_stmt()
+        && OB_NOT_NULL(table_schema)
+        && share::schema::is_local_fts_index(table_schema->get_index_type())) {
+      get_all = true;
+      is_range_get = false;
+      is_col_part_expr = false;
+      se_part_expr = NULL;
+      se_gen_col_expr = NULL;
+      calc_node = NULL;
+      gen_col_node = NULL;
+      fallback_scan_all_parts = true;
+      LOG_INFO("index direct select: fallback to scanning all partitions",
+               K(part_level), K(loc_meta_.ref_table_id_), K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret) || fallback_scan_all_parts) {
+    // do nothing
+  } else if (OB_ISNULL(exec_ctx) || OB_ISNULL(query_ctx = stmt.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(exec_ctx), K(query_ctx), K(ret));
   } else if (OB_FAIL(get_partition_column_info(stmt,

@@ -6007,7 +6007,34 @@ int ObDMLStmt::get_partition_columns(const int64_t table_id,
     LOG_WARN("part level should be one or two", K(ret));
   }
   if (OB_SUCC(ret)) {
-    if (OB_ISNULL(partition_expr)) {
+    bool fallback_scan_all_parts = false;
+    const TableItem *table_item = get_table_item_by_id(table_id);
+    if (OB_NOT_NULL(table_item) && table_item->is_index_table_ && is_select_stmt()) {
+      ObQueryCtx *query_ctx = get_query_ctx();
+      const share::schema::ObTableSchema *index_schema = NULL;
+      if (OB_ISNULL(query_ctx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("query ctx is null", K(ret));
+      } else if (OB_FAIL(query_ctx->sql_schema_guard_.get_table_schema(table_id,
+                                                                      index_id,
+                                                                      this,
+                                                                      index_schema))) {
+        LOG_WARN("get index schema failed", K(ret), K(table_id), K(index_id));
+      } else if (OB_ISNULL(index_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("index schema is null", K(ret), K(table_id), K(index_id));
+      } else if (share::schema::is_local_fts_index(index_schema->get_index_type())) {
+        fallback_scan_all_parts = true;
+        partition_columns.reset();
+        generate_columns.reset();
+        LOG_INFO("index direct select: fallback to scanning all partitions",
+                 K(part_level), K(table_id), K(index_id));
+      }
+    }
+
+    if (OB_FAIL(ret) || fallback_scan_all_parts) {
+      // do nothing
+    } else if (OB_ISNULL(partition_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null partition expr", K(ret), K(part_level), K(table_id), K(index_id));
     } else if (OB_FAIL(extract_partition_columns(table_id, partition_expr,
