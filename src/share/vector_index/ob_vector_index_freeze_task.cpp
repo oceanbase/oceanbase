@@ -17,6 +17,7 @@ namespace oceanbase
 {
 namespace share
 {
+ERRSIM_POINT_DEF(ERRSIM_VEC_DISABLE_TUNE_INDEX_IN_FREEZE, "When set, vector index tune index is disabled in freeze task.");
 
 bool ObVecIdxFreezeTaskExecutor::check_operation_allow()
 {
@@ -313,6 +314,14 @@ int ObVecIdxFreezeTask::do_check_and_freeze(ObPluginVectorIndexAdapterGuard &adp
         if (OB_FAIL(check_and_wait_write(frozen_data))) {
           LOG_WARN("check and wait write finished fail", K(ret));
         } else {
+          frozen_data->state_ = ObVecIdxFrozenData::State::TUNE_INDEX;
+        }
+        break;
+      }
+      case ObVecIdxFrozenData::State::TUNE_INDEX: {
+        if (OB_FAIL(do_tune_index_if_needed(frozen_data, adaptor))) {
+          LOG_WARN("tune index fail", K(ret));
+        } else {
           frozen_data->state_ = ObVecIdxFrozenData::State::WAIT_WRITE_FINISHED;
         }
         break;
@@ -396,6 +405,34 @@ int ObVecIdxFreezeTask::check_and_wait_write(const ObVecIdxFrozenDataHandle &fro
   if (check_cnt >= MAX_WAIT_CNT || frozen_data->segment_handle_->get_write_ref() > 0) {
     ret = OB_EAGAIN;
     LOG_WARN("reach max wait cnt, still has write thread", K(ret), K(check_cnt), K(frozen_data));
+  }
+  return ret;
+}
+
+int ObVecIdxFreezeTask::do_tune_index_if_needed(const ObVecIdxFrozenDataHandle &frozen_data,
+                                                ObPluginVectorIndexAdaptor *adaptor)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(adaptor) || ! frozen_data->segment_handle_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("segment or adaptor is null", K(ret), KPC(adaptor));
+  } else {
+    const ObVectorIndexAlgorithmType index_type = static_cast<ObVectorIndexAlgorithmType>(adaptor->get_index_type());
+    const ObVectorIndexAlgorithmType current_type = frozen_data->segment_handle_->get_index_type();
+    if (ERRSIM_VEC_DISABLE_TUNE_INDEX_IN_FREEZE == OB_SUCCESS
+        && current_type == VIAT_HGRAPH  && (index_type == VIAT_HNSW_SQ || index_type == VIAT_HNSW_BQ)) {
+      const int64_t start_time_us = ObTimeUtility::fast_current_time();
+      const ObVectorIndexAlgorithmType tune_type = index_type;
+      // tune_index builds params via construct_vsag_create_param and updates handler index_type on success.
+      if (OB_FAIL(frozen_data->segment_handle_->tune_index(tune_type))) {
+        LOG_WARN("tune index failed", K(ret), KPC(adaptor), K(index_type), K(current_type), K(tune_type));
+      } else {
+        const int64_t cost_us = ObTimeUtility::fast_current_time() - start_time_us;
+        LOG_INFO("tune index success", KP(adaptor), K(index_type), K(current_type), K(tune_type), K(cost_us));
+      }
+    } else {
+      LOG_INFO("index type is not hnsw_sq or hnsw_bq, no need tune", K(index_type), K(current_type), KP(adaptor));
+    }
   }
   return ret;
 }

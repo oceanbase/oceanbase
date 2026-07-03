@@ -146,6 +146,16 @@ int build_index(obvsag::VectorIndexPtr &index_handler, uint32_t *lens, uint32_t 
 #endif
 }
 
+int tune_index(obvsag::VectorIndexPtr index_handler, int new_index_type)
+{
+  INIT_SUCC(ret);
+#ifdef OB_BUILD_CDC_DISABLE_VSAG
+  return ret;
+#else
+  return obvsag::tune_index(index_handler, new_index_type);
+#endif
+}
+
 int add_index(obvsag::VectorIndexPtr index_handler, float* vector_list, int64_t* ids, int dim, char *extra_info, int size)
 {
   INIT_SUCC(ret);

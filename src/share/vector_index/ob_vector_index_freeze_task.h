@@ -47,6 +47,8 @@ private:
   int check_and_freeze(ObPluginVectorIndexAdapterGuard &adpt_guard, const ObLSID &ls_id);
   int do_check_and_freeze(ObPluginVectorIndexAdapterGuard &adpt_guard, const ObLSID &ls_id);
   int check_and_wait_write(const ObVecIdxFrozenDataHandle &frozen_data);
+  int do_tune_index_if_needed(const ObVecIdxFrozenDataHandle &frozen_data,
+                              ObPluginVectorIndexAdaptor *adaptor);
   int refresh_adaptor(ObPluginVectorIndexAdapterGuard &adpt_guard, ObIAllocator &allocator, const ObLSID &ls_id);
 
   DISALLOW_COPY_AND_ASSIGN(ObVecIdxFreezeTask);
