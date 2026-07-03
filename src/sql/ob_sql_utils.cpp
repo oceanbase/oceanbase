@@ -6875,7 +6875,7 @@ int ObSQLUtils::print_identifier_require_quotes(ObCollationType collation_type,
     require = true;
   } else if (require) {
     //do nothing
-  } else if (-1 != mysql_sql_reserved_keyword_lookup(ident.ptr())) {
+  } else if (NULL != mysql_sql_reserved_keyword_lookup(ident.ptr())) {
     require = true;
   }
   return ret;

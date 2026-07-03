@@ -1831,7 +1831,7 @@ BEGIN(in_c_comment);
     return NAME_OB;
   } else {
     int ret = NAME_OB;
-    if (NULL == (word = mysql_non_reserved_keyword_lookup(yytext)))
+    if (NULL == (word = mysql_sql_keyword_lookup(yytext)))
     {
       check_value(yylval);
       ParseNode *node = NULL;

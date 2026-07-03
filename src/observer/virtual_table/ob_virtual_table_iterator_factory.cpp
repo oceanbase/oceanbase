@@ -98,6 +98,7 @@
 #include "observer/virtual_table/ob_virtual_ash.h"
 #include "observer/virtual_table/ob_all_virtual_arbitration_member_info.h"
 #include "observer/virtual_table/ob_all_virtual_arbitration_service_status.h"
+#include "observer/virtual_table/ob_all_virtual_keywords.h"
 #include "observer/virtual_table/ob_virtual_sql_monitor_statname.h"
 #include "observer/virtual_table/ob_tenant_virtual_concurrent_limit_sql.h"
 #include "observer/virtual_table/ob_all_virtual_proxy_partition_info.h"
@@ -2339,6 +2340,15 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               SERVER_LOG(WARN, "failed to init all_virtual_server", KR(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(server);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_KEYWORD_TID: {
+            ObAllVirtualKeywords *keywords = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualKeywords, keywords))) {
+              SERVER_LOG(ERROR, "ObAllVirtualKeywords construct failed", KR(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(keywords);
             }
             break;
           }

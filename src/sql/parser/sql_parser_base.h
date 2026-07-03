@@ -227,7 +227,7 @@ do {                                                                            
     memmove(src, name, len);                                                           \
     src[len] = '\0';                                                                   \
     const NonReservedKeyword *word = NULL;                                             \
-    if (NULL == (word = mysql_non_reserved_keyword_lookup(src)))                       \
+    if (NULL == (word = mysql_sql_keyword_lookup(src)))                                \
     {                                                                                  \
       if (p->is_not_utf8_connection_) {                                                \
         node->str_value_ = parse_str_convert_utf8(p->charset_info_, src, p->malloc_pool_, &(node->str_len_), &(p->extra_errno_)); \

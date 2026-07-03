@@ -1294,6 +1294,7 @@ public:
   static int all_virtual_java_policy_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_audit_log_encryption_password_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sandbox_process_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_keyword_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_log_transport_stat_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_mview_dep_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_mview_refresh_pending_task_schema(share::schema::ObTableSchema &table_schema);
@@ -1642,6 +1643,7 @@ public:
   static int all_virtual_sync_standby_status_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_external_resource_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_java_policy_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_keyword_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_log_transport_stat_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_mview_refresh_pending_task_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_plan_cache_stat_schema(share::schema::ObTableSchema &table_schema);
@@ -2235,6 +2237,7 @@ public:
   static int dba_scheduler_running_jobs_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_scheduler_running_jobs_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_scheduler_jobs_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_keywords_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_ls_log_replay_stat_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_ls_log_replay_stat_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_ls_log_transport_stat_schema(share::schema::ObTableSchema &table_schema);
@@ -2543,6 +2546,7 @@ public:
   static int user_ob_source_schema(share::schema::ObTableSchema &table_schema);
   static int dba_java_policy_ora_schema(share::schema::ObTableSchema &table_schema);
   static int user_java_policy_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_keywords_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_instance_schema(share::schema::ObTableSchema &table_schema);
@@ -4719,6 +4723,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_java_policy_history_schema,
   ObInnerTableSchema::all_virtual_audit_log_encryption_password_schema,
   ObInnerTableSchema::all_virtual_sandbox_process_schema,
+  ObInnerTableSchema::all_virtual_keyword_schema,
   ObInnerTableSchema::all_virtual_log_transport_stat_schema,
   ObInnerTableSchema::all_virtual_mview_dep_schema,
   ObInnerTableSchema::all_virtual_mview_refresh_pending_task_schema,
@@ -5067,6 +5072,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_sync_standby_status_real_agent_ora_schema,
   ObInnerTableSchema::all_virtual_external_resource_real_agent_ora_schema,
   ObInnerTableSchema::all_virtual_java_policy_real_agent_ora_schema,
+  ObInnerTableSchema::all_virtual_keyword_ora_schema,
   ObInnerTableSchema::all_virtual_log_transport_stat_ora_schema,
   ObInnerTableSchema::all_virtual_mview_refresh_pending_task_real_agent_ora_schema,
   NULL,};
@@ -5775,6 +5781,7 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::dba_scheduler_running_jobs_schema,
   ObInnerTableSchema::cdb_scheduler_running_jobs_schema,
   ObInnerTableSchema::cdb_scheduler_jobs_schema,
+  ObInnerTableSchema::v_ob_keywords_schema,
   ObInnerTableSchema::gv_ob_ls_log_replay_stat_schema,
   ObInnerTableSchema::v_ob_ls_log_replay_stat_schema,
   ObInnerTableSchema::gv_ob_ls_log_transport_stat_schema,
@@ -6083,6 +6090,7 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::user_ob_source_schema,
   ObInnerTableSchema::dba_java_policy_ora_schema,
   ObInnerTableSchema::user_java_policy_ora_schema,
+  ObInnerTableSchema::v_ob_keywords_ora_schema,
   ObInnerTableSchema::gv_ob_sql_audit_ora_schema,
   ObInnerTableSchema::v_ob_sql_audit_ora_schema,
   ObInnerTableSchema::gv_instance_schema,
@@ -7124,6 +7132,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_SYNC_STANDBY_DEST_TID,
   OB_ALL_VIRTUAL_JAVA_POLICY_HISTORY_TID,
   OB_ALL_VIRTUAL_SANDBOX_PROCESS_TID,
+  OB_ALL_VIRTUAL_KEYWORD_TID,
   OB_ALL_VIRTUAL_LOG_TRANSPORT_STAT_TID,
   OB_ALL_VIRTUAL_MVIEW_DEP_TID,
   OB_ALL_VIRTUAL_MVIEW_REFRESH_PENDING_TASK_TID,
@@ -7482,6 +7491,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_SYNC_STANDBY_STATUS_REAL_AGENT_ORA_TID,
   OB_ALL_VIRTUAL_EXTERNAL_RESOURCE_REAL_AGENT_ORA_TID,
   OB_ALL_VIRTUAL_JAVA_POLICY_REAL_AGENT_ORA_TID,
+  OB_ALL_VIRTUAL_KEYWORD_ORA_TID,
   OB_ALL_VIRTUAL_LOG_TRANSPORT_STAT_ORA_TID,
   OB_ALL_VIRTUAL_MVIEW_REFRESH_PENDING_TASK_REAL_AGENT_ORA_TID,
   OB_GV_OB_PLAN_CACHE_STAT_TID,
@@ -7912,6 +7922,7 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_JAVA_POLICY_TID,
   OB_USER_JAVA_POLICY_TID,
   OB_DBA_SCHEDULER_RUNNING_JOBS_TID,
+  OB_V_OB_KEYWORDS_TID,
   OB_GV_OB_LS_LOG_REPLAY_STAT_TID,
   OB_V_OB_LS_LOG_REPLAY_STAT_TID,
   OB_GV_OB_LS_LOG_TRANSPORT_STAT_TID,
@@ -8219,6 +8230,7 @@ const uint64_t tenant_space_tables [] = {
   OB_USER_OB_SOURCE_TID,
   OB_DBA_JAVA_POLICY_ORA_TID,
   OB_USER_JAVA_POLICY_ORA_TID,
+  OB_V_OB_KEYWORDS_ORA_TID,
   OB_GV_OB_SQL_AUDIT_ORA_TID,
   OB_V_OB_SQL_AUDIT_ORA_TID,
   OB_GV_INSTANCE_TID,
@@ -9557,6 +9569,7 @@ const uint64_t all_ora_mapping_virtual_table_org_tables [] = {
   OB_ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY_V2_TID,
   OB_ALL_VIRTUAL_WR_SQLSTAT_V2_TID,
   OB_ALL_VIRTUAL_SYNC_STANDBY_DEST_TID,
+  OB_ALL_VIRTUAL_KEYWORD_TID,
   OB_ALL_VIRTUAL_LOG_TRANSPORT_STAT_TID,  };
 
 const uint64_t all_ora_mapping_virtual_tables [] = {  OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID
@@ -9754,6 +9767,7 @@ const uint64_t all_ora_mapping_virtual_tables [] = {  OB_ALL_VIRTUAL_SQL_AUDIT_O
 ,  OB_ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY_V2_ORA_TID
 ,  OB_ALL_VIRTUAL_WR_SQLSTAT_V2_ORA_TID
 ,  OB_ALL_VIRTUAL_SYNC_STANDBY_DEST_ORA_TID
+,  OB_ALL_VIRTUAL_KEYWORD_ORA_TID
 ,  OB_ALL_VIRTUAL_LOG_TRANSPORT_STAT_ORA_TID
 ,  };
 
@@ -10420,6 +10434,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_SYNC_STANDBY_DEST_TNAME,
   OB_ALL_VIRTUAL_JAVA_POLICY_HISTORY_TNAME,
   OB_ALL_VIRTUAL_SANDBOX_PROCESS_TNAME,
+  OB_ALL_VIRTUAL_KEYWORD_TNAME,
   OB_ALL_VIRTUAL_LOG_TRANSPORT_STAT_TNAME,
   OB_ALL_VIRTUAL_MVIEW_DEP_TNAME,
   OB_ALL_VIRTUAL_MVIEW_REFRESH_PENDING_TASK_TNAME,
@@ -10778,6 +10793,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_SYNC_STANDBY_STATUS_REAL_AGENT_ORA_TNAME,
   OB_ALL_VIRTUAL_EXTERNAL_RESOURCE_REAL_AGENT_ORA_TNAME,
   OB_ALL_VIRTUAL_JAVA_POLICY_REAL_AGENT_ORA_TNAME,
+  OB_ALL_VIRTUAL_KEYWORD_ORA_TNAME,
   OB_ALL_VIRTUAL_LOG_TRANSPORT_STAT_ORA_TNAME,
   OB_ALL_VIRTUAL_MVIEW_REFRESH_PENDING_TASK_REAL_AGENT_ORA_TNAME,
   OB_GV_OB_PLAN_CACHE_STAT_TNAME,
@@ -11208,6 +11224,7 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_JAVA_POLICY_TNAME,
   OB_USER_JAVA_POLICY_TNAME,
   OB_DBA_SCHEDULER_RUNNING_JOBS_TNAME,
+  OB_V_OB_KEYWORDS_TNAME,
   OB_GV_OB_LS_LOG_REPLAY_STAT_TNAME,
   OB_V_OB_LS_LOG_REPLAY_STAT_TNAME,
   OB_GV_OB_LS_LOG_TRANSPORT_STAT_TNAME,
@@ -11515,6 +11532,7 @@ const char* const tenant_space_table_names [] = {
   OB_USER_OB_SOURCE_TNAME,
   OB_DBA_JAVA_POLICY_ORA_TNAME,
   OB_USER_JAVA_POLICY_ORA_TNAME,
+  OB_V_OB_KEYWORDS_ORA_TNAME,
   OB_GV_OB_SQL_AUDIT_ORA_TNAME,
   OB_V_OB_SQL_AUDIT_ORA_TNAME,
   OB_GV_INSTANCE_TNAME,

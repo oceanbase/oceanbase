@@ -17994,6 +17994,25 @@ def_table_schema(
 )
 
 def_table_schema(
+  owner = 'zhuangyifeng.zyf',
+  table_name     = '__all_virtual_keyword',
+  table_id       = '12604',
+  table_type = 'VIRTUAL_TABLE',
+  vtable_route_policy='local',
+  gm_columns = [],
+  rowkey_columns = [
+  ],
+  in_tenant_space = True,
+
+  normal_columns = [
+    ('keyword_name', 'varchar:128'),
+    ('keyword_length', 'int'),
+    ('keyword_type', 'varchar:16'),
+    ('reserved', 'int'),
+  ],
+)
+
+def_table_schema(
   owner = 'shouju.zyp',
   table_name = '__all_virtual_log_transport_stat',
   table_id = '12607',
@@ -18621,6 +18640,7 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15550', all_def_ke
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15551', all_def_keywords['__all_java_policy']))
 
 # 15550: __all_external_resource
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15553', all_def_keywords['__all_virtual_keyword']))
 
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15554', all_def_keywords['__all_virtual_log_transport_stat']))
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15557', all_def_keywords['__all_mview_refresh_pending_task']))
@@ -46423,6 +46443,25 @@ def_table_schema(
 )
 
 def_table_schema(
+  owner = 'zhuangyifeng.zyf',
+  table_name     = 'V$OB_KEYWORDS',
+  table_id       = '21724',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      keyword_name AS KEYWORD,
+      keyword_length AS LENGTH,
+      keyword_type AS TYPE,
+      reserved AS RESERVED
+    FROM oceanbase.__all_virtual_keyword
+  """.replace("\n", " "),
+)
+
+def_table_schema(
   owner = 'shouju.zyp',
   table_name = 'GV$OB_LS_LOG_REPLAY_STAT',
   table_id = '21728',
@@ -69738,6 +69777,27 @@ def_table_schema(
         jp.TENANT_ID = EFFECTIVE_TENANT_ID() and jp.grantee = u.user_id and jp.type_schema = db.database_id and u.user_name = SYS_CONTEXT('USERENV','CURRENT_USER')
       order by u.user_name, db.database_name, jp.type_name, jp.name, jp.action
              """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'zhuangyifeng.zyf',
+  table_name     = 'V$OB_KEYWORDS',
+  name_postfix = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id       = '25321',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  in_tenant_space = True,
+  rowkey_columns = [],
+  normal_columns = [],
+  view_definition = """
+    SELECT
+      CAST(keyword_name AS VARCHAR2(128)) AS KEYWORD,
+      CAST(keyword_length AS NUMBER) AS LENGTH,
+      CAST(keyword_type AS VARCHAR2(16)) AS TYPE,
+      CAST(reserved AS INT) AS RESERVED
+    FROM SYS.ALL_VIRTUAL_KEYWORD
+  """.replace("\n", " "),
 )
 
 #

@@ -46,6 +46,21 @@ then
 fi
 }
 
+ORACLE_GENERATED_KEYWORD_FILES=(
+  "$CURDIR/non_reserved_keywords_oracle_utf8_mode.c"
+  "$CURDIR/non_reserved_keywords_oracle_gbk_mode.c"
+  "$CURDIR/non_reserved_keywords_oracle_hkscs_mode.c"
+)
+oracle_generated_outputs_missing() {
+  local file
+  for file in "${ORACLE_GENERATED_KEYWORD_FILES[@]}"; do
+    if [ ! -f "$file" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 function generate_parser {
 
 # fts boolean mode parser for mysql
@@ -292,13 +307,26 @@ fi
 echo "$md5sum_value" > $CACHE_MD5_FILE
 }
 
+run_keyword_token_mapping_check() {
+  python ../../../src/sql/parser/check_keyword_token_mapping.py mysql || return 1
+  if [ -d "../../../close_modules/oracle_parser/sql/parser" ]; then
+    python ../../../src/sql/parser/check_keyword_token_mapping.py oracle || return 1
+  fi
+}
+
+# check token type mapping
+run_keyword_token_mapping_check >&2 || exit 1
+
 if [[ -n "$NEED_PARSER_CACHE" && "$NEED_PARSER_CACHE" == "ON" ]]; then
     echo "generate sql parser with cache"
     origin_md5sum_value=$(<$CACHE_MD5_FILE)
-    if [[ "$md5sum_value" == "$origin_md5sum_value" ]]; then
-      echo "hit the md5 cache"
-    else
+    if [[ "$md5sum_value" != "$origin_md5sum_value" ]]; then
       generate_parser
+    elif [ -d "../../../close_modules/oracle_parser/sql/parser" ] && oracle_generated_outputs_missing; then
+      echo "md5 cache hit but oracle generated keyword files are missing, regenerating"
+      generate_parser
+    else
+      echo "hit the md5 cache"
     fi
 else
     echo "generate sql parser without cache"
