@@ -11992,11 +11992,14 @@ int ObJoinOrder::generate_subquery_paths(PathHelper &helper)
       if (OB_ISNULL(view_table)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(view_table), K(ret));
-      } else if (view_table->is_generated_table()) {
-        // e.g. `select * from (select /*+no_merge*/ * from t1) v where rownum <= 1 FOR UPDATE;`
-        // Suppress generating `FOR_UPDATE` op for the subquery because
-        // the `FOR_UPDATE` op should be placed on top of the outer stmt rather than the inner one
-        // or else all the rows of t1 would be locked instead of the first row
+      } else if (view_table->is_generated_table() && view_table->for_update_) {
+        // Only suppress when FOR UPDATE is applied on the outer view reference, e.g.
+        // `select * from (select /*+no_merge*/ * from t1) v where rownum <= 1 FOR UPDATE;`
+        // Here the `FOR_UPDATE` op must be placed on top of the outer stmt rather than the inner
+        // one, or else all the rows of t1 would be locked instead of the first row.
+        // When FOR UPDATE is written inside the view stmt itself (view_table->for_update_ is false),
+        // e.g. `select * from t1 where c2 in (select c2 from t2 for update)`, the inner subplan
+        // must still generate its own `FOR_UPDATE` op to lock t2, so it must NOT be suppressed.
         log_plan->set_for_update_suppressed(true);
       }
     }
