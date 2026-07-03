@@ -24,6 +24,7 @@
 #include "rootserver/standby/ob_standby_service.h" // ObStandbyService
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "sql/resolver/expr/ob_raw_expr_modify_column_name.h"
+#include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "rootserver/ob_ddl_service_launcher.h" // for ObDDLServiceLauncher
 #include "rootserver/ddl_task/ob_sys_ddl_util.h" // ObSysDDLSchedulerUtil
 #include "rootserver/ob_index_builder.h"
@@ -10117,14 +10118,18 @@ int ObDDLService::refill_column_id_array_for_constraint(
               LOG_WARN("build generated column expr failed", K(ret), K(check_expr));
             } else {
               for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); i++) {
-                const ObString &col_name = columns.at(i).col_name_;
-                if (OB_ISNULL(column = new_table_schema.get_column_schema(col_name))) {
-                  ret = OB_ERR_BAD_FIELD_ERROR;
-                  LOG_WARN("unknown column", KR(ret), K(col_name), K(check_expr));
-                } else if (OB_FAIL(column_id_array.push_back(column->get_column_id()))) {
-                  LOG_WARN("failed to push back", K(ret));
-                } else if (OB_FAIL((*cst_iter)->assign_column_ids(column_id_array))) {
-                  LOG_WARN("failed to assign column ids", K(ret));
+                if (columns.at(i).is_sys_func()) {
+                  // skip system function entries (e.g., TRUNC, ROUND)
+                } else {
+                  const ObString &col_name = columns.at(i).col_name_;
+                  if (OB_ISNULL(column = new_table_schema.get_column_schema(col_name))) {
+                    ret = OB_ERR_BAD_FIELD_ERROR;
+                    LOG_WARN("unknown column", KR(ret), K(col_name), K(check_expr));
+                  } else if (OB_FAIL(column_id_array.push_back(column->get_column_id()))) {
+                    LOG_WARN("failed to push back", K(ret));
+                  } else if (OB_FAIL((*cst_iter)->assign_column_ids(column_id_array))) {
+                    LOG_WARN("failed to assign column ids", K(ret));
+                  }
                 }
               }
             }
@@ -10206,23 +10211,46 @@ int ObDDLService::rebuild_constraint_check_expr(
                                                                          default_session, *node, expr, columns))) {
             LOG_WARN("build generated column expr failed", K(ret), K(orig_check_expr));
           }
+          ObArray<std::pair<ObRawExpr*, ObRawExpr*>> ref_sys_exprs;
           for (int64_t i = 0; OB_SUCC(ret) && i <columns.count(); i++) {
             const ObQualifiedName &q_name = columns.at(i);
-            if (0 == orig_column.get_column_name_str().
-                case_compare(q_name.col_name_)) {
-              need_modify_check_expr = true;
-            }
-            if (OB_UNLIKELY(!q_name.database_name_.empty()
-                            || OB_UNLIKELY(!q_name.tbl_name_.empty()))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("invalid generated_column column name", K(q_name));
-            } else if (OB_ISNULL(col_schema = table_schema.get_column_schema(q_name.col_name_))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("column schema is null", K(ret), K(q_name.col_name_));
-            } else if (OB_FAIL(ObRawExprUtils::init_column_expr(*col_schema, NULL, *q_name.ref_expr_))) {
-              LOG_WARN("init column expr failed", K(ret), K((*col_schema).get_column_name_str()));
+            if (q_name.is_sys_func()) {
+              ObRawExpr *sys_func = q_name.access_idents_.at(0).sys_func_expr_;
+              if (OB_ISNULL(sys_func)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("sys func expr is null", K(ret));
+              }
+              for (int64_t j = 0; OB_SUCC(ret) && j < ref_sys_exprs.count(); ++j) {
+                if (OB_FAIL(ObRawExprUtils::replace_ref_column(
+                    sys_func, ref_sys_exprs.at(j).first, ref_sys_exprs.at(j).second))) {
+                  LOG_WARN("replace ref column in sys func failed", K(ret));
+                }
+              }
+              if (FAILEDx(q_name.access_idents_.at(0).check_param_num())) {
+                LOG_WARN("check param num failed", K(ret));
+              } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(expr, q_name.ref_expr_, sys_func))) {
+                LOG_WARN("replace ref column failed", K(ret));
+              } else if (OB_FAIL(ref_sys_exprs.push_back(
+                  std::pair<ObRawExpr*, ObRawExpr*>(q_name.ref_expr_, sys_func)))) {
+                LOG_WARN("push back ref sys expr failed", K(ret));
+              }
             } else {
-              q_name.ref_expr_->set_ref_id(table_schema.get_table_id(), col_schema->get_column_id());
+              if (0 == orig_column.get_column_name_str().
+                  case_compare(q_name.col_name_)) {
+                need_modify_check_expr = true;
+              }
+              if (OB_UNLIKELY(!q_name.database_name_.empty()
+                              || OB_UNLIKELY(!q_name.tbl_name_.empty()))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("invalid generated_column column name", K(q_name));
+              } else if (OB_ISNULL(col_schema = table_schema.get_column_schema(q_name.col_name_))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("column schema is null", K(ret), K(q_name.col_name_));
+              } else if (OB_FAIL(ObRawExprUtils::init_column_expr(*col_schema, NULL, *q_name.ref_expr_))) {
+                LOG_WARN("init column expr failed", K(ret), K((*col_schema).get_column_name_str()));
+              } else {
+                q_name.ref_expr_->set_ref_id(table_schema.get_table_id(), col_schema->get_column_id());
+              }
             }
           }
           if (OB_FAIL(ret)) {
