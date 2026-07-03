@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX RS
 
 #include "rootserver/ddl_task/ob_fts_index_build_task.h"
+#include "share/schema/ob_schema_utils.h"
 #include "share/ob_fts_index_builder_util.h"
 #include "share/ob_ddl_error_message_table_operator.h"
 #include "rootserver/ddl_task/ob_sys_ddl_util.h" // for ObSysDDLSchedulerUtil
@@ -1208,8 +1209,53 @@ int ObFtsIndexBuildTask::try_lock_dictionary_tables_out_trans()
         if (OB_OBJ_LOCK_EXIST == ret) {
           ret = OB_SUCCESS;
         } else {
-          LOG_WARN("failed to lock all dictionary table",
-            K(ret), K(tenant_id_), K(owner_id), K(dict_table_ids));
+          const int lock_ret = ret;
+          if (OB_TRANS_NEED_ROLLBACK == lock_ret) {
+            // When the dictionary table does not exist, table lock may return
+            // OB_TRANS_NEED_ROLLBACK, which is in DDL retry whitelist and causes
+            // the task to retry indefinitely. Re-fetch the latest schema to verify
+            // whether the dictionary table still exists, consistent with
+            // ObTableLockService::get_table_schema_.
+            if (OB_ISNULL(GCTX.sql_proxy_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("sql proxy is null", K(ret));
+            } else {
+              ObArenaAllocator allocator("FtsDicLock");
+              bool dict_table_missing = false;
+              ret = OB_SUCCESS;
+              for (int64_t i = 0; OB_SUCC(ret) && i < dict_table_ids.count(); ++i) {
+                ObSimpleTableSchemaV2 *table_schema = nullptr;
+                const uint64_t table_id = dict_table_ids.at(i);
+                if (OB_FAIL(ObSchemaUtils::get_latest_table_schema(
+                        *GCTX.sql_proxy_, allocator, tenant_id_, table_id, table_schema))) {
+                  if (OB_TABLE_NOT_EXIST == ret) {
+                    dict_table_missing = true;
+                    ret = OB_SUCCESS;
+                  } else {
+                    LOG_WARN("get dictionary table latest schema failed",
+                        K(ret), K(tenant_id_), K(table_id));
+                  }
+                } else if (OB_ISNULL(table_schema)) {
+                  dict_table_missing = true;
+                }
+              }
+              if (OB_SUCC(ret)) {
+                if (dict_table_missing) {
+                  ret = OB_TABLE_NOT_EXIST;
+                  LOG_WARN("dictionary table not exist when lock dictionary table",
+                      K(ret), K(tenant_id_), K(dict_table_ids));
+                } else {
+                  ret = lock_ret;
+                }
+              }
+            }
+          } else {
+            ret = lock_ret;
+          }
+          if (OB_FAIL(ret)) {
+            LOG_WARN("failed to lock all dictionary table",
+                K(ret), K(tenant_id_), K(owner_id), K(dict_table_ids));
+          }
         }
       }
     }
