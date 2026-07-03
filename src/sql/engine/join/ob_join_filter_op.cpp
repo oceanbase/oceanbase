@@ -740,7 +740,7 @@ int ObJoinFilterOp::do_drain_exch()
   int ret = OB_SUCCESS;
   bool need_get_data = false;
   const ObBatchRows *brs = nullptr;
-  if (exch_drained_) {
+  if (exch_drained_ || row_reach_end_ || batch_reach_end_) {
   } else if (MY_SPEC.is_material_controller() && !has_sent_runtime_filter_
       && MY_SPEC.jf_material_control_info_.each_sqc_has_full_data_
       && (ctx_.get_sqc_handler()->get_sqc_proxy().get_sqc_id() == 0)) {
