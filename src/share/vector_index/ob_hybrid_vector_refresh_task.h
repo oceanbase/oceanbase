@@ -33,12 +33,13 @@ enum ObHybridVectorRefreshTaskStatus
   TASK_FINISH = 4,
 };
 
-class ObVecEmbeddingAsyncTaskExecutor final : public ObVecAsyncTaskExector
+class ObVecEmbeddingAsyncTaskExecutor final : public ObVecAsyncTaskExecutor
 {
 public:
-  ObVecEmbeddingAsyncTaskExecutor() : ObVecAsyncTaskExector()
+  ObVecEmbeddingAsyncTaskExecutor() : ObVecAsyncTaskExecutor()
   {}
   virtual ~ObVecEmbeddingAsyncTaskExecutor() {}
+  int load_triggered_task(const ObVecIndexTaskStatus &task_row) override;
   virtual int load_task(uint64_t &task_trace_base_num) override;
 private:
   bool check_operation_allow() override;
@@ -77,7 +78,7 @@ public:
   void check_task_free();
   void set_task_finish();
 
-  TO_STRING_KV(K_(tenant_id), KP_(ls), K_(status), K_(task_status), K_(sys_task_id), K_(in_thread_pool));
+  TO_STRING_KV(K_(tenant_id), K_(ls_handle), K_(status), K_(task_status), K_(sys_task_id), K_(in_thread_pool));
 
   ObHybridVectorRefreshTaskStatus status_;
   ObTableScanIterator *scan_iter_; // [vid][type][vector][chunk][other key columns]

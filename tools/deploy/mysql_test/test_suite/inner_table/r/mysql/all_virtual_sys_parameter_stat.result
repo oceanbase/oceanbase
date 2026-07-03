@@ -373,6 +373,7 @@ utl_file_open_max
 vector_index_memory_saving_mode
 vector_index_optimization_concurrency
 vector_index_optimize_duty_time
+vector_task_thread_limit_percent
 virtual_table_location_cache_expire_time
 weak_read_version_refresh_interval
 workarea_size_policy
@@ -780,6 +781,7 @@ _use_distinct_with_expansion
 _use_hash_rollup
 _use_odps_jni_connector
 _vector_pre_filtering_timeout
+_vector_task_disable_list
 _wait_interval_after_parallel_ddl
 _with_subquery
 _write_throttle_by_pending_log_size_limit

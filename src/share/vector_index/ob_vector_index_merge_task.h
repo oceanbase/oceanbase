@@ -15,14 +15,15 @@ namespace oceanbase
 namespace share
 {
 
-class ObVecIdxMergeTaskExecutor : public ObVecAsyncTaskExector
+class ObVecIdxMergeTaskExecutor : public ObVecAsyncTaskExecutor
 {
 public:
   ObVecIdxMergeTaskExecutor()
-    : ObVecAsyncTaskExector(),
+    : ObVecAsyncTaskExecutor(),
     merge_base_percentage_(OB_VECTOR_INDEX_MERGE_BASE_PERCENTAGE)
   {}
   virtual ~ObVecIdxMergeTaskExecutor() {}
+  int load_triggered_task(const ObVecIndexTaskStatus &task_row) override;
   int load_task(uint64_t &task_trace_base_num) override;
 private:
   bool check_operation_allow() override;
@@ -53,8 +54,8 @@ private:
       transaction::ObTxReadSnapshot &snapshot,
       const uint64_t timeout_us);
   int prepare_merge_segment(const ObVecIdxSnapshotDataHandle& old_snap_data);
-  int upadte_task_merge_segments_info();
-  int upadte_task_result_segments_info(const ObVectorIndexSegmentMeta *new_meta);
+  int update_task_merge_segments_info();
+  int update_task_result_segments_info(const ObVectorIndexSegmentMeta *new_meta);
   int calculate_max_merge_vec_cnt(int64_t &max_merge_vec_cnt, int64_t incr_count);
   int build_filter_clause(const ObTableSchema &data_table_schema, const ObTableSchema &snapshot_table_schema);
   int merge_bitmap(ObPluginVectorIndexAdaptor *adaptor);

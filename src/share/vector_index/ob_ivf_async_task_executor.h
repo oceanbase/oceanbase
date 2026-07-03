@@ -14,11 +14,12 @@ namespace oceanbase
 namespace share
 {
 // schedule ivf vector tasks for a ls
-class ObIvfAsyncTaskExector final : public ObVecITaskExecutor
+class ObIvfAsyncTaskExecutor final : public ObVecITaskExecutor
 {
 public:
-  ObIvfAsyncTaskExector() : ObVecITaskExecutor(), local_schema_version_(OB_INVALID_VERSION) {}
-  virtual ~ObIvfAsyncTaskExector() {}
+  ObIvfAsyncTaskExecutor() : ObVecITaskExecutor(), local_schema_version_(OB_INVALID_VERSION) {}
+  virtual ~ObIvfAsyncTaskExecutor() {}
+  int load_triggered_task(const ObVecIndexTaskStatus &task_row) override;
   int load_task(uint64_t &task_trace_base_num) override;
   int check_and_set_thread_pool() override;
   int check_schema_version_changed(bool &schema_changed);
@@ -72,13 +73,16 @@ private:
   struct LoadTaskCallback final
   {
   public:
-    LoadTaskCallback(ObVecIndexAsyncTaskOption &task_opt, int64_t tenant_id, storage::ObLS &ls,
+    LoadTaskCallback(ObVecIndexAsyncTaskOption &task_opt, int64_t tenant_id,
+                     storage::ObLSHandle &ls_handle,
+                     ObVecIdxAsyncTaskScheduler *scheduler,
                      ObVecIndexTaskCtxArray &task_status_array,
                      ObSchemaGetterGuard &schema_guard, uint64_t &task_trace_base_num)
         : task_opt_(task_opt),
           trace_base_num_(0),
           tenant_id_(tenant_id),
-          ls_(&ls),
+          ls_handle_(ls_handle),
+          scheduler_(scheduler),
           task_status_array_(task_status_array),
           schema_guard_(schema_guard),
           task_trace_base_num_(task_trace_base_num)
@@ -89,13 +93,14 @@ private:
     int operator()(IvfCacheMgrEntry &entry);
     int is_cache_mgr_deprecated(ObIvfCacheMgr &cache_mgr, bool &is_deprecated);
     int is_cache_writable(const ObIvfAuxTableInfo &table_info, int64_t idx, bool &is_writable);
-    TO_STRING_KV(K(task_opt_), K(trace_base_num_), K(tenant_id_), KP(ls_));
+    TO_STRING_KV(K(task_opt_), K(trace_base_num_), K(tenant_id_), K(ls_handle_), KP_(scheduler));
 
   public:
     ObVecIndexAsyncTaskOption &task_opt_;
     uint64_t trace_base_num_;
     int64_t tenant_id_;
-    storage::ObLS *ls_;
+    storage::ObLSHandle ls_handle_;
+    ObVecIdxAsyncTaskScheduler *scheduler_;
     ObVecIndexTaskCtxArray &task_status_array_;
     ObSchemaGetterGuard &schema_guard_;
     uint64_t &task_trace_base_num_;

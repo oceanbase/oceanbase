@@ -209,6 +209,7 @@ private:
 protected:
   virtual int prepare_meta_for_insert(ObVectorIndexMeta &new_meta, const int64_t snapshot_version) { return OB_NOT_SUPPORTED; }
   virtual int prepare_meta_for_update(ObVectorIndexMeta &new_meta, const ObVectorIndexMeta &old_meta, const int64_t snapshot_version) { return OB_NOT_SUPPORTED; }
+  static int check_segment_start_key_exist(const ObVectorIndexMeta &meta, const ObVectorIndexSegmentMeta &new_seg);
 
 public:
   TO_STRING_KV(KP(this), K_(tenant_id), K_(tenant_schema_version), K_(schema_version),

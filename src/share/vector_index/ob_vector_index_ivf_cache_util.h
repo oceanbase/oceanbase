@@ -23,7 +23,8 @@ public:
                                            const ObTableID &table_id,
                                            const ObTabletID &tablet_id,
                                            const ObVectorIndexParam &vec_param,
-                                           ObIvfCentCache &cent_cache);
+                                           ObIvfCentCache &cent_cache,
+                                           ObVecIndexAsyncTaskCtx *task_ctx=nullptr);
 
 private:
   class ObIvfWriteCacheFunc

@@ -75,4 +75,11 @@ CREATE OR REPLACE PACKAGE dbms_vector AUTHID CURRENT_USER
     IN     parameters        VARCHAR(65535) DEFAULT NULL)
   RETURN FLOAT;
 
+  PROCEDURE trigger_async_task(
+    IN     database_name     VARCHAR(65535),
+    IN     task_type         VARCHAR(65535),
+    IN     table_name        VARCHAR(65535),
+    IN     index_name        VARCHAR(65535),
+    IN     tablet_id         BIGINT);
+
 END dbms_vector;

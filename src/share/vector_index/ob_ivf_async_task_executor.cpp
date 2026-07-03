@@ -14,19 +14,23 @@ namespace oceanbase
 using namespace storage;
 namespace share
 {
-int ObIvfAsyncTaskExector::LoadTaskCallback::is_cache_mgr_deprecated(ObIvfCacheMgr &cache_mgr,
+int ObIvfAsyncTaskExecutor::LoadTaskCallback::is_cache_mgr_deprecated(ObIvfCacheMgr &cache_mgr,
                                                                      bool &is_deprecated)
 {
   int ret = OB_SUCCESS;
   is_deprecated = false;
   const ObTableSchema *table_schema = nullptr;
   ObTabletHandle tablet_handle;
-  if (OB_FAIL(schema_guard_.get_table_schema(tenant_id_, cache_mgr.get_table_id(), table_schema))) {
+  ObLS *ls = nullptr;
+  if (OB_ISNULL(ls = ls_handle_.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls is null", KR(ret));
+  } else if (OB_FAIL(schema_guard_.get_table_schema(tenant_id_, cache_mgr.get_table_id(), table_schema))) {
     LOG_WARN("failed to get simple schema", KR(ret), K(tenant_id_), K(cache_mgr));
   } else if (OB_ISNULL(table_schema) || table_schema->is_in_recyclebin()) {
     is_deprecated = true;
   } else if (OB_FAIL(
-                 ls_->get_tablet_svr()->get_tablet(cache_mgr.get_cache_mgr_key(), tablet_handle))) {
+                 ls->get_tablet_svr()->get_tablet(cache_mgr.get_cache_mgr_key(), tablet_handle))) {
     if (OB_TABLET_NOT_EXIST != ret) {
       LOG_WARN("fail to get tablet", K(ret), K(cache_mgr));
     } else {
@@ -37,7 +41,7 @@ int ObIvfAsyncTaskExector::LoadTaskCallback::is_cache_mgr_deprecated(ObIvfCacheM
   return ret;
 }
 
-int ObIvfAsyncTaskExector::LoadTaskCallback::operator()(IvfCacheMgrEntry &entry)
+int ObIvfAsyncTaskExecutor::LoadTaskCallback::operator()(IvfCacheMgrEntry &entry)
 {
   int ret = OB_SUCCESS;
   ObTabletID tablet_id = entry.first;
@@ -52,54 +56,69 @@ int ObIvfAsyncTaskExector::LoadTaskCallback::operator()(IvfCacheMgrEntry &entry)
              K(cache_mgr->get_table_id()),
              K(tablet_id));
   } else if (is_deprecated) {
-    ObIAllocator *allocator = task_opt_.get_allocator();
-    ObVecIndexAsyncTaskCtx *task_ctx = nullptr;
-    int64_t new_task_id = OB_INVALID_ID;
-    int64_t index_table_id = OB_INVALID_ID;
-    common::ObCurTraceId::TraceId new_trace_id;
-    bool inc_new_task = false;
-
-    if (OB_ISNULL(task_ctx = OB_NEWx(ObVecIndexAsyncTaskCtx, allocator))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to new ObVecIndexAsyncTaskCtx", K(ret));
-    } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::fetch_new_task_id(cache_mgr->get_tenant_id(),
-                                                                  new_task_id))) {
-      LOG_WARN("fail to fetch new task id", K(ret), K(cache_mgr->get_tenant_id()));
-    } else if (tablet_id != cache_mgr->get_cache_mgr_key()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tablet id is not match", K(ret), K(tablet_id), K(cache_mgr->get_cache_mgr_key()));
-    } else if (FALSE_IT(index_table_id = cache_mgr->get_table_id())) {
-    } else if (OB_INVALID_ID == index_table_id) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table id should be invalid", K(ret));
-    } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::fetch_new_trace_id(
-                   ++task_trace_base_num_, allocator, new_trace_id))) {
-      LOG_WARN("fail to fetch new trace id", K(ret), K(tablet_id));
+    if (OB_NOT_NULL(scheduler_) && scheduler_->is_task_disabled(
+            ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_IVF_CLEAN, tablet_id.id())) {
+      LOG_TRACE("[VEC_IDX_TASK_DISABLED] skip generating disabled task",
+                K_(tenant_id), K(tablet_id), "task_type", "IVF_CLEAN");
     } else {
-      LOG_DEBUG("start load task", K(ret), K(tablet_id), K(new_task_id), K(index_table_id));
-      // 1. update task_ctx to async task map
-      task_ctx->tenant_id_ = tenant_id_;
-      task_ctx->ls_ = ls_;
-      task_ctx->task_status_.tablet_id_ = tablet_id.id();
-      task_ctx->task_status_.tenant_id_ = tenant_id_;
-      task_ctx->task_status_.table_id_ = index_table_id;
-      task_ctx->task_status_.task_id_ = new_task_id;
-      task_ctx->task_status_.task_type_ = ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_IVF_CLEAN;
-      task_ctx->task_status_.trigger_type_ = ObVecIndexAsyncTaskTriggerType::OB_VEC_TRIGGER_AUTO;
-      task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE;
-      task_ctx->task_status_.trace_id_ = new_trace_id;
-      task_ctx->task_status_.target_scn_.convert_from_ts(ObTimeUtility::current_time());
-      if (OB_FAIL(task_opt_.add_task_ctx(tablet_id, task_ctx, inc_new_task))) {  // not overwrite
-        LOG_WARN("fail to add task ctx", K(ret));
-      } else if (inc_new_task && OB_FAIL(task_status_array_.push_back(task_ctx))) {
-        LOG_WARN("fail to push back task status", K(ret), K(task_ctx));
+      ObIAllocator *allocator = task_opt_.get_allocator();
+      ObVecIndexAsyncTaskCtx *task_ctx = nullptr;
+      int64_t new_task_id = OB_INVALID_ID;
+      int64_t index_table_id = OB_INVALID_ID;
+      common::ObCurTraceId::TraceId new_trace_id;
+      bool inc_new_task = false;
+      bool task_ctx_in_map = false;
+
+      if (OB_ISNULL(task_ctx = OB_NEWx(ObVecIndexAsyncTaskCtx, allocator))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to new ObVecIndexAsyncTaskCtx", K(ret));
+      } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::fetch_new_task_id(cache_mgr->get_tenant_id(),
+                                                                    new_task_id))) {
+        LOG_WARN("fail to fetch new task id", K(ret), K(cache_mgr->get_tenant_id()));
+      } else if (tablet_id != cache_mgr->get_cache_mgr_key()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tablet id is not match", K(ret), K(tablet_id), K(cache_mgr->get_cache_mgr_key()));
+      } else if (FALSE_IT(index_table_id = cache_mgr->get_table_id())) {
+      } else if (OB_INVALID_ID == index_table_id) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table id should be invalid", K(ret));
+      } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::fetch_new_trace_id(
+                     ++task_trace_base_num_, allocator, new_trace_id))) {
+        LOG_WARN("fail to fetch new trace id", K(ret), K(tablet_id));
+      } else {
+        LOG_INFO("[VEC_ASYNC_TASK] task loaded with PREPARE status",
+                 K(ret), K(tablet_id), K(new_trace_id), K(new_task_id), K(index_table_id));
+        // 1. update task_ctx to async task map
+        task_ctx->tenant_id_ = tenant_id_;
+        task_ctx->ls_handle_ = ls_handle_;
+        task_ctx->task_status_.tablet_id_ = tablet_id.id();
+        task_ctx->task_status_.tenant_id_ = tenant_id_;
+        task_ctx->task_status_.table_id_ = index_table_id;
+        task_ctx->task_status_.task_id_ = new_task_id;
+        task_ctx->task_status_.task_type_ = ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_IVF_CLEAN;
+        task_ctx->task_status_.trigger_type_ = ObVecIndexAsyncTaskTriggerType::OB_VEC_TRIGGER_AUTO;
+        task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE;
+        task_ctx->task_status_.exec_addr_ = GCTX.self_addr();
+        task_ctx->task_status_.trace_id_ = new_trace_id;
+        task_ctx->task_status_.target_scn_.convert_from_ts(ObTimeUtility::current_time());
+        if (OB_FAIL(task_opt_.add_task_ctx(tablet_id, task_ctx, inc_new_task))) {  // not overwrite
+          LOG_WARN("fail to add task ctx", K(ret));
+        } else if (FALSE_IT(task_ctx_in_map = inc_new_task)) {
+        } else if (inc_new_task && OB_FAIL(task_status_array_.push_back(task_ctx))) {
+          LOG_WARN("fail to push back task status", K(ret), K(task_ctx));
+        }
       }
-    }
-    // release memory when fail
-    if (OB_FAIL(ret) || !inc_new_task) {
-      if (OB_NOT_NULL(task_ctx)) {
-        task_ctx->~ObVecIndexAsyncTaskCtx();
-        allocator->free(task_ctx);  // arena need free
+      // release memory when fail
+      if (OB_NOT_NULL(task_ctx) && (!OB_SUCC(ret) || !inc_new_task)) {
+        if (task_ctx_in_map) {
+          int tmp_ret = ObVecIndexAsyncTaskUtil::clear_task_ctx(task_opt_, task_ctx);
+          if (OB_SUCCESS != tmp_ret) {
+            LOG_WARN("fail to clear task ctx after load task failed", K(tmp_ret), K(ret), K(task_ctx));
+          }
+        } else {
+          task_ctx->~ObVecIndexAsyncTaskCtx();
+          allocator->free(task_ctx);  // arena need free
+        }
         task_ctx = nullptr;
       }
     }
@@ -107,13 +126,17 @@ int ObIvfAsyncTaskExector::LoadTaskCallback::operator()(IvfCacheMgrEntry &entry)
   return ret;
 }
 
-int ObIvfAsyncTaskExector::LoadTaskCallback::is_cache_writable(const ObIvfAuxTableInfo &table_info,
+int ObIvfAsyncTaskExecutor::LoadTaskCallback::is_cache_writable(const ObIvfAuxTableInfo &table_info,
                                                                int64_t idx, bool &is_writable)
 {
   int ret = OB_SUCCESS;
   is_writable = false;
   ObVectorIndexParam vec_param;
-  if (idx < 0 || idx >= table_info.count()) {
+  ObLS *ls = nullptr;
+  if (OB_ISNULL(ls = ls_handle_.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls is null", KR(ret));
+  } else if (idx < 0 || idx >= table_info.count()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid idx", K(ret), K(idx), K(table_info));
   } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_param_with_dim(
@@ -124,7 +147,7 @@ int ObIvfAsyncTaskExector::LoadTaskCallback::is_cache_writable(const ObIvfAuxTab
                  ObVectorIndexType::VIT_IVF_INDEX,
                  vec_param))) {
     LOG_WARN("fail to get vector index param with dim", K(ret), K(tenant_id_), K(table_info));
-  } else if (OB_FAIL(ObIvfCacheUtil::is_cache_writable(ls_->get_ls_id(),
+  } else if (OB_FAIL(ObIvfCacheUtil::is_cache_writable(ls->get_ls_id(),
                                                        table_info.centroid_table_id_,
                                                        table_info.centroid_tablet_ids_[idx],
                                                        vec_param,
@@ -133,7 +156,7 @@ int ObIvfAsyncTaskExector::LoadTaskCallback::is_cache_writable(const ObIvfAuxTab
                                                        is_writable))) {
     LOG_WARN("fail to check is cache writable", K(ret), K(table_info));
   } else if (!is_writable && table_info.type_ == ObVectorIndexAlgorithmType::VIAT_IVF_PQ && table_info.is_ivf_pq_centroid_table_valid()) {
-    if (OB_FAIL(ObIvfCacheUtil::is_cache_writable(ls_->get_ls_id(),
+    if (OB_FAIL(ObIvfCacheUtil::is_cache_writable(ls->get_ls_id(),
                                                   table_info.centroid_table_id_,
                                                   table_info.centroid_tablet_ids_[idx],
                                                   vec_param,
@@ -146,7 +169,7 @@ int ObIvfAsyncTaskExector::LoadTaskCallback::is_cache_writable(const ObIvfAuxTab
   return ret;
 }
 
-int ObIvfAsyncTaskExector::LoadTaskCallback::operator()(ObIvfAuxTableInfoEntry &entry)
+int ObIvfAsyncTaskExecutor::LoadTaskCallback::operator()(ObIvfAuxTableInfoEntry &entry)
 {
   int ret = OB_SUCCESS;
   const ObIvfAuxTableInfo &table_info = entry.second;
@@ -164,11 +187,12 @@ int ObIvfAsyncTaskExector::LoadTaskCallback::operator()(ObIvfAuxTableInfoEntry &
     int64_t index_table_id = table_info.centroid_table_id_;
     common::ObCurTraceId::TraceId new_trace_id;
     bool inc_new_task = false;
+    bool task_ctx_in_map = false;
     ObTabletID tablet_id = table_info.centroid_tablet_ids_[i];
     bool is_exist = false;
     bool is_writable = false;
 
-    if (OB_FAIL(task_opt_.is_task_ctx_exist(tablet_id, is_exist))) {
+    if (OB_FAIL(task_opt_.is_task_ctx_exist(tablet_id, ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_IVF_LOAD, is_exist))) {
       LOG_WARN("fail to check is task ctx exist", K(ret), K(tablet_id));
     } else if (is_exist) {
       // do nothing
@@ -176,6 +200,10 @@ int ObIvfAsyncTaskExector::LoadTaskCallback::operator()(ObIvfAuxTableInfoEntry &
       LOG_WARN("fail to check is cache writable", K(ret), K(table_info));
     } else if (!is_writable) {
       // do nothing
+    } else if (OB_NOT_NULL(scheduler_) && scheduler_->is_task_disabled(
+                   ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_IVF_LOAD, tablet_id.id())) {
+      LOG_TRACE("[VEC_IDX_TASK_DISABLED] skip generating disabled task",
+                K_(tenant_id), K(tablet_id), "task_type", "IVF_LOAD");
     } else if (OB_ISNULL(task_ctx = OB_NEWx(ObVecIndexAsyncTaskCtx, allocator))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObVecIndexAsyncTaskCtx", K(ret));
@@ -185,10 +213,11 @@ int ObIvfAsyncTaskExector::LoadTaskCallback::operator()(ObIvfAuxTableInfoEntry &
                    ++task_trace_base_num_, allocator, new_trace_id))) {
       LOG_WARN("fail to fetch new trace id", K(ret), K(task_trace_base_num_));
     } else {
-      LOG_DEBUG("start load task", K(ret), K(task_trace_base_num_), K(new_task_id), K(index_table_id));
+      LOG_INFO("[VEC_ASYNC_TASK] task loaded with PREPARE status",
+               K(ret), K(tablet_id), K(new_trace_id), K(new_task_id), K(index_table_id));
       // 1. update task_ctx to async task map
       task_ctx->tenant_id_ = tenant_id_;
-      task_ctx->ls_ = ls_;
+      task_ctx->ls_handle_ = ls_handle_;
       task_ctx->task_status_.tablet_id_ = tablet_id.id();
       task_ctx->task_status_.tenant_id_ = tenant_id_;
       task_ctx->task_status_.table_id_ = index_table_id;
@@ -196,6 +225,7 @@ int ObIvfAsyncTaskExector::LoadTaskCallback::operator()(ObIvfAuxTableInfoEntry &
       task_ctx->task_status_.task_type_ = ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_IVF_LOAD;
       task_ctx->task_status_.trigger_type_ = ObVecIndexAsyncTaskTriggerType::OB_VEC_TRIGGER_AUTO;
       task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE;
+      task_ctx->task_status_.exec_addr_ = GCTX.self_addr();
       task_ctx->task_status_.trace_id_ = new_trace_id;
       task_ctx->task_status_.target_scn_.convert_from_ts(ObTimeUtility::current_time());
       task_ctx->allocator_.set_tenant_id(tenant_id_);
@@ -209,24 +239,38 @@ int ObIvfAsyncTaskExector::LoadTaskCallback::operator()(ObIvfAuxTableInfoEntry &
       } else if (OB_FAIL(
                      task_opt_.add_task_ctx(tablet_id, task_ctx, inc_new_task))) {  // not overwrite
         LOG_WARN("fail to add task ctx", K(ret));
+      } else if (FALSE_IT(task_ctx_in_map = inc_new_task)) {
       } else if (inc_new_task && OB_FAIL(task_status_array_.push_back(task_ctx))) {
         LOG_WARN("fail to push back task status", K(ret), K(task_ctx));
       }
     }
     // release memory when fail
-    if (OB_FAIL(ret)) {
-      if (OB_NOT_NULL(task_ctx)) {
+    if (OB_NOT_NULL(task_ctx) && (!OB_SUCC(ret) || !inc_new_task)) {
+      if (task_ctx_in_map) {
+        int tmp_ret = ObVecIndexAsyncTaskUtil::clear_task_ctx(task_opt_, task_ctx);
+        if (OB_SUCCESS != tmp_ret) {
+          LOG_WARN("fail to clear task ctx after load task failed", K(tmp_ret), K(ret), K(task_ctx));
+        }
+      } else {
         task_ctx->~ObVecIndexAsyncTaskCtx();
         allocator->free(task_ctx);  // arena need free
-        task_ctx = nullptr;
       }
+      task_ctx = nullptr;
     }
   }
 
   return ret;
 }
 
-bool ObIvfAsyncTaskExector::check_operation_allow()
+int ObIvfAsyncTaskExecutor::load_triggered_task(const ObVecIndexTaskStatus &task_row)
+{
+  int ret = OB_NOT_SUPPORTED;
+  UNUSED(task_row);
+  LOG_WARN("manual trigger not supported for ivf executor yet", KR(ret), K(task_row));
+  return ret;
+}
+
+bool ObIvfAsyncTaskExecutor::check_operation_allow()
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_data_version = 0;
@@ -247,7 +291,7 @@ bool ObIvfAsyncTaskExector::check_operation_allow()
   return bret;
 }
 
-int ObIvfAsyncTaskExector::check_and_set_thread_pool()
+int ObIvfAsyncTaskExecutor::check_and_set_thread_pool()
 {
   int ret = OB_SUCCESS;
   ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
@@ -274,12 +318,13 @@ int ObIvfAsyncTaskExector::check_and_set_thread_pool()
   return ret;
 }
 
-int ObIvfAsyncTaskExector::get_tablet_ids_by_ls(const ObTableSchema &index_table_schema,
+int ObIvfAsyncTaskExecutor::get_tablet_ids_by_ls(const ObTableSchema &index_table_schema,
                                                 common::ObIArray<ObTabletID> &tablet_id_array)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObTabletID, 1> tmp_tablet_id_array;
-  if (OB_ISNULL(ls_) || OB_ISNULL(ls_->get_tablet_svr())) {
+  storage::ObLS *ls = ls_handle_.get_ls();
+  if (OB_ISNULL(ls) || OB_ISNULL(ls->get_tablet_svr())) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("invalid null ls", K(ret));
   } else if (OB_FAIL(index_table_schema.get_tablet_ids(tmp_tablet_id_array))) {
@@ -288,7 +333,7 @@ int ObIvfAsyncTaskExector::get_tablet_ids_by_ls(const ObTableSchema &index_table
     ObTabletHandle tablet_handle;
     // check tablet if exist in self ls
     for (int64_t i = 0; i < tmp_tablet_id_array.count(); ++i) {
-      ret = ls_->get_tablet_svr()->get_tablet(tmp_tablet_id_array.at(i), tablet_handle);
+      ret = ls->get_tablet_svr()->get_tablet(tmp_tablet_id_array.at(i), tablet_handle);
       if (OB_SUCC(ret)) {
         if (OB_FAIL(tablet_id_array.push_back(tmp_tablet_id_array.at(i)))) {
           LOG_WARN("fail to push back tablet id", K(ret), K(tmp_tablet_id_array.at(i)));
@@ -304,7 +349,7 @@ int ObIvfAsyncTaskExector::get_tablet_ids_by_ls(const ObTableSchema &index_table
   return ret;
 }
 
-int ObIvfAsyncTaskExector::record_aux_table_info(ObSchemaGetterGuard &schema_guard,
+int ObIvfAsyncTaskExecutor::record_aux_table_info(ObSchemaGetterGuard &schema_guard,
                                                  const ObTableSchema &index_table_schema,
                                                  ObIvfAuxTableInfo &aux_table_info)
 {
@@ -368,7 +413,7 @@ int ObIvfAsyncTaskExector::record_aux_table_info(ObSchemaGetterGuard &schema_gua
   return ret;
 }
 
-int ObIvfAsyncTaskExector::check_schema_version_changed(bool &schema_changed)
+int ObIvfAsyncTaskExecutor::check_schema_version_changed(bool &schema_changed)
 {
   int ret = OB_SUCCESS;
   schema_changed = false;
@@ -391,7 +436,7 @@ int ObIvfAsyncTaskExector::check_schema_version_changed(bool &schema_changed)
   return ret;
 }
 
-int ObIvfAsyncTaskExector::generate_aux_table_info_map(ObSchemaGetterGuard &schema_guard,
+int ObIvfAsyncTaskExecutor::generate_aux_table_info_map(ObSchemaGetterGuard &schema_guard,
                                                        const int64_t table_id,
                                                        ObIvfAuxTableInfoMap &aux_table_info_map)
 {
@@ -464,7 +509,7 @@ int ObIvfAsyncTaskExector::generate_aux_table_info_map(ObSchemaGetterGuard &sche
   return ret;
 }
 
-int ObIvfAsyncTaskExector::generate_aux_table_info_map(ObIvfAuxTableInfoMap &aux_table_info_map)
+int ObIvfAsyncTaskExecutor::generate_aux_table_info_map(ObIvfAuxTableInfoMap &aux_table_info_map)
 {
   int ret = OB_SUCCESS;
   bool has_ivf_index = false;
@@ -499,7 +544,7 @@ int ObIvfAsyncTaskExector::generate_aux_table_info_map(ObIvfAuxTableInfoMap &aux
   return ret;
 }
 
-int ObIvfAsyncTaskExector::load_task(uint64_t &task_trace_base_num)
+int ObIvfAsyncTaskExecutor::load_task(uint64_t &task_trace_base_num)
 {
   int ret = OB_SUCCESS;
   ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
@@ -509,8 +554,8 @@ int ObIvfAsyncTaskExector::load_task(uint64_t &task_trace_base_num)
     LOG_WARN("vector async task not init", KR(ret));
   } else if (!check_operation_allow()) {                 // skip
   } else if (OB_FAIL(get_index_ls_mgr(index_ls_mgr))) {  // skip
-    LOG_WARN("fail to get index ls mgr", K(ret), K(tenant_id_), K(ls_->get_ls_id()));
-  } else if (OB_ISNULL(ls_)) {
+    LOG_WARN("fail to get index ls mgr", K(ret), K(tenant_id_), K(ls_handle_));
+  } else if (OB_ISNULL(ls_handle_.get_ls())) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("invalid null ls", K(ret));
   } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
@@ -519,24 +564,30 @@ int ObIvfAsyncTaskExector::load_task(uint64_t &task_trace_base_num)
   } else {
     ObVecIndexTaskCtxArray task_status_array;
     LoadTaskCallback load_task_func(
-        index_ls_mgr->get_async_task_opt(), tenant_id_, *ls_, task_status_array, schema_guard, task_trace_base_num);
+        index_ls_mgr->get_async_task_opt(), tenant_id_, ls_handle_, scheduler_, task_status_array, schema_guard, task_trace_base_num);
     ObIvfAuxTableInfoMap aux_table_info_map;
 
     if (OB_FAIL(index_ls_mgr->get_ivf_cache_mgr_map().foreach_refactored(
             load_task_func))) {  // ivf clean task
       LOG_WARN("fail to do load task each entry", K(ret), K(load_task_func));
-    } else if (OB_FAIL(generate_aux_table_info_map(aux_table_info_map))) {
-      LOG_WARN("fail to generate aux table info map", K(ret), K(tenant_id_), K(ls_->get_ls_id()));
-    } else if (OB_FAIL(aux_table_info_map.foreach_refactored(load_task_func))) {  // ivf load task
-      LOG_WARN("fail to do load task each entry", K(ret), K(load_task_func));
-    } else if (OB_FAIL(insert_new_task(task_status_array))) {
-      LOG_WARN("fail to insert new task", K(ret), K(tenant_id_), K(ls_->get_ls_id()));
+    } else if (index_ls_mgr->get_ls_leader()) {
+      if (OB_FAIL(generate_aux_table_info_map(aux_table_info_map))) {
+        LOG_WARN("fail to generate aux table info map", K(ret), K(tenant_id_), K(ls_handle_));
+      } else if (OB_FAIL(aux_table_info_map.foreach_refactored(load_task_func))) { // ivf load task
+        LOG_WARN("fail to do load task each entry", K(ret), K(load_task_func));
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(insert_new_task(task_status_array))) {
+      LOG_WARN("fail to insert new task", K(ret), K(tenant_id_), K(ls_handle_));
     }
     // clear on fail
     if (OB_FAIL(ret) && !task_status_array.empty()) {
-      if (OB_FAIL(clear_task_ctxs(index_ls_mgr->get_async_task_opt(), task_status_array))) {
+      if (OB_FAIL(ObVecIndexAsyncTaskUtil::clear_task_ctxs(index_ls_mgr->get_async_task_opt(), task_status_array))) {
         LOG_WARN("fail to clear task ctx", K(ret));
       }
+    }
+    if (task_status_array.count() > 0) {
+      LOG_INFO("finish load async task", K(ret), K(ls_handle_.get_ls()->get_ls_id()), K(task_status_array.count()));
     }
   }
   return ret;

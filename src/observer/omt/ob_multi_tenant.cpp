@@ -1648,6 +1648,9 @@ int ObMultiTenant::update_tenant_config(uint64_t tenant_id)
       if (OB_TMP_FAIL(update_tenant_dag_scheduler_config())) {
         LOG_WARN("failed to update tenant dag scheduler config", K(tmp_ret), K(tenant_id));
       }
+      if (OB_TMP_FAIL(update_tenant_vec_async_task_config())) {
+        LOG_WARN("failed to update tenant vec async task config", K(tmp_ret), K(tenant_id));
+      }
       if (OB_TMP_FAIL(update_tenant_ddl_config())) {
         LOG_WARN("failed to update tenant ddl config", K(tmp_ret), K(tenant_id));
       }
@@ -1705,6 +1708,22 @@ int ObMultiTenant::update_tenant_dag_scheduler_config()
     LOG_WARN("dag scheduler should not be null", K(ret));
   } else {
     dag_scheduler->reload_config();
+  }
+  return ret;
+}
+
+int ObMultiTenant::update_tenant_vec_async_task_config()
+{
+  int ret = OB_SUCCESS;
+  ObPluginVectorIndexService *svc = MTL(ObPluginVectorIndexService *);
+  if (OB_NOT_NULL(svc)) {
+    ObVecIndexAsyncTaskHandler &handler = svc->get_vec_async_task_handle();
+    if (OB_FAIL(handler.refresh_thread_count())) {
+      LOG_WARN("failed to refresh vec async task thread count", KR(ret), K(MTL_ID()));
+    }
+  } else {
+    // svc may be NULL for tenants that do not enable vector index service (e.g. SYS tenant).
+    LOG_DEBUG("vector index service not available, skip refresh", K(MTL_ID()));
   }
   return ret;
 }

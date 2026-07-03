@@ -17,6 +17,11 @@ namespace oceanbase
 namespace share
 {
 
+int ObVecEmbeddingAsyncTaskExecutor::load_triggered_task(const ObVecIndexTaskStatus &task_row)
+{
+  return ObVecAsyncTaskExecutor::load_triggered_task(task_row);
+}
+
 int ObVecEmbeddingAsyncTaskExecutor::load_task(uint64_t &task_trace_base_num)
 {
   int ret = OB_SUCCESS;
@@ -27,8 +32,9 @@ int ObVecEmbeddingAsyncTaskExecutor::load_task(uint64_t &task_trace_base_num)
     LOG_WARN("vector async task not init", KR(ret));
   } else if (!check_operation_allow()) { // skip
   } else if (OB_FAIL(get_index_ls_mgr(index_ls_mgr))) { // skip
-    LOG_WARN("fail to get index ls mgr", K(ret), K(tenant_id_), K(ls_->get_ls_id()));
+    LOG_WARN("fail to get index ls mgr", K(ret), K(tenant_id_), K(ls_handle_));
   } else {
+    storage::ObLS *ls = ls_handle_.get_ls();
     ObVecIndexAsyncTaskOption &task_opt = index_ls_mgr->get_async_task_opt();
     ObIAllocator *allocator = task_opt.get_allocator();
     const int64_t current_task_cnt = ObVecIndexAsyncTaskUtil::get_processing_task_cnt(task_opt);
@@ -51,8 +57,15 @@ int ObVecEmbeddingAsyncTaskExecutor::load_task(uint64_t &task_trace_base_num)
       } else if (OB_INVALID_ID == index_table_id) {
         LOG_DEBUG("index table id is invalid, skip", K(ret)); // skip to next
       } else if (adapter->is_hybrid_index() && adapter->check_need_embedding()) {
+        if (OB_NOT_NULL(scheduler_) && scheduler_->is_task_disabled(
+                ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_HYBRID_VECTOR_EMBEDDING, tablet_id.id())) {
+          LOG_TRACE("[VEC_IDX_TASK_DISABLED] skip generating disabled task",
+                    K_(tenant_id), K(tablet_id), "task_type", "EMBEDDING");
+          continue;
+        }
         int64_t new_task_id = OB_INVALID_ID;
         bool inc_new_task = false;
+        bool task_ctx_in_map = false;
         common::ObCurTraceId::TraceId new_trace_id;
 
         char *task_ctx_buf = static_cast<char *>(allocator->alloc(sizeof(ObHybridVectorRefreshTaskCtx)));
@@ -66,10 +79,12 @@ int ObVecEmbeddingAsyncTaskExecutor::load_task(uint64_t &task_trace_base_num)
         } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::fetch_new_trace_id(++task_trace_base_num, allocator, new_trace_id))) {
           LOG_WARN("fail to fetch new trace id", K(ret), K(tablet_id));
         } else {
-          LOG_DEBUG("start load task", K(ret), K(tablet_id), K(tenant_id_), K(task_trace_base_num), K(ls_->get_ls_id()));
+          LOG_INFO("[VEC_ASYNC_TASK] task loaded with PREPARE status",
+                   K(ret), K(tablet_id), K(tenant_id_), K(new_trace_id), K(new_task_id),
+                   K(task_trace_base_num), K(ls->get_ls_id()));
           // 1. update task_ctx to async task map
           task_ctx->tenant_id_ = tenant_id_;
-          task_ctx->ls_ = ls_;
+          task_ctx->ls_handle_ = ls_handle_;
           task_ctx->task_status_.tablet_id_ = tablet_id.id();
           task_ctx->task_status_.tenant_id_ = tenant_id_;
           task_ctx->task_status_.table_id_ = index_table_id;
@@ -77,33 +92,42 @@ int ObVecEmbeddingAsyncTaskExecutor::load_task(uint64_t &task_trace_base_num)
           task_ctx->task_status_.task_type_ = ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_HYBRID_VECTOR_EMBEDDING;
           task_ctx->task_status_.trigger_type_ = ObVecIndexAsyncTaskTriggerType::OB_VEC_TRIGGER_AUTO;
           task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE;
+          task_ctx->task_status_.exec_addr_ = GCTX.self_addr();
           task_ctx->task_status_.trace_id_ = new_trace_id;
           task_ctx->task_status_.target_scn_.convert_from_ts(ObTimeUtility::current_time());
           task_ctx->allocator_.set_tenant_id(tenant_id_);
           if (OB_FAIL(index_ls_mgr->get_async_task_opt().add_task_ctx(tablet_id, task_ctx, inc_new_task))) { // not overwrite
             LOG_WARN("fail to add task ctx", K(ret));
+          } else if (FALSE_IT(task_ctx_in_map = inc_new_task)) {
           } else if (inc_new_task && OB_FAIL(task_ctx_array.push_back(task_ctx))) {
             LOG_WARN("fail to push back task status", K(ret), K(task_ctx));
           }
         }
-        if (OB_FAIL(ret) || !inc_new_task) { // release memory when fail
-          if (OB_NOT_NULL(task_ctx)) {
+        if (OB_NOT_NULL(task_ctx) && (!OB_SUCC(ret) || !inc_new_task)) { // release memory when fail
+          if (task_ctx_in_map) {
+            int tmp_ret = ObVecIndexAsyncTaskUtil::clear_task_ctx(index_ls_mgr->get_async_task_opt(), task_ctx);
+            if (OB_SUCCESS != tmp_ret) {
+              LOG_WARN("fail to clear task ctx after load task failed", K(tmp_ret), K(ret), K(task_ctx));
+            }
+          } else {
             task_ctx->~ObHybridVectorRefreshTaskCtx();
             allocator->free(task_ctx); // arena need free
-            task_ctx = nullptr;
           }
+          task_ctx = nullptr;
         }
       }
     }
-    LOG_INFO("finish load async task", K(ret), K(ls_->get_ls_id()), K(task_ctx_array.count()), K(current_task_cnt));
+    if (task_ctx_array.count() > 0) {
+      LOG_INFO("finish load async task", K(ret), K(ls->get_ls_id()), K(task_ctx_array.count()), K(current_task_cnt));
+    }
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(insert_new_task(task_ctx_array))) {
-    LOG_WARN("fail to insert new tasks", K(ret), K(tenant_id_), K(ls_->get_ls_id()));
+    LOG_WARN("fail to insert new tasks", K(ret), K(tenant_id_), K(ls_handle_));
   }
   // clear on fail
   if (OB_FAIL(ret) && !task_ctx_array.empty()) {
-    if (OB_FAIL(clear_task_ctxs(index_ls_mgr->get_async_task_opt(), task_ctx_array))) {
+    if (OB_FAIL(ObVecIndexAsyncTaskUtil::clear_task_ctxs(index_ls_mgr->get_async_task_opt(), task_ctx_array))) {
       LOG_WARN("fail to clear task ctx", K(ret));
     }
   }
@@ -165,14 +189,16 @@ int ObHybridVectorRefreshTask::do_work()
 {
   int ret = OB_SUCCESS;
   int exec_finish = false;
+  CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_VECTOR_MID);
   ObPluginVectorIndexAdapterGuard adpt_guard;
+  ObTraceIdGuard trace_guard(ctx_->task_status_.trace_id_);
   ObPluginVectorIndexService *vector_index_service = MTL(ObPluginVectorIndexService *);
   ObHybridVectorRefreshTaskCtx *task_ctx = static_cast<ObHybridVectorRefreshTaskCtx *>(get_task_ctx());
   if (OB_ISNULL(vector_index_service) || OB_ISNULL(task_ctx) || OB_ISNULL(vec_idx_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error", K(ret), KPC(task_ctx));
   } else {
-    LOG_INFO("start do_work", K(ret), KPC(task_ctx), K(ls_id_));
+    LOG_INFO("[VEC_ASYNC_TASK] start do_work", K(ret), K(task_ctx->status_), K(task_ctx->task_status_), K(ls_id_));
   }
   while (OB_SUCC(ret) && !exec_finish) {
     switch (current_status()) {
@@ -223,7 +249,7 @@ int ObHybridVectorRefreshTask::do_work()
   if (OB_NOT_NULL(ctx_)) {
     common::ObSpinLockGuard ctx_guard(ctx_->lock_);
     ctx_->task_status_.ret_code_ = ret;
-    LOG_INFO("end do_work", K(ret), KPC(ctx_));
+    LOG_INFO("[VEC_ASYNC_TASK] end do_work", K(ret), K(task_ctx->status_), K(ctx_->task_status_));
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("unexpected error: null context pointer", K(ret), KPC(this));

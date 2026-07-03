@@ -259,7 +259,19 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &const_arg, obrpc::ObDropInd
   }
   // get vector rebuild drop index table id
   if (OB_SUCC(ret) && arg.is_add_to_scheduler_ && (arg.is_vec_inner_drop_ || arg.is_drop_in_rebuild_task_)) {
-    if (OB_FAIL(get_rebuild_drop_index_id_and_name(schema_guard, arg))) {
+    if (arg.is_drop_in_rebuild_task_) {
+      const ObTableSchema *new_index_schema = nullptr;
+      if (OB_FAIL(schema_guard.get_table_schema(tenant_id, arg.table_id_, new_index_schema))) {
+        LOG_WARN("fail to check new index schema existence", K(ret), K(arg.table_id_));
+      } else if (OB_ISNULL(new_index_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        ignore_for_domain_index = true;
+        LOG_INFO("new index schema not exist, already cleaned up by child task, skip drop",
+            K(arg.table_id_), K(arg.index_table_id_));
+      } else if (OB_FAIL(get_rebuild_drop_index_id_and_name(schema_guard, arg))) {
+        LOG_WARN("fail to get rebuild drop index id", K(ret), K(arg));
+      }
+    } else if (OB_FAIL(get_rebuild_drop_index_id_and_name(schema_guard, arg))) {
       LOG_WARN("fail to get vector drop index id", K(ret), K(arg));
     }
   }

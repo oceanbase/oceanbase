@@ -40,6 +40,31 @@ bool ObVecIdxFreezeTaskExecutor::check_operation_allow()
   return bret;
 }
 
+int ObVecIdxFreezeTaskExecutor::load_triggered_task(const ObVecIndexTaskStatus &task_row)
+{
+  int ret = OB_SUCCESS;
+  ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("vector index load task not inited", KR(ret));
+  } else if (OB_FAIL(get_index_ls_mgr(index_ls_mgr))) {
+    LOG_WARN("fail to get index ls mgr", K(ret), K(tenant_id_), K(ls_handle_));
+  } else if (OB_ISNULL(index_ls_mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null index_ls_mgr", K(ret));
+  } else {
+    storage::ObLS *ls = ls_handle_.get_ls();
+    ObVecIndexAsyncTaskOption &task_opt = index_ls_mgr->get_async_task_opt();
+    ObVecIndexTaskStatus task_row_copy = task_row;
+    task_row_copy.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE;
+    if (OB_FAIL(ObVecIndexAsyncTaskUtil::try_add_task_ctx_from_inner_row(
+            tenant_id_, task_row_copy, ls, ls_handle_, task_opt, true /*verify_tablet_on_ls*/))) {
+      LOG_WARN("fail to add triggered freeze task ctx", K(ret), K(task_row));
+    }
+  }
+  return ret;
+}
+
 int ObVecIdxFreezeTaskExecutor::load_task(uint64_t &task_trace_base_num)
 {
   int ret = OB_SUCCESS;
@@ -50,8 +75,9 @@ int ObVecIdxFreezeTaskExecutor::load_task(uint64_t &task_trace_base_num)
     LOG_WARN("vector async task not init", KR(ret));
   } else if (!check_operation_allow()) { // skip
   } else if (OB_FAIL(get_index_ls_mgr(index_ls_mgr))) { // skip
-    LOG_WARN("fail to get index ls mgr", K(ret), K(tenant_id_), K(ls_->get_ls_id()));
+    LOG_WARN("fail to get index ls mgr", K(ret), K(tenant_id_), K(ls_handle_));
   } else {
+    storage::ObLS *ls = ls_handle_.get_ls();
     ObSharedMemAllocMgr *shared_mem_mgr = MTL(ObSharedMemAllocMgr*);
     ObTenantVectorAllocator& vector_allocator = shared_mem_mgr->vector_allocator();
     ObVecIndexAsyncTaskOption &task_opt = index_ls_mgr->get_async_task_opt();
@@ -76,6 +102,7 @@ int ObVecIdxFreezeTaskExecutor::load_task(uint64_t &task_trace_base_num)
         int64_t new_task_id = OB_INVALID_ID;
         int64_t index_table_id = OB_INVALID_ID;
         bool inc_new_task = false;
+        bool task_ctx_in_map = false;
         common::ObCurTraceId::TraceId new_trace_id;
 
         char *task_ctx_buf = nullptr;
@@ -107,6 +134,10 @@ int ObVecIdxFreezeTaskExecutor::load_task(uint64_t &task_trace_base_num)
           LOG_TRACE("active segment is not need to freeze", K(ret), KPC(adapter));
         } else if (adapter->is_frozen_finish()) {
           LOG_INFO("frozen data is already finished, no need to freeze", K(ret), KPC(adapter));
+        } else if (OB_NOT_NULL(scheduler_) && scheduler_->is_task_disabled(
+                       ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_FREEZE, tablet_id.id())) {
+          LOG_TRACE("[VEC_IDX_TASK_DISABLED] skip generating disabled task",
+                    K_(tenant_id), K(tablet_id), "task_type", "FREEZE");
         } else if (OB_ISNULL(task_ctx_buf = static_cast<char *>(allocator->alloc(sizeof(ObVecIndexAsyncTaskCtx))))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("async task ctx is null", K(ret));
@@ -120,10 +151,12 @@ int ObVecIdxFreezeTaskExecutor::load_task(uint64_t &task_trace_base_num)
         } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::fetch_new_trace_id(++task_trace_base_num, allocator, new_trace_id))) {
           LOG_WARN("fail to fetch new trace id", K(ret), K(tablet_id));
         } else {
-          LOG_DEBUG("start load task", K(ret), K(tablet_id), K(tenant_id_), K(task_trace_base_num), K(ls_->get_ls_id()));
+          LOG_INFO("[VEC_ASYNC_TASK] task loaded with PREPARE status",
+                   K(ret), K(tablet_id), K(tenant_id_), K(new_trace_id), K(new_task_id),
+                   K(task_trace_base_num), K(ls->get_ls_id()));
           // 1. update task_ctx to async task map
           task_ctx->tenant_id_ = tenant_id_;
-          task_ctx->ls_ = ls_;
+          task_ctx->ls_handle_ = ls_handle_;
           task_ctx->task_status_.tablet_id_ = tablet_id.id();
           task_ctx->task_status_.tenant_id_ = tenant_id_;
           task_ctx->task_status_.table_id_ = index_table_id;
@@ -131,34 +164,43 @@ int ObVecIdxFreezeTaskExecutor::load_task(uint64_t &task_trace_base_num)
           task_ctx->task_status_.task_type_ = ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_FREEZE;
           task_ctx->task_status_.trigger_type_ = ObVecIndexAsyncTaskTriggerType::OB_VEC_TRIGGER_AUTO;
           task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE;
+          task_ctx->task_status_.exec_addr_ = GCTX.self_addr();
           task_ctx->task_status_.trace_id_ = new_trace_id;
           task_ctx->allocator_.set_tenant_id(tenant_id_);
           if (OB_FAIL(index_ls_mgr->get_async_task_opt().add_task_ctx(tablet_id, task_ctx, inc_new_task))) { // not overwrite
             LOG_WARN("fail to add task ctx", K(ret));
+          } else if (FALSE_IT(task_ctx_in_map = inc_new_task)) {
           } else if (inc_new_task && OB_FAIL(task_ctx_array.push_back(task_ctx))) {
             LOG_WARN("fail to push back task status", K(ret), K(task_ctx));
           }
         }
-        if (OB_FAIL(ret) || !inc_new_task) { // release memory when fail
-          if (OB_NOT_NULL(task_ctx)) {
+        if (OB_NOT_NULL(task_ctx) && (!OB_SUCC(ret) || !inc_new_task)) { // release memory when fail
+          if (task_ctx_in_map) {
+            int tmp_ret = ObVecIndexAsyncTaskUtil::clear_task_ctx(index_ls_mgr->get_async_task_opt(), task_ctx);
+            if (OB_SUCCESS != tmp_ret) {
+              LOG_WARN("fail to clear task ctx after load task failed", K(tmp_ret), K(ret), K(task_ctx));
+            }
+          } else {
             task_ctx->~ObVecIndexAsyncTaskCtx();
             allocator->free(task_ctx); // arena need free
-            task_ctx = nullptr;
           }
+          task_ctx = nullptr;
         }
       }
     }
-    LOG_INFO("finish load async task", K(ret), K(ls_->get_ls_id()), K(task_ctx_array.count()), K(current_task_cnt));
+    if (task_ctx_array.count() > 0) {
+      LOG_INFO("finish load async task", K(ret), K(ls->get_ls_id()), K(task_ctx_array.count()), K(current_task_cnt));
+    }
     vector_allocator.pre_free(total_pre_alloc_size);
   }
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(insert_new_task(task_ctx_array))) {
-    LOG_WARN("fail to insert new tasks", K(ret), K(tenant_id_), K(ls_->get_ls_id()));
+    LOG_WARN("fail to insert new tasks", K(ret), K(tenant_id_), K(ls_handle_));
   }
   // clear on fail
   if (OB_FAIL(ret) && !task_ctx_array.empty()) {
-    if (OB_FAIL(clear_task_ctxs(index_ls_mgr->get_async_task_opt(), task_ctx_array))) {
+    if (OB_FAIL(ObVecIndexAsyncTaskUtil::clear_task_ctxs(index_ls_mgr->get_async_task_opt(), task_ctx_array))) {
       LOG_WARN("fail to clear task ctx", K(ret));
     }
   }
@@ -190,12 +232,14 @@ int ObVecIdxFreezeTaskExecutor::calc_freeze_threshold(
 int ObVecIdxFreezeTask::do_work()
 {
   int ret = OB_SUCCESS;
+  CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_VECTOR_MID);
   ObTraceIdGuard trace_guard(ctx_->task_status_.trace_id_);
-  LOG_TRACE("[VECTOR INDEX FREEZE] start freeze task", K(ret), K(ctx_->task_status_.tablet_id_));
+  LOG_INFO("[VEC_ASYNC_TASK] start freeze do_work", K(ret), K(ctx_->task_status_), K(ls_id_));
+  DEBUG_SYNC(HANDLE_VECTOR_INDEX_FREEZE_TASK);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObVecIndexAsyncTask is not init", KR(ret));
-  } else if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->ls_)) {
+  } else if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->get_ls())) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("unexpected nullptr", K(ret), KP(ctx_));
   } else if (OB_ISNULL(vec_idx_mgr_)) {
@@ -213,9 +257,8 @@ int ObVecIdxFreezeTask::do_work()
   if (OB_NOT_NULL(ctx_)) {
     common::ObSpinLockGuard ctx_guard(ctx_->lock_);
     ctx_->task_status_.ret_code_ = ret;
-    ctx_->in_thread_pool_ = false;
   }
-  LOG_TRACE("[VECTOR INDEX FREEZE] end freeze task", K(ret), K(ctx_->task_status_.tablet_id_));
+  LOG_INFO("[VEC_ASYNC_TASK] end freeze do_work", K(ret), K(ctx_->task_status_));
   return ret;
 }
 
@@ -398,10 +441,12 @@ int ObVecIdxFreezeTask::check_and_wait_write(const ObVecIdxFrozenDataHandle &fro
   const static int64_t WAIT_US = 100 * 1000; // 100ms
   const static int64_t MAX_WAIT_CNT = 100;
   int64_t check_cnt = 0;
-  while(check_cnt < MAX_WAIT_CNT && frozen_data->segment_handle_->get_write_ref() > 0) {
+  int64_t loop_cnt = 0;
+  while(OB_SUCC(ret) && check_cnt < MAX_WAIT_CNT && frozen_data->segment_handle_->get_write_ref() > 0) {
     LOG_INFO("there are some write thread still run, so need wait", K(frozen_data), K(check_cnt));
     ob_usleep(WAIT_US);
     ++check_cnt;
+    CHECK_TASK_CANCELLED_IN_PROCESS(ret, loop_cnt, ctx_);
   }
   if (check_cnt >= MAX_WAIT_CNT || frozen_data->segment_handle_->get_write_ref() > 0) {
     ret = OB_EAGAIN;
@@ -490,11 +535,17 @@ int ObVecIdxFreezeTask::refresh_adaptor(ObPluginVectorIndexAdapterGuard &adpt_gu
       LOG_WARN("read real string data fail", K(ret));
     } else if (OB_FAIL(ObVectorIndexMeta::get_meta_scn(meta_data, meta_scn))) {
       LOG_WARN("get meta scn fail", K(ret));
+    } else {
+      CHECK_TASK_CANCELLED(ret, ctx_);
+      DEBUG_SYNC(BEFORE_VECTOR_INDEX_FREEZE_DESERIALIZE);
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(new_adapter->deserialize_snap_meta(meta_data))) {
       LOG_WARN("deserialize snap meta fail", K(ret), K(meta_scn), K(meta_data.length()));
     } else if (OB_FAIL(try_reuse_segments_from_old_adapter())) {
       LOG_WARN("try reuse segments from old adapter fail", K(ret));
-    } else if (OB_FAIL(new_adapter->get_snap_data()->load_persist_segments(new_adapter, allocator_, ls_id_, current_scn))) {
+    } else if (OB_FAIL(new_adapter->get_snap_data()->load_persist_segments(new_adapter, allocator_, ls_id_,
+        current_scn, ctx_))) {
       LOG_WARN("load persist segments fail", K(ret));
     } else if (OB_FALSE_IT(new_adapter->get_snap_data()->set_inited())) {
     } else if (OB_FALSE_IT(new_adapter->set_snap_data_has_complete())) {

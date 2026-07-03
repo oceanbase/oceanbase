@@ -1594,6 +1594,11 @@ void ObVecIdxSnapshotData::free_memdata_resource(ObIAllocator *allocator, const 
   is_init_ = false;
 }
 
+void ObVecIdxSnapshotData::free_memdata_resource_with_lock(ObIAllocator *allocator, const uint64_t tenant_id) {
+  TCWLockGuard lock_guard(mem_data_rwlock_);
+  free_memdata_resource(allocator, tenant_id);
+}
+
 ObVecIdxSnapshotData::~ObVecIdxSnapshotData()
 {
   const int64_t instacnce_cnt = ATOMIC_SAF(&instacnce_cnt_, 1);
@@ -1942,7 +1947,8 @@ static int rescan(
 }
 
 int ObVecIdxSnapshotData::load_segment(ObIAllocator &allocator, ObPluginVectorIndexAdaptor *adaptor,
-    ObTableScanIterator *snap_data_iter, const uint64_t tenant_id, ObVectorIndexSegmentMeta &seg_meta)
+    ObTableScanIterator *snap_data_iter, const uint64_t tenant_id, ObVectorIndexSegmentMeta &seg_meta,
+    ObVecIndexAsyncTaskCtx *task_ctx)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator tmp_allocator("VISerde", OB_MALLOC_MIDDLE_BLOCK_SIZE, tenant_id);
@@ -1950,6 +1956,7 @@ int ObVecIdxSnapshotData::load_segment(ObIAllocator &allocator, ObPluginVectorIn
   param.iter_ = snap_data_iter;
   param.allocator_ = &tmp_allocator;
   param.seg_meta_ = &seg_meta;
+  param.task_ctx_ = task_ctx;
   if (OB_FAIL(ObVectorIndexSegment::deserialize(seg_meta.segment_handle_, tenant_id, adaptor, param))) {
     LOG_WARN("serialize index failed.", K(ret));
   } else {
@@ -1963,7 +1970,8 @@ int ObVecIdxSnapshotData::load_segment(ObIAllocator &allocator, ObPluginVectorIn
 
 int ObVecIdxSnapshotData::load_segment(ObPluginVectorIndexAdaptor *adaptor,
     ObIAllocator &allocator, const uint64_t tenant_id, const ObLSID& ls_id, const ObTabletID &tablet_id,
-    const share::SCN &target_scn, ObVectorIndexSegmentMeta &seg_meta)
+    const share::SCN &target_scn, ObVectorIndexSegmentMeta &seg_meta,
+    ObVecIndexAsyncTaskCtx *task_ctx)
 {
   int ret = OB_SUCCESS;
   schema::ObTableParam snap_table_param(allocator);
@@ -1982,6 +1990,7 @@ int ObVecIdxSnapshotData::load_segment(ObPluginVectorIndexAdaptor *adaptor,
     param.iter_ = snap_data_iter;
     param.allocator_ = &tmp_allocator;
     param.seg_meta_ = &seg_meta;
+    param.task_ctx_ = task_ctx;
     if (OB_FAIL(ObVectorIndexSegment::deserialize(seg_meta.segment_handle_, tenant_id, adaptor, param))) {
       LOG_WARN("serialize index failed.", K(ret));
     }
@@ -2003,7 +2012,8 @@ int ObVecIdxSnapshotData::load_segment(ObPluginVectorIndexAdaptor *adaptor,
 
 int ObVecIdxSnapshotData::load_persist_segments(
     ObPluginVectorIndexAdaptor *adaptor, ObIAllocator &allocator,
-    storage::ObTableScanParam &scan_param, ObTableScanIterator *table_scan_iter)
+    storage::ObTableScanParam &scan_param, ObTableScanIterator *table_scan_iter,
+    ObVecIndexAsyncTaskCtx *task_ctx)
 {
   int ret = OB_SUCCESS;
   int64_t vec_cnt = 0;
@@ -2013,24 +2023,31 @@ int ObVecIdxSnapshotData::load_persist_segments(
     LOG_WARN("prepare rowkey array fail", K(ret), K(rowkey_cnt));
   }
   for (int64_t i = 0; i < meta_.incrs_.count() && OB_SUCC(ret); ++i) {
+    CHECK_TASK_CANCELLED(ret, task_ctx);
+    if (OB_FAIL(ret)) { break; }
     ObVectorIndexSegmentMeta& seg_meta = meta_.incrs_.at(i);
     const uint64_t timeout_us = ObTimeUtility::current_time() + ObInsertLobColumnHelper::LOB_TX_TIMEOUT;
     if (seg_meta.segment_handle_.is_valid()) {
       LOG_INFO("incr segment has been load, so skip", K(i), K(seg_meta));
     } else if (OB_FAIL(rescan(seg_meta, scan_param, timeout_us, table_scan_iter, rowkey_objs))) {
       LOG_WARN("rescan fail", K(ret));
-    } else if (OB_FAIL(load_segment(allocator, adaptor, table_scan_iter, adaptor->get_tenant_id(), seg_meta))) {
+    } else if (OB_FAIL(load_segment(allocator, adaptor, table_scan_iter, adaptor->get_tenant_id(), seg_meta,
+        task_ctx))) {
       LOG_WARN("load_segment fail", K(ret), K(i), K(seg_meta));
     }
   }
+  CHECK_TASK_CANCELLED(ret, task_ctx);
   for (int64_t i = 0; i < meta_.bases_.count() && OB_SUCC(ret); ++i) {
+    CHECK_TASK_CANCELLED(ret, task_ctx);
+    if (OB_FAIL(ret)) { break; }
     ObVectorIndexSegmentMeta& seg_meta = meta_.bases_.at(i);
     const uint64_t timeout_us = ObTimeUtility::current_time() + ObInsertLobColumnHelper::LOB_TX_TIMEOUT;
     if (seg_meta.segment_handle_.is_valid()) {
       LOG_INFO("base segment has been load, so skip", K(i), K(seg_meta));
     } else if (OB_FAIL(rescan(seg_meta, scan_param, timeout_us, table_scan_iter, rowkey_objs))) {
       LOG_WARN("rescan fail", K(ret));
-    } else if (OB_FAIL(load_segment(allocator, adaptor, table_scan_iter, adaptor->get_tenant_id(), seg_meta))) {
+    } else if (OB_FAIL(load_segment(allocator, adaptor, table_scan_iter, adaptor->get_tenant_id(), seg_meta,
+        task_ctx))) {
       LOG_WARN("load_segment fail", K(ret), K(i), K(seg_meta));
     }
   }
@@ -2046,7 +2063,8 @@ int ObVecIdxSnapshotData::load_persist_segments(
 }
 
 int ObVecIdxSnapshotData::load_persist_segments(
-    ObPluginVectorIndexAdaptor *adaptor, ObIAllocator &allocator, const ObLSID& ls_id, const share::SCN &target_scn)
+    ObPluginVectorIndexAdaptor *adaptor, ObIAllocator &allocator, const ObLSID& ls_id, const share::SCN &target_scn,
+    ObVecIndexAsyncTaskCtx *task_ctx)
 {
   int ret = OB_SUCCESS;
   int64_t vec_cnt = 0;
@@ -2054,15 +2072,18 @@ int ObVecIdxSnapshotData::load_persist_segments(
     ObVectorIndexSegmentMeta& seg_meta = meta_.incrs_.at(i);
     if (seg_meta.segment_handle_.is_valid()) {
       LOG_INFO("incr segment has been load, so skip", K(i), K(seg_meta));
-    } else if (OB_FAIL(load_segment(adaptor, allocator, adaptor->get_tenant_id(), ls_id, adaptor->get_snap_tablet_id(), target_scn, seg_meta))) {
+    } else if (OB_FAIL(load_segment(adaptor, allocator, adaptor->get_tenant_id(), ls_id,
+        adaptor->get_snap_tablet_id(), target_scn, seg_meta, task_ctx))) {
       LOG_WARN("load_segment fail", K(ret), K(i), K(seg_meta));
     }
   }
+  CHECK_TASK_CANCELLED(ret, task_ctx);
   for (int64_t i = 0; i < meta_.bases_.count() && OB_SUCC(ret); ++i) {
     ObVectorIndexSegmentMeta& seg_meta = meta_.bases_.at(i);
     if (seg_meta.segment_handle_.is_valid()) {
       LOG_INFO("base segment has been load, so skip", K(i), K(seg_meta));
-    } else if (OB_FAIL(load_segment(adaptor, allocator, adaptor->get_tenant_id(), ls_id, adaptor->get_snap_tablet_id(), target_scn, seg_meta))) {
+    } else if (OB_FAIL(load_segment(adaptor, allocator, adaptor->get_tenant_id(), ls_id,
+        adaptor->get_snap_tablet_id(), target_scn, seg_meta, task_ctx))) {
       LOG_WARN("load_segment fail", K(ret), K(i), K(seg_meta));
     }
   }

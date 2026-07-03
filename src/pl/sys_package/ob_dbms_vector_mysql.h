@@ -35,6 +35,7 @@ public:
   DECLARE_FUNC(query_recall);
   DECLARE_FUNC(index_recall);
   DECLARE_FUNC(set_attribute);
+  DECLARE_FUNC(trigger_async_task_with_database);
 
 #undef DECLARE_FUNC
 

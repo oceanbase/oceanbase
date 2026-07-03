@@ -16,8 +16,10 @@
 #include "observer/table/ttl/ob_tenant_ttl_manager.h"
 #include "share/vector_index/ob_plugin_vector_index_util.h"
 #include "share/vector_type/ob_vector_common_util.h"
-#include "share/vector_index/ob_tenant_vector_index_async_task.h"
 #include "share/vector_index/ob_vector_index_async_task_util.h"
+#include "share/vector_index/ob_vec_idx_async_task_scheduler.h"
+#include "share/vector_index/ob_vec_index_priority_queue_manager.h"
+#include "lib/atomic/ob_atomic.h"
 #include "ob_vector_kmeans_ctx.h"
 #include "share/vector_index/ob_vector_index_ivf_cache_mgr.h"
 #include "share/vector_index/ob_ai_access_service.h"
@@ -133,7 +135,10 @@ public:
       memory_context_(memory_context),
       all_vsag_use_mem_(nullptr),
       async_task_opt_(tenant_id),
-      ls_leader_(false)
+      ls_leader_(false),
+      vec_idx_async_bind_stopped_(false),
+      need_refresh_memdata_(true),
+      need_maintenance_(false)
   {}
   virtual ~ObPluginVectorIndexMgr();
 
@@ -221,6 +226,21 @@ public:
                                         ObIvfCacheMgrGuard &cache_mgr_guard);
   ObVectorIndexMemSyncInfo &get_mem_sync_info() { return mem_sync_info_; }
   ObVecIndexAsyncTaskOption &get_async_task_opt() { return async_task_opt_; }
+  // ObVecIdxAsyncTaskScheduler must not re-bind per-LS executors (SHARE_MOD) after LoadScheduler::stop().
+  void stop_vec_idx_async_executor_bind() { ATOMIC_STORE(&vec_idx_async_bind_stopped_, true); }
+  bool is_vec_idx_async_executor_bind_stopped() const
+  {
+    return ATOMIC_LOAD(&vec_idx_async_bind_stopped_);
+  }
+
+  void set_need_refresh_memdata(bool v) { ATOMIC_STORE(&need_refresh_memdata_, v); }
+  bool get_and_clear_need_refresh_memdata()
+  {
+    return ATOMIC_TAS(&need_refresh_memdata_, false);
+  }
+  bool need_refresh_memdata() const { return need_refresh_memdata_; }
+  void set_need_maintenance(bool v) { need_maintenance_ = v; }
+  bool need_maintenance() const { return need_maintenance_; }
   // for debug
   void dump_all_inst();
   // for virtual table
@@ -281,6 +301,9 @@ private:
   uint64_t *all_vsag_use_mem_;
   ObVecIndexAsyncTaskOption async_task_opt_;
   bool ls_leader_;
+  bool vec_idx_async_bind_stopped_;
+  bool need_refresh_memdata_;
+  bool need_maintenance_;
 };
 
 // id to unique identify an vector index adapter
@@ -352,8 +375,6 @@ public:
     sql_proxy_(NULL),
     memory_context_(NULL),
     all_vsag_use_mem_(NULL),
-    tenant_vec_async_task_sched_(nullptr),
-    is_vec_async_task_started_(false),
     ai_service_init_lock_(common::ObLatchIds::OB_EMBEDDING_TASK_HANDLER_SPIN_LOCK),
     kmeans_tg_id_(OB_INVALID_TG_ID),
     embedding_tg_id_(OB_INVALID_TG_ID)
@@ -394,16 +415,21 @@ public:
   int switch_to_leader();
   int switch_to_follower_gracefully();
   int resume_leader() { return switch_to_leader(); }
-  int alloc_tenant_vec_async_task_sched();
   ObFIFOAllocator &get_adaptor_allocator() { return adaptor_allocator_; }
 
   // feature interfaces
   int get_kmeans_tg_id() { return kmeans_tg_id_; }
   int get_embedding_tg_id() { return embedding_tg_id_; }
   ObVecIndexAsyncTaskHandler &get_vec_async_task_handle() { return vec_async_task_handle_; }
+  ObVecIndexPriorityQueueManager &get_vec_index_priority_queue_manager() { return vec_index_priority_queue_manager_; }
+  ObVecIdxAsyncTaskScheduler &get_vec_idx_async_task_sched() { return vec_idx_async_task_sched_; }
+  int cancel_ls_leader_tasks(const share::ObLSID &ls_id) { return vec_idx_async_task_sched_.cancel_ls_leader_tasks(ls_id); }
+  int cancel_ls_follower_tasks(const share::ObLSID &ls_id) { return vec_idx_async_task_sched_.cancel_ls_follower_tasks(ls_id); }
+  void mark_ls_need_resume(const share::ObLSID &ls_id) { vec_idx_async_task_sched_.mark_ls_need_resume(ls_id); }
+  void mark_ls_need_resume_for_follower(const share::ObLSID &ls_id) { vec_idx_async_task_sched_.mark_ls_need_resume_for_follower(ls_id); }
   ObKmeansBuildTaskHandler& get_kmeans_build_handler() { return kmeans_build_task_handler_; };
   int get_embedding_task_handler(ObEmbeddingTaskHandler *&handler);
-  int get_ai_execution_service(vector_index::ObAiAccessService *&service);
+  int get_ai_execution_service(oceanbase::vector_index::ObAiAccessService *&service);
   LSIndexMgrMap &get_ls_index_mgr_map() { return index_ls_mgr_map_; };
   ObVecIndexTmpInfoMap &get_vector_index_tmp_info_map() { return vec_idx_tmp_map_; }
   int release_vector_index_tmp_info(const int64_t task_id);
@@ -480,7 +506,8 @@ public:
       const uint64_t table_id,
       const ObTabletID tablet_id,
       ObIAllocator &allocator,
-      CallbackFunc &callback_func);
+      CallbackFunc &callback_func,
+      ObVecIndexAsyncTaskCtx *task_ctx=nullptr);
   int acquire_ivf_cache_mgr_guard(ObLSID ls_id,
                                   const ObIvfCacheMgrKey &key,
                                   const ObVectorIndexParam &vec_index_param,
@@ -531,14 +558,14 @@ private:
   // use wrapped memory context in ob_tenant_vector_allocator.h and init by this memory context
   lib::MemoryContext memory_context_;
   uint64_t *all_vsag_use_mem_;
-  ObTenantVecAsyncTaskScheduler *tenant_vec_async_task_sched_;
-  bool is_vec_async_task_started_;
+  ObVecIdxAsyncTaskScheduler vec_idx_async_task_sched_;
+  ObVecIndexPriorityQueueManager vec_index_priority_queue_manager_;
   ObVecIndexAsyncTaskHandler vec_async_task_handle_;
   ObKmeansBuildTaskHandler kmeans_build_task_handler_;
   ObVecIndexTmpInfoMap vec_idx_tmp_map_;
   ObEmbeddingTaskHandler embedding_task_handler_;
   // TODO(haohan): shared_tg_id for kmeans and embedding thread pool
-  vector_index::ObAiAccessService ai_execution_service_;
+  oceanbase::vector_index::ObAiAccessService ai_execution_service_;
   common::ObSpinLock ai_service_init_lock_;
   int kmeans_tg_id_;
   int embedding_tg_id_;
@@ -552,7 +579,8 @@ int ObPluginVectorIndexService::process_ivf_aux_info(
     const uint64_t table_id,
     const ObTabletID tablet_id,
     ObIAllocator &allocator,
-    CallbackFunc &callback_func)
+    CallbackFunc &callback_func,
+    ObVecIndexAsyncTaskCtx *task_ctx)
 {
   int ret = OB_SUCCESS;
   bool is_hidden_table = false;

@@ -44553,7 +44553,7 @@ def_table_schema(
       gmt_create as CREATE_TIME,
       gmt_modified as MODIFY_TIME,
       case trigger_type
-        when 0 then "USER"
+        when 0 then "AUTO"
         when 1 then "MANUAL"
         else "INVALID" END AS TRIGGER_TYPE,
       case status
@@ -44561,8 +44561,21 @@ def_table_schema(
         when 1 then "RUNNING"
         when 2 then "PENDING"
         when 3 then "FINISHED"
+        when 4 then "EXCHANGE"
+        when 5 then "CLEAN"
+        when 6 then "CANCEL"
+        when 7 then "STANDBY"
+        when 8 then "QUEUE"
         else "INVALID" END AS STATUS,
-      task_type as TASK_TYPE,
+      case task_type
+        when 1 then "PARTITION_REBUILD"
+        when 2 then "IVF_CACHE_LOAD"
+        when 3 then "IVF_CACHE_CLEAN"
+        when 4 then "SEMANTIC_INDEX_REFRESH"
+        when 5 then "INCREMENTAL_INDEX_FREEZE"
+        when 6 then "INCREMENTAL_INDEX_MERGE"
+        when 7 then "MEM_SYNC"
+        else "INVALID" END AS TASK_TYPE,
       target_scn as TASK_SCN,
       ret_code as RET_CODE,
       trace_id as TRACE_ID,
@@ -44594,7 +44607,7 @@ def_table_schema(
       gmt_create as CREATE_TIME,
       gmt_modified as MODIFY_TIME,
       case trigger_type
-        when 0 then "USER"
+        when 0 then "AUTO"
         when 1 then "MANUAL"
         else "INVALID" END AS TRIGGER_TYPE,
       case status
@@ -44602,8 +44615,21 @@ def_table_schema(
         when 1 then "RUNNING"
         when 2 then "PENDING"
         when 3 then "FINISHED"
+        when 4 then "EXCHANGE"
+        when 5 then "CLEAN"
+        when 6 then "CANCEL"
+        when 7 then "STANDBY"
+        when 8 then "QUEUE"
         else "INVALID" END AS STATUS,
-      task_type as TASK_TYPE,
+      case task_type
+        when 1 then "PARTITION_REBUILD"
+        when 2 then "IVF_CACHE_LOAD"
+        when 3 then "IVF_CACHE_CLEAN"
+        when 4 then "SEMANTIC_INDEX_REFRESH"
+        when 5 then "INCREMENTAL_INDEX_FREEZE"
+        when 6 then "INCREMENTAL_INDEX_MERGE"
+        when 7 then "MEM_SYNC"
+        else "INVALID" END AS TASK_TYPE,
       target_scn as TASK_SCN,
       ret_code as RET_CODE,
       trace_id as TRACE_ID,
@@ -44643,8 +44669,21 @@ def_table_schema(
         when 1 then "RUNNING"
         when 2 then "PENDING"
         when 3 then "FINISHED"
+        when 4 then "EXCHANGE"
+        when 5 then "CLEAN"
+        when 6 then "CANCEL"
+        when 7 then "STANDBY"
+        when 8 then "QUEUE"
         else "INVALID" END AS STATUS,
-      task_type as TASK_TYPE,
+      case task_type
+        when 1 then "PARTITION_REBUILD"
+        when 2 then "IVF_CACHE_LOAD"
+        when 3 then "IVF_CACHE_CLEAN"
+        when 4 then "SEMANTIC_INDEX_REFRESH"
+        when 5 then "INCREMENTAL_INDEX_FREEZE"
+        when 6 then "INCREMENTAL_INDEX_MERGE"
+        when 7 then "MEM_SYNC"
+        else "INVALID" END AS TASK_TYPE,
       target_scn as TASK_SCN,
       ret_code as RET_CODE,
       trace_id as TRACE_ID,
@@ -44683,8 +44722,21 @@ def_table_schema(
         when 1 then "RUNNING"
         when 2 then "PENDING"
         when 3 then "FINISHED"
+        when 4 then "EXCHANGE"
+        when 5 then "CLEAN"
+        when 6 then "CANCEL"
+        when 7 then "STANDBY"
+        when 8 then "QUEUE"
         else "INVALID" END AS STATUS,
-      task_type as TASK_TYPE,
+      case task_type
+        when 1 then "PARTITION_REBUILD"
+        when 2 then "IVF_CACHE_LOAD"
+        when 3 then "IVF_CACHE_CLEAN"
+        when 4 then "SEMANTIC_INDEX_REFRESH"
+        when 5 then "INCREMENTAL_INDEX_FREEZE"
+        when 6 then "INCREMENTAL_INDEX_MERGE"
+        when 7 then "MEM_SYNC"
+        else "INVALID" END AS TASK_TYPE,
       target_scn as TASK_SCN,
       ret_code as RET_CODE,
       trace_id as TRACE_ID,

@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "ob_plugin_vector_index_serialize.h"
+#include "share/vector_index/ob_vector_index_async_task_util.h"
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
 #include "share/vector_index/ob_vector_index_util.h"
 #include "storage/access/ob_table_scan_iterator.h"
@@ -358,7 +359,6 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
   } else {
     data = nullptr;
     read_size = 0;
-    DEBUG_SYNC(BEFORE_VEC_SERIALIZE_GET_DATA_CANCELLED);
     do {
       if (OB_NOT_NULL(str_iter)) {
         // try to get current next block
@@ -491,7 +491,12 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
           }
         }
       }
-      CHECK_REFRESH_MEMDATA_TASK_CANCELLED(ret, param.loop_cnt_, param.task_ctx_);
+      DEBUG_SYNC(BEFORE_VEC_SERIALIZE_GET_DATA_CANCELLED);
+      if (OB_NOT_NULL(param.task_ctx_)) {
+        CHECK_TASK_CANCELLED_IN_PROCESS_WITHOUT_MGR(ret, param.loop_cnt_, 20, param.task_ctx_);
+      } else {
+        CHECK_REFRESH_MEMDATA_TASK_CANCELLED(ret, param.loop_cnt_, param.legacy_task_ctx_);
+      }
     } while (OB_SUCC(ret) && OB_ISNULL(data) && !adp->is_need_cancel_task());
 
     if (OB_FAIL(ret) && ret != OB_ITER_END) {

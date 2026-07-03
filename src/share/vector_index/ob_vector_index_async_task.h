@@ -16,13 +16,14 @@ namespace share
 {
 // schedule vector tasks for a ls
 class ObPluginVectorIndexMgr;
-class ObVecAsyncTaskExector : public ObVecITaskExecutor
+class ObVecAsyncTaskExecutor : public ObVecITaskExecutor
 {
 public:
-  ObVecAsyncTaskExector()
+  ObVecAsyncTaskExecutor()
     : ObVecITaskExecutor()
   {}
-  virtual ~ObVecAsyncTaskExector() {}
+  virtual ~ObVecAsyncTaskExecutor() {}
+  int load_triggered_task(const ObVecIndexTaskStatus &task_row) override;
   int load_task(uint64_t &task_trace_base_num) override;
   int check_and_set_thread_pool() override;
 private:
@@ -40,7 +41,7 @@ public:
   {}
   ~ObVecTaskManager() {}
   int process_task();
-  int create_task();
+  int create_task(ObVecIndexAsyncTaskStatus initial_status = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE);
   int check_task_status();
   TO_STRING_KV(K_(tenant_id), K_(index_table_id), K_(task_type), K_(task_ids));
 private:

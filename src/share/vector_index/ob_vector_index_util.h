@@ -1131,6 +1131,8 @@ public:
 
   static const char* get_type_str(ObVectorIndexAlgorithmType type);
   static const char* get_dist_algorithm_str(ObVectorIndexDistAlgorithm dist);
+  static bool check_is_match_index_type(
+      const ObIndexType type1, const ObIndexType type2);
 
 private:
   static void save_column_schema(
@@ -1179,8 +1181,6 @@ private:
       const ObColumnSchemaV2 &col_schema,
       const int64_t col_id,
       bool &has_same_col_id);
-  static bool check_is_match_index_type(
-      const ObIndexType type1, const ObIndexType type2);
   static int is_int_val(const ObString &str, bool &is_int);
   static int cast_vector_array_str_to_float_array_binary(
       ObIAllocator &allocator,

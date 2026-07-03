@@ -29,7 +29,7 @@ namespace oceanbase
 {
 namespace share
 {
-struct ObPluginVectorIndexTaskCtx;
+struct ObVecIndexAsyncTaskCtx;
 class ObVsagMemContext;
 class ObPluginVectorIndexMgr;
 
@@ -336,6 +336,7 @@ public:
       is_sparse_vector_(false),
       is_refresh_adaptor_(false),
       complete_delta_lock_(nullptr),
+      task_ctx_(nullptr),
       scn_() {};
   ~ObVectorQueryAdaptorResultContext();
   int init_bitmaps();
@@ -393,6 +394,8 @@ public:
       ObHnswBitmapFilter* filter, const bool reverse_filter);
   void set_complete_delta_lock(TCRWLock *lock) { complete_delta_lock_ = lock; }
   TCRWLock *get_complete_delta_lock() { return complete_delta_lock_; }
+  void set_task_ctx(ObVecIndexAsyncTaskCtx *task_ctx) { task_ctx_ = task_ctx; }
+  ObVecIndexAsyncTaskCtx *get_task_ctx() { return task_ctx_; }
 
 private:
   PluginVectorQueryResStatus status_;
@@ -414,6 +417,7 @@ private:
   bool is_refresh_adaptor_;
   // hold complete lock
   TCRWLock *complete_delta_lock_;
+  ObVecIndexAsyncTaskCtx *task_ctx_;
   SCN scn_;
 };
 
@@ -697,8 +701,8 @@ public:
 
   bool is_valid() { return (is_inc_tablet_valid() || is_vbitmap_tablet_valid() || is_snap_tablet_valid()) && is_data_tablet_valid(); }
   bool is_complete();
-  void set_need_cancel_task() { need_cancel_task_ = true; }
-  bool is_need_cancel_task() { return need_cancel_task_; }
+  void set_need_cancel_task() { ATOMIC_STORE(&need_cancel_task_, true); }
+  bool is_need_cancel_task() { return ATOMIC_LOAD(&need_cancel_task_); }
   void inc_ref();
   bool dec_ref_and_check_release();
   void inc_idle() { idle_cnt_++; }
@@ -768,13 +772,13 @@ public:
   int check_delta_buffer_table_readnext_status(ObVectorQueryAdaptorResultContext *ctx,
                                                common::ObNewRowIterator *row_iter,
                                                SCN query_scn,
-                                               ObPluginVectorIndexTaskCtx *task_ctx = nullptr);
+                                               ObVecIndexAsyncTaskCtx *task_ctx = nullptr);
   int complete_delta_buffer_table_data(ObVectorQueryAdaptorResultContext *ctx);
   // Query Processor second
   int check_index_id_table_readnext_status(ObVectorQueryAdaptorResultContext *ctx,
                                            common::ObNewRowIterator *row_iter,
                                            SCN query_scn,
-                                           ObPluginVectorIndexTaskCtx *task_ctx = nullptr);
+                                           ObVecIndexAsyncTaskCtx *task_ctx = nullptr);
   // Query Processor third
   int check_snapshot_table_wait_status(ObVectorQueryAdaptorResultContext *ctx);
 
@@ -801,6 +805,9 @@ public:
   int64_t get_incr_vsag_mem_hold();
   int64_t get_snap_vsag_mem_used();
   int64_t get_snap_vsag_mem_hold();
+  int64_t get_frozen_data_mem_used();
+  int64_t get_frozen_data_mem_hold();
+  int64_t get_adapter_mem_hold();
   ObIAllocator *get_allocator() { return allocator_; }
 
   void *get_algo_data() { return ATOMIC_LOAD(&algo_data_); }
@@ -811,7 +818,7 @@ public:
                               common::ObNewRowIterator *row_iter,
                               blocksstable::ObDatumRow *last_row,
                               int64_t &i_vid_count,
-                              ObPluginVectorIndexTaskCtx *task_ctx = nullptr);
+                              ObVecIndexAsyncTaskCtx *task_ctx = nullptr);
   int prepare_delta_mem_data(roaring::api::roaring64_bitmap_t *gene_bitmap,
                              ObVectorQueryAdaptorResultContext *ctx);
   int serialize(ObIAllocator *allocator, ObOStreamBuf::CbParam &cb_param, ObOStreamBuf::Callback &cb);

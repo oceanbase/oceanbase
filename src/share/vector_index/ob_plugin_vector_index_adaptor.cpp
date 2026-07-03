@@ -2529,7 +2529,7 @@ int ObPluginVectorIndexAdaptor::check_snap_index()
 int ObPluginVectorIndexAdaptor::check_delta_buffer_table_readnext_status(ObVectorQueryAdaptorResultContext *ctx,
                                                                          common::ObNewRowIterator *row_iter,
                                                                          SCN query_scn,
-                                                                         ObPluginVectorIndexTaskCtx *task_ctx)
+                                                                         ObVecIndexAsyncTaskCtx *task_ctx)
 {
   INIT_SUCC(ret);
   SCN min_delta_scn;
@@ -2585,7 +2585,8 @@ int ObPluginVectorIndexAdaptor::check_delta_buffer_table_readnext_status(ObVecto
         }
         can_skip = false;
       }
-      CHECK_REFRESH_MEMDATA_TASK_CANCELLED(ret, loop_cnt, task_ctx);
+      DEBUG_SYNC(BEFORE_VEC_DELTA_BUF_CANCELLED);
+      CHECK_TASK_CANCELLED_IN_PROCESS_WITHOUT_MGR(ret, loop_cnt, 20, task_ctx);
     }
     if (OB_FAIL(ret) && ret != OB_ITER_END) {
     } else if (need_cancel_task_) { // if it's the error code from iter_end and the task needs to be canceled at this moment, then override it.
@@ -2886,7 +2887,7 @@ int ObPluginVectorIndexAdaptor::complete_delta_buffer_table_data(ObVectorQueryAd
 int ObPluginVectorIndexAdaptor::check_index_id_table_readnext_status(ObVectorQueryAdaptorResultContext *ctx,
                                                                      common::ObNewRowIterator *row_iter,
                                                                      SCN query_scn,
-                                                                     ObPluginVectorIndexTaskCtx *task_ctx)
+                                                                     ObVecIndexAsyncTaskCtx *task_ctx)
 {
   INIT_SUCC(ret);
   blocksstable::ObDatumRow *datum_row = nullptr;
@@ -3181,7 +3182,7 @@ int ObPluginVectorIndexAdaptor::complete_index_mem_data(ObVectorQueryAdaptorResu
                                                         common::ObNewRowIterator *row_iter,
                                                         blocksstable::ObDatumRow *last_row,
                                                         int64_t &i_vid_count,
-                                                        ObPluginVectorIndexTaskCtx *task_ctx)
+                                                        ObVecIndexAsyncTaskCtx *task_ctx)
 {
   INIT_SUCC(ret);
   SCN frozen_vbitmap_scn = SCN::min_scn();
@@ -3212,7 +3213,7 @@ int ObPluginVectorIndexAdaptor::complete_index_mem_data(ObVectorQueryAdaptorResu
       oceanbase::share::SCN stop_scn = vbitmap->scn_;
       oceanbase::share::SCN curr_scn;
       int64_t read_num = 0;
-      int loop_cnt = 0;
+      int64_t loop_cnt = 0;
       ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(row_iter);
       DEBUG_SYNC(BEFORE_VEC_SCAN_VID_CANCELLED);
       while (OB_SUCC(ret) && !need_cancel_task_) {
@@ -3239,7 +3240,8 @@ int ObPluginVectorIndexAdaptor::complete_index_mem_data(ObVectorQueryAdaptorResu
         } else {
           INC_METRIC_VAL(common::ObMetricId::HS_VEC_HNSW_INDEX_ID_TABLE_SCAN_ROWS, 1);
         }
-        CHECK_REFRESH_MEMDATA_TASK_CANCELLED(ret, loop_cnt, task_ctx);
+        DEBUG_SYNC(BEFORE_VEC_SCAN_VID_CANCELLED);
+        CHECK_TASK_CANCELLED_IN_PROCESS_WITHOUT_MGR(ret, loop_cnt, 20, task_ctx);
       }
 
       if (OB_FAIL(ret) && ret != OB_ITER_END) {
@@ -4996,7 +4998,11 @@ int ObPluginVectorIndexAdaptor::check_can_sync_to_follower(ObPluginVectorIndexMg
       need_sync = false;
       LOG_INFO("snapshot table not ready, not need sync to follower", KPC(this));
     }
-    if (current_snapshot_count == 0 && can_read_index) {
+    bool has_complete = false;
+    if (snap_data_.is_valid() && snap_data_->has_complete_) {
+      has_complete = true;
+    }
+    if (current_snapshot_count == 0 && can_read_index && !has_complete) {
       if (OB_FAIL(mgr->get_mem_sync_info().add_task_to_waiting_map(get_inc_tablet_id(), get_inc_table_id()))) {
         if (OB_HASH_EXIST == ret) {
           ret = OB_SUCCESS;
@@ -5059,6 +5065,43 @@ int64_t ObPluginVectorIndexAdaptor::get_snap_vsag_mem_hold()
     size = snap_data_->get_snap_mem_hold();
   }
   return size;
+}
+
+int64_t ObPluginVectorIndexAdaptor::get_frozen_data_mem_used()
+{
+  int64_t size = 0;
+  if (frozen_data_.is_valid() && frozen_data_->is_inited() && frozen_data_->segment_handle_.is_valid()) {
+    size = frozen_data_->segment_handle_->get_mem_used();
+  }
+  return size;
+}
+
+int64_t ObPluginVectorIndexAdaptor::get_frozen_data_mem_hold()
+{
+  int64_t size = 0;
+  if (frozen_data_.is_valid() && frozen_data_->is_inited() && frozen_data_->segment_handle_.is_valid()) {
+    size = frozen_data_->segment_handle_->get_mem_hold();
+  }
+  return size;
+}
+
+int64_t ObPluginVectorIndexAdaptor::get_adapter_mem_hold() {
+  int64_t incr_mem_hold = 0;
+  int64_t snap_mem_hold = 0;
+  int64_t frozen_data_mem_hold = 0;
+  if (incr_data_.is_valid() && incr_data_->is_inited())  {
+    TCRLockGuard lock_guard(incr_data_->mem_data_rwlock_);
+    incr_mem_hold = get_incr_vsag_mem_hold();
+  }
+  if (snap_data_.is_valid() && snap_data_->is_inited())  {
+    TCRLockGuard lock_guard(snap_data_->mem_data_rwlock_);
+    snap_mem_hold = get_snap_vsag_mem_hold();
+  }
+  if (frozen_data_.is_valid() && frozen_data_->is_inited() && frozen_data_->segment_handle_.is_valid()) {
+    TCRLockGuard lock_guard(frozen_data_->mem_data_rwlock_);
+    frozen_data_mem_hold = get_frozen_data_mem_hold();
+  }
+  return incr_mem_hold + snap_mem_hold + frozen_data_mem_hold;
 }
 
 int ObPluginVectorIndexAdaptor::get_vid_bound(ObVidBound &bound)

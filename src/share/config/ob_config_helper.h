@@ -1314,6 +1314,30 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigCommaSeparatedStringChecker);
 };
 
+// Checker for vector_task_thread_limit_percent config.
+// Format: 'TASK_TYPE:PERCENT,...' e.g. 'IVF_LOAD:80,EMBEDDING:20'
+class ObVecTaskThreadLimitPercentChecker : public ObConfigChecker
+{
+public:
+  ObVecTaskThreadLimitPercentChecker() {}
+  virtual ~ObVecTaskThreadLimitPercentChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObVecTaskThreadLimitPercentChecker);
+};
+
+// Checker for _vector_task_disable_list config.
+// Format: 'TASK_TYPE:TABLET_ID,...' e.g. 'FREEZE:200001,MERGE:*'
+class ObVecTaskDisableListChecker : public ObConfigChecker
+{
+public:
+  ObVecTaskDisableListChecker() {}
+  virtual ~ObVecTaskDisableListChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObVecTaskDisableListChecker);
+};
+
 } // namespace common
 } // namespace oceanbase
 

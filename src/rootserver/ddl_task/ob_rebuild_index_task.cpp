@@ -790,6 +790,16 @@ int ObRebuildIndexTask::check_ddl_task_finish(const int64_t tenant_id, int64_t &
       LOG_INFO("succ to wait task finish", K(ret));
     }
   }
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = OB_E(EventTable::EN_VEC_INDEX_HNSW_REBUILD_CHECK_TASK_FAIL) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      LOG_WARN("errsim ddl execute building the subtask of rebuild index failed", KR(ret));
+    }
+  }
+#endif
+
   return ret;
 }
 

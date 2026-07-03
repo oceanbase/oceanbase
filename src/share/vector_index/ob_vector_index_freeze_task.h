@@ -15,13 +15,14 @@ namespace oceanbase
 namespace share
 {
 
-class ObVecIdxFreezeTaskExecutor : public ObVecAsyncTaskExector
+class ObVecIdxFreezeTaskExecutor : public ObVecAsyncTaskExecutor
 {
 public:
   ObVecIdxFreezeTaskExecutor()
-    : ObVecAsyncTaskExector(), max_active_segment_size_(0)
+    : ObVecAsyncTaskExecutor(), max_active_segment_size_(0)
   {}
   virtual ~ObVecIdxFreezeTaskExecutor() {}
+  int load_triggered_task(const ObVecIndexTaskStatus &task_row) override;
   int load_task(uint64_t &task_trace_base_num) override;
 private:
   bool check_operation_allow() override;

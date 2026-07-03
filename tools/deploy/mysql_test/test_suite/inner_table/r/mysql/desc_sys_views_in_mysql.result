@@ -10856,7 +10856,7 @@ CREATE_TIME	timestamp(6)	YES
 MODIFY_TIME	timestamp(6)	YES			
 TRIGGER_TYPE	varchar(7)	NO		NULL	
 STATUS	varchar(8)	NO		NULL	
-TASK_TYPE	bigint(20)	NO		NULL	
+TASK_TYPE	varchar(24)	NO		NULL	
 TASK_SCN	bigint(20)	NO		NULL	
 RET_CODE	bigint(20)	NO		NULL	
 TRACE_ID	varchar(512)	NO		NULL	
@@ -10886,7 +10886,7 @@ CREATE_TIME	timestamp(6)	YES
 MODIFY_TIME	timestamp(6)	YES			
 TRIGGER_TYPE	varchar(7)	NO		NULL	
 STATUS	varchar(8)	NO		NULL	
-TASK_TYPE	bigint(20)	NO		NULL	
+TASK_TYPE	varchar(24)	NO		NULL	
 TASK_SCN	bigint(20)	NO		NULL	
 RET_CODE	bigint(20)	NO		NULL	
 TRACE_ID	varchar(512)	NO		NULL	

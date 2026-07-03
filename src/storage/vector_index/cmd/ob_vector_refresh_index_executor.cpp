@@ -34,10 +34,13 @@ int ObVectorRefreshIndexExecutor::execute_refresh(
   OZ(schema_checker_.init(*(ctx_->get_sql_ctx()->schema_guard_),
                           session_info_->get_server_sid()));
   OX(tenant_id_ = session_info_->get_effective_tenant_id());
+  // Reject manual triggers during cluster upgrade (mixed-version window):
+  // the new framework writes STANDBY status / new columns that older observers
+  // cannot interpret. Allow only after cluster fully upgraded to 4_6_0_1.
   OZ(ObVectorRefreshIndexExecutor::check_min_data_version(
-      tenant_id_, DATA_VERSION_4_3_3_0,
-      "tenant's data version is below 4.3.3.0, refreshing vector index is not "
-      "supported."));
+      tenant_id_, DATA_VERSION_4_6_0_1,
+      "vector index task is not supported during cluster upgrade, "
+      "please retry after the cluster has fully upgraded to 4.6.0.1."));
   OZ(resolve_refresh_arg(arg));
 
   if (OB_FAIL(ret)) {
@@ -62,10 +65,11 @@ int ObVectorRefreshIndexExecutor::execute_refresh_inner(
   OZ(schema_checker_.init(*(ctx_->get_sql_ctx()->schema_guard_),
                           session_info_->get_server_sid()));
   OX(tenant_id_ = session_info_->get_effective_tenant_id());
+  // See execute_refresh: reject manual triggers during cluster upgrade.
   OZ(ObVectorRefreshIndexExecutor::check_min_data_version(
-      tenant_id_, DATA_VERSION_4_3_3_0,
-      "tenant's data version is below 4.3.3.0, refreshing vector index is not "
-      "supported."));
+      tenant_id_, DATA_VERSION_4_6_0_1,
+      "vector index task is not supported during cluster upgrade, "
+      "please retry after the cluster has fully upgraded to 4.6.0.1."));
   OZ(resolve_refresh_inner_arg(arg, in_recycle_bin));
 
   if (OB_FAIL(ret)) {
@@ -93,10 +97,11 @@ int ObVectorRefreshIndexExecutor::execute_flush(
   OZ(schema_checker_.init(*(ctx_->get_sql_ctx()->schema_guard_),
                           session_info_->get_server_sid()));
   OX(tenant_id_ = session_info_->get_effective_tenant_id());
+  // See execute_refresh: reject manual triggers during cluster upgrade.
   OZ(ObVectorRefreshIndexExecutor::check_min_data_version(
-      tenant_id_, DATA_VERSION_4_5_1_0,
-      "tenant's data version is below 4.5.1.0, vector index task is not "
-      "supported."));
+      tenant_id_, DATA_VERSION_4_6_0_1,
+      "vector index task is not supported during cluster upgrade, "
+      "please retry after the cluster has fully upgraded to 4.6.0.1."));
   if (OB_SUCC(ret) &&
       !share::ObPluginVectorIndexHelper::enable_persist_vector_index_incremental(tenant_id_)) {
     ret = OB_NOT_SUPPORTED;
@@ -127,7 +132,7 @@ int ObVectorRefreshIndexExecutor::execute_flush(
       share::ObVecTaskManager manager(
           tenant_id_, domain_table_schema->get_table_id(),
           share::ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_FREEZE);
-      if (OB_FAIL(manager.create_task())) {
+      if (OB_FAIL(manager.create_task(share::ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_STANDBY))) {
         LOG_WARN("failed to create flush task", K(ret), K(manager));
       } else {
         LOG_INFO("flush index task created", K(ret), K(domain_table_schema->get_table_id()), K(arg.table_name_), K(arg.idx_name_));
@@ -152,10 +157,11 @@ int ObVectorRefreshIndexExecutor::execute_compact(
   OZ(schema_checker_.init(*(ctx_->get_sql_ctx()->schema_guard_),
                           session_info_->get_server_sid()));
   OX(tenant_id_ = session_info_->get_effective_tenant_id());
+  // See execute_refresh: reject manual triggers during cluster upgrade.
   OZ(ObVectorRefreshIndexExecutor::check_min_data_version(
-      tenant_id_, DATA_VERSION_4_5_1_0,
-      "tenant's data version is below 4.5.1.0, vector index task is not "
-      "supported."));
+      tenant_id_, DATA_VERSION_4_6_0_1,
+      "vector index task is not supported during cluster upgrade, "
+      "please retry after the cluster has fully upgraded to 4.6.0.1."));
   if (OB_SUCC(ret) &&
       !share::ObPluginVectorIndexHelper::enable_persist_vector_index_incremental(tenant_id_)) {
     ret = OB_NOT_SUPPORTED;
@@ -186,7 +192,7 @@ int ObVectorRefreshIndexExecutor::execute_compact(
       share::ObVecTaskManager manager(
           tenant_id_, index_id_table_schema->get_table_id(),
           share::ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_MERGE);
-      if (OB_FAIL(manager.create_task())) {
+      if (OB_FAIL(manager.create_task(share::ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_STANDBY))) {
         LOG_WARN("failed to create compact task", K(ret), K(manager));
       } else {
         LOG_INFO("compact index task created", K(ret), K(index_id_table_schema->get_table_id()), K(arg.table_name_), K(arg.idx_name_));
@@ -209,10 +215,11 @@ int ObVectorRefreshIndexExecutor::execute_rebuild(
   OZ(schema_checker_.init(*(ctx_->get_sql_ctx()->schema_guard_),
                           session_info_->get_server_sid()));
   OX(tenant_id_ = session_info_->get_effective_tenant_id());
+  // See execute_refresh: reject manual triggers during cluster upgrade.
   OZ(ObVectorRefreshIndexExecutor::check_min_data_version(
-      tenant_id_, DATA_VERSION_4_3_3_0,
-      "tenant's data version is below 4.3.3.0, refreshing vector index is not "
-      "supported."));
+      tenant_id_, DATA_VERSION_4_6_0_1,
+      "vector index task is not supported during cluster upgrade, "
+      "please retry after the cluster has fully upgraded to 4.6.0.1."));
   OZ(resolve_rebuild_arg(arg));
 
   if (OB_FAIL(ret)) {
@@ -237,10 +244,11 @@ int ObVectorRefreshIndexExecutor::execute_rebuild_inner(
   OZ(schema_checker_.init(*(ctx_->get_sql_ctx()->schema_guard_),
                           session_info_->get_server_sid()));
   OX(tenant_id_ = session_info_->get_effective_tenant_id());
+  // See execute_refresh: reject manual triggers during cluster upgrade.
   OZ(ObVectorRefreshIndexExecutor::check_min_data_version(
-      tenant_id_, DATA_VERSION_4_3_3_0,
-      "tenant's data version is below 4.3.3.0, refreshing vector index is not "
-      "supported."));
+      tenant_id_, DATA_VERSION_4_6_0_1,
+      "vector index task is not supported during cluster upgrade, "
+      "please retry after the cluster has fully upgraded to 4.6.0.1."));
   OZ(resolve_rebuild_inner_arg(arg, in_recycle_bin));
 
   if (OB_FAIL(ret)) {

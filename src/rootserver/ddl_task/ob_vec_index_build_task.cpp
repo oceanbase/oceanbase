@@ -2098,6 +2098,9 @@ int ObVecIndexBuildTask::cleanup_impl()
 {
   int ret = OB_SUCCESS;
   ObString unused_str;
+
+  DEBUG_SYNC(CREATE_VECTOR_INDEX_SUCCESS);
+
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -2149,8 +2152,6 @@ int ObVecIndexBuildTask::cleanup_impl()
       }
     }
   }
-
-  DEBUG_SYNC(CREATE_INDEX_SUCCESS);
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObDDLTaskRecordOperator::delete_record(*GCTX.sql_proxy_,

@@ -7,7 +7,6 @@
 
 #include "ob_plugin_vector_index_util.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
-#include "storage/tx_storage/ob_tenant_freezer.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/das/iter/ob_das_iter.h"
 

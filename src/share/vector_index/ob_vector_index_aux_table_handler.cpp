@@ -1039,6 +1039,27 @@ int ObVectorIndexSnapTableHandler::scan_and_lock_meta_row(
   return ret;
 }
 
+int ObVectorIndexSnapTableHandler::check_segment_start_key_exist(
+    const ObVectorIndexMeta &meta, const ObVectorIndexSegmentMeta &new_seg)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < meta.bases_.count(); ++i) {
+    if (0 == meta.bases_.at(i).start_key_.compare(new_seg.start_key_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("segment start_key conflict in bases", K(ret), K(i),
+          "exist_seg", meta.bases_.at(i), K(new_seg));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < meta.incrs_.count(); ++i) {
+    if (0 == meta.incrs_.at(i).start_key_.compare(new_seg.start_key_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("segment start_key conflict in incrs", K(ret), K(i),
+          "exist_seg", meta.incrs_.at(i), K(new_seg));
+    }
+  }
+  return ret;
+}
+
 int ObVecIdxSnapTableSegAddOp::preprea_meta(ObVectorIndexSegmentMeta &seg_meta, ObVectorIndexMeta &fake_old_meta)
 {
   int ret = OB_SUCCESS;
@@ -1080,6 +1101,8 @@ int ObVecIdxSnapTableSegAddOp::prepare_meta_for_update(ObVectorIndexMeta &new_me
   if (OB_ISNULL(new_seg_meta_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("new seg meta is null", KPC(new_seg_meta_));
+  } else if (OB_FAIL(check_segment_start_key_exist(old_meta, *new_seg_meta_))) {
+    LOG_WARN("segment start_key conflict", K(ret), KPC_(new_seg_meta), K(old_meta));
   } else if (OB_FAIL(new_meta.assign(old_meta))) {
     LOG_WARN("copy meta fail", K(ret), K(old_meta));
   } else if (OB_FAIL(new_meta.incrs_.push_back(*new_seg_meta_))) {
@@ -1147,6 +1170,8 @@ int ObVecIdxSnapTableSegMergeOp::prepare_meta_for_update(ObVectorIndexMeta &new_
       LOG_WARN("may be conflict with other task, need cancal", K(old_meta));
     } else if (OB_ISNULL(new_seg_meta_)) {
       LOG_INFO("new_seg_meta is empty, so skip push", KPC_(new_seg_meta), K(new_meta));
+    } else if (OB_FAIL(check_segment_start_key_exist(new_meta, *new_seg_meta_))) {
+      LOG_WARN("segment start_key conflict", K(ret), KPC_(new_seg_meta), K(new_meta));
     } else if (ObVectorIndexSegmentType::BASE == new_seg_meta_->seg_type_) {
       if (OB_FAIL(new_meta.bases_.push_back(*new_seg_meta_))) {
         LOG_WARN("push back new seg meta to bases fail", K(ret), KPC_(new_seg_meta), K(new_meta));

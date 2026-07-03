@@ -5,6 +5,7 @@
 #define USING_LOG_PREFIX SERVER
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
+#include "share/vector_index/ob_vector_index_async_task_util.h"
 #include "share/ob_vec_index_builder_util.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
@@ -438,7 +439,7 @@ int ObPluginVectorIndexUtils::read_vector_info(ObPluginVectorIndexAdaptor *adapt
                                                ObLSID &ls_id,
                                                SCN target_scn,
                                                ObVectorQueryAdaptorResultContext &ada_ctx,
-                                               ObPluginVectorIndexTaskCtx *task_ctx)
+                                               ObVecIndexAsyncTaskCtx *task_ctx)
 {
   INIT_SUCC(ret);
   const bool is_hybrid_vector = adapter->is_hybrid_index();
@@ -518,7 +519,6 @@ int ObPluginVectorIndexUtils::read_vector_info(ObPluginVectorIndexAdaptor *adapt
           obj_ptr = new (buf) ObObj[data_table_rowkey_count + 1];
         }
       }
-      DEBUG_SYNC(BEFORE_VEC_UTILS_GET_DATA_CANCELLED);
       for (int64_t j = 0; OB_SUCC(ret) && j < ada_ctx.get_count() && !adapter->is_need_cancel_task(); j += ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE) {
         batch_temp_allocator.reuse();
         int64_t vec_cnt = ada_ctx.get_vec_cnt();
@@ -569,7 +569,8 @@ int ObPluginVectorIndexUtils::read_vector_info(ObPluginVectorIndexAdaptor *adapt
                                                               get_data))) {
             LOG_WARN("failed to read obj from data table.", K(ret));
           }
-          CHECK_REFRESH_MEMDATA_TASK_CANCELLED(ret, loop_cnt, task_ctx);
+          DEBUG_SYNC(BEFORE_VEC_UTILS_GET_DATA_CANCELLED);
+          CHECK_TASK_CANCELLED_IN_PROCESS_WITHOUT_MGR(ret, loop_cnt, 20, task_ctx);
         }
 
         if (OB_FAIL(ret) && ret != OB_ITER_END) {
@@ -593,7 +594,6 @@ int ObPluginVectorIndexUtils::read_vector_info(ObPluginVectorIndexAdaptor *adapt
     } else if (!adapter->get_is_need_vid()) {
       bool get_data = false;
       int32_t data_table_rowkey_count = 1;
-      DEBUG_SYNC(BEFORE_VEC_UTILS_GET_DATA_WITHOUT_VID_CANCELLED);
       for (int64_t j = 0; OB_SUCC(ret) && j < ada_ctx.get_count() && !adapter->is_need_cancel_task(); j += ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE) {
         batch_temp_allocator.reuse();
         int64_t vec_cnt = ada_ctx.get_vec_cnt();
@@ -625,7 +625,8 @@ int ObPluginVectorIndexUtils::read_vector_info(ObPluginVectorIndexAdaptor *adapt
                                                                                        get_data))) {
             LOG_WARN("failed to read obj from embedded table.", K(ret));
           }
-          CHECK_REFRESH_MEMDATA_TASK_CANCELLED(ret, loop_cnt, task_ctx);
+          DEBUG_SYNC(BEFORE_VEC_UTILS_GET_DATA_WITHOUT_VID_CANCELLED);
+          CHECK_TASK_CANCELLED_IN_PROCESS_WITHOUT_MGR(ret, loop_cnt, 20, task_ctx);
         }
 
         if (OB_FAIL(ret) && ret != OB_ITER_END) {
@@ -740,7 +741,7 @@ int ObPluginVectorIndexUtils::try_sync_vbitmap_memdata(ObLSID &ls_id,
                                                        SCN &target_scn,
                                                        ObIAllocator &allocator,
                                                        ObVectorQueryAdaptorResultContext &ada_ctx,
-                                                       ObPluginVectorIndexTaskCtx *task_ctx)
+                                                       ObVecIndexAsyncTaskCtx *task_ctx)
 {
   int ret = OB_SUCCESS;
   schema::ObIndexType index_type = INDEX_TYPE_VEC_INDEX_ID_LOCAL;
@@ -948,7 +949,7 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
                                                         const bool create_new_adp,
                                                         SCN &target_scn,
                                                         ObIAllocator &allocator,
-                                                        ObPluginVectorIndexTaskCtx *task_ctx)
+                                                        ObVecIndexAsyncTaskCtx *ctx)
 {
   int ret = OB_SUCCESS;
   common::ScopedTimer timer(common::ObMetricId::HS_VEC_HNSW_SYNC_SNAP_MEM_TIME);
@@ -1024,6 +1025,9 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
             new_adapter = adapter;
           }
         }
+        if (OB_NOT_NULL(ctx)) {
+          ctx->set_adaptor(new_adapter);
+        }
         if (OB_FAIL(ret)) {
         } else if (is_meta_data) {
           ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
@@ -1031,7 +1035,7 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
             LOG_WARN("deserialize snap meta fail", K(ret));
           } else if (OB_FAIL(try_reuse_segments_from_old_adapter(new_adapter, old_adapter))) {
             LOG_WARN("try reuse segments from old adapter fail", K(ret));
-          } else if (OB_FAIL(new_adapter->get_snap_data()->load_persist_segments(new_adapter, tmp_allocator, ls_id, target_scn))) {
+          } else if (OB_FAIL(new_adapter->get_snap_data()->load_persist_segments(new_adapter, tmp_allocator, ls_id, target_scn, ctx))) {
             LOG_WARN("load persist segments fail", K(ret));
           } else if (OB_FALSE_IT(new_adapter->get_snap_data()->set_inited())) {
           } else if (OB_FALSE_IT(new_adapter->set_snap_data_has_complete())) {
@@ -1047,10 +1051,12 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
           ObHNSWDeserializeCallback::CbParam param;
           param.iter_ = snapshot_idx_iter;
           param.allocator_ = &tmp_allocator;
-          param.task_ctx_ = task_ctx;
+          param.task_ctx_ = ctx;
+          CHECK_TASK_CANCELLED(ret, ctx);
           // ToDo: concurrency with weakread
           // name rule: TabletID_SCN_xxx_data_partn, we need TabletID_SCN
-          if (OB_FAIL(new_adapter->deserialize_snap_data(param, row_key))) {
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(new_adapter->deserialize_snap_data(param, row_key))) {
             LOG_WARN("deseriale snapshot data fail", K(ret));
           } else if (OB_FAIL(new_adapter->get_snap_index_row_cnt(index_count))) {
             LOG_WARN("fail to get snap index row cnt", K(ret), KP(new_adapter), KP(adapter));
@@ -1065,6 +1071,9 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
     LOG_INFO("release new adapter memory in failure",
         K(ret), K(index_count), KP(new_adapter), K(create_new_adp), K(is_meta_data),
         K(is_empty_snapshot_table));
+    if (OB_NOT_NULL(ctx)) {
+      ctx->reset_adaptor();
+    }
     new_adapter->~ObPluginVectorIndexAdaptor();
     vector_index_service->get_adaptor_allocator().free(adpt_buff);
     adpt_buff = nullptr;
@@ -1171,7 +1180,7 @@ int ObPluginVectorIndexUtils::refresh_adp_from_table(
     const bool create_new_adapter,
     SCN target_scn,
     ObIAllocator &allocator,
-    ObPluginVectorIndexTaskCtx *task_ctx)
+    ObVecIndexAsyncTaskCtx *ctx)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(adapter)) {
@@ -1186,8 +1195,16 @@ int ObPluginVectorIndexUtils::refresh_adp_from_table(
     schema::ObTableParam inc_table_param(allocator);
     int64_t extra_info_actual_size = 0;
     schema::ObIndexType delta_type = adapter->is_hybrid_index()? INDEX_TYPE_HYBRID_INDEX_LOG_LOCAL: INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL;
-    if (OB_FAIL(try_sync_snapshot_memdata(ls_id, adapter, create_new_adapter, target_scn, allocator, task_ctx))) {
+
+    DEBUG_SYNC(REFRESH_MEMDATA_BEFORE_SYNC_SNAPSHOT);
+
+    if (OB_FAIL(try_sync_snapshot_memdata(ls_id, adapter, create_new_adapter, target_scn, allocator, ctx))) {
       LOG_WARN("failed to refresh mem snapshots without refresh incr", KR(ret));
+    }
+    CHECK_TASK_CANCELLED(ret, ctx);
+    DEBUG_SYNC(REFRESH_MEMDATA_AFTER_SYNC_SNAPSHOT);
+
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(read_local_tablet(ls_id,
                                   adapter,
                                   target_scn,
@@ -1210,12 +1227,17 @@ int ObPluginVectorIndexUtils::refresh_adp_from_table(
       ada_ctx.set_scn(target_scn);
       ada_ctx.set_is_refresh_adaptor(true);
       bool ls_leader = true;
-      if (OB_FAIL(ObPluginVectorIndexUtils::get_ls_leader_flag(ls_id, ls_leader))) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObPluginVectorIndexUtils::get_ls_leader_flag(ls_id, ls_leader))) {
         LOG_WARN("fail to get ls leader flag", K(ret), K(ls_id));
       } else if (FALSE_IT(ada_ctx.set_ls_leader(ls_leader))) {
-      } else if (OB_FAIL(adapter->check_delta_buffer_table_readnext_status(&ada_ctx, delta_buf_iter, target_scn, task_ctx))) {
+      } else if (OB_FAIL(adapter->check_delta_buffer_table_readnext_status(&ada_ctx, delta_buf_iter, target_scn, ctx))) {
         LOG_WARN("fail to check_delta_buffer_table_readnext_status.", K(ret));
-      } else if (OB_FAIL(try_sync_vbitmap_memdata(ls_id, adapter, target_scn, allocator, ada_ctx, task_ctx))) {
+      }
+      CHECK_TASK_CANCELLED(ret, ctx);
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_FAIL(try_sync_vbitmap_memdata(ls_id, adapter, target_scn, allocator, ada_ctx, ctx))) {
         LOG_WARN("failed to sync vbitmap", KR(ret));
       } else {
         LOG_INFO("refresh memdata delta ready",
@@ -1223,7 +1245,10 @@ int ObPluginVectorIndexUtils::refresh_adp_from_table(
           K(ada_ctx.get_count()), K(ada_ctx.get_vec_cnt()));
       }
       if (OB_SUCC(ret) && ada_ctx.get_status() == PVQ_COM_DATA) {
-        if (OB_FAIL(read_vector_info(adapter, allocator, ls_id, target_scn, ada_ctx, task_ctx))) {
+        CHECK_TASK_CANCELLED(ret, ctx);
+        if (OB_FAIL(ret)) {
+          // do nothing
+        } else if (OB_FAIL(read_vector_info(adapter, allocator, ls_id, target_scn, ada_ctx, ctx))) {
           LOG_WARN("failed to read vector_info", KR(ret));
         }
       }
@@ -1320,7 +1345,7 @@ int ObPluginVectorIndexUtils::refresh_memdata(ObLSID &ls_id,
                                               ObPluginVectorIndexAdaptor *adapter,
                                               SCN target_scn,
                                               ObIAllocator &allocator,
-                                              ObPluginVectorIndexTaskCtx *task_ctx)
+                                              ObVecIndexAsyncTaskCtx *ctx)
 {
   int ret = OB_SUCCESS;
   // ToDo: remove test interface later
@@ -1340,7 +1365,8 @@ int ObPluginVectorIndexUtils::refresh_memdata(ObLSID &ls_id,
   }
 #endif
   bool can_do_refresh_memdata = false;
-  if (OB_ISNULL(adapter)) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(adapter)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid adapter", K(ret), KPC(adapter));
   } else if (OB_FAIL(check_can_do_refresh_memdata(adapter, target_scn, can_do_refresh_memdata))) {
@@ -1362,7 +1388,7 @@ int ObPluginVectorIndexUtils::refresh_memdata(ObLSID &ls_id,
       } else if (OB_ISNULL(vec_idx_mgr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get invalid vector index ls mgr", KR(ret));
-      } else if (OB_FAIL(refresh_adp_from_table(ls_id, new_adapter, true, target_scn, allocator, task_ctx))) {
+      } else if (OB_FAIL(refresh_adp_from_table(ls_id, new_adapter, true, target_scn, allocator, ctx))) {
         LOG_WARN("failed to refresh adapter from table", K(ret), KPC(adapter));
       }
       if (adapter != new_adapter && OB_NOT_NULL(new_adapter)) {
@@ -1379,6 +1405,9 @@ int ObPluginVectorIndexUtils::refresh_memdata(ObLSID &ls_id,
         }
         if (OB_FAIL(ret) || !has_replace) {
           LOG_INFO("release new vector index adapter on failed", K(ret), K(new_adapter), K(has_replace));
+          if(OB_NOT_NULL(ctx)) {
+            ctx->reset_adaptor();
+          }
           new_adapter->~ObPluginVectorIndexAdaptor();
           void *adpt_buff  = reinterpret_cast<void*>(new_adapter);
           vector_index_service->get_adaptor_allocator().free(adpt_buff);
@@ -1706,8 +1735,7 @@ int ObPluginVectorIndexUtils::init_common_scan_param(storage::ObTableScanParam& 
       LOG_WARN("get null adapter", KR(ret), K(type));
     } else if (OB_FAIL(get_special_index_aux_table_column_count(type, adapter->get_tenant_id(),
                                                                 table_id, col_cnt, scan_param))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected index type", KR(ret), K(type));
+      LOG_WARN("fail to get special index aux table column count", KR(ret), K(type), K(table_id));
     }
   }
 
@@ -2605,6 +2633,9 @@ void ObPluginVectorIndexUtils::set_ls_leader_flag(const ObLSID &ls_id, const boo
     LOG_WARN("unexpected nullptr", K(ret), KP(index_ls_mgr));
   } else {
     index_ls_mgr->set_ls_leader(is_leader);
+    if (is_leader) {
+      index_ls_mgr->set_need_refresh_memdata(true);
+    }
     LOG_INFO("success to set ls leader", K(ls_id), K(is_leader));
   }
 }
@@ -2625,7 +2656,6 @@ int ObPluginVectorIndexUtils::get_ls_leader_flag(const ObLSID &ls_id, bool &is_l
   }
   return ret;
 }
-
 
 int ObPluginVectorIndexUtils::fill_mem_context_detail_info(ObPluginVectorIndexService *service, ObIArray<ObLSTabletPair> &tablet_ids, char *buf, int64_t buf_len, int64_t &pos)
 {

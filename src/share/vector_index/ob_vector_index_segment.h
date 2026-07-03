@@ -828,13 +828,16 @@ public:
   void get_read_bound_vid(int64_t &max_vid, int64_t &min_vid) { vid_bound_.get_bound_vid(max_vid, min_vid); }
 
   void free_memdata_resource(ObIAllocator *allocator, const uint64_t tenant_id);
+  void free_memdata_resource_with_lock(ObIAllocator *allocator, const uint64_t tenant_id);
   int free_segment_memory();
 
   int load_persist_segments(ObPluginVectorIndexAdaptor *adaptor,
-      ObIAllocator &allocator, const ObLSID& ls_id, const share::SCN &target_scn);
+      ObIAllocator &allocator, const ObLSID& ls_id, const share::SCN &target_scn,
+      ObVecIndexAsyncTaskCtx *task_ctx = nullptr);
   int load_persist_segments(
       ObPluginVectorIndexAdaptor *adaptor, ObIAllocator &allocator,
-      storage::ObTableScanParam &scan_param, storage::ObTableScanIterator *table_scan_iter);
+      storage::ObTableScanParam &scan_param, storage::ObTableScanIterator *table_scan_iter,
+      ObVecIndexAsyncTaskCtx *task_ctx = nullptr);
   int load_segment(
       const uint64_t tenant_id, ObPluginVectorIndexAdaptor *adaptor, ObHNSWDeserializeCallback::CbParam &param);
 
@@ -842,9 +845,11 @@ private:
   int get_snap_vid_bound(int64_t &min_vid, int64_t &max_vid);
   int load_segment(ObPluginVectorIndexAdaptor *adaptor,
       ObIAllocator &allocator, const uint64_t tenant_id, const ObLSID& ls_id, const ObTabletID &tablet_id,
-      const share::SCN &target_scn, ObVectorIndexSegmentMeta &seg_meta);
+      const share::SCN &target_scn, ObVectorIndexSegmentMeta &seg_meta,
+      ObVecIndexAsyncTaskCtx *task_ctx = nullptr);
   int load_segment(ObIAllocator &allocator, ObPluginVectorIndexAdaptor *adaptor,
-      storage::ObTableScanIterator *snap_data_iter, const uint64_t tenant_id, ObVectorIndexSegmentMeta &seg_meta);
+      storage::ObTableScanIterator *snap_data_iter, const uint64_t tenant_id, ObVectorIndexSegmentMeta &seg_meta,
+      ObVecIndexAsyncTaskCtx *task_ctx = nullptr);
 
 public:
   TO_STRING_KV(KP(this), K_(type), K_(is_init), K_(has_complete), K_(scn),

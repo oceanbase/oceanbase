@@ -41,16 +41,18 @@ enum ObVectorTaskScheduleType // FARM COMPAT WHITELIST
   IVF_TASK = 3,
   HNSW_FREEZE = 4,
   HNSW_MERGE = 5,
+  HISTORY_CLEANUP = 6,
   SCHEDULE_MAX,
 };
 
 static const int schedule_interval[SCHEDULE_MAX] = {
   10 * 1000 * 1000,            // adapter_maintenance: 10s
-  10 * 1000 * 1000,            // follower_sync_task: 10s
+  1 * 1000 * 1000,             // follower_sync_task: 1s
   10 * 1000 * 1000,            // hnsw_optimize_task: 10s
   10 * 1000 * 1000,            // ivf_task: 10s
   10 * 1000 * 1000,            // hnsw_freeze_task: 10s
   10 * 1000 * 1000,            // hnsw_merge_task: 10s
+  30 * 1000 * 1000,            // history_cleanup: 30s
 };
 
 class ObVectorIndexSyncLog
@@ -85,7 +87,7 @@ public:
   }
 
   ~ObVectorIndexSyncLogCb() {
-    destory();
+    destroy();
   }
 
   void reset()
@@ -94,7 +96,7 @@ public:
     ATOMIC_SET(&is_success_, false);
   }
 
-  void destory()
+  void destroy()
   {
     if (OB_NOT_NULL(log_buffer_)) {
       ob_free(log_buffer_);
@@ -220,7 +222,7 @@ public:
       tenant_id_(OB_INVALID_TENANT_ID),
       ttl_tablet_timer_tg_id_(0),
       interval_factor_(1),
-      basic_period_(VEC_INDEX_SCHEDULAR_BASIC_PERIOD),
+      basic_period_(VEC_INDEX_SCHEDULER_BASIC_PERIOD),
       current_memory_config_(0),
       dag_ref_cnt_(0),
       vector_index_service_(nullptr),
@@ -247,7 +249,7 @@ public:
   int check_schema_version();
   void mark_tenant_need_check();
   void mark_tenant_checked();
-  int reload_tenant_task(bool &has_ivf_index);
+  int reload_tenant_task();
   int check_and_execute_tasks(ObIArray<uint64_t> &vec_table_id_array); // was check_and_handle_event
   int check_and_execute_adapter_maintenance_task(ObPluginVectorIndexMgr *&mgr, ObIArray<uint64_t> &vec_table_id_array);
   int check_and_execute_memdata_sync_task(ObPluginVectorIndexMgr *mgr);
@@ -268,9 +270,7 @@ public:
                                   bool &is_shared_index_table);
   void clean_deprecated_adapters();
   void clean_deprecated_ivf_caches();
-  int cancel_for_truncated(const ObTabletID &tablet_id, const int64_t truncate_version, ObPluginVectorIndexMgr *&index_ls_mgr);
   bool disallow_cancel_task(const ObVecIndexAsyncTaskCtx *task_ctx);
-  int cancel_async_task(const ObTabletID &tablet_id, ObPluginVectorIndexMgr *&index_ls_mgr);
   int check_need_maintence_ls_follower();
   int check_index_adpter_exist(ObPluginVectorIndexMgr *mgr);
   int check_and_execute_ivf_cache_maintenance_task(ObPluginVectorIndexMgr *&mgr);
@@ -281,7 +281,7 @@ public:
   int execute_all_memdata_sync_task(ObPluginVectorIndexMgr *mgr);
   int execute_one_memdata_sync_task(ObPluginVectorIndexMgr *mgr, ObPluginVectorIndexTaskCtx *ctx);
   int check_ls_task_state(ObPluginVectorIndexMgr *mgr);
-  int check_has_vector_index(bool &has_ivf_index, ObIArray<uint64_t> &vec_table_id_array);
+  int check_has_vector_index(ObIArray<uint64_t> &vec_table_id_array);
 
   // task generation interfaces
   bool can_schedule_tenant(const ObPluginVectorIndexMgr *mgr);
@@ -308,18 +308,19 @@ public:
   int resume_leader() { return OB_SUCCESS; }
   int switch_to_leader();
 
-  // task save destory
+  // task save destroy
   void stop();
   void destroy();
   bool is_stopped() { return (is_stopped_ == true); };
   void inc_dag_ref() { ATOMIC_INC(&dag_ref_cnt_); }
   void dec_dag_ref() { ATOMIC_DEC(&dag_ref_cnt_); }
   int64_t get_dag_ref() const { return ATOMIC_LOAD(&dag_ref_cnt_); }
-  bool get_ls_leader() { return is_leader_; }
+  bool get_ls_leader() { return ATOMIC_LOAD(&is_leader_); }
   uint64_t get_tenant_id() { return tenant_id_; }
 
   int safe_to_destroy(bool &is_safe);
   int cancel_all_async_tasks();
+  int cancel_all_async_tasks_for_destroy();
 
   TO_STRING_KV(K_(is_inited), K_(is_leader), K_(need_do_for_switch), K_(is_stopped), K_(is_logging),
                K_(need_refresh), K_(tenant_id), K_(ttl_tablet_timer_tg_id), K_(interval_factor),
@@ -327,14 +328,17 @@ public:
                KP_(vector_index_service), KP_(ls),
                K_(local_schema_version), K_(local_tenant_task));
 
+public:
+  static const int64_t VEC_INDEX_SCHEDULER_BASIC_PERIOD = 1 * 1000 * 1000; // 1s
+  static const int64_t VEC_INDEX_LOAD_TIME_NORMAL_THRESHOLD = 30 * 1000 * 1000; // 30s
+
 private:
   int submit_log_();
   void inner_switch_to_follower_();
-  int init_task_executors(uint64_t tenant_id, ObLS &ls);
-  int check_and_load_task_executors(bool &has_ivf_index);
-  int start_task_executors();
-  int resume_task_executors();
-  bool can_schedule(ObVectorTaskScheduleType task_type) { return can_schedule_[task_type]; }
+  void inner_switch_to_leader_();
+  bool can_schedule(ObVectorTaskScheduleType task_type) {
+    return can_schedule_[task_type];
+  }
   void check_can_schedule() {
     for (int i = 0; i < ObVectorTaskScheduleType::SCHEDULE_MAX; i++) {
       can_schedule_[i] = (ObTimeUtility::fast_current_time() - last_schedule_time_[i] > schedule_interval[i]);
@@ -352,8 +356,6 @@ private:
 
 private:
 
-  static const int64_t VEC_INDEX_SCHEDULAR_BASIC_PERIOD = 1 * 1000 * 1000; // 1s
-  static const int64_t VEC_INDEX_LOAD_TIME_NORMAL_THRESHOLD = 30 * 1000 * 1000; // 30s
   static const int64_t DEFAULT_TABLE_ARRAY_SIZE = 200;
   static const int64_t TBALE_GENERATE_BATCH_SIZE = 200;
 
@@ -387,11 +389,6 @@ private:
   ObVectorIndexTableIDArray table_id_array_;
   int64_t last_schedule_time_[ObVectorTaskScheduleType::SCHEDULE_MAX];
   bool can_schedule_[ObVectorTaskScheduleType::SCHEDULE_MAX];
-  ObVecAsyncTaskExector async_task_exec_;
-  ObIvfAsyncTaskExector ivf_task_exec_;
-  ObVecEmbeddingAsyncTaskExecutor embedding_task_exec_;
-  ObVecIdxFreezeTaskExecutor freeze_exec_;
-  ObVecIdxMergeTaskExecutor merge_exec_;
 };
 
 class ObVectorIndexTask : public share::ObITask
@@ -487,7 +484,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObVectorIndexDag);
 };
 
-typedef common::hash::ObHashMap<common::ObTabletID, ObPluginVectorIndexTaskCtx*> VectorIndexMemSyncMap;
+typedef common::hash::ObHashMap<common::ObTabletID, ObVecIndexAsyncTaskCtx*> VectorIndexMemSyncMap;
 typedef common::hash::ObHashMap<common::ObTabletID, ObPluginVectorIndexAdaptor*> VectorIndexAdaptorMap;
 class ObVectorIndexMemSyncInfo
 {
@@ -516,10 +513,10 @@ public:
   VectorIndexMemSyncMap &get_processing_map() { return processing_first_mem_sync_ ? first_mem_sync_map_ : second_mem_sync_map_; }
   int64_t get_processing_size() const { return processing_first_mem_sync_ ? first_mem_sync_map_.size() : second_mem_sync_map_.size(); }
   int64_t get_waiting_size() const { return processing_first_mem_sync_ ? second_mem_sync_map_.size() : first_mem_sync_map_.size(); }
+  ObIAllocator &get_processing_allocator() { return processing_first_mem_sync_ ? first_task_allocator_ : second_task_allocator_; }
 
 private:
   VectorIndexMemSyncMap &get_waiting_map() { return processing_first_mem_sync_ ? second_mem_sync_map_ : first_mem_sync_map_; }
-  ObIAllocator &get_processing_allocator() { return processing_first_mem_sync_ ? first_task_allocator_ : second_task_allocator_; }
   ObIAllocator &get_waiting_allocator() { return processing_first_mem_sync_ ? second_task_allocator_ : first_task_allocator_; }
   void switch_processing_map();
 

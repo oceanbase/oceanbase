@@ -29,14 +29,15 @@ int ObIvfCacheUtil::scan_and_write_ivf_cent_cache(ObPluginVectorIndexService &se
                                                   const ObTableID &table_id,
                                                   const ObTabletID &tablet_id,
                                                   const ObVectorIndexParam &vec_param,
-                                                  ObIvfCentCache &cent_cache)
+                                                  ObIvfCentCache &cent_cache,
+                                                  ObVecIndexAsyncTaskCtx *task_ctx)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator tmp_allocator;
   if (cent_cache.set_writing_if_idle()) {
     RWLock::WLockGuard guard(cent_cache.get_lock());
     ObIvfWriteCacheFunc write_func(cent_cache);
-    if (OB_FAIL(service.process_ivf_aux_info(table_id, tablet_id, tmp_allocator, write_func))) {
+    if (OB_FAIL(service.process_ivf_aux_info(table_id, tablet_id, tmp_allocator, write_func, task_ctx))) {
       LOG_WARN("failed to get centers", K(ret));
       cent_cache.reuse();
     } else if (!cent_cache.is_full_cache()) {
@@ -46,11 +47,15 @@ int ObIvfCacheUtil::scan_and_write_ivf_cent_cache(ObPluginVectorIndexService &se
         cent_cache.set_completed();
       } else if (cent_cache.get_count() < ObVecIdxExtraInfo::IVF_CENTERS_HGRAPH_THRESHOLD) {
         cent_cache.set_completed();
-      } else if (OB_FAIL(cent_cache.build_hgraph_and_release_centers(vec_param))) {
-        LOG_WARN("fail to build hgraph index after cache load", K(ret), K(table_id), K(tablet_id));
-        cent_cache.reuse();
       } else {
-        cent_cache.set_completed();
+        CHECK_TASK_CANCELLED(ret, task_ctx);
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(cent_cache.build_hgraph_and_release_centers(vec_param))) {
+          LOG_WARN("fail to build hgraph index after cache load", K(ret), K(table_id), K(tablet_id));
+          cent_cache.reuse();
+        } else {
+          cent_cache.set_completed();
+        }
       }
     }
   }

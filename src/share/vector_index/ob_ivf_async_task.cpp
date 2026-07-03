@@ -91,7 +91,8 @@ int ObIvfAsyncTask::write_cache(ObPluginVectorIndexService &vector_index_service
                  aux_table_info->centroid_table_id_,
                  aux_table_info->centroid_tablet_ids_[0],
                  vec_param,
-                 *cent_cache))) {
+                 *cent_cache,
+                ctx_))) {
     LOG_WARN("fail to scan and write ivf cent cache", K(ret), KPC(aux_table_info));
   } else if (aux_table_info->type_ == VIAT_IVF_PQ
              && aux_table_info->is_ivf_pq_centroid_table_valid()) {
@@ -104,7 +105,8 @@ int ObIvfAsyncTask::write_cache(ObPluginVectorIndexService &vector_index_service
                    aux_table_info->pq_centroid_table_id_,
                    aux_table_info->pq_centroid_tablet_ids_[0],
                    vec_param,
-                   *pq_cent_cache))) {
+                   *pq_cent_cache,
+                  ctx_))) {
       LOG_WARN("fail to scan and write ivf cent cache", K(ret), K(aux_table_info));
     }
   }
@@ -115,12 +117,25 @@ int ObIvfAsyncTask::do_work()
 {
   int ret = OB_SUCCESS;
   bool is_deprecated = false;
+  CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_VECTOR_HIGH);
+  ObTraceIdGuard trace_guard(ctx_->task_status_.trace_id_);
+  LOG_INFO("[VEC_ASYNC_TASK] start ivf do_work", K(ret), K(ctx_->task_status_), K(ls_id_));
   ObPluginVectorIndexService *vector_index_service = MTL(ObPluginVectorIndexService *);
   DEBUG_SYNC(HANDLE_VECTOR_INDEX_ASYNC_TASK);
-  if (IS_NOT_INIT) {
+  if (OB_SUCC(ret) && OB_NOT_NULL(ctx_)) {
+    bool is_cancel = false;
+    if (OB_FAIL(ObVecIndexAsyncTaskUtil::check_task_is_cancel(ctx_, is_cancel))) {
+      LOG_WARN("fail to check ivf task cancel after sync point", K(ret), KPC(ctx_));
+    } else if (is_cancel) {
+      ret = OB_CANCELED;
+      LOG_INFO("[VEC_ASYNC_TASK] ivf task cancelled at start", KPC(ctx_));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObVecIndexAsyncTask is not init", KR(ret));
-  } else if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->ls_) || OB_ISNULL(vector_index_service)) {
+  } else if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->get_ls()) || OB_ISNULL(vector_index_service)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("unexpected nullptr", K(ret), KP(ctx_), KP(vector_index_service));
   } else if (OB_ISNULL(vec_idx_mgr_)) {
@@ -143,7 +158,7 @@ int ObIvfAsyncTask::do_work()
     common::ObSpinLockGuard ctx_guard(ctx_->lock_);
     ctx_->task_status_.ret_code_ = ret;
   }
-  LOG_INFO("end ivf do_work", K(ret), K(ctx_->task_status_.tablet_id_));
+  LOG_INFO("[VEC_ASYNC_TASK] end ivf do_work", K(ret), K(ctx_->task_status_));
   return ret;
 }
 }  // namespace share

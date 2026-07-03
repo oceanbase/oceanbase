@@ -16,11 +16,11 @@ namespace oceanbase
 {
 namespace share
 {
+struct ObVecIndexAsyncTaskCtx;
 class ObVectorIndexSegment;
 class ObVectorIndexSegmentHandle;
 class ObVectorIndexMeta;
 class ObVectorIndexSegmentMeta;
-struct ObVecIndexAsyncTaskCtx;
 struct ObPluginVectorIndexTaskCtx;
 class ObStreamBuf : public std::streambuf
 {
@@ -116,7 +116,7 @@ public:
       : iter_(iter), allocator_(allocator), str_iter_(nullptr),
         is_vec_tablet_rebuild_(false), is_need_unvisible_row_(false),
         seg_meta_(nullptr), index_type_(VIAT_MAX), start_key_(), end_key_(),
-        loop_cnt_(0), task_ctx_(nullptr)
+        loop_cnt_(0), task_ctx_(nullptr), legacy_task_ctx_(nullptr)
     {}
     CbParam()
       : iter_(nullptr),
@@ -128,7 +128,8 @@ public:
         index_type_(VIAT_MAX),
         start_key_(), end_key_(),
         loop_cnt_(0),
-        task_ctx_(nullptr)
+        task_ctx_(nullptr),
+        legacy_task_ctx_(nullptr)
     {}
     virtual ~CbParam() {
       if (str_iter_ != nullptr) {
@@ -155,8 +156,9 @@ public:
     char end_key_buf_[OB_VECTOR_INDEX_SNAPSHOT_KEY_LENGTH] = {0};
     ObString start_key_;
     ObString end_key_;
-    int loop_cnt_;
-    ObPluginVectorIndexTaskCtx *task_ctx_;
+    int64_t loop_cnt_;
+    ObVecIndexAsyncTaskCtx *task_ctx_;
+    ObPluginVectorIndexTaskCtx *legacy_task_ctx_;
   };
 public:
   ObHNSWDeserializeCallback(void *adp) : index_type_(VIAT_MAX), adp_(adp)
@@ -190,7 +192,7 @@ public:
 
     TO_STRING_KV(KP_(vctx), KP_(allocator), KP_(tmp_allocator), KP_(tx_desc),
         KP_(snapshot), K_(timeout), K_(lob_inrow_threshold), K_(tablet_id),
-        K_(snapshot_version), K_(need_serde_meta), K_(is_vec_tablet_rebuild));
+        K_(snapshot_version), K_(need_serde_meta), K_(is_vec_tablet_rebuild), KP_(task_ctx));
 
     void *vctx_; // ObVecIdxSnapshotDataWriteCtx
     ObIAllocator *allocator_;
@@ -203,7 +205,7 @@ public:
     int64_t snapshot_version_;
     bool need_serde_meta_;
     bool is_vec_tablet_rebuild_;
-    int loop_cnt_;
+    int64_t loop_cnt_;
     ObVecIndexAsyncTaskCtx *task_ctx_;
   };
 public:

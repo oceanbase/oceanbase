@@ -120,6 +120,7 @@ public:
   int update_tenant_config(uint64_t tenant_id);
   int update_palf_config();
   int update_tenant_dag_scheduler_config();
+  int update_tenant_vec_async_task_config();
   int update_tenant_ddl_config();
   int update_checkpoint_diagnose_config();
   int update_tenant_audit_log_config();

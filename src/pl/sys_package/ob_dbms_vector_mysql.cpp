@@ -10,9 +10,13 @@
 #include "lib/oblog/ob_warning_buffer.h"
 #include "storage/vector_index/cmd/ob_vector_refresh_index_executor.h"
 #include "share/vector_index/ob_vector_recall_calc_util.h"
+#include "share/vector_index/ob_vector_index_async_task_util.h"
+#include "share/vector_index/ob_plugin_vector_index_utils.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "lib/utility/ob_fast_convert.h"
 #include "share/schema/ob_schema_struct.h"
+#include "share/inner_table/ob_inner_table_schema_constants.h"
+#include "share/schema/ob_schema_utils.h"
 
 #define KEYWORD_APPROXIMATE " APPROXIMATE "
 #define KEYWORD_APPROX " APPROX "
@@ -2568,6 +2572,271 @@ int ObDBMSVectorMySql::check_table_select_privilege(
     }
   }
 
+  return ret;
+}
+
+static int parse_task_type_string(const ObString &task_type_str, int64_t &task_type)
+{
+  int ret = OB_SUCCESS;
+  if (task_type_str.case_compare("INCREMENTAL_INDEX_FREEZE") == 0) {
+    task_type = share::ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_FREEZE;
+  } else if (task_type_str.case_compare("INCREMENTAL_INDEX_MERGE") == 0) {
+    task_type = share::ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_MERGE;
+  } else if (task_type_str.case_compare("FOLLOWER_IN_MEMORY_INDEX_REFRESH") == 0) {
+    task_type = share::ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_MEM_SYNC_TASK;
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_WARN(OB_NOT_SUPPORTED,
+        "this task type is not supported. Valid values: "
+        "INCREMENTAL_INDEX_FREEZE, "
+        "INCREMENTAL_INDEX_MERGE, FOLLOWER_IN_MEMORY_INDEX_REFRESH");
+    LOG_WARN("unsupported task type for manual trigger", KR(ret), K(task_type_str));
+  }
+  return ret;
+}
+
+static int trigger_async_task_impl(ObPLExecCtx &ctx,
+                                   const ObString &database_name,
+                                   const ObString &task_type_str,
+                                   const ObString &table_name,
+                                   const ObString &index_name,
+                                   const int64_t tablet_id_val)
+{
+  int ret = OB_SUCCESS;
+  int64_t task_type = share::ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_TASK_TYPE_INVALID;
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+
+  if (OB_ISNULL(ctx.exec_ctx_) || OB_ISNULL(ctx.exec_ctx_->get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec context or session is null", KR(ret));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", KR(ret));
+  } else {
+    tenant_id = ctx.exec_ctx_->get_my_session()->get_effective_tenant_id();
+    if (task_type_str.empty() || table_name.empty() || index_name.empty()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "task_type, table_name and index_name must not be empty");
+      LOG_WARN("empty argument", KR(ret), K(task_type_str), K(table_name), K(index_name));
+    } else if (tablet_id_val <= 0) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "tablet_id must be a positive integer");
+      LOG_WARN("invalid tablet_id", KR(ret), K(tablet_id_val));
+    }
+  }
+
+  // Parse task_type string to enum
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(parse_task_type_string(task_type_str, task_type))) {
+    LOG_WARN("fail to parse task type", KR(ret), K(task_type_str));
+  }
+
+  // Validate table + index via schema
+  const share::schema::ObTableSchema *table_schema = nullptr;
+  const share::schema::ObTableSchema *index_schema = nullptr;
+  ObString vector_column;
+  share::ObVectorIndexDistAlgorithm dist_algo = share::VIDA_MAX;
+  share::schema::ObSchemaGetterGuard schema_guard;
+
+  if (OB_FAIL(ret)) {
+  } else if (database_name.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "database_name must not be empty");
+    LOG_WARN("empty database_name", KR(ret));
+  } else if (OB_FAIL(ObDBMSVectorMySql::get_vector_index_info(ctx, table_name, database_name, index_name,
+                                                              table_schema, index_schema, vector_column,
+                                                              dist_algo, schema_guard))) {
+    LOG_WARN("fail to get vector index info", KR(ret), K(table_name), K(database_name), K(index_name));
+  } else if (OB_ISNULL(table_schema) || OB_ISNULL(index_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null schema after get_vector_index_info", KR(ret));
+  }
+
+  // Check ALTER privilege on the table for trigger operation
+  if (OB_FAIL(ret)) {
+  } else {
+    sql::ObSQLSessionInfo *session_info = ctx.exec_ctx_->get_my_session();
+    share::schema::ObSessionPrivInfo session_priv;
+    const share::schema::ObNeedPriv need_priv(
+        database_name, table_name,
+        share::schema::OB_PRIV_TABLE_LEVEL,
+        OB_PRIV_ALTER,
+        false);
+    if (OB_FAIL(session_info->get_session_priv_info(session_priv))) {
+      LOG_WARN("fail to get session priv info", KR(ret));
+    } else if (OB_FAIL(schema_guard.check_single_table_priv(
+                   session_priv,
+                   session_info->get_enable_role_array(),
+                   need_priv))) {
+      LOG_WARN("fail to check table alter privilege for trigger_async_task",
+               KR(ret), K(database_name), K(table_name));
+    }
+  }
+
+  // For merge tasks, resolve the vbitmap (index_id) table schema so that the
+  // task row uses the same table_id / tablet_id as the auto-load path.
+  // For mem_sync / freeze tasks, target_schema stays as index_schema (delta_buffer).
+  const share::schema::ObTableSchema *target_schema = index_schema;
+  if (OB_FAIL(ret)) {
+  } else if (task_type == share::ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_MERGE) {
+    ObString src_prefix;
+    if (OB_FAIL(share::ObPluginVectorIndexUtils::get_vector_index_prefix(*index_schema, src_prefix))) {
+      LOG_WARN("fail to get vector index prefix from delta buffer schema", KR(ret));
+    } else {
+      ObSEArray<share::schema::ObAuxTableMetaInfo, 16> simple_index_infos;
+      if (OB_FAIL(table_schema->get_simple_index_infos(simple_index_infos))) {
+        LOG_WARN("fail to get simple index infos", KR(ret));
+      }
+      bool vbitmap_found = false;
+      for (int64_t i = 0; OB_SUCC(ret) && !vbitmap_found && i < simple_index_infos.count(); ++i) {
+        const share::schema::ObTableSchema *candidate = nullptr;
+        if (OB_FAIL(schema_guard.get_table_schema(tenant_id, simple_index_infos.at(i).table_id_, candidate))) {
+          LOG_WARN("fail to get candidate schema", KR(ret), "table_id", simple_index_infos.at(i).table_id_);
+        } else if (OB_ISNULL(candidate)) {
+          // skip deleted / recycled tables
+        } else if (!candidate->is_vec_index_id_type()) {
+          // not vbitmap, skip
+        } else {
+          ObString candidate_prefix;
+          if (OB_FAIL(share::ObPluginVectorIndexUtils::get_vector_index_prefix(*candidate, candidate_prefix))) {
+            LOG_WARN("fail to get vector index prefix from candidate", KR(ret));
+          } else if (candidate_prefix == src_prefix) {
+            target_schema = candidate;
+            vbitmap_found = true;
+          }
+        }
+      }
+      if (OB_SUCC(ret) && !vbitmap_found) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to find vbitmap table for merge task", KR(ret), K(index_name), K(src_prefix));
+      }
+    }
+  }
+
+  // Validate tablet_id belongs to target_schema
+  if (OB_FAIL(ret)) {
+  } else {
+    ObSEArray<ObTabletID, 16> tablet_ids;
+    const ObTabletID target_tablet_id(tablet_id_val);
+    if (OB_FAIL(target_schema->get_tablet_ids(tablet_ids))) {
+      LOG_WARN("fail to get tablet ids from target schema", KR(ret));
+    } else {
+      bool tablet_found = false;
+      for (int64_t i = 0; i < tablet_ids.count(); ++i) {
+        if (tablet_ids.at(i) == target_tablet_id) {
+          tablet_found = true;
+          break;
+        }
+      }
+      if (!tablet_found) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("tablet_id does not belong to the target table",
+                 KR(ret), K(tablet_id_val), K(index_name), K(tablet_ids),
+                 "target_table_id", target_schema->get_table_id());
+      }
+    }
+  }
+
+  // Insert task row into __all_vector_index_task
+  if (OB_FAIL(ret)) {
+  } else {
+    int64_t task_id = 0;
+    const uint64_t target_table_id = target_schema->get_table_id();
+    const uint64_t exec_tenant_id = share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id);
+    const int64_t manual_trigger_type =
+        static_cast<int64_t>(share::ObVecIndexAsyncTaskTriggerType::OB_VEC_TRIGGER_MANUAL);
+    const int64_t standby_status =
+        static_cast<int64_t>(share::ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_STANDBY);
+    ObSqlString sql;
+    SCN target_scn;
+    int64_t affect_rows = 0;
+    common::ObCurTraceId::TraceId new_trace_id;
+    ObArenaAllocator tmp_allocator("VecManualTrig");
+    char trace_id_str[OB_MAX_TRACE_ID_BUFFER_SIZE] = {0};
+    if (OB_FAIL(share::ObVecIndexAsyncTaskUtil::fetch_new_task_id(tenant_id, task_id))) {
+      LOG_WARN("fail to fetch new task id for trigger_async_task", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(share::ObVecIndexAsyncTaskUtil::fetch_new_trace_id(
+                   static_cast<uint64_t>(task_id), &tmp_allocator, new_trace_id))) {
+      LOG_WARN("fail to fetch new trace id for trigger_async_task", KR(ret), K(tenant_id), K(task_id));
+    } else if (FALSE_IT(new_trace_id.to_string(trace_id_str, sizeof(trace_id_str)))) {
+    } else if (OB_FAIL(target_scn.convert_from_ts(ObTimeUtility::current_time()))) {
+      LOG_WARN("fail to convert target scn from ts", KR(ret), K(tenant_id), K(task_id));
+    } else if (OB_FAIL(sql.assign_fmt("INSERT INTO %s"
+                               " (tenant_id, table_id, tablet_id,"
+                               " task_id, trigger_type, task_type, status, target_scn,"
+                               " ret_code, trace_id, priority)"
+                               " SELECT %ld, %ld, %ld, %ld, %ld, %ld, %ld, %ld, 0, '%s', 0"
+                               " FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM %s"
+                               " WHERE tenant_id = %ld AND table_id = %ld AND tablet_id = %ld"
+                               " AND task_type = %ld AND trigger_type = %ld AND status = %ld)",
+                               OB_ALL_VECTOR_INDEX_TASK_TNAME,
+                               exec_tenant_id,
+                               target_table_id,
+                               tablet_id_val,
+                               task_id,
+                               manual_trigger_type,
+                               task_type,
+                               standby_status,
+                               target_scn.get_val_for_sql(),
+                               trace_id_str,
+                               OB_ALL_VECTOR_INDEX_TASK_TNAME,
+                               exec_tenant_id,
+                               target_table_id,
+                               tablet_id_val,
+                               task_type,
+                               manual_trigger_type,
+                               standby_status))) {
+      LOG_WARN("fail to assign sql", KR(ret));
+    } else if (OB_FAIL(GCTX.sql_proxy_->write(tenant_id, sql.ptr(), affect_rows))) {
+      LOG_WARN("fail to execute insert sql", KR(ret), K(sql));
+    } else if (OB_UNLIKELY(affect_rows < 0 || affect_rows > 1)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected affected rows", KR(ret), K(affect_rows), K(task_id));
+    } else if (0 == affect_rows) {
+      LOG_INFO("trigger_async_task skipped duplicate standby task",
+               K(tenant_id), K(target_table_id), K(tablet_id_val), K(task_type), K(index_name));
+    } else {
+      LOG_INFO("trigger_async_task inserted task", K(tenant_id), K(target_table_id),
+               K(tablet_id_val), K(task_id), K(task_type), K(index_name), K(new_trace_id));
+    }
+  }
+
+  return ret;
+}
+
+/*
+PROCEDURE trigger_async_task(
+  IN      DATABASE_NAME   VARCHAR(65535),   ---- database name
+  IN      TASK_TYPE       VARCHAR(65535),   ---- task type: INCREMENTAL_INDEX_FREEZE/INCREMENTAL_INDEX_MERGE/FOLLOWER_IN_MEMORY_INDEX_REFRESH
+  IN      TABLE_NAME      VARCHAR(65535),   ---- table name
+  IN      INDEX_NAME      VARCHAR(65535),   ---- vector index name
+  IN      TABLET_ID       BIGINT            ---- tablet id
+);
+*/
+int ObDBMSVectorMySql::trigger_async_task_with_database(ObPLExecCtx &ctx, ParamStore &params, ObObj &result)
+{
+  UNUSED(result);
+  int ret = OB_SUCCESS;
+  CK(OB_LIKELY(5 == params.count()));
+  CK(GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_6_0_1);
+  if (OB_FAIL(ret)) {
+  } else if (!params.at(0).is_varchar()
+             || !params.at(1).is_varchar()
+             || !params.at(2).is_varchar()
+             || !params.at(3).is_varchar()
+             || !params.at(4).is_int()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument for trigger_async_task_with_database", KR(ret),
+             K(params.at(0)), K(params.at(1)), K(params.at(2)), K(params.at(3)), K(params.at(4)));
+  } else if (OB_FAIL(trigger_async_task_impl(ctx,
+                                             params.at(0).get_varchar(),
+                                             params.at(1).get_varchar(),
+                                             params.at(2).get_varchar(),
+                                             params.at(3).get_varchar(),
+                                             params.at(4).get_int()))) {
+    LOG_WARN("fail to trigger async task with database", KR(ret),
+             K(params.at(0)), K(params.at(1)), K(params.at(2)), K(params.at(3)), K(params.at(4)));
+  }
   return ret;
 }
 

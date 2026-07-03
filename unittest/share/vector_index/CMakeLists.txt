@@ -20,3 +20,5 @@ else()
 endif()
 
 ob_unittest(test_vsag_adaptor)
+ob_unittest(test_vec_index_priority_queue_manager)
+ob_unittest(test_vec_async_task_thread_pool)

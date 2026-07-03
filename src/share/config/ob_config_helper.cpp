@@ -6,6 +6,7 @@
 
 #include "ob_config_helper.h"
 #include "share/ob_resource_limit.h"
+#include "share/vector_index/ob_vector_index_async_task_util.h"
 #include "src/observer/ob_server.h"
 #include "share/config/ob_config_mode_name_def.h"
 #include "share/backup/ob_archive_persist_helper.h"
@@ -1948,6 +1949,182 @@ bool ObConfigCommaSeparatedStringChecker::check(const ObConfigItem &t) const
         if (str[i] == ',' && str[i - 1] == ',') {
           bret = false;
         }
+      }
+    }
+  }
+  return bret;
+}
+
+// Checker for vector_task_thread_limit_percent: 'TASK_TYPE:PERCENT,...'
+// Empty string is valid (use defaults). Each KEY must be a valid task type short name,
+// VALUE must be in [0,100], and duplicate KEYs are rejected.
+bool ObVecTaskThreadLimitPercentChecker::check(const ObConfigItem &t) const
+{
+  bool bret = true;
+  const char *str = t.str();
+  if (OB_ISNULL(str)) {
+    bret = false;
+  } else if (0 == STRLEN(str)) {
+    // empty string is valid (use default thresholds)
+    bret = true;
+  } else {
+    const int64_t MAX_LEN = 4096;
+    const size_t str_len = STRLEN(str);
+    if (str_len > MAX_LEN) {
+      bret = false;
+      OB_LOG_RET(WARN, OB_INVALID_CONFIG, "vector_task_thread_limit_percent too long", K(str_len));
+    } else {
+      // Parse comma-separated KEY:VALUE pairs
+      char buf[MAX_LEN + 1];
+      MEMCPY(buf, str, str_len);
+      buf[str_len] = '\0';
+      // Track seen types to detect duplicates
+      bool seen[share::OB_VECTOR_ASYNC_TASK_TYPE_INVALID];
+      MEMSET(seen, 0, sizeof(seen));
+      char *saveptr = nullptr;
+      char *token = STRTOK_R(buf, ",", &saveptr);
+      while (bret && OB_NOT_NULL(token)) {
+        // Find colon separator
+        char *colon = STRCHR(token, ':');
+        if (OB_ISNULL(colon) || colon == token) {
+          bret = false;
+          OB_LOG_RET(WARN, OB_INVALID_CONFIG, "invalid format, expect KEY:VALUE", K(token));
+          break;
+        }
+        *colon = '\0';
+        const char *key = token;
+        const char *val_str = colon + 1;
+        // Trim leading spaces from key and val_str
+        while (*key == ' ') { key++; }
+        while (*val_str == ' ') { val_str++; }
+        // Validate key is a known task type
+        share::ObVecIndexAsyncTaskType task_type = share::OB_VECTOR_ASYNC_TASK_TYPE_INVALID;
+        if (OB_SUCCESS != share::ObVecIndexAsyncTaskUtil::get_vec_task_type_by_short_name(key, task_type)) {
+          bret = false;
+          OB_LOG_RET(WARN, OB_INVALID_CONFIG, "unknown task type short name", K(key));
+          break;
+        }
+        // Check duplicate
+        if (seen[static_cast<int>(task_type)]) {
+          bret = false;
+          OB_LOG_RET(WARN, OB_INVALID_CONFIG, "duplicate task type in config", K(key));
+          break;
+        }
+        seen[static_cast<int>(task_type)] = true;
+        // Validate value is integer in [0, 100]
+        if ('\0' == *val_str) {
+          bret = false;
+          OB_LOG_RET(WARN, OB_INVALID_CONFIG, "empty value for task type", K(key));
+          break;
+        }
+        char *endptr = nullptr;
+        long val = strtol(val_str, &endptr, 10);
+        if (OB_ISNULL(endptr) || '\0' != *endptr || val < 0 || val > 100) {
+          bret = false;
+          OB_LOG_RET(WARN, OB_INVALID_CONFIG, "value must be integer in [0,100]", K(key), K(val_str));
+          break;
+        }
+        token = STRTOK_R(nullptr, ",", &saveptr);
+      }
+    }
+  }
+  return bret;
+}
+
+// Checker for _vector_task_disable_list: 'TASK_TYPE:TABLET_ID,...'
+// Empty string is valid (nothing disabled). Each KEY must be a valid task type short name,
+// VALUE must be '*' (wildcard) or a positive integer (tablet_id).
+// Duplicate (task_type, tablet_id) pairs are rejected.
+bool ObVecTaskDisableListChecker::check(const ObConfigItem &t) const
+{
+  bool bret = true;
+  const char *str = t.str();
+  if (OB_ISNULL(str)) {
+    bret = false;
+  } else if (0 == STRLEN(str)) {
+    // empty string is valid (nothing disabled)
+    bret = true;
+  } else {
+    const int64_t MAX_LEN = 4096;
+    const size_t str_len = STRLEN(str);
+    if (str_len > MAX_LEN) {
+      bret = false;
+      OB_LOG_RET(WARN, OB_INVALID_CONFIG, "_vector_task_disable_list too long", K(str_len));
+    } else {
+      char buf[MAX_LEN + 1];
+      MEMCPY(buf, str, str_len);
+      buf[str_len] = '\0';
+      // Track seen (type, tablet_id) pairs to detect duplicates
+      // Use a simple array of pairs, max 128 entries
+      const int64_t MAX_ENTRIES = 128;
+      struct SeenEntry {
+        share::ObVecIndexAsyncTaskType type_;
+        int64_t tablet_id_;  // 0 means wildcard
+      };
+      SeenEntry seen[MAX_ENTRIES];
+      int64_t seen_count = 0;
+      char *saveptr = nullptr;
+      char *token = STRTOK_R(buf, ",", &saveptr);
+      while (bret && OB_NOT_NULL(token)) {
+        char *colon = STRCHR(token, ':');
+        if (OB_ISNULL(colon) || colon == token) {
+          bret = false;
+          OB_LOG_RET(WARN, OB_INVALID_CONFIG, "invalid format, expect TASK_TYPE:TABLET_ID", K(token));
+          break;
+        }
+        *colon = '\0';
+        const char *key = token;
+        const char *val_str = colon + 1;
+        // Trim leading spaces from key and val_str
+        while (*key == ' ') { key++; }
+        while (*val_str == ' ') { val_str++; }
+        // Validate key is a known task type
+        share::ObVecIndexAsyncTaskType task_type = share::OB_VECTOR_ASYNC_TASK_TYPE_INVALID;
+        if (OB_SUCCESS != share::ObVecIndexAsyncTaskUtil::get_vec_task_type_by_short_name(key, task_type)) {
+          bret = false;
+          OB_LOG_RET(WARN, OB_INVALID_CONFIG, "unknown task type short name", K(key));
+          break;
+        }
+        // Validate value is '*' or positive integer
+        int64_t tablet_id = 0;
+        if ('\0' == *val_str) {
+          bret = false;
+          OB_LOG_RET(WARN, OB_INVALID_CONFIG, "empty tablet_id for task type", K(key));
+          break;
+        } else if ('*' == *val_str && '\0' == *(val_str + 1)) {
+          tablet_id = 0;  // wildcard
+        } else {
+          char *endptr = nullptr;
+          long long val = strtoll(val_str, &endptr, 10);
+          if (OB_ISNULL(endptr) || '\0' != *endptr || val <= 0) {
+            bret = false;
+            OB_LOG_RET(WARN, OB_INVALID_CONFIG, "tablet_id must be '*' or positive integer", K(key), K(val_str));
+            break;
+          }
+          tablet_id = static_cast<int64_t>(val);
+        }
+        // Check duplicate
+        if (seen_count >= MAX_ENTRIES) {
+          bret = false;
+          OB_LOG_RET(WARN, OB_INVALID_CONFIG, "too many entries in _vector_task_disable_list", K(seen_count));
+          break;
+        }
+        bool dup = false;
+        for (int64_t i = 0; i < seen_count; ++i) {
+          if (seen[i].type_ == task_type && seen[i].tablet_id_ == tablet_id) {
+            dup = true;
+            break;
+          }
+        }
+        if (dup) {
+          bret = false;
+          OB_LOG_RET(WARN, OB_INVALID_CONFIG, "duplicate (task_type, tablet_id) in config", K(key), K(val_str));
+          break;
+        }
+        seen[seen_count].type_ = task_type;
+        seen[seen_count].tablet_id_ = tablet_id;
+        seen_count++;
+        token = STRTOK_R(nullptr, ",", &saveptr);
       }
     }
   }

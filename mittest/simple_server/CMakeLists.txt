@@ -209,4 +209,5 @@ set(VECTOR_INDEX_TEST_SHARE
         vector_index/test_vector_index_utils.cpp
         )
 ob_farm_observer(test_vector_index_freeze vector_index/test_vector_index_freeze.cpp ${VECTOR_INDEX_TEST_SHARE})
+set_tests_properties(test_vector_index_freeze PROPERTIES TIMEOUT 600)
 ####### vector index case #########

@@ -836,7 +836,8 @@ ob_set_subtarget(ob_share vector_index
   vector_index/ob_plugin_vector_index_utils.cpp
   vector_index/ob_vector_index_util.cpp
   vector_index/ob_vector_kmeans_ctx.cpp
-  vector_index/ob_tenant_vector_index_async_task.cpp
+  vector_index/ob_vec_idx_async_task_scheduler.cpp
+  vector_index/ob_vec_index_priority_queue_manager.cpp
   vector_index/ob_vector_index_async_task.cpp
   vector_index/ob_vector_index_async_task_util.cpp
   vector_index/ob_vector_index_param.cpp
@@ -853,6 +854,8 @@ ob_set_subtarget(ob_share vector_index
   vector_index/ob_vector_index_merge_task.cpp
   vector_index/ob_vector_index_aux_table_handler.cpp
   vector_index/ob_vector_recall_calc_util.cpp
+  vector_index/ob_vector_mem_sync_executor.cpp
+  vector_index/ob_vec_merge_longops.cpp
   vector_index/ob_ai_access_service.cpp
 )
 
