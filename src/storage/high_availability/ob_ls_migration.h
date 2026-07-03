@@ -93,6 +93,7 @@ public:
 
 public:
   common::ObTabletID tablet_id_;
+  common::ObArenaAllocator tablet_allocator_;
   ObTabletHandle tablet_handle_;
 private:
   common::SpinRWLock lock_;
