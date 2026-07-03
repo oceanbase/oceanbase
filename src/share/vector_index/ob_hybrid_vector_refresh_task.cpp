@@ -10,6 +10,7 @@
 #include "src/storage/ls/ob_ls.h"
 #include "src/storage/tx/ob_trans_service.h"
 #include "sql/das/ob_das_dml_vec_iter.h"
+#include "sql/engine/expr/ob_expr_ai/ob_ai_func_utils.h"
 
 namespace oceanbase
 {
@@ -475,6 +476,8 @@ int ObHybridVectorRefreshTask::init_dml_param(uint64_t table_id,
 int ObHybridVectorRefreshTask::init_endpoint(ObPluginVectorIndexAdaptor &adaptor)
 {
   int ret = OB_SUCCESS;
+  bool use_request_model_name = false;
+  ObAIFuncExprInfo *ai_func_info = nullptr;
   omt::ObTenantAiService *ai_service = MTL(omt::ObTenantAiService *);
   ObHybridVectorRefreshTaskCtx *task_ctx = static_cast<ObHybridVectorRefreshTaskCtx *>(get_task_ctx());
   if (OB_ISNULL(ai_service) || OB_ISNULL(task_ctx)) {
@@ -484,6 +487,16 @@ int ObHybridVectorRefreshTask::init_endpoint(ObPluginVectorIndexAdaptor &adaptor
     LOG_WARN("failed to get ai service guard", K(ret), KPC(task_ctx));
   } else if (OB_FAIL(task_ctx->ai_service_.get_ai_endpoint_by_ai_model_name(adaptor.get_endpoint(), task_ctx->endpoint_, false /*need_check*/))) {
     LOG_WARN("failed to get endpoint info", K(ret), K(adaptor));
+  } else if (OB_FALSE_IT(use_request_model_name = !task_ctx->endpoint_->get_request_model_name().empty())) {
+  } else if (use_request_model_name && OB_FAIL(ob_write_string(task_ctx->allocator_, task_ctx->endpoint_->get_request_model_name(), task_ctx->request_model_name_))) {
+    LOG_WARN("failed to copy request_model_name", K(ret));
+  } else if (!use_request_model_name && OB_FAIL(ObAIFuncUtils::get_ai_func_info(task_ctx->allocator_, adaptor.get_endpoint(), ai_func_info))) {
+    LOG_WARN("failed to get ai func info", K(ret), K(adaptor.get_endpoint()));
+  } else if (!use_request_model_name && OB_ISNULL(ai_func_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ai func info is null", K(ret));
+  } else if (!use_request_model_name && OB_FAIL(ob_write_string(task_ctx->allocator_, ai_func_info->model_, task_ctx->request_model_name_))) {
+    LOG_WARN("failed to copy model_name from ai func info", K(ret));
   }
   return ret;
 }
@@ -657,7 +670,7 @@ int ObHybridVectorRefreshTask::prepare_for_embedding(ObPluginVectorIndexAdaptor 
             LOG_WARN("failed to get access key", K(ret));
           } else if (OB_FAIL(ob_write_string(task_ctx->allocator_, endpoint->get_url(), url, true))) {
             LOG_WARN("fail to write string", K(ret));
-          } else if (OB_FAIL(task_ctx->embedding_task_->init(url, endpoint->get_request_model_name(),
+          } else if (OB_FAIL(task_ctx->embedding_task_->init(url, task_ctx->request_model_name_,
                              endpoint->get_provider(), access_key, chunk_array, col_type, dim, http_timeout_us,
                              http_max_retries, ctx_->task_status_.task_id_, ObEmbeddingTasSourceType::ASYNC_INDEX))) {
             LOG_WARN("failed to init embedding task", K(ret), KPC(endpoint));
