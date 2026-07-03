@@ -482,7 +482,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLAssignStmt &s)
             if (OB_SUCC(ret)) {
               const ObPLDataType &into_type = var->get_type();
               if (!into_type.is_collection_type() && !into_type.is_record_type()) {
-                result_idx = idx;
+                result_idx = var->is_not_null() ? OB_INVALID_INDEX : idx;
               }
             }
           } else {
