@@ -13,6 +13,7 @@
 #include "sql/hybrid_search/ob_fulltext_search_node.h"
 #include "share/schema/ob_schema_struct.h"
 #include "sql/engine/table/ob_table_scan_op.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 namespace oceanbase
 {
@@ -69,7 +70,13 @@ int ObHybridSearchCgService::generate_ctdef(ObLogTableScan &op, const ObFusionNo
       LOG_WARN("failed to generate rank constant rt expr", K(ret));
     }
   }
-  if (OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(cg_.opt_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("opt ctx is null", K(ret));
+  } else {
+    const bool enable_parallel = cg_.opt_ctx_->is_enable_hybrid_search_parallel_execution();
+    const int64_t query_dop = enable_parallel ? fusion_node->query_dop_ : 1;
     if (OB_FAIL(new_fusion_ctdef->init(
         fusion_node->search_index_,
         fusion_node->has_search_subquery_,
@@ -77,6 +84,8 @@ int ObHybridSearchCgService::generate_ctdef(ObLogTableScan &op, const ObFusionNo
         fusion_node->is_top_k_query_,
         fusion_node->method_,
         fusion_node->has_hybrid_fusion_op_,
+        enable_parallel,
+        query_dop,
         size_expr,
         offset_expr,
         window_size_expr,

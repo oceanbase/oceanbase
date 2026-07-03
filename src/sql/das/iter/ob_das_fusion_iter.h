@@ -8,8 +8,10 @@
 
 #include "share/ob_i_tablet_scan.h"
 #include "sql/das/iter/ob_das_iter.h"
+#include "sql/das/iter/ob_das_fusion_parallel.h"
 #include "sql/das/search/ob_das_search_define.h"
 #include "lib/container/ob_se_array.h"
+#include "lib/allocator/page_arena.h"
 #include "lib/container/ob_heap.h"
 #include "lib/hash/ob_hashmap.h"
 #include "common/rowkey/ob_rowkey.h"
@@ -195,7 +197,9 @@ public:
       size_(10),
       offset_(0),
       min_score_(0.0),
-      has_hybrid_fusion_op_(false)
+      has_hybrid_fusion_op_(false),
+      search_ctx_(nullptr),
+      fusion_rtdef_(nullptr)
   {}
   virtual ~ObDASFusionIterParam() {}
 
@@ -213,6 +217,8 @@ public:
   int64_t offset_;
   double min_score_;
   bool has_hybrid_fusion_op_;
+  ObDASSearchCtx *search_ctx_;
+  ObDASFusionRtDef *fusion_rtdef_;
   common::ObSEArray<double, 2> weights_;
   common::ObSEArray<int64_t, 2> path_top_k_limits_;
 };
@@ -263,7 +269,12 @@ public:
       output_idx_(0),
       input_row_cnt_(0),
       output_row_cnt_(0),
-      fusion_profile_(nullptr)
+      fusion_profile_(nullptr),
+      enable_parallel_(false),
+      search_ctx_(nullptr),
+      fusion_rtdef_(nullptr),
+      parallel_ctx_(),
+      parallel_coordinator_()
   {}
   virtual ~ObDASFusionIter() {}
 
@@ -284,12 +295,21 @@ private:
   int init_fusion_row();
   int do_fusion(bool is_vectorized);
   int finish_fusion();
+  int do_parallel_table_scan(const bool use_rescan);
+  int do_serial_table_scan(const bool use_rescan);
+  int create_parallel_task_profiles();
+  int merge_parallel_results();
+  int merge_parallel_runtime_rows(const ObDASFusionChildRuntime &runtime);
+  int merge_range_parallel_path_rows(const int64_t path_idx,
+                                     const int64_t top_k_limit,
+                                     common::ObIArray<ObDASFusionMaterializedRow> &path_rows);
+  void release_parallel_runtime();
 
   // Row ID extraction and lookup
   int extract_score(const int64_t path_idx, double &score);
 
   template<typename RowkeyType>
-  int find_or_create_doc(RowkeyType &rowkey,
+  int find_or_create_doc(const RowkeyType &rowkey,
                          const int64_t path_idx,
                          double score);
 
@@ -410,6 +430,14 @@ private:
   int64_t input_row_cnt_;
   int64_t output_row_cnt_;
   common::ObOpProfile<common::ObMetric> *fusion_profile_;
+
+  // Parallel execution fields
+  bool enable_parallel_;
+  ObDASSearchCtx *search_ctx_;
+  ObDASFusionRtDef *fusion_rtdef_;
+  ObDASFusionParallelCtx parallel_ctx_;
+  ObDASFusionParallelCoordinator parallel_coordinator_;
+
 };
 
 }  // namespace sql

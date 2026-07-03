@@ -273,14 +273,46 @@ int ObDASBitmapOp::do_init(const ObIDASSearchOpParam &op_param)
   return ret;
 }
 
+int ObDASBitmapOp::set_external_bitmap(ObFastBitmap *bm)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(bm)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("external bitmap is null", K(ret));
+  } else if (OB_UNLIKELY(bitmap_built_ || owns_bitmap_ || OB_NOT_NULL(bitmap_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("set_external_bitmap called after bitmap already initialized",
+             K(ret), K(bitmap_built_), K(owns_bitmap_), KP(bitmap_));
+  } else {
+    bitmap_ = bm;
+    owns_bitmap_ = false;
+  }
+  return ret;
+}
+
 int ObDASBitmapOp::do_open()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(scan_op_)) {
+  has_pending_first_ = false;
+  if (OB_NOT_NULL(bitmap_) && !owns_bitmap_) {
+    // External bitmap was injected via set_external_bitmap(): skip scan.
+    if (OB_FAIL(bitmap_iter_.init(bitmap_))) {
+      LOG_WARN("failed to init bitmap iterator on external bitmap", K(ret));
+    } else {
+      exhausted_ = (bitmap_->cardinality() == 0);
+      bitmap_built_ = true;
+      if (OB_FAIL(seek_iter_to_lo())) {
+        LOG_WARN("failed to seek iter to docid_range_lo", K(ret));
+      }
+    }
+  } else if (OB_ISNULL(scan_op_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected scan op", K(ret));
   } else if (OB_FAIL(scan_op_->open())) {
     LOG_WARN("failed to open scan op", K(ret));
+  } else if (FALSE_IT(owns_bitmap_ = true)) {
+    // Mark ownership early so do_close() closes scan_op_ even if bitmap
+    // allocation or init fails afterwards.
   } else if (OB_ISNULL(bitmap_ = OB_NEWx(ObFastBitmap, &ctx_allocator(), ctx_allocator()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate fast bitmap", K(ret));
@@ -298,7 +330,16 @@ int ObDASBitmapOp::do_open()
 int ObDASBitmapOp::do_rescan()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(scan_op_)) {
+  has_pending_first_ = false;
+  if (OB_NOT_NULL(bitmap_) && !owns_bitmap_) {
+    // External bitmap path: content owned upstream and still valid.
+    bitmap_iter_.reuse();
+    exhausted_ = (bitmap_->cardinality() == 0);
+    bitmap_built_ = true;
+    if (OB_FAIL(seek_iter_to_lo())) {
+      LOG_WARN("failed to seek iter to docid_range_lo on rescan", K(ret));
+    }
+  } else if (OB_ISNULL(scan_op_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected scan op", K(ret));
   } else if (OB_FAIL(scan_op_->rescan())) {
@@ -308,7 +349,6 @@ int ObDASBitmapOp::do_rescan()
       bitmap_->reuse();
       bitmap_iter_.reuse();
     }
-
     exhausted_ = true;
     bitmap_built_ = false;
   }
@@ -318,21 +358,27 @@ int ObDASBitmapOp::do_rescan()
 int ObDASBitmapOp::do_close()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(scan_op_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected scan op", K(ret));
-  } else if (OB_FAIL(scan_op_->close())) {
-    LOG_WARN("failed to close scan op", K(ret));
-  } else {
-    if (OB_NOT_NULL(bitmap_)) {
+  if (owns_bitmap_) {
+    if (OB_ISNULL(scan_op_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected scan op", K(ret));
+    } else if (OB_FAIL(scan_op_->close())) {
+      LOG_WARN("failed to close scan op", K(ret));
+    } else if (OB_NOT_NULL(bitmap_)) {
       bitmap_iter_.reset();
       bitmap_->reset();
-      bitmap_ = nullptr;
     }
-    exhausted_ = true;
-    bitmap_built_ = false;
-    rowid_expr_ = nullptr;
+    bitmap_ = nullptr;
+  } else {
+    // External bitmap or never opened: caller retains ownership if any.
+    bitmap_iter_.reset();
+    bitmap_ = nullptr;
   }
+  owns_bitmap_ = false;
+  exhausted_ = true;
+  bitmap_built_ = false;
+  has_pending_first_ = false;
+  rowid_expr_ = nullptr;
   return ret;
 }
 
@@ -347,15 +393,37 @@ int ObDASBitmapOp::do_advance_to(const ObDASRowID &target, ObDASRowID &curr_id, 
     ret = OB_NOT_INIT;
     LOG_WARN("bitmap iterator not initialized", K(ret));
   } else {
-    uint64_t val = 0;
-    if (OB_FAIL(bitmap_iter_.advance_to(target.get_uint64(), val))) {
-      if (OB_UNLIKELY(OB_ITER_END != ret)) {
-        LOG_WARN("failed to advance to target", K(ret), K(target));
-      } else {
-        exhausted_ = true;
+    // Clamp target to docid_range_lo to ensure no <lo docids leak through
+    // (range-parallel tasks must stay within their assigned [lo, hi]).
+    uint64_t t = target.get_uint64();
+    if (search_ctx_.has_docid_range()
+        && !search_ctx_.get_docid_range_lo().is_min_value()) {
+      const uint64_t lo = search_ctx_.get_docid_range_lo().get_uint64();
+      if (t < lo) {
+        t = lo;
       }
+    }
+    if (has_pending_first_ && t <= pending_first_val_) {
+      // First call consumes the buffered lo-seek result.
+      curr_id.set_uint64(pending_first_val_);
+      has_pending_first_ = false;
     } else {
-      curr_id.set_uint64(val);
+      // Target moved past the buffered first val (or no buffer): drop it and
+      // advance the underlying iterator.
+      has_pending_first_ = false;
+      uint64_t val = 0;
+      if (OB_FAIL(bitmap_iter_.advance_to(t, val))) {
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+          LOG_WARN("failed to advance to target", K(ret), K(target), K(t));
+        } else {
+          exhausted_ = true;
+        }
+      } else if (is_beyond_docid_range_hi(val)) {
+        exhausted_ = true;
+        ret = OB_ITER_END;
+      } else {
+        curr_id.set_uint64(val);
+      }
     }
   }
   return ret;
@@ -372,6 +440,10 @@ int ObDASBitmapOp::do_next_rowid(ObDASRowID &next_id, double &score)
   } else if (OB_UNLIKELY(!bitmap_iter_.is_inited())) {
     ret = OB_NOT_INIT;
     LOG_WARN("bitmap iterator not initialized", K(ret));
+  } else if (has_pending_first_) {
+    // First call consumes the buffered lo-seek result from do_open/rescan/build.
+    next_id.set_uint64(pending_first_val_);
+    has_pending_first_ = false;
   } else {
     uint64_t val = 0;
     if (OB_FAIL(bitmap_iter_.next_id(val))) {
@@ -380,6 +452,9 @@ int ObDASBitmapOp::do_next_rowid(ObDASRowID &next_id, double &score)
       } else {
         exhausted_ = true;
       }
+    } else if (is_beyond_docid_range_hi(val)) {
+      exhausted_ = true;
+      ret = OB_ITER_END;
     } else {
       next_id.set_uint64(val);
     }
@@ -387,66 +462,138 @@ int ObDASBitmapOp::do_next_rowid(ObDASRowID &next_id, double &score)
   return ret;
 }
 
-int ObDASBitmapOp::build_bitmap()
+int ObDASBitmapOp::fill_bitmap_from_scan(ObFastBitmap &bitmap)
 {
   int ret = OB_SUCCESS;
   int64_t total_count = 0;
-  if (OB_ISNULL(scan_op_) || OB_ISNULL(bitmap_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected nullptr", K(ret), K(scan_op_), K(bitmap_));
-  } else {
-    int64_t count = 0;
-    while (OB_SUCC(ret)) {
-      count = 0;
-      if (OB_FAIL(scan_op_->get_next_rows(count, max_batch_size()))) {
-        if (OB_UNLIKELY(ret != OB_ITER_END)) {
-          LOG_WARN("failed to get next rows from scan", K(ret), K(max_batch_size()));
-        } else {
-          if (count > 0) {
-            ret = OB_SUCCESS;
-          }
+  int64_t count = 0;
+  while (OB_SUCC(ret)) {
+    count = 0;
+    if (OB_FAIL(scan_op_->get_next_rows(count, max_batch_size()))) {
+      if (OB_UNLIKELY(ret != OB_ITER_END)) {
+        LOG_WARN("failed to get next rows from scan", K(ret), K(max_batch_size()));
+      } else {
+        if (count > 0) {
+          ret = OB_SUCCESS;
         }
       }
-      if (OB_SUCC(ret) && count > 0) {
-        total_count += count;
-        ObIVector *vector = nullptr;
-        if (OB_ISNULL(rowid_expr_) || OB_ISNULL(vector = rowid_expr_->get_vector(eval_ctx()))) {
+    }
+    if (OB_SUCC(ret) && count > 0) {
+      total_count += count;
+      ObIVector *vector = nullptr;
+      if (OB_ISNULL(rowid_expr_) || OB_ISNULL(vector = rowid_expr_->get_vector(eval_ctx()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null rowid expr or vector", K(ret), KPC(rowid_expr_));
+      } else if (common::VEC_FIXED == vector->get_format()) {
+        common::ObFixedLengthBase *fixed_vec = static_cast<common::ObFixedLengthBase *>(vector);
+        uint64_t *data = reinterpret_cast<uint64_t *>(fixed_vec->get_data());
+        if (OB_ISNULL(data)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected null rowid expr or vector", K(ret), KPC(rowid_expr_));
-        } else if (common::VEC_FIXED == vector->get_format()) {
-          common::ObFixedLengthBase *fixed_vec = static_cast<common::ObFixedLengthBase *>(vector);
-          uint64_t *data = reinterpret_cast<uint64_t *>(fixed_vec->get_data());
-          if (OB_ISNULL(data)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected null data", K(ret));
-          } else {
-            for (int64_t i = 0; OB_SUCC(ret) && i < count; i++) {
-              if (OB_FAIL(bitmap_->add(data[i]))) {
-                LOG_WARN("failed to add id to bitmap", K(ret));
-              }
-            }
-          }
+          LOG_WARN("unexpected null data", K(ret));
         } else {
           for (int64_t i = 0; OB_SUCC(ret) && i < count; i++) {
-            if (OB_FAIL(bitmap_->add(vector->get_uint64(i)))) {
+            if (OB_FAIL(bitmap.add(data[i]))) {
               LOG_WARN("failed to add id to bitmap", K(ret));
             }
           }
         }
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < count; i++) {
+          if (OB_FAIL(bitmap.add(vector->get_uint64(i)))) {
+            LOG_WARN("failed to add id to bitmap", K(ret));
+          }
+        }
       }
     }
-    ret = ret == OB_ITER_END ? OB_SUCCESS : ret;
+  }
+  ret = ret == OB_ITER_END ? OB_SUCCESS : ret;
+  LOG_TRACE("fill_bitmap_from_scan done", K(ret), K(total_count), K(bitmap.cardinality()));
+  return ret;
+}
 
-    if (OB_SUCC(ret)) {
-      uint64_t cardinality = bitmap_->cardinality();
-      if (cardinality == 0) {
-        exhausted_ = true;
-        LOG_TRACE("bitmap built with no data", K(total_count));
-      } else {
-        exhausted_ = false;
-        bitmap_built_ = true;
+int ObDASBitmapOp::build_bitmap()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(scan_op_) || OB_ISNULL(bitmap_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret), K(scan_op_), K(bitmap_));
+  } else if (OB_FAIL(fill_bitmap_from_scan(*bitmap_))) {
+    LOG_WARN("failed to fill bitmap from scan", K(ret));
+  } else {
+    uint64_t cardinality = bitmap_->cardinality();
+    if (cardinality == 0) {
+      exhausted_ = true;
+      LOG_TRACE("bitmap built with no data");
+    } else {
+      exhausted_ = false;
+      bitmap_built_ = true;
+      if (OB_FAIL(seek_iter_to_lo())) {
+        LOG_WARN("failed to seek iter to docid_range_lo after build", K(ret));
       }
-      LOG_TRACE("bitmap build", K(ret), K(total_count), K(cardinality));
+    }
+  }
+  return ret;
+}
+
+int ObDASBitmapOp::seek_iter_to_lo()
+{
+  int ret = OB_SUCCESS;
+  has_pending_first_ = false;
+  if (!exhausted_ && bitmap_built_ && search_ctx_.has_docid_range()
+      && !search_ctx_.get_docid_range_lo().is_min_value()) {
+    const uint64_t lo = search_ctx_.get_docid_range_lo().get_uint64();
+    uint64_t val = 0;
+    if (OB_FAIL(bitmap_iter_.advance_to(lo, val))) {
+      if (OB_ITER_END == ret) {
+        exhausted_ = true;
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to advance bitmap iter to docid_range_lo", K(ret), K(lo));
+      }
+    } else if (is_beyond_docid_range_hi(val)) {
+      exhausted_ = true;
+    } else {
+      pending_first_val_ = val;
+      has_pending_first_ = true;
+    }
+  }
+  return ret;
+}
+
+int ObDASBitmapOp::build_shared_bitmap(common::ObIAllocator &bitmap_alloc, ObFastBitmap *&out_bitmap)
+{
+  int ret = OB_SUCCESS;
+  out_bitmap = nullptr;
+  if (OB_ISNULL(scan_op_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("scan_op_ is null", K(ret));
+  } else if (OB_FAIL(scan_op_->open())) {
+    LOG_WARN("failed to open scan op for shared bitmap", K(ret));
+  } else {
+    ObFastBitmap *bm = OB_NEWx(ObFastBitmap, &bitmap_alloc, bitmap_alloc);
+    if (OB_ISNULL(bm)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate shared bitmap", K(ret));
+    } else if (OB_FAIL(bm->init(search_ctx_.get_row_count().cost()))) {
+      LOG_WARN("failed to init shared bitmap", K(ret));
+    } else if (OB_FAIL(fill_bitmap_from_scan(*bm))) {
+      LOG_WARN("failed to fill shared bitmap from scan", K(ret));
+    }
+    int close_ret = scan_op_->close();
+    if (OB_SUCCESS != close_ret) {
+      LOG_WARN("failed to close scan op after shared bitmap build", K(close_ret));
+      if (OB_SUCC(ret)) {
+        ret = close_ret;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      out_bitmap = bm;
+      // Caller will inject this bitmap back via set_external_bitmap() in a later
+      // phase; do not assume ownership here.
+      LOG_TRACE("shared bitmap built", K(bm->cardinality()));
+    } else if (OB_NOT_NULL(bm)) {
+      bm->~ObFastBitmap();
+      bitmap_alloc.free(bm);
     }
   }
   return ret;

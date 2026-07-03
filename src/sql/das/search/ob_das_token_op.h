@@ -92,9 +92,11 @@ private:
   storage::ObTextRetrievalBlockMaxIter text_retrieval_iter_;
   ObBM25IndexParamEstimator bm25_param_estimator_;
   ObNewRange inv_idx_scan_range_;
+  ObNewRange inv_idx_agg_range_;  // unrestricted range for agg (global token_doc_cnt estimation)
   double token_boost_;
   sql::ObEvalCtx *eval_ctx_;
   ObObj obj_buf_[OBJ_BUF_SIZE];
+  ObObj agg_obj_buf_[OBJ_BUF_SIZE];  // separate obj buf for agg range (always full range)
   ObCompactRow *curr_id_;
   ObCompactRow *min_id_;
   ObCompactRow *max_id_;

@@ -578,6 +578,10 @@ public:
 
   ObDiagnosisManager& get_diagnosis_manager() { return diagnosis_manager_; }
   common::ObArenaAllocator &get_deterministic_udf_cache_allocator() { return deterministic_udf_cache_allocator_; }
+  // Lazy-initialized thread-safe arena for parallel-execution profile data
+  // (e.g. hybrid search adopted child profiles). Backed by mem_context_'s
+  // arena, lives as long as ObExecContext itself.
+  int get_safe_profile_allocator(common::ObSafeArenaAllocator *&alloc);
 
   void *get_external_url_resource_cache() { return external_url_resource_cache_; }
   void set_external_url_resource_cache(void *cache) { external_url_resource_cache_ = cache; }
@@ -795,6 +799,12 @@ protected:
   bool force_local_plan_;
   ObDiagnosisManager diagnosis_manager_;
   common::ObArenaAllocator deterministic_udf_cache_allocator_;
+  // Lazily created on first use via get_safe_profile_allocator().
+  // Wraps mem_context_->get_arena_allocator() with a spinlock so multiple
+  // parallel workers (e.g. hybrid search FusionIter sub-tasks) can safely
+  // allocate child profile memory. Lives until ~ObExecContext destroys
+  // mem_context_, so child profiles stay valid through submit_op_monitor_node.
+  common::ObSafeArenaAllocator *safe_profile_alloc_;
 
   void *external_url_resource_cache_;
   void *external_py_url_resource_cache_;

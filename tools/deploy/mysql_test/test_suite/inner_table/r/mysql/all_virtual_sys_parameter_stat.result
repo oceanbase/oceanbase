@@ -461,6 +461,7 @@ _enable_hash_join_hasher
 _enable_hash_join_processor
 _enable_hgby_llc_ndv_adaptive
 _enable_hgby_skew_detection
+_enable_hybrid_search_parallel_execution
 _enable_inc_major_direct_load
 _enable_index_merge
 _enable_index_merge_intersect_bitmap

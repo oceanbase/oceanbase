@@ -1005,6 +1005,11 @@ DEF_TIME(_ob_trans_rpc_timeout, OB_CLUSTER_PARAMETER, "3s", "[0s, 3600s]",
 DEF_BOOL(enable_early_lock_release, OB_TENANT_PARAMETER, "True",
          "enable early lock release",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_hybrid_search_parallel_execution, OB_TENANT_PARAMETER, "False",
+         "specifies whether to enable parallel execution for hybrid search queries, "
+         "including multi-path parallelism and intra-query-path range parallelism. "
+         "Set to False to force serial execution as a kill switch.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_tx_result_retention, OB_TENANT_PARAMETER, "300", "[0, 36000]",
         "The tx data can be recycled after at least _tx_result_retention seconds. "
         "Range: [0, 36000]",

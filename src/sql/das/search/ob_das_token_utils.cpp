@@ -230,8 +230,8 @@ int ObDASTokenOpHelper::rescan()
     LOG_WARN("failed to get related tablet id", K(ret));
   } else {
     const bool need_relevance = ir_ctdef_->need_calc_relevance();
-    ObIDASSearchOp::switch_tablet_id(inv_idx_tablet_id_, inv_idx_scan_param_);
-    ObIDASSearchOp::switch_tablet_id(inv_idx_tablet_id_, inv_idx_agg_param_);
+    ObIDASSearchOp::switch_tablet_id(search_ctx_.get_ls_id(), inv_idx_tablet_id_, inv_idx_scan_param_);
+    ObIDASSearchOp::switch_tablet_id(search_ctx_.get_ls_id(), inv_idx_tablet_id_, inv_idx_agg_param_);
     reset_scan_range();
     if (OB_FAIL(inv_idx_scan_iter_.reuse())) {
       LOG_WARN("failed to reuse inv idx scan iter", K(ret));

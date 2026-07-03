@@ -70,7 +70,7 @@ class ObDASFusionIter;
 
 class ObDASIterUtils
 {
-
+  friend class ObDASFusionChildRuntime;
 public:
   static int create_das_scan_iter_tree(DAS_ITER_TREE_SIGNATURE, ObDASIter *&iter_tree);
 
@@ -330,7 +330,11 @@ private:
       ObDASSearchCost lead_cost = ObDASSearchCost());
 
   static int create_vec_search_iter(
-      DAS_ITER_TREE_SIGNATURE,
+      common::ObIAllocator &alloc,
+      ObDASSearchCtx *search_ctx,
+      const share::ObLSID &ls_id,
+      transaction::ObTxDesc *trans_desc,
+      transaction::ObTxReadSnapshot *snapshot,
       ObExpr *score_expr,
       const ObDASVecIndexDriverCtDef *vec_index_driver_ctdef,
       ObDASVecIndexDriverRtDef *vec_index_driver_rtdef,
@@ -356,11 +360,19 @@ private:
 
   static int init_fusion_param(common::ObIAllocator &alloc,
                                const ObDASFusionCtDef *fusion_ctdef,
-                               const ObDASFusionRtDef *fusion_rtdef,
+                               ObDASFusionRtDef *fusion_rtdef,
+                               ObDASSearchCtx *search_ctx,
                                ObDASIterParam &param);
 
-                               static int create_vec_index_scan_iter(DAS_ITER_TREE_SIGNATURE, const ObDASVecIndexHNSWScanCtDef *vec_index_scan_ctdef,
-                                ObDASVecIndexHNSWScanRtDef *vec_index_scan_rtdef, ObDASVecIndexScanIter *&vec_index_scan_iter);
+  static int create_vec_index_scan_iter(
+      common::ObIAllocator &alloc,
+      ObDASSearchCtx *search_ctx,
+      const share::ObLSID &ls_id,
+      transaction::ObTxDesc *trans_desc,
+      transaction::ObTxReadSnapshot *snapshot,
+      const ObDASVecIndexHNSWScanCtDef *vec_index_scan_ctdef,
+      ObDASVecIndexHNSWScanRtDef *vec_index_scan_rtdef,
+      ObDASVecIndexScanIter *&vec_index_scan_iter);
   static int create_vec_func_indexback_sub_tree(ObTableScanParam &scan_param,
                                                 common::ObIAllocator &alloc,
                                                 const ObDASBaseCtDef *index_ctdef,

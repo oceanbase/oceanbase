@@ -43,6 +43,7 @@ friend class ObDASSearchDriverIter;
 friend class RowIDStore;
 friend class UInt64RowIDStore;
 friend class CompactRowIDStore;
+friend struct ObDASFusionChildRuntime;
 
 public:
   explicit ObDASSearchCtx(common::ObIAllocator &allocator, ObDASScanOp &op)
@@ -61,7 +62,10 @@ public:
       use_dynamic_pruning_(true),
       rowid_type_(DAS_ROWID_TYPE_UINT64),
       table_row_count_(),
-      is_vec_index_search_(false)
+      is_vec_index_search_(false),
+      docid_range_lo_(),
+      docid_range_hi_(),
+      has_docid_range_(false)
   { }
 
   ~ObDASSearchCtx() { reset(); }
@@ -92,9 +96,23 @@ public:
   OB_INLINE RowMeta &get_rowid_meta() { return rowid_meta_; }
   OB_INLINE const common::ObIArray<ObExpr *> &get_rowid_exprs() const { return *rowid_exprs_; }
   OB_INLINE common::ObIAllocator &get_allocator() { return allocator_; }
+  OB_INLINE const share::ObLSID &get_ls_id() const { return ls_id_; }
+  OB_INLINE void set_ls_id(const share::ObLSID &ls_id) { ls_id_ = ls_id; }
+  OB_INLINE const common::ObTabletID &get_root_tablet_id() const
+  { return root_das_task_.get_scan_param().tablet_id_; }
   void reset();
+  void set_docid_range(const common::ObObj &lo, const common::ObObj &hi)
+  {
+    docid_range_lo_ = lo;
+    docid_range_hi_ = hi;
+    has_docid_range_ = true;
+  }
+  OB_INLINE bool has_docid_range() const { return has_docid_range_; }
+  OB_INLINE const common::ObObj &get_docid_range_lo() const { return docid_range_lo_; }
+  OB_INLINE const common::ObObj &get_docid_range_hi() const { return docid_range_hi_; }
 
   OB_INLINE ObDASRowIDType get_rowid_type() const { return rowid_type_; }
+  OB_INLINE void set_rowid_type(ObDASRowIDType type) { rowid_type_ = type; }
   OB_INLINE const ObDASSearchCost &get_row_count() const { return table_row_count_; }
   int refresh_table_row_count();
   OB_INLINE void set_is_vec_index_search(bool is_vec_index_search) { is_vec_index_search_ = is_vec_index_search; }
@@ -178,6 +196,9 @@ private:
   ObDASRowIDType rowid_type_;
   ObDASSearchCost table_row_count_;
   bool is_vec_index_search_;
+  common::ObObj docid_range_lo_;
+  common::ObObj docid_range_hi_;
+  bool has_docid_range_;
 
 private:
   static int compare_uint64_rowid(const ObDASRowID &rowid1, const ObDASRowID &rowid2,

@@ -88,6 +88,9 @@ public:
   void set_bitmap(ObVecIndexBitmap *bitmap) { bitmap_ = bitmap; }
   ObDASSearchOpType get_root_op_type() const { return root_op_->get_op_type(); }
   ObIDASSearchOp *get_root_op() { return root_op_; }
+  void set_search_ctx(ObDASSearchCtx *search_ctx) { search_ctx_ = search_ctx; }
+  void set_root_op(ObIDASSearchOp *root_op) { root_op_ = root_op; }
+  int64_t get_top_k_limit() const { return top_k_limit_param_.limit_; }
 
 protected:
   virtual int inner_init(ObDASIterParam &param) override;

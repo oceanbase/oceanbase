@@ -162,6 +162,14 @@ int ObBM25IndexParamEstimator::init(
   return ret;
 }
 
+void ObBM25IndexParamEstimator::switch_tablet_id(const common::ObTabletID &new_tablet_id)
+{
+  if (tablet_id_ != new_tablet_id) {
+    tablet_id_ = new_tablet_id;
+    estimated_ = false;
+  }
+}
+
 int ObBM25IndexParamEstimator::do_estimation(sql::ObDASSearchCtx &search_ctx)
 {
   int ret = OB_SUCCESS;

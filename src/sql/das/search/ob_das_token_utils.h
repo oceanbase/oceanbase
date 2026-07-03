@@ -28,6 +28,7 @@ public:
   int init_text_retrieval_iter(ObTextRetrievalBlockMaxIter &iter);
   int rescan();
   int close();
+  const ObTabletID &get_inv_idx_tablet_id() const { return inv_idx_tablet_id_; }
 private:
   int init_scan_param(const ObDASTokenOpParam &param);
   void init_scan_range(

@@ -851,6 +851,7 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
   int64_t rtf_user_min_partition_count = tenant_config.is_valid() ? tenant_config->_rtf_user_min_partition_count : -1;
   bool enable_distributed_das_scan = tenant_config.is_valid() ? tenant_config->_enable_distributed_das_scan : true;
   bool enable_index_merge = tenant_config.is_valid() ? tenant_config->_enable_index_merge : false;
+  bool enable_hybrid_search_parallel_execution = tenant_config.is_valid() ? tenant_config->_enable_hybrid_search_parallel_execution : false;
   const ObOptParamHint &opt_params = ctx_.get_global_hint().opt_params_;
   bool aggr_pushdown_allowed = false;
 
@@ -927,6 +928,8 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     LOG_WARN("failed to get das batch rescan flag", K(ret));
   } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ENABLE_INDEX_MERGE, enable_index_merge))) {
     LOG_WARN("failed to get opt param enable index merge", K(ret));
+  } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ENABLE_HYBRID_SEARCH_PARALLEL_EXECUTION, enable_hybrid_search_parallel_execution))) {
+    LOG_WARN("failed to get opt param enable hybrid search parallel", K(ret));
   } else if(OB_FAIL(session.if_aggr_pushdown_allowed(aggr_pushdown_allowed))) {
     LOG_WARN("failed to get sys var enable aggr pushdown", K(ret));
   } else {
@@ -948,6 +951,7 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     ctx_.set_rtf_creator_max_row_count(rtf_creator_max_row_count);
     ctx_.set_rtf_user_min_partition_count(rtf_user_min_partition_count);
     ctx_.set_enable_index_merge(enable_index_merge);
+    ctx_.set_enable_hybrid_search_parallel_execution(enable_hybrid_search_parallel_execution);
     if (query_ctx->get_query_hint().has_outline_data()) {
       ctx_.set_push_join_pred_into_view_enabled(true);
     } else {

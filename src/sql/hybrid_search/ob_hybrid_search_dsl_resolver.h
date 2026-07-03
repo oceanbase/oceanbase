@@ -179,7 +179,7 @@ struct ObDSLQueryInfo
 {
   ObDSLQueryInfo()
     : queries_(), from_(nullptr), size_(nullptr), min_score_(nullptr), one_const_expr_(nullptr),
-      query_top_level_boost_(nullptr), raw_dsl_param_str_(), is_top_k_query_(true) {}
+      query_top_level_boost_(nullptr), raw_dsl_param_str_(), is_top_k_query_(true), query_dop_(1) {}
   static int check_column_in_dsl(ObIArray<TableItem*> &table_items, ObColumnRefRawExpr *col_expr, bool &in_dsl);
   int deep_copy(const ObDSLQueryInfo& src, ObIRawExprCopier &expr_copier, ObIAllocator* allocator);
   static int deep_copy_query(const ObDSLQuery *src, ObDSLQuery *&dst,
@@ -207,9 +207,10 @@ struct ObDSLQueryInfo
   ObSEArray<ObRawExpr*, 4, ModulePageAllocator, true> dsl_exprs_;
   ObString raw_dsl_param_str_;
   bool is_top_k_query_;
+  int64_t query_dop_;
   TO_STRING_KV(K(queries_), K(from_), K(size_), K(min_score_), K(query_top_level_boost_),
                K(rank_info_), K(rowkey_cols_), K(dsl_cols), K(score_cols_),
-               K(dsl_exprs_), K(raw_dsl_param_str_), K(is_top_k_query_));
+               K(dsl_exprs_), K(raw_dsl_param_str_), K(is_top_k_query_), K(query_dop_));
 };
 
 class ObDSLResolver
@@ -342,6 +343,7 @@ private :
       RequiredParamsSet &required_params,
       hash::ObHashSet<int32_t> &resolved_field_idx_set);
   int resolve_query(ObIJsonBase &req_node);
+  int resolve_query_search_options(ObIJsonBase &req_node);
   int resolve_query_string(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSLQuery *parent_query, ObEsQueryItem outer_query_type);
   int resolve_query_string_fields(ObIJsonBase &req_node, ObIArray<ObColumnRefRawExpr*> &fields, ObIArray<ObConstRawExpr*> &field_boosts, bool &compatible);
   int resolve_query_string_operator(ObIJsonBase &req_node, ObMatchOperator &opr);
@@ -352,6 +354,7 @@ private :
   int resolve_rrf(ObIJsonBase &req_node);
   int resolve_search_options(ObIJsonBase &req_node, ObDSLKnnQuery::SearchOption *&search_option);
   int resolve_single_term(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSLQuery *parent_query, ObEsQueryItem outer_query_type);
+  int dispatch_query_type(const ObString &key, ObIJsonBase &sub_node, ObDSLQuery *&query, ObDSLQuery *parent_query, ObEsQueryItem outer_query_type);
   int resolve_size(ObIJsonBase &req_node);
   int resolve_slop(ObIJsonBase &req_node, int32_t &slop);
   int resolve_term(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSLQuery *parent_query, ObEsQueryItem outer_query_type);

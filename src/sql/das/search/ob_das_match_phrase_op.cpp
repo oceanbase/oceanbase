@@ -128,6 +128,9 @@ int ObDASMatchPhraseOp::do_rescan()
       token_iters_[i]->reuse();
     }
   }
+  if (OB_SUCC(ret) && !token_helpers_.empty()) {
+    estimator_.switch_tablet_id(token_helpers_[0]->get_inv_idx_tablet_id());
+  }
   bm25_param_estimated_ = false;
   total_token_weight_ = -1.0;
   return ret;

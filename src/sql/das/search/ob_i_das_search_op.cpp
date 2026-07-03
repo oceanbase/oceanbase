@@ -349,11 +349,12 @@ int ObIDASSearchOp::get_related_tablet_id(const ObDASScalarScanCtDef *scalar_ctd
   return ret;
 }
 
-void ObIDASSearchOp::switch_tablet_id(const common::ObTabletID &new_tablet_id, storage::ObTableScanParam &scan_param)
+void ObIDASSearchOp::switch_tablet_id(const share::ObLSID &new_ls_id, const common::ObTabletID &new_tablet_id, storage::ObTableScanParam &scan_param)
 {
   const common::ObTabletID &old_tablet_id = scan_param.tablet_id_;
   scan_param.need_switch_param_ =
     scan_param.need_switch_param_ || ((old_tablet_id.is_valid() && old_tablet_id != new_tablet_id));
+  scan_param.ls_id_ = new_ls_id;
   scan_param.tablet_id_ = new_tablet_id;
 }
 

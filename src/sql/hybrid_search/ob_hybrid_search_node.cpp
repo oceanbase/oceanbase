@@ -310,6 +310,7 @@ int ObHybridSearchGenerator::init_fusion_node(const ObDSLQueryInfo *query_info, 
   fusion_node->window_size_ = query_info->rank_info_.window_size_;
   fusion_node->rank_const_ = query_info->rank_info_.rank_const_;
   fusion_node->is_top_k_query_ = query_info->is_top_k_query_;
+  fusion_node->query_dop_ = query_info->query_dop_;
   for (int i = 0; i < query_info->rowkey_cols_.count() && OB_SUCC(ret); i++) {
     if (OB_FAIL(fusion_node->rowkey_cols_.push_back(query_info->rowkey_cols_.at(i)))) {
       LOG_WARN("failed to append rowkey expr", K(ret));

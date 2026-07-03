@@ -113,6 +113,7 @@ ob_set_subtarget(ob_sql das
   das/iter/ob_das_vec_index_driver_iter.cpp
   das/iter/ob_das_vec_index_scan_iter.cpp
   das/iter/ob_das_vec_index_hnsw_scan_iter.cpp
+  das/iter/ob_das_fusion_parallel.cpp
   das/iter/ob_das_fusion_iter.cpp
   das/iter/ob_das_profile_iter.cpp
   das/search/ob_das_search_define.cpp

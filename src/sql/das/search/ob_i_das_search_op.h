@@ -241,6 +241,7 @@ public:
   OB_INLINE void set_op_id(const int64_t id) { op_id_ = id; }
   OB_INLINE int64_t get_op_id() const { return op_id_; }
   OB_INLINE ObIDASSearchOp **get_children() { return children_; }
+  OB_INLINE int64_t get_children_cnt() const { return children_cnt_; }
 
   OB_INLINE const common::ObIArray<ObExpr *> &get_rowid_exprs() { return *search_ctx_.rowid_exprs_; }
   OB_INLINE const RowMeta &get_rowid_meta() { return search_ctx_.rowid_meta_; }
@@ -269,7 +270,7 @@ public:
   { return search_ctx_.get_datum_from_rowid(rowid, datum, col_idx); }
 
   int get_related_tablet_id(const ObDASScalarScanCtDef *scalar_ctdef, common::ObTabletID &tablet_id);
-  static void switch_tablet_id(const common::ObTabletID &new_tablet_id, storage::ObTableScanParam &scan_param);
+  static void switch_tablet_id(const share::ObLSID &new_ls_id, const common::ObTabletID &new_tablet_id, storage::ObTableScanParam &scan_param);
 
 public:
 // ---------------- core interfaces ----------------

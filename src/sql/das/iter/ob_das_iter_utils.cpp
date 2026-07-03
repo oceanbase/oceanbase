@@ -73,7 +73,8 @@ int ObDASIterUtils::create_das_spatial_scan_iter(ObIAllocator &alloc, ObDASSpati
 
 int ObDASIterUtils::init_fusion_param(common::ObIAllocator &alloc,
                                       const ObDASFusionCtDef *fusion_ctdef,
-                                      const ObDASFusionRtDef *fusion_rtdef,
+                                      ObDASFusionRtDef *fusion_rtdef,
+                                      ObDASSearchCtx *search_ctx,
                                       ObDASIterParam &param)
 {
   int ret = OB_SUCCESS;
@@ -130,6 +131,8 @@ int ObDASIterUtils::init_fusion_param(common::ObIAllocator &alloc,
     fusion_param.exec_ctx_ = &fusion_rtdef->eval_ctx_->exec_ctx_;
     fusion_param.output_ = &fusion_ctdef->result_output_;
     fusion_param.has_hybrid_fusion_op_ = fusion_ctdef->has_hybrid_fusion_op_;
+    fusion_param.search_ctx_ = search_ctx;
+    fusion_param.fusion_rtdef_ = fusion_rtdef;
     // to do: when fusion iter is removed, we need to pass offset and size to fusion iter
     for (int64_t i = 0; OB_SUCC(ret) && i < fusion_ctdef->weight_exprs_.count(); i++) {
       ObExpr *weight_expr = fusion_ctdef->weight_exprs_.at(i);
@@ -4300,10 +4303,16 @@ int ObDASIterUtils::create_fusion_iter_tree(
   } else if (OB_ISNULL(fusion_rtdef->eval_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fusion_rtdef eval_ctx is null", K(ret));
-  } else if (OB_FAIL(init_fusion_param(alloc, fusion_ctdef, fusion_rtdef, fusion_param))) {
+  } else if (OB_ISNULL(search_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("search ctx is null in fusion tree", KR(ret), KP(search_ctx));
+  } else if (OB_FAIL(init_fusion_param(alloc, fusion_ctdef, fusion_rtdef, search_ctx, fusion_param))) {
     LOG_WARN("failed to init fusion param", K(ret));
   } else if (OB_FAIL(create_das_iter(alloc, fusion_param, iter))) {
     LOG_WARN("failed to create fusion iter", K(ret));
+  } else if (OB_ISNULL(iter)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fusion iter is null after create", KR(ret), KP(iter));
   } else if (OB_FALSE_IT(children_cnt = fusion_ctdef->children_cnt_)) {
   } else if (OB_FAIL(create_iter_children_array(children_cnt, alloc, iter))) {
     LOG_WARN("failed to create iter children array", K(ret), K(children_cnt));
@@ -4335,7 +4344,7 @@ int ObDASIterUtils::create_fusion_iter_tree(
         if (OB_ISNULL(vec_index_driver_ctdef) || OB_ISNULL(vec_index_driver_rtdef)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("vec_index_driver_ctdef or vec_index_driver_rtdef is null", K(ret), K(i), KP(vec_index_driver_ctdef), KP(vec_index_driver_rtdef));
-        } else if (OB_FAIL(create_vec_search_iter(DAS_ITER_TREE_ARGS, score_expr, vec_index_driver_ctdef, vec_index_driver_rtdef, vec_search_iter))) {
+        } else if (OB_FAIL(create_vec_search_iter(alloc, search_ctx, scan_param.ls_id_, trans_desc, snapshot, score_expr, vec_index_driver_ctdef, vec_index_driver_rtdef, vec_search_iter))) {
           LOG_WARN("failed to create vec_search_iter for path", K(ret), K(i));
         } else if (OB_ISNULL(vec_search_iter)) {
           ret = OB_ERR_UNEXPECTED;
@@ -4433,7 +4442,11 @@ int ObDASIterUtils::check_single_scalar_filter(
 }
 
 int ObDASIterUtils::create_vec_search_iter(
-    DAS_ITER_TREE_SIGNATURE,
+    common::ObIAllocator &alloc,
+    ObDASSearchCtx *search_ctx,
+    const share::ObLSID &ls_id,
+    transaction::ObTxDesc *trans_desc,
+    transaction::ObTxReadSnapshot *snapshot,
     ObExpr *score_expr,
     const ObDASVecIndexDriverCtDef *vec_index_driver_ctdef,
     ObDASVecIndexDriverRtDef *vec_index_driver_rtdef,
@@ -4473,7 +4486,7 @@ int ObDASIterUtils::create_vec_search_iter(
     } else if (OB_ISNULL(vec_index_scan_ctdef) || OB_ISNULL(vec_index_scan_rtdef)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected nullptr", K(ret));
-    } else if (OB_FAIL(create_vec_index_scan_iter(DAS_ITER_TREE_ARGS, vec_index_scan_ctdef, vec_index_scan_rtdef, vec_index_scan_iter))) {
+    } else if (OB_FAIL(create_vec_index_scan_iter(alloc, search_ctx, ls_id, trans_desc, snapshot, vec_index_scan_ctdef, vec_index_scan_rtdef, vec_index_scan_iter))) {
       LOG_WARN("failed to create vec index scan iter", K(ret));
     } else if (OB_ISNULL(vec_index_scan_iter)) {
       ret = OB_ERR_UNEXPECTED;
@@ -4589,12 +4602,13 @@ int ObDASIterUtils::create_vec_search_iter(
     }
 
     if (OB_SUCC(ret)) {
-      LOG_INFO("vec index type", K(vec_index_type), K(go_brute_force), K(vec_index_driver_ctdef->row_count_), K(filter_mode));
+      LOG_INFO("vec index type", K(vec_index_type), K(go_brute_force),
+               K(vec_index_driver_ctdef->row_count_), K(filter_mode));
 
       ObEvalCtx *eval_ctx = vec_index_driver_rtdef->eval_ctx_;
       ObDASVecIndexDriverIterParam vec_index_driver_param;
       vec_index_driver_param.max_size_ = eval_ctx->is_vectorized() ? eval_ctx->max_batch_size_ : 1;
-      vec_index_driver_param.ls_id_ = scan_param.ls_id_;
+      vec_index_driver_param.ls_id_ = ls_id;
       vec_index_driver_param.tx_desc_ = trans_desc;
       vec_index_driver_param.snapshot_ = snapshot;
       vec_index_driver_param.vec_index_scan_iter_ = vec_index_scan_iter;
@@ -4630,7 +4644,12 @@ int ObDASIterUtils::create_vec_search_iter(
   return ret;
 }
 
-int ObDASIterUtils::create_vec_index_scan_iter(DAS_ITER_TREE_SIGNATURE,
+int ObDASIterUtils::create_vec_index_scan_iter(
+    common::ObIAllocator &alloc,
+    ObDASSearchCtx *search_ctx,
+    const share::ObLSID &ls_id,
+    transaction::ObTxDesc *trans_desc,
+    transaction::ObTxReadSnapshot *snapshot,
     const ObDASVecIndexHNSWScanCtDef *vec_index_scan_ctdef,
     ObDASVecIndexHNSWScanRtDef *vec_index_scan_rtdef,
     ObDASVecIndexScanIter *&vec_index_scan_iter)
@@ -4662,7 +4681,7 @@ int ObDASIterUtils::create_vec_index_scan_iter(DAS_ITER_TREE_SIGNATURE,
       hnsw_scan_param.eval_ctx_ = eval_ctx;
       hnsw_scan_param.exec_ctx_ = &eval_ctx->exec_ctx_;
       hnsw_scan_param.output_ = &vec_index_scan_ctdef->result_output_;
-      hnsw_scan_param.ls_id_ = scan_param.ls_id_;
+      hnsw_scan_param.ls_id_ = ls_id;
       hnsw_scan_param.tx_desc_ = trans_desc;
       hnsw_scan_param.snapshot_ = snapshot;
       hnsw_scan_param.delta_buf_iter_ = delta_buf_table_iter;

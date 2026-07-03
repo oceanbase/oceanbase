@@ -49,6 +49,7 @@ public:
       ObDASIRScanRtDef &ir_scan_rtdef,
       ObTableScanParam &inv_scan_param,
       ObInvIdxParamCache &param_cache);
+  void switch_tablet_id(const common::ObTabletID &inv_idx_tablet_id);
   void reset();
   // do total doc cnt and avg doc token cnt estimation on demand
   int do_estimation(sql::ObDASSearchCtx &search_ctx);

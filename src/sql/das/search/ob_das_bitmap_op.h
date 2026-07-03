@@ -113,12 +113,19 @@ public:
   : ObIDASSearchOp(search_ctx),
     exhausted_(true),
     bitmap_built_(false),
+    owns_bitmap_(false),
+    has_pending_first_(false),
+    pending_first_val_(0),
     bitmap_(nullptr),
     bitmap_iter_(),
     rowid_expr_(nullptr),
     scan_op_(nullptr)
   { }
   virtual ~ObDASBitmapOp() {}
+
+  // Must be called before do_open(). Caller retains ownership of bm.
+  int set_external_bitmap(ObFastBitmap *bm);
+  int build_shared_bitmap(common::ObIAllocator &bitmap_alloc, ObFastBitmap *&out_bitmap);
 
 private:
   int do_init(const ObIDASSearchOpParam &op_param) override;
@@ -130,10 +137,28 @@ private:
 
 private:
   int build_bitmap();
+  int fill_bitmap_from_scan(ObFastBitmap &bitmap);
+  // Position bitmap_iter_ at the first val >= docid_range_lo and buffer it into
+  // pending_first_val_. Must be called after bitmap_built_/exhausted_ are set.
+  int seek_iter_to_lo();
+  OB_INLINE bool is_beyond_docid_range_hi(uint64_t val) const
+  {
+    return search_ctx_.has_docid_range()
+        && !search_ctx_.get_docid_range_hi().is_max_value()
+        && val > search_ctx_.get_docid_range_hi().get_uint64();
+  }
 
 private:
   bool exhausted_;
   bool bitmap_built_;
+  // true iff bitmap_ was allocated by this op (self-built path); false when
+  // bitmap_ is an externally-injected shared bitmap whose lifetime is managed
+  // by the caller.
+  bool owns_bitmap_;
+  // Buffered result of the initial advance_to(docid_range_lo). Consumed by the
+  // first do_next_rowid() or a do_advance_to() whose target <= pending_first_val_.
+  bool has_pending_first_;
+  uint64_t pending_first_val_;
   ObFastBitmap *bitmap_;
   ObFastBitmap::Iterator bitmap_iter_;
   ObExpr *rowid_expr_;

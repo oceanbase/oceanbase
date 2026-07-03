@@ -4,12 +4,17 @@
  */
 
 #include "lib/ob_errno.h"
+#include "lib/allocator/ob_malloc.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/utility/utility.h"
 #include "lib/utility/ob_sort.h"
 #include "share/vector/type_traits.h"
+#include "observer/ob_srv_network_frame.h"
+#include "observer/omt/ob_multi_tenant.h"
 #include "sql/engine/expr/ob_expr.h"
+#include "sql/engine/expr/ob_expr_frame_info.h"
+#include "sql/engine/ob_physical_plan.h"
 #include <float.h>
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/iter/ob_das_fusion_iter.h"
@@ -39,6 +44,8 @@ int ObDASFusionIter::inner_init(ObDASIterParam &param)
     offset_ = fusion_param.offset_;
     size_ = fusion_param.size_;
     min_score_ = fusion_param.min_score_;
+    search_ctx_ = fusion_param.search_ctx_;
+    fusion_rtdef_ = fusion_param.fusion_rtdef_;
 
     // if it is distrubuted scenario, the rank_window_size_ is the max of all path top k limits.
     for (int64_t i = 0; OB_SUCC(ret) && rank_window_size_ > 0 && i < fusion_ctdef_->children_cnt_; ++i) {
@@ -79,6 +86,11 @@ int ObDASFusionIter::inner_init(ObDASIterParam &param)
   if (OB_SUCC(ret)) {
     if (OB_FAIL(init_fusion_row())) {
       LOG_WARN("failed to init fusion row", K(ret));
+    } else if (OB_ISNULL(search_ctx_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("search_ctx_ is null", K(ret));
+    } else {
+      enable_parallel_ = ObDASFusionParallelCtx::should_enable_parallel(*fusion_ctdef_, *search_ctx_);
     }
   }
   return ret;
@@ -104,6 +116,7 @@ int ObDASFusionIter::inner_reuse()
   sorted_doc_indices_.reset();
   destroy_rowid_map();
   free_fusion_score_heap();
+  release_parallel_runtime();
 
   if (OB_NOT_NULL(fusion_memctx_)) {
     fusion_memctx_->reset_remain_one_page();
@@ -137,6 +150,7 @@ int ObDASFusionIter::inner_release()
   sorted_doc_indices_.reset();
   destroy_rowid_map();
   free_fusion_score_heap();
+  release_parallel_runtime();
 
   if (OB_NOT_NULL(fusion_memctx_)) {
     fusion_memctx_->reset_remain_one_page();
@@ -178,10 +192,10 @@ int ObDASFusionIter::do_table_scan()
     SET_METRIC_VAL(common::ObMetricId::HS_FUSION_SIZE, size_);
     SET_METRIC_VAL(common::ObMetricId::HS_RANK_WINDOW_SIZE, rank_window_size_);
     SET_METRIC_VAL(common::ObMetricId::HS_FUSION_METHOD, static_cast<uint64_t>(fusion_method_));
-    for (int64_t i = 0; OB_SUCC(ret) && i < children_cnt_; ++i) {
-      if (OB_NOT_NULL(children_[i]) && OB_FAIL(children_[i]->do_table_scan())) {
-        LOG_WARN("failed to do table scan on child", K(ret), K(i));
-      }
+    if (enable_parallel_ && OB_FAIL(do_parallel_table_scan(false /* use_rescan */))) {
+      LOG_WARN("failed to do parallel table scan", KR(ret));
+    } else if (!enable_parallel_ && OB_FAIL(do_serial_table_scan(false /* use_rescan */))) {
+      LOG_WARN("failed to do serial table scan", KR(ret));
     }
   }
 
@@ -201,10 +215,10 @@ int ObDASFusionIter::rescan()
   } else {
     fusion_profile_ = fusion_profile;
     common::ObProfileSwitcher switcher(fusion_profile);
-    for (int64_t i = 0; OB_SUCC(ret) && i < children_cnt_; ++i) {
-      if (OB_NOT_NULL(children_[i]) && OB_FAIL(children_[i]->rescan())) {
-        LOG_WARN("failed to rescan child", K(ret), K(i));
-      }
+    if (enable_parallel_ && OB_FAIL(do_parallel_table_scan(true /* use_rescan */))) {
+      LOG_WARN("failed to do parallel table scan", KR(ret));
+    } else if (!enable_parallel_ && OB_FAIL(do_serial_table_scan(true /* use_rescan */))) {
+      LOG_WARN("failed to do serial table scan", KR(ret));
     }
   }
 
@@ -294,7 +308,7 @@ int ObDASFusionIter::extract_rowkey<uint64_t>(uint64_t &rowkey)
 
 // to do: implement this
 template<typename RowkeyType>
-int ObDASFusionIter::find_or_create_doc(RowkeyType &rowkey,
+int ObDASFusionIter::find_or_create_doc(const RowkeyType &rowkey,
                                         const int64_t path_idx,
                                         double score)
 {
@@ -303,7 +317,7 @@ int ObDASFusionIter::find_or_create_doc(RowkeyType &rowkey,
 }
 
 template<>
-int ObDASFusionIter::find_or_create_doc<uint64_t>(uint64_t &rowkey_val,
+int ObDASFusionIter::find_or_create_doc<uint64_t>(const uint64_t &rowkey_val,
                                                   const int64_t path_idx,
                                                   double score)
 {
@@ -350,12 +364,310 @@ int ObDASFusionIter::find_or_create_doc<uint64_t>(uint64_t &rowkey_val,
   return ret;
 }
 
+int ObDASFusionIter::do_serial_table_scan(const bool use_rescan)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < children_cnt_; ++i) {
+    if (OB_ISNULL(children_[i])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("child iter is null", KR(ret), K(i));
+    } else if (use_rescan && OB_FAIL(children_[i]->rescan())) {
+      LOG_WARN("failed to rescan fusion child iter", KR(ret), K(i));
+    } else if (!use_rescan && OB_FAIL(children_[i]->do_table_scan())) {
+      LOG_WARN("failed to do table scan on fusion child iter", KR(ret), K(i));
+    }
+  }
+  return ret;
+}
+
+int ObDASFusionIter::do_parallel_table_scan(const bool use_rescan)
+{
+  int ret = OB_SUCCESS;
+  int wait_ret = OB_SUCCESS;
+  omt::ObMultiTenant *omt = GCTX.omt_;
+  ObPhysicalPlanCtx *plan_ctx = nullptr;
+  int64_t timeout_ts = THIS_WORKER.get_timeout_ts();
+  int32_t group_id = THIS_WORKER.get_group_id() | das::OB_DAS_PARALLEL_POOL_MARK;
+  // Disable SQL memory leak guard: ObDASFusionChildTask is allocated here via OB_NEW
+  // but freed by the OMT framework on the worker thread after execution completes.
+  // The cross-thread ownership transfer would trigger false positive leak reports.
+  DISABLE_SQL_MEMLEAK_GUARD;
+  int64_t submitted_task_cnt = 0;
+  if (OB_ISNULL(omt) || OB_ISNULL(exec_ctx_) || OB_ISNULL(eval_ctx_) || OB_ISNULL(search_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr for parallel fusion scan", KR(ret), KP(omt), KP(exec_ctx_), KP(eval_ctx_), KP(search_ctx_));
+  } else if (OB_ISNULL(plan_ctx = exec_ctx_->get_physical_plan_ctx()) || OB_ISNULL(fusion_ctdef_) || OB_ISNULL(fusion_rtdef_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fusion iter missing plan_ctx/fusion_ctdef/fusion_rtdef", KR(ret), KP(plan_ctx), KP(fusion_ctdef_), KP(fusion_rtdef_));
+  } else {
+    ObIAllocator &alloc = fusion_memctx_->get_arena_allocator();
+    if (OB_FAIL(parallel_ctx_.init(alloc, *fusion_ctdef_, *fusion_rtdef_, *search_ctx_, *exec_ctx_, *eval_ctx_, children_, children_cnt_))) {
+      LOG_WARN("failed to init fusion parallel ctx", KR(ret), K(children_cnt_));
+    } else if (OB_FAIL(parallel_coordinator_.init(parallel_ctx_.get_runtime_count()))) {
+      LOG_WARN("failed to init fusion parallel coordinator", KR(ret), K(parallel_ctx_.get_runtime_count()));
+    } else if (OB_FAIL(create_parallel_task_profiles())) {
+      LOG_WARN("failed to create parallel task profiles", KR(ret));
+    } else {
+      const int64_t runtime_count = parallel_ctx_.get_runtime_count();
+      for (int64_t i = 0; OB_SUCC(ret) && i < runtime_count; ++i) {
+        ObDASFusionChildRuntime *runtime = parallel_ctx_.at(i);
+        ObDASFusionChildTask *task = nullptr;
+        if (OB_ISNULL(runtime)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected nullptr runtime", KR(ret), K(i));
+        } else if (FALSE_IT(runtime->use_rescan_ = use_rescan)) {
+        } else if (OB_ISNULL(task = OB_NEW(ObDASFusionChildTask, common::ObMemAttr(MTL_ID(), "DASFusTask")))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc fusion child task", KR(ret), K(i));
+        } else if (OB_FAIL(task->init(runtime, &parallel_coordinator_, timeout_ts, group_id))) {
+          LOG_WARN("failed to init fusion child task", KR(ret), K(i), K(runtime->path_idx_));
+        } else if (OB_FAIL(omt->recv_request(MTL_ID(), *task))) {
+          LOG_WARN("failed to submit fusion child task", KR(ret), K(i), K(runtime->path_idx_));
+        } else {
+          runtime->submitted_ = true;
+          ++submitted_task_cnt;
+        }
+        if (OB_FAIL(ret) && OB_NOT_NULL(task) && (OB_ISNULL(runtime) || !runtime->submitted_)) {
+          OB_DELETE(ObDASFusionChildTask, "DASFusTask", task);
+          task = nullptr;
+        }
+      }
+    }
+  }
+  if (OB_FAIL(ret) && parallel_coordinator_.is_inited()) {
+    parallel_coordinator_.set_first_error(ret);
+    for (int64_t i = 0; i < parallel_ctx_.get_runtime_count(); ++i) {
+      ObDASFusionChildRuntime *runtime = parallel_ctx_.at(i);
+      if (OB_ISNULL(runtime)) {
+        // ignore ret
+        parallel_coordinator_.on_child_finish(ret);
+        LOG_ERROR("fusion child runtime is null when handling submit failure", KR(ret), K(i));
+      } else if (!runtime->submitted_) {
+        runtime->compensate_bitmap_slots(ret);
+        ATOMIC_STORE(&runtime->err_code_, ret);
+        ATOMIC_STORE(&runtime->finished_, true);
+        parallel_coordinator_.on_child_finish(ret);
+      }
+    }
+  }
+  if (parallel_coordinator_.is_inited() && submitted_task_cnt > 0) {
+    wait_ret = parallel_coordinator_.wait_all_complete(timeout_ts);
+    if (OB_SUCCESS != wait_ret) {
+      LOG_WARN("failed to wait fusion child tasks", KR(wait_ret), KR(ret), K(timeout_ts),
+               K(children_cnt_), K(submitted_task_cnt));
+      if (OB_SUCC(ret)) {
+        ret = wait_ret;
+      }
+    }
+  }
+  return ret;
+}
+
+namespace
+{
+struct ObDASFusionMaterializedRowCmp
+{
+  bool operator()(const ObDASFusionMaterializedRow &lhs,
+                  const ObDASFusionMaterializedRow &rhs) const
+  {
+    bool bret = false;
+    if (lhs.score_ > rhs.score_) {
+      bret = true;
+    } else if (lhs.score_ < rhs.score_) {
+      bret = false;
+    } else {
+      bret = lhs.rowkey_ < rhs.rowkey_;
+    }
+    return bret;
+  }
+};
+} // namespace
+
+int ObDASFusionIter::merge_parallel_runtime_rows(const ObDASFusionChildRuntime &runtime)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < runtime.rows_.count(); ++row_idx) {
+    const ObDASFusionMaterializedRow &row = runtime.rows_.at(row_idx);
+    if (OB_FAIL(find_or_create_doc(row.rowkey_, runtime.path_idx_, row.score_))) {
+      LOG_WARN("failed to merge fusion child row", KR(ret), K(row_idx), K(runtime.path_idx_), K(row));
+    }
+  }
+  return ret;
+}
+
+int ObDASFusionIter::merge_range_parallel_path_rows(
+    const int64_t path_idx,
+    const int64_t top_k_limit,
+    common::ObIArray<ObDASFusionMaterializedRow> &path_rows)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(top_k_limit < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("range parallel top k limit is invalid", KR(ret), K(path_idx), K(top_k_limit));
+  } else {
+    if (path_rows.count() > 1) {
+      lib::ob_sort(path_rows.get_data(), path_rows.get_data() + path_rows.count(),
+                   ObDASFusionMaterializedRowCmp());
+    }
+    const int64_t emit_cnt = OB_MIN(top_k_limit, path_rows.count());
+    for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < emit_cnt; ++row_idx) {
+      const ObDASFusionMaterializedRow &row = path_rows.at(row_idx);
+      if (OB_FAIL(find_or_create_doc(row.rowkey_, path_idx, row.score_))) {
+        LOG_WARN("failed to merge range parallel path row",
+                 KR(ret), K(path_idx), K(top_k_limit), K(row_idx), K(row));
+      }
+    }
+  }
+  return ret;
+}
+
+// Merge results from all parallel child tasks into FusionIter's main data structures.
+//
+// Two strategies:
+//   - Normal path (KNN, or Query without range split): directly merge each runtime's rows.
+//   - Range-parallel path (Query split by docid range): single pass collects rows from all
+//     range runtimes into per-path buckets, then each bucket is sorted and the top-K emitted.
+//     Without this pre-merge, multiple range runtimes would each appear as an independent
+//     path in RRF scoring, breaking serial execution semantics.
+int ObDASFusionIter::merge_parallel_results()
+{
+  int ret = OB_SUCCESS;
+  const int64_t runtime_count = parallel_ctx_.get_runtime_count();
+
+  // Phase 0: Verify all tasks completed successfully.
+  for (int64_t i = 0; OB_SUCC(ret) && i < runtime_count; ++i) {
+    ObDASFusionChildRuntime *runtime = parallel_ctx_.at(i);
+    if (OB_ISNULL(runtime)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fusion child runtime is null", KR(ret), K(i));
+    } else if (!ATOMIC_LOAD(&runtime->finished_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fusion child runtime is not finished",
+               KR(ret), K(i), K(runtime->path_idx_), K(runtime->submitted_));
+    } else if (OB_SUCCESS != ATOMIC_LOAD(&runtime->err_code_)) {
+      ret = ATOMIC_LOAD(&runtime->err_code_);
+      LOG_WARN("fusion child task failed", KR(ret), K(i), K(runtime->path_idx_));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(fusion_ctdef_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fusion ctdef is null", KR(ret), KP(fusion_ctdef_));
+  } else {
+    const int64_t path_count = fusion_ctdef_->children_cnt_;
+    common::ObSEArray<int64_t, 8> path_top_k_limits;
+    common::ObSEArray<common::ObSEArray<ObDASFusionMaterializedRow, 16>, 8> path_rows_buckets;
+    if (OB_FAIL(path_top_k_limits.prepare_allocate(path_count)) ||
+        OB_FAIL(path_rows_buckets.prepare_allocate(path_count))) {
+      LOG_WARN("failed to init path merge structures", KR(ret), K(path_count));
+    }
+    // Single pass over runtimes:
+    //   - Range-parallel: collect into per-path bucket, record top_k limit.
+    //   - Non-range-parallel: merge rows directly.
+    for (int64_t i = 0; OB_SUCC(ret) && i < runtime_count; ++i) {
+      ObDASFusionChildRuntime *runtime = parallel_ctx_.at(i);
+      if (OB_ISNULL(runtime)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fusion child runtime is null", KR(ret), K(i));
+      } else if (runtime->path_idx_ < 0 || runtime->path_idx_ >= path_count) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fusion child runtime path idx is invalid",
+                 KR(ret), K(i), K(runtime->path_idx_), K(path_count));
+      } else if (runtime->is_range_parallel_) {
+        path_top_k_limits.at(runtime->path_idx_) = runtime->range_top_k_limit_;
+        common::ObSEArray<ObDASFusionMaterializedRow, 16> &bucket = path_rows_buckets.at(runtime->path_idx_);
+        for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < runtime->rows_.count(); ++row_idx) {
+          if (OB_FAIL(bucket.push_back(runtime->rows_.at(row_idx)))) {
+            LOG_WARN("failed to collect range parallel row", KR(ret), K(i), K(row_idx), K(runtime->path_idx_));
+          }
+        }
+      } else if (OB_FAIL(merge_parallel_runtime_rows(*runtime))) {
+        LOG_WARN("failed to merge parallel runtime rows", KR(ret), K(i), K(runtime->path_idx_));
+      }
+    }
+    // Emit: for each range-parallel path, sort collected rows and emit top-K.
+    for (int64_t path_idx = 0; OB_SUCC(ret) && path_idx < path_count; ++path_idx) {
+      if (path_rows_buckets.at(path_idx).count() > 0) {
+        if (OB_FAIL(merge_range_parallel_path_rows(path_idx, path_top_k_limits.at(path_idx),
+                                                   path_rows_buckets.at(path_idx)))) {
+          LOG_WARN("failed to merge range parallel path rows", KR(ret), K(path_idx));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+void ObDASFusionIter::release_parallel_runtime()
+{
+  if (parallel_coordinator_.is_inited()) {
+    int wait_ret = parallel_coordinator_.wait_all_complete(INT64_MAX);
+    if (OB_SUCCESS != wait_ret) {
+      LOG_WARN_RET(wait_ret, "failed to wait all fusion child tasks during release");
+    }
+    parallel_coordinator_.reset();
+  }
+
+  parallel_ctx_.release();
+}
+
+int ObDASFusionIter::create_parallel_task_profiles()
+{
+  int ret = OB_SUCCESS;
+  common::ObOpProfile<common::ObMetric> *fusion_profile =
+      common::get_current_profile<common::ObMetric>();
+  if (OB_ISNULL(fusion_profile)) {
+    // Profile disabled, nothing to do.
+  } else {
+    // Create per-task child profiles on the ExecContext's lazily-created
+    // thread-safe arena (ObSafeArenaAllocator wrapping mem_context_'s arena).
+    // Worker-thread allocations (register_child / register_metric) are
+    // serialized by the spinlock; the arena lives until ~ObExecContext, so
+    // child profiles stay valid through submit_op_monitor_node.
+    common::ObSafeArenaAllocator *safe_alloc = nullptr;
+    if (OB_FAIL(exec_ctx_->get_safe_profile_allocator(safe_alloc))) {
+      LOG_WARN("failed to get safe profile allocator", KR(ret));
+    } else if (OB_ISNULL(safe_alloc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("safe profile allocator is null", KR(ret));
+    } else {
+      const int64_t runtime_count = parallel_ctx_.get_runtime_count();
+      SET_METRIC_VAL(common::ObMetricId::HS_PARALLEL_TASK_COUNT, runtime_count);
+      for (int64_t i = 0; OB_SUCC(ret) && i < runtime_count; ++i) {
+        ObDASFusionChildRuntime *runtime = parallel_ctx_.at(i);
+        if (OB_NOT_NULL(runtime)) {
+          void *buf = safe_alloc->alloc(sizeof(common::ObOpProfile<common::ObMetric>));
+          if (OB_ISNULL(buf)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to alloc per-task child profile", KR(ret), K(i));
+          } else {
+            common::ObOpProfile<common::ObMetric> *child_profile =
+                new (buf) common::ObOpProfile<common::ObMetric>(
+                    common::ObProfileId::HYBRID_SEARCH_PARALLEL_TASK, safe_alloc);
+            if (OB_FAIL(fusion_profile->adopt_child(child_profile))) {
+              LOG_WARN("failed to adopt per-task child profile", KR(ret), K(i));
+            } else {
+              runtime->profile_ = child_profile;
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDASFusionIter::do_fusion(bool is_vectorized)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(fusion_ctdef_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fusion_ctdef is null", K(ret));
+  } else if (enable_parallel_) {
+    if (OB_FAIL(merge_parallel_results())) {
+      LOG_WARN("failed to merge parallel fusion results", KR(ret));
+    }
   } else if (OB_LIKELY(is_vectorized)) {
     for (int64_t path_idx = 0; OB_SUCC(ret) && path_idx < children_cnt_; ++path_idx) {
       ObDASIter *child = children_[path_idx];

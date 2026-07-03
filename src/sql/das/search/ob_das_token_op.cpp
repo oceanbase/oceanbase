@@ -42,9 +42,11 @@ ObDASTokenOp::ObDASTokenOp(ObDASSearchCtx &search_ctx)
     text_retrieval_iter_(),
     bm25_param_estimator_(),
     inv_idx_scan_range_(),
+    inv_idx_agg_range_(),
     token_boost_(0.0),
     eval_ctx_(nullptr),
     obj_buf_(),
+    agg_obj_buf_(),
     curr_id_(nullptr),
     min_id_(nullptr),
     max_id_(nullptr),
@@ -62,6 +64,7 @@ int ObDASTokenOp::do_init(const ObIDASSearchOpParam &op_param)
   if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(param));
+  } else if (FALSE_IT(is_simple_doc_id_ = search_ctx_.get_rowid_type() == DAS_ROWID_TYPE_UINT64)) {
   } else if (OB_FAIL(init_scan_param(param))) {
     LOG_WARN("failed to init text retrieval param", K(ret));
   } else if (OB_FAIL(bm25_param_estimator_.init(
@@ -78,7 +81,6 @@ int ObDASTokenOp::do_init(const ObIDASSearchOpParam &op_param)
     token_boost_ = param.token_boost_;
     eval_ctx_ = ir_rtdef_->eval_ctx_;
     use_rich_format_ = param.use_rich_format_;
-    is_simple_doc_id_ = search_ctx_.get_rowid_type() == DAS_ROWID_TYPE_UINT64;
     bm25_param_estimated_ = false;
     block_max_inited_ = false;
     is_inited_ = true;
@@ -146,8 +148,9 @@ int ObDASTokenOp::do_rescan()
     LOG_WARN("failed to reset inv scan range", K(ret));
   } else {
     const bool need_relevance = ir_ctdef_->need_calc_relevance();
-    ObIDASSearchOp::switch_tablet_id(inv_idx_tablet_id_, inv_idx_scan_param_);
-    ObIDASSearchOp::switch_tablet_id(inv_idx_tablet_id_, inv_idx_agg_param_);
+    ObIDASSearchOp::switch_tablet_id(search_ctx_.get_ls_id(), inv_idx_tablet_id_, inv_idx_scan_param_);
+    ObIDASSearchOp::switch_tablet_id(search_ctx_.get_ls_id(), inv_idx_tablet_id_, inv_idx_agg_param_);
+    bm25_param_estimator_.switch_tablet_id(inv_idx_tablet_id_);
     if (OB_FAIL(inv_idx_scan_iter_.reuse())) {
       LOG_WARN("failed to reuse inv idx scan iter", K(ret));
     } else if (need_relevance && OB_FAIL(inv_idx_agg_iter_.reuse())) {
@@ -169,8 +172,8 @@ int ObDASTokenOp::do_rescan()
     } else if (OB_UNLIKELY(!inv_idx_agg_param_.key_ranges_.empty())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected non-empty scan range", K(ret), K(inv_idx_agg_param_.key_ranges_));
-    } else if (OB_FAIL(inv_idx_agg_param_.key_ranges_.push_back(inv_idx_scan_range_))) {
-      LOG_WARN("failed to push back scan range", K(ret));
+    } else if (OB_FAIL(inv_idx_agg_param_.key_ranges_.push_back(inv_idx_agg_range_))) {
+      LOG_WARN("failed to push back agg range", K(ret));
     } else if (OB_FAIL(inv_idx_agg_iter_.rescan())) {
       LOG_WARN("failed to rescan inv idx agg iter", K(ret));
     }
@@ -184,6 +187,7 @@ int ObDASTokenOp::do_close()
   inv_idx_scan_iter_.release();
   inv_idx_agg_iter_.release();
   inv_idx_scan_range_.reset();
+  inv_idx_agg_range_.reset();
   text_retrieval_iter_.reset();
   bm25_param_estimator_.reset();
   inv_idx_scan_param_.destroy_schema_guard();
@@ -215,7 +219,14 @@ int ObDASTokenOp::do_next_rowid(ObDASRowID &next_id, double &score)
     LOG_WARN("failed to get curr score from text retrieval iter", K(ret));
   } else if (FALSE_IT(score *= token_boost_)) {
   } else if (is_simple_doc_id_) {
-    next_id.set_uint64(id_datum->get_uint64());
+    const uint64_t docid = id_datum->get_uint64();
+    if (search_ctx_.has_docid_range()
+        && !search_ctx_.get_docid_range_hi().is_max_value()
+        && docid > search_ctx_.get_docid_range_hi().get_uint64()) {
+      ret = OB_ITER_END;
+    } else {
+      next_id.set_uint64(docid);
+    }
   } else {
     datum_to_compact_row(*id_datum, *curr_id_);
     next_id.set_compact_row(curr_id_);
@@ -230,6 +241,18 @@ int ObDASTokenOp::do_advance_to(const ObDASRowID &target, ObDASRowID &curr_id, d
   ObDatum target_datum;
   if (OB_FAIL(search_ctx_.get_datum_from_rowid(target, target_datum))) {
     LOG_WARN("failed to get datum from rowid", K(ret), K(target));
+  } else {
+    // Clamp target to docid range lower bound to prevent
+    // ObTextRetrievalTokenIter::advance_to from corrupting the inverted index
+    // scan range start_key (it overwrites obj_ptr[1] with target_docid,
+    // expanding the scan range below docid_range_lo).
+    if (is_simple_doc_id_ && search_ctx_.has_docid_range()
+        && !search_ctx_.get_docid_range_lo().is_min_value()
+        && target_datum.get_uint64() < search_ctx_.get_docid_range_lo().get_uint64()) {
+      target_datum.set_uint(search_ctx_.get_docid_range_lo().get_uint64());
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(do_inv_idx_bm25_param_estimation_on_demand())) {
     LOG_WARN("failed to do inv idx bm25 param estimation on demand", K(ret));
   } else if (OB_FAIL(text_retrieval_iter_.advance_to(target_datum))) {
@@ -242,7 +265,14 @@ int ObDASTokenOp::do_advance_to(const ObDASRowID &target, ObDASRowID &curr_id, d
     LOG_WARN("failed to get curr score from text retrieval iter", K(ret));
   } else if (FALSE_IT(score *= token_boost_)) {
   } else if (is_simple_doc_id_) {
-    curr_id.set_uint64(id_datum->get_uint64());
+    const uint64_t docid = id_datum->get_uint64();
+    if (search_ctx_.has_docid_range()
+        && !search_ctx_.get_docid_range_hi().is_max_value()
+        && docid > search_ctx_.get_docid_range_hi().get_uint64()) {
+      ret = OB_ITER_END;
+    } else {
+      curr_id.set_uint64(docid);
+    }
   } else {
     datum_to_compact_row(*id_datum, *curr_id_);
     curr_id.set_compact_row(curr_id_);
@@ -262,6 +292,12 @@ int ObDASTokenOp::do_advance_shallow(
   ObDASRowID max_id;
   if (OB_FAIL(search_ctx_.get_datum_from_rowid(target, target_datum))) {
     LOG_WARN("failed to get datum from rowid", K(ret), K(target));
+  } else if (is_simple_doc_id_ && search_ctx_.has_docid_range()
+             && !search_ctx_.get_docid_range_lo().is_min_value()
+             && target_datum.get_uint64() < search_ctx_.get_docid_range_lo().get_uint64()) {
+    target_datum.set_uint(search_ctx_.get_docid_range_lo().get_uint64());
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(init_block_max_iter_on_demand())) {
     LOG_WARN("failed to init block max iter on demand", K(ret));
   } else if (OB_FAIL(text_retrieval_iter_.advance_shallow(target_datum, inclusive))) {
@@ -344,8 +380,8 @@ int ObDASTokenOp::init_scan_param(const ObDASTokenOpParam &param)
       LOG_WARN("unexpected non-empty key ranges", K(ret), K(inv_idx_agg_rtdef->key_ranges_));
     } else if (OB_FAIL(search_ctx_.init_scan_param(inv_idx_tablet_id_, inv_idx_agg_ctdef, inv_idx_agg_rtdef, inv_idx_agg_param_))) {
       LOG_WARN("failed to init agg param", K(ret), K(inv_idx_agg_ctdef), K(inv_idx_agg_rtdef));
-    } else if (OB_FAIL(inv_idx_agg_param_.key_ranges_.push_back(inv_idx_scan_range_))) {
-      LOG_WARN("failed to push back scan range", K(ret));
+    } else if (OB_FAIL(inv_idx_agg_param_.key_ranges_.push_back(inv_idx_agg_range_))) {
+      LOG_WARN("failed to push back agg range", K(ret));
     }
   }
   return ret;
@@ -357,20 +393,51 @@ int ObDASTokenOp::init_scan_range(
     ObNewRange &scan_range)
 {
   int ret = OB_SUCCESS;
-  // Do we need deep copy query token here?
   obj_buf_[0].set_common_value(query_token);
   obj_buf_[0].set_meta_type(ir_ctdef.search_text_->obj_meta_);
-  obj_buf_[1].set_min_value();
   obj_buf_[2].set_common_value(query_token);
   obj_buf_[2].set_meta_type(ir_ctdef.search_text_->obj_meta_);
-  obj_buf_[3].set_max_value();
-  ObRowkey start_key(obj_buf_, 2);
-  ObRowkey end_key(obj_buf_ + 2, 2);
+
+  if (search_ctx_.has_docid_range() && is_simple_doc_id_
+      && OB_NOT_NULL(ir_ctdef.inv_scan_domain_id_col_)) {
+    const common::ObObj &lo = search_ctx_.get_docid_range_lo();
+    const common::ObObj &hi = search_ctx_.get_docid_range_hi();
+    if (lo.is_min_value()) {
+      obj_buf_[1].set_min_value();
+    } else {
+      obj_buf_[1] = lo;
+      obj_buf_[1].set_meta_type(ir_ctdef.inv_scan_domain_id_col_->obj_meta_);
+    }
+    if (hi.is_max_value()) {
+      obj_buf_[3].set_max_value();
+    } else {
+      obj_buf_[3] = hi;
+      obj_buf_[3].set_meta_type(ir_ctdef.inv_scan_domain_id_col_->obj_meta_);
+    }
+  } else {
+    obj_buf_[1].set_min_value();
+    obj_buf_[3].set_max_value();
+  }
   scan_range.table_id_ = ir_ctdef.get_inv_idx_scan_scalar_ctdef()->ref_table_id_;
   scan_range.start_key_.assign(obj_buf_, 2);
   scan_range.end_key_.assign(obj_buf_ + 2, 2);
   scan_range.border_flag_.set_inclusive_start();
   scan_range.border_flag_.set_inclusive_end();
+
+  // Initialize agg range WITHOUT docid restriction so that token_doc_cnt estimation
+  // in ObTextRetrievalTokenIter::estimate_token_doc_cnt() uses global statistics.
+  // This ensures BM25 IDF is computed correctly for range-parallel tasks.
+  agg_obj_buf_[0].set_common_value(query_token);
+  agg_obj_buf_[0].set_meta_type(ir_ctdef.search_text_->obj_meta_);
+  agg_obj_buf_[2].set_common_value(query_token);
+  agg_obj_buf_[2].set_meta_type(ir_ctdef.search_text_->obj_meta_);
+  agg_obj_buf_[1].set_min_value();
+  agg_obj_buf_[3].set_max_value();
+  inv_idx_agg_range_.table_id_ = ir_ctdef.get_inv_idx_scan_scalar_ctdef()->ref_table_id_;
+  inv_idx_agg_range_.start_key_.assign(agg_obj_buf_, 2);
+  inv_idx_agg_range_.end_key_.assign(agg_obj_buf_ + 2, 2);
+  inv_idx_agg_range_.border_flag_.set_inclusive_start();
+  inv_idx_agg_range_.border_flag_.set_inclusive_end();
   return ret;
 }
 
@@ -495,13 +562,37 @@ int ObDASTokenOp::init_block_max_iter_on_demand()
 int ObDASTokenOp::reset_inv_scan_range()
 {
   int ret = OB_SUCCESS;
-  // reset inv idx scan range since doc id might be pushed forward on advance_to
-  obj_buf_[1].set_min_value();
-  obj_buf_[3].set_max_value();
+  if (search_ctx_.has_docid_range() && is_simple_doc_id_
+      && OB_NOT_NULL(ir_ctdef_) && OB_NOT_NULL(ir_ctdef_->inv_scan_domain_id_col_)) {
+    const common::ObObj &lo = search_ctx_.get_docid_range_lo();
+    const common::ObObj &hi = search_ctx_.get_docid_range_hi();
+    if (lo.is_min_value()) {
+      obj_buf_[1].set_min_value();
+    } else {
+      obj_buf_[1] = lo;
+      obj_buf_[1].set_meta_type(ir_ctdef_->inv_scan_domain_id_col_->obj_meta_);
+    }
+    if (hi.is_max_value()) {
+      obj_buf_[3].set_max_value();
+    } else {
+      obj_buf_[3] = hi;
+      obj_buf_[3].set_meta_type(ir_ctdef_->inv_scan_domain_id_col_->obj_meta_);
+    }
+  } else {
+    obj_buf_[1].set_min_value();
+    obj_buf_[3].set_max_value();
+  }
   inv_idx_scan_range_.start_key_.assign(obj_buf_, 2);
   inv_idx_scan_range_.end_key_.assign(obj_buf_ + 2, 2);
   inv_idx_scan_range_.border_flag_.set_inclusive_start();
   inv_idx_scan_range_.border_flag_.set_inclusive_end();
+  // Agg range always uses full range (no docid restriction) for global BM25 statistics.
+  agg_obj_buf_[1].set_min_value();
+  agg_obj_buf_[3].set_max_value();
+  inv_idx_agg_range_.start_key_.assign(agg_obj_buf_, 2);
+  inv_idx_agg_range_.end_key_.assign(agg_obj_buf_ + 2, 2);
+  inv_idx_agg_range_.border_flag_.set_inclusive_start();
+  inv_idx_agg_range_.border_flag_.set_inclusive_end();
   return ret;
 }
 

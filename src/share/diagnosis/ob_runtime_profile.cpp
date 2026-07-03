@@ -385,6 +385,36 @@ int ObOpProfile<MetricType>::register_child(ObProfileId id, ObOpProfile<MetricTy
 }
 
 template<typename MetricType>
+int ObOpProfile<MetricType>::adopt_child(ObOpProfile<MetricType> *child)
+{
+  int ret = OB_SUCCESS;
+  char *buf = nullptr;
+  if (OB_ISNULL(child)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("child profile is null", K(ret));
+  } else if (OB_ISNULL(buf = (char *)alloc_->alloc(sizeof(ProfileWrap)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory for profile wrap");
+  } else {
+    MEMSET(buf, 0, sizeof(ProfileWrap));
+    ProfileWrap *profile_wrap = reinterpret_cast<ProfileWrap *>(buf);
+    profile_wrap->elem_ = child;
+    if (OB_FAIL(child_array_.push_back(child))) {
+      LOG_WARN("failed to push_back child profile");
+    } else {
+      child->parent_ = this;
+      if (nullptr == ATOMIC_LOAD(&child_head_)) {
+        ATOMIC_STORE_RLX(&child_head_, profile_wrap);
+      } else {
+        ATOMIC_STORE_RLX(&(child_tail_->next_), profile_wrap);
+      }
+      child_tail_ = profile_wrap;
+    }
+  }
+  return ret;
+}
+
+template<typename MetricType>
 int ObOpProfile<MetricType>::get_all_count(int64_t &metric_count, int64_t &profile_cnt) const
 {
   int ret = OB_SUCCESS;

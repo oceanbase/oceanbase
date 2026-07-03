@@ -38,6 +38,7 @@ protected:
   int do_next_rowid(ObDASRowID &next_id, double &score) override;
   virtual int advance_skip_scan(const ObDASRowID &target) = 0;
   virtual int prepare_scan_ranges(const ObDASScalarScanRtDef *rtdef);
+  int narrow_scan_ranges_by_docid_range();
 
 protected:
   storage::ObTableScanParam scan_param_;

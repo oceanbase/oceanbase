@@ -224,8 +224,17 @@ public:
     snapshot_tablet_id_ = related_tablet_ids.snapshot_tablet_id_;
     com_aux_vec_tablet_id_ = related_tablet_ids.lookup_tablet_id_;
   }
+  void fill_related_tablet_ids(ObDASRelatedTabletID &related_tablet_ids) const
+  {
+    related_tablet_ids.delta_buf_tablet_id_ = delta_buf_tablet_id_;
+    related_tablet_ids.index_id_tablet_id_ = index_id_tablet_id_;
+    related_tablet_ids.snapshot_tablet_id_ = snapshot_tablet_id_;
+    related_tablet_ids.lookup_tablet_id_ = com_aux_vec_tablet_id_;
+  }
 
   ObDASVecIndexScanIter *get_vec_index_scan_iter() const { return vec_index_scan_iter_; }
+  void set_search_ctx(ObDASSearchCtx *search_ctx) { search_ctx_ = search_ctx; }
+  void set_ls_id(const share::ObLSID &ls_id) { ls_id_ = ls_id; }
 
   static const uint64_t VSAG_MAX_EF_SEARCH = 160000;
   static constexpr double FIXED_MAGNIFICATION_RATIO = 2.0;

@@ -11,6 +11,8 @@
 #include "share/rc/ob_tenant_base.h"
 #include "sql/das/iter/ob_das_fusion_iter.h"
 #include "sql/das/search/ob_das_search_define.h"
+#include "sql/das/search/ob_i_das_search_op.h"
+#include "sql/das/search/ob_das_search_context.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr.h"
 #include "share/datum/ob_datum.h"
@@ -311,10 +313,13 @@ class ObDASFusionIterTest : public ::testing::Test
 protected:
   ObDASFusionIterTest()
       : allocator_("TestDASFusion"),
+        scan_alloc_("TestMockScan"),
         exec_ctx_(allocator_),
         eval_ctx_(exec_ctx_),
         fusion_param_(),
-        fusion_ctdef_(allocator_)
+        fusion_ctdef_(allocator_),
+        mock_scan_op_(scan_alloc_),
+        search_ctx_(allocator_, mock_scan_op_)
   {
     eval_ctx_.max_batch_size_ = 256;
   }
@@ -746,6 +751,7 @@ protected:
     fusion_param_.exec_ctx_ = &exec_ctx_;
     fusion_param_.max_size_ = 1024 * 1024;  // 1MB
     fusion_param_.output_ = &fusion_ctdef_.result_output_;
+    fusion_param_.search_ctx_ = &search_ctx_;
 
     if (OB_FAIL(fusion_iter_.init(fusion_param_))) {
       LOG_WARN("failed to init fusion iter", K(ret));
@@ -861,11 +867,14 @@ protected:
 
 protected:
   ObArenaAllocator allocator_;
+  ObArenaAllocator scan_alloc_;
   ObExecContext exec_ctx_;
   ObEvalCtx eval_ctx_;
   ObDASFusionIter fusion_iter_;
   ObDASFusionIterParam fusion_param_;
   ObDASFusionCtDef fusion_ctdef_;
+  ObDASScanOp mock_scan_op_;
+  ObDASSearchCtx search_ctx_;
 };
 
 // Test basic fusion with two paths

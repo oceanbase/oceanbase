@@ -91,6 +91,8 @@ public:
   int64_t get_max_size() const { return max_size_; }
   ObEvalCtx *get_eval_ctx() const { return eval_ctx_; }
   ObExecContext *get_exec_ctx() const { return exec_ctx_; }
+  void set_eval_ctx(ObEvalCtx *eval_ctx) { eval_ctx_ = eval_ctx; }
+  void set_exec_ctx(ObExecContext *exec_ctx) { exec_ctx_ = exec_ctx; }
 
   // The state of ObDASMergeIter may change many times during execution, e.g., the merge_type
   // changing from SEQUENTIAL_MERGE to SORT_MERGE, or the creation of a new batch of DAS tasks.

@@ -224,9 +224,19 @@ SQL_MONITOR_STATNAME_DEF(HS_VEC_HNSW_BQ_REORDER_HEAP_SIZE, metric::Unit::INT, "v
 SQL_MONITOR_STATNAME_DEF(HS_VEC_HNSW_DESERIALIZE_SNAP_TIME, metric::Unit::TIME_NS, "vec hnsw deserialize snap time", "adaptor deserialize snapshot time", M_SUM, metric::Level::STANDARD)
 SQL_MONITOR_STATNAME_DEF(HS_VEC_HNSW_SYNC_SNAP_MEM_TIME, metric::Unit::TIME_NS, "vec hnsw sync snap mem time", "adaptor sync snapshot to mem time", M_SUM, metric::Level::STANDARD)
 
+// Lake Table Parquet Page Mgr
+SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_PARQUET_PAGE_MGR_CACHED_PAGE_HIT_COUNT, metric::Unit::INT, "parquetPageMgr cached page hit count", "parquetPageMgr cached page hit count", M_SUM, metric::Level::CRITICAL)
+SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_PARQUET_PAGE_MGR_CACHED_PAGE_HIT_SIZE, metric::Unit::BYTES, "parquetPageMgr cached page hit size", "parquetPageMgr cached page hit size", M_SUM, metric::Level::CRITICAL)
+SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_PARQUET_PAGE_MGR_CACHED_PAGE_MISS_COUNT, metric::Unit::INT, "parquetPageMgr cached page miss count", "parquetPageMgr cached page miss count", M_SUM, metric::Level::CRITICAL)
+SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_PARQUET_PAGE_MGR_CACHED_PAGE_MISS_SIZE, metric::Unit::BYTES, "parquetPageMgr cached page miss size", "parquetPageMgr cached page miss size", M_SUM, metric::Level::CRITICAL)
+
 // Hybrid Search Vector Index Driver Metrics for path selection
 SQL_MONITOR_STATNAME_DEF(HS_VEC_PARTITION_ROW_COUNT, metric::Unit::INT, "vec partition row count", "estimated total row count of the partition used for path selection", M_FIRST_VAL, metric::Level::STANDARD)
 SQL_MONITOR_STATNAME_DEF(HS_VEC_FILTER_EST_ROW_COUNT, metric::Unit::INT, "vec filter est row count", "estimated filter output row count used for path selection", M_FIRST_VAL, metric::Level::STANDARD)
+
+// Hybrid Search Parallel Execution
+SQL_MONITOR_STATNAME_DEF(HS_PARALLEL_TASK_COUNT, metric::Unit::INT, "parallel task count", "parallel task count", M_SUM, metric::Level::STANDARD)
+
 //end
 SQL_MONITOR_STATNAME_DEF(MONITOR_STATNAME_END, metric::Unit::INVALID, "monitor end", "monitor stat name end", E_MIN | E_MAX, metric::Level::AD_HOC)
 #endif

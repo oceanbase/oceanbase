@@ -194,6 +194,7 @@ int ObDSLQueryInfo::deep_copy(const ObDSLQueryInfo& src, ObIRawExprCopier &expr_
     LOG_WARN("failed to copy rank_const expr", K(ret));
   } else if (OB_FAIL(ob_write_string(*allocator, src.raw_dsl_param_str_, raw_dsl_param_str_))) {
     LOG_WARN("failed to copy raw dsl param string", K(ret));
+  } else if (FALSE_IT(query_dop_ = src.query_dop_)) {
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < src.queries_.count(); ++i) {
       ObDSLQuery *copied_query = nullptr;
@@ -2599,6 +2600,73 @@ int ObDSLResolver::resolve_search_options(ObIJsonBase &req_node, ObDSLKnnQuery::
   return ret;
 }
 
+int ObDSLResolver::dispatch_query_type(const ObString &key, ObIJsonBase &sub_node, ObDSLQuery *&query, ObDSLQuery *parent_query, ObEsQueryItem outer_query_type)
+{
+  int ret = OB_SUCCESS;
+  if (key.case_compare("bool") == 0) {
+    if (OB_FAIL(resolve_bool(sub_node, query, parent_query, outer_query_type))) {
+      LOG_WARN("fail to resolve bool", K(ret));
+    }
+  } else if (key.case_compare("range") == 0) {
+    if (OB_FAIL(resolve_range(sub_node, query, parent_query, outer_query_type))) {
+      LOG_WARN("fail to resolve range", K(ret));
+    }
+  } else if (key.case_compare("term") == 0) {
+    if (OB_FAIL(resolve_term(sub_node, query, parent_query, outer_query_type))) {
+      LOG_WARN("fail to resolve term", K(ret));
+    }
+  } else if (key.case_compare("terms") == 0) {
+    if (OB_FAIL(resolve_terms(sub_node, query, parent_query, outer_query_type))) {
+      LOG_WARN("fail to resolve terms", K(ret));
+    }
+  } else if (key.case_compare("match") == 0) {
+    if (OB_FAIL(resolve_match(sub_node, query, parent_query, outer_query_type))) {
+      LOG_WARN("fail to resolve match", K(ret));
+    }
+  } else if (key.case_compare("match_phrase") == 0) {
+    if (OB_FAIL(resolve_match_phrase(sub_node, query, parent_query, outer_query_type))) {
+      LOG_WARN("fail to resolve match phrase", K(ret));
+    }
+  } else if (key.case_compare("multi_match") == 0) {
+    if (OB_FAIL(resolve_multi_match(sub_node, query, parent_query, outer_query_type))) {
+      LOG_WARN("fail to resolve multi match", K(ret));
+    }
+  } else if (key.case_compare("query_string") == 0) {
+    if (OB_FAIL(resolve_query_string(sub_node, query, parent_query, outer_query_type))) {
+      LOG_WARN("fail to resolve query string", K(ret));
+    }
+  } else if (key.case_compare("array_contains") == 0) {
+    if (OB_FAIL(resolve_array_contains(sub_node, query, parent_query, outer_query_type))) {
+      LOG_WARN("fail to resolve array contains", K(ret));
+    }
+  } else if (key.case_compare("array_contains_all") == 0) {
+    if (OB_FAIL(resolve_array_contains_all(sub_node, query, parent_query, outer_query_type))) {
+      LOG_WARN("fail to resolve array contains_all", K(ret));
+    }
+  } else if (key.case_compare("array_overlaps") == 0) {
+    if (OB_FAIL(resolve_array_overlaps(sub_node, query, parent_query, outer_query_type))) {
+      LOG_WARN("fail to resolve array overlaps", K(ret));
+    }
+  } else if (key.case_compare("json_contains") == 0) {
+    if (OB_FAIL(resolve_json_contains(sub_node, query, parent_query, outer_query_type))) {
+      LOG_WARN("fail to resolve json contains", K(ret));
+    }
+  } else if (key.case_compare("json_member_of") == 0) {
+    if (OB_FAIL(resolve_json_member_of(sub_node, query, parent_query, outer_query_type))) {
+      LOG_WARN("fail to resolve json member_of", K(ret));
+    }
+  } else if (key.case_compare("json_overlaps") == 0) {
+    if (OB_FAIL(resolve_json_overlaps(sub_node, query, parent_query, outer_query_type))) {
+      LOG_WARN("fail to resolve json overlaps", K(ret));
+    }
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "invalid key in query");
+    LOG_WARN("not supported syntax in query", K(ret), K(key));
+  }
+  return ret;
+}
+
 int ObDSLResolver::resolve_single_term(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSLQuery *parent_query, ObEsQueryItem outer_query_type)
 {
   int ret = OB_SUCCESS;
@@ -2612,66 +2680,8 @@ int ObDSLResolver::resolve_single_term(ObIJsonBase &req_node, ObDSLQuery *&query
     LOG_WARN("single term must only contain one term", K(ret));
   } else if (OB_FAIL(req_node.get_object_value(0, key, sub_node))) {
     LOG_WARN("fail to get value", K(ret));
-  } else if (key.case_compare("bool") == 0) {
-    if (OB_FAIL(resolve_bool(*sub_node, query, parent_query, outer_query_type))) {
-      LOG_WARN("fail to resolve bool", K(ret));
-    }
-  } else if (key.case_compare("range") == 0) {
-    if (OB_FAIL(resolve_range(*sub_node, query, parent_query, outer_query_type))) {
-      LOG_WARN("fail to resolve range", K(ret));
-    }
-  } else if (key.case_compare("term") == 0) {
-    if (OB_FAIL(resolve_term(*sub_node, query, parent_query, outer_query_type))) {
-      LOG_WARN("fail to resolve term", K(ret));
-    }
-  } else if (key.case_compare("terms") == 0) {
-    if (OB_FAIL(resolve_terms(*sub_node, query, parent_query, outer_query_type))) {
-      LOG_WARN("fail to resolve terms", K(ret));
-    }
-  } else if (key.case_compare("match") == 0) {
-    if (OB_FAIL(resolve_match(*sub_node, query, parent_query, outer_query_type))) {
-      LOG_WARN("fail to resolve match", K(ret));
-    }
-  } else if (key.case_compare("match_phrase") == 0) {
-    if (OB_FAIL(resolve_match_phrase(*sub_node, query, parent_query, outer_query_type))) {
-      LOG_WARN("fail to resolve match phrase", K(ret));
-    }
-  } else if (key.case_compare("multi_match") == 0) {
-    if (OB_FAIL(resolve_multi_match(*sub_node, query, parent_query, outer_query_type))) {
-      LOG_WARN("fail to resolve multi match", K(ret));
-    }
-  } else if (key.case_compare("query_string") == 0) {
-    if (OB_FAIL(resolve_query_string(*sub_node, query, parent_query, outer_query_type))) {
-      LOG_WARN("fail to resolve query string", K(ret));
-    }
-  } else if (key.case_compare("array_contains") == 0) {
-    if (OB_FAIL(resolve_array_contains(*sub_node, query, parent_query, outer_query_type))) {
-      LOG_WARN("fail to resolve array contains", K(ret));
-    }
-  } else if (key.case_compare("array_contains_all") == 0) {
-    if (OB_FAIL(resolve_array_contains_all(*sub_node, query, parent_query, outer_query_type))) {
-      LOG_WARN("fail to resolve array contains_all", K(ret));
-    }
-  } else if (key.case_compare("array_overlaps") == 0) {
-    if (OB_FAIL(resolve_array_overlaps(*sub_node, query, parent_query, outer_query_type))) {
-      LOG_WARN("fail to resolve array overlaps", K(ret));
-    }
-  } else if (key.case_compare("json_contains") == 0) {
-    if (OB_FAIL(resolve_json_contains(*sub_node, query, parent_query, outer_query_type))) {
-      LOG_WARN("fail to resolve json contains", K(ret));
-    }
-  } else if (key.case_compare("json_member_of") == 0) {
-    if (OB_FAIL(resolve_json_member_of(*sub_node, query, parent_query, outer_query_type))) {
-      LOG_WARN("fail to resolve json member_of", K(ret));
-    }
-  } else if (key.case_compare("json_overlaps") == 0) {
-    if (OB_FAIL(resolve_json_overlaps(*sub_node, query, parent_query, outer_query_type))) {
-      LOG_WARN("fail to resolve json overlaps", K(ret));
-    }
-  } else {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "invalid key in query");
-    LOG_WARN("not supported syntax in query", K(ret), K(key));
+  } else if (OB_FAIL(dispatch_query_type(key, *sub_node, query, parent_query, outer_query_type))) {
+    LOG_WARN("fail to dispatch query type", K(ret), K(key));
   }
   if (OB_FAIL(ret)) {
   } else if (outer_query_type == QUERY_ITEM_QUERY) {
@@ -2982,10 +2992,90 @@ int ObDSLResolver::resolve_query(ObIJsonBase &req_node)
 {
   int ret = OB_SUCCESS;
   ObDSLQuery *fts_query = nullptr;
-  if (OB_FAIL(resolve_single_term(req_node, fts_query, nullptr, QUERY_ITEM_QUERY))) {
-    LOG_WARN("failed to resolve single term", K(ret));
-  } else if (OB_FAIL(dsl_query_info_->queries_.push_back(fts_query))) {
-    LOG_WARN("fail to push back fts query", K(ret));
+  if (req_node.json_type() != ObJsonNodeType::J_OBJECT || req_node.element_count() < 1) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("query node must be a non-empty JSON object", KR(ret));
+  } else {
+    bool found_query_type = false;
+    for (uint64_t i = 0; OB_SUCC(ret) && i < req_node.element_count(); ++i) {
+      ObString key;
+      ObIJsonBase *sub_node = nullptr;
+      if (OB_FAIL(req_node.get_object_value(i, key, sub_node))) {
+        LOG_WARN("fail to get query value", KR(ret), K(i));
+      } else if (key.case_compare("search_options") == 0) {
+        if (OB_FAIL(resolve_query_search_options(*sub_node))) {
+          LOG_WARN("failed to resolve query search_options", KR(ret));
+        }
+      } else if (found_query_type) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("query node must contain exactly one query type key", KR(ret), K(key));
+      } else if (OB_FAIL(dispatch_query_type(key, *sub_node, fts_query, nullptr, QUERY_ITEM_QUERY))) {
+        LOG_WARN("failed to dispatch query type", KR(ret), K(key));
+      } else {
+        found_query_type = true;
+      }
+    }
+    if (OB_SUCC(ret) && !found_query_type) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("no query type key found in query node", KR(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(setup_top_level_score(fts_query))) {
+    LOG_WARN("fail to setup top level score", KR(ret));
+  } else {
+    dsl_query_info_->query_top_level_boost_ = fts_query->boost_;
+    fts_query->boost_ = static_cast<ObConstRawExpr *>(dsl_query_info_->one_const_expr_);
+    if (OB_FAIL(try_push_nested_boost_to_leaf_query(fts_query, 1.0))) {
+      LOG_WARN("fail to push nested boost to leaf query", KR(ret));
+    } else if (OB_FAIL(dsl_query_info_->queries_.push_back(fts_query))) {
+      LOG_WARN("fail to push back fts query", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDSLResolver::resolve_query_search_options(ObIJsonBase &req_node)
+{
+  int ret = OB_SUCCESS;
+  if (req_node.json_type() != ObJsonNodeType::J_OBJECT) {
+    ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
+    LOG_WARN("query search_options must be a JSON object", KR(ret));
+  } else {
+    for (uint64_t i = 0; OB_SUCC(ret) && i < req_node.element_count(); ++i) {
+      ObString key;
+      ObIJsonBase *sub_node = nullptr;
+      if (OB_FAIL(req_node.get_object_value(i, key, sub_node))) {
+        LOG_WARN("fail to get search_options value", KR(ret), K(i));
+      } else if (key.case_compare("query_dop") == 0) {
+        if (OB_ISNULL(sub_node)) {
+          ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
+          LOG_WARN("query_dop value is null", KR(ret));
+        } else {
+          const ObJsonNodeType node_type = sub_node->json_type();
+          if (node_type != ObJsonNodeType::J_INT
+              && node_type != ObJsonNodeType::J_UINT) {
+            ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
+            LOG_WARN("query_dop must be an integer", KR(ret));
+          } else {
+            int64_t dop = sub_node->get_int();
+            if (dop < 1) {
+              ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
+              LOG_WARN("query_dop must be at least 1", KR(ret), K(dop));
+            } else if (dop > 128) {
+              ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
+              LOG_WARN("query_dop must not exceed 128", KR(ret), K(dop));
+            } else {
+              dsl_query_info_->query_dop_ = dop;
+            }
+          }
+        }
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "unknown key in query search_options");
+        LOG_WARN("unknown key in query search_options", KR(ret), K(key));
+      }
+    }
   }
   return ret;
 }

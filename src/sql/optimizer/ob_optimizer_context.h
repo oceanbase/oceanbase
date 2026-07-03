@@ -306,6 +306,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     enable_storage_aggr_push_down_(false),
     enable_storage_group_by_push_down_(false),
     enable_index_merge_(false),
+    enable_hybrid_search_parallel_execution_(false),
     enable_partial_distinct_pushdown_(true),
     enable_runtime_filter_adaptive_apply_(true),
     enable_rich_vector_format_(false),
@@ -399,6 +400,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   void set_das_keep_order_enabled(bool das_keep_order_enabled) { das_keep_order_enabled_ = das_keep_order_enabled; }
   inline bool is_enable_index_merge() const { return enable_index_merge_; }
   void set_enable_index_merge(bool enable_index_merge) { enable_index_merge_ = enable_index_merge; }
+  inline bool is_enable_hybrid_search_parallel_execution() const { return enable_hybrid_search_parallel_execution_; }
+  void set_enable_hybrid_search_parallel_execution(bool v) { enable_hybrid_search_parallel_execution_ = v; }
   inline int64_t get_parallel() const { return parallel_; }
   inline int64_t get_max_parallel() const { return max_parallel_; }
   inline int64_t get_parallel_degree_limit(const int64_t server_cnt) const { return auto_dop_params_.get_parallel_degree_limit(server_cnt); }
@@ -974,6 +977,7 @@ private:
   bool enable_storage_aggr_push_down_;
   bool enable_storage_group_by_push_down_;
   bool enable_index_merge_;
+  bool enable_hybrid_search_parallel_execution_;
   bool enable_partial_distinct_pushdown_;
   bool enable_runtime_filter_adaptive_apply_;
   bool enable_rich_vector_format_;

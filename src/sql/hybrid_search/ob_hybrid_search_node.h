@@ -70,7 +70,7 @@ public:
     from_(nullptr), size_(nullptr), min_score_(nullptr), window_size_(nullptr), rank_const_(nullptr),
     rowkey_cols_(allocator), score_cols_(allocator), weight_cols_(allocator), path_top_k_limit_(allocator),
     contains_vec_node_(false), search_index_(-1), has_search_subquery_(false), has_vector_subquery_(false),
-    is_top_k_query_(true), has_hybrid_fusion_op_(false)
+    is_top_k_query_(true), has_hybrid_fusion_op_(false), query_dop_(1)
     { node_type_ = INDEX_MERGE_HYBRID_FUSION_SEARCH; }
   virtual ~ObFusionNode() {}
   virtual inline bool contains_vector_node() const { return contains_vec_node_; }
@@ -94,6 +94,7 @@ public:
   bool has_vector_subquery_;
   bool is_top_k_query_;
   bool has_hybrid_fusion_op_;
+  int64_t query_dop_;
 };
 
 class ObScalarQueryNode : public ObHybridSearchNodeBase

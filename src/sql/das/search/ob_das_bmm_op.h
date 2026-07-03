@@ -59,6 +59,7 @@ class ObDASBMMOp : public ObIDASSearchOp
 public:
   ObDASBMMOp(ObDASSearchCtx &search_ctx);
   virtual ~ObDASBMMOp() {}
+  OB_INLINE ObIDASSearchOp *get_filter_op() const { return filter_op_; }
 
 private:
   int do_init(const ObIDASSearchOpParam &op_param) override;

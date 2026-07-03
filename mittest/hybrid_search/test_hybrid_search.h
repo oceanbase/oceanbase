@@ -504,6 +504,8 @@ public:
                                   true,
                                   ObFusionMethod::WEIGHT_SUM,
                                   false,
+                                  false,
+                                  1,
                                   nullptr,
                                   nullptr,
                                   nullptr,

@@ -20,6 +20,8 @@ int ObDASBMMOpParam::get_children_ops(ObIArray<ObIDASSearchOp *> &children) cons
     LOG_WARN("score ops is null", KR(ret));
   } else if (OB_FAIL(children.assign(*score_ops_))) {
     LOG_WARN("failed to assign score ops", KR(ret));
+  } else if (OB_NOT_NULL(filter_op_) && OB_FAIL(children.push_back(filter_op_))) {
+    LOG_WARN("failed to push back filter op", KR(ret));
   }
   return ret;
 }
@@ -95,11 +97,6 @@ int ObDASBMMOp::do_open()
       LOG_WARN("failed to open child", K(ret));
     }
   }
-  if (OB_SUCC(ret) && has_filter()) {
-    if (OB_FAIL(filter_op_->open())) {
-      LOG_WARN("failed to open filter op", K(ret));
-    }
-  }
   return ret;
 }
 
@@ -114,11 +111,18 @@ int ObDASBMMOp::do_rescan()
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < children_cnt_; ++i) {
-    if (OB_ISNULL(children_[i]) || OB_ISNULL(merge_iters_[i])) {
+    if (OB_ISNULL(children_[i])) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null child", K(ret), K(i), KP(children_[i]), KP(merge_iters_[i]));
+      LOG_WARN("unexpected null child", K(ret), K(i));
     } else if (OB_FAIL(children_[i]->rescan())) {
       LOG_WARN("failed to rescan child", K(ret));
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < merge_iters_.count(); ++i) {
+    if (OB_ISNULL(merge_iters_[i])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null merge iter", K(ret), K(i));
     } else {
       merge_iters_[i]->reuse();
       sorted_iter_idxes_[i] = i;
@@ -126,11 +130,7 @@ int ObDASBMMOp::do_rescan()
   }
 
   if (OB_SUCC(ret) && has_filter()) {
-    if (OB_FAIL(filter_op_->rescan())) {
-      LOG_WARN("failed to rescan filter op", K(ret));
-    } else {
-      curr_filter_id_.set_min();
-    }
+    curr_filter_id_.set_min();
   }
 
   if (OB_SUCC(ret)) {

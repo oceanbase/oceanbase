@@ -134,6 +134,7 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     force_local_plan_(false),
     diagnosis_manager_(),
     deterministic_udf_cache_allocator_("UDFCACHE", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    safe_profile_alloc_(nullptr),
     external_url_resource_cache_(nullptr),
     external_py_url_resource_cache_(nullptr),
     external_py_sch_resource_cache_(nullptr),
@@ -204,6 +205,12 @@ ObExecContext::~ObExecContext()
   if (OB_LIKELY(NULL != convert_allocator_)) {
     DESTROY_CONTEXT(convert_allocator_);
     convert_allocator_ = NULL;
+  }
+  if (OB_NOT_NULL(safe_profile_alloc_)) {
+    // Backing arena is owned by mem_context_; only destruct the wrapper here
+    // (allocator_ frees the wrapper memory itself).
+    safe_profile_alloc_->~ObSafeArenaAllocator();
+    safe_profile_alloc_ = nullptr;
   }
   if (OB_LIKELY(NULL != mem_context_)) {
     DESTROY_CONTEXT(mem_context_);
@@ -710,6 +717,34 @@ int ObExecContext::get_malloc_allocator(ObIAllocator *&allocator)
     allocator = &mem_context_->get_malloc_allocator();
   }
 
+  return ret;
+}
+
+int ObExecContext::get_safe_profile_allocator(common::ObSafeArenaAllocator *&alloc)
+{
+  int ret = OB_SUCCESS;
+  alloc = nullptr;
+  if (OB_ISNULL(safe_profile_alloc_)) {
+    ObIAllocator *unused = nullptr;
+    if (OB_FAIL(get_malloc_allocator(unused))) {
+      LOG_WARN("init mem_context_ failed", K(ret));
+    } else if (OB_ISNULL(mem_context_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("mem_context_ is null after init", K(ret));
+    } else {
+      void *buf = allocator_.alloc(sizeof(common::ObSafeArenaAllocator));
+      if (OB_ISNULL(buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc safe_profile_alloc_ failed", K(ret));
+      } else {
+        safe_profile_alloc_ = new (buf) common::ObSafeArenaAllocator(
+            mem_context_->get_arena_allocator());
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    alloc = safe_profile_alloc_;
+  }
   return ret;
 }
 
