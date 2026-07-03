@@ -1504,6 +1504,7 @@ int ObSchemaRetrieveUtils::fill_table_schema(
     ObString empty_str("");
     ObString ttl_definition;
     ObString ttl_flag;
+    ObString merge_engine_upper_version;
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
       result, external_file_location, table_schema, true/*skip null*/, true/*ignore column error*/, empty_str);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
@@ -1514,6 +1515,8 @@ int ObSchemaRetrieveUtils::fill_table_schema(
       result, external_file_pattern, table_schema, true/*skip null*/, true/*ignore column error*/, empty_str);
     EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(
       result, "ttl_definition", ttl_definition, true, ignore_column_error, empty_str);
+    EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(
+      result, "merge_engine_upper_version", merge_engine_upper_version, true/*skip null*/, true/*ignore column error*/, empty_str);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
       result, kv_attributes, table_schema, true, ignore_column_error, "");
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
@@ -1578,13 +1581,13 @@ int ObSchemaRetrieveUtils::fill_table_schema(
       result, semistruct_properties, table_schema, true/*skip null*/, true/*ignore column error*/, "");
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, skip_index_level, table_schema, ObSkipIndexLevel,
         true/*skip null*/, true/*ignore column error*/, ObSkipIndexLevel::OB_SKIP_INDEX_LEVEL_BASE_ONLY);
-    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
-      result, merge_engine_upper_version, table_schema, true/*skip null*/, true/*ignore column error*/, empty_str);
     if (OB_SUCC(ret)) {
       bool with_dynamic_partition_policy = !table_schema.get_dynamic_partition_policy().empty();
       table_schema.set_with_dynamic_partition_policy(with_dynamic_partition_policy);
       if (OB_FAIL(table_schema.set_ttl_definition(ttl_definition, ttl_flag))) {
         SHARE_SCHEMA_LOG(WARN, "fail to set ttl definition", K(ret));
+      } else if (OB_FAIL(table_schema.set_merge_engine_upper_version(merge_engine_upper_version))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to set merge engine upper version", K(ret));
       }
     }
     ObString delta_format(ObStoreFormat::get_delta_format_name(ObStoreFormat::DEFAULT_MINOR_ROW_STORE_TYPE));
