@@ -465,15 +465,22 @@ int ObSharedStorageNetThrotManager::cal_iops_quota(const int64_t limit, ObQuotaP
   int ret = OB_SUCCESS;
   int64_t remain_limit = limit;
   int64_t valid_count = 0;
+  const int64_t map_size = (OB_ISNULL(quota_plan_map)) ? 0 : quota_plan_map->size();
+  const int64_t predict_elements_size = map_size * 2;
+  int64_t *predict_elements = nullptr;
   if (OB_ISNULL(quota_plan_map)) {
     ret = OB_INVALID_CONFIG;
     LOG_WARN("quota_plan_map is nullptr", K(ret));
+  } else if (0 == map_size) {
+    // empty map, nothing to distribute; keep prior behavior (valid_count stays 0)
+  } else if (OB_ISNULL(predict_elements = static_cast<int64_t *>(
+                 ob_malloc(sizeof(int64_t) * predict_elements_size, "SSNT_SERVICE")))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc memory for predict_elements", K(ret), K(predict_elements_size));
   } else {
     obrpc::ObQuotaPlanMap::iterator iter = quota_plan_map->begin();
-    int64_t predict_elements_size = quota_plan_map->size() * 2;
-    int64_t predict_elements[predict_elements_size];
-    memset(predict_elements, 0, sizeof(predict_elements));
-    for (int64_t i = 0; iter != quota_plan_map->end() && i < quota_plan_map->size(); ++iter, ++i) {
+    memset(predict_elements, 0, sizeof(int64_t) * predict_elements_size);
+    for (int64_t i = 0; iter != quota_plan_map->end() && i < map_size; ++iter, ++i) {
       ObSSNTValue *value = iter->second;
       if (OB_ISNULL(value)) {
         ret = OB_INVALID_CONFIG;
@@ -549,6 +556,10 @@ int ObSharedStorageNetThrotManager::cal_iops_quota(const int64_t limit, ObQuotaP
       value->assigned_resource_.iops_ = value->assigned_resource_.ops_ + value->assigned_resource_.ips_;
     }
   }
+  if (OB_NOT_NULL(predict_elements)) {
+    ob_free(predict_elements);
+    predict_elements = nullptr;
+  }
   return ret;
 }
 
@@ -558,17 +569,24 @@ int ObSharedStorageNetThrotManager::cal_bw_quota(
   int ret = OB_SUCCESS;
   int64_t remain_limit = limit;
   int64_t valid_count = 0;
+  const int64_t map_size = (OB_ISNULL(quota_plan_map)) ? 0 : quota_plan_map->size();
+  int64_t *predict_elements = nullptr;
   if (OB_ISNULL(quota_plan_map)) {
     ret = OB_INVALID_CONFIG;
     LOG_WARN("quota_plan_map is nullptr", K(ret));
   } else if (OB_ISNULL(member_ptr)) {
     ret = OB_NULL_CHECK_ERROR;
     LOG_ERROR("member_ptr is nullptr", K(ret));
+  } else if (0 == map_size) {
+    // empty map, nothing to distribute; keep prior behavior (valid_count stays 0)
+  } else if (OB_ISNULL(predict_elements = static_cast<int64_t *>(
+                 ob_malloc(sizeof(int64_t) * map_size, "SSNT_SERVICE")))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc memory for predict_elements", K(ret), K(map_size));
   } else {
     obrpc::ObQuotaPlanMap::iterator iter = quota_plan_map->begin();
-    int64_t predict_elements[quota_plan_map->size()];
-    memset(predict_elements, 0, sizeof(predict_elements));
-    for (int64_t i = 0; iter != quota_plan_map->end() && i < quota_plan_map->size(); ++iter, ++i) {
+    memset(predict_elements, 0, sizeof(int64_t) * map_size);
+    for (int64_t i = 0; iter != quota_plan_map->end() && i < map_size; ++iter, ++i) {
       ObSSNTValue *value = iter->second;
       if (OB_ISNULL(value)) {
         ret = OB_INVALID_CONFIG;
@@ -622,6 +640,10 @@ int ObSharedStorageNetThrotManager::cal_bw_quota(
       ObSSNTValue *value = quota_plan_map->begin()->second;
       value->assigned_resource_.*member_ptr += remain_quota;
     }
+  }
+  if (OB_NOT_NULL(predict_elements)) {
+    ob_free(predict_elements);
+    predict_elements = nullptr;
   }
   return ret;
 }
