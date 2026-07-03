@@ -96,8 +96,16 @@ int ObFTIndexRowCache::init(
       parser_context_.ngram_token_size_ = property.ngram_token_size_;
       parser_context_.ik_param_.mode_
           = (property.ik_mode_smart_ ? plugin::ObFTIKParam::Mode::SMART : plugin::ObFTIKParam::Mode::MAX_WORD);
-          parser_context_.min_ngram_size_ = property.min_ngram_token_size_;
-          parser_context_.max_ngram_size_ = property.max_ngram_token_size_;
+      parser_context_.min_ngram_size_ = property.min_ngram_token_size_;
+      parser_context_.max_ngram_size_ = property.max_ngram_token_size_;
+      parser_context_.ik_param_.main_dict_id_ = property.dict_table_id_;
+      parser_context_.ik_param_.quan_dict_id_ = property.quantifier_table_id_;
+      parser_context_.ik_param_.stopword_dict_id_ = property.stopword_table_id_;
+      parser_context_.ik_param_.main_dict_name_ = property.dict_table_name_;
+      parser_context_.ik_param_.quan_dict_name_ = property.quantifier_table_name_;
+      parser_context_.ik_param_.stopword_dict_name_ = property.stopword_table_name_;
+      parser_context_.is_ddl_mode_ = true;
+      parser_context_.need_casedown_ = helper_.get_process_token_flags().casedown_token();
     }
 
   }
@@ -131,6 +139,7 @@ int ObFTIndexRowCache::segment(const common::ObObjMeta &ft_obj_meta,
     analyzer_param.meta_ = ft_obj_meta;
     analyzer_param.alloc_ = &scratch_allocator_;
     analyzer_param.is_ddl_mode_ = helper_.is_ddl_mode();
+    analyzer_param.need_casedown_ = helper_.get_process_token_flags().casedown_token();
 
     storage::ObFTSAnalyzer *fts_analyzer = nullptr;
     storage::ObITokenStream *token_stream = nullptr;

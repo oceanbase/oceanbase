@@ -146,12 +146,13 @@ private:
   struct DictTableInfo {
     uint64_t table_id_;
     common::ObString table_name_;
-    TO_STRING_KV(K_(table_id), K_(table_name));
+    int64_t collation_type_;
+    TO_STRING_KV(K_(table_id), K_(table_name), K_(collation_type));
   };
 
   int get_sql_statement(common::ObSqlString &sql);
   int get_all_dict_tables(common::ObIAllocator &allocator, common::ObIArray<DictTableInfo> &dict_tables);
-  int refresh_dict_cache(const uint64_t table_id, const common::ObString &table_name);
+  int refresh_dict_cache(const DictTableInfo &table_info);
 
 private:
   uint64_t tenant_id_;

@@ -100,7 +100,8 @@ public:
         ngram_token_size_(NGRAM_TOKEN_SIZE),
         min_ngram_size_(NGRAM_TOKEN_SIZE),
         max_ngram_size_(NGRAM_TOKEN_SIZE),
-        is_ddl_mode_(false)
+        is_ddl_mode_(false),
+        need_casedown_(false)
   {
   }
   virtual ~ObFTParserParam() { reset(); }
@@ -112,9 +113,12 @@ public:
     scratch_alloc_ = nullptr;
     ngram_token_size_ = NGRAM_TOKEN_SIZE;
     is_ddl_mode_ = false;
+    need_casedown_ = false;
   }
 
-  INHERIT_TO_STRING_KV("base", ObFTParserParamExport, K_(ik_param), K_(ngram_token_size), K_(is_ddl_mode));
+  INHERIT_TO_STRING_KV("ObFTParserParamExport", ObFTParserParamExport,
+      KP_(metadata_alloc), KP_(scratch_alloc), K_(ngram_token_size),
+      K_(min_ngram_size), K_(max_ngram_size), K_(ik_param), K_(is_ddl_mode), K_(need_casedown));
 
 public:
   common::ObIAllocator *metadata_alloc_;
@@ -125,6 +129,7 @@ public:
   int64_t max_ngram_size_;
 
   bool is_ddl_mode_;
+  bool need_casedown_;
 };
 
 class ObITokenIterator

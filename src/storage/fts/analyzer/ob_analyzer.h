@@ -41,7 +41,8 @@ public:
       process_token_flag_(),
       meta_(),
       alloc_(nullptr),
-      is_ddl_mode_(false) {}
+      is_ddl_mode_(false),
+      need_casedown_(false) {}
   ~ObFTAnalyzerParam() = default;
   bool is_valid() const
   {
@@ -58,6 +59,7 @@ public:
     meta_.reset();
     alloc_ = nullptr;
     is_ddl_mode_= false;
+    need_casedown_ = false;
   }
   TO_STRING_KV(K_(legacy_tokenizer_type), KP_(parser_property), K_(fts_index_type),
                K_(process_token_flag), K_(meta), KP_(alloc));
@@ -75,6 +77,7 @@ public:
   // --- for all component allocation ---
   common::ObIAllocator *alloc_;                           // allocator for creating analyzer and its components
   bool is_ddl_mode_;                                      // whether the analyzer is created for DDL
+  bool need_casedown_;                                     // whether to lowercase dict words for case-insensitive matching
 };
 
 enum class ObAnalyzerType

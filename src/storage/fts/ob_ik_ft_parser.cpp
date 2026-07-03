@@ -292,9 +292,10 @@ int ObIKFTParser::init_dict(const plugin::ObFTParserParam &param)
                                       ? ObFTDictDesc::BuildMode::DDL_EXE : ObFTDictDesc::BuildMode::DML_OR_SELECT_EXE;
   const ObCharsetType charset = ObCharsetType::CHARSET_UTF8MB4;
   const ObCollationType collation = ObCollationType::CS_TYPE_UTF8MB4_BIN;
-  ObFTDictDesc main_dict_desc(charset, collation, param.ik_param_.main_dict_id_, param.ik_param_.main_dict_name_);
-  ObFTDictDesc quan_dict_desc(charset, collation, param.ik_param_.quan_dict_id_, param.ik_param_.quan_dict_name_);
-  ObFTDictDesc stopword_dict_desc(charset, collation, param.ik_param_.stopword_dict_id_, param.ik_param_.stopword_dict_name_);
+  const bool need_casedown = param.need_casedown_;
+  ObFTDictDesc main_dict_desc(charset, collation, param.ik_param_.main_dict_id_, param.ik_param_.main_dict_name_, need_casedown);
+  ObFTDictDesc quan_dict_desc(charset, collation, param.ik_param_.quan_dict_id_, param.ik_param_.quan_dict_name_, need_casedown);
+  ObFTDictDesc stopword_dict_desc(charset, collation, param.ik_param_.stopword_dict_id_, param.ik_param_.stopword_dict_name_, need_casedown);
 
   if (OB_FAIL(init_cache_loader(build_mode))) {
     LOG_WARN("Failed to init cache loader", K(ret), K(build_mode));

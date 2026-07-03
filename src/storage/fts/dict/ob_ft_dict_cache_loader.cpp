@@ -73,7 +73,7 @@ int ObFTDictCacheLoaderBase::build_ranges_from_table(const ObFTDictDesc &desc,
   SMART_VAR(ObISQLClient::ReadResult, result)
   {
     ObFTDictTableIter iter_table(result);
-    if (OB_FAIL(iter_table.init(desc.table_name_, tenant_id_, snapshot_version, partial_ranges))) {
+    if (OB_FAIL(iter_table.init(desc.table_name_, tenant_id_, snapshot_version, desc.need_casedown_, partial_ranges))) {
       if (OB_SNAPSHOT_DISCARDED == ret) {
         // need more build
       } else if (OB_ITER_END != ret) {

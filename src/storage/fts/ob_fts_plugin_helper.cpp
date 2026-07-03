@@ -380,6 +380,7 @@ int ObFTParseHelper::segment(
     analyzer_param.meta_ = meta;
     analyzer_param.alloc_ = allocator_;
     analyzer_param.is_ddl_mode_ = is_ddl_mode_;
+    analyzer_param.need_casedown_ = process_token_flag_.casedown_token();
 
     if (OB_FAIL(create_analyzer(analyzer_param, fts_analyzer))) {
       LOG_WARN("fail to create fts analyzer", K(ret));

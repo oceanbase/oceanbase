@@ -1512,6 +1512,7 @@ int ObTokenStreamFactory::create_analyzer_from_legacy_parser(
             s->quan_dict_name_ = parser_property.quantifier_table_name_;
             s->stopword_dict_name_ = parser_property.stopword_table_name_;
             s->is_ddl_mode_ = param.is_ddl_mode_;
+            s->need_casedown_ = param.need_casedown_;
             tokenizer_spec = s;
             analyzer_spec.tokenizer_spec_ = tokenizer_spec;
           }

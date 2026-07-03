@@ -4823,10 +4823,11 @@ int ObRpcRefreshFulltextDictP::process()
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("table is not a fulltext dictionary table", K(ret), K(arg_.table_id_));
       } else {
+        const ObCollationType dict_coll = table_schema->get_collation_type();
         storage::ObFTDictDesc desc(table_schema->get_charset_type(),
-                                  table_schema->get_collation_type(),
-                                  arg_.table_id_,
-                                  arg_.full_table_name_);
+                                   dict_coll,
+                                   arg_.table_id_,
+                                   arg_.full_table_name_);
         storage::ObFTDictCacheLoaderRefresh loader;
         if (OB_FAIL(loader.load_cache(desc))) {
           LOG_WARN("build cache from table failed", K(ret), K(arg_.table_id_), K(arg_.full_table_name_));

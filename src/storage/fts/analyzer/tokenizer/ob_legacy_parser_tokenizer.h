@@ -50,6 +50,7 @@ struct ObIKTokenizerSpec : public ObTokenizerSpec
   common::ObString stopword_dict_name_;
   bool ik_mode_smart_;
   bool is_ddl_mode_;
+  bool need_casedown_;
 
   ObIKTokenizerSpec()
     : main_dict_id_(OB_INVALID_ID),
@@ -59,10 +60,12 @@ struct ObIKTokenizerSpec : public ObTokenizerSpec
       quan_dict_name_(),
       stopword_dict_name_(),
       ik_mode_smart_(true),
-      is_ddl_mode_(false)
+      is_ddl_mode_(false),
+      need_casedown_(false)
   { type_ = ObTokenizerType::TOKENIZER_TYPE_IK; }
   VIRTUAL_TO_STRING_KV(K_(type), K_(main_dict_id), K_(quan_dict_id), K_(stopword_dict_id),
-      K_(main_dict_name), K_(quan_dict_name), K_(stopword_dict_name), K_(ik_mode_smart), K_(is_ddl_mode));
+      K_(main_dict_name), K_(quan_dict_name), K_(stopword_dict_name), K_(ik_mode_smart),
+      K_(is_ddl_mode), K_(need_casedown));
 };
 
 struct ObNgram2TokenizerSpec : public ObTokenizerSpec
@@ -157,7 +160,7 @@ protected:
 class ObIKTokenizer final : public ObLegacyParserTokenizer
 {
 public:
-  ObIKTokenizer() : ik_mode_smart_(true) {}
+  ObIKTokenizer() : ik_mode_smart_(true), is_ddl_mode_(false), need_casedown_(false) {}
   virtual ~ObIKTokenizer() = default;
   virtual int init(const ObTokenizerSpec &spec, common::ObIAllocator &alloc) override;
 protected:
@@ -171,6 +174,7 @@ private:
   common::ObString stopword_dict_name_;
   bool ik_mode_smart_;
   bool is_ddl_mode_;
+  bool need_casedown_;
 };
 
 class ObNgram2Tokenizer final : public ObLegacyParserTokenizer

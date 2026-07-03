@@ -56,6 +56,7 @@ int ObFTDictTableIter::next()
 }
 
 int ObFTDictTableIter::append_where_clause(ObSqlString &sql_string,
+                                           const bool need_casedown,
                                            const ObIArray<ObMissingRangeInfo> *partial_ranges)
 {
   int ret = OB_SUCCESS;
@@ -81,7 +82,9 @@ int ObFTDictTableIter::append_where_clause(ObSqlString &sql_string,
       } else if (OB_FAIL(sql_string.append("("))) {
         LOG_WARN("Failed to append opening parenthesis", K(ret));
       } else if (!start_word_str.empty()) {
-        if (OB_FAIL(sql_string.append("word > "))) {
+        if (need_casedown && OB_FAIL(sql_string.append("LOWER(word) > "))) {
+          LOG_WARN("Failed to append start_token condition", K(ret));
+        } else if (!need_casedown && OB_FAIL(sql_string.append("word > "))) {
           LOG_WARN("Failed to append start_word condition", K(ret));
         } else if (OB_FAIL(sql_append_hex_escape_str(start_word_str, sql_string))) {
           LOG_WARN("Failed to append start_word value", K(ret), K(start_word_str));
@@ -92,7 +95,9 @@ int ObFTDictTableIter::append_where_clause(ObSqlString &sql_string,
       } else if (with_and && OB_FAIL(sql_string.append(" AND "))) {
         LOG_WARN("Failed to append AND", K(ret));
       } else if (!end_word_str.empty()) {
-        if (OB_FAIL(sql_string.append("word < "))) {
+        if (need_casedown && OB_FAIL(sql_string.append("LOWER(word) < "))) {
+          LOG_WARN("Failed to append end_token condition", K(ret));
+        } else if (!need_casedown && OB_FAIL(sql_string.append("word < "))) {
           LOG_WARN("Failed to append end_word condition", K(ret));
         } else if (OB_FAIL(sql_append_hex_escape_str(end_word_str, sql_string))) {
           LOG_WARN("Failed to append end_word value", K(ret), K(end_word_str));
@@ -114,6 +119,7 @@ int ObFTDictTableIter::append_where_clause(ObSqlString &sql_string,
 int ObFTDictTableIter::init(const ObString &table_name,
                             const uint64_t tenant_id,
                             const int64_t snapshot_version,
+                            const bool need_casedown,
                             const ObIArray<ObMissingRangeInfo> *partial_ranges)
 {
   int ret = OB_SUCCESS;
@@ -131,12 +137,15 @@ int ObFTDictTableIter::init(const ObString &table_name,
   } else {
     SMART_VAR(ObSqlString, sql_string)
     {
-      // Build SQL query: SELECT word FROM table_name AS OF SNAPSHOT snapshot_version
-      if (OB_FAIL(sql_string.append_fmt("SELECT word FROM %.*s AS OF SNAPSHOT %ld",
-                                         table_name.length(), table_name.ptr(),
-                                         snapshot_version))) {
-        LOG_WARN("Failed to build sql prefix", K(ret), K(table_name), K(snapshot_version));
-      } else if (OB_FAIL(append_where_clause(sql_string, partial_ranges))) {
+      if (need_casedown && OB_FAIL(sql_string.append_fmt(
+              "SELECT DISTINCT LOWER(word) AS word FROM %.*s AS OF SNAPSHOT %ld",
+              table_name.length(), table_name.ptr(), snapshot_version))) {
+        LOG_WARN("Failed to build sql prefix", K(ret), K(table_name), K(snapshot_version), K(need_casedown));
+      } else if (!need_casedown && OB_FAIL(sql_string.append_fmt(
+                     "SELECT word FROM %.*s AS OF SNAPSHOT %ld",
+                     table_name.length(), table_name.ptr(), snapshot_version))) {
+        LOG_WARN("Failed to build sql prefix", K(ret), K(table_name), K(snapshot_version), K(need_casedown));
+      } else if (OB_FAIL(append_where_clause(sql_string, need_casedown, partial_ranges))) {
         LOG_WARN("Failed to append partial ranges WHERE clause", K(ret));
       } else if (OB_FAIL(sql_string.append(" ORDER BY word"))) {
         LOG_WARN("Failed to append ORDER BY", K(ret));

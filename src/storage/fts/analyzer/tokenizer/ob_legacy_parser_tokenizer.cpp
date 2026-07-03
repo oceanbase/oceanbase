@@ -285,6 +285,7 @@ int ObIKTokenizer::init(const ObTokenizerSpec &spec, common::ObIAllocator &alloc
     const ObIKTokenizerSpec &ik_spec = static_cast<const ObIKTokenizerSpec &>(spec);
     ik_mode_smart_ = ik_spec.ik_mode_smart_;
     is_ddl_mode_ = ik_spec.is_ddl_mode_;
+    need_casedown_ = ik_spec.need_casedown_;
     main_dict_id_ = ik_spec.main_dict_id_;
     quan_dict_id_ = ik_spec.quan_dict_id_;
     stopword_dict_id_ = ik_spec.stopword_dict_id_;
@@ -316,6 +317,7 @@ int ObIKTokenizer::create_parser_impl(
     param.metadata_alloc_ = alloc_;
     param.scratch_alloc_ = alloc_;
     param.is_ddl_mode_ = is_ddl_mode_;
+    param.need_casedown_ = need_casedown_;
     param.ik_param_.mode_ = ik_mode_smart_
                                 ? plugin::ObFTIKParam::Mode::SMART
                                 : plugin::ObFTIKParam::Mode::MAX_WORD;

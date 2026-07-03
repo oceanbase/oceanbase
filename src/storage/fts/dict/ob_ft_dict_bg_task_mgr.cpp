@@ -70,7 +70,7 @@ void ObFTDictRefreshTask::runTimerTask()
     } else if (dict_tables.count() > 0) {
       for (int64_t i = 0; i < dict_tables.count(); ++i) {
         const DictTableInfo &table_info = dict_tables.at(i);
-        if (OB_FAIL(refresh_dict_cache(table_info.table_id_, table_info.table_name_))) {
+        if (OB_FAIL(refresh_dict_cache(table_info))) {
           LOG_WARN("fail to refresh dict cache", K(ret), K(table_info));
         }
       }
@@ -93,7 +93,9 @@ int ObFTDictRefreshTask::get_sql_statement(common::ObSqlString &sql)
     LOG_WARN("fail to collect row_scn table ids", K(ret));
   } else if (0 < cached_id_cnt) {
     if (OB_FAIL(sql.assign_fmt(
-            "SELECT DISTINCT t.table_id AS table_id, CONCAT(db.database_name, '.', t.table_name) AS table_name "
+            "SELECT DISTINCT t.table_id AS table_id, "
+            "CONCAT(db.database_name, '.', t.table_name) AS table_name, "
+            "t.collation_type AS collation_type "
             "FROM %s t "
             "INNER JOIN %s db ON t.tenant_id = db.tenant_id AND t.database_id = db.database_id "
             "AND db.in_recyclebin = 0 AND db.database_name != '__recyclebin' "
@@ -149,6 +151,7 @@ int ObFTDictRefreshTask::get_all_dict_tables(common::ObIAllocator &allocator,
               common::ObString tmp_table_name;
               EXTRACT_INT_FIELD_MYSQL(*result, "table_id", table_info.table_id_, int64_t);
               EXTRACT_VARCHAR_FIELD_MYSQL(*result, "table_name", tmp_table_name);
+              EXTRACT_INT_FIELD_MYSQL(*result, "collation_type", table_info.collation_type_, int64_t);
               if (OB_FAIL(ret)) {
                 LOG_WARN("fail to extract table info", K(ret));
               } else if (OB_INVALID_ID == table_info.table_id_) {
@@ -168,23 +171,21 @@ int ObFTDictRefreshTask::get_all_dict_tables(common::ObIAllocator &allocator,
   return ret;
 }
 
-int ObFTDictRefreshTask::refresh_dict_cache(const uint64_t table_id,
-                                            const common::ObString &table_name)
+int ObFTDictRefreshTask::refresh_dict_cache(const DictTableInfo &table_info)
 {
   int ret = OB_SUCCESS;
-  ObFTDictDesc desc(ObCharsetType::CHARSET_UTF8MB4,
-                    ObCollationType::CS_TYPE_UTF8MB4_BIN,
-                    table_id,
-                    table_name);
+  const ObCollationType collation = static_cast<ObCollationType>(table_info.collation_type_);
+  const ObCharsetType charset = ObCharset::charset_type_by_coll(collation);
+  ObFTDictDesc desc(charset, collation, table_info.table_id_, table_info.table_name_);
   ObFTDictCacheLoaderRefresh loader;
   if (OB_FAIL(loader.load_cache(desc))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
-      LOG_WARN("fail to load cache", K(ret), K(table_id), K(table_name));
+      LOG_WARN("fail to load cache", K(ret), K(table_info));
     } else {
       ret = OB_SUCCESS;
     }
   } else {
-    LOG_INFO("refresh single dict table cache success", K(table_id), K(table_name));
+    LOG_INFO("refresh single dict table cache success", K(table_info));
   }
   return ret;
 }

@@ -31,12 +31,14 @@ public:
   int init(const ObString &table_name,
            const uint64_t tenant_id,
            const int64_t snapshot_version,
+           const bool need_casedown,
            const ObIArray<ObMissingRangeInfo> *partial_ranges = nullptr);
 
 private:
   void reset();
 
-  int append_where_clause(ObSqlString &sql_string, const ObIArray<ObMissingRangeInfo> *partial_ranges);
+  int append_where_clause(ObSqlString &sql_string, const bool need_casedown,
+                          const ObIArray<ObMissingRangeInfo> *partial_ranges);
 
   bool is_inited_;
   ObISQLClient::ReadResult &res_;

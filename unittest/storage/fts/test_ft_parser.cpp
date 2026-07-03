@@ -735,13 +735,13 @@ TEST_F(FTParserTest, test_append_where_clause)
   common::ObISQLClient::ReadResult res;
   ObFTDictTableIter iter(res);
 
-  ret = iter.append_where_clause(sql, nullptr);
+  ret = iter.append_where_clause(sql, false, nullptr);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(sql.empty());
 
   ObSEArray<ObMissingRangeInfo, 4> empty_ranges;
   sql.reset();
-  ret = iter.append_where_clause(sql, &empty_ranges);
+  ret = iter.append_where_clause(sql, false, &empty_ranges);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(sql.empty());
 
@@ -751,7 +751,7 @@ TEST_F(FTParserTest, test_append_where_clause)
   ASSERT_EQ(OB_SUCCESS, r1.end_word_.set_token("z", 1));
   ASSERT_EQ(OB_SUCCESS, ranges.push_back(r1));
   sql.reset();
-  ret = iter.append_where_clause(sql, &ranges);
+  ret = iter.append_where_clause(sql, false, &ranges);
   ASSERT_EQ(OB_SUCCESS, ret);
   {
     std::string s(sql.string().ptr(), sql.string().length());
@@ -766,7 +766,7 @@ TEST_F(FTParserTest, test_append_where_clause)
   ASSERT_EQ(OB_SUCCESS, r2.start_word_.set_token("m", 1));
   ASSERT_EQ(OB_SUCCESS, ranges.push_back(r2));
   sql.reset();
-  ret = iter.append_where_clause(sql, &ranges);
+  ret = iter.append_where_clause(sql, false, &ranges);
   ASSERT_EQ(OB_SUCCESS, ret);
   {
     std::string s(sql.string().ptr(), sql.string().length());
@@ -779,7 +779,7 @@ TEST_F(FTParserTest, test_append_where_clause)
   ASSERT_EQ(OB_SUCCESS, r3.end_word_.set_token("z", 1));
   ASSERT_EQ(OB_SUCCESS, ranges.push_back(r3));
   sql.reset();
-  ret = iter.append_where_clause(sql, &ranges);
+  ret = iter.append_where_clause(sql, false, &ranges);
   ASSERT_EQ(OB_SUCCESS, ret);
   {
     std::string s(sql.string().ptr(), sql.string().length());
@@ -796,7 +796,7 @@ TEST_F(FTParserTest, test_append_where_clause)
   ASSERT_EQ(OB_SUCCESS, r4.end_word_.set_token("z", 1));
   ASSERT_EQ(OB_SUCCESS, ranges.push_back(r4));
   sql.reset();
-  ret = iter.append_where_clause(sql, &ranges);
+  ret = iter.append_where_clause(sql, false, &ranges);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(std::string(sql.string().ptr(), sql.string().length()).find("OR") != std::string::npos);
 
@@ -804,7 +804,7 @@ TEST_F(FTParserTest, test_append_where_clause)
   ObMissingRangeInfo r5;
   ASSERT_EQ(OB_SUCCESS, ranges.push_back(r5));
   sql.reset();
-  ret = iter.append_where_clause(sql, &ranges);
+  ret = iter.append_where_clause(sql, false, &ranges);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(sql.empty());
 }

@@ -50,17 +50,35 @@ public:
   ObFTDictDesc(const ObCharsetType charset,
                const ObCollationType coll_type,
                const uint64_t table_id,
-               const common::ObString &table_name)
-      : table_id_(table_id), table_name_(table_name), charset_(charset), coll_type_(coll_type)
+               const common::ObString &table_name,
+               const bool need_casedown)
+      : table_id_(table_id), table_name_(table_name), charset_(charset), coll_type_(coll_type),
+        need_casedown_(need_casedown)
   {
   }
-  TO_STRING_KV(K_(charset), K_(coll_type), K_(table_id), K_(table_name));
+  ObFTDictDesc(const ObCharsetType charset,
+               const ObCollationType coll_type,
+               const uint64_t table_id,
+               const common::ObString &table_name)
+      : table_id_(table_id), table_name_(table_name), charset_(charset), coll_type_(coll_type),
+        need_casedown_(is_ci_collation(coll_type))
+  {
+  }
+
+  static bool is_ci_collation(const ObCollationType coll_type)
+  {
+    const ObCharsetInfo *cs = common::ObCharset::get_charset(coll_type);
+    return (cs != nullptr) && (cs->state & OB_CS_CI);
+  }
+
+  TO_STRING_KV(K_(charset), K_(coll_type), K_(table_id), K_(table_name), K_(need_casedown));
 
 public:
   uint64_t table_id_;
   common::ObString table_name_;
   ObCharsetType charset_;
   ObCollationType coll_type_;
+  bool need_casedown_;
 };
 
 } //  namespace storage
