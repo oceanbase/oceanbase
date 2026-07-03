@@ -6023,22 +6023,35 @@ int ObPluginVectorIndexAdaptor::check_need_freeze_by_optimize_ratio(const int64_
   bool snap_data_loaded = false;
   need_freeze = false;
   int64_t dim = 0;
+  bool can_read_index = false;
 
   if (snap_data_.is_valid()) {
     snap_data_loaded = snap_data_->has_complete_;
   }
   // only check snap data and delete bitmap count, at least one vector in incr data
-  if (snap_data_.is_valid() && snap_data_->is_inited() && OB_FAIL(get_snap_index_row_cnt_safe(snap_count))) {
+  if (!(snap_data_.is_valid() && snap_data_->is_inited())) {
+    // skip check snap_data for freeze until snapshot data is ready
+  } else if (OB_FAIL(check_snapshot_table_can_read_index(can_read_index))) {
+    LOG_WARN("fail to check snapshot table can read index", KR(ret), K_(tenant_id), KPC(this));
+    ret = OB_SUCCESS;
+  } else if (!can_read_index) {
+    // skip check snap_data for freeze until snapshot table can read index
+    LOG_INFO("snapshot table can not read index, skip freeze check by optimize ratio", K_(tenant_id), KPC(this));
+  } else if (OB_FAIL(get_snap_index_row_cnt_safe(snap_count))) {
     LOG_WARN("failed to get snap index row cnt", K(ret));
+  }
+  // get incr index row cnt
+  if (OB_FAIL(ret)) {
+    // skip for error
+  } else if (snap_count == 0 && !snap_data_loaded) {
+    // skip, snap data not ready
+    LOG_DEBUG("skip freeze by optimize ratio, snap data not ready", K(ret), K(snap_data_loaded));
   } else if (incr_data_.is_valid() && incr_data_->is_inited()
               && OB_FAIL(get_inc_index_row_cnt_safe(incr_count))) {
     LOG_WARN("failed to get incr index row cnt", K(ret));
   } else if (vbitmap_data_.is_valid() && vbitmap_data_->is_inited()
              && OB_FAIL(get_vbitmap_delete_cnt_safe(vbitmap_delete_count))) {
     LOG_WARN("failed to get vbitmap delete cnt", K(ret));
-  } else if (snap_count == 0 && !snap_data_loaded) {
-    // skip, snap data not ready
-    LOG_DEBUG("skip freeze by optimize ratio, snap data not ready", K(ret), K(snap_data_loaded));
   } else if (OB_FAIL(get_dim(dim))) {
     LOG_WARN("failed to get dim", K(ret));
     //TODO: segment frozen check now, if don't need, don't need to check incr_count
