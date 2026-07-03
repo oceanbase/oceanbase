@@ -690,3 +690,10 @@ select  * from z1 ignore key(a);
 select /*+index(z1 z1_b)*/ * from z1 ignore key(z1_b);
 select  * from z1 ignore key(z1_b);
 
+**************   Case 174   ***************
+select /*+index(index_test "idx_faa_code`") COMMENTA*/c2 from index_test;
+select c2 from index_test;
+
+**************   Case 175   ***************
+select /*+index(index_test "idx_faa_code`") COMMENTA*/c2 from index_test;
+select c2 from index_test;

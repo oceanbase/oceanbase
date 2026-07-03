@@ -228,3 +228,10 @@ select /*+ INDEX(@SEL$3 opt.z1@SEL$2 z1_b)*/ min(a) from z1 za where za.a in (se
 #repair: /*+index(t i)*/ hint will ignore IGNORE HINT
 select /*+index(z1 z1_b)*/ * from z1 ignore key(a);
 select /*+index(z1 z1_b)*/ * from z1 ignore key(z1_b);
+
+# issue 2024071000103618229: 反引号在 hint 内不应让过滤 hint 失败
+--sql_mode mysql
+select /*+index(index_test "idx_faa_code`") COMMENTA*/c2 from index_test;
+--sql_mode oracle
+select /*+index(index_test "idx_faa_code`") COMMENTA*/c2 from index_test;
+--sql_mode mysql
