@@ -2451,7 +2451,20 @@ int ObDASIterUtils::create_function_lookup_tree(ObTableScanParam &scan_param,
     const bool need_rewind = true;
     const bool need_distinct = false;
 
-    if (OB_FAIL(ObDASUtils::find_child_das_def(
+    if (OB_UNLIKELY(1 != sort_ctdef->children_cnt_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected children cnt", K(ret), K(sort_ctdef->children_cnt_));
+    } else if (ObDASOpType::DAS_OP_IR_AUX_LOOKUP == sort_ctdef->children_[0]->op_type_) {
+      if (OB_FAIL(create_mvi_lookup_sub_tree(scan_param, alloc, sort_ctdef, sort_rtdef, nullptr,
+                                             related_tablet_ids, trans_desc, snapshot, sort_result))) {
+        LOG_WARN("failed to create mvi lookup sub tree", K(ret));
+      } else {
+        rowkey_scan_iter = sort_result;
+        const ObDASIRAuxLookupCtDef *mvi_lookup_ctdef
+            = static_cast<const ObDASIRAuxLookupCtDef *>(sort_ctdef->children_[0]);
+        rowkey_scan_output_exprs = &mvi_lookup_ctdef->get_lookup_scan_ctdef()->pd_expr_spec_.access_exprs_;
+      }
+    } else if (OB_FAIL(ObDASUtils::find_child_das_def(
         rowkey_scan_ctdef,
         rowkey_scan_rtdef,
         ObDASOpType::DAS_OP_IR_SCAN,
@@ -2504,7 +2517,8 @@ int ObDASIterUtils::create_function_lookup_tree(ObTableScanParam &scan_param,
       }
     }
 
-    if (FAILEDx(create_sort_sub_tree(
+    if (OB_FAIL(ret) || ObDASOpType::DAS_OP_IR_AUX_LOOKUP == sort_ctdef->children_[0]->op_type_) {
+    } else if (OB_FAIL(create_sort_sub_tree(
         alloc, sort_ctdef, sort_rtdef, need_rewind, need_distinct, child_iter, sort_result))) {
       LOG_WARN("failed to create sort sub tree", K(ret));
     } else {
@@ -2874,69 +2888,9 @@ int ObDASIterUtils::create_mvi_lookup_tree(ObTableScanParam &scan_param,
 
   if (OB_FAIL(ret)) {
   } else if (sort_ctdef->children_[0]->op_type_ == DAS_OP_IR_AUX_LOOKUP) {
-    const ObDASIRAuxLookupCtDef *mvi_lookup_ctdef = nullptr;
-    ObDASIRAuxLookupRtDef *mvi_lookup_rtdef = nullptr;
-    if (OB_FAIL(ObDASUtils::find_target_das_def(attach_ctdef, attach_rtdef, DAS_OP_IR_AUX_LOOKUP, mvi_lookup_ctdef, mvi_lookup_rtdef))) {
-      LOG_WARN("find ir aux lookup def failed", K(ret));
-    } else if (mvi_lookup_ctdef->children_cnt_ != 2) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("find index def failed", K(ret), K(mvi_lookup_ctdef->children_cnt_));
-    } else {
-      ObDASScanIter *docid_rowkey_table_iter = nullptr;
-      ObDASMVILookupIter *mvi_lookup_iter = nullptr;
-
-      const ObDASScanCtDef* index_ctdef = static_cast<const ObDASScanCtDef*>(mvi_lookup_ctdef->children_[0]);
-      ObDASScanRtDef * index_rtdef = static_cast<ObDASScanRtDef *>(mvi_lookup_rtdef->children_[0]);
-      const ObDASScanCtDef* docid_table_ctdef = mvi_lookup_ctdef->get_lookup_scan_ctdef();
-      ObDASScanRtDef * docid_table_rtdef = mvi_lookup_rtdef->get_lookup_scan_rtdef();
-
-      ObDASScanIterParam index_table_param;
-      init_scan_iter_param(index_table_param, index_ctdef, index_rtdef);
-      ObDASScanIterParam docid_rowkey_table_param;
-      init_scan_iter_param(docid_rowkey_table_param, docid_table_ctdef, docid_table_rtdef);
-
-      if (OB_FAIL(create_das_iter(alloc, index_table_param, index_table_iter))) {
-        LOG_WARN("failed to create index table scan iter", K(ret));
-      } else if (OB_FAIL(create_das_iter(alloc, docid_rowkey_table_param, docid_rowkey_table_iter))){
-        LOG_WARN("failed to create docid rowkey table scan iter", K(ret));
-      } else {
-        ObDASLocalLookupIterParam mvi_lookup_param;
-        mvi_lookup_param.max_size_ = 1;
-        mvi_lookup_param.eval_ctx_ = mvi_lookup_rtdef->eval_ctx_;
-        mvi_lookup_param.exec_ctx_ = &mvi_lookup_rtdef->eval_ctx_->exec_ctx_;
-        mvi_lookup_param.output_ = &mvi_lookup_ctdef->result_output_;
-        mvi_lookup_param.index_ctdef_ = index_ctdef;
-        mvi_lookup_param.index_rtdef_ = index_rtdef;
-        mvi_lookup_param.lookup_ctdef_ = docid_table_ctdef;
-        mvi_lookup_param.lookup_rtdef_ = docid_table_rtdef;
-        mvi_lookup_param.index_table_iter_ = index_table_iter;
-        mvi_lookup_param.data_table_iter_ = docid_rowkey_table_iter;
-        mvi_lookup_param.trans_desc_ = trans_desc;
-        mvi_lookup_param.snapshot_ = snapshot;
-        mvi_lookup_param.rowkey_exprs_ = &mvi_lookup_ctdef->get_lookup_scan_ctdef()->rowkey_exprs_;
-        if (OB_FAIL(create_das_iter(alloc, mvi_lookup_param, mvi_lookup_iter))) {
-          LOG_WARN("failed to create mvi lookup iter", K(ret));
-        } else if (OB_FAIL(create_iter_children_array(2, alloc, mvi_lookup_iter))) {
-          LOG_WARN("failed to create iter children array", K(ret));
-        } else {
-          mvi_lookup_iter->get_children()[0] = index_table_iter;
-          mvi_lookup_iter->get_children()[1] = docid_rowkey_table_iter;
-          index_table_iter->set_scan_param(scan_param);
-          if (OB_NOT_NULL(vec_aux_ctdef) && vec_aux_ctdef->algorithm_type_ != ObVectorIndexAlgorithmType::VIAT_SPIV // LATENCY_FIRST does not support spiv
-            && vec_aux_ctdef->strategy_ == ObVecIdxQueryStrategy::LATENCY_FIRST) {
-            index_table_iter->set_pre_filtering_timeout(vec_aux_ctdef->pre_filtering_timeout_);
-          }
-          docid_rowkey_table_iter->set_scan_param(mvi_lookup_iter->get_lookup_param());
-          mvi_lookup_iter->set_tablet_id(related_tablet_ids.doc_rowkey_tablet_id_);
-          mvi_lookup_iter->set_ls_id(scan_param.ls_id_);
-        }
-      }
-
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(create_sort_sub_tree(alloc, sort_ctdef, sort_rtdef, false/*need_rewind*/,
-                                              true/*need_distinct*/, mvi_lookup_iter, sort_iter))) {
-        LOG_WARN("failed to create sort sub tree", K(ret));
-      }
+    if (OB_FAIL(create_mvi_lookup_sub_tree(scan_param, alloc, sort_ctdef, sort_rtdef, vec_aux_ctdef,
+                                           related_tablet_ids, trans_desc, snapshot, sort_iter))) {
+      LOG_WARN("failed to create mvi lookup sub tree", K(ret));
     }
   } else {
     // do not need docid index back
@@ -2968,6 +2922,103 @@ int ObDASIterUtils::create_mvi_lookup_tree(ObTableScanParam &scan_param,
     LOG_WARN("failed to create local lookup sub tree", K(ret));
   }
 
+  return ret;
+}
+
+/*                 sort_distinct
+ *                     |
+ *               aux_local_lookup
+ *                 |        |
+ *           index_table  docid_rowkey_table
+*/
+int ObDASIterUtils::create_mvi_lookup_sub_tree(ObTableScanParam &scan_param,
+                                               common::ObIAllocator &alloc,
+                                               const ObDASSortCtDef *sort_ctdef,
+                                               ObDASSortRtDef *sort_rtdef,
+                                               const ObDASVecAuxScanCtDef *vec_aux_ctdef,
+                                               const ObDASRelatedTabletID &related_tablet_ids,
+                                               transaction::ObTxDesc *trans_desc,
+                                               transaction::ObTxReadSnapshot *snapshot,
+                                               ObDASIter *&iter_tree)
+{
+  int ret = OB_SUCCESS;
+  const ObDASIRAuxLookupCtDef *mvi_lookup_ctdef = nullptr;
+  ObDASIRAuxLookupRtDef *mvi_lookup_rtdef = nullptr;
+  if (OB_ISNULL(sort_ctdef) || OB_ISNULL(sort_rtdef)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret), KP(sort_ctdef), KP(sort_rtdef));
+  } else if (OB_UNLIKELY(1 != sort_ctdef->children_cnt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected children cnt", K(ret), K(sort_ctdef->children_cnt_));
+  } else if (OB_UNLIKELY(ObDASOpType::DAS_OP_IR_AUX_LOOKUP != sort_ctdef->children_[0]->op_type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected child op type", K(ret), K(sort_ctdef->children_[0]->op_type_));
+  } else if (FALSE_IT(mvi_lookup_ctdef = static_cast<const ObDASIRAuxLookupCtDef *>(sort_ctdef->children_[0]))) {
+  } else if (FALSE_IT(mvi_lookup_rtdef = static_cast<ObDASIRAuxLookupRtDef *>(sort_rtdef->children_[0]))) {
+  } else if (OB_UNLIKELY(2 != mvi_lookup_ctdef->children_cnt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected children cnt", K(ret), K(mvi_lookup_ctdef->children_cnt_));
+  } else {
+    const ObDASScanCtDef *index_ctdef = static_cast<const ObDASScanCtDef*>(mvi_lookup_ctdef->children_[0]);
+    ObDASScanRtDef *index_rtdef = static_cast<ObDASScanRtDef *>(mvi_lookup_rtdef->children_[0]);
+    const ObDASScanCtDef* docid_table_ctdef = mvi_lookup_ctdef->get_lookup_scan_ctdef();
+    ObDASScanRtDef *docid_table_rtdef = mvi_lookup_rtdef->get_lookup_scan_rtdef();
+
+    ObDASScanIter *index_table_iter = nullptr;
+    ObDASScanIter *docid_rowkey_table_iter = nullptr;
+    ObDASMVILookupIter *mvi_lookup_iter = nullptr;
+    ObDASIter *sort_iter = nullptr;
+
+    ObDASScanIterParam index_table_param;
+    init_scan_iter_param(index_table_param, index_ctdef, index_rtdef);
+    ObDASScanIterParam docid_rowkey_table_param;
+    init_scan_iter_param(docid_rowkey_table_param, docid_table_ctdef, docid_table_rtdef);
+
+    if (OB_FAIL(create_das_iter(alloc, index_table_param, index_table_iter))) {
+      LOG_WARN("failed to create index table scan iter", K(ret));
+    } else if (OB_FAIL(create_das_iter(alloc, docid_rowkey_table_param, docid_rowkey_table_iter))){
+      LOG_WARN("failed to create docid rowkey table scan iter", K(ret));
+    } else {
+      ObDASLocalLookupIterParam mvi_lookup_param;
+      mvi_lookup_param.max_size_ = 1;
+      mvi_lookup_param.eval_ctx_ = mvi_lookup_rtdef->eval_ctx_;
+      mvi_lookup_param.exec_ctx_ = &mvi_lookup_rtdef->eval_ctx_->exec_ctx_;
+      mvi_lookup_param.output_ = &mvi_lookup_ctdef->result_output_;
+      mvi_lookup_param.index_ctdef_ = index_ctdef;
+      mvi_lookup_param.index_rtdef_ = index_rtdef;
+      mvi_lookup_param.lookup_ctdef_ = docid_table_ctdef;
+      mvi_lookup_param.lookup_rtdef_ = docid_table_rtdef;
+      mvi_lookup_param.index_table_iter_ = index_table_iter;
+      mvi_lookup_param.data_table_iter_ = docid_rowkey_table_iter;
+      mvi_lookup_param.trans_desc_ = trans_desc;
+      mvi_lookup_param.snapshot_ = snapshot;
+      mvi_lookup_param.rowkey_exprs_ = &mvi_lookup_ctdef->get_lookup_scan_ctdef()->rowkey_exprs_;
+      if (OB_FAIL(create_das_iter(alloc, mvi_lookup_param, mvi_lookup_iter))) {
+        LOG_WARN("failed to create mvi lookup iter", K(ret));
+      } else if (OB_FAIL(create_iter_children_array(2, alloc, mvi_lookup_iter))) {
+        LOG_WARN("failed to create iter children array", K(ret));
+      } else {
+        mvi_lookup_iter->get_children()[0] = index_table_iter;
+        mvi_lookup_iter->get_children()[1] = docid_rowkey_table_iter;
+        index_table_iter->set_scan_param(scan_param);
+        if (OB_NOT_NULL(vec_aux_ctdef) && vec_aux_ctdef->algorithm_type_ != ObVectorIndexAlgorithmType::VIAT_SPIV // LATENCY_FIRST does not support spiv
+          && vec_aux_ctdef->strategy_ == ObVecIdxQueryStrategy::LATENCY_FIRST) {
+          index_table_iter->set_pre_filtering_timeout(vec_aux_ctdef->pre_filtering_timeout_);
+        }
+        docid_rowkey_table_iter->set_scan_param(mvi_lookup_iter->get_lookup_param());
+        mvi_lookup_iter->set_tablet_id(related_tablet_ids.doc_rowkey_tablet_id_);
+        mvi_lookup_iter->set_ls_id(scan_param.ls_id_);
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(create_sort_sub_tree(alloc, sort_ctdef, sort_rtdef, false/*need_rewind*/,
+                                            true/*need_distinct*/, mvi_lookup_iter, sort_iter))) {
+      LOG_WARN("failed to create sort sub tree", K(ret));
+    } else {
+      iter_tree = sort_iter;
+    }
+  }
   return ret;
 }
 

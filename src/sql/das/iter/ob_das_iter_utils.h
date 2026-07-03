@@ -288,6 +288,16 @@ private:
                                     transaction::ObTxReadSnapshot *snapshot,
                                     ObDASIter *&iter_tree);
 
+  static int create_mvi_lookup_sub_tree(ObTableScanParam &scan_param,
+                                        common::ObIAllocator &alloc,
+                                        const ObDASSortCtDef *sort_ctdef,
+                                        ObDASSortRtDef *sort_rtdef,
+                                        const ObDASVecAuxScanCtDef *vec_aux_ctdef,
+                                        const ObDASRelatedTabletID &related_tablet_ids,
+                                        transaction::ObTxDesc *trans_desc,
+                                        transaction::ObTxReadSnapshot *snapshot,
+                                        ObDASIter *&iter_tree);
+
   static int create_gis_lookup_tree(ObTableScanParam &scan_param,
                                     common::ObIAllocator &alloc,
                                     const ObDASBaseCtDef *attach_ctdef,
