@@ -1209,6 +1209,12 @@ int ObTxDesc::fetch_conflict_txs_array(ObIArray<ObTransIDAndAddr> &array) {
   return ret;
 }
 
+void ObTxDesc::reset_conflict_info_array()
+{
+  ObSpinLockGuard guard(lock_);
+  conflict_info_array_.reset();
+}
+
 int ObTxDesc::fetch_conflict_info_array(ObIArray<storage::ObRowConflictInfo> &array) {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(lock_);

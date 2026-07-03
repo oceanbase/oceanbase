@@ -836,7 +836,11 @@ void ObLockWaitMgr::on_lock_conflict(ObSArray<ObRowConflictInfo> &cflict_infos,
     }
   }
   if (OB_UNLIKELY(!ObDeadLockDetectorMgr::is_deadlock_enabled())) {
-    cflict_infos.reset();
+    if (OB_NOT_NULL(tx)) {
+      tx->reset_conflict_info_array();
+    } else {
+      cflict_infos.reset();
+    }
   }
 }
 
