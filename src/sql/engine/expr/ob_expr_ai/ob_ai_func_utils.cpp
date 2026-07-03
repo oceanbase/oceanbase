@@ -2053,6 +2053,12 @@ int ObAIFuncJsonUtils::get_json_object_form_str(ObIAllocator &allocator, const O
   ObIJsonBase *j_base = NULL;
   if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, str, ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_base))) {
     LOG_WARN("fail to get json base", K(ret), K(str));
+  } else if (OB_ISNULL(j_base)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("j_base is null", K(ret), K(str));
+  } else if (j_base->json_type() != ObJsonNodeType::J_OBJECT) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("j_base is not json object", K(ret), K(str), K(j_base->json_type()));
   } else {
     obj_node = static_cast<ObJsonObject *>(j_base);
   }
