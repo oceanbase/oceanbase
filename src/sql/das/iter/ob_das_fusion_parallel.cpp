@@ -1360,7 +1360,7 @@ int ObDASFusionChildTaskHandler::run()
       LOG_WARN("child iter is null", KR(ret), K(runtime->path_idx_));
     }
     // Step 2: Shared bitmap phase (range-parallel only)
-    if (runtime->is_range_parallel_
+    if (OB_SUCC(ret) && runtime->is_range_parallel_
         && runtime->parallel_ctx_->has_shared_bitmaps()) {
       const int64_t timeout_ts = task->get_timeout_ts();
       if (OB_FAIL(runtime->build_assigned_bitmaps(timeout_ts))) {
