@@ -2213,6 +2213,9 @@ int ObHybridSearchGenerator::split_json_contains(const ObDSLScalarQuery *scalar_
         // scalar, no need to split, need to add scalar constraint during query range extraction
       } else if (j_base->json_type() != common::ObJsonNodeType::J_ARRAY) {
         // not an array, no need to split
+      } else if (j_base->element_count() == 0) {
+        // empty array: no scalar sub-predicates to split, leave split_node as nullptr.
+        // aligning with the SQL-form json_contains(col, '[]') behavior.
       } else if (OB_FAIL(ObSearchIndexConstraint::is_json_scalar_or_array_match(j_base, cons_encode_type,
                                                                                 can_extract))) {
         LOG_WARN("failed to check json array match", K(ret));

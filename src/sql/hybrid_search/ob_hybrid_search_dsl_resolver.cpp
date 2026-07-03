@@ -811,7 +811,7 @@ int ObDSLResolver::build_const_double(double dval, ObConstRawExpr *&const_expr, 
 int ObDSLResolver::build_field_expr_with_path(ObColumnRefRawExpr *col_expr, const ObString &path_str, const ObEsQueryItem query_type, ObRawExpr *&field_expr)
 {
   int ret = OB_SUCCESS;
-  if (path_str.empty() ||
+  if (OB_ISNULL(path_str.ptr()) ||
       (query_type == QUERY_ITEM_JSON_MEMBER_OF && path_str.compare_equal("$"))) {
     // use column expr without json_extract if any of the following conditions is met:
     // (1) no path
@@ -3244,8 +3244,9 @@ int ObDSLResolver::resolve_const(ObIJsonBase &req_node,
   } else if (target_type == ObJsonNodeType::J_ARRAY) {
     ObSysFunRawExpr *array_expr = nullptr;
     int64_t count = req_node.element_count();
-    if (count == 0) {
+    if (count == 0 && query_type != QUERY_ITEM_JSON_MEMBER_OF) {
       ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "array, should have at least one element");
       LOG_WARN("array must have at least one element", K(ret));
     } else if (OB_FAIL(expr_factory->create_raw_expr(T_FUN_SYS_ARRAY, array_expr))) {
       LOG_WARN("fail to create array func expr", K(ret));
@@ -3698,8 +3699,6 @@ int ObDSLResolver::resolve_json_expr(ObIJsonBase &req_node, ObDSLQuery *&query, 
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("path should be string type", K(ret), K(sub_node->json_type()));
         } else if (OB_FALSE_IT(path_str.assign_ptr(sub_node->get_data(), sub_node->get_data_length()))) {
-        } else if (OB_FAIL(common::ob_strip_space(*allocator_, path_str, path_str))) {
-          LOG_WARN("fail to remove whitespace", K(ret), K(path_str));
         }
       } else if (key.case_compare("boost") == 0) {
         if (OB_FAIL(resolve_boost(*sub_node, boost_expr, query_type, outer_query_type))) {
@@ -4636,14 +4635,15 @@ int ObDSLResolver::resolve_range(ObIJsonBase &req_node, ObDSLQuery *&query, ObDS
     LOG_WARN("scalar range query cannot be scored or exist in must/should clause", K(ret), K(outer_query_type));
   } else if (req_node.json_type() != ObJsonNodeType::J_OBJECT || req_node.element_count() != 1) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "range query, should be single-key object");
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "range, should be single-key object");
     LOG_WARN("range query should be single-key object", K(ret));
   } else if (OB_FAIL(req_node.get_object_value(0, col_name, sub_node))) {
     LOG_WARN("fail to get object key and value", K(ret));
-  } else if (OB_FALSE_IT(count = sub_node->element_count())) {
-  } else if (count == 0) {
+  } else if (sub_node->json_type() != ObJsonNodeType::J_OBJECT || sub_node->element_count() == 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("unexpectd range condition", K(ret));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "range query, should be an object with at least one of \"gt\", \"gte\", \"lt\", \"lte\"");
+    LOG_WARN("unexpected range condition", K(ret));
+  } else if (OB_FALSE_IT(count = sub_node->element_count())) {
   } else if (OB_FAIL(get_field_expr_and_path(col_name, col_expr, path_str))) {
     LOG_WARN("fail to get field expr and path", K(ret), K(col_name));
   } else if (OB_FAIL(build_field_expr_with_path(col_expr, path_str, QUERY_ITEM_RANGE, field_expr))) {
