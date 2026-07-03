@@ -222,10 +222,10 @@ public:
   ObAiDimensionKey() { reset(); }
   explicit ObAiDimensionKey(const common::ObString &model_name,
                              const common::ObString &provider,
-                             share::ObAiAccessMode access_mode)
+                             share::ObAiServiceTier service_tier)
     : model_name_(model_name),
       provider_(provider),
-      ai_execution_mode_(access_mode)
+      ai_service_tier_(service_tier)
   {}
   ~ObAiDimensionKey() = default;
 
@@ -233,13 +233,12 @@ public:
   {
     model_name_.reset();
     provider_.reset();
-    ai_execution_mode_ = share::OB_AI_ACCESS_MODE_INVALID;
+    ai_service_tier_ = share::OB_AI_SERVICE_TIER_STANDARD;
   }
 
   bool is_valid() const
   {
-    return !model_name_.empty() && !provider_.empty() &&
-           ai_execution_mode_ != share::OB_AI_ACCESS_MODE_INVALID;
+    return !model_name_.empty() && !provider_.empty();
   }
 
   uint64_t hash() const
@@ -247,7 +246,7 @@ public:
     uint64_t hash_val = 0;
     hash_val = common::murmurhash(model_name_.ptr(), model_name_.length(), hash_val);
     hash_val = common::murmurhash(provider_.ptr(), provider_.length(), hash_val);
-    hash_val = common::murmurhash(&ai_execution_mode_, sizeof(ai_execution_mode_), hash_val);
+    hash_val = common::murmurhash(&ai_service_tier_, sizeof(ai_service_tier_), hash_val);
     return hash_val;
   }
 
@@ -255,15 +254,15 @@ public:
   {
     return model_name_ == other.model_name_ &&
            provider_ == other.provider_ &&
-           ai_execution_mode_ == other.ai_execution_mode_;
+           ai_service_tier_ == other.ai_service_tier_;
   }
 
-  TO_STRING_KV(K_(model_name), K_(provider), K_(ai_execution_mode));
+  TO_STRING_KV(K_(model_name), K_(provider), K_(ai_service_tier));
 
 public:
   common::ObString model_name_;
   common::ObString provider_;
-  share::ObAiAccessMode ai_execution_mode_;
+  share::ObAiServiceTier ai_service_tier_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAiDimensionKey);
@@ -621,7 +620,7 @@ public:
                    ObAiSchedulableTaskType task_type) override;
 
   int init(common::ObIAllocator &allocator,
-           share::ObAiAccessMode access_mode,
+           share::ObAiServiceTier service_tier,
            share::ObAiCommandType command_type,
            int64_t total_count,
            const share::ObAiModelEndpointInfo &endpoint_info,
@@ -641,7 +640,7 @@ public:
   virtual int64_t get_reschedule_delay_us() const override;
 
   share::ObAiTaskPhase get_phase() const { return ATOMIC_LOAD(&phase_); }
-  share::ObAiAccessMode get_ai_execution_mode() const { return ai_execution_mode_; }
+  share::ObAiServiceTier get_ai_service_tier() const { return ai_service_tier_; }
   share::ObAiCommandType get_command_type() const { return command_type_; }
   bool is_all_processed() const { return current_offset_ >= total_count_; }
   int64_t get_processed_count() const { return current_offset_; }
@@ -678,7 +677,7 @@ public:
   void set_abandoned() { ATOMIC_STORE(&abandoned_, true); }
 
   TO_STRING_KV(K_(phase), K_(is_inited), K_(current_offset), K_(total_count),
-               K_(batch_size), K_(http_timeout_us), K_(ai_execution_mode), K_(reschedule_delay_us));
+               K_(batch_size), K_(http_timeout_us), K_(ai_service_tier), K_(reschedule_delay_us));
 
 private:
   struct RemoteAssetView
@@ -703,8 +702,8 @@ private:
   void log_phase_transition_(share::ObAiTaskPhase from_phase, share::ObAiTaskPhase to_phase);
 
   int handle_done_phase_();
-  int advance_current_mode_();
-  int advance_batch_file_mode_();
+  int advance_current_tier_();
+  int advance_batch_file_tier_();
 
   int complete_terminal_(share::ObAiTaskStatus status, int error_code_for_table,
                          const common::ObString &error_msg);
@@ -744,7 +743,7 @@ private:
   RemoteAssetView build_remote_asset_view_() const;
   LocalMaterializationView build_local_materialization_view_() const;
 
-  bool is_batch_file_mode_() const { return share::OB_AI_ACCESS_MODE_BATCH_FILE == ai_execution_mode_; }
+  bool is_batch_mode_() const { return share::OB_AI_SERVICE_TIER_BATCH == ai_service_tier_; }
   void parse_and_accumulate_tokens_(const common::ObString &response_body);
   void cleanup_tmp_files_();  // Clean up TmpFileManager fds on terminal state
 
@@ -752,7 +751,7 @@ private:
   int64_t calculate_retry_delay_us_(int error_code) const;
 
 private:
-  share::ObAiAccessMode ai_execution_mode_;
+  share::ObAiServiceTier ai_service_tier_;
   share::ObAiCommandType command_type_;
   int64_t http_timeout_us_;
   int64_t batch_size_;

@@ -372,14 +372,16 @@ int ObVectorIndexUtil::parser_params_from_string(
           } else {
             param.ob_sparse_drop_ratio_search_ = out_val;
           }
-        } else if (new_param_name == "AI_EXECUTION_MODE") {
-          if (new_param_value == "SYNC_HTTP") {
-            param.ai_execution_mode_ = ObVectorIndexAccessMode::VIAM_SYNC_HTTP;
-          } else if (new_param_value == "BATCH_FILE") {
-            param.ai_execution_mode_ = ObVectorIndexAccessMode::VIAM_BATCH_FILE;
-          } else {
+        } else if (new_param_name == "AI_SERVICE_TIER") {
+          share::ObAiServiceTier tier = share::ObAiExecUtils::str_to_ai_service_tier(ObString(new_param_value.length(), new_param_value.ptr()));
+          if (tier >= share::OB_AI_SERVICE_TIER_MAX) {
             ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("invalid ai_execution_mode value", K(ret), K(new_param_value));
+            LOG_WARN("invalid ai_service_tier value", K(ret), K(new_param_value));
+          } else if (tier == share::OB_AI_SERVICE_TIER_FLEX) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("flex service tier is not yet supported", K(ret), K(new_param_value));
+          } else {
+            param.ai_service_tier_ = tier;
           }
         } else if (new_param_name == "ALLOW_NULL_ON_FAILURE") {
           if (new_param_value == "true" || new_param_value == "TRUE" || new_param_value == "1") {
@@ -853,8 +855,8 @@ int ObVectorIndexParam::print_hnsw_params(char *buf, int64_t buf_len, int64_t &p
   PRINT_PARAM("sync_interval_value=%ld,", sync_interval_value_);
   PRINT_PARAM("endpoint=%s,", endpoint_);
   PRINT_PARAM("content_type=%s,", ObVectorIndexUtil::get_content_type_str(content_type_));
-  if (ai_execution_mode_ != ObVectorIndexAccessMode::VIAM_SYNC_HTTP) {
-    PRINT_PARAM("ai_execution_mode=%d,", static_cast<int>(ai_execution_mode_));
+  if (ai_service_tier_ != share::OB_AI_SERVICE_TIER_STANDARD) {
+    PRINT_PARAM("ai_service_tier=%d,", static_cast<int>(ai_service_tier_));
   }
   if (allow_null_on_failure_) {
     PRINT_PARAM("%s", "allow_null_on_failure=TRUE,");
@@ -904,7 +906,7 @@ int ObVectorIndexParam::print_ipivf_params(char *buf, int64_t buf_len, int64_t &
   PRINT_PARAM("refine_k=%f,", refine_k_);
   PRINT_PARAM("drop_ratio_build=%f,", ob_sparse_drop_ratio_build_);
   PRINT_PARAM("drop_ratio_search=%f,", ob_sparse_drop_ratio_search_);
-  PRINT_PARAM("ai_execution_mode=%d,", static_cast<int>(ai_execution_mode_));
+  PRINT_PARAM("ai_service_tier=%d,", static_cast<int>(ai_service_tier_));
   #undef PRINT_PARAM
   return ret;
 }
@@ -3451,10 +3453,10 @@ int ObVectorIndexUtil::check_vec_index_in_stmt(const sql::ObStmt &stmt, const Ob
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("create ivf index in create table stmt is not supported", K(ret), K(vec_index_type));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "create ivf index in create table stmt is");
-    } else if (obs_str_contains(index_params, "AI_EXECUTION_MODE=BATCH_FILE")) {
+    } else if (obs_str_contains(index_params, "AI_SERVICE_TIER=BATCH")) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("create BATCH_FILE ai_execution_mode index in create table stmt is not supported", K(ret), K(index_params));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "create BATCH_FILE ai_execution_mode index in create table stmt is");
+      LOG_WARN("create batch ai_service_tier index in create table stmt is not supported", K(ret), K(index_params));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "create batch ai_service_tier index in create table stmt is");
     }
   }
   return ret;
@@ -3934,8 +3936,8 @@ int ObVectorIndexUtil::check_index_param(
     bool refine_is_set = false;
     bool drop_ratio_build_is_set = false;
     bool drop_ratio_search_is_set = false;
-    bool ai_execution_mode_is_set = false;
-    ObString ai_execution_mode_name;
+    bool ai_service_tier_is_set = false;
+    ObString ai_service_tier_name;
     bool allow_null_is_set = false;
     bool allow_null_value = false;
 
@@ -3988,7 +3990,7 @@ int ObVectorIndexUtil::check_index_param(
                    new_variable_name != "REFINE" &&
                    new_variable_name != "DROP_RATIO_BUILD" &&
                    new_variable_name != "DROP_RATIO_SEARCH" &&
-                   new_variable_name != "AI_EXECUTION_MODE" &&
+                   new_variable_name != "AI_SERVICE_TIER" &&
                    new_variable_name != "ALLOW_NULL_ON_FAILURE") {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("unexpected vector variable name", K(ret), K(new_variable_name));
@@ -4223,14 +4225,19 @@ int ObVectorIndexUtil::check_index_param(
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("sync_mode value is invalid", K(ret), K(new_parser_name));
           }
-        } else if (last_variable == "AI_EXECUTION_MODE") {
-          if (new_parser_name == "SYNC_HTTP" || new_parser_name == "BATCH_FILE") {
-            ai_execution_mode_is_set = true;
-            ai_execution_mode_name = new_parser_name;
+        } else if (last_variable == "AI_SERVICE_TIER") {
+          share::ObAiServiceTier tier = share::ObAiExecUtils::str_to_ai_service_tier(ObString(new_parser_name.length(), new_parser_name.ptr()));
+          if (tier < share::OB_AI_SERVICE_TIER_MAX && tier != share::OB_AI_SERVICE_TIER_FLEX) {
+            ai_service_tier_is_set = true;
+            ai_service_tier_name = new_parser_name;
+          } else if (tier == share::OB_AI_SERVICE_TIER_FLEX) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("flex service tier is not yet supported", K(ret), K(new_parser_name));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "ai_service_tier=flex is");
           } else {
             ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("ai_execution_mode value is invalid", K(ret), K(new_parser_name));
-            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_execution_mode value must be SYNC_HTTP or BATCH_FILE");
+            LOG_WARN("ai_service_tier value is invalid", K(ret), K(new_parser_name));
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_service_tier value must be standard or batch");
           }
         } else if (last_variable == "ALLOW_NULL_ON_FAILURE") {
           if (new_parser_name == "TRUE" || parser_value == 1) {
@@ -4526,9 +4533,9 @@ int ObVectorIndexUtil::check_index_param(
                                                                   ", CONTENT_TYPE=%s",
                                                                   get_content_type_str(content_type)))) {
           LOG_WARN("fail to printf databuff", K(ret));
-        } else if (ai_execution_mode_is_set &&
+        } else if (ai_service_tier_is_set &&
                    OB_FAIL(databuff_printf(not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos,
-                                           ", AI_EXECUTION_MODE=%.*s", ai_execution_mode_name.length(), ai_execution_mode_name.ptr()))) {
+                                           ", AI_SERVICE_TIER=%.*s", ai_service_tier_name.length(), ai_service_tier_name.ptr()))) {
           LOG_WARN("fail to printf databuff", K(ret));
         } else if (is_enable_bp_param && type_hnsw_bq_is_set &&! refine_type_is_set &&
             OB_FAIL(databuff_printf(not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos, ", REFINE_TYPE=SQ8"))) {
@@ -4573,7 +4580,7 @@ int ObVectorIndexUtil::check_index_param(
             || dim_is_set
             || sync_interval_is_set
             || sync_mode_is_set
-            || ai_execution_mode_is_set
+            || ai_service_tier_is_set
             || allow_null_is_set) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("parameter for sparse vector index is not supported", K(ret));

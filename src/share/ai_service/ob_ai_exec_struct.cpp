@@ -32,10 +32,10 @@ static const char *COMMAND_TYPE_STR[] = {
   "RERANK"
 };
 
-static const char *ACCESS_MODE_STR[] = {
-  "INVALID",
-  "SYNC_HTTP",
-  "BATCH_FILE"
+static const char *SERVICE_TIER_STR[] = {
+  "standard",
+  "batch",
+  "flex"
 };
 
 static const char *TASK_STATUS_STR[] = {
@@ -236,10 +236,10 @@ const char *ObAiExecUtils::get_command_type_str(ObAiCommandType type)
   return "UNKNOWN";
 }
 
-const char *ObAiExecUtils::get_ai_execution_mode_str(ObAiAccessMode mode)
+const char *ObAiExecUtils::get_ai_service_tier_str(ObAiServiceTier tier)
 {
-  if (mode >= OB_AI_ACCESS_MODE_INVALID && mode < OB_AI_ACCESS_MODE_MAX) {
-    return ACCESS_MODE_STR[mode];
+  if (tier >= OB_AI_SERVICE_TIER_STANDARD && tier < OB_AI_SERVICE_TIER_MAX) {
+    return SERVICE_TIER_STR[tier];
   }
   return "UNKNOWN";
 }
@@ -280,16 +280,16 @@ ObAiCommandType ObAiExecUtils::str_to_command_type(const ObString &str)
   return type;
 }
 
-ObAiAccessMode ObAiExecUtils::str_to_ai_execution_mode(const ObString &str)
+ObAiServiceTier ObAiExecUtils::str_to_ai_service_tier(const ObString &str)
 {
-  ObAiAccessMode mode = OB_AI_ACCESS_MODE_INVALID;
-  for (int i = OB_AI_ACCESS_MODE_INVALID; i < OB_AI_ACCESS_MODE_MAX; ++i) {
-    if (str.case_compare(ACCESS_MODE_STR[i]) == 0) {
-      mode = static_cast<ObAiAccessMode>(i);
+  ObAiServiceTier tier = OB_AI_SERVICE_TIER_MAX;
+  for (int i = OB_AI_SERVICE_TIER_STANDARD; i < OB_AI_SERVICE_TIER_MAX; ++i) {
+    if (str.case_compare(SERVICE_TIER_STR[i]) == 0) {
+      tier = static_cast<ObAiServiceTier>(i);
       break;
     }
   }
-  return mode;
+  return tier;
 }
 
 int ObAiExecUtils::build_error_detail_json(int ob_error_code,

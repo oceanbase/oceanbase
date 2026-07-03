@@ -39,14 +39,13 @@ enum ObAiCommandType
   OB_AI_COMMAND_MAX
 };
 
-// Access mode for task execution
-enum ObAiAccessMode
+// Service tier for AI task execution
+enum ObAiServiceTier
 {
-  OB_AI_ACCESS_MODE_INVALID = 0,
-  OB_AI_ACCESS_MODE_SYNC_HTTP = 1,    // Synchronous HTTP call
-  OB_AI_ACCESS_MODE_BATCH_FILE = 2,   // Batch file mode (async)
-  OB_AI_ACCESS_MODE_BATCH_API = 3,    // Batch API mode (cost optimization)
-  OB_AI_ACCESS_MODE_MAX
+  OB_AI_SERVICE_TIER_STANDARD = 0,
+  OB_AI_SERVICE_TIER_BATCH    = 1,
+  OB_AI_SERVICE_TIER_FLEX     = 2,
+  OB_AI_SERVICE_TIER_MAX
 };
 
 // Task status for scheduling
@@ -322,13 +321,13 @@ class ObAiExecUtils
 {
 public:
   static const char *get_command_type_str(ObAiCommandType type);
-  static const char *get_ai_execution_mode_str(ObAiAccessMode mode);
+  static const char *get_ai_service_tier_str(ObAiServiceTier tier);
   static const char *get_task_status_str(ObAiTaskStatus status);
   static const char *get_task_phase_str(ObAiTaskPhase phase);
   static const char *get_source_type_str(ObAiSourceType type);
 
   static ObAiCommandType str_to_command_type(const ObString &str);
-  static ObAiAccessMode str_to_ai_execution_mode(const ObString &str);
+  static ObAiServiceTier str_to_ai_service_tier(const ObString &str);
 
   static int build_error_detail_json(int ob_error_code,
                                      int64_t model_http_code,

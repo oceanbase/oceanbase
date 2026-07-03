@@ -625,7 +625,7 @@ int ObAiHttpResponseData::append_data(const char *src, int64_t len)
 
 ObAiAccessTask::ObAiAccessTask()
   : ObAiSchedulableTask(),
-    ai_execution_mode_(OB_AI_ACCESS_MODE_BATCH_FILE),
+    ai_service_tier_(OB_AI_SERVICE_TIER_BATCH),
     command_type_(OB_AI_COMMAND_EMBED),
     http_timeout_us_(DEFAULT_HTTP_TIMEOUT_US),
     batch_size_(DEFAULT_BATCH_SIZE),
@@ -692,7 +692,7 @@ int ObAiAccessTask::init(common::ObIAllocator &allocator,
 }
 
 int ObAiAccessTask::init(common::ObIAllocator &allocator,
-                            ObAiAccessMode access_mode,
+                            ObAiServiceTier service_tier,
                             ObAiCommandType command_type,
                             int64_t total_count,
                             const ObAiModelEndpointInfo &endpoint_info,
@@ -730,7 +730,7 @@ int ObAiAccessTask::init(common::ObIAllocator &allocator,
       table_manager_ = table_manager;
       sql_client_ = sql_client;
 
-      ai_execution_mode_ = access_mode;
+      ai_service_tier_ = service_tier;
       allow_null_on_failure_ = allow_null_on_failure;
       command_type_ = command_type;
       total_count_ = total_count;
@@ -931,7 +931,7 @@ void ObAiAccessTask::reset()
   total_count_ = 0;
   last_error_ctx_.reset();
   phase_ = OB_AI_TASK_PHASE_INIT;
-  ai_execution_mode_ = OB_AI_ACCESS_MODE_BATCH_FILE;
+  ai_service_tier_ = OB_AI_SERVICE_TIER_BATCH;
   command_type_ = OB_AI_COMMAND_EMBED;
   if (OB_NOT_NULL(provider_)) {
     provider_->~ObAIFuncBase();
@@ -974,7 +974,7 @@ int ObAiAccessTask::do_work()
     reschedule_delay_us_ = 0;
     // Execution phases: FILE_UPLOADING → BATCH_SUBMITTING → BATCH_POLLING → RESULT_DOWNLOADING → DONE
     if (phase_ != OB_AI_TASK_PHASE_DONE) {
-      LOG_DEBUG("[BATCH-FILE] processing execution task", K(phase_), K(current_offset_), K(total_count_), K_(ai_execution_mode));
+      LOG_DEBUG("[BATCH-FILE] processing execution task", K(phase_), K(current_offset_), K(total_count_), K_(ai_service_tier));
 
       bool continue_processing = true;
       while (OB_SUCC(ret) && continue_processing && phase_ != OB_AI_TASK_PHASE_DONE) {
@@ -988,8 +988,8 @@ int ObAiAccessTask::do_work()
             LOG_WARN("Failed to complete with cancel in do_work loop", K(ret), K_(task_id));
           }
           continue_processing = false;
-        } else if (OB_FAIL(advance_current_mode_())) {
-          LOG_WARN("failed to advance current access mode", K(ret), K_(ai_execution_mode), K_(phase));
+        } else if (OB_FAIL(advance_current_tier_())) {
+          LOG_WARN("failed to advance current service tier", K(ret), K_(ai_service_tier), K_(phase));
         } else if (phase_ == OB_AI_TASK_PHASE_BATCH_POLLING) {
           continue_processing = false;
         } else if (phase_ == OB_AI_TASK_PHASE_DONE) {
@@ -1096,7 +1096,7 @@ void ObAiAccessTask::log_phase_transition_(ObAiTaskPhase from_phase, ObAiTaskPha
 
 bool ObAiAccessTask::is_retryable_error_(int error_code) const
 {
-  if (!is_batch_file_mode_()) {
+  if (!is_batch_mode_()) {
     return false;
   }
   // Retryability is determined by error_code alone.
@@ -1127,26 +1127,27 @@ int ObAiAccessTask::handle_done_phase_()
   return OB_SUCCESS;
 }
 
-int ObAiAccessTask::advance_current_mode_()
+int ObAiAccessTask::advance_current_tier_()
 {
   int ret = OB_SUCCESS;
-  switch (ai_execution_mode_) {
-    case OB_AI_ACCESS_MODE_BATCH_FILE:
-      ret = advance_batch_file_mode_();
+  switch (ai_service_tier_) {
+    case OB_AI_SERVICE_TIER_BATCH:
+      ret = advance_batch_file_tier_();
       break;
-    case OB_AI_ACCESS_MODE_SYNC_HTTP:
+    case OB_AI_SERVICE_TIER_STANDARD:
+    case OB_AI_SERVICE_TIER_FLEX:
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("Access mode not implemented yet", K(ret), K_(ai_execution_mode), K_(command_type));
+      LOG_WARN("service tier not implemented yet", K(ret), K_(ai_service_tier), K_(command_type));
       break;
     default:
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected access mode", K(ret), K_(ai_execution_mode), K_(task_id));
+      LOG_WARN("unexpected service tier", K(ret), K_(ai_service_tier), K_(task_id));
       break;
   }
   return ret;
 }
 
-int ObAiAccessTask::advance_batch_file_mode_()
+int ObAiAccessTask::advance_batch_file_tier_()
 {
   int ret = OB_SUCCESS;
   switch (phase_) {
@@ -1288,7 +1289,7 @@ int ObAiAccessTask::update_system_task_status_(ObAiTaskStatus status,
                                                const common::ObString &error_msg)
 {
   int ret = OB_SUCCESS;
-  if (is_batch_file_mode_() && OB_NOT_NULL(table_manager_) && OB_NOT_NULL(sql_client_)
+  if (is_batch_mode_() && OB_NOT_NULL(table_manager_) && OB_NOT_NULL(sql_client_)
       && !task_id_.empty()) {
     common::ObString remote_files_json;
     if (OB_FAIL(ObAiTaskInfo::build_remote_files_json(local_allocator_,
@@ -2396,7 +2397,7 @@ int ObAdaptiveBatchProcessor::get_or_create_entry_(const ObAiDimensionKey &key,
                                           static_cast<int32_t>(strlen(entry->model_name_buf_)));
       entry->key_.provider_.assign_ptr(entry->provider_buf_,
                                         static_cast<int32_t>(strlen(entry->provider_buf_)));
-      entry->key_.ai_execution_mode_ = key.ai_execution_mode_;
+      entry->key_.ai_service_tier_ = key.ai_service_tier_;
 
       entry->state_.current_batch_size_ = default_batch_size;
       entry->state_.min_batch_size_ = DEFAULT_MIN_BATCH_SIZE;
@@ -2907,7 +2908,7 @@ int ObAiAccessService::commit_batch_task_(const share::ObBatchFileDataSegment &s
       } else {
         ObAiAccessTask *task = new (buf) ObAiAccessTask();
         if (OB_FAIL(task->init(*allocator_,
-                               OB_AI_ACCESS_MODE_BATCH_FILE,
+                               OB_AI_SERVICE_TIER_BATCH,
                                command_type,
                                segment.line_count_,
                                endpoint_info, task_id, &table_manager_, sql_client_,

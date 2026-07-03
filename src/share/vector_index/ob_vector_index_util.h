@@ -15,6 +15,7 @@
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "share/vector_type/ob_vector_common_util.h"
 #include "share/vector_index/ob_vector_index_param.h"
+#include "share/ai_service/ob_ai_exec_struct.h"
 
 namespace oceanbase
 {
@@ -153,14 +154,6 @@ enum ObVectorIndexContentType
   VICT_MAX
 };
 
-// Access mode for hybrid vector index embedding
-enum ObVectorIndexAccessMode
-{
-  VIAM_SYNC_HTTP = 0,    // default, sync http mode
-  VIAM_BATCH_FILE = 1,   // batch file mode
-  VIAM_MAX
-};
-
 static const int64_t OB_MAX_ENDPOINT_LENGTH = 512;
 
 struct ObIvfConstant {
@@ -201,7 +194,7 @@ struct ObVectorIndexParam //FARM COMPAT WHITELIST
     refine_k_(DEFAULT_REFINE_K), bq_use_fht_(false), sync_interval_type_(VSIT_MAX), sync_interval_value_(0), nbits_(0),
     prune_(false), refine_(false), ob_sparse_drop_ratio_build_(0), window_size_(DEFAULT_WINDOW_SIZE),
     ob_sparse_drop_ratio_search_(0), similarity_threshold_(0),
-    content_type_(VICT_TEXT), ai_execution_mode_(VIAM_SYNC_HTTP),
+    content_type_(VICT_TEXT), ai_service_tier_(share::OB_AI_SERVICE_TIER_STANDARD),
     allow_null_on_failure_(false)
   {
     MEMSET(endpoint_, 0, sizeof(endpoint_));
@@ -233,7 +226,7 @@ struct ObVectorIndexParam //FARM COMPAT WHITELIST
     nbits_ = 0;
     similarity_threshold_ = 0;
     content_type_ = VICT_TEXT;
-    ai_execution_mode_ = VIAM_SYNC_HTTP;
+    ai_service_tier_ = share::OB_AI_SERVICE_TIER_STANDARD;
     allow_null_on_failure_ = false;
   };
   int assign(const ObVectorIndexParam &other) {
@@ -263,7 +256,7 @@ struct ObVectorIndexParam //FARM COMPAT WHITELIST
     ob_sparse_drop_ratio_search_ = other.ob_sparse_drop_ratio_search_;
     similarity_threshold_ = other.similarity_threshold_;
     content_type_ = other.content_type_;
-    ai_execution_mode_ = other.ai_execution_mode_;
+    ai_service_tier_ = other.ai_service_tier_;
     allow_null_on_failure_ = other.allow_null_on_failure_;
     MEMCPY(endpoint_, other.endpoint_, sizeof(endpoint_));
     return ret;
@@ -298,7 +291,7 @@ struct ObVectorIndexParam //FARM COMPAT WHITELIST
   float similarity_threshold_;
   ObVectorIndexContentType content_type_;
   // access mode for hybrid vector index embedding
-  ObVectorIndexAccessMode ai_execution_mode_;
+  share::ObAiServiceTier ai_service_tier_;
   // when true, persistent BatchFile errors degrade DDL to NULL vectors instead of aborting
   bool allow_null_on_failure_;
   OB_UNIS_VERSION(1);
@@ -311,7 +304,7 @@ public:
     K_(nlist), K_(sample_per_nlist), K_(extra_info_max_size), K_(extra_info_actual_size),
     K_(refine_type), K_(bq_bits_query), K_(refine_k), K_(bq_use_fht), K_(sync_interval_type), K_(sync_interval_value), K_(endpoint), K_(nbits),
     K_(prune), K_(refine), K_(ob_sparse_drop_ratio_build),K_(window_size), K_(ob_sparse_drop_ratio_search), K_(similarity_threshold),
-    K_(content_type), K_(ai_execution_mode), K_(allow_null_on_failure));
+    K_(content_type), K_(ai_service_tier), K_(allow_null_on_failure));
   int print_to_string(char *buf, int64_t buf_len, int64_t &pos) const;
 
 public:

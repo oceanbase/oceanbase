@@ -2400,7 +2400,7 @@ ObBatchFileEmbeddingOperator::ObBatchFileEmbeddingOperator(ObPipeline *pipeline)
       service_(nullptr),
       embed_provider_(nullptr),
       model_id_(),
-      ai_execution_mode_(share::OB_AI_ACCESS_MODE_BATCH_FILE),
+      ai_service_tier_(share::OB_AI_SERVICE_TIER_BATCH),
       allow_null_on_failure_(false),
       vec_dim_(-1),
       text_col_idx_(-1),
@@ -2463,7 +2463,7 @@ int ObBatchFileEmbeddingOperator::init(const ObTabletID &tablet_id)
     LOG_WARN("invalid tablet_id", K(ret), K(tablet_id));
   } else {
     tablet_id_ = tablet_id;
-    ai_execution_mode_ = share::OB_AI_ACCESS_MODE_BATCH_FILE;
+    ai_service_tier_ = share::OB_AI_SERVICE_TIER_BATCH;
     LOG_INFO("[BATCH-FILE] ObBatchFileEmbeddingOperator::init", K(tablet_id), K(tablet_id_));
 
     // Get DDL context for column info and model_id
@@ -2558,7 +2558,7 @@ int ObBatchFileEmbeddingOperator::init(const ObTabletID &tablet_id)
     if (OB_SUCC(ret)) {
       is_inited_ = true;
       LOG_INFO("ObBatchFileEmbeddingOperator initialized",
-               K(tablet_id), K_(model_id), K_(ai_execution_mode), K_(ddl_task_id));
+               K(tablet_id), K_(model_id), K_(ai_service_tier), K_(ddl_task_id));
     }
   }
   return ret;
@@ -3640,7 +3640,7 @@ void ObBatchFileEmbeddingOperator::cancel_inflight_tasks_()
 ObHNSWEmbeddingAppendAndWritePipeline::ObHNSWEmbeddingAppendAndWritePipeline()
   : ObDDLWriteMacroBlockBasePipeline(TASK_TYPE_DDL_VECTOR_INDEX_APPEND_PIPELINE),
     cg_row_file_writer_op_(nullptr), embedding_op_(nullptr),
-    ai_execution_mode_(VIAM_SYNC_HTTP), embedding_write_op_(this)
+    ai_service_tier_(share::OB_AI_SERVICE_TIER_STANDARD), embedding_write_op_(this)
 {}
 
 ObHNSWEmbeddingAppendAndWritePipeline::~ObHNSWEmbeddingAppendAndWritePipeline()
@@ -3651,10 +3651,13 @@ ObHNSWEmbeddingAppendAndWritePipeline::~ObHNSWEmbeddingAppendAndWritePipeline()
     cg_row_file_writer_op_ = nullptr;
   }
   if (OB_NOT_NULL(embedding_op_)) {
-    if (VIAM_BATCH_FILE == ai_execution_mode_) {
+    if (share::OB_AI_SERVICE_TIER_BATCH == ai_service_tier_) {
       static_cast<ObBatchFileEmbeddingOperator *>(embedding_op_)->~ObBatchFileEmbeddingOperator();
-    } else {
+    } else if (share::OB_AI_SERVICE_TIER_STANDARD == ai_service_tier_
+               || share::OB_AI_SERVICE_TIER_FLEX == ai_service_tier_) {
       static_cast<ObHNSWEmbeddingOperator *>(embedding_op_)->~ObHNSWEmbeddingOperator();
+    } else {
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unknown ai_service_tier in destructor", K_(ai_service_tier));
     }
     ob_free(embedding_op_);
     embedding_op_ = nullptr;
@@ -3673,7 +3676,7 @@ int ObHNSWEmbeddingAppendAndWritePipeline::init(ObDDLSlice *ddl_slice)
     const ObTabletID &tablet_id = ddl_slice->get_tablet_id();
     const int64_t slice_idx = ddl_slice->get_slice_idx();
 
-    // Read ai_execution_mode from tablet context
+    // Read ai_service_tier from tablet context
     ObDDLIndependentDag *dag = static_cast<ObDDLIndependentDag *>(get_dag());
     ObDDLTabletContext *tablet_context = nullptr;
     ObVectorIndexTabletContext *vector_index_ctx = nullptr;
@@ -3693,15 +3696,14 @@ int ObHNSWEmbeddingAppendAndWritePipeline::init(ObDDLSlice *ddl_slice)
             vec_idx_param, ObVectorIndexType::VIT_HNSW_INDEX, param, false))) {
           LOG_WARN("fail to parse vector index param", K(ret), K(vec_idx_param));
         } else {
-          ai_execution_mode_ = param.ai_execution_mode_;
+          ai_service_tier_ = param.ai_service_tier_;
         }
       }
     }
 
-    // Allocate embedding operator based on ai_execution_mode
-    // The upstream DDL scan always produces CG_ROW_TMP_FILES chunks for all access modes.
+    // Allocate embedding operator based on ai_service_tier
     if (OB_SUCC(ret)) {
-      if (VIAM_BATCH_FILE == ai_execution_mode_) {
+      if (share::OB_AI_SERVICE_TIER_BATCH == ai_service_tier_) {
         void *buf = ob_malloc(sizeof(ObBatchFileEmbeddingOperator), ObMemAttr(MTL_ID(), "BatchFileEmbed"));
         if (OB_ISNULL(buf)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -3712,7 +3714,7 @@ int ObHNSWEmbeddingAppendAndWritePipeline::init(ObDDLSlice *ddl_slice)
             LOG_WARN("init BatchFile embedding operator failed", K(ret), K(tablet_id));
           }
         }
-      } else {
+      } else if (share::OB_AI_SERVICE_TIER_STANDARD == ai_service_tier_) {
         void *buf = ob_malloc(sizeof(ObHNSWEmbeddingOperator), ObMemAttr(MTL_ID(), "HNSWEmbed"));
         if (OB_ISNULL(buf)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -3723,6 +3725,9 @@ int ObHNSWEmbeddingAppendAndWritePipeline::init(ObDDLSlice *ddl_slice)
             LOG_WARN("init HNSW embedding operator failed", K(ret), K(tablet_id));
           }
         }
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("unsupported service tier for embedding operator", K(ret), K_(ai_service_tier));
       }
     }
 
@@ -3736,7 +3741,7 @@ int ObHNSWEmbeddingAppendAndWritePipeline::init(ObDDLSlice *ddl_slice)
         LOG_WARN("add embedding write op failed", K(ret));
       } else {
         LOG_INFO("ObHNSWEmbeddingAppendAndWritePipeline initialized",
-                 K(tablet_id), K(slice_idx), K_(ai_execution_mode));
+                 K(tablet_id), K(slice_idx), K_(ai_service_tier));
       }
     }
   }

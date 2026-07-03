@@ -908,7 +908,7 @@ public:
 private:
   ObCGRowFileWriterOp *cg_row_file_writer_op_;
   ObVecEmbeddingBaseOp *embedding_op_;           // polymorphic, heap-alloc
-  ObVectorIndexAccessMode ai_execution_mode_;
+  share::ObAiServiceTier ai_service_tier_;
   ObHNSWEmbeddingWriteMacroOperator embedding_write_op_;
 };
 
@@ -942,7 +942,7 @@ public:
                                   ResultState &result_state,
                                   ObChunk &output_chunk) override;
 
-  TO_STRING_KV(K_(tablet_id), K_(model_id), K_(ai_execution_mode), K_(is_inited),
+  TO_STRING_KV(K_(tablet_id), K_(model_id), K_(ai_service_tier), K_(is_inited),
                K_(all_data_collected), K_(all_tasks_submitted), K_(end_chunk_sent),
                K_(total_rows_collected), K_(slot_ring));
 
@@ -989,7 +989,7 @@ private:
   vector_index::ObAiAccessService *service_;
   common::ObAIFuncBase *embed_provider_;
   common::ObString model_id_;
-  share::ObAiAccessMode ai_execution_mode_;
+  share::ObAiServiceTier ai_service_tier_;
   bool allow_null_on_failure_;
   int64_t vec_dim_;
   int64_t text_col_idx_;
