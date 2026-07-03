@@ -731,6 +731,7 @@ int ObIntegerColumnDecoder::get_aggregate_result(
   } else {
     int64_t base_idx = 0;
     const int64_t row_count = pd_row_id_ctx.get_row_count();
+    bool agg_null = false;
     while (OB_SUCC(ret) && base_idx < row_count) {
       int64_t row_id_start = pd_row_id_ctx.get_row_id(base_idx);
       int64_t batch_size = MIN(AGGREGATE_STORE_BATCH_SIZE, row_count - base_idx);
@@ -741,18 +742,28 @@ int ObIntegerColumnDecoder::get_aggregate_result(
           ObBitmap &null_bitmap = agg_cell.get_bitmap();
           for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; ++i) {
             const int64_t row_id = pd_row_id_ctx.get_row_id(base_idx + i);
-            if (ObCSDecodingUtil::test_bit(integer_ctx.null_or_nop_bitmap_, row_id) &&
-                OB_FAIL(null_bitmap.set(i))) {
-              LOG_WARN("Fail to set null bitmap", KR(ret), K(i), K(base_idx), K(row_id));
+            if (ObCSDecodingUtil::test_bit(integer_ctx.null_or_nop_bitmap_, row_id)) {
+              if (OB_FAIL(null_bitmap.set(i))) {
+                LOG_WARN("Fail to set null bitmap", KR(ret), K(i), K(base_idx), K(row_id));
+              } else {
+                agg_null = true;
+              }
             }
           }
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(traverse_integer_in_agg(integer_ctx, is_col_signed, row_id_start, batch_size, agg_cell))){
+      } else if (OB_FAIL(traverse_integer_in_agg(integer_ctx, is_col_signed, row_id_start, batch_size, agg_null, agg_cell))){
         LOG_WARN("Failed to traverse integer to aggregate", KR(ret), K(integer_ctx), K(is_col_signed));
       } else {
         base_idx += batch_size;
+      }
+    }
+    if (OB_SUCC(ret) && agg_null) {
+      ObStorageDatum storage_datum;
+      storage_datum.set_null();
+      if (OB_FAIL(agg_cell.eval(storage_datum))) {
+        LOG_WARN("Failed to eval agg_cell", KR(ret), K(storage_datum), K(agg_cell));
       }
     }
   }
@@ -792,6 +803,7 @@ int ObIntegerColumnDecoder::traverse_integer_in_agg(
     const bool is_col_signed,
     const int64_t row_start,
     const int64_t row_count,
+    bool &agg_null,
     storage::ObAggCellBase &agg_cell)
 {
   int ret = OB_SUCCESS;
@@ -833,7 +845,7 @@ int ObIntegerColumnDecoder::traverse_integer_in_agg(
         LOG_WARN("Unexpected null min_max function", KR(ret), K(store_width_tag), K(agg_cell));
       } else {
         min_max_func(reinterpret_cast<const unsigned char *>(ctx.data_), null_replaced_val_base_diff,
-          row_start, row_start + row_count, result);
+          row_start, row_start + row_count, agg_null, result);
         result_is_null = result == null_replaced_val_base_diff;
       }
     } else if (exist_null_or_nop_bitmap) {

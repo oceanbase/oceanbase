@@ -77,6 +77,7 @@ typedef void (*raw_min_max_function_with_null)(
             const uint64_t null_value,
             uint32_t from,
             uint32_t to,
+            bool &has_null,
             uint64_t &res);
 
 typedef void (*raw_min_max_function_with_null_bitmap)(

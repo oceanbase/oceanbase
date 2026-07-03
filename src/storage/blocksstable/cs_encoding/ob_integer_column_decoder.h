@@ -111,6 +111,7 @@ private:
                                      const bool is_col_signed,
                                      const int64_t row_start,
                                      const int64_t row_count,
+                                     bool &agg_null,
                                      storage::ObAggCellBase &agg_cell);
 
 };

@@ -1643,6 +1643,7 @@ class RawAggFunctionImpl
       const uint64_t null_value,
       uint32_t from,
       uint32_t to,
+      bool &has_null,
       uint64_t &res)
   {
     const DataType *start_pos = reinterpret_cast<const DataType *>(raw_data);
@@ -1656,6 +1657,8 @@ class RawAggFunctionImpl
         } else if (Op::apply(*a_pos, res_value)) {
           res_value = *a_pos;
         }
+      } else {
+        has_null = true;
       }
       ++a_pos;
     }
