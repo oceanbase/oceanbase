@@ -1537,6 +1537,29 @@ int ObTenantTabletTTLMgr::init(storage::ObLS *ls)
     is_inited_ = true;
     LOG_INFO("ObTenantTabletTTLMgr is inited", K_(tenant_id), K_(ls_id), K_(ttl_tg_id), K_(vec_tg_id), K(ls->get_ls_id().is_user_ls()), K_(hrowkey_tg_id));
   }
+  if (OB_FAIL(ret)) {
+    ObSEArray<ObTabletTTLScheduler *, 4> &schedulers = periodic_task_.get_tablet_ttl_schedulers();
+    for (int i = 0; i < schedulers.count(); i++) {
+      if (OB_NOT_NULL(schedulers.at(i))) {
+        schedulers.at(i)->~ObTabletTTLScheduler();
+        schedulers.at(i) = nullptr;
+      }
+    }
+    ObSEArray<ObTabletTTLScheduler *, 4> &hrowkey_schedulers = hrowkey_periodic_task_.get_tablet_ttl_schedulers();
+    for (int i = 0; i < hrowkey_schedulers.count(); i++) {
+      if (OB_NOT_NULL(hrowkey_schedulers.at(i))) {
+        hrowkey_schedulers.at(i)->~ObTabletTTLScheduler();
+        hrowkey_schedulers.at(i) = nullptr;
+      }
+    }
+    if (vec_tg_id_ != 0 && ls->get_ls_id().is_user_ls()) {
+      TG_STOP(vec_tg_id_);
+      TG_WAIT(vec_tg_id_);
+      TG_DESTROY(vec_tg_id_);
+      vec_tg_id_ = 0;
+      vector_idx_scheduler_.destroy();
+    }
+  }
   return ret;
 }
 
