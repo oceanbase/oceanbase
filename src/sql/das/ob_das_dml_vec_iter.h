@@ -142,7 +142,9 @@ public:
       const ObDASDMLBaseCtDef *das_ctdef,
       const ObDASDMLBaseCtDef *main_ctdef)
     : ObDomainDMLIterator(allocator, row_projector, write_iter, das_ctdef, main_ctdef),
-      is_old_row_(das_ctdef_->op_type_ == ObDASOpType::DAS_OP_TABLE_UPDATE || das_ctdef_->op_type_ == ObDASOpType::DAS_OP_TABLE_DELETE)
+      is_old_row_(das_ctdef_->op_type_ == ObDASOpType::DAS_OP_TABLE_UPDATE || das_ctdef_->op_type_ == ObDASOpType::DAS_OP_TABLE_DELETE),
+      vec_param_inited_(false),
+      vec_param_()
     {}
   virtual ~ObEmbeddedVecDMLIterator() = default;
 protected:
@@ -155,6 +157,9 @@ private:
   virtual int check_sync_interval(bool &is_sync_interval) const override;
 public:
   bool is_old_row_;
+private:
+  bool vec_param_inited_; // true after vec_param_ is parsed once
+  share::ObVectorIndexParam vec_param_; // cached parse result of vec_index_param
 };
 
 } // end namespace sql

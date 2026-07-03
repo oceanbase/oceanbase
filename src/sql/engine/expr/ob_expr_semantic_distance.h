@@ -14,24 +14,24 @@
  namespace sql
  {
 
- class ObExprSemanticDistance : public ObFuncExprOperator
- {
- public:
-   explicit ObExprSemanticDistance(common::ObIAllocator &alloc);
-   virtual ~ObExprSemanticDistance() {};
+class ObExprSemanticDistance : public ObFuncExprOperator
+{
+public:
+  explicit ObExprSemanticDistance(common::ObIAllocator &alloc);
+  virtual ~ObExprSemanticDistance() {};
 
-   virtual int calc_result_type2(ObExprResType &type,
-                                 ObExprResType &type1,
-                                 ObExprResType &type2,
-                                 common::ObExprTypeCtx &type_ctx) const override;
+  virtual int calc_result_typeN(ObExprResType &type,
+                                ObExprResType *types_stack,
+                                int64_t param_num,
+                                common::ObExprTypeCtx &type_ctx) const override;
 
-   static int calc_semantic_distance(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
+  static int calc_semantic_distance(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
 
-   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const override;
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const override;
 
- private:
-   DISALLOW_COPY_AND_ASSIGN(ObExprSemanticDistance);
- };
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObExprSemanticDistance);
+};
 
  class ObExprSemanticVectorDistance : public ObExprVectorDistance
  {

@@ -1809,6 +1809,9 @@ int ObHNSWEmbeddingOperator::init(const ObTabletID &tablet_id)
       LOG_WARN("build_extra_column_idxs failed", K(ret), K(text_col_idx_));
     } else if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(vector_index_ctx->vec_idx_param_, ObVectorIndexType::VIT_HNSW_INDEX, index_param, false))) {
       LOG_WARN("failed to parser params from string", K(ret));
+    } else if (!ObVectorIndexUtil::is_valid_content_type(index_param.content_type_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid vector index content type", K(ret), K(index_param.content_type_));
     } else if (OB_FAIL(ob_write_string(op_allocator_, ObString(index_param.endpoint_), model_id_))) {
       LOG_WARN("failed to copy endpoint to model_id", K(ret), K(ObString(index_param.endpoint_)));
     } else if (OB_ISNULL(embedmgr_)) {
@@ -1822,7 +1825,7 @@ int ObHNSWEmbeddingOperator::init(const ObTabletID &tablet_id)
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(embedmgr_->init(model_id_, col_type))) {
+      if (OB_FAIL(embedmgr_->init(model_id_, col_type, index_param.content_type_))) {
         embedmgr_->~ObEmbeddingTaskMgr();
         op_allocator_.free(embedmgr_);
         embedmgr_ = nullptr;

@@ -633,7 +633,6 @@ int ObHybridVecLogDMLIterator::check_sync_interval(bool &is_sync_interval) const
 {
   int ret = OB_SUCCESS;
   ObVectorIndexSyncIntervalType sync_interval_type = ObVectorIndexSyncIntervalType::VSIT_MAX;
-  int64_t sync_interval_value = 0;
   share::ObVectorIndexParam vec_param;
   const ObTableSchemaParam &table_param = das_ctdef_->table_param_.get_data_table();
 
@@ -648,7 +647,6 @@ int ObHybridVecLogDMLIterator::check_sync_interval(bool &is_sync_interval) const
     LOG_WARN("failed to parse vector index params", K(ret), K(table_param.get_vec_index_param()));
   } else {
     sync_interval_type = vec_param.sync_interval_type_;
-    sync_interval_value = vec_param.sync_interval_value_;
   }
 
   if (OB_FAIL(ret)) {
@@ -714,7 +712,12 @@ int ObEmbeddedVecDMLIterator::generate_embedded_vec_row(const ObChunkDatumStore:
           ObString vec_index_param = das_ctdef_->table_param_.get_data_table().get_vec_index_param();
           ObString chunk;
           int64_t vid = OB_INVALID_ID;
-          if (OB_FAIL(get_vid(store_row, vid_idx, vid))) {
+          share::ObVectorIndexType index_type = share::ObVectorIndexType::VIT_HNSW_INDEX;
+          if (!vec_param_inited_
+              && OB_FAIL(ObVectorIndexUtil::parser_params_from_string(vec_index_param, index_type, vec_param_, false))) {
+            LOG_WARN("failed to parse vector index param", K(ret), K(vec_index_param));
+          } else if (FALSE_IT(vec_param_inited_ = true)) {
+          } else if (OB_FAIL(get_vid(store_row, vid_idx, vid))) {
             LOG_WARN("failed to get vid", K(ret));
           } else if (!is_sync) {
             obj_arr[vid_idx].set_int(vid);
@@ -731,9 +734,12 @@ int ObEmbeddedVecDMLIterator::generate_embedded_vec_row(const ObChunkDatumStore:
               obj_arr[embedded_vec_idx].set_null();
             } else if (das_ctdef_->is_embedded_vec_ref_column_) {
               obj_arr[embedded_vec_idx].set_string(chunk);
+            } else if (OB_FAIL(ObVectorIndexUtil::check_embedding_content_valid(chunk, vec_param_.content_type_))) {
+              LOG_WARN("failed to validate embedding content", K(ret), K(chunk), K(vec_param_.content_type_));
             } else {
-              if (OB_FAIL(ObVectorIndexUtil::get_vector_from_text_by_embedding(allocator_, chunk, vec_index_param, embedded_vector))) {
-                LOG_WARN("failed to get vector from text by embedding", K(ret));
+              if (OB_FAIL(ObVectorIndexUtil::get_vector_from_content_by_embedding(
+                             allocator_, chunk, vec_param_.content_type_, vec_index_param, embedded_vector))) {
+                LOG_WARN("failed to get vector from content by embedding", K(ret), K(vec_param_.content_type_));
               } else {
                 obj_arr[embedded_vec_idx].set_string(embedded_vector);
               }
@@ -826,23 +832,25 @@ int ObEmbeddedVecDMLIterator::check_sync_interval(bool &is_sync_interval) const
 {
   int ret = OB_SUCCESS;
   ObVectorIndexSyncIntervalType sync_interval_type = ObVectorIndexSyncIntervalType::VSIT_MAX;
-  int64_t sync_interval_value = 0;
-  share::ObVectorIndexParam vec_param;
   const ObTableSchemaParam &table_param = das_ctdef_->table_param_.get_data_table();
 
-  if (table_param.get_vec_index_param().empty()) {
+  if (vec_param_inited_) {
+    sync_interval_type = vec_param_.sync_interval_type_;
+  } else if (table_param.get_vec_index_param().empty()) {
     // Use default sync mode when vector index param is empty?
     sync_interval_type = ObVectorIndexSyncIntervalType::VSIT_IMMEDIATE;
     LOG_DEBUG("vector index param is empty, use default sync mode", K(sync_interval_type));
-  } else if (OB_FAIL(share::ObVectorIndexUtil::parser_params_from_string(
-                                                                        table_param.get_vec_index_param(),
-                                                                        share::ObVectorIndexType::VIT_HNSW_INDEX,
-                                                                        vec_param,
-                                                                        true))) {
-    LOG_WARN("failed to parse vector index params", K(ret), K(table_param.get_vec_index_param()));
   } else {
-    sync_interval_type = vec_param.sync_interval_type_;
-    sync_interval_value = vec_param.sync_interval_value_;
+    share::ObVectorIndexParam local_param;
+    if (OB_FAIL(share::ObVectorIndexUtil::parser_params_from_string(
+                    table_param.get_vec_index_param(),
+                    share::ObVectorIndexType::VIT_HNSW_INDEX,
+                    local_param,
+                    true))) {
+      LOG_WARN("failed to parse vector index params", K(ret), K(table_param.get_vec_index_param()));
+    } else {
+      sync_interval_type = local_param.sync_interval_type_;
+    }
   }
 
   if (OB_FAIL(ret)) {

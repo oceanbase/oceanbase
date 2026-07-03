@@ -549,6 +549,9 @@ ObEmbeddingTaskMgr::ObEmbeddingTaskMgr(ObHNSWEmbeddingOperator &embedding_operat
     is_inited_(false),
     is_failed_(false),
     cs_type_(CS_TYPE_INVALID),
+    input_type_(share::VICT_TEXT),
+    model_request_timeout_us_(60 * 1000 * 1000),
+    model_max_retries_(2),
     embedding_operator_(embedding_operator),
     task_id_(OB_INVALID_ID)
 {
@@ -566,12 +569,17 @@ ObEmbeddingTaskMgr::~ObEmbeddingTaskMgr()
   }
 }
 
-int ObEmbeddingTaskMgr::init(const ObString &model_id, const ObCollationType col_type)
+int ObEmbeddingTaskMgr::init(const ObString &model_id,
+                             const ObCollationType col_type,
+                             const share::ObVectorIndexContentType input_type)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("embedding task mgr init twice", K(ret));
+  } else if (OB_UNLIKELY(input_type < share::VICT_TEXT || input_type >= share::VICT_MAX)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid embedding input type", K(ret), K(input_type));
   } else if (OB_FAIL(get_ai_config(model_id))) {
     LOG_WARN("load cfg from sys table failed", K(ret));
   } else {
@@ -586,6 +594,7 @@ int ObEmbeddingTaskMgr::init(const ObString &model_id, const ObCollationType col
 
   if (OB_SUCC(ret)) {
     cs_type_ = col_type;
+    input_type_ = input_type;
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     if (tenant_config.is_valid()) {
       model_request_timeout_us_ = tenant_config->model_request_timeout;
@@ -685,7 +694,7 @@ int ObEmbeddingTaskMgr::submit_batch_info(ObTaskBatchInfo *&batch_info)
               task = new (task_mem) share::ObEmbeddingTask();
               const int64_t vec_dim = results.at(0)->get_vector_dim();
               if (OB_FAIL(task->init(cfg_.model_url_, cfg_.model_name_, cfg_.provider_, cfg_.user_key_,
-                                     texts, cs_type_, vec_dim, model_request_timeout_us_, model_max_retries_,
+                                     texts, cs_type_, input_type_, vec_dim, model_request_timeout_us_, model_max_retries_,
                                      task_id_, ObEmbeddingTasSourceType::INDEX_PIPELINE, cb_handle, true))) {
                 LOG_WARN("failed to initialize EmbeddingTask", K(ret));
               }

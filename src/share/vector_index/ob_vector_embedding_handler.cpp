@@ -15,6 +15,7 @@
 #include "observer/ob_server_struct.h"
 #include "lib/mysqlclient/ob_mysql_transaction.h"
 #include "sql/engine/expr/ob_expr_ai/ob_ai_func_utils.h"
+#include "sql/engine/expr/ob_expr_ai/ob_ai_func.h"
 #include "storage/ddl/ob_hnsw_embedmgr.h"
 #include "lib/lock/ob_thread_cond.h"
 #include "lib/allocator/ob_malloc.h"
@@ -149,11 +150,13 @@ void ObEmbeddingTask::init_members()
   model_url_.reset();
   model_name_.reset();
   provider_.reset();
+  embed_provider_ = nullptr;
   use_base64_format_ = false;
   user_key_.reset();
   dimension_ = 0;
   input_chunks_.reset();
   output_vectors_.reset();
+  input_type_ = VICT_TEXT;
   cb_handle_ = nullptr;
   process_callback_offset_ = 0;
   is_inited_ = false;
@@ -202,13 +205,15 @@ void ObEmbeddingTask::init_members()
 }
 
 ObEmbeddingTask::ObEmbeddingTask() : local_allocator_("EmbeddingTask", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-                                     allocator_(local_allocator_)
+                                     allocator_(local_allocator_),
+                                     curl_resp_allocator_("EmbedCurlResp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
 {
   init_members();
 }
 
 ObEmbeddingTask::ObEmbeddingTask(ObArenaAllocator &allocator) : local_allocator_(),
-                                                                allocator_(allocator)
+                                                                allocator_(allocator),
+                                                                curl_resp_allocator_("EmbedCurlResp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
 {
   init_members();
 }
@@ -222,6 +227,7 @@ int ObEmbeddingTask::init(const ObString &model_url,
                           const ObString &user_key,
                           const ObIArray<ObString> &input_chunks,
                           const ObCollationType col_type,
+                          const ObVectorIndexContentType input_type,
                           int64_t dimension,
                           int64_t http_timeout_us,
                           int64_t http_max_retries,
@@ -231,9 +237,17 @@ int ObEmbeddingTask::init(const ObString &model_url,
                           bool always_retry)
 {
   int ret = OB_SUCCESS;
+  const bool is_multi_model = ObAIFuncUtils::is_multi_model(model_name);
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObEmbeddingTask already inited", K(ret), K(model_url), K(model_name), K(user_key), K(input_chunks));
+  } else if (!ObVectorIndexUtil::is_valid_content_type(input_type)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid embedding input type", K(ret), K(input_type));
+  } else if (input_type == VICT_IMAGE && !is_multi_model) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("image content type requires a multi-model (VL) embedding model", K(ret), K(model_name), K(input_type));
+    FORWARD_USER_ERROR(ret, "image content type requires a multi-model (VL) embedding model");
   } else if (http_timeout_us <= 0 || http_max_retries <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid http timeout", K(ret), K(http_timeout_us), K(http_max_retries));
@@ -251,6 +265,9 @@ int ObEmbeddingTask::init(const ObString &model_url,
     LOG_WARN("failed to copy user_key", K(ret));
   } else if (OB_FAIL(ob_write_string(allocator_, provider, provider_))) {
     LOG_WARN("failed to copy provider", K(ret));
+  } else if (OB_FAIL(ObAIFuncUtils::get_embed_provider(allocator_, provider, embed_provider_,
+                                                        is_multi_model))) {
+    LOG_WARN("failed to get embed provider", K(ret), K(provider), K(model_name));
   } else if (OB_FAIL(calc_max_wait_completion_time_us(http_timeout_us, http_max_retries, batch_size_,
                                                       input_chunks.count(), wait_for_completion_timeout_us_))) {
     LOG_WARN("failed to calculate max wait completion time", K(ret));
@@ -260,6 +277,10 @@ int ObEmbeddingTask::init(const ObString &model_url,
     task_id_ = (static_cast<int64_t>(tenant_id_) << 32) | (ObTimeUtility::current_time() & 0xFFFFFFFF);
     use_base64_format_ = ObAIFuncUtils::is_provider_support_base64(provider);
     dimension_ = dimension;
+    // qwen2.x-vl models don't support batch requests
+    if (ObAIFuncUtils::vl_model_needs_individual_requests(model_name)) {
+      batch_size_ = 1;
+    }
     total_chunks_ = input_chunks.count();
     processed_chunks_ = 0;
     process_callback_offset_ = 0;
@@ -293,6 +314,7 @@ int ObEmbeddingTask::init(const ObString &model_url,
     current_batch_size_ = batch_size_;
     successful_requests_count_ = 0;
     col_type_ = col_type;
+    input_type_ = input_type;
     source_task_id_ = source_task_id;
     source_task_type_ = source_task_type;
     always_retry_ = always_retry;
@@ -339,52 +361,53 @@ int ObEmbeddingTask::parse_embedding_response(const char *response_data, size_t 
   if (OB_ISNULL(response_data) || response_size == 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid response data", K(ret), KP(response_data), K(response_size));
+  } else if (OB_FAIL(json_reader.parse(response_data, response_size, root))) {
+    LOG_WARN("failed to parse json response", K(ret), KP(response_data), K(response_size));
+  } else if (OB_ISNULL(root)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("root is null", K(ret), K(response_size));
+  } else if (!ObJsonHelper::is_object_type(root)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("root is not a json object", K(ret));
   } else {
-    if (OB_FAIL(json_reader.parse(response_data, response_size, root))) {
-      LOG_WARN("failed to parse json response", K(ret), KP(response_data), K(response_size));
-    } else if (OB_ISNULL(root)) {
+    // Use cached embed provider's parse_output to handle different provider response formats
+    ObJsonObject *response_obj = static_cast<ObJsonObject *>(root);
+    ObIJsonBase *output = nullptr;
+
+    if (OB_ISNULL(embed_provider_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("root is null", K(ret));
-    } else if (!ObJsonHelper::is_object_type(root)) {
+      LOG_WARN("embed_provider_ is null", K(ret));
+    } else if (OB_FAIL(embed_provider_->parse_output(allocator_, response_obj, output))) {
+      LOG_WARN("failed to parse output from embed provider", K(ret), K_(provider));
+    } else if (OB_ISNULL(output)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("output is null", K(ret));
+    } else if (!ObJsonHelper::is_array_type(output)) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("root is not a json object", K(ret));
+      LOG_WARN("output is not an array", K(ret));
     } else {
-      ObIJsonBase *data_array = nullptr;
-      if (OB_FAIL(json_reader.get_object_value(root, DATA_NAME, data_array))) {
-        LOG_WARN("data array not found in response", K(ret), K(DATA_NAME));
-      } else if (!ObJsonHelper::is_array_type(data_array)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("data field is not an array", K(ret), "data_type", ObJsonHelper::get_type_name(data_array));
-      } else {
-        uint64_t data_array_size = json_reader.get_array_size(data_array);
-        for (uint64_t data_idx = 0; data_idx < data_array_size && OB_SUCC(ret); data_idx++) {
-          ObIJsonBase *data_item = nullptr;
-          if (OB_FAIL(json_reader.get_array_element(data_array, data_idx, data_item))) {
-            LOG_WARN("failed to get data array element", K(ret), K(data_idx));
-          } else if (!ObJsonHelper::is_object_type(data_item)) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("data item is not an object", K(ret), K(data_idx));
-          } else {
-            ObIJsonBase *embedding_jbase = nullptr;
-            float *vector = nullptr;
-            if (OB_FAIL(json_reader.get_object_value(data_item, EMBEDDING_NAME, embedding_jbase))) {
-              LOG_WARN("embedding array not found", K(ret), K(EMBEDDING_NAME));
-            } else if (OB_ISNULL(embedding_jbase)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("embedding jbase is null", K(ret));
-            } else if (use_base64_format_ && OB_FAIL(ObAIFuncUtils::decode_base64_embedding_array(
-                                                      *embedding_jbase, allocator_, dimension_, vector))) {
-              LOG_WARN("failed to decode base64 embedding array", K(ret));
-            } else if (!use_base64_format_ && OB_FAIL(ObAIFuncUtils::decode_float_embedding_array(
-                                                        *embedding_jbase, allocator_, json_reader, dimension_, vector))) {
-              LOG_WARN("failed to decode float embedding array", K(ret));
-            } else {
-              // no need to lock here, only access by other thread when task is done
-              if (OB_FAIL(output_vectors_.push_back(vector))) {
-                LOG_WARN("failed to push back vector", K(ret));
-              }
-            }
-          }
+      // output is an array of embeddings (float arrays)
+      uint64_t embeddings_count = json_reader.get_array_size(output);
+      for (uint64_t i = 0; i < embeddings_count && OB_SUCC(ret); ++i) {
+        ObIJsonBase *embedding_jbase = nullptr;
+        float *vector = nullptr;
+        if (OB_FAIL(json_reader.get_array_element(output, i, embedding_jbase))) {
+          LOG_WARN("failed to get embedding array element", K(ret), K(i));
+        } else if (OB_ISNULL(embedding_jbase)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("embedding jbase is null", K(ret), K(i));
+        } else if (use_base64_format_ && OB_FAIL(ObAIFuncUtils::decode_base64_embedding_array(
+                                                  *embedding_jbase, allocator_, dimension_, vector))) {
+          LOG_WARN("failed to decode base64 embedding array", K(ret));
+        } else if (!use_base64_format_ && OB_FAIL(ObAIFuncUtils::decode_float_embedding_array(
+                                                    *embedding_jbase, allocator_, json_reader, dimension_, vector))) {
+          LOG_WARN("failed to decode float embedding array", K(ret));
+        } else if (OB_ISNULL(vector)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("decoded vector is null", K(ret), K(i), K_(use_base64_format));
+        } else if (OB_FAIL(output_vectors_.push_back(vector))) {
+          // no need to lock here, only access by other thread when task is done
+          LOG_WARN("failed to push back vector", K(ret));
         }
       }
     }
@@ -405,10 +428,12 @@ void ObEmbeddingTask::reset()
   model_url_.reset();
   model_name_.reset();
   provider_.reset();
+  embed_provider_ = nullptr;
   use_base64_format_ = false;
   user_key_.reset();
   input_chunks_.reset();
   output_vectors_.reset();
+  input_type_ = VICT_TEXT;
   process_callback_offset_ = 0;
   dimension_ = 0;
   processed_chunks_ = 0;
@@ -433,6 +458,7 @@ void ObEmbeddingTask::reset()
   callback_done_ = false;
 
   cleanup_async_http();
+  curl_resp_allocator_.reset();
   local_allocator_.reset();
   task_cond_.destroy();
 }
@@ -519,73 +545,73 @@ int ObEmbeddingTask::start_async_work()
 
     int64_t start_idx = current_batch_idx_ * batch_size_;
     int64_t end_idx = OB_MIN(start_idx + batch_size_, input_chunks_.count());
-    uint64_t total_text_length = 0;
     if (OB_FAIL(ret)) {
     } else if (start_idx >= input_chunks_.count()
               && OB_FAIL(finish_task())) {
       LOG_WARN("failed to complete task successfully", K(ret));
     } else {
-      // TODO: Depending on the model type, different HTTP requests need to be generated
-      ObJsonBuilder json_builder(allocator_);
-      Value *root = nullptr;
-      Value *input_array = nullptr;
-      if (OB_FAIL(json_builder.create_object(root))) {
-        LOG_WARN("failed to create json object", K(ret));
-      } else if (OB_FAIL(json_builder.add_array_field(root, INPUT_NAME, input_array))) {
-        LOG_WARN("failed to add input array field", K(ret));
+      ObArray<ObString> contents;
+      ObJsonObject *config = nullptr;
+      ObJsonInt *dim_json = nullptr;
+      ObJsonObject *body = nullptr;
+      ObString json_str;
+      ObString input_type_str;
+      if (OB_FAIL(ObVectorIndexUtil::get_content_type_input_str(input_type_, input_type_str))) {
+        LOG_WARN("invalid input type for embedding task", K(ret), K_(input_type));
+      } else if (OB_FAIL(contents.reserve(end_idx - start_idx))) {
+        LOG_WARN("failed to reserve embedding contents", K(ret), K(start_idx), K(end_idx));
       } else {
         for (int64_t i = start_idx; i < end_idx && OB_SUCC(ret); i++) {
-          const ObString &text = input_chunks_.at(i);
-          ObString new_utf8_text = text;
-          LOG_DEBUG("Adding text to input array", K(i), K(text));
-          if (col_type_ != CS_TYPE_UTF8MB4_BIN && col_type_ != CS_TYPE_UTF8MB4_GENERAL_CI) {
+          const ObString &raw_content = input_chunks_.at(i);
+          ObString prepared_content = raw_content;
+          if (input_type_ == VICT_IMAGE) {
+            if (raw_content.empty()) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("image input content is empty", K(ret), K(i));
+            } else if (!raw_content.prefix_match_ci("http://") && !raw_content.prefix_match_ci("https://")) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("image input url must start with http or https", K(ret), K(raw_content));
+            } else if (OB_FAIL(ObAIFuncUtils::check_url_security(raw_content))) {
+              LOG_WARN("image input url security check failed", K(ret), K(raw_content));
+            }
+          } else if (col_type_ != CS_TYPE_UTF8MB4_BIN && col_type_ != CS_TYPE_UTF8MB4_GENERAL_CI) {
             if (col_type_ == CS_TYPE_INVALID) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpected cs_type", K(ret), K(col_type_));
-            } else if (OB_FAIL(ObCharset::charset_convert(allocator_, text, col_type_, CS_TYPE_UTF8MB4_GENERAL_CI, new_utf8_text))) {
-              LOG_WARN("charset convertion failed", K(ret), K(text));
+            } else if (OB_FAIL(ObCharset::charset_convert(allocator_, raw_content, col_type_, CS_TYPE_UTF8MB4_GENERAL_CI, prepared_content))) {
+              LOG_WARN("charset convertion failed", K(ret), K(raw_content));
             }
           }
           if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(truncate_text_by_token_count(new_utf8_text, CS_TYPE_UTF8MB4_GENERAL_CI, current_input_token_limit_))) {
+          } else if (input_type_ == VICT_TEXT
+                     && OB_FAIL(truncate_text_by_token_count(prepared_content, CS_TYPE_UTF8MB4_GENERAL_CI, current_input_token_limit_))) {
             LOG_WARN("failed to truncate text by token count", K(ret), K(i));
-          } else if (OB_FAIL(json_builder.array_add_string(input_array, new_utf8_text))) {
-            LOG_WARN("failed to add new_utf8_text to input array", K(ret), K(i));
-          } else {
-            total_text_length += new_utf8_text.length();
+          } else if (OB_FAIL(contents.push_back(prepared_content))) {
+            LOG_WARN("failed to push content", K(ret), K(i));
           }
         }
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(json_builder.add_string_field(root, MODEL_NAME_NAME, model_name_))) {
-          LOG_WARN("failed to add model field", K(ret));
-        } else if (use_base64_format_ && OB_FAIL(json_builder.add_string_field(root, ENCODING_FORMAT_NAME, BASE64_FORMAT))) {
-          LOG_WARN("failed to add encoding format field", K(ret));
-        } else if (!use_base64_format_ && OB_FAIL(json_builder.add_string_field(root, ENCODING_FORMAT_NAME, FLOAT_FORMAT))) {
-          LOG_WARN("failed to add encoding format field", K(ret));
-        } else if (dimension_ > 0 && OB_FAIL(json_builder.add_int_field(root, DIMENSIONS_NAME, dimension_))) {
-          LOG_WARN("failed to add dimensions field", K(ret));
-        } else {
-          const int64_t json_buf_len = total_text_length + 2048;
-          char *json_buf = (char*)allocator_.alloc(json_buf_len);
-          if (OB_ISNULL(json_buf)) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("failed to alloc json buffer", K(ret));
-          } else {
-            int64_t json_len = 0;
-            if (OB_FAIL(json_builder.to_string(root, json_buf, json_buf_len, json_len))) {
-              LOG_WARN("failed to convert json to string", K(ret));
-            } else {
-              if (OB_FAIL(send_http_request_async(json_buf, json_len))) {
-                LOG_WARN("failed to send http request", K(ret));
-              } else {
-                LOG_DEBUG("HTTP request sent successfully for batch", K(current_batch_idx_),
-                                                                    K(start_idx),
-                                                                    K(end_idx),
-                                                                    K(*this));
-              }
-            }
-          }
-        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObAIFuncJsonUtils::get_json_object(allocator_, config))) {
+        LOG_WARN("failed to create embedding config json", K(ret));
+      } else if (dimension_ > 0
+                 && OB_FAIL(ObAIFuncJsonUtils::get_json_int(allocator_, dimension_, dim_json))) {
+        LOG_WARN("failed to get json int for dimension", K(ret), K_(dimension));
+      } else if (dimension_ > 0 && OB_NOT_NULL(dim_json)
+                 && OB_FAIL(config->add("dimensions", dim_json))) {
+        LOG_WARN("failed to add dimensions to config", K(ret));
+      } else if (OB_ISNULL(embed_provider_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("embed_provider_ is null", K(ret));
+      } else if (OB_FAIL(embed_provider_->get_body(allocator_, model_name_, contents, config, input_type_str, body))) {
+        LOG_WARN("failed to build embedding request body", K(ret), K_(provider), K(input_type_str));
+      } else if (OB_FAIL(ObAIFuncJsonUtils::print_json_to_str(allocator_, body, json_str))) {
+        LOG_WARN("failed to serialize embedding request body", K(ret));
+      } else if (OB_FAIL(send_http_request_async(json_str.ptr(), json_str.length()))) {
+        LOG_WARN("failed to send http request", K(ret));
+      } else {
+        LOG_DEBUG("HTTP request sent successfully for batch",
+                  K_(current_batch_idx), K(start_idx), K(end_idx), K_(input_type), K(*this));
       }
     }
   }
@@ -848,7 +874,18 @@ int ObEmbeddingTask::check_http_progress()
       }
 
       if (OB_NOT_NULL(curl_response_data_)) {
+        // http_error_message_ may be a shallow ref into curl buffer; deep-copy before reset
+        if (!http_error_message_.empty()) {
+          ObString copied;
+          if (OB_SUCCESS == ob_write_string(allocator_, http_error_message_, copied)) {
+            http_error_message_ = copied;
+          } else {
+            LOG_WARN("failed to deep copy http_error_message_, clearing to avoid dangling ref");
+            http_error_message_.reset();
+          }
+        }
         curl_response_data_->reset();
+        curl_resp_allocator_.reset();  // reclaim all WriteMemoryCallback intermediate blocks
       }
     }
   }
@@ -1758,7 +1795,7 @@ int ObEmbeddingTask::init_curl_handler(const ObString &model_url, const ObString
       curl_easy_setopt(curl_easy_handle_, CURLOPT_HTTPHEADER, curl_headers_);
       curl_easy_setopt(curl_easy_handle_, CURLOPT_WRITEFUNCTION, ObEmbeddingTask::WriteMemoryCallback);
 
-      curl_response_data_ = OB_NEWx(HttpResponseData, &allocator_, allocator_);
+      curl_response_data_ = OB_NEWx(HttpResponseData, &allocator_, curl_resp_allocator_);
       if (OB_ISNULL(curl_response_data_)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to create response data structure", K(ret));

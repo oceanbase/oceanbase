@@ -13,9 +13,13 @@
 #include "lib/allocator/ob_allocator.h"
 #include "share/io/ob_io_define.h"
 
-
 namespace oceanbase
 {
+
+namespace common
+{
+class ObAIFuncIEmbed;
+}
 
 namespace storage
 {
@@ -165,6 +169,7 @@ class ObEmbeddingTask
           const ObString &user_key,
           const ObIArray<ObString> &input_chunks,
           const ObCollationType col_type,
+          const ObVectorIndexContentType input_type,
           int64_t dimension,
           int64_t http_timeout_us,
           int64_t http_max_retries,
@@ -197,6 +202,7 @@ class ObEmbeddingTask
                 K_(total_chunks),
                 K_(process_callback_offset),
                 K_(col_type),
+                K_(input_type),
                 K_(current_input_token_limit),
                 K_(need_cancel),
                 K_(source_task_id),
@@ -304,6 +310,7 @@ private:
   bool is_ready_to_handle() const; // Check if current time exceeds next_handle_task_time_us_
   int finish_task();
   int try_rescheule_task();
+
   int calc_max_wait_completion_time_us(int64_t http_timeout_us, int64_t http_max_retry_count,
                                        int64_t batch_size, int64_t input_chunks_count,
                                        int64_t &max_wait_completion_time_us) const;
@@ -348,16 +355,19 @@ private:
 private:
   ObArenaAllocator local_allocator_;
   ObArenaAllocator &allocator_;
+  ObArenaAllocator curl_resp_allocator_;  // dedicated allocator for curl response buffer, reset per batch
 
   // request model required fields
   ObString model_url_;
   ObString model_name_;
   ObString provider_;
+  common::ObAIFuncIEmbed *embed_provider_;
   bool use_base64_format_;
   ObString user_key_;
   int64_t dimension_;
   ObArray<ObString> input_chunks_;
   ObArray<float*> output_vectors_;
+  ObVectorIndexContentType input_type_;
 
   // IO callback for progress notification
   storage::ObEmbeddingIOCallbackHandle *cb_handle_;

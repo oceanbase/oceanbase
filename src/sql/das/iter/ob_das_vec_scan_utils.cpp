@@ -128,10 +128,10 @@ int ObDasVecScanUtils::check_ivf_support_similarity_threshold(ObExpr &expr)
   return ret;
 }
 
-int ObDasVecScanUtils::get_real_search_vec(common::ObIAllocator &allocator,
+int ObDasVecScanUtils::get_real_string_from_expr(common::ObIAllocator &allocator,
                                            ObEvalCtx *eval_ctx,
                                            ObExpr *origin_vec,
-                                           ObString &real_search_vec)
+                                           ObString &real_str)
 {
   int ret = OB_SUCCESS;
 
@@ -144,19 +144,19 @@ int ObDasVecScanUtils::get_real_search_vec(common::ObIAllocator &allocator,
   } else if (search_vec_datum->is_null()) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("search vector is null", K(ret));
-  } else if (OB_FALSE_IT(real_search_vec = search_vec_datum->get_string())) {
-  } else if (0 == real_search_vec.length()) {
+  } else if (OB_FALSE_IT(real_str = search_vec_datum->get_string())) {
+  } else if (0 == real_str.length()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("search vector is empty string", K(ret));
   } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator,
                                                                ObLongTextType,
                                                                CS_TYPE_BINARY,
                                                                origin_vec->obj_meta_.has_lob_header(),
-                                                               real_search_vec))) {
+                                                               real_str))) {
     LOG_WARN("failed to get real data.", K(ret));
-  } else if (OB_ISNULL(real_search_vec.ptr())) {
+  } else if (OB_ISNULL(real_str.ptr())) {
     ret = OB_ERR_NULL_VALUE;
-    LOG_WARN("invalid null pointer", K(ret), KP(real_search_vec.ptr()));
+    LOG_WARN("invalid null pointer", K(ret), KP(real_str.ptr()));
   }
 
   return ret;
@@ -262,23 +262,37 @@ int ObDasVecScanUtils::init_sort_of_hybrid_index(ObIAllocator &allocator,
         distance_calc = expr;
         ObString query_str;
         ObExpr *query_str_expr = nullptr;
-        if (expr->arg_cnt_ != 2) {
+        const bool arg_cnt_invalid = expr->is_semantic_vector_distance_expr()
+                                     ? (expr->arg_cnt_ != 2)
+                                     : (expr->arg_cnt_ != 2 && expr->arg_cnt_ != 3);
+        if (arg_cnt_invalid) {
           ret = OB_ERR_PARAM_SIZE;
           LOG_WARN("unexpected arg num", K(ret), K(expr->arg_cnt_));
         } else if (!expr->args_[ARGS_IDX_ZERO]->is_const_expr() && !expr->args_[ARGS_IDX_ONE]->is_const_expr()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("semantic_distance expr args are not string type", K(ret), KPC(expr->args_[ARGS_IDX_ZERO]), KPC(expr->args_[ARGS_IDX_ONE]));
         } else if (FALSE_IT(query_str_expr = expr->args_[ARGS_IDX_ZERO]->is_const_expr() ? expr->args_[ARGS_IDX_ZERO] : expr->args_[ARGS_IDX_ONE])) {
-        } else if (OB_FAIL(ObDasVecScanUtils::get_real_search_vec(allocator, sort_rtdef->eval_ctx_, query_str_expr, query_str))) {
-          LOG_WARN("failed to get real search vec", K(ret));
+        } else if (OB_FAIL(ObDasVecScanUtils::get_real_string_from_expr(allocator, sort_rtdef->eval_ctx_, query_str_expr, query_str))) {
+          LOG_WARN("failed to get real string from expr", K(ret));
         } else {
           if (expr->is_semantic_vector_distance_expr()) {
             if (OB_FAIL(ObVectorIndexUtil::get_vector_from_vector_array_string(allocator, query_str, ir_ctdef->vec_index_param_, hybrid_search_vec))) {
               LOG_WARN("failed to get vector from query text", K(ret), KPC(expr));
             }
           } else {
-            if (OB_FAIL(ObVectorIndexUtil::get_vector_from_text_by_embedding(allocator, query_str, ir_ctdef->vec_index_param_, hybrid_search_vec))) {
-              LOG_WARN("failed to get vector from query text", K(ret), KPC(expr));
+            ObVectorIndexContentType input_type = VICT_TEXT;
+            ObString input_type_str;
+            if (expr->arg_cnt_ == 3) {
+              if (OB_FAIL(ObDasVecScanUtils::get_real_string_from_expr(allocator, sort_rtdef->eval_ctx_, expr->args_[2], input_type_str))) {
+                LOG_WARN("failed to get semantic input type string", K(ret));
+              } else if (OB_FAIL(ObVectorIndexUtil::parse_content_type_str(input_type_str, input_type))) {
+                LOG_WARN("failed to parse semantic input type", K(ret), K(input_type_str));
+              }
+            }
+
+            if (OB_SUCC(ret)
+                && OB_FAIL(ObVectorIndexUtil::get_vector_from_content_by_embedding(allocator, query_str, input_type, ir_ctdef->vec_index_param_, hybrid_search_vec))) {
+              LOG_WARN("failed to get vector from content by embedding", K(ret), KPC(expr));
             }
           }
         }

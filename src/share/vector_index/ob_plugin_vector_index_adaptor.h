@@ -935,6 +935,15 @@ public:
     }
     return result;
   }
+  ObVectorIndexContentType get_content_type() const
+  {
+    ObVectorIndexContentType result = VICT_TEXT;
+    ObVectorIndexParam *param = static_cast<ObVectorIndexParam*>(algo_data_);
+    if (OB_NOT_NULL(param)) {
+      result = param->content_type_;
+    }
+    return result;
+  }
   bool check_need_embedding();
   int get_vid_bound(ObVidBound &bound);
 

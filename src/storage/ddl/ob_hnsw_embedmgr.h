@@ -234,7 +234,7 @@ class ObEmbeddingTaskMgr
 public:
   ObEmbeddingTaskMgr(ObHNSWEmbeddingOperator &embedding_operator);
   ~ObEmbeddingTaskMgr();
-  int init(const common::ObString &model_id, const ObCollationType cs_type);
+  int init(const common::ObString &model_id, const ObCollationType cs_type, const share::ObVectorIndexContentType input_type);
   int submit_batch_info(ObTaskBatchInfo *&batch_info);
   int get_ready_batch_info(ObTaskBatchInfo *&batch_info, int &error_ret_code);
   int mark_task_ready(const int64_t slot_idx, const int ret_code);
@@ -259,6 +259,7 @@ private:
   bool is_inited_;
   bool is_failed_;
   ObCollationType cs_type_;
+  share::ObVectorIndexContentType input_type_;
   int64_t model_request_timeout_us_; //For controlling the maximum timeout of calling model http service
   int64_t model_max_retries_; //For controlling the maximum retries of calling model http service
   ObHNSWEmbeddingOperator &embedding_operator_;

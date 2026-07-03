@@ -3460,9 +3460,9 @@ int ObDASHNSWScanIter::set_vector_query_condition(ObVectorQueryConditions &query
     query_cond.extra_column_count_ = extra_column_count_;
     if (OB_FAIL(ret)) {
     } else if (!OB_ISNULL(search_vec_)) {
-      if (OB_FAIL(ObDasVecScanUtils::get_real_search_vec(mem_context_->get_arena_allocator(), sort_rtdef_->eval_ctx_, search_vec_,
-                                                        query_cond.query_vector_))) {
-        LOG_WARN("failed to get real search vec", K(ret));
+      if (OB_FAIL(ObDasVecScanUtils::get_real_string_from_expr(mem_context_->get_arena_allocator(), sort_rtdef_->eval_ctx_, search_vec_,
+                                                              query_cond.query_vector_))) {
+        LOG_WARN("failed to get real string from expr", K(ret));
       }
     } else {
       query_cond.query_vector_ = hybrid_search_vec_;

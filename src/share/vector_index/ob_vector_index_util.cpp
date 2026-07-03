@@ -269,6 +269,10 @@ int ObVectorIndexUtil::parser_params_from_string(
             MEMCPY(param.endpoint_, new_param_value.ptr(), new_param_value.length());
             param.endpoint_[new_param_value.length()] = '\0';
           }
+        } else if (new_param_name == "CONTENT_TYPE") {
+          if (OB_FAIL(parse_content_type_str(new_param_value, param.content_type_))) {
+            LOG_WARN("invalid content_type value", K(ret), K(new_param_value));
+          }
         } else if (new_param_name == "DIM") {
           int64_t int_value = 0;
           if (OB_FAIL(ObSchemaUtils::str_to_int(new_param_value, int_value))) {
@@ -499,6 +503,60 @@ int ObVectorIndexUtil::get_vector_from_vector_array_string(ObIAllocator &allocat
   return ret;
 }
 
+int ObVectorIndexUtil::parse_content_type_str(const ObString &content_type_str,
+                                              ObVectorIndexContentType &content_type)
+{
+  int ret = OB_SUCCESS;
+  if (content_type_str.case_compare("TEXT") == 0) {
+    content_type = VICT_TEXT;
+  } else if (content_type_str.case_compare("IMAGE") == 0) {
+    content_type = VICT_IMAGE;
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid vector index content type", K(ret), K(content_type_str));
+  }
+  return ret;
+}
+
+const char *ObVectorIndexUtil::get_content_type_str(const ObVectorIndexContentType content_type)
+{
+  const char *type_str = "TEXT";
+  switch (content_type) {
+    case VICT_TEXT:
+      type_str = "TEXT";
+      break;
+    case VICT_IMAGE:
+      type_str = "IMAGE";
+      break;
+    default:
+      // unexpected content type, fallback to TEXT as safe default
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected content type in get_content_type_str",
+                   K(content_type));
+      type_str = "TEXT";
+      break;
+  }
+  return type_str;
+}
+
+bool ObVectorIndexUtil::is_valid_content_type(const ObVectorIndexContentType content_type)
+{
+  return content_type >= VICT_TEXT && content_type < VICT_MAX;
+}
+
+int ObVectorIndexUtil::get_content_type_input_str(const ObVectorIndexContentType content_type, ObString &input_type_str)
+{
+  int ret = OB_SUCCESS;
+  if (content_type == VICT_TEXT) {
+    input_type_str = ObString("text");
+  } else if (content_type == VICT_IMAGE) {
+    input_type_str = ObString("image");
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid content type", K(ret), K(content_type));
+  }
+  return ret;
+}
+
 int ObVectorIndexUtil::parse_time_string_to_seconds(const ObString &time_str, int64_t &seconds)
 {
   int ret = OB_SUCCESS;
@@ -561,13 +619,45 @@ int ObVectorIndexUtil::get_vector_from_text_by_embedding(ObIAllocator &allocator
                                                         const ObString &param_str,
                                                         ObString &output_vec)
 {
+  return get_vector_from_content_by_embedding(allocator, query_text, VICT_TEXT, param_str, output_vec);
+}
+
+int ObVectorIndexUtil::check_embedding_content_valid(
+    const ObString &query_content,
+    const ObVectorIndexContentType content_type)
+{
+  int ret = OB_SUCCESS;
+  if (content_type == VICT_IMAGE && query_content.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("image query content is empty", K(ret));
+  } else if (content_type == VICT_IMAGE
+             && !(query_content.prefix_match_ci("http://")
+                  || query_content.prefix_match_ci("https://"))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("image query url must start with http or https", K(ret), K(query_content));
+  } else if (content_type == VICT_IMAGE
+             && OB_FAIL(ObAIFuncUtils::check_url_security(query_content))) {
+    LOG_WARN("image query url security check failed", K(ret), K(content_type), K(query_content));
+  }
+  return ret;
+}
+
+int ObVectorIndexUtil::get_vector_from_content_by_embedding(ObIAllocator &allocator,
+                                                            const ObString &query_content,
+                                                            const ObVectorIndexContentType content_type,
+                                                            const ObString &param_str,
+                                                            ObString &output_vec)
+{
   int ret = OB_SUCCESS;
   ObVectorIndexParam param;
   ObVectorIndexType index_type = ObVectorIndexType::VIT_HNSW_INDEX;
   ObString result;
   if (OB_FAIL(parser_params_from_string(param_str, index_type, param, false))) {
     LOG_WARN("parse vector index param failed", K(ret), K(param_str));
+  } else if (OB_FAIL(check_embedding_content_valid(query_content, content_type))) {
+    LOG_WARN("embedding content validation failed", K(ret), K(content_type), K(query_content));
   } else if (strlen(param.endpoint_) == 0) {
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("wrong vector index param endpoint", K(ret), K(param_str));
   } else {
     ObString endpoint_str(param.endpoint_);
@@ -589,14 +679,18 @@ int ObVectorIndexUtil::get_vector_from_text_by_embedding(ObIAllocator &allocator
       ObJsonInt *dim_json = nullptr;
       ObJsonObject *config = nullptr;
       ObAIFuncModel model(allocator, *ai_fun_info, *endpoint_info);
-      ObString query_text_copy = query_text;  // Create a non-const copy
+      ObString query_content_copy = query_content;
+      ObString input_type_str;
       if (OB_FAIL(ObAIFuncJsonUtils::get_json_object(allocator, config))) {
         LOG_WARN("fail to get json object", K(ret));
       } else if (OB_FAIL(ObAIFuncJsonUtils::get_json_int(allocator, dim, dim_json))) {
         LOG_WARN("fail to get json int", K(ret));
       } else if (OB_FAIL(config->add("dimensions", dim_json))) {
-         LOG_WARN("fail to add dimensions", K(ret));
-      } else if (OB_FAIL(model.call_dense_embedding(query_text_copy, config, result))) {
+        LOG_WARN("fail to add dimensions", K(ret));
+      } else if (OB_FAIL(get_content_type_input_str(content_type, input_type_str))) {
+        LOG_WARN("invalid embedding content type", K(ret), K(content_type));
+      } else if (FALSE_IT(model.set_input_type(input_type_str))) {
+      } else if (OB_FAIL(model.call_dense_embedding(query_content_copy, config, result))) {
         LOG_WARN("fail to call embedding", K(ret));
       }
     }
@@ -740,6 +834,7 @@ int ObVectorIndexParam::print_hnsw_params(char *buf, int64_t buf_len, int64_t &p
   PRINT_PARAM("sync_interval_type=%d,", static_cast<int>(sync_interval_type_));
   PRINT_PARAM("sync_interval_value=%ld,", sync_interval_value_);
   PRINT_PARAM("endpoint=%s,", endpoint_);
+  PRINT_PARAM("content_type=%s,", ObVectorIndexUtil::get_content_type_str(content_type_));
 
   #undef PRINT_PARAM
   return ret;
@@ -3007,7 +3102,8 @@ int ObVectorIndexUtil::get_index_tids_for_hnsw_by_prefix(
     LOG_WARN("failed to get index table schema", K(ret), K(index_tid));
   } else if (OB_ISNULL(src_index_schema)) {
     ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("get null index schema", K(ret), K(index_tid));
+    LOG_WARN("get null index schema for vector index", K(ret), K(index_tid), K(tenant_id),
+             "table_name", data_table_schema.get_table_name());
   } else if (OB_FAIL(ObPluginVectorIndexUtils::get_vector_index_prefix(*src_index_schema, src_index_prefix))) {
     LOG_WARN("failed to get index prefix", K(ret));
   } else if (OB_FAIL(data_table_schema.get_simple_index_infos(simple_index_infos))) {
@@ -3020,7 +3116,9 @@ int ObVectorIndexUtil::get_index_tids_for_hnsw_by_prefix(
         LOG_WARN("fail to get index_table_schema", K(ret), K(tenant_id), "table_id", simple_index_infos.at(i).table_id_);
       } else if (OB_ISNULL(index_table_schema)) {
         ret = OB_TABLE_NOT_EXIST;
-        LOG_WARN("index table schema should not be null", K(ret), K(simple_index_infos.at(i).table_id_));
+        LOG_WARN("index table schema should not be null for vector index", K(ret),
+                 "table_id", simple_index_infos.at(i).table_id_, K(tenant_id),
+                 "data_table_name", data_table_schema.get_table_name());
       } else if (!(index_table_schema->get_index_type() == INDEX_TYPE_VEC_INDEX_ID_LOCAL
                  || index_table_schema->get_index_type() == INDEX_TYPE_VEC_INDEX_SNAPSHOT_DATA_LOCAL
                  || index_table_schema->get_index_type() == INDEX_TYPE_HYBRID_INDEX_EMBEDDED_LOCAL
@@ -3747,6 +3845,7 @@ int ObVectorIndexUtil::check_index_param(
     ObString type_name;
     ObString endpoint_name;
     ObVectorIndexSyncIntervalType sync_interval_type;
+    ObVectorIndexContentType content_type = VICT_TEXT;
     int64_t parser_value = 0;
     int32_t str_len = 0;
     int64_t m_value = 0;
@@ -3773,6 +3872,7 @@ int ObVectorIndexUtil::check_index_param(
     bool sample_per_nlist_is_set = false; // ivf
     bool nbits_is_set = false;          // ivf
     bool endpoint_is_set = false;       // hybrid search
+    bool content_type_is_set = false;   // hybrid search
     bool sync_mode_is_set = false;      // hybrid search
     bool sync_interval_is_set = false;  // hybrid search
     bool dim_is_set = false;            // hybrid search
@@ -3830,6 +3930,7 @@ int ObVectorIndexUtil::check_index_param(
                    new_variable_name != "EXTRA_INFO_MAX_SIZE" &&
                    new_variable_name != "NBITS" &&
                    new_variable_name != "MODEL" &&
+                   new_variable_name != "CONTENT_TYPE" &&
                    new_variable_name != "SYNC_MODE" &&
                    new_variable_name != "SYNC_INTERVAL" &&
                    new_variable_name != "DIM" &&
@@ -4039,6 +4140,13 @@ int ObVectorIndexUtil::check_index_param(
             LOG_WARN("invalid vector index model value", K(ret), K(new_parser_name));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "this value of vector index model is");
           }
+        } else if (last_variable == "CONTENT_TYPE") {
+          if (OB_FAIL(parse_content_type_str(new_parser_name, content_type))) {
+            LOG_WARN("invalid vector index content_type value", K(ret), K(new_parser_name));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "this value of vector index content_type is");
+          } else {
+            content_type_is_set = true;
+          }
         } else if (last_variable == "SYNC_INTERVAL") {
           int64_t seconds = 0;
           if (OB_FAIL(parse_time_string_to_seconds(new_parser_name, seconds))) {
@@ -4187,6 +4295,11 @@ int ObVectorIndexUtil::check_index_param(
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "hybrid vector index on non-varchar column is");
       LOG_WARN("create hybrid vector index on non-varchar column is not supported", K(ret));
+    } else if (OB_SUCC(ret) && content_type_is_set && !(endpoint_is_set && dim_is_set && type_hnsw_is_set)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("content_type is only supported for hybrid hnsw family index", K(ret),
+               K(content_type_is_set), K(endpoint_is_set), K(dim_is_set), K(type_hnsw_is_set));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector index content_type for current index is");
     }
     if (OB_FAIL(ret)) {
     } else if (!is_sparse_vec) {
@@ -4237,10 +4350,10 @@ int ObVectorIndexUtil::check_index_param(
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "ivf vector index param setting ef_construction or ef_search should or extra_info_max_size is");
         }
         if (OB_FAIL(ret)) {
-        } else if (!type_hybrid_vec_is_set && (endpoint_is_set || sync_mode_is_set || sync_interval_is_set)) {
+        } else if (!type_hybrid_vec_is_set && (endpoint_is_set || content_type_is_set || sync_mode_is_set || sync_interval_is_set)) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("ivf vector index no need to set model or sync_mode or sync_interval",
-            K(ret), K(endpoint_is_set), K(sync_mode_is_set), K(sync_interval_is_set));
+            K(ret), K(endpoint_is_set), K(content_type_is_set), K(sync_mode_is_set), K(sync_interval_is_set));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "ivf vector index setting model or sync_mode or sync_interval is");
         }
         nlist_value = nlist_is_set ? nlist_value : default_nlist_value;
@@ -4286,10 +4399,10 @@ int ObVectorIndexUtil::check_index_param(
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "hnsw vector index setting nlist or sample_per_nlist or nbits is");
         }
         if (OB_FAIL(ret)) {
-        } else if (!type_hybrid_vec_is_set && (endpoint_is_set || sync_mode_is_set || sync_interval_is_set)) {
+        } else if (!type_hybrid_vec_is_set && (endpoint_is_set || content_type_is_set || sync_mode_is_set || sync_interval_is_set)) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("hnsw vector index no need to set model or sync_mode or sync_interval",
-            K(ret), K(endpoint_is_set), K(sync_mode_is_set), K(sync_interval_is_set));
+            K(ret), K(endpoint_is_set), K(content_type_is_set), K(sync_mode_is_set), K(sync_interval_is_set));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "hnsw vector index setting model or sync_mode or sync_interval is");
         }
       }
@@ -4341,6 +4454,9 @@ int ObVectorIndexUtil::check_index_param(
         } else if (!sync_interval_is_set && type_hybrid_vec_is_set &&
                    OB_FAIL(databuff_printf(not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos,
                                            ", SYNC_INTERVAL=%lds", sync_interval_value))) {
+        } else if (content_type_is_set && OB_FAIL(databuff_printf(not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos,
+                                                                  ", CONTENT_TYPE=%s",
+                                                                  get_content_type_str(content_type)))) {
         } else if (is_enable_bp_param && type_hnsw_bq_is_set &&! refine_type_is_set &&
             OB_FAIL(databuff_printf(not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos, ", REFINE_TYPE=SQ8"))) {
           LOG_WARN("fail to printf databuff", K(ret));
@@ -4380,6 +4496,7 @@ int ObVectorIndexUtil::check_index_param(
             || type_ivf_pq_is_set
             || extra_info_max_size_is_set
             || endpoint_is_set
+            || content_type_is_set
             || dim_is_set
             || sync_interval_is_set
             || sync_mode_is_set) {
@@ -7993,6 +8110,7 @@ int ObVectorIndexUtil::check_only_change_search_params(const ObString &old_idx_p
           old_vector_index_param.dim_ != new_vector_index_param.dim_ ||
           old_vector_index_param.m_ != new_vector_index_param.m_ ||
           old_vector_index_param.ef_construction_ != new_vector_index_param.ef_construction_ ||
+          old_vector_index_param.content_type_ != new_vector_index_param.content_type_ ||
           old_vector_index_param.extra_info_max_size_ != new_vector_index_param.extra_info_max_size_ ||
           old_vector_index_param.extra_info_actual_size_ != new_vector_index_param.extra_info_actual_size_) {
         only_change_search_params = false;
@@ -8181,6 +8299,7 @@ int ObVectorIndexUtil::check_need_embedding_when_rebuild(const ObString &old_idx
     const bool extra_info_max_changed = (old_param.extra_info_max_size_ != new_param.extra_info_max_size_);
     const bool extra_info_actual_changed = (old_param.extra_info_actual_size_ != new_param.extra_info_actual_size_);
     const bool endpoint_changed = (0 != STRCMP(old_param.endpoint_, new_param.endpoint_));
+    const bool content_type_changed = (old_param.content_type_ != new_param.content_type_);
     const bool sync_interval_type_changed = (old_param.sync_interval_type_ != new_param.sync_interval_type_);
     const bool sync_interval_value_changed = (old_param.sync_interval_value_ != new_param.sync_interval_value_);
 
@@ -8193,6 +8312,7 @@ int ObVectorIndexUtil::check_need_embedding_when_rebuild(const ObString &old_idx
                                || extra_info_max_changed
                                || extra_info_actual_changed
                                || endpoint_changed
+                               || content_type_changed
                                || sync_interval_type_changed
                                || sync_interval_value_changed;
   }

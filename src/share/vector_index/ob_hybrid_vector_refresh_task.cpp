@@ -670,8 +670,11 @@ int ObHybridVectorRefreshTask::prepare_for_embedding(ObPluginVectorIndexAdaptor 
             LOG_WARN("failed to get access key", K(ret));
           } else if (OB_FAIL(ob_write_string(task_ctx->allocator_, endpoint->get_url(), url, true))) {
             LOG_WARN("fail to write string", K(ret));
+          } else if (!ObVectorIndexUtil::is_valid_content_type(adaptor.get_content_type())) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid vector index content type", K(ret), "content_type", adaptor.get_content_type());
           } else if (OB_FAIL(task_ctx->embedding_task_->init(url, task_ctx->request_model_name_,
-                             endpoint->get_provider(), access_key, chunk_array, col_type, dim, http_timeout_us,
+                             endpoint->get_provider(), access_key, chunk_array, col_type, adaptor.get_content_type(), dim, http_timeout_us,
                              http_max_retries, ctx_->task_status_.task_id_, ObEmbeddingTasSourceType::ASYNC_INDEX))) {
             LOG_WARN("failed to init embedding task", K(ret), KPC(endpoint));
           } else {
