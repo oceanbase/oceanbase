@@ -40,7 +40,6 @@ int ObFTTrie<DATA_TYPE>::insert(const ObString &words, const ObFTTrieNodeData<DA
         if (OB_ISNULL(new_child = OB_NEWx(ObFTTrieNode<DATA_TYPE>, &allocator_, allocator_))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
         } else {
-          level_statistics_[level]++;
           new_child->dat_build_info_.level_ = level;
           new_child->is_leaf_ = (offset + char_len == words.length());
           if (OB_FAIL(new_child->token_.set_token(current_char.ptr(), current_char.length()))) {

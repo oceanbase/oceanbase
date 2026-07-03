@@ -86,8 +86,7 @@ class ObFTTrie final
 {
 public:
   ObFTTrie(ObIAllocator &allocator, ObCollationType collation_type)
-      : allocator_(allocator), collation_type_(collation_type), root_(allocator), node_num_(0),
-        level_statistics_()
+      : allocator_(allocator), collation_type_(collation_type), root_(allocator), node_num_(0)
   {
   }
 
@@ -125,7 +124,6 @@ private:
   ObFTTrieNode<DATA_TYPE> root_;
 
   size_t node_num_;
-  uint32_t level_statistics_[64];
 };
 
 extern template class ObFTTrie<void>;
