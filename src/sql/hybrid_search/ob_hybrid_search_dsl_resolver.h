@@ -463,6 +463,7 @@ private :
   int construct_score_columns();
   int construct_string_expr(const ObString &str_value, ObRawExpr *&expr, ObCollationType collation_type = CS_TYPE_INVALID);
   int convert_wildcard_pattern_to_like(const ObString &src, ObString &dst);
+  int get_wildcard_pattern_from_json_node(ObIJsonBase &node, ObString &pattern_str);
   int append_wildcard_pattern_char(char *buf, const int64_t max_len, int64_t &pos, const char ch);
   int append_wildcard_like_escaped_char(char *buf, const int64_t max_len, int64_t &pos, const char ch);
   int resolve_query_string_expr(const ObString &str_value, const ObCollationType target_coll, ObRawExpr *&expr);

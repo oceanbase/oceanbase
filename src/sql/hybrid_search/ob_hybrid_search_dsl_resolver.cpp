@@ -5180,6 +5180,27 @@ int ObDSLResolver::resolve_term(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSL
   return ret;
 }
 
+int ObDSLResolver::get_wildcard_pattern_from_json_node(ObIJsonBase &node, ObString &pattern_str)
+{
+  int ret = OB_SUCCESS;
+  ObJsonBuffer j_buf(allocator_);
+  const ObJsonNodeType json_type = node.json_type();
+  if (json_type == ObJsonNodeType::J_STRING) {
+    pattern_str.assign_ptr(node.get_data(), node.get_data_length());
+  } else if (ObIJsonBase::is_json_number_type(json_type) || json_type == ObJsonNodeType::J_BOOLEAN) {
+    if (OB_FAIL(print_json_node(node, j_buf))) {
+      LOG_WARN("fail to print scalar json node to wildcard pattern string", K(ret), K(json_type));
+    } else if (OB_FAIL(j_buf.get_result_string(pattern_str))) {
+      LOG_WARN("fail to get wildcard pattern string from buffer", K(ret));
+    }
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "wildcard pattern should be string, number or boolean");
+    LOG_WARN("wildcard pattern should be string, number or boolean", K(ret), K(json_type));
+  }
+  return ret;
+}
+
 int ObDSLResolver::resolve_wildcard(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSLQuery *parent_query, ObEsQueryItem outer_query_type)
 {
   int ret = OB_SUCCESS;
@@ -5200,6 +5221,7 @@ int ObDSLResolver::resolve_wildcard(ObIJsonBase &req_node, ObDSLQuery *&query, O
   ObConstRawExpr *boost_expr = nullptr;
   ObDSLScalarQuery *wildcard_query = nullptr;
   ObCollationType target_coll = CS_TYPE_INVALID;
+  ObString wildcard_pattern;
   ObString like_pattern;
   if (ObDSLQuery::check_need_cal_score_in_bool(outer_query_type, parent_query)) {
     ret = OB_NOT_SUPPORTED;
@@ -5217,10 +5239,12 @@ int ObDSLResolver::resolve_wildcard(ObIJsonBase &req_node, ObDSLQuery *&query, O
   } else if (OB_FAIL(get_field_expr_and_path(col_name, col_expr, path_str))) {
     LOG_WARN("failed to get field expr and path", K(ret), K(col_name));
   } else if (path_str.empty() && !ob_is_string_or_lob_type(col_expr->get_result_type().get_type())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "field in wildcard query, should be string column");
-    LOG_WARN("wildcard only supports string or lob column", K(ret), K(col_name), K(col_expr->get_result_type()));
-  } else if (col_para->json_type() == ObJsonNodeType::J_STRING) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-json column not string or lob type using wildcard query");
+    LOG_WARN("non-json column not string or lob type using wildcard query is not supported", K(ret), K(col_name), K(col_expr->get_result_type()));
+  } else if (col_para->json_type() == ObJsonNodeType::J_STRING
+             || ObIJsonBase::is_json_number_type(col_para->json_type())
+             || col_para->json_type() == ObJsonNodeType::J_BOOLEAN) {
     pattern_node = col_para;
   } else if (col_para->json_type() == ObJsonNodeType::J_OBJECT) {
     if (col_para->element_count() == 0) {
@@ -5234,10 +5258,17 @@ int ObDSLResolver::resolve_wildcard(ObIJsonBase &req_node, ObDSLQuery *&query, O
       if (OB_FAIL(col_para->get_object_value(i, key, sub_node))) {
         LOG_WARN("failed to get wildcard param", K(ret), K(i));
       } else if (key.case_compare("value") == 0 || key.case_compare("wildcard") == 0) {
-        if (sub_node->json_type() != ObJsonNodeType::J_STRING) {
+        if (OB_NOT_NULL(pattern_node)) {
           ret = OB_INVALID_ARGUMENT;
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "value type in wildcard query, should be string");
-          LOG_WARN("value type in wildcard query should be string", K(ret), K(key), K(sub_node->json_type()));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "wildcard query, only one of 'value' or 'wildcard' can be specified");
+          LOG_WARN("wildcard query, only one of 'value' or 'wildcard' can be specified", K(ret));
+        } else if (sub_node->json_type() != ObJsonNodeType::J_STRING
+            && !ObIJsonBase::is_json_number_type(sub_node->json_type())
+            && sub_node->json_type() != ObJsonNodeType::J_BOOLEAN) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "value type in json column wildcard query, should be string, number or boolean");
+          LOG_WARN("value type in json column wildcard query should be string, number or boolean",
+                   K(ret), K(key), K(sub_node->json_type()));
         } else {
           pattern_node = sub_node;
         }
@@ -5253,16 +5284,17 @@ int ObDSLResolver::resolve_wildcard(ObIJsonBase &req_node, ObDSLQuery *&query, O
     }
   } else {
     ret = OB_INVALID_ARGUMENT;
-    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "wildcard field value should be string or object");
-    LOG_WARN("wildcard field value should be string or object", K(ret), K(col_para->json_type()));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "wildcard field value should be string, number, boolean or object");
+    LOG_WARN("wildcard field value should be string, number, boolean or object", K(ret), K(col_para->json_type()));
   }
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(pattern_node)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "wildcard query, required param \"value\" or \"wildcard\" is missed");
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "wildcard query, required param 'value' or 'wildcard' is missed");
     LOG_WARN("wildcard pattern is missing", K(ret));
-  } else if (OB_FAIL(convert_wildcard_pattern_to_like(
-                 ObString(pattern_node->get_data_length(), pattern_node->get_data()), like_pattern))) {
+  } else if (OB_FAIL(get_wildcard_pattern_from_json_node(*pattern_node, wildcard_pattern))) {
+    LOG_WARN("failed to get wildcard pattern from json node", K(ret));
+  } else if (OB_FAIL(convert_wildcard_pattern_to_like(wildcard_pattern, like_pattern))) {
     LOG_WARN("failed to convert wildcard pattern", K(ret));
   } else if (OB_FAIL(build_field_expr_with_path(col_expr, path_str, QUERY_ITEM_WILDCARD, field_expr))) {
     LOG_WARN("failed to build field expr with path for wildcard", K(ret), K(path_str));
