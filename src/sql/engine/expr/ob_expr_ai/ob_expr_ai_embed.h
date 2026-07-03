@@ -41,6 +41,7 @@ private:
                                             ObJsonObject *response,
                                             const ObArray<int64_t> &row_indices,
                                             const share::ObAIModelConfigInfo &config,
+                                            int64_t user_dim,
                                             ObIVector *res_vec);
 
   static int enqueue_group_to_pending(ObIAllocator &allocator,

@@ -201,9 +201,11 @@ int ObExprAIComplete::pack_complete_response_to_indices(const ObExpr &expr,
                                                         common::ObJsonObject *response,
                                                         const common::ObArray<int64_t> &row_indices,
                                                         const share::ObAIModelConfigInfo &config,
+                                                        int64_t user_dim,
                                                         common::ObIVector *res_vec)
 {
   int ret = OB_SUCCESS;
+  UNUSED(user_dim);
   common::ObIJsonBase *output = nullptr;
   ObString raw_str;
   if (OB_FAIL(ObAIFuncUtils::parse_complete_output(allocator, config, response, output))) {

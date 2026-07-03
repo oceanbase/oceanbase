@@ -4786,7 +4786,7 @@ int ObAIFuncBatchUtils::flush_pending_batch(ObIAllocator &allocator,
         if (OB_FAIL(ret)) {
           // Error already logged
         } else if (OB_FAIL(parse_fn(expr, ctx, allocator, responses.at(i), row_indices,
-                                    pending.config_, res_vec))) {
+                                    pending.config_, pending.user_dim_, res_vec))) {
           LOG_WARN("fail to parse batch response", K(ret), K(i));
         } else {
           for (int64_t j = 0; j < row_indices.count(); ++j) {

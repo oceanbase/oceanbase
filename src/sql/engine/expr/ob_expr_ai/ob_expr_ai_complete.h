@@ -39,6 +39,7 @@ private:
                                                common::ObJsonObject *response,
                                                const common::ObArray<int64_t> &row_indices,
                                                const share::ObAIModelConfigInfo &config,
+                                               int64_t user_dim,
                                                common::ObIVector *res_vec);
   static constexpr int MODEL_IDX = 0;
   static constexpr int PROMPT_IDX = 1;

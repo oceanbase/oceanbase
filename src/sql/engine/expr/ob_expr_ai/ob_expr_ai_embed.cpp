@@ -268,6 +268,7 @@ int ObExprAIEmbed::enqueue_group_to_pending(ObIAllocator &allocator,
       LOG_WARN("fail to init pending state", K(ret), K(grp_model_id));
     } else {
       pending_dim = grp_dim;
+      pending.user_dim_ = grp_dim;
     }
   }
 
@@ -705,6 +706,7 @@ int ObExprAIEmbed::pack_embed_response_to_indices(const ObExpr &expr,
                                                   ObJsonObject *response,
                                                   const ObArray<int64_t> &row_indices,
                                                   const share::ObAIModelConfigInfo &config,
+                                                  int64_t user_dim,
                                                   ObIVector *res_vec)
 {
   int ret = OB_SUCCESS;
@@ -734,6 +736,18 @@ int ObExprAIEmbed::pack_embed_response_to_indices(const ObExpr &expr,
           if (OB_ISNULL(embedding)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("embedding is null", K(ret), K(j));
+          } else if (embedding->json_type() != ObJsonNodeType::J_ARRAY) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("embedding is not array", K(ret), K(j));
+          } else if (user_dim > 0
+                     && static_cast<ObJsonArray *>(embedding)->element_count() != user_dim) {
+            // Keep the user-visible error identical to the scalar path's
+            // check in call_dense_embedding_vector_v2.
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("result array is not equal to dimension", K(ret), K(user_dim),
+                     K(static_cast<ObJsonArray *>(embedding)->element_count()));
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT,
+                           "ai_embed, result dimension is not equal to dimension");
           } else {
             ObStringBuffer embedding_buf(&allocator);
             ObString raw_str;

@@ -804,11 +804,15 @@ struct ObAIFuncBatchState
   ObArray<int64_t> row_indices_flat_;
   ObArray<int64_t> row_starts_;
   ObArray<int64_t> row_lens_;
+  // User-specified dim for embed: keep parse-side check aligned with
+  // scalar path's "result dimension is not equal to dimension". 0 = skip.
+  int64_t user_dim_;
 
   ObAIFuncBatchState()
       : initialized_(false),
         min_concurrency_(share::ObAIModelConfigItem::DEFAULT_MIN_CONCURRENCY),
-        max_concurrency_(share::ObAIModelConfigItem::DEFAULT_MAX_CONCURRENCY) {}
+        max_concurrency_(share::ObAIModelConfigItem::DEFAULT_MAX_CONCURRENCY),
+        user_dim_(0) {}
 
   void reset()
   {
@@ -822,6 +826,7 @@ struct ObAIFuncBatchState
     row_indices_flat_.reuse();
     row_starts_.reuse();
     row_lens_.reuse();
+    user_dim_ = 0;
   }
 };
 
@@ -834,6 +839,7 @@ typedef int (*ParseBatchResponseFn)(const sql::ObExpr &expr,
                                     ObJsonObject *response,
                                     const ObArray<int64_t> &row_indices,
                                     const share::ObAIModelConfigInfo &config,
+                                    int64_t user_dim,
                                     ObIVector *res_vec);
 
 class ObAIFuncBatchUtils
