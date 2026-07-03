@@ -417,8 +417,9 @@ int ObSequenceCache::get_item(CacheItemKey &key, ObSequenceCacheItem *&item)
         LOG_WARN("fail to get switchover_epoch", K(ret));
       } else if (OB_FAIL(sequence_cache_.insert_and_get(key, item))) {
         LOG_WARN("fail set cache item", K(key), K(ret));
+      } else {
+        item->epoch_version_ = switchover_epoch;
       }
-      item->epoch_version_ = switchover_epoch;
       if (OB_FAIL(ret) && nullptr != item) {
         sequence_cache_.free_value(item);
         item = nullptr;
