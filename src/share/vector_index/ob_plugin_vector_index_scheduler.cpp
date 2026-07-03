@@ -1906,9 +1906,17 @@ int ObPluginVectorIndexLoadScheduler::cancel_all_async_tasks_for_destroy()
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null task ctx for ls destroy cleanup", KR(ret));
         } else if (OB_TMP_FAIL(ObVecIndexAsyncTaskUtil::update_status_and_ret_code(task_ctx))) {
-          LOG_WARN("fail to update finished cancelled task for ls destroy", K(tmp_ret), KPC(task_ctx));
+          if (OB_TENANT_NOT_EXIST == tmp_ret) {
+            LOG_INFO("tenant not exist, skip update finished cancelled task for ls destroy", KR(tmp_ret), KPC(task_ctx));
+            tmp_ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("fail to update finished cancelled task for ls destroy", KR(tmp_ret), KPC(task_ctx));
+          }
+        }
+        if (OB_SUCCESS != ret || OB_SUCCESS != tmp_ret) {
+          // skip push when prior step failed; tenant-not-exist already reset tmp_ret above
         } else if (OB_TMP_FAIL(cleanup_ctx_array.push_back(task_ctx))) {
-          LOG_WARN("fail to push cleanup ctx array for ls destroy", K(tmp_ret), KPC(task_ctx));
+          LOG_WARN("fail to push cleanup ctx array for ls destroy", KR(tmp_ret), KPC(task_ctx));
         }
       }
       if (OB_SUCC(ret) && cleanup_ctx_array.count() > 0
@@ -2002,12 +2010,12 @@ void ObPluginVectorIndexLoadScheduler::stop()
       index_ls_mgr->stop_vec_idx_async_executor_bind();
       index_ls_mgr->get_async_task_opt().set_stop();
     }
+    // Drop per-LS ObVecIdxLeaderExecutors even if mgr map entry is gone.
+    vector_index_service_->get_vec_idx_async_task_sched().remove_and_destroy_ls_executors(ls_->get_ls_id());
     int tmp_ret = cancel_all_async_tasks_for_destroy();
     if (OB_SUCCESS != tmp_ret) {
       LOG_WARN("fail to cancel all async tasks for destroy", K(tmp_ret));
     }
-    // Drop per-LS ObVecIdxLeaderExecutors even if mgr map entry is gone.
-    vector_index_service_->get_vec_idx_async_task_sched().remove_and_destroy_ls_executors(ls_->get_ls_id());
   }
   FLOG_INFO("vector index task scheduler stop", K(ls_->get_ls_id()));
 };

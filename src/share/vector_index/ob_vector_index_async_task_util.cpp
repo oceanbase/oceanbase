@@ -125,21 +125,32 @@ int ObVecIndexAsyncTaskCtx::cancel_task_for_ls_destroy(bool &can_cleanup)
   can_cleanup = false;
   if (OB_FAIL(cancel_task())) {
     LOG_WARN("fail to cancel task for ls destroy", K(ret), KPC(this));
-  } else if (OB_FAIL(drain_cancel_post_work_if_pending())) {
-    LOG_WARN("fail to drain cancel post work for ls destroy", K(ret), KPC(this));
   } else {
-    common::ObSpinLockGuard guard(lock_);
-    if (in_thread_pool_ || in_queue_ || in_cancel_ || cancel_post_work_pending_) {
-      LOG_INFO("[VEC_ASYNC_TASK] cancelled task still owned, skip destroy cleanup", KPC(this));
-    } else {
-      if (task_status_.status_ != ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH) {
-        task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH;
-        task_status_.ret_code_ = OB_CANCELED;
+    if (OB_FAIL(drain_cancel_post_work_if_pending())) {
+      if (OB_TENANT_NOT_EXIST == ret) {
+        common::ObSpinLockGuard guard(lock_);
+        // ignore tenant not exist error in ls destroy
+        cancel_post_work_pending_ = false;
+        LOG_INFO("tenant not exist, skip drain cancel post work for ls destroy", KR(ret), KPC(this));
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to drain cancel post work for ls destroy", K(ret), KPC(this));
       }
-      task_status_.all_finished_ = true;
-      task_status_.end_time_ = ObTimeUtility::current_time();
-      can_cleanup = true;
-      LOG_INFO("[VEC_ASYNC_TASK] cancelled task finished for ls destroy", KPC(this));
+    }
+    if (OB_SUCC(ret)) {
+      common::ObSpinLockGuard guard(lock_);
+      if (in_thread_pool_ || in_queue_ || in_cancel_ || cancel_post_work_pending_) {
+        LOG_INFO("[VEC_ASYNC_TASK] cancelled task still owned, skip destroy cleanup", KPC(this));
+      } else {
+        if (task_status_.status_ != ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH) {
+          task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH;
+          task_status_.ret_code_ = OB_CANCELED;
+        }
+        task_status_.all_finished_ = true;
+        task_status_.end_time_ = ObTimeUtility::current_time();
+        can_cleanup = true;
+        LOG_INFO("[VEC_ASYNC_TASK] cancelled task finished for ls destroy", KPC(this));
+      }
     }
   }
   return ret;
