@@ -6,6 +6,7 @@
 #ifndef OCEANBASE_STORAGE_FTS_ANALYZER_FILTER_OB_STOP_WORD_FILTER_H_
 #define OCEANBASE_STORAGE_FTS_ANALYZER_FILTER_OB_STOP_WORD_FILTER_H_
 
+#include "lib/allocator/page_arena.h"
 #include "storage/fts/analyzer/ob_i_token_filter.h"
 
 namespace oceanbase
@@ -72,6 +73,9 @@ private:
   ObBuiltinStopWordChecker *builtin_checker_;
   common::ObString stopword_table_name_;
   common::ObIAllocator *checker_owner_alloc_;
+  // Owns builtin checker and stopword hash table; must survive across analyze() calls
+  // (factory passes scratch_alloc to init(), which analyze() reuses per document).
+  common::ObArenaAllocator checker_arena_;
   StopwordSourceType source_type_;
   ObStopWordLanguageKind language_kind_;
   bool is_inited_;

@@ -6,6 +6,7 @@
 #include "storage/fts/analyzer/filter/ob_stop_word_filter.h"
 
 #include "lib/ob_define.h"
+#include "share/rc/ob_tenant_base.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/string/ob_string.h"
 #include "storage/fts/ob_fts_stop_token_check.h"
@@ -299,6 +300,7 @@ ObStopWordFilter::ObStopWordFilter()
     : builtin_checker_(nullptr),
       stopword_table_name_(),
       checker_owner_alloc_(nullptr),
+      checker_arena_(lib::ObMemAttr(MTL_ID(), "FTStopWrd"), OB_MALLOC_NORMAL_BLOCK_SIZE),
       source_type_(StopwordSourceType::SOURCE_INVALID),
       language_kind_(ObStopWordLanguageKind::LANGUAGE_INVALID),
       is_inited_(false)
@@ -361,6 +363,10 @@ int ObStopWordFilter::init(const ObTokenFilterSpec &spec, common::ObIAllocator &
   int ret = OB_SUCCESS;
   const ObStopWordFilterSpec *stop_spec = nullptr;
   ObStopWordLanguageKind lang_kind = ObStopWordLanguageKind::LANGUAGE_INVALID;
+  // init() receives analyzer scratch_alloc (reused on every analyze()); persistent
+  // checker state must live on checker_arena_ instead.
+  common::ObIAllocator &checker_alloc = checker_arena_;
+  UNUSED(alloc);
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("stop word filter init twice", K(ret));
@@ -375,10 +381,10 @@ int ObStopWordFilter::init(const ObTokenFilterSpec &spec, common::ObIAllocator &
       lang_kind = ObStopWordLanguageKind::LANGUAGE_ENGLISH;
     }
     if (!stop_spec->stopword_table_.empty()) {
-      checker_owner_alloc_ = &alloc;
-      if (OB_FAIL(ob_write_string(alloc, stop_spec->stopword_table_, stopword_table_name_))) {
+      checker_owner_alloc_ = &checker_alloc;
+      if (OB_FAIL(ob_write_string(checker_alloc, stop_spec->stopword_table_, stopword_table_name_))) {
         LOG_WARN("failed to copy stopword table name", K(ret), K(stop_spec->stopword_table_));
-      } else if (OB_FAIL(init_custom_stop_word_checker(stopword_table_name_, alloc))) {
+      } else if (OB_FAIL(init_custom_stop_word_checker(stopword_table_name_, checker_alloc))) {
         LOG_WARN("failed to init custom stopword checker", K(ret), K(stopword_table_name_));
       } else {
         source_type_ = StopwordSourceType::SOURCE_CUSTOM_TABLE;
@@ -386,13 +392,13 @@ int ObStopWordFilter::init(const ObTokenFilterSpec &spec, common::ObIAllocator &
         is_inited_ = true;
       }
     } else {
-      checker_owner_alloc_ = &alloc;
-      void *buf = alloc.alloc(sizeof(ObBuiltinStopWordChecker));
+      checker_owner_alloc_ = &checker_alloc;
+      void *buf = checker_alloc.alloc(sizeof(ObBuiltinStopWordChecker));
       if (OB_ISNULL(buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc builtin stopword checker", K(ret), K(static_cast<int>(lang_kind)));
       } else if (FALSE_IT(builtin_checker_ = new (buf) ObBuiltinStopWordChecker())) {
-      } else if (OB_FAIL(builtin_checker_->init(lang_kind, alloc))) {
+      } else if (OB_FAIL(builtin_checker_->init(lang_kind, checker_alloc))) {
         LOG_WARN("failed to init builtin stopword checker", K(ret), K(static_cast<int>(lang_kind)));
         destroy_builtin_checker();
       } else {
@@ -407,6 +413,7 @@ int ObStopWordFilter::init(const ObTokenFilterSpec &spec, common::ObIAllocator &
     language_kind_ = ObStopWordLanguageKind::LANGUAGE_INVALID;
     destroy_stopword_table_name();
     destroy_builtin_checker();
+    checker_arena_.reset();
     checker_owner_alloc_ = nullptr;
   }
   return ret;
@@ -450,6 +457,7 @@ void ObStopWordFilter::reset()
     language_kind_ = ObStopWordLanguageKind::LANGUAGE_INVALID;
     destroy_stopword_table_name();
     destroy_builtin_checker();
+    checker_arena_.reset();
     checker_owner_alloc_ = nullptr;
     is_inited_ = false;
   }
