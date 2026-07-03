@@ -3445,9 +3445,10 @@ void ObVecIndexAsyncTaskHandler::handle(void *task)
           ObSEArray<int64_t, 2> expected_prepare_or_queue;
           (void)expected_prepare_or_queue.push_back(ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE);
           (void)expected_prepare_or_queue.push_back(ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_QUEUE);
-          if (OB_FAIL(ObVecIndexAsyncTaskUtil::update_status_and_ret_code_if_match(
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(ObVecIndexAsyncTaskUtil::update_status_and_ret_code_if_match(
                   task_ctx, expected_prepare_or_queue))) {
-            LOG_WARN("fail to update task status to inner table", K(ret), K(*task_ctx));
+            LOG_WARN("fail to update task status to inner table", K(tmp_ret), K(*task_ctx));
           }
         }
       }
