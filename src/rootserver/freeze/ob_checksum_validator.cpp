@@ -1010,7 +1010,7 @@ int ObChecksumValidator::validate_rowkey_doc_indexs(const ObFTSGroup &fts_group,
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator tmp_allocator(lib::ObMemAttr(MTL_ID(), "ckmvfydoc"));
-  ObTableCkmItems* ckm_item[3];
+  ObTableCkmItems* ckm_item[3] = { nullptr, nullptr, nullptr };
   for (int64_t i = 0; OB_SUCC(ret) && i < 3; ++i) {
     void *buf = nullptr;
     if (OB_ISNULL(buf = tmp_allocator.alloc(sizeof(ObTableCkmItems)))) {
