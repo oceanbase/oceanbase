@@ -1228,6 +1228,7 @@ int ObHybridSearchCgService::try_alloc_topk_collect_ctdef(ObDASFusionCtDef *fusi
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate fusion ctdef children failed", K(ret));
     } else {
+      topk_collect_ctdef->set_is_scoring(fusion_ctdef->get_search_ctdef()->is_scoring());
       topk_collect_ctdef->limit_ = fusion_ctdef->rank_window_size_expr_;
       const int64_t search_idx = fusion_ctdef->get_search_idx();
       topk_collect_ctdef->children_[0] = fusion_ctdef->children_[search_idx];

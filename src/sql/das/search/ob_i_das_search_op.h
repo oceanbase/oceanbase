@@ -209,13 +209,16 @@ private:
 class ObIDASSearchOpParam
 {
 public:
-  ObIDASSearchOpParam(ObDASSearchOpType op_type) : op_type_(op_type) {}
+  ObIDASSearchOpParam(ObDASSearchOpType op_type) : op_type_(op_type), is_scoring_(true) {}
   virtual ~ObIDASSearchOpParam() {}
   OB_INLINE ObDASSearchOpType get_op_type() const { return op_type_; }
+  OB_INLINE void set_is_scoring(const bool is_scoring) { is_scoring_ = is_scoring; }
+  OB_INLINE bool get_is_scoring() const { return is_scoring_; }
   virtual int get_children_ops(ObIArray<ObIDASSearchOp *> &children) const = 0;
-  VIRTUAL_TO_STRING_KV(K_(op_type));
+  VIRTUAL_TO_STRING_KV(K_(op_type), K_(is_scoring));
 private:
   ObDASSearchOpType op_type_;
+  bool is_scoring_;
 };
 
 class ObIDASSearchOp
@@ -229,6 +232,7 @@ public:
       children_(nullptr),
       children_cnt_(0),
       min_competitive_score_(0.0),
+      is_scoring_(true),
       profile_(nullptr)
   { }
   virtual ~ObIDASSearchOp() {}
@@ -364,6 +368,7 @@ protected:
   ObIDASSearchOp **children_;
   int64_t children_cnt_;
   double min_competitive_score_;
+  bool is_scoring_;
   common::ObOpProfile<common::ObMetric> *profile_;
 };
 
@@ -379,6 +384,7 @@ OB_INLINE int ObIDASSearchOp::init(const ObIDASSearchOpParam &op_param)
     LOG_WARN("failed to init children ops array", KR(ret));
   } else {
     op_type_ = op_param.get_op_type();
+    is_scoring_ = op_param.get_is_scoring();
   }
   return ret;
 }
@@ -438,6 +444,9 @@ OB_INLINE int ObIDASSearchOp::advance_to(const ObDASRowID &target, ObDASRowID &c
   if (OB_FAIL(do_advance_to(target, curr_id, score))) {
     LOG_WARN_IGNORE_ITER_END(ret, "failed to advance to impl", KR(ret));
   } else {
+    if (!is_scoring_) {
+      score = 0.0;
+    }
     INC_METRIC_VAL(common::ObMetricId::HS_OUTPUT_ROW_COUNT, 1);
   }
   return ret;
@@ -453,6 +462,9 @@ OB_INLINE int ObIDASSearchOp::next_rowid(ObDASRowID &next_id, double &score)
   if (OB_FAIL(do_next_rowid(next_id, score))) {
     LOG_WARN_IGNORE_ITER_END(ret, "failed to next rowid impl", KR(ret));
   } else {
+    if (!is_scoring_) {
+      score = 0.0;
+    }
     INC_METRIC_VAL(common::ObMetricId::HS_OUTPUT_ROW_COUNT, 1);
   }
   return ret;
@@ -467,6 +479,9 @@ OB_INLINE int ObIDASSearchOp::advance_shallow(const ObDASRowID &target, const bo
   INC_METRIC_VAL(common::ObMetricId::HS_ADVANCE_SHALLOW_COUNT, 1);
   if (OB_FAIL(do_advance_shallow(target, inclusive, max_score_tuple))) {
     LOG_WARN_IGNORE_ITER_END(ret, "failed to advance shallow impl", KR(ret));
+  } else if (!is_scoring_ && nullptr != max_score_tuple) {
+    max_score_tuple_.set(max_score_tuple->get_min_id(), max_score_tuple->get_max_id(), 0.0);
+    max_score_tuple = &max_score_tuple_;
   }
   return ret;
 }
@@ -506,6 +521,8 @@ OB_INLINE int ObIDASSearchOp::calc_max_score(double &threshold)
   INC_METRIC_VAL(common::ObMetricId::HS_CALC_MAX_SCORE_COUNT, 1);
   if (OB_FAIL(do_calc_max_score(threshold))) {
     LOG_WARN_IGNORE_ITER_END(ret, "failed to calc max score impl", KR(ret));
+  } else if (!is_scoring_) {
+    threshold = 0.0;
   }
   return ret;
 }

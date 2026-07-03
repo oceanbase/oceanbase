@@ -197,6 +197,7 @@ public:
         mock_op = new(buf) MockSearchOp(search_ctx, rowids_, scores_);
 
         MockSearchOpParam param;
+        param.set_is_scoring(ctdef->is_scoring());
         if (OB_FAIL(mock_op->init(param))) {
            LOG_WARN("failed to init mock op", KR(ret));
         } else {
@@ -831,6 +832,7 @@ TEST_F(ObDASBooleanQueryTest, conjunction_op_execution)
 {
   SearchCtxSetup ctx_setup(allocator_);
   MockSearchCtDef mock_ctdef(allocator_);
+  mock_ctdef.set_is_scoring(true);
 
   // Op1: 1(1.0), 3(3.0), 5(5.0), 7(7.0), 9(9.0)
   MockSearchRtDef must_clause1(10, {1, 3, 5, 7, 9}, {1.0, 3.0, 5.0, 7.0, 9.0});
@@ -842,6 +844,7 @@ TEST_F(ObDASBooleanQueryTest, conjunction_op_execution)
 
   add_clause(MUST, &must_clause1);
   add_clause(MUST, &must_clause2);
+  ctdef_.set_is_scoring(true);
 
   ObIDASSearchOp *op = nullptr;
   prepare_structure();
@@ -871,6 +874,7 @@ TEST_F(ObDASBooleanQueryTest, disjunction_op_execution)
 {
   SearchCtxSetup ctx_setup(allocator_);
   MockSearchCtDef mock_ctdef(allocator_);
+  mock_ctdef.set_is_scoring(true);
 
   // Op1: 1(1.0), 5(5.0)
   MockSearchRtDef should_clause1(10, {1, 5}, {1.0, 5.0});
@@ -884,12 +888,18 @@ TEST_F(ObDASBooleanQueryTest, disjunction_op_execution)
   ctdef_.min_should_match_ = 1;
   add_clause(SHOULD, &should_clause1);
   add_clause(SHOULD, &should_clause2);
+  ctdef_.set_is_scoring(true);
 
   ObIDASSearchOp *op = nullptr;
   prepare_structure();
   ASSERT_EQ(OB_SUCCESS, rtdef_.generate_op(ObDASSearchCost(0), ctx_setup.search_ctx_, op));
-  EXPECT_EQ(DAS_SEARCH_OP_DISJUNCTION_FILTER, op->get_op_type());
-  verify_result(op, {1, 3, 5, 7}, {0, 0, 0, 0});
+  EXPECT_EQ(DAS_SEARCH_OP_DISJUNCTION, op->get_op_type());
+  // Expected union:
+  // 1: 1.0
+  // 3: 0.3
+  // 5: 5.0 + 0.5 = 5.5
+  // 7: 0.7
+  verify_result(op, {1, 3, 5, 7}, {1.0, 0.3, 5.5, 0.7});
 
   ASSERT_EQ(OB_SUCCESS, rtdef_.generate_op(ObDASSearchCost(0), ctx_setup.search_ctx_, op));
   // Test advance_to
@@ -897,9 +907,9 @@ TEST_F(ObDASBooleanQueryTest, disjunction_op_execution)
   // advance to 4 -> 5(5.5)
   // advance to 6 -> 7(0.7)
   verify_advance_to(op, {
-      {2, 3, 0},
-      {4, 5, 0},
-      {6, 7, 0},
+      {2, 3, 0.3},
+      {4, 5, 5.5},
+      {6, 7, 0.7},
       {8, UINT64_MAX, -1.0}
   });
 }
@@ -910,6 +920,7 @@ TEST_F(ObDASBooleanQueryTest, mixed_must_and_should_min_match_1)
 {
   SearchCtxSetup ctx_setup(allocator_);
   MockSearchCtDef mock_ctdef(allocator_);
+  mock_ctdef.set_is_scoring(true);
 
   // MUST 1: {1, 3, 5, 7, 9}
   MockSearchRtDef must_clause1(10, {1, 3, 5, 7, 9}, {10.0, 30.0, 50.0, 70.0, 90.0});
@@ -932,6 +943,7 @@ TEST_F(ObDASBooleanQueryTest, mixed_must_and_should_min_match_1)
   add_clause(MUST, &must_clause2);
   add_clause(SHOULD, &should_clause1);
   add_clause(SHOULD, &should_clause2);
+  ctdef_.set_is_scoring(true);
 
   ObIDASSearchOp *op = nullptr;
   prepare_structure();
@@ -941,20 +953,20 @@ TEST_F(ObDASBooleanQueryTest, mixed_must_and_should_min_match_1)
   EXPECT_EQ(DAS_SEARCH_OP_CONJUNCTION, op->get_op_type());
   // Logic check:
   // Must Combined:
-  // 1: M1(10.0) + M2(1.0) = 11.0
-  // 3: M1(30.0) + M2(3.0) = 33.0
-  // 5: M1(50.0) + M2(5.0) = 55.0
-  // 7: M1(70.0) + M2(7.0) = 77.0
+  // 1: M1(10.0) + M2(1.0) + S1(1.0) = 12.0
+  // 3: M1(30.0) + M2(3.0) + S2(3.0) = 36.0
+  // 5: M1(50.0) + M2(5.0) + S1(5.0) + S2(5.0) = 65.0
+  // 7: M1(70.0) + M2(7.0) = + S2(7.0) = 84.0
   // 9: M1(90.0) -> Skip (not in M2)
 
-  verify_result(op, {1, 3, 5, 7}, {11.0, 33.0, 55.0, 77.0});
+  verify_result(op, {1, 3, 5, 7}, {12.0, 36.0, 65.0, 84.0});
 
   ASSERT_EQ(OB_SUCCESS, rtdef_.generate_op(ObDASSearchCost(0), ctx_setup.search_ctx_, op));
   // Advance check
   verify_advance_to(op, {
-    {2, 3, 33.0},
-    {4, 5, 55.0},
-    {6, 7, 77.0},
+    {2, 3, 36.0},
+    {4, 5, 65.0},
+    {6, 7, 84.0},
     {8, UINT64_MAX, -1.0}
   });
 }
@@ -965,6 +977,7 @@ TEST_F(ObDASBooleanQueryTest, disjunction_min_should_match_2)
 {
   SearchCtxSetup ctx_setup(allocator_);
   MockSearchCtDef mock_ctdef(allocator_);
+  mock_ctdef.set_is_scoring(true);
 
   // Op1: {10, 20, 30}
   MockSearchRtDef clause1(10, {10, 20, 30}, {1.0, 1.0, 1.0});
@@ -981,22 +994,27 @@ TEST_F(ObDASBooleanQueryTest, disjunction_min_should_match_2)
   add_clause(SHOULD, &clause1);
   add_clause(SHOULD, &clause2);
   add_clause(SHOULD, &clause3);
+  ctdef_.set_is_scoring(true);
 
   ObIDASSearchOp *op = nullptr;
   prepare_structure();
   ASSERT_EQ(OB_SUCCESS, rtdef_.generate_op(ObDASSearchCost(0), ctx_setup.search_ctx_, op));
 
   // Structure: Disjunction
-  EXPECT_EQ(DAS_SEARCH_OP_DISJUNCTION_FILTER, op->get_op_type());
+  EXPECT_EQ(DAS_SEARCH_OP_DISJUNCTION, op->get_op_type());
 
 
-  verify_result(op, {10, 20, 30}, {0, 0, 0});
+  // Expected ids match >= 2 clauses:
+  // 10: 1.0 + 2.0 + 3.0 = 6.0
+  // 20: 1.0 + 3.0 = 4.0
+  // 30: 1.0 + 2.0 = 3.0
+  verify_result(op, {10, 20, 30}, {6.0, 4.0, 3.0});
 
   ASSERT_EQ(OB_SUCCESS, rtdef_.generate_op(ObDASSearchCost(0), ctx_setup.search_ctx_, op));
-  EXPECT_EQ(DAS_SEARCH_OP_DISJUNCTION_FILTER, op->get_op_type());
+  EXPECT_EQ(DAS_SEARCH_OP_DISJUNCTION, op->get_op_type());
   verify_advance_to(op, {
-    {15, 20, 0},
-    {21, 30, 0},
+    {15, 20, 4.0},
+    {21, 30, 3.0},
     {31, UINT64_MAX, -1.0}
   });
 }
@@ -1387,7 +1405,7 @@ TEST_F(ObDASBooleanQueryTest, generate_op_only_filter_no_must)
   EXPECT_EQ(2, conjunction_op->children_cnt_);
 
   // Expected intersection: {1, 3}
-  verify_result(op, {1, 3}, {2.0, 6.0});
+  verify_result(op, {1, 3}, {0.0, 0.0});
 }
 
 // Test: generate_op with MUST + FILTER + SHOULD (min_match=0) should generate REQ_OPT op
