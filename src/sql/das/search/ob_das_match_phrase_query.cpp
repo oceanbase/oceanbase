@@ -65,7 +65,7 @@ int ObDASMatchPhraseRtDef::generate_op(
     } else {
       op = dummy_op;
     }
-  } else if (OB_ISNULL(ctdef->get_ir_ctdef()->inv_scan_token_cnt_col_)) {
+  } else if (ctdef->get_ir_ctdef()->need_calc_relevance() && OB_ISNULL(ctdef->get_ir_ctdef()->inv_scan_token_cnt_col_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("missing token count column in index", K(ret));
   } else if (OB_ISNULL(ctdef->get_ir_ctdef()->inv_scan_pos_list_col_)) {
@@ -78,8 +78,8 @@ int ObDASMatchPhraseRtDef::generate_op(
   } else if (OB_UNLIKELY(boost_datum->is_null() || slop_datum->is_null())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null datum", K(ret), KPC(boost_datum), KPC(slop_datum));
-  } else if (block_max_param_initialized_) {
-    // skip
+  } else if (!ctdef->get_ir_ctdef()->need_calc_relevance() || block_max_param_initialized_) {
+    // skip: block max param is only needed for scoring
   } else if (OB_FAIL(block_max_param_.init(*ctdef->get_ir_ctdef(), allocator_))) {
     LOG_WARN("failed to init block max param", KR(ret));
   } else {

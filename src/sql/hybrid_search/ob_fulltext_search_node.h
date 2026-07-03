@@ -69,6 +69,7 @@ public:
   ObFullTextQueryNode(common::ObIAllocator &allocator, const QueryType query_type = QueryType::OB_FULLTEXT_QUERY_TYPE_MAX);
   virtual ~ObFullTextQueryNode() {}
   bool need_score() const { return nullptr != score_project_expr_; }
+  bool need_pos_list() const { return OB_FULLTEXT_QUERY_TYPE_MATCH_PHRASE == query_type_; }
   virtual int generate_access_exprs(
       const TableItem &table_item,
       ObOptimizerContext &opt_ctx) override;

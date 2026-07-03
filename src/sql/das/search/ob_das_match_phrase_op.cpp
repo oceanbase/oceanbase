@@ -321,6 +321,8 @@ int ObDASMatchPhraseOp::evaluate(double &score)
     LOG_WARN("unexpected negative total match count", K(ret), K(total_match_count));
   } else if (0 == total_match_count) {
     score = 0.0;
+  } else if (!ir_ctdef_->need_calc_relevance()) {
+    score = 1.0;
   } else {
     int64_t doc_length = 0;
     uint64_t total_doc_cnt = 0;

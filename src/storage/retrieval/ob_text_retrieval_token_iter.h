@@ -182,6 +182,7 @@ private:
   int do_expr_materialization();
   int do_expr_materialization_with_threshold();
   int try_refresh_max_batch_size();
+  inline bool need_calc_relevance() const { return nullptr != relevance_expr_; }
 private:
   static constexpr int64_t MIN_BATCH_SIZE = 4;
   static constexpr double SKIPPED_ROWS_RATIO = 0.9;
