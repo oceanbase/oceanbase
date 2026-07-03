@@ -1853,15 +1853,12 @@ int ObTransformTempTable::update_table_id_for_pseudo_columns(ObSelectStmt *view,
     LOG_WARN("failed to extract pseudo column like expr", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < pseudo_column_like_exprs.count(); ++i) {
-      ObPseudoColumnRawExpr *pseudo_column_like_expr = NULL;
-      TableItem *table_item = NULL;
-      if (OB_ISNULL(pseudo_column_like_exprs.at(i)) ||
-          OB_UNLIKELY(!pseudo_column_like_exprs.at(i)->is_pseudo_column_expr())) {
+      if (OB_ISNULL(pseudo_column_like_exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null expr", K(ret), K(pseudo_column_like_expr));
-      } else if (OB_FALSE_IT(pseudo_column_like_expr =
-                 static_cast<ObPseudoColumnRawExpr *>(pseudo_column_like_exprs.at(i)))) {
-      } else {
+        LOG_WARN("unexpect null expr", K(ret));
+      } else if (pseudo_column_like_exprs.at(i)->is_pseudo_column_expr()) {
+        ObPseudoColumnRawExpr *pseudo_column_like_expr =
+            static_cast<ObPseudoColumnRawExpr *>(pseudo_column_like_exprs.at(i));
         uint64_t table_id = OB_INVALID_ID;
         ObRelIds table_set;
         if (OB_FAIL(ObStmtComparer::get_map_table(map_info, view, temp_table_query,
