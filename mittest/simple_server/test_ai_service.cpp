@@ -14,6 +14,7 @@
 #include "env/ob_simple_cluster_test_base.h"
 #include "observer/omt/ob_tenant_ai_service.h"
 #include "share/schema/ob_tenant_schema_service.h"
+#include "sql/engine/expr/ob_expr_ai/ob_ai_func_utils.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::share;
@@ -244,6 +245,148 @@ TEST_F(TestAiService, test_get_increment_ai_model_keys_reversely)
     ASSERT_EQ(OB_SUCCESS, schema_guard.get_ai_model_schema(tenant_id, id, schema));
     ASSERT_TRUE(OB_ISNULL(schema));
   }
+}
+
+TEST_F(TestAiService, test_get_model_config_info)
+{
+  share::ObTenantSwitchGuard tenant_guard;
+  ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(OB_SYS_TENANT_ID));
+  common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy();
+  common::ObArenaAllocator allocator;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  const int64_t MB = 1024L * 1024L;
+
+  ObString model_key = "test_model_cfg";
+  ObString endpoint_name = "test_model_cfg_endpoint";
+  ObString model_name = "qwen3-vl-embedding";
+  ObString request_model_name = "qwen3-vl-embedding";
+  ObString url = "https://example.com/v1/embeddings";
+  ObString access_key = "sk-test-0001";
+  ObString provider = "ALIYUN-DASHSCOPE";
+
+  // cleanup leftovers from previous failed runs (best effort)
+  sql.assign_fmt("call DBMS_AI_SERVICE.DROP_AI_MODEL_ENDPOINT ('%s')", endpoint_name.ptr());
+  (void)sql_proxy.write(sql.ptr(), affected_rows);
+  sql.assign_fmt("call DBMS_AI_SERVICE.DROP_AI_MODEL ('%s')", model_key.ptr());
+  (void)sql_proxy.write(sql.ptr(), affected_rows);
+
+  // 1. create ai model
+  std::string model_json = R"({"model_name": ")";
+  model_json += model_name.ptr();
+  model_json += R"(", "type": "DENSE_EMBEDDING"})";
+  sql.assign_fmt("call DBMS_AI_SERVICE.CREATE_AI_MODEL ('%s', '%s')", model_key.ptr(), model_json.c_str());
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
+
+  // 2. create ai endpoint with explicit batch_size/max_image_size
+  std::string endpoint_json = R"({"url": ")";
+  endpoint_json += url.ptr();
+  endpoint_json += R"(", "access_key": ")";
+  endpoint_json += access_key.ptr();
+  endpoint_json += R"(", "ai_model_name": ")";
+  endpoint_json += model_key.ptr();
+  endpoint_json += R"(", "provider": ")";
+  endpoint_json += provider.ptr();
+  endpoint_json += R"(", "request_model_name": ")";
+  endpoint_json += request_model_name.ptr();
+  endpoint_json += R"(", "parameters": "{\\\"batch_size\\\":4,\\\"max_image_size\\\":2097152}"})";
+  sql.assign_fmt("call DBMS_AI_SERVICE.CREATE_AI_MODEL_ENDPOINT ('%s', '%s')", endpoint_name.ptr(), endpoint_json.c_str());
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
+
+  // 3. get model config and verify endpoint overrides
+  {
+    ObAIModelConfigInfo config;
+    ASSERT_EQ(OB_SUCCESS, common::ObAIFuncUtils::get_model_config_info(allocator, model_key, config));
+    ASSERT_EQ(0, config.get_model_key().compare(model_key));
+    ASSERT_EQ(0, config.get_model_name().compare(model_name));
+    ASSERT_EQ(0, config.get_provider().case_compare("ALIYUN-DASHSCOPE"));
+    ASSERT_EQ(0, config.get_request_model_name().compare(request_model_name));
+    ASSERT_EQ(4, config.get_batch_size());
+    ASSERT_EQ(2 * MB, config.get_max_image_size());
+  }
+
+  // 4. alter endpoint, keep only batch_size then fallback max_image_size to default model config
+  std::string alter_json = R"({"parameters": "{\\\"batch_size\\\":3}"})";
+  sql.assign_fmt("call DBMS_AI_SERVICE.ALTER_AI_MODEL_ENDPOINT ('%s', '%s')", endpoint_name.ptr(), alter_json.c_str());
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
+  {
+    ObAIModelConfigInfo config;
+    ASSERT_EQ(OB_SUCCESS, common::ObAIFuncUtils::get_model_config_info(allocator, model_key, config));
+    ASSERT_EQ(3, config.get_batch_size());
+    ASSERT_EQ(5 * MB, config.get_max_image_size());
+  }
+
+  // 5. alter endpoint, clear parameters then both values fallback to default
+  alter_json = R"({"parameters": ""})";
+  sql.assign_fmt("call DBMS_AI_SERVICE.ALTER_AI_MODEL_ENDPOINT ('%s', '%s')", endpoint_name.ptr(), alter_json.c_str());
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
+  {
+    ObAIModelConfigInfo config;
+    ASSERT_EQ(OB_SUCCESS, common::ObAIFuncUtils::get_model_config_info(allocator, model_key, config));
+    ASSERT_EQ(5, config.get_batch_size());
+    ASSERT_EQ(5 * MB, config.get_max_image_size());
+  }
+
+  // 6. alter endpoint with mixed-case provider/model and verify case-insensitive default config lookup
+  alter_json = R"({"provider":"aliyun-dashscope","request_model_name":"QWEN3-VL-EMBEDDING","parameters":""})";
+  sql.assign_fmt("call DBMS_AI_SERVICE.ALTER_AI_MODEL_ENDPOINT ('%s', '%s')", endpoint_name.ptr(), alter_json.c_str());
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
+  {
+    ObAIModelConfigInfo config;
+    ASSERT_EQ(OB_SUCCESS, common::ObAIFuncUtils::get_model_config_info(allocator, model_key, config));
+    ASSERT_EQ(0, config.get_provider().case_compare("aliyun-dashscope"));
+    ASSERT_EQ(0, config.get_request_model_name().case_compare("QWEN3-VL-EMBEDDING"));
+    ASSERT_EQ(5, config.get_batch_size());
+    ASSERT_EQ(5 * MB, config.get_max_image_size());
+  }
+
+  // 7. cleanup
+  sql.assign_fmt("call DBMS_AI_SERVICE.DROP_AI_MODEL_ENDPOINT ('%s')", endpoint_name.ptr());
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
+  sql.assign_fmt("call DBMS_AI_SERVICE.DROP_AI_MODEL ('%s')", model_key.ptr());
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
+}
+
+TEST_F(TestAiService, test_get_model_config_info_negative)
+{
+  share::ObTenantSwitchGuard tenant_guard;
+  ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(OB_SYS_TENANT_ID));
+  common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy();
+  common::ObArenaAllocator allocator;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+
+  // 1. empty model key
+  {
+    ObAIModelConfigInfo config;
+    ASSERT_EQ(OB_INVALID_ARGUMENT, common::ObAIFuncUtils::get_model_config_info(allocator, ObString(), config));
+  }
+
+  // 2. model key not exists
+  {
+    ObAIModelConfigInfo config;
+    ASSERT_EQ(OB_INVALID_ARGUMENT,
+              common::ObAIFuncUtils::get_model_config_info(allocator,
+                                                           ObString::make_string("model_key_not_exists"),
+                                                           config));
+  }
+
+  // 3. model exists but endpoint missing
+  ObString model_key = "test_model_cfg_no_endpoint";
+  ObString model_name = "qwen3-vl-embedding";
+  std::string model_json = R"({"model_name": ")";
+  model_json += model_name.ptr();
+  model_json += R"(", "type": "DENSE_EMBEDDING"})";
+  sql.assign_fmt("call DBMS_AI_SERVICE.CREATE_AI_MODEL ('%s', '%s')", model_key.ptr(), model_json.c_str());
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
+
+  {
+    ObAIModelConfigInfo config;
+    ASSERT_EQ(OB_AI_FUNC_ENDPOINT_NOT_FOUND, common::ObAIFuncUtils::get_model_config_info(allocator, model_key, config));
+  }
+
+  sql.assign_fmt("call DBMS_AI_SERVICE.DROP_AI_MODEL ('%s')", model_key.ptr());
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
 }
 
 TEST_F(TestAiService, end)

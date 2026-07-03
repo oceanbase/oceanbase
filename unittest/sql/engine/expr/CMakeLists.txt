@@ -10,6 +10,7 @@ sql_unittest(test_expr_relation_map)
 ob_unittest(test_ob_openai_utils)
 ob_unittest(test_ob_dashscope_utils)
 ob_unittest(test_ob_siliconflow_utils)
+ob_unittest(ob_expr_ai_func_utils_test)
 ob_unittest(ob_expr_ai_prompt_test)
 sql_unittest(test_expr_serialize_compat)
 

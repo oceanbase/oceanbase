@@ -530,6 +530,7 @@
 #include "sql/engine/expr/ob_expr_collect_file_list.h"
 #include "sql/engine/expr/ob_expr_pos_list.h"
 #include "sql/engine/expr/ob_expr_ai/ob_expr_load_file.h"
+#include "sql/engine/expr/ob_expr_image_type.h"
 #include "sql/engine/expr/ob_expr_lock_func.h"
 #include "sql/engine/expr/ob_expr_format_profile.h"
 #include "sql/engine/expr/ob_expr_max_pt.h"
@@ -1080,6 +1081,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprJsonValue, SHORT_CIRCUIT_EVALUATION);
     REG_OP(ObExprJsonReplace, SHORT_CIRCUIT_EVALUATION);
     REG_OP(ObExprJsonType, EAGER_EVALUATION);
+    REG_OP(ObExprImageType, EAGER_EVALUATION);
     REG_OP(ObExprJsonLength, SHORT_CIRCUIT_EVALUATION);
     REG_OP(ObExprJsonInsert, SHORT_CIRCUIT_EVALUATION);
     REG_OP(ObExprJsonStorageSize, EAGER_EVALUATION);

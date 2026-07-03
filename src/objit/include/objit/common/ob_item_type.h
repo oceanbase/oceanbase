@@ -1096,7 +1096,6 @@ typedef enum ObItemType
   T_FUN_SYS_INNER_COLLATION_TYPE_TO_CHARSET = 2103,
   T_FUN_SYS_INNER_COLLATION_TYPE_TO_COLLATION = 2104,
   T_FUN_SYS_IMAGE_TYPE = 2105,
-
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
