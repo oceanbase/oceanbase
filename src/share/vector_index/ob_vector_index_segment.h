@@ -273,7 +273,7 @@ struct ObVidBound {
     max_vid_ = 0;
   }
 
-  bool is_valid() const { return min_vid_ < max_vid_; }
+  bool is_valid() const { return min_vid_ <= max_vid_; }
 
   void set_vid(int64_t vid)
   {

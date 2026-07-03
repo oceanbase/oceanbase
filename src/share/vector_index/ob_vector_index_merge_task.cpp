@@ -471,7 +471,7 @@ int ObVecIdxMergeTask::build_filter_clause(const ObTableSchema &data_table_schem
       max_vid_ = OB_MAX(max_vid_, seg_max_vid);
     }
   }
-  if (min_vid_ >= max_vid_) {
+  if (min_vid_ > max_vid_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("vid bound is invalid", K(ret), K(min_vid_), K(max_vid_));
   } else if (OB_FAIL(snapshot_table_schema.get_all_column_ids(all_column_ids))) {
@@ -534,7 +534,7 @@ int ObVecIdxMergeTask::merge_bitmap(ObPluginVectorIndexAdaptor *adaptor)
   } else if (OB_ISNULL(segment_builder = adaptor->get_snap_data()->builder_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("segment_builder is null", K(ret));
-  } else if (min_vid_ >= max_vid_) {
+  } else if (min_vid_ > max_vid_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("vid bound is invalid", K(ret), K(min_vid_), K(max_vid_));
   } else if (OB_FALSE_IT(segment_builder->vid_bound_.set_vid_bound(max_vid_, min_vid_))) {
