@@ -226,7 +226,7 @@ int ObTabletEmptyShellHandler::update_tablets_to_empty_shell(ObLS *ls, const com
     LOG_WARN_RET(tmp_ret, "failed to check is errsim transfer server");
   } else if (is_errsim_transfer_server) {
     if (OB_SUCCESS != EN_DONT_UPDATE_TABLET_TO_EMPTY_SHELL) {
-      LOG_INFO("errsim do not set tablet status to transfer out deleted", "ls_id", ls->get_ls_id(), "tablet_ids", tablet_ids);
+      LOG_INFO("errsim do not update tablets to empty shell", "ls_id", ls->get_ls_id(), "tablet_ids", tablet_ids);
       need_update = false;
     }
   }
