@@ -800,7 +800,7 @@ public:
   int64_t get_snap_vsag_mem_hold();
   ObIAllocator *get_allocator() { return allocator_; }
 
-  void *get_algo_data() { return algo_data_; }
+  void *get_algo_data() { return ATOMIC_LOAD(&algo_data_); }
 
   bool check_if_complete_data(ObVectorQueryAdaptorResultContext *ctx);
   int complete_index_mem_data(ObVectorQueryAdaptorResultContext *ctx,
