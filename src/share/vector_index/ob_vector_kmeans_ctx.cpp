@@ -2302,9 +2302,9 @@ void ObKmeansBaseTaskCtx::init()
 
 void ObKmeansBaseTaskCtx::finish(int ret_code)
 {
-  ATOMIC_STORE(&is_finish_, true);
   ret_code_ = ret_code;
   gmt_modified_ = ObTimeUtility::current_time();
+  ATOMIC_STORE(&is_finish_, true);
 }
 
 } // end namespace share
