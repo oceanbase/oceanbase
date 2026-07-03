@@ -766,7 +766,7 @@ int construct_vsag_sindi_create_param(uint8_t create_type, const char *dtype, co
   const bool deserialize_without_footer = true;
   const bool deserialize_without_buffer = true;
   bool use_quantization = create_type == IPIVF_TYPE ? false : true;
-  const uint32_t term_id_limit = 500000;
+  const uint32_t term_id_limit = 1000000;
   const uint32_t DEFAULT_AVG_DOC_TERM_LENGTH = 120;
   if (avg_doc_term_length == 0) {
     avg_doc_term_length = DEFAULT_AVG_DOC_TERM_LENGTH;
