@@ -1680,25 +1680,25 @@ int ObEmbeddingTask::map_http_error_to_internal_error(int64_t http_error_code) c
 {
   switch (http_error_code) {
     case 400: // Bad Request
-      return OB_INVALID_ARGUMENT;
+      return OB_AI_REMOTE_SERVICE_ERROR;
     case 401: // Unauthorized
     case 403: // Forbidden
-      return OB_ERR_NO_PRIVILEGE;
+      return OB_AI_REMOTE_SERVICE_ERROR;
     case 404: // Not Found
-      return OB_ENTRY_NOT_EXIST;
+      return OB_AI_REMOTE_SERVICE_ERROR;
     case 408: // Request Timeout
       return OB_TIMEOUT;
     case 413: // Request Entity Too Large
-      return OB_SIZE_OVERFLOW;
+      return OB_AI_REMOTE_SERVICE_ERROR;
     case 429: // Too Many Requests
-      return OB_ERR_UNEXPECTED;
+      return OB_AI_REMOTE_SERVICE_ERROR;
     case 500: // Internal Server Error
     case 502: // Bad Gateway
     case 503: // Service Unavailable
     case 504: // Gateway Timeout
-      return OB_ERR_UNEXPECTED;
+      return OB_AI_REMOTE_SERVICE_ERROR;
     default:
-      return OB_ERR_UNEXPECTED;
+      return OB_AI_REMOTE_SERVICE_ERROR;
   }
 }
 
