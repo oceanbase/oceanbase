@@ -1047,6 +1047,9 @@ public:
   void set_created_by_segment_merge(const bool value) { created_by_segment_merge_ = value; }
   bool is_created_by_segment_merge() const { return created_by_segment_merge_; }
 
+  void set_skip_merge_sched() { skip_merge_sched_ = true; }
+  bool is_skip_merge_sched() const { return skip_merge_sched_; }
+
 public:
 
   void log_deseri_snap_without_lock(ObVectorIndexAlgorithmType index_type, const ObString &target_prefix,
@@ -1063,7 +1066,8 @@ public:
               K_(ref_cnt), K_(idle_cnt), KP_(allocator),
               K_(index_identity), K_(follower_sync_statistics),
               K_(mem_check_cnt), K_(is_mem_limited), K_(is_need_vid), K_(dump_info), K_(snapshot_key_prefix),
-              K_(replace_scn), K_(reload_finish), K_(need_be_optimized), K_(is_in_opt_task), K_(need_cancel_task), K_(created_by_segment_merge));
+              K_(replace_scn), K_(reload_finish), K_(need_be_optimized), K_(is_in_opt_task), K_(need_cancel_task), K_(created_by_segment_merge),
+              K_(skip_merge_sched));
 private:
   int do_fill_vector_index_all_segments(common::ObIArray<ObVectorSegmentInfo> &segment_infos);
   int add_datum_row_into_array(blocksstable::ObDatumRow *datum_row,
@@ -1172,6 +1176,7 @@ private:
   SCN replace_scn_;
   bool need_cancel_task_;
   bool created_by_segment_merge_; // whether the adaptor is created by segment merge
+  bool skip_merge_sched_; // skip merge scheduling until adaptor replaced
 
   constexpr static uint32_t VEC_INDEX_INCR_DATA_SYNC_THRESHOLD = 100;
   constexpr static uint32_t VEC_INDEX_VBITMAP_SYNC_THRESHOLD = 100;
