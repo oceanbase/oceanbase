@@ -6022,9 +6022,9 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_schema(ObTableSchema &table
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
-      ObVarcharType, //column_type
+      ObLongTextType, //column_type
       CS_TYPE_BINARY, //column_collation_type
-      65536, //column_length
+      0, //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable
@@ -6873,9 +6873,9 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
-      ObVarcharType, //column_type
+      ObLongTextType, //column_type
       CS_TYPE_BINARY, //column_collation_type
-      65536, //column_length
+      0, //column_length
       -1, //column_precision
       -1, //column_scale
       false,//is_nullable
