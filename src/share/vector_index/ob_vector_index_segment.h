@@ -430,7 +430,8 @@ public:
       transaction::ObTxReadSnapshot &snapshot,
       const int64_t lob_inrow_threshold,
       const int64_t timeout,
-      ObVectorIndexAlgorithmType &index_type);
+      ObVectorIndexAlgorithmType &index_type,
+      ObVecIndexAsyncTaskCtx* task_ctx);
   static int deserialize(
       ObVectorIndexSegmentHandle &segment_handle, const uint64_t tenant_id, ObPluginVectorIndexAdaptor *adaptor, ObHNSWDeserializeCallback::CbParam &param);
 

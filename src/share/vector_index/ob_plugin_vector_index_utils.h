@@ -26,6 +26,20 @@ namespace oceanbase
 namespace share
 {
 
+#define CHECK_REFRESH_MEMDATA_TASK_CANCELLED(ret, loop_cnt, ctx_)  \
+  if (OB_FAIL(ret)) { \
+  } else if (++loop_cnt > 20) { \
+    bool is_cancel = false; \
+    if (OB_FAIL(ObPluginVectorIndexUtils::check_task_is_cancel(ctx_, is_cancel))) { \
+      LOG_WARN("fail to check task is cancel", KPC(ctx_));  \
+    } else if (is_cancel) { \
+      ret = OB_CANCELED;  \
+      LOG_INFO("async task is cancel", KPC(ctx_));  \
+    } else {  \
+      loop_cnt = 0; \
+    } \
+  }
+
 class ObVsagLoggerSingleton
 {
 private:
@@ -53,12 +67,14 @@ public:
   static int refresh_memdata(ObLSID &ls_id,
                              ObPluginVectorIndexAdaptor *adapter,
                              SCN target_scn,
-                             ObIAllocator &allocator);
+                             ObIAllocator &allocator,
+                             ObPluginVectorIndexTaskCtx *task_ctx = nullptr);
   static int refresh_adp_from_table(ObLSID &ls_id,
                                     ObPluginVectorIndexAdaptor *&adapter,
                                     const bool create_new_adapter,
                                     SCN target_scn,
-                                    ObIAllocator &allocator);
+                                    ObIAllocator &allocator,
+                                    ObPluginVectorIndexTaskCtx *task_ctx = nullptr);
   static int release_vector_index_adapter(ObPluginVectorIndexAdaptor* &adapter);
   static int release_vector_index_build_helper(ObIvfBuildHelper* &helper, bool *fully_released = nullptr);
   static int release_ivf_cache_mgr(ObIvfCacheMgr* &mgr);
@@ -136,7 +152,8 @@ public:
                               ObIAllocator &allocator,
                               ObLSID &ls_id,
                               SCN target_scn,
-                              ObVectorQueryAdaptorResultContext &ada_ctx);
+                              ObVectorQueryAdaptorResultContext &ada_ctx,
+                              ObPluginVectorIndexTaskCtx *task_ctx = nullptr);
   static int read_local_tablet(ObLSID &ls_id,
                                ObPluginVectorIndexAdaptor* adapter,
                                SCN target_scn,
@@ -195,10 +212,12 @@ public:
                                       ObPluginVectorIndexAdaptor *adapter,
                                       SCN &target_scn,
                                       ObIAllocator &allocator,
-                                      ObVectorQueryAdaptorResultContext &ada_ctx);
+                                      ObVectorQueryAdaptorResultContext &ada_ctx,
+                                      ObPluginVectorIndexTaskCtx *task_ctx = nullptr);
   static int get_tenant_vector_index_ids(const uint64_t tenant_id, bool &has_ivf_index, common::ObIArray<uint64_t> &table_id_array);
   static int get_current_read_scn(share::SCN &current_scn);
   static int get_lob_tablet_id(const ObLSID &ls_id, const ObTabletID &data_tablet_id, ObTabletID &lob_meta_tablet_id, ObTabletID &lob_piece_tablet_id);
+  static int check_task_is_cancel(ObPluginVectorIndexTaskCtx *task_ctx, bool &is_cancel);
 
 private:
   static const int EMBEDDED_TABLE_BASE_COLUMN_CNT = 2;
@@ -234,7 +253,8 @@ private:
                                        ObPluginVectorIndexAdaptor *&adapter,
                                        const bool create_new_adp,
                                        SCN &target_scn,
-                                       ObIAllocator &allocator);
+                                       ObIAllocator &allocator,
+                                       ObPluginVectorIndexTaskCtx *task_ctx = nullptr);
   static int find_segment_in_old_meta(ObVectorIndexSegmentMeta &new_seg_meta,
                                       const ObVectorIndexMeta &old_meta);
   static int fill_mem_context_detail_info(ObPluginVectorIndexService *service, ObIArray<ObLSTabletPair> &tablet_ids, char *buf, int64_t buf_len, int64_t &pos);

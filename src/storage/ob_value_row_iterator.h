@@ -35,8 +35,8 @@ public:
   virtual int get_next_row(blocksstable::ObDatumRow *&row);
   virtual void reset();
   void rescan() { cur_idx_ = 0; }
-  int add_row(blocksstable::ObDatumRow &row);
-  int add_row(blocksstable::ObDatumRow &row,  const ObIArray<int32_t> &projector);
+  virtual int add_row(blocksstable::ObDatumRow &row);
+  virtual int add_row(blocksstable::ObDatumRow &row,  const ObIArray<int32_t> &projector);
 private:
   bool is_inited_;
   common::ObArenaAllocator allocator_;

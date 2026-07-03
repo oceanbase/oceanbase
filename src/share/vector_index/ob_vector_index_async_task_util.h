@@ -30,6 +30,7 @@ namespace share
 typedef common::ObCurTraceId::TraceId TraceId;
 const static int64_t VEC_ASYNC_TASK_DEFAULT_ERR_CODE = -1;
 class ObPluginVectorIndexMgr;
+class ObVectorVerifyRowIterator;
 
 
 #define CHECK_TASK_CANCELLED_IN_PROCESS(ret, loop_cnt, ctx_)  \
@@ -44,6 +45,19 @@ class ObPluginVectorIndexMgr;
       LOG_INFO("async task is cancel", KPC(ctx_));  \
     } else {  \
       loop_cnt = 0; \
+    } \
+  }
+
+
+#define CHECK_TASK_CANCELLED(ret, ctx_) \
+  if (OB_FAIL(ret)) { \
+  } else { \
+    bool is_cancel = false; \
+    if (OB_FAIL(ObVecIndexAsyncTaskUtil::check_task_is_cancel(ctx_, is_cancel))) { \
+      OB_LOG(WARN, "fail to check task is cancel", KPC(ctx_)); \
+    } else if (is_cancel) { \
+      ret = OB_CANCELED; \
+      OB_LOG(INFO, "async task is cancel", KR(ret), KPC(ctx_)); \
     } \
   }
 
@@ -62,6 +76,7 @@ enum ObVecIndexAsyncTaskStatus //FARM COMPAT WHITELIST
   OB_VECTOR_ASYNC_TASK_FINISH = 3,
   OB_VECTOR_ASYNC_TASK_EXCHANGE = 4,
   OB_VECTOR_ASYNC_TASK_CLEAN = 5,
+  OB_VECTOR_ASYNC_TASK_CANCEL = 6,
   OB_VECTOR_ASYNC_TASK_INVALID
 };
 
@@ -278,6 +293,7 @@ public:
         run_inner_sql_(false),
         inner_sql_snapshot_version_(0),
         inner_sql_exec_addr_(),
+        truncate_version_(OB_INVALID_VERSION),
         lock_(common::ObLatchIds::OB_VEC_INDEX_ASYNC_TASK_CTX_LOCK),
         allocator_(ObMemAttr(MTL_ID(), "VecIdxTaskCtx")), // set after init
         extra_data_(),
@@ -296,9 +312,8 @@ public:
     inner_sql_exec_addr_.reset();
   }
 
-  TO_STRING_KV(K_(tenant_id), K_(retry_time), KP_(ls), K_(task_status), K_(sys_task_id),
-               K_(in_thread_pool), K_(run_inner_sql), K_(inner_sql_snapshot_version),
-               K_(inner_sql_exec_addr), KP_(extra_data), K_(is_new_task));
+  TO_STRING_KV(K_(tenant_id), K_(retry_time), KP_(ls), K_(task_status), K_(sys_task_id), K_(inner_sql_exec_addr),
+               K_(in_thread_pool), K_(run_inner_sql), K_(inner_sql_snapshot_version), K_(truncate_version), KP_(extra_data), K_(is_new_task));
 
   uint64_t tenant_id_;
   uint64_t retry_time_;
@@ -309,6 +324,7 @@ public:
   bool run_inner_sql_;
   int64_t inner_sql_snapshot_version_;
   common::ObAddr inner_sql_exec_addr_;
+  int64_t truncate_version_;
   common::ObSpinLock lock_; // lock for update task_status_
   ObArenaAllocator allocator_; // for extra_data_
   void *extra_data_;
@@ -406,9 +422,11 @@ private:
 class ObVecIndexATaskUpdIterator : public blocksstable::ObDatumRowIterator
 {
 public:
-  ObVecIndexATaskUpdIterator()
+  ObVecIndexATaskUpdIterator(ObVecIndexAsyncTaskCtx *task_ctx = nullptr)
     : got_old_row_(false),
-      is_iter_end_(false)
+      is_iter_end_(false),
+      loop_cnt_(0),
+      task_ctx_(task_ctx)
   {}
 
   virtual ~ObVecIndexATaskUpdIterator() {
@@ -431,6 +449,8 @@ private:
   storage::ObValueRowIterator new_row_;
   bool got_old_row_;
   bool is_iter_end_;
+  int64_t loop_cnt_;
+  ObVecIndexAsyncTaskCtx *task_ctx_;
 };
 
 class ObPluginVectorIndexAdaptor;
@@ -569,7 +589,7 @@ protected:
       storage::ObTableScanIterator *table_scan_iter,
       ObSEArray<uint64_t, 4> &dml_column_ids,
       bool check_null_chunk = false);
-  int delete_incr_table_data(ObPluginVectorIndexAdaptor &adaptor, storage::ObDMLBaseParam &dml_param, transaction::ObTxDesc *tx_desc);
+  int delete_incr_table_data(ObPluginVectorIndexAdaptor &adaptor, storage::ObDMLBaseParam &dml_param, transaction::ObTxDesc *tx_desc, ObVecIndexAsyncTaskCtx *ctx = nullptr);
   int delete_inc_index_rows(
       transaction::ObTxDesc *tx_desc,
       transaction::ObTxReadSnapshot &snapshot,
@@ -611,7 +631,7 @@ protected:
       common::ObCollationType cs_type,
       ObTableScanIterator *table_scan_iter,
       ObIArray<uint64_t> &extra_column_idxs,
-      storage::ObValueRowIterator &row_iter,
+      ObVectorVerifyRowIterator &row_iter,
       transaction::ObTxReadSnapshot &snapshot,
       const bool is_force_delete = false);
   int prepare_schema_and_snapshot(
@@ -760,6 +780,11 @@ public:
   static int in_active_time(const uint64_t tenant_id, bool& is_active_time);
   static int check_task_is_cancel(ObVecIndexAsyncTaskCtx *task, bool &is_cancel);
   static int insert_new_task(uint64_t tenant_id, ObVecIndexTaskCtxArray &task_ctx_array);
+  // Create one memsync trigger task record in __all_vector_index_task (PREPARE status).
+  // Timer/scheduler will read and execute memdata sync for this record.
+  static int create_memsync_trigger_task_record(
+    uint64_t tenant_id, uint64_t table_id, uint64_t tablet_id);
+  static int get_truncate_version(uint64_t tenant_id, uint64_t table_id, int64_t &truncate_version);
   static int construct_read_task_sql(
       const uint64_t tenant_id,
       const char *tname,

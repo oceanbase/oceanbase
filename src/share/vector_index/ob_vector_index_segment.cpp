@@ -764,7 +764,8 @@ int ObVectorIndexSegment::serialize(
     transaction::ObTxReadSnapshot &snapshot,
     const int64_t lob_inrow_threshold,
     const int64_t timeout,
-    ObVectorIndexAlgorithmType &index_type)
+    ObVectorIndexAlgorithmType &index_type,
+    ObVecIndexAsyncTaskCtx* task_ctx)
 {
   int ret = OB_SUCCESS;
   ObHNSWSerializeCallback::CbParam param;
@@ -776,6 +777,7 @@ int ObVectorIndexSegment::serialize(
   param.snapshot_ = &snapshot;
   param.tx_desc_ = tx_desc;
   param.need_serde_meta_ = nullptr != ibitmap_;
+  param.task_ctx_ = task_ctx;
   vbitmap_ = vbitmap;
   int64_t index_size = 0;
   if (OB_FAIL(get_index_number(index_size))) {

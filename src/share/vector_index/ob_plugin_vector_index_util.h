@@ -11,6 +11,7 @@
 #include "lib/vector/ob_vector_util.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "src/share/vector_index/ob_vector_index_util.h"
+#include "storage/ob_value_row_iterator.h"
 
 namespace oceanbase
 {
@@ -20,6 +21,22 @@ class ObDASIter;
 }
 namespace share
 {
+
+#define CHECK_TASK_CANCELLED_IN_PROCESS_WITHOUT_MGR(ret, loop_cnt, loop_cnt_threshold, task_ctx)  \
+  if (OB_FAIL(ret)) { \
+  } else if (++loop_cnt > loop_cnt_threshold) { \
+    bool is_cancel = false; \
+    if (OB_FAIL(ObVecIndexAsyncTaskUtil::check_task_is_cancel(task_ctx, is_cancel))) { \
+      OB_LOG(WARN, "fail to check task is cancel", KPC(task_ctx)); \
+    } else if (is_cancel) { \
+      ret = OB_CANCELED; \
+      OB_LOG(INFO, "async task is cancel", KPC(task_ctx)); \
+    } else { \
+      loop_cnt = 0; \
+    } \
+  }
+
+struct ObVecIndexAsyncTaskCtx;
 
 class ObVectorQueryRowkeyIterator
 {
@@ -118,6 +135,25 @@ private:
   ObIAllocator *allocator_;
   int64_t rel_count_;
   common::hash::ObHashMap<int64_t, double*> *rel_map_ptr_;
+};
+
+class ObVectorVerifyRowIterator : public storage::ObValueRowIterator
+{
+public:
+  ObVectorVerifyRowIterator(ObVecIndexAsyncTaskCtx *task_ctx = nullptr)
+    : ObValueRowIterator(),
+      loop_cnt_(0),
+      task_ctx_(task_ctx)
+  {}
+  virtual ~ObVectorVerifyRowIterator() {}
+
+  virtual int add_row(blocksstable::ObDatumRow &row) override;
+  virtual int add_row(blocksstable::ObDatumRow &row, const ObIArray<int32_t> &projector) override;
+  virtual int get_next_row(blocksstable::ObDatumRow *&row) override;
+private:
+  int64_t loop_cnt_;
+  ObVecIndexAsyncTaskCtx *task_ctx_;
+
 };
 
 struct ObVsagQueryResult

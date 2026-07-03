@@ -477,9 +477,8 @@ ObPluginVectorIndexAdaptor::ObPluginVectorIndexAdaptor(common::ObIAllocator *all
     parent_mem_ctx_(entity), index_identity_(), follower_sync_statistics_(), is_in_opt_task_(false), need_be_optimized_(false), extra_info_column_count_(0),
     opt_task_lock_(common::ObLatchIds::OB_PLUGIN_VECTOR_INDEX_ADAPTOR_OPT_TASK_LOCK),
     reload_lock_(common::ObLatchIds::VECTOR_RELOAD_LOCK),
-    query_lock_(common::ObLatchIds::VECTOR_QUERY_LOCK), reload_finish_(false),
-    last_embedding_time_(ObTimeUtility::fast_current_time()), is_need_vid_(true), sparse_vector_type_(nullptr), index_statistics_updated_(false), replace_scn_(),
-    created_by_segment_merge_(false)
+    query_lock_(common::ObLatchIds::VECTOR_QUERY_LOCK), reload_finish_(false), last_embedding_time_(ObTimeUtility::fast_current_time()), is_need_vid_(true),
+    sparse_vector_type_(nullptr), index_statistics_updated_(false), replace_scn_(), need_cancel_task_(false), created_by_segment_merge_(false)
 {
   ATOMIC_INC(&instacnce_cnt_);
 }
@@ -2522,12 +2521,13 @@ int ObPluginVectorIndexAdaptor::check_snap_index()
 // Query Processor first
 int ObPluginVectorIndexAdaptor::check_delta_buffer_table_readnext_status(ObVectorQueryAdaptorResultContext *ctx,
                                                                          common::ObNewRowIterator *row_iter,
-                                                                         SCN query_scn)
+                                                                         SCN query_scn,
+                                                                         ObPluginVectorIndexTaskCtx *task_ctx)
 {
   INIT_SUCC(ret);
   SCN min_delta_scn;
   bool can_skip = true;
-
+  int64_t loop_cnt = 0;
   // TODO 优先判断是否需要等待 PVQ_WAIT
   if (OB_ISNULL(ctx) || OB_ISNULL(row_iter)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2536,7 +2536,8 @@ int ObPluginVectorIndexAdaptor::check_delta_buffer_table_readnext_status(ObVecto
     LOG_WARN("failed to init ctx bitmaps.", K(ret));
   } else {
     ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(row_iter);
-    while (OB_SUCC(ret)) {
+    DEBUG_SYNC(BEFORE_VEC_DELTA_BUF_CANCELLED);
+    while (OB_SUCC(ret) && !need_cancel_task_) {
       blocksstable::ObDatumRow *datum_row = nullptr;
       int64_t vid = 0;
       ObString op;
@@ -2577,9 +2578,13 @@ int ObPluginVectorIndexAdaptor::check_delta_buffer_table_readnext_status(ObVecto
         }
         can_skip = false;
       }
+      CHECK_REFRESH_MEMDATA_TASK_CANCELLED(ret, loop_cnt, task_ctx);
     }
-
-    if (ret == OB_ITER_END) {
+    if (OB_FAIL(ret) && ret != OB_ITER_END) {
+    } else if (need_cancel_task_) { // if it's the error code from iter_end and the task needs to be canceled at this moment, then override it.
+      ret = OB_CANCELED;
+      LOG_INFO("async task is cancel", KPC(task_ctx));
+    } else if (ret == OB_ITER_END) {
       ret = OB_SUCCESS;
       if (get_can_skip() != NOT_SKIP && !can_skip) {
         update_can_skip(NOT_SKIP);
@@ -2773,6 +2778,9 @@ int ObPluginVectorIndexAdaptor::complete_delta_buffer_table_data(ObVectorQueryAd
   // whether really get the lock, write to the index
   bool has_written = false;
   if (OB_FAIL(ret)) {
+  } else if (need_cancel_task_) {
+    ret = OB_CANCELED;
+    LOG_INFO("async task is cancel", K(ret), KPC(this));
   } else {
     if (!is_sparse_vector_index_type()) {
       if (OB_FAIL(write_into_delta_mem(ctx, count, vectors, vids, extra_info_objs, ctx->get_extra_column_count(), vid_bound, null_vids, null_count, has_written))) {
@@ -2870,7 +2878,8 @@ int ObPluginVectorIndexAdaptor::complete_delta_buffer_table_data(ObVectorQueryAd
 // Query Processor second
 int ObPluginVectorIndexAdaptor::check_index_id_table_readnext_status(ObVectorQueryAdaptorResultContext *ctx,
                                                                      common::ObNewRowIterator *row_iter,
-                                                                     SCN query_scn)
+                                                                     SCN query_scn,
+                                                                     ObPluginVectorIndexTaskCtx *task_ctx)
 {
   INIT_SUCC(ret);
   blocksstable::ObDatumRow *datum_row = nullptr;
@@ -2929,7 +2938,7 @@ int ObPluginVectorIndexAdaptor::check_index_id_table_readnext_status(ObVectorQue
       ctx->status_ = PVQ_COM_DATA;
     }
   } else if (check_if_complete_index(read_scn) &&
-             OB_FAIL(complete_index_mem_data(ctx, read_scn, row_iter, datum_row, i_vid_count))) {
+             OB_FAIL(complete_index_mem_data(ctx, read_scn, row_iter, datum_row, i_vid_count, task_ctx))) {
     LOG_WARN("failed to check comple index mem data.", K(ret), K(read_scn), K(vbitmap_data_->scn_));
   } else if (OB_ISNULL(ctx->bitmaps_) || OB_ISNULL(ctx->bitmaps_->insert_bitmap_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -3163,7 +3172,8 @@ int ObPluginVectorIndexAdaptor::complete_index_mem_data(ObVectorQueryAdaptorResu
                                                         SCN read_scn,
                                                         common::ObNewRowIterator *row_iter,
                                                         blocksstable::ObDatumRow *last_row,
-                                                        int64_t &i_vid_count)
+                                                        int64_t &i_vid_count,
+                                                        ObPluginVectorIndexTaskCtx *task_ctx)
 {
   INIT_SUCC(ret);
   SCN frozen_vbitmap_scn = SCN::min_scn();
@@ -3194,8 +3204,10 @@ int ObPluginVectorIndexAdaptor::complete_index_mem_data(ObVectorQueryAdaptorResu
       oceanbase::share::SCN stop_scn = vbitmap->scn_;
       oceanbase::share::SCN curr_scn;
       int64_t read_num = 0;
+      int loop_cnt = 0;
       ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(row_iter);
-      while (OB_SUCC(ret)) {
+      DEBUG_SYNC(BEFORE_VEC_SCAN_VID_CANCELLED);
+      while (OB_SUCC(ret) && !need_cancel_task_) {
         blocksstable::ObDatumRow *datum_row = nullptr;
         int64_t vid = 0;
         ObString op;
@@ -3219,9 +3231,14 @@ int ObPluginVectorIndexAdaptor::complete_index_mem_data(ObVectorQueryAdaptorResu
         } else {
           INC_METRIC_VAL(common::ObMetricId::HS_VEC_HNSW_INDEX_ID_TABLE_SCAN_ROWS, 1);
         }
+        CHECK_REFRESH_MEMDATA_TASK_CANCELLED(ret, loop_cnt, task_ctx);
       }
 
-      if (ret == OB_ITER_END) {
+      if (OB_FAIL(ret) && ret != OB_ITER_END) {
+      } else if (need_cancel_task_) { // if it's the error code from iter_end and the task needs to be canceled at this moment, then override it.
+        ret = OB_CANCELED;
+        LOG_INFO("async task is cancel", KPC(task_ctx));
+      } else if (ret == OB_ITER_END) {
         ret = OB_SUCCESS;
       }
 
@@ -6361,7 +6378,7 @@ int ObPluginVectorIndexAdaptor::check_vbitmap_is_subset(roaring::api::roaring64_
   return ret;
 }
 
-int ObPluginVectorIndexAdaptor::persist_incr_segment(const ObLSID &ls_id)
+int ObPluginVectorIndexAdaptor::persist_incr_segment(const ObLSID &ls_id, ObVecIndexAsyncTaskCtx *task_ctx)
 {
   int ret = OB_SUCCESS;
   ObAccessService *oas = MTL(ObAccessService *);
@@ -6395,13 +6412,14 @@ int ObPluginVectorIndexAdaptor::persist_incr_segment(const ObLSID &ls_id)
     LOG_WARN("there is no freeze segment", K(ret), K(frozen_data_));
   // 冻结的segment不会有其他线程写入, 所以不需要加写锁互斥
   } else if (OB_FAIL(frozen_data_->segment_handle_->serialize(tenant_id_, allocator, ctx, frozen_data_->vbitmap_->bitmap_,
-      tx_desc, snapshot, lob_inrow_threshold, timeout, index_type))) {
+      tx_desc, snapshot, lob_inrow_threshold, timeout, index_type, task_ctx))) {
     LOG_WARN("serialize segment fail", K(ret), K(frozen_data_));
-  } else if (OB_FAIL(snap_table_handler.insert_segment_data(ctx.vals_, tx_desc, snapshot, snapshot_version, index_type, timeout))) {
+  } else if (OB_FAIL(snap_table_handler.insert_segment_data(
+      ctx.vals_, tx_desc, snapshot, snapshot_version, index_type, timeout, task_ctx))) {
     LOG_WARN("do insert fail", K(ret));
   // delete 3, 4 index table data.
   } else if (OB_FAIL(delete_incr_table_data(allocator, ls_id, snapshot,
-      tx_desc, timeout, frozen_data_->frozen_scn_, frozen_data_->vbitmap_->bitmap_))) {
+      tx_desc, timeout, frozen_data_->frozen_scn_, frozen_data_->vbitmap_->bitmap_, task_ctx))) {
     LOG_WARN("failed to delete rows from snapshot table", K(ret));
   } else if (OB_FAIL(ObVectorIndexSegmentMeta::prepare_new_segment_meta(
       allocator, seg_meta, ObVectorIndexSegmentType::FREEZE_PERSIST, index_type, get_snap_tablet_id(),
@@ -6437,14 +6455,16 @@ int ObPluginVectorIndexAdaptor::persist_incr_segment(const ObLSID &ls_id)
 int ObPluginVectorIndexAdaptor::delete_incr_table_data(
     ObIAllocator &allocator, const ObLSID &ls_id, transaction::ObTxReadSnapshot &snapshot,
     transaction::ObTxDesc *tx_desc, const int64_t timeout,
-    const share::SCN& frozen_scn, const ObVectorIndexRoaringBitMap *bitmap)
+    const share::SCN& frozen_scn, const ObVectorIndexRoaringBitMap *bitmap,
+    ObVecIndexAsyncTaskCtx *task_ctx)
 {
   int ret = OB_SUCCESS;
   ObVectorIndexDeltaTableHandler delta_table_hanlder(tenant_id_);
   if (OB_FAIL(delta_table_hanlder.init(this, ls_id, data_table_id_, inc_table_id_,
       vbitmap_table_id_, inc_tablet_id_, vbitmap_tablet_id_, snapshot.core_.version_))) {
     LOG_WARN("init delta table handler fail", K(ret), K(snapshot));
-  } else if (OB_FAIL(delta_table_hanlder.delete_incr_table_data(snapshot, tx_desc, timeout, frozen_scn, bitmap))) {
+  } else if (OB_FAIL(delta_table_hanlder.delete_incr_table_data(
+      snapshot, tx_desc, timeout, frozen_scn, bitmap, task_ctx))) {
     LOG_WARN("failed to delete incr table data", K(ret), K(snapshot));
   }
   return ret;

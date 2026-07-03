@@ -7,6 +7,7 @@
 #define OCEANBASE_SHARE_IVF_CACHE_UTIL_H_
 #include "share/vector_index/ob_vector_index_ivf_cache_mgr.h"
 #include "share/vector_index/ob_vector_index_util.h"
+#include "share/vector_index/ob_vector_index_async_task_util.h"
 
 namespace oceanbase
 {

@@ -172,7 +172,7 @@ int ObHybridVectorRefreshTask::do_work()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error", K(ret), KPC(task_ctx));
   } else {
-    LOG_INFO("start do_work", K(ret), K(task_ctx->task_status_), K(ls_id_));
+    LOG_INFO("start do_work", K(ret), KPC(task_ctx), K(ls_id_));
   }
   while (OB_SUCC(ret) && !exec_finish) {
     switch (current_status()) {
@@ -223,7 +223,7 @@ int ObHybridVectorRefreshTask::do_work()
   if (OB_NOT_NULL(ctx_)) {
     common::ObSpinLockGuard ctx_guard(ctx_->lock_);
     ctx_->task_status_.ret_code_ = ret;
-    LOG_INFO("end do_work", K(ret), K(ctx_->task_status_));
+    LOG_INFO("end do_work", K(ret), KPC(ctx_));
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("unexpected error: null context pointer", K(ret), KPC(this));
@@ -823,7 +823,6 @@ int ObHybridVectorRefreshTask::prepare_index_id_data(storage::ObValueRowIterator
             LOG_WARN("failed to add row to index id iter", K(ret));
           }
           delta_row.reuse();
-          CHECK_TASK_CANCELLED_IN_PROCESS(ret, loop_cnt, ctx_);
         }
       } // end while.
       if (OB_ITER_END == ret) {
@@ -932,8 +931,8 @@ int ObHybridVectorRefreshTask::after_embedding(ObPluginVectorIndexAdaptor &adapt
   float *vector_buf = nullptr;
   ObHybridVectorRefreshTaskCtx *task_ctx = static_cast<ObHybridVectorRefreshTaskCtx *>(get_task_ctx());
   ObVecIndexATaskUpdIterator embedded_iter;
-  storage::ObValueRowIterator index_id_iter;
-  storage::ObValueRowIterator delta_delete_iter;
+  ObVectorVerifyRowIterator index_id_iter(task_ctx);
+  ObVectorVerifyRowIterator delta_delete_iter(task_ctx);
   embedded_iter.init();
   bool trans_start = false;
   transaction::ObTxDesc *tx_desc = nullptr;

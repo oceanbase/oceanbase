@@ -8,6 +8,7 @@
 #include "share/vector_index/ob_plugin_vector_index_service.h"
 #include "share/vector_index/ob_vector_index_async_task_util.h"
 #include "share/vector_index/ob_vector_index_aux_table_handler.h"
+#include "share/vector_index/ob_plugin_vector_index_util.h"
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
 #include "share/allocator/ob_tenant_vector_allocator.h"
@@ -780,7 +781,7 @@ int ObVecIdxMergeTask::serialize_and_insert_snap_index(
     } else if (OB_FAIL(snap_table_handler.init(ls_id_, new_adapter_->get_data_table_id(), new_adapter_->get_snapshot_table_id(), new_adapter_->get_snap_tablet_id()))) {
       LOG_WARN("init snap table handler fail", K(ret));
     } else if (OB_FALSE_IT(index_type = new_adapter_->get_snap_index_type())) {
-    } else if (OB_FAIL(snap_table_handler.insert_segment_data(write_ctx.vals_, tx_desc, snapshot, snapshot_version, index_type, timeout_us))) {
+    } else if (OB_FAIL(snap_table_handler.insert_segment_data(write_ctx.vals_, tx_desc, snapshot, snapshot_version, index_type, timeout_us, ctx_))) {
       LOG_WARN("insert_segment_data fail", K(ret));
     } else {
       LOG_INFO("insert_segment_data success", K(ret), KP(new_adapter_), K(index_type),
@@ -871,6 +872,7 @@ int ObVecIdxMergeTask::clean_snap_index_rows(
   storage::ObTableScanParam snap_scan_param;
   schema::ObTableParam snap_table_param(allocator_);
   common::ObNewRowIterator *snap_data_iter = nullptr;
+  int64_t loop_cnt = 0;
   ObVecIdxSnapTableSegMergeOp snap_table_handler(new_adapter_->get_tenant_id());
   if (OB_ISNULL(ctx_) || OB_ISNULL(tx_desc) || OB_ISNULL(new_adapter_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -897,9 +899,10 @@ int ObVecIdxMergeTask::clean_snap_index_rows(
       LOG_INFO("delete segment info", K(i), KPC(seg_meta));
       if (OB_FAIL(rescan(*seg_meta, snap_scan_param, timeout_us, table_scan_iter))) {
         LOG_WARN("rescan fail", K(ret), K(i), KPC(seg_meta));
-      } else if (OB_FAIL(snap_table_handler.delete_segment_data(new_adapter_, table_scan_iter, tx_desc, snapshot, timeout_us))) {
+      } else if (OB_FAIL(snap_table_handler.delete_segment_data(new_adapter_, table_scan_iter, tx_desc, snapshot, timeout_us, ctx_))) {
         LOG_WARN("delete segment row fail", K(ret), K(i), KPC(seg_meta));
       }
+      CHECK_TASK_CANCELLED_IN_PROCESS(ret, loop_cnt, ctx_);
     }
   }
   if (OB_NOT_NULL(oas)) {

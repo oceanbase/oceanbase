@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "ob_plugin_vector_index_serialize.h"
+#include "share/vector_index/ob_plugin_vector_index_utils.h"
 #include "share/vector_index/ob_vector_index_util.h"
 #include "storage/access/ob_table_scan_iterator.h"
 #include "share/vector_index/ob_plugin_vector_index_adaptor.h"
@@ -347,12 +348,17 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
   ObVectorIndexSegmentMeta *seg_meta = param.seg_meta_;
   ObTextStringIterState state;
   ObString src_block_data;
+  ObPluginVectorIndexAdaptor *adp = static_cast<ObPluginVectorIndexAdaptor*>(adp_);
   if (!param.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid row_iter", K(ret), K(row_iter));
+  } else if (OB_ISNULL(adp)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid adp", K(ret));
   } else {
     data = nullptr;
     read_size = 0;
+    DEBUG_SYNC(BEFORE_VEC_SERIALIZE_GET_DATA_CANCELLED);
     do {
       if (OB_NOT_NULL(str_iter)) {
         // try to get current next block
@@ -418,7 +424,6 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
             LOG_WARN("init lob str iter failed ", K(ret));
           } else if (index_type_ == VIAT_MAX) {
             // TODO: old index segment compatibility, use startkey/index_type get index_type
-            ObPluginVectorIndexAdaptor *adp = static_cast<ObPluginVectorIndexAdaptor*>(adp_);
             ObCollationType calc_cs_type = CS_TYPE_UTF8MB4_GENERAL_CI;
             uint32_t idx_ipivf_sq = ObCharset::locate(calc_cs_type, key_datum.get_string().ptr(), key_datum.get_string().length(),
                                        "ipivf_sq", 8, 1);
@@ -486,21 +491,25 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
           }
         }
       }
-    } while (OB_SUCC(ret) && OB_ISNULL(data));
+      CHECK_REFRESH_MEMDATA_TASK_CANCELLED(ret, param.loop_cnt_, param.task_ctx_);
+    } while (OB_SUCC(ret) && OB_ISNULL(data) && !adp->is_need_cancel_task());
 
-    if (ret == OB_ITER_END) {
+    if (OB_FAIL(ret) && ret != OB_ITER_END) {
+    } else if (adp->is_need_cancel_task()) { // if it's the error code from iter_end and the task needs to be canceled at this moment, then override it.
+      ret = OB_CANCELED;
+      LOG_INFO("async task is cancel", KPC(param.task_ctx_));
+    } else if (ret == OB_ITER_END) {
       ret = OB_SUCCESS;
-      ObPluginVectorIndexAdaptor *adp_ptr = static_cast<ObPluginVectorIndexAdaptor*>(adp_);
-      if (OB_ISNULL(adp_ptr)) {
+      if (OB_ISNULL(adp)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get invalid adp", K(ret));
       } else if (nullptr != seg_meta && index_type_ == VIAT_MAX) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("segment donot read data", KPC(seg_meta));
-      } else if (!adp_ptr->is_snap_inited() && !is_vec_tablet_rebuild) {
+      } else if (!adp->is_mem_data_init_atomic(VIRT_SNAP) && !is_vec_tablet_rebuild) {
         // If it’s vec tablet rebuild and nothing was deserialized, then there’s no need to create snap_index here; the outer layer will create it.
         // Otherwise, it may cause a mismatch between the index data and the index type.
-        if (OB_FAIL(adp_ptr->init_snap_data_without_lock(VIAT_HNSW))) {
+        if (OB_FAIL(adp->init_snap_data_without_lock(VIAT_HNSW))) {
           LOG_WARN("failed to init hnsw mem data", K(ret));
         } else {
           ret = OB_ITER_END;
@@ -557,6 +566,8 @@ int ObHNSWSerializeCallback::operator()(const char *data, const int64_t data_siz
       LOG_WARN("fail to push dest lob into ctx val array", K(ret));
     }
   }
+  DEBUG_SYNC(BEFORE_VEC_SERIALIZE_GET_DATA_CANCELLED);
+  CHECK_TASK_CANCELLED_IN_PROCESS_WITHOUT_MGR(ret, param.loop_cnt_, 20, param.task_ctx_);
   return ret;
 }
 

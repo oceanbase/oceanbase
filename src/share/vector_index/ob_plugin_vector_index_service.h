@@ -25,6 +25,7 @@ namespace oceanbase
 {
 namespace share
 {
+
 struct ObIvfHelperKey final
 {
 public:
@@ -115,7 +116,8 @@ class ObPluginVectorIndexMgr
 {
 public:
   ObPluginVectorIndexMgr(lib::MemoryContext &memory_context, uint64_t tenant_id)
-    : is_inited_(false),
+    : task_ctx_lock_(common::ObLatchIds::OB_PLUGIN_VECTOR_INDEX_TASK_CTX_MAP_LOCK),
+      is_inited_(false),
       need_check_(false),
       ls_id_(),
       complete_index_adpt_map_(),
@@ -199,7 +201,7 @@ public:
   int check_and_merge_partial_inner(ObVecIdxSharedTableInfoMap &info_map, ObIAllocator &allocator);
 
   // maintance interface
-  int check_need_mem_data_sync_task(bool &need_sync);
+  int check_need_mem_data_sync_task(bool &need_sync, bool can_release_processing_ctx);
   int erase_complete_adapter(ObTabletID tablet_id);
   int erase_partial_adapter(ObTabletID tablet_id);
   int erase_ivf_build_helper(const ObIvfHelperKey &key, bool *fully_cleared = nullptr);
@@ -248,6 +250,10 @@ private:
                           const ObVectorIndexParam &vec_index_param,
                           int64_t dim,
                           int64_t table_id);
+
+public:
+  common::ObSpinLock task_ctx_lock_;
+
 private:
   static const int64_t DEFAULT_ADAPTER_HASH_SIZE = 1000;
   static const int64_t DEFAULT_CANDIDATE_ADAPTER_HASH_SIZE = 1000;

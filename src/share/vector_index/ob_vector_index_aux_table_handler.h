@@ -51,7 +51,8 @@ public:
       const share::SCN &target_scn);
   int delete_incr_table_data(transaction::ObTxReadSnapshot &snapshot,
       transaction::ObTxDesc *tx_desc, const int64_t timeout,
-      const share::SCN& frozen_scn, const ObVectorIndexRoaringBitMap *bitmap);
+      const share::SCN& frozen_scn, const ObVectorIndexRoaringBitMap *bitmap,
+      ObVecIndexAsyncTaskCtx *task_ctx = nullptr);
 
 private:
   int prepare_dml_param(
@@ -66,7 +67,8 @@ private:
       ObTableScanIterator *table_scan_iter,
       ObIArray<uint64_t> &dml_column_ids,
       const share::SCN& frozen_scn,
-      const ObVectorIndexRoaringBitMap *bitmap);
+      const ObVectorIndexRoaringBitMap *bitmap,
+      ObVecIndexAsyncTaskCtx *task_ctx);
 
 private:
   ObArenaAllocator allocator_;
@@ -126,13 +128,14 @@ public:
       ObPluginVectorIndexAdaptor *adaptor, transaction::ObTxDesc *tx_desc, const int64_t timeout_ts);
   int insert_segment_data(
       ObIArray<ObVecIdxSnapshotBlockData> &data_blocks, transaction::ObTxDesc *tx_desc, transaction::ObTxReadSnapshot &snapshot,
-      const int64_t snapshot_version, const ObVectorIndexAlgorithmType index_type, const int64_t timeout);
+      const int64_t snapshot_version, const ObVectorIndexAlgorithmType index_type, const int64_t timeout, ObVecIndexAsyncTaskCtx *task_ctx);
   int delete_segment_data(
       ObPluginVectorIndexAdaptor *adaptor,
       ObTableScanIterator *table_scan_iter,
       transaction::ObTxDesc *tx_desc,
       transaction::ObTxReadSnapshot &snapshot,
-      const int64_t timeout);
+      const int64_t timeout,
+      ObVecIndexAsyncTaskCtx *task_ctx);
 
 private:
   static int prepare_snapshot_table_column_info(

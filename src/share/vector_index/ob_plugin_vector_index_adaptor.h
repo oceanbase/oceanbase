@@ -697,7 +697,8 @@ public:
 
   bool is_valid() { return (is_inc_tablet_valid() || is_vbitmap_tablet_valid() || is_snap_tablet_valid()) && is_data_tablet_valid(); }
   bool is_complete();
-
+  void set_need_cancel_task() { need_cancel_task_ = true; }
+  bool is_need_cancel_task() { return need_cancel_task_; }
   void inc_ref();
   bool dec_ref_and_check_release();
   void inc_idle() { idle_cnt_++; }
@@ -766,12 +767,14 @@ public:
   // Query Processor first
   int check_delta_buffer_table_readnext_status(ObVectorQueryAdaptorResultContext *ctx,
                                                common::ObNewRowIterator *row_iter,
-                                               SCN query_scn);
+                                               SCN query_scn,
+                                               ObPluginVectorIndexTaskCtx *task_ctx = nullptr);
   int complete_delta_buffer_table_data(ObVectorQueryAdaptorResultContext *ctx);
   // Query Processor second
   int check_index_id_table_readnext_status(ObVectorQueryAdaptorResultContext *ctx,
                                            common::ObNewRowIterator *row_iter,
-                                           SCN query_scn);
+                                           SCN query_scn,
+                                           ObPluginVectorIndexTaskCtx *task_ctx = nullptr);
   // Query Processor third
   int check_snapshot_table_wait_status(ObVectorQueryAdaptorResultContext *ctx);
 
@@ -807,7 +810,8 @@ public:
                               SCN read_scn,
                               common::ObNewRowIterator *row_iter,
                               blocksstable::ObDatumRow *last_row,
-                              int64_t &i_vid_count);
+                              int64_t &i_vid_count,
+                              ObPluginVectorIndexTaskCtx *task_ctx = nullptr);
   int prepare_delta_mem_data(roaring::api::roaring64_bitmap_t *gene_bitmap,
                              ObVectorQueryAdaptorResultContext *ctx);
   int serialize(ObIAllocator *allocator, ObOStreamBuf::CbParam &cb_param, ObOStreamBuf::Callback &cb);
@@ -825,7 +829,7 @@ public:
   int freeze_active_segment(const ObLSID &ls_id);
   int update_vbitmap_memdata(const ObLSID &ls_id,
       const share::SCN &target_scn, ObIAllocator &allocator);
-  int persist_incr_segment(const ObLSID &ls_id);
+  int persist_incr_segment(const ObLSID &ls_id, ObVecIndexAsyncTaskCtx* task_ctx = nullptr);
   void free_result(const ObVecIdxQueryResult& dist_result);
 
   void sync_finish() { follower_sync_statistics_.sync_count_++; }
@@ -1032,7 +1036,8 @@ public:
   int delete_incr_table_data(
     ObIAllocator &allocator, const ObLSID &ls_id, transaction::ObTxReadSnapshot &snapshot,
     transaction::ObTxDesc *tx_desc, const int64_t timeout,
-    const share::SCN& frozen_scn, const ObVectorIndexRoaringBitMap *bitmap);
+    const share::SCN& frozen_scn, const ObVectorIndexRoaringBitMap *bitmap,
+    ObVecIndexAsyncTaskCtx *task_ctx = nullptr);
 
   // for segment
   int create_mem_ctx(ObVsagMemContext *&mem_ctx);
@@ -1057,9 +1062,8 @@ public:
               K_(inc_table_id), K_(vbitmap_table_id), K_(snapshot_table_id), K_(embedded_table_id),
               K_(ref_cnt), K_(idle_cnt), KP_(allocator),
               K_(index_identity), K_(follower_sync_statistics),
-              K_(mem_check_cnt), K_(is_mem_limited), K_(is_need_vid), K_(snapshot_key_prefix), K_(replace_scn),
-              K_(created_by_segment_merge), K_(dump_info));
-
+              K_(mem_check_cnt), K_(is_mem_limited), K_(is_need_vid), K_(dump_info), K_(snapshot_key_prefix),
+              K_(replace_scn), K_(reload_finish), K_(need_be_optimized), K_(is_in_opt_task), K_(need_cancel_task), K_(created_by_segment_merge));
 private:
   int do_fill_vector_index_all_segments(common::ObIArray<ObVectorSegmentInfo> &segment_infos);
   int add_datum_row_into_array(blocksstable::ObDatumRow *datum_row,
@@ -1166,6 +1170,7 @@ private:
    * we can't get scn from snapshot_key_prefix_ because it is invaild in some cases like BQ
    */
   SCN replace_scn_;
+  bool need_cancel_task_;
   bool created_by_segment_merge_; // whether the adaptor is created by segment merge
 
   constexpr static uint32_t VEC_INDEX_INCR_DATA_SYNC_THRESHOLD = 100;

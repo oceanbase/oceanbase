@@ -77,7 +77,7 @@ public:
   void check_task_free();
   void set_task_finish();
 
-  TO_STRING_KV(K_(tenant_id), KP_(ls), K_(task_status), K_(sys_task_id), K_(in_thread_pool));
+  TO_STRING_KV(K_(tenant_id), KP_(ls), K_(status), K_(task_status), K_(sys_task_id), K_(in_thread_pool));
 
   ObHybridVectorRefreshTaskStatus status_;
   ObTableScanIterator *scan_iter_; // [vid][type][vector][chunk][other key columns]

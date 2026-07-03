@@ -570,10 +570,13 @@ int ObPluginVectorIndexMgr::get_and_merge_adapter(ObVectorIndexAcquireCtx &ctx,
   return ret;
 }
 
-int ObPluginVectorIndexMgr::check_need_mem_data_sync_task(bool &need_sync)
+int ObPluginVectorIndexMgr::check_need_mem_data_sync_task(bool &need_sync,
+                                                          bool can_release_processing_ctx)
 {
   need_sync = false;
-  mem_sync_info_.check_and_switch_if_needed(need_sync, ls_tablet_task_ctx_.all_finished_);
+  common::ObSpinLockGuard guard(task_ctx_lock_);
+  mem_sync_info_.check_and_switch_if_needed(
+      need_sync, ls_tablet_task_ctx_.all_finished_, can_release_processing_ctx);
   LOG_INFO("memdata sync check", K(ls_id_), K(need_sync), K(ls_tablet_task_ctx_));
   // both map empty, do nothing
   return OB_SUCCESS;

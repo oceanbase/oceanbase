@@ -417,6 +417,36 @@ void ObVectorQueryVidIterator::reset()
   rel_map_ptr_ = nullptr;
 }
 
+int ObVectorVerifyRowIterator::get_next_row(blocksstable::ObDatumRow *&row)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(storage::ObValueRowIterator::get_next_row(row))) {
+    LOG_WARN("fail to get next row", K(ret));
+  }
+  CHECK_TASK_CANCELLED_IN_PROCESS_WITHOUT_MGR(ret, loop_cnt_, 1024, task_ctx_);
+  return ret;
+}
+
+int ObVectorVerifyRowIterator::add_row(blocksstable::ObDatumRow &row)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(storage::ObValueRowIterator::add_row(row))) {
+    LOG_WARN("failed to add row to iter", K(ret));
+  }
+  CHECK_TASK_CANCELLED_IN_PROCESS_WITHOUT_MGR(ret, loop_cnt_, 1024, task_ctx_);
+  return ret;
+}
+
+int ObVectorVerifyRowIterator::add_row(blocksstable::ObDatumRow &row, const ObIArray<int32_t> &projector)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(storage::ObValueRowIterator::add_row(row, projector))) {
+    LOG_WARN("failed to add row to iter", K(ret));
+  }
+  CHECK_TASK_CANCELLED_IN_PROCESS_WITHOUT_MGR(ret, loop_cnt_, 1024, task_ctx_);
+  return ret;
+}
+
 int ObPluginVectorIndexHelper::driect_merge_delta_and_snap_vids(
                                                                        const ObVsagQueryResultArray &results,
                                                                        int64_t &actual_cnt,

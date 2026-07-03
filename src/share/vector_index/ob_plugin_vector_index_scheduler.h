@@ -184,10 +184,11 @@ struct ObPluginVectorIndexTaskCtx
       err_code_(OB_SUCCESS),
       in_queue_(false),
       task_status_(ObVectorIndexTaskStatus::OB_TTL_TASK_PREPARE),
+      truncate_version_(OB_INVALID_VERSION),
       lock_(common::ObLatchIds::OB_PLUGIN_VECTOR_INDEX_TASK_CTX_LOCK)
   {}
   TO_STRING_KV(K_(index_table_id), K_(index_tablet_id), K_(task_start_time), K_(last_modify_time),
-               K_(failure_times), K_(err_code), K_(in_queue), K_(task_status));
+               K_(failure_times), K_(err_code), K_(in_queue), K_(task_status), K_(truncate_version));
   ObTabletID index_tablet_id_;
   uint64_t index_table_id_;
   int64_t task_start_time_;
@@ -196,6 +197,7 @@ struct ObPluginVectorIndexTaskCtx
   int64_t err_code_;
   bool in_queue_; // whether in dag queue or not
   ObVectorIndexTaskStatus task_status_;
+  int64_t truncate_version_;
   common::ObSpinLock lock_; // lock for update task_status_
 };
 typedef hash::ObHashMap<ObTabletID, ObVectorIndexSharedTableInfo> ObVecIdxSharedTableInfoMap;
@@ -266,11 +268,16 @@ public:
                                   bool &is_shared_index_table);
   void clean_deprecated_adapters();
   void clean_deprecated_ivf_caches();
+  int cancel_for_truncated(const ObTabletID &tablet_id, const int64_t truncate_version, ObPluginVectorIndexMgr *&index_ls_mgr);
+  bool disallow_cancel_task(const ObVecIndexAsyncTaskCtx *task_ctx);
+  int cancel_async_task(const ObTabletID &tablet_id, ObPluginVectorIndexMgr *&index_ls_mgr);
   int check_need_maintence_ls_follower();
   int check_index_adpter_exist(ObPluginVectorIndexMgr *mgr);
   int check_and_execute_ivf_cache_maintenance_task(ObPluginVectorIndexMgr *&mgr);
 
   int log_tablets_need_memdata_sync(ObPluginVectorIndexMgr *mgr);
+  int submit_memdata_sync_log_for_tablets(const ObIArray<common::ObTabletID> &tablet_ids,
+                                          const ObIArray<uint64_t> &table_ids);
   int execute_all_memdata_sync_task(ObPluginVectorIndexMgr *mgr);
   int execute_one_memdata_sync_task(ObPluginVectorIndexMgr *mgr, ObPluginVectorIndexTaskCtx *ctx);
   int check_ls_task_state(ObPluginVectorIndexMgr *mgr);
@@ -312,6 +319,7 @@ public:
   uint64_t get_tenant_id() { return tenant_id_; }
 
   int safe_to_destroy(bool &is_safe);
+  int cancel_all_async_tasks();
 
   TO_STRING_KV(K_(is_inited), K_(is_leader), K_(need_do_for_switch), K_(is_stopped), K_(is_logging),
                K_(need_refresh), K_(tenant_id), K_(ttl_tablet_timer_tg_id), K_(interval_factor),
@@ -504,7 +512,7 @@ public:
   int count_processing_finished(bool &is_finished,
                                 uint32_t &total_count,
                                 uint32_t &finished_count);
-  void check_and_switch_if_needed(bool &need_sync, bool &all_finished);
+  void check_and_switch_if_needed(bool &need_sync, bool &all_finished, bool can_release_processing_ctx);
   VectorIndexMemSyncMap &get_processing_map() { return processing_first_mem_sync_ ? first_mem_sync_map_ : second_mem_sync_map_; }
   int64_t get_processing_size() const { return processing_first_mem_sync_ ? first_mem_sync_map_.size() : second_mem_sync_map_.size(); }
   int64_t get_waiting_size() const { return processing_first_mem_sync_ ? second_mem_sync_map_.size() : first_mem_sync_map_.size(); }

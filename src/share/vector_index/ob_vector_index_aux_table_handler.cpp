@@ -112,7 +112,8 @@ int ObVectorIndexDeltaTableHandler::init(
 int ObVectorIndexDeltaTableHandler::delete_incr_table_data(
     transaction::ObTxReadSnapshot &snapshot,
     transaction::ObTxDesc *tx_desc, const int64_t timeout,
-    const share::SCN& frozen_scn, const ObVectorIndexRoaringBitMap *bitmap)
+    const share::SCN& frozen_scn, const ObVectorIndexRoaringBitMap *bitmap,
+    ObVecIndexAsyncTaskCtx *task_ctx)
 {
   int ret = OB_SUCCESS;
   ObAccessService *oas = MTL(ObAccessService *);
@@ -133,7 +134,8 @@ int ObVectorIndexDeltaTableHandler::delete_incr_table_data(
     //   LOG_WARN("failed to delete delta table data", K(ret));
     } else if (FALSE_IT(dml_param.schema_version_ = vbitmap_table_schema_version_)) {
     } else if (FALSE_IT(dml_param.table_param_ = &vbitmap_table_dml_param_)) {
-    } else if (OB_FAIL(delete_tablet_data(vbitmap_tablet_id_, dml_param, tx_desc, index_scan_iter, index_dml_column_ids_, frozen_scn, bitmap))) {
+    } else if (OB_FAIL(delete_tablet_data(vbitmap_tablet_id_, dml_param, tx_desc, index_scan_iter,
+        index_dml_column_ids_, frozen_scn, bitmap, task_ctx))) {
       LOG_WARN("failed to delete index table data", K(ret));
     }
   }
@@ -185,7 +187,8 @@ int ObVectorIndexDeltaTableHandler::delete_tablet_data(
     ObTableScanIterator *table_scan_iter,
     ObIArray<uint64_t> &dml_column_ids,
     const share::SCN& frozen_scn,
-    const ObVectorIndexRoaringBitMap *bitmap)
+    const ObVectorIndexRoaringBitMap *bitmap,
+    ObVecIndexAsyncTaskCtx *task_ctx)
 {
   static const int BATCH_CNT = 2000; // 8M / 4(sizeof(float)) / 1000(dim)
   int ret = OB_SUCCESS;
@@ -193,7 +196,7 @@ int ObVectorIndexDeltaTableHandler::delete_tablet_data(
   bool delete_unfinish = true;
   int64_t delta_table_affected_rows = 0;
   int64_t skip_rows = 0;
-  storage::ObValueRowIterator row_iter;
+  ObVectorVerifyRowIterator row_iter(task_ctx);
   ObAccessService *oas = MTL(ObAccessService *);
   const roaring::api::roaring64_bitmap_t *insert_bitmap = nullptr == bitmap ? nullptr : bitmap->insert_bitmap_;
   const roaring::api::roaring64_bitmap_t *delete_bitmap = nullptr == bitmap ? nullptr : bitmap->delete_bitmap_;
@@ -745,10 +748,10 @@ int ObVectorIndexSnapTableHandler::inner_insertup_meta_row(
 
 int ObVectorIndexSnapTableHandler::insert_segment_data(
     ObIArray<ObVecIdxSnapshotBlockData> &data_blocks, transaction::ObTxDesc *tx_desc, transaction::ObTxReadSnapshot &snapshot,
-    const int64_t snapshot_version, const ObVectorIndexAlgorithmType index_type, const int64_t timeout)
+    const int64_t snapshot_version, const ObVectorIndexAlgorithmType index_type, const int64_t timeout, ObVecIndexAsyncTaskCtx *task_ctx)
 {
   int ret = OB_SUCCESS;
-  storage::ObValueRowIterator row_iter;
+  ObVectorVerifyRowIterator row_iter(task_ctx);
   if (OB_FAIL(prepare_insert_iter(data_blocks, snapshot_version, index_type, row_iter))) {
     LOG_WARN("prepare_insert_iter fail", K(ret));
   } else if (OB_FAIL(do_insert(row_iter, tx_desc, snapshot, timeout))) {
@@ -762,10 +765,11 @@ int ObVectorIndexSnapTableHandler::delete_segment_data(
     ObTableScanIterator *table_scan_iter,
     transaction::ObTxDesc *tx_desc,
     transaction::ObTxReadSnapshot &snapshot,
-    const int64_t timeout)
+    const int64_t timeout,
+    ObVecIndexAsyncTaskCtx *task_ctx)
 {
   int ret = OB_SUCCESS;
-  storage::ObValueRowIterator row_iter;
+  ObVectorVerifyRowIterator row_iter(task_ctx);
   if (OB_FAIL(prepare_delete_iter(adaptor, tx_desc, table_scan_iter, row_iter, snapshot))) {
     LOG_WARN("fail to prepare delete iter", K(ret));
   } else if (OB_FAIL(do_delete(row_iter, tx_desc, snapshot, timeout))) {

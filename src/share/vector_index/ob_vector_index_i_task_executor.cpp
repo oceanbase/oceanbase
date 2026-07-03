@@ -11,6 +11,7 @@
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/scheduler/ob_sys_task_stat.h"
+#include "share/vector_index/ob_plugin_vector_index_adaptor.h"
 
 namespace oceanbase
 {
@@ -396,13 +397,24 @@ int ObVecITaskExecutor::start_task()
             }
             break;
           }
+          case ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_CANCEL:
+          {
+            if (OB_FAIL(ObVecIndexAsyncTaskUtil::update_status_and_ret_code(task_ctx))) {
+              LOG_WARN("fail to update task status to inner table",
+                       K(ret), K(tenant_id_), K(ls_->get_ls_id()), K(*task_ctx));
+            }
+            break;
+          }
           case ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH:
           {
             // update task status in inner table
-            if (OB_FAIL(ObVecIndexAsyncTaskUtil::update_status_and_ret_code(task_ctx))) {
+            int tmp_ret = OB_SUCCESS;
+            if (OB_TMP_FAIL(ObVecIndexAsyncTaskUtil::update_status_and_ret_code(task_ctx))) {
               LOG_WARN("fail to update task status to inner table",
-                K(ret), K(tenant_id_), K(ls_->get_ls_id()), K(*task_ctx));
-            } else if (OB_FAIL(task_ctx_array.push_back(task_ctx))) {
+                K(tmp_ret), K(tenant_id_), K(ls_->get_ls_id()), K(*task_ctx));
+            }
+            // prevent mem leak
+            if (OB_FAIL(task_ctx_array.push_back(task_ctx))) {
               LOG_WARN("fail to push back task_ctx_array", K(ret), K(task_ctx));
             }
             break;
@@ -414,6 +426,7 @@ int ObVecITaskExecutor::start_task()
         }
       }
     }
+    common::ObSpinLockGuard guard(index_ls_mgr->task_ctx_lock_);
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(clear_task_ctxs(task_opt, task_ctx_array))) {  // iter map and clean / add map is not allow in same foreach
       LOG_WARN("fail to clean map", K(ret), K(task_ctx_array));
@@ -488,10 +501,7 @@ int ObVecITaskExecutor::check_task_result(ObVecIndexAsyncTaskCtx *task_ctx)
       LOG_DEBUG("start check vec async task result", KPC(task_ctx));
       if (task_ctx->task_status_.ret_code_ == OB_SUCCESS) {
         task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH;
-        LOG_WARN("vector index async task is finish", K(ret), KPC(task_ctx));
-      } else if (task_ctx->task_status_.ret_code_ == OB_CANCELED) {
-        task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH;
-        LOG_INFO("vector index async task is canceled and finish", K(ret), KPC(task_ctx));
+        LOG_INFO("vector index async task is finish", K(ret), KPC(task_ctx));
       } else if (task_ctx->task_status_.ret_code_ == VEC_ASYNC_TASK_DEFAULT_ERR_CODE) { // skip default code
         LOG_WARN("vector index async task not finish", K(ret), KPC(task_ctx));
       } else if (!ObIDDLTask::in_ddl_retry_white_list(task_ctx->task_status_.ret_code_)) {
@@ -528,6 +538,22 @@ int ObVecITaskExecutor::check_task_result(ObVecIndexAsyncTaskCtx *task_ctx)
         task_ctx->task_status_.all_finished_ = (task_ctx->task_status_.status_ == ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH);
         task_ctx->in_thread_pool_ = false; // clear old task flag
       }
+    } else if (task_ctx->task_status_.status_ == ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_CANCEL &&
+              (task_ctx->task_status_.ret_code_ != VEC_ASYNC_TASK_DEFAULT_ERR_CODE || task_ctx->in_thread_pool_ == false)) {
+      if (task_ctx->task_status_.task_type_ == OB_VECTOR_ASYNC_HYBRID_VECTOR_EMBEDDING &&
+            task_ctx->task_status_.ret_code_ == OB_SUCCESS && !task_ctx->task_status_.all_finished_) {
+        ObHybridVectorRefreshTaskCtx *ctx = static_cast<ObHybridVectorRefreshTaskCtx *>(task_ctx);
+        if (OB_NOT_NULL(ctx)) {
+          ctx->set_task_finish();
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null ctx_ptr", K(ret), KPC(task_ctx));
+        }
+      }
+      task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH;
+      task_ctx->task_status_.ret_code_ = OB_CANCELED;
+      task_ctx->task_status_.all_finished_ = true;
+      task_ctx->in_thread_pool_ = false; // clear old task flag
     } else {
       // do nothing
     }

@@ -432,6 +432,7 @@ public:
   static bool check_can_do_work();
   static bool check_can_process_tenant_tasks(uint64_t tenant_id);
   static bool is_support_scan_index_version(uint64_t data_version);
+  static int check_can_process_tenant_tasks(uint64_t tenant_id, bool &can_process);
 
   static int parse_kv_attributes(const ObString &kv_attributes, ObKVAttr &kv_attr);
   static int parse_kv_attributes(uint64_t tenant_id, const ObString &kv_attributes, ObKVAttr &kv_attr);

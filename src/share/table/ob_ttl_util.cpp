@@ -862,6 +862,28 @@ bool ObTTLUtil::is_support_scan_index_version(uint64_t data_version)
   return bret;
 }
 
+int ObTTLUtil::check_can_process_tenant_tasks(uint64_t tenant_id, bool &can_process)
+{
+  int ret = OB_SUCCESS;
+  can_process = false;
+
+  if (OB_INVALID_TENANT_ID == tenant_id) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid tenant id", K(ret), K(tenant_id));
+  } else {
+    bool is_restore = true;
+    if (OB_FAIL(share::schema::ObMultiVersionSchemaService::get_instance().
+                  check_tenant_is_restore(NULL, tenant_id, is_restore))) {
+      if (OB_TENANT_NOT_EXIST != ret) {
+        LOG_WARN("fail to check tenant is restore", KR(ret), K(tenant_id), K(common::lbt()));
+      }
+    } else {
+      can_process = !is_restore;
+    }
+  }
+  return ret;
+}
+
 int ObTTLUtil::move_task_to_history_table(
   uint64_t tenant_id,
   uint64_t task_id,

@@ -12,7 +12,6 @@
 #include "share/vector_index/ob_vector_index_common_define.h"
 #include "share/vector_index/ob_plugin_vector_index_util.h"
 #include "ob_vector_index_util.h"
-
 namespace oceanbase
 {
 namespace share
@@ -21,7 +20,8 @@ class ObVectorIndexSegment;
 class ObVectorIndexSegmentHandle;
 class ObVectorIndexMeta;
 class ObVectorIndexSegmentMeta;
-
+struct ObVecIndexAsyncTaskCtx;
+struct ObPluginVectorIndexTaskCtx;
 class ObStreamBuf : public std::streambuf
 {
 public:
@@ -115,7 +115,8 @@ public:
     CbParam(ObNewRowIterator *iter, ObIAllocator *allocator)
       : iter_(iter), allocator_(allocator), str_iter_(nullptr),
         is_vec_tablet_rebuild_(false), is_need_unvisible_row_(false),
-        seg_meta_(nullptr), index_type_(VIAT_MAX), start_key_(), end_key_()
+        seg_meta_(nullptr), index_type_(VIAT_MAX), start_key_(), end_key_(),
+        loop_cnt_(0), task_ctx_(nullptr)
     {}
     CbParam()
       : iter_(nullptr),
@@ -125,7 +126,9 @@ public:
         is_need_unvisible_row_(false),
         seg_meta_(nullptr),
         index_type_(VIAT_MAX),
-        start_key_(), end_key_()
+        start_key_(), end_key_(),
+        loop_cnt_(0),
+        task_ctx_(nullptr)
     {}
     virtual ~CbParam() {
       if (str_iter_ != nullptr) {
@@ -152,6 +155,8 @@ public:
     char end_key_buf_[OB_VECTOR_INDEX_SNAPSHOT_KEY_LENGTH] = {0};
     ObString start_key_;
     ObString end_key_;
+    int loop_cnt_;
+    ObPluginVectorIndexTaskCtx *task_ctx_;
   };
 public:
   ObHNSWDeserializeCallback(void *adp) : index_type_(VIAT_MAX), adp_(adp)
@@ -169,7 +174,8 @@ public:
     CbParam()
       : vctx_(nullptr), allocator_(nullptr), tmp_allocator_(nullptr), tx_desc_(nullptr), snapshot_(nullptr),
         timeout_(0), lob_inrow_threshold_(0), tablet_id_(), snapshot_version_(), need_serde_meta_(false),
-        is_vec_tablet_rebuild_(false)
+        is_vec_tablet_rebuild_(false), loop_cnt_(0),
+        task_ctx_(nullptr)
     {}
     virtual ~CbParam() {}
     bool is_valid() const
@@ -197,6 +203,8 @@ public:
     int64_t snapshot_version_;
     bool need_serde_meta_;
     bool is_vec_tablet_rebuild_;
+    int loop_cnt_;
+    ObVecIndexAsyncTaskCtx *task_ctx_;
   };
 public:
   ObHNSWSerializeCallback()

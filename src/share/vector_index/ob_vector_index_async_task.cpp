@@ -137,7 +137,7 @@ int ObVecAsyncTaskExector::load_task(uint64_t &task_trace_base_num)
           if (conflict_sets_ready &&
               (OB_HASH_EXIST == conflict_table_id_set.exist_refactored(data_table_id) ||
                 OB_HASH_EXIST == conflict_index_task_set.exist_refactored(inc_table_id))) {
-            LOG_TRACE("skip creating hnsw async task due to DDL conflict",
+            LOG_INFO("skip creating hnsw async task due to DDL conflict",
                       K(tenant_id_), K(tablet_id), K(data_table_id), K(inc_table_id));
           } else {
             int64_t new_task_id = OB_INVALID_ID;
@@ -157,6 +157,8 @@ int ObVecAsyncTaskExector::load_task(uint64_t &task_trace_base_num)
               LOG_WARN("fail to get table id from adapter", K(ret), K(tablet_id));
             } else if (OB_INVALID_ID == index_table_id) {
               LOG_DEBUG("index table id is invalid, skip", K(ret)); // skip to next
+            } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::get_truncate_version(tenant_id_, index_table_id, task_ctx->truncate_version_))) {
+              LOG_WARN("fail to get table truncate version", K(ret), K(index_table_id));
             } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::fetch_new_trace_id(++task_trace_base_num, allocator, new_trace_id))) {
               LOG_WARN("fail to fetch new trace id", K(ret), K(tablet_id));
             } else {

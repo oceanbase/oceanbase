@@ -7,6 +7,7 @@
 
 #include "ob_vector_index_async_task_util.h"
 #include "share/vector_index/ob_tenant_vector_index_async_task.h"
+#include "share/vector_index/ob_plugin_vector_index_util.h"
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
 #include "share/vector_index/ob_hybrid_vector_refresh_task.h"
@@ -380,16 +381,16 @@ int ObVecIndexAsyncTaskCtx::cancel_task()
 {
   int ret = OB_SUCCESS;
   bool need_kill_inner_sql = false;
-  DEBUG_SYNC(CANCEL_VECTOR_INDEX_ASYNC_TASK);
   {
     common::ObSpinLockGuard guard(lock_);
-    if (task_status_.status_ != ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH) {
-      task_status_.ret_code_ = OB_CANCELED;
+    if (task_status_.status_ != ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH
+        && task_status_.status_ != ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_CANCEL) {
+      task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_CANCEL;
       need_kill_inner_sql = run_inner_sql_;
     }
   }
+  // Reserve a mechanism to kill inner SQL for asynchronous task optimization on the master branch.
   if (need_kill_inner_sql) {
-    LOG_INFO("kill inner sql for canceled vector task", KPC(this));
     int tmp_ret = kill_inner_sql_if_needed();
     if (OB_SUCCESS != tmp_ret) {
       LOG_WARN("fail to kill inner sql for canceled vector task", K(tmp_ret), KPC(this));
@@ -445,6 +446,22 @@ int ObVecIndexAsyncTaskCtx::kill_inner_sql_if_needed()
   return ret;
 }
 
+int ObVecIndexAsyncTaskUtil::check_task_is_cancel(ObVecIndexAsyncTaskCtx *task_ctx, bool &is_cancel)
+{
+  int ret = OB_SUCCESS;
+  is_cancel = false;
+  if (OB_NOT_NULL(task_ctx)) {
+    if (task_ctx->task_status_.status_ == ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_CANCEL) {
+      is_cancel = true;
+    } else if (task_ctx->sys_task_id_.is_valid()) {
+      if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(task_ctx->sys_task_id_, is_cancel))) {
+        LOG_WARN("failed to check task is cancel", K(ret), K(task_ctx->sys_task_id_));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObVecIndexAsyncTaskCtx::set_inner_sql_running(const int64_t snapshot_version, const common::ObAddr &exec_addr)
 {
   int ret = OB_SUCCESS;
@@ -460,18 +477,21 @@ int ObVecIndexAsyncTaskCtx::set_inner_sql_running(const int64_t snapshot_version
   return ret;
 }
 
-int ObVecIndexAsyncTaskUtil::check_task_is_cancel(ObVecIndexAsyncTaskCtx *task_ctx, bool &is_cancel)
+int ObVecIndexAsyncTaskUtil::get_truncate_version(const uint64_t tenant_id, const uint64_t table_id, int64_t &truncate_version)
 {
   int ret = OB_SUCCESS;
-  is_cancel = false;
-  if (OB_NOT_NULL(task_ctx)) {
-    if (task_ctx->task_status_.ret_code_ == OB_CANCELED) {
-      is_cancel = true;
-    } else if (task_ctx->sys_task_id_.is_valid()) {
-      if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(task_ctx->sys_task_id_, is_cancel))) {
-        LOG_WARN("failed to check task is cancel", K(ret), K(task_ctx->sys_task_id_));
-      }
-    }
+  schema::ObSchemaGetterGuard schema_guard;
+  const schema::ObTableSchema *table_schema = nullptr;
+  if (OB_FAIL(schema::ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
+          tenant_id, schema_guard))) {
+    LOG_WARN("fail to get schema guard", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exist", K(ret), K(tenant_id), K(table_id));
+  } else {
+    truncate_version = table_schema->get_truncate_version();
   }
   return ret;
 }
@@ -2359,7 +2379,6 @@ int ObVecIndexAsyncTask::check_finished_exchange_before(share::SCN &current_scn,
   is_finished = false;
 
   ObAccessService *tsc_service = MTL(ObAccessService *);
-  ObTableScanIterator *table_scan_iter = nullptr;
   common::ObNewRowIterator *snapshot_idx_iter = nullptr;
   storage::ObTableScanParam snapshot_scan_param;
   schema::ObTableParam snapshot_table_param(allocator_);
@@ -2491,7 +2510,11 @@ int ObVecIndexAsyncTask::parallel_optimize_vec_index()
       } else {
         need_retry = false;
         DEBUG_SYNC(PARALLEL_VEC_TASK_EXECUTE_CLEAN);
-        ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
+        if (OB_CANCELED == ret) {
+          LOG_INFO("keep canceled ret code when clean table is dropped", K(ret), K(tmp_ret), KPC(ctx_));
+        } else {
+          ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
+        }
       }
     }
   }
@@ -2933,7 +2956,7 @@ int ObVecIndexAsyncTask::clean_snap_index_rows(
   int64_t affected_rows = 0;
   ObAccessService *tsc_service = MTL(ObAccessService *);
   ObAccessService *oas = MTL(ObAccessService*);
-  storage::ObValueRowIterator row_iter;
+  ObVectorVerifyRowIterator row_iter(ctx_);
   ObDMLBaseParam dml_param;
   ObTableScanIterator *table_scan_iter = nullptr;
   storage::ObStoreCtxGuard store_ctx_guard;
@@ -3026,6 +3049,7 @@ int ObVecIndexATaskUpdIterator::get_next_row(blocksstable::ObDatumRow *&row)
       }
     }
   }
+  CHECK_TASK_CANCELLED_IN_PROCESS_WITHOUT_MGR(ret, loop_cnt_, 20, task_ctx_);
   return ret;
 }
 
@@ -3168,7 +3192,7 @@ int ObVecIndexAsyncTask::delete_inc_index_rows(
     LOG_WARN("unexpected nullptr", K(ret), KP(tx_desc), KP(ctx_));
   } else if (OB_FAIL(prepare_dml_param(dml_param, table_dml_param, store_ctx_guard, tx_desc, snapshot, schema_version, timeout_us))) {
     LOG_WARN("fail to prepare dml param", K(ret), K(ctx_));
-  } else if (OB_FAIL(delete_incr_table_data(*new_adapter_, dml_param, tx_desc))) {
+  } else if (OB_FAIL(delete_incr_table_data(*new_adapter_, dml_param, tx_desc, ctx_))) {
     LOG_WARN("failed to delete rows from snapshot table", K(ret), K(ctx_->task_status_.tablet_id_));
   }
   return ret;
@@ -3185,7 +3209,7 @@ int ObVecIndexAsyncTask::exchange_snap_index_rows(
   int64_t affected_rows = 0;
   ObAccessService *tsc_service = MTL(ObAccessService *);
   ObAccessService *oas = MTL(ObAccessService*);
-  ObVecIndexATaskUpdIterator row_iter;
+  ObVecIndexATaskUpdIterator row_iter(ctx_);
   ObDMLBaseParam dml_param;
   ObTableScanIterator *table_scan_iter = nullptr;
   storage::ObStoreCtxGuard store_ctx_guard;
@@ -3363,7 +3387,7 @@ int ObVecIndexAsyncTask::prepare_dml_del_row_iter(
     common::ObCollationType cs_type,
     ObTableScanIterator *table_scan_iter,
     ObIArray<uint64_t> &extra_column_idxs,
-    storage::ObValueRowIterator &row_iter,
+    ObVectorVerifyRowIterator &row_iter,
     transaction::ObTxReadSnapshot &snapshot,
     const bool is_force_delete)
 {
@@ -3912,8 +3936,8 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
   ObSEArray<uint64_t, 4> dml_column_ids;
   ObSEArray<uint64_t, 4> delete_column_ids;
   storage::ObStoreCtxGuard store_ctx_guard;
-  storage::ObValueRowIterator row_iter;
-  storage::ObValueRowIterator delete_row_iter;
+  ObVectorVerifyRowIterator row_iter(ctx_);
+  ObVectorVerifyRowIterator delete_row_iter(ctx_);
   common::ObNewRowIterator *snap_data_iter = nullptr;
   ObSEArray<uint64_t, 4> extra_column_idxs;
   int64_t snapshot_column_count = 4;    // key data vector vid
@@ -3979,6 +4003,7 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
         param.tx_desc_ = tx_desc;
         param.tablet_id_ = adaptor.get_snap_tablet_id();
         param.snapshot_version_ = ctx_->task_status_.target_scn_.get_val_for_inner_table_field();
+        param.task_ctx_ = ctx_;
         ObVectorIndexAlgorithmType index_type = VIAT_MAX;
 
         if (OB_FAIL(adaptor.set_snapshot_key_prefix(adaptor.get_snap_tablet_id().id(), ctx_->task_status_.target_scn_.get_val_for_inner_table_field(), ObVectorIndexSliceStore::OB_VEC_IDX_SNAPSHOT_KEY_LENGTH))) {
@@ -4100,7 +4125,7 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
 
   // delete 3, 4 index table data.
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(delete_incr_table_data(adaptor, dml_param, tx_desc))) {
+  } else if (OB_FAIL(delete_incr_table_data(adaptor, dml_param, tx_desc, ctx_))) {
     LOG_WARN("failed to delete rows from snapshot table", K(ret), K(ctx_->task_status_.tablet_id_));
   }
   return ret;
@@ -4326,11 +4351,9 @@ int ObVecIndexAsyncTask::delete_tablet_data(
     bool check_null_chunk)
 {
   int ret = OB_SUCCESS;
-  int64_t loop_cnt = 0;
-  ObStorageDatumUtils util;
   bool delete_unfinish = true;
   int64_t delta_table_affected_rows = 0;
-  storage::ObValueRowIterator row_iter;
+  ObVectorVerifyRowIterator row_iter(ctx_);
   ObAccessService *oas = MTL(ObAccessService *);
   if (OB_ISNULL(tx_desc) || OB_ISNULL(oas)) {
     ret = OB_ERR_UNEXPECTED;
@@ -4361,7 +4384,6 @@ int ObVecIndexAsyncTask::delete_tablet_data(
       } else {
         cur_row_count += 1;
       }
-      CHECK_TASK_CANCELLED_IN_PROCESS(ret, loop_cnt, ctx_);
     }
     if (ret == OB_ITER_END) {
       ret = OB_SUCCESS;
@@ -4383,7 +4405,7 @@ int ObVecIndexAsyncTask::delete_tablet_data(
   return ret;
 }
 
-int ObVecIndexAsyncTask::delete_incr_table_data(ObPluginVectorIndexAdaptor &adaptor, ObDMLBaseParam &dml_param, transaction::ObTxDesc *tx_desc)
+int ObVecIndexAsyncTask::delete_incr_table_data(ObPluginVectorIndexAdaptor &adaptor, ObDMLBaseParam &dml_param, transaction::ObTxDesc *tx_desc, ObVecIndexAsyncTaskCtx *ctx)
 {
   int ret = OB_SUCCESS;
   // 可以考虑一下使用inner sql删除数据。
@@ -4393,19 +4415,14 @@ int ObVecIndexAsyncTask::delete_incr_table_data(ObPluginVectorIndexAdaptor &adap
   schema::ObTableParam index_table_param(allocator_);
   common::ObNewRowIterator *delta_table_iter = nullptr;
   common::ObNewRowIterator *index_table_iter = nullptr;
-  storage::ObValueRowIterator delta_row_iter;
-  storage::ObValueRowIterator index_row_iter;
   ObSEArray<uint64_t, 4> delta_dml_column_ids;
   ObSEArray<uint64_t, 4> index_dml_column_ids;
   ObAccessService *oas = MTL(ObAccessService *);
-  int64_t loop_cnt = 0;
   const ObTableSchema *delta_table_schema;
   const ObTableSchema *index_table_schema;
   share::schema::ObTableDMLParam table_dml_param(allocator_);
   share::schema::ObTableDMLParam bitmap_table_dml_param(allocator_);
   ObSchemaGetterGuard schema_guard;
-  int64_t delta_table_affected_rows = 0;
-  int64_t index_table_affected_rows = 0;
   SMART_VARS_2((storage::ObTableScanParam, delta_scan_param),
                (storage::ObTableScanParam, index_scan_param)) {
     if (OB_ISNULL(tx_desc) || OB_ISNULL(oas)) {

@@ -356,7 +356,7 @@ int ObVecIdxFreezeTask::do_check_and_freeze(ObPluginVectorIndexAdapterGuard &adp
         break;
       }
       case ObVecIdxFrozenData::State::PERSIST: {
-        if (OB_FAIL(adaptor->persist_incr_segment(ls_id))) {
+        if (OB_FAIL(adaptor->persist_incr_segment(ls_id, ctx_))) {
           LOG_WARN("persist frozen segment fail", K(ret), K(ls_id));
         } else {
           frozen_data->state_ = ObVecIdxFrozenData::State::REFRESH_SNAP;
@@ -378,6 +378,7 @@ int ObVecIdxFreezeTask::do_check_and_freeze(ObPluginVectorIndexAdapterGuard &adp
         break;
       }
       }
+      CHECK_TASK_CANCELLED(ret, ctx_);
     }
     if (OB_FAIL(ret)) {
       frozen_data->ret_code_ = ret;
