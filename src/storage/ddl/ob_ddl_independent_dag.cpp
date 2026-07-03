@@ -24,6 +24,7 @@
 #include "storage/ddl/ob_ddl_dag_monitor_entry.h"
 #include "storage/ddl/ob_ddl_dag_monitor_node.h"
 #include "sql/engine/expr/ob_expr_ai/ob_ai_func_utils.h"
+#include "share/vector_index/ob_vector_index_util.h"
 
 using namespace oceanbase;
 using namespace oceanbase::storage;
@@ -471,22 +472,24 @@ int ObDDLIndependentDag::add_scan_chunk(ObDDLChunk &ddl_chunk, const int64_t tim
       LOG_WARN("get tablet context failed", K(ret), K(ddl_chunk));
     } else if (OB_FAIL(tablet_context->get_or_create_slice(ddl_chunk.slice_idx_, ddl_slice, is_new_slice))) {
       LOG_WARN("get ddl slice failed", K(ret));
-    } else if (nullptr != ddl_chunk.chunk_data_ &&
-               OB_FAIL(push_chunk(ddl_slice, ddl_chunk.chunk_data_))) {
-      LOG_WARN("push chunk failed", K(ret), KPC(ddl_slice));
-    } else if (FALSE_IT(ddl_chunk.chunk_data_ = nullptr)) {
-    } else if (need_end_chunk) {
-      ObChunk *end_chunk = OB_NEW(ObChunk, ObMemAttr(MTL_ID(), "ddl_end_chunk"));
-      if (OB_ISNULL(end_chunk)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("allocate memory failed", K(ret));
-      } else {
-        end_chunk->set_end_chunk();
-        if (OB_FAIL(push_chunk(ddl_slice, end_chunk))) {
-          LOG_WARN("push end chunk failed", K(ret), KPC(ddl_slice));
-          int tmp_ret = OB_SUCCESS;
-          // ignore ret
-          (void)finish_chunk(end_chunk);
+    } else {
+      if (nullptr != ddl_chunk.chunk_data_ &&
+          OB_FAIL(push_chunk(ddl_slice, ddl_chunk.chunk_data_))) {
+        LOG_WARN("push chunk failed", K(ret), KPC(ddl_slice));
+      } else if (FALSE_IT(ddl_chunk.chunk_data_ = nullptr)) {
+      } else if (need_end_chunk) {
+        ObChunk *end_chunk = OB_NEW(ObChunk, ObMemAttr(MTL_ID(), "ddl_end_chunk"));
+        if (OB_ISNULL(end_chunk)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate memory failed", K(ret));
+        } else {
+          end_chunk->set_end_chunk();
+          if (OB_FAIL(push_chunk(ddl_slice, end_chunk))) {
+            LOG_WARN("push end chunk failed", K(ret), KPC(ddl_slice));
+            int tmp_ret = OB_SUCCESS;
+            // ignore ret
+            (void)finish_chunk(end_chunk);
+          }
         }
       }
     }
@@ -538,6 +541,9 @@ int ObDDLIndependentDag::add_pipeline(
     const ObIndexType &index_type)
 {
   int ret = OB_SUCCESS;
+  bool is_vec_complement = ObDDLUtil::is_vector_index_complement(index_type);
+  bool is_hybrid_log = schema::is_hybrid_vec_index_log_type(index_type);
+  bool is_hybrid_embedded = schema::is_hybrid_vec_index_embedded_type(index_type);
   if (ObDDLUtil::is_vector_index_complement(index_type)) {
     if (OB_FAIL(add_vector_index_append_pipeline(index_type, tablet_context, ddl_slice))) {
       LOG_WARN("add vector index pipeline failed", K(ret));
@@ -559,6 +565,12 @@ int ObDDLIndependentDag::add_pipeline(
 int ObDDLIndependentDag::add_vector_index_append_pipeline(const ObIndexType &index_type, ObDDLTabletContext *tablet_context, ObDDLSlice *ddl_slice)
 {
   int ret = OB_SUCCESS;
+  bool is_snapshot_data = schema::is_vec_index_snapshot_data_type(index_type);
+  bool is_ivf_centroid = schema::is_local_vec_ivf_centroid_index(index_type);
+  bool is_ivfsq8_meta = schema::is_vec_ivfsq8_meta_index(index_type);
+  bool is_ivfpq_pq = schema::is_vec_ivfpq_pq_centroid_index(index_type);
+  bool is_hybrid_log = schema::is_hybrid_vec_index_log_type(index_type);
+  bool is_hybrid_embedded = schema::is_hybrid_vec_index_embedded_type(index_type);
   if (schema::is_vec_index_snapshot_data_type(index_type)) {
     ObHNSWAppendPipeline *pipeline = nullptr;
     if (OB_FAIL(add_pipeline(tablet_context, ddl_slice, pipeline))) {
@@ -582,8 +594,10 @@ int ObDDLIndependentDag::add_vector_index_append_pipeline(const ObIndexType &ind
   } else if (schema::is_hybrid_vec_index_embedded_type(index_type)) {
     ObHNSWEmbeddingAppendAndWritePipeline *pipeline = nullptr;
     if (OB_FAIL(add_pipeline(tablet_context, ddl_slice, pipeline))) {
-      LOG_WARN("init hnsw index failed", K(ret));
+      LOG_WARN("init embedding pipeline failed", K(ret));
     }
+  } else {
+    LOG_WARN("no pipeline branch matched", K(index_type));
   }
   return ret;
 }

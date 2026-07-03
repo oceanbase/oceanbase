@@ -106,12 +106,23 @@ public:
   int init(const int64_t batch_size, const int64_t vec_dim);
 
   // Add an item during batching phase (deep copy to allocator)
+  // pre_alloc_vector: HNSW mode needs pre-allocated buffer for in-place MEMCPY;
+  //                   BatchFile mode allocates its own buffer during fill, so skip.
   int add_item(const blocksstable::ObStorageDatum &text,
-               const common::ObArray<blocksstable::ObStorageDatum> &extras);
+               const common::ObArray<blocksstable::ObStorageDatum> &extras,
+               bool pre_alloc_vector = true);
   int64_t get_count() const { return current_count_; }
   int64_t get_need_embedding_count() const { return need_embedding_count_; }
   bool is_full() const { return current_count_ >= batch_size_; }
   common::ObArray<ObEmbeddingResult*>& get_results() { return results_; }
+  common::ObArenaAllocator& get_allocator() { return allocator_; }
+
+  // Set batch as filled with given count (used by BatchFile mode where we skip add_item)
+  void set_filled(int64_t count, int64_t need_embedding_count) {
+    current_count_ = count;
+    need_embedding_count_ = need_embedding_count;
+  }
+
   void reset();
 
   TO_STRING_KV(K_(batch_size), K_(current_count), K_(need_embedding_count), K_(vec_dim), "results_count", results_.count());

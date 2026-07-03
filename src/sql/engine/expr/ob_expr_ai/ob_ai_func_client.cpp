@@ -201,8 +201,35 @@ int ObAIFuncClient::send_post(ObJsonObject *data, ObJsonObject *&response)
         response_buf.reset();
       }
     }
-    if (OB_SUCC(ret) && OB_FAIL(error_handle(res, http_code, response_buf))) {
-      LOG_WARN("AI service request failed", K(ret), K(res), K(http_code));
+    if (OB_SUCC(ret)) {
+      if (res != CURLE_OK && OB_FAIL(error_handle(res, http_code, response_buf))) {
+        LOG_WARN("fail to handle error", K(ret), K(res));
+      } else if ((http_code / 100) != 2) { // http status code 2xx means success
+        ret = OB_CURL_ERROR;
+        char http_code_str[1024];
+        ObString err_msg = response_buf.string();
+        int64_t copy_len = std::min(static_cast<int64_t>(err_msg.length()),
+                                    static_cast<int64_t>(sizeof(http_code_str) - 64));
+        if (copy_len > 0) {
+          snprintf(http_code_str, sizeof(http_code_str), "http status code: %ld, error message: %.*s",
+                   http_code, static_cast<int>(copy_len), err_msg.ptr());
+        } else {
+          snprintf(http_code_str, sizeof(http_code_str), "http status code: %ld", http_code);
+        }
+        ObString ob_http_code_str;
+        ob_http_code_str.assign_ptr(http_code_str, static_cast<int32_t>(strlen(http_code_str)));
+        // Print full response body for debugging
+        ObString full_response = response_buf.string();
+        LOG_WARN("unexpected http status code", K(ret), K(http_code), K(ob_http_code_str), K_(url),
+                 "response_body", full_response);
+        // Also print request body for debugging
+        ObJsonBuffer req_j_buf(allocator_);
+        if (OB_SUCCESS == data->print(req_j_buf, false)) {
+          ObString req_body = req_j_buf.string();
+          LOG_WARN("request body for failed request", "request_body", req_body);
+        }
+        FORWARD_USER_ERROR(ret, "http request to AI service failed");
+      }
     }
 
     if (OB_SUCC(ret)) {
@@ -500,6 +527,16 @@ int ObAIFuncClient::get_batch_result(ObArray<ObAIBatchItemResult> &results)
             long http_code = 0;
             curl_easy_getinfo(easy_handle, CURLINFO_RESPONSE_CODE, &http_code);
             item.http_code_ = http_code;
+            if (http_code < 200 || http_code >= 300) {
+              if (idx < response_buffers_.count()) {
+                ObStringBuffer *resp_buf = response_buffers_.at(idx);
+                ObString full_response = OB_NOT_NULL(resp_buf) ? resp_buf->string() : ObString();
+                LOG_WARN("unexpected http status code in batch", K(http_code), K(idx),
+                         K_(url), "response_body", full_response);
+              } else {
+                LOG_WARN("unexpected http status code in batch", K(http_code), K(idx), K_(url));
+              }
+            }
             // Parse response JSON
             ObStringBuffer *response_buf = response_buffers_.at(idx);
             if (OB_NOT_NULL(response_buf) && !response_buf->string().empty()) {

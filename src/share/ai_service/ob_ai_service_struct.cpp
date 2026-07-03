@@ -241,6 +241,21 @@ bool ObAiModelEndpointInfo::is_valid_provider(const ObString &provider)
   return is_valid;
 }
 
+ObString ObAiModelEndpointInfo::get_batch_file_url() const
+{
+  static const char *KNOWN_SUFFIXES[] = {"/embeddings", "/rerank", "/completions"};
+  for (int64_t i = 0; i < ARRAYSIZEOF(KNOWN_SUFFIXES); i++) {
+    int32_t suf_len = static_cast<int32_t>(strlen(KNOWN_SUFFIXES[i]));
+    if (url_.length() > suf_len) {
+      ObString tail(suf_len, url_.ptr() + url_.length() - suf_len);
+      if (tail.case_compare(KNOWN_SUFFIXES[i]) == 0) {
+        return ObString(url_.length() - suf_len, url_.ptr());
+      }
+    }
+  }
+  return url_;
+}
+
 int ObAiModelEndpointInfo::merge_delta_endpoint(common::ObArenaAllocator &allocator, const ObIJsonBase &delta_jbase)
 {
   int ret = OB_SUCCESS;
@@ -430,6 +445,35 @@ int ObAiModelEndpointInfo::assign_storage_access_key_only(common::ObIAllocator &
   reset();
   if (OB_FAIL(ob_write_string(allocator, encrypted_access_key_from_table, access_key_, true))) {
     LOG_WARN("failed to copy encrypted access key", K(ret));
+  }
+  return ret;
+}
+
+int ObAiModelEndpointInfo::deep_copy(common::ObIAllocator &allocator, const ObAiModelEndpointInfo &other)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  endpoint_id_ = other.endpoint_id_;
+  if (OB_FAIL(ob_write_string(allocator, other.name_, name_))) {
+    LOG_WARN("failed to copy name", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, other.scope_, scope_))) {
+    LOG_WARN("failed to copy scope", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, other.ai_model_name_, ai_model_name_))) {
+    LOG_WARN("failed to copy ai_model_name", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, other.url_, url_))) {
+    LOG_WARN("failed to copy url", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, other.access_key_, access_key_))) {
+    LOG_WARN("failed to copy access_key", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, other.provider_, provider_))) {
+    LOG_WARN("failed to copy provider", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, other.request_model_name_, request_model_name_))) {
+    LOG_WARN("failed to copy request_model_name", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, other.parameters_, parameters_))) {
+    LOG_WARN("failed to copy parameters", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, other.request_transform_fn_, request_transform_fn_))) {
+    LOG_WARN("failed to copy request_transform_fn", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, other.response_transform_fn_, response_transform_fn_))) {
+    LOG_WARN("failed to copy response_transform_fn", K(ret));
   }
   return ret;
 }

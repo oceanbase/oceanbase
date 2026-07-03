@@ -374,6 +374,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 599	__all_ai_model_profile	0	201001	1
 600	__all_ai_gateway	0	201001	1
 601	__all_ai_gateway_history	0	201001	1
+602	__all_ai_batch_task	0	201001	1
+603	__all_ai_batch_task_history	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1
@@ -948,6 +950,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12609	__all_virtual_ai_model_provider	2	201001	1
 12610	__all_virtual_ai_model_profile	2	201001	1
 12611	__all_virtual_ai_gateway	2	201001	1
+12612	__all_virtual_ai_batch_task	2	201001	1
+12613	__all_virtual_ai_batch_task_history	2	201001	1
 12614	__all_virtual_ai_model_provider_history	2	201001	1
 12615	__all_virtual_ai_gateway_history	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
@@ -1562,6 +1566,10 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21737	CDB_OB_AI_GATEWAYS	1	201001	1
 21738	DBA_OB_AI_GATEWAY_ENDPOINTS	1	201001	1
 21739	CDB_OB_AI_GATEWAY_ENDPOINTS	1	201001	1
+21740	DBA_OB_AI_BATCH_TASKS	1	201001	1
+21741	CDB_OB_AI_BATCH_TASKS	1	201001	1
+21742	DBA_OB_AI_BATCH_TASK_HISTORY	1	201001	1
+21743	CDB_OB_AI_BATCH_TASK_HISTORY	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

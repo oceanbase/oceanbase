@@ -10,7 +10,9 @@
 #include "lib/string/ob_string.h"
 #include "share/ob_service_name_proxy.h"
 #include "lib/json_type/ob_json_base.h"
-#include "share/schema/ob_schema_struct.h"
+#include "lib/json_type/ob_json_tree.h"
+// Note: Do NOT include ob_schema_struct.h here - only forward declaration is needed
+// to avoid circular dependency through ob_object.h -> ObExecContext forward declaration
 
 namespace oceanbase
 {
@@ -107,9 +109,15 @@ public:
   int merge_delta_endpoint(common::ObArenaAllocator &allocator, const ObIJsonBase &delta_endpoint);
   int check_valid() const;
 
+  // Deep copy endpoint info to target
+  int deep_copy(common::ObIAllocator &allocator, const ObAiModelEndpointInfo &other);
+
   const ObString &get_name() const { return name_; }
   const ObString &get_scope() const { return scope_; }
   const ObString &get_url() const { return url_; }
+  // Derive base URL for BatchFile API by stripping known endpoint suffixes (e.g. "/embeddings").
+  // Supports both full URL (original convention) and base URL conventions.
+  ObString get_batch_file_url() const;
   const ObString &get_encrypted_access_key() const { return access_key_; }
   int get_unencrypted_access_key(common::ObIAllocator &allocator, ObString &unencrypted_access_key) const;
   // For decrypting access_key stored in __all_ai_model_provider (same format as endpoint table).

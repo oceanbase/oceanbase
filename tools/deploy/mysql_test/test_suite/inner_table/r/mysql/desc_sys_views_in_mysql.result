@@ -12226,6 +12226,58 @@ end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_AI_GATEWAY_ENDPOINTS limit 1);
 cnt
 1
+desc oceanbase.DBA_OB_AI_BATCH_TASKS;
+Field	Type	Null	Key	Default	Extra
+TASK_ID	varchar(256)	NO		NULL	
+DDL_TASK_ID	bigint(20)	YES		NULL	
+MODEL_NAME	varchar(256)	YES		NULL	
+COMMAND_TYPE	varchar(256)	YES		NULL	
+STATUS	varchar(9)	NO		NULL	
+REQUESTS_HANDLED	bigint(20)	NO		NULL	
+TOTAL_REQUESTS	bigint(20)	NO		NULL	
+PROGRESS_PERCENT	decimal(26,2)	NO			
+TASK_CREATE_TIME	timestamp(6)	NO		NULL	
+TASK_UPDATE_TIME	timestamp(6)	NO		NULL	
+BATCH_ID	varchar(256)	YES		NULL	
+REMOTE_FILE_IDS	varchar(2048)	YES		NULL	
+ERROR_DETAIL	varchar(4096)	YES		NULL	
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_AI_BATCH_TASKS|%') then 2
+when ('' like '%|DBA_OB_AI_BATCH_TASKS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_AI_BATCH_TASKS|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_AI_BATCH_TASKS limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_AI_BATCH_TASK_HISTORY;
+Field	Type	Null	Key	Default	Extra
+TASK_ID	varchar(256)	NO		NULL	
+DDL_TASK_ID	bigint(20)	YES		NULL	
+MODEL_NAME	varchar(256)	YES		NULL	
+COMMAND_TYPE	varchar(256)	YES		NULL	
+STATUS	varchar(9)	NO		NULL	
+REQUESTS_HANDLED	bigint(20)	NO		NULL	
+TOTAL_REQUESTS	bigint(20)	NO		NULL	
+PROGRESS_PERCENT	decimal(26,2)	NO			
+TASK_CREATE_TIME	timestamp(6)	NO		NULL	
+TASK_UPDATE_TIME	timestamp(6)	NO		NULL	
+BATCH_ID	varchar(256)	YES		NULL	
+REMOTE_FILE_IDS	varchar(2048)	YES		NULL	
+ERROR_DETAIL	varchar(4096)	YES		NULL	
+TOKEN_USAGE	varchar(1024)	YES		NULL	
+PROVIDER_TIMELINE	varchar(1024)	YES		NULL	
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_AI_BATCH_TASK_HISTORY|%') then 2
+when ('' like '%|DBA_OB_AI_BATCH_TASK_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_AI_BATCH_TASK_HISTORY|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_AI_BATCH_TASK_HISTORY limit 1);
+cnt
+1
 select case cnt when 0 then NULL else 'UNEXPECTED ERROR: It is expected to be an empty set, which means that all GV$ and V$ view column names are defined consistently' end ERROR_INFO from (select /*+no_rewrite*/ count(*) cnt from
 (SELECT t.table_name,
 group_concat(c.column_name) as column_name_list

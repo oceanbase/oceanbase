@@ -12769,6 +12769,52 @@ select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all
 IF(count(*) >= 0, 1, 0)
 1
 select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_ai_gateway limit 1;
+desc oceanbase.__all_virtual_ai_batch_task;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+task_id	varchar(256)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+ddl_task_id	bigint(20)	YES		NULL	
+model_name	varchar(256)	YES		NULL	
+command_type	varchar(256)	YES		NULL	
+status	bigint(20)	NO		NULL	
+requests_handled	bigint(20)	NO		NULL	
+total_requests	bigint(20)	NO		NULL	
+task_create_time	timestamp(6)	NO		NULL	
+task_update_time	timestamp(6)	NO		NULL	
+batch_id	varchar(256)	YES		NULL	
+remote_file_ids	varchar(2048)	YES		NULL	
+local_file_metadata	varchar(1024)	YES		NULL	
+error_detail	varchar(4096)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ai_batch_task;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_ai_batch_task limit 1;
+desc oceanbase.__all_virtual_ai_batch_task_history;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+task_id	varchar(256)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+ddl_task_id	bigint(20)	YES		NULL	
+model_name	varchar(256)	YES		NULL	
+command_type	varchar(256)	YES		NULL	
+status	bigint(20)	NO		NULL	
+requests_handled	bigint(20)	NO		NULL	
+total_requests	bigint(20)	NO		NULL	
+task_create_time	timestamp(6)	NO		NULL	
+task_update_time	timestamp(6)	NO		NULL	
+batch_id	varchar(256)	YES		NULL	
+remote_file_ids	varchar(2048)	YES		NULL	
+local_file_metadata	varchar(1024)	YES		NULL	
+error_detail	varchar(4096)	YES		NULL	
+token_usage	varchar(1024)	YES		NULL	
+provider_timeline	varchar(1024)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ai_batch_task_history;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_ai_batch_task_history limit 1;
 desc oceanbase.__all_virtual_ai_model_provider_history;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	

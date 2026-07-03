@@ -372,6 +372,24 @@ int ObVectorIndexUtil::parser_params_from_string(
           } else {
             param.ob_sparse_drop_ratio_search_ = out_val;
           }
+        } else if (new_param_name == "AI_EXECUTION_MODE") {
+          if (new_param_value == "SYNC_HTTP") {
+            param.ai_execution_mode_ = ObVectorIndexAccessMode::VIAM_SYNC_HTTP;
+          } else if (new_param_value == "BATCH_FILE") {
+            param.ai_execution_mode_ = ObVectorIndexAccessMode::VIAM_BATCH_FILE;
+          } else {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid ai_execution_mode value", K(ret), K(new_param_value));
+          }
+        } else if (new_param_name == "ALLOW_NULL_ON_FAILURE") {
+          if (new_param_value == "true" || new_param_value == "TRUE" || new_param_value == "1") {
+            param.allow_null_on_failure_ = true;
+          } else if (new_param_value == "false" || new_param_value == "FALSE" || new_param_value == "0") {
+            param.allow_null_on_failure_ = false;
+          } else {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid allow_null_on_failure value", K(ret), K(new_param_value));
+          }
         } else {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid vector index param name", K(ret), K(new_param_name));
@@ -835,6 +853,12 @@ int ObVectorIndexParam::print_hnsw_params(char *buf, int64_t buf_len, int64_t &p
   PRINT_PARAM("sync_interval_value=%ld,", sync_interval_value_);
   PRINT_PARAM("endpoint=%s,", endpoint_);
   PRINT_PARAM("content_type=%s,", ObVectorIndexUtil::get_content_type_str(content_type_));
+  if (ai_execution_mode_ != ObVectorIndexAccessMode::VIAM_SYNC_HTTP) {
+    PRINT_PARAM("ai_execution_mode=%d,", static_cast<int>(ai_execution_mode_));
+  }
+  if (allow_null_on_failure_) {
+    PRINT_PARAM("%s", "allow_null_on_failure=TRUE,");
+  }
 
   #undef PRINT_PARAM
   return ret;
@@ -879,7 +903,8 @@ int ObVectorIndexParam::print_ipivf_params(char *buf, int64_t buf_len, int64_t &
   PRINT_PARAM("refine=%s,", refine_ ? "true" : "false");
   PRINT_PARAM("refine_k=%f,", refine_k_);
   PRINT_PARAM("drop_ratio_build=%f,", ob_sparse_drop_ratio_build_);
-  PRINT_PARAM("drop_ratio_search=%f", ob_sparse_drop_ratio_search_);
+  PRINT_PARAM("drop_ratio_search=%f,", ob_sparse_drop_ratio_search_);
+  PRINT_PARAM("ai_execution_mode=%d,", static_cast<int>(ai_execution_mode_));
   #undef PRINT_PARAM
   return ret;
 }
@@ -3408,13 +3433,29 @@ int ObVectorIndexUtil::get_vector_index_tid_with_index_prefix(
   return ret;
 }
 
-int ObVectorIndexUtil::check_vec_index_in_stmt(const sql::ObStmt &stmt, const ObIndexType &vec_index_type)
+static bool obs_str_contains(const ObString &haystack, const char *needle)
+{
+  const int64_t needle_len = static_cast<int64_t>(strlen(needle));
+  if (OB_ISNULL(haystack.ptr()) || haystack.length() < needle_len) { return false; }
+  for (int64_t i = 0; i + needle_len <= haystack.length(); ++i) {
+    if (0 == MEMCMP(haystack.ptr() + i, needle, needle_len)) { return true; }
+  }
+  return false;
+}
+
+int ObVectorIndexUtil::check_vec_index_in_stmt(const sql::ObStmt &stmt, const ObIndexType &vec_index_type, const ObString &index_params)
 {
   int ret = OB_SUCCESS;
-  if (stmt::T_CREATE_TABLE == stmt.get_stmt_type() && share::schema::is_vec_ivf_index(vec_index_type)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("create ivf index in create table stmt is not supported", K(ret), K(vec_index_type));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create ivf index in create table stmt is");
+  if (stmt::T_CREATE_TABLE == stmt.get_stmt_type()) {
+    if (share::schema::is_vec_ivf_index(vec_index_type)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("create ivf index in create table stmt is not supported", K(ret), K(vec_index_type));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "create ivf index in create table stmt is");
+    } else if (obs_str_contains(index_params, "AI_EXECUTION_MODE=BATCH_FILE")) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("create BATCH_FILE ai_execution_mode index in create table stmt is not supported", K(ret), K(index_params));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "create BATCH_FILE ai_execution_mode index in create table stmt is");
+    }
   }
   return ret;
 }
@@ -3893,6 +3934,10 @@ int ObVectorIndexUtil::check_index_param(
     bool refine_is_set = false;
     bool drop_ratio_build_is_set = false;
     bool drop_ratio_search_is_set = false;
+    bool ai_execution_mode_is_set = false;
+    ObString ai_execution_mode_name;
+    bool allow_null_is_set = false;
+    bool allow_null_value = false;
 
     // [4.3.5.3, 4.4.0.0) or [4.4.1.0, )
     bool is_enable_bp_param = (tenant_data_version >= MOCK_DATA_VERSION_4_3_5_3 && tenant_data_version < DATA_VERSION_4_4_0_0)
@@ -3942,7 +3987,9 @@ int ObVectorIndexUtil::check_index_param(
                    new_variable_name != "PRUNE" &&
                    new_variable_name != "REFINE" &&
                    new_variable_name != "DROP_RATIO_BUILD" &&
-                   new_variable_name != "DROP_RATIO_SEARCH") {
+                   new_variable_name != "DROP_RATIO_SEARCH" &&
+                   new_variable_name != "AI_EXECUTION_MODE" &&
+                   new_variable_name != "ALLOW_NULL_ON_FAILURE") {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("unexpected vector variable name", K(ret), K(new_variable_name));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "unexpected vector index params items is");
@@ -4175,6 +4222,27 @@ int ObVectorIndexUtil::check_index_param(
           } else {
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("sync_mode value is invalid", K(ret), K(new_parser_name));
+          }
+        } else if (last_variable == "AI_EXECUTION_MODE") {
+          if (new_parser_name == "SYNC_HTTP" || new_parser_name == "BATCH_FILE") {
+            ai_execution_mode_is_set = true;
+            ai_execution_mode_name = new_parser_name;
+          } else {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("ai_execution_mode value is invalid", K(ret), K(new_parser_name));
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_execution_mode value must be SYNC_HTTP or BATCH_FILE");
+          }
+        } else if (last_variable == "ALLOW_NULL_ON_FAILURE") {
+          if (new_parser_name == "TRUE" || parser_value == 1) {
+            allow_null_is_set = true;
+            allow_null_value = true;
+          } else if (new_parser_name == "FALSE" || parser_value == 0) {
+            allow_null_is_set = true;
+            allow_null_value = false;
+          } else {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("allow_null_on_failure value is invalid", K(ret), K(new_parser_name));
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "allow_null_on_failure value must be TRUE or FALSE");
           }
         } else if (last_variable == "DIM") {
           if (parser_value > 0 && parser_value <= 4096) {
@@ -4457,6 +4525,11 @@ int ObVectorIndexUtil::check_index_param(
         } else if (content_type_is_set && OB_FAIL(databuff_printf(not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos,
                                                                   ", CONTENT_TYPE=%s",
                                                                   get_content_type_str(content_type)))) {
+          LOG_WARN("fail to printf databuff", K(ret));
+        } else if (ai_execution_mode_is_set &&
+                   OB_FAIL(databuff_printf(not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos,
+                                           ", AI_EXECUTION_MODE=%.*s", ai_execution_mode_name.length(), ai_execution_mode_name.ptr()))) {
+          LOG_WARN("fail to printf databuff", K(ret));
         } else if (is_enable_bp_param && type_hnsw_bq_is_set &&! refine_type_is_set &&
             OB_FAIL(databuff_printf(not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos, ", REFINE_TYPE=SQ8"))) {
           LOG_WARN("fail to printf databuff", K(ret));
@@ -4499,7 +4572,9 @@ int ObVectorIndexUtil::check_index_param(
             || content_type_is_set
             || dim_is_set
             || sync_interval_is_set
-            || sync_mode_is_set) {
+            || sync_mode_is_set
+            || ai_execution_mode_is_set
+            || allow_null_is_set) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("parameter for sparse vector index is not supported", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "parameter for sparse vector index is");

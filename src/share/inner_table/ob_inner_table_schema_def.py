@@ -9108,6 +9108,8 @@ def_table_schema(
 
 # 600: __all_ai_gateway
 # 601: __all_ai_gateway_history
+# 602: __all_ai_batch_task
+# 603: __all_ai_batch_task_history
 
 all_ai_model_provider_def = dict(
     owner = 'maochongxin.mcx',
@@ -9178,6 +9180,62 @@ all_ai_gateway_def = dict(
 
 def_table_schema(**all_ai_gateway_def)
 def_table_schema(**gen_history_table_def(601, all_ai_gateway_def))
+
+def_table_schema(
+  owner = 'maochongxin.mcx',
+  table_name = '__all_ai_batch_task',
+  table_id = '602',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('task_id', 'varchar:256'),
+  ],
+  in_tenant_space = True,
+  normal_columns = [
+    ('ddl_task_id', 'int', 'true'),
+    ('model_name', 'varchar:256', 'true'),
+    ('command_type', 'varchar:256', 'true'),
+    ('status', 'int'),
+    ('requests_handled', 'int'),
+    ('total_requests', 'int'),
+    ('task_create_time', 'timestamp'),
+    ('task_update_time', 'timestamp'),
+    ('batch_id', 'varchar:256', 'true'),
+    ('remote_file_ids', 'varchar:2048', 'true'),
+    ('local_file_metadata', 'varchar:1024', 'true'),
+    ('error_detail', 'varchar:4096', 'true'),
+  ],
+)
+
+def_table_schema(
+  owner = 'maochongxin.mcx',
+  table_name = '__all_ai_batch_task_history',
+  table_id = '603',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('task_id', 'varchar:256'),
+  ],
+  in_tenant_space = True,
+  normal_columns = [
+    ('ddl_task_id', 'int', 'true'),
+    ('model_name', 'varchar:256', 'true'),
+    ('command_type', 'varchar:256', 'true'),
+    ('status', 'int'),
+    ('requests_handled', 'int'),
+    ('total_requests', 'int'),
+    ('task_create_time', 'timestamp'),
+    ('task_update_time', 'timestamp'),
+    ('batch_id', 'varchar:256', 'true'),
+    ('remote_file_ids', 'varchar:2048', 'true'),
+    ('local_file_metadata', 'varchar:1024', 'true'),
+    ('error_detail', 'varchar:4096', 'true'),
+    ('token_usage', 'varchar:1024', 'true'),
+    ('provider_timeline', 'varchar:1024', 'true'),
+  ],
+)
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -18346,6 +18404,8 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
 )
+
+
 # 12597: __all_virtual_object_storage_stat
 # 12598: __all_virtual_object_storage_error_record
 # 12599: __all_virtual_audit_log_encryption_password
@@ -18354,7 +18414,6 @@ def_table_schema(
 # 12602: __all_virtual_optstat_catalog_global_prefs
 # 12603: __all_virtual_tenant_worker_group
 # 12604: __all_virtual_keyword
-
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12609',
@@ -18370,6 +18429,16 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12611',
   table_name = '__all_virtual_ai_gateway',
   keywords = all_def_keywords['__all_ai_gateway']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12612',
+  table_name = '__all_virtual_ai_batch_task',
+  keywords = all_def_keywords['__all_ai_batch_task']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12613',
+  table_name = '__all_virtual_ai_batch_task_history',
+  keywords = all_def_keywords['__all_ai_batch_task_history']))
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12614',
@@ -47157,6 +47226,7 @@ def_table_schema(
     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
 )
+
 # 21718: DBA_JAVA_POLICY
 # 21719: USER_JAVA_POLICY
 # 21720: DBA_SCHEDULER_RUNNING_JOBS
@@ -47367,6 +47437,155 @@ def_table_schema(
     )) jt
   """.replace("\n", " ")
 )
+
+def_table_schema(
+  owner           = 'maochongxin.mcx',
+  table_name      = 'DBA_OB_AI_BATCH_TASKS',
+  table_id        = '21740',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+      task_id AS TASK_ID,
+      ddl_task_id AS DDL_TASK_ID,
+      model_name AS MODEL_NAME,
+      command_type AS COMMAND_TYPE,
+      CASE status
+        WHEN 0 THEN 'INVALID'
+        WHEN 3 THEN 'PENDING'
+        WHEN 4 THEN 'RUNNING'
+        WHEN 5 THEN 'FINISHED'
+        WHEN 6 THEN 'FAILED'
+        WHEN 7 THEN 'CANCELLED'
+        ELSE 'UNKNOWN'
+      END AS STATUS,
+      requests_handled AS REQUESTS_HANDLED,
+      total_requests AS TOTAL_REQUESTS,
+      ROUND(requests_handled * 100.0 / NULLIF(total_requests, 0), 2) AS PROGRESS_PERCENT,
+      task_create_time AS TASK_CREATE_TIME,
+      task_update_time AS TASK_UPDATE_TIME,
+      batch_id AS BATCH_ID,
+      remote_file_ids AS REMOTE_FILE_IDS,
+      error_detail AS ERROR_DETAIL
+  FROM oceanbase.__all_ai_batch_task
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'maochongxin.mcx',
+  table_name      = 'CDB_OB_AI_BATCH_TASKS',
+  table_id        = '21741',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+  SELECT
+      tenant_id AS TENANT_ID,
+      task_id AS TASK_ID,
+      ddl_task_id AS DDL_TASK_ID,
+      model_name AS MODEL_NAME,
+      command_type AS COMMAND_TYPE,
+      CASE status
+        WHEN 0 THEN 'INVALID'
+        WHEN 3 THEN 'PENDING'
+        WHEN 4 THEN 'RUNNING'
+        WHEN 5 THEN 'FINISHED'
+        WHEN 6 THEN 'FAILED'
+        WHEN 7 THEN 'CANCELLED'
+        ELSE 'UNKNOWN'
+      END AS STATUS,
+      requests_handled AS REQUESTS_HANDLED,
+      total_requests AS TOTAL_REQUESTS,
+      ROUND(requests_handled * 100.0 / NULLIF(total_requests, 0), 2) AS PROGRESS_PERCENT,
+      task_create_time AS TASK_CREATE_TIME,
+      task_update_time AS TASK_UPDATE_TIME,
+      batch_id AS BATCH_ID,
+      remote_file_ids AS REMOTE_FILE_IDS,
+      error_detail AS ERROR_DETAIL
+  FROM oceanbase.__all_virtual_ai_batch_task
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'maochongxin.mcx',
+  table_name      = 'DBA_OB_AI_BATCH_TASK_HISTORY',
+  table_id        = '21742',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+      task_id AS TASK_ID,
+      ddl_task_id AS DDL_TASK_ID,
+      model_name AS MODEL_NAME,
+      command_type AS COMMAND_TYPE,
+      CASE status
+        WHEN 0 THEN 'INVALID'
+        WHEN 3 THEN 'PENDING'
+        WHEN 4 THEN 'RUNNING'
+        WHEN 5 THEN 'FINISHED'
+        WHEN 6 THEN 'FAILED'
+        WHEN 7 THEN 'CANCELLED'
+        ELSE 'UNKNOWN'
+      END AS STATUS,
+      requests_handled AS REQUESTS_HANDLED,
+      total_requests AS TOTAL_REQUESTS,
+      ROUND(requests_handled * 100.0 / NULLIF(total_requests, 0), 2) AS PROGRESS_PERCENT,
+      task_create_time AS TASK_CREATE_TIME,
+      task_update_time AS TASK_UPDATE_TIME,
+      batch_id AS BATCH_ID,
+      remote_file_ids AS REMOTE_FILE_IDS,
+      error_detail AS ERROR_DETAIL,
+      token_usage AS TOKEN_USAGE,
+      provider_timeline AS PROVIDER_TIMELINE
+  FROM oceanbase.__all_ai_batch_task_history
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'maochongxin.mcx',
+  table_name      = 'CDB_OB_AI_BATCH_TASK_HISTORY',
+  table_id        = '21743',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+  SELECT
+      tenant_id AS TENANT_ID,
+      task_id AS TASK_ID,
+      ddl_task_id AS DDL_TASK_ID,
+      model_name AS MODEL_NAME,
+      command_type AS COMMAND_TYPE,
+      CASE status
+        WHEN 0 THEN 'INVALID'
+        WHEN 3 THEN 'PENDING'
+        WHEN 4 THEN 'RUNNING'
+        WHEN 5 THEN 'FINISHED'
+        WHEN 6 THEN 'FAILED'
+        WHEN 7 THEN 'CANCELLED'
+        ELSE 'UNKNOWN'
+      END AS STATUS,
+      requests_handled AS REQUESTS_HANDLED,
+      total_requests AS TOTAL_REQUESTS,
+      ROUND(requests_handled * 100.0 / NULLIF(total_requests, 0), 2) AS PROGRESS_PERCENT,
+      task_create_time AS TASK_CREATE_TIME,
+      task_update_time AS TASK_UPDATE_TIME,
+      batch_id AS BATCH_ID,
+      remote_file_ids AS REMOTE_FILE_IDS,
+      error_detail AS ERROR_DETAIL,
+      token_usage AS TOKEN_USAGE,
+      provider_timeline AS PROVIDER_TIMELINE
+  FROM oceanbase.__all_virtual_ai_batch_task_history
+""".replace("\n", " ")
+)
+
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -83570,6 +83789,22 @@ def_sys_index_table(
   index_using_type = 'USING_BTREE',
   index_type = 'INDEX_TYPE_UNIQUE_LOCAL',
   keywords = all_def_keywords['__all_ai_gateway'])
+
+def_sys_index_table(
+  index_name = 'idx_ai_batch_task_ddl_task_id',
+  index_table_id = 101129,
+  index_columns = ['tenant_id', 'ddl_task_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_ai_batch_task'])
+
+def_sys_index_table(
+  index_name = 'idx_ai_batch_task_history_ddl_task_id',
+  index_table_id = 101130,
+  index_columns = ['tenant_id', 'ddl_task_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_ai_batch_task_history'])
 
 # 余留位置（此行之前占位）
 # 索引表占位建议：基于基表（数据表）表名来占位，其他方式包括：索引名（index_name）、索引表表名

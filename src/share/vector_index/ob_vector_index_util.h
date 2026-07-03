@@ -153,6 +153,14 @@ enum ObVectorIndexContentType
   VICT_MAX
 };
 
+// Access mode for hybrid vector index embedding
+enum ObVectorIndexAccessMode
+{
+  VIAM_SYNC_HTTP = 0,    // default, sync http mode
+  VIAM_BATCH_FILE = 1,   // batch file mode
+  VIAM_MAX
+};
+
 static const int64_t OB_MAX_ENDPOINT_LENGTH = 512;
 
 struct ObIvfConstant {
@@ -192,7 +200,9 @@ struct ObVectorIndexParam //FARM COMPAT WHITELIST
     refine_type_(0), bq_bits_query_(DEFAULT_BQ_BITS_QUERY),
     refine_k_(DEFAULT_REFINE_K), bq_use_fht_(false), sync_interval_type_(VSIT_MAX), sync_interval_value_(0), nbits_(0),
     prune_(false), refine_(false), ob_sparse_drop_ratio_build_(0), window_size_(DEFAULT_WINDOW_SIZE),
-    ob_sparse_drop_ratio_search_(0), similarity_threshold_(0), content_type_(VICT_TEXT)
+    ob_sparse_drop_ratio_search_(0), similarity_threshold_(0),
+    content_type_(VICT_TEXT), ai_execution_mode_(VIAM_SYNC_HTTP),
+    allow_null_on_failure_(false)
   {
     MEMSET(endpoint_, 0, sizeof(endpoint_));
   }
@@ -223,6 +233,8 @@ struct ObVectorIndexParam //FARM COMPAT WHITELIST
     nbits_ = 0;
     similarity_threshold_ = 0;
     content_type_ = VICT_TEXT;
+    ai_execution_mode_ = VIAM_SYNC_HTTP;
+    allow_null_on_failure_ = false;
   };
   int assign(const ObVectorIndexParam &other) {
     int ret = OB_SUCCESS;
@@ -251,6 +263,8 @@ struct ObVectorIndexParam //FARM COMPAT WHITELIST
     ob_sparse_drop_ratio_search_ = other.ob_sparse_drop_ratio_search_;
     similarity_threshold_ = other.similarity_threshold_;
     content_type_ = other.content_type_;
+    ai_execution_mode_ = other.ai_execution_mode_;
+    allow_null_on_failure_ = other.allow_null_on_failure_;
     MEMCPY(endpoint_, other.endpoint_, sizeof(endpoint_));
     return ret;
   };
@@ -283,6 +297,10 @@ struct ObVectorIndexParam //FARM COMPAT WHITELIST
   float ob_sparse_drop_ratio_search_;
   float similarity_threshold_;
   ObVectorIndexContentType content_type_;
+  // access mode for hybrid vector index embedding
+  ObVectorIndexAccessMode ai_execution_mode_;
+  // when true, persistent BatchFile errors degrade DDL to NULL vectors instead of aborting
+  bool allow_null_on_failure_;
   OB_UNIS_VERSION(1);
 private:
   int print_hnsw_params(char *buf, int64_t buf_len, int64_t &pos) const;
@@ -292,8 +310,8 @@ public:
   TO_STRING_KV(K_(type), K_(lib), K_(dist_algorithm), K_(dim), K_(m), K_(ef_construction), K_(ef_search),
     K_(nlist), K_(sample_per_nlist), K_(extra_info_max_size), K_(extra_info_actual_size),
     K_(refine_type), K_(bq_bits_query), K_(refine_k), K_(bq_use_fht), K_(sync_interval_type), K_(sync_interval_value), K_(endpoint), K_(nbits),
-    K_(content_type),
-    K_(prune), K_(refine), K_(ob_sparse_drop_ratio_build),K_(window_size), K_(ob_sparse_drop_ratio_search), K_(similarity_threshold));
+    K_(prune), K_(refine), K_(ob_sparse_drop_ratio_build),K_(window_size), K_(ob_sparse_drop_ratio_search), K_(similarity_threshold),
+    K_(content_type), K_(ai_execution_mode), K_(allow_null_on_failure));
   int print_to_string(char *buf, int64_t buf_len, int64_t &pos) const;
 
 public:
@@ -518,7 +536,7 @@ public:
       int64_t extra_info_max_size,
       int64_t& extra_info_actual_size);
   static int update_param_extra_actual_size(const ObTableSchema &data_schema, ObTableSchema &index_schema);
-  static int check_vec_index_in_stmt(const sql::ObStmt &stmt, const ObIndexType &vec_index_type);
+  static int check_vec_index_in_stmt(const sql::ObStmt &stmt, const ObIndexType &vec_index_type, const ObString &index_params);
   static int check_vec_index_param(
       const uint64_t tenant_id,
       const ParseNode *option_node,

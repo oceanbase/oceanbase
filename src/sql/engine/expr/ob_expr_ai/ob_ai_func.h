@@ -13,6 +13,7 @@
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/engine/expr/ob_expr_udf/ob_expr_udf_utils.h"
 #include "share/ai_service/ob_ai_service_struct.h"
+#include "share/ai_service/ob_ai_func_provider.h"
 
 namespace oceanbase
 {
@@ -42,107 +43,6 @@ public:
   common::ObString name_;
   share::EndpointType::TYPE type_;
   common::ObString model_;
-};
-
-class ObAIFuncBase
-{
-public:
-  ObAIFuncBase() {}
-  virtual ~ObAIFuncBase() {}
-  virtual int get_header(common::ObIAllocator &allocator,
-                         common::ObString &api_key,
-                         ObArray<ObString> &headers) = 0;
-  virtual int parse_output(common::ObIAllocator &allocator,
-                           common::ObJsonObject *http_response,
-                           common::ObIJsonBase *&result) = 0;
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObAIFuncBase);
-};
-
-class ObAIFuncIComplete : public ObAIFuncBase
-{
-public:
-  ObAIFuncIComplete() {}
-  virtual ~ObAIFuncIComplete() {}
-  virtual int get_body(common::ObIAllocator &allocator,
-                       common::ObString &model,
-                       common::ObString &prompt,
-                       common::ObString &content,
-                       common::ObJsonObject *config,
-                       common::ObJsonObject *&body) = 0;
-  virtual int set_config_json_format(common::ObIAllocator &allocator, common::ObJsonObject *config) = 0;
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObAIFuncIComplete);
-};
-
-class ObAIFuncIVLComplete : public ObAIFuncBase
-{
-public:
-  ObAIFuncIVLComplete() {}
-  virtual ~ObAIFuncIVLComplete() {}
-  virtual int get_body(common::ObIAllocator &allocator,
-                       common::ObString &model,
-                       common::ObString &prompt,
-                       common::ObJsonObject *prompt_object,
-                       common::ObJsonObject *config,
-                       common::ObJsonObject *&body) = 0;
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObAIFuncIVLComplete);
-};
-
-class ObAIFuncIEmbed : public ObAIFuncBase
-{
-public:
-  ObAIFuncIEmbed() {}
-  virtual ~ObAIFuncIEmbed() {}
-  virtual int get_body(common::ObIAllocator &allocator,
-                       common::ObString &model,
-                       common::ObArray<ObString> &contents,
-                       common::ObJsonObject *config,
-                       common::ObString input_type,  // "text" or "image"
-                       common::ObJsonObject *&body) = 0;
-  virtual int get_body(common::ObIAllocator &allocator,
-                       common::ObString &model,
-                       common::ObArray<ObString> &contents,
-                       common::ObJsonObject *config,
-                       common::ObArray<ObString> &input_type_array,  // input type per content, e.g. text/image
-                       common::ObJsonObject *&body) = 0;
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObAIFuncIEmbed);
-};
-
-class ObAIFuncIRerank : public ObAIFuncBase
-{
-public:
-  ObAIFuncIRerank() {}
-  virtual ~ObAIFuncIRerank() {}
-  virtual int get_body(common::ObIAllocator &allocator,
-                       common::ObString &model,
-                       common::ObString &query,
-                       common::ObJsonArray *document_array,
-                       common::ObJsonObject *config,
-                       common::ObJsonObject *&body) = 0;
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObAIFuncIRerank);
-};
-
-class ObAIFuncHandle
-{
-public:
-  ObAIFuncHandle() {}
-  virtual ~ObAIFuncHandle() {}
-  virtual int send_post(common::ObIAllocator &allocator,
-                        const ObString &url,
-                        ObArray<ObString> &headers,
-                        ObJsonObject *data,
-                        ObJsonObject *&response) = 0;
-  virtual int send_post_batch(common::ObIAllocator &allocator,
-                              const ObString &url,
-                              ObArray<ObString> &headers,
-                              ObArray<ObJsonObject *> &data_array,
-                              ObArray<ObJsonObject *> &responses) = 0;
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObAIFuncHandle);
 };
 
 } // namespace common

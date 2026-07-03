@@ -727,6 +727,8 @@ public:
   static int all_ai_model_profile_schema(share::schema::ObTableSchema &table_schema);
   static int all_ai_gateway_schema(share::schema::ObTableSchema &table_schema);
   static int all_ai_gateway_history_schema(share::schema::ObTableSchema &table_schema);
+  static int all_ai_batch_task_schema(share::schema::ObTableSchema &table_schema);
+  static int all_ai_batch_task_history_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_all_table_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_table_column_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_table_index_schema(share::schema::ObTableSchema &table_schema);
@@ -1301,6 +1303,8 @@ public:
   static int all_virtual_ai_model_provider_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ai_model_profile_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ai_gateway_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_ai_batch_task_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_ai_batch_task_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ai_model_provider_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ai_gateway_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -2265,6 +2269,10 @@ public:
   static int cdb_ob_ai_gateways_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_ai_gateway_endpoints_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_ai_gateway_endpoints_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_ai_batch_tasks_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_ob_ai_batch_tasks_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_ai_batch_task_history_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_ob_ai_batch_task_history_schema(share::schema::ObTableSchema &table_schema);
   static int dba_synonyms_schema(share::schema::ObTableSchema &table_schema);
   static int dba_objects_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_objects_schema(share::schema::ObTableSchema &table_schema);
@@ -3185,6 +3193,8 @@ public:
   static int all_ai_model_profile_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_ai_gateway_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_ai_gateway_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_ai_batch_task_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_ai_batch_task_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_table_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_ddl_operation_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
@@ -3559,6 +3569,8 @@ public:
   static int all_ai_model_profile_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_ai_gateway_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_ai_gateway_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_ai_batch_task_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_ai_batch_task_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_table_real_agent_ora_idx_data_table_id_real_agent_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_table_real_agent_ora_idx_db_tb_name_real_agent_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_table_real_agent_ora_idx_tb_name_real_agent_schema(share::schema::ObTableSchema &table_schema);
@@ -3789,6 +3801,8 @@ public:
   static int all_ai_model_provider_idx_ai_model_provider_name_schema(share::schema::ObTableSchema &table_schema);
   static int all_ai_model_profile_idx_ai_model_profile_name_schema(share::schema::ObTableSchema &table_schema);
   static int all_ai_gateway_idx_ai_gateway_name_schema(share::schema::ObTableSchema &table_schema);
+  static int all_ai_batch_task_idx_ai_batch_task_ddl_task_id_schema(share::schema::ObTableSchema &table_schema);
+  static int all_ai_batch_task_history_idx_ai_batch_task_history_ddl_task_id_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_table_mgr_all_virtual_table_mgr_i1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tablet_sstable_macro_info_all_virtual_tablet_sstable_macro_info_i1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ddl_diagnose_info_all_virtual_ddl_diagnose_info_i1_schema(share::schema::ObTableSchema &table_schema);
@@ -4191,6 +4205,8 @@ const schema_create_func sys_table_schema_creators [] = {
   ObInnerTableSchema::all_ai_model_profile_schema,
   ObInnerTableSchema::all_ai_gateway_schema,
   ObInnerTableSchema::all_ai_gateway_history_schema,
+  ObInnerTableSchema::all_ai_batch_task_schema,
+  ObInnerTableSchema::all_ai_batch_task_history_schema,
   NULL,};
 
 const schema_create_func virtual_table_schema_creators [] = {
@@ -4768,6 +4784,8 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_ai_model_provider_schema,
   ObInnerTableSchema::all_virtual_ai_model_profile_schema,
   ObInnerTableSchema::all_virtual_ai_gateway_schema,
+  ObInnerTableSchema::all_virtual_ai_batch_task_schema,
+  ObInnerTableSchema::all_virtual_ai_batch_task_history_schema,
   ObInnerTableSchema::all_virtual_ai_model_provider_history_schema,
   ObInnerTableSchema::all_virtual_ai_gateway_history_schema,
   ObInnerTableSchema::all_virtual_sql_audit_ora_schema,
@@ -5847,6 +5865,10 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::cdb_ob_ai_gateways_schema,
   ObInnerTableSchema::dba_ob_ai_gateway_endpoints_schema,
   ObInnerTableSchema::cdb_ob_ai_gateway_endpoints_schema,
+  ObInnerTableSchema::dba_ob_ai_batch_tasks_schema,
+  ObInnerTableSchema::cdb_ob_ai_batch_tasks_schema,
+  ObInnerTableSchema::dba_ob_ai_batch_task_history_schema,
+  ObInnerTableSchema::cdb_ob_ai_batch_task_history_schema,
   ObInnerTableSchema::dba_synonyms_schema,
   ObInnerTableSchema::dba_objects_ora_schema,
   ObInnerTableSchema::all_objects_schema,
@@ -6532,6 +6554,8 @@ const schema_create_func sys_index_table_schema_creators [] = {
   ObInnerTableSchema::all_ai_model_provider_idx_ai_model_provider_name_schema,
   ObInnerTableSchema::all_ai_model_profile_idx_ai_model_profile_name_schema,
   ObInnerTableSchema::all_ai_gateway_idx_ai_gateway_name_schema,
+  ObInnerTableSchema::all_ai_batch_task_idx_ai_batch_task_ddl_task_id_schema,
+  ObInnerTableSchema::all_ai_batch_task_history_idx_ai_batch_task_history_ddl_task_id_schema,
   ObInnerTableSchema::all_tablet_reorganize_history_idx_tablet_his_table_id_dest_schema,
   NULL,};
 
@@ -6890,6 +6914,8 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_AI_MODEL_PROFILE_TID,
   OB_ALL_AI_GATEWAY_TID,
   OB_ALL_AI_GATEWAY_HISTORY_TID,
+  OB_ALL_AI_BATCH_TASK_TID,
+  OB_ALL_AI_BATCH_TASK_HISTORY_TID,
   OB_TENANT_VIRTUAL_ALL_TABLE_TID,
   OB_TENANT_VIRTUAL_TABLE_COLUMN_TID,
   OB_TENANT_VIRTUAL_TABLE_INDEX_TID,
@@ -8007,6 +8033,8 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_OB_AI_MODEL_PROFILES_TID,
   OB_DBA_OB_AI_GATEWAYS_TID,
   OB_DBA_OB_AI_GATEWAY_ENDPOINTS_TID,
+  OB_DBA_OB_AI_BATCH_TASKS_TID,
+  OB_DBA_OB_AI_BATCH_TASK_HISTORY_TID,
   OB_DBA_SYNONYMS_TID,
   OB_DBA_OBJECTS_ORA_TID,
   OB_ALL_OBJECTS_TID,
@@ -8680,6 +8708,8 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_AI_MODEL_PROVIDER_IDX_AI_MODEL_PROVIDER_NAME_TID,
   OB_ALL_AI_MODEL_PROFILE_IDX_AI_MODEL_PROFILE_NAME_TID,
   OB_ALL_AI_GATEWAY_IDX_AI_GATEWAY_NAME_TID,
+  OB_ALL_AI_BATCH_TASK_IDX_AI_BATCH_TASK_DDL_TASK_ID_TID,
+  OB_ALL_AI_BATCH_TASK_HISTORY_IDX_AI_BATCH_TASK_HISTORY_DDL_TASK_ID_TID,
   OB_ALL_TABLET_REORGANIZE_HISTORY_IDX_TABLET_HIS_TABLE_ID_DEST_TID,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_DATA_TABLE_ID_REAL_AGENT_TID,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_DB_TB_NAME_REAL_AGENT_TID,
@@ -9114,6 +9144,8 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_AI_MODEL_PROFILE_AUX_LOB_META_TID,
   OB_ALL_AI_GATEWAY_AUX_LOB_META_TID,
   OB_ALL_AI_GATEWAY_HISTORY_AUX_LOB_META_TID,
+  OB_ALL_AI_BATCH_TASK_AUX_LOB_META_TID,
+  OB_ALL_AI_BATCH_TASK_HISTORY_AUX_LOB_META_TID,
   OB_ALL_TABLE_AUX_LOB_PIECE_TID,
   OB_ALL_COLUMN_AUX_LOB_PIECE_TID,
   OB_ALL_DDL_OPERATION_AUX_LOB_PIECE_TID,
@@ -9460,7 +9492,9 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_AI_MODEL_PROVIDER_HISTORY_AUX_LOB_PIECE_TID,
   OB_ALL_AI_MODEL_PROFILE_AUX_LOB_PIECE_TID,
   OB_ALL_AI_GATEWAY_AUX_LOB_PIECE_TID,
-  OB_ALL_AI_GATEWAY_HISTORY_AUX_LOB_PIECE_TID,  };
+  OB_ALL_AI_GATEWAY_HISTORY_AUX_LOB_PIECE_TID,
+  OB_ALL_AI_BATCH_TASK_AUX_LOB_PIECE_TID,
+  OB_ALL_AI_BATCH_TASK_HISTORY_AUX_LOB_PIECE_TID,  };
 
 const uint64_t all_ora_mapping_virtual_table_org_tables [] = {
   OB_ALL_VIRTUAL_SQL_AUDIT_TID,
@@ -10230,6 +10264,8 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_AI_MODEL_PROFILE_TNAME,
   OB_ALL_AI_GATEWAY_TNAME,
   OB_ALL_AI_GATEWAY_HISTORY_TNAME,
+  OB_ALL_AI_BATCH_TASK_TNAME,
+  OB_ALL_AI_BATCH_TASK_HISTORY_TNAME,
   OB_TENANT_VIRTUAL_ALL_TABLE_TNAME,
   OB_TENANT_VIRTUAL_TABLE_COLUMN_TNAME,
   OB_TENANT_VIRTUAL_TABLE_INDEX_TNAME,
@@ -11347,6 +11383,8 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_OB_AI_MODEL_PROFILES_TNAME,
   OB_DBA_OB_AI_GATEWAYS_TNAME,
   OB_DBA_OB_AI_GATEWAY_ENDPOINTS_TNAME,
+  OB_DBA_OB_AI_BATCH_TASKS_TNAME,
+  OB_DBA_OB_AI_BATCH_TASK_HISTORY_TNAME,
   OB_DBA_SYNONYMS_TNAME,
   OB_DBA_OBJECTS_ORA_TNAME,
   OB_ALL_OBJECTS_TNAME,
@@ -12020,6 +12058,8 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_AI_MODEL_PROVIDER_IDX_AI_MODEL_PROVIDER_NAME_TNAME,
   OB_ALL_AI_MODEL_PROFILE_IDX_AI_MODEL_PROFILE_NAME_TNAME,
   OB_ALL_AI_GATEWAY_IDX_AI_GATEWAY_NAME_TNAME,
+  OB_ALL_AI_BATCH_TASK_IDX_AI_BATCH_TASK_DDL_TASK_ID_TNAME,
+  OB_ALL_AI_BATCH_TASK_HISTORY_IDX_AI_BATCH_TASK_HISTORY_DDL_TASK_ID_TNAME,
   OB_ALL_TABLET_REORGANIZE_HISTORY_IDX_TABLET_HIS_TABLE_ID_DEST_TNAME,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_DATA_TABLE_ID_REAL_AGENT_TNAME,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_DB_TB_NAME_REAL_AGENT_TNAME,
@@ -12454,6 +12494,8 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_AI_MODEL_PROFILE_AUX_LOB_META_TNAME,
   OB_ALL_AI_GATEWAY_AUX_LOB_META_TNAME,
   OB_ALL_AI_GATEWAY_HISTORY_AUX_LOB_META_TNAME,
+  OB_ALL_AI_BATCH_TASK_AUX_LOB_META_TNAME,
+  OB_ALL_AI_BATCH_TASK_HISTORY_AUX_LOB_META_TNAME,
   OB_ALL_TABLE_AUX_LOB_PIECE_TNAME,
   OB_ALL_COLUMN_AUX_LOB_PIECE_TNAME,
   OB_ALL_DDL_OPERATION_AUX_LOB_PIECE_TNAME,
@@ -12800,7 +12842,9 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_AI_MODEL_PROVIDER_HISTORY_AUX_LOB_PIECE_TNAME,
   OB_ALL_AI_MODEL_PROFILE_AUX_LOB_PIECE_TNAME,
   OB_ALL_AI_GATEWAY_AUX_LOB_PIECE_TNAME,
-  OB_ALL_AI_GATEWAY_HISTORY_AUX_LOB_PIECE_TNAME,  };
+  OB_ALL_AI_GATEWAY_HISTORY_AUX_LOB_PIECE_TNAME,
+  OB_ALL_AI_BATCH_TASK_AUX_LOB_PIECE_TNAME,
+  OB_ALL_AI_BATCH_TASK_HISTORY_AUX_LOB_PIECE_TNAME,  };
 
 const uint64_t only_rs_vtables [] = {
   OB_ALL_VIRTUAL_CORE_META_TABLE_TID,
@@ -16397,6 +16441,22 @@ LOBMapping const lob_aux_table_mappings [] = {
     OB_ALL_AI_GATEWAY_HISTORY_AUX_LOB_PIECE_TID,
     ObInnerTableSchema::all_ai_gateway_history_aux_lob_meta_schema,
     ObInnerTableSchema::all_ai_gateway_history_aux_lob_piece_schema
+  },
+
+  {
+    OB_ALL_AI_BATCH_TASK_TID,
+    OB_ALL_AI_BATCH_TASK_AUX_LOB_META_TID,
+    OB_ALL_AI_BATCH_TASK_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_ai_batch_task_aux_lob_meta_schema,
+    ObInnerTableSchema::all_ai_batch_task_aux_lob_piece_schema
+  },
+
+  {
+    OB_ALL_AI_BATCH_TASK_HISTORY_TID,
+    OB_ALL_AI_BATCH_TASK_HISTORY_AUX_LOB_META_TID,
+    OB_ALL_AI_BATCH_TASK_HISTORY_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_ai_batch_task_history_aux_lob_meta_schema,
+    ObInnerTableSchema::all_ai_batch_task_history_aux_lob_piece_schema
   },
 
 };

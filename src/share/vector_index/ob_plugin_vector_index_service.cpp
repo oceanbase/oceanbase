@@ -8,6 +8,7 @@
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "share/ob_vec_index_builder_util.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
+#include "share/vector_index/ob_ai_access_service.h"
 
 namespace oceanbase
 {
@@ -1100,6 +1101,8 @@ void ObPluginVectorIndexService::destroy()
     kmeans_build_task_handler_.destroy();
     // destroy async task handler
     vec_async_task_handle_.destroy();
+    // destroy ai execution service before adaptor_allocator_ reset
+    ai_execution_service_.destroy();
 
     FOREACH(iter, vec_idx_tmp_map_) {
       ObVectorIndexTmpInfo *tmp_info = iter->second;
@@ -2319,5 +2322,36 @@ int ObPluginVectorIndexService::get_embedding_task_handler(ObEmbeddingTaskHandle
   return ret;
 }
 
+int ObPluginVectorIndexService::get_ai_execution_service(vector_index::ObAiAccessService *&service)
+{
+  int ret = OB_SUCCESS;
+  if (!ai_execution_service_.is_inited()
+      || !ai_execution_service_.is_running()
+      || !ai_execution_service_.is_table_poller_running()) {
+    common::ObSpinLockGuard lock_guard(ai_service_init_lock_);
+    if (!ai_execution_service_.is_inited() && OB_FAIL(ai_execution_service_.init(adaptor_allocator_, tenant_id_))) {
+      LOG_WARN("failed to init ai execution service", KR(ret), K(tenant_id_));
+    } else if (!ai_execution_service_.is_running() && OB_FAIL(ai_execution_service_.start())) {
+      LOG_WARN("failed to start ai execution service", KR(ret), K(tenant_id_));
+    } else if (OB_ISNULL(sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sql_proxy_ is null", K(ret));
+    } else {
+      ai_execution_service_.set_sql_client(sql_proxy_);
+      if (!ai_execution_service_.is_table_poller_running()) {
+        if (OB_FAIL(ai_execution_service_.register_table_poller_task(*sql_proxy_))) {
+          LOG_WARN("failed to register table poller", KR(ret), K(tenant_id_));
+        } else {
+          LOG_INFO("table poller started for ai execution service", K(tenant_id_));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    service = &ai_execution_service_;
+  }
+  return ret;
 }
-}
+
+} // namespace share
+} // namespace oceanbase

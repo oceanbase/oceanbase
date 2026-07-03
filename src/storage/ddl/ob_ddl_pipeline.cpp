@@ -11,12 +11,20 @@
 #include "storage/ddl/ob_ddl_tablet_context.h"
 #include "storage/ddl/ob_tablet_slice_writer.h"
 #include "storage/ddl/ob_direct_load_struct.h"
+#include "storage/ddl/ob_cg_macro_block_write_task.h"
 #include "storage/lob/ob_lob_util.h"
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "sql/engine/expr/ob_expr_ai/ob_ai_func_utils.h"
+#include "share/vector_index/ob_ai_access_service.h"
+#include "share/ai_service/ob_ai_batch_file_manager.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
+#include "lib/random/ob_random.h"
+#include "lib/json_type/ob_json_base.h"
+#include "lib/json_type/ob_json_parse.h"
+#include "lib/charset/ob_charset.h"
 
 using namespace oceanbase::storage;
 using namespace oceanbase::common;
@@ -328,6 +336,7 @@ int ObVectorIndexTabletContext::init_hnsw_embedding_index(const ObDDLTableSchema
 
   for (int64_t i = 0; OB_SUCC(ret) && i < col_array.count(); i++) {
     if (!col_array.at(i).is_valid_) {
+      // skip invalid column
     } else if (ObSchemaUtils::is_vec_hnsw_vector_column(col_array.at(i).column_flags_)) {
       vector_chunk_col_idx_ = static_cast<int32_t>(i);
     } else if (OB_FAIL(extra_column_idx_types_.push_back(ObExtraInfoIdxType(i, col_array.at(i).col_type_)))) {
@@ -893,7 +902,7 @@ int ObVectorIndexBaseOperator::get_ddl_tablet_context(ObDDLTabletContext *&table
     LOG_WARN("get dag failed", K(ret));
   } else if (OB_FALSE_IT(dag = static_cast<ObDDLIndependentDag *>(get_dag()))) {
   } else if (OB_FAIL(dag->get_tablet_context(tablet_id_, tablet_context))) {
-    LOG_WARN("get tablet context failed", K(ret));
+    LOG_WARN("get tablet context failed", K(ret), K(tablet_id_));
   } else if (OB_ISNULL(tablet_context)) {
     ret = OB_ERR_SYS;
     LOG_WARN("error sys, invalid tablet context", K(ret));
@@ -2299,13 +2308,17 @@ int ObHNSWEmbeddingWriteMacroOperator::init(const ObTabletID &tablet_id, const i
       LOG_WARN("get dag failed", K(ret));
     } else if (OB_FAIL(ObDDLUtil::fill_writer_param(tablet_id_, slice_idx_, -1/*cg_idx*/, ddl_dag, write_param))) {
       LOG_WARN("fill writer param failed", K(ret));
-    } else if (OB_ISNULL(slice_writer_ = OB_NEWx(ObTabletSliceWriter, &op_allocator_))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory for tablet slice writer failed", K(ret));
-    } else if (OB_FAIL(slice_writer_->init(write_param))) {
-      LOG_WARN("init macro block slice store failed", K(ret));
     } else {
-      is_inited_ = true;
+      if (OB_ISNULL(slice_writer_ = OB_NEWx(ObTabletSliceWriter, &op_allocator_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory for tablet slice writer failed", K(ret));
+      } else {
+        if (OB_FAIL(slice_writer_->init(write_param))) {
+          LOG_WARN("init macro block slice store failed", K(ret));
+        } else {
+          is_inited_ = true;
+        }
+      }
     }
 
     if (OB_FAIL(ret) && OB_NOT_NULL(slice_writer_)) {
@@ -2345,23 +2358,28 @@ int ObHNSWEmbeddingWriteMacroOperator::execute(const ObChunk &input_chunk,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid input chunk", K(ret), K(input_chunk));
   } else if (input_chunk.batch_info_->get_count() == 0) {
-    // do nothing
+    // empty batch, skip write
   } else if (OB_ISNULL(slice_writer_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("slice writer is not initialized", K(ret));
+    LOG_WARN("slice writer is not initialized", K(ret), K_(tablet_id), K_(slice_idx));
   } else {
     iter_.reuse();
     if (OB_FAIL(iter_.init(*tablet_context->vector_index_ctx_, input_chunk.batch_info_))) {
       LOG_WARN("init embedding row iterator with batch info failed", K(ret));
     } else {
       blocksstable::ObDatumRow *datum_row = nullptr;
+      int64_t row_idx = 0;
       while (OB_SUCC(ret)) {
         if (OB_FAIL(iter_.get_next_row(datum_row))) {
           if (ret != OB_ITER_END) {
             LOG_WARN("fail to get next embedding data row", K(ret));
           }
-        } else if (OB_FAIL(slice_writer_->append_row(*datum_row))) {
-          LOG_WARN("fail to append row to macro block slice store", K(ret));
+        } else {
+          if (OB_FAIL(slice_writer_->append_row(*datum_row))) {
+            LOG_WARN("fail to append row to macro block slice store", K(ret), K(row_idx));
+          } else {
+            row_idx++;
+          }
         }
       }
       if (ret == OB_ITER_END) {
@@ -2371,6 +2389,1356 @@ int ObHNSWEmbeddingWriteMacroOperator::execute(const ObChunk &input_chunk,
 
     input_chunk.batch_info_->~ObTaskBatchInfo();
     ob_free(input_chunk.batch_info_);
+  }
+  return ret;
+}
+
+// -------------------------------- SlotContext methods --------------------------------
+// -------------------------------- ObBatchFileEmbeddingOperator --------------------------------
+ObBatchFileEmbeddingOperator::ObBatchFileEmbeddingOperator(ObPipeline *pipeline)
+    : ObVecEmbeddingBaseOp(pipeline),
+      service_(nullptr),
+      embed_provider_(nullptr),
+      model_id_(),
+      ai_execution_mode_(share::OB_AI_ACCESS_MODE_BATCH_FILE),
+      allow_null_on_failure_(false),
+      vec_dim_(-1),
+      text_col_idx_(-1),
+      rowkey_cnt_(-1),
+      dir_id_(-1),
+      error_ret_code_(OB_SUCCESS),
+      endpoint_info_(nullptr),
+      request_model_name_(),
+      allocator_("BatchFileEmb", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      text_col_collation_type_(CS_TYPE_INVALID),
+      extra_column_idxs_(),
+      slot_ring_(),
+      slot_contexts_(),
+      ddl_task_id_(0),
+      writer_(),
+      current_task_row_count_(0),
+      current_batch_info_(nullptr),
+      current_cg_row_files_(nullptr),
+      cur_file_idx_(0),
+      cur_datum_rows_(nullptr),
+      cur_row_in_batch_(0),
+      chunk_exhausted_(false),
+      total_rows_collected_(0),
+      all_data_collected_(false),
+      all_tasks_submitted_(false),
+      end_chunk_sent_(false),
+      drain_start_ts_(0),
+      drain_poll_count_(0)
+  {}
+
+ObBatchFileEmbeddingOperator::~ObBatchFileEmbeddingOperator()
+{
+  cancel_inflight_tasks_();
+  if (OB_NOT_NULL(endpoint_info_)) {
+    endpoint_info_->~ObAiModelEndpointInfo();
+    allocator_.free(endpoint_info_);
+    endpoint_info_ = nullptr;
+  }
+  destroy_current_batch_info_();
+  // Clean up batch_info in slot contexts
+  for (int64_t i = 0; i < slot_contexts_.count(); ++i) {
+    ObTaskBatchInfo *bi = slot_contexts_.at(i).batch_info_;
+    if (OB_NOT_NULL(bi)) {
+      bi->~ObTaskBatchInfo();
+      ob_free(bi);
+      slot_contexts_.at(i).batch_info_ = nullptr;
+    }
+  }
+  slot_ring_.destroy();
+}
+
+int ObBatchFileEmbeddingOperator::init(const ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret), K(is_inited_));
+  } else if (!tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tablet_id", K(ret), K(tablet_id));
+  } else {
+    tablet_id_ = tablet_id;
+    ai_execution_mode_ = share::OB_AI_ACCESS_MODE_BATCH_FILE;
+    LOG_INFO("[BATCH-FILE] ObBatchFileEmbeddingOperator::init", K(tablet_id), K(tablet_id_));
+
+    // Get DDL context for column info and model_id
+    ObDDLTabletContext *tablet_context = nullptr;
+    ObVectorIndexTabletContext *vector_index_ctx = nullptr;
+    if (OB_FAIL(get_ddl_tablet_context(tablet_context))) {
+      LOG_WARN("get ddl tablet context failed", K(ret), K(tablet_id_), K(tablet_id));
+    } else if (OB_ISNULL(vector_index_ctx = tablet_context->vector_index_ctx_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("vector index context is null", K(ret));
+    } else {
+      // Resolve model_id from vec_idx_param
+      ObVectorIndexParam index_param;
+      if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(
+          vector_index_ctx->vec_idx_param_, ObVectorIndexType::VIT_HNSW_INDEX, index_param, false))) {
+        LOG_WARN("failed to parse vector index param", K(ret), K(vector_index_ctx->vec_idx_param_));
+      } else if (OB_FAIL(ob_write_string(allocator_, ObString(index_param.endpoint_), model_id_))) {
+        LOG_WARN("failed to copy model_id from endpoint", K(ret));
+      } else {
+        allow_null_on_failure_ = index_param.allow_null_on_failure_;
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      vec_dim_ = vector_index_ctx->vec_dim_;
+      rowkey_cnt_ = vector_index_ctx->rowkey_cnt_;
+      text_col_idx_ = vector_index_ctx->vector_chunk_col_idx_;
+      ddl_task_id_ = vector_index_ctx->ddl_task_id_;
+      // Initialize extra_column_idxs_ from vector_index_ctx
+      extra_column_idxs_.reset();
+      for (int64_t i = 0; OB_SUCC(ret) && i < vector_index_ctx->extra_column_idx_types_.count(); ++i) {
+        if (OB_FAIL(extra_column_idxs_.push_back(static_cast<int32_t>(vector_index_ctx->extra_column_idx_types_.at(i).idx_)))) {
+          LOG_WARN("failed to push back extra column idx", K(ret), K(i));
+        }
+      }
+      // Get collation type for text column
+      if (OB_FAIL(ret)) {
+        // already logged
+      } else if (OB_FAIL(ObVectorIndexUtil::get_index_column_collation_type(MTL_ID(), vector_index_ctx->table_id_, text_col_collation_type_))) {
+        LOG_WARN("failed to get index column collation type", K(ret), K(text_col_idx_));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      // Get ObAiAccessService instance from ObPluginVectorIndexService
+      vector_index::ObAiAccessService *service = nullptr;
+      ObPluginVectorIndexService *vec_index_service = MTL(ObPluginVectorIndexService *);
+      if (OB_ISNULL(vec_index_service)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ObPluginVectorIndexService is null", K(ret));
+      } else if (OB_FAIL(vec_index_service->get_ai_execution_service(service))) {
+        LOG_WARN("failed to get ai execution service", K(ret));
+      } else if (OB_ISNULL(service)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ObAiAccessService is null", K(ret));
+      } else {
+        service_ = service;
+      }
+    }
+
+    // Get AI config from model_id (endpoint info, api key, etc.)
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(get_ai_config_(model_id_))) {
+        LOG_WARN("failed to get AI config", K(ret), K_(model_id));
+      }
+    }
+
+    // Create embed provider from endpoint provider name
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(endpoint_info_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("endpoint_info is null after get_ai_config_", K(ret));
+      } else {
+        common::ObAIFuncIEmbed *embed_provider_tmp = nullptr;
+        if (OB_FAIL(common::ObAIFuncUtils::get_embed_provider(
+                     allocator_, endpoint_info_->get_provider(), embed_provider_tmp))) {
+          LOG_WARN("failed to get embed provider", K(ret),
+                   "provider", endpoint_info_->get_provider());
+        } else {
+          embed_provider_ = embed_provider_tmp;
+        }
+      }
+    }
+
+    // Initialize SlotRing
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(slot_ring_.init(DEFAULT_MAX_CONCURRENT_TASKS))) {
+        LOG_WARN("failed to init slot ring", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      is_inited_ = true;
+      LOG_INFO("ObBatchFileEmbeddingOperator initialized",
+               K(tablet_id), K_(model_id), K_(ai_execution_mode), K_(ddl_task_id));
+    }
+  }
+  return ret;
+}
+
+int ObBatchFileEmbeddingOperator::get_ai_config_(const common::ObString &model_id)
+{
+  int ret = OB_SUCCESS;
+
+  if (model_id.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("model_id is empty", K(ret));
+  } else {
+    ObAIFuncExprInfo *info = nullptr;
+    const share::ObAiModelEndpointInfo *endpoint_info = nullptr;
+    omt::ObAiServiceGuard ai_service_guard;
+    omt::ObTenantAiService *ai_service = MTL(omt::ObTenantAiService *);
+    if (OB_ISNULL(ai_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ai service is null", K(ret));
+    } else if (OB_FAIL(ObAIFuncUtils::get_ai_func_info(op_allocator_, const_cast<common::ObString &>(model_id), info))) {
+      LOG_WARN("failed to get ai func info", K(ret), K(model_id));
+    } else if (OB_ISNULL(info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ai func info is null", K(ret));
+    } else if (OB_FAIL(ai_service->get_ai_service_guard(ai_service_guard))) {
+      LOG_WARN("failed to get ai service guard", K(ret));
+    } else if (OB_FAIL(ai_service_guard.get_ai_endpoint_by_ai_model_name(model_id, endpoint_info))) {
+      LOG_WARN("failed to get endpoint info", K(ret), K(model_id));
+    } else if (OB_ISNULL(endpoint_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("endpoint info is null", K(ret));
+    } else {
+      // Allocate endpoint_info_ if not already allocated
+      if (OB_ISNULL(endpoint_info_)) {
+        void *buf = allocator_.alloc(sizeof(share::ObAiModelEndpointInfo));
+        if (OB_ISNULL(buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory for endpoint info", K(ret));
+        } else {
+          endpoint_info_ = new (buf) share::ObAiModelEndpointInfo();
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(endpoint_info_->deep_copy(allocator_, *endpoint_info))) {
+        LOG_WARN("failed to deep copy endpoint info", K(ret));
+      } else if (OB_SUCC(ret)) {
+        // Use endpoint's request_model_name if set, otherwise AI Model's model_name
+        const common::ObString &request_model =
+            endpoint_info_->get_request_model_name().empty()
+            ? info->model_
+            : endpoint_info_->get_request_model_name();
+        if (OB_FAIL(ob_write_string(allocator_, request_model, request_model_name_, true /*c_style*/))) {
+          LOG_WARN("failed to copy request model name", K(ret));
+        } else {
+          LOG_INFO("get AI config successfully", K(model_id), "endpoint_id", endpoint_info_->get_endpoint_id(),
+                   K_(request_model_name), "ai_model_name", info->model_);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+/*
+ * Batch-file embedding flow (Writer-based):
+ *
+ *   open_batch_task(endpoint, cmd, ddl_task_id, provider, writer)
+ *     → writer.append(line) × N
+ *       - returns OB_ITER_END when threshold reached (50K lines / 100MB);
+ *         line NOT written. Commit current writer, re-open, retry same line.
+ *     → writer.commit(task_id)
+ *       - synchronously registers task as RUNNING and schedules it
+ *       - Poller picks up the task for upload → batch submit → poll → download
+ *
+ *   DDL reads results via query_task_status() + get_next_result()
+ */
+
+int ObBatchFileEmbeddingOperator::execute(const ObChunk &input_chunk,
+                                            ResultState &result_state,
+                                            ObChunk &output_chunk)
+{
+  int ret = OB_SUCCESS;
+  output_chunk.reset();
+  result_state = ObPipelineOperator::NEED_MORE_INPUT;
+
+  LOG_DEBUG("[BATCH-FILE] execute start",
+           K_(is_inited), KP_(service), K(input_chunk.type_),
+           "is_cg_row_tmp_files", input_chunk.is_cg_row_tmp_files_type(),
+           K_(tablet_id), K_(all_data_collected), K_(all_tasks_submitted),
+           K_(end_chunk_sent), K_(total_rows_collected), K_(slot_ring));
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (need_stop_()) {
+    cancel_inflight_tasks_();
+    ret = OB_CANCELED;
+    LOG_WARN("[BATCH-FILE] dag stopped, exiting execute", K(ret), K_(tablet_id));
+  } else if (OB_ISNULL(service_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("BatchFile mode not supported - ObAiAccessService not available", K(ret));
+  } else if (input_chunk.is_end_chunk()) {
+    if (OB_FAIL(handle_end_chunk_(output_chunk, result_state))) {
+      LOG_WARN("handle_end_chunk_ failed", K(ret));
+    }
+  } else if (!input_chunk.is_cg_row_tmp_files_type() || OB_ISNULL(input_chunk.cg_row_file_arr_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid input chunk type for BatchFile mode", K(ret), K(input_chunk.type_));
+  } else {
+    if (input_chunk.cg_row_file_arr_ != current_cg_row_files_) {
+      all_data_collected_ = false;
+      chunk_exhausted_ = false;
+      cur_file_idx_ = 0;
+      cur_datum_rows_ = nullptr;
+      cur_row_in_batch_ = 0;
+      current_cg_row_files_ = input_chunk.cg_row_file_arr_;
+    }
+
+    if (all_data_collected_ || all_tasks_submitted_) {
+      // Current chunk already collected or tasks already submitted.
+      // Just poll and check for results (don't re-process data).
+      // NOTE: !slot_ring_.is_empty() must NOT be included here — the slot ring only
+      // enforces output ordering; it must not block collection of new data chunks.
+      // New chunks arriving while AI tasks are in-flight must still be collected,
+      // otherwise their data is permanently lost.
+      if (OB_FAIL(poll_submitted_slots_())) {
+        LOG_WARN("poll_submitted_slots_ failed", K(ret));
+      } else if (OB_FAIL(check_and_output_result_(output_chunk, result_state))) {
+        LOG_WARN("check_and_output_result_ failed", K(ret));
+      }
+      if (OB_SUCC(ret) && ObPipelineOperator::NEED_MORE_INPUT == result_state) {
+        if (OB_FAIL(do_yield_())) {
+          LOG_WARN("do_yield_ failed", K(ret));
+        }
+      }
+    } else {
+      // Collect data from input chunk and send to AiAccessService
+      if (OB_FAIL(collect_data_to_service_(input_chunk))) {
+        LOG_WARN("collect_data_to_service_ failed", K(ret));
+      }
+      // Poll and check for results from previously submitted tasks
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(poll_submitted_slots_())) {
+          LOG_WARN("poll_submitted_slots_ failed", K(ret));
+        } else if (OB_FAIL(check_and_output_result_(output_chunk, result_state))) {
+          LOG_WARN("check_and_output_result_ failed", K(ret));
+        }
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    error_ret_code_ = ret;
+    cancel_inflight_tasks_();
+  }
+
+  return ret;
+}
+
+int ObBatchFileEmbeddingOperator::try_execute_finish(const ObChunk &input_chunk,
+                                                       ResultState &result_state,
+                                                       ObChunk &output_chunk)
+{
+  int ret = OB_SUCCESS;
+  if (input_chunk.is_end_chunk() && output_chunk.is_valid()) {
+    // Bypass base class check that would error on HAVE_MORE_OUTPUT + end_chunk.
+    // We legitimately produce multiple outputs during end_chunk draining.
+  } else if (OB_FAIL(ObVectorIndexBaseOperator::try_execute_finish(input_chunk, result_state, output_chunk))) {
+    LOG_WARN("fail to try execute finish", K(ret));
+  }
+  return ret;
+}
+
+int ObBatchFileEmbeddingOperator::collect_data_to_service_(const ObChunk &input_chunk)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(input_chunk.cg_row_file_arr_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("cg_row_file_arr is null", K(ret));
+  } else if (OB_ISNULL(service_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("service_ is null", K(ret));
+  } else {
+    LOG_DEBUG("[BATCH-FILE] collect_data_to_service_ start",
+             "file_count", current_cg_row_files_->count(),
+             "is_end_chunk", input_chunk.is_end_chunk());
+
+    const common::ObString &model_name = request_model_name_;
+    blocksstable::ObStorageDatum text;
+    common::ObArray<blocksstable::ObStorageDatum> extras;
+    bool has_row = false;
+
+    while (OB_SUCC(ret) && !chunk_exhausted_) {
+      extras.reset();
+      if (OB_FAIL(get_next_row_from_tmp_files_(current_cg_row_files_, text, extras, has_row))) {
+        LOG_WARN("get_next_row_from_tmp_files_ failed", K(ret));
+      } else if (!has_row) {
+        chunk_exhausted_ = true;
+        all_data_collected_ = true;
+      } else if (text.is_null()) {
+        // NULL text: add to batch_info as SKIP_EMBEDDING so domain index gets a row
+        // for every base table row (required by concat_rows in HNSW build scan).
+        if (OB_FAIL(ensure_batch_info_())) {
+          LOG_WARN("ensure_batch_info_ failed for null row", K(ret));
+        } else if (OB_FAIL(current_batch_info_->add_item(text, extras, false))) {
+          LOG_WARN("add_item failed for null row", K(ret));
+        } else {
+          total_rows_collected_++;
+          LOG_DEBUG("[BATCH-FILE] added null row to batch_info as SKIP_EMBEDDING", K(total_rows_collected_));
+        }
+      } else {
+        // Open writer and batch_info if needed (deferred until we have a valid row)
+        if (!writer_.is_inited()) {
+          if (OB_FAIL(open_new_task_())) {
+            LOG_WARN("failed to open batch task", K(ret));
+          } else {
+            LOG_DEBUG("[BATCH-FILE] opened batch task writer", K_(ddl_task_id));
+          }
+        }
+
+#ifdef ERRSIM
+        if (OB_SUCC(ret)) {
+          ret = OB_E(common::EventTable::EN_BATCH_FILE_OP_COLLECT_DATA_ERR) OB_SUCCESS;
+          if (OB_FAIL(ret)) {
+            LOG_WARN("[ERRSIM] fail to collect data to service", KR(ret), K_(ddl_task_id));
+          }
+        }
+#endif
+        if (OB_FAIL(ret)) {
+          // already failed
+        } else if (OB_ISNULL(current_batch_info_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("current_batch_info_ is null", K(ret));
+        } else {
+          // Extract text from StorageDatum (LOB deref + charset convert)
+          common::ObArenaAllocator tmp_alloc("BatchBodyTmp",
+                                             OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+          common::ObString text_str;
+          common::ObString raw_text = text.get_string();
+          if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(&tmp_alloc,
+                                                                      ObLongTextType,
+                                                                      true /*has_lob_header*/,
+                                                                      raw_text,
+                                                                      nullptr /*exec_ctx*/))) {
+            LOG_WARN("failed to read real string data for text", K(ret), K(raw_text.length()));
+          } else if (raw_text.length() == 0) {
+            // Empty text: add to batch_info as SKIP_EMBEDDING (same reason as null rows)
+            if (OB_FAIL(current_batch_info_->add_item(text, extras, false))) {
+              LOG_WARN("add_item failed for empty row", K(ret));
+            } else {
+              total_rows_collected_++;
+              LOG_DEBUG("[BATCH-FILE] added empty row to batch_info as SKIP_EMBEDDING", K(total_rows_collected_));
+            }
+          } else if (text_col_collation_type_ != CS_TYPE_UTF8MB4_BIN
+                     && text_col_collation_type_ != CS_TYPE_UTF8MB4_GENERAL_CI
+                     && text_col_collation_type_ != CS_TYPE_INVALID) {
+            if (OB_FAIL(ObCharset::charset_convert(tmp_alloc, raw_text,
+                                                   text_col_collation_type_,
+                                                   CS_TYPE_UTF8MB4_GENERAL_CI,
+                                                   text_str))) {
+              LOG_WARN("failed to convert text charset to UTF-8", K(ret),
+                       K(text_col_collation_type_), K(raw_text.length()));
+            }
+          } else {
+            text_str = raw_text;
+          }
+
+          // Build batch line via provider and append with retry.
+          // Skip rows where text_str is empty (NULL or empty-string rows were handled above).
+          // OB_ITER_END means file threshold reached (line NOT written): commit, re-open, retry.
+          // encode_batch_line is called inside the retry loop so index is correct after re-open.
+          if (OB_FAIL(ret) || text_str.empty()) {
+            // already failed or row was skipped (NULL/empty text)
+          } else if (OB_ISNULL(embed_provider_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("embed_provider_ is null", K(ret));
+          } else {
+            bool need_retry = false;
+            do {
+              need_retry = false;
+              common::ObArenaAllocator line_alloc("BatchBodyLine",
+                                                   OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+              common::ObAiBatchFileLine line;
+              if (OB_FAIL(embed_provider_->encode_batch_line(line_alloc, request_model_name_,
+                                                              current_batch_info_->get_count(),
+                                                              text_str, line))) {
+                LOG_WARN("failed to encode batch line from provider", K(ret));
+              } else if (OB_UNLIKELY(line.body_.empty())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("[BATCH-FILE] provider produced empty body", K(ret));
+              } else {
+                ret = writer_.append(line);
+                if (OB_ITER_END == ret) {
+                  ret = OB_SUCCESS;
+                  if (OB_FAIL(finish_and_submit_current_task_())) {
+                    LOG_WARN("failed to commit writer on threshold", K(ret));
+                  } else if (OB_FAIL(open_new_task_())) {
+                    LOG_WARN("failed to re-open batch task", K(ret));
+                  } else {
+                    need_retry = true;
+                    LOG_DEBUG("[BATCH-FILE] committed full writer, re-opened new one",
+                              K_(ddl_task_id));
+                  }
+                } else if (OB_FAIL(ret)) {
+                  LOG_WARN("failed to append line to writer", K(ret));
+                } else {
+                  if (OB_FAIL(current_batch_info_->add_item(text, extras, false))) {
+                    LOG_WARN("failed to add item to batch_info", K(ret));
+                  } else {
+                    current_task_row_count_++;
+                    total_rows_collected_++;
+                    if (current_task_row_count_ >= DEFAULT_SLICE_SIZE) {
+                      if (OB_FAIL(finish_and_submit_current_task_())) {
+                        LOG_WARN("failed to finish and submit current task", K(ret));
+                      } else if (OB_FAIL(open_new_task_())) {
+                        LOG_WARN("failed to re-open batch task after row-count submission",
+                                 K(ret));
+                      }
+                    }
+                  }
+                }
+              }
+            } while (OB_SUCC(ret) && need_retry);
+          }
+        }
+      }
+    }
+
+    LOG_INFO("[BATCH-FILE] collect_data_to_service_ done",
+             K_(total_rows_collected), K_(all_data_collected), K_(current_task_row_count));
+  }
+
+  return ret;
+}
+
+int ObBatchFileEmbeddingOperator::open_new_task_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(service_->open_batch_task(*endpoint_info_, share::OB_AI_COMMAND_EMBED,
+                                         ddl_task_id_, writer_,
+                                         allow_null_on_failure_))) {
+    LOG_WARN("failed to open batch task", K(ret));
+  } else if (OB_FAIL(ensure_batch_info_())) {
+    LOG_WARN("failed to ensure batch_info in open_new_task_", K(ret));
+  } else {
+    current_task_row_count_ = 0;
+  }
+  return ret;
+}
+
+int ObBatchFileEmbeddingOperator::ensure_batch_info_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(current_batch_info_)) {
+    void *bi_buf = ob_malloc(sizeof(ObTaskBatchInfo), ObMemAttr(MTL_ID(), "BatchFileBatch"));
+    if (OB_ISNULL(bi_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate batch_info", K(ret));
+    } else {
+      current_batch_info_ = new (bi_buf) ObTaskBatchInfo();
+      if (OB_FAIL(current_batch_info_->init(DEFAULT_SLICE_SIZE, vec_dim_))) {
+        LOG_WARN("failed to init batch_info", K(ret));
+        current_batch_info_->~ObTaskBatchInfo();
+        ob_free(bi_buf);
+        current_batch_info_ = nullptr;
+      }
+    }
+  }
+  return ret;
+}
+
+void ObBatchFileEmbeddingOperator::destroy_current_batch_info_()
+{
+  if (OB_NOT_NULL(current_batch_info_)) {
+    current_batch_info_->~ObTaskBatchInfo();
+    ob_free(current_batch_info_);
+    current_batch_info_ = nullptr;
+  }
+}
+
+void ObBatchFileEmbeddingOperator::reset_current_task_state_()
+{
+  current_task_row_count_ = 0;
+  writer_.reset();
+}
+
+void ObBatchFileEmbeddingOperator::mark_slot_failed_best_effort_(int64_t slot_idx,
+                                                                 int error_code,
+                                                                 const char *reason)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(slot_ring_.mark_slot_failed(slot_idx, error_code))) {
+    LOG_WARN("failed to mark slot failed", K(ret), K(slot_idx), K(error_code), "reason", reason);
+  }
+}
+
+bool ObBatchFileEmbeddingOperator::is_query_task_status_retryable_(int ret) const
+{
+  return OB_TIMEOUT == ret
+      || OB_TRANS_TIMEOUT == ret
+      || OB_CONNECT_ERROR == ret
+      || OB_RPC_POST_ERROR == ret
+      || OB_EAGAIN == ret;
+}
+
+int ObBatchFileEmbeddingOperator::submit_skip_only_batch_()
+{
+  int ret = OB_SUCCESS;
+  int64_t slot_idx = -1;
+
+  // Skip-only batch: batch_info has SKIP_EMBEDDING rows but no valid rows for the API.
+  // Reserve a slot and mark it immediately ready so concat_rows still sees one output row per input row.
+  if (OB_FAIL(slot_ring_.reserve_slot(slot_idx))) {
+    LOG_WARN("failed to reserve slot for skip-only batch", K(ret), K(slot_idx));
+    destroy_current_batch_info_();
+    reset_current_task_state_();
+  } else {
+    if (slot_idx >= slot_contexts_.count()) {
+      SlotContext ctx;
+      ctx.reset();
+      if (OB_FAIL(slot_contexts_.push_back(ctx))) {
+        LOG_WARN("failed to expand slot_contexts_ for skip-only batch", K(ret), K(slot_idx));
+        mark_slot_failed_best_effort_(slot_idx, ret, "skip-only slot context expansion");
+        destroy_current_batch_info_();
+        reset_current_task_state_();
+      }
+    }
+    if (OB_SUCC(ret)) {
+      SlotContext &ctx = slot_contexts_.at(slot_idx);
+      ctx.task_id_.reset();   // empty: no API task was submitted
+      ctx.row_count_ = 0;     // 0 valid rows for get_next_results
+      ctx.batch_info_ = current_batch_info_;
+      if (OB_FAIL(slot_ring_.mark_slot_directly_ready(slot_idx))) {
+        LOG_WARN("mark_slot_directly_ready failed for skip-only batch", K(ret), K(slot_idx));
+        ctx.batch_info_ = nullptr;  // retain ownership in current_batch_info_
+        mark_slot_failed_best_effort_(slot_idx, ret, "skip-only directly-ready");
+        destroy_current_batch_info_();
+        reset_current_task_state_();
+      } else {
+        LOG_INFO("[BATCH-FILE] skip-only batch submitted as immediately-ready slot",
+                 K(slot_idx), "skip_count", current_batch_info_->get_count());
+        current_batch_info_ = nullptr;
+        reset_current_task_state_();
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBatchFileEmbeddingOperator::submit_api_batch_()
+{
+  int ret = OB_SUCCESS;
+  int64_t slot_idx = -1;
+  common::ObString task_id;
+  common::ObString task_id_copy;
+
+  LOG_INFO("[BATCH-FILE] finishing and submitting task", K_(current_task_row_count));
+
+  if (OB_FAIL(slot_ring_.reserve_slot(slot_idx))) {
+    LOG_WARN("failed to reserve slot", K(ret));
+    destroy_current_batch_info_();
+    reset_current_task_state_();
+  } else {
+    if (OB_FAIL(writer_.commit(task_id))) {
+      LOG_WARN("failed to commit writer", K(ret));
+      mark_slot_failed_best_effort_(slot_idx, ret, "writer commit");
+    } else if (OB_FAIL(ob_write_string(allocator_, task_id, task_id_copy))) {
+      LOG_WARN("failed to deep copy task_id", K(ret));
+      mark_slot_failed_best_effort_(slot_idx, ret, "task id copy");
+    }
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = OB_E(common::EventTable::EN_BATCH_FILE_OP_SUBMIT_TASK_ERR) OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        LOG_WARN("[ERRSIM] fail to submit task", KR(ret), K(task_id_copy), K(slot_idx));
+        mark_slot_failed_best_effort_(slot_idx, ret, "submit task errsim");
+      }
+    }
+#endif
+    if (OB_SUCC(ret)) {
+      if (slot_idx >= slot_contexts_.count()) {
+        SlotContext ctx;
+        ctx.reset();
+        if (OB_FAIL(slot_contexts_.push_back(ctx))) {
+          LOG_WARN("failed to expand slot_contexts_", K(ret), K(slot_idx));
+          mark_slot_failed_best_effort_(slot_idx, ret, "slot context expansion");
+        }
+      }
+      if (OB_SUCC(ret)) {
+        SlotContext &ctx = slot_contexts_.at(slot_idx);
+        ctx.task_id_ = task_id_copy;  // deep copy, backed by allocator_
+        ctx.row_count_ = current_task_row_count_;
+        ctx.batch_info_ = current_batch_info_;  // Transfer ownership to slot
+
+        if (OB_FAIL(slot_ring_.mark_slot_submitted(slot_idx, task_id_copy))) {
+          LOG_WARN("mark_slot_submitted failed", K(ret), K(slot_idx), K(task_id_copy));
+          ctx.batch_info_ = nullptr;  // retain ownership in current_batch_info_
+          mark_slot_failed_best_effort_(slot_idx, ret, "mark slot submitted");
+        } else {
+          LOG_INFO("[BATCH-FILE] submitted task",
+                   K(task_id_copy), K(slot_idx), K_(current_task_row_count));
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      current_batch_info_ = nullptr;  // Ownership transferred to slot
+      reset_current_task_state_();
+    } else {
+      const common::ObString submitted_task_id = task_id_copy.empty() ? task_id : task_id_copy;
+      if (OB_NOT_NULL(service_) && !submitted_task_id.empty()) {
+        int cancel_ret = service_->abandon_task(submitted_task_id);
+        if (OB_SUCCESS != cancel_ret) {
+          LOG_WARN("[BATCH-FILE] failed to abandon task after submit bookkeeping failure",
+                   K(cancel_ret), K(submitted_task_id), K(slot_idx));
+        }
+      }
+      destroy_current_batch_info_();
+      reset_current_task_state_();
+    }
+  }
+  return ret;
+}
+
+int ObBatchFileEmbeddingOperator::finish_and_submit_current_task_()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_NOT_NULL(current_batch_info_) && current_batch_info_->get_count() > 0
+      && (!writer_.is_inited() || writer_.is_empty())) {
+    if (OB_FAIL(submit_skip_only_batch_())) {
+      LOG_WARN("failed to submit skip-only batch", K(ret));
+    }
+  } else if (!writer_.is_inited() || writer_.is_empty()) {
+    LOG_DEBUG("no current task to submit");
+  } else if (OB_ISNULL(service_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("service_ is null", K(ret));
+  } else if (OB_FAIL(submit_api_batch_())) {
+    LOG_WARN("failed to submit api batch", K(ret));
+  }
+  return ret;
+}
+
+
+int ObBatchFileEmbeddingOperator::poll_submitted_slots_()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(service_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("service is null", K(ret));
+  } else {
+    // Iterate over all slots from head to next, check SUBMITTED ones
+    const int64_t head = slot_ring_.get_head_idx();
+    const int64_t next = slot_ring_.get_next_idx();
+
+    for (int64_t idx = head; OB_SUCC(ret) && idx < next; ++idx) {
+      if (need_stop_()) {
+        cancel_inflight_tasks_();
+        ret = OB_CANCELED;
+        LOG_WARN("[BATCH-FILE] dag stopped during poll, exiting", K(ret), K_(tablet_id));
+        break;
+      }
+      ObBatchFileSlotRing::SlotStatus status;
+      if (OB_FAIL(slot_ring_.get_slot_status(idx, status))) {
+        LOG_WARN("get_slot_status failed", K(ret), K(idx));
+      } else if (ObBatchFileSlotRing::SLOT_SUBMITTED == status) {
+        // Query task status
+        common::ObString task_id;
+        if (OB_FAIL(slot_ring_.get_slot_task_id(idx, task_id))) {
+          LOG_WARN("get_slot_task_id failed", K(ret), K(idx));
+        } else {
+          share::ObAiTaskInfo task_info;
+          if (OB_FAIL(service_->query_task_status(task_id, task_info))) {
+            const int query_ret = ret;
+            if (is_query_task_status_retryable_(query_ret)) {
+              LOG_WARN("[BATCH-FILE] query_task_status failed, will retry",
+                       K(query_ret), K(task_id), K(idx), K_(tablet_id));
+              // The task might still be processing; retry transient status-query failures.
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("[BATCH-FILE] query_task_status failed permanently",
+                       K(query_ret), K(task_id), K(idx), K_(tablet_id));
+              mark_slot_failed_best_effort_(idx, query_ret, "query task status");
+              // Slot is already marked failed; continue processing remaining slots.
+              ret = OB_SUCCESS;
+            }
+          } else if (task_info.status_ == share::OB_AI_TASK_STATUS_FINISHED) {
+            LOG_INFO("[BATCH-FILE] task FINISHED",
+                     K(idx), K(task_id), K_(tablet_id));
+#ifdef ERRSIM
+            ret = OB_E(common::EventTable::EN_BATCH_FILE_OP_POLL_SLOT_ERR) OB_SUCCESS;
+            if (OB_FAIL(ret)) {
+              LOG_WARN("[ERRSIM] fail to poll submitted slot", KR(ret), K(idx), K(task_id));
+            }
+#endif
+            // Task completed - just mark slot as ready
+            if (OB_FAIL(ret)) {
+            } else if (OB_FAIL(slot_ring_.mark_slot_ready(idx))) {
+              LOG_WARN("mark_slot_ready failed", K(ret), K(idx));
+            } else {
+              LOG_DEBUG("[BATCH-FILE] slot ready", K(idx), K(task_id));
+            }
+          } else if (task_info.status_ == share::OB_AI_TASK_STATUS_FAILED) {
+            int err = OB_ERR_UNEXPECTED;
+            const char *msg = "task failed";
+            char msg_buf[OB_AI_MAX_ERROR_MESSAGE_LENGTH];
+            if (!task_info.error_detail_.empty()) {
+              common::ObArenaAllocator json_alloc("BFPolJson", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+              common::ObJsonNode *root = nullptr;
+              const int parse_ret = common::ObJsonParser::get_tree(&json_alloc,
+                                                                   task_info.error_detail_,
+                                                                   root);
+              if (OB_SUCCESS != parse_ret || OB_ISNULL(root)) {
+                LOG_WARN("[BATCH-FILE] failed to parse error_detail json",
+                         K(parse_ret), K(task_info.error_detail_));
+              } else if (root->json_type() == common::ObJsonNodeType::J_OBJECT) {
+                common::ObJsonObject *obj = static_cast<common::ObJsonObject *>(root);
+                common::ObJsonNode *code_node = obj->get_value("ob_error_code");
+                if (OB_NOT_NULL(code_node)
+                    && code_node->json_type() == common::ObJsonNodeType::J_INT) {
+                  err = static_cast<int>(static_cast<common::ObJsonInt *>(code_node)->value());
+                }
+                common::ObJsonNode *msg_node = obj->get_value("message");
+                if (OB_NOT_NULL(msg_node)
+                    && msg_node->json_type() == common::ObJsonNodeType::J_STRING) {
+                  const common::ObString &s = static_cast<common::ObJsonString *>(msg_node)->value();
+                  const int64_t len = s.length();
+                  const int64_t cap = static_cast<int64_t>(sizeof(msg_buf) - 1);
+                  const int64_t copy_len = (len < cap) ? len : cap;
+                  if (copy_len > 0) {
+                    MEMCPY(msg_buf, s.ptr(), copy_len);
+                    msg_buf[copy_len] = '\0';
+                    msg = msg_buf;
+                  }
+                }
+              }
+            }
+            LOG_WARN("[BATCH-FILE] task FAILED", K(idx), K(task_id), K(err),
+                     K(task_info.error_detail_), K_(tablet_id));
+            mark_slot_failed_best_effort_(idx, err, msg);
+          } else if (task_info.status_ == share::OB_AI_TASK_STATUS_CANCELLED) {
+            LOG_WARN("[BATCH-FILE] task CANCELLED", K(idx), K(task_id), K_(tablet_id));
+            mark_slot_failed_best_effort_(idx, OB_CANCELED, "task cancelled");
+          } else {
+            // Task still running, will retry on next poll cycle
+            LOG_DEBUG("[BATCH-FILE] task still pending",
+                      K(idx), K(task_id), "task_status", task_info.status_, K_(tablet_id));
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObBatchFileEmbeddingOperator::check_and_output_result_(ObChunk &output_chunk,
+                                                            ResultState &result_state)
+{
+  int ret = OB_SUCCESS;
+  int error_code = OB_SUCCESS;
+
+  int64_t target_slot_idx = -1;
+  if (slot_ring_.head_is_ready(error_code)) {
+    target_slot_idx = slot_ring_.get_head_idx();
+  } else if (OB_SUCCESS != error_code) {
+    ret = error_code;
+    LOG_WARN("head slot failed", K(ret));
+  } else {
+    // Non-head slot failure: abort early instead of waiting for end_chunk drain.
+    // This prevents creating more tasks for subsequent chunks when previous ones
+    // have already failed, avoiding an explosion of duplicate AI tasks.
+    int any_error_code = OB_SUCCESS;
+    if (slot_ring_.has_any_failed(any_error_code)) {
+      ret = any_error_code;
+      LOG_WARN("non-head slot failed, aborting early to prevent duplicate tasks",
+               K(ret), K_(slot_ring));
+    }
+  }
+
+  if (OB_SUCC(ret) && target_slot_idx != -1) {
+    if (OB_UNLIKELY(target_slot_idx >= slot_contexts_.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("slot_contexts_ index out of range", K(ret), K(target_slot_idx),
+               "count", slot_contexts_.count());
+    } else {
+      SlotContext &ctx = slot_contexts_.at(target_slot_idx);
+      common::ObString task_id = ctx.task_id_;
+      ObTaskBatchInfo *batch_info = ctx.batch_info_;
+
+      if (OB_ISNULL(batch_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("batch_info in slot context is null", K(ret), K(target_slot_idx));
+      } else {
+        // Get all embedding results from Service for this task.
+        // Skip-only batches have no API task (task_id is empty) — embedding_results stays empty.
+        const int64_t total_count = ctx.row_count_;
+        common::ObSEArray<share::ObAiResultRow, 1024> embedding_results;
+        bool has_more = false;
+        if (!task_id.empty() && total_count > 0) {
+          if (OB_FAIL(service_->get_next_results(task_id, total_count,
+                                                   embedding_results, has_more))) {
+            LOG_WARN("failed to get result rows from service", K(ret), K(task_id));
+          } else if (has_more) {
+            LOG_WARN("[BATCH-FILE] has_more=true from get_next_results; results may be incomplete",
+                     K(task_id), K(total_count), "got", embedding_results.count());
+          }
+        }
+#ifdef ERRSIM
+        if (OB_SUCC(ret)) {
+          ret = OB_E(common::EventTable::EN_BATCH_FILE_OP_OUTPUT_RESULT_ERR) OB_SUCCESS;
+          if (OB_FAIL(ret)) {
+            LOG_WARN("[ERRSIM] fail to output result", KR(ret), K(task_id));
+          }
+        }
+#endif
+        if (OB_SUCC(ret)) {
+          // Fill embedding vectors into pre-existing results (which already have extras from add_item)
+          common::ObArray<ObEmbeddingResult*> &results = batch_info->get_results();
+          int64_t success_count = 0;
+
+          for (int64_t i = 0; OB_SUCC(ret) && i < embedding_results.count(); ++i) {
+            const share::ObAiResultRow &row = embedding_results.at(i);
+            const int64_t idx = row.original_index_;
+            if (idx < 0 || idx >= results.count()) {
+              LOG_WARN("original_index out of range", K(idx), "results_count", results.count());
+              continue;
+            }
+            ObEmbeddingResult *result = results.at(idx);
+            if (OB_ISNULL(result)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("null result at index", K(ret), K(idx));
+            } else if (OB_SUCCESS != row.ret_code_) {
+              ret = row.ret_code_;
+              LOG_WARN("embedding row failed in batch result", K(ret), K(i), K(idx),
+                       K(row.error_detail_));
+            } else if (OB_ISNULL(row.embedding_vector_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("embedding vector is null", K(ret), K(i), K(idx));
+            } else {
+              // Allocate vector buffer and copy embedding
+              float *vec_buf = static_cast<float*>(
+                  batch_info->get_allocator().alloc(vec_dim_ * sizeof(float)));
+              if (OB_ISNULL(vec_buf)) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                LOG_WARN("failed to allocate vector buffer", K(ret), K(idx), K_(vec_dim));
+              } else {
+                MEMCPY(vec_buf, row.embedding_vector_, vec_dim_ * sizeof(float));
+                result->set_vector(vec_buf, vec_dim_);
+                result->set_status(ObEmbeddingResult::NEED_EMBEDDING);
+                success_count++;
+              }
+            }
+          }
+
+          if (OB_SUCC(ret) && allow_null_on_failure_
+              && success_count < batch_info->get_need_embedding_count()) {
+            // Degraded-finish or partial result: API returned fewer successful
+            // embeddings than expected.  Rows that were NOT filled by the fill loop
+            // have null vectors (cleared above).  Demote them to SKIP_EMBEDDING so
+            // downstream outputs NULL instead of erroring.
+            for (int64_t i = 0; i < results.count(); ++i) {
+              ObEmbeddingResult *result = results.at(i);
+              if (OB_NOT_NULL(result) && result->need_embedding()
+                  && OB_ISNULL(result->get_vector())) {
+                result->set_status(ObEmbeddingResult::SKIP_EMBEDDING);
+              }
+            }
+          } else if (OB_SUCC(ret) && success_count < batch_info->get_need_embedding_count()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("embedding results count mismatch", K(ret),
+                     K(success_count), "expected", batch_info->get_need_embedding_count());
+          }
+
+          if (OB_SUCC(ret)) {
+            // batch_info already has correct count from add_item; update need_embedding_count
+            batch_info->set_filled(batch_info->get_count(), success_count);
+
+            // Transfer batch_info ownership to output_chunk
+            output_chunk.type_ = ObChunk::TASK_BATCH_INFO;
+            output_chunk.batch_info_ = batch_info;
+            ctx.batch_info_ = nullptr;  // Ownership transferred
+            result_state = ObPipelineOperator::HAVE_MORE_OUTPUT;
+
+            // Pop slot
+            if (OB_FAIL(slot_ring_.pop_head())) {
+              LOG_WARN("pop_head failed", K(ret));
+            } else {
+              // Notify service that DDL has consumed this task's results.
+              // release_task archives to history table and destroys the task object.
+              if (OB_NOT_NULL(service_)) {
+                int tmp_ret = service_->release_task(task_id);
+                if (OB_SUCCESS != tmp_ret) {
+                  // Non-fatal: slot already consumed by pop_head, ctx.reset() must execute.
+                  LOG_WARN("[BATCH-FILE] release_task failed after pop_head",
+                           K(tmp_ret), K(task_id));
+                }
+              }
+              ctx.reset();
+              LOG_INFO("[BATCH-FILE] output result for slot",
+                       "result_count", batch_info->get_count(), K(success_count),
+                       K(task_id), K_(slot_ring));
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObBatchFileEmbeddingOperator::handle_end_chunk_(ObChunk &output_chunk,
+                                                      ResultState &result_state)
+{
+  int ret = OB_SUCCESS;
+
+  // Submit remaining data if any (including skip-only batches with no writer)
+  if (!all_tasks_submitted_) {
+    const bool has_pending = (writer_.is_inited() && !writer_.is_empty())
+                             || (OB_NOT_NULL(current_batch_info_)
+                                 && current_batch_info_->get_count() > 0);
+    if (has_pending) {
+      if (OB_FAIL(finish_and_submit_current_task_())) {
+        LOG_WARN("finish_and_submit_current_task_ failed on end_chunk", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      all_tasks_submitted_ = true;
+      LOG_INFO("[BATCH-FILE] all tasks submitted", K_(total_rows_collected), K_(slot_ring));
+    }
+  }
+
+  // Drain the slot ring: poll, check, yield in a loop
+  if (OB_SUCC(ret)) {
+    // Record drain start time on first entry
+    if (0 == drain_start_ts_) {
+      drain_start_ts_ = common::ObTimeUtility::current_time();
+      drain_poll_count_ = 0;
+      LOG_INFO("[BATCH-FILE] drain loop started", K_(slot_ring), K_(tablet_id));
+    }
+
+    while (OB_SUCC(ret) && !slot_ring_.is_empty()) {
+      ++drain_poll_count_;
+      const int64_t elapsed_us = common::ObTimeUtility::current_time() - drain_start_ts_;
+
+      // Periodic progress logging (WARN level so it's always visible)
+      if (drain_poll_count_ % DRAIN_LOG_INTERVAL == 0) {
+        LOG_WARN("[BATCH-FILE] drain loop still waiting for tasks",
+                 K_(slot_ring), K_(tablet_id), K_(drain_poll_count),
+                 "elapsed_sec", elapsed_us / 1000000);
+      }
+
+      if (OB_FAIL(poll_submitted_slots_())) {
+        LOG_WARN("poll_submitted_slots_ failed", K(ret));
+      } else {
+        int error_code = OB_SUCCESS;
+        if (slot_ring_.head_is_ready(error_code)) {
+          // Output this result using check_and_output_result_
+          if (OB_FAIL(check_and_output_result_(output_chunk, result_state))) {
+            LOG_WARN("check_and_output_result_ failed", K(ret));
+          } else if (ObPipelineOperator::HAVE_MORE_OUTPUT == result_state) {
+            return ret; // Return this batch; pipeline will call us again
+          }
+        } else if (OB_SUCCESS != error_code) {
+          ret = error_code;
+          LOG_WARN("head slot failed during end_chunk drain", K(ret));
+        } else if (need_stop_()) {
+          cancel_inflight_tasks_();
+          ret = OB_CANCELED;
+          LOG_WARN("dag stopped during end_chunk drain", K(ret));
+        } else {
+          // Check if any non-head slot has failed (early abort)
+          int any_error_code = OB_SUCCESS;
+          if (slot_ring_.has_any_failed(any_error_code)) {
+            cancel_inflight_tasks_();
+            ret = any_error_code;
+            LOG_WARN("non-head slot failed during end_chunk drain", K(ret));
+          } else {
+            // Still waiting, yield to allow other tasks to run
+            if (OB_FAIL(do_yield_())) {
+              LOG_WARN("do_yield_ failed", K(ret));
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // All results drained, send ITER_END
+  if (OB_SUCC(ret) && slot_ring_.is_empty()) {
+    if (!end_chunk_sent_) {
+      output_chunk.type_ = ObChunk::ITER_END_TYPE;
+      result_state = ObPipelineOperator::HAVE_MORE_OUTPUT;
+      end_chunk_sent_ = true;
+      LOG_INFO("[BATCH-FILE] all results drained, sending ITER_END_TYPE");
+    } else {
+      result_state = ObPipelineOperator::NEED_MORE_INPUT;
+      LOG_DEBUG("[BATCH-FILE] ITER_END already sent");
+    }
+  }
+
+  return ret;
+}
+
+int ObBatchFileEmbeddingOperator::do_yield_()
+{
+  int ret = OB_SUCCESS;
+  ob_usleep(CHECK_INTERVAL_US);
+  if (OB_FAIL(share::dag_yield())) {
+    if (OB_CANCELED == ret) {
+      LOG_WARN("dag yield cancelled", K(ret));
+    } else {
+      LOG_WARN("dag yield failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObBatchFileEmbeddingOperator::get_next_row_from_tmp_files_(
+    common::ObArray<ObCGRowFile *> *cg_row_file_arr,
+    blocksstable::ObStorageDatum &text,
+    common::ObArray<blocksstable::ObStorageDatum> &extras,
+    bool &has_row)
+{
+  int ret = OB_SUCCESS;
+  has_row = false;
+
+  LOG_DEBUG("[BATCH-FILE] get_next_row_from_tmp_files_ start",
+            K(cur_file_idx_), "file_count", cg_row_file_arr ? cg_row_file_arr->count() : -1);
+
+  if (OB_ISNULL(cg_row_file_arr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid cg_row_file_arr", K(ret));
+  } else {
+    while (OB_SUCC(ret) && cur_file_idx_ < cg_row_file_arr->count() && !has_row) {
+      ObCGRowFile *&row_file = cg_row_file_arr->at(cur_file_idx_);
+      LOG_DEBUG("[BATCH-FILE] checking row_file", K(cur_file_idx_), KP(row_file));
+      if (OB_ISNULL(row_file)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("row file null", K(ret), K(cur_file_idx_));
+      }
+
+      while (OB_SUCC(ret) && !has_row) {
+        if (OB_FAIL(get_next_batch_from_tmp_files_(row_file))) {
+          LOG_WARN("get next batch failed", K(ret));
+        } else if (OB_ISNULL(cur_datum_rows_)) {
+          // Current file end, switch to next file
+          cur_file_idx_++;
+          break;
+        } else {
+          const int64_t total_row_count = cur_datum_rows_->row_count_;
+          const int64_t total_column_count = cur_datum_rows_->get_column_count();
+
+          if (total_column_count <= text_col_idx_) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("column index out of range", K(ret), K(total_column_count), K(text_col_idx_));
+          } else {
+            while (OB_SUCC(ret) && !has_row && cur_row_in_batch_ < total_row_count) {
+              blocksstable::ObDatumRow current_row;
+              if (OB_FAIL(current_row.init(cur_datum_rows_->get_column_count()))) {
+                LOG_WARN("init datum row failed", K(ret));
+              } else if (OB_FAIL(cur_datum_rows_->to_datum_row(cur_row_in_batch_, current_row))) {
+                LOG_WARN("to_datum_row failed", K(ret), K(cur_row_in_batch_));
+              } else if (OB_FAIL(parse_row_(current_row, text, extras))) {
+                LOG_WARN("parse row failed", K(ret));
+              } else {
+                cur_row_in_batch_++;
+                has_row = true;
+              }
+            }
+
+            if (OB_SUCC(ret) && !has_row) {
+              // Current batch finished, reset to fetch next batch
+              cur_datum_rows_ = nullptr;
+              cur_row_in_batch_ = 0;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObBatchFileEmbeddingOperator::get_next_batch_from_tmp_files_(ObCGRowFile *&row_file)
+{
+  int ret = OB_SUCCESS;
+
+  LOG_DEBUG("[BATCH-FILE] get_next_batch_from_tmp_files_ start", KP(row_file), KP(cur_datum_rows_));
+
+  if (nullptr == cur_datum_rows_) {
+    if (OB_FAIL(row_file->get_next_batch(cur_datum_rows_))) {
+      if (OB_ITER_END == ret) {
+        LOG_INFO("[BATCH-FILE] get_next_batch returned ITER_END", K(cur_file_idx_));
+        ret = OB_SUCCESS;
+        row_file->~ObCGRowFile();
+        ob_free(row_file);
+        row_file = nullptr;
+        cur_datum_rows_ = nullptr;
+        cur_row_in_batch_ = 0;
+      } else {
+        LOG_WARN("get next batch failed", K(ret));
+      }
+    } else {
+      cur_row_in_batch_ = 0;
+      LOG_DEBUG("[BATCH-FILE] get_next_batch success",
+                "row_count", cur_datum_rows_->row_count_,
+                "col_count", cur_datum_rows_->get_column_count());
+    }
+  }
+
+  return ret;
+}
+
+int ObBatchFileEmbeddingOperator::parse_row_(const blocksstable::ObDatumRow &current_row,
+                                              blocksstable::ObStorageDatum &text,
+                                              common::ObArray<blocksstable::ObStorageDatum> &extras)
+{
+  int ret = OB_SUCCESS;
+  text.reset();
+  extras.reset();
+
+  if (OB_UNLIKELY(current_row.get_column_count() <= text_col_idx_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid datum row", K(ret), K(current_row), K(text_col_idx_));
+  } else {
+    // Use shallow copy like ObHNSWEmbeddingOperator::parse_row
+    // Deep copy happens in add_item() when saving to batch_info_
+    const blocksstable::ObStorageDatum &chunk_cell = current_row.storage_datums_[text_col_idx_];
+    text.shallow_copy_from_datum(chunk_cell);
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < extra_column_idxs_.count(); ++i) {
+      int32_t col_idx = extra_column_idxs_.at(i);
+      if (col_idx < 0 || col_idx >= current_row.get_column_count()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("extra column index out of range", K(ret), K(col_idx), K(current_row.get_column_count()));
+      } else if (OB_FAIL(extras.push_back(current_row.storage_datums_[col_idx]))) {
+        LOG_WARN("push extra datum failed", K(ret), K(col_idx));
+      }
+    }
+  }
+
+  return ret;
+}
+
+bool ObBatchFileEmbeddingOperator::need_stop_()
+{
+  bool bret = false;
+  ObIDag *dag = get_dag();
+  if (OB_ISNULL(dag)) {
+    bret = true;
+  } else if (dag->is_final_status()) {
+    bret = true;
+  }
+  return bret;
+}
+
+void ObBatchFileEmbeddingOperator::cancel_inflight_tasks_()
+{
+  if (OB_ISNULL(service_)) {
+    return;
+  }
+  for (int64_t i = 0; i < slot_contexts_.count(); ++i) {
+    const common::ObString &task_id = slot_contexts_.at(i).task_id_;
+    if (!task_id.empty()) {
+      int tmp_ret = service_->abandon_task(task_id);
+      LOG_INFO("[BATCH-FILE] abandon inflight task on DDL exit",
+               K(task_id), K(tmp_ret), K_(tablet_id), K_(ddl_task_id));
+    }
+  }
+}
+
+// -------------------------------- ObHNSWEmbeddingAppendAndWritePipeline --------------------------------
+ObHNSWEmbeddingAppendAndWritePipeline::ObHNSWEmbeddingAppendAndWritePipeline()
+  : ObDDLWriteMacroBlockBasePipeline(TASK_TYPE_DDL_VECTOR_INDEX_APPEND_PIPELINE),
+    cg_row_file_writer_op_(nullptr), embedding_op_(nullptr),
+    ai_execution_mode_(VIAM_SYNC_HTTP), embedding_write_op_(this)
+{}
+
+ObHNSWEmbeddingAppendAndWritePipeline::~ObHNSWEmbeddingAppendAndWritePipeline()
+{
+  if (OB_NOT_NULL(cg_row_file_writer_op_)) {
+    cg_row_file_writer_op_->~ObCGRowFileWriterOp();
+    ob_free(cg_row_file_writer_op_);
+    cg_row_file_writer_op_ = nullptr;
+  }
+  if (OB_NOT_NULL(embedding_op_)) {
+    if (VIAM_BATCH_FILE == ai_execution_mode_) {
+      static_cast<ObBatchFileEmbeddingOperator *>(embedding_op_)->~ObBatchFileEmbeddingOperator();
+    } else {
+      static_cast<ObHNSWEmbeddingOperator *>(embedding_op_)->~ObHNSWEmbeddingOperator();
+    }
+    ob_free(embedding_op_);
+    embedding_op_ = nullptr;
+  }
+}
+
+int ObHNSWEmbeddingAppendAndWritePipeline::init(ObDDLSlice *ddl_slice)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr == ddl_slice || !ddl_slice->is_inited())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KPC(ddl_slice));
+  } else {
+    ddl_slice_ = ddl_slice;
+    const int64_t MAX_BATCH_SIZE = 1024;
+    const ObTabletID &tablet_id = ddl_slice->get_tablet_id();
+    const int64_t slice_idx = ddl_slice->get_slice_idx();
+
+    // Read ai_execution_mode from tablet context
+    ObDDLIndependentDag *dag = static_cast<ObDDLIndependentDag *>(get_dag());
+    ObDDLTabletContext *tablet_context = nullptr;
+    ObVectorIndexTabletContext *vector_index_ctx = nullptr;
+    if (OB_ISNULL(dag)) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("get dag failed", K(ret));
+    } else if (OB_FAIL(dag->get_tablet_context(tablet_id, tablet_context))) {
+      LOG_WARN("get tablet context failed", K(ret), K(tablet_id));
+    } else if (OB_ISNULL(vector_index_ctx = tablet_context->vector_index_ctx_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("vector index context is null", K(ret));
+    } else {
+      const ObString &vec_idx_param = vector_index_ctx->vec_idx_param_;
+      if (!vec_idx_param.empty()) {
+        ObVectorIndexParam param;
+        if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(
+            vec_idx_param, ObVectorIndexType::VIT_HNSW_INDEX, param, false))) {
+          LOG_WARN("fail to parse vector index param", K(ret), K(vec_idx_param));
+        } else {
+          ai_execution_mode_ = param.ai_execution_mode_;
+        }
+      }
+    }
+
+    // Allocate embedding operator based on ai_execution_mode
+    // The upstream DDL scan always produces CG_ROW_TMP_FILES chunks for all access modes.
+    if (OB_SUCC(ret)) {
+      if (VIAM_BATCH_FILE == ai_execution_mode_) {
+        void *buf = ob_malloc(sizeof(ObBatchFileEmbeddingOperator), ObMemAttr(MTL_ID(), "BatchFileEmbed"));
+        if (OB_ISNULL(buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("alloc BatchFile embedding operator failed", K(ret));
+        } else {
+          embedding_op_ = new (buf) ObBatchFileEmbeddingOperator(this);
+          if (OB_FAIL(embedding_op_->init(tablet_id))) {
+            LOG_WARN("init BatchFile embedding operator failed", K(ret), K(tablet_id));
+          }
+        }
+      } else {
+        void *buf = ob_malloc(sizeof(ObHNSWEmbeddingOperator), ObMemAttr(MTL_ID(), "HNSWEmbed"));
+        if (OB_ISNULL(buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("alloc HNSW embedding operator failed", K(ret));
+        } else {
+          embedding_op_ = new (buf) ObHNSWEmbeddingOperator(this);
+          if (OB_FAIL(embedding_op_->init(tablet_id))) {
+            LOG_WARN("init HNSW embedding operator failed", K(ret), K(tablet_id));
+          }
+        }
+      }
+    }
+
+    // Add ops and init write operator (both modes)
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(add_op(embedding_op_))) {
+        LOG_WARN("add embedding op failed", K(ret));
+      } else if (OB_FAIL(embedding_write_op_.init(tablet_id, slice_idx))) {
+        LOG_WARN("init embedding write operator failed", K(ret));
+      } else if (OB_FAIL(add_op(&embedding_write_op_))) {
+        LOG_WARN("add embedding write op failed", K(ret));
+      } else {
+        LOG_INFO("ObHNSWEmbeddingAppendAndWritePipeline initialized",
+                 K(tablet_id), K(slice_idx), K_(ai_execution_mode));
+      }
+    }
   }
   return ret;
 }

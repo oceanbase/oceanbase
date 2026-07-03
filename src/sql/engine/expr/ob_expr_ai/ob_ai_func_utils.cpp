@@ -691,6 +691,74 @@ int ObOpenAIUtils::ObOpenAIEmbed::get_body(common::ObIAllocator &allocator,
   return ret;
 }
 
+int ObOpenAIUtils::ObOpenAIEmbed::encode_batch_line(common::ObIAllocator &allocator,
+                                                    const common::ObString &model,
+                                                    int64_t index,
+                                                    const common::ObString &input_text,
+                                                    ObAiBatchFileLine &line)
+{
+  int ret = OB_SUCCESS;
+  line.reset();
+  line.method_ = common::ObString::make_string("POST");
+  line.url_ = common::ObString::make_string("/v1/embeddings");
+
+  char tmp_buf[64];
+  int64_t tmp_len = snprintf(tmp_buf, sizeof(tmp_buf), "%ld", index);
+  char *cid_buf = static_cast<char*>(allocator.alloc(tmp_len));
+  if (OB_ISNULL(cid_buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc custom_id", K(ret));
+  } else {
+    MEMCPY(cid_buf, tmp_buf, tmp_len);
+    line.custom_id_.assign_ptr(cid_buf, static_cast<int32_t>(tmp_len));
+  }
+
+  if (OB_SUCC(ret)) {
+    common::ObArenaAllocator tmp_alloc("BatchBodyTmp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    common::ObJsonBuffer model_jbuf(&tmp_alloc);
+    common::ObJsonBuffer text_jbuf(&tmp_alloc);
+    if (OB_FAIL(common::ObJsonBaseUtil::add_double_quote(
+            model_jbuf, model.ptr(), model.length()))) {
+      LOG_WARN("failed to escape model name", K(ret));
+    } else if (OB_FAIL(common::ObJsonBaseUtil::add_double_quote(
+            text_jbuf, input_text.ptr(), input_text.length()))) {
+      LOG_WARN("failed to escape input text", K(ret));
+    } else {
+      const int64_t body_len = model_jbuf.length() + text_jbuf.length() + 64;
+      char *body_buf = static_cast<char*>(allocator.alloc(body_len));
+      if (OB_ISNULL(body_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc body buffer", K(ret), K(body_len));
+      } else {
+        int64_t pos = snprintf(body_buf, body_len,
+            "{\"model\":%.*s,\"input\":%.*s,\"encoding_format\":\"float\"}",
+            static_cast<int>(model_jbuf.length()), model_jbuf.ptr(),
+            static_cast<int>(text_jbuf.length()), text_jbuf.ptr());
+        if (pos <= 0 || pos >= body_len) {
+          ret = OB_SIZE_OVERFLOW;
+          LOG_WARN("body snprintf overflow", K(ret), K(pos), K(body_len));
+        } else {
+          line.body_.assign_ptr(body_buf, static_cast<int32_t>(pos));
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    line.line_size_ = line.custom_id_.length() + line.method_.length() +
+                      line.url_.length() + line.body_.length() + 100;
+  }
+  return ret;
+}
+
+int ObOpenAIUtils::ObOpenAIEmbed::get_batch_submit_spec(common::ObString &endpoint,
+                                                        common::ObString &completion_window) const
+{
+  endpoint = common::ObString::make_string("/v1/embeddings");
+  completion_window = common::ObString::make_string("24h");
+  return OB_SUCCESS;
+}
+
 int ObOpenAIUtils::ObOpenAIEmbed::parse_output(common::ObIAllocator &allocator,
                                                common::ObJsonObject *http_response,
                                                common::ObIJsonBase *&result)
@@ -730,6 +798,60 @@ int ObOpenAIUtils::ObOpenAIEmbed::parse_output(common::ObIAllocator &allocator,
       }
       if (OB_SUCC(ret)) {
         result = result_array;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObOpenAIUtils::ObOpenAIEmbed::decode_result(common::ObIAllocator &allocator,
+                                                const common::ObString &response_body,
+                                                share::ObAiResultRow &row)
+{
+  int ret = OB_SUCCESS;
+  common::ObArenaAllocator parse_alloc("DecodeResult", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  common::ObJsonNode *root = nullptr;
+  common::ObIJsonBase *result = nullptr;
+
+  if (OB_FAIL(common::ObJsonParser::get_tree(&parse_alloc, response_body, root))) {
+    LOG_WARN("failed to parse response body json", K(ret));
+  } else if (OB_ISNULL(root) || root->json_type() != common::ObJsonNodeType::J_OBJECT) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid response json root", K(ret));
+  } else if (OB_FAIL(parse_output(parse_alloc, static_cast<common::ObJsonObject *>(root), result))) {
+    LOG_WARN("parse_output failed", K(ret));
+  } else if (OB_ISNULL(result) || result->json_type() != common::ObJsonNodeType::J_ARRAY) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("parse_output returned non-array", K(ret));
+  } else {
+    common::ObJsonArray *result_arr = static_cast<common::ObJsonArray *>(result);
+    if (result_arr->element_count() == 0) {
+      ret = OB_INVALID_DATA;
+      LOG_WARN("empty result array from parse_output", K(ret));
+    } else {
+      common::ObJsonNode *emb_node = result_arr->get_value(0);
+      if (OB_ISNULL(emb_node) || emb_node->json_type() != common::ObJsonNodeType::J_ARRAY) {
+        ret = OB_INVALID_DATA;
+        LOG_WARN("invalid embedding node in result array", K(ret));
+      } else {
+        common::ObJsonArray *emb_arr = static_cast<common::ObJsonArray *>(emb_node);
+        const int64_t dim = static_cast<int64_t>(emb_arr->element_count());
+        float *vec_buf = static_cast<float *>(allocator.alloc(dim * sizeof(float)));
+        if (OB_ISNULL(vec_buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc vector buffer", K(ret), K(dim));
+        } else {
+          for (int64_t j = 0; j < dim; ++j) {
+            common::ObJsonNode *val = (*emb_arr)[j];
+            if (OB_NOT_NULL(val) && val->json_type() == common::ObJsonNodeType::J_DOUBLE) {
+              vec_buf[j] = static_cast<float>(static_cast<common::ObJsonDouble *>(val)->value());
+            } else {
+              vec_buf[j] = 0.0f;
+            }
+          }
+          row.embedding_vector_ = vec_buf;
+          row.vector_dim_ = dim;
+        }
       }
     }
   }
@@ -1379,6 +1501,74 @@ int ObDashscopeUtils::ObDashscopeEmbed::get_body(common::ObIAllocator &allocator
   return ret;
 }
 
+int ObDashscopeUtils::ObDashscopeEmbed::encode_batch_line(common::ObIAllocator &allocator,
+                                                          const common::ObString &model,
+                                                          int64_t index,
+                                                          const common::ObString &input_text,
+                                                          ObAiBatchFileLine &line)
+{
+  int ret = OB_SUCCESS;
+  line.reset();
+  line.method_ = common::ObString::make_string("POST");
+  line.url_ = common::ObString::make_string("/v1/embeddings");
+
+  char tmp_buf[64];
+  int64_t tmp_len = snprintf(tmp_buf, sizeof(tmp_buf), "%ld", index);
+  char *cid_buf = static_cast<char*>(allocator.alloc(tmp_len));
+  if (OB_ISNULL(cid_buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc custom_id", K(ret));
+  } else {
+    MEMCPY(cid_buf, tmp_buf, tmp_len);
+    line.custom_id_.assign_ptr(cid_buf, static_cast<int32_t>(tmp_len));
+  }
+
+  if (OB_SUCC(ret)) {
+    common::ObArenaAllocator tmp_alloc("BatchBodyTmp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    common::ObJsonBuffer model_jbuf(&tmp_alloc);
+    common::ObJsonBuffer text_jbuf(&tmp_alloc);
+    if (OB_FAIL(common::ObJsonBaseUtil::add_double_quote(
+            model_jbuf, model.ptr(), model.length()))) {
+      LOG_WARN("failed to escape model name", K(ret));
+    } else if (OB_FAIL(common::ObJsonBaseUtil::add_double_quote(
+            text_jbuf, input_text.ptr(), input_text.length()))) {
+      LOG_WARN("failed to escape input text", K(ret));
+    } else {
+      const int64_t body_len = model_jbuf.length() + text_jbuf.length() + 64;
+      char *body_buf = static_cast<char*>(allocator.alloc(body_len));
+      if (OB_ISNULL(body_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc body buffer", K(ret), K(body_len));
+      } else {
+        int64_t pos = snprintf(body_buf, body_len,
+            "{\"model\":%.*s,\"input\":%.*s,\"encoding_format\":\"float\"}",
+            static_cast<int>(model_jbuf.length()), model_jbuf.ptr(),
+            static_cast<int>(text_jbuf.length()), text_jbuf.ptr());
+        if (pos <= 0 || pos >= body_len) {
+          ret = OB_SIZE_OVERFLOW;
+          LOG_WARN("body snprintf overflow", K(ret), K(pos), K(body_len));
+        } else {
+          line.body_.assign_ptr(body_buf, static_cast<int32_t>(pos));
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    line.line_size_ = line.custom_id_.length() + line.method_.length() +
+                      line.url_.length() + line.body_.length() + 100;
+  }
+  return ret;
+}
+
+int ObDashscopeUtils::ObDashscopeEmbed::get_batch_submit_spec(common::ObString &endpoint,
+                                                              common::ObString &completion_window) const
+{
+  endpoint = common::ObString::make_string("/v1/embeddings");
+  completion_window = common::ObString::make_string("24h");
+  return OB_SUCCESS;
+}
+
 int ObDashscopeUtils::ObDashscopeEmbed::parse_output(common::ObIAllocator &allocator,
                                                     common::ObJsonObject *http_response,
                                                     common::ObIJsonBase *&result)
@@ -1416,6 +1606,110 @@ int ObDashscopeUtils::ObDashscopeEmbed::parse_output(common::ObIAllocator &alloc
       }
       if (OB_SUCC(ret)) {
         result = result_array;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDashscopeUtils::ObDashscopeEmbed::parse_openai_output(common::ObIAllocator &allocator,
+                                                             common::ObJsonObject *root,
+                                                             common::ObIJsonBase *&result)
+{
+  int ret = OB_SUCCESS;
+  // OpenAI batch format: {"data": [{"object": "embedding", "embedding": [...], "index": N}, ...]}
+  ObJsonArray *data_array = nullptr;
+  ObJsonArray *result_array = nullptr;
+  if (OB_FAIL(ObAIFuncJsonUtils::get_json_array(allocator, result_array))) {
+    LOG_WARN("Failed to get json array", K(ret));
+  } else if (OB_ISNULL(data_array = static_cast<ObJsonArray *>(root->get_value("data")))) {
+    ret = OB_INVALID_DATA;
+    LOG_WARN("data array is null in OpenAI response", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < data_array->element_count(); ++i) {
+      ObJsonObject *item = static_cast<ObJsonObject *>(data_array->get_value(i));
+      if (OB_ISNULL(item)) {
+        ret = OB_INVALID_DATA;
+        LOG_WARN("data item is null", K(ret), K(i));
+      } else {
+        ObJsonArray *emb_arr = static_cast<ObJsonArray *>(item->get_value("embedding"));
+        if (OB_ISNULL(emb_arr)) {
+          ret = OB_INVALID_DATA;
+          LOG_WARN("embedding array is null in OpenAI data item", K(ret), K(i));
+        } else if (OB_FAIL(result_array->append(emb_arr))) {
+          LOG_WARN("Failed to append embedding array", K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      result = result_array;
+    }
+  }
+  return ret;
+}
+
+int ObDashscopeUtils::ObDashscopeEmbed::decode_result(common::ObIAllocator &allocator,
+                                                      const common::ObString &response_body,
+                                                      share::ObAiResultRow &row)
+{
+  int ret = OB_SUCCESS;
+  common::ObArenaAllocator parse_alloc("DecodeResult", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  common::ObJsonNode *root = nullptr;
+  common::ObIJsonBase *result = nullptr;
+
+  if (OB_FAIL(common::ObJsonParser::get_tree(&parse_alloc, response_body, root))) {
+    LOG_WARN("failed to parse response body json", K(ret));
+  } else if (OB_ISNULL(root) || root->json_type() != common::ObJsonNodeType::J_OBJECT) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid response json root", K(ret));
+  } else {
+    common::ObJsonObject *root_obj = static_cast<common::ObJsonObject *>(root);
+    if (OB_NOT_NULL(root_obj->get_value("output"))) {
+      // DashScope real-time format: {"output": {"embeddings": [...]}}
+      if (OB_FAIL(parse_output(parse_alloc, root_obj, result))) {
+        LOG_WARN("parse_output (dashscope) failed", K(ret));
+      }
+    } else {
+      // OpenAI batch format: {"data": [{"embedding": [...]}]}
+      if (OB_FAIL(parse_openai_output(parse_alloc, root_obj, result))) {
+        LOG_WARN("parse_openai_output failed", K(ret));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(result) || result->json_type() != common::ObJsonNodeType::J_ARRAY) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("parse_output returned non-array", K(ret));
+  } else {
+    common::ObJsonArray *result_arr = static_cast<common::ObJsonArray *>(result);
+    if (result_arr->element_count() == 0) {
+      ret = OB_INVALID_DATA;
+      LOG_WARN("empty result array from parse_output", K(ret));
+    } else {
+      common::ObJsonNode *emb_node = result_arr->get_value(0);
+      if (OB_ISNULL(emb_node) || emb_node->json_type() != common::ObJsonNodeType::J_ARRAY) {
+        ret = OB_INVALID_DATA;
+        LOG_WARN("invalid embedding node in result array", K(ret));
+      } else {
+        common::ObJsonArray *emb_arr = static_cast<common::ObJsonArray *>(emb_node);
+        const int64_t dim = static_cast<int64_t>(emb_arr->element_count());
+        float *vec_buf = static_cast<float *>(allocator.alloc(dim * sizeof(float)));
+        if (OB_ISNULL(vec_buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc vector buffer", K(ret), K(dim));
+        } else {
+          for (int64_t j = 0; j < dim; ++j) {
+            common::ObJsonNode *val = (*emb_arr)[j];
+            if (OB_NOT_NULL(val) && val->json_type() == common::ObJsonNodeType::J_DOUBLE) {
+              vec_buf[j] = static_cast<float>(static_cast<common::ObJsonDouble *>(val)->value());
+            } else {
+              vec_buf[j] = 0.0f;
+            }
+          }
+          row.embedding_vector_ = vec_buf;
+          row.vector_dim_ = dim;
+        }
       }
     }
   }
@@ -3096,7 +3390,7 @@ int ObAIFuncModel::call_completion(ObString &prompt, ObJsonObject *config, ObStr
   } else if (OB_FAIL(complete_provider->get_body(*allocator_, request_model_name, prompt_str, prompt, config, body))) {
     LOG_WARN("Failed to get body", K(ret));
   } else if (OB_FAIL(client.send_post(*allocator_, get_url_(), headers, body, response))) {
-    LOG_WARN("Failed to send post", K(ret));
+    LOG_WARN("Failed to send post", K(ret), "url", get_url_(), "provider", get_provider_(), K(request_model_name));
   } else if (OB_FAIL(complete_provider->parse_output(*allocator_, response, result_base))) {
     LOG_WARN("Failed to parse output", K(ret));
   } else if (OB_FAIL(ObAIFuncJsonUtils::print_json_to_str(*allocator_, result_base, result_str))) {
@@ -3305,7 +3599,7 @@ int ObAIFuncModel::call_dense_embedding_vector_v2(ObArray<ObString> &content, Ob
   } else if (OB_FAIL(embed_provider->get_body(*allocator_, request_model_name, content, config, input_type_, body))) {
     LOG_WARN("Failed to get body", K(ret));
   } else if (OB_FAIL(client.send_post(*allocator_, get_url_(), headers, body, response))) {
-    LOG_WARN("Failed to send post", K(ret));
+    LOG_WARN("Failed to send post", K(ret), "url", get_url_(), "provider", get_provider_(), K(request_model_name));
   } else if (OB_FAIL(embed_provider->parse_output(*allocator_, response, result_base))) {
     LOG_WARN("Failed to parse output", K(ret));
   } else {
@@ -3384,7 +3678,7 @@ int ObAIFuncModel::call_rerank(ObString &query,
   } else if (OB_FAIL(rerank_provider->get_body(*allocator_, request_model_name, query, contents, config, body))) {
     LOG_WARN("Failed to get body", K(ret));
   } else if (OB_FAIL(client.send_post(*allocator_, get_url_(), headers, body, response))) {
-    LOG_WARN("Failed to send post", K(ret));
+    LOG_WARN("Failed to send post", K(ret), "url", get_url_(), "provider", get_provider_(), K(request_model_name));
   } else if (OB_FAIL(rerank_provider->parse_output(*allocator_, response, result_base))) {
     LOG_WARN("Failed to parse output", K(ret));
   } else {
@@ -4068,7 +4362,7 @@ int ObAIModelConfigInfoManager::get_config(const ObString &provider,
     LOG_WARN("provider or model_name is empty", K(ret), K(provider), K(model_name));
   } else {
     ObAIModelConfigKey key;
-    ObArenaAllocator allocator("AICfgKey");
+    ObArenaAllocator allocator("AICfgKey", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     if (OB_FAIL(ObCharset::toupper(CS_TYPE_UTF8MB4_GENERAL_CI, provider, key.provider_, allocator))) {
       LOG_WARN("failed to toupper provider", K(ret), K(provider));
     } else if (OB_FAIL(ObCharset::toupper(CS_TYPE_UTF8MB4_GENERAL_CI, model_name, key.model_name_, allocator))) {

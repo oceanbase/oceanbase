@@ -57,6 +57,9 @@ public:
   int finish_append_batch(bool need_dump);
   OB_INLINE int64_t get_mem_hold() const { return store_.get_mem_hold(); }
   OB_INLINE int64_t get_cg_idx() const { return cg_idx_; }
+  OB_INLINE int64_t get_slice_idx() const { return slice_idx_; }
+  OB_INLINE int64_t get_row_count() const { return store_.get_row_cnt(); }
+  OB_INLINE int64_t get_dir_id() const { return store_.get_file_dir_id(); }
   OB_INLINE bool is_opened() const { return is_opened_; }
   TO_STRING_KV(K(is_opened_), K(tablet_id_), K(slice_idx_), K(cg_idx_), K(is_start_iterate_), K(column_count_), K(brs_));
 

@@ -802,6 +802,7 @@ ob_set_subtarget(ob_storage ddl
   ddl/ob_ddl_merge_schedule.cpp
   ddl/ob_ddl_inc_merge_schedule.cpp
   ddl/ob_hnsw_embedmgr.cpp
+  ddl/ob_batch_file_slot_ring.cpp
   ddl/ob_fts_macro_block_write_op.cpp
   ddl/ob_final_merge_sort_write_task.cpp
   ddl/ob_ddl_encode_sortkey_utils.cpp

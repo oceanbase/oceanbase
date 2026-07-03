@@ -9,13 +9,26 @@
 #include "storage/ddl/ob_pipeline.h"
 #include "storage/ddl/ob_ddl_independent_dag.h"
 #include "storage/ddl/ob_ddl_tablet_context.h"
+#include "storage/blocksstable/ob_storage_datum.h"
 #include "common/ob_tablet_id.h"
 #include "share/vector_index/ob_vector_index_util.h"
 #include "share/vector_index/ob_plugin_vector_index_adaptor.h"
 #include "share/vector_index/ob_vector_kmeans_ctx.h"
 #include "share/vector_index/ob_vector_embedding_handler.h"
+#include "share/vector_index/ob_ai_access_service.h"
 #include "storage/ddl/ob_hnsw_embedmgr.h"
+#include "storage/ddl/ob_batch_file_slot_ring.h"
 #include "lib/lock/ob_spin_lock.h"
+#include "share/ai_service/ob_ai_batch_file_writer.h"
+
+// Forward declaration to avoid circular dependency
+namespace oceanbase
+{
+namespace storage
+{
+class ObCGRowFileWriterOp;
+}
+}
 
 namespace oceanbase
 {
@@ -26,6 +39,11 @@ class ObPluginVectorIndexAdapterGuard;
 class ObPluginVectorIndexAdaptor;
 class ObEmbeddingTask;
 class ObEmbeddingTaskHandler;
+}
+
+namespace vector_index
+{
+class ObAiAccessService;
 }
 
 namespace common
@@ -321,6 +339,16 @@ protected:
   int64_t slice_idx_;
   ObArenaAllocator op_allocator_;
   ObArenaAllocator row_allocator_;
+};
+
+class ObVecEmbeddingBaseOp : public ObVectorIndexBaseOperator
+{
+public:
+  explicit ObVecEmbeddingBaseOp(ObPipeline *pipeline)
+    : ObVectorIndexBaseOperator(pipeline)
+  {}
+  virtual ~ObVecEmbeddingBaseOp() = default;
+  virtual int init(const ObTabletID &tablet_id) = 0;
 };
 
 class ObHNSWIndexAppendBufferOperator : public ObVectorIndexBaseOperator
@@ -743,11 +771,11 @@ typedef ObVectorIndexBuildAndWritePipeline<ObIVFPqIndexBuildOperator, ObIVFPqWri
 // ==================== Vector Embedding ====================
 class ObEmbeddingTaskMgr;
 
-class ObHNSWEmbeddingOperator : public ObVectorIndexBaseOperator
+class ObHNSWEmbeddingOperator : public ObVecEmbeddingBaseOp
 {
 public:
   explicit ObHNSWEmbeddingOperator(ObPipeline *pipeline)
-    : ObVectorIndexBaseOperator(pipeline), embedmgr_(nullptr), vec_dim_(-1), rowkey_cnt_(-1),
+    : ObVecEmbeddingBaseOp(pipeline), embedmgr_(nullptr), vec_dim_(-1), rowkey_cnt_(-1),
       text_col_idx_(-1), is_inited_(false), error_ret_code_(OB_SUCCESS),
       batch_size_(0), current_batch_(nullptr)
   {}
@@ -858,35 +886,15 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObHNSWEmbeddingWriteMacroOperator);
 };
 
+// Pipeline for HNSW embedding index build (supports SYNC_HTTP and BATCH_FILE access modes)
+// Data flow: cg_row_tmp_files (from upstream DDL scan) -> embedding_op -> embedding_write_op -> results
 class ObHNSWEmbeddingAppendAndWritePipeline : public ObDDLWriteMacroBlockBasePipeline
 {
 public:
-  ObHNSWEmbeddingAppendAndWritePipeline()
-    : ObDDLWriteMacroBlockBasePipeline(TASK_TYPE_DDL_VECTOR_INDEX_APPEND_PIPELINE),
-      embedding_buffer_op_(this), embedding_write_op_(this)
-  {}
-  virtual ~ObHNSWEmbeddingAppendAndWritePipeline() = default;
+  ObHNSWEmbeddingAppendAndWritePipeline();
+  virtual ~ObHNSWEmbeddingAppendAndWritePipeline();
 
-  int init(ObDDLSlice *ddl_slice)
-  {
-    int ret = OB_SUCCESS;
-    if (OB_UNLIKELY(nullptr == ddl_slice || !ddl_slice->is_inited())) {
-      ret = OB_INVALID_ARGUMENT;
-      STORAGE_LOG(WARN, "invalid arguments", K(ret), KPC(ddl_slice));
-    } else {
-      ddl_slice_ = ddl_slice;
-      if (OB_FAIL(embedding_buffer_op_.init(ddl_slice->get_tablet_id()))) {
-        STORAGE_LOG(WARN, "init embedding buffer operator failed", K(ret));
-      } else if (OB_FAIL(embedding_write_op_.init(ddl_slice->get_tablet_id(), ddl_slice->get_slice_idx()))) {
-        STORAGE_LOG(WARN, "init embedding write operator failed", K(ret));
-      } else if (OB_FAIL(add_op(&embedding_buffer_op_))) {
-        STORAGE_LOG(WARN, "add embedding buffer op failed", K(ret));
-      } else if (OB_FAIL(add_op(&embedding_write_op_))) {
-        STORAGE_LOG(WARN, "add embedding write op failed", K(ret));
-      }
-    }
-    return ret;
-  }
+  int init(ObDDLSlice *ddl_slice);
 
   virtual int set_remain_block() override {
     if (OB_ISNULL(ddl_slice_)) {
@@ -898,9 +906,160 @@ public:
   }
 
 private:
-  ObHNSWEmbeddingOperator embedding_buffer_op_;
+  ObCGRowFileWriterOp *cg_row_file_writer_op_;
+  ObVecEmbeddingBaseOp *embedding_op_;           // polymorphic, heap-alloc
+  ObVectorIndexAccessMode ai_execution_mode_;
   ObHNSWEmbeddingWriteMacroOperator embedding_write_op_;
 };
+
+// ==================== BatchFile Embedding Operator ====================
+// Non-blocking BatchFile embedding operator with multi-file support.
+// Collects data incrementally across execute() calls, submits BatchFile tasks
+// when files are full, and uses dag_yield() to avoid blocking DDL threads.
+// SlotRing guarantees results are output in submission order.
+//
+// execute() flow:
+//   1. Collect data from input_chunk into JSONL file
+//   2. When file is full, submit BatchFile task and reserve SlotRing slot
+//   3. Poll SUBMITTED slots for completion (query_task_status)
+//   4. If head slot is READY, pop result and return HAVE_MORE_OUTPUT
+//   5. If no result ready, sleep + dag_yield() and return NEED_MORE_INPUT
+//   6. On end_chunk: submit remaining, stream out all results in order
+
+class ObBatchFileEmbeddingOperator : public ObVecEmbeddingBaseOp
+{
+public:
+  explicit ObBatchFileEmbeddingOperator(ObPipeline *pipeline);
+  ~ObBatchFileEmbeddingOperator();
+
+  virtual int init(const ObTabletID &tablet_id) override;
+
+  virtual int execute(const ObChunk &input_chunk,
+                      ResultState &result_state,
+                      ObChunk &output_chunk) override;
+
+  virtual int try_execute_finish(const ObChunk &input_chunk,
+                                  ResultState &result_state,
+                                  ObChunk &output_chunk) override;
+
+  TO_STRING_KV(K_(tablet_id), K_(model_id), K_(ai_execution_mode), K_(is_inited),
+               K_(all_data_collected), K_(all_tasks_submitted), K_(end_chunk_sent),
+               K_(total_rows_collected), K_(slot_ring));
+
+private:
+  // ==================== Core flow methods ====================
+  // Collect rows from input_chunk and send to AiAccessService
+  int collect_data_to_service_(const ObChunk &input_chunk);
+  // Finish current task's data collection and submit it
+  int finish_and_submit_current_task_();
+  // Poll SUBMITTED slots for completion
+  int poll_submitted_slots_();
+  // Check head slot and output result if ready
+  int check_and_output_result_(ObChunk &output_chunk, ResultState &result_state);
+  // Handle end_chunk: submit remaining data, then stream out all results
+  int handle_end_chunk_(ObChunk &output_chunk, ResultState &result_state);
+  // Sleep + dag_yield() combo to release DDL thread
+  int do_yield_();
+
+  // ==================== Helper methods ====================
+  int get_ai_config_(const common::ObString &model_id);
+  int get_next_row_from_tmp_files_(common::ObArray<ObCGRowFile *> *cg_row_file_arr,
+                                    blocksstable::ObStorageDatum &text,
+                                    common::ObArray<blocksstable::ObStorageDatum> &extra_cols,
+                                    bool &has_row);
+  int get_next_batch_from_tmp_files_(ObCGRowFile *&row_file);
+  int parse_row_(const blocksstable::ObDatumRow &current_row,
+                 blocksstable::ObStorageDatum &text,
+                 common::ObArray<blocksstable::ObStorageDatum> &extras);
+  bool need_stop_();
+  int open_new_task_();
+  int ensure_batch_info_();
+  void destroy_current_batch_info_();
+  void reset_current_task_state_();
+  int submit_skip_only_batch_();
+  int submit_api_batch_();
+  bool is_query_task_status_retryable_(int ret) const;
+  void mark_slot_failed_best_effort_(int64_t slot_idx, int error_code, const char *reason);
+  // Cancel all submitted tasks in slot_contexts_ via AiAccessService.
+  // Called when DDL exits before all tasks complete.
+  void cancel_inflight_tasks_();
+
+private:
+  // ==================== Service and config ====================
+  vector_index::ObAiAccessService *service_;
+  common::ObAIFuncBase *embed_provider_;
+  common::ObString model_id_;
+  share::ObAiAccessMode ai_execution_mode_;
+  bool allow_null_on_failure_;
+  int64_t vec_dim_;
+  int64_t text_col_idx_;
+  int64_t rowkey_cnt_;
+  int64_t dir_id_;
+  int error_ret_code_;
+  share::ObAiModelEndpointInfo *endpoint_info_;
+  common::ObString request_model_name_;
+  common::ObArenaAllocator allocator_;
+  ObCollationType text_col_collation_type_;
+  common::ObSEArray<int32_t, 4> extra_column_idxs_;
+
+  // ==================== SlotRing for multi-task ordering ====================
+  ObBatchFileSlotRing slot_ring_;
+
+  // Slot context: maps slot_idx -> task_id + batch_info (with extras)
+  struct SlotContext {
+    common::ObString task_id_;
+    int64_t row_count_;
+    ObTaskBatchInfo *batch_info_;  // Stores extras collected during data phase
+
+    SlotContext() : task_id_(), row_count_(0), batch_info_(nullptr) {}
+    void reset() { task_id_.reset(); row_count_ = 0; batch_info_ = nullptr; }
+    TO_STRING_KV(K_(task_id), K_(row_count), KP_(batch_info));
+  };
+  common::ObSEArray<SlotContext, 8> slot_contexts_;
+
+  // DDL task ID for batch task creation
+  int64_t ddl_task_id_;
+
+  // RAII writer for current batch task
+  share::ObAiBatchTaskWriter writer_;
+
+  // Current task being collected
+  int64_t current_task_row_count_;
+  ObTaskBatchInfo *current_batch_info_;  // Batch info being filled during data collection
+
+  // ==================== Data collection state ====================
+  common::ObArray<ObCGRowFile *> *current_cg_row_files_;
+  int64_t cur_file_idx_;
+  blocksstable::ObBatchDatumRows *cur_datum_rows_;
+  int64_t cur_row_in_batch_;
+  bool chunk_exhausted_;
+  int64_t total_rows_collected_;
+
+  // ==================== State flags ====================
+  bool all_data_collected_;
+  bool all_tasks_submitted_;
+  bool end_chunk_sent_;
+
+  // ==================== Drain loop state ====================
+  int64_t drain_start_ts_;
+  int64_t drain_poll_count_;
+
+  // ==================== Constants ====================
+  static const int64_t DEFAULT_MAX_CONCURRENT_TASKS = 8;
+  static const int64_t RESULT_BATCH_SIZE = 1024;  // Rows per batch when reading results
+#ifndef NDEBUG
+  static const int64_t DEFAULT_SLICE_SIZE = 100;            // 100 rows per task
+  static const int64_t CHECK_INTERVAL_US = 2 * 1000 * 1000; // 2 seconds
+  static const int64_t DRAIN_LOG_INTERVAL = 30;             // Log every 30 iterations
+#else
+  static const int64_t DEFAULT_SLICE_SIZE = 10000;           // 10000 rows per task
+  static const int64_t CHECK_INTERVAL_US = 10 * 1000 * 1000; // 10 seconds
+  static const int64_t DRAIN_LOG_INTERVAL = 30;             // Log every 30 iterations
+#endif
+
+  DISALLOW_COPY_AND_ASSIGN(ObBatchFileEmbeddingOperator);
+};
+
 
 }  // end namespace storage
 }  // end namespace oceanbase

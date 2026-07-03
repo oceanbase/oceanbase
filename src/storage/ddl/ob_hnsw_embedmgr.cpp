@@ -76,6 +76,7 @@ int ObEmbeddingResult::set_extra_cols(const common::ObArray<blocksstable::ObStor
 {
   int ret = OB_SUCCESS;
   extra_values_.reset();
+  extra_values_.set_tenant_id(MTL_ID());
   if (src_extras.count() == 0) {
     // nothing to do
   } else if (OB_FAIL(extra_values_.reserve(src_extras.count()))) {
@@ -140,6 +141,7 @@ int ObEmbeddingIOCallback::process()
     LOG_WARN("embedding callback not inited", K(ret));
   } else {
     common::ObArray<float*> vectors;
+    vectors.set_tenant_id(MTL_ID());
     if (OB_FAIL(task_->get_async_result(vectors))) {
       LOG_WARN("get async result failed", K(ret), K(slot_idx_), "vec_cnt", vectors.count());
     } else if (vectors.count() <= 0) {
@@ -200,6 +202,7 @@ int ObTaskBatchInfo::init(const int64_t batch_size, const int64_t vec_dim)
     vec_dim_ = vec_dim;
     current_count_ = 0;
 
+    results_.set_tenant_id(MTL_ID());
     if (OB_FAIL(results_.reserve(batch_size))) {
       LOG_WARN("reserve results array failed", K(ret), K(batch_size));
     } else {
@@ -223,7 +226,8 @@ int ObTaskBatchInfo::init(const int64_t batch_size, const int64_t vec_dim)
 }
 
 int ObTaskBatchInfo::add_item(const blocksstable::ObStorageDatum &text,
-                              const common::ObArray<blocksstable::ObStorageDatum> &extras)
+                              const common::ObArray<blocksstable::ObStorageDatum> &extras,
+                              bool pre_alloc_vector)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(current_count_ >= batch_size_)) {
@@ -245,16 +249,17 @@ int ObTaskBatchInfo::add_item(const blocksstable::ObStorageDatum &text,
       }
     }
 
-    // pre-allocate space (will be filled by embedding task)
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && pre_alloc_vector) {
       float *vec_buf = static_cast<float*>(allocator_.alloc(vec_dim_ * sizeof(float)));
       if (OB_ISNULL(vec_buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate vector buffer failed", K(ret), K_(vec_dim));
       } else {
         result->set_vector(vec_buf, vec_dim_);
-        current_count_++;
       }
+    }
+    if (OB_SUCC(ret)) {
+      current_count_++;
     }
   }
   return ret;
@@ -307,6 +312,7 @@ int ObTaskSlotRing::init(const int64_t capacity)
     LOG_WARN("slot ring already initialized", K(ret));
   } else {
     capacity_ = capacity + 1; // +1 for the extra slot to differentiate between full and empty queue
+    slots_.set_tenant_id(MTL_ID());
     if (OB_FAIL(slots_.prepare_allocate(capacity_))) {
       LOG_WARN("prepare allocate slots failed", K(ret), K(capacity_));
     } else {
@@ -656,6 +662,7 @@ int ObEmbeddingTaskMgr::submit_batch_info(ObTaskBatchInfo *&batch_info)
       }
     } else {
       common::ObArray<ObString> texts;
+      texts.set_tenant_id(MTL_ID());
       const common::ObArray<ObEmbeddingResult*> &results = batch_info->get_results();
       const int64_t count = batch_info->get_count();
       int64_t embedding_count = batch_info->get_need_embedding_count();

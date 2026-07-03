@@ -20,6 +20,7 @@
 #include "share/vector_index/ob_vector_index_async_task_util.h"
 #include "ob_vector_kmeans_ctx.h"
 #include "share/vector_index/ob_vector_index_ivf_cache_mgr.h"
+#include "share/vector_index/ob_ai_access_service.h"
 
 namespace oceanbase
 {
@@ -353,6 +354,7 @@ public:
     all_vsag_use_mem_(NULL),
     tenant_vec_async_task_sched_(nullptr),
     is_vec_async_task_started_(false),
+    ai_service_init_lock_(common::ObLatchIds::OB_EMBEDDING_TASK_HANDLER_SPIN_LOCK),
     kmeans_tg_id_(OB_INVALID_TG_ID),
     embedding_tg_id_(OB_INVALID_TG_ID)
   {}
@@ -401,6 +403,7 @@ public:
   ObVecIndexAsyncTaskHandler &get_vec_async_task_handle() { return vec_async_task_handle_; }
   ObKmeansBuildTaskHandler& get_kmeans_build_handler() { return kmeans_build_task_handler_; };
   int get_embedding_task_handler(ObEmbeddingTaskHandler *&handler);
+  int get_ai_execution_service(vector_index::ObAiAccessService *&service);
   LSIndexMgrMap &get_ls_index_mgr_map() { return index_ls_mgr_map_; };
   ObVecIndexTmpInfoMap &get_vector_index_tmp_info_map() { return vec_idx_tmp_map_; }
   int release_vector_index_tmp_info(const int64_t task_id);
@@ -535,6 +538,8 @@ private:
   ObVecIndexTmpInfoMap vec_idx_tmp_map_;
   ObEmbeddingTaskHandler embedding_task_handler_;
   // TODO(haohan): shared_tg_id for kmeans and embedding thread pool
+  vector_index::ObAiAccessService ai_execution_service_;
+  common::ObSpinLock ai_service_init_lock_;
   int kmeans_tg_id_;
   int embedding_tg_id_;
 

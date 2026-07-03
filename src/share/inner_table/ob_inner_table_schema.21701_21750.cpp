@@ -1242,6 +1242,210 @@ int ObInnerTableSchema::cdb_ob_ai_gateway_endpoints_schema(ObTableSchema &table_
   return ret;
 }
 
+int ObInnerTableSchema::dba_ob_ai_batch_tasks_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_OB_AI_BATCH_TASKS_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_OB_AI_BATCH_TASKS_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT       task_id AS TASK_ID,       ddl_task_id AS DDL_TASK_ID,       model_name AS MODEL_NAME,       command_type AS COMMAND_TYPE,       CASE status         WHEN 0 THEN 'INVALID'         WHEN 3 THEN 'PENDING'         WHEN 4 THEN 'RUNNING'         WHEN 5 THEN 'FINISHED'         WHEN 6 THEN 'FAILED'         WHEN 7 THEN 'CANCELLED'         ELSE 'UNKNOWN'       END AS STATUS,       requests_handled AS REQUESTS_HANDLED,       total_requests AS TOTAL_REQUESTS,       ROUND(requests_handled * 100.0 / NULLIF(total_requests, 0), 2) AS PROGRESS_PERCENT,       task_create_time AS TASK_CREATE_TIME,       task_update_time AS TASK_UPDATE_TIME,       batch_id AS BATCH_ID,       remote_file_ids AS REMOTE_FILE_IDS,       error_detail AS ERROR_DETAIL   FROM oceanbase.__all_ai_batch_task )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::cdb_ob_ai_batch_tasks_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_CDB_OB_AI_BATCH_TASKS_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_CDB_OB_AI_BATCH_TASKS_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT       tenant_id AS TENANT_ID,       task_id AS TASK_ID,       ddl_task_id AS DDL_TASK_ID,       model_name AS MODEL_NAME,       command_type AS COMMAND_TYPE,       CASE status         WHEN 0 THEN 'INVALID'         WHEN 3 THEN 'PENDING'         WHEN 4 THEN 'RUNNING'         WHEN 5 THEN 'FINISHED'         WHEN 6 THEN 'FAILED'         WHEN 7 THEN 'CANCELLED'         ELSE 'UNKNOWN'       END AS STATUS,       requests_handled AS REQUESTS_HANDLED,       total_requests AS TOTAL_REQUESTS,       ROUND(requests_handled * 100.0 / NULLIF(total_requests, 0), 2) AS PROGRESS_PERCENT,       task_create_time AS TASK_CREATE_TIME,       task_update_time AS TASK_UPDATE_TIME,       batch_id AS BATCH_ID,       remote_file_ids AS REMOTE_FILE_IDS,       error_detail AS ERROR_DETAIL   FROM oceanbase.__all_virtual_ai_batch_task )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::dba_ob_ai_batch_task_history_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_OB_AI_BATCH_TASK_HISTORY_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_OB_AI_BATCH_TASK_HISTORY_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT       task_id AS TASK_ID,       ddl_task_id AS DDL_TASK_ID,       model_name AS MODEL_NAME,       command_type AS COMMAND_TYPE,       CASE status         WHEN 0 THEN 'INVALID'         WHEN 3 THEN 'PENDING'         WHEN 4 THEN 'RUNNING'         WHEN 5 THEN 'FINISHED'         WHEN 6 THEN 'FAILED'         WHEN 7 THEN 'CANCELLED'         ELSE 'UNKNOWN'       END AS STATUS,       requests_handled AS REQUESTS_HANDLED,       total_requests AS TOTAL_REQUESTS,       ROUND(requests_handled * 100.0 / NULLIF(total_requests, 0), 2) AS PROGRESS_PERCENT,       task_create_time AS TASK_CREATE_TIME,       task_update_time AS TASK_UPDATE_TIME,       batch_id AS BATCH_ID,       remote_file_ids AS REMOTE_FILE_IDS,       error_detail AS ERROR_DETAIL,       token_usage AS TOKEN_USAGE,       provider_timeline AS PROVIDER_TIMELINE   FROM oceanbase.__all_ai_batch_task_history )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::cdb_ob_ai_batch_task_history_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_CDB_OB_AI_BATCH_TASK_HISTORY_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_CDB_OB_AI_BATCH_TASK_HISTORY_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT       tenant_id AS TENANT_ID,       task_id AS TASK_ID,       ddl_task_id AS DDL_TASK_ID,       model_name AS MODEL_NAME,       command_type AS COMMAND_TYPE,       CASE status         WHEN 0 THEN 'INVALID'         WHEN 3 THEN 'PENDING'         WHEN 4 THEN 'RUNNING'         WHEN 5 THEN 'FINISHED'         WHEN 6 THEN 'FAILED'         WHEN 7 THEN 'CANCELLED'         ELSE 'UNKNOWN'       END AS STATUS,       requests_handled AS REQUESTS_HANDLED,       total_requests AS TOTAL_REQUESTS,       ROUND(requests_handled * 100.0 / NULLIF(total_requests, 0), 2) AS PROGRESS_PERCENT,       task_create_time AS TASK_CREATE_TIME,       task_update_time AS TASK_UPDATE_TIME,       batch_id AS BATCH_ID,       remote_file_ids AS REMOTE_FILE_IDS,       error_detail AS ERROR_DETAIL,       token_usage AS TOKEN_USAGE,       provider_timeline AS PROVIDER_TIMELINE   FROM oceanbase.__all_virtual_ai_batch_task_history )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
 
 } // end namespace share
 } // end namespace oceanbase

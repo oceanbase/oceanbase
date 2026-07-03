@@ -853,6 +853,7 @@ ob_set_subtarget(ob_share vector_index
   vector_index/ob_vector_index_merge_task.cpp
   vector_index/ob_vector_index_aux_table_handler.cpp
   vector_index/ob_vector_recall_calc_util.cpp
+  vector_index/ob_ai_access_service.cpp
 )
 
 ob_set_subtarget(ob_share vector_type
@@ -905,6 +906,14 @@ ob_set_subtarget(ob_share ai_service
   ai_service/ob_ai_service_proxy.cpp
   ai_service/ob_ai_service_executor.cpp
   ai_service/ob_ai_provider_importer.cpp
+  ai_service/ob_ai_exec_struct.cpp
+  ai_service/ob_ai_system_table_manager.cpp
+  ai_service/ob_ai_table_poller.cpp
+  ai_service/ob_ai_func_provider.cpp
+  ai_service/ob_ai_batch_file_writer.cpp
+  ai_service/ob_ai_batch_file_manager.cpp
+  ai_service/ob_batch_file_jsonl_writer.cpp
+  ai_service/ob_batch_file_jsonl_iterator.cpp
 )
 
 ob_set_subtarget(ob_share compaction_ttl

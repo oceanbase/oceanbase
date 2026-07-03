@@ -1886,7 +1886,7 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
           } else if (OB_FAIL(ObVectorIndexUtil::check_vec_index_param(tenant_id, option_node, *allocator_,
               *tbl_schema, index_params_, vec_column_name_, vec_index_type_, session_info_))) {
             LOG_WARN("fail to check vec index params", K(ret));
-          } else if (OB_FAIL(ObVectorIndexUtil::check_vec_index_in_stmt(*stmt_, vec_index_type_))) {
+          } else if (OB_FAIL(ObVectorIndexUtil::check_vec_index_in_stmt(*stmt_, vec_index_type_, index_params_))) {
             LOG_WARN("fail to check vec index in stmt", K(ret));
           }
         }

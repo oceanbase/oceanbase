@@ -88,6 +88,16 @@ public:
     virtual int parse_output(common::ObIAllocator &allocator,
                              common::ObJsonObject *http_response,
                              common::ObIJsonBase *&result) override;
+    virtual int encode_batch_line(common::ObIAllocator &allocator,
+                                  const common::ObString &model,
+                                  int64_t index,
+                                  const common::ObString &input_text,
+                                  ObAiBatchFileLine &line) override;
+    virtual int decode_result(common::ObIAllocator &allocator,
+                              const common::ObString &response_body,
+                              share::ObAiResultRow &row) override;
+    virtual int get_batch_submit_spec(common::ObString &endpoint,
+                                      common::ObString &completion_window) const override;
   private:
     DISALLOW_COPY_AND_ASSIGN(ObOpenAIEmbed);
   };
@@ -146,6 +156,8 @@ public:
     virtual int parse_output(common::ObIAllocator &allocator,
                              common::ObJsonObject *http_response,
                              common::ObIJsonBase *&result) override;
+    // Ollama users register the full endpoint URL (e.g. http://host/api/embeddings), so no path suffix.
+    virtual const char *get_embed_path() const override { return ""; }
   private:
     DISALLOW_COPY_AND_ASSIGN(ObOllamaEmbed);
   };
@@ -222,7 +234,20 @@ public:
     virtual int parse_output(common::ObIAllocator &allocator,
                              common::ObJsonObject *http_response,
                              common::ObIJsonBase *&result) override;
+    virtual int encode_batch_line(common::ObIAllocator &allocator,
+                                  const common::ObString &model,
+                                  int64_t index,
+                                  const common::ObString &input_text,
+                                  ObAiBatchFileLine &line) override;
+    virtual int decode_result(common::ObIAllocator &allocator,
+                              const common::ObString &response_body,
+                              share::ObAiResultRow &row) override;
+    virtual int get_batch_submit_spec(common::ObString &endpoint,
+                                      common::ObString &completion_window) const override;
   private:
+    int parse_openai_output(common::ObIAllocator &allocator,
+                            common::ObJsonObject *root,
+                            common::ObIJsonBase *&result);
     DISALLOW_COPY_AND_ASSIGN(ObDashscopeEmbed);
   };
   // Embed provider for Dashscope multi-modal (vl/flush) models: always uses input.contents with {"text"/"image"} nodes.
