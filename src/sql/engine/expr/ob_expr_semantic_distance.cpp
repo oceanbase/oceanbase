@@ -22,7 +22,7 @@ namespace sql
 {
 
 ObExprSemanticDistance::ObExprSemanticDistance(common::ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_SEMANTIC_DISTANCE, N_SEMANTIC_DISTANCE, TWO_OR_THREE, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_SEMANTIC_DISTANCE, N_SEMANTIC_DISTANCE, TWO_OR_THREE, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 
@@ -146,6 +146,17 @@ int ObExprSemanticVectorDistance::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawE
   rt_expr.eval_func_ = calc_semantic_vector_distance;
 
   return ret;
+}
+
+int ObExprSemanticVectorDistance::is_valid_for_generated_column(
+    const ObRawExpr *expr,
+    const common::ObIArray<ObRawExpr *> &exprs,
+    bool &is_valid) const
+{
+  UNUSED(expr);
+  UNUSED(exprs);
+  is_valid = false;
+  return OB_SUCCESS;
 }
 
 } // namespace sql
