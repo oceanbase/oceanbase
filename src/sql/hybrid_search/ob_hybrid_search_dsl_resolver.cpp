@@ -793,6 +793,21 @@ int ObDSLResolver::build_array_intersects_expr(ObColumnRefRawExpr *col_expr,
   return ret;
 }
 
+int ObDSLResolver::build_const_double(double dval, ObConstRawExpr *&const_expr, ObObjType array_base_type)
+{
+  int ret = OB_SUCCESS;
+  if (array_base_type == ObFloatType && !ObArithExprOperator::is_float_out_of_range(static_cast<float>(dval))) {
+    if (OB_FAIL(ObRawExprUtils::build_const_float_expr(*params_.expr_factory_, ObFloatType, static_cast<float>(dval), const_expr))) {
+      LOG_WARN("fail to create const float expr", K(ret), K(dval));
+    }
+  } else if (dval == 1.0) {
+    const_expr = static_cast<ObConstRawExpr*>(dsl_query_info_->one_const_expr_);
+  } else if (OB_FAIL(ObRawExprUtils::build_const_double_expr(*params_.expr_factory_, ObDoubleType, dval, const_expr))) {
+    LOG_WARN("fail to create const double expr", K(ret), K(dval));
+  }
+  return ret;
+}
+
 int ObDSLResolver::build_field_expr_with_path(ObColumnRefRawExpr *col_expr, const ObString &path_str, const ObEsQueryItem query_type, ObRawExpr *&field_expr)
 {
   int ret = OB_SUCCESS;
@@ -1765,11 +1780,12 @@ int ObDSLResolver::init_resolver()
   return ret;
 }
 
-int ObDSLResolver::is_array_column(ObColumnRefRawExpr *col_expr, bool &is_array_col)
+int ObDSLResolver::is_array_column(ObColumnRefRawExpr *col_expr, bool &is_array_col, ObObjType &array_base_type)
 {
   int ret = OB_SUCCESS;
   const ObSqlCollectionInfo *coll_info = nullptr;
   is_array_col = false;
+  array_base_type = ObMaxType;
   if (!col_expr->get_result_type().is_collection_sql_type()) {
   } else if (OB_FAIL(ObRawExprUtils::get_expr_collection_info(col_expr, session_info_->get_cur_exec_ctx(), coll_info))) {
     LOG_WARN("fail to get collection meta for column", K(ret), KPC(col_expr));
@@ -1777,7 +1793,9 @@ int ObDSLResolver::is_array_column(ObColumnRefRawExpr *col_expr, bool &is_array_
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("collection info or meta is null", K(ret), KPC(col_expr));
   } else if (coll_info->collection_meta_->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
+    uint32_t nest_depth = 0;
     is_array_col = true;
+    array_base_type = coll_info->get_basic_meta(nest_depth).get_obj_type();
   }
   return ret;
 }
@@ -1822,16 +1840,31 @@ int ObDSLResolver::resolve_array_expr(ObIJsonBase &req_node, ObDSLQuery *&query,
   ObItemType expr_type = T_MAX;
   ObString col_name;
   ObString expr_name;
-  ObJsonNodeType args_type = ObJsonNodeType::J_MAX_TYPE;
+  ObJsonNodeType arg_type = ObJsonNodeType::J_MAX_TYPE;
   bool is_array_col = false;
+  ObObjType array_base_type = ObMaxType;
   ObIJsonBase *param_node = nullptr;
   ObIJsonBase *arg_node = nullptr;
   ObColumnRefRawExpr *col_expr = nullptr;
-  ObRawExpr *args_expr = nullptr;
+  ObRawExpr *arg_expr = nullptr;
   ObSysFunRawExpr *array_expr = nullptr;
   ObConstRawExpr *boost_expr = nullptr;
   ObDSLScalarQuery *array_query = nullptr;
-  if (ObDSLQuery::check_need_cal_score_in_bool(outer_query_type, parent_query)) {
+  if (query_type == QUERY_ITEM_ARRAY_CONTAINS) {
+    expr_type = T_FUNC_SYS_ARRAY_CONTAINS;
+    expr_name = N_ARRAY_CONTAINS;
+  } else if (query_type == QUERY_ITEM_ARRAY_CONTAINS_ALL) {
+    expr_type = T_FUNC_SYS_ARRAY_CONTAINS_ALL;
+    expr_name = N_ARRAY_CONTAINS_ALL;
+  } else if (query_type == QUERY_ITEM_ARRAY_OVERLAPS) {
+    expr_type = T_FUNC_SYS_ARRAY_OVERLAPS;
+    expr_name = N_ARRAY_OVERLAPS;
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("unsupported array query type", K(ret), K(query_type));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (ObDSLQuery::check_need_cal_score_in_bool(outer_query_type, parent_query)) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "array query in must/should clause");
     LOG_WARN("array query cannot be scored or exist in must/should clause", K(ret), K(query_type));
@@ -1867,39 +1900,25 @@ int ObDSLResolver::resolve_array_expr(ObIJsonBase &req_node, ObDSLQuery *&query,
     ret = OB_INVALID_ARGUMENT;
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "array query, arg not exists");
     LOG_WARN("arg not exists in array query", K(ret));
-  } else if (OB_FALSE_IT(args_type = (query_type == QUERY_ITEM_ARRAY_CONTAINS) ? arg_node->json_type() : ObJsonNodeType::J_ARRAY)) {
-  } else if (OB_FAIL(resolve_const(*arg_node, args_expr, args_type, query_type))) {
-    LOG_WARN("fail to resolve arg expr", K(ret));
-  } else if (query_type == QUERY_ITEM_ARRAY_CONTAINS) {
-    expr_type = T_FUNC_SYS_ARRAY_CONTAINS;
-    expr_name = N_ARRAY_CONTAINS;
-  } else if (query_type == QUERY_ITEM_ARRAY_CONTAINS_ALL) {
-    expr_type = T_FUNC_SYS_ARRAY_CONTAINS_ALL;
-    expr_name = N_ARRAY_CONTAINS_ALL;
-  } else if (query_type == QUERY_ITEM_ARRAY_OVERLAPS) {
-    expr_type = T_FUNC_SYS_ARRAY_OVERLAPS;
-    expr_name = N_ARRAY_OVERLAPS;
-  } else {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("unsupported array expr type", K(ret), K(query_type));
-  }
-  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(get_user_column_expr(col_name, col_expr))) {
     if (OB_HASH_NOT_EXIST == ret) {
       ret = OB_INVALID_ARGUMENT;
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "array expression, column not exists");
     }
     LOG_WARN("fail to get user column expr", K(ret), K(col_name));
-  } else if (OB_FAIL(is_array_column(col_expr, is_array_col))) {
+  } else if (OB_FAIL(is_array_column(col_expr, is_array_col, array_base_type))) {
     LOG_WARN("fail to check if column is array", K(ret), KPC(col_expr));
   } else if (!is_array_col) {
     ret = OB_INVALID_ARGUMENT;
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "array expression, column is not an array type");
     LOG_WARN("array expression for non-array column", K(ret), K(col_name));
+  } else if (OB_FALSE_IT(arg_type = resolve_type_mapping(arg_node->json_type(), col_expr, query_type, array_base_type))) {
+  } else if (OB_FAIL(resolve_const(*arg_node, arg_expr, arg_type, query_type, array_base_type))) {
+    LOG_WARN("fail to resolve arg expr", K(ret));
   } else if (OB_FAIL(expr_factory->create_raw_expr(expr_type, array_expr))) {
     LOG_WARN("fail to create array expr", K(ret));
   } else if (OB_FALSE_IT(array_expr->set_func_name(expr_name))) {
-  } else if (OB_FAIL(array_expr->set_param_exprs(col_expr, args_expr))) {
+  } else if (OB_FAIL(array_expr->set_param_exprs(col_expr, arg_expr))) {
     LOG_WARN("fail to set param exprs for array expr", K(ret));
   } else if (OB_FAIL(ObDSLScalarQuery::create(*allocator_, array_query, query_type, outer_query_type, parent_query))) {
     LOG_WARN("fail to create array query", K(ret));
@@ -2921,20 +2940,17 @@ int ObDSLResolver::resolve_knn(ObIJsonBase &req_node, ObDSLQuery *&query)
       }
     } else if (key.case_compare("similarity") == 0) {
       double similarity = 0.0;
-      if (OB_LIKELY(sub_node->is_json_number(sub_node->json_type()))) {
-        if (OB_FAIL(sub_node->to_double(similarity))) {
-          LOG_WARN("fail to get double value from similarity", K(ret));
-        }
-      } else if (sub_node->json_type() == ObJsonNodeType::J_STRING) {
-        ObString similarity_str = ObString(sub_node->get_data_length(), sub_node->get_data());
-        if (OB_FAIL(trim_strtod(similarity_str, similarity))) {
-          LOG_WARN("fail to convert string to double", K(ret));
-        }
-      } else {
+      ObJsonNodeType json_type = sub_node->json_type();
+      if (!ObIJsonBase::is_json_number_type(json_type) && json_type != ObJsonNodeType::J_STRING) {
         ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("similarity should be number or string type", K(ret), K(sub_node->json_type()));
-      }
-      if (OB_FAIL(ret)) {
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "similarity, should be number or string type");
+        LOG_WARN("similarity should be number or string type", K(ret), K(json_type));
+      } else if (OB_FAIL(sub_node->to_double(similarity))) {
+        if (json_type == ObJsonNodeType::J_STRING) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "similarity, invalid numeric string");
+        }
+        LOG_WARN("fail to get double value from similarity", K(ret));
       } else if (similarity < 0.0 || similarity > 1.0) {
         ret = OB_INVALID_ARGUMENT;
         LOG_USER_ERROR(OB_INVALID_ARGUMENT, "similarity, should be in range [0.0, 1.0]");
@@ -3136,16 +3152,20 @@ int ObDSLResolver::resolve_bool_clause(ObIJsonBase &req_node, ObIArray<ObDSLQuer
 }
 
 // Type conversion matrix: [json_type][target_type] -> allowed (true/false)
-// json_type \ target_type | J_STRING | J_INT | J_UINT |J_DOUBLE | J_ARRAY | J_OBJECT | J_BOOLEAN
-// ------------------------|----------|-------|--------|---------|---------|----------|----------
-// J_STRING                |   true   | true  |  true  |  true   |  false  |   true   |   true
-// J_INT                   |   false  | true  |  true  |  true   |  false  |   false  |   false
-// J_UINT                  |   false  | true  |  true  |  true   |  false  |   false  |   false
-// J_DOUBLE                |   false  | true  |  true  |  true   |  false  |   false  |   false
-// J_ARRAY                 |   true   | false |  false |  false  |  true   |   true   |   false
-// J_OBJECT                |   true   | false |  false |  false  |  false  |   true   |   false
-// J_BOOLEAN               |   true   | false |  false |  false  |  false  |   false  |   true
-int ObDSLResolver::resolve_const(ObIJsonBase &req_node, ObRawExpr *&expr, ObJsonNodeType target_type, ObEsQueryItem query_type/*=QUERY_ITEM_UNKNOWN*/)
+// json_type \ target_type | J_STRING | J_INT | J_UINT | J_DOUBLE | J_ARRAY | J_OBJECT | J_BOOLEAN
+// ------------------------|----------|-------|--------|----------|---------|----------|----------
+// J_STRING                |   true   | true  | false  |  true    |  false  |   true   |   false
+// J_INT                   |   false  | true  | false  |  true    |  false  |   false  |   false
+// J_UINT                  |   false  | true  | true   |  false   |  false  |   false  |   false
+// J_DOUBLE                |   false  | true  | false  |  true    |  false  |   false  |   false
+// J_ARRAY                 |   true   | false | false  |  false   |  true   |   true   |   false
+// J_OBJECT                |   true   | false | false  |  false   |  false  |   true   |   false
+// J_BOOLEAN               |   true   | false | false  |  false   |  false  |   false  |   true
+int ObDSLResolver::resolve_const(ObIJsonBase &req_node,
+                                 ObRawExpr *&expr,
+                                 ObJsonNodeType target_type,
+                                 ObEsQueryItem query_type/*=QUERY_ITEM_UNKNOWN*/,
+                                 ObObjType array_base_type/*=ObMaxType*/)
 {
   int ret = OB_SUCCESS;
   ObRawExprFactory *expr_factory = params_.expr_factory_;
@@ -3156,8 +3176,9 @@ int ObDSLResolver::resolve_const(ObIJsonBase &req_node, ObRawExpr *&expr, ObJson
                 json_type == ObJsonNodeType::J_ARRAY ||
                 json_type == ObJsonNodeType::J_OBJECT ||
                 json_type == ObJsonNodeType::J_BOOLEAN);
+  } else if (target_type == ObJsonNodeType::J_UINT) {
+    can_cast = (json_type == ObJsonNodeType::J_UINT);
   } else if (target_type == ObJsonNodeType::J_INT ||
-             target_type == ObJsonNodeType::J_UINT ||
              target_type == ObJsonNodeType::J_DOUBLE) {
     can_cast = (req_node.is_json_number(json_type) || (json_type == ObJsonNodeType::J_STRING));
   } else if (target_type == ObJsonNodeType::J_ARRAY) {
@@ -3166,12 +3187,8 @@ int ObDSLResolver::resolve_const(ObIJsonBase &req_node, ObRawExpr *&expr, ObJson
     can_cast = (json_type == ObJsonNodeType::J_OBJECT);
   } else if (target_type == ObJsonNodeType::J_BOOLEAN) {
     can_cast = (json_type == ObJsonNodeType::J_BOOLEAN || json_type == ObJsonNodeType::J_STRING);
-  } else {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("unsupported conversion from source type to target type", K(ret), K(json_type), K(target_type));
   }
-  if (OB_FAIL(ret)) {
-  } else if (!can_cast) {
+  if (!can_cast) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("unsupported conversion from source type to target type", K(ret), K(json_type), K(target_type));
   } else if (target_type == ObJsonNodeType::J_STRING ||
@@ -3208,40 +3225,21 @@ int ObDSLResolver::resolve_const(ObIJsonBase &req_node, ObRawExpr *&expr, ObJson
              target_type == ObJsonNodeType::J_UINT ||
              target_type == ObJsonNodeType::J_DOUBLE) {
     ObConstRawExpr *const_expr = nullptr;
-    double num_value = 0.0;
-    if (json_type == ObJsonNodeType::J_STRING) {
-      ObString str_val = ObString(req_node.get_data_length(), req_node.get_data());
-      if (OB_FAIL(trim_strtod(str_val, num_value))) {
-        LOG_WARN("fail to convert string to double", K(ret), K(str_val));
+    if (target_type == ObJsonNodeType::J_INT) {
+      if (OB_FAIL(resolve_const_to_int(req_node, const_expr))) {
+        LOG_WARN("fail to resolve int const", K(ret));
       }
-    } else if (json_type == ObJsonNodeType::J_INT) {
-      num_value = static_cast<double>(req_node.get_int());
-    } else if (json_type == ObJsonNodeType::J_UINT) {
-      num_value = static_cast<double>(req_node.get_uint());
-    } else if (json_type == ObJsonNodeType::J_DOUBLE) {
-      num_value = req_node.get_double();
+    } else if (target_type == ObJsonNodeType::J_UINT) {
+      if (OB_FAIL(resolve_const_to_uint(req_node, const_expr))) {
+        LOG_WARN("fail to resolve uint const", K(ret));
+      }
+    } else { // target_type == ObJsonNodeType::J_DOUBLE
+      if (OB_FAIL(resolve_const_to_double(req_node, const_expr, array_base_type))) {
+        LOG_WARN("fail to resolve double const", K(ret));
+      }
     }
-    if (OB_FAIL(ret)) {
-    } else if (target_type == ObJsonNodeType::J_INT || target_type == ObJsonNodeType::J_UINT) {
-      if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*expr_factory, ObIntType, static_cast<int64_t>(num_value), const_expr))) {
-        LOG_WARN("fail to create const int expr", K(ret));
-      } else {
-        expr = const_expr;
-      }
-    } else if (IS_QUERY_ITEM_ARRAY(query_type) && !ObArithExprOperator::is_float_out_of_range(static_cast<float>(num_value))) {
-      if (OB_FAIL(ObRawExprUtils::build_const_float_expr(*expr_factory, ObFloatType, static_cast<float>(num_value), const_expr))) {
-        LOG_WARN("fail to create const float expr", K(ret), K(target_type));
-      } else {
-        expr = const_expr;
-      }
-    } else {
-      if (num_value == 1.0) {
-        expr = dsl_query_info_->one_const_expr_;
-      } else if (OB_FAIL(ObRawExprUtils::build_const_double_expr(*expr_factory, ObDoubleType, num_value, const_expr))) {
-        LOG_WARN("fail to create const double expr", K(ret), K(target_type));
-      } else {
-        expr = const_expr;
-      }
+    if (OB_SUCC(ret)) {
+      expr = const_expr;
     }
   } else if (target_type == ObJsonNodeType::J_ARRAY) {
     ObSysFunRawExpr *array_expr = nullptr;
@@ -3262,8 +3260,9 @@ int ObDSLResolver::resolve_const(ObIJsonBase &req_node, ObRawExpr *&expr, ObJson
         ObJsonNodeType elem_json_type = ObJsonNodeType::J_NULL;
         if (OB_FAIL(req_node.get_array_element(i, elem_node))) {
           LOG_WARN("fail to get array element", K(ret), K(i));
-        } else if (OB_FALSE_IT(elem_json_type = elem_node->json_type())) {
-        } else if (OB_FAIL(resolve_const(*elem_node, elem_expr, elem_json_type, query_type))) {
+        } else if (OB_FALSE_IT(elem_json_type = resolve_type_mapping(elem_node->json_type(), nullptr,
+                                                                     query_type, array_base_type))) {
+        } else if (OB_FAIL(resolve_const(*elem_node, elem_expr, elem_json_type, query_type, array_base_type))) {
           LOG_WARN("fail to resolve array element", K(ret), K(i));
         } else if (OB_FAIL(array_expr->add_param_expr(elem_expr))) {
           LOG_WARN("fail to add param expr", K(ret), K(i));
@@ -3293,6 +3292,69 @@ int ObDSLResolver::resolve_const(ObIJsonBase &req_node, ObRawExpr *&expr, ObJson
     } else if (OB_FAIL(ObRawExprUtils::build_const_bool_expr(expr_factory, expr, b_value))) {
       LOG_WARN("fail to create const bool expr", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObDSLResolver::resolve_const_to_double(ObIJsonBase &req_node, ObConstRawExpr *&const_expr, ObObjType array_base_type)
+{
+  int ret = OB_SUCCESS;
+  double dval = 0.0;
+  if (OB_FAIL(req_node.to_double(dval))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("fail to convert json node to double", K(ret), K(req_node.json_type()));
+  } else if (OB_FAIL(build_const_double(dval, const_expr, array_base_type))) {
+    LOG_WARN("fail to build const double expr", K(ret), K(dval));
+  }
+  return ret;
+}
+
+int ObDSLResolver::resolve_const_to_int(ObIJsonBase &req_node, ObConstRawExpr *&const_expr)
+{
+  int ret = OB_SUCCESS;
+  ObRawExprFactory *expr_factory = params_.expr_factory_;
+  ObJsonNodeType json_type = req_node.json_type();
+  int64_t ival = 0;
+  if (json_type == ObJsonNodeType::J_INT || json_type == ObJsonNodeType::J_UINT) {
+    if (OB_FAIL(req_node.to_int(ival, true))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("fail to convert json node to int", K(ret), K(json_type));
+    }
+  } else if (json_type == ObJsonNodeType::J_DOUBLE || json_type == ObJsonNodeType::J_STRING) {
+    // cannot use to_int: it uses rint() (rounds to nearest) but DSL requires truncation
+    double dval = 0.0;
+    if (OB_FAIL(req_node.to_double(dval))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("fail to convert to double for int target", K(ret), K(json_type));
+    } else {
+      LOG_TRACE("checking double-to-int64 overflow boundary", K(dval), K(json_type), "double_INT64_MAX", static_cast<double>(INT64_MAX));
+      if (dval >= static_cast<double>(INT64_MAX) || dval < static_cast<double>(INT64_MIN)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("value overflows int64", K(ret), K(dval), K(json_type));
+      } else {
+        ival = static_cast<int64_t>(dval);
+      }
+    }
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("unsupported json type to int", K(ret), K(json_type));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*expr_factory, ObIntType, ival, const_expr))) {
+    LOG_WARN("fail to create const int expr", K(ret));
+  }
+  return ret;
+}
+
+int ObDSLResolver::resolve_const_to_uint(ObIJsonBase &req_node, ObConstRawExpr *&const_expr)
+{
+  int ret = OB_SUCCESS;
+  // only for json uint
+  if (req_node.json_type() != ObJsonNodeType::J_UINT) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("expects json uint", K(ret), K(req_node.json_type()));
+  } else if (OB_FAIL(ObRawExprUtils::build_const_uint_expr(*params_.expr_factory_, ObUInt64Type, req_node.get_uint(), const_expr))) {
+    LOG_WARN("fail to create const uint expr from json uint", K(ret));
   }
   return ret;
 }
@@ -3626,7 +3688,7 @@ int ObDSLResolver::resolve_json_expr(ObIJsonBase &req_node, ObDSLQuery *&query, 
              sub_node->json_type() != ObJsonNodeType::J_STRING &&
              sub_node->json_type() != ObJsonNodeType::J_OBJECT &&
              sub_node->json_type() != ObJsonNodeType::J_ARRAY)) {
-          candidate_type = sub_node->json_type();
+          candidate_type = resolve_type_mapping(sub_node->json_type());
         }
         if (OB_FAIL(resolve_const(*sub_node, candidate_expr, candidate_type, query_type))) {
           LOG_WARN("fail to resolve candidate", K(ret));
@@ -4623,13 +4685,7 @@ int ObDSLResolver::resolve_range(ObIJsonBase &req_node, ObDSLQuery *&query, ObDS
       ret = OB_INVALID_ARGUMENT;
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "value in range query, should be string or number");
       LOG_WARN("invalid value type in range query", K(ret), K(var_node->json_type()));
-    } else if (col_expr->get_result_type().get_type() == ObTinyIntType &&
-               col_expr->get_result_type().get_precision() == DEFAULT_PRECISION_FOR_BOOL) {
-      value_type = ObJsonNodeType::J_BOOLEAN;
-    } else {
-      value_type = var_node->json_type();
-    }
-    if (OB_FAIL(ret)) {
+    } else if (OB_FALSE_IT(value_type = resolve_type_mapping(var_node->json_type(), col_expr))) {
     } else if (OB_FAIL(resolve_const(*var_node, var_expr, value_type))) {
       LOG_WARN("fail to resolve const value", K(ret), K(i));
     } else if (OB_FAIL(expr_factory->create_raw_expr(type, cmp_expr))) {
@@ -4902,10 +4958,12 @@ int ObDSLResolver::resolve_term(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSL
 {
   int ret = OB_SUCCESS;
   ObRawExprFactory *expr_factory = params_.expr_factory_;
+  ObEsQueryItem query_type = QUERY_ITEM_TERM;
   ObString col_name;
   ObString path_str;
   ObJsonNodeType value_type = ObJsonNodeType::J_MAX_TYPE;
   bool is_array_col = false;
+  ObObjType array_base_type = ObMaxType;
   ObIJsonBase *col_para = nullptr;
   ObIJsonBase *value_node = nullptr;
   ObColumnRefRawExpr *col_expr = nullptr;
@@ -4952,6 +5010,14 @@ int ObDSLResolver::resolve_term(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSL
     LOG_WARN("term query field value should be scalar or object", K(ret), K(col_para->json_type()));
   }
   if (OB_FAIL(ret)) {
+  } else if (col_expr->get_result_type().is_json()) {
+    query_type = QUERY_ITEM_JSON_CONTAINS;
+  } else if (OB_FAIL(is_array_column(col_expr, is_array_col, array_base_type))) {
+    LOG_WARN("fail to check if column is array", K(ret), KPC(col_expr));
+  } else if (is_array_col) {
+    query_type = QUERY_ITEM_ARRAY_CONTAINS;
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(value_node)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "term query, value not exists");
@@ -4960,18 +5026,10 @@ int ObDSLResolver::resolve_term(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSL
     ret = OB_INVALID_ARGUMENT;
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "value in term query, should be scalar like string, number, boolean, etc.");
     LOG_WARN("invalid value type in term query", K(ret), K(col_expr->get_result_type()), K(value_node->json_type()));
-  } else if (col_expr->get_result_type().get_type() == ObTinyIntType &&
-             col_expr->get_result_type().get_precision() == DEFAULT_PRECISION_FOR_BOOL) {
-    value_type = ObJsonNodeType::J_BOOLEAN;
-  } else {
-    value_type = value_node->json_type();
-  }
-  if (OB_FAIL(ret)) {
-  } else if (!col_expr->get_result_type().is_json() &&
-             OB_FAIL(resolve_const(*value_node, value_expr, value_type))) {
+  } else if (OB_FALSE_IT(value_type = resolve_type_mapping(value_node->json_type(), col_expr, query_type, array_base_type))) {
+  } else if (query_type != QUERY_ITEM_JSON_CONTAINS &&
+             OB_FAIL(resolve_const(*value_node, value_expr, value_type, query_type, array_base_type))) {
     LOG_WARN("fail to resolve const value", K(ret));
-  } else if (OB_FAIL(is_array_column(col_expr, is_array_col))) {
-      LOG_WARN("fail to check if column is array", K(ret), KPC(col_expr));
   } else if (is_array_col) {
     ObSEArray<ObRawExpr*, 1, ModulePageAllocator, true> value_exprs;
     if (OB_FAIL(value_exprs.push_back(value_expr))) {
@@ -5154,6 +5212,7 @@ int ObDSLResolver::resolve_terms(ObIJsonBase &req_node, ObDSLQuery *&query, ObDS
   uint64_t count = 0;
   ObString path_str;
   bool is_array_col = false;
+  ObObjType array_base_type = ObMaxType;
   ObColumnRefRawExpr *col_expr = nullptr;
   ObRawExpr *field_expr = nullptr;
   ObIJsonBase *array_elem_node = nullptr; // array element in terms param array
@@ -5208,10 +5267,16 @@ int ObDSLResolver::resolve_terms(ObIJsonBase &req_node, ObDSLQuery *&query, ObDS
         } else {
           query_type = QUERY_ITEM_JSON_OVERLAPS;
         }
-      } else if (OB_FAIL(is_array_column(col_expr, is_array_col))) {
+      } else if (OB_FAIL(is_array_column(col_expr, is_array_col, array_base_type))) {
         LOG_WARN("fail to check if column is array", K(ret), KPC(col_expr));
       } else if (is_array_col) {
-        query_type = QUERY_ITEM_ARRAY_CONTAINS;
+        if (array_count == 1) {
+          query_type = QUERY_ITEM_ARRAY_CONTAINS;
+        } else {
+          query_type = QUERY_ITEM_ARRAY_OVERLAPS;
+        }
+      } else if (array_count == 1) {
+        query_type = QUERY_ITEM_TERM;
       }
       for (uint64_t j = 0; OB_SUCC(ret) && j < array_count; j++) {
         ObJsonNodeType element_type = ObJsonNodeType::J_MAX_TYPE;
@@ -5233,14 +5298,8 @@ int ObDSLResolver::resolve_terms(ObIJsonBase &req_node, ObDSLQuery *&query, ObDS
             array_elem_node = element;
             break;
           }
-        } else if (col_expr->get_result_type().get_type() == ObTinyIntType &&
-                   col_expr->get_result_type().get_precision() == DEFAULT_PRECISION_FOR_BOOL) {
-          element_type = ObJsonNodeType::J_BOOLEAN;
-        } else {
-          element_type = element->json_type();
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(resolve_const(*element, value_expr, element_type, query_type))) {
+        } else if (OB_FALSE_IT(element_type = resolve_type_mapping(element->json_type(), col_expr, query_type, array_base_type))) {
+        } else if (OB_FAIL(resolve_const(*element, value_expr, element_type, query_type, array_base_type))) {
           LOG_WARN("fail to resolve const value", K(ret), K(j));
         } else if (OB_FAIL(value_exprs.push_back(value_expr))) {
           LOG_WARN("fail to add value to value_exprs", K(ret));
@@ -5269,12 +5328,11 @@ int ObDSLResolver::resolve_terms(ObIJsonBase &req_node, ObDSLQuery *&query, ObDS
     } else if (OB_FAIL(build_json_overlaps_array_expr(field_expr, value_exprs, expr))) {
       LOG_WARN("fail to build json intersects array expr for terms on json column", K(ret));
     }
-  } else if (value_exprs.count() == 1) {
-    query_type = QUERY_ITEM_TERM;
+  } else if (query_type == QUERY_ITEM_TERM) {
     if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*expr_factory, T_OP_EQ, field_expr, value_exprs.at(0), expr))) {
       LOG_WARN("fail to build equal expr", K(ret));
     }
-  } else {
+  } else { // query_type == QUERY_ITEM_TERMS
     ObOpRawExpr *row_expr = nullptr;
     if (OB_FAIL(expr_factory->create_raw_expr(T_OP_ROW, row_expr))) {
       LOG_WARN("fail to create row expr", K(ret));
@@ -5409,30 +5467,6 @@ int ObDSLResolver::set_default_rank_window_size()
     LOG_WARN("failed to build size+from const expr", K(ret));
   } else {
     dsl_query_info_->rank_info_.window_size_ = sum_expr;
-  }
-  return ret;
-}
-
-int ObDSLResolver::trim_strtod(const ObString &num_str, double &num_val)
-{
-  int ret = OB_SUCCESS;
-  int64_t str_len = 0;
-  char *buf = nullptr;
-  ObString trimmed_str = num_str.trim();
-  str_len = trimmed_str.length();
-  if (OB_ISNULL(buf = static_cast<char *>(allocator_->alloc(str_len + 1)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate memory for temp string", K(ret));
-  } else {
-    MEMCPY(buf, trimmed_str.ptr(), str_len);
-    buf[str_len] = '\0';  // need a terminated string for strtod
-    char *end_ptr = nullptr;
-    num_val = strtod(buf, &end_ptr);
-    if (end_ptr == buf || end_ptr != buf + str_len) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "string to number conversion, invalid numeric string");
-      LOG_WARN("invalid numeric string", K(ret), K(num_str));
-    }
   }
   return ret;
 }

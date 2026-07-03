@@ -429,6 +429,23 @@ public:
            json_type == ObJsonNodeType::J_BOOLEAN ||
            ObIJsonBase::is_json_number_type(json_type);
   }
+  inline static ObJsonNodeType resolve_type_mapping(ObJsonNodeType json_type,
+                                                    ObColumnRefRawExpr *col_expr = nullptr,
+                                                    ObEsQueryItem query_type = QUERY_ITEM_UNKNOWN,
+                                                    ObObjType array_elem_type = ObMaxType)
+  {
+    if (OB_NOT_NULL(col_expr) &&
+        col_expr->get_result_type().get_type() == ObTinyIntType &&
+        col_expr->get_result_type().get_precision() == DEFAULT_PRECISION_FOR_BOOL) {
+      return ObJsonNodeType::J_BOOLEAN;
+    } else if (IS_QUERY_ITEM_ARRAY(query_type) &&
+               ObIJsonBase::is_json_number_type(json_type) &&
+               (array_elem_type == ObDoubleType || array_elem_type == ObFloatType)) {
+      return ObJsonNodeType::J_DOUBLE;
+    } else {
+      return json_type;
+    }
+  }
 
   static const int64_t FROM_DEFAULT = 0;
   static const int64_t SIZE_DEFAULT = 10;
@@ -445,6 +462,7 @@ private :
   int add_dsl_expr(ObRawExpr *expr);
   int add_dsl_expr_recursive(ObDSLQuery *query);
   int build_array_intersects_expr(ObColumnRefRawExpr *col_expr, const ObIArray<ObRawExpr*> &value_exprs, ObRawExpr *&expr);
+  int build_const_double(double dval, ObConstRawExpr *&const_expr, ObObjType array_base_type = ObMaxType);
   int build_field_expr_with_path(ObColumnRefRawExpr *col_expr, const ObString &path_str, const ObEsQueryItem query_type, ObRawExpr *&field_expr);
   int build_json_contains_scalar_expr(ObRawExpr *target_expr, ObIJsonBase &json_node, ObRawExpr *&expr);
   int build_json_extract_expr(ObRawExpr *col_expr, const ObString &json_path, ObRawExpr *&expr);
@@ -479,7 +497,7 @@ private :
   int init_col_idx_map();
   int init_col_schema_map();
   int init_resolver();
-  int is_array_column(ObColumnRefRawExpr *col_expr, bool &is_array_col);
+  int is_array_column(ObColumnRefRawExpr *col_expr, bool &is_array_col, ObObjType &array_base_type);
   int print_json_node(ObIJsonBase &node, ObJsonBuffer &j_buf);
   int resolve_array_contains(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSLQuery *parent_query, ObEsQueryItem outer_query_type);
   int resolve_array_contains_all(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSLQuery *parent_query, ObEsQueryItem outer_query_type);
@@ -488,7 +506,10 @@ private :
   int resolve_bool(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSLQuery *parent_query, ObEsQueryItem outer_query_type);
   int resolve_bool_clause(ObIJsonBase &req_node, ObIArray<ObDSLQuery*> &queries, int64_t &count, ObDSLQuery *parent_query, ObEsQueryItem outer_query_type);
   int resolve_boost(ObIJsonBase &req_node, ObConstRawExpr *&boost_expr, ObEsQueryItem query_type, ObEsQueryItem outer_query_type);
-  int resolve_const(ObIJsonBase &req_node, ObRawExpr *&expr, ObJsonNodeType target_type, ObEsQueryItem query_type = QUERY_ITEM_UNKNOWN);
+  int resolve_const(ObIJsonBase &req_node, ObRawExpr *&expr, ObJsonNodeType target_type, ObEsQueryItem query_type = QUERY_ITEM_UNKNOWN, ObObjType array_base_type = ObMaxType);
+  int resolve_const_to_double(ObIJsonBase &req_node, ObConstRawExpr *&const_expr, ObObjType array_base_type = ObMaxType);
+  int resolve_const_to_int(ObIJsonBase &req_node, ObConstRawExpr *&const_expr);
+  int resolve_const_to_uint(ObIJsonBase &req_node, ObConstRawExpr *&const_expr);
   int resolve_default_params(ObIJsonBase &req_node);
   int resolve_field(ObIJsonBase &req_node, ObColumnRefRawExpr *&col_expr, ObConstRawExpr *&boost_expr);
   int resolve_from(ObIJsonBase &req_node);
@@ -548,7 +569,6 @@ private :
   static void set_track_score(ObDSLQueryInfo *dsl_query_info);
   int setup_top_level_score(ObDSLQuery *query);
   int set_default_rank_window_size();
-  int trim_strtod(const ObString &num_str, double &num_val);
   int try_push_nested_boost_to_leaf_query(ObDSLQuery *query, const double cumulative_boost);
 
   // collapse
