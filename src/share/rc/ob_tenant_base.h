@@ -87,6 +87,7 @@ class ObTenantMdsService;
   class ObTenantMetaMemMgr;
   class ObTenantStorageMetaService;
   class ObTenantFTPluginMgr;
+  class ObFTDictMgr;
   class ObTenantFreezeInfoMgr;
   class ObStorageHAService;
   class ObStorageHAHandlerService;
@@ -505,6 +506,7 @@ using ObHMSClientUnifyPoolMgr = share::ObCatalogClientPoolMgr<oceanbase::share::
       rootserver::ObCloneScheduler*,                \
       share::ObIndexUsageInfoMgr*,                  \
       storage::ObTabletMemtableMgrPool*,            \
+      storage::ObFTDictMgr*,                        \
       rootserver::ObMViewMaintenanceService*,       \
       SSWriterService                               \
       AtomicFileMgr                                 \

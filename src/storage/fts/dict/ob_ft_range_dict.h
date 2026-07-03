@@ -15,7 +15,6 @@
 #include "storage/fts/dict/ob_ft_cache_container.h"
 #include "storage/fts/dict/ob_ft_dict.h"
 #include "storage/fts/dict/ob_ft_dict_def.h"
-#include "storage/fts/dict/ob_ft_dict_iterator.h"
 
 namespace oceanbase
 {
@@ -47,27 +46,7 @@ public:
   int match_with_hit(const ObString &single_word,
                      const ObDATrieHit &last_hit,
                      ObDATrieHit &hit) const override;
-
-public:
   int build_dict_from_cache(const ObFTCacheRangeContainer &range_container);
-
-  static int try_load_cache(const ObFTDictDesc &desc,
-                            const uint32_t range_count,
-                            ObFTCacheRangeContainer &range_container);
-  static int build_cache(const ObFTDictDesc &desc, ObFTCacheRangeContainer &range_container);
-
-private:
-  // build cache
-  static int build_ranges(const ObFTDictDesc &desc,
-                          ObIFTDictIterator &iter,
-                          ObFTCacheRangeContainer &range_container);
-
-  // build one range's cache
-  static int build_one_range(const ObFTDictDesc &desc,
-                             const int32_t range_id,
-                             ObIFTDictIterator &iter,
-                             ObFTCacheRangeContainer &container,
-                             bool &build_next_range);
 
 private:
   void destroy()
@@ -82,7 +61,6 @@ private:
   int find_first_char_range(const ObString &single_word, ObIFTDict *&dict) const;
 
 private:
-  static constexpr int DEFAULT_KEY_PER_RANGE = 50000; // by estimated
   bool is_inited_;
   ObFTDictDesc desc_;
   ObArenaAllocator range_alloc_;

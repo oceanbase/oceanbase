@@ -18,13 +18,14 @@
 #include "plugin/sys/ob_plugin_helper.h"
 #include "share/ob_fts_index_builder_util.h"
 #include "share/ob_json_access_utils.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "storage/fts/analyzer/ob_token_stream_factory.h"
 #include "storage/fts/dict/ob_gen_dic_loader.h"
 #include "storage/fts/ob_fts_parser_property.h"
 #include "storage/fts/ob_fts_plugin_helper.h"
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_json_func_helper.h" // file not self-contained, there're logs inside.
-#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -127,11 +128,13 @@ ObExprTokenize::TokenizeParam ::TokenizeParam()
     parser_name_(ObString(OB_DEFAULT_FULLTEXT_PARSER_NAME)),
     meta_(),
     fulltext_(),
+    has_analysis_(false),
+    has_additional_args_(false),
     output_mode_(OUTPUT_MODE::DEFAULT)
 {
 }
 
-int ObExprTokenize::TokenizeParam::parse_json_param(const ObIJsonBase *obj)
+int ObExprTokenize::TokenizeParam::parse_json_param(const ObIJsonBase *obj, const ObString &database_name, const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   ObString str;
@@ -175,6 +178,19 @@ int ObExprTokenize::TokenizeParam::parse_json_param(const ObIJsonBase *obj)
   } else if (0 == str.case_compare(STOPWORDS_LIST_STR)) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "stopwords");
+  } else if (0 == str.case_compare(ANALYSIS_STR)) {
+    if (ObJsonNodeType::J_STRING != val->json_type()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("Analysis should be a string", K(ret));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "analysis should be a JSON string");
+    } else {
+      ObString analysis_val(val->get_data_length(), val->get_data());
+      if (OB_FAIL(ob_write_string(allocator_, analysis_val, properties_))) {
+        LOG_WARN("Fail to copy analysis string", K(ret));
+      } else {
+        has_analysis_ = true;
+      }
+    }
   } else if (0 == str.case_compare(ADDITIONAL_ARGS_STR)) {
     if (ObJsonNodeType::J_ARRAY != val->json_type()) {
       ret = OB_INVALID_ARGUMENT;
@@ -182,13 +198,14 @@ int ObExprTokenize::TokenizeParam::parse_json_param(const ObIJsonBase *obj)
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "parser arguments");
     } else {
       ObString json_str;
-      if (OB_FAIL(ObFTParserJsonProps::tokenize_array_to_props_json(allocator_, val, json_str))) {
+      if (OB_FAIL(ObFTParserJsonProps::tokenize_array_to_props_json(allocator_, val, database_name, tenant_id, json_str))) {
         LOG_WARN("Fail to tokenize array to props json", K(ret));
         ObSqlString message;
         message.append_fmt("format in %s form", ADDITIONAL_ARGS_STR);
         LOG_USER_ERROR(OB_INVALID_ARGUMENT, message.ptr());
       } else {
         properties_ = json_str;
+        has_additional_args_ = true;
       }
     }
   } else {
@@ -215,6 +232,13 @@ int ObExprTokenize::parse_param(const ObExpr &expr,
   uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
   MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
 
+  // Get current database name for resolving table names without database prefix
+  ObString database_name;
+  sql::ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  if (OB_NOT_NULL(session)) {
+    database_name = session->get_database_name();
+  }
+
   if (OB_UNLIKELY(expr.arg_cnt_ < 1 || expr.arg_cnt_ > 3)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Args count invalid.", K(ret), K(expr.arg_cnt_));
@@ -222,9 +246,13 @@ int ObExprTokenize::parse_param(const ObExpr &expr,
     LOG_WARN("Fail to parse fulltext.", K(ret));
   } else if (OB_FAIL(parse_parser_name(expr, ctx, param))) {
     LOG_WARN("Fail to parse parser params.", K(ret));
-  } else if (OB_FAIL(parse_parser_properties(expr, ctx, temp_allocator, param))) {
+  } else if (OB_FAIL(param.check_analyzer_data_version(tenant_id))) {
+    LOG_WARN("Fail to check analyzer data version.", K(ret), K(tenant_id));
+  } else if (OB_FAIL(parse_parser_properties(expr, tenant_id, database_name, ctx, temp_allocator, param))) {
     LOG_WARN("Fail to parse parser params.", K(ret));
-  } else if (OB_FAIL(param.reform_parser_properties(param.properties_))) {
+  } else if (OB_FAIL(param.validate_parser_properties())) {
+    LOG_WARN("Fail to validate parser params.", K(ret));
+  } else if (OB_FAIL(param.reform_parser_properties(param.properties_, tenant_id))) {
     LOG_WARN("Fail to reform parser params.", K(ret));
   } else if (OB_FAIL(param.try_load_dictionary_for_ik(tenant_id))) {
     LOG_WARN("fail to try load dictionary for ik", K(ret), K(tenant_id));
@@ -235,23 +263,35 @@ int ObExprTokenize::parse_param(const ObExpr &expr,
 int ObExprTokenize::construct_ft_parser_inner_name(const ObString &input_str, TokenizeParam &param)
 {
   int ret = OB_SUCCESS;
-  // make an extract parser name
-  share::ObPluginName plugin_name;
-  storage::ObFTParser parser;
-
-  char *parser_name_buf = nullptr;
-  if (OB_ISNULL(parser_name_buf
-                = static_cast<char *>(param.allocator_.alloc(OB_PLUGIN_NAME_LENGTH)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("Fail to alloc memory", K(ret));
-  } else if (OB_FAIL(plugin_name.set_name(input_str))) {
-    LOG_WARN("Fail to set plugin name", K(ret));
-  } else if (OB_FAIL(plugin::ObPluginHelper::find_ftparser(input_str, parser))) {
-    LOG_WARN("Fail to get ft parser", K(ret));
-  } else if (OB_FAIL(parser.serialize_to_str(parser_name_buf, OB_PLUGIN_NAME_LENGTH))) {
-    LOG_WARN("Fail to parse ft parser name", K(ret));
+  if (storage::ObFTParser::is_analyzer_parser_name(input_str)) {
+    char *buf = nullptr;
+    const char *analyzer_name = storage::ObFTSLiteral::PARSER_NAME_ANALYZER;
+    const int64_t len = STRLEN(analyzer_name);
+    if (OB_ISNULL(buf = static_cast<char *>(param.allocator_.alloc(len + 1)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("Fail to alloc memory", K(ret));
+    } else {
+      MEMCPY(buf, analyzer_name, len);
+      buf[len] = '\0';
+      param.parser_name_ = ObString::make_string(buf);
+    }
   } else {
-    param.parser_name_ = ObString::make_string(parser_name_buf);
+    share::ObPluginName plugin_name;
+    storage::ObFTParser parser;
+    char *parser_name_buf = nullptr;
+    if (OB_ISNULL(parser_name_buf
+                  = static_cast<char *>(param.allocator_.alloc(OB_PLUGIN_NAME_LENGTH)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("Fail to alloc memory", K(ret));
+    } else if (OB_FAIL(plugin_name.set_name(input_str))) {
+      LOG_WARN("Fail to set plugin name", K(ret));
+    } else if (OB_FAIL(plugin::ObPluginHelper::find_ftparser(input_str, parser))) {
+      LOG_WARN("Fail to get ft parser", K(ret));
+    } else if (OB_FAIL(parser.serialize_to_str(parser_name_buf, OB_PLUGIN_NAME_LENGTH))) {
+      LOG_WARN("Fail to parse ft parser name", K(ret));
+    } else {
+      param.parser_name_ = ObString::make_string(parser_name_buf);
+    }
   }
   return ret;
 }
@@ -370,6 +410,8 @@ int ObExprTokenize::parse_parser_name(const ObExpr &expr, ObEvalCtx &ctx, Tokeni
 }
 
 int ObExprTokenize::parse_parser_properties(const ObExpr &expr,
+                                            const uint64_t tenant_id,
+                                            const ObString &database_name,
                                             ObEvalCtx &ctx,
                                             MultimodeAlloctor &mm_alloc,
                                             TokenizeParam &param)
@@ -396,7 +438,7 @@ int ObExprTokenize::parse_parser_properties(const ObExpr &expr,
           } else if (ObJsonNodeType::J_OBJECT != (node->json_type())) {
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("Argument of json array invalid", K(ret));
-          } else if (OB_FAIL(param.parse_json_param(node))) {
+          } else if (OB_FAIL(param.parse_json_param(node, database_name, tenant_id))) {
             LOG_WARN("Failed to parse json object", K(ret));
           }
         } // for
@@ -407,22 +449,70 @@ int ObExprTokenize::parse_parser_properties(const ObExpr &expr,
   return ret;
 }
 
-int ObExprTokenize::TokenizeParam::reform_parser_properties(const ObString &properties)
+int ObExprTokenize::TokenizeParam::check_analyzer_data_version(const uint64_t tenant_id) const
 {
   int ret = OB_SUCCESS;
-  storage::ObFTParserJsonProps parser_properties;
+  uint64_t tenant_data_version = 0;
+  if (!storage::ObFTParser::is_analyzer_parser_name(parser_name_)) {
+    // do nothing
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    LOG_WARN("fail to get tenant data version", K(ret), K(tenant_id));
+  } else if (tenant_data_version < share::MIN_DATA_VERSION_FOR_FTS_ANALYZER) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("analyzer syntax is not supported before version 4.6.0.1",
+             K(ret), K(tenant_id), K(tenant_data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "TOKENIZE analyzer before version 4.6.0.1");
+  }
+  return ret;
+}
 
-  if (OB_FAIL(parser_properties.init())) {
-    LOG_WARN("fail to init parser properties", K(ret));
-  } else if (OB_FAIL(parser_properties.parse_from_valid_str(properties))) {
-    LOG_WARN("fail to parse properties", K(ret));
-    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "parser properties invalid.");
-  } else if (OB_FAIL(parser_properties.rebuild_props_for_ddl(parser_name_,
-                                                             ObCollationType::CS_TYPE_UTF8MB4_BIN,
-                                                             true))) {
-    LOG_WARN("fail to serialize to string", K(ret), K(parser_properties));
-  } else if (OB_FAIL(parser_properties.to_format_json(allocator_, properties_))) {
-    LOG_WARN("fail to serialize to string", K(ret), K(parser_properties));
+int ObExprTokenize::TokenizeParam::validate_parser_properties() const
+{
+  int ret = OB_SUCCESS;
+  const bool is_analyzer_parser = storage::ObFTParser::is_analyzer_parser_name(parser_name_);
+  if (has_analysis_ && has_additional_args_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("analysis cannot be combined with additional_args", K(ret), K(parser_name_));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "analysis cannot be combined with additional_args");
+  } else if (is_analyzer_parser) {
+    if (has_additional_args_) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("additional_args cannot be used with analyzer parser", K(ret), K(parser_name_));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "additional_args cannot be used with analyzer parser");
+    } else if (!has_analysis_) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("analysis is required for analyzer parser", K(ret), K(parser_name_));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "analysis is required for analyzer parser");
+    }
+  } else if (has_analysis_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("analysis is only supported for analyzer parser", K(ret), K(parser_name_));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "analysis is only supported for analyzer parser");
+  }
+  return ret;
+}
+
+int ObExprTokenize::TokenizeParam::reform_parser_properties(const ObString &properties, const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+
+  if (storage::ObFTParser::is_analyzer_parser_name(parser_name_)) {
+    // analyzer path: properties_ already holds the raw analysis JSON, skip legacy validation
+  } else {
+    storage::ObFTParserJsonProps parser_properties;
+    if (OB_FAIL(parser_properties.init())) {
+      LOG_WARN("fail to init parser properties", K(ret));
+    } else if (OB_FAIL(parser_properties.parse_from_valid_str(properties))) {
+      LOG_WARN("fail to parse properties", K(ret));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "parser properties invalid.");
+    } else if (OB_FAIL(parser_properties.rebuild_props_for_ddl(parser_name_,
+                                                               ObCollationType::CS_TYPE_UTF8MB4_BIN,
+                                                               true,
+                                                               tenant_id))) {
+      LOG_WARN("fail to serialize to string", K(ret), K(parser_properties));
+    } else if (OB_FAIL(parser_properties.to_format_json(allocator_, properties_))) {
+      LOG_WARN("fail to serialize to string", K(ret), K(parser_properties));
+    }
   }
 
   return ret;
@@ -431,30 +521,63 @@ int ObExprTokenize::TokenizeParam::reform_parser_properties(const ObString &prop
 int ObExprTokenize::TokenizeParam::try_load_dictionary_for_ik(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  bool need_to_load_dic = false;
-  ObTenantDicLoaderHandle dic_loader_handle;
-  if (OB_FAIL(ObFtsIndexBuilderUtil::check_need_to_load_dic(tenant_id,
-                                                            parser_name_,
-                                                            need_to_load_dic))) {
-    LOG_WARN("fail to check need to load dic",
-        K(ret), K(tenant_id), K(parser_name_), K(need_to_load_dic));
-  } else if (need_to_load_dic) {
-    ObString parser_name_without_version;
-    if (OB_FAIL(ObGenDicLoader::parser_name_without_version(parser_name_, parser_name_without_version))) {
-      LOG_WARN("fail to get parser name without version", K(ret), K(parser_name_));
-    } else if (OB_FAIL(ObGenDicLoader::get_instance().get_dic_loader(
-                    tenant_id,
-                    parser_name_without_version,
-                    ObCharset::charset_type_by_coll(meta_.get_collation_type()),
-                    dic_loader_handle))) {
-      LOG_WARN("fail to get dic loader", K(ret), K(tenant_id));
-    } else if (OB_UNLIKELY(!dic_loader_handle.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("dic loader handle is not valid", K(ret), K(tenant_id), K(dic_loader_handle));
-    } else if (OB_FAIL(dic_loader_handle.get_loader()->try_load_dictionary_in_trans(tenant_id))) {
-      LOG_WARN("fail to try load dictionary", K(ret), K(tenant_id), K(dic_loader_handle));
+  if (storage::ObFTParser::is_analyzer_parser_name(parser_name_)) {
+    bool use_ik_tokenizer = false;
+    if (has_analysis_
+        && OB_FAIL(storage::ObAnalyzerSpecFactory::check_analyzer_use_ik_tokenizer(
+            properties_, allocator_, use_ik_tokenizer))) {
+      LOG_WARN("fail to check whether analyzer uses ik tokenizer", K(ret), K(properties_));
+    } else if (use_ik_tokenizer) {
+      bool need_to_load_dic = false;
+      ObTenantDicLoaderHandle dic_loader_handle;
+      const ObString ik_parser_name(ObFTSLiteral::PARSER_NAME_IK);
+      const ObString ik_versioned_name("ik.1");
+      if (OB_FAIL(ObFtsIndexBuilderUtil::check_need_to_load_dic(
+              tenant_id, ik_versioned_name, need_to_load_dic))) {
+        LOG_WARN("fail to check need to load ik dict for analyzer",
+                 K(ret), K(tenant_id));
+      } else if (need_to_load_dic) {
+        if (OB_FAIL(ObGenDicLoader::get_instance().get_dic_loader(
+                tenant_id, ik_parser_name,
+                ObCharset::charset_type_by_coll(meta_.get_collation_type()),
+                dic_loader_handle))) {
+          LOG_WARN("fail to get ik dic loader for analyzer", K(ret), K(tenant_id));
+        } else if (OB_UNLIKELY(!dic_loader_handle.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("ik dic loader handle is not valid", K(ret), K(tenant_id));
+        } else if (OB_FAIL(dic_loader_handle.get_loader()->try_load_dictionary_in_trans(
+                       tenant_id))) {
+          LOG_WARN("fail to load ik dict for analyzer tokenize",
+                   K(ret), K(tenant_id));
+        }
+      }
     }
-  }
+  } else {
+    bool need_to_load_dic = false;
+    ObTenantDicLoaderHandle dic_loader_handle;
+    if (OB_FAIL(ObFtsIndexBuilderUtil::check_need_to_load_dic(tenant_id,
+                                                              parser_name_,
+                                                              need_to_load_dic))) {
+      LOG_WARN("fail to check need to load dic",
+          K(ret), K(tenant_id), K(parser_name_), K(need_to_load_dic));
+    } else if (need_to_load_dic) {
+      ObString parser_name_without_version;
+      if (OB_FAIL(ObGenDicLoader::parser_name_without_version(parser_name_, parser_name_without_version))) {
+        LOG_WARN("fail to get parser name without version", K(ret), K(parser_name_));
+      } else if (OB_FAIL(ObGenDicLoader::get_instance().get_dic_loader(
+                      tenant_id,
+                      parser_name_without_version,
+                      ObCharset::charset_type_by_coll(meta_.get_collation_type()),
+                      dic_loader_handle))) {
+        LOG_WARN("fail to get dic loader", K(ret), K(tenant_id));
+      } else if (OB_UNLIKELY(!dic_loader_handle.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("dic loader handle is not valid", K(ret), K(tenant_id), K(dic_loader_handle));
+      } else if (OB_FAIL(dic_loader_handle.get_loader()->try_load_dictionary_in_trans(tenant_id))) {
+        LOG_WARN("fail to try load dictionary", K(ret), K(tenant_id), K(dic_loader_handle));
+      }
+    }
+  } // end else (non-analyzer path)
   return ret;
 }
 

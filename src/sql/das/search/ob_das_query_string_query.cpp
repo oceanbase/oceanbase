@@ -13,6 +13,7 @@
 #include "ob_das_bmm_op.h"
 #include "ob_das_dummy_op.h"
 #include "storage/fts/ob_fts_tokenizer.h"
+#include "sql/das/search/ob_das_msm_runtime_util.h"
 
 namespace oceanbase {
 
@@ -25,7 +26,8 @@ OB_SERIALIZE_MEMBER((ObDASQueryStringCtDef, ObIDASSearchCtDef),
                     minimum_should_match_,
                     type_,
                     field_boosts_,
-                    ir_ctdef_indices_);
+                    ir_ctdef_indices_,
+                    is_msm_unresolved_expr_);
 
 OB_SERIALIZE_MEMBER((ObDASQueryStringRtDef, ObIDASSearchRtDef));
 
@@ -279,10 +281,32 @@ int ObDASQueryStringRtDef::can_pushdown_filter_to_bmm(bool &can_pushdown)
     const bool is_supported_type =
         (ObMatchFieldsType::MATCH_BEST_FIELDS == type_val && 1 == field_cnt)
         || ObMatchFieldsType::MATCH_MOST_FIELDS == type_val;
-    can_pushdown = ctdef->is_top_level_scoring()
+    const bool base_ok = ctdef->is_top_level_scoring()
         && ObMatchOperator::MATCH_OPERATOR_OR == default_operator_datum->get_int()
-        && min_should_match_datum->get_int() <= 1
         && is_supported_type;
+    ObArray<ObArray<ObString>> token_groups;
+    ObArray<double> token_boosts;
+    int64_t effective_msm = 0;
+    if (!base_ok) {
+      // can_pushdown stays false
+    } else if (OB_ISNULL(ctdef->get_ir_ctdef(0))
+        || OB_ISNULL(ctdef->get_ir_ctdef(0)->get_inv_idx_scan_scalar_ctdef())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr ir ctdef for query_string pushdown", KR(ret));
+    } else if (OB_FAIL(parse_query_string(token_groups, token_boosts))) {
+      LOG_WARN("failed to parse query string for bmm pushdown", KR(ret));
+    } else if (0 == token_groups.count()) {
+      // no groups -> leave can_pushdown false
+    } else if (OB_FAIL(ObDASMSMRuntimeUtil::calc_multi_or_query_string_msm(
+        allocator_,
+        token_groups.count(),
+        ctdef->is_msm_unresolved_expr_,
+        min_should_match_datum,
+        effective_msm))) {
+      LOG_WARN("failed to calc query_string msm for bmm pushdown", KR(ret));
+    } else {
+      can_pushdown = effective_msm <= 1;
+    }
   }
   return ret;
 }
@@ -354,15 +378,17 @@ int ObDASQueryStringRtDef::generate_op(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null param", KR(ret), KPC(query_text_datum), KPC(default_operator_datum),
               KPC(min_should_match_datum), KPC(type_datum));
-    } else {
-      min_should_match = MIN(MAX(min_should_match_datum->get_int(), 1), group_cnt);
+    } else if (OB_FAIL(ObDASMSMRuntimeUtil::calc_multi_or_query_string_msm(allocator_, group_cnt,
+                       ctdef->is_msm_unresolved_expr_, min_should_match_datum, min_should_match))) {
+      LOG_WARN("failed to calculate query_string minimum_should_match", KR(ret), K(group_cnt), KPC(min_should_match_datum));
     }
 
     ObSEArray<double, 8> field_boosts;
-    if (FAILEDx(field_boosts.reserve(field_cnt))) {
-      LOG_WARN("failed to reserve array of field boosts", K(ret));
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(field_boosts.reserve(field_cnt))) {
+      LOG_WARN("Query string failed to reserve field boost array capacity", KR(ret), KPC(min_should_match_datum));
     } else if (OB_FAIL(init_block_max_params(*ctdef, field_cnt))) {
-      LOG_WARN("failed to init block max params", K(ret), KPC(ctdef), K(field_cnt));
+      LOG_WARN("failed to init block max params", KR(ret), KPC(ctdef), K(field_cnt), KPC(min_should_match_datum));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < field_cnt; ++i) {
       ObDASIRScanCtDef *ir_ctdef = ctdef->get_ir_ctdef(i);

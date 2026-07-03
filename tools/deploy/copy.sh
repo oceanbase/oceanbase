@@ -34,6 +34,7 @@ BIN_DIR=`pwd`/bin${VER}
 LIB_DIR=`pwd`/lib
 TOOL_DIR=`pwd`/tools
 ETC_DIR=`pwd`/etc
+ICU_ETC_DIR=$ETC_DIR/icu
 DEBUG_DIR=`pwd`/debug
 ADMIN_DIR=`pwd`/admin
 
@@ -157,6 +158,7 @@ then
   mkdir -p $LIB_DIR
   mkdir -p $TOOL_DIR
   mkdir -p $ETC_DIR
+  mkdir -p $ICU_ETC_DIR
   mkdir -p $DEBUG_DIR
   mkdir -p $ADMIN_DIR
   if [ -f $SOURCE_DIR/deps/oblib/src/lib/compress/liblz4_1.0.la ]; then
@@ -170,6 +172,7 @@ then
   do_install $SOURCE_DIR/deps/3rd/usr/local/oceanbase/devtools/bin/llvm-symbolizer $TOOL_DIR/
   do_install $SOURCE_DIR/rpm/.dep_create/lib/libstdc++.so.6 $LIB_DIR true
   do_install "$SOURCE_DIR/tools/timezone*.data" $ETC_DIR
+  do_install "$SOURCE_DIR/tools/icu/icu_folding.dat" $ICU_ETC_DIR
   do_install $SOURCE_DIR/deps/oblib/src/lib/profile/obperf $TOOL_DIR/ true
   do_install $SOURCE_DIR/deps/3rd/home/admin/oceanbase/bin/obshell $BIN_DIR/obshell true
   do_install "$SOURCE_DIR/tools/spatial_reference_systems.data" $ETC_DIR

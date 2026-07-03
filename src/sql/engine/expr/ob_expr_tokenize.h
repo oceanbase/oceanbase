@@ -45,14 +45,17 @@ private:
     static constexpr const char *OUTPUT_MODE_STR = "output";
     static constexpr const char *STOPWORDS_LIST_STR = "stopwords";
     static constexpr const char *ADDITIONAL_ARGS_STR = "additional_args";
+    static constexpr const char *ANALYSIS_STR = "analysis";
 
   public:
     TokenizeParam();
 
-    int parse_json_param(const ObIJsonBase *obj);
+    int parse_json_param(const ObIJsonBase *obj, const ObString &database_name, const uint64_t tenant_id);
+    int validate_parser_properties() const;
+    int check_analyzer_data_version(const uint64_t tenant_id) const;
 
     // check and reform parser properties to standard format
-    int reform_parser_properties(const ObString &properties);
+    int reform_parser_properties(const ObString &properties, const uint64_t tenant_id);
     int try_load_dictionary_for_ik(const uint64_t tenant_id);
 
   public:
@@ -62,6 +65,8 @@ private:
     ObString properties_;
     ObObjMeta meta_;
     ObString fulltext_;
+    bool has_analysis_;
+    bool has_additional_args_;
     enum OUTPUT_MODE
     {
       DEFAULT,
@@ -81,6 +86,8 @@ private:
                             TokenizeParam &param);
   static int parse_parser_name(const ObExpr &expr, ObEvalCtx &ctx, TokenizeParam &param);
   static int parse_parser_properties(const ObExpr &expr,
+                                     const uint64_t tenant_id,
+                                     const ObString &database_name,
                                      ObEvalCtx &ctx,
                                      MultimodeAlloctor &mm_alloc,
                                      TokenizeParam &param);

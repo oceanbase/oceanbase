@@ -95,7 +95,11 @@ public:
       KPC_(field), KPC_(minimum_should_match), KPC_(operator));
 private:
   ObDSLMatchQuery(ObEsQueryItem outer_query_type, ObDSLQuery *parent_query)
-    : ObDSLFullTextQuery(QUERY_ITEM_MATCH, outer_query_type, parent_query) {}
+    : ObDSLFullTextQuery(QUERY_ITEM_MATCH, outer_query_type, parent_query),
+      field_(nullptr),
+      minimum_should_match_(nullptr),
+      operator_(nullptr)
+  {}
   virtual int inner_deep_copy(ObIRawExprCopier &expr_copier, ObDSLMatchQuery &dst) const;
   ObColumnRefRawExpr *field_;
   ObConstRawExpr *minimum_should_match_;

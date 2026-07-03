@@ -239,6 +239,11 @@ int ObExprBM25::eval_batch_bm25_relevance_expr(const ObExpr &expr, ObEvalCtx &ct
   return ret;
 }
 
+double ObExprBM25::length_normalizer(const int64_t dl, const double avg_dl)
+{
+  return 1.0 - p_b + p_b * dl / avg_dl;
+}
+
 double ObExprBM25::doc_token_weight(const int64_t token_freq, const double norm_len)
 {
   const double tf = static_cast<double>(token_freq);

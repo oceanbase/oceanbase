@@ -263,6 +263,7 @@ target_link_libraries(oblib_base_without_pass
   ${DEP_DIR}/lib/libicui18n.a
   ${DEP_DIR}/lib/libicudata.a
   ${DEP_DIR}/lib/libicuuc.a
+  ${DEP_DIR}/lib/libstemmer.a
   ${DEP_DIR}/lib/libprotobuf-c.a
   ${DEP_DIR}/lib/libthrift.a
   ${DEP_DIR}/lib/cyrus-sasl/libsasl2.a
@@ -309,6 +310,7 @@ target_link_libraries(oblib_base_without_pass
   ${DEP_DIR}/lib/libicui18n.a
   ${DEP_DIR}/lib/libicudata.a
   ${DEP_DIR}/lib/libicuuc.a
+  ${DEP_DIR}/lib/libstemmer.a
   ${DEP_DIR}/lib/libprotobuf-c.a
   ${DEP_DIR}/lib/libthrift.a
   ${DEP_DIR}/lib/cyrus-sasl/libsasl2.a

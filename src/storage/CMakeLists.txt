@@ -246,6 +246,23 @@ ob_set_subtarget(ob_storage ckpt
   slog_ckpt/ob_tablet_replay_create_handler.cpp
 )
 
+ob_set_subtarget(ob_storage analyzer
+  fts/analyzer/ob_utf8_utils.cpp
+  fts/analyzer/tokenizer/ob_keyword_tokenizer.cpp
+  fts/analyzer/tokenizer/ob_standard_tokenizer.cpp
+  fts/analyzer/filter/ob_icu_normalizer2_filter.cpp
+  fts/analyzer/filter/ob_snowball_filter.cpp
+  fts/analyzer/filter/ob_decimal_digit_filter.cpp
+  fts/analyzer/filter/ob_english_possessive_filter.cpp
+  fts/analyzer/filter/ob_lower_case_filter.cpp
+  fts/analyzer/filter/ob_stop_word_filter.cpp
+  fts/analyzer/ob_analyzer.cpp
+  fts/analyzer/ob_token_stream_factory.cpp
+  fts/analyzer/tokenizer/ob_legacy_parser_tokenizer.cpp
+  fts/analyzer/char_filter/ob_legacy_char_filter.cpp
+  fts/analyzer/filter/ob_legacy_token_filter.cpp
+)
+
 ob_set_subtarget(ob_storage fts
   fts/ob_ik_ft_parser.cpp
   fts/ob_ngram2_ft_parser.cpp
@@ -281,11 +298,14 @@ ob_set_subtarget(ob_storage ik
   fts/dict/ob_ft_dict_def.cpp
   fts/dict/ob_ft_trie.cpp
   fts/dict/ob_ft_cache_dict.cpp
-  fts/dict/ob_ft_dict_hub.cpp
   fts/dict/ob_ft_range_dict.cpp
   fts/dict/ob_ft_dict_table_iter.cpp
   fts/dict/ob_ft_cache.cpp
   fts/ik/ob_ik_char_util.cpp
+  fts/dict/ob_ft_slot_mgr.cpp
+  fts/dict/ob_ft_dict_bg_task_mgr.cpp
+  fts/dict/ob_ft_dict_mgr.cpp
+  fts/dict/ob_ft_dict_cache_loader.cpp
 )
 
 

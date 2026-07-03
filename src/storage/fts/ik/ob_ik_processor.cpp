@@ -157,7 +157,8 @@ int TokenizeContext::step_next()
       if (OB_LIKELY(OB_ITER_END == ret)) {
         fulltext_len_ = cursor_;
       } else {
-        LOG_WARN("Failed to prepare next char", K(ret));
+        LOG_WARN("Failed to prepare next char in step_next", K(ret),
+            K(cursor_), K(fulltext_len_), K(handle_size_), K(next_char_len_));
       }
     }
   }

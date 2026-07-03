@@ -135,6 +135,8 @@ DEF_SIMPLE_CMD_RESOLVER(ObRefreshSchemaResolver);
 
 DEF_SIMPLE_CMD_RESOLVER(ObRefreshMemStatResolver);
 
+DEF_SIMPLE_CMD_RESOLVER(ObRefreshFulltextDictResolver);
+
 DEF_SIMPLE_CMD_RESOLVER(ObWashMemFragmentationResolver);
 
 DEF_SIMPLE_CMD_RESOLVER(ObRefreshIOCalibrationResolver);

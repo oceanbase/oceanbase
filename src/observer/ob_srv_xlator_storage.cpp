@@ -5,7 +5,7 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/ob_srv_xlator.h"
-
+#include "observer/ob_rpc_processor_simple.h"
 
 #include "src/observer/table/ob_table_filter.h"
 
@@ -167,6 +167,7 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcGetSSGCDetectInfosP, gctx_);
     RPC_PROCESSOR(ObRpcGetSSGCStartScnItemsP, gctx_);
 #endif
+    RPC_PROCESSOR(ObRpcRefreshFulltextDictP, gctx_);
     RPC_PROCESSOR(ObRebuildTabletP, gctx_);
     RPC_PROCESSOR(ObNotifySharedStorageInfoP, gctx_);
     RPC_PROCESSOR(ObNotifyLogServiceAccessPointP, gctx_);

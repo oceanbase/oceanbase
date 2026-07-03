@@ -250,6 +250,10 @@ int ObCreateIndexHelper::check_table_legitimacy_()
   } else if (OB_UNLIKELY(is_inner_table(table_id))) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("create index on inner table not support", KR(ret), K(table_id));
+  } else if (OB_UNLIKELY(orig_data_table_schema_->is_fulltext_dict())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("create index on fulltext dictionary table not supported", KR(ret), K(table_id));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create index on fulltext dictionary table is");
   } else if (OB_UNLIKELY(!arg_.is_inner_ && orig_data_table_schema_->is_in_recyclebin())) {
     ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
     LOG_WARN("can not add index on table in recyclebin", KR(ret), K_(arg));

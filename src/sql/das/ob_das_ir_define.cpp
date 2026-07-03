@@ -89,7 +89,8 @@ OB_DEF_SERIALIZE(ObDASIRScanCtDef)
   }
   LST_DO_CODE(OB_UNIS_ENCODE,
     avg_doc_token_cnt_expr_,
-    inv_scan_pos_list_col_);
+    inv_scan_pos_list_col_,
+    inv_scan_token_cnt_col_);
   return ret;
 }
 
@@ -121,7 +122,8 @@ OB_DEF_DESERIALIZE(ObDASIRScanCtDef)
   }
   LST_DO_CODE(OB_UNIS_DECODE,
     avg_doc_token_cnt_expr_,
-    inv_scan_pos_list_col_);
+    inv_scan_pos_list_col_,
+    inv_scan_token_cnt_col_);
   return ret;
 }
 
@@ -151,7 +153,8 @@ OB_DEF_SERIALIZE_SIZE(ObDASIRScanCtDef)
   }
   LST_DO_CODE(OB_UNIS_ADD_LEN,
     avg_doc_token_cnt_expr_,
-    inv_scan_pos_list_col_);
+    inv_scan_pos_list_col_,
+    inv_scan_token_cnt_col_);
   return len;
 }
 

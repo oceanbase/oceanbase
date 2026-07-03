@@ -37,10 +37,12 @@ struct ObTextRetrievalScanIterParam
       eval_ctx_(nullptr),
       relevance_expr_(nullptr),
       inv_scan_doc_length_col_(nullptr),
+      inv_scan_token_cnt_col_(nullptr),
       inv_scan_domain_id_col_(nullptr),
       inv_scan_pos_list_col_(nullptr),
       reuse_inv_idx_agg_res_(false),
-      use_rich_format_(false)
+      use_rich_format_(false),
+      match_phrase_mode_(false)
   {}
 
   ObArenaAllocator *allocator_; // long-term allocator, lifetime larger than iter
@@ -55,10 +57,12 @@ struct ObTextRetrievalScanIterParam
   sql::ObEvalCtx *eval_ctx_;
   sql::ObExpr *relevance_expr_;
   sql::ObExpr *inv_scan_doc_length_col_;
+  sql::ObExpr *inv_scan_token_cnt_col_;
   sql::ObExpr *inv_scan_domain_id_col_;
   sql::ObExpr *inv_scan_pos_list_col_;
   bool reuse_inv_idx_agg_res_;
   bool use_rich_format_;
+  bool match_phrase_mode_;
 };
 
 class ObTextRetrievalTokenIter final : public ObISparseRetrievalDimIter
@@ -139,6 +143,7 @@ private:
   bool token_doc_cnt_calculated_;
   bool reuse_inv_idx_agg_res_;
   bool use_rich_format_;
+  bool match_phrase_mode_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObTextRetrievalTokenIter);
 };
@@ -157,6 +162,7 @@ public:
   virtual int get_curr_score(double &score) const override;
   virtual int get_curr_id(const ObDatum *&id_datum) const override;
   int get_curr_doc_length(int64_t &length) const;
+  int get_curr_token_freq(int64_t &token_freq) const;
   int get_curr_pos_list(ObString &pos_list) const;
   virtual bool iter_end() const override { return iter_end_; }
 public:
@@ -171,7 +177,7 @@ public:
     }
     return ret;
   }
-  void set_filter_threshold(const double threshold);
+  int set_filter_threshold(const double threshold);
 private:
   int do_expr_materialization();
   int do_expr_materialization_with_threshold();
@@ -185,6 +191,7 @@ private:
   sql::ObExpr *relevance_expr_;
   sql::ObExpr *inv_scan_domain_id_col_;
   sql::ObExpr *inv_scan_doc_length_col_;
+  sql::ObExpr *inv_scan_token_cnt_col_;
   sql::ObExpr *inv_scan_pos_list_col_;
   int64_t max_batch_size_;
   int64_t initial_max_batch_size_;
@@ -195,11 +202,13 @@ private:
   ObFixedArray<double, ObIAllocator> relevance_; // when ~ObFixedArray(), wikll destory itself
   ObFixedArray<ObDocIdExt, ObIAllocator> doc_id_;
   ObFixedArray<int64_t, ObIAllocator> doc_length_;
+  ObFixedArray<int64_t, ObIAllocator> token_freq_;
   ObFixedArray<ObString, ObIAllocator> pos_list_;
   common::ObDatumCmpFuncType cmp_func_;
   bool use_rich_format_;
   bool is_inited_;
   bool iter_end_;
+  bool match_phrase_mode_;
   DISALLOW_COPY_AND_ASSIGN(ObTextRetrievalDaaTTokenIter);
 };
 
@@ -222,7 +231,9 @@ public:
   virtual int get_curr_score(double &score) const override;
   virtual int get_curr_id(const ObDatum *&id_datum) const override;
   int get_curr_doc_length(int64_t &length) const;
+  int get_curr_token_freq(int64_t &token_freq) const;
   int get_curr_pos_list(ObString &pos_list) const;
+  int get_token_doc_cnt(int64_t &token_doc_cnt) { return token_iter_.get_token_doc_cnt(token_doc_cnt); }
   int get_max_token_relevance(double &max_token_relevance)
   { return token_iter_.get_dim_max_score(max_token_relevance); }
   virtual int get_dim_max_score(double &score) override;
@@ -233,7 +244,7 @@ public:
   // currently, for text retrieval, total_doc_cnt and token_doc_cnt is required before block max calculation
   int init_block_max_iter(const int64_t total_doc_cnt, const double avg_doc_token_cnt);
   // threshold = topK_threshold - other_dim_max_score
-  virtual void set_filter_threshold(const double threshold) override { token_iter_.set_filter_threshold(threshold); }
+  virtual int set_filter_threshold(const double threshold) override { return token_iter_.set_filter_threshold(threshold); }
 private:
   int calc_dim_max_score(
       const ObBlockMaxScoreIterParam &block_max_iter_param,
@@ -253,6 +264,7 @@ private:
   bool block_max_iter_end_;
   bool in_shallow_status_;
   bool is_inited_;
+  bool match_phrase_mode_;
   DISALLOW_COPY_AND_ASSIGN(ObTextRetrievalBlockMaxIter);
 };
 

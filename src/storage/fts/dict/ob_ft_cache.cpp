@@ -39,11 +39,12 @@ int ObDictCache::put_dict(const ObDictCacheKey &key, const ObDictCacheValue &val
 int ObDictCache::put_and_fetch_dict(const ObDictCacheKey &key,
                                     const ObDictCacheValue &value,
                                     const ObDictCacheValue *&pvalue,
-                                    common::ObKVCacheHandle &handle)
+                                    common::ObKVCacheHandle &handle,
+                                    bool overwrite)
 {
   int ret = OB_SUCCESS;
   handle.reset();
-  if (OB_FAIL(put_and_fetch(key, value, pvalue, handle))) {
+  if (OB_FAIL(put_and_fetch(key, value, pvalue, handle, overwrite))) {
     LOG_WARN("put dict to cache failed", K(ret));
   }
   return ret;

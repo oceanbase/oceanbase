@@ -43,6 +43,7 @@ ObTextRetrievalTokenIter::ObTextRetrievalTokenIter()
     token_doc_cnt_calculated_(false),
     reuse_inv_idx_agg_res_(false),
     use_rich_format_(false),
+    match_phrase_mode_(false),
     is_inited_(false)
 {
 }
@@ -66,6 +67,7 @@ int ObTextRetrievalTokenIter::init(const ObTextRetrievalScanIterParam &iter_para
   max_batch_size_ = OB_MAX(iter_param.eval_ctx_->max_batch_size_, 1);
   reuse_inv_idx_agg_res_ = iter_param.reuse_inv_idx_agg_res_;
   use_rich_format_ = iter_param.use_rich_format_;
+  match_phrase_mode_ = iter_param.match_phrase_mode_;
   use_doc_length_col_as_agg_ = false;
 
   if (OB_ISNULL(inv_idx_scan_iter_) || OB_ISNULL(eval_ctx_) || OB_ISNULL(inv_idx_scan_param_) ||
@@ -119,7 +121,7 @@ void ObTextRetrievalTokenIter::reuse()
 int ObTextRetrievalTokenIter::init_calc_exprs_in_relevance_expr()
 {
   int ret = OB_SUCCESS;
-  if (need_calc_relevance()) {
+  if (need_calc_relevance() && !match_phrase_mode_) {
     if (OB_ISNULL(relevance_expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null relevance expr", K(ret));
@@ -404,7 +406,7 @@ int ObTextRetrievalTokenIter::get_next_row()
       LOG_WARN("failed to get next row from inverted index", K(ret), K_(inv_idx_scan_param), KPC_(inv_idx_scan_iter));
     }
   } else {
-    if (need_calc_relevance()) {
+    if (!match_phrase_mode_ && need_calc_relevance()) {
       clear_row_wise_evaluated_flag();
       if (OB_FAIL(get_next_doc_token_cnt(need_fwd_idx_agg()))) {
         LOG_WARN("failed to get next doc token count", K(ret));
@@ -526,7 +528,7 @@ int ObTextRetrievalTokenIter::get_next_batch(const int64_t capacity, int64_t &co
   }
 
   if (OB_FAIL(ret)) {
-  } else if (need_calc_relevance()) {
+  } else if (!match_phrase_mode_ && need_calc_relevance()) {
     const ObBitVector *skip = NULL;
     PRINT_VECTORIZED_ROWS(SQL, DEBUG, *eval_ctx_, *inv_idx_scan_param_->output_exprs_, count, skip);
     clear_batch_wise_evaluated_flag(count);
@@ -774,6 +776,7 @@ ObTextRetrievalDaaTTokenIter::ObTextRetrievalDaaTTokenIter()
     relevance_expr_(nullptr),
     inv_scan_domain_id_col_(nullptr),
     inv_scan_doc_length_col_(nullptr),
+    inv_scan_token_cnt_col_(nullptr),
     inv_scan_pos_list_col_(nullptr),
     max_batch_size_(1),
     initial_max_batch_size_(max_batch_size_),
@@ -784,11 +787,13 @@ ObTextRetrievalDaaTTokenIter::ObTextRetrievalDaaTTokenIter()
     relevance_(),
     doc_id_(),
     doc_length_(),
+    token_freq_(),
     pos_list_(),
     cmp_func_(nullptr),
     use_rich_format_(false),
     is_inited_(false),
-    iter_end_(false)
+    iter_end_(false),
+    match_phrase_mode_(false)
 {
 }
 
@@ -811,32 +816,45 @@ int ObTextRetrievalDaaTTokenIter::init(const ObTextRetrievalScanIterParam &iter_
       relevance_expr_ = iter_param.relevance_expr_;
       inv_scan_domain_id_col_ = iter_param.inv_scan_domain_id_col_;
       inv_scan_doc_length_col_ = iter_param.inv_scan_doc_length_col_;
+      inv_scan_token_cnt_col_ = iter_param.inv_scan_token_cnt_col_;
       inv_scan_pos_list_col_ = iter_param.inv_scan_pos_list_col_;
       max_batch_size_ = OB_MAX(iter_param.eval_ctx_->max_batch_size_, 1);
       initial_max_batch_size_ = max_batch_size_;
       sql::ObExprBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(inv_scan_domain_id_col_->datum_meta_.type_, CS_TYPE_BINARY);
       cmp_func_ = lib::is_oracle_mode() ? basic_funcs->null_last_cmp_ : basic_funcs->null_first_cmp_;
       use_rich_format_ = iter_param.use_rich_format_;
+      match_phrase_mode_ = iter_param.match_phrase_mode_;
       if (OB_ISNULL(cmp_func_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to init IRIterLoserTreeCmp", K(ret));
-      } else if (FALSE_IT(relevance_.set_allocator(allocator_))) {
-      } else if (OB_FAIL(relevance_.init(max_batch_size_))) {
+      } else if (!match_phrase_mode_ && FALSE_IT(relevance_.set_allocator(allocator_))) {
+      } else if (!match_phrase_mode_ && OB_FAIL(relevance_.init(max_batch_size_))) {
         LOG_WARN("failed to init next batch iter idxes array", K(ret));
-      } else if (OB_FAIL(relevance_.prepare_allocate(max_batch_size_))) {
+      } else if (!match_phrase_mode_ && OB_FAIL(relevance_.prepare_allocate(max_batch_size_))) {
         LOG_WARN("failed to prepare allocate next batch iter idxes array", K(ret));
       } else if (FALSE_IT(doc_id_.set_allocator(allocator_))) {
       } else if (OB_FAIL(doc_id_.init(max_batch_size_))) {
         LOG_WARN("failed to init next batch iter idxes array", K(ret));
       } else if (OB_FAIL(doc_id_.prepare_allocate(max_batch_size_))) {
         LOG_WARN("failed to prepare allocate next batch iter idxes array", K(ret));
-      } else if (nullptr != inv_scan_pos_list_col_) {
+      } else if (match_phrase_mode_) {
         doc_length_.set_allocator(allocator_);
+        token_freq_.set_allocator(allocator_);
         pos_list_.set_allocator(allocator_);
-        if (OB_FAIL(doc_length_.init(max_batch_size_))) {
+        if (OB_ISNULL(inv_scan_pos_list_col_)
+            || OB_ISNULL(inv_scan_doc_length_col_)
+            || OB_ISNULL(inv_scan_token_cnt_col_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected nullptr in match phrase mode", K(ret),
+              KP_(inv_scan_pos_list_col), KP_(inv_scan_doc_length_col), KP_(inv_scan_token_cnt_col));
+        } else if (OB_FAIL(doc_length_.init(max_batch_size_))) {
           LOG_WARN("failed to init next batch iter doc lengths array", K(ret));
         } else if (OB_FAIL(doc_length_.prepare_allocate(max_batch_size_))) {
           LOG_WARN("failed to prepare allocate next batch iter doc lengths array", K(ret));
+        } else if (OB_FAIL(token_freq_.init(max_batch_size_))) {
+          LOG_WARN("failed to init next batch iter token freqs array", K(ret));
+        } else if (OB_FAIL(token_freq_.prepare_allocate(max_batch_size_))) {
+          LOG_WARN("failed to prepare allocate next batch iter token freqs array", K(ret));
         } else if (OB_FAIL(pos_list_.init(max_batch_size_))) {
           LOG_WARN("failed to init next batch iter pos lists array", K(ret));
         } else if (OB_FAIL(pos_list_.prepare_allocate(max_batch_size_))) {
@@ -920,7 +938,7 @@ int ObTextRetrievalDaaTTokenIter::get_next_row() {
         need_materialize = true;
       }
       if (OB_SUCC(ret) && need_materialize) {
-        const bool need_filter = (nullptr != relevance_expr_ && filter_threshold_ > 0.0);
+        const bool need_filter = nullptr != relevance_expr_ && filter_threshold_ > 0.0;
         if (need_filter && OB_FAIL(do_expr_materialization_with_threshold())) {
           LOG_WARN("failed to materialize expr with threshold", K(ret));
         } else if (!need_filter && OB_FAIL(do_expr_materialization())) {
@@ -960,7 +978,7 @@ int ObTextRetrievalDaaTTokenIter::do_expr_materialization()
     }
   }
 
-  if (OB_FAIL(ret) || OB_ISNULL(relevance_expr_)) {
+  if (OB_FAIL(ret) || match_phrase_mode_ || OB_ISNULL(relevance_expr_)) {
     // skip
   } else if (use_rich_format_) {
     ObIVector *vec = relevance_expr_->get_vector(*eval_ctx_);
@@ -974,13 +992,15 @@ int ObTextRetrievalDaaTTokenIter::do_expr_materialization()
     }
   }
 
-  if (OB_FAIL(ret) || OB_ISNULL(inv_scan_pos_list_col_)) {
+  if (OB_FAIL(ret) || !match_phrase_mode_) {
     // skip
   } else if (use_rich_format_) {
     ObIVector *doc_length_vec = inv_scan_doc_length_col_->get_vector(*eval_ctx_);
+    ObIVector *token_freq_vec = inv_scan_token_cnt_col_->get_vector(*eval_ctx_);
     ObIVector *pos_list_vec = inv_scan_pos_list_col_->get_vector(*eval_ctx_);
     for (int64_t i = 0; OB_SUCC(ret) && i < count_; ++i) {
       doc_length_[i] = doc_length_vec->get_int(i);
+      token_freq_[i] = token_freq_vec->get_int(i);
       ObString pos_list = pos_list_vec->get_string(i);
       if (OB_UNLIKELY(0 != pos_list_[i].set_length(0))) {
         ret = OB_ERR_UNEXPECTED;
@@ -992,9 +1012,11 @@ int ObTextRetrievalDaaTTokenIter::do_expr_materialization()
     }
   } else {
     ObDatum *doc_length_datum = inv_scan_doc_length_col_->locate_batch_datums(*eval_ctx_);
+    ObDatum *token_freq_datum = inv_scan_token_cnt_col_->locate_batch_datums(*eval_ctx_);
     ObDatum *pos_list_datum = inv_scan_pos_list_col_->locate_batch_datums(*eval_ctx_);
     for (int64_t i = 0; OB_SUCC(ret) && i < count_; ++i) {
       doc_length_[i] = doc_length_datum[i].get_int();
+      token_freq_[i] = token_freq_datum[i].get_int();
       ObString pos_list = pos_list_datum[i].get_string();
       if (OB_UNLIKELY(0 != pos_list_[i].set_length(0))) {
         ret = OB_ERR_UNEXPECTED;
@@ -1017,30 +1039,21 @@ int ObTextRetrievalDaaTTokenIter::do_expr_materialization_with_threshold()
   if (OB_ISNULL(inv_scan_domain_id_col_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid domain id column", K(ret));
+  } else if (OB_UNLIKELY(match_phrase_mode_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected match phrase mode", K(ret), K_(filter_threshold));
   } else {
     ObIVector *domain_id_vec = nullptr;
     ObIVector *relevance_vec = nullptr;
-    ObIVector *doc_length_vec = nullptr;
-    ObIVector *pos_list_vec = nullptr;
     ObDatum *domain_id_datum = nullptr;
     ObDatum *relevance_datum = nullptr;
-    ObDatum *doc_length_datum = nullptr;
-    ObDatum *pos_list_datum = nullptr;
 
     if (use_rich_format_) {
       domain_id_vec = inv_scan_domain_id_col_->get_vector(*eval_ctx_);
       relevance_vec = relevance_expr_->get_vector(*eval_ctx_);
-      if (nullptr != inv_scan_pos_list_col_ && nullptr != inv_scan_doc_length_col_) {
-        doc_length_vec = inv_scan_doc_length_col_->get_vector(*eval_ctx_);
-        pos_list_vec = inv_scan_pos_list_col_->get_vector(*eval_ctx_);
-      }
     } else {
       domain_id_datum = inv_scan_domain_id_col_->locate_batch_datums(*eval_ctx_);
       relevance_datum = relevance_expr_->locate_batch_datums(*eval_ctx_);
-      if (nullptr != inv_scan_pos_list_col_ && nullptr != inv_scan_doc_length_col_) {
-        doc_length_datum = inv_scan_doc_length_col_->locate_batch_datums(*eval_ctx_);
-        pos_list_datum = inv_scan_pos_list_col_->locate_batch_datums(*eval_ctx_);
-      }
     }
 
     for (int64_t i = 0; OB_SUCC(ret) && i < original_count; ++i) {
@@ -1055,30 +1068,6 @@ int ObTextRetrievalDaaTTokenIter::do_expr_materialization_with_threshold()
           }
         } else if (OB_FAIL(doc_id_[write_idx].from_datum(domain_id_datum[i]))) {
           LOG_WARN("failed to get doc id from datum", K(ret), K(i), K(write_idx));
-        }
-
-        if (OB_SUCC(ret) && nullptr != inv_scan_pos_list_col_ && nullptr != inv_scan_doc_length_col_) {
-          if (use_rich_format_) {
-            doc_length_[write_idx] = doc_length_vec->get_int(i);
-            ObString pos_list = pos_list_vec->get_string(i);
-            if (OB_UNLIKELY(0 != pos_list_[write_idx].set_length(0))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("failed to reset length of pos list string", K(ret));
-            } else if (OB_UNLIKELY(pos_list.length() != pos_list_[write_idx].write(pos_list.ptr(), pos_list.length()))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("failed to write pos list string", K(ret));
-            }
-          } else {
-            doc_length_[write_idx] = doc_length_datum[i].get_int();
-            ObString pos_list = pos_list_datum[i].get_string();
-            if (OB_UNLIKELY(0 != pos_list_[write_idx].set_length(0))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("failed to reset length of pos list string", K(ret));
-            } else if (OB_UNLIKELY(pos_list.length() != pos_list_[write_idx].write(pos_list.ptr(), pos_list.length()))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("failed to write pos list string", K(ret));
-            }
-          }
         }
         ++write_idx;
       } else {
@@ -1146,7 +1135,10 @@ int ObTextRetrievalDaaTTokenIter::advance_to(const ObDatum &id_datum)
 int ObTextRetrievalDaaTTokenIter::get_curr_score(double &score) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(cur_idx_ >= count_)) {
+  if (OB_UNLIKELY(match_phrase_mode_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("score not supported", K(ret));
+  } else if (OB_UNLIKELY(cur_idx_ >= count_)) {
     ret = OB_ARRAY_OUT_OF_RANGE;
     LOG_WARN("array index out of bounds", K(ret), K_(cur_idx), K_(count));
   } else if (relevance_expr_) {
@@ -1170,7 +1162,7 @@ int ObTextRetrievalDaaTTokenIter::get_curr_id(const ObDatum *&id_datum) const
 int ObTextRetrievalDaaTTokenIter::get_curr_doc_length(int64_t &length) const
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(inv_scan_pos_list_col_)) {
+  if (OB_UNLIKELY(!match_phrase_mode_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pos list not supported", K(ret));
   } else if (OB_UNLIKELY(cur_idx_ >= count_)) {
@@ -1182,10 +1174,25 @@ int ObTextRetrievalDaaTTokenIter::get_curr_doc_length(int64_t &length) const
   return ret;
 }
 
+int ObTextRetrievalDaaTTokenIter::get_curr_token_freq(int64_t &token_freq) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!match_phrase_mode_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("token freq not supported", K(ret));
+  } else if (OB_UNLIKELY(cur_idx_ >= count_)) {
+    ret = OB_ARRAY_OUT_OF_RANGE;
+    LOG_WARN("array index out of bounds", K(ret), K_(cur_idx), K_(count));
+  } else {
+    token_freq = token_freq_[cur_idx_];
+  }
+  return ret;
+}
+
 int ObTextRetrievalDaaTTokenIter::get_curr_pos_list(ObString &pos_list) const
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(inv_scan_pos_list_col_)) {
+  if (OB_UNLIKELY(!match_phrase_mode_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pos list not supported", K(ret));
   } else if (OB_UNLIKELY(cur_idx_ >= count_)) {
@@ -1212,10 +1219,17 @@ int ObTextRetrievalDaaTTokenIter::try_refresh_max_batch_size()
   return ret;
 }
 
-void ObTextRetrievalDaaTTokenIter::set_filter_threshold(const double threshold)
+int ObTextRetrievalDaaTTokenIter::set_filter_threshold(const double threshold)
 {
-  LOG_DEBUG("[Text Retrieval] set filter threshold", K(threshold), K(filter_threshold_), K(count_), K(cur_idx_), KP(this));
-  filter_threshold_ = threshold;
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(match_phrase_mode_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("prohibited to set filter threshold in match phrase mode", K(ret), K(threshold));
+  } else {
+    LOG_DEBUG("[Text Retrieval] set filter threshold", K(threshold), K(filter_threshold_), K(count_), K(cur_idx_), KP(this));
+    filter_threshold_ = threshold;
+  }
+  return ret;
 }
 
 ObTextRetrievalBlockMaxIter::ObTextRetrievalBlockMaxIter()
@@ -1232,7 +1246,8 @@ ObTextRetrievalBlockMaxIter::ObTextRetrievalBlockMaxIter()
     block_max_inited_(false),
     block_max_iter_end_(false),
     in_shallow_status_(false),
-    is_inited_(false)
+    is_inited_(false),
+    match_phrase_mode_(false)
 {
 }
 
@@ -1260,6 +1275,7 @@ int ObTextRetrievalBlockMaxIter::init(
     dim_max_score_ = 0;
     in_shallow_status_ = false;
     block_max_iter_end_ = false;
+    match_phrase_mode_ = iter_param.match_phrase_mode_;
     ranking_param_.token_freq_col_idx_ = block_max_iter_param.token_freq_col_idx_;
     ranking_param_.doc_length_col_idx_ = block_max_iter_param.doc_length_col_idx_;
     is_inited_ = true;
@@ -1422,6 +1438,22 @@ int ObTextRetrievalBlockMaxIter::get_curr_doc_length(int64_t &length) const
   return ret;
 }
 
+int ObTextRetrievalBlockMaxIter::get_curr_token_freq(int64_t &token_freq) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not initialized", K(ret));
+  } else if (OB_UNLIKELY(in_shallow_status_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected iter status, can not get curr token freq after shallow advance",
+        K(ret), K_(in_shallow_status));
+  } else if (OB_FAIL(token_iter_.get_curr_token_freq(token_freq))) {
+    LOG_WARN("failed to get curr token freq", K(ret));
+  }
+  return ret;
+}
+
 int ObTextRetrievalBlockMaxIter::get_curr_pos_list(ObString &pos_list) const
 {
   int ret = OB_SUCCESS;
@@ -1523,9 +1555,11 @@ int ObTextRetrievalBlockMaxIter::init_block_max_iter(const int64_t total_doc_cnt
     LOG_WARN("block max iter already initalized", K(ret));
   } else if (FALSE_IT(ranking_param_.total_doc_cnt_ = total_doc_cnt)) {
   } else if (FALSE_IT(ranking_param_.avg_doc_token_cnt_ = avg_doc_token_cnt)) {
+  } else if (FALSE_IT(ranking_param_.match_phrase_mode_ = match_phrase_mode_)) {
   } else if (OB_FAIL(token_iter_.get_token_doc_cnt(ranking_param_.doc_freq_))) {
     LOG_WARN("failed to get token doc cnt", K(ret));
-  } else if (OB_FAIL(calc_dim_max_score(*block_max_iter_param_, ranking_param_, *block_max_scan_param_))) {
+  } else if (!match_phrase_mode_ // since ObDASMatchPhraseOp does not call get_dim_max_score()
+      && OB_FAIL(calc_dim_max_score(*block_max_iter_param_, ranking_param_, *block_max_scan_param_))) {
     LOG_WARN("failed to calc dim max score", K(ret));
   } else if (OB_FAIL(block_max_iter_.init(ranking_param_, *block_max_iter_param_, *block_max_scan_param_))) {
     LOG_WARN("failed to init block max iter", K(ret));

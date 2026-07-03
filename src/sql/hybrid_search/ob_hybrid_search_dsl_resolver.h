@@ -101,19 +101,21 @@ public:
   int64_t should_cnt_;
   int64_t filter_cnt_;
   int64_t must_not_cnt_;
+  // Legacy msm int for generator/CG until expr-based bool MSM replaces ObDSLBoolQuery::msm_.
   int32_t msm_;
+  ObConstRawExpr *minimum_should_match_;
   ObRawExpr *origin_expr_; // for search index
   INHERIT_TO_STRING_KV("ObDSLQuery", ObDSLQuery,
                        K(must_), K(should_), K(filter_), K(must_not_),
                        K(must_cnt_), K(should_cnt_), K(filter_cnt_), K(must_not_cnt_),
-                       K(msm_), K(origin_expr_));
+                       K(msm_), KPC_(minimum_should_match), K(origin_expr_));
 
 private:
   ObDSLBoolQuery(ObEsQueryItem outer_query_type, ObDSLQuery *parent_query)
     : ObDSLQuery(QUERY_ITEM_BOOL, outer_query_type, parent_query),
       must_(), should_(), filter_(), must_not_(),
       must_cnt_(-1), should_cnt_(-1), filter_cnt_(-1), must_not_cnt_(-1),
-      msm_(1), origin_expr_(nullptr) {}
+      msm_(1), minimum_should_match_(nullptr), origin_expr_(nullptr) {}
 };
 
 class ObDSLKnnQuery : public ObDSLQuery
@@ -471,7 +473,9 @@ private :
   int get_fulltext_index_schema(const ObString &col_name, const ObTableSchema *&index_schema);
   int get_json_string_from_node(const ParseNode *node, ObString &json_str);
   int get_user_column_expr(ObString &col_name, ObColumnRefRawExpr *&col_expr);
-  int init_bool_info(ObIJsonBase &req_node, int32_t &msm, ObConstRawExpr *&boost_expr);
+  int init_bool_info(ObIJsonBase &req_node, ObConstRawExpr *&msm_expr, ObConstRawExpr *&boost_expr);
+  /// Compact int snapshot for `ObDSLBoolQuery::msm_` from the already-built const MSM expr (bool query).
+  static int dsl_bool_msm_snapshot_from_msm_expr(ObConstRawExpr *msm_expr, int32_t &msm_snapshot);
   int init_col_idx_map();
   int init_col_schema_map();
   int init_resolver();
@@ -497,7 +501,11 @@ private :
   int resolve_match(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSLQuery *parent_query, ObEsQueryItem outer_query_type);
   int resolve_match_phrase(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSLQuery *parent_query, ObEsQueryItem outer_query_type);
   int resolve_min_score(ObIJsonBase &req_node);
-  int resolve_minimum_should_match(ObIJsonBase &req_node, int32_t &msm);
+  int resolve_minimum_should_match_expr(
+      ObIJsonBase *sub_node,
+      ObCollationType collation_type,
+      const int32_t default_msm_i32,
+      ObConstRawExpr *&msm_expr);
   int resolve_multi_knn(ObIJsonBase &req_node);
   int resolve_multi_match(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSLQuery *parent_query, ObEsQueryItem outer_query_type);
   int resolve_multi_fields_query_param(

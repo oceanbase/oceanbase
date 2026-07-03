@@ -1863,6 +1863,10 @@ int ObIndexBuilder::do_create_index(
     // FIXME: create index for inner table is not supported yet.
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("create index on inner table not supported", K(ret), K(table_id));
+  } else if (table_schema->is_fulltext_dict()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("create index on fulltext dictionary table not supported", K(ret), K(table_id));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create index on fulltext dictionary table is");
   } else if (!arg.is_inner_ && table_schema->is_in_recyclebin()) {
     ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
     LOG_WARN("can not add index on table in recyclebin", K(ret), K(arg));

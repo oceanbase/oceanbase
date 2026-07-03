@@ -872,6 +872,13 @@ int ObTableHelper::inner_generate_table_schema_(const ObCreateTableArg &arg, ObT
     LOG_WARN("fail to format partition schema", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(new_table.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("failed to get compat mode", KR(ret), K_(tenant_id));
+  } else if (compat_version < DATA_VERSION_4_6_0_1 && new_table.is_fulltext_dict()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("fulltext dict table is not supported before FTS_DICT version", KR(ret), K_(tenant_id), K(compat_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "fulltext dict table option in data version less than required");
+  } else if (compat_version >= DATA_VERSION_4_6_0_1 && new_table.is_fulltext_dict()
+             && OB_FAIL(ObFtsIndexBuilderUtil::check_fulltext_dict_schema(new_table, tenant_id_))) {
+    LOG_WARN("fulltext dict schema check failed", K(ret), K(tenant_id_), K(new_table.get_table_id()));
   }
 
   const uint64_t tablespace_id = new_table.get_tablespace_id();

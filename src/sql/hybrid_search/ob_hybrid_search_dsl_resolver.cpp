@@ -14,6 +14,7 @@
 #include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "lib/utility/ob_fast_convert.h"
 #include "sql/rewrite/ob_expand_aggregate_utils.h"
 
 namespace oceanbase
@@ -573,11 +574,19 @@ int ObDSLQueryInfo::deep_copy_query_bool(const ObDSLBoolQuery *src, ObDSLBoolQue
   } else if (OB_FAIL(dst->must_not_.assign(must_not))) {
     LOG_WARN("failed to assign must_not queries", K(ret));
   } else {
+    ObRawExpr *msm_copy = nullptr;
     dst->must_cnt_ = src->must_cnt_;
     dst->should_cnt_ = src->should_cnt_;
     dst->filter_cnt_ = src->filter_cnt_;
     dst->must_not_cnt_ = src->must_not_cnt_;
     dst->msm_ = src->msm_;
+    if (OB_ISNULL(src->minimum_should_match_)) {
+      dst->minimum_should_match_ = nullptr;
+    } else if (OB_FAIL(expr_copier.copy(src->minimum_should_match_, msm_copy))) {
+      LOG_WARN("failed to copy bool minimum_should_match expr", K(ret));
+    } else {
+      dst->minimum_should_match_ = static_cast<ObConstRawExpr *>(msm_copy);
+    }
   }
   return ret;
 }
@@ -727,6 +736,10 @@ int ObDSLResolver::add_dsl_expr_recursive(ObDSLQuery *query)
     LOG_WARN("fail to add boost expr", K(ret));
   } else if (IS_QUERY_ITEM_BOOL(query->query_type_)) {
     ObDSLBoolQuery *bool_query = static_cast<ObDSLBoolQuery*>(query);
+    if (OB_NOT_NULL(bool_query->minimum_should_match_) &&
+        OB_FAIL(add_dsl_expr(bool_query->minimum_should_match_))) {
+      LOG_WARN("fail to add bool minimum_should_match expr", K(ret));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < bool_query->must_.count(); i++) {
       if (OB_FAIL(add_dsl_expr_recursive(bool_query->must_.at(i)))) {
         LOG_WARN("fail to add must query expr", K(ret));
@@ -1599,16 +1612,21 @@ int ObDSLResolver::get_user_column_expr(ObString &col_name, ObColumnRefRawExpr *
   return ret;
 }
 
-int ObDSLResolver::init_bool_info(ObIJsonBase &req_node, int32_t &msm, ObConstRawExpr *&boost_expr)
+int ObDSLResolver::init_bool_info(ObIJsonBase &req_node, ObConstRawExpr *&msm_expr, ObConstRawExpr *&boost_expr)
 {
   int ret = OB_SUCCESS;
   bool has_msm_key = false;
   bool has_must = false;
   bool has_filter = false;
   bool has_should = false;
+  msm_expr = nullptr;
+  ObRawExprFactory *expr_factory = params_.expr_factory_;
   if (req_node.json_type() != ObJsonNodeType::J_OBJECT) {
     ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
     LOG_WARN("unexpectd json type", K(ret), K(req_node.json_type()));
+  } else if (OB_ISNULL(expr_factory)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null expr_factory", K(ret));
   } else {
     for (uint64_t i = 0; OB_SUCC(ret) && i < req_node.element_count(); i++) {
       ObString key;
@@ -1623,7 +1641,7 @@ int ObDSLResolver::init_bool_info(ObIJsonBase &req_node, int32_t &msm, ObConstRa
         has_should = true;
       } else if (key.case_compare("minimum_should_match") == 0) {
         has_msm_key = true;
-        if (OB_FAIL(resolve_minimum_should_match(*sub_node, msm))) {
+        if (OB_FAIL(resolve_minimum_should_match_expr(sub_node, CS_TYPE_INVALID, 0, msm_expr))) {
           LOG_WARN("fail to resolve minimum_should_match", K(ret));
         }
       } else if (key.case_compare("boost") == 0) {
@@ -1633,10 +1651,10 @@ int ObDSLResolver::init_bool_info(ObIJsonBase &req_node, int32_t &msm, ObConstRa
       }
     }
     if (OB_SUCC(ret) && !has_msm_key) {
-      if (has_should && !has_must && !has_filter) {
-        msm = 1;
-      } else {
-        msm = 0;
+      const int32_t default_bool_msm =
+          static_cast<int32_t>((has_should && !has_must && !has_filter) ? 1 : 0);
+      if (OB_FAIL(resolve_minimum_should_match_expr(nullptr, CS_TYPE_INVALID, default_bool_msm, msm_expr))) {
+        LOG_WARN("fail to build default bool minimum_should_match expr", KR(ret));
       }
     }
   }
@@ -2705,7 +2723,8 @@ int ObDSLResolver::resolve_match(ObIJsonBase &req_node, ObDSLQuery *&query, ObDS
   ObConstRawExpr *boost_expr = nullptr;
   ObConstRawExpr *min_should_match_expr = nullptr;
   ObConstRawExpr *operator_expr = nullptr;
-  int32_t min_should_match = ObDSLMatchQuery::DEFAULT_MINIMUM_SHOULD_MATCH;
+  bool has_msm_key = false;
+  ObIJsonBase *match_msm_json_node = nullptr;
   ObMatchOperator match_operator = ObDSLMatchQuery::DEFAULT_OPERATOR;
   ObCollationType collation_type = CS_TYPE_INVALID;
   ObDSLMatchQuery *match_query = nullptr;
@@ -2745,15 +2764,14 @@ int ObDSLResolver::resolve_match(ObIJsonBase &req_node, ObDSLQuery *&query, ObDS
         }
       } else if (key.case_compare("boost") == 0) {
         if (OB_FAIL(resolve_boost(*sub_node, boost_expr, QUERY_ITEM_MATCH, outer_query_type))) {
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "boost in match query");
           LOG_WARN("fail to resolve boost", K(ret));
         }
       } else if (key.case_compare("minimum_should_match") == 0) {
-        if (OB_FAIL(resolve_minimum_should_match(*sub_node, min_should_match))) {
-          LOG_WARN("fail to resolve minimum should match", K(ret));
-        }
+        has_msm_key = true;
+        match_msm_json_node = sub_node;
       } else if (key.case_compare("operator") == 0) {
         if (OB_FAIL(resolve_query_string_operator(*sub_node, match_operator))) {
-          ret = OB_INVALID_ARGUMENT;
           LOG_USER_ERROR(OB_INVALID_ARGUMENT, "operator in match query");
           LOG_WARN("fail to resolve query string operator", K(ret));
         }
@@ -2774,13 +2792,19 @@ int ObDSLResolver::resolve_match(ObIJsonBase &req_node, ObDSLQuery *&query, ObDS
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "match query, required param \"query\" is missed");
     LOG_WARN("missing query node", K(ret));
   } else if (OB_FALSE_IT(collation_type = col_expr->get_collation_type())) {
-  } else if (OB_FAIL(resolve_query_string_expr(ObString(query_node->get_data_length(), query_node->get_data()), collation_type, query_expr))) {
+  } else if (OB_FAIL(resolve_minimum_should_match_expr(
+                     has_msm_key ? match_msm_json_node : nullptr, collation_type,
+                     ObDSLMatchQuery::DEFAULT_MINIMUM_SHOULD_MATCH, min_should_match_expr))) {
+    LOG_WARN("fail to resolve or default minimum should match expr", KR(ret));
+  } else if (OB_ISNULL(min_should_match_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("minimum should match expr is null", K(ret));
+  } else if (OB_FAIL(resolve_query_string_expr(
+                     ObString(query_node->get_data_length(), query_node->get_data()),
+                     collation_type, query_expr))) {
     LOG_WARN("fail to construct string expr", K(ret));
   } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(
-      *expr_factory, ObIntType, static_cast<int64_t>(min_should_match), min_should_match_expr))) {
-    LOG_WARN("fail to build const int expr for minimum should match", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(
-      *expr_factory, ObIntType, static_cast<int64_t>(match_operator), operator_expr))) {
+                     *expr_factory, ObIntType, static_cast<int64_t>(match_operator), operator_expr))) {
     LOG_WARN("fail to build const int expr for operator", K(ret));
   } else if (OB_FAIL(ObDSLMatchQuery::create(outer_query_type, parent_query, *allocator_, match_query))) {
     LOG_WARN("fail to create match query", K(ret));
@@ -3072,7 +3096,7 @@ int ObDSLResolver::resolve_bool(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSL
   int64_t filter_cnt = -1;
   int64_t must_not_cnt = -1;
   int64_t score_cnt = 0;
-  int32_t msm = 1;
+  ObConstRawExpr *msm_expr = nullptr;
   ObConstRawExpr *boost_expr = nullptr;
   ObDSLBoolQuery *bool_query = nullptr;
   if (req_node.json_type() != ObJsonNodeType::J_OBJECT) {
@@ -3083,7 +3107,7 @@ int ObDSLResolver::resolve_bool(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSL
     ret = OB_INVALID_ARGUMENT;
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "bool query, it cannot be empty");
     LOG_WARN("empty bool query", K(ret));
-  } else if (OB_FAIL(init_bool_info(req_node, msm, boost_expr))) {
+  } else if (OB_FAIL(init_bool_info(req_node, msm_expr, boost_expr))) {
     LOG_WARN("fail to init bool info", K(ret));
   } else if (OB_FAIL(ObDSLBoolQuery::create(*allocator_, bool_query, outer_query_type, parent_query))) {
     LOG_WARN("fail to create bool query", K(ret));
@@ -3149,11 +3173,19 @@ int ObDSLResolver::resolve_bool(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSL
     bool_query->should_cnt_ = should_cnt;
     bool_query->filter_cnt_ = filter_cnt;
     bool_query->must_not_cnt_ = must_not_cnt;
-    bool_query->msm_ = msm;
-    bool_query->boost_ = setup_boost(boost_expr);
-    // score is true only if there is at least one item which really needs to calculate score
-    bool_query->need_cal_score_ = bool_query->need_cal_score_ && score_cnt > 0;
-    query = bool_query;
+    bool_query->minimum_should_match_ = msm_expr;
+    int32_t msm_snapshot = 1;
+    if (OB_FAIL(ObDSLResolver::dsl_bool_msm_snapshot_from_msm_expr(msm_expr, msm_snapshot))) {
+      LOG_WARN("failed to derive bool msm snapshot", K(ret));
+    } else {
+      bool_query->msm_ = msm_snapshot;
+    }
+    if (OB_SUCC(ret)) {
+      bool_query->boost_ = setup_boost(boost_expr);
+      // score is true only if there is at least one item which really needs to calculate score
+      bool_query->need_cal_score_ = bool_query->need_cal_score_ && score_cnt > 0;
+      query = bool_query;
+    }
   }
   return ret;
 }
@@ -4042,30 +4074,98 @@ int ObDSLResolver::resolve_min_score(ObIJsonBase &req_node)
   return ret;
 }
 
-int ObDSLResolver::resolve_minimum_should_match(ObIJsonBase &req_node, int32_t &msm)
+int ObDSLResolver::dsl_bool_msm_snapshot_from_msm_expr(ObConstRawExpr *msm_expr, int32_t &msm_snapshot)
 {
   int ret = OB_SUCCESS;
-  double msm_double = 0.0;
-  if (req_node.json_type() != ObJsonNodeType::J_INT && req_node.json_type() != ObJsonNodeType::J_STRING) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "minimum_should_match, it accepts an integer or a string representing an integer");
-    LOG_WARN("minimum_should_match should be int type", K(ret), K(req_node.json_type()));
-  } else if (OB_FAIL(req_node.to_double(msm_double))) {
-    if (req_node.json_type() == ObJsonNodeType::J_STRING) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "minimum_should_match, it accepts an integer or a string representing an integer");
+  static const int64_t INT32_MAX_AS_I64 = static_cast<int64_t>(2147483647LL);
+  msm_snapshot = 1;
+  if (msm_expr != nullptr) {
+    const ObObj &v = msm_expr->get_value();
+    const ObObjType tp = v.get_type();
+    if (ob_is_string_type(tp)) {
+      msm_snapshot = 1;
+    } else if (ob_is_integer_type(tp)) {
+      const int64_t raw = v.get_int();
+      if (raw < 0) {
+        msm_snapshot = 0;
+      } else if (raw > INT32_MAX_AS_I64) {
+        msm_snapshot = static_cast<int32_t>(INT32_MAX_AS_I64);
+      } else {
+        msm_snapshot = static_cast<int32_t>(raw);
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected minimum_should_match const expr type", K(ret), K(tp));
     }
-    LOG_WARN("fail to get double value from minimum_should_match", K(ret));
-  } else if (req_node.json_type() == ObJsonNodeType::J_STRING && msm_double != static_cast<int64_t>(msm_double)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "minimum_should_match, it accepts an integer or a string representing an integer");
-    LOG_WARN("minimum_should_match is not an integer", K(ret), K(msm_double));
-  } else if (msm_double < 0.0 || msm_double > INT32_MAX) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "minimum_should_match, should be in range [0, 2147483647]");
-    LOG_WARN("minimum_should_match out of range", K(ret), K(msm_double));
+  }
+  return ret;
+}
+
+int ObDSLResolver::resolve_minimum_should_match_expr(
+    ObIJsonBase *sub_node,
+    ObCollationType collation_type,
+    const int32_t default_msm_i32,
+    ObConstRawExpr *&msm_expr)
+{
+  int ret = OB_SUCCESS;
+  msm_expr = nullptr;
+  ObRawExprFactory *expr_factory = params_.expr_factory_;
+  if (OB_ISNULL(expr_factory)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_USER_ERROR(OB_ERR_UNEXPECTED, "unexpected null expr_factory");
+    LOG_WARN("unexpected null expr_factory", K(ret));
+  } else if (OB_ISNULL(sub_node)) {
+    if (OB_FAIL(ObRawExprUtils::build_const_int_expr(
+                *expr_factory, ObIntType, static_cast<int64_t>(default_msm_i32), msm_expr))) {
+      LOG_WARN("failed to build default minimum_should_match expr", K(ret));
+    } else if (OB_ISNULL(msm_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("minimum_should_match expr is null after default build", KR(ret));
+    }
   } else {
-    msm = static_cast<int32_t>(msm_double);
+    ObCollationType coll = collation_type;
+    if (CS_TYPE_INVALID == coll && OB_FAIL(session_info_->get_collation_connection(coll))) {
+      LOG_WARN("failed to get collation_connection", K(ret));
+    } else {
+      const ObJsonNodeType msm_json_node_type = sub_node->json_type();
+      if (ObJsonNodeType::J_INT == msm_json_node_type) {
+        const int64_t msm_i64 = sub_node->get_int();
+        if (msm_i64 < static_cast<int64_t>(INT32_MIN) || msm_i64 > static_cast<int64_t>(INT32_MAX)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "minimum_should_match, should be in range [-2147483648, 2147483647]");
+          LOG_WARN("minimum_should_match out of int32 range", KR(ret), K(msm_i64));
+        } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(
+                           *expr_factory, ObIntType, msm_i64, msm_expr))) {
+          LOG_WARN("failed to build msm int expr", KR(ret));
+        }
+      } else if (ObJsonNodeType::J_STRING == msm_json_node_type) {
+        const ObString raw(sub_node->get_data_length(), sub_node->get_data());
+        const ObString trimmed = raw.trim();
+        if (trimmed.empty()) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "minimum_should_match string should not be empty");
+          LOG_WARN("minimum_should_match empty string", KR(ret));
+        } else {
+          bool valid_int = false;
+          const char *const p = trimmed.ptr();
+          const char *const e = trimmed.ptr() + trimmed.length();
+          const int32_t parsed = common::ObFastAtoi<int32_t>::atoi(p, e, valid_int);
+          if (valid_int) {
+            if (OB_FAIL(ObRawExprUtils::build_const_int_expr(
+                        *expr_factory, ObIntType, static_cast<int64_t>(parsed), msm_expr))) {
+              LOG_WARN("failed to build msm int expr", KR(ret));
+            }
+          } else if (OB_FAIL(ObRawExprUtils::build_const_string_expr(
+                             *expr_factory, ObVarcharType, trimmed, coll, msm_expr))) {
+            LOG_WARN("failed to build msm string expr", KR(ret));
+          }
+        }
+      } else {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "minimum_should_match in match query");
+        LOG_WARN("minimum_should_match unsupported json type", KR(ret), K(msm_json_node_type));
+      }
+    }
   }
   return ret;
 }
@@ -4185,7 +4285,8 @@ int ObDSLResolver::resolve_multi_fields_query_param(
   ObSEArray<ObConstRawExpr*, 4, ModulePageAllocator, true> field_boosts;
   ObMatchFieldsType type = ObDSLFullTextMultiFieldQueryParam::DEFAULT_FIELD_TYPE;
   ObMatchOperator opr = ObDSLFullTextQuery::DEFAULT_OPERATOR;
-  int32_t minimum_should_match = ObDSLFullTextQuery::DEFAULT_MINIMUM_SHOULD_MATCH;
+  bool has_msm_key = false;
+  ObIJsonBase *multi_msm_json_node = nullptr;
   ObConstRawExpr *minimum_should_match_expr = nullptr;
   ObConstRawExpr *operator_expr = nullptr;
   ObConstRawExpr *type_expr = nullptr;
@@ -4224,20 +4325,17 @@ int ObDSLResolver::resolve_multi_fields_query_param(
       }
     } else if (is_multi_match && key.case_compare("operator") == 0) {
       if (OB_FAIL(resolve_query_string_operator(*sub_node, opr))) {
-        ret = OB_INVALID_ARGUMENT;
         LOG_USER_ERROR(OB_INVALID_ARGUMENT, "operator in multi_match query");
         LOG_WARN("fail to resolve query_string operator", K(ret));
       }
     } else if (!is_multi_match && key.case_compare("default_operator") == 0) {
       if (OB_FAIL(resolve_query_string_operator(*sub_node, opr))) {
-        ret = OB_INVALID_ARGUMENT;
         LOG_USER_ERROR(OB_INVALID_ARGUMENT, "default_operator in query_string query");
         LOG_WARN("fail to resolve query_string operator", K(ret));
       }
     } else if (key.case_compare("minimum_should_match") == 0) {
-      if (OB_FAIL(resolve_minimum_should_match(*sub_node, minimum_should_match))) {
-        LOG_WARN("fail to resolve minimum_should_match", K(ret));
-      }
+      has_msm_key = true;
+      multi_msm_json_node = sub_node;
     } else {
       key_matched = false;
     }
@@ -4253,16 +4351,22 @@ int ObDSLResolver::resolve_multi_fields_query_param(
     // in case the key "fields" is not found
     ret = OB_INVALID_ARGUMENT;
     LOG_USER_ERROR(OB_INVALID_ARGUMENT,
-        is_multi_match ? "multi_match, \"fields\" is necessary" :
-                         "query_string, \"fields\" is necessary");
+      is_multi_match ? "multi_match, \"fields\" is necessary" :
+                       "query_string, \"fields\" is necessary");
     LOG_WARN("fields is empty or not found", K(ret));
   } else if (OB_FAIL(fields_param.fields_.assign(fields))) {
     LOG_WARN("fail to assign fields", K(ret));
   } else if (OB_FAIL(fields_param.field_boosts_.assign(field_boosts))) {
     LOG_WARN("fail to assign field boosts", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(
-      *params_.expr_factory_, ObIntType, minimum_should_match, minimum_should_match_expr))) {
-    LOG_WARN("fail to build const int expr for minimum should match", K(ret));
+  } else if (OB_FAIL(resolve_minimum_should_match_expr(
+                     has_msm_key ? multi_msm_json_node : nullptr,
+                     CS_TYPE_INVALID,
+                     ObDSLFullTextQuery::DEFAULT_MINIMUM_SHOULD_MATCH,
+                     minimum_should_match_expr))) {
+    LOG_WARN("fail to resolve or default minimum_should_match", K(ret));
+  } else if (OB_ISNULL(minimum_should_match_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("minimum should match expr is null", K(ret));
   } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(
       *params_.expr_factory_, ObIntType, opr, operator_expr))) {
     LOG_WARN("fail to build const int expr for operator", K(ret));

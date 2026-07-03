@@ -12,8 +12,10 @@
 #include "object/ob_object.h"
 #include "share/ob_plugin_helper.h"
 #include "share/schema/ob_schema_struct_fts.h"
+#include "storage/fts/ob_fts_literal.h"
 #include "storage/fts/ob_fts_parser_property.h"
 #include "storage/fts/ob_fts_struct.h"
+#include "storage/fts/analyzer/ob_analyzer.h"
 
 namespace oceanbase
 {
@@ -33,7 +35,6 @@ namespace storage
 
 class ObStopTokenCheckerGen;
 class ObStopTokenChecker;
-class ObFTDictHub;
 
 #define FTS_BUILD_IN_PARSER_LIST                                                                   \
   FT_PARSER_TYPE(FTP_SPACE, space)                                                                 \
@@ -72,9 +73,56 @@ public:
   OB_INLINE int64_t get_parser_version() const { return parser_version_; }
   OB_INLINE bool is_valid() const { return parser_name_.is_valid() && parser_version_ >= 0; }
   OB_INLINE bool is_type_before_4_3_5_1() const { return is_space() || is_beng() || is_ngram(); }
-  OB_INLINE bool is_builtin_parser() const
+  OB_INLINE bool is_legacy_parser() const
   {
     return is_space() || is_ngram() || is_beng() || is_ik() || is_ngram2();
+  }
+  OB_INLINE static bool is_legacy_parser_name(const common::ObString &name)
+  {
+    return (0 == name.case_compare(ObFTSLiteral::PARSER_NAME_SPACE)) ||
+           (0 == name.case_compare(ObFTSLiteral::PARSER_NAME_NGRAM)) ||
+           (0 == name.case_compare(ObFTSLiteral::PARSER_NAME_NGRAM2)) ||
+           (0 == name.case_compare(ObFTSLiteral::PARSER_NAME_BENG)) ||
+           (0 == name.case_compare(ObFTSLiteral::PARSER_NAME_IK));
+  }
+  // Returns true for "analyzer" (no version) or "analyzer.N" where N is a pure-digit version
+  // string (e.g. "analyzer.1"). Multiple dots (e.g. "analyzer.1.2") or non-digit suffixes
+  // (e.g. "analyzer.1a") return false.
+  OB_INLINE static bool is_analyzer_parser_name(const common::ObString &name)
+  {
+    bool is_analyzer = false;
+    if (nullptr == name.find('.')) {
+      is_analyzer = (0 == name.case_compare(ObFTSLiteral::PARSER_NAME_ANALYZER));
+    } else {
+      common::ObString parser_name_with_version = name;
+      common::ObString parser_name = parser_name_with_version.split_on('.');
+      is_analyzer = (0 == parser_name.case_compare(ObFTSLiteral::PARSER_NAME_ANALYZER))
+                    && !parser_name_with_version.empty();
+      for (int64_t i = 0; is_analyzer && i < parser_name_with_version.length(); ++i) {
+        is_analyzer = parser_name_with_version.ptr()[i] >= '0' && parser_name_with_version.ptr()[i] <= '9';
+      }
+    }
+    return is_analyzer;
+  }
+  OB_INLINE bool is_analyzer_parser() const
+  {
+    return parser_name_ == share::ObPluginName(ObFTSLiteral::PARSER_NAME_ANALYZER);
+  }
+  OB_INLINE ObTokenizerType to_tokenizer_type() const
+  {
+    ObTokenizerType tokenizer_type = ObTokenizerType::TOKENIZER_TYPE_INVALID;
+    if (is_space()) {
+      tokenizer_type = ObTokenizerType::TOKENIZER_TYPE_SPACE;
+    } else if (is_ngram()) {
+      tokenizer_type = ObTokenizerType::TOKENIZER_TYPE_NGRAM;
+    } else if (is_beng()) {
+      tokenizer_type = ObTokenizerType::TOKENIZER_TYPE_BENG;
+    } else if (is_ik()) {
+      tokenizer_type = ObTokenizerType::TOKENIZER_TYPE_IK;
+    } else if (is_ngram2()) {
+      tokenizer_type = ObTokenizerType::TOKENIZER_TYPE_NGRAM2;
+    }
+    return tokenizer_type;
   }
   OB_INLINE void set_name_and_version(const share::ObPluginName &name, const int64_t version)
   {
@@ -100,7 +148,7 @@ class ObFTParsePluginData final
 {
 public:
   ObFTParsePluginData() :
-      stop_token_checker_gen_(nullptr), dict_hub_(nullptr), handler_allocator_(), is_inited_(false) { }
+      stop_token_checker_gen_(nullptr), handler_allocator_(), is_inited_(false) { }
   ~ObFTParsePluginData();
 
   /**
@@ -116,15 +164,11 @@ public:
 public:
   int get_stop_token_checker(const ObCollationType coll,
                              ObStopTokenChecker &stop_token_checker);
-  int get_dict_hub(ObFTDictHub *&hub);
-
 private:
   int init_stop_token_checker_gen();
-  int init_dict_hub();
 
 private:
   ObStopTokenCheckerGen *stop_token_checker_gen_;
-  ObFTDictHub *dict_hub_;
   common::ObFIFOAllocator handler_allocator_;
   bool is_inited_;
 };
@@ -160,7 +204,8 @@ public:
       common::ObIAllocator *allocator,
       const common::ObString &plugin_name,
       const common::ObString &plugin_properties,
-      const share::schema::ObFTSIndexType fts_index_type);
+      const share::schema::ObFTSIndexType fts_index_type,
+      const bool is_ddl_mode = false);
   /**
    * Split document into multiple words
    *
@@ -215,21 +260,55 @@ public:
 
   OB_INLINE const ObProcessTokenFlag &get_process_token_flags() const { return process_token_flag_; }
 
-  OB_INLINE bool is_builtin_parser() const { return parser_name_.is_builtin_parser(); }
+  OB_INLINE bool is_ddl_mode() const { return is_ddl_mode_; }
+
+  OB_INLINE bool is_builtin_parser() const { return parser_name_.is_legacy_parser() || is_builtin_analyzer(); }
+  OB_INLINE bool is_legacy_parser() const { return parser_name_.is_legacy_parser(); }
+
+  OB_INLINE bool is_analyzer_parser() const { return parser_name_.is_analyzer_parser(); }
+
+  OB_INLINE bool is_builtin_analyzer() const
+  {
+    return is_analyzer_parser() && OB_NOT_NULL(analyzer_spec_)
+        && (analyzer_spec_->analyzer_type_ == ObAnalyzerType::ANALYZER_TYPE_STANDARD
+            || analyzer_spec_->analyzer_type_ == ObAnalyzerType::ANALYZER_TYPE_ENGLISH
+            || analyzer_spec_->analyzer_type_ == ObAnalyzerType::ANALYZER_TYPE_THAI
+            || analyzer_spec_->analyzer_type_ == ObAnalyzerType::ANALYZER_TYPE_VIETNAMESE
+            || analyzer_spec_->analyzer_type_ == ObAnalyzerType::ANALYZER_TYPE_INDONESIAN
+            || analyzer_spec_->analyzer_type_ == ObAnalyzerType::ANALYZER_TYPE_MALAY);
+  }
+  OB_INLINE bool is_custom_analyzer() const
+  {
+    return is_analyzer_parser() && OB_NOT_NULL(analyzer_spec_)
+        && analyzer_spec_->analyzer_type_ == ObAnalyzerType::ANALYZER_TYPE_CUSTOM;
+  }
+
+  OB_INLINE const common::ObString &get_analysis_json() const { return analysis_json_; }
+  OB_INLINE const ObAnalyzerSpec *get_analyzer_spec() const { return analyzer_spec_; }
+
+  // Create an analyzer from the given param. Caller owns the returned analyzer
+  // and must destroy it after use.
+  int create_analyzer(const ObFTAnalyzerParam &param, ObFTSAnalyzer *&fts_analyzer) const;
 
   TO_STRING_KV(KP_(allocator), K_(parser_name), KP_(parser_desc), K_(is_inited), K_(fts_index_type));
 
 private:
   int set_process_token_flag(const plugin::ObIFTParserDesc &ftparser_desc);
+  void free_analyzer_spec_();
 
 private:
   common::ObIAllocator *allocator_;
+  common::ObArenaAllocator analyzer_allocator_;  // separate arena for analyzer_spec_ and analysis_json_
   plugin::ObIFTParserDesc *parser_desc_;
   plugin::ObPluginParam *plugin_param_;
   ObFTParser parser_name_;
   ObProcessTokenFlag process_token_flag_;
+  ObFTParserJsonProps props_;
   ObFTParserProperty parser_property_;
+  common::ObString analysis_json_;   // for "analyzer" parser: raw analysis JSON
+  ObAnalyzerSpec *analyzer_spec_;
   share::schema::ObFTSIndexType fts_index_type_;
+  bool is_ddl_mode_;
   bool is_inited_;
 
 private:

@@ -49,7 +49,8 @@ class ObBooleanQueryNode : public ObHybridSearchNodeBase
 {
 public:
   ObBooleanQueryNode(common::ObIAllocator &allocator) : ObHybridSearchNodeBase(allocator), must_nodes_(allocator), should_nodes_(allocator),
-    filter_nodes_(allocator), must_not_nodes_(allocator), min_should_match_(0), origin_expr_(nullptr)
+    filter_nodes_(allocator), must_not_nodes_(allocator), min_should_match_(0), origin_expr_(nullptr),
+    minimum_should_match_(nullptr)
     { node_type_ = INDEX_MERGE_HYBRID_BOOLEAN_QUERY; }
   virtual ~ObBooleanQueryNode() {}
   virtual int explain_info(char *buf, int64_t buf_len, int64_t &pos, ExplainType type, int blank_space_count);
@@ -61,6 +62,7 @@ public:
   ObSqlArray<ObIndexMergeNode*> must_not_nodes_;
   double min_should_match_;
   ObRawExpr *origin_expr_; // for search index
+  ObConstRawExpr *minimum_should_match_;
 };
 
 class ObFusionNode : public ObHybridSearchNodeBase

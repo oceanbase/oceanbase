@@ -38,6 +38,7 @@ struct ObDASMatchPhraseOpParam : public ObIDASSearchOpParam
       token_ids_(),
       query_tokens_(),
       counter_(nullptr),
+      slop_(0),
       boost_(0.0),
       use_rich_format_(false)
   {}
@@ -51,6 +52,7 @@ struct ObDASMatchPhraseOpParam : public ObIDASSearchOpParam
         && nullptr != block_max_param_
         && !query_tokens_.empty()
         && nullptr != counter_
+        && slop_ >= 0
         && boost_ > 0.0;
   }
   int get_children_ops(ObIArray<ObIDASSearchOp *> &children) const override
@@ -62,6 +64,7 @@ struct ObDASMatchPhraseOpParam : public ObIDASSearchOpParam
       KPC_(ir_ctdef),
       KPC_(ir_rtdef),
       K_(query_tokens),
+      K_(slop),
       K_(boost),
       K_(use_rich_format));
 
@@ -72,6 +75,7 @@ struct ObDASMatchPhraseOpParam : public ObIDASSearchOpParam
   ObSEArray<int64_t, 16> token_ids_;
   ObSEArray<ObString, 16> query_tokens_;
   ObPhraseMatchCounter *counter_;
+  int64_t slop_;
   double boost_;
   bool use_rich_format_;
 };
@@ -97,9 +101,12 @@ private:
 
 private:
   int find_intersection(ObDASRowID &rowid, double &score);
+  int pre_evaluate(bool &is_candidate);
   int evaluate(double &score);
+  int select_lead_idx();
   int calculate_total_token_weight_on_demand();
   int estimate_bm25_param_on_demand();
+  int init_block_max_iters_on_demand();
 private:
   ObIAllocator *allocator_;
   const ObDASIRScanCtDef *ir_ctdef_;
@@ -109,11 +116,14 @@ private:
   ObFixedArray<ObTextRetrievalBlockMaxIter *, ObIAllocator> token_iters_;
   ObBM25IndexParamEstimator estimator_;
   bool bm25_param_estimated_;
+  bool block_max_inited_;
   double total_token_weight_;
   ObFTSPositionListStore *decoder_;
   ObPhraseMatchCounter *counter_;
+  int64_t slop_;
   double boost_;
   bool use_rich_format_;
+  int64_t lead_idx_;
   ObDASRowID curr_id_;
   bool is_inited_;
 };

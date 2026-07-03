@@ -135,6 +135,7 @@ ob_set_subtarget(ob_sql das
   das/search/ob_das_disjunction_op.cpp
   das/search/ob_das_disjunction_filter_op.cpp
   das/search/ob_das_disjunctive_max_op.cpp
+  das/search/ob_das_msm_runtime_util.cpp
   das/search/ob_das_token_op.cpp
   das/search/ob_das_token_utils.cpp
   das/search/ob_das_match_query.cpp

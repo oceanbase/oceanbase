@@ -946,7 +946,7 @@ int ObLoadDataSPImpl::exec_shuffle(int64_t task_id, ObShuffleTaskHandle *handle)
   int64_t tenant_id = OB_INVALID_TENANT_ID;
   void *expr_buf = NULL;
   ObLoadFileBuffer *expr_buffer = NULL;
-  ObArrayHashMap<ObTabletID, ObDataFrag *> part_buf_mgr;
+  common::ObArrayHashMap<ObTabletID, ObDataFrag *> part_buf_mgr;
   ObSEArray<ObString, 32> insert_values;
   int64_t parsed_line_num = 0;
   ObStringBuf str_buf("LoadDataStrBuf", OB_MALLOC_MIDDLE_BLOCK_SIZE);

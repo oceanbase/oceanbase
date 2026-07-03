@@ -137,6 +137,11 @@ install(FILES
   DESTINATION etc
   COMPONENT server)
 
+install(FILES
+  tools/icu/icu_folding.dat
+  DESTINATION etc/icu
+  COMPONENT server)
+
 message(STATUS "system package release directory: " ${SYS_PACK_RELEASE_DIR})
 install(
   DIRECTORY ${SYS_PACK_RELEASE_DIR}/

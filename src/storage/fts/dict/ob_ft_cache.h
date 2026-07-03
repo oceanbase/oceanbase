@@ -25,11 +25,20 @@ namespace storage
 class ObDictCacheKey : public common::ObIKVCacheKey
 {
 public:
-  ObDictCacheKey(const uint64_t name,
-                 const uint64_t tenant,
-                 const ObFTDictType dict_type,
+  ObDictCacheKey() = default;
+  ObDictCacheKey(const uint64_t table_id,
+                 const uint64_t tenant_id,
                  int32_t range_id)
-      : name_(name), tenant_(tenant), dict_type_(dict_type), range_id_(range_id)
+      : table_id_(table_id),
+        tenant_id_(tenant_id),
+        range_id_(range_id)
+  {
+  }
+  // Copy constructor for deep_copy
+  ObDictCacheKey(const ObDictCacheKey &other)
+      : table_id_(other.table_id_),
+        tenant_id_(other.tenant_id_),
+        range_id_(other.range_id_)
   {
   }
   ~ObDictCacheKey() override {}
@@ -38,16 +47,16 @@ public:
   {
     const ObDictCacheKey &other_key = reinterpret_cast<const ObDictCacheKey &>(other);
     return (&other == this)
-           || ((other_key.name_ == name_) && (other_key.dict_type_ == dict_type_)
-               && (other_key.tenant_ == tenant_));
+           || ((other_key.tenant_id_ == tenant_id_)
+               && (other_key.table_id_ == table_id_)
+               && (other_key.range_id_ == range_id_));
   }
 
   uint64_t hash() const override
   {
     uint64_t hash_val = 0;
-    hash_val = murmurhash(&name_, sizeof(name_), hash_val);
-    hash_val = murmurhash(&tenant_, sizeof(tenant_), hash_val);
-    hash_val = murmurhash(&dict_type_, sizeof(dict_type_), hash_val);
+    hash_val = murmurhash(&table_id_, sizeof(table_id_), hash_val);
+    hash_val = murmurhash(&tenant_id_, sizeof(tenant_id_), hash_val);
     hash_val = murmurhash(&range_id_, sizeof(range_id_), hash_val);
     return hash_val;
   }
@@ -62,53 +71,80 @@ public:
     hash_value = hash();
     return OB_SUCCESS;
   }
-  uint64_t get_tenant_id() const override { return tenant_; }
+  uint64_t get_tenant_id() const override { return tenant_id_; }
+  int32_t get_range_id() const { return range_id_; }
   int64_t size() const override { return sizeof(ObDictCacheKey); }
 
   int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey *&key) const override
   {
     int ret = OB_SUCCESS;
-    if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len < size())) {
+    const int64_t key_size = size();
+    if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len < key_size)) {
       ret = OB_INVALID_ARGUMENT;
-      CLOG_LOG(WARN, "invalid argument for ob dict cache", K(ret), K(buf_len), K(size()));
+      CLOG_LOG(WARN, "invalid argument for ob dict cache", K(ret), K(buf_len), K(key_size));
     } else {
-      ObDictCacheKey *new_key = new (buf) ObDictCacheKey(name_, tenant_, dict_type_, range_id_);
+      ObDictCacheKey *new_key = new (buf) ObDictCacheKey(*this);
       key = new_key;
     }
     return ret;
   }
 
+  TO_STRING_KV(K_(table_id), K_(tenant_id), K_(range_id));
 private:
-  // to change to name
-  uint64_t name_; // when build dict
-  uint64_t tenant_;
-  ObFTDictType dict_type_;
+  uint64_t table_id_;
+  uint64_t tenant_id_;
   int32_t range_id_;
 };
 
 class ObDictCacheValue : public common::ObIKVCacheValue
 {
 public:
-  ObDictCacheValue(ObFTDAT *dat_block) : dat_block_(dat_block) {}
+  // range_id = 0: range_count_ stores the total number of ranges
+  // range_id > 0: range_count_ is not used
+  // snapshot_version: snapshot version used when building this cache entry
+  // start_word and end_word are stored in dat_block_->start_word_ and dat_block_->end_word_
+  ObDictCacheValue(const ObFTDAT *dat_block,
+                   const int64_t snapshot_version,
+                   const int32_t range_count)
+      : dat_block_(dat_block),
+        snapshot_version_(snapshot_version),
+        range_count_(range_count) {}
+
   ~ObDictCacheValue() override {}
-  int64_t size() const override { return sizeof(ObDictCacheValue) + dat_block_->mem_block_size_; }
+
+  int64_t size() const override
+  {
+    return sizeof(ObDictCacheValue) + (dat_block_ ? dat_block_->mem_block_size_ : 0);
+  }
+
   int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheValue *&value) const override
   {
     int ret = OB_SUCCESS;
-    if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len < size())) {
+    const int64_t value_size = size();
+    if (OB_UNLIKELY(OB_ISNULL(buf)) || OB_UNLIKELY(buf_len < value_size) || OB_UNLIKELY(OB_ISNULL(dat_block_))) {
       ret = OB_INVALID_ARGUMENT;
-      CLOG_LOG(WARN, "invalid argument for ob dict cache", K(ret), K(buf_len), K(size()));
+      CLOG_LOG(WARN, "invalid argument for ob dict cache", K(ret), K(buf_len), K(value_size), KP(dat_block_));
     } else {
       ObFTDAT *new_data = reinterpret_cast<ObFTDAT *>(buf + sizeof(ObDictCacheValue));
       MEMCPY(new_data, dat_block_, dat_block_->mem_block_size_);
-      ObIKVCacheValue *new_value = new (buf) ObDictCacheValue(new_data);
+
+      ObIKVCacheValue *new_value = new (buf) ObDictCacheValue(
+          new_data, snapshot_version_, range_count_);
       value = new_value;
     }
     return ret;
   }
 
+  const ObFTDAT *get_dat_block() const { return dat_block_; }
+  int32_t get_range_count() const { return range_count_; }
+  void set_range_count(int32_t range_count) { range_count_ = range_count; }
+  int64_t get_snapshot_version() const { return snapshot_version_; }
+  void set_snapshot_version(int64_t snapshot_version) { snapshot_version_ = snapshot_version; }
+
 public:
-  ObFTDAT *dat_block_;
+  const ObFTDAT *dat_block_;
+  int64_t snapshot_version_; // Snapshot version used when building this cache entry
+  int32_t range_count_; // Only valid for range_id = 0, stores total number of ranges
 };
 
 class ObDictCache : public common::ObKVCache<ObDictCacheKey, ObDictCacheValue>
@@ -124,7 +160,8 @@ public:
   int put_and_fetch_dict(const ObDictCacheKey &key,
                          const ObDictCacheValue &value,
                          const ObDictCacheValue *&pvalue,
-                         common::ObKVCacheHandle &handle);
+                         common::ObKVCacheHandle &handle,
+                         bool overwrite = true);
 
 public:
   static ObDictCache &get_instance()

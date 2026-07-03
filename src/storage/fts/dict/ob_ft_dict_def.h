@@ -29,35 +29,36 @@ public:
   ObFTSingleToken &operator=(const ObFTSingleToken &other) = default;
   int set_token(const char *token, int32_t token_len);
   ObString get_token() const { return ObString(token_char_len_, token_); }
+  bool is_empty() const { return 0 == token_char_len_; }
   bool operator==(const ObFTSingleToken &other) const;
+  TO_STRING_KV(K_(token_char_len), K(get_token()));
 
 public:
   char token_[common::ObCharset::MAX_MB_LEN];
   uint8_t token_char_len_;
 } __attribute__((packed));
 
-enum class ObFTDictType : uint32_t
-{
-  DICT_TYPE_INVALID = 0,
-  DICT_IK_MAIN = 1,
-  DICT_IK_QUAN = 2,
-  DICT_IK_STOP = 3,
-};
-
 class ObFTDictDesc
 {
 public:
-  ObFTDictDesc(const ObString &name,
-               const ObFTDictType type,
-               const ObCharsetType charset,
-               const ObCollationType coll_type)
-      : name_(name), type_(type), charset_(charset), coll_type_(coll_type)
+  enum BuildMode {
+    DDL_EXE = 0,
+    REFRESH_ONLY,
+    DML_OR_SELECT_EXE
+  };
+public:
+  ObFTDictDesc(const ObCharsetType charset,
+               const ObCollationType coll_type,
+               const uint64_t table_id,
+               const common::ObString &table_name)
+      : table_id_(table_id), table_name_(table_name), charset_(charset), coll_type_(coll_type)
   {
   }
+  TO_STRING_KV(K_(charset), K_(coll_type), K_(table_id), K_(table_name));
 
 public:
-  ObString name_;
-  ObFTDictType type_;
+  uint64_t table_id_;
+  common::ObString table_name_;
   ObCharsetType charset_;
   ObCollationType coll_type_;
 };

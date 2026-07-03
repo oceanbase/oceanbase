@@ -46,7 +46,16 @@ struct ObDASBooleanQueryCtDef : ObIDASSearchCtDef {
 
 public:
   ObDASBooleanQueryCtDef(common::ObIAllocator &alloc)
-      : ObIDASSearchCtDef(alloc, DAS_OP_BOOLEAN_QUERY), must_(), filter_(), should_(), must_not_(), min_should_match_(0) {}
+      : ObIDASSearchCtDef(alloc, DAS_OP_BOOLEAN_QUERY),
+        must_(),
+        filter_(),
+        should_(),
+        must_not_(),
+        min_should_match_(0),
+        min_should_match_expr_(nullptr),
+        is_msm_unresolved_expr_(false)
+  {
+  }
   virtual ~ObDASBooleanQueryCtDef() {}
   int must(ObBooleanSubClause<ObIDASSearchCtDef> &clause) const;
   int filter(ObBooleanSubClause<ObIDASSearchCtDef> &clause) const;
@@ -58,6 +67,9 @@ public:
   void set_should(int64_t offset, int64_t count) { should_ = SubClauseInfo(true, offset, count); }
   void set_must_not(int64_t offset, int64_t count) { must_not_ = SubClauseInfo(true, offset, count); }
   void set_min_should_match(int64_t val) { min_should_match_ = val; }
+  /// Code generator only: runtime uses friend ObDASBooleanQueryRtDef for direct access where needed.
+  void set_min_should_match_expr(ObExpr *expr) { min_should_match_expr_ = expr; }
+  void set_is_msm_unresolved_expr(bool is_unresolved_expr) { is_msm_unresolved_expr_ = is_unresolved_expr; }
 
 private:
   struct SubClauseInfo {
@@ -77,6 +89,9 @@ private:
   SubClauseInfo should_;
   SubClauseInfo must_not_;
   int64_t min_should_match_;
+  ObExpr *min_should_match_expr_;
+  /// Snapshot at CG from minimum_should_match expr meta when present (string vs int path at runtime).
+  bool is_msm_unresolved_expr_;
 };
 
 struct ObDASBooleanQueryRtDef : ObIDASSearchRtDef {

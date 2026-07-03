@@ -55,6 +55,7 @@ public:
     const double score = query_token_weight(doc_freq, doc_cnt) * doc_token_weight(token_freq, norm_len);
     return score;
   }
+  static double length_normalizer(const int64_t dl, const double avg_dl);
   static double doc_token_weight(const int64_t token_freq, const double norm_len);
   static double doc_phrase_weight(const double phrase_freq, const double norm_len);
   static double query_token_weight(const int64_t doc_freq, const int64_t doc_cnt);

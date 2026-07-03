@@ -203,10 +203,12 @@ void ObDASTokenOpHelper::init_text_retrieval_param(
   text_retrieval_param.eval_ctx_ = eval_ctx_;
   text_retrieval_param.relevance_expr_ = ir_ctdef_->relevance_expr_;
   text_retrieval_param.inv_scan_doc_length_col_ = ir_ctdef_->inv_scan_doc_length_col_;
+  text_retrieval_param.inv_scan_token_cnt_col_ = ir_ctdef_->inv_scan_token_cnt_col_;
   text_retrieval_param.inv_scan_domain_id_col_ = ir_ctdef_->inv_scan_domain_id_col_;
   text_retrieval_param.inv_scan_pos_list_col_ = ir_ctdef_->inv_scan_pos_list_col_;
   text_retrieval_param.reuse_inv_idx_agg_res_ = true;
   text_retrieval_param.use_rich_format_ = use_rich_format_;
+  text_retrieval_param.match_phrase_mode_ = true;
 }
 
 void ObDASTokenOpHelper::reset_scan_range()

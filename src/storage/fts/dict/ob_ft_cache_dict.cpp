@@ -16,6 +16,7 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "share/rc/ob_tenant_base.h"
 #include "storage/fts/dict/ob_ft_cache.h"
+#include "storage/fts/dict/ob_ft_cache_container.h"
 #include "storage/fts/dict/ob_ft_dict_def.h"
 
 namespace oceanbase
@@ -67,21 +68,19 @@ int ObFTCacheDict::match_with_hit(const ObString &single_word,
   return reader_.match_with_hit(single_word, last_hit, hit);
 }
 
-int ObFTCacheDict::make_and_fetch_cache_entry(const ObFTDictDesc &desc,
-                                              ObFTDAT *dat_buff,
-                                              const size_t buff_size,
+int ObFTCacheDict::put_and_fetch_cache_entry(const uint64_t table_id,
+                                              const uint64_t tenant_id,
                                               const int32_t range_id,
-                                              const ObDictCacheValue *&value,
-                                              ObKVCacheHandle &handle)
+                                              const ObFTDAT *dat_buff,
+                                              const int64_t snapshot_version,
+                                              const int32_t range_count,
+                                              ObFTCacheRangeHandle &handle)
 {
   int ret = OB_SUCCESS;
-  ObDictCache &cache = ObDictCache::get_instance();
-
-  uint64_t name = static_cast<uint64_t>(desc.type_);
-  const ObDictCacheKey put_key(name, MTL_ID(), desc.type_, range_id);
-  const ObDictCacheValue put_value(dat_buff);
-  if (OB_FAIL(cache.put_and_fetch_dict(put_key, put_value, value, handle))) {
-    LOG_WARN("Failed to put dict into kv cache", K(ret));
+  const ObDictCacheKey key(table_id, tenant_id, range_id);
+  const ObDictCacheValue value(dat_buff, snapshot_version, range_count);
+  if (OB_FAIL(ObDictCache::get_instance().put_and_fetch_dict(key, value, handle.value_, handle.handle_, true))) {
+    LOG_WARN("Failed to put dict into kvcache", K(ret), K(table_id), K(tenant_id), K(range_id));
   }
   return ret;
 }

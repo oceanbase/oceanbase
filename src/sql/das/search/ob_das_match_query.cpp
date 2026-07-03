@@ -13,7 +13,7 @@
 #include "ob_das_conjunction_op.h"
 #include "ob_das_scalar_define.h"
 #include "storage/fts/ob_fts_tokenizer.h"
-
+#include "sql/das/search/ob_das_msm_runtime_util.h"
 
 namespace oceanbase
 {
@@ -27,7 +27,8 @@ OB_SERIALIZE_MEMBER((ObDASMatchCtDef, ObIDASSearchCtDef),
                     match_operator_,
                     minimum_should_match_,
                     ir_ctdef_idx_,
-                    pushdown_must_filter_op_ctdef_idx_);
+                    pushdown_must_filter_op_ctdef_idx_,
+                    is_msm_unresolved_expr_);
 
 OB_SERIALIZE_MEMBER((ObDASMatchRtDef, ObIDASSearchRtDef));
 
@@ -53,9 +54,38 @@ int ObDASMatchRtDef::can_pushdown_filter_to_bmm(bool &can_pushdown)
     LOG_WARN("unexpected null datum", KR(ret),
         KPC(minimum_should_match_datum), KPC(match_operator_datum));
   } else {
-    can_pushdown = ctdef->is_top_level_scoring()
-        && ObMatchOperator::MATCH_OPERATOR_AND != match_operator_datum->get_int()
-        && minimum_should_match_datum->get_int() <= 1;
+    const bool base_ok = ctdef->is_top_level_scoring()
+        && ObMatchOperator::MATCH_OPERATOR_AND != match_operator_datum->get_int();
+    int64_t effective_msm = 0;
+    ObDatum *query_text_datum = nullptr;
+    ObSEArray<ObString, 16> query_tokens;
+    if (!base_ok) {
+      // can_pushdown stays false
+    } else if (OB_FAIL(ctdef->query_text_->eval(*eval_ctx_, query_text_datum))) {
+      LOG_WARN("expr evaluation failed for bmm pushdown", KR(ret));
+    } else if (OB_UNLIKELY(query_text_datum->is_null())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null query text for bmm pushdown", KR(ret));
+    } else if (OB_FAIL(ObFTSTokenizer::tokenize(
+                       allocator_,
+                       query_text_datum->get_string(),
+                       ctdef->get_ir_ctdef()->get_inv_idx_scan_scalar_ctdef()->table_param_.get_parser_name(),
+                       ctdef->get_ir_ctdef()->get_inv_idx_scan_scalar_ctdef()->table_param_.get_parser_property(),
+                       ctdef->query_text_->obj_meta_,
+                       query_tokens))) {
+      LOG_WARN("failed to tokenize query text for bmm pushdown", KR(ret));
+    } else if (0 == query_tokens.count()) {
+      // can_pushdown stays false
+    } else if (OB_FAIL(ObDASMSMRuntimeUtil::calc_match_msm(
+                       allocator_,
+                       query_tokens.count(),
+                       ctdef->is_msm_unresolved_expr_,
+                       minimum_should_match_datum,
+                       effective_msm))) {
+      LOG_WARN("failed to calc match msm for bmm pushdown", KR(ret));
+    } else {
+      can_pushdown = effective_msm <= 1;
+    }
   }
   return ret;
 }
@@ -151,15 +181,17 @@ int ObDASMatchRtDef::generate_op(ObDASSearchCost lead_cost, ObDASSearchCtx &sear
         op = conjunction_op;
       }
     } else {
-      int64_t minimum_should_match = minimum_should_match_datum->get_int() > query_tokens.count()
-          ? query_tokens.count() : minimum_should_match_datum->get_int();
-      if (get_ctdef()->is_top_level_scoring()) {
+      int64_t minimum_should_match = 0;
+      if (OB_FAIL(ObDASMSMRuntimeUtil::calc_match_msm(allocator_, query_tokens.count(),
+                  get_ctdef()->is_msm_unresolved_expr_, minimum_should_match_datum, minimum_should_match))) {
+        LOG_WARN("failed to calculate match minimum_should_match", KR(ret), KPC(minimum_should_match_datum));
+      } else if (get_ctdef()->is_top_level_scoring()) {
         if (minimum_should_match > 1) {
           ObDASBMWOp *bmw_op = nullptr;
           ObDASBMWOpParam bmw_op_param(token_ops, minimum_should_match, allocator_);
           bmw_op_param.set_is_scoring(ctdef->is_scoring());
           if (OB_FAIL(search_ctx.create_op(bmw_op_param, bmw_op))) {
-            LOG_WARN("failed to create bmw op", KR(ret));
+            LOG_WARN("Match query failed to create BMW operator with minimum should match", KR(ret), KPC(minimum_should_match_datum));
           } else {
             op = bmw_op;
           }
@@ -169,7 +201,7 @@ int ObDASMatchRtDef::generate_op(ObDASSearchCost lead_cost, ObDASSearchCtx &sear
               token_ops, query_optional_, pushdown_filter_op_, allocator_);
           bmm_op_param.set_is_scoring(ctdef->is_scoring());
           if (OB_FAIL(search_ctx.create_op(bmm_op_param, bmm_op))) {
-            LOG_WARN("failed to create bmm op", KR(ret));
+            LOG_WARN("Match query failed to create BMM operator with minimum should match", KR(ret), KPC(minimum_should_match_datum));
           } else {
             op = bmm_op;
           }
@@ -183,7 +215,7 @@ int ObDASMatchRtDef::generate_op(ObDASSearchCost lead_cost, ObDASSearchCtx &sear
             lead_cost);
         disjunction_op_param.set_is_scoring(ctdef->is_scoring());
         if (OB_FAIL(search_ctx.create_op(disjunction_op_param, disjunction_op))) {
-          LOG_WARN("failed to create disjunction op", KR(ret));
+          LOG_WARN("Match query failed to create disjunction operator with minimum should match", KR(ret), KPC(minimum_should_match_datum));
         } else {
           op = disjunction_op;
         }

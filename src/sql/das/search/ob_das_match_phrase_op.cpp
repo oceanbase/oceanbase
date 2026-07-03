@@ -27,11 +27,14 @@ ObDASMatchPhraseOp::ObDASMatchPhraseOp(ObDASSearchCtx &search_ctx)
     token_iters_(),
     estimator_(),
     bm25_param_estimated_(false),
+    block_max_inited_(false),
     total_token_weight_(-1.0),
     decoder_(nullptr),
     counter_(nullptr),
+    slop_(0),
     boost_(0.0),
     use_rich_format_(false),
+    lead_idx_(0),
     curr_id_(),
     is_inited_(false)
 {}
@@ -51,6 +54,7 @@ int ObDASMatchPhraseOp::do_init(const ObIDASSearchOpParam &op_param)
     ir_ctdef_ = param.ir_ctdef_;
     ir_rtdef_ = param.ir_rtdef_;
     counter_ = param.counter_;
+    slop_ = param.slop_;
     boost_ = param.boost_;
     use_rich_format_ = param.use_rich_format_;
     token_ids_.set_allocator(allocator_);
@@ -111,6 +115,11 @@ int ObDASMatchPhraseOp::do_open()
       LOG_WARN("failed to open token iter", K(ret));
     }
   }
+  if (FAILEDx(estimate_bm25_param_on_demand())) {
+    LOG_WARN("failed to estimate bm25 param on demand", K(ret));
+  } else if (OB_FAIL(select_lead_idx())) {
+    LOG_WARN("failed to select lead idx", K(ret));
+  }
   return ret;
 }
 
@@ -132,7 +141,13 @@ int ObDASMatchPhraseOp::do_rescan()
     estimator_.switch_tablet_id(token_helpers_[0]->get_inv_idx_tablet_id());
   }
   bm25_param_estimated_ = false;
+  block_max_inited_ = false;
   total_token_weight_ = -1.0;
+  if (FAILEDx(estimate_bm25_param_on_demand())) {
+    LOG_WARN("failed to estimate bm25 param on demand", K(ret));
+  } else if (OB_FAIL(select_lead_idx())) {
+    LOG_WARN("failed to select lead idx", K(ret));
+  }
   return ret;
 }
 
@@ -176,25 +191,42 @@ int ObDASMatchPhraseOp::find_intersection(ObDASRowID &rowid, double &score)
   int ret = OB_SUCCESS;
   const ObDatum *curr_id = nullptr;
   bool got_result = false;
+  if (OB_FAIL(init_block_max_iters_on_demand())) {
+    LOG_WARN("failed to init block max iters on demand", K(ret));
+  }
   while (OB_SUCC(ret) && !got_result) {
-    if (OB_FAIL(token_iters_[0]->get_curr_id(curr_id))) {
-      LOG_WARN("failed to get curr id", K(ret));
+    if (OB_FAIL(token_iters_[lead_idx_]->get_curr_id(curr_id))) {
+      LOG_WARN("failed to get lead curr id", K(ret));
     }
-    got_result = true;
-    for (int64_t i = 1; OB_SUCC(ret) && got_result && i < token_iters_.count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < token_iters_.count(); ++i) {
+      if (i == lead_idx_) {
+        // skip
+      } else if (OB_FAIL(token_iters_[i]->advance_shallow(*curr_id, true))) {
+        LOG_WARN_IGNORE_ITER_END(ret, "failed to advance shallow token iter", K(ret), KPC(curr_id));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (0.0 == min_competitive_score_) {
+      got_result = true;
+    } else if (OB_FAIL(pre_evaluate(got_result))) {
+      LOG_WARN("failed to pre evaluate", K(ret));
+    } else if (!got_result) {
+      if (OB_FAIL(token_iters_[lead_idx_]->get_next_row())) {
+        LOG_WARN_IGNORE_ITER_END(ret, "failed to get next row after pre-evaluation", K(ret));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && got_result && i < token_iters_.count(); ++i) {
       const ObDatum *temp_id = nullptr;
-      if (OB_FAIL(token_iters_[i]->advance_to(*curr_id))) {
-        if (OB_UNLIKELY(OB_ITER_END != ret)) {
-          LOG_WARN("failed to advance secondary token iter", K(ret));
-        }
+      if (i == lead_idx_) {
+        // skip
+      } else if (OB_FAIL(token_iters_[i]->advance_to(*curr_id))) {
+        LOG_WARN_IGNORE_ITER_END(ret, "failed to advance token iter", K(ret));
       } else if (OB_FAIL(token_iters_[i]->get_curr_id(temp_id))) {
         LOG_WARN("failed to get curr id", K(ret));
       } else if (OB_UNLIKELY(!ObDatum::binary_equal(*curr_id, *temp_id))) {
         got_result = false;
-        if (OB_FAIL(token_iters_[0]->advance_to(*temp_id))) {
-          if (OB_UNLIKELY(OB_ITER_END != ret)) {
-            LOG_WARN("failed to advance primary token iter", K(ret));
-          }
+        if (OB_FAIL(token_iters_[lead_idx_]->advance_to(*temp_id))) {
+          LOG_WARN_IGNORE_ITER_END(ret, "failed to advance lead token iter", K(ret));
         }
       }
     }
@@ -203,10 +235,8 @@ int ObDASMatchPhraseOp::find_intersection(ObDASRowID &rowid, double &score)
       LOG_WARN("failed to evaluate", K(ret));
     } else if (0 == score) {
       got_result = false;
-      if (OB_FAIL(token_iters_[0]->get_next_row())) {
-        if (OB_UNLIKELY(OB_ITER_END != ret)) {
-          LOG_WARN("failed to get next row", K(ret));
-        }
+      if (OB_FAIL(token_iters_[lead_idx_]->get_next_row())) {
+        LOG_WARN_IGNORE_ITER_END(ret, "failed to get next row after evaluation", K(ret));
       }
     }
   }
@@ -214,6 +244,55 @@ int ObDASMatchPhraseOp::find_intersection(ObDASRowID &rowid, double &score)
     LOG_WARN("failed to write curr id to rowid", K(ret));
   } else {
     rowid = curr_id_;
+  }
+  return ret;
+}
+
+int ObDASMatchPhraseOp::pre_evaluate(bool &is_candidate)
+{
+  int ret = OB_SUCCESS;
+  uint64_t total_doc_cnt = 0;
+  double avg_doc_token_cnt = 0.0;
+  int64_t doc_length = 0;
+  int64_t lead_tf = 0;
+  if (OB_UNLIKELY(!bm25_param_estimated_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("bm25 param should have been estimated", K(ret));
+  } else if (OB_FAIL(estimator_.get_bm25_param(total_doc_cnt, avg_doc_token_cnt))) {
+    LOG_WARN("failed to get bm25 param", K(ret));
+  } else if (OB_FAIL(token_iters_[lead_idx_]->get_curr_doc_length(doc_length))) {
+    LOG_WARN("failed to get curr doc length", K(ret));
+  } else if (OB_FAIL(token_iters_[lead_idx_]->get_curr_token_freq(lead_tf))) {
+    LOG_WARN("failed to get curr token freq", K(ret));
+  } else if (OB_FAIL(calculate_total_token_weight_on_demand())) {
+    LOG_WARN("failed to calculate total token weight on demand", K(ret));
+  } else {
+    const double length_normalizer = ObExprBM25::length_normalizer(doc_length, avg_doc_token_cnt);
+    int64_t phrase_freq_sum = 1 - token_iters_.count();
+    int64_t phrase_freq_min = lead_tf;
+    const ObMaxScoreTuple *max_score_tuple = nullptr;
+    for (int64_t i = 0; OB_SUCC(ret) && i < token_ids_.count(); ++i) {
+      if (lead_idx_ == token_ids_[i]) {
+        phrase_freq_sum += lead_tf;
+        phrase_freq_min = MIN(phrase_freq_min, lead_tf);
+      } else if (OB_FAIL(token_iters_[token_ids_[i]]->get_curr_block_max_info(max_score_tuple))) {
+        LOG_WARN("failed to get curr block max info", K(ret));
+      } else {
+        const int64_t tf_max = static_cast<int64_t>(
+            max_score_tuple->max_score_ * length_normalizer + 1E-5);
+        phrase_freq_sum += tf_max;
+        phrase_freq_min = MIN(phrase_freq_min, tf_max);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      const double phrase_freq_ub = (0 == slop_)
+          ? phrase_freq_min
+          : (phrase_freq_min + phrase_freq_sum) / 2.0;
+      const double norm_len = doc_length / avg_doc_token_cnt;
+      const double doc_weight_ub = ObExprBM25::doc_phrase_weight(phrase_freq_ub, norm_len);
+      const double score_ub = total_token_weight_ * doc_weight_ub * boost_;
+      is_candidate = score_ub > min_competitive_score_;
+    }
   }
   return ret;
 }
@@ -249,7 +328,7 @@ int ObDASMatchPhraseOp::evaluate(double &score)
     double avg_doc_length = 0.0;
     if (OB_FAIL(calculate_total_token_weight_on_demand())) {
       LOG_WARN("failed to calculate total token weight", K(ret));
-    } else if (OB_FAIL(token_iters_[0]->get_curr_doc_length(doc_length))) {
+    } else if (OB_FAIL(token_iters_[lead_idx_]->get_curr_doc_length(doc_length))) {
       LOG_WARN("failed to get curr doc length", K(ret));
     } else if (OB_FAIL(estimator_.get_bm25_param(total_doc_cnt, avg_doc_length))) {
       LOG_WARN("failed to get bm25 param", K(ret));
@@ -288,7 +367,7 @@ int ObDASMatchPhraseOp::do_next_rowid(ObDASRowID &next_id, double &score)
     LOG_WARN("not initialized", K(ret));
   } else if (OB_FAIL(estimate_bm25_param_on_demand())) {
     LOG_WARN("failed to estimate bm25 param", K(ret));
-  } else if (OB_FAIL(token_iters_[0]->get_next_row())) {
+  } else if (OB_FAIL(token_iters_[lead_idx_]->get_next_row())) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("failed to get next row", K(ret));
     }
@@ -314,13 +393,30 @@ int ObDASMatchPhraseOp::do_advance_to(
     LOG_WARN("failed to estimate bm25 param", K(ret));
   } else if (OB_FAIL(get_datum_from_rowid(target, target_datum))) {
     LOG_WARN("failed to get datum from target", K(ret));
-  } else if (OB_FAIL(token_iters_[0]->advance_to(target_datum))) {
+  } else if (OB_FAIL(token_iters_[lead_idx_]->advance_to(target_datum))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("failed to get next row", K(ret));
     }
   } else if (OB_FAIL(find_intersection(curr_id, score))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("failed to intersect", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDASMatchPhraseOp::select_lead_idx()
+{
+  int ret = OB_SUCCESS;
+  int64_t min_token_doc_cnt = INT64_MAX;
+  lead_idx_ = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < token_iters_.count(); ++i) {
+    int64_t token_doc_cnt = 0;
+    if (OB_FAIL(token_iters_[i]->get_token_doc_cnt(token_doc_cnt))) {
+      LOG_WARN("failed to get token doc cnt", K(ret), K(i));
+    } else if (token_doc_cnt < min_token_doc_cnt) {
+      min_token_doc_cnt = token_doc_cnt;
+      lead_idx_ = i;
     }
   }
   return ret;
@@ -407,6 +503,30 @@ int ObDASMatchPhraseOp::estimate_bm25_param_on_demand()
       avg_doc_token_cnt_expr->locate_datum_for_write(eval_ctx).set_double(avg_doc_token_cnt);
     }
     bm25_param_estimated_ = true;
+  }
+  return ret;
+}
+
+int ObDASMatchPhraseOp::init_block_max_iters_on_demand()
+{
+  int ret = OB_SUCCESS;
+  uint64_t total_doc_cnt = 0;
+  double avg_doc_token_cnt = 0.0;
+  if (block_max_inited_) {
+    // skip
+  } else if (OB_FAIL(estimate_bm25_param_on_demand())) {
+    LOG_WARN("failed to estimate bm25 param on demand", K(ret));
+  } else if (OB_FAIL(estimator_.get_bm25_param(total_doc_cnt, avg_doc_token_cnt))) {
+    LOG_WARN("failed to get bm25 param", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < token_iters_.count(); ++i) {
+      if (OB_FAIL(token_iters_[i]->init_block_max_iter(total_doc_cnt, avg_doc_token_cnt))) {
+        LOG_WARN("failed to init block max iter", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      block_max_inited_ = true;
+    }
   }
   return ret;
 }

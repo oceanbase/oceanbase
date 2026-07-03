@@ -11,6 +11,7 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "share/cache/ob_kv_storecache.h"
 #include "storage/fts/dict/ob_ft_cache.h"
+#include "storage/fts/dict/ob_ft_cache_container.h"
 #include "storage/fts/dict/ob_ft_dat_dict.h"
 #include "storage/fts/dict/ob_ft_dict.h"
 #include "storage/fts/dict/ob_ft_dict_def.h"
@@ -22,7 +23,7 @@ namespace storage
 class ObFTCacheDict final : public ObIFTDict
 {
 public:
-  ObFTCacheDict(ObCollationType coll_type, ObFTDAT *dat)
+  ObFTCacheDict(ObCollationType coll_type, const ObFTDAT *dat)
       : coll_type_(coll_type), dat_(dat), reader_(dat)
   {
   }
@@ -33,18 +34,18 @@ public:
                      const ObDATrieHit &last_hit,
                      ObDATrieHit &hit) const override;
 
-public:
-  static int make_and_fetch_cache_entry(const ObFTDictDesc &desc,
-                                        ObFTDAT *dat_buff,
-                                        const size_t buff_size,
+  static int put_and_fetch_cache_entry(const uint64_t table_id,
+                                        const uint64_t tenant_id,
                                         const int32_t range_id,
-                                        const ObDictCacheValue *&value,
-                                        ObKVCacheHandle &handle);
+                                        const ObFTDAT *dat_buff,
+                                        const int64_t snapshot_version,
+                                        const int32_t range_count,
+                                        ObFTCacheRangeHandle &handle);
 
 private:
-  ObKVCacheHandle handle_; // used to pin the mem block later
+  common::ObKVCacheHandle handle_; // used to pin the mem block later
   ObCollationType coll_type_;
-  ObFTDAT *dat_ = nullptr;
+  const ObFTDAT *dat_;
   ObFTDATReader<void> reader_;
 
 private:

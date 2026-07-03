@@ -12,6 +12,7 @@
 #include "ob_das_bmm_op.h"
 #include "ob_das_bmw_op.h"
 #include "lib/utility/ob_sort.h"
+#include "sql/das/search/ob_das_msm_runtime_util.h"
 
 namespace oceanbase
 {
@@ -37,7 +38,9 @@ OB_SERIALIZE_MEMBER((ObDASBooleanQueryCtDef, ObIDASSearchCtDef),
                     filter_,
                     should_,
                     must_not_,
-                    min_should_match_);
+                    min_should_match_,
+                    min_should_match_expr_,
+                    is_msm_unresolved_expr_);
 
 OB_SERIALIZE_MEMBER(ObDASBooleanQueryCtDef::SubClauseInfo,
                     exist_,
@@ -182,6 +185,7 @@ int ObDASBooleanQueryRtDef::generate_op(ObDASSearchCost lead_cost, ObDASSearchCt
   ObBooleanSubClause<ObIDASSearchRtDef> should_clauses;
   const ObDASBooleanQueryCtDef *ctdef = static_cast<const ObDASBooleanQueryCtDef *>(ctdef_);
   ObDASSearchCost self_cost;
+  int64_t bool_should_msm = 0;
   if (OB_ISNULL(ctdef)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr ctdef", KR(ret));
@@ -200,85 +204,124 @@ int ObDASBooleanQueryRtDef::generate_op(ObDASSearchCost lead_cost, ObDASSearchCt
     LOG_WARN("failed to get filter clauses", KR(ret));
   } else if (OB_FAIL(should(should_clauses))) {
     LOG_WARN("failed to get should clauses", KR(ret));
-  } else if (should_clauses.count() == 0) {
-    // full conjunction query
-    ObIDASSearchOp *req_op = nullptr;
-    if (OB_FAIL(req(must_clauses, filter_clauses, lead_cost, ctdef->is_top_level_scoring(), search_ctx, req_op))) {
-      LOG_WARN("failed to generate required op", KR(ret));
-    } else if (OB_FAIL(excl(req_op, must_not_clauses, lead_cost, search_ctx, op))) {
-      LOG_WARN("failed to generate excluded op", KR(ret));
-    }
-  } else if (must_clauses.count() == 0 && filter_clauses.count() == 0) {
-    // full disjunction query
-    ObIDASSearchOp *opt_op = nullptr;
-    if (OB_FAIL(opt(should_clauses, ctdef->min_should_match_, ctdef->is_scoring(), lead_cost,
-                    ctdef->is_top_level_scoring(), search_ctx, opt_op))) {
-      LOG_WARN("failed to generate optional op", KR(ret));
-    } else if (OB_FAIL(excl(opt_op, must_not_clauses, lead_cost, search_ctx, op))) {
-      LOG_WARN("failed to generate excluded op", KR(ret));
-    }
   } else {
-    // mixed conjunction and disjunction query
-    ObIDASSearchOp *req_op = nullptr;
-    ObIDASSearchOp *excl_op = nullptr;
-    ObIDASSearchOp *opt_op = nullptr;
-
-    // Push filter ops directly into BMMOp when must is empty (only filter as required) and
-    // BMMOp would be created for the should clauses, to enable early pivot pruning within BMMOp.
-    const bool can_push_filter_to_should =
-        must_clauses.empty() &&
-        must_not_clauses.empty() &&
-        !filter_clauses.empty() &&
-        !DISABLE_BMM_FILTER_PUSHDOWN &&
-        should_clauses.count() == 1;
-    bool can_push_filter = false;
-    if (can_push_filter_to_should) {
-      ObIDASSearchRtDef *should_rtdef = nullptr;
-      const ObIDASSearchCtDef *should_ctdef = nullptr;
-      if (OB_FAIL(should_clauses.get(0, should_rtdef))) {
-        LOG_WARN("failed to get should clause", KR(ret));
-      } else if (OB_ISNULL(should_rtdef)) {
+    bool_should_msm = ctdef->min_should_match_;
+    const int64_t should_n = should_clauses.count();
+    ObDatum *bool_msm_snapshot = nullptr;
+    if (should_n > 0 && OB_NOT_NULL(ctdef->min_should_match_expr_)) {
+      ObDatum *msm_datum = nullptr;
+      if (OB_ISNULL(eval_ctx_)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected nullptr to should clause", KR(ret));
-      } else if (OB_FAIL(should_rtdef->can_pushdown_filter_to_bmm(can_push_filter))) {
-        LOG_WARN("failed to check filter pushdown for should clause", KR(ret));
+        LOG_WARN("unexpected null eval ctx for bool minimum_should_match", KR(ret));
+      } else if (OB_FAIL(ctdef->min_should_match_expr_->eval(*eval_ctx_, msm_datum))) {
+        LOG_WARN("failed to eval bool minimum_should_match expr", KR(ret));
+      } else if (OB_UNLIKELY(msm_datum->is_null())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null bool msm datum", KR(ret));
+      } else {
+        bool_msm_snapshot = msm_datum;
+        if (OB_FAIL(ObDASMSMRuntimeUtil::calc_bool_should_msm(allocator_, should_n,
+                                                              ctdef->is_msm_unresolved_expr_,
+                                                              msm_datum, bool_should_msm))) {
+          LOG_WARN("failed to calculate bool should minimum_should_match", KR(ret));
+        }
       }
+    }
+    // ES: [0, should_n]. Expr + calc_bool_should_msm path is normalized in ObDASMSMRuntimeUtil; here
+    if (OB_SUCC(ret) && should_n > 0 && OB_ISNULL(ctdef->min_should_match_expr_)) {
+      bool_should_msm = MAX(static_cast<int64_t>(0), MIN(bool_should_msm, should_n));
     }
 
     if (OB_FAIL(ret)) {
-    } else if (can_push_filter) {
-      ObIDASSearchOp *pushed_filter_op = nullptr;
-      if (OB_FAIL(generate_filter_op(filter_clauses, lead_cost, search_ctx, pushed_filter_op))) {
-        LOG_WARN("failed to generate filter op for bmm pushdown", KR(ret));
-      } else if (OB_FAIL(opt(should_clauses, ctdef->min_should_match_, ctdef->is_scoring(), lead_cost,
-                             ctdef->is_top_level_scoring(), search_ctx, opt_op,
-                             ctdef->min_should_match_ == 0, pushed_filter_op))) {
-        LOG_WARN("failed to generate opt op with pushed filter", KR(ret));
-      } else {
-        op = opt_op;
+    } else if (should_clauses.count() == 0) {
+      // full conjunction query
+      ObIDASSearchOp *req_op = nullptr;
+      if (OB_FAIL(req(must_clauses, filter_clauses, lead_cost, ctdef->is_top_level_scoring(), search_ctx, req_op))) {
+        LOG_WARN("failed to generate required op", KR(ret));
+      } else if (OB_FAIL(excl(req_op, must_not_clauses, lead_cost, search_ctx, op))) {
+        LOG_WARN("failed to generate excluded op", KR(ret));
       }
-    } else if (OB_FAIL(
-            req(must_clauses, filter_clauses, lead_cost, ctdef->is_top_level_scoring(), search_ctx, req_op))) {
-      LOG_WARN("failed to generate required op", KR(ret));
-    } else if (OB_FAIL(excl(req_op, must_not_clauses, lead_cost, search_ctx, excl_op))) {
-      LOG_WARN("failed to generate excluded op", KR(ret));
-    } else if (OB_FAIL(opt(should_clauses, ctdef->min_should_match_, ctdef->is_scoring(), lead_cost,
-                           ctdef->is_top_level_scoring(), search_ctx, opt_op))) {
-      LOG_WARN("failed to generate optional op", KR(ret));
-    } else if (ctdef->min_should_match_ > 0) {
-      ObArray<ObIDASSearchOp *> required;
-      if (OB_FAIL(construct_op_array(required, excl_op, opt_op))) {
-        LOG_WARN("failed to construct op array", KR(ret));
-      } else if (OB_FAIL(generate_conjunction_op(required, search_ctx, op))) {
-        LOG_WARN("failed to generate conjunction op", KR(ret));
-      }
-    } else if (ctdef->min_should_match_ == 0) {
-      if (OB_FAIL(generate_req_opt_op(excl_op, opt_op, search_ctx, op))) {
-        LOG_WARN("failed to generate req opt op", KR(ret));
+    } else if (must_clauses.count() == 0 && filter_clauses.count() == 0) {
+      // full disjunction query
+      ObIDASSearchOp *opt_op = nullptr;
+      if (OB_FAIL(opt(should_clauses, bool_should_msm, ctdef->is_scoring(), lead_cost,
+                      ctdef->is_top_level_scoring(), search_ctx, opt_op))) {
+        if (OB_NOT_NULL(bool_msm_snapshot)) {
+          LOG_WARN("Boolean query failed to build optional should operator", KR(ret), KPC(bool_msm_snapshot));
+        } else {
+          LOG_WARN("failed to generate optional op", KR(ret));
+        }
+      } else if (OB_FAIL(excl(opt_op, must_not_clauses, lead_cost, search_ctx, op))) {
+        LOG_WARN("failed to generate excluded op", KR(ret));
       }
     } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected min should match", KR(ret), K(ctdef->min_should_match_));
+      // mixed conjunction and disjunction query
+      ObIDASSearchOp *req_op = nullptr;
+      ObIDASSearchOp *excl_op = nullptr;
+      ObIDASSearchOp *opt_op = nullptr;
+
+      // Push filter ops directly into BMMOp when must is empty (only filter as required) and
+      // BMMOp would be created for the should clauses, to enable early pivot pruning within BMMOp.
+      const bool can_push_filter_to_should = must_clauses.empty() && must_not_clauses.empty()
+                                             && !filter_clauses.empty() && !DISABLE_BMM_FILTER_PUSHDOWN
+                                             && should_clauses.count() == 1;
+      bool can_push_filter = false;
+      if (can_push_filter_to_should) {
+        ObIDASSearchRtDef *should_rtdef = nullptr;
+        const ObIDASSearchCtDef *should_ctdef = nullptr;
+        if (OB_FAIL(should_clauses.get(0, should_rtdef))) {
+          LOG_WARN("failed to get should clause", KR(ret));
+        } else if (OB_ISNULL(should_rtdef)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected nullptr to should clause", KR(ret));
+        } else if (OB_FAIL(should_rtdef->can_pushdown_filter_to_bmm(can_push_filter))) {
+          LOG_WARN("failed to check filter pushdown for should clause", KR(ret));
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (can_push_filter) {
+        ObIDASSearchOp *pushed_filter_op = nullptr;
+        if (OB_FAIL(generate_filter_op(filter_clauses, lead_cost, search_ctx, pushed_filter_op))) {
+          LOG_WARN("failed to generate filter op for bmm pushdown", KR(ret));
+        } else if (OB_FAIL(opt(should_clauses, bool_should_msm, ctdef->is_scoring(), lead_cost,
+                               ctdef->is_top_level_scoring(), search_ctx, opt_op,
+                               bool_should_msm == 0, pushed_filter_op))) {
+          if (OB_NOT_NULL(bool_msm_snapshot)) {
+            LOG_WARN("Boolean query failed to build optional operator with filter pushdown", KR(ret), KPC(bool_msm_snapshot));
+          } else {
+            LOG_WARN("failed to generate opt op with pushed filter", KR(ret));
+          }
+        } else {
+          op = opt_op;
+        }
+      } else if (OB_FAIL(
+              req(must_clauses, filter_clauses, lead_cost, ctdef->is_top_level_scoring(), search_ctx, req_op))) {
+        LOG_WARN("failed to generate required op", KR(ret));
+      } else if (OB_FAIL(excl(req_op, must_not_clauses, lead_cost, search_ctx, excl_op))) {
+        LOG_WARN("failed to generate excluded op", KR(ret));
+      } else if (OB_FAIL(opt(should_clauses, bool_should_msm, ctdef->is_scoring(), lead_cost,
+                             ctdef->is_top_level_scoring(), search_ctx, opt_op))) {
+        if (OB_NOT_NULL(bool_msm_snapshot)) {
+          LOG_WARN("Boolean query failed to build optional should operator", KR(ret), KPC(bool_msm_snapshot));
+        } else {
+          LOG_WARN("failed to generate optional op", KR(ret));
+        }
+      } else if (bool_should_msm > 0) {
+        ObArray<ObIDASSearchOp *> required;
+        if (OB_FAIL(construct_op_array(required, excl_op, opt_op))) {
+          LOG_WARN("failed to construct op array", KR(ret));
+        } else if (OB_FAIL(generate_conjunction_op(required, search_ctx, op))) {
+          LOG_WARN("failed to generate conjunction op", KR(ret));
+        }
+      } else if (bool_should_msm == 0) {
+        if (OB_FAIL(generate_req_opt_op(excl_op, opt_op, search_ctx, op))) {
+          LOG_WARN("failed to generate req opt op", KR(ret));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected min should match", KR(ret), K(bool_should_msm));
+      }
     }
   }
   return ret;
@@ -433,7 +476,7 @@ int ObDASBooleanQueryRtDef::opt(const ObBooleanSubClause<ObIDASSearchRtDef> &sho
     ObDASDisjunctionOpParam disjunction_op_param(optional_ops, min_should_match, false, lead_cost);
     disjunction_op_param.set_is_scoring(static_cast<const ObIDASSearchCtDef *>(ctdef_)->is_scoring());
     if (OB_FAIL(search_ctx.create_op(disjunction_op_param, disjunction_op))) {
-      LOG_WARN("failed to create disjunction op", KR(ret));
+      LOG_WARN("failed to create disjunction op", K(ret));
     } else {
       op = disjunction_op;
     }

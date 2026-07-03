@@ -433,7 +433,21 @@ int ObHybridSearchCgService::generate_ctdef(ObLogTableScan &op, const ObBooleanQ
   if (OB_SUCC(ret)) {
     new_boolean_query_ctdef->set_is_top_level_scoring(boolean_query_node->is_top_level_scoring_);
     new_boolean_query_ctdef->set_is_scoring(boolean_query_node->is_scoring_);
-    boolean_query_ctdef = new_boolean_query_ctdef;
+    if (OB_NOT_NULL(boolean_query_node->minimum_should_match_)) {
+      ObExpr *msm_rt_expr = nullptr;
+      if (OB_FAIL(cg_.generate_rt_expr(*boolean_query_node->minimum_should_match_, msm_rt_expr))) {
+        LOG_WARN("failed to generate rt expr for bool minimum_should_match", KR(ret));
+      } else {
+        new_boolean_query_ctdef->set_min_should_match_expr(msm_rt_expr);
+        new_boolean_query_ctdef->set_is_msm_unresolved_expr(ob_is_string_type(msm_rt_expr->obj_meta_.get_type()));
+      }
+    } else {
+      new_boolean_query_ctdef->set_min_should_match_expr(nullptr);
+      new_boolean_query_ctdef->set_is_msm_unresolved_expr(false);
+    }
+    if (OB_SUCC(ret)) {
+      boolean_query_ctdef = new_boolean_query_ctdef;
+    }
   }
   return ret;
 }

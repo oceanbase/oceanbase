@@ -3067,6 +3067,10 @@ typedef enum ObItemType
   T_SET_STORAGE_CACHE_POLICY_STATUS = 4977,
 
   T_EXTERNAL_LANGUAGE = 4978,  // for Oracle external language parse node
+  T_FULLTEXT_DICT = 4981,
+  T_REFRESH_FULLTEXT_DICT = 4982,
+
+  T_PARSER_ANALYSIS = 4988,  // for fulltext index WITH PARSER analyzer analysis JSON
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;

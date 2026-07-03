@@ -1169,6 +1169,7 @@ int ObHybridSearchGenerator::generate_boolean_node(const ObDSLBoolQuery *dsl_que
   if (OB_FAIL(ret)) {
   } else {
     bool_node->min_should_match_ = dsl_query->msm_;
+    bool_node->minimum_should_match_ = dsl_query->minimum_should_match_;
     bool_node->origin_expr_ = dsl_query->origin_expr_;
   }
 
@@ -1439,6 +1440,10 @@ int ObHybridSearchNodeBase::collect_hybrid_search_exprs(ObIArray<ObRawExpr*> &qu
       if (OB_FAIL(SMART_CALL(child_node->collect_hybrid_search_exprs(query_exprs, score_exprs)))) {
         LOG_WARN("failed to append node for child", K(ret), K(i), KPC(child_node));
       }
+    }
+    if (OB_NOT_NULL(bool_node->minimum_should_match_) &&
+        OB_FAIL(add_var_to_array_no_dup(query_exprs, static_cast<ObRawExpr *>(bool_node->minimum_should_match_)))) {
+      LOG_WARN("failed to append bool minimum_should_match expr", KR(ret));
     }
   }
 

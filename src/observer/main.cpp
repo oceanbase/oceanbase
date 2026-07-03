@@ -29,6 +29,7 @@
 #include <malloc.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+#include <unicode/putil.h>
 // easy complains in compiling if put the right position.
 #include <link.h>
 #include "sql/monitor/ob_security_audit_utils.h"
@@ -540,6 +541,7 @@ int inner_main(int argc, char *argv[])
   char              LOG_DIR[]                 = "log";
   char              PID_DIR[]                 = "run";
   char              CONF_DIR[]                = "etc";
+  char              ICU_DATA_DIR[]            = "etc/icu";
   char              AUDIT_DIR[]               = "audit";
   char              ALERT_DIR[]               = "log/alert";
   const char *const LOG_FILE_NAME             = "log/observer.log";
@@ -581,6 +583,9 @@ int inner_main(int argc, char *argv[])
     MPRINT("create log dir fail: ./log/");
   } else if (OB_FAIL(FileDirectoryUtils::create_full_path(CONF_DIR))) {
     MPRINT("create log dir fail: ./etc/");
+  } else if (OB_FAIL(FileDirectoryUtils::create_full_path(ICU_DATA_DIR))) {
+    MPRINT("create log dir fail: ./etc/icu/");
+  } else if (FALSE_IT(u_setDataDirectory(ICU_DATA_DIR))) {
   } else if (OB_FAIL(FileDirectoryUtils::create_full_path(AUDIT_DIR))) {
     MPRINT("create log dir fail: ./audit/");
   } else if (OB_FAIL(FileDirectoryUtils::create_full_path(ALERT_DIR))) {

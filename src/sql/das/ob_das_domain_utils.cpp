@@ -10,6 +10,7 @@
 
 #include "ob_das_domain_utils.h"
 #include "lib/geo/ob_geo_utils.h"
+#include "storage/fts/analyzer/ob_token_stream.h"
 #include "sql/das/ob_das_utils.h"
 #include "sql/das/ob_das_dml_vec_iter.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
@@ -54,7 +55,8 @@ int ObFTIndexRowCache::init(
   } else if (OB_FAIL(helper_.init(&metadata_allocator_/*not used*/,
                                   parser_name,
                                   parser_properties,
-                                  fts_index_type))) {
+                                  fts_index_type,
+                                  true))) {
     LOG_WARN("fail to initialize ft parser helper", K(ret));
   } else if (OB_FAIL(ft_token_processor_.init(helper_.get_parser_property(),
                                               get_ft_expr()->obj_meta_,
@@ -111,8 +113,6 @@ int ObFTIndexRowCache::segment(const common::ObObjMeta &ft_obj_meta,
                                const ObString &fulltext)
 {
   int ret = OB_SUCCESS;
-  ObString regularized_ft_str;
-  const bool need_tolower_ft = helper_.get_process_token_flags().casedown_token();
   const int64_t ft_token_bkt_cnt = MIN(MAX(fulltext.length() / chars_per_token_, MIN_FT_TOKEN_BUCKET_COUNT), MAX_FT_TOKEN_BUCKET_COUNT);
   reuse();
   if (OB_UNLIKELY(!is_inited_)) {
@@ -122,42 +122,64 @@ int ObFTIndexRowCache::segment(const common::ObObjMeta &ft_obj_meta,
     ret = OB_ITER_END;
   } else if (OB_FAIL(create_ft_token_map(ft_token_bkt_cnt))) {
     LOG_WARN("fail to create ft token map", K(ret), K(ft_token_bkt_cnt));
-  } else if (need_tolower_ft && OB_FAIL(ObCharset::tolower(ft_obj_meta.get_collation_type(),
-                                                           fulltext, regularized_ft_str,
-                                                           scratch_allocator_))) {
-    LOG_WARN("fail to tolower fulltext", K(ret));
-  } else if (need_tolower_ft && OB_UNLIKELY(regularized_ft_str.empty())) {
-    ret = OB_ITER_END;
-  } else if (OB_FAIL(prepare_parser(ft_obj_meta,
-                                    need_tolower_ft ? regularized_ft_str.ptr() : fulltext.ptr(),
-                                    need_tolower_ft ? regularized_ft_str.length() : fulltext.length()))) {
-    LOG_WARN("fail to prepare parser", K(ret));
   } else {
-    const char *token = nullptr;
-    int64_t token_len = 0;
-    int64_t char_cnt = 0;
-    int64_t token_freq = 0;
-    int64_t doc_length = 0;
-    int simple_pos = 0;
-    const bool need_pos_list = (fts_index_type_ == share::schema::OB_FTS_INDEX_TYPE_PHRASE_MATCH);
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(token_iterator_->get_next_token(token, token_len, char_cnt, token_freq))) {
-        if (OB_LIKELY(OB_ITER_END == ret)) {
+    storage::ObFTAnalyzerParam analyzer_param;
+    analyzer_param.legacy_tokenizer_type_ = helper_.get_parser_name().to_tokenizer_type();
+    analyzer_param.parser_property_ = &helper_.get_parser_property();
+    analyzer_param.fts_index_type_ = fts_index_type_;
+    analyzer_param.process_token_flag_ = helper_.get_process_token_flags();
+    analyzer_param.meta_ = ft_obj_meta;
+    analyzer_param.alloc_ = &scratch_allocator_;
+    analyzer_param.is_ddl_mode_ = helper_.is_ddl_mode();
+
+    storage::ObFTSAnalyzer *fts_analyzer = nullptr;
+    storage::ObITokenStream *token_stream = nullptr;
+    if (OB_FAIL(helper_.create_analyzer(analyzer_param, fts_analyzer))) {
+      LOG_WARN("fail to create fts analyzer", K(ret));
+    } else if (OB_ISNULL(fts_analyzer)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fts analyzer is null", K(ret));
+    } else if (OB_FAIL(fts_analyzer->analyze(fulltext.ptr(), fulltext.length(),
+                                              scratch_allocator_, token_stream))) {
+      LOG_WARN("fail to analyze text via analyzer", K(ret));
+    } else if (OB_ISNULL(token_stream)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("token stream is null", K(ret));
+    } else {
+      storage::ObTokenAttr token_attr;
+      int64_t position = -1;  // pos_inc_ semantics: position starts at -1, first token = -1 + 1 = 0
+      const bool need_pos_list = (fts_index_type_ == share::schema::OB_FTS_INDEX_TYPE_PHRASE_MATCH);
+      while (OB_SUCC(ret)) {
+        if (OB_FAIL(token_stream->get_next_token(token_attr))) {
+          if (OB_LIKELY(OB_ITER_END == ret)) {
+          } else {
+            LOG_WARN("fail to get next token from analyzer", K(ret));
+          }
+        } else if (FALSE_IT(position += token_attr.pos_inc_)) {
         } else {
-          LOG_WARN("fail to get next token", K(ret), KPC(token_iterator_));
+          ObString token_string;
+          if (OB_FAIL(ob_write_string(scratch_allocator_, token_attr.to_ob_string(), token_string))) {
+            LOG_WARN("fail to deep copy token", K(ret), K(token_attr));
+          }
+          if (FAILEDx(ft_token_processor_.process_token(
+                         need_pos_list, token_string.ptr(), token_string.length(), position))) {
+            LOG_WARN("fail to process one word", K(ret), K(token_attr));
+          }
         }
-      } else if (OB_FAIL(ft_token_processor_.process_token(need_pos_list, token, token_len, char_cnt, simple_pos++))) {
-        LOG_WARN("fail to process one word", K(ret), KP(token), K(token_len), K(char_cnt));
+      }
+      if (OB_LIKELY(OB_ITER_END == ret)) {
+        int64_t doc_length = ft_token_processor_.get_non_stop_token_count();
+        if (OB_LIKELY(ft_token_map_.size() > 0)) {
+          ret = OB_SUCCESS;
+          datum_row_.storage_datums_[DOC_ID_COL_IDX].shallow_copy_from_datum(doc_id_datum);
+          datum_row_.storage_datums_[DOC_LEN_COL_IDX].set_uint(doc_length);
+        }
       }
     }
-    if (OB_LIKELY(OB_ITER_END == ret)) {
-      doc_length = ft_token_processor_.get_non_stop_token_count();
-      if (OB_LIKELY(ft_token_map_.size() > 0)) {
-        // has output tokens
-        ret = OB_SUCCESS;
-        datum_row_.storage_datums_[DOC_ID_COL_IDX].shallow_copy_from_datum(doc_id_datum);
-        datum_row_.storage_datums_[DOC_LEN_COL_IDX].set_uint(doc_length);
-      }
+    if (OB_NOT_NULL(fts_analyzer)) {
+      fts_analyzer->~ObFTSAnalyzer();
+      scratch_allocator_.free(fts_analyzer);
+      fts_analyzer = nullptr;
     }
   }
 

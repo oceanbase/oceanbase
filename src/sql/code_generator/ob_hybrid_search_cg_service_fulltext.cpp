@@ -106,7 +106,7 @@ int ObHybridSearchCgService::generate_fulltext_query_ctdef(ObLogTableScan &op,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("match query ctdef is null", K(ret));
   } else if (FALSE_IT(doc_id_idx_tid = OB_INVALID_ID == match_node->doc_id_idx_tid_
-      ? op.get_ref_table_id() : match_node->doc_id_idx_tid_)) {
+                      ? op.get_ref_table_id() : match_node->doc_id_idx_tid_)) {
   } else if (OB_FAIL(generate_text_ir_ctdef(
       op,
       match_node->index_info_,
@@ -132,6 +132,9 @@ int ObHybridSearchCgService::generate_fulltext_query_ctdef(ObLogTableScan &op,
     LOG_WARN("failed to generate rt expr for boost", K(ret));
   } else if (OB_FAIL(cg_.generate_rt_expr(*match_node->minimum_should_match_, match_query_ctdef->minimum_should_match_))) {
     LOG_WARN("failed to generate rt expr for minimum should match", K(ret));
+  } else if (FALSE_IT(match_query_ctdef->is_msm_unresolved_expr_
+                      = ob_is_string_type(match_query_ctdef->minimum_should_match_->obj_meta_.get_type()))) {
+    // CG records string vs int MSM; execution only reads the flag.
   } else if (OB_FAIL(cg_.generate_rt_expr(*match_node->operator_, match_query_ctdef->match_operator_))) {
     LOG_WARN("failed to generate rt expr for operator", K(ret));
   } else {
@@ -160,7 +163,7 @@ int ObHybridSearchCgService::generate_match_phrase_query_ctdef(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("match phrase query ctdef is null", K(ret));
   } else if (FALSE_IT(doc_id_idx_tid = OB_INVALID_ID == match_phrase_node->doc_id_idx_tid_
-      ? op.get_ref_table_id() : match_phrase_node->doc_id_idx_tid_)) {
+                      ? op.get_ref_table_id() : match_phrase_node->doc_id_idx_tid_)) {
   } else if (OB_FAIL(generate_text_ir_ctdef(
       op,
       match_phrase_node->index_info_,
@@ -207,7 +210,7 @@ int ObHybridSearchCgService::generate_multi_match_query_ctdef(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", KR(ret), K(cg_.phy_plan_), K(multi_match_node));
   } else if (FALSE_IT(doc_id_idx_tid = OB_INVALID_ID == multi_match_node->doc_id_idx_tid_
-      ? op.get_ref_table_id() : multi_match_node->doc_id_idx_tid_)) {
+                      ? op.get_ref_table_id() : multi_match_node->doc_id_idx_tid_)) {
   } else if (OB_FAIL(ObDASTaskFactory::alloc_das_ctdef(
       DAS_OP_MULTI_MATCH_QUERY, cg_.phy_plan_->get_allocator(), multi_match_query_ctdef))) {
     LOG_WARN("failed to allocate multi match query ctdef", K(ret));
@@ -263,6 +266,9 @@ int ObHybridSearchCgService::generate_multi_match_query_ctdef(
   } else if (OB_FAIL(cg_.generate_rt_expr(
       *multi_match_node->minimum_should_match_, multi_match_query_ctdef->minimum_should_match_))) {
     LOG_WARN("failed to generate rt expr for minimum should match", K(ret));
+  } else if (FALSE_IT(multi_match_query_ctdef->is_msm_unresolved_expr_
+                      = ob_is_string_type(multi_match_query_ctdef->minimum_should_match_->obj_meta_.get_type()))) {
+    // CG records string vs int MSM; execution only reads the flag.
   } else if (OB_FAIL(cg_.generate_rt_expr(
       *multi_match_node->operator_, multi_match_query_ctdef->match_operator_))) {
     LOG_WARN("failed to generate rt expr for operator", K(ret));
@@ -292,7 +298,7 @@ int ObHybridSearchCgService::generate_query_string_query_ctdef(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", KR(ret), K(cg_.phy_plan_), K(query_string_node));
   } else if (FALSE_IT(doc_id_idx_tid = OB_INVALID_ID == query_string_node->doc_id_idx_tid_
-      ? op.get_ref_table_id() : query_string_node->doc_id_idx_tid_)) {
+                      ? op.get_ref_table_id() : query_string_node->doc_id_idx_tid_)) {
   } else if (OB_FAIL(ObDASTaskFactory::alloc_das_ctdef(
       DAS_OP_QUERY_STRING_QUERY, cg_.phy_plan_->get_allocator(), query_string_query_ctdef))) {
     LOG_WARN("failed to allocate query string query ctdef", K(ret));
@@ -348,6 +354,9 @@ int ObHybridSearchCgService::generate_query_string_query_ctdef(
   } else if (OB_FAIL(cg_.generate_rt_expr(
       *query_string_node->minimum_should_match_, query_string_query_ctdef->minimum_should_match_))) {
     LOG_WARN("failed to generate rt expr for minimum should match", K(ret));
+  } else if (FALSE_IT(query_string_query_ctdef->is_msm_unresolved_expr_
+                      = ob_is_string_type(query_string_query_ctdef->minimum_should_match_->obj_meta_.get_type()))) {
+    // CG records string vs int MSM; execution only reads the flag.
   } else if (OB_FAIL(cg_.generate_rt_expr(
       *query_string_node->default_operator_, query_string_query_ctdef->default_operator_))) {
     LOG_WARN("failed to generate rt expr for operator", K(ret));
@@ -590,36 +599,45 @@ int ObHybridSearchCgService::generate_text_ir_spec(const ObTextRetrievalIndexInf
   const UIntFixedArray &inv_scan_col_ids = ir_scan_ctdef.get_inv_idx_scan_scalar_ctdef()->access_column_ids_;
   const ObColumnRefRawExpr *doc_id_column = static_cast<ObColumnRefRawExpr *>(index_info.domain_id_column_);
   const ObColumnRefRawExpr *doc_length_column = static_cast<ObColumnRefRawExpr *>(index_info.doc_length_column_);
+  const ObColumnRefRawExpr *token_cnt_column = static_cast<ObColumnRefRawExpr *>(index_info.token_cnt_column_);
   const ObColumnRefRawExpr *pos_list_column = static_cast<ObColumnRefRawExpr *>(index_info.pos_list_column_);
   if (OB_UNLIKELY(OB_ISNULL(doc_id_column)
       || (need_score && OB_ISNULL(doc_length_column))
+      || (need_score && OB_ISNULL(token_cnt_column))
       || (is_topk_query && !need_score))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected status", K(ret), K(need_score), K(is_topk_query), K(doc_id_column), K(doc_length_column));
+    LOG_WARN("unexpected status", K(ret), K(need_score), K(is_topk_query),
+        K(doc_id_column), K(doc_length_column), K(token_cnt_column));
   }
   int64_t doc_id_col_idx = -1;
   int64_t doc_length_col_idx = -1;
+  int64_t token_cnt_col_idx = -1;
   int64_t pos_list_col_idx = -1;
   for (int64_t i = 0; OB_SUCC(ret) && i < inv_scan_col_ids.count(); ++i) {
     if (inv_scan_col_ids.at(i) == doc_id_column->get_column_id()) {
       doc_id_col_idx = i;
     } else if (need_score && inv_scan_col_ids.at(i) == doc_length_column->get_column_id()) {
       doc_length_col_idx = i;
+    } else if (need_score && inv_scan_col_ids.at(i) == token_cnt_column->get_column_id()) {
+      token_cnt_col_idx = i;
     } else if (nullptr != pos_list_column
         && inv_scan_col_ids.at(i) == pos_list_column->get_column_id()) {
       pos_list_col_idx = i;
     }
   }
-  if (OB_UNLIKELY(-1 == doc_id_col_idx || (need_score && -1 == doc_length_col_idx))) {
+  if (OB_UNLIKELY(-1 == doc_id_col_idx
+      || (need_score && (-1 == doc_length_col_idx || -1 == token_cnt_col_idx)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected column not found in inverted index scan access columns",
-        K(ret), K(inv_scan_col_ids), KPC(doc_id_column), KPC(doc_length_column));
+        K(ret), K(inv_scan_col_ids), KPC(doc_id_column), KPC(doc_length_column), KPC(token_cnt_column));
   } else {
     ir_scan_ctdef.inv_scan_domain_id_col_ = ir_scan_ctdef.get_inv_idx_scan_scalar_ctdef()->pd_expr_spec_.access_exprs_.at(doc_id_col_idx);
     if (need_score) {
       ir_scan_ctdef.inv_scan_doc_length_col_ = ir_scan_ctdef.get_inv_idx_scan_scalar_ctdef()->pd_expr_spec_.access_exprs_.at(doc_length_col_idx);
+      ir_scan_ctdef.inv_scan_token_cnt_col_ = ir_scan_ctdef.get_inv_idx_scan_scalar_ctdef()->pd_expr_spec_.access_exprs_.at(token_cnt_col_idx);
     } else {
       ir_scan_ctdef.inv_scan_doc_length_col_ = nullptr;
+      ir_scan_ctdef.inv_scan_token_cnt_col_ = nullptr;
     }
     if (-1 != pos_list_col_idx) {
       ir_scan_ctdef.inv_scan_pos_list_col_ = ir_scan_ctdef.get_inv_idx_scan_scalar_ctdef()->pd_expr_spec_.access_exprs_.at(pos_list_col_idx);

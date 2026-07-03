@@ -65,6 +65,9 @@ int ObDASMatchPhraseRtDef::generate_op(
     } else {
       op = dummy_op;
     }
+  } else if (OB_ISNULL(ctdef->get_ir_ctdef()->inv_scan_token_cnt_col_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("missing token count column in index", K(ret));
   } else if (OB_ISNULL(ctdef->get_ir_ctdef()->inv_scan_pos_list_col_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("missing pos list column in index", K(ret));
@@ -103,6 +106,9 @@ int ObDASMatchPhraseRtDef::generate_op(
       allocator_, param.token_ids_, token_offsets,
       slop_datum->get_int(), has_duplicate_tokens, param.counter_))) {
     LOG_WARN("failed to create phrase match counter", K(ret));
+  } else if (OB_UNLIKELY((param.slop_ = slop_datum->get_int()) < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected negative slop", K(ret), K_(param.slop));
   } else if (OB_UNLIKELY((param.boost_ = boost_datum->get_double()) <= 0.0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected non-positive boost", K(ret), K_(param.boost));

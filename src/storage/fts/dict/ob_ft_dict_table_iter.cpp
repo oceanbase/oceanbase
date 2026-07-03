@@ -4,13 +4,13 @@
  */
 
 #include "storage/fts/dict/ob_ft_dict_table_iter.h"
-
 #include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "share/ob_server_struct.h"
+#include "lib/string/ob_sql_string.h"
+#include "lib/utility/utility.h"
+#include "share/ob_force_print_log.h"
+#include "share/rc/ob_tenant_base.h"
+#include "storage/tx/ob_trans_service.h"
+#include "storage/fts/dict/ob_ft_range_dict.h"
 
 #define USING_LOG_PREFIX STORAGE_FTS
 
@@ -55,25 +55,95 @@ int ObFTDictTableIter::next()
   return ret;
 }
 
-int ObFTDictTableIter::init(const ObString &table_name)
+int ObFTDictTableIter::append_where_clause(ObSqlString &sql_string,
+                                           const ObIArray<ObMissingRangeInfo> *partial_ranges)
 {
   int ret = OB_SUCCESS;
-  common::ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
+
+  if (OB_ISNULL(partial_ranges) || partial_ranges->empty()) {
+  } else {
+    bool has_appended = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < partial_ranges->count(); ++i) {
+      const ObMissingRangeInfo &range = partial_ranges->at(i);
+      const ObString &start_word_str = range.start_word_.get_token();
+      const ObString &end_word_str = range.end_word_.get_token();
+      bool is_valid_range = !start_word_str.empty() || !end_word_str.empty();
+      bool with_and = !start_word_str.empty() && !end_word_str.empty();
+
+      if (!is_valid_range) {
+        continue;
+      }
+
+      if (!has_appended && OB_FAIL(sql_string.append(" WHERE "))) {
+        LOG_WARN("Failed to append WHERE", K(ret));
+      } else if (has_appended && OB_FAIL(sql_string.append(" OR "))) {
+        LOG_WARN("Failed to append OR", K(ret));
+      } else if (OB_FAIL(sql_string.append("("))) {
+        LOG_WARN("Failed to append opening parenthesis", K(ret));
+      } else if (!start_word_str.empty()) {
+        if (OB_FAIL(sql_string.append("word > "))) {
+          LOG_WARN("Failed to append start_word condition", K(ret));
+        } else if (OB_FAIL(sql_append_hex_escape_str(start_word_str, sql_string))) {
+          LOG_WARN("Failed to append start_word value", K(ret), K(start_word_str));
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (with_and && OB_FAIL(sql_string.append(" AND "))) {
+        LOG_WARN("Failed to append AND", K(ret));
+      } else if (!end_word_str.empty()) {
+        if (OB_FAIL(sql_string.append("word < "))) {
+          LOG_WARN("Failed to append end_word condition", K(ret));
+        } else if (OB_FAIL(sql_append_hex_escape_str(end_word_str, sql_string))) {
+          LOG_WARN("Failed to append end_word value", K(ret), K(end_word_str));
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(sql_string.append(")"))) {
+        LOG_WARN("Failed to append closing parenthesis", K(ret));
+      } else if (!has_appended) {
+        has_appended = true;
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObFTDictTableIter::init(const ObString &table_name,
+                            const uint64_t tenant_id,
+                            const int64_t snapshot_version,
+                            const ObIArray<ObMissingRangeInfo> *partial_ranges)
+{
+  int ret = OB_SUCCESS;
+  common::ObMySQLProxy *sql_proxy = MTL(transaction::ObTransService *)->get_mysql_proxy();
 
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
-    LOG_WARN("Inited twice.", K(ret));
+    LOG_WARN("Inited twice", K(ret));
+  } else if (table_name.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid table_name", K(ret), K(table_name));
+  } else if (snapshot_version <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid snapshot_version", K(ret), K(snapshot_version));
   } else {
     SMART_VAR(ObSqlString, sql_string)
     {
-      if (OB_FAIL(sql_string.append("SELECT word FROM oceanbase."))) {
-        LOG_WARN("Failed to append sql", K(ret));
-      } else if (OB_FAIL(sql_string.append(table_name))) {
-        LOG_WARN("Failed to append sql", K(ret));
+      // Build SQL query: SELECT word FROM table_name AS OF SNAPSHOT snapshot_version
+      if (OB_FAIL(sql_string.append_fmt("SELECT word FROM %.*s AS OF SNAPSHOT %ld",
+                                         table_name.length(), table_name.ptr(),
+                                         snapshot_version))) {
+        LOG_WARN("Failed to build sql prefix", K(ret), K(table_name), K(snapshot_version));
+      } else if (OB_FAIL(append_where_clause(sql_string, partial_ranges))) {
+        LOG_WARN("Failed to append partial ranges WHERE clause", K(ret));
       } else if (OB_FAIL(sql_string.append(" ORDER BY word"))) {
-        LOG_WARN("Failed to append sql", K(ret));
-      } else if (OB_FAIL(sql_proxy->read(res_, MTL_ID(), sql_string.ptr()))) {
-        LOG_WARN("Failed to execute sql", K(ret));
+        LOG_WARN("Failed to append ORDER BY", K(ret));
+      } else if (OB_FAIL(sql_proxy->read(res_, tenant_id, sql_string.ptr()))) {
+        // Use FLOG_WARN to force print, bypassing rate limiter
+        FLOG_WARN("Failed to execute sql, table may not exist or access denied",
+                  K(ret), K(table_name), K(snapshot_version), K(sql_string), K(tenant_id));
       }
     }
 

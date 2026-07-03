@@ -14,6 +14,8 @@
 #include "share/schema/ob_table_sql_service.h"
 #include "share/schema/ob_schema_service_sql_impl.h"
 #include "share/schema/ob_sensitive_rule_schema_struct.h"
+#include "share/schema/ob_dependency_info.h"
+#include "share/ob_fts_index_builder_util.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
 #include "storage/tablet/ob_session_tablet_helper.h"
 
@@ -169,6 +171,12 @@ int ObDropTableHelper::check_legitimacy_()
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("drop table required by materialized view is not supported", KR(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop table required by materialized view is");
+      } else if (table_schema->is_fulltext_dict() &&
+                 OB_FAIL(share::ObFtsIndexBuilderUtil::check_can_drop_dict_table(
+                     tenant_id_, table_schema->get_table_id(), get_trans_()))) {
+        if (OB_OP_NOT_ALLOW != ret) {
+          LOG_WARN("failed to check and remove dict table on drop", KR(ret), K(tenant_id_), K(table_schema->get_table_id()));
+        }
       }
     }
   }

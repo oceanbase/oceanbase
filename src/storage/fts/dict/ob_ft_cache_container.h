@@ -19,18 +19,24 @@ namespace storage
 // type
 struct ObFTCacheRangeHandle
 {
-  ObFTDictType type_;
   // kvcache
   ObKVCacheHandle handle_;
-  const ObDictCacheKey *key_;
+  ObDictCacheKey key_;
   const ObDictCacheValue *value_;
 
 public:
   ObFTCacheRangeHandle()
-      : type_(ObFTDictType::DICT_TYPE_INVALID), handle_(), key_(nullptr), value_(nullptr)
+      : handle_(), key_(), value_(nullptr)
   {
   }
   ~ObFTCacheRangeHandle() {}
+  void move_from(ObFTCacheRangeHandle &other)
+  {
+    this->handle_.move_from(other.handle_);
+    this->key_ = other.key_;
+    this->value_ = other.value_;
+    other.value_ = nullptr;
+  }
 };
 
 class ObFTCacheRangeContainer

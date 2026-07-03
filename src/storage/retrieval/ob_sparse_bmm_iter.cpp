@@ -540,9 +540,12 @@ int ObSRBMMIterImpl::set_filter_threshold_for_dim(const int64_t iter_idx, ObISRD
     } else {
       const double top_k_threshold = get_top_k_threshold();
       const double filter_threshold = top_k_threshold - other_iters_max_score_sum;
-      iter->set_filter_threshold(filter_threshold);
-      LOG_DEBUG("[Sparse Retrieval] set filter threshold for iter", K(iter_idx), K(filter_threshold),
-          K(top_k_threshold), K(other_iters_max_score_sum));
+      if (OB_FAIL(iter->set_filter_threshold(filter_threshold))) {
+        LOG_WARN("failed to set filter threshold", K(ret), K(iter_idx), K(filter_threshold), K(top_k_threshold));
+      } else {
+        LOG_DEBUG("[Sparse Retrieval] set filter threshold for iter", K(iter_idx), K(filter_threshold),
+            K(top_k_threshold), K(other_iters_max_score_sum));
+      }
     }
   }
   return ret;

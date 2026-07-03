@@ -82,7 +82,7 @@ public :
   virtual int advance_shallow(const ObDatum &id_datum, const bool inclusive) = 0;
   virtual int get_curr_block_max_info(const ObMaxScoreTuple *&max_score_tuple) = 0;
   virtual bool in_shallow_status() const = 0;
-  virtual void set_filter_threshold(const double threshold) { UNUSED(threshold); }
+  virtual int set_filter_threshold(const double threshold) { return OB_NOT_IMPLEMENT; }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObISRDimBlockMaxIter);
 };
