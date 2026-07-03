@@ -12,6 +12,8 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "ob_vector_mem_sync_executor.h"
+#include "lib/utility/ob_sort.h"
+#include "share/ob_ddl_task_executor.h"  // ObIDDLTask::in_ddl_retry_white_list
 #include "ob_plugin_vector_index_scheduler.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
@@ -30,6 +32,17 @@ namespace oceanbase
 using namespace storage;
 namespace share
 {
+
+// Whether a per-tablet ret_code should drive a retry of that tablet. Kept aligned with the
+// retry decision in ObVecIndexAsyncTaskUtil::check_task_result: the DDL retry whitelist plus
+// the mem-sync-specific OB_REPLICA_NOT_READABLE. A ret_code that is NOT retryable and NOT
+// OB_SUCCESS is a terminal failure (for example OB_CANCELED for a disabled tablet, or a fatal
+// error) and that tablet is not re-run on the next attempt.
+static inline bool is_mem_sync_retryable_ret(const int ret_code)
+{
+  return OB_REPLICA_NOT_READABLE == ret_code
+      || ObIDDLTask::in_ddl_retry_white_list(ret_code);
+}
 
 // ==================== ObVecMemSyncLogCb Implementation ====================
 ObVecMemSyncLogCb::ObVecMemSyncLogCb()
@@ -140,59 +153,74 @@ int ObVecMemSyncTask::do_work()
   return ret;
 }
 
-int ObVecMemSyncTask::process_one()
+int ObVecMemSyncTask::process_one_tablet(
+    ObPluginVectorIndexMgr *mgr, const ObTabletID &tablet_id, int64_t &tablet_est_mem)
 {
   int ret = OB_SUCCESS;
+  tablet_est_mem = 0;
   int64_t start_time = ObTimeUtil::current_time();
   ObPluginVectorIndexAdapterGuard adpt_guard;
   ObPluginVectorIndexAdapterGuard new_adpt_guard;
-  ObPluginVectorIndexMgr *mgr = nullptr;
-  ObPluginVectorIndexService *vector_index_service = MTL(ObPluginVectorIndexService *);
-
-  if (OB_ISNULL(vector_index_service)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("vector index service is null", KR(ret));
-  } else if (OB_FAIL(vector_index_service->acquire_vector_index_mgr(ls_id_, mgr))) {
-    LOG_WARN("fail to acquire vector index mgr", KR(ret), K(ls_id_));
-  } else if (OB_ISNULL(mgr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("mgr is null", KR(ret));
-  } else if (OB_FAIL(ObPluginVectorIndexUtils::get_task_read_snapshot(ls_id_, read_snapshot_))) {
-    LOG_WARN("memdata sync fail to get task read snapshot", KR(ret), K(ls_id_), KPC(ctx_));
-  } else if (OB_FAIL(mgr->get_adapter_inst_guard(ctx_->task_status_.tablet_id_, adpt_guard))) {
+  if (OB_ISNULL(mgr) || !tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(mgr), K(tablet_id));
+  } else if (OB_FAIL(mgr->get_adapter_inst_guard(tablet_id, adpt_guard))) {
     if (OB_HASH_NOT_EXIST == ret) {
       ret = OB_EAGAIN;
     }
-    LOG_WARN("memdata sync fail to get adapter instance guard", KR(ret), K(ls_id_), KPC(ctx_));
+    LOG_WARN("memdata sync fail to get adapter instance guard", KR(ret), K(ls_id_), K(tablet_id));
   } else {
-    common::ObSpinLockGuard ctx_guard(adpt_guard.get_adatper()->get_reload_lock());
-    if (mgr->get_ls_leader() && adpt_guard.get_adatper()->get_reload_finish()) {
-      // do nothing
-    } else {
-      int64_t est_mem = 0;
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(ObVecIndexAsyncTaskUtil::estimate_task_memory(ctx_, est_mem))) {
-        LOG_WARN("fail to estimate merge task memory", K(tmp_ret), KPC(ctx_));
+    bool is_tablet_cancel = false;
+    if (OB_FAIL(ObVecIndexAsyncTaskUtil::check_mem_sync_tablet_is_cancel(ctx_, tablet_id, is_tablet_cancel))) {
+      LOG_WARN("fail to check mem sync tablet cancel", KR(ret), K(ls_id_), K(tablet_id), KPC(ctx_));
+    } else if (is_tablet_cancel) {
+      ret = OB_CANCELED;
+      LOG_INFO("mem sync tablet cancelled before refresh", K(ls_id_), K(tablet_id), KPC(ctx_));
+    }
+    // Per-tablet memory estimate (statistics only): use this tablet's live adapter so the
+    // row count / schema are resolved for THIS tablet's index table, not the representative.
+    int tmp_ret = OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+    } else if (OB_TMP_FAIL(ObVecIndexAsyncTaskUtil::estimate_task_memory(ctx_, tablet_est_mem, adpt_guard.get_adatper()))) {
+      LOG_WARN("fail to estimate mem sync tablet memory", K(tmp_ret), K(ls_id_), K(tablet_id));
+      tablet_est_mem = 0;
+    }
+    if (OB_SUCC(ret)) {
+      common::ObSpinLockGuard ctx_guard(adpt_guard.get_adatper()->get_reload_lock());
+      if (OB_FAIL(ObVecIndexAsyncTaskUtil::check_mem_sync_tablet_is_cancel(ctx_, tablet_id, is_tablet_cancel))) {
+        LOG_WARN("fail to check mem sync tablet cancel before refresh", KR(ret), K(ls_id_), K(tablet_id), KPC(ctx_));
+      } else if (is_tablet_cancel) {
+        ret = OB_CANCELED;
+        LOG_INFO("mem sync tablet cancelled before refresh under reload lock", K(ls_id_), K(tablet_id), KPC(ctx_));
+      } else if (mgr->get_ls_leader() && adpt_guard.get_adatper()->get_reload_finish()) {
+        // do nothing
+      } else {
+        if (OB_FAIL(ObPluginVectorIndexUtils::refresh_memdata(ls_id_,
+                                                              adpt_guard.get_adatper(),
+                                                              read_snapshot_,
+                                                              allocator_,
+                                                              ctx_,
+                                                              tablet_id))) {
+          LOG_WARN("memdata sync fail to refresh memdata", KR(ret), K(ls_id_), K(tablet_id), KPC(ctx_));
+        } else if (mgr->get_ls_leader()) {
+          adpt_guard.get_adatper()->set_reload_finish(true);
+        }
       }
-      if (OB_NOT_NULL(ctx_)) {
-        common::ObSpinLockGuard ctx_guard(ctx_->lock_);
-        ctx_->task_status_.target_scn_ = read_snapshot_;
-        ctx_->task_status_.task_info_.task_estimate_memory_ = est_mem;
-      }
-      if (OB_FAIL(ObPluginVectorIndexUtils::refresh_memdata(ls_id_,
-                                                            adpt_guard.get_adatper(),
-                                                            read_snapshot_,
-                                                            allocator_,
-                                                            ctx_))) {
-        LOG_WARN("memdata sync fail to refresh memdata", KR(ret), K(ls_id_), KPC(ctx_));
-      } else if (mgr->get_ls_leader()) {
-        adpt_guard.get_adatper()->set_reload_finish(true);
+    }
+    if (OB_SUCC(ret)) {
+      bool is_tablet_cancel_after_refresh = false;
+      if (OB_FAIL(ObVecIndexAsyncTaskUtil::check_mem_sync_tablet_is_cancel(
+              ctx_, tablet_id, is_tablet_cancel_after_refresh))) {
+        LOG_WARN("fail to check mem sync tablet cancel after refresh", KR(ret), K(ls_id_), K(tablet_id), KPC(ctx_));
+      } else if (is_tablet_cancel_after_refresh) {
+        ret = OB_CANCELED;
+        LOG_INFO("mem sync tablet cancelled after refresh", K(ls_id_), K(tablet_id), KPC(ctx_));
       }
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(mgr->get_adapter_inst_guard(ctx_->task_status_.tablet_id_, new_adpt_guard))) {
-    LOG_WARN("memdata sync fail to get adapter instance", KR(ret), K(ls_id_), KPC(ctx_));
+  } else if (OB_FAIL(mgr->get_adapter_inst_guard(tablet_id, new_adpt_guard))) {
+    LOG_WARN("memdata sync fail to get adapter instance", KR(ret), K(ls_id_), K(tablet_id));
   }
 
   // Update adapter statistics
@@ -209,15 +237,227 @@ int ObVecMemSyncTask::process_one()
       adpt_guard.get_adatper()->sync_fail(ret);
     }
   }
+  int64_t cost = ObTimeUtil::current_time() - start_time;
+  LOG_INFO("memdata sync finish process one tablet", K(cost), K(allocator_.used()), K(allocator_.total()),
+           K(ls_id_), K(tablet_id), KR(ret));
+  allocator_.reset();
+  return ret;
+}
+
+int ObVecMemSyncTask::process_one()
+{
+  int ret = OB_SUCCESS;
+  ObPluginVectorIndexMgr *mgr = nullptr;
+  ObPluginVectorIndexService *vector_index_service = MTL(ObPluginVectorIndexService *);
+
+  if (OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx is null", KR(ret));
+  } else if (OB_ISNULL(vector_index_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("vector index service is null", KR(ret));
+  } else if (OB_FAIL(vector_index_service->acquire_vector_index_mgr(ls_id_, mgr))) {
+    LOG_WARN("fail to acquire vector index mgr", KR(ret), K(ls_id_));
+  } else if (OB_ISNULL(mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("mgr is null", KR(ret));
+  } else if (OB_FAIL(ObPluginVectorIndexUtils::get_task_read_snapshot(ls_id_, read_snapshot_))) {
+    LOG_WARN("memdata sync fail to get task read snapshot", KR(ret), K(ls_id_), KPC(ctx_));
+  } else {
+    // Scheduler for the per-tablet disable check (mem sync skips the scheduler-loop disable
+    // gate so one disabled tablet does not cancel the whole batch; instead each tablet is
+    // checked here and individually skipped). Best-effort: if unavailable, no per-tablet skip.
+    ObVecIdxAsyncTaskScheduler *sched = &vector_index_service->get_vec_idx_async_task_sched();
+
+    {
+      common::ObSpinLockGuard ctx_guard(ctx_->lock_);
+      ctx_->task_status_.target_scn_ = read_snapshot_;
+    }
+
+    // Build the tablet list to process: representative first, then extras.
+    ObSEArray<uint64_t, ObVecMemSyncExecutor::VEC_MEM_SYNC_BATCH_SIZE> all_tablets;
+    if (OB_FAIL(all_tablets.push_back(ctx_->task_status_.tablet_id_.id()))) {
+      LOG_WARN("fail to push representative tablet", KR(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->task_status_.task_info_.batch_tablets_.count(); ++i) {
+      if (OB_FAIL(all_tablets.push_back(ctx_->task_status_.task_info_.batch_tablets_.at(i)))) {
+        LOG_WARN("fail to push batch tablet", KR(ret), K(i));
+      }
+    }
+
+    // Prepare per-tablet ret_code array, preserving previously-succeeded results across an
+    // in-memory retry so we can skip them. batch_ret_codes_ is indexed 1:1 with all_tablets.
+    ObSEArray<int64_t, ObVecMemSyncExecutor::VEC_MEM_SYNC_BATCH_SIZE> prev_ret_codes;
+    if (OB_SUCC(ret)) {
+      common::ObSpinLockGuard ctx_guard(ctx_->lock_);
+      // copy any existing ret codes (from a prior attempt) aligned by index
+      for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->task_status_.task_info_.batch_ret_codes_.count(); ++i) {
+        if (OB_FAIL(prev_ret_codes.push_back(ctx_->task_status_.task_info_.batch_ret_codes_.at(i)))) {
+          LOG_WARN("fail to copy prev ret code", KR(ret), K(i));
+        }
+      }
+      ctx_->task_status_.task_info_.batch_ret_codes_.reset();
+      ctx_->task_status_.task_info_.batch_mem_estimates_.reset();
+    }
+
+    // Batch ret aggregation operands. Priority for the final ctx ret_code that drives
+    // check_task_result is: retryable > fatal(non-retryable failure) > success. So if any
+    // tablet returned a retryable code, the WHOLE batch goes back to PREPARE and is retried;
+    // on that retry only the still-retryable tablets are re-run (success / fatal / disabled
+    // are terminal and skipped). When no tablet is retryable any more, the batch terminates
+    // carrying the first fatal failure (if any), else OB_SUCCESS.
+    int first_retryable_ret = OB_SUCCESS;
+    int first_fatal_ret = OB_SUCCESS;
+    int64_t succ_cnt = 0;
+    int64_t skip_cnt = 0;
+    int64_t disabled_cnt = 0;
+    int64_t tablet_cancel_cnt = 0;
+    int64_t retryable_cnt = 0;
+    int64_t fatal_cnt = 0;
+    int64_t total_est_mem = 0;
+    bool mem_estimate_record_broken = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_tablets.count(); ++i) {
+      ObTabletID cur_tablet(all_tablets.at(i));
+      int tablet_ret = OB_SUCCESS;
+      int64_t tablet_est_mem = 0;
+      // Stop processing the rest of the batch once the ctx is cancelled (e.g. leader switch
+      // marks it CANCEL via mark_task_cancel_lightweight). Without this, the worker keeps
+      // hitting refresh_memdata for every remaining tablet and cannot exit the thread pool
+      // promptly, which holds the thread-pool slot and blocks other task types by water level.
+      // Same cancel check freeze/merge tasks use; it inspects task_status_.status_ == CANCEL
+      // (the flag the lightweight cancel path sets) plus the sys_task cancel state, and sets
+      // ret = OB_CANCELED so the loop's OB_SUCC(ret) guard terminates the batch.
+      CHECK_TASK_CANCELLED(ret, ctx_);
+      if (OB_FAIL(ret)) {
+        LOG_INFO("mem sync batch cancelled, stop processing remaining tablets",
+                 KR(ret), K(ls_id_), K(i), "total", all_tablets.count());
+        break;
+      }
+      // On a retry, only re-run tablets whose previous ret was retryable; success and
+      // terminal-failure (incl. disabled OB_CANCELED) tablets are skipped, preserving their
+      // prior ret_code so the batch's terminal aggregation still sees the non-retryable failure.
+      // VEC_ASYNC_TASK_DEFAULT_ERR_CODE is only the not-yet-run placeholder populated at task
+      // creation time, so it must not be treated as a previous terminal result.
+      const int prev_ret = (i < prev_ret_codes.count())
+          ? static_cast<int>(prev_ret_codes.at(i))
+          : VEC_ASYNC_TASK_DEFAULT_ERR_CODE;
+      const bool has_prev = (VEC_ASYNC_TASK_DEFAULT_ERR_CODE != prev_ret);
+      const bool prev_terminal = has_prev && (OB_SUCCESS == prev_ret || !is_mem_sync_retryable_ret(prev_ret));
+      bool is_tablet_cancel = false;
+      if (OB_FAIL(ObVecIndexAsyncTaskUtil::check_mem_sync_tablet_is_cancel(ctx_, cur_tablet, is_tablet_cancel))) {
+        LOG_WARN("fail to check mem sync tablet cancel", KR(ret), K(ls_id_), K(cur_tablet), K(i));
+      } else if (is_tablet_cancel) {
+        tablet_ret = OB_CANCELED;
+        ++tablet_cancel_cnt;
+        ++fatal_cnt;
+        if (OB_SUCCESS == first_fatal_ret) {
+          first_fatal_ret = tablet_ret;
+        }
+        LOG_INFO("mem sync skip cancelled tablet", K(ls_id_), K(cur_tablet), K(i));
+      } else if (OB_NOT_NULL(sched) && sched->is_task_disabled(
+              ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_MEM_SYNC_TASK, cur_tablet.id())) {
+        // Per-tablet disable: skip just this tablet and mark OB_CANCELED. It is terminal and
+        // non-retryable for this tablet, so the batch should finish with OB_CANCELED if there
+        // is no retryable tablet error with higher priority.
+        tablet_ret = OB_CANCELED;
+        ++disabled_cnt;
+        ++fatal_cnt;
+        if (OB_SUCCESS == first_fatal_ret) {
+          first_fatal_ret = tablet_ret;
+        }
+        LOG_INFO("[VEC_IDX_TASK_DISABLED] mem sync skip disabled tablet", K(ls_id_), K(cur_tablet), K(i));
+      } else if (prev_terminal) {
+        // already in a terminal state from a previous attempt, carry it over without re-running
+        tablet_ret = prev_ret;
+        ++skip_cnt;
+        if (OB_SUCCESS != prev_ret) {
+          ++fatal_cnt;
+          if (OB_SUCCESS == first_fatal_ret) {
+            first_fatal_ret = prev_ret; // a non-retryable failure from a prior attempt still fails the batch
+          }
+        }
+        LOG_INFO("mem sync skip terminal tablet on retry", K(ls_id_), K(cur_tablet), K(i), K(prev_ret));
+      } else {
+        tablet_ret = process_one_tablet(mgr, cur_tablet, tablet_est_mem);
+        bool is_tablet_cancel_after_process = false;
+        int tmp_ret = ObVecIndexAsyncTaskUtil::check_mem_sync_tablet_is_cancel(
+            ctx_, cur_tablet, is_tablet_cancel_after_process);
+        if (OB_SUCCESS != tmp_ret) {
+          LOG_WARN("fail to check mem sync tablet cancel after process",
+                   K(tmp_ret), K(ls_id_), K(cur_tablet), K(i));
+        }
+        total_est_mem += tablet_est_mem;
+        if (OB_CANCELED == tablet_ret && is_tablet_cancel_after_process) {
+          ++tablet_cancel_cnt;
+          ++fatal_cnt;
+          if (OB_SUCCESS == first_fatal_ret) {
+            first_fatal_ret = tablet_ret;
+          }
+          LOG_INFO("mem sync tablet cancelled during process", K(ls_id_), K(cur_tablet), K(i));
+        } else if (OB_SUCCESS == tablet_ret) {
+          ++succ_cnt;
+        } else if (is_mem_sync_retryable_ret(tablet_ret)) {
+          ++retryable_cnt;
+          if (OB_SUCCESS == first_retryable_ret) {
+            first_retryable_ret = tablet_ret;
+          }
+          LOG_WARN("mem sync tablet retryable", K(tablet_ret), K(ls_id_), K(cur_tablet), K(i));
+        } else {
+          ++fatal_cnt;
+          if (OB_SUCCESS == first_fatal_ret) {
+            first_fatal_ret = tablet_ret;
+          }
+          LOG_WARN("mem sync tablet fatal fail", K(tablet_ret), K(ls_id_), K(cur_tablet), K(i));
+        }
+      }
+      // record per-tablet ret code and memory estimate (both indexed 1:1 with all_tablets)
+      common::ObSpinLockGuard ctx_guard(ctx_->lock_);
+      if (OB_FAIL(ctx_->task_status_.task_info_.batch_ret_codes_.push_back(tablet_ret))) {
+        LOG_WARN("fail to record per-tablet ret code, stop mem sync batch to keep retry index aligned",
+                 KR(ret), K(cur_tablet), K(i), "total", all_tablets.count());
+      } else if (!mem_estimate_record_broken) {
+        int tmp_ret = ctx_->task_status_.task_info_.batch_mem_estimates_.push_back(tablet_est_mem);
+        if (OB_SUCCESS != tmp_ret) {
+          mem_estimate_record_broken = true;
+          LOG_WARN("fail to record per-tablet mem estimate, stop recording mem estimates for this attempt",
+                   K(tmp_ret), K(cur_tablet), K(i), "total", all_tablets.count());
+        }
+      }
+    }
+
+    // Statistics only (mem sync is not memory-limited): total estimate = sum of per-tablet.
+    if (OB_SUCC(ret)) {
+      common::ObSpinLockGuard ctx_guard(ctx_->lock_);
+      ctx_->task_status_.task_info_.task_estimate_memory_ = total_est_mem;
+    }
+
+    // Aggregate by priority: retryable > fatal > success (see comment above). A retryable
+    // batch ret makes check_task_result send the whole ctx back to PREPARE for another round.
+    if (OB_SUCC(ret)) {
+      if (OB_SUCCESS != first_retryable_ret) {
+        ret = first_retryable_ret;
+      } else {
+        ret = first_fatal_ret; // OB_SUCCESS if no fatal
+      }
+    }
+    int64_t batch_ret_code_cnt = 0;
+    int64_t batch_mem_estimate_cnt = 0;
+    {
+      common::ObSpinLockGuard ctx_guard(ctx_->lock_);
+      batch_ret_code_cnt = ctx_->task_status_.task_info_.batch_ret_codes_.count();
+      batch_mem_estimate_cnt = ctx_->task_status_.task_info_.batch_mem_estimates_.count();
+    }
+    LOG_INFO("mem sync batch process done", KR(ret), K(ls_id_),
+             "total", all_tablets.count(), K(succ_cnt), K(skip_cnt), K(disabled_cnt), K(tablet_cancel_cnt),
+             K(retryable_cnt), K(fatal_cnt), K(first_retryable_ret), K(first_fatal_ret),
+             K(total_est_mem), K(batch_ret_code_cnt), K(batch_mem_estimate_cnt),
+             K(mem_estimate_record_broken));
+  }
+
   if (OB_NOT_NULL(ctx_)) {
     common::ObSpinLockGuard ctx_guard(ctx_->lock_);
     ctx_->task_status_.ret_code_ = ret;
   }
-  int64_t cost = ObTimeUtil::current_time() - start_time;
-  LOG_INFO("memdata sync finish process one", K(cost), K(allocator_.used()), K(allocator_.total()),
-           K(ls_id_), KPC(ctx_));
-  allocator_.reset();
-
   return ret;
 }
 
@@ -473,15 +713,18 @@ int ObVecMemSyncExecutor::load_task(uint64_t &task_trace_base_num)
     VectorIndexMemSyncMap &processing_map = index_ls_mgr->get_mem_sync_info().get_processing_map();
     ObVecIndexAsyncTaskOption &task_opt = index_ls_mgr->get_async_task_opt();
     ObIAllocator *allocator = task_opt.get_allocator();
+
+    // ---- Phase A: collect eligible tablets ----
+    // Aggregate multiple tablets of this ls into one task ctx (one inner-table row) to cut
+    // task count. Skip tablets that are (a) task-disabled, or (b) already in flight (their
+    // ctx from a previous round still alive in task_ctx_map_) -- the in-flight map provides
+    // cross-round dedup for NON-representative tablets that the per-(tablet,task_type)
+    // task_ctx_map_ key alone can't cover after aggregation. See R1 in the design.
+    ObArray<uint64_t> eligible_tablets;
     FOREACH_X(iter, processing_map, OB_SUCC(ret)) {
       ObTabletID tablet_id = iter->first;
       ObVecIndexAsyncTaskCtx *task_ctx_tmp = iter->second;
-      ObVecIndexAsyncTaskCtx *task_ctx = nullptr;
-      char *task_ctx_buf = nullptr;
-      bool inc_new_task = false;
-      bool task_ctx_in_map = false;
-      int64_t new_task_id = OB_INVALID_ID;
-      common::ObCurTraceId::TraceId new_trace_id;
+      bool is_in_flight = false;
       if (OB_ISNULL(task_ctx_tmp)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected nullptr task_ctx_tmp", K(ret), K(tablet_id));
@@ -489,23 +732,52 @@ int ObVecMemSyncExecutor::load_task(uint64_t &task_trace_base_num)
                      ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_MEM_SYNC_TASK, tablet_id.id())) {
         LOG_TRACE("[VEC_IDX_TASK_DISABLED] skip generating disabled task",
                   K_(tenant_id), K(tablet_id), "task_type", "MEM_SYNC");
+      } else if (OB_FAIL(task_opt.is_mem_sync_tablet_in_flight(tablet_id, is_in_flight))) {
+        LOG_WARN("fail to check mem sync tablet in flight", KR(ret), K(tablet_id));
+      } else if (is_in_flight) {
+        LOG_TRACE("skip tablet already in flight for mem sync", K_(tenant_id), K(tablet_id));
+      } else if (OB_FAIL(eligible_tablets.push_back(tablet_id.id()))) {
+        LOG_WARN("fail to push back eligible tablet", KR(ret), K(tablet_id));
+      }
+    }
+    // Sort so the representative (min tablet_id) of each batch is deterministic.
+    if (OB_SUCC(ret) && eligible_tablets.count() > 1) {
+      lib::ob_sort(eligible_tablets.begin(), eligible_tablets.end());
+    }
+
+    // ---- Phase B: slice into batches of VEC_MEM_SYNC_BATCH_SIZE, one ctx per batch ----
+    for (int64_t batch_begin = 0;
+         OB_SUCC(ret) && batch_begin < eligible_tablets.count();
+         batch_begin += VEC_MEM_SYNC_BATCH_SIZE) {
+      const int64_t batch_end = MIN(batch_begin + VEC_MEM_SYNC_BATCH_SIZE, eligible_tablets.count());
+      ObTabletID representative_tablet(eligible_tablets.at(batch_begin)); // min in this batch
+      ObVecIndexAsyncTaskCtx *task_ctx = nullptr;
+      char *task_ctx_buf = nullptr;
+      bool inc_new_task = false;
+      bool task_ctx_in_map = false;
+      bool in_flight_added = false;
+      int64_t new_task_id = OB_INVALID_ID;
+      common::ObCurTraceId::TraceId new_trace_id;
+      // Source task_status_ template: reuse the representative tablet's entry in processing_map.
+      ObVecIndexAsyncTaskCtx *src_ctx = nullptr;
+      if (OB_FAIL(processing_map.get_refactored(representative_tablet, src_ctx)) || OB_ISNULL(src_ctx)) {
+        ret = OB_SUCC(ret) ? OB_ERR_UNEXPECTED : ret;
+        LOG_WARN("fail to get src ctx for representative tablet", KR(ret), K(representative_tablet));
       } else if (OB_ISNULL(task_ctx_buf =
                      static_cast<char *>(allocator->alloc(sizeof(ObVecIndexAsyncTaskCtx))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc task ctx buf", KR(ret));
       } else if (FALSE_IT(task_ctx = new(task_ctx_buf) ObVecIndexAsyncTaskCtx())) {
-      } else if (FALSE_IT(task_ctx->task_status_ =
-                     task_ctx_tmp->task_status_)) {
+      } else if (FALSE_IT(task_ctx->task_status_ = src_ctx->task_status_)) {
       } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::fetch_new_task_id(tenant_id_, new_task_id))) {
         LOG_WARN("fail to fetch new task id", K(ret), K(tenant_id_));
       } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::fetch_new_trace_id(++task_trace_base_num, allocator, new_trace_id))) {
-        LOG_WARN("fail to fetch new trace id", K(ret), K(tablet_id));
+        LOG_WARN("fail to fetch new trace id", K(ret), K(representative_tablet));
       } else {
-        LOG_INFO("[VEC_ASYNC_TASK] task loaded with PREPARE status",
-                 K(ret), K(tablet_id), K(new_trace_id), K(new_task_id));
         task_ctx->tenant_id_ = tenant_id_;
         task_ctx->ls_handle_ = ls_handle_;
         task_ctx->task_status_.tenant_id_ = tenant_id_;
+        task_ctx->task_status_.tablet_id_ = representative_tablet;
         task_ctx->task_status_.task_type_ = ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_MEM_SYNC_TASK;
         task_ctx->task_status_.trigger_type_ = ObVecIndexAsyncTaskTriggerType::OB_VEC_TRIGGER_AUTO;
         task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE;
@@ -513,26 +785,62 @@ int ObVecMemSyncExecutor::load_task(uint64_t &task_trace_base_num)
         task_ctx->task_status_.task_id_ = new_task_id;
         task_ctx->task_status_.trace_id_ = new_trace_id;
         task_ctx->allocator_.set_tenant_id(tenant_id_);
-        if (OB_FAIL(index_ls_mgr->get_async_task_opt().add_task_ctx(tablet_id, task_ctx, inc_new_task))) {
+        // Extra tablets (besides the representative) go into batch_tablets_. batch_ret_codes_
+        // is indexed by the full batch order and is prefilled so task_info is observable before
+        // the first execution; default ret_code means "not run yet".
+        task_ctx->task_status_.task_info_.batch_tablets_.reset();
+        task_ctx->task_status_.task_info_.batch_ret_codes_.reset();
+        task_ctx->task_status_.task_info_.batch_mem_estimates_.reset();
+        task_ctx->task_status_.task_info_.batch_cancel_tablets_.reset();
+        if (OB_FAIL(task_ctx->task_status_.task_info_.batch_ret_codes_.push_back(
+                VEC_ASYNC_TASK_DEFAULT_ERR_CODE))) {
+          LOG_WARN("fail to push representative batch ret code", KR(ret));
+        }
+        for (int64_t i = batch_begin + 1; OB_SUCC(ret) && i < batch_end; ++i) {
+          if (OB_FAIL(task_ctx->task_status_.task_info_.batch_tablets_.push_back(eligible_tablets.at(i)))) {
+            LOG_WARN("fail to push back batch tablet", KR(ret), K(i));
+          } else if (OB_FAIL(task_ctx->task_status_.task_info_.batch_ret_codes_.push_back(
+                         VEC_ASYNC_TASK_DEFAULT_ERR_CODE))) {
+            LOG_WARN("fail to push back batch ret code", KR(ret), K(i));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          LOG_INFO("[VEC_ASYNC_TASK] mem sync batch task loaded with PREPARE status",
+                   K(ret), K(representative_tablet), K(new_trace_id), K(new_task_id),
+                   "batch_extra_cnt", task_ctx->task_status_.task_info_.batch_tablets_.count());
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(task_opt.add_task_ctx(representative_tablet, task_ctx, inc_new_task))) {
           LOG_WARN("fail to add task ctx", KR(ret));
         } else if (FALSE_IT(task_ctx_in_map = inc_new_task)) {
-        } else if (inc_new_task && OB_FAIL(task_ctx_array.push_back(task_ctx))) {
-          int tmp_ret = OB_SUCCESS;
-          if (OB_TMP_FAIL(ObVecIndexAsyncTaskUtil::clear_task_ctx(index_ls_mgr->get_async_task_opt(), task_ctx))) {
-            LOG_WARN("fail to clear task ctx", KR(tmp_ret), K(task_ctx));
+        } else if (inc_new_task) {
+          // Register all tablets of this batch into the in-flight map (representative + extras),
+          // then push for inner-table insert.
+          if (OB_FAIL(task_opt.add_mem_sync_in_flight(
+                  representative_tablet, task_ctx->task_status_.task_info_.batch_tablets_))) {
+            LOG_WARN("fail to add mem sync in flight", KR(ret), K(representative_tablet));
+          } else if (FALSE_IT(in_flight_added = true)) {
+          } else if (OB_FAIL(task_ctx_array.push_back(task_ctx))) {
+            LOG_WARN("fail to push back task status", KR(ret));
           }
-          task_ctx_in_map = false;
-          task_ctx = nullptr;
-          LOG_WARN("fail to push back task status", KR(ret));
         }
       }
-      if (OB_NOT_NULL(task_ctx) && (!OB_SUCC(ret) || !inc_new_task)) {
+      // cleanup on failure or duplicate (inc_new_task == false)
+      if (OB_NOT_NULL(task_ctx) && (OB_FAIL(ret) || !inc_new_task)) {
         if (task_ctx_in_map) {
-          int tmp_ret = ObVecIndexAsyncTaskUtil::clear_task_ctx(index_ls_mgr->get_async_task_opt(), task_ctx);
+          // clear_task_ctx will also erase the in-flight entries we added (if any).
+          int tmp_ret = ObVecIndexAsyncTaskUtil::clear_task_ctx(task_opt, task_ctx);
           if (OB_SUCCESS != tmp_ret) {
             LOG_WARN("fail to clear task ctx after load task failed", K(tmp_ret), K(ret), K(task_ctx));
           }
         } else {
+          if (in_flight_added) {
+            int tmp_ret = task_opt.erase_mem_sync_in_flight(
+                representative_tablet, task_ctx->task_status_.task_info_.batch_tablets_);
+            if (OB_SUCCESS != tmp_ret) {
+              LOG_WARN("fail to erase in flight after load fail", K(tmp_ret), K(representative_tablet));
+            }
+          }
           task_ctx->~ObVecIndexAsyncTaskCtx();
           allocator->free(task_ctx);
         }

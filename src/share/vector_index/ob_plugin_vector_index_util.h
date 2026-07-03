@@ -36,6 +36,37 @@ namespace share
     } \
   }
 
+#define CHECK_MEM_SYNC_TABLET_CANCELLED(ret, task_ctx, tablet_id)  \
+  if (OB_FAIL(ret)) { \
+  } else { \
+    bool is_cancel = false; \
+    if (OB_FAIL(ObVecIndexAsyncTaskUtil::check_mem_sync_tablet_is_cancel(task_ctx, tablet_id, is_cancel))) { \
+      OB_LOG(WARN, "fail to check mem sync tablet is cancel", K(tablet_id), KPC(task_ctx)); \
+    } else if (is_cancel) { \
+      ret = OB_CANCELED; \
+      OB_LOG(INFO, "mem sync tablet is cancel", K(tablet_id), KPC(task_ctx)); \
+    } \
+  }
+
+#define CHECK_TASK_CANCELLED_IN_PROCESS_WITH_TABLET(ret, loop_cnt, loop_cnt_threshold, task_ctx, tablet_id)  \
+  if (OB_FAIL(ret)) { \
+  } else if (++loop_cnt > loop_cnt_threshold) { \
+    bool is_cancel = false; \
+    if (OB_FAIL(ObVecIndexAsyncTaskUtil::check_task_is_cancel(task_ctx, is_cancel))) { \
+      OB_LOG(WARN, "fail to check task is cancel", KPC(task_ctx)); \
+    } else if (is_cancel) { \
+      ret = OB_CANCELED; \
+      OB_LOG(INFO, "async task is cancel", KPC(task_ctx)); \
+    } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::check_mem_sync_tablet_is_cancel(task_ctx, tablet_id, is_cancel))) { \
+      OB_LOG(WARN, "fail to check mem sync tablet is cancel", K(tablet_id), KPC(task_ctx)); \
+    } else if (is_cancel) { \
+      ret = OB_CANCELED; \
+      OB_LOG(INFO, "mem sync tablet is cancel", K(tablet_id), KPC(task_ctx)); \
+    } else { \
+      loop_cnt = 0; \
+    } \
+  }
+
 struct ObVecIndexAsyncTaskCtx;
 
 class ObVectorQueryRowkeyIterator

@@ -81,7 +81,18 @@ public:
   TO_STRING_KV(K_(is_inited), K_(tenant_id), K_(ls_id), KPC_(ctx));
 
 private:
+  // Orchestrates the batch: acquires mgr + read_snapshot once, then loops over the
+  // representative tablet plus task_info_.batch_tablets_, calling process_one_tablet for
+  // each, recording per-tablet ret_code into task_info_.batch_ret_codes_, skipping tablets
+  // already succeeded in a prior in-memory retry, and aggregating into a single ctx ret_code
+  // ("any non-success fails the batch").
   int process_one();
+  // Refresh memdata for a single tablet. Returns the per-tablet ret (OB_EAGAIN if adapter
+  // not ready yet, so the batch is retried). Does not touch ctx_->task_status_.ret_code_.
+  // tablet_est_mem is filled with this tablet's vector-index memory estimate (statistics
+  // only; best-effort, left 0 on estimate failure).
+  int process_one_tablet(ObPluginVectorIndexMgr *mgr, const ObTabletID &tablet_id,
+                         int64_t &tablet_est_mem);
 
 private:
   storage::ObLS *ls_;
@@ -102,6 +113,11 @@ public:
   {}
 
   virtual ~ObVecMemSyncExecutor() {}
+
+  // Max number of tablets aggregated into a single mem sync task (one ctx, one inner-table
+  // row). load_task slices the processing_map into batches of this size. Chosen to bound a
+  // single task's memory footprint and failure blast radius while still cutting task count.
+  static const int64_t VEC_MEM_SYNC_BATCH_SIZE = 64;
 
   int init(uint64_t tenant_id, storage::ObLSHandle &ls_handle);
 

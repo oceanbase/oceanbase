@@ -70,13 +70,15 @@ public:
                              ObPluginVectorIndexAdaptor *adapter,
                              SCN target_scn,
                              ObIAllocator &allocator,
-                             ObVecIndexAsyncTaskCtx *ctx = nullptr);
+                             ObVecIndexAsyncTaskCtx *ctx = nullptr,
+                             const common::ObTabletID &mem_sync_tablet_id = common::ObTabletID());
   static int refresh_adp_from_table(ObLSID &ls_id,
                                     ObPluginVectorIndexAdaptor *&adapter,
                                     const bool create_new_adapter,
                                     SCN target_scn,
                                     ObIAllocator &allocator,
-                                    ObVecIndexAsyncTaskCtx *ctx = nullptr);
+                                    ObVecIndexAsyncTaskCtx *ctx = nullptr,
+                                    const common::ObTabletID &mem_sync_tablet_id = common::ObTabletID());
   static int release_vector_index_adapter(ObPluginVectorIndexAdaptor* &adapter);
   static int release_vector_index_build_helper(ObIvfBuildHelper* &helper, bool *fully_released = nullptr);
   static int release_ivf_cache_mgr(ObIvfCacheMgr* &mgr);
@@ -155,7 +157,8 @@ public:
                               ObLSID &ls_id,
                               SCN target_scn,
                               ObVectorQueryAdaptorResultContext &ada_ctx,
-                              ObVecIndexAsyncTaskCtx *task_ctx = nullptr);
+                              ObVecIndexAsyncTaskCtx *task_ctx = nullptr,
+                              const common::ObTabletID &mem_sync_tablet_id = common::ObTabletID());
   static int read_local_tablet(ObLSID &ls_id,
                                ObPluginVectorIndexAdaptor* adapter,
                                SCN target_scn,
@@ -215,7 +218,8 @@ public:
                                       SCN &target_scn,
                                       ObIAllocator &allocator,
                                       ObVectorQueryAdaptorResultContext &ada_ctx,
-                                      ObVecIndexAsyncTaskCtx *task_ctx = nullptr);
+                                      ObVecIndexAsyncTaskCtx *task_ctx = nullptr,
+                                      const common::ObTabletID &mem_sync_tablet_id = common::ObTabletID());
   static int get_tenant_vector_index_ids(const uint64_t tenant_id, bool &has_ivf_index, common::ObIArray<uint64_t> &table_id_array);
   static int get_current_read_scn(share::SCN &current_scn);
   static int get_lob_tablet_id(const ObLSID &ls_id, const ObTabletID &data_tablet_id, ObTabletID &lob_meta_tablet_id, ObTabletID &lob_piece_tablet_id);
@@ -256,7 +260,8 @@ private:
                                        const bool create_new_adp,
                                        SCN &target_scn,
                                        ObIAllocator &allocator,
-                                       ObVecIndexAsyncTaskCtx *ctx = nullptr);
+                                       ObVecIndexAsyncTaskCtx *ctx = nullptr,
+                                       const common::ObTabletID &mem_sync_tablet_id = common::ObTabletID());
   static int create_refresh_adaptor(ObLSID &ls_id,
                                     ObPluginVectorIndexService *vector_index_service,
                                     ObPluginVectorIndexAdaptor *old_adapter,

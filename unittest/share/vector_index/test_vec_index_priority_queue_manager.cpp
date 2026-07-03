@@ -129,6 +129,20 @@ TEST_F(TestVecIndexPriorityQueueManager, push_built_type_overflow)
 }
 
 // ---------------------------------------------------------------------------
+// Test: task-type queue max sizes
+// MEM_SYNC has a larger queue budget; other schedulable task types use default.
+// ---------------------------------------------------------------------------
+TEST_F(TestVecIndexPriorityQueueManager, task_type_queue_max_size)
+{
+  ASSERT_EQ(10000, mgr_.get_task_type_queue_max_size(OB_VECTOR_ASYNC_MEM_SYNC_TASK));
+  ASSERT_EQ(2048, mgr_.get_task_type_queue_max_size(OB_VECTOR_ASYNC_INDEX_IVF_LOAD));
+  ASSERT_EQ(2048, mgr_.get_task_type_queue_max_size(OB_VECTOR_ASYNC_INDEX_FREEZE));
+  ASSERT_EQ(2048, mgr_.get_task_type_queue_max_size(OB_VECTOR_ASYNC_INDEX_OPTINAL));
+  ASSERT_EQ(0, mgr_.get_task_type_queue_max_size(OB_VECTOR_ASYNC_INDEX_BUILT));
+  ASSERT_EQ(2048, PRIORITY_QUEUE_MAX_SIZE[PRIORITY_P0]);
+}
+
+// ---------------------------------------------------------------------------
 // Test: basic push + pop (AUTO, single task)
 // ---------------------------------------------------------------------------
 TEST_F(TestVecIndexPriorityQueueManager, push_and_pop_single)
@@ -228,7 +242,7 @@ TEST_F(TestVecIndexPriorityQueueManager, manual_before_auto_priority)
 
 // ---------------------------------------------------------------------------
 // Test: HIGH priority (P1) is popped before LOW priority (P4)
-// IVF_LOAD=P1(threshold=85), OPTINAL=P4(threshold=35)
+// IVF_LOAD=P1(threshold=90), OPTINAL=P4(threshold=35)
 // ---------------------------------------------------------------------------
 TEST_F(TestVecIndexPriorityQueueManager, high_priority_before_low)
 {
@@ -346,8 +360,8 @@ TEST_F(TestVecIndexPriorityQueueManager, double_push_same_ctx)
 //
 // Priority mapping reminder:
 //   manual queue  : threshold=100 (always schedulable)
-//   IVF_LOAD      : P1, threshold=85
-//   MEM_SYNC      : P1, threshold=85
+//   IVF_LOAD      : P1, threshold=90
+//   MEM_SYNC      : P1, threshold=90
 //   FREEZE/MERGE  : P2, threshold=70
 //   HYBRID_EMBED  : P3, threshold=50
 //   OPTIONAL      : P4, threshold=35
@@ -400,14 +414,14 @@ TEST_F(TestVecIndexPriorityQueueManager, pop_order_full_priority_spectrum)
 // Water level formula (integer division, same as production scheduler):
 //   water_level = running_count * 100 / thread_count
 //
-// Thresholds: P4/OPTIONAL=35, P1/IVF_LOAD=85
+// Thresholds: P4/OPTIONAL=35, P1/IVF_LOAD=90
 //
 // Steps:
 //   Phase 1 - Push 12 P4 tasks only. Pop them one-by-one; each popped task
 //             is assumed to start running (running_count++). Once
 //             water_level > 35, no more P4 tasks can be popped.
 //   Phase 2 - Push 1 P1 task. Despite the elevated water level, P1
-//             (threshold=85) is still schedulable. Verify it can be popped.
+//             (threshold=90) is still schedulable. Verify it can be popped.
 //   Verify  - After popping P1, remaining P4 tasks are still blocked.
 // ---------------------------------------------------------------------------
 TEST_F(TestVecIndexPriorityQueueManager, water_level_rise_blocks_low_priority)
@@ -439,13 +453,13 @@ TEST_F(TestVecIndexPriorityQueueManager, water_level_rise_blocks_low_priority)
   ASSERT_GT(running, 0);                                                // at least some popped
   ASSERT_GT(mgr_.get_queued_count(OB_VECTOR_ASYNC_INDEX_OPTINAL), 0);  // some remain blocked
   ASSERT_GT(current_wl, 35);  // P4 is blocked
-  ASSERT_LE(current_wl, 85);  // still below P1 threshold
+  ASSERT_LE(current_wl, 90);  // still below P1 threshold
 
-  // Phase 2: push a P1 task (IVF_LOAD, threshold=85).
+  // Phase 2: push a P1 task (IVF_LOAD, threshold=90).
   FakeCtx p1_ctx;
   ASSERT_EQ(OB_SUCCESS, mgr_.push(&p1_ctx, OB_VECTOR_ASYNC_INDEX_IVF_LOAD));
 
-  // At current_wl (>35, <=85): P4 blocked, P1 schedulable.
+  // At current_wl (>35, <=90): P4 blocked, P1 schedulable.
   out = nullptr;
   ASSERT_EQ(OB_SUCCESS, mgr_.pop(out, current_wl));
   ASSERT_EQ(&p1_ctx, out);  // P1 popped despite elevated water level

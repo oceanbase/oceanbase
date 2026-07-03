@@ -25,8 +25,10 @@ namespace oceanbase
 namespace unittest
 {
 
+// THREAD_FACTOR == 0.5: thread count = floor(cpu * 0.5) clamped to [2, 64].
+
 // ---------------------------------------------------------------------------
-// ADAPT-001: Small tenant (cpu=2) -> floor(2*0.8)=1, clamped to min 2
+// ADAPT-001: Small tenant (cpu=2) -> floor(2*0.5)=1, clamped to min 2
 // ---------------------------------------------------------------------------
 TEST(TestCalcMaxThreadCountByCpu, ADAPT_001_small_tenant_cpu_2)
 {
@@ -34,37 +36,37 @@ TEST(TestCalcMaxThreadCountByCpu, ADAPT_001_small_tenant_cpu_2)
 }
 
 // ---------------------------------------------------------------------------
-// ADAPT-002: Medium tenant (cpu=5) -> floor(5*0.8)=4
+// ADAPT-002: Medium tenant (cpu=5) -> floor(5*0.5)=2
 // ---------------------------------------------------------------------------
 TEST(TestCalcMaxThreadCountByCpu, ADAPT_002_medium_tenant_cpu_5)
 {
-  ASSERT_EQ(4, ObVecIndexAsyncTaskHandler::calc_max_thread_count_by_cpu(5));
+  ASSERT_EQ(2, ObVecIndexAsyncTaskHandler::calc_max_thread_count_by_cpu(5));
 }
 
 // ---------------------------------------------------------------------------
-// ADAPT-003: Large tenant capped (cpu=20) -> floor(20*0.8)=16, clamped to max 12
+// ADAPT-003: Large tenant (cpu=20) -> floor(20*0.5)=10
 // ---------------------------------------------------------------------------
 TEST(TestCalcMaxThreadCountByCpu, ADAPT_003_large_tenant_cpu_20)
 {
-  ASSERT_EQ(12, ObVecIndexAsyncTaskHandler::calc_max_thread_count_by_cpu(20));
+  ASSERT_EQ(10, ObVecIndexAsyncTaskHandler::calc_max_thread_count_by_cpu(20));
 }
 
 // ---------------------------------------------------------------------------
-// ADAPT-004: CPU scale up 2 -> 8
+// ADAPT-004: CPU scale up 2 -> 8 (floor(8*0.5)=4)
 // ---------------------------------------------------------------------------
 TEST(TestCalcMaxThreadCountByCpu, ADAPT_004_scale_up_2_to_8)
 {
-  ASSERT_EQ(2, ObVecIndexAsyncTaskHandler::calc_max_thread_count_by_cpu(2));   // floor(1.6)=1 -> 2
-  ASSERT_EQ(6, ObVecIndexAsyncTaskHandler::calc_max_thread_count_by_cpu(8));   // floor(6.4)=6
+  ASSERT_EQ(2, ObVecIndexAsyncTaskHandler::calc_max_thread_count_by_cpu(2));
+  ASSERT_EQ(4, ObVecIndexAsyncTaskHandler::calc_max_thread_count_by_cpu(8));
 }
 
 // ---------------------------------------------------------------------------
-// ADAPT-005: CPU scale down 8 -> 3
+// ADAPT-005: CPU scale down 8 -> 3 (floor(8*0.5)=4, floor(3*0.5)=1 -> min 2)
 // ---------------------------------------------------------------------------
 TEST(TestCalcMaxThreadCountByCpu, ADAPT_005_scale_down_8_to_3)
 {
-  ASSERT_EQ(6, ObVecIndexAsyncTaskHandler::calc_max_thread_count_by_cpu(8));   // floor(6.4)=6
-  ASSERT_EQ(2, ObVecIndexAsyncTaskHandler::calc_max_thread_count_by_cpu(3));   // floor(2.4)=2
+  ASSERT_EQ(4, ObVecIndexAsyncTaskHandler::calc_max_thread_count_by_cpu(8));
+  ASSERT_EQ(2, ObVecIndexAsyncTaskHandler::calc_max_thread_count_by_cpu(3));
 }
 
 // ---------------------------------------------------------------------------
@@ -75,7 +77,7 @@ TEST(TestCalcMaxThreadCountByCpu, ADAPT_006_idempotency)
   const int64_t r1 = ObVecIndexAsyncTaskHandler::calc_max_thread_count_by_cpu(5);
   const int64_t r2 = ObVecIndexAsyncTaskHandler::calc_max_thread_count_by_cpu(5);
   ASSERT_EQ(r1, r2);
-  ASSERT_EQ(4, r1);
+  ASSERT_EQ(2, r1);
 }
 
 // ---------------------------------------------------------------------------
@@ -83,44 +85,44 @@ TEST(TestCalcMaxThreadCountByCpu, ADAPT_006_idempotency)
 // ---------------------------------------------------------------------------
 TEST(TestCalcMaxThreadCountByCpu, edge_cpu_0)
 {
-  // floor(0*0.8)=0, clamped to min 2
+  // floor(0*0.5)=0, clamped to min 2
   ASSERT_EQ(2, ObVecIndexAsyncTaskHandler::calc_max_thread_count_by_cpu(0));
 }
 
 TEST(TestCalcMaxThreadCountByCpu, edge_cpu_1)
 {
-  // floor(1*0.8)=0, clamped to min 2
+  // floor(1*0.5)=0, clamped to min 2
   ASSERT_EQ(2, ObVecIndexAsyncTaskHandler::calc_max_thread_count_by_cpu(1));
 }
 
 TEST(TestCalcMaxThreadCountByCpu, edge_cpu_3)
 {
-  // floor(3*0.8)=floor(2.4)=2, exactly at min boundary
+  // floor(3*0.5)=1, clamped to min 2
   ASSERT_EQ(2, ObVecIndexAsyncTaskHandler::calc_max_thread_count_by_cpu(3));
 }
 
 TEST(TestCalcMaxThreadCountByCpu, edge_cpu_4)
 {
-  // floor(4*0.8)=floor(3.2)=3, just above min
-  ASSERT_EQ(3, ObVecIndexAsyncTaskHandler::calc_max_thread_count_by_cpu(4));
+  // floor(4*0.5)=2
+  ASSERT_EQ(2, ObVecIndexAsyncTaskHandler::calc_max_thread_count_by_cpu(4));
 }
 
 TEST(TestCalcMaxThreadCountByCpu, edge_cpu_15)
 {
-  // floor(15*0.8)=floor(12.0)=12, exactly at max boundary
-  ASSERT_EQ(12, ObVecIndexAsyncTaskHandler::calc_max_thread_count_by_cpu(15));
+  // floor(15*0.5)=7
+  ASSERT_EQ(7, ObVecIndexAsyncTaskHandler::calc_max_thread_count_by_cpu(15));
 }
 
 TEST(TestCalcMaxThreadCountByCpu, edge_cpu_14)
 {
-  // floor(14*0.8)=floor(11.2)=11, just below max
-  ASSERT_EQ(11, ObVecIndexAsyncTaskHandler::calc_max_thread_count_by_cpu(14));
+  // floor(14*0.5)=7
+  ASSERT_EQ(7, ObVecIndexAsyncTaskHandler::calc_max_thread_count_by_cpu(14));
 }
 
 TEST(TestCalcMaxThreadCountByCpu, edge_cpu_100)
 {
-  // floor(100*0.8)=80, clamped to max 12
-  ASSERT_EQ(12, ObVecIndexAsyncTaskHandler::calc_max_thread_count_by_cpu(100));
+  // floor(100*0.5)=50, below max 64
+  ASSERT_EQ(50, ObVecIndexAsyncTaskHandler::calc_max_thread_count_by_cpu(100));
 }
 
 // ---------------------------------------------------------------------------
@@ -129,7 +131,7 @@ TEST(TestCalcMaxThreadCountByCpu, edge_cpu_100)
 TEST(TestCalcMaxThreadCountByCpu, constants)
 {
   ASSERT_EQ(2, ObVecIndexAsyncTaskHandler::MIN_THREAD_COUNT);
-  ASSERT_EQ(12, ObVecIndexAsyncTaskHandler::MAX_THREAD_COUNT);
+  ASSERT_EQ(64, ObVecIndexAsyncTaskHandler::MAX_THREAD_COUNT);
 }
 
 } // namespace unittest

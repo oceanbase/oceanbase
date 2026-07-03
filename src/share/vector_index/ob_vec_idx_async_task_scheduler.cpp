@@ -877,9 +877,8 @@ void ObVecIdxAsyncTaskScheduler::clean_deprecated_adapters(
     if (OB_SUCC(ret) && !delete_tablet_id_array.empty()) {
       LOG_INFO("try erase complete vector index adapter",
         K(mgr->get_ls_id()), K(delete_tablet_id_array.count()));
-      ObVecIndexAsyncTaskOption &task_opt = mgr->get_async_task_opt();
       for (int64_t i = 0; i < delete_tablet_id_array.count(); ++i) {
-        int tmp_ret = cancel_tablet_async_tasks_(delete_tablet_id_array.at(i), task_opt);
+        int tmp_ret = cancel_tablet_async_tasks_(delete_tablet_id_array.at(i), *mgr);
         if (OB_SUCCESS != tmp_ret) {
           LOG_WARN("fail to cancel async tasks for tablet", KR(tmp_ret), K(delete_tablet_id_array.at(i)));
         }
@@ -961,9 +960,8 @@ void ObVecIdxAsyncTaskScheduler::clean_deprecated_adapters(
     if (OB_SUCC(ret) && !delete_tablet_id_array.empty()) {
       LOG_INFO("try erase partial vector index adapter",
         K(mgr->get_ls_id()), K(delete_tablet_id_array.count()));
-      ObVecIndexAsyncTaskOption &task_opt = mgr->get_async_task_opt();
       for (int64_t i = 0; i < delete_tablet_id_array.count(); ++i) {
-        int tmp_ret = cancel_tablet_async_tasks_(delete_tablet_id_array.at(i), task_opt);
+        int tmp_ret = cancel_tablet_async_tasks_(delete_tablet_id_array.at(i), *mgr);
         if (OB_SUCCESS != tmp_ret) {
           LOG_WARN("fail to cancel async tasks for partial tablet", KR(tmp_ret), K(delete_tablet_id_array.at(i)));
         }
@@ -2021,16 +2019,43 @@ if (OB_ISNULL(service_)
 } else {
   ObLSHandle ls_handle;
   ObPluginVectorIndexMgr *mgr = nullptr;
+  bool tablet_held = false;
   int tmp_ret = find_ls_holding_tablet_(row.tablet_id_, ls_handle);
+  if (OB_SUCCESS == tmp_ret) {
+    tablet_held = true;
+  } else if (OB_ENTRY_NOT_EXIST == tmp_ret
+             && row.task_type_ == ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_MEM_SYNC_TASK) {
+    for (int64_t i = 0; OB_ENTRY_NOT_EXIST == tmp_ret && i < row.task_info_.batch_tablets_.count(); ++i) {
+      ObTabletID batch_tablet_id(row.task_info_.batch_tablets_.at(i));
+      int batch_tmp_ret = find_ls_holding_tablet_(batch_tablet_id, ls_handle);
+      if (OB_SUCCESS != batch_tmp_ret) {
+        if (OB_ENTRY_NOT_EXIST == batch_tmp_ret) {
+          tmp_ret = batch_tmp_ret;
+        } else {
+          tmp_ret = batch_tmp_ret;
+          LOG_WARN("fail to locate batch tablet holding ls, skip orphan self task check",
+                   KR(tmp_ret), K(row), K(batch_tablet_id));
+        }
+      } else {
+        tmp_ret = OB_SUCCESS;
+        tablet_held = true;
+        LOG_TRACE("batch tablet is still held by this observer during orphan self task check",
+                  K(row), K(batch_tablet_id));
+      }
+    }
+  }
   if (OB_ENTRY_NOT_EXIST == tmp_ret) {
     alive = false;
     orphan_ret_code = OB_TABLET_NOT_EXIST;
-    LOG_INFO("tablet is not held by this observer, treat self task row as orphan",
+    LOG_INFO("all task tablets are not held by this observer, treat self task row as orphan",
              KR(tmp_ret), K(row));
   } else if (OB_SUCCESS != tmp_ret) {
     alive = true;
     LOG_WARN("fail to locate ls holding tablet, skip orphan self task check",
              KR(tmp_ret), K(row));
+  } else if (!tablet_held) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected tablet held state while checking orphan self task", KR(ret), K(row));
   } else if (OB_ISNULL(ls_handle.get_ls())) {
     alive = true;
     LOG_WARN("ls is null while checking orphan self task, skip", K(row));
@@ -2500,7 +2525,11 @@ int ObVecIdxAsyncTaskScheduler::check_and_schedule_leader_ls_tasks(
                   ObVecIndexAsyncTaskType task_type =
                       static_cast<ObVecIndexAsyncTaskType>(task_ctx->task_status_.task_type_);
                   int64_t tablet_id_val = task_ctx->task_status_.tablet_id_.id();
-                  if (is_task_disabled_(task_type, tablet_id_val)) {
+                  // Mem sync is aggregated; skip the representative-keyed disable gate here and
+                  // handle disable per-tablet in ObVecMemSyncTask::process_one, so one disabled
+                  // tablet does not cancel the whole batch.
+                  if (ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_MEM_SYNC_TASK != task_type
+                      && is_task_disabled_(task_type, tablet_id_val)) {
                     task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH;
                     task_ctx->task_status_.ret_code_ = OB_CANCELED;
                     task_ctx->task_status_.all_finished_ = true;
@@ -2723,7 +2752,11 @@ int ObVecIdxAsyncTaskScheduler::check_and_schedule_follower_ls_tasks(
                   ObVecIndexAsyncTaskType task_type =
                       static_cast<ObVecIndexAsyncTaskType>(task_ctx->task_status_.task_type_);
                   int64_t tablet_id_val = task_ctx->task_status_.tablet_id_.id();
-                  if (is_task_disabled_(task_type, tablet_id_val)) {
+                  // Mem sync is aggregated; skip the representative-keyed disable gate here and
+                  // handle disable per-tablet in ObVecMemSyncTask::process_one, so one disabled
+                  // tablet does not cancel the whole batch.
+                  if (ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_MEM_SYNC_TASK != task_type
+                      && is_task_disabled_(task_type, tablet_id_val)) {
                     task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH;
                     task_ctx->task_status_.ret_code_ = OB_CANCELED;
                     task_ctx->task_status_.all_finished_ = true;
@@ -3067,24 +3100,32 @@ int ObVecIdxAsyncTaskScheduler::pop_tasks_to_work()
         continue;
       }
 
-      // Check disable list for tasks already in queue before config was set
+      // Check disable list for tasks already in queue before config was set.
+      // Mem sync is aggregated (one ctx covers many tablets), so a disable gate keyed on the
+      // representative tablet would wrongly cancel the WHOLE batch. Mem sync therefore skips
+      // this gate and handles disable per-tablet inside ObVecMemSyncTask::process_one (a
+      // disabled tablet is individually skipped, the rest of the batch still syncs).
       {
         ObVecIndexAsyncTaskType pop_task_type =
             static_cast<ObVecIndexAsyncTaskType>(task_ctx->task_status_.task_type_);
         int64_t pop_tablet_id = task_ctx->task_status_.tablet_id_.id();
-        if (is_task_disabled_(pop_task_type, pop_tablet_id)) {
+        if (ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_MEM_SYNC_TASK != pop_task_type
+            && is_task_disabled_(pop_task_type, pop_tablet_id)) {
           round_stat.skip_disabled_cnt_++;
-          common::ObSpinLockGuard ctx_guard(task_ctx->lock_);
-          task_ctx->in_queue_ = false;
-          task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH;
-          task_ctx->task_status_.ret_code_ = OB_CANCELED;
-          task_ctx->task_status_.all_finished_ = true;
-          int tmp_ret = OB_SUCCESS;
-          if (OB_TMP_FAIL(task_ctx->set_err_msg(ObString(VEC_TASK_CANCEL_MSG_DISABLED)))) {
-            LOG_WARN("fail to set disabled cancel err msg", KR(tmp_ret), KPC(task_ctx));
+          {
+            common::ObSpinLockGuard ctx_guard(task_ctx->lock_);
+            task_ctx->in_queue_ = false;
+            task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH;
+            task_ctx->task_status_.ret_code_ = OB_CANCELED;
+            task_ctx->task_status_.all_finished_ = true;
+            int tmp_ret = OB_SUCCESS;
+            if (OB_TMP_FAIL(task_ctx->set_err_msg(ObString(VEC_TASK_CANCEL_MSG_DISABLED)))) {
+              LOG_WARN("fail to set disabled cancel err msg", KR(tmp_ret), KPC(task_ctx));
+            }
           }
           LOG_INFO("[VEC_IDX_TASK_DISABLED] queued task disabled, finishing with OB_CANCELED",
                    K_(tenant_id), K(ls_id), K(pop_task_type), K(pop_tablet_id), KPC(task_ctx));
+          int tmp_ret = OB_SUCCESS;
           if (OB_TMP_FAIL(ObVecIndexAsyncTaskUtil::update_status_and_ret_code(task_ctx))) {
             LOG_WARN("fail to update inner table for disabled queued task", KR(tmp_ret), KPC(task_ctx));
           }
@@ -3101,14 +3142,16 @@ int ObVecIdxAsyncTaskScheduler::pop_tasks_to_work()
         }
         if (is_conflict) {
           round_stat.skip_ddl_conflict_cnt_++;
-          common::ObSpinLockGuard ctx_guard(task_ctx->lock_);
-          task_ctx->in_queue_ = false;
-          task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH;
-          task_ctx->task_status_.ret_code_ = OB_CANCELED;
-          task_ctx->task_status_.all_finished_ = true;
-          (void)task_ctx->set_err_msg(ObString(VEC_TASK_CANCEL_MSG_DDL_CONFLICT));
-          LOG_INFO("[VEC_ASYNC_TASK] queued task cancelled due to DDL conflict",
-                   K_(tenant_id), K(ls_id), KPC(task_ctx));
+          {
+            common::ObSpinLockGuard ctx_guard(task_ctx->lock_);
+            task_ctx->in_queue_ = false;
+            task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH;
+            task_ctx->task_status_.ret_code_ = OB_CANCELED;
+            task_ctx->task_status_.all_finished_ = true;
+            (void)task_ctx->set_err_msg(ObString(VEC_TASK_CANCEL_MSG_DDL_CONFLICT));
+            LOG_INFO("[VEC_ASYNC_TASK] queued task cancelled due to DDL conflict",
+                     K_(tenant_id), K(ls_id), KPC(task_ctx));
+          }
           if (OB_TMP_FAIL(ObVecIndexAsyncTaskUtil::update_status_and_ret_code(task_ctx))) {
             LOG_WARN("fail to update inner table for DDL-conflicted task", KR(tmp_ret), KPC(task_ctx));
           }
@@ -3464,27 +3507,68 @@ int ObVecIdxAsyncTaskScheduler::cancel_ls_follower_tasks(const share::ObLSID &ls
 }
 
 /**
- * @brief Cancel all async task ctxs whose tablet_id matches the given one.
+ * @brief Cancel async task ctxs whose tablet_id matches the given one.
  *
- * Performs cancellation directly inside foreach_refactored callback where the
- * hash bucket read lock is held, preventing concurrent erase+free (UAF).
- * Aggregates the first non-SUCCESS failure into ret so callers can react;
- * per-ctx failures are logged but do not abort the sweep.
+ * Mem sync aggregated ctxs are located through mem_sync_in_flight_map_ and
+ * marked per-tablet under task_ctx_lock_ + ctx->lock_, so other tablets in the
+ * same batch can keep syncing. Other task types are cancelled inside
+ * foreach_refactored callback where the hash bucket read lock is held,
+ * preventing concurrent erase+free (UAF). Aggregates the first non-SUCCESS
+ * failure into ret so callers can react; per-ctx failures are logged but do not
+ * abort the sweep.
  */
 int ObVecIdxAsyncTaskScheduler::cancel_tablet_async_tasks_(
     const common::ObTabletID &tablet_id,
-    ObVecIndexAsyncTaskOption &task_opt)
+    ObPluginVectorIndexMgr &mgr)
 {
   int ret = OB_SUCCESS;
-  ObAsyncTaskCancelByTabletFunc cancel_func(tablet_id);
-  if (OB_FAIL(task_opt.get_async_task_map().foreach_refactored(cancel_func))) {
-    LOG_WARN("fail to cancel tablet tasks in async task map", KR(ret), K(tablet_id));
-  } else if (OB_SUCCESS != cancel_func.get_first_fail_ret()) {
-    ret = cancel_func.get_first_fail_ret();
+  ObVecIndexAsyncTaskOption &task_opt = mgr.get_async_task_opt();
+  ObTabletID representative_tablet_id;
+  if (!tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tablet id", KR(ret), K(tablet_id));
+  } else if (OB_FAIL(task_opt.get_mem_sync_representative(tablet_id, representative_tablet_id))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to get mem sync representative", KR(ret), K(tablet_id));
+    }
+  } else {
+    ObVecIndexAsyncTaskKey mem_sync_key(
+        representative_tablet_id,
+        ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_MEM_SYNC_TASK);
+    ObVecIndexAsyncTaskCtx *task_ctx = nullptr;
+    common::ObSpinLockGuard task_ctx_map_guard(mgr.task_ctx_lock_);
+    if (OB_FAIL(task_opt.get_async_task_map().get_refactored(mem_sync_key, task_ctx))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        // In-flight map can lag best-effort cleanup. Treat as no mem sync ctx and
+        // continue to ordinary task cancellation below.
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to get mem sync task ctx", KR(ret), K(tablet_id), K(mem_sync_key));
+      }
+    } else if (OB_ISNULL(task_ctx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null mem sync task ctx", KR(ret), K(tablet_id), K(mem_sync_key));
+    } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::mark_mem_sync_tablet_cancel(task_ctx, tablet_id))) {
+      LOG_WARN("fail to mark mem sync tablet cancel", KR(ret), K(tablet_id), K(mem_sync_key), KPC(task_ctx));
+    } else {
+      LOG_INFO("marked mem sync tablet cancel by tablet", K(tablet_id), K(representative_tablet_id));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObAsyncTaskCancelByTabletFunc cancel_func(tablet_id);
+    if (OB_FAIL(task_opt.get_async_task_map().foreach_refactored(cancel_func))) {
+      LOG_WARN("fail to cancel tablet tasks in async task map", KR(ret), K(tablet_id));
+    } else if (OB_SUCCESS != cancel_func.get_first_fail_ret()) {
+      ret = cancel_func.get_first_fail_ret();
+    }
   }
   return ret;
 }
 
+// now mem sync task does not support truncate_version, so this function is not used.
+// if need to support truncate_version for mem sync task, please implement like ObVecIdxAsyncTaskScheduler::cancel_tablet_async_tasks_
 int ObVecIdxAsyncTaskScheduler::cancel_tablet_async_tasks_for_truncated_(
     const common::ObTabletID &tablet_id,
     const int64_t truncate_version,
@@ -3698,12 +3782,15 @@ void ObVecIdxAsyncTaskScheduler::refresh_disable_list_config_()
   // Commit: only update member variables if parsing fully succeeded
   if (OB_SUCC(ret)) {
     const int64_t disable_all_cnt = static_cast<int64_t>(OB_VECTOR_ASYNC_TASK_TYPE_INVALID);
-    MEMCPY(disabled_all_,
-           tmp_disabled_all,
-           disable_all_cnt * static_cast<int64_t>(sizeof(bool)));
-    MEMCPY(disable_entries_, tmp_entries, sizeof(DisableEntry) * tmp_count);
-    disable_entry_count_ = tmp_count;
-    last_disable_list_hash_ = new_hash;
+    {
+      common::ObSpinLockGuard guard(disable_list_lock_);
+      MEMCPY(disabled_all_,
+             tmp_disabled_all,
+             disable_all_cnt * static_cast<int64_t>(sizeof(bool)));
+      MEMCPY(disable_entries_, tmp_entries, sizeof(DisableEntry) * tmp_count);
+      disable_entry_count_ = tmp_count;
+      last_disable_list_hash_ = new_hash;
+    }
     // Warn if ALL task types are disabled via wildcard
     bool all_types_disabled = (disable_all_cnt > 0);
     for (int64_t i = 0; i < disable_all_cnt && all_types_disabled; ++i) {
@@ -3722,6 +3809,7 @@ void ObVecIdxAsyncTaskScheduler::refresh_disable_list_config_()
 bool ObVecIdxAsyncTaskScheduler::is_task_disabled_(
     ObVecIndexAsyncTaskType task_type, int64_t tablet_id) const
 {
+  common::ObSpinLockGuard guard(disable_list_lock_);
   if (OB_ISNULL(disabled_all_) || OB_ISNULL(disable_entries_)) {
     return false;
   }

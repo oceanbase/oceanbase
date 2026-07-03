@@ -46,8 +46,9 @@ enum ObVecIndexTaskPriority {
 // P5 is reserved for lower tiers (20% ≈ ~2-thread equivalent on a 12-thread pool).
 extern const int64_t WATER_LEVEL_THRESHOLD[PRIORITY_MAX];
 
-// Maximum number of tasks allowed in each per-priority queue.
-// Exceeding this causes push() to return OB_SIZE_OVERFLOW.
+// Default maximum number of tasks allowed in each queue.
+// Some task types may override this in get_task_type_queue_max_size().
+// Exceeding the effective max size causes push() to return OB_SIZE_OVERFLOW.
 extern const int64_t PRIORITY_QUEUE_MAX_SIZE[PRIORITY_MAX];
 
 // Map a task type + trigger type to a scheduling priority.

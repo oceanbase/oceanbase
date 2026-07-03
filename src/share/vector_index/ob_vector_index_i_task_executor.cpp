@@ -267,29 +267,42 @@ int ObVecITaskExecutor::start_task()
         switch (task_ctx->task_status_.status_) {
           case ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE:
           {
-            common::ObSpinLockGuard ctx_guard(task_ctx->lock_);
             ObVecIndexAsyncTaskHandler &task_handle = vector_index_service_->get_vec_async_task_handle();
             int tmp_ret = OB_SUCCESS;
             if (is_conflict) {
-              task_ctx->task_status_.status_   = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH;
-              task_ctx->task_status_.ret_code_ = OB_CANCELED;
-              LOG_INFO("cancel hnsw async PREPARE task due to DDL conflict", KPC(task_ctx));
+              {
+                common::ObSpinLockGuard ctx_guard(task_ctx->lock_);
+                task_ctx->task_status_.status_   = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH;
+                task_ctx->task_status_.ret_code_ = OB_CANCELED;
+                LOG_INFO("cancel hnsw async PREPARE task due to DDL conflict", KPC(task_ctx));
+              }
               if (OB_FAIL(ObVecIndexAsyncTaskUtil::update_status_and_ret_code(task_ctx))) {
                 LOG_WARN("fail to update status for conflicted PREPARE task",
                          K(ret), K(tenant_id_), K(ls->get_ls_id()), KPC(task_ctx));
               } else if (OB_FAIL(task_ctx_array.push_back(task_ctx))) {
                 LOG_WARN("fail to push back task_ctx_array", K(ret), K(task_ctx));
               }
-            } else if (task_ctx->in_thread_pool_) {
-              LOG_DEBUG("task is in thread pool already", KPC(task_ctx));
-            } else if (OB_FAIL(task_handle.push_task(tenant_id_, ls->get_ls_id(), task_ctx, task_opt.get_allocator()))) {
-              LOG_WARN("fail to push task to thread pool", K(ret), K(tenant_id_), K(ls->get_ls_id()), K(*task_ctx));
-            } else if (FALSE_IT(task_ctx->in_thread_pool_ = true)) {
-            } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::update_status_and_ret_code(task_ctx))) {
-              LOG_WARN("fail to update task status to inner table",
-                K(ret), K(tenant_id_), K(ls->get_ls_id()), K(*task_ctx));
-            } else if (task_ctx->sys_task_id_.is_invalid() && OB_TMP_FAIL(ObVecIndexAsyncTaskUtil::add_sys_task(task_ctx))) {
-              LOG_WARN("add sys task failed", K(tmp_ret));
+            } else {
+              bool need_update = false;
+              {
+                common::ObSpinLockGuard ctx_guard(task_ctx->lock_);
+                if (task_ctx->in_thread_pool_) {
+                  LOG_DEBUG("task is in thread pool already", KPC(task_ctx));
+                } else if (OB_FAIL(task_handle.push_task(tenant_id_, ls->get_ls_id(), task_ctx, task_opt.get_allocator()))) {
+                  LOG_WARN("fail to push task to thread pool", K(ret), K(tenant_id_), K(ls->get_ls_id()), K(*task_ctx));
+                } else {
+                  task_ctx->in_thread_pool_ = true;
+                  need_update = true;
+                }
+              }
+              if (OB_SUCC(ret) && need_update) {
+                if (OB_FAIL(ObVecIndexAsyncTaskUtil::update_status_and_ret_code(task_ctx))) {
+                  LOG_WARN("fail to update task status to inner table",
+                    K(ret), K(tenant_id_), K(ls->get_ls_id()), K(*task_ctx));
+                } else if (task_ctx->sys_task_id_.is_invalid() && OB_TMP_FAIL(ObVecIndexAsyncTaskUtil::add_sys_task(task_ctx))) {
+                  LOG_WARN("add sys task failed", K(tmp_ret));
+                }
+              }
             }
             break;
           }
@@ -310,18 +323,26 @@ int ObVecITaskExecutor::start_task()
                          K(ret), K(tenant_id_), K(ls->get_ls_id()), KPC(task_ctx));
               }
             } else {
-              common::ObSpinLockGuard ctx_guard(task_ctx->lock_);
               ObVecIndexAsyncTaskHandler &task_handle = vector_index_service_->get_vec_async_task_handle();
-              if (task_ctx->in_thread_pool_) {
-                LOG_DEBUG("task is in thread pool already", KPC(task_ctx));
-              } else if (OB_FAIL(task_handle.push_task(tenant_id_, ls->get_ls_id(), task_ctx, task_opt.get_allocator()))) {
-                LOG_WARN("fail to push task to thread pool", K(ret), K(tenant_id_), K(ls->get_ls_id()), K(*task_ctx));
-              } else if (FALSE_IT(task_ctx->in_thread_pool_ = true)) {
-              } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::update_status_and_ret_code(task_ctx))) {
-                LOG_WARN("fail to update task status to inner table",
-                         K(ret), K(tenant_id_), K(ls->get_ls_id()), K(*task_ctx));
-              } else if (task_ctx->sys_task_id_.is_invalid() && OB_TMP_FAIL(ObVecIndexAsyncTaskUtil::add_sys_task(task_ctx))) {
-                LOG_WARN("add sys task failed", K(tmp_ret));
+              bool need_update = false;
+              {
+                common::ObSpinLockGuard ctx_guard(task_ctx->lock_);
+                if (task_ctx->in_thread_pool_) {
+                  LOG_DEBUG("task is in thread pool already", KPC(task_ctx));
+                } else if (OB_FAIL(task_handle.push_task(tenant_id_, ls->get_ls_id(), task_ctx, task_opt.get_allocator()))) {
+                  LOG_WARN("fail to push task to thread pool", K(ret), K(tenant_id_), K(ls->get_ls_id()), K(*task_ctx));
+                } else {
+                  task_ctx->in_thread_pool_ = true;
+                  need_update = true;
+                }
+              }
+              if (OB_SUCC(ret) && need_update) {
+                if (OB_FAIL(ObVecIndexAsyncTaskUtil::update_status_and_ret_code(task_ctx))) {
+                  LOG_WARN("fail to update task status to inner table",
+                           K(ret), K(tenant_id_), K(ls->get_ls_id()), K(*task_ctx));
+                } else if (task_ctx->sys_task_id_.is_invalid() && OB_TMP_FAIL(ObVecIndexAsyncTaskUtil::add_sys_task(task_ctx))) {
+                  LOG_WARN("add sys task failed", K(tmp_ret));
+                }
               }
             }
             break;
@@ -329,19 +350,27 @@ int ObVecITaskExecutor::start_task()
           case ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_EXCHANGE:
           case ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_CLEAN:
           {
-            common::ObSpinLockGuard ctx_guard(task_ctx->lock_);
             ObVecIndexAsyncTaskHandler &task_handle = vector_index_service_->get_vec_async_task_handle();
             int tmp_ret = OB_SUCCESS;
-            if (task_ctx->in_thread_pool_) {
-              LOG_DEBUG("task is in thread pool already", KPC(task_ctx));
-            } else if (OB_FAIL(task_handle.push_task(tenant_id_, ls->get_ls_id(), task_ctx, task_opt.get_allocator()))) {
-              LOG_WARN("fail to push task to thread pool", K(ret), K(tenant_id_), K(ls->get_ls_id()), K(*task_ctx));
-            } else if (FALSE_IT(task_ctx->in_thread_pool_ = true)) {
-            } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::update_status_and_ret_code(task_ctx))) {
-              LOG_WARN("fail to update task status to inner table",
-                K(ret), K(tenant_id_), K(ls->get_ls_id()), K(*task_ctx));
-            } else if (task_ctx->sys_task_id_.is_invalid() && OB_TMP_FAIL(ObVecIndexAsyncTaskUtil::add_sys_task(task_ctx))) {
-              LOG_WARN("add sys task failed", K(tmp_ret));
+            bool need_update = false;
+            {
+              common::ObSpinLockGuard ctx_guard(task_ctx->lock_);
+              if (task_ctx->in_thread_pool_) {
+                LOG_DEBUG("task is in thread pool already", KPC(task_ctx));
+              } else if (OB_FAIL(task_handle.push_task(tenant_id_, ls->get_ls_id(), task_ctx, task_opt.get_allocator()))) {
+                LOG_WARN("fail to push task to thread pool", K(ret), K(tenant_id_), K(ls->get_ls_id()), K(*task_ctx));
+              } else {
+                task_ctx->in_thread_pool_ = true;
+                need_update = true;
+              }
+            }
+            if (OB_SUCC(ret) && need_update) {
+              if (OB_FAIL(ObVecIndexAsyncTaskUtil::update_status_and_ret_code(task_ctx))) {
+                LOG_WARN("fail to update task status to inner table",
+                  K(ret), K(tenant_id_), K(ls->get_ls_id()), K(*task_ctx));
+              } else if (task_ctx->sys_task_id_.is_invalid() && OB_TMP_FAIL(ObVecIndexAsyncTaskUtil::add_sys_task(task_ctx))) {
+                LOG_WARN("add sys task failed", K(tmp_ret));
+              }
             }
             break;
           }

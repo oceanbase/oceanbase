@@ -22,8 +22,16 @@ namespace oceanbase
 namespace share
 {
 
-const int64_t WATER_LEVEL_THRESHOLD[PRIORITY_MAX] = {100, 85, 70, 50, 35, 20};
-const int64_t PRIORITY_QUEUE_MAX_SIZE[PRIORITY_MAX] = {512, 256, 256, 256, 256, 256};
+const int64_t WATER_LEVEL_THRESHOLD[PRIORITY_MAX] = {100, 90, 70, 50, 35, 20};
+const int64_t DEFAULT_TASK_TYPE_QUEUE_MAX_SIZE = 2048;
+const int64_t MEM_SYNC_TASK_QUEUE_MAX_SIZE = 10000;
+const int64_t PRIORITY_QUEUE_MAX_SIZE[PRIORITY_MAX] = {
+    DEFAULT_TASK_TYPE_QUEUE_MAX_SIZE,
+    DEFAULT_TASK_TYPE_QUEUE_MAX_SIZE,
+    DEFAULT_TASK_TYPE_QUEUE_MAX_SIZE,
+    DEFAULT_TASK_TYPE_QUEUE_MAX_SIZE,
+    DEFAULT_TASK_TYPE_QUEUE_MAX_SIZE,
+    DEFAULT_TASK_TYPE_QUEUE_MAX_SIZE};
 
 void ObVecIndexQueuePopDiag::reset()
 {
@@ -185,11 +193,16 @@ int64_t ObVecIndexPriorityQueueManager::get_default_water_level_threshold(ObVecI
 
 int64_t ObVecIndexPriorityQueueManager::get_task_type_queue_max_size(ObVecIndexAsyncTaskType type)
 {
-  ObVecIndexTaskPriority p = get_auto_priority_by_task_type(type);
-  if (p >= PRIORITY_P0 && p < PRIORITY_MAX) {
-    return PRIORITY_QUEUE_MAX_SIZE[p];
+  int64_t max_size = 0;
+  if (OB_VECTOR_ASYNC_MEM_SYNC_TASK == type) {
+    max_size = MEM_SYNC_TASK_QUEUE_MAX_SIZE;
+  } else {
+    ObVecIndexTaskPriority p = get_auto_priority_by_task_type(type);
+    if (p >= PRIORITY_P0 && p < PRIORITY_MAX) {
+      max_size = DEFAULT_TASK_TYPE_QUEUE_MAX_SIZE;
+    }
   }
-  return 0;
+  return max_size;
 }
 
 void ObVecIndexPriorityQueueManager::build_priority_to_task_types_map()
@@ -466,40 +479,46 @@ int ObVecIndexPriorityQueueManager::pop(ObVecIndexAsyncTaskCtx *&task_ctx,
 
 // Recompute effective water-level thresholds for a given thread-pool size.
 //
-// Thread pool sizing (calc_max_thread_count = clamp(floor(cpu * 0.8), 2, 12)):
+// Thread pool sizing (calc_max_thread_count = clamp(floor(cpu * 0.5), 2, 64)):
 //
 //   tenant CPU | max_threads
 //   -----------+------------
-//         1~2  |  2         (MIN_THREAD_COUNT floor)
-//         3    |  2         (floor(3*0.8)=2)
-//         4    |  3
-//         5    |  4
-//         6~7  |  4~5
-//         8~9  |  6~7
-//        10~14 |  8~11
-//          15+ | 12         (MAX_THREAD_COUNT cap)
+//         0~5  |  2         (MIN_THREAD_COUNT floor)
+//       6~7    |  3
+//       8~9    |  4
+//      10~11   |  5
+//      12~13   |  6
+//      16~17   |  8
+//      24~25   | 12
+//      32~33   | 16
+//      64~65   | 32
+//     126~127  | 63
+//       128+   | 64         (MAX_THREAD_COUNT cap)
 //
 // Unconfigured task types use priority defaults:
 //   allowed concurrent slots = max(min_slots[p], floor(max_threads * default_pct[p] / 100))
 // Explicitly configured task types use user water level with only min_slots fallback:
 //   effective threshold = max(user_pct, min_slots[p] * 100 / max_threads)
 //
-//   Priority | pct  | min_slots | 2 thr | 3 thr | 4 thr | 6 thr | 8 thr | 12 thr
-//   ---------+------+-----------+-------+-------+-------+-------+-------+-------
-//   P0 100%  |  100 |    2      |  *2   |   3   |   4   |   6   |   8   |  12
-//   P1  85%  |   85 |    2      |  *2   |  *2   |   3   |   5   |   6   |  10
-//   P2  70%  |   70 |    1      |   1   |   2   |   2   |   4   |   5   |   8
-//   P3  50%  |   50 |    1      |   1   |   1   |   2   |   3   |   4   |   6
-//   P4  35%  |   35 |    1      |  *1   |  *1   |   1   |   2   |   2   |   4
-//   P5  20%  |   20 |    0      |   0   |   0   |   0   |   1   |   1   |   2
+//   Priority | pct  | min_slots | 2 thr | 4 thr | 8 thr | 12 thr | 16 thr | 32 thr | 64 thr
+//   ---------+------+-----------+-------+-------+-------+--------+--------+--------+-------
+//   P0 100%  |  100 |    2      |   2   |   4   |   8   |   12   |   16   |   32   |  64
+//   P1  90%  |   90 |    2      |  *2   |   3   |   7   |   10   |   14   |   28   |  57
+//   P2  70%  |   70 |    1      |   1   |   2   |   5   |    8   |   11   |   22   |  44
+//   P3  50%  |   50 |    1      |   1   |   2   |   4   |    6   |    8   |   16   |  32
+//   P4  35%  |   35 |    1      |  *1   |   1   |   2   |    4   |    5   |   11   |  22
+//   P5  20%  |   20 |    0      |   0   |   0   |   1   |    2   |    3   |    6   |  12
 //
 //   (*) entries where min_slots override the percentage floor
 //
 // Key behaviors for small tenants:
-//   - 2-thread pool: P5 has 0 slots, meaning it only runs when running_count=0 (idle).
+//   - 0~5 CPU tenant: max_threads is floored to 2. P5 has 0 slots, meaning it
+//     only runs when running_count=0 (idle).
 //     P0/P1 are guaranteed 2 slots (= all threads), P4 is guaranteed 1 slot via min_slots.
-//   - 4-thread pool: all priorities except P5 have at least 1 slot; real differentiation exists.
-//   - 12-thread pool: identical to original static WATER_LEVEL_THRESHOLD behavior.
+//   - 8~9 CPU tenant: max_threads is 4. All priorities except P5 have at least
+//     1 slot; real differentiation exists.
+//   - Larger pools follow default pct closely; integer flooring may make the
+//     effective threshold slightly lower than WATER_LEVEL_THRESHOLD.
 void ObVecIndexPriorityQueueManager::update_thread_limit(int64_t max_threads, bool force /*= false*/)
 {
   if (max_threads <= 0) {

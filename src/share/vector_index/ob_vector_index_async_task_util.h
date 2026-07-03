@@ -203,6 +203,23 @@ struct ObVecIndexTaskInfo
   int64_t vector_mem_limit_;      // total vector memory limit
   int64_t task_estimate_memory_;    // estimated memory for current task
   int64_t tasks_total_reserved_memory_;         // reserved memory (estimated - actual for other tasks)
+  // mem sync batch fields: a single mem sync task may aggregate multiple tablets
+  // of the same ls. batch_tablets_ holds the EXTRA tablets aggregated besides the
+  // representative one (task_status_.tablet_id_).
+  // batch_ret_codes_ and batch_mem_estimates_ are indexed by the FULL batch order
+  // [representative, batch_tablets_...] (i.e. length == 1 + batch_tablets_.count()),
+  // NOT by batch_tablets_ alone. batch_ret_codes_ is the per-tablet ret_code (used for
+  // retry-skip of already-succeeded tablets within the same process); batch_mem_estimates_
+  // is the per-tablet memory estimate (statistics only -- mem sync is not memory-limited,
+  // but its task_estimate_memory_ total IS read by other tasks' admission check). Only
+  // batch_tablets_ is parsed back from the inner table for orphan checks; ret/mem/cancel
+  // arrays remain in-memory only. See ob_vector_mem_sync_executor.cpp.
+  common::ObSEArray<uint64_t, 4> batch_tablets_;
+  common::ObSEArray<int64_t, 4> batch_ret_codes_;
+  common::ObSEArray<int64_t, 4> batch_mem_estimates_;
+  // In-memory only: tablets in an aggregated mem sync ctx that should be cancelled
+  // individually. Protected by ObVecIndexAsyncTaskCtx::lock_.
+  common::ObSEArray<uint64_t, 4> batch_cancel_tablets_;
 
   ObVecIndexTaskInfo()
       : merge_segs_(),
@@ -211,7 +228,11 @@ struct ObVecIndexTaskInfo
         vector_mem_hold_(0),
         vector_mem_limit_(0),
         task_estimate_memory_(0),
-        tasks_total_reserved_memory_(0) {}
+        tasks_total_reserved_memory_(0),
+        batch_tablets_(),
+        batch_ret_codes_(),
+        batch_mem_estimates_(),
+        batch_cancel_tablets_() {}
   void reset()
   {
     merge_segs_.reset();
@@ -221,10 +242,16 @@ struct ObVecIndexTaskInfo
     vector_mem_limit_ = 0;
     task_estimate_memory_ = 0;
     tasks_total_reserved_memory_ = 0;
+    batch_tablets_.reset();
+    batch_ret_codes_.reset();
+    batch_mem_estimates_.reset();
+    batch_cancel_tablets_.reset();
   }
   TO_STRING_KV(K_(merge_segs), K_(res_segs), K_(task_memory_limited),
                K_(vector_mem_hold), K_(vector_mem_limit),
-               K_(task_estimate_memory), K_(tasks_total_reserved_memory));
+               K_(task_estimate_memory), K_(tasks_total_reserved_memory),
+               K_(batch_tablets), K_(batch_ret_codes), K_(batch_mem_estimates),
+               K_(batch_cancel_tablets));
 };
 
 struct ObVecIndexTaskStatus
@@ -535,6 +562,7 @@ class ObVecIndexAsyncTaskOption
 public:
   ObVecIndexAsyncTaskOption(uint64_t tenant_id) :
     mem_attr_(tenant_id, "VecIdxATaskCtx"),
+    in_flight_lock_(common::ObLatchIds::OB_VEC_INDEX_ASYNC_TASK_CTX_LOCK),
     allocator_(tenant_id),
     ls_task_cnt_(0),
     ls_queued_task_cnt_(0),
@@ -550,6 +578,29 @@ public:
   int add_task_ctx(ObTabletID &tablet_id, ObVecIndexAsyncTaskCtx *task, bool &inc_new_task);
   int del_task_ctx(const common::ObTabletID &tablet_id, uint32_t task_type);
   int is_task_ctx_exist(const common::ObTabletID &tablet_id, uint32_t task_type, bool &is_exist);
+
+  // ---- mem sync in-flight tablet map ----
+  // Maps any in-flight mem sync tablet_id -> the representative tablet_id of the batch
+  // ctx it belongs to. Serves two purposes:
+  //   (1) cross-round dedup: load_task skips tablets already in flight (avoids a tablet
+  //       appearing in two overlapping batches, which would break the "one-row-per-batch"
+  //       semantic). See R1 in the design.
+  //   (2) cancel-by-tablet O(1) locate: given any tablet_id, find the representative
+  //       tablet_id, then locate the aggregated ctx in task_ctx_map_ by representative key.
+  // Lifecycle is kept in lockstep with task_ctx_map_: entries are added when a batch ctx
+  // is registered (add_mem_sync_in_flight), and removed in clear_task_ctx by iterating the
+  // ctx's batch_tablets_ (erase_mem_sync_in_flight).
+  // Returns true via out param if the tablet is already in flight (caller should skip it).
+  int is_mem_sync_tablet_in_flight(const common::ObTabletID &tablet_id, bool &is_in_flight);
+  // Register all tablets of a batch (representative + extras), all pointing to representative.
+  int add_mem_sync_in_flight(const common::ObTabletID &representative_tablet_id,
+                             const common::ObIArray<uint64_t> &batch_tablets);
+  // Remove all tablets of a batch from the in-flight map (representative + extras).
+  int erase_mem_sync_in_flight(const common::ObTabletID &representative_tablet_id,
+                               const common::ObIArray<uint64_t> &batch_tablets);
+  // Given any tablet_id, return the representative tablet_id of its in-flight batch.
+  int get_mem_sync_representative(const common::ObTabletID &tablet_id,
+                                  common::ObTabletID &representative_tablet_id);
   void inc_ls_task_cnt() { ATOMIC_INC(&ls_task_cnt_); }
   void dec_ls_task_cnt() { ATOMIC_DEC(&ls_task_cnt_); }
   int64_t get_ls_processing_task_cnt() const { return ATOMIC_LOAD(&ls_task_cnt_); }
@@ -572,6 +623,10 @@ public:
 private:
   ObMemAttr mem_attr_;
   VecIndexAsyncTaskMap task_ctx_map_;
+  // mem sync in-flight tablet map: tablet_id -> representative tablet_id. Protected by
+  // in_flight_lock_. Only used by mem sync; other task types never touch it.
+  common::hash::ObHashMap<common::ObTabletID, common::ObTabletID> mem_sync_in_flight_map_;
+  common::ObSpinLock in_flight_lock_;
   common::ObFIFOAllocator allocator_;
   volatile int64_t ls_task_cnt_;
   volatile int64_t ls_queued_task_cnt_;
@@ -610,8 +665,8 @@ public:
   // Absolute lower bound: always keep at least 2 threads so P0/P1 tasks can make progress
   // even on the smallest tenant.
   static const int64_t MIN_THREAD_COUNT = 2;
-  // Absolute upper bound kept at 12 for large tenants (>=15 CPU).
-  static const int64_t MAX_THREAD_COUNT = 12;
+  // Absolute upper bound keeps large tenants from creating too many background workers.
+  static const int64_t MAX_THREAD_COUNT = 64;
   // Pure calculation: given a CPU count, return the clamped max thread count.
   // Exposed as static for unit testing; calc_max_thread_count() delegates to this.
   static int64_t calc_max_thread_count_by_cpu(int64_t cpu);
@@ -623,8 +678,8 @@ private:
   // Note: depends on MTL context (caller must be in the correct tenant thread).
   int64_t calc_max_thread_count();
 
-  // Fraction of tenant CPUs allocated to this thread pool.
-  static constexpr double THREAD_FACTOR = 0.8;
+  // Scale vector async workers to the tenant CPU count so P1 tasks can drain faster.
+  static constexpr double THREAD_FACTOR = 0.5;
   static const int64_t INVALID_TG_ID = -1;
   bool is_inited_;
   int tg_id_;
@@ -955,6 +1010,10 @@ public:
 
   static int format_merge_task_info_to_json(const ObVecIndexTaskInfo &task_info, common::ObSqlString &output);
   static int format_task_mem_info_to_json(const ObVecIndexTaskInfo &task_info, common::ObSqlString &output);
+  // Aggregated mem sync task: emit batch tablet list + per-tablet ret_code as JSON.
+  static int format_mem_sync_task_info_to_json(uint64_t representative_tablet_id,
+                                               const ObVecIndexTaskInfo &task_info,
+                                               common::ObSqlString &output);
   static int parse_task_info_from_json(const common::ObString &json_str, common::ObIAllocator &allocator, ObVecIndexTaskInfo &task_info);
   static int append_seg_info_to_json(const ObVecIndexTaskSegInfo &seg, common::ObSqlString &output);
   static int append_task_info_seg_array_to_json(const common::ObIArray<ObVecIndexTaskSegInfo> &segs, common::ObSqlString &output);
@@ -1058,6 +1117,11 @@ public:
   static int check_task_result(ObVecIndexAsyncTaskCtx *task_ctx);
   static int clear_task_ctxs(ObVecIndexAsyncTaskOption &task_opt, const ObVecIndexTaskCtxArray &task_ctx_array);
   static int clear_task_ctx(ObVecIndexAsyncTaskOption &task_opt, ObVecIndexAsyncTaskCtx *task_ctx);
+  static int mark_mem_sync_tablet_cancel(ObVecIndexAsyncTaskCtx *task_ctx, const common::ObTabletID &tablet_id);
+  static int check_mem_sync_tablet_is_cancel(
+      ObVecIndexAsyncTaskCtx *task_ctx,
+      const common::ObTabletID &tablet_id,
+      bool &is_cancel);
 
   static const int64_t VEC_INDEX_TASK_MAX_RETRY_TIME = 3;
   static int fetch_new_trace_id(const uint64_t basic_num, ObIAllocator *allocator, TraceId &new_trace_id);

@@ -12,6 +12,7 @@
 #include "lib/roaringbitmap/ob_rb_memory_mgr.h"
 #include "share/ls/ob_ls_operator.h"
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
+#include "share/vector_index/ob_vector_index_async_task_util.h"
 #include "share/allocator/ob_tenant_vector_allocator.h"
 #include "share/vector_index/ob_vector_index_aux_table_handler.h"
 #include "storage/vector_index/ob_vector_index_refresh.h"
@@ -2529,7 +2530,8 @@ int ObPluginVectorIndexAdaptor::check_snap_index()
 int ObPluginVectorIndexAdaptor::check_delta_buffer_table_readnext_status(ObVectorQueryAdaptorResultContext *ctx,
                                                                          common::ObNewRowIterator *row_iter,
                                                                          SCN query_scn,
-                                                                         ObVecIndexAsyncTaskCtx *task_ctx)
+                                                                         ObVecIndexAsyncTaskCtx *task_ctx,
+                                                                         const common::ObTabletID &mem_sync_tablet_id)
 {
   INIT_SUCC(ret);
   SCN min_delta_scn;
@@ -2586,7 +2588,7 @@ int ObPluginVectorIndexAdaptor::check_delta_buffer_table_readnext_status(ObVecto
         can_skip = false;
       }
       DEBUG_SYNC(BEFORE_VEC_DELTA_BUF_CANCELLED);
-      CHECK_TASK_CANCELLED_IN_PROCESS_WITHOUT_MGR(ret, loop_cnt, 20, task_ctx);
+      CHECK_TASK_CANCELLED_IN_PROCESS_WITH_TABLET(ret, loop_cnt, 20, task_ctx, mem_sync_tablet_id);
     }
     if (OB_FAIL(ret) && ret != OB_ITER_END) {
     } else if (need_cancel_task_) { // if it's the error code from iter_end and the task needs to be canceled at this moment, then override it.
@@ -2887,7 +2889,8 @@ int ObPluginVectorIndexAdaptor::complete_delta_buffer_table_data(ObVectorQueryAd
 int ObPluginVectorIndexAdaptor::check_index_id_table_readnext_status(ObVectorQueryAdaptorResultContext *ctx,
                                                                      common::ObNewRowIterator *row_iter,
                                                                      SCN query_scn,
-                                                                     ObVecIndexAsyncTaskCtx *task_ctx)
+                                                                     ObVecIndexAsyncTaskCtx *task_ctx,
+                                                                     const common::ObTabletID &mem_sync_tablet_id)
 {
   INIT_SUCC(ret);
   blocksstable::ObDatumRow *datum_row = nullptr;
@@ -2946,7 +2949,8 @@ int ObPluginVectorIndexAdaptor::check_index_id_table_readnext_status(ObVectorQue
       ctx->status_ = PVQ_COM_DATA;
     }
   } else if (check_if_complete_index(read_scn) &&
-             OB_FAIL(complete_index_mem_data(ctx, read_scn, row_iter, datum_row, i_vid_count, task_ctx))) {
+             OB_FAIL(complete_index_mem_data(
+                 ctx, read_scn, row_iter, datum_row, i_vid_count, task_ctx, mem_sync_tablet_id))) {
     LOG_WARN("failed to check comple index mem data.", K(ret), K(read_scn), K(vbitmap_data_->scn_));
   } else if (OB_ISNULL(ctx->bitmaps_) || OB_ISNULL(ctx->bitmaps_->insert_bitmap_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -3182,7 +3186,8 @@ int ObPluginVectorIndexAdaptor::complete_index_mem_data(ObVectorQueryAdaptorResu
                                                         common::ObNewRowIterator *row_iter,
                                                         blocksstable::ObDatumRow *last_row,
                                                         int64_t &i_vid_count,
-                                                        ObVecIndexAsyncTaskCtx *task_ctx)
+                                                        ObVecIndexAsyncTaskCtx *task_ctx,
+                                                        const common::ObTabletID &mem_sync_tablet_id)
 {
   INIT_SUCC(ret);
   SCN frozen_vbitmap_scn = SCN::min_scn();
@@ -3241,7 +3246,7 @@ int ObPluginVectorIndexAdaptor::complete_index_mem_data(ObVectorQueryAdaptorResu
           INC_METRIC_VAL(common::ObMetricId::HS_VEC_HNSW_INDEX_ID_TABLE_SCAN_ROWS, 1);
         }
         DEBUG_SYNC(BEFORE_VEC_SCAN_VID_CANCELLED);
-        CHECK_TASK_CANCELLED_IN_PROCESS_WITHOUT_MGR(ret, loop_cnt, 20, task_ctx);
+        CHECK_TASK_CANCELLED_IN_PROCESS_WITH_TABLET(ret, loop_cnt, 20, task_ctx, mem_sync_tablet_id);
       }
 
       if (OB_FAIL(ret) && ret != OB_ITER_END) {

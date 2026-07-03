@@ -137,6 +137,7 @@ public:
       schedule_tg_id_(-1),
       service_(nullptr),
       ls_executor_lock_(common::ObLatchIds::OB_VEC_IDX_ASYNC_TASK_SCHEDULER_EXECUTOR_MAP_LOCK),
+      disable_list_lock_(common::ObLatchIds::OB_VEC_IDX_ASYNC_TASK_SCHEDULER_EXECUTOR_MAP_LOCK),
       executor_allocator_(ObMemAttr(OB_SERVER_TENANT_ID, "VecIdxExecAlloc")),
       last_schedule_time_{},
       can_schedule_{},
@@ -210,7 +211,7 @@ public:
 
 private:
   static const int64_t SCHEDULE_PERIOD_US = 1 * 1000 * 1000;         // 1s
-  static const int64_t VEC_INDEX_LOAD_TIME_NORMAL_THRESHOLD = 30 * 1000 * 1000; // 30s
+  static const int64_t VEC_INDEX_LOAD_TIME_NORMAL_THRESHOLD = 10 * 1000 * 1000; // 10s
   static const int64_t DEFAULT_LS_EXECUTOR_MAP_SIZE = 64;
   static const int64_t DEFAULT_TABLE_ARRAY_SIZE = 200;
   static const int64_t TABLE_GENERATE_BATCH_SIZE = 200;
@@ -261,7 +262,7 @@ private:
   // Returns OB_SUCCESS if every ctx was cancelled, or the first non-SUCCESS tmp_ret
   // (per-ctx failures are logged but do not abort the sweep).
   int cancel_tablet_async_tasks_(const common::ObTabletID &tablet_id,
-                                 ObVecIndexAsyncTaskOption &task_opt);
+                                 ObPluginVectorIndexMgr &mgr);
   // Cancel ctxs whose truncate_version_ is older than the table's current
   // truncate_version. Skips IVF_CLEAN. Used when a tablet still exists but the
   // schema has bumped truncate_version.
@@ -337,6 +338,9 @@ private:
   int schedule_tg_id_;
   ObPluginVectorIndexService *service_;
   mutable common::ObSpinLock ls_executor_lock_;  // protect both executor maps for concurrent access
+  // Reuse the scheduler latch id to avoid adding a new latch definition; this lock only
+  // protects task disable list state.
+  mutable common::ObSpinLock disable_list_lock_;
   common::hash::ObHashMap<share::ObLSID, ObVecIdxLeaderExecutors *> ls_leader_executor_map_;
   common::hash::ObHashMap<share::ObLSID, ObVecIdxFollowerExecutors *> ls_follower_executor_map_;
   common::ObArenaAllocator executor_allocator_;

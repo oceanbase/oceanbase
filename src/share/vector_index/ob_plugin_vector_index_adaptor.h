@@ -773,13 +773,15 @@ public:
   int check_delta_buffer_table_readnext_status(ObVectorQueryAdaptorResultContext *ctx,
                                                common::ObNewRowIterator *row_iter,
                                                SCN query_scn,
-                                               ObVecIndexAsyncTaskCtx *task_ctx = nullptr);
+                                               ObVecIndexAsyncTaskCtx *task_ctx = nullptr,
+                                               const common::ObTabletID &mem_sync_tablet_id = common::ObTabletID());
   int complete_delta_buffer_table_data(ObVectorQueryAdaptorResultContext *ctx);
   // Query Processor second
   int check_index_id_table_readnext_status(ObVectorQueryAdaptorResultContext *ctx,
                                            common::ObNewRowIterator *row_iter,
                                            SCN query_scn,
-                                           ObVecIndexAsyncTaskCtx *task_ctx = nullptr);
+                                           ObVecIndexAsyncTaskCtx *task_ctx = nullptr,
+                                           const common::ObTabletID &mem_sync_tablet_id = common::ObTabletID());
   // Query Processor third
   int check_snapshot_table_wait_status(ObVectorQueryAdaptorResultContext *ctx);
 
@@ -819,7 +821,8 @@ public:
                               common::ObNewRowIterator *row_iter,
                               blocksstable::ObDatumRow *last_row,
                               int64_t &i_vid_count,
-                              ObVecIndexAsyncTaskCtx *task_ctx = nullptr);
+                              ObVecIndexAsyncTaskCtx *task_ctx = nullptr,
+                              const common::ObTabletID &mem_sync_tablet_id = common::ObTabletID());
   int prepare_delta_mem_data(roaring::api::roaring64_bitmap_t *gene_bitmap,
                              ObVectorQueryAdaptorResultContext *ctx);
   int serialize(ObIAllocator *allocator, ObOStreamBuf::CbParam &cb_param, ObOStreamBuf::Callback &cb);
