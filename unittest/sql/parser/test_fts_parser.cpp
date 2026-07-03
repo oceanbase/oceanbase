@@ -70,6 +70,8 @@ static int transfer_ret_code(int ret)
       return OB_ERR_PARSER_SYNTAX;
     case FTS_ERROR_OTHER:
       return OB_ERR_UNEXPECTED;
+    case FTS_ERROR_INVALID_ARGUMENT:
+      return OB_NOT_SUPPORTED;
     }
     return OB_SUCCESS;
 }
@@ -133,6 +135,62 @@ TEST_F(TestFtsParser, input_ok_test)
   query_str = "+you +(-me2 +(A +C))";
   fts_parse_docment(query_str, strlen(query_str), &allocator_, &ss);
   ASSERT_EQ(OB_SUCCESS, transfer_ret_code(ss.ret_));
+}
+
+TEST_F(TestFtsParser, nested_depth_limit_ok)
+{
+  const char *term = "alpha";
+  const int64_t term_len = strlen(term);
+  char query[FTS_MAX_BOOLEAN_NESTING_DEPTH * 3 + 6] = {0};
+  int64_t pos = 0;
+  FtsParserResult ss;
+  for (int64_t i = 0; i < FTS_MAX_BOOLEAN_NESTING_DEPTH; ++i) {
+    query[pos++] = '+';
+    query[pos++] = '(';
+  }
+  MEMCPY(query + pos, term, term_len);
+  pos += term_len;
+  for (int64_t i = 0; i < FTS_MAX_BOOLEAN_NESTING_DEPTH; ++i) {
+    query[pos++] = ')';
+  }
+  query[pos] = '\0';
+  fts_parse_docment(query, static_cast<int>(pos), &allocator_, &ss);
+  ASSERT_EQ(FTS_OK, ss.ret_);
+}
+
+TEST_F(TestFtsParser, nested_depth_limit_exceeded)
+{
+  const int64_t nesting_depth = FTS_MAX_BOOLEAN_NESTING_DEPTH + 1;
+  const char *term = "alpha";
+  const int64_t term_len = strlen(term);
+  char query[(FTS_MAX_BOOLEAN_NESTING_DEPTH + 1) * 3 + 6] = {0};
+  int64_t pos = 0;
+  FtsParserResult ss;
+  for (int64_t i = 0; i < nesting_depth; ++i) {
+    query[pos++] = '+';
+    query[pos++] = '(';
+  }
+  MEMCPY(query + pos, term, term_len);
+  pos += term_len;
+  for (int64_t i = 0; i < nesting_depth; ++i) {
+    query[pos++] = ')';
+  }
+  query[pos] = '\0';
+  fts_parse_docment(query, static_cast<int>(pos), &allocator_, &ss);
+  ASSERT_EQ(FTS_ERROR_INVALID_ARGUMENT, ss.ret_);
+  ASSERT_NE(nullptr, ss.err_info_.str_);
+  ASSERT_NE(nullptr, strstr(ss.err_info_.str_, "fulltext boolean query with nesting depth exceeding the maximum of 256"));
+}
+
+TEST_F(TestFtsParser, unmatched_parentheses_still_syntax_error)
+{
+  const char *query_str = "alpha)";
+  FtsParserResult ss;
+  fts_parse_docment(query_str, strlen(query_str), &allocator_, &ss);
+  ASSERT_EQ(FTS_ERROR_SYNTAX, ss.ret_);
+  query_str = "(alpha";
+  fts_parse_docment(query_str, strlen(query_str), &allocator_, &ss);
+  ASSERT_EQ(FTS_ERROR_SYNTAX, ss.ret_);
 }
 
 
