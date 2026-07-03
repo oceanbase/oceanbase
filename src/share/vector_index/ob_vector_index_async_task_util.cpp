@@ -2590,23 +2590,16 @@ int ObVecIndexAsyncTaskUtil::check_task_result(ObVecIndexAsyncTaskCtx *task_ctx)
         LOG_DEBUG("vector index async task still running", K(ret), KPC(task_ctx), K(need_cancel_task));
       } else if (task_ctx->task_status_.task_type_ == ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_MEM_SYNC_TASK &&
         OB_REPLICA_NOT_READABLE == task_ctx->task_status_.ret_code_) {
+        // for mem sync task, if replica not readable, always retry it
         task_ctx->retry_time_++;
-        if (task_ctx->retry_time_ > VEC_INDEX_TASK_MAX_RETRY_TIME) {
-          task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH;
-          LOG_WARN("[VEC_ASYNC_TASK] mem sync task replica not readable retries exceeded, RUNNING->FINISH",
-                   KR(ret), K(task_ctx->task_status_.trace_id_),
-                   K(task_ctx->task_status_.task_id_), K(task_ctx->task_status_.tablet_id_),
-                   K(task_ctx->task_status_.task_type_), K(task_ctx->retry_time_));
-        } else {
-          task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE;
-          task_ctx->task_status_.last_error_code_ = task_ctx->task_status_.ret_code_;
-          task_ctx->task_status_.ret_code_ = VEC_ASYNC_TASK_DEFAULT_ERR_CODE;
-          need_sync_running_to_prepare = true;
-          LOG_INFO("[VEC_ASYNC_TASK] task retry, RUNNING->PREPARE, replica not readable",
-                   KR(ret), K(task_ctx->task_status_.trace_id_),
-                   K(task_ctx->task_status_.task_id_), K(task_ctx->task_status_.tablet_id_),
-                   K(task_ctx->task_status_.task_type_), K(task_ctx->retry_time_));
-        }
+        task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE;
+        task_ctx->task_status_.last_error_code_ = task_ctx->task_status_.ret_code_;
+        task_ctx->task_status_.ret_code_ = VEC_ASYNC_TASK_DEFAULT_ERR_CODE;
+        need_sync_running_to_prepare = true;
+        LOG_INFO("[VEC_ASYNC_TASK] task retry, RUNNING->PREPARE, replica not readable",
+                 KR(ret), K(task_ctx->task_status_.trace_id_),
+                 K(task_ctx->task_status_.task_id_), K(task_ctx->task_status_.tablet_id_),
+                 K(task_ctx->task_status_.task_type_), K(task_ctx->retry_time_));
       } else if (!ObIDDLTask::in_ddl_retry_white_list(task_ctx->task_status_.ret_code_)) {
         task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH;
         LOG_WARN("[VEC_ASYNC_TASK] task finished with error, RUNNING->FINISH",

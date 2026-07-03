@@ -237,7 +237,11 @@ public:
   void set_need_refresh_memdata(bool v) { ATOMIC_STORE(&need_refresh_memdata_, v); }
   bool get_and_clear_need_refresh_memdata()
   {
-    return ATOMIC_TAS(&need_refresh_memdata_, false);
+    const bool need_refresh_memdata = ATOMIC_TAS(&need_refresh_memdata_, false);
+    if (need_refresh_memdata) {
+      OB_LOG(INFO, "clear need refresh memdata flag", K_(tenant_id), K_(ls_id), K(lbt()));
+    }
+    return need_refresh_memdata;
   }
   bool need_refresh_memdata() const { return need_refresh_memdata_; }
   void set_need_maintenance(bool v) { need_maintenance_ = v; }

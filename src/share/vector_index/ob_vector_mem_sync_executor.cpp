@@ -398,7 +398,7 @@ int ObVecMemSyncTask::process_one()
           ++succ_cnt;
         } else if (is_mem_sync_retryable_ret(tablet_ret)) {
           ++retryable_cnt;
-          if (OB_SUCCESS == first_retryable_ret) {
+          if (OB_SUCCESS == first_retryable_ret || OB_REPLICA_NOT_READABLE == tablet_ret) {
             first_retryable_ret = tablet_ret;
           }
           LOG_WARN("mem sync tablet retryable", K(tablet_ret), K(ls_id_), K(cur_tablet), K(i));
@@ -431,8 +431,9 @@ int ObVecMemSyncTask::process_one()
       ctx_->task_status_.task_info_.task_estimate_memory_ = total_est_mem;
     }
 
-    // Aggregate by priority: retryable > fatal > success (see comment above). A retryable
-    // batch ret makes check_task_result send the whole ctx back to PREPARE for another round.
+    // Aggregate by priority: OB_REPLICA_NOT_READABLE > other retryable > fatal > success
+    // (see comment above). A retryable batch ret makes check_task_result send the whole ctx
+    // back to PREPARE for another round.
     if (OB_SUCC(ret)) {
       if (OB_SUCCESS != first_retryable_ret) {
         ret = first_retryable_ret;

@@ -301,6 +301,12 @@ void ObVecIdxAsyncTaskScheduler::run_timer_task()
       LOG_WARN("fail to load triggered tasks from inner table", KR(ret), K_(tenant_id));
     }
     tg.click("load triggered");
+    if (OB_SUCC(ret) && can_schedule(ObVectorTaskScheduleType::ADAPTER_MAINTENANCE)) {
+      if (OB_TMP_FAIL(check_and_execute_adapter_maintenance_tasks())) {
+        LOG_WARN("fail to execute adapter maintenance tasks", KR(tmp_ret), K_(tenant_id));
+      }
+    }
+    tg.click("adapter maintenance");
     if (OB_SUCC(ret) && OB_FAIL(collect_leader_executors_to_run(leader_executors_to_run))) {
       LOG_WARN("fail to collect leader executors to run", KR(ret), K_(tenant_id));
     }
@@ -338,11 +344,6 @@ void ObVecIdxAsyncTaskScheduler::run_timer_task()
       }
     }
     tg.click("release executor refs");
-    if (OB_SUCC(ret) && can_schedule(ObVectorTaskScheduleType::ADAPTER_MAINTENANCE)
-        && OB_FAIL(check_and_execute_adapter_maintenance_tasks())) {
-      LOG_WARN("fail to execute adapter maintenance tasks", KR(ret), K_(tenant_id));
-    }
-    tg.click("adapter maintenance");
     if (OB_SUCC(ret) && OB_FAIL(pop_tasks_to_work())) {
       LOG_WARN("fail to pop tasks to work", KR(ret), K_(tenant_id));
     }
@@ -875,8 +876,8 @@ void ObVecIdxAsyncTaskScheduler::clean_deprecated_adapters(
 
     // cancel async tasks before erasing adapters
     if (OB_SUCC(ret) && !delete_tablet_id_array.empty()) {
-      LOG_INFO("try erase complete vector index adapter",
-        K(mgr->get_ls_id()), K(delete_tablet_id_array.count()));
+      LOG_INFO("[VEC_ADAPTER_MAINTAIN]try erase complete vector index adapter",
+        K(mgr->get_ls_id()), K(delete_tablet_id_array.count()), K(delete_tablet_id_array));
       for (int64_t i = 0; i < delete_tablet_id_array.count(); ++i) {
         int tmp_ret = cancel_tablet_async_tasks_(delete_tablet_id_array.at(i), *mgr);
         if (OB_SUCCESS != tmp_ret) {
@@ -958,8 +959,8 @@ void ObVecIdxAsyncTaskScheduler::clean_deprecated_adapters(
 
     // cancel async tasks before erasing partial adapters
     if (OB_SUCC(ret) && !delete_tablet_id_array.empty()) {
-      LOG_INFO("try erase partial vector index adapter",
-        K(mgr->get_ls_id()), K(delete_tablet_id_array.count()));
+      LOG_INFO("[VEC_ADAPTER_MAINTAIN]try erase partial vector index adapter",
+        K(mgr->get_ls_id()), K(delete_tablet_id_array.count()), K(delete_tablet_id_array));
       for (int64_t i = 0; i < delete_tablet_id_array.count(); ++i) {
         int tmp_ret = cancel_tablet_async_tasks_(delete_tablet_id_array.at(i), *mgr);
         if (OB_SUCCESS != tmp_ret) {
@@ -1137,6 +1138,7 @@ int ObVecIdxAsyncTaskScheduler::execute_adapter_maintenance_for_ls(
     VEC_INDEX_LOAD_TIME_NORMAL_THRESHOLD);
   ObVecIdxSharedTableInfoMap shared_table_info_map;
   ObMemAttr memattr(tenant_id_, "VecIdxInfo");
+  share::ObLSID ls_id;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet vector index scheduler not init", KR(ret));
@@ -1144,13 +1146,14 @@ int ObVecIdxAsyncTaskScheduler::execute_adapter_maintenance_for_ls(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(ls), KP(mgr));
   } else {
+    ls_id = ls->get_ls_id();
     clean_deprecated_adapters(ls, mgr, is_ls_leader);
   }
   if (OB_FAIL(ret)) {
   } else if (current_memory_config_ == 0) {
   } else if (!vec_table_id_array.empty()
              && OB_FAIL(shared_table_info_map.create(DEFAULT_TABLE_ARRAY_SIZE, memattr, memattr))) {
-    LOG_WARN("fail to create shared table info map", K(ret), K(ls->get_ls_id()));
+    LOG_WARN("fail to create shared table info map", K(ret), K(ls_id));
   } else {
     bool need_maintenance = true;
     if (OB_SUCC(ret)) {
@@ -1199,7 +1202,7 @@ int ObVecIdxAsyncTaskScheduler::execute_adapter_maintenance_for_ls(
             ret = OB_TABLE_NOT_EXIST;
             LOG_WARN("table schema is null", K(ret), K(table_id), K_(tenant_id));
           } else if (OB_FAIL(acquire_adapter_in_maintenance(
-                         ls, ls->get_ls_id(), table_id, tmp_table_schema, shared_table_info_map))) {
+                         ls, ls_id, table_id, tmp_table_schema, shared_table_info_map))) {
             LOG_WARN("fail to acquire adapter in maintenance", K(ret), K(table_id));
           }
         } else if (is_shared_index) {
@@ -1211,13 +1214,13 @@ int ObVecIdxAsyncTaskScheduler::execute_adapter_maintenance_for_ls(
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(service_->check_and_merge_adapter(ls->get_ls_id(), shared_table_info_map))) {
-      LOG_WARN("fail to merge partial adapter task", K(ret), K(ls->get_ls_id()));
+    } else if (OB_FAIL(service_->check_and_merge_adapter(ls_id, shared_table_info_map))) {
+      LOG_WARN("fail to merge partial adapter task", K(ret), K(ls_id));
     } else {
       mgr->set_need_maintenance(false);
     }
   }
-  LOG_INFO("finish generate tenant tablet tasks", KR(ret), K_(tenant_id), KP(ls));
+  LOG_INFO("[VEC_ADAPTER_MAINTAIN]finish execute_adapter_maintenance_for_ls tasks", KR(ret), K_(tenant_id), K(ls_id));
   return ret;
 }
 
@@ -1256,6 +1259,10 @@ int ObVecIdxAsyncTaskScheduler::check_and_execute_adapter_maintenance_tasks()
           }
         }
       }
+    }
+
+    if (OB_SUCC(ret) && ls_ids_to_maintain.count() > 0) {
+      LOG_INFO("[VEC_ASYNC_TASK_SCHED]collect ls ids to maintain", K_(tenant_id), K(schema_version_changed), K(ls_ids_to_maintain));
     }
 
     for (int64_t i = 0; OB_SUCC(ret) && i < ls_ids_to_maintain.count(); ++i) {
@@ -1354,6 +1361,12 @@ int ObVecIdxAsyncTaskScheduler::sync_ls_executors()
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(mgr_map.foreach_refactored(collect_new_func))) {
       LOG_WARN("fail to collect new ls ids", KR(ret), K_(tenant_id));
+    }
+    if (stale_ls_ids.count() > 0) {
+      LOG_INFO("[VEC_ASYNC_TASK_SCHED]vec idx ls executors removed for stale ls", K_(tenant_id), K(stale_ls_ids));
+    }
+    if (new_ls_ids.count() > 0) {
+      LOG_INFO("[VEC_ASYNC_TASK_SCHED]vec idx ls executors to create for new ls", K_(tenant_id), K(new_ls_ids));
     }
   }
 
@@ -1524,6 +1537,12 @@ int ObVecIdxAsyncTaskScheduler::collect_leader_executors_to_run(
   };
   if (OB_FAIL(ls_leader_executor_map_.foreach_refactored(collect_func))) {
     LOG_WARN("fail to collect leader executors to run", KR(ret), K_(tenant_id));
+  } else if (leader_executors_to_run.count() > 0 && REACH_TIME_INTERVAL(10L * 1000000)) {
+    ObSEArray<ObLSID, DEFAULT_LS_EXECUTOR_MAP_SIZE> collected_ls_ids;
+    for (int64_t i = 0; i < leader_executors_to_run.count(); ++i) {
+      (void) collected_ls_ids.push_back(leader_executors_to_run.at(i).first);
+    }
+    LOG_INFO("[VEC_ASYNC_TASK_SCHED]collect leader executors to run", K_(tenant_id), K(collected_ls_ids));
   }
   return ret;
 }
@@ -1561,6 +1580,12 @@ int ObVecIdxAsyncTaskScheduler::collect_follower_executors_to_run(
   };
   if (OB_FAIL(ls_follower_executor_map_.foreach_refactored(collect_func))) {
     LOG_WARN("fail to collect follower executors to run", KR(ret), K_(tenant_id));
+  } else if (follower_executors_to_run.count() > 0 && REACH_TIME_INTERVAL(10L * 1000000)) {
+    ObSEArray<ObLSID, DEFAULT_LS_EXECUTOR_MAP_SIZE> collected_ls_ids;
+    for (int64_t i = 0; i < follower_executors_to_run.count(); ++i) {
+      (void) collected_ls_ids.push_back(follower_executors_to_run.at(i).first);
+    }
+    LOG_INFO("[VEC_ASYNC_TASK_SCHED]collect follower executors to run", K_(tenant_id), K(collected_ls_ids));
   }
   return ret;
 }

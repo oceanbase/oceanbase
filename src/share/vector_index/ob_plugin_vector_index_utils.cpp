@@ -8,11 +8,15 @@
 #include "share/vector_index/ob_vector_index_async_task_util.h"
 #include "share/ob_vec_index_builder_util.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "lib/utility/ob_tracepoint.h"
 
 namespace oceanbase
 {
 namespace share
 {
+
+ERRSIM_POINT_DEF(ERRSIM_VEC_REFRESH_MEMDATA,
+    "Inject error before vector index refresh memdata.");
 
 int ObPluginVectorIndexUtils::get_task_read_snapshot(ObLSID &ls_id, SCN &read_version)
 {
@@ -1204,7 +1208,12 @@ int ObPluginVectorIndexUtils::refresh_adp_from_table(
 
     DEBUG_SYNC(REFRESH_MEMDATA_BEFORE_SYNC_SNAPSHOT);
 
-    if (OB_FAIL(try_sync_snapshot_memdata(
+    if (OB_UNLIKELY(OB_SUCCESS != (ret = EVENT_CALL(
+            ERRSIM_VEC_REFRESH_MEMDATA,
+            mem_sync_tablet_id.is_valid() ? mem_sync_tablet_id.id() : 0)))) {
+      LOG_WARN("ERRSIM_VEC_REFRESH_MEMDATA injected before sync snapshot",
+               KR(ret), K(ls_id), K(mem_sync_tablet_id), K(target_scn));
+    } else if (OB_FAIL(try_sync_snapshot_memdata(
             ls_id, adapter, create_new_adapter, target_scn, allocator, ctx, mem_sync_tablet_id))) {
       LOG_WARN("failed to refresh mem snapshots without refresh incr", KR(ret));
     }
@@ -1380,6 +1389,11 @@ int ObPluginVectorIndexUtils::refresh_memdata(ObLSID &ls_id,
 #endif
   bool can_do_refresh_memdata = false;
   if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(OB_SUCCESS != (ret = EVENT_CALL(
+                 ERRSIM_VEC_REFRESH_MEMDATA,
+                 mem_sync_tablet_id.is_valid() ? mem_sync_tablet_id.id() : 0)))) {
+    LOG_WARN("ERRSIM_VEC_REFRESH_MEMDATA injected",
+             KR(ret), K(ls_id), K(mem_sync_tablet_id), K(target_scn));
   } else if (OB_ISNULL(adapter)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid adapter", K(ret), KPC(adapter));
