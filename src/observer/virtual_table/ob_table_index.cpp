@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "share/ob_fts_index_builder_util.h"
+#include "share/vector_index/ob_vector_index_util.h"
 #include "observer/virtual_table/ob_table_index.h"
 
 using namespace oceanbase::common;
@@ -1373,8 +1374,12 @@ int ObTableIndex::add_vec_index_column(const ObString &database_name,
           }
           // comment
           case OB_APP_MIN_COLUMN_ID + 14: {
-            //TODO
-            cells[cell_idx].set_varchar(ObString(ob_index_status_str(index_schema->get_index_status())));
+            if (OB_NOT_NULL(schema_guard_)
+                && ObVectorIndexUtil::check_index_is_all_ready(*schema_guard_, table_schema, *index_schema)) {
+              cells[cell_idx].set_varchar(ObString(ob_index_status_str(INDEX_STATUS_AVAILABLE)));
+            } else {
+              cells[cell_idx].set_varchar(ObString(ob_index_status_str(INDEX_STATUS_UNAVAILABLE)));
+            }
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
