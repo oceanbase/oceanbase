@@ -2305,6 +2305,34 @@ int ObTransService::check_ls_status(const share::ObLSID &ls_id){
   return ret;
 }
 
+int ObTransService::check_ls_tx_ctx_mgr_exist(const share::ObLSID &ls_id, bool &exist)
+{
+  int ret = OB_SUCCESS;
+  ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
+  exist = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "ObTransService not inited", K(ret));
+  } else if (OB_UNLIKELY(!is_running_)) {
+    ret = OB_NOT_RUNNING;
+    TRANS_LOG(WARN, "ObTransService is not running", K(ret));
+  } else if (OB_UNLIKELY(!ls_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), K(ls_id));
+  } else if (OB_FAIL(tx_ctx_mgr_.get_ls_tx_ctx_mgr(ls_id, ls_tx_ctx_mgr))) {
+    // OB_PARTITION_NOT_EXIST means the ls tx ctx mgr is no longer in the map.
+    if (OB_PARTITION_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      TRANS_LOG(WARN, "get ls tx ctx mgr failed", K(ret), K(ls_id));
+    }
+  } else {
+    exist = true;
+    tx_ctx_mgr_.revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr);
+  }
+  return ret;
+}
+
 int ObTransService::check_ls_status_(const share::ObLSID &ls_id, bool &leader)
 {
   int ret = OB_SUCCESS;
