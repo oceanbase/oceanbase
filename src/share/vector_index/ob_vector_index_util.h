@@ -379,6 +379,18 @@ struct VecIndexAccessInfo
   bool has_vec_index() const { return inited_;}
   bool is_pre_filter() const { return inited_ && vec_extra_info_.is_pre_filter(); }
   bool is_post_filter() const { return inited_ && vec_extra_info_.is_post_filter(); }
+
+  int assign(const VecIndexAccessInfo &other)
+  {
+    int ret = common::OB_SUCCESS;
+    vec_extra_info_ = other.vec_extra_info_;
+    inited_ = other.inited_;
+    if (OB_FAIL(vec_index_ids_.assign(other.vec_index_ids_))) {
+      COMMON_LOG(WARN, "failed to assign vec index ids", K(ret));
+    }
+    return ret;
+  }
+
   TO_STRING_KV(K_(vec_extra_info), K_(vec_index_ids), K_(inited));
 
   ObVecIdxExtraInfo vec_extra_info_;

@@ -8096,6 +8096,7 @@ int oceanbase::sql::Path::assign(const Path &other, common::ObIAllocator *alloca
   is_local_order_ = other.is_local_order_;
   is_local_order_by_das_ = other.is_local_order_by_das_;
   is_range_order_ = other.is_range_order_;
+  interesting_order_info_ = other.interesting_order_info_;
   cost_  = other.cost_;
   op_cost_ = other.op_cost_;
   log_op_ = other.log_op_;
@@ -8115,22 +8116,31 @@ int oceanbase::sql::Path::assign(const Path &other, common::ObIAllocator *alloca
   server_cnt_ = other.server_cnt_;
   is_pipelined_path_ = other.is_pipelined_path_;
   is_nl_style_pipelined_path_ = other.is_nl_style_pipelined_path_;
+  inherit_sharding_index_ = other.inherit_sharding_index_;
   is_valid_inner_path_ = other.is_valid_inner_path_;
 
   if (OB_FAIL(ordering_.assign(other.ordering_))) {
-    LOG_WARN("failed to assign nested loop params", K(ret));
+    LOG_WARN("failed to assign ordering", K(ret));
   } else if (OB_FAIL(server_list_.assign(other.server_list_))) {
     LOG_WARN("failed to assign server list", K(ret));
   } else if (OB_FAIL(filter_.assign(other.filter_))) {
-    LOG_WARN("failed to assign nested loop params", K(ret));
+    LOG_WARN("failed to assign filter", K(ret));
   } else if (OB_FAIL(pushdown_filters_.assign(other.pushdown_filters_))) {
     LOG_WARN("failed to assign pushdown filters", K(ret));
   } else if (OB_FAIL(nl_params_.assign(other.nl_params_))) {
-    LOG_WARN("failed to assign nested loop params", K(ret));
+    LOG_WARN("failed to assign nl params", K(ret));
   } else if (OB_FAIL(subquery_exprs_.assign(other.subquery_exprs_))) {
-    LOG_WARN("failed to assign nested loop params", K(ret));
+    LOG_WARN("failed to assign subquery exprs", K(ret));
   } else if (OB_FAIL(weak_sharding_.assign(other.weak_sharding_))) {
-    LOG_WARN("failed to assign nested loop params", K(ret));
+    LOG_WARN("failed to assign weak sharding", K(ret));
+  } else if (OB_FAIL(equal_param_constraints_.assign(other.equal_param_constraints_))) {
+    LOG_WARN("failed to assign equal param constraints", K(ret));
+  } else if (OB_FAIL(const_param_constraints_.assign(other.const_param_constraints_))) {
+    LOG_WARN("failed to assign const param constraints", K(ret));
+  } else if (OB_FAIL(expr_constraints_.assign(other.expr_constraints_))) {
+    LOG_WARN("failed to assign expr constraints", K(ret));
+  } else if (OB_FAIL(ambient_card_.assign(other.ambient_card_))) {
+    LOG_WARN("failed to assign ambient card", K(ret));
   }
   return ret;
 }
@@ -8316,6 +8326,9 @@ int AccessPath::assign(const AccessPath &other, common::ObIAllocator *allocator)
   if (OB_ISNULL(allocator)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("NULL pointer error", K(allocator), K(ret));
+  } else if (OB_UNLIKELY(is_index_merge_path() != other.is_index_merge_path())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("assign index merge path to non-index merge path is not allowed", K(ret), K(other));
   } else if (OB_FAIL(Path::assign(other, allocator))) {
     LOG_WARN("copy path error", K(ret));
   } else if (OB_FAIL(index_keys_.assign(other.index_keys_))) {
@@ -8324,6 +8337,10 @@ int AccessPath::assign(const AccessPath &other, common::ObIAllocator *allocator)
     LOG_WARN("Failed to assign re_est_param", K(ret));
   } else if (OB_FAIL(est_records_.assign(other.est_records_))) {
     LOG_WARN("Failed to assign re_est_param", K(ret));
+  } else if (OB_FAIL(domain_idx_info_.assign(other.domain_idx_info_))) {
+    LOG_WARN("Failed to assign domain_idx_info", K(ret));
+  } else if (OB_FAIL(vec_idx_info_.assign(other.vec_idx_info_))) {
+    LOG_WARN("Failed to assign vec_idx_info", K(ret));
   } else if (other.pre_range_graph_ != NULL) {
     ObPreRangeGraph *range_graph = static_cast<ObPreRangeGraph*>(allocator->alloc(sizeof(ObPreRangeGraph)));
     if (OB_ISNULL(range_graph)) {
