@@ -662,6 +662,8 @@ public:
   ObBackupMetaIndex();
   void reset();
   bool is_valid() const;
+  int64_t get_deep_copy_size() const;
+  int deep_copy(const ObBackupMetaIndex &src, char *buf, int64_t len, int64_t &pos);
   bool operator==(const ObBackupMetaIndex &other) const;
   uint64_t calc_hash(uint64_t seed) const;
   TO_STRING_KV(

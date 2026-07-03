@@ -58,24 +58,29 @@ public:
   virtual int next() = 0;
   virtual bool is_iter_end() const = 0;
 
-protected:
-  int get_file_id_list_(const bool need_read_inner_table, common::ObIArray<int64_t> &file_id_list);
-  int get_last_file_id_from_inner_table_(int64_t &last_file_id);
-  int get_data_backup_file_path_(const int64_t file_id, share::ObBackupPath &backup_path) const;
+public:
+  // The following static helpers are exposed so that the parallel index rebuild
+  // tasks (see ob_backup_index_rebuild_task.h) can read a single backup data file
+  // without going through a full iterator instance.
   static int get_backup_file_length_(
       const share::ObBackupPath &backup_path, const share::ObBackupStorageInfo *storage_info, int64_t &file_length);
   static int pread_file_(const common::ObString &backup_path, const share::ObBackupStorageInfo *storage_info,
       const ObStorageIdMod &mod, const int64_t offset, const int64_t read_size, char *buf);
   static int read_data_file_trailer_(const share::ObBackupPath &backup_path, const share::ObBackupStorageInfo *storage_info,
       const ObStorageIdMod &mod, ObBackupDataFileTrailer &data_file_trailer);
-  static int read_index_file_trailer_(const share::ObBackupPath &backup_path, const share::ObBackupStorageInfo *storage_info,
-      const ObStorageIdMod &mod, ObBackupMultiLevelIndexTrailer &index_file_trailer);
   static int read_backup_index_block_(const share::ObBackupPath &backup_path,
       const share::ObBackupStorageInfo *storage_info, const ObStorageIdMod &mod, const int64_t offset, const int64_t length,
       common::ObIAllocator &allocator, blocksstable::ObBufferReader &buffer);
   template <class IndexType>
   static int parse_from_index_blocks_impl_(const int64_t offset, blocksstable::ObBufferReader &buffer_reader,
       common::ObIArray<IndexType> &index_list, common::ObIArray<ObBackupIndexBlockDesc> &block_desc_list);
+
+protected:
+  int get_file_id_list_(const bool need_read_inner_table, common::ObIArray<int64_t> &file_id_list);
+  int get_last_file_id_from_inner_table_(int64_t &last_file_id);
+  int get_data_backup_file_path_(const int64_t file_id, share::ObBackupPath &backup_path) const;
+  static int read_index_file_trailer_(const share::ObBackupPath &backup_path, const share::ObBackupStorageInfo *storage_info,
+      const ObStorageIdMod &mod, ObBackupMultiLevelIndexTrailer &index_file_trailer);
   static int extract_backup_file_id_(
       const common::ObString &file_name, const common::ObString &prefix, int64_t &file_id, bool &match);
 

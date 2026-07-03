@@ -17,6 +17,7 @@
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "storage/high_availability/ob_storage_ha_dag.h"
 #include "storage/backup/ob_backup_meta_cache.h"
+#include "storage/backup/ob_backup_index_rebuild_task.h"
 #include "share/ob_zone_merge_info.h"
 #include "share/ob_global_merge_table_operator.h"
 
@@ -1728,6 +1729,10 @@ int ObLSBackupIndexRebuildDag::init(const ObLSBackupDagInitParam &param,
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("task init twice", K(ret));
+  } else if (0 == param.ls_id_.id() && backup_data_type.is_sys_backup()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant level index rebuild should not be scheduled for sys backup",
+        K(ret), K(param), K(backup_data_type));
   } else if (OB_FAIL(param_.assign(param))) {
     LOG_WARN("failed to assign param", K(ret), K(param));
   } else if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(param.tenant_id_, compat_mode_))) {
@@ -1748,7 +1753,7 @@ int ObLSBackupIndexRebuildDag::init(const ObLSBackupDagInitParam &param,
 int ObLSBackupIndexRebuildDag::create_first_task()
 {
   int ret = OB_SUCCESS;
-  ObBackupIndexRebuildTask *task = NULL;
+  ObBackupIndexRebuildPrepareTask *task = NULL;
   ObLSBackupDataParam param;
   const ObCompressorType &compressor_type = DEFAULT_COMPRESSOR_TYPE;
   if (IS_NOT_INIT) {

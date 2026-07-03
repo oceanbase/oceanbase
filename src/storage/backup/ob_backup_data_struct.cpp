@@ -1277,6 +1277,31 @@ bool ObBackupMetaIndex::operator==(const ObBackupMetaIndex &other) const
          offset_ == other.offset_ && length_ == other.length_;
 }
 
+int64_t ObBackupMetaIndex::get_deep_copy_size() const
+{
+  return 0;
+}
+
+int ObBackupMetaIndex::deep_copy(const ObBackupMetaIndex &src, char *buf, int64_t len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  UNUSEDx(buf, len, pos);
+  if (!src.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid arg", K(ret), K(src));
+  } else {
+    meta_key_ = src.meta_key_;
+    backup_set_id_ = src.backup_set_id_;
+    ls_id_ = src.ls_id_;
+    turn_id_ = src.turn_id_;
+    retry_id_ = src.retry_id_;
+    file_id_ = src.file_id_;
+    offset_ = src.offset_;
+    length_ = src.length_;
+  }
+  return ret;
+}
+
 uint64_t ObBackupMetaIndex::calc_hash(uint64_t seed) const
 {
   uint64_t hash_code = 0;

@@ -361,6 +361,7 @@ ob_set_subtarget(ob_storage backup
   backup/ob_backup_index_cache.cpp
   backup/ob_backup_iterator.cpp
   backup/ob_backup_index_merger.cpp
+  backup/ob_backup_index_rebuild_task.cpp
   backup/ob_backup_reader.cpp
   backup/ob_backup_handler.cpp
   backup/ob_backup_index_store.cpp

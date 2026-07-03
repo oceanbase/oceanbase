@@ -1703,6 +1703,7 @@ public:
   bool is_sorted() const { return is_sorted_; }
   bool is_all_got() const { return add_count_ == get_count_; }
   void add_count(const int64_t count) { add_count_ += count; }
+  int64_t get_add_count() const { return add_count_; }
   TO_STRING_KV(K(is_inited_), K(file_buf_size_), K(buf_mem_limit_), K(expire_timestamp_),
       K(merge_count_per_round_), KP(tenant_id_), KP(compare_), K_(add_count), K_(get_count));
 private:
