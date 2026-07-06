@@ -1001,7 +1001,8 @@ LATCH_DEF(MVIEW_TASK_QUEUE_LOCK, 969, "mview task queue lock", LATCH_FIFO, 2000,
 LATCH_DEF(MVIEW_PENDING_TASK_INSPECTION_LOCK, 970, "mview pending task inspection lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(OB_ARB_MONITOR_LOCK, 971, "ob arb monitor lock", LATCH_READ_PREFER, 2000, 0, true)
 LATCH_DEF(JAVA_DATASOURCE_INIT_MUTEX, 972, "java datasource init mutex", LATCH_FIFO, 2000, 0, true)
-LATCH_DEF(LATCH_END, 973, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(SHARED_COMPACTION_THREAD_LIMITER_LOCK, 973, "shared compaction thread limiter lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(LATCH_END, 974, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 
