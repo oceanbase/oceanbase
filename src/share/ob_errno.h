@@ -1970,6 +1970,7 @@ constexpr int OB_ERR_PL_PARSER_HANDLE_INVALID = -9842;
 constexpr int OB_ERR_MISSING_EXPRESSION = -9843;
 constexpr int OB_ERR_MISSING_RIGHT_PARENTHESIS = -9844;
 constexpr int OB_ERR_INVALID_RELATIONAL_OPERATOR = -9845;
+constexpr int OB_ERR_XML_NOT_MATCH_TYPE_DEF = -9846;
 constexpr int OB_ERR_KV_GLOBAL_INDEX_ROUTE = -10500;
 constexpr int OB_TTL_NOT_ENABLE = -10501;
 constexpr int OB_TTL_COLUMN_NOT_EXIST = -10502;
@@ -4479,6 +4480,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_MISSING_EXPRESSION__USER_ERROR_MSG "missing expression"
 #define OB_ERR_MISSING_RIGHT_PARENTHESIS__USER_ERROR_MSG "missing right parenthesis"
 #define OB_ERR_INVALID_RELATIONAL_OPERATOR__USER_ERROR_MSG "invalid relational operator"
+#define OB_ERR_XML_NOT_MATCH_TYPE_DEF__USER_ERROR_MSG "XML element or attribute does not match any in type"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__USER_ERROR_MSG "incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__USER_ERROR_MSG "TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__USER_ERROR_MSG "TTL column '%.*s' not exists"
@@ -9417,6 +9419,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_MISSING_RIGHT_PARENTHESIS__OBE_USER_ERROR_MSG "OBE-00907: missing right parenthesis"
 #define OB_ERR_INVALID_RELATIONAL_OPERATOR__ORA_USER_ERROR_MSG "ORA-00920: invalid relational operator"
 #define OB_ERR_INVALID_RELATIONAL_OPERATOR__OBE_USER_ERROR_MSG "OBE-00920: invalid relational operator"
+#define OB_ERR_XML_NOT_MATCH_TYPE_DEF__ORA_USER_ERROR_MSG "ORA-19031: XML element or attribute %.*s does not match any in type %.*s"
+#define OB_ERR_XML_NOT_MATCH_TYPE_DEF__OBE_USER_ERROR_MSG "OBE-19031: XML element or attribute %.*s does not match any in type %.*s"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10501, TTL feature is not enabled"
@@ -9794,7 +9798,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2560];
+extern int g_all_ob_errnos[2561];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
