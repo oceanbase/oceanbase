@@ -393,6 +393,14 @@ int ObPartitionPreSplit::check_global_index_bound(const ObTableSchema &schema)
           LOG_WARN("[PRE_SPLIT] outrow lob in high bound val is not supported", K(ret), K(obj_ptr[j]));
         }
       }
+      if (OB_SUCC(ret)) {
+        const int64_t serialize_size = high_bound.get_serialize_size();
+        if (serialize_size * 2 > OB_MAX_B_HIGH_BOUND_VAL_LENGTH) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("[PRE_SPLIT] high bound val serialized size exceeds hex buffer limit, skip pre-split",
+              K(ret), K(serialize_size), K(OB_MAX_B_HIGH_BOUND_VAL_LENGTH), K(i));
+        }
+      }
     }
   }
   return ret;
