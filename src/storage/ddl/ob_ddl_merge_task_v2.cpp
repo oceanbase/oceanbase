@@ -282,6 +282,19 @@ int ObDDLMergePrepareTask::inner_process()
     LOG_WARN("failed to process prepare task", KR(ret), K(merge_param_));
   } else if (OB_FAIL(merge_helper->get_rec_scn(merge_param_))) {
     LOG_WARN("failed to get rec scn", K(ret));
+  } else if (!merge_param_.for_major_ && cg_slices.empty()) {
+    // Rebuild placeholder tablet: redo logs were skipped because with_major_sstable=true,
+    // so no DDL KVs were written. Major SSTable will arrive via migration; nothing to merge here.
+    // Guard against a narrow race where migration completed between DAG creation and here:
+    // only skip when the tablet data is still incomplete (i.e. migration has not yet finished).
+    ObTabletHandle tmp_tablet_handle;
+    if (OB_FAIL(ObDirectLoadMgrUtil::get_tablet_handle(ls_id, tablet_id, tmp_tablet_handle))) {
+      LOG_WARN("failed to get tablet handle", K(ret), K(ls_id), K(tablet_id));
+    } else if (!tmp_tablet_handle.get_obj()->get_tablet_meta().ha_status_.check_allow_read()) {
+      need_merge = false;
+      FLOG_INFO("[DDL_MERGE_TASK] skip dump merge for rebuild placeholder tablet, no ddl kvs",
+                K(merge_param_));
+    }
   }
 
   /* generate assemble table task */
