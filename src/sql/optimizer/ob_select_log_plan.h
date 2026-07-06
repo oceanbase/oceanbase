@@ -193,6 +193,19 @@ private:
                                      ObIArray<CandidatePlan> &candi_plans,
                                      ObIArray<CandidatePlan> &groupby_plans);
 
+  int generate_group_by_plans_for_sharding_group(const ObIArray<ObRawExpr*> &reduce_exprs,
+                                                 const ObIArray<ObRawExpr*> &group_by_exprs,
+                                                 const ObIArray<ObOrderDirection> &group_directions,
+                                                 const ObIArray<ObRawExpr*> &having_exprs,
+                                                 const ObIArray<ObAggFunRawExpr*> &aggr_items,
+                                                 GroupingOpHelper &groupby_helper,
+                                                 const ObIArray<CandidatePlan> &candidates,
+                                                 ObIArray<CandidatePlan> &groupby_plans,
+                                                 bool use_hash_valid,
+                                                 bool use_merge_valid,
+                                                 bool part_sort_valid,
+                                                 bool normal_sort_valid);
+
   int create_hash_group_plan(const ObIArray<ObRawExpr*> &reduce_exprs,
                              const ObIArray<ObRawExpr*> &group_by_exprs,
                              const ObIArray<ObAggFunRawExpr*> &aggr_items,
