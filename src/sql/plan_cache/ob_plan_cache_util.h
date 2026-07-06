@@ -710,7 +710,7 @@ struct ObPlanStat
   common::ObString hints_info_;
   bool hints_all_worked_;
   bool is_inner_;
-  bool is_use_auto_dop_;
+  bool is_enable_adaptive_auto_dop_;
   AdaptivePCInfo adaptive_pc_info_;
   ObVecIndexExecCtx vec_index_exec_ctx_;
   ObPlanExecutingStat executing_stat_;
@@ -790,7 +790,7 @@ struct ObPlanStat
       plan_hash_value_(0),
       hints_all_worked_(true),
       is_inner_(false),
-      is_use_auto_dop_(false),
+      is_enable_adaptive_auto_dop_(false),
       adaptive_pc_info_(),
       vec_index_exec_ctx_(),
       executing_stat_(),
@@ -872,7 +872,7 @@ struct ObPlanStat
       plan_hash_value_(rhs.plan_hash_value_),
       hints_all_worked_(rhs.hints_all_worked_),
       is_inner_(rhs.is_inner_),
-      is_use_auto_dop_(rhs.is_use_auto_dop_),
+      is_enable_adaptive_auto_dop_(rhs.is_enable_adaptive_auto_dop_),
       adaptive_pc_info_(rhs.adaptive_pc_info_),
       vec_index_exec_ctx_(rhs.vec_index_exec_ctx_),
       executing_stat_(rhs.executing_stat_),

@@ -588,8 +588,8 @@ public:
   bool get_direct_load_need_sort() const { return direct_load_need_sort_; }
   inline bool get_insertup_can_do_gts_opt() const {return insertup_can_do_gts_opt_; }
   inline void set_insertup_can_do_gts_opt(bool v) { insertup_can_do_gts_opt_ = v; }
-  void set_is_use_auto_dop(bool use_auto_dop)  { stat_.is_use_auto_dop_ = use_auto_dop; }
-  bool get_is_use_auto_dop() const { return stat_.is_use_auto_dop_; }
+  void set_is_enable_adaptive_auto_dop(bool enable) { stat_.is_enable_adaptive_auto_dop_ = enable; }
+  bool get_is_enable_adaptive_auto_dop() const { return stat_.is_enable_adaptive_auto_dop_; }
   void set_px_node_policy(ObPxNodePolicy px_node_policy)
   {
     px_node_policy_ = px_node_policy;

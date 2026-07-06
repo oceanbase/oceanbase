@@ -2068,7 +2068,7 @@ int ObSqlPlanSet::try_get_local_plan(ObPlanCacheCtx &pc_ctx,
       RECORD_CACHE_MISS(LOCATION_CONSTR_NOT_MATCH, pc_ctx, "Location constraint not match", K(real_type));
       plan = NULL;
       get_next = true;
-    } else if (GCONF._enable_adaptive_auto_dop && plan->get_is_use_auto_dop() && is_single_table_
+    } else if (plan->get_is_enable_adaptive_auto_dop() && is_single_table_
                && !is_contain_inner_table_ && !plan->stat_.is_inner_) {
       int64_t dop = -1;
       bool is_single_part = false;
@@ -2144,7 +2144,7 @@ int ObSqlPlanSet::try_get_dist_plan(ObPlanCacheCtx &pc_ctx,
   } else if (plan != NULL) {
     MATCH_GUARD(plan->get_plan_id(), pc_ctx);
     LOG_TRACE("succeed to get dist plan", K(*plan));
-    if (GCONF._enable_adaptive_auto_dop && plan->get_is_use_auto_dop() && is_single_table_
+    if (plan->get_is_enable_adaptive_auto_dop() && is_single_table_
         && !is_contain_inner_table_ && !plan->stat_.is_inner_) {
       int64_t dop = -1;
       bool is_single_part = false;
