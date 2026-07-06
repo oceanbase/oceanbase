@@ -15354,7 +15354,10 @@ int ObDDLService::get_and_check_table_schema(
                     && ObSQLUtils::is_data_version_ge_422_or_431(compat_version))
                && !orig_table_schema->is_tmp_table()
                && !orig_table_schema->is_external_table()
-               && !(orig_table_schema->is_mlog_table() && compat_version >= DATA_VERSION_4_6_1_0)) {
+               && !(orig_table_schema->is_mlog_table() &&
+                    ((compat_version >= MOCK_DATA_VERSION_4_4_2_2 &&
+                      compat_version < DATA_VERSION_4_5_0_0) ||
+                     compat_version >= DATA_VERSION_4_6_1_0))) {
       ret = OB_ERR_WRONG_OBJECT;
       ObCStringHelper helper;
       LOG_USER_ERROR(OB_ERR_WRONG_OBJECT,

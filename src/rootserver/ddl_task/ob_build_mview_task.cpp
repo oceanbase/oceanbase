@@ -415,7 +415,9 @@ int ObBuildMViewTask::build_mlog_impl(const obrpc::ObMVRequiredColumnsInfo &requ
     // if the base table already has a mlog, and all of its required columns are already in the mlog, skip
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
     LOG_WARN("fail to get tenant data version", KR(ret), K(data_version));
-  } else if (NULL != mlog_schema && data_version >= DATA_VERSION_4_6_1_0) {
+  } else if (NULL != mlog_schema &&
+             ((data_version >= MOCK_DATA_VERSION_4_4_2_2 && data_version < DATA_VERSION_4_5_0_0) ||
+              data_version >= DATA_VERSION_4_6_1_0)) {
     if (OB_FAIL(ObMViewUtils::add_missing_columns_to_mlog(tenant_id_, missing_columns,
                                                           schema_guard, base_table_schema))) {
       LOG_WARN("failed to add missing columns to mlog", KR(ret), K(tenant_id_), K(base_table_id),
