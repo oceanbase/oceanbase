@@ -81,6 +81,8 @@ int ObFTCacheDict::put_and_fetch_cache_entry(const uint64_t table_id,
   const ObDictCacheValue value(dat_buff, snapshot_version, range_count);
   if (OB_FAIL(ObDictCache::get_instance().put_and_fetch_dict(key, value, handle.value_, handle.handle_, true))) {
     LOG_WARN("Failed to put dict into kvcache", K(ret), K(table_id), K(tenant_id), K(range_id));
+  } else {
+    handle.key_ = key;
   }
   return ret;
 }

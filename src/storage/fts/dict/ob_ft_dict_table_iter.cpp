@@ -82,10 +82,10 @@ int ObFTDictTableIter::append_where_clause(ObSqlString &sql_string,
       } else if (OB_FAIL(sql_string.append("("))) {
         LOG_WARN("Failed to append opening parenthesis", K(ret));
       } else if (!start_word_str.empty()) {
-        if (need_casedown && OB_FAIL(sql_string.append("LOWER(word) > "))) {
+        if (need_casedown && OB_FAIL(sql_string.append("LEFT(LOWER(word), 1) > "))) {
           LOG_WARN("Failed to append start_token condition", K(ret));
-        } else if (!need_casedown && OB_FAIL(sql_string.append("word > "))) {
-          LOG_WARN("Failed to append start_word condition", K(ret));
+        } else if (!need_casedown && OB_FAIL(sql_string.append("LEFT(word, 1) > "))) {
+          LOG_WARN("Failed to append start_token condition", K(ret));
         } else if (OB_FAIL(sql_append_hex_escape_str(start_word_str, sql_string))) {
           LOG_WARN("Failed to append start_word value", K(ret), K(start_word_str));
         }

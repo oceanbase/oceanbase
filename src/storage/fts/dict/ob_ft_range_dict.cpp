@@ -13,6 +13,7 @@
 #include "lib/oblog/ob_log_module.h"
 #include "lib/string/ob_sql_string.h"
 #include "lib/utility/ob_macro_utils.h"
+#include "lib/utility/ob_sort.h"
 #include "ob_smart_var.h"
 #include "share/scn.h"
 #include "storage/fts/dict/ob_ft_cache.h"
@@ -33,6 +34,17 @@ namespace oceanbase
 {
 namespace storage
 {
+struct ObFTRangeStartCmp
+{
+  bool operator()(const ObFTRangeDict::ObFTRange &lhs,
+                  const ObFTRangeDict::ObFTRange &rhs) const
+  {
+    return ObCharset::strcmp(ObCollationType::CS_TYPE_UTF8MB4_BIN,
+                             lhs.start_.get_token(),
+                             rhs.start_.get_token()) < 0;
+  }
+};
+
 int ObFTRangeDict::init()
 {
   int ret = OB_SUCCESS;
@@ -158,6 +170,9 @@ int ObFTRangeDict::build_dict_from_cache(const ObFTCacheRangeContainer &range_co
         LOG_WARN("Failed to push back range dict", K(ret));
       }
     }
+  }
+  if (OB_SUCC(ret)) {
+    lib::ob_sort(range_dicts_.begin(), range_dicts_.end(), ObFTRangeStartCmp());
   }
   return ret;
 }
