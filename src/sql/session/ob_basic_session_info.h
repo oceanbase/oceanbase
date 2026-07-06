@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "lib/utility/ob_macro_utils.h"
 #ifndef _OB_OBPROXY_BASIC_SESSION_INFO_H
 #define _OB_OBPROXY_BASIC_SESSION_INFO_H 1
 
@@ -616,16 +617,12 @@ public:
                     const bool need_check_valid /* true */);
   void init_use_rich_format()
   {
-    config_use_rich_format_ = GCONF._global_enable_rich_vector_format;
-    if (!config_use_rich_format_) {
-      use_rich_vector_format_ = false;
-      force_rich_vector_format_ = ForceRichFormatStatus::FORCE_OFF;
-    } else {
-      use_rich_vector_format_ = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0
-                                && sys_vars_cache_.get_enable_rich_vector_format();
-      force_rich_vector_format_ = ForceRichFormatStatus::Disable;
-    }
+    config_use_rich_format_ = true;
+    use_rich_vector_format_ = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0;
+    force_rich_vector_format_ = ForceRichFormatStatus::Disable;
   }
+  // TODO(rich_format): dead since 4.6.1 -- force_rich_vector_format_ can no longer be
+  // FORCE_OFF, so this always returns false.
   bool is_force_off_rich_format() {
     return force_rich_vector_format_ == ForceRichFormatStatus::FORCE_OFF;
   }
@@ -650,11 +647,12 @@ public:
 
   void set_force_rich_format(ObBasicSessionInfo::ForceRichFormatStatus status)
   {
-    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0) {
-      force_rich_vector_format_ = status;
-    } else {
-      force_rich_vector_format_ = ForceRichFormatStatus::Disable;
-    }
+    // TODO(rich_format): rich format is forced on since 4.6.1 (commit "disable
+    // rich_format correlated hint/variables"), so the force on/off path is inert.
+    // Remove this setter, force_rich_vector_format_, ForceRichFormatStatus and
+    // is_force_off_rich_format() after the upgrade barrier version.
+    UNUSED(status);
+    // do nothing
   }
   //getters
   const common::ObString get_tenant_name() const;

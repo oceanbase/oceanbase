@@ -188,7 +188,6 @@ struct ObOptParamHint
     DEF(ENABLE_IN_RANGE_OPTIMIZATION,)              \
     DEF(XSOLAPI_GENERATE_WITH_CLAUSE,)              \
     DEF(WORKAREA_SIZE_POLICY,)                      \
-    DEF(ENABLE_RICH_VECTOR_FORMAT,)                 \
     DEF(_ENABLE_STORAGE_CARDINALITY_ESTIMATION,)    \
     DEF(PRESERVE_ORDER_FOR_PAGINATION,)             \
     DEF(ENABLE_DAS_KEEP_ORDER,)                     \

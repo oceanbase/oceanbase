@@ -120,6 +120,16 @@ void OpTestEngine::apply_sql_mode()
   }
 }
 
+void OpTestEngine::enable_rich_format(bool enable)
+{
+  // set_force_rich_format() is a NO-OP since commit "disable rich_format correlated
+  // hint/variables". Directly write force_rich_vector_format_ here — use_rich_format()
+  // still checks it, giving us the only working FORCE_ON/FORCE_OFF path in tests.
+  session_info_.force_rich_vector_format_ =
+      enable ? ObBasicSessionInfo::ForceRichFormatStatus::FORCE_ON
+             : ObBasicSessionInfo::ForceRichFormatStatus::FORCE_OFF;
+}
+
 void OpTestEngine::init()
 {
   if (inited_) {
@@ -149,9 +159,12 @@ void OpTestEngine::init()
   // and other operators that need session access during open()
   exec_ctx_.set_my_session(&session_info_);
 
-  // Force enable rich format for vector execution
-  session_info_.set_force_rich_format(
-      oceanbase::sql::ObBasicSessionInfo::ForceRichFormatStatus::FORCE_ON);
+  // Force enable rich format for vector execution.
+  // NOTE: set_force_rich_format() is a NO-OP since commit "disable rich_format
+  // correlated hint/variables". Directly write force_rich_vector_format_ here —
+  // use_rich_format() still checks it, so this is the only working path.
+  session_info_.force_rich_vector_format_ =
+      oceanbase::sql::ObBasicSessionInfo::ForceRichFormatStatus::FORCE_ON;
 
   // Initialize ObTenantTmpFileManager for scalar aggregate operations
   // This is required by ObChunkStoreUtil::alloc_dir_id() which is called in

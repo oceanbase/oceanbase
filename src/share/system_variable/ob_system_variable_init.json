@@ -3519,7 +3519,7 @@
     "base_value": "1",
     "data_type": "bool",
     "info": "whether use rich vector format in vectorized execution engine",
-    "flags": "GLOBAL | SESSION | INFLUENCE_PLAN | NEED_SERIALIZE | INVISIBLE",
+    "flags": "GLOBAL | SESSION | NEED_SERIALIZE | INVISIBLE",
     "publish_version": "430",
     "info_cn": "在向量化引擎中, 开启/关闭使用多种列格式描述功能",
     "background_cn": "",

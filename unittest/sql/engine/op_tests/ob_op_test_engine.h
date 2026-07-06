@@ -122,13 +122,13 @@ public:
    * @brief Enable/disable rich format for vectorized execution.
    * Must be called AFTER prepare() (expression CG) to ensure CG runs in FORCE_ON mode.
    * @param enable True for FORCE_ON (2.0 vec), false for FORCE_OFF (1.0)
+   *
+   * NOTE: set_force_rich_format() is a NO-OP since commit "disable rich_format
+   * correlated hint/variables".  This function is implemented in ob_op_test_engine.cpp
+   * (where #define private public is active) so it can directly write
+   * force_rich_vector_format_, which use_rich_format() still checks.
    */
-  void enable_rich_format(bool enable)
-  {
-    session_info_.set_force_rich_format(
-        enable ? ObBasicSessionInfo::ForceRichFormatStatus::FORCE_ON
-               : ObBasicSessionInfo::ForceRichFormatStatus::FORCE_OFF);
-  }
+  void enable_rich_format(bool enable);
 
   // ===== Lifecycle =====
   virtual void init() override;

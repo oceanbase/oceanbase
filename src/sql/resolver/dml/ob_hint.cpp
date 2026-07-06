@@ -950,7 +950,6 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
     case USE_DEFAULT_OPT_STAT:
     case ENABLE_IN_RANGE_OPTIMIZATION:
     case XSOLAPI_GENERATE_WITH_CLAUSE:
-    case ENABLE_RICH_VECTOR_FORMAT:
     case _ENABLE_STORAGE_CARDINALITY_ESTIMATION:
     case PRESERVE_ORDER_FOR_PAGINATION:
     case ENABLE_DAS_KEEP_ORDER:

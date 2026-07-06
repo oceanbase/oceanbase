@@ -85,7 +85,6 @@ const ObSysVarClassType ESSENTIAL_SYS_VARS[] = {
   SYS_VAR_PARALLEL_DEGREE_LIMIT,        // parallel_degree_limit
   SYS_VAR_PARALLEL_MIN_SCAN_TIME_THRESHOLD,        // parallel_min_scan_time_threshold
   SYS_VAR_RUNTIME_FILTER_TYPE,        // runtime_filter_type
-  SYS_VAR__ENABLE_RICH_VECTOR_FORMAT,        // _enable_rich_vector_format
   SYS_VAR_OB_SECURITY_VERSION,        // ob_security_version
   SYS_VAR_CARDINALITY_ESTIMATION_MODEL,        // cardinality_estimation_model
   SYS_VAR_QUERY_REWRITE_ENABLED,        // query_rewrite_enabled
@@ -3549,7 +3548,7 @@ static struct VarsInit{
       ObSysVars[246].info_ = "whether use rich vector format in vectorized execution engine" ;
       ObSysVars[246].name_ = "_enable_rich_vector_format" ;
       ObSysVars[246].data_type_ = ObIntType ;
-      ObSysVars[246].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INVISIBLE ;
+      ObSysVars[246].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INVISIBLE ;
       ObSysVars[246].id_ = SYS_VAR__ENABLE_RICH_VECTOR_FORMAT ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__ENABLE_RICH_VECTOR_FORMAT)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR__ENABLE_RICH_VECTOR_FORMAT] = 246 ;
