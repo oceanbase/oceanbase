@@ -5325,7 +5325,7 @@ int ObTableSchema::check_alter_column_type(const ObColumnSchemaV2 &src_column,
           // is_type_reduction = true;
         }
       }
-    } else if ((!src_column.is_string_type() &&
+    } else if ((!src_column.is_string_type() && !src_meta.is_integer_type() && !dst_meta.is_integer_type() &&
         (src_accuracy.get_precision() > dst_accuracy.get_precision() ||
         src_accuracy.get_scale() > dst_accuracy.get_scale()))
       || (src_column.is_string_type() &&
