@@ -1,7 +1,7 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-# owner: yaoying.yyy
+# owner: zhaoyongheng.zyh
 # owner group: trans
 # description: test alter system set backup_log_archive_option
 

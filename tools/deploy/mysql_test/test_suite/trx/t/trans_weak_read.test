@@ -1,7 +1,7 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-#owner: liangjinrong.ljr
+#owner: handora.qc
 #owner group: transaction 
 #description: 测试弱读配置项的检查能力，通过错误注入测试弱读功能的防御能力
 
