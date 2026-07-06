@@ -503,11 +503,13 @@ void ObResourceGroup::check_worker_count()
   if (OB_SUCC(workers_lock_.trylock())) {
     int64_t now = ObTimeUtility::current_time();
     bool enable_dynamic_worker = true;
-    int64_t threshold = 3 * 1000;
+    int64_t threshold = 3LL * 1000;
     {
       ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_->id()));
       enable_dynamic_worker = tenant_config.is_valid() ? tenant_config->_ob_enable_dynamic_worker : true;
-      threshold = tenant_config.is_valid() ? tenant_config->_stall_threshold_for_dynamic_worker : 3 * 1000;
+      threshold = tenant_config.is_valid()
+          ? tenant_config->_stall_threshold_for_dynamic_worker.get_value()
+          : 3LL * 1000;
     }
     if (enable_database_isolation_mode_ && common::is_resource_manager_group(group_id_)) {
       // not need nesting worker
@@ -540,6 +542,42 @@ void ObResourceGroup::check_worker_count()
                   && now - w->blocking_ts() >= threshold
                   && enable_dynamic_worker) {
           ++blocking_cnt;
+#ifdef ENABLE_DEBUG_LOG
+          const int64_t blocking_ts = w->blocking_ts();
+          const int64_t stall_us = now - blocking_ts;
+          const uint64_t worker_pthread = static_cast<uint64_t>(w->get_pthread(0));
+          const int64_t query_start_time = w->get_query_start_time();
+          const int64_t query_enqueue_time = w->get_query_enqueue_time();
+          const int64_t last_wakeup_ts = w->get_last_wakeup_ts();
+          char threshold_str[32];
+          char stall_str[32];
+          IGNORE_RETURN snprintf(threshold_str, sizeof(threshold_str), "%.3fms(%ldus)",
+              threshold / 1000.0, threshold);
+          IGNORE_RETURN snprintf(stall_str, sizeof(stall_str), "%.3fms(%ldus)",
+              stall_us / 1000.0, stall_us);
+          LOG_INFO("stall worker detected for dynamic worker",
+              K(tenant_->id()),
+              K(group_id_),
+              KP(w),
+              "is_doing_ddl", w->is_doing_ddl(),
+              "threshold", threshold_str,
+              "blocking_ts", common::ObTime2Str::ob_timestamp_str(blocking_ts),
+              KTIME(now),
+              "stall", stall_str,
+              K(worker_pthread),
+              "module_name", w->get_module_name(),
+              "worker_level", w->get_worker_level(),
+              "group_id", w->get_group_id(),
+              "large_query", w->large_query(),
+              "is_high_priority", w->is_high_priority(),
+              "is_normal_priority", w->is_normal_priority(),
+              "query_start_time", (0 != query_start_time)
+                  ? common::ObTime2Str::ob_timestamp_str(query_start_time) : "N/A",
+              "query_enqueue_time", (0 != query_enqueue_time)
+                  ? common::ObTime2Str::ob_timestamp_str(query_enqueue_time) : "N/A",
+              "last_wakeup_ts", (0 != last_wakeup_ts)
+                  ? common::ObTime2Str::ob_timestamp_str(last_wakeup_ts) : "N/A");
+#endif
         } else if (!w->has_req_flag()) {
           ++idle_cnt;
         }
@@ -594,7 +632,17 @@ void ObResourceGroup::check_worker_count()
       token_change_ts_ = now;
       ATOMIC_STORE(&shrink_, false);
       acquire_more_worker(diff, succ_num, /* force */ true);
-      LOG_INFO("worker thread created", K(tenant_->id()), K(group_id_), K(token), K(workers_.get_size()), K(running_cnt), K(diff));
+      LOG_INFO("resource group worker expanded",
+          K(tenant_->id()),
+          K(group_id_),
+          "expand_reason", token < min_worker_cnt() ? "replenish_to_token" : "replenish_min",
+          K(diff),
+          K(succ_num),
+          K(token),
+          "workers", workers_.get_size(),
+          K(running_cnt),
+          K(blocking_cnt),
+          K(is_group_critical));
     } else if (OB_UNLIKELY(workers_.get_size() < token) &&
                OB_LIKELY(ObMallocAllocator::get_instance()->get_tenant_remain(tenant_->id()) >
                          ObMallocAllocator::get_instance()->get_tenant_limit(tenant_->id()) * 0.05)) {
@@ -602,12 +650,29 @@ void ObResourceGroup::check_worker_count()
       if (OB_LIKELY(now - token_change_ts_ >= EXPAND_INTERVAL)) {
         token_change_ts_ = now;
         acquire_more_worker(1, succ_num);
-        LOG_INFO("worker thread created", K(tenant_->id()), K(group_id_), K(token), K(workers_.get_size()), K(running_cnt));
+        LOG_INFO("resource group worker expanded",
+            K(tenant_->id()),
+            K(group_id_),
+            "expand_reason", "expand_to_token",
+            K(succ_num),
+            K(token),
+            "workers", workers_.get_size(),
+            K(running_cnt),
+            K(blocking_cnt),
+            K(is_group_critical));
       }
     } else if (OB_UNLIKELY(running_cnt > token) && OB_LIKELY(now - token_change_ts_ >= shrink_ts)) {
       token_change_ts_ = now;
       ATOMIC_STORE(&shrink_, true);
-      LOG_INFO("worker thread began to shrink", K(tenant_->id()), K(group_id_), K(token), K(workers_.get_size()), K(running_cnt));
+      LOG_INFO("resource group worker began to shrink",
+          K(tenant_->id()),
+          K(group_id_),
+          "shrink_reason", token == 0 ? "idle_queue_empty" : "workers_above_token",
+          K(token),
+          "workers", workers_.get_size(),
+          K(running_cnt),
+          K(blocking_cnt),
+          K(is_group_critical));
     }
     IGNORE_RETURN workers_lock_.unlock();
   }
@@ -2168,11 +2233,13 @@ void ObTenant::check_worker_count()
     int64_t token = min_active_worker_cnt();
     int64_t now = ObTimeUtility::current_time();
     bool enable_dynamic_worker = true;
-    int64_t threshold = 3 * 1000;
+    int64_t threshold = 3LL * 1000;
     {
       ObTenantConfigGuard tenant_config(TENANT_CONF(id_));
       enable_dynamic_worker = tenant_config.is_valid() ? tenant_config->_ob_enable_dynamic_worker : true;
-      threshold = tenant_config.is_valid() ? tenant_config->_stall_threshold_for_dynamic_worker : 3 * 1000;
+      threshold = tenant_config.is_valid()
+          ? tenant_config->_stall_threshold_for_dynamic_worker.get_value()
+          : 3LL * 1000;
     }
     // assume that high priority and normal priority were busy.
     DLIST_FOREACH_REMOVESAFE(wnode, workers_) {
@@ -2189,6 +2256,42 @@ void ObTenant::check_worker_count()
         } else {
           token++;
         }
+#ifdef ENABLE_DEBUG_LOG
+        const int64_t blocking_ts = w->blocking_ts();
+        const int64_t stall_us = (0 != blocking_ts) ? now - blocking_ts : 0;
+        const uint64_t worker_pthread = static_cast<uint64_t>(w->get_pthread(0));
+        const int64_t query_start_time = w->get_query_start_time();
+        const int64_t query_enqueue_time = w->get_query_enqueue_time();
+        const int64_t last_wakeup_ts = w->get_last_wakeup_ts();
+        char threshold_str[32];
+        char stall_str[32];
+        IGNORE_RETURN snprintf(threshold_str, sizeof(threshold_str), "%.3fms(%ldus)",
+            threshold / 1000.0, threshold);
+        IGNORE_RETURN snprintf(stall_str, sizeof(stall_str), "%.3fms(%ldus)",
+            stall_us / 1000.0, stall_us);
+        LOG_INFO("stall worker detected for dynamic worker",
+            K(id_),
+            KP(w),
+            "is_doing_ddl", w->is_doing_ddl(),
+            "threshold", threshold_str,
+            "blocking_ts", (0 != blocking_ts)
+                ? common::ObTime2Str::ob_timestamp_str(blocking_ts) : "N/A",
+            KTIME(now),
+            "stall", stall_str,
+            K(worker_pthread),
+            "module_name", w->get_module_name(),
+            "worker_level", w->get_worker_level(),
+            "group_id", w->get_group_id(),
+            "large_query", w->large_query(),
+            "is_high_priority", w->is_high_priority(),
+            "is_normal_priority", w->is_normal_priority(),
+            "query_start_time", (0 != query_start_time)
+                ? common::ObTime2Str::ob_timestamp_str(query_start_time) : "N/A",
+            "query_enqueue_time", (0 != query_enqueue_time)
+                ? common::ObTime2Str::ob_timestamp_str(query_enqueue_time) : "N/A",
+            "last_wakeup_ts", (0 != last_wakeup_ts)
+                ? common::ObTime2Str::ob_timestamp_str(last_wakeup_ts) : "N/A");
+#endif
       }
     }
     int64_t succ_num = 0L;
@@ -2200,20 +2303,42 @@ void ObTenant::check_worker_count()
       token_change_ts_ = now;
       ATOMIC_STORE(&shrink_, false);
       acquire_more_worker(diff, succ_num, /* force */ true);
-      LOG_INFO("worker thread created", K(id_), K(token));
+      LOG_INFO("tenant default worker expanded",
+          K(id_),
+          "expand_reason", "replenish_min",
+          K(diff),
+          K(succ_num),
+          K(token),
+          K(ddl_token),
+          "workers", workers_.get_size(),
+          K(enable_dynamic_worker),
+          K(threshold));
     } else if (OB_UNLIKELY(token > workers_.get_size())
                && OB_LIKELY(ObMallocAllocator::get_instance()->get_tenant_remain(id_) > ObMallocAllocator::get_instance()->get_tenant_limit(id_) * 0.05)) {
       ATOMIC_STORE(&shrink_, false);
       if (OB_LIKELY(now - token_change_ts_ >= EXPAND_INTERVAL)) {
         token_change_ts_ = now;
         acquire_more_worker(1, succ_num);
-        LOG_INFO("worker thread created", K(id_), K(token));
+        LOG_INFO("tenant default worker expanded",
+            K(id_),
+            "expand_reason", ddl_token > 0 ? "expand_for_ddl_or_stall" : "expand_to_token",
+            K(succ_num),
+            K(token),
+            K(ddl_token),
+            "workers", workers_.get_size(),
+            K(enable_dynamic_worker),
+            K(threshold));
       }
     } else if (OB_UNLIKELY(token < workers_.get_size())
                && OB_LIKELY(now - token_change_ts_ >= SHRINK_INTERVAL)) {
       token_change_ts_ = now;
       ATOMIC_STORE(&shrink_, true);
-      LOG_INFO("worker thread began to shrink", K(id_), K(token));
+      LOG_INFO("tenant default worker began to shrink",
+          K(id_),
+          "shrink_reason", "workers_above_token",
+          K(token),
+          K(ddl_token),
+          "workers", workers_.get_size());
     }
 
     if (OB_LIKELY(workers_.get_size() > min_worker_cnt())) {
