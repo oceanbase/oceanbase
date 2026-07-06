@@ -21,11 +21,11 @@
 using namespace oceanbase::share;
 using namespace oceanbase::logservice;
 
-#define SERIALIZE_SCHEMA_TO_BUF \
+#define SERIALIZE_SCHEMA_TO_BUF(...) \
     if (OB_ISNULL(schema)) { \
       ret = OB_ERR_UNEXPECTED; \
       LOG_WARN("expect valid schema", KR(ret), KP(schema), K(idx), K(count)); \
-    } else if (OB_FAIL(meta.init(*schema))) { \
+    } else if (OB_FAIL(meta.init(*schema, ##__VA_ARGS__))) { \
       LOG_WARN("init meta with schema failed", KR(ret), K(schema), K(meta)); \
     } else { \
       const int64_t meta_serialize_size = meta.get_serialize_size(); \
@@ -229,7 +229,8 @@ int ObDataDictStorage::gen_and_serialize_dict_metas(
     const ObIArray<const ObTableSchema*> &table_schemas,
     char *&buf,
     int64_t &buf_len,
-    int64_t &pos)
+    int64_t &pos,
+    common::ObISQLClient *sql_client)
 {
   int ret = OB_SUCCESS;
 
@@ -265,21 +266,23 @@ int ObDataDictStorage::gen_and_serialize_dict_metas(
         const ObTenantSchema *schema = tenant_schemas.at(idx);
         ObDictTenantMeta meta(&allocator);
         ObDictMetaHeader header(ObDictMetaType::TENANT_META);
-        SERIALIZE_SCHEMA_TO_BUF;
+        SERIALIZE_SCHEMA_TO_BUF();
       }
 
       ARRAY_FOREACH_N(database_schemas, idx, count) {
         const ObDatabaseSchema *schema = database_schemas.at(idx);
         ObDictDatabaseMeta meta(&allocator);
         ObDictMetaHeader header(ObDictMetaType::DATABASE_META);
-        SERIALIZE_SCHEMA_TO_BUF;
+        SERIALIZE_SCHEMA_TO_BUF();
       }
 
       ARRAY_FOREACH_N(table_schemas, idx, count) {
         const ObTableSchema *schema = table_schemas.at(idx);
         ObDictTableMeta meta(&allocator);
         ObDictMetaHeader header(ObDictMetaType::TABLE_META);
-        SERIALIZE_SCHEMA_TO_BUF;
+        // pass schema_version=OB_INVALID_VERSION and sql_client so the GTT v2 session
+        // tablet ids are read within the caller's transaction (visible uncommitted writes).
+        SERIALIZE_SCHEMA_TO_BUF(OB_INVALID_VERSION, sql_client);
       }
     }
   }
