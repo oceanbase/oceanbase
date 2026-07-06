@@ -140,22 +140,13 @@ private:
       const uint64_t tenant_id,
       common::hash::ObHashMap<int64_t, int64_t> &column_checksum_map,
       common::ObMySQLProxy &sql_proxy);
-  static int get_part_column_checksum(
-      const uint64_t tenant_id,
-      const uint64_t table_id,
-      const uint64_t tablet_id,
-      const uint64_t execution_id,
-      const int64_t ddl_task_id,
-      const bool is_unique_index_checking,
-      common::ObMySQLProxy &sql_proxy,
-      common::hash::ObHashMap<int64_t, int64_t> &column_checksum_map);
   static int get_tablet_latest_execution_id(
       const uint64_t tenant_id,
       const uint64_t index_table_id,
       const int64_t ddl_task_id,
-      const int64_t tablet_id,
+      const ObIArrayWrap<ObTabletID> &index_tablet_ids,
       common::ObMySQLProxy &sql_proxy,
-      int64_t &execution_id);
+      common::hash::ObHashMap<int64_t, int64_t> &tablet_exec_id_map);
   static int get_tablet_checksum_status(
       const ObSqlString &sql,
       const uint64_t tenant_id,

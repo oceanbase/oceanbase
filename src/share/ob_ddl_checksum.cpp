@@ -184,7 +184,7 @@ int ObDDLChecksumOperator::get_column_checksum(const ObSqlString &sql, const uin
       while (OB_SUCC(ret)) {
         if (OB_FAIL(result->next())) {
           if (OB_ITER_END == ret) {
-            if (0 != column_id && OB_FAIL(column_checksum_map.set_refactored(column_id, column_checksum))) {
+            if (0 != column_id && OB_FAIL(column_checksum_map.set_refactored(column_id, column_checksum, true))) {
               LOG_WARN("fail to set column checksum to map", K(ret));
             }
             break;
@@ -196,147 +196,28 @@ int ObDDLChecksumOperator::get_column_checksum(const ObSqlString &sql, const uin
           int64_t curr_column_checksum = 0;
           EXTRACT_INT_FIELD_MYSQL(*result, "column_id", curr_column_id, int64_t);
           EXTRACT_INT_FIELD_MYSQL(*result, "checksum", curr_column_checksum, int64_t);
-          if (0 == column_id) {
-            column_id = curr_column_id;
-          }
-          if (curr_column_id != column_id) {
-            if (OB_FAIL(column_checksum_map.set_refactored(column_id, column_checksum))) {
+          if (OB_FAIL(ret)) {
+          } else if (OB_UNLIKELY(0 == curr_column_id)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid column id from sql result", K(ret), K(curr_column_checksum));
+          } else if (curr_column_id != column_id) {
+            if (0 != column_id && OB_FAIL(column_checksum_map.set_refactored(column_id, column_checksum, true))) {
               LOG_WARN("fail to set column checksum to map", K(ret));
             } else {
-              column_id = curr_column_id;
-              column_checksum = curr_column_checksum;
-            }
-          } else {
-            column_checksum += curr_column_checksum;
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDDLChecksumOperator::get_part_column_checksum(
-      const uint64_t tenant_id,
-      const uint64_t table_id,
-      const uint64_t tablet_id,
-      const uint64_t execution_id,
-      const int64_t ddl_task_id,
-      const bool is_unique_index_checking,
-      common::ObMySQLProxy &sql_proxy,
-      common::hash::ObHashMap<int64_t, int64_t> &column_checksum_map)
-{
-  int ret = OB_SUCCESS;
-  ObSqlString sql;
-  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id  || OB_INVALID_ID == table_id || OB_INVALID_ID == tablet_id || execution_id < 0
-      || OB_INVALID_ID == ddl_task_id || !sql_proxy.is_inited() || !column_checksum_map.created())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(table_id), K(execution_id), K(ddl_task_id), K(sql_proxy.is_inited()), K(column_checksum_map.created()));
-  } else if (OB_FAIL(sql.assign_fmt(
-    "SELECT column_id, checksum FROM %s "
-    "WHERE execution_id = %ld AND tenant_id = %ld AND table_id = %ld AND tablet_id = %ld AND ddl_task_id = %ld AND task_id %s "
-    "ORDER BY column_id", OB_ALL_DDL_CHECKSUM_TNAME,
-    execution_id, ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id), table_id, tablet_id, ddl_task_id, is_unique_index_checking ? "< 0" : ">= 0"))) {
-    LOG_WARN("fail to assign fmt", K(ret), K(OB_ALL_DDL_CHECKSUM_TNAME), K(execution_id), K(ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id)), K(table_id), K(tablet_id), K(ddl_task_id), K(is_unique_index_checking));
-  } else {
-    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-      sqlclient::ObMySQLResult *result = NULL;
-      if (OB_FAIL(sql_proxy.read(res, tenant_id, sql.ptr()))) {
-        LOG_WARN("fail to execute sql", K(ret));
-      } else if (OB_ISNULL(result = res.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("error unexpected, query result must not be NULL", K(ret));
-      } else {
-        int64_t column_id = 0;
-        int64_t column_checksum = 0;
-        while (OB_SUCC(ret)) {
-          if (OB_FAIL(result->next())) {
-            if (OB_ITER_END == ret) {
-              if (0 != column_id && OB_FAIL(column_checksum_map.set_refactored(column_id, column_checksum, true))) {
-                LOG_WARN("fail to set column checksum to map", K(ret));
-              }
-              break;
-            } else {
-              LOG_WARN("fail to get next row", K(ret));
-            }
-          } else {
-            int64_t curr_column_id = 0;
-            int64_t curr_column_checksum = 0;
-            EXTRACT_INT_FIELD_MYSQL(*result, "column_id", curr_column_id, int64_t);
-            EXTRACT_INT_FIELD_MYSQL(*result, "checksum", curr_column_checksum, int64_t);
-            if (OB_SUCC(ret) && 0 == column_id) {
               column_id = curr_column_id;
               if (OB_FAIL(column_checksum_map.get_refactored(curr_column_id, column_checksum))) {
                 if (OB_HASH_NOT_EXIST == ret) {
                   ret = OB_SUCCESS;
-                }
-              }
-            }
-            if (OB_SUCC(ret)) {
-              if (OB_UNLIKELY(curr_column_id != column_id)) {
-                if (OB_FAIL(column_checksum_map.set_refactored(column_id, column_checksum, true))) {
-                  LOG_WARN("fail to set column checksum to map", K(ret));
-                } else {
-                  column_id = curr_column_id;
-                  if (OB_FAIL(column_checksum_map.get_refactored(curr_column_id, column_checksum))) {
-                    if (OB_HASH_NOT_EXIST == ret) {
-                      ret = OB_SUCCESS;
-                      column_checksum = curr_column_checksum;
-                    }
-                  } else {
-                    column_checksum += curr_column_checksum;
-                  }
+                  column_checksum = curr_column_checksum;
                 }
               } else {
                 column_checksum += curr_column_checksum;
               }
             }
+          } else {
+            column_checksum += curr_column_checksum;
           }
         }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDDLChecksumOperator::get_tablet_latest_execution_id(
-    const uint64_t tenant_id,
-    const uint64_t index_table_id,
-    const int64_t ddl_task_id,
-    const int64_t tablet_id,
-    common::ObMySQLProxy &sql_proxy,
-    int64_t &execution_id)
-{
-  int ret = OB_SUCCESS;
-  ObSqlString sql;
-  execution_id = 0;
-  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id  || OB_INVALID_ID == index_table_id || OB_INVALID_ID == ddl_task_id || OB_INVALID_ID == tablet_id || !sql_proxy.is_inited())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(index_table_id), K(ddl_task_id), K(tablet_id), K(sql_proxy.is_inited()));
-  } else if (OB_FAIL(sql.assign_fmt(
-    "SELECT max(execution_id) as execution_id FROM %s "
-    "WHERE  tenant_id = %ld AND table_id = %ld AND ddl_task_id = %ld AND task_id = %ld",
-    OB_ALL_DDL_CHECKSUM_TNAME, ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id), index_table_id, ddl_task_id, tablet_id))) {
-    LOG_WARN("fail to assign fmt", K(ret), K(OB_ALL_DDL_CHECKSUM_TNAME), K(ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id)), K(index_table_id), K(ddl_task_id), K(tablet_id));
-  } else {
-    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-      sqlclient::ObMySQLResult *result = NULL;
-      if (!sql.is_valid()) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid arguments", K(ret), K(sql));
-      } else if (OB_FAIL(sql_proxy.read(res, tenant_id, sql.ptr()))) {
-        LOG_WARN("fail to execute sql", K(ret), K(tenant_id), K(sql));
-      } else if (OB_ISNULL(result = res.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("error unexpected, query result must not be NULL", K(ret));
-      } else if (OB_FAIL(result->next())) {
-        if (OB_ITER_END != ret) {
-          TRANS_LOG(WARN, "iterate next result fail", K(ret), K(sql));
-        }
-      } else {
-        EXTRACT_INT_FIELD_MYSQL(*result, "execution_id", execution_id, int64_t);
       }
     }
   }
@@ -534,6 +415,70 @@ int ObDDLChecksumOperator::get_table_column_checksum(
   return ret;
 }
 
+int ObDDLChecksumOperator::get_tablet_latest_execution_id(
+    const uint64_t tenant_id,
+    const uint64_t index_table_id,
+    const int64_t ddl_task_id,
+    const ObIArrayWrap<ObTabletID> &index_tablet_ids,
+    common::ObMySQLProxy &sql_proxy,
+    common::hash::ObHashMap<int64_t, int64_t> &tablet_exec_id_map)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+  ObSqlString exec_id_sql;
+  if (OB_UNLIKELY(!tablet_exec_id_map.created())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid map", K(ret));
+  } else if (OB_FAIL(exec_id_sql.assign_fmt(
+      "SELECT task_id, MAX(execution_id) as execution_id FROM %s"
+      " WHERE tenant_id = %ld AND table_id = %ld AND ddl_task_id = %ld"
+      " AND task_id IN (",
+      OB_ALL_DDL_CHECKSUM_TNAME,
+      ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+      ObSchemaUtils::get_extract_schema_id(exec_tenant_id, index_table_id),
+      ddl_task_id))) {
+    LOG_WARN("fail to assign fmt", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < index_tablet_ids.count(); i++) {
+    if (OB_FAIL(exec_id_sql.append_fmt("%s%ld", 0 == i ? "" : ",", index_tablet_ids.at(i).id()))) {
+      LOG_WARN("fail to append tablet id", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(exec_id_sql.append(") GROUP BY task_id"))) {
+    LOG_WARN("fail to append sql", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(sql_proxy.read(res, tenant_id, exec_id_sql.ptr()))) {
+        LOG_WARN("fail to execute sql", K(ret), K(exec_id_sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, query result must not be NULL", K(ret));
+      } else {
+        while (OB_SUCC(ret)) {
+          if (OB_FAIL(result->next())) {
+            if (OB_ITER_END == ret) {
+              ret = OB_SUCCESS;
+              break;
+            }
+            LOG_WARN("fail to get next row", K(ret));
+          } else {
+            int64_t task_id = 0;
+            int64_t execution_id = 0;
+            EXTRACT_INT_FIELD_MYSQL(*result, "task_id", task_id, int64_t);
+            EXTRACT_INT_FIELD_MYSQL(*result, "execution_id", execution_id, int64_t);
+            if (OB_SUCC(ret) && OB_FAIL(tablet_exec_id_map.set_refactored(task_id, execution_id))) {
+              LOG_WARN("fail to set tablet exec id", K(ret), K(task_id), K(execution_id));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLChecksumOperator::get_table_column_checksum_without_execution_id(
     const uint64_t tenant_id,
     const uint64_t table_id,
@@ -556,14 +501,60 @@ int ObDDLChecksumOperator::get_table_column_checksum_without_execution_id(
   } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id, index_table_id, index_tablet_ids))) {
     LOG_WARN("failed to get index table tablet ids", K(ret), K(tenant_id), K(index_table_id), K(index_tablet_ids));
   } else {
-    int64_t tablet_latest_execution_id = 0;
-    common::hash::ObHashSet<uint64_t>::iterator iter;
-    for (int64_t i = 0; i < index_tablet_ids.count() && OB_SUCC(ret); i++) {
-      tablet_latest_execution_id = 0;
-      if (OB_FAIL(get_tablet_latest_execution_id(tenant_id, index_table_id, ddl_task_id, index_tablet_ids.at(i).id(), sql_proxy, tablet_latest_execution_id))) {
-        LOG_WARN("fail to get tablet latest execution id", K(ret), K(tenant_id), K(index_table_id), K(ddl_task_id), K(index_tablet_ids.at(i).id()), K(tablet_latest_execution_id));
-      } else if (OB_FAIL(get_part_column_checksum(tenant_id, table_id, tablet_ids.at(i).id(), tablet_latest_execution_id, ddl_task_id, is_unique_index_checking, sql_proxy, column_checksum_map))) {
-        LOG_WARN("fail to get column checksum", K(ret), K(tenant_id), K(table_id), K(tablet_ids.at(i).id()), K(tablet_latest_execution_id), K(ddl_task_id), K(is_unique_index_checking), K(column_checksum_map.size()));
+    const int64_t batch_size = 512;
+    const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_tablet_ids.count(); i += batch_size) {
+      const int64_t end = std::min(i + batch_size, index_tablet_ids.count());
+      ObSqlString checksum_sql;
+      // Step 1: batch get max execution_id per tablet from index table
+      common::hash::ObHashMap<int64_t, int64_t> tablet_exec_id_map;
+      ObArrayWrap<ObTabletID> cur_index_tablet_ids(&index_tablet_ids.at(i), end - i);
+      if (OB_FAIL(tablet_exec_id_map.create(end - i, ObModIds::OB_SSTABLE_CREATE_INDEX))) {
+        LOG_WARN("fail to create tablet exec id map", K(ret));
+      } else if (OB_FAIL(get_tablet_latest_execution_id(tenant_id, index_table_id, ddl_task_id, cur_index_tablet_ids, sql_proxy, tablet_exec_id_map))) {
+        LOG_WARN("failed to get lastest exec id", K(ret), K(index_table_id), K(ddl_task_id));
+      }
+      // Step 2: batch get checksums from table using the execution_ids
+      // Build a query: SELECT column_id, checksum FROM ... WHERE (tablet_id, execution_id) IN ((...), (...)) ORDER BY column_id
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(checksum_sql.assign_fmt(
+            "SELECT column_id, checksum FROM %s"
+            " WHERE tenant_id = %ld AND table_id = %ld AND ddl_task_id = %ld AND task_id %s"
+            " AND (tablet_id, execution_id) IN (",
+            OB_ALL_DDL_CHECKSUM_TNAME,
+            ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+            ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id),
+            ddl_task_id,
+            is_unique_index_checking ? "< 0" : ">= 0"))) {
+          LOG_WARN("fail to assign fmt", K(ret));
+        }
+        for (int64_t j = i; OB_SUCC(ret) && j < end; j++) {
+          int64_t execution_id = 0;
+          if (OB_FAIL(tablet_exec_id_map.get_refactored(index_tablet_ids.at(j).id(), execution_id))) {
+            if (OB_HASH_NOT_EXIST == ret) {
+              ret = OB_ITER_END;
+            }
+            LOG_WARN("fail to get execution id for tablet", K(ret), K(index_tablet_ids.at(j).id()));
+          } else if (OB_FAIL(checksum_sql.append_fmt(
+              "%s(%ld,%ld)",
+              j == i ? "" : ",", tablet_ids.at(j).id(), execution_id))) {
+            LOG_WARN("fail to append tablet condition", K(ret));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(checksum_sql.append(") ORDER BY column_id"))) {
+            LOG_WARN("fail to append order by", K(ret));
+          } else if (OB_FAIL(get_column_checksum(checksum_sql, tenant_id, column_checksum_map, sql_proxy))) {
+            if (OB_ITER_END != ret) {
+              LOG_WARN("fail to get column checksum", K(ret), K(checksum_sql));
+            } else {
+              ret = OB_SUCCESS;
+            }
+          }
+        }
+      }
+      if (tablet_exec_id_map.created()) {
+        tablet_exec_id_map.destroy();
       }
     }
   }
