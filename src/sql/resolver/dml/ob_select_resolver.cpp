@@ -2650,10 +2650,13 @@ int ObSelectResolver::expand_target_list(
         if (is_child_unpivot_select && select_item.is_unpivot_mocked_column_) {
           LOG_DEBUG("continue", K(select_item));
           continue;
+        } else if (OB_FAIL(tmp_select_item.questions_pos_.assign(select_item.questions_pos_))) {
+          LOG_WARN("failed to assign questions_pos_", K(ret));
+        } else if (OB_FAIL(tmp_select_item.params_idx_.assign(select_item.params_idx_))) {
+          LOG_WARN("failed to assign params_idx_", K(ret));
+        } else if (OB_FAIL(tmp_select_item.neg_param_idx_.assign(select_item.neg_param_idx_))) {
+          LOG_WARN("failed to assign neg_param_idx_", K(ret));
         } else {
-          tmp_select_item.questions_pos_ = select_item.questions_pos_;
-          tmp_select_item.params_idx_ = select_item.params_idx_;
-          tmp_select_item.neg_param_idx_ = select_item.neg_param_idx_;
           tmp_select_item.esc_str_flag_ = select_item.esc_str_flag_;
           tmp_select_item.paramed_alias_name_ = select_item.paramed_alias_name_;
           tmp_select_item.need_check_dup_name_ = select_item.need_check_dup_name_;
@@ -2661,12 +2664,14 @@ int ObSelectResolver::expand_target_list(
         }
       }
     }
-    tmp_select_item.alias_name_ = col_item.column_name_;
-    tmp_select_item.expr_name_ = col_item.column_name_;
-    tmp_select_item.is_real_alias_ = false;
-    tmp_select_item.expr_ = col_item.expr_;
-    if (OB_FAIL(target_list.push_back(tmp_select_item))) {
-      LOG_WARN("push back target list failed", K(ret));
+    if (OB_SUCC(ret)) {
+      tmp_select_item.alias_name_ = col_item.column_name_;
+      tmp_select_item.expr_name_ = col_item.column_name_;
+      tmp_select_item.is_real_alias_ = false;
+      tmp_select_item.expr_ = col_item.expr_;
+      if (OB_FAIL(target_list.push_back(tmp_select_item))) {
+        LOG_WARN("push back target list failed", K(ret));
+      }
     }
   }
   return ret;
