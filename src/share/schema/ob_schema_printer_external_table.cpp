@@ -87,10 +87,11 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
     const char *pattern_fmt = nullptr;
     if (table_schema.get_external_file_pattern_type() == GLOB_EXTERNAL_FILE_PATTERN) {
       pattern_fmt = "\nGLOB_PATTERN='%.*s'";
-    } else if (data_version < DATA_VERSION_4_6_1_0) {
-      pattern_fmt = "\nPATTERN='%.*s'";
-    } else {
+    } else if ((data_version >= DATA_VERSION_4_6_1_0)
+             || (data_version >= MOCK_DATA_VERSION_4_4_2_2 && data_version < DATA_VERSION_4_5_0_0)) {
       pattern_fmt = "\nREGEXP_PATTERN='%.*s'";
+    } else {
+      pattern_fmt = "\nPATTERN='%.*s'";
     }
     if (OB_FAIL(databuff_printf(buf, buf_len, pos, pattern_fmt, pattern.length(), pattern.ptr()))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print PATTERN", K(ret));

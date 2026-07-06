@@ -11026,7 +11026,8 @@ int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFo
         uint64_t data_version = 0;
         if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
           LOG_WARN("failed to get data version", K(ret));
-        } else if (data_version < DATA_VERSION_4_6_1_0) {
+        } else if (data_version < MOCK_DATA_VERSION_4_4_2_2
+                    || (data_version >= DATA_VERSION_4_5_0_0 && data_version < DATA_VERSION_4_6_1_0)) {
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "data version is less than 4.6.1.0, export_csv_header");
         } else {

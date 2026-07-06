@@ -3446,7 +3446,8 @@ int ObTableSqlService::gen_table_dml_without_check(
            || (data_version >= MOCK_DATA_VERSION_4_4_2_0 && data_version < DATA_VERSION_4_5_0_0)
            || (data_version >= DATA_VERSION_4_5_1_0))
           && OB_FAIL(dml.add_column("mview_expand_definition", ObHexEscapeSqlStr(table.get_view_schema().get_expand_view_definition_for_mv()))))
-      || (data_version >= DATA_VERSION_4_6_1_0
+      || (((data_version >= DATA_VERSION_4_6_1_0)
+             || (data_version >= MOCK_DATA_VERSION_4_4_2_2 && data_version < DATA_VERSION_4_5_0_0))
           && OB_FAIL(dml.add_column("external_file_pattern_type", table.get_external_file_pattern_type())))
       || (data_version >= DATA_VERSION_5_0_1_0
           && OB_FAIL(dml.add_column("merge_engine_upper_version", ObHexEscapeSqlStr(merge_engine_upper_version_str))))
@@ -3586,7 +3587,8 @@ int ObTableSqlService::gen_table_dml(
   } else if (data_version < DATA_VERSION_4_5_1_0 && !ObStoreFormat::is_row_store_type_with_flat(table.get_minor_row_store_type())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("can't set non-flat delta format in current version", K(data_version), "minor_row_store_type", table.get_minor_row_store_type());
-  } else if (data_version < DATA_VERSION_4_6_1_0
+  } else if ((data_version < MOCK_DATA_VERSION_4_4_2_2
+             || (data_version >= DATA_VERSION_4_5_0_0 && data_version < DATA_VERSION_4_6_1_0))
     && OB_UNLIKELY(table.get_external_file_pattern_type() != REGEXP_EXTERNAL_FILE_PATTERN)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("glob pattern is not support before 4.6.1", K(ret), K(table));

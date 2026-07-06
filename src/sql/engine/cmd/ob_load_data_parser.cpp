@@ -562,7 +562,10 @@ int ObCSVGeneralFormat::to_json_kv_string(char *buf, const int64_t buf_len, int6
                        OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::MAX_ROW_LENGTH)],
                        max_row_length_));
   }
-  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_6_1_0 && into_outfile) {
+  if (((GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_6_1_0)
+      || (GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_4_2_2
+          && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_0_0))
+      && into_outfile) {
     OZ(J_COMMA());
     OZ(databuff_printf(buf, buf_len, pos, R"("%s":%s)",
                       OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::EXPORT_HEADER)],

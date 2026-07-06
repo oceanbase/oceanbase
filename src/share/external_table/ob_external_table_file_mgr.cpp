@@ -2102,15 +2102,16 @@ int ObExternalTableFileManager::collect_file_list_by_expr_parallel(
   uint64_t data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("failed to get data version", K(ret));
-  } else if (data_version < DATA_VERSION_4_6_1_0) {
+  } else if ((data_version >= DATA_VERSION_4_6_1_0)
+             || (data_version >= MOCK_DATA_VERSION_4_4_2_2 && data_version < DATA_VERSION_4_5_0_0)) {
     OZ(query_sql.assign_fmt(
       "SELECT/*+ query_timeout(%ld) parallel(%ld) no_rewrite PQ_SUBQUERY(HASH ALL) */ part_path, "
-      "(select COLLECT_FILE_LIST(part_path, pattern, access_info) from dual) AS file_list FROM "
+      "(select COLLECT_FILE_LIST(part_path, pattern, access_info, pattern_type) from dual) AS file_list FROM "
       "((VALUES ", remain_timeout, dop));
   } else {
     OZ(query_sql.assign_fmt(
       "SELECT/*+ query_timeout(%ld) parallel(%ld) no_rewrite PQ_SUBQUERY(HASH ALL) */ part_path, "
-      "(select COLLECT_FILE_LIST(part_path, pattern, access_info, pattern_type) from dual) AS file_list FROM "
+      "(select COLLECT_FILE_LIST(part_path, pattern, access_info) from dual) AS file_list FROM "
       "((VALUES ", remain_timeout, dop));
   }
 
@@ -2125,19 +2126,20 @@ int ObExternalTableFileManager::collect_file_list_by_expr_parallel(
   }
 
   if (OB_FAIL(ret)) {
-  } else if (data_version < DATA_VERSION_4_6_1_0) {
-    OZ(query_sql.append_fmt("(VALUES ROW('%.*s')) t2(pattern), (VALUES ROW('%.*s')) t3(access_info)),",
-                            pattern.length(),
-                            pattern.ptr(),
-                            access_info.length(),
-                            access_info.ptr()));
-  } else {
+  } else if ((data_version >= DATA_VERSION_4_6_1_0)
+             || (data_version >= MOCK_DATA_VERSION_4_4_2_2 && data_version < DATA_VERSION_4_5_0_0)) {
     OZ(query_sql.append_fmt("(VALUES ROW('%.*s')) t2(pattern), (VALUES ROW('%.*s')) t3(access_info)), (VALUES ROW(%ld)) t4(pattern_type),",
                             pattern.length(),
                             pattern.ptr(),
                             access_info.length(),
                             access_info.ptr(),
                             static_cast<int64_t>(pattern_type)));
+  } else {
+    OZ(query_sql.append_fmt("(VALUES ROW('%.*s')) t2(pattern), (VALUES ROW('%.*s')) t3(access_info)),",
+                            pattern.length(),
+                            pattern.ptr(),
+                            access_info.length(),
+                            access_info.ptr()));
   }
   OZ(query_sql.append("(select count(*) from internal.oceanbase.__all_dummy);"));
 
