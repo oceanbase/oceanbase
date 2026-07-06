@@ -6474,7 +6474,8 @@ int ObLogPlan::check_storage_groupby_pushdown(const ObIArray<ObAggFunRawExpr *> 
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
     } else if (!groupby_column->is_column_ref_expr() ||
-               table_item->table_id_ != static_cast<ObColumnRefRawExpr*>(groupby_column)->get_table_id()) {
+               table_item->table_id_ != static_cast<ObColumnRefRawExpr*>(groupby_column)->get_table_id() ||
+               static_cast<ObColumnRefRawExpr*>(groupby_column)->is_pseudo_column_ref()) {
       can_push = false;
     } else if (OB_FAIL(check_normal_aggr_can_storage_pushdown(table_item->table_id_,
                                                               aggrs,
