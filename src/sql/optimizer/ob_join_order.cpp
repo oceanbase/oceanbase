@@ -20101,10 +20101,12 @@ int ObJoinOrder::extract_pushdown_quals(const ObIArray<ObRawExpr *> &quals,
     if (OB_ISNULL(qual)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(qual), K(ret));
-    // can not push down expr with subquery
-    } else if (force_inner_nl && qual->has_flag(CNT_ROWNUM) && qual->has_flag(CNT_SUB_QUERY)) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "join condition contains rownum and subquery");
+    // can not push down expr with rownum
+    } else if (qual->has_flag(CNT_ROWNUM)) {
+      if (force_inner_nl && qual->has_flag(CNT_SUB_QUERY)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "join condition contains rownum and subquery");
+      }
     } else if (force_inner_nl && qual->has_flag(CNT_MATCH_EXPR)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("can't pushdown join conds with match expr");
