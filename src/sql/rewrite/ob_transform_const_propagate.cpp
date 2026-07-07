@@ -1313,11 +1313,11 @@ int ObTransformConstPropagate::prepare_new_expr(ExprConstInfo &const_info)
     ObRawExpr *cast_expr = const_info.const_expr_;
     if (const_info.const_expr_->get_result_type() == const_info.column_expr_->get_result_type()) {
       const_info.new_expr_ = const_info.const_expr_;
-    } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace(*ctx_->expr_factory_,
-                                                            const_info.column_expr_,
-                                                            cast_expr,
-                                                            ctx_->session_info_))) {
-      LOG_WARN("failed to create cast expr", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_,
+                                                                    const_info.column_expr_,
+                                                                    cast_expr,
+                                                                    ctx_->session_info_))) {
+      LOG_WARN("failed to create cast expr if need", K(ret));
     } else {
       const_info.new_expr_ = cast_expr;
     }
@@ -1413,11 +1413,11 @@ int ObTransformConstPropagate::do_remove_const_exec_param(ObRawExpr *&expr,
         LOG_WARN("failed to check need cast", K(ret));
       } else if (!need_cast && parent_exprs.count() != 0) {
         expr = ref_expr;
-      } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace(*ctx_->expr_factory_,
-                                                                expr,
-                                                                cast_expr,
-                                                                ctx_->session_info_))) {
-        LOG_WARN("failed to create cast expr", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_,
+                                                                        expr,
+                                                                        cast_expr,
+                                                                        ctx_->session_info_))) {
+        LOG_WARN("failed to create cast expr if need", K(ret));
       } else {
         expr = cast_expr;
       }

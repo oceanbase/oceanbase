@@ -796,7 +796,12 @@ int ObPredicateDeduce::deduce_general_predicates(ObTransformerCtx &ctx,
       for (int64_t j = 0; OB_SUCC(ret) && j < equal_exprs.count(); ++j) {
         ObRawExpr *new_pred = NULL;
         ObRawExprCopier copier(*ctx.expr_factory_);
-        if (OB_FAIL(copier.add_replaced_expr(cast_expr, equal_exprs.at(j)))) {
+        ObRawExpr *new_equal_expr = const_cast<ObRawExpr*>(equal_exprs.at(j));
+        if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(
+                        *ctx.expr_factory_, cast_expr, new_equal_expr,
+                        ctx.session_info_))) {
+          LOG_WARN("failed to add cast for replace if need", K(ret));
+        } else if (OB_FAIL(copier.add_replaced_expr(cast_expr, new_equal_expr))) {
           LOG_WARN("failed to add replaced expr", K(ret));
         } else if (OB_FAIL(copier.copy_on_replace(pred, new_pred))) {
           LOG_WARN("failed to copy expr node", K(ret));
