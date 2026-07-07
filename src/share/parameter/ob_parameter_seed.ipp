@@ -3563,7 +3563,7 @@ DEF_BOOL(_enable_database_isolation_mode, OB_TENANT_PARAMETER, "False",
     "enable database isolation mode",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
 
-DEF_BOOL(_enable_mv_refresh_queuing, OB_TENANT_PARAMETER, "True",
+DEF_BOOL(_enable_mv_refresh_queuing, OB_TENANT_PARAMETER, "False",
         "Enable the new MV refresh engine based on pending task scheduling. "
         "When set to True, refresh requests are submitted to the pending task queue and executed asynchronously. "
         "When set to False, the legacy synchronous refresh engine is used.",

@@ -11127,6 +11127,8 @@ int ObRootService::set_config_after_bootstrap_()
     LOG_WARN("push _enable_das_batch_rescan_flag failed", KR(ret));
   } else if (OB_FAIL(configs.push_back({"_enable_sql_parse_fullwidth_symbols", "true"}))) {
     LOG_WARN("push _enable_sql_parse_fullwidth_symbols failed", KR(ret));
+  } else if (OB_FAIL(configs.push_back({"_enable_mv_refresh_queuing", "true"}))) {
+    LOG_WARN("push _enable_mv_refresh_queuing failed", KR(ret));
   } else {
     LOG_INFO("push all static configs after bootstrap success");
   }
