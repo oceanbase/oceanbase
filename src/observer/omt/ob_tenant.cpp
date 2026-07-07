@@ -2169,17 +2169,15 @@ void ObTenant::regist_threads_to_cgroup()
     {
       Thread *thread = thread_list_node_->get_data();
       char *thread_base = (char *)thread->get_pthread();
-      Worker *worker = nullptr;
       if (OB_NOT_NULL(thread_base)) {
-        GET_OTHER_TSI_ADDR(worker, &Worker::self_);
-        if (OB_NOT_NULL(worker) && OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid() &&
-            OB_FAIL(GCTX.cgroup_ctrl_->add_thread_to_cgroup_(thread->get_tid(), id_, worker->get_group_id()))) {
+        GET_OTHER_TSI_ADDR(worker_group_id, &Worker::worker_group_id_);
+        if (OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid() &&
+            OB_FAIL(GCTX.cgroup_ctrl_->add_thread_to_cgroup_(thread->get_tid(), id_, worker_group_id))) {
           LOG_WARN("regist thread to cgroup failed",
               K(ret),
               K(thread->get_tid()),
               K(id_),
-              KP(worker),
-              K(worker->get_group_id()));
+              K(worker_group_id));
         }
       }
     }
@@ -2844,7 +2842,8 @@ int ObTenant::switch_worker_to_large_query_group(ObThWorker* worker)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(worker) || worker->get_tenant() != this || worker->get_group_id() != 0) {
+  if (OB_ISNULL(worker) || worker->get_tenant() != this || worker->get_group_id() != 0
+      || static_cast<Worker *>(worker) != Worker::self_) {
     ret = OB_INVALID_ARGUMENT;
   } else {
     // 带超时的trylock
@@ -2892,6 +2891,7 @@ int ObTenant::switch_worker_to_large_query_group(ObThWorker* worker)
             } else {
               worker->set_group(lq_group);
               worker->set_group_id_(share::OBCG_LQ);
+              Worker::worker_group_id_ = worker->get_group_id();
               worker->set_thread_group_id(OB_THREAD_GROUP_LARGE_QUERY);
               worker->set_th_worker_thread_name();
               if (cgroup_ctrl_.is_valid()) {

@@ -136,6 +136,7 @@ protected:
   OB_INLINE void set_is_th_worker(bool is_th_worker) { is_th_worker_ = is_th_worker; }
 public:
   static __thread Worker *self_;
+  static __thread uint64_t worker_group_id_;
 
 public:
   common::ObDLinkNode<Worker*> worker_node_;

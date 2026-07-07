@@ -76,6 +76,7 @@ bool __attribute__((weak)) is_global_background_resource_isolation_enabled()
 }  // namespace lib
 }  // namespace oceanbase
 __thread Worker *Worker::self_;
+__thread uint64_t Worker::worker_group_id_; // A copy of oceanbase::lib::Worker::group_id_ for access by other threads
 
 Worker::Worker()
     : group_(nullptr),

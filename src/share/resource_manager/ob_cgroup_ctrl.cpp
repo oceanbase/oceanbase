@@ -37,6 +37,7 @@ int SET_GROUP_ID(uint64_t group_id, bool is_background)
     LOG_TRACE("thread maybe change to other tenant dir", K(group_id), K(GET_GROUP_ID()), K(MTL_ID()), K(GET_ORIGIN_TENANT_ID()), K(lbt()));
   }
   THIS_WORKER.set_group_id_(group_id);
+  Worker::worker_group_id_ = THIS_WORKER.get_group_id();
   int tmp_ret = OB_SUCCESS;
   if (OB_NOT_NULL(GCTX.cgroup_ctrl_) &&
       OB_TMP_FAIL(GCTX.cgroup_ctrl_->add_self_to_cgroup_(GET_ORIGIN_TENANT_ID(), group_id, is_background))) {
