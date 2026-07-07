@@ -2680,17 +2680,31 @@ int ObMultiVersionMicroBlockRowScanner::cache_cur_micro_row_reverse(const bool f
       // row_ is the first and only row for this rowkey, no deep copy needed
     } else if (!is_row_empty(row_)) {
       prev_micro_row_.copy_row_meta(row_);
-      int64_t end_cell_pos = row_.count_;
-      if (row_.row_flag_.is_delete()) {
-        end_cell_pos = OB_INVALID_INDEX != read_info_->get_trans_col_index()
-                       ? read_info_->get_schema_rowkey_count() + 1
-                       : read_info_->get_schema_rowkey_count();
-      }
+      // For a delete row only the rowkey columns and the trans_version column hold
+      // meaningful values, the rest must stay NOP. The trans_version column may be
+      // projected at an arbitrary position (not necessarily right after the rowkey),
+      // so copy the rowkey columns first and then copy the trans column at its real index.
+      const int64_t end_cell_pos = row_.row_flag_.is_delete()
+          ? read_info_->get_schema_rowkey_count() : row_.count_;
+
       for (int64_t i = 0; OB_SUCC(ret) && i < end_cell_pos; ++i) {
         ObStorageDatum &src_datum = row_.storage_datums_[i];
         ObStorageDatum &dest_datum = prev_micro_row_.storage_datums_[i];
         if (OB_FAIL(dest_datum.deep_copy(src_datum, cell_allocator_))) {
           LOG_WARN("failed to deep copy datum", K(ret), K(src_datum));
+        }
+      }
+
+      if (OB_SUCC(ret) && row_.row_flag_.is_delete()) {
+        const int64_t trans_idx = read_info_->get_trans_col_index();
+        if (OB_INVALID_INDEX != trans_idx) {
+          if (OB_UNLIKELY(trans_idx < 0 || trans_idx >= row_.count_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("Unexpected trans info", K(ret), K(trans_idx), K_(row), KPC_(read_info));
+          } else if (OB_FAIL(prev_micro_row_.storage_datums_[trans_idx].deep_copy(
+                      row_.storage_datums_[trans_idx], cell_allocator_))) {
+            LOG_WARN("failed to deep copy trans datum", K(ret), K(trans_idx));
+          }
         }
       }
     }
