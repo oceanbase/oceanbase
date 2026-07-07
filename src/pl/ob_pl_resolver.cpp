@@ -3991,8 +3991,10 @@ int ObPLResolver::resolve_declare_var_comm(const ObStmtNodeTree *parse_tree,
 
         if (OB_SUCC(ret)
             && T_CHAR == default_node->children_[0]->type_
-            && (T_CHAR == type_node->type_ || T_NCHAR == type_node->type_)
-            && default_node->children_[0]->str_len_ == 0) {
+            && default_node->children_[0]->str_len_ == 0
+            && OB_NOT_NULL(data_type.get_data_type())
+            && (ObCharType == data_type.get_data_type()->get_obj_type()
+                || ObNCharType == data_type.get_data_type()->get_obj_type())) {
           default_node->children_[0]->str_len_++;
           default_node->children_[0]->str_value_ = " ";
           default_node->children_[0]->raw_text_ = "' '";
