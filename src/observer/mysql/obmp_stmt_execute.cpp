@@ -443,6 +443,7 @@ int ObMPStmtExecute::save_exception_for_arraybinding(
 
   const char *errm_result = NULL;
   int64_t errm_length = 0;
+  char fallback_buf[128];
 
   exception.pos_ = pos;
   exception.error_code_ = static_cast<uint16_t>(ob_errpkt_errno(error_code, lib::is_oracle_mode()));
@@ -456,9 +457,15 @@ int ObMPStmtExecute::save_exception_for_arraybinding(
   } else {
     errm_result = ob_errpkt_strerror(error_code, true);
     if (NULL == errm_result) {
-      errm_result = "OBE%ld: Message error_code not found; product=RDBMS; facility=ORA";
+      const char *errpfx = g_enable_ob_error_msg_style ? "OBE" : "ORA";
+      snprintf(fallback_buf, sizeof(fallback_buf),
+               "%s%d: Message error_code not found; product=RDBMS; facility=ORA",
+               errpfx, error_code);
+      errm_result = fallback_buf;
     }
-    errm_length = strlen(errm_result);
+    if (OB_NOT_NULL(errm_result)) {
+      errm_length = strlen(errm_result);
+    }
   }
 
   OZ (ob_write_string(alloc, ObString(errm_length, errm_result), exception.error_msg_));
