@@ -33,6 +33,7 @@ CREATE OR REPLACE PACKAGE dbms_xmldom AUTHID CURRENT_USER AS
 
   PROCEDURE freeDocument(doc IN DOMDocument);
   FUNCTION getChildNodes(n IN DOMNode) RETURN DOMNodeList;
+  FUNCTION getFirstChild(n IN DOMNode) RETURN DOMNode;
   FUNCTION getElementsByTagName(doc IN DOMDocument, name IN VARCHAR2) RETURN DOMNodeList;
   FUNCTION getLength(nl IN DOMNodeList) RETURN NUMBER;
   FUNCTION getNodeValue(n IN DOMNode) RETURN VARCHAR2;
