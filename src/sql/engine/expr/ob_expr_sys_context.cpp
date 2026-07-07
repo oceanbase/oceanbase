@@ -119,7 +119,8 @@ int ObExprSysContext::get_userenv_fun(const ObString &pram_str, eval_fun &fun)
     }
   }
   if (!found) {
-    ret = OB_INVALID_ARGUMENT;
+    ret = OB_ERR_INVALID_USERENV_PARAMETER;
+    LOG_USER_ERROR(OB_ERR_INVALID_USERENV_PARAMETER);
     LOG_WARN("invalid argument", K(ret), K(pram_str));
   }
   return ret;
