@@ -6301,72 +6301,79 @@ int ObSPIService::spi_new_coll_element(uint64_t collection_id,
   CK (OB_NOT_NULL(type));
   CK (type->is_collection_type());
   CK (OB_NOT_NULL(collection_type = static_cast<const pl::ObCollectionType*>(type)));
+  OZ (collection_type->get_element_type().get_size(pl::PL_TYPE_INIT_SIZE, init_size));
   OZ (collection_type->get_element_type().newx(*allocator, ns, ptr));
-  if (OB_FAIL(ret)) {
-  } else if (collection_type->get_element_type().is_collection_type()) {
-    pl::ObPLCollection *collection = NULL;
-    CK (OB_NOT_NULL(collection = reinterpret_cast<pl::ObPLCollection*>(ptr)));
+  if (OB_SUCC(ret)) {
+    if (collection_type->get_element_type().is_collection_type()) {
+      pl::ObPLCollection *collection = NULL;
+      CK (OB_NOT_NULL(collection = reinterpret_cast<pl::ObPLCollection*>(ptr)));
 
-    if (OB_SUCC(ret)) {
-      if (collection_type->get_element_type().is_associative_array_type()) {
-        collection->set_count(0);
-      } else {
-        // set newly extended collection to NULL, to be compatible with Oracle
-        collection->set_count(OB_INVALID_COUNT);
-      }
-    }
-  } else if (collection_type->get_element_type().is_record_type()) {
-    ObPLRecord *record = NULL;
-    bool has_default = false;
-    CK (OB_NOT_NULL(record = reinterpret_cast<ObPLRecord*>(ptr)));
-#ifdef OB_BUILD_ORACLE_PL
-    if (OB_SUCC(ret) && (collection_type->get_element_type().is_package_type()
-                         || collection_type->get_element_type().is_local_type())) {
-      const ObRecordType *record_type = NULL;
-      const ObUserDefinedType *elem_udt = NULL;
-      ObPLExecCtx *pl_ctx = dynamic_cast<ObPLExecCtx *>(const_cast<ObPLINS *>(ns));
-      OZ (ns->get_user_type(collection_type->get_element_type().get_user_type_id(), elem_udt));
-      CK (OB_NOT_NULL(pl_ctx));
-      CK (OB_NOT_NULL(elem_udt));
-      OX (record_type = static_cast<const ObRecordType *>(elem_udt));
-      CK (OB_NOT_NULL(record_type));
       if (OB_SUCC(ret)) {
-        const bool is_pkg_type = collection_type->get_element_type().is_package_type();
-        const uint64_t package_id = is_pkg_type
-            ? extract_package_id(record_type->get_user_type_id()) : OB_INVALID_ID;
-        ObIAllocator &copy_allocator = OB_NOT_NULL(record->get_allocator())
-                                         ? *record->get_allocator() : *allocator;
-        for (int64_t i = 0; OB_SUCC(ret) && i < record_type->get_record_member_count(); ++i) {
-          const ObRecordMember *member = record_type->get_record_member(i);
-          if (OB_NOT_NULL(member) && OB_INVALID_INDEX != member->get_default()) {
-            has_default = true;
-            ObObjParam result;
-            ObObj *elem = NULL;
-            if (is_pkg_type) {
-              OZ (spi_calc_package_expr(pl_ctx, package_id, member->get_default(), &result));
-            } else {
-              OZ (spi_calc_expr_at_idx(pl_ctx, member->get_default(),
-                                       OB_INVALID_INDEX, false, &result));
-            }
-            OZ (record->get_element(i, elem));
-            CK (OB_NOT_NULL(elem));
-            if (OB_FAIL(ret)) {
-            } else if (result.is_pl_extend()) {
-              OZ (ObUserDefinedType::deep_copy_obj(copy_allocator, result, *elem));
-            } else {
-              OZ (deep_copy_obj(copy_allocator, result, *elem));
+        if (collection_type->get_element_type().is_associative_array_type()) {
+          collection->set_count(0);
+        } else {
+          // set newly extended collection to NULL, to be compatible with Oracle
+          collection->set_count(OB_INVALID_COUNT);
+        }
+      }
+    } else if (collection_type->get_element_type().is_record_type()) {
+      ObPLRecord *record = NULL;
+      bool has_default = false;
+      CK (OB_NOT_NULL(record = reinterpret_cast<ObPLRecord*>(ptr)));
+  #ifdef OB_BUILD_ORACLE_PL
+      if (OB_SUCC(ret) && (collection_type->get_element_type().is_package_type()
+                          || collection_type->get_element_type().is_local_type())) {
+        const ObRecordType *record_type = NULL;
+        const ObUserDefinedType *elem_udt = NULL;
+        ObPLExecCtx *pl_ctx = dynamic_cast<ObPLExecCtx *>(const_cast<ObPLINS *>(ns));
+        OZ (ns->get_user_type(collection_type->get_element_type().get_user_type_id(), elem_udt));
+        CK (OB_NOT_NULL(pl_ctx));
+        CK (OB_NOT_NULL(elem_udt));
+        OX (record_type = static_cast<const ObRecordType *>(elem_udt));
+        CK (OB_NOT_NULL(record_type));
+        if (OB_SUCC(ret)) {
+          const bool is_pkg_type = collection_type->get_element_type().is_package_type();
+          const uint64_t package_id = is_pkg_type
+              ? extract_package_id(record_type->get_user_type_id()) : OB_INVALID_ID;
+          ObIAllocator &copy_allocator = OB_NOT_NULL(record->get_allocator())
+                                          ? *record->get_allocator() : *allocator;
+          for (int64_t i = 0; OB_SUCC(ret) && i < record_type->get_record_member_count(); ++i) {
+            const ObRecordMember *member = record_type->get_record_member(i);
+            if (OB_NOT_NULL(member) && OB_INVALID_INDEX != member->get_default()) {
+              has_default = true;
+              ObObjParam result;
+              ObObj *elem = NULL;
+              if (is_pkg_type) {
+                OZ (spi_calc_package_expr(pl_ctx, package_id, member->get_default(), &result));
+              } else {
+                OZ (spi_calc_expr_at_idx(pl_ctx, member->get_default(),
+                                        OB_INVALID_INDEX, false, &result));
+              }
+              OZ (record->get_element(i, elem));
+              CK (OB_NOT_NULL(elem));
+              if (OB_FAIL(ret)) {
+              } else if (result.is_pl_extend()) {
+                OZ (ObUserDefinedType::deep_copy_obj(copy_allocator, result, *elem));
+              } else {
+                OZ (deep_copy_obj(copy_allocator, result, *elem));
+              }
             }
           }
         }
       }
+  #endif
+      if (OB_SUCC(ret) && !has_default) {
+        record->set_null();
+      }
     }
-#endif
-    if (OB_SUCC(ret) && !has_default) {
-      record->set_null();
+    new_element->set_extend(ptr, collection_type->get_element_type().get_type(), init_size);
+    if (OB_FAIL(ret)) {
+      int tmp = ObUserDefinedType::destruct_objparam(*allocator, *new_element, nullptr);
+      if (tmp != OB_SUCCESS) {
+        LOG_WARN("failed to destruct objparam", K(tmp), K(ret));
+      }
     }
   }
-  OZ (collection_type->get_element_type().get_size(pl::PL_TYPE_INIT_SIZE, init_size));
-  OX (new_element->set_extend(ptr, collection_type->get_element_type().get_type(), init_size));
   return ret;
 }
 
