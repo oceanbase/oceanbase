@@ -2899,9 +2899,13 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
           } else {
             // 为了解决部分gbk字符因为转换函数中不包含对应unicode字符导致全gbk链路中字符解析错误的问题，
             // 当两个ObCollationType的CharsetType相同时，跳过 mb_wc, wc_mb 的转换过程，
-            // 直接设置结果的collation_type
-            if (ObCharset::charset_type_by_coll(connection_collation) ==
-                ObCharset::charset_type_by_coll(target_collation)) {
+            // 直接设置结果的collation_type。
+            // BINARY collation 的字节是 raw bytes，没有字符集语义，做 mb_wc/wc_mb 转换会把每个
+            // 字节当作独立字符重新编码（导致 double encoding），因此同样跳过转换、只 retag，
+            // 与高层 ObCharset::charset_convert 重载对 BINARY 源的处理（MEMCPY）保持一致。
+            const ObCharsetType src_charset_type = ObCharset::charset_type_by_coll(connection_collation);
+            if (src_charset_type == ObCharset::charset_type_by_coll(target_collation)
+                || src_charset_type == CHARSET_BINARY) {
               val.set_collation_type(target_collation);
             } else if (OB_ISNULL(buf = static_cast<char*>(allocator.alloc(buf_len)))) {
               ret = OB_ALLOCATE_MEMORY_FAILED;
