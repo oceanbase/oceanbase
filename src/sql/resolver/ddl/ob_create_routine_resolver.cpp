@@ -1049,7 +1049,7 @@ int ObCreateRoutineResolver::resolve_impl(ObRoutineType routine_type,
     }else if (database_schema->get_database_name_str() != session_info_->get_database_name()) {
       OZ (old_database_name.append(session_info_->get_database_name()));
       OX (old_database_id = session_info_->get_database_id());
-      OZ (session_info_->set_default_database(database_schema->get_database_name_str(), common::CS_TYPE_INVALID, false));
+      OZ (session_info_->set_default_database(database_schema->get_database_name_str()));
       OX (session_info_->set_database_id(database_id));
       OX (crt_routine_arg->routine_info_.set_database_id(database_id));
       OX (need_reset_default_database = true);
@@ -1080,7 +1080,7 @@ int ObCreateRoutineResolver::resolve_impl(ObRoutineType routine_type,
   }
   if (need_reset_default_database) {
     int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = session_info_->set_default_database(old_database_name.string(), common::CS_TYPE_INVALID, false))) {
+    if (OB_SUCCESS != (tmp_ret = session_info_->set_default_database(old_database_name.string()))) {
       ret = OB_SUCCESS == ret ? tmp_ret : ret; // 不覆盖错误码
       LOG_ERROR("failed to reset default database", K(ret), K(tmp_ret), K(old_database_name));
     } else {
@@ -1310,7 +1310,7 @@ int ObCreateRoutineResolver::resolve_external_udf(const ParseNode &parse_tree,
   } else if (database_schema->get_database_name_str() != session_info_->get_database_name()) {
     if (OB_FAIL(old_database_name.append(session_info_->get_database_name()))) {
       LOG_WARN("failed to append old database name", K(ret), K(session_info_), K(old_database_name));
-    } else if (OB_FAIL(session_info_->set_default_database(database_schema->get_database_name_str(), common::CS_TYPE_INVALID, false))) {
+    } else if (OB_FAIL(session_info_->set_default_database(database_schema->get_database_name_str()))) {
       LOG_WARN("failed to set_default_database", K(ret), K(session_info_), KPC(database_schema));
     } else {
       old_database_id = session_info_->get_database_id();
@@ -1402,7 +1402,7 @@ int ObCreateRoutineResolver::resolve_external_udf(const ParseNode &parse_tree,
 
   if (need_reset_default_database) {
     int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = session_info_->set_default_database(old_database_name.string(), common::CS_TYPE_INVALID, false))) {
+    if (OB_SUCCESS != (tmp_ret = session_info_->set_default_database(old_database_name.string()))) {
       ret = OB_SUCCESS == ret ? tmp_ret : ret; // 不覆盖错误码
       LOG_ERROR("failed to reset default database", K(ret), K(tmp_ret), K(old_database_name));
     } else {

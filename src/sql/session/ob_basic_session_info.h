@@ -574,8 +574,7 @@ public:
   bool is_in_internal_catalog();
   bool is_in_external_catalog();
   int set_default_database(const common::ObString &database_name,
-                           common::ObCollationType coll_type = common::CS_TYPE_INVALID,
-                           bool need_track_database = true);
+                           common::ObCollationType coll_type = common::CS_TYPE_INVALID);
   int reset_default_database() { return set_default_database(""); }
   int update_database_variables(share::schema::ObSchemaGetterGuard *schema_guard);
   int update_max_packet_size();
@@ -2841,6 +2840,7 @@ private:
   common::ObSEArray<common::ObString, 16> changed_user_vars_;
   common::ObArenaAllocator changed_var_pool_;  // reuse for each statement
   common::ObReserveArenaAllocator<256> extra_info_allocator_; // use for extra_info in 20 protocol
+  char initial_database_name_[common::OB_MAX_DATABASE_NAME_BUF_LENGTH * OB_MAX_CHAR_LEN];  // initial database name
   bool is_database_changed_;  // is schema changed
   share::ObFeedbackManager feedback_manager_; // feedback T-L-V
   // add by gujian, cached the flag whether transaction is sepcified

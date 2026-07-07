@@ -20572,7 +20572,7 @@ ObPLSwitchDatabaseGuard::ObPLSwitchDatabaseGuard(sql::ObSQLSessionInfo &session_
     OV (OB_NOT_NULL(db_schema), OB_ERR_UNEXPECTED, K(database_id_));
     OX (database_id_ = session_info_.get_database_id());
     OZ (database_name_.append(session_info_.get_database_name()));
-    OZ (session_info_.set_default_database(db_schema->get_database_name_str(), common::CS_TYPE_INVALID, false));
+    OZ (session_info_.set_default_database(db_schema->get_database_name_str()));
     OX (session_info_.set_database_id(db_schema->get_database_id()));
     OX (need_reset_ = true);
   }
@@ -20583,7 +20583,7 @@ ObPLSwitchDatabaseGuard::~ObPLSwitchDatabaseGuard()
 {
   int ret = OB_SUCCESS;
   if (need_reset_) {
-    if (OB_FAIL(session_info_.set_default_database(database_name_.string(), common::CS_TYPE_INVALID, false))) {
+    if (OB_FAIL(session_info_.set_default_database(database_name_.string()))) {
       LOG_ERROR("failed to reset default database", K(ret), K(database_name_.string()));
     } else {
       session_info_.set_database_id(database_id_);

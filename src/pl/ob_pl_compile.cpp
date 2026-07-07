@@ -1828,7 +1828,7 @@ void ObPLCompilerEnvGuard::init(const Info &info,
     OZ (old_db_name_.append(session_info_.get_database_name()));
     OZ (schema_guard.get_database_schema(info.get_tenant_id(), info.get_database_id(), db_schema));
     CK (OB_NOT_NULL(db_schema));
-    OZ (session_info_.set_default_database(db_schema->get_database_name_str(), common::CS_TYPE_INVALID, false));
+    OZ (session_info_.set_default_database(db_schema->get_database_name_str()));
     OX (session_info_.set_database_id(db_schema->get_database_id()));
     OX (need_reset_default_database_ = true);
   }
@@ -1844,7 +1844,7 @@ ObPLCompilerEnvGuard::~ObPLCompilerEnvGuard()
     }
   }
   if (need_reset_default_database_) {
-    if ((ret = session_info_.set_default_database(old_db_name_.string(), common::CS_TYPE_INVALID, false)) != OB_SUCCESS) {
+    if ((ret = session_info_.set_default_database(old_db_name_.string())) != OB_SUCCESS) {
       ret_ = OB_SUCCESS == ret_ ? ret : ret_;
       LOG_WARN("failed to reset default database in pl env guard", K(ret), K(ret_), K(old_db_name_));
     } else {

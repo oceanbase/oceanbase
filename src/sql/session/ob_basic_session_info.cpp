@@ -169,6 +169,7 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
   CHAR_CARRAY_INIT(tenant_);
   CHAR_CARRAY_INIT(effective_tenant_);
   CHAR_CARRAY_INIT(trace_id_buff_);
+  CHAR_CARRAY_INIT(initial_database_name_);
   sql_id_[0] = '\0';
   ssl_cipher_buff_[0] = '\0';
   sess_bt_buff_[0] = '\0';
@@ -983,9 +984,9 @@ int ObBasicSessionInfo::set_diagnosis_bad_file(const ObString &diagnosis_bad_fil
   } else {}
   return ret;
 }
+
 int ObBasicSessionInfo::set_default_database(const ObString &database_name,
-                                             const ObCollationType coll_type/*= CS_TYPE_INVALID */,
-                                             bool need_track_database/*= true */)
+                                             const ObCollationType coll_type/*= CS_TYPE_INVALID */)
 {
   int ret = OB_SUCCESS;
   if (database_name.length() > OB_MAX_DATABASE_NAME_LENGTH * OB_MAX_CHAR_LEN) {
@@ -1005,9 +1006,8 @@ int ObBasicSessionInfo::set_default_database(const ObString &database_name,
       LockGuard lock_guard(thread_data_mutex_);
       MEMCPY(thread_data_.database_name_, database_name.ptr(), database_name.length());
       thread_data_.database_name_[database_name.length()] = '\0';
-      if (need_track_database && is_track_session_info()) {
-        is_database_changed_ = true;
-      }
+      ObString initial_db_name(initial_database_name_);
+      is_database_changed_ = initial_db_name.case_compare(database_name) != 0;
     }
   }
   return ret;
@@ -6037,6 +6037,12 @@ void ObBasicSessionInfo::reset_session_changed_info()
 {
   changed_sys_vars_.reset();
   changed_user_vars_.reset();
+  initial_database_name_[0] = '\0';
+  if (is_track_session_info() && '\0' != thread_data_.database_name_[0]) {
+    int64_t len = strlen(thread_data_.database_name_);
+    MEMCPY(initial_database_name_, thread_data_.database_name_, len);
+    initial_database_name_[len] = '\0';
+  }
   is_database_changed_ = false;
   changed_var_pool_.reset();
   feedback_manager_.reset();

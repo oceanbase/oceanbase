@@ -1790,9 +1790,7 @@ int ObPLContext::set_default_database(ObPLFunction &routine,
       MEMCPY(database_name_, session_info_->get_database_name().ptr(), len);
       database_name_[len] = '\0';
       OX (database_id_ = session_info_->get_database_id());
-      // pl switch database do not need track database, because pl switch database is not a real database switch, it is just a temporary database switch.
-      // after pl execution, the database will be switched back to the original database.
-      OZ (session_info_->set_default_database(routine.get_database_name(), common::CS_TYPE_INVALID, false));
+      OZ (session_info_->set_default_database(routine.get_database_name()));
       OX (session_info_->set_database_id(routine.get_database_id()));
       OX (old_db_priv_set_ = session_info_->get_db_priv_set());
       ObPrivSet db_priv_set;
@@ -1815,7 +1813,7 @@ void ObPLContext::reset_default_database(int &ret)
       ret = OB_SUCCESS == ret ? OB_ERR_UNEXPECTED : ret;
       LOG_ERROR("current session info is null", K(ret), K(session_info_));
     } else if (OB_SUCCESS !=
-        (tmp_ret = session_info_->set_default_database(get_database_name(), common::CS_TYPE_INVALID, false))) {
+        (tmp_ret = session_info_->set_default_database(get_database_name()))) {
       ret = OB_SUCCESS == ret ? tmp_ret : ret; // 不覆盖错误码
       LOG_ERROR("failed to reset default database", K(ret), K(tmp_ret), K(database_name_));
     } else {
