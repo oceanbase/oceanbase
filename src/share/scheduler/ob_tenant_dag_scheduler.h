@@ -1024,10 +1024,15 @@ public:
       ObTenantDagScheduler &scheduler);
   bool is_empty() const
   {
+    // Hold prio_lock_ and also check dag_map_: move_dag_to_list_ removes a dag
+    // from one list before adding it to another, so an unlocked list-only check
+    // can transiently observe all lists empty while the dag is still alive in dag_map_.
+    lib::ObMutexGuard guard(prio_lock_);
     bool bret = true;
     bret &= (dag_list_[READY_DAG_LIST].is_empty()
       && dag_list_[WAITING_DAG_LIST].is_empty()
-      && dag_list_[RANK_DAG_LIST].is_empty());
+      && dag_list_[RANK_DAG_LIST].is_empty()
+      && dag_map_.empty());
     return bret;
   } // only for unittest
 
@@ -1192,7 +1197,7 @@ private:
 private:
   DagMap dag_map_;
   DagList dag_list_[DAG_LIST_MAX];
-  lib::ObMutex prio_lock_;  // Make sure the lock is outside if there are nested locks
+  mutable lib::ObMutex prio_lock_;  // Make sure the lock is outside if there are nested locks
   WorkerList waiting_workers_;  // workers waiting for time slice to run
   WorkerList running_workers_;  // running workers // lock with prio_lock_
   ObIAllocator* allocator_;
