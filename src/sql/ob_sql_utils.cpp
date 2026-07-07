@@ -6610,12 +6610,15 @@ int ObSQLUtils::check_sql_map_expected_resource_group(const ObSqlCtx &context,
               tenant_id, session_info->get_user_id(), final_choosed_group_id))) {
           LOG_WARN("get group id by user failed", K(ret));
         } else if (OB_INVALID_ID == final_choosed_group_id) {
-          // if not set consumer_group for current user, use OBCG_DEFAULT or OBCG_LQ.
-          if (THIS_WORKER.get_group_id() == share::OBCG_LQ) {
-            final_choosed_group_id = share::OBCG_LQ;
-          } else {
-            final_choosed_group_id = share::OBCG_DEFAULT;
-          }
+          // if not set consumer_group for current user, use OBCG_DEFAULT by default.
+          final_choosed_group_id = share::OBCG_DEFAULT;
+        }
+      }
+      // if worker had been scheduled into LQ from DEFAULT as a large query,
+      // use OBCG_LQ as the final chosen group id.
+      if (OB_SUCC(ret)) {
+        if (final_choosed_group_id == share::OBCG_DEFAULT && THIS_WORKER.get_group_id() == share::OBCG_LQ) {
+          final_choosed_group_id = share::OBCG_LQ;
         }
       }
 
