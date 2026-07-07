@@ -1156,15 +1156,26 @@ int ObPlanCache::get_plan_cache(ObILibCacheCtx &ctx,
   return ret;
 }
 
+ERRSIM_POINT_DEF(EN_PC_ADD_PLAN_BATCH_ERROR, "simulate error at pc add plan for batch params execute");
+
 int ObPlanCache::add_cache_obj(ObILibCacheCtx &ctx,
                                ObILibCacheKey *key,
                                ObILibCacheObject *cache_obj)
 {
   int ret = OB_SUCCESS;
   ctx.need_destroy_node_ = false;
+  if (OB_UNLIKELY(EN_PC_ADD_PLAN_BATCH_ERROR)) {
+    if (OB_NOT_NULL(cache_obj) && cache_obj->is_sql_crsr()
+        && static_cast<ObPlanCacheCtx&>(ctx).sql_ctx_.is_batch_params_execute()) {
+      ret = EN_PC_ADD_PLAN_BATCH_ERROR;
+      LOG_INFO("simulate add plan lock conflict for batch", K(ret));
+    }
+  }
   ObLibCacheWlockAndRef w_ref_lock(LC_NODE_WR_HANDLE, ctx.get_lock_timeout());
   ObILibCacheNode *cache_node = NULL;
-  if (OB_ISNULL(key) || OB_ISNULL(cache_obj)) {
+  if (OB_FAIL(ret)) {
+    // errsim 触发的 LOCK_CONFLICT, 不再 get_value
+  } else if (OB_ISNULL(key) || OB_ISNULL(cache_obj)) {
     ret = OB_INVALID_ARGUMENT;
     SQL_PC_LOG(WARN, "invalid null argument", K(ret), K(key), K(cache_obj));
   } else if (get_tenant_id() != cache_obj->get_tenant_id()) {

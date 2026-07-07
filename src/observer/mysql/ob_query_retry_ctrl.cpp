@@ -188,6 +188,25 @@ public:
   }
 };
 
+// PC_LOCK_CONFLICT only triggers LOCAL retry for batch params execute path;
+// non-batch paths must swallow OB_PC_LOCK_CONFLICT themselves (see ob_sql.cpp).
+// When retry exhausts (>=3) pc_add_plan rewrites the error to OB_BATCHED_MULTI_STMT_ROLLBACK,
+// which is then handled by batch_execute_opt_retry_proc / can_do_insert_batch_opt.
+class ObPcLockConflictRetryPolicy : public ObRetryPolicy
+{
+public:
+  ObPcLockConflictRetryPolicy() = default;
+  ~ObPcLockConflictRetryPolicy() = default;
+  virtual void test(ObRetryParam &v) const override
+  {
+    if (v.ctx_.is_batch_params_execute()) {
+      v.retry_type_ = RETRY_TYPE_LOCAL;
+    } else {
+      v.retry_type_ = RETRY_TYPE_NONE;
+    }
+  }
+};
+
 class ObSwitchConsumerGroupRetryPolicy : public ObRetryPolicy
 {
 public:
@@ -949,6 +968,13 @@ void ObQueryRetryCtrl::batch_execute_opt_retry_proc(ObRetryParam &v)
   retry_obj.test(batch_opt_retry);
 }
 
+void ObQueryRetryCtrl::pc_lock_conflict_retry_proc(ObRetryParam &v)
+{
+  ObRetryObject retry_obj(v);
+  ObPcLockConflictRetryPolicy pc_lock_conflict_retry;
+  retry_obj.test(pc_lock_conflict_retry);
+}
+
 void ObQueryRetryCtrl::switch_consumer_group_retry_proc(ObRetryParam &v)
 {
   ObRetryObject retry_obj(v);
@@ -1254,6 +1280,11 @@ int ObQueryRetryCtrl::init()
   // wait and retry, will see new part
   ERR_RETRY_FUNC("SQL",      OB_NO_PARTITION_FOR_INTERVAL_PART,  short_wait_retry_proc,             short_wait_retry_proc,                         nullptr);
   ERR_RETRY_FUNC("SQL",      OB_BATCHED_MULTI_STMT_ROLLBACK,     batch_execute_opt_retry_proc,      batch_execute_opt_retry_proc,                  nullptr);
+  // For batch params execute path (insert values multi-row opt + array binding), pc add_plan
+  // lock conflict triggers LOCAL retry to rerun the whole sql. pc_add_plan rewrites the error
+  // to OB_BATCHED_MULTI_STMT_ROLLBACK after 3 retries. Non-batch paths swallow this error
+  // themselves (see ob_sql.cpp) so this registration is effectively batch-only.
+  ERR_RETRY_FUNC("SQL",      OB_PC_LOCK_CONFLICT,                pc_lock_conflict_retry_proc,        batch_execute_opt_retry_proc,                  nullptr);
   ERR_RETRY_FUNC("SQL",      OB_SQL_RETRY_SPM,                   force_local_retry_proc,            force_local_retry_proc,                        nullptr);
   ERR_RETRY_FUNC("SQL",      OB_NEED_SWITCH_CONSUMER_GROUP,      switch_consumer_group_retry_proc,  empty_proc,                                    nullptr);
 

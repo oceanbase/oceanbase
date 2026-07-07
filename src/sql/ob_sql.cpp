@@ -5085,6 +5085,16 @@ int ObSql::pc_add_plan(ObPlanCacheCtx &pc_ctx,
       if (OB_SQL_PC_PLAN_DUPLICATE == ret) {
         ret = OB_SUCCESS;
         LOG_DEBUG("this plan has been added by others, need not add again", K(phy_plan));
+      } else if (OB_PC_LOCK_CONFLICT == ret) {
+        // batch + pc lock conflict: retry whole sql; rollback to single-row after 3 retries
+        int64_t stmt_retry = pc_ctx.sql_ctx_.session_info_->get_retry_info().get_retry_cnt();
+        if (stmt_retry < 3) {
+          LOG_DEBUG("pc add plan lock conflict, will retry whole sql", K(ret), K(stmt_retry));
+          // keep ret = OB_PC_LOCK_CONFLICT, let retry ctrl trigger LOCAL retry
+        } else {
+          LOG_WARN("pc lock conflict retry exhausted, rollback to single-row", K(ret), K(stmt_retry));
+          ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
+        }
       } else if (OB_FAIL(ret)) {
         LOG_WARN("some unexpected error occured", K(ret));
         ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
