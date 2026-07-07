@@ -2083,9 +2083,11 @@ int ObSysVarOnCheckFuncs::check_default_value_for_utf8mb4(ObExecContext &ctx,
       if (CS_TYPE_INVALID == (coll_type = ObCharset::collation_type(coll_name))) {
         ret = OB_ERR_UNKNOWN_COLLATION;
         LOG_USER_ERROR(OB_ERR_UNKNOWN_COLLATION, coll_name.length(), coll_name.ptr());
-      } else if (coll_type != CS_TYPE_UTF8MB4_GENERAL_CI) {
+      } else if (coll_type != CS_TYPE_UTF8MB4_GENERAL_CI
+                 && coll_type != CS_TYPE_UTF8MB4_0900_AI_CI) {
         ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED,"only utf8mb4_general_ci is supported, other collation");
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                       "only utf8mb4_general_ci and utf8mb4_0900_ai_ci are supported, other collation");
       } else {
         out_val.set_int(static_cast<int64_t>(coll_type));
       }
@@ -2104,9 +2106,11 @@ int ObSysVarOnCheckFuncs::check_default_value_for_utf8mb4(ObExecContext &ctx,
           ObString coll_name_str(val_buf);
           LOG_USER_ERROR(OB_ERR_UNKNOWN_COLLATION, coll_name_str.length(), coll_name_str.ptr());
         }
-      } else if (int64_val != 45) {
+      } else if (int64_val != static_cast<int64_t>(CS_TYPE_UTF8MB4_GENERAL_CI)
+                 && int64_val != static_cast<int64_t>(CS_TYPE_UTF8MB4_0900_AI_CI)) {
         ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED,"only utf8mb4_general_ci is supported, other collation");
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                       "only utf8mb4_general_ci and utf8mb4_0900_ai_ci are supported, other collation");
       } else {
         out_val = in_val;
       }
