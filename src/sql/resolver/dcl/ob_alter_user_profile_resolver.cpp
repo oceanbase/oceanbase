@@ -112,7 +112,7 @@ int ObAlterUserProfileResolver::resolve_role_list(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("role opt identified by node is null", K(ret));
       } else if (lib::is_mysql_mode()) {
-      } else if (T_IDENT == role->type_) {
+      } else if (T_IDENT == role->type_ || T_VARCHAR == role->type_ || T_NCHAR == role->type_) {
       } else if (T_SET_ROLE_PASSWORD != role->type_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("role type is error", K(ret), K(role->type_));
