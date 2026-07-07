@@ -453,6 +453,11 @@ bool ObDbmsStatsMaintenanceWindow::is_stats_job(const ObString &job_name)
   return is_true;
 }
 
+bool ObDbmsStatsMaintenanceWindow::is_spm_stats_job(const ObString &job_name)
+{
+  return 0 == job_name.case_compare(spm_stats_manager);
+}
+
 int ObDbmsStatsMaintenanceWindow::get_time_zone_offset(const ObSysVariableSchema &sys_variable,
                                                        const uint64_t tenant_id,
                                                        int32_t &offset_sec)
