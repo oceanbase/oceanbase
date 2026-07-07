@@ -41,7 +41,10 @@ public:
       uint64_t has_transfer_table_ : 1;
       uint64_t has_nested_table_   : 1;
       uint64_t initial_state_      : 1;
-      uint64_t reserved_           : 59;
+      uint64_t compat_version_     : 4;
+      uint64_t no_minor_gc_work_   : 1; // no minor/mds-minor merge need to trigger, no upper-trans update, no extra major to gc
+      uint64_t no_ddl_merge_work_  : 1; // major exists AND no unmerged ddl sstable
+      uint64_t reserved_           : 53;
     };
   };
 };
