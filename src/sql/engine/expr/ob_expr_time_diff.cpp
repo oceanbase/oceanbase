@@ -117,7 +117,8 @@ int ObExprTimeDiff::cg_expr(ObExprCGCtx &op_cg_ctx,
   } else {
     rt_expr.eval_func_ = ObExprTimeDiff::calc_timediff;
     // The vectorization of other types for the expression not completed yet.
-    if (ob_is_string_tc(rt_expr.args_[0]->datum_meta_.type_)
+    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_5_0_1_0
+        && ob_is_string_tc(rt_expr.args_[0]->datum_meta_.type_)
         && ob_is_string_tc(rt_expr.args_[1]->datum_meta_.type_)) {
       rt_expr.eval_vector_func_ = ObExprTimeDiff::calc_timediff_vector;
     }

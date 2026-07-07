@@ -64,7 +64,7 @@ int ObExprWeekOfYear::cg_expr(ObExprCGCtx &op_cg_ctx,
     // The vectorization of other types for the expression not completed yet.
     if (ob_is_datetime_or_mysql_datetime_tc(rt_expr.args_[0]->datum_meta_.type_)
         || ob_is_date_or_mysql_date(rt_expr.args_[0]->datum_meta_.type_)
-        || (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0 &&
+        || (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_5_0_1_0 &&
             ob_is_string_tc(rt_expr.args_[0]->datum_meta_.type_))) {
       rt_expr.eval_vector_func_ = ObExprWeekOfYear::calc_weekofyear_vector;
     }
