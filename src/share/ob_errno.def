@@ -2785,6 +2785,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_MISSING_EXPRESSION, -9843, -1, "HY000", "missing expr
 DEFINE_ORACLE_ERROR(OB_ERR_MISSING_RIGHT_PARENTHESIS, -9844, -1, "HY000", "missing right parenthesis", 907, "missing right parenthesis");
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_RELATIONAL_OPERATOR, -9845, -1, "HY000", "invalid relational operator", 920, "invalid relational operator");
 DEFINE_ORACLE_ERROR(OB_ERR_XML_NOT_MATCH_TYPE_DEF, -9846, -1, "HY000", "XML element or attribute does not match any in type", 19031, "XML element or attribute %.*s does not match any in type %.*s");
+DEFINE_ORACLE_ERROR(OB_ERR_JAVA_SESSION_STATE_CLEARED, -9847, -1, "HY000", "Java session state cleared", 29550, "Java session state cleared");
 
 // 余留位置
 ////////////////////////////////////////////////////////////////
