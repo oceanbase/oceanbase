@@ -318,6 +318,11 @@ int ObDDLResolver::resolve_external_file_location_object(ObResolverParams &param
     } else if (OB_ISNULL(schema_ptr)) {
       ret = OB_LOCATION_OBJ_NOT_EXIST;
       LOG_WARN("location object does't exist", K(ret), K(tenant_id), K(location_obj));
+    } else if (ObExternalTableUtils::is_sub_path_contain_parent_dir(sub_path)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sub path contains '..' which is not allowed");
+      LOG_WARN("sub path contains parent directory reference, suspected path traversal",
+               K(ret), K(sub_path));
     } else {
       table_schema.set_external_location_id(schema_ptr->get_location_id());
       OZ (table_schema.set_external_sub_path(sub_path));

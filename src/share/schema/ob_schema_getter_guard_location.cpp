@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 
+#include "share/external_table/ob_external_table_utils.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/schema/ob_schema_mgr.h"
 #include "sql/resolver/ob_schema_checker.h"
@@ -101,7 +102,7 @@ int ObSchemaGetterGuard::get_location_schema_by_prefix_match_with_priv(
     LOG_WARN("get schema failed", K(tenant_id), K(access_path), KR(ret));
   } else {
     // 再检查是否具有所需权限, 选择具有权限的对象中url最长匹配的对象(各个对象的aksk可能不一样)
-    int max_match_len = 0;
+    int64_t max_match_len = 0;
     for (int i = 0; OB_SUCC(ret) && i < match_schemas.count(); ++i) {
       const ObLocationSchema *tmp_schema = match_schemas.at(i);
       bool has_priv = true;
@@ -118,9 +119,23 @@ int ObSchemaGetterGuard::get_location_schema_by_prefix_match_with_priv(
       }
       if (OB_FAIL(ret)) {
         // do nothing
-      } else if (has_priv && tmp_schema->get_location_name_str().length() > max_match_len) {
+      } else if (has_priv && tmp_schema->get_location_url_str().length() > max_match_len) {
         schema = tmp_schema;
-        max_match_len = tmp_schema->get_location_name_str().length();
+        max_match_len = tmp_schema->get_location_url_str().length();
+      }
+    }
+    if (OB_SUCC(ret) && OB_NOT_NULL(schema)) {
+      const common::ObString &location_url = schema->get_location_url_str();
+      if (access_path.length() > location_url.length()) {
+        const common::ObString sub_path(access_path.length() - location_url.length(),
+                                        access_path.ptr() + location_url.length());
+        if (ObExternalTableUtils::is_sub_path_contain_parent_dir(sub_path)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sub path contains '..' which is not allowed");
+          LOG_WARN("matched location sub path contains parent directory reference, suspected path traversal",
+                   K(ret), K(access_path), K(sub_path), KPC(schema));
+          schema = nullptr;
+        }
       }
     }
   }

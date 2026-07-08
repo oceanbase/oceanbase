@@ -408,6 +408,8 @@ public:
   static bool is_skipped_insert_column(const schema::ObColumnSchemaV2& column);
   // External table hidden columns (__file_id, __line_number) have no catalog column stats.
   static bool is_hidden_external_column(const common::ObString &column_name);
+
+  static bool is_sub_path_contain_parent_dir(const common::ObString &sub_path);
   static int concat_external_file_location(const ObString &location,
                                            const ObString &sub_path,
                                            ObSqlString &full_path);

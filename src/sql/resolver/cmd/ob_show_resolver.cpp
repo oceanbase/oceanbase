@@ -11,6 +11,7 @@
 #include "storage/tx/ob_xa_define.h"
 #include "share/schema/ob_schema_printer.h"
 #include "share/catalog/ob_catalog_utils.h"
+#include "share/external_table/ob_external_table_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -2096,6 +2097,12 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
           if (OB_SUCC(ret) && OB_NOT_NULL(parse_tree.children_[1])) {
             ParseNode *child_node = parse_tree.children_[1];
             sub_path.assign_ptr(child_node->str_value_, static_cast<int32_t>(child_node->str_len_));
+            if (ObExternalTableUtils::is_sub_path_contain_parent_dir(sub_path)) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sub path contains '..' which is not allowed");
+              LOG_WARN("sub path contains parent directory reference, suspected path traversal",
+                       K(ret), K(sub_path));
+            }
           }
           if (OB_SUCC(ret) && OB_NOT_NULL(parse_tree.children_[2])) {
             ParseNode *child_node = parse_tree.children_[2];

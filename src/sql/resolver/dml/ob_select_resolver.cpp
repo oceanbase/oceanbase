@@ -6025,12 +6025,19 @@ int ObSelectResolver::resolve_into_file_name_node(const ParseNode *node, ObObj &
       ObString sub_path;
       if (OB_NOT_NULL(sub_path_node)) {
         sub_path = ObString(sub_path_node->str_len_, sub_path_node->str_value_);
+        if (ObExternalTableUtils::is_sub_path_contain_parent_dir(sub_path)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sub path contains '..' which is not allowed");
+          LOG_WARN("sub path contains parent directory reference, suspected path traversal",
+                   K(ret), K(sub_path));
+        }
       }
 
       share::schema::ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
       ObString full_path_str;
       ObString access_info;
-      if (OB_ISNULL(schema_guard)) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(schema_guard)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("schema guard is null", K(ret));
       } else if (OB_FAIL(ObExternalTableUtils::resolve_location_for_load_and_select_into(

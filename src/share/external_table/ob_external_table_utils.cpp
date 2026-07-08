@@ -2443,6 +2443,20 @@ bool ObExternalTableUtils::is_hidden_external_column(const ObString &column_name
          || column_name.case_compare(OB_HIDDEN_LINE_NUMBER_COLUMN_NAME) == 0;
 }
 
+bool ObExternalTableUtils::is_sub_path_contain_parent_dir(const common::ObString &sub_path)
+{
+  // A ".." path component escapes the location root. It only appears in one of:
+  //   - the whole sub_path is ".."
+  //   - a leading "../"
+  //   - a trailing "/.."
+  //   - a middle "/../"
+  return !sub_path.empty()
+         && (sub_path == ".."
+             || sub_path.prefix_match("../")
+             || sub_path.suffix_match("/..")
+             || OB_NOT_NULL(memmem(sub_path.ptr(), sub_path.length(), "/../", 4)));
+}
+
 int ObExternalTableUtils::concat_external_file_location(const ObString &location,
                                                         const ObString &sub_path,
                                                         ObSqlString &full_path)
