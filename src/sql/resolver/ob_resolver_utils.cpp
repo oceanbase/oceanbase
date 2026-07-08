@@ -6847,6 +6847,152 @@ int ObResolverUtils::build_partition_key_expr(ObResolverParams &params,
   return ret;
 }
 
+/*@brief, ObResolverUtils::process_part_str 用于将部分特殊关键字添加双引号去除关键字属性，比如：
+ * create table t1(SYSTIMESTAMP int) partition by range(SYSTIMESTAMP) (parition "p0" values less than 10000);
+ * select SYSTIMESTAMP from dual; ==> select "SYSTIMESTAMP" from dual;
+ * 以上才能真正重新解析出来part expr, 否则会误解析为函数，本质上这里表示的为普通列性质,目前已知的有如下关键字：
+ * SYSTIMESTAMP、CURRENT_DATE、LOCALTIMESTAMP、CURRENT_TIMESTAMP、SESSIONTIMEZONE、DBTIMEZONE、
+ * CONNECT_BY_ISCYCLE、CONNECT_BY_ISLEAF
+ * bug:
+ */
+
+#define ISSPACE(c) ((c) == ' ' || (c) == '\n' || (c) == '\r' || (c) == '\t' || (c) == '\f' || (c) == '\v')
+
+int ObResolverUtils::process_part_str(ObIAllocator &calc_buf, const ObString &part_str, ObString &new_part_str)
+{
+  int ret = OB_SUCCESS;
+  char *buf = NULL;
+  char *tmp_buf = NULL;
+  const char *part_ptr = part_str.ptr();
+  int32_t part_len = part_str.length();
+  int64_t buf_len = part_len + part_len / 10 * 2;
+  int32_t real_len = 0;
+  uint64_t offset = 0;
+  if (OB_ISNULL(buf = static_cast<char *>(calc_buf.alloc(buf_len)))
+      || OB_ISNULL(tmp_buf = static_cast<char *>(calc_buf.alloc(part_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc memory failed", K(ret), K(buf), K(buf_len), K(tmp_buf), K(part_len));
+  } else if (buf_len == part_len) {
+    new_part_str.assign_ptr(part_ptr, part_len);
+    LOG_TRACE("succeed to process part str", K(new_part_str));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i <= part_len; ++i) {
+      if (i < part_len && ISSPACE(part_ptr[i])) {
+        /*do nothing*/
+      } else if (i == part_len || part_ptr[i] == ',') {
+        if (0 == STRNCASECMP(tmp_buf, "SYSTIMESTAMP", std::min(offset, strlen("SYSTIMESTAMP")))
+            || 0 == STRNCASECMP(tmp_buf, "CURRENT_DATE", std::min(offset, strlen("CURRENT_DATE")))
+            || 0 == STRNCASECMP(tmp_buf, "LOCALTIMESTAMP", std::min(offset, strlen("LOCALTIMESTAMP")))
+            || 0 == STRNCASECMP(tmp_buf, "CURRENT_TIMESTAMP", std::min(offset, strlen("CURRENT_TIMESTAMP")))
+            || 0 == STRNCASECMP(tmp_buf, "SESSIONTIMEZONE", std::min(offset, strlen("SESSIONTIMEZONE")))
+            || 0 == STRNCASECMP(tmp_buf, "DBTIMEZONE", std::min(offset, strlen("DBTIMEZONE")))
+            || 0 == STRNCASECMP(tmp_buf, "CONNECT_BY_ISLEAF", std::min(offset, strlen("CONNECT_BY_ISLEAF")))
+            || 0 == STRNCASECMP(tmp_buf, "CONNECT_BY_ISCYCLE", std::min(offset, strlen("CONNECT_BY_ISCYCLE")))) {
+          buf[real_len++] = '\"';
+          // 由于schema中保存的列名为大写，同时添加双引号的字符串无法保证大小写，因此需要强制转换
+          for (int64_t j = 0; j < offset; ++j) {
+            tmp_buf[j] = toupper(tmp_buf[j]);
+          }
+          MEMCPY(buf + real_len, tmp_buf, offset);
+          real_len = real_len + offset;
+          buf[real_len++] = '\"';
+        } else {
+          MEMCPY(buf + real_len, tmp_buf, offset);
+          real_len = real_len + offset;
+        }
+        if (i != part_len && part_ptr[i] == ',') {
+          buf[real_len++] = ',';
+        }
+        offset = 0;
+        MEMSET(tmp_buf, 0, part_len);
+      } else if (OB_UNLIKELY(offset >= part_len)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(offset), K(part_len), K(ret));
+      } else {
+        tmp_buf[offset++] = part_ptr[i];
+      }
+    }
+    if (OB_SUCC(ret)) {
+      new_part_str.assign_ptr(buf, real_len);
+      LOG_TRACE("succeed to process part str", K(new_part_str));
+    }
+  }
+  return ret;
+}
+
+int ObResolverUtils::build_partition_expr_sql_str(ObPartitionFuncType part_type,
+                                                  const ObString &part_func_expr_str,
+                                                  bool is_oracle_mode,
+                                                  const ObPartitionKeyInfo *key_info,
+                                                  const ObTableSchema *parent_table_schema,
+                                                  ObSqlString &sql_str)
+{
+  int ret = OB_SUCCESS;
+  if (PARTITION_FUNC_TYPE_KEY_IMPLICIT == part_type) {
+    // KEY_IMPLICIT: part_func_expr_str stores "key", not column names.
+    // Build expression from key_info, matching build_partition_key_expr.
+    if (OB_ISNULL(key_info) || OB_ISNULL(parent_table_schema) || OB_UNLIKELY(key_info->get_size() == 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid key info for KEY_IMPLICIT partition", K(ret));
+    } else {
+      // Quote each column name so reserved-keyword / special-char names (e.g.
+      // `order`, `key`) parse correctly. Explicit KEY/HASH partitions store an
+      // already-quoted part_func_expr_str (formalize_part_str -> PRINT_IDENT_WITH_QUOT);
+      // the KEY_IMPLICIT path rebuilds names from key_info, so it must quote itself.
+      const char quote_char = is_oracle_mode ? '"' : '`';
+      ObArenaAllocator calc_buf(ObModIds::OB_SQL_PARSER);
+      OZ(sql_str.append_fmt("%s(", N_PART_KEY));
+      for (int64_t i = 0; OB_SUCC(ret) && i < key_info->get_size(); i++) {
+        const ObRowkeyColumn *key_col = key_info->get_column(i);
+        CK(OB_NOT_NULL(key_col));
+        bool is_col_exist = false;
+        ObString col_name;
+        ObString escaped_name;
+        if (OB_SUCC(ret)) {
+          parent_table_schema->get_column_name_by_column_id(key_col->column_id_, col_name, is_col_exist);
+          if (!is_col_exist) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("partition key column not found in parent schema", K(ret), K(key_col->column_id_));
+          } else if (OB_FAIL(ObSQLUtils::generate_new_name_with_escape_character(calc_buf,
+                                                                                 col_name,
+                                                                                 escaped_name,
+                                                                                 is_oracle_mode))) {
+            LOG_WARN("failed to escape partition key column name", K(ret), K(col_name));
+          } else {
+            if (i > 0) {
+              OZ(sql_str.append(", "));
+            }
+            OZ(sql_str.append_fmt("%c%.*s%c", quote_char, escaped_name.length(), escaped_name.ptr(), quote_char));
+          }
+        }
+      }
+      OZ(sql_str.append_fmt(")"));
+    }
+  } else if (OB_UNLIKELY(part_type >= PARTITION_FUNC_TYPE_MAX)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Error part type", K(ret));
+  } else if (OB_UNLIKELY(part_func_expr_str.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Part string should not be empty", K(ret));
+  } else if (PARTITION_FUNC_TYPE_KEY == part_type) {
+    OZ(sql_str.append_fmt("%s(%.*s)", N_PART_KEY, part_func_expr_str.length(), part_func_expr_str.ptr()));
+  } else if (is_oracle_mode && PARTITION_FUNC_TYPE_HASH == part_type) {
+    OZ(sql_str.append_fmt("%s(%.*s)", N_PART_HASH, part_func_expr_str.length(), part_func_expr_str.ptr()));
+  } else {
+    // Oracle: double-quote special keywords to prevent them being parsed as functions
+    // Wrap expression in parentheses matching original resolver behavior
+    if (is_oracle_mode) {
+      ObArenaAllocator calc_buf(ObModIds::OB_SQL_PARSER);
+      ObString new_part_str;
+      OZ(process_part_str(calc_buf, part_func_expr_str, new_part_str));
+      OZ(sql_str.append_fmt("(%.*s)", new_part_str.length(), new_part_str.ptr()));
+    } else {
+      OZ(sql_str.append_fmt("(%.*s)", part_func_expr_str.length(), part_func_expr_str.ptr()));
+    }
+  }
+  return ret;
+}
+
 int ObResolverUtils::check_column_name(const ObSQLSessionInfo *session_info,
                                        const ObQualifiedName &q_name,
                                        const ObColumnRefRawExpr &col_ref,

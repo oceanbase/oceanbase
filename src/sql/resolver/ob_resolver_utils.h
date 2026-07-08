@@ -598,6 +598,15 @@ public:
                                       const share::schema::ObTableSchema &table_schema,
                                       ObRawExpr *&partition_key_expr,
                                       common::ObIArray<ObQualifiedName> *qualified_names);
+  static int process_part_str(common::ObIAllocator &calc_buf,
+                              const common::ObString &part_str,
+                              common::ObString &new_part_str);
+  static int build_partition_expr_sql_str(share::schema::ObPartitionFuncType part_type,
+                                          const common::ObString &part_func_expr_str,
+                                          bool is_oracle_mode,
+                                          const ObPartitionKeyInfo *key_info,
+                                          const ObTableSchema *parent_table_schema,
+                                          common::ObSqlString &sql_str);
   static int create_generate_table_column(ObRawExprFactory &expr_factory,
                                           const TableItem &table_item,
                                           uint64_t column_id,

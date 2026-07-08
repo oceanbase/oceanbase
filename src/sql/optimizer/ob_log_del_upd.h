@@ -359,6 +359,19 @@ protected:
   int generate_old_calc_partid_expr(IndexDMLInfo &index_info);
   int generate_lookup_part_id_expr(IndexDMLInfo &index_info);
   int generate_fk_lookup_part_id_expr(IndexDMLInfo &index_info);
+  int build_fk_part_expr_from_key_info(const share::schema::ObForeignKeyInfo &fk_info,
+                                       const IndexDMLInfo &index_dml_info,
+                                       ObRawExprFactory &expr_factory,
+                                       const share::schema::ObTableSchema &parent_table_schema,
+                                       const common::ObPartitionKeyInfo &key_info,
+                                       const common::ObString &part_func_expr_str,
+                                       share::schema::ObPartitionFuncType func_type,
+                                       ObRawExpr *&expr);
+  int remap_fk_part_expr_columns(ObRawExpr *&expr,
+                                 common::ObIArray<ObQualifiedName> &columns,
+                                 const share::schema::ObForeignKeyInfo &fk_info,
+                                 const share::schema::ObTableSchema &parent_table_schema,
+                                 const IndexDMLInfo &index_dml_info);
   int convert_insert_new_fk_lookup_part_id_expr(ObIArray<ObRawExpr*> &all_exprs,IndexDMLInfo &index_dml_info);
   int convert_update_new_fk_lookup_part_id_expr(ObIArray<ObRawExpr*> &all_exprs, IndexDMLInfo &index_dml_info);
   int replace_expr_for_fk_part_expr(const ObIArray<ObRawExpr *> &dml_columns,

@@ -5,12 +5,13 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "ob_log_del_upd.h"
-#include "sql/optimizer/ob_del_upd_log_plan.h"
-#include "sql/optimizer/ob_log_table_scan.h"
-#include "sql/optimizer/ob_log_exchange.h"
-#include "sql/optimizer/ob_log_join.h"
-#include "sql/optimizer/ob_log_granule_iterator.h"
+
 #include "share/ob_fts_index_builder_util.h"
+#include "sql/optimizer/ob_del_upd_log_plan.h"
+#include "sql/optimizer/ob_log_exchange.h"
+#include "sql/optimizer/ob_log_granule_iterator.h"
+#include "sql/optimizer/ob_log_join.h"
+#include "sql/optimizer/ob_log_table_scan.h"
 
 using namespace oceanbase;
 using namespace oceanbase::sql;
@@ -1431,6 +1432,8 @@ int ObLogDelUpd::generate_fk_lookup_part_id_expr(IndexDMLInfo &index_dml_info)
   } else if (OB_ISNULL(fk_infos = &table_schema->get_foreign_key_infos())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("foreign key infos is null", K(ret));
+  } else if (!index_dml_info.fk_lookup_part_id_expr_.empty()) {
+    // Only the first call builds the FK part exprs.
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < fk_infos->count(); i++) {
       const ObForeignKeyInfo &fk_info = fk_infos->at(i);
@@ -1455,25 +1458,183 @@ int ObLogDelUpd::generate_fk_lookup_part_id_expr(IndexDMLInfo &index_dml_info)
           ret = OB_ERR_CANNOT_ADD_FOREIGN;
           LOG_WARN("get invalid table id to build das scan task for foreign key checks", K(ret));
         } else {
-          ObRawExpr* fk_look_up_part_id_expr = nullptr;
-          const ObTableSchema* scan_table_schema = nullptr;
-          if (schema_guard->get_table_schema(session_info->get_effective_tenant_id(),
-                                             scan_index_tid,
-                                             scan_table_schema)) {
+          ObRawExpr *fk_look_up_part_id_expr = nullptr;
+          const ObTableSchema *scan_table_schema = nullptr;
+          ObRawExpr *part_expr = nullptr, *subpart_expr = nullptr;
+          ObRawExprFactory &expr_factory = log_plan->get_optimizer_context().get_expr_factory();
+          if (OB_FAIL(schema_guard->get_table_schema(session_info->get_effective_tenant_id(),
+                                                     scan_index_tid,
+                                                     scan_table_schema))) {
             LOG_WARN("failed to get scan table schema to perform foreign key check", K(ret), K(scan_index_tid));
           } else if (OB_ISNULL(scan_table_schema)) {
             ret = OB_TABLE_NOT_EXIST;
             LOG_WARN("table schema scanned for foreign key check not exist", K(ret));
-          } else if (scan_table_schema->get_part_level() != PARTITION_LEVEL_ZERO &&
-                    OB_FAIL(log_plan->gen_calc_part_id_expr(fk_info.foreign_key_id_, // init table_id by foreign key id
-                                                            scan_index_tid,
-                                                            CALC_PARTITION_TABLET_ID,
-                                                            fk_look_up_part_id_expr))) {
-            LOG_WARN("failed to gen calc part id expr", K(ret));
+          } else if (scan_table_schema->get_part_level() != PARTITION_LEVEL_ZERO
+                     && OB_FAIL(build_fk_part_expr_from_key_info(fk_info,
+                                                                 index_dml_info,
+                                                                 expr_factory,
+                                                                 *scan_table_schema,
+                                                                 scan_table_schema->get_partition_key_info(),
+                                                                 scan_table_schema->get_part_option().get_part_func_expr_str(),
+                                                                 scan_table_schema->get_part_option().get_part_func_type(),
+                                                                 part_expr))) {
+            LOG_WARN("failed to build fk partition expr", K(ret));
+          } else if (scan_table_schema->get_part_level() == PARTITION_LEVEL_TWO
+                     && OB_FAIL(build_fk_part_expr_from_key_info(fk_info,
+                                                                 index_dml_info,
+                                                                 expr_factory,
+                                                                 *scan_table_schema,
+                                                                 scan_table_schema->get_subpartition_key_info(),
+                                                                 scan_table_schema->get_sub_part_option().get_part_func_expr_str(),
+                                                                 scan_table_schema->get_sub_part_option().get_part_func_type(),
+                                                                 subpart_expr))) {
+            LOG_WARN("failed to build fk subpartition expr", K(ret));
+          } else if (scan_table_schema->get_part_level() != PARTITION_LEVEL_ZERO
+                     && OB_FAIL(ObRawExprUtils::build_calc_partition_tablet_id_expr(expr_factory,
+                                                                                    *session_info,
+                                                                                    scan_index_tid,
+                                                                                    scan_table_schema->get_part_level(),
+                                                                                    part_expr,
+                                                                                    subpart_expr,
+                                                                                    fk_look_up_part_id_expr))) {
+            LOG_WARN("failed to build calc partition tablet id expr", K(ret));
           } else if (OB_FAIL(index_dml_info.fk_lookup_part_id_expr_.push_back(fk_look_up_part_id_expr))) {
             LOG_WARN("failed to push part id expr to array", K(ret), K(index_dml_info.fk_lookup_part_id_expr_));
           }
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogDelUpd::build_fk_part_expr_from_key_info(const ObForeignKeyInfo &fk_info,
+                                                  const IndexDMLInfo &index_dml_info,
+                                                  ObRawExprFactory &expr_factory,
+                                                  const ObTableSchema &parent_table_schema,
+                                                  const ObPartitionKeyInfo &key_info,
+                                                  const ObString &part_func_expr_str,
+                                                  ObPartitionFuncType func_type,
+                                                  ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString expr_sql;
+  ObSQLSessionInfo *s = nullptr;
+  ObSQLMode sql_mode = SMO_DEFAULT;
+  const ParseNode *part_expr_node = nullptr;
+  ObSEArray<ObQualifiedName, 4> columns;
+  expr = nullptr;
+  s = get_plan()->get_optimizer_context().get_session_info();
+  if (OB_ISNULL(s)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is null", K(ret));
+  } else if (OB_FALSE_IT(sql_mode = lib::is_oracle_mode() ? (DEFAULT_ORACLE_MODE | SMO_ORACLE) : s->get_sql_mode())) {
+  } else if (OB_FAIL(ObResolverUtils::build_partition_expr_sql_str(func_type,
+                                                                   part_func_expr_str,
+                                                                   lib::is_oracle_mode(),
+                                                                   &key_info,
+                                                                   &parent_table_schema,
+                                                                   expr_sql))) {
+    LOG_WARN("failed to build partition expr sql str", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::parse_expr_node_from_str(expr_sql.string(),
+                                                              s->get_charsets4parser(),
+                                                              expr_factory.get_allocator(),
+                                                              part_expr_node,
+                                                              sql_mode))) {
+    LOG_WARN("failed to parse partition expr", K(ret), K(expr_sql));
+  } else if (OB_FAIL(ObRawExprUtils::build_check_constraint_expr(expr_factory, *s, *part_expr_node, expr, columns))) {
+    LOG_WARN("failed to build check constraint expr", K(ret));
+  } else if (OB_FAIL(remap_fk_part_expr_columns(expr, columns, fk_info, parent_table_schema, index_dml_info))) {
+    LOG_WARN("failed to remap fk part expr columns", K(ret));
+  } else if (OB_FAIL(expr->formalize(s))) {
+    LOG_WARN("failed to formalize expr", K(ret));
+  }
+  return ret;
+}
+
+int ObLogDelUpd::remap_fk_part_expr_columns(ObRawExpr *&expr,
+                                            ObIArray<ObQualifiedName> &columns,
+                                            const ObForeignKeyInfo &fk_info,
+                                            const ObTableSchema &parent_table_schema,
+                                            const IndexDMLInfo &index_dml_info)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObRawExpr *> real_exprs;
+  const ObColumnSchemaV2 *col_schema = nullptr;
+  ObQualifiedName *q_name = nullptr;
+  ObRawExpr *real_ref_expr = nullptr;
+  uint64_t pk_col_id = OB_INVALID_ID;
+  uint64_t child_col_id = OB_INVALID_ID;
+  bool found = false;
+  int64_t i = 0;
+  int64_t j = 0;
+  for (i = 0; OB_SUCC(ret) && i < columns.count(); i++) {
+    q_name = &columns.at(i);
+    real_ref_expr = nullptr;
+    found = false;
+    if (q_name->is_sys_func()) {
+      if (OB_UNLIKELY(q_name->access_idents_.empty())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("sys func has empty access idents", K(ret));
+      } else if (OB_FAIL(q_name->access_idents_.at(0).check_param_num())) {
+        LOG_WARN("failed to check param num", K(ret));
+      } else {
+        real_ref_expr = static_cast<ObRawExpr *>(q_name->access_idents_.at(0).sys_func_expr_);
+        found = true;
+      }
+    } else if (OB_NOT_NULL(q_name->ref_expr_) && q_name->ref_expr_->is_column_ref_expr()
+               && !q_name->col_name_.empty()) {
+      col_schema = parent_table_schema.get_column_schema(q_name->col_name_);
+      if (OB_ISNULL(col_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("col not found in parent schema", K(ret), K(q_name->col_name_));
+      } else {
+        // Map parent column -> child column via FK info
+        pk_col_id = col_schema->get_column_id();
+        child_col_id = OB_INVALID_ID;
+        for (j = 0; OB_INVALID_ID == child_col_id && j < fk_info.parent_column_ids_.count(); j++) {
+          if (fk_info.parent_column_ids_.at(j) == pk_col_id) {
+            child_col_id = fk_info.child_column_ids_.at(j);
+          }
+        }
+        if (OB_UNLIKELY(OB_INVALID_ID == child_col_id)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fk part key col not in parent columns", K(pk_col_id));
+        } else {
+          // Find the matching column expr pointer in index_dml_info
+          for (j = 0; nullptr == real_ref_expr && j < index_dml_info.column_exprs_.count(); j++) {
+            if (OB_NOT_NULL(index_dml_info.column_exprs_.at(j))
+                && index_dml_info.column_exprs_.at(j)->is_column_ref_expr()
+                && static_cast<ObColumnRefRawExpr *>(index_dml_info.column_exprs_.at(j))->get_column_id()
+                   == child_col_id) {
+              real_ref_expr = index_dml_info.column_exprs_.at(j);
+            }
+          }
+          if (OB_ISNULL(real_ref_expr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("child FK column expr not found in column_exprs_", K(child_col_id));
+          } else {
+            found = true;
+          }
+        }
+      }
+    }
+    // else: constant or unsupported expr type in partition key - skip
+    if (OB_FAIL(ret)) {
+    } else if (!found) {
+    } else {
+      // Replace already-mapped columns' refs inside this real_ref_expr
+      for (j = 0; OB_SUCC(ret) && j < real_exprs.count(); j++) {
+        if (OB_FAIL(ObRawExprUtils::replace_ref_column(real_ref_expr, columns.at(j).ref_expr_, real_exprs.at(j)))) {
+          LOG_WARN("failed to replace ref column in real ref expr", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(real_exprs.push_back(real_ref_expr))) {
+        LOG_WARN("failed to push back real expr", K(ret));
+      } else if (q_name->ref_expr_ != real_ref_expr
+                 && OB_FAIL(ObRawExprUtils::replace_ref_column(expr, q_name->ref_expr_, real_ref_expr))) {
+        LOG_WARN("failed to replace ref column in expr", K(ret));
       }
     }
   }

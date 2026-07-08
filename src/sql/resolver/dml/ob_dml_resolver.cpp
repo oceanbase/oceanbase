@@ -9016,53 +9016,45 @@ int ObDMLResolver::resolve_foreign_key_constraint(const TableItem *table_item)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table item is null", K(ret));
   } else if (!table_item->is_basic_table()) {
-    //nothing to do, only resolve foreign key constraint for basic table
+    // nothing to do, only resolve foreign key constraint for basic table
   } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
-                                                       table_item->ref_id_, table_schema))) {
+                                                       table_item->ref_id_,
+                                                       table_schema))) {
     LOG_WARN("get table schema failed", K_(table_item->table_name), K(table_item->ref_id_), K(ret));
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table schema not exist", K(ret), K(table_item->ref_id_));
-  } else if (OB_FAIL(resolve_fk_table_partition_expr(*table_item, *table_schema))) {
-    LOG_WARN("failed to resolve partition expr used for foreign key check", K(ret));
-  }
-  return ret;
-}
-
-int ObDMLResolver::resolve_fk_table_partition_expr(const TableItem &table_item, const ObTableSchema &table_schema)
-{
-  int ret = OB_SUCCESS;
-  ObDMLStmt *dml_stmt = get_stmt();
-  if (OB_ISNULL(dml_stmt)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("dml_stmt is null", K(ret));
-  } else if (table_schema.get_foreign_key_infos().count() > 0) {
-    const common::ObIArray<ObForeignKeyInfo> & foreign_key_infos = table_schema.get_foreign_key_infos();
-    for (int64_t i = 0; i < foreign_key_infos.count(); i++) {
+  } else if (table_schema->get_foreign_key_infos().count() > 0) {
+    const common::ObIArray<ObForeignKeyInfo> &foreign_key_infos = table_schema->get_foreign_key_infos();
+    for (int64_t i = 0; OB_SUCC(ret) && i < foreign_key_infos.count(); i++) {
       const ObForeignKeyInfo &foreign_key_info = foreign_key_infos.at(i);
       const uint64_t parent_table_id = foreign_key_info.parent_table_id_;
       const uint64_t child_table_id = foreign_key_info.child_table_id_;
-      if (child_table_id == table_schema.get_table_id() && !foreign_key_info.is_parent_table_mock_ && foreign_key_info.is_ref_unique_index()) {
+      if (child_table_id == table_schema->get_table_id() && !foreign_key_info.is_parent_table_mock_
+          && foreign_key_info.is_ref_unique_index()) {
         const ObTableSchema *parent_table_schema = nullptr;
         const ObTableSchema *child_table_schema = NULL;
         const ObDatabaseSchema *foreign_key_database_schema = NULL;
-        bool parent_key_is_pkey = false;
         const common::ObSEArray<uint64_t, 4> &parent_column_ids = foreign_key_info.parent_column_ids_;
-        const ObTableSchema *resolve_table_schema = nullptr;
         uint64_t fk_scan_tid = OB_INVALID_ID;
-        if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), child_table_id, child_table_schema))) {
+        if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                                                      child_table_id,
+                                                      child_table_schema))) {
           LOG_WARN("failed to get child table schema", K(ret), K(child_table_id));
         } else if (OB_ISNULL(child_table_schema)) {
           ret = OB_TABLE_NOT_EXIST;
           LOG_WARN("child table not exists", K(ret), K(child_table_id));
-        } else if (OB_FAIL(schema_checker_->get_database_schema(session_info_->get_effective_tenant_id(), child_table_schema->get_database_id(), foreign_key_database_schema))) {
+        } else if (OB_FAIL(schema_checker_->get_database_schema(session_info_->get_effective_tenant_id(),
+                                                                child_table_schema->get_database_id(),
+                                                                foreign_key_database_schema))) {
           LOG_WARN("failed to get foreign key database schema", K(ret), K(child_table_schema->get_database_id()));
         } else if (OB_ISNULL(foreign_key_database_schema)) {
           ret = OB_ERR_BAD_DATABASE;
           LOG_WARN("foreign key database schema not exists", K(ret), K(child_table_schema->get_database_id()));
-        } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), parent_table_id, parent_table_schema))) { //NOTE: Can we use this function to get schema here
+        } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                                                             parent_table_id,
+                                                             parent_table_schema))) {
           if (OB_TABLE_NOT_EXIST == ret) {
-            // Note: Parent table not exist, return OB_ERR_NO_REFERENCED_ROW instead of table not exist to ensure compatibility
             ret = OB_ERR_NO_REFERENCED_ROW;
             LOG_USER_ERROR(OB_ERR_NO_REFERENCED_ROW,
                            foreign_key_database_schema->get_database_name_str().length(),
@@ -9073,7 +9065,6 @@ int ObDMLResolver::resolve_fk_table_partition_expr(const TableItem &table_item, 
           }
           LOG_WARN("get parent table schema from schema checker failed", K(ret), K(parent_table_id));
         } else if (OB_ISNULL(parent_table_schema)) {
-          // Note: Parent table not exist, return OB_ERR_NO_REFERENCED_ROW instead of table not exist to ensure compatibility
           ret = OB_ERR_NO_REFERENCED_ROW;
           LOG_USER_ERROR(OB_ERR_NO_REFERENCED_ROW,
                          foreign_key_database_schema->get_database_name_str().length(),
@@ -9081,50 +9072,50 @@ int ObDMLResolver::resolve_fk_table_partition_expr(const TableItem &table_item, 
                          foreign_key_info.foreign_key_name_.length(),
                          foreign_key_info.foreign_key_name_.ptr());
           LOG_WARN("parent table not exists", K(parent_table_id));
-        } else if (OB_FAIL(parent_table_schema->get_fk_check_index_tid(*schema_checker_->get_schema_guard(), parent_column_ids, fk_scan_tid))) {
+        } else if (OB_FAIL(parent_table_schema->get_fk_check_index_tid(*schema_checker_->get_schema_guard(),
+                                                                       parent_column_ids,
+                                                                       fk_scan_tid))) {
           LOG_WARN("failed to get table id to perform scan task for foreign key check", K(ret));
         } else if (OB_INVALID_ID == fk_scan_tid) {
           ret = OB_ERR_CANNOT_ADD_FOREIGN;
-          LOG_WARN("invalid table id to perform scan task for foregin key check", K(ret));
-        } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), fk_scan_tid, resolve_table_schema))) {
-          LOG_WARN("failed to get table schema to perform foreign key check", K(ret), K(fk_scan_tid));
-        } else if (OB_ISNULL(resolve_table_schema)) {
-          ret = OB_TABLE_NOT_EXIST;
-          LOG_WARN("table schema used to perform foreign key check not exist", K(ret), K(fk_scan_tid));
+          LOG_WARN("invalid table id to perform scan task for foreign key check", K(ret));
         } else {
-          ObRawExpr *parent_part_expr = nullptr;
-          ObRawExpr *parent_subpart_expr = nullptr;
-          const ObString &part_str = resolve_table_schema->get_part_option().get_part_func_expr_str();
-          ObPartitionFuncType part_type = resolve_table_schema->get_part_option().get_part_func_type();
-          // NOTE: for parent index table, can we still use table_item of child table here
-          if (resolve_table_schema->get_part_level() != PARTITION_LEVEL_ZERO) {
-            if (OB_FAIL(resolve_partition_expr(table_item, *resolve_table_schema, part_type, part_str, parent_part_expr, true, &foreign_key_info))) {
-              LOG_WARN("Failed to resolve partition expr", K(ret), K(part_str), K(part_type));
-            } else if (PARTITION_LEVEL_TWO == resolve_table_schema->get_part_level()) {
-              const ObString &parent_subpart_str = resolve_table_schema->get_sub_part_option().get_part_func_expr_str();
-              ObPartitionFuncType parent_subpart_type = resolve_table_schema->get_sub_part_option().get_part_func_type();
-              if (OB_FAIL(resolve_partition_expr(table_item, *parent_table_schema, parent_subpart_type, parent_subpart_str, parent_subpart_expr, true, &foreign_key_info))) {
-                LOG_WARN("Failed to resolve partition expr", K(ret));
+          const ObTableSchema *scan_table_schema = nullptr;
+          if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                                                         fk_scan_tid,
+                                                         scan_table_schema))) {
+            LOG_WARN("failed to get scan table schema for FK check", K(ret), K(fk_scan_tid));
+          } else if (OB_ISNULL(scan_table_schema)) {
+            ret = OB_TABLE_NOT_EXIST;
+            LOG_WARN("scan table schema for FK check not exist", K(ret), K(fk_scan_tid));
+          } else if (scan_table_schema->get_part_level() != PARTITION_LEVEL_ZERO) {
+            // Validate partition key columns are mappable through FK parent columns.
+            const ObPartitionKeyInfo *key_infos[2] = {&scan_table_schema->get_partition_key_info(),
+                                                      scan_table_schema->get_part_level() == PARTITION_LEVEL_TWO
+                                                      ? &scan_table_schema->get_subpartition_key_info()
+                                                      : nullptr};
+            for (int64_t k = 0; OB_SUCC(ret) && k < 2 && key_infos[k] != nullptr; ++k) {
+              const ObPartitionKeyInfo &key_info = *key_infos[k];
+              for (int64_t j = 0; OB_SUCC(ret) && j < key_info.get_size(); ++j) {
+                uint64_t col_id = OB_INVALID_ID;
+                bool covered = false;
+                if (OB_FAIL(key_info.get_column_id(j, col_id))) {
+                  LOG_WARN("get partition key column id failed", K(ret), K(j));
+                } else {
+                  for (int64_t m = 0; !covered && m < parent_column_ids.count(); ++m) {
+                    if (parent_column_ids.at(m) == col_id) {
+                      covered = true;
+                    }
+                  }
+                  if (!covered) {
+                    ret = OB_ERR_CANNOT_ADD_FOREIGN;
+                    LOG_WARN("partition key column of FK scan table not covered by FK parent columns",
+                             K(col_id),
+                             K(fk_scan_tid));
+                  }
+                }
               }
             }
-            if (OB_FAIL(ret)) {
-            } else if (OB_FAIL(dml_stmt->set_part_expr(foreign_key_info.foreign_key_id_, fk_scan_tid,
-                                parent_part_expr, parent_subpart_expr))) {
-              /*
-                create table t17(a int, b int, c int, d int, primary key (a)) partition by hash(a) partitions 3;
-                create table tf17(a int, b int, c int, d int, primary key (a), foreign key (a) references t17 (a)) partition by hash(a) partitions 3;
-                update tf17 partition(p0) as C, tf17 as P set C.d = C.d + 100 where C.a = P.a;
-                In follwing cases, the partition key of t17 will be resolved twice, but it needs return success for compatibility with oracle
-              */
-              if (ret == OB_ERR_TABLE_EXIST) {
-                ret = OB_SUCCESS;
-                LOG_INFO("Duplicate foreign key", K(lbt()));
-              } else {
-                LOG_WARN("set part expr to dml stmt failed", K(ret));
-              }
-            } else {
-              LOG_TRACE("resolve partition expr", K(table_item), KPC(parent_part_expr), K(part_str));
-            }
           }
         }
       }
@@ -9132,103 +9123,6 @@ int ObDMLResolver::resolve_fk_table_partition_expr(const TableItem &table_item, 
   }
   return ret;
 }
-
-int ObDMLResolver::map_to_fk_column_name(const ObTableSchema &child_table_schema,
-                                         const ObTableSchema &parent_table_schema,
-                                         const ObForeignKeyInfo &fk_info,
-                                         const ObString &pk_col_name,
-                                         ObString &fk_col_name)
-{
-  int ret = OB_SUCCESS;
-  bool is_column_exist = false;
-  if (OB_ISNULL(parent_table_schema.get_column_schema(pk_col_name))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("parent column schema is null", K(ret),K(pk_col_name));
-  } else {
-    const uint64_t pk_col_id = parent_table_schema.get_column_schema(pk_col_name)->get_column_id();
-    uint64_t fk_col_id = OB_INVALID_ID;
-    if OB_FAIL(fk_info.get_child_column_id(pk_col_id, fk_col_id)) {
-      LOG_WARN("failed to get child column id according parent column id", K(ret));
-    } else {
-      child_table_schema.get_column_name_by_column_id(fk_col_id, fk_col_name, is_column_exist);
-      if (!is_column_exist) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("child column is not exist", K(ret), K(fk_col_id));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDMLResolver::resolve_columns_for_fk_partition_expr(ObRawExpr *&expr,
-                                            ObIArray<ObQualifiedName> &columns,
-                                            const TableItem &table_item, // table_item of dml table(child_table)
-                                            const ObTableSchema &parent_table_schema,
-                                            const ObForeignKeyInfo *fk_info)
-{
-  int ret = OB_SUCCESS;
-  const uint64_t child_table_id = fk_info->child_table_id_;
-  const ObTableSchema *child_table_schema = nullptr;
-  if (OB_ISNULL(fk_info)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("foreign key info is null", K(ret));
-  } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
-                                                       child_table_id, child_table_schema))) {
-    LOG_WARN("failed to get child table schema", K(ret));
-  } else {
-    ObArray<ObRawExpr*> real_exprs;
-    for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); i++) {
-      ObQualifiedName &q_name = columns.at(i);
-      ObRawExpr *real_ref_expr = NULL;
-      ObString child_col_name;
-      if (q_name.is_sys_func()) {
-        if (OB_FAIL(resolve_qualified_identifier(q_name, columns, real_exprs, real_ref_expr))) {
-          LOG_WARN("resolve sysfunc expr failed", K(q_name), K(ret));
-        } else if (OB_ISNULL(real_ref_expr)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("expr is NULL", K(ret));
-        } else if (!real_ref_expr->is_sys_func_expr()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid exor", K(*real_ref_expr), K(ret));
-        } else {
-          ObSysFunRawExpr *sys_func_expr = static_cast<ObSysFunRawExpr*>(real_ref_expr);
-          if (OB_FAIL(sys_func_expr->check_param_num())) {
-            LOG_WARN("sys func check param failed", K(ret));
-          }
-        }
-      } else if (OB_FAIL(map_to_fk_column_name(*child_table_schema, parent_table_schema, *fk_info, q_name.col_name_, child_col_name))) {
-        LOG_WARN("failed to map parent column name to child column name", K(ret));
-      } else {
-        ColumnItem *column_item = NULL;
-        if (OB_ISNULL(child_col_name)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("failed to get column name of foreign key column", K(ret), K(q_name.col_name_));
-        } else if (OB_FAIL(resolve_basic_column_item(table_item, child_col_name, parent_table_schema.is_oracle_tmp_table(), column_item))) {
-          LOG_WARN("resolve basic column item failed", K(i), K(q_name), K(ret));
-        } else {
-          real_ref_expr = column_item->expr_;
-        }
-      }
-
-      if (OB_SUCC(ret)) {
-        for (int64_t i = 0; OB_SUCC(ret) && i < real_exprs.count(); ++i) {
-          if (OB_FAIL(ObRawExprUtils::replace_ref_column(real_ref_expr, columns.at(i).ref_expr_, real_exprs.at(i)))) {
-            LOG_WARN("failed to replace real expr", K(i), K(ret));
-          }
-        }
-        if (OB_FAIL(ret)) {
-          // nothing to do
-        } else if (OB_FAIL(real_exprs.push_back(real_ref_expr))) {
-          LOG_WARN("failed to push back real ref exprs", K(ret));
-        } else if OB_FAIL((ObRawExprUtils::replace_ref_column(expr, q_name.ref_expr_, real_ref_expr))) {
-          LOG_WARN("failed to replace real ref column", K(ret));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 
 //for recursively process columns item in resolve_partition_expr
 //just wrap columns process logic in resolve_partition_expr
@@ -9276,14 +9170,12 @@ int ObDMLResolver::resolve_columns_for_partition_expr(ObRawExpr *&expr,
   }
   return ret;
 }
-int ObDMLResolver::resolve_partition_expr(
-    const TableItem &table_item,
-    const ObTableSchema &table_schema,
-    const ObPartitionFuncType part_type,
-    const ObString &part_str,
-    ObRawExpr *&expr,
-    bool for_fk,
-    const ObForeignKeyInfo *fk_info)
+
+int ObDMLResolver::resolve_partition_expr(const TableItem &table_item,
+                                          const ObTableSchema &table_schema,
+                                          const ObPartitionFuncType part_type,
+                                          const ObString &part_str,
+                                          ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
   ObArray<ObQualifiedName> columns;
@@ -9306,7 +9198,7 @@ int ObDMLResolver::resolve_partition_expr(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Part string should not be empty", K(ret));
   } else {
-    ObSqlString sql_str;
+    ObSqlString expr_str;
     ParseResult parse_result;
     ParseNode *stmt_node = NULL;
     ParseNode *select_node = NULL;
@@ -9321,36 +9213,18 @@ int ObDMLResolver::resolve_partition_expr(
     }
     ObParser parser(*allocator_, sql_mode);
     LOG_DEBUG("resolve partition expr", K(sql_mode), K(table_schema.get_tenant_id()));
-    if (PARTITION_FUNC_TYPE_KEY == part_type) {
-      if (OB_FAIL(sql_str.append_fmt("SELECT %s(%.*s) FROM DUAL", N_PART_KEY,
-                                     part_str.length(), part_str.ptr()))) {
-        LOG_WARN("fail to concat string", K(part_str), K(ret));
-      }
-    } else if (lib::is_oracle_mode() && PARTITION_FUNC_TYPE_HASH == part_type) {
-      if (OB_FAIL(sql_str.append_fmt("SELECT %s(%.*s) FROM DUAL", N_PART_HASH,
-                                     part_str.length(), part_str.ptr()))) {
-        LOG_WARN("fail to concat string", K(part_str), K(ret));
-      }
-    } else {
-      //对于oracle模式下的部分特殊关键字需要添加双引号去除关键字属性，以防止将列名识别为了函数。比如current_date
-      if (lib::is_oracle_mode()) {
-        ObArenaAllocator calc_buf(ObModIds::OB_SQL_PARSER);
-        ObString new_part_str;
-        if (OB_FAIL(process_part_str(calc_buf, part_str, new_part_str))) {
-          LOG_WARN("failed to process part str");
-        } else if (OB_FAIL(sql_str.append_fmt("SELECT (%.*s) FROM DUAL",
-                                              new_part_str.length(),
-                                              new_part_str.ptr()))) {
-          LOG_WARN("fail to concat string", K(part_str), K(ret));
-        } else {/*do nothing*/}
-      } else if (OB_FAIL(sql_str.append_fmt("SELECT (%.*s) FROM DUAL",
-                                            part_str.length(),
-                                            part_str.ptr()))) {
-        LOG_WARN("fail to concat string", K(part_str), K(ret));
-      }
+    if (OB_FAIL(ObResolverUtils::build_partition_expr_sql_str(part_type,
+                                                              part_str,
+                                                              lib::is_oracle_mode(),
+                                                              nullptr,
+                                                              nullptr,
+                                                              expr_str))) {
+      LOG_WARN("failed to build partition expr sql str", K(ret));
     }
-
+    ObSqlString sql_str;
     if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(sql_str.append_fmt("SELECT %.*s FROM DUAL", expr_str.length(), expr_str.ptr()))) {
+      LOG_WARN("failed to build sql string", K(ret));
     } else if (OB_FAIL(parser.parse(sql_str.string(), parse_result))) {
       ret = OB_ERR_PARSE_SQL;
       _OB_LOG(WARN, "parse: %p, %p, %p, msg=[%s], start_col_=[%d], end_col_[%d], line_[%d], yycolumn[%d], yylineno_[%d], sql[%.*s]",
@@ -9394,15 +9268,11 @@ int ObDMLResolver::resolve_partition_expr(
     }
   }
   if (OB_SUCC(ret)) {
-    if (for_fk) {
-      if (OB_ISNULL(fk_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fk_info is nullptr when resolve foreign key part expr", K(ret));
-      } else if (OB_FAIL(resolve_columns_for_fk_partition_expr(expr, columns, table_item, table_schema, fk_info))) {
-        LOG_WARN("resolve columns for parent table partition expr failed", K(ret));
-      }
-    } else if (OB_FAIL(resolve_columns_for_partition_expr(expr, columns, table_item,
-            table_schema.is_oracle_tmp_table() || table_schema.is_fts_index() || table_schema.is_vec_index() || table_schema.is_random_part()))) {
+    if (OB_FAIL(resolve_columns_for_partition_expr(expr,
+                                                   columns,
+                                                   table_item,
+                                                   table_schema.is_oracle_tmp_table() || table_schema.is_fts_index()
+                                                   || table_schema.is_vec_index() || table_schema.is_random_part()))) {
       LOG_WARN("resolve columns for partition expr failed", K(ret));
     }
   }
@@ -16134,81 +16004,6 @@ int ObDMLResolver::get_all_column_ref(ObRawExpr *expr, ObIArray<ObColumnRefRawEx
       }
     } else {
       // do nothing
-    }
-  }
-  return ret;
-}
-
-/*@brief, ObDMLResolver::process_part_str 用于将部分特殊关键字添加双引号去除关键字属性，比如：
- * create table t1(SYSTIMESTAMP int) partition by range(SYSTIMESTAMP) (parition "p0" values less than 10000);
- * select SYSTIMESTAMP from dual; ==> select "SYSTIMESTAMP" from dual;
- * 以上才能真正重新解析出来part expr, 否则会误解析为函数，本质上这里表示的为普通列性质,目前已知的有如下关键字：
- * SYSTIMESTAMP、CURRENT_DATE、LOCALTIMESTAMP、CURRENT_TIMESTAMP、SESSIONTIMEZONE、DBTIMEZONE、
- * CONNECT_BY_ISCYCLE、CONNECT_BY_ISLEAF
- * bug:
- */
-
-#define ISSPACE(c) ((c) == ' ' || (c) == '\n' || (c) == '\r' || (c) == '\t' || (c) == '\f' || (c) == '\v')
-
-int ObDMLResolver::process_part_str(ObIAllocator &calc_buf,
-                                    const ObString &part_str,
-                                    ObString &new_part_str)
-{
-  int ret = OB_SUCCESS;
-  char *buf = NULL;
-  char *tmp_buf = NULL;
-  const char *part_ptr = part_str.ptr();
-  int32_t part_len = part_str.length();
-  int64_t buf_len = part_len + part_len / 10 * 2;
-  int32_t real_len = 0;
-  uint64_t offset = 0;
-  if (OB_ISNULL(buf = static_cast<char *>(calc_buf.alloc(buf_len))) ||
-      OB_ISNULL(tmp_buf = static_cast<char *>(calc_buf.alloc(part_len)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("alloc memory failed", K(ret), K(buf), K(buf_len), K(tmp_buf), K(part_len));
-  } else if (buf_len == part_len) {
-    new_part_str.assign_ptr(part_ptr, part_len);
-    LOG_TRACE("succeed to process part str", K(new_part_str));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i <= part_len; ++i) {
-      if (i < part_len && ISSPACE(part_ptr[i])) {
-        /*do nothing*/
-      } else if (part_ptr[i] == ',' || i == part_len) {
-        if (0 == STRNCASECMP(tmp_buf, "SYSTIMESTAMP", std::min(offset, strlen("SYSTIMESTAMP"))) ||
-            0 == STRNCASECMP(tmp_buf, "CURRENT_DATE", std::min(offset, strlen("CURRENT_DATE"))) ||
-            0 == STRNCASECMP(tmp_buf, "LOCALTIMESTAMP", std::min(offset, strlen("LOCALTIMESTAMP"))) ||
-            0 == STRNCASECMP(tmp_buf, "CURRENT_TIMESTAMP", std::min(offset, strlen("CURRENT_TIMESTAMP"))) ||
-            0 == STRNCASECMP(tmp_buf, "SESSIONTIMEZONE", std::min(offset, strlen("SESSIONTIMEZONE"))) ||
-            0 == STRNCASECMP(tmp_buf, "DBTIMEZONE", std::min(offset, strlen("DBTIMEZONE"))) ||
-            0 == STRNCASECMP(tmp_buf, "CONNECT_BY_ISLEAF", std::min(offset, strlen("CONNECT_BY_ISLEAF"))) ||
-            0 == STRNCASECMP(tmp_buf, "CONNECT_BY_ISCYCLE", std::min(offset, strlen("CONNECT_BY_ISCYCLE")))) {
-          buf[real_len++] = '\"';
-          //由于schema中保存的列名为大写，同时添加双引号的字符串无法保证大小写，因此需要强制转换
-          for (int64_t j = 0; j < offset; ++j) {
-            tmp_buf[j] = toupper(tmp_buf[j]);
-          }
-          MEMCPY(buf + real_len, tmp_buf, offset);
-          real_len = real_len + offset;
-          buf[real_len++] = '\"';
-        } else {
-          MEMCPY(buf + real_len, tmp_buf, offset);
-          real_len = real_len + offset;
-        }
-        if (part_ptr[i] == ',') {
-          buf[real_len++] = ',';
-        }
-        offset = 0;
-        MEMSET(tmp_buf, 0, part_len);
-      } else if (OB_UNLIKELY(offset >= part_len)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(offset), K(part_len), K(ret));
-      } else {
-        tmp_buf[offset++] = part_ptr[i];
-      }
-    }
-    if (OB_SUCC(ret)) {
-      new_part_str.assign_ptr(buf, real_len);
-      LOG_TRACE("succeed to process part str", K(new_part_str));
     }
   }
   return ret;
