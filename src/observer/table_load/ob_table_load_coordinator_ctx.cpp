@@ -688,8 +688,8 @@ int ObTableLoadCoordinatorCtx::commit_trans(ObTableLoadCoordinatorTrans *trans)
     } else if (OB_UNLIKELY(segment_ctx->current_trans_ != trans)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected trans", KR(ret));
-    } else if (OB_FAIL(trans->check_trans_status(ObTableLoadTransStatusType::COMMIT))) {
-      LOG_WARN("fail to check trans status commit", KR(ret));
+    } else if (OB_FAIL(trans->check_trans_status(ObTableLoadTransStatusType::FROZEN))) {
+      LOG_WARN("fail to check trans status frozen", KR(ret));
     } else if (OB_FAIL(commited_trans_ctx_array_.push_back(trans->get_trans_ctx()))) {
       LOG_WARN("fail to push back trans ctx", KR(ret));
     } else {
@@ -697,6 +697,12 @@ int ObTableLoadCoordinatorCtx::commit_trans(ObTableLoadCoordinatorTrans *trans)
       segment_ctx->committed_trans_ctx_ = trans->get_trans_ctx();
       if (OB_FAIL(trans_map_.erase_refactored(trans->get_trans_id()))) {
         LOG_WARN("fail to erase_refactored", KR(ret));
+      }
+      // Publish COMMIT AFTER erasing trans_map_ so that observing COMMIT implies
+      // the trans has been removed.  This closes a TOCTOU window where finish()
+      // could see a non-empty trans_map_ and incorrectly return OB_ENTRY_EXIST.
+      else if (OB_FAIL(trans->set_trans_status_commit())) {
+        LOG_WARN("fail to set trans status commit", KR(ret));
       } else {
         put_trans(trans);
       }

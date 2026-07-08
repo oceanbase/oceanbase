@@ -1850,9 +1850,11 @@ int ObTableLoadCoordinator::commit_trans(ObTableLoadCoordinatorTrans *trans)
     LOG_WARN("ObTableLoadCoordinator not init", KR(ret), KP(this));
   } else {
     LOG_INFO("coordinator commit trans", K(trans->get_trans_id()));
-    if (OB_FAIL(trans->set_trans_status_commit())) {
-      LOG_WARN("fail to set trans status commit", KR(ret));
-    } else if (OB_FAIL(coordinator_ctx_->commit_trans(trans))) {
+    // Defer COMMIT publish to coordinator_ctx_->commit_trans, where it is set AFTER
+    // erasing from trans_map_ under the same rwlock.  This guarantees that the main
+    // thread, when it observes COMMIT via get_trans_status, already sees an empty
+    // trans_map_, avoiding the spurious "trans already exist" in finish().
+    if (OB_FAIL(coordinator_ctx_->commit_trans(trans))) {
       LOG_WARN("fail to commit trans", KR(ret));
     }
   }
