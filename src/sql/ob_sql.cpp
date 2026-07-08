@@ -6330,12 +6330,14 @@ int ObSql::check_need_reroute(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session,
   bool should_reroute = false;
   if (OB_NOT_NULL(plan)) {
     session.partition_hit().try_set_bool(das_ctx.is_partition_hit());
+    const bool in_spm_evolution = plan->get_evolution();
 
     should_reroute = pc_ctx.sql_ctx_.can_reroute_sql_
+      && !in_spm_evolution
       && (OB_PHY_PLAN_REMOTE == plan->get_plan_type()
           || (!das_ctx.is_partition_hit() && !das_ctx.get_table_loc_list().empty()));
     // check inject reroute for test
-    if (!should_reroute) {
+    if (!should_reroute && !in_spm_evolution) {
       const uint32_t sessid = session.get_server_sid();
       const int reroute_retry_cnt = OB_E(EventTable::EN_LOCK_CONFLICT_RETRY_THEN_REROUTE, sessid) OB_SUCCESS;
       if (OB_UNLIKELY(reroute_retry_cnt)) {
