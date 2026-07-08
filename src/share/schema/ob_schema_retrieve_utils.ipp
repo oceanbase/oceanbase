@@ -5700,7 +5700,7 @@ int ObSchemaRetrieveUtils::retrieve_simple_encrypt_info(
   if (ret != OB_ITER_END) {
     SHARE_SCHEMA_LOG(WARN, "fail to get simple encrypt info. iter quit. ", K(ret));
   } else {
-    SHARE_SCHEMA_LOG(INFO, "retrieve simple encrypt info", K(master_key_id), K(encrypt_key));
+    SHARE_SCHEMA_LOG(INFO, "retrieve simple encrypt info", K(master_key_id));
     ret = OB_SUCCESS;
   }
 
