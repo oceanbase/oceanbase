@@ -249,6 +249,10 @@ SQL_MONITOR_STATNAME_DEF(AI_RERANK_API_CALL_COUNT, metric::Unit::INT, "ai rerank
 // Hybrid Search Fusion Iter Exec Mode
 SQL_MONITOR_STATNAME_DEF(HS_FUSION_EXEC_MODE, metric::Unit::INT, "fusion exec mode", "fusion iter exec mode: 0 skip, 1 distinct_only, 2 full_recall, 3 top_k", M_FIRST_VAL, metric::Level::STANDARD)
 
+// Hybrid Search Probe Metrics
+SQL_MONITOR_STATNAME_DEF(HS_PROBE_COUNT, metric::Unit::INT, "probe count", "probe count", M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(HS_PROBE_TIME, metric::Unit::TIME_NS, "probe time", "probe time", M_SUM, metric::Level::STANDARD)
+
 //end
 SQL_MONITOR_STATNAME_DEF(MONITOR_STATNAME_END, metric::Unit::INVALID, "monitor end", "monitor stat name end", E_MIN | E_MAX, metric::Level::AD_HOC)
 #endif
