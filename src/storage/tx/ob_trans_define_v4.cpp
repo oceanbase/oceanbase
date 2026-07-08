@@ -734,6 +734,7 @@ bool ObTxDesc::in_tx_for_free_route_()
 bool ObTxDesc::contain_savepoint(const ObString &sp)
 {
   bool hit = false;
+  ObSpinLockGuard guard(lock_);
   ARRAY_FOREACH_X(savepoints_, i, cnt, !hit) {
     ObTxSavePoint &it = savepoints_[cnt - 1 - i];
     if (it.is_savepoint() && it.name_ == sp) {
