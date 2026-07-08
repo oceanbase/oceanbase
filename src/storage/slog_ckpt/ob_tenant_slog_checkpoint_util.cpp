@@ -245,62 +245,6 @@ int ObTenantSlogCkptUtil::acquire_tmp_tablet_for_compat(
   return ret;
 }
 
-int ObTenantSlogCkptUtil::record_wait_gc_tablet(
-    omt::ObTenant &tenant,
-    ObTenantStorageMetaService &tsms,
-    ObLinkedMacroBlockItemWriter &wait_gc_tablet_item_writer,
-    blocksstable::MacroBlockId &wait_gc_tablet_entry,
-    ObSlogCheckpointFdDispenser *fd_dispenser,
-    const ObMemAttr &mem_attr)
-{
-  int ret = OB_SUCCESS;
-  if (!GCTX.is_shared_storage_mode()) {
-    // nothing to do
-  } else if (OB_FAIL(wait_gc_tablet_item_writer.init_for_slog_ckpt(MTL_ID(), MTL_EPOCH_ID(), mem_attr, fd_dispenser))) {
-    LOG_WARN("failed to init log stream item writer", K(ret));
-  } else {
-    HEAP_VAR(ObTenantSuperBlock, tenant_super_block, tenant.get_super_block()) {
-      common::ObSArray<ObPendingFreeTabletItem> items;
-      for (int64_t i = 0; OB_SUCC(ret) && i < tenant_super_block.ls_cnt_; ++i) {
-        ObLSPendingFreeTabletArray ls_wait_gc_tablet_array;
-        const ObLSItem &ls_item = tenant_super_block.ls_item_arr_[i];
-        items.reuse();
-        ls_wait_gc_tablet_array.ls_id_ = ls_item.ls_id_;
-        ls_wait_gc_tablet_array.ls_epoch_ = ls_item.epoch_;
-        if (OB_FAIL(tsms.get_wait_gc_tablet_items(ls_item.ls_id_, ls_item.epoch_, items))) {
-          LOG_WARN("fail to get wait gc tablet items", K(ret), K(ls_item));
-        } else if (OB_FAIL(ls_wait_gc_tablet_array.items_.assign(items))) {
-          LOG_WARN("fail to assign wait gc tablet items", K(ret), K(ls_item), K(items));
-        } else {
-          const int64_t buf_len = ls_wait_gc_tablet_array.get_serialize_size();
-          int64_t pos = 0;
-          char *buf = nullptr;
-          if (OB_UNLIKELY(!ls_wait_gc_tablet_array.is_valid())) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("invalid wait gc tablet array", K(ret), K(ls_wait_gc_tablet_array));
-          } else if (OB_ISNULL(buf = static_cast<char *>(ob_malloc(buf_len, mem_attr)))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("fail to allocate memory", K(ret));
-          } else if (OB_FAIL(ls_wait_gc_tablet_array.serialize(buf, buf_len, pos))) {
-            LOG_WARN("fail to serialize ls wait gc tablet array", K(ret), KP(buf), K(buf_len), K(pos));
-          } else if (OB_FAIL(wait_gc_tablet_item_writer.write_item(buf, buf_len))) {
-            LOG_WARN("fail to write ls wait gc tablet array", K(ret), KP(buf), K(buf_len));
-          }
-          if (OB_NOT_NULL(buf)) {
-            ob_free(buf);
-          }
-        }
-      }
-      if (FAILEDx(wait_gc_tablet_item_writer.close())) {
-        LOG_WARN("fail to close ls wait gc tablet writer", K(ret));
-      } else if (OB_FAIL(wait_gc_tablet_item_writer.get_entry_block(wait_gc_tablet_entry))) {
-        LOG_WARN("fail to get entry block", K(ret));
-      }
-    } // HEAP_VAR
-  }
-  return ret;
-}
-
 // ==========================
 //      LSCkptInheritOp
 // ==========================
@@ -386,8 +330,14 @@ int TabletDfgtPicker::add_tablet(const ObTabletStorageParam &param)
   if (OB_FAIL(param.original_addr_.get_block_addr(block_id, tablet_offset, tablet_size))) {
     STORAGE_LOG(WARN, "failed to get block address from param", K(ret), K(param));
   } else {
-    const int64_t tablet_size_aligned = common::ob_aligned_to2(tablet_size, DIO_READ_ALIGN_SIZE);
-    OB_ASSERT(tablet_size_aligned < OB_DEFAULT_MACRO_BLOCK_SIZE);
+    int64_t final_tablet_size = 0;
+    if (ObMetaDiskAddr::DiskType::RAW_BLOCK == param.original_addr_.type()) {
+      final_tablet_size = common::ob_aligned_to2(tablet_size, DIO_READ_ALIGN_SIZE);
+    } else {
+      // DON'T upper_align if tablet is persisted by batch
+      final_tablet_size = tablet_size;
+    }
+    OB_ASSERT(final_tablet_size < OB_DEFAULT_MACRO_BLOCK_SIZE);
     MapValue *value = nullptr;
     void *alloc = nullptr;
     if (OB_SUCC(map_.get_refactored(block_id, value))) {
@@ -397,7 +347,7 @@ int TabletDfgtPicker::add_tablet(const ObTabletStorageParam &param)
       } else if (OB_FAIL(value->tablet_storage_params_.push_back(param))) {
         STORAGE_LOG(WARN, "failed to update shared macro block map", K(ret), K(param));
       } else {
-        value->total_occupied_ += tablet_size_aligned;
+        value->total_occupied_ += final_tablet_size;
         OB_ASSERT(value->total_occupied_ <= OB_DEFAULT_MACRO_BLOCK_SIZE);
       }
     } else if (OB_HASH_NOT_EXIST != ret) {
@@ -407,7 +357,7 @@ int TabletDfgtPicker::add_tablet(const ObTabletStorageParam &param)
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed to allocate memory", K(ret), K(sizeof(MapValue)));
     } else if (FALSE_IT(value = new(alloc)MapValue())) { // call constructor of MapValue
-    } else if (FALSE_IT(value->total_occupied_ = tablet_size_aligned)) { // set occupied
+    } else if (FALSE_IT(value->total_occupied_ = final_tablet_size)) { // set occupied
     } else if (FALSE_IT(value->tablet_storage_params_.set_attr(mem_attr_))) { // set mem attr
     } else if (OB_FAIL(value->tablet_storage_params_.push_back(param))) { // add param
       value->~MapValue();
@@ -420,7 +370,7 @@ int TabletDfgtPicker::add_tablet(const ObTabletStorageParam &param)
     }
 
     if (OB_SUCC(ret)) {
-      total_tablet_size_ += tablet_size_aligned;
+      total_tablet_size_ += final_tablet_size;
     }
   }
   return ret;
@@ -448,7 +398,8 @@ public:
     int ret = OB_SUCCESS;
     const MapValue &val = *entry.second;
     OB_ASSERT(entry.first.is_valid());
-    const double size_amp = ObTenantSlogCkptUtil::cal_size_amplification(1, val.total_occupied_);
+    const int64_t total_occupied_aligned = upper_align(val.total_occupied_, DIO_READ_ALIGN_SIZE);
+    const double size_amp = ObTenantSlogCkptUtil::cal_size_amplification(1, total_occupied_aligned);
     if (size_amp < size_amp_threshold_) {
       // nothing to do if size amp unreached the threshold.
     } else if (min_occupied_ > val.total_occupied_) {

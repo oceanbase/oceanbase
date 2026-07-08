@@ -111,14 +111,6 @@ struct ObTenantSlogCkptUtil
       ObArenaAllocator &allocator,
       ObTabletHandle &handle);
 
-  static int record_wait_gc_tablet(
-        omt::ObTenant &tenant,
-        ObTenantStorageMetaService &tsms,
-        ObLinkedMacroBlockItemWriter &wait_gc_tablet_item_writer,
-        blocksstable::MacroBlockId &wait_gc_tablet_entry,
-        ObSlogCheckpointFdDispenser *fd_dispenser,
-        const ObMemAttr &mem_attr);
-
   struct LSCkptInheritOp final
   {
   public:
@@ -180,7 +172,7 @@ struct ObTenantSlogCkptUtil
 
     public:
       ObSEArray<ObTabletStorageParam, DEFAULT_TABLET_ITEM_CNT> tablet_storage_params_;
-      int64_t total_occupied_; // tablet size(aligned to 4KiB)
+      int64_t total_occupied_;
     };
 
     /**

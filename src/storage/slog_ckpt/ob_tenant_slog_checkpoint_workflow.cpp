@@ -457,8 +457,9 @@ int ObTenantSlogCheckpointWorkflow::TabletDefragmentHelper::pick_tablets_by_size
 
         // pick tablets if everything is ok.
         if (OB_SUCC(ret)) {
+          const int64_t total_tablet_size_aligned = upper_align(picker.total_tablet_size(), DIO_READ_ALIGN_SIZE);
           const double total_size_amp = ObTenantSlogCkptUtil::cal_size_amplification(picker.block_num(),
-            picker.total_tablet_size());
+            total_tablet_size_aligned);
 
           tracer_.record_size_amp_before_dfgt(total_size_amp);
           int64_t total_picked_tablet_size = empty_shell_size;
@@ -714,13 +715,6 @@ int ObTenantSlogCheckpointWorkflow::SlogCheckpointHelper::do_truncate(const bool
             STORAGE_LOG(WARN, "failed to close ls item writer", K(ret));
           } else if (OB_FAIL(ls_item_writer_.get_entry_block(ls_meta_entry))) {
             STORAGE_LOG(WARN, "failed to get ls entry block", K(ret));
-          } else if (OB_FAIL(ObTenantSlogCkptUtil::record_wait_gc_tablet(ctx_.tenant_,
-                                                                        ctx_.tenant_smeta_svr_,
-                                                                        wait_gc_tablet_item_writer_ /*out*/,
-                                                                        wait_gc_tablet_entry /*out*/,
-                                                                        fd_dispenser_ptr,
-                                                                        ctx_.get_mem_attr()))) {
-            STORAGE_LOG(WARN, "failed to record wait gc tablet", K(ret));
           } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.fsync_block())) { // sync macro block link before update tenant's super block
             STORAGE_LOG(WARN, "failed to fsync block", K(ret));
           } else if (OB_FAIL(apply_truncate_result_(ckpt_cursor,
