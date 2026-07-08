@@ -48,7 +48,7 @@ public:
   void reset();
 
   // init INSERT/UPDATE/DELETE/DDL/BEGIN/COMMIT/HEARTBEAT Binlog Record
-  // unique id of BinlogRecord: Pkey + LogId + LogOffset + row_index
+  // unique id of BinlogRecord: Pkey + LogId + LogOffset + row_index_in_redo
   // 1. DML statement
   //    set unique id by puFilterRuleVal
   // 2. DDL statement
@@ -56,7 +56,7 @@ public:
   int init_data(const RecordType type,
       const uint64_t cluster_id,
       const int64_t tenant_id,
-      const uint64_t row_index,
+      const uint64_t row_index_in_redo,
       const common::ObString &trace_id,
       const common::ObString &trace_info,
       const common::ObString &unique_id,
@@ -77,6 +77,9 @@ public:
   int set_table_meta(ITableMeta *table_meta);
   int set_db_meta(IDBMeta *db_meta);
 
+  int set_transaction_id(const int64_t transaction_id);
+  int set_row_index_in_trans(const uint64_t row_index_in_trans);
+
   inline int64_t get_commit_version() const { return commit_version_; }
 
   inline void *get_host() { return host_; }
@@ -87,7 +90,7 @@ public:
 
   uint64_t get_tenant_id() const { return tenant_id_; }
   int64_t get_schema_version() const { return schema_version_; }
-  uint64_t get_row_index() const { return row_index_; }
+  uint64_t get_row_index_in_redo() const { return row_index_in_redo_; }
   int64_t get_part_trans_task_count() const { return part_trans_task_count_; }
 
   // Aone:
@@ -124,8 +127,9 @@ private:
 
   int64_t       commit_version_;      ///< transaction commit version in micro seconds
 
-  // DML/DDL record row_index(start from 0 in participants, not global)
-  uint64_t      row_index_;
+  // DML/DDL stmt index within a redo log (start from 0 per redo, combined with redo_lsn for unique id)
+  uint64_t      row_index_in_redo_;
+  // transaction-level BR sequence is stored in data_->RowIndex via set_row_index_in_trans()
 
   // Number of tasks in the transaction partition, i.e. number of participants in the transaction
   // 1. DDL

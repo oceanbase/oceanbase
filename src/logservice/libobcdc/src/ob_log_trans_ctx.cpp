@@ -843,10 +843,18 @@ int TransCtx::append_sorted_br(ObLogBR *br)
   if (OB_ISNULL(br)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("binlog that will append to output queue should not be null", KR(ret), KP(br));
-  } else if (OB_FAIL(br_out_queue_.push(const_cast<ObLogBR*>(br)))) {
-    LOG_ERROR("failed to push br into output queue", KR(ret));
   } else {
-    inc_total_br_count_();
+    // Must set row_index_in_trans and increment count BEFORE pushing into the queue,
+    // otherwise the committer thread may pop and consume the BR via pop_br_for_committer()
+    // before row_index_in_trans is written, causing a concurrent visibility bug.
+    // If push fails, roll back the count to keep total_br_count_ consistent with the
+    // actual number of BRs in the queue — a mismatched count would cause the committer
+    // to dead-wait in is_trans_commit_finish() forever.
+    br->set_row_index_in_trans(inc_total_br_count_and_get_());
+    if (OB_FAIL(br_out_queue_.push(const_cast<ObLogBR*>(br)))) {
+      LOG_ERROR("failed to push br into output queue", KR(ret));
+      dec_total_br_count_();
+    }
   }
 
   return ret;

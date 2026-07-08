@@ -27,7 +27,7 @@ ObLogBR::ObLogBR() : ObLogResourceRecycleTask(ObLogResourceRecycleTask::BINLOG_R
                      tenant_id_(OB_INVALID_TENANT_ID),
                      schema_version_(OB_INVALID_VERSION),
                      commit_version_(0),
-                     row_index_(0),
+                     row_index_in_redo_(0),
                      part_trans_task_count_(0)
 {
 }
@@ -87,6 +87,7 @@ void ObLogBR::reset()
   tenant_id_ = OB_INVALID_TENANT_ID;
   schema_version_ = OB_INVALID_VERSION;
   commit_version_ = 0;
+  row_index_in_redo_ = 0;
   part_trans_task_count_ = 0;
 }
 
@@ -126,10 +127,34 @@ int ObLogBR::set_db_meta(IDBMeta *db_meta)
   return ret;
 }
 
+int ObLogBR::set_transaction_id(const int64_t transaction_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(data_)) {
+    LOG_ERROR("IBinlogRecord has not been created");
+    ret = OB_NOT_INIT;
+  } else {
+    data_->setTransactionId(transaction_id);
+  }
+  return ret;
+}
+
+int ObLogBR::set_row_index_in_trans(const uint64_t row_index_in_trans)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(data_)) {
+    LOG_ERROR("IBinlogRecord has not been created");
+    ret = OB_NOT_INIT;
+  } else {
+    data_->setRowIndex(row_index_in_trans);
+  }
+  return ret;
+}
+
 int ObLogBR::init_data(const RecordType type,
     const uint64_t cluster_id,
     const int64_t tenant_id,
-    const uint64_t row_index,
+    const uint64_t row_index_in_redo,
     const common::ObString &trace_id,
     const common::ObString &trace_info,
     const common::ObString &unique_id,
@@ -207,7 +232,7 @@ int ObLogBR::init_data(const RecordType type,
     set_next(NULL);
     valid_ = true;
     tenant_id_ = tenant_id;
-    row_index_ = row_index;
+    row_index_in_redo_ = row_index_in_redo;
     schema_version_ = schema_version;
     commit_version_ = commit_version;
     part_trans_task_count_ = part_trans_task_count;

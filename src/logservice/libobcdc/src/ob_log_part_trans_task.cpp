@@ -56,7 +56,7 @@ namespace libobcdc
 void IStmtTask::reset()
 {
   hash_value_ = OB_INVALID_ID;
-  row_index_ = OB_INVALID_ID;
+  row_index_in_redo_ = OB_INVALID_ID;
   next_ = NULL;
 }
 
@@ -1387,7 +1387,7 @@ int64_t DmlStmtUniqueID::get_dml_unique_id_length() const
 {
   // 1. tenent_ls_id_str.len(include tenant_id, ls_id, trans_id)
   // 2. redo_log_lsn.val_.len(uint64_t)
-  // 3. row_index.len
+  // 3. row_index_in_redo.len
   // 4. DELIMITER_STR * 5
   // 5. '\0'
 
@@ -1395,7 +1395,7 @@ int64_t DmlStmtUniqueID::get_dml_unique_id_length() const
       + sizeof(DELIMITER_STR)
       + compute_str_length_base_num(redo_log_lsn_.val_)
       + sizeof(DELIMITER_STR)
-      + compute_str_length_base_num(row_index_)
+      + compute_str_length_base_num(row_index_in_redo_)
       + 1;
 
   return dml_unique_id_length;
@@ -1462,7 +1462,7 @@ int DmlStmtUniqueID::customized_to_string(char *buf, const int64_t buf_len, int6
       pos += str_len;
 
       if (OB_FAIL(common::databuff_printf(buf, buf_len, pos, DELIMITER_STR"%lu"DELIMITER_STR"%lu",
-          redo_log_lsn_.val_, row_index_))) {
+          redo_log_lsn_.val_, row_index_in_redo_))) {
         LOG_ERROR("databuff_printf fail", KR(ret), K(buf), K(buf_len), K(pos), K(str_len), KPC(this));
       } else {
         // succ
@@ -1700,7 +1700,7 @@ bool DdlStmtTask::is_table_recover_end_ddl_(const int64_t ddl_operation_type)
 
 int DdlStmtTask::parse_ddl_info(
     ObLogBR *br,
-    const uint64_t row_index,
+    const uint64_t row_index_in_redo,
     const ObLogAllDdlOperationSchemaInfo &all_ddl_operation_table_schema_info,
     const bool is_build_baseline,
     bool &is_valid_ddl,
@@ -1713,8 +1713,8 @@ int DdlStmtTask::parse_ddl_info(
 
   is_valid_ddl = true;
 
-  if (OB_ISNULL(br) || OB_UNLIKELY(OB_INVALID_ID == row_index)) {
-    LOG_ERROR("invalid argument", K(br), K(row_index));
+  if (OB_ISNULL(br) || OB_UNLIKELY(OB_INVALID_ID == row_index_in_redo)) {
+    LOG_ERROR("invalid argument", K(br), K(row_index_in_redo));
     ret = OB_INVALID_ARGUMENT;
   }
   // parses the column data
@@ -1813,9 +1813,9 @@ int DdlStmtTask::parse_ddl_info(
     }
 
     if (OB_SUCCESS == ret && is_valid_ddl) {
-      if (OB_FAIL(build_ddl_binlog_record_(br, ddl_stmt_str_, row_index))) {
+      if (OB_FAIL(build_ddl_binlog_record_(br, ddl_stmt_str_, row_index_in_redo))) {
         LOG_ERROR("build_ddl_binlog_record_ fail", KR(ret), K(br), K(ddl_stmt_str_), "commit_version", get_host().get_trans_commit_version(),
-            K(row_index));
+            K(row_index_in_redo));
       } else {
         // set Binlog Record
         set_binlog_record(br);
@@ -1979,7 +1979,7 @@ int DdlStmtTask::parse_ddl_info_(
 int DdlStmtTask::build_ddl_binlog_record_(
     ObLogBR *br,
     const ObString &ddl_stmt,
-    const uint64_t row_index)
+    const uint64_t row_index_in_redo)
 {
   int ret = OB_SUCCESS;
   const int64_t trans_commit_version = get_host().get_trans_commit_version();
@@ -1996,12 +1996,12 @@ int DdlStmtTask::build_ddl_binlog_record_(
   ObString ddl_unique_id;
   const int64_t part_trans_task_count = 1;
 
-  if (OB_ISNULL(br) || OB_UNLIKELY(OB_INVALID_ID == row_index)) {
-    LOG_ERROR("invalid argument", K(br), K(ddl_stmt), K(trans_commit_version), K(row_index));
+  if (OB_ISNULL(br) || OB_UNLIKELY(OB_INVALID_ID == row_index_in_redo)) {
+    LOG_ERROR("invalid argument", K(br), K(ddl_stmt), K(trans_commit_version), K(row_index_in_redo));
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(init_ddl_unique_id_(ddl_unique_id))) {
     LOG_ERROR("init_ddl_unique_id_ fail", KR(ret), K(ddl_unique_id));
-  } else if (OB_FAIL(br->init_data(EDDL, cluster_id, tenant_id, row_index,
+  } else if (OB_FAIL(br->init_data(EDDL, cluster_id, tenant_id, row_index_in_redo,
           trace_id, trace_info, ddl_unique_id, ddl_op_schema_version_, trans_commit_version,
           part_trans_task_count))) {
     LOG_ERROR("ObLogBR::init_data EDDL fail", KR(ret), K(trans_commit_version),
@@ -2026,6 +2026,9 @@ int DdlStmtTask::build_ddl_binlog_record_(
 
       br_data->putNew(ddl_stmt.ptr(), ddl_stmt.length());
       br_data->putNew(ddl_op_schema_version_str_, static_cast<int>(strlen(ddl_op_schema_version_str_)));
+      br_data->setTransactionId(get_host().get_trans_id().get_id());
+      // DDL is always the only BR in its transaction, row_index_in_trans = 0
+      br_data->setRowIndex(0);
     }
   }
 
@@ -2411,18 +2414,18 @@ int ObLogEntryTask::rc_callback()
   return ret;
 }
 
-int ObLogEntryTask::add_stmt(const uint64_t row_index, IStmtTask *stmt_task)
+int ObLogEntryTask::add_stmt(const uint64_t row_index_in_redo, IStmtTask *stmt_task)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(OB_INVALID_ID == row_index)
+  if (OB_UNLIKELY(OB_INVALID_ID == row_index_in_redo)
       || OB_ISNULL(stmt_task)) {
-    LOG_ERROR("invalid argument", K(row_index), KPC(stmt_task));
+    LOG_ERROR("invalid argument", K(row_index_in_redo), KPC(stmt_task));
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(stmt_list_.add(stmt_task))) {
     LOG_ERROR("add stmt task into stmt_list fail", KR(ret), K(stmt_list_), KP(stmt_task));
   } else {
-    stmt_task->set_row_index(row_index);
+    stmt_task->set_row_index_in_redo(row_index_in_redo);
   }
 
   return ret;
@@ -4065,52 +4068,52 @@ void PartTransTask::free(void *ptr)
   ptr = NULL;
 }
 
-int PartTransTask::add_stmt(const uint64_t row_index, IStmtTask *stmt_task)
+int PartTransTask::add_stmt(const uint64_t row_index_in_redo, IStmtTask *stmt_task)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(OB_INVALID_ID == row_index)
+  if (OB_UNLIKELY(OB_INVALID_ID == row_index_in_redo)
       || OB_ISNULL(stmt_task)) {
-    LOG_ERROR("invalid argument", K(row_index), KPC(stmt_task));
+    LOG_ERROR("invalid argument", K(row_index_in_redo), KPC(stmt_task));
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(stmt_list_.add(stmt_task))) {
     LOG_ERROR("add stmt task into stmt_list fail", KR(ret), K(stmt_list_), KP(stmt_task));
   } else {
-    stmt_task->set_row_index(row_index);
+    stmt_task->set_row_index_in_redo(row_index_in_redo);
   }
 
   return ret;
 }
 
-int PartTransTask::add_ddl_lob_aux_stmt(const uint64_t row_index, DmlStmtTask *stmt_task)
+int PartTransTask::add_ddl_lob_aux_stmt(const uint64_t row_index_in_redo, DmlStmtTask *stmt_task)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(OB_INVALID_ID == row_index)
+  if (OB_UNLIKELY(OB_INVALID_ID == row_index_in_redo)
       || OB_ISNULL(stmt_task)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("invalid argument", KR(ret), K(row_index), KPC(stmt_task));
+    LOG_ERROR("invalid argument", KR(ret), K(row_index_in_redo), KPC(stmt_task));
   } else if (OB_FAIL(ddl_lob_aux_stmt_list_.add(stmt_task))) {
     LOG_ERROR("add stmt task into ddl_lob_aux_stmt_list_ fail", KR(ret), K(stmt_list_), KP(stmt_task));
   } else {
-    stmt_task->set_row_index(row_index);
+    stmt_task->set_row_index_in_redo(row_index_in_redo);
   }
 
   return ret;
 }
 
-int PartTransTask::add_ddl_stmt(const uint64_t row_index, DdlStmtTask *ddl_stmt)
+int PartTransTask::add_ddl_stmt(const uint64_t row_index_in_redo, DdlStmtTask *ddl_stmt)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(OB_INVALID_ID == row_index)
+  if (OB_UNLIKELY(OB_INVALID_ID == row_index_in_redo)
       || OB_ISNULL(ddl_stmt)
       || OB_UNLIKELY(ddl_stmt->get_op_schema_version() <= 0)
       || OB_ISNULL(ddl_stmt->get_binlog_record())) {
     LOG_ERROR("invalid argument", KPC(ddl_stmt));
     ret = OB_INVALID_ARGUMENT;
   } else {
-    ddl_stmt->set_row_index(row_index);
+    ddl_stmt->set_row_index_in_redo(row_index_in_redo);
     ddl_stmt->set_next(NULL);
 
     if (NULL == stmt_list_.head_) {
