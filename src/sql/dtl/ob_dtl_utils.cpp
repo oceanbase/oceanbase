@@ -581,7 +581,7 @@ int ObTransmitEofAsynSender::fill_batch_msg(ObDtlPeerCtlBatch &slot)
     for (int64_t i = 0; i < batch_msg_.payload_bufs_.count(); ++i) {
       ObDtlLinkedBuffer *buffer = batch_msg_.payload_bufs_.at(i);
       if (OB_NOT_NULL(buffer)) {
-        ObDtlBasicChannel *ch = static_cast<ObDtlBasicChannel *>(slot.chs_.at(0));
+        ObDtlBasicChannel *ch = static_cast<ObDtlBasicChannel *>(batch_msg_.payload_channels_.at(i));
         ch->free_linked_buffer(buffer);
       }
     }
