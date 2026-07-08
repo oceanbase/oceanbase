@@ -550,7 +550,8 @@ public:
   virtual int get_prefix_info(int64_t &equal_prefix_count,
                               int64_t &range_prefix_count,
                               int64_t &ss_range_prefix_count,
-                              bool &contain_always_false) const;
+                              bool &contain_always_false,
+                              int64_t &min_range_prefix_count) const;
   void inner_get_prefix_info(const ObKeyPart *key_part,
                              int64_t &equal_prefix_count,
                              int64_t &range_prefix_count,

@@ -2439,6 +2439,7 @@ struct MergeKeyInfoHelper
                                       common::ObIArray<uint64_t> &prefix_range_ids,
                                       common::ObIArray<uint64_t> &ss_offset_ids,
                                       common::ObIArray<uint64_t> &ss_range_ids,
+                                      common::ObIArray<uint64_t> &min_prefix_range_ids,
                                       ObIArray<ObRawExpr *> &restrict_infos);
 
     /**

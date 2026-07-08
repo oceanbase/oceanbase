@@ -8,9 +8,9 @@
 | InnerPathInfo | 264 |
 | ObConflictDetector | 392 |
 | JoinInfo | 160 |
-| IndexInfoEntry | 624 |
+| IndexInfoEntry | 632 |
 | OrderingInfo | 88 |
-| QueryRangeInfo | 472 |
+| QueryRangeInfo | 480 |
 | ObSkylineDim | 16 |
 | ObIndexBackDim | 16 |
 | ObInterestOrderDim | 56 |

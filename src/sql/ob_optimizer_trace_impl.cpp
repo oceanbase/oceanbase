@@ -933,9 +933,14 @@ int ObOptimizerTraceImpl::append(const ObSkylineDim &dim)
       append(", column ids:", order_dim.column_ids_);
       break;
     }
-    case ObSkylineDim::QUERY_RANGE: {
+    case ObSkylineDim::QUERY_RANGE:
+    case ObSkylineDim::MIN_QUERY_RANGE: {
       const ObQueryRangeDim &range_dim = static_cast<const ObQueryRangeDim &>(dim);
-      append("[query range dim] contain false range:", range_dim.contain_always_false_);
+      if (ObSkylineDim::MIN_QUERY_RANGE == dim.get_dim_type()) {
+        append("[min query range dim] contain false range:", range_dim.contain_always_false_);
+      } else {
+        append("[query range dim] contain false range:", range_dim.contain_always_false_);
+      }
       append(", rowkey ids:", range_dim.range_column_ids_);
       if (!range_dim.ss_range_column_ids_.empty()) {
         append(", skip scan range ids:", range_dim.ss_range_column_ids_);

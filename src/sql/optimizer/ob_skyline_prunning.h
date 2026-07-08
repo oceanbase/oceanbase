@@ -32,6 +32,7 @@ public:
     QUERY_RANGE,
     SHARDING_INFO,
     UNIQUE_RANGE,
+    MIN_QUERY_RANGE,
     MAX_DIM //max dimension
   };
   enum CompareStat {
@@ -113,13 +114,14 @@ class ObQueryRangeDim: public ObSkylineDim
 {
 public:
   friend class ObOptimizerTraceImpl;
-  ObQueryRangeDim(common::ObIAllocator &allocator) : ObSkylineDim(QUERY_RANGE),
+  ObQueryRangeDim(common::ObIAllocator &allocator, ObSkylineDim::Dimension dim_type) : ObSkylineDim(dim_type),
     range_column_ids_(allocator),
     ss_range_column_ids_(allocator),
     ss_offset_column_ids_(allocator),
     contain_always_false_(false),
     skip_scan_comparable_(false)
   { }
+  ObQueryRangeDim(common::ObIAllocator &allocator) : ObQueryRangeDim(allocator, ObSkylineDim::QUERY_RANGE) {}
   virtual ~ObQueryRangeDim() = default;
   virtual int compare(const ObSkylineDim &other, CompareStat &status) const;
 
@@ -251,6 +253,9 @@ public:
                           common::ObIAllocator &allocator,
                           bool contain_always_false,
                           bool skip_scan_comparable);
+  int add_min_query_range_dim(const common::ObIArray<uint64_t> &min_prefix_range_ids,
+                              common::ObIAllocator &allocator,
+                              bool contain_always_false);
   int add_unique_range_dim(int64_t range_cnt, ObIAllocator &allocator);
   int add_sharding_info_dim(ObShardingInfo *sharding_info, bool is_single_get, bool is_global_index, bool is_index_back, bool can_extract_range, ObIAllocator &allocator);
   bool can_prunning() const { return can_prunning_; }
@@ -292,6 +297,8 @@ public:
   template<typename SkylineDimType>
   int create_skyline_dim(common::ObIAllocator &allocator,
                          SkylineDimType *&skyline_dim);
+  int create_skyline_dim(common::ObIAllocator &allocator, ObQueryRangeDim *&skyline_dim,
+                         ObSkylineDim::Dimension dim_type);
 private:
   ObSkylineDimFactory() {}
   DISALLOW_COPY_AND_ASSIGN(ObSkylineDimFactory);
