@@ -9136,6 +9136,7 @@ ATOMIC_REFRESH	varchar(1)	NO
 NESTED	varchar(1)	NO			
 OUT_OF_PLACE	varchar(1)	NO			
 NUMBER_OF_FAILURES	bigint(20)	NO		NULL	
+RESULT	bigint(20)	YES		NULL	
 START_TIME	datetime	NO		NULL	
 END_TIME	datetime	NO		NULL	
 ELAPSED_TIME	bigint(20)	NO		NULL	

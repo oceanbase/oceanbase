@@ -106,7 +106,8 @@ int ObMViewRefreshExecutor::execute(ObExecContext &ctx, const ObMViewRefreshArg 
                                                             end_time,
                                                             log_purge_time,
                                                             ret,
-                                                            common::ObString()))) {
+                                                            common::ObString(),
+                                                            0 /*num_failures, old engine path*/))) {
       LOG_WARN("fail to write_run_end", KR(tmp_ret));
     }
   }

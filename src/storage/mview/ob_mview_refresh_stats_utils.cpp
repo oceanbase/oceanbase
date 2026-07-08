@@ -86,30 +86,43 @@ int ObMViewRefreshStatsUtils::write_run_start(common::ObMySQLProxy *sql_proxy,
              (OB_FAIL(dml.add_column("mview_id", run_params.mview_id_)) ||
               OB_FAIL(dml.add_uint64_column("data_target_scn", run_params.data_target_scn_)) ||
               OB_FAIL(dml.add_column("result", 1)) ||
-              OB_FAIL(dml.add_column(true, "error_message")))) {
+              OB_FAIL(dml.add_column(true, "error_message")) ||
+              OB_FAIL(dml.add_column(true, "rollback_seg")) ||
+              OB_FAIL(dml.add_column(true, "push_deferred_rpc")) ||
+              OB_FAIL(dml.add_column(true, "refresh_after_errors")) ||
+              OB_FAIL(dml.add_column(true, "purge_option")) ||
+              OB_FAIL(dml.add_column(true, "heap_size")) ||
+              OB_FAIL(dml.add_column(true, "atomic_refresh")) ||
+              OB_FAIL(dml.add_column(true, "out_of_place")) ||
+              OB_FAIL(dml.add_column(true, "complete_stats_avaliable")) ||
+              OB_FAIL(dml.add_column(true, "num_mvs_total")) ||
+              OB_FAIL(dml.add_column("num_mvs_current", 0)) ||
+              OB_FAIL(dml.add_column(true, "mviews")) ||
+              OB_FAIL(dml.add_column(true, "base_tables")) ||
+              OB_FAIL(dml.add_column(true, "log_purge_time")))) {
     LOG_WARN("fail to add columns introduced in 4.4.2.2", KR(ret), K(run_params));
+  } else if (!((data_version >= MOCK_DATA_VERSION_4_4_2_2 &&
+                data_version < DATA_VERSION_4_5_0_0) ||
+               data_version >= DATA_VERSION_4_6_1_0) &&
+             (OB_FAIL(dml.add_column("rollback_seg", "")) ||
+              OB_FAIL(dml.add_column("push_deferred_rpc", false)) ||
+              OB_FAIL(dml.add_column("refresh_after_errors", false)) ||
+              OB_FAIL(dml.add_column("purge_option", 0)) ||
+              OB_FAIL(dml.add_column("heap_size", 0)) ||
+              OB_FAIL(dml.add_column("atomic_refresh", false)) ||
+              OB_FAIL(dml.add_column("out_of_place", false)) ||
+              OB_FAIL(dml.add_column("complete_stats_avaliable", false)) ||
+              OB_FAIL(dml.add_column("num_mvs_total", 0)) ||
+              OB_FAIL(dml.add_column("num_mvs_current", 0)) ||
+              OB_FAIL(dml.add_column("mviews", "")) ||
+              OB_FAIL(dml.add_column("base_tables", "")) ||
+              OB_FAIL(dml.add_column("log_purge_time", 0)))) {
+    LOG_WARN("fail to add unused columns with default", KR(ret));
   // Updated later by write_run_end; insert with zeros.
   } else if (OB_FAIL(dml.add_column("number_of_failures", 0)) ||
              OB_FAIL(dml.add_time_column("end_time", 0)) ||
-             OB_FAIL(dml.add_column("elapsed_time", 0)) ||
-             OB_FAIL(dml.add_column("log_purge_time", 0))) {
+             OB_FAIL(dml.add_column("elapsed_time", 0))) {
     LOG_WARN("fail to add columns updated by write_run_end", KR(ret));
-  // Columns not yet wired up; written as defaults only to satisfy NOT NULL.
-  } else if (OB_FAIL(dml.add_column("rollback_seg", "")) ||
-             OB_FAIL(dml.add_column("push_deferred_rpc", false)) ||
-             OB_FAIL(dml.add_column("refresh_after_errors", false)) ||
-             OB_FAIL(dml.add_column("purge_option", 0)) ||
-             OB_FAIL(dml.add_column("heap_size", 0)) ||
-             OB_FAIL(dml.add_column("atomic_refresh", false)) ||
-             OB_FAIL(dml.add_column("out_of_place", false)) ||
-             OB_FAIL(dml.add_column("complete_stats_avaliable", false))) {
-    LOG_WARN("fail to add unused columns with default", KR(ret));
-  // Deprecated columns kept only for schema compatibility (see schema_def.py).
-  } else if (OB_FAIL(dml.add_column("num_mvs_total", 0)) ||
-             OB_FAIL(dml.add_column("num_mvs_current", 0)) ||
-             OB_FAIL(dml.add_column("mviews", "")) ||
-             OB_FAIL(dml.add_column("base_tables", ""))) {
-    LOG_WARN("fail to add deprecated columns with default", KR(ret));
   } else if (OB_FAIL(dml.splice_insert_sql(OB_ALL_MVIEW_REFRESH_RUN_STATS_TNAME, sql))) {
     LOG_WARN("fail to splice insert sql", KR(ret), K(run_params));
   } else if (OB_FAIL(execute_trans_write(sql_proxy,
@@ -163,7 +176,6 @@ int ObMViewRefreshStatsUtils::write_mv_start(sql::ObExecContext &ctx,
         OB_FAIL(refresh_dml.add_column("initial_num_rows", initial_num_rows)) ||
         OB_FAIL(refresh_dml.add_time_column("end_time", 0)) ||
         OB_FAIL(refresh_dml.add_column("elapsed_time", 0)) ||
-        OB_FAIL(refresh_dml.add_column("log_purge_time", 0)) ||
         OB_FAIL(refresh_dml.add_column("final_num_rows", 0)) ||
         OB_FAIL(refresh_dml.add_column("result", 1)) ||
         OB_FAIL(refresh_dml.add_column("num_steps", num_steps))) {
@@ -180,9 +192,13 @@ int ObMViewRefreshStatsUtils::write_mv_start(sql::ObExecContext &ctx,
         LOG_WARN("fail to add svr_ip column", KR(ret));
       } else if (OB_FAIL(refresh_dml.add_column("svr_port", GCTX.self_addr().get_port()))) {
         LOG_WARN("fail to add svr_port column", KR(ret));
+      } else if (OB_FAIL(refresh_dml.add_column(true, "log_purge_time"))) {
+        LOG_WARN("fail to add log_purge_time column", KR(ret));
       } else if (OB_FAIL(refresh_dml.add_uint64_column("refresh_scn", 0))) {
         LOG_WARN("fail to add refresh_scn column", KR(ret));
       }
+    } else if (OB_FAIL(refresh_dml.add_column("log_purge_time", 0))) {
+      LOG_WARN("fail to add log_purge_time column with default", KR(ret));
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(refresh_dml.splice_insert_sql(OB_ALL_MVIEW_REFRESH_STATS_TNAME, sql))) {
@@ -460,8 +476,7 @@ int ObMViewRefreshStatsUtils::write_mv_end(sql::ObExecContext &ctx,
         OB_FAIL(dml.add_time_column("end_time", end_time)) ||
         OB_FAIL(dml.add_column("elapsed_time", elapsed_time)) ||
         OB_FAIL(dml.add_column("final_num_rows", final_num_rows)) ||
-        OB_FAIL(dml.add_column("result", result)) ||
-        OB_FAIL(dml.add_column("log_purge_time", 0))) {
+        OB_FAIL(dml.add_column("result", result))) {
       LOG_WARN("fail to add update columns", KR(ret));
     } else if (OB_FAIL(GET_MIN_DATA_VERSION(refresh_param.tenant_id_, data_version))) {
       LOG_WARN("fail to get data version", KR(ret), K(refresh_param.tenant_id_));
@@ -490,7 +505,8 @@ int ObMViewRefreshStatsUtils::write_run_end(common::ObMySQLProxy *sql_proxy,
                                             const int64_t end_time,
                                             const int64_t log_purge_time,
                                             const int result,
-                                            const common::ObString &error_message)
+                                            const common::ObString &error_message,
+                                            const int64_t num_failures)
 {
   int ret = OB_SUCCESS;
   common::ObSqlString sql;
@@ -505,10 +521,15 @@ int ObMViewRefreshStatsUtils::write_run_end(common::ObMySQLProxy *sql_proxy,
   } else if (OB_FAIL(sql.assign_fmt(
                  "UPDATE %s SET end_time = usec_to_time(%ld),"
                  " elapsed_time = %ld - time_to_usec(start_time),"
-                 " log_purge_time = %ld",
+                 " number_of_failures = number_of_failures + %ld",
                  OB_ALL_MVIEW_REFRESH_RUN_STATS_TNAME,
-                 end_time, end_time, log_purge_time))) {
+                 end_time, end_time, num_failures))) {
     LOG_WARN("fail to assign update sql", KR(ret));
+  } else if (!((data_version >= MOCK_DATA_VERSION_4_4_2_2 &&
+               data_version < DATA_VERSION_4_5_0_0) ||
+              data_version >= DATA_VERSION_4_6_1_0) &&
+             OB_FAIL(sql.append_fmt(", log_purge_time = %ld", log_purge_time))) {
+    LOG_WARN("fail to append log_purge_time", KR(ret));
   } else if (((data_version >= MOCK_DATA_VERSION_4_4_2_2 &&
                data_version < DATA_VERSION_4_5_0_0) ||
               data_version >= DATA_VERSION_4_6_1_0) &&
