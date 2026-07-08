@@ -3230,12 +3230,17 @@ int ObSelectResolver::expand_target_list(
                  K(i), K(table_item.ref_query_->get_select_item_size()));
       } else {
         const SelectItem &select_item = table_item.ref_query_->get_select_item(i);
-        tmp_select_item.questions_pos_ = select_item.questions_pos_;
-        tmp_select_item.params_idx_ = select_item.params_idx_;
-        tmp_select_item.neg_param_idx_ = select_item.neg_param_idx_;
-        tmp_select_item.esc_str_flag_ = select_item.esc_str_flag_;
-        tmp_select_item.paramed_alias_name_ = select_item.paramed_alias_name_;
-        tmp_select_item.need_check_dup_name_ = select_item.need_check_dup_name_;
+        if (OB_FAIL(tmp_select_item.questions_pos_.assign(select_item.questions_pos_))) {
+          LOG_WARN("failed to assign questions_pos_", K(ret));
+        } else if (OB_FAIL(tmp_select_item.params_idx_.assign(select_item.params_idx_))) {
+          LOG_WARN("failed to assign params_idx_", K(ret));
+        } else if (OB_FAIL(tmp_select_item.neg_param_idx_.assign(select_item.neg_param_idx_))) {
+          LOG_WARN("failed to assign neg_param_idx_", K(ret));
+        } else {
+          tmp_select_item.esc_str_flag_ = select_item.esc_str_flag_;
+          tmp_select_item.paramed_alias_name_ = select_item.paramed_alias_name_;
+          tmp_select_item.need_check_dup_name_ = select_item.need_check_dup_name_;
+        }
       }
     }
     if (OB_SUCC(ret)) {

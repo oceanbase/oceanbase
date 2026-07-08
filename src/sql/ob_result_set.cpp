@@ -1691,118 +1691,124 @@ int ObResultSet::construct_display_field_name(common::ObField &field,
   } else {
     LOG_DEBUG("construct display field name", K(field));
     #define PARAM_CTX field.paramed_ctx_
-    for (int64_t i = 0; OB_SUCC(ret) && pos <= buf_len && i < PARAM_CTX->param_idxs_.count(); i++) {
-      int64_t idx = PARAM_CTX->param_idxs_.at(i);
-      if (idx >= raw_params.count()) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid index", K(i), K(raw_params.count()));
-      } else if (OB_ISNULL(raw_params.at(idx)) || OB_ISNULL(raw_params.at(idx)->node_)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid argument", K(raw_params.at(idx)), K(raw_params.at(idx)->node_));
-      } else {
-        int32_t len = (int32_t)PARAM_CTX->param_str_offsets_.at(i) - name_pos;
-        len = std::min(buf_len - pos, len);
-        if (len > 0) {
-          MEMCPY(buf + pos, PARAM_CTX->paramed_cname_.ptr() + name_pos, len);
-        }
-        name_pos = (int32_t)PARAM_CTX->param_str_offsets_.at(i) + 1; // skip '?'
-        pos += len;
+    if(OB_UNLIKELY(PARAM_CTX->param_idxs_.count()!=PARAM_CTX->param_str_offsets_.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("param_idxs_ count not equal to param_str_offsets_ count", K(ret), 
+      K(PARAM_CTX->param_idxs_.count()), K(PARAM_CTX->param_str_offsets_.count()),K(PARAM_CTX->paramed_cname_));
+    }
+    else{
+      for (int64_t i = 0; OB_SUCC(ret) && pos <= buf_len && i < PARAM_CTX->param_idxs_.count(); i++) {
+        int64_t idx = PARAM_CTX->param_idxs_.at(i);
+        if (idx >= raw_params.count()) {  
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid index", K(i), K(raw_params.count()));
+        } else if (OB_ISNULL(raw_params.at(idx)) || OB_ISNULL(raw_params.at(idx)->node_)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid argument", K(raw_params.at(idx)), K(raw_params.at(idx)->node_));
+        } else {
+          int32_t len = (int32_t)PARAM_CTX->param_str_offsets_.at(i) - name_pos;
+          len = std::min(buf_len - pos, len);
+          if (len > 0) {
+            MEMCPY(buf + pos, PARAM_CTX->paramed_cname_.ptr() + name_pos, len);
+          }
+          name_pos = (int32_t)PARAM_CTX->param_str_offsets_.at(i) + 1; // skip '?'
+          pos += len;
 
-        if (is_first_parse && PARAM_CTX->neg_param_idxs_.has_member(idx) && pos < buf_len) {
-          buf[pos++] = '-'; // insert `-` for negative value
-        }
-        int64_t copy_str_len = 0;
-        const char *copy_str = NULL;
+          if (is_first_parse && PARAM_CTX->neg_param_idxs_.has_member(idx) && pos < buf_len) {
+            buf[pos++] = '-'; // insert `-` for negative value
+          }
+          int64_t copy_str_len = 0;
+          const char *copy_str = NULL;
 
-        // 1.
-        // 如果有词法分析得到常量节点有is_copy_raw_text_标记，则是有前缀的常量，比如
-        // select date'2012-12-12' from dual, column显示为date'2012-12-12',
-        // 词法分析得到的常量节点的raw_text为date'2012-12-12'，
-        // 所以直接拷贝raw_text，在oracle模式下需要还需要去空格以及转换大小写
-        // 2.
-        // 如果esc_str_flag_被标记，那么投影列是是常量字符串，其内部字符串需要转义，
-        // 常量节点的str_value是转义好的字符串，直接使用即可，
-        // 但是在mysql模式下，字符串开头的某些转义字符不会显示，ObResultSet::make_final_field_name会处理
-        // oracle模式下，需要在加上单引号
-        // 比如MySQL模式：select '\'hello' from dual,列名显示'hello
-        //                select '\thello' from dual,列名显示hello (去掉了左边的转义字符)
-        // Oracle模式：select 'hello' from dual, 列名显示 'hello', (带引号)
-        //             select '''hello' from dual, 列名显示 ''hello'
-        // 3.
-        // mysql模式下, 有以下对于以下sql：
-        // select 'a' 'abc' from dual
-        // 行为是a作为column name，’abc‘作为值，但是参数化后的sql为select ? from dual
-        // 在词法节点两个字符串被concat，整体作为一个varchar节点，但是该节点有一个T_CONCAT_STRING子节点，节点的str_val保存的是column name
-        // 所以这种情况下，直接去T_CONCAT_STRING的str_val作为列名
-        if (1 == raw_params.at(idx)->node_->is_copy_raw_text_) {
-          copy_str_len = raw_params.at(idx)->node_->text_len_;
-          copy_str = raw_params.at(idx)->node_->raw_text_;
-        } else if (PARAM_CTX->esc_str_flag_) {
-          if (lib::is_mysql_mode()
-              && 1 == raw_params.at(idx)->node_->num_child_) {
-            LOG_DEBUG("concat str node");
-            if (OB_ISNULL(raw_params.at(idx)->node_->children_)
-                || OB_ISNULL(raw_params.at(idx)->node_->children_[0])
-                || T_CONCAT_STRING != raw_params.at(idx)->node_->children_[0]->type_) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("invalid argument", K(ret));
+          // 1.
+          // 如果有词法分析得到常量节点有is_copy_raw_text_标记，则是有前缀的常量，比如
+          // select date'2012-12-12' from dual, column显示为date'2012-12-12',
+          // 词法分析得到的常量节点的raw_text为date'2012-12-12'，
+          // 所以直接拷贝raw_text，在oracle模式下需要还需要去空格以及转换大小写
+          // 2.
+          // 如果esc_str_flag_被标记，那么投影列是是常量字符串，其内部字符串需要转义，
+          // 常量节点的str_value是转义好的字符串，直接使用即可，
+          // 但是在mysql模式下，字符串开头的某些转义字符不会显示，ObResultSet::make_final_field_name会处理
+          // oracle模式下，需要在加上单引号
+          // 比如MySQL模式：select '\'hello' from dual,列名显示'hello
+          //                select '\thello' from dual,列名显示hello (去掉了左边的转义字符)
+          // Oracle模式：select 'hello' from dual, 列名显示 'hello', (带引号)
+          //             select '''hello' from dual, 列名显示 ''hello'
+          // 3.
+          // mysql模式下, 有以下对于以下sql：
+          // select 'a' 'abc' from dual
+          // 行为是a作为column name，’abc‘作为值，但是参数化后的sql为select ? from dual
+          // 在词法节点两个字符串被concat，整体作为一个varchar节点，但是该节点有一个T_CONCAT_STRING子节点，节点的str_val保存的是column name
+          // 所以这种情况下，直接去T_CONCAT_STRING的str_val作为列名
+          if (1 == raw_params.at(idx)->node_->is_copy_raw_text_) {
+            copy_str_len = raw_params.at(idx)->node_->text_len_;
+            copy_str = raw_params.at(idx)->node_->raw_text_;
+          } else if (PARAM_CTX->esc_str_flag_) {
+            if (lib::is_mysql_mode()
+                && 1 == raw_params.at(idx)->node_->num_child_) {
+              LOG_DEBUG("concat str node");
+              if (OB_ISNULL(raw_params.at(idx)->node_->children_)
+                  || OB_ISNULL(raw_params.at(idx)->node_->children_[0])
+                  || T_CONCAT_STRING != raw_params.at(idx)->node_->children_[0]->type_) {
+                ret = OB_INVALID_ARGUMENT;
+                LOG_WARN("invalid argument", K(ret));
+              } else {
+                copy_str_len = raw_params.at(idx)->node_->children_[0]->str_len_;
+                copy_str = raw_params.at(idx)->node_->children_[0]->str_value_;
+              }
             } else {
-              copy_str_len = raw_params.at(idx)->node_->children_[0]->str_len_;
-              copy_str = raw_params.at(idx)->node_->children_[0]->str_value_;
+              copy_str_len = raw_params.at(idx)->node_->str_len_;
+              copy_str = raw_params.at(idx)->node_->str_value_;
+              if (lib::is_oracle_mode() && pos < buf_len) {
+                buf[pos++] = '\'';
+              }
             }
+          } else if (lib::is_mysql_mode() &&
+                    0 == field.paramed_ctx_->paramed_cname_.compare("?") &&
+                    1 == PARAM_CTX->param_idxs_.count() &&
+                    T_NULL == raw_params.at(idx)->node_->type_ &&
+                    enable_modify_null_name) {
+            // MySQL sets the alias of standalone null value("\N","null"...) to "NULL" during projection.
+            copy_str_len = strlen("NULL");
+            copy_str = "NULL";
           } else {
-            copy_str_len = raw_params.at(idx)->node_->str_len_;
-            copy_str = raw_params.at(idx)->node_->str_value_;
-            if (lib::is_oracle_mode() && pos < buf_len) {
+            copy_str_len = raw_params.at(idx)->node_->text_len_;
+            copy_str = raw_params.at(idx)->node_->raw_text_;
+          }
+
+          if (OB_SUCC(ret)) {
+            len = std::min(buf_len - pos, (int32_t)copy_str_len);
+            if (len > 0) {
+              MEMCPY(buf + pos, copy_str, len);
+            }
+
+            if (len > 0
+                && 1 == raw_params.at(idx)->node_->is_copy_raw_text_
+                && lib::is_oracle_mode()) {
+              // 如果直接拷贝了raw_text_，可能需要转换大小写和去空格
+              ObCollationType col_type = static_cast<ObCollationType>(field.charsetnr_);
+              len = (int32_t)remove_extra_space(buf + pos, len);
+              ObString str(len, (const char *)buf+pos);
+              ObString dest;
+              if (OB_FAIL(ObCharset::caseup(col_type, str, dest, get_mem_pool()))) {
+                LOG_WARN("failed to do charset caseup", K(ret));
+              } else {
+                len = dest.length();
+                MEMCPY(buf+pos, dest.ptr(), len);
+              }
+              get_mem_pool().free(dest.ptr());
+              dest.reset();
+              str.reset();
+            }
+            pos += len;
+
+            if (PARAM_CTX->esc_str_flag_ && lib::is_oracle_mode() && pos < buf_len) {
               buf[pos++] = '\'';
             }
           }
-        } else if (lib::is_mysql_mode() &&
-                   0 == field.paramed_ctx_->paramed_cname_.compare("?") &&
-                   1 == PARAM_CTX->param_idxs_.count() &&
-                   T_NULL == raw_params.at(idx)->node_->type_ &&
-                   enable_modify_null_name) {
-          // MySQL sets the alias of standalone null value("\N","null"...) to "NULL" during projection.
-          copy_str_len = strlen("NULL");
-          copy_str = "NULL";
-        } else {
-          copy_str_len = raw_params.at(idx)->node_->text_len_;
-          copy_str = raw_params.at(idx)->node_->raw_text_;
         }
-
-        if (OB_SUCC(ret)) {
-          len = std::min(buf_len - pos, (int32_t)copy_str_len);
-          if (len > 0) {
-            MEMCPY(buf + pos, copy_str, len);
-          }
-
-          if (len > 0
-              && 1 == raw_params.at(idx)->node_->is_copy_raw_text_
-              && lib::is_oracle_mode()) {
-            // 如果直接拷贝了raw_text_，可能需要转换大小写和去空格
-            ObCollationType col_type = static_cast<ObCollationType>(field.charsetnr_);
-            len = (int32_t)remove_extra_space(buf + pos, len);
-            ObString str(len, (const char *)buf+pos);
-            ObString dest;
-            if (OB_FAIL(ObCharset::caseup(col_type, str, dest, get_mem_pool()))) {
-              LOG_WARN("failed to do charset caseup", K(ret));
-            } else {
-              len = dest.length();
-              MEMCPY(buf+pos, dest.ptr(), len);
-            }
-            get_mem_pool().free(dest.ptr());
-            dest.reset();
-            str.reset();
-          }
-          pos += len;
-
-          if (PARAM_CTX->esc_str_flag_ && lib::is_oracle_mode() && pos < buf_len) {
-            buf[pos++] = '\'';
-          }
-        }
-      }
-    } // for end
-
+      } // for end
+    }
     if (OB_FAIL(ret)) {
       // do nothing
     } else if (name_pos < PARAM_CTX->paramed_cname_.length()) { // 如果最后一个常量后面还有字符串
