@@ -12311,9 +12311,8 @@ int ObDDLResolver::resolve_auto_partition(ObPartitionedStmt *stmt, ParseNode *no
       LOG_WARN("not allow heap organizated table to set auto-partition clause", KR(ret), K(table_schema.get_table_type()));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "using auto-partition clause for heap organizated table is");
     } else { // table_schema.is_user_table() && stmt->use_auto_partition_clause()
-      const int64_t enable_random_part_for_test = OB_E(EN_ENABLE_RANDOM_PARTITION_FOR_TEST) 0;
       const bool is_random_part_table = !SET_PARTITION_DEFINITION && !SET_PARTITION_KEY &&
-        (is_random_type_partition(node->type_) || (is_partition_by_range && table_schema.is_table_without_pk())) && enable_random_part_for_test;
+        (is_random_type_partition(node->type_) || (is_partition_by_range && table_schema.is_table_without_pk()));
       if (!SET_PARTITION_DEFINITION && !is_random_part_table &&
           OB_FAIL(resolve_presetting_partition_key(node, table_schema))) {
         // non-partitioned table
