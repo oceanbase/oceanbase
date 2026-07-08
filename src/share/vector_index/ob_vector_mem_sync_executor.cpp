@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SHARE
 #include "ob_vector_mem_sync_executor.h"
 #include "lib/utility/ob_sort.h"
+#include "lib/utility/ob_tracepoint.h"
 #include "share/ob_ddl_task_executor.h"  // ObIDDLTask::in_ddl_retry_white_list
 #include "ob_plugin_vector_index_scheduler.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
@@ -161,7 +162,10 @@ int ObVecMemSyncTask::process_one_tablet(
   int64_t start_time = ObTimeUtil::current_time();
   ObPluginVectorIndexAdapterGuard adpt_guard;
   ObPluginVectorIndexAdapterGuard new_adpt_guard;
-  if (OB_ISNULL(mgr) || !tablet_id.is_valid()) {
+  ret = OB_E(EventTable::EN_VEC_MEM_SYNC_TASK_FAIL) OB_SUCCESS;
+  if (OB_FAIL(ret)) {
+    LOG_INFO("[VEC_ASYNC_TASK] errsim EN_VEC_MEM_SYNC_TASK_FAIL, fail mem sync tablet", KR(ret), K(ls_id_), K(tablet_id));
+  } else if (OB_ISNULL(mgr) || !tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), KP(mgr), K(tablet_id));
   } else if (OB_FAIL(mgr->get_adapter_inst_guard(tablet_id, adpt_guard))) {

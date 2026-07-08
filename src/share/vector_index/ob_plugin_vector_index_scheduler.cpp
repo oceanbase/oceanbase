@@ -1713,8 +1713,9 @@ int ObPluginVectorIndexLoadScheduler::switch_to_leader()
     ATOMIC_STORE(&need_refresh_, true);
   }
   if (OB_SUCC(ret) && check_can_do_work()) {
-    (void) ObPluginVectorIndexUtils::set_ls_leader_flag(ls_->get_ls_id(), ATOMIC_LOAD(&is_leader_));
+    // reset has_complete before announcing leadership
     refresh_adapter_rb_flag();
+    (void) ObPluginVectorIndexUtils::set_ls_leader_flag(ls_->get_ls_id(), ATOMIC_LOAD(&is_leader_));
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(vector_index_service_)) {
     // Cancel residual follower tasks before resuming leader tasks

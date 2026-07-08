@@ -5427,8 +5427,9 @@ void ObPluginVectorIndexAdaptor::reset_complete()
     ObVecIdxVBitmapDataHandle& vbitmap_memdata = this->get_vbitmap_data();
     vbitmap_memdata->has_complete_ = false;
   }
-  if (! this->get_snap_data().is_valid() || !this->get_snap_data()->is_inited()) {
-    LOG_INFO("snap_data index is empty or not init, won't reset has_complete",  K(this), K(snapshot_tablet_id_), K(snap_data_));
+  // reset snap has_complete regardless of init state, so no stale complete flag survives role change
+  if (! this->get_snap_data().is_valid()) {
+    LOG_INFO("snap_data is invalid, won't reset has_complete",  K(this), K(snapshot_tablet_id_), K(snap_data_));
   } else {
     ObVecIdxSnapshotDataHandle& snap_memdata = this->get_snap_data();
     snap_memdata->has_complete_ = false;
