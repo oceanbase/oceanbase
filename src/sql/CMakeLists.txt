@@ -1457,6 +1457,7 @@ ob_set_subtarget(ob_sql resolver_cmd
   resolver/cmd/ob_help_resolver.cpp
   resolver/cmd/ob_help_stmt.cpp
   resolver/cmd/ob_kill_resolver.cpp
+  resolver/cmd/ob_system_cmd_resolver.cpp
   resolver/cmd/ob_mock_resolver.cpp
   resolver/cmd/ob_load_data_resolver.cpp
   resolver/cmd/ob_load_data_stmt.cpp

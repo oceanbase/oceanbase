@@ -63,24 +63,6 @@ int ObServiceNameResolver::resolve(const ParseNode &parse_tree)
   if (OB_SUCC(ret)) {
     stmt_ = stmt;
   }
-  if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
-    if (OB_ISNULL(schema_checker_)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret));
-    } else if (OB_FAIL(schema_checker_->check_ora_ddl_priv(
-      session_info_->get_effective_tenant_id(),
-      session_info_->get_priv_user_id(),
-      ObString(""),
-      // why use T_ALTER_SYSTEM_SET_PARAMETER?
-      // because T_ALTER_SYSTEM_SET_PARAMETER has following traits:
-      // T_ALTER_SYSTEM_SET_PARAMETER can allow dba to do an operation
-      // and prohibit other user to do this operation
-      // so we reuse this.
-      stmt::T_ALTER_SYSTEM_SET_PARAMETER,
-      session_info_->get_enable_role_array()))) {
-      LOG_WARN("failed to check privilege", K(session_info_->get_effective_tenant_id()), K(session_info_->get_user_id()));
-    }
-  }
   return ret;
 }
 } // sql

@@ -2387,6 +2387,10 @@ int ObOraSysChecker::check_ora_ddl_priv(
         DEFINE_DROP_CHECK_CMD(PRIV_ID_DROP_ANY_TABLE);
         break;
       }
+      case stmt::T_FLASHBACK_STANDBY_LOG: {
+        DEFINE_PUB_CHECK_CMD(PRIV_ID_ALTER_SYSTEM);
+        break;
+      }
       case stmt::T_PURGE_TABLE: {
         DEFINE_DROP_CHECK_CMD(PRIV_ID_DROP_ANY_TABLE);
         break;
@@ -2425,6 +2429,10 @@ int ObOraSysChecker::check_ora_ddl_priv(
         break;
       }
       case stmt::T_ALTER_SYSTEM_SET_PARAMETER: {
+        DEFINE_PUB_CHECK_CMD(PRIV_ID_ALTER_SYSTEM);
+        break;
+      }
+      case stmt::T_ALTER_SYSTEM_RESET_PARAMETER: {
         DEFINE_PUB_CHECK_CMD(PRIV_ID_ALTER_SYSTEM);
         break;
       }
@@ -2506,9 +2514,130 @@ int ObOraSysChecker::check_ora_ddl_priv(
         DEFINE_PUB_CHECK_CMD(PRIV_ID_ALTER_SYSTEM);
         break;
       }
+      case stmt::T_SERVICE_NAME: {
+        DEFINE_PUB_CHECK_CMD(PRIV_ID_ALTER_SYSTEM);
+        break;
+      }
+      // compaction
+      case stmt::T_FREEZE:
+      case stmt::T_ADMIN_MERGE:
+      case stmt::T_CLEAR_MERGE_ERROR:
+      // cache flush
+      case stmt::T_FLUSH_CACHE:
+      case stmt::T_FLUSH_KVCACHE:
+      case stmt::T_FLUSH_ILOGCACHE:
+      case stmt::T_FLUSH_SS_MICRO_CACHE:
+      case stmt::T_FLUSH_SS_LOCAL_CACHE:
+      // archive
+      case stmt::T_ARCHIVE_LOG:
+      case stmt::T_ARCHIVE_TENANT:
+      // backup
+      case stmt::T_BACKUP_DATABASE:
+      case stmt::T_BACKUP_MANAGE:
+      case stmt::T_BACKUP_CLEAN:
+      case stmt::T_BACKUP_KEY:
+      case stmt::T_BACKUP_BACKUPSET:
+      case stmt::T_BACKUP_BACKUPPIECE:
+      case stmt::T_BACKUP_ARCHIVELOG:
+      case stmt::T_BACKUP_CLUSTER_PARAMETERS:
+      case stmt::T_DELETE_POLICY:
+      // restore / recover
+      case stmt::T_RECOVER:
+      case stmt::T_CANCEL_RESTORE:
+      // transfer / log stream
+      case stmt::T_TRANSFER_PARTITION:
+      case stmt::T_ALTER_LS:
+      case stmt::T_ALTER_LS_REPLICA:
+      // T_REMOVE_LS_REPLICA / T_MIGRATE_LS_REPLICA / T_MODIFY_LS_PAXOS_REPLICA_NUM /
+      // T_CANCEL_LS_REPLICA_TASK / T_REPLACE_LS are ObItemType parser tokens, not
+      // stmt::StmtType; they all resolve to ObAlterLSReplicaStmt (T_ALTER_LS_REPLICA)
+      // and are thus already covered by the case above.
+      case stmt::T_MIGRATE_UNIT:
+      // TTL
+      case stmt::T_TABLE_TTL: {
+        DEFINE_PUB_CHECK_CMD(PRIV_ID_ALTER_SYSTEM);
+        break;
+      }
+
+      // admin / upgrade
+      case stmt::T_ADMIN_SERVER:
+      case stmt::T_ADMIN_ZONE:
+      case stmt::T_ADMIN_STORAGE:
+      case stmt::T_ADMIN_RECOVERY:
+      case stmt::T_ADMIN_UPGRADE_CMD:
+      case stmt::T_ADMIN_ROLLING_UPGRADE_CMD:
+      case stmt::T_ADMIN_RUN_UPGRADE_JOB:
+      case stmt::T_ADMIN_STOP_UPGRADE_JOB:
+      case stmt::T_UPGRADE_VIRTUAL_SCHEMA:
+      case stmt::T_RUN_JOB:
+      // replica / rs / arbitration
+      case stmt::T_SWITCH_REPLICA_ROLE:
+      case stmt::T_SWITCH_RS_ROLE:
+      case stmt::T_REPORT_REPLICA:
+      case stmt::T_RECYCLE_REPLICA:
+      case stmt::T_ADD_ARBITRATION_SERVICE:
+      case stmt::T_REMOVE_ARBITRATION_SERVICE:
+      case stmt::T_REPLACE_ARBITRATION_SERVICE:
+      // tenant / clone / restore / recover
+      case stmt::T_CHANGE_TENANT:
+      case stmt::T_SWITCHOVER:
+      case stmt::T_REPLACE_TENANT:
+      case stmt::T_CANCEL_CLONE:
+      case stmt::T_PHYSICAL_RESTORE_TENANT:
+      case stmt::T_RECOVER_TABLE:
+      case stmt::T_REBUILD_TABLET:
+      case stmt::T_CANCEL_TASK:
+      // backup / restore source / diskgroup
+      case stmt::T_BACKUP_SET_ENCRYPTION:
+      case stmt::T_BACKUP_SET_DECRYPTION:
+      case stmt::T_ADD_RESTORE_SOURCE:
+      case stmt::T_CLEAR_RESTORE_SOURCE:
+      case stmt::T_CHANGE_EXTERNAL_STORAGE_DEST:
+      case stmt::T_ALTER_DISKGROUP_ADD_DISK:
+      case stmt::T_ALTER_DISKGROUP_DROP_DISK:
+      // cache / flush / refresh / reload
+      case stmt::T_CLEAR_LOCATION_CACHE:
+      case stmt::T_CLEAR_ROOT_TABLE:
+      case stmt::T_CLEAR_BALANCE_TASK:
+      case stmt::T_FLUSH_DAG_WARNINGS:
+      case stmt::T_PREWARM_SS_LOCAL_CACHE:
+      case stmt::T_WASH_MEMORY_FRAGMENTATION:
+      case stmt::T_REFRESH_SCHEMA:
+      case stmt::T_REFRESH_MEMORY_STAT:
+      case stmt::T_REFRESH_IO_CALIBRATION:
+      case stmt::T_REFRESH_FULLTEXT_DICT:
+      case stmt::T_RELOAD_SERVER:
+      case stmt::T_RELOAD_UNIT:
+      case stmt::T_RELOAD_ZONE:
+      // misc admin
+      case stmt::T_ALTER_SYSTEM_SETTP:
+      case stmt::T_SET_DISK_VALID:
+      case stmt::T_SET_REGION_NETWORK_BANDWIDTH:
+      case stmt::T_CHECKPOINT_SLOG:
+      case stmt::T_LOAD_LICENSE:
+      case stmt::T_BOOTSTRAP:
+      case stmt::T_ENABLE_SQL_THROTTLE:
+      case stmt::T_DISABLE_SQL_THROTTLE:
+      case stmt::T_MODULE_DATA: {
+        DEFINE_PUB_CHECK_CMD(PRIV_ID_ALTER_SYSTEM);
+        break;
+      }
+      // Temp-table admin commands reuse the generic DDL stmt types
+      // (ObDropTableStmt / ObAlterTableStmt) but are invoked via
+      // `ALTER SYSTEM DROP/REFRESH TEMP TABLE` for the login tenant's own
+      // session temp tables. They carry no sys-tenant guard in the resolver and
+      // operate on the user's own temp tables, so they must NOT require
+      // ALTER_SYSTEM.
+      case stmt::T_DROP_TABLE:
+      case stmt::T_ALTER_TABLE:
+      // ObReloadGtsResolver::resolve() always returns OB_NOT_SUPPORTED and never builds a stmt.
+      case stmt::T_RELOAD_GTS: {
+        // no system privilege required
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("stmt type ddl priv undefined", K(stmt_type));
+        LOG_WARN("sys stmt type ddl priv undefined", K(stmt_type));
         break;
       }
     }
@@ -2552,6 +2681,10 @@ int ObOraSysChecker::check_ora_ddl_priv(
         DEFINE_ALTER_CHECK_CMD(PRIV_ID_ALTER_ANY_TABLE, OBJ_PRIV_ID_ALTER);
         break;
       }
+      case stmt::T_FLASHBACK_STANDBY_LOG: {
+        DEFINE_PUB_CHECK_CMD(PRIV_ID_ALTER_SYSTEM);
+        break;
+      }
       case stmt::T_ALTER_SEQUENCE: {
         DEFINE_ALTER_CHECK_CMD(PRIV_ID_ALTER_ANY_SEQ, OBJ_PRIV_ID_ALTER);
         break;
@@ -2574,6 +2707,7 @@ int ObOraSysChecker::check_ora_ddl_priv(
       }
       case stmt::T_DROP_CONTEXT: {
         DEFINE_ALTER_CHECK_CMD(PRIV_ID_CREATE_ANY_CONTEXT, OBJ_PRIV_ID_DELETE);
+        break;
       }
       default: {
         ret = OB_ERR_UNEXPECTED;

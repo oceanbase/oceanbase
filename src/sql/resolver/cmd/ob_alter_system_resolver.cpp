@@ -1261,24 +1261,6 @@ int ObFlushCacheResolver::resolve(const ParseNode &parse_tree)
                 K(stmt->flush_cache_arg_.sequence_name_), K(stmt->flush_cache_arg_.is_fine_grained_),
                 K(stmt->flush_cache_arg_.tenant_ids_), K(stmt->flush_cache_arg_.db_ids_));
   }
-  if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
-    if (OB_ISNULL(schema_checker_)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret));
-    } else if (OB_FAIL(schema_checker_->check_ora_ddl_priv(
-        session_info_->get_effective_tenant_id(),
-        session_info_->get_priv_user_id(),
-        ObString(""),
-        // why use T_ALTER_SYSTEM_SET_PARAMETER?
-        // because T_ALTER_SYSTEM_SET_PARAMETER has following traits:
-        // T_ALTER_SYSTEM_SET_PARAMETER can allow dba to do an operation
-        // and prohibit other user to do this operation
-        // so we reuse this.
-        stmt::T_ALTER_SYSTEM_SET_PARAMETER,
-        session_info_->get_enable_role_array()))) {
-      LOG_WARN("failed to check privilege", K(session_info_->get_effective_tenant_id()), K(session_info_->get_user_id()));
-    }
-  }
   return ret;
 }
 
@@ -3915,21 +3897,6 @@ int ObAlterSystemResolverUtil::do_check_for_alter_ls_replica(
   } else if (OB_FAIL(Util::check_compatibility_for_alter_ls_replica(target_tenant_id))) {
     LOG_WARN("check compatibility for alter ls replica failed", KR(ret), K(target_tenant_id));
   }
-  if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
-    if (OB_FAIL(schema_checker->check_ora_ddl_priv(
-                          session_info->get_effective_tenant_id(),
-                          session_info->get_priv_user_id(), ObString(""),
-                          // why use T_ALTER_SYSTEM_SET_PARAMETER?
-                          // because T_ALTER_SYSTEM_SET_PARAMETER has following
-                          // traits: T_ALTER_SYSTEM_SET_PARAMETER can allow dba to
-                          // do an operation and prohibit other user to do this
-                          // operation so we reuse this.
-                          stmt::T_ALTER_SYSTEM_SET_PARAMETER,
-                          session_info->get_enable_role_array()))) {
-      LOG_WARN("failed to check privilege", KR(ret), K(session_info->get_effective_tenant_id()),
-              K(session_info->get_user_id()));
-    }
-  }
   return ret;
 }
 
@@ -5851,19 +5818,6 @@ int ObAlterSystemSetResolver::resolve(const ParseNode &parse_tree)
         } // end for
       }
     }
-    /* 无论设置租户级配置项，还是系统参数，都需要alter system权限。
-       对租户级配置项的修改，算是一种扩展，借用alter system权限进行控制 */
-    if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
-      CK (OB_NOT_NULL(schema_checker_));
-      OZ (schema_checker_->check_ora_ddl_priv(
-          session_info_->get_effective_tenant_id(),
-          session_info_->get_priv_user_id(),
-          ObString(""),
-          stmt::T_ALTER_SYSTEM_SET_PARAMETER,
-          session_info_->get_enable_role_array()),
-          session_info_->get_effective_tenant_id(), session_info_->get_user_id());
-    }
-
   } // if
 
   return ret;
@@ -7804,18 +7758,6 @@ int ObAlterSystemResetResolver::resolve(const ParseNode &parse_tree)
     } else {
       ret = OB_ERR_SYS_CONFIG_UNKNOWN;
       LOG_WARN("variables do not support reset or unknown config item", KR(ret));
-    }
-    /* 无论设置租户级配置项，还是系统参数，都需要alter system权限。
-       对租户级配置项的修改，算是一种扩展，借用alter system权限进行控制 */
-    if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
-      CK (OB_NOT_NULL(schema_checker_));
-      OZ (schema_checker_->check_ora_ddl_priv(
-          session_info_->get_effective_tenant_id(),
-          session_info_->get_priv_user_id(),
-          ObString(""),
-          stmt::T_ALTER_SYSTEM_RESET_PARAMETER,
-          session_info_->get_enable_role_array()),
-          session_info_->get_effective_tenant_id(), session_info_->get_user_id());
     }
   } // if
   return ret;

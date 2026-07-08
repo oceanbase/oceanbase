@@ -41,7 +41,7 @@ public:
   virtual ~ObStmtResolver() {}
 
   virtual int resolve(const ParseNode &parse_tree) = 0;
-  inline ObStmt *get_basic_stmt() { return stmt_; }
+  inline ObStmt *get_basic_stmt() const { return stmt_; }
   inline void set_basic_stmt(ObStmt *stmt) { stmt_ = stmt; }
   int resolve_table_relation_factor(const ParseNode *node, uint64_t tenant_id, uint64_t &database_id,
                                     common::ObString &table_name, common::ObString &synonym_name, common::ObString &db_name);
@@ -135,6 +135,7 @@ public:
                               common::ObString &db_name);
 
   virtual bool is_select_resolver() const { return false; }
+  virtual int check_ora_priv() const { return OB_SUCCESS; }
   inline uint64_t generate_query_id() { return params_.new_gen_qid_++; }
   inline uint64_t generate_column_id() { return params_.new_gen_cid_--; }
   uint64_t generate_table_id();

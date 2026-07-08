@@ -61,19 +61,6 @@ int ObBackupValidateResolver::resolve(const ParseNode &parse_tree)
   } else {
     stmt_ = stmt;
   }
-  if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
-    if (OB_ISNULL(schema_checker_)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret));
-    } else if (OB_FAIL(schema_checker_->check_ora_ddl_priv(
-        session_info_->get_effective_tenant_id(),
-        session_info_->get_priv_user_id(),
-        ObString(""),
-        stmt::T_BACKUP_VALIDATE,
-        session_info_->get_enable_role_array()))) {
-      LOG_WARN("failed to check privilege", K(session_info_->get_effective_tenant_id()), K(session_info_->get_user_id()));
-    }
-  }
 
   return ret;
 }

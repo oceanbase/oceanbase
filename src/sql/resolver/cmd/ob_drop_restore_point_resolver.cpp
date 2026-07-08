@@ -52,14 +52,6 @@ int ObDropRestorePointResolver::resolve(const ParseNode &parse_tree)
     }
   }
 
-  if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
-    OZ (schema_checker_->check_ora_ddl_priv(session_info_->get_effective_tenant_id(),
-                                            session_info_->get_priv_user_id(),
-                                            ObString("")/*database_name*/,
-                                            stmt::T_DROP_RESTORE_POINT,
-                                            session_info_->get_enable_role_array()));
-  }
-
   /* tenant name */
   if (OB_SUCC(ret)) {
     if (OB_UNLIKELY(T_IDENT != parse_tree.children_[0]->type_)) {

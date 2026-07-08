@@ -185,6 +185,8 @@ int ObResolver::stmt_resolver_func(ObResolverParams &params, const ParseNode &pa
   HEAP_VAR(ResolverType, stmt_resolver, params) {
     if (OB_FAIL(stmt_resolver.resolve(parse_tree))) {
       LOG_WARN("execute stmt_resolver failed", K(ret), K(parse_tree.type_));
+    } else if (OB_FAIL(stmt_resolver.check_ora_priv())) {
+      LOG_WARN("check ora priv failed", K(ret), K(parse_tree.type_));
     }
     stmt = stmt_resolver.get_basic_stmt();
   }

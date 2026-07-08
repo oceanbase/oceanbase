@@ -19,6 +19,10 @@ public:
   {}
   virtual ~ObSystemCmdResolver()
   {}
+
+  virtual int resolve(const ParseNode &parse_tree) = 0;
+  virtual int check_ora_priv() const override;
+
 private:
   /* functions */
   /* variables */
