@@ -2550,10 +2550,11 @@ int ObTabletDDLUtil::check_and_get_major_sstable(const share::ObLSID &ls_id,
   return ret;
 }
 
-int ObTabletDDLUtil::freeze_ddl_kv(const ObDDLTableMergeDagParam &param)
+int ObTabletDDLUtil::freeze_ddl_kv(const ObDDLTableMergeDagParam &param, const ObDDLKV *caller_kv)
 {
   return ObDDLMergeTaskUtils::freeze_ddl_kv(param.ls_id_, param.tablet_id_, param.direct_load_type_,
-                                            param.start_scn_, param.snapshot_version_, param.data_format_version_);
+                                            param.start_scn_, param.snapshot_version_, param.data_format_version_,
+                                            caller_kv);
 }
 
 int ObTabletDDLUtil::check_need_replay_column_store(

@@ -141,7 +141,8 @@ public:
       const ObDDLKVType ddl_kv_type = ObDDLKVType::DDL_KV_FULL,
       const transaction::ObTransID &trans_id = transaction::ObTransID(),
       const transaction::ObTxSEQ &seq_no = transaction::ObTxSEQ(),
-      const ObITable::TableType table_type = ObITable::TableType::MAX_TABLE_TYPE);
+      const ObITable::TableType table_type = ObITable::TableType::MAX_TABLE_TYPE,
+      const ObDDLKV *caller_kv = nullptr); // when non-null, only freeze if active tail == caller_kv
   int release_ddl_kvs(const ObDDLKVType ddl_kv_type, const share::SCN &rec_scn); // release persistent ddl kv, used in ddl merge task for free ddl kv
   int check_has_effective_ddl_kv(bool &has_ddl_kv); // used in ddl log handler for checkpoint
   int try_flush_ddl_commit_scn(

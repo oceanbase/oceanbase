@@ -221,7 +221,8 @@ int ObDDLMergeTaskUtils::freeze_ddl_kv(const ObLSID &ls_id,
                                            const ObDirectLoadType &direct_load_type,
                                            const share::SCN start_scn,
                                            const int64_t snapshot_version,
-                                           const uint64_t tenant_data_version)
+                                           const uint64_t tenant_data_version,
+                                           const ObDDLKV *caller_kv)
 
 {
   int ret = OB_SUCCESS;
@@ -258,7 +259,8 @@ int ObDDLMergeTaskUtils::freeze_ddl_kv(const ObLSID &ls_id,
     }
   } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->freeze_ddl_kv(
       start_scn, snapshot_version, tenant_data_version, SCN::min_scn()/*freeze_scn*/,
-      convert_direct_load_type_to_ddl_kv_type(direct_load_type)))) {
+      convert_direct_load_type_to_ddl_kv_type(direct_load_type),
+      ObTransID(), ObTxSEQ(), ObITable::MAX_TABLE_TYPE, caller_kv))) {
     LOG_WARN("ddl kv manager try freeze failed", K(ret), K(tablet_id),
         K(start_scn), K(snapshot_version), K(tenant_data_version), K(direct_load_type));
   }

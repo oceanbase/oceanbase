@@ -47,7 +47,8 @@ public:
                            const ObDirectLoadType &direct_load_type,
                            const share::SCN start_scn,
                            const int64_t snapshot_version,
-                           const uint64_t tenant_data_version);
+                           const uint64_t tenant_data_version,
+                           const ObDDLKV *caller_kv = nullptr);
 
   // final freeze ddl kv for major merge, avoid full ddl kv left in tablet
   static int final_freeze_ddl_kv(const ObLSID &ls_id, const ObTabletID &tablet_id);

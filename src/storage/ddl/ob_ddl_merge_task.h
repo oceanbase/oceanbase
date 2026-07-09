@@ -225,7 +225,7 @@ public:
       share::SCN &compact_end_scn,
       share::SCN &rec_scn);
 
-  static int freeze_ddl_kv(const ObDDLTableMergeDagParam &param);
+  static int freeze_ddl_kv(const ObDDLTableMergeDagParam &param, const ObDDLKV *caller_kv = nullptr);
 
   static int check_data_continue(
       ObTableStoreIterator &ddl_sstable_iter,

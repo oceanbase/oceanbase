@@ -655,7 +655,8 @@ int ObTabletDDLKvMgr::freeze_ddl_kv(
     const ObDDLKVType ddl_kv_type,
     const transaction::ObTransID &trans_id,
     const transaction::ObTxSEQ &seq_no,
-    const ObITable::TableType table_type)
+    const ObITable::TableType table_type,
+    const ObDDLKV *caller_kv)
 {
   int ret = OB_SUCCESS;
   ObDDLKVHandle kv_handle;
@@ -684,6 +685,11 @@ int ObTabletDDLKvMgr::freeze_ddl_kv(
     if (OB_ISNULL(kv)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ddl kv is null", K(ret), KP(kv), K(kv_handle));
+    } else if (caller_kv != nullptr && kv != caller_kv) {
+      // The active tail has been replaced since the caller checked: skip freeze to avoid
+      // prematurely freezing a KV that is not the one that triggered the threshold.
+      LOG_INFO("skip freeze ddl kv: caller kv is not the current active tail",
+               KP(caller_kv), KP(kv), K(ls_id_), K(tablet_id_), KPC(caller_kv), KPC(kv));
     } else if (OB_FAIL(kv->freeze(freeze_scn))) {
       if (OB_EAGAIN != ret) {
         LOG_WARN("fail to freeze active ddl kv", K(ret));

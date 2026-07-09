@@ -1101,7 +1101,8 @@ int ObDDLKV::set_macro_block(
       }
     }
   }
-  if (OB_SUCC(ret) && can_freeze && (get_macro_block_cnt() >= freeze_block_count || get_memory_used() >= MEMORY_LIMIT)) {
+  if (OB_SUCC(ret) && can_freeze && !is_freezed()
+      && (get_macro_block_cnt() >= freeze_block_count || get_memory_used() >= MEMORY_LIMIT)) {
     ObDDLTableMergeDagParam param;
     if (is_inc_major_ddl_kv()) {
       param.direct_load_type_ = ObDirectLoadType::DIRECT_LOAD_INCREMENTAL_MAJOR;
@@ -1118,7 +1119,7 @@ int ObDDLKV::set_macro_block(
     param.seq_no_ = macro_block.seq_no_;
     param.table_type_ = macro_block.table_key_.table_type_;
     int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(ObTabletDDLUtil::freeze_ddl_kv(param))) {
+    if (OB_TMP_FAIL(ObTabletDDLUtil::freeze_ddl_kv(param, this))) {
       LOG_WARN("try to freeze ddl kv failed", K(tmp_ret), K(param));
     } else if (OB_TMP_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
       LOG_WARN("try schedule ddl merge dag failed when ddl kv is full ",
