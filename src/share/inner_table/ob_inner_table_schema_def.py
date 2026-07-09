@@ -10015,6 +10015,7 @@ def_table_schema(
       ('duplicate_table_replica_constraint', 'longtext'),
       ('strict_location_constraint', 'longtext'),
       ('non_strict_location_constraint', 'longtext'),
+      ('params_value', 'longtext'),
   ],
   vtable_route_policy = 'distributed',
   partition_columns = ['svr_ip', 'svr_port'],
@@ -19380,7 +19381,8 @@ def_table_schema(
     IS_BATCHED_MULTI_STMT, RULE_NAME,
     (CASE PLAN_STATUS WHEN 0 THEN 'ACTIVE' ELSE 'INACTIVE' END) AS PLAN_STATUS,
     ADAPTIVE_FEEDBACK_TIMES, FIRST_GET_PLAN_TIME, FIRST_EXE_USEC, FORMAT_SQL_ID, CACHE_NODE_ID,
-    PCV_ID, PLAN_SET_ID, SUBSTR(CREATE_REASON, 1, INSTR(CREATE_REASON, 'Detail info:') - 1) AS CREATE_REASON
+    PCV_ID, PLAN_SET_ID, SUBSTR(CREATE_REASON, 1, INSTR(CREATE_REASON, 'Detail info:') - 1) AS CREATE_REASON,
+    PARAMS_VALUE
     FROM oceanbase.__all_virtual_plan_stat WHERE OBJECT_STATUS = 0 AND is_in_pc=true
 """.replace("\n", " "),
 
@@ -21154,7 +21156,7 @@ def_table_schema(
     TEMP_TABLES, IS_USE_JIT,OBJECT_TYPE,HINTS_INFO,HINTS_ALL_WORKED, PL_SCHEMA_ID,
     IS_BATCHED_MULTI_STMT, RULE_NAME, PLAN_STATUS, ADAPTIVE_FEEDBACK_TIMES,
     FIRST_GET_PLAN_TIME, FIRST_EXE_USEC, FORMAT_SQL_ID, CACHE_NODE_ID, PCV_ID,
-    PLAN_SET_ID, CREATE_REASON
+    PLAN_SET_ID, CREATE_REASON, PARAMS_VALUE
   FROM oceanbase.GV$OB_PLAN_CACHE_PLAN_STAT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
 
@@ -71928,7 +71930,8 @@ def_table_schema(
       CACHE_NODE_ID AS CACHE_NODE_ID,
       PCV_ID AS PCV_ID,
       PLAN_SET_ID AS PLAN_SET_ID,
-      SUBSTR(CREATE_REASON, 1, INSTR(CREATE_REASON, 'Detail info:') - 1) AS CREATE_REASON
+      SUBSTR(CREATE_REASON, 1, INSTR(CREATE_REASON, 'Detail info:') - 1) AS CREATE_REASON,
+      PARAMS_VALUE
       FROM SYS.ALL_VIRTUAL_PLAN_STAT WHERE OBJECT_STATUS = 0 AND IS_IN_PC='1'
 """.replace("\n", " ")
 )
@@ -72009,7 +72012,8 @@ FORMAT_SQL_ID,
 CACHE_NODE_ID,
 PCV_ID,
 PLAN_SET_ID,
-CREATE_REASON
+CREATE_REASON,
+PARAMS_VALUE
 FROM SYS.GV$OB_PLAN_CACHE_PLAN_STAT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
