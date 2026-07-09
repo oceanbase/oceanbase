@@ -860,6 +860,7 @@ namespace share
   static const char* const OB_SV_AP_QUERY_REPLICA_FALLBACK = "ap_query_replica_fallback";
   static const char* const OB_SV_UDF_COST_FACTOR = "ob_udf_cost_factor";
   static const char* const OB_SV_UDF_SELECTIVITY = "ob_udf_selectivity";
+  static const char* const OB_SV__ENABLE_PL_COMPOSITE_AS_SQL_UDT = "_enable_pl_composite_as_sql_udt";
 
 }
 }

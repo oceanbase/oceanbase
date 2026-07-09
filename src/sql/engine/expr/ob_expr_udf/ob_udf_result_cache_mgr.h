@@ -18,7 +18,7 @@ namespace oceanbase
 namespace pl
 {
 
-static constexpr int64_t RESULT_CACHE_SYS_VAR_COUNT = 14;
+static constexpr int64_t RESULT_CACHE_SYS_VAR_COUNT = 15;
 static constexpr share::ObSysVarClassType InfluenceMap[RESULT_CACHE_SYS_VAR_COUNT + 1] = {
   share::SYS_VAR_CHARACTER_SET_RESULTS,
   share::SYS_VAR_NCHARACTER_SET_CONNECTION,
@@ -34,6 +34,7 @@ static constexpr share::ObSysVarClassType InfluenceMap[RESULT_CACHE_SYS_VAR_COUN
   share::SYS_VAR_NLS_DUAL_CURRENCY,
   share::SYS_VAR_PLSQL_CCFLAGS,
   share::SYS_VAR_OB_COMPATIBILITY_VERSION,
+  share::SYS_VAR__ENABLE_PL_COMPOSITE_AS_SQL_UDT,
   share::SYS_VAR_INVALID
 };
 

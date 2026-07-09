@@ -98,6 +98,7 @@ const ObSysVarClassType ESSENTIAL_SYS_VARS[] = {
   SYS_VAR_AP_QUERY_ROUTE_POLICY,        // ap_query_route_policy
   SYS_VAR_OB_UDF_COST_FACTOR,        // ob_udf_cost_factor
   SYS_VAR_OB_UDF_SELECTIVITY,        // ob_udf_selectivity
+  SYS_VAR__ENABLE_PL_COMPOSITE_AS_SQL_UDT,        // _enable_pl_composite_as_sql_udt
 };
 
 const int64_t ESSENTIAL_SYS_VARS_COUNT = sizeof(ESSENTIAL_SYS_VARS) / sizeof(ESSENTIAL_SYS_VARS[0]);
@@ -11732,13 +11733,26 @@ static struct VarsInit{
     ObSysVars[850].alias_ = "OB_SV_UDF_SELECTIVITY" ;
     }();
 
+    [&] (){
+      ObSysVars[851].default_value_ = "0" ;
+      ObSysVars[851].info_ = "Whether to use SQL UDT for PL complex types in SQL scope to optimize memory" ;
+      ObSysVars[851].name_ = "_enable_pl_composite_as_sql_udt" ;
+      ObSysVars[851].data_type_ = ObIntType ;
+      ObSysVars[851].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::INFLUENCE_PL | ObSysVarFlag::ORACLE_ONLY ;
+      ObSysVars[851].id_ = SYS_VAR__ENABLE_PL_COMPOSITE_AS_SQL_UDT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__ENABLE_PL_COMPOSITE_AS_SQL_UDT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__ENABLE_PL_COMPOSITE_AS_SQL_UDT] = 851 ;
+      ObSysVars[851].base_value_ = "0" ;
+    ObSysVars[851].alias_ = "OB_SV__ENABLE_PL_COMPOSITE_AS_SQL_UDT" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 851;
+static int64_t var_amount = 852;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

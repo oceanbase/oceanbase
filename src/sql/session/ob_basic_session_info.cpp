@@ -3449,6 +3449,12 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       OX (sys_vars_cache_.set_plsql_can_transform_sql_to_assign(int_val != 0));
       break;
     }
+    case SYS_VAR__ENABLE_PL_COMPOSITE_AS_SQL_UDT: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_enable_pl_composite_as_sql_udt(int_val != 0));
+      break;
+    }
     case SYS_VAR_CHARACTER_SET_CLIENT: {
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
@@ -4020,6 +4026,12 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
       OX (sys_vars_cache.set_base_plsql_can_transform_sql_to_assign(int_val != 0));
+      break;
+    }
+    case SYS_VAR__ENABLE_PL_COMPOSITE_AS_SQL_UDT: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_base_enable_pl_composite_as_sql_udt(int_val != 0));
       break;
     }
     case SYS_VAR_CHARACTER_SET_CLIENT: {

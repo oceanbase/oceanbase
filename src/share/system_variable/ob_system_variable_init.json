@@ -11999,5 +11999,18 @@
     "info_cn": "设置UDF谓词的选择率(默认值: 0.005)",
     "background_cn": "",
     "ref_url": ""
+  },
+  "_enable_pl_composite_as_sql_udt": {
+    "id": 10767,
+    "name": "_enable_pl_composite_as_sql_udt",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "bool",
+    "info": "Whether to use SQL UDT for PL complex types in SQL scope to optimize memory",
+    "flags": "SESSION | GLOBAL | NEED_SERIALIZE | INFLUENCE_PLAN | INFLUENCE_PL | ORACLE_ONLY",
+    "publish_version": "4.4.2.3",
+    "info_cn": "控制 SQL 作用域内 PL 复杂类型是否使用 SQL UDT 以优化内存",
+    "background_cn": "",
+    "ref_url": ""
   }
 }

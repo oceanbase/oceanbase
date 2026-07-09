@@ -611,6 +611,7 @@ public:
   const common::ObString get_local_nls_timestamp_format() const;
   const common::ObString get_local_nls_timestamp_tz_format() const;
   bool get_local_plsql_can_transform_sql_to_assign() const;
+  bool get_local_enable_pl_composite_as_sql_udt() const;
   bool get_local_ob_enable_pl_async_commit() const;
   int get_local_nls_format(const ObObjType type, ObString &format_str) const;
   int set_time_zone(const common::ObString &str_val, const bool is_oralce_mode,
@@ -2039,7 +2040,8 @@ public:
         plsql_can_transform_sql_to_assign_(false),
         max_execution_time_(MAX_EXECUTION_TIME_MIN),
         ob_enable_pl_async_commit_(false),
-        json_float_full_precision_(false)
+        json_float_full_precision_(false),
+        enable_pl_composite_as_sql_udt_(false)
     {
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         MEMSET(nls_formats_buf_[i], 0, MAX_NLS_FORMAT_STR_LEN);
@@ -2117,6 +2119,7 @@ public:
       ob_enable_pl_async_commit_ = false;
       max_execution_time_  = MAX_EXECUTION_TIME_MIN;
       json_float_full_precision_ = false;
+      enable_pl_composite_as_sql_udt_ = false;
     }
 
     inline bool operator==(const SysVarsCacheData &other) const {
@@ -2178,7 +2181,8 @@ public:
             plsql_optimize_level_ == other.plsql_optimize_level_ &&
             ob_enable_pl_async_commit_ == other.ob_enable_pl_async_commit_ &&
             max_execution_time_ == other.max_execution_time_;
-            json_float_full_precision_ == other.json_float_full_precision_;
+            json_float_full_precision_ == other.json_float_full_precision_ &&
+            enable_pl_composite_as_sql_udt_ == other.enable_pl_composite_as_sql_udt_;
       bool equal2 = true;
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         if (nls_formats_[i] != other.nls_formats_[i]) {
@@ -2374,6 +2378,7 @@ public:
     int64_t max_execution_time_;
     bool ob_enable_pl_async_commit_;
     bool json_float_full_precision_;
+    bool enable_pl_composite_as_sql_udt_;
   private:
     char nls_formats_buf_[ObNLSFormatEnum::NLS_MAX][MAX_NLS_FORMAT_STR_LEN];
   };
@@ -2449,6 +2454,7 @@ private:
     DEF_SYS_VAR_BIT_ENUM(ob_enable_pl_async_commit, 63)
     DEF_SYS_VAR_BIT_ENUM(json_float_full_precision, 64)
     DEF_SYS_VAR_BIT_ENUM(max_execution_time, 65)
+    DEF_SYS_VAR_BIT_ENUM(enable_pl_composite_as_sql_udt, 66)
     BIT_MAX_POSITION = 128  // max position is 128 now
   };
 #undef DEF_SYS_VAR_BIT_ENUM
@@ -2606,6 +2612,7 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, plsql_optimize_level);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, max_execution_time);
     DEF_SYS_VAR_CACHE_FUNCS(bool, json_float_full_precision);
+    DEF_SYS_VAR_CACHE_FUNCS(bool, enable_pl_composite_as_sql_udt);
     void set_autocommit_info(bool inc_value)
     {
       inc_data_.autocommit_ = inc_value;
@@ -3128,6 +3135,10 @@ inline const common::ObString ObBasicSessionInfo::get_local_nls_timestamp_tz_for
 inline bool ObBasicSessionInfo::get_local_plsql_can_transform_sql_to_assign() const
 {
   return sys_vars_cache_.get_plsql_can_transform_sql_to_assign();
+}
+inline bool ObBasicSessionInfo::get_local_enable_pl_composite_as_sql_udt() const
+{
+  return sys_vars_cache_.get_enable_pl_composite_as_sql_udt();
 }
 inline bool ObBasicSessionInfo::get_local_ob_enable_pl_async_commit() const
 {

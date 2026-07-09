@@ -6157,6 +6157,13 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_UDF_SELECTIVITY; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(850); }
 };
+class ObSysVarEnablePlCompositeAsSqlUdt : public ObBoolSysVar
+{
+public:
+  ObSysVarEnablePlCompositeAsSqlUdt() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR__ENABLE_PL_COMPOSITE_AS_SQL_UDT; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(851); }
+};
 
 
 class ObSysVarFactory
@@ -6180,7 +6187,7 @@ private:
 
 public:
   const static int64_t MYSQL_SYS_VARS_COUNT = 99;
-  const static int64_t OB_SYS_VARS_COUNT = 752;
+  const static int64_t OB_SYS_VARS_COUNT = 753;
   const static int64_t OB_SYS_DEFAULT_VALUE_CHANGED_SERIALIZED_VAR_COUNT = 10;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
   const static int64_t INVALID_MAX_READ_STALE_TIME = -1;
