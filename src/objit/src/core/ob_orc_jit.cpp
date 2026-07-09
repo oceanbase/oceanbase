@@ -175,7 +175,11 @@ int ObOrcJit::lookup(const std::string &name, ObJITSymbol &symbol)
         "name", name.c_str(),
         "msg", msg.c_str());
     } else {
+#if LLVM_VERSION_MAJOR >= 14
       symbol = JITEvaluatedSymbol(value->getValue(), JITSymbolFlags::Exported);
+#else
+      symbol = *value;
+#endif
     }
   }
 
@@ -269,6 +273,9 @@ void ObNotifyLoaded::registerDebugInfoToGdb(ObObjectKey Key)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL entry after set_refactored", K(ret));
   } else {
+#if defined(__loongarch64)
+    if (&__jit_debug_descriptor != nullptr) {
+#endif
     jit_code_entry *next = __jit_debug_descriptor.first_entry;
     if (OB_NOT_NULL(next)) {
       next->prev_entry = entry;
@@ -281,7 +288,13 @@ void ObNotifyLoaded::registerDebugInfoToGdb(ObObjectKey Key)
 
     __jit_debug_descriptor.relevant_entry = entry;
     __jit_debug_descriptor.action_flag = JIT_REGISTER_FN;
+#if defined(__loongarch64)
+    if (__jit_debug_register_code != nullptr)
+#endif
     __jit_debug_register_code();
+#if defined(__loongarch64)
+    }
+#endif
   }
 
   LOG_DEBUG("finished registerDebugInfoToGdb", K(ret), K(Key), K(AllGdbReg.second.size()));
@@ -296,6 +309,9 @@ void ObNotifyLoaded::deregisterDebugInfoFromGdb(ObObjectKey Key)
   jit_code_entry *entry = AllGdbReg.second.get(Key);
 
   if (OB_NOT_NULL(entry)) {
+#if defined(__loongarch64)
+    if (&__jit_debug_descriptor != nullptr) {
+#endif
     jit_code_entry *prev = entry->prev_entry;
     jit_code_entry *next = entry->next_entry;
 
@@ -311,7 +327,13 @@ void ObNotifyLoaded::deregisterDebugInfoFromGdb(ObObjectKey Key)
 
     __jit_debug_descriptor.relevant_entry = entry;
     __jit_debug_descriptor.action_flag = JIT_UNREGISTER_FN;
+#if defined(__loongarch64)
+    if (__jit_debug_register_code != nullptr)
+#endif
     __jit_debug_register_code();
+#if defined(__loongarch64)
+    }
+#endif
 
     if (OB_FAIL(AllGdbReg.second.erase_refactored(Key))) {
       LOG_WARN("failed to erase jit entry from hashmap", K(ret));
@@ -357,7 +379,11 @@ int ObOrcJit::set_optimize_level(ObPLOptLevel level)
 
   if (OB_SUCC(ret) && level == ObPLOptLevel::O0) {
     auto &tm_builder = ObEngineBuilder.getJITTargetMachineBuilder();
+#if LLVM_VERSION_MAJOR >= 14
     if (!tm_builder.has_value()) {
+#else
+    if (!tm_builder.hasValue()) {
+#endif
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected NULL JITTargetMachineBuilder", K(ret), K(lbt()));
     } else {

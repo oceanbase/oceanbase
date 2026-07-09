@@ -584,14 +584,18 @@ int ObLLVMHelper::initialize()
   llvm::InitializeNativeTargetAsmPrinter();
   llvm::InitializeNativeTargetAsmParser();
 
-/*Do not juse use !defined(__aarch64__) here*/
-//#if !defined(__aarch64__)
 #if defined(__x86_64__)
   // initialize LLVM X86 unfold table
   llvm::lookupUnfoldTable(0);
 #endif
 
+#if defined(__loongarch64)
+  // On LoongArch, RTDyld crashes during relocation processing of the pl_init_func
+  // warmup stub (sig_addr=0x10). This stub is x86 AVX-512 specific and not needed.
+  OZ (core::ObNotifyLoaded::initGdbHelper());
+#else
   OZ (init_llvm());
+#endif
 
   return ret;
 }

@@ -2218,7 +2218,7 @@ int ObUpgradeFor4410Processor::post_upgrade_for_replace_tenant_()
 int ObUpgradeFor4410Processor::post_upgrade_for_upload_cluster_info_()
 {
   int ret = OB_SUCCESS;
-#ifdef OB_BUILD_SHARED_STORAGE
+#if defined(OB_BUILD_SHARED_STORAGE) && defined(OB_BUILD_SHARED_LOG_SERVICE)
   bool file_exist = false;
   ObSSClusterInfo ss_cluster_info;
   share::ObBackupDest storage_dest;

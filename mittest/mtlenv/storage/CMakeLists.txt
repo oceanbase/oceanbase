@@ -1,6 +1,6 @@
 function(ob_mds_case case)
   storage_dml_unittest(${ARGV})
-  target_link_libraries(${case} PRIVATE truncate_info_helper -static-libstdc++)
+  target_link_libraries(${case} PRIVATE truncate_info_helper ${STATIC_LIBSTDCXX_FLAGS})
 endfunction()
 
 storage_unittest(test_tenant_module_env)

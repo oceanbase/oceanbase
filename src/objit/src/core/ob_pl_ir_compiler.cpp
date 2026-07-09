@@ -110,7 +110,11 @@ public:
 
   inline std::unique_ptr<llvm::remarks::MetaSerializer>
   metaSerializer(raw_ostream &OS,
+#if LLVM_VERSION_MAJOR >= 14
                  std::optional<StringRef> ExternalFilename = std::nullopt
+#else
+                 Optional<StringRef> ExternalFilename = None
+#endif
                 ) override
   {
     return std::make_unique<ObJitMetaSerializer>(OS);

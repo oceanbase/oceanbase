@@ -1994,7 +1994,7 @@ int ObMigrateUnitExecutor::execute(ObExecContext &ctx, ObMigrateUnitStmt &stmt)
 int ObReplaceTenantExecutor::execute(ObExecContext &ctx, ObReplaceTenantStmt &stmt)
 {
   int ret = OB_SUCCESS;
-#ifdef OB_BUILD_SHARED_STORAGE
+#if defined(OB_BUILD_SHARED_STORAGE) && defined(OB_BUILD_SHARED_LOG_SERVICE)
   ObDRReplaceTenant replace_tenant;
   if (OB_UNLIKELY(!stmt.is_valid())) {
     ret = OB_INVALID_ARGUMENT;

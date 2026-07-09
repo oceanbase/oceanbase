@@ -100,6 +100,14 @@ if(OB_BUILD_ORACLE_PL)
   )
 endif()
 
+if( ${ARCHITECTURE} STREQUAL "loongarch64" )
+  target_include_directories(
+    oblib_base_without_pass INTERFACE
+    ${DEP_3RD_DIR}/u01/obclient/include
+    ${CMAKE_SOURCE_DIR}/close_modules/oracle_pl
+  )
+endif()
+
 if(OB_BUILD_TDE_SECURITY)
   target_include_directories(
     oblib_base_without_pass INTERFACE
@@ -160,6 +168,9 @@ if (OB_USE_CLANG)
     -Wno-implicit-fallthrough -Wno-deprecated-non-prototype
     -Wno-ambiguous-reversed-operator
     -Wno-string-concatenation)
+  if( ${ARCHITECTURE} STREQUAL "loongarch64" )
+    list(INSERT OBLIB_COMPILE_DEFINITIONS 0 -Wno-unknown-warning-option)
+  endif()
   target_compile_options(oblib_base_without_pass INTERFACE ${OBLIB_COMPILE_DEFINITIONS})
   if (ENABLE_SANITY)
     target_compile_options(oblib_pass

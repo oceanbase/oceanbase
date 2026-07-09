@@ -136,6 +136,26 @@ static __inline__ uint64_t rdtscp()
     __asm__ __volatile__("rdtscp" : "=a"(rax), "=d"(rdx) :: "%rcx");
     return (rdx << 32) + rax;
 }
+
+#elif defined(__loongarch64) || defined(__loongarch__)
+static __inline__ uint64_t rdtsc()
+{
+    uint64_t cycles, tid;
+    __asm__ __volatile__("rdtime.d %0, %1" : "=r"(cycles), "=r"(tid));
+    return cycles;
+}
+static __inline__ uint64_t rdtscp()
+{
+    uint64_t cycles, tid;
+    __asm__ __volatile__(
+        "dbar 0\n\t"
+        "rdtime.d %0, %1\n\t"
+        : "=r"(cycles), "=r"(tid)
+        :: "memory"
+    );
+    return cycles;
+}
+
 #else
 static __inline__ uint64_t rdtscp()
 {
@@ -181,6 +201,28 @@ uint64_t get_cpufreq_khz()
                     freq_khz = (uint64_t)(freq_mhz * 1000UL);
                     break;
                 }
+            }
+        }
+        fclose(stream);
+    }
+
+    return freq_khz;
+}
+#elif defined(__loongarch64) || defined(__loongarch__)
+// LoongArch /proc/cpuinfo format: "CPU MHz            : 2100.00"
+uint64_t get_cpufreq_khz(void)
+{
+    char line[256];
+    FILE *stream = NULL;
+    double freq_mhz = 0.0;
+    uint64_t freq_khz = 0;
+
+    stream = fopen("/proc/cpuinfo", "r");
+    if (NULL != stream) {
+        while (fgets(line, sizeof(line), stream)) {
+            if (sscanf(line, "CPU MHz : %lf", &freq_mhz) == 1) {
+                freq_khz = (uint64_t)(freq_mhz * 1000UL);
+                break;
             }
         }
         fclose(stream);

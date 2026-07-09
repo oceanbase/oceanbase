@@ -295,7 +295,7 @@ void *ObJitAllocator::alloc(const JitMemType mem_type, int64_t sz, int64_t align
   switch (mem_type) {
     case JMT_RO: {
       ret =
-#if defined(__aarch64__)
+#if defined(__aarch64__) || defined(__loongarch64)
           code_mem_
 #else
           ro_data_mem_
@@ -304,7 +304,7 @@ void *ObJitAllocator::alloc(const JitMemType mem_type, int64_t sz, int64_t align
     } break;
     case JMT_RW: {
       ret =
-#if defined(__aarch64__)
+#if defined(__aarch64__) || defined(__loongarch64)
           code_mem_
 #else
           rw_data_mem_

@@ -122,7 +122,7 @@ private:
   int check_protected_sys_variable(ObSQLSessionInfo *session,
                                    const share::ObSetVar &set_var,
                                    int &ret);
-#ifdef OB_BUILD_CLOSE_MODULES
+#if defined(OB_BUILD_CLOSE_MODULES) && defined(OB_BUILD_ORACLE_PL)
   int do_early_lock_release(ObExecContext &ctx,
                             ObSQLSessionInfo &session,
                             const bool enable_early_lock_release);

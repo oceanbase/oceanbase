@@ -39,13 +39,15 @@ int ObRpcRunDBMSSchedJobP::process()
   int ret = OB_SUCCESS;
   const ObDBMSSchedJobArg &arg = arg_;
   ObDBMSSchedJobResult &result = result_;
-  ObDBMSSchedJobExecutor executor;
   result.set_tenant_id(arg.tenant_id_);
   result.set_job_id(arg.job_id_);
   result.set_server_addr(arg.server_addr_);
 
+#if !defined(__loongarch64)
+  // On LoongArch, PL/SQL JIT execution of scheduled jobs crashes due to
+  // incomplete RTDyld relocation support. Skip job execution on this platform.
+  ObDBMSSchedJobExecutor executor;
   LOG_INFO("dbms sched job run rpc process start", K(ret));
-
   if (!arg.is_valid()) {
     ret = OB_INVALID_ERROR;
     LOG_WARN("fail to get dbms sched job arg", K(ret), K(arg));
@@ -58,6 +60,7 @@ int ObRpcRunDBMSSchedJobP::process()
   } else if (OB_FAIL(executor.run_dbms_sched_job(arg.tenant_id_, arg.is_oracle_tenant_, arg.job_id_, arg.job_name_))) {
     LOG_WARN("fail to executor dbms sched job", K(ret), K(arg));
   }
+#endif
   LOG_INFO("dbms sched job run rpc process end", K(ret), K(arg_));
   result.set_status_code(ret);
 

@@ -153,6 +153,8 @@ int ObPxBloomFilter::init(int64_t data_length, ObIAllocator &allocator, int64_t 
     const bool simd_support = common::is_arch_supported(ObTargetArch::AVX512);
 #elif defined(__aarch64__)
     const bool simd_support = common::is_arch_supported(ObTargetArch::NEON);
+#elif defined(__loongarch64)
+    const bool simd_support = false;
 #else
 #error unsupported arch
 #endif
@@ -561,8 +563,12 @@ OB_DEF_DESERIALIZE(ObPxBloomFilter)
 
     if (OB_SUCC(ret)) {
       bits_array_ = bits_array;
+#if defined(__loongarch64)
+      might_contain_ = &ObPxBloomFilter::might_contain_nonsimd;
+#else
       might_contain_ = common::is_arch_supported(ObTargetArch::AVX512) ? &ObPxBloomFilter::might_contain_simd
                        : &ObPxBloomFilter::might_contain_nonsimd;
+#endif
     }
   }
   OB_UNIS_DECODE(max_bit_count_);

@@ -13,7 +13,7 @@ target_link_libraries(test_sql_fast_parser
   oblib
   gtest
   gmock
-  -static-libstdc++
+  ${STATIC_LIBSTDCXX_FLAGS}
 )
 target_link_options(test_sql_fast_parser PRIVATE LINKER:--allow-multiple-definition)
 target_include_directories(test_sql_fast_parser

@@ -700,6 +700,8 @@ for (__typeof__((c).at(0)) *it = ((extra_condition) && (c).count() > 0 ? &(c).at
 #define CACHE_ALIGN_SIZE 64
 #elif __aarch64__
 #define CACHE_ALIGN_SIZE 128
+#elif __loongarch64
+#define CACHE_ALIGN_SIZE 64
 #endif
 
 #define CACHE_ALIGNED __attribute__((aligned(CACHE_ALIGN_SIZE)))

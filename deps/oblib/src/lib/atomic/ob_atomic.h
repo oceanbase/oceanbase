@@ -23,6 +23,9 @@ namespace common
 #elif defined(__aarch64__)
 #define WEAK_BARRIER() __sync_synchronize()
 #define PAUSE() ({OB_ATOMIC_EVENT(atomic_pause); asm("yield\n");})  // for ARM
+#elif defined(__loongarch64)
+#define WEAK_BARRIER() __sync_synchronize()
+#define PAUSE() ({OB_ATOMIC_EVENT(atomic_pause); asm volatile("nop\n" :::);}) // for LoongArch, equivalent to pause/yield hint
 #else
 #error arch unsupported
 #endif

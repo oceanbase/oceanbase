@@ -8,7 +8,11 @@
 
 #include "ob_pl_stmt.h"
 
+#if defined(__loongarch64)
+#include "lib/clang/13.0.1/include/unwind.h"
+#else
 #include "lib/clang/17/include/unwind.h"
+#endif
 
 namespace oceanbase
 {

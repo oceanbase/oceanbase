@@ -413,13 +413,18 @@ int ObPreBootstrap::wirte_ss_format_and_cluster_info_(const ObBackupDest &storag
   } else if (rs_list_.count() <= 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("rs_list size must larger than 0", K(ret));
-  } else if (OB_FAIL(ObDRReplaceTenant::get_logservice_cluster_id(logservice_cluster_id))) {
-    LOG_WARN("fail to get logservice cluster id", KR(ret));
-  } else if (OB_FAIL(ss_cluster_info.init(logservice_cluster_id, rs_list_.at(0).region_))) {
-    LOG_WARN("fail to init ss_cluster_info", KR(ret), K(logservice_cluster_id), K(CLUSTER_CURRENT_VERSION));
-  } else if (OB_FAIL(ObSSClusterInfoUtil::write_ss_cluster_info(storage_dest, ss_cluster_info))) {
-    LOG_ERROR("fail to write ss_cluster_info file", KR(ret), K(storage_dest), K(ss_cluster_info));
   }
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObDRReplaceTenant::get_logservice_cluster_id(logservice_cluster_id))) {
+      LOG_WARN("fail to get logservice cluster id", KR(ret));
+    } else if (OB_FAIL(ss_cluster_info.init(logservice_cluster_id, rs_list_.at(0).region_))) {
+      LOG_WARN("fail to init ss_cluster_info", KR(ret), K(logservice_cluster_id), K(CLUSTER_CURRENT_VERSION));
+    } else if (OB_FAIL(ObSSClusterInfoUtil::write_ss_cluster_info(storage_dest, ss_cluster_info))) {
+      LOG_ERROR("fail to write ss_cluster_info file", KR(ret), K(storage_dest), K(ss_cluster_info));
+    }
+  }
+#endif
   FLOG_INFO("write ss_cluster_info", KR(ret), K(ss_cluster_info), K(ss_format));
   return ret;
 }

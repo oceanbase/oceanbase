@@ -63,7 +63,7 @@ public:
 
   virtual void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
 
-#if defined(__aarch64__)
+#if defined(__aarch64__) || defined(__loongarch64)
   /// Inform the memory manager about the total amount of memory required to
   /// allocate all sections to be loaded:
   /// \p CodeSize - the total size of all code sections

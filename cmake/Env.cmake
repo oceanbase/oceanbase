@@ -144,24 +144,31 @@ else()
   set(OB_BUILD_CLOSE_MODULES ON)
 endif()
 
+# close modules features for loongarch64
+if(${ARCHITECTURE} STREQUAL "loongarch64")
+  set(BUILD_DEFAULT OFF)
+else()
+  set(BUILD_DEFAULT ON)
+endif()
+
 if(OB_BUILD_CLOSE_MODULES)
   # SECURITY, 包含3个功能点
   ob_define(OB_BUILD_TDE_SECURITY ON)
-  ob_define(OB_BUILD_AUDIT_SECURITY ON)
+  ob_define(OB_BUILD_AUDIT_SECURITY ${BUILD_DEFAULT})
   ob_define(OB_BUILD_LABEL_SECURITY ON)
   # SPM功能
-  ob_define(OB_BUILD_SPM ON)
+  ob_define(OB_BUILD_SPM ${BUILD_DEFAULT})
 
   # oracle
   ob_define(OB_BUILD_ORACLE_PARSER ON)
-  ob_define(OB_BUILD_ORACLE_PL ON)
+  ob_define(OB_BUILD_ORACLE_PL ${BUILD_DEFAULT})
   # dblink
-  ob_define(OB_BUILD_DBLINK ON)
+  ob_define(OB_BUILD_DBLINK ${BUILD_DEFAULT})
   # odps
   ob_define(OB_BUILD_CPP_ODPS ON)
 
   # 仲裁功能
-  ob_define(OB_BUILD_ARBITRATION ON)
+  ob_define(OB_BUILD_ARBITRATION ${BUILD_DEFAULT})
 
   # 日志存储压缩
   ob_define(OB_BUILD_LOG_STORAGE_COMPRESS ON)
@@ -286,10 +293,18 @@ endif(OB_USE_CCACHE)
 
 if (OB_USE_CLANG)
 
+  if(${ARCHITECTURE} STREQUAL "loongarch64")
+    set(CLANG_C_BIN clang)
+    set(CLANG_CXX_BIN clang++)
+  else()
+    set(CLANG_C_BIN clang-17)
+    set(CLANG_CXX_BIN clang++-17)
+  endif()
+
   if (OB_CC)
     message(STATUS "Using OB_CC compiler: ${OB_CC}")
   else()
-    find_program(OB_CC clang-17
+    find_program(OB_CC ${CLANG_C_BIN}
     "${DEVTOOLS_DIR}/bin"
       NO_DEFAULT_PATH)
   endif()
@@ -297,16 +312,20 @@ if (OB_USE_CLANG)
   if (OB_CXX)
     message(STATUS "Using OB_CXX compiler: ${OB_CXX}")
   else()
-    find_program(OB_CXX clang++-17
+    find_program(OB_CXX ${CLANG_CXX_BIN}
     "${DEVTOOLS_DIR}/bin"
       NO_DEFAULT_PATH)
   endif()
 
   set(OB_OBJCOPY_BIN "${DEVTOOLS_DIR}/bin/llvm-objcopy")
 
-  find_file(GCC9 devtools
-    PATHS ${CMAKE_SOURCE_DIR}/deps/3rd/usr/local/oceanbase
-    NO_DEFAULT_PATH)
+  if(${ARCHITECTURE} STREQUAL "loongarch64")
+    set(GCC9 /usr)
+  else()
+    find_file(GCC9 devtools
+      PATHS ${CMAKE_SOURCE_DIR}/deps/3rd/usr/local/oceanbase
+      NO_DEFAULT_PATH)
+  endif()
   set(_CMAKE_TOOLCHAIN_PREFIX llvm-)
   set(_CMAKE_TOOLCHAIN_LOCATION "${DEVTOOLS_DIR}/bin")
 
@@ -399,11 +418,44 @@ option(OB_ENABLE_AVX2 "enable AVX2 and related instruction set support for x86_6
 
 include(CMakeFindBinUtils)
 EXECUTE_PROCESS(COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE ARCHITECTURE )
+set(STATIC_LIBGCC_FLAGS "-static-libgcc")
+set(STATIC_LIBSTDCXX_FLAGS "-static-libstdc++")
 if( ${ARCHITECTURE} STREQUAL "x86_64" )
     set(MARCH_CFLAGS "-march=nehalem")
     set(MTUNE_CFLAGS -mtune=core2)
     set(ARCH_LDFLAGS "")
     set(OCI_DEVEL_INC "${DEP_3RD_DIR}/usr/include/oracle/12.2/client64")
+elseif( ${ARCHITECTURE} STREQUAL "loongarch64" )
+    find_program(SYSTEM_GCC_BIN gcc
+      PATHS /usr/bin /bin
+      NO_DEFAULT_PATH)
+    if (NOT SYSTEM_GCC_BIN)
+      message(FATAL_ERROR "cannot find system gcc for loongarch64.")
+    endif()
+    execute_process(COMMAND ${SYSTEM_GCC_BIN} -dumpversion
+      OUTPUT_VARIABLE SYSTEM_GCC_VER
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+    execute_process(COMMAND ${SYSTEM_GCC_BIN} -dumpmachine
+      OUTPUT_VARIABLE SYSTEM_GCC_ARCH_TRIPLET
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+    set(STATIC_LIBGCC_FLAGS "")
+    set(STATIC_LIBSTDCXX_FLAGS "")
+    set(SYSTEM_GCC_LIB_DIR "/usr/lib/gcc/${SYSTEM_GCC_ARCH_TRIPLET}/${SYSTEM_GCC_VER}")
+    set(SYSTEM_GCC_CFLAGS "-fPIC -mcmodel=large -B${SYSTEM_GCC_LIB_DIR}")
+    set(SYSTEM_GCC_CXXFLAGS "-mcmodel=large -B${SYSTEM_GCC_LIB_DIR} -isystem /usr/include/c++/${SYSTEM_GCC_VER} -isystem /usr/include/c++/${SYSTEM_GCC_VER}/${SYSTEM_GCC_ARCH_TRIPLET}")
+    set(SYSTEM_GCC_LDFLAGS "-mcmodel=large -B${SYSTEM_GCC_LIB_DIR} -L${SYSTEM_GCC_LIB_DIR} -L/usr/lib64")
+    # GCC 8 puts std::filesystem in a separate archive not pulled in by -lstdc++
+    set(STDCXXFS_LIB "${SYSTEM_GCC_LIB_DIR}/libstdc++fs.a")
+
+    # set FLAGS for compiler
+    set(MARCH_CFLAGS "-march=la464" "-mcmodel=large" "-mlsx")
+    set(MTUNE_CFLAGS "-mabi=lp64")
+    set(ARCH_LDFLAGS "-latomic")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${SYSTEM_GCC_CFLAGS}")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SYSTEM_GCC_CXXFLAGS} -D_GLIBCXX_USE_CXX11_ABI=0")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${SYSTEM_GCC_LDFLAGS}")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${SYSTEM_GCC_LDFLAGS}")
 else()
     if (${OB_DISABLE_LSE})
       message(STATUS "build with no-lse")

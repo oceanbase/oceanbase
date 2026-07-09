@@ -18,7 +18,9 @@
 #include "llvm/ExecutionEngine/JITEventListener.h"
 #include "llvm/IR/Mangler.h"
 #include "llvm/ExecutionEngine/Orc/Shared/ExecutorAddress.h"
+#if LLVM_VERSION_MAJOR >= 14
 #include "llvm/ExecutionEngine/Orc/Shared/ExecutorSymbolDef.h"
+#endif
 
 #include <string>
 #include "lib/lock/ob_spin_lock.h"
@@ -54,10 +56,20 @@ extern "C" {
   // We put information about the JITed function in this global, which the
   // debugger reads.  Make sure to specify the version statically, because the
   // debugger checks the version before we can set it during runtime.
+#if defined(__loongarch64)
+  // LoongArch LLVM 13 may not provide these GDB JIT interface symbols;
+  // declare as weak so their address can be checked at runtime before use.
+  extern struct jit_descriptor __jit_debug_descriptor __attribute__((weak));
+#else
   extern struct jit_descriptor __jit_debug_descriptor;
+#endif
 
   // Debuggers puts a breakpoint in this function.
+#if defined(__loongarch64)
+  extern void __jit_debug_register_code() __attribute__((weak));
+#else
   extern void __jit_debug_register_code();
+#endif
 
 }
 
@@ -113,8 +125,13 @@ typedef ::llvm::JITEventListener ObJitEventListener;
 
 typedef ::llvm::orc::DefinitionGenerator ObJitDefinitionGenerator;
 using ObObjectKey = ObJitEventListener::ObjectKey;
+#if LLVM_VERSION_MAJOR >= 14
 using ObSymbolDef = ::llvm::orc::ExecutorSymbolDef;
 using ObExecutorAddr = ::llvm::orc::ExecutorAddr;
+#else
+using ObSymbolDef = ::llvm::JITEvaluatedSymbol;
+using ObExecutorAddr = ::llvm::JITTargetAddress;
+#endif
 
 class ObNotifyLoaded: public ObJitEventListener
 {

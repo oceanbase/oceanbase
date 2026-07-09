@@ -2011,7 +2011,7 @@ const int64_t OB_RESERVED_THREAD_NUM = 128; // Naked threads created with pthrea
 const int32_t OB_MAX_SYS_BKGD_THREAD_NUM = 64;
 #if __x86_64__
 const int64_t OB_MAX_CPU_NUM = 64;
-#elif __aarch64__
+#elif defined(__aarch64__) || defined(__loongarch64)
 const int64_t OB_MAX_CPU_NUM = 128;
 #endif
 

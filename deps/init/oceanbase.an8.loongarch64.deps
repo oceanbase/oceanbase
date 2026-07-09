@@ -1,0 +1,54 @@
+[target-default]
+os=8
+arch=loongarch64
+repo=http://yum-test.obvos.alibaba-inc.com/oceanbase/development-kit/an/8/loongarch64/
+
+[target-current]
+os=8
+arch=loongarch64
+repo=https://ob-yum.oceanbase-dev.com/8/loongarch64/current
+
+[target-tarball]
+repo=http://yum-test.obvos.alibaba-inc.com/oceanbase/development-kit/an/8/loongarch64/loong_3rd.tar.gz
+
+[deps]
+obdal-0.2.2-20260630.an8.loongarch64.rpm
+devdeps-mxml-3.3.1-1.an8.loongarch64.rpm
+devdeps-lua-5.4.8-1.an8.loongarch64.rpm
+devdeps-oss-c-sdk-3.11.2-1.an8.loongarch64.rpm
+devdeps-boost-1.74.0-1.an8.loongarch64.rpm
+devdeps-apache-arrow-20.0.0-20260627.an8.loongarch64.rpm
+devdeps-vsag-1.2.0-20260630.an8.loongarch64.rpm
+devdeps-apache-avro-cpp-1.12.0-20260627.an8.loongarch64.rpm
+devdeps-apache-orc-2.1.1-20260701.an8.loongarch64.rpm
+devdeps-apache-thrift-0.16.0-20260626.an8.loongarch64.rpm
+devdeps-mit-krb5-1.21.3-1.an8.loongarch64.rpm
+devdeps-cyrus-sasl-2.1.28-1.an8.loongarch64.rpm
+devdeps-lz4-1.7.1-1.an8.loongarch64.rpm
+devdeps-lz4-1.9.1-1.an8.loongarch64.rpm
+devdeps-snappy-1.0.3-1.an8.loongarch64.rpm
+devdeps-zstd-1.1.1-1.an8.loongarch64.rpm
+devdeps-zstd-1.3.8-1.an8.loongarch64.rpm
+devdeps-zstd-1.5.7-1.an8.loongarch64.rpm
+devdeps-obcharset-1.0.0-1.an8.loongarch64.rpm
+devdeps-hms-client-1.0.0-1.an8.loongarch64.rpm
+devdeps-rocksdb-6.22.1-20260701.an8.loongarch64.rpm
+devdeps-abseil-cpp-20250814.1-20260630.an8.loongarch64.rpm
+devdeps-re2-20250812-20260630.an8.loongarch64.rpm
+devdeps-python3-3.13.3-1.an8.loongarch64.rpm
+devdeps-kafka-2.12.1-20260701.an8.loongarch64.rpm
+devdeps-icu-69.1-20260630.an8.loongarch64.rpm
+
+# for business
+babassl-ob-8.3.7-20260627.an8.loongarch64.rpm
+devdeps-s2geometry-0.10.0-20260630.an8.loongarch64.rpm
+libpalf-1.2.0-12026040115.an8.loongarch64.rpm
+devdeps-drcmsg-1.1-262025123118.an8.loongarch64.rpm
+
+[tools]
+# obdevtools-binutils-2.40-1.an8.loongarch64.rpm
+# obdevtools-bison-2.4.1-1.an8.loongarch64.rpm
+# obdevtools-ccache-3.7.12-1.an8.loongarch64.rpm
+# obdevtools-cmake-3.30.3-1.an8.loongarch64.rpm
+# obdevtools-flex-2.5.35-1.an8.loongarch64.rpm
+# obdevtools-llvm-13.0.1-1.an8.loongarch64.rpm
