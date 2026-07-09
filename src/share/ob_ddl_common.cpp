@@ -4099,6 +4099,8 @@ int ObDDLUtil::get_split_replicas_addrs(
     for (int64_t idx = 0; OB_SUCC(ret) && idx < all_replicas.count(); idx++) {
       const ObLSReplica &tmp_replica = all_replicas.at(idx);
       if (REPLICA_TYPE_ARBITRATION == tmp_replica.get_replica_type()
+        || REPLICA_TYPE_LOGONLY == tmp_replica.get_replica_type()
+        || REPLICA_TYPE_ENCRYPTION_LOGONLY == tmp_replica.get_replica_type()
         || REPLICA_STATUS_OFFLINE == tmp_replica.get_replica_status()) {
         if (OB_FAIL(filter_replica_addrs.push_back(tmp_replica.get_server()))) {
           LOG_WARN("push back failed", K(ret));
