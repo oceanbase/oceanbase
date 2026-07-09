@@ -84,7 +84,7 @@ int ObMLogPurgeInfoHelper::get_recent_tenant_mlog_purge_scns(
               OB_ALL_MLOG_TNAME, read_snapshot, last_mlog_id, BATCH_LIMIT))) {
         LOG_WARN("fail to assign sql", KR(ret));
       } else if (OB_FAIL(sql_client->read(res, exec_tenant_id, sql.ptr()))) {
-        if (OB_TABLE_DEFINITION_CHANGED == ret || OB_SNAPSHOT_DISCARDED == ret) {
+        if (OB_TABLE_DEFINITION_CHANGED == ret || OB_SNAPSHOT_DISCARDED == ret || OB_TENANT_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
           // overwrite ret
           scan_done = true;

@@ -474,6 +474,7 @@ int ObTenantTabletScheduler::update_upper_trans_version_and_gc_sstable()
       LOG_WARN("failed to update upper trans version", K(tmp_ret), "ls_id", ls->get_ls_id());
     }
   }
+  gc_sst_tablet_iter_.reset_cur_ls_handler();
   return ret;
 }
 
@@ -585,6 +586,7 @@ int ObTenantTabletScheduler::schedule_all_tablets_minor()
       }
     }
   } // end of while
+  minor_ls_tablet_iter_.reset_cur_ls_handler();
   return ret;
 }
 

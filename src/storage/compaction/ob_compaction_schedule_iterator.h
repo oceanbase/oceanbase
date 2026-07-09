@@ -79,6 +79,7 @@ public:
     merge_finish_ &= merge_finish;
   }
   void reset_basic_iter();
+  inline void reset_cur_ls_handler() {cur_ls_handle_.reset();}
   bool is_valid() const;
   void skip_cur_ls()
   {

@@ -98,6 +98,8 @@ int ObMediumLoop::loop()
 #endif
     }
   } // while
+  // avoid holding ls_handle during idle time, reset it here
+  ls_tablet_iter_.reset_cur_ls_handler();
   LOG_TRACE("finish schedule ls medium merge", K(tmp_ret), K(ret), K_(ls_tablet_iter), K(ls_id));
   add_event_and_diagnose(func);
   return ret;

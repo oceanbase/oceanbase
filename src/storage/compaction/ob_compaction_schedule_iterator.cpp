@@ -196,10 +196,7 @@ void ObBasicMergeScheduleIterator::reset_basic_iter()
 
 bool ObBasicMergeScheduleIterator::is_valid() const
 {
-  return ls_ids_.count() > 0 && ls_idx_ >= 0 && cur_ls_handle_.is_valid()
-    && (ls_idx_ < ls_ids_.count() - 1
-      || (ls_idx_ == ls_ids_.count() - 1 && !tablet_ids_.is_ls_iter_end()));
-    // have remain ls or have remain tablet
+  return ls_ids_.count() > 0 && ls_idx_ >= 0 && !scan_finish_;
 }
 
 int64_t ObBasicMergeScheduleIterator::to_string(char *buf, const int64_t buf_len) const
