@@ -46,6 +46,7 @@ constexpr int OB_IO_LIMIT                            = -9061;
 constexpr int OB_BACKUP_PERMISSION_DENIED            = -9071;
 constexpr int OB_BACKUP_PWRITE_OFFSET_NOT_MATCH      = -9083;
 constexpr int OB_INVALID_OBJECT_STORAGE_ENDPOINT     = -9118;
+constexpr int OB_OBJECT_STORAGE_IO_ERROR              = -9129;
 constexpr int OB_OBJECT_STORAGE_CHECKSUM_ERROR       = -9132;
 
 const int COS_BAD_REQUEST = 400;
@@ -308,7 +309,7 @@ struct CosContext
   }
 };
 
-static void log_status(cos_status_t *s, const int ob_errcode)
+static void log_status(cos_status_t *s, int &ob_errcode)
 {
   if (NULL != s) {
     if (OB_OBJECT_STORAGE_CHECKSUM_ERROR == ob_errcode) {
@@ -322,6 +323,9 @@ static void log_status(cos_status_t *s, const int ob_errcode)
       if (s->req_id) {
         cos_error_log("[COS]status->req_id: %s, ret=%d", s->req_id, ob_errcode);
       }
+      // checksum error are offten caused by network issues, so we convert it to
+      // io error to make it easier for user to retry.
+      ob_errcode = OB_OBJECT_STORAGE_IO_ERROR;
     } else {
       cos_warn_log("[COS]status->code: %d, ret=%d", s->code, ob_errcode);
       if (s->error_code) {
