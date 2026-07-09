@@ -336,6 +336,57 @@ TEST_F(TestSSTableIndexScanner, test_advance_to_prefix_key_should_not_throw_unex
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
+// Regression test: when advance_to enters the non-prefetched else branch (advance key is
+// beyond last_prefetch_key_), query_range_.start_key_ must be updated. Otherwise subsequent
+// open/get_next still scan from the stale range start.
+TEST_F(TestSSTableIndexScanner, test_advance_to_non_prefetched_path_should_update_query_range)
+{
+  ObArenaAllocator tmp_arena;
+  ObDatumRange range;
+  generate_range(min_row_seed_, max_row_seed_, range);
+  ObSSTableIndexScanParam scan_param;
+  ObFixedArray<ObSkipIndexColMeta, ObIAllocator> proj;
+  prepare_scan_param(false, scan_param, proj);
+
+  ObSSTableIndexScanner index_scanner;
+  ASSERT_EQ(OB_SUCCESS, index_scanner.init(range, scan_param, sstable_, tmp_arena));
+  const ObSSTableIndexRow *index_row = nullptr;
+  ASSERT_EQ(OB_SUCCESS, index_scanner.get_next(index_row));
+  ASSERT_TRUE(nullptr != index_row);
+
+  ObSSTableIndexBlockLevelScanner *leaf =
+      index_scanner.level_scanners_.at(index_scanner.level_scanners_.count() - 1);
+  ASSERT_TRUE(nullptr != leaf);
+  ASSERT_FALSE(leaf->is_root_block_);
+
+  ObDatumRowkey small_prefetch_key;
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(min_row_seed_, start_key_buf_));
+  small_prefetch_key.assign(start_key_buf_.storage_datums_, TEST_ROWKEY_COLUMN_CNT);
+  leaf->last_prefetch_key_.set_compact_rowkey(&small_prefetch_key);
+
+  ObDatumRowkey advance_key;
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(max_row_seed_ / 2, rowkey_buf_));
+  advance_key.assign(rowkey_buf_.storage_datums_, TEST_ROWKEY_COLUMN_CNT);
+
+  int cmp_ret = 0;
+  const ObStorageDatumUtils &datum_utils = read_info_.get_datum_utils();
+  ASSERT_EQ(OB_SUCCESS, leaf->last_prefetch_key_.compare(advance_key, datum_utils, cmp_ret, false));
+  ASSERT_LT(cmp_ret, 0);
+
+  ASSERT_EQ(OB_SUCCESS, index_scanner.advance_to(advance_key, true));
+
+  cmp_ret = 0;
+  ASSERT_EQ(OB_SUCCESS, leaf->query_range_.start_key_.compare(advance_key, datum_utils, cmp_ret));
+  ASSERT_EQ(0, cmp_ret);
+  ASSERT_TRUE(leaf->query_range_.get_border_flag().inclusive_start());
+
+  ASSERT_EQ(OB_SUCCESS, index_scanner.get_next(index_row));
+  ASSERT_TRUE(nullptr != index_row);
+  cmp_ret = 0;
+  ASSERT_EQ(OB_SUCCESS, index_row->endkey_->compare(advance_key, datum_utils, cmp_ret));
+  ASSERT_TRUE(cmp_ret >= 0);
+}
+
 } // namespace blocksstable
 } // namespace oceanbase
 

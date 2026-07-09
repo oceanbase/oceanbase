@@ -368,6 +368,12 @@ int ObSSTableIndexBlockLevelScanner::advance_to(const ObDatumRowkey &rowkey, con
       }
     }
   } else {
+    query_range_.start_key_ = rowkey;
+    if (inclusive) {
+      query_range_.set_left_closed();
+    } else {
+      query_range_.set_left_open();
+    }
     prefetched = false;
   }
 
