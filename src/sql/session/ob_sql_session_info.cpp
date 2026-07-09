@@ -4413,7 +4413,7 @@ void ObSQLSessionInfo::update_trans_gtt_v2_sequence()
 {
   set_trans_gtt_v2_sequence(get_gtt_trans_scope_unique_id());
   trans_gtt_v2_sequence_encoder_.is_changed_ = true;
-  LOG_INFO("update trans gtt v2 sequence", K(get_trans_gtt_v2_sequence()));
+  LOG_TRACE("update trans gtt v2 sequence", K(get_trans_gtt_v2_sequence()));
 }
 
 int64_t ObSQLSessionInfo::get_session_gtt_v2_sequence()
