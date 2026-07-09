@@ -166,6 +166,7 @@ int ObDtlChannelGroup::build_data_channels(void *buf,
   int ret = OB_SUCCESS;
   int64_t offset = 0;
   ObTenantDfc *tenant_dfc = nullptr;
+  bool failed_in_push_back = false;
   if (OB_FAIL(DTL.get_tenant_dfc(tenant_id, tenant_dfc))) {
     LOG_WARN("fail get tenant dfc", K(ret));
   } else if (OB_FAIL(channels.reserve(ch_set.count()))) {
@@ -179,7 +180,6 @@ int ObDtlChannelGroup::build_data_channels(void *buf,
     seed[1] = static_cast<uint16_t>(time & 0x0000FFFF);
     seed[2] = static_cast<uint16_t>((time & 0xFFFF0000) >> 16);
     seed48(seed);
-    bool failed_in_push_back = false;
     for (int64_t idx = 0; idx < ch_set.count() && OB_SUCC(ret); ++idx) {
       ObDtlChannel *ch = NULL;
       int64_t hash_val = jrand48(seed);
@@ -203,9 +203,9 @@ int ObDtlChannelGroup::build_data_channels(void *buf,
         offset += channel_size;
       }
     }
-    if (0 == channels.count() && !failed_in_push_back) {
-      ob_free(buf);
-    }
+  }
+  if (0 == channels.count() && !failed_in_push_back) {
+    ob_free(buf);
   }
   return ret;
 }
