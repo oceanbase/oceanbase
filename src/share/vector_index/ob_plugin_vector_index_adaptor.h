@@ -961,6 +961,8 @@ public:
   }
   bool check_need_embedding();
   int get_vid_bound(ObVidBound &bound);
+  share::SCN get_last_empty_scan_scn() const { return last_empty_scan_scn_; }
+  void set_last_empty_scan_scn(const share::SCN &scn) { last_empty_scan_scn_ = scn; }
 
   bool validate_tablet_ids(const ObVectorIndexAcquireCtx& ctx) {
     bool is_valid = (inc_tablet_id_ == ctx.inc_tablet_id_
@@ -990,7 +992,7 @@ public:
     return is_sparse;
   }
 
-  inline bool is_support_meta() { return ! is_hybrid_index() && ! is_sparse_vector_index_type(); }
+  inline bool is_support_meta() { return ! is_sparse_vector_index_type(); }
   inline bool check_has_meta() { return is_support_meta() && snap_data_.is_valid() && snap_data_->meta_.is_persistent(); }
 
   int parse_sparse_vector(char *data, int num, uint32_t *sparse_byte_lens, ObArenaAllocator *allocator, uint32_t **lens,
@@ -1185,6 +1187,7 @@ private:
    * we can't get scn from snapshot_key_prefix_ because it is invaild in some cases like BQ
    */
   SCN replace_scn_;
+  SCN last_empty_scan_scn_;
   bool need_cancel_task_;
   bool created_by_segment_merge_; // whether the adaptor is created by segment merge
   bool skip_merge_sched_; // skip merge scheduling until adaptor replaced

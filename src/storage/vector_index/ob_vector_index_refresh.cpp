@@ -10,6 +10,7 @@
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
 #include "share/vector_index/ob_plugin_vector_index_adaptor.h"
+#include "share/vector_index/ob_plugin_vector_index_util.h"
 
 namespace oceanbase {
 namespace storage {
@@ -693,9 +694,13 @@ int ObVectorIndexRefresher::do_rebuild() {
 
   if (OB_FAIL(ret)) {
   } else if (is_hybrid_vector && !need_embedding_when_rebuild) {
-    ObVecTaskManager manager(tenant_id, domain_table_schema->get_table_id(), ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_OPTINAL);
-    if (OB_FAIL(manager.process_task())) {
-      LOG_WARN("failed to process rebuild task", K(ret), K(manager));
+    if (!ObPluginVectorIndexHelper::enable_persist_vector_index_incremental(tenant_id)) {
+      ObVecTaskManager manager(tenant_id, domain_table_schema->get_table_id(), ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_OPTINAL);
+      if (OB_FAIL(manager.process_task())) {
+        LOG_WARN("failed to process rebuild task", K(ret), K(manager));
+      }
+    } else {
+      LOG_INFO("skip rebuild task", K(ret), K(tenant_id), K(domain_table_schema->get_table_id()));
     }
   } else if (triggered) {
     LOG_INFO("start to rebuild vec index");

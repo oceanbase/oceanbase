@@ -479,7 +479,7 @@ ObPluginVectorIndexAdaptor::ObPluginVectorIndexAdaptor(common::ObIAllocator *all
     opt_task_lock_(common::ObLatchIds::OB_PLUGIN_VECTOR_INDEX_ADAPTOR_OPT_TASK_LOCK),
     reload_lock_(common::ObLatchIds::VECTOR_RELOAD_LOCK),
     query_lock_(common::ObLatchIds::VECTOR_QUERY_LOCK), reload_finish_(false), last_embedding_time_(ObTimeUtility::fast_current_time()), is_need_vid_(true),
-    sparse_vector_type_(nullptr), index_statistics_updated_(false), replace_scn_(), need_cancel_task_(false), created_by_segment_merge_(false),
+    sparse_vector_type_(nullptr), index_statistics_updated_(false), replace_scn_(), last_empty_scan_scn_(), need_cancel_task_(false), created_by_segment_merge_(false),
     skip_merge_sched_(false)
 {
   ATOMIC_INC(&instacnce_cnt_);
@@ -2297,8 +2297,7 @@ int ObPluginVectorIndexAdaptor::check_if_need_optimize()
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
     if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
       LOG_WARN("failed to get tenant data version", K(ret), K(tenant_id_));
-    } else if (tenant_config.is_valid() && (tenant_data_version >= DATA_VERSION_4_5_1_0) &&
-      ! is_hybrid_index() && ! is_sparse_vector_index_type() &&
+    } else if (tenant_config.is_valid() && (tenant_data_version >= DATA_VERSION_4_5_1_0) && ! is_sparse_vector_index_type() &&
       OB_FALSE_IT(use_new_check = ObPluginVectorIndexHelper::enable_persist_vector_index_incremental(tenant_id_))) {
       // do nothing
     } else if (use_new_check) {
@@ -2444,6 +2443,7 @@ int ObPluginVectorIndexAdaptor::copy_meta_info(ObPluginVectorIndexAdaptor &other
   follower_sync_statistics_.sync_count_ = other.follower_sync_statistics_.sync_count_;
   follower_sync_statistics_.sync_fail_ = other.follower_sync_statistics_.sync_fail_;
   is_need_vid_ = other.is_need_vid_;
+  last_empty_scan_scn_ = other.last_empty_scan_scn_;
   if (OB_NOT_NULL(algo_data_)) {
     // do nothing
   } else if (OB_ISNULL(get_allocator())) {

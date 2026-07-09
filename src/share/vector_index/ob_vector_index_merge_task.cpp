@@ -106,8 +106,6 @@ int ObVecIdxMergeTaskExecutor::load_task(uint64_t &task_trace_base_num)
           LOG_TRACE("adapter not complete, no need merge", K(ret), KPC(adapter));
         } else if (adapter->get_create_type() != CreateTypeComplete) {
           LOG_TRACE("adapter is not complete, no need merge", K(ret), KPC(adapter));
-        } else if (adapter->is_hybrid_index()) {
-          LOG_TRACE("adapter is not hybrid index, no need merge", K(ret), KPC(adapter));
         } else if (adapter->is_sparse_vector_index_type()) {
           LOG_TRACE("adapter is sparse vector index, no need merge", K(ret), KPC(adapter));
         } else if (adapter->is_skip_merge_sched()) {

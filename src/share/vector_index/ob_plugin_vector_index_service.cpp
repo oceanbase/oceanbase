@@ -772,6 +772,7 @@ int ObPluginVectorIndexMgr::check_and_merge_partial_inner(ObVecIdxSharedTableInf
               candidate->is_valid_ = false;
             } else {
               candidate->inc_adatper_guard_.set_adapter(partial_adpt);
+              candidate->is_hybrid_ = partial_adpt->is_hybrid_index();
             }
           } else if (index_tablet_id == partial_adpt->get_vbitmap_tablet_id()) {
             if (candidate->bitmp_adatper_guard_.is_valid()) { // conflict maybe during rebuild
@@ -1515,6 +1516,14 @@ int ObPluginVectorIndexMgr::replace_old_adapter(ObPluginVectorIndexAdaptor *new_
     LOG_WARN("get null adapter", KR(ret));
   } else {
     int overwrite = 0;
+    ObPluginVectorIndexAdaptor *old_adapter = nullptr;
+    if (OB_SUCCESS == complete_index_adpt_map_.get_refactored(new_adapter->get_inc_tablet_id(), old_adapter)
+        && OB_NOT_NULL(old_adapter)
+        && old_adapter->get_last_empty_scan_scn().is_valid()) {
+      new_adapter->set_last_empty_scan_scn(old_adapter->get_last_empty_scan_scn());
+      LOG_INFO("empty scan scn guard watermark carried over on adapter replace",
+               K(new_adapter->get_inc_tablet_id()), "last_empty_scan_scn", old_adapter->get_last_empty_scan_scn());
+    }
     // should not fail in following process
     if (OB_FAIL(erase_complete_adapter(new_adapter->get_inc_tablet_id()))) {
       LOG_WARN("failed to erase new complete partial adapter", K(new_adapter->get_inc_tablet_id()), KR(ret));

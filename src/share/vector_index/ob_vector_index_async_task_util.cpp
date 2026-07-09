@@ -1155,12 +1155,18 @@ int ObVecIndexAsyncTaskUtil::move_task_to_history_table(
   int64_t insert_rows = 0;
   int64_t delete_rows = 0;
   uint64_t data_version = 0;
+  share::SCN snapshot_scn;
+  int64_t snapshot_val = 0;
 
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("fail to get tenant data version", KR(ret), K(data_version));
   } else if (data_version < DATA_VERSION_4_3_5_2) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("data version less than 4.3.5.2 is not support");
+  } else if (OB_FAIL(ObPluginVectorIndexUtils::get_current_read_scn(snapshot_scn))) {
+    LOG_WARN("fail to get read snapshot scn for archival", KR(ret));
+  } else if (FALSE_IT(snapshot_val = snapshot_scn.get_val_for_sql())) {
+    // unreachable
   } else {
     /*
      [451, ): task_info已经占位;
@@ -1173,10 +1179,15 @@ int ObVecIndexAsyncTaskUtil::move_task_to_history_table(
       LOG_WARN("fail to append extra_cols", K(ret));
     } else if (has_obs_cols && OB_FAIL(extra_cols.append(", exec_addr, priority, start_time, end_time, err_msg"))) {
       LOG_WARN("fail to append extra_cols", K(ret));
-    } else if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s SELECT gmt_create, gmt_modified, tenant_id, table_id, tablet_id, task_id, trigger_type, task_type, status, target_scn, ret_code, trace_id%s FROM %s WHERE tenant_id = %ld AND status = 3 ORDER BY gmt_create LIMIT %ld",
+    } else if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s SELECT gmt_create, gmt_modified, tenant_id, table_id, tablet_id, task_id, trigger_type, task_type, status, target_scn, ret_code, trace_id%s FROM %s AS OF SNAPSHOT %ld"
+              " WHERE (tenant_id, table_id, tablet_id, task_id) IN"
+              " (SELECT tenant_id, table_id, tablet_id, task_id FROM %s AS OF SNAPSHOT %ld WHERE tenant_id = %ld AND status = 3 ORDER BY gmt_create, tenant_id, table_id, tablet_id, task_id LIMIT %ld)",
               share::OB_ALL_VECTOR_INDEX_TASK_HISTORY_TNAME,
               extra_cols.empty() ? "" : extra_cols.ptr(),
               share::OB_ALL_VECTOR_INDEX_TASK_TNAME,
+              snapshot_val,
+              share::OB_ALL_VECTOR_INDEX_TASK_TNAME,
+              snapshot_val,
               ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
               batch_size))){
       LOG_WARN("sql assign fmt failed", K(ret));
@@ -1187,16 +1198,19 @@ int ObVecIndexAsyncTaskUtil::move_task_to_history_table(
   } else if (OB_FAIL(proxy.write(tenant_id, sql.ptr(), insert_rows))) {
     LOG_WARN("fail to execute sql", K(ret), K(sql), K(tenant_id));
   } else if (OB_FAIL(sql.assign_fmt("DELETE FROM %s"
-          " WHERE tenant_id = %ld AND status = 3 AND gmt_modified <= (SELECT gmt_modified FROM %s ORDER BY gmt_modified desc LIMIT 1)",
+          " WHERE (tenant_id, table_id, tablet_id, task_id) IN"
+          " (SELECT tenant_id, table_id, tablet_id, task_id FROM %s AS OF SNAPSHOT %ld WHERE tenant_id = %ld AND status = 3 ORDER BY gmt_create, tenant_id, table_id, tablet_id, task_id LIMIT %ld)",
           share::OB_ALL_VECTOR_INDEX_TASK_TNAME,
+          share::OB_ALL_VECTOR_INDEX_TASK_TNAME,
+          snapshot_val,
           ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
-          share::OB_ALL_VECTOR_INDEX_TASK_HISTORY_TNAME))) {
+          batch_size))) {
     LOG_WARN("sql assign fmt failed", K(ret));
   } else if (OB_FAIL(proxy.write(tenant_id, sql.ptr(), delete_rows))) {
     LOG_WARN("fail to execute sql", K(ret), K(sql), K(tenant_id));
   } else {
     move_rows = delete_rows;
-    LOG_DEBUG("batch move task to history table", K(ret), K(tenant_id), K(sql), K(insert_rows), K(delete_rows));
+    LOG_DEBUG("batch move task to history table", K(ret), K(tenant_id), K(sql), K(insert_rows), K(delete_rows), K(snapshot_val));
   }
   return ret;
 }

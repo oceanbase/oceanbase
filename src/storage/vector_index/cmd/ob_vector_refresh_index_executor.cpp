@@ -994,6 +994,17 @@ int ObVectorRefreshIndexExecutor::resolve_rebuild_arg(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("rebuild sparse vector index is not support", K(ret), K(domain_table_schema));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "rebuild sparse vector index is");
+  } else if (domain_table_schema->is_hybrid_vec_index_log_type()
+             && arg.idx_parameters_.empty()
+             && ObPluginVectorIndexHelper::enable_persist_vector_index_incremental(tenant_id_)) {
+    // Partition-level rebuild (no params change) on hybrid vector index is taken over
+    // by freeze/merge tasks when incr=true. Reject manual entry to avoid silent no-op;
+    // table-level rebuild with changed params is still allowed (follows normal index behavior).
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("partition-level rebuild on hybrid vector index is not supported when _persist_vector_index_incremental is true",
+             KR(ret), K(domain_table_schema));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                   "partition-level rebuild on hybrid vector index when _persist_vector_index_incremental is true is");
   } else if (domain_table_schema->is_vec_hnsw_index() && OB_ISNULL(index_id_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table_schemas are null", K(ret), KP(index_id_table_schema));

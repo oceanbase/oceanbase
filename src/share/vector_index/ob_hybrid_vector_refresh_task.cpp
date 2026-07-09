@@ -9,6 +9,10 @@
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
 #include "src/storage/ls/ob_ls.h"
 #include "src/storage/tx/ob_trans_service.h"
+#include "storage/tablet/ob_tablet.h"
+#include "storage/memtable/ob_memtable.h"
+#include "share/ob_share_util.h"
+#include "common/ob_timeout_ctx.h"
 #include "sql/das/ob_das_dml_vec_iter.h"
 #include "sql/engine/expr/ob_expr_ai/ob_ai_func_utils.h"
 
@@ -46,21 +50,52 @@ int ObVecEmbeddingAsyncTaskExecutor::load_task(uint64_t &task_trace_base_num)
       LOG_WARN("fail to foreach adapter map", KR(ret));
     }
     FOREACH_X(iter, adapter_array, OB_SUCC(ret) && (task_ctx_array.count() + current_task_cnt <= MAX_ASYNC_TASK_PROCESSING_COUNT)) {
-      ObTabletID tablet_id = iter->tablet_id_;
+      ObTabletID snap_tablet_id = iter->tablet_id_;
       ObPluginVectorIndexAdaptor *adapter = iter->adapter_;
       int64_t index_table_id = OB_INVALID_ID;
       if (OB_ISNULL(adapter)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected nullptr", K(ret));
-      } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::get_table_id_from_adapter(adapter, tablet_id, index_table_id))) { // only get table 3 table_id to generate new task
-        LOG_WARN("fail to get table id from adapter", K(ret), K(tablet_id));
-      } else if (OB_INVALID_ID == index_table_id) {
+      } else if (! adapter->is_snap_tablet_valid() || snap_tablet_id != adapter->get_snap_tablet_id()) {
         LOG_DEBUG("index table id is invalid, skip", K(ret)); // skip to next
+      } else if (OB_FALSE_IT(index_table_id = adapter->get_snapshot_table_id())) {
       } else if (adapter->is_hybrid_index() && adapter->check_need_embedding()) {
+        share::SCN last_empty_scn = adapter->get_last_empty_scan_scn();
+        if (last_empty_scn.is_valid()) {
+          bool has_new_delta = true;
+          ObTabletHandle tablet_handle;
+          ObTabletID inc_tablet_id = adapter->get_inc_tablet_id();
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(ls->get_tablet_svr()->get_tablet(
+                  inc_tablet_id, tablet_handle, 0, ObMDSGetTabletMode::READ_READABLE_COMMITED))) {
+            LOG_WARN("fail to get tablet for empty scan scn guard, skip task", K(tmp_ret), K(inc_tablet_id));
+          } else {
+            share::SCN checkpoint_scn = tablet_handle.get_obj()->get_clog_checkpoint_scn();
+            share::SCN max_scn = checkpoint_scn;
+            ObSEArray<ObITable *, 4> memtables;
+            if (OB_TMP_FAIL(tablet_handle.get_obj()->get_memtables(memtables))) {
+              LOG_WARN("fail to get memtables for empty scan scn guard, skip task", K(tmp_ret), K(inc_tablet_id));
+            } else {
+              for (int64_t i = 0; i < memtables.count(); ++i) {
+                ObITable *table = memtables.at(i);
+                if (OB_NOT_NULL(table) && table->is_memtable() && !table->is_direct_load_memtable()) {
+                  memtable::ObMemtable *mt = static_cast<memtable::ObMemtable *>(table);
+                  max_scn = share::SCN::max(max_scn, mt->get_max_end_scn());
+                }
+              }
+              has_new_delta = max_scn > last_empty_scn;
+              LOG_DEBUG("empty scan scn guard check", K(inc_tablet_id), K(max_scn), K(last_empty_scn),
+                        K(has_new_delta), K(checkpoint_scn), K(memtables.count()));
+            }
+          }
+          if (!has_new_delta) {
+            continue;
+          }
+        }
         if (OB_NOT_NULL(scheduler_) && scheduler_->is_task_disabled(
-                ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_HYBRID_VECTOR_EMBEDDING, tablet_id.id())) {
+                ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_HYBRID_VECTOR_EMBEDDING, snap_tablet_id.id())) {
           LOG_TRACE("[VEC_IDX_TASK_DISABLED] skip generating disabled task",
-                    K_(tenant_id), K(tablet_id), "task_type", "EMBEDDING");
+                    K_(tenant_id), K(snap_tablet_id), "task_type", "EMBEDDING");
           continue;
         }
         int64_t new_task_id = OB_INVALID_ID;
@@ -77,15 +112,15 @@ int ObVecEmbeddingAsyncTaskExecutor::load_task(uint64_t &task_trace_base_num)
         } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::fetch_new_task_id(tenant_id_, new_task_id))) {
           LOG_WARN("fail to fetch new task id", K(ret), K(tenant_id_));
         } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::fetch_new_trace_id(++task_trace_base_num, allocator, new_trace_id))) {
-          LOG_WARN("fail to fetch new trace id", K(ret), K(tablet_id));
+          LOG_WARN("fail to fetch new trace id", K(ret), K(snap_tablet_id));
         } else {
           LOG_INFO("[VEC_ASYNC_TASK] task loaded with PREPARE status",
-                   K(ret), K(tablet_id), K(tenant_id_), K(new_trace_id), K(new_task_id),
+                   K(ret), K(snap_tablet_id), K(tenant_id_), K(new_trace_id), K(new_task_id),
                    K(task_trace_base_num), K(ls->get_ls_id()));
           // 1. update task_ctx to async task map
           task_ctx->tenant_id_ = tenant_id_;
           task_ctx->ls_handle_ = ls_handle_;
-          task_ctx->task_status_.tablet_id_ = tablet_id.id();
+          task_ctx->task_status_.tablet_id_ = snap_tablet_id.id();
           task_ctx->task_status_.tenant_id_ = tenant_id_;
           task_ctx->task_status_.table_id_ = index_table_id;
           task_ctx->task_status_.task_id_ = new_task_id;
@@ -96,7 +131,7 @@ int ObVecEmbeddingAsyncTaskExecutor::load_task(uint64_t &task_trace_base_num)
           task_ctx->task_status_.trace_id_ = new_trace_id;
           task_ctx->task_status_.target_scn_.convert_from_ts(ObTimeUtility::current_time());
           task_ctx->allocator_.set_tenant_id(tenant_id_);
-          if (OB_FAIL(index_ls_mgr->get_async_task_opt().add_task_ctx(tablet_id, task_ctx, inc_new_task))) { // not overwrite
+          if (OB_FAIL(index_ls_mgr->get_async_task_opt().add_task_ctx(snap_tablet_id, task_ctx, inc_new_task))) { // not overwrite
             LOG_WARN("fail to add task ctx", K(ret));
           } else if (FALSE_IT(task_ctx_in_map = inc_new_task)) {
           } else if (inc_new_task && OB_FAIL(task_ctx_array.push_back(task_ctx))) {
@@ -153,7 +188,6 @@ bool ObVecEmbeddingAsyncTaskExecutor::check_operation_allow()
 ObHybridVectorRefreshTask::do_work()
 ├── prepare_for_task()
 │   ├── get_adapter_inst_guard()
-│   └── has_doing_vector_index_task()
 ├── prepare_for_embedding()
 │   ├── get_index_id_column_ids()
 │   ├── get_embedded_table_column_ids()
@@ -275,9 +309,6 @@ int ObHybridVectorRefreshTask::prepare_for_task()
   } else if (OB_ISNULL(task_ctx->adp_guard_.get_adatper())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get vector index adapter", KR(ret), KPC(ctx_));
-  } else if (task_ctx->adp_guard_.get_adatper()->has_doing_vector_index_task()) {
-    ret = OB_EAGAIN;
-    LOG_INFO("there is other vector index task running", K(ret), KP(task_ctx->adp_guard_.get_adatper()));
   } else if (!task_ctx->adp_guard_.get_adatper()->is_complete()) {
     ret = OB_EAGAIN;
     LOG_INFO("adapter not complete, need wait", K(ret), KP(task_ctx->adp_guard_.get_adatper()));
@@ -573,7 +604,8 @@ int ObHybridVectorRefreshTask::prepare_for_embedding(ObPluginVectorIndexAdaptor 
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret), K(table_param));
     } else if (FALSE_IT(table_param = new(table_param)schema::ObTableParam(task_ctx->allocator_))) {
-    } else if (FALSE_IT(ctx_->task_status_.target_scn_.convert_from_ts(ObTimeUtility::current_time()))) {
+    } else if (OB_FAIL(ObPluginVectorIndexUtils::get_current_read_scn(ctx_->task_status_.target_scn_))) {
+      LOG_WARN("fail to get read snapshot version", K(ret));
     } else if (OB_FAIL(ObPluginVectorIndexUtils::read_local_tablet(ls_id_,
         &adaptor,
         ctx_->task_status_.target_scn_,
@@ -671,6 +703,9 @@ int ObHybridVectorRefreshTask::prepare_for_embedding(ObPluginVectorIndexAdaptor 
     } else if (chunk_array.empty()) {
       if (cur_row_count == 0) {
         task_ctx->status_ = ObHybridVectorRefreshTaskStatus::TASK_FINISH;
+        adaptor.set_last_empty_scan_scn(ctx_->task_status_.target_scn_);
+        LOG_INFO("empty scan scn guard watermark updated", K(ctx_->task_status_.tablet_id_),
+                 "last_empty_scan_scn", ctx_->task_status_.target_scn_);
       } else {
         task_ctx->status_ = ObHybridVectorRefreshTaskStatus::WAITING_EMBEDDING;
       }
@@ -1212,7 +1247,6 @@ void ObHybridVectorRefreshTaskCtx::set_task_finish()
   table_scan_param_ = nullptr;
   table_param_ = nullptr;
   if (task_started_) {
-    adp_guard_.get_adatper()->vector_index_task_finish();
     adp_guard_.~ObPluginVectorIndexAdapterGuard();
     task_started_ = false;
   }
