@@ -11,7 +11,10 @@ else
     TOP_DIR=`pwd`/../
     REDHAT=$(grep -Po '(?<=release )\d' /etc/redhat-release)
     ID=$(grep -Po '(?<=^ID=).*' /etc/os-release | tr -d '"')
-    if [[ "${ID}"x == "alinux"x ]]; then
+    OS_ARCH="$(uname -m)"
+    if [[ "$OS_ARCH" == "loongarch64" ]]; then
+        RELEASE="$4.an8"
+    elif [[ "${ID}"x == "alinux"x ]]; then
 	RELEASE="$4.al8"
     else
         RELEASE="$4.el${REDHAT}"
