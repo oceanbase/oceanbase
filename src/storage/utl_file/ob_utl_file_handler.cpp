@@ -95,10 +95,20 @@ int ObUtlFileHandler::fclose(const int64_t &fd)
   if (OB_UNLIKELY(!io_fd.is_normal_file())) {
     ret = OB_UTL_FILE_INVALID_FILEHANDLE;
     LOG_WARN("invalid handle", K(ret), K(io_fd));
-  } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.fsync(io_fd))) {
-    LOG_WARN("failed to fsync", K(ret), K(io_fd));
-  } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.close(io_fd))) {
-    LOG_WARN("failed to close fd", K(ret), K(io_fd));
+  } else {
+    // always attempt close even when fsync fails, otherwise a failed fsync would
+    // short circuit and leak the OS fd while callers have already dropped their
+    // tracking of it; report the first error encountered
+    if (OB_FAIL(LOCAL_DEVICE_INSTANCE.fsync(io_fd))) {
+      LOG_WARN("failed to fsync", K(ret), K(io_fd));
+    }
+    int close_ret = LOCAL_DEVICE_INSTANCE.close(io_fd);
+    if (OB_SUCCESS != close_ret) {
+      LOG_WARN("failed to close fd", K(close_ret), K(io_fd));
+      if (OB_SUCC(ret)) {
+        ret = close_ret;
+      }
+    }
   }
   return ret;
 }
