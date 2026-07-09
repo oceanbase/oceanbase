@@ -41692,7 +41692,7 @@ def_table_schema(
     normal_columns  = [],
     gm_columns      = [],
     view_definition = """
-    SELECT
+    SELECT/*+opt_param('enable_optimizer_rowgoal','off')*/
       B.TENANT_ID AS TENANT_ID,
       CAST(A.DATABASE_NAME AS CHAR(128)) AS MV_OWNER,
       CAST(B.TABLE_NAME AS CHAR(128)) AS MV_NAME,
@@ -41740,7 +41740,7 @@ def_table_schema(
     gm_columns      = [],
     in_tenant_space = True,
     view_definition = """
-    SELECT
+    SELECT/*+opt_param('enable_optimizer_rowgoal','off')*/
       CAST(A.DATABASE_NAME AS CHAR(128)) AS MV_OWNER,
       CAST(B.TABLE_NAME AS CHAR(128)) AS MV_NAME,
       C.REFRESH_ID AS REFRESH_ID,
@@ -70295,7 +70295,7 @@ def_table_schema(
     gm_columns      = [],
     in_tenant_space = True,
     view_definition = """
-    SELECT
+    SELECT/*+opt_param('enable_optimizer_rowgoal','off')*/
       CAST(A.DATABASE_NAME AS VARCHAR2(128)) AS MV_OWNER,
       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS MV_NAME,
       CAST(C.REFRESH_ID AS NUMBER) AS REFRESH_ID,
@@ -70344,7 +70344,7 @@ def_table_schema(
     gm_columns      = [],
     in_tenant_space = True,
     view_definition = """
-    SELECT
+    SELECT/*+opt_param('enable_optimizer_rowgoal','off')*/
       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS MV_NAME,
       CAST(C.REFRESH_ID AS NUMBER) AS REFRESH_ID,
       CAST(
