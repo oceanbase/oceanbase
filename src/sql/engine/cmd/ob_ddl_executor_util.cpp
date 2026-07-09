@@ -41,14 +41,16 @@ int ObDDLExecutorUtil::wait_ddl_finish(
     const bool ddl_need_retry_at_executor,
     ObSQLSessionInfo *session,
     obrpc::ObCommonRpcProxy *common_rpc_proxy,
-    const bool is_support_cancel)
+    const bool is_support_cancel,
+    const int64_t wait_timeout_us)
 {
   int ret = OB_SUCCESS;
   const int64_t retry_interval = 100 * 1000;
   ObAddr unused_addr;
   bool is_table_exist = false;
   int64_t unused_user_msg_len = 0;
-  THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + OB_MAX_USER_SPECIFIED_TIMEOUT);
+  const int64_t abs_wait_timeout_ts = ObTimeUtility::current_time() + wait_timeout_us;
+  THIS_WORKER.set_timeout_ts(abs_wait_timeout_ts);
   ObDDLErrorMessageTableOperator::ObBuildDDLErrorMessage error_message;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || task_id <= 0 || nullptr == common_rpc_proxy)) {
     ret = OB_INVALID_ARGUMENT;
@@ -128,6 +130,14 @@ int ObDDLExecutorUtil::wait_ddl_finish(
           ret = OB_TIMEOUT;
           FORWARD_USER_ERROR(ret, "DDL execution status is undecided, please check later if it finishes successfully or not.");
           LOG_WARN("server is stopping, check whether the ddl task finish successfully or not", K(ret), K(tenant_id), K(task_id));
+        } else if (OB_UNLIKELY(THIS_WORKER.get_timeout_remain() <= 0)) {
+          ret = OB_TIMEOUT;
+          LOG_WARN("worker timeout, stop waiting ddl finish",
+              K(ret), K(tenant_id), K(task_id), K(wait_timeout_us), K(abs_wait_timeout_ts), K(is_support_cancel));
+          FORWARD_USER_ERROR(ret, "DDL execution status is undecided, please check later if it finishes successfully or not.");
+          if (is_support_cancel && OB_TMP_FAIL(cancel_ddl_task(tenant_id, common_rpc_proxy))) {
+            LOG_WARN("cancel ddl task after check status failed", K(tmp_ret), K(tenant_id), K(task_id));
+          }
         } else {
           ob_usleep(retry_interval);
         }

@@ -15431,7 +15431,7 @@ public:
       refresh_parallel_(0),
       retry_count_(0),
       is_consistent_refresh_(false),
-      expire_ts_(0)
+      timeout_us_(0)
   {}
   ObRunMViewPendingTaskArg(uint64_t tenant_id,
                           int64_t refresh_id,
@@ -15441,7 +15441,7 @@ public:
                           const int64_t refresh_parallel,
                           const int64_t retry_count,
                           const bool is_consistent_refresh,
-                          const int64_t expire_ts)
+                          const int64_t timeout_us)
     : tenant_id_(tenant_id),
       refresh_id_(refresh_id),
       mview_id_(mview_id),
@@ -15450,7 +15450,7 @@ public:
       refresh_parallel_(refresh_parallel),
       retry_count_(retry_count),
       is_consistent_refresh_(is_consistent_refresh),
-      expire_ts_(expire_ts)
+      timeout_us_(timeout_us)
   {}
   inline bool is_valid() const
   {
@@ -15460,7 +15460,7 @@ public:
   }
   TO_STRING_KV(K_(tenant_id), K_(refresh_id), K_(mview_id), K_(target_data_sync_scn),
                K_(refresh_method), K_(refresh_parallel), K_(retry_count),
-               K_(is_consistent_refresh), K_(expire_ts));
+               K_(is_consistent_refresh), K_(timeout_us));
   uint64_t tenant_id_;
   int64_t refresh_id_;
   uint64_t mview_id_;
@@ -15469,7 +15469,7 @@ public:
   int64_t refresh_parallel_;
   int64_t retry_count_;
   bool is_consistent_refresh_;
-  int64_t expire_ts_;
+  int64_t timeout_us_; // FARM COMPAT WHITELIST
 };
 
 struct ObRunMViewPendingTaskResult
@@ -15493,7 +15493,7 @@ public:
       is_nested_(false),
       refresh_method_(share::schema::ObMVRefreshMethod::MAX),
       refresh_parallel_(0),
-      expire_ts_(0),
+      timeout_us_(0),
       force_(false)
   {}
   inline bool is_valid() const
@@ -15502,14 +15502,14 @@ public:
   }
 
   TO_STRING_KV(K_(tenant_id), K_(run_user_id), K_(mview_id), K_(is_nested), K_(refresh_method),
-               K_(refresh_parallel), K_(expire_ts), K_(force));
+               K_(refresh_parallel), K_(timeout_us), K_(force));
   uint64_t tenant_id_;
   uint64_t run_user_id_;
   uint64_t mview_id_;
   bool is_nested_;
   share::schema::ObMVRefreshMethod refresh_method_;
   int64_t refresh_parallel_;
-  int64_t expire_ts_;
+  int64_t timeout_us_; // FARM COMPAT WHITELIST
   bool force_;
 };
 

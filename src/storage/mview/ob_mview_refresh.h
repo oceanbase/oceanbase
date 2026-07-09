@@ -103,6 +103,9 @@ private:
                                  ObMViewStmtPlanCaptureInfo &capture_info);
   int purge_mlog(const ObIArray<share::schema::ObMLogInfo> &mlog_infos,
                  const ObIArray<share::schema::ObDependencyInfo> &dependency_infos);
+  int write_mv_end(const int64_t end_time,
+                   const int64_t elapsed_time,
+                   const int result);
   int calc_mv_refresh_parallelism(const int64_t refresh_param_dop,
                                   const int64_t mview_info_dop,
                                   int64_t &refresh_parallelism);

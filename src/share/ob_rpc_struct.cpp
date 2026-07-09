@@ -15188,10 +15188,14 @@ OB_SERIALIZE_MEMBER(ObFetchArbMemberArg, tenant_id_, ls_id_);
 OB_SERIALIZE_MEMBER(ObCheckNestedMViewMdsArg, tenant_id_, mview_id_, refresh_id_, target_data_sync_scn_);
 OB_SERIALIZE_MEMBER(ObCheckNestedMViewMdsRes, target_data_sync_scn_, ret_);
 OB_SERIALIZE_MEMBER(ObRunMViewPendingTaskArg, tenant_id_, refresh_id_, mview_id_, target_data_sync_scn_,
-                    refresh_method_, refresh_parallel_, retry_count_, is_consistent_refresh_, expire_ts_);
+                    refresh_method_, refresh_parallel_, retry_count_, is_consistent_refresh_,
+                    timeout_us_ // FARM COMPAT WHITELIST
+                    );
 OB_SERIALIZE_MEMBER(ObRunMViewPendingTaskResult, ret_, msg_);
 OB_SERIALIZE_MEMBER(ObScheduleMViewRefreshArg, tenant_id_, run_user_id_, mview_id_, is_nested_, refresh_method_,
-                    refresh_parallel_, expire_ts_, force_);
+                    refresh_parallel_,
+                    timeout_us_, // FARM COMPAT WHITELIST
+                    force_);
 OB_SERIALIZE_MEMBER(ObScheduleMViewRefreshResult, refresh_id_, ret_);
 OB_SERIALIZE_MEMBER(ObKillMViewRefreshArg, tenant_id_, refresh_id_, mview_id_, is_kill_by_mview_id_, is_drop_);
 OB_SERIALIZE_MEMBER(ObKillMViewRefreshResult, ret_);

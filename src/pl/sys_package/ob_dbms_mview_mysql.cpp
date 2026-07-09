@@ -168,15 +168,16 @@ int ObDBMSMViewMysql::refresh(ObPLExecCtx &pl_ctx, ParamStore &params, ObObj &re
     rootserver::ObMViewMaintenanceService *mview_maintenance_service = MTL(rootserver::ObMViewMaintenanceService*);
       obrpc::ObScheduleMViewRefreshArg schedule_arg;
       obrpc::ObScheduleMViewRefreshResult schedule_result;
+      const int64_t worker_deadline = THIS_WORKER.get_timeout_ts();
+      const int64_t now = ObTimeUtility::current_time();
+      schedule_arg.timeout_us_ = (worker_deadline > now) ? (worker_deadline - now) : 0;
       schedule_arg.tenant_id_ = tenant_id;
       schedule_arg.run_user_id_ = ctx.get_my_session()->get_priv_user_id();
       schedule_arg.is_nested_ = params.count() > ObDBMSMViewRefreshParam::NESTED
                                 && params.at(ObDBMSMViewRefreshParam::NESTED).get_bool();
       schedule_arg.refresh_parallel_ = params.at(ObDBMSMViewRefreshParam::REFRESH_PARALLEL).get_int();
       schedule_arg.force_ = force;
-      schedule_arg.expire_ts_ = THIS_WORKER.get_timeout_ts();
-    if (OB_ISNULL(mview_maintenance_service) ||
-          OB_ISNULL(mview_maintenance_service->get_pending_task_manager())) {
+      if (OB_ISNULL(mview_maintenance_service) || OB_ISNULL(mview_maintenance_service->get_pending_task_manager())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("mview maintenance service is null", KR(ret));
       } else if (OB_FAIL(ObMViewExecutorUtil::resolve_mview_list_and_method(

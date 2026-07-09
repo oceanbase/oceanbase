@@ -51,7 +51,8 @@ public:
       const bool ddl_need_retry_at_executor,
       ObSQLSessionInfo *session,
       obrpc::ObCommonRpcProxy *common_rpc_proxy,
-      const bool is_support_cancel = true);
+      const bool is_support_cancel = true,
+      const int64_t wait_timeout_us = common::OB_MAX_USER_SPECIFIED_TIMEOUT);
   static int wait_ddl_retry_task_finish(
       const uint64_t tenant_id,
       const int64_t task_id,

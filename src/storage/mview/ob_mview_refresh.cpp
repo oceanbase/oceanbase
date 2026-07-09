@@ -129,14 +129,7 @@ int ObMViewRefresher::refresh()
   tmp_ret = OB_SUCCESS;
   // write_mv_end must be called before trans_.end() because it queries final_num_rows
   // via trans.read(); after trans_.end() the connection is closed.
-  if (OB_TMP_FAIL(ObMViewRefreshStatsUtils::write_mv_end(ctx_,
-                                                         trans_,
-                                                         param_,
-                                                         collection_level_,
-                                                         end_time,
-                                                         elapsed_time,
-                                                         ret,
-                                                         mview_refresh_scn_range_))) {
+  if (OB_TMP_FAIL(write_mv_end(end_time, elapsed_time, ret))) {
     LOG_WARN("fail to write_mv_end", KR(tmp_ret));
   }
 
@@ -223,6 +216,34 @@ int ObMViewRefresher::calc_create_mv_refresh_parallelism(ObSchemaGetterGuard &sc
   }
   LOG_TRACE("calc create mv refresh parallelism", K(ddl_parallel_hint), K(refresh_dop),
             K(session_var_refresh_dop), K(refresh_parallelism));
+  return ret;
+}
+
+int ObMViewRefresher::write_mv_end(const int64_t end_time,
+                                   const int64_t elapsed_time,
+                                   const int result)
+{
+  int ret = OB_SUCCESS;
+  const int64_t MV_WRITE_END_STATS_MIN_TIMEOUT = 10000000; // 10s
+  const int64_t origin_timeout_ts = THIS_WORKER.get_timeout_ts();
+  const bool need_extend_timeout =
+      origin_timeout_ts - ObTimeUtil::current_time() < MV_WRITE_END_STATS_MIN_TIMEOUT;
+  if (need_extend_timeout) {
+    THIS_WORKER.set_timeout_ts(MV_WRITE_END_STATS_MIN_TIMEOUT + ObTimeUtil::current_time());
+  }
+  if (OB_FAIL(ObMViewRefreshStatsUtils::write_mv_end(ctx_,
+                                                     trans_,
+                                                     param_,
+                                                     collection_level_,
+                                                     end_time,
+                                                     elapsed_time,
+                                                     result,
+                                                     mview_refresh_scn_range_))) {
+    LOG_WARN("fail to write_mv_end", KR(ret));
+  }
+  if (need_extend_timeout) {
+    THIS_WORKER.set_timeout_ts(origin_timeout_ts);
+  }
   return ret;
 }
 
@@ -779,7 +800,9 @@ int ObMViewRefresher::complete_refresh()
                                                           res.task_id_,
                                                           false,
                                                           session_info,
-                                                          GCTX.rs_rpc_proxy_))) {
+                                                          GCTX.rs_rpc_proxy_,
+                                                          true /*is_support_cancel*/,
+                                                          timeout_ctx.get_timeout()))) {
       LOG_WARN("fail to wait mview complete refresh finish", KR(ret), K(arg));
     } else {
       LOG_INFO("mview complete refresh success", K(arg), K(res));
