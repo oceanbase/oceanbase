@@ -33,7 +33,7 @@ public:
   int construct(const common::ObString &upper_version_str, const ObMergeEngineType original_merge_engine_type);
   int init_upper_version(const ObMergeEngineType merge_engine_type);
   int update_upper_version(
-    const uint64_t data_version,
+    const int64_t compat_merge_engine_count,
     const share::SCN &upper_version,
     const ObMergeEngineType origin_merge_engine_type,
     const ObMergeEngineType new_merge_engine_type);
@@ -53,6 +53,19 @@ public:
   }
   OB_INLINE ObMergeEngineType get_original_merge_engine_type() const { return original_merge_engine_type_; }
   OB_INLINE void set_original_merge_engine_type(const ObMergeEngineType merge_engine_type) { original_merge_engine_type_ = merge_engine_type; }
+  OB_INLINE int64_t get_upper_version_count() const { return upper_versions_.count(); }
+  // Return the max upper version excluding the max_scn sentinel of the current merge engine.
+  // Return min_scn when there is no real merge engine switch history.
+  OB_INLINE share::SCN get_max_upper_version() const
+  {
+    share::SCN max_upper_version = share::SCN::min_scn();
+    for (int64_t i = 0; i < upper_versions_.count(); ++i) {
+      if (upper_versions_.at(i) != share::SCN::max_scn() && upper_versions_.at(i) > max_upper_version) {
+        max_upper_version = upper_versions_.at(i);
+      }
+    }
+    return max_upper_version;
+  }
   inline int64_t get_convert_size() const
   {
     int64_t convert_size = sizeof(*this);

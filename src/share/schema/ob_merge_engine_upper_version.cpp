@@ -147,18 +147,20 @@ int ObMergeEngineUpperVersion::init_upper_version(const ObMergeEngineType merge_
 }
 
 int ObMergeEngineUpperVersion::update_upper_version(
-    const uint64_t data_version,
+    const int64_t compat_merge_engine_count,
     const share::SCN &upper_version,
     const ObMergeEngineType origin_merge_engine_type,
     const ObMergeEngineType new_merge_engine_type)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!ObMergeEngineStoreFormat::is_merge_engine_valid(origin_merge_engine_type) ||
+  if (OB_UNLIKELY(compat_merge_engine_count < 0 ||
+    !upper_version.is_valid() || share::SCN::max_scn() == upper_version || share::SCN::min_scn() == upper_version ||
+    !ObMergeEngineStoreFormat::is_merge_engine_valid(origin_merge_engine_type) ||
     !ObMergeEngineStoreFormat::is_merge_engine_valid(new_merge_engine_type))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid merge engine type", K(ret), K(origin_merge_engine_type), K(new_merge_engine_type));
+    LOG_WARN("Invalid merge engine type", K(ret), K(compat_merge_engine_count),
+      K(upper_version), K(origin_merge_engine_type), K(new_merge_engine_type));
   } else {
-    int64_t compat_merge_engine_count = get_compat_merge_engine_count(data_version);
     // If new observer adds a new merge engine, the upper versions will be incomplete when upgrading from old servers.
     // We set the upper versions to min scn to for new merge engine to disable it before update.
     // e.g. new added merge engine is 3, orginal upper versions is [11, 22, MAX], new upper versions is [11, 22, MAX, MIN].
@@ -167,16 +169,16 @@ int ObMergeEngineUpperVersion::update_upper_version(
         LOG_WARN("Fail to push back enable version", K(ret));
       }
     }
-  }
 
-  if (OB_SUCC(ret) && OB_LIKELY(origin_merge_engine_type != new_merge_engine_type)) {
-    if (OB_UNLIKELY(convert_to_idx(origin_merge_engine_type) >= upper_versions_.count() ||
-                    convert_to_idx(new_merge_engine_type) >= upper_versions_.count())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Invalid merge engine type", K(ret), K(origin_merge_engine_type), K(new_merge_engine_type), K(upper_versions_));
-    } else {
-      upper_versions_[convert_to_idx(origin_merge_engine_type)] = upper_version;
-      upper_versions_[convert_to_idx(new_merge_engine_type)] = share::SCN::max_scn();
+    if (OB_SUCC(ret) && OB_LIKELY(origin_merge_engine_type != new_merge_engine_type)) {
+      if (OB_UNLIKELY(convert_to_idx(origin_merge_engine_type) >= upper_versions_.count() ||
+                      convert_to_idx(new_merge_engine_type) >= upper_versions_.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Invalid merge engine type", K(ret), K(origin_merge_engine_type), K(new_merge_engine_type), K(upper_versions_));
+      } else {
+        upper_versions_[convert_to_idx(origin_merge_engine_type)] = upper_version;
+        upper_versions_[convert_to_idx(new_merge_engine_type)] = share::SCN::max_scn();
+      }
     }
   }
   return ret;
@@ -329,11 +331,12 @@ int ObMergeEngineUtil::update_merge_engine_upper_version(
 {
   int ret = OB_SUCCESS;
   share::SCN upper_version;
+  const int64_t compat_merge_engine_count = get_compat_merge_engine_count(data_version);
   if (OB_FAIL(get_gts_scn(table_schema.get_tenant_id(), upper_version))) {
     LOG_WARN("fail to get gts scn", KR(ret), K(table_schema.get_tenant_id()));
   } else if (OB_FAIL(table_schema.get_merge_engine_upper_version_for_update().update_upper_version(
-      data_version, upper_version, origin_merge_engine_type, table_schema.get_merge_engine_type()))) {
-    LOG_WARN("failed to update merge engine upper version", KR(ret),
+      compat_merge_engine_count, upper_version, origin_merge_engine_type, table_schema.get_merge_engine_type()))) {
+    LOG_WARN("failed to update merge engine upper version", KR(ret), K(compat_merge_engine_count),
         K(upper_version), K(origin_merge_engine_type), K(table_schema));
   }
   return ret;
@@ -370,10 +373,21 @@ int ObMergeEngineUtil::inherit_merge_engine(
     const ObMergeEngineType inherit_merge_engine_type)
 {
   int ret = OB_SUCCESS;
-  if (table_schema.is_fts_index() || table_schema.is_vec_index()) {
+  const share::SCN max_upper_version = other.get_max_upper_version();
+  const ObMergeEngineType origin_merge_engine_type = table_schema.get_merge_engine_type();
+  if (!other.is_inited() || share::SCN::min_scn() == max_upper_version ||
+      origin_merge_engine_type == inherit_merge_engine_type) {
+    // Skip inheriting when the main table has no real merge engine switch history
+    // (upper versions uninitialized, or initialized by exchange but never altered),
+    // or the merge engine type of the aux table is unchanged.
+  } else if (table_schema.is_fts_index() || table_schema.is_vec_index()) {
     table_schema.set_merge_engine_type(ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE);
-  } else if (OB_FAIL(table_schema.get_merge_engine_upper_version_for_update().assign(other))) {
-    LOG_WARN("fail to assign merge engine upper version", K(ret), K(other));
+  } else if (OB_FAIL(table_schema.get_merge_engine_upper_version_for_update()
+                      .update_upper_version(other.get_upper_version_count(),
+                                            max_upper_version,
+                                            origin_merge_engine_type,
+                                            inherit_merge_engine_type))) {
+    LOG_WARN("fail to update merge engine upper version", KR(ret), K(other), K(inherit_merge_engine_type));
   } else if (table_schema.is_aux_lob_table()) {
     table_schema.get_merge_engine_upper_version_for_update().disable_merge_engine_for_lob();
     table_schema.set_merge_engine_type(
