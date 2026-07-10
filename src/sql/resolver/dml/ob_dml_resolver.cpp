@@ -8295,6 +8295,7 @@ int ObDMLResolver::resolve_function_table_item(const ParseNode &parse_tree,
     if (function_table_expr->get_result_type().is_ext()) {
       // PL collection used in TABLE(), extract PL info from schema
       CK(OB_NOT_NULL(schema_checker_));
+      OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= true);
       if (OB_SUCC(ret)) {
         pl::ObPLPackageGuard *package_guard = NULL;
         const ObUserDefinedType *user_type = NULL;
