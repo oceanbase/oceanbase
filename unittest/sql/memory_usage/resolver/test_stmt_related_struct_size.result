@@ -1,6 +1,6 @@
 | class | sizeof(class) |
 | --- | --- |
-| TableItem | 520 |
+| TableItem | 440 |
 | ObJtColBaseInfo | 144 |
 | ObJsonTableDef | 144 |
 | ObUnpivotItem | 128 |

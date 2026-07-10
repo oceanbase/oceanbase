@@ -214,8 +214,13 @@ int ObTransformDBlink::get_target_dblink_id(ObDMLStmt *stmt, uint64_t &dblink_id
     } else if (OB_ISNULL(target_table=stmt->get_table_item_by_id(table_infos.at(0)->table_id_))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null table item", K(ret));
-    } else if (target_table->is_link_table()) {
-      dblink_id = target_table->is_reverse_link_ ? 0 : target_table->dblink_id_;
+    } else if (target_table->is_link_type()) {
+      if (OB_ISNULL(target_table->ext_table_def_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null external table def for dblink table", K(ret));
+      } else {
+        dblink_id = target_table->ext_table_def_->is_reverse_link_ ? 0 : target_table->ext_table_def_->dblink_id_;
+      }
     } else if (target_table->is_generated_table()) {
       if (OB_FAIL(SMART_CALL(recursive_get_target_dblink_id(target_table->ref_query_, dblink_id)))) {
         LOG_WARN("failed to get target dblink id", K(ret));
@@ -239,10 +244,13 @@ int ObTransformDBlink::recursive_get_target_dblink_id(ObSelectStmt *stmt, uint64
     if (OB_ISNULL(target_table = stmt->get_table_item(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null table", K(ret));
-    } else if (target_table->is_link_table()) {
-      if (OB_INVALID_ID == target_dblink_id) {
-        target_dblink_id = target_table->dblink_id_;
-      } else if (target_dblink_id != target_table->dblink_id_) {
+    } else if (target_table->is_link_type()) {
+      if (OB_ISNULL(target_table->ext_table_def_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null external table def for dblink table", K(ret), KPC(target_table));
+      } else if (OB_INVALID_ID == target_dblink_id) {
+        target_dblink_id = target_table->ext_table_def_->dblink_id_;
+      } else if (target_dblink_id != target_table->ext_table_def_->dblink_id_) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("multi dblink table dml not support", K(ret));
       }
@@ -310,40 +318,49 @@ int ObTransformDBlink::reverse_one_link_table(TableItem *table, uint64_t target_
   if (OB_ISNULL(table) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null table", K(ret));
-  } else if (table->is_reverse_link_ && table->is_link_type()) {
-    table->is_reverse_link_ = false;
-    if (OB_FAIL(ob_write_string(*ctx_->allocator_,
-                                table->link_database_name_,
-                                table->database_name_))) {
-      LOG_WARN("failed to write string", K(ret));
-    } else if (table->dblink_name_.empty()) {
-      table->type_ = TableItem::BASE_TABLE;
-    }
   } else if (table->is_link_type()) {
-    if (table->dblink_id_ == target_dblink_id) {
-      table->type_ = TableItem::BASE_TABLE;
+    if (OB_ISNULL(table->ext_table_def_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null external table def for dblink table", K(ret));
+    } else if (table->ext_table_def_->is_reverse_link_) {
+      table->ext_table_def_->is_reverse_link_ = false;
       if (OB_FAIL(ob_write_string(*ctx_->allocator_,
-                                  table->link_database_name_,
+                                  table->ext_table_def_->link_database_name_,
                                   table->database_name_))) {
         LOG_WARN("failed to write string", K(ret));
+      } else if (table->ext_table_def_->dblink_name_.empty()) {
+        table->type_ = TableItem::BASE_TABLE;
       }
     } else {
-      table->is_reverse_link_ = true;
-      if (OB_FAIL(ob_write_string(*ctx_->allocator_,
-                                  table->link_database_name_,
-                                  table->database_name_))) {
-        LOG_WARN("failed to write string", K(ret));
+      if (table->ext_table_def_->dblink_id_ == target_dblink_id) {
+        table->type_ = TableItem::BASE_TABLE;
+        if (OB_FAIL(ob_write_string(*ctx_->allocator_,
+                                    table->ext_table_def_->link_database_name_,
+                                    table->database_name_))) {
+          LOG_WARN("failed to write string", K(ret));
+        }
+      } else {
+        table->ext_table_def_->is_reverse_link_ = true;
+        if (OB_FAIL(ob_write_string(*ctx_->allocator_,
+                                    table->ext_table_def_->link_database_name_,
+                                    table->database_name_))) {
+          LOG_WARN("failed to write string", K(ret));
+        }
       }
     }
   } else if (table->is_view_table_) {
     table->database_name_ = ObString::make_empty_string();
   } else if (table->is_basic_table()) {
-    table->type_ = TableItem::LINK_TABLE;
-    table->is_reverse_link_ = true;
-    if (OB_FAIL(ob_write_string(*ctx_->allocator_,
-                                table->database_name_,
-                                table->link_database_name_))) {
-      LOG_WARN("failed to write string", K(ret));
+    if (OB_ISNULL(table->ext_table_def_)
+        && OB_FAIL(table->alloc_ext_table_def(ctx_->allocator_))) {
+      LOG_WARN("failed to allocate external table def", K(ret));
+    } else {
+      table->type_ = TableItem::LINK_TABLE;
+      table->ext_table_def_->is_reverse_link_ = true;
+      if (OB_FAIL(ob_write_string(*ctx_->allocator_, table->database_name_,
+                                  table->ext_table_def_->link_database_name_))) {
+        LOG_WARN("failed to write string", K(ret));
+      }
     }
   } else if (table->is_joined_table()) {
     if (OB_FAIL(SMART_CALL(reverse_one_link_table(static_cast<JoinedTable*>(table)->left_table_, target_dblink_id)))) {
@@ -825,13 +842,19 @@ int ObTransformDBlink::check_is_link_table(TableItem *table,
   int ret = OB_SUCCESS;
   is_link_table = false;
   dblink_id = OB_INVALID_ID;
+  is_reverse_link = false;
   if (OB_ISNULL(table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null table", K(ret));
-  } else if (table->is_link_table()) {
-    is_link_table = true;
-    dblink_id = table->dblink_id_;
-    is_reverse_link = table->is_reverse_link_;
+  } else if (table->is_link_type()) {
+    if (OB_ISNULL(table->ext_table_def_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null external table def for dblink table", K(ret));
+    } else if (OB_INVALID_ID != table->ext_table_def_->dblink_id_) {
+      is_link_table = true;
+      dblink_id = table->ext_table_def_->dblink_id_;
+      is_reverse_link = table->ext_table_def_->is_reverse_link_;
+    }
   } else if (table->is_temp_table()) {
     is_link_table = false;
   } else if (table->is_generated_table()) {
@@ -1858,12 +1881,15 @@ int ObTransformDBlink::add_flashback_query_for_dblink(ObDMLStmt *stmt)
       if (OB_ISNULL(table_item)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null param", K(ret));
+      } else if (table_item->is_link_type() && OB_ISNULL(table_item->ext_table_def_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null external table def for dblink table", K(ret), KPC(table_item));
       } else if (!table_item->is_link_table()
                  || TableItem::NOT_USING != table_item->flashback_query_type_
                  || table_item->has_for_update()) {
       // do nothing if not dblink table or already have flashback query or table has for update
-      } else if (FALSE_IT(dblink_id = table_item->dblink_id_)) {
-      } else if (table_item->is_reverse_link_) {
+      } else if (FALSE_IT(dblink_id = table_item->ext_table_def_->dblink_id_)) {
+      } else if (OB_NOT_NULL(table_item->ext_table_def_) && table_item->ext_table_def_->is_reverse_link_) {
         need_add = true;
       } else if (OB_FAIL(ctx_->sql_schema_guard_->get_dblink_schema(tenant_id, dblink_id, dblink_schema))) {
         LOG_WARN("failed to get dblink schema", K(ret), K(tenant_id), K(dblink_id));

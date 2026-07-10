@@ -97,6 +97,17 @@ public:
 
   int prune_manifest_files(ObIArray<iceberg::ManifestFile*> &manifest_list,
                            ObIArray<iceberg::ManifestFile*> &valid_manifest_list);
+  int prune_manifest_files_by_partition_clause(
+                          ObIArray<iceberg::ManifestFile*> &manifest_files,
+                          const common::ObIArray<common::ObString> &partition_names,
+                          const common::ObIArray<common::ObObj> &partition_values,
+                          int32_t expected_spec_id,
+                          const ObIArray<iceberg::PartitionSpec*> &partition_specs);
+  int prune_manifest_entries_by_partition_clause(
+                            const ObIArray<ObString> &partition_names,
+                            const ObIArray<ObObj> &partition_values,
+                            int32_t expected_spec_id,
+                            common::ObSEArray<iceberg::ManifestEntry *, 16> &manifest_entries);
   int prune_data_files(ObExecContext &exec_ctx,
                        const ObIArray<iceberg::ManifestEntry*> &manifest_entries,
                        const bool is_hash_aggregate,

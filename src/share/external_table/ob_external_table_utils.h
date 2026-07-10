@@ -9,11 +9,13 @@
 #include "lib/allocator/page_arena.h"
 #include "lib/container/ob_iarray.h"
 #include "lib/string/ob_string.h"
+#include "objit/common/ob_item_type.h"
 #include "sql/engine/px/ob_dfo.h"
 #include "sql/optimizer/file_prune/ob_hive_file_pruner.h"
 #include "src/share/external_table/ob_external_table_file_mgr.h"
 #include "src/sql/engine/table/ob_external_file_access.h"
 #include "sql/optimizer/file_prune/ob_lake_table_file_map.h"
+#include "sql/table_format/iceberg/ob_iceberg_type_fwd.h"
 #include "sql/engine/connector/ob_odps_jni_connector.h"
 #include "sql/engine/table/ob_csv_prefetch_mgr.h"
 #include "sql/engine/px/ob_granule_parallel_task_gen.h"
@@ -25,6 +27,7 @@ namespace common
 class ObObj;
 class ObNewRange;
 class ObAddr;
+struct ObCatalogExtPartitionInfo;
 }
 
 namespace sql
@@ -34,6 +37,7 @@ class ObExecContext;
 class ObExternalTableAccessService;
 class ObExprRegexContext;
 class ObExprRegexpSessionVariables;
+struct ObIcebergFileDesc;
 }
 
 namespace share
@@ -410,6 +414,12 @@ public:
   static bool is_hidden_external_column(const common::ObString &column_name);
 
   static bool is_sub_path_contain_parent_dir(const common::ObString &sub_path);
+  static bool is_external_table_psudo_expr(const ObItemType expr_type)
+  {
+    return T_PSEUDO_EXTERNAL_FILE_COL == expr_type
+        || T_PSEUDO_PARTITION_LIST_COL == expr_type
+        || T_PSEUDO_EXTERNAL_FILE_URL == expr_type;
+  }
   static int concat_external_file_location(const ObString &location,
                                            const ObString &sub_path,
                                            ObSqlString &full_path);
@@ -462,6 +472,15 @@ public:
 
   static int get_part_col_names(const ObTableSchema &table_schema,
                                 ObIArray<ObString> &part_col_names);
+  static int collect_iceberg_partition_values(
+                common::ObIAllocator &allocator,
+                const common::ObIArray<sql::ObIcebergFileDesc *> &file_descs,
+                common::ObIArray<common::ObString> &partition_values);
+  static int build_iceberg_partition_json_desc(
+                common::ObIAllocator &allocator,
+                const sql::iceberg::PartitionSpec &partition_spec,
+                const common::ObIArray<common::ObObj> &partition_values,
+                common::ObString &partition_desc);
 
   static int collect_partitions_info_with_cache(const ObTableSchema &table_schema,
                                                 ObSqlSchemaGuard &sql_schema_guard,
@@ -480,6 +499,10 @@ public:
                                           bool &is_file_sample,
                                           int64_t &target_count,
                                           common::ObIArray<int64_t> &indices);
+
+  static int print_obj_json_escaped(common::ObIAllocator &allocator,
+                                    const common::ObObj &obj,
+                                    common::ObString &value);
 
 private:
   // Rewrite `sfile://<path>` to `file://<path>` in-place via allocator.

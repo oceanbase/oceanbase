@@ -6,6 +6,7 @@
 #ifndef OCEANBASE_SQL_STMT_H_
 #define OCEANBASE_SQL_STMT_H_
 #include "sql/resolver/expr/ob_raw_expr.h"
+#include "common/object/ob_object.h"
 #include "lib/string/ob_string.h"
 #include "lib/allocator/ob_mod_define.h"
 #include "lib/allocator/ob_allocator.h"
@@ -168,6 +169,38 @@ struct ObValuesTableDef {
                        K(access_type_), K(is_const_), K(column_types_));
 };
 
+struct ObExtTableDef
+{
+  explicit ObExtTableDef(ObIAllocator &allocator)
+      : lake_table_format_(share::ObLakeTableFormat::INVALID),
+        lake_table_snapshot_id_(OB_INVALID_ID),
+        is_reverse_link_(false),
+        dblink_id_(OB_INVALID_ID),
+        dblink_name_(),
+        link_database_name_(),
+        external_table_partition_(),
+        partition_values_(allocator),
+        external_location_id_(common::OB_INVALID_ID)
+  {
+  }
+  int deep_copy(const ObExtTableDef &other, ObIAllocator *allocator);
+  virtual TO_STRING_KV(K_(lake_table_format), K_(lake_table_snapshot_id),
+                       K_(is_reverse_link), K_(dblink_id), K_(dblink_name),
+                       K_(link_database_name), K_(external_table_partition), K_(partition_values),
+                       K_(external_location_id));
+
+  share::ObLakeTableFormat lake_table_format_;
+  int64_t lake_table_snapshot_id_;
+  bool is_reverse_link_;
+  int64_t dblink_id_;
+  common::ObString dblink_name_;
+  common::ObString link_database_name_;
+  common::ObString external_table_partition_;
+  // iceberg external table partition clause, e.g. PARTITION(spec_id=0, col='v')
+  ObSqlArray<common::ObObj> partition_values_;
+  uint64_t external_location_id_;
+};
+
 struct TableItem
 {
   TableItem(ObIAllocator &allocator)
@@ -196,21 +229,17 @@ struct TableItem
     flashback_query_expr_ = nullptr;
     flashback_query_type_ = FlashBackQueryType::NOT_USING;
     function_table_expr_ = nullptr;
-    is_reverse_link_ = false;
-    dblink_id_ = OB_INVALID_ID;
     ddl_schema_version_ = 0;
     ddl_table_id_ = common::OB_INVALID_ID;
     json_table_def_ = nullptr;
     table_type_ = MAX_TABLE_TYPE;
-    lake_table_format_ = share::ObLakeTableFormat::INVALID;
-    lake_table_snapshot_id_ = OB_INVALID_ID;
     values_table_def_ = NULL;
     sample_info_ = nullptr;
     transpose_table_def_ = NULL;
     // assign default value for compatibility
     catalog_name_ = lib::is_oracle_mode() ? OB_INTERNAL_CATALOG_NAME_UPPER : OB_INTERNAL_CATALOG_NAME;
-    external_location_id_ = common::OB_INVALID_ID;  // 检查权限时临时外表拿不到tableschema
     dsl_query_ = NULL;
+    ext_table_def_ = NULL;
   }
 
   virtual TO_STRING_KV(N_TID, table_id_,
@@ -228,14 +257,12 @@ struct TableItem
                K_(skip_locked),
                "view_base_item",
                (NULL == view_base_item_ ? OB_INVALID_ID : view_base_item_->table_id_),
-               K_(dblink_id), K_(dblink_name), K_(link_database_name), K_(is_reverse_link),
                K_(ddl_schema_version), K_(ddl_table_id),
                K_(is_view_table), K_(part_ids), K_(part_names), K_(cte_type),
                KPC_(function_table_expr),
                K_(flashback_query_type), KPC_(flashback_query_expr), K_(table_type),
                K_(exec_params), KPC_(sample_info), K_(mview_id), K_(need_expand_rt_mv),
-               K_(external_table_partition), K_(catalog_name), K_(external_location_id),
-               K_(is_mv_proctime_table), K_(lake_table_snapshot_id));
+               KPC_(ext_table_def), K_(catalog_name), K_(is_mv_proctime_table));
 
   enum TableType
   {
@@ -285,13 +312,14 @@ struct TableItem
   bool is_joined_table() const { return JOINED_TABLE == type_; }
   bool is_function_table() const { return FUNCTION_TABLE == type_; }
   bool is_transpose_table() const { return TRANSPOSE_TABLE == type_; }
-  bool is_link_table() const { return OB_INVALID_ID != dblink_id_; } // why not use type_, cause type_ will be changed in dblink transform rule, but dblink id don't change
+  bool is_link_table() const { return OB_NOT_NULL(ext_table_def_) && OB_INVALID_ID != ext_table_def_->dblink_id_; } // why not use type_, cause type_ will be changed in dblink transform rule, but dblink id don't change
   bool is_link_type() const { return LINK_TABLE == type_; } // after dblink transformer, LINK_TABLE will be BASE_TABLE, BASE_TABLE will be LINK_TABLE
   bool is_json_table() const { return JSON_TABLE == type_; }  // json_table_def_->table_type_ == MulModeTableType::OB_ORA_JSON_TABLE_TYPE
   bool is_values_table() const { return VALUES_TABLE == type_; }//used to mark values statement: values row(1,2), row(3,4);
   bool is_hybrid_search() const { return dsl_query_ != NULL; }
   bool is_lateral_table() const { return LATERAL_TABLE == type_; }
   bool is_synonym() const { return !synonym_name_.empty(); }
+  bool is_external_table() const { return share::schema::EXTERNAL_TABLE == table_type_; }
   bool is_oracle_all_or_user_sys_view() const
   {
     return (is_ora_sys_view_table(ref_id_) && (table_name_.prefix_match("USER_") || table_name_.prefix_match("ALL_")));
@@ -330,6 +358,8 @@ struct TableItem
   }
 
   ObJsonTableDef* get_json_table_def() { return json_table_def_; }
+  int alloc_ext_table_def(ObIAllocator* allocator);
+  int deep_copy_ext_table_def(const ObExtTableDef& table_def, ObIAllocator* allocator);
   int deep_copy_json_table_def(const ObJsonTableDef& jt_def, ObIRawExprCopier &expr_copier, ObIAllocator* allocator);
   int deep_copy_values_table_def(const ObValuesTableDef& table_def,
                                  ObIRawExprCopier &expr_copier,
@@ -361,8 +391,6 @@ struct TableItem
   bool is_view_table_; //for VIEW privilege check
   bool is_recursive_union_fake_table_; //mark whether this table is a tmp fake table for resolve the recursive cte table
   share::schema::ObTableType table_type_;
-  share::ObLakeTableFormat lake_table_format_;
-  int64_t lake_table_snapshot_id_;
   CTEType cte_type_;
   common::ObString database_name_;
   /* FOR UPDATE clause */
@@ -379,11 +407,6 @@ struct TableItem
   ObRawExpr *flashback_query_expr_;
   FlashBackQueryType flashback_query_type_;
   ObRawExpr *function_table_expr_;
-  // dblink
-  bool is_reverse_link_;
-  int64_t dblink_id_;
-  common::ObString dblink_name_;
-  common::ObString link_database_name_;
   int64_t ddl_schema_version_;
   int64_t ddl_table_id_;
   // table partition
@@ -396,13 +419,11 @@ struct TableItem
   ObValuesTableDef *values_table_def_;
   // external table
   common::ObString catalog_name_;
-  common::ObString external_table_partition_;
+  ObExtTableDef *ext_table_def_;
   // sample scan infos
   SampleInfo *sample_info_;
   // transpose table
   TransposeDef *transpose_table_def_;
-  // external location
-  uint64_t external_location_id_;
   ObDSLQueryInfo *dsl_query_;
 };
 

@@ -1338,7 +1338,8 @@ int ObOptStatManager::get_catalog_table_stat(const uint64_t tenant_id,
 
   if (OB_SUCC(ret) && !found_stat) {
     const bool is_odps_global_stat = lake_table_metadata->get_format_type() == ObLakeTableFormat::ODPS;
-    const bool is_iceberg_global_stat = lake_table_metadata->get_format_type() == ObLakeTableFormat::ICEBERG;
+    const bool is_iceberg_global_stat =
+        lake_table_metadata->get_format_type() == ObLakeTableFormat::ICEBERG && partition_values.empty();
     // ODPS 和 Iceberg 是全表缓存
     // 全表缓存查询时用空分区值，回源时用真实分区值
     // 下层获取统计信息时 ODPS 和 Iceberg 写入的分区值都是空，Hive 会按实际分区值填写
@@ -1397,7 +1398,7 @@ int ObOptStatManager::get_catalog_table_stat(const uint64_t tenant_id,
   }
 
   if (OB_NOT_NULL(lake_table_metadata)) {
-    LOG_TRACE("lekou stat table result",
+    LOG_TRACE("catalog stat table result",
              K(ret),
              K(tenant_id),
              K(ref_table_id),
@@ -1481,7 +1482,8 @@ int ObOptStatManager::get_catalog_column_stat(ObIAllocator &alloc,
   if (OB_SUCC(ret)) {
     ObSEArray<const ObOptCatalogColumnStat::Key*, 16> keys;
     const bool is_odps_global_stat = lake_table_metadata->get_format_type() == ObLakeTableFormat::ODPS;
-    const bool is_iceberg_global_stat = lake_table_metadata->get_format_type() == ObLakeTableFormat::ICEBERG;
+    const bool is_iceberg_global_stat =
+        lake_table_metadata->get_format_type() == ObLakeTableFormat::ICEBERG && partition_values.empty();
     const ObIArray<ObString> &column_names_to_fetch
         = is_all_partitions_selected
               ? static_cast<const ObIArray<ObString>&>(missed_columns)
@@ -1639,7 +1641,7 @@ int ObOptStatManager::get_catalog_column_stat(ObIAllocator &alloc,
   }
 
   if (OB_NOT_NULL(lake_table_metadata)) {
-    LOG_TRACE("lekou stat column result",
+    LOG_TRACE("catalog stat column result",
              K(ret),
              K(tenant_id),
              K(ref_table_id),

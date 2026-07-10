@@ -61,6 +61,7 @@ enum class FormatVersion;
 class Schema;
 class PartitionSpec;
 class PartitionField;
+enum class TransformType;
 class Snapshot;
 class StatisticsFile;
 

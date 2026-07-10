@@ -17,6 +17,7 @@
 #include "sql/table_format/iceberg/spec/table_metadata.h"
 #include "sql/optimizer/file_prune/ob_hive_file_pruner.h"
 #include "share/external_table/ob_external_table_utils.h"
+#include "sql/table_format/iceberg/ob_iceberg_utils.h"
 
 namespace oceanbase
 {
@@ -100,12 +101,30 @@ int ObLakeTablePartitionInfo::prune_file_and_select_location(ObSqlSchemaGuard &s
     ObIcebergTableMetadata *iceberg_table_metadata
         = down_cast<ObIcebergTableMetadata *>(lake_table_metadata);
     const ObString &access_info = iceberg_table_metadata->access_info_;
+    const TableItem *part_item = stmt.get_table_item_by_id(table_id);
+    const ObIArray<ObString> *partition_names =
+        OB_NOT_NULL(part_item) ? &part_item->part_names_ : nullptr;
+    const ObIArray<ObObj> *partition_values =
+        OB_NOT_NULL(part_item) && OB_NOT_NULL(part_item->ext_table_def_)
+        ? &part_item->ext_table_def_->partition_values_ : nullptr;
+    int32_t partition_spec_id = -1;
+    if (OB_NOT_NULL(partition_names) && !partition_names->empty()) {
+      if (OB_UNLIKELY(part_item->part_ids_.empty())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid partition clause, should have partition spec id", K(ret));
+        LOG_USER_WARN(OB_INVALID_ARGUMENT, "invalid partition clause, should have partition spec id");
+      } else {
+        partition_spec_id = static_cast<int32_t>(part_item->part_ids_.at(0));
+      }
+    }
+
     ObSEArray<iceberg::ManifestFile*, 16> all_manifest_files;
     ObSEArray<iceberg::ManifestFile*, 16> manifest_files;
     ObSEArray<iceberg::ManifestEntry*, 16> manifest_entries;
     hash::ObHashMap<ObLakeTablePartKey, uint64_t> part_key_map;
     iceberg::Snapshot *snapshot = NULL;
-    if (lake_table_snapshot_id == -1L) {
+    if (OB_FAIL(ret)) {
+    } else if (lake_table_snapshot_id == -1L) {
       // do nothing 空表
       snapshot = NULL;
       ret = OB_SUCCESS;
@@ -140,6 +159,13 @@ int ObLakeTablePartitionInfo::prune_file_and_select_location(ObSqlSchemaGuard &s
       // do nothing
     } else if (OB_FAIL(iceberg_file_pruner->prune_manifest_files(all_manifest_files, manifest_files))) {
       LOG_WARN("failed to prune manifest files");
+    } else if (OB_NOT_NULL(partition_names)
+               && OB_NOT_NULL(partition_values)
+               && !partition_names->empty()
+               && OB_FAIL(iceberg_file_pruner->prune_manifest_files_by_partition_clause(
+                              manifest_files, *partition_names, *partition_values, partition_spec_id,
+                              iceberg_table_metadata->table_metadata_.partition_specs))) {
+      LOG_WARN("failed to prune manifest files by partition clause");
     // 解析出的 ManifestEntry 裁剪之后还要用来获取统计信息，因此使用类的成员 allocator 生成。
     } else if (manifest_files.empty()) {
       // do nothing
@@ -149,6 +175,15 @@ int ObLakeTablePartitionInfo::prune_file_and_select_location(ObSqlSchemaGuard &s
       LOG_WARN("failed to get manifest entries");
     } else if (manifest_entries.empty()) {
       // do nothing
+    } else if (OB_NOT_NULL(partition_names)
+               && OB_NOT_NULL(partition_values)
+               && !partition_names->empty()
+               && OB_FAIL(iceberg_file_pruner->prune_manifest_entries_by_partition_clause(
+                              *partition_names, *partition_values,
+                              partition_spec_id, manifest_entries))) {
+      LOG_WARN("failed to filter manifest entries by partition clause", K(ret));
+    } else if (manifest_entries.empty()) {
+      // do nothing (after PARTITION clause filtering)
     } else if (OB_FAIL(check_iceberg_use_hash_part(
                    iceberg_table_metadata->table_metadata_.partition_specs,
                    first_bucket_partition_value_offset_))) {

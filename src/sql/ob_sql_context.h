@@ -549,6 +549,10 @@ public:
   int get_lake_table_metadata(const uint64_t tenant_id,
                               const uint64_t table_id,
                               const share::ObILakeTableMetadata *&lake_table_metadata);
+
+  int get_lake_table_metadata(const uint64_t tenant_id,
+                              const uint64_t table_id,
+                              share::ObILakeTableMetadata *&lake_table_metadata);
 public:
   static TableItem *get_table_item_by_ref_id(const ObDMLStmt *stmt, uint64_t ref_table_id);
   static bool is_link_table(const ObDMLStmt *stmt, uint64_t table_id);

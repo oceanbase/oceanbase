@@ -41,19 +41,9 @@ int ObDbmsCatalogStatsGather::gather_stats(const ObOptCatalogStatGatherParam &pa
     int64_t start_time = ObTimeUtility::current_time();
     int64_t basic_duration_time = 0;
     // TODO(bitao): add more estimators for other table formats, such as Delta Lake, Hudi, etc.
-    if (share::ObLakeTableFormat::ICEBERG == param.external_info_.lake_table_format_) {
-      if (OB_FAIL(ObDbmsCatalogStatsUtils::normalize_iceberg_gather_param_to_table_level(
-              const_cast<ObOptCatalogStatGatherParam &>(param)))) {
-        LOG_WARN("failed to normalize iceberg gather param", K(ret));
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-    } else {
-      ObBasicCatalogStatsEstimator basic_est(ctx, *param.allocator_);
-      if (OB_FAIL(basic_est.estimate(param, opt_catalog_stats))) {
-        LOG_WARN("failed to estimate basic catalog statistics", K(ret));
-      }
+    ObBasicCatalogStatsEstimator basic_est(ctx, *param.allocator_);
+    if (OB_FAIL(basic_est.estimate(param, opt_catalog_stats))) {
+      LOG_WARN("failed to estimate basic catalog statistics", K(ret));
     }
 
     basic_duration_time = ObTimeUtility::current_time() - start_time;

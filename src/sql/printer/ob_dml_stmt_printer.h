@@ -28,12 +28,20 @@ namespace sql
 
 #define PRINT_TABLE_NAME_NORMAL(table_item)                                 \
   do {                                                                		  \
-    ObString catalog_name = table_item->catalog_name_;                      \
-    ObString database_name = table_item->synonym_name_.empty() ?         \
-                            ( table_item->is_link_table() ?                 \
-                              table_item->link_database_name_ :             \
-                              table_item->database_name_ ) :                 \
-                             table_item->synonym_db_name_;                  \
+    ObString catalog_name = table_item->catalog_name_;                 \
+    ObString database_name;                                                  \
+    if (!table_item->synonym_name_.empty()) {                                \
+      database_name = table_item->synonym_db_name_;                          \
+    } else if (table_item->is_link_table()) {                                \
+      if (OB_ISNULL(table_item->ext_table_def_)) {                           \
+        ret = OB_ERR_UNEXPECTED;                                             \
+        LOG_WARN("unexpected null external table def for link table", K(ret), KPC(table_item)); \
+      } else {                                                               \
+        database_name = table_item->ext_table_def_->link_database_name_;      \
+      }                                                                      \
+    } else {                                                                 \
+      database_name = table_item->database_name_;                            \
+    }                                                                        \
     ObString table_name = table_item->synonym_name_.empty() ? table_item->table_name_ : table_item->synonym_name_ ; \
     if (table_item->cte_type_ == TableItem::NOT_CTE) {								      \
       if (!catalog_name.empty() && table_item->type_ == TableItem::BASE_TABLE && need_print_catalog_name(catalog_name)) { \
@@ -45,9 +53,14 @@ namespace sql
         DATA_PRINTF(".");                                                   \
       }                                                                     \
       PRINT_IDENT_WITH_QUOT(table_name);                                      \
-      if (table_item->synonym_name_.empty() && table_item->is_link_type()) {  \
-        const ObString &dblink_name = table_item->dblink_name_;               \
-        DATA_PRINTF("@%.*s", LEN_AND_PTR(dblink_name));                       \
+      if (table_item->synonym_name_.empty() && table_item->is_link_type()) { \
+        if (OB_ISNULL(table_item->ext_table_def_)) {                         \
+          ret = OB_ERR_UNEXPECTED;                                           \
+          LOG_WARN("unexpected null external table def for dblink table", K(ret), KPC(table_item)); \
+        } else {                                                             \
+          const ObString &dblink_name = table_item->ext_table_def_->dblink_name_; \
+          DATA_PRINTF("@%.*s", LEN_AND_PTR(dblink_name));                   \
+        }                                                                    \
       } \
     } else {																																\
       PRINT_IDENT_WITH_QUOT(table_name);                                    \
@@ -64,13 +77,18 @@ namespace sql
         DATA_PRINTF(".");                                                   \
       }                                                                     \
       PRINT_IDENT_WITH_QUOT(table_name);                                    \
-      if (table_item->is_link_type()) {                                    \
-        const ObString &dblink_name = table_item->dblink_name_;             \
-        if (table_item->is_reverse_link_) {                                 \
-          DATA_PRINTF("@%.*s!", LEN_AND_PTR(dblink_name));                  \
-        }  else {                                                           \
-          DATA_PRINTF("@%.*s", LEN_AND_PTR(dblink_name));                   \
-        }                                                                   \
+      if (table_item->is_link_type()) {                                      \
+        if (OB_ISNULL(table_item->ext_table_def_)) {                         \
+          ret = OB_ERR_UNEXPECTED;                                           \
+          LOG_WARN("unexpected null external table def for dblink table", K(ret), KPC(table_item)); \
+        } else {                                                             \
+          const ObString &dblink_name = table_item->ext_table_def_->dblink_name_; \
+          if (table_item->ext_table_def_->is_reverse_link_) {               \
+            DATA_PRINTF("@%.*s!", LEN_AND_PTR(dblink_name));                \
+          }  else {                                                         \
+            DATA_PRINTF("@%.*s", LEN_AND_PTR(dblink_name));                 \
+          }                                                                 \
+        }                                                                    \
       }                                                                     \
     } else {																																\
       PRINT_IDENT_WITH_QUOT(table_name);                                    \

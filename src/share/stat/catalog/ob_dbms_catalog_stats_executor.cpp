@@ -114,16 +114,13 @@ int ObDbmsCatalogStatsExecutor::prepare_gather_stats(ObExecContext &ctx,
     gather_helper.maximum_gather_part_cnt_
         = partition_cnt > 0 ? std::min(partition_cnt, batch_part_size) : 1;
   }
-  // Iceberg partitions can evolve, so partition-level NDV is unreliable.
-  // Skip partition-level collection and only gather global stats.
-  // normalize_iceberg_gather_param_to_table_level() handles the actual param reset.
-  if (OB_SUCC(ret) && share::ObLakeTableFormat::ICEBERG == param.external_info_.lake_table_format_
+  if (OB_SUCC(ret)
+      && share::ObLakeTableFormat::ICEBERG == param.external_info_.lake_table_format_
       && param.part_level_ != share::schema::PARTITION_LEVEL_ZERO
       && partition_cnt > 0) {
-    param.part_level_ = share::schema::PARTITION_LEVEL_ZERO;
-    param.part_stat_param_.need_modify_ = false;
-    param.global_stat_param_.need_modify_ = true;
-    partition_cnt = 0;
+    // Iceberg partition evolution means different partitions may belong to different specs,
+    // so gather them one by one with each partition's own predicate.
+    gather_helper.maximum_gather_part_cnt_ = 1;  // todo@lekou: 支持元信息伪列后可以一条sql收多个分区
   }
   gather_helper.maximum_gather_col_cnt_
       = std::min(origin_column_cnt,
@@ -143,7 +140,9 @@ int ObDbmsCatalogStatsExecutor::prepare_gather_stats(ObExecContext &ctx,
 
   // For Parquet/ORC format, enable refine min/max using file metadata.
   // FILE sample scans selected files fully, so min/max are already precise — skip refine.
+  // skip refine min/max for iceberg
   if (!param.gather_options_.sample_info_.is_file_sample()
+      && share::ObLakeTableFormat::ICEBERG != param.external_info_.lake_table_format_
       && (param.external_info_.format_type_ == sql::ObExternalFileFormat::PARQUET_FORMAT
           || param.external_info_.format_type_ == sql::ObExternalFileFormat::ORC_FORMAT)) {
     bool has_refine_column = false;
@@ -768,6 +767,8 @@ int ObDbmsCatalogStatsExecutor::do_gather_catalog_stats(
     // Copy column_params from gather_param which has the correct allocator context
     if (OB_FAIL(temp_table_param.column_params_.assign(param.column_params_))) {
       LOG_WARN("failed to assign column params", K(ret));
+    } else if (OB_FAIL(temp_table_param.part_infos_.assign(param.partition_infos_))) {
+      LOG_WARN("failed to assign partition infos", K(ret));
     } else if (OB_FAIL(ObDbmsCatalogStatsUtils::split_batch_write(
                    temp_table_param,
                    ctx,

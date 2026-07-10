@@ -1154,6 +1154,20 @@ int ObSqlSchemaGuard::get_lake_table_metadata(const uint64_t tenant_id,
 }
 
 int ObSqlSchemaGuard::get_lake_table_metadata(const uint64_t tenant_id,
+                                              const uint64_t table_id,
+                                              share::ObILakeTableMetadata *&lake_table_metadata)
+{
+  int ret = OB_SUCCESS;
+  const share::ObILakeTableMetadata *const_lake_table_metadata = NULL;
+  if (OB_FAIL(get_lake_table_metadata(tenant_id, table_id, const_lake_table_metadata))) {
+    LOG_WARN("failed to get lake table metadata", K(ret), K(tenant_id), K(table_id));
+  } else {
+    lake_table_metadata = const_cast<share::ObILakeTableMetadata *>(const_lake_table_metadata);
+  }
+  return ret;
+}
+
+int ObSqlSchemaGuard::get_lake_table_metadata(const uint64_t tenant_id,
                                               const uint64_t catalog_id,
                                               const uint64_t database_id,
                                               const ObString &database_name,

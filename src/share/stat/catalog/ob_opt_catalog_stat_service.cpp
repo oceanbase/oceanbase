@@ -214,7 +214,7 @@ int ObOptCatalogStatService::batch_get_catalog_table_stats(const uint64_t tenant
         LOG_WARN("failed to aggregate catalog table stats from handles", K(ret), K(handles.count()));
       }
     }
-    LOG_TRACE("lekou stat", K(ret), K(regather_keys.count()), K(handles.count()));
+    LOG_TRACE("catalog stat, batch get table stats", K(ret), K(regather_keys.count()), K(handles.count()));
   }
   return ret;
 }
@@ -362,7 +362,7 @@ int ObOptCatalogStatService::batch_get_catalog_column_stats(const uint64_t tenan
       LOG_WARN("failed to aggregate catalog column stats from handles", K(ret), K(handles.count()));
     }
 
-    LOG_TRACE("lekou stat", K(ret), K(regather_keys.count()), K(handles.count()));
+    LOG_TRACE("catalog stat, batch get column stats", K(ret), K(regather_keys.count()), K(handles.count()));
   }
   return ret;
 }
@@ -1225,6 +1225,7 @@ int ObOptCatalogStatService::fetch_catalog_table_stat_from_system_table(
             lake_table_metadata->namespace_name_,
             lake_table_metadata->table_name_,
             table_schema,
+            lake_table_metadata->get_format_type() == ObLakeTableFormat::ICEBERG,
             key_partition_values,
             column_names,
             stat_allocator,

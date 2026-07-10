@@ -82,6 +82,7 @@ public:
       const ObString &database_name,
       const ObString &table_name,
       const share::schema::ObTableSchema *table_schema,
+      const bool skip_partition_column_filter,
       const ObIArray<ObString> &partition_values,
       const ObIArray<ObString> &column_names,
       ObIAllocator &allocator,

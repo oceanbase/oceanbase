@@ -105,7 +105,7 @@ int ObLakeTableStatUtils::construct_stat_from_iceberg(const uint64_t tenant_id,
       }
     }
     ObLakeColumnStat tmp_column_stat;
-    table_stat.pruned_row_count_ = file_descs.count();
+    table_stat.pruned_row_count_ = 0;
     table_stat.last_analyzed_ = last_analyzed;
     for (int64_t i = 0; OB_SUCC(ret) && i < file_descs.count(); ++i) {
       ObIcebergFileDesc *file_desc = file_descs.at(i);

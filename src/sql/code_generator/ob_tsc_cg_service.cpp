@@ -1554,10 +1554,8 @@ int ObTscCgService::generate_access_ctdef(const ObLogTableScan &op,
       OZ(access_column_ids.push_back(OB_MAJOR_REFRESH_MVIEW_OLD_NEW_COLUMN_ID));
     } else if (T_PSEUDO_GROUP_ID == expr->get_expr_type()) {
       OZ(access_column_ids.push_back(common::OB_HIDDEN_GROUP_IDX_COLUMN_ID));
-    } else if (T_PSEUDO_EXTERNAL_FILE_COL == expr->get_expr_type()) {
+    } else if (ObExternalTableUtils::is_external_table_psudo_expr(expr->get_expr_type())) {
       //TODO EXTERNAL-TABLE
-    } else if (T_PSEUDO_EXTERNAL_FILE_URL == expr->get_expr_type()) {
-    } else if (T_PSEUDO_PARTITION_LIST_COL == expr->get_expr_type()) {
     } else {
       ObColumnRefRawExpr* col_expr = static_cast<ObColumnRefRawExpr *>(expr);
       bool is_mapping_vt_table = op.get_real_ref_table_id() != op.get_ref_table_id();

@@ -23,6 +23,7 @@
 #include "storage/ob_locality_manager.h"
 #include "share/resource_manager/ob_resource_manager.h"
 #include "share/ob_cluster_version.h"
+#include "share/stat/catalog/ob_dbms_catalog_stats_utils.h"
 
 namespace oceanbase
 {
@@ -143,8 +144,6 @@ int ObDbmsCatalogStats::gather_table_stat(sql::ObExecContext &ctx,
   } else {
     ObOptStatGatherStat gather_stat(task_info);
     ObOptStatGatherAudit audit(ctx.get_allocator());
-    const share::schema::ObTableSchema *table_schema = NULL;
-    const share::ObILakeTableMetadata *lake_table_metadata = NULL;
     ObOptStatGatherStatList::instance().push(gather_stat);
     ObOptStatRunningMonitor running_monitor(ctx.get_allocator(),
                                             start_time,
@@ -162,9 +161,7 @@ int ObDbmsCatalogStats::gather_table_stat(sql::ObExecContext &ctx,
                                              params.at(2),
                                              params.count() > 3 ? params.at(3) : ObObjParam(),
                                              ctx,
-                                             stat_param,
-                                             table_schema,
-                                             lake_table_metadata))) {
+                                             stat_param))) {
       LOG_WARN("failed to parse table part info", K(ret));
     } else if (OB_FAIL(parse_catalog_table_stats_params(params, ctx, stat_param))) {
       LOG_WARN("failed to parse catalog table stats params", K(ret));
@@ -272,8 +269,6 @@ int ObDbmsCatalogStats::set_catalog_table_prefs(sql::ObExecContext &ctx,
   ObCatalogTableStatParam stat_param;
   ObString opt_name;
   ObString opt_value;
-  const share::schema::ObTableSchema *table_schema = NULL;
-  const share::ObILakeTableMetadata *lake_table_metadata = NULL;
   stat_param.allocator_ = &ctx.get_allocator();
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
@@ -287,9 +282,7 @@ int ObDbmsCatalogStats::set_catalog_table_prefs(sql::ObExecContext &ctx,
                                            params.at(2),
                                            dummy_part,
                                            ctx,
-                                           stat_param,
-                                           table_schema,
-                                           lake_table_metadata))) {
+                                           stat_param))) {
     LOG_WARN("failed to parse table part info", K(ret));
   } else if (params.at(3).is_null() || OB_FAIL(params.at(3).get_varchar(opt_name))) {
     ret = OB_ERR_DBMS_STATS_PL;
@@ -333,8 +326,6 @@ int ObDbmsCatalogStats::get_catalog_prefs(sql::ObExecContext &ctx,
   dummy_part.set_null();
   ObCatalogTableStatParam stat_param;
   ObString opt_name;
-  const share::schema::ObTableSchema *table_schema = NULL;
-  const share::ObILakeTableMetadata *lake_table_metadata = NULL;
   stat_param.allocator_ = &ctx.get_allocator();
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
@@ -346,9 +337,7 @@ int ObDbmsCatalogStats::get_catalog_prefs(sql::ObExecContext &ctx,
                                            params.at(3),
                                            dummy_part,
                                            ctx,
-                                           stat_param,
-                                           table_schema,
-                                           lake_table_metadata))) {
+                                           stat_param))) {
     LOG_WARN("failed to parse table part info", K(ret));
   } else if (params.at(0).is_null() || OB_FAIL(params.at(0).get_varchar(opt_name))) {
     ret = OB_ERR_DBMS_STATS_PL;
@@ -385,8 +374,6 @@ int ObDbmsCatalogStats::delete_catalog_table_prefs(sql::ObExecContext &ctx,
   dummy_part.set_null();
   ObCatalogTableStatParam stat_param;
   ObString opt_name;
-  const share::schema::ObTableSchema *table_schema = NULL;
-  const share::ObILakeTableMetadata *lake_table_metadata = NULL;
   stat_param.allocator_ = &ctx.get_allocator();
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
@@ -400,9 +387,7 @@ int ObDbmsCatalogStats::delete_catalog_table_prefs(sql::ObExecContext &ctx,
                                            params.at(2),
                                            dummy_part,
                                            ctx,
-                                           stat_param,
-                                           table_schema,
-                                           lake_table_metadata))) {
+                                           stat_param))) {
     LOG_WARN("failed to parse table part info", K(ret));
   } else if (params.at(3).is_null() || OB_FAIL(params.at(3).get_varchar(opt_name))) {
     ret = OB_ERR_DBMS_STATS_PL;
@@ -597,13 +582,13 @@ int ObDbmsCatalogStats::parse_table_part_info(
     const ObObjParam &table,
     const ObObjParam &part,
     sql::ObExecContext &ctx,
-    ObCatalogTableStatParam &stat_param,
-    const share::schema::ObTableSchema *&table_schema,
-    const share::ObILakeTableMetadata *&lake_table_metadata)
+    ObCatalogTableStatParam &stat_param)
 {
   int ret = OB_SUCCESS;
   sql::ObSqlSchemaGuard sql_schema_guard;
   ObArray<ObCatalogExtPartitionInfo *> partition_infos;
+  const share::schema::ObTableSchema *table_schema = nullptr;
+  share::ObILakeTableMetadata *lake_table_metadata = nullptr;
 
   if (OB_FAIL(parse_base_stat_param(catalog, db, table, part, ctx, stat_param))) {
     LOG_WARN("failed to parse base stat param", K(ret));
@@ -648,11 +633,23 @@ int ObDbmsCatalogStats::parse_table_part_info(
 
     if (OB_FAIL(ret)) {
     } else if (share::ObLakeTableFormat::ICEBERG == lake_table_metadata->get_format_type()) {
-      // Iceberg does not use partition info from HMS; skip partition collection entirely.
-      ObCatalogExtPartitionInfo dummy_part_info;
-      dummy_part_info.partition_ = ObString::make_empty_string();
-      if (OB_FAIL(stat_param.part_infos_.push_back(dummy_part_info))) {
-        LOG_WARN("failed to push back dummy partition info for iceberg", K(ret));
+      if (OB_FAIL(ObDbmsCatalogStatsUtils::collect_iceberg_partition_infos(
+                                              *stat_param.allocator_,
+                                              lake_table_metadata,
+                                              stat_param.part_infos_,
+                                              stat_param.global_modified_ts_))) {
+        LOG_WARN("failed to collect iceberg partition infos", K(ret));
+      } else {
+        if (stat_param.part_infos_.count() > 1) {
+          stat_param.part_level_ = share::schema::PARTITION_LEVEL_ONE;
+        } else if (stat_param.part_infos_.count() == 1) {
+          if (stat_param.part_infos_.at(0).partition_values_.empty()) {
+            stat_param.part_level_ = share::schema::PARTITION_LEVEL_ZERO;
+            stat_param.part_infos_.at(0).partition_ = ObString::make_empty_string();
+          } else {
+            stat_param.part_level_ = share::schema::PARTITION_LEVEL_ONE;
+          }
+        }
       }
     } else {
       int64_t refresh_interval_sec = 0;
@@ -831,7 +828,7 @@ int ObDbmsCatalogStats::get_table_schema(ObCatalogTableStatParam &stat_param,
                                          sql::ObExecContext &ctx,
                                          sql::ObSqlSchemaGuard &sql_schema_guard,
                                          const share::schema::ObTableSchema *&table_schema,
-                                         const share::ObILakeTableMetadata *&lake_table_metadata)
+                                         share::ObILakeTableMetadata *&lake_table_metadata)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ctx.get_sql_ctx()) || OB_ISNULL(ctx.get_sql_ctx()->schema_guard_)) {
@@ -898,7 +895,7 @@ int ObDbmsCatalogStats::parse_partition_name(const share::schema::ObTableSchema 
              K(ret),
              KP(table_schema),
              KP(stat_param.allocator_));
-  } else if (!table_schema->is_partitioned_table()) {
+  } else if (!table_schema->is_partitioned_table() && stat_param.all_part_infos_.empty()) {
     ret = OB_ERR_NOT_PARTITIONED;
     LOG_WARN("the target table is not partitioned", K(ret));
   } else if (OB_FAIL(find_selected_part_info(stat_param.part_name_,
@@ -947,8 +944,8 @@ int ObDbmsCatalogStats::init_column_stat_params(const share::schema::ObTableSche
     if (OB_ISNULL(col)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("column is null", K(ret), K(col));
-    } else if (!check_column_validity(*col)) {
-      // hidden/partition key columns are not collected, so skip them
+    } else if (!check_column_validity(*table_schema, *col)) {
+      // Skip hidden columns and partition-key columns for non-Iceberg tables.
     } else if (OB_UNLIKELY(col->get_column_name_str().empty())) {
       // Column name from table schema is empty, which should not happen for valid columns
       // Log detailed info for debugging
@@ -1029,10 +1026,12 @@ int ObDbmsCatalogStats::init_column_stat_params(const share::schema::ObTableSche
   return ret;
 }
 
-bool ObDbmsCatalogStats::check_column_validity(const share::schema::ObColumnSchemaV2 &col_schema)
+bool ObDbmsCatalogStats::check_column_validity(const share::schema::ObTableSchema &tab_schema,
+                                               const share::schema::ObColumnSchemaV2 &col_schema)
 {
   bool is_valid = false;
-  if (col_schema.is_part_key_column()) {
+  if (col_schema.is_part_key_column()
+      && share::ObLakeTableFormat::ICEBERG != tab_schema.get_lake_table_format()) {
     // For current Hive tables, partition columns are mostly independent and their
     // metadata is fetched from HMS directly, usually represented by partition paths.
     // Keep them out of this flow for now and adapt path-based handling later if needed.
@@ -1509,8 +1508,6 @@ int ObDbmsCatalogStats::lock_catalog_table_stat(sql::ObExecContext &ctx,
   ObCatalogTableStatParam stat_param;
   stat_param.allocator_ = &ctx.get_allocator();
   ObString stat_type_str;
-  const share::schema::ObTableSchema *table_schema = NULL;
-  const share::ObILakeTableMetadata *lake_table_metadata = NULL;
   ObObjParam empty_part;
   empty_part.set_null();
 
@@ -1526,9 +1523,7 @@ int ObDbmsCatalogStats::lock_catalog_table_stat(sql::ObExecContext &ctx,
                                            params.at(2),
                                            params.count() > 3 ? params.at(3) : empty_part,
                                            ctx,
-                                           stat_param,
-                                           table_schema,
-                                           lake_table_metadata))) {
+                                           stat_param))) {
     LOG_WARN("failed to parse table part info", K(ret));
   }
 
@@ -1570,8 +1565,6 @@ int ObDbmsCatalogStats::unlock_catalog_table_stat(sql::ObExecContext &ctx,
   ObCatalogTableStatParam stat_param;
   stat_param.allocator_ = &ctx.get_allocator();
   ObString stat_type_str;
-  const share::schema::ObTableSchema *table_schema = NULL;
-  const share::ObILakeTableMetadata *lake_table_metadata = NULL;
   ObObjParam empty_part;
   empty_part.set_null();
 
@@ -1587,9 +1580,7 @@ int ObDbmsCatalogStats::unlock_catalog_table_stat(sql::ObExecContext &ctx,
                                            params.at(2),
                                            params.count() > 3 ? params.at(3) : empty_part,
                                            ctx,
-                                           stat_param,
-                                           table_schema,
-                                           lake_table_metadata))) {
+                                           stat_param))) {
     LOG_WARN("failed to parse table part info", K(ret));
   }
 
@@ -1631,8 +1622,6 @@ int ObDbmsCatalogStats::lock_catalog_partition_stat(sql::ObExecContext &ctx,
   ObCatalogTableStatParam stat_param;
   stat_param.allocator_ = &ctx.get_allocator();
   stat_param.gather_options_.stattype_ = StatTypeLocked::PARTITION_ALL_TYPE;
-  const share::schema::ObTableSchema *table_schema = NULL;
-  const share::ObILakeTableMetadata *lake_table_metadata = NULL;
 
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
@@ -1647,9 +1636,7 @@ int ObDbmsCatalogStats::lock_catalog_partition_stat(sql::ObExecContext &ctx,
                                            params.at(2),
                                            params.at(3),
                                            ctx,
-                                           stat_param,
-                                           table_schema,
-                                           lake_table_metadata))) {
+                                           stat_param))) {
     LOG_WARN("failed to parse table part info", K(ret));
   }
 
@@ -1672,8 +1659,6 @@ int ObDbmsCatalogStats::unlock_catalog_partition_stat(sql::ObExecContext &ctx,
   ObCatalogTableStatParam stat_param;
   stat_param.allocator_ = &ctx.get_allocator();
   stat_param.gather_options_.stattype_ = StatTypeLocked::PARTITION_ALL_TYPE;
-  const share::schema::ObTableSchema *table_schema = NULL;
-  const share::ObILakeTableMetadata *lake_table_metadata = NULL;
 
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
@@ -1688,9 +1673,7 @@ int ObDbmsCatalogStats::unlock_catalog_partition_stat(sql::ObExecContext &ctx,
                                            params.at(2),
                                            params.at(3),
                                            ctx,
-                                           stat_param,
-                                           table_schema,
-                                           lake_table_metadata))) {
+                                           stat_param))) {
     LOG_WARN("failed to parse table part info", K(ret));
   }
 

@@ -181,6 +181,68 @@ int TableItem::deep_copy_json_table_def(const ObJsonTableDef& jt_def, ObIRawExpr
   return ret;
 }
 
+int TableItem::alloc_ext_table_def(ObIAllocator* allocator)
+{
+  int ret = OB_SUCCESS;
+  void* tmp = nullptr;
+  if (OB_NOT_NULL(ext_table_def_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("external table def has been allocated", K(ret), KPC(ext_table_def_));
+  } else if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param, invalid param.", K(ret));
+  } else if (OB_ISNULL(tmp = allocator->alloc(sizeof(ObExtTableDef)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory external table def failed.", K(ret));
+  } else {
+    ext_table_def_ = new (tmp) ObExtTableDef(*allocator);
+  }
+  return ret;
+}
+
+int TableItem::deep_copy_ext_table_def(const ObExtTableDef& table_def, ObIAllocator* allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(alloc_ext_table_def(allocator))) {
+    LOG_WARN("failed to allocate external table def", K(ret));
+  } else if (OB_FAIL(ext_table_def_->deep_copy(table_def, allocator))) {
+    LOG_WARN("failed to deep copy external table def", K(ret));
+  }
+  return ret;
+}
+
+int ObExtTableDef::deep_copy(const ObExtTableDef &other, ObIAllocator *allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null allocator", K(ret));
+  } else {
+    lake_table_format_ = other.lake_table_format_;
+    lake_table_snapshot_id_ = other.lake_table_snapshot_id_;
+    dblink_id_ = other.dblink_id_;
+    is_reverse_link_ = other.is_reverse_link_;
+    dblink_name_ = other.dblink_name_;
+    link_database_name_ = other.link_database_name_;
+    external_table_partition_ = other.external_table_partition_;
+    external_location_id_ = other.external_location_id_;
+    if (OB_FAIL(partition_values_.reserve(other.partition_values_.count()))) {
+      LOG_WARN("failed to reserve external partition values", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < other.partition_values_.count(); ++i) {
+        ObObj copied_obj;
+        if (OB_FAIL(ob_write_obj(*allocator, other.partition_values_.at(i), copied_obj))) {
+          LOG_WARN("failed to deep copy external partition value", K(ret), K(i),
+                   K(other.partition_values_.at(i)));
+        } else if (OB_FAIL(partition_values_.push_back(copied_obj))) {
+          LOG_WARN("failed to push back external partition value", K(ret), K(i));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int TableItem::deep_copy(ObIRawExprCopier &expr_copier,
                          const TableItem &other,
                          ObIAllocator* allocator)
@@ -198,8 +260,6 @@ int TableItem::deep_copy(ObIRawExprCopier &expr_copier,
   is_index_table_ = other.is_index_table_;
   is_view_table_ = other.is_view_table_;
   table_type_ = other.table_type_;
-  lake_table_format_ = other.lake_table_format_;
-  lake_table_snapshot_id_ = other.lake_table_snapshot_id_;
   is_recursive_union_fake_table_ = other.is_recursive_union_fake_table_;
   cte_type_ = other.cte_type_;
   database_name_ = other.database_name_;
@@ -212,19 +272,12 @@ int TableItem::deep_copy(ObIRawExprCopier &expr_copier,
   is_mv_proctime_table_ = other.is_mv_proctime_table_;
   node_ = other.node_; // should deep copy ? seems to be unnecessary
   flashback_query_type_ = other.flashback_query_type_;
-  // dblink
-  dblink_id_ = other.dblink_id_;
-  is_reverse_link_ = other.is_reverse_link_;
-  dblink_name_ = other.dblink_name_;
-  link_database_name_ = other.link_database_name_;
   // ddl related
   ddl_schema_version_ = other.ddl_schema_version_;
   ddl_table_id_ = other.ddl_table_id_;
   ref_query_ = other.ref_query_;
   //external table
-  external_table_partition_ = other.external_table_partition_;
   catalog_name_ = other.catalog_name_;
-  external_location_id_ = other.external_location_id_;
   SampleInfo *buf = NULL;
   if (is_json_table()
       && OB_FAIL(deep_copy_json_table_def(*other.json_table_def_, expr_copier, allocator))) {
@@ -243,6 +296,13 @@ int TableItem::deep_copy(ObIRawExprCopier &expr_copier,
   } else if (OB_NOT_NULL(other.dsl_query_) &&
              OB_FAIL(deep_copy_dsl_query_info(*other.dsl_query_, expr_copier, allocator))) {
     LOG_WARN("failed to deep copy dsl query info", K(ret));
+  } else if (is_external_table()) {
+    if (OB_ISNULL(other.ext_table_def_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null external table def", K(ret), K(other));
+    } else if (OB_FAIL(deep_copy_ext_table_def(*other.ext_table_def_, allocator))) {
+      LOG_WARN("failed to deep copy external table def", K(ret));
+    }
   } else { /* do nothing */ }
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(other.sample_info_)) {

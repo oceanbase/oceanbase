@@ -20,6 +20,11 @@ class ObSqlSchemaGuard;
 namespace share
 {
 class ObILakeTableMetadata;
+namespace schema
+{
+class ObTableSchema;
+class ObColumnSchemaV2;
+}
 }
 namespace pl
 {
@@ -83,9 +88,7 @@ private:
                                    const ObObjParam &table,
                                    const ObObjParam &part,
                                    sql::ObExecContext &ctx,
-                                   ObCatalogTableStatParam &stat_param,
-                                   const share::schema::ObTableSchema *&table_schema,
-                                   const share::ObILakeTableMetadata *&lake_table_metadata);
+                                   ObCatalogTableStatParam &stat_param);
 
   static int parse_base_stat_param(const ObObjParam &catalog,
                                    const ObObjParam &db,
@@ -98,7 +101,7 @@ private:
                               sql::ObExecContext &ctx,
                               sql::ObSqlSchemaGuard &sql_schema_guard,
                               const share::schema::ObTableSchema *&table_schema,
-                              const share::ObILakeTableMetadata *&lake_table_metadata);
+                              share::ObILakeTableMetadata *&lake_table_metadata);
 
   static int parse_partition_name(const share::schema::ObTableSchema *table_schema,
                                   sql::ObExecContext &ctx,
@@ -138,7 +141,8 @@ private:
                                 const ObIArray<ObCatalogColumnStatParam> &column_params,
                                 const common::ObIArray<common::ObString> &record_cols);
 
-  static bool check_column_validity(const share::schema::ObColumnSchemaV2 &col_schema);
+  static bool check_column_validity(const share::schema::ObTableSchema &tab_schema,
+                                    const share::schema::ObColumnSchemaV2 &col_schema);
 
   static int check_statistic_table_writeable(sql::ObExecContext &ctx);
 

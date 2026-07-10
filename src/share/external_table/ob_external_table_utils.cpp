@@ -11,14 +11,23 @@
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/schema/ob_schema_struct.h"
 #include "share/system_variable/ob_system_variable_factory.h"
+#include "share/ob_catalog_ext_partition_info.h"
 #include "sql/executor/ob_task_spliter.h"
 #include "sql/engine/table/ob_csv_table_row_iter.h"
 #include "share/config/ob_server_config.h"
 #include "share/backup/ob_backup_io_adapter.h"
+#include "lib/hash/ob_hashset.h"
+#include "lib/json_type/ob_json_base.h"
+#include "lib/utility/ob_print_utils.h"
+#include "observer/mysql/obmp_utils.h"
 #include "sql/engine/table/ob_odps_jni_table_row_iter.h"
 #include "sql/engine/table/ob_odps_table_row_iter.h"
 #include "plugin/interface/ob_plugin_external_intf.h"
 #include "sql/engine/basic/ob_consistent_hashing_load_balancer.h"
+#include "sql/optimizer/file_prune/ob_iceberg_file_pruner.h"
+#include "sql/table_format/iceberg/spec/manifest.h"
+#include "sql/table_format/iceberg/spec/partition.h"
+#include "sql/table_format/iceberg/spec/schema.h"
 #include "lib/restore/ob_object_device.h"
 #include "lib/hash_func/murmur_hash.h"
 #include "src/share/ob_device_manager.h"
@@ -33,6 +42,174 @@ namespace share
 const char *ObExternalTableUtils::dummy_file_name()
 {
   return "#######DUMMY_FILE#######";
+}
+
+int ObExternalTableUtils::print_obj_json_escaped(ObIAllocator &allocator,
+                                                 const ObObj &obj,
+                                                 ObString &value)
+{
+  int ret = OB_SUCCESS;
+  ObString plain_value;
+  ObString quoted_value;
+  value.reset();
+  if (obj.is_null()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("unexpected null obj for json string escaping", K(ret), K(obj));
+  } else if (OB_FAIL(observer::ObMPUtils::get_plain_str_literal(allocator, obj, plain_value))) {
+    LOG_WARN("failed to print plain obj before json escaping", K(ret), K(obj));
+  } else {
+    ObJsonBuffer json_buf(&allocator);
+    if (OB_FAIL(ObJsonBaseUtil::add_double_quote(json_buf, plain_value.ptr(), plain_value.length()))) {
+      LOG_WARN("failed to escape json string", K(ret), K(plain_value));
+    } else if (OB_FAIL(json_buf.get_result_string(quoted_value))) {
+      LOG_WARN("failed to get escaped json string", K(ret));
+    } else if (OB_UNLIKELY(quoted_value.length() < 2)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected escaped json string length", K(ret), K(quoted_value));
+    } else {
+      ObString escaped_value(static_cast<int32_t>(quoted_value.length() - 2), quoted_value.ptr() + 1);
+      if (OB_FAIL(ob_write_string(allocator, escaped_value, value, true))) {
+        LOG_WARN("failed to write escaped json string", K(ret), K(escaped_value));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExternalTableUtils::build_iceberg_partition_json_desc(
+    ObIAllocator &allocator,
+    const sql::iceberg::PartitionSpec &partition_spec,
+    const ObIArray<ObObj> &partition_values,
+    ObString &partition_desc)
+{
+  int ret = OB_SUCCESS;
+  partition_desc.reset();
+  if (OB_UNLIKELY(partition_spec.fields.count() != partition_values.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("partition field count does not match values",
+             K(ret), K(partition_spec.fields.count()), K(partition_values.count()));
+  } else {
+    int64_t json_buf_len = 512;
+    bool need_retry = false;
+    do {
+      need_retry = false;
+      ObSqlString json;
+      char *buf = nullptr;
+      int64_t buf_len = 0;
+      int64_t pos = 0;
+      if (OB_FAIL(json.reserve(json_buf_len))) {
+        LOG_WARN("failed to reserve iceberg partition json", K(ret), K(json_buf_len));
+      } else if (FALSE_IT(buf = json.ptr())) {
+      } else if (FALSE_IT(buf_len = json.capacity() + 1)) {
+      } else if (OB_FAIL(J_OBJ_START())) {
+        LOG_WARN("failed to start iceberg partition json", K(ret), K(partition_spec.spec_id));
+      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, R"("spec_id":%d)", partition_spec.spec_id))) {
+        LOG_WARN("failed to append spec_id kv", K(ret), K(partition_spec.spec_id));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < partition_spec.fields.count(); ++i) {
+          const sql::iceberg::PartitionField *field = partition_spec.fields.at(i);
+          ObString field_name;
+          ObString json_escaped_val;
+          const ObObj &obj = partition_values.at(i);
+          if (OB_ISNULL(field)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("partition field is null", K(ret), K(i));
+          } else if (FALSE_IT(field_name = field->name)) {
+          } else if (sql::iceberg::TransformType::Void == field->transform.transform_type) {
+            // Void fields are not included in the partition json description.
+          } else if (OB_FAIL(J_COMMA())) {
+            LOG_WARN("failed to append field separator", K(ret), K(i));
+          } else if (obj.is_null()) {
+            if (OB_FAIL(databuff_printf(buf, buf_len, pos, R"("%.*s":null)",
+                                        field_name.length(), field_name.ptr()))) {
+              LOG_WARN("failed to append null to json", K(ret), K(i));
+            }
+          } else if (obj.is_integer_type()) {
+            if (OB_FAIL(databuff_printf(buf, buf_len, pos, R"("%.*s":%ld)",
+                                        field_name.length(), field_name.ptr(), obj.get_int()))) {
+              LOG_WARN("failed to append integer to json", K(ret), K(i), K(obj));
+            }
+          } else {
+             if (OB_FAIL(print_obj_json_escaped(allocator, obj, json_escaped_val))) {
+              LOG_WARN("failed to print json escaped partition value", K(ret), K(i));
+            } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, R"("%.*s":"%.*s")",
+                                              field_name.length(), field_name.ptr(),
+                                              json_escaped_val.length(), json_escaped_val.ptr()))) {
+              LOG_WARN("failed to append string value to json", K(ret), K(i), K(json_escaped_val));
+            }
+          }
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(J_OBJ_END())) {
+        LOG_WARN("failed to close iceberg partition json", K(ret));
+      } else if (OB_FAIL(json.set_length(pos))) {
+        LOG_WARN("failed to set iceberg partition json length", K(ret), K(pos));
+      } else if (OB_FAIL(ob_write_string(allocator, json.string(), partition_desc, true))) {
+        LOG_WARN("failed to write iceberg partition desc", K(ret));
+      }
+
+      if (OB_SIZE_OVERFLOW == ret) {
+        ret = OB_SUCCESS;
+        json_buf_len = buf_len * 2;
+        need_retry = true;
+      }
+    } while (OB_SUCC(ret) && need_retry);
+  }
+  return ret;
+}
+
+int ObExternalTableUtils::collect_iceberg_partition_values(
+    ObIAllocator &allocator,
+    const ObIArray<sql::ObIcebergFileDesc *> &file_descs,
+    ObIArray<ObString> &partition_values)
+{
+  int ret = OB_SUCCESS;
+  common::hash::ObHashSet<sql::iceberg::PartitionKey> partition_key_set;
+  partition_values.reuse();
+  if (OB_FAIL(partition_key_set.create(std::max<int64_t>(16, file_descs.count() * 2),
+                                       "IcePartStatKey",
+                                       "IcePartStatKey"))) {
+    LOG_WARN("failed to create iceberg partition key set", K(ret), K(file_descs.count()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < file_descs.count(); ++i) {
+      const sql::ObIcebergFileDesc *file_desc = file_descs.at(i);
+      const sql::iceberg::ManifestEntry *entry = nullptr;
+      sql::iceberg::PartitionKey partition_key;
+      if (OB_ISNULL(file_desc) || OB_ISNULL(entry = file_desc->entry_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected iceberg file desc", K(ret));
+      } else if (OB_FAIL(partition_key.init_from_manifest_entry(*entry))) {
+        LOG_WARN("failed to init iceberg partition key", K(ret), K(i));
+      } else {
+        const int hash_ret = partition_key_set.exist_refactored(partition_key);
+        if (OB_HASH_NOT_EXIST == hash_ret) {
+          ObString partition_desc;
+          if (OB_FAIL(build_iceberg_partition_json_desc(allocator,
+                                                        entry->partition_spec,
+                                                        entry->data_file.partition,
+                                                        partition_desc))) {
+            LOG_WARN("failed to build iceberg partition desc", K(ret), K(i));
+          } else if (OB_FAIL(partition_values.push_back(partition_desc))) {
+            LOG_WARN("failed to push back partition value", K(ret), K(partition_desc));
+          } else if (OB_FAIL(partition_key_set.set_refactored(partition_key))) {
+            LOG_WARN("failed to cache iceberg partition key", K(ret), K(i));
+          }
+        } else if (OB_HASH_EXIST == hash_ret) {
+          // do nothing
+        } else if (OB_SUCCESS != hash_ret) {
+          ret = hash_ret;
+          LOG_WARN("failed to lookup iceberg partition key", K(ret), K(i));
+        }
+      }
+    }
+  }
+  if (partition_key_set.created()) {
+    partition_key_set.destroy();
+  }
+  LOG_TRACE("catalog stat, collect partition values", K(ret), K(partition_values));
+  return ret;
 }
 
 int ObExternalTableUtils::adjust_string_length_for_external_table(const char *data,

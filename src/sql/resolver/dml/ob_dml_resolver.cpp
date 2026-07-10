@@ -49,6 +49,8 @@
 #include "src/share/hybrid_search/ob_hybrid_search_executor.h"
 #include "sql/hybrid_search/ob_hybrid_search_dsl_resolver.h"
 #include "lib/charset/ob_charset.h"
+#include "lib/utility/ob_print_utils.h"
+#include "share/object/ob_obj_cast.h"
 
 namespace oceanbase
 {
@@ -3849,8 +3851,13 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
           LOG_WARN("failed to check ddl schema version from hint", K(ret));
         }
       }
-      if (OB_SUCC(ret)) {
-        table_item->external_location_id_ = table_schema->get_external_location_id();
+      if (OB_SUCC(ret) && table_schema->is_external_table()) {
+        if (OB_ISNULL(table_item->ext_table_def_)
+            && OB_FAIL(table_item->alloc_ext_table_def(allocator_))) {
+          LOG_WARN("failed to allocate external table def", K(ret));
+        } else {
+          table_item->ext_table_def_->external_location_id_ = table_schema->get_external_location_id();
+        }
       }
 
       if (OB_SUCCESS == ret && table_item->is_view_table_) {
@@ -4294,10 +4301,14 @@ int ObDMLResolver::build_mocked_external_table_item(const ObTableSchema *table_s
       item->table_name_ = table_schema->get_table_name_str();
       item->ref_id_ = table_schema->get_table_id();
       item->table_type_ = table_schema->get_table_type();
-      item->lake_table_format_ = table_schema->get_lake_table_format();
-      item->lake_table_snapshot_id_ = table_schema->get_lake_table_snapshot_id();
+      if (OB_FAIL(item->alloc_ext_table_def(allocator_))) {
+        LOG_WARN("failed to allocate external table def", K(ret));
+      } else {
+        item->ext_table_def_->lake_table_format_ = table_schema->get_lake_table_format();
+        item->ext_table_def_->lake_table_snapshot_id_ = table_schema->get_lake_table_snapshot_id();
+        item->ext_table_def_->external_location_id_ = table_schema->get_external_location_id();
+      }
       item->database_name_ = session_info_->get_database_name();
-      item->external_location_id_ = table_schema->get_external_location_id();
       if (!alias_name.empty()) {
         item->alias_name_ = alias_name;
       }
@@ -8491,6 +8502,11 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(const uint64_t tenant
         }
       }
     }
+    if (OB_SUCC(ret)
+        && tschema->is_external_table()
+        && OB_FAIL(item->alloc_ext_table_def(allocator_))) {
+      LOG_WARN("failed to allocate external table def", K(ret));
+    }
     if (OB_SUCC(ret)) {
       if (session_info_->get_ddl_info().is_ddl()) {
         if (!tschema->is_storage_local_index_table() || tschema->is_search_index()) {
@@ -8503,8 +8519,10 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(const uint64_t tenant
           item->ddl_schema_version_ = tschema->get_schema_version();
           item->ddl_table_id_ = tschema->get_table_id();
           item->table_type_ = tschema->get_table_type();
-          item->lake_table_format_ = tschema->get_lake_table_format();
-          item->lake_table_snapshot_id_ = tschema->get_lake_table_snapshot_id();
+          if (OB_NOT_NULL(item->ext_table_def_)) {
+            item->ext_table_def_->lake_table_format_ = tschema->get_lake_table_format();
+            item->ext_table_def_->lake_table_snapshot_id_ = tschema->get_lake_table_snapshot_id();
+          }
         } else {
           const ObTableSchema *tab_schema = nullptr;
           if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), tschema->get_data_table_id(), tab_schema))) {
@@ -8519,8 +8537,10 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(const uint64_t tenant
             item->ddl_schema_version_ = tschema->get_schema_version();
             item->ddl_table_id_ = tschema->get_table_id();
             item->table_type_ = tschema->get_table_type();
-            item->lake_table_format_ = tschema->get_lake_table_format();
-            item->lake_table_snapshot_id_ = tschema->get_lake_table_snapshot_id();
+            if (OB_NOT_NULL(item->ext_table_def_)) {
+              item->ext_table_def_->lake_table_format_ = tschema->get_lake_table_format();
+              item->ext_table_def_->lake_table_snapshot_id_ = tschema->get_lake_table_snapshot_id();
+            }
           }
         }
       } else if (tschema->is_index_table() || tschema->is_materialized_view()) {
@@ -8538,8 +8558,10 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(const uint64_t tenant
             item->ref_id_ = tschema->get_data_table_id();
             item->mview_id_ = tschema->get_table_id();
             item->table_type_ = tschema->get_table_type();
-            item->lake_table_format_ = tschema->get_lake_table_format();
-            item->lake_table_snapshot_id_ = tschema->get_lake_table_snapshot_id();
+            if (OB_NOT_NULL(item->ext_table_def_)) {
+              item->ext_table_def_->lake_table_format_ = tschema->get_lake_table_format();
+              item->ext_table_def_->lake_table_snapshot_id_ = tschema->get_lake_table_snapshot_id();
+            }
             item->need_expand_rt_mv_ = !params_.is_for_rt_mv_ && tschema->mv_on_query_computation();
             item->table_name_ = tschema->get_table_name_str();
             item->alias_name_ = alias_name.empty() ? tschema->get_table_name_str() : alias_name;
@@ -8576,10 +8598,13 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(const uint64_t tenant
         item->is_view_table_ = tschema->is_view_table();
         item->ddl_schema_version_ = tschema->get_schema_version();
         item->table_type_ = tschema->get_table_type();
-        item->lake_table_format_ = tschema->get_lake_table_format();
-        item->lake_table_snapshot_id_ = tschema->get_lake_table_snapshot_id();
+        if (OB_NOT_NULL(item->ext_table_def_)) {
+          item->ext_table_def_->lake_table_format_ = tschema->get_lake_table_format();
+          item->ext_table_def_->lake_table_snapshot_id_ = tschema->get_lake_table_snapshot_id();
+        }
       }
     }
+
     if (OB_SUCC(ret)) {
       ObSchemaObjVersion table_version;
       table_version.object_id_ = tschema->get_table_id();
@@ -8635,7 +8660,9 @@ int ObDMLResolver::resolve_base_or_alias_table_item_dblink(uint64_t dblink_id,
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "unsupported link table in materialized view");
   } else {
     // common info.
-    if (0 == alias_name.length()) {
+    if (OB_FAIL(item->alloc_ext_table_def(allocator_))) {
+      LOG_WARN("failed to allocate external table def", K(ret));
+    } else if (0 == alias_name.length()) {
       // item->table_id_ = table_schema->get_table_id();
       // table_id_ must be unique, ref_id_
       // ex: SELECT c_id FROM remote_dblink_test.stu2@my_link3 WHERE p_id = (SELECT MIN(p_id) FROM remote_dblink_test.stu2@my_link3);
@@ -8645,22 +8672,24 @@ int ObDMLResolver::resolve_base_or_alias_table_item_dblink(uint64_t dblink_id,
       item->table_id_ = generate_table_id();
       item->alias_name_ = alias_name;
     }
-    item->type_ = TableItem::LINK_TABLE;
-    item->ref_id_ = table_schema->get_table_id();
-    item->table_name_ = table_name;
-    item->is_index_table_ = false;
-    item->is_system_table_ = false;
-    item->is_view_table_ = false;
-    item->table_type_ = MAX_TABLE_TYPE;
-    item->lake_table_format_ = share::ObLakeTableFormat::INVALID;
-    item->lake_table_snapshot_id_ = OB_INVALID_ID;
-    item->synonym_name_ = synonym_name;
-    item->synonym_db_name_ = synonym_db_name;
-    // dblink info.
-    item->dblink_id_ = dblink_id;
-    item->dblink_name_ = dblink_name;
-    item->link_database_name_ = database_name;
-    item->is_reverse_link_ = is_reverse_link;
+    if (OB_SUCC(ret)) {
+      item->type_ = TableItem::LINK_TABLE;
+      item->ref_id_ = table_schema->get_table_id();
+      item->table_name_ = table_name;
+      item->is_index_table_ = false;
+      item->is_system_table_ = false;
+      item->is_view_table_ = false;
+      item->table_type_ = MAX_TABLE_TYPE;
+      item->ext_table_def_->lake_table_format_ = share::ObLakeTableFormat::INVALID;
+      item->ext_table_def_->lake_table_snapshot_id_ = OB_INVALID_ID;
+      item->synonym_name_ = synonym_name;
+      item->synonym_db_name_ = synonym_db_name;
+      // dblink info.
+      item->ext_table_def_->dblink_id_ = dblink_id;
+      item->ext_table_def_->dblink_name_ = dblink_name;
+      item->ext_table_def_->link_database_name_ = database_name;
+      item->ext_table_def_->is_reverse_link_ = is_reverse_link;
+    }
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(stmt->add_table_item(session_info_, item))) {
@@ -10587,8 +10616,131 @@ int ObDMLResolver::resolve_partitions(const ParseNode *part_node,
       }
     } else if (schema::EXTERNAL_TABLE == table_item.table_type_
                && T_EXTERNAL_TABLE_PARTITION == part_node->children_[0]->type_) {
-      table_item.external_table_partition_.assign_ptr(part_node->children_[0]->str_value_,
-                                                      part_node->children_[0]->str_len_);
+      const ParseNode *external_part_node = part_node->children_[0];
+      if (OB_ISNULL(table_item.ext_table_def_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null external table def", K(ret), K(table_item));
+      } else if (OB_ISNULL(external_part_node)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected iceberg external partition node", K(ret));
+      } else if (share::ObLakeTableFormat::ICEBERG != table_schema.get_lake_table_format()) {
+        table_item.ext_table_def_->external_table_partition_.assign_ptr(external_part_node->str_value_,
+                                                                        external_part_node->str_len_);
+      } else if (external_part_node->num_child_ <= 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected iceberg external partition child count", K(ret), K(external_part_node->num_child_));
+      } else {
+        table_item.ext_table_def_->external_table_partition_.assign_ptr(external_part_node->str_value_,
+                                                                        external_part_node->str_len_);
+        table_item.part_names_.reuse();
+        table_item.ext_table_def_->partition_values_.reuse();
+        const ObLengthSemantics default_length_semantics =
+            (OB_NOT_NULL(session_info_) ? session_info_->get_actual_nls_length_semantics() : LS_BYTE);
+        const ObSQLSessionInfo *session_info = session_info_;
+        int64_t server_collation = CS_TYPE_INVALID;
+        ObCollationType nation_collation =
+            OB_NOT_NULL(session_info_) ? session_info_->get_nls_collation_nation() : CS_TYPE_INVALID;
+        ObCollationType collation_connection = CS_TYPE_INVALID;
+        bool enable_decimal_int = false;
+        ObCompatType compat_type = COMPAT_MYSQL57;
+        ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
+        bool enable_mysql_compatible_dates = false;
+        if (OB_ISNULL(params_.expr_factory_) || OB_ISNULL(params_.session_info_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("resolve status is invalid", K(ret), K_(params_.expr_factory), K_(params_.session_info));
+        } else if (OB_FAIL(params_.session_info_->get_collation_connection(collation_connection))) {
+          LOG_WARN("fail to get collation_connection", K(ret));
+        } else if (lib::is_oracle_mode() && nullptr == session_info) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("session info is null", K(ret));
+        } else if (lib::is_oracle_mode() && OB_FAIL(
+                        session_info->get_sys_variable(share::SYS_VAR_COLLATION_SERVER, server_collation))) {
+          LOG_WARN("get sys variables failed", K(ret));
+        } else if (OB_FAIL(session_info->get_compatibility_control(compat_type))) {
+          LOG_WARN("failed to get compat type", K(ret));
+        } else if (OB_FAIL(session_info->get_charset_compat_type(charset_compat_type))) {
+          LOG_WARN("fail to get charset compat type", K(ret));
+        } else if (OB_FAIL(ObSQLUtils::check_enable_decimalint(session_info, enable_decimal_int))) {
+          LOG_WARN("fail to check enable decimal int", K(ret));
+        } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(session_info,
+                                                                            false,
+                                                                            enable_mysql_compatible_dates))) {
+          LOG_WARN("fail to check mysql compatible dates", K(ret));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < external_part_node->num_child_; ++i) {
+            const ParseNode *element_node = external_part_node->children_[i];
+            const ParseNode *key_node = nullptr;
+            const ParseNode *value_node = nullptr;
+            ObString part_key;
+            ObString normalized_key;
+            ObObjParam part_value;
+            ObObj copied_part_value;
+            ObString literal_prefix;
+            ObExprInfo parents_expr_info;
+            if (OB_ISNULL(element_node)
+                || OB_UNLIKELY(T_PARTITION_LIST_ELEMENT != element_node->type_)
+                || OB_ISNULL(element_node->children_)
+                || OB_ISNULL(element_node->children_[0])
+                || OB_ISNULL(element_node->children_[1])) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("invalid iceberg external partition element", K(ret), KP(element_node), K(i));
+            } else if (FALSE_IT(key_node = element_node->children_[0])) {
+            } else if (FALSE_IT(value_node = element_node->children_[1])) {
+            } else if (FALSE_IT(part_key.assign_ptr(key_node->str_value_, key_node->str_len_))) {
+            } else if (OB_FAIL(ob_write_string(*allocator_, part_key, normalized_key, true))) {
+              LOG_WARN("failed to normalize partition key", K(ret), K(part_key));
+            } else if (FALSE_IT(ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, normalized_key))) {
+            } else if (OB_FAIL(ObResolverUtils::resolve_const(value_node,
+                                                              lib::is_oracle_mode() ? session_info->get_stmt_type() : stmt::T_NONE,
+                                                              params_.expr_factory_->get_allocator(),
+                                                              collation_connection,
+                                                              nation_collation,
+                                                              TZ_INFO(params_.session_info_),
+                                                              part_value,
+                                                              false,
+                                                              literal_prefix,
+                                                              default_length_semantics,
+                                                              static_cast<ObCollationType>(server_collation),
+                                                              &parents_expr_info,
+                                                              session_info->get_sql_mode(),
+                                                              enable_decimal_int,
+                                                              compat_type,
+                                                              enable_mysql_compatible_dates,
+                                                              session_info->get_min_const_integer_precision(),
+                                                              session_info->get_exec_min_cluster_version(),
+                                                              nullptr != params_.secondary_namespace_,
+                                                              false,
+                                                              charset_compat_type))) {
+              LOG_WARN("failed to resolve iceberg partition const", K(ret), K(normalized_key));
+            } else if (OB_FAIL(table_item.part_names_.push_back(normalized_key))) {
+              LOG_WARN("failed to push back iceberg partition name", K(ret), K(normalized_key), K(i));
+            } else {
+              int64_t pos = 0;
+              const int64_t deep_copy_size = part_value.get_deep_copy_size();
+              char *buf = nullptr;
+              if (FALSE_IT(buf = deep_copy_size > 0
+                                      ? static_cast<char *>(allocator_->alloc(deep_copy_size))
+                                      : nullptr)) {
+              } else if (deep_copy_size > 0 && OB_ISNULL(buf)) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                LOG_WARN("failed to allocate memory for iceberg partition value", K(ret), K(deep_copy_size), K(i));
+              } else if (OB_FAIL(copied_part_value.deep_copy(part_value, buf, deep_copy_size, pos))) {
+                LOG_WARN("failed to deep copy iceberg partition value", K(ret), K(part_value), K(i));
+              } else if (OB_FAIL(table_item.ext_table_def_->partition_values_.push_back(copied_part_value))) {
+                LOG_WARN("failed to push back iceberg partition value", K(ret), K(i));
+              } else if (0 == normalized_key.compare("spec_id")) {
+                ObCastCtx cast_ctx(allocator_, NULL, CM_NONE, CS_TYPE_INVALID);
+                ObObj casted_spec_id;
+                if (OB_FAIL(ObObjCaster::to_type(ObInt32Type, cast_ctx, part_value, casted_spec_id))) {
+                  LOG_WARN("failed to cast iceberg partition spec id", K(ret), K(part_value), K(i));
+                } else if (OB_FAIL(table_item.part_ids_.push_back(casted_spec_id.get_int32()))) {
+                  LOG_WARN("failed to push back iceberg partition spec id", K(ret), K(casted_spec_id), K(i));
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
   return ret;
@@ -21272,12 +21424,19 @@ int ObDMLResolver::try_add_join_table_for_fts(const TableItem *left_table, Table
     right_table->table_name_ = table_schema->get_table_name_str();
     right_table->alias_name_ = table_schema->get_table_name_str();
     right_table->table_type_ = table_schema->get_table_type();
-    right_table->lake_table_format_ = table_schema->get_lake_table_format();
-    right_table->lake_table_snapshot_id_ = table_schema->get_lake_table_snapshot_id();
+    if (table_schema->is_external_table()) {
+      if (OB_FAIL(right_table->alloc_ext_table_def(allocator_))) {
+        STORAGE_FTS_LOG(WARN, "fail to allocate external table def", K(ret));
+      } else {
+        right_table->ext_table_def_->lake_table_format_ = table_schema->get_lake_table_format();
+        right_table->ext_table_def_->lake_table_snapshot_id_ = table_schema->get_lake_table_snapshot_id();
+      }
+    }
     right_table->qb_name_ = left_table->qb_name_;
     right_table->synonym_db_name_ = left_table->synonym_db_name_;
     right_table->database_name_ = left_table->database_name_;
-    if (OB_FAIL(get_stmt()->add_table_item(session_info_, right_table))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(get_stmt()->add_table_item(session_info_, right_table))) {
       STORAGE_FTS_LOG(WARN, "fail to add right table item", K(ret), K(right_table));
     } else if (OB_FAIL(resolve_table_partition_expr(*right_table, *table_schema))) {
       STORAGE_FTS_LOG(WARN, "fail to resolve table partition expr", K(ret), KPC(right_table), KPC(table_schema));

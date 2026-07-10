@@ -1827,7 +1827,14 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
     scan->set_table_partition_info(ap->table_partition_info_);
     scan->set_table_opt_info(ap->table_opt_info_);
     scan->set_access_path(ap);
-    scan->set_dblink_id(table_item->dblink_id_); // will be delete after implement log_link_table_scan
+    if (table_item->is_link_type()) {
+      if (OB_ISNULL(table_item->ext_table_def_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null external table def for dblink table", K(ret));
+      } else {
+        scan->set_dblink_id(table_item->ext_table_def_->dblink_id_); // will be delete after implement log_link_table_scan
+      }
+    }
     scan->set_sample_info(ap->sample_info_);
     scan->set_use_column_store(ap->use_column_store_);
     if (NULL != table_schema && table_schema->is_tmp_table()) {
@@ -1841,7 +1848,8 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
     scan->set_lake_table_format(table_schema->get_lake_table_format());
     scan->set_index_prefix(ap->index_prefix_);
     scan->set_mr_mv_scan(table_item->mr_mv_flags_);
-    if (!ap->is_inner_path_ &&
+    if (OB_FAIL(ret)) {
+    } else if (!ap->is_inner_path_ &&
         (OB_NOT_NULL(ap->pre_range_graph_) ? !ap->pre_range_graph_->has_fake_const_udf() : true) &&
         OB_FAIL(scan->set_query_ranges(ap->get_cost_table_scan_info().ranges_,
                                        ap->get_cost_table_scan_info().ss_ranges_))) {

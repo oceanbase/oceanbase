@@ -95,6 +95,19 @@ int ObBasicCatalogStatsEstimator::estimate(const ObOptCatalogStatGatherParam &pa
                            || OB_ISNULL(dst_opt_catalog_stats.at(0).table_stat_))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected error", K(ret), K(param.partition_infos_));
+    } else if (share::ObLakeTableFormat::ICEBERG == param.external_info_.lake_table_format_
+               && param.stat_level_ == PARTITION_LEVEL
+               && !param.partition_infos_.empty()
+               && !param.partition_infos_.at(0).partition_.empty()
+               ) {
+      if (OB_FAIL(ObDbmsCatalogStatsUtils::build_iceberg_partition_sql_clause(
+                      allocator, param.partition_infos_.at(0), partition_string_))) {
+        LOG_WARN("failed to build iceberg partition clause", K(ret), K(param.partition_infos_.at(0)));
+      } else if (OB_FAIL(ob_write_string(allocator,
+                                     dst_opt_catalog_stats.at(0).table_stat_->get_partition_value(),
+                                     src_table_stat->get_partition_value()))) {
+        LOG_WARN("failed to write iceberg partition value", K(ret), K(param.partition_infos_.at(0)));
+      }
     } else if (param.stat_level_ == PARTITION_LEVEL
                && !param.partition_infos_.empty()
                && OB_FAIL(ObCatalogStatsEstimator::fill_single_partition_info(
@@ -102,8 +115,7 @@ int ObBasicCatalogStatsEstimator::estimate(const ObOptCatalogStatGatherParam &pa
                    allocator,
                    param.partition_infos_.at(0).partition_values_))) {
       LOG_WARN("failed to add partition info for single partition", K(ret));
-    } else if (OB_FAIL(
-                   ob_write_string(allocator,
+    } else if (OB_FAIL(ob_write_string(allocator,
                                    dst_opt_catalog_stats.at(0).table_stat_->get_partition_value(),
                                    src_table_stat->get_partition_value()))) {
       LOG_WARN("failed to write partition value", K(ret));
@@ -124,6 +136,18 @@ int ObBasicCatalogStatsEstimator::estimate(const ObOptCatalogStatGatherParam &pa
                || OB_ISNULL(dst_opt_catalog_stats.at(0).table_stat_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected error", K(ret), K(param.partition_infos_));
+    } else if (share::ObLakeTableFormat::ICEBERG == param.external_info_.lake_table_format_
+               && param.stat_level_ == PARTITION_LEVEL
+               && !param.partition_infos_.empty()
+               && !param.partition_infos_.at(0).partition_.empty()) {
+      if (OB_FAIL(ObDbmsCatalogStatsUtils::build_iceberg_partition_sql_clause(
+                      allocator, param.partition_infos_.at(0), partition_string_))) {
+        LOG_WARN("failed to build iceberg partition clause", K(ret), K(param.partition_infos_.at(0)));
+      } else if (OB_FAIL(ob_write_string(allocator,
+                                     dst_opt_catalog_stats.at(0).table_stat_->get_partition_value(),
+                                     src_table_stat->get_partition_value()))) {
+        LOG_WARN("failed to write iceberg partition value", K(ret), K(param.partition_infos_.at(0)));
+      }
     } else if (param.stat_level_ == PARTITION_LEVEL
                && !param.partition_infos_.empty()
                && OB_FAIL(

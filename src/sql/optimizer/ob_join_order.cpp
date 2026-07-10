@@ -22,6 +22,9 @@
 #include "sql/optimizer/ob_lake_table_partition_info.h"
 #include "share/stat/ob_lake_table_stat.h"
 #include "share/external_table/ob_external_table_file_mgr.h"
+#include "sql/table_format/iceberg/ob_iceberg_table_metadata.h"
+#include "sql/table_format/iceberg/spec/partition.h"
+#include "sql/table_format/iceberg/spec/schema.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "sql/engine/expr/ob_expr_json_utils.h"
 #include "sql/ob_sql_utils.h"
@@ -12692,16 +12695,24 @@ int ObJoinOrder::init_base_join_order(const TableItem *table_item)
     table_id_ = table_item->table_id_;
     table_meta_info_.ref_table_id_ = table_item->ref_id_;
     table_meta_info_.table_type_ = table_item->table_type_;
-    table_meta_info_.lake_table_format_ = table_item->lake_table_format_;
-    table_meta_info_.lake_table_snapshot_id_ = table_item->lake_table_snapshot_id_;
+    if (table_item->is_external_table()) {
+      if (OB_ISNULL(table_item->ext_table_def_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null external table def", K(ret), KPC(table_item));
+      } else {
+        table_meta_info_.lake_table_format_ = table_item->ext_table_def_->lake_table_format_;
+        table_meta_info_.lake_table_snapshot_id_ = table_item->ext_table_def_->lake_table_snapshot_id_;
+      }
+    }
     table_bit_index = stmt->get_table_bit_index(table_item->table_id_);
 
-    if (OB_FAIL(get_tables().add_member(table_bit_index)) ||
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(get_tables().add_member(table_bit_index)) ||
         OB_FAIL(get_output_tables().add_member(table_bit_index))) {
       LOG_WARN("failed to add member", K(table_bit_index), K(ret));
     } else if (table_item->is_basic_table()) {
-      if (share::ObLakeTableFormat::ICEBERG == table_item->lake_table_format_ ||
-          share::ObLakeTableFormat::HIVE == table_item->lake_table_format_) {
+      if (share::ObLakeTableFormat::ICEBERG == table_meta_info_.lake_table_format_ ||
+          share::ObLakeTableFormat::HIVE == table_meta_info_.lake_table_format_) {
         set_type(LAKE_TABLE_ACCESS);
       } else {
         set_type(ACCESS);
@@ -25196,6 +25207,11 @@ int ObJoinOrder::get_iceberg_table_stat(ObIAllocator &allocator,
                                                                        column_stats,
                                                                        &allocator))) {
     LOG_WARN("failed to construct table stat from iceberg");
+  } else if (OB_FAIL(ObExternalTableUtils::collect_iceberg_partition_values(
+                                                                       allocator,
+                                                                       lake_table_partition_info->get_file_descs(),
+                                                                       partition_names))) {
+    LOG_WARN("failed to collect iceberg partition stats keys", K(ret));
   } else if (OB_FAIL(get_common_lake_table_stat(allocator,
                                                 ref_table_id,
                                                 column_exprs,
@@ -25231,7 +25247,7 @@ int ObJoinOrder::get_common_lake_table_stat(ObIAllocator &allocator,
   ObOptimizerContext *opt_ctx = NULL;
   ObSqlSchemaGuard *sql_schema_guard = NULL;
   ObSEArray<ObString, 16> column_names;
-
+  LOG_TRACE("partition infos", K(partition_names));
   for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs.count(); ++i) {
     const ObColumnRefRawExpr *col_expr = column_exprs.at(i);
     if (OB_ISNULL(col_expr)) {

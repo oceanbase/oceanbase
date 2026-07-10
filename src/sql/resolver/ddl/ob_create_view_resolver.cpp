@@ -708,11 +708,21 @@ int ObCreateViewResolver::get_sel_priv_tables_in_subquery(const ObSelectStmt *se
     for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_table_items().count(); i++) {
       const TableItem *table_item = select_stmt->get_table_item(i);
       const TableItem *dummy_item = NULL;
+      bool need_collect_priv = true;
       if (OB_ISNULL(table_item)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table_item is NULL ptr", K(ret));
-      } else if (!(table_item->is_basic_table() || table_item->is_view_table_) ||
-                 (table_item->database_name_.empty() && !table_item->dblink_name_.empty())) {
+      } else if (!(table_item->is_basic_table() || table_item->is_view_table_)) {
+        need_collect_priv = false;
+      } else if (table_item->database_name_.empty() && table_item->is_link_type()) {
+        if (OB_ISNULL(table_item->ext_table_def_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null external table def for dblink table", K(ret), KPC(table_item));
+        } else if (!table_item->ext_table_def_->dblink_name_.empty()) {
+          need_collect_priv = false;
+        }
+      }
+      if (OB_FAIL(ret) || !need_collect_priv) {
         /* do nothing */
       } else if (OB_FAIL(select_tables.get_refactored(table_item->ref_id_, dummy_item))) {
         if (OB_HASH_NOT_EXIST != ret) {
@@ -818,11 +828,21 @@ int ObCreateViewResolver::get_need_priv_tables(ObSelectStmt &root_stmt,
     for (int64_t i = 0; OB_SUCC(ret) && i < root_stmt.get_table_items().count(); i++) {
       const TableItem *table_item = root_stmt.get_table_item(i);
       bool is_database_name_equal = false;
+      bool need_collect_priv = true;
       if (OB_ISNULL(table_item)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table item is null");
-      } else if (!(table_item->is_basic_table() || table_item->is_view_table_) ||
-                 (table_item->database_name_.empty() && !table_item->dblink_name_.empty())) {
+      } else if (!(table_item->is_basic_table() || table_item->is_view_table_)) {
+        need_collect_priv = false;
+      } else if (table_item->database_name_.empty() && table_item->is_link_type()) {
+        if (OB_ISNULL(table_item->ext_table_def_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null external table def for dblink table", K(ret), KPC(table_item));
+        } else if (!table_item->ext_table_def_->dblink_name_.empty()) {
+          need_collect_priv = false;
+        }
+      }
+      if (OB_FAIL(ret) || !need_collect_priv) {
         /* do nothing */
       } else if (OB_FAIL(select_tables.get_refactored(table_item->ref_id_, dummy_item))) {
         if (OB_HASH_NOT_EXIST != ret) {

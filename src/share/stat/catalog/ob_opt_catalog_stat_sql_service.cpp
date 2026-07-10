@@ -429,6 +429,7 @@ int ObOptCatalogStatSqlService::fetch_catalog_column_stats_from_system_table(
     const ObString &database_name,
     const ObString &table_name,
     const share::schema::ObTableSchema *table_schema,
+    const bool skip_partition_column_filter,
     const ObIArray<ObString> &partition_values,
     const ObIArray<ObString> &column_names,
     ObIAllocator &allocator,
@@ -449,7 +450,9 @@ int ObOptCatalogStatSqlService::fetch_catalog_column_stats_from_system_table(
 
   ObSEArray<ObString, 8> filtered_column_names;
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(filter_partition_columns(table_schema, column_names, filtered_column_names))) {
+  } else if (skip_partition_column_filter && OB_FAIL(filtered_column_names.assign(column_names))) {
+    LOG_WARN("failed to assign column names", K(ret), K(column_names.count()));
+  } else if (!skip_partition_column_filter && OB_FAIL(filter_partition_columns(table_schema, column_names, filtered_column_names))) {
     LOG_WARN("failed to filter partition columns", K(ret));
   } else if (filtered_column_names.empty()) {
     // all columns are partition columns, return success
@@ -542,7 +545,7 @@ int ObOptCatalogStatSqlService::get_catalog_table_stat_sql(
       || OB_FAIL(dml_splicer.add_pk_column("catalog_id", catalog_table_stat.get_catalog_id()))
       || OB_FAIL(dml_splicer.add_pk_column("db_name", catalog_table_stat.get_database_name()))
       || OB_FAIL(dml_splicer.add_pk_column("table_name", catalog_table_stat.get_table_name()))
-      || OB_FAIL(dml_splicer.add_pk_column("partition_value", partition_value))
+      || OB_FAIL(dml_splicer.add_pk_column("partition_value", ObHexEscapeSqlStr(partition_value)))
       || OB_FAIL(dml_splicer.add_column("schema_version", catalog_table_stat.get_schema_version()))
       || OB_FAIL(
           dml_splicer.add_time_column("last_analyzed", catalog_table_stat.get_last_analyzed()))
@@ -737,7 +740,7 @@ int ObOptCatalogStatSqlService::get_catalog_column_stat_sql(
         || OB_FAIL(dml_splicer.add_pk_column("catalog_id", stat.get_catalog_id()))
         || OB_FAIL(dml_splicer.add_pk_column("db_name", stat.get_database_name()))
         || OB_FAIL(dml_splicer.add_pk_column("table_name", stat.get_table_name()))
-        || OB_FAIL(dml_splicer.add_pk_column("partition_value", partition_value))
+        || OB_FAIL(dml_splicer.add_pk_column("partition_value", ObHexEscapeSqlStr(partition_value)))
         || OB_FAIL(dml_splicer.add_pk_column("column_name", stat.get_column_name())) ||
         // Add statistics columns
         OB_FAIL(dml_splicer.add_time_column(

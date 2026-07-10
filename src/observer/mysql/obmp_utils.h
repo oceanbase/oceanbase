@@ -55,7 +55,7 @@ public:
                             sql::ObSQLSessionInfo &session,
                             const bool only_changed = false);
   static int add_cap_flag(obmysql::OMPKOK &okp, sql::ObSQLSessionInfo &session);
-private:
+
   static int get_plain_str_literal(common::ObIAllocator &allocator, const common::ObObj &obj,
                                    common::ObString &value_str);
 

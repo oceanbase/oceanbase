@@ -2232,18 +2232,22 @@ int ObInsertLogPlan::allocate_select_into_as_top_for_insert(ObLogicalOperator *&
     if (OB_SUCC(ret)) {
       select_into->set_is_overwrite(stmt->is_external_table_overwrite());
       select_into->set_external_properties(external_properties);
-      select_into->set_external_partition(stmt->get_table_item(0)->external_table_partition_);
       select_into->set_child(ObLogicalOperator::first_child, old_top);
       select_into->set_is_single(false);
-
       outfile_obj.set_varchar(outfile_name_str);
       outfile_obj.set_collation_type(session_info->get_local_collation_connection());
       select_into->set_outfile_name(outfile_obj);
 
-      if (select_into->get_external_partition().empty() && table_schema.is_partitioned_table()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert into partitioned external table");
-        LOG_WARN("not support to insert into partitioned external table", K(ret));
+      if (OB_ISNULL(stmt->get_table_item(0)->ext_table_def_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null external table def", K(ret));
+      } else {
+        select_into->set_external_partition(stmt->get_table_item(0)->ext_table_def_->external_table_partition_);
+        if (select_into->get_external_partition().empty() && table_schema.is_partitioned_table()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert into partitioned external table");
+          LOG_WARN("not support to insert into partitioned external table", K(ret));
+        }
       }
     }
 

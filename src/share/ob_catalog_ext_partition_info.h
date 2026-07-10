@@ -20,8 +20,9 @@ namespace common
 struct ObCatalogExtPartitionInfo
 {
   ObCatalogExtPartitionInfo()
-      : partition_(), path_(), partition_values_(), modify_ts_(0), data_size_(0), file_num_(0),
-        schema_version_(0), part_stattype_(0)
+      : partition_(), path_(), partition_values_(), iceberg_part_names_(), iceberg_part_sql_literals_(),
+        modify_ts_(0), data_size_(0), file_num_(0), schema_version_(0), part_stattype_(0),
+        iceberg_spec_id_(-1)
   {
   }
 
@@ -30,11 +31,14 @@ struct ObCatalogExtPartitionInfo
   ObString partition_;
   ObString path_;
   ObSEArray<ObString, 4> partition_values_;
+  ObSEArray<ObString, 4> iceberg_part_names_;
+  ObSEArray<ObString, 4> iceberg_part_sql_literals_;
   int64_t modify_ts_;
   int64_t data_size_;
   int64_t file_num_;
   int64_t schema_version_;
   int64_t part_stattype_;
+  int64_t iceberg_spec_id_;
 
   int64_t get_size() const
   {
@@ -44,11 +48,20 @@ struct ObCatalogExtPartitionInfo
     for (int64_t i = 0; i < partition_values_.count(); ++i) {
       size += sizeof(ObString) + partition_values_.at(i).length() + 1;
     }
+    for (int64_t i = 0; i < iceberg_part_names_.count(); ++i) {
+      size += sizeof(ObString) + iceberg_part_names_.at(i).length() + 1;
+    }
+    for (int64_t i = 0; i < iceberg_part_sql_literals_.count(); ++i) {
+      size += sizeof(ObString) + iceberg_part_sql_literals_.at(i).length() + 1;
+    }
     return size;
   }
 
   TO_STRING_KV(K_(partition),
                K_(path),
+               K_(iceberg_part_names),
+               K_(iceberg_part_sql_literals),
+               K_(iceberg_spec_id),
                K_(modify_ts),
                K_(file_num),
                K_(data_size),

@@ -3308,7 +3308,16 @@ int ObSelectResolver::transfer_rb_iterate_items()
     OZ( column_namespace_checker_.add_reference_table(table_item), table_item );
     OZ( select_stmt->add_from_item(table_item->table_id_, table_item->is_joined_table()) );
     OZ( add_from_items_order(table_item), table_item );
-    OX( select_stmt->set_has_reverse_link(table_item->is_reverse_link_) );
+    if (OB_SUCC(ret)) {
+      if (table_item->is_link_type()) {
+        if (OB_ISNULL(table_item->ext_table_def_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null external table def for dblink table", K(ret));
+        } else {
+          select_stmt->set_has_reverse_link(table_item->ext_table_def_->is_reverse_link_);
+        }
+      }
+    }
   }
 
   return ret;
@@ -4721,8 +4730,13 @@ int ObSelectResolver::resolve_from_clause(const ParseNode *node)
       OZ( select_stmt->add_from_item(table_item->table_id_, table_item->is_joined_table()) );
       // oracle outer join will change from items
       OZ( add_from_items_order(table_item), table_item );
-      if (OB_SUCC(ret)) {
-        select_stmt->set_has_reverse_link(table_item->is_reverse_link_);
+      if (OB_SUCC(ret) && table_item->is_link_type()) {
+        if (OB_ISNULL(table_item->ext_table_def_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null external table def for dblink table", K(ret));
+        } else {
+          select_stmt->set_has_reverse_link(table_item->ext_table_def_->is_reverse_link_);
+        }
       }
     }
     OZ( check_recursive_cte_usage(*select_stmt) );

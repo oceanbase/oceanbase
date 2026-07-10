@@ -23,12 +23,237 @@
 #include "lib/string/ob_sql_string.h"
 #include "lib/utility/utility.h"
 #include "sql/engine/ob_exec_context.h"
+#include "lib/timezone/ob_time_convert.h"
+#include "share/ob_catalog_ext_partition_info.h"
+#include "observer/mysql/obmp_utils.h"
+#include "sql/table_format/iceberg/ob_iceberg_table_metadata.h"
+#include "sql/table_format/iceberg/spec/manifest.h"
+#include "sql/table_format/iceberg/spec/table_metadata.h"
+#include "share/external_table/ob_external_table_utils.h"
+#include <algorithm>
 
 namespace oceanbase
 {
 using namespace sql;
 namespace common
 {
+
+int ObDbmsCatalogStatsUtils::build_iceberg_partition_sql_clause(
+    ObIAllocator &allocator,
+    const common::ObCatalogExtPartitionInfo &partition_info,
+    ObString &partition_clause)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  partition_clause.reset();
+  if (OB_UNLIKELY(partition_info.iceberg_spec_id_ < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid iceberg spec id", K(ret), K(partition_info));
+  } else if (OB_UNLIKELY(partition_info.iceberg_part_names_.count()
+                         != partition_info.iceberg_part_sql_literals_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("iceberg partition field count does not match sql literal count",
+             K(ret),
+             K(partition_info));
+  } else if (OB_FAIL(sql.append("PARTITION("))) {
+    LOG_WARN("failed to start iceberg partition clause", K(ret));
+  } else if (OB_FAIL(sql.append_fmt("spec_id=%ld", partition_info.iceberg_spec_id_))) {
+    LOG_WARN("failed to append iceberg spec id", K(ret), K(partition_info.iceberg_spec_id_));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < partition_info.iceberg_part_names_.count(); ++i) {
+      const ObString &field_name = partition_info.iceberg_part_names_.at(i);
+      const ObString &sql_literal = partition_info.iceberg_part_sql_literals_.at(i);
+      if (OB_FAIL(sql.append_fmt(", %.*s=", field_name.length(), field_name.ptr()))) {
+        LOG_WARN("failed to append iceberg partition field name", K(ret), K(field_name), K(i));
+      } else if (OB_FAIL(sql.append(sql_literal))) {
+        LOG_WARN("failed to append iceberg partition sql literal", K(ret), K(sql_literal), K(i));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(sql.append(")"))) {
+    LOG_WARN("failed to close iceberg partition clause", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, sql.string(), partition_clause, true))) {
+    LOG_WARN("failed to write iceberg partition clause", K(ret));
+  }
+  LOG_TRACE("catalog stat, iceberg partition clause", K(ret), K(partition_clause));
+  return ret;
+}
+
+int ObDbmsCatalogStatsUtils::build_iceberg_partition_info(
+                                            common::ObIAllocator &allocator,
+                                            const sql::iceberg::PartitionSpec &partition_spec,
+                                            const common::ObIArray<common::ObObj> &partition_values,
+                                            common::ObCatalogExtPartitionInfo &partition_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(partition_spec.fields.count() != partition_values.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("partition field count does not match values",
+             K(ret), K(partition_spec.fields.count()), K(partition_values.count()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < partition_spec.fields.count(); ++i) {
+      const sql::iceberg::PartitionField *field = partition_spec.fields.at(i);
+      ObString field_name;
+      common::ObString partition_value_plain;
+      common::ObString partition_value_sql_literal;
+      if (OB_ISNULL(field)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("partition field is null", K(ret), K(i));
+      } else if (FALSE_IT(field_name = field->name)) {
+      } else if (partition_values.at(i).is_null()) {
+        if (OB_FAIL(ob_write_string(allocator, ObString("NULL"), partition_value_plain, true))) {
+          LOG_WARN("failed to write null partition value", K(ret), K(i));
+        }
+      } else if (OB_FAIL(observer::ObMPUtils::get_plain_str_literal(
+                             allocator, partition_values.at(i), partition_value_plain))) {
+        LOG_WARN("failed to print plain partition value", K(ret), K(i));
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(partition_info.partition_values_.push_back(partition_value_plain))) {
+        LOG_WARN("failed to push partition value", K(ret));
+      } else if (sql::iceberg::TransformType::Void == field->transform.transform_type) {
+        // Void fields are not rendered in Iceberg PARTITION(...) syntax.
+      } else {
+        const common::ObObj &obj = partition_values.at(i);
+        common::ObString field_name_copy;
+        if (OB_FAIL(ob_write_string(allocator, field_name, field_name_copy, true))) {
+          LOG_WARN("failed to write iceberg partition field name", K(ret), K(field_name));
+        } else if (OB_FAIL(partition_info.iceberg_part_names_.push_back(field_name_copy))) {
+          LOG_WARN("failed to push iceberg partition field name", K(ret), K(field_name));
+        } else if (obj.is_null()) {
+          if (OB_FAIL(ob_write_string(allocator, ObString("NULL"), partition_value_sql_literal, true))) {
+            LOG_WARN("failed to write null partition sql literal", K(ret), K(i));
+          }
+        } else if (OB_FAIL(observer::ObMPUtils::get_user_sql_literal(allocator,
+                                                                     obj,
+                                                                     partition_value_sql_literal,
+                                                                     ObObjPrintParams()))) {
+          LOG_WARN("failed to print iceberg partition sql literal", K(ret), K(obj));
+        }
+
+        if (OB_SUCC(ret)
+           && OB_FAIL(partition_info.iceberg_part_sql_literals_.push_back(partition_value_sql_literal))) {
+          LOG_WARN("failed to push iceberg partition sql literal", K(ret), K(partition_value_sql_literal));
+        }
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (FALSE_IT(partition_info.iceberg_spec_id_ = partition_spec.spec_id)) {
+  } else if (OB_FAIL(ObExternalTableUtils::build_iceberg_partition_json_desc(
+                         allocator,
+                         partition_spec,
+                         partition_values,
+                         partition_info.partition_))) {
+    LOG_WARN("failed to build iceberg partition json", K(ret));
+  }
+
+  return ret;
+}
+
+int ObDbmsCatalogStatsUtils::collect_iceberg_partition_infos(
+                                    common::ObIAllocator &allocator,
+                                    share::ObILakeTableMetadata *lake_table_metadata,
+                                    common::ObIArray<common::ObCatalogExtPartitionInfo> &partition_infos,
+                                    int64_t &global_modified_ts)
+{
+  int ret = OB_SUCCESS;
+  partition_infos.reset();
+  global_modified_ts = -1;
+  sql::iceberg::ObIcebergTableMetadata *iceberg_metadata = nullptr;
+  sql::iceberg::Snapshot *current_snapshot = nullptr;
+  common::ObArray<sql::iceberg::ManifestFile *> manifest_files;
+  hash::ObHashMap<sql::iceberg::PartitionKey, int64_t> partition_index_map;
+  if (OB_ISNULL(lake_table_metadata)
+      || OB_UNLIKELY(share::ObLakeTableFormat::ICEBERG != lake_table_metadata->get_format_type())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid iceberg metadata", K(ret));
+  } else if (FALSE_IT(iceberg_metadata =
+                          static_cast<sql::iceberg::ObIcebergTableMetadata *>(lake_table_metadata))) {
+  } else if (OB_FAIL(iceberg_metadata->table_metadata_.get_current_snapshot(current_snapshot))) {
+    if (OB_ERR_TABLE_SNAPSHOT_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      current_snapshot = nullptr;
+    } else {
+      LOG_WARN("failed to get current snapshot", K(ret));
+    }
+  } else if (OB_ISNULL(current_snapshot)) {
+    // empty iceberg table
+  } else if (OB_FAIL(current_snapshot->get_manifest_files(iceberg_metadata->access_info_, manifest_files))) {
+    LOG_WARN("failed to get manifest files", K(ret));
+  } else if (OB_FAIL(partition_index_map.create(std::max<int64_t>(64, manifest_files.count() * 16),
+                                                "IcePartIdx",
+                                                "IcePartIdx"))) {
+    LOG_WARN("failed to create iceberg partition map", K(ret), K(manifest_files.count()));
+  } else {
+    global_modified_ts = current_snapshot->timestamp_ms * 1000L;
+    for (int64_t i = 0; OB_SUCC(ret) && i < manifest_files.count(); ++i) {
+      sql::iceberg::ManifestFile *manifest_file = manifest_files.at(i);
+      common::ObArray<sql::iceberg::ManifestEntry *> manifest_entries;
+      if (OB_ISNULL(manifest_file)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("manifest file is null", K(ret), K(i));
+      } else if (OB_FAIL(manifest_file->get_manifest_entries(iceberg_metadata->access_info_,
+                                                             manifest_entries))) {
+        LOG_WARN("failed to get manifest entries", K(ret), K(i), K(manifest_file->partition_spec_id));
+      } else {
+        for (int64_t j = 0; OB_SUCC(ret) && j < manifest_entries.count(); ++j) {
+          sql::iceberg::ManifestEntry *manifest_entry = manifest_entries.at(j);
+          if (OB_ISNULL(manifest_entry)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("manifest entry is null", K(ret), K(i), K(j));
+          } else if (!manifest_entry->is_alive() || !manifest_entry->is_data_file()) {
+            // only collect current live data files
+          } else {
+            sql::iceberg::PartitionKey partition_key;
+            int64_t part_idx = -1;
+            if (OB_FAIL(partition_key.init_from_manifest_entry(*manifest_entry))) {
+              LOG_WARN("failed to init partition key", K(ret), K(i), K(j));
+            } else {
+              int hash_ret = partition_index_map.get_refactored(partition_key, part_idx);
+              if (OB_HASH_NOT_EXIST == hash_ret) {
+                common::ObCatalogExtPartitionInfo partition_info;
+                partition_info.file_num_ = 1;
+                partition_info.data_size_ = manifest_entry->data_file.file_size_in_bytes;
+                partition_info.modify_ts_ = global_modified_ts;
+                partition_info.schema_version_ = lake_table_metadata->lake_table_metadata_version_;
+                if (OB_FAIL(build_iceberg_partition_info(allocator,
+                                                         manifest_entry->partition_spec,
+                                                         manifest_entry->data_file.partition,
+                                                         partition_info))) {
+                  LOG_WARN("failed to build iceberg partition info", K(ret), K(i), K(j));
+                } else if (OB_FAIL(partition_infos.push_back(partition_info))) {
+                  LOG_WARN("failed to push back iceberg partition info", K(ret));
+                } else if (FALSE_IT(part_idx = partition_infos.count() - 1)) {
+                } else if (OB_FAIL(partition_index_map.set_refactored(partition_key, part_idx))) {
+                  LOG_WARN("failed to set partition key index", K(ret), K(part_idx));
+                }
+              } else if (OB_SUCCESS != hash_ret) {
+                ret = hash_ret;
+                LOG_WARN("failed to get partition key index", K(ret), K(i), K(j));
+              } else if (OB_UNLIKELY(part_idx < 0 || part_idx >= partition_infos.count())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("invalid partition index", K(ret), K(part_idx), K(partition_infos.count()));
+              } else {
+                partition_infos.at(part_idx).file_num_ += 1;
+                partition_infos.at(part_idx).data_size_ += manifest_entry->data_file.file_size_in_bytes;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (partition_index_map.created()) {
+    partition_index_map.destroy();
+  }
+  return ret;
+}
 
 int ObDbmsCatalogStatsUtils::classify_catalog_opt_stat(
     const ObIArray<ObOptCatalogStat> &catalog_stats,
@@ -559,39 +784,6 @@ int ObDbmsCatalogStatsUtils::prepare_gather_stat_param(const ObCatalogTableStatP
   // gather_param.use_part_derive_global_ = param.use_part_derive_global_;
   if (OB_SUCC(ret) && OB_FAIL(gather_param.column_params_.assign(param.column_params_))) {
     LOG_WARN("failed to assign", K(ret));
-  }
-  return ret;
-}
-
-int ObDbmsCatalogStatsUtils::normalize_iceberg_gather_param_to_table_level(
-    ObOptCatalogStatGatherParam &param)
-{
-  int ret = OB_SUCCESS;
-  if (share::ObLakeTableFormat::ICEBERG != param.external_info_.lake_table_format_) {
-    // not Iceberg
-  } else if (TABLE_LEVEL == param.stat_level_ && param.part_cols_.empty()) {
-    // Already normalized to table level by executor layer, nothing to do.
-  } else {
-    // Defensive fallback: normalize partition-level params to table-level.
-    param.part_cols_.reset();
-    param.is_specify_partition_ = false;
-    ObCatalogExtPartitionInfo merged;
-    merged.part_stattype_ = param.stattype_;
-    for (int64_t i = 0; OB_SUCC(ret) && i < param.partition_infos_.count(); ++i) {
-      const ObCatalogExtPartitionInfo &p = param.partition_infos_.at(i);
-      merged.data_size_ += p.data_size_;
-      merged.file_num_ += p.file_num_;
-      merged.modify_ts_ = std::max(merged.modify_ts_, p.modify_ts_);
-      merged.schema_version_ = std::max(merged.schema_version_, p.schema_version_);
-    }
-    if (OB_SUCC(ret)) {
-      param.partition_infos_.reset();
-      if (OB_FAIL(param.partition_infos_.push_back(merged))) {
-        LOG_WARN("failed to push merged iceberg partition info", K(ret));
-      } else {
-        param.stat_level_ = TABLE_LEVEL;
-      }
-    }
   }
   return ret;
 }

@@ -8,6 +8,7 @@
 #include "sql/optimizer/ob_log_join.h"
 #include "share/vector_index/ob_vector_index_util.h"
 #include "share/domain_id/ob_domain_id.h"
+#include "share/external_table/ob_external_table_utils.h"
 #include "plugin/interface/ob_plugin_external_intf.h"
 #include "sql/optimizer/ob_lake_table_partition_info.h"
 #include "sql/optimizer/file_prune/ob_hive_file_pruner.h"
@@ -535,9 +536,7 @@ int ObLogTableScan::extract_file_column_exprs_recursively(ObRawExpr *expr)
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
-  } else if (T_PSEUDO_EXTERNAL_FILE_COL == expr->get_expr_type() ||
-             T_PSEUDO_PARTITION_LIST_COL == expr->get_expr_type() ||
-             T_PSEUDO_EXTERNAL_FILE_URL == expr->get_expr_type()) {
+  } else if (ObExternalTableUtils::is_external_table_psudo_expr(expr->get_expr_type())) {
     auto pseudo_col_expr = static_cast<ObPseudoColumnRawExpr*>(expr);
     if (pseudo_col_expr->get_table_id() != table_id_) {
       //table id may be changed because of rewrite
@@ -2599,22 +2598,27 @@ int ObLogTableScan::get_plan_object_info(PlanText &plan_text,
                     plan_item.object_type_len_);
       plan_item.object_id_ = ref_table_id_;
     } else if (table_item->is_link_table()) {
-      BUF_PRINT_OB_STR(table_item->dblink_name_.ptr(),
-                      table_item->dblink_name_.length(),
-                      plan_item.object_node_,
-                      plan_item.object_node_len_);
-      BUF_PRINT_OB_STR(table_item->database_name_.ptr(),
-                      table_item->database_name_.length(),
-                      plan_item.object_owner_,
-                      plan_item.object_owner_len_);
-      BUF_PRINT_OB_STR(table_item->table_name_.ptr(),
-                      table_item->table_name_.length(),
-                      plan_item.object_name_,
-                      plan_item.object_name_len_);
-      BUF_PRINT_STR("DBLINK",
-                    plan_item.object_type_,
-                    plan_item.object_type_len_);
-      plan_item.object_id_ = ref_table_id_;
+      if (OB_ISNULL(table_item->ext_table_def_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null external table def for dblink table", K(ret));
+      } else {
+        BUF_PRINT_OB_STR(table_item->ext_table_def_->dblink_name_.ptr(),
+                        table_item->ext_table_def_->dblink_name_.length(),
+                        plan_item.object_node_,
+                        plan_item.object_node_len_);
+        BUF_PRINT_OB_STR(table_item->database_name_.ptr(),
+                        table_item->database_name_.length(),
+                        plan_item.object_owner_,
+                        plan_item.object_owner_len_);
+        BUF_PRINT_OB_STR(table_item->table_name_.ptr(),
+                        table_item->table_name_.length(),
+                        plan_item.object_name_,
+                        plan_item.object_name_len_);
+        BUF_PRINT_STR("DBLINK",
+                      plan_item.object_type_,
+                      plan_item.object_type_len_);
+        plan_item.object_id_ = ref_table_id_;
+      }
     } else if (table_item->is_fake_cte_table()) {
       BUF_PRINT_OB_STR(table_item->table_name_.ptr(),
                       table_item->table_name_.length(),

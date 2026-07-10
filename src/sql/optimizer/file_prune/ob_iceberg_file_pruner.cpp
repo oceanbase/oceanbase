@@ -12,6 +12,8 @@
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "sql/optimizer/ob_optimizer_util.h"
+#include "share/object/ob_obj_cast.h"
+#include "share/external_table/ob_external_table_utils.h"
 #include "sql/table_format/iceberg/ob_iceberg_utils.h"
 #include "sql/table_format/iceberg/scan/conversions.h"
 #include "sql/table_format/iceberg/scan/delete_file_index.h"
@@ -1012,6 +1014,113 @@ int ObIcebergFilePrunner::prune_manifest_files(ObIArray<iceberg::ManifestFile*> 
   return ret;
 }
 
+int ObIcebergFilePrunner::prune_manifest_files_by_partition_clause(
+    ObIArray<iceberg::ManifestFile*> &manifest_files,
+    const ObIArray<ObString> &partition_names,
+    const ObIArray<ObObj> &partition_values,
+    int32_t expected_spec_id,
+    const ObIArray<iceberg::PartitionSpec*> &partition_specs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(partition_names.count() != partition_values.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("partition names and values count mismatch", K(ret), K(partition_names.count()), K(partition_values.count()));
+  } else {
+    iceberg::PartitionSpec *target_spec = nullptr;
+    for (int64_t i = 0; OB_ISNULL(target_spec) && i < partition_specs.count(); ++i) {
+      if (OB_NOT_NULL(partition_specs.at(i))
+          && partition_specs.at(i)->spec_id == expected_spec_id) {
+        target_spec = partition_specs.at(i);
+      }
+    }
+    CK (OB_NOT_NULL(target_spec));
+    ObSEArray<iceberg::ManifestFile*, 16> valid_files;
+    ObArenaAllocator tmp_allocator("FilePruneTmp", OB_MALLOC_MIDDLE_BLOCK_SIZE, MTL_ID());
+    for (int64_t i = 0; OB_SUCC(ret) && i < manifest_files.count(); ++i) {
+      iceberg::ManifestFile *mf = manifest_files.at(i);
+      bool in_bound = true;
+      if (OB_ISNULL(mf)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("null manifest file in partition clause prune", K(ret), K(i));
+      } else if (mf->partition_spec_id != expected_spec_id) {
+        in_bound = false;
+      } else if (mf->partitions.empty()
+                 || mf->partitions.count() != target_spec->fields.count()) {
+        // 无法做 bounds 检查，保留
+      } else {
+        for (int64_t j = 0; OB_SUCC(ret) && in_bound && j < target_spec->fields.count(); ++j) {
+          const iceberg::PartitionField *field = target_spec->fields.at(j);
+          iceberg::PartitionFieldSummary *summary = mf->partitions.at(j);
+          if (OB_ISNULL(field) || OB_ISNULL(summary)) {
+            // do nothing
+          } else if (iceberg::TransformType::Void == field->transform.transform_type) {
+            // do nothing
+          } else {
+            const ObObj *query_val = nullptr;
+            uint64_t ob_column_id = iceberg::ObIcebergUtils::get_ob_column_id(field->source_id);
+            int64_t col_idx = -1;
+            tmp_allocator.reuse();
+            ObFieldBound manifest_bound;
+            for (int64_t k = 0; OB_ISNULL(query_val) && k < partition_names.count(); ++k) {
+              if (0 == partition_names.at(k).compare(field->name)) {
+                query_val = &partition_values.at(k);
+              }
+            }
+            if (OB_ISNULL(query_val)) {
+              // do nothing
+            } else if (!ObOptimizerUtil::find_item(column_ids_, ob_column_id, &col_idx)) {
+              // do nothing
+            } else if (OB_FAIL(from_partition_field_summary(tmp_allocator, manifest_bound,
+                                                    field->transform.transform_type,
+                                                    column_metas_.at(col_idx),
+                                                    *summary))) {
+              LOG_WARN("failed to init field bound from partition field summary");
+            } else if (query_val->is_null()) {
+              ObFieldBound query_bound;
+              query_bound.contains_null_ = true;
+              query_bound.is_valid_range_ = false;
+              in_bound = query_bound.is_intersect(manifest_bound);
+            } else {
+              const ObObj &type_ref = !manifest_bound.lower_bound_.is_min_value()
+                                      ? manifest_bound.lower_bound_
+                                      : manifest_bound.upper_bound_;
+              if (!type_ref.is_min_value() && !type_ref.is_max_value()) {
+                ObObj normalized_query_val;
+                ObFieldBound query_bound;
+                ObCastCtx cast_ctx(&tmp_allocator, NULL, CM_NONE, type_ref.get_collation_type());
+                if (OB_FAIL(ObObjCaster::to_type(type_ref.get_type(),
+                                                 type_ref.get_collation_type(),
+                                                 cast_ctx,
+                                                 *query_val,
+                                                 normalized_query_val))) {
+                  LOG_WARN("failed to cast partition clause value", K(ret), K(j), KPC(query_val), K(type_ref));
+                } else {
+                  query_bound.include_lower_ = true;
+                  query_bound.lower_bound_ = normalized_query_val;
+                  query_bound.include_upper_ = true;
+                  query_bound.upper_bound_ = normalized_query_val;
+                  in_bound = query_bound.is_intersect(manifest_bound);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      if (OB_SUCC(ret) && in_bound) {
+        if (OB_FAIL(valid_files.push_back(mf))) {
+          LOG_WARN("failed to push back valid manifest file", K(ret));
+        }
+      }
+    }
+
+    if (OB_SUCC(ret) && OB_FAIL(manifest_files.assign(valid_files))) {
+      LOG_WARN("failed to assign manifest files after partition clause prune", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObIcebergFilePrunner::check_manifest_file_in_bound(ObIAllocator &allocator,
                                                        iceberg::ManifestFile& manifest_file,
                                                        ObIcebergPartBound& part_bound,
@@ -1236,5 +1345,85 @@ int ObIcebergFilePrunner::check_manifest_entry_in_bound(iceberg::ManifestEntry& 
   }
   return ret;
 }
+
+int ObIcebergFilePrunner::prune_manifest_entries_by_partition_clause(
+    const ObIArray<ObString> &partition_names,
+    const ObIArray<ObObj> &partition_values,
+    int32_t expected_spec_id,
+    common::ObSEArray<iceberg::ManifestEntry *, 16> &manifest_entries)
+{
+  int ret = OB_SUCCESS;
+  common::ObSEArray<iceberg::ManifestEntry *, 16> filtered;
+
+  if (OB_UNLIKELY(partition_names.count() != partition_values.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("partition clause names and values count mismatch",
+             K(ret), K(partition_names.count()), K(partition_values.count()));
+  } else if (!partition_names.empty()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < manifest_entries.count(); ++i) {
+      iceberg::ManifestEntry *entry = manifest_entries.at(i);
+      if (OB_ISNULL(entry)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("null manifest entry", K(ret), K(i));
+      } else if (entry->partition_spec_id != expected_spec_id) {
+      } else {
+        bool match = true;
+        const iceberg::PartitionSpec &spec = entry->partition_spec;
+        const common::ObIArray<common::ObObj> &pvals = entry->data_file.partition;
+        for (int64_t j = 0; OB_SUCC(ret) && j < spec.fields.count() && match; ++j) {
+          const iceberg::PartitionField *field = spec.fields.at(j);
+          if (OB_ISNULL(field)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("null partition field", K(ret), K(j));
+          } else if (iceberg::TransformType::Void == field->transform.transform_type) {
+          } else {
+            const common::ObObj &pobj = pvals.at(j);
+            const ObObj *query_val = nullptr;
+            for (int64_t k = 0; OB_ISNULL(query_val) && k < partition_names.count(); ++k) {
+              if (0 == field->name.compare(partition_names.at(k))) {
+                query_val = &partition_values.at(k);
+              }
+            }
+            if (OB_ISNULL(query_val)) {
+              match = false;
+            } else if (pobj.is_null() || query_val->is_null()) {
+              match = pobj.is_null() && query_val->is_null();
+            } else {
+              ObObj normalized_query_val;
+              ObCastCtx cast_ctx(&allocator_, NULL, CM_NONE, pobj.get_collation_type());
+              if (OB_FAIL(ObObjCaster::to_type(pobj.get_type(),
+                                               pobj.get_collation_type(),
+                                               cast_ctx,
+                                               *query_val,
+                                               normalized_query_val))) {
+                LOG_WARN("failed to cast partition clause value", K(ret), K(j), KPC(query_val), K(pobj));
+              } else {
+                int cmp = 0;
+                if (OB_FAIL(normalized_query_val.compare(pobj, pobj.get_collation_type(), cmp))) {
+                  LOG_WARN("failed to compare partition clause value",
+                           K(ret), K(j), K(normalized_query_val), K(pobj));
+                } else {
+                  match = (0 == cmp);
+                }
+              }
+            }
+          }
+        }
+
+        if (OB_SUCC(ret) && match) {
+          if (OB_FAIL(filtered.push_back(entry))) {
+            LOG_WARN("failed to add filtered entry", K(ret));
+          }
+        }
+      }
+    }
+
+    if (OB_SUCC(ret) && OB_FAIL(manifest_entries.assign(filtered))) {
+      LOG_WARN("failed to assign manifest entries after partition clause prune", K(ret));
+    }
+  }
+  return ret;
+}
+
 } // namespace sql
 } // namespace oceanbase

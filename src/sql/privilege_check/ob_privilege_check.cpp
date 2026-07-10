@@ -292,8 +292,12 @@ int add_mysql_external_table_priv(
   if (OB_ISNULL(table_item)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("table item is null", K(ret));
-  } else if (ObTableType::EXTERNAL_TABLE != table_item->table_type_
-             || common::OB_INVALID_ID == table_item->external_location_id_) {
+  } else if (ObTableType::EXTERNAL_TABLE != table_item->table_type_) {
+    // do nothing
+  } else if (OB_ISNULL(table_item->ext_table_def_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null external table def", K(ret), KPC(table_item));
+  } else if (common::OB_INVALID_ID == table_item->ext_table_def_->external_location_id_) {
     // do nothing
   } else {
     ObSchemaGetterGuard schema_guard;
@@ -302,7 +306,7 @@ int add_mysql_external_table_priv(
     const ObLocationSchema *location_schema = NULL;
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(schema_guard.get_location_schema_by_id(tenant_id,
-                                                              table_item->external_location_id_,
+                                                              table_item->ext_table_def_->external_location_id_,
                                                               location_schema))) {
       LOG_WARN("failed to get location schema", K(ret));
     } else if (OB_ISNULL(location_schema)) {
@@ -1282,24 +1286,19 @@ int add_nec_loc_priv_in_dml(
       if (OB_ISNULL(table_item)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table item is null");
-      } else if (ObTableType::EXTERNAL_TABLE == table_item->table_type_
-                 && common::OB_INVALID_ID != table_item->external_location_id_) {
-        CK (ctx.schema_guard_ != NULL);
-        CK (ctx.session_info_ != NULL);
-        // const ObTableSchema *table_schema =  NULL;
-        // LOG_INFO("table schema info", K(table_item->table_id_), K(table_item->ref_id_), K(table_item->database_name_), K(table_item->table_name_));
-        // if (OB_FAIL(ctx.schema_guard_->get_table_schema(ctx.session_info_->get_effective_tenant_id(),
-        //                                                 table_item->ref_id_,
-        //                                                 table_schema))) {
-        //   LOG_WARN("failed to get table schema");
-        // } else if (OB_ISNULL(table_schema)) {
-        //   ret = OB_ERR_UNEXPECTED;
-        //   LOG_WARN("table schema is null");
-        // } else if (OB_INVALID_ID != table_schema->get_external_location_id()) {
+      } else if (ObTableType::EXTERNAL_TABLE == table_item->table_type_) {
+        if (OB_ISNULL(table_item->ext_table_def_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null external table def", K(ret), KPC(table_item));
+        } else if (common::OB_INVALID_ID == table_item->ext_table_def_->external_location_id_) {
+          // do nothing
+        } else {
+          CK (ctx.schema_guard_ != NULL);
+          CK (ctx.session_info_ != NULL);
           const ObLocationSchema *location_schema = NULL;
           if (OB_FAIL(ctx.schema_guard_->get_location_schema_by_id(ctx.session_info_->get_effective_tenant_id(),
-                                                                   table_item->external_location_id_,
-                                                                   location_schema))) {
+                                                                    table_item->ext_table_def_->external_location_id_,
+                                                                    location_schema))) {
             LOG_WARN("failed to get location schema");
           } else if (OB_ISNULL(location_schema)) {
             ret = OB_ERR_UNEXPECTED;
@@ -1316,7 +1315,7 @@ int add_nec_loc_priv_in_dml(
             OZ (add_need_priv(need_privs, need_priv));
           }
         }
-      //}
+      }
     }
   }
   return ret;
@@ -1870,21 +1869,18 @@ int get_dml_stmt_need_privs(
               }
             }
             if (OB_SUCC(ret)
-               && ObTableType::EXTERNAL_TABLE == table_item->table_type_
-               && common::OB_INVALID_ID != table_item->external_location_id_) {
-              ObSchemaGetterGuard schema_guard;
-              CK(GCTX.schema_service_ != NULL);
-              OZ(GCTX.schema_service_->get_tenant_schema_guard(session_priv.tenant_id_, schema_guard));
-              // const ObTableSchema *table_schema = NULL;
-              // LOG_INFO("table id", K(table_item->table_id_), K(table_item->ref_id_), K(table_item->database_name_), K(table_item->table_name_));
-              // if (OB_FAIL(schema_guard.get_table_schema(session_priv.tenant_id_, table_item->ref_id_, table_schema))) {
-              //   LOG_WARN("failed to get table schema", K(ret));
-              // } else if (OB_ISNULL(table_schema)) {
-              //   ret = OB_ERR_UNEXPECTED;
-              //   LOG_WARN("table schema is null", K(ret));
-              // } else if (OB_INVALID_ID != table_schema->get_external_location_id()) {
+                && ObTableType::EXTERNAL_TABLE == table_item->table_type_) {
+              if (OB_ISNULL(table_item->ext_table_def_)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected null external table def", K(ret), KPC(table_item));
+              } else if (common::OB_INVALID_ID == table_item->ext_table_def_->external_location_id_) {
+                // do nothing
+              } else {
+                ObSchemaGetterGuard schema_guard;
+                CK(GCTX.schema_service_ != NULL);
+                OZ(GCTX.schema_service_->get_tenant_schema_guard(session_priv.tenant_id_, schema_guard));
                 const ObLocationSchema *location_schema = NULL;
-                if (OB_FAIL(schema_guard.get_location_schema_by_id(session_priv.tenant_id_, table_item->external_location_id_, location_schema))) {
+                if (OB_FAIL(schema_guard.get_location_schema_by_id(session_priv.tenant_id_, table_item->ext_table_def_->external_location_id_, location_schema))) {
                   LOG_WARN("failed to get location schema", K(ret));
                 } else if (OB_ISNULL(location_schema)) {
                   ret = OB_ERR_UNEXPECTED;
@@ -1898,7 +1894,7 @@ int get_dml_stmt_need_privs(
                   tmp_need_priv.obj_type_ = ObObjectType::LOCATION;
                   ADD_NEED_PRIV(tmp_need_priv);
                 }
-              // }
+              }
             }
             if (OB_SUCC(ret)) {
               if (lib::is_mysql_mode()) {

@@ -12,6 +12,8 @@
 #include "lib/allocator/ob_allocator.h"
 #include "lib/string/ob_string.h"
 #include "lib/hash/ob_hashmap.h"
+#include "sql/table_format/iceberg/ob_iceberg_type_fwd.h"
+#include "sql/table_format/iceberg/spec/partition.h"
 
 namespace oceanbase
 {
@@ -19,6 +21,7 @@ namespace share
 {
 class ObOptCatalogTableStat;
 class ObOptCatalogColumnStat;
+class ObILakeTableMetadata;
 namespace schema
 {
 class ObSchemaGetterGuard;
@@ -135,10 +138,6 @@ public:
                                        const int64_t gather_vectorize,
                                        ObOptCatalogStatGatherParam &gather_param);
 
-  // Iceberg: single global gather (basic estimator SQL without partition columns). Merges
-  // partition_infos_ for file metadata and clears part_cols_.
-  static int normalize_iceberg_gather_param_to_table_level(ObOptCatalogStatGatherParam &param);
-
   static int merge_split_gather_tab_stats(ObIArray<share::ObOptCatalogTableStat *> &all_tstats,
                                           ObIArray<share::ObOptCatalogTableStat *> &cur_all_tstats);
 
@@ -188,6 +187,18 @@ public:
                                           const ObCatalogTableStatParam &param,
                                           const ObIArray<ObString> &partitions_to_delete);
 
+  static int collect_iceberg_partition_infos(ObIAllocator &allocator,
+                                             share::ObILakeTableMetadata *lake_table_metadata,
+                                             ObIArray<ObCatalogExtPartitionInfo> &partition_infos,
+                                             int64_t &global_modified_ts);
+  static int build_iceberg_partition_info(ObIAllocator &allocator,
+                                            const sql::iceberg::PartitionSpec &partition_spec,
+                                            const ObIArray<ObObj> &partition_values,
+                                            ObCatalogExtPartitionInfo &partition_info);
+  static int build_iceberg_partition_sql_clause(
+                                            common::ObIAllocator &allocator,
+                                            const common::ObCatalogExtPartitionInfo &partition_info,
+                                            common::ObString &partition_clause);
 private:
   static int init_stats_by_part_names_and_col_names(
       const ObCatalogTableStatParam &param,

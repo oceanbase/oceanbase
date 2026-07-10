@@ -16,6 +16,7 @@
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "lib/hash/ob_hashset.h"
 #include "lib/oblog/ob_log_module.h"
+#include <type_traits>
 
 namespace oceanbase
 {
@@ -216,25 +217,39 @@ int ObOptCatalogStatService::batch_load_catalog_table_stats_and_put_cache(
     const KeyT *first_key = keys.at(0);
     ObLoadCatalogTableStatParam param(tenant_id, first_key->catalog_id_, table_id);
     hash::ObHashSet<ObString> partition_value_set;
-    if (OB_FAIL(partition_value_set.create(keys.count() * 2 + 512, "CatStatPartSet", "CatStatPartSet"))) {
-      SQL_ENG_LOG(WARN, "failed to create partition value set", K(ret), K(keys.count()));
-    } else {
+    if constexpr (std::is_same_v<KeyT, share::ObOptCatalogColumnStat::Key>) {
+      if (OB_FAIL(partition_value_set.create(keys.count() * 2 + 512, "CatStatPartSet", "CatStatPartSet"))) {
+        SQL_ENG_LOG(WARN, "failed to create partition value set", K(ret), K(keys.count()));
+      }
+    }
+    if (OB_SUCC(ret)) {
       for (int64_t i = 0; OB_SUCC(ret) && i < keys.count(); ++i) {
         if (OB_ISNULL(keys.at(i))) {
           ret = OB_ERR_UNEXPECTED;
           SQL_ENG_LOG(WARN, "catalog stat key is null", K(ret), K(i));
         } else {
           const ObString &partition_value = keys.at(i)->partition_value_;
-          if (OB_FAIL(partition_value_set.set_refactored(partition_value, 0))) {
-            SQL_ENG_LOG(WARN, "failed to add partition value to set", K(ret), K(i), K(partition_value));
+          if constexpr (std::is_same_v<KeyT, share::ObOptCatalogColumnStat::Key>) {
+            // 多列共享同一 partition_value，需要去重后再回源
+            if (OB_FAIL(partition_value_set.exist_refactored(partition_value))) {
+              if (OB_HASH_EXIST == ret) {
+                ret = OB_SUCCESS;
+              } else if (OB_HASH_NOT_EXIST == ret) {
+                if (OB_FAIL(partition_value_set.set_refactored(partition_value, 0))) {
+                  SQL_ENG_LOG(WARN, "failed to add partition value to set", K(ret), K(i), K(partition_value));
+                } else if (OB_FAIL(key_partition_values.push_back(partition_value))) {
+                  SQL_ENG_LOG(WARN, "failed to push back partition value", K(ret), K(i), K(partition_value));
+                }
+              } else {
+                SQL_ENG_LOG(WARN, "failed to check partition value in set", K(ret), K(i));
+              }
+            }
+          } else {
+            // 表统计信息每个分区只有一条 key，无需去重
+            if (OB_FAIL(key_partition_values.push_back(partition_value))) {
+              SQL_ENG_LOG(WARN, "failed to push back partition value", K(ret), K(i), K(partition_value));
+            }
           }
-        }
-      }
-      for (hash::ObHashSet<ObString>::const_iterator iter = partition_value_set.begin();
-           OB_SUCC(ret) && iter != partition_value_set.end();
-           ++iter) {
-        if (OB_FAIL(key_partition_values.push_back(iter->first))) {
-          SQL_ENG_LOG(WARN, "failed to push back partition value", K(ret), K(iter->first));
         }
       }
     }

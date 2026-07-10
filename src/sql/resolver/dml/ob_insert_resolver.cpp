@@ -133,7 +133,11 @@ int ObInsertResolver::resolve(const ParseNode &parse_tree)
     if (OB_ISNULL(tmp_table_item)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(tmp_table_item), K(ret));
-    } else if (share::ObLakeTableFormat::ICEBERG == tmp_table_item->lake_table_format_) {
+    } else if (tmp_table_item->is_external_table() && OB_ISNULL(tmp_table_item->ext_table_def_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null external table def", K(ret), KPC(tmp_table_item));
+    } else if (OB_NOT_NULL(tmp_table_item->ext_table_def_) &&
+               share::ObLakeTableFormat::ICEBERG == tmp_table_item->ext_table_def_->lake_table_format_) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert overwrite into iceberg table");
     } else if (!insert_stmt->value_from_select()) {
