@@ -1176,16 +1176,30 @@ int ObOptimizer::init_route_policy(ObDMLStmt &dml_stmt, ObSQLSessionInfo &sessio
   int64_t route_policy_type = 0;
   bool is_weak_read = false;
   ObQueryCtx *query_ctx = dml_stmt.get_query_ctx();
-  if (OB_ISNULL(query_ctx) || OB_ISNULL(ctx_.get_exec_ctx()->get_sql_ctx())) {
+  ObSqlCtx *sql_ctx = nullptr;
+  APQueryRoutePolicy ap_query_route_policy = APQueryRoutePolicy::OFF;
+  if (OB_ISNULL(query_ctx) || OB_ISNULL(sql_ctx = ctx_.get_exec_ctx()->get_sql_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null query ctx", K(ret));
   } else if (OB_FAIL(ObTableLocation::get_is_weak_read(dml_stmt,
                                                 &session,
-                                                ctx_.get_exec_ctx()->get_sql_ctx(),
+                                                sql_ctx,
                                                 is_weak_read))) {
     LOG_WARN("failed to get is weak read", K(ret));
+  } else if (OB_FAIL(query_ctx->get_query_hint().get_ap_query_route_policy(&session, ap_query_route_policy))) {
+    LOG_WARN("failed to get adaptive replica chosen", K(ret));
   } else if (session.get_route_to_column_replica()) {
-    // do nothing
+    // SQL is retrying to generate a plan routed to the column store replica.
+    if (APQueryRoutePolicy::AUTO == ap_query_route_policy && sql_ctx->can_reroute_sql_) {
+      int64_t origin_route_policy = 0;
+      if (OB_FAIL(session.get_sys_variable(share::SYS_VAR_OB_ROUTE_POLICY, origin_route_policy))) {
+        SQL_SESSION_LOG(WARN, "get route policy failed", K(ret));
+      } else if (origin_route_policy != COLUMN_STORE_ONLY) {
+        sql_ctx->can_reroute_sql_ = false;
+        LOG_INFO("optimizer automatically chooses column store replica plan, disable reroute",
+                 K(origin_route_policy), K(ap_query_route_policy));
+      }
+    }
   } else if (OB_FAIL(session.get_ob_route_policy(route_policy_type))) {
     LOG_WARN("fail to get sys variable", K(ret));
   } else if (COLUMN_STORE_ONLY == static_cast<ObRoutePolicyType>(route_policy_type)) {
@@ -1193,14 +1207,14 @@ int ObOptimizer::init_route_policy(ObDMLStmt &dml_stmt, ObSQLSessionInfo &sessio
         query_ctx->is_contain_select_for_update_) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "when route policy is COLUMN_STORE_ONLY, read query request");
+    } else if (session.is_in_transaction() && !is_weak_read) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "when route policy is COLUMN_STORE_ONLY, strong read in transaction");
     }
   } else {
-    APQueryRoutePolicy ap_query_route_policy = APQueryRoutePolicy::OFF;
     bool can_route_to_cs = false;
     bool ap_query_replica_fallback = true;
-    if (OB_FAIL(query_ctx->get_query_hint().get_ap_query_route_policy(&session, ap_query_route_policy))) {
-      LOG_WARN("failed to get adaptive replica chosen", K(ret));
-    } else if (APQueryRoutePolicy::FORCE != ap_query_route_policy) {
+    if (APQueryRoutePolicy::FORCE != ap_query_route_policy) {
       // do nothing
     } else if (OB_FAIL(session.get_sys_variable(share::SYS_VAR_AP_QUERY_REPLICA_FALLBACK,
                                                 ap_query_replica_fallback))) {
