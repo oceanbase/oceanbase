@@ -1900,8 +1900,12 @@ int ObJsonUtil::get_json_path(ObExpr* expr,
       j_path_text = json_datum->get_string();
       if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(expr, ctx, temp_allocator, j_path_text, is_null_result))) {
         LOG_WARN("fail to get real data.", K(ret), K(j_path_text));
-      } else if (j_path_text.length() == 0) { // maybe input json doc is null type
-        is_null_result = true;
+      } else if (j_path_text.length() == 0) {
+        if (param_ctx->json_param_.is_asis_) {
+          j_path_text = ObString::make_string("$");
+        } else {
+          is_null_result = true;
+        }
       } else if (OB_FAIL(ObJsonExprHelper::convert_string_collation_type(expr->datum_meta_.cs_type_,
                                                        CS_TYPE_UTF8MB4_BIN,
                                                        &ctx.exec_ctx_.get_allocator(),
