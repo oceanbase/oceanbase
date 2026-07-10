@@ -265,6 +265,7 @@ struct ObOptParamHint
     DEF(ENABLE_SEPARATE_SPF_FOR_SELECT_ITEMS,)         \
     DEF(ENABLE_PARTITION_SORT,)                   \
     DEF(ENABLE_ADAPTIVE_AUTO_DOP,)                \
+    DEF(ENABLE_SKIP_INDEX,)                       \
 
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);

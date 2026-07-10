@@ -6588,8 +6588,8 @@ int ObStaticEngineCG::generate_tsc_flags(const ObLogTableScan &op, ObDASScanCtDe
       const int64_t io_read_gap_size = io_read_batch_size * (has_io_gap_percentage_hint ? hint_io_gap_percentage : tenant_config->_io_read_redundant_limit_percentage) / 100;
       pd_blockscan = ObPushdownFilterUtils::is_blockscan_pushdown_enabled(pd_level);
       pd_filter = ObPushdownFilterUtils::is_filter_pushdown_enabled(pd_level);
-      enable_base_skip_index = tenant_config->_enable_skip_index;
-      enable_inc_skip_index = tenant_config->_enable_skip_index;
+      enable_base_skip_index = log_plan->get_optimizer_context().enable_skip_index();
+      enable_inc_skip_index = log_plan->get_optimizer_context().enable_skip_index();
       int tmp_ret = OB_E(EventTable::EN_DISABLE_INC_SKIP_INDEX_SCAN) OB_SUCCESS;
       if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
         enable_inc_skip_index = false;

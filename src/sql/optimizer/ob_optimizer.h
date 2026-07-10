@@ -235,6 +235,7 @@ namespace sql
     int check_enable_runtime_filter();
     int check_extend_sql_plan_monitor_metrics();
     int check_enable_delete_insert_scan();
+    int check_enable_skip_index();
 
   private:
     ObOptimizerContext &ctx_;

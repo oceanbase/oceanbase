@@ -1203,8 +1203,8 @@ int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
         int64_t pd_level = tenant_config.is_valid() ? tenant_config->_pushdown_storage_level : 0;
         bool pd_blockscan = false;
         bool pd_filter = false;
-        bool enable_base_skip_index = tenant_config.is_valid() ? tenant_config->_enable_skip_index : false;
-        bool enable_inc_skip_index = tenant_config.is_valid() ? tenant_config->_enable_skip_index : false;
+        bool enable_base_skip_index = op.get_plan()->get_optimizer_context().enable_skip_index();
+        bool enable_inc_skip_index = op.get_plan()->get_optimizer_context().enable_skip_index();
         bool enable_prefetch_limit = tenant_config.is_valid() ? tenant_config->_enable_prefetch_limiting : false;
         bool enable_column_store = true; // in filter was generated only use column store
         bool enable_filter_reordering = tenant_config.is_valid() ? tenant_config->_enable_filter_reordering : false;

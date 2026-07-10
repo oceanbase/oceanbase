@@ -815,6 +815,8 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
     LOG_WARN("failed to check extend sql plan monitor metrics");
   } else if (OB_FAIL(check_enable_delete_insert_scan())) {
     LOG_WARN("failed to check enable delete insert scan");
+  } else if (OB_FAIL(check_enable_skip_index())) {
+    LOG_WARN("failed to check enable skip index");
   } else if (OB_FAIL(opt_params.get_sys_var(ObOptParamHint::JOIN_ORDER_ENUM_THRESHOLD,
                                             session_info,
                                             share::SYS_VAR__JOIN_ORDER_ENUM_THRESHOLD,
@@ -1873,6 +1875,38 @@ int ObOptimizer::check_enable_delete_insert_scan()
   }
   if (OB_SUCC(ret)) {
     ctx_.set_enable_delete_insert_scan(enable_delete_insert_scan);
+  }
+  return ret;
+}
+
+int ObOptimizer::check_enable_skip_index()
+{
+  int ret = OB_SUCCESS;
+  bool enable_skip_index = true;
+  ObSQLSessionInfo *session_info = nullptr;
+  if (OB_ISNULL(session_info = ctx_.get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr");
+  } else {
+    bool hint_enable = false;
+    bool config_enable = true;
+    int64_t tenant_id = session_info->get_effective_tenant_id();
+    bool hint_exist = false;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      config_enable = tenant_config->_enable_skip_index;
+    }
+    if (OB_FAIL(ctx_.get_global_hint().opt_params_.get_bool_opt_param(
+                ObOptParamHint::ENABLE_SKIP_INDEX, hint_enable, hint_exist))) {
+      LOG_WARN("fail to get hint", K(ret));
+    } else if (hint_exist) {
+      enable_skip_index = hint_enable;
+    } else {
+      enable_skip_index = config_enable;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ctx_.set_enable_skip_index(enable_skip_index);
   }
   return ret;
 }
