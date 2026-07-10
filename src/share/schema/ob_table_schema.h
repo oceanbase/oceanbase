@@ -2406,6 +2406,7 @@ public:
     return !dynamic_partition_policy_.empty();
   }
   int get_part_key_column_type(const int64_t index, ObObjType &type) const;
+  int get_part_key_column_collation_type(const int64_t index, common::ObCollationType &cs_type) const;
   int get_part_key_column_name(const int64_t index, ObString &name) const;
 
   int check_support_interval_part() const;

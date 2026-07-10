@@ -83,15 +83,22 @@ private:
   int build_add_partition_sql_(const ObString &specified_precreate_time, ObSqlString &sql);
   int build_drop_partition_sql_(ObSqlString &sql);
   bool enable_update_global_indexes_();
+  const char *get_precreate_partition_def_template_(const bool is_list_part);
+  int build_precreate_partition_val_(const int64_t low_bound_timestamp, const int64_t high_bound_timestamp, ObSqlString &part_val);
   int build_precreate_partition_definition_list_(const ObString &specified_precreate_time, ObSqlString &part_def_list);
   int build_expired_partition_name_list_(ObSqlString &part_name_list);
   int build_part_name_(const int64_t timestamp, ObSqlString &str);
+  int format_timestamp_(const int64_t timestamp, const ObString &format, char *buf, const int64_t buf_len, int64_t &pos);
   int build_high_bound_val_(const int64_t timestamp, ObSqlString &str);
+  int build_list_partition_val_(const int64_t timestamp, ObSqlString &str);
   int check_partition_name_exists_(const ObString &part_name, bool &exists);
   int get_start_precreate_timestamp_(int64_t &timestamp);
   int get_target_precreate_timestamp_(const ObString &specified_precreate_time, int64_t &timestamp);
   int get_table_time_zone_wrap_(ObTimeZoneInfoWrap &tz_info_wrap);
   int fetch_timestamp_from_part_key_(const schema::ObPartition &part, int64_t &timestamp);
+  int fetch_timestamp_from_range_part_key_(const schema::ObPartition &part, int64_t &timestamp);
+  int fetch_timestamp_from_list_part_key_(const schema::ObPartition &part, int64_t &timestamp);
+  int parse_list_part_string_to_timestamp_(const ObString &str_val, const ObTimeZoneInfoWrap &time_zone_info_wrap, int64_t &timestamp);
   int get_session_time_zone_str_(char *buf, const int64_t len, int64_t &pos);
   int datetime_to_timestamp_skip_gap_(const int64_t datetime, const ObTimeZoneInfo *tz_info, int64_t &timestamp);
   int add_timestamp_(const int64_t num, const ObDateUnitType time_unit, int64_t &timestamp);
@@ -118,13 +125,16 @@ public:
 private:
   static int64_t get_approximate_hour_num_(ObDateUnitType type);
   static bool is_int_as_timestamp_(ObObjType type);
+  static bool is_string_as_date_(ObObjType type);
   static bool is_stored_in_utc_(ObObjType type);
   static bool support_part_key_type_(ObObjType type);
+  static int check_part_type_with_col_type_(const schema::ObTableSchema &table_schema, const ObObjType col_data_type, const common::ObCollationType col_collation_type);
   static bool is_valid_time_unit_(ObObjType type, ObDateUnitType time_unit);
   static int update_dynamic_partition_policy_with_str_(const ObString &str, bool is_alter, ObDynamicPartitionPolicy &policy);
   static int dynamic_partition_policy_to_str_(ObIAllocator &allocator, const ObDynamicPartitionPolicy& policy, ObString &str);
   static int str_to_dynamic_partition_policy_(const ObString &str, ObDynamicPartitionPolicy &policy);
   static int64_t bigint_precision_scale_(const ObString &bigint_precision);
+  static int check_string_matches_format_(const ObString &str_val, const int32_t expected_len);
   static int get_time_zone_wrap_(const uint64_t tenant_id, const ObString &time_zone, ObTimeZoneInfoWrap &tz_info_wrap);
   static bool is_time_unit_matching_(const common::ObIArray<common::ObString> &time_unit_strs, const common::ObString &time_unit_str);
   static int64_t get_current_timestamp_();
@@ -134,6 +144,7 @@ private:
   static int check_expire_time_is_valid_(const schema::ObTableSchema &table_schema);
   static int check_time_zone_is_valid_(const schema::ObTableSchema &table_schema);
   static int check_bigint_precision_is_valid_(const schema::ObTableSchema &table_schema);
+  static int check_list_part_single_value_(const schema::ObTableSchema &table_schema);
   static int print_dynamic_partition_policy_(
     const ObDynamicPartitionPolicy &policy,
     bool is_show_create_table,

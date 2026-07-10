@@ -10542,6 +10542,22 @@ int ObTableSchema::get_part_key_column_type(const int64_t index, ObObjType &type
   return ret;
 }
 
+int ObTableSchema::get_part_key_column_collation_type(const int64_t index, ObCollationType &cs_type) const
+{
+  int ret = OB_SUCCESS;
+  uint64_t col_id = OB_INVALID_ID;
+  const ObColumnSchemaV2 *column_schema = NULL;
+  if (OB_FAIL(partition_key_info_.get_column_id(index, col_id))) {
+    LOG_WARN("fail to get column id", KR(ret), K(index));
+  } else if (OB_ISNULL(column_schema = get_column_schema(col_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column schema is null", KR(ret), K(col_id));
+  } else {
+    cs_type = column_schema->get_collation_type();
+  }
+  return ret;
+}
+
 int ObTableSchema::get_part_key_column_name(const int64_t index, ObString &name) const
 {
   int ret = OB_SUCCESS;
