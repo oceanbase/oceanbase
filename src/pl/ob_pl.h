@@ -782,6 +782,8 @@ struct ObPLExecCtx : public ObPLINS
   virtual int get_user_type(uint64_t type_id,
                             const ObUserDefinedType *&user_type,
                             ObIAllocator *allocator = NULL) const;
+  int get_user_type_from_local(uint64_t type_id,
+                              const ObUserDefinedType *&user_type) const;
   virtual int calc_expr(uint64_t package_id, int64_t expr_idx, ObObjParam &result);
   void set_is_sensitive(bool is_sensitive) const
   {

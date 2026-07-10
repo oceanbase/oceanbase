@@ -3784,16 +3784,7 @@ int ObPLExecCtx::get_user_type(uint64_t type_id,
   UNUSED(allocator);
   int ret = OB_SUCCESS;
   ObIAllocator *expr_alloc = const_cast<ObPLExecCtx *>(this)->get_top_expr_allocator();
-  user_type = NULL;
-  CK (OB_NOT_NULL(func_));
-  for (int64_t i = 0;
-      OB_SUCC(ret) && NULL == user_type && i < func_->get_type_table().count();
-      ++i) {
-    CK (OB_NOT_NULL(func_->get_type_table().at(i)));
-    if (OB_SUCC(ret) && type_id == func_->get_type_table().at(i)->get_user_type_id()) {
-      user_type = func_->get_type_table().at(i);
-    }
-  }
+  OZ(get_user_type_from_local(type_id, user_type));
   if (OB_SUCC(ret)
       && OB_ISNULL(user_type)
       && OB_NOT_NULL(allocator_)
@@ -3810,6 +3801,23 @@ int ObPLExecCtx::get_user_type(uint64_t type_id,
                                     *(exec_ctx_->get_sql_proxy()),
                                     false);
     OZ (resolve_ctx.get_user_type(type_id, user_type));
+  }
+  return ret;
+}
+
+int ObPLExecCtx::get_user_type_from_local(uint64_t type_id,
+                                          const ObUserDefinedType *&user_type) const
+{
+  int ret = OB_SUCCESS;
+  user_type = NULL;
+  CK (OB_NOT_NULL(func_));
+  for (int64_t i = 0;
+      OB_SUCC(ret) && NULL == user_type && i < func_->get_type_table().count();
+      ++i) {
+    CK (OB_NOT_NULL(func_->get_type_table().at(i)));
+    if (OB_SUCC(ret) && type_id == func_->get_type_table().at(i)->get_user_type_id()) {
+      user_type = func_->get_type_table().at(i);
+    }
   }
   return ret;
 }
