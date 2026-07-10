@@ -344,7 +344,14 @@ int ret = OB_SUCCESS;
     const uint32_t src_data_offset = begin * sizeof(T);
     int64_t curr_pos = this->data_container_->raw_data_.size();
     int64_t capacity = curr_pos + len;
-    if (OB_FAIL(this->data_container_->raw_data_.prepare_allocate(capacity))) {
+    if (capacity > this->data_container_->raw_data_.get_capacity()) {
+      int64_t doubled_cap = MAX(capacity, 2 * (this->data_container_->raw_data_.get_capacity()));
+      if (OB_FAIL(this->data_container_->raw_data_.reserve(doubled_cap))) {
+        OB_LOG(WARN, "reserve raw data failed", K(ret), K(doubled_cap));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(this->data_container_->raw_data_.prepare_allocate(capacity))) {
       OB_LOG(WARN, "allocate memory failed", K(ret), K(capacity));
     } else {
       char *cur_data = reinterpret_cast<char *>(this->data_container_->raw_data_.get_data() + curr_pos);
