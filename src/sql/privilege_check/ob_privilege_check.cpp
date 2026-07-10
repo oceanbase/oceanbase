@@ -2170,7 +2170,24 @@ int get_alter_table_stmt_need_privs(
       need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
       ADD_NEED_PRIV(need_priv);
 
-      const AlterTableSchema &alter_schema = const_cast<ObAlterTableStmt*>(stmt)->get_alter_table_arg().alter_table_schema_;
+      const obrpc::ObAlterTableArg::AlterPartitionType alter_part_type = stmt->get_alter_table_arg().alter_part_type_;
+      if (alter_part_type == obrpc::ObAlterTableArg::EXCHANGE_PARTITION
+          || alter_part_type == obrpc::ObAlterTableArg::EXCHANGE_SUBPARTITION) {
+        need_priv.db_ = stmt->get_org_database_name();
+        need_priv.table_ = stmt->get_org_table_name();
+        need_priv.priv_set_ = OB_PRIV_INSERT | OB_PRIV_DROP | OB_PRIV_CREATE;
+        need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
+        ADD_NEED_PRIV(need_priv);
+        // target table name is always set by the resolver when alter_part_type_ is
+        // EXCHANGE_* (resolve succeeds => set_exchange_table_name was called).
+        need_priv.db_ = stmt->get_exchange_database_name();
+        need_priv.table_ = stmt->get_exchange_table_name();
+        need_priv.priv_set_ = OB_PRIV_ALTER | OB_PRIV_INSERT | OB_PRIV_DROP | OB_PRIV_CREATE;
+        need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
+        ADD_NEED_PRIV(need_priv);
+      }
+
+      const AlterTableSchema &alter_schema = stmt->get_alter_table_arg().alter_table_schema_;
       if (alter_schema.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::SESSION_ACTIVE_TIME)
           && session_priv.tenant_id_ != OB_SYS_TENANT_ID) {
         ret = OB_ERR_NO_PRIVILEGE;

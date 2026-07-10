@@ -3548,6 +3548,9 @@ int ObAlterTableResolver::resolve_exchange_partition_stmt(
       LOG_WARN("check alter partition for append only valid failed", KR(ret));
     } else {
       orig_part_name.assign_ptr(node.children_[0]->str_value_, static_cast<int32_t>(node.children_[0]->str_len_));
+      // Carry the exchange target table's name to the stmt for the privilege check.
+      get_alter_table_stmt()->set_exchange_database_name(exchange_db_name);
+      get_alter_table_stmt()->set_exchange_table_name(exchange_table_name);
     }
   }
   return ret;

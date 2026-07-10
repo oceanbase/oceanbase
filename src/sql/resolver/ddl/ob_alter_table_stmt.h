@@ -29,7 +29,8 @@ public:
   int add_index_arg(obrpc::ObIndexArg *index_arg);
   int check_drop_fk_arg_exist(obrpc::ObDropForeignKeyArg *drop_fk_arg, bool &has_same_fk_arg);
   int check_drop_cst_exist(const ObConstraint &constraint, bool &has_same_cst);
-  obrpc::ObAlterTableArg& get_alter_table_arg(){ return alter_table_arg_; }
+  obrpc::ObAlterTableArg& get_alter_table_arg() { return alter_table_arg_; }
+  const obrpc::ObAlterTableArg& get_alter_table_arg() const { return alter_table_arg_; }
   //check duplicate alter of same column in one clause
   bool is_column_modified(const common::ObString &column_name);
   bool is_comment_table() const { return is_comment_table_; }
@@ -114,6 +115,17 @@ public:
   ObTableSchema &get_alter_table_schema() { return alter_table_arg_.alter_table_schema_; }
   obrpc::ObExchangePartitionArg &get_exchange_partition_arg() { return exchange_partition_arg_;}
   int set_exchange_partition_arg(const obrpc::ObExchangePartitionArg &exchange_partition_arg);
+  // Shallow-copies the parse-tree string into exchange_db_name_/exchange_table_name_.
+  // The backing memory lives in ObResultSet::mem_pool_ (same lifetime as the stmt),
+  // so reads MUST happen before ~ObResultSet. Currently only the privilege check
+  // (get_alter_table_stmt_need_privs, runs right after resolve) reads it -- which is
+  // within that window. Do NOT read from execute-after-result-destroyed, async, or
+  // RPC-to-rootserver paths; if you need to, switch to deep copy (ob_write_string with
+  // alter_table_arg_.allocator_).
+  void set_exchange_database_name(const common::ObString &db) { exchange_db_name_ = db; }
+  void set_exchange_table_name(const common::ObString &t) { exchange_table_name_ = t; }
+  const common::ObString &get_exchange_database_name() const { return exchange_db_name_; }
+  const common::ObString &get_exchange_table_name() const { return exchange_table_name_; }
   inline void set_client_session_info(const uint32_t client_sessid,
                                       const int64_t create_ts)
   {
@@ -139,6 +151,8 @@ private:
   int64_t alter_external_table_type_;
   obrpc::ObExchangePartitionArg exchange_partition_arg_;
   bool is_add_interval_partition_;
+  ObString  exchange_db_name_;
+  ObString  exchange_table_name_;
 };
 
 inline int ObAlterTableStmt::set_tz_info_wrap(const common::ObTimeZoneInfoWrap &tz_info_wrap)
