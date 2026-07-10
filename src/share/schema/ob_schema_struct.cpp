@@ -13399,7 +13399,9 @@ ObProfileSchema::ObProfileSchema(ObIAllocator *allocator)
     password_verify_function_(),
     password_life_time_(-1),
     password_grace_time_(-1),
-    password_rollover_time_(-1)
+    password_rollover_time_(-1),
+    idle_time_(-1),
+    sessions_per_user_(-1)
 {
 }
 
@@ -13433,6 +13435,8 @@ ObProfileSchema &ObProfileSchema::operator=(const ObProfileSchema &other)
       password_life_time_ = other.password_life_time_;
       password_grace_time_ = other.password_grace_time_;
       password_rollover_time_ = other.password_rollover_time_;
+      idle_time_ = other.idle_time_;
+      sessions_per_user_ = other.sessions_per_user_;
     }
 
     if (OB_FAIL(ret)) {
@@ -13467,6 +13471,8 @@ void ObProfileSchema::reset()
   password_life_time_ = -1;
   password_grace_time_ = -1;
   password_rollover_time_ = -1;
+  idle_time_ = -1;
+  sessions_per_user_ = -1;
 }
 
 int64_t ObProfileSchema::get_convert_size() const
@@ -13495,6 +13501,12 @@ int ObProfileSchema::set_value(const int64_t type, const int64_t value)
     break;
   case PASSWORD_ROLLOVER_TIME:
     set_password_rollover_time(value);
+    break;
+  case IDLE_TIME:
+    set_idle_time(value);
+    break;
+  case SESSIONS_PER_USER:
+    set_sessions_per_user(value);
     break;
   default:
     ret = OB_ERR_UNEXPECTED;
@@ -13535,6 +13547,8 @@ const int64_t ObProfileSchema::INVALID_PARAM_VALUES[] = {
   -1,        //1 day
   -1,        //1 day
   -1,        //invalid rollover time
+  -1,        //invalid idle time
+  -1,        //invalid sessions_per_user
 };
 static_assert(ARRAYSIZEOF(ObProfileSchema::INVALID_PARAM_VALUES) == ObProfileSchema::MAX_PARAMS, "array size");
 
@@ -13545,6 +13559,8 @@ const char* ObProfileSchema::PARAM_VALUE_NAMES[] = {
   "PASSWORD_LIFE_TIME",
   "PASSWORD_GRACE_TIME",
   "PASSWORD_ROLLOVER_TIME",
+  "IDLE_TIME",
+  "SESSIONS_PER_USER",
 };
 
 static_assert(ARRAYSIZEOF(ObProfileSchema::PARAM_VALUE_NAMES) == ObProfileSchema::MAX_PARAMS, "array size");
@@ -13559,7 +13575,9 @@ OB_SERIALIZE_MEMBER(ObProfileSchema,
                     password_verify_function_,
                     password_life_time_,
                     password_grace_time_,
-                    password_rollover_time_);
+                    password_rollover_time_,
+                    idle_time_,
+                    sessions_per_user_);
 
 ObDirectorySchema::ObDirectorySchema()
   : ObSchema()

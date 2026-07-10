@@ -8652,14 +8652,14 @@ public:
     PASSWORD_LIFE_TIME,
     PASSWORD_GRACE_TIME,
     PASSWORD_ROLLOVER_TIME,
+    IDLE_TIME,
+    SESSIONS_PER_USER,
     /*
     PASSWORD_REUSE_TIME,
     PASSWORD_REUSE_MAX,
-    SESSIONS_PER_USER,
     CPU_PER_SESSION,
     CPU_PER_CALL,
     CONNECT_TIME,
-    IDLE_TIME,
     LOGICAL_READS_PER_SESSION,
     LOGICAL_READS_PER_CALL,
     PRIVATE_SGA,
@@ -8677,7 +8677,7 @@ public:
 
   TO_STRING_KV(K_(tenant_id), K_(profile_id), K_(schema_version), K_(profile_name),
                K_(failed_login_attempts), K_(password_lock_time), K_(password_life_time),
-               K_(password_grace_time), K_(password_rollover_time));
+               K_(password_grace_time), K_(password_rollover_time), K_(idle_time), K_(sessions_per_user));
 
   bool is_valid() const;
   void reset();
@@ -8696,6 +8696,8 @@ public:
   inline void set_password_life_time(const int64_t value) { password_life_time_ = value; }
   inline void set_password_grace_time(const int64_t value) { password_grace_time_ = value; }
   inline void set_password_rollover_time(const int64_t value) { password_rollover_time_ = value; }
+  inline void set_idle_time(const int64_t value) { idle_time_ = value; }
+  inline void set_sessions_per_user(const int64_t value) { sessions_per_user_ = value; }
 
   inline uint64_t get_tenant_id() const { return tenant_id_; }
   inline uint64_t get_profile_id() const { return profile_id_; }
@@ -8707,6 +8709,8 @@ public:
   inline int64_t get_password_life_time() const { return password_life_time_; }
   inline int64_t get_password_grace_time() const { return password_grace_time_; }
   inline int64_t get_password_rollover_time() const { return password_rollover_time_; }
+  inline int64_t get_idle_time() const { return idle_time_; }
+  inline int64_t get_sessions_per_user() const { return sessions_per_user_; }
 
   inline ObTenantProfileId get_tenant_profile_id() const { return ObTenantProfileId(tenant_id_, profile_id_); }
 
@@ -8729,6 +8733,8 @@ private:
   int64_t password_life_time_;
   int64_t password_grace_time_;
   int64_t password_rollover_time_;
+  int64_t idle_time_;
+  int64_t sessions_per_user_;
 };
 
 common::ObIAllocator *&schema_stack_allocator();
