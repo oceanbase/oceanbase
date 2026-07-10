@@ -534,6 +534,7 @@ int ObTXTransferUtils::set_tablet_freeze_flag(storage::ObLS &ls, ObTablet *table
   MDS_TG(10_ms);
   int ret = OB_SUCCESS;
   ObArray<ObTableHandleV2> memtables;
+  memtables.set_attr(ObMemAttr(MTL_ID(), "TransferMemtbl"));
   ObTabletID tablet_id = tablet->get_tablet_meta().tablet_id_;
   SCN weak_read_scn;
   share::ObLSID ls_id = ls.get_ls_id();
@@ -1375,22 +1376,57 @@ int ObTransferBuildTabletInfoCtx::ObTransferStorageSchemaMgr::build_latest_stora
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(task_info));
   } else {
+    const uint64_t tenant_id = task_info.tenant_id_;
+    const int64_t tablet_count = task_info.tablet_list_.count();
     ObRefreshSchemaStatus status;
-    status.tenant_id_ = task_info.tenant_id_;
+    status.tenant_id_ = tenant_id;
     int64_t schema_version = 0;
+    uint64_t compat_version = 0;
+    // tablet count is bounded by _transfer_task_tablet_count_threshold (default 100),
+    // see ObTenantTransferService::get_tablet_count_threshold_()
+    ObSEArray<ObTabletID, 64> tablet_ids;
+    tablet_ids.set_attr(ObMemAttr(MTL_ID(), "TransferTblts"));
+    ObSEArray<uint64_t, 64> table_ids;
+    table_ids.set_attr(ObMemAttr(MTL_ID(), "TransferTbls"));
+    schema::ObSchemaGetterGuard schema_guard;
 
     if (OB_FAIL(server_schema_service->fetch_schema_version(status, *GCTX.sql_proxy_, schema_version))) {
       LOG_WARN("fail to fetch schema version", KR(ret), K(status));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+      LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(tablet_ids.reserve(tablet_count))) {
+      LOG_WARN("failed to reserve tablet ids", K(ret), K(tablet_count));
     } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < task_info.tablet_list_.count(); ++i) {
-        const ObTabletID &tablet_id = task_info.tablet_list_.at(i).tablet_id_;
+      for (int64_t i = 0; OB_SUCC(ret) && i < tablet_count; ++i) {
+        if (OB_FAIL(tablet_ids.push_back(task_info.tablet_list_.at(i).tablet_id_))) {
+          LOG_WARN("failed to push back tablet id", K(ret), K(i));
+        }
+      }
+    }
+
+    // The tablets of one transfer task belong to different tables (data table, its local
+    // indexes and lob aux tables), so resolve every tablet's table_id in one batch and hold a
+    // single tenant level schema guard, instead of one inner table query and one guard per tablet.
+    if (FAILEDx(schema_service->get_tablet_to_table_history(tenant_id, tablet_ids, schema_version, table_ids))) {
+      LOG_WARN("failed to get table ids according to tablet ids", K(ret), K(tenant_id), K(schema_version));
+    } else if (OB_UNLIKELY(table_ids.count() != tablet_count)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table id count does not match tablet id count", K(ret), K(tablet_count), K(table_ids));
+    } else if (OB_FAIL(check_all_tables_exist_(schema_version, tablet_ids, table_ids))) {
+      LOG_WARN("some table of the transfer task is deleted", K(ret), K(tenant_id), K(schema_version));
+    } else if (OB_FAIL(get_schema_guard_(tenant_id, schema_version, table_ids.at(0), *schema_service, schema_guard))) {
+      LOG_WARN("failed to get schema guard", K(ret), K(tenant_id), K(schema_version));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < tablet_count; ++i) {
+        const ObTabletID &tablet_id = tablet_ids.at(i);
         if (timeout_ctx.is_timeouted()) {
           ret = OB_TIMEOUT;
           LOG_WARN("transfer prepare storage schema timeout", K(ret));
-        } else if (OB_FAIL(build_tablet_storage_schema_(task_info, tablet_id, schema_version, ls, *schema_service))) {
+        } else if (OB_FAIL(build_tablet_storage_schema_(tenant_id, tablet_id, table_ids.at(i),
+            compat_version, ls, schema_guard))) {
           LOG_WARN("failed to build tablet storage schema", K(ret), K(tablet_id));
         }
-      }
+      } // for
     }
   }
 
@@ -1398,39 +1434,108 @@ int ObTransferBuildTabletInfoCtx::ObTransferStorageSchemaMgr::build_latest_stora
   return ret;
 }
 
-int ObTransferBuildTabletInfoCtx::ObTransferStorageSchemaMgr::build_tablet_storage_schema_(
-    const share::ObTransferTaskInfo &task_info,
-    const ObTabletID &tablet_id,
+// get_tablet_to_table_history() keeps a one-to-one correspondence between tablet_ids and
+// table_ids, filling OB_INVALID_ID where the tablet-table history was recycled or the tablet
+// was dropped. Every tablet of a transfer task must resolve to a live table, so reject the
+// whole batch here instead of letting build_tablet_storage_schema_() discover the hole after
+// it has already built the storage schema of the preceding tablets.
+int ObTransferBuildTabletInfoCtx::ObTransferStorageSchemaMgr::check_all_tables_exist_(
     const int64_t schema_version,
+    const common::ObIArray<ObTabletID> &tablet_ids,
+    const common::ObIArray<uint64_t> &table_ids)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(schema_version < 0 || tablet_ids.count() != table_ids.count() || table_ids.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("check all tables exist get invalid argument", K(ret), K(schema_version), K(tablet_ids), K(table_ids));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); ++i) {
+      if (OB_UNLIKELY(OB_INVALID_ID == table_ids.at(i))) {
+        ret = OB_TABLE_IS_DELETED;
+        LOG_WARN("table is deleted", K(ret), K(schema_version), "tablet_id", tablet_ids.at(i));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransferBuildTabletInfoCtx::ObTransferStorageSchemaMgr::get_schema_guard_(
+    const uint64_t tenant_id,
+    const int64_t schema_version,
+    const uint64_t table_id,
+    ObMultiVersionSchemaService &schema_service,
+    schema::ObSchemaGetterGuard &schema_guard)
+{
+  int ret = OB_SUCCESS;
+  int64_t save_schema_version = schema_version;
+
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || schema_version < 0 || OB_INVALID_ID == table_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get schema guard get invalid argument", K(ret), K(tenant_id), K(schema_version), K(table_id));
+  } else if (OB_FAIL(schema_service.retry_get_schema_guard(tenant_id, schema_version, table_id,
+      schema_guard, save_schema_version))) {
+    // retry_get_schema_guard() refreshes the local schema up to schema_version and the guard it
+    // returns is tenant scoped, so one guard serves every tablet of the task. Its table_id
+    // argument only decides whether the table is probed successfully at schema_version; when it
+    // is not, retry_get_schema_guard() itself reports OB_TABLE_IS_DELETED. So any table_id of
+    // the task may drive it, and check_all_tables_exist_() has already proven they all resolve.
+    if (OB_TABLE_IS_DELETED == ret) {
+      LOG_WARN("table is deleted", K(ret), K(table_id));
+    } else if (OB_ERR_SCHEMA_HISTORY_EMPTY == ret) {
+      LOG_WARN("schema history may recycle", K(ret));
+    } else {
+      LOG_WARN("failed to get schema guard", K(ret), K(tenant_id), K(schema_version), K(table_id));
+    }
+  } else if (OB_UNLIKELY(save_schema_version < schema_version)) {
+    // Unreachable while retry_get_schema_guard() reports OB_TABLE_IS_DELETED for every
+    // schema_version > save_schema_version. Kept as a guard against that contract changing,
+    // because a storage schema built on an older version would silently skew the merge.
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("can not use older schema version", K(ret), K(schema_version), K(save_schema_version), K(table_id));
+  }
+  return ret;
+}
+
+int ObTransferBuildTabletInfoCtx::ObTransferStorageSchemaMgr::build_tablet_storage_schema_(
+    const uint64_t tenant_id,
+    const ObTabletID &tablet_id,
+    const uint64_t table_id,
+    const uint64_t compat_version,
     ObLS *ls,
-    ObMultiVersionSchemaService &schema_service)
+    schema::ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
   ObTablet *tablet = nullptr;
   ObStorageSchema *storage_schema = nullptr;
-  uint64_t compat_version = 0;
-  uint64_t unused_table_id = OB_INVALID_ID;
+  const schema::ObTableSchema *table_schema = nullptr;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer storage schema mgr do not init", K(ret));
-  } else if (schema_version < 0 || !tablet_id.is_valid() || OB_ISNULL(ls)) {
+  } else if (!tablet_id.is_valid() || OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get table storage schema get invalid argument", K(ret), K(schema_version));
-  } else if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle, 0,
-      ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
-    LOG_WARN("failed to get tablet", K(ret), K(task_info));
+    LOG_WARN("get table storage schema get invalid argument", K(ret), K(tablet_id), KP(ls));
+  } else if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
+    // tablet-table history is recycled, or the tablet has been dropped
+    ret = OB_TABLE_IS_DELETED;
+    LOG_WARN("table is deleted", K(ret), K(tablet_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_IS_DELETED;
+    LOG_WARN("table is deleted", K(ret), K(table_id));
+  } else if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+    LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), KP(tablet));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(task_info.tenant_id_, compat_version))) {
-    LOG_WARN("fail to get data version", KR(ret), K(task_info));
   } else if (OB_FAIL(ObStorageSchemaUtil::alloc_storage_schema(allocator_, storage_schema))) {
     LOG_WARN("failed to alloc storage schema", K(ret));
-  } else if (OB_FAIL(compaction::ObMediumCompactionScheduleFunc::get_table_schema_to_merge(
-      schema_service, *tablet, schema_version, compat_version, allocator_, *storage_schema, unused_table_id))) {
-    LOG_WARN("failed to get table schema to merge", K(ret), KPC(tablet), K(task_info));
+  } else if (OB_FAIL(compaction::ObMediumCompactionScheduleFunc::build_storage_schema_to_merge(
+      *tablet, *table_schema, compat_version, allocator_, *storage_schema))) {
+    LOG_WARN("failed to build storage schema to merge", K(ret), KPC(tablet), K(table_id));
   } else if (OB_FAIL(storage_schema_map_.set_refactored(tablet_id, storage_schema))) {
     LOG_WARN("failed to push storage schema into map", K(ret), K(tablet_id), KPC(storage_schema));
   } else {
@@ -1439,6 +1544,7 @@ int ObTransferBuildTabletInfoCtx::ObTransferStorageSchemaMgr::build_tablet_stora
 
   if (OB_NOT_NULL(storage_schema)) {
     storage_schema->~ObStorageSchema();
+    storage_schema = nullptr;
   }
   return ret;
 }

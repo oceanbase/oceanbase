@@ -1220,14 +1220,28 @@ int ObMediumCompactionScheduleFunc::get_table_schema_to_merge(
     }
   }
 #endif
-  // for old version medium info, need generate old version schema
-  if (FAILEDx(storage_schema.init(allocator, *table_schema, tablet.get_tablet_meta().compat_mode_, false/*skip_column_info*/, data_version, false/*generate_cs_replica_cg_array*/))) {
-    LOG_WARN("failed to init storage schema", K(ret), K(schema_version), K(tablet), KPC(table_schema));
+  if (FAILEDx(build_storage_schema_to_merge(tablet, *table_schema, data_version, allocator, storage_schema))) {
+    LOG_WARN("failed to build storage schema", K(ret), K(schema_version), K(tablet), KPC(table_schema));
   } else {
     LOG_INFO("get schema to merge", K(tablet_id), K(table_id), K(schema_version),
               K(storage_schema),
               "is_hidden_table", table_schema->is_user_hidden_table(),
               "is_invalid_index", table_schema->is_index_table() && !table_schema->can_read_index());
+  }
+  return ret;
+}
+
+int ObMediumCompactionScheduleFunc::build_storage_schema_to_merge(
+    const ObTablet &tablet,
+    const ObTableSchema &table_schema,
+    const int64_t data_version,
+    ObIAllocator &allocator,
+    ObStorageSchema &storage_schema)
+{
+  int ret = OB_SUCCESS;
+  // for old version medium info, need generate old version schema
+  if (OB_FAIL(storage_schema.init(allocator, table_schema, tablet.get_tablet_meta().compat_mode_, false/*skip_column_info*/, data_version, false/*generate_cs_replica_cg_array*/))) {
+    LOG_WARN("failed to init storage schema", K(ret), K(data_version), K(tablet), K(table_schema));
   }
   return ret;
 }

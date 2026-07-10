@@ -19,6 +19,13 @@
 
 namespace oceanbase
 {
+namespace share
+{
+namespace schema
+{
+class ObSchemaGetterGuard;
+}
+}
 namespace storage
 {
 
@@ -342,12 +349,23 @@ private:
     int build_latest_storage_schema_(
         const share::ObTransferTaskInfo &task_info,
         ObTimeoutCtx &timeout_ctx);
-    int build_tablet_storage_schema_(
-        const share::ObTransferTaskInfo &task_info,
-        const ObTabletID &tablet_id,
+    int check_all_tables_exist_(
         const int64_t schema_version,
+        const common::ObIArray<ObTabletID> &tablet_ids,
+        const common::ObIArray<uint64_t> &table_ids);
+    int get_schema_guard_(
+        const uint64_t tenant_id,
+        const int64_t schema_version,
+        const uint64_t table_id,
+        ObMultiVersionSchemaService &schema_service,
+        share::schema::ObSchemaGetterGuard &schema_guard);
+    int build_tablet_storage_schema_(
+        const uint64_t tenant_id,
+        const ObTabletID &tablet_id,
+        const uint64_t table_id,
+        const uint64_t compat_version,
         ObLS *ls,
-        ObMultiVersionSchemaService &schema_service);
+        share::schema::ObSchemaGetterGuard &schema_guard);
   private:
     bool is_inited_;
     common::ObArenaAllocator allocator_;

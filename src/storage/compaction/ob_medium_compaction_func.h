@@ -77,6 +77,15 @@ public:
     ObIAllocator &allocator,
     storage::ObStorageSchema &storage_schema,
     uint64_t &table_id);
+  // The only place a merge storage schema is materialized from a table schema.
+  // Transfer builds the dest tablet schema through here as well, so that schema stays a
+  // column superset of any major the source may later produce from a medium info.
+  static int build_storage_schema_to_merge(
+    const ObTablet &tablet,
+    const ObTableSchema &table_schema,
+    const int64_t data_version,
+    ObIAllocator &allocator,
+    storage::ObStorageSchema &storage_schema);
   static int get_table_schema(
     ObMultiVersionSchemaService &schema_service,
     const ObTabletID tablet_id,
