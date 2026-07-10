@@ -265,14 +265,54 @@ int ObVecTaskManager::create_task(ObVecIndexAsyncTaskStatus initial_status)
   int ret = OB_SUCCESS;
   uint64_t trace_base_num = 0;
   ObSEArray<ObTabletID, 1> tablet_ids;
+  ObSEArray<ObTabletID, 1> new_tablet_ids;
   ObArray<ObVecIndexAsyncTaskCtx*> task_ctx_array;
   ObArenaAllocator allocator("VecTaskCtx", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  common::hash::ObHashSet<ObTabletID> dedup_tablets;
   if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, index_table_id_, tablet_ids))) {
     LOG_WARN("failed to get tablet ids", K(ret));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", K(ret));
+  } else if (OB_FAIL(dedup_tablets.create(
+                 hash::cal_next_prime(MAX(tablet_ids.count(), 1)),
+                 "VecTaskDedup", "VecTaskDedup", tenant_id_))) {
+    LOG_WARN("fail to create dedup tablet set", K(ret), K(tablet_ids.count()));
+  } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::get_tablets_with_standby_manual_task(
+                 tenant_id_, index_table_id_, task_type_, *GCTX.sql_proxy_, dedup_tablets))) {
+    LOG_WARN("fail to get tablets with standby manual task", K(ret), K(tenant_id_), K(index_table_id_));
   } else {
-    for (int i = 0; i < tablet_ids.count() && OB_SUCC(ret); i++) {
+    // Skip tablets that already have an identical STANDBY manual task; repeated
+    // flush_index/compact_index calls must not pile up duplicate rows.
+    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); i++) {
+      const int exist_ret = dedup_tablets.exist_refactored(tablet_ids.at(i));
+      if (OB_HASH_EXIST == exist_ret) {
+        // duplicate, skip
+      } else if (OB_HASH_NOT_EXIST == exist_ret) {
+        if (OB_FAIL(new_tablet_ids.push_back(tablet_ids.at(i)))) {
+          LOG_WARN("fail to collect new tablet id", K(ret), K(tablet_ids.at(i)));
+        }
+      } else {
+        ret = exist_ret;
+        LOG_WARN("fail to check dedup tablet set", K(ret), K(tablet_ids.at(i)));
+      }
+    }
+    if (OB_SUCC(ret) && new_tablet_ids.count() < tablet_ids.count()) {
+      LOG_INFO("skip duplicate standby manual tasks", K(tenant_id_), K(index_table_id_),
+               K(task_type_), "total", tablet_ids.count(), "new", new_tablet_ids.count());
+    }
+    // Tenant-wide cap on pending manual tasks; reject the whole call when exceeded.
+    if (OB_SUCC(ret) && new_tablet_ids.count() > 0
+        && OB_FAIL(ObVecIndexAsyncTaskUtil::check_standby_manual_task_quota(
+               tenant_id_, *GCTX.sql_proxy_, new_tablet_ids.count()))) {
+      LOG_WARN("standby manual task quota check failed", K(ret), K(tenant_id_),
+               K(index_table_id_), "new_task_cnt", new_tablet_ids.count());
+    }
+  }
+  if (OB_SUCC(ret)) {
+    for (int i = 0; i < new_tablet_ids.count() && OB_SUCC(ret); i++) {
       int64_t new_task_id = OB_INVALID_ID;
-      ObTabletID tablet_id = tablet_ids.at(i);
+      ObTabletID tablet_id = new_tablet_ids.at(i);
       ObVecIndexAsyncTaskCtx* task_ctx = nullptr;
       common::ObCurTraceId::TraceId new_trace_id;
       char *task_ctx_buf = static_cast<char *>(allocator.alloc(sizeof(ObVecIndexAsyncTaskCtx)));

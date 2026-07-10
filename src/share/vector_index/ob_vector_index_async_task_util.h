@@ -1131,6 +1131,25 @@ public:
   static const char *get_vec_task_type_short_name(ObVecIndexAsyncTaskType type);
   static int get_vec_task_type_by_short_name(const char *name, ObVecIndexAsyncTaskType &type);
   static int insert_new_task(uint64_t tenant_id, ObVecIndexTaskCtxArray &task_ctx_array);
+  // Max STANDBY manual-trigger rows allowed in __all_vector_index_task per tenant.
+  // Manual submission interfaces (dbms_vector.trigger_async_task / flush_index /
+  // compact_index) reject new tasks that would exceed this cap.
+  static const int64_t VEC_MANUAL_TASK_MAX_STANDBY_CNT = 10000;
+  // Collect tablet_ids of table_id that already have a STANDBY manual-trigger row of
+  // task_type, so submission interfaces can skip inserting duplicate tasks.
+  static int get_tablets_with_standby_manual_task(
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      const int64_t task_type,
+      common::ObISQLClient &sql_client,
+      common::hash::ObHashSet<common::ObTabletID> &dedup_tablets);
+  // Check that inserting new_task_cnt manual rows keeps the tenant-wide STANDBY
+  // manual-trigger row count within VEC_MANUAL_TASK_MAX_STANDBY_CNT.
+  // Returns OB_OP_NOT_ALLOW (with user error) when the quota would be exceeded.
+  static int check_standby_manual_task_quota(
+      const uint64_t tenant_id,
+      common::ObISQLClient &sql_client,
+      const int64_t new_task_cnt);
   // Create one memsync trigger task record in __all_vector_index_task (PREPARE status).
   // Timer/scheduler will read and execute memdata sync for this record.
   static int create_memsync_trigger_task_record(

@@ -15,6 +15,7 @@
 
 #include "lib/task/ob_timer.h"
 #include "lib/hash/ob_hashmap.h"
+#include "lib/hash/ob_hashset.h"
 #include "lib/lock/ob_spin_lock.h"
 #include "share/ob_ls_id.h"
 #include "share/vector_index/ob_plugin_vector_index_scheduler.h"
@@ -157,6 +158,7 @@ public:
       last_can_do_work_check_ts_(0),
       last_triggered_task_check_ts_(0),
       last_orphan_task_check_ts_(0),
+      last_history_clear_ts_(0),
       last_sched_snapshot_ts_(0),
       last_blocked_diag_ts_(0),
       last_unexpected_no_pop_diag_ts_(0),
@@ -217,6 +219,7 @@ private:
   static const int64_t TABLE_GENERATE_BATCH_SIZE = 200;
   static const int64_t CAN_DO_WORK_CACHE_INTERVAL_US = 30 * 1000 * 1000;       // 30s
   static const int64_t TRIGGERED_TASK_CHECK_INTERVAL_US = 5 * 1000 * 1000;     // 5s
+  static const int64_t TRIGGERED_TASK_BATCH_SQL_SIZE = 500;  // max task_ids per batch claim/finish SQL
   static const int64_t ORPHAN_TASK_CHECK_INTERVAL_US = 30 * 1000 * 1000;       // 30s
   static const int64_t ORPHAN_TASK_MIN_AGE_US = 30 * 1000 * 1000;              // 30s
   static const int64_t STARTUP_CLEANUP_BATCH_SIZE = 100L;
@@ -229,6 +232,7 @@ private:
   static const int64_t HISTORY_MOVE_BATCH_SIZE = 1024L;
   static const int64_t HISTORY_MOVE_MAX_ROWS_PER_ROUND = 4096L;
   static const int64_t HISTORY_CLEAR_BATCH_SIZE = 4096L;
+  static const int64_t HISTORY_CLEAR_INTERVAL_US = 12LL * 60 * 60 * 1000 * 1000; // 12h
 
   void run_timer_task();
   // True if tenant is not in restore and can run vector index scheduling.
@@ -307,6 +311,17 @@ private:
   int resolve_leader_triggered_executor_(const int64_t task_type, ObVecIdxLeaderExecutors &exec, ObVecITaskExecutor *&out);
   int resolve_follower_triggered_executor_(const int64_t task_type, ObVecIdxFollowerExecutors &exec, ObVecITaskExecutor *&out);
   int claim_triggered_task_(const ObVecIndexTaskStatus &row, bool &claimed);
+  // Batch variants used by load_triggered_tasks_: one autocommit UPDATE per chunk of
+  // TRIGGERED_TASK_BATCH_SQL_SIZE task_ids instead of one transaction per row.
+  // task_id is tenant-unique, so rows are matched by task_id only; task_ids must all
+  // belong to task_type (priority is derived from it). Successfully claimed task_ids
+  // are added to claimed_set.
+  int batch_claim_triggered_tasks_(const int64_t task_type,
+                                   const common::ObIArray<int64_t> &task_ids,
+                                   common::hash::ObHashSet<int64_t> &claimed_set);
+  int batch_finish_triggered_tasks_(const common::ObIArray<int64_t> &task_ids,
+                                    const int ret_code,
+                                    const int64_t expected_status);
   int finish_triggered_task_(
       const ObVecIndexTaskStatus &row,
       const int ret_code,
@@ -381,6 +396,7 @@ private:
   int64_t last_can_do_work_check_ts_;     // timestamp of last successful check_can_do_work()
   int64_t last_triggered_task_check_ts_;  // timestamp of last load_triggered_tasks_()
   int64_t last_orphan_task_check_ts_;      // timestamp of last orphan self-task check
+  int64_t last_history_clear_ts_;          // timestamp of last history expire-record clear
   int64_t last_sched_snapshot_ts_;
   int64_t last_blocked_diag_ts_;
   int64_t last_unexpected_no_pop_diag_ts_;

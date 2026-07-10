@@ -2753,7 +2753,11 @@ static int trigger_async_task_impl(ObPLExecCtx &ctx,
     common::ObCurTraceId::TraceId new_trace_id;
     ObArenaAllocator tmp_allocator("VecManualTrig");
     char trace_id_str[OB_MAX_TRACE_ID_BUFFER_SIZE] = {0};
-    if (OB_FAIL(share::ObVecIndexAsyncTaskUtil::fetch_new_task_id(tenant_id, task_id))) {
+    if (OB_FAIL(share::ObVecIndexAsyncTaskUtil::check_standby_manual_task_quota(
+            tenant_id, *GCTX.sql_proxy_, 1))) {
+      LOG_WARN("standby manual task quota check failed for trigger_async_task",
+               KR(ret), K(tenant_id), K(target_table_id));
+    } else if (OB_FAIL(share::ObVecIndexAsyncTaskUtil::fetch_new_task_id(tenant_id, task_id))) {
       LOG_WARN("fail to fetch new task id for trigger_async_task", KR(ret), K(tenant_id));
     } else if (OB_FAIL(share::ObVecIndexAsyncTaskUtil::fetch_new_trace_id(
                    static_cast<uint64_t>(task_id), &tmp_allocator, new_trace_id))) {

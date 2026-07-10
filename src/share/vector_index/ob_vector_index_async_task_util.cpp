@@ -1036,6 +1036,89 @@ int ObVecIndexAsyncTaskUtil::insert_new_task(uint64_t tenant_id, ObVecIndexTaskC
   return ret;
 }
 
+int ObVecIndexAsyncTaskUtil::get_tablets_with_standby_manual_task(
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    const int64_t task_type,
+    common::ObISQLClient &sql_client,
+    common::hash::ObHashSet<common::ObTabletID> &dedup_tablets)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  const uint64_t extract_tenant_id = ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id);
+  if (OB_FAIL(sql.assign_fmt(
+          "SELECT tablet_id FROM %s WHERE tenant_id = %lu AND table_id = %lu"
+          " AND task_type = %ld AND trigger_type = %ld AND status = %ld",
+          OB_ALL_VECTOR_INDEX_TASK_TNAME, extract_tenant_id, table_id, task_type,
+          static_cast<int64_t>(ObVecIndexAsyncTaskTriggerType::OB_VEC_TRIGGER_MANUAL),
+          static_cast<int64_t>(ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_STANDBY)))) {
+    LOG_WARN("fail to assign dedup query sql", KR(ret), K(tenant_id), K(table_id), K(task_type));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      sqlclient::ObMySQLResult *result = nullptr;
+      if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
+        LOG_WARN("fail to read standby manual tasks", KR(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("query result is null", KR(ret));
+      } else {
+        while (OB_SUCC(ret) && OB_SUCC(result->next())) {
+          uint64_t tablet_id = 0;
+          EXTRACT_INT_FIELD_MYSQL(*result, "tablet_id", tablet_id, uint64_t);
+          if (OB_SUCC(ret) && OB_FAIL(dedup_tablets.set_refactored(ObTabletID(tablet_id)))) {
+            LOG_WARN("fail to add dedup tablet id", KR(ret), K(tablet_id));
+          }
+        }
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObVecIndexAsyncTaskUtil::check_standby_manual_task_quota(
+    const uint64_t tenant_id,
+    common::ObISQLClient &sql_client,
+    const int64_t new_task_cnt)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t standby_cnt = 0;
+  const uint64_t extract_tenant_id = ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id);
+  if (OB_FAIL(sql.assign_fmt(
+          "SELECT COUNT(*) AS cnt FROM %s WHERE tenant_id = %lu"
+          " AND trigger_type = %ld AND status = %ld",
+          OB_ALL_VECTOR_INDEX_TASK_TNAME, extract_tenant_id,
+          static_cast<int64_t>(ObVecIndexAsyncTaskTriggerType::OB_VEC_TRIGGER_MANUAL),
+          static_cast<int64_t>(ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_STANDBY)))) {
+    LOG_WARN("fail to assign quota query sql", KR(ret), K(tenant_id));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      sqlclient::ObMySQLResult *result = nullptr;
+      if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
+        LOG_WARN("fail to count standby manual tasks", KR(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("query result is null", KR(ret));
+      } else if (OB_FAIL(result->next())) {
+        LOG_WARN("fail to get count row", KR(ret));
+      } else {
+        EXTRACT_INT_FIELD_MYSQL(*result, "cnt", standby_cnt, int64_t);
+      }
+    }
+  }
+  if (OB_SUCC(ret) && standby_cnt + new_task_cnt > VEC_MANUAL_TASK_MAX_STANDBY_CNT) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW,
+        "creating manual vector index tasks over the pending standby task limit is");
+    LOG_WARN("standby manual task quota exceeded", KR(ret), K(tenant_id),
+             K(standby_cnt), K(new_task_cnt), LITERAL_K(VEC_MANUAL_TASK_MAX_STANDBY_CNT));
+  }
+  return ret;
+}
+
 int ObVecIndexAsyncTaskUtil::in_active_time(
     const uint64_t tenant_id, bool& is_active_time)
 {
@@ -1157,6 +1240,8 @@ int ObVecIndexAsyncTaskUtil::move_task_to_history_table(
   uint64_t data_version = 0;
   share::SCN snapshot_scn;
   int64_t snapshot_val = 0;
+  ObSEArray<int64_t, 128> task_ids;
+  move_rows = 0;
 
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("fail to get tenant data version", KR(ret), K(data_version));
@@ -1167,6 +1252,43 @@ int ObVecIndexAsyncTaskUtil::move_task_to_history_table(
     LOG_WARN("fail to get read snapshot scn for archival", KR(ret));
   } else if (FALSE_IT(snapshot_val = snapshot_scn.get_val_for_sql())) {
     // unreachable
+  } else if (OB_FAIL(sql.assign_fmt("SELECT task_id FROM %s AS OF SNAPSHOT %ld WHERE tenant_id = %ld AND status = 3 ORDER BY gmt_create LIMIT %ld",
+                 share::OB_ALL_VECTOR_INDEX_TASK_TNAME,
+                 snapshot_val,
+                 ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+                 batch_size))) {
+    LOG_WARN("sql assign fmt failed", K(ret));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      sqlclient::ObMySQLResult *result = nullptr;
+      if (OB_FAIL(proxy.read(res, tenant_id, sql.ptr()))) {
+        LOG_WARN("fail to execute sql", KR(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, query result must not be NULL", K(ret));
+      } else {
+        while (OB_SUCC(ret)) {
+          if (OB_FAIL(result->next())) {
+            if (OB_ITER_END != ret) {
+              LOG_WARN("fail to get next row", K(ret));
+            }
+          } else {
+            int64_t task_id = 0;
+            EXTRACT_INT_FIELD_MYSQL(*result, "task_id", task_id, int64_t);
+            if (OB_SUCC(ret) && OB_FAIL(task_ids.push_back(task_id))) {
+              LOG_WARN("fail to push back task id", K(ret), K(task_id));
+            }
+          }
+        }
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        }
+      }
+    }
+  }
+
+  if (OB_FAIL(ret) || task_ids.empty()) {
+    // nothing to move: skip REPLACE/DELETE so idle rounds cost only the small SELECT above
   } else {
     /*
      [451, ): task_info已经占位;
@@ -1175,42 +1297,42 @@ int ObVecIndexAsyncTaskUtil::move_task_to_history_table(
     const bool has_task_info = (data_version >= DATA_VERSION_4_5_1_0);
     const bool has_obs_cols = (data_version >= DATA_VERSION_4_6_0_0);
     ObSqlString extra_cols;
-    if (has_task_info && OB_FAIL(extra_cols.append(", task_info"))) {
+    ObSqlString task_id_list;
+    for (int64_t i = 0; OB_SUCC(ret) && i < task_ids.count(); ++i) {
+      if (OB_FAIL(task_id_list.append_fmt("%s%ld", (0 == i) ? "" : ", ", task_ids.at(i)))) {
+        LOG_WARN("fail to append task id", K(ret), K(i));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (has_task_info && OB_FAIL(extra_cols.append(", task_info"))) {
       LOG_WARN("fail to append extra_cols", K(ret));
     } else if (has_obs_cols && OB_FAIL(extra_cols.append(", exec_addr, priority, start_time, end_time, err_msg"))) {
       LOG_WARN("fail to append extra_cols", K(ret));
-    } else if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s SELECT gmt_create, gmt_modified, tenant_id, table_id, tablet_id, task_id, trigger_type, task_type, status, target_scn, ret_code, trace_id%s FROM %s AS OF SNAPSHOT %ld"
-              " WHERE (tenant_id, table_id, tablet_id, task_id) IN"
-              " (SELECT tenant_id, table_id, tablet_id, task_id FROM %s AS OF SNAPSHOT %ld WHERE tenant_id = %ld AND status = 3 ORDER BY gmt_create, tenant_id, table_id, tablet_id, task_id LIMIT %ld)",
+    } else if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s SELECT gmt_create, gmt_modified, tenant_id, table_id, tablet_id, task_id, trigger_type, task_type, status, target_scn, ret_code, trace_id%s FROM %s AS OF SNAPSHOT %ld WHERE tenant_id = %ld AND task_id IN (%s)",
               share::OB_ALL_VECTOR_INDEX_TASK_HISTORY_TNAME,
               extra_cols.empty() ? "" : extra_cols.ptr(),
               share::OB_ALL_VECTOR_INDEX_TASK_TNAME,
               snapshot_val,
-              share::OB_ALL_VECTOR_INDEX_TASK_TNAME,
-              snapshot_val,
               ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
-              batch_size))){
+              task_id_list.ptr()))){
       LOG_WARN("sql assign fmt failed", K(ret));
+    } else if (OB_FAIL(proxy.write(tenant_id, sql.ptr(), insert_rows))) {
+      LOG_WARN("fail to execute sql", K(ret), K(sql), K(tenant_id));
+    } else if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE tenant_id = %ld AND task_id IN (%s)",
+            share::OB_ALL_VECTOR_INDEX_TASK_TNAME,
+            ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+            task_id_list.ptr()))) {
+      LOG_WARN("sql assign fmt failed", K(ret));
+    } else if (OB_FAIL(proxy.write(tenant_id, sql.ptr(), delete_rows))) {
+      LOG_WARN("fail to execute sql", K(ret), K(sql), K(tenant_id));
+    } else {
+      move_rows = delete_rows;
+      if (delete_rows != task_ids.count() || insert_rows < delete_rows) {
+        LOG_WARN("moved rows mismatch with selected batch", K(tenant_id),
+            K(task_ids.count()), K(insert_rows), K(delete_rows));
+      }
+      LOG_DEBUG("batch move task to history table", K(ret), K(tenant_id), K(sql), K(insert_rows), K(delete_rows));
     }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(proxy.write(tenant_id, sql.ptr(), insert_rows))) {
-    LOG_WARN("fail to execute sql", K(ret), K(sql), K(tenant_id));
-  } else if (OB_FAIL(sql.assign_fmt("DELETE FROM %s"
-          " WHERE (tenant_id, table_id, tablet_id, task_id) IN"
-          " (SELECT tenant_id, table_id, tablet_id, task_id FROM %s AS OF SNAPSHOT %ld WHERE tenant_id = %ld AND status = 3 ORDER BY gmt_create, tenant_id, table_id, tablet_id, task_id LIMIT %ld)",
-          share::OB_ALL_VECTOR_INDEX_TASK_TNAME,
-          share::OB_ALL_VECTOR_INDEX_TASK_TNAME,
-          snapshot_val,
-          ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
-          batch_size))) {
-    LOG_WARN("sql assign fmt failed", K(ret));
-  } else if (OB_FAIL(proxy.write(tenant_id, sql.ptr(), delete_rows))) {
-    LOG_WARN("fail to execute sql", K(ret), K(sql), K(tenant_id));
-  } else {
-    move_rows = delete_rows;
-    LOG_DEBUG("batch move task to history table", K(ret), K(tenant_id), K(sql), K(insert_rows), K(delete_rows), K(snapshot_val));
   }
   return ret;
 }
@@ -1361,15 +1483,20 @@ int ObVecIndexAsyncTaskUtil::insert_vec_tasks(
     LOG_WARN("invalid argument", K(ret), K(batch_size));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("fail to get tenant data version", KR(ret), K(data_version));
-  } else if (data_version < DATA_VERSION_4_3_5_2) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("data version less than 4.3.5.2 is not support");
+  } else if (data_version < DATA_VERSION_4_6_0_1) {
+    // Rolling-upgrade mixed deployment: the new framework runs pure in-memory and
+    // skips inner-table writes, so legacy observers own the task table exclusively
+    // (see ObVecIdxAsyncTaskScheduler::check_can_do_work).
+    if (REACH_TIME_INTERVAL(60L * 1000000)) {
+      LOG_INFO("skip inserting vec tasks into inner table, data version < 4.6.0.1",
+               K(tenant_id), K(data_version));
+    }
+    return ret;
   } else if (OB_FAIL(sql.assign_fmt(" INSERT INTO %s"
                                     " (tenant_id, table_id, tablet_id,"
                                     " task_id, trigger_type, task_type, status, target_scn,"
-                                    " ret_code, trace_id%s) VALUES",
-                                    tname,
-                                    data_version >= DATA_VERSION_4_6_0_1 ? ", priority, exec_addr" : ""))) {
+                                    " ret_code, trace_id, priority, exec_addr) VALUES",
+                                    tname))) {
     LOG_WARN("fail to assign fmt", K(ret));
   } else {
     // values
@@ -1389,21 +1516,12 @@ int ObVecIndexAsyncTaskUtil::insert_vec_tasks(
         if (task.exec_addr_.is_valid()) {
           task.exec_addr_.ip_port_to_string(exec_addr_buf, sizeof(exec_addr_buf));
         }
-        if (data_version >= DATA_VERSION_4_6_0_1
-            && OB_FAIL(sql.append_fmt(" (%ld, %ld, %ld, %ld, %ld, %ld, %ld, %ld, %ld, '%s', %ld, '%s')",
-                                      ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
-                                      task.table_id_, task.tablet_id_.id(),
-                                      task.task_id_, task.trigger_type_, task.task_type_,
-                                      task.status_, task.target_scn_.get_val_for_sql(), task.ret_code_,
-                                      trace_id_str, priority, exec_addr_buf))) {
-          LOG_WARN("fail to assign fmt", K(ret));
-        } else if (data_version < DATA_VERSION_4_6_0_1
-                   && OB_FAIL(sql.append_fmt(" (%ld, %ld, %ld, %ld, %ld, %ld, %ld, %ld, %ld, '%s')",
-                                             ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
-                                             task.table_id_, task.tablet_id_.id(),
-                                             task.task_id_, task.trigger_type_, task.task_type_,
-                                             task.status_, task.target_scn_.get_val_for_sql(), task.ret_code_,
-                                             trace_id_str))) {
+        if (OB_FAIL(sql.append_fmt(" (%ld, %ld, %ld, %ld, %ld, %ld, %ld, %ld, %ld, '%s', %ld, '%s')",
+                                   ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+                                   task.table_id_, task.tablet_id_.id(),
+                                   task.task_id_, task.trigger_type_, task.task_type_,
+                                   task.status_, task.target_scn_.get_val_for_sql(), task.ret_code_,
+                                   trace_id_str, priority, exec_addr_buf))) {
           LOG_WARN("fail to assign fmt", K(ret));
         } else if ((i != batch_size - 1) && OB_FAIL(sql.append_fmt(","))) {
           LOG_WARN("fail to assign fmt", K(ret), K(i));
@@ -1720,9 +1838,15 @@ int ObVecIndexAsyncTaskUtil::update_vec_task(
 
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("fail to get tenant data version", KR(ret), K(data_version));
-  } else if (data_version < DATA_VERSION_4_3_5_2) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("data version less than 4.3.5.2 is not support");
+  } else if (data_version < DATA_VERSION_4_6_0_1) {
+    // Rolling-upgrade mixed deployment: the new framework runs pure in-memory and
+    // skips inner-table writes, so legacy observers own the task table exclusively
+    // (see ObVecIdxAsyncTaskScheduler::check_can_do_work).
+    if (REACH_TIME_INTERVAL(60L * 1000000)) {
+      LOG_INFO("skip updating vec task inner table, data version < 4.6.0.1",
+               K(tenant_id), K(data_version));
+    }
+    return ret;
   } else if (OB_FAIL(sql.assign_fmt("UPDATE %s SET ", tname))) {
     LOG_WARN("sql assign fmt failed", K(ret));
   }
@@ -1754,8 +1878,6 @@ int ObVecIndexAsyncTaskUtil::update_vec_task(
   }
 
   if (OB_FAIL(ret)) {
-  } else if (data_version < DATA_VERSION_4_4_1_0) {
-    // do nothing
   } else if (progress_info.vec_opt_status_ == OB_VECTOR_ASYNC_OPT_STATUS_MAX) {
     if (OB_FAIL(sql.append_fmt(",progress_info = NULL"))) {
       LOG_WARN("failed to fill statistics", K(ret));
@@ -1815,7 +1937,7 @@ int ObVecIndexAsyncTaskUtil::update_vec_task(
   // task_info (merge segment task: merge_segments + result_segments JSON; mem sync task:
   // aggregated tablet list + per-tablet ret_code JSON; otherwise mem_limit info)
   if (OB_FAIL(ret)) {
-  } else if (data_version >= DATA_VERSION_4_5_1_0 && task_info.merge_segs_.count() > 0) {
+  } else if (task_info.merge_segs_.count() > 0) {
     ObSqlString task_info_json;
     if (OB_FAIL(format_merge_task_info_to_json(task_info, task_info_json))) {
       LOG_WARN("format task_info to json fail", K(ret));
@@ -1846,9 +1968,9 @@ int ObVecIndexAsyncTaskUtil::update_vec_task(
     }
   }
 
-  // observability columns (>= 4.6.0.0): exec_addr, priority, start_time, end_time, err_msg
+  // observability columns: exec_addr, priority, start_time, end_time, err_msg
   if (OB_FAIL(ret)) {
-  } else if (data_version >= DATA_VERSION_4_6_0_0) {
+  } else {
     // exec_addr
     if (exec_addr.is_valid()) {
       char addr_buf[MAX_IP_PORT_LENGTH];

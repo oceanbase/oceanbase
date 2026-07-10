@@ -30,6 +30,7 @@
 #include "share/ob_debug_sync.h"
 #include "share/table/ob_ttl_util.h"
 #include "share/vector_index/ob_vector_index_async_task_util.h"
+#include "lib/utility/ob_tracepoint.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
@@ -38,6 +39,9 @@ namespace oceanbase
 {
 namespace share
 {
+
+ERRSIM_POINT_DEF(ERRSIM_VEC_SKIP_LOAD_TRIGGERED_TASKS,
+    "Skip loading manually triggered vector async tasks and return success.");
 
 // ---------------------------------- ObVecIdxAsyncTaskScheduler ----------------------------------//
 
@@ -607,8 +611,13 @@ int ObVecIdxAsyncTaskScheduler::do_history_cleanup_()
   } else if (OB_FAIL(move_task_to_history_table_())) {
     LOG_WARN("fail to move task to history table", KR(ret), K_(tenant_id));
   } else if (is_stopped_) {
+  } else if (ObTimeUtility::fast_current_time() - last_history_clear_ts_ < HISTORY_CLEAR_INTERVAL_US) {
+    // expired-history clearing full-scans the history table (no index on gmt_modified),
+    // so it only runs every HISTORY_CLEAR_INTERVAL_US while task moving keeps the 30s pace
   } else if (OB_FAIL(clear_history_task_())) {
     LOG_WARN("fail to clear history task", KR(ret), K_(tenant_id));
+  } else {
+    last_history_clear_ts_ = ObTimeUtility::fast_current_time();
   }
   return ret;
 }
@@ -645,22 +654,32 @@ int ObVecIdxAsyncTaskScheduler::move_task_to_history_table_()
 int ObVecIdxAsyncTaskScheduler::clear_history_task_()
 {
   int ret = OB_SUCCESS;
-  int64_t clear_rows = 0;
-  ObMySQLTransaction trans;
-  if (is_stopped_) {
-    ret = OB_CANCELED;
-  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id_))) {
-    LOG_WARN("fail start transaction", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::clear_history_expire_task_record(
-                 tenant_id_, HISTORY_CLEAR_BATCH_SIZE, trans, clear_rows))) {
-    LOG_WARN("fail to clear history task", KR(ret), K_(tenant_id));
-  }
-  if (trans.is_started()) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("fail to commit trans", KR(ret), K(tmp_ret));
-      ret = OB_SUCC(ret) ? tmp_ret : ret;
+  int64_t clear_rows = HISTORY_CLEAR_BATCH_SIZE;
+  int64_t total_cleared = 0;
+  // drain all expired rows in one round since this only runs every HISTORY_CLEAR_INTERVAL_US
+  while (OB_SUCC(ret) && clear_rows == HISTORY_CLEAR_BATCH_SIZE) {
+    ObMySQLTransaction trans;
+    if (is_stopped_) {
+      ret = OB_CANCELED;
+    } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id_))) {
+      LOG_WARN("fail start transaction", KR(ret), K_(tenant_id));
+    } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::clear_history_expire_task_record(
+                   tenant_id_, HISTORY_CLEAR_BATCH_SIZE, trans, clear_rows))) {
+      LOG_WARN("fail to clear history task", KR(ret), K_(tenant_id));
     }
+    if (trans.is_started()) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("fail to commit trans", KR(ret), K(tmp_ret));
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      total_cleared += clear_rows;
+    }
+  }
+  if (total_cleared > 0) {
+    LOG_INFO("[VEC_ASYNC_TASK] clear expired history task records", KR(ret), K_(tenant_id), K(total_cleared));
   }
   return ret;
 }
@@ -1913,6 +1932,168 @@ int ObVecIdxAsyncTaskScheduler::finish_triggered_task_(
   return ret;
 }
 
+int ObVecIdxAsyncTaskScheduler::batch_claim_triggered_tasks_(
+    const int64_t task_type,
+    const common::ObIArray<int64_t> &task_ids,
+    common::hash::ObHashSet<int64_t> &claimed_set)
+{
+  int ret = OB_SUCCESS;
+  ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
+  if (task_ids.count() <= 0) {
+    // nothing to claim
+  } else if (OB_ISNULL(sql_proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", KR(ret));
+  } else {
+    const uint64_t extract_tenant_id = ObSchemaUtils::get_extract_tenant_id(tenant_id_, tenant_id_);
+    const int64_t priority = static_cast<int64_t>(get_priority_by_task_type(
+        static_cast<ObVecIndexAsyncTaskType>(task_type),
+        ObVecIndexAsyncTaskTriggerType::OB_VEC_TRIGGER_MANUAL));
+    char addr_buf[MAX_IP_PORT_LENGTH] = {0};
+    if (OB_FAIL(GCTX.self_addr().ip_port_to_string(addr_buf, sizeof(addr_buf)))) {
+      LOG_WARN("fail to format self addr", KR(ret));
+    }
+    for (int64_t start = 0; OB_SUCC(ret) && start < task_ids.count();
+         start += TRIGGERED_TASK_BATCH_SQL_SIZE) {
+      const int64_t end = MIN(start + TRIGGERED_TASK_BATCH_SQL_SIZE, task_ids.count());
+      ObSqlString sql;
+      int64_t affected_rows = 0;
+      if (OB_FAIL(sql.assign_fmt(
+              "UPDATE %s SET status = %ld, ret_code = %ld",
+              OB_ALL_VECTOR_INDEX_TASK_TNAME,
+              static_cast<int64_t>(ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE),
+              VEC_ASYNC_TASK_DEFAULT_ERR_CODE))) {
+        LOG_WARN("fail to assign batch claim sql", KR(ret));
+      } else if (OB_FAIL(sql.append_fmt(", exec_addr = '%s', priority = %ld",
+                                        addr_buf, priority))) {
+        LOG_WARN("fail to append exec_addr/priority", KR(ret));
+      } else if (OB_FAIL(sql.append_fmt(
+              " WHERE tenant_id = %lu AND task_type = %ld AND trigger_type = %ld"
+              " AND status = %ld AND task_id IN (",
+              extract_tenant_id, task_type,
+              static_cast<int64_t>(ObVecIndexAsyncTaskTriggerType::OB_VEC_TRIGGER_MANUAL),
+              static_cast<int64_t>(ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_STANDBY)))) {
+        LOG_WARN("fail to append batch claim where clause", KR(ret));
+      }
+      for (int64_t i = start; OB_SUCC(ret) && i < end; ++i) {
+        if (OB_FAIL(sql.append_fmt("%s%ld", i == start ? "" : ",", task_ids.at(i)))) {
+          LOG_WARN("fail to append task id", KR(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(sql.append(")"))) {
+        LOG_WARN("fail to append batch claim sql tail", KR(ret));
+      } else if (OB_FAIL(sql_proxy->write(tenant_id_, sql.ptr(), affected_rows))) {
+        LOG_WARN("fail to execute batch claim sql", KR(ret), K(sql));
+      } else if (affected_rows == end - start) {
+        // Fast path: every row in this chunk was still STANDBY and is now ours.
+        for (int64_t i = start; OB_SUCC(ret) && i < end; ++i) {
+          if (OB_FAIL(claimed_set.set_refactored(task_ids.at(i)))) {
+            LOG_WARN("fail to add claimed task id", KR(ret), "task_id", task_ids.at(i));
+          }
+        }
+      } else {
+        // Some rows were concurrently advanced before our UPDATE; read back the
+        // ones this node actually owns now.
+        ObSqlString query;
+        SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+          sqlclient::ObMySQLResult *result = nullptr;
+          if (OB_FAIL(query.assign_fmt(
+                  "SELECT task_id FROM %s WHERE tenant_id = %lu AND status = %ld"
+                  " AND task_id IN (",
+                  OB_ALL_VECTOR_INDEX_TASK_TNAME, extract_tenant_id,
+                  static_cast<int64_t>(ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE)))) {
+            LOG_WARN("fail to assign claim check sql", KR(ret));
+          }
+          for (int64_t i = start; OB_SUCC(ret) && i < end; ++i) {
+            if (OB_FAIL(query.append_fmt("%s%ld", i == start ? "" : ",", task_ids.at(i)))) {
+              LOG_WARN("fail to append task id", KR(ret));
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(query.append_fmt(") AND exec_addr = '%s'", addr_buf))) {
+            LOG_WARN("fail to append claim check sql tail", KR(ret));
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(sql_proxy->read(res, tenant_id_, query.ptr()))) {
+            LOG_WARN("fail to read back claimed tasks", KR(ret), K(query));
+          } else if (OB_ISNULL(result = res.get_result())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("query result is null", KR(ret));
+          } else {
+            while (OB_SUCC(ret) && OB_SUCC(result->next())) {
+              int64_t task_id = 0;
+              EXTRACT_INT_FIELD_MYSQL(*result, "task_id", task_id, int64_t);
+              if (OB_SUCC(ret) && OB_FAIL(claimed_set.set_refactored(task_id))) {
+                LOG_WARN("fail to add claimed task id", KR(ret), K(task_id));
+              }
+            }
+            if (OB_ITER_END == ret) {
+              ret = OB_SUCCESS;
+            }
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        LOG_INFO("batch claim triggered tasks", K_(tenant_id), K(task_type),
+                 "chunk_size", end - start, K(affected_rows));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObVecIdxAsyncTaskScheduler::batch_finish_triggered_tasks_(
+    const common::ObIArray<int64_t> &task_ids,
+    const int ret_code,
+    const int64_t expected_status)
+{
+  int ret = OB_SUCCESS;
+  ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
+  if (task_ids.count() <= 0) {
+    // nothing to finish
+  } else if (OB_ISNULL(sql_proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", KR(ret));
+  } else {
+    const uint64_t extract_tenant_id = ObSchemaUtils::get_extract_tenant_id(tenant_id_, tenant_id_);
+    for (int64_t start = 0; OB_SUCC(ret) && start < task_ids.count();
+         start += TRIGGERED_TASK_BATCH_SQL_SIZE) {
+      const int64_t end = MIN(start + TRIGGERED_TASK_BATCH_SQL_SIZE, task_ids.count());
+      ObSqlString sql;
+      int64_t affected_rows = 0;
+      if (OB_FAIL(sql.assign_fmt(
+              "UPDATE %s SET status = %ld, ret_code = %d"
+              " WHERE tenant_id = %lu AND status = %ld AND task_id IN (",
+              OB_ALL_VECTOR_INDEX_TASK_TNAME,
+              static_cast<int64_t>(ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH),
+              ret_code, extract_tenant_id, expected_status))) {
+        LOG_WARN("fail to assign batch finish sql", KR(ret));
+      }
+      for (int64_t i = start; OB_SUCC(ret) && i < end; ++i) {
+        if (OB_FAIL(sql.append_fmt("%s%ld", i == start ? "" : ",", task_ids.at(i)))) {
+          LOG_WARN("fail to append task id", KR(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(sql.append(")"))) {
+        LOG_WARN("fail to append batch finish sql tail", KR(ret));
+      } else if (OB_FAIL(sql_proxy->write(tenant_id_, sql.ptr(), affected_rows))) {
+        LOG_WARN("fail to execute batch finish sql", KR(ret), K(sql));
+      } else {
+        if (affected_rows != end - start) {
+          // Not an error: some rows were concurrently advanced past expected_status.
+          LOG_INFO("batch finish skipped some concurrently advanced rows",
+                   K_(tenant_id), "chunk_size", end - start, K(affected_rows));
+        }
+        LOG_INFO("batch finish triggered tasks", K_(tenant_id), K(ret_code),
+                 K(expected_status), "chunk_size", end - start, K(affected_rows));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObVecIdxAsyncTaskScheduler::check_and_finish_orphan_self_tasks_()
 {
   int ret = OB_SUCCESS;
@@ -1997,7 +2178,7 @@ int ObVecIdxAsyncTaskScheduler::check_and_finish_orphan_self_tasks_()
     for (int64_t i = 0; OB_SUCC(ret) && i < rows.count(); ++i) {
       const ObVecIndexTaskStatus &row = rows.at(i);
       bool alive = true;
-      int orphan_ret_code = OB_ERR_UNEXPECTED;
+      int orphan_ret_code = OB_TASK_EXPIRED;
       int tmp_ret = OB_SUCCESS;
       if (row.task_type_ == ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_MEM_SYNC_TASK
           && row.trigger_type_ == ObVecIndexAsyncTaskTriggerType::OB_VEC_TRIGGER_MANUAL) {
@@ -2034,7 +2215,7 @@ int ObVecIdxAsyncTaskScheduler::check_task_alive_in_memory_(
 {
 int ret = OB_SUCCESS;
 alive = false;
-orphan_ret_code = OB_ERR_UNEXPECTED;
+orphan_ret_code = OB_TASK_EXPIRED;
 if (OB_ISNULL(service_)
     || !row.tablet_id_.is_valid()
     || row.task_type_ < 0
@@ -2128,7 +2309,7 @@ int ObVecIdxAsyncTaskScheduler::finish_orphan_self_task_(const ObVecIndexTaskSta
 {
   int ret = OB_SUCCESS;
   bool alive = true;
-  int orphan_ret_code = OB_ERR_UNEXPECTED;
+  int orphan_ret_code = OB_TASK_EXPIRED;
   ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
   if (OB_ISNULL(sql_proxy)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2202,14 +2383,30 @@ int ObVecIdxAsyncTaskScheduler::check_table_dropped_(uint64_t table_id, bool &dr
   return ret;
 }
 
+// A manual-trigger row that passed all local checks (leader LS, executor resolved,
+// executor ref already held) and is waiting for the batch claim phase.
+struct ObVecTriggeredReadyItem
+{
+  int64_t row_idx_;
+  ObVecITaskExecutor *exec_;
+  ObVecIdxLeaderExecutors *leader_exec_;
+  TO_STRING_KV(K_(row_idx), KP_(exec), KP_(leader_exec));
+};
+
 int ObVecIdxAsyncTaskScheduler::load_triggered_tasks_()
 {
   int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ERRSIM_VEC_SKIP_LOAD_TRIGGERED_TASKS)) {
+    LOG_WARN("ERRSIM_VEC_SKIP_LOAD_TRIGGERED_TASKS injected, skip loading triggered tasks",
+             K_(tenant_id));
+    return OB_SUCCESS;
+  }
   const int64_t now = ObTimeUtility::fast_current_time();
   if (last_triggered_task_check_ts_ > 0
       && now - last_triggered_task_check_ts_ < TRIGGERED_TASK_CHECK_INTERVAL_US) {
     return OB_SUCCESS;
   }
+  uint64_t data_version = 0;
   ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -2219,6 +2416,14 @@ int ObVecIdxAsyncTaskScheduler::load_triggered_tasks_()
   } else if (OB_ISNULL(service_) || OB_ISNULL(sql_proxy)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", KR(ret), KP(service_), KP(sql_proxy));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
+    LOG_WARN("fail to get tenant data version", KR(ret), K_(tenant_id));
+  } else if (data_version < DATA_VERSION_4_6_0_1) {
+    if (REACH_TIME_INTERVAL(60L * 1000000)) {
+      LOG_INFO("skip loading manual triggered tasks, data version < 4.6.0.1",
+               K_(tenant_id), K(data_version));
+    }
+    last_triggered_task_check_ts_ = now;
   } else {
     ObVecIndexFieldArray filters;
     ObVecIndexTaskStatusField f_tenant;
@@ -2246,6 +2451,10 @@ int ObVecIdxAsyncTaskScheduler::load_triggered_tasks_()
         LOG_WARN("fail to read triggered tasks", KR(ret), K_(tenant_id));
       } else {
         LSIndexMgrMap &mgr_map = service_->get_ls_index_mgr_map();
+        // Rows that pass all local checks are batch-claimed after the scan (one
+        // autocommit UPDATE per chunk) instead of one transaction per row, which
+        // dominated this phase when many manual tasks piled up.
+        ObSEArray<ObVecTriggeredReadyItem, 64> ready_items;
         for (int64_t i = 0; OB_SUCC(ret) && i < rows.count(); ++i) {
           const ObVecIndexTaskStatus &row = rows.at(i);
           const ObTabletID tablet_id(row.tablet_id_);
@@ -2373,51 +2582,164 @@ int ObVecIdxAsyncTaskScheduler::load_triggered_tasks_()
               LOG_INFO("skip manual trigger task, executor not ready yet", K(ls_id), K(executor_inited), K(row));
               continue;
             } else {
-              bool claimed = false;
-              tmp_ret = claim_triggered_task_(row, claimed);
-              if (OB_SUCCESS != tmp_ret) {
+              // Executor resolved and its ref is held; defer the claim to the
+              // batch phase below.
+              ObVecTriggeredReadyItem item;
+              item.row_idx_ = i;
+              item.exec_ = exec_to_run;
+              item.leader_exec_ = leader_exec_to_run;
+              if (OB_FAIL(ready_items.push_back(item))) {
+                LOG_WARN("fail to collect manual trigger task for batch claim", KR(ret), K(ls_id), K(row));
                 common::ObSpinLockGuard guard(ls_executor_lock_);
                 dec_leader_executor_ref_(*leader_exec_to_run);
-                LOG_WARN("fail to claim manual trigger task", KR(tmp_ret), K(ls_id), K(row));
-              } else if (!claimed) {
-                common::ObSpinLockGuard guard(ls_executor_lock_);
-                dec_leader_executor_ref_(*leader_exec_to_run);
-                LOG_INFO("manual trigger task already claimed or advanced, skip loading", K(ls_id), K(row));
-              } else {
-                ObVecIndexTaskStatus claimed_row = row;
-                claimed_row.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE;
-                claimed_row.ret_code_ = VEC_ASYNC_TASK_DEFAULT_ERR_CODE;
-                claimed_row.exec_addr_ = GCTX.self_addr();
-                claimed_row.priority_ = static_cast<int64_t>(get_priority_by_task_type(
-                    static_cast<ObVecIndexAsyncTaskType>(row.task_type_), row.trigger_type_));
-                tmp_ret = exec_to_run->load_triggered_task(claimed_row);
-                {
-                  common::ObSpinLockGuard guard(ls_executor_lock_);
-                  dec_leader_executor_ref_(*leader_exec_to_run);
-                }
-                if (OB_SUCCESS != tmp_ret) {
-                  LOG_WARN("load_triggered_task failed, finishing task", KR(tmp_ret), K(ls_id), K(row));
-                  int fail_ret = finish_triggered_task_(
-                      row, tmp_ret, ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE);
-                  if (OB_SUCCESS != fail_ret) {
-                    LOG_WARN("fail to finish triggered task after load failure", KR(fail_ret), K(row));
-                  }
-                } else if (row.task_type_ == ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_MEM_SYNC_TASK) {
-                  // MemSync tasks are added to waiting_map, not async_task_opt.
-                  // Immediately mark the inner-table row as FINISH to prevent
-                  // repeated loading on the next scheduler cycle.
-                  int fail_ret = finish_triggered_task_(
-                      row, OB_SUCCESS, ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE);
-                  if (OB_SUCCESS != fail_ret) {
-                    LOG_WARN("fail to finish triggered mem sync task", KR(fail_ret), K(row));
-                  }
+              }
+            }
+          }
+        }
+        // Batch-claim collected rows, grouped by task_type (priority derives from it).
+        // Claim failures are not fatal: unclaimed rows keep STANDBY and are retried
+        // next round; refs collected above are always released in the load pass below.
+        common::hash::ObHashSet<int64_t> claimed_set;
+        bool claimed_set_valid = false;
+        if (ready_items.count() > 0) {
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(claimed_set.create(hash::cal_next_prime(ready_items.count()),
+                                             "VecTrigClaim", "VecTrigClaim", tenant_id_))) {
+            LOG_WARN("fail to create claimed task set", KR(tmp_ret), "count", ready_items.count());
+          } else {
+            claimed_set_valid = true;
+            ObSEArray<int64_t, 4> claim_types;
+            for (int64_t j = 0; OB_SUCCESS == tmp_ret && j < ready_items.count(); ++j) {
+              const int64_t type = rows.at(ready_items.at(j).row_idx_).task_type_;
+              bool found = false;
+              for (int64_t k = 0; !found && k < claim_types.count(); ++k) {
+                found = (claim_types.at(k) == type);
+              }
+              if (!found && OB_TMP_FAIL(claim_types.push_back(type))) {
+                LOG_WARN("fail to collect claim task type", KR(tmp_ret), K(type));
+              }
+            }
+            for (int64_t k = 0; OB_SUCCESS == tmp_ret && k < claim_types.count(); ++k) {
+              const int64_t type = claim_types.at(k);
+              ObSEArray<int64_t, 64> type_task_ids;
+              for (int64_t j = 0; OB_SUCCESS == tmp_ret && j < ready_items.count(); ++j) {
+                const ObVecIndexTaskStatus &row = rows.at(ready_items.at(j).row_idx_);
+                if (row.task_type_ == type && OB_TMP_FAIL(type_task_ids.push_back(row.task_id_))) {
+                  LOG_WARN("fail to collect task id for batch claim", KR(tmp_ret), K(row));
                 }
               }
-              if (OB_SUCCESS != tmp_ret) {
-                // Claim/load failures should not abort the tenant scheduler loop;
-                // this row has either been left for the next round or finished above.
-                tmp_ret = OB_SUCCESS;
+              if (OB_SUCCESS == tmp_ret
+                  && OB_TMP_FAIL(batch_claim_triggered_tasks_(type, type_task_ids, claimed_set))) {
+                LOG_WARN("fail to batch claim triggered tasks, retry next round",
+                         KR(tmp_ret), K(type), "count", type_task_ids.count());
+                tmp_ret = OB_SUCCESS;  // other types can still be claimed
               }
+            }
+          }
+        }
+        // Load claimed rows into executors and release refs. This pass must run for
+        // every collected item (even when claiming failed) to balance the ref counts.
+        ObSEArray<int64_t, 64> memsync_finished_ids;
+        // Load failures (e.g. OB_ENTRY_EXIST for duplicate mem-sync rows) are finished
+        // in batches grouped by ret_code instead of one transaction per row.
+        ObSEArray<int64_t, 64> failed_task_ids;
+        ObSEArray<int, 64> failed_ret_codes;
+        for (int64_t j = 0; j < ready_items.count(); ++j) {
+          const ObVecTriggeredReadyItem &item = ready_items.at(j);
+          const ObVecIndexTaskStatus &row = rows.at(item.row_idx_);
+          bool claimed = false;
+          if (claimed_set_valid) {
+            claimed = (OB_HASH_EXIST == claimed_set.exist_refactored(row.task_id_));
+          }
+          if (!claimed) {
+            LOG_TRACE("manual trigger task not claimed (concurrently advanced or claim failed),"
+                      " skip loading", K(row));
+          } else {
+            ObVecIndexTaskStatus claimed_row = row;
+            claimed_row.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE;
+            claimed_row.ret_code_ = VEC_ASYNC_TASK_DEFAULT_ERR_CODE;
+            claimed_row.exec_addr_ = GCTX.self_addr();
+            claimed_row.priority_ = static_cast<int64_t>(get_priority_by_task_type(
+                static_cast<ObVecIndexAsyncTaskType>(row.task_type_), row.trigger_type_));
+            int tmp_ret = item.exec_->load_triggered_task(claimed_row);
+            if (OB_SUCCESS != tmp_ret) {
+              LOG_WARN("load_triggered_task failed, finishing task", KR(tmp_ret),
+                       K(row.task_id_), K(row.tablet_id_), K(row.task_type_));
+              int push_ret = failed_task_ids.push_back(row.task_id_);
+              if (OB_SUCCESS == push_ret) {
+                push_ret = failed_ret_codes.push_back(tmp_ret);
+                if (OB_SUCCESS != push_ret) {
+                  failed_task_ids.pop_back();
+                }
+              }
+              if (OB_SUCCESS != push_ret) {
+                // Fallback: finish this row on its own so it does not stay in PREPARE.
+                int fail_ret = finish_triggered_task_(
+                    row, tmp_ret, ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE);
+                if (OB_SUCCESS != fail_ret) {
+                  LOG_WARN("fail to finish triggered task after load failure", KR(fail_ret), K(row));
+                }
+              }
+            } else if (row.task_type_ == ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_MEM_SYNC_TASK) {
+              // MemSync tasks are added to waiting_map, not async_task_opt. Their
+              // inner-table rows are marked FINISH in one batch below to prevent
+              // repeated loading on the next scheduler cycle.
+              if (OB_SUCCESS != (tmp_ret = memsync_finished_ids.push_back(row.task_id_))) {
+                LOG_WARN("fail to collect mem sync task id, fallback to single finish",
+                         KR(tmp_ret), K(row));
+                int fail_ret = finish_triggered_task_(
+                    row, OB_SUCCESS, ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE);
+                if (OB_SUCCESS != fail_ret) {
+                  LOG_WARN("fail to finish triggered mem sync task", KR(fail_ret), K(row));
+                }
+              }
+            }
+          }
+          {
+            common::ObSpinLockGuard guard(ls_executor_lock_);
+            dec_leader_executor_ref_(*item.leader_exec_);
+          }
+        }
+        if (memsync_finished_ids.count() > 0) {
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(batch_finish_triggered_tasks_(
+                  memsync_finished_ids, OB_SUCCESS,
+                  ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE))) {
+            LOG_WARN("fail to batch finish triggered mem sync tasks", KR(tmp_ret),
+                     "count", memsync_finished_ids.count());
+          }
+        }
+        // Batch-finish load failures, one batch per distinct ret_code (usually one:
+        // OB_ENTRY_EXIST from duplicate manual tasks on the same tablet).
+        if (failed_task_ids.count() > 0) {
+          int tmp_ret = OB_SUCCESS;
+          ObSEArray<int, 4> distinct_codes;
+          for (int64_t j = 0; OB_SUCCESS == tmp_ret && j < failed_ret_codes.count(); ++j) {
+            const int code = failed_ret_codes.at(j);
+            bool found = false;
+            for (int64_t k = 0; !found && k < distinct_codes.count(); ++k) {
+              found = (distinct_codes.at(k) == code);
+            }
+            if (!found && OB_TMP_FAIL(distinct_codes.push_back(code))) {
+              LOG_WARN("fail to collect distinct ret code", KR(tmp_ret), K(code));
+            }
+          }
+          for (int64_t k = 0; OB_SUCCESS == tmp_ret && k < distinct_codes.count(); ++k) {
+            const int code = distinct_codes.at(k);
+            ObSEArray<int64_t, 64> code_task_ids;
+            for (int64_t j = 0; OB_SUCCESS == tmp_ret && j < failed_task_ids.count(); ++j) {
+              if (failed_ret_codes.at(j) == code
+                  && OB_TMP_FAIL(code_task_ids.push_back(failed_task_ids.at(j)))) {
+                LOG_WARN("fail to collect failed task id", KR(tmp_ret));
+              }
+            }
+            if (OB_SUCCESS == tmp_ret
+                && OB_TMP_FAIL(batch_finish_triggered_tasks_(
+                       code_task_ids, code,
+                       ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE))) {
+              LOG_WARN("fail to batch finish failed triggered tasks", KR(tmp_ret),
+                       K(code), "count", code_task_ids.count());
+              tmp_ret = OB_SUCCESS;  // other codes can still be finished
             }
           }
         }
