@@ -9808,6 +9808,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_VIRTUAL_LS_SNAPSHOT_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_LS_SNAPSHOT_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_INDEX_USAGE_INFO_REAL_AGENT_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_INDEX_USAGE_INFO_REAL_AGENT_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_SHARED_STORAGE_QUOTA_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SHARED_STORAGE_QUOTA_ORACLE_SCHEMA_VERSION); break;
+    case OB_ALL_VIRTUAL_COLUMN_GROUP_REAL_AGENT_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_COLUMN_GROUP_REAL_AGENT_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_LS_REPLICA_TASK_HISTORY_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_LS_REPLICA_TASK_HISTORY_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_SESSION_PS_INFO_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SESSION_PS_INFO_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_TRACEPOINT_INFO_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_TRACEPOINT_INFO_ORACLE_SCHEMA_VERSION); break;

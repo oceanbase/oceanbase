@@ -1591,6 +1591,7 @@ public:
   static int all_virtual_ls_snapshot_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_index_usage_info_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_shared_storage_quota_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_column_group_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ls_replica_task_history_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_session_ps_info_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tracepoint_info_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -5097,6 +5098,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_ls_snapshot_ora_schema,
   ObInnerTableSchema::all_virtual_index_usage_info_real_agent_ora_schema,
   ObInnerTableSchema::all_virtual_shared_storage_quota_ora_schema,
+  ObInnerTableSchema::all_virtual_column_group_real_agent_ora_schema,
   ObInnerTableSchema::all_virtual_ls_replica_task_history_ora_schema,
   ObInnerTableSchema::all_virtual_session_ps_info_ora_schema,
   ObInnerTableSchema::all_virtual_tracepoint_info_ora_schema,
@@ -7571,6 +7573,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_LS_SNAPSHOT_ORA_TID,
   OB_ALL_VIRTUAL_INDEX_USAGE_INFO_REAL_AGENT_ORA_TID,
   OB_ALL_VIRTUAL_SHARED_STORAGE_QUOTA_ORA_TID,
+  OB_ALL_VIRTUAL_COLUMN_GROUP_REAL_AGENT_ORA_TID,
   OB_ALL_VIRTUAL_LS_REPLICA_TASK_HISTORY_ORA_TID,
   OB_ALL_VIRTUAL_SESSION_PS_INFO_ORA_TID,
   OB_ALL_VIRTUAL_TRACEPOINT_INFO_ORA_TID,
@@ -10959,6 +10962,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_LS_SNAPSHOT_ORA_TNAME,
   OB_ALL_VIRTUAL_INDEX_USAGE_INFO_REAL_AGENT_ORA_TNAME,
   OB_ALL_VIRTUAL_SHARED_STORAGE_QUOTA_ORA_TNAME,
+  OB_ALL_VIRTUAL_COLUMN_GROUP_REAL_AGENT_ORA_TNAME,
   OB_ALL_VIRTUAL_LS_REPLICA_TASK_HISTORY_ORA_TNAME,
   OB_ALL_VIRTUAL_SESSION_PS_INFO_ORA_TNAME,
   OB_ALL_VIRTUAL_TRACEPOINT_INFO_ORA_TNAME,
@@ -13385,6 +13389,7 @@ const uint64_t restrict_access_virtual_tables[] = {
   OB_ALL_VIRTUAL_LS_SNAPSHOT_ORA_TID,
   OB_ALL_VIRTUAL_INDEX_USAGE_INFO_REAL_AGENT_ORA_TID,
   OB_ALL_VIRTUAL_SHARED_STORAGE_QUOTA_ORA_TID,
+  OB_ALL_VIRTUAL_COLUMN_GROUP_REAL_AGENT_ORA_TID,
   OB_ALL_VIRTUAL_LS_REPLICA_TASK_HISTORY_ORA_TID,
   OB_ALL_VIRTUAL_SESSION_PS_INFO_ORA_TID,
   OB_ALL_VIRTUAL_TRACEPOINT_INFO_ORA_TID,

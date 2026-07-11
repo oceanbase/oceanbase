@@ -2040,6 +2040,8 @@
 # 15440: __all_index_usage_info  # BASE_TABLE_NAME
 # 15441: ALL_VIRTUAL_SHARED_STORAGE_QUOTA
 # 15441: __all_virtual_shared_storage_quota  # BASE_TABLE_NAME
+# 15442: ALL_VIRTUAL_COLUMN_GROUP_REAL_AGENT
+# 15442: __all_column_group  # BASE_TABLE_NAME
 # 15443: ALL_VIRTUAL_LS_REPLICA_TASK_HISTORY
 # 15443: __all_ls_replica_task_history  # BASE_TABLE_NAME
 # 15443: __all_virtual_ls_replica_task_history  # BASE_TABLE_NAME1
