@@ -19152,8 +19152,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15441', all_def_keywords['__all_virtual_shared_storage_quota'])))
 
-# 余留位置
-# 15442: __all_virtual_column_group
+# 15442: __all_column_group
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15443', all_def_keywords['__all_virtual_ls_replica_task_history'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15444', all_def_keywords['__all_virtual_session_ps_info'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15445', all_def_keywords['__all_virtual_tracepoint_info'])))
