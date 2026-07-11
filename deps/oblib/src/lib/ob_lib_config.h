@@ -22,6 +22,7 @@ namespace lib
 bool is_diagnose_info_enabled();
 void reload_diagnose_info_config(const bool);
 bool is_trace_log_enabled();
+bool is_timeguard_log_enabled();
 void reload_trace_log_config(const bool);
 
 class ObLibConfig
@@ -42,6 +43,7 @@ class ObPerfModeGuard
   friend class ObEnableDiagnoseGuard;
   friend bool is_diagnose_info_enabled();
   friend bool is_trace_log_enabled();
+  friend bool is_timeguard_log_enabled();
 public:
   explicit ObPerfModeGuard() : old_value_(get_tl_instance())
   {
@@ -103,6 +105,11 @@ inline bool is_trace_log_enabled()
   }
 #endif
   return bool_ret && !ObPerfModeGuard::get_tl_instance();
+}
+
+inline bool is_timeguard_log_enabled()
+{
+  return !ObPerfModeGuard::get_tl_instance();
 }
 
 inline void reload_trace_log_config(const bool enable_trace_log)

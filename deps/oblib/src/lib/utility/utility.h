@@ -923,32 +923,39 @@ class ObTimeGuard
 public:
   explicit ObTimeGuard(const char *owner = "unknown", const int64_t warn_threshold = INT64_MAX)
   {
-    start_ts_ = common::ObTimeUtility::fast_current_time();
-    last_ts_ = start_ts_;
-    click_count_ = 0;
-    warn_threshold_ = warn_threshold;
-    owner_ = owner;
-    memset(click_, 0, sizeof(click_));
-    memset(click_str_, 0, sizeof(click_str_));
+    need_record_log_ = oceanbase::lib::is_timeguard_log_enabled();
+    if (need_record_log_) {
+      start_ts_ = common::ObTimeUtility::fast_current_time();
+      last_ts_ = start_ts_;
+      click_count_ = 0;
+      warn_threshold_ = warn_threshold;
+      owner_ = owner;
+      memset(click_, 0, sizeof(click_));
+      memset(click_str_, 0, sizeof(click_str_));
+    }
   }
   void click(const char *mod = NULL)
   {
-    const int64_t cur_ts = common::ObTimeUtility::fast_current_time();
-    if (OB_LIKELY(click_count_ < MAX_CLICK_COUNT)) {
-      click_str_[click_count_] = mod;
-      click_[click_count_++] = (int32_t)(cur_ts - last_ts_);
-      last_ts_ = cur_ts;
+    if (need_record_log_) {
+      const int64_t cur_ts = common::ObTimeUtility::fast_current_time();
+      if (OB_LIKELY(click_count_ < MAX_CLICK_COUNT)) {
+        click_str_[click_count_] = mod;
+        click_[click_count_++] = (int32_t)(cur_ts - last_ts_);
+        last_ts_ = cur_ts;
+      }
     }
   }
   ~ObTimeGuard()
   {
-    if (OB_UNLIKELY(get_diff() >= warn_threshold_)) {
-      LIB_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "destruct", K(*this));
+    if (need_record_log_) {
+      if (OB_UNLIKELY(get_diff() >= warn_threshold_)) {
+        LIB_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "destruct", K(*this));
+      }
     }
   }
   int64_t get_diff() const
   {
-    return common::ObTimeUtility::fast_current_time() - start_ts_;
+    return need_record_log_ ? common::ObTimeUtility::fast_current_time() - start_ts_ : 0;
   }
   int64_t to_string(char *buf, const int64_t buf_len) const;
   DECLARE_TO_YSON_KV;
@@ -961,6 +968,7 @@ private:
   int64_t warn_threshold_;
   const char *owner_;
   int32_t click_[MAX_CLICK_COUNT];
+  bool need_record_log_;
   const char *click_str_[MAX_CLICK_COUNT];
 };
 
