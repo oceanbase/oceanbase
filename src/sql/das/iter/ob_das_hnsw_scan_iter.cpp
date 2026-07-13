@@ -3115,19 +3115,13 @@ int ObDASHNSWScanIter::process_adaptor_state_post_filter_once(
     ObVidAdaLookupStatus last_state = ObVidAdaLookupStatus::STATES_ERROR;
     ObVidAdaLookupStatus cur_state = ObVidAdaLookupStatus::STATES_INIT;
 
-    if (adaptor->get_can_skip() == SKIP && ada_ctx->get_ls_leader()) {
+    if (adaptor->get_can_skip() == SKIP && ada_ctx->get_ls_leader() && adaptor->get_snap_has_complete()) {
       if (OB_FAIL(ada_ctx->init_bitmaps())) {
         LOG_WARN("failed to init bitmaps", K(ret));
       } else {
-        if (! adaptor->get_snap_has_complete()) {
-          ada_ctx->set_status(PVQ_LACK_SCN);
-          ada_ctx->set_flag(PVQP_SECOND);
-          cur_state = ObVidAdaLookupStatus::QUERY_SNAPSHOT_TBL;
-        } else {
-          ada_ctx->set_status(PVQ_OK);
-          ada_ctx->set_flag(PVQP_FIRST);
-          cur_state = ObVidAdaLookupStatus::STATES_SET_RESULT;
-        }
+        ada_ctx->set_status(PVQ_OK);
+        ada_ctx->set_flag(PVQP_FIRST);
+        cur_state = ObVidAdaLookupStatus::STATES_SET_RESULT;
       }
     }
 

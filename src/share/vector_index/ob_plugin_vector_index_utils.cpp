@@ -883,6 +883,53 @@ int ObPluginVectorIndexUtils::get_snap_index_visible_row_key(ObLSID &ls_id,
   return ret;
 }
 
+int ObPluginVectorIndexUtils::create_refresh_adaptor(
+    ObLSID &ls_id,
+    ObPluginVectorIndexService *vector_index_service,
+    ObPluginVectorIndexAdaptor *old_adapter,
+    ObPluginVectorIndexAdaptor *&new_adapter,
+    void *&adpt_buff)
+{
+  int ret = OB_SUCCESS;
+  ObPluginVectorIndexMgr *vec_idx_mgr = nullptr;
+  if (OB_ISNULL(vector_index_service) || OB_ISNULL(old_adapter)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret), KP(vector_index_service), KPC(old_adapter));
+  } else if (OB_FAIL(vector_index_service->get_ls_index_mgr_map().get_refactored(ls_id, vec_idx_mgr))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("vector index ls mgr not exist", K(ret), K(ls_id));
+    } else {
+      LOG_WARN("fail to get vector index ls mgr", KR(ret));
+    }
+  } else if (OB_ISNULL(vec_idx_mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid vector index ls mgr", KR(ret));
+  } else if (OB_ISNULL(
+      adpt_buff = vector_index_service->get_adaptor_allocator().alloc(
+          sizeof(ObPluginVectorIndexAdaptor)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory for vector index adapter", KR(ret));
+  } else {
+    new_adapter = new(adpt_buff)ObPluginVectorIndexAdaptor(
+        &vector_index_service->get_adaptor_allocator(),
+        vec_idx_mgr->get_memory_context(), old_adapter->get_tenant_id());
+    new_adapter->set_create_type(old_adapter->get_create_type());
+    if (OB_FAIL(new_adapter->copy_meta_info(*old_adapter))) {
+      LOG_WARN("failed to copy meta info", K(ret));
+    } else if (OB_FAIL(new_adapter->init(
+        vec_idx_mgr->get_memory_context(), vec_idx_mgr->get_all_vsag_use_mem()))) {
+      LOG_WARN("failed to init adpt.", K(ret));
+    } else if (OB_FAIL(new_adapter->set_index_identity(old_adapter->get_index_identity()))) {
+      LOG_WARN("failed to set index identity", K(ret));
+    } else {
+      LOG_INFO("[VECTOR INDEX ADAPTOR] clone adaptor success for refresh",
+          KP(new_adapter), "create_type", new_adapter->get_create_type(), KP(old_adapter), K(lbt()));
+    }
+  }
+  return ret;
+}
+
 int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
                                                         ObPluginVectorIndexAdaptor *&adapter,
                                                         const bool create_new_adp,
@@ -899,8 +946,8 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
   schema::ObTableParam snapshot_table_param(allocator);
   ObPluginVectorIndexAdaptor *old_adapter = adapter;
   ObPluginVectorIndexAdaptor *new_adapter = nullptr;
-  ObPluginVectorIndexMgr *vec_idx_mgr = nullptr;
   bool is_meta_data = false;
+  bool is_empty_snapshot_table = false;
   int64_t meta_scn = 0;
   ObString row_key;
   int64_t index_count = 0;
@@ -920,8 +967,20 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
     ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(snapshot_idx_iter);
     if (OB_FAIL(table_scan_iter->get_next_row(row))) {
       if (OB_ITER_END == ret) {
-        adapter->set_snap_data_has_complete();
         ret = OB_SUCCESS;
+        is_empty_snapshot_table = true;
+        if (!create_new_adp) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("empty snapshot table requires new adapter", K(ret), K(ls_id), KPC(adapter));
+        } else if (OB_FAIL(create_refresh_adaptor(
+            ls_id, vector_index_service, adapter, new_adapter, adpt_buff))) {
+          LOG_WARN("failed to create empty refresh adaptor", K(ret), K(ls_id), KPC(adapter));
+        } else {
+          new_adapter->set_snap_data_has_complete();
+          adapter = new_adapter;
+          LOG_INFO("[VECTOR INDEX ADAPTOR] clone empty adaptor success for refresh",
+              KP(new_adapter), "create_type", new_adapter->get_create_type(), KP(old_adapter), K(lbt()));
+        }
       } else {
         LOG_WARN("failed to get next row", K(ret));
       }
@@ -938,37 +997,13 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
         if (OB_ISNULL(vector_index_service)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected nullptr", K(ret));
-        } else if (OB_FAIL(vector_index_service->get_ls_index_mgr_map().get_refactored(ls_id, vec_idx_mgr))) {
-          if (OB_HASH_NOT_EXIST == ret) {
-            ret = OB_SUCCESS;
-          } else {
-            LOG_WARN("fail to get vector index ls mgr", KR(ret));
-          }
-        } else if (OB_ISNULL(vec_idx_mgr)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get invalid vector index ls mgr", KR(ret));
         } else {
           if (create_new_adp) {
-            adpt_buff = vector_index_service->get_adaptor_allocator().alloc(sizeof(ObPluginVectorIndexAdaptor));
-            if (OB_ISNULL(adpt_buff)) {
-              ret = OB_ALLOCATE_MEMORY_FAILED;
-              LOG_WARN("failed to allocate memory for vector index adapter", KR(ret));
+            if (OB_FAIL(create_refresh_adaptor(
+                ls_id, vector_index_service, adapter, new_adapter, adpt_buff))) {
+              LOG_WARN("failed to create refresh adaptor", K(ret), K(ls_id), KPC(adapter));
             } else {
-              new_adapter = new(adpt_buff)ObPluginVectorIndexAdaptor(
-                &vector_index_service->get_adaptor_allocator(),
-                vec_idx_mgr->get_memory_context(), adapter->get_tenant_id());
-              new_adapter->set_create_type(adapter->get_create_type());
-              if (OB_FAIL(new_adapter->copy_meta_info(*adapter))) {
-                LOG_WARN("failed to copy meta info", K(ret));
-              } else if (OB_FAIL(new_adapter->init(vec_idx_mgr->get_memory_context(), vec_idx_mgr->get_all_vsag_use_mem()))) {
-                LOG_WARN("failed to init adpt.", K(ret));
-              } else if (OB_FAIL(new_adapter->set_index_identity(adapter->get_index_identity()))) {
-                LOG_WARN("failed to set index identity", K(ret));
-              } else {
-                LOG_INFO("[VECTOR INDEX ADAPTOR] clone adaptor success for refresh",
-                    KP(new_adapter), "create_type", new_adapter->get_create_type(), KP(adapter), K(lbt()));
-                adapter = new_adapter;
-              }
+              adapter = new_adapter;
             }
           } else {
             new_adapter = adapter;
@@ -1009,8 +1044,11 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
     }
   }
   // free adapter memory when failed
-  if ((OB_FAIL(ret) || (index_count == 0 && !is_meta_data)) && OB_NOT_NULL(new_adapter) && create_new_adp) {
-    LOG_INFO("release new adapter memory in failure", K(ret), K(index_count), KP(new_adapter), K(create_new_adp), K(is_meta_data));
+  if ((OB_FAIL(ret) || (index_count == 0 && !is_meta_data && !is_empty_snapshot_table))
+      && OB_NOT_NULL(new_adapter) && create_new_adp) {
+    LOG_INFO("release new adapter memory in failure",
+        K(ret), K(index_count), KP(new_adapter), K(create_new_adp), K(is_meta_data),
+        K(is_empty_snapshot_table));
     new_adapter->~ObPluginVectorIndexAdaptor();
     vector_index_service->get_adaptor_allocator().free(adpt_buff);
     adpt_buff = nullptr;
@@ -1026,7 +1064,8 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
   }
   if (OB_SUCC(ret)) {
     LOG_INFO("refresh memdata snap done", KP(new_adapter), KP(adapter),
-      K(ls_id), K(target_scn), K(index_count), K(is_meta_data), K(meta_scn));
+      K(ls_id), K(target_scn), K(index_count), K(is_meta_data),
+      K(is_empty_snapshot_table), K(meta_scn));
   }
   return ret;
 }
