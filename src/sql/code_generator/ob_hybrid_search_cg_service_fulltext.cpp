@@ -375,7 +375,7 @@ int ObHybridSearchCgService::generate_text_ir_ctdef(ObLogTableScan &op,
   ir_scan_ctdef = nullptr;
   ObDASScalarScanCtDef *inv_idx_scan_ctdef = nullptr;
   const bool need_score = fulltext_node.need_score();
-  const bool need_pos_list = (nullptr != index_info.pos_list_column_);
+  const bool need_pos_list = fulltext_node.need_pos_list();
   if (OB_UNLIKELY(!index_info.is_valid() || OB_INVALID_ID == inv_idx_tid)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(inv_idx_tid), K(doc_id_idx_tid), K(index_info));

@@ -65,7 +65,6 @@ public:
   static const int64_t DOC_WORD_INDEX_COL_CNT = 2;
 
   static constexpr const int64_t MAX_POSITION_LIST_COUNT = 512;
-  static constexpr const double POSITION_LIST_SAFE_COMPACTION_RATIO = 2.0;
 
   // FTS_DOC_WORD table has 4 or 5 columns: [DOC_ID], [WORD], [WORD_COUNT], [DOC_LENGTH], [POS_LIST]
   static constexpr const int64_t FT_WORD_DOC_COL_CNT_WITH_POS = 5;

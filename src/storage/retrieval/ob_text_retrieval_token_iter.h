@@ -7,6 +7,7 @@
 #define OB_TEXT_RETRIEVAL_TOKEN_ITER_H_
 
 #include "lib/container/ob_se_array.h"
+#include "lib/allocator/page_arena.h"
 #include "sql/engine/expr/ob_expr.h"
 #include "sql/das/iter/ob_das_scan_iter.h"
 #include "sql/das/ob_das_ir_define.h"
@@ -173,12 +174,14 @@ public:
   }
   void set_filter_threshold(const double threshold);
 private:
-  int do_expr_materialization();
+  int do_expr_materialization(const bool is_last_batch);
   int do_expr_materialization_with_threshold();
+  int materialize_pos_list(const int64_t idx, const ObString &pos_list, const bool is_last_batch);
   int try_refresh_max_batch_size();
 private:
   static constexpr int64_t MIN_BATCH_SIZE = 4;
   static constexpr double SKIPPED_ROWS_RATIO = 0.9;
+  static constexpr int64_t RESERVED_POS_BUF_SIZE = 512;
   ObArenaAllocator *allocator_;
   ObTextRetrievalTokenIter token_iter_;
   sql::ObEvalCtx *eval_ctx_;
@@ -196,6 +199,10 @@ private:
   ObFixedArray<ObDocIdExt, ObIAllocator> doc_id_;
   ObFixedArray<int64_t, ObIAllocator> doc_length_;
   ObFixedArray<ObString, ObIAllocator> pos_list_;
+  char *pos_buf_;
+  int64_t pos_buf_cap_;
+  int64_t pos_buf_used_;
+  ObArenaAllocator overflow_allocator_;
   common::ObDatumCmpFuncType cmp_func_;
   bool use_rich_format_;
   bool is_inited_;

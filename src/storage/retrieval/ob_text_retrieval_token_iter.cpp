@@ -785,6 +785,10 @@ ObTextRetrievalDaaTTokenIter::ObTextRetrievalDaaTTokenIter()
     doc_id_(),
     doc_length_(),
     pos_list_(),
+    pos_buf_(nullptr),
+    pos_buf_cap_(0),
+    pos_buf_used_(0),
+    overflow_allocator_(common::ObMemAttr(MTL_ID(), "DASPosList")),
     cmp_func_(nullptr),
     use_rich_format_(false),
     is_inited_(false),
@@ -841,17 +845,12 @@ int ObTextRetrievalDaaTTokenIter::init(const ObTextRetrievalScanIterParam &iter_
           LOG_WARN("failed to init next batch iter pos lists array", K(ret));
         } else if (OB_FAIL(pos_list_.prepare_allocate(max_batch_size_))) {
           LOG_WARN("failed to prepare allocate next batch iter pos lists array", K(ret));
-        }
-        for (int64_t i = 0; OB_SUCC(ret) && i < max_batch_size_; ++i) {
-          void *buf = nullptr;
-          constexpr int64_t buf_len = sizeof(int64_t)
-              * share::ObFTSConstants::MAX_POSITION_LIST_COUNT
-              * share::ObFTSConstants::POSITION_LIST_SAFE_COMPACTION_RATIO;
-          if (OB_ISNULL(buf = allocator_->alloc(buf_len))) {
+        } else {
+          pos_buf_cap_ = max_batch_size_ * RESERVED_POS_BUF_SIZE;
+          pos_buf_ = static_cast<char *>(allocator_->alloc(pos_buf_cap_));
+          if (OB_ISNULL(pos_buf_)) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("failed to allocate memory for pos list", K(ret));
-          } else {
-            pos_list_[i].assign_buffer(static_cast<char *>(buf), buf_len);
+            LOG_WARN("failed to allocate packed pos list buffer", K(ret), K_(pos_buf_cap));
           }
         }
       }
@@ -872,6 +871,8 @@ void ObTextRetrievalDaaTTokenIter::reuse()
   skipped_rows_in_advance_ = 0;
   token_iter_.reuse();
   iter_end_ = false;
+  pos_buf_used_ = 0;
+  overflow_allocator_.reuse();
 }
 
 void ObTextRetrievalDaaTTokenIter::reset()
@@ -879,6 +880,12 @@ void ObTextRetrievalDaaTTokenIter::reset()
   relevance_.reset();
   doc_id_.reset();
   token_iter_.reset();
+  doc_length_.reset();
+  pos_list_.reset();
+  pos_buf_ = nullptr;
+  pos_buf_cap_ = 0;
+  pos_buf_used_ = 0;
+  overflow_allocator_.reset();
   cur_idx_ = -1;
   count_ = 0;
   filter_threshold_ = 0.0;
@@ -898,6 +905,7 @@ int ObTextRetrievalDaaTTokenIter::get_next_row() {
   } else {
     while (OB_SUCC(ret) && !iter_end_) {
       need_materialize = false;
+      bool is_last_batch = false;
       if (!eval_ctx_->is_vectorized() && (OB_FAIL(token_iter_.get_next_row()))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("failed to get row from inverted index", K(ret));
@@ -912,6 +920,7 @@ int ObTextRetrievalDaaTTokenIter::get_next_row() {
         } else if (count_ != 0) {
           ret = OB_SUCCESS;
           need_materialize = true;
+          is_last_batch = true;
         } else {
           iter_end_ = true;
         }
@@ -923,7 +932,7 @@ int ObTextRetrievalDaaTTokenIter::get_next_row() {
         const bool need_filter = (nullptr != relevance_expr_ && filter_threshold_ > 0.0);
         if (need_filter && OB_FAIL(do_expr_materialization_with_threshold())) {
           LOG_WARN("failed to materialize expr with threshold", K(ret));
-        } else if (!need_filter && OB_FAIL(do_expr_materialization())) {
+        } else if (!need_filter && OB_FAIL(do_expr_materialization(is_last_batch))) {
           LOG_WARN("failed to materialize expr", K(ret));
         } else if (count_ == 0) {
           LOG_DEBUG("[Text Retrieval] all documents filtered out, continue loading", K(count_), K(filter_threshold_));
@@ -937,7 +946,7 @@ int ObTextRetrievalDaaTTokenIter::get_next_row() {
   return ret;
 }
 
-int ObTextRetrievalDaaTTokenIter::do_expr_materialization()
+int ObTextRetrievalDaaTTokenIter::do_expr_materialization(const bool is_last_batch)
 {
   // TODO: encapsulate specialized materialization for sparse retrieval?
   int ret = OB_SUCCESS;
@@ -977,32 +986,51 @@ int ObTextRetrievalDaaTTokenIter::do_expr_materialization()
   if (OB_FAIL(ret) || OB_ISNULL(inv_scan_pos_list_col_)) {
     // skip
   } else if (use_rich_format_) {
+    pos_buf_used_ = 0;
+    overflow_allocator_.reuse();
     ObIVector *doc_length_vec = inv_scan_doc_length_col_->get_vector(*eval_ctx_);
     ObIVector *pos_list_vec = inv_scan_pos_list_col_->get_vector(*eval_ctx_);
     for (int64_t i = 0; OB_SUCC(ret) && i < count_; ++i) {
       doc_length_[i] = doc_length_vec->get_int(i);
-      ObString pos_list = pos_list_vec->get_string(i);
-      if (OB_UNLIKELY(0 != pos_list_[i].set_length(0))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to reset length of pos list string", K(ret));
-      } else if (OB_UNLIKELY(pos_list.length() != pos_list_[i].write(pos_list.ptr(), pos_list.length()))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to write pos list string", K(ret));
+      if (OB_FAIL(materialize_pos_list(i, pos_list_vec->get_string(i), is_last_batch))) {
+        LOG_WARN("failed to materialize pos list", K(ret), K(i));
       }
     }
   } else {
+    pos_buf_used_ = 0;
+    overflow_allocator_.reuse();
     ObDatum *doc_length_datum = inv_scan_doc_length_col_->locate_batch_datums(*eval_ctx_);
     ObDatum *pos_list_datum = inv_scan_pos_list_col_->locate_batch_datums(*eval_ctx_);
     for (int64_t i = 0; OB_SUCC(ret) && i < count_; ++i) {
       doc_length_[i] = doc_length_datum[i].get_int();
-      ObString pos_list = pos_list_datum[i].get_string();
-      if (OB_UNLIKELY(0 != pos_list_[i].set_length(0))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to reset length of pos list string", K(ret));
-      } else if (OB_UNLIKELY(pos_list.length() != pos_list_[i].write(pos_list.ptr(), pos_list.length()))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to write pos list string", K(ret));
+      if (OB_FAIL(materialize_pos_list(i, pos_list_datum[i].get_string(), is_last_batch))) {
+        LOG_WARN("failed to materialize pos list", K(ret), K(i));
       }
+    }
+  }
+  return ret;
+}
+
+int ObTextRetrievalDaaTTokenIter::materialize_pos_list(const int64_t idx,
+                                                       const ObString &pos_list,
+                                                       const bool is_last_batch)
+{
+  int ret = OB_SUCCESS;
+  if (is_last_batch) {
+    pos_list_[idx] = pos_list;
+  } else {
+    char *dst = nullptr;
+    if (pos_buf_used_ + pos_list.length() <= pos_buf_cap_) {
+      dst = pos_buf_ + pos_buf_used_;
+      pos_buf_used_ += pos_list.length();
+    } else if (OB_ISNULL(dst = static_cast<char *>(
+        overflow_allocator_.alloc(pos_list.length())))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate overflow pos list buffer", K(ret), K(pos_list.length()));
+    }
+    if (OB_SUCC(ret)) {
+      MEMCPY(dst, pos_list.ptr(), pos_list.length());
+      pos_list_[idx].assign_ptr(dst, pos_list.length());
     }
   }
   return ret;
@@ -1021,25 +1049,21 @@ int ObTextRetrievalDaaTTokenIter::do_expr_materialization_with_threshold()
     ObIVector *domain_id_vec = nullptr;
     ObIVector *relevance_vec = nullptr;
     ObIVector *doc_length_vec = nullptr;
-    ObIVector *pos_list_vec = nullptr;
     ObDatum *domain_id_datum = nullptr;
     ObDatum *relevance_datum = nullptr;
     ObDatum *doc_length_datum = nullptr;
-    ObDatum *pos_list_datum = nullptr;
 
     if (use_rich_format_) {
       domain_id_vec = inv_scan_domain_id_col_->get_vector(*eval_ctx_);
       relevance_vec = relevance_expr_->get_vector(*eval_ctx_);
       if (nullptr != inv_scan_pos_list_col_ && nullptr != inv_scan_doc_length_col_) {
         doc_length_vec = inv_scan_doc_length_col_->get_vector(*eval_ctx_);
-        pos_list_vec = inv_scan_pos_list_col_->get_vector(*eval_ctx_);
       }
     } else {
       domain_id_datum = inv_scan_domain_id_col_->locate_batch_datums(*eval_ctx_);
       relevance_datum = relevance_expr_->locate_batch_datums(*eval_ctx_);
       if (nullptr != inv_scan_pos_list_col_ && nullptr != inv_scan_doc_length_col_) {
         doc_length_datum = inv_scan_doc_length_col_->locate_batch_datums(*eval_ctx_);
-        pos_list_datum = inv_scan_pos_list_col_->locate_batch_datums(*eval_ctx_);
       }
     }
 
@@ -1056,28 +1080,11 @@ int ObTextRetrievalDaaTTokenIter::do_expr_materialization_with_threshold()
         } else if (OB_FAIL(doc_id_[write_idx].from_datum(domain_id_datum[i]))) {
           LOG_WARN("failed to get doc id from datum", K(ret), K(i), K(write_idx));
         }
-
         if (OB_SUCC(ret) && nullptr != inv_scan_pos_list_col_ && nullptr != inv_scan_doc_length_col_) {
           if (use_rich_format_) {
             doc_length_[write_idx] = doc_length_vec->get_int(i);
-            ObString pos_list = pos_list_vec->get_string(i);
-            if (OB_UNLIKELY(0 != pos_list_[write_idx].set_length(0))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("failed to reset length of pos list string", K(ret));
-            } else if (OB_UNLIKELY(pos_list.length() != pos_list_[write_idx].write(pos_list.ptr(), pos_list.length()))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("failed to write pos list string", K(ret));
-            }
           } else {
             doc_length_[write_idx] = doc_length_datum[i].get_int();
-            ObString pos_list = pos_list_datum[i].get_string();
-            if (OB_UNLIKELY(0 != pos_list_[write_idx].set_length(0))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("failed to reset length of pos list string", K(ret));
-            } else if (OB_UNLIKELY(pos_list.length() != pos_list_[write_idx].write(pos_list.ptr(), pos_list.length()))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("failed to write pos list string", K(ret));
-            }
           }
         }
         ++write_idx;
@@ -1188,6 +1195,9 @@ int ObTextRetrievalDaaTTokenIter::get_curr_pos_list(ObString &pos_list) const
   if (OB_ISNULL(inv_scan_pos_list_col_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pos list not supported", K(ret));
+  } else if (OB_UNLIKELY(nullptr != relevance_expr_ && filter_threshold_ > 0.0)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("pos list not available", K(ret), K_(filter_threshold));
   } else if (OB_UNLIKELY(cur_idx_ >= count_)) {
     ret = OB_ARRAY_OUT_OF_RANGE;
     LOG_WARN("array index out of bounds", K(ret), K_(cur_idx), K_(count));
