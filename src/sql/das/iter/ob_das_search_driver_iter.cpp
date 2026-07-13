@@ -101,6 +101,7 @@ int ObDASSearchDriverIter::inner_init(ObDASIterParam &param)
 int ObDASSearchDriverIter::inner_reuse()
 {
   int ret = OB_SUCCESS;
+  profile_ = nullptr;
   // no need to reuse search op, processed in rescan logic
   scores_.clear();
   row_ids_.clear();
@@ -124,6 +125,7 @@ int ObDASSearchDriverIter::inner_reuse()
 int ObDASSearchDriverIter::inner_release()
 {
   int ret = OB_SUCCESS;
+  profile_ = nullptr;
   scores_.reset();
   row_ids_.reset();
   allocator_.reset();
@@ -141,15 +143,14 @@ int ObDASSearchDriverIter::inner_release()
 int ObDASSearchDriverIter::do_table_scan()
 {
   int ret = OB_SUCCESS;
-  common::ObOpProfile<common::ObMetric> *profile = nullptr;
   if (OB_ISNULL(root_op_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr root op", KR(ret));
   } else if (OB_FAIL(ObDASProfileIter::init_runtime_profile(
-          common::ObProfileId::HYBRID_SEARCH_HYBRID_ITER, profile))) {
+          common::ObProfileId::HYBRID_SEARCH_HYBRID_ITER, profile_))) {
     LOG_WARN("failed to init runtime profile", KR(ret));
   } else {
-    common::ObProfileSwitcher switcher(profile);
+    common::ObProfileSwitcher switcher(profile_);
     if (OB_FAIL(root_op_->open())) {
       LOG_WARN("failed to open root op", KR(ret));
     }
@@ -160,16 +161,21 @@ int ObDASSearchDriverIter::do_table_scan()
 int ObDASSearchDriverIter::rescan()
 {
   int ret = OB_SUCCESS;
-  common::ObOpProfile<common::ObMetric> *profile = nullptr;
+  // for vector index search, in post-iterative filter mode, we can reuse the old profile in the same tablet execution
+  // otherwise, every iteration will create a new profile, which will overwhelm the profile output
+  bool is_vec_index_search = search_ctx_->is_vec_index_search();
   if (OB_ISNULL(root_op_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr root op", KR(ret));
-  } else if (OB_FAIL(ObDASProfileIter::init_runtime_profile(
-          common::ObProfileId::HYBRID_SEARCH_HYBRID_ITER, profile))) {
+  } else if (!is_vec_index_search && OB_FAIL(ObDASProfileIter::init_runtime_profile(
+          common::ObProfileId::HYBRID_SEARCH_HYBRID_ITER, profile_))) {
     LOG_WARN("failed to init runtime profile", KR(ret));
   } else {
-    common::ObProfileSwitcher switcher(profile);
-    root_op_->reset_profile();
+    // vector index search can reuse the old profile in the same tablet execution
+    common::ObProfileSwitcher switcher(profile_);
+    if (!is_vec_index_search) {
+      root_op_->reset_profile();
+    }
     if (OB_FAIL(root_op_->rescan())) {
       LOG_WARN("failed to rescan root op", KR(ret));
     }

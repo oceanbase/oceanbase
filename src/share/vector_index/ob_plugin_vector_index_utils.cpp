@@ -937,6 +937,7 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
                                                         ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
+  common::ScopedTimer timer(common::ObMetricId::HS_VEC_HNSW_SYNC_SNAP_MEM_TIME);
   ObCostGuard sync_snapshot_cost_guard(adapter, "try_sync_snapshot_memdata", 0, 0, ObCostGuard::KNN_THRESHOLD_500MS);
   schema::ObIndexType index_type = INDEX_TYPE_VEC_INDEX_SNAPSHOT_DATA_LOCAL;
   ObAccessService *tsc_service = MTL(ObAccessService *);
@@ -2724,10 +2725,13 @@ int ObPluginVectorIndexUtils::check_snapshot_iter_need_rescan(common::ObNewRowIt
   } else if (OB_ISNULL(row) || row->get_column_count() < 2) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid row", K(ret), K(row));
-  } else if (row->storage_datums_[0].get_string().suffix_match("_meta_data")) {
-    need_rescan = false;
-  } else if (OB_NOT_NULL(row) && row->get_column_count() == 3 && !row->storage_datums_[2].get_bool()) { // if table 5 has visible row
-    need_rescan = true;
+  } else {
+    INC_METRIC_VAL(common::ObMetricId::HS_VEC_HNSW_SNAPSHOT_TABLE_SCAN_ROWS, 1);
+    if (row->storage_datums_[0].get_string().suffix_match("_meta_data")) {
+      need_rescan = false;
+    } else if (OB_NOT_NULL(row) && row->get_column_count() == 3 && !row->storage_datums_[2].get_bool()) { // if table 5 has visible row
+      need_rescan = true;
+    }
   }
   LOG_INFO("check snapshot iter need rescan", K(ret), K(need_rescan));
   return ret;

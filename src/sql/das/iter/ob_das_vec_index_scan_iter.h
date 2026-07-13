@@ -239,6 +239,7 @@ public:
   void set_bitmap(ObVecIndexBitmap *bitmap) { bitmap_ = bitmap; }
 
   ObVecIndexType get_index_type() const { return vec_index_type_; }
+  bool is_brute_force() const { return go_brute_force_; }
   void set_vec_index_type(ObVecIndexType vec_index_type, ObVecIdxAdaTryPath vec_idx_try_path, bool go_brute_force) {
     vec_index_type_ = vec_index_type;
     vec_idx_try_path_ = vec_idx_try_path;

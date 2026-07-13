@@ -9,6 +9,7 @@
 #include "sql/das/iter/ob_das_vec_scan_utils.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
+#include "sql/das/iter/ob_das_profile_iter.h"
 
 namespace oceanbase
 {
@@ -73,6 +74,32 @@ int ObDASVecIndexHNSWScanIter::inner_init(ObDASIterParam &param)
   return ret;
 }
 
+int ObDASVecIndexHNSWScanIter::do_table_scan()
+{
+  int ret = OB_SUCCESS;
+  common::ObOpProfile<common::ObMetric> *my_profile = nullptr;
+  if (OB_FAIL(ObDASProfileIter::init_runtime_profile(
+          common::ObProfileId::HYBRID_SEARCH_VEC_HNSW_SCAN, my_profile))) {
+    LOG_WARN("failed to init runtime profile for hnsw scan", KR(ret));
+  } else {
+    profile_ = my_profile;
+  }
+  return ret;
+}
+
+int ObDASVecIndexHNSWScanIter::rescan()
+{
+  int ret = OB_SUCCESS;
+  common::ObOpProfile<common::ObMetric> *my_profile = nullptr;
+  if (OB_FAIL(ObDASProfileIter::init_runtime_profile(
+          common::ObProfileId::HYBRID_SEARCH_VEC_HNSW_SCAN, my_profile))) {
+    LOG_WARN("failed to init runtime profile for hnsw scan", KR(ret));
+  } else {
+    profile_ = my_profile;
+  }
+  return ret;
+}
+
 int ObDASVecIndexHNSWScanIter::init_sort()
 {
   int ret = OB_SUCCESS;
@@ -97,6 +124,7 @@ int ObDASVecIndexHNSWScanIter::inner_reuse()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  profile_ = nullptr;
 
   if (!com_aux_vec_iter_first_scan_ && OB_FAIL(reuse_com_aux_vec_iter())) {
     LOG_WARN("failed to reuse com aux vec iter", K(ret));
@@ -135,6 +163,7 @@ int ObDASVecIndexHNSWScanIter::inner_release()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  profile_ = nullptr;
 
   if (OB_NOT_NULL(delta_buf_iter_) && OB_FAIL(delta_buf_iter_->release())) {
     LOG_WARN("failed to release delta buf iter", K(ret));
@@ -226,6 +255,7 @@ void ObDASVecIndexHNSWScanIter::reset_adaptor_vid_iter_for_next_iteration()
 int ObDASVecIndexHNSWScanIter::inner_get_next_rows(int64_t &count, int64_t capacity)
 {
   int ret = OB_SUCCESS;
+  common::ObProfileSwitcher switcher(profile_);
 
   reset_adaptor_vid_iter_for_next_iteration();
   if (OB_FAIL(process_adaptor_state(true))) {
@@ -447,6 +477,7 @@ int ObDASVecIndexHNSWScanIter::init_brute_force_params(ObVectorQueryAdaptorResul
   } else {
     ctx.limit = get_reorder_count_for_brute_force(query_cond_->ef_search_, limit_, search_param_);
     ctx.search_vec = query_cond_->query_vector_;
+    SET_METRIC_VAL(common::ObMetricId::HS_VEC_HNSW_BQ_REORDER_LIMIT, ctx.limit);
   }
 
   return ret;
@@ -465,6 +496,7 @@ int ObDASVecIndexHNSWScanIter::query_brute_force_distances(ObPluginVectorIndexAd
     LOG_WARN("invalid arguments", K(ret), KP(adaptor), KP(brute_vids), K(brute_cnt));
   } else {
     dist_result.brute_cnt = static_cast<int>(brute_cnt);
+    common::ScopedTimer timer(common::ObMetricId::HS_VEC_HNSW_VSAG_QUERY_TIME);
     if (OB_FAIL(adaptor->vsag_query_vids(reinterpret_cast<float *>(const_cast<char*>(search_vec.ptr())),
                                          brute_vids, brute_cnt, dist_result, search_vec.length()))) {
       LOG_WARN("failed to brute force query", K(ret), K(brute_cnt));
@@ -533,6 +565,7 @@ int ObDASVecIndexHNSWScanIter::build_brute_force_result_iterator_bq(ObPluginVect
     uint64_t snap_size = snap_heap.get_size();
     uint64_t incr_size = incr_heap.get_size();
     uint64_t total_size = snap_size + incr_size;
+    SET_METRIC_VAL(common::ObMetricId::HS_VEC_HNSW_BQ_REORDER_HEAP_SIZE, total_size);
 
     if (total_size == 0) {
       ret = OB_ITER_END;
@@ -702,9 +735,13 @@ int ObDASVecIndexHNSWScanIter::process_adaptor_state_pre_filter(
         query_cond_->query_scn_ = snapshot_scan_param_.snapshot_.core_.version_;
         query_cond_->scan_param_ = &snapshot_scan_param_;
       }
-
-      if (FAILEDx(adaptor->query_result(ls_id_, ada_ctx, query_cond_, adaptor_vid_iter_))) {
-        LOG_WARN("failed to query result.", K(ret));
+      {
+        common::ScopedTimer timer(common::ObMetricId::HS_VEC_HNSW_VSAG_QUERY_TIME);
+        if (FAILEDx(adaptor->query_result(ls_id_, ada_ctx, query_cond_, adaptor_vid_iter_))) {
+          LOG_WARN("failed to query result.", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (PVQ_REFRESH == ada_ctx->get_status()) {
         if (OB_FAIL(ObPluginVectorIndexUtils::query_need_refresh_memdata(adaptor, ls_id_, ada_ctx->get_ls_leader()))) {
           if (ret != OB_SCHEMA_EAGAIN) {
@@ -776,7 +813,11 @@ int ObDASVecIndexHNSWScanIter::process_adaptor_state_post_filter(
   int64_t iter_scan_total_num = 0;
   if (first_post_filter_search_ && OB_FAIL(process_adaptor_state_post_filter_once(ada_ctx, adaptor))) {
     LOG_WARN("failed to process adaptor state post filter once.", K(ret), K(vec_index_type_), K(vec_idx_try_path_));
-  } else if (!first_post_filter_search_ && OB_FAIL(adaptor->query_next_result(ada_ctx, query_cond_, adaptor_vid_iter_))) {
+  } else if (!first_post_filter_search_) {
+    common::ScopedTimer timer(common::ObMetricId::HS_VEC_HNSW_VSAG_QUERY_TIME);
+    if (OB_FAIL(adaptor->query_next_result(ada_ctx, query_cond_, adaptor_vid_iter_))) {
+      LOG_WARN("failed to query next result.", K(ret));
+    }
   } else if (first_post_filter_search_ && OB_FALSE_IT(first_post_filter_search_ = false)) {
   }
   return ret;
@@ -870,6 +911,7 @@ int ObDASVecIndexHNSWScanIter::call_pva_interface(const ObVidAdaLookupStatus& cu
   int ret = OB_SUCCESS;
   switch(cur_state) {
     case ObVidAdaLookupStatus::STATES_INIT: {
+      common::ScopedTimer timer(common::ObMetricId::HS_VEC_HNSW_DELTA_BUF_TABLE_SCAN_TIME);
       ObNewRowIterator *real_delta_buf_iter = delta_buf_iter_->get_output_result_iter();
       if (OB_FAIL(adaptor.check_delta_buffer_table_readnext_status(&ada_ctx, real_delta_buf_iter, delta_buf_scan_param_.snapshot_.core_.version_))) {
         LOG_WARN("failed to check delta buffer table readnext status.", K(ret));
@@ -877,12 +919,15 @@ int ObDASVecIndexHNSWScanIter::call_pva_interface(const ObVidAdaLookupStatus& cu
       break;
     }
     case ObVidAdaLookupStatus::QUERY_ROWKEY_VEC: {
+      INC_METRIC_VAL(common::ObMetricId::HS_VEC_HNSW_COMP_DELTA_COUNT, 1);
+      common::ScopedTimer timer(common::ObMetricId::HS_VEC_HNSW_COMP_DELTA_TIME);
       if (OB_FAIL(adaptor.complete_delta_buffer_table_data(&ada_ctx))) {
         LOG_WARN("failed to complete delta buffer table data.", K(ret));
       }
       break;
     }
     case ObVidAdaLookupStatus::QUERY_INDEX_ID_TBL: {
+      common::ScopedTimer timer(common::ObMetricId::HS_VEC_HNSW_INDEX_ID_TABLE_SCAN_TIME);
       ObNewRowIterator *real_index_id_iter = index_id_iter_->get_output_result_iter();
       if (!index_id_scan_param_.snapshot_.is_valid() || !index_id_scan_param_.snapshot_.core_.version_.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
@@ -893,6 +938,7 @@ int ObDASVecIndexHNSWScanIter::call_pva_interface(const ObVidAdaLookupStatus& cu
       break;
     }
     case ObVidAdaLookupStatus::QUERY_SNAPSHOT_TBL: {
+      common::ScopedTimer timer(common::ObMetricId::HS_VEC_HNSW_SNAPSHOT_TABLE_SCAN_TIME);
       if (OB_FAIL(adaptor.check_snapshot_table_wait_status(&ada_ctx))) {
         LOG_WARN("failed to check snapshot table wait status.", K(ret));
       }
@@ -906,8 +952,11 @@ int ObDASVecIndexHNSWScanIter::call_pva_interface(const ObVidAdaLookupStatus& cu
       }
       if (!ada_ctx.get_ls_leader() && OB_FAIL(prepare_follower_query_cond(*query_cond_))) {
         LOG_WARN("fail to prepare query cond of follower", K(ret));
-      } else if (OB_FAIL(adaptor.query_result(ls_id_, &ada_ctx, query_cond_, adaptor_vid_iter_))) {
-        LOG_WARN("failed to query result.", K(ret));
+      } else {
+        common::ScopedTimer timer(common::ObMetricId::HS_VEC_HNSW_VSAG_QUERY_TIME);
+        if (OB_FAIL(adaptor.query_result(ls_id_, &ada_ctx, query_cond_, adaptor_vid_iter_))) {
+          LOG_WARN("failed to query result.", K(ret));
+        }
       }
       break;
     }
