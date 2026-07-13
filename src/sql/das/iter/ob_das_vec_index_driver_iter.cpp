@@ -41,6 +41,8 @@ int ObDASVecIndexDriverIter::do_table_scan()
     profile_ = my_profile;
     common::ObProfileSwitcher switcher(my_profile);
     SET_METRIC_VAL(common::ObMetricId::HS_VEC_INDEX_PATH, static_cast<uint64_t>(get_vec_index_path_type()));
+    SET_METRIC_VAL(common::ObMetricId::HS_VEC_PARTITION_ROW_COUNT, static_cast<uint64_t>(last_partition_row_count_));
+    SET_METRIC_VAL(common::ObMetricId::HS_VEC_FILTER_EST_ROW_COUNT, static_cast<uint64_t>(last_filter_est_row_count_));
     if (OB_FAIL(vec_index_scan_iter_->do_table_scan())) {
       LOG_WARN("failed to do table scan", K(ret));
     } else if (OB_NOT_NULL(pre_filter_iter_) && OB_FAIL(pre_filter_iter_->do_table_scan())) {
@@ -75,6 +77,8 @@ int ObDASVecIndexDriverIter::rescan()
       LOG_WARN("failed to rescan filter iter", K(ret));
     } else {
       SET_METRIC_VAL(common::ObMetricId::HS_VEC_INDEX_PATH, static_cast<uint64_t>(get_vec_index_path_type()));
+      SET_METRIC_VAL(common::ObMetricId::HS_VEC_PARTITION_ROW_COUNT, static_cast<uint64_t>(last_partition_row_count_));
+      SET_METRIC_VAL(common::ObMetricId::HS_VEC_FILTER_EST_ROW_COUNT, static_cast<uint64_t>(last_filter_est_row_count_));
     }
   }
 
@@ -265,6 +269,9 @@ int ObDASVecIndexDriverIter::inner_reuse()
   iter_added_cnt_ = 0;
   iter_scan_total_num_ = 0;
   ready_to_output_ = false;
+
+  last_partition_row_count_ = 0;
+  last_filter_est_row_count_ = 0;
 
   // must be after memory reset
   if (OB_SUCC(ret) && OB_FAIL(set_vec_index_param(vec_index_driver_ctdef_->vec_index_param_))) {
