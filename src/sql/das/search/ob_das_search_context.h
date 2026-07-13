@@ -92,6 +92,8 @@ public:
   OB_INLINE RowMeta &get_rowid_meta() { return rowid_meta_; }
   OB_INLINE const common::ObIArray<ObExpr *> &get_rowid_exprs() const { return *rowid_exprs_; }
   OB_INLINE common::ObIAllocator &get_allocator() { return allocator_; }
+  OB_INLINE const share::ObLSID &get_ls_id() const { return ls_id_; }
+  OB_INLINE void set_ls_id(const share::ObLSID &ls_id) { ls_id_ = ls_id; }
   void reset();
 
   OB_INLINE ObDASRowIDType get_rowid_type() const { return rowid_type_; }

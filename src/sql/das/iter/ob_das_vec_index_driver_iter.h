@@ -224,6 +224,7 @@ public:
     snapshot_tablet_id_ = related_tablet_ids.snapshot_tablet_id_;
     com_aux_vec_tablet_id_ = related_tablet_ids.lookup_tablet_id_;
   }
+  void set_ls_id(const share::ObLSID &ls_id) { ls_id_ = ls_id; }
 
   ObDASVecIndexScanIter *get_vec_index_scan_iter() const { return vec_index_scan_iter_; }
   const ObDASVecIndexDriverCtDef *get_driver_ctdef() const { return vec_index_driver_ctdef_; }

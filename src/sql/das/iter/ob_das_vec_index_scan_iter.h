@@ -250,6 +250,10 @@ public:
   virtual void set_adaptor(share::ObPluginVectorIndexAdaptor *adaptor) = 0;
   virtual void set_vector_query_condition(ObVectorQueryConditions *query_cond) = 0;
   virtual void set_related_tablet_ids(const ObDASRelatedTabletID &related_tablet_ids) = 0;
+  virtual void set_ls_id(const share::ObLSID &ls_id)
+  {
+    UNUSED(ls_id);
+  }
   virtual share::ObVectorQueryVidIterator* get_adaptor_vid_iter() { return nullptr; }
   virtual int do_table_scan() override { return OB_SUCCESS; }
   virtual int rescan() override { return OB_SUCCESS; }

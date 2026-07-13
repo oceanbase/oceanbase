@@ -140,7 +140,7 @@ public:
     com_aux_vec_tablet_id_ = related_tablet_ids.lookup_tablet_id_;
   }
 
-  void set_ls_id(const share::ObLSID &ls_id) { ls_id_ = ls_id; }
+  virtual void set_ls_id(const share::ObLSID &ls_id) override { ls_id_ = ls_id; }
   uint64_t adjust_batch_count(bool is_vectored, uint64_t batch_count);
   bool enable_using_simplified_scan() { return need_save_distance_result(); }
 

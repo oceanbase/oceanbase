@@ -682,6 +682,7 @@ int ObDASScanOp::set_hybrid_search_tablet_ids(ObDASIter *result)
           LOG_WARN("failed to get lookup tablet id", K(ret));
         } else {
           lookup_iter->set_tablet_id(tablet_id);
+          lookup_iter->set_ls_id(ls_id_);
         }
         break;
       }
@@ -723,6 +724,8 @@ int ObDASScanOp::set_hybrid_search_tablet_ids(ObDASIter *result)
           } else {
             vec_index_driver_iter->set_related_tablet_ids(related_tablet_ids);
             vec_index_scan_iter->set_related_tablet_ids(related_tablet_ids);
+            vec_index_driver_iter->set_ls_id(ls_id_);
+            vec_index_scan_iter->set_ls_id(ls_id_);
           }
         }
         break;
@@ -1086,6 +1089,9 @@ int ObDASScanOp::rescan()
   reset_access_datums_ptr();
   scan_param_.tablet_id_ = tablet_id_;
   scan_param_.ls_id_ = ls_id_;
+  if (OB_NOT_NULL(search_ctx_)) {
+    search_ctx_->set_ls_id(ls_id_);
+  }
 
   LOG_DEBUG("begin to das table rescan",
             "ls_id", scan_param_.ls_id_,

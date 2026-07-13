@@ -151,7 +151,7 @@ int ObDASScalarPrimaryROROp::do_rescan()
       LOG_WARN("unexpected nullptr", K(ret), K(scalar_ctdef_), K(scalar_rtdef_), K(tsc_service_));
     } else if (OB_FAIL(get_related_tablet_id(scalar_ctdef_, tablet_id_))) {
       LOG_WARN("failed to get related tablet id", K(ret));
-    } else if (FALSE_IT(ObIDASSearchOp::switch_tablet_id(tablet_id_, get_param_))) {
+    } else if (FALSE_IT(ObIDASSearchOp::switch_tablet_id(search_ctx_.get_ls_id(), tablet_id_, get_param_))) {
     } else if (OB_FAIL(tsc_service_->reuse_scan_iter(get_param_.need_switch_param_, get_result_))) {
       LOG_WARN("failed to reuse scan iter", K(ret));
     } else {

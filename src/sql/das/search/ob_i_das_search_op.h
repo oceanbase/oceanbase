@@ -269,7 +269,7 @@ public:
   { return search_ctx_.get_datum_from_rowid(rowid, datum, col_idx); }
 
   int get_related_tablet_id(const ObDASScalarScanCtDef *scalar_ctdef, common::ObTabletID &tablet_id);
-  static void switch_tablet_id(const common::ObTabletID &new_tablet_id, storage::ObTableScanParam &scan_param);
+  static void switch_tablet_id(const share::ObLSID &new_ls_id, const common::ObTabletID &new_tablet_id, storage::ObTableScanParam &scan_param);
 
 public:
 // ---------------- core interfaces ----------------
