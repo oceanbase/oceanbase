@@ -15,9 +15,7 @@ namespace oceanbase
 namespace sql
 {
 
-ERRSIM_POINT_DEF(EN_FORCE_PRIMARY_ROR_SCAN, "Force to use primary ror scan");
-
-OB_SERIALIZE_MEMBER((ObDASScalarCtDef, ObIDASSearchCtDef), has_main_scan_, has_index_scan_);
+OB_SERIALIZE_MEMBER((ObDASScalarCtDef, ObIDASSearchCtDef), has_main_scan_, has_index_scan_, boost_, primary_get_ratio_);
 
 OB_SERIALIZE_MEMBER((ObDASScalarRtDef, ObIDASSearchRtDef));
 
@@ -171,12 +169,25 @@ int ObDASScalarRtDef::generate_op(ObDASSearchCost lead_cost, ObDASSearchCtx &sea
     const ObDASScalarScanCtDef *primary_scan_ctdef = scalar_ctdef->get_main_scan_ctdef();
 
     if (scalar_ctdef->has_index_scan() && scalar_ctdef->has_main_scan()) {
-      // choose the scan with lower cost
-      // If 8 times the lead_cost is less than the index scan cost, it is considered that scanning the primary table has a lower cost.
-      // This is because the primary table can directly provide the primary key order without extra processing,
-      // and is more advantageous when scanning fewer rows.
-      LOG_TRACE("index or primary scan", K(lead_cost.cost()), K(cost.cost()), K(cost.cost() >> 3));
-      if (/*lead_cost.cost() >= (cost.cost() >> 3) &&*/ !EN_FORCE_PRIMARY_ROR_SCAN) {
+      // choose the scan with lower cost when:
+      //   1. allow probe &&
+      //   2. primary-get optimization is enabled (primary_get_ratio_ > 0) &&
+      //   3. primary-get cost is considered cheaper than index-scan cost
+      const int64_t ratio = scalar_ctdef->get_primary_get_ratio();
+      const bool primary_get_enabled = ratio > 0;
+      const bool allow_probe = get_allow_probe();
+      LOG_TRACE("generate scalar op", K(allow_probe), K(primary_get_enabled), K(ratio),
+        K(lead_cost.cost()), K(cost.cost()));
+      if (allow_probe && primary_get_enabled && lead_cost.cost() <= cost.cost() / ratio) {
+        // scan primary table
+        if (OB_ISNULL(primary_scan_rtdef) || OB_ISNULL(primary_scan_ctdef)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected nullptr", K(ret));
+        } else if (FALSE_IT(primary_scan_rtdef->set_allow_probe(allow_probe))) {
+        } else if (OB_FAIL(primary_scan_rtdef->generate_op(lead_cost, search_ctx, op))) {
+          LOG_WARN("failed to generate primary scan op", K(ret));
+        }
+      } else {
         // scan index table
         if (OB_ISNULL(index_scan_rtdef) || OB_ISNULL(index_scan_ctdef)) {
           ret = OB_ERR_UNEXPECTED;
@@ -184,16 +195,9 @@ int ObDASScalarRtDef::generate_op(ObDASSearchCost lead_cost, ObDASSearchCtx &sea
         } else if (OB_FAIL(index_scan_rtdef->generate_op(lead_cost, search_ctx, op))) {
           LOG_WARN("failed to generate index scan op", K(ret));
         }
-      } else {
-        // scan primary table
-        if (OB_ISNULL(primary_scan_rtdef) || OB_ISNULL(primary_scan_ctdef)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected nullptr", K(ret));
-        } else if (OB_FAIL(primary_scan_rtdef->generate_op(lead_cost, search_ctx, op))) {
-          LOG_WARN("failed to generate primary scan op", K(ret));
-        }
       }
     } else if (scalar_ctdef->has_index_scan()) {
+      LOG_TRACE("generate index ror scan op", K(lead_cost.cost()), K(cost.cost()));
       if (OB_ISNULL(index_scan_rtdef) || OB_ISNULL(index_scan_ctdef)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected nullptr", K(ret));
@@ -201,9 +205,11 @@ int ObDASScalarRtDef::generate_op(ObDASSearchCost lead_cost, ObDASSearchCtx &sea
         LOG_WARN("failed to generate index scan op", K(ret));
       }
     } else if (scalar_ctdef->has_main_scan()) {
+      LOG_TRACE("generate primary scan op without index", K(lead_cost.cost()), K(cost.cost()));
       if (OB_ISNULL(primary_scan_rtdef) || OB_ISNULL(primary_scan_ctdef)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected nullptr", K(ret));
+      } else if (FALSE_IT(primary_scan_rtdef->set_allow_probe(get_allow_probe()))) {
       } else if (OB_FAIL(primary_scan_rtdef->generate_op(lead_cost, search_ctx, op))) {
         LOG_WARN("failed to generate primary scan op", K(ret));
       }
@@ -283,6 +289,7 @@ int ObDASScalarScanRtDef::generate_op(ObDASSearchCost lead_cost, ObDASSearchCtx 
       ObDASScalarPrimaryROROpParam op_param(ctdef, this);
       ObDASScalarPrimaryROROp *primary_ror_op = nullptr;
       op_param.set_is_scoring(ctdef->is_scoring());
+      op_param.set_is_probe_mode(get_allow_probe());
       if (OB_FAIL(search_ctx.create_op(op_param, primary_ror_op))) {
         LOG_WARN("failed to create primary ror op", K(ret));
       } else if (OB_ISNULL(primary_ror_op)) {

@@ -2563,10 +2563,34 @@ int ObDSLResolver::resolve_search_options(ObIJsonBase &req_node, ObDSLKnnQuery::
         search_option->param_.ivf_nprobes_ = ivf_nprobes;
         search_option->param_.is_set_ivf_nprobes_ = 1;
       }
+    } else if (key.case_compare("primary_get_ratio") == 0) {
+      if (OB_FAIL(resolve_primary_get_ratio(*sub_node, *search_option))) {
+        LOG_WARN("fail to resolve primary_get_ratio", K(ret));
+      }
     } else {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("unsupported key in search_option", K(ret), K(key));
     }
+  }
+  return ret;
+}
+
+int ObDSLResolver::resolve_primary_get_ratio(ObIJsonBase &sub_node, ObDSLBaseSearchOption &base_option)
+{
+  int ret = OB_SUCCESS;
+  const ObJsonNodeType node_type = sub_node.json_type();
+  int64_t ratio = 0;
+  if (node_type != ObJsonNodeType::J_INT && node_type != ObJsonNodeType::J_UINT) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "primary_get_ratio, should be integer");
+    LOG_WARN("primary_get_ratio should be integer", KR(ret), K(node_type));
+  } else if (OB_FALSE_IT(ratio = sub_node.get_int())) {
+  } else if (ratio < 1 || ratio > 1000000000) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "primary_get_ratio, should be in range [1, 1000000000]");
+    LOG_WARN("primary_get_ratio should be in range [1, 1000000000]", KR(ret), K(ratio));
+  } else {
+    base_option.primary_get_ratio_ = ratio;
   }
   return ret;
 }

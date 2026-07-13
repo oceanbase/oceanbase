@@ -190,6 +190,7 @@ int ObHybridSearchCgService::generate_ctdef(ObLogTableScan &op, const ObScalarQu
   } else if (OB_ISNULL(new_scalar_ctdef)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("scalar ctdef is null", K(ret));
+  } else if (OB_FALSE_IT(new_scalar_ctdef->set_primary_get_ratio(scalar_query_node->primary_get_ratio_))) {
   } else if (nullptr != scalar_query_node->ap_) {
     // has index scan access path
     is_search_index_path = scalar_query_node->ap_->is_search_index_path();

@@ -429,6 +429,12 @@ int ObHybridSearchGenerator::generate_knn_node(const ObDSLKnnQuery *knn_query, O
     knn_node->main_index_table_id_ = index_id;
     fusion_node_->contains_vec_node_ = true;
 
+    // Save/set/restore cur_primary_get_ratio_ from the knn search option so every scalar
+    // node generated for this knn's filters picks it up, while sibling clauses are unaffected.
+    const int64_t saved_cur_primary_get_ratio = cur_primary_get_ratio_;
+    cur_primary_get_ratio_ =
+      (nullptr != knn_query->search_option_) ? knn_query->search_option_->primary_get_ratio_ : 0;
+
     if (OB_FAIL(ret)) {
     } else if (knn_query->filter_.count() == 0) {
       // do nothing
@@ -507,6 +513,8 @@ int ObHybridSearchGenerator::generate_knn_node(const ObDSLKnnQuery *knn_query, O
         LOG_WARN("fail to get index name", KR(ret));
       }
     }
+    // Restore cur_primary_get_ratio_ to its original value.
+    cur_primary_get_ratio_ = saved_cur_primary_get_ratio;
   }
 
   return ret;
@@ -548,6 +556,7 @@ int ObHybridSearchGenerator::generate_scalar_node(ObRawExpr *filter, ObScalarQue
   } else if (OB_ISNULL(scalar_node = OB_NEWx(ObScalarQueryNode, allocator_, *allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate hybrid search node", K(ret));
+  } else if (OB_FALSE_IT(scalar_node->primary_get_ratio_ = cur_primary_get_ratio_)) {
   } else if (OB_FAIL(scalar_node->filter_.push_back(filter))) {
     LOG_WARN("failed to append scalar filter", K(ret));
   } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(filter, access_exprs))) {

@@ -101,6 +101,20 @@ private:
       msm_(1), origin_expr_(nullptr) {}
 };
 
+// Base for per-clause search options. Inherited by knn SearchOption (and future option
+// types), so options common across search option types live here and can be extended
+// without touching each subclass.
+struct ObDSLBaseSearchOption {
+  ObDSLBaseSearchOption() : primary_get_ratio_(0) {}
+  virtual ~ObDSLBaseSearchOption() {}
+  // When primary_get_ratio_ > 0, enables the primary-get optimization for the scalar scans
+  // of this clause: when lead_cost * primary_get_ratio_ <= index_scan_cost, the primary
+  // table is scanned instead of the index. When 0 (the default), the optimization is
+  // completely disabled and the index scan path is always used (the original behavior).
+  int64_t primary_get_ratio_;
+  TO_STRING_KV(K(primary_get_ratio_));
+};
+
 class ObDSLKnnQuery : public ObDSLQuery
 {
 public:
@@ -109,13 +123,14 @@ public:
                     ObEsQueryItem outer_query_type);
   virtual ~ObDSLKnnQuery() {}
 
-  struct SearchOption {
+  struct SearchOption : public ObDSLBaseSearchOption {
     SearchOption()
-      : param_(), filter_mode_(INVALID_KNN_FILTER_MODE) {}
+      : ObDSLBaseSearchOption(), param_(), filter_mode_(INVALID_KNN_FILTER_MODE) {}
     ~SearchOption() {}
     ObVectorIndexQueryParam param_;
     ObKnnFilterMode filter_mode_;  // ["pre", "pre-knn", "pre-brute", "post", "post-index-merge"]
-    TO_STRING_KV(K(param_), K(filter_mode_));
+    INHERIT_TO_STRING_KV("ObDSLBaseSearchOption", ObDSLBaseSearchOption,
+                         K(param_), K(filter_mode_));
   };
   ObVectorIndexDistAlgorithm dist_algo_;
   ObColumnRefRawExpr *field_;
@@ -350,6 +365,7 @@ private :
   int resolve_rank(ObIJsonBase &req_node);
   int resolve_rrf(ObIJsonBase &req_node);
   int resolve_search_options(ObIJsonBase &req_node, ObDSLKnnQuery::SearchOption *&search_option);
+  int resolve_primary_get_ratio(ObIJsonBase &sub_node, ObDSLBaseSearchOption &base_option);
   int resolve_single_term(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSLQuery *parent_query, ObEsQueryItem outer_query_type);
   int resolve_size(ObIJsonBase &req_node);
   int resolve_slop(ObIJsonBase &req_node, int32_t &slop);

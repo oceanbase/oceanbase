@@ -248,7 +248,8 @@ struct ObIDASSearchRtDef : ObDASAttachRtDef
 public:
   ObIDASSearchRtDef(const ObDASOpType &op_type)
     : ObDASAttachRtDef(op_type),
-      cost_()
+      cost_(),
+      allow_probe_(false)
   { }
 
 public:
@@ -260,9 +261,14 @@ public:
   virtual int can_pushdown_filter_to_bmm(bool &can_pushdown);
   virtual void set_pushdown_filter(const bool query_optional, ObIDASSearchOp *filter_op);
 
+  OB_INLINE bool get_allow_probe() const { return allow_probe_; }
+  OB_INLINE void set_allow_probe(bool allow_probe) { allow_probe_ = allow_probe; }
+
 private:
   // the estimated cost of this query, which is, the upper bound of the number of matching docs.
   ObDASSearchCost cost_;
+  // Runtime-only flag (not serialized): set before generating scalar child ops of conjunction.
+  bool allow_probe_;
 };
 
 /*

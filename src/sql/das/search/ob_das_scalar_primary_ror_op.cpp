@@ -11,8 +11,6 @@ namespace oceanbase
 namespace sql
 {
 
-ERRSIM_POINT_DEF(EN_FORCE_PRIMARY_ROR_ADVANCE_GET, "Force to use point get for primary ror");
-
 int ObDASScalarPrimaryROROpParam::get_children_ops(ObIArray<ObIDASSearchOp *> &children) const
 {
   // leaf node, no children
@@ -29,7 +27,9 @@ int ObDASScalarPrimaryROROp::do_init(const ObIDASSearchOpParam &op_param)
   } else {
     scalar_ctdef_ = scalar_op_param.get_scan_ctdef();
     scalar_rtdef_ = scalar_op_param.get_scan_rtdef();
+    is_probe_mode_ = scalar_op_param.get_is_probe_mode();
   }
+  LOG_TRACE("do init", K(ret), K(is_probe_mode_));
   return ret;
 }
 
@@ -38,7 +38,10 @@ int ObDASScalarPrimaryROROp::do_open()
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObDASScalarROROp::do_open())) {
     LOG_WARN("failed to open", K(ret));
-  } else if (OB_UNLIKELY(EN_FORCE_PRIMARY_ROR_ADVANCE_GET)) {
+  } else if (is_probe_mode_) {
+    // Probe mode: set up an independent get_param_ used by do_probe / point_get. This
+    // iterator is decoupled from scan_param_ so probing does not perturb the scan
+    // iterator's position used by the base ROR semantics.
     if (OB_ISNULL(tsc_service_) || OB_ISNULL(scalar_ctdef_) || OB_ISNULL(scalar_rtdef_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected nullptr", K(ret), K(tsc_service_), K(scalar_ctdef_), K(scalar_rtdef_));
@@ -50,7 +53,6 @@ int ObDASScalarPrimaryROROp::do_open()
       get_param_.op_ = nullptr;
       get_param_.is_get_ = true;
       get_param_.key_ranges_.reset();
-      last_get_id_.set_max();
 
       common::ObIAllocator &allocator = ctx_allocator();
       const ObIArray<ObNewRange> &rt_ranges = scalar_rtdef_->key_ranges_;
@@ -64,7 +66,6 @@ int ObDASScalarPrimaryROROp::do_open()
         }
       }
 
-      // Create independent ObPushdownOperator for get_param_ to avoid state sharing with scan_param_
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(init_get_pd_op())) {
         LOG_WARN("failed to init get pd op", K(ret));
@@ -135,7 +136,6 @@ int ObDASScalarPrimaryROROp::do_close()
     get_param_.destroy_schema_guard();
     get_param_.snapshot_.reset();
     get_param_.destroy();
-    last_get_id_.set_max();
   }
   return ret;
 }
@@ -145,7 +145,7 @@ int ObDASScalarPrimaryROROp::do_rescan()
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObDASScalarROROp::do_rescan())) {
     LOG_WARN("failed to do rescan from parent", K(ret));
-  } else if (OB_UNLIKELY(EN_FORCE_PRIMARY_ROR_ADVANCE_GET)) {
+  } else if (is_probe_mode_) {
     if (OB_ISNULL(scalar_ctdef_) || OB_ISNULL(scalar_rtdef_) || OB_ISNULL(tsc_service_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected nullptr", K(ret), K(scalar_ctdef_), K(scalar_rtdef_), K(tsc_service_));
@@ -178,7 +178,6 @@ int ObDASScalarPrimaryROROp::do_rescan()
         LOG_WARN("failed to rescan table", K(ret), K(get_param_));
       } else {
         get_param_.need_switch_param_ = false;
-        last_get_id_.set_max();
       }
     }
   }
@@ -188,28 +187,14 @@ int ObDASScalarPrimaryROROp::do_rescan()
 int ObDASScalarPrimaryROROp::do_advance_to(const ObDASRowID &target, ObDASRowID &curr_id, double &score)
 {
   int ret = OB_SUCCESS;
-  bool found = false;
-  score = 0.0;
-
-  if (OB_UNLIKELY(EN_FORCE_PRIMARY_ROR_ADVANCE_GET) && OB_FAIL(point_get(target, found))) {
-    LOG_WARN("failed to do point get", K(ret));
-  } else if (found) {
-    curr_id = target;
-    if (OB_FAIL(search_ctx_.deep_copy_rowid(target, last_get_id_, search_ctx_.get_allocator()))) {
-      LOG_WARN("failed to deep copy rowid", K(ret));
-    } else {
-      LOG_TRACE("point_get hit", K(target));
-    }
-  } else {
-    if (OB_FAIL(ObDASScalarROROp::do_advance_to(target, curr_id, score))) {
-      if (ret != OB_ITER_END) {
-        LOG_WARN("failed to do advance to", K(ret), K(target));
-      }
-    } else {
-      last_get_id_.set_max();
-    }
+  if (is_probe_mode_) {
+    // Probe mode: this op is a non-driver follower coordinated by the parent conjunction,
+    // which must only call probe() against it. Iterating the scan iterator is forbidden.
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("advance_to not supported in primary probe mode", K(ret), K(target));
+  } else if (OB_FAIL(ObDASScalarROROp::do_advance_to(target, curr_id, score))) {
+    LOG_WARN_IGNORE_ITER_END(ret, "failed to do advance to", K(ret), K(target));
   }
-
   return ret;
 }
 
@@ -217,38 +202,49 @@ int ObDASScalarPrimaryROROp::do_next_rowid(ObDASRowID &next_id, double &score)
 {
   int ret = OB_SUCCESS;
   score = 0.0;
-  if (OB_UNLIKELY(EN_FORCE_PRIMARY_ROR_ADVANCE_GET)) {
-    // Since the iterator used by 'get' and the iterator used by 'scan' do not share state,
-    // there exists a scenario where after 'get' retrieves a current id, calling 'next_rowid' again,
-    // the scan iterator cannot perceive the value fetched by the previous 'get',
-    // and will continue from its last scan state instead.
-    // This can cause the scan to advance to an incorrect rowid and result in inaccurate output.
-    // For example: suppose the current branch has rows [1, 2, 3, 4] and the scan iterator is at 1.
-    // After calling get(3), if we then call next_rowid,
-    // because the scan iterator is unaware of the last 'get' value,
-    // it will continue from 1 and advance to 2, instead of 4 as expected.
-    if (last_get_id_.is_normal()) {
-      if (search_ctx_.get_rowid_type() == DAS_ROWID_TYPE_UINT64) {
-        last_get_id_.set_uint64(last_get_id_.get_uint64() + 1);
-        LOG_TRACE("uint64_t rowid advance from curr_id_", K(last_get_id_));
-      } else {
-        // TODO: Support fetching the first value semantically greater than target for compact rowid
-        // rescan may be a simpler way to implement this,
-        // but the performance implications of rescan need to be carefully considered
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not supported rowid type", K(ret), K(search_ctx_.get_rowid_type()));
-      }
-
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObDASScalarROROp::do_advance_to(last_get_id_, next_id, score))) {
-        LOG_WARN_IGNORE_ITER_END(ret, "failed to do advance to", K(ret), K(last_get_id_));
-      }
-      last_get_id_.set_max();
-    } else if (OB_FAIL(ObDASScalarROROp::do_next_rowid(next_id, score))) {
-      LOG_WARN_IGNORE_ITER_END(ret, "failed to do next rowid", K(ret));
-    }
+  if (is_probe_mode_) {
+    // Probe mode: this op is a non-driver follower coordinated by the parent conjunction,
+    // which must only call probe() against it. Iterating the scan iterator is forbidden.
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("next_rowid not supported in primary probe mode", K(ret));
   } else if (OB_FAIL(ObDASScalarROROp::do_next_rowid(next_id, score))) {
     LOG_WARN_IGNORE_ITER_END(ret, "failed to do next rowid", K(ret));
+  }
+  return ret;
+}
+
+int ObDASScalarPrimaryROROp::do_advance_shallow(const ObDASRowID &target,
+                                                const bool inclusive,
+                                                const MaxScoreTuple *&max_score_tuple)
+{
+  int ret = OB_SUCCESS;
+  if (is_probe_mode_) {
+    if (inclusive) {
+      max_score_tuple_.set(target, target, 0.0);
+    } else {
+      ObDASRowID next_id;
+      next_id.set_uint64(target.get_uint64() + 1);
+      max_score_tuple_.set(next_id, next_id, 0.0);
+    }
+    max_score_tuple = &max_score_tuple_;
+  } else if (OB_FAIL(ObIDASSearchOp::do_advance_shallow(target, inclusive, max_score_tuple))) {
+    LOG_WARN_IGNORE_ITER_END(ret, "failed to do advance shallow", K(ret), K(target));
+  }
+  return ret;
+}
+
+int ObDASScalarPrimaryROROp::do_probe(const ObDASRowID &target, bool &hit)
+{
+  int ret = OB_SUCCESS;
+  hit = false;
+  if (!is_probe_mode_) {
+    // Only the probe-mode supports probe.
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("probe not supported in non-probe primary ROR mode", K(ret), K(target));
+  } else if (OB_FAIL(point_get(target, hit))) {
+    LOG_WARN("failed to do point get for probe", K(ret), K(target));
+  } else {
+    LOG_TRACE("primary probe", K(target), K(hit));
   }
   return ret;
 }
@@ -323,40 +319,45 @@ int ObDASScalarPrimaryROROp::point_get(const ObDASRowID &target, bool &found)
 int ObDASScalarPrimaryROROp::advance_skip_scan(const ObDASRowID &target)
 {
   int ret = OB_SUCCESS;
-  ObRangeArray &key_ranges = scan_param_.key_ranges_;
-  const ObIArray<ObExpr *> &rowkeys = get_rowid_exprs();
-  if (OB_UNLIKELY(key_ranges.count() != 1)) {
-    // do nothing
-  } else if (OB_UNLIKELY(key_ranges.at(0).start_key_.get_obj_cnt() != rowkeys.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected rowkey count", K(ret), K(rowkeys), K(key_ranges));
+  if (is_probe_mode_) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("advance_skip_scan not supported in primary probe mode", K(ret), K(target));
   } else {
-    ObObj *start_rowkey_objs = key_ranges.at(0).start_key_.get_obj_ptr();
-    for (int64_t i = 0; OB_SUCC(ret) && i < rowkeys.count(); i++) {
-      const ObExpr *rowkey_expr = rowkeys.at(i);
-      if (OB_ISNULL(rowkey_expr) || OB_ISNULL(start_rowkey_objs + i)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected nullptr rowkey expr", K(ret));
-      } else {
-        ObDatum target_datum;
-        if (OB_FAIL(get_datum_from_rowid(target, target_datum, i))) {
-          LOG_WARN("failed to get datum from target rowid", K(ret), K(i));
-        } else if (OB_FAIL(target_datum.to_obj(start_rowkey_objs[i], rowkey_expr->obj_meta_))) {
-          LOG_WARN("failed to convert target datum to obj", K(ret));
+    ObRangeArray &key_ranges = scan_param_.key_ranges_;
+    const ObIArray<ObExpr *> &rowkeys = get_rowid_exprs();
+    if (OB_UNLIKELY(key_ranges.count() != 1)) {
+      // do nothing
+    } else if (OB_UNLIKELY(key_ranges.at(0).start_key_.get_obj_cnt() != rowkeys.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected rowkey count", K(ret), K(rowkeys), K(key_ranges));
+    } else {
+      ObObj *start_rowkey_objs = key_ranges.at(0).start_key_.get_obj_ptr();
+      for (int64_t i = 0; OB_SUCC(ret) && i < rowkeys.count(); i++) {
+        const ObExpr *rowkey_expr = rowkeys.at(i);
+        if (OB_ISNULL(rowkey_expr) || OB_ISNULL(start_rowkey_objs + i)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected nullptr rowkey expr", K(ret));
+        } else {
+          ObDatum target_datum;
+          if (OB_FAIL(get_datum_from_rowid(target, target_datum, i))) {
+            LOG_WARN("failed to get datum from target", K(ret), K(i));
+          } else if (OB_FAIL(target_datum.to_obj(start_rowkey_objs[i], rowkey_expr->obj_meta_))) {
+            LOG_WARN("failed to convert target datum to obj", K(ret));
+          }
         }
       }
-    }
 
-    if (OB_SUCC(ret)) {
-      key_ranges.at(0).border_flag_.set_inclusive_start();
+      if (OB_SUCC(ret)) {
+        key_ranges.at(0).border_flag_.set_inclusive_start();
 
-      if (OB_ISNULL(tsc_service_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected nullptr tsc service", K(ret));
-      } else if (OB_FAIL(tsc_service_->table_advance_scan(scan_param_, result_))) {
-        LOG_WARN("failed to advance scan", K(ret));
-      } else {
-        LOG_TRACE("advance skip scan", K(key_ranges.at(0)));
+        if (OB_ISNULL(tsc_service_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected nullptr tsc service", K(ret));
+        } else if (OB_FAIL(tsc_service_->table_advance_scan(scan_param_, result_))) {
+          LOG_WARN("failed to advance scan", K(ret));
+        } else {
+          LOG_TRACE("advance skip scan", K(key_ranges.at(0)));
+        }
       }
     }
   }

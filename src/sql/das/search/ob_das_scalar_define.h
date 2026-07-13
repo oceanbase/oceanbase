@@ -20,8 +20,10 @@ struct ObDASScalarCtDef : ObIDASSearchCtDef
 public:
   ObDASScalarCtDef(common::ObIAllocator &alloc)
     : ObIDASSearchCtDef(alloc, DAS_OP_SCALAR_QUERY),
+      boost_(nullptr),
       has_index_scan_(false),
-      has_main_scan_(false)
+      has_main_scan_(false),
+      primary_get_ratio_(0)
   { }
   virtual ~ObDASScalarCtDef() {}
 
@@ -29,13 +31,21 @@ public:
   OB_INLINE bool has_index_scan() const { return has_index_scan_; }
   OB_INLINE void set_has_main_scan(bool has_main_scan) { has_main_scan_ = has_main_scan; }
   OB_INLINE void set_has_index_scan(bool has_index_scan) { has_index_scan_ = has_index_scan; }
+  OB_INLINE int64_t get_primary_get_ratio() const { return primary_get_ratio_; }
+  OB_INLINE void set_primary_get_ratio(int64_t primary_get_ratio) { primary_get_ratio_ = primary_get_ratio; }
 
   const ObDASScalarScanCtDef* get_index_scan_ctdef() const;
   const ObDASScalarScanCtDef* get_main_scan_ctdef() const;
 
+  ObExpr *boost_;
+
 private:
   bool has_index_scan_;
   bool has_main_scan_;
+  // Primary-get optimization ratio for this scalar query; see ObDSLBaseSearchOption.
+  // 0 means the optimization is disabled and the index scan path is always used
+  // (the original behavior).
+  int64_t primary_get_ratio_;
 };
 
 struct ObDASScalarRtDef : ObIDASSearchRtDef

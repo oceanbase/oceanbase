@@ -342,6 +342,24 @@ int ObDASBooleanQueryRtDef::req(const ObBooleanSubClause<ObIDASSearchRtDef> &mus
   if (OB_SUCC(ret)) {
     ObDASRtDefCostComparator comparator(search_ctx);
     lib::ob_sort(required_clauses.begin(), required_clauses.end(), comparator);
+    // Set allow_probe on each scalar required clause before driving its generate_op:
+    //   - driver (i == 0) is the lead, must iterate via advance_to/next_rowid, so allow_probe = false
+    //   - non-driver scalar clause gets allow_probe = true, thus a probe op could be generated
+    //     based on the actual cost and primary_get_ratio_ config. Once the probe op is generated,
+    //     the conjunction will coordinate it via probe() against the driver.
+    // NOTE: only scalar clauses with direct parent conjunction are eligible for probe path.
+    //     knn+filter and should/must_not paths are not affected currently.
+    for (int64_t i = 0; OB_SUCC(ret) && i < required_clauses.count(); i++) {
+      ObIDASSearchRtDef *clause = nullptr;
+      if (OB_FAIL(required_clauses.at(i, clause))) {
+        LOG_WARN("failed to get clause", KR(ret), K(i));
+      } else if (OB_ISNULL(clause)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected nullptr clause", KR(ret), K(i));
+      } else if (i != 0 && clause->op_type_ == DAS_OP_SCALAR_QUERY && search_ctx.get_rowid_type() == DAS_ROWID_TYPE_UINT64) {
+        clause->set_allow_probe(true);
+      }
+    }
     for (int i = 0; OB_SUCC(ret) && i < required_clauses.count(); i++) {
       ObIDASSearchRtDef *clause = nullptr;
       ObIDASSearchOp *required_op = nullptr;

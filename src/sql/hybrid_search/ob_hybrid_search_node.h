@@ -106,7 +106,8 @@ public:
                         index_table_query_params_(allocator),
                         index_table_rowkey_exprs_(allocator),
                         has_valid_index_(false),
-                        is_extracted_(false)
+                        is_extracted_(false),
+                        primary_get_ratio_(0)
   { node_type_ = INDEX_MERGE_HYBRID_SCALAR_QUERY; }
   virtual ~ObScalarQueryNode() {}
   virtual inline bool is_hybrid_scalar_node() const { return true; }
@@ -141,6 +142,9 @@ public:
   ObSqlArray<ObRawExpr*> index_table_rowkey_exprs_;
   bool has_valid_index_;
   bool is_extracted_;  // For vec search: all filter exprs are extracted to generate a new scalar query node
+  // Primary-get optimization ratio for this scalar scan; see ObDSLBaseSearchOption.
+  // 0 means the optimization is disabled for this node.
+  int64_t primary_get_ratio_;
 };
 
 class ObVecSearchNode : public ObHybridSearchNodeBase
@@ -213,7 +217,7 @@ public:
     : allocator_(alloc), plan_(plan), schema_guard_(schema_guard), table_schema_(table_schema),
       valid_index_ids_(valid_index_ids), valid_index_cols_(valid_index_cols),
       index_can_ignore_prefix_(index_can_ignore_prefix),
-      fusion_node_(nullptr), table_item_(table_item) {}
+      fusion_node_(nullptr), table_item_(table_item), cur_primary_get_ratio_(0) {}
   virtual ~ObHybridSearchGenerator() {}
   int generate(const ObDSLQueryInfo *dsl_query, ObIndexMergeNode *&hybrid_search_tree);
   int deal_table_scan_filters(ObIndexMergeNode *hybrid_search_tree,
@@ -275,6 +279,10 @@ private :
   const ObIArray<bool> &index_can_ignore_prefix_;
   ObFusionNode *fusion_node_;
   const TableItem *table_item_;
+  // Ratio of the clause currently being generated, stamped onto each ObScalarQueryNode it
+  // produces. Sourced from the knn query's search_option (ObDSLBaseSearchOption). 0 means
+  // off; save/set/restore around generate_knn_node so sibling clauses are unaffected.
+  int64_t cur_primary_get_ratio_;
   static const double MAX_INTERSECTION_MERGE_SEL;
   static const double MAX_SEL_GAP_RATIO;
 };

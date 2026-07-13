@@ -339,6 +339,13 @@ public:
    * @out param max_score: The dimension-level max score.
    */
   OB_INLINE int calc_max_score(double &threshold);
+
+  /*
+   * Probes whether the given target rowid matches this operator's filter set.
+   * Only the non-driver primary ror op of conjunction supports probe mode currently.
+   */
+  virtual bool is_probe_mode() const { return false; }
+  OB_INLINE int probe(const ObDASRowID &target, bool &hit);
 // ---------------- core interfaces end ----------------
 
 protected:
@@ -353,6 +360,7 @@ protected:
   virtual int do_next_rowids(int64_t capacity, int64_t &count);
   virtual int do_set_min_competitive_score(const double &threshold);
   virtual int do_calc_max_score(double &threshold);
+  virtual int do_probe(const ObDASRowID &target, bool &hit) { return OB_NOT_SUPPORTED; }
 // ---------------- interfaces implementation end ----------------
 
   OB_INLINE common::ObIAllocator &ctx_allocator() const { return search_ctx_.get_allocator(); }
@@ -533,6 +541,23 @@ OB_INLINE int ObIDASSearchOp::calc_max_score(double &threshold)
   }
   return ret;
 }
+
+OB_INLINE int ObIDASSearchOp::probe(const ObDASRowID &target, bool &hit)
+{
+  int ret = OB_SUCCESS;
+  common::ObProfileSwitcher switcher(profile_);
+  common::ScopedTimer total_timer(common::ObMetricId::HS_TOTAL_TIME);
+  common::ScopedTimer timer(common::ObMetricId::HS_PROBE_TIME);
+  INC_METRIC_VAL(common::ObMetricId::HS_PROBE_COUNT, 1);
+  if (OB_UNLIKELY(!is_probe_mode())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("this op does not support probe", KR(ret), K(op_type_));
+  } else if (OB_FAIL(do_probe(target, hit))) {
+    LOG_WARN("failed to probe impl", KR(ret), K(target));
+  }
+  return ret;
+}
+
 } // namespace sql
 } // namespace oceanbase
 
