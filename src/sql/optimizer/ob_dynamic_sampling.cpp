@@ -793,6 +793,8 @@ int ObDynamicSampling::add_basic_hint_info(ObSqlString &basic_hint_str,
     LOG_WARN("failed to append", K(ret));
   } else if (OB_FAIL(basic_hint_str.append(" OPT_PARAM('APPROX_COUNT_DISTINCT_PRECISION', 10) "))) {
     LOG_WARN("failed to append", K(ret));
+  } else if (OB_FAIL(basic_hint_str.append(" OPT_PARAM('_ENABLE_STORAGE_CARDINALIRY_ESTIMATION', 'FALSE') "))) {
+    LOG_WARN("failed to append", K(ret));
   } else if (ctx_->get_is_weak_read() && WEAK != session_info->get_consistency_level() &&
              OB_FAIL(basic_hint_str.append(" READ_CONSISTENCY(WEAK) "))) {
     LOG_WARN("failed to append", K(ret));

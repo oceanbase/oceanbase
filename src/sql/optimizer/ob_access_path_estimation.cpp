@@ -3026,6 +3026,7 @@ int ObAccessPathEstimation::estimate_path_rowcount_by_dynamic_sampling(ObOptimiz
                                       all_predicate_sel,
                                       block_sample_ratio,
                                       table_row_count,
+                                      table_row_count,
                                       logical_row_count,
                                       prefix_filter_sel))) {
           LOG_WARN("failed to process prefix filter ds result", K(ret));
@@ -3036,6 +3037,7 @@ int ObAccessPathEstimation::estimate_path_rowcount_by_dynamic_sampling(ObOptimiz
                                             ObDSResultItemType::OB_DS_INDEX_SKIP_SCAN_STAT,
                                             all_predicate_sel,
                                             block_sample_ratio,
+                                            table_row_count,
                                             logical_row_count,
                                             skip_scan_range_row_count,
                                             est_cost_info.ss_postfix_range_filters_sel_))) {
@@ -3047,6 +3049,7 @@ int ObAccessPathEstimation::estimate_path_rowcount_by_dynamic_sampling(ObOptimiz
                                             ObDSResultItemType::OB_DS_INDEX_BACK_STAT,
                                             all_predicate_sel,
                                             block_sample_ratio,
+                                            table_row_count,
                                             skip_scan_range_row_count,
                                             index_back_row_count,
                                             est_cost_info.postfix_filter_sel_))) {
@@ -3070,6 +3073,7 @@ int ObAccessPathEstimation::process_ds_result(const OptTableMetas &table_metas,
                                               ObDSResultItemType type,
                                               ObIArray<ObExprSelPair> &all_predicate_sel,
                                               const double query_block_sample_ratio,
+                                              const double table_rowcnt,
                                               const double total_rowcnt,
                                               double &filter_rowcnt,
                                               double &filter_sel)
@@ -3101,6 +3105,12 @@ int ObAccessPathEstimation::process_ds_result(const OptTableMetas &table_metas,
       if (!result_item->exprs_.empty()) {
         filter_rowcnt = result_item->stat_handle_.stat_->get_rowcount();
         tmp_ds_cnt = filter_rowcnt;
+      } else {
+        // When no DS-able filters exist, DS provides no absolute count.
+        // Use table_rowcnt (full table rows) as base instead of total_rowcnt
+        // (which already includes selectivity from previous steps),
+        // to avoid double-counting selectivity of inherited filters.
+        filter_rowcnt = table_rowcnt;
       }
       filter_rowcnt *= non_ds_sel;
       // refine row count
@@ -3108,7 +3118,7 @@ int ObAccessPathEstimation::process_ds_result(const OptTableMetas &table_metas,
         filter_rowcnt = 1.0 * stat_total_sel;
       }
       filter_rowcnt *= query_block_sample_ratio;
-      filter_sel = 0 == filter_rowcnt ? 0.0 : filter_rowcnt * 1.0 / total_rowcnt;
+      filter_sel = 0 == total_rowcnt ? 0.0 : filter_rowcnt * 1.0 / total_rowcnt;
     } else {
       if (!result_item->exprs_.empty()) {
         filter_rowcnt = result_item->stat_handle_.stat_->get_rowcount();
@@ -3117,12 +3127,12 @@ int ObAccessPathEstimation::process_ds_result(const OptTableMetas &table_metas,
         filter_rowcnt =  filter_rowcnt != 0 ? filter_rowcnt : static_cast<int64_t>(100.0 / ds_ratio);
         filter_rowcnt *= non_ds_sel;
       } else {
-        filter_rowcnt = total_rowcnt;
+        filter_rowcnt = table_rowcnt;
         filter_rowcnt *= non_ds_sel;
       }
       filter_rowcnt *= query_block_sample_ratio;
       filter_rowcnt = std::max(filter_rowcnt, 1.0);
-      filter_sel = 0 == filter_rowcnt ? 0.0 : filter_rowcnt * 1.0 / total_rowcnt;
+      filter_sel = 0 == total_rowcnt ? 0.0 : filter_rowcnt * 1.0 / total_rowcnt;
     }
   }
   return ret;

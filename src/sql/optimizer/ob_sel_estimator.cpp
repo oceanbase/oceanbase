@@ -920,6 +920,31 @@ int ObEqualSelEstimator::get_simple_equal_sel(const OptTableMetas &table_metas,
   return ret;
 }
 
+bool ObEqualSelEstimator::is_complex_join_qual() {
+  bool bret = true;
+  const ObRawExpr *left_expr = nullptr;
+  const ObRawExpr *right_expr = nullptr;
+  if (OB_ISNULL(expr_) ||
+      OB_UNLIKELY(expr_->get_param_count() < 2) ||
+      OB_ISNULL(left_expr = expr_->get_param_expr(0)) ||
+      OB_ISNULL(right_expr = expr_->get_param_expr(1))) {
+    bret = true;
+  } else if (left_expr->same_as(*right_expr)) {
+    bret = false;
+  } else if (expr_->get_relation_ids().num_members() > 2) {
+    // multi table join conditions
+    // e.g t1.c1 + t2.c1 = t3.c1
+    bret = true;
+  } else if (left_expr->get_relation_ids().overlap(right_expr->get_relation_ids())) {
+    // non-standard join qual
+    // e.g t1.c1 = substr(t2.c1, 1, length(t1.c1))
+    bret = true;
+  } else {
+    bret = false;
+  }
+  return bret;
+}
+
 /**
  * For the equal predicate 'a = b', we calculate the NDV of (a, b),
  * and use the maximum number of tuples that might satisfy the equality as the result of predicate filtering.
@@ -978,13 +1003,17 @@ int ObEqualSelEstimator::get_cntcol_op_cntcol_sel(const OptTableMetas &table_met
                                                               NULL))) {
       LOG_WARN("Failed to calculate distinct", K(ret));
     } else if (left_expr->get_relation_ids() == right_expr->get_relation_ids()) {
+      // considered as filter
+      // e.g. t1.c1 = t1.c2
       selectivity = ObOptSelectivity::calc_equal_filter_sel(ctx, left_expr->same_as(*right_expr), op_type,
                                                             left_ndv, right_ndv,
                                                             left_nns, right_nns);
     } else {
+      // normal join condition
+      // e.g. t1.c1 = t2.c1
       if (OB_NOT_NULL(ctx.get_left_rel_ids()) && OB_NOT_NULL(ctx.get_right_rel_ids()) &&
-          (left_expr->get_relation_ids().overlap(*ctx.get_right_rel_ids()) ||
-           right_expr->get_relation_ids().overlap(*ctx.get_left_rel_ids()))) {
+          (left_expr->get_relation_ids().is_subset(*ctx.get_right_rel_ids()) &&
+           right_expr->get_relation_ids().is_subset(*ctx.get_left_rel_ids()))) {
         std::swap(left_ndv, right_ndv);
         std::swap(left_base_ndv, right_base_ndv);
         std::swap(left_nns, right_nns);
@@ -2790,10 +2819,9 @@ int ObInequalJoinSelEstimator::get_sel(const OptTableMetas &table_metas,
     ndv1 = std::max(ndv1, 1.0);
     ndv2 = std::max(ndv2, 1.0);
     if (OB_FAIL(ret)) {
-    } else if (OB_UNLIKELY(min1 > max1) ||
-        OB_UNLIKELY(min2 > max2)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected min max", K(min1), K(max1), K(min2), K(max2), KPC(this));
+    } else if (OB_UNLIKELY(min1 > max1) || OB_UNLIKELY(min2 > max2)) {
+      // unexpected min max
+      selectivity = DEFAULT_INEQ_JOIN_SEL;
     } else if (fabs(max1 - min1) <= OB_DOUBLE_EPSINON && fabs(max2 - min2) <= OB_DOUBLE_EPSINON) {
       // Both c1 and c2 have only one value
       // e.g. c1 in [1,1] and c2 in [2,2]

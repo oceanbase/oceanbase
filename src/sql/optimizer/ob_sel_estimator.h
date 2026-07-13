@@ -606,9 +606,7 @@ public:
                               const ObRawExpr &expr,
                               ObSelEstimator *&estimator);
   virtual bool is_complex_filter_qual() override { return !can_calc_sel_; }
-  virtual bool is_complex_join_qual() override {
-    return OB_NOT_NULL(expr_) && expr_->get_relation_ids().num_members() > 2;
-  }
+  virtual bool is_complex_join_qual() override;
   virtual int get_sel(const OptTableMetas &table_metas,
                       const OptSelectivityCtx &ctx,
                       double &selectivity,

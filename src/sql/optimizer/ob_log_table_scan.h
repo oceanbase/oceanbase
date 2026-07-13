@@ -855,7 +855,8 @@ public:
   int set_limit_offset(ObRawExpr *limit, ObRawExpr *offset);
   inline int64_t get_table_row_count() const
   { return est_cost_info_ == NULL || est_cost_info_->table_meta_info_ == NULL ? 0.0 : est_cost_info_->table_meta_info_->table_row_count_; }
-  inline double get_output_row_count() const { return est_cost_info_ == NULL ? 0.0 : est_cost_info_->output_row_count_; }
+  inline double get_path_output_row_count() const { return est_cost_info_ == NULL ? 0.0 : est_cost_info_->output_row_count_; }
+  inline double get_scan_output_row_count() const { return OB_ISNULL(access_path_) ? 0.0 : access_path_->get_path_output_rows(); }
   inline double get_phy_query_range_row_count() const { return est_cost_info_ == NULL ? 0.0 : est_cost_info_->phy_query_range_row_count_; }
   inline double get_logical_query_range_row_count() const { return est_cost_info_ == NULL ? 0.0 : est_cost_info_->logical_query_range_row_count_; }
   inline void set_index_back_row_count(double index_back_row_count) { if (est_cost_info_ != NULL) est_cost_info_->index_back_row_count_ = index_back_row_count; }

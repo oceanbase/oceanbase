@@ -2383,7 +2383,7 @@ struct NoSpecialExprPredicate {
         join_use_meta_info->table_op_id_ = tablescan->get_op_id();
         join_use_meta_info->ref_table_id_ = tablescan->get_ref_table_id();
         join_use_meta_info->index_id_ = tablescan->get_index_table_id();
-        join_use_meta_info->row_count_ = tablescan->get_output_row_count();
+        join_use_meta_info->row_count_ = tablescan->get_scan_output_row_count();
         join_use_meta_info->sharding_ = tablescan->get_sharding();
         // todo check whether has rtf will make table use column store???
         join_use_meta_info->use_column_store_ = tablescan->use_column_store();

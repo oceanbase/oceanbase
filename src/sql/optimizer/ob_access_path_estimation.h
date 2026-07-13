@@ -385,6 +385,7 @@ private:
                                ObDSResultItemType type,
                                ObIArray<ObExprSelPair> &all_predicate_sel,
                                const double query_block_sample_ratio,
+                               const double table_rowcnt,
                                const double total_rowcnt,
                                double &filter_rowcnt,
                                double &filter_sel);

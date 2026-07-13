@@ -239,7 +239,7 @@ int ObLogTableScan::do_re_est_cost(EstimateCostInfo &param, double &card, double
     LOG_WARN("failed to get limit offset value", K(ret));
   } else {
     est_cost_info_->rescan_left_server_list_ = param.rescan_left_server_list_;
-    card = get_output_row_count();
+    card = get_scan_output_row_count();
     int64_t part_count = est_cost_info_->index_meta_info_.index_part_count_;
     double limit_count_double = static_cast<double>(limit_count);
     double offset_count_double = static_cast<double>(offset_count);
@@ -2727,7 +2727,7 @@ int ObLogTableScan::explain_index_selection_info(char *buf,
     } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else if (OB_FAIL(BUF_PRINTF("output_rows:%ld",
-                            static_cast<int64_t>(ceil(get_output_row_count()))))) {
+                            static_cast<int64_t>(ceil(get_path_output_row_count()))))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));

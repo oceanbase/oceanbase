@@ -6183,7 +6183,7 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
     spec.use_dist_das_ = op.use_das();
     spec.batch_scan_flag_ = op.use_batch();
     spec.table_row_count_ = op.get_table_row_count();
-    spec.output_row_count_ = static_cast<int64_t>(op.get_output_row_count());
+    spec.output_row_count_ = static_cast<int64_t>(op.get_scan_output_row_count());
     spec.query_range_row_count_ = static_cast<int64_t>(op.get_logical_query_range_row_count());
     spec.index_back_row_count_ = static_cast<int64_t>(op.get_index_back_row_count());
     spec.estimate_method_ = INVALID_METHOD;
@@ -7749,7 +7749,7 @@ int ObStaticEngineCG::set_optimization_info(ObLogTableScan &op, ObTableScanSpec 
   OZ(spec.set_est_row_count_record(op.get_est_row_count_record()));
   if (OB_SUCC(ret)) {
     spec.table_row_count_ = op.get_table_row_count();
-    spec.output_row_count_ = static_cast<int64_t>(op.get_output_row_count());
+    spec.output_row_count_ = static_cast<int64_t>(op.get_scan_output_row_count());
     spec.phy_query_range_row_count_ = static_cast<int64_t>(op.get_phy_query_range_row_count());
     spec.query_range_row_count_ = static_cast<int64_t>(op.get_logical_query_range_row_count());
     spec.index_back_row_count_ = static_cast<int64_t>(op.get_index_back_row_count());

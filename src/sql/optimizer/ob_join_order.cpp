@@ -9761,9 +9761,7 @@ int oceanbase::sql::Path::compute_path_property_from_log_op()
     cost_ = log_op_->get_cost();
     op_cost_ = log_op_->get_op_cost();
     contain_pw_merge_op_ = log_op_->get_contains_pw_merge_op();
-    if (is_inner_path_) {
-      inner_row_count_ = log_op_->get_card();
-    }
+    // ignore assigning inner row count
   }
   return ret;
 }
