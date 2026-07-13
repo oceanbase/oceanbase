@@ -559,6 +559,8 @@ int ObDASHNSWScanIter::calc_dis_by_vid(const ObObj& vid_obj, double &dis_value)
         LOG_WARN("failed to get vec dis type", K(ret));
       } else if (OB_FAIL(ObExprVectorDistance::DisFunc<float>::distance_funcs[vec_dis_type](embedded_data, query_data, embedded_size, dis_value))) {
         LOG_WARN("failed to calculate distance", K(ret), K(vec_dis_type));
+      } else if (ObVectorIndexDistAlgorithm::VIDA_IP == index_param.dist_algorithm_) {
+        dis_value = -dis_value;
       }
     }
   }

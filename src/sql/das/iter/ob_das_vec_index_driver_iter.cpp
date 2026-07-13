@@ -555,6 +555,11 @@ int ObDASVecIndexDriverIter::inner_get_next_rows(int64_t &count, int64_t capacit
         }
       }
     }
+    if (OB_SUCC(ret) && limit_param_.limit_ + limit_param_.offset_ > 0) {
+      if (OB_FAIL(truncate_result_adaptor_vid_iter_by_limit())) {
+        LOG_WARN("failed to truncate result adaptor vid iter by limit", K(ret));
+      }
+    }
     ready_to_output_ = true;
   }
 
@@ -890,6 +895,31 @@ int ObDASVecIndexDriverIter::fetch_vids_from_vec_index(share::ObPluginVectorInde
   return ret;
 }
 
+int ObDASVecIndexDriverIter::truncate_result_adaptor_vid_iter_by_limit()
+{
+  int ret = OB_SUCCESS;
+  ObVectorQueryVidIterator *adaptor_vid_iter = nullptr;
+  if (is_pre_filter()) {
+    adaptor_vid_iter = vec_index_scan_iter_->get_adaptor_vid_iter();
+  } else if (is_iter_filter()) {
+    adaptor_vid_iter = adaptor_vid_iter_;
+  } else if (is_post_filter()) {
+    adaptor_vid_iter = OB_NOT_NULL(filter_iter_) ? adaptor_vid_iter_ : vec_index_scan_iter_->get_adaptor_vid_iter();
+  }
+
+  if (OB_ISNULL(adaptor_vid_iter)) {
+    // nothing to do
+  } else {
+    const uint64_t final_limit = limit_param_.limit_ + limit_param_.offset_;
+    if (adaptor_vid_iter->get_total() > static_cast<int64_t>(final_limit)) {
+      const int64_t total = adaptor_vid_iter->get_total();
+      adaptor_vid_iter->set_total(final_limit);
+      LOG_TRACE("truncate adaptor vid iter by limit", K(total), K(final_limit), K(vec_index_type_), K(vec_idx_try_path_));
+    }
+  }
+  return ret;
+}
+
 int ObDASVecIndexDriverIter::init_adaptor_vid_iter_if_null()
 {
   int ret = OB_SUCCESS;
@@ -1168,8 +1198,6 @@ int ObDASVecIndexDriverIter::process_post_filter_mode(share::ObPluginVectorIndex
     if (OB_ISNULL(adaptor_vid_iter)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("adaptor vid iter is null", K(ret));
-    } else {
-      adaptor_vid_iter->set_total(limit_param_.limit_ + limit_param_.offset_);
     }
   }
 

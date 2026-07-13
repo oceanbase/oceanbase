@@ -118,8 +118,13 @@
    }
 
    if (OB_SUCC(ret)) {
-     if (OB_FAIL(ObExprVectorDistance::calc_distance(expr, ctx, res_datum, dis_type))) {
-      LOG_WARN("failed to calc distance", K(ret), K(dis_type));
+     if (ObExprVectorDistance::ObVecDisType::DOT == dis_type) {
+       if (OB_FAIL(ObExprVectorNegativeIPDistance::calc_negative_inner_product(
+               expr, ctx, res_datum))) {
+         LOG_WARN("failed to calc negative inner product", K(ret));
+       }
+     } else if (OB_FAIL(ObExprVectorDistance::calc_distance(expr, ctx, res_datum, dis_type))) {
+       LOG_WARN("failed to calc distance", K(ret), K(dis_type));
      }
    }
 

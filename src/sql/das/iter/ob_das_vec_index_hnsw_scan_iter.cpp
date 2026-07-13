@@ -8,8 +8,13 @@
 #include "src/storage/access/ob_table_scan_iterator.h"
 #include "sql/das/iter/ob_das_vec_scan_utils.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/engine/expr/ob_expr_vector.h"
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
 #include "sql/das/iter/ob_das_profile_iter.h"
+#include "lib/utility/ob_tracepoint.h"
+
+ERRSIM_POINT_DEF(ERRSIM_VEC_HNSW_BQ_COM_AUX_VEC_NOT_FOUND,
+                 "When enabled, simulate a missing com aux vector during HNSW BQ exact distance recomputation.");
 
 namespace oceanbase
 {
@@ -316,6 +321,20 @@ int ObDASVecIndexHNSWScanIter::process_adaptor_state(bool is_vectorized)
       }
     } else if (OB_FAIL(process_adaptor_state_post_filter(&ada_ctx_, adaptor_, is_vectorized))) {
       LOG_WARN("hnsw post filter failed to query result.", K(ret));
+    }
+  }
+
+  // For HNSW BQ, the distances produced above are quantized (snap=BQ) and mixed with
+  // precise incr distances, so they are not directly comparable. Recompute exact distances
+  // from raw fp32 vectors here so upper TopN/Sort ranks correctly. Non-BQ paths are already
+  // precise and are skipped.
+  if (OB_SUCC(ret) && is_hnsw_bq() && OB_NOT_NULL(adaptor_vid_iter_)) {
+    if (OB_FAIL(recompute_exact_distances())) {
+      LOG_WARN("failed to recompute exact distances", K(ret));
+    } else if (OB_FAIL(sort_adaptor_vid_iter_by_distance())) {
+      LOG_WARN("failed to sort adaptor vid iter by exact distance", K(ret));
+    } else {
+      LOG_TRACE("finish recompute bq distances", K(adaptor_vid_iter_->get_total()));
     }
   }
 
@@ -1216,6 +1235,156 @@ int ObDASVecIndexHNSWScanIter::get_vector_from_com_aux_vec_table(ObIAllocator &a
     LOG_WARN("failed to get real data.", K(ret));
   }
 
+  return ret;
+}
+
+int ObDASVecIndexHNSWScanIter::recompute_exact_distances()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(adaptor_vid_iter_)) {
+    // nothing to do
+  } else if (OB_ISNULL(query_cond_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("query cond is null", K(ret), KP(query_cond_));
+  } else {
+    const int64_t total = adaptor_vid_iter_->get_total();
+    const int64_t *vids = adaptor_vid_iter_->get_vids();
+    float *distances = adaptor_vid_iter_->get_distance();
+    const ObString &query_vector = query_cond_->query_vector_;
+    if (total <= 0) {
+      // empty result, nothing to recompute
+    } else if (OB_ISNULL(vids) || OB_ISNULL(distances)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("vids or distances is null", K(ret), KP(vids), KP(distances), K(total));
+    } else if (query_vector.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("query vector is empty", K(ret));
+    } else if (0 != query_vector.length() % sizeof(float)) {
+      ret = OB_ERR_INVALID_VECTOR_DIM;
+      LOG_WARN("query vector length is invalid", K(ret), K(query_vector.length()));
+    } else {
+      int64_t vec_dis_type = ObVectorIndexDistAlgorithm::VIDA_MAX;
+      const float *query_data = reinterpret_cast<const float *>(query_vector.ptr());
+      const int64_t query_size = query_vector.length() / sizeof(float);
+      const int64_t vec_dim = (OB_NOT_NULL(vec_index_scan_ctdef_) && vec_index_scan_ctdef_->dim_ > 0)
+                              ? vec_index_scan_ctdef_->dim_
+                              : search_param_.dim_;
+      if (OB_FAIL(share::ObVectorIndexUtil::get_vec_dis_type_from_dis_algorithm(
+                      search_param_.dist_algorithm_, vec_dis_type))) {
+        LOG_WARN("failed to get vec dis type", K(ret), K(search_param_.dist_algorithm_));
+      } else if (vec_dis_type < ObExprVectorDistance::ObVecDisType::COSINE
+                 || vec_dis_type >= ObExprVectorDistance::ObVecDisType::MAX_TYPE
+                 || ObExprVectorDistance::DisFunc<float>::distance_funcs[vec_dis_type] == nullptr) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("unsupported distance type for exact distance recompute", K(ret), K(vec_dis_type),
+                 K(search_param_.dist_algorithm_));
+      } else if (query_size != vec_dim) {
+        ret = OB_ERR_INVALID_VECTOR_DIM;
+        LOG_WARN("query vector dim mismatch", K(ret), K(query_size), K(vec_dim), K(search_param_.dim_));
+      } else {
+        // Reuse the temporary allocator after each row to avoid retaining all raw vectors
+        // in the query-level arena and causing memory growth for a large result set.
+        ObArenaAllocator tmp_allocator("VecBQRecomp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+        for (int64_t i = 0; OB_SUCC(ret) && i < total; ++i) {
+          tmp_allocator.reuse();
+          ObObj vid_obj;
+          vid_obj.set_uint64(static_cast<uint64_t>(vids[i]));
+          ObRowkey vid_rowkey(&vid_obj, 1);
+          ObString raw;
+          double dis_value = 0;
+          const int errsim_ret = ERRSIM_VEC_HNSW_BQ_COM_AUX_VEC_NOT_FOUND;
+          if (OB_UNLIKELY(OB_SUCCESS != errsim_ret)) {
+            ret = errsim_ret;
+          } else {
+            ret = get_vector_from_com_aux_vec_table(tmp_allocator, &vid_rowkey, raw);
+          }
+          if (OB_FAIL(ret)) {
+            if (OB_ITER_END == ret) {
+              ret = OB_ERR_DEFENSIVE_CHECK;
+            }
+            LOG_WARN("failed to get vector from com aux vec table", K(ret), K(i), K(vids[i]));
+          } else if (raw.empty()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("empty raw vector for exact distance recompute", K(ret), K(i), K(vids[i]));
+          } else if (0 != raw.length() % sizeof(float)) {
+            ret = OB_ERR_INVALID_VECTOR_DIM;
+            LOG_WARN("raw vector length is invalid", K(ret), K(i), K(raw.length()));
+          } else {
+            const float *raw_data = reinterpret_cast<const float *>(raw.ptr());
+            const int64_t raw_size = raw.length() / sizeof(float);
+            if (raw_size != vec_dim) {
+              ret = OB_ERR_INVALID_VECTOR_DIM;
+              LOG_WARN("raw vector dim mismatch", K(ret), K(i), K(raw_size),
+                       K(vec_dim), K(search_param_.dim_));
+            } else if (OB_FAIL(ObExprVectorDistance::DisFunc<float>::distance_funcs[vec_dis_type](
+                           raw_data, query_data, raw_size, dis_value))) {
+              LOG_WARN("failed to calculate distance", K(ret), K(i), K(vec_dis_type), K(vids[i]));
+            } else if (::isinf(dis_value)) {
+              ret = OB_NUMERIC_OVERFLOW;
+              LOG_WARN("distance value is overflow", K(ret), K(i), K(dis_value));
+            } else {
+              if (ObVectorIndexDistAlgorithm::VIDA_IP == search_param_.dist_algorithm_) {
+                dis_value = -dis_value;
+              }
+              distances[i] = static_cast<float>(dis_value);
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDASVecIndexHNSWScanIter::sort_adaptor_vid_iter_by_distance()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(adaptor_vid_iter_)) {
+    // nothing to do
+  } else {
+    const int64_t total = adaptor_vid_iter_->get_total();
+    int64_t *vids = adaptor_vid_iter_->get_vids();
+    float *distances = adaptor_vid_iter_->get_distance();
+    if (total <= 1) {
+      // already ordered
+    } else if (OB_ISNULL(vids) || OB_ISNULL(distances)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("vids or distances is null", K(ret), KP(vids), KP(distances), K(total));
+    } else {
+      struct VidDistanceEntry {
+        int64_t vid_;
+        float distance_;
+        const char *extra_info_;
+        static bool compare(const VidDistanceEntry &left, const VidDistanceEntry &right)
+        {
+          return left.distance_ < right.distance_;
+        }
+      };
+      VidDistanceEntry *entries = nullptr;
+      ObArenaAllocator allocator("VecBQReorder", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+      ObVecExtraInfoPtr extra_info = adaptor_vid_iter_->get_extra_info();
+      if (OB_ISNULL(entries = static_cast<VidDistanceEntry *>(
+              allocator.alloc(sizeof(VidDistanceEntry) * total)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc vid distance entries", K(ret), K(total));
+      } else {
+        for (int64_t i = 0; i < total; ++i) {
+          entries[i].vid_ = vids[i];
+          entries[i].distance_ = distances[i];
+          entries[i].extra_info_ = !extra_info.is_null() ? extra_info[i] : nullptr;
+        }
+        lib::ob_sort(entries, entries + total, VidDistanceEntry::compare);
+        for (int64_t i = 0; OB_SUCC(ret) && i < total; ++i) {
+          vids[i] = entries[i].vid_;
+          distances[i] = entries[i].distance_;
+          if (!extra_info.is_null()
+              && OB_FAIL(extra_info.set_no_copy(i, entries[i].extra_info_))) {
+            LOG_WARN("failed to set extra info after exact distance reorder", K(ret), K(i));
+          }
+        }
+      }
+    }
+  }
   return ret;
 }
 
