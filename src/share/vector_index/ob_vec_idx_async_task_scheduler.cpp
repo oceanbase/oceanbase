@@ -2180,10 +2180,7 @@ int ObVecIdxAsyncTaskScheduler::check_and_finish_orphan_self_tasks_()
       bool alive = true;
       int orphan_ret_code = OB_TASK_EXPIRED;
       int tmp_ret = OB_SUCCESS;
-      if (row.task_type_ == ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_MEM_SYNC_TASK
-          && row.trigger_type_ == ObVecIndexAsyncTaskTriggerType::OB_VEC_TRIGGER_MANUAL) {
-        LOG_TRACE("skip manual mem sync task in orphan self task check", K(row));
-      } else if (OB_TMP_FAIL(check_task_alive_in_memory_(row, alive, orphan_ret_code))) {
+      if (OB_TMP_FAIL(check_task_alive_in_memory_(row, alive, orphan_ret_code))) {
         LOG_WARN("fail to check task alive in memory, skip orphan self task row",
                  KR(tmp_ret), K(row));
       } else if (alive) {
@@ -2366,19 +2363,37 @@ int ObVecIdxAsyncTaskScheduler::finish_orphan_self_task_(const ObVecIndexTaskSta
   return ret;
 }
 
-int ObVecIdxAsyncTaskScheduler::check_table_dropped_(uint64_t table_id, bool &dropped)
+int ObVecIdxAsyncTaskScheduler::check_tablet_dropped_(
+    uint64_t table_id,
+    const ObTabletID &tablet_id,
+    bool &dropped)
 {
   int ret = OB_SUCCESS;
   dropped = false;
   ObSchemaGetterGuard schema_guard;
   const ObSimpleTableSchemaV2 *table_schema = nullptr;
-  if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
+  ObSEArray<ObTabletID, 16> tablet_ids;
+  if (OB_UNLIKELY(OB_INVALID_ID == table_id || !tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument for orphan task check", KR(ret), K(table_id), K(tablet_id));
+  } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
           tenant_id_, schema_guard))) {
-    LOG_WARN("fail to get schema guard for orphan task check", KR(ret), K_(tenant_id), K(table_id));
+    LOG_WARN("fail to get schema guard for orphan task check",
+             KR(ret), K_(tenant_id), K(table_id), K(tablet_id));
   } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id_, table_id, table_schema))) {
-    LOG_WARN("fail to get table schema for orphan task check", KR(ret), K_(tenant_id), K(table_id));
+    LOG_WARN("fail to get table schema for orphan task check",
+             KR(ret), K_(tenant_id), K(table_id), K(tablet_id));
   } else if (OB_ISNULL(table_schema) || table_schema->is_in_recyclebin()) {
     dropped = true;
+  } else if (OB_FAIL(table_schema->get_tablet_ids(tablet_ids))) {
+    LOG_WARN("fail to get tablet ids for orphan task check",
+             KR(ret), K_(tenant_id), K(table_id), K(tablet_id));
+  } else {
+    bool tablet_found = false;
+    for (int64_t i = 0; !tablet_found && i < tablet_ids.count(); ++i) {
+      tablet_found = tablet_ids.at(i) == tablet_id;
+    }
+    dropped = !tablet_found;
   }
   return ret;
 }
@@ -2464,23 +2479,23 @@ int ObVecIdxAsyncTaskScheduler::load_triggered_tasks_()
             // Tablet not located on any LS on this observer (OB_ENTRY_NOT_EXIST), or a
             // transient error occurred during the scan. We must NOT finish the task
             // unconditionally: "tablet not on this observer" is very different from
-            // "table truly dropped" — for the former, the LS leader on another observer
+            // "tablet truly dropped" — for the former, the LS leader on another observer
             // is responsible for the task. Verify with schema before finishing.
-            bool table_dropped = false;
-            int chk_ret = check_table_dropped_(row.table_id_, table_dropped);
-            if (OB_SUCCESS == chk_ret && table_dropped) {
-              // Orphan task: table is gone, finish so it does not linger.
+            bool tablet_dropped = false;
+            int chk_ret = check_tablet_dropped_(row.table_id_, tablet_id, tablet_dropped);
+            if (OB_SUCCESS == chk_ret && tablet_dropped) {
+              // Orphan task: tablet is gone, finish so it does not linger.
               int fail_ret = finish_triggered_task_(
-                  row, OB_TABLE_NOT_EXIST, ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_STANDBY);
+                  row, OB_TABLET_NOT_EXIST, ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_STANDBY);
               if (OB_SUCCESS != fail_ret) {
-                LOG_WARN("fail to finish orphan triggered task for dropped table",
+                LOG_WARN("fail to finish orphan triggered task for dropped tablet",
                          KR(fail_ret), KR(tmp_ret), K(row));
               } else {
-                LOG_INFO("finished orphan triggered task, table dropped",
+                LOG_INFO("finished orphan triggered task, tablet dropped",
                          KR(tmp_ret), K(row.table_id_), K(row.tablet_id_), K(row.task_type_));
               }
             } else if (OB_ENTRY_NOT_EXIST == tmp_ret) {
-              // Table still exists; tablet just isn't on this observer. The LS leader on
+              // Tablet still exists; it just isn't on this observer. The LS leader on
               // another node will pick it up. Skip silently to avoid log spam.
               LOG_TRACE("tablet not on this observer, skip manual trigger task",
                         KR(tmp_ret), KR(chk_ret), K(row));

@@ -332,11 +332,15 @@ private:
   //   OB_ERR_UNEXPECTED    - tablet is held but in-memory task ctx is missing
   int check_task_alive_in_memory_(const ObVecIndexTaskStatus &row, bool &alive, int &orphan_ret_code);
   int finish_orphan_self_task_(const ObVecIndexTaskStatus &row);
-  // Check whether table_id has been dropped or moved to recyclebin.
+  // Check whether tablet_id has been dropped from table_id, or table_id itself
+  // has been dropped or moved to recyclebin.
   // Returns OB_SUCCESS on lookup success (dropped is set accordingly).
   // Returns non-success if schema lookup itself fails — caller should treat
   // unknown state as "not dropped" (safe default: do not finish the task).
-  int check_table_dropped_(uint64_t table_id, bool &dropped);
+  int check_tablet_dropped_(
+      uint64_t table_id,
+      const common::ObTabletID &tablet_id,
+      bool &dropped);
   int handle_cancelled_task_(
       ObVecIndexAsyncTaskCtx &task_ctx,
       const share::ObLSID &ls_id,
