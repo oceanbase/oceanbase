@@ -126,7 +126,8 @@ public:
       uint64_t need_tx_                         : 1;
       uint64_t need_subschema_ctx_              : 1;
       uint64_t has_attach_ctdef_                : 1;
-      uint64_t reserved_                        : 58;
+      uint64_t should_use_deser_cache_format    : 1;
+      uint64_t reserved_                        : 57;
     };
   };
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
