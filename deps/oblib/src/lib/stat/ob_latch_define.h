@@ -992,7 +992,8 @@ LATCH_DEF(MA_SYNC_MODE_SWITCH_LOCK, 960, "ma protection level switch helper lock
 LATCH_DEF(OB_RS_RANDOM_PARTITION_SCHEDULER_LOCK, 961, "ob rs random partition scheduler lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(OB_INSPECTION_SERVICE_LOCK, 962, "ob inspection service lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(OB_SCHEMA_HISTORY_RECYCLE_SERVICE_LOCK, 963, "ob schema history recycle service lock", LATCH_FIFO, 2000, 0, true)
-LATCH_DEF(LATCH_END, 964, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(VECTOR_LS_MGR_MAP_LOCK, 968, "vector ls mgr map lock", LATCH_READ_PREFER, 2000, 0, true)
+LATCH_DEF(LATCH_END, 969, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 

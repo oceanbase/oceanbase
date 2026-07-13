@@ -8,6 +8,7 @@
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "share/ob_vec_index_builder_util.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
+#include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
 {
@@ -941,33 +942,71 @@ int ObPluginVectorIndexService::get_vector_index_tmp_info(const int64_t task_id,
   return ret;
 }
 
+int ObPluginVectorIndexService::remove_ls_index_mgr(const share::ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  ObPluginVectorIndexMgr *ls_index_mgr = nullptr;
+  {
+    // Called after dag_ref_cnt_ and ls_ref_cnt_ reaches zero, so no Local-LS task holds this mgr.
+    TCRWLock::WLockGuard lock_guard(ls_mgr_map_rwlock_);
+    if (OB_FAIL(index_ls_mgr_map_.erase_refactored(ls_id, &ls_index_mgr))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to erase ls index mgr", KR(ret), K(ls_id));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(ls_index_mgr)) {
+    ls_index_mgr->destroy();
+    index_mgr_allocator_.free(ls_index_mgr);
+  }
+  return ret;
+}
+
 int ObPluginVectorIndexService::acquire_vector_index_mgr(ObLSID ls_id, ObPluginVectorIndexMgr *&mgr)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(get_ls_index_mgr_map().get_refactored(ls_id, mgr))) {
     if (OB_HASH_NOT_EXIST == ret) {
-      void *mgr_buff = index_mgr_allocator_.alloc(sizeof(ObPluginVectorIndexMgr));
-      if (OB_ISNULL(mgr_buff)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate memeory for new vector index mgr", KR(ret));
-      } else {
-        ObPluginVectorIndexMgr *new_ls_index_mgr = new(mgr_buff)ObPluginVectorIndexMgr(memory_context_, tenant_id_);
-        if (OB_FAIL(new_ls_index_mgr->init(tenant_id_, ls_id, memory_context_, all_vsag_use_mem_))) {
-          LOG_WARN("failed to init ls vector index mgr", KR(ret), K(ls_id));
-        } else if (OB_FAIL(get_ls_index_mgr_map().set_refactored(ls_id, new_ls_index_mgr))) {
-          if (ret != OB_HASH_EXIST) {
-            LOG_WARN("set vector index mgr map faild", KR(ret), K(ls_id));
+      ret = OB_SUCCESS;
+      // Before creating a new mgr, verify the LS is still alive
+      storage::ObLSService *ls_service = MTL(storage::ObLSService *);
+      if (OB_NOT_NULL(ls_service)) {
+        bool ls_exist = false;
+        if (OB_FAIL(ls_service->check_ls_exist(ls_id, ls_exist))) {
+          LOG_WARN("[VEC_INDEX] failed to check ls existence before creating vec index mgr",
+                   K(ls_id), KR(ret));
+        } else if (!ls_exist) {
+          ret = OB_LS_NOT_EXIST;
+          LOG_WARN("[VEC_INDEX] skip creating vec index mgr for non-existent ls",
+                   K(ls_id), KR(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        void *mgr_buff = index_mgr_allocator_.alloc(sizeof(ObPluginVectorIndexMgr));
+        if (OB_ISNULL(mgr_buff)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memeory for new vector index mgr", KR(ret));
+        } else {
+          ObPluginVectorIndexMgr *new_ls_index_mgr = new(mgr_buff)ObPluginVectorIndexMgr(memory_context_, tenant_id_);
+          if (OB_FAIL(new_ls_index_mgr->init(tenant_id_, ls_id, memory_context_, all_vsag_use_mem_))) {
+            LOG_WARN("failed to init ls vector index mgr", KR(ret), K(ls_id));
+          } else if (OB_FAIL(get_ls_index_mgr_map().set_refactored(ls_id, new_ls_index_mgr))) {
+            if (ret != OB_HASH_EXIST) {
+              LOG_WARN("set vector index mgr map faild", KR(ret), K(ls_id));
+            }
           }
-        }
-        if (OB_FAIL(ret)) {
-          new_ls_index_mgr->~ObPluginVectorIndexMgr();
-          index_mgr_allocator_.free(mgr_buff);
-          new_ls_index_mgr = nullptr;
-          mgr_buff = nullptr;
-        }
-        if (OB_FAIL(ret) && (OB_HASH_EXIST != ret)) {
-        } else if (OB_FAIL(get_ls_index_mgr_map().get_refactored(ls_id, mgr))) {
-          LOG_WARN("failed to get vector index mgr for ls", KR(ret), K(ls_id));
+          if (OB_FAIL(ret)) {
+            new_ls_index_mgr->~ObPluginVectorIndexMgr();
+            index_mgr_allocator_.free(mgr_buff);
+            new_ls_index_mgr = nullptr;
+            mgr_buff = nullptr;
+          }
+          if (OB_FAIL(ret) && (OB_HASH_EXIST != ret)) {
+          } else if (OB_FAIL(get_ls_index_mgr_map().get_refactored(ls_id, mgr))) {
+            LOG_WARN("failed to get vector index mgr for ls", KR(ret), K(ls_id));
+          }
         }
       }
     }
@@ -1413,6 +1452,7 @@ int ObPluginVectorIndexService::get_snapshot_ids(
     ObIArray<ObLSTabletPair> &partial_tablet_ids)
 {
   int ret = OB_SUCCESS;
+  TCRWLock::RLockGuard lock_guard(ls_mgr_map_rwlock_);
   FOREACH_X(iter, index_ls_mgr_map_, OB_SUCC(ret)) {
     const ObLSID &ls_id = iter->first;
     ObPluginVectorIndexMgr *index_ls_mgr = iter->second;
@@ -1426,6 +1466,7 @@ int ObPluginVectorIndexService::get_snapshot_ids(
 int ObPluginVectorIndexService::get_cache_ids(ObIArray<ObLSTabletPair> &cache_tablet_ids)
 {
   int ret = OB_SUCCESS;
+  TCRWLock::RLockGuard lock_guard(ls_mgr_map_rwlock_);
   FOREACH_X(iter, index_ls_mgr_map_, OB_SUCC(ret))
   {
     ObLSID &ls_id = iter->first;

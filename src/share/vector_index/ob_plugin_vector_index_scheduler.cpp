@@ -1697,10 +1697,9 @@ int ObPluginVectorIndexLoadScheduler::safe_to_destroy(bool &is_safe)
 {
   int ret = OB_SUCCESS;
   is_safe = true;
-
+  ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
   int64_t async_task_ref = 0;
   if (OB_NOT_NULL(vector_index_service_)) {
-    ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
     if (OB_FAIL(vector_index_service_->get_ls_index_mgr_map().get_refactored(ls_->get_ls_id(), index_ls_mgr))) {
       if (OB_HASH_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
@@ -1727,6 +1726,29 @@ int ObPluginVectorIndexLoadScheduler::safe_to_destroy(bool &is_safe)
       LOG_WARN("vector index scheduler can't destroy", K(dag_ref));
     }
     is_safe = false;
+  }
+
+  // Query paths indirectly hold an ObLSHandle via the DAS sub-iter's
+  // ObTableScanIterator::ctx_guard_. While that handle is alive the mgr may
+  // still be in use and must not be freed. ObLS::safe_to_destroy outside also
+  // waits for ref_cnt to drop to 1 (the safe_destroy_task itself); gate here
+  // to keep the destroy order consistent.
+  if (is_safe && OB_NOT_NULL(index_ls_mgr)
+      && ls_->get_ref_mgr().get_total_ref_cnt() > 1) {
+    if (REACH_TIME_INTERVAL(60L * 1000000)) {
+      LOG_WARN("vector index mgr destroy blocked by outstanding ls handle",
+               K(ls_->get_ls_id()),
+               "ref_cnt", ls_->get_ref_mgr().get_total_ref_cnt());
+    }
+    is_safe = false;
+  }
+
+  if (OB_SUCC(ret) && is_safe && OB_NOT_NULL(index_ls_mgr)) {
+    if (OB_FAIL(vector_index_service_->remove_ls_index_mgr(ls_->get_ls_id()))) {
+      LOG_WARN("failed to remove ls index mgr on destroy", KR(ret), K(ls_->get_ls_id()));
+    } else {
+      LOG_INFO("successfully removed ls index mgr on destroy", K(ls_->get_ls_id()));
+    }
   }
   return ret;
 }

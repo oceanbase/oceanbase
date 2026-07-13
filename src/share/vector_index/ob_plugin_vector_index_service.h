@@ -339,6 +339,7 @@ public:
   : is_inited_(false),
     has_start_(false),
     tenant_id_(OB_INVALID_TENANT_ID),
+    ls_mgr_map_rwlock_(ObLatchIds::VECTOR_LS_MGR_MAP_LOCK),
     is_ls_or_tablet_changed_(false),
     schema_service_(NULL),
     ls_service_(NULL),
@@ -396,8 +397,10 @@ public:
   ObKmeansBuildTaskHandler& get_kmeans_build_handler() { return kmeans_build_task_handler_; };
   int get_embedding_task_handler(ObEmbeddingTaskHandler *&handler);
   LSIndexMgrMap &get_ls_index_mgr_map() { return index_ls_mgr_map_; };
+  TCRWLock &get_ls_mgr_map_lock() { return ls_mgr_map_rwlock_; };
   ObVecIndexTmpInfoMap &get_vector_index_tmp_info_map() { return vec_idx_tmp_map_; }
   int release_vector_index_tmp_info(const int64_t task_id);
+  int remove_ls_index_mgr(const share::ObLSID &ls_id);
   int get_adapter_inst_guard(ObLSID ls_id, ObTabletID tablet_id, ObPluginVectorIndexAdapterGuard &adapter_guard);
   int get_build_helper_inst_guard(ObLSID ls_id, const ObIvfHelperKey &key, ObIvfBuildHelperGuard &helper_guard);
   int create_partial_adapter(ObLSID ls_id,
@@ -509,6 +512,7 @@ private:
   bool has_start_;
   int64_t tenant_id_;
   LSIndexMgrMap index_ls_mgr_map_;
+  TCRWLock ls_mgr_map_rwlock_; // protects concurrent iteration vs erase on index_ls_mgr_map_
   bool is_ls_or_tablet_changed_;
 
   share::schema::ObMultiVersionSchemaService *schema_service_;
