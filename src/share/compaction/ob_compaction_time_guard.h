@@ -127,10 +127,10 @@ public:
   enum CompactionEvent : uint16_t {
     // medium scheduler
     GET_TABLET = 0,
-    INIT_TABLET_STATUS,
+    INIT_TABLET_STATUS, // FARM COMPAT WHITELIST
     READ_MEDIUM_INFO,
     SCHEDULE_NEXT_MEDIUM,
-    SCHEDULE_TABLET_EXECUTE,
+    SCHEDULE_TABLET_EXECUTE, // FARM COMPAT WHITELIST
     FAST_FREEZE,
     // medium checker
     SEARCH_META_TABLE,

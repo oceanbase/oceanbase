@@ -57,7 +57,7 @@ public:
     {
       uint16_t agg_col_idx_size_      : 6;
       uint16_t agg_col_idx_off_size_  : 3;
-      uint16_t cell_off_size_         : 3;
+      uint16_t cell_off_size_         : 3; // FARM COMPAT WHITELIST
       uint16_t bitmap_size_           : 4;
     };
   };

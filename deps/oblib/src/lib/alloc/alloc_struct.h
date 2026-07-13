@@ -163,7 +163,7 @@ struct ObMemAttr
   bool expect_500() const { return expect_500_; }
   bool ignore_version() const { return ignore_version_; }
 public:
-  union { //FARM COMPAT WHITELIST
+  union { // FARM COMPAT WHITELIST
     char padding__[4];
     struct {
       struct {
@@ -314,7 +314,7 @@ struct ABlock {
   OB_INLINE uint64_t hold(uint64_t *payload=nullptr) const;
   OB_INLINE char *data() const;
 
-  union {
+  union { // FARM COMPAT WHITELIST
     uint32_t MAGIC_CODE_;
     struct {
       struct {
@@ -322,7 +322,7 @@ struct ABlock {
         uint8_t is_large_ : 1;
         uint8_t is_washed_ : 1;
         uint8_t status_ : 2;
-        uint8_t is_malloc_v2_ : 1;
+        uint8_t is_malloc_v2_ : 1; 
       };
     };
   };
@@ -333,7 +333,7 @@ struct ABlock {
     ObjectSet *obj_set_;
     ObjectSetV2 *obj_set_v2_;
   };
-  union {
+  union { // FARM COMPAT WHITELIST
     struct {
       int32_t sc_idx_;
       int32_t max_cnt_;
@@ -381,7 +381,7 @@ struct AObject {
   char label_[AOBJECT_LABEL_SIZE + 1];
 
   // padding to ensure data_ is 16x offset
-  union {
+  union { // FARM COMPAT WHITELIST
     char padding__[16];
     struct {
       struct {

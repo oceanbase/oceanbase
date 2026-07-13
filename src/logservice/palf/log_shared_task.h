@@ -24,7 +24,7 @@ class IPalfEnvImpl;
 enum class LogSharedTaskType
 {
   LogHandleSubmitType = 1,
-  LogFastRebuildType = 2,
+  LogFastRebuildType = 2, // FARM COMPAT WHITELIST
   LogFillCacheType = 3,
 };
 

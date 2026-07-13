@@ -95,7 +95,7 @@ enum ObDiagnoseTabletType {
   TYPE_RS_MAJOR_MERGE, // for tenant major in RS
   TYPE_TX_TABLE_MERGE,
   TYPE_MDS_MINI_MERGE,
-  TYPE_BATCH_EXECUTE, // for batch execute dag
+  TYPE_BATCH_EXECUTE, // for batch execute dag FARM COMPAT WHITELIST
   TYPE_S2_REFRESH, // for shared storage
   TYPE_MICRO_MINI_MERGE,
   TYPE_DIAGNOSE_TABLET_MAX

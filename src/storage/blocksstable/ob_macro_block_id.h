@@ -692,12 +692,12 @@ private:
     int64_t fourth_id_;
     // for PRIVATE_DATA_MACRO and PRIVATE_META_MACRO
     struct {
-      int64_t macro_transfer_seq_  : SF_BIT_TRANSFER_SEQ;
+      int64_t macro_transfer_seq_  : SF_BIT_TRANSFER_SEQ; // FARM COMPAT WHITELIST
       uint64_t tenant_seq_          : SF_BIT_TENANT_SEQ;
     };
     // for PRIVATE_TABLET_META and PRIVATE_TABLET_CURRENT_VERSION
     struct {
-      int64_t meta_transfer_seq_   : SF_BIT_TRANSFER_SEQ;
+      int64_t meta_transfer_seq_   : SF_BIT_TRANSFER_SEQ; // FARM COMPAT WHITELIST
       uint64_t meta_version_id_     : SF_BIT_META_VERSION_ID;
     };
   };
