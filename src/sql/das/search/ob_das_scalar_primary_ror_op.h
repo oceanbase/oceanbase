@@ -18,14 +18,18 @@ class ObDASScalarPrimaryROROpParam : public ObIDASSearchOpParam
 public:
   ObDASScalarPrimaryROROpParam(const ObDASScalarScanCtDef *scan_ctdef,
                                ObDASScalarScanRtDef *scan_rtdef)
-    : ObIDASSearchOpParam(DAS_SEARCH_OP_SCALAR_PRIMARY_ROR), scan_ctdef_(scan_ctdef), scan_rtdef_(scan_rtdef) {}
+    : ObIDASSearchOpParam(DAS_SEARCH_OP_SCALAR_PRIMARY_ROR), scan_ctdef_(scan_ctdef), scan_rtdef_(scan_rtdef), is_probe_mode_(false) {}
   ~ObDASScalarPrimaryROROpParam() {}
   OB_INLINE const ObDASScalarScanCtDef *get_scan_ctdef() const { return scan_ctdef_; }
   OB_INLINE ObDASScalarScanRtDef *get_scan_rtdef() const { return scan_rtdef_; }
+  // probe is supported and next/advance_to are not supported when in probe mode.
+  OB_INLINE void set_is_probe_mode(bool is_probe_mode) { is_probe_mode_ = is_probe_mode; }
+  OB_INLINE bool get_is_probe_mode() const { return is_probe_mode_; }
   int get_children_ops(ObIArray<ObIDASSearchOp *> &children) const override;
 private:
   const ObDASScalarScanCtDef *scan_ctdef_;
   ObDASScalarScanRtDef *scan_rtdef_;
+  bool is_probe_mode_;
 };
 
 class ObDASScalarPrimaryROROp : public ObDASScalarROROp
@@ -35,7 +39,7 @@ public:
     : ObDASScalarROROp(search_ctx),
       get_param_(),
       get_result_(nullptr),
-      last_get_id_()
+      is_probe_mode_(false)
   { }
 
 protected:
@@ -45,6 +49,11 @@ protected:
   int do_init(const ObIDASSearchOpParam &op_param) override;
   int do_advance_to(const ObDASRowID &target, ObDASRowID &curr_id, double &score) override;
   int do_next_rowid(ObDASRowID &next_id, double &score) override;
+  int do_advance_shallow(const ObDASRowID &target,
+                         const bool inclusive,
+                         const MaxScoreTuple *&max_score_tuple) override;
+  virtual bool is_probe_mode() const override { return is_probe_mode_; }
+  int do_probe(const ObDASRowID &target, bool &hit) override;
 
   int init_get_pd_op();
   int point_get(const ObDASRowID &target, bool &found);
@@ -53,7 +62,7 @@ protected:
 private:
   storage::ObTableScanParam get_param_;
   common::ObNewRowIterator *get_result_;
-  ObDASRowID last_get_id_;
+  bool is_probe_mode_;
 
 private:
   union {

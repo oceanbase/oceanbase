@@ -18,6 +18,7 @@
 #include "sql/das/search/ob_i_das_search_op.h"
 #include "sql/engine/basic/ob_temp_row_store.h"
 #include "sql/engine/basic/ob_temp_column_store.h"
+#include "lib/container/ob_se_array.h"
 
 namespace oceanbase
 {
@@ -58,9 +59,18 @@ private:
 
 private:
   int inner_advance_to(const ObDASRowID &target, ObDASRowID &curr_id, double &score);
+  // Splits children into driver_ops_ and probe_ops_ based on is_probe_mode().
+  // Called from do_open / do_rescan so the conjunction can coordinate probe-capable children.
+  int classify_children();
+  int advance_driver_ops_to(const ObDASRowID &target, ObDASRowID &curr_id, double &score);
+  int inner_advance_to_with_probe(const ObDASRowID &target, ObDASRowID &curr_id, double &score);
 
 private:
   int64_t last_idx_ = 0;
+  bool has_probe_child_ = false;
+  // Probe-capable children; the driver is never in this list.
+  ObSEArray<ObIDASSearchOp *, 4> probe_ops_;
+  ObSEArray<ObIDASSearchOp *, 4> driver_ops_;
 };
 
 } // namespace sql
