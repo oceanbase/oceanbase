@@ -1,7 +1,7 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-# owner: jim.wjh
+# owner: link.zt
 # owner group: sql2
 # tags: optimizer
 # desc: insert via parallel execution

@@ -1,7 +1,7 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-# owner: yibo.tyf
+# owner: wuyuming.wym
 # owner group: SQL3
 # tags: optimizer
 # description:

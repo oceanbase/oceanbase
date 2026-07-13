@@ -1,10 +1,11 @@
+# owner: tuliwei.tlw
+# owner group: sql3
+# description: 测试instr函数
+# tags: expr, datatype
+
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-#### owner: jim.wjh
-#### owner group: sql3
-#### description: 测试instr函数
-# tags: expr, datatype
 
 --enable_sorted_result
 --result_format 4
