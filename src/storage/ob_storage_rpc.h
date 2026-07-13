@@ -12,6 +12,7 @@
 #include "rpc/obrpc/ob_rpc_proxy.h"
 #include "rpc/obrpc/ob_rpc_processor.h"
 #include "rpc/obrpc/ob_rpc_result_code.h"
+#include "share/ob_define.h"
 #include "share/rpc/ob_async_rpc_proxy.h"
 #include "common/ob_member.h"
 #include "storage/ob_storage_struct.h"
@@ -107,7 +108,8 @@ public:
   void reset();
   bool is_valid() const;
   int assign(const ObCopyMacroBlockRangeArg &arg);
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(table_key), K_(data_version), K_(backfill_tx_scn), K_(copy_macro_range_info));
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(table_key), K_(data_version), K_(backfill_tx_scn),
+      K_(copy_macro_range_info), K_(migration_task_id));
 
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -118,6 +120,7 @@ public:
   bool need_check_seq_;
   int64_t ls_rebuild_seq_;
   ObSArray<ObCopyMacroBlockInfo> copy_macro_block_infos_;
+  share::ObTaskId migration_task_id_; // FARM COMPAT WHITELIST
   DISALLOW_COPY_AND_ASSIGN(ObCopyMacroBlockRangeArg);
 };
 
@@ -204,7 +207,7 @@ public:
 
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(need_check_seq),
       K_(ls_rebuild_seq), K_(is_only_copy_major), K_(tablet_sstable_info_arg_list),
-      K_(version));
+      K_(version), K_(migration_task_id));
 
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -213,6 +216,7 @@ public:
   bool is_only_copy_major_;
   common::ObSArray<ObCopyTabletSSTableInfoArg> tablet_sstable_info_arg_list_;
   uint64_t version_;
+  share::ObTaskId migration_task_id_; // FARM COMPAT WHITELIST
   DISALLOW_COPY_AND_ASSIGN(ObCopyTabletsSSTableInfoArg);
 };
 
@@ -360,7 +364,7 @@ public:
 
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id),
       "copy_table_key_array", ObTableKeyArrayLogWrap(copy_table_key_array_),
-      K_(macro_range_max_marco_count));
+      K_(macro_range_max_marco_count), K_(migration_task_id));
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
@@ -368,6 +372,7 @@ public:
   int64_t macro_range_max_marco_count_;
   bool need_check_seq_;
   int64_t ls_rebuild_seq_;
+  share::ObTaskId migration_task_id_; // FARM COMPAT WHITELIST
   DISALLOW_COPY_AND_ASSIGN(ObCopySSTableMacroRangeInfoArg);
 };
 
@@ -1055,13 +1060,14 @@ public:
   bool is_valid() const;
   void reset();
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id),
-      K_(dest_major_sstable_snapshot), K_(version));
+      K_(dest_major_sstable_snapshot), K_(version), K_(migration_task_id));
 
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
   int64_t dest_major_sstable_snapshot_;
   uint64_t version_;
+  share::ObTaskId migration_task_id_; // FARM COMPAT WHITELIST
 };
 
 struct ObAdvanceSrcLSCheckpointArg final

@@ -160,7 +160,8 @@ ObCopyMacroBlockRangeArg::ObCopyMacroBlockRangeArg()
     copy_macro_range_info_(),
     need_check_seq_(false),
     ls_rebuild_seq_(-1),
-    copy_macro_block_infos_()
+    copy_macro_block_infos_(),
+    migration_task_id_()
 {
 }
 
@@ -175,6 +176,7 @@ void ObCopyMacroBlockRangeArg::reset()
   need_check_seq_ = false;
   ls_rebuild_seq_ = -1;
   copy_macro_block_infos_.reset();
+  migration_task_id_.reset();
 }
 
 bool ObCopyMacroBlockRangeArg::is_valid() const
@@ -206,12 +208,14 @@ int ObCopyMacroBlockRangeArg::assign(const ObCopyMacroBlockRangeArg &arg)
     backfill_tx_scn_ = arg.backfill_tx_scn_;
     need_check_seq_ = arg.need_check_seq_;
     ls_rebuild_seq_ = arg.ls_rebuild_seq_;
+    migration_task_id_ = arg.migration_task_id_;
   }
   return ret;
 }
 
 OB_SERIALIZE_MEMBER(ObCopyMacroBlockRangeArg, tenant_id_, ls_id_, table_key_, data_version_,
-    backfill_tx_scn_, copy_macro_range_info_, need_check_seq_, ls_rebuild_seq_, copy_macro_block_infos_);
+    backfill_tx_scn_, copy_macro_range_info_, need_check_seq_, ls_rebuild_seq_, copy_macro_block_infos_,
+    migration_task_id_);
 
 ObCopyMacroBlockHeader::ObCopyMacroBlockHeader()
   : is_reuse_macro_block_(false),
@@ -357,7 +361,8 @@ ObCopyTabletsSSTableInfoArg::ObCopyTabletsSSTableInfoArg()
     ls_rebuild_seq_(-1),
     is_only_copy_major_(false),
     tablet_sstable_info_arg_list_(),
-    version_(OB_INVALID_ID)
+    version_(OB_INVALID_ID),
+    migration_task_id_()
 {
 }
 
@@ -375,6 +380,7 @@ void ObCopyTabletsSSTableInfoArg::reset()
   is_only_copy_major_ = false;
   tablet_sstable_info_arg_list_.reset();
   version_ = OB_INVALID_ID;
+  migration_task_id_.reset();
 }
 
 bool ObCopyTabletsSSTableInfoArg::is_valid() const
@@ -388,7 +394,9 @@ bool ObCopyTabletsSSTableInfoArg::is_valid() const
 
 OB_SERIALIZE_MEMBER(ObCopyTabletsSSTableInfoArg,
     tenant_id_, ls_id_, need_check_seq_, ls_rebuild_seq_, is_only_copy_major_,
-    tablet_sstable_info_arg_list_, version_);
+    tablet_sstable_info_arg_list_, version_,
+    migration_task_id_ // FARM COMPAT WHITELIST
+);
 
 
 ObCopyTabletSSTableInfo::ObCopyTabletSSTableInfo()
@@ -590,7 +598,8 @@ ObCopySSTableMacroRangeInfoArg::ObCopySSTableMacroRangeInfoArg()
     copy_table_key_array_(),
     macro_range_max_marco_count_(0),
     need_check_seq_(false),
-    ls_rebuild_seq_(0)
+    ls_rebuild_seq_(0),
+    migration_task_id_()
 {
 }
 
@@ -607,6 +616,7 @@ void ObCopySSTableMacroRangeInfoArg::reset()
   macro_range_max_marco_count_ = 0;
   need_check_seq_ = false;
   ls_rebuild_seq_ = -1;
+  migration_task_id_.reset();
 }
 
 bool ObCopySSTableMacroRangeInfoArg::is_valid() const
@@ -633,13 +643,16 @@ int ObCopySSTableMacroRangeInfoArg::assign(const ObCopySSTableMacroRangeInfoArg 
     macro_range_max_marco_count_ = arg.macro_range_max_marco_count_;
     need_check_seq_ = arg.need_check_seq_;
     ls_rebuild_seq_ = arg.ls_rebuild_seq_;
+    migration_task_id_ = arg.migration_task_id_;
   }
   return ret;
 }
 
 OB_SERIALIZE_MEMBER(ObCopySSTableMacroRangeInfoArg, tenant_id_, ls_id_,
     tablet_id_, copy_table_key_array_, macro_range_max_marco_count_,
-    need_check_seq_, ls_rebuild_seq_);
+    need_check_seq_, ls_rebuild_seq_,
+    migration_task_id_ // FARM COMPAT WHITELIST
+);
 
 ObCopySSTableMacroRangeInfoHeader::ObCopySSTableMacroRangeInfoHeader()
   : copy_table_key_(),
@@ -1360,7 +1373,8 @@ ObRebuildTabletSSTableInfoArg::ObRebuildTabletSSTableInfoArg()
     ls_id_(),
     tablet_id_(),
     dest_major_sstable_snapshot_(0),
-    version_(OB_INVALID_ID)
+    version_(OB_INVALID_ID),
+    migration_task_id_()
 {
 }
 
@@ -1375,6 +1389,7 @@ void ObRebuildTabletSSTableInfoArg::reset()
   tablet_id_.reset();
   dest_major_sstable_snapshot_ = 0;
   version_ = OB_INVALID_ID;
+  migration_task_id_.reset();
 }
 
 bool ObRebuildTabletSSTableInfoArg::is_valid() const
@@ -1387,7 +1402,9 @@ bool ObRebuildTabletSSTableInfoArg::is_valid() const
 }
 
 OB_SERIALIZE_MEMBER(ObRebuildTabletSSTableInfoArg,
-    tenant_id_, ls_id_, tablet_id_, dest_major_sstable_snapshot_, version_);
+    tenant_id_, ls_id_, tablet_id_, dest_major_sstable_snapshot_, version_,
+    migration_task_id_ // FARM COMPAT WHITELIST
+);
 
 ObAdvanceSrcLSCheckpointArg::ObAdvanceSrcLSCheckpointArg()
   : tenant_id_(OB_INVALID_ID),

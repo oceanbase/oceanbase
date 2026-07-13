@@ -18692,6 +18692,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12618: __all_virtual_ai_gateway_endpoint_stat
 # 12619: __all_virtual_replay_queue_stat
 
+# 12620: __all_virtual_migration_table_cache_info
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -19299,6 +19300,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15556', all_def_keyword
 
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15557', all_def_keywords['__all_mview_refresh_pending_task']))
 
+# 15558: __all_virtual_migration_table_cahce_info
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
 # - 示例：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
@@ -48224,6 +48226,8 @@ def_table_schema(
 # 21747: GV$OB_AI_GATEWAY_ENDPOINT_STAT
 # 21748: V$OB_AI_GATEWAY_ENDPOINT_STAT
 
+# 21749: GV$OB_MIGRATION_TABLE_CACHE_INFO
+# 21750: V$OB_MIGRATION_TABLE_CACHE_INFO
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
@@ -83759,6 +83763,8 @@ def_table_schema(
   ORDER BY NAME, MODIFY_TIME
   """.replace("\n", " "),
 )
+# 28302: GV$OB_MIGRATION_TABLE_CACHE_INFO
+# 28303: V$OB_MIGRATION_TABLE_CACHE_INFO
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
