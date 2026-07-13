@@ -66,9 +66,9 @@ public:
   /// operations needed to reliably use the memory are also performed.
   ///
   /// Returns true if an error occurred, false otherwise.
-  virtual bool finalizeMemory(std::string *ErrMsg = 0);
+  bool finalizeMemory(std::string *ErrMsg = 0) override;
 
-  virtual void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
+  void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
 
 #if defined(__aarch64__)
   /// Inform the memory manager about the total amount of memory required to
