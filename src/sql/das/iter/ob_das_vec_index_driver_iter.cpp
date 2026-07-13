@@ -356,22 +356,75 @@ void ObDASVecIndexDriverIter::switch_to_post_filter()
                      : ObVecFilterMode::VEC_FILTER_MODE_SEARCH_DRIVER_FILTER;
 }
 
+int ObDASVecIndexDriverIter::refresh_bruteforce_fallback_threshold(int64_t partition_row_count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(vec_index_driver_ctdef_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null vec index driver ctdef", K(ret));
+  } else {
+    bruteforce_fallback_threshold_ = ObVecIdxExtraInfo::get_hnsw_bruteforce_fallback_threshold(
+        vec_index_driver_ctdef_->query_param_, partition_row_count);
+    LOG_TRACE("refresh hybrid hnsw bruteforce fallback threshold",
+              K(partition_row_count), K_(bruteforce_fallback_threshold));
+  }
+  return ret;
+}
+
+void ObDASVecIndexDriverIter::update_go_brute_force_after_pre_filter()
+{
+  const ObKnnFilterMode knn_filter_mode = OB_NOT_NULL(vec_index_driver_ctdef_)
+      ? vec_index_driver_ctdef_->filter_mode_
+      : ObKnnFilterMode::INVALID_KNN_FILTER_MODE;
+  const int64_t actual_filter_cnt = bitmap_.get_valid_cnt();
+  const bool can_brute_force = actual_filter_cnt <= bruteforce_fallback_threshold_;
+
+  go_brute_force_ = (ObKnnFilterMode::PRE_KNN != knn_filter_mode) && can_brute_force;
+
+  last_filter_est_row_count_ = actual_filter_cnt;
+  if (OB_NOT_NULL(vec_index_scan_iter_)) {
+    vec_index_scan_iter_->set_vec_index_type(vec_index_type_, vec_idx_try_path_, go_brute_force_);
+  }
+  LOG_TRACE("update go_brute_force by actual pre filter row count",
+            K(knn_filter_mode), K(go_brute_force_), K_(bruteforce_fallback_threshold),
+            K(actual_filter_cnt), K(bitmap_.type_));
+}
+
 int ObDASVecIndexDriverIter::evaluate_partition_path()
 {
   int ret = OB_SUCCESS;
 
   ObDASSearchCost p_cost;
-  if (OB_ISNULL(filter_rtdef_for_reeval_)) {
-    // No filter: only one path exists, nothing to evaluate.
-  } else if (OB_ISNULL(search_ctx_) || OB_ISNULL(vec_index_driver_ctdef_)) {
+  const bool user_forced_specific_pre =
+      OB_NOT_NULL(vec_index_driver_ctdef_)
+      && ObVecIndexType::VEC_INDEX_INVALID != vec_index_driver_ctdef_->vec_type_
+      && ObKnnFilterMode::PRE_ADAPTIVE != vec_index_driver_ctdef_->filter_mode_
+      && ObKnnFilterMode::POST_FILTER != vec_index_driver_ctdef_->filter_mode_
+      && ObKnnFilterMode::POST_INDEX_MERGE != vec_index_driver_ctdef_->filter_mode_;
+  if (OB_ISNULL(search_ctx_) || OB_ISNULL(vec_index_driver_ctdef_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null in evaluate_partition_path", K(ret),
              KP(search_ctx_), KP(vec_index_driver_ctdef_));
-  } else if (ObVecIndexType::VEC_INDEX_INVALID != vec_index_driver_ctdef_->vec_type_
-             && ObKnnFilterMode::PRE_ADAPTIVE != vec_index_driver_ctdef_->filter_mode_
-             && ObKnnFilterMode::POST_FILTER != vec_index_driver_ctdef_->filter_mode_
-             && ObKnnFilterMode::POST_INDEX_MERGE != vec_index_driver_ctdef_->filter_mode_) {
-    // User forced a specific PRE sub-path (pre-knn/pre-brute); skip per-partition evaluation.
+  } else if (user_forced_specific_pre) {
+    // User forced a specific PRE sub-path (pre-knn/pre-brute); only refresh threshold.
+    if (OB_FAIL(search_ctx_->refresh_table_row_count())) {
+      LOG_WARN("failed to refresh partition row count", K(ret));
+    } else if (!search_ctx_->get_row_count().is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid partition row count", K(ret), K(search_ctx_->get_row_count()));
+    } else {
+      const int64_t partition_row_count = search_ctx_->get_row_count().cost();
+      if (OB_FAIL(refresh_bruteforce_fallback_threshold(partition_row_count))) {
+        LOG_WARN("failed to refresh bruteforce fallback threshold", K(ret));
+      } else {
+        last_partition_row_count_ = partition_row_count;
+        last_filter_est_row_count_ = 0;
+        LOG_TRACE("refresh threshold for forced pre path",
+                  K(partition_row_count), K_(bruteforce_fallback_threshold));
+      }
+    }
+  } else if (OB_ISNULL(filter_rtdef_for_reeval_)) {
+    // Auto path with no filter or forced path; skip per-partition evaluation.
   } else if (OB_FALSE_IT(filter_rtdef_for_reeval_->reset_cost_recursive())) {
   } else if (OB_FAIL(search_ctx_->refresh_table_row_count())) {
     LOG_WARN("failed to refresh partition row count", K(ret));
@@ -394,12 +447,14 @@ int ObDASVecIndexDriverIter::evaluate_partition_path()
           ? ObVecIndexType::VEC_INDEX_PRE
           : ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER;
       bool new_bf = false;
-      if (p_cost.cost() <= static_cast<int64_t>(ObVecIdxExtraInfo::MAX_HNSW_BRUTE_FORCE_SIZE)) {
+      if (OB_FAIL(refresh_bruteforce_fallback_threshold(partition_row_count))) {
+        LOG_WARN("failed to refresh bruteforce fallback threshold", K(ret));
+      } else if (p_cost.cost() <= bruteforce_fallback_threshold_) {
         new_type = ObVecIndexType::VEC_INDEX_PRE;
         new_bf = true;
       } else if (partition_row_count > 0
                 && static_cast<double>(p_cost.cost()) / static_cast<double>(partition_row_count)
-                        <= ObVecIdxExtraInfo::DEFAULT_PRE_RATE_FILTER_WITH_IDX) {
+                        <= ObVecIdxExtraInfo::get_pre_filter_threshold(vec_index_driver_ctdef_->query_param_)) {
         new_type = ObVecIndexType::VEC_INDEX_PRE;
       }
 
@@ -592,7 +647,7 @@ int ObDASVecIndexDriverIter::build_bitmap_from_filter_iter(share::ObPluginVector
   ObVidBound bound;
   if (OB_FAIL(adaptor->get_vid_bound(bound))) {
     LOG_WARN("failed to get vid bound", K(ret));
-  } else if (OB_FAIL(bitmap_.init(bound.min_vid_, bound.max_vid_, ObDASVecIndexHNSWScanIter::MAX_HNSW_BRUTE_FORCE_SIZE))) {
+  } else if (OB_FAIL(bitmap_.init(bound.min_vid_, bound.max_vid_, bruteforce_fallback_threshold_))) {
     LOG_WARN("failed to init bitmap", K(ret));
   }
 
@@ -679,6 +734,7 @@ int ObDASVecIndexDriverIter::process_pre_filter_mode(share::ObPluginVectorIndexA
     ret = OB_ITER_END;
   } else {
     common::ScopedTimer timer(common::ObMetricId::HS_VEC_DRIVER_VEC_INDEX_TIME);
+    update_go_brute_force_after_pre_filter();
     vec_index_scan_iter_->set_bitmap(&bitmap_);
     vec_index_scan_iter_->clear_evaluated_flag();
     int64_t dummy_count = 0;
@@ -860,7 +916,7 @@ int ObDASVecIndexDriverIter::fetch_vids_from_vec_index(share::ObPluginVectorInde
         ObVidBound bound;
         if (OB_FAIL(adaptor->get_vid_bound(bound))) {
           LOG_WARN("failed to get vid bound", K(ret));
-        } else if (OB_FAIL(bitmap_.init(bound.min_vid_, bound.max_vid_, ObDASVecIndexHNSWScanIter::MAX_HNSW_BRUTE_FORCE_SIZE))) {
+        } else if (OB_FAIL(bitmap_.init(bound.min_vid_, bound.max_vid_, bruteforce_fallback_threshold_))) {
           LOG_WARN("failed to init bitmap", K(ret));
         } else {
           const int64_t *vids = adaptor_vid_iter->get_vids();
@@ -1109,7 +1165,9 @@ int ObDASVecIndexDriverIter::adjust_vector_query_condition(bool first_search)
       omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
       int64_t hnsw_max_iter_scan_nums = 0;
       if (tenant_config.is_valid()) {
-        hnsw_max_iter_scan_nums = tenant_config->_hnsw_max_scan_vectors;
+        hnsw_max_iter_scan_nums = ObVecIdxExtraInfo::get_post_filter_max_scan_rows(
+            vec_index_driver_ctdef_->query_param_,
+            tenant_config->_hnsw_max_scan_vectors);
       }
 
       if (iter_unfiltered_vid_cnt_ < query_cond_.query_limit_

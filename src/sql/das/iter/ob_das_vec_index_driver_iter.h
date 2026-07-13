@@ -200,6 +200,7 @@ public:
       scalar_scan_rtdef_(nullptr),
       filter_rtdef_for_reeval_(nullptr),
       go_brute_force_(false),
+      bruteforce_fallback_threshold_(ObVecIdxExtraInfo::MIN_DEFAULT_HNSW_BRUTEFORCE_FALLBACK_THRESHOLD),
       last_partition_row_count_(0),
       last_filter_est_row_count_(0),
       profile_(nullptr) {}
@@ -271,6 +272,8 @@ private:
   int truncate_result_adaptor_vid_iter_by_limit();
 
   int evaluate_partition_path();
+  int refresh_bruteforce_fallback_threshold(int64_t partition_row_count);
+  void update_go_brute_force_after_pre_filter();
   void switch_to_pre_filter();
   void switch_to_post_filter();
   ObVecPathType get_vec_index_path_type();
@@ -339,6 +342,7 @@ private:
   ObDASScalarScanRtDef *scalar_scan_rtdef_;
   ObIDASSearchRtDef *filter_rtdef_for_reeval_;
   bool go_brute_force_;
+  int64_t bruteforce_fallback_threshold_;
   int64_t last_partition_row_count_;
   int64_t last_filter_est_row_count_;
   common::ObObj vid_obj_for_lookup_;

@@ -307,7 +307,10 @@ static constexpr double DEFAULT_SELECTIVITY_RATE = 0.3;
 static constexpr double DEFAULT_PRE_RATE_FILTER_WITH_ROWKEY = 0.35;
 static constexpr double DEFAULT_PRE_RATE_FILTER_WITH_IDX = 0.15;
 static constexpr double DEFAULT_SINDI_SELECTIVITY_RATE = 0.1;
-static const uint64_t MAX_HNSW_BRUTE_FORCE_SIZE = 20000;
+static const uint64_t MIN_DEFAULT_HNSW_BRUTEFORCE_FALLBACK_THRESHOLD = 20000;
+static const uint64_t MAX_DEFAULT_HNSW_BRUTEFORCE_FALLBACK_THRESHOLD = 100000;
+static const uint64_t MIN_BRUTEFORCE_FALLBACK_THRESHOLD = 1;
+static const uint64_t MAX_BRUTEFORCE_FALLBACK_THRESHOLD = 1000000;
 static const uint64_t MAX_HNSW_PRE_ROW_CNT_WITH_ROWKEY = 1000000;
 static const uint64_t MAX_HNSW_PRE_ROW_CNT_WITH_IDX = 300000;
 static constexpr uint64_t IVF_CENTERS_HGRAPH_THRESHOLD = 5000;  // minimum centers count to build hgraph index
@@ -319,6 +322,57 @@ static const uint64_t MAX_IVF_PRE_ROW_CNT_WITH_IDX = 500000;
 static constexpr double DEFAULT_IVF_PRE_RATE_FILTER_WITH_ROWKEY = 0.9;
 static constexpr double DEFAULT_IVF_PRE_RATE_FILTER_WITH_IDX = 0.1;
 static const uint64_t MAX_IVF_POST_DIST_CALC_CNT = 500000;
+
+  static int64_t calc_default_hnsw_bruteforce_fallback_threshold(int64_t tablet_row_count)
+  {
+    if (tablet_row_count <= 0) {
+      return static_cast<int64_t>(MIN_DEFAULT_HNSW_BRUTEFORCE_FALLBACK_THRESHOLD);
+    }
+    const int64_t pct_threshold = tablet_row_count / 100;
+    const int64_t capped_threshold = OB_MIN(static_cast<int64_t>(MAX_DEFAULT_HNSW_BRUTEFORCE_FALLBACK_THRESHOLD),
+                                            pct_threshold);
+    return OB_MAX(static_cast<int64_t>(MIN_DEFAULT_HNSW_BRUTEFORCE_FALLBACK_THRESHOLD), capped_threshold);
+  }
+
+  // SQL PARAMETERS(...) syntax: default 20000 when bruteforce_fallback_threshold is not specified.
+  static int64_t get_sql_hnsw_bruteforce_fallback_threshold(const ObVectorIndexQueryParam &query_param)
+  {
+    if (query_param.is_set_bruteforce_fallback_threshold_) {
+      return query_param.bruteforce_fallback_threshold_;
+    }
+    return static_cast<int64_t>(MIN_DEFAULT_HNSW_BRUTEFORCE_FALLBACK_THRESHOLD);
+  }
+
+  // Hybrid search search_options syntax: default max(20000, min(100000, 1% * tablet_row_count))
+  // when bruteforce_fallback_threshold is not specified.
+  static int64_t get_hnsw_bruteforce_fallback_threshold(const ObVectorIndexQueryParam &query_param,
+                                                      int64_t tablet_row_count)
+  {
+    if (query_param.is_set_bruteforce_fallback_threshold_) {
+      return query_param.bruteforce_fallback_threshold_;
+    }
+    return calc_default_hnsw_bruteforce_fallback_threshold(tablet_row_count);
+  }
+
+  // Statement-level post_filter_max_scan_rows: default inherits tenant _hnsw_max_scan_vectors.
+  static int64_t get_post_filter_max_scan_rows(const ObVectorIndexQueryParam &query_param,
+                                               int64_t tenant_hnsw_max_scan_vectors)
+  {
+    if (query_param.is_set_post_filter_max_scan_rows_) {
+      return query_param.post_filter_max_scan_rows_;
+    }
+    return tenant_hnsw_max_scan_vectors;
+  }
+
+  // Statement-level pre_filter_threshold: default 0.15 for HNSW pre/post filter path selection.
+  static double get_pre_filter_threshold(const ObVectorIndexQueryParam &query_param,
+                                         const bool is_primary_idx = false)
+  {
+    if (query_param.is_set_pre_filter_threshold_) {
+      return query_param.pre_filter_threshold_;
+    }
+    return is_primary_idx ? DEFAULT_PRE_RATE_FILTER_WITH_ROWKEY : DEFAULT_PRE_RATE_FILTER_WITH_IDX;
+  }
 
   ObVecIdxExtraInfo()
     : vec_idx_type_(ObVecIndexType::VEC_INDEX_INVALID),
@@ -1037,7 +1091,10 @@ public:
                                     double &selectivity,
                                     sql::ObRawExpr *&vector_expr,
                                     const sql::ObDMLStmt *&stmt);
-  static int set_adaptive_try_path(ObVecIdxExtraInfo& vc_info, const bool is_primary_idx, bool is_ipivf=false);
+  static int set_adaptive_try_path(ObVecIdxExtraInfo& vc_info,
+                                   const ObVectorIndexQueryParam &query_param,
+                                   const bool is_primary_idx,
+                                   bool is_ipivf=false);
   static int check_need_embedding_when_rebuild(const ObString &old_idx_params,
                                                const ObString &new_idx_params,
                                                const ObTableSchema &index_table_schema,

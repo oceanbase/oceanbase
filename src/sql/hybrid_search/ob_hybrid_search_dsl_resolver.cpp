@@ -7,6 +7,7 @@
 #include "sql/hybrid_search/ob_hybrid_search_dsl_resolver.h"
 #include "sql/hybrid_search/ob_fulltext_search_query.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "share/vector_index/ob_vector_index_util.h"
 
 namespace oceanbase
 {
@@ -2476,6 +2477,9 @@ int ObDSLResolver::resolve_search_options(ObIJsonBase &req_node, ObDSLKnnQuery::
   double refine_k = 1.0;
   double drop_ratio_search = 0.0;
   int64_t ivf_nprobes = 1;
+  int64_t bruteforce_fallback_threshold = 0;
+  int64_t post_filter_max_scan_rows = 0;
+  double pre_filter_threshold = 0.0;
   if (req_node.json_type() != ObJsonNodeType::J_OBJECT) {
     ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
     LOG_WARN("search options should be object", K(ret));
@@ -2566,6 +2570,58 @@ int ObDSLResolver::resolve_search_options(ObIJsonBase &req_node, ObDSLKnnQuery::
     } else if (key.case_compare("primary_get_ratio") == 0) {
       if (OB_FAIL(resolve_primary_get_ratio(*sub_node, *search_option))) {
         LOG_WARN("fail to resolve primary_get_ratio", K(ret));
+      }
+    } else if (key.case_compare("bruteforce_fallback_threshold") == 0) {
+      if (search_option->param_.is_set_bruteforce_fallback_threshold_) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "duplicate field bruteforce_fallback_threshold in search options");
+        LOG_WARN("duplicate field bruteforce_fallback_threshold in search options", K(ret));
+      } else if (sub_node->json_type() != ObJsonNodeType::J_INT) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("bruteforce_fallback_threshold should be int type", K(ret), K(sub_node->json_type()));
+      } else if (OB_FAIL(sub_node->to_int(bruteforce_fallback_threshold))) {
+        LOG_WARN("fail to get int value from bruteforce_fallback_threshold", K(ret));
+      } else if (bruteforce_fallback_threshold < static_cast<int64_t>(ObVecIdxExtraInfo::MIN_BRUTEFORCE_FALLBACK_THRESHOLD)
+                 || bruteforce_fallback_threshold > static_cast<int64_t>(ObVecIdxExtraInfo::MAX_BRUTEFORCE_FALLBACK_THRESHOLD)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("bruteforce_fallback_threshold value not in valid range", K(ret), K(bruteforce_fallback_threshold));
+      } else {
+        search_option->param_.bruteforce_fallback_threshold_ = static_cast<int32_t>(bruteforce_fallback_threshold);
+        search_option->param_.is_set_bruteforce_fallback_threshold_ = 1;
+      }
+    } else if (key.case_compare("post_filter_max_scan_rows") == 0) {
+      if (search_option->param_.is_set_post_filter_max_scan_rows_) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "duplicate field post_filter_max_scan_rows in search options");
+        LOG_WARN("duplicate field post_filter_max_scan_rows in search options", K(ret));
+      } else if (sub_node->json_type() != ObJsonNodeType::J_INT) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("post_filter_max_scan_rows should be int type", K(ret), K(sub_node->json_type()));
+      } else if (OB_FAIL(sub_node->to_int(post_filter_max_scan_rows))) {
+        LOG_WARN("fail to get int value from post_filter_max_scan_rows", K(ret));
+      } else if (post_filter_max_scan_rows < 0) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("post_filter_max_scan_rows value not in valid range", K(ret), K(post_filter_max_scan_rows));
+      } else {
+        search_option->param_.post_filter_max_scan_rows_ = post_filter_max_scan_rows;
+        search_option->param_.is_set_post_filter_max_scan_rows_ = 1;
+      }
+    } else if (key.case_compare("pre_filter_threshold") == 0) {
+      if (search_option->param_.is_set_pre_filter_threshold_) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "duplicate field pre_filter_threshold in search options");
+        LOG_WARN("duplicate field pre_filter_threshold in search options", K(ret));
+      } else if (!sub_node->is_json_number(sub_node->json_type())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("pre_filter_threshold should be number type", K(ret), K(sub_node->json_type()));
+      } else if (OB_FAIL(sub_node->to_double(pre_filter_threshold))) {
+        LOG_WARN("fail to get double value from pre_filter_threshold", K(ret));
+      } else if (pre_filter_threshold < 0.0 || pre_filter_threshold > 1.0) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("pre_filter_threshold value not in valid range", K(ret), K(pre_filter_threshold));
+      } else {
+        search_option->param_.pre_filter_threshold_ = static_cast<float>(pre_filter_threshold);
+        search_option->param_.is_set_pre_filter_threshold_ = 1;
       }
     } else {
       ret = OB_NOT_SUPPORTED;

@@ -1845,7 +1845,9 @@ int ObJoinOrder::process_basic_vec_info_for_index_merge_node(const ObDMLStmt *st
                                                                 vector_expr,
                                                                 stmt))) {
       LOG_WARN("failed to set vector index parameters", K(ret));
-    } else if (OB_FAIL(ObVectorIndexUtil::set_adaptive_try_path(index_merge_path->vec_idx_info_.vec_extra_info_, false))) {
+    } else if (OB_FAIL(ObVectorIndexUtil::set_adaptive_try_path(index_merge_path->vec_idx_info_.vec_extra_info_,
+                                                                stmt->get_vector_index_query_param(),
+                                                                false))) {
       LOG_WARN("set vector index adaptive try path", K(ret));
     }
   }
@@ -1986,7 +1988,10 @@ int ObJoinOrder::process_vec_index_info(const ObDMLStmt *stmt,
     } else if (access_path.vec_idx_info_.vec_extra_info_.vec_idx_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN
       && (access_path.vec_idx_info_.vec_extra_info_.adaptive_try_path_ == ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN
       || access_path.vec_idx_info_.vec_extra_info_.adaptive_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER)
-      && OB_FAIL(ObVectorIndexUtil::set_adaptive_try_path(access_path.vec_idx_info_.vec_extra_info_, index_id == ref_table_id, is_ipivf))) {
+      && OB_FAIL(ObVectorIndexUtil::set_adaptive_try_path(access_path.vec_idx_info_.vec_extra_info_,
+                                                          stmt->get_vector_index_query_param(),
+                                                          index_id == ref_table_id,
+                                                          is_ipivf))) {
       LOG_WARN("set vector index adaptive try path", K(ret));
     }
   }

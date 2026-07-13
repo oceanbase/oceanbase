@@ -2372,8 +2372,14 @@ int ObDMLStmtPrinter::print_vector_index_query_param()
       if (OB_SUCC(ret) && param.is_set_similarity_threshold_) {
         DATA_PRINTF(", similarity_threshold=%f", param.similarity_threshold_);
       }
-      if (OB_SUCC(ret) && param.is_set_ivf_nprobes_) {
-        DATA_PRINTF(", ivf_nprobes=%d", param.ivf_nprobes_);
+      if (OB_SUCC(ret) && param.is_set_bruteforce_fallback_threshold_) {
+        DATA_PRINTF(", bruteforce_fallback_threshold=%d", param.bruteforce_fallback_threshold_);
+      }
+      if (OB_SUCC(ret) && param.is_set_post_filter_max_scan_rows_) {
+        DATA_PRINTF(", post_filter_max_scan_rows=%ld", param.post_filter_max_scan_rows_);
+      }
+      if (OB_SUCC(ret) && param.is_set_pre_filter_threshold_) {
+        DATA_PRINTF(", pre_filter_threshold=%f", param.pre_filter_threshold_);
       }
       DATA_PRINTF(") ");
     }

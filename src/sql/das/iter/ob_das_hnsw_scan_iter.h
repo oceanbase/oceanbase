@@ -289,6 +289,7 @@ public:
       distance_calc_(nullptr),
       is_primary_pre_with_rowkey_with_filter_(false),
       go_brute_force_(false),
+      bruteforce_fallback_threshold_(ObVecIdxExtraInfo::MIN_DEFAULT_HNSW_BRUTEFORCE_FALLBACK_THRESHOLD),
       extra_column_count_(0),
       simple_cmp_info_(),
       vec_index_type_(ObVecIndexType::VEC_INDEX_INVALID),
@@ -345,6 +346,7 @@ private:
   int reuse_pre_filter_by_type();
   int build_rowkey_vid_range();
   int init_rel_map(ObPluginVectorIndexAdaptor* adaptor);
+  int refresh_bruteforce_fallback_threshold();
   bool is_hnsw_bq() const { return OB_NOT_NULL(vec_aux_ctdef_) && vec_aux_ctdef_->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ;}
   bool is_ipivf() const { return OB_NOT_NULL(vec_aux_ctdef_) && (vec_aux_ctdef_->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF || vec_aux_ctdef_->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF_SQ);}
   bool need_save_distance_result() {
@@ -506,7 +508,6 @@ private:
   static constexpr double SPARSE_FIXED_MAGNIFICATION_RATIO = 50.0;
   static constexpr double ITER_CONSIDER_LAST_SEARCH_SELETIVITY = 0.05;
   static const uint64_t MAX_OPTIMIZE_BATCH_COUNT = 16;
-  static const uint64_t MAX_HNSW_BRUTE_FORCE_SIZE = 20000;
   static const int32_t CHANGE_PATH_WINDOW_SIZE = 30;
   static constexpr double DECAY_FACTOR = 0.5;
   static const uint64_t MIN_BQ_REORDER_SIZE_FOR_BRUTE_FORCE = 100;
@@ -586,6 +587,7 @@ private:
   ObExpr* distance_calc_;
   bool is_primary_pre_with_rowkey_with_filter_;
   bool go_brute_force_;
+  int64_t bruteforce_fallback_threshold_;
   int64_t extra_column_count_;
   ObHnswSimpleCmpInfo simple_cmp_info_;
   // extra_info idx to rowkey idx, because of extra_info is sort by column id

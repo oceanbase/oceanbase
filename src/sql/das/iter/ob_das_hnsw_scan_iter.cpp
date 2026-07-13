@@ -148,6 +148,20 @@ void ObDASHNSWScanIter::clear_evaluated_flag()
   }
 }
 
+int ObDASHNSWScanIter::refresh_bruteforce_fallback_threshold()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(vec_aux_ctdef_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null vec aux ctdef", K(ret));
+  } else {
+    bruteforce_fallback_threshold_ = ObVecIdxExtraInfo::get_sql_hnsw_bruteforce_fallback_threshold(
+        vec_aux_ctdef_->vec_query_param_);
+    LOG_TRACE("refresh hnsw bruteforce fallback threshold", K_(bruteforce_fallback_threshold));
+  }
+  return ret;
+}
+
 int ObDASHNSWScanIter::inner_init(ObDASIterParam &param)
 {
   int ret = OB_SUCCESS;
@@ -794,14 +808,19 @@ int ObDASHNSWScanIter::check_iter_filter_need_retry()
   int ret = OB_SUCCESS;
   double iter_selectivity = double(adaptive_ctx_.iter_res_row_cnt_) /  double(adaptive_ctx_.iter_filter_row_cnt_);
   double output_row_cnt = iter_selectivity * adaptive_ctx_.row_count_;
+  const double pre_filter_threshold = OB_NOT_NULL(vec_aux_ctdef_)
+      ? ObVecIdxExtraInfo::get_pre_filter_threshold(vec_aux_ctdef_->vec_query_param_, adaptive_ctx_.is_primary_index_)
+      : (adaptive_ctx_.is_primary_index_
+          ? ObVecIdxExtraInfo::DEFAULT_PRE_RATE_FILTER_WITH_ROWKEY
+          : ObVecIdxExtraInfo::DEFAULT_PRE_RATE_FILTER_WITH_IDX);
   if (adaptive_ctx_.iter_times_ > 2) {
     if (adaptive_ctx_.is_primary_index_) {
       ret = (output_row_cnt <= ObVecIdxExtraInfo::MAX_HNSW_PRE_ROW_CNT_WITH_ROWKEY
-            && iter_selectivity < ObVecIdxExtraInfo::DEFAULT_PRE_RATE_FILTER_WITH_ROWKEY) ?
+            && iter_selectivity <= pre_filter_threshold) ?
             OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY : OB_SUCCESS;
     } else {
       ret = (output_row_cnt <= ObVecIdxExtraInfo::MAX_HNSW_PRE_ROW_CNT_WITH_IDX
-            && iter_selectivity < ObVecIdxExtraInfo::DEFAULT_PRE_RATE_FILTER_WITH_IDX) ?
+            && iter_selectivity <= pre_filter_threshold) ?
             OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY : OB_SUCCESS;
     }
   }
@@ -815,15 +834,18 @@ int ObDASHNSWScanIter::check_pre_filter_need_retry()
 {
   int ret = OB_SUCCESS;
   double pre_selectivity = double(adaptive_ctx_.pre_scan_row_cnt_) / double(adaptive_ctx_.row_count_);
-  if (adaptive_ctx_.pre_scan_row_cnt_ <= MAX_HNSW_BRUTE_FORCE_SIZE) {
+  const double pre_filter_threshold = OB_NOT_NULL(vec_aux_ctdef_)
+      ? ObVecIdxExtraInfo::get_pre_filter_threshold(vec_aux_ctdef_->vec_query_param_, adaptive_ctx_.is_primary_index_)
+      : (adaptive_ctx_.is_primary_index_
+          ? ObVecIdxExtraInfo::DEFAULT_PRE_RATE_FILTER_WITH_ROWKEY
+          : ObVecIdxExtraInfo::DEFAULT_PRE_RATE_FILTER_WITH_IDX);
+  if (adaptive_ctx_.pre_scan_row_cnt_ <= bruteforce_fallback_threshold_) {
     /*do nothing*/
   } else if (is_parallel_with_block_granule()) {
     /*do nothing*/
   } else if (is_ipivf() && pre_selectivity > ObVecIdxExtraInfo::DEFAULT_SINDI_SELECTIVITY_RATE) {
     ret = OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY;
-  } else if (!adaptive_ctx_.is_primary_index_ && pre_selectivity > ObVecIdxExtraInfo::DEFAULT_PRE_RATE_FILTER_WITH_IDX) {
-    ret = OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY;
-  } else if (pre_selectivity > ObVecIdxExtraInfo::DEFAULT_PRE_RATE_FILTER_WITH_ROWKEY) {
+  } else if (pre_selectivity > pre_filter_threshold) {
     ret = OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY;
   }
   if (OB_FAIL(ret)) {
@@ -1567,7 +1589,9 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter(
   ObCostGuard pre_filter_total_cost_guard(adaptor, "hnsw_pre_filter_total", query_cond_.ef_search_, query_cond_.query_limit_, ObCostGuard::KNN_THRESHOLD_1S);
   int64_t *brute_vids = nullptr;
   int brute_cnt = 0;
-  if (is_primary_pre_with_rowkey_with_filter_) {
+  if (OB_FAIL(refresh_bruteforce_fallback_threshold())) {
+    LOG_WARN("failed to refresh bruteforce fallback threshold", K(ret));
+  } else if (is_primary_pre_with_rowkey_with_filter_) {
     if (OB_FAIL(process_adaptor_state_pre_filter_with_rowkey(ada_ctx, adaptor, brute_vids, brute_cnt, is_vectorized))) {
       LOG_WARN("hnsw pre filter(rowkey vid iter) failed to query result.", K(ret));
     }
@@ -1722,7 +1746,7 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_rowkey(
     vids = nullptr;
     brute_cnt = 0;
     ObArenaAllocator &allocator = mem_context_->get_arena_allocator();
-    if (OB_ISNULL(vids = static_cast<int64_t *>(allocator.alloc(sizeof(int64_t) * MAX_HNSW_BRUTE_FORCE_SIZE)))) {
+    if (OB_ISNULL(vids = static_cast<int64_t *>(allocator.alloc(sizeof(int64_t) * bruteforce_fallback_threshold_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocator vids", K(ret));
     } else {
@@ -1737,25 +1761,23 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_rowkey(
       bool index_end = false;
       bool is_pre_filter_end = false;
       while (OB_SUCC(ret) && !index_end && !is_pre_filter_end) {
-        bool add_brute = (brute_cnt + batch_row_count) < MAX_HNSW_BRUTE_FORCE_SIZE;
         if (!is_vectorized) {
           for (int i = 0; OB_SUCC(ret) && i < batch_row_count && !is_pre_filter_end; ++i) {
             int64_t vid = 0;
             if (OB_FAIL(get_vid_from_rowkey_vid_table(vid))) {
               if (OB_UNLIKELY(OB_ITER_END != ret)) {
                 LOG_WARN("failed to get vector from rowkey vid table.", K(ret),
-                    K(brute_cnt), K(adaptive_ctx_.pre_scan_row_cnt_), K(i), K(batch_row_count), K(add_brute));
+                    K(brute_cnt), K(adaptive_ctx_.pre_scan_row_cnt_), K(i), K(batch_row_count));
               }
               index_end = true;
-            } else if (go_brute_force_ && add_brute && brute_cnt < MAX_HNSW_BRUTE_FORCE_SIZE) {
+            } else if (go_brute_force_ && brute_cnt + 1 <= bruteforce_fallback_threshold_) {
               vids[brute_cnt] = vid;
               ++brute_cnt;
             } else if (ada_ctx->is_range_prefilter()) {
               is_pre_filter_end = true;
               go_brute_force_ = false;
             } else {
-              // brute_cnt + batch_row_count already > MAX_HNSW_BRUTE_FORCE_SIZE
-              // do not choose brue force, just add vids to bitmap
+              // The actual collected row count already exceeds threshold; switch to bitmap.
               if (go_brute_force_) {
                 go_brute_force_ = false;
                 lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(adaptor->get_tenant_id(), "VIBitmapADPI"));
@@ -1791,7 +1813,7 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_rowkey(
           if (OB_SUCC(ret)) {
             ObExpr *vid_expr = vec_aux_ctdef_->inv_scan_vec_id_col_;
             ObDatum *vid_datum = vid_expr->locate_batch_datums(*vec_aux_rtdef_->eval_ctx_);
-            if (go_brute_force_ && add_brute && (brute_cnt + scan_row_cnt < MAX_HNSW_BRUTE_FORCE_SIZE)) {
+            if (go_brute_force_ && brute_cnt + scan_row_cnt <= bruteforce_fallback_threshold_) {
               for (int64_t i = 0; OB_SUCC(ret) && i < scan_row_cnt; ++i) {
                 int64_t vid = vid_datum[i].get_int();
                 vids[brute_cnt] = vid;
@@ -2163,12 +2185,11 @@ int ObDASHNSWScanIter::get_vid_from_idx_filter(
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
             LOG_WARN("failed to get vector from rowkey vid table.", K(ret), K(brute_cnt), K(i), K(batch_row_count));
           }
-        } else if (go_brute_force_ && brute_cnt + batch_row_count < MAX_HNSW_BRUTE_FORCE_SIZE) {
+        } else if (go_brute_force_ && brute_cnt + 1 <= bruteforce_fallback_threshold_) {
           vids[brute_cnt] = vid;
           brute_cnt++;
         } else {
-          // brute_cnt + batch_row_count already > MAX_HNSW_BRUTE_FORCE_SIZE
-          // do not choose brue force, just add vids to bitmap
+          // The actual collected row count already exceeds threshold; switch to bitmap.
           if (go_brute_force_) {
             go_brute_force_ = false;
             lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(adaptor->get_tenant_id(), "VIBitmapADPI"));
@@ -2208,7 +2229,7 @@ int ObDASHNSWScanIter::get_vid_from_idx_filter(
         ObExpr *vid_expr = vec_aux_ctdef_->inv_scan_vec_id_col_;
         ObDatum *vid_datum = vid_expr->locate_batch_datums(*vec_aux_rtdef_->eval_ctx_);
 
-        if (go_brute_force_ && brute_cnt + scan_row_cnt < MAX_HNSW_BRUTE_FORCE_SIZE) {
+        if (go_brute_force_ && brute_cnt + scan_row_cnt <= bruteforce_fallback_threshold_) {
           for (int64_t i = 0; OB_SUCC(ret) && i < scan_row_cnt; ++i) {
             int64_t vid = vid_datum[i].get_int();
             vids[brute_cnt] = vid;
@@ -2316,7 +2337,7 @@ int ObDASHNSWScanIter::get_pk_increment_from_idx_filter(
           LOG_WARN("failed to get relevance", K(ret), K(i));
         } else if (OB_FAIL(get_pk_increment(vid))) {
           LOG_WARN("failed to pk_increment", K(ret));
-        } else if (go_brute_force_ && brute_cnt + 1 < MAX_HNSW_BRUTE_FORCE_SIZE) {
+        } else if (go_brute_force_ && brute_cnt + 1 <= bruteforce_fallback_threshold_) {
           vids[brute_cnt] = vid;
           brute_cnt++;
           if (if_add_relevance && i >= relevance_record.count()) {
@@ -2326,8 +2347,7 @@ int ObDASHNSWScanIter::get_pk_increment_from_idx_filter(
             LOG_WARN("failed to add relevance", K(ret), K(i));
           }
         } else {
-          // brute_cnt + batch_row_count already > MAX_HNSW_BRUTE_FORCE_SIZE
-          // do not choose brue force, just add vids to bitmap
+          // The actual collected row count already exceeds threshold; switch to bitmap.
           if (go_brute_force_) {
             go_brute_force_ = false;
             lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(adaptor->get_tenant_id(), "VIBitmapADPI"));
@@ -2380,7 +2400,7 @@ int ObDASHNSWScanIter::get_pk_increment_from_idx_filter(
             guard.set_batch_size(scan_row_cnt);
             guard.set_batch_idx(0);
             ObDatum *vid_datums = expr->locate_batch_datums(*rtdef->eval_ctx_);
-            if (go_brute_force_ && brute_cnt + scan_row_cnt < MAX_HNSW_BRUTE_FORCE_SIZE) {
+            if (go_brute_force_ && brute_cnt + scan_row_cnt <= bruteforce_fallback_threshold_) {
               for (int64_t i = 0; OB_SUCC(ret) && i < scan_row_cnt; ++i) {
                 int64_t vid = vid_datums[i].get_uint64();
                 vids[brute_cnt] = vid;
@@ -2438,7 +2458,7 @@ int ObDASHNSWScanIter::init_rel_map(ObPluginVectorIndexAdaptor* adaptor)
   } else {
     ObMemAttr bucket_attr(adaptor->get_tenant_id(), "HnswRelMap");
     ObMemAttr node_attr(adaptor->get_tenant_id(), "HnswRelMap");
-    if (OB_FAIL(rel_map_.create(MAX_HNSW_BRUTE_FORCE_SIZE, bucket_attr, node_attr))) {
+    if (OB_FAIL(rel_map_.create(bruteforce_fallback_threshold_, bucket_attr, node_attr))) {
       LOG_WARN("failed to create json bucket num", K(ret));
     }
   }
@@ -2473,7 +2493,7 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_idx_filter(
       LOG_WARN("fail to get vid bound from adaptor", K(ret));
     } else if (!ada_ctx->is_prefilter_valid() && OB_FAIL(ada_ctx->init_prefilter(bound.min_vid_, bound.max_vid_))) {
       LOG_WARN("init bitmaps failed.", K(ret), K(bound.min_vid_), K(bound.max_vid_));
-    } else if (OB_ISNULL(vids = static_cast<int64_t *>(allocator.alloc(sizeof(int64_t) * MAX_HNSW_BRUTE_FORCE_SIZE)))) {
+    } else if (OB_ISNULL(vids = static_cast<int64_t *>(allocator.alloc(sizeof(int64_t) * bruteforce_fallback_threshold_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocator vids", K(ret));
     } else if (use_vid_) {
@@ -2586,7 +2606,9 @@ int ObDASHNSWScanIter::process_adaptor_state_post_filter(
   LOG_TRACE("vector index show post-filter query info", K(vec_index_type_), K(vec_idx_try_path_), K(simple_cmp_info_.inited_), KPC(simple_cmp_info_.filter_expr_),
   K(extra_column_count_), K(query_cond_.query_limit_), K(query_cond_.ef_search_));
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-  int64_t hnsw_max_iter_scan_nums = tenant_config->_hnsw_max_scan_vectors;
+  int64_t hnsw_max_iter_scan_nums = ObVecIdxExtraInfo::get_post_filter_max_scan_rows(
+      vec_aux_ctdef_->vec_query_param_,
+      tenant_config.is_valid() ? tenant_config->_hnsw_max_scan_vectors : 0);
   while (OB_SUCC(ret) && !end_search) {
     ++adaptive_ctx_.iter_times_;
     if (first_search && OB_FAIL(process_adaptor_state_post_filter_once(ada_ctx, adaptor))) {

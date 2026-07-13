@@ -920,19 +920,36 @@ int ObVectorIndexUtil::resolve_query_param(
           param.similarity_threshold_ = out_val;
           param.is_set_similarity_threshold_ = 1;
         }
-      } else if (param_name.case_compare("IVF_NPROBES") == 0) {
-        if (param.is_set_ivf_nprobes_) {
+      } else if (param_name.case_compare("BRUTEFORCE_FALLBACK_THRESHOLD") == 0) {
+        if (param.is_set_bruteforce_fallback_threshold_) {
           ret = OB_ERR_PARAM_DUPLICATE;
-          LOG_WARN("duplicate ivf_nprobes param", K(ret), K(i));
+          LOG_WARN("duplicate bruteforce_fallback_threshold param", K(ret), K(i));
         } else if (value_node->type_ != T_INT && value_node->type_ != T_NUMBER) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid query param", K(ret), K(i), K(param_name), K(value_node->type_));
-        } else if (! (value_node->value_ >= 1 && value_node->value_ <= 65536)) {
+        } else if (!(value_node->value_ >= static_cast<int64_t>(ObVecIdxExtraInfo::MIN_BRUTEFORCE_FALLBACK_THRESHOLD)
+                     && value_node->value_ <= static_cast<int64_t>(ObVecIdxExtraInfo::MAX_BRUTEFORCE_FALLBACK_THRESHOLD))) {
           ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("invalid query param", K(ret), K(i), K(param_name), K(value_node->type_), K(value_node->value_));
+          LOG_WARN("invalid bruteforce_fallback_threshold value", K(ret), K(value_node->value_));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "vector index bruteforce_fallback_threshold value");
         } else {
-          param.ivf_nprobes_ = value_node->value_;
-          param.is_set_ivf_nprobes_ = 1;
+          param.bruteforce_fallback_threshold_ = static_cast<int32_t>(value_node->value_);
+          param.is_set_bruteforce_fallback_threshold_ = 1;
+        }
+      } else if (param_name.case_compare("POST_FILTER_MAX_SCAN_ROWS") == 0) {
+        if (param.is_set_post_filter_max_scan_rows_) {
+          ret = OB_ERR_PARAM_DUPLICATE;
+          LOG_WARN("duplicate post_filter_max_scan_rows param", K(ret), K(i));
+        } else if (value_node->type_ != T_INT && value_node->type_ != T_NUMBER) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid query param", K(ret), K(i), K(param_name), K(value_node->type_));
+        } else if (value_node->value_ < 0) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid post_filter_max_scan_rows value", K(ret), K(value_node->value_));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "vector index post_filter_max_scan_rows value");
+        } else {
+          param.post_filter_max_scan_rows_ = value_node->value_;
+          param.is_set_post_filter_max_scan_rows_ = 1;
         }
       } else if (param_name.case_compare("DROP_RATIO_SEARCH") == 0) {
         int err = 0;
@@ -8017,10 +8034,15 @@ int ObVectorIndexUtil::set_vector_index_param(const ObTableSchema *&vec_index_sc
   return ret;
 }
 
-int ObVectorIndexUtil::set_adaptive_try_path(ObVecIdxExtraInfo& vc_info, const bool is_primary_idx, bool is_ipivf)
+int ObVectorIndexUtil::set_adaptive_try_path(ObVecIdxExtraInfo& vc_info,
+                                             const ObVectorIndexQueryParam &query_param,
+                                             const bool is_primary_idx,
+                                             bool is_ipivf)
 {
   int ret = OB_SUCCESS;
   double output_row_count = vc_info.row_count_ * vc_info.selectivity_;
+  const int64_t hnsw_brute_threshold =
+      ObVecIdxExtraInfo::get_sql_hnsw_bruteforce_fallback_threshold(query_param);
 
   if (is_ipivf) {
     if (vc_info.adaptive_try_path_ == ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN) {
@@ -8043,15 +8065,17 @@ int ObVectorIndexUtil::set_adaptive_try_path(ObVecIdxExtraInfo& vc_info, const b
                                       ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER : ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER;
       }
       LOG_TRACE("daptive_try_path choose result", K(vc_info));
-    } else if (output_row_count <= ObVecIdxExtraInfo::MAX_HNSW_BRUTE_FORCE_SIZE) {
+    } else if (output_row_count <= hnsw_brute_threshold) {
       vc_info.adaptive_try_path_ = ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER;
     } else if (is_primary_idx) {
+      const double pre_filter_threshold = ObVecIdxExtraInfo::get_pre_filter_threshold(query_param, true);
       vc_info.adaptive_try_path_ = (output_row_count < ObVecIdxExtraInfo::MAX_HNSW_PRE_ROW_CNT_WITH_ROWKEY
-                                    && vc_info.selectivity_ <= ObVecIdxExtraInfo::DEFAULT_PRE_RATE_FILTER_WITH_ROWKEY) ?
+                                    && vc_info.selectivity_ <= pre_filter_threshold) ?
                                     ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER : ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER;
     } else {
+      const double pre_filter_threshold = ObVecIdxExtraInfo::get_pre_filter_threshold(query_param, false);
       vc_info.adaptive_try_path_ = (output_row_count < ObVecIdxExtraInfo::MAX_HNSW_PRE_ROW_CNT_WITH_IDX
-                                    && vc_info.selectivity_ <= ObVecIdxExtraInfo::DEFAULT_PRE_RATE_FILTER_WITH_IDX) ?
+                                    && vc_info.selectivity_ <= pre_filter_threshold) ?
                                     ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER : ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER;
     }
   }
