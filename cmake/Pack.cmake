@@ -103,7 +103,7 @@ if (NOT OB_BUILD_OPENSOURCE)
   endforeach()
 endif()
 
-if (OB_BUILD_STANDALONE)
+if (OB_BUILD_STANDALONE AND NOT "${ARCHITECTURE}" STREQUAL "loongarch64")
   install(PROGRAMS
   deps/3rd/home/admin/oceanbase/bin/obshell
   DESTINATION bin
