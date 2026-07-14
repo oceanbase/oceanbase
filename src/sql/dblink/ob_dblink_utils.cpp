@@ -603,22 +603,22 @@ int ObDblinkUtils::has_reverse_link_or_any_dblink(const ObDMLStmt *stmt, bool &h
     if (OB_ISNULL(table_item)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null ptr", K(ret));
-    } else if (!table_item->is_link_type()) {
-      // do nothing
-    } else if (OB_ISNULL(table_item->ext_table_def_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get null ext table def", K(ret));
-    } else if (enable_check_any_dblink &&
-               (table_item->ext_table_def_->is_reverse_link_ ||
-                OB_INVALID_ID != table_item->ext_table_def_->dblink_id_)) {
-      has = true;
-      LOG_DEBUG("succ to find reverse link", K(table_item), K(i));
-      break;
-    } else if (!enable_check_any_dblink &&
-               table_item->ext_table_def_->is_reverse_link_) {
-      has = true;
-      LOG_DEBUG("succ to find reverse link", K(table_item), K(i));
-      break;
+    } else if (table_item->is_link_table() || table_item->is_link_type()) {
+      if (OB_ISNULL(table_item->ext_table_def_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null ext table def", K(ret));
+      } else if (enable_check_any_dblink &&
+                (table_item->ext_table_def_->is_reverse_link_ ||
+                  OB_INVALID_ID != table_item->ext_table_def_->dblink_id_)) {
+        has = true;
+        LOG_DEBUG("succ to find reverse link", K(table_item), K(i));
+        break;
+      } else if (!enable_check_any_dblink &&
+                table_item->ext_table_def_->is_reverse_link_) {
+        has = true;
+        LOG_DEBUG("succ to find reverse link", K(table_item), K(i));
+        break;
+      }
     } else if (table_item->is_temp_table()) {
       if (OB_FAIL(SMART_CALL(has_reverse_link_or_any_dblink(table_item->ref_query_, has, enable_check_any_dblink)))) {
           LOG_WARN("failed to exec has_reverse_link", K(ret));
@@ -678,15 +678,15 @@ int ObDblinkUtils::gather_dblink_id(const ObDMLStmt *stmt, ObIArray<int64_t> &db
     if (OB_ISNULL(table_item)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null ptr", K(ret));
-    } else if (!table_item->is_link_type()) {
-      // do nothing
-    } else if (OB_ISNULL(table_item->ext_table_def_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get null ext table def", K(ret));
-    } else if (OB_INVALID_ID != table_item->ext_table_def_->dblink_id_ &&
-               0 != table_item->ext_table_def_->dblink_id_ &&
-               OB_FAIL(add_var_to_array_no_dup(dblink_id_array, table_item->ext_table_def_->dblink_id_))) {
-      LOG_WARN("failed to add dblink id to array", K(ret), K(table_item->ext_table_def_->dblink_id_));
+    } else if (table_item->is_link_table()) {
+      if (OB_ISNULL(table_item->ext_table_def_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null ext table def", K(ret));
+      } else if (OB_INVALID_ID != table_item->ext_table_def_->dblink_id_ &&
+                0 != table_item->ext_table_def_->dblink_id_ &&
+                OB_FAIL(add_var_to_array_no_dup(dblink_id_array, table_item->ext_table_def_->dblink_id_))) {
+        LOG_WARN("failed to add dblink id to array", K(ret), K(table_item->ext_table_def_->dblink_id_));
+      }
     } else if (table_item->is_temp_table()) {
       if (OB_FAIL(SMART_CALL(gather_dblink_id(table_item->ref_query_, dblink_id_array)))) {
           LOG_WARN("failed to exec gather_dblink_id", K(ret));

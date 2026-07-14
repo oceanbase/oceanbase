@@ -296,13 +296,9 @@ int TableItem::deep_copy(ObIRawExprCopier &expr_copier,
   } else if (OB_NOT_NULL(other.dsl_query_) &&
              OB_FAIL(deep_copy_dsl_query_info(*other.dsl_query_, expr_copier, allocator))) {
     LOG_WARN("failed to deep copy dsl query info", K(ret));
-  } else if (is_external_table()) {
-    if (OB_ISNULL(other.ext_table_def_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null external table def", K(ret), K(other));
-    } else if (OB_FAIL(deep_copy_ext_table_def(*other.ext_table_def_, allocator))) {
+  } else if (OB_NOT_NULL(other.ext_table_def_)
+             && OB_FAIL(deep_copy_ext_table_def(*other.ext_table_def_, allocator))) {
       LOG_WARN("failed to deep copy external table def", K(ret));
-    }
   } else { /* do nothing */ }
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(other.sample_info_)) {

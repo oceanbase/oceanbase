@@ -3309,7 +3309,7 @@ int ObSelectResolver::transfer_rb_iterate_items()
     OZ( select_stmt->add_from_item(table_item->table_id_, table_item->is_joined_table()) );
     OZ( add_from_items_order(table_item), table_item );
     if (OB_SUCC(ret)) {
-      if (table_item->is_link_type()) {
+      if (table_item->is_link_table()) {
         if (OB_ISNULL(table_item->ext_table_def_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null external table def for dblink table", K(ret));
@@ -4730,7 +4730,7 @@ int ObSelectResolver::resolve_from_clause(const ParseNode *node)
       OZ( select_stmt->add_from_item(table_item->table_id_, table_item->is_joined_table()) );
       // oracle outer join will change from items
       OZ( add_from_items_order(table_item), table_item );
-      if (OB_SUCC(ret) && table_item->is_link_type()) {
+      if (OB_SUCC(ret) && table_item->is_link_table()) {
         if (OB_ISNULL(table_item->ext_table_def_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null external table def for dblink table", K(ret));

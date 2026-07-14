@@ -1827,7 +1827,7 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
     scan->set_table_partition_info(ap->table_partition_info_);
     scan->set_table_opt_info(ap->table_opt_info_);
     scan->set_access_path(ap);
-    if (table_item->is_link_type()) {
+    if (table_item->is_link_table()) {
       if (OB_ISNULL(table_item->ext_table_def_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null external table def for dblink table", K(ret));

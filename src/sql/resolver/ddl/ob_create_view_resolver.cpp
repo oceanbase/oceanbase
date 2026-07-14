@@ -714,7 +714,7 @@ int ObCreateViewResolver::get_sel_priv_tables_in_subquery(const ObSelectStmt *se
         LOG_WARN("table_item is NULL ptr", K(ret));
       } else if (!(table_item->is_basic_table() || table_item->is_view_table_)) {
         need_collect_priv = false;
-      } else if (table_item->database_name_.empty() && table_item->is_link_type()) {
+      } else if (table_item->database_name_.empty() && table_item->is_link_table()) {
         if (OB_ISNULL(table_item->ext_table_def_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null external table def for dblink table", K(ret), KPC(table_item));
@@ -834,7 +834,7 @@ int ObCreateViewResolver::get_need_priv_tables(ObSelectStmt &root_stmt,
         LOG_WARN("table item is null");
       } else if (!(table_item->is_basic_table() || table_item->is_view_table_)) {
         need_collect_priv = false;
-      } else if (table_item->database_name_.empty() && table_item->is_link_type()) {
+      } else if (table_item->database_name_.empty() && table_item->is_link_table()) {
         if (OB_ISNULL(table_item->ext_table_def_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null external table def for dblink table", K(ret), KPC(table_item));

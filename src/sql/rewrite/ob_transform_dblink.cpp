@@ -214,7 +214,7 @@ int ObTransformDBlink::get_target_dblink_id(ObDMLStmt *stmt, uint64_t &dblink_id
     } else if (OB_ISNULL(target_table=stmt->get_table_item_by_id(table_infos.at(0)->table_id_))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null table item", K(ret));
-    } else if (target_table->is_link_type()) {
+    } else if (target_table->is_link_table()) {
       if (OB_ISNULL(target_table->ext_table_def_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null external table def for dblink table", K(ret));
@@ -244,7 +244,7 @@ int ObTransformDBlink::recursive_get_target_dblink_id(ObSelectStmt *stmt, uint64
     if (OB_ISNULL(target_table = stmt->get_table_item(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null table", K(ret));
-    } else if (target_table->is_link_type()) {
+    } else if (target_table->is_link_table()) {
       if (OB_ISNULL(target_table->ext_table_def_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null external table def for dblink table", K(ret), KPC(target_table));
@@ -846,7 +846,7 @@ int ObTransformDBlink::check_is_link_table(TableItem *table,
   if (OB_ISNULL(table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null table", K(ret));
-  } else if (table->is_link_type()) {
+  } else if (table->is_link_table()) {
     if (OB_ISNULL(table->ext_table_def_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null external table def for dblink table", K(ret));
@@ -1881,7 +1881,7 @@ int ObTransformDBlink::add_flashback_query_for_dblink(ObDMLStmt *stmt)
       if (OB_ISNULL(table_item)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null param", K(ret));
-      } else if (table_item->is_link_type() && OB_ISNULL(table_item->ext_table_def_)) {
+      } else if (table_item->is_link_table() && OB_ISNULL(table_item->ext_table_def_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null external table def for dblink table", K(ret), KPC(table_item));
       } else if (!table_item->is_link_table()
