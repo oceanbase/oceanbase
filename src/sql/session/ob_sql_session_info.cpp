@@ -550,6 +550,17 @@ int64_t ObSQLSessionInfo::get_inlist_rewrite_threshold() const
   return threshold;
 }
 
+int64_t ObSQLSessionInfo::get_union_dual_rewrite_threshold() const
+{
+  int64_t threshold = 1000;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    threshold = tenant_config->_union_dual_rewrite_threshold;
+  }
+  return threshold;
+}
+
 int ObSQLSessionInfo::is_better_inlist_enabled(bool &enabled) const
 {
   int ret = OB_SUCCESS;

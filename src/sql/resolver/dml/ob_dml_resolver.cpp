@@ -79,7 +79,6 @@ ObDMLResolver::ObDMLResolver(ObResolverParams &params)
       has_oracle_join_(false),
       with_clause_without_record_(false),
       is_prepare_stage_(params.is_prepare_stage_),
-      in_pl_(params.secondary_namespace_ || params.is_dynamic_sql_ || params.is_dbms_sql_),
       resolve_alias_for_subquery_(true),
       current_view_level_(0),
       view_ref_id_(OB_INVALID_ID),

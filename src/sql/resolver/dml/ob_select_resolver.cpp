@@ -8360,6 +8360,7 @@ int ObSelectResolver::check_union_to_values_table_valid(const ParseNode &parse_n
   is_valid = true;
   uint64_t optimizer_version = 0;
   const ParseNode *set_node = parse_node.children_[PARSE_SELECT_SET];
+  bool in_pl = false;
   if (OB_ISNULL(session_info_) || OB_ISNULL(set_node)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("got unexpected ptr", K(ret));
@@ -8369,9 +8370,12 @@ int ObSelectResolver::check_union_to_values_table_valid(const ParseNode &parse_n
              (optimizer_version >= COMPAT_VERSION_4_3_0 && optimizer_version < COMPAT_VERSION_4_3_5)) {
     is_valid = false;
     LOG_TRACE("rewrite not happened", K(optimizer_version));
+  } else if (OB_FALSE_IT(in_pl = NULL != params_.secondary_namespace_
+                || (params_.is_dynamic_sql_ && OB_NOT_NULL(session_info_->get_pl_context()))
+                || params_.is_dbms_sql_)) {
   } else if ((T_SET_UNION != set_node->type_ && T_SET_UNION_ALL != set_node->type_) ||
              params_.is_from_create_view_ || params_.is_from_create_table_ ||
-             in_pl_ || is_prepare_stage_) {
+             in_pl || is_prepare_stage_) {
     is_valid = false;
     LOG_TRACE("rewrite not happened");
   } else {
@@ -8386,9 +8390,10 @@ int ObSelectResolver::check_union_to_values_table_valid(const ParseNode &parse_n
       }
     }
   }
-  if (OB_SUCC(ret) && is_valid && leaf_nodes.count() < UNION_TO_VALUES_THRESHOLD) {
+  if (OB_SUCC(ret) && is_valid && leaf_nodes.count() < session_info_->get_union_dual_rewrite_threshold()) {
     is_valid = false;
-    LOG_TRACE("set count is invalid", K(leaf_nodes.count()));
+    LOG_TRACE("set count is invalid", K(leaf_nodes.count()),
+                                      K(session_info_->get_union_dual_rewrite_threshold()));
   }
   return ret;
 }

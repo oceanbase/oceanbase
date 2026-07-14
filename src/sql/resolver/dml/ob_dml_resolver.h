@@ -1220,7 +1220,6 @@ protected:
    * */
   bool with_clause_without_record_;
   bool is_prepare_stage_;
-  bool in_pl_;
   bool resolve_alias_for_subquery_;
   int32_t current_view_level_;
   uint64_t view_ref_id_;
