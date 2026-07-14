@@ -1479,7 +1479,7 @@ protected:
 
    int get_param_types(const ObRawExpr &param,
                        const bool is_iter,
-                       common::ObIArray<common::ObObjMeta> &types) const;
+                       common::ObIArray<ObExprResType> &types) const;
 
   static int setup_row(
       ObExpr **expr, ObEvalCtx &ctx, const bool is_iter, const int64_t cmp_func_cnt,

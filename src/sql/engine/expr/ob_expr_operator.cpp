@@ -3832,14 +3832,14 @@ int ObSubQueryRelationalExpr::compare_single_row(const ObNewRow &left_row,
 }
 
 int ObSubQueryRelationalExpr::get_param_types(
-    const ObRawExpr &param, const bool is_iter, ObIArray<ObObjMeta> &types) const
+    const ObRawExpr &param, const bool is_iter, ObIArray<ObExprResType> &types) const
 {
   int ret = OB_SUCCESS;
   if (param.get_expr_type() == T_OP_ROW) {
     for (int64_t i = 0; OB_SUCC(ret) && i < param.get_param_count(); i++) {
       const ObRawExpr *e = param.get_param_expr(i);
       CK(NULL != e);
-      OZ(types.push_back(e->get_result_meta()));
+      OZ(types.push_back(e->get_result_type()));
     }
   } else if (param.get_expr_type() == T_REF_QUERY && is_iter) {
     const ObQueryRefRawExpr &ref = static_cast<const ObQueryRefRawExpr &>(param);
@@ -3847,7 +3847,7 @@ int ObSubQueryRelationalExpr::get_param_types(
       OZ(types.push_back(*t));
     }
   } else {
-    OZ(types.push_back(param.get_result_meta()));
+    OZ(types.push_back(param.get_result_type()));
   }
   return ret;
 }
@@ -3857,8 +3857,8 @@ int ObSubQueryRelationalExpr::cg_expr(ObExprCGCtx &op_cg_ctx,
                                       ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObObjMeta, 1> left_types;
-  ObSEArray<ObObjMeta, 1> right_types;
+  ObSEArray<ObExprResType, 1> left_types;
+  ObSEArray<ObExprResType, 1> right_types;
   void **funcs = NULL;
 
   CK(NULL != op_cg_ctx.allocator_);
