@@ -237,7 +237,7 @@ int ObIndexBuilderUtil::add_shadow_partition_keys(
   int ret = OB_SUCCESS;
   if (!data_schema.is_heap_table()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("only heap table should add shadow partition keys", K(data_schema), K(ret));
+    LOG_WARN("only heap table with global index should add shadow partition keys", K(ret), K(data_schema), K(schema));
   } else {
     const bool is_index_column = false;
     const bool is_rowkey = !schema.is_unique_index();
@@ -298,6 +298,12 @@ int ObIndexBuilderUtil::add_shadow_partition_keys(
               if (OB_ISNULL(cascaded_col_schema)) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("failed to get column", K(data_schema), K(column_id), K(ret));
+              } else if (is_lob_storage(cascaded_col_schema->get_data_type())) {
+                ret = OB_ERR_WRONG_KEY_COLUMN;
+                const ObString &column_name = data_column.get_column_name_str();
+                LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
+                LOG_WARN("generated column depending on lob cannot be used in global index",
+                          K(ret), K(data_column), KPC(cascaded_col_schema));
               } else if (OB_INVALID_INDEX == row_desc.get_idx(
                         cascaded_col_schema->get_table_id(), cascaded_col_schema->get_column_id())) {
                 if (cascaded_col_schema->get_column_id() > schema.get_max_used_column_id()) {
