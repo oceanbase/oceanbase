@@ -363,12 +363,19 @@ int ObMViewResolverHelper::resolve_mv_refresh_info(ParseNode *refresh_info_node,
         } else {
           int64_t start_time = OB_INVALID_TIMESTAMP;
           ObString next_time_expr;
+          int64_t period_sec = 0;
+          int64_t mview_complete_refresh_min_interval = 600;
+          omt::ObTenantConfigGuard tenant_config(TENANT_CONF(resolver.session_info_->get_effective_tenant_id()));
+          if (tenant_config.is_valid()) {
+            mview_complete_refresh_min_interval = tenant_config->_mv_complete_refresh_min_interval / 1000000L;
+          }
           if (OB_FAIL(resolve_refresh_interval_node(refresh_interval_node,
                                                     resolver.session_info_,
                                                     resolver.allocator_,
                                                     resolver.params_,
                                                     start_time,
-                                                    next_time_expr))) {
+                                                    next_time_expr,
+                                                    period_sec))) {
             LOG_WARN("failed to resolve interval node", KR(ret));
           } else if (OB_INVALID_TIMESTAMP != start_time || NULL != next_time_expr) {
             // refresh interval has been set
@@ -380,6 +387,11 @@ int ObMViewResolverHelper::resolve_mv_refresh_info(ParseNode *refresh_info_node,
               ret = OB_NOT_SUPPORTED;
               LOG_WARN("ON STATEMENT attribute followed by start with/next clause is not supported", KR(ret));
               LOG_USER_ERROR(OB_NOT_SUPPORTED, "ON STATEMENT attribute followed by start with/next clause is");
+            } else if (OB_UNLIKELY(ObMVRefreshMethod::COMPLETE == refresh_info.refresh_method_ &&
+                                   period_sec < mview_complete_refresh_min_interval)) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("the interval of complete refresh is less than the minimum interval", KR(ret), K(period_sec), K(mview_complete_refresh_min_interval));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "the interval of complete refresh is less than the minimum interval");
             } else {
               refresh_info.start_time_.set_timestamp(start_time);
               refresh_info.next_time_expr_ = next_time_expr;
@@ -521,11 +533,13 @@ int ObMViewResolverHelper::resolve_refresh_interval_node(const ParseNode *refres
                                                          common::ObIAllocator *allocator,
                                                          ObResolverParams &resolver_params,
                                                          int64_t &start_time,
-                                                         ObString &next_time_expr)
+                                                         ObString &next_time_expr,
+                                                         int64_t &period_sec)
 {
   int ret = OB_SUCCESS;
   start_time = OB_INVALID_TIMESTAMP;
   next_time_expr.reset();
+  period_sec = 0;
   if (OB_ISNULL(refresh_interval_node) || OB_ISNULL(session_info) || OB_ISNULL(allocator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", KR(ret), K(session_info), K(allocator));
@@ -570,6 +584,15 @@ int ObMViewResolverHelper::resolve_refresh_interval_node(const ParseNode *refres
         ObString next_date_str(next_date->str_len_, next_date->str_value_);
         if (OB_FAIL(ob_write_string(*allocator, next_date_str, next_time_expr))) {
           LOG_WARN("fail to write string", KR(ret));
+        } else {
+          int64_t next_ts = 0;
+          const uint64_t tenant_id = session_info->get_effective_tenant_id();
+          if (OB_FAIL(ObMViewSchedJobUtils::calc_date_expr_from_str(
+                  *session_info, *allocator, tenant_id, next_time_expr, next_ts))) {
+            LOG_WARN("failed to calc date expr from str", KR(ret), K(next_time_expr));
+          } else {
+            period_sec = (next_ts - current_time) / 1000000L;
+          }
         }
       }
     }

@@ -192,6 +192,7 @@ int ObMViewSchedJobUtils::add_scheduler_job(
     const int64_t default_max_run_sec = 24 * 60 * 60; // 1 day
     const int64_t default_min_run_sec = 10 * 60; // 10 minutes
     int64_t period_sec = 0;
+    int64_t current_time_us = 0;
     int tmp_ret = OB_SUCCESS;
     HEAP_VAR(ObDBMSSchedJobInfo, job_info) {
       job_info.tenant_id_ = tenant_id;
@@ -226,11 +227,12 @@ int ObMViewSchedJobUtils::add_scheduler_job(
           LOG_WARN("failed to calc period_sec from date expression", KR(tmp_ret),
                    K(repeat_interval), K(start_date_us));
         } else {
-          period_sec = (next_date_ts - start_date_us) / 1000000L;
+          current_time_us = ObTimeUtility::current_time() / 1000000L * 1000000L; // ignore micro seconds
+          period_sec = (next_date_ts - current_time_us) / 1000000L;
         }
       }
       LOG_INFO("calc mview job refresh period", K(period_sec), K(tenant_id),
-               K(start_date_us), K(repeat_interval));
+               K(current_time_us), K(start_date_us), K(repeat_interval));
       if (preserved_max_run_duration_sec >= 0) {
         job_info.max_run_duration_ = preserved_max_run_duration_sec;
       } else if (period_sec > 0 && period_sec <= default_min_run_sec / 5) {

@@ -3426,6 +3426,12 @@ DEF_TIME(_tablet_replica_info_cache_expire_time, OB_CLUSTER_PARAMETER, "10m", "[
 DEF_INT(_mv_adaptive_complete_refresh_threshold, OB_TENANT_PARAMETER, "0", "[0, 100]",
         "adaptive complete refresh percentage threshold, set to 0 to disable adaptive complete refresh",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_mv_complete_refresh_min_interval, OB_TENANT_PARAMETER, "10m", "[0s,)",
+         "the minimum interval for scheduled complete materialized view refresh, 0s means no limit",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_mv_nested, OB_TENANT_PARAMETER, "False",
+         "enable or disable creating materialized view based on another materialized view",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 // for upgraded tenant, default _append_update_global_indexes_for_dynamic_partition will be OFF
 // for new created tenant, default _append_update_global_indexes_for_dynamic_partition will be AUTO
 DEF_STR_WITH_CHECKER(_append_update_global_indexes_for_dynamic_partition, OB_TENANT_PARAMETER, "OFF",
