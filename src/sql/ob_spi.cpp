@@ -6307,12 +6307,20 @@ int ObSPIService::spi_new_coll_element(uint64_t collection_id,
         if (OB_NOT_NULL(pl_ctx)) {
           const ObRecordType *record_type = NULL;
           const ObUserDefinedType *elem_udt = NULL;
-          OZ (pl_ctx->get_user_type_from_local(
-                  collection_type->get_element_type().get_user_type_id(), elem_udt));
+          const bool is_pkg_type = collection_type->get_element_type().is_package_type();
+          if (is_pkg_type) {
+            OZ (pl_ctx->get_user_type_from_package(
+                    collection_type->get_element_type().get_user_type_id(), elem_udt));
+          } else {
+            OZ (pl_ctx->get_user_type_from_local(
+                    collection_type->get_element_type().get_user_type_id(), elem_udt));
+          }
           CK (OB_NOT_NULL(elem_udt));
           OX (record_type = static_cast<const ObRecordType *>(elem_udt));
           CK (OB_NOT_NULL(record_type));
           if (OB_SUCC(ret)) {
+            const uint64_t package_id = is_pkg_type
+                ? extract_package_id(record_type->get_user_type_id()) : OB_INVALID_ID;
             ObIAllocator &copy_allocator = OB_NOT_NULL(record->get_allocator())
                                             ? *record->get_allocator() : *allocator;
             for (int64_t i = 0; OB_SUCC(ret) && i < record_type->get_record_member_count(); ++i) {
@@ -6322,8 +6330,12 @@ int ObSPIService::spi_new_coll_element(uint64_t collection_id,
                 has_default = true;
                 ObObjParam result;
                 ObObj *elem = NULL;
-                OZ (spi_calc_expr_at_idx(pl_ctx, member->get_default(),
-                                        OB_INVALID_INDEX, false, &result));
+                if (is_pkg_type) {
+                  OZ (spi_calc_package_expr(pl_ctx, package_id, member->get_default(), &result));
+                } else {
+                  OZ (spi_calc_expr_at_idx(pl_ctx, member->get_default(),
+                                          OB_INVALID_INDEX, false, &result));
+                }
                 OZ (record->get_element(i, elem));
                 CK (OB_NOT_NULL(elem));
                 if (OB_FAIL(ret)) {

@@ -3822,6 +3822,36 @@ int ObPLExecCtx::get_user_type_from_local(uint64_t type_id,
   return ret;
 }
 
+int ObPLExecCtx::get_user_type_from_package(uint64_t type_id,
+                                            const ObUserDefinedType *&user_type) const
+{
+  int ret = OB_SUCCESS;
+  user_type = NULL;
+  ObIAllocator *expr_alloc = const_cast<ObPLExecCtx *>(this)->get_top_expr_allocator();
+  if (OB_INVALID_ID == extract_package_id(type_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type id is not package type", K(ret), K(type_id));
+  } else if (OB_ISNULL(allocator_)
+             || OB_ISNULL(exec_ctx_)
+             || OB_ISNULL(exec_ctx_->get_my_session())
+             || OB_ISNULL(exec_ctx_->get_sql_ctx())
+             || OB_ISNULL(exec_ctx_->get_sql_ctx()->schema_guard_)
+             || OB_ISNULL(exec_ctx_->get_sql_proxy())
+             || OB_ISNULL(guard_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid pl exec ctx to get package user type", K(ret), K(type_id));
+  } else {
+    pl::ObPLResolveCtx resolve_ctx(*expr_alloc,
+                                   *(exec_ctx_->get_my_session()),
+                                   *(exec_ctx_->get_sql_ctx()->schema_guard_),
+                                   *(guard_),
+                                   *(exec_ctx_->get_sql_proxy()),
+                                   false);
+    OZ (resolve_ctx.get_user_type(type_id, user_type, expr_alloc));
+  }
+  return ret;
+}
+
 int ObPLExecCtx::calc_expr(uint64_t package_id, int64_t expr_idx, ObObjParam &result)
 {
   int ret = OB_SUCCESS;
