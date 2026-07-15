@@ -401,11 +401,14 @@ int ObCOMergeDagNet::create_dag(
 #endif
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(MTL(share::ObTenantDagScheduler*)->add_dag(dag))) {
-    STORAGE_LOG(WARN, "Fail to add dag into dag_scheduler", K(ret));
   } else {
-    STORAGE_LOG(INFO, "success to create and add dag", K(ret), K_(basic_param), KPC(dag),
-      "dag_type", ObIDag::get_dag_type_str(dag->get_type()),  K(dag->get_indegree()));
+    // dag may be scheduled and freed by another worker immediately after add_dag succeeds,
+    // so print log (dereferences dag) before adding it into scheduler
+    STORAGE_LOG(INFO, "try to add dag into scheduler", K(ret), K_(basic_param), KPC(dag),
+      "dag_type", ObIDag::get_dag_type_str(dag->get_type()), K(dag->get_indegree()));
+    if (OB_FAIL(MTL(share::ObTenantDagScheduler*)->add_dag(dag))) {
+      STORAGE_LOG(WARN, "Fail to add dag into dag_scheduler", K(ret));
+    }
   }
   if (OB_FAIL(ret) && nullptr != dag) {
     // will remove from dag_net & free dag in this func
