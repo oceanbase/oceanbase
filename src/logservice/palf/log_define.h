@@ -200,6 +200,7 @@ enum LogReplicaType
   INVALID_REPLICA = 0,
   NORMAL_REPLICA,           // full replica
   ARBITRATION_REPLICA,      // arbitration replica
+  LOGONLY_REPLICA,          // logonly replica
 };
 
 inline const char *replica_type_2_str(const LogReplicaType state)
@@ -209,6 +210,7 @@ inline const char *replica_type_2_str(const LogReplicaType state)
   {
     CHECK_REPLICA_TYPE_STR(NORMAL_REPLICA);
     CHECK_REPLICA_TYPE_STR(ARBITRATION_REPLICA);
+    CHECK_REPLICA_TYPE_STR(LOGONLY_REPLICA);
     default:
       return "InvalidReplicaType";
   }
@@ -223,6 +225,8 @@ inline int log_replica_type_to_string(const LogReplicaType replica_type, char *s
     strncpy(str_buf_, "NORMAL_REPLICA", str_len);
   } else if (LogReplicaType::ARBITRATION_REPLICA == replica_type) {
     strncpy(str_buf_, "ARBITRATION_REPLICA", str_len);
+  } else if (LogReplicaType::LOGONLY_REPLICA == replica_type) {
+    strncpy(str_buf_, "LOGONLY_REPLICA", str_len);
   } else {
     ret = OB_INVALID_ARGUMENT;
   }
