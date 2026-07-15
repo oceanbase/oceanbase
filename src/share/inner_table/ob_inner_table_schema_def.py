@@ -18693,6 +18693,9 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12619: __all_virtual_replay_queue_stat
 
 # 12620: __all_virtual_migration_table_cache_info
+
+# 12621: __all_virtual_resource_function_info
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -48228,6 +48231,10 @@ def_table_schema(
 
 # 21749: GV$OB_MIGRATION_TABLE_CACHE_INFO
 # 21750: V$OB_MIGRATION_TABLE_CACHE_INFO
+
+# 21751: GV$OB_RESOURCE_FUNCTION_INFO
+# 21752: V$OB_RESOURCE_FUNCTION_INFO
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
