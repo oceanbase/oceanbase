@@ -6424,7 +6424,7 @@ int ObLogPlan::check_storage_groupby_pushdown(const ObIArray<ObAggFunRawExpr *> 
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(table_item));
   } else if (EXTERNAL_TABLE == table_item->table_type_) {
-    bool all_ext_minmax = true;
+    bool all_ext_minmax = (aggrs.count() > 0);
     for (int64_t i = 0; all_ext_minmax && i < aggrs.count(); ++i) {
       if (OB_NOT_NULL(aggrs.at(i)) && aggrs.at(i)->get_expr_type() != T_FUN_SYS_EXT_MIN
           && aggrs.at(i)->get_expr_type() != T_FUN_SYS_EXT_MAX) {
