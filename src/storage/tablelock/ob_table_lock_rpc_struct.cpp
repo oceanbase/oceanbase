@@ -42,7 +42,8 @@ OB_SERIALIZE_MEMBER(ObLockParam,
                     is_for_replace_,
                     lock_priority_,
                     is_two_phase_lock_,
-                    need_holder_info_);
+                    need_holder_info_  // FARM COMPAT WHITELIST
+                    );
 
 OB_SERIALIZE_MEMBER_INHERIT(ObReplaceLockParam, ObLockParam,
                             new_lock_mode_,
@@ -95,7 +96,8 @@ OB_SERIALIZE_MEMBER(ObTableLockTaskResult,
                     tx_result_,
                     can_retry_,
                     success_pos_,
-                    holder_info_);
+                    holder_info_  // FARM COMPAT WHITELIST
+                    );
 
 OB_DEF_SERIALIZE_SIZE(ObTableLockTaskRequest)
 {
