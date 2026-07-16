@@ -1087,8 +1087,8 @@ int ObSplitReuseBlockIter::get_next_micro_block(
     ret = OB_ERR_SYS;
     LOG_WARN("unexpected null micro block", K(ret));
   } else if (FALSE_IT(cur_rowid_in_sstable_ += cur_micro_block_->header_.row_count_)) {
-  } else if (OB_FAIL(check_can_reuse_micro_block(dest_tablet_index, can_reuse))) {
-    LOG_WARN("pre check can reuse micro block failed", K(ret));
+  //} else if (OB_FAIL(check_can_reuse_micro_block(dest_tablet_index, can_reuse))) {
+  //  LOG_WARN("pre check can reuse micro block failed", K(ret));
   } else if (can_reuse) {
     micro_block = cur_micro_block_;
   }
