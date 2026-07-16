@@ -1787,7 +1787,7 @@ public:
   int64_t max_applying_part_log_no_; // start from 0 on follower and always be INT64_MAX on leader
   ObTxSEQ max_submitted_seq_no_; // maintains on Leader and transfer to Follower via ActiveInfoLog
   ObSEArray<uint64_t,1> checksum_;
-  ObSEArray<share::SCN,1> checksum_scn_;
+  ObSEArray<share::SCN,1> checksum_scn_; // FARM COMPAT WHITELIST
   palf::LSN max_durable_lsn_;
   bool data_complete_;
   bool is_dup_tx_;
