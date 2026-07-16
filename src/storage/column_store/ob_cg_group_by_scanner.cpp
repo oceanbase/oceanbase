@@ -82,6 +82,10 @@ int ObCGGroupByScanner::switch_context(
   } else if (OB_FAIL(index_prefetcher_.switch_context(get_type(), *sstable_, iter_param, access_ctx))) {
     LOG_WARN("Fail to switch context for prefetcher", K(ret));
   }
+  if (OB_SUCC(ret)) {
+    // point to valid group by cell in block row store, can not ignore this assignment
+    group_by_cell_ = (static_cast<ObVectorStore*>(access_ctx.block_row_store_))->get_group_by_cell();
+  }
   return ret;
 }
 

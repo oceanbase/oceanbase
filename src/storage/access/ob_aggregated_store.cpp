@@ -23,6 +23,11 @@ void ObCGAggCells::reset()
   agg_cells_.reset();
 }
 
+void ObCGAggCells::reuse()
+{
+  agg_cells_.reuse();
+}
+
 bool ObCGAggCells::check_finished() const
 {
   bool finised = true;
