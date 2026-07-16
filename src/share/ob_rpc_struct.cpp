@@ -7938,7 +7938,8 @@ int ObGetLSReplayedScnArg::assign(const ObGetLSReplayedScnArg &other)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObGetLSReplayedScnRes, tenant_id_, ls_id_, cur_readable_scn_, offline_scn_, self_addr_);
+OB_SERIALIZE_MEMBER(ObGetLSReplayedScnRes, tenant_id_, ls_id_, cur_readable_scn_, offline_scn_,
+    self_addr_, checkpoint_scn_);
 
 bool ObGetLSReplayedScnRes::is_valid() const
 {
@@ -7959,16 +7960,16 @@ int ObGetLSReplayedScnRes::init(
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
                   || !ls_id.is_valid()
                   || !cur_readable_scn.is_valid_and_not_min()
-                  || !server.is_valid())) {
                   //不用校验offline_scn，可能就是一个非法的
+                  || !server.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(cur_readable_scn), K(server));
   } else {
     tenant_id_ = tenant_id;
     ls_id_ = ls_id;
     cur_readable_scn_ = cur_readable_scn;
-    self_addr_ = server;
     offline_scn_ = offline_scn;
+    self_addr_ = server;
   }
   return ret;
 }
@@ -7980,8 +7981,9 @@ int ObGetLSReplayedScnRes::assign(const ObGetLSReplayedScnRes &other)
     tenant_id_ = other.tenant_id_;
     ls_id_ = other.ls_id_;
     cur_readable_scn_ = other.cur_readable_scn_;
-    self_addr_ = other.self_addr_;
     offline_scn_ = other.offline_scn_;
+    self_addr_ = other.self_addr_;
+    checkpoint_scn_ = other.checkpoint_scn_;
   }
   return ret;
 }
