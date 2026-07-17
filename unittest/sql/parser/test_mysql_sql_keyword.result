@@ -377,8 +377,6 @@ Reserved Keyword: SQL_SMALL_RESULT
 Test Table Name and Column Name Sql:create table SQL_SMALL_RESULT(SQL_SMALL_RESULT int);
 Reserved Keyword: SSL
 Test Table Name and Column Name Sql:create table SSL(SSL int);
-Reserved Keyword: SKIP
-Test Table Name and Column Name Sql:create table SKIP(SKIP int);
 Reserved Keyword: STARTING
 Test Table Name and Column Name Sql:create table STARTING(STARTING int);
 Reserved Keyword: STORED
@@ -457,7 +455,7 @@ Reserved Keyword: ZEROFILL
 Test Table Name and Column Name Sql:create table ZEROFILL(ZEROFILL int);
 Reserved Keyword: TABLEGROUP
 Test Table Name and Column Name Sql:create table TABLEGROUP(TABLEGROUP int);
-************** Total Count of Reserved Keyword:229   ***************
+************** Total Count of Reserved Keyword:228   ***************
 **************   End Test Reserved Keyword   ***************
 **************   Begin Test Non-Reserved Keyword  ***************
 **************   End Test Non-Reserved Keyword  ***************
