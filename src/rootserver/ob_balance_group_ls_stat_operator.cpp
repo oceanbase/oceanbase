@@ -1315,39 +1315,23 @@ int ObNewTableTabletAllocator::alloc_ls_for_in_tablegroup_tablet(
       }
     }
   } else {
-    common::ObArray<const share::schema::ObTableSchema *> table_schema_array;
-    /* 
-    scene of using latest_schema_guard: 
-      When multiple tables are created in a DDL transaction, ObSchemaGetterGuard cannot obtain the latest schema, 
-      causing the partition distribution of each table not comply with the constraints of tablegroup.
-    */
-    if (OB_ISNULL(latest_schema_guard) && OB_FAIL(schema_guard_.get_table_schemas_in_tablegroup(
-            tenant_id_,
-            tablegroup_schema.get_tablegroup_id(),
-            table_schema_array))) {
-      LOG_WARN("fail to get table schemas in tablegroup", KR(ret),
+    const ObTableSchema *primary_table_schema = NULL;
+    if (OB_FAIL(get_primary_table_schema_in_tablegroup_(
+                tablegroup_schema, latest_schema_guard, primary_table_schema))) {
+      LOG_WARN("fail to get primary table schema in tablegroup", KR(ret),
                "tenant_id", tenant_id_,
                "tablegroup_id", tablegroup_schema.get_tablegroup_id());
-    } else if (OB_NOT_NULL(latest_schema_guard) && OB_FAIL(latest_schema_guard->get_table_schemas_in_tablegroup(
-                  tablegroup_schema.get_tablegroup_id(), 
-                  table_schema_array))) {
-      LOG_WARN("fail to get latest table schemas in tablegroup", KR(ret),
-               "tenant_id", tenant_id_,
-               "tablegroup_id", tablegroup_schema.get_tablegroup_id());
-    } else if (table_schema_array.count() > 0) {
-      if (OB_UNLIKELY(nullptr == table_schema_array.at(0))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table schema ptr is null", KR(ret), K(table_schema_array));
-      } else if (!is_add_partition_ || tablegroup_schema.get_sharding() == OB_PARTITION_SHARDING_NONE) {
-        if (!is_add_partition_ && table_schema_array.at(0)->get_table_id() == table_schema.get_table_id()) {
+    } else if (OB_NOT_NULL(primary_table_schema)) {
+      if (!is_add_partition_ || tablegroup_schema.get_sharding() == OB_PARTITION_SHARDING_NONE) {
+        if (!is_add_partition_ && primary_table_schema->get_table_id() == table_schema.get_table_id()) {
           // In the scene of creating multi tables in one ddl transaction,
           // the schema of the creating table will be getted by latest schema guard
           if (OB_FAIL(alloc_tablet_for_tablegroup(table_schema, tablegroup_schema))) {
             LOG_WARN("fail to alloc tablet for tablegroup", KR(ret), K(table_schema));
           }
         } else {
-          if (OB_FAIL(alloc_tablet_for_tablegroup(*table_schema_array.at(0), table_schema, tablegroup_schema))) {
-            LOG_WARN("fail to alloc tablet for tablegroup", KR(ret), K(is_add_partition_), K(tablegroup_schema), K(*table_schema_array.at(0)), K(table_schema));
+          if (OB_FAIL(alloc_tablet_for_tablegroup(*primary_table_schema, table_schema, tablegroup_schema))) {
+            LOG_WARN("fail to alloc tablet for tablegroup", KR(ret), K(is_add_partition_), K(tablegroup_schema), KPC(primary_table_schema), K(table_schema));
           }
         }
       } else if (tablegroup_schema.get_sharding() == OB_PARTITION_SHARDING_ADAPTIVE) {
@@ -1374,6 +1358,53 @@ int ObNewTableTabletAllocator::alloc_ls_for_in_tablegroup_tablet(
       if (OB_FAIL(alloc_tablet_for_tablegroup(table_schema, tablegroup_schema))) {
         LOG_WARN("fail to alloc tablet for tablegroup", KR(ret), K(table_schema));
       }
+    }
+  }
+  return ret;
+}
+
+// Only the first table (primary table) in the tablegroup is needed by the caller.
+// Fetch only that one full schema instead of loading every table's full schema, which
+// can be very slow when the tablegroup contains a large number of tables.
+//
+// latest_schema_guard != NULL only when multiple tables are created in one DDL
+// transaction. In that case schema cache may miss tables created earlier within the
+// same transaction, so we must read from the latest_schema_guard to satisfy tablegroup
+// constraints.
+int ObNewTableTabletAllocator::get_primary_table_schema_in_tablegroup_(
+    const ObTablegroupSchema &tablegroup_schema,
+    ObLatestSchemaGuard *latest_schema_guard,
+    const ObTableSchema *&primary_table_schema)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tablegroup_id = tablegroup_schema.get_tablegroup_id();
+  primary_table_schema = NULL;
+  if (OB_ISNULL(latest_schema_guard)) {
+    const ObSimpleTableSchemaV2 *primary_simple_schema = NULL;
+    if (OB_FAIL(schema_guard_.get_primary_table_schema_in_tablegroup(
+                              tenant_id_, tablegroup_id, primary_simple_schema))) {
+      LOG_WARN("fail to get primary table schema in tablegroup", KR(ret),
+               K_(tenant_id), K(tablegroup_id));
+    } else if (OB_NOT_NULL(primary_simple_schema)) {
+      if (OB_FAIL(schema_guard_.get_table_schema(primary_simple_schema->get_tenant_id(),
+                                                 primary_simple_schema->get_table_id(),
+                                                 primary_table_schema))) {
+        LOG_WARN("fail to get primary table schema", KR(ret), KPC(primary_simple_schema));
+      } else if (OB_ISNULL(primary_table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("primary table schema is null", KR(ret), KPC(primary_simple_schema));
+      }
+    }
+  } else {
+    common::ObArray<const ObTableSchema *> table_schema_array;
+    if (OB_FAIL(latest_schema_guard->get_table_schemas_in_tablegroup(
+                                     tablegroup_id, table_schema_array))) {
+      LOG_WARN("fail to get latest table schemas in tablegroup", KR(ret),
+               K_(tenant_id), K(tablegroup_id));
+    } else if (table_schema_array.count() > 0
+               && OB_ISNULL(primary_table_schema = table_schema_array.at(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema ptr is null", KR(ret), K(table_schema_array));
     }
   }
   return ret;
