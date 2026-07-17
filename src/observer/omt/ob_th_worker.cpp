@@ -517,27 +517,32 @@ int ObThWorker::acquire_diagnostic_info(ObDiagnosticInfo *&di, rpc::ObRequest *r
   if (di != nullptr) {
     //do nothing
   } else if (req->get_type() == ObRequest::OB_RPC && oceanbase::lib::is_diagnose_info_enabled()) {
-    int64_t session_id = ObBackgroundSessionIdGenerator::get_instance().get_next_rpc_session_id();
-    const obrpc::ObRpcPacket &pkt
-        = reinterpret_cast<const obrpc::ObRpcPacket &>(req->get_packet());
-    const uint64_t tenant_id = pkt.get_tenant_id();
-    const uint64_t group_id = pkt.get_group_id();
-    if (OB_INVALID_TENANT_ID != tenant_id && OB_DTL_TENANT_ID != tenant_id) {
-      MTL_SWITCH(tenant_id)
-      {
-        if (OB_FAIL(MTL(common::ObDiagnosticInfoContainer *)
-                        ->acquire_diagnostic_info(tenant_id, group_id, session_id, di))) {
-          OB_ASSERT(di == nullptr);
-          LOG_WARN("failed to acquire diagnostic info", K(ret), K(tenant_id), K(group_id), K(session_id));
-        } else {
-          OB_ASSERT(di != nullptr);
-          di->get_ash_stat().pcode_ = pkt.get_pcode();
-          di->get_ash_stat().session_type_ = ObActiveSessionStatItem::SessionType::BACKGROUND;
-          snprintf(di->get_ash_stat().program_, ASH_PROGRAM_STR_LEN, "T%ld_RPC_REQUEST", tenant_id);
-          di->get_ash_stat().module_[0] = '\0';
-          di->get_ash_stat().action_[0] = '\0';
-          di->get_ash_stat().trace_id_ = req->generate_trace_id(GCTX.self_addr());
-          req->set_diagnostic_info(di);
+    const bool skip_worker_rpc_di = ObDiagnosticInfoContainer::get_di_experimental_feature_flag().skip_worker_rpc_di();
+    if (OB_UNLIKELY(skip_worker_rpc_di)) {
+      // skip worker rpc di creation
+    } else {
+      int64_t session_id = ObBackgroundSessionIdGenerator::get_instance().get_next_rpc_session_id();
+      const obrpc::ObRpcPacket &pkt
+          = reinterpret_cast<const obrpc::ObRpcPacket &>(req->get_packet());
+      const uint64_t tenant_id = pkt.get_tenant_id();
+      const uint64_t group_id = pkt.get_group_id();
+      if (OB_INVALID_TENANT_ID != tenant_id && OB_DTL_TENANT_ID != tenant_id) {
+        MTL_SWITCH(tenant_id)
+        {
+          if (OB_FAIL(MTL(common::ObDiagnosticInfoContainer *)
+                          ->acquire_diagnostic_info(tenant_id, group_id, session_id, di))) {
+            OB_ASSERT(di == nullptr);
+            LOG_WARN("failed to acquire diagnostic info", K(ret), K(tenant_id), K(group_id), K(session_id));
+          } else {
+            OB_ASSERT(di != nullptr);
+            di->get_ash_stat().pcode_ = pkt.get_pcode();
+            di->get_ash_stat().session_type_ = ObActiveSessionStatItem::SessionType::BACKGROUND;
+            snprintf(di->get_ash_stat().program_, ASH_PROGRAM_STR_LEN, "T%ld_RPC_REQUEST", tenant_id);
+            di->get_ash_stat().module_[0] = '\0';
+            di->get_ash_stat().action_[0] = '\0';
+            di->get_ash_stat().trace_id_ = req->generate_trace_id(GCTX.self_addr());
+            req->set_diagnostic_info(di);
+          }
         }
       }
     }
