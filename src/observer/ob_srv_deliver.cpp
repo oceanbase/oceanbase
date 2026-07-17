@@ -622,7 +622,10 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
         session_id = ObBackgroundSessionIdGenerator::get_instance().get_next_rpc_session_id();
       }
       const bool using_rpc_throttle = ObDiagnosticInfoContainer::get_di_experimental_feature_flag().rpc_throttle();
-      if (OB_SUCCESS != acquire_diagnostic_info_object(tenant_id, group_id, session_id, di,
+      const bool skip_rpc_di = ObDiagnosticInfoContainer::get_di_experimental_feature_flag().skip_rpc_di();
+      if (OB_UNLIKELY(skip_rpc_di)) {
+        // skip rpc di creation
+      } else if (OB_SUCCESS != acquire_diagnostic_info_object(tenant_id, group_id, session_id, di,
                             using_cache, using_rpc_throttle, tenant)) {
         // ignore diagnostic info error
       } else {
