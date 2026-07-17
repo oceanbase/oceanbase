@@ -617,7 +617,7 @@ void ObTenantArchivePieceAttr::Key::reset()
 OB_SERIALIZE_MEMBER(ObTenantArchivePieceAttr, key_, incarnation_, dest_no_,
   file_count_, start_scn_, checkpoint_scn_,
   max_scn_, end_scn_, compatible_, input_bytes_, output_bytes_, status_,
-  file_status_, cp_file_id_, cp_file_offset_, path_);
+  file_status_, cp_file_id_, cp_file_offset_, path_, backup_file_status_);
 
 // Return if both primary key and value are valid.
 bool ObTenantArchivePieceAttr::is_valid() const
@@ -757,6 +757,7 @@ int ObTenantArchivePieceAttr::assign(const ObTenantArchivePieceAttr &other)
 
   status_ = other.status_;
   file_status_ = other.file_status_;
+  backup_file_status_ = other.backup_file_status_;
 
   cp_file_id_ = other.cp_file_id_;
   cp_file_offset_ = other.cp_file_offset_;
@@ -781,6 +782,7 @@ void ObTenantArchivePieceAttr::reset()
   compatible_.version_ = ObArchiveCompatible::Compatible::NONE;
   status_.status_ = ObArchivePieceStatus::Status::MAX_STATUS;
   file_status_ = ObBackupFileStatus::STATUS::BACKUP_FILE_MAX;
+  backup_file_status_ = ObBackupFileStatus::STATUS::BACKUP_FILE_INCOMPLETE;
   path_.reset();
 }
 

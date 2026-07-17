@@ -5902,11 +5902,14 @@ public:
     tenant_id_(0),
     ls_id_(),
     src_server_(),
-    result_(OB_SUCCESS) {}
+    result_(OB_SUCCESS),
+    round_id_(0),
+    piece_id_(0) {}
 public:
   bool is_valid() const;
   int assign(const ObBackupTaskRes &res);
-  TO_STRING_KV(K_(task_id), K_(job_id), K_(tenant_id), K_(src_server), K_(ls_id), K_(result), K_(trace_id), K_(dag_id));
+  TO_STRING_KV(K_(task_id), K_(job_id), K_(tenant_id), K_(src_server), K_(ls_id), K_(result),
+      K_(trace_id), K_(dag_id), K_(round_id), K_(piece_id));
 public:
   int64_t task_id_;
   int64_t job_id_;
@@ -5916,6 +5919,8 @@ public:
   int result_;
   share::ObTaskId trace_id_;
   share::ObTaskId dag_id_;
+  int64_t round_id_; // only used for backup archive task
+  int64_t piece_id_; // only used for backup archive task
 };
 struct ObBackupDataArg
 {

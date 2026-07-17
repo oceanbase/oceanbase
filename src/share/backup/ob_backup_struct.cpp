@@ -2117,6 +2117,8 @@ const char *ObBackupType::get_backup_type_str() const
     "",
     "FULL",
     "INC",
+    "BACKUP_ARCHIVE",
+    "BACKUP_ARCHIVE_DELETE_INPUT",
   };
   STATIC_ASSERT(MAX == ARRAYSIZEOF(backup_func_type_strs), "types count mismatch");
   if (type_ < 0 || type_ >= MAX) {
@@ -2139,6 +2141,8 @@ int ObBackupType::set_backup_type(
       "",
       "FULL",
       "INC",
+      "BACKUP_ARCHIVE",
+      "BACKUP_ARCHIVE_DELETE_INPUT",
     };
     BackupType tmp_type = MAX;
     STATIC_ASSERT(MAX == ARRAYSIZEOF(backup_func_type_strs), "types count mismatch");

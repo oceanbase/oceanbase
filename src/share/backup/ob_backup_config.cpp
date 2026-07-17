@@ -43,6 +43,7 @@ const char *const ObBackupConfigType::type_str[ObBackupConfigType::Type::MAX_CON
   "log_archive_dest_8",
   "log_archive_dest_state_8",
   "log_restore_source",
+  "backup_archive_dest",
 };
 
 int ObBackupConfigType::set_backup_config_type(const common::ObString& str) {

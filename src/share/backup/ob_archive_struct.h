@@ -613,6 +613,7 @@ public:
 
   ObArchivePieceStatus status_;
   ObBackupFileStatus::STATUS file_status_;
+  ObBackupFileStatus::STATUS backup_file_status_;
 
   int64_t cp_file_id_;
   int64_t cp_file_offset_;
@@ -631,6 +632,7 @@ public:
     checkpoint_scn_ = share::SCN::min_scn();
     max_scn_ = share::SCN::min_scn();
     end_scn_ = share::SCN::min_scn();
+    backup_file_status_ = ObBackupFileStatus::BACKUP_FILE_INCOMPLETE;
   }
 
   // Return if primary key valid.
@@ -699,7 +701,7 @@ public:
 
   TO_STRING_KV(K_(key), K_(incarnation), K_(dest_no), K_(file_count),
     K_(start_scn), K_(checkpoint_scn), K_(max_scn), K_(end_scn), K_(compatible), K_(input_bytes),
-    K_(output_bytes), K_(status), K_(file_status), K_(cp_file_id), K_(cp_file_offset), K_(path));
+    K_(output_bytes), K_(status), K_(file_status), K_(backup_file_status), K_(cp_file_id), K_(cp_file_offset), K_(path));
 };
 
 

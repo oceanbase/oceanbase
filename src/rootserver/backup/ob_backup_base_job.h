@@ -29,6 +29,7 @@ enum class BackupJobType : int64_t
   BACKUP_BACKUP_PIECE_JOB = 2,
   BACKUP_BACKUP_DATA_JOB = 3,
   BACKUP_CLEAN_JOB = 4,
+  BACKUP_ARCHIVE_JOB = 5,
   BACKUP_JOB_MAX
 };
 

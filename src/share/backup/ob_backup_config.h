@@ -50,6 +50,7 @@ public:
     LOG_ARCHIVE_DEST_8 = 17,
     LOG_ARCHIVE_DEST_STATE_8 = 18,
     LOG_RESTORE_SOURCE = 19,
+    BACKUP_ARCHIVE_DEST = 20,
     MAX_CONFIG_NAME
   };
   static const char *const type_str[Type::MAX_CONFIG_NAME];

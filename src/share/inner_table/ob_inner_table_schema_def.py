@@ -9373,6 +9373,9 @@ def_table_schema(
   ],
 )
 
+# 605: __all_backup_archive_piece_task
+# 606: __all_backup_archive_piece_task_history
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -18695,6 +18698,10 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12620: __all_virtual_migration_table_cache_info
 
 # 12621: __all_virtual_resource_function_info
+# 12622: __all_virtual_backup_archive_piece_task
+
+# 12623: __all_virtual_backup_archive_piece_task_history
+
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位

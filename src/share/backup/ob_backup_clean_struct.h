@@ -45,6 +45,7 @@ struct ObNewBackupCleanType final
     DELETE_OBSOLETE_BACKUP = 4,
     DELETE_OBSOLETE_BACKUP_BACKUP = 5,
     CANCEL_DELETE = 6,
+    DELETE_BACKED_UP_ARCHIVE_PIECE = 7,
     MAX,
   };
   static const char *get_str(const TYPE &type);

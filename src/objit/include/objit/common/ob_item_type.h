@@ -3094,6 +3094,7 @@ T_FUN_SYS_SEARCH_INDEX_INNER_PATH = 1943,
   // HMS SERVICE PRINCIPAL
   T_HMS_PRINCIPAL = 4992,
   T_SP_ASYNC_COMMIT = 4993,
+  T_BACKUP_ARCHIVELOG_ALL = 4994, // for backup archive log all
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;

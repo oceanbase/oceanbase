@@ -185,6 +185,8 @@ enum ObLogBaseType
   TTL_SERVICE_LOG_BASE_TYPE = 62,
   SYNC_MODE_LOG_BASE_TYPE = 63,
   PROTECTION_MODE_MGR_LOG_BASE_TYPE = 64,
+  // for backup archivelog job service
+  BACKUP_ARCHIVE_JOB_SERVICE_LOG_BASE_TYPE = 65,
   // pay attention!!!
   // add log type in log_base_type_to_string
   // max value
@@ -269,6 +271,8 @@ int log_base_type_to_string(const ObLogBaseType log_type,
     strncpy(str, "BACKUP_ARCHIVE_SERVICE", str_len);
   } else if (log_type == BACKUP_TASK_SCHEDULER_LOG_BASE_TYPE) {
     strncpy(str, "BACKUP_TASK_SCHEDULER", str_len);
+  } else if (log_type == BACKUP_ARCHIVE_JOB_SERVICE_LOG_BASE_TYPE) {
+    strncpy(str, "BACKUP_ARCHIVE_JOB_SERVICE", str_len);
   } else if (log_type == TRANSFER_HANDLER_LOG_BASE_TYPE) {
     strncpy(str, "TRANSFER_HANDLER", str_len);
   } else if (log_type == COMMON_LS_SERVICE_LOG_BASE_TYPE) {

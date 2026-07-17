@@ -69,7 +69,8 @@ static const char *new_backup_clean_type_str[] = {
     "DELETE BACKUP ALL",
     "DELETE OBSOLETE BACKUP",
     "DELETE OBSOLETE BACKUP BACKUP",
-    "CANCEL DELETE"
+    "CANCEL DELETE",
+    "DELETE BACKED UP ARCHIVELOG PIECE"
 };
 
 const char *ObNewBackupCleanType::get_str(const TYPE &type)

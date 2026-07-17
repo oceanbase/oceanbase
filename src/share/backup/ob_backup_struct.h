@@ -625,6 +625,8 @@ public:
     EMPTY = 0,
     FULL_BACKUP = 1,
     INCREMENTAL_BACKUP = 2,
+    BACKUP_ARCHIVE = 3,
+    BACKUP_ARCHIVE_DELETE_INPUT = 4,
     MAX,
   };
 

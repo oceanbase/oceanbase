@@ -8902,7 +8902,7 @@ int ObBackupDataArg::assign(const ObBackupDataArg &arg)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObBackupTaskRes, task_id_, job_id_, tenant_id_, ls_id_, src_server_, result_, trace_id_, dag_id_);
+OB_SERIALIZE_MEMBER(ObBackupTaskRes, task_id_, job_id_, tenant_id_, ls_id_, src_server_, result_, trace_id_, dag_id_, round_id_, piece_id_);
 
 bool ObBackupTaskRes::is_valid() const
 {
@@ -8930,6 +8930,8 @@ int ObBackupTaskRes::assign(const ObBackupTaskRes &res)
     result_ = res.result_;
     trace_id_ = res.trace_id_;
     dag_id_ = res.dag_id_;
+    round_id_ = res.round_id_;
+    piece_id_ = res.piece_id_;
   }
   return ret;
 }
