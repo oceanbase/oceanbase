@@ -258,7 +258,7 @@ private:
   int64_t last_autoinc_val_; // record last autoinc val for future dml
   ObBucketLock bucket_lock_;
   int64_t bucket_count_;
-  typedef hash::ObHashMap<int64_t, ObDDLSlice *, hash::NoPthreadDefendMode> SLICE_MAP;
+  typedef hash::ObHashMap<int64_t, ObDDLSlice *> SLICE_MAP;
   SLICE_MAP slice_map_;
 
   // In full direct load, start_scn_ is a mock value
