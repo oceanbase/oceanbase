@@ -141,6 +141,14 @@ void oceanbase::observer::init_srv_xlator_for_migration(ObSrvRpcXlator *xlator)
   RPC_PROCESSOR(ObFetchSSTableMacroLogicIdInfoP, gctx_.bandwidth_throttle_);
   RPC_PROCESSOR(ObAdvanceSrcLSCheckpointP);
 
+  // vector index migration
+  RPC_PROCESSOR(ObFetchVectorIndexAdaptorListP);
+  RPC_PROCESSOR(ObFetchVectorIndexSegmentMetasP);
+  RPC_PROCESSOR(ObFetchVecIndexMigrationSegmentDataP);
+  RPC_PROCESSOR(ObRegisterVecIndexMigrationProcessorP);
+  RPC_PROCESSOR(ObReleaseVectorIndexAdaptorHandleP);
+  RPC_PROCESSOR(ObNotifyVectorIndexMigrationProcessorDoneP);
+
   // restore
   RPC_PROCESSOR(ObNotifyRestoreTabletsP, gctx_.bandwidth_throttle_);
   RPC_PROCESSOR(ObInquireRestoreP, gctx_.bandwidth_throttle_);

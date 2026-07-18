@@ -34,6 +34,11 @@ int ObDASVecIndexHNSWScanIter::inner_init(ObDASIterParam &param)
     ls_id_ = hnsw_scan_param.ls_id_;
     tx_desc_ = hnsw_scan_param.tx_desc_;
     snapshot_ = hnsw_scan_param.snapshot_;
+    // default ctor placed an invalid ls_id into ada_ctx_; rebuild it now that
+    // the real ls_id is known so any caller between init() and the first
+    // reset_for_new_query() observes a coherent context.
+    ada_ctx_.~ObVectorQueryAdaptorResultContext();
+    new (&ada_ctx_) ObVectorQueryAdaptorResultContext(MTL_ID(), ls_id_, 0, &vec_op_alloc_, nullptr);
 
     delta_buf_iter_ = hnsw_scan_param.delta_buf_iter_;
     index_id_iter_ = hnsw_scan_param.index_id_iter_;
@@ -153,7 +158,7 @@ int ObDASVecIndexHNSWScanIter::inner_reuse()
   vec_op_alloc_.reset();
 
   // must be after memory reset
-  new (&ada_ctx_) ObVectorQueryAdaptorResultContext(MTL_ID(), 0, &vec_op_alloc_, nullptr);
+  new (&ada_ctx_) ObVectorQueryAdaptorResultContext(MTL_ID(), ls_id_, 0, &vec_op_alloc_, nullptr);
   ada_ctx_.set_temp_allocator(&mem_context_->get_arena_allocator());
 
   return ret;

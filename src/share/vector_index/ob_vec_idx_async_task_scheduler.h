@@ -171,6 +171,22 @@ public:
   {}
   virtual ~ObVecIdxAsyncTaskScheduler();
 
+  typedef common::hash::ObHashMap<ObPluginVectorIndexIdentity, ObVectorIndexAcquireCtx> VecAcquireCtxMap;
+  struct ObVectorIndexSharedInfo {
+    ObTabletID rowkey_vid_tablet_id_;
+    uint64_t rowkey_vid_table_id_;
+    ObTabletID vid_rowkey_tablet_id_;
+    uint64_t vid_rowkey_table_id_;
+    ObVectorIndexSharedInfo()
+      : rowkey_vid_tablet_id_(ObTabletID::INVALID_TABLET_ID),
+        rowkey_vid_table_id_(OB_INVALID_ID),
+        vid_rowkey_tablet_id_(ObTabletID::INVALID_TABLET_ID),
+        vid_rowkey_table_id_(OB_INVALID_ID) {}
+    TO_STRING_KV(K_(rowkey_vid_tablet_id), K_(rowkey_vid_table_id),
+                 K_(vid_rowkey_tablet_id), K_(vid_rowkey_table_id));
+  };
+  typedef common::hash::ObHashMap<common::ObTabletID, ObVectorIndexSharedInfo> VecSharedInfoMap;
+
   int init(uint64_t tenant_id, ObPluginVectorIndexService *service);
   int start();
   void stop();
@@ -206,6 +222,12 @@ public:
   // with exec_addr=self_addr. The next timer cycle will trigger an R1 sweep on the
   // follower load path. Called from ObPluginVectorIndexLoadScheduler::inner_switch_to_follower_().
   void mark_ls_need_resume_for_follower(const share::ObLSID &ls_id);
+
+  // Returns true after stop() has been called (MTL stop or explicit stop).
+  // Used by ObPluginVectorIndexLoadScheduler::safe_to_destroy to detect that
+  // the scheduler tick will no longer run check_and_schedule_* for this tenant,
+  // so cancel_all_async_tasks_for_destroy must be invoked directly as a fallback.
+  bool is_scheduler_stopped() const { return is_stopped_; }
 
   static const int64_t HISTORY_SAVE_TIME_US = 7LL * 24 * 60 * 60 * 1000 * 1000; // 7 days
 
@@ -243,22 +265,26 @@ private:
   int check_schema_version(bool &schema_version_changed);
   int check_index_adapter_exist(ObPluginVectorIndexMgr *mgr);
   int check_need_maintenance_ls_follower(ObPluginVectorIndexMgr *mgr);
+  int check_transfer_scn(ObPluginVectorIndexMgr *mgr);
+  int check_ls_in_vector_migration(storage::ObLS *ls, bool &is_in_migration);
   int check_need_maintenance(ObPluginVectorIndexMgr *mgr);
   void set_need_maintenance(ObPluginVectorIndexMgr *mgr);
   int execute_adapter_maintenance_for_ls(storage::ObLS *ls,
                                          ObPluginVectorIndexMgr *mgr,
                                          const common::ObIArray<uint64_t> &vec_table_id_array,
                                          const bool is_ls_leader);
-  int acquire_adapter_in_maintenance(storage::ObLS *ls,
-                                     const share::ObLSID &ls_id,
-                                     const int64_t table_id,
-                                     const schema::ObTableSchema *table_schema,
-                                     ObVecIdxSharedTableInfoMap &shared_table_info_map);
-  int set_shared_table_info_in_maintenance(storage::ObLS *ls,
-                                           const int64_t table_id,
-                                           const schema::ObSimpleTableSchemaV2 *table_schema,
-                                           ObVecIdxSharedTableInfoMap &shared_table_info_map);
+  int create_or_update_adaptors(storage::ObLS *ls,
+                                ObPluginVectorIndexMgr *mgr,
+                                VecAcquireCtxMap &ctx_map);
+  int collect_tablet_info_for_maintenance(
+      storage::ObLS *ls,
+      const int64_t table_id,
+      const schema::ObSimpleTableSchemaV2 *table_schema,
+      VecAcquireCtxMap &ctx_map,
+      VecSharedInfoMap &shared_map,
+      common::ObIAllocator &allocator);
   int check_and_execute_adapter_maintenance_tasks();
+  int remove_zero_ls_ref_tenant_adaptors();
   int check_is_vector_index_table(
       const ObSimpleTableSchemaV2 &table_schema, bool &is_vector_index_table, bool &is_shared_index_table);
   void clean_deprecated_adapters(storage::ObLS *ls, ObPluginVectorIndexMgr *mgr, const bool is_ls_leader);
@@ -329,8 +355,16 @@ private:
   int check_and_finish_orphan_self_tasks_();
   // When alive is false, orphan_ret_code carries the reason:
   //   OB_TABLET_NOT_EXIST  - tablet/ls is no longer held by this observer
-  //   OB_ERR_UNEXPECTED    - tablet is held but in-memory task ctx is missing
+  //   OB_TASK_EXPIRED      - tablet is held but in-memory task ctx is missing
   int check_task_alive_in_memory_(const ObVecIndexTaskStatus &row, bool &alive, int &orphan_ret_code);
+  // Search every LS-local task map for the exact <tablet_id, task_type, task_id>.
+  // During tablet transfer the ctx can temporarily remain in the source LS map
+  // while the tablet has already moved to current_ls_id.
+  int check_task_alive_in_all_ls_(
+      const ObVecIndexTaskStatus &row,
+      const share::ObLSID &current_ls_id,
+      bool &alive,
+      share::ObLSID &ctx_ls_id);
   int finish_orphan_self_task_(const ObVecIndexTaskStatus &row);
   // Check whether tablet_id has been dropped from table_id, or table_id itself
   // has been dropped or moved to recyclebin.

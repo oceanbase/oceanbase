@@ -10,6 +10,8 @@
 
 #include "ob_das_domain_utils.h"
 #include "lib/geo/ob_geo_utils.h"
+#include "share/ob_vec_index_builder_util.h"
+#include "share/vector_index/ob_plugin_vector_index_utils.h"
 #include "storage/fts/analyzer/ob_analyzer.h"
 #include "storage/fts/analyzer/ob_token_stream.h"
 #include "sql/das/ob_das_utils.h"
@@ -554,6 +556,181 @@ int ObDASDomainUtils::build_ft_doc_word_infos(
   }
   LOG_TRACE("build_ft_doc_word_infos", K(ret), K(ls_id), K(snapshot), K(doc_word_infos), K(related_ctdefs),
       K(related_tablet_ids));
+  return ret;
+}
+
+int ObDASDomainUtils::is_same_vec_index_group(const share::schema::ObTableSchemaParam &lhs,
+                                              const share::schema::ObTableSchemaParam &rhs,
+                                              bool &is_same)
+{
+  int ret = OB_SUCCESS;
+  is_same = false;
+  common::ObString lhs_prefix;
+  common::ObString rhs_prefix;
+  if (lhs.get_index_name().prefix_match("SYS_DELETING_INDEX:")
+      || rhs.get_index_name().prefix_match("SYS_DELETING_INDEX:")) {
+    // indexes being dropped don't belong to any active vector index group
+  } else if (OB_FAIL(share::ObPluginVectorIndexUtils::get_vector_index_prefix(lhs, lhs_prefix))) {
+    LOG_WARN("failed to get left vector index prefix", K(ret), K(lhs.get_index_name()), K(lhs.get_index_type()));
+  } else if (OB_FAIL(share::ObPluginVectorIndexUtils::get_vector_index_prefix(rhs, rhs_prefix))) {
+    LOG_WARN("failed to get right vector index prefix", K(ret), K(rhs.get_index_name()), K(rhs.get_index_type()));
+  } else {
+    is_same = (0 == lhs_prefix.case_compare(rhs_prefix));
+  }
+  return ret;
+}
+
+void ObDASDomainUtils::fill_data_table_info_if_needed(const ObDASDMLBaseCtDef &current_ctdef,
+                                                      const common::ObTabletID &current_tablet_id,
+                                                      const uint64_t current_table_id,
+                                                      share::ObVectorIndexAcquireCtx &ctx)
+{
+  if (!current_ctdef.table_param_.get_data_table().is_vector_index()) {
+    ctx.data_tablet_id_ = current_tablet_id;
+    ctx.data_table_id_ = current_table_id;
+  }
+}
+
+void ObDASDomainUtils::fill_vec_aux_table_info(const share::schema::ObTableSchemaParam &table_param,
+                                               const common::ObTabletID &tablet_id,
+                                               share::ObVectorIndexAcquireCtx &ctx)
+{
+  const share::schema::ObIndexType index_type = table_param.get_index_type();
+  if (share::schema::is_vec_delta_buffer_type(index_type)
+      || share::schema::is_hybrid_vec_index_log_type(index_type)) {
+    ctx.inc_tablet_id_ = tablet_id;
+    ctx.inc_table_id_ = table_param.get_table_id();
+  } else if (share::schema::is_vec_index_id_type(index_type)) {
+    ctx.vbitmap_tablet_id_ = tablet_id;
+    ctx.vbitmap_table_id_ = table_param.get_table_id();
+  } else if (share::schema::is_vec_index_snapshot_data_type(index_type)) {
+    ctx.snapshot_tablet_id_ = tablet_id;
+    ctx.snapshot_table_id_ = table_param.get_table_id();
+  } else if (share::schema::is_hybrid_vec_index_embedded_type(index_type)) {
+    ctx.embedded_tablet_id_ = tablet_id;
+    ctx.embedded_table_id_ = table_param.get_table_id();
+  } else if (share::schema::is_vec_rowkey_vid_type(index_type)) {
+    ctx.rowkey_vid_tablet_id_ = tablet_id;
+    ctx.rowkey_vid_table_id_ = table_param.get_table_id();
+  } else if (share::schema::is_vec_vid_rowkey_type(index_type)) {
+    ctx.vid_rowkey_tablet_id_ = tablet_id;
+    ctx.vid_rowkey_table_id_ = table_param.get_table_id();
+  }
+}
+
+bool ObDASDomainUtils::check_need_build_vec_index_tablet_infos(
+    const ObDASDMLBaseCtDef &current_ctdef,
+    const DASDMLCtDefArray &related_das_ctdefs)
+{
+  bool need = false;
+  const share::schema::ObIndexType cur_type =
+      current_ctdef.table_param_.get_data_table().get_index_type();
+  if (share::schema::is_vec_non_shared_aux_table(cur_type)) {
+    need = true;
+  }
+  for (int64_t i = 0; !need && i < related_das_ctdefs.count(); ++i) {
+    const ObDASDMLBaseCtDef *r = related_das_ctdefs.at(i);
+    if (OB_NOT_NULL(r)) {
+      const share::schema::ObIndexType rt = r->table_param_.get_data_table().get_index_type();
+      if (share::schema::is_vec_inc_aux_table(rt)) {
+        need = true;
+      }
+    }
+  }
+  return need;
+}
+
+int ObDASDomainUtils::build_vec_index_tablet_infos(
+    const common::ObTabletID &data_tablet_id,
+    const uint64_t data_table_id,
+    const ObDASDMLBaseCtDef &current_ctdef,
+    const common::ObIArray<const ObDASBaseCtDef *> &related_ctdefs,
+    const common::ObIArray<common::ObTabletID> &related_tablet_ids,
+    common::ObIArray<share::ObVectorIndexAcquireCtx> &ctxs)
+{
+  int ret = OB_SUCCESS;
+  ctxs.reset();
+  const share::schema::ObTableSchemaParam &current_table_param = current_ctdef.table_param_.get_data_table();
+  if (OB_UNLIKELY(!data_tablet_id.is_valid()
+                  || OB_INVALID_ID == data_table_id
+                  || related_ctdefs.count() != related_tablet_ids.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(data_tablet_id), K(data_table_id),
+        K(related_ctdefs.count()), K(related_tablet_ids.count()));
+  }
+
+  if (OB_SUCC(ret) && share::schema::is_vec_non_shared_aux_table(current_table_param.get_index_type())
+      && !current_table_param.get_index_name().prefix_match("SYS_DELETING_INDEX:")) {
+    share::ObVectorIndexAcquireCtx ctx;
+    fill_data_table_info_if_needed(current_ctdef, data_tablet_id, data_table_id, ctx);
+    fill_vec_aux_table_info(current_table_param, data_tablet_id, ctx);
+    for (int64_t j = 0; OB_SUCC(ret) && j < related_ctdefs.count(); ++j) {
+      const ObDASDMLBaseCtDef *aux_ctdef = static_cast<const ObDASDMLBaseCtDef *>(related_ctdefs.at(j));
+      if (OB_ISNULL(aux_ctdef)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error, related ctdef is nullptr", K(ret), K(j), K(related_ctdefs));
+      } else {
+        const share::schema::ObTableSchemaParam &aux_table_param = aux_ctdef->table_param_.get_data_table();
+        const share::schema::ObIndexType aux_index_type = aux_table_param.get_index_type();
+        if (share::schema::is_vec_rowkey_vid_type(aux_index_type)
+            || share::schema::is_vec_vid_rowkey_type(aux_index_type)) {
+          fill_vec_aux_table_info(aux_table_param, related_tablet_ids.at(j), ctx);
+        } else if (share::schema::is_vec_non_shared_aux_table(aux_table_param.get_index_type())) {
+          bool is_same_group = false;
+          if (OB_FAIL(is_same_vec_index_group(current_table_param, aux_table_param, is_same_group))) {
+          } else if (is_same_group) {
+            fill_vec_aux_table_info(aux_table_param, related_tablet_ids.at(j), ctx);
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret) && ctx.is_inc_valid() && OB_FAIL(ctxs.push_back(ctx))) {
+      LOG_WARN("failed to push back vector index acquire ctx", K(ret), K(ctx));
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && !share::schema::is_vec_non_shared_aux_table(current_table_param.get_index_type()) && i < related_ctdefs.count(); ++i) {
+    const ObDASDMLBaseCtDef *related_ctdef = static_cast<const ObDASDMLBaseCtDef *>(related_ctdefs.at(i));
+    if (OB_ISNULL(related_ctdef)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error, related ctdef is nullptr", K(ret), K(i), K(related_ctdefs));
+    } else {
+      const share::schema::ObTableSchemaParam &table_param = related_ctdef->table_param_.get_data_table();
+      if (share::schema::is_vec_inc_aux_table(table_param.get_index_type())
+          && !table_param.get_index_name().prefix_match("SYS_DELETING_INDEX:")) {
+        share::ObVectorIndexAcquireCtx ctx;
+        fill_data_table_info_if_needed(current_ctdef, data_tablet_id, data_table_id, ctx);
+        fill_vec_aux_table_info(table_param, related_tablet_ids.at(i), ctx);
+        for (int64_t j = 0; OB_SUCC(ret) && j < related_ctdefs.count(); ++j) {
+          const ObDASDMLBaseCtDef *aux_ctdef = static_cast<const ObDASDMLBaseCtDef *>(related_ctdefs.at(j));
+          if (OB_ISNULL(aux_ctdef)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected error, related ctdef is nullptr", K(ret), K(j), K(related_ctdefs));
+          } else {
+            const share::schema::ObTableSchemaParam &aux_table_param = aux_ctdef->table_param_.get_data_table();
+            const share::schema::ObIndexType aux_index_type = aux_table_param.get_index_type();
+            if (share::schema::is_vec_rowkey_vid_type(aux_index_type)
+                || share::schema::is_vec_vid_rowkey_type(aux_index_type)) {
+              fill_vec_aux_table_info(aux_table_param, related_tablet_ids.at(j), ctx);
+            } else if (j != i
+                       && share::schema::is_vec_non_shared_aux_table(aux_table_param.get_index_type())) {
+              bool is_same_group = false;
+              if (OB_FAIL(is_same_vec_index_group(table_param, aux_table_param, is_same_group))) {
+              } else if (is_same_group) {
+                fill_vec_aux_table_info(aux_table_param, related_tablet_ids.at(j), ctx);
+              }
+            }
+          }
+        }
+        if (OB_SUCC(ret) && OB_FAIL(ctxs.push_back(ctx))) {
+          LOG_WARN("failed to push back vector index acquire ctx", K(ret), K(ctx), K(i));
+        }
+      }
+    }
+  }
+
+  LOG_TRACE("build_vec_index_tablet_infos", K(ret), K(data_tablet_id), K(data_table_id),
+      K(related_ctdefs), K(related_tablet_ids), K(ctxs));
   return ret;
 }
 

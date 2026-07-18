@@ -493,6 +493,9 @@ public:
   int64_t get() const { return value_; }
   operator const int64_t &() const { return value_; }
 
+  int64_t get_min_value() const { return min_value_; }
+  int64_t get_max_value() const { return max_value_; }
+
   bool parse_range(const char *range);
   void init(Scope::ScopeInfo scope_info,
             const char *name,

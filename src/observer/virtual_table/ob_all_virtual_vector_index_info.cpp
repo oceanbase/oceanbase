@@ -72,19 +72,10 @@ int ObVectorIndexInfoIterator::get_next_info(ObVectorIndexInfo &info)
       if (OB_HASH_NOT_EXIST != ret) {
         SERVER_LOG(WARN, "failed to get adapter inst guard", K(ls_id), K(tablet_id), KR(ret));
       }
-    } else if (OB_HASH_EXIST == (ret = ptr_set_.exist_refactored(reinterpret_cast<int64_t>(adapter_guard.get_adatper())))) {
-      ret = OB_HASH_NOT_EXIST; // set OB_HASH_NOT_EXIST to ignore this adapter
-    } else if (OB_HASH_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-      if (OB_FAIL(ptr_set_.set_refactored(reinterpret_cast<int64_t>(adapter_guard.get_adatper())))) {
-        SERVER_LOG(WARN, "failed to set adapter check set", K(ret));
-      } else if (OB_FAIL(adapter_guard.get_adatper()->fill_vector_index_info(info))) {
-        SERVER_LOG(WARN, "failed to fill vector index info", K(ret), K(ls_id), K(tablet_id));
-      } else {
-        info.ls_id_ = ls_id.id();
-      }
+    } else if (OB_FAIL(adapter_guard.get_adatper()->fill_vector_index_info(info))) {
+      SERVER_LOG(WARN, "failed to fill vector index info", K(ret), K(ls_id), K(tablet_id));
     } else {
-      SERVER_LOG(WARN, "failed to check adapter ptr", K(ret));
+      info.ls_id_ = ls_id.id();
     }
     index_idx_++;
   }

@@ -27,6 +27,7 @@ using common::ObDatum;
 }  // namespace sql
 namespace share
 {
+struct ObVectorIndexAcquireCtx;
 namespace schema
 {
 class ObTableParam;
@@ -265,7 +266,8 @@ struct ObDMLBaseParam
         ddl_task_id_(0),
         lob_allocator_(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
         data_row_for_lob_(nullptr),
-        is_main_table_in_fts_ddl_(false)
+        is_main_table_in_fts_ddl_(false),
+        vec_index_acquire_ctxs_(nullptr)
   {
   }
 
@@ -303,6 +305,7 @@ struct ObDMLBaseParam
   mutable ObArenaAllocator lob_allocator_;
   const blocksstable::ObDatumRow *data_row_for_lob_; // for tablet split
   bool is_main_table_in_fts_ddl_; // whether the main table is in fts ddl when dml is executed
+  common::ObIArray<share::ObVectorIndexAcquireCtx> *vec_index_acquire_ctxs_; // vector index auxiliary table info array for adaptor lookup (one per vector index)
   bool is_valid() const { return (timeout_ > 0 && schema_version_ >= 0) && nullptr != store_ctx_guard_; }
   DECLARE_TO_STRING;
 };

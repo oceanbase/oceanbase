@@ -570,6 +570,11 @@ void set_block_size_limit(uint64_t size)
   vsag::Options::Instance().set_block_size_limit(size);
 }
 
+std::string version()
+{
+  return vsag::version();
+}
+
 bool get_is_hgraph_type(uint8_t create_type)
 {
   bool res = false;

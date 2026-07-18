@@ -13,6 +13,9 @@
 #include "ob_storage_ha_utils.h"
 #include "storage/high_availability/ob_transfer_service.h"
 #include "storage/high_availability/ob_rebuild_service.h"
+#include "storage/high_availability/ob_migration_vector_index.h"
+#include "share/vector_index/ob_plugin_vector_index_utils.h"
+#include "share/vector_index/ob_plugin_vector_index_service.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/high_availability/ob_ls_warmup_migration.h"
 #include "close_modules/shared_storage/storage/high_availability/ob_migration_warmup_dag.h"
@@ -36,8 +39,12 @@ ObLSCompleteMigrationCtx::ObLSCompleteMigrationCtx()
     start_ts_(0),
     finish_ts_(0),
     rebuild_seq_(0),
+    src_ls_rebuild_seq_(-1),
     chosen_src_(),
-    cost_static_(nullptr)
+    cost_static_(nullptr),
+    vecidx_ctx_(),
+    has_vecidx_ctx_(false),
+    skip_vecidx_mig_(false)
 {
 }
 
@@ -59,9 +66,13 @@ void ObLSCompleteMigrationCtx::reset()
   task_id_.reset();
   start_ts_ = 0;
   finish_ts_ = 0;
+  src_ls_rebuild_seq_ = -1;
   ObIHADagNetCtx::reset();
   chosen_src_.reset();
   cost_static_ = nullptr;
+  vecidx_ctx_.reset();
+  has_vecidx_ctx_ = false;
+  skip_vecidx_mig_ = false;
 }
 
 int ObLSCompleteMigrationCtx::fill_comment(char *buf, const int64_t buf_len) const
@@ -103,6 +114,7 @@ ObLSCompleteMigrationParam::ObLSCompleteMigrationParam()
     task_id_(),
     result_(OB_SUCCESS),
     rebuild_seq_(0),
+    src_ls_rebuild_seq_(-1),
     svr_rpc_proxy_(nullptr),
     storage_rpc_(nullptr),
     chosen_src_(),
@@ -124,6 +136,7 @@ void ObLSCompleteMigrationParam::reset()
   task_id_.reset();
   result_ = OB_SUCCESS;
   rebuild_seq_ = 0;
+  src_ls_rebuild_seq_ = -1;
   svr_rpc_proxy_ = nullptr;
   storage_rpc_ = nullptr;
   chosen_src_.reset();
@@ -162,6 +175,7 @@ int ObLSCompleteMigrationDagNet::init_by_param(const ObIDagInitParam *param)
     ctx_.arg_ = init_param->arg_;
     ctx_.task_id_ = init_param->task_id_;
     ctx_.rebuild_seq_ = init_param->rebuild_seq_;
+    ctx_.src_ls_rebuild_seq_ = init_param->src_ls_rebuild_seq_;
     ctx_.chosen_src_ = init_param->chosen_src_;
     ctx_.cost_static_ = init_param->cost_static_;
     if (OB_SUCCESS != init_param->result_) {
@@ -371,6 +385,14 @@ int ObLSCompleteMigrationDagNet::clear_dag_net_ctx()
     } else if (OB_FAIL(ls_migration_handler->set_result(result))) {
       LOG_WARN("failed to set result", K(ret), K(result), K(ctx_));
     }
+    // On migration failure, clean up adaptor shells from ls_map and tenant_map.
+    if (OB_SUCC(ret) && OB_SUCCESS != result && ctx_.has_vecidx_ctx_) {
+      if (OB_FAIL(share::ObPluginVectorIndexUtils::cleanup_adaptor_shells(
+              ctx_.arg_.ls_id_, ctx_.vecidx_ctx_.get_adaptor_metas()))) {
+        LOG_WARN("failed to cleanup adaptor shells after migration failure",
+            K(ret), K(result), K(ctx_.arg_.ls_id_));
+      }
+    }
 
     if (is_shared_storage) {
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -383,6 +405,7 @@ int ObLSCompleteMigrationDagNet::clear_dag_net_ctx()
       }
 #endif
     }
+    // TODO(suxing.zq): clean adaptor while migration failed
 
     ctx_.finish_ts_ = ObTimeUtil::current_time();
     const int64_t cost_ts = ctx_.finish_ts_ - ctx_.start_ts_;
@@ -879,10 +902,13 @@ int ObInitialCompleteMigrationTask::process()
     LOG_WARN("initial complete migration task do not init", K(ret));
   } else {
     bool open_migration_warmup = true;
+    bool enable_migrate_vector_index = false;
     const bool is_replace_ls_op = ObMigrationOpType::REPLACE_LS_OP == ctx_->arg_.type_;
+    const bool is_replica_with_ssstore = ObReplicaTypeCheck::is_replica_with_ssstore(ctx_->arg_.dst_.get_replica_type());
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(ctx_->tenant_id_));
     if (tenant_config.is_valid()) {
       open_migration_warmup = tenant_config->_enable_ss_migration_prewarm;
+      enable_migrate_vector_index = tenant_config->_enable_migrate_vector_index;
     }
     if (is_shared_storage && !is_replace_ls_op && open_migration_warmup && !ctx_->is_failed()) {
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -890,12 +916,15 @@ int ObInitialCompleteMigrationTask::process()
         LOG_WARN("failed to generate migration dags", K(ret), K(*ctx_));
       }
 #endif
+    } else if (!is_shared_storage && enable_migrate_vector_index && is_replica_with_ssstore
+        && !ctx_->arg_.ls_id_.is_sys_ls() && !ctx_->skip_vecidx_mig_) {
+      if (OB_FAIL(generate_migration_dags_with_vector_index_())) {
+        LOG_WARN("failed to generate migration dags with vector index", K(ret), K(*ctx_));
+      }
     } else if (OB_FAIL(generate_migration_dags_())) {
       LOG_WARN("failed to generate migration dags", K(ret), K(*ctx_));
     }
   }
-
-
 
   if (OB_SUCCESS != (tmp_ret = record_server_event_())) {
     LOG_WARN("failed to record server event", K(tmp_ret), K(ret));
@@ -1000,6 +1029,114 @@ int ObInitialCompleteMigrationTask::generate_migration_dags_()
       if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(wait_data_ready_dag)) {
         scheduler->free_dag(*wait_data_ready_dag);
         wait_data_ready_dag = nullptr;
+      }
+
+      if (OB_SUCCESS != (tmp_ret = ctx_->set_result(ret, true /*allow_retry*/, this->get_dag()->get_type()))) {
+        LOG_WARN("failed to set complete migration result", K(ret), K(tmp_ret), K(*ctx_));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObInitialCompleteMigrationTask::generate_migration_dags_with_vector_index_()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObVectorIndexMigrationDag *vector_index_dag = nullptr;
+  ObWaitDataReadyDag *wait_data_ready_dag = nullptr;
+  ObFinishCompleteMigrationDag *finish_complete_dag = nullptr;
+  ObTenantDagScheduler *scheduler = nullptr;
+  ObInitialCompleteMigrationDag *initial_complete_migration_dag = nullptr;
+  ObDagPrio::ObDagPrioEnum prio = ObDagPrio::DAG_PRIO_MAX;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("initial prepare migration task do not init", K(ret));
+  } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
+  } else if (OB_ISNULL(initial_complete_migration_dag = static_cast<ObInitialCompleteMigrationDag *>(this->get_dag()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("initial complete migration dag should not be NULL", K(ret), KP(initial_complete_migration_dag));
+  } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx_->arg_.type_, prio))) {
+    LOG_WARN("failed to get dag priority", K(ret));
+  } else {
+    if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, vector_index_dag))) {
+      LOG_WARN("failed to alloc vector index migration dag", K(ret));
+    } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, wait_data_ready_dag))) {
+      LOG_WARN("failed to alloc wait data ready dag ", K(ret));
+    } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, finish_complete_dag))) {
+      LOG_WARN("failed to alloc finish complete migration dag", K(ret));
+    } else if (OB_FAIL(vector_index_dag->init(dag_net_))) {
+      LOG_WARN("failed to init vector index migration dag", K(ret));
+    } else if (OB_FAIL(wait_data_ready_dag->init(dag_net_))) {
+      LOG_WARN("failed to init wait data ready dag", K(ret));
+    } else if (OB_FAIL(finish_complete_dag->init(dag_net_))) {
+      LOG_WARN("failed to init finish complete migration dag", K(ret));
+    } else if (OB_FAIL(this->get_dag()->add_child(*vector_index_dag))) {
+      LOG_WARN("failed to add vector index migration dag", K(ret), KPC(vector_index_dag));
+    } else if (OB_FAIL(vector_index_dag->create_first_task())) {
+      LOG_WARN("failed to create first task for vi dag", K(ret));
+    } else if (OB_FAIL(vector_index_dag->add_child(*wait_data_ready_dag))) {
+      LOG_WARN("failed to add wait data ready dag as child of vi dag", K(ret));
+    } else if (OB_FAIL(wait_data_ready_dag->create_first_task())) {
+      LOG_WARN("failed to create first task", K(ret));
+    } else if (OB_FAIL(wait_data_ready_dag->add_child(*finish_complete_dag))) {
+      LOG_WARN("failed to add finish complete migration dag as child", K(ret));
+    } else if (OB_FAIL(finish_complete_dag->create_first_task())) {
+      LOG_WARN("failed to create first task", K(ret));
+    } else if (OB_FAIL(scheduler->add_dag(finish_complete_dag))) {
+      LOG_WARN("failed to add finish complete migration dag", K(ret), K(*finish_complete_dag));
+      if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
+        LOG_WARN("Fail to add task", K(ret));
+        ret = OB_EAGAIN;
+      }
+    } else if (OB_FAIL(scheduler->add_dag(wait_data_ready_dag))) {
+      LOG_WARN("failed to add dag", K(ret), K(*wait_data_ready_dag));
+      if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
+        LOG_WARN("Fail to add task", K(ret));
+        ret = OB_EAGAIN;
+      }
+      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(finish_complete_dag))) {
+        LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(initial_complete_migration_dag));
+      }
+      finish_complete_dag = nullptr;
+    } else if (OB_FAIL(scheduler->add_dag(vector_index_dag))) {
+      LOG_WARN("failed to add vector index migration dag", K(ret), K(*vector_index_dag));
+      if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
+        LOG_WARN("Fail to add task", K(ret));
+        ret = OB_EAGAIN;
+      }
+      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(finish_complete_dag))) {
+        LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(initial_complete_migration_dag));
+      }
+      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(wait_data_ready_dag))) {
+        LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(initial_complete_migration_dag));
+      }
+      finish_complete_dag = nullptr;
+      wait_data_ready_dag = nullptr;
+    } else {
+      LOG_INFO("succeed to add all dag", K(*vector_index_dag), K(*wait_data_ready_dag), K(*finish_complete_dag));
+      vector_index_dag = nullptr;
+      wait_data_ready_dag = nullptr;
+      finish_complete_dag = nullptr;
+    }
+
+    if (OB_FAIL(ret)) {
+      if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(finish_complete_dag)) {
+        scheduler->free_dag(*finish_complete_dag);
+        finish_complete_dag = nullptr;
+      }
+
+      if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(wait_data_ready_dag)) {
+        scheduler->free_dag(*wait_data_ready_dag);
+        wait_data_ready_dag = nullptr;
+      }
+
+      if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(vector_index_dag)) {
+        scheduler->free_dag(*vector_index_dag);
+        vector_index_dag = nullptr;
       }
 
       if (OB_SUCCESS != (tmp_ret = ctx_->set_result(ret, true /*allow_retry*/, this->get_dag()->get_type()))) {
@@ -1287,6 +1424,8 @@ int ObWaitDataReadyTask::process()
     LOG_WARN("failed to check all tablet ready", K(ret), KPC(ctx_));
   } else if (OB_FAIL(wait_log_replay_to_max_minor_end_scn_())) {
     LOG_WARN("failed to wait log replay to max minor end scn", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(wait_log_replay_for_vector_index_())) {
+    LOG_WARN("failed to wait vector index log replay to boundary scn", K(ret), KPC(ctx_));
   } else if (OB_FAIL(update_ls_migration_status_wait_())) {
     LOG_WARN("failed to update ls migration wait", K(ret), KPC(ctx_));
   } else if (OB_FAIL(wait_transfer_table_replace_())) {
@@ -2842,6 +2981,78 @@ int ObWaitDataReadyTask::wait_log_replay_to_max_minor_end_scn_()
   return ret;
 }
 
+int ObWaitDataReadyTask::wait_log_replay_for_vector_index_()
+{
+  int ret = OB_SUCCESS;
+  ObLS *ls = nullptr;
+  share::SCN vec_boundary_scn;
+  share::SCN current_replay_scn;
+  int64_t timeout = 10_min;
+  bool need_wait = true;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("wait data ready task do not init", K(ret));
+  } else if (!ctx_->has_vecidx_ctx_) {
+    LOG_INFO("no vector index migration ctx, skip wait vector index log replay", KPC(ctx_));
+  } else if (ctx_->vecidx_ctx_.is_all_adaptor_skip_fetch()) {
+    LOG_INFO("all adaptor skip fetch, skip wait vector index log replay", KPC(ctx_));
+  } else if (OB_FAIL(ctx_->vecidx_ctx_.get_vec_index_right_boundary_scn(vec_boundary_scn))) {
+    LOG_WARN("failed to get vector index right boundary scn", K(ret), KPC(ctx_));
+  } else if (!vec_boundary_scn.is_valid() || vec_boundary_scn.is_min()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("vector index right boundary scn is invalid or min, unexpected",
+        K(ret), K(vec_boundary_scn), KPC(ctx_));
+  } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), KP(ls), KPC(ctx_));
+  } else if (OB_FAIL(check_need_wait_log_replay_(ls, need_wait))) {
+    LOG_WARN("failed to check need wait vector index log replay", K(ret), KPC(ctx_));
+  } else if (!need_wait) {
+    LOG_INFO("no need wait vector index log replay", KPC(ctx_));
+  } else if (OB_FAIL(get_wait_timeout_(timeout))) {
+    LOG_WARN("failed to get wait timeout", K(ret));
+  } else {
+    const int64_t wait_start_ts = ObTimeUtility::current_time();
+    LOG_INFO("start waiting vector index log replay to boundary scn",
+        "arg", ctx_->arg_, K(vec_boundary_scn));
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(check_ls_and_task_status_(ls))) {
+        LOG_WARN("failed to check ls and task status", K(ret), KPC(ctx_));
+      } else if (OB_FAIL(ls->get_max_decided_scn(current_replay_scn))) {
+        LOG_WARN("failed to get current replay scn", K(ret), KPC(ctx_));
+      } else if (current_replay_scn >= vec_boundary_scn) {
+        const int64_t cost_ts = ObTimeUtility::current_time() - wait_start_ts;
+        LOG_INFO("wait vector index replay to boundary scn success",
+            "arg", ctx_->arg_, K(cost_ts), K(vec_boundary_scn), K(current_replay_scn));
+        break;
+      } else {
+        if (REACH_THREAD_TIME_INTERVAL(60 * 1000 * 1000)) {
+          LOG_INFO("waiting vector index replay to boundary scn, retry next loop",
+              "arg", ctx_->arg_, K(wait_start_ts), K(vec_boundary_scn), K(current_replay_scn));
+        }
+
+        const int64_t current_ts = ObTimeUtility::current_time();
+        if (current_ts - wait_start_ts >= timeout) {
+          if (OB_FAIL(ctx_->set_result(OB_WAIT_REPLAY_TIMEOUT, true /*allow_retry*/,
+              this->get_dag()->get_type()))) {
+            LOG_WARN("failed to set result", K(ret), KPC(ctx_));
+          } else {
+            ret = OB_WAIT_REPLAY_TIMEOUT;
+            STORAGE_LOG(WARN, "failed to wait vector index replay to boundary scn, timeout",
+                K(ret), K(*ctx_), K(current_ts), K(wait_start_ts), K(vec_boundary_scn));
+          }
+        }
+
+        if (OB_SUCC(ret)) {
+          ob_usleep(CHECK_CONDITION_INTERVAL);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObWaitDataReadyTask::check_ls_and_task_status_(
     ObLS *ls)
 {
@@ -3051,11 +3262,57 @@ int ObFinishCompleteMigrationTask::process()
       bool allow_retry = false;
       if (OB_FAIL(ctx_->check_allow_retry(allow_retry))) {
         LOG_ERROR("failed to check need retry", K(ret), K(*ctx_));
-      } else if (allow_retry) {
-        ctx_->reuse();
-        if (OB_FAIL(generate_prepare_initial_dag_())) {
-          LOG_WARN("failed to generate prepare initial dag", K(ret), KPC(ctx_));
+      } else {
+        // For ADD/REBUILD vec migration, force one dag-net retry with vector index migration skipped
+        int32_t failed_result = OB_SUCCESS;
+        if (OB_FAIL(ctx_->get_result(failed_result))) {
+          LOG_WARN("failed to get result", K(ret), KPC(ctx_));
+        } else if (OB_ALLOCATE_MEMORY_FAILED == failed_result && ctx_->has_vecidx_ctx_ && !ctx_->skip_vecidx_mig_
+        && (ObMigrationOpType::ADD_LS_OP == ctx_->arg_.type_ || ObMigrationOpType::REBUILD_LS_OP == ctx_->arg_.type_)) {
+          ctx_->skip_vecidx_mig_ = true;
+          allow_retry = true;
+          LOG_INFO("[MIG VEC] mem not enough, force one dag net retry with vector index migration skipped", KPC(ctx_));
+          SERVER_EVENT_ADD("storage_ha", "vector_index_migration_skip_on_retry", "tenant_id", ctx_->tenant_id_,
+              "ls_id", ctx_->arg_.ls_id_.id(), "src", ctx_->arg_.src_.get_server(), "dst", ctx_->arg_.dst_.get_server(),
+              "task_id", ctx_->task_id_);
         }
+      }
+      if (OB_SUCC(ret) && allow_retry) {
+        if (ctx_->has_vecidx_ctx_) {
+          if (OB_FAIL(share::ObPluginVectorIndexUtils::cleanup_adaptor_shells(
+                  ctx_->arg_.ls_id_, ctx_->vecidx_ctx_.get_adaptor_metas()))) {
+            LOG_WARN("failed to cleanup adaptor shells before dag net retry", K(ret), KPC(ctx_));
+          } else {
+            ctx_->vecidx_ctx_.reset();
+            ctx_->has_vecidx_ctx_ = false;
+          }
+        }
+        if (OB_SUCC(ret)) {
+          ctx_->reuse();
+          if (OB_FAIL(generate_prepare_initial_dag_())) {
+            LOG_WARN("failed to generate prepare initial dag", K(ret), KPC(ctx_));
+          } else {
+            SERVER_EVENT_ADD("storage_ha", "ls_complete_migration_dag_net_retry",
+                "tenant_id", ctx_->tenant_id_,
+                "ls_id", ctx_->arg_.ls_id_.id(),
+                "has_vecidx_ctx", ctx_->has_vecidx_ctx_);
+          }
+        }
+      }
+      int32_t prev_result = OB_SUCCESS;
+      int32_t prev_retry_count = 0;
+      if (OB_TMP_FAIL(ctx_->get_result(prev_result))) {
+        LOG_WARN("failed to get result", K(ret), K(tmp_ret), KPC(ctx_));
+      } else if (OB_TMP_FAIL(ctx_->get_retry_count(prev_retry_count))) {
+        LOG_WARN("failed to get retry count", K(ret), K(tmp_ret), KPC(ctx_));
+      } else {
+        SERVER_EVENT_ADD("storage_ha", "ls_complete_migration_dag_net_failed",
+            "tenant_id", ctx_->tenant_id_,
+            "ls_id", ctx_->arg_.ls_id_.id(),
+            "prev_result", prev_result,
+            "prev_retry_count", prev_retry_count,
+            "has_vecidx_ctx", ctx_->has_vecidx_ctx_,
+            "allow_retry", allow_retry);
       }
     }
     if (OB_FAIL(ret)) {
@@ -3140,3 +3397,129 @@ int ObFinishCompleteMigrationTask::record_server_event_()
   return ret;
 }
 
+
+// ======================== ObVectorIndexMigrationCtx ========================
+
+ObVectorIndexMigrationCtx::ObVectorIndexMigrationCtx()
+  : lock_(common::ObLatchIds::OB_STORAGE_HA_STRUCT_LOCK),
+    is_inited_(false),
+    adaptor_metas_(),
+    index_(0),
+    vec_index_right_boundary_scn_(),
+    all_adaptor_skip_fetch_(true)
+{
+}
+
+ObVectorIndexMigrationCtx::~ObVectorIndexMigrationCtx()
+{
+  reset();
+}
+
+int ObVectorIndexMigrationCtx::init(const ObIArray<ObMigrationVectorIndexAdaptorMeta> &adaptor_metas)
+{
+  int ret = OB_SUCCESS;
+  SpinWLockGuard guard(lock_);
+  if (is_inited_) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("vector index migration ctx already inited", K(ret));
+  } else if (OB_FAIL(adaptor_metas_.assign(adaptor_metas))) {
+    LOG_WARN("failed to assign adaptor metas", K(ret));
+  } else {
+    index_ = 0;
+    vec_index_right_boundary_scn_.reset();
+    all_adaptor_skip_fetch_ = true;
+    is_inited_ = true;
+    LOG_INFO("vector index migration ctx init success",
+        "adaptor_count", adaptor_metas.count());
+  }
+  return ret;
+}
+
+void ObVectorIndexMigrationCtx::reset()
+{
+  SpinWLockGuard guard(lock_);
+  adaptor_metas_.reset();
+  index_ = 0;
+  vec_index_right_boundary_scn_.reset();
+  is_inited_ = false;
+  all_adaptor_skip_fetch_ = true;
+}
+
+int ObVectorIndexMigrationCtx::get_next_adaptor_meta(ObMigrationVectorIndexAdaptorMeta &meta)
+{
+  int ret = OB_SUCCESS;
+  SpinWLockGuard guard(lock_);
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("vector index migration ctx not inited", K(ret));
+  } else if (index_ >= adaptor_metas_.count()) {
+    ret = OB_ITER_END;
+    LOG_INFO("no more adaptor meta", K(index_), "adaptor_count", adaptor_metas_.count());
+  } else {
+    meta = adaptor_metas_.at(index_);
+    ++index_;
+  }
+  return ret;
+}
+
+int ObVectorIndexMigrationCtx::check_adaptor_metas_empty(bool &is_empty) const
+{
+  int ret = OB_SUCCESS;
+  is_empty = true;
+  SpinRLockGuard guard(lock_);
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("vector index migration ctx not inited", K(ret));
+  } else {
+    is_empty = adaptor_metas_.empty();
+  }
+  return ret;
+}
+
+int ObVectorIndexMigrationCtx::get_total_count(int64_t &total_count) const
+{
+  int ret = OB_SUCCESS;
+  total_count = 0;
+  SpinRLockGuard guard(lock_);
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("vector index migration ctx not inited", K(ret));
+  } else {
+    total_count = adaptor_metas_.count();
+  }
+  return ret;
+}
+
+bool ObVectorIndexMigrationCtx::is_inited() const
+{
+  SpinRLockGuard guard(lock_);
+  return is_inited_;
+}
+
+int ObVectorIndexMigrationCtx::update_vec_index_right_boundary_scn(const share::SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  SpinWLockGuard guard(lock_);
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("vector index migration ctx not inited", K(ret));
+  } else if (scn > vec_index_right_boundary_scn_) {
+    vec_index_right_boundary_scn_ = scn;
+    LOG_DEBUG("update vector index right boundary scn", K(scn), KPC(this));
+  }
+  return ret;
+}
+
+int ObVectorIndexMigrationCtx::get_vec_index_right_boundary_scn(share::SCN &out_scn) const
+{
+  int ret = OB_SUCCESS;
+  out_scn = share::SCN::invalid_scn();
+  SpinRLockGuard guard(lock_);
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("vector index migration ctx not inited", K(ret));
+  } else {
+    out_scn = vec_index_right_boundary_scn_;
+  }
+  return ret;
+}

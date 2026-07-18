@@ -32,6 +32,10 @@ struct TestOStreamCbParam : public share::ObOStreamBuf::CbParam {
     : total_size_(0)
   {}
   virtual ~TestOStreamCbParam() {}
+  virtual share::ObOStreamBuf::CbParam::CbParamType get_type() const override
+  {
+    return share::ObOStreamBuf::CbParam::CbParamType::HNSW_SERIALIZE;
+  }
   int64_t total_size_;
 };
 
@@ -89,6 +93,10 @@ struct TestIStreamCbParam : public share::ObIStreamBuf::CbParam {
     : cur_(0)
   {}
   virtual ~TestIStreamCbParam() {}
+  virtual share::ObIStreamBuf::CbParam::CbParamType get_type() const override
+  {
+    return share::ObIStreamBuf::CbParam::CbParamType::HNSW_DESERIALIZE;
+  }
   int64_t cur_;
 };
 
@@ -133,7 +141,7 @@ TEST_F(TestVectorIndexSerialize, deserialize_failed)
 {
   const int MAX_BUF_SIZE = 8LL;
   char data[MAX_BUF_SIZE] = {0};
-  share::ObIStreamBuf::CbParam cb_param;
+  TestIStreamCbParam cb_param;
   DeserializeCallback callback(OB_ERR_UNEXPECTED);
   share::ObIStreamBuf::Callback func = callback;
   share::ObIStreamBuf streambuf(data, MAX_BUF_SIZE, cb_param, func);

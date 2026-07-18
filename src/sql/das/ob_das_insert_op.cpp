@@ -112,6 +112,7 @@ int ObDASInsertOp::insert_rows()
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
+  common::ObSEArray<share::ObVectorIndexAcquireCtx, OB_DAS_VEC_INDEX_ACQUIRE_CTX_INLINE_CNT> vec_index_ctxs;
   ObDASDMLIterator dml_iter(ins_ctdef_, insert_buffer_, op_alloc_);
   ObDASIndexDMLAdaptor<DAS_OP_TABLE_INSERT, ObDASDMLIterator> ins_adaptor;
   ins_adaptor.tx_desc_ = trans_desc_;
@@ -126,12 +127,24 @@ int ObDASInsertOp::insert_rows()
   ins_adaptor.related_tablet_ids_ = &related_tablet_ids_;
   ins_adaptor.is_do_gts_opt_ = das_gts_opt_info_.use_specify_snapshot_;
   ins_adaptor.das_allocator_ = &op_alloc_;
-  if (OB_FAIL(ins_adaptor.write_tablet(dml_iter, affected_rows))) {
-    if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-      LOG_WARN("insert rows to access service failed", K(ret));
-    }
+  if (!ins_ctdef_->not_need_build_vec_index_tablet_infos_
+      && OB_FAIL(ObDASDomainUtils::build_vec_index_tablet_infos(
+          tablet_id_, ins_ctdef_->table_param_.get_data_table().get_table_id(),
+          *ins_ctdef_,
+          related_ctdefs_, related_tablet_ids_, vec_index_ctxs))) {
+    LOG_WARN("fail to build vec index tablet infos", K(ret), K(tablet_id_), K(related_ctdefs_),
+        K(related_tablet_ids_));
   } else {
-    affected_rows_ = affected_rows;
+    if (!vec_index_ctxs.empty()) {
+      ins_adaptor.vec_index_acquire_ctxs_ = &vec_index_ctxs;
+    }
+    if (OB_FAIL(ins_adaptor.write_tablet(dml_iter, affected_rows))) {
+      if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+        LOG_WARN("insert rows to access service failed", K(ret));
+      }
+    } else {
+      affected_rows_ = affected_rows;
+    }
   }
   return ret;
 }
@@ -204,6 +217,17 @@ int ObDASInsertOp::insert_row_with_fetch()
   storage::ObStoreCtxGuard store_ctx_guard;
   concurrent_control::ObWriteFlag write_flag;
   transaction::ObTxReadSnapshot *snapshot = snapshot_;
+  common::ObSEArray<share::ObVectorIndexAcquireCtx, OB_DAS_VEC_INDEX_ACQUIRE_CTX_INLINE_CNT> vec_index_ctxs;
+  if (!ins_ctdef_->not_need_build_vec_index_tablet_infos_
+      && OB_FAIL(ObDASDomainUtils::build_vec_index_tablet_infos(
+          tablet_id_, ins_ctdef_->table_param_.get_data_table().get_table_id(),
+          *ins_ctdef_,
+          related_ctdefs_, related_tablet_ids_, vec_index_ctxs))) {
+    LOG_WARN("fail to build vec index tablet infos", K(ret), K(tablet_id_), K(related_ctdefs_),
+        K(related_tablet_ids_));
+  } else if (!vec_index_ctxs.empty()) {
+    dml_param.vec_index_acquire_ctxs_ = &vec_index_ctxs;
+  }
 
   // write_flag should be inited before get store ctx, as it will be used in the call function
   (void)ObDMLService::init_dml_write_flag(*ins_ctdef_, *ins_rtdef_, write_flag, das_gts_opt_info_.use_specify_snapshot_);

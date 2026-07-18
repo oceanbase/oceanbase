@@ -250,6 +250,7 @@ protected:
   virtual int inner_get_next_rows(int64_t &count, int64_t capacity) override;
 
 private:
+  int build_vec_index_acquire_ctx(share::ObVectorIndexAcquireCtx &index_ctx);
   int get_reorder_count(const int64_t ef_search, const int64_t topK, const ObVectorIndexParam& param);
   int set_vector_query_condition(ObVectorQueryConditions &query_cond);
   int init_limit_param();

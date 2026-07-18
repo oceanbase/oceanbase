@@ -14,7 +14,6 @@
 #include "ob_vector_mem_sync_executor.h"
 #include "lib/utility/ob_sort.h"
 #include "lib/utility/ob_tracepoint.h"
-#include "share/ob_ddl_task_executor.h"  // ObIDDLTask::in_ddl_retry_white_list
 #include "ob_plugin_vector_index_scheduler.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
@@ -23,7 +22,6 @@
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "storage/ls/ob_ls.h"
 #include "logservice/ob_log_handler.h"
-#include "rootserver/ddl_task/ob_ddl_task.h"
 #include "lib/thread/thread_mgr.h"
 #include "common/ob_role.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
@@ -34,15 +32,11 @@ using namespace storage;
 namespace share
 {
 
-// Whether a per-tablet ret_code should drive a retry of that tablet. Kept aligned with the
-// retry decision in ObVecIndexAsyncTaskUtil::check_task_result: the DDL retry whitelist plus
-// the mem-sync-specific OB_REPLICA_NOT_READABLE. A ret_code that is NOT retryable and NOT
-// OB_SUCCESS is a terminal failure (for example OB_CANCELED for a disabled tablet, or a fatal
-// error) and that tablet is not re-run on the next attempt.
+// Whether a per-tablet ret_code should drive a retry of that tablet.
 static inline bool is_mem_sync_retryable_ret(const int ret_code)
 {
   return OB_REPLICA_NOT_READABLE == ret_code
-      || ObIDDLTask::in_ddl_retry_white_list(ret_code);
+      || OB_SNAPSHOT_DISCARDED == ret_code;
 }
 
 // ==================== ObVecMemSyncLogCb Implementation ====================
@@ -435,6 +429,33 @@ int ObVecMemSyncTask::process_one()
       ctx_->task_status_.task_info_.task_estimate_memory_ = total_est_mem;
     }
 
+    // The current ctx has consumed all of its in-memory retries. Successful tablets remain
+    // terminal; only tablets that still have a transient readability failure are deferred.
+    // A later maintenance tick creates a fresh ctx, which also obtains a fresh weak-read SCN.
+    if (OB_SUCC(ret) && retryable_cnt > 0
+        && ctx_->retry_time_ >= ObVecIndexAsyncTaskUtil::VEC_INDEX_TASK_MAX_RETRY_TIME) {
+      for (int64_t i = 0; i < all_tablets.count(); ++i) {
+        int tablet_ret = VEC_ASYNC_TASK_DEFAULT_ERR_CODE;
+        {
+          common::ObSpinLockGuard ctx_guard(ctx_->lock_);
+          if (i < ctx_->task_status_.task_info_.batch_ret_codes_.count()) {
+            tablet_ret = static_cast<int>(ctx_->task_status_.task_info_.batch_ret_codes_.at(i));
+          }
+        }
+        if (is_mem_sync_retryable_ret(tablet_ret)) {
+          ObTabletID tablet_id(all_tablets.at(i));
+          ObPluginVectorIndexAdapterGuard guard;
+          int tmp_ret = mgr->get_adapter_inst_guard(tablet_id, guard);
+          if (OB_SUCCESS != tmp_ret || OB_ISNULL(guard.get_adatper())) {
+            LOG_WARN("fail to get adapter when deferring mem sync tablet", K(tmp_ret), K(tablet_id));
+          } else if (OB_SUCCESS != (tmp_ret = mgr->get_mem_sync_info().add_deferred_task(
+                         tablet_id, guard.get_adatper()->get_inc_table_id(), tablet_ret))) {
+            LOG_WARN("fail to defer mem sync tablet", K(tmp_ret), K(tablet_id), K(tablet_ret));
+          }
+        }
+      }
+    }
+
     // Aggregate by priority: OB_REPLICA_NOT_READABLE > other retryable > fatal > success
     // (see comment above). A retryable batch ret makes check_task_result send the whole ctx
     // back to PREPARE for another round.
@@ -584,7 +605,7 @@ int ObVecMemSyncExecutor::check_and_set_thread_pool()
     LOG_WARN("unexpected nullptr", K(ret), K_(tenant_id));
   } else if (OB_FAIL(get_index_ls_mgr(index_ls_mgr))) {
     LOG_WARN("fail to get index ls mgr", K(ret), K_(tenant_id), K_(ls_handle));
-  } else if (0 == index_ls_mgr->get_complete_adapter_map().size()) {
+  } else if (0 == index_ls_mgr->get_vec_adaptor_map().size()) {
     // no vector index exist on this LS, skip creating thread pool
   } else {
     ObVecIndexAsyncTaskHandler &thread_pool_handle = vector_index_service_->get_vec_async_task_handle();
@@ -625,7 +646,7 @@ int ObVecMemSyncExecutor::log_tablets_need_memdata_sync(ObPluginVectorIndexMgr *
     } else {
       // follower just refresh adapter statistics, leader submit log need memdata sync
       RWLock::RLockGuard lock_guard(index_ls_mgr->get_adapter_map_lock());
-      FOREACH_X(iter, index_ls_mgr->get_complete_adapter_map(), OB_SUCC(ret)) {
+      FOREACH_X(iter, index_ls_mgr->get_vec_adaptor_map(), OB_SUCC(ret)) {
         ObPluginVectorIndexAdaptor *adapter = iter->second;
         bool need_sync = false;
         bool can_read_index = false;
@@ -664,7 +685,7 @@ int ObVecMemSyncExecutor::log_tablets_need_memdata_sync(ObPluginVectorIndexMgr *
     // do nothing
   } else if (need_submit_log) {
     if (need_refresh_) {
-      if (OB_FAIL(index_ls_mgr->get_mem_sync_info().add_task_to_waiting_map(index_ls_mgr->get_complete_adapter_map()))) {
+      if (OB_FAIL(index_ls_mgr->get_mem_sync_info().add_task_to_waiting_map(index_ls_mgr->get_vec_adaptor_map()))) {
         TRANS_LOG(WARN, "fail to add complete adaptor to waiting map",KR(ret), K(tenant_id_));
       }
     } else if (tenant_config->load_vector_index_on_follower) {
@@ -675,7 +696,7 @@ int ObVecMemSyncExecutor::log_tablets_need_memdata_sync(ObPluginVectorIndexMgr *
       }
     }
   } else if (!is_leader && need_refresh_) {
-    if (OB_FAIL(index_ls_mgr->get_mem_sync_info().add_task_to_waiting_map(index_ls_mgr->get_complete_adapter_map()))) {
+    if (OB_FAIL(index_ls_mgr->get_mem_sync_info().add_task_to_waiting_map(index_ls_mgr->get_vec_adaptor_map()))) {
       TRANS_LOG(WARN, "fail to add complete adaptor to waiting map",KR(ret), K(tenant_id_));
     }
   }

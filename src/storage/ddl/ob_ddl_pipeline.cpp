@@ -18,6 +18,7 @@
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "sql/engine/expr/ob_expr_ai/ob_ai_func_utils.h"
+#include "share/schema/ob_multi_version_schema_service.h"
 #include "share/vector_index/ob_ai_access_service.h"
 #include "share/ai_service/ob_ai_batch_file_manager.h"
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
@@ -227,11 +228,19 @@ int ObVectorIndexTabletContext::init_hnsw_index(const ObDDLTableSchema &ddl_tabl
     }
   }
   if (OB_SUCC(ret)) {
+    if (OB_FAIL(fill_vec_acquire_ctx(ctx_.data_tablet_id_))) {
+      LOG_WARN("fail to fill vec acquire ctx", K(ret), K(ctx_.data_tablet_id_));
+    }
+  }
+  if (OB_SUCC(ret)) {
     is_vec_tablet_rebuild_ = ddl_table_schema.table_item_.is_vec_tablet_rebuild_;
     if (is_vec_tablet_rebuild_) { // async task need
       ObVectorIndexTmpInfo *tmp_info = nullptr;
-      if (OB_FAIL(MTL(ObPluginVectorIndexService *)->get_vector_index_tmp_info(ddl_task_id_, tmp_info))) {
-        LOG_WARN("fail to get vector index tmp info", K(ret), K(tablet_id_));
+      if (OB_FAIL(MTL(ObPluginVectorIndexService *)->get_vector_index_tmp_info(ddl_task_id_, tmp_info, true/*get_from_exist*/))) {
+        LOG_WARN("fail to get vector index tmp info, merge task may have already cleaned up", K(ret), K(ddl_task_id_), K(tablet_id_));
+      } else if (OB_ISNULL(tmp_info->adapter_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("adapter in tmp info is null, merge task may have cleaned up concurrently", K(ret), K(ddl_task_id_), K(tablet_id_));
       } else if (OB_FAIL(adapter_guard_.set_adapter(tmp_info->adapter_))) {
         LOG_WARN("fail to set new adapter guard", K(ret));
       }
@@ -353,6 +362,118 @@ int ObVectorIndexTabletContext::init_hnsw_embedding_index(const ObDDLTableSchema
   return ret;
 }
 
+int ObVectorIndexTabletContext::fill_vec_acquire_ctx(const ObTabletID &data_tablet_id)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  uint64_t data_table_id = OB_INVALID_ID;
+  ObString current_index_prefix;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *table_schema = nullptr;
+  const ObTableSchema *data_table_schema = nullptr;
+  int64_t part_idx = OB_INVALID_INDEX;
+  int64_t subpart_idx = OB_INVALID_INDEX;
+
+  if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get schema guard", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id_, table_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(table_id_));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table schema is null", K(ret), K(table_id_));
+  } else if (FALSE_IT(data_table_id = table_schema->get_data_table_id())) {
+  } else if (OB_FAIL(ObPluginVectorIndexUtils::get_vector_index_prefix(*table_schema, current_index_prefix))) {
+    LOG_WARN("fail to get current vector index prefix", K(ret), K(table_id_));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, data_table_id, data_table_schema))) {
+    LOG_WARN("fail to get data table schema", K(ret), K(data_table_id));
+  } else if (OB_ISNULL(data_table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("data table schema is null", K(ret), K(data_table_id));
+  } else if (PARTITION_LEVEL_ZERO == data_table_schema->get_part_level()) {
+    // Non-partitioned tables do not have part indexes; downstream aux schema lookup
+    // can still resolve the single tablet via get_part_id_and_tablet_id_by_idx().
+  } else if (OB_FAIL(data_table_schema->get_part_idx_by_tablet(data_tablet_id, part_idx, subpart_idx))) {
+    LOG_WARN("fail to get partition index by data tablet", K(ret), K(data_tablet_id), K(data_table_id));
+  }
+
+  // iterate all indexes of the data table and fill vec_acquire_ctx_
+  if (OB_SUCC(ret)) {
+    vec_acquire_ctx_.reset();
+    vec_acquire_ctx_.data_tablet_id_ = data_tablet_id;
+    vec_acquire_ctx_.data_table_id_ = data_table_id;
+    ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+    if (OB_FAIL(data_table_schema->get_simple_index_infos(simple_index_infos))) {
+      LOG_WARN("fail to get simple index infos", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+      const uint64_t aux_table_id = simple_index_infos.at(i).table_id_;
+      const ObIndexType index_type = simple_index_infos.at(i).index_type_;
+      const ObSimpleTableSchemaV2 *aux_schema = nullptr;
+      const bool is_vec_table = schema::is_vec_non_shared_aux_table(index_type);
+      const bool is_shared_table = schema::is_vec_shared_aux_table(index_type);
+      if (!is_vec_table && !is_shared_table) {
+        continue;
+      }
+      if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id, aux_table_id, aux_schema))) {
+        LOG_WARN("fail to get aux table schema", K(ret), K(aux_table_id));
+      } else if (OB_ISNULL(aux_schema)) {
+        // table might have been dropped, skip
+        continue;
+      } else {
+        ObString aux_idx_name;
+        if (OB_FAIL(ObSimpleTableSchemaV2::get_index_name(aux_schema->get_table_name_str(), aux_idx_name))) {
+          LOG_WARN("fail to get aux table index name", K(ret), K(aux_table_id));
+        } else if (aux_idx_name.prefix_match("SYS_DELETING_INDEX:")) {
+          // aux table is being concurrently dropped (SYS_DELETING state), skip
+          LOG_INFO("skip aux table in deleting state during fill_vec_acquire_ctx",
+                   K(aux_table_id), K(aux_schema->get_table_name_str()));
+          continue;
+        } else if (!is_shared_table) {
+          ObString aux_index_prefix;
+          if (OB_FAIL(ObPluginVectorIndexUtils::get_vector_index_prefix(*aux_schema, aux_index_prefix))) {
+            LOG_WARN("fail to get aux vector index prefix", K(ret), K(aux_table_id));
+          } else if (aux_index_prefix != current_index_prefix) {
+            continue;
+          }
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else {
+        ObObjectID object_id = OB_INVALID_ID;
+        ObObjectID first_level_part_id = OB_INVALID_ID;
+        ObTabletID aux_tablet_id;
+        if (OB_FAIL(aux_schema->get_part_id_and_tablet_id_by_idx(
+                part_idx, subpart_idx, object_id, first_level_part_id, aux_tablet_id))) {
+          LOG_WARN("fail to get aux tablet by partition index",
+                   K(ret), K(aux_table_id), K(part_idx), K(subpart_idx));
+        } else if (OB_UNLIKELY(!aux_tablet_id.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("aux tablet id is invalid", K(ret), K(aux_table_id), K(part_idx), K(subpart_idx));
+        } else if (schema::is_vec_delta_buffer_type(index_type)
+            || schema::is_hybrid_vec_index_log_type(index_type)) {
+          vec_acquire_ctx_.inc_tablet_id_ = aux_tablet_id;
+          vec_acquire_ctx_.inc_table_id_ = aux_table_id;
+        } else if (schema::is_vec_index_id_type(index_type)) {
+          vec_acquire_ctx_.vbitmap_tablet_id_ = aux_tablet_id;
+          vec_acquire_ctx_.vbitmap_table_id_ = aux_table_id;
+        } else if (schema::is_vec_index_snapshot_data_type(index_type)) {
+          vec_acquire_ctx_.snapshot_tablet_id_ = aux_tablet_id;
+          vec_acquire_ctx_.snapshot_table_id_ = aux_table_id;
+        } else if (schema::is_hybrid_vec_index_embedded_type(index_type)) {
+          vec_acquire_ctx_.embedded_tablet_id_ = aux_tablet_id;
+          vec_acquire_ctx_.embedded_table_id_ = aux_table_id;
+        } else if (schema::is_vec_rowkey_vid_type(index_type)) {
+          vec_acquire_ctx_.rowkey_vid_tablet_id_ = aux_tablet_id;
+          vec_acquire_ctx_.rowkey_vid_table_id_ = aux_table_id;
+        } else if (schema::is_vec_vid_rowkey_type(index_type)) {
+          vec_acquire_ctx_.vid_rowkey_tablet_id_ = aux_tablet_id;
+          vec_acquire_ctx_.vid_rowkey_table_id_ = aux_table_id;
+        }
+      }
+    }
+  }
+  return ret;
+}
 
 int ObVectorIndexTabletContext::create_ivf_build_helper(
     const ObIndexType type,
@@ -982,12 +1103,12 @@ int ObHNSWIndexAppendBufferOperator::append_row(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("error unexpected, vector index service is nullptr", K(ret));
     } else if (!is_vec_tablet_rebuild && OB_FAIL(vec_index_service->acquire_adapter_guard(tablet_context->vector_index_ctx_->ls_id_,
-                                                      tablet_id_,
-                                                      ObIndexType::INDEX_TYPE_VEC_INDEX_SNAPSHOT_DATA_LOCAL,
+                                                      tablet_context->vector_index_ctx_->vec_acquire_ctx_,
                                                       adaptor_guard,
                                                       &tablet_context->vector_index_ctx_->vec_idx_param_,
                                                       tablet_context->vector_index_ctx_->vec_dim_))) {
-      LOG_WARN("fail to get ObMockPluginVectorIndexAdapter", K(ret), K(tablet_context->vector_index_ctx_->ls_id_), K(tablet_id_));
+      LOG_WARN("fail to get ObPluginVectorIndexAdapter by ctx", K(ret),
+               K(tablet_context->vector_index_ctx_->ls_id_), K(tablet_context->vector_index_ctx_->vec_acquire_ctx_));
     } else if (OB_ISNULL(adapter = is_vec_tablet_rebuild ? tablet_context->vector_index_ctx_->adapter_guard_.get_adatper() : adaptor_guard.get_adatper())) {
       LOG_WARN("error unexpected, adapter is nullptr", K(ret), K(tablet_context->vector_index_ctx_->ls_id_), K(tablet_id_));
     } else if (OB_FAIL(adapter->get_extra_info_actual_size(extra_info_actual_size))) {
@@ -1129,12 +1250,11 @@ int ObHNSWIndexBuildOperator::serialize_vector_index(
     LOG_WARN("get null ObPluginVectorIndexService ptr", K(ret), K(MTL_ID()));
   } else if (!is_vec_tablet_rebuild &&
              OB_FAIL(vec_index_service->acquire_adapter_guard(ctx.ls_id_,
-                                                              tablet_id_,
-                                                              ObIndexType::INDEX_TYPE_VEC_INDEX_SNAPSHOT_DATA_LOCAL,
+                                                              ctx.vec_acquire_ctx_,
                                                               adaptor_guard,
                                                               &ctx.vec_idx_param_,
                                                               ctx.vec_dim_))) {
-    LOG_WARN("fail to get ObMockPluginVectorIndexAdapter", K(ret), K(ctx.ls_id_), K(tablet_id_));
+    LOG_WARN("fail to get ObPluginVectorIndexAdapter by ctx", K(ret), K(ctx.ls_id_), K(ctx.vec_acquire_ctx_));
   } else {
     ObHNSWSerializeCallback::CbParam param;
     param.vctx_ = &ctx.ctx_;

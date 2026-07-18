@@ -21,6 +21,13 @@ namespace oceanbase
 namespace share
 {
 
+int ObVecIdxMergeTaskExecutor::do_check_task_result(
+    ObVecIndexAsyncTaskCtx *task_ctx,
+    ObVecTaskResultCheckAction &action)
+{
+  return do_check_normal_running_task_result(task_ctx, action);
+}
+
 bool ObVecIdxMergeTaskExecutor::check_operation_allow()
 {
   int ret = OB_SUCCESS;
@@ -78,6 +85,11 @@ int ObVecIdxMergeTaskExecutor::load_task(uint64_t &task_trace_base_num)
   } else if (!check_operation_allow()) { // skip
   } else if (OB_FAIL(get_index_ls_mgr(index_ls_mgr))) { // skip
     LOG_WARN("fail to get index ls mgr", K(ret), K(tenant_id_), K(ls_handle_));
+  } else if (OB_NOT_NULL(index_ls_mgr) && index_ls_mgr->get_async_task_opt().is_stop()) {
+    // LS is being destroyed; skip creating new tasks.  Cancellation of existing
+    // tasks is handled by check_and_schedule_* later in the same tick.
+    LOG_INFO("[VEC_ASYNC_TASK] ls is stopping, skip load task", K(tenant_id_),
+             K(ls_handle_.get_ls()->get_ls_id()));
   } else {
     storage::ObLS *ls = ls_handle_.get_ls();
     ObVecIndexAsyncTaskOption &task_opt = index_ls_mgr->get_async_task_opt();
@@ -85,10 +97,10 @@ int ObVecIdxMergeTaskExecutor::load_task(uint64_t &task_trace_base_num)
     const int64_t current_task_cnt = ObVecIndexAsyncTaskUtil::get_processing_task_cnt(task_opt);
 
     RWLock::RLockGuard lock_guard(index_ls_mgr->get_adapter_map_lock());
-    FOREACH_X(iter, index_ls_mgr->get_complete_adapter_map(),
+    FOREACH_X(iter, index_ls_mgr->get_vec_adaptor_map(),
         OB_SUCC(ret) && (task_ctx_array.count() + current_task_cnt <= MAX_ASYNC_TASK_PROCESSING_COUNT)) {
-      ObTabletID tablet_id = iter->first;
       ObPluginVectorIndexAdaptor *adapter = iter->second;
+      ObTabletID tablet_id = adapter->get_vbitmap_tablet_id();
       if (OB_ISNULL(adapter)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected nullptr", K(ret));
@@ -104,7 +116,7 @@ int ObVecIdxMergeTaskExecutor::load_task(uint64_t &task_trace_base_num)
         bool need_merge = false;
         if (! adapter->is_complete()) {
           LOG_TRACE("adapter not complete, no need merge", K(ret), KPC(adapter));
-        } else if (adapter->get_create_type() != CreateTypeComplete) {
+        } else if (!adapter->is_ready_complete()) {
           LOG_TRACE("adapter is not complete, no need merge", K(ret), KPC(adapter));
         } else if (adapter->is_sparse_vector_index_type()) {
           LOG_TRACE("adapter is sparse vector index, no need merge", K(ret), KPC(adapter));
@@ -146,6 +158,7 @@ int ObVecIdxMergeTaskExecutor::load_task(uint64_t &task_trace_base_num)
           task_ctx->task_status_.exec_addr_ = GCTX.self_addr();
           task_ctx->task_status_.trace_id_ = new_trace_id;
           task_ctx->allocator_.set_tenant_id(tenant_id_);
+          task_ctx->task_status_.inc_tablet_id_ = adapter->get_inc_tablet_id();
           int64_t est_mem = 0;
           if (OB_FAIL(ObVecIndexAsyncTaskUtil::estimate_task_memory(task_ctx, est_mem, adapter))) {
             LOG_WARN("fail to estimate merge task memory", K(ret), K(tablet_id));
@@ -660,7 +673,17 @@ int ObVecIdxMergeTask::process_merge()
   } else if (OB_ISNULL(vec_idx_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid vector index ls mgr", KR(ret), K(tenant_id_), K(ls_id_));
-  } else if (OB_FAIL(vec_idx_mgr_->get_adapter_inst_guard(ctx_->task_status_.tablet_id_, adpt_guard))) {
+  } else if (OB_INVALID_ID == ctx_->task_status_.inc_tablet_id_.id()
+             && OB_FAIL(vec_idx_mgr_->get_inc_tablet_id_by_vbitmap(
+                 ctx_->task_status_.table_id_,
+                 ObTabletID(ctx_->task_status_.tablet_id_),
+                 ctx_->task_status_.inc_tablet_id_))) {
+    // __all_vector_index_task only stores index_id (vbitmap) table_id/tablet_id; inc_tablet_id_
+    // is kept in memory by load_task but lost after resume (incl. dbms_vector.compact_index).
+    // Look up delta-buffer tablet on vec_adaptor_map before get_adapter_inst_guard.
+    ret = OB_EAGAIN;
+    LOG_INFO("can not get inc tablet id for merge task, need wait", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(vec_idx_mgr_->get_adapter_inst_guard(ctx_->task_status_.inc_tablet_id_, adpt_guard))) {
     if (OB_HASH_NOT_EXIST == ret) {
       ret = OB_EAGAIN;
       LOG_INFO("can not get adapter, need wait", K(ret), KPC(ctx_));
@@ -673,7 +696,7 @@ int ObVecIdxMergeTask::process_merge()
   } else if (! adpt_guard.get_adatper()->is_complete()) {
     ret = OB_EAGAIN;
     LOG_INFO("adapter not complete, need wait", K(ret), KP(adpt_guard.get_adatper()));
-  } else if (adpt_guard.get_adatper()->get_create_type() != CreateTypeComplete) {
+  } else if (!adpt_guard.get_adatper()->is_ready_complete()) {
     ret = OB_EAGAIN;
     LOG_INFO("adapter is not complete, no need merge", K(ret), KPC(adpt_guard.get_adatper()));
   } else if (!check_snapshot_table_available(*adpt_guard.get_adatper())) {
@@ -911,7 +934,7 @@ int ObVecIdxMergeTask::execute_exchange()
   transaction::ObTxReadSnapshot snapshot;
   transaction::ObTransService *txs = MTL(transaction::ObTransService *);
   const uint64_t timeout_us = ObTimeUtility::current_time() + ObInsertLobColumnHelper::LOB_TX_TIMEOUT;
-  if (OB_FAIL(ObInsertLobColumnHelper::start_trans(ls_id_, false/*is_for_read*/, timeout_us, tx_desc))) {
+  if (OB_FAIL(ObVectorIndexTableHelper::start_trans(ls_id_, false/*is_for_read*/, timeout_us, new_adapter_->get_data_tablet_id(), tx_desc))) {
     LOG_WARN("fail to get tx_desc", K(ret));
   } else if (OB_ISNULL(tx_desc) || OB_ISNULL(txs)) {
     ret = OB_ERR_UNEXPECTED;
@@ -934,7 +957,7 @@ int ObVecIdxMergeTask::execute_exchange()
   }
   int tmp_ret = OB_SUCCESS;
   DEBUG_SYNC(BEFORE_VECTOR_INDEX_MERGE_COMMIT);
-  if (nullptr != tx_desc && OB_SUCCESS != (tmp_ret = ObInsertLobColumnHelper::end_trans(tx_desc, OB_SUCCESS != ret, timeout_us))) {
+  if (nullptr != tx_desc && OB_SUCCESS != (tmp_ret = ObVectorIndexTableHelper::end_trans(tx_desc, OB_SUCCESS != ret, timeout_us))) {
     ret = tmp_ret;
     LOG_WARN("fail to end trans", K(ret));
   }
@@ -1218,7 +1241,7 @@ int ObVecIdxMergeTask::refresh_adaptor()
       LOG_WARN("no need refresh adaptor", K(meta_scn), KPC(old_adapter_));
       ObPluginVectorIndexAdapterGuard latest_adpt_guard;
       int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(vec_idx_mgr_->get_adapter_inst_guard(ctx_->task_status_.tablet_id_, latest_adpt_guard))) {
+      if (OB_TMP_FAIL(vec_idx_mgr_->get_adapter_inst_guard(ctx_->task_status_.inc_tablet_id_, latest_adpt_guard))) {
         LOG_WARN("fail to get adapter instance", K(tmp_ret), KPC(ctx_));
       } else if (latest_adpt_guard.get_adatper() != old_adapter_) {
         LOG_INFO("old adaptor is changeed", KPC(old_adapter_), KPC(latest_adpt_guard.get_adatper()), KPC(new_adapter_));
@@ -1250,7 +1273,7 @@ int ObVecIdxMergeTask::refresh_adaptor()
         LOG_INFO("build new adaptor success", KPC(new_adapter_), KPC(old_adapter_));
         ObPluginVectorIndexAdapterGuard latest_adpt_guard;
         RWLock::WLockGuard lock_guard(vec_idx_mgr_->get_adapter_map_lock());
-        if (OB_FAIL(vec_idx_mgr_->get_adapter_inst_guard_in_lock(ctx_->task_status_.tablet_id_, latest_adpt_guard))) {
+        if (OB_FAIL(vec_idx_mgr_->get_adapter_inst_guard_in_lock(ctx_->task_status_.inc_tablet_id_, latest_adpt_guard))) {
           LOG_WARN("fail to get adapter instance", K(ret), KPC(ctx_));
         } else if (latest_adpt_guard.get_adatper()->get_snapshot_scn() > new_adapter_->get_snapshot_scn()) {
           LOG_INFO("snap data is load by other, so no need to refresh", KPC(new_adapter_), KPC(latest_adpt_guard.get_adatper()));

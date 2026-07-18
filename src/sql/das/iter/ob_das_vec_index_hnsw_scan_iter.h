@@ -118,7 +118,7 @@ public:
       distance_calc_(nullptr),
       distance_threshold_(FLT_MAX),
       adaptor_(nullptr),
-      ada_ctx_(MTL_ID(), 0, &vec_op_alloc_, nullptr),
+      ada_ctx_(MTL_ID(), ls_id_, 0, &vec_op_alloc_, nullptr),
       first_post_filter_search_(true),
       profile_(nullptr) {}
 

@@ -5,6 +5,9 @@
 #define USING_LOG_PREFIX SERVER
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
+#include "share/allocator/ob_shared_memory_allocator_mgr.h"
+#include "share/inner_table/ob_inner_table_schema_constants.h"
+#include "share/schema/ob_table_dml_param.h"
 #include "share/vector_index/ob_vector_index_async_task_util.h"
 #include "share/ob_vec_index_builder_util.h"
 #include "storage/tx_storage/ob_ls_service.h"
@@ -447,6 +450,7 @@ int ObPluginVectorIndexUtils::read_vector_info(ObPluginVectorIndexAdaptor *adapt
                                                const common::ObTabletID &mem_sync_tablet_id)
 {
   INIT_SUCC(ret);
+  ObPluginVectorIndexMgr *ls_index_mgr = nullptr;
   const bool is_hybrid_vector = adapter->is_hybrid_index();
   uint64_t vid_id_table_table_id = adapter->get_vid_rowkey_table_id();
   uint64_t data_table_table_id = is_hybrid_vector? adapter->get_embedded_table_id(): adapter->get_data_table_id();
@@ -507,6 +511,11 @@ int ObPluginVectorIndexUtils::read_vector_info(ObPluginVectorIndexAdaptor *adapt
     }
 
     if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(try_get_ls_index_mgr(ls_id, ls_index_mgr))) {
+      LOG_WARN("fail to try get ls index mgr", K(ret), K(ls_id));
+    } else if (OB_ISNULL(ls_index_mgr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls index mgr is null when reading vector info", K(ret), K(ls_id));
     } else if (adapter->get_is_need_vid()) {
       bool get_data = false;
       void *buf = nullptr;
@@ -524,7 +533,7 @@ int ObPluginVectorIndexUtils::read_vector_info(ObPluginVectorIndexAdaptor *adapt
           obj_ptr = new (buf) ObObj[data_table_rowkey_count + 1];
         }
       }
-      for (int64_t j = 0; OB_SUCC(ret) && j < ada_ctx.get_count() && !adapter->is_need_cancel_task(); j += ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE) {
+      for (int64_t j = 0; OB_SUCC(ret) && j < ada_ctx.get_count() && !adapter->is_need_cancel_task() && !ls_index_mgr->is_ls_destroying(); j += ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE) {
         batch_temp_allocator.reuse();
         int64_t vec_cnt = ada_ctx.get_vec_cnt();
         for (int64_t i = 0; OB_SUCC(ret) && i < vec_cnt; i++) {
@@ -579,9 +588,15 @@ int ObPluginVectorIndexUtils::read_vector_info(ObPluginVectorIndexAdaptor *adapt
         }
 
         if (OB_FAIL(ret) && ret != OB_ITER_END) {
-        } else if (adapter->is_need_cancel_task()) { // if it's the error code from iter_end and the task needs to be canceled at this moment, then override it.
+        } else if (adapter->is_need_cancel_task()
+                   || ls_index_mgr->is_ls_destroying()) {
+          // if it's the error code from iter_end and the task needs to be canceled at this moment, then override it.
           ret = OB_CANCELED;
-          LOG_INFO("async task is cancel", KPC(task_ctx));
+          LOG_INFO("task is canceled",
+                   K(ls_id),
+                   "adapter_cancel", adapter->is_need_cancel_task(),
+                   "mgr_ls_destroying", ls_index_mgr->is_ls_destroying(),
+                   KPC(task_ctx));
         } else {
           ret = OB_SUCCESS;
         }
@@ -599,7 +614,7 @@ int ObPluginVectorIndexUtils::read_vector_info(ObPluginVectorIndexAdaptor *adapt
     } else if (!adapter->get_is_need_vid()) {
       bool get_data = false;
       int32_t data_table_rowkey_count = 1;
-      for (int64_t j = 0; OB_SUCC(ret) && j < ada_ctx.get_count() && !adapter->is_need_cancel_task(); j += ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE) {
+      for (int64_t j = 0; OB_SUCC(ret) && j < ada_ctx.get_count() && !adapter->is_need_cancel_task() && !ls_index_mgr->is_ls_destroying(); j += ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE) {
         batch_temp_allocator.reuse();
         int64_t vec_cnt = ada_ctx.get_vec_cnt();
         for (int64_t i = 0; OB_SUCC(ret) && i < vec_cnt; i++) {
@@ -635,9 +650,15 @@ int ObPluginVectorIndexUtils::read_vector_info(ObPluginVectorIndexAdaptor *adapt
         }
 
         if (OB_FAIL(ret) && ret != OB_ITER_END) {
-        } else if (adapter->is_need_cancel_task()) { // if it's the error code from iter_end and the task needs to be canceled at this moment, then override it.
+        } else if (adapter->is_need_cancel_task()
+                   || ls_index_mgr->is_ls_destroying()) {
+          // if it's the error code from iter_end and the task needs to be canceled at this moment, then override it.
           ret = OB_CANCELED;
-          LOG_INFO("async task is cancel", KPC(task_ctx));
+          LOG_INFO("task is canceled",
+                   K(ls_id),
+                   "adapter_cancel", adapter->is_need_cancel_task(),
+                   "mgr_ls_destroying", ls_index_mgr->is_ls_destroying(),
+                   KPC(task_ctx));
         } else {
           ret = OB_SUCCESS;
         }
@@ -935,17 +956,14 @@ int ObPluginVectorIndexUtils::create_refresh_adaptor(
     new_adapter = new(adpt_buff)ObPluginVectorIndexAdaptor(
         &vector_index_service->get_adaptor_allocator(),
         vec_idx_mgr->get_memory_context(), old_adapter->get_tenant_id());
-    new_adapter->set_create_type(old_adapter->get_create_type());
     if (OB_FAIL(new_adapter->copy_meta_info(*old_adapter))) {
       LOG_WARN("failed to copy meta info", K(ret));
     } else if (OB_FAIL(new_adapter->init(
         vec_idx_mgr->get_memory_context(), vec_idx_mgr->get_all_vsag_use_mem()))) {
       LOG_WARN("failed to init adpt.", K(ret));
-    } else if (OB_FAIL(new_adapter->set_index_identity(old_adapter->get_index_identity()))) {
-      LOG_WARN("failed to set index identity", K(ret));
     } else {
       LOG_INFO("[VECTOR INDEX ADAPTOR] clone adaptor success for refresh",
-          KP(new_adapter), "create_type", new_adapter->get_create_type(), KP(old_adapter), K(lbt()));
+          KP(new_adapter), KP(old_adapter), K(lbt()));
     }
   }
   return ret;
@@ -1010,6 +1028,7 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
   schema::ObIndexType index_type = INDEX_TYPE_VEC_INDEX_SNAPSHOT_DATA_LOCAL;
   ObAccessService *tsc_service = MTL(ObAccessService *);
   ObPluginVectorIndexService *vector_index_service = MTL(ObPluginVectorIndexService *);
+  ObPluginVectorIndexMgr *vec_idx_mgr = nullptr;
   common::ObNewRowIterator *snapshot_idx_iter = nullptr;
   storage::ObTableScanParam snapshot_scan_param;
   schema::ObTableParam snapshot_table_param(allocator);
@@ -1021,6 +1040,22 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
   ObString row_key;
   int64_t index_count = 0;
   void *adpt_buff = nullptr;
+
+  if (OB_ISNULL(vector_index_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret));
+  } else if (OB_FAIL(vector_index_service->get_ls_index_mgr_map().get_refactored(ls_id, vec_idx_mgr))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("vector index ls mgr not exist", KR(ret), K(ls_id));
+    } else {
+      LOG_WARN("fail to get vector index ls mgr", KR(ret));
+    }
+  } else if (OB_ISNULL(vec_idx_mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid vector index ls mgr", KR(ret));
+  }
+
   if (OB_FAIL(read_local_tablet(ls_id,
                                 adapter,
                                 target_scn,
@@ -1048,7 +1083,7 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
           new_adapter->set_snap_data_has_complete();
           adapter = new_adapter;
           LOG_INFO("[VECTOR INDEX ADAPTOR] clone empty adaptor success for refresh",
-              KP(new_adapter), "create_type", new_adapter->get_create_type(), KP(old_adapter), K(lbt()));
+              KP(new_adapter), KP(old_adapter), K(lbt()));
         }
       } else {
         LOG_WARN("failed to get next row", K(ret));
@@ -1060,8 +1095,8 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
       LOG_WARN("fail to get snap index visible row iter", K(ret));
     } else if (!row_key.empty()) {
       ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(snapshot_idx_iter);
-      if ((is_meta_data && (meta_scn > adapter->get_snapshot_scn() || ! adapter->get_snap_has_complete())) ||
-          (!is_meta_data && (adapter->get_snapshot_key_prefix().empty() || !row_key.prefix_match(adapter->get_snapshot_key_prefix()) || ! adapter->get_snap_has_complete()))) {
+      if ((is_meta_data && (meta_scn > adapter->get_snapshot_scn())) ||
+          (!is_meta_data && (adapter->get_snapshot_key_prefix().empty() || !row_key.prefix_match(adapter->get_snapshot_key_prefix())))) {
         ObString target_prefix;
         if (OB_ISNULL(vector_index_service)) {
           ret = OB_ERR_UNEXPECTED;
@@ -1106,6 +1141,7 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
           ObHNSWDeserializeCallback::CbParam param;
           param.iter_ = snapshot_idx_iter;
           param.allocator_ = &tmp_allocator;
+          param.mgr_ = vec_idx_mgr;
           param.task_ctx_ = ctx;
           // ToDo: concurrency with weakread
           // name rule: TabletID_SCN_xxx_data_partn, we need TabletID_SCN
@@ -1120,6 +1156,9 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
             LOG_INFO("deserialize snapshot data success", K(ret), K(row_key), KPC(new_adapter), KPC(adapter));
           }
         }
+      } else {
+        LOG_INFO("no need refresh snapshot memdata", K(ret), K(ls_id), K(meta_scn), K(row_key), KPC(adapter));
+        adapter->set_snap_data_has_complete();
       }
     }
   }
@@ -1245,8 +1284,9 @@ int ObPluginVectorIndexUtils::refresh_adp_from_table(
   if (OB_ISNULL(adapter)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid adapter", K(ret), KPC(adapter));
-  } else if (adapter->get_create_type() != CreateTypeComplete) {
+  } else if (!adapter->is_ready_complete()) {
     // skip not complete adapter.
+    LOG_INFO("adaptor not ready complete, skip", K(ls_id), KPC(adapter));
   } else {
     common::ObNewRowIterator *delta_buf_iter = nullptr;
     ObAccessService *tsc_service = MTL(ObAccessService *);
@@ -1289,7 +1329,7 @@ int ObPluginVectorIndexUtils::refresh_adp_from_table(
               ? ObPluginVectorIndexUtils::get_extra_column_count(inc_table_param, delta_type)
               : 0;
       ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, adapter->get_tenant_id());
-      ObVectorQueryAdaptorResultContext ada_ctx(adapter->get_tenant_id(), extra_info_column_count, &allocator, &tmp_allocator);
+      ObVectorQueryAdaptorResultContext ada_ctx(adapter->get_tenant_id(), ls_id, extra_info_column_count, &allocator, &tmp_allocator);
       ada_ctx.set_scn(target_scn);
       ada_ctx.set_is_refresh_adaptor(true);
       bool ls_leader = true;
@@ -2428,22 +2468,25 @@ ObVectorIndexRecordType ObPluginVectorIndexUtils::index_type_to_record_type(sche
   return record_type;
 }
 
-ObAdapterCreateType ObPluginVectorIndexUtils::index_type_to_create_type(schema::ObIndexType type)
+static int assign_vector_index_prefix(const ObString &index_name,
+                                      const char *suffix,
+                                      ObString &prefix)
 {
-  ObAdapterCreateType create_type = CreateTypeMax;
-  if (schema::is_vec_delta_buffer_type(type) || schema::is_hybrid_vec_index_log_type(type)) {
-    create_type =  CreateTypeInc;
-  } else if (schema::is_vec_index_id_type(type)) {
-    create_type = CreateTypeBitMap;
-  } else if (schema::is_vec_index_snapshot_data_type(type)) {
-    create_type = CreateTypeSnap;
-  } else if (schema::is_hybrid_vec_index_embedded_type(type)) {
-    create_type = CreateTypeEmbedded;
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(suffix)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("suffix is null", K(ret));
+  } else if (!index_name.suffix_match(suffix)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("index name does not match expected suffix", K(ret), K(index_name), K(suffix));
+  } else {
+    const int64_t suffix_len = STRLEN(suffix);
+    prefix.assign_ptr(index_name.ptr(), index_name.length() - suffix_len);
   }
-  return create_type;
+  return ret;
 }
 
-int ObPluginVectorIndexUtils::get_vector_index_prefix_inner(const ObTableSchema &index_schema,
+int ObPluginVectorIndexUtils::get_vector_index_prefix_inner(const ObSimpleTableSchemaV2 &index_schema,
                                                       const ObString index_name,
                                                       ObString &prefix)
 {
@@ -2457,8 +2500,6 @@ int ObPluginVectorIndexUtils::get_vector_index_prefix_inner(const ObTableSchema 
     LOG_WARN("unexpected vector index type, only support get none share table prefix",
       K(ret), K(index_schema));
   } else {
-    const int64_t table_name_len = index_name.length();
-
     const char* delta_buffer_table = ObVecIndexBuilderUtil::DELTA_BUFFER_TABLE_NAME_SUFFIX;
     const char* index_id_table = ObVecIndexBuilderUtil::INDEX_ID_TABLE_NAME_SUFFIX;
     const char* index_snapshot_data_table = ObVecIndexBuilderUtil::SNAPSHOT_DATA_TABLE_NAME_SUFFIX;
@@ -2473,53 +2514,105 @@ int ObPluginVectorIndexUtils::get_vector_index_prefix_inner(const ObTableSchema 
     const char* ivf_pq_code_table = ObVecIndexBuilderUtil::IVF_PQ_CODE_TABLE_NAME_SUFFIX;
     const char* ivf_pq_rowkey_cid_table = ObVecIndexBuilderUtil::IVF_PQ_ROWKEY_CID_TABLE_NAME_SUFFIX;
 
-    int64_t prefix_len = 0;
+    const char *suffix = nullptr;
 
     if (index_schema.is_vec_delta_buffer_type()) {
-      prefix_len = table_name_len - strlen(delta_buffer_table);
+      suffix = delta_buffer_table;
     } else if (index_schema.is_vec_index_id_type()) {
-      prefix_len = table_name_len - strlen(index_id_table);
+      suffix = index_id_table;
     } else if (index_schema.is_vec_index_snapshot_data_type()) {
-      prefix_len = table_name_len - strlen(index_snapshot_data_table);
+      suffix = index_snapshot_data_table;
     } else if (index_schema.is_hybrid_vec_index_log_type()) {
-      prefix_len = table_name_len - strlen(hybrid_log_table);
+      suffix = hybrid_log_table;
     } else if (index_schema.is_hybrid_vec_index_embedded_type()) {
-      prefix_len = table_name_len - strlen(hybrid_embedded_table);
+      suffix = hybrid_embedded_table;
     } else if (index_schema.is_vec_ivf_centroid_index()) {
-      prefix_len = table_name_len - strlen(ivf_centroid_table);
+      suffix = ivf_centroid_table;
     } else if (index_schema.is_vec_ivfflat_rowkey_cid_index() ||
                index_schema.is_vec_ivfsq8_rowkey_cid_index()) {
-      prefix_len = table_name_len - strlen(ivf_rowkey_cid_table);
+      suffix = ivf_rowkey_cid_table;
     } else if (index_schema.is_vec_ivfflat_cid_vector_index() ||
                index_schema.is_vec_ivfsq8_cid_vector_index()) {
-      prefix_len = table_name_len - strlen(ivf_cid_vector_table);
+      suffix = ivf_cid_vector_table;
     } else if (index_schema.is_vec_ivfsq8_meta_index()) {
-      prefix_len = table_name_len - strlen(ivf_sq_meta_table);
+      suffix = ivf_sq_meta_table;
     } else if (index_schema.is_vec_ivfpq_pq_centroid_index()) {
-      prefix_len = table_name_len - strlen(ivf_pq_centroid_table);
+      suffix = ivf_pq_centroid_table;
     } else if (index_schema.is_vec_ivfpq_code_index()) {
-      prefix_len = table_name_len - strlen(ivf_pq_code_table);
+      suffix = ivf_pq_code_table;
     } else if (index_schema.is_vec_ivfpq_rowkey_cid_index()) {
-      prefix_len = table_name_len - strlen(ivf_pq_rowkey_cid_table);
+      suffix = ivf_pq_rowkey_cid_table;
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected vector index type", K(ret), K(index_schema));
     }
     if (OB_SUCC(ret)) {
-      prefix.assign_ptr(index_name.ptr(), prefix_len);
-      LOG_INFO("get_index_prefix", K(prefix), K(index_name), K(index_schema.get_table_id()));
+      if (OB_FAIL(assign_vector_index_prefix(index_name, suffix, prefix))) {
+        LOG_WARN("failed to assign vector index prefix", K(ret), K(index_name), K(suffix), K(index_schema.get_table_id()));
+      } else {
+        LOG_INFO("get_index_prefix", K(prefix), K(index_name), K(index_schema.get_table_id()));
+      }
     }
   }
   return ret;
 }
 
-int ObPluginVectorIndexUtils::get_vector_index_prefix(const ObTableSchema &index_schema,
+int ObPluginVectorIndexUtils::get_vector_index_prefix(const ObSimpleTableSchemaV2 &index_schema,
                                                       ObString &prefix)
 {
   int ret = OB_SUCCESS;
   ObString tmp_table_name = index_schema.get_table_name();
   if (OB_FAIL(get_vector_index_prefix_inner(index_schema, tmp_table_name, prefix))) {
     LOG_WARN("failed to get_vector_index_prefix_inner", K(ret), K(tmp_table_name));
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexUtils::get_vector_index_prefix(const schema::ObTableSchemaParam &index_schema,
+                                                      ObString &prefix)
+{
+  int ret = OB_SUCCESS;
+  prefix.reset();
+  ObString index_name;
+  if (!index_schema.is_vector_index()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected, not vector index table", K(ret), K(index_schema));
+  } else if (schema::is_vec_rowkey_vid_type(index_schema.get_index_type())
+             || schema::is_vec_vid_rowkey_type(index_schema.get_index_type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected vector index type, only support get none share table prefix",
+      K(ret), K(index_schema));
+  } else if (OB_FAIL(index_schema.get_index_name(index_name))) {
+    LOG_WARN("failed to get index name", K(ret), K(index_schema));
+  } else {
+    const char* delta_buffer_table = ObVecIndexBuilderUtil::DELTA_BUFFER_TABLE_NAME_SUFFIX;
+    const char* index_id_table = ObVecIndexBuilderUtil::INDEX_ID_TABLE_NAME_SUFFIX;
+    const char* index_snapshot_data_table = ObVecIndexBuilderUtil::SNAPSHOT_DATA_TABLE_NAME_SUFFIX;
+    const char* hybrid_log_table = ObVecIndexBuilderUtil::HYBRID_LOG_TABLE_NAME_SUFFIX;
+    const char* hybrid_embedded_table = ObVecIndexBuilderUtil::HYBRID_EMBEDDED_VEC_TABLE_NAME_SUFFIX;
+    const char *suffix = nullptr;
+    const schema::ObIndexType index_type = index_schema.get_index_type();
+    if (schema::is_vec_delta_buffer_type(index_type)) {
+      suffix = delta_buffer_table;
+    } else if (schema::is_vec_index_id_type(index_type)) {
+      suffix = index_id_table;
+    } else if (schema::is_vec_index_snapshot_data_type(index_type)) {
+      suffix = index_snapshot_data_table;
+    } else if (schema::is_hybrid_vec_index_log_type(index_type)) {
+      suffix = hybrid_log_table;
+    } else if (schema::is_hybrid_vec_index_embedded_type(index_type)) {
+      suffix = hybrid_embedded_table;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected vector index type", K(ret), K(index_schema));
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(assign_vector_index_prefix(index_name, suffix, prefix))) {
+        LOG_WARN("failed to assign vector index prefix", K(ret), K(index_name), K(suffix), K(index_schema.get_table_id()));
+      } else {
+        LOG_INFO("get_index_prefix", K(prefix), K(index_name), K(index_schema.get_table_id()));
+      }
+    }
   }
   return ret;
 }
@@ -2691,6 +2784,27 @@ int ObPluginVectorIndexUtils::get_prefix(const ObString &src, const ObString &it
     } else {
       const int64_t len = str - src.ptr();
       dst.assign_ptr(src.ptr(), static_cast<int32_t>(len));
+    }
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexUtils::try_get_ls_index_mgr(const ObLSID &ls_id, ObPluginVectorIndexMgr *&mgr)
+{
+  int ret = OB_SUCCESS;
+  mgr = nullptr;
+  ObPluginVectorIndexService *vector_index_service = MTL(ObPluginVectorIndexService *);
+  if (!ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ls id", K(ret), K(ls_id));
+  } else if (OB_ISNULL(vector_index_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("vector index service is null", K(ret));
+  } else if (OB_FAIL(vector_index_service->get_ls_index_mgr_map().get_refactored(ls_id, mgr))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to get vector index ls mgr", K(ret), K(ls_id));
     }
   }
   return ret;
@@ -2897,6 +3011,138 @@ int ObPluginVectorIndexUtils::get_tenant_vector_index_ids(const uint64_t tenant_
   return ret;
 }
 
+int ObPluginVectorIndexUtils::check_tenant_has_vector_index(
+    const uint64_t tenant_id, bool &has_vector_index)
+{
+  int ret = OB_SUCCESS;
+  bool has_ivf_index = false;
+  ObArray<uint64_t> table_id_array;
+  has_vector_index = false;
+  if (OB_FAIL(get_tenant_vector_index_ids(tenant_id, has_ivf_index, table_id_array))) {
+    LOG_WARN("failed to get tenant vector index ids", KR(ret), K(tenant_id));
+  } else {
+    has_vector_index = (table_id_array.count() > 0);
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexUtils::get_ls_vector_mem_from_virtual_table_(
+    const uint64_t tenant_id,
+    const ObLSID &ls_id,
+    const common::ObAddr &src_addr,
+    int64_t &ls_vector_mem)
+{
+  int ret = OB_SUCCESS;
+  ls_vector_mem = 0;
+  ObSqlString sql;
+  char ip_buf[OB_IP_STR_BUFF] = {};
+  int32_t svr_port = src_addr.get_port();
+
+  if (OB_UNLIKELY(!src_addr.ip_to_string(ip_buf, sizeof(ip_buf)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to convert src_addr ip to string", K(ret), K(src_addr));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("sql proxy is null", K(ret));
+  } else if (OB_FAIL(sql.assign_fmt(
+      "SELECT CAST(SUM(CAST(JSON_VALUE(statistics, '$.incr_mem_hold') AS SIGNED)"
+      " + CAST(JSON_VALUE(statistics, '$.snap_mem_hold') AS SIGNED)) AS SIGNED) AS ls_vector_mem"
+      " FROM %s"
+      " WHERE tenant_id = %lu AND ls_id = %ld AND svr_ip = '%s' AND svr_port = %d",
+      OB_ALL_VIRTUAL_VECTOR_INDEX_INFO_TNAME,
+      tenant_id, ls_id.id(), ip_buf, svr_port))) {
+    LOG_WARN("failed to construct sql to get ls vector mem", K(ret), K(tenant_id), K(ls_id));
+  } else {
+    HEAP_VAR(ObMySQLProxy::MySQLResult, res) {
+      common::sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(GCTX.sql_proxy_->read(res, OB_SYS_TENANT_ID, sql.ptr()))) {
+        LOG_WARN("failed to read ls vector mem from virtual table", K(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get sql result", K(ret), K(sql));
+      } else if (OB_FAIL(result->next())) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          ls_vector_mem = 0;
+        } else {
+          LOG_WARN("failed to get next row", K(ret), K(sql));
+        }
+      } else {
+        EXTRACT_INT_FIELD_MYSQL_SKIP_RET(*result, "ls_vector_mem", ls_vector_mem, int64_t);
+        if (OB_FAIL(ret)) {
+          ret = OB_SUCCESS;
+          ls_vector_mem = 0;
+          LOG_WARN("ls_vector_mem column is null, treat as 0", K(sql));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexUtils::check_vector_memory_for_migrate(
+    const uint64_t tenant_id,
+    const ObLSID &ls_id,
+    const common::ObAddr &src_addr)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  int64_t ls_vector_mem = 0;
+  int64_t vector_memory_limit = 0;
+  int64_t tenant_remain_mem = 0;
+  int64_t all_vsag_use_mem = 0;
+  int64_t tx_share_limit = 0;
+  int64_t current_tx_share_hold = 0;
+  ObPluginVectorIndexService *vec_idx_svc = MTL(ObPluginVectorIndexService *);
+
+  if (OB_TMP_FAIL(get_ls_vector_mem_from_virtual_table_(
+          tenant_id, ls_id, src_addr, ls_vector_mem))) {
+    // non-fatal: virtual table may be unavailable during restore, skip check
+    LOG_WARN("failed to get ls vector mem, skip vector memory check",
+        KR(tmp_ret), K(ls_id), K(src_addr));
+  } else if (ls_vector_mem <= 0) {
+    // no vector memory on source LS, nothing to check
+    LOG_INFO("no vector memory on source LS, nothing to check",
+        K(tenant_id), K(ls_id), K(src_addr));
+  } else if (OB_FAIL(ObPluginVectorIndexHelper::get_vector_memory_limit_size(
+      tenant_id, vector_memory_limit))) {
+    LOG_WARN("failed to get vector memory limit size", K(ret), K(tenant_id));
+  } else {
+    tenant_remain_mem = lib::get_tenant_memory_remain(tenant_id);
+    if (OB_NOT_NULL(vec_idx_svc) && OB_NOT_NULL(vec_idx_svc->get_all_vsag_use_mem())) {
+      all_vsag_use_mem = static_cast<int64_t>(
+          ATOMIC_LOAD(vec_idx_svc->get_all_vsag_use_mem()));
+    }
+    ObSharedMemAllocMgr *shared_mem_mgr = MTL(ObSharedMemAllocMgr *);
+    if (OB_NOT_NULL(shared_mem_mgr)) {
+      tx_share_limit = shared_mem_mgr->share_resource_throttle_tool()
+          .get_resource_limit<FakeAllocatorForTxShare>();
+      current_tx_share_hold = shared_mem_mgr->memstore_allocator().hold()
+          + shared_mem_mgr->tx_data_allocator().hold()
+          + shared_mem_mgr->mds_allocator().hold()
+          + shared_mem_mgr->vector_allocator().hold();
+    }
+    if (ls_vector_mem + all_vsag_use_mem > vector_memory_limit
+        || ls_vector_mem > tenant_remain_mem
+        || (tx_share_limit > 0
+            && current_tx_share_hold + ls_vector_mem > tx_share_limit)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("vector memory check failed before migrate ls, not enough vector memory",
+          K(ret), K(ls_vector_mem), K(all_vsag_use_mem),
+          K(vector_memory_limit), K(tenant_remain_mem),
+          K(tx_share_limit), K(current_tx_share_hold),
+          K(tenant_id), K(ls_id), K(src_addr));
+    } else {
+      LOG_INFO("vector memory check passed before migrate ls",
+          K(ls_vector_mem), K(all_vsag_use_mem),
+          K(vector_memory_limit), K(tenant_remain_mem),
+          K(tx_share_limit), K(current_tx_share_hold),
+          K(tenant_id), K(ls_id), K(src_addr));
+    }
+  }
+  return ret;
+}
+
 int ObPluginVectorIndexUtils::get_current_read_scn(share::SCN &current_scn)
 {
   int ret = OB_SUCCESS;
@@ -2942,6 +3188,254 @@ int ObPluginVectorIndexUtils::get_lob_tablet_id(const ObLSID &ls_id, const ObTab
      lob_piece_tablet_id = ddl_data.lob_piece_tablet_id_;
    }
  }
+ return ret;
+}
+int ObPluginVectorIndexUtils::get_migration_adaptor_list(
+    const ObLSID &ls_id,
+    common::ObIArray<storage::ObMigrationVectorIndexAdaptorMeta> &adaptor_metas)
+{
+  int ret = OB_SUCCESS;
+  ObPluginVectorIndexService *vi_service = MTL(ObPluginVectorIndexService *);
+  ObPluginVectorIndexMgr *vi_mgr = nullptr;
+  if (OB_ISNULL(vi_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("vector index service not available", K(ret), K(ls_id));
+  } else if (OB_FAIL(vi_service->acquire_vector_index_mgr(ls_id, vi_mgr))) {
+    LOG_WARN("failed to acquire vector index manager", K(ret), K(ls_id));
+  } else if (OB_ISNULL(vi_mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("vector index manager is null", K(ret), K(ls_id));
+  } else if (OB_FAIL(vi_mgr->get_migration_adaptor_list(adaptor_metas))) {
+    LOG_WARN("failed to get migration adaptor list", K(ret), K(ls_id));
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexUtils::batch_create_adaptor_shells(
+    const ObLSID &ls_id,
+    const common::ObIArray<storage::ObMigrationVectorIndexAdaptorMeta> &adaptor_metas)
+{
+  int ret = OB_SUCCESS;
+  ObPluginVectorIndexService *vi_service = MTL(ObPluginVectorIndexService *);
+  ObPluginVectorIndexMgr *vi_mgr = nullptr;
+  if (OB_ISNULL(vi_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("vector index service not available", K(ret), K(ls_id));
+  } else if (OB_FAIL(vi_service->acquire_vector_index_mgr(ls_id, vi_mgr))) {
+    LOG_WARN("failed to acquire vector index manager", K(ret), K(ls_id));
+  } else if (OB_ISNULL(vi_mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("vector index manager is null", K(ret), K(ls_id));
+  } else if (OB_FAIL(vi_mgr->batch_create_adaptor_shells(
+          vi_service->get_adaptor_allocator(), adaptor_metas))) {
+    LOG_WARN("failed to batch create adaptor shells", K(ret), K(ls_id));
+  }
+  return ret;
+}
+
+static int erase_tenant_adaptor_shell_if_same_as_ls_shell_(
+    const common::ObTabletID &inc_tablet_id,
+    ObPluginVectorIndexAdapterGuard &local_guard,
+    ObPluginVectorIndexAdapterGuard &tenant_guard,
+    ObPluginVectorIndexService *vi_service)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(vi_service)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("[MIG VEC] erase_tenant_adaptor_shell_if_same_as_ls_shell_: vi_service is null",
+        K(ret), K(inc_tablet_id));
+  // Only erase tenant_map if it still points to our migration shell
+  // (same pointer as ls_map). If they differ, the scheduler has already
+  // replaced it with a valid adaptor, so tenant_map must stay untouched.
+  } else {
+    ObPluginVectorIndexAdaptor *local_adaptor = local_guard.get_adatper();
+    ObPluginVectorIndexAdaptor *tenant_adaptor = tenant_guard.get_adatper();
+    const bool same_adaptor = OB_NOT_NULL(local_adaptor)
+                              && OB_NOT_NULL(tenant_adaptor)
+                              && local_adaptor == tenant_adaptor;
+    if (same_adaptor) {
+      if (OB_FAIL(vi_service->erase_tenant_vec_adaptor(inc_tablet_id))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS; // concurrent erase is fine
+        } else {
+          LOG_WARN("[MIG VEC] erase_tenant_adaptor_shell_if_same_as_ls_shell_: failed to erase from tenant_map",
+              K(ret), K(inc_tablet_id));
+        }
+      }
+    } else {
+      LOG_INFO("[MIG VEC] ls_map and tenant_map adaptor shell differ",
+          K(inc_tablet_id), KP(local_adaptor), KP(tenant_adaptor),
+          "local_ls_ref", OB_ISNULL(local_adaptor) ? -1 : local_adaptor->get_ls_ref(),
+          "tenant_ls_ref", OB_ISNULL(tenant_adaptor) ? -1 : tenant_adaptor->get_ls_ref());
+    }
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexUtils::set_adaptor_mig_state(
+    const ObLSID &ls_id,
+    const ObTabletID &inc_tablet_id, ObAdaptorMigState state)
+{
+  int ret = OB_SUCCESS;
+  ObPluginVectorIndexService *vi_service = MTL(ObPluginVectorIndexService *);
+  ObPluginVectorIndexMgr *vi_mgr = nullptr;
+  ObPluginVectorIndexAdapterGuard guard;
+  if (OB_ISNULL(vi_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("[MIG VEC] vi_service not available", K(ret), K(ls_id), K(inc_tablet_id));
+  } else if (OB_FAIL(vi_service->acquire_vector_index_mgr(ls_id, vi_mgr))) {
+    LOG_WARN("[MIG VEC] failed to acquire vi_mgr", K(ret), K(ls_id), K(inc_tablet_id));
+  } else if (OB_FAIL(vi_mgr->get_adapter_inst_guard(inc_tablet_id, guard))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      LOG_INFO("[MIG VEC] adaptor not exist, skip set mig state", K(ret), K(ls_id), K(inc_tablet_id), K(state));
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("[MIG VEC] failed to get ls adaptor", K(ret), K(ls_id), K(inc_tablet_id), K(state));
+    }
+  } else if (OB_NOT_NULL(guard.get_adatper())) {
+    guard.get_adatper()->set_mig_state(state);
+    LOG_DEBUG("[MIG VEC] set adaptor mig_state", K(ls_id), K(inc_tablet_id), K(state),
+        KPC(guard.get_adatper()));
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexUtils::cleanup_adaptor_shells(
+    const ObLSID &ls_id,
+    const common::ObIArray<storage::ObMigrationVectorIndexAdaptorMeta> &adaptor_metas)
+{
+  int ret = OB_SUCCESS;
+  ObPluginVectorIndexService *vi_service = MTL(ObPluginVectorIndexService *);
+  ObPluginVectorIndexMgr *vi_mgr = nullptr;
+  if (OB_ISNULL(vi_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("[MIG VEC] cleanup_adaptor_shells: vi_service not available", K(ret), K(ls_id));
+  } else if (OB_FAIL(vi_service->acquire_vector_index_mgr(ls_id, vi_mgr))) {
+    LOG_WARN("[MIG VEC] cleanup_adaptor_shells: failed to acquire vi_mgr",
+        K(ret), K(ls_id));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < adaptor_metas.count(); ++i) {
+      const ObTabletID &inc_tablet_id = adaptor_metas.at(i).inc_tablet_id_;
+      ObPluginVectorIndexAdapterGuard local_guard;
+      ObPluginVectorIndexAdapterGuard tenant_guard;
+      // Fetch both pointers before any mutation so we can compare them later.
+      if (OB_FAIL(vi_service->get_adapter_inst_guard(ls_id, inc_tablet_id, local_guard))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("[MIG VEC] cleanup_adaptor_shells: failed to get local adaptor",
+              K(ret), K(ls_id), K(inc_tablet_id));
+        }
+      } else if (OB_FAIL(vi_service->get_tenant_adapter_inst_guard(inc_tablet_id, tenant_guard))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("[MIG VEC] cleanup_adaptor_shells: failed to get tenant adaptor",
+              K(ret), K(inc_tablet_id));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        bool detached = false;
+        // always detach from ls_map, no matter whether the tenant_map is the same as the ls_map
+        if (OB_FAIL(vi_mgr->detach_adapter(inc_tablet_id, detached))) {
+          LOG_WARN("[MIG VEC] cleanup_adaptor_shells: failed to detach from ls_map",
+              K(ret), K(ls_id), K(inc_tablet_id));
+        // Only erase tenant_map if it still points to the same shell we saw in
+        // ls_map. If the scheduler has already replaced tenant_map with a valid
+        // adaptor, leave it untouched.
+        } else if (OB_FAIL(erase_tenant_adaptor_shell_if_same_as_ls_shell_(
+                       inc_tablet_id, local_guard, tenant_guard, vi_service))) {
+          LOG_WARN("[MIG VEC] cleanup_adaptor_shells: failed to erase from tenant_map",
+              K(ret), K(ls_id), K(inc_tablet_id));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexUtils::cleanup_tenant_adaptor_shell_for_retry(
+    const ObLSID &ls_id,
+    const common::ObTabletID &inc_tablet_id)
+{
+  int ret = OB_SUCCESS;
+  ObPluginVectorIndexService *vi_service = MTL(ObPluginVectorIndexService *);
+  if (OB_ISNULL(vi_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("[MIG VEC] cleanup_tenant_adaptor_shell_for_retry: vi_service not available",
+        K(ret), K(ls_id), K(inc_tablet_id));
+  } else {
+    ObPluginVectorIndexAdapterGuard local_guard;
+    ObPluginVectorIndexAdapterGuard tenant_guard;
+    // Inner retry must only clean tenant_map for the current adaptor, but still
+    // needs the same pointer check to avoid erasing a replacement installed by
+    // the scheduler.
+    if (OB_FAIL(vi_service->get_adapter_inst_guard(ls_id, inc_tablet_id, local_guard))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("[MIG VEC] cleanup_tenant_adaptor_shell_for_retry: failed to get local adaptor",
+            K(ret), K(ls_id), K(inc_tablet_id));
+      }
+    } else if (OB_FAIL(vi_service->get_tenant_adapter_inst_guard(inc_tablet_id, tenant_guard))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("[MIG VEC] cleanup_tenant_adaptor_shell_for_retry: failed to get tenant adaptor",
+            K(ret), K(inc_tablet_id));
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(erase_tenant_adaptor_shell_if_same_as_ls_shell_(
+            inc_tablet_id, local_guard, tenant_guard, vi_service))) {
+      LOG_WARN("[MIG VEC] cleanup_tenant_adaptor_shell_for_retry: failed to erase from tenant_map",
+          K(ret), K(ls_id), K(inc_tablet_id));
+    }
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexUtils::try_reuse_adaptor_from_tenant_map(
+    const ObLSID &ls_id,
+    const common::ObTabletID &inc_tablet_id, bool &reused)
+{
+  int ret = OB_SUCCESS;
+  reused = false;
+  ObPluginVectorIndexService *vi_service = MTL(ObPluginVectorIndexService *);
+  ObPluginVectorIndexMgr *vi_mgr = nullptr;
+  if (OB_ISNULL(vi_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("vector index service not available", K(ret), K(ls_id));
+  } else if (OB_FAIL(vi_service->acquire_vector_index_mgr(ls_id, vi_mgr))) {
+    LOG_WARN("failed to acquire vector index manager", K(ret), K(ls_id), K(inc_tablet_id));
+  } else if (OB_ISNULL(vi_mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("vector index manager is null", K(ret), K(ls_id), K(inc_tablet_id));
+  } else {
+    if (OB_FAIL(vi_mgr->try_reuse_adaptor_from_tenant_map(inc_tablet_id, reused))) {
+      LOG_WARN("failed to reuse adaptor from tenant map", K(ret), K(inc_tablet_id));
+    }
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexUtils::enqueue_mem_sync_task(
+    const ObLSID &ls_id,
+    common::ObTabletID inc_tablet_id, const int64_t inc_table_id)
+{
+  int ret = OB_SUCCESS;
+  ObPluginVectorIndexService *vi_service = MTL(ObPluginVectorIndexService *);
+  ObPluginVectorIndexMgr *vi_mgr = nullptr;
+  if (OB_ISNULL(vi_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("vector index service not available", K(ret), K(ls_id));
+  } else if (OB_FAIL(vi_service->acquire_vector_index_mgr(ls_id, vi_mgr))) {
+    LOG_WARN("failed to acquire vector index manager", K(ret), K(ls_id));
+  } else if (OB_ISNULL(vi_mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("vector index manager is null", K(ret), K(ls_id));
+  } else if (OB_FAIL(vi_mgr->enqueue_mem_sync_task(inc_tablet_id, inc_table_id))) {
+    LOG_WARN("failed to enqueue mem sync task", K(ret), K(ls_id), K(inc_tablet_id));
+  }
   return ret;
 }
 

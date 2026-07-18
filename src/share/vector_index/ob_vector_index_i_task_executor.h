@@ -51,18 +51,38 @@ public:
       const common::hash::ObHashSet<uint64_t> &conflict_table_id_set,
       const common::hash::ObHashSet<uint64_t> &conflict_index_task_set,
       bool &is_conflict);
+  static int check_task_result(ObVecIndexAsyncTaskCtx *task_ctx);
 
 protected:
+  struct ObVecTaskResultCheckAction
+  {
+    ObVecTaskResultCheckAction()
+      : task_result_checked_(false),
+        need_cancel_task_(false),
+        need_sync_running_to_prepare_(false)
+    {}
+    bool task_result_checked_;
+    bool need_cancel_task_;
+    bool need_sync_running_to_prepare_;
+  };
+
   static const int64_t INVALID_TG_ID = -1;
   static const int64_t MAX_ASYNC_TASK_PROCESSING_COUNT = 128; // the thread pool max paralell processing cnt is 8
 
   int get_index_ls_mgr(ObPluginVectorIndexMgr *&index_ls_mgr);
   virtual bool check_operation_allow() = 0;
+  static int do_check_normal_running_task_result(
+      ObVecIndexAsyncTaskCtx *task_ctx,
+      ObVecTaskResultCheckAction &action);
   int insert_new_task(ObVecIndexTaskCtxArray &task_ctx_array);
   int start_task();
   int clear_task_ctx(ObVecIndexAsyncTaskOption &task_opt, ObVecIndexAsyncTaskCtx *task_ctx);
   int clear_task_ctxs(ObVecIndexAsyncTaskOption &task_opt, const ObVecIndexTaskCtxArray &task_ctx_array);
-  int check_task_result(ObVecIndexAsyncTaskCtx *task_ctx);
+
+private:
+  static int do_check_task_result(
+      ObVecIndexAsyncTaskCtx *task_ctx,
+      ObVecTaskResultCheckAction &action);
 
 public:
   TO_STRING_KV(K_(is_inited), K_(tenant_id), K_(ls_handle), K_(async_task_ref_cnt));

@@ -23,6 +23,9 @@ public:
   int load_task(uint64_t &task_trace_base_num) override;
   int check_and_set_thread_pool() override;
   int check_schema_version_changed(bool &schema_changed);
+  static int do_check_task_result(
+      ObVecIndexAsyncTaskCtx *task_ctx,
+      ObVecTaskResultCheckAction &action);
 
 private:
   static const int64_t DEFAULT_TABLE_ID_ARRAY_SIZE = 128;

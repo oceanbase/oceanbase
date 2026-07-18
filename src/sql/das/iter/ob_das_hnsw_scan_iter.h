@@ -354,6 +354,7 @@ private:
   int inner_process_adaptor_state(bool is_vectorized);
   int process_adaptor_state_brute_force(ObIAllocator &allocator, bool is_vectorized);
   int process_adaptor_state_hnsw(ObIAllocator &allocator, bool is_vectorized);
+  int build_vec_index_acquire_ctx(share::ObVectorIndexAcquireCtx &index_ctx);
   int process_adaptor_state_pre_filter(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor, bool is_vectorized);
   int process_adaptor_state_pre_filter_with_idx_filter(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor, int64_t *&vids,
                         int& brute_cnt, bool is_vectorized);

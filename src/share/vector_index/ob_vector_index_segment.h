@@ -202,7 +202,7 @@ public:
   int64_t scn() const { return header_.scn_; }
 
   int assign(const ObVectorIndexMeta& other);
-  void release(ObIAllocator *allocator, const uint64_t tenant_id);
+  void release();
 
   int serialize(ObIAllocator &allocator, ObString &serde_data);
 
@@ -217,13 +217,19 @@ public:
   const ObVectorIndexSegmentMeta& base_seg_meta(int64_t index) const { return bases_.at(index); }
   ObVectorIndexSegmentMeta& incr_seg_meta(int64_t index) { return incrs_.at(index); }
   const ObVectorIndexSegmentMeta& incr_seg_meta(int64_t index) const { return incrs_.at(index); }
+  int add_base_seg_meta(const ObVectorIndexSegmentMeta &seg_meta);
+  int add_incr_seg_meta(const ObVectorIndexSegmentMeta &seg_meta);
+  void set_persistent() { is_persistent_ = true; }
+  const ObVectorIndexSegmentMeta &flat_seg_meta_at(int64_t idx) const
+  {
+    const int64_t base_cnt = bases_.count();
+    return idx < base_cnt ? bases_.at(idx) : incrs_.at(idx - base_cnt);
+  }
 
   TO_STRING_KV(K_(header), K_(is_persistent), K_(reserved), K_(bases), K_(incrs));
 
 private:
   int deserialize_seg_metas(const char *buf, const int64_t data_len, int64_t &pos);
-  int add_base_seg_meta(const ObVectorIndexSegmentMeta &seg_meta);
-  int add_incr_seg_meta(const ObVectorIndexSegmentMeta &seg_meta);
   int copy_base_seg_metas(const ObVectorIndexMeta &other) { return bases_.assign(other.bases_); }
 
 public:
@@ -598,8 +604,9 @@ public:
   ObVecIdxActiveData()
     : ObVectorIndexDataBase(),
       segment_handle_(),
-      last_dml_scn_(),
+      last_delta_refresh_scn_(),
       last_read_scn_(),
+      last_dml_scn_(),
       can_skip_(NOT_INITED)
   {
     ATOMIC_INC(&instacnce_cnt_);
@@ -609,13 +616,14 @@ public:
   void free_memdata_resource(ObIAllocator *allocator, const uint64_t tenant_id);
 
   TO_STRING_KV(KP(this), K_(type), K_(is_init), K_(has_complete), K_(scn), K_(ref_cnt), K_(segment_handle),
-      K_(last_dml_scn), K_(last_read_scn), K_(can_skip));
+      K_(last_delta_refresh_scn), K_(last_read_scn), K_(last_dml_scn), K_(can_skip));
 
 public:
   TCRWLock mem_data_rwlock_{ObLatchIds::VECTOR_MEM_DATA};
   ObVectorIndexSegmentHandle segment_handle_;
-  SCN last_dml_scn_;
+  SCN last_delta_refresh_scn_; // updated when delta buffer rows are deleted during refresh
   SCN last_read_scn_;
+  SCN last_dml_scn_; // updated when primary table DML writes to delta buffer
   ObCanSkip3rdAnd4thVecIndex can_skip_;
 
 };
@@ -774,6 +782,9 @@ public:
   int64_t total_cnt_;
   int64_t add_cnt_;
   int64_t skip_cnt_;
+
+private:
+  void free_vec_buf_data_nolock(ObIAllocator &allocator);
 };
 
 class ObVectorIndexSegmentDeserializer
@@ -835,7 +846,7 @@ public:
       ObIAllocator &allocator, const ObLSID& ls_id, const share::SCN &target_scn,
       ObVecIndexAsyncTaskCtx *task_ctx = nullptr);
   int load_persist_segments(
-      ObPluginVectorIndexAdaptor *adaptor, ObIAllocator &allocator,
+      ObPluginVectorIndexAdaptor *adaptor, ObIAllocator &allocator, const ObLSID &ls_id,
       storage::ObTableScanParam &scan_param, storage::ObTableScanIterator *table_scan_iter,
       ObVecIndexAsyncTaskCtx *task_ctx = nullptr);
   int load_segment(
@@ -848,7 +859,8 @@ private:
       const share::SCN &target_scn, ObVectorIndexSegmentMeta &seg_meta,
       ObVecIndexAsyncTaskCtx *task_ctx = nullptr);
   int load_segment(ObIAllocator &allocator, ObPluginVectorIndexAdaptor *adaptor,
-      storage::ObTableScanIterator *snap_data_iter, const uint64_t tenant_id, ObVectorIndexSegmentMeta &seg_meta,
+      storage::ObTableScanIterator *snap_data_iter, const uint64_t tenant_id,
+      const ObLSID &ls_id, ObVectorIndexSegmentMeta &seg_meta,
       ObVecIndexAsyncTaskCtx *task_ctx = nullptr);
 
 public:
@@ -933,9 +945,7 @@ struct ObVectorIndexSegQueryHandler
 
   int knn_search(ObVsagQueryResult &result, int segment_cnt = 0);
 
-  TO_STRING_KV(KP(this), K_(tenant_id), KPC_(segment_querier), KP_(ctx), KP_(query_cond),
-      K_(valid_ratio), K_(selectivity), K_(extra_info_actual_size), K_(is_sparse_vector),
-      KP_(query_vector), K_(dim), KP_(sparse_lens), KP_(sparse_dims), KP_(sparse_vals));
+  DECLARE_TO_STRING;
 
 
   uint64_t tenant_id_;

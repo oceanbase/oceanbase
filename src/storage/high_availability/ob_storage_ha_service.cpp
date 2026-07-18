@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_storage_ha_service.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
+#include "ob_migration_vector_index_processor.h"
 
 namespace oceanbase
 {
@@ -17,7 +18,8 @@ ObStorageHAService::ObStorageHAService()
   : is_inited_(false),
     thread_cond_(),
     wakeup_cnt_(0),
-    ls_service_(nullptr)
+    ls_service_(nullptr),
+    window_mgr_()
 {
 }
 
@@ -52,6 +54,8 @@ int ObStorageHAService::init(
     LOG_WARN("init high avaiable handler mgr get invalid argument", K(ret), KP(ls_service));
   } else if (OB_FAIL(thread_cond_.init(ObWaitEventIds::HA_SERVICE_COND_WAIT))) {
     LOG_WARN("failed to init ha service thread cond", K(ret));
+  } else if (OB_FAIL(window_mgr_.init_from_tenant_config(MTL_ID()))) {
+    LOG_WARN("failed to init migration tenant window mgr", K(ret));
   } else {
     lib::ThreadPool::set_run_wrapper(MTL_CTX());
     ls_service_ = ls_service;
@@ -71,6 +75,7 @@ void ObStorageHAService::destroy()
 {
   if (is_inited_) {
     COMMON_LOG(INFO, "ObStorageHAService starts to destroy");
+    window_mgr_.destroy();
     thread_cond_.destroy();
     wakeup_cnt_ = 0;
     is_inited_ = false;
@@ -130,6 +135,14 @@ void ObStorageHAService::run1()
       LOG_WARN("failed to do scheduler ls ha handler", K(ret));
     }
 
+    // cleanup timeout vector index processors
+    if (OB_SUCC(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(cleanup_vector_index_processors_())) {
+        LOG_WARN_RET(tmp_ret, "failed to cleanup vector index processors");
+      }
+    }
+
 #ifdef ERRSIM
     if (FAILEDx(errsim_set_ls_migration_status_hold_())) {
       LOG_WARN("failed to errsim set ls migration status hold", K(ret));
@@ -144,6 +157,53 @@ void ObStorageHAService::run1()
       thread_cond_.wait(SCHEDULER_WAIT_TIME_MS);
     }
   }
+}
+
+int ObStorageHAService::cleanup_vector_index_processors_()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("storage ha service do not init", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < ls_id_array_.count(); ++i) {
+      const share::ObLSID &ls_id = ls_id_array_.at(i);
+      ObLSHandle ls_handle;
+      ObLS *ls = nullptr;
+      if (OB_FAIL(ls_service_->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
+        if (OB_LS_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+          continue;
+        }
+        LOG_WARN("failed to get ls", K(ret), K(ls_id));
+      } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(ls_id));
+      } else {
+        ObVectorIndexMigrationProcessorMgr *mgr = ls->get_migration_processor_mgr();
+        if (OB_NOT_NULL(mgr)) {
+          int64_t migration_timeout_us = ObVectorIndexMigrationProcessorMgr::PROCESSOR_AND_ADAPTOR_TIMEOUT_US;
+#ifdef ERRSIM
+          const int64_t errsim_migration_timeout_us =
+              GCONF.errsim_vec_index_migration_processor_and_adaptor_timeout;
+          if (0 != errsim_migration_timeout_us) {
+            migration_timeout_us = errsim_migration_timeout_us;
+          }
+#endif
+          if (mgr->get_processor_count() > 0 && OB_SUCCESS != (tmp_ret = mgr->cleanup_timeout_processors(
+                                    migration_timeout_us))) {
+            LOG_WARN_RET(tmp_ret, "failed to cleanup timeout processors", K(ls_id));
+          }
+          if (mgr->get_adaptor_handle_count() > 0 && OB_SUCCESS != (tmp_ret = mgr->cleanup_timeout_adaptor_handles(
+                                    migration_timeout_us))) {
+            LOG_WARN_RET(tmp_ret, "failed to cleanup timeout adaptor handles", K(ls_id));
+          }
+        }
+      }
+    }
+  }
+  return ret;
 }
 
 int ObStorageHAService::get_ls_id_array_()
@@ -280,6 +340,18 @@ int ObStorageHAService::errsim_set_ls_migration_status_hold_()
   return ret;
 }
 #endif
+
+int ObStorageHAService::reload_config()
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("storage ha service not inited", KR(ret));
+  } else if (OB_FAIL(window_mgr_.reload_config_from_tenant(MTL_ID()))) {
+    LOG_WARN("failed to reload migration tenant window mgr config", KR(ret));
+  }
+  return ret;
+}
 
 }
 }

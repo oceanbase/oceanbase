@@ -7,6 +7,7 @@
 #define OCEABASE_STORAGE_RPC
 
 #include "lib/net/ob_addr.h"
+#include "lib/string/ob_fixed_length_string.h"
 #include "lib/utility/ob_unify_serialize.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
@@ -27,6 +28,8 @@
 #include "storage/blocksstable/ob_logic_macro_id.h"
 #include "share/rpc/ob_async_rpc_proxy.h"
 #include "storage/meta_mem/ob_tablet_pointer.h"
+#include "share/vector_index/ob_vector_index_util.h"
+#include "share/vector_index/ob_vector_index_segment.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/high_availability/ob_migration_warmup_struct.h"
 #include "close_modules/shared_storage/storage/shared_storage/micro_cache/ob_ss_micro_cache_common_meta.h"
@@ -42,7 +45,104 @@ namespace storage
 class ObLogStreamService;
 class ObICopySSTableMacroRangeObProducer;
 class ObCopyPhysicalMacroBlockIdObProducer;
-}
+
+// Base header for all vector-index migration chunks.
+struct ObVecIdxMigChunkHeader
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  static constexpr int64_t MAX_BYTES = 128;
+
+  enum class ChunkType : int64_t
+  {
+    META = 0,
+    VSAG = 1,
+    MAX_TYPE,
+  };
+
+  ObVecIdxMigChunkHeader();
+  virtual ~ObVecIdxMigChunkHeader() = default;
+  virtual void reset();
+  virtual bool is_valid() const;
+  bool match(int64_t processor_id, uint64_t tenant_id, const share::ObLSID &ls_id) const;
+
+  virtual int read(const char *buf, int64_t buf_len,
+                   int64_t expected_processor_id,
+                   uint64_t expected_tenant_id,
+                   const share::ObLSID &expected_ls_id,
+                   int64_t &header_size);
+
+  TO_STRING_KV(K_(chunk_type), K_(processor_id), K_(tenant_id), K_(ls_id));
+
+  ChunkType chunk_type_;
+  int64_t processor_id_;
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObVecIdxMigChunkHeader);
+};
+
+struct ObVecIdxMigMetaChunkHeader final : public ObVecIdxMigChunkHeader
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObVecIdxMigMetaChunkHeader();
+  virtual void reset() override;
+  virtual bool is_valid() const override;
+
+  INHERIT_TO_STRING_KV("ObVecIdxMigChunkHeader", ObVecIdxMigChunkHeader, K_(meta_len));
+
+  int64_t meta_len_;       // total meta bytes across all meta chunks
+};
+
+// Vsag-chunk header: no extra fields; serialization inherited from the base.
+struct ObVecIdxMigVsagChunkHeader final : public ObVecIdxMigChunkHeader
+{
+public:
+  ObVecIdxMigVsagChunkHeader();
+  virtual bool is_valid() const override;
+};
+
+struct ObMigrationVectorIndexAdaptorMeta
+{
+  OB_UNIS_VERSION(1);
+public:
+  static const int64_t MAX_SNAPSHOT_KEY_PREFIX_LEN = 128; // max length of snapshot key prefix in vector index adaptor
+  ObMigrationVectorIndexAdaptorMeta();
+  void reset();
+  bool is_valid() const;
+
+  TO_STRING_KV(K_(inc_tablet_id), K_(snapshot_tablet_id), K_(vbitmap_tablet_id),
+               K_(data_tablet_id), K_(rowkey_vid_tablet_id), K_(vid_rowkey_tablet_id),
+               K_(embedded_tablet_id), K_(inc_table_id), K_(snapshot_table_id),
+               K_(vbitmap_table_id), K_(data_table_id), K_(rowkey_vid_table_id),
+               K_(vid_rowkey_table_id), K_(embedded_table_id),
+               K_(type), K_(is_need_vid), K_(vec_index_param),
+               K_(replace_scn), K_(snapshot_key_prefix), K_(has_complete));
+
+  common::ObTabletID inc_tablet_id_;
+  common::ObTabletID snapshot_tablet_id_;
+  common::ObTabletID vbitmap_tablet_id_;
+  common::ObTabletID data_tablet_id_;
+  common::ObTabletID rowkey_vid_tablet_id_;
+  common::ObTabletID vid_rowkey_tablet_id_;
+  common::ObTabletID embedded_tablet_id_;
+  uint64_t inc_table_id_;
+  uint64_t snapshot_table_id_;
+  uint64_t vbitmap_table_id_;
+  uint64_t data_table_id_;
+  uint64_t rowkey_vid_table_id_;
+  uint64_t vid_rowkey_table_id_;
+  uint64_t embedded_table_id_;
+  share::ObVectorIndexAlgorithmType type_;
+  bool is_need_vid_;
+  share::ObVectorIndexParam vec_index_param_;
+  share::SCN replace_scn_;
+  common::ObFixedLengthString<MAX_SNAPSHOT_KEY_PREFIX_LEN> snapshot_key_prefix_;
+  bool has_complete_;
+};
+
+}  // namespace storage
 
 namespace obrpc
 {
@@ -1078,6 +1178,173 @@ public:
   share::SCN recycle_scn_;
 };
 
+// ======================== VectorIndex Migration RPC Arg / Res ========================
+
+struct ObFetchVectorIndexAdaptorListArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObFetchVectorIndexAdaptorListArg()
+    : tenant_id_(OB_INVALID_TENANT_ID), ls_id_(), ls_rebuild_seq_(-1) {}
+  ~ObFetchVectorIndexAdaptorListArg() = default;
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(ls_rebuild_seq));
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  int64_t ls_rebuild_seq_;
+};
+
+struct ObFetchVectorIndexAdaptorListRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  static const int64_t MAX_VSAG_VERSION_LEN = 128;
+  ObFetchVectorIndexAdaptorListRes() : adaptor_metas_(), vsag_version_() {}
+  ~ObFetchVectorIndexAdaptorListRes() = default;
+  void reset();
+  TO_STRING_KV(K_(adaptor_metas), K_(vsag_version));
+  common::ObSArray<storage::ObMigrationVectorIndexAdaptorMeta> adaptor_metas_;
+  common::ObFixedLengthString<MAX_VSAG_VERSION_LEN> vsag_version_;
+};
+
+struct ObFetchVectorIndexSegmentMetasArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObFetchVectorIndexSegmentMetasArg()
+    : tenant_id_(OB_INVALID_TENANT_ID), ls_id_(), inc_tablet_id_(),
+      ls_rebuild_seq_(-1) {}
+  ~ObFetchVectorIndexSegmentMetasArg() = default;
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(inc_tablet_id),
+               K_(ls_rebuild_seq));
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  common::ObTabletID inc_tablet_id_;
+  int64_t ls_rebuild_seq_;
+};
+
+struct ObFetchVectorIndexSegmentMetasRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObFetchVectorIndexSegmentMetasRes()
+    : adaptor_handle_id_(OB_INVALID_ID), vec_index_meta_(), vec_index_right_boundary_scn_() {}
+  ~ObFetchVectorIndexSegmentMetasRes() = default;
+  void reset();
+  TO_STRING_KV(K_(adaptor_handle_id), K_(vec_index_right_boundary_scn), K_(vec_index_meta));
+
+  // OB_INVALID_ID means the adaptor was not found on src (e.g. index dropped during the
+  // migration window); dest treats this as a graceful skip rather than an error.
+  // A valid hold produces a non-negative monotonically increasing id, so OB_INVALID_ID (-1)
+  // is never a legitimate handle value.
+  int64_t adaptor_handle_id_;
+  share::ObVectorIndexMeta vec_index_meta_;
+  // replay right-boundary SCN captured at the moment the adaptor handle is held
+  share::SCN vec_index_right_boundary_scn_;
+};
+
+struct ObRegisterVecIndexMigrationProcessorArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObRegisterVecIndexMigrationProcessorArg()
+    : tenant_id_(OB_INVALID_TENANT_ID), ls_id_(), adaptor_handle_id_(OB_INVALID_ID),
+      segment_idx_(-1), ls_rebuild_seq_(-1) {}
+  ~ObRegisterVecIndexMigrationProcessorArg() = default;
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(adaptor_handle_id), K_(segment_idx),
+               K_(ls_rebuild_seq));
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  int64_t adaptor_handle_id_;
+  int64_t segment_idx_;
+  int64_t ls_rebuild_seq_;
+};
+
+struct ObRegisterVecIndexMigrationProcessorRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObRegisterVecIndexMigrationProcessorRes()
+      : processor_id_(OB_INVALID_ID) {}
+  ~ObRegisterVecIndexMigrationProcessorRes() = default;
+  void reset();
+  TO_STRING_KV(K_(processor_id));
+  int64_t processor_id_;
+};
+
+struct ObFetchVecIndexMigrationSegmentDataArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObFetchVecIndexMigrationSegmentDataArg()
+    : tenant_id_(OB_INVALID_TENANT_ID), ls_id_(), processor_id_(OB_INVALID_ID), seq_idx_(-1),
+      ls_rebuild_seq_(-1) {}
+  ~ObFetchVecIndexMigrationSegmentDataArg() = default;
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(processor_id), K_(seq_idx),
+               K_(ls_rebuild_seq));
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  int64_t processor_id_;
+  int64_t seq_idx_;
+  int64_t ls_rebuild_seq_;
+};
+
+struct ObFetchVecIndexMigrationSegmentDataRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObFetchVecIndexMigrationSegmentDataRes() : data_() {}
+  ~ObFetchVecIndexMigrationSegmentDataRes() = default;
+  void reset();
+  TO_STRING_KV(K(data_));
+  common::ObString data_;  // Serialized data chunk (max 2MB).
+};
+
+struct ObReleaseVectorIndexAdaptorHandleArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObReleaseVectorIndexAdaptorHandleArg()
+    : tenant_id_(OB_INVALID_TENANT_ID), ls_id_(), adaptor_handle_id_(OB_INVALID_ID),
+      ls_rebuild_seq_(-1) {}
+  ~ObReleaseVectorIndexAdaptorHandleArg() = default;
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(adaptor_handle_id),
+               K_(ls_rebuild_seq));
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  int64_t adaptor_handle_id_;
+  int64_t ls_rebuild_seq_;
+};
+
+struct ObNotifyVecIndexMigrationProcessorDoneArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObNotifyVecIndexMigrationProcessorDoneArg()
+    : tenant_id_(OB_INVALID_TENANT_ID), ls_id_(), adaptor_handle_id_(OB_INVALID_ID),
+      failure_code_(common::OB_SUCCESS), ls_rebuild_seq_(-1), processor_id_(-1) {}
+  ~ObNotifyVecIndexMigrationProcessorDoneArg() = default;
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(adaptor_handle_id), K_(failure_code),
+               K_(ls_rebuild_seq), K_(processor_id));
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  int64_t adaptor_handle_id_;
+  int32_t failure_code_;
+  int64_t ls_rebuild_seq_;
+  int64_t processor_id_;
+};
+
 //src
 class ObStorageRpcProxy : public obrpc::ObRpcProxy
 {
@@ -1124,6 +1391,20 @@ public:
   RPC_SS(PR5 fetch_local_cache_block, OB_HA_FETCH_LOCAL_CACHE_BLOCK, (ObHAFetchLocalCacheBlockArg), common::ObDataBuffer);
 #endif
   RPC_S(PR5 advance_src_ls_checkpoint, OB_HA_ADVANCE_SRC_LS_CHECKPOINT, (ObAdvanceSrcLSCheckpointArg), obrpc::Int64);
+
+  // vector index migration RPCs
+  RPC_S(PR5 fetch_vector_index_adaptor_list, OB_HA_FETCH_VECTOR_INDEX_ADAPTOR_LIST,
+        (ObFetchVectorIndexAdaptorListArg), ObFetchVectorIndexAdaptorListRes);
+  RPC_S(PR5 fetch_vector_index_segment_metas, OB_HA_FETCH_VECTOR_INDEX_SEGMENT_METAS,
+        (ObFetchVectorIndexSegmentMetasArg), ObFetchVectorIndexSegmentMetasRes);
+  RPC_S(PR5 register_vec_index_migration_processor, OB_HA_REGISTER_VECTOR_INDEX_MIGRATION_PROCESSOR,
+        (ObRegisterVecIndexMigrationProcessorArg), ObRegisterVecIndexMigrationProcessorRes);
+  RPC_AP(PR5 fetch_vec_index_migration_segment_data, OB_HA_FETCH_VECTOR_INDEX_MIGRATION_SEGMENT_DATA,
+         (ObFetchVecIndexMigrationSegmentDataArg), ObFetchVecIndexMigrationSegmentDataRes);
+  RPC_S(PR5 release_vector_index_adaptor_handle, OB_HA_RELEASE_VECTOR_INDEX_ADAPTOR_HANDLE,
+        (ObReleaseVectorIndexAdaptorHandleArg), obrpc::Int64);
+  RPC_S(PR5 notify_vec_index_migration_processor_done, OB_HA_NOTIFY_VECTOR_INDEX_MIGRATION_PROCESSOR_DONE,
+        (ObNotifyVecIndexMigrationProcessorDoneArg), obrpc::Int64);
 
   // RPC_AP stands for asynchronous RPC.
   RPC_AP(PR5 check_transfer_tablet_backfill_completed, OB_HA_CHECK_TRANSFER_TABLET_BACKFILL, (obrpc::ObCheckTransferTabletBackfillArg), obrpc::ObCheckTransferTabletBackfillRes);
@@ -1735,6 +2016,70 @@ class ObAdvanceSrcLSCheckpointP:
 public:
   ObAdvanceSrcLSCheckpointP() = default;
   virtual ~ObAdvanceSrcLSCheckpointP() {}
+protected:
+  int process();
+};
+
+// ======================== vector index migration RPC Processor ========================
+
+class ObFetchVectorIndexAdaptorListP
+    : public ObStorageRpcProxy::Processor<OB_HA_FETCH_VECTOR_INDEX_ADAPTOR_LIST>
+{
+public:
+  ObFetchVectorIndexAdaptorListP() = default;
+  virtual ~ObFetchVectorIndexAdaptorListP() = default;
+protected:
+  int process();
+};
+
+class ObFetchVectorIndexSegmentMetasP
+    : public ObStorageRpcProxy::Processor<OB_HA_FETCH_VECTOR_INDEX_SEGMENT_METAS>
+{
+public:
+  ObFetchVectorIndexSegmentMetasP() = default;
+  virtual ~ObFetchVectorIndexSegmentMetasP() = default;
+protected:
+  int process();
+};
+
+class ObRegisterVecIndexMigrationProcessorP
+    : public ObStorageRpcProxy::Processor<OB_HA_REGISTER_VECTOR_INDEX_MIGRATION_PROCESSOR>
+{
+public:
+  ObRegisterVecIndexMigrationProcessorP() = default;
+  virtual ~ObRegisterVecIndexMigrationProcessorP() = default;
+protected:
+  int process();
+};
+
+class ObFetchVecIndexMigrationSegmentDataP
+    : public ObStorageRpcProxy::Processor<OB_HA_FETCH_VECTOR_INDEX_MIGRATION_SEGMENT_DATA>
+{
+public:
+  ObFetchVecIndexMigrationSegmentDataP() = default;
+  virtual ~ObFetchVecIndexMigrationSegmentDataP();
+protected:
+  int process();
+private:
+  common::ObDataBuffer seg_buf_;
+};
+
+class ObReleaseVectorIndexAdaptorHandleP
+    : public ObStorageRpcProxy::Processor<OB_HA_RELEASE_VECTOR_INDEX_ADAPTOR_HANDLE>
+{
+public:
+  ObReleaseVectorIndexAdaptorHandleP() = default;
+  virtual ~ObReleaseVectorIndexAdaptorHandleP() = default;
+protected:
+  int process();
+};
+
+class ObNotifyVectorIndexMigrationProcessorDoneP
+    : public ObStorageRpcProxy::Processor<OB_HA_NOTIFY_VECTOR_INDEX_MIGRATION_PROCESSOR_DONE>
+{
+public:
+  ObNotifyVectorIndexMigrationProcessorDoneP() = default;
+  virtual ~ObNotifyVectorIndexMigrationProcessorDoneP() = default;
 protected:
   int process();
 };

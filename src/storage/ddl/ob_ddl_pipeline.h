@@ -148,6 +148,7 @@ private:
   int init_ivf_sq8_meta_index(const ObDDLTableSchema &ddl_table_schema);
   int init_ivf_pq_center_index(const ObDDLTableSchema &ddl_table_schema);
   int init_hnsw_embedding_index(const ObDDLTableSchema &ddl_table_schema);
+  int fill_vec_acquire_ctx(const ObTabletID &data_tablet_id);
   int create_ivf_build_helper(
       const ObIndexType index_type,
       ObString &vec_index_param);
@@ -181,6 +182,7 @@ public:
   ObIvfBuildHelper *helper_;
   int64_t ddl_task_id_;
   bool is_vec_tablet_rebuild_;
+  share::ObVectorIndexAcquireCtx vec_acquire_ctx_;
   ObPluginVectorIndexAdapterGuard adapter_guard_;
   transaction::ObTxDesc *tx_desc_;
   common::ObArenaAllocator allocator_;

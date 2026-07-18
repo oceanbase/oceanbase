@@ -84,7 +84,7 @@ int ObVecAsyncTaskExecutor::check_and_set_thread_pool()
   } else {
     ObIAllocator *allocator = index_ls_mgr->get_async_task_opt().get_allocator();
     ObVecIndexAsyncTaskHandler &thread_pool_handle = vector_index_service_->get_vec_async_task_handle();
-    if (0 == index_ls_mgr->get_complete_adapter_map().size()) { // no vector index exist, skip
+    if (0 == index_ls_mgr->get_vec_adaptor_map().size()) { // no vector index exist, skip
     } else {
       common::ObSpinLockGuard init_guard(thread_pool_handle.lock_); // lock thread pool init to avoid init twice
       if (thread_pool_handle.get_tg_id() != INVALID_TG_ID) { // no need to init twice, skip
@@ -110,6 +110,11 @@ int ObVecAsyncTaskExecutor::load_task(uint64_t &task_trace_base_num)
   } else if (!check_operation_allow()) { // skip
   } else if (OB_FAIL(get_index_ls_mgr(index_ls_mgr))) { // skip
     LOG_WARN("fail to get index ls mgr", K(ret), K(tenant_id_), K(ls_handle_));
+  } else if (OB_NOT_NULL(index_ls_mgr) && index_ls_mgr->get_async_task_opt().is_stop()) {
+    // LS is being destroyed; skip creating new tasks.  Cancellation of existing
+    // tasks is handled by check_and_schedule_* later in the same tick.
+    LOG_INFO("[VEC_ASYNC_TASK] ls is stopping, skip load task", K(tenant_id_),
+             K(ls_handle_.get_ls()->get_ls_id()));
   } else {
     storage::ObLS *ls = ls_handle_.get_ls();
     ObVecIndexAsyncTaskOption &task_opt = index_ls_mgr->get_async_task_opt();
@@ -133,7 +138,7 @@ int ObVecAsyncTaskExecutor::load_task(uint64_t &task_trace_base_num)
     }
 
     RWLock::RLockGuard lock_guard(index_ls_mgr->get_adapter_map_lock());
-    FOREACH_X(iter, index_ls_mgr->get_complete_adapter_map(),
+    FOREACH_X(iter, index_ls_mgr->get_vec_adaptor_map(),
         OB_SUCC(ret) && (task_ctx_array.count() + current_task_cnt <= MAX_ASYNC_TASK_PROCESSING_COUNT)) {
       ObTabletID tablet_id = iter->first;
       ObPluginVectorIndexAdaptor *adapter = iter->second;

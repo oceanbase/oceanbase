@@ -1041,6 +1041,11 @@ public:
            type == ObVectorIndexAlgorithmType::VIAT_IPIVF_SQ;
   }
 
+  static int64_t get_hnsw_max_degree(
+      const ObVectorIndexAlgorithmType param_type,
+      const ObVectorIndexAlgorithmType build_type,
+      const int64_t m);
+
   static bool check_vector_index_memory(
       ObSchemaGetterGuard &schema_guard,
       const ObTableSchema &index_schema,

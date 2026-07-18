@@ -894,6 +894,26 @@ inline bool is_hybrid_vec_index_embedded_type(const ObIndexType index_type)
   return index_type == INDEX_TYPE_HYBRID_INDEX_EMBEDDED_LOCAL;
 }
 
+inline bool is_vec_inc_aux_table(const ObIndexType index_type)
+{
+  return is_vec_delta_buffer_type(index_type)
+         || is_hybrid_vec_index_log_type(index_type);
+}
+
+inline bool is_vec_non_shared_aux_table(const ObIndexType index_type)
+{
+  return is_vec_inc_aux_table(index_type)
+         || is_vec_index_id_type(index_type)
+         || is_vec_index_snapshot_data_type(index_type)
+         || is_hybrid_vec_index_embedded_type(index_type);
+}
+
+// Shared HNSW aux (same physical meaning as ObSimpleTableSchemaV2::is_vec_shared_table_type).
+inline bool is_vec_shared_aux_table(const ObIndexType index_type)
+{
+  return is_vec_rowkey_vid_type(index_type) || is_vec_vid_rowkey_type(index_type);
+}
+
 inline bool is_local_vec_ivfflat_index(const ObIndexType index_type)
 {
   return is_vec_ivfflat_centroid_index(index_type) ||

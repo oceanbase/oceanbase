@@ -12,11 +12,46 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "ob_storage_ha_dag.h"
 #include "logservice/palf/lsn.h"
+#include "lib/lock/ob_spin_rwlock.h"
+#include "lib/container/ob_array.h"
 
 namespace oceanbase
 {
 namespace storage
 {
+
+// ======================== Vector index migration context ========================
+// Context for migrating vector index adaptors during LS migration.
+// Holds a list of adaptor metas fetched from source and iterates over them one by one.
+
+class ObVectorIndexMigrationCtx final
+{
+public:
+  ObVectorIndexMigrationCtx();
+  ~ObVectorIndexMigrationCtx();
+  int init(const common::ObIArray<ObMigrationVectorIndexAdaptorMeta> &adaptor_metas);
+  void reset();
+  int get_next_adaptor_meta(ObMigrationVectorIndexAdaptorMeta &meta);
+  int check_adaptor_metas_empty(bool &is_empty) const;
+  int get_total_count(int64_t &total_count) const;
+  bool is_inited() const;
+  int update_vec_index_right_boundary_scn(const share::SCN &scn);
+  int get_vec_index_right_boundary_scn(share::SCN &out_scn) const;
+  const common::ObIArray<ObMigrationVectorIndexAdaptorMeta> &get_adaptor_metas() const { return adaptor_metas_; }
+  bool is_all_adaptor_skip_fetch() const { return all_adaptor_skip_fetch_; }
+  void clear_all_adaptor_skip_fetch() { all_adaptor_skip_fetch_ = false; }
+  TO_STRING_KV(K_(is_inited), K_(adaptor_metas), K_(index), K_(vec_index_right_boundary_scn), K_(all_adaptor_skip_fetch));
+
+private:
+  mutable common::SpinRWLock lock_;
+  bool is_inited_;
+  common::ObArray<ObMigrationVectorIndexAdaptorMeta> adaptor_metas_;
+  int64_t index_;   // Current iteration index for get_next_adaptor_meta().
+  share::SCN vec_index_right_boundary_scn_;
+  bool all_adaptor_skip_fetch_;
+
+  DISALLOW_COPY_AND_ASSIGN(ObVectorIndexMigrationCtx);
+};
 
 struct ObLSCompleteMigrationCtx : public ObIHADagNetCtx
 {
@@ -36,8 +71,12 @@ public:
   int64_t start_ts_;
   int64_t finish_ts_;
   int64_t rebuild_seq_;
+  int64_t src_ls_rebuild_seq_;
   ObStorageHASrcInfo chosen_src_;
   ObLSMigrationCostStatic *cost_static_;
+  ObVectorIndexMigrationCtx vecidx_ctx_;
+  bool has_vecidx_ctx_;
+  bool skip_vecidx_mig_;
 
   INHERIT_TO_STRING_KV(
       "ObIHADagNetCtx", ObIHADagNetCtx,
@@ -47,8 +86,11 @@ public:
       K_(start_ts),
       K_(finish_ts),
       K_(rebuild_seq),
+      K_(src_ls_rebuild_seq),
       K_(chosen_src),
-      KP_(cost_static));
+      KP_(cost_static),
+      K_(has_vecidx_ctx),
+      K_(skip_vecidx_mig));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSCompleteMigrationCtx);
 };
@@ -61,11 +103,12 @@ public:
   virtual bool is_valid() const override;
   void reset();
 
-  VIRTUAL_TO_STRING_KV(K_(arg), K_(task_id), K_(result), K_(rebuild_seq), K_(chosen_src), KP_(cost_static));
+  VIRTUAL_TO_STRING_KV(K_(arg), K_(task_id), K_(result), K_(rebuild_seq), K_(src_ls_rebuild_seq), K_(chosen_src), KP_(cost_static));
   ObMigrationOpArg arg_;
   share::ObTaskId task_id_;
   int32_t result_;
   int64_t rebuild_seq_;
+  int64_t src_ls_rebuild_seq_;
   obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
   storage::ObStorageRpc *storage_rpc_;
   ObStorageHASrcInfo chosen_src_;
@@ -159,6 +202,7 @@ private:
   int generate_migration_dags_after_ss_mode_();
 #endif
   int generate_migration_dags_();
+  int generate_migration_dags_with_vector_index_();
   int record_server_event_();
 private:
   bool is_inited_;
@@ -227,6 +271,7 @@ private:
       ObLS *ls,
       bool &need_wait);
   int wait_log_replay_to_max_minor_end_scn_();
+  int wait_log_replay_for_vector_index_();
   int check_ls_and_task_status_(
       ObLS *ls);
   int record_server_event_();

@@ -470,6 +470,7 @@ int ObDASUpdateOp::open_op()
   int64_t affected_rows = 0;
   common::ObSEArray<ObFTDocWordInfo, 4> doc_word_infos;
   doc_word_infos.set_attr(lib::ObMemAttr(MTL_ID(), "FTDocWInfo"));
+  common::ObSEArray<share::ObVectorIndexAcquireCtx, OB_DAS_VEC_INDEX_ACQUIRE_CTX_INLINE_CNT> vec_index_ctxs;
   ObDASUpdIterator upd_iter(upd_ctdef_, write_buffer_, op_alloc_);
   ObDASIndexDMLAdaptor<DAS_OP_TABLE_UPDATE, ObDASUpdIterator> upd_adaptor;
   upd_adaptor.tx_desc_ = trans_desc_;
@@ -489,12 +490,24 @@ int ObDASUpdateOp::open_op()
           upd_ctdef_->is_main_table_in_fts_ddl_, doc_word_infos))) {
     LOG_WARN("fail to build fulltext doc word infos", K(ret), K(ls_id_), KPC(snapshot_), K(related_ctdefs_),
         K(related_tablet_ids_));
-  } else if (OB_FAIL(upd_adaptor.write_tablet(upd_iter, affected_rows))) {
-    if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-      LOG_WARN("update row to partition storage failed", K(ret));
-    }
+  } else if (!upd_ctdef_->not_need_build_vec_index_tablet_infos_
+      && OB_FAIL(ObDASDomainUtils::build_vec_index_tablet_infos(
+          tablet_id_, upd_ctdef_->table_param_.get_data_table().get_table_id(),
+          *upd_ctdef_,
+          related_ctdefs_, related_tablet_ids_, vec_index_ctxs))) {
+    LOG_WARN("fail to build vec index tablet infos", K(ret), K(tablet_id_), K(related_ctdefs_),
+        K(related_tablet_ids_));
   } else {
-    affected_rows_ = affected_rows;
+    if (!vec_index_ctxs.empty()) {
+      upd_adaptor.vec_index_acquire_ctxs_ = &vec_index_ctxs;
+    }
+    if (OB_FAIL(upd_adaptor.write_tablet(upd_iter, affected_rows))) {
+      if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+        LOG_WARN("update row to partition storage failed", K(ret));
+      }
+    } else {
+      affected_rows_ = affected_rows;
+    }
   }
   return ret;
 }

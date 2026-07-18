@@ -19,6 +19,13 @@ namespace share
 {
 ERRSIM_POINT_DEF(ERRSIM_VEC_DISABLE_TUNE_INDEX_IN_FREEZE, "When set, vector index tune index is disabled in freeze task.");
 
+int ObVecIdxFreezeTaskExecutor::do_check_task_result(
+    ObVecIndexAsyncTaskCtx *task_ctx,
+    ObVecTaskResultCheckAction &action)
+{
+  return do_check_normal_running_task_result(task_ctx, action);
+}
+
 bool ObVecIdxFreezeTaskExecutor::check_operation_allow()
 {
   int ret = OB_SUCCESS;
@@ -76,6 +83,11 @@ int ObVecIdxFreezeTaskExecutor::load_task(uint64_t &task_trace_base_num)
   } else if (!check_operation_allow()) { // skip
   } else if (OB_FAIL(get_index_ls_mgr(index_ls_mgr))) { // skip
     LOG_WARN("fail to get index ls mgr", K(ret), K(tenant_id_), K(ls_handle_));
+  } else if (OB_NOT_NULL(index_ls_mgr) && index_ls_mgr->get_async_task_opt().is_stop()) {
+    // LS is being destroyed; skip creating new tasks.  Cancellation of existing
+    // tasks is handled by check_and_schedule_* later in the same tick.
+    LOG_INFO("[VEC_ASYNC_TASK] ls is stopping, skip load task", K(tenant_id_),
+             K(ls_handle_.get_ls()->get_ls_id()));
   } else {
     storage::ObLS *ls = ls_handle_.get_ls();
     ObSharedMemAllocMgr *shared_mem_mgr = MTL(ObSharedMemAllocMgr*);
@@ -91,7 +103,7 @@ int ObVecIdxFreezeTaskExecutor::load_task(uint64_t &task_trace_base_num)
     int64_t freeze_segment_size = 128 * 1024 * 1024; // default 128MB
     int64_t total_pre_alloc_size = 0;
     int64_t freeze_threshold = 0;
-    FOREACH_X(iter, index_ls_mgr->get_complete_adapter_map(),
+    FOREACH_X(iter, index_ls_mgr->get_vec_adaptor_map(),
         OB_SUCC(ret) && (task_ctx_array.count() + current_task_cnt <= MAX_ASYNC_TASK_PROCESSING_COUNT)) {
       ObTabletID tablet_id = iter->first;
       ObPluginVectorIndexAdaptor *adapter = iter->second;
@@ -111,7 +123,7 @@ int ObVecIdxFreezeTaskExecutor::load_task(uint64_t &task_trace_base_num)
         int64_t inc_mem_size = 0;
         if (! adapter->is_complete()) {
           LOG_TRACE("adapter not complete, no need freeze", K(ret), KPC(adapter));
-        } else if (adapter->get_create_type() != CreateTypeComplete) {
+        } else if (!adapter->is_ready_complete()) {
           LOG_INFO("adapter is not complete, no need freeze", K(ret), KPC(adapter));
         } else if (adapter->is_sparse_vector_index_type()) {
           LOG_TRACE("adapter is sparse vector index, no need merge", K(ret), KPC(adapter));
@@ -288,7 +300,7 @@ int ObVecIdxFreezeTask::process_freeze()
   } else if (!adpt_guard.get_adatper()->is_complete()) {
     ret = OB_EAGAIN;
     LOG_INFO("adapter not complete, need wait", K(ret), KP(adpt_guard.get_adatper()));
-  } else if (adpt_guard.get_adatper()->get_create_type() != CreateTypeComplete) {
+  } else if (!adpt_guard.get_adatper()->is_ready_complete()) {
     ret = OB_EAGAIN;
     LOG_INFO("adapter is not complete, no need freeze", K(ret), KPC(adpt_guard.get_adatper()));
   } else if (!check_snapshot_table_available(*adpt_guard.get_adatper())) {

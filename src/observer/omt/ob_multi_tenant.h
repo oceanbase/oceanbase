@@ -125,6 +125,7 @@ public:
   int update_checkpoint_diagnose_config();
   int update_tenant_audit_log_config();
   int update_tenant_query_response_time_flush_config();
+  int update_tenant_ha_service_config();
   int get_tenant_unsafe(const uint64_t tenant_id, ObTenant *&tenant) const;
   int get_tenant(const uint64_t tenant_id, ObTenant *&tenant) const;
   int get_tenant_with_tenant_lock(const uint64_t tenant_id, common::ObLDHandle &handle, ObTenant *&tenant) const;

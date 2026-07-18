@@ -15,11 +15,119 @@
 #include "storage/ddl/ob_direct_load_struct.h"
 #include "storage/lob/ob_lob_manager.h"
 #include "sql/das/ob_das_dml_vec_iter.h"
+#include "storage/lob/ob_lob_util.h"
+#include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
 {
 namespace share
 {
+
+int ObVectorIndexTableHelper::start_trans(
+    const share::ObLSID &ls_id,
+    const bool is_for_read,
+    const int64_t timeout_ts,
+    const common::ObTabletID &data_tablet_id,
+    transaction::ObTxDesc *&tx_desc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObInsertLobColumnHelper::start_trans(ls_id, is_for_read, timeout_ts, tx_desc))) {
+    LOG_WARN("failed to start trans", K(ret), K(ls_id), K(is_for_read), K(timeout_ts));
+  } else if (! is_for_read && OB_FAIL(lock_tablet(ls_id, data_tablet_id, tx_desc, timeout_ts))) {
+    LOG_WARN("failed to lock tablet", K(ret), K(ls_id), K(data_tablet_id));
+  } else {
+    LOG_INFO("start trans success", K(ls_id), K(is_for_read), K(timeout_ts), K(tx_desc->get_tx_id()));
+  }
+  return ret;
+}
+
+int ObVectorIndexTableHelper::end_trans(
+    transaction::ObTxDesc *tx_desc,
+    const bool is_rollback,
+    const int64_t timeout_ts)
+{
+  int ret = OB_SUCCESS;
+  transaction::ObTransID tx_id;
+  DEBUG_SYNC(BEFORE_COMMIT_CHECK_POINT);
+  if (OB_NOT_NULL(tx_desc) && OB_FALSE_IT(tx_id = tx_desc->get_tx_id())) {
+  } else if (OB_FAIL(ObInsertLobColumnHelper::end_trans(tx_desc, is_rollback, timeout_ts))) {
+    LOG_WARN("failed to end trans", K(ret), K(is_rollback), K(timeout_ts));
+  } else {
+    LOG_INFO("end trans success", K(is_rollback));
+  }
+  return ret;
+}
+
+int ObVectorIndexTableHelper::get_tablet_schema_version(
+    const share::ObLSID &ls_id, const int64_t timeout_ts,
+    const common::ObTabletID &data_tablet_id, int64_t &schema_version)
+{
+  int ret = OB_SUCCESS;
+  ObLSService* ls_service = MTL(ObLSService *);
+  ObLSHandle ls_handle;
+  ObTabletHandle tablet_handle;
+  if (OB_ISNULL(ls_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls service is null", K(ret));
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::SHARE_MOD))) {
+    LOG_WARN("failed to get log stream", K(ret), K(ls_id));
+  } else if (OB_ISNULL(ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be null", K(ret));
+  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_with_timeout(data_tablet_id,
+                                                                 tablet_handle,
+                                                                 timeout_ts,
+                                                                 ObMDSGetTabletMode::READ_ALL_COMMITED,
+                                                                 share::SCN::max_scn()))) {
+    LOG_WARN("fail to get tablet handle", KR(ret), K(data_tablet_id));
+  } else {
+    schema_version = tablet_handle.get_obj()->get_tablet_meta().max_sync_storage_schema_version_;
+  }
+  return ret;
+}
+
+int ObVectorIndexTableHelper::lock_tablet(
+    const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
+    transaction::ObTxDesc *tx_desc, const int64_t timeout_ts)
+{
+  int ret = OB_SUCCESS;
+  ObAccessService *oas = MTL(ObAccessService *);
+  transaction::tablelock::ObLockID lock_id;
+  transaction::tablelock::ObLockParam lock_param;
+  const transaction::tablelock::ObTableLockMode lock_mode = transaction::tablelock::ROW_EXCLUSIVE;
+  const transaction::tablelock::ObTableLockOpType lock_op_type = transaction::tablelock::IN_TRANS_DML_LOCK;
+  transaction::tablelock::ObTableLockOwnerID lock_owner;
+  lock_owner.set_default();
+  const bool is_deadlock_avoid_enabled = false;
+  int64_t lock_expired_ts = 0;
+  int64_t schmea_version = 0;
+  if (OB_ISNULL(oas) || OB_ISNULL(tx_desc)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("oas or tx_desc is null", K(ret), KP(oas), KP(tx_desc));
+  } else if (OB_FAIL(get_tablet_schema_version(ls_id, timeout_ts, tablet_id, schmea_version))) {
+    LOG_WARN("get tablet schema version fail", K(ret), K(ls_id), K(tablet_id), K(timeout_ts));
+  } else {
+    lock_expired_ts = MIN(timeout_ts, tx_desc->get_expire_ts());
+    const bool is_try_lock = lock_expired_ts <= 0;
+    if (OB_FAIL(transaction::tablelock::get_lock_id(tablet_id, lock_id))) {
+      LOG_WARN("get lock id failed", K(ret), K(tablet_id));
+    } else if (OB_FAIL(lock_param.set(lock_id,
+                                      lock_mode,
+                                      lock_owner,
+                                      lock_op_type,
+                                      schmea_version,
+                                      is_deadlock_avoid_enabled,
+                                      is_try_lock,
+                                      lock_expired_ts))) {
+      LOG_WARN("set lock param failed", K(ret), K(ls_id), K(lock_id), K(schmea_version));
+    } else if (OB_FAIL(oas->lock_obj(ls_id, *tx_desc, lock_param))) {
+      LOG_WARN("lock tablet failed", K(ret), K(lock_param), K(tablet_id));
+    } else {
+      LOG_INFO("lock tablet success", K(ls_id), K(tablet_id), K(schmea_version), K(lock_param));
+    }
+  }
+  return ret;
+}
 
 ObVectorIndexDeltaTableHandler::~ObVectorIndexDeltaTableHandler()
 {
@@ -1167,7 +1275,7 @@ int ObVecIdxSnapTableSegMergeOp::prepare_meta_for_update(ObVectorIndexMeta &new_
   if (OB_SUCC(ret)) {
     if (real_delete_cnt != merge_segments_->count()) {
       ret =  OB_CANCELED;
-      LOG_WARN("may be conflict with other task, need cancal", K(old_meta));
+      LOG_WARN("may be conflict with other task, need cancal", K(old_meta), K(real_delete_cnt), K(merge_segments_->count()));
     } else if (OB_ISNULL(new_seg_meta_)) {
       LOG_INFO("new_seg_meta is empty, so skip push", KPC_(new_seg_meta), K(new_meta));
     } else if (OB_FAIL(check_segment_start_key_exist(new_meta, *new_seg_meta_))) {

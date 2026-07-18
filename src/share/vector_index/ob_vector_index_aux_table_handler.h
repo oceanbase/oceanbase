@@ -28,6 +28,23 @@ namespace share
 class ObPluginVectorIndexAdaptor;
 class ObVecIndexAsyncTaskCtx;
 
+class ObVectorIndexTableHelper
+{
+public:
+  static int start_trans(
+      const share::ObLSID &ls_id, const bool is_for_read,
+      const int64_t timeout_ts, const common::ObTabletID &data_tablet_id,
+      transaction::ObTxDesc *&tx_desc);
+  static int end_trans(
+      transaction::ObTxDesc *tx_desc, const bool is_rollback, const int64_t timeout_ts);
+  static int get_tablet_schema_version(
+      const share::ObLSID &ls_id, const int64_t timeout_ts,
+      const common::ObTabletID &data_tablet_id, int64_t &schema_version);
+  static int lock_tablet(
+      const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
+      transaction::ObTxDesc *tx_desc, const int64_t timeout);
+};
+
 class ObVectorIndexDeltaTableHandler
 {
 public:

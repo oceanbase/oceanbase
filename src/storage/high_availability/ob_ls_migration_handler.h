@@ -15,6 +15,7 @@
 #include "observer/ob_rpc_processor_simple.h"
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "storage/ob_storage_rpc.h"
+#include "ob_migration_vector_index_processor.h"
 
 namespace oceanbase
 {
@@ -98,11 +99,13 @@ public:
   bool is_dag_net_cleared() const;
   void set_dag_net_cleared();
   int set_result(const int32_t result);
+  int set_src_ls_rebuild_seq(const int64_t seq);
   int get_migration_task_and_handler_status(
       ObLSMigrationTask &task,
       ObLSMigrationHandlerStatus &status);
   int update_advance_ls_checkpoint_scn(const share::SCN &scn);
   int advance_ls_checkpoint();
+  ObVectorIndexMigrationProcessorMgr *get_processor_mgr() { return &processor_mgr_; }
 
 #ifdef OB_BUILD_SHARED_STORAGE
   int notify_switch_to_leader_and_wait_replace_complete(const int64_t new_proposal_id);
@@ -176,13 +179,14 @@ private:
   bool is_stop_;
   bool is_cancel_;
   ObStorageHASrcInfo chosen_src_;
+  int64_t src_ls_rebuild_seq_;
   bool is_complete_; // true when ObLSCompleteMigrationDagNet has been generated
   bool is_dag_net_cleared_;
 
   int64_t last_advance_checkpoint_ts_; // won't clear when handler is reused
   share::SCN advance_checkpoint_scn_; // won't clear when handler is reused
   ObLSMigrationCostStatic cost_static_;
-
+  ObVectorIndexMigrationProcessorMgr processor_mgr_;
 #ifdef OB_BUILD_SHARED_STORAGE
   common::ObThreadCond switch_leader_cond_;
   int64_t switch_leader_cnt_;

@@ -1215,6 +1215,9 @@ DEF_INT(ha_mid_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
 DEF_INT(ha_low_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
         "the current work thread score of high availability low thread. Range: [0,100] in integer. Especially, 0 means default value",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(ha_vector_index_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
+        "the current work thread score of vector index migration serialize thread. Range: [0,100] in integer. Especially, 0 means default value",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(ddl_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
         "the current work thread score of ddl thread. Range: [0,100] in integer. Especially, 0 means default value",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -2077,6 +2080,11 @@ DEF_TIME(_ob_plan_cache_auto_flush_interval, OB_CLUSTER_PARAMETER, "0s", "[0s,)"
 ERRSIM_DEF_INT(errsim_migration_ls_id, OB_CLUSTER_PARAMETER, "0", "[0,)",
         "errsim migration ls id. Range: [0,) in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+ERRSIM_DEF_TIME(errsim_vec_index_migration_processor_and_adaptor_timeout, OB_CLUSTER_PARAMETER, "0s", "[0s,)",
+        "vector index migration processor and adaptor handle cleanup timeout in errsim mode. "
+        "0s means use default 30min timeout. "
+        "Range: [0s, +∞)",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_STR(errsim_transfer_backfill_server_addr, OB_CLUSTER_PARAMETER, "",
         "the server addr that transfer backfill forbid to execute to when in errsim mode",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -2242,7 +2250,10 @@ DEF_BOOL(_optimizer_skip_scan_enabled, OB_TENANT_PARAMETER, "True",
 DEF_TIME(_ls_migration_wait_completing_timeout, OB_TENANT_PARAMETER, "30m", "[60s,)",
         "the wait timeout in ls complete migration phase",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
+DEF_CAP(_migration_vector_index_window_buffer_size, OB_TENANT_PARAMETER, "64M", "[2M, 256M]",
+        "the memory size for vector index migration window buffer pool. "
+        "Range: [2M, 256M]",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 // column store section
 DEF_BOOL(_enable_column_store, OB_TENANT_PARAMETER, "True",
         "enable the column store format in storage engine",
@@ -2584,6 +2595,10 @@ DEF_TIME(_ss_old_ver_retention_time, OB_TENANT_PARAMETER, "5d", "[0,365d]",
 
 DEF_BOOL(_enable_ss_migration_prewarm, OB_TENANT_PARAMETER, "True",
          "Control whether open migration prewarm",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_migrate_vector_index, OB_TENANT_PARAMETER, "True",
+         "Control whether enable migrating vector index",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_TIME(_ss_local_cache_expiration_time, OB_TENANT_PARAMETER, "0s", "[0s,)",

@@ -146,6 +146,37 @@ int ObVectorIndexRefresher::lock_domain_tb(
   return ret;
 }
 
+int ObVectorIndexRefresher::lock_data_tablet(
+    ObVectorRefreshIdxTransaction &trans,
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    const ObIArray<ObTabletID> &tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!trans.is_started() || OB_INVALID_TENANT_ID == tenant_id ||
+                  OB_INVALID_ID == table_id || tablet_ids.empty()) ) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(trans.is_started()), K(tenant_id),
+             K(table_id), K(tablet_ids));
+  } else {
+    const int64_t DEFAULT_TIMEOUT = GCONF.internal_sql_execute_timeout;
+    ObInnerSQLConnection *conn = nullptr;
+    if (OB_ISNULL(conn = static_cast<ObInnerSQLConnection *>(
+                      trans.get_connection()))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("conn_ is NULL", KR(ret));
+    } else {
+      LOG_INFO("lock obj start", K(tenant_id), K(table_id), K(tablet_ids));
+      if (OB_FAIL(ObInnerConnectionLockUtil::lock_tablet(
+          tenant_id, table_id, tablet_ids, ROW_EXCLUSIVE, DEFAULT_TIMEOUT, conn))) {
+        LOG_WARN("lock dest table failed", KR(ret), K(tenant_id), K(tablet_ids));
+      }
+      LOG_INFO("lock obj end", KR(ret), K(tenant_id), K(table_id), K(tablet_ids));
+    }
+  }
+  return ret;
+}
+
 int ObVectorIndexRefresher::get_table_row_count(const ObString &db_name,
                                                 const ObString &table_name,
                                                 const share::SCN &scn,
@@ -317,6 +348,7 @@ int ObVectorIndexRefresher::do_refresh() {
   uint64_t tenant_id = OB_INVALID_ID;
   ObSQLSessionInfo *session_info = nullptr;
   ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *base_table_schema = nullptr;
   const ObTableSchema *domain_table_schema = nullptr;
   const ObTableSchema *index_id_tb_schema = nullptr;
   const ObDatabaseSchema *db_schema = nullptr;
@@ -329,6 +361,7 @@ int ObVectorIndexRefresher::do_refresh() {
   int64_t start_time_us = common::ObTimeUtility::fast_current_time();
 
   ObArray<uint64_t> col_ids;
+  ObArray<ObTabletID> base_tablet_ids;
   if (OB_ISNULL(refresh_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("refresh_ctx is null", K(ret));
@@ -356,6 +389,11 @@ int ObVectorIndexRefresher::do_refresh() {
   }
   // get delta_buf_table row count
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, refresh_ctx_->base_tb_id_, base_table_schema))) {
+    LOG_WARN("fail to get base table schema", KR(ret), K(tenant_id),K(refresh_ctx_->base_tb_id_));
+  } else if (OB_ISNULL(base_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("base_table not exist", KR(ret), K(tenant_id), K(refresh_ctx_->base_tb_id_));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
                                                  refresh_ctx_->domain_tb_id_,
                                                  domain_table_schema))) {
@@ -417,7 +455,12 @@ int ObVectorIndexRefresher::do_refresh() {
     LOG_WARN("set timeout failed", K(ret));
   } else if (domain_table_schema->is_vec_delta_buffer_type()) {
     // do refresh
-    if (OB_SUCC(ret)) {
+    if (OB_FAIL(base_table_schema->get_tablet_ids(base_tablet_ids))) {
+      LOG_WARN("fail to get tablet ids", KR(ret), KPC(base_table_schema));
+    } else if (OB_FAIL(lock_data_tablet(
+              *(refresh_ctx_->trans_), tenant_id, refresh_ctx_->base_tb_id_, base_tablet_ids))) {
+      LOG_WARN("lock table fail", K(ret), K(tenant_id), K(refresh_ctx_->base_tb_id_));
+    } else {
       int64_t affected_rows = 0;
       refresh_ctx_->need_major_merge_ = (domain_table_schema->get_table_mode_flag() != share::schema::TABLE_MODE_QUEUING_EXTREME);
       // 1. insert into index_id_table select ... from delta_buf_table
@@ -841,6 +884,7 @@ int ObVectorIndexRefresher::tablet_fast_refresh(share::ObPluginVectorIndexAdapto
   refresh_ctx.index_id_tb_id_ = adaptor->get_vbitmap_table_id();
   refresh_ctx.refresh_method_ = ObVectorRefreshMethod::REFRESH_DELTA;
   refresh_ctx.is_tablet_level_ = true;
+  refresh_ctx.base_tablet_id_ = adaptor->get_data_tablet_id();
   refresh_ctx.domain_tablet_id_ = adaptor->get_inc_tablet_id();
   refresh_ctx.scn_ = scn;
   ObVectorIndexRefresher refresher;
@@ -937,6 +981,7 @@ int ObVectorIndexRefresher::tablet_fast_refresh()
   ObString partition_names;
   ObArray<uint64_t> col_ids;
   const int64_t init_timeout_us = calc_tablet_fast_refresh_timeout_us(0);
+  ObSEArray<ObTabletID, 1> base_tablet_ids;
   if (OB_ISNULL(refresh_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("refresh_ctx is null", K(ret));
@@ -946,6 +991,9 @@ int ObVectorIndexRefresher::tablet_fast_refresh()
   } else if (! refresh_ctx_->domain_tablet_id_.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablet id is invalid", K(ret), K(refresh_ctx_->domain_tablet_id_));
+  } else if (! refresh_ctx_->base_tablet_id_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tablet id is invalid", K(ret), K(refresh_ctx_->base_tablet_id_));
   } else if (! refresh_ctx_->scn_.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("refresh scn is invalid", K(ret), K(refresh_ctx_->scn_));
@@ -1028,6 +1076,11 @@ int ObVectorIndexRefresher::tablet_fast_refresh()
       LOG_WARN("set trx timeout failed", K(ret), K(timeout_us));
     } else if (OB_FAIL(timeout_ctx.set_timeout(timeout_us))) {
       LOG_WARN("set timeout failed", K(ret), K(timeout_us));
+    } else if (OB_FAIL(base_tablet_ids.push_back(refresh_ctx_->base_tablet_id_))) {
+      LOG_WARN("push back fail", K(ret));
+    } else if (OB_FAIL(lock_data_tablet(
+              *(refresh_ctx_->trans_), tenant_id, refresh_ctx_->base_tb_id_, base_tablet_ids))) {
+      LOG_WARN("lock table fail", K(ret), K(tenant_id), K(refresh_ctx_->base_tb_id_));
     } else {
       int64_t affected_rows = 0;
       // 1. insert into index_id_table select ... from delta_buf_table

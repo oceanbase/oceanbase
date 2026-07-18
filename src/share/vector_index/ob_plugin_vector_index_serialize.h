@@ -22,6 +22,7 @@ class ObVectorIndexSegmentHandle;
 class ObVectorIndexMeta;
 class ObVectorIndexSegmentMeta;
 struct ObPluginVectorIndexTaskCtx;
+class ObPluginVectorIndexMgr;
 class ObStreamBuf : public std::streambuf
 {
 public:
@@ -46,7 +47,12 @@ class ObOStreamBuf : public ObStreamBuf
 public:
   struct CbParam
   {
+    enum class CbParamType {
+      HNSW_SERIALIZE = 0,
+      VEC_MIG_SERIALIZE = 1,
+    };
     virtual ~CbParam() = default;
+    virtual CbParamType get_type() const = 0;
   };
   using Callback = ObFunction<int(const char *, const int64_t, CbParam &)>;
   explicit ObOStreamBuf(char *data, const int64_t capacity, CbParam &cb_param, Callback &cb)
@@ -78,7 +84,12 @@ class ObIStreamBuf : public ObStreamBuf
 public:
   struct CbParam
   {
+    enum class CbParamType {
+      HNSW_DESERIALIZE = 0,
+      VEC_MIG_VSAG_STREAM = 1,
+    };
     virtual ~CbParam() = default;
+    virtual CbParamType get_type() const = 0;
   };
   using Callback = ObFunction<int(char *&, const int64_t, int64_t &, CbParam &)>;
   explicit ObIStreamBuf(char *data, const int64_t capacity, CbParam &cb_param, Callback &cb)
@@ -116,7 +127,7 @@ public:
       : iter_(iter), allocator_(allocator), str_iter_(nullptr),
         is_vec_tablet_rebuild_(false), is_need_unvisible_row_(false),
         seg_meta_(nullptr), index_type_(VIAT_MAX), start_key_(), end_key_(),
-        loop_cnt_(0), task_ctx_(nullptr), legacy_task_ctx_(nullptr)
+        loop_cnt_(0), task_ctx_(nullptr), mgr_(nullptr), legacy_task_ctx_(nullptr)
     {}
     CbParam()
       : iter_(nullptr),
@@ -129,6 +140,7 @@ public:
         start_key_(), end_key_(),
         loop_cnt_(0),
         task_ctx_(nullptr),
+        mgr_(nullptr),
         legacy_task_ctx_(nullptr)
     {}
     virtual ~CbParam() {
@@ -140,10 +152,12 @@ public:
         str_iter_ = nullptr;
       }
     }
+    virtual CbParamType get_type() const override { return CbParamType::HNSW_DESERIALIZE; }
     bool is_valid() const
     {
       return nullptr != iter_
-             && nullptr != allocator_;
+             && nullptr != allocator_
+             && nullptr != mgr_;
     }
     ObNewRowIterator *iter_;
     ObIAllocator *allocator_;
@@ -158,6 +172,8 @@ public:
     ObString end_key_;
     int64_t loop_cnt_;
     ObVecIndexAsyncTaskCtx *task_ctx_;
+    // Mgr-level cancel; set once when constructing param before vsag deserialize.
+    ObPluginVectorIndexMgr *mgr_;
     ObPluginVectorIndexTaskCtx *legacy_task_ctx_;
   };
 public:
@@ -180,6 +196,7 @@ public:
         task_ctx_(nullptr)
     {}
     virtual ~CbParam() {}
+    virtual CbParamType get_type() const override { return CbParamType::HNSW_SERIALIZE; }
     bool is_valid() const
     {
       return nullptr != vctx_

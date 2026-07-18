@@ -131,9 +131,12 @@ public:
 
   TO_STRING_KV(K_(is_inited), K_(tenant_id), K_(ls_handle));
 
+  static int do_check_task_result(
+      ObVecIndexAsyncTaskCtx *task_ctx,
+      ObVecTaskResultCheckAction &action);
+
 private:
   virtual bool check_operation_allow() override;
-
   int log_tablets_need_memdata_sync(ObPluginVectorIndexMgr *index_ls_mgr);
 
   int submit_log_(ObVectorIndexTabletIDArray &tablet_id_array,

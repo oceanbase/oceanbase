@@ -375,8 +375,10 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
           str_iter = nullptr;
           allocator->reuse();
         } else {
-          ret = (str_iter->get_inner_ret() != OB_SUCCESS) ?
-                str_iter->get_inner_ret() : OB_INVALID_DATA;
+          const int inner_ret = str_iter->get_inner_ret();
+          ret = (inner_ret == OB_SUCCESS || inner_ret == OB_ITER_END)
+                  ? OB_INVALID_DATA
+                  : inner_ret;
           LOG_WARN("iter state invalid", K(ret), K(state), KPC(str_iter));
           // return error, release current str iter
           str_iter->~ObTextStringIter();
@@ -497,12 +499,18 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
       } else {
         CHECK_REFRESH_MEMDATA_TASK_CANCELLED(ret, param.loop_cnt_, param.legacy_task_ctx_);
       }
-    } while (OB_SUCC(ret) && OB_ISNULL(data) && !adp->is_need_cancel_task());
+    } while (OB_SUCC(ret) && OB_ISNULL(data) && !adp->is_need_cancel_task() && !param.mgr_->is_ls_destroying());
 
     if (OB_FAIL(ret) && ret != OB_ITER_END) {
-    } else if (adp->is_need_cancel_task()) { // if it's the error code from iter_end and the task needs to be canceled at this moment, then override it.
+    } else if (adp->is_need_cancel_task()
+               || param.mgr_->is_ls_destroying()) {
+      // if it's the error code from iter_end and the task needs to be canceled at this moment, then override it.
       ret = OB_CANCELED;
-      LOG_INFO("async task is cancel", KPC(param.task_ctx_));
+      LOG_INFO("task is canceled",
+               "ls_id", param.mgr_->get_ls_id(),
+               "adapter_cancel", adp->is_need_cancel_task(),
+               "mgr_ls_destroying", param.mgr_->is_ls_destroying(),
+               KPC(param.task_ctx_));
     } else if (ret == OB_ITER_END) {
       ret = OB_SUCCESS;
       if (OB_ISNULL(adp)) {

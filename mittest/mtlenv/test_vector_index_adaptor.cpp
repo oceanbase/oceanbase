@@ -555,6 +555,10 @@ public:
       : allocator_(nullptr), data_(nullptr), size_(0)
     {}
     virtual ~CbParam() {}
+    virtual ObOStreamBuf::CbParam::CbParamType get_type() const override
+    {
+      return ObOStreamBuf::CbParam::CbParamType::HNSW_SERIALIZE;
+    }
     bool is_valid() const
     {
       return nullptr != allocator_;
@@ -591,6 +595,10 @@ public:
       : allocator_(nullptr), data_(nullptr), size_(0), cur_pos_(0), part_size_(0)
     {}
     virtual ~CbParam() {}
+    virtual ObIStreamBuf::CbParam::CbParamType get_type() const override
+    {
+      return ObIStreamBuf::CbParam::CbParamType::HNSW_DESERIALIZE;
+    }
     bool is_valid() const
     {
       return nullptr != data_

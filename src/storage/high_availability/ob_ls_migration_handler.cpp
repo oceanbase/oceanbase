@@ -15,6 +15,7 @@
 #include "ob_rebuild_service.h"
 #include "observer/omt/ob_tenant.h"
 #include "ob_ha_rebuild_tablet.h"
+#include "share/vector_index/ob_plugin_vector_index_utils.h"
 
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/high_availability/ob_ss_ls_migration.h"
@@ -161,6 +162,7 @@ ObLSMigrationHandler::ObLSMigrationHandler()
     is_stop_(false),
     is_cancel_(false),
     chosen_src_(),
+    src_ls_rebuild_seq_(-1),
     is_complete_(false),
     is_dag_net_cleared_(true), // default is true, set to false before generate dag net
     last_advance_checkpoint_ts_(0),
@@ -196,6 +198,8 @@ int ObLSMigrationHandler::init(
   } else if (OB_FAIL(switch_leader_cond_.init(ObWaitEventIds::HA_SERVICE_COND_WAIT))) {
     LOG_WARN("failed to init switch leader thread cond", K(ret));
 #endif
+  } else if (OB_FAIL(processor_mgr_.init(ls))) {
+    LOG_WARN("failed to init processor mgr", K(ret));
   } else {
     ls_ = ls;
     bandwidth_throttle_ = bandwidth_throttle;
@@ -257,6 +261,19 @@ int ObLSMigrationHandler::set_result(const int32_t result)
   return ret;
 }
 
+int ObLSMigrationHandler::set_src_ls_rebuild_seq(const int64_t seq)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls migration handler do not init", K(ret));
+  } else {
+    common::SpinWLockGuard guard(lock_);
+    src_ls_rebuild_seq_ = seq;
+  }
+  return ret;
+}
+
 int ObLSMigrationHandler::get_result_(int32_t &result)
 {
   int ret = OB_SUCCESS;
@@ -288,6 +305,7 @@ void ObLSMigrationHandler::reuse_()
   is_complete_ = false;
   is_dag_net_cleared_ = true;
   chosen_src_.reset();
+  src_ls_rebuild_seq_ = -1;
   cost_static_.reset();
 }
 
@@ -588,6 +606,7 @@ void ObLSMigrationHandler::destroy()
     start_ts_ = 0;
     finish_ts_ = 0;
     task_list_.reset();
+    processor_mgr_.destroy();
     is_inited_ = false;
   }
 }
@@ -1129,6 +1148,7 @@ int ObLSMigrationHandler::generate_complete_ls_dag_net_()
     param.arg_ = ls_migration_task.arg_;
     param.task_id_ = ls_migration_task.task_id_;
     param.rebuild_seq_ = ls_->get_rebuild_seq();
+    param.src_ls_rebuild_seq_ = src_ls_rebuild_seq_;
     param.svr_rpc_proxy_ = svr_rpc_proxy_;
     param.storage_rpc_ = storage_rpc_;
     param.chosen_src_ = chosen_src_;
@@ -1319,6 +1339,23 @@ int ObLSMigrationHandler::check_before_do_task_()
     LOG_INFO("no need to check remove ls op", K(task));
   } else if (OB_FAIL(check_disk_space_(task.arg_))) {
     STORAGE_LOG(WARN, "failed to check_disk_space_", K(ret), K(task));
+  } else if (ObMigrationOpType::MIGRATE_LS_OP == task.arg_.type_) {
+    int tmp_ret = OB_SUCCESS;
+    bool has_vector_index = false;
+    if (OB_TMP_FAIL(ObPluginVectorIndexUtils::check_tenant_has_vector_index(
+            MTL_ID(), has_vector_index))) {
+      LOG_WARN("failed to check tenant has vector index, skip memory check", K(tmp_ret));
+    } else if (has_vector_index
+               && OB_TMP_FAIL(ObPluginVectorIndexUtils::check_vector_memory_for_migrate(
+                   MTL_ID(), task.arg_.ls_id_, task.arg_.src_.get_server()))) {
+      if (OB_ALLOCATE_MEMORY_FAILED == tmp_ret) {
+        ret = tmp_ret;
+        LOG_WARN("not enough vector memory to migrate ls", K(ret), K(task));
+      } else {
+        LOG_WARN("failed to check vector memory for migrate ls, skip memory check",
+            K(tmp_ret), K(task));
+      }
+    }
   }
   return ret;
 }

@@ -39,10 +39,13 @@ class ObIMetaReport;
 namespace common
 {
 class ObRowStore;
+class ObString;
 }
 
 namespace share
 {
+struct ObVectorIndexAcquireCtx;
+class ObPluginVectorIndexAdapterGuard;
 namespace schema
 {
 struct ColumnMap;
@@ -98,7 +101,6 @@ class ObTabletCreateDeleteMdsUserData;
 class ObBlockStatScanParam;
 class ObBlockStatIterator;
 
-
 class ObLSTabletService : public logservice::ObIReplaySubHandler,
                           public logservice::ObIRoleChangeSubHandler,
                           public logservice::ObICheckpointSubHandler
@@ -148,6 +150,7 @@ private:
   virtual share::SCN get_rec_scn() override;
 
 public:
+  int prepare_vector_index_for_tablet_destroy();
   int prepare_for_safe_destroy();
   int safe_to_destroy(bool &is_safe);
 
@@ -896,6 +899,11 @@ private:
       ObDMLRunningCtx &run_ctx,
       blocksstable::ObDatumRow *rows,
       int64_t row_count);
+  static int delete_vector_index_rows(
+      ObTabletHandle &data_tablet,
+      ObDMLRunningCtx &run_ctx,
+      blocksstable::ObDatumRow *rows,
+      int64_t row_count);
   static int extract_rowkey(
       const ObRelativeTable &table,
       const common::ObStoreRowkey &rowkey,
@@ -1081,6 +1089,15 @@ private:
       const common::ObTabletID &tablet_id,
       const share::SCN &transfer_start_scn,
       bool &is_same);
+  // Match vec_index_acquire_ctxs_ for current aux tablet, then acquire adaptor guard.
+  // aux_index_type: share::schema::is_vec_inc_aux_table (delta_buffer / hybrid_log) uses inc_tablet_id_;
+  //                 is_hybrid_vec_index_embedded_type uses embedded_tablet_id_.
+  static int acquire_vec_index_adapter_guard_for_aux_dml(
+      ObDMLRunningCtx &run_ctx,
+      const share::schema::ObIndexType aux_index_type,
+      common::ObString &vec_idx_param,
+      const int64_t vec_dim,
+      share::ObPluginVectorIndexAdapterGuard &adaptor_guard);
 
   // for lob tablet dml
   static int check_rowkey_length(

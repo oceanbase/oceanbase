@@ -2068,8 +2068,10 @@ int ObTableDmlCgService::generate_insert_ctdef(ObTableCtx &ctx,
                                                 ins_ctdef.related_ctdefs_))) {
     LOG_WARN("fail to generate related ins ctdef", K(ret));
   } else if (OB_NOT_NULL(index_info.old_part_id_expr_) &&
-      OB_FAIL(generate_calc_tablet_id_rt_expr(ctx, *index_info.old_part_id_expr_, ins_ctdef.new_part_id_expr_))) {
+             OB_FAIL(generate_calc_tablet_id_rt_expr(ctx, *index_info.old_part_id_expr_, ins_ctdef.new_part_id_expr_))) {
     LOG_WARN("fail to generate calc tablet id expr", K(ret));
+  } else {
+    ins_ctdef.das_ctdef_.not_need_build_vec_index_tablet_infos_ = true;
   }
 
   return ret;
@@ -2180,6 +2182,8 @@ int ObTableDmlCgService::generate_update_ctdef(ObTableCtx &ctx,
     LOG_WARN("fail to generate related upd ctdef", K(ret));
   } else if (OB_FAIL(generate_upd_assign_infos(ctx, index_info, allocator, upd_ctdef))) {
     LOG_WARN("fail to generate related upd assign info", K(ret));
+  } else {
+    upd_ctdef.das_ctdef_.not_need_build_vec_index_tablet_infos_ = true;
   }
 
   if (OB_SUCC(ret) &&
@@ -2217,6 +2221,9 @@ int ObTableDmlCgService::generate_update_ctdef(ObTableCtx &ctx,
                                                   new_row,
                                                   upd_ctdef.related_ins_ctdefs_))) {
       LOG_WARN("fail to generate related ins ctdef", K(ret));
+    } else {
+      upd_ctdef.ddel_ctdef_->not_need_build_vec_index_tablet_infos_ = true;
+      upd_ctdef.dins_ctdef_->not_need_build_vec_index_tablet_infos_ = true;
     }
   }
 
@@ -2373,6 +2380,8 @@ int ObTableDmlCgService::generate_delete_ctdef(ObTableCtx &ctx,
   } else if (OB_NOT_NULL(index_info.old_part_id_expr_) &&
              OB_FAIL(generate_calc_tablet_id_rt_expr(ctx, *index_info.old_part_id_expr_, del_ctdef.old_part_id_expr_))) {
     LOG_WARN("fail to generate calc tablet id expr", K(ret));
+  } else {
+    del_ctdef.das_ctdef_.not_need_build_vec_index_tablet_infos_ = true;
   }
 
   return ret;

@@ -230,6 +230,7 @@ public:
   static int get_active_segment_max_size(const uint64_t tenant_id, int64_t &size);
   static int get_merge_base_percentage(const uint64_t tenant_id, int64_t &percentage);
   static bool enable_persist_vector_index_incremental(const uint64_t tenant_id);
+private:
 };
 
 // ObDASHNSWScanIter::process_adaptor_state                                                        CostGuard(KNN_THRESHOLD_1S)

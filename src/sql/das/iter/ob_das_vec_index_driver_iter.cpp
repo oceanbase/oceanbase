@@ -7,6 +7,7 @@
 #include "sql/das/iter/ob_das_vec_index_driver_iter.h"
 #include "sql/das/iter/ob_das_profile_iter.h"
 #include "sql/das/iter/ob_das_vec_index_hnsw_scan_iter.h"
+#include "sql/das/iter/ob_das_vec_index_scan_iter.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
 #include "share/vector_index/ob_vector_index_util.h"
 #include "lib/oblog/ob_log_module.h"
@@ -511,6 +512,38 @@ int ObDASVecIndexDriverIter::get_ob_hnsw_ef_search(uint64_t &ob_hnsw_ef_search)
   return ret;
 }
 
+int ObDASVecIndexDriverIter::build_vec_index_acquire_ctx(share::ObVectorIndexAcquireCtx &index_ctx)
+{
+  int ret = OB_SUCCESS;
+  index_ctx.inc_tablet_id_ = delta_buf_tablet_id_;
+  index_ctx.vbitmap_tablet_id_ = index_id_tablet_id_;
+  index_ctx.snapshot_tablet_id_ = snapshot_tablet_id_;
+  index_ctx.data_tablet_id_ = com_aux_vec_tablet_id_;
+
+  if (OB_NOT_NULL(vec_index_driver_ctdef_) && vec_index_driver_ctdef_->children_cnt_ > 0
+      && OB_NOT_NULL(vec_index_driver_ctdef_->children_[0])) {
+    const ObDASVecIndexHNSWScanCtDef *scan_ctdef =
+        static_cast<const ObDASVecIndexHNSWScanCtDef *>(vec_index_driver_ctdef_->children_[0]);
+    const ObDASScanCtDef *delta_ctdef = scan_ctdef->get_delta_buf_table_ctdef();
+    const ObDASScanCtDef *index_id_ctdef = scan_ctdef->get_index_id_table_ctdef();
+    const ObDASScanCtDef *snapshot_ctdef = scan_ctdef->get_snapshot_table_ctdef();
+    const ObDASScanCtDef *com_aux_ctdef = scan_ctdef->get_com_aux_vec_table_ctdef();
+    if (OB_NOT_NULL(delta_ctdef)) {
+      index_ctx.inc_table_id_ = delta_ctdef->ref_table_id_;
+    }
+    if (OB_NOT_NULL(index_id_ctdef)) {
+      index_ctx.vbitmap_table_id_ = index_id_ctdef->ref_table_id_;
+    }
+    if (OB_NOT_NULL(snapshot_ctdef)) {
+      index_ctx.snapshot_table_id_ = snapshot_ctdef->ref_table_id_;
+    }
+    if (OB_NOT_NULL(com_aux_ctdef)) {
+      index_ctx.data_table_id_ = com_aux_ctdef->ref_table_id_;
+    }
+  }
+  return ret;
+}
+
 int ObDASVecIndexDriverIter::inner_get_next_rows(int64_t &count, int64_t capacity)
 {
   int ret = OB_SUCCESS;
@@ -525,11 +558,9 @@ int ObDASVecIndexDriverIter::inner_get_next_rows(int64_t &count, int64_t capacit
       ObPluginVectorIndexService *vec_index_service = MTL(ObPluginVectorIndexService *);
       ObPluginVectorIndexAdapterGuard adaptor_guard;
       share::ObVectorIndexAcquireCtx index_ctx;
-      index_ctx.inc_tablet_id_ = delta_buf_tablet_id_;
-      index_ctx.vbitmap_tablet_id_ = index_id_tablet_id_;
-      index_ctx.snapshot_tablet_id_ = snapshot_tablet_id_;
-      index_ctx.data_tablet_id_ = com_aux_vec_tablet_id_;
-      if (OB_FAIL(vec_index_service->acquire_adapter_guard(ls_id_, index_ctx, adaptor_guard, &vec_index_param_, dim_))) {
+      if (OB_FAIL(build_vec_index_acquire_ctx(index_ctx))) {
+        LOG_WARN("failed to build vector index acquire ctx", K(ret));
+      } else if (OB_FAIL(vec_index_service->acquire_adapter_guard(ls_id_, index_ctx, adaptor_guard, &vec_index_param_, dim_))) {
         LOG_WARN("failed to get ObPluginVectorIndexAdapter", K(ret), K(ls_id_), K(index_ctx));
       } else {
         share::ObPluginVectorIndexAdaptor* adaptor = adaptor_guard.get_adatper();

@@ -16,6 +16,7 @@
 #include "share/domain_id/ob_domain_id.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "share/ob_heap_organized_table_util.h"
+#include "sql/das/ob_das_domain_utils.h"
 #include "lib/udt/ob_collection_type.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
@@ -92,6 +93,9 @@ int ObDmlCgService::generate_insert_ctdef(ObLogDelUpd &op,
                                                 new_row,
                                                 ins_ctdef.related_ctdefs_))) {
     LOG_WARN("generate related ins ctdef failed", K(ret));
+  } else {
+    ins_ctdef.das_ctdef_.not_need_build_vec_index_tablet_infos_ =
+        !ObDASDomainUtils::check_need_build_vec_index_tablet_infos(ins_ctdef.das_ctdef_, ins_ctdef.related_ctdefs_);
   }
   if (OB_SUCC(ret) && index_dml_info.is_primary_index_ && op.get_err_log_define().is_err_log_) {
     if (OB_FAIL(generate_err_log_ctdef(op.get_err_log_define(), ins_ctdef.error_logging_ctdef_))) {
@@ -294,6 +298,8 @@ int ObDmlCgService::generate_delete_ctdef(ObLogDelUpd &op,
   } else {
     del_ctdef.need_check_filter_null_ = index_dml_info.need_filter_null_;
     del_ctdef.distinct_algo_ = index_dml_info.distinct_algo_;
+    del_ctdef.das_ctdef_.not_need_build_vec_index_tablet_infos_ =
+        !ObDASDomainUtils::check_need_build_vec_index_tablet_infos(del_ctdef.das_ctdef_, del_ctdef.related_ctdefs_);
   }
 
   if (OB_SUCC(ret) && lib::is_oracle_mode() &&
@@ -499,6 +505,8 @@ int ObDmlCgService::generate_update_ctdef(ObLogDelUpd &op,
   } else {
     upd_ctdef.need_check_filter_null_ = index_dml_info.need_filter_null_;
     upd_ctdef.distinct_algo_ = index_dml_info.distinct_algo_;
+    upd_ctdef.dupd_ctdef_.not_need_build_vec_index_tablet_infos_ =
+        !ObDASDomainUtils::check_need_build_vec_index_tablet_infos(upd_ctdef.dupd_ctdef_, upd_ctdef.related_upd_ctdefs_);
   }
 
   // create table t1 (c1 int primary key, c2 int, c3 int) partition by hash(c1) partitions 4;
@@ -548,6 +556,11 @@ int ObDmlCgService::generate_update_ctdef(ObLogDelUpd &op,
                                                   new_row,
                                                   upd_ctdef.related_ins_ctdefs_))) {
       LOG_WARN("generate related ins ctdef failed", K(ret));
+    } else {
+      upd_ctdef.ddel_ctdef_->not_need_build_vec_index_tablet_infos_ =
+          !ObDASDomainUtils::check_need_build_vec_index_tablet_infos(*upd_ctdef.ddel_ctdef_, upd_ctdef.related_del_ctdefs_);
+      upd_ctdef.dins_ctdef_->not_need_build_vec_index_tablet_infos_ =
+          !ObDASDomainUtils::check_need_build_vec_index_tablet_infos(*upd_ctdef.dins_ctdef_, upd_ctdef.related_ins_ctdefs_);
     }
   }
   if (OB_SUCC(ret) && lib::is_mysql_mode()) {

@@ -485,6 +485,9 @@ int ObMigrationDagNet::clear_dag_net_ctx()
       LOG_WARN("failed to get migration ctx result", K(ret), KPC(ctx_));
     } else if (OB_FAIL(ls_migration_handler->set_result(result))) {
       LOG_WARN("failed to report result", K(ret), KPC(ctx_));
+    // Pass source LS rebuild_seq to handler for the complete migration phase.
+    } else if (OB_FAIL(ls_migration_handler->set_src_ls_rebuild_seq(ctx_->src_ls_rebuild_seq_))) {
+      LOG_WARN("failed to set src ls rebuild seq", K(ret), KPC(ctx_));
     }
 
     ctx_->finish_ts_ = ObTimeUtil::current_time();

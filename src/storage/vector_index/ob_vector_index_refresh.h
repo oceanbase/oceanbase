@@ -58,6 +58,7 @@ public:
 
   double delta_rate_threshold_;
   int64_t refresh_threshold_;
+  ObTabletID base_tablet_id_;
   ObTabletID domain_tablet_id_;
   bool is_tablet_level_;
   bool need_major_merge_;
@@ -86,6 +87,10 @@ private:
                                const uint64_t tenant_id,
                                const uint64_t domain_tb_id,
                                const bool try_lock = false);
+  static int lock_data_tablet(ObVectorRefreshIdxTransaction &trans,
+                               const uint64_t tenant_id,
+                               const uint64_t table_id,
+                               const ObIArray<ObTabletID> &tablet_ids);
   int get_table_row_count(const ObString &db_name, const ObString &table_name,
                           const share::SCN &scn, int64_t &row_cnt);
   int get_tablet_row_count(const ObString &db_name, const ObString &table_name,

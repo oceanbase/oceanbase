@@ -19,6 +19,16 @@
 #include "storage/ddl/ob_direct_load_mgr_utils.h"
 #include "lib/thread/thread.h"
 #include "lib/worker.h"
+#include "lib/hash/ob_hashset.h"
+#include "lib/lock/ob_tc_rwlock.h"
+#include "share/vector_index/ob_plugin_vector_index_service.h"
+#include "share/vector_index/ob_plugin_vector_index_adaptor.h"
+#include "lib/vector/ob_vsag_adaptor.h"
+#include "share/vector_index/ob_plugin_vector_index_scheduler.h"
+#include "storage/high_availability/ob_migration_vector_index.h"
+#include "storage/high_availability/ob_migration_vector_index_processor.h"
+#include "storage/high_availability/ob_migration_tenant_window_mgr.h"
+#include "storage/ls/ob_ls.h"
 
 namespace oceanbase
 {
@@ -66,6 +76,33 @@ static int compare_ls_rebuild_seq(const uint64_t tenant_id, const share::ObLSID 
                        "local_rebuild_seq", local_rebuild_seq,
                        "remote_rebuild_seq", remote_rebuild_seq);
     }
+  }
+  return ret;
+}
+
+static int get_ls_and_vecidx_processor_mgr(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const int64_t ls_rebuild_seq,
+    ObLSHandle &out_handle,
+    ObLS *&out_ls,
+    storage::ObVectorIndexMigrationProcessorMgr *&out_mgr)
+{
+  int ret = OB_SUCCESS;
+  ObLSService *ls_service = MTL(ObLSService *);
+  if (OB_ISNULL(ls_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls service is null", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, out_handle, ObLSGetMod::HA_MOD))) {
+    LOG_WARN("failed to get ls", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_ISNULL(out_ls = out_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls is null", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(compare_ls_rebuild_seq(tenant_id, ls_id, ls_rebuild_seq))) {
+    LOG_WARN("failed to compare ls rebuild seq", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_ISNULL(out_mgr = out_ls->get_migration_processor_mgr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("processor mgr is null", K(ret), K(tenant_id), K(ls_id));
   }
   return ret;
 }
@@ -1413,6 +1450,142 @@ void ObAdvanceSrcLSCheckpointArg::reset()
 }
 
 OB_SERIALIZE_MEMBER(ObAdvanceSrcLSCheckpointArg, tenant_id_, ls_id_, recycle_scn_);
+
+bool ObFetchVectorIndexAdaptorListArg::is_valid() const
+{
+  return OB_INVALID_TENANT_ID != tenant_id_ && ls_id_.is_valid()
+      && ls_rebuild_seq_ >= 0;
+}
+
+void ObFetchVectorIndexAdaptorListArg::reset()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  ls_id_.reset();
+  ls_rebuild_seq_ = -1;
+}
+
+void ObFetchVectorIndexAdaptorListRes::reset()
+{
+  adaptor_metas_.reset();
+  vsag_version_.reset();
+}
+
+bool ObFetchVectorIndexSegmentMetasArg::is_valid() const
+{
+  return OB_INVALID_TENANT_ID != tenant_id_ && ls_id_.is_valid() && inc_tablet_id_.is_valid()
+      && ls_rebuild_seq_ >= 0;
+}
+
+void ObFetchVectorIndexSegmentMetasArg::reset()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  ls_id_.reset();
+  inc_tablet_id_.reset();
+  ls_rebuild_seq_ = -1;
+}
+
+void ObFetchVectorIndexSegmentMetasRes::reset()
+{
+  adaptor_handle_id_ = OB_INVALID_ID;
+  vec_index_meta_.release();
+  vec_index_right_boundary_scn_.reset();
+}
+
+bool ObRegisterVecIndexMigrationProcessorArg::is_valid() const
+{
+  return OB_INVALID_TENANT_ID != tenant_id_ && ls_id_.is_valid()
+      && OB_INVALID_ID != adaptor_handle_id_
+      && segment_idx_ >= 0
+      && ls_rebuild_seq_ >= 0;
+}
+
+void ObRegisterVecIndexMigrationProcessorArg::reset()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  ls_id_.reset();
+  adaptor_handle_id_ = OB_INVALID_ID;
+  segment_idx_ = -1;
+  ls_rebuild_seq_ = -1;
+}
+
+void ObRegisterVecIndexMigrationProcessorRes::reset()
+{
+  processor_id_ = OB_INVALID_ID;
+}
+
+bool ObFetchVecIndexMigrationSegmentDataArg::is_valid() const
+{
+  return OB_INVALID_TENANT_ID != tenant_id_ && ls_id_.is_valid()
+      && OB_INVALID_ID != processor_id_ && seq_idx_ >= 0
+      && ls_rebuild_seq_ >= 0;
+}
+
+void ObFetchVecIndexMigrationSegmentDataArg::reset()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  ls_id_.reset();
+  processor_id_ = OB_INVALID_ID;
+  seq_idx_ = -1;
+  ls_rebuild_seq_ = -1;
+}
+
+void ObFetchVecIndexMigrationSegmentDataRes::reset()
+{
+  data_.reset();
+}
+
+bool ObReleaseVectorIndexAdaptorHandleArg::is_valid() const
+{
+  return OB_INVALID_TENANT_ID != tenant_id_ && ls_id_.is_valid()
+      && OB_INVALID_ID != adaptor_handle_id_
+      && ls_rebuild_seq_ >= 0;
+}
+
+void ObReleaseVectorIndexAdaptorHandleArg::reset()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  ls_id_.reset();
+  adaptor_handle_id_ = OB_INVALID_ID;
+  ls_rebuild_seq_ = -1;
+}
+
+// vector index migration RPC serialization
+OB_SERIALIZE_MEMBER(ObFetchVectorIndexAdaptorListArg, tenant_id_, ls_id_,
+    ls_rebuild_seq_);
+OB_SERIALIZE_MEMBER(ObFetchVectorIndexAdaptorListRes, adaptor_metas_, vsag_version_);
+
+OB_SERIALIZE_MEMBER(ObFetchVectorIndexSegmentMetasArg, tenant_id_, ls_id_, inc_tablet_id_,
+    ls_rebuild_seq_);
+OB_SERIALIZE_MEMBER(ObFetchVectorIndexSegmentMetasRes, adaptor_handle_id_, vec_index_meta_,
+    vec_index_right_boundary_scn_);
+OB_SERIALIZE_MEMBER(ObRegisterVecIndexMigrationProcessorArg, tenant_id_, ls_id_, adaptor_handle_id_,
+                    segment_idx_, ls_rebuild_seq_);
+OB_SERIALIZE_MEMBER(ObRegisterVecIndexMigrationProcessorRes, processor_id_);
+OB_SERIALIZE_MEMBER(ObFetchVecIndexMigrationSegmentDataArg, tenant_id_, ls_id_, processor_id_, seq_idx_,
+    ls_rebuild_seq_);
+OB_SERIALIZE_MEMBER(ObFetchVecIndexMigrationSegmentDataRes, data_);
+OB_SERIALIZE_MEMBER(ObReleaseVectorIndexAdaptorHandleArg, tenant_id_, ls_id_, adaptor_handle_id_,
+    ls_rebuild_seq_);
+OB_SERIALIZE_MEMBER(ObNotifyVecIndexMigrationProcessorDoneArg, tenant_id_, ls_id_, adaptor_handle_id_,
+    failure_code_, ls_rebuild_seq_, processor_id_);
+
+bool ObNotifyVecIndexMigrationProcessorDoneArg::is_valid() const
+{
+  return OB_INVALID_TENANT_ID != tenant_id_ && ls_id_.is_valid()
+      && OB_INVALID_ID != adaptor_handle_id_
+      && ls_rebuild_seq_ >= 0
+      && ObVectorIndexMigrationProcessorMgr::is_valid_processor_id(processor_id_);
+}
+
+void ObNotifyVecIndexMigrationProcessorDoneArg::reset()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  ls_id_.reset();
+  adaptor_handle_id_ = OB_INVALID_ID;
+  failure_code_ = common::OB_SUCCESS;
+  ls_rebuild_seq_ = -1;
+  processor_id_ = -1;
+}
 
 template <ObRpcPacketCode RPC_CODE>
 ObStorageStreamRpcP<RPC_CODE>::ObStorageStreamRpcP(common::ObInOutBandwidthThrottle *bandwidth_throttle)
@@ -5232,10 +5405,559 @@ int ObAdvanceSrcLSCheckpointP::process()
   return ret;
 }
 
+// ======================== Vector index migration RPC Processor ========================
+
+ERRSIM_POINT_DEF(EN_VEC_MIG_FAKE_VSAG_VERSION_MISMATCH);
+int ObFetchVectorIndexAdaptorListP::process()
+{
+  int ret = OB_SUCCESS;
+  const ObFetchVectorIndexAdaptorListArg &arg = arg_;
+  ObFetchVectorIndexAdaptorListRes &res = result_;
+  LOG_INFO("receive fetch vector index adaptor list rpc", K(arg));
+
+  // Always report src vsag version so dest can guard against library mismatch.
+  std::string local_vsag_ver = common::obvsag::version();
+#ifdef ERRSIM
+  {
+    int tmp_ret = EN_VEC_MIG_FAKE_VSAG_VERSION_MISMATCH ?: OB_SUCCESS;
+    if (OB_SUCCESS != tmp_ret) {
+      // Errsim active: report a deliberately wrong version so dest refuses migration.
+      local_vsag_ver = std::string("errsim_fake_vsag_version");
+      LOG_INFO("errsim inject fake vsag version mismatch on src",
+               "fake_version", local_vsag_ver.c_str(), K(tmp_ret));
+    }
+  }
+#endif
+  if (OB_FAIL(res.vsag_version_.assign(local_vsag_ver.c_str()))) {
+    LOG_WARN("failed to set vsag version", K(ret),
+             "len", static_cast<int64_t>(local_vsag_ver.size()));
+  } else {
+    if (arg.tenant_id_ != MTL_ID()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("vec index migration rpc tenant not match", K(ret), K(arg), "mtl_id", MTL_ID());
+    } else {
+      ObLSHandle ls_handle;
+      ObLS *ls = nullptr;
+      ObLSService *ls_service = nullptr;
+      if (!arg.is_valid()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret), K(arg));
+      } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ls service is null", K(ret));
+      } else if (OB_FAIL(ls_service->get_ls(arg.ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
+        LOG_WARN("failed to get ls", K(ret), K(arg));
+      } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ls is null", K(ret), K(arg));
+      } else if (OB_FAIL(compare_ls_rebuild_seq(arg.tenant_id_, arg.ls_id_, arg.ls_rebuild_seq_))) {
+        LOG_WARN("failed to compare ls rebuild seq", K(ret), K(arg));
+      } else if (OB_FAIL(ObPluginVectorIndexUtils::get_migration_adaptor_list(arg.ls_id_, res.adaptor_metas_))) {
+        LOG_WARN("failed to get migration adaptor list", K(ret), K(arg));
+      }
+    }
+  }
+
+
+
+  return ret;
+}
+
+ERRSIM_POINT_DEF(EN_VEC_INDEX_MIGRATION_SRC_HOLD_ADAPTOR_FAILED);
+int ObFetchVectorIndexSegmentMetasP::process()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  const ObFetchVectorIndexSegmentMetasArg &arg = arg_;
+  ObFetchVectorIndexSegmentMetasRes &res = result_;
+  LOG_INFO("receive fetch vector index segment metas rpc", K(arg));
+
+  if (arg.tenant_id_ != MTL_ID()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("vec index migration rpc tenant not match", K(ret), K(arg), "mtl_id", MTL_ID());
+  } else {
+    ObLSHandle ls_handle;
+    ObLS *ls = nullptr;
+    ObVectorIndexMigrationProcessorMgr *vecidx_processor_mgr = nullptr;
+    if (!arg.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(arg));
+    } else if (OB_FAIL(get_ls_and_vecidx_processor_mgr(arg.tenant_id_, arg.ls_id_,
+          arg.ls_rebuild_seq_, ls_handle, ls, vecidx_processor_mgr))) {
+    } else {
+      share::ObPluginVectorIndexService *vecidx_service = MTL(share::ObPluginVectorIndexService *);
+      share::ObPluginVectorIndexAdapterGuard adaptor_guard;
+      int64_t adaptor_handle_id = OB_INVALID_ID;
+      if (OB_ISNULL(vecidx_service)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("vector index service is null", K(ret), K(arg));
+      } else if (OB_FAIL(vecidx_service->get_adapter_inst_guard(
+                     arg.ls_id_, arg.inc_tablet_id_, adaptor_guard))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          // adaptor was cleaned up (e.g. index dropped between list-fetch and this RPC).
+          // Return OB_SUCCESS with adaptor_handle_id_ left as OB_INVALID_ID to signal dest
+          // to skip this adaptor gracefully. See ObFetchVectorIndexSegmentMetasRes::adaptor_handle_id_.
+          ret = OB_SUCCESS;
+          LOG_INFO("adaptor not found in service, index may have been dropped, dest will skip",
+              K(arg));
+        } else {
+          LOG_WARN("failed to get adapter guard", K(ret), K(arg));
+        }
+      } else if (!adaptor_guard.is_valid()) {
+        // same convention: adaptor_handle_id_ stays OB_INVALID_ID, dest skips
+        LOG_INFO("adaptor guard invalid, index may have been dropped, dest will skip", K(arg));
+      } else if (OB_FAIL(vecidx_processor_mgr->hold_adaptor(adaptor_guard, adaptor_handle_id))) {
+        LOG_WARN("failed to hold adaptor", K(ret), K(arg));
+      } else {
+#ifdef ERRSIM
+        if (OB_FAIL(EN_VEC_INDEX_MIGRATION_SRC_HOLD_ADAPTOR_FAILED)) {
+          LOG_INFO("errsim inject src hold adaptor failure", K(ret), K(adaptor_handle_id));
+          SERVER_EVENT_ADD("storage_ha", "vec_mig_errsim_src_hold_adaptor",
+              "tenant_id", arg.tenant_id_, "ls_id", arg.ls_id_.id(),
+              "adaptor_handle_id", adaptor_handle_id, "ret", ret);
+        }
+#endif
+        share::ObPluginVectorIndexAdaptor *adaptor = adaptor_guard.get_adatper();
+        share::ObVecIdxSnapshotDataHandle &snap_data = adaptor->get_snap_data();
+        if (OB_FAIL(ret)) {
+        } else {
+          if (snap_data.is_valid() && snap_data->is_inited()) {
+            // bases_/incrs_ are mutated under snap_data_->mem_data_rwlock_ (write lock).
+            TCRLockGuard lock_guard(snap_data->mem_data_rwlock_);
+            const share::ObVectorIndexMeta &meta = snap_data->meta_;
+            res.vec_index_meta_.header_ = meta.header_;
+            res.vec_index_meta_.flags_ = meta.flags_;
+            for (int64_t i = 0; OB_SUCC(ret) && i < meta.bases_.count(); ++i) {
+              if (OB_FAIL(res.vec_index_meta_.add_base_seg_meta(meta.bases_.at(i)))) {
+                LOG_WARN("failed to add base seg meta to res", K(ret), K(i));
+              }
+            }
+            for (int64_t i = 0; OB_SUCC(ret) && i < meta.incrs_.count(); ++i) {
+              if (OB_FAIL(res.vec_index_meta_.add_incr_seg_meta(meta.incrs_.at(i)))) {
+                LOG_WARN("failed to add incr seg meta to res", K(ret), K(i));
+              }
+            }
+          }
+          if (OB_SUCC(ret)) {
+            res.adaptor_handle_id_ = adaptor_handle_id;
+            share::ObPluginVectorIndexMgr *vi_mgr = nullptr;
+            if (OB_FAIL(vecidx_service->acquire_vector_index_mgr(arg.ls_id_, vi_mgr))) {
+              LOG_WARN("failed to acquire vector index mgr", K(ret), K(arg));
+            } else if (OB_NOT_NULL(vi_mgr) && vi_mgr->get_ls_leader()) {
+              if (OB_FAIL(adaptor->get_adaptor_scn(res.vec_index_right_boundary_scn_))) {
+                LOG_WARN("failed to get adaptor scn", K(ret), K(arg));
+              } else if (!res.vec_index_right_boundary_scn_.is_valid_and_not_min()) {
+                res.vec_index_right_boundary_scn_ = ls->get_ls_wrs_handler()->get_ls_weak_read_ts();
+              }
+            } else {
+              res.vec_index_right_boundary_scn_ = ls->get_ls_wrs_handler()->get_ls_weak_read_ts();
+            }
+
+            if (OB_FAIL(ret)) {
+            } else if (!res.vec_index_right_boundary_scn_.is_valid()) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("vector index right boundary scn is invalid", K(ret), K(arg));
+            } else {
+              LOG_INFO("fetch segment metas success", K(adaptor_handle_id),
+              "base_count", res.vec_index_meta_.base_segment_count(),
+              "incr_count", res.vec_index_meta_.incr_segment_count(),
+              "total", res.vec_index_meta_.segment_count(),
+              "boundary_scn", res.vec_index_right_boundary_scn_);
+            }
+          }
+        }
+      }
+      // Mark meta as persistent so it can be serialized.
+      // When snap_data is empty, this represents a valid state (adaptor exists but
+      // has no snapshot data yet); dest will create 0 copy tasks.
+      if (OB_SUCC(ret)) {
+        res.vec_index_meta_.set_persistent();
+      }
+      if (OB_FAIL(ret) && OB_INVALID_ID != adaptor_handle_id) {
+        if (OB_SUCCESS != (tmp_ret = vecidx_processor_mgr->release_adaptor(adaptor_handle_id))) {
+          LOG_WARN("failed to release adaptor on failure",
+              K(tmp_ret), K(adaptor_handle_id));
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObRegisterVecIndexMigrationProcessorP::process()
+{
+  int ret = OB_SUCCESS;
+  const ObRegisterVecIndexMigrationProcessorArg &arg = arg_;
+  ObRegisterVecIndexMigrationProcessorRes &res = result_;
+  res.reset();
+  LOG_INFO("receive register vector index processor rpc", K(arg));
+
+  if (arg.tenant_id_ != MTL_ID()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("vec index migration rpc tenant not match", K(ret), K(arg), "mtl_id", MTL_ID());
+  } else {
+    ObLSHandle ls_handle;
+    ObLS *ls = nullptr;
+    ObVectorIndexMigrationProcessorMgr *vecidx_processor_mgr = nullptr;
+    if (!arg.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(arg));
+    } else if (OB_FAIL(get_ls_and_vecidx_processor_mgr(arg.tenant_id_, arg.ls_id_,
+          arg.ls_rebuild_seq_, ls_handle, ls, vecidx_processor_mgr))) {
+    } else {
+      share::ObPluginVectorIndexAdapterGuard adaptor_guard;
+      if (OB_FAIL(vecidx_processor_mgr->get_held_adaptor(arg.adaptor_handle_id_, adaptor_guard))) {
+        LOG_WARN("failed to get held adaptor", K(ret), K(arg));
+      } else if (!adaptor_guard.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("held adaptor guard is invalid", K(ret), K(arg));
+      } else {
+        share::ObPluginVectorIndexAdaptor *adaptor = adaptor_guard.get_adatper();
+        int64_t processor_id = -1;
+        const ObTabletID data_tablet_id = adaptor->get_data_tablet_id();
+
+        // TODO(lyh444845): consider merging register_processor +
+        // setup_and_start_processor into a single call.
+        // TODO(lyh444845): Then the State enum can be removed.
+        if (OB_FAIL(vecidx_processor_mgr->register_processor(
+                data_tablet_id, arg.segment_idx_,
+                get_peer(), arg.adaptor_handle_id_, processor_id))) {
+          LOG_WARN("failed to register processor", K(ret), K(arg));
+        } else if (OB_FAIL(vecidx_processor_mgr->setup_and_start_processor(
+                processor_id, adaptor_guard, arg.segment_idx_))) {
+          LOG_WARN("failed to setup and start processor", K(ret), K(processor_id), K(arg));
+          int tmp_ret = vecidx_processor_mgr->release_processor(processor_id);
+          if (OB_SUCCESS != tmp_ret && OB_ENTRY_NOT_EXIST != tmp_ret) {
+            LOG_WARN("failed to release processor on setup failure",
+                K(tmp_ret), K(processor_id));
+          }
+        } else {
+          res.processor_id_ = processor_id;
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+ObFetchVecIndexMigrationSegmentDataP::~ObFetchVecIndexMigrationSegmentDataP()
+{
+  if (OB_NOT_NULL(seg_buf_.get_data())) {
+    ob_free(seg_buf_.get_data());
+    seg_buf_.reset();
+  }
+}
+
+ERRSIM_POINT_DEF(EN_VEC_INDEX_MIGRATION_SRC_FETCH_SEGMENT_DATA_FAILED);
+int ObFetchVecIndexMigrationSegmentDataP::process()
+{
+  int ret = OB_SUCCESS;
+  const ObFetchVecIndexMigrationSegmentDataArg &arg = arg_;
+  ObFetchVecIndexMigrationSegmentDataRes &res = result_;
+
+  // Processor may be reused across RPCs; response serialization copies payload.
+  if (OB_NOT_NULL(seg_buf_.get_data())) {
+    ob_free(seg_buf_.get_data());
+    seg_buf_.reset();
+  }
+
+  if (arg.tenant_id_ != MTL_ID()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("vec index migration rpc tenant not match", K(ret), K(arg), "mtl_id", MTL_ID());
+  } else {
+    ObLSHandle ls_handle;
+    ObLS *ls = nullptr;
+    ObVectorIndexMigrationProcessorMgr *vecidx_processor_mgr = nullptr;
+    if (!arg.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(arg));
+    } else if (OB_FAIL(get_ls_and_vecidx_processor_mgr(arg.tenant_id_, arg.ls_id_,
+          arg.ls_rebuild_seq_, ls_handle, ls, vecidx_processor_mgr))) {
+    } else {
+      static const int64_t SEGMENT_BUF_SIZE =
+          ObMigrationTenantWindowMgr::MIGRATION_WINDOW_DEFAULT_SLOT_BUF_SIZE;
+      char *buf = static_cast<char *>(ob_malloc(SEGMENT_BUF_SIZE, "VIMigSegBuf"));
+      if (OB_ISNULL(buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc segment buf", K(ret));
+      } else {
+        seg_buf_.set_data(buf, SEGMENT_BUF_SIZE);
+#ifdef ERRSIM
+        if (OB_FAIL(EN_VEC_INDEX_MIGRATION_SRC_FETCH_SEGMENT_DATA_FAILED)) {
+          LOG_INFO("errsim inject src fetch segment data failure", K(ret), K(arg.processor_id_), K(arg.seq_idx_));
+          SERVER_EVENT_ADD("storage_ha", "vec_mig_errsim_src_fetch", "tenant_id", arg.tenant_id_,
+            "ls_id", arg.ls_id_.id(), "processor_id", arg.processor_id_, "seq_idx", arg.seq_idx_, "ret", ret);
+        }
+#endif
+        int64_t data_len = 0;
+        if (OB_FAIL(ret)) {
+          ob_free(seg_buf_.get_data());
+          seg_buf_.reset();
+        } else if (OB_FAIL(vecidx_processor_mgr->try_fetch_segment_data(
+                                arg.processor_id_, arg.seq_idx_,
+                                seg_buf_.get_data(), seg_buf_.get_capacity(), data_len))) {
+          if (OB_EAGAIN != ret) {
+            LOG_WARN("failed to fetch segment data", K(ret), K(arg));
+          }
+          ob_free(seg_buf_.get_data());
+          seg_buf_.reset();
+        } else {
+          res.data_.assign_ptr(seg_buf_.get_data(), static_cast<int32_t>(data_len));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && res.data_.length() > 0) {
+    common::ObInOutBandwidthThrottle *throttle = GCTX.bandwidth_throttle_;
+    if (OB_NOT_NULL(throttle)) {
+      int64_t last_send_ts = ObTimeUtility::current_time();
+      lib::Thread::WaitGuard guard(lib::Thread::WAIT_FOR_IO_EVENT);
+      int tmp_ret = throttle->limit_out_and_sleep(res.data_.length(), last_send_ts, INT64_MAX);
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("[MIG VEC] failed to limit out band", K(tmp_ret), K(res.data_.length()));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObReleaseVectorIndexAdaptorHandleP::process()
+{
+  int ret = OB_SUCCESS;
+  const ObReleaseVectorIndexAdaptorHandleArg &arg = arg_;
+  LOG_INFO("receive release vector index adaptor handle rpc", K(arg));
+
+  if (arg.tenant_id_ != MTL_ID()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("vec index migration rpc tenant not match", K(ret), K(arg), "mtl_id", MTL_ID());
+  } else {
+    ObLSHandle ls_handle;
+    ObLS *ls = nullptr;
+    ObVectorIndexMigrationProcessorMgr *vecidx_processor_mgr = nullptr;
+    if (!arg.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(arg));
+    } else if (OB_FAIL(get_ls_and_vecidx_processor_mgr(arg.tenant_id_, arg.ls_id_,
+          arg.ls_rebuild_seq_, ls_handle, ls, vecidx_processor_mgr))) {
+    } else if (OB_FAIL(vecidx_processor_mgr->release_adaptor(arg.adaptor_handle_id_))) {
+        if (OB_HASH_NOT_EXIST == ret || OB_ENTRY_NOT_EXIST == ret) {
+          // Already released by a concurrent cleanup / duplicate RPC (e.g.
+          // ObNotifyVectorIndexMigrationProcessorDoneP cleared the handle first, then
+          // dest retried the normal release). Treat as success; the desired
+          // post-condition — "handle no longer held on src" — is already met.
+          LOG_INFO("release adaptor handle: already gone (benign)",
+              K(ret), K(arg));
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to release adaptor handle", K(ret), K(arg));
+        }
+      } else {
+        LOG_INFO("release adaptor handle success", K(arg));
+      }
+  }
+
+  return ret;
+}
+
+int ObNotifyVectorIndexMigrationProcessorDoneP::process()
+{
+  int ret = OB_SUCCESS;
+  const ObNotifyVecIndexMigrationProcessorDoneArg &arg = arg_;
+  LOG_INFO("receive notify vec index migration processor done rpc", K(arg));
+
+  if (arg.tenant_id_ != MTL_ID()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("vec index migration rpc tenant not match", K(ret), K(arg), "mtl_id", MTL_ID());
+  } else {
+    ObLSHandle ls_handle;
+    ObLS *ls = nullptr;
+    ObVectorIndexMigrationProcessorMgr *vecidx_processor_mgr = nullptr;
+    if (!arg.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(arg));
+    } else if (OB_FAIL(get_ls_and_vecidx_processor_mgr(arg.tenant_id_, arg.ls_id_,
+          arg.ls_rebuild_seq_, ls_handle, ls, vecidx_processor_mgr))) {
+    } else if (OB_SUCCESS == arg.failure_code_) {
+      if (OB_FAIL(vecidx_processor_mgr->release_processor(arg.processor_id_))) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to release processor on done notify", K(ret), K(arg));
+        }
+      } else {
+        LOG_INFO("processor released on done notify success", K(arg));
+      }
+    } else if (OB_FAIL(vecidx_processor_mgr->mark_processor_failed(
+                       arg.processor_id_, arg.failure_code_))) {
+      LOG_WARN("failed to mark processor failed", K(ret), K(arg));
+    } else {
+      LOG_INFO("mark processor failed success", K(arg));
+    }
+  }
+
+  return ret;
+}
+
 } //namespace obrpc
 
 namespace storage
 {
+
+ObVecIdxMigChunkHeader::ObVecIdxMigChunkHeader()
+  : chunk_type_(ObVecIdxMigChunkHeader::ChunkType::MAX_TYPE),
+    processor_id_(OB_INVALID_ID),
+    tenant_id_(OB_INVALID_TENANT_ID),
+    ls_id_()
+{}
+
+void ObVecIdxMigChunkHeader::reset()
+{
+  chunk_type_ = ObVecIdxMigChunkHeader::ChunkType::MAX_TYPE;
+  processor_id_ = OB_INVALID_ID;
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  ls_id_.reset();
+}
+
+bool ObVecIdxMigChunkHeader::is_valid() const
+{
+  return OB_INVALID_ID != processor_id_
+         && OB_INVALID_TENANT_ID != tenant_id_
+         && ls_id_.is_valid()
+         && (ObVecIdxMigChunkHeader::ChunkType::META == chunk_type_
+             || ObVecIdxMigChunkHeader::ChunkType::VSAG == chunk_type_);
+}
+
+bool ObVecIdxMigChunkHeader::match(int64_t processor_id, uint64_t tenant_id,
+                                   const share::ObLSID &ls_id) const
+{
+  return processor_id_ == processor_id
+         && tenant_id_ == tenant_id
+         && ls_id_ == ls_id;
+}
+
+int ObVecIdxMigChunkHeader::read(const char *buf, int64_t buf_len,
+                                 int64_t expected_processor_id,
+                                 uint64_t expected_tenant_id,
+                                 const share::ObLSID &expected_ls_id,
+                                 int64_t &header_size)
+{
+  int ret = OB_SUCCESS;
+  header_size = 0;
+  if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "[MIG VEC] invalid args reading chunk header", K(ret), KP(buf), K(buf_len));
+  } else {
+    int64_t pos = 0;
+    if (OB_FAIL(deserialize(buf, buf_len, pos))) {
+      STORAGE_LOG(WARN, "[MIG VEC] deserialize chunk header fail", K(ret), K(buf_len));
+    } else if (OB_UNLIKELY(pos > ObVecIdxMigChunkHeader::MAX_BYTES)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "[MIG VEC] chunk header size exceeds upper bound", K(ret), K(pos),
+          "max", ObVecIdxMigChunkHeader::MAX_BYTES);
+    } else if (OB_UNLIKELY(!is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "[MIG VEC] decoded chunk header is invalid", K(ret), KPC(this));
+    } else if (OB_UNLIKELY(!match(expected_processor_id, expected_tenant_id, expected_ls_id))) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "[MIG VEC] chunk header mismatch with expected identity", K(ret), KPC(this),
+          K(expected_processor_id), K(expected_tenant_id), K(expected_ls_id));
+    } else {
+      header_size = pos;
+    }
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObVecIdxMigChunkHeader, chunk_type_, processor_id_, tenant_id_, ls_id_);
+
+ObVecIdxMigMetaChunkHeader::ObVecIdxMigMetaChunkHeader()
+  : ObVecIdxMigChunkHeader(),
+    meta_len_(0)
+{
+  chunk_type_ = ObVecIdxMigChunkHeader::ChunkType::META;
+}
+
+void ObVecIdxMigMetaChunkHeader::reset()
+{
+  ObVecIdxMigChunkHeader::reset();
+  chunk_type_ = ObVecIdxMigChunkHeader::ChunkType::META;
+  meta_len_ = 0;
+}
+
+bool ObVecIdxMigMetaChunkHeader::is_valid() const
+{
+  return ObVecIdxMigChunkHeader::is_valid()
+         && ObVecIdxMigChunkHeader::ChunkType::META == chunk_type_
+         && meta_len_ > 0;
+}
+
+OB_SERIALIZE_MEMBER((ObVecIdxMigMetaChunkHeader, ObVecIdxMigChunkHeader), meta_len_);
+
+ObVecIdxMigVsagChunkHeader::ObVecIdxMigVsagChunkHeader()
+  : ObVecIdxMigChunkHeader()
+{
+  chunk_type_ = ObVecIdxMigChunkHeader::ChunkType::VSAG;
+}
+
+bool ObVecIdxMigVsagChunkHeader::is_valid() const
+{
+  return ObVecIdxMigChunkHeader::is_valid()
+         && ObVecIdxMigChunkHeader::ChunkType::VSAG == chunk_type_;
+}
+
+ObMigrationVectorIndexAdaptorMeta::ObMigrationVectorIndexAdaptorMeta()
+    : inc_tablet_id_(), snapshot_tablet_id_(), vbitmap_tablet_id_(), data_tablet_id_(),
+      rowkey_vid_tablet_id_(), vid_rowkey_tablet_id_(), embedded_tablet_id_(),
+      inc_table_id_(OB_INVALID_ID), snapshot_table_id_(OB_INVALID_ID),
+      vbitmap_table_id_(OB_INVALID_ID), data_table_id_(OB_INVALID_ID),
+      rowkey_vid_table_id_(OB_INVALID_ID), vid_rowkey_table_id_(OB_INVALID_ID),
+      embedded_table_id_(OB_INVALID_ID),
+      type_(share::VIAT_MAX), is_need_vid_(false),
+      vec_index_param_(),
+      replace_scn_(), snapshot_key_prefix_(), has_complete_(false)
+{}
+
+void ObMigrationVectorIndexAdaptorMeta::reset()
+{
+  inc_tablet_id_.reset();
+  snapshot_tablet_id_.reset();
+  vbitmap_tablet_id_.reset();
+  data_tablet_id_.reset();
+  rowkey_vid_tablet_id_.reset();
+  vid_rowkey_tablet_id_.reset();
+  embedded_tablet_id_.reset();
+  inc_table_id_ = OB_INVALID_ID;
+  snapshot_table_id_ = OB_INVALID_ID;
+  vbitmap_table_id_ = OB_INVALID_ID;
+  data_table_id_ = OB_INVALID_ID;
+  rowkey_vid_table_id_ = OB_INVALID_ID;
+  vid_rowkey_table_id_ = OB_INVALID_ID;
+  embedded_table_id_ = OB_INVALID_ID;
+  type_ = share::VIAT_MAX;
+  is_need_vid_ = false;
+  vec_index_param_.reset();
+  replace_scn_.reset();
+  snapshot_key_prefix_.reset();
+  has_complete_ = false;
+}
+
+bool ObMigrationVectorIndexAdaptorMeta::is_valid() const
+{
+  return inc_tablet_id_.is_valid() && vbitmap_tablet_id_.is_valid()
+         && snapshot_tablet_id_.is_valid() && data_tablet_id_.is_valid()
+         && (vbitmap_table_id_ != OB_INVALID_ID) && (inc_table_id_ != OB_INVALID_ID)
+         && (snapshot_table_id_ != OB_INVALID_ID);
+}
+
+OB_SERIALIZE_MEMBER(ObMigrationVectorIndexAdaptorMeta,
+    inc_tablet_id_, snapshot_tablet_id_, vbitmap_tablet_id_, data_tablet_id_,
+    rowkey_vid_tablet_id_, vid_rowkey_tablet_id_, embedded_tablet_id_,
+    inc_table_id_, snapshot_table_id_, vbitmap_table_id_, data_table_id_,
+    rowkey_vid_table_id_, vid_rowkey_table_id_, embedded_table_id_,
+    type_, is_need_vid_, vec_index_param_,
+    replace_scn_, snapshot_key_prefix_, has_complete_);
 
 ObStorageRpc::ObStorageRpc()
     : is_inited_(false),

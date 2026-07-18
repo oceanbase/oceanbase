@@ -303,6 +303,7 @@ public:
   logservice::ObGCHandler *get_gc_handler() { return &gc_handler_; }
   //migration handler
   ObLSMigrationHandler *get_ls_migration_handler() { return &ls_migration_handler_; }
+  ObVectorIndexMigrationProcessorMgr *get_migration_processor_mgr() { return ls_migration_handler_.get_processor_mgr(); }
   //migration handler
   ObTransferHandler *get_transfer_handler() { return &transfer_handler_; }
   ObLSTransferInfo &get_ls_startup_transfer_info() { return startup_transfer_info_; }

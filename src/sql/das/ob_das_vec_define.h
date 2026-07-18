@@ -137,7 +137,9 @@ public:
   const ObDASScanCtDef *get_vec_aux_tbl_ctdef(int64_t ctdef_idx, ObTSCIRScanType scan_type) const
   {
     const ObDASScanCtDef *aux_tbl_ctdef = nullptr;
-    if (children_cnt_ > ctdef_idx && ctdef_idx > 0 && children_ != nullptr) {
+    if (children_cnt_ > ctdef_idx && ctdef_idx > 0 && children_ != nullptr
+        && children_[ctdef_idx] != nullptr
+        && children_[ctdef_idx]->op_type_ == DAS_OP_TABLE_SCAN) {
       const ObDASScanCtDef *child = static_cast<const ObDASScanCtDef *>(children_[ctdef_idx]);
       if (child->ir_scan_type_ == scan_type) {
         aux_tbl_ctdef = child;
@@ -229,7 +231,9 @@ public:
   {
     const ObDASVecAuxScanCtDef *ctdef = static_cast<const ObDASVecAuxScanCtDef *>(ctdef_);
     ObDASScanRtDef *rtdef = nullptr;
-    if (children_cnt_ > rtdef_idx && children_ != nullptr) {
+    if (children_cnt_ > rtdef_idx && rtdef_idx > 0 && children_ != nullptr
+        && children_[rtdef_idx] != nullptr
+        && children_[rtdef_idx]->op_type_ == DAS_OP_TABLE_SCAN) {
       rtdef = static_cast<ObDASScanRtDef*>(children_[rtdef_idx]);
     }
     return rtdef;

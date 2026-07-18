@@ -162,6 +162,7 @@ global_index_auto_split_policy
 ha_high_thread_score
 ha_low_thread_score
 ha_mid_thread_score
+ha_vector_index_thread_score
 high_priority_net_thread_count
 ignore_replay_checksum_error
 inc_sstable_upload_thread_score
@@ -479,6 +480,7 @@ _enable_log_cache
 _enable_malloc_v2
 _enable_memleak_light_backtrace
 _enable_memtable_hash_index
+_enable_migrate_vector_index
 _enable_mock_stmt_flush_table
 _enable_more_aggressive_dynamic_worker
 _enable_multiple_semantic_indexes_on_column
@@ -606,6 +608,7 @@ _max_tablet_cnt_per_gb
 _mds_memory_limit_percentage
 _memstore_limit_percentage
 _migrate_block_verify_level
+_migration_vector_index_window_buffer_size
 _minor_compaction_amplification_factor
 _minor_merge_write_amplification_threshold
 _min_const_integer_precision

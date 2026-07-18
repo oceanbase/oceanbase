@@ -12,6 +12,10 @@
 
 namespace oceanbase
 {
+namespace share
+{
+struct ObVectorIndexAcquireCtx;
+}
 namespace sql
 {
 class ObTableModifyOp;
@@ -349,6 +353,7 @@ public:
       related_tablet_ids_(nullptr),
       das_allocator_(nullptr),
       ft_doc_word_infos_(nullptr),
+      vec_index_acquire_ctxs_(nullptr),
       is_do_gts_opt_(false),
       dml_param_()
   { }
@@ -373,6 +378,7 @@ public:
   ObTabletIDFixedArray *related_tablet_ids_;
   common::ObIAllocator *das_allocator_;
   common::ObIArray<ObFTDocWordInfo> *ft_doc_word_infos_;
+  common::ObIArray<share::ObVectorIndexAcquireCtx> *vec_index_acquire_ctxs_;
   bool is_do_gts_opt_;
 private:
   storage::ObDMLBaseParam dml_param_;
@@ -407,7 +413,7 @@ int ObDASIndexDMLAdaptor<N, DMLIterator>::write_tablet(DMLIterator &iter, int64_
     } else if (OB_FAIL(ObDMLService::init_dml_param(
         *ctdef_, *rtdef_, *snapshot_, write_branch_id_, *das_allocator_, store_ctx_guard, dml_param_, is_do_gts_opt_))) {
       SQL_DAS_LOG(WARN, "init dml param failed", K(ret), K(ctdef_->table_id_), K(ctdef_->index_tid_));
-
+    } else if (FALSE_IT(dml_param_.vec_index_acquire_ctxs_ = vec_index_acquire_ctxs_)) {
     } else if (OB_FAIL(write_rows(ls_id_, tablet_id_, *ctdef_, *rtdef_, iter, affected_rows))) {
       SQL_DAS_LOG(WARN, "write rows failed", K(ret),
                   K(ls_id_), K(tablet_id_), K(ctdef_->table_id_), K(ctdef_->index_tid_));
@@ -500,6 +506,7 @@ int ObDASIndexDMLAdaptor<N, DMLIterator>::write_tablet_with_ignore(DMLIterator &
       } else if (OB_FAIL(ObDMLService::init_dml_param(*ctdef_, *rtdef_, *snapshot_, write_branch_id_,
           *das_allocator_, store_ctx_guard, dml_param_, is_do_gts_opt_))) {
         SQL_DAS_LOG(WARN, "init dml param failed", K(ret), KPC_(ctdef), KPC_(rtdef));
+      } else if (FALSE_IT(dml_param_.vec_index_acquire_ctxs_ = vec_index_acquire_ctxs_)) {
       } else if (with_local_index && FALSE_IT(dml_param_.write_flag_.set_skip_flush_redo())) {
       } else if (OB_FAIL(write_rows(ls_id_,
                                     tablet_id_,

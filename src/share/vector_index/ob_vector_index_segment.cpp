@@ -8,6 +8,7 @@
 #include "ob_vector_index_segment.h"
 #include "lib/roaringbitmap/ob_roaringbitmap.h"
 #include "lib/utility/ob_tracepoint.h"
+#include "share/ob_debug_sync.h"
 #include "share/vector_index/ob_plugin_vector_index_adaptor.h"
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
 #include "storage/tx_storage/ob_access_service.h"
@@ -410,7 +411,7 @@ int ObVectorIndexMeta::assign(const ObVectorIndexMeta& other)
   return ret;
 }
 
-void ObVectorIndexMeta::release(ObIAllocator *allocator, const uint64_t tenant_id)
+void ObVectorIndexMeta::release()
 {
   header_.reset();
   flags_ = 0;
@@ -1058,11 +1059,18 @@ ObVectorIndexSegmentBuilder::~ObVectorIndexSegmentBuilder()
 
 void ObVectorIndexSegmentBuilder::free_vec_buf_data(ObIAllocator &allocator)
 {
+  TCWLockGuard lock_guard(mem_data_rwlock_);
+  free_vec_buf_data_nolock(allocator);
+}
+
+void ObVectorIndexSegmentBuilder::free_vec_buf_data_nolock(ObIAllocator &allocator)
+{
   LOG_INFO("free vec buf data", KPC(this), K(lbt()));
   if (OB_NOT_NULL(vid_array_)) {
     vid_array_->~ObVecIdxVidArray();
     allocator.free(vid_array_);
     vid_array_ = nullptr;
+    DEBUG_SYNC(VECTOR_INDEX_BUILDER_FREE_AFTER_VID);
   }
   if (OB_NOT_NULL(vec_array_)) {
     vec_array_->~ObVecIdxVecArray();
@@ -1096,9 +1104,10 @@ int ObVectorIndexSegmentBuilder::init_vec_buffer(
     const uint64_t tenant_id, ObIAllocator &allocator, const bool is_sparse_vector)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(ATOMIC_LOAD(&(vid_array_)))) {
+  DEBUG_SYNC(VECTOR_INDEX_BUILDER_INIT_BEFORE_LOCK);
+  if (!ATOMIC_LOAD(&has_build_) && OB_ISNULL(ATOMIC_LOAD(&(vid_array_)))) {
     TCWLockGuard lock_guard(mem_data_rwlock_);
-    if (OB_NOT_NULL(ATOMIC_LOAD(&(vid_array_)))) {
+    if (ATOMIC_LOAD(&has_build_) || OB_NOT_NULL(ATOMIC_LOAD(&(vid_array_)))) {
       // do nothing
     } else if (OB_ISNULL(vid_array_ = OB_NEWx(ObVecIdxVidArray, &allocator))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1128,9 +1137,10 @@ int ObVectorIndexSegmentBuilder::init_vec_buffer(
       LOG_WARN("allocate memory for vector array fail", K(ret));
     } else {
       vec_array_->set_attr(ObMemAttr(tenant_id, "VecIdxBuf"));
+      DEBUG_SYNC(VECTOR_INDEX_BUILDER_INIT_AFTER_ALLOC);
     }
     if (OB_FAIL(ret)) {
-      free_vec_buf_data(allocator);
+      free_vec_buf_data_nolock(allocator);
     }
   }
   return ret;
@@ -1327,8 +1337,9 @@ int ObVectorIndexSegmentBuilder::build_if_need(
       LOG_WARN("create segment fail", K(ret));
     }
     if (OB_SUCC(ret)) {
-      has_build_ = true;
-      free_vec_buf_data(allocator);
+      TCWLockGuard lock_guard(mem_data_rwlock_);
+      free_vec_buf_data_nolock(allocator);
+      ATOMIC_STORE(&has_build_, true);
     }
   }
   return ret;
@@ -1590,7 +1601,7 @@ void ObVecIdxSnapshotData::free_memdata_resource(ObIAllocator *allocator, const 
     allocator->free(builder_);
     builder_ = nullptr;
   }
-  meta_.release(allocator, tenant_id);
+  meta_.release();
   is_init_ = false;
 }
 
@@ -1870,6 +1881,7 @@ int ObVecIdxSnapshotData::build_finished(ObIAllocator &allocator)
     }
     builder_->free(allocator);
     builder_->set_build_finished(true);
+    has_complete_ = true;
   }
   return ret;
 }
@@ -1947,8 +1959,8 @@ static int rescan(
 }
 
 int ObVecIdxSnapshotData::load_segment(ObIAllocator &allocator, ObPluginVectorIndexAdaptor *adaptor,
-    ObTableScanIterator *snap_data_iter, const uint64_t tenant_id, ObVectorIndexSegmentMeta &seg_meta,
-    ObVecIndexAsyncTaskCtx *task_ctx)
+    ObTableScanIterator *snap_data_iter, const uint64_t tenant_id,
+    const ObLSID &ls_id, ObVectorIndexSegmentMeta &seg_meta, ObVecIndexAsyncTaskCtx *task_ctx)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator tmp_allocator("VISerde", OB_MALLOC_MIDDLE_BLOCK_SIZE, tenant_id);
@@ -1957,7 +1969,12 @@ int ObVecIdxSnapshotData::load_segment(ObIAllocator &allocator, ObPluginVectorIn
   param.allocator_ = &tmp_allocator;
   param.seg_meta_ = &seg_meta;
   param.task_ctx_ = task_ctx;
-  if (OB_FAIL(ObVectorIndexSegment::deserialize(seg_meta.segment_handle_, tenant_id, adaptor, param))) {
+  if (OB_FAIL(ObPluginVectorIndexUtils::try_get_ls_index_mgr(ls_id, param.mgr_))) {
+    LOG_WARN("fail to try get ls index mgr", K(ret), K(ls_id));
+  } else if (OB_ISNULL(param.mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls index mgr is null", K(ret), K(ls_id));
+  } else if (OB_FAIL(ObVectorIndexSegment::deserialize(seg_meta.segment_handle_, tenant_id, adaptor, param))) {
     LOG_WARN("serialize index failed.", K(ret));
   } else {
     LOG_INFO("load segment success", K(ret), K(seg_meta));
@@ -1991,7 +2008,12 @@ int ObVecIdxSnapshotData::load_segment(ObPluginVectorIndexAdaptor *adaptor,
     param.allocator_ = &tmp_allocator;
     param.seg_meta_ = &seg_meta;
     param.task_ctx_ = task_ctx;
-    if (OB_FAIL(ObVectorIndexSegment::deserialize(seg_meta.segment_handle_, tenant_id, adaptor, param))) {
+    if (OB_FAIL(ObPluginVectorIndexUtils::try_get_ls_index_mgr(ls_id, param.mgr_))) {
+      LOG_WARN("fail to try get ls index mgr", K(ret), K(ls_id));
+    } else if (OB_ISNULL(param.mgr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls index mgr is null", K(ret), K(ls_id));
+    } else if (OB_FAIL(ObVectorIndexSegment::deserialize(seg_meta.segment_handle_, tenant_id, adaptor, param))) {
       LOG_WARN("serialize index failed.", K(ret));
     }
   }
@@ -2011,7 +2033,7 @@ int ObVecIdxSnapshotData::load_segment(ObPluginVectorIndexAdaptor *adaptor,
 }
 
 int ObVecIdxSnapshotData::load_persist_segments(
-    ObPluginVectorIndexAdaptor *adaptor, ObIAllocator &allocator,
+    ObPluginVectorIndexAdaptor *adaptor, ObIAllocator &allocator, const ObLSID &ls_id,
     storage::ObTableScanParam &scan_param, ObTableScanIterator *table_scan_iter,
     ObVecIndexAsyncTaskCtx *task_ctx)
 {
@@ -2031,8 +2053,8 @@ int ObVecIdxSnapshotData::load_persist_segments(
       LOG_INFO("incr segment has been load, so skip", K(i), K(seg_meta));
     } else if (OB_FAIL(rescan(seg_meta, scan_param, timeout_us, table_scan_iter, rowkey_objs))) {
       LOG_WARN("rescan fail", K(ret));
-    } else if (OB_FAIL(load_segment(allocator, adaptor, table_scan_iter, adaptor->get_tenant_id(), seg_meta,
-        task_ctx))) {
+    } else if (OB_FAIL(load_segment(allocator, adaptor, table_scan_iter, adaptor->get_tenant_id(),
+                                    ls_id, seg_meta, task_ctx))) {
       LOG_WARN("load_segment fail", K(ret), K(i), K(seg_meta));
     }
   }
@@ -2046,8 +2068,8 @@ int ObVecIdxSnapshotData::load_persist_segments(
       LOG_INFO("base segment has been load, so skip", K(i), K(seg_meta));
     } else if (OB_FAIL(rescan(seg_meta, scan_param, timeout_us, table_scan_iter, rowkey_objs))) {
       LOG_WARN("rescan fail", K(ret));
-    } else if (OB_FAIL(load_segment(allocator, adaptor, table_scan_iter, adaptor->get_tenant_id(), seg_meta,
-        task_ctx))) {
+    } else if (OB_FAIL(load_segment(allocator, adaptor, table_scan_iter, adaptor->get_tenant_id(),
+                                    ls_id, seg_meta, task_ctx))) {
       LOG_WARN("load_segment fail", K(ret), K(i), K(seg_meta));
     }
   }
@@ -2159,6 +2181,17 @@ ObVecIdxFrozenData::~ObVecIdxFrozenData()
   FLOG_INFO("destruct ObVecIdxFrozenData", K(instacnce_cnt), KP(this));
 }
 
+
+DEF_TO_STRING(ObVectorIndexSegQueryHandler)
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(this), K_(tenant_id), KPC_(segment_querier), KP_(ctx), KP_(query_cond),
+       K_(valid_ratio), K_(selectivity), K_(extra_info_actual_size), K_(is_sparse_vector),
+       KP_(query_vector), K_(dim), KP_(sparse_lens), KP_(sparse_dims), KP_(sparse_vals));
+  J_OBJ_END();
+  return pos;
+}
 
 int ObVectorIndexSegQueryHandler::knn_search(ObVsagQueryResult &result, int segment_cnt)
 {

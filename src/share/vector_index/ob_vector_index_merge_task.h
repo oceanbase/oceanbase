@@ -25,6 +25,9 @@ public:
   virtual ~ObVecIdxMergeTaskExecutor() {}
   int load_triggered_task(const ObVecIndexTaskStatus &task_row) override;
   int load_task(uint64_t &task_trace_base_num) override;
+  static int do_check_task_result(
+      ObVecIndexAsyncTaskCtx *task_ctx,
+      ObVecTaskResultCheckAction &action);
 private:
   bool check_operation_allow() override;
 

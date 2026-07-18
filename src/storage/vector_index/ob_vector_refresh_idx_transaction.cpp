@@ -216,6 +216,7 @@ int ObVectorRefreshIdxTransaction::start(ObSQLSessionInfo *session_info, ObISQLC
 int ObVectorRefreshIdxTransaction::end(const bool commit)
 {
   int ret = OB_SUCCESS;
+  DEBUG_SYNC(BEFORE_COMMIT_CHECK_POINT);
   int tmp_ret = OB_SUCCESS;
   if (in_trans_) {
     if (OB_FAIL(end_transaction(commit))) {

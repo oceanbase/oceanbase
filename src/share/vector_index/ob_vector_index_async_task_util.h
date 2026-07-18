@@ -274,6 +274,7 @@ struct ObVecIndexTaskStatus
   ObVecIndexTaskProgressInfo progress_info_;
   bool all_finished_;
   ObVecIndexTaskInfo task_info_;
+  ObTabletID inc_tablet_id_;
   common::ObAddr exec_addr_; // server address executing the task (from inner table, data_version >= 4.6.0.0)
   int64_t priority_;
   int64_t start_time_;
@@ -296,6 +297,7 @@ struct ObVecIndexTaskStatus
                             progress_info_(),
                             all_finished_(false),
                             task_info_(),
+                            inc_tablet_id_(OB_INVALID_ID),
                             exec_addr_(),
                             priority_(0),
                             start_time_(0),
@@ -305,7 +307,7 @@ struct ObVecIndexTaskStatus
   TO_STRING_KV(K_(gmt_create), K_(gmt_modified), K_(tenant_id), K_(table_id),
                 K_(tablet_id), K_(task_type), K_(trigger_type), K_(task_id),
                 K_(status), K_(target_scn), K_(trace_id), K_(ret_code),
-                K_(progress_info), K_(all_finished), K_(task_info), K_(last_error_code),
+                K_(progress_info), K_(all_finished), K_(task_info), K_(last_error_code), K_(inc_tablet_id),
                 K_(exec_addr), K_(priority), K_(start_time), K_(end_time), K_(err_msg));
 };
 
@@ -528,6 +530,23 @@ private:
   // Used by the leader/follower switch path to keep the switch lightweight; the
   // scheduler tick later picks up cancel_post_work_pending_ tasks and drains them.
   bool defer_post_work_;
+};
+
+class ObCollectZeroLsRefAdaptorCallback
+{
+public:
+  ObCollectZeroLsRefAdaptorCallback(
+      const int64_t zero_ref_time_threshold,
+      common::ObIArray<common::ObTabletID> &tablet_ids)
+    : zero_ref_time_threshold_(zero_ref_time_threshold),
+      tablet_ids_(tablet_ids)
+  {}
+  ~ObCollectZeroLsRefAdaptorCallback() {}
+  int operator()(
+      const hash::HashMapPair<common::ObTabletID, ObPluginVectorIndexAdaptor *> &entry);
+private:
+  const int64_t zero_ref_time_threshold_;
+  common::ObIArray<common::ObTabletID> &tablet_ids_;
 };
 
 class ObAsyncTaskCancelByTabletFunc
@@ -1114,7 +1133,6 @@ public:
   static int fetch_new_task_id(const uint64_t tenant_id, int64_t &new_task_id);
   static int add_sys_task(ObVecIndexAsyncTaskCtx *task);
   static int remove_sys_task(ObVecIndexAsyncTaskCtx *task);
-  static int check_task_result(ObVecIndexAsyncTaskCtx *task_ctx);
   static int clear_task_ctxs(ObVecIndexAsyncTaskOption &task_opt, const ObVecIndexTaskCtxArray &task_ctx_array);
   static int clear_task_ctx(ObVecIndexAsyncTaskOption &task_opt, ObVecIndexAsyncTaskCtx *task_ctx);
   static int mark_mem_sync_tablet_cancel(ObVecIndexAsyncTaskCtx *task_ctx, const common::ObTabletID &tablet_id);
@@ -1122,6 +1140,12 @@ public:
       ObVecIndexAsyncTaskCtx *task_ctx,
       const common::ObTabletID &tablet_id,
       bool &is_cancel);
+  // Cancel all async tasks owned by index_ls_mgr for LS destroy.
+  // Acquires index_ls_mgr->task_ctx_lock_ internally; must NOT be called while
+  // the caller already holds that lock.  Safe to call from either the scheduler
+  // tick (check_and_schedule_*) or from safe_to_destroy when the scheduler has
+  // already stopped.
+  static int cancel_all_async_tasks_for_destroy(ObPluginVectorIndexMgr *index_ls_mgr);
 
   static const int64_t VEC_INDEX_TASK_MAX_RETRY_TIME = 3;
   static int fetch_new_trace_id(const uint64_t basic_num, ObIAllocator *allocator, TraceId &new_trace_id);

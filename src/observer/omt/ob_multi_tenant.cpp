@@ -1679,6 +1679,9 @@ int ObMultiTenant::update_tenant_config(uint64_t tenant_id)
       if (OB_TMP_FAIL(update_tenant_query_response_time_flush_config())) {
         LOG_WARN("failed to update tenant query response time flush config", K(tmp_ret), K(tenant_id));
       }
+      if (OB_TMP_FAIL(update_tenant_ha_service_config())) {
+        LOG_WARN("failed to update tenant ha service config", K(tmp_ret), K(tenant_id));
+      }
     }
   }
   LOG_INFO("update_tenant_config success", K(tenant_id));
@@ -1708,6 +1711,19 @@ int ObMultiTenant::update_tenant_dag_scheduler_config()
     LOG_WARN("dag scheduler should not be null", K(ret));
   } else {
     dag_scheduler->reload_config();
+  }
+  return ret;
+}
+
+int ObMultiTenant::update_tenant_ha_service_config()
+{
+  int ret = OB_SUCCESS;
+  ObStorageHAService *ha_service = MTL(ObStorageHAService*);
+  if (OB_ISNULL(ha_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ha service should not be null", K(ret));
+  } else if (OB_FAIL(ha_service->reload_config())) {
+    LOG_WARN("failed to reload ha service config", K(ret));
   }
   return ret;
 }

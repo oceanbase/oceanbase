@@ -177,6 +177,11 @@
           "comment":"ha high thread number"
         },
         {
+          "name": "ha_vector_index_thread_score",
+          "value": 0,
+          "comment":"vector index migration serialize thread number, 0 means use default"
+        },
+        {
           "name": "_ss_micro_cache_memory_percentage",
           "value": 10,
           "comment": "the percentage of tenant memory size used by micro_cache in ss mode"

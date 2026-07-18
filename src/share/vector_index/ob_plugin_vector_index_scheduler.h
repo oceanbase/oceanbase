@@ -202,7 +202,6 @@ struct ObPluginVectorIndexTaskCtx
   int64_t truncate_version_;
   common::ObSpinLock lock_; // lock for update task_status_
 };
-typedef hash::ObHashMap<ObTabletID, ObVectorIndexSharedTableInfo> ObVecIdxSharedTableInfoMap;
 
 // schedule vector tasks for a ls
 class ObPluginVectorIndexLoadScheduler : public common::ObTimerTask,
@@ -258,12 +257,29 @@ public:
 
   // core interfaces
   int execute_adapter_maintenance(ObIArray<uint64_t> &vec_table_id_array);
-  int acquire_adapter_in_maintenance(const int64_t table_id,
-                                     const ObTableSchema *table_schema,
-                                     ObVecIdxSharedTableInfoMap &shared_table_info_map);
-  int set_shared_table_info_in_maintenance(const int64_t table_id,
-                                           const ObSimpleTableSchemaV2 *table_schema,
-                                           ObVecIdxSharedTableInfoMap &shared_table_info_map);
+  typedef common::hash::ObHashMap<ObPluginVectorIndexIdentity, ObVectorIndexAcquireCtx> VecAcquireCtxMap;
+
+  struct ObVectorIndexSharedInfo {
+    ObTabletID rowkey_vid_tablet_id_;
+    uint64_t rowkey_vid_table_id_;
+    ObTabletID vid_rowkey_tablet_id_;
+    uint64_t vid_rowkey_table_id_;
+    ObVectorIndexSharedInfo()
+      : rowkey_vid_tablet_id_(ObTabletID::INVALID_TABLET_ID),
+        rowkey_vid_table_id_(OB_INVALID_ID),
+        vid_rowkey_tablet_id_(ObTabletID::INVALID_TABLET_ID),
+        vid_rowkey_table_id_(OB_INVALID_ID) {}
+    TO_STRING_KV(K_(rowkey_vid_tablet_id), K_(rowkey_vid_table_id),
+                 K_(vid_rowkey_tablet_id), K_(vid_rowkey_table_id));
+  };
+  typedef common::hash::ObHashMap<common::ObTabletID, ObVectorIndexSharedInfo> VecSharedInfoMap;
+
+  int collect_tablet_info_for_maintenance(const int64_t table_id,
+                                          const ObSimpleTableSchemaV2 *table_schema,
+                                          VecAcquireCtxMap &ctx_map,
+                                          VecSharedInfoMap &shared_map,
+                                          ObIAllocator &allocator);
+  int create_or_update_adaptors(VecAcquireCtxMap &ctx_map);
   int check_task_state(ObPluginVectorIndexMgr *mgr, ObPluginVectorIndexTaskCtx *task_ctx, bool &is_stop);
   int check_is_vector_index_table(const ObSimpleTableSchemaV2 &table_schema,
                                   bool &is_vector_index_table,
@@ -272,6 +288,9 @@ public:
   void clean_deprecated_ivf_caches();
   bool disallow_cancel_task(const ObVecIndexAsyncTaskCtx *task_ctx);
   int check_need_maintence_ls_follower();
+  int check_transfer_scn(ObPluginVectorIndexMgr *mgr,
+                         bool &need_update_transfer_scn,
+                         share::SCN &current_transfer_scn);
   int check_index_adpter_exist(ObPluginVectorIndexMgr *mgr);
   int check_and_execute_ivf_cache_maintenance_task(ObPluginVectorIndexMgr *&mgr);
 
@@ -281,6 +300,8 @@ public:
   int execute_all_memdata_sync_task(ObPluginVectorIndexMgr *mgr);
   int execute_one_memdata_sync_task(ObPluginVectorIndexMgr *mgr, ObPluginVectorIndexTaskCtx *ctx);
   int check_ls_task_state(ObPluginVectorIndexMgr *mgr);
+  int check_other_ls_transfer_maintenance_finished(bool &is_finished);
+  int detach_and_clean_adaptors_for_destroy(ObPluginVectorIndexMgr *index_ls_mgr);
   int check_has_vector_index(ObIArray<uint64_t> &vec_table_id_array);
 
   // task generation interfaces
@@ -290,7 +311,6 @@ public:
   int try_schedule_remaining_tasks(ObPluginVectorIndexMgr *mgr, ObPluginVectorIndexTaskCtx *current_ctx);
   int generate_vec_idx_memdata_dag(ObPluginVectorIndexMgr *mgr, ObPluginVectorIndexTaskCtx *task_ctx);
   int get_ls_mgr(ObPluginVectorIndexMgr *&mgr);
-  void refresh_adapter_rb_flag();
   void set_ls_leader_flag(const bool is_leader);
 
   // logger interfaces
@@ -319,8 +339,6 @@ public:
   uint64_t get_tenant_id() { return tenant_id_; }
 
   int safe_to_destroy(bool &is_safe);
-  int cancel_all_async_tasks();
-  int cancel_all_async_tasks_for_destroy();
 
   TO_STRING_KV(K_(is_inited), K_(is_leader), K_(need_do_for_switch), K_(is_stopped), K_(is_logging),
                K_(need_refresh), K_(tenant_id), K_(ttl_tablet_timer_tg_id), K_(interval_factor),
@@ -334,6 +352,7 @@ public:
 
 private:
   int submit_log_();
+  int check_ls_in_vector_migration(bool &is_in_migration);
   void inner_switch_to_follower_();
   void inner_switch_to_leader_();
   bool can_schedule(ObVectorTaskScheduleType task_type) {
@@ -486,6 +505,29 @@ private:
 
 typedef common::hash::ObHashMap<common::ObTabletID, ObVecIndexAsyncTaskCtx*> VectorIndexMemSyncMap;
 typedef common::hash::ObHashMap<common::ObTabletID, ObPluginVectorIndexAdaptor*> VectorIndexAdaptorMap;
+struct ObVectorIndexMemSyncDeferredInfo
+{
+  ObVectorIndexMemSyncDeferredInfo()
+      : table_id_(OB_INVALID_ID), ret_code_(OB_SUCCESS), defer_count_(0),
+        first_defer_ts_(0), last_defer_ts_(0), next_schedule_ts_(0)
+  {}
+  ObVectorIndexMemSyncDeferredInfo(const uint64_t table_id, const int ret_code,
+                                   const int64_t now, const int64_t next_schedule_ts)
+      : table_id_(table_id), ret_code_(ret_code), defer_count_(1),
+        first_defer_ts_(now), last_defer_ts_(now), next_schedule_ts_(next_schedule_ts)
+  {}
+  TO_STRING_KV(K_(table_id), K_(ret_code), K_(defer_count), K_(first_defer_ts),
+               K_(last_defer_ts), K_(next_schedule_ts));
+
+  uint64_t table_id_;
+  int ret_code_;
+  int64_t defer_count_;
+  int64_t first_defer_ts_;
+  int64_t last_defer_ts_;
+  int64_t next_schedule_ts_;
+};
+typedef common::hash::ObHashMap<common::ObTabletID, ObVectorIndexMemSyncDeferredInfo>
+    VectorIndexMemSyncDeferredMap;
 class ObVectorIndexMemSyncInfo
 {
 public:
@@ -495,7 +537,8 @@ public:
     first_mem_sync_map_(),
     second_mem_sync_map_(),
     first_task_allocator_(ObMemAttr(tenant_id, "VecIdxTask")),
-    second_task_allocator_(ObMemAttr(tenant_id, "VecIdxTask"))
+    second_task_allocator_(ObMemAttr(tenant_id, "VecIdxTask")),
+    deferred_map_()
   {}
 
   ~ObVectorIndexMemSyncInfo(){}
@@ -506,6 +549,8 @@ public:
   int add_task_to_waiting_map(ObVectorIndexSyncLog &ls_log);
   int add_task_to_waiting_map(VectorIndexAdaptorMap &adapter_map);
   int add_task_to_waiting_map(ObTabletID &tablet_id, int64_t table_id);
+  int add_deferred_task(const ObTabletID &tablet_id, uint64_t table_id, int ret_code);
+  int promote_due_deferred_tasks();
   int count_processing_finished(bool &is_finished,
                                 uint32_t &total_count,
                                 uint32_t &finished_count);
@@ -530,6 +575,7 @@ private:
   VectorIndexMemSyncMap second_mem_sync_map_;
   ObArenaAllocator first_task_allocator_;
   ObArenaAllocator second_task_allocator_;
+  VectorIndexMemSyncDeferredMap deferred_map_;
 };
 
 } // namespace share

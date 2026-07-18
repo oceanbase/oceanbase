@@ -330,6 +330,10 @@ ob_set_subtarget(ob_storage high_availability
   high_availability/ob_ls_migration_handler.cpp
   high_availability/ob_ls_prepare_migration.cpp
   high_availability/ob_ls_complete_migration.cpp
+  high_availability/ob_migration_vector_index.cpp
+  high_availability/ob_migration_vector_index_processor.cpp
+  high_availability/ob_migration_sliding_window_controller.cpp
+  high_availability/ob_migration_tenant_window_mgr.cpp
   high_availability/ob_tablet_backfill_tx.cpp
   high_availability/ob_tablet_copy_dependency_mgr.cpp
   high_availability/ob_storage_ha_dag.cpp
@@ -356,6 +360,8 @@ ob_set_subtarget(ob_storage high_availability
   high_availability/ob_ha_rebuild_tablet.cpp
   high_availability/ob_sstable_copy_start_task.cpp
   high_availability/ob_tenant_startup_status.cpp
+  high_availability/ob_migration_tenant_window_mgr.cpp
+  high_availability/ob_migration_sliding_window_controller.cpp
 )
 
 ob_set_subtarget(ob_storage restore

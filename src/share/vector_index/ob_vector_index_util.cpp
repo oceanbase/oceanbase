@@ -3622,8 +3622,10 @@ int ObVectorIndexUtil::get_vector_index_param_with_dim(
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, data_table_id, data_table_schema))) {
     LOG_WARN("failed to get simple schema", KR(ret), K(tenant_id), K(data_table_id));
   } else if (OB_ISNULL(index_table_schema) || OB_ISNULL(data_table_schema)) {
-    ret = OB_ERR_NULL_VALUE;
-    LOG_WARN("invalid null table schema", K(ret), KP(index_table_schema), KP(data_table_schema));
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table schema not found, table or index table may have been dropped", K(ret),
+             K(index_table_id), K(data_table_id),
+             KP(index_table_schema), KP(data_table_schema));
   } else if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(
                  index_table_schema->get_index_params(), index_type, param))) {
     LOG_WARN("fail to parse params from string", K(ret), K(index_table_schema->get_index_params()));
@@ -7128,6 +7130,19 @@ int ObVectorIndexUtil::get_nearest_center_with_hgraph(
   return ret;
 }
 
+int64_t ObVectorIndexUtil::get_hnsw_max_degree(
+    const ObVectorIndexAlgorithmType param_type,
+    const ObVectorIndexAlgorithmType build_type,
+    const int64_t m)
+{
+  int64_t max_degree = m;
+  if (is_ipivf_index_type(build_type)) {
+    max_degree = 0;
+  } else if (param_type == VIAT_HNSW_SQ && build_type == VIAT_HNSW) {
+    max_degree = get_hnswsq_type_metric(m);
+  }
+  return max_degree;
+}
 
 int ObVectorIndexUtil::estimate_hnsw_memory(uint64_t num_vectors,
                                             const ObVectorIndexParam &param,

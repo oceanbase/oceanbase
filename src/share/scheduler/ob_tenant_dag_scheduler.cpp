@@ -501,6 +501,11 @@ const char *ObITask::ObITaskTypeStr[] = {
   "SS_SSTABLE_BACKUP",
   "SS_SSTABLE_BACKUP_FINISH",
   "SS_FINISH_LS_BACKUP",
+  "VEC_INDEX_MIGRATE_PREPARE",
+  "VEC_INDEX_ADAPTOR_PREPARE",
+  "VEC_INDEX_SEGMENT_COPY",
+  "VEC_INDEX_ADAPTOR_FINISH",
+  "VEC_INDEX_SERIALIZE",
   "MAX"
 };
 
@@ -4441,6 +4446,7 @@ void ObTenantDagScheduler::inner_reload_config()
     set_thread_score(ObDagPrio::DAG_PRIO_MDS_COMPACTION_MID, tenant_config->mds_compaction_mid_thread_score);
     set_thread_score(ObDagPrio::DAG_PRIO_COMPACTION_LOW, tenant_config->compaction_low_thread_score);
     set_thread_score(ObDagPrio::DAG_PRIO_HA_HIGH, tenant_config->ha_high_thread_score);
+    set_thread_score(ObDagPrio::DAG_PRIO_VECTOR_INDEX, tenant_config->ha_vector_index_thread_score);
     set_thread_score(ObDagPrio::DAG_PRIO_HA_MID, tenant_config->ha_mid_thread_score);
     set_thread_score(ObDagPrio::DAG_PRIO_HA_LOW, tenant_config->ha_low_thread_score);
     set_thread_score(ObDagPrio::DAG_PRIO_DDL, tenant_config->ddl_thread_score);

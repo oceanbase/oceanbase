@@ -7,6 +7,7 @@
 #include "ob_hybrid_vector_refresh_task.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
+#include "share/vector_index/ob_vector_index_aux_table_handler.h"
 #include "src/storage/ls/ob_ls.h"
 #include "src/storage/tx/ob_trans_service.h"
 #include "storage/tablet/ob_tablet.h"
@@ -37,6 +38,11 @@ int ObVecEmbeddingAsyncTaskExecutor::load_task(uint64_t &task_trace_base_num)
   } else if (!check_operation_allow()) { // skip
   } else if (OB_FAIL(get_index_ls_mgr(index_ls_mgr))) { // skip
     LOG_WARN("fail to get index ls mgr", K(ret), K(tenant_id_), K(ls_handle_));
+  } else if (OB_NOT_NULL(index_ls_mgr) && index_ls_mgr->get_async_task_opt().is_stop()) {
+    // LS is being destroyed; skip creating new tasks.  Cancellation of existing
+    // tasks is handled by check_and_schedule_* later in the same tick.
+    LOG_INFO("[VEC_ASYNC_TASK] ls is stopping, skip load task", K(tenant_id_),
+             K(ls_handle_.get_ls()->get_ls_id()));
   } else {
     storage::ObLS *ls = ls_handle_.get_ls();
     ObVecIndexAsyncTaskOption &task_opt = index_ls_mgr->get_async_task_opt();
@@ -46,7 +52,7 @@ int ObVecEmbeddingAsyncTaskExecutor::load_task(uint64_t &task_trace_base_num)
     ObAdapterMapFunc adapter_map_func(adapter_array);
 
     RWLock::RLockGuard lock_guard(index_ls_mgr->get_adapter_map_lock());
-    if (OB_FAIL(index_ls_mgr->get_complete_adapter_map().foreach_refactored(adapter_map_func))) {
+    if (OB_FAIL(index_ls_mgr->get_vec_adaptor_map().foreach_refactored(adapter_map_func))) {
       LOG_WARN("fail to foreach adapter map", KR(ret));
     }
     FOREACH_X(iter, adapter_array, OB_SUCC(ret) && (task_ctx_array.count() + current_task_cnt <= MAX_ASYNC_TASK_PROCESSING_COUNT)) {
@@ -791,6 +797,7 @@ int ObHybridVectorRefreshTask::do_refresh_only(
     // insert into 4 table.
     int64_t affected_rows = 0;
     ObDMLBaseParam dml_param;
+    ObSEArray<ObVectorIndexAcquireCtx, 1> vec_index_ctxs;
     share::schema::ObTableDMLParam table_dml_param(allocator_);
     share::schema::ObTableDMLParam index_id_dml_param(allocator_);
     ObAccessService *oas = MTL(ObAccessService *);
@@ -816,6 +823,16 @@ int ObHybridVectorRefreshTask::do_refresh_only(
       LOG_WARN("failed to remove ora_rowscn column", K(ret));
     } else if (OB_FAIL(init_dml_param(adaptor.get_inc_table_id(), dml_param, index_id_dml_param, delta_delete_column_id, tx_desc, snapshot, store_ctx_guard))) {
       LOG_WARN("failed to init dml param", K(ret), K(dml_param), K(index_id_dml_param));
+    } else {
+      ObVectorIndexAcquireCtx vec_index_ctx;
+      adaptor.build_acquire_ctx(vec_index_ctx);
+      if (OB_FAIL(vec_index_ctxs.push_back(vec_index_ctx))) {
+        LOG_WARN("failed to push back vector index acquire ctx", K(ret), K(vec_index_ctx));
+      } else {
+        dml_param.vec_index_acquire_ctxs_ = &vec_index_ctxs;
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(oas->delete_rows(ls_id_, adaptor.get_inc_tablet_id(), *tx_desc, dml_param, delta_delete_column_id, &delta_delete_iter, affected_rows))) {
       LOG_WARN("failed to insert rows to index id table", K(ret), K(adaptor.get_inc_table_id()));
     }
@@ -967,6 +984,7 @@ int ObHybridVectorRefreshTask::delete_embedded_table(ObPluginVectorIndexAdaptor 
 
     int64_t affected_rows = 0;
     ObDMLBaseParam dml_param;
+    ObSEArray<ObVectorIndexAcquireCtx, 1> vec_index_ctxs;
     share::schema::ObTableDMLParam table_dml_param(allocator_);
     if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(oas)) {
@@ -974,6 +992,16 @@ int ObHybridVectorRefreshTask::delete_embedded_table(ObPluginVectorIndexAdaptor 
       LOG_WARN("unexpected error", K(ret), KPC(task_ctx), K(oas));
     } else if (OB_FAIL(init_dml_param(adaptor.get_embedded_table_id(), dml_param, table_dml_param, dml_column_ids, tx_desc, snapshot, store_ctx_guard))) {
       LOG_WARN("failed to init dml param", K(ret), K(dml_param), K(table_dml_param));
+    } else {
+      ObVectorIndexAcquireCtx vec_index_ctx;
+      adaptor.build_acquire_ctx(vec_index_ctx);
+      if (OB_FAIL(vec_index_ctxs.push_back(vec_index_ctx))) {
+        LOG_WARN("failed to push back vector index acquire ctx", K(ret), K(vec_index_ctx));
+      } else {
+        dml_param.vec_index_acquire_ctxs_ = &vec_index_ctxs;
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(oas->delete_rows(ls_id_, adaptor.get_embedded_tablet_id(), *tx_desc, dml_param, dml_column_ids, &delete_iter, affected_rows))) {
       LOG_WARN("failed to delete rows from embedded table", K(ret), K(adaptor.get_embedded_tablet_id()));
     }
@@ -995,7 +1023,6 @@ int ObHybridVectorRefreshTask::after_embedding(ObPluginVectorIndexAdaptor &adapt
   ObVectorVerifyRowIterator index_id_iter(task_ctx);
   ObVectorVerifyRowIterator delta_delete_iter(task_ctx);
   embedded_iter.init();
-  bool trans_start = false;
   transaction::ObTxDesc *tx_desc = nullptr;
   oceanbase::transaction::ObTxReadSnapshot snapshot;
   storage::ObStoreCtxGuard store_ctx_guard;
@@ -1014,9 +1041,8 @@ int ObHybridVectorRefreshTask::after_embedding(ObPluginVectorIndexAdaptor &adapt
   } else if (OB_ISNULL(txs)) {
     ret =  OB_ERR_UNEXPECTED;
     LOG_WARN("get null ptr", K(ret), KPC(task_ctx), K(txs));
-  } else if (OB_FAIL(ObInsertLobColumnHelper::start_trans(ls_id_, false/*is_for_read*/, timeout_us, tx_desc))) {
+  } else if (OB_FAIL(ObVectorIndexTableHelper::start_trans(ls_id_, false/*is_for_read*/, timeout_us, adaptor.get_data_tablet_id(), tx_desc))) {
     LOG_WARN("fail to start trans", K(ret));
-  } else if (FALSE_IT(trans_start = true)) {
   } else if (OB_FAIL(txs->get_ls_read_snapshot(*tx_desc, transaction::ObTxIsolationLevel::RC, ls_id_, timeout_us, snapshot))) {
     LOG_WARN("fail to get snapshot", K(ret));
   } else if (OB_FAIL(do_refresh_only(adaptor, tx_desc, snapshot, store_ctx_guard, index_id_iter, delta_delete_iter))) {
@@ -1184,6 +1210,7 @@ int ObHybridVectorRefreshTask::after_embedding(ObPluginVectorIndexAdaptor &adapt
     // insert into 6 table.
     int64_t affected_rows = 0;
     ObDMLBaseParam dml_param;
+    ObSEArray<ObVectorIndexAcquireCtx, 1> vec_index_ctxs;
     share::schema::ObTableDMLParam table_dml_param(allocator_);
     if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(oas)) {
@@ -1191,6 +1218,16 @@ int ObHybridVectorRefreshTask::after_embedding(ObPluginVectorIndexAdaptor &adapt
       LOG_WARN("unexpected error", K(ret), KPC(task_ctx), K(oas));
     } else if (OB_FAIL(init_dml_param(adaptor.get_embedded_table_id(), dml_param, table_dml_param, task_ctx->embedded_table_column_ids_, tx_desc, snapshot, store_ctx_guard))) {
       LOG_WARN("failed to init dml param", K(ret), K(dml_param), K(table_dml_param));
+    } else {
+      ObVectorIndexAcquireCtx vec_index_ctx;
+      adaptor.build_acquire_ctx(vec_index_ctx);
+      if (OB_FAIL(vec_index_ctxs.push_back(vec_index_ctx))) {
+        LOG_WARN("failed to push back vector index acquire ctx", K(ret), K(vec_index_ctx));
+      } else {
+        dml_param.vec_index_acquire_ctxs_ = &vec_index_ctxs;
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(oas->update_rows(ls_id_, adaptor.get_embedded_tablet_id(), *tx_desc, dml_param, task_ctx->embedded_table_column_ids_, task_ctx->embedded_table_update_ids_, &embedded_iter, affected_rows))) {
       LOG_WARN("failed to insert rows to embedded table", K(ret), K(adaptor.get_embedded_tablet_id()));
     }
@@ -1204,7 +1241,7 @@ int ObHybridVectorRefreshTask::after_embedding(ObPluginVectorIndexAdaptor &adapt
   embedded_iter.reset();
   int tmp_ret = OB_SUCCESS;
   timeout_us = ObTimeUtility::current_time() + ObInsertLobColumnHelper::LOB_TX_TIMEOUT;
-  if (OB_NOT_NULL(tx_desc) && trans_start && OB_SUCCESS != (tmp_ret = ObInsertLobColumnHelper::end_trans(tx_desc, ret != OB_SUCCESS, timeout_us))) {
+  if (OB_NOT_NULL(tx_desc) && OB_SUCCESS != (tmp_ret = ObVectorIndexTableHelper::end_trans(tx_desc, ret != OB_SUCCESS, timeout_us))) {
     ret = tmp_ret;
     LOG_WARN("fail to end trans", K(ret));
   }

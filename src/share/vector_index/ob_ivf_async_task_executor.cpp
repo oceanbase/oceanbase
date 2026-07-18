@@ -14,6 +14,13 @@ namespace oceanbase
 using namespace storage;
 namespace share
 {
+int ObIvfAsyncTaskExecutor::do_check_task_result(
+    ObVecIndexAsyncTaskCtx *task_ctx,
+    ObVecTaskResultCheckAction &action)
+{
+  return do_check_normal_running_task_result(task_ctx, action);
+}
+
 int ObIvfAsyncTaskExecutor::LoadTaskCallback::is_cache_mgr_deprecated(ObIvfCacheMgr &cache_mgr,
                                                                      bool &is_deprecated)
 {
@@ -555,6 +562,11 @@ int ObIvfAsyncTaskExecutor::load_task(uint64_t &task_trace_base_num)
   } else if (!check_operation_allow()) {                 // skip
   } else if (OB_FAIL(get_index_ls_mgr(index_ls_mgr))) {  // skip
     LOG_WARN("fail to get index ls mgr", K(ret), K(tenant_id_), K(ls_handle_));
+  } else if (OB_NOT_NULL(index_ls_mgr) && index_ls_mgr->get_async_task_opt().is_stop()) {
+    // LS is being destroyed; skip creating new tasks.  Cancellation of existing
+    // tasks is handled by check_and_schedule_* later in the same tick.
+    LOG_INFO("[VEC_ASYNC_TASK] ls is stopping, skip load task", K(tenant_id_),
+             K(ls_handle_.get_ls()->get_ls_id()));
   } else if (OB_ISNULL(ls_handle_.get_ls())) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("invalid null ls", K(ret));

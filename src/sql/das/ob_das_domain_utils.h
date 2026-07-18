@@ -13,6 +13,9 @@
 #include "storage/fts/ob_fts_plugin_helper.h"
 #include "storage/fts/ob_ft_token_processor.h"
 #include "storage/fts/ob_i_ft_parser.h"
+#include "share/vector_index/ob_plugin_vector_index_adaptor.h"
+
+#define OB_DAS_VEC_INDEX_ACQUIRE_CTX_INLINE_CNT 4
 
 namespace oceanbase
 {
@@ -294,6 +297,17 @@ public:
       const common::ObIArray<common::ObTabletID> &related_tablet_ids,
       const bool is_main_table_in_fts_ddl,
       common::ObIArray<ObFTDocWordInfo> &doc_word_infos);
+  static int build_vec_index_tablet_infos(
+      const common::ObTabletID &data_tablet_id,
+      const uint64_t data_table_id,
+      const ObDASDMLBaseCtDef &current_ctdef,
+      const common::ObIArray<const ObDASBaseCtDef *> &related_ctdefs,
+      const common::ObIArray<common::ObTabletID> &related_tablet_ids,
+      common::ObIArray<share::ObVectorIndexAcquireCtx> &ctxs);
+  // True iff build_vec_index_tablet_infos must run for this DAS DML task.
+  // CG stores the negated result in not_need_build_vec_index_tablet_infos_.
+  static bool check_need_build_vec_index_tablet_infos(const ObDASDMLBaseCtDef &current_ctdef,
+                                                      const DASDMLCtDefArray &related_das_ctdefs);
   static int generate_spatial_index_rows(
       ObIAllocator &allocator,
       const ObDASDMLBaseCtDef &das_ctdef,
@@ -319,6 +333,19 @@ public:
       const ObDASWriteBuffer::DmlRow &dml_row,
       ObDomainIndexRow &domain_rows);
 private:
+  static int is_same_vec_index_group(
+      const share::schema::ObTableSchemaParam &lhs,
+      const share::schema::ObTableSchemaParam &rhs,
+      bool &is_same);
+  static void fill_data_table_info_if_needed(
+      const ObDASDMLBaseCtDef &current_ctdef,
+      const common::ObTabletID &current_tablet_id,
+      const uint64_t current_table_id,
+      share::ObVectorIndexAcquireCtx &ctx);
+  static void fill_vec_aux_table_info(
+      const share::schema::ObTableSchemaParam &table_param,
+      const common::ObTabletID &tablet_id,
+      share::ObVectorIndexAcquireCtx &ctx);
   static int calc_save_rowkey_policy(
     ObIAllocator &allocator,
     const ObDASDMLBaseCtDef &das_ctdef,

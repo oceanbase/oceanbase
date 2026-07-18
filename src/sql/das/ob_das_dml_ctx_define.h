@@ -88,7 +88,10 @@ public:
       uint64_t is_update_pk_                    : 1;
       uint64_t is_vec_hnsw_index_vid_opt_       : 1;  // hnsw index vid opt for tables without pk
       uint64_t is_embedded_vec_ref_column_      : 1;  // semantic embeding table column change flags
-      uint64_t reserved_                        : 46; //add new flag before reserved_
+      // Backward compatibility: default 0 means DAS builds vec_index_acquire_ctxs_.
+      // CG writes 1 only when build_vec_index_tablet_infos can be safely skipped.
+      uint64_t not_need_build_vec_index_tablet_infos_ : 1;
+      uint64_t reserved_                        : 45; //add new flag before reserved_
       uint64_t compat_version_                  : 4; //prohibited to insert new flags between compat_version_ and reserved_
     };
   };

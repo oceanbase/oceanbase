@@ -25,6 +25,10 @@ namespace oceanbase
 {
 namespace share
 {
+namespace schema
+{
+class ObTableSchemaParam;
+}
 
 struct ObVecIndexAsyncTaskCtx;
 
@@ -84,9 +88,9 @@ public:
   static int release_ivf_cache_mgr(ObIvfCacheMgr* &mgr);
   static ObVectorIndexRecordType index_type_to_record_type(schema::ObIndexType type);
 
-  static ObAdapterCreateType index_type_to_create_type(schema::ObIndexType type);
-  static int get_vector_index_prefix_inner(const ObTableSchema &index_schema, const ObString index_name, ObString &prefix);
-  static int get_vector_index_prefix(const ObTableSchema &index_schema, ObString &prefix);
+  static int get_vector_index_prefix_inner(const ObSimpleTableSchemaV2 &index_schema, const ObString index_name, ObString &prefix);
+  static int get_vector_index_prefix(const ObSimpleTableSchemaV2 &index_schema, ObString &prefix);
+  static int get_vector_index_prefix(const schema::ObTableSchemaParam &index_schema, ObString &prefix);
   static int get_vector_index_name_prefix(const ObTableSchema &index_schema, ObString &prefix);
   static int get_domain_table_schema(share::schema::ObSchemaGetterGuard &schema_guard, const ObTableSchema &index_schema, const ObTableSchema *&domain_table_schema);
   static int get_prefix(const ObString &src, const ObString &item, ObString &dst);
@@ -101,6 +105,8 @@ public:
   }
   static void set_ls_leader_flag(const ObLSID &ls_id, const bool is_leader);
   static int get_ls_leader_flag(const ObLSID &ls_id, bool &is_leader);
+  // Lookup ls mgr only; does not create. OB_HASH_NOT_EXIST -> OB_SUCCESS and mgr=nullptr;
+  static int try_get_ls_index_mgr(const ObLSID &ls_id, ObPluginVectorIndexMgr *&mgr);
   static int get_read_scn(bool is_leader, ObLSID &ls_id, SCN &target_scn);
   static int query_need_refresh_memdata(ObPluginVectorIndexAdaptor *adapter, ObLSID &ls_id, bool is_leader);
   static int check_snapshot_iter_need_rescan(common::ObNewRowIterator *snapshot_idx_iter, bool &need_rescan, blocksstable::ObDatumRow *&row);
@@ -221,11 +227,46 @@ public:
                                       ObVecIndexAsyncTaskCtx *task_ctx = nullptr,
                                       const common::ObTabletID &mem_sync_tablet_id = common::ObTabletID());
   static int get_tenant_vector_index_ids(const uint64_t tenant_id, bool &has_ivf_index, common::ObIArray<uint64_t> &table_id_array);
+  static int check_tenant_has_vector_index(const uint64_t tenant_id, bool &has_vector_index);
+  static int check_vector_memory_for_migrate(const uint64_t tenant_id,
+                                             const share::ObLSID &ls_id,
+                                             const common::ObAddr &src_addr);
   static int get_current_read_scn(share::SCN &current_scn);
   static int get_lob_tablet_id(const ObLSID &ls_id, const ObTabletID &data_tablet_id, ObTabletID &lob_meta_tablet_id, ObTabletID &lob_piece_tablet_id);
   static int check_task_is_cancel(ObPluginVectorIndexTaskCtx *task_ctx, bool &is_cancel);
 
+  // vector index migration helpers
+  static int get_migration_adaptor_list(
+      const ObLSID &ls_id,
+      common::ObIArray<storage::ObMigrationVectorIndexAdaptorMeta> &adaptor_metas);
+  static int batch_create_adaptor_shells(
+      const ObLSID &ls_id,
+      const common::ObIArray<storage::ObMigrationVectorIndexAdaptorMeta> &adaptor_metas);
+  static int try_reuse_adaptor_from_tenant_map(
+      const ObLSID &ls_id,
+      const common::ObTabletID &inc_tablet_id, bool &reused);
+  static int enqueue_mem_sync_task(
+      const ObLSID &ls_id,
+      common::ObTabletID inc_tablet_id, const int64_t inc_table_id);
+  // Batch cleanup for outer retry / migration failure: detach migration shells
+  // from ls_map and erase matching stale entries from tenant_map.
+  static int cleanup_adaptor_shells(
+      const ObLSID &ls_id,
+      const common::ObIArray<storage::ObMigrationVectorIndexAdaptorMeta> &adaptor_metas);
+  // Single-adaptor cleanup for inner retry: only erase tenant_map when it still
+  // points to the same migration shell as ls_map.
+  static int cleanup_tenant_adaptor_shell_for_retry(
+      const ObLSID &ls_id,
+      const common::ObTabletID &inc_tablet_id);
+  static int set_adaptor_mig_state(
+      const ObLSID &ls_id,
+      const common::ObTabletID &inc_tablet_id, ObAdaptorMigState state);
+
 private:
+  static int get_ls_vector_mem_from_virtual_table_(const uint64_t tenant_id,
+                                                   const share::ObLSID &ls_id,
+                                                   const common::ObAddr &src_addr,
+                                                   int64_t &ls_vector_mem);
   static const int EMBEDDED_TABLE_BASE_COLUMN_CNT = 2;
   static int init_common_scan_param(storage::ObTableScanParam& scan_param,
                                     ObPluginVectorIndexAdaptor *adapter,

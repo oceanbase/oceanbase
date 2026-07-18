@@ -103,7 +103,7 @@ TEST_F(TestVectorIndexFreeze, simple_test)
         ObPluginVectorIndexAdapterGuard adaptor_guard;
         if (OB_SUCC(vec_index_service->get_adapter_inst_guard(ls_id, tablet_id, adaptor_guard))) {
           ObPluginVectorIndexAdaptor* adaptor = adaptor_guard.get_adatper();
-          if (OB_NOT_NULL(adaptor) && adaptor->get_create_type() == CreateTypeComplete) {
+          if (OB_NOT_NULL(adaptor) && adaptor->is_ready_complete()) {
             break;
           }
         }
@@ -336,7 +336,7 @@ TEST_F(TestVectorIndexFreeze, heap_table)
         ObPluginVectorIndexAdapterGuard adaptor_guard;
         if (OB_SUCC(vec_index_service->get_adapter_inst_guard(ls_id, tablet_id, adaptor_guard))) {
           ObPluginVectorIndexAdaptor* adaptor = adaptor_guard.get_adatper();
-          if (OB_NOT_NULL(adaptor) && adaptor->get_create_type() == CreateTypeComplete) {
+          if (OB_NOT_NULL(adaptor) && adaptor->is_ready_complete()) {
             break;
           }
         }
@@ -568,7 +568,7 @@ TEST_F(TestVectorIndexFreeze, partition_table)
         ObPluginVectorIndexAdapterGuard adaptor_guard;
         if (OB_SUCC(vec_index_service->get_adapter_inst_guard(ls_id, tablet_id, adaptor_guard))) {
           ObPluginVectorIndexAdaptor* adaptor = adaptor_guard.get_adatper();
-          if (OB_NOT_NULL(adaptor) && adaptor->get_create_type() == CreateTypeComplete) {
+          if (OB_NOT_NULL(adaptor) && adaptor->is_ready_complete()) {
             break;
           }
         }
@@ -819,7 +819,7 @@ TEST_F(TestVectorIndexFreeze, with_base)
         ObPluginVectorIndexAdapterGuard adaptor_guard;
         if (OB_SUCC(vec_index_service->get_adapter_inst_guard(ls_id, tablet_id, adaptor_guard))) {
           ObPluginVectorIndexAdaptor* adaptor = adaptor_guard.get_adatper();
-          if (OB_NOT_NULL(adaptor) && adaptor->get_create_type() == CreateTypeComplete) {
+          if (OB_NOT_NULL(adaptor) && adaptor->is_ready_complete()) {
             break;
           }
         }
