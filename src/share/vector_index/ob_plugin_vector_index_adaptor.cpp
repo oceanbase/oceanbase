@@ -6619,6 +6619,7 @@ int ObPluginVectorIndexAdaptor::deserialize_snap_data(ObHNSWDeserializeCallback:
       snap_data_->free_memdata_resource(get_allocator(), tenant_id_);
       LOG_INFO("memdata sync snapshot index complement no data", K(index_count), K(index_type), KPC(this));
     } else { // index_count > 0
+      snap_data_->set_inited();
       set_snap_data_has_complete();
       LOG_INFO("memdata sync snapshot index complement data", K(index_count), K(index_type), KPC(this));
     }
