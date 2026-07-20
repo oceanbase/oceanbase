@@ -277,6 +277,7 @@ private:
   int get_single_row_from_filter_iter(bool is_vectorized);
 
   int init_adaptor_vid_iter_if_null();
+  int truncate_result_adaptor_vid_iter_by_limit();
 
   ObVecPathType get_vec_index_path_type();
 

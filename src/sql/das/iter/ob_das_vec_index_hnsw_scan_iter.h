@@ -194,6 +194,10 @@ private:
 
   int get_vector_from_com_aux_vec_table(ObIAllocator &allocator, ObRowkey *rowkey, ObString &vector);
   int get_vector_from_com_aux_vec_table(ObIAllocator &allocator, ObString &vector);
+  // Recompute exact distances by fetching raw fp32 vectors from the com aux vec table row by
+  // row and evaluating the vector distance function, then overwrite adaptor_vid_iter_'s
+  // distances.
+  int recompute_exact_distances();
 
   int do_delta_buf_table_scan();
   int do_index_id_table_scan();
@@ -254,6 +258,7 @@ private:
                                           const ObSimpleMaxHeap& incr_heap,
                                           ObVecIdxQueryResult &dist_result,
                                           ObVectorQueryVidIterator*& result_iter);
+  int sort_adaptor_vid_iter_by_distance();
 
   lib::MemoryContext mem_context_;
   ObArenaAllocator vec_op_alloc_;

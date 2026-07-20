@@ -109,8 +109,8 @@ int ObExprSemanticVectorDistance::calc_result_typeN(ObExprResType &type,
   return ret;
 }
 
-
-int ObExprSemanticVectorDistance::calc_semantic_vector_distance(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
+int ObExprSemanticVectorDistance::calc_semantic_vector_distance(
+    const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
   ObExprVectorDistance::ObVecDisType dis_type = ObExprVectorDistance::ObVecDisType::MAX_TYPE;
@@ -131,7 +131,12 @@ int ObExprSemanticVectorDistance::calc_semantic_vector_distance(const ObExpr &ex
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObExprVectorDistance::calc_distance(expr, ctx, res_datum, dis_type))) {
+    if (ObExprVectorDistance::ObVecDisType::DOT == dis_type) {
+      if (OB_FAIL(ObExprVectorNegativeIPDistance::calc_negative_inner_product(
+              expr, ctx, res_datum))) {
+        LOG_WARN("failed to calc negative inner product", K(ret));
+      }
+    } else if (OB_FAIL(ObExprVectorDistance::calc_distance(expr, ctx, res_datum, dis_type))) {
       LOG_WARN("failed to calc distance", K(ret), K(dis_type));
     }
   }
@@ -139,7 +144,8 @@ int ObExprSemanticVectorDistance::calc_semantic_vector_distance(const ObExpr &ex
   return ret;
 }
 
-int ObExprSemanticVectorDistance::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const
+int ObExprSemanticVectorDistance::cg_expr(
+    ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
 
