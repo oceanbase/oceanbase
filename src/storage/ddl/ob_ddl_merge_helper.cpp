@@ -1669,6 +1669,7 @@ int ObSSDDLMergeHelper::update_tablet_table_store(ObDDLTabletMergeDagParamV2 &da
         /* update local merge param for dump sstable */
         ObTableStoreIterator iter;
         ObSSTableUploadRegHandle upload_register_handle;
+        DEBUG_SYNC(BEFORE_DDL_TABLE_MERGE_TASK);
         if (OB_FAIL(ls_handle.get_ls()->prepare_register_sstable_upload(upload_register_handle))) {
             LOG_WARN("prepare mini sstable upload register fail", K(ret));
         } else if (OB_FAIL(ls_handle.get_ls()->update_tablet_table_store(target_tablet_id, table_store_param, new_tablet_handle))) {

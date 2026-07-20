@@ -1034,9 +1034,12 @@ int ObDropVecIndexTask::cleanup_impl()
                                                      object_id_,
                                                      data_table_schema))) {
       LOG_WARN("fail to get data table schema", K(ret), K(object_id_));
-    } else if (OB_UNLIKELY(nullptr == data_table_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("data table schema is nullptr", K(ret), KP(data_table_schema));
+    } else if (OB_ISNULL(data_table_schema)) {
+      // The data table may have been dropped concurrently, e.g. the offline ddl rollback
+      // drops the hidden data table after the vector index rebuild on it fails. The ddl locks
+      // are gone with the table, so skip unlocking and continue to delete the task record.
+      LOG_INFO("data table not exist, skip unlock for add drop index",
+          K(tenant_id_), K(object_id_), K(task_id_));
     } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id_))) {
       LOG_WARN("fail to start transaction", K(ret));
     } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, task_id_))) {

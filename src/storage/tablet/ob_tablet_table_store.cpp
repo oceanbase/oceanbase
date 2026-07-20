@@ -265,6 +265,7 @@ int ObTabletTableStore::init(
     LOG_WARN("get unexpected table type", K(ret), KPC(new_sstable));
   } else if (OB_UNLIKELY(ObMergeType::MINI_MERGE == param.compaction_info_.merge_type_
                       && nullptr != new_sstable
+                      && new_sstable->is_mini_sstable()
                       && new_sstable->get_end_scn() < tablet.get_clog_checkpoint_scn())) {
     ret = OB_NO_NEED_MERGE;
     LOG_WARN("multi version sstable's end scn is smaller than ckpt, no need to do mini merge", K(ret), KPC(new_sstable), K(tablet.get_clog_checkpoint_scn()));

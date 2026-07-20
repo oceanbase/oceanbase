@@ -454,6 +454,12 @@ TEST_F(TestTableStore, test_basic_add_new_minor)
   EXPECT_EQ(1, new_table_store.major_tables_.count());
   EXPECT_EQ(3, new_table_store.minor_tables_.count());
 
+  // test reject an obsolete mini sstable whose end scn is behind the clog checkpoint
+  new_table_store.reset();
+  new_minor->key_.scn_range_.end_scn_.convert_for_tx(250);
+  EXPECT_EQ(OB_NO_NEED_MERGE, new_table_store.init(allocator_, *tablet, param, old_table_store));
+  new_minor->key_.scn_range_.end_scn_.convert_for_tx(300);
+
 
   // test add a mini sstable which end scn not equals to the clog checkpoint scn
   new_table_store.reset();
