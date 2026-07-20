@@ -369,7 +369,6 @@ select st_astext(g1) from t3 where st_intersects(ST_GeomFromText('GEOMETRYCOLLEC
 st_astext(g1)
 select st_astext(g1) from t3 where g1=ST_GeomFromText('GEOMETRYCOLLECTION EMPTY', 4326);
 st_astext(g1)
-GEOMETRYCOLLECTION EMPTY
 drop index idx_g on t3;
 create index idx_g on t3(g1);
 select st_astext(g1) from t3 where st_intersects(ST_GeomFromText('GEOMETRYCOLLECTION EMPTY', 4326), g1);
