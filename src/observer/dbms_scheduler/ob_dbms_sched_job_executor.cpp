@@ -16,6 +16,8 @@
 #include "ob_dbms_sched_table_operator.h"
 #include "ob_dbms_sched_job_executor.h"
 
+#include "share/stat/ob_dbms_stats_maintenance_window.h"
+
 #include "lib/oblog/ob_log.h"
 #include "lib/mysqlclient/ob_isql_connection.h"
 #include "share/ob_define.h"
@@ -95,6 +97,12 @@ int ObDBMSSchedJobExecutor::init_session(
                                   ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_FORMAT));
   OZ (session.update_sys_variable(share::SYS_VAR_NLS_TIMESTAMP_TZ_FORMAT,
                                   ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_TZ_FORMAT));
+  // bound pl block timeout by max_run_duration for the spm stats job, otherwise it may run
+  // beyond its declared duration and overlap with the next scheduled run.
+  if (OB_SUCC(ret) && ObDbmsStatsMaintenanceWindow::is_spm_stats_job(job_info.get_job_name())) {
+    OZ (session.update_sys_variable(share::SYS_VAR_OB_PL_BLOCK_TIMEOUT,
+                                    job_info.get_max_run_duration() * 1000000L));
+  }
   OZ (session.set_default_database(database_name));
   OZ (session.get_pc_mem_conf(pc_mem_conf));
   CK (OB_NOT_NULL(GCTX.sql_engine_));
@@ -417,7 +425,6 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(uint64_t tenant_id, bool is_oracl
   OZ (table_operator_.get_dbms_sched_job_info(tenant_id, is_oracle_tenant, job_id, job_name, allocator, job_info));
 
   if (OB_SUCC(ret)) {
-
     OZ (run_dbms_sched_job(tenant_id, job_info));
 
     int tmp_ret = OB_SUCCESS;

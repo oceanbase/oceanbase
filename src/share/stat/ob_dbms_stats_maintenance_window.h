@@ -58,6 +58,8 @@ public:
 
   static bool is_stats_job(const ObString &job_name);
 
+  static bool is_spm_stats_job(const ObString &job_name);
+
   static int get_async_gather_stats_job_for_upgrade(common::ObMySQLProxy *sql_proxy,
                                                     const uint64_t tenant_id,
                                                     ObSqlString &sql);
