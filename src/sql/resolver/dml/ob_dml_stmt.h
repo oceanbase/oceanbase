@@ -1063,8 +1063,10 @@ public:
   inline bool has_vec_approx() const { return has_vec_approx_; }
   inline void set_hybrid_search() { is_hybrid_search_ = true; }
   inline bool is_hybrid_search() const { return is_hybrid_search_; }
-  const share::ObVectorIndexQueryParam& get_vector_index_query_param() const { return vector_index_query_param_; }
-  share::ObVectorIndexQueryParam& get_vector_index_query_param() { return vector_index_query_param_; }
+  const share::ObVectorIndexQueryParam *get_vector_index_query_param() const { return vector_index_query_param_; }
+  share::ObVectorIndexQueryParam *get_vector_index_query_param() { return vector_index_query_param_; }
+  bool has_vector_index_query_param() const { return NULL != vector_index_query_param_; }
+  int alloc_vector_index_query_param(common::ObIAllocator &allocator);
   bool is_contain_vector_origin_distance_calc() const;
   int add_subquery_ref(ObQueryRefRawExpr *query_ref);
   virtual int get_child_stmt_size(int64_t &child_size) const;
@@ -1147,7 +1149,7 @@ public:
                K_(dblink_id),
                K_(is_reverse_link),
                K_(has_vec_approx),
-               K_(vector_index_query_param));
+               KPC_(vector_index_query_param));
 
   int check_if_contain_inner_table(bool &is_contain_inner_table) const;
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -1351,7 +1353,7 @@ protected:
   bool has_vec_approx_;
   // fulltext search exprs
   ObSqlArray<ObMatchFunRawExpr*> match_exprs_;
-  share::ObVectorIndexQueryParam vector_index_query_param_;
+  share::ObVectorIndexQueryParam *vector_index_query_param_;
   bool is_hybrid_search_;
 };
 

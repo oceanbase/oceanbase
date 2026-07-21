@@ -9,7 +9,7 @@ total_size = 28, fragment = 4
 
 | class | sizeof(class) |
 | --- | --- |
-| ObDMLStmt | 1088 |
+| ObDMLStmt | 1056 |
 | ObStmt | 32 |
 | order_items_ | 40 |
 | limit_count_expr_ | 8 |
@@ -44,13 +44,13 @@ total_size = 28, fragment = 4
 | is_reverse_link_ | 1 |
 | has_vec_approx_ | 1 |
 | match_exprs_ | 40 |
-| vector_index_query_param_ | 40 |
-total_size = 1065, fragment = 23
+| vector_index_query_param_ | 8 |
+total_size = 1033, fragment = 23
 
 | class | sizeof(class) |
 | --- | --- |
-| ObSelectStmt | 2024 |
-| ObDMLStmt | 1088 |
+| ObSelectStmt | 1992 |
+| ObDMLStmt | 1056 |
 | set_op_ | 4 |
 | is_recursive_cte_ | 1 |
 | is_breadth_search_ | 1 |
@@ -97,12 +97,12 @@ total_size = 1065, fragment = 23
 | is_oracle_compat_groupby_ | 1 |
 | is_recursive_union_branch_ | 1 |
 | for_update_cursor_table_id_ | 8 |
-total_size = 1999, fragment = 25
+total_size = 1967, fragment = 25
 
 | class | sizeof(class) |
 | --- | --- |
-| ObDelUpdStmt | 1456 |
-| ObDMLStmt | 1088 |
+| ObDelUpdStmt | 1424 |
+| ObDMLStmt | 1056 |
 | returning_exprs_ | 40 |
 | returning_into_exprs_ | 40 |
 | returning_strs_ | 40 |
@@ -116,42 +116,42 @@ total_size = 1999, fragment = 25
 | ab_stmt_id_expr_ | 8 |
 | dml_source_from_join_ | 1 |
 | pdml_disabled_ | 1 |
-total_size = 1437, fragment = 19
+total_size = 1405, fragment = 19
 
 | class | sizeof(class) |
 | --- | --- |
-| ObDeleteStmt | 1496 |
-| ObDelUpdStmt | 1456 |
+| ObDeleteStmt | 1464 |
+| ObDelUpdStmt | 1424 |
 | table_info_ | 40 |
-total_size = 1496, fragment = 0
+total_size = 1464, fragment = 0
 
 | class | sizeof(class) |
 | --- | --- |
-| ObUpdateStmt | 1496 |
-| ObDelUpdStmt | 1456 |
+| ObUpdateStmt | 1464 |
+| ObDelUpdStmt | 1424 |
 | table_info_ | 40 |
-total_size = 1496, fragment = 0
+total_size = 1464, fragment = 0
 
 | class | sizeof(class) |
 | --- | --- |
-| ObInsertStmt | 1936 |
-| ObDelUpdStmt | 1456 |
+| ObInsertStmt | 1904 |
+| ObDelUpdStmt | 1424 |
 | is_all_const_values_ | 1 |
 | table_info_ | 480 |
-total_size = 1937, fragment = -1
+total_size = 1905, fragment = -1
 
 | class | sizeof(class) |
 | --- | --- |
-| ObInsertAllStmt | 1496 |
-| ObDelUpdStmt | 1456 |
+| ObInsertAllStmt | 1464 |
+| ObDelUpdStmt | 1424 |
 | is_multi_insert_first_ | 1 |
 | is_multi_condition_insert_ | 1 |
 | table_info_ | 40 |
-total_size = 1498, fragment = -2
+total_size = 1466, fragment = -2
 
 | class | sizeof(class) |
 | --- | --- |
-| ObMergeStmt | 2112 |
-| ObDelUpdStmt | 1456 |
+| ObMergeStmt | 2080 |
+| ObDelUpdStmt | 1424 |
 | table_info_ | 656 |
-total_size = 2112, fragment = 0
+total_size = 2080, fragment = 0

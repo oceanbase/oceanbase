@@ -16465,7 +16465,8 @@ int ObLogPlan::prepare_vector_index_info(AccessPath *ap,
       vc_info.is_multi_value_index_ = ap->vec_idx_info_->vec_extra_info_.is_multi_value_index_;
       vc_info.strategy_ = ap->vec_idx_info_->vec_extra_info_.get_query_strategy();
       vc_info.pre_filtering_timeout_ = ap->vec_idx_info_->vec_extra_info_.get_pre_filtering_timeout();
-      if (OB_FAIL(vc_info.set_query_param(stmt->get_vector_index_query_param()))) {
+      if (OB_NOT_NULL(stmt->get_vector_index_query_param())
+          && OB_FAIL(vc_info.set_query_param(*stmt->get_vector_index_query_param()))) {
         LOG_WARN("set query param fail", K(ret));
       } else if (vc_info.is_hnsw_vec_scan()) {
         vc_info.is_hybrid_index = is_hybrid_index; // TODO by tanzhu, only support hnsw now

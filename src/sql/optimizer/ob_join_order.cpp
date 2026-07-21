@@ -1876,16 +1876,16 @@ int ObJoinOrder::resolve_vec_query_strategy(const ObDMLStmt &stmt,
     // 4.3.5.5 hotfix 6 and 4.4.1.0 hotfix 10 start to support query strategy, but the default strategy is RECALL_FIRST
     // from 4.6.0.0, the default strategy is LATENCY_FIRST, and only set strategy from 4.6.0.0
     // upgrading from 4.3.5.5 hotfix 6 or 4.4.1.0 hotfix 10 will keep the old strategy set before, but strategy is unavailable during upgrading stage because of the lack of version checking for hotfix
-    const ObVectorIndexQueryParam &query_param = stmt.get_vector_index_query_param();
-    if (query_param.is_set_strategy_ && query_param.strategy_ == ObVecIdxQueryStrategy::RECALL_FIRST) {
-      strategy = query_param.strategy_;
+    const ObVectorIndexQueryParam *query_param = stmt.get_vector_index_query_param();
+    if (OB_NOT_NULL(query_param) && query_param->is_set_strategy_ && query_param->strategy_ == ObVecIdxQueryStrategy::RECALL_FIRST) {
+      strategy = query_param->strategy_;
     } else {
       omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
       if (OB_UNLIKELY(!tenant_config.is_valid())) {
         LOG_WARN("tenant config is invalid");
       } else {
-        if (query_param.is_set_strategy_) {
-          strategy = query_param.strategy_;
+        if (OB_NOT_NULL(query_param) && query_param->is_set_strategy_) {
+          strategy = query_param->strategy_;
         } else {
           ObString tenant_strategy(tenant_config->ob_vector_search_strategy.get_value());
           strategy = tenant_strategy.compare(ObVectorTenantSearchStrategy::LATENCY_FIRST_STR) == 0

@@ -390,12 +390,30 @@ ObDMLStmt::ObDMLStmt(stmt::StmtType type, ObIAllocator &allocator)
       is_reverse_link_(false),
       has_vec_approx_(false),
       match_exprs_(allocator),
+      vector_index_query_param_(NULL),
       is_hybrid_search_(false)
 {
 }
 
 ObDMLStmt::~ObDMLStmt()
 {
+}
+
+int ObDMLStmt::alloc_vector_index_query_param(common::ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(vector_index_query_param_)) {
+    // already allocated
+  } else {
+    void *ptr = NULL;
+    if (OB_ISNULL(ptr = allocator.alloc(sizeof(share::ObVectorIndexQueryParam)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate vector index query param", K(ret));
+    } else {
+      vector_index_query_param_ = new (ptr) share::ObVectorIndexQueryParam();
+    }
+  }
+  return ret;
 }
 
 // tables come from table_items_
@@ -488,8 +506,6 @@ int ObDMLStmt::assign(const ObDMLStmt &other)
     LOG_WARN("faield to assign check constraint items", K(ret));
   } else if (OB_FAIL(match_exprs_.assign(other.match_exprs_))) {
     LOG_WARN("faield to assign fulltext search exprs", K(ret));
-  } else if (OB_FAIL(vector_index_query_param_.assign(other.vector_index_query_param_))) {
-    LOG_WARN("faield to assign vector index query param", K(ret));
   } else {
     limit_count_expr_ = other.limit_count_expr_;
     limit_offset_expr_ = other.limit_offset_expr_;
@@ -505,6 +521,7 @@ int ObDMLStmt::assign(const ObDMLStmt &other)
     dblink_id_ = other.dblink_id_;
     is_reverse_link_ = other.is_reverse_link_;
     has_vec_approx_ = other.has_vec_approx_;
+    vector_index_query_param_ = other.vector_index_query_param_;
     is_hybrid_search_ = other.is_hybrid_search_;
   }
   return ret;
@@ -667,8 +684,6 @@ int ObDMLStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
     LOG_WARN("failed to assign sequence ids", K(ret));
   } else if (OB_FAIL(currval_sequence_ids_.assign(other.currval_sequence_ids_))) {
     LOG_WARN("failed to assign sequence ids", K(ret));
-  } else if (OB_FAIL(vector_index_query_param_.assign(other.vector_index_query_param_))) {
-    LOG_WARN("faield to assign vector index query param", K(ret));
   } else {
     is_calc_found_rows_ = other.is_calc_found_rows_;
     has_top_limit_ = other.has_top_limit_;
@@ -691,6 +706,23 @@ int ObDMLStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
       LOG_WARN("failed to deep copy unpivot info", K(ret));
     } else {
       unpivot_item_ = tmp;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    vector_index_query_param_ = NULL;
+    if (OB_NOT_NULL(other.vector_index_query_param_)) {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator.alloc(sizeof(share::ObVectorIndexQueryParam)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate vector index query param", K(ret));
+      } else {
+        share::ObVectorIndexQueryParam *tmp_param = new (ptr) share::ObVectorIndexQueryParam();
+        if (OB_FAIL(tmp_param->assign(*other.vector_index_query_param_))) {
+          LOG_WARN("failed to assign vector index query param", K(ret));
+        } else {
+          vector_index_query_param_ = tmp_param;
+        }
+      }
     }
   }
   return ret;

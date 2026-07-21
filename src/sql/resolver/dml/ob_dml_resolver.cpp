@@ -10261,7 +10261,15 @@ int ObDMLResolver::resolve_vector_index_params(const ParseNode *params_node)
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("in current version vector index query param is not support", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "in current version vector index query param is");
-  } else if (OB_FAIL(ObVectorIndexUtil::resolve_query_param(params_node, stmt->get_vector_index_query_param()))){
+  } else if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is null", K(ret));
+  } else if (OB_FAIL(stmt->alloc_vector_index_query_param(*allocator_))) {
+    LOG_WARN("failed to alloc vector index query param", K(ret));
+  } else if (OB_ISNULL(stmt->get_vector_index_query_param())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("vector index query param is null", K(ret));
+  } else if (OB_FAIL(ObVectorIndexUtil::resolve_query_param(params_node, *stmt->get_vector_index_query_param()))){
     LOG_WARN("resolve_query_param fail", K(ret));
   }
   return ret;

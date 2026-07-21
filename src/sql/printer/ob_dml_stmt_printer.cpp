@@ -2354,26 +2354,26 @@ int ObDMLStmtPrinter::print_vector_index_query_param()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt_ is NULL or buf_ is NULL or pos_ is NULL", K(ret));
   } else {
-    const ObVectorIndexQueryParam& param = stmt_->get_vector_index_query_param();
-    if (param.is_valid()) {
+    const ObVectorIndexQueryParam *param = stmt_->get_vector_index_query_param();
+    if (OB_NOT_NULL(param) && param->is_valid()) {
       DATA_PRINTF(" parameters(");
-      if (OB_SUCC(ret) && param.is_set_ef_search_) {
-        DATA_PRINTF("ef_search=%d", param.ef_search_);
+      if (OB_SUCC(ret) && param->is_set_ef_search_) {
+        DATA_PRINTF("ef_search=%d", param->ef_search_);
       }
-      if (OB_SUCC(ret) && param.is_set_refine_k_) {
-        DATA_PRINTF(", refine_k=%f", param.refine_k_);
+      if (OB_SUCC(ret) && param->is_set_refine_k_) {
+        DATA_PRINTF(", refine_k=%f", param->refine_k_);
       }
-      if (OB_SUCC(ret) && param.is_set_ivf_nprobes_) {
-        DATA_PRINTF(", ivf_nprobes=%d", param.ivf_nprobes_);
+      if (OB_SUCC(ret) && param->is_set_ivf_nprobes_) {
+        DATA_PRINTF(", ivf_nprobes=%d", param->ivf_nprobes_);
       }
-      if (OB_SUCC(ret) && param.is_set_drop_ratio_search_) {
-        DATA_PRINTF(", drop_ratio_search=%f", param.ob_sparse_drop_ratio_search_);
+      if (OB_SUCC(ret) && param->is_set_drop_ratio_search_) {
+        DATA_PRINTF(", drop_ratio_search=%f", param->ob_sparse_drop_ratio_search_);
       }
-      if (OB_SUCC(ret) && param.is_set_similarity_threshold_) {
-        DATA_PRINTF(", similarity_threshold=%f", param.similarity_threshold_);
+      if (OB_SUCC(ret) && param->is_set_similarity_threshold_) {
+        DATA_PRINTF(", similarity_threshold=%f", param->similarity_threshold_);
       }
-      if (OB_SUCC(ret) && param.is_set_ivf_nprobes_) {
-        DATA_PRINTF(", ivf_nprobes=%d", param.ivf_nprobes_);
+      if (OB_SUCC(ret) && param->is_set_ivf_nprobes_) {
+        DATA_PRINTF(", ivf_nprobes=%d", param->ivf_nprobes_);
       }
       DATA_PRINTF(") ");
     }
