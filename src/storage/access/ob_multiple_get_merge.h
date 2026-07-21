@@ -104,15 +104,12 @@ private:
     ObDatumRowkey &rowkey,
     ObFuseRowValueHandle &handle,
     ObQueryRowInfo &row_info);
-  int iter_fuse_row_from_memtable(
+  int iter_fuse_row_from_specified_tables(
     ObDatumRowkey &cur_rowkey,
     ObDatumRow &row,
     ObNopPos &nop_pos,
-    bool &has_uncommitted_row);
-  int iter_fuse_row_from_memtable(
-    ObDatumRowkey &cur_rowkey,
-    ObDatumRow &row,
-    ObNopPos &nop_pos);
+    bool &has_uncommitted_row,
+    const bool only_memtables = true);
   int iter_fuse_row_from_sstable(ObQueryRowInfo &row_info);
   int fuse_cache_row(const ObFuseRowValueHandle &handle, ObQueryRowInfo &fuse_row_info);
   int check_final_row(ObDatumRow &fuse_row, bool &is_valid_row);
@@ -120,7 +117,7 @@ private:
   int get_rows_from_memory();
   int prepare_prefetch_next_rowkey(const int64_t &multi_version_start, const int64_t &read_snapshot_version);
   int try_get_next_row(ObQueryRowInfo &row_info, ObFuseRowValueHandle &handle);
-  int inner_get_next_row_for_memtables_only(ObDatumRow &row);
+  int inner_get_next_row_for_all_tables(ObDatumRow &row, const bool only_memtables = true);
   int inner_get_next_row_for_sstables_exist(ObDatumRow &row);
 private:
   common::ObIArray<blocksstable::ObDatumRowkey> *rowkeys_;

@@ -157,7 +157,7 @@ int ObMultipleGetMerge::construct_iters()
   if (OB_UNLIKELY(tables_.count() == 0)) {
   } else {
     int64_t table_start_idx = tables_.count() - 1;
-    if (is_read_memtable_only()) {
+    if (is_read_memtable_only() || exist_ddl_kv_) {
       access_ctx_->use_fuse_row_cache_ = false;
       if (OB_FAIL(construct_specified_iters(table_start_idx))) {
         STORAGE_LOG(WARN, "fail to construct iterators from all memtables only", K(ret));
@@ -186,11 +186,11 @@ int ObMultipleGetMerge::construct_iters()
 int ObMultipleGetMerge::inner_get_next_row(ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
-  if (is_read_memtable_only()) {
+  if (is_read_memtable_only() || exist_ddl_kv_) {
     access_ctx_->use_fuse_row_cache_ = false;
-    if (OB_FAIL(inner_get_next_row_for_memtables_only(row))) {
+    if (OB_FAIL(inner_get_next_row_for_all_tables(row, is_read_memtable_only()))) {
       if (OB_ITER_END != ret) {
-        STORAGE_LOG(WARN, "fail to get next row in the scenario where only memtables exist", K(ret), K(get_row_range_idx_));
+        STORAGE_LOG(WARN, "fail to get next row in the scenario where ddl kv may exist", K(ret), K(get_row_range_idx_));
       }
     }
   } else if (OB_FAIL(inner_get_next_row_for_sstables_exist(row))) {
@@ -368,11 +368,12 @@ int ObMultipleGetMerge::try_get_fuse_row_cache(
   return ret;
 }
 
-int ObMultipleGetMerge::iter_fuse_row_from_memtable(
+int ObMultipleGetMerge::iter_fuse_row_from_specified_tables(
     ObDatumRowkey &cur_rowkey,
     ObDatumRow &row,
     ObNopPos &nop_pos,
-    bool &has_uncommitted_row)
+    bool &has_uncommitted_row,
+    const bool only_memtables)
 {
   int ret = OB_SUCCESS;
   int64_t table_cnt = tables_.count();
@@ -383,7 +384,7 @@ int ObMultipleGetMerge::iter_fuse_row_from_memtable(
     ObITable *table = nullptr;
     if (OB_FAIL(tables_.at(table_cnt - i - 1, table))) {
       STORAGE_LOG(WARN, "fail to get table", K(ret));
-    } else if (!table->is_memtable()) {
+    } else if (only_memtables && !table->is_memtable()) {
       break;
     } else if (OB_FAIL(iters_[i]->get_next_row(tmp_row))) {
       STORAGE_LOG(WARN, "iterator get next row failed", K(ret), K(i), K(cur_rowkey));
@@ -400,20 +401,8 @@ int ObMultipleGetMerge::iter_fuse_row_from_memtable(
       }
     }
   }
-  STORAGE_LOG(DEBUG, "iterate memtables finished", K(ret), K(cur_rowkey), K(row), K(nop_pos), K(has_uncommitted_row), K(access_ctx_->use_fuse_row_cache_));
-  return ret;
-}
-
-int ObMultipleGetMerge::iter_fuse_row_from_memtable(
-    ObDatumRowkey &cur_rowkey,
-    ObDatumRow &row,
-    ObNopPos &nop_pos)
-{
-  int ret = OB_SUCCESS;
-  bool has_uncommitted_row = false;
-  if (OB_FAIL(iter_fuse_row_from_memtable(cur_rowkey, row, nop_pos, has_uncommitted_row))) {
-    STORAGE_LOG(WARN, "fail to iterate row", K(ret), K(cur_rowkey), K(row), K(nop_pos));
-  }
+  STORAGE_LOG(DEBUG, "iterate tables finished", K(ret), K(cur_rowkey), K(row), K(nop_pos),
+                  K(has_uncommitted_row), K(access_ctx_->use_fuse_row_cache_), K(only_memtables), K(table_cnt));
   return ret;
 }
 
@@ -536,7 +525,7 @@ int ObMultipleGetMerge::get_rows_from_memory()
     for (int64_t i = 0; OB_SUCC(ret) && i < max_prefetch_rowkey_cnt; ++i) {
       ObQueryRowInfo &row_info = full_rows_[i % common::OB_MULTI_GET_OPEN_ROWKEY_NUM];
       ObDatumRowkey &rowkey = rowkeys_->at(i);
-      if (OB_FAIL(iter_fuse_row_from_memtable(rowkey, row_info.row_, row_info.nop_pos_, row_info.has_uncommitted_row_))) {
+      if (OB_FAIL(iter_fuse_row_from_specified_tables(rowkey, row_info.row_, row_info.nop_pos_, row_info.has_uncommitted_row_, true/*only memtables*/))) {
         STORAGE_LOG(WARN, "fail to iterate rows for memory tables", K(ret), K(rowkey), K(row_info));
       } else if (access_ctx_->use_fuse_row_cache_ && OB_FAIL(check_final_result(row_info.nop_pos_, rowkey.is_skip_prefetch_))) {
         STORAGE_LOG(WARN, "fail to check final result", K(ret), K(rowkey), K(row_info));
@@ -582,7 +571,7 @@ int ObMultipleGetMerge::prepare_prefetch_next_rowkey(
   row_info.end_iter_idx_ = tables_.count();
   handle.reset();
   if (table->is_memtable()) {
-    if (OB_FAIL(iter_fuse_row_from_memtable(rowkey, row_info.row_, row_info.nop_pos_, row_info.has_uncommitted_row_))) {
+    if (OB_FAIL(iter_fuse_row_from_specified_tables(rowkey, row_info.row_, row_info.nop_pos_, row_info.has_uncommitted_row_, true/*only memtables*/))) {
       STORAGE_LOG(WARN, "fail to iterate rows for memory tables", K(ret), K(rowkey), K(row_info));
     } else if (access_ctx_->use_fuse_row_cache_ && OB_FAIL(check_final_result(row_info.nop_pos_, rowkey.is_skip_prefetch_))) {
       STORAGE_LOG(WARN, "fail to check final result", K(ret), K(rowkey), K(row_info));
@@ -619,11 +608,12 @@ int ObMultipleGetMerge::try_get_next_row(ObQueryRowInfo &row_info, ObFuseRowValu
   return ret;
 }
 
-int ObMultipleGetMerge::inner_get_next_row_for_memtables_only(ObDatumRow &row)
+int ObMultipleGetMerge::inner_get_next_row_for_all_tables(ObDatumRow &row, const bool only_memtables)
 {
   int ret = OB_SUCCESS;
   bool is_valid_row = false;
   int64_t rowkey_cnt = rowkeys_->count();
+  bool has_uncommitted_row = false;
 
   if (OB_UNLIKELY(0 == tables_.count())) {
     ret = OB_ITER_END;
@@ -638,8 +628,9 @@ int ObMultipleGetMerge::inner_get_next_row_for_memtables_only(ObDatumRow &row)
         fuse_row.snapshot_version_ = 0L;
         nop_pos_.reset();
 
-        if (OB_FAIL(iter_fuse_row_from_memtable(rowkeys_->at(get_row_range_idx_), fuse_row, nop_pos_))) {
-          STORAGE_LOG(WARN, "fail to iterate rows for memory tables", K(ret), K(get_row_range_idx_), K(rowkeys_->at(get_row_range_idx_)), K(fuse_row), K(nop_pos_));
+        if (OB_FAIL(iter_fuse_row_from_specified_tables(rowkeys_->at(get_row_range_idx_), fuse_row, nop_pos_, has_uncommitted_row, only_memtables))) {
+          STORAGE_LOG(WARN, "fail to iterate rows for tables", K(ret), K(only_memtables),
+              K(get_row_range_idx_), K(rowkeys_->at(get_row_range_idx_)), K(fuse_row), K(nop_pos_));
         } else if (OB_FAIL(check_final_row(fuse_row, is_valid_row))) {
           STORAGE_LOG(WARN, "fail to check final row validity", K(ret), K(fuse_row), K(is_valid_row));
         } else {
