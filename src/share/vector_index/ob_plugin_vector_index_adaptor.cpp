@@ -541,9 +541,11 @@ void ObPluginVectorIndexAdaptor::build_acquire_ctx(ObVectorIndexAcquireCtx &ctx)
   ctx.vid_rowkey_table_id_ = vid_rowkey_table_id_;
 }
 
-int ObPluginVectorIndexAdaptor::try_fill_tablet_info(const ObVectorIndexAcquireCtx &ctx)
+int ObPluginVectorIndexAdaptor::try_fill_tablet_info(
+    const ObVectorIndexAcquireCtx &ctx, bool &became_complete)
 {
   int ret = OB_SUCCESS;
+  became_complete = false;
   if (ATOMIC_LOAD(&ready_state_) == ADAPTOR_COMPLETE) {
     // already complete, skip
   } else {
@@ -635,16 +637,18 @@ int ObPluginVectorIndexAdaptor::try_fill_tablet_info(const ObVectorIndexAcquireC
                                          && vid_rowkey_table_id_ == OB_INVALID_ID;
         if (both_vid_table_valid) {
           is_need_vid_ = true;
-          ATOMIC_STORE(&ready_state_, ADAPTOR_COMPLETE);
-          LOG_INFO("[VECTOR INDEX ADAPTOR] adaptor ready state changed to COMPLETE",
-              KPC(this), K_(is_need_vid));
         } else if (both_vid_table_invalid) {
           is_need_vid_ = false;
-          ATOMIC_STORE(&ready_state_, ADAPTOR_COMPLETE);
-          LOG_INFO("[VECTOR INDEX ADAPTOR] adaptor ready state changed to COMPLETE",
-              KPC(this), K_(is_need_vid));
         } else {
           LOG_WARN("both vid table are not valid or invalid", K(rowkey_vid_table_id_), K(vid_rowkey_table_id_));
+        }
+        if (both_vid_table_valid || both_vid_table_invalid) {
+          became_complete = ATOMIC_BCAS(
+              &ready_state_, ADAPTOR_INC_ONLY, ADAPTOR_COMPLETE);
+          if (became_complete) {
+            LOG_INFO("[VECTOR INDEX ADAPTOR] adaptor ready state changed to COMPLETE",
+                KPC(this), K_(is_need_vid));
+          }
         }
       }
     }

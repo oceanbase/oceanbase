@@ -213,6 +213,9 @@ public:
       const common::ObIArray<storage::ObMigrationVectorIndexAdaptorMeta> &adaptor_metas);
   int enqueue_mem_sync_task(
       common::ObTabletID inc_tablet_id, const int64_t inc_table_id);
+  // Called after an adapter that became complete has been attached to the LS map.
+  // Re-arm one follower memdata load that may have been consumed while it was incomplete.
+  void on_adapter_complete(ObPluginVectorIndexAdaptor *adapter);
   int try_reuse_adaptor_from_tenant_map(
       common::ObTabletID inc_tablet_id, bool &reused);
 

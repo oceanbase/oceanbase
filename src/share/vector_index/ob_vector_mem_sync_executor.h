@@ -87,12 +87,14 @@ private:
   // already succeeded in a prior in-memory retry, and aggregating into a single ctx ret_code
   // ("any non-success fails the batch").
   int process_one();
-  // Refresh memdata for a single tablet. Returns the per-tablet ret (OB_EAGAIN if adapter
-  // not ready yet, so the batch is retried). Does not touch ctx_->task_status_.ret_code_.
+  // Refresh memdata for a single tablet. Does not touch ctx_->task_status_.ret_code_.
   // tablet_est_mem is filled with this tablet's vector-index memory estimate (statistics
   // only; best-effort, left 0 on estimate failure).
+  // skipped_not_complete is set when the adapter exists but is not ADAPTOR_COMPLETE: the
+  // tablet is skipped without touching sync statistics (counted as skip, not success);
+  // the load is re-armed by ObPluginVectorIndexMgr::on_adapter_complete once it completes.
   int process_one_tablet(ObPluginVectorIndexMgr *mgr, const ObTabletID &tablet_id,
-                         int64_t &tablet_est_mem);
+                         int64_t &tablet_est_mem, bool &skipped_not_complete);
 
 private:
   storage::ObLS *ls_;

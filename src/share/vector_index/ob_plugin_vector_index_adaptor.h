@@ -709,7 +709,7 @@ public:
   OB_INLINE ObAdaptorMigState get_mig_state() const { return ATOMIC_LOAD(&mig_state_); }
   OB_INLINE void set_mig_state(ObAdaptorMigState state) { ATOMIC_STORE(&mig_state_, state); }
   void build_acquire_ctx(ObVectorIndexAcquireCtx &ctx) const;
-  int try_fill_tablet_info(const ObVectorIndexAcquireCtx &ctx);
+  int try_fill_tablet_info(const ObVectorIndexAcquireCtx &ctx, bool &became_complete);
   bool is_need_async_optimal() { return need_be_optimized_ && ! has_frozen(); }
   bool has_frozen() const { return frozen_data_.is_valid() && frozen_data_->has_frozen(); }
   bool is_frozen_finish() const { return frozen_data_.is_valid() && frozen_data_->is_frozen_finish(); }

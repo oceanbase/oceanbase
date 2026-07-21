@@ -12,6 +12,7 @@
 #include "share/ob_vec_index_builder_util.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
 #include "share/vector_index/ob_ai_access_service.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 namespace oceanbase
 {
@@ -533,6 +534,7 @@ int ObPluginVectorIndexMgr::acquire_adapter_by_ctx(ObVectorIndexAcquireCtx &ctx,
 {
   int ret = OB_SUCCESS;
   ObPluginVectorIndexAdaptor *adapter = nullptr;
+  bool became_complete = false;
   if (OB_UNLIKELY(!ctx.is_inc_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid ctx, inc_tablet_id is not valid", K(ret), K(ctx));
@@ -551,7 +553,7 @@ int ObPluginVectorIndexMgr::acquire_adapter_by_ctx(ObVectorIndexAcquireCtx &ctx,
     // do nothing
   } else if (OB_NOT_NULL(adapter)) {
     // adapter already exists, try fill tablet info and return
-    if (OB_FAIL(adapter->try_fill_tablet_info(ctx))) {
+    if (OB_FAIL(adapter->try_fill_tablet_info(ctx, became_complete))) {
       LOG_WARN("failed to try fill tablet info", K(ret), K(ctx), KPC(adapter));
     } else if (OB_FAIL(adapter_guard.set_adapter(adapter))) {
       LOG_WARN("failed to set adapter", K(ret), K(adapter_guard));
@@ -573,7 +575,7 @@ int ObPluginVectorIndexMgr::acquire_adapter_by_ctx(ObVectorIndexAcquireCtx &ctx,
         LOG_WARN("failed to init adaptor", K(ret), KPC(vec_index_param), K(dim));
       } else if (OB_FAIL(new_adapter->set_tablet_id(VIRT_INC, ctx.inc_tablet_id_))) {
         LOG_WARN("failed to set inc tablet id", K(ret), K(ctx));
-      } else if (OB_FAIL(new_adapter->try_fill_tablet_info(ctx))) {
+      } else if (OB_FAIL(new_adapter->try_fill_tablet_info(ctx, became_complete))) {
         LOG_WARN("failed to fill tablet info from ctx", K(ret), K(ctx));
       } else {
         WLockGuard lock_guard(adapter_map_rwlock_);
@@ -584,10 +586,12 @@ int ObPluginVectorIndexMgr::acquire_adapter_by_ctx(ObVectorIndexAcquireCtx &ctx,
             ObPluginVectorIndexAdaptor *existing = nullptr;
             if (OB_FAIL(vec_adaptor_map_.get_refactored(ctx.inc_tablet_id_, existing))) {
               LOG_WARN("failed to get existing adapter", K(ret), K(ctx.inc_tablet_id_));
-            } else if (OB_FAIL(existing->try_fill_tablet_info(ctx))) {
-              LOG_WARN("failed to try fill tablet info", K(ret), K(ctx));
-            } else if (OB_FAIL(adapter_guard.set_adapter(existing))) {
-              LOG_WARN("failed to set adapter", K(ret), K(adapter_guard));
+            } else {
+              if (OB_FAIL(existing->try_fill_tablet_info(ctx, became_complete))) {
+                LOG_WARN("failed to try fill tablet info", K(ret), K(ctx));
+              } else if (OB_FAIL(adapter_guard.set_adapter(existing))) {
+                LOG_WARN("failed to set adapter", K(ret), K(adapter_guard));
+              }
             }
             new_adapter->~ObPluginVectorIndexAdaptor();
             allocator.free(adpt_buff);
@@ -631,6 +635,9 @@ int ObPluginVectorIndexMgr::acquire_adapter_by_ctx(ObVectorIndexAcquireCtx &ctx,
         adpt_buff = nullptr;
       }
     }
+  }
+  if (OB_SUCC(ret) && became_complete) {
+    on_adapter_complete(adapter_guard.get_adatper());
   }
   return ret;
 }
@@ -724,6 +731,8 @@ int ObPluginVectorIndexService::acquire_adapter_guard(ObLSID ls_id,
 {
   int ret = OB_SUCCESS;
   ObPluginVectorIndexMgr *ls_index_mgr = nullptr;
+  bool became_complete = false;
+  bool adapter_attached_to_ls = false;
   if (OB_FAIL(acquire_vector_index_mgr(ls_id, ls_index_mgr))) {
     LOG_WARN("failed to acquire vector index mgr", KR(ret), K(ls_id));
   } else if (OB_FAIL(get_tenant_adapter_inst_guard(ctx.inc_tablet_id_, adapter_guard))) {
@@ -746,7 +755,7 @@ int ObPluginVectorIndexService::acquire_adapter_guard(ObLSID ls_id,
           LOG_WARN("failed to init adaptor", K(ret), KPC(vec_index_param), K(dim));
         } else if (OB_FAIL(new_adapter->set_tablet_id(VIRT_INC, ctx.inc_tablet_id_))) {
           LOG_WARN("failed to set inc tablet id", K(ret), K(ctx));
-        } else if (OB_FAIL(new_adapter->try_fill_tablet_info(ctx))) {
+        } else if (OB_FAIL(new_adapter->try_fill_tablet_info(ctx, became_complete))) {
           LOG_WARN("failed to fill tablet info from ctx", K(ret), K(ctx));
         } else if (FALSE_IT(new_adapter->set_identity_ts(ls_index_mgr->get_identity_ts()))) {
         } else if (OB_FAIL(set_tenant_vec_adaptor(ctx.inc_tablet_id_, new_adapter))) {
@@ -758,8 +767,10 @@ int ObPluginVectorIndexService::acquire_adapter_guard(ObLSID ls_id,
             adpt_buff = nullptr;
             if (OB_FAIL(get_tenant_adapter_inst_guard(ctx.inc_tablet_id_, adapter_guard))) {
               LOG_WARN("failed to get existing tenant adaptor", KR(ret), K(ctx.inc_tablet_id_));
-            } else if (OB_FAIL(adapter_guard.get_adatper()->try_fill_tablet_info(ctx))) {
-              LOG_WARN("failed to fill existing tenant adaptor", KR(ret), K(ctx));
+            } else {
+              if (OB_FAIL(adapter_guard.get_adatper()->try_fill_tablet_info(ctx, became_complete))) {
+                LOG_WARN("failed to fill existing tenant adaptor", KR(ret), K(ctx));
+              }
             }
           } else {
             LOG_WARN("failed to set tenant adaptor", KR(ret), K(ctx.inc_tablet_id_));
@@ -784,8 +795,10 @@ int ObPluginVectorIndexService::acquire_adapter_guard(ObLSID ls_id,
         }
       }
     }
-  } else if (OB_FAIL(adapter_guard.get_adatper()->try_fill_tablet_info(ctx))) {
-    LOG_WARN("failed to fill tenant adaptor info", K(ls_id), K(ctx), KR(ret));
+  } else {
+    if (OB_FAIL(adapter_guard.get_adatper()->try_fill_tablet_info(ctx, became_complete))) {
+      LOG_WARN("failed to fill tenant adaptor info", K(ls_id), K(ctx), KR(ret));
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -797,13 +810,20 @@ int ObPluginVectorIndexService::acquire_adapter_guard(ObLSID ls_id,
         if (OB_FAIL(ls_index_mgr->attach_adapter(adapter_guard.get_adatper(), attached))) {
           ls_index_mgr->set_last_transfer_scn(share::SCN::invalid_scn());
           LOG_WARN("failed to attach adaptor into ls map", KR(ret), K(ls_id), K(ctx.inc_tablet_id_));
+        } else {
+          adapter_attached_to_ls = attached;
         }
       } else {
         LOG_WARN("failed to check local adaptor", KR(ret), K(ls_id), K(ctx.inc_tablet_id_));
       }
     } else if (local_guard.get_adatper() != adapter_guard.get_adatper()) {
       ls_index_mgr->set_last_transfer_scn(share::SCN::invalid_scn());
+    } else {
+      adapter_attached_to_ls = true;
     }
+  }
+  if (OB_SUCC(ret) && became_complete && adapter_attached_to_ls) {
+    ls_index_mgr->on_adapter_complete(adapter_guard.get_adatper());
   }
 
   return ret;
@@ -1601,6 +1621,34 @@ int ObPluginVectorIndexMgr::enqueue_mem_sync_task(
     LOG_INFO("enqueued memdata sync task", K(inc_tablet_id), K(inc_table_id));
   }
   return ret;
+}
+
+void ObPluginVectorIndexMgr::on_adapter_complete(
+    ObPluginVectorIndexAdaptor *adapter)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(adapter) || !adapter->is_ready_complete()) {
+    LOG_WARN("invalid completed adapter", KP(adapter));
+  } else if (get_ls_leader()) {
+    // leader re-evaluates need_sync every scheduler tick, no re-arm needed
+  } else if (!adapter->get_inc_tablet_id().is_valid()
+             || OB_INVALID_ID == adapter->get_inc_table_id()) {
+    // should not happen for a complete adapter, be defensive
+  } else {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+    if (!tenant_config.is_valid() || !tenant_config->load_vector_index_on_follower) {
+      // follower load disabled, skip
+    } else if (OB_FAIL(enqueue_mem_sync_task(adapter->get_inc_tablet_id(),
+                                             adapter->get_inc_table_id()))) {
+      // best-effort: the follower falls back to the next leader sync log on failure
+      LOG_WARN("fail to enqueue follower mem sync after adapter complete",
+          K(ret), K_(ls_id), "inc_tablet_id", adapter->get_inc_tablet_id());
+    } else {
+      LOG_INFO("[VECTOR INDEX ADAPTOR] follower adapter became complete, schedule mem load",
+          K_(ls_id), "inc_tablet_id", adapter->get_inc_tablet_id(),
+          "inc_table_id", adapter->get_inc_table_id());
+    }
+  }
 }
 
 int ObPluginVectorIndexService::get_snapshot_ids(

@@ -149,10 +149,12 @@ int ObVecMemSyncTask::do_work()
 }
 
 int ObVecMemSyncTask::process_one_tablet(
-    ObPluginVectorIndexMgr *mgr, const ObTabletID &tablet_id, int64_t &tablet_est_mem)
+    ObPluginVectorIndexMgr *mgr, const ObTabletID &tablet_id, int64_t &tablet_est_mem,
+    bool &skipped_not_complete)
 {
   int ret = OB_SUCCESS;
   tablet_est_mem = 0;
+  skipped_not_complete = false;
   int64_t start_time = ObTimeUtil::current_time();
   ObPluginVectorIndexAdapterGuard adpt_guard;
   ObPluginVectorIndexAdapterGuard new_adpt_guard;
@@ -167,6 +169,14 @@ int ObVecMemSyncTask::process_one_tablet(
       ret = OB_EAGAIN;
     }
     LOG_WARN("memdata sync fail to get adapter instance guard", KR(ret), K(ls_id_), K(tablet_id));
+  } else if (!adpt_guard.get_adatper()->is_ready_complete()) {
+    // The adapter is not fully initialized (e.g. snapshot table schema was not visible yet
+    // when it was created). Skip without updating sync statistics so this does not show up
+    // as a successful sync; once the adapter completes, the follower load is re-armed by
+    // ObPluginVectorIndexMgr::on_adapter_complete.
+    skipped_not_complete = true;
+    LOG_INFO("adaptor not ready complete, skip mem sync tablet",
+             K(ls_id_), K(tablet_id), KPC(adpt_guard.get_adatper()));
   } else {
     bool is_tablet_cancel = false;
     if (OB_FAIL(ObVecIndexAsyncTaskUtil::check_mem_sync_tablet_is_cancel(ctx_, tablet_id, is_tablet_cancel))) {
@@ -216,13 +226,14 @@ int ObVecMemSyncTask::process_one_tablet(
       }
     }
   }
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) || skipped_not_complete) {
   } else if (OB_FAIL(mgr->get_adapter_inst_guard(tablet_id, new_adpt_guard))) {
     LOG_WARN("memdata sync fail to get adapter instance", KR(ret), K(ls_id_), K(tablet_id));
   }
 
-  // Update adapter statistics
-  if (OB_SUCC(ret)) {
+  // Update adapter statistics (a not-complete skip is neither a success nor a failure)
+  if (skipped_not_complete) {
+  } else if (OB_SUCC(ret)) {
     if (OB_NOT_NULL(new_adpt_guard.get_adatper())) {
       new_adpt_guard.get_adatper()->sync_succ();
     } else if (OB_NOT_NULL(adpt_guard.get_adatper())) {
@@ -376,7 +387,8 @@ int ObVecMemSyncTask::process_one()
         }
         LOG_INFO("mem sync skip terminal tablet on retry", K(ls_id_), K(cur_tablet), K(i), K(prev_ret));
       } else {
-        tablet_ret = process_one_tablet(mgr, cur_tablet, tablet_est_mem);
+        bool skipped_not_complete = false;
+        tablet_ret = process_one_tablet(mgr, cur_tablet, tablet_est_mem, skipped_not_complete);
         bool is_tablet_cancel_after_process = false;
         int tmp_ret = ObVecIndexAsyncTaskUtil::check_mem_sync_tablet_is_cancel(
             ctx_, cur_tablet, is_tablet_cancel_after_process);
@@ -392,6 +404,10 @@ int ObVecMemSyncTask::process_one()
             first_fatal_ret = tablet_ret;
           }
           LOG_INFO("mem sync tablet cancelled during process", K(ls_id_), K(cur_tablet), K(i));
+        } else if (OB_SUCCESS == tablet_ret && skipped_not_complete) {
+          // adapter not complete yet: terminal for this batch (no retry storm); the load
+          // is re-armed per-adapter once it transitions to COMPLETE
+          ++skip_cnt;
         } else if (OB_SUCCESS == tablet_ret) {
           ++succ_cnt;
         } else if (is_mem_sync_retryable_ret(tablet_ret)) {
