@@ -560,7 +560,6 @@ int ObSSTableMetaPersistCtx::init(
   } else if (OB_FAIL(shared_macro_map_.create(map_bucket_cnt, "ObBlockInfoMap", "SharedBlkNode", MTL_ID()))) {
     STORAGE_LOG(WARN, "fail to create shared macro map", K(ret));
   } else {
-    tables_.set_attr(lib::ObMemAttr(MTL_ID(), "PerstTables", ctx_id));
     write_infos_.set_attr(lib::ObMemAttr(MTL_ID(), "SSTWriteReqs", ctx_id));
     is_inited_ = true;
   }
@@ -765,6 +764,7 @@ int ObSSTableMetaPersistHelper::do_persist_all_sstables(
   sst_meta_size_aligned = 0;
 
   ObTableStoreIterator sstable_iter;
+  common::ObSArray<ObITable *> tables;
   const blocksstable::ObMajorChecksumInfo &major_ckm_info = old_table_store.get_major_ckm_info();
   const int64_t ctx_id = share::is_reserve_mode()
                        ? ObCtxIds::MERGE_RESERVE_CTX_ID
@@ -779,6 +779,7 @@ int ObSSTableMetaPersistHelper::do_persist_all_sstables(
   ObITable *itable = nullptr;
   ObMultiTimeStats::TimeStats *time_stats = nullptr;
   ObBlockInfoSet &block_info_set = ctx_.block_info_set_;
+  tables.set_attr(lib::ObMemAttr(MTL_ID(), "PerstTables", ctx_id));
 
   if (OB_UNLIKELY(!is_ready_for_persist_())) {
     ret = OB_ERR_UNEXPECTED;
@@ -804,6 +805,7 @@ int ObSSTableMetaPersistHelper::do_persist_all_sstables(
       } else if (FALSE_IT(sstable = static_cast<ObSSTable *>(itable))) {
       } else if (OB_FAIL(inner_do_persist_single_sst_(*sstable,
                                                       /*skip_normal_sst*/ false,
+                                                      tables,
                                                       out_co_sstable))) {
         STORAGE_LOG(WARN, "failed to persist sstable", K(ret), KPC(this));
       }
@@ -838,10 +840,10 @@ int ObSSTableMetaPersistHelper::do_persist_all_sstables(
   }
   // init new table store
   else if (OB_FAIL(new_table_store.init(new_table_store_allocator,
-                                        ctx_.tables_,
+                                        tables,
                                         sst_write_op_->get_written_addrs(),
                                         major_ckm_info))) {
-    STORAGE_LOG(WARN, "failed to init new table store", K(ret), K(ctx_.tables_), K(sst_write_op_->get_written_addrs()));
+    STORAGE_LOG(WARN, "failed to init new table store", K(ret), K(tables.count()), K(sst_write_op_->get_written_addrs()));
   } else {
     if (OB_NOT_NULL(time_stats)) {
       time_stats->click("init_new_table_store");
@@ -870,6 +872,8 @@ int ObSSTableMetaPersistHelper::do_persist_for_full_direct_load(
 {
   int ret = OB_SUCCESS;
   out_co_sstable = nullptr;
+  // full direct load only needs out_co_sstable; tables is unused after return
+  common::ObSEArray<ObITable *, 1> tables;
   if (OB_UNLIKELY(!is_ready_for_persist_())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "helper is not ready for persist", K(ret), KPC(this));
@@ -878,6 +882,7 @@ int ObSSTableMetaPersistHelper::do_persist_for_full_direct_load(
     STORAGE_LOG(WARN, "invalid null sstable", K(ret), KP(sstable));
   } else if (OB_FAIL(inner_do_persist_single_sst_(*sstable,
                                                   /*skip_normal_sst*/true,
+                                                  tables,
                                                   out_co_sstable))) {
     STORAGE_LOG(WARN, "failed to persist sstable", K(ret), K(sstable), KPC(this));
   }
@@ -896,6 +901,7 @@ bool ObSSTableMetaPersistHelper::is_ready_for_persist_() const
 int ObSSTableMetaPersistHelper::inner_do_persist_single_sst_(
     ObSSTable &sstable,
     const bool skip_normal_sst,
+    common::ObIArray<ObITable *> &tables,
     ObCOSSTableV2 *&out_co_sstable)
 {
   OB_ASSERT(is_ready_for_persist_());
@@ -906,13 +912,13 @@ int ObSSTableMetaPersistHelper::inner_do_persist_single_sst_(
   } else if (sstable.is_co_sstable() && sstable.get_serialize_size(data_version_) > large_co_sstable_threshold_) {
     // persist large co sstable
     ObCOSSTableV2 &co_sstable = static_cast<ObCOSSTableV2 &>(sstable);
-    if (OB_FAIL(persist_large_co_sstable_(co_sstable, out_co_sstable))) {
+    if (OB_FAIL(persist_large_co_sstable_(co_sstable, tables, out_co_sstable))) {
       STORAGE_LOG(WARN, "failed to persist large co_sstable", K(ret), K(co_sstable));
     }
   } else if (skip_normal_sst) {
     // just do nothing
     STORAGE_LOG(INFO, "not large co sstable, skip it", K(ret), K(sstable));
-  } else if (OB_FAIL(persist_normal_sstable_(sstable))) {
+  } else if (OB_FAIL(persist_normal_sstable_(sstable, tables))) {
     STORAGE_LOG(WARN, "failed to persist normal sstable", K(ret), K(sstable));
   }
   return ret;
@@ -974,6 +980,7 @@ int ObSSTableMetaPersistHelper::persist_sstable_linked_block_if_need_(ObSSTable 
 
 int ObSSTableMetaPersistHelper::persist_large_co_sstable_(
     ObCOSSTableV2 &co_sstable,
+    common::ObIArray<ObITable *> &tables,
     ObCOSSTableV2 *&out_co_sstable)
 {
   OB_ASSERT(is_ready_for_persist_());
@@ -1036,10 +1043,11 @@ int ObSSTableMetaPersistHelper::persist_large_co_sstable_(
                                                           ctx_.write_infos_))) {
             STORAGE_LOG(WARN, "failed to fill out_co_sstable write info", K(ret), KPC(out_co_sstable), K(ctx_));
           } else if (FALSE_IT(ctx_.large_co_sstable_cnt_++)) {
-          } else if (OB_FAIL(ctx_.tables_.push_back(out_co_sstable))) {
-            STORAGE_LOG(WARN, "failed to add out_co_sstable into ctx", K(ret), K(ctx_));
+          } else if (OB_FAIL(tables.push_back(out_co_sstable))) {
+            STORAGE_LOG(WARN, "failed to add out_co_sstable into tables", K(ret), KPC(out_co_sstable));
+          } else {
+            STORAGE_LOG(INFO, "generate new co_sstable with addr succ", K(co_sstable), KPC(out_co_sstable), K(sstable_meta_size));
           }
-          STORAGE_LOG(INFO, "generate new co_sstable with addr succ", K(co_sstable), KPC(out_co_sstable), K(sstable_meta_size));
         }
       }
       if (OB_SUCC(ret)) {
@@ -1050,7 +1058,9 @@ int ObSSTableMetaPersistHelper::persist_large_co_sstable_(
   return ret;
 }
 
-int ObSSTableMetaPersistHelper::persist_normal_sstable_(ObSSTable &sstable)
+int ObSSTableMetaPersistHelper::persist_normal_sstable_(
+    ObSSTable &sstable,
+    common::ObIArray<ObITable *> &tables)
 {
   OB_ASSERT(is_ready_for_persist_());
   int ret = OB_SUCCESS;
@@ -1074,8 +1084,8 @@ int ObSSTableMetaPersistHelper::persist_normal_sstable_(ObSSTable &sstable)
                                                          /*check_has_padding_meta_cache*/true,
                                                          ctx_.write_infos_))) {
     STORAGE_LOG(WARN, "failed to fill sstable's write info", K(ret), K(sstable), K(ctx_));
-  } else if (OB_FAIL(ctx_.tables_.push_back(&sstable))) {
-    STORAGE_LOG(WARN, "failed to add table", K(ret), K(sstable), K(ctx_));
+  } else if (OB_FAIL(tables.push_back(&sstable))) {
+    STORAGE_LOG(WARN, "failed to add table", K(ret), K(sstable));
   } else if (is_co_sstable) {
     ctx_.small_co_sstable_cnt_++;
   } else {

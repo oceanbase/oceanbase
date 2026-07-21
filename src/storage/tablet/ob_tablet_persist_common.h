@@ -412,12 +412,16 @@ private:
   int inner_do_persist_single_sst_(
       ObSSTable &sstable,
       const bool skip_normal_sst,
+      common::ObIArray<ObITable *> &tables,
       ObCOSSTableV2 *&out_co_sstable);
   int persist_sstable_linked_block_if_need_(ObSSTable &sstable);
   int persist_large_co_sstable_(
       ObCOSSTableV2 &co_sstable,
+      common::ObIArray<ObITable *> &tables,
       ObCOSSTableV2 *&out_co_sstable);
-  int persist_normal_sstable_(ObSSTable &sstable);
+  int persist_normal_sstable_(
+      ObSSTable &sstable,
+      common::ObIArray<ObITable *> &tables);
   int record_cg_sstables_macro_(const ObCOSSTableV2 &co_sstable);
   int fill_sstable_write_info_and_record_(
       const ObSSTable &sstable,
@@ -470,7 +474,6 @@ public:
                K_(large_co_sstable_cnt),
                K_(small_co_sstable_cnt),
                K_(normal_sstable_cnt),
-               K_(tables),
                K_(write_infos),
                K_(sstable_meta_write_ctxs));
 
@@ -482,8 +485,6 @@ public:
   int64_t small_co_sstable_cnt_;
   int64_t normal_sstable_cnt_;
   ObTabletBlockInfoSetBuilder::SharedMacroMap shared_macro_map_;
-  /// @brief: sstables that exclude cg sstable(used for building table store)
-  common::ObSArray<ObITable *> tables_;
   common::ObSEArray<ObSharedObjectWriteInfo, 16> write_infos_;
   common::ObArenaAllocator &allocator_;
   ObBlockInfoSet &block_info_set_;
