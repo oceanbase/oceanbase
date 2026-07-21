@@ -27176,6 +27176,32 @@ INTNUM
 {
   $$ = $1;
 }
+| '-' number_literal
+{
+  if (T_UINT64 == $2->type_) {
+    uint64_t value = $2->value_;
+    if (INT64_MAX == value - 1) {
+      $2->value_ = INT64_MIN;
+      $2->type_ = T_INT;
+    } else {
+      $2->value_ = -$2->value_;
+      $2->type_ = T_NUMBER;
+    }
+  } else {
+    $2->value_ = -$2->value_;
+  }
+  int32_t len = $2->str_len_ + 2;
+  char *str_value = (char*)parse_malloc(len, result->malloc_pool_);
+  if (OB_LIKELY(NULL != str_value)) {
+    snprintf(str_value, len, "-%.*s", (int32_t)($2->str_len_), $2->str_value_);
+    $$ = $2;
+    $$->str_value_ = str_value;
+    $$->str_len_ = $2->str_len_ + 1;
+  } else {
+    yyerror(NULL, result, "No more space for copying expression string\n");
+    YYABORT_NO_MEMORY;
+  }
+}
 | relation_name
 {
   $$ = $1;

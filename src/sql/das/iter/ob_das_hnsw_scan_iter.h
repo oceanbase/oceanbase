@@ -300,6 +300,7 @@ public:
       rel_map_(),
       use_vid_(false),
       distance_threshold_(FLT_MAX),
+      remaining_dist_offset_(-1),
       strategy_(ObVecIdxQueryStrategy::LATENCY_FIRST) {
         extra_in_rowkey_idxs_.set_attr(ObMemAttr(MTL_ID(), "ExtraIdx"));
       }
@@ -347,8 +348,14 @@ private:
   int init_rel_map(ObPluginVectorIndexAdaptor* adaptor);
   bool is_hnsw_bq() const { return OB_NOT_NULL(vec_aux_ctdef_) && vec_aux_ctdef_->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ;}
   bool is_ipivf() const { return OB_NOT_NULL(vec_aux_ctdef_) && (vec_aux_ctdef_->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF || vec_aux_ctdef_->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF_SQ);}
+  // for hnsw bq with last_distance, skip reorder
+  bool bq_skip_reorder() const {
+    return is_hnsw_bq() && OB_NOT_NULL(vec_aux_ctdef_)
+           && vec_aux_ctdef_->vec_query_param_.is_set_last_distance_;
+  }
   bool need_save_distance_result() {
-    return is_hybrid_ ? distance_calc_ != nullptr : (distance_calc_ != nullptr && !is_hnsw_bq());
+    return is_hybrid_ ? distance_calc_ != nullptr
+                      : distance_calc_ != nullptr && !is_hnsw_bq();
   }
   int process_adaptor_state(bool is_vectorized);
   int inner_process_adaptor_state(bool is_vectorized);
@@ -457,6 +464,9 @@ private:
   int prepare_extra_objs(ObIAllocator &allocator, ObObj *&objs);
   int build_extra_info_rowkey(const ObRowkey &rowkey, ObRowkey &extra_rowkey);
   int build_extra_info_range(const ObNewRange &range, const ObNewRange *&const_extra_range);
+  int recompute_exact_distances();
+  int sort_adaptor_vid_iter_by_distance();
+  int truncate_by_limit();
   int64_t get_reorder_count(const int64_t ef_search, const int64_t topK, const ObVectorIndexParam& param);
   int64_t get_reorder_count_for_brute_force(const int64_t ef_search, const int64_t topK, const ObVectorIndexParam& param);
   inline bool is_pre_filter() { return vec_index_type_ == ObVecIndexType::VEC_INDEX_PRE
@@ -602,6 +612,7 @@ private:
   common::ObRowkey tmp_filter_main_rowkey_;
   bool use_vid_;
   float distance_threshold_;
+  int64_t remaining_dist_offset_;
   ObVecIdxQueryStrategy strategy_;
 
 private:

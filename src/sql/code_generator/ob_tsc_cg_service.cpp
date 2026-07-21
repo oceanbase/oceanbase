@@ -561,6 +561,8 @@ int ObTscCgService::calc_enable_use_simplified_scan(
         } else if (!col_ref->is_rowkey_column()) {
           is_access_pk = false;
         }
+      } else if (si.expr_->is_vector_sort_expr() && si.expr_->has_flag(IS_CUT_CALC_EXPR) && !op.need_skip_rowkey_vid()) {
+        // distance reused from VSAG, no need to read embedding from main table
       } else {
         is_access_pk = false;
       }

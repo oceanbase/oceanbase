@@ -723,7 +723,7 @@ int construct_vsag_create_param(
                                      ",\"max_degree\":%d",
                                      max_degree))) {
     LOG_WARN("failed to fill result_param_str", K(ret), K(max_degree));
-  } else if (create_type == HGRAPH_TYPE &&
+  } else if (create_type == HGRAPH_TYPE && store_raw_vector &&
              OB_FAIL(databuff_printf(result_param_str, buf_len, pos,
                                  ",\"store_raw_vector\":true"))) {
     LOG_WARN("failed to fill store_raw_vector", K(ret));
@@ -852,7 +852,8 @@ int construct_vsag_search_param(uint8_t create_type,
                                 int64_t ef_search,
                                 bool use_extra_info_filter,
                                 char *result_param_str,
-                                float timeout_ms)
+                                float timeout_ms,
+                                float min_distance)
 {
   int ret = OB_SUCCESS;
   bool is_hgraph_type = get_is_hgraph_type(create_type);
@@ -885,6 +886,11 @@ int construct_vsag_search_param(uint8_t create_type,
                         pos,
                         ",\"use_extra_info_filter\":%s", use_extra_info_filter ? "true" : "false"))) {
     LOG_WARN("failed to fill result_param_str", K(ret), K(index_type_str));
+  } else if (min_distance != -FLT_MAX && OB_FAIL(databuff_printf(result_param_str,
+                        buf_len,
+                        pos,
+                        ",\"min_distance\":%.9g", min_distance))) {
+    LOG_WARN("failed to fill result_param_str min_distance", K(ret), K(min_distance));
   } else if (OB_FAIL(databuff_printf(result_param_str,
                         buf_len,
                         pos,
@@ -1131,7 +1137,7 @@ int tune_index(VectorIndexPtr &index_handler, int new_index_type)
             max_degree, hnsw->get_ef_construction(), hnsw->get_ef_search(),
             hnsw->get_allocator(), static_cast<int>(hnsw->get_extra_info_size()),
             hnsw->get_refine_type(), hnsw->get_bq_bits_query(), hnsw->get_bq_use_fht(),
-            (new_index_type == HGRAPH_TYPE), false, result_param_str))) {
+            false, false, result_param_str))) {
       LOG_WARN("[OBVSAG] construct_vsag_create_param for tune failed", K(ret), K(new_index_type), KP(index_handler));
     } else {
       std::string params_str(result_param_str);
@@ -1303,7 +1309,7 @@ int knn_search(VectorIndexPtr &index_handler, float *query_vector,
                int64_t &result_size, int ef_search, bool need_extra_info,
                const char *&extra_infos, void *invalid, bool reverse_filter,
                bool use_extra_info_filter, void *allocator, float valid_ratio,
-               float distance_threshold, float timeout_ms)
+               float distance_threshold, float timeout_ms, float last_distance)
 {
   int ret = OB_SUCCESS;
   if (index_handler == nullptr || query_vector == nullptr) {
@@ -1324,7 +1330,7 @@ int knn_search(VectorIndexPtr &index_handler, float *query_vector,
       int64_t ef_search_threshold = AMPLIFICATION_FACTOR * topk > EF_SEARCH_LIMIT ? AMPLIFICATION_FACTOR * topk : EF_SEARCH_LIMIT;
       ef_search = ef_search < ef_search_threshold ? ef_search : ef_search_threshold;
     }
-    if (OB_FAIL(construct_vsag_search_param(uint8_t(index_type), ef_search, use_extra_info_filter, result_param_str, timeout_ms))) {
+    if (OB_FAIL(construct_vsag_search_param(uint8_t(index_type), ef_search, use_extra_info_filter, result_param_str, timeout_ms, last_distance))) {
       LOG_WARN("[OBVSAG] construct_vsag_search_param fail", K(ret), K(index_type), K(ef_search), K(use_extra_info_filter), K(topk));
     } else {
       const std::string input_json_string(result_param_str);
@@ -1345,7 +1351,7 @@ int knn_search(VectorIndexPtr &index_handler, float *query_vector,
                int64_t &result_size, int ef_search, bool need_extra_info,
                const char *&extra_infos, void *invalid, bool reverse_filter,
                bool use_extra_info_filter, float valid_ratio, void *&iter_ctx,
-               bool is_last_search, void *allocator, float timeout_ms)
+               bool is_last_search, void *allocator, float timeout_ms, float last_distance)
 {
   int ret = OB_SUCCESS;
   if (index_handler == nullptr || query_vector == nullptr) {
@@ -1366,7 +1372,7 @@ int knn_search(VectorIndexPtr &index_handler, float *query_vector,
       int64_t ef_search_threshold = AMPLIFICATION_FACTOR * topk > EF_SEARCH_LIMIT ? AMPLIFICATION_FACTOR * topk : EF_SEARCH_LIMIT;
       ef_search = ef_search < ef_search_threshold ? ef_search : ef_search_threshold;
     }
-    if (OB_FAIL(construct_vsag_search_param(uint8_t(index_type), ef_search, use_extra_info_filter, result_param_str, timeout_ms))) {
+    if (OB_FAIL(construct_vsag_search_param(uint8_t(index_type), ef_search, use_extra_info_filter, result_param_str, timeout_ms, last_distance))) {
       LOG_WARN("[OBVSAG] construct_vsag_search_param fail", K(ret), K(index_type), K(ef_search), K(use_extra_info_filter), K(topk));
     } else {
       const std::string input_json_string(result_param_str);

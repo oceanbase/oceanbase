@@ -451,7 +451,8 @@ public:
       rel_map_ptr_(nullptr),
       distance_threshold_(FLT_MAX),
       ob_sparse_drop_ratio_search_(0),
-      n_candidate_(0) {};
+      n_candidate_(0),
+      last_distance_(-FLT_MAX) {};
   ~ObVectorQueryConditions() { query_vector_.reset(); }
   bool is_inited() { return query_vector_.length() > 0 && ef_search_ > 0; }
   void reset() {
@@ -462,8 +463,9 @@ public:
     ob_sparse_drop_ratio_search_ = 0;
     n_candidate_ = 0;
     only_complete_data_ = false;
+    last_distance_ = -FLT_MAX;
   }
-  TO_STRING_KV(K_(query_limit), K_(query_order), K_(ef_search), K_(query_vector), K_(query_scn), K_(ob_sparse_drop_ratio_search), K_(n_candidate));
+  TO_STRING_KV(K_(query_limit), K_(query_order), K_(ef_search), K_(query_vector), K_(query_scn), K_(ob_sparse_drop_ratio_search), K_(n_candidate), K_(last_distance));
 
   uint32_t query_limit_;
   bool query_order_; // true: asc, false: desc
@@ -481,6 +483,7 @@ public:
   float distance_threshold_;
   float ob_sparse_drop_ratio_search_;
   int64_t n_candidate_;
+  float last_distance_;
 };
 
 struct ObVecIndexLoadInfo {

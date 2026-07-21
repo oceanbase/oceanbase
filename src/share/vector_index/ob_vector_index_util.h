@@ -364,13 +364,13 @@ static const uint64_t MAX_IVF_POST_DIST_CALC_CNT = 500000;
            vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ;
   }
   inline bool is_hnsw_bq_scan() const { return vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ; }
-
   inline bool is_ipivf_scan() const
   {
     return vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF ||
            vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF_SQ;
   }
 
+  inline bool is_ipivf_refine() const { return vector_index_param_.refine_; }
   inline bool is_hybrid_index() const { return strlen(vector_index_param_.endpoint_) > 0; }
 
   inline bool is_ivf_vec_scan() const
@@ -509,6 +509,8 @@ class ObVectorIndexUtil final
     ObExprVecIvfCenterIdCache pq_cache_;
   };
 public:
+  static int convert_vsag_to_ob_distance(double vsag_distance, ObItemType expr_type, double &ob_distance);
+  static int convert_ob_to_vsag_distance(double ob_distance, ObItemType expr_type, double &vsag_distance);
   static int determine_vid_type(
       const ObTableSchema &table_schema,
       ObDocIDType &vid_type);
@@ -1281,7 +1283,7 @@ struct ObVecExtraInfoPtr {
   inline bool is_null() const { return buf_ == nullptr || count_ == 0; }
   inline const char *operator[](int64_t idx) const
   {
-    return (buf_ == nullptr && idx >= count_) ? nullptr : buf_[idx];
+    return (buf_ == nullptr || idx >= count_) ? nullptr : buf_[idx];
   }
   inline int set_with_copy(int64_t idx, const char *src_buf, int64_t extra_info_actual_size)
   {

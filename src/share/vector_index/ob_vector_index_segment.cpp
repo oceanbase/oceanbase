@@ -2266,7 +2266,8 @@ int ObVectorIndexSegQueryHandler::knn_search(ObVsagQueryResult &result, int segm
           &ctx_->search_allocator_,
           query_cond_->extra_column_count_ > 0,
           query_cond_->distance_threshold_,
-          timeout_ms))) {
+          timeout_ms,
+          query_cond_->last_distance_))) {
           LOG_WARN("knn search dense vector failed.", K(ret));
         }
       }
@@ -2292,7 +2293,8 @@ int ObVectorIndexSegQueryHandler::knn_search(ObVsagQueryResult &result, int segm
         query_cond_->extra_column_count_ > 0,
         segment_querier_->iter_ctx_,
         query_cond_->is_last_search_,
-        timeout_ms))) {
+        timeout_ms,
+        query_cond_->last_distance_))) {
         LOG_WARN("knn search delta failed.", K(ret));
       }
     }

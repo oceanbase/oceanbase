@@ -377,7 +377,7 @@ TEST_F(TestVsagAdaptor, test_construct_vsag_create_param_hnsw_family)
           buf));
   EXPECT_STREQ(
       "{\"dim\":128,\"dtype\":\"float32\",\"metric_type\":\"l2\",\"use_old_serial_format\":true,"
-      "\"index_param\":{\"ef_construction\":100,\"max_degree\":32,\"store_raw_vector\":true,"
+      "\"index_param\":{\"ef_construction\":100,\"max_degree\":32,"
       "\"base_quantization_type\":\"fp32\",\"build_thread_count\":0,\"label_remap_type\":\"robin\"}}",
       buf);
 

@@ -955,6 +955,15 @@ int ObVectorIndexParam::build_search_param(const ObVectorIndexParam &index_param
         search_param.ob_sparse_drop_ratio_search_ = query_param.ob_sparse_drop_ratio_search_;
       }
     }
+    if (OB_FAIL(ret)) {
+    } else if (query_param.is_set_last_distance_) {
+      if (!ObVectorIndexUtil::is_hnsw_index_type(index_param.type_)
+          || ObVectorIndexAlgorithmType::VIAT_HNSW_BQ == index_param.type_) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("last_distance is not support parameter for current index", K(ret), K(index_param.type_));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "last_distance parameter for current index is");
+      }
+    }
     LOG_TRACE("vector param", K(index_param), K(query_param), K(search_param));
   }
   return ret;
@@ -1093,6 +1102,25 @@ int ObVectorIndexUtil::resolve_query_param(
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("invalid vector query strategy param, should be LATENCY_FIRST or RECALL_FIRST", K(ret), K(i), K(param_name), K(value_str));
           }
+        }
+      } else if (param_name.case_compare("LAST_DISTANCE") == 0) {
+        int err = 0;
+        char *endptr = NULL;
+        ObString value_str(static_cast<int32_t>(value_node->str_len_), value_node->str_value_);
+        double out_val = 0;
+        if (param.is_set_last_distance_) {
+          ret = OB_ERR_PARAM_DUPLICATE;
+          LOG_WARN("duplicate last_distance param", K(ret), K(i));
+        } else if (OB_FALSE_IT(out_val = ObCharset::strntod(value_str.ptr(), value_str.length(), &endptr, &err))) {
+        } else if (err != 0 || (value_str.ptr() + value_str.length()) != endptr) {
+          ret = OB_DATA_OUT_OF_RANGE;
+          LOG_WARN("fail to cast string to double", K(ret), K(value_str), K(err), KP(endptr));
+        } else if (!isfinite(out_val) || out_val > FLT_MAX || out_val < -FLT_MAX) {
+          ret = OB_DATA_OUT_OF_RANGE;
+          LOG_WARN("last_distance out of float range", K(ret), K(out_val));
+        } else {
+          param.last_distance_ = static_cast<float>(out_val);
+          param.is_set_last_distance_ = 1;
         }
       } else {
         ret = OB_INVALID_ARGUMENT;
@@ -1620,6 +1648,66 @@ bool ObVectorIndexUtil::is_expr_type_and_distance_algorithm_match(
     default: break;
   }
   return is_match;
+}
+
+int ObVectorIndexUtil::convert_vsag_to_ob_distance(
+    double vsag_distance, ObItemType expr_type, double &ob_distance)
+{
+  int ret = OB_SUCCESS;
+  switch (expr_type) {
+    case T_FUN_SYS_L2_DISTANCE:
+      ob_distance = sqrt(vsag_distance < 0 ? 0 : vsag_distance);
+      break;
+    case T_FUN_SYS_L2_SQUARED:
+      ob_distance = vsag_distance;
+      break;
+    case T_FUN_SYS_COSINE_DISTANCE:
+      ob_distance = vsag_distance;
+      break;
+    case T_FUN_SYS_INNER_PRODUCT:
+      ob_distance = 1.0 - vsag_distance;
+      break;
+    case T_FUN_SYS_NEGATIVE_INNER_PRODUCT:
+      ob_distance = vsag_distance - 1.0;
+      break;
+    default:
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected vector distance expr type", K(ret), K(expr_type));
+      break;
+  }
+  return ret;
+}
+
+int ObVectorIndexUtil::convert_ob_to_vsag_distance(
+    double ob_distance, ObItemType expr_type, double &vsag_distance)
+{
+  int ret = OB_SUCCESS;
+  switch (expr_type) {
+    case T_FUN_SYS_L2_DISTANCE:
+      if (ob_distance < 0) {
+        vsag_distance = ob_distance;
+      } else {
+        vsag_distance = ob_distance * ob_distance;
+      }
+      break;
+    case T_FUN_SYS_L2_SQUARED:
+      vsag_distance = ob_distance;
+      break;
+    case T_FUN_SYS_COSINE_DISTANCE:
+      vsag_distance = ob_distance;
+      break;
+    case T_FUN_SYS_INNER_PRODUCT:
+      vsag_distance = 1.0 - ob_distance;
+      break;
+    case T_FUN_SYS_NEGATIVE_INNER_PRODUCT:
+      vsag_distance = ob_distance + 1.0;
+      break;
+    default:
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected vector distance expr type", K(ret), K(expr_type));
+      break;
+  }
+  return ret;
 }
 
 int ObVectorIndexUtil::check_distance_algorithm_match(
@@ -8237,12 +8325,21 @@ int ObVectorIndexUtil::set_vector_index_param(const ObTableSchema *&vec_index_sc
     if (OB_ISNULL(vector_expr)) {
       vector_expr = stmt->get_first_vector_expr();
     }
-    if (OB_NOT_NULL(vector_expr) &&
-        (vec_extra_info.is_hnsw_vec_scan() || vec_extra_info.is_ipivf_scan())
-        && (! vec_extra_info.is_hnsw_bq_scan() || vec_extra_info.is_hybrid_index())
-        &&!stmt->is_contain_vector_origin_distance_calc()) {
-      FLOG_INFO("distance needn't calc", K(ret));
-      vector_expr->add_flag(IS_CUT_CALC_EXPR);
+    // IS_CUT_CALC_EXPR: skip expression-engine distance recalculation
+    if (OB_NOT_NULL(vector_expr)) {
+      bool hnsw_can_cut = vec_extra_info.is_hnsw_vec_scan() && !vec_extra_info.is_hnsw_bq_scan();
+      // Mixed-version compatibility before 4.6.0.1:
+      // SELECT distance must not set IS_CUT_CALC_EXPR.
+      if (hnsw_can_cut && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_6_0_1 &&
+          stmt->is_contain_vector_origin_distance_calc()) {
+        hnsw_can_cut = false;
+      }
+      const bool hybrid_can_cut = vec_extra_info.is_hybrid_index() && !stmt->is_contain_vector_origin_distance_calc();
+      const bool ipivf_can_cut = vec_extra_info.is_ipivf_scan() && !stmt->is_contain_vector_origin_distance_calc();
+      if (hnsw_can_cut || hybrid_can_cut || ipivf_can_cut) {
+        FLOG_INFO("distance needn't calc", K(ret));
+        vector_expr->add_flag(IS_CUT_CALC_EXPR);
+      }
     }
   }
   return ret;
