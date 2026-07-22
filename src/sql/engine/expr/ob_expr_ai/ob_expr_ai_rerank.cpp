@@ -8,6 +8,8 @@
 #include "lib/utility/utility.h"
 #include "lib/json_type/ob_json_common.h"
 #include "observer/omt/ob_tenant_ai_service.h"
+#include "share/ai_service/ob_ai_gateway_route_session.h"
+#include "sql/engine/expr/ob_expr_ai/ob_ai_gateway_retry_callback.h"
 #include "share/diagnosis/ob_runtime_profile.h"
 
 using namespace oceanbase::common;
@@ -17,6 +19,28 @@ namespace oceanbase
 {
 namespace sql
 {
+
+// Gateway retry callback for rerank: rebuilds rerank headers on endpoint switch.
+class RerankGatewayRetryCallback : public ObAiGatewayRetryCallbackBase
+{
+public:
+  using ObAiGatewayRetryCallbackBase::ObAiGatewayRetryCallbackBase;
+
+protected:
+  int rebuild_headers() override
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(ObAIFuncUtils::get_header(allocator_,
+                                          ep_config_.get_model_type(),
+                                          ep_config_.get_provider(),
+                                          ep_config_.get_api_key(),
+                                          ep_config_.get_request_model_name(),
+                                          ep_headers_))) {
+      LOG_WARN("failed to get rerank header for retry", K(ret));
+    }
+    return ret;
+  }
+};
 
 ObExprAIRerank::ObExprAIRerank(common::ObIAllocator &alloc)
 : ObFuncExprOperator(alloc,
@@ -102,7 +126,6 @@ int ObExprAIRerank::eval_ai_rerank(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_rerank, model id or query or documents is null");
     res.set_null();
   } else {
-    // Profile: create AI Rerank profile scope
     ObProfileSwitcher profile_switcher(ObProfileId::AI_RERANK);
     ScopedTimer total_timer(ObMetricId::AI_RERANK_ELAPSE_TIME);
 
@@ -115,7 +138,6 @@ int ObExprAIRerank::eval_ai_rerank(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     ObString query = arg_query->get_string();
     ObArray<ObString> header_array;
     ObJsonArray *document_array = nullptr;
-    ObJsonArray *result_array = nullptr;
     ObIJsonBase *j_base = nullptr;
     bool is_null_result = false;
     if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, temp_allocator, DOCUMENTS_IDX,
@@ -169,73 +191,130 @@ int ObExprAIRerank::eval_ai_rerank(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     }
 
     if (OB_FAIL(ret)) {
+    } else if (model_config.is_gateway_route()) {
+      // Endpoint switching on retry is handled by RerankGatewayRetryCallback in send_post().
+      share::ObAiGatewayCircuitState *gw_state = model_config.get_gw_state();
+      share::ObAiGatewayRouteSession session;
+      share::ObAiGatewayEndpoint gw_endpoint;
+      share::ObAIModelConfigInfo ep_config;
+      if (OB_FAIL(session.init(gw_state))) {
+        LOG_WARN("failed to init gateway route session", K(ret));
+      } else if (OB_FAIL(ObAIFuncUtils::gateway_next_config(temp_allocator, session,
+                     model_config.get_op_type(), gw_endpoint, ep_config))) {
+        LOG_WARN("failed to get initial gateway endpoint config", K(ret));
+      } else {
+        RerankGatewayRetryCallback retry_cb(session, gw_endpoint, ep_config,
+                                            temp_allocator, model_config);
+        int request_ret = OB_SUCCESS;
+        int64_t final_http_code = 0;
+        if (OB_NOT_NULL(arg_doc_key)) {
+          ObString doc_key = arg_doc_key->get_string();
+          request_ret = eval_ai_rerank_with_doc_key(expr, ctx, temp_allocator,
+                            query, document_array, doc_key, ep_config, res, &retry_cb,
+                            final_http_code);
+        } else {
+          // ep_config / the callback's headers are updated on endpoint switch, so each
+          // batch reads the current endpoint.
+          request_ret = eval_ai_rerank_batched(expr, ctx, temp_allocator, query,
+                            document_array, ep_config, retry_cb.get_headers(), res, &retry_cb,
+                            final_http_code);
+        }
+        if (OB_SUCCESS == request_ret) {
+          (void)session.on_success();
+        } else {
+          // Record the final endpoint failure so the session does not
+          // auto-report it as a "code defect" in its destructor.
+          (void)session.on_failure(final_http_code);
+          ret = request_ret;
+        }
+      }
     } else if (OB_NOT_NULL(arg_doc_key)) {
       ObString doc_key = arg_doc_key->get_string();
+      int64_t unused_http_code = 0;
       if (OB_FAIL(eval_ai_rerank_with_doc_key(expr, ctx, temp_allocator,
-                  query, document_array, doc_key, model_config, res))) {
+                  query, document_array, doc_key, model_config, res, nullptr,
+                  unused_http_code))) {
         LOG_WARN("fail to eval ai rerank with doc key", K(ret));
       }
     } else {
-      int64_t batch_size = model_config.get_batch_size() > 0 ? model_config.get_batch_size() : 20;
-      if (OB_FAIL(ObAIFuncUtils::get_header(temp_allocator,
-                                            model_config.get_model_type(),
-                                            model_config.get_provider(),
-                                            model_config.get_api_key(),
-                                            model_config.get_request_model_name(),
-                                            header_array))) {
-        LOG_WARN("fail to get header", K(ret));
-      } else if (OB_FAIL(ObAIFuncJsonUtils::get_json_array(temp_allocator, result_array))) {
-        LOG_WARN("fail to get json array", K(ret));
+      int64_t unused_http_code = 0;
+      if (OB_FAIL(eval_ai_rerank_batched(expr, ctx, temp_allocator, query,
+              document_array, model_config, header_array, res, nullptr,
+              unused_http_code))) {
+        LOG_WARN("fail to eval ai rerank batched", K(ret));
       }
+    }
+  }
+  return ret;
+}
 
-      if (OB_SUCC(ret)) {
-        ObString score_key(SCORE_KEY);
-        int64_t end_idx = 0;
-        ObJsonArray *compact_array = nullptr;
-        ObJsonArray *batch_result_array = nullptr;
-        ObJsonArray *batch_document_array = nullptr;
-        int64_t api_call_count = 0;
-        int64_t total_doc_count = document_array->element_count();
+int ObExprAIRerank::eval_ai_rerank_batched(const ObExpr &expr, ObEvalCtx &ctx,
+                                           ObIAllocator &allocator,
+                                           ObString &query, ObJsonArray *document_array,
+                                           const share::ObAIModelConfigInfo &config,
+                                           ObArray<ObString> &header_array, ObDatum &res,
+                                           ObAIRetryCallback *retry_cb,
+                                           int64_t &out_http_code)
+{
+  int ret = OB_SUCCESS;
+  ObJsonArray *result_array = nullptr;
+  const int64_t batch_size = config.get_batch_size() > 0 ? config.get_batch_size() : RERANK_DEFAULT_BATCH_SIZE;
+  if (OB_FAIL(ObAIFuncUtils::get_header(allocator,
+                                        config.get_model_type(),
+                                        config.get_provider(),
+                                        config.get_api_key(),
+                                        config.get_request_model_name(),
+                                        header_array))) {
+    LOG_WARN("fail to get header", K(ret));
+  } else if (OB_FAIL(ObAIFuncJsonUtils::get_json_array(allocator, result_array))) {
+    LOG_WARN("fail to get json array", K(ret));
+  }
 
-        // Profile: record document count and batch count
-        INC_METRIC_VAL(ObMetricId::AI_RERANK_DOCUMENT_COUNT, total_doc_count);
-        int64_t expected_batch_count = (total_doc_count + batch_size - 1) / batch_size;
-        INC_METRIC_VAL(ObMetricId::AI_RERANK_BATCH_COUNT, expected_batch_count);
+  if (OB_SUCC(ret)) {
+    ObString score_key(SCORE_KEY);
+    int64_t end_idx = 0;
+    ObJsonArray *compact_array = nullptr;
+    ObJsonArray *batch_result_array = nullptr;
+    ObJsonArray *batch_document_array = nullptr;
+    int64_t api_call_count = 0;
+    const int64_t total_doc_count = document_array->element_count();
 
-        for (int64_t i = 0; OB_SUCC(ret) && i < document_array->element_count(); i += batch_size) {
-          end_idx = i + batch_size;
-          if (end_idx > document_array->element_count()) {
-            end_idx = document_array->element_count();
-          }
-          if (OB_FAIL(construct_batch_document_array(temp_allocator, document_array, i, end_idx, batch_document_array))) {
-            LOG_WARN("fail to construct batch document array", K(ret));
-          } else if (OB_FAIL(inner_eval_ai_rerank(temp_allocator,
-                                                   model_config.get_provider(),
-                                                   model_config.get_request_model_name(),
-                                                   model_config.get_url(),
-                                                   header_array, query, batch_document_array, batch_result_array))) {
-            LOG_WARN("fail to eval ai rerank", K(ret));
-          } else if (OB_FAIL(batch_result_add_base(temp_allocator, batch_result_array, i))) {
-            LOG_WARN("fail to add base", K(ret));
-          } else if (OB_FAIL(compact_json_array_by_key(temp_allocator, result_array, batch_result_array, score_key, compact_array))) {
-            LOG_WARN("fail to compact json array", K(ret));
-          } else {
-            result_array = compact_array;
-            api_call_count++;
-          }
-        }
+    INC_METRIC_VAL(ObMetricId::AI_RERANK_DOCUMENT_COUNT, total_doc_count);
+    const int64_t expected_batch_count = (total_doc_count + batch_size - 1) / batch_size;
+    INC_METRIC_VAL(ObMetricId::AI_RERANK_BATCH_COUNT, expected_batch_count);
 
-        // Profile: record API call count
-        INC_METRIC_VAL(ObMetricId::AI_RERANK_API_CALL_COUNT, api_call_count);
+    for (int64_t i = 0; OB_SUCC(ret) && i < total_doc_count; i += batch_size) {
+      end_idx = i + batch_size;
+      if (end_idx > total_doc_count) {
+        end_idx = total_doc_count;
       }
-      if (OB_SUCC(ret)) {
-        ObString raw_str;
-        if (OB_FAIL(result_array->get_raw_binary(raw_str, &temp_allocator))) {
-          LOG_WARN("json extarct get result binary failed", K(ret));
-        } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_str))) {
-          LOG_WARN("fail to pack json result", K(ret));
-        }
+      if (OB_FAIL(construct_batch_document_array(allocator, document_array, i, end_idx, batch_document_array))) {
+        LOG_WARN("fail to construct batch document array", K(ret));
+      } else if (OB_FAIL(inner_eval_ai_rerank(allocator,
+                                              config.get_provider(),
+                                              config.get_request_model_name(),
+                                              config.get_url(),
+                                              header_array, query, batch_document_array,
+                                              batch_result_array, out_http_code, retry_cb))) {
+        LOG_WARN("fail to eval ai rerank", K(ret));
+      } else if (OB_FAIL(batch_result_add_base(allocator, batch_result_array, i))) {
+        LOG_WARN("fail to add base", K(ret));
+      } else if (OB_FAIL(compact_json_array_by_key(allocator, result_array, batch_result_array, score_key, compact_array))) {
+        LOG_WARN("fail to compact json array", K(ret));
+      } else {
+        result_array = compact_array;
+        api_call_count++;
       }
+    }
+
+    INC_METRIC_VAL(ObMetricId::AI_RERANK_API_CALL_COUNT, api_call_count);
+  }
+  if (OB_SUCC(ret)) {
+    ObString raw_str;
+    if (OB_FAIL(result_array->get_raw_binary(raw_str, &allocator))) {
+      LOG_WARN("json get result binary failed", K(ret));
+    } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_str))) {
+      LOG_WARN("fail to pack json result", K(ret));
     }
   }
   return ret;
@@ -246,7 +325,9 @@ int ObExprAIRerank::eval_ai_rerank_with_doc_key(const ObExpr &expr, ObEvalCtx &c
                                                 ObString &query, ObJsonArray *document_array,
                                                 ObString &doc_key,
                                                 const share::ObAIModelConfigInfo &config,
-                                                ObDatum &res)
+                                                ObDatum &res,
+                                                ObAIRetryCallback *retry_cb,
+                                                int64_t &out_http_code)
 {
   INIT_SUCC(ret);
   ObJsonArray *doc_array = nullptr;
@@ -256,11 +337,15 @@ int ObExprAIRerank::eval_ai_rerank_with_doc_key(const ObExpr &expr, ObEvalCtx &c
     LOG_WARN("fail to get doc array", K(ret));
   } else {
     ObAIFuncModel model(allocator, config);
+    if (OB_NOT_NULL(retry_cb)) {
+      model.set_before_retry_cb(retry_cb);
+    }
     if (OB_FAIL(model.call_rerank(query, doc_array, result_array))) {
       LOG_WARN("fail to call rerank", K(ret));
     } else if (OB_FAIL(sort_document_array_by_model_result(allocator, document_array, result_array, sorted_document_array))) {
       LOG_WARN("fail to sort document array", K(ret));
     }
+    out_http_code = model.get_last_http_code();
   }
   if (OB_SUCC(ret)) {
     ObString raw_str;
@@ -395,7 +480,9 @@ int ObExprAIRerank::inner_eval_ai_rerank(ObIAllocator &allocator,
                                           ObArray<ObString> &header_array,
                                           ObString &query,
                                           ObJsonArray *document_array,
-                                          ObJsonArray *&result_array)
+                                          ObJsonArray *&result_array,
+                                          int64_t &out_http_code,
+                                          ObAIRetryCallback *retry_cb)
 {
   INIT_SUCC(ret);
 
@@ -414,6 +501,9 @@ int ObExprAIRerank::inner_eval_ai_rerank(ObIAllocator &allocator,
     ai_client.set_timeout_sec(60);
     ai_client.set_max_retry_times(2);
   }
+  if (OB_NOT_NULL(retry_cb)) {
+    ai_client.set_before_retry_cb(retry_cb);  // also wires the client into retry_cb
+  }
   if (OB_FAIL(ObAIFuncUtils::get_rerank_body(allocator, provider, request_model_name,
                                                         query, document_array, config_json, body))) {
     LOG_WARN("fail to get body", K(ret));
@@ -430,6 +520,7 @@ int ObExprAIRerank::inner_eval_ai_rerank(ObIAllocator &allocator,
   } else {
     result_array = res;
   }
+  out_http_code = ai_client.get_last_http_code();
 
   return ret;
 }

@@ -916,6 +916,10 @@ ob_set_subtarget(ob_share ai_service
   ai_service/ob_ai_batch_file_manager.cpp
   ai_service/ob_batch_file_jsonl_writer.cpp
   ai_service/ob_batch_file_jsonl_iterator.cpp
+  ai_service/ob_ai_gateway_route_session.cpp
+  ai_service/ob_ai_gateway_circuit_state.cpp
+  ai_service/ob_ai_endpoint_circuit_state.cpp
+  ai_service/ob_ai_circuit_sliding_window.cpp
 )
 
 ob_set_subtarget(ob_share compaction_ttl

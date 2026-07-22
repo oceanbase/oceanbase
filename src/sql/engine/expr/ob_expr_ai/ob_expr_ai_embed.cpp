@@ -7,6 +7,8 @@
 #include "ob_expr_ai_embed.h"
 #include "observer/omt/ob_tenant_ai_service.h"
 #include "lib/allocator/page_arena.h"
+#include "share/ai_service/ob_ai_gateway_route_session.h"
+#include "sql/engine/expr/ob_expr_ai/ob_ai_gateway_retry_callback.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -15,6 +17,30 @@ namespace oceanbase
 {
 namespace sql
 {
+
+// Gateway retry callback for embed: rebuilds embed-specific headers on endpoint switch.
+class EmbedGatewayRetryCallback : public ObAiGatewayRetryCallbackBase
+{
+public:
+  using ObAiGatewayRetryCallbackBase::ObAiGatewayRetryCallbackBase;
+
+protected:
+  int rebuild_headers() override
+  {
+    int ret = OB_SUCCESS;
+    ObString api_key = ep_config_.get_api_key();
+    ObString provider = ep_config_.get_provider();
+    bool is_multi_model = ObAIFuncUtils::is_multi_model(ep_config_.get_request_model_name());
+    ObAIFuncIEmbed *embed_provider = nullptr;
+    if (OB_FAIL(ObAIFuncUtils::get_embed_provider(allocator_, provider, embed_provider, is_multi_model))) {
+      LOG_WARN("failed to get embed provider for retry", K(ret), K(provider));
+    } else if (OB_FAIL(embed_provider->get_header(allocator_, api_key, ep_headers_))) {
+      LOG_WARN("failed to get embed header for retry", K(ret));
+    }
+    return ret;
+  }
+};
+
 ObExprAIEmbed::ObExprAIEmbed(common::ObIAllocator &alloc)
     : ObFuncExprOperator(alloc,
                         T_FUN_SYS_AI_EMBED,
@@ -202,14 +228,44 @@ int ObExprAIEmbed::eval_ai_embed(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
         }
       }
       if (OB_SUCC(ret)) {
-        ObAIFuncModel model(temp_allocator, model_config);
-        // Set input_type based on parsed options
         ObString input_type_str = (input_type == ObAiEmbedInputType::INPUT_TYPE_IMAGE) ? ObString("image") : ObString("text");
-        model.set_input_type(input_type_str);
         ObString result;
-        if (OB_FAIL(model.call_dense_embedding(processed_content, config, result))) {
-          LOG_WARN("fail to call dense embedding", K(ret));
-        } else if (OB_FAIL(ObAIFuncUtils::set_string_result(expr, ctx, res, result))) {
+        if (model_config.is_gateway_route()) {
+          // Endpoint switching on retry is handled by EmbedGatewayRetryCallback in send_post().
+          share::ObAiGatewayCircuitState *gw_state = model_config.get_gw_state();
+          share::ObAiGatewayRouteSession session;
+          share::ObAiGatewayEndpoint gw_endpoint;
+          share::ObAIModelConfigInfo ep_config;
+          if (OB_FAIL(session.init(gw_state))) {
+            LOG_WARN("failed to init gateway route session", K(ret));
+          } else if (OB_FAIL(ObAIFuncUtils::gateway_next_config(temp_allocator, session,
+                         model_config.get_op_type(), gw_endpoint, ep_config))) {
+            LOG_WARN("failed to get initial gateway endpoint config", K(ret));
+          } else {
+            ObAIFuncModel ep_model(temp_allocator, ep_config);
+            ep_model.set_input_type(input_type_str);
+            EmbedGatewayRetryCallback retry_cb(session, gw_endpoint, ep_config,
+                                               temp_allocator, model_config);
+            ep_model.set_before_retry_cb(&retry_cb);
+            int request_ret = ep_model.call_dense_embedding(processed_content, config, result);
+            if (OB_SUCCESS == request_ret) {
+              (void)session.on_success();
+            } else {
+              // Record the final endpoint failure so the session does not
+              // auto-report it as a "code defect" in its destructor.
+              (void)session.on_failure(ep_model.get_last_http_code());
+              ret = request_ret;
+            }
+          }
+        } else {
+          // Non-gateway path (original)
+          ObAIFuncModel model(temp_allocator, model_config);
+          model.set_input_type(input_type_str);
+          if (OB_FAIL(model.call_dense_embedding(processed_content, config, result))) {
+            LOG_WARN("fail to call dense embedding", K(ret));
+          }
+        }
+        if (OB_SUCC(ret) && OB_FAIL(ObAIFuncUtils::set_string_result(expr, ctx, res, result))) {
           LOG_WARN("fail to set string result", K(ret));
         }
       }

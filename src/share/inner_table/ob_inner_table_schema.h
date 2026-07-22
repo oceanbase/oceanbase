@@ -1307,6 +1307,7 @@ public:
   static int all_virtual_ai_batch_task_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ai_model_provider_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ai_gateway_history_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_ai_gateway_endpoint_stat_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_stat_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_cache_plan_explain_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -2273,6 +2274,8 @@ public:
   static int cdb_ob_ai_batch_tasks_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_ai_batch_task_history_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_ai_batch_task_history_schema(share::schema::ObTableSchema &table_schema);
+  static int gv_ob_ai_gateway_endpoint_stat_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_ai_gateway_endpoint_stat_schema(share::schema::ObTableSchema &table_schema);
   static int dba_synonyms_schema(share::schema::ObTableSchema &table_schema);
   static int dba_objects_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_objects_schema(share::schema::ObTableSchema &table_schema);
@@ -4788,6 +4791,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_ai_batch_task_history_schema,
   ObInnerTableSchema::all_virtual_ai_model_provider_history_schema,
   ObInnerTableSchema::all_virtual_ai_gateway_history_schema,
+  ObInnerTableSchema::all_virtual_ai_gateway_endpoint_stat_schema,
   ObInnerTableSchema::all_virtual_sql_audit_ora_schema,
   ObInnerTableSchema::all_virtual_plan_stat_ora_schema,
   ObInnerTableSchema::all_virtual_plan_cache_plan_explain_ora_schema,
@@ -5869,6 +5873,8 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::cdb_ob_ai_batch_tasks_schema,
   ObInnerTableSchema::dba_ob_ai_batch_task_history_schema,
   ObInnerTableSchema::cdb_ob_ai_batch_task_history_schema,
+  ObInnerTableSchema::gv_ob_ai_gateway_endpoint_stat_schema,
+  ObInnerTableSchema::v_ob_ai_gateway_endpoint_stat_schema,
   ObInnerTableSchema::dba_synonyms_schema,
   ObInnerTableSchema::dba_objects_ora_schema,
   ObInnerTableSchema::all_objects_schema,
@@ -7230,6 +7236,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_SS_LOCAL_CACHE_DIAGNOSE_INFO_TID,
   OB_ALL_VIRTUAL_DDL_DAG_MONITOR_TID,
   OB_ALL_VIRTUAL_VECTOR_SEGMENT_INFO_TID,
+  OB_ALL_VIRTUAL_AI_GATEWAY_ENDPOINT_STAT_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TID,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TID,
@@ -8035,6 +8042,8 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_OB_AI_GATEWAY_ENDPOINTS_TID,
   OB_DBA_OB_AI_BATCH_TASKS_TID,
   OB_DBA_OB_AI_BATCH_TASK_HISTORY_TID,
+  OB_GV_OB_AI_GATEWAY_ENDPOINT_STAT_TID,
+  OB_V_OB_AI_GATEWAY_ENDPOINT_STAT_TID,
   OB_DBA_SYNONYMS_TID,
   OB_DBA_OBJECTS_ORA_TID,
   OB_ALL_OBJECTS_TID,
@@ -10580,6 +10589,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_SS_LOCAL_CACHE_DIAGNOSE_INFO_TNAME,
   OB_ALL_VIRTUAL_DDL_DAG_MONITOR_TNAME,
   OB_ALL_VIRTUAL_VECTOR_SEGMENT_INFO_TNAME,
+  OB_ALL_VIRTUAL_AI_GATEWAY_ENDPOINT_STAT_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TNAME,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TNAME,
@@ -11385,6 +11395,8 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_OB_AI_GATEWAY_ENDPOINTS_TNAME,
   OB_DBA_OB_AI_BATCH_TASKS_TNAME,
   OB_DBA_OB_AI_BATCH_TASK_HISTORY_TNAME,
+  OB_GV_OB_AI_GATEWAY_ENDPOINT_STAT_TNAME,
+  OB_V_OB_AI_GATEWAY_ENDPOINT_STAT_TNAME,
   OB_DBA_SYNONYMS_TNAME,
   OB_DBA_OBJECTS_ORA_TNAME,
   OB_ALL_OBJECTS_TNAME,
@@ -13043,6 +13055,7 @@ const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_SS_LOCAL_CACHE_DIAGNOSE_INFO_TID,
   OB_ALL_VIRTUAL_DDL_DAG_MONITOR_TID,
   OB_ALL_VIRTUAL_VECTOR_SEGMENT_INFO_TID,
+  OB_ALL_VIRTUAL_AI_GATEWAY_ENDPOINT_STAT_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TID,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TID,

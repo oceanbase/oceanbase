@@ -46,15 +46,34 @@ int ObTenantAiService::init()
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTenantAiService already initialized", K(ret));
+  } else if (OB_FAIL(gateway_circuit_mgr_.init())) {
+    LOG_WARN("failed to init gateway circuit manager", KR(ret));
   } else {
     is_inited_ = true;
   }
   return ret;
 }
 
+void ObTenantAiService::stop()
+{
+  if (is_inited_) {
+    gateway_circuit_mgr_.stop();
+  }
+}
+
+void ObTenantAiService::wait()
+{
+  if (is_inited_) {
+    gateway_circuit_mgr_.wait();
+  }
+}
+
 void ObTenantAiService::destroy()
 {
-  is_inited_ = false;
+  if (is_inited_) {
+    gateway_circuit_mgr_.destroy();
+    is_inited_ = false;
+  }
 }
 
 int ObTenantAiService::get_ai_service_guard(ObAiServiceGuard &ai_service_guard)
@@ -62,6 +81,27 @@ int ObTenantAiService::get_ai_service_guard(ObAiServiceGuard &ai_service_guard)
   // TODO: implement after cache support
   int ret = OB_SUCCESS;
   return ret;
+}
+
+int ObTenantAiService::get_or_create_gateway_state(
+    uint64_t gateway_id,
+    const common::ObString &endpoints_json,
+    const common::ObString &circuit_breaker_json,
+    int64_t schema_version,
+    share::ObAiGatewayCircuitState *&state)
+{
+  return gateway_circuit_mgr_.get_or_create_gateway_state(
+      gateway_id, endpoints_json, circuit_breaker_json, schema_version, state);
+}
+
+int ObTenantAiService::push_stale_gateway(uint64_t gateway_id)
+{
+  return gateway_circuit_mgr_.push_stale_gateway(gateway_id);
+}
+
+void ObTenantAiService::drain_stale_gateways()
+{
+  gateway_circuit_mgr_.drain_stale_gateways();
 }
 
 ObAiServiceGuard::ObAiServiceGuard()

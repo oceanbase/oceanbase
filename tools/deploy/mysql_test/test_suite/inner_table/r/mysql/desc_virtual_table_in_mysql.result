@@ -6864,3 +6864,21 @@ IF(count(*) >= 0, 1, 0)
 "oceanbase.__all_virtual_vector_segment_info runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_ai_gateway_endpoint_stat;
+Field	Type	Null	Key	Default	Extra
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+tenant_id	bigint(20)	NO		NULL	
+gateway_name	varchar(256)	NO		NULL	
+endpoint_name	varchar(256)	NO		NULL	
+routing_status	varchar(32)	NO		NULL	
+failure_rate	bigint(20)	NO		NULL	
+total_requests	bigint(20)	NO		NULL	
+blocked_until_ts	timestamp(6)	YES		NULL	
+last_failed_ts	timestamp(6)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ai_gateway_endpoint_stat;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_ai_gateway_endpoint_stat runs in single server"
+IF(count(*) >= 0, 1, 0)
+1

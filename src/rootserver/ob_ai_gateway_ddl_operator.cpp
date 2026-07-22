@@ -90,6 +90,7 @@ int ObAIGatewayDDLOperator::check_endpoint_provider_exists(const ObAIGatewaySche
 
   static constexpr int64_t MAX_ENDPOINTS_LEN = 32767;
   static constexpr uint64_t MAX_GATEWAY_ENDPOINTS = 5;
+  static constexpr int64_t MAX_PROVIDER_NAME_LEN = 128;
 
   if (endpoints_str.empty()) {
     // nothing to check
@@ -127,14 +128,17 @@ int ObAIGatewayDDLOperator::check_endpoint_provider_exists(const ObAIGatewaySche
         LOG_WARN("endpoint element must be a JSON object", K(ret), K(i));
         LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, 9, "endpoints");
       } else {
-        // validate model contains '/' and provider exists
         ObString model_full;
         {
           ObIJsonBase *model_value = nullptr;
           if (OB_FAIL(elem->get_object_value("model", model_value))) {
-            ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
-            LOG_WARN("endpoint missing model field", K(ret), K(i));
-            LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, 12, "model in endpoint");
+            if (OB_SEARCH_NOT_FOUND == ret) {
+              ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+              LOG_WARN("endpoint missing model field", K(ret), K(i));
+              LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, 12, "model in endpoint");
+            } else {
+              LOG_WARN("failed to get model from endpoint json", K(ret), K(i));
+            }
           } else if (OB_ISNULL(model_value) || model_value->json_type() != ObJsonNodeType::J_STRING) {
             ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
             LOG_WARN("model must be a string", K(ret));
@@ -153,7 +157,6 @@ int ObAIGatewayDDLOperator::check_endpoint_provider_exists(const ObAIGatewaySche
           }
         }
         if (OB_SUCC(ret)) {
-          // validate weight is non-negative integer
           {
             ObIJsonBase *weight_value = nullptr;
             if (OB_FAIL(elem->get_object_value("weight", weight_value))) {
@@ -177,12 +180,11 @@ int ObAIGatewayDDLOperator::check_endpoint_provider_exists(const ObAIGatewaySche
           }
         }
         if (OB_SUCC(ret)) {
-          // extract provider name (part before '/') and check it exists
           const char *slash = static_cast<const char *>(
               MEMCHR(model_full.ptr(), '/', model_full.length()));
           ObString provider_name(static_cast<int32_t>(slash - model_full.ptr()), model_full.ptr());
           ObSqlString sql;
-          if (provider_name.length() > 128) {
+          if (provider_name.length() > MAX_PROVIDER_NAME_LEN) {
             ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
             LOG_WARN("provider name too long in model field", K(ret), K(provider_name));
             LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, 5, "model");
@@ -223,4 +225,4 @@ int ObAIGatewayDDLOperator::check_endpoint_provider_exists(const ObAIGatewaySche
 }
 
 } // namespace rootserver
-}
+} // namespace oceanbase

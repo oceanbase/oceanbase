@@ -975,6 +975,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_ai/ob_ai_func.cpp
   engine/expr/ob_expr_ai/ob_ai_func_client.cpp
   engine/expr/ob_expr_ai/ob_ai_func_utils.cpp
+  engine/expr/ob_expr_ai/ob_ai_gateway_retry_callback.cpp
   engine/expr/ob_expr_ai/ob_expr_ai_complete.cpp
   engine/expr/ob_expr_ai/ob_expr_ai_embed.cpp
   engine/expr/ob_expr_ai/ob_expr_ai_rerank.cpp

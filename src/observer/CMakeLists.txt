@@ -140,6 +140,7 @@ ob_set_subtarget(ob_server omt
   omt/ob_multi_tenant_operator.cpp
   omt/ob_tenant_srs.cpp
   omt/ob_tenant_ai_service.cpp
+  omt/ob_ai_gateway_circuit_manager.cpp
 )
 
 ob_set_subtarget(ob_server table
@@ -647,6 +648,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_tenant_resource_limit.cpp
   virtual_table/ob_all_virtual_tenant_resource_limit_detail.cpp
   virtual_table/ob_all_virtual_activity_metrics.cpp
+  virtual_table/ob_all_virtual_ai_gateway_endpoint_stat.cpp
   virtual_table/ob_all_virtual_checkpoint_diagnose_info.cpp
   virtual_table/ob_all_virtual_checkpoint_diagnose_memtable_info.cpp
   virtual_table/ob_all_virtual_nic_info.cpp

@@ -13,7 +13,10 @@
 
 #include "env/ob_simple_cluster_test_base.h"
 #include "observer/omt/ob_tenant_ai_service.h"
+#include "share/ai_service/ob_ai_gateway_circuit_state.h"
+#include "share/ai_service/ob_ai_endpoint_circuit_state.h"
 #include "share/schema/ob_tenant_schema_service.h"
+#include "share/schema/ob_ai_gateway_mgr.h"
 #include "sql/engine/expr/ob_expr_ai/ob_ai_func_utils.h"
 
 using namespace oceanbase::observer;
@@ -387,6 +390,107 @@ TEST_F(TestAiService, test_get_model_config_info_negative)
   }
 
   sql.assign_fmt("call DBMS_AI_SERVICE.DROP_AI_MODEL ('%s')", model_key.ptr());
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
+}
+
+TEST_F(TestAiService, test_gateway_circuit_state_lifecycle)
+{
+  share::ObTenantSwitchGuard tenant_guard;
+  ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(OB_SYS_TENANT_ID));
+  ObTenantAiService *ai_service = MTL(ObTenantAiService*);
+  ASSERT_TRUE(OB_NOT_NULL(ai_service));
+  common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy();
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+
+  // cleanup leftovers
+  sql.assign("call DBMS_AI_SERVICE.DROP_AI_GATEWAY ('lc_test_gw')");
+  (void)sql_proxy.write(sql.ptr(), affected_rows);
+  sql.assign("call DBMS_AI_SERVICE.UNREGISTER_PROVIDER ('lc_test_prov')");
+  (void)sql_proxy.write(sql.ptr(), affected_rows);
+
+  // 1. Register provider + create gateway via DDL
+  sql.assign("call DBMS_AI_SERVICE.REGISTER_PROVIDER ('lc_test_prov', "
+             "'{\"protocol\": \"openai\", \"base_url\": \"http://license.coscl.org.cn/MulanPubL-2.0\"}')");
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
+
+  sql.assign("call DBMS_AI_SERVICE.CREATE_AI_GATEWAY ('lc_test_gw', "
+             "'{\"endpoints\": [{\"name\": \"ep1\", \"model\": \"lc_test_prov/gpt-4o\", \"weight\": 100}],"
+             "  \"circuit_breaker\": {\"failure_rate_threshold\": 100, \"minimum_requests\": 1,"
+             "  \"break_duration_seconds\": 1, \"probe_requests\": 1}}')");
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
+
+  // 2. Get gateway schema to obtain gateway_id
+  ObSchemaGetterGuard schema_guard;
+  ASSERT_EQ(OB_SUCCESS, get_curr_observer().get_schema_service().get_tenant_schema_guard(
+      OB_SYS_TENANT_ID, schema_guard));
+  const schema::ObAIGatewaySchema *gw_schema = NULL;
+  ASSERT_EQ(OB_SUCCESS, schema_guard.get_ai_gateway_schema(
+      OB_SYS_TENANT_ID, ObString("lc_test_gw"), gw_schema));
+  ASSERT_TRUE(OB_NOT_NULL(gw_schema));
+  const uint64_t gateway_id = gw_schema->get_gateway_id();
+  const int64_t schema_version = gw_schema->get_schema_version();
+
+  // 3. get_or_create_gateway_state — creates circuit state entry
+  share::ObAiGatewayCircuitState *gw_state = NULL;
+  ASSERT_EQ(OB_SUCCESS, ai_service->get_or_create_gateway_state(
+      gateway_id,
+      gw_schema->get_endpoints(),
+      gw_schema->get_circuit_breaker(),
+      schema_version,
+      gw_state));
+  ASSERT_TRUE(OB_NOT_NULL(gw_state));
+  ASSERT_EQ(1, gw_state->endpoints_.count());
+  ASSERT_EQ(0, gw_state->endpoints_.at(0).endpoint_name_.compare("ep1"));
+
+  // 4. Simulate failure via circuit state API (under lock)
+  {
+    ObSpinLockGuard guard(gw_state->lock_);
+    ASSERT_EQ(OB_SUCCESS, gw_state->endpoint_states_.at(0)->on_request_done(
+        false, gw_state->cb_params_));
+    // threshold=100, min_requests=1, 1 failure = 100% >= 100% → OPEN
+    ASSERT_EQ(share::ObAiCircuitState::OPEN,
+              gw_state->endpoint_states_.at(0)->get_state());
+  }
+
+  // 5. Verify via get_or_create (same version, should not re-parse)
+  share::ObAiGatewayCircuitState *gw_state2 = NULL;
+  ASSERT_EQ(OB_SUCCESS, ai_service->get_or_create_gateway_state(
+      gateway_id,
+      gw_schema->get_endpoints(),
+      gw_schema->get_circuit_breaker(),
+      schema_version,
+      gw_state2));
+  ASSERT_EQ(gw_state, gw_state2);  // same pointer
+  {
+    ObSpinLockGuard guard(gw_state2->lock_);
+    ASSERT_EQ(share::ObAiCircuitState::OPEN,
+              gw_state2->endpoint_states_.at(0)->get_state());
+  }
+
+  // 6. Push stale and drain
+  ASSERT_EQ(OB_SUCCESS, ai_service->push_stale_gateway(gateway_id));
+  ai_service->drain_stale_gateways();
+
+  // 7. After drain, get_or_create should create a new entry (fresh CLOSED state)
+  share::ObAiGatewayCircuitState *gw_state3 = NULL;
+  ASSERT_EQ(OB_SUCCESS, ai_service->get_or_create_gateway_state(
+      gateway_id,
+      gw_schema->get_endpoints(),
+      gw_schema->get_circuit_breaker(),
+      schema_version,
+      gw_state3));
+  ASSERT_TRUE(OB_NOT_NULL(gw_state3));
+  {
+    ObSpinLockGuard guard(gw_state3->lock_);
+    ASSERT_EQ(share::ObAiCircuitState::CLOSED,
+              gw_state3->endpoint_states_.at(0)->get_state());
+  }
+
+  // 8. Cleanup
+  sql.assign("call DBMS_AI_SERVICE.DROP_AI_GATEWAY ('lc_test_gw')");
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
+  sql.assign("call DBMS_AI_SERVICE.UNREGISTER_PROVIDER ('lc_test_prov')");
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
 }
 

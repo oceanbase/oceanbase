@@ -15,6 +15,18 @@ namespace oceanbase
 namespace common
 {
 
+class ObAIFuncClient;
+
+// Abstract callback interface for retry logic in send_post().
+class ObAIRetryCallback
+{
+public:
+  virtual ~ObAIRetryCallback() {}
+  virtual int before_retry() = 0;
+  // Optional no-op hook; overridden only by callbacks that call prepare_retry().
+  virtual void set_client(ObAIFuncClient &client) { (void)client; }
+};
+
 // Result structure for individual request in batch
 struct ObAIBatchItemResult
 {
@@ -39,11 +51,26 @@ public:
   void clean_up();
   void reset();
   void set_timeout_sec(int64_t timeout_sec) { timeout_sec_ = timeout_sec; }
+  int64_t get_timeout_sec() const { return timeout_sec_; }
   void set_max_retry_times(int64_t max_retry_times) { max_retry_times_ = max_retry_times; }
-  // Check if HTTP status code is retryable (network failure, rate limited, or server error)
+  // Prepare for retry: update curl handle with new URL and headers.
+  // Used by gateway routing to switch endpoints between retries inside send_post().
+  int prepare_retry(common::ObIAllocator &allocator, const ObString &url, ObArray<ObString> &headers);
+  // Set a callback invoked before each retry in send_post(); also wires the client
+  // into the callback so callers need not call set_client() separately.
+  void set_before_retry_cb(ObAIRetryCallback *cb)
+  {
+    before_retry_cb_ = cb;
+    if (OB_NOT_NULL(cb)) {
+      cb->set_client(*this);
+    }
+  }
+  void set_current_endpoint_name(const ObString &name) { current_endpoint_name_ = name; }
   static bool is_retryable_status_code(int64_t http_code);
   static bool is_retryable_curl_code(int curl_code);
-  // ai function interface
+  // Return the HTTP status code of the last completed send_post() call.
+  // Returns 0 if the last call failed at the network layer (no HTTP response).
+  int64_t get_last_http_code() const { return last_http_code_; }
   virtual int send_post(common::ObIAllocator &allocator,
                         const ObString &url,
                         ObArray<ObString> &headers,
@@ -60,7 +87,6 @@ public:
                                   ObArray<ObString> &headers,
                                   ObArray<ObJsonObject *> &data_array,
                                   ObArray<ObAIBatchItemResult> &results);
-  // embedding service interface
   int send_post_batch_no_wait(ObArray<ObJsonObject *> &data_array);
   bool check_batch_finished();
   int get_batch_result(ObArray<ObJsonObject *> &responses);
@@ -83,11 +109,13 @@ private:
   CURL *curl_;
   ObArray<CURL *> curl_handles_;
   ObArray<ObStringBuffer *> response_buffers_;
-  // atomic boolean value, used to check if the batch task is finished
   std::atomic<bool> is_finished_;
   int64_t max_retry_times_;
   int64_t abs_timeout_ts_;
   int64_t timeout_sec_;
+  int64_t last_http_code_;    // HTTP status code from last send_post() call (0 = network failure)
+  ObString current_endpoint_name_;  // gateway endpoint name for error messages
+  ObAIRetryCallback *before_retry_cb_;
   DISALLOW_COPY_AND_ASSIGN(ObAIFuncClient);
 };
 

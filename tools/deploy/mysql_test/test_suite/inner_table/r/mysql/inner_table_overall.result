@@ -954,6 +954,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12613	__all_virtual_ai_batch_task_history	2	201001	1
 12614	__all_virtual_ai_model_provider_history	2	201001	1
 12615	__all_virtual_ai_gateway_history	2	201001	1
+12618	__all_virtual_ai_gateway_endpoint_stat	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
@@ -1570,6 +1571,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21741	CDB_OB_AI_BATCH_TASKS	1	201001	1
 21742	DBA_OB_AI_BATCH_TASK_HISTORY	1	201001	1
 21743	CDB_OB_AI_BATCH_TASK_HISTORY	1	201001	1
+21747	GV$OB_AI_GATEWAY_ENDPOINT_STAT	1	201001	1
+21748	V$OB_AI_GATEWAY_ENDPOINT_STAT	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

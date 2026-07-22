@@ -56,6 +56,8 @@ ObAIFuncClient::ObAIFuncClient()
   abs_timeout_ts_ = 0;
   max_retry_times_ = 3;  // default retry 3 times
   timeout_sec_ = 60; // default timeout 1 minute
+  last_http_code_ = 0;
+  before_retry_cb_ = NULL;
 }
 
 void ObAIFuncClient::reset()
@@ -142,16 +144,81 @@ int ObAIFuncClient::error_handle(CURLcode res, int64_t http_code, ObStringBuffer
   if (res != CURLE_OK) {
     ret = (res == CURLE_URL_MALFORMAT) ? OB_INVALID_ARGUMENT : OB_CURL_ERROR;
     const char *curl_err_msg = get_sync_curl_error_msg(res);
-    LOG_WARN("curl request failed", K(ret), K(res), K(curl_err_msg));
-    FORWARD_USER_ERROR_MSG(ret, "curl error: %s (code %d)", curl_err_msg, res);
+    LOG_WARN("curl request failed", K(ret), K(res), K(curl_err_msg), K_(current_endpoint_name));
+    if (current_endpoint_name_.empty()) {
+      FORWARD_USER_ERROR_MSG(ret, "curl error: %s (code %d)", curl_err_msg, res);
+    } else {
+      FORWARD_USER_ERROR_MSG(ret, "endpoint '%.*s' curl error: %s (code %d)",
+          current_endpoint_name_.length(), current_endpoint_name_.ptr(), curl_err_msg, res);
+    }
   } else if ((http_code / 100) != 2) {
     ret = OB_CURL_ERROR;
     ObString err_msg = response_buf.string();
     const char *err_ptr = (err_msg.ptr() != nullptr) ? err_msg.ptr() : "";
     const int err_len = (err_msg.ptr() != nullptr) ? std::min(static_cast<int>(err_msg.length()), 450) : 0;
-    LOG_WARN("http request to AI service failed", K(ret), K(http_code), K(err_msg));
-    FORWARD_USER_ERROR_MSG(ret, "http status code: %ld, error message: %.*s",
-        http_code, err_len, err_ptr);
+    const ObString err_preview(err_len, err_ptr);
+    LOG_WARN("http request to AI service failed", K(ret), K(http_code), K(err_preview), K_(current_endpoint_name));
+    if (current_endpoint_name_.empty()) {
+      FORWARD_USER_ERROR_MSG(ret, "http status code: %ld, error message: %.*s",
+          http_code, err_len, err_ptr);
+    } else {
+      FORWARD_USER_ERROR_MSG(ret, "endpoint '%.*s' http status code: %ld, error message: %.*s",
+          current_endpoint_name_.length(), current_endpoint_name_.ptr(),
+          http_code, err_len, err_ptr);
+    }
+  }
+  return ret;
+}
+
+int ObAIFuncClient::prepare_retry(ObIAllocator &allocator,
+                                     const ObString &url,
+                                     ObArray<ObString> &headers)
+{
+  int ret = OB_SUCCESS;
+  // Update url_
+  if (url_ != nullptr && allocator_ != nullptr) {
+    allocator_->free(url_);
+  }
+  url_ = nullptr;
+  if (url.length() > 0) {
+    url_ = static_cast<char *>(allocator.alloc(url.length() + 1));
+    if (OB_ISNULL(url_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc url for retry", K(ret));
+    } else {
+      MEMCPY(url_, url.ptr(), url.length());
+      url_[url.length()] = '\0';
+    }
+  }
+  // Rebuild header list
+  if (OB_NOT_NULL(header_list_)) {
+    curl_slist_free_all(header_list_);
+    header_list_ = nullptr;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < headers.count(); ++i) {
+    ObString header_c_str;
+    if (OB_FAIL(ob_write_string(allocator, headers.at(i), header_c_str, true))) {
+      LOG_WARN("failed to convert header to cstring for retry", K(ret), K(i));
+    } else {
+      struct curl_slist *new_list = curl_slist_append(header_list_, header_c_str.ptr());
+      if (OB_ISNULL(new_list)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to append header for retry", K(ret));
+      } else {
+        header_list_ = new_list;
+      }
+    }
+  }
+  // Update curl handle
+  if (OB_SUCC(ret) && OB_NOT_NULL(curl_)) {
+    CURLcode res;
+    if (CURLE_OK != (res = curl_easy_setopt(curl_, CURLOPT_URL, url_))) {
+      ret = OB_CURL_ERROR;
+      LOG_WARN("fail to set url for retry", K(ret), K(res));
+    } else if (CURLE_OK != (res = curl_easy_setopt(curl_, CURLOPT_HTTPHEADER, header_list_))) {
+      ret = OB_CURL_ERROR;
+      LOG_WARN("fail to set headers for retry", K(ret), K(res));
+    }
   }
   return ret;
 }
@@ -188,28 +255,48 @@ int ObAIFuncClient::send_post(ObJsonObject *data, ObJsonObject *&response)
       if (need_retry && is_timeout()) {
         ret = OB_TIMEOUT;
         const char *curl_err_msg = get_sync_curl_error_msg(res);
-        LOG_WARN("AI service request timeout, skip retry", K(ret), K(i), K(res), K(http_code));
+        LOG_WARN("AI service request timeout, skip retry", K(ret), K(i), K(res), K(http_code),
+                 K_(current_endpoint_name));
         FORWARD_USER_ERROR_MSG(ret, "AI service request timeout after %ld retries, "
             "last error: %s (curl code %d, http code %ld). "
             "please increase ob_query_timeout, example: set ob_query_timeout = 1000000000",
             i, curl_err_msg, res, http_code);
-      } else if (need_retry) {
-        LOG_WARN("retrying AI service request", K(i), K(res), K(http_code));
-        const int64_t delay_ms = static_cast<int64_t>(1000)
-            * (static_cast<int64_t>(1) << MIN(i, static_cast<int64_t>(4))) + ObRandom::rand(0, 1000);
-        ob_usleep(MIN(delay_ms, static_cast<int64_t>(10000)) * 1000);
-        response_buf.reset();
+      } else if (need_retry && (0 == max_retry_times_ || i < max_retry_times_)) {
+        // before_retry() advances the route session; calling it on the last
+        // attempt would record a failure on an endpoint that never receives
+        // this request.
+        if (OB_NOT_NULL(before_retry_cb_)) {
+          int prepare_ret = before_retry_cb_->before_retry();
+          if (OB_SUCCESS != prepare_ret) {
+            need_retry = false;
+            ret = prepare_ret;
+            LOG_WARN("before_retry callback failed, abort retry", K(ret), K(i), K(res), K(http_code),
+                     K_(current_endpoint_name));
+          }
+        }
+        if (need_retry) {
+          const int64_t delay_ms = static_cast<int64_t>(1000)
+              * (static_cast<int64_t>(1) << MIN(i, static_cast<int64_t>(4))) + ObRandom::rand(0, 1000);
+          LOG_WARN("retrying AI service request", K(i), K(res), K(http_code), K(delay_ms),
+                   K_(current_endpoint_name));
+          ob_usleep(MIN(delay_ms, static_cast<int64_t>(10000)) * 1000);
+          response_buf.reset();
+        }
       }
     }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(error_handle(res, http_code, response_buf))) {
-      LOG_WARN("fail to handle error", K(ret), K(res));
-    } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(
+    last_http_code_ = http_code;
+    if (OB_SUCC(ret) && OB_FAIL(error_handle(res, http_code, response_buf))) {
+      LOG_WARN("AI service request failed", K(ret), K(res), K(http_code));
+    }
+
+    if (OB_SUCC(ret)) {
+        if (OB_FAIL(ObJsonBaseFactory::get_json_base(
               allocator_, response_buf.string(), ObJsonInType::JSON_TREE,
               ObJsonInType::JSON_TREE, j_tree))) {
-      LOG_WARN("fail to parse http_response", K(ret));
-    } else {
-      response = static_cast<ObJsonObject *>(j_tree);
+          LOG_WARN("fail to parse http_response", K(ret));
+        } else {
+          response = static_cast<ObJsonObject *>(j_tree);
+        }
     }
   }
   return ret;
@@ -248,7 +335,7 @@ int ObAIFuncClient::send_post_batch(ObArray<ObJsonObject *> &data_array, ObArray
       const ObAIBatchItemResult &item = results.at(i);
       if (!item.is_success()) {
         ret = OB_CURL_ERROR;
-        LOG_WARN("unexpected http status code", K(ret), K(item.http_code_), K(i));
+        LOG_WARN("batch item failed", K(ret), K(i), K(item.http_code_), K(item.curl_code_));
       } else if (OB_FAIL(responses.push_back(item.response_))) {
         LOG_WARN("failed to append response", K(ret), K(i));
       }
@@ -491,7 +578,7 @@ int ObAIFuncClient::get_batch_result(ObArray<ObAIBatchItemResult> &results)
             // Network failure
             item.http_code_ = 0;
             item.response_ = nullptr;
-            LOG_WARN("curl request failed", K(idx), K(curl_code));
+            LOG_WARN("curl request failed in batch", K(idx), K(curl_code), K_(url));
           } else {
             long http_code = 0;
             curl_easy_getinfo(easy_handle, CURLINFO_RESPONSE_CODE, &http_code);
@@ -500,8 +587,12 @@ int ObAIFuncClient::get_batch_result(ObArray<ObAIBatchItemResult> &results)
               if (idx < response_buffers_.count()) {
                 ObStringBuffer *resp_buf = response_buffers_.at(idx);
                 ObString full_response = OB_NOT_NULL(resp_buf) ? resp_buf->string() : ObString();
+                const char *resp_ptr = OB_NOT_NULL(full_response.ptr()) ? full_response.ptr() : "";
+                const int32_t preview_len = static_cast<int32_t>(
+                    MIN(full_response.length(), static_cast<int64_t>(450)));
+                const ObString response_preview(preview_len, resp_ptr);
                 LOG_WARN("unexpected http status code in batch", K(http_code), K(idx),
-                         K_(url), "response_body", full_response);
+                         K_(url), K(response_preview));
               } else {
                 LOG_WARN("unexpected http status code in batch", K(http_code), K(idx), K_(url));
               }
@@ -517,7 +608,11 @@ int ObAIFuncClient::get_batch_result(ObArray<ObAIBatchItemResult> &results)
                              allocator_, response_str, ObJsonInType::JSON_TREE,
                              ObJsonInType::JSON_TREE, j_tree))) {
                 // JSON parse failure - treat as error but don't fail the whole batch
-                LOG_WARN("failed to parse response json", K(ret), K(idx), K(response_str));
+                const char *resp_ptr = OB_NOT_NULL(response_str.ptr()) ? response_str.ptr() : "";
+                const int32_t preview_len = static_cast<int32_t>(
+                    MIN(response_str.length(), static_cast<int64_t>(450)));
+                const ObString response_preview(preview_len, resp_ptr);
+                LOG_WARN("failed to parse response json", K(ret), K(idx), K(response_preview));
                 item.response_ = nullptr;
                 ret = OB_SUCCESS;  // Continue processing other results
               } else {

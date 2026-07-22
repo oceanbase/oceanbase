@@ -11,11 +11,14 @@
 #include "lib/hash_func/murmur_hash.h"
 #include "lib/lock/ob_spin_lock.h"
 #include "share/vector_index/ob_json_helper.h"
+#include "share/ai_service/ob_ai_gateway_route_session.h"
 
 namespace oceanbase
 {
 namespace common
 {
+
+class ObAIRetryCallback;
 
 class ObOpenAIUtils
 {
@@ -563,6 +566,19 @@ public:
                                    const ObString &model_key,
                                    const share::EndpointType::TYPE op_type,
                                    share::ObAIModelConfigInfo &config);
+  // Resolve a gateway endpoint to a full ObAIModelConfigInfo by looking up
+  // the provider schema for base_url and api_key, then building the full URL.
+  static int resolve_gateway_endpoint_config(ObIAllocator &allocator,
+                                              const share::ObAiGatewayEndpoint &endpoint,
+                                              const share::EndpointType::TYPE op_type,
+                                              share::ObAIModelConfigInfo &config);
+  // Calls get_next_endpoint + resolve_gateway_endpoint_config; maps OB_ITER_END to
+  // OB_CURL_ERROR (only ep_count==0 triggers ITER_END; last-resort tier prevents it).
+  static int gateway_next_config(ObIAllocator &allocator,
+                                 share::ObAiGatewayRouteSession &session,
+                                 const share::EndpointType::TYPE op_type,
+                                 share::ObAiGatewayEndpoint &gw_endpoint,
+                                 share::ObAIModelConfigInfo &ep_config);
   // URL security check for preventing SSRF attacks
   static int check_url_security(const ObString &url);
   // True if model name contains "vl" or "flush" (case-insensitive); used for multi-modal message format.
@@ -585,24 +601,29 @@ private:
 class ObAIFuncModel
 {
 public:
-  // Original constructor: info + endpoint_info backed.
   ObAIFuncModel(ObIAllocator &allocator, const ObAIFuncExprInfo &info,
                 const ObAiModelEndpointInfo &endpoint_info)
       : allocator_(&allocator),
         info_(&info),
         endpoint_info_(&endpoint_info),
         config_ptr_(nullptr),
-        input_type_()
+        input_type_(),
+        retry_cb_(nullptr),
+        last_http_code_(0)
   {}
   ObAIFuncModel(ObIAllocator &allocator, const share::ObAIModelConfigInfo &config)
       : allocator_(&allocator),
         info_(nullptr),
         endpoint_info_(nullptr),
         config_ptr_(&config),
-        input_type_()
+        input_type_(),
+        retry_cb_(nullptr),
+        last_http_code_(0)
   {}
    virtual ~ObAIFuncModel() {}
    void set_input_type(const ObString &input_type) { input_type_ = input_type; }
+   void set_before_retry_cb(common::ObAIRetryCallback *cb) { retry_cb_ = cb; }
+   int64_t get_last_http_code() const { return last_http_code_; }
    // completion
    int call_completion(ObString &prompt, ObJsonObject *config, ObString &result);
    int call_completion_vector(ObArray<ObString> &prompts, ObJsonObject *config, ObArray<ObString> &results);
@@ -616,7 +637,6 @@ public:
                    ObJsonArray *&results,
                    ObJsonObject *config = nullptr);
  private:
-   // Private accessors that dispatch to either config_ptr_ or info_/endpoint_info_.
    share::EndpointType::TYPE get_type_() const;
    const ObString &get_provider_() const;
    int get_access_key_(ObString &key) const;
@@ -631,6 +651,8 @@ public:
    const ObAiModelEndpointInfo *endpoint_info_;
    const share::ObAIModelConfigInfo *config_ptr_;
    ObString input_type_;
+   common::ObAIRetryCallback *retry_cb_;
+   int64_t last_http_code_;
    DISALLOW_COPY_AND_ASSIGN(ObAIFuncModel);
 };
 
@@ -703,7 +725,6 @@ public:
   ObAiFuncImageUtils() {}
   virtual ~ObAiFuncImageUtils() {}
 public:
-  // image type enum
   enum ObImageType
   {
     IMAGE_TYPE_JPEG = 0,
@@ -719,11 +740,8 @@ public:
     IMAGE_TYPE_UNKNOWN
   };
 
-  // get image type from binary by magic number
   static int get_type_from_binary(ObIAllocator &allocator, const ObString &binary_image_str, ObImageType &image_type);
-  // image binary to base64 data uri
   static int get_base64_data_uri_from_binary(ObIAllocator &allocator, const ObString &binary_image_str, ObString &base64_data_uri);
-  // get image type string by image type enum
   static const char* get_image_type_str(ObImageType image_type);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAiFuncImageUtils);
@@ -807,12 +825,16 @@ struct ObAIFuncBatchState
   // User-specified dim for embed: keep parse-side check aligned with
   // scalar path's "result dimension is not equal to dimension". 0 = skip.
   int64_t user_dim_;
+  // Gateway route session (holds state ref, records real outcomes)
+  share::ObAiGatewayRouteSession route_session_;
+  bool is_gateway_;
 
   ObAIFuncBatchState()
       : initialized_(false),
         min_concurrency_(share::ObAIModelConfigItem::DEFAULT_MIN_CONCURRENCY),
         max_concurrency_(share::ObAIModelConfigItem::DEFAULT_MAX_CONCURRENCY),
-        user_dim_(0) {}
+        user_dim_(0),
+        is_gateway_(false) {}
 
   void reset()
   {
@@ -827,7 +849,12 @@ struct ObAIFuncBatchState
     row_starts_.reuse();
     row_lens_.reuse();
     user_dim_ = 0;
+    route_session_.reset();
+    is_gateway_ = false;
   }
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObAIFuncBatchState);
 };
 
 typedef int (*CheckModelTypeFn)(const ObAIFuncExprInfo *info);

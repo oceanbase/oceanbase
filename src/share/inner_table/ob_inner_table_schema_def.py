@@ -18450,6 +18450,31 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_name = '__all_virtual_ai_gateway_history',
   keywords = all_def_keywords['__all_ai_gateway_history']))
 
+def_table_schema(
+  owner = 'shenyunlong.syl',
+  table_name    = '__all_virtual_ai_gateway_endpoint_stat',
+  table_id      = '12618',
+  table_type    = 'VIRTUAL_TABLE',
+  in_tenant_space = True,
+  gm_columns    = [],
+  rowkey_columns = [],
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('gateway_name', 'varchar:OB_MAX_ORIGINAL_NANE_LENGTH'),
+    ('endpoint_name', 'varchar:OB_MAX_ORIGINAL_NANE_LENGTH'),
+    ('routing_status', 'varchar:32'),
+    ('failure_rate', 'int'),
+    ('total_requests', 'int'),
+    ('blocked_until_ts', 'timestamp', 'true'),
+    ('last_failed_ts', 'timestamp', 'true'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -47626,6 +47651,41 @@ def_table_schema(
       provider_timeline AS PROVIDER_TIMELINE
   FROM oceanbase.__all_virtual_ai_batch_task_history
 """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'shenyunlong.syl',
+  table_name      = 'GV$OB_AI_GATEWAY_ENDPOINT_STAT',
+  table_id        = '21747',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+    SELECT SVR_IP, SVR_PORT, TENANT_ID, GATEWAY_NAME, ENDPOINT_NAME, ROUTING_STATUS,
+           FAILURE_RATE, TOTAL_REQUESTS, BLOCKED_UNTIL_TS, LAST_FAILED_TS
+    FROM oceanbase.__all_virtual_ai_gateway_endpoint_stat
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'shenyunlong.syl',
+  table_name      = 'V$OB_AI_GATEWAY_ENDPOINT_STAT',
+  table_id        = '21748',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+    SELECT SVR_IP, SVR_PORT, TENANT_ID, GATEWAY_NAME, ENDPOINT_NAME, ROUTING_STATUS,
+           FAILURE_RATE, TOTAL_REQUESTS, BLOCKED_UNTIL_TS, LAST_FAILED_TS
+    FROM oceanbase.GV$OB_AI_GATEWAY_ENDPOINT_STAT
+    WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
+  """.replace("\n", " ")
 )
 
 

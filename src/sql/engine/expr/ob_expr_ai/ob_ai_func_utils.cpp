@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_ai_func_utils.h"
 #include "ob_ai_func_client.h"
+#include "ob_ai_gateway_retry_callback.h"
 #include "lib/encode/ob_base64_encode.h"
 #include "lib/random/ob_random.h"
 #include <cctype>
@@ -13,9 +14,12 @@
 #include <algorithm>
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/schema/ob_ai_provider_mgr.h"
+#include "share/schema/ob_ai_gateway_mgr.h"
 #include "share/ai_service/ob_ai_service_proxy.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "lib/worker.h"
+#include "share/ai_service/ob_ai_gateway_route_session.h"
+#include "observer/omt/ob_tenant_ai_service.h"
 
 namespace oceanbase
 {
@@ -3175,6 +3179,33 @@ static int build_inline_full_url(ObIAllocator &allocator,
   return ret;
 }
 
+// Build dispatch_tag + full_url and init `config` from a resolved provider schema and inline
+// provider/model. Shared by get_model_config_info and resolve_gateway_endpoint_config.
+static int init_config_from_provider_model(ObIAllocator &allocator,
+                                           const schema::ObAIProviderSchema &provider_schema,
+                                           const ObString &model_key,
+                                           const ObString &model_name,
+                                           const share::EndpointType::TYPE op_type,
+                                           share::ObAIModelConfigInfo &config)
+{
+  int ret = OB_SUCCESS;
+  ObString dispatch_tag;
+  ObString full_url;
+  const bool is_vl_for_url = (share::EndpointType::DENSE_EMBEDDING == op_type)
+                             && ObAIFuncUtils::is_multi_model(model_name);
+  if (OB_FAIL(map_provider_row_to_dispatch_tag(
+          provider_schema.get_name(), provider_schema.get_protocol(), allocator, dispatch_tag))) {
+    LOG_WARN("map dispatch tag failed", K(ret));
+  } else if (OB_FAIL(build_inline_full_url(
+                 allocator, provider_schema.get_base_url(), op_type, dispatch_tag, is_vl_for_url, full_url))) {
+    LOG_WARN("build full url failed", K(ret));
+  } else if (OB_FAIL(config.init_from_inline_provider_model(
+                 allocator, model_key, provider_schema, model_name, op_type, dispatch_tag, full_url))) {
+    LOG_WARN("init config from inline provider/model failed", K(ret));
+  }
+  return ret;
+}
+
 int ObAIFuncUtils::get_model_config_info(ObIAllocator &allocator,
                                          const ObString &model_key,
                                          const share::EndpointType::TYPE op_type,
@@ -3217,11 +3248,14 @@ int ObAIFuncUtils::get_model_config_info(ObIAllocator &allocator,
         LOG_WARN("failed to init config", K(ret));
       }
     } else if (OB_SUCC(ret)) {
+      // ai_model_schema is NULL: model_key is either inline provider/model (always
+      // contains '/') or a gateway name (never contains '/').
       ObString provider_part;
       ObString model_part;
       const bool split_ok = try_split_inline_provider_model_key(model_key, provider_part, model_part);
       if (!split_ok) {
-        // gateway path: check ACCESS privilege before reporting error
+        // Gateway path: no '/' means model_key must be a gateway name.
+        // Check ACCESS ON AI GATEWAY privilege first.
         sql::ObSQLSessionInfo *session = THIS_WORKER.get_session();
         if (OB_NOT_NULL(session)) {
           share::schema::ObSessionPrivInfo session_priv;
@@ -3236,11 +3270,30 @@ int ObAIFuncUtils::get_model_config_info(ObIAllocator &allocator,
           }
         }
         // session is NULL: background thread, pass through
-        if (OB_SUCC(ret)) {
-          // privilege check passed but gateway feature not fully implemented
+        const schema::ObAIGatewaySchema *gateway_schema = NULL;
+        omt::ObTenantAiService *ai_service = MTL(omt::ObTenantAiService*);
+        share::ObAiGatewayCircuitState *gw_state = NULL;
+        if (OB_FAIL(ret)) {
+          // privilege check failed, skip
+        } else if (OB_FAIL(guard.get_ai_gateway_schema(tenant_id, model_key, gateway_schema))) {
+          LOG_WARN("fail to get ai gateway schema", K(ret), K(tenant_id), K(model_key));
+        } else if (OB_ISNULL(gateway_schema)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("ai model schema is null", KR(ret), K(tenant_id), K(model_key));
           LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_function, ai model not found, please check if the model exists");
+        } else if (OB_ISNULL(ai_service)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("tenant ai service is null", K(ret));
+        } else if (OB_FAIL(ai_service->get_or_create_gateway_state(
+                       gateway_schema->get_gateway_id(),
+                       gateway_schema->get_endpoints(),
+                       gateway_schema->get_circuit_breaker(),
+                       gateway_schema->get_schema_version(),
+                       gw_state))) {
+          LOG_WARN("failed to get gateway circuit state", K(ret),
+                   K(gateway_schema->get_gateway_id()));
+        } else {
+          config.init_gateway_route(model_key, gw_state, op_type);
         }
       } else if (share::EndpointType::MAX_TYPE == op_type) {
         ret = OB_INVALID_ARGUMENT;
@@ -3277,29 +3330,14 @@ int ObAIFuncUtils::get_model_config_info(ObIAllocator &allocator,
           LOG_WARN("provider base_url empty", K(ret), K(provider_part));
           LOG_USER_ERROR(OB_ERR_UNEXPECTED, "ai provider base_url is empty, reload built-in provider data");
         } else {
-          ObString dispatch_tag;
-          ObString full_url;
           ObArenaAllocator profile_allocator("AIProfile");
           ObString profile_model_config;
           ObString profile_run_config;
           int64_t profile_id = OB_INVALID_ID;
           bool profile_exists = false;
-          const bool is_vl_for_url = (share::EndpointType::DENSE_EMBEDDING == op_type)
-                                     && ObAIFuncUtils::is_multi_model(model_part);
-          if (OB_FAIL(map_provider_row_to_dispatch_tag(
-                  provider_schema->get_name(), provider_schema->get_protocol(), allocator, dispatch_tag))) {
-            LOG_WARN("map dispatch tag failed", K(ret));
-          } else if (OB_FAIL(build_inline_full_url(
-                         allocator, provider_schema->get_base_url(), op_type, dispatch_tag, is_vl_for_url, full_url))) {
-            LOG_WARN("build full url failed", K(ret));
-          } else if (OB_FAIL(config.init_from_inline_provider_model(allocator,
-                         model_key,
-                         *provider_schema,
-                         model_part,
-                         op_type,
-                         dispatch_tag,
-                         full_url))) {
-            LOG_WARN("init from inline provider failed", K(ret));
+          if (OB_FAIL(init_config_from_provider_model(
+                  allocator, *provider_schema, model_key, model_part, op_type, config))) {
+            LOG_WARN("init config from inline provider/model failed", K(ret), K(model_key));
           } else if (OB_ISNULL(GCTX.sql_proxy_)) {
             // sql_proxy not ready, skip profile lookup
           } else if (OB_FAIL(share::ObAiServiceProxy::select_ai_model_profile(
@@ -3314,7 +3352,7 @@ int ObAIFuncUtils::get_model_config_info(ObIAllocator &allocator,
       }
     }
 
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && !config.is_gateway_route()) {
       share::ObAIModelConfigItem default_config;
       if (OB_FAIL(ObAIModelConfigInfoManager::get_instance().get_model_config(config.get_provider(),
                                                                               config.get_request_model_name(),
@@ -3324,6 +3362,78 @@ int ObAIFuncUtils::get_model_config_info(ObIAllocator &allocator,
         LOG_WARN("failed to merge default config", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObAIFuncUtils::resolve_gateway_endpoint_config(ObIAllocator &allocator,
+                                                    const share::ObAiGatewayEndpoint &endpoint,
+                                                    const share::EndpointType::TYPE op_type,
+                                                    share::ObAIModelConfigInfo &config)
+{
+  int ret = OB_SUCCESS;
+  config.reset();
+
+  schema::ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
+  schema::ObSchemaGetterGuard guard;
+  uint64_t tenant_id = MTL_ID();
+  const schema::ObAIProviderSchema *provider_schema = nullptr;
+
+  if (endpoint.provider_.empty() || endpoint.model_name_.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("gateway endpoint provider or model_name is empty", K(ret), K(endpoint));
+  } else if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is null", KR(ret));
+  } else if (OB_FAIL(schema_service->get_tenant_schema_guard(tenant_id, guard))) {
+    LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(guard.get_ai_provider_schema(tenant_id, endpoint.provider_, provider_schema))) {
+    LOG_WARN("fail to get ai provider schema for gateway endpoint", KR(ret),
+             K(tenant_id), K(endpoint.provider_));
+  } else if (OB_ISNULL(provider_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ai provider not found for gateway endpoint", KR(ret),
+             K(tenant_id), K(endpoint.provider_), K(endpoint.endpoint_name_));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT,
+                   "ai_function, ai provider not found for gateway endpoint");
+  } else if (provider_schema->get_base_url().empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("provider base_url empty for gateway endpoint", K(ret), K(endpoint.provider_));
+    LOG_USER_ERROR(OB_ERR_UNEXPECTED,
+                   "ai provider base_url is empty, reload built-in provider data");
+  } else if (OB_FAIL(init_config_from_provider_model(
+                 allocator, *provider_schema, endpoint.model_, endpoint.model_name_, op_type, config))) {
+    // endpoint.model_ is the original "provider/model" used as model_key
+    LOG_WARN("init config from gateway endpoint failed", K(ret), K(endpoint));
+  } else {
+    // Merge default model config for this provider/model
+    share::ObAIModelConfigItem default_config;
+    if (OB_FAIL(ObAIModelConfigInfoManager::get_instance().get_model_config(
+            config.get_provider(), config.get_request_model_name(), default_config))) {
+      LOG_WARN("failed to get default config for gateway endpoint", K(ret));
+    } else if (OB_FAIL(config.merge_default_config(allocator, default_config))) {
+      LOG_WARN("failed to merge default config for gateway endpoint", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObAIFuncUtils::gateway_next_config(ObIAllocator &allocator,
+                                       share::ObAiGatewayRouteSession &session,
+                                       const share::EndpointType::TYPE op_type,
+                                       share::ObAiGatewayEndpoint &gw_endpoint,
+                                       share::ObAIModelConfigInfo &ep_config)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(session.get_next_endpoint(gw_endpoint))) {
+    if (OB_ITER_END == ret) {
+      ret = OB_AI_REMOTE_SERVICE_ERROR;
+      const ObString err_msg("no available endpoint for the gateway");
+      LOG_USER_ERROR(OB_AI_REMOTE_SERVICE_ERROR, err_msg.length(), err_msg.ptr());
+    }
+    LOG_WARN("failed to get next gateway endpoint", K(ret));
+  } else if (OB_FAIL(resolve_gateway_endpoint_config(allocator, gw_endpoint, op_type, ep_config))) {
+    LOG_WARN("failed to resolve gateway endpoint config", K(ret), K(gw_endpoint));
   }
   return ret;
 }
@@ -3628,6 +3738,9 @@ int ObAIFuncModel::call_dense_embedding_vector_v2(ObArray<ObString> &content, Ob
     client.set_timeout_sec(60);
     client.set_max_retry_times(2);
   }
+  if (OB_NOT_NULL(retry_cb_)) {
+    client.set_before_retry_cb(retry_cb_);  // also wires the client into retry_cb_
+  }
   ObString unencrypted_access_key;
   ObString request_model_name = get_request_model_name();
   bool is_multi_model = ObAIFuncUtils::is_multi_model(request_model_name);
@@ -3684,6 +3797,7 @@ int ObAIFuncModel::call_dense_embedding_vector_v2(ObArray<ObString> &content, Ob
       }
     }
   }
+  last_http_code_ = client.get_last_http_code();
   if (ret == OB_INVALID_DATA) {
     ObString response_str;
     if (OB_SUCCESS == ObAIFuncJsonUtils::print_json_to_str(*allocator_, response, response_str)) {
@@ -3721,6 +3835,9 @@ int ObAIFuncModel::call_rerank(ObString &query,
     client.set_timeout_sec(60);
     client.set_max_retry_times(2);
   }
+  if (OB_NOT_NULL(retry_cb_)) {
+    client.set_before_retry_cb(retry_cb_);  // also wires the client into retry_cb_
+  }
   ObString unencrypted_access_key;
   ObString request_model_name = get_request_model_name();
   if (!is_rerank_type()) {
@@ -3742,6 +3859,7 @@ int ObAIFuncModel::call_rerank(ObString &query,
   } else {
     results = static_cast<ObJsonArray *>(result_base);
   }
+  last_http_code_ = client.get_last_http_code();
 
   if (ret == OB_INVALID_DATA) {
     ObString response_str;
@@ -3802,6 +3920,128 @@ int ObAIServiceClient::merge_message_parameters_to_config(ObIAllocator &allocato
   return ObAIFuncUtils::merge_message_parameters_to_config(allocator, message_parameters, config, merged_config);
 }
 
+// Retry callback for completion: rebuilds completion (or VL) headers on endpoint switch.
+class GatewayRetryCallback : public ObAiGatewayRetryCallbackBase
+{
+public:
+  GatewayRetryCallback(share::ObAiGatewayRouteSession &session,
+                       share::ObAiGatewayEndpoint &gw_endpoint,
+                       share::ObAIModelConfigInfo &ep_config,
+                       common::ObIAllocator &allocator,
+                       const share::ObAIModelConfigInfo &model_config_info,
+                       bool is_vl)
+    : ObAiGatewayRetryCallbackBase(session, gw_endpoint, ep_config, allocator, model_config_info),
+      is_vl_(is_vl) {}
+
+protected:
+  int rebuild_headers() override
+  {
+    int ret = OB_SUCCESS;
+    ObString api_key = ep_config_.get_api_key();
+    ObString provider = ep_config_.get_provider();
+    if (is_vl_) {
+      ObAIFuncIVLComplete *vl_prov = nullptr;
+      if (OB_FAIL(ObAIFuncUtils::get_vl_complete_provider(allocator_, provider, vl_prov))) {
+        LOG_WARN("failed to get vl complete provider for retry", K(ret), K(provider));
+      } else if (OB_FAIL(vl_prov->get_header(allocator_, api_key, ep_headers_))) {
+        LOG_WARN("failed to get vl header for retry", K(ret), K(provider));
+      }
+    } else {
+      ObAIFuncIComplete *comp_prov = nullptr;
+      if (OB_FAIL(ObAIFuncUtils::get_complete_provider(allocator_, provider, comp_prov))) {
+        LOG_WARN("failed to get complete provider for retry", K(ret), K(provider));
+      } else if (OB_FAIL(comp_prov->get_header(allocator_, api_key, ep_headers_))) {
+        LOG_WARN("failed to get header for retry", K(ret), K(provider));
+      }
+    }
+    return ret;
+  }
+private:
+  bool is_vl_;
+};
+
+// Build the completion request (headers + body) and effective url from a resolved
+// model config. Shared by the gateway and non-gateway paths of call_completion.
+static int build_completion_request(common::ObIAllocator &allocator,
+                                    const share::ObAIModelConfigInfo &cfg,
+                                    ObString &prompt,
+                                    ObJsonObject *prompt_object,
+                                    ObJsonObject *config,
+                                    const bool is_vl,
+                                    ObString &url,
+                                    ObArray<ObString> &headers,
+                                    ObJsonObject *&body)
+{
+  int ret = OB_SUCCESS;
+  ObJsonObject *merged_config = nullptr;
+  ObString api_key = cfg.get_api_key();
+  ObString model_name = cfg.get_request_model_name();
+  ObString provider = cfg.get_provider();
+  url = cfg.get_url();
+  if (OB_FAIL(ObAIFuncUtils::merge_message_parameters_to_config(allocator, cfg.get_message_parameters(), config, merged_config))) {
+    LOG_WARN("failed to merge message parameters", K(ret));
+  } else if (OB_FAIL(ObAIFuncUtils::set_default_enable_thinking(allocator, merged_config))) {
+    LOG_WARN("fail to set default enable_thinking", K(ret));
+  } else if (is_vl
+             && dispatch_literal_eq(provider, ObAIFuncProviderUtils::DASHSCOPE)
+             && !cfg.get_provider_base_url().empty()
+             && OB_FAIL(build_inline_full_url(allocator, cfg.get_provider_base_url(),
+                                              share::EndpointType::COMPLETION, provider, true, url))) {
+    LOG_WARN("failed to rebuild dashscope vl completion url", K(ret));
+  } else if (is_vl) {
+    ObAIFuncIVLComplete *vl_provider = nullptr;
+    if (OB_FAIL(ObAIFuncUtils::get_vl_complete_provider(allocator, provider, vl_provider))) {
+      LOG_WARN("failed to get vl complete provider", K(ret));
+    } else if (OB_FAIL(vl_provider->get_header(allocator, api_key, headers))) {
+      LOG_WARN("failed to get header", K(ret));
+    } else if (OB_FAIL(vl_provider->get_body(allocator, model_name, prompt, prompt_object, merged_config, body))) {
+      LOG_WARN("failed to get body", K(ret));
+    }
+  } else {
+    ObAIFuncIComplete *complete_provider = nullptr;
+    ObString system_prompt;
+    if (OB_FAIL(ObAIFuncUtils::get_complete_provider(allocator, provider, complete_provider))) {
+      LOG_WARN("failed to get complete provider", K(ret));
+    } else if (OB_FAIL(complete_provider->get_header(allocator, api_key, headers))) {
+      LOG_WARN("failed to get header", K(ret));
+    } else if (OB_FAIL(complete_provider->get_body(allocator, model_name, system_prompt, prompt, merged_config, body))) {
+      LOG_WARN("failed to get body", K(ret));
+    }
+  }
+  return ret;
+}
+
+// Parse a completion HTTP response into the result string, picking the vl or
+// non-vl provider by name. Shared by both paths of call_completion.
+static int parse_completion_response(common::ObIAllocator &allocator,
+                                     const ObString &provider,
+                                     const bool is_vl,
+                                     ObJsonObject *response,
+                                     ObString &result)
+{
+  int ret = OB_SUCCESS;
+  ObIJsonBase *result_base = nullptr;
+  if (is_vl) {
+    ObAIFuncIVLComplete *vl_provider = nullptr;
+    if (OB_FAIL(ObAIFuncUtils::get_vl_complete_provider(allocator, provider, vl_provider))) {
+      LOG_WARN("failed to get vl complete provider for parse", K(ret));
+    } else if (OB_FAIL(vl_provider->parse_output(allocator, response, result_base))) {
+      LOG_WARN("failed to parse output", K(ret));
+    }
+  } else {
+    ObAIFuncIComplete *complete_provider = nullptr;
+    if (OB_FAIL(ObAIFuncUtils::get_complete_provider(allocator, provider, complete_provider))) {
+      LOG_WARN("failed to get complete provider for parse", K(ret));
+    } else if (OB_FAIL(complete_provider->parse_output(allocator, response, result_base))) {
+      LOG_WARN("failed to parse output", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(ObAIFuncJsonUtils::print_json_to_str(allocator, result_base, result))) {
+    LOG_WARN("failed to print json to string", K(ret));
+  }
+  return ret;
+}
+
 int ObAIServiceClient::call_completion(ObString &prompt,
                                    ObJsonObject *prompt_object,
                                    ObJsonObject *config,
@@ -3813,8 +4053,6 @@ int ObAIServiceClient::call_completion(ObString &prompt,
   ObArray<ObString> headers;
   ObJsonObject *body = nullptr;
   ObJsonObject *response = nullptr;
-  ObIJsonBase *result_base = nullptr;
-  ObString result_str;
   ObAIFuncClient client;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   if (tenant_config.is_valid()) {
@@ -3825,73 +4063,66 @@ int ObAIServiceClient::call_completion(ObString &prompt,
     client.set_timeout_sec(60);
     client.set_max_retry_times(2);
   }
-  ObAIFuncIComplete *complete_provider = nullptr;
-  ObAIFuncIVLComplete *vl_complete_provider = nullptr;
-  ObString system_prompt;
-  ObString api_key;
-  ObString model_name;
   ObString url;
-  ObString provider;
-  ObJsonObject *merged_config = nullptr;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("model not initialized", K(ret));
+  } else if (model_config_info_->is_gateway_route()) {
+    // Gateway routing: each retry attempt inside send_post() gets a new endpoint
+    // via the before_retry callback. No separate gateway while-loop.
+    share::ObAiGatewayCircuitState *gw_state = model_config_info_->get_gw_state();
+    share::ObAiGatewayRouteSession session;
+    share::ObAiGatewayEndpoint gw_endpoint;
+    share::ObAIModelConfigInfo ep_config;
+    if (OB_FAIL(session.init(gw_state))) {
+      LOG_WARN("failed to init gateway route session", K(ret));
+    } else if (OB_FAIL(ObAIFuncUtils::gateway_next_config(allocator_, session,
+                   model_config_info_->get_op_type(), gw_endpoint, ep_config))) {
+      LOG_WARN("failed to get initial gateway endpoint config", K(ret));
+    } else {
+      // Retry callback switches endpoints inside send_post(); ep_config is updated
+      // in place so it always reflects the endpoint that produced the response.
+      ObArray<ObString> ep_headers;
+      ObJsonObject *ep_body = nullptr;
+      ObString ep_url = ep_config.get_url();
+      is_vl = OB_NOT_NULL(prompt_object);
+      if (OB_FAIL(build_completion_request(allocator_, ep_config, prompt, prompt_object,
+                                           config, is_vl, ep_url, ep_headers, ep_body))) {
+        LOG_WARN("failed to build gateway completion request", K(ret), K(gw_endpoint));
+      } else {
+        GatewayRetryCallback retry_cb(session, gw_endpoint, ep_config, allocator_,
+                                      *model_config_info_, is_vl);
+        client.set_current_endpoint_name(gw_endpoint.endpoint_name_);
+        client.set_before_retry_cb(&retry_cb);
+        // Single send_post call — retries + endpoint switching handled internally
+        ObJsonObject *ep_response = nullptr;
+        int request_ret = client.send_post(allocator_, ep_url, ep_headers, ep_body, ep_response);
+        if (OB_SUCCESS == request_ret) {
+          (void)session.on_success();
+          if (OB_FAIL(parse_completion_response(allocator_, ep_config.get_provider(), is_vl, ep_response, result))) {
+            LOG_WARN("failed to parse gateway completion response", K(ret));
+          }
+        } else {
+          // Pass http_code so on_failure() can skip CB recording for 4xx client errors.
+          (void)session.on_failure(client.get_last_http_code());
+          ret = request_ret;
+        }
+      }
+    }
   } else {
     is_vl = OB_NOT_NULL(prompt_object);
     is_completion_type = model_config_info_->get_model_type() == share::EndpointType::COMPLETION;
-    api_key = model_config_info_->get_api_key();
-    model_name = model_config_info_->get_request_model_name();
-    url = model_config_info_->get_url();
-    provider = model_config_info_->get_provider();
     if (!is_completion_type) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("info type is not completion", K(ret));
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_complete, info type is not completion");
-    } else if (OB_FAIL(merge_message_parameters_to_config(allocator_, model_config_info_->get_message_parameters(), config, merged_config))) {
-      LOG_WARN("Failed to merge message parameters to config", K(ret));
-    } else if (OB_FAIL(ObAIFuncUtils::set_default_enable_thinking(allocator_, merged_config))) {
-      LOG_WARN("fail to set default enable_thinking", K(ret));
-    } else if (is_vl
-               && dispatch_literal_eq(provider, ObAIFuncProviderUtils::DASHSCOPE)
-               && !model_config_info_->get_provider_base_url().empty()
-               && OB_FAIL(build_inline_full_url(allocator_,
-                                                     model_config_info_->get_provider_base_url(),
-                                                     share::EndpointType::COMPLETION,
-                                                     provider, true, url))) {
-      LOG_WARN("failed to rebuild dashscope vl completion url", K(ret));
-    } else if (is_vl) {
-      if (OB_FAIL(ObAIFuncUtils::get_vl_complete_provider(allocator_, provider, vl_complete_provider))) {
-        LOG_WARN("Failed to get vl complete provider", K(ret));
-      } else if (OB_FAIL(vl_complete_provider->get_header(allocator_, api_key, headers))) {
-        LOG_WARN("Failed to get header", K(ret));
-      } else if (OB_FAIL(vl_complete_provider->get_body(allocator_, model_name, prompt, prompt_object, merged_config, body))) {
-        LOG_WARN("Failed to get body", K(ret));
-      } else if (OB_FAIL(client.send_post(allocator_, url, headers, body, response))) {
-        LOG_WARN("Failed to send post", K(ret));
-      } else if (OB_FAIL(vl_complete_provider->parse_output(allocator_, response, result_base))) {
-        LOG_WARN("Failed to parse output", K(ret));
-      } else if (OB_FAIL(ObAIFuncJsonUtils::print_json_to_str(allocator_, result_base, result_str))) {
-        LOG_WARN("Failed to print json to string", K(ret));
-      } else {
-        result = result_str;
-      }
-    } else {
-      // Non-VL path
-      if (OB_FAIL(ObAIFuncUtils::get_complete_provider(allocator_, provider, complete_provider))) {
-        LOG_WARN("Failed to get complete provider", K(ret));
-      } else if (OB_FAIL(complete_provider->get_header(allocator_, api_key, headers))) {
-        LOG_WARN("Failed to get header", K(ret));
-      } else if (OB_FAIL(complete_provider->get_body(allocator_, model_name, system_prompt, prompt, merged_config, body))) {
-        LOG_WARN("Failed to get body", K(ret));
-      } else if (OB_FAIL(client.send_post(allocator_, url, headers, body, response))) {
-        LOG_WARN("Failed to send post", K(ret));
-      } else if (OB_FAIL(complete_provider->parse_output(allocator_, response, result_base))) {
-        LOG_WARN("Failed to parse output", K(ret));
-      } else if (OB_FAIL(ObAIFuncJsonUtils::print_json_to_str(allocator_, result_base, result_str))) {
-        LOG_WARN("Failed to print json to string", K(ret));
-      } else {
-        result = result_str;
-      }
+    } else if (OB_FAIL(build_completion_request(allocator_, *model_config_info_, prompt, prompt_object,
+                                                config, is_vl, url, headers, body))) {
+      LOG_WARN("failed to build completion request", K(ret));
+    } else if (OB_FAIL(client.send_post(allocator_, url, headers, body, response))) {
+      LOG_WARN("Failed to send post", K(ret));
+    } else if (OB_FAIL(parse_completion_response(allocator_, model_config_info_->get_provider(), is_vl, response, result))) {
+      LOG_WARN("failed to parse completion response", K(ret));
     }
     if (OB_INVALID_DATA == ret) {
       ObString response_str;
@@ -4747,12 +4978,23 @@ int ObAIFuncBatchUtils::flush_pending_batch(ObIAllocator &allocator,
         LOG_WARN("result count mismatch", K(ret), K(results.count()), K(batch_indices.count()));
       }
 
-      // Process results and adjust state
       bool all_success = true;
       bool has_retryable = false;
+      int64_t retryable_http_cnt = 0;
+      int64_t retryable_network_cnt = 0;
+      int64_t first_retry_idx = -1;
+      int64_t first_retry_http_code = 0;
+      int first_retry_curl_code = 0;
       for (int64_t i = 0; OB_SUCC(ret) && i < results.count(); ++i) {
         const int64_t idx = batch_indices.at(i);
         const ObAIBatchItemResult &result = results.at(i);
+        if (pending.is_gateway_) {
+          if (result.is_success()) {
+            (void)pending.route_session_.on_success();
+          } else {
+            (void)pending.route_session_.on_failure(result.http_code_);
+          }
+        }
         if (result.is_success()) {
           completed.at(idx) = true;
           responses.at(idx) = result.response_;
@@ -4760,18 +5002,33 @@ int ObAIFuncBatchUtils::flush_pending_batch(ObIAllocator &allocator,
         } else if (ObAIFuncClient::is_retryable_status_code(result.http_code_)) {
           all_success = false;
           has_retryable = true;
-          LOG_WARN("retryable HTTP error for request", K(idx), K(result.http_code_));
+          ++retryable_http_cnt;
+          if (first_retry_idx < 0) {
+            first_retry_idx = idx;
+            first_retry_http_code = result.http_code_;
+            first_retry_curl_code = static_cast<int>(result.curl_code_);
+          }
         } else if (0 == result.http_code_
                    && ObAIFuncClient::is_retryable_curl_code(result.curl_code_)) {
           all_success = false;
           has_retryable = true;
-          LOG_WARN("retryable network error for request", K(idx), K(result.curl_code_));
+          ++retryable_network_cnt;
+          if (first_retry_idx < 0) {
+            first_retry_idx = idx;
+            first_retry_http_code = result.http_code_;
+            first_retry_curl_code = static_cast<int>(result.curl_code_);
+          }
         } else {
           ret = OB_CURL_ERROR;
           ObString response_str;
           if (result.response_ != nullptr &&
               OB_SUCCESS == ObAIFuncJsonUtils::print_json_to_str(allocator, result.response_, response_str)) {
-            LOG_WARN("fatal HTTP error for request", K(ret), K(idx), K(result.http_code_), K(result.curl_code_), K(response_str));
+            const char *response_ptr = OB_NOT_NULL(response_str.ptr()) ? response_str.ptr() : "";
+            const int32_t preview_len = static_cast<int32_t>(
+                MIN(response_str.length(), static_cast<int64_t>(450)));
+            const ObString response_preview(preview_len, response_ptr);
+            LOG_WARN("fatal HTTP error for request", K(ret), K(idx), K(result.http_code_),
+                     K(result.curl_code_), K(response_preview));
             FORWARD_USER_ERROR_MSG(ret, "HTTP error %ld, curl code %d: %.*s", result.http_code_,
                                    static_cast<int>(result.curl_code_),
                                    static_cast<int>(response_str.length()), response_str.ptr());
@@ -4783,7 +5040,6 @@ int ObAIFuncBatchUtils::flush_pending_batch(ObIAllocator &allocator,
         }
       }
 
-      // Adjust concurrency and handle retry backoff
       if (OB_SUCC(ret)) {
         current_concurrency = adjust_concurrency(current_concurrency, min_concurrency,
                                                  max_concurrency, all_success);
@@ -4792,19 +5048,20 @@ int ObAIFuncBatchUtils::flush_pending_batch(ObIAllocator &allocator,
         } else if (has_retryable) {
           ++retry_count;
           const int64_t delay_ms = 1000 * (1 << std::min(retry_count, static_cast<int64_t>(2))) + ObRandom::rand(0, 1000);
-          LOG_INFO("waiting before retry", K(delay_ms), K(retry_count), K(current_concurrency), K(min_concurrency), K(max_concurrency));
+          LOG_INFO("retry batch after backoff", K(delay_ms), K(retry_count), K(current_concurrency),
+                   K(min_concurrency), K(max_concurrency), K(retryable_http_cnt),
+                   K(retryable_network_cnt), K(first_retry_idx), K(first_retry_http_code),
+                   K(first_retry_curl_code), K(pending_count));
           ob_usleep(delay_ms * 1000);
         }
       }
     }
 
-    // Check timeout after loop
     if (OB_SUCC(ret) && pending_count > 0) {
       ret = OB_TIMEOUT;
       LOG_WARN("query timeout during batch processing", K(ret), K(pending_count));
     }
 
-    // Parse all successful responses in order
     for (int64_t i = 0; OB_SUCC(ret) && i < total_requests; ++i) {
       const int64_t start = pending.row_starts_.at(i);
       const int64_t len = pending.row_lens_.at(i);
@@ -4822,7 +5079,6 @@ int ObAIFuncBatchUtils::flush_pending_batch(ObIAllocator &allocator,
           }
         }
         if (OB_FAIL(ret)) {
-          // Error already logged
         } else if (OB_FAIL(parse_fn(expr, ctx, allocator, responses.at(i), row_indices,
                                     pending.config_, pending.user_dim_, res_vec))) {
           LOG_WARN("fail to parse batch response", K(ret), K(i));
@@ -4845,22 +5101,48 @@ int ObAIFuncBatchUtils::init_pending_state(ObIAllocator &allocator,
 {
   int ret = OB_SUCCESS;
   pending.model_id_ = model_id;
+  pending.is_gateway_ = false;
   if (OB_FAIL(ObAIFuncUtils::get_model_config_info(allocator, model_id, op_type, pending.config_))) {
     LOG_WARN("fail to get model config info", K(ret), K(model_id));
-  } else if (OB_FAIL(check_fn(pending.config_))) {
-    LOG_WARN("fail to check model type", K(ret), K(model_id));
-  } else {
-    pending.min_concurrency_ = pending.config_.get_min_concurrency();
-    pending.max_concurrency_ = pending.config_.get_max_concurrency();
-    if (OB_FAIL(ObAIFuncUtils::get_header(allocator,
-                                          pending.config_.get_model_type(),
-                                          pending.config_.get_provider(),
-                                          pending.config_.get_api_key(),
-                                          pending.config_.get_request_model_name(),
-                                          pending.headers_))) {
-      LOG_WARN("fail to get header", K(ret));
+  } else if (pending.config_.is_gateway_route()) {
+    // Gateway batch path: resolve first available endpoint upfront; the entire
+    // batch uses this single endpoint (no per-request failover in batch mode).
+    pending.is_gateway_ = true;
+    share::ObAiGatewayCircuitState *gw_state = pending.config_.get_gw_state();
+    share::ObAiGatewayEndpoint gw_endpoint;
+    if (OB_FAIL(pending.route_session_.init(gw_state))) {
+      LOG_WARN("failed to init gateway route session for batch", K(ret));
+    } else if (OB_FAIL(pending.route_session_.get_next_endpoint(gw_endpoint))) {
+      if (OB_ITER_END == ret) {
+        ret = OB_AI_REMOTE_SERVICE_ERROR;
+        const ObString err_msg("no available endpoint for the gateway");
+        LOG_WARN("no available gateway endpoint for batch", K(ret));
+        LOG_USER_ERROR(OB_AI_REMOTE_SERVICE_ERROR, err_msg.length(), err_msg.ptr());
+      }
+    } else if (OB_FAIL(ObAIFuncUtils::resolve_gateway_endpoint_config(
+                   allocator, gw_endpoint, pending.config_.get_op_type(), pending.config_))) {
+      LOG_WARN("failed to resolve gateway endpoint for batch", K(ret), K(gw_endpoint));
+    }
+  }
+
+  // Both paths converge here: validate model type, capture concurrency, and build
+  // request headers.
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(check_fn(pending.config_))) {
+      LOG_WARN("fail to check model type", K(ret), K(model_id));
     } else {
-      pending.initialized_ = true;
+      pending.min_concurrency_ = pending.config_.get_min_concurrency();
+      pending.max_concurrency_ = pending.config_.get_max_concurrency();
+      if (OB_FAIL(ObAIFuncUtils::get_header(allocator,
+                                            pending.config_.get_model_type(),
+                                            pending.config_.get_provider(),
+                                            pending.config_.get_api_key(),
+                                            pending.config_.get_request_model_name(),
+                                            pending.headers_))) {
+        LOG_WARN("fail to get header", K(ret));
+      } else {
+        pending.initialized_ = true;
+      }
     }
   }
   return ret;

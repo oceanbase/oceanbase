@@ -4,6 +4,7 @@
  */
 
 #include "share/ai_service/ob_ai_service_struct.h"
+#include "share/ai_service/ob_ai_gateway_circuit_state.h"
 #include "lib/json/ob_json.h"
 #include "share/ob_encryption_util.h"
 #include "share/rc/ob_tenant_base.h"
@@ -530,6 +531,12 @@ int ObAiServiceModelInfo::check_valid() const
   return ret;
 }
 
+void ObAIModelConfigInfo::release_gw_state_()
+{
+  ObAiGatewayCircuitState::dec_ref_and_release(gw_state_);
+  gw_state_ = nullptr;
+}
+
 int ObAIModelConfigInfo::init(ObIAllocator &allocator,
                               const schema::ObAiModelSchema &ai_model_schema,
                               const ObAiModelEndpointInfo &endpoint_info)
@@ -720,6 +727,273 @@ int ObAIModelConfigInfo::merge_default_config(ObIAllocator &allocator, const sha
 }
 
 OB_SERIALIZE_MEMBER(ObAiServiceModelInfo, name_, type_, model_name_);
+
+int parse_gateway_endpoints_json(common::ObIAllocator &allocator,
+                                 const common::ObString &json_str,
+                                 common::ObIArray<ObAiGatewayEndpoint> &endpoints)
+{
+  int ret = OB_SUCCESS;
+  endpoints.reset();
+  ObIJsonBase *j_base = nullptr;
+  if (json_str.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("endpoints json string is empty", K(ret));
+  } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator,
+                                                       json_str,
+                                                       ObJsonInType::JSON_TREE,
+                                                       ObJsonInType::JSON_TREE,
+                                                       j_base))) {
+    LOG_WARN("failed to parse endpoints json", K(ret), K(json_str));
+  } else if (OB_ISNULL(j_base) || j_base->json_type() != ObJsonNodeType::J_ARRAY) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("endpoints json should be array", K(ret), K(json_str));
+  } else {
+    uint64_t ep_count = j_base->element_count();
+    for (uint64_t i = 0; OB_SUCC(ret) && i < ep_count; ++i) {
+      ObIJsonBase *ep = nullptr;
+      if (OB_FAIL(j_base->get_array_element(i, ep))) {
+        LOG_WARN("failed to get array element", K(ret), K(i));
+      } else if (OB_ISNULL(ep) || ep->json_type() != ObJsonNodeType::J_OBJECT) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("endpoint element should be json object", K(ret), K(i));
+      } else {
+        ObAiGatewayEndpoint endpoint;
+        ObString raw_name;
+        ObString raw_model;
+        JsonObjectIterator iter = ep->object_iterator();
+        while (OB_SUCC(ret) && !iter.end()) {
+          ObJsonObjPair elem;
+          if (OB_FAIL(iter.get_elem(elem))) {
+            LOG_WARN("failed to get endpoint element", K(ret));
+          } else if (0 == elem.first.case_compare("name")) {
+            if (elem.second->json_type() != ObJsonNodeType::J_STRING) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("endpoint name should be string", K(ret));
+            } else {
+              raw_name = ObString(elem.second->get_data_length(), elem.second->get_data());
+            }
+          } else if (0 == elem.first.case_compare("model")) {
+            if (elem.second->json_type() != ObJsonNodeType::J_STRING) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("endpoint model should be string", K(ret));
+            } else {
+              raw_model = ObString(elem.second->get_data_length(), elem.second->get_data());
+            }
+          } else if (0 == elem.first.case_compare("weight")) {
+            if (elem.second->json_type() != ObJsonNodeType::J_INT
+                && elem.second->json_type() != ObJsonNodeType::J_UINT) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("endpoint weight should be integer", K(ret));
+            } else {
+              endpoint.weight_ = elem.second->get_int();
+            }
+          } else {
+            // ignore unknown keys
+          }
+          if (OB_SUCC(ret)) { iter.next(); }
+        }
+        // validate required fields
+        if (OB_FAIL(ret)) {
+        } else if (raw_name.empty()) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("endpoint name is empty", K(ret), K(i));
+        } else if (raw_model.empty()) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("endpoint model is empty", K(ret), K(i));
+        } else {
+          // split model by '/' to get provider and model_name
+          const char *slash_ptr = static_cast<const char *>(MEMCHR(raw_model.ptr(), '/', raw_model.length()));
+          if (OB_ISNULL(slash_ptr)
+              || slash_ptr == raw_model.ptr()
+              || slash_ptr == raw_model.ptr() + raw_model.length() - 1) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("endpoint model format invalid, expected provider/model_name", K(ret), K(raw_model));
+          } else {
+            int32_t provider_len = static_cast<int32_t>(slash_ptr - raw_model.ptr());
+            int32_t model_name_len = static_cast<int32_t>(raw_model.length() - provider_len - 1);
+            ObString raw_provider(provider_len, raw_model.ptr());
+            ObString raw_model_name(model_name_len, slash_ptr + 1);
+            // deep copy all strings
+            if (OB_FAIL(ob_write_string(allocator, raw_name, endpoint.endpoint_name_, true))) {
+              LOG_WARN("failed to deep copy endpoint name", K(ret), K(raw_name));
+            } else if (OB_FAIL(ob_write_string(allocator, raw_model, endpoint.model_, true))) {
+              LOG_WARN("failed to deep copy endpoint model", K(ret), K(raw_model));
+            } else if (OB_FAIL(ob_write_string(allocator, raw_provider, endpoint.provider_, true))) {
+              LOG_WARN("failed to deep copy endpoint provider", K(ret), K(raw_provider));
+            } else if (OB_FAIL(ob_write_string(allocator, raw_model_name, endpoint.model_name_, true))) {
+              LOG_WARN("failed to deep copy endpoint model_name", K(ret), K(raw_model_name));
+            } else if (OB_FAIL(endpoints.push_back(endpoint))) {
+              LOG_WARN("failed to push endpoint", K(ret), K(endpoint));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAiCircuitBreakerParams::validate_ranges(int64_t failure_rate_threshold,
+                                              int64_t window_size_seconds,
+                                              int64_t minimum_requests,
+                                              int64_t break_duration_seconds,
+                                              int64_t probe_requests)
+{
+  int ret = OB_SUCCESS;
+  if (failure_rate_threshold < MIN_FAILURE_RATE_THRESHOLD
+      || failure_rate_threshold > MAX_FAILURE_RATE_THRESHOLD) {
+    ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+    LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID,
+                   (int)strlen("failure_rate_threshold"), "failure_rate_threshold");
+  } else if (window_size_seconds < MIN_WINDOW_SIZE_SECONDS
+             || window_size_seconds > MAX_WINDOW_SIZE_SECONDS) {
+    ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+    LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID,
+                   (int)strlen("window_size_seconds"), "window_size_seconds");
+  } else if (minimum_requests < MIN_MINIMUM_REQUESTS
+             || minimum_requests > MAX_MINIMUM_REQUESTS) {
+    ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+    LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID,
+                   (int)strlen("minimum_requests"), "minimum_requests");
+  } else if (break_duration_seconds < MIN_BREAK_DURATION_SECONDS
+             || break_duration_seconds > MAX_BREAK_DURATION_SECONDS) {
+    ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+    LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID,
+                   (int)strlen("break_duration_seconds"), "break_duration_seconds");
+  } else if (probe_requests < MIN_PROBE_REQUESTS
+             || probe_requests > MAX_PROBE_REQUESTS) {
+    ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+    LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID,
+                   (int)strlen("probe_requests"), "probe_requests");
+  }
+  return ret;
+}
+
+int parse_gateway_circuit_breaker_json(common::ObIAllocator &allocator,
+                                       const common::ObString &json_str,
+                                       ObAiCircuitBreakerParams &params)
+{
+  int ret = OB_SUCCESS;
+  params.set_defaults();
+  if (json_str.empty()) {
+    // empty string means use all defaults
+  } else {
+    ObIJsonBase *j_base = nullptr;
+    if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator,
+                                                  json_str,
+                                                  ObJsonInType::JSON_TREE,
+                                                  ObJsonInType::JSON_TREE,
+                                                  j_base))) {
+      LOG_WARN("failed to parse circuit_breaker json", K(ret), K(json_str));
+    } else if (OB_ISNULL(j_base) || j_base->json_type() != ObJsonNodeType::J_OBJECT) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("circuit_breaker json should be object", K(ret), K(json_str));
+    } else {
+      JsonObjectIterator iter = j_base->object_iterator();
+      while (OB_SUCC(ret) && !iter.end()) {
+        ObJsonObjPair elem;
+        if (OB_FAIL(iter.get_elem(elem))) {
+          LOG_WARN("failed to get circuit_breaker element", K(ret));
+        } else if (0 == elem.first.case_compare("failure_rate_threshold")) {
+          if (elem.second->json_type() != ObJsonNodeType::J_INT
+              && elem.second->json_type() != ObJsonNodeType::J_UINT) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("failure_rate_threshold should be integer", K(ret));
+          } else {
+            params.failure_rate_threshold_ = elem.second->get_int();
+          }
+        } else if (0 == elem.first.case_compare("window_size_seconds")) {
+          if (elem.second->json_type() != ObJsonNodeType::J_INT
+              && elem.second->json_type() != ObJsonNodeType::J_UINT) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("window_size_seconds should be integer", K(ret));
+          } else {
+            params.window_size_seconds_ = elem.second->get_int();
+          }
+        } else if (0 == elem.first.case_compare("minimum_requests")) {
+          if (elem.second->json_type() != ObJsonNodeType::J_INT
+              && elem.second->json_type() != ObJsonNodeType::J_UINT) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("minimum_requests should be integer", K(ret));
+          } else {
+            params.minimum_requests_ = elem.second->get_int();
+          }
+        } else if (0 == elem.first.case_compare("break_duration_seconds")) {
+          if (elem.second->json_type() != ObJsonNodeType::J_INT
+              && elem.second->json_type() != ObJsonNodeType::J_UINT) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("break_duration_seconds should be integer", K(ret));
+          } else {
+            params.break_duration_seconds_ = elem.second->get_int();
+          }
+        } else if (0 == elem.first.case_compare("probe_requests")) {
+          if (elem.second->json_type() != ObJsonNodeType::J_INT
+              && elem.second->json_type() != ObJsonNodeType::J_UINT) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("probe_requests should be integer", K(ret));
+          } else {
+            params.probe_requests_ = elem.second->get_int();
+          }
+        } else {
+          ret = OB_AI_FUNC_PARAM_INVALID;
+          LOG_USER_ERROR(OB_AI_FUNC_PARAM_INVALID, elem.first.length(), elem.first.ptr());
+          LOG_WARN("unknown circuit_breaker param", K(ret), K(elem.first));
+        }
+        if (OB_SUCC(ret)) { iter.next(); }
+      }
+      // Defense-in-depth: validate ranges (DDL layer should have caught these,
+      // but guard against internal callers or corrupted stored data).
+      if (OB_SUCC(ret)
+          && OB_FAIL(ObAiCircuitBreakerParams::validate_ranges(
+                 params.failure_rate_threshold_,
+                 params.window_size_seconds_,
+                 params.minimum_requests_,
+                 params.break_duration_seconds_,
+                 params.probe_requests_))) {
+        LOG_WARN("circuit breaker param out of range", K(ret), K(params));
+      }
+    }
+  }
+  return ret;
+}
+
+int merge_gateway_circuit_breaker_json(common::ObIAllocator &allocator,
+                                       const common::ObString &old_json,
+                                       const common::ObString &new_json,
+                                       common::ObString &merged_json)
+{
+  int ret = OB_SUCCESS;
+  ObIJsonBase *old_base = nullptr;
+  ObIJsonBase *new_base = nullptr;
+  if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, old_json,
+          ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, old_base))) {
+    LOG_WARN("failed to parse old circuit_breaker json", K(ret), K(old_json));
+  } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, new_json,
+          ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, new_base))) {
+    LOG_WARN("failed to parse new circuit_breaker json", K(ret), K(new_json));
+  } else if (OB_ISNULL(old_base) || OB_ISNULL(new_base)
+             || old_base->json_type() != ObJsonNodeType::J_OBJECT
+             || new_base->json_type() != ObJsonNodeType::J_OBJECT) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("circuit_breaker json should be object", K(ret), K(old_json), K(new_json));
+  } else {
+    // RFC 7396 merge: old_obj as base, new_obj overlays; unspecified fields kept.
+    ObJsonObject *merged_obj = static_cast<ObJsonObject *>(old_base);
+    ObJsonBuffer buf(&allocator);
+    ObAiCircuitBreakerParams params;
+    if (OB_FAIL(merged_obj->merge_patch(&allocator, static_cast<ObJsonObject *>(new_base)))) {
+      LOG_WARN("failed to merge circuit_breaker json", K(ret));
+    } else if (OB_FAIL(merged_obj->print(buf, false))) {
+      LOG_WARN("failed to serialize merged circuit_breaker json", K(ret));
+    } else if (OB_FAIL(ob_write_string(allocator, ObString(buf.length(), buf.ptr()), merged_json))) {
+      LOG_WARN("failed to copy merged circuit_breaker", K(ret));
+    } else if (OB_FAIL(parse_gateway_circuit_breaker_json(allocator, merged_json, params))) {
+      // Re-validate ranges so M1 bounds cannot be bypassed via a preserved old field.
+      LOG_WARN("merged circuit_breaker is invalid", K(ret), K(merged_json));
+    }
+  }
+  return ret;
+}
 
 } // namespace share
 } // namespace oceanbase

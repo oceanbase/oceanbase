@@ -8,11 +8,13 @@
 
 #include "lib/ob_define.h"
 #include "lib/string/ob_string.h"
+#include "lib/container/ob_iarray.h"
 #include "share/ob_service_name_proxy.h"
 #include "lib/json_type/ob_json_base.h"
 #include "lib/json_type/ob_json_tree.h"
-// Note: Do NOT include ob_schema_struct.h here - only forward declaration is needed
-// to avoid circular dependency through ob_object.h -> ObExecContext forward declaration
+// Do NOT include ob_schema_struct.h: forward declaration only to avoid circular dependency.
+
+namespace oceanbase { namespace share { struct ObAiGatewayCircuitState; } }
 
 namespace oceanbase
 {
@@ -82,7 +84,6 @@ private:
 };
 
 
-// ai service endpoint info from user side
 class ObAiModelEndpointInfo
 {
   friend class ObAiServiceProxy;
@@ -109,18 +110,14 @@ public:
   int merge_delta_endpoint(common::ObArenaAllocator &allocator, const ObIJsonBase &delta_endpoint);
   int check_valid() const;
 
-  // Deep copy endpoint info to target
   int deep_copy(common::ObIAllocator &allocator, const ObAiModelEndpointInfo &other);
 
   const ObString &get_name() const { return name_; }
   const ObString &get_scope() const { return scope_; }
   const ObString &get_url() const { return url_; }
-  // Derive base URL for BatchFile API by stripping known endpoint suffixes (e.g. "/embeddings").
-  // Supports both full URL (original convention) and base URL conventions.
   ObString get_batch_file_url() const;
   const ObString &get_encrypted_access_key() const { return access_key_; }
   int get_unencrypted_access_key(common::ObIAllocator &allocator, ObString &unencrypted_access_key) const;
-  // For decrypting access_key stored in __all_ai_model_provider (same format as endpoint table).
   int assign_storage_access_key_only(common::ObIAllocator &allocator, const ObString &encrypted_access_key_from_table);
   const ObString &get_ai_model_name() const { return ai_model_name_; }
   const ObString &get_request_model_name() const { return request_model_name_; }
@@ -190,8 +187,8 @@ public:
 struct ObAIModelConfigInfo
 {
 public:
-  ObAIModelConfigInfo() { reset(); }
-  ~ObAIModelConfigInfo() = default;
+  ObAIModelConfigInfo() : gw_state_(nullptr) { reset(); }
+  ~ObAIModelConfigInfo() { release_gw_state_(); }
 
   void reset()
   {
@@ -208,10 +205,12 @@ public:
     max_image_size_ = 0;
     min_concurrency_ = ObAIModelConfigItem::DEFAULT_MIN_CONCURRENCY;
     max_concurrency_ = ObAIModelConfigItem::DEFAULT_MAX_CONCURRENCY;
+    is_gateway_route_ = false;
+    release_gw_state_();
+    op_type_ = EndpointType::MAX_TYPE;
   }
 
   int init(ObIAllocator &allocator, const schema::ObAiModelSchema &ai_model_schema, const ObAiModelEndpointInfo &endpoint_info);
-  // New syntax: provider/model from __all_ai_model_provider + optional __all_ai_model_profile (caller supplies full HTTP URL).
   int init_from_inline_provider_model(common::ObIAllocator &allocator,
                                       const common::ObString &inline_model_key,
                                       const schema::ObAIProviderSchema &provider_schema,
@@ -223,6 +222,16 @@ public:
   int apply_profile_params(ObIAllocator &allocator,
                            const ObString &model_config,
                            const ObString &run_config);
+  void init_gateway_route(const ObString &model_key,
+                          ObAiGatewayCircuitState *gw_state,
+                          EndpointType::TYPE op_type)
+  {
+    is_gateway_route_ = true;
+    gw_state_ = gw_state;
+    op_type_ = op_type;
+    model_type_ = op_type;
+    model_key_ = model_key;
+  }
   const ObString &get_model_key() const { return model_key_; }
   const ObString &get_model_name() const { return model_name_; }
   EndpointType::TYPE get_model_type() const { return model_type_; }
@@ -236,6 +245,9 @@ public:
   int64_t get_max_image_size() const { return max_image_size_; }
   int64_t get_min_concurrency() const { return min_concurrency_; }
   int64_t get_max_concurrency() const { return max_concurrency_; }
+  bool is_gateway_route() const { return is_gateway_route_; }
+  ObAiGatewayCircuitState *get_gw_state() const { return gw_state_; }
+  EndpointType::TYPE get_op_type() const { return op_type_; }
 
   TO_STRING_KV(K_(model_key),
                K_(model_name),
@@ -248,14 +260,15 @@ public:
                K_(batch_size),
                K_(max_image_size),
                K_(min_concurrency),
-               K_(max_concurrency));
+               K_(max_concurrency),
+               K_(is_gateway_route),
+               K_(op_type),
+               KP_(gw_state));
 
 private:
   ObString model_key_;
-  // ai service model info
   ObString model_name_;
   EndpointType::TYPE model_type_;
-  // endpoint info
   ObString provider_;
   ObString url_;
   ObString api_key_;
@@ -266,6 +279,13 @@ private:
   int64_t max_image_size_;
   int64_t min_concurrency_;
   int64_t max_concurrency_;
+  bool is_gateway_route_;
+  ObAiGatewayCircuitState *gw_state_; // owned: released in dtor/reset
+  EndpointType::TYPE op_type_;
+
+  // Releases gw_state_ ref (out-of-line: dec_ref_and_release needs the full type).
+  void release_gw_state_();
+  DISALLOW_COPY_AND_ASSIGN(ObAIModelConfigInfo);
 };
 
 inline bool is_supported_ai_provider_protocol(const common::ObString &protocol)
@@ -274,6 +294,97 @@ inline bool is_supported_ai_provider_protocol(const common::ObString &protocol)
       || 0 == protocol.case_compare("dashscope")
       || 0 == protocol.case_compare("cohere");
 }
+
+const int64_t OB_MAX_AI_GATEWAY_NAME_LENGTH = 256;
+const int64_t OB_MAX_AI_GATEWAY_ENDPOINT_NAME_LENGTH = 256;
+
+struct ObAiGatewayEndpoint
+{
+  ObString endpoint_name_;
+  ObString provider_;          // parsed from model (part before '/')
+  ObString model_name_;        // parsed from model (part after '/')
+  ObString model_;             // original "provider/model_name" string
+  int64_t weight_;             // routing weight (default 0)
+
+  ObAiGatewayEndpoint() : weight_(0) {}
+  void reset()
+  {
+    endpoint_name_.reset();
+    provider_.reset();
+    model_name_.reset();
+    model_.reset();
+    weight_ = 0;
+  }
+  TO_STRING_KV(K_(endpoint_name), K_(provider), K_(model_name), K_(model), K_(weight));
+};
+
+struct ObAiCircuitBreakerParams
+{
+  static constexpr int64_t MAX_ENDPOINTS_PER_GATEWAY = 5;
+  static constexpr int64_t DEFAULT_FAILURE_RATE_THRESHOLD = 50;
+  static constexpr int64_t DEFAULT_WINDOW_SIZE_SECONDS = 60;
+  static constexpr int64_t DEFAULT_MINIMUM_REQUESTS = 10;
+  static constexpr int64_t DEFAULT_BREAK_DURATION_SECONDS = 60;
+  static constexpr int64_t DEFAULT_PROBE_REQUESTS = 3;
+  static constexpr int64_t MAX_WINDOW_SIZE_SECONDS = 300;
+  static constexpr int64_t MIN_FAILURE_RATE_THRESHOLD = 1;
+  static constexpr int64_t MAX_FAILURE_RATE_THRESHOLD = 100;
+  static constexpr int64_t MIN_WINDOW_SIZE_SECONDS = 1;
+  static constexpr int64_t MIN_MINIMUM_REQUESTS = 1;
+  static constexpr int64_t MAX_MINIMUM_REQUESTS = 1000000;
+  static constexpr int64_t MIN_BREAK_DURATION_SECONDS = 1;
+  // Cap break_duration so break_duration_seconds_ * 1000000L (us) cannot overflow int64.
+  static constexpr int64_t MAX_BREAK_DURATION_SECONDS = 30L * 24 * 3600;
+  static constexpr int64_t MIN_PROBE_REQUESTS = 1;
+  static constexpr int64_t MAX_PROBE_REQUESTS = 10000;
+  static constexpr int64_t US_PER_SECOND = 1000000L;
+  static constexpr int64_t FAILURE_RATE_PERCENT_BASE = 100;
+
+  int64_t failure_rate_threshold_;
+  int64_t window_size_seconds_;
+  int64_t minimum_requests_;
+  int64_t break_duration_seconds_;
+  int64_t probe_requests_;
+
+  ObAiCircuitBreakerParams() { set_defaults(); }
+  void set_defaults()
+  {
+    failure_rate_threshold_ = DEFAULT_FAILURE_RATE_THRESHOLD;
+    window_size_seconds_ = DEFAULT_WINDOW_SIZE_SECONDS;
+    minimum_requests_ = DEFAULT_MINIMUM_REQUESTS;
+    break_duration_seconds_ = DEFAULT_BREAK_DURATION_SECONDS;
+    probe_requests_ = DEFAULT_PROBE_REQUESTS;
+  }
+  static int validate_ranges(int64_t failure_rate_threshold,
+                             int64_t window_size_seconds,
+                             int64_t minimum_requests,
+                             int64_t break_duration_seconds,
+                             int64_t probe_requests);
+
+  TO_STRING_KV(K_(failure_rate_threshold), K_(window_size_seconds), K_(minimum_requests),
+               K_(break_duration_seconds), K_(probe_requests));
+};
+
+static inline bool is_ai_gateway_endpoint_error(int64_t http_code)
+{
+  return http_code == 429 || http_code == 500 || http_code == 502
+      || http_code == 503 || http_code == 504;
+}
+
+int parse_gateway_endpoints_json(common::ObIAllocator &allocator,
+                                 const common::ObString &json_str,
+                                 common::ObIArray<ObAiGatewayEndpoint> &endpoints);
+
+int parse_gateway_circuit_breaker_json(common::ObIAllocator &allocator,
+                                       const common::ObString &json_str,
+                                       ObAiCircuitBreakerParams &params);
+
+// Field-level merge for ALTER: old_json as base, new_json overlays specified
+// fields; unspecified fields keep their old values. Validates the merged result.
+int merge_gateway_circuit_breaker_json(common::ObIAllocator &allocator,
+                                       const common::ObString &old_json,
+                                       const common::ObString &new_json,
+                                       common::ObString &merged_json);
 
 } // namespace share
 } // namespace oceanbase

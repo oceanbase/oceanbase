@@ -41,10 +41,23 @@ private:
                                   common::ObArray<common::ObString> &header_array,
                                   common::ObString &query,
                                   common::ObJsonArray *document_array,
-                                  common::ObJsonArray *&result_array);
+                                  common::ObJsonArray *&result_array,
+                                  int64_t &out_http_code,
+                                  common::ObAIRetryCallback *retry_cb = nullptr);
   static int eval_ai_rerank_with_doc_key(const ObExpr &expr, ObEvalCtx &ctx, common::ObIAllocator &allocator,
                                          common::ObString &query, common::ObJsonArray *document_array,
-                                         common::ObString &doc_key, const share::ObAIModelConfigInfo &config, ObDatum &res);
+                                         common::ObString &doc_key, const share::ObAIModelConfigInfo &config, ObDatum &res,
+                                         common::ObAIRetryCallback *retry_cb,
+                                         int64_t &out_http_code);
+  // Batched (no doc_key) rerank shared by gateway and non-gateway paths. For the gateway
+  // path, config/header_array are the retry callback's objects, updated in place on each
+  // endpoint switch, so every batch reads the current endpoint.
+  static int eval_ai_rerank_batched(const ObExpr &expr, ObEvalCtx &ctx, common::ObIAllocator &allocator,
+                                    common::ObString &query, common::ObJsonArray *document_array,
+                                    const share::ObAIModelConfigInfo &config,
+                                    common::ObArray<common::ObString> &header_array, ObDatum &res,
+                                    common::ObAIRetryCallback *retry_cb,
+                                    int64_t &out_http_code);
   static int get_doc_array_from_documents_array_with_key(ObIAllocator &allocator, ObJsonArray *document_object_array, ObString &doc_key, ObJsonArray *&doc_array);
   static int sort_document_array_by_model_result(common::ObIAllocator &allocator, common::ObJsonArray *document_array, common::ObJsonArray *model_result_array, common::ObJsonArray *&sorted_document_array);
   static int construct_config_json(common::ObIAllocator &allocator, int64_t top_k, int64_t return_doc, common::ObJsonObject *&config_json);

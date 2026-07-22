@@ -156,6 +156,7 @@
 #include "observer/virtual_table/ob_all_virtual_tenant_memory_info.h"
 #include "observer/virtual_table/ob_all_virtual_master_key_version_info.h"
 #include "observer/virtual_table/ob_all_virtual_io_status.h"
+#include "observer/virtual_table/ob_all_virtual_ai_gateway_endpoint_stat.h"
 #include "observer/virtual_table/ob_information_triggers_table.h"
 #include "observer/virtual_table/ob_show_create_trigger.h"
 #include "observer/virtual_table/ob_all_virtual_px_target_monitor.h"
@@ -2488,6 +2489,17 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
                 SERVER_LOG(WARN, "fail to init ObAllVirtualIOCalibrationStatus, ", K(ret));
               } else {
                 vt_iter = static_cast<ObVirtualTableIterator *>(calibration_status);
+              }
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_AI_GATEWAY_ENDPOINT_STAT_TID: {
+            ObAllVirtualAiGatewayEndpointStat *ai_gw_ep_status = nullptr;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualAiGatewayEndpointStat, ai_gw_ep_status))) {
+              if (OB_FAIL(ai_gw_ep_status->init(addr_))) {
+                SERVER_LOG(WARN, "fail to init ObAllVirtualAiGatewayEndpointStat, ", K(ret));
+              } else {
+                vt_iter = static_cast<ObVirtualTableIterator *>(ai_gw_ep_status);
               }
             }
             break;

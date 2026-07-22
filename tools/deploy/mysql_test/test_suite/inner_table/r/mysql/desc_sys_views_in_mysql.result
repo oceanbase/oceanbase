@@ -12274,6 +12274,50 @@ end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_AI_BATCH_TASK_HISTORY limit 1);
 cnt
 1
+desc oceanbase.GV$OB_AI_GATEWAY_ENDPOINT_STAT;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+TENANT_ID	bigint(20)	NO		NULL	
+GATEWAY_NAME	varchar(256)	NO		NULL	
+ENDPOINT_NAME	varchar(256)	NO		NULL	
+ROUTING_STATUS	varchar(32)	NO		NULL	
+FAILURE_RATE	bigint(20)	NO		NULL	
+TOTAL_REQUESTS	bigint(20)	NO		NULL	
+BLOCKED_UNTIL_TS	timestamp(6)	YES		NULL	
+LAST_FAILED_TS	timestamp(6)	YES		NULL	
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_AI_GATEWAY_ENDPOINT_STAT|%') then 2
+when ('' like '%|GV$OB_AI_GATEWAY_ENDPOINT_STAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_AI_GATEWAY_ENDPOINT_STAT|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_AI_GATEWAY_ENDPOINT_STAT limit 1);
+cnt
+1
+desc oceanbase.V$OB_AI_GATEWAY_ENDPOINT_STAT;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO			
+SVR_PORT	bigint(20)	NO			
+TENANT_ID	bigint(20)	NO			
+GATEWAY_NAME	varchar(256)	NO			
+ENDPOINT_NAME	varchar(256)	NO			
+ROUTING_STATUS	varchar(32)	NO			
+FAILURE_RATE	bigint(20)	NO			
+TOTAL_REQUESTS	bigint(20)	NO			
+BLOCKED_UNTIL_TS	timestamp(6)	NO			
+LAST_FAILED_TS	timestamp(6)	NO			
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|V$OB_AI_GATEWAY_ENDPOINT_STAT|%') then 2
+when ('' like '%|V$OB_AI_GATEWAY_ENDPOINT_STAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_AI_GATEWAY_ENDPOINT_STAT|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_AI_GATEWAY_ENDPOINT_STAT limit 1);
+cnt
+1
 select case cnt when 0 then NULL else 'UNEXPECTED ERROR: It is expected to be an empty set, which means that all GV$ and V$ view column names are defined consistently' end ERROR_INFO from (select /*+no_rewrite*/ count(*) cnt from
 (SELECT t.table_name,
 group_concat(c.column_name) as column_name_list

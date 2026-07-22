@@ -652,7 +652,6 @@ int ObDBMSAiService::alter_provider(ObPLExecCtx &ctx, sql::ParamStore &params, c
         if (OB_FAIL(iter.get_elem(elem))) {
           LOG_WARN("failed to get json element", KR(ret));
         } else if (0 == elem.first.case_compare("protocol")) {
-          // protocol cannot be modified
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "modifying protocol via alter_provider");
           LOG_WARN("protocol modification is not supported in alter_provider", K(ret));
@@ -674,7 +673,6 @@ int ObDBMSAiService::alter_provider(ObPLExecCtx &ctx, sql::ParamStore &params, c
       }
       if (OB_FAIL(ret)) {
       } else if (!has_base_url && !has_access_key) {
-        // empty JSON or no modifiable fields
         ret = OB_AI_FUNC_PARAM_EMPTY;
         ObString var_name = "base_url or access_key";
         LOG_USER_ERROR(OB_AI_FUNC_PARAM_EMPTY, var_name.length(), var_name.ptr());
@@ -813,7 +811,13 @@ int ObDBMSAiService::validate_gateway_endpoint_json_(common::ObIAllocator &alloc
       } else {
         endpoints_obj = elem.second;
         uint64_t ep_count = endpoints_obj->element_count();
+        if (ep_count > static_cast<uint64_t>(ObAiCircuitBreakerParams::MAX_ENDPOINTS_PER_GATEWAY)) {
+          ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+          LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, 9, "endpoints");
+        }
         common::ObSEArray<ObString, 16> seen_ep_names;
+        bool has_positive_weight = false;
+        bool has_explicit_weight = false;
         const ObString ep_name_key(4, "name");
         for (uint64_t i = 0; OB_SUCC(ret) && i < ep_count; ++i) {
           ObIJsonBase *ep = nullptr;
@@ -854,6 +858,7 @@ int ObDBMSAiService::validate_gateway_endpoint_json_(common::ObIAllocator &alloc
                   LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, 13, "endpoint_name");
                 }
               } else if (0 == ep_elem.first.case_compare("weight")) {
+                has_explicit_weight = true;
                 if (ep_elem.second->json_type() != ObJsonNodeType::J_INT
                     && ep_elem.second->json_type() != ObJsonNodeType::J_UINT) {
                   ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
@@ -861,6 +866,8 @@ int ObDBMSAiService::validate_gateway_endpoint_json_(common::ObIAllocator &alloc
                 } else if (ep_elem.second->get_int() < 0) {
                   ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
                   LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, 6, "weight");
+                } else if (ep_elem.second->get_int() > 0) {
+                  has_positive_weight = true;
                 }
               } else {
                 ret = OB_AI_FUNC_PARAM_INVALID;
@@ -892,6 +899,9 @@ int ObDBMSAiService::validate_gateway_endpoint_json_(common::ObIAllocator &alloc
                   ret = OB_AI_FUNC_PARAM_EMPTY;
                   ObString var_name = "name";
                   LOG_USER_ERROR(OB_AI_FUNC_PARAM_EMPTY, var_name.length(), var_name.ptr());
+                } else if (cur_ep_name.length() > OB_MAX_AI_GATEWAY_ENDPOINT_NAME_LENGTH) {
+                  ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+                  LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, 13, "endpoint_name");
                 } else {
                   for (int64_t si = 0; OB_SUCC(ret) && si < seen_ep_names.count(); ++si) {
                     if (0 == seen_ep_names.at(si).case_compare(cur_ep_name)) {
@@ -907,6 +917,10 @@ int ObDBMSAiService::validate_gateway_endpoint_json_(common::ObIAllocator &alloc
               }
             }
           }
+        }
+        if (OB_SUCC(ret) && has_explicit_weight && !has_positive_weight) {
+          ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+          LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, 6, "weight");
         }
       }
     } else if (0 == elem.first.case_compare("circuit_breaker")) {
@@ -941,6 +955,17 @@ int ObDBMSAiService::validate_gateway_endpoint_json_(common::ObIAllocator &alloc
         LOG_WARN("failed to serialize circuit_breaker", K(ret));
       } else {
         circuit_breaker_str = ObString(static_cast<int32_t>(cb_buf.length()), cb_buf.ptr());
+        ObAiCircuitBreakerParams cb_params;
+        if (OB_FAIL(parse_gateway_circuit_breaker_json(allocator, circuit_breaker_str, cb_params))) {
+          LOG_WARN("failed to parse circuit_breaker for validation", K(ret));
+        } else if (OB_FAIL(ObAiCircuitBreakerParams::validate_ranges(
+                       cb_params.failure_rate_threshold_,
+                       cb_params.window_size_seconds_,
+                       cb_params.minimum_requests_,
+                       cb_params.break_duration_seconds_,
+                       cb_params.probe_requests_))) {
+          LOG_WARN("circuit breaker param out of range", K(ret), K(cb_params));
+        }
       }
     }
   }
@@ -977,7 +1002,7 @@ int ObDBMSAiService::create_ai_gateway(ObPLExecCtx &ctx, sql::ParamStore &params
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("exec_ctx or sql_ctx is null", K(ret));
   } else {
-    ObArenaAllocator tmp_allocator;
+    ObArenaAllocator tmp_allocator(ObMemAttr(MTL_ID(), "AiCreateGw"));
     ObIJsonBase *j_base = nullptr;
     if (OB_FAIL(get_json_base_(tmp_allocator, params, j_base))) {
       LOG_WARN("failed to get json base", K(ret), K(params));
@@ -1038,7 +1063,7 @@ int ObDBMSAiService::alter_ai_gateway(ObPLExecCtx &ctx, sql::ParamStore &params,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("exec_ctx or sql_ctx is null", K(ret));
   } else {
-    ObArenaAllocator tmp_allocator;
+    ObArenaAllocator tmp_allocator(ObMemAttr(MTL_ID(), "AiAlterGw"));
     ObIJsonBase *j_base = nullptr;
     if (OB_FAIL(get_json_base_(tmp_allocator, params, j_base))) {
       LOG_WARN("failed to get json base", K(ret), K(params));

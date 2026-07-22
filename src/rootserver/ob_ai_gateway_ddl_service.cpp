@@ -7,6 +7,7 @@
 #include "rootserver/ob_ai_gateway_ddl_service.h"
 #include "rootserver/ob_ai_gateway_ddl_operator.h"
 #include "share/schema/ob_ai_gateway_mgr.h"
+#include "share/ai_service/ob_ai_service_struct.h"
 #include "lib/mysqlclient/ob_mysql_transaction.h"
 
 namespace oceanbase
@@ -28,15 +29,16 @@ int ObAIGatewayDDLService::create_gateway(const obrpc::ObCreateAiGatewayArg &arg
   } else {
     ObAIGatewaySchema new_schema;
     new_schema.set_tenant_id(tenant_id);
-    new_schema.set_name(arg.gateway_name_);
-    new_schema.set_endpoints(arg.endpoints_);
-    if (!arg.circuit_breaker_.empty()) {
-      new_schema.set_circuit_breaker(arg.circuit_breaker_);
-    }
-
     ObSchemaGetterGuard schema_guard;
     const ObAIGatewaySchema *old_gateway_schema = nullptr;
-    if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+    if (OB_FAIL(new_schema.set_name(arg.gateway_name_))) {
+      LOG_WARN("failed to set gateway name", K(ret), K(arg.gateway_name_));
+    } else if (OB_FAIL(new_schema.set_endpoints(arg.endpoints_))) {
+      LOG_WARN("failed to set endpoints", K(ret));
+    } else if (!arg.circuit_breaker_.empty()
+               && OB_FAIL(new_schema.set_circuit_breaker(arg.circuit_breaker_))) {
+      LOG_WARN("failed to set circuit_breaker", K(ret));
+    } else if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
       LOG_WARN("fail to get schema guard", K(ret), K(tenant_id));
     } else if (OB_FAIL(schema_guard.get_ai_gateway_schema(tenant_id, arg.gateway_name_, old_gateway_schema))) {
       LOG_WARN("fail to get ai gateway schema", K(ret), K(tenant_id), K(arg.gateway_name_));
@@ -97,15 +99,13 @@ int ObAIGatewayDDLService::alter_gateway(const obrpc::ObAlterAiGatewayArg &arg)
   } else {
     ObAIGatewaySchema new_schema;
     new_schema.set_tenant_id(tenant_id);
-    new_schema.set_name(arg.gateway_name_);
-    new_schema.set_endpoints(arg.endpoints_);
-    if (!arg.circuit_breaker_.empty()) {
-      new_schema.set_circuit_breaker(arg.circuit_breaker_);
-    }
-
     ObSchemaGetterGuard schema_guard;
     const ObAIGatewaySchema *old_gateway_schema = nullptr;
-    if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+    if (OB_FAIL(new_schema.set_name(arg.gateway_name_))) {
+      LOG_WARN("failed to set gateway name", K(ret), K(arg.gateway_name_));
+    } else if (OB_FAIL(new_schema.set_endpoints(arg.endpoints_))) {
+      LOG_WARN("failed to set endpoints", K(ret));
+    } else if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
       LOG_WARN("fail to get schema guard", K(ret), K(tenant_id));
     } else if (OB_FAIL(schema_guard.get_ai_gateway_schema(tenant_id, arg.gateway_name_, old_gateway_schema))) {
       LOG_WARN("fail to get ai gateway schema", K(ret), K(tenant_id), K(arg.gateway_name_));
@@ -118,6 +118,30 @@ int ObAIGatewayDDLService::alter_gateway(const obrpc::ObAlterAiGatewayArg &arg)
       ObString var_name = "endpoints";
       LOG_USER_ERROR(OB_AI_FUNC_PARAM_EMPTY, var_name.length(), var_name.ptr());
       LOG_WARN("endpoints is required for alter gateway", K(ret));
+    }
+
+    if (OB_SUCC(ret)) {
+      // ALTER fully replaces endpoints; circuit_breaker is a field-level merge so an
+      // ALTER that omits (or partially sets) it preserves the existing config.
+      const ObString old_cb = old_gateway_schema->get_circuit_breaker();
+      if (arg.circuit_breaker_.empty()) {
+        if (OB_FAIL(new_schema.set_circuit_breaker(old_cb))) {
+          LOG_WARN("failed to preserve circuit_breaker", K(ret));
+        }
+      } else if (old_cb.empty()) {
+        if (OB_FAIL(new_schema.set_circuit_breaker(arg.circuit_breaker_))) {
+          LOG_WARN("failed to set circuit_breaker", K(ret));
+        }
+      } else {
+        ObArenaAllocator tmp_alloc("AiGwCbMerge");
+        ObString merged_cb;
+        if (OB_FAIL(share::merge_gateway_circuit_breaker_json(tmp_alloc, old_cb,
+                                                              arg.circuit_breaker_, merged_cb))) {
+          LOG_WARN("failed to merge circuit_breaker on alter", K(ret));
+        } else if (OB_FAIL(new_schema.set_circuit_breaker(merged_cb))) {
+          LOG_WARN("failed to set merged circuit_breaker", K(ret));
+        }
+      }
     }
 
     if (OB_FAIL(ret)) {
