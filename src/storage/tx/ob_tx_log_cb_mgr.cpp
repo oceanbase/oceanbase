@@ -12,6 +12,7 @@
 
 #include "storage/tx/ob_tx_log_cb_mgr.h"
 #include "storage/tx/ob_trans_part_ctx.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 namespace oceanbase
 {
@@ -141,7 +142,7 @@ int ObTxLogCbPoolMgr::switch_to_leader(const int64_t active_tx_cnt)
     int64_t pool_list_size = 0;
     {
       SpinRLockGuard guard(pool_list_rw_lock_);
-      const int64_t pool_list_size = pool_list_.get_size();
+      pool_list_size = pool_list_.get_size();
     }
     if (target_log_pool_cnt <= pool_list_size) {
       // do nothing
@@ -167,7 +168,7 @@ int ObTxLogCbPoolMgr::adjust_log_cb_pool(const int64_t active_tx_cnt)
   int tmp_ret = OB_SUCCESS;
   int estimated_ret = OB_SUCCESS;
   int64_t expected_pool_cnt = -1;
-  int64_t limit_pool_cnt = -1;
+  int64_t limit_pool_cnt = 0;
 
 #ifdef ENABLE_DEBUG_LOG
   ret = EN_ADJUST_TX_LOG_CB_POOL;
@@ -293,6 +294,15 @@ int ObTxLogCbPoolMgr::adjust_log_cb_pool(const int64_t active_tx_cnt)
 
     expected_pool_cnt = ceil(expected_pool_float_cnt);
     expected_pool_cnt = OB_MAX(expected_pool_cnt, abs(ERRSIM_MIN_LOG_CB_POOL_LIMIT));
+
+    // apply minimum pool count limit from hidden config
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      limit_pool_cnt = tenant_config->_log_cb_pool_min_count;
+      if (limit_pool_cnt > 0 && expected_pool_cnt < limit_pool_cnt) {
+        expected_pool_cnt = limit_pool_cnt;
+      }
+    }
 
     if (pool_list_size < expected_pool_cnt) {
       for (int64_t i = pool_list_size; i < expected_pool_cnt && OB_SUCC(ret); i++) {

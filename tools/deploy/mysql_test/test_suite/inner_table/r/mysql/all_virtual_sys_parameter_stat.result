@@ -413,6 +413,7 @@ _iut_stat_collection_type
 _keepalive_interval
 _lcl_op_interval
 _load_tde_encrypt_engine
+_log_cb_pool_min_count
 _log_writer_parallelism
 _ls_gc_wait_readonly_tx_time
 _ls_migration_wait_completing_timeout
