@@ -28,20 +28,7 @@ class ObAllVirtualTenantMemstoreInfo : public common::ObVirtualTableScannerItera
     FREEZE_TRIGGER,
     FREEZE_CNT,
     MEMSTORE_USED,
-    MEMSTORE_LIMIT,
-    REAL_USED,
-    PAGE_UTIL_PCT,
-    FROZEN_USED,
-    MERGING_USED,
-    RELEASED_USED,
-    PAGE_ALLOC_FAIL_CNT,
-    PAGE_CREATE_RATE,
-    PAGE_RECLAIM_RATE,
-    PROMOTED_CNT,
-    SMALL_ARENA_HOLD,
-    SMALL_REAL_USED,
-    SMALL_PAGE_ALLOC_FAIL_CNT,
-    TOTAL_PROMOTED_CNT
+    MEMSTORE_LIMIT
   };
 public:
   ObAllVirtualTenantMemstoreInfo();
