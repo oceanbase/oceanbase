@@ -138,6 +138,13 @@ enum ObVectorQueryProcessFlag
   PVQP_MAX,
 };
 
+enum ObVBitmapCompleteResult
+{
+  VBITMAP_NOT_COMPLETED,
+  VBITMAP_CTX_ONLY,
+  VBITMAP_SHARED_COMPLETED,
+};
+
 struct ObVectorParamData
 {
   int64_t dim_;
@@ -880,6 +887,7 @@ public:
                               common::ObNewRowIterator *row_iter,
                               blocksstable::ObDatumRow *last_row,
                               int64_t &i_vid_count,
+                              ObVBitmapCompleteResult &complete_result,
                               ObVecIndexAsyncTaskCtx *task_ctx = nullptr,
                               const common::ObTabletID &mem_sync_tablet_id = common::ObTabletID());
   int prepare_delta_mem_data(roaring::api::roaring64_bitmap_t *gene_bitmap,

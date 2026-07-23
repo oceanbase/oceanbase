@@ -1758,11 +1758,9 @@ share::SCN ObPluginVectorIndexAdaptor::get_last_dml_scn()
 
 bool ObPluginVectorIndexAdaptor::is_pruned_read_index_id()
 {
-  bool b_ret = false;
-  if (incr_data_->last_read_scn_ > incr_data_->last_delta_refresh_scn_) {
-    b_ret = true;
-  }
-  return b_ret;
+  const SCN last_read_scn = incr_data_->last_read_scn_.atomic_load();
+  const SCN last_delta_refresh_scn = incr_data_->last_delta_refresh_scn_.atomic_load();
+  return last_read_scn > last_delta_refresh_scn;
 }
 
 void ObPluginVectorIndexAdaptor::update_can_skip(ObCanSkip3rdAnd4thVecIndex can_skip)
@@ -3285,6 +3283,7 @@ int ObPluginVectorIndexAdaptor::check_index_id_table_readnext_status(ObVectorQue
   int64_t read_num = 0;
   SCN read_scn = SCN::min_scn();
   int64_t i_vid_count = 0;
+  ObVBitmapCompleteResult complete_result = VBITMAP_NOT_COMPLETED;
   ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(row_iter);
   bool is_skip_4th_index = is_pruned_read_index_id();
 
@@ -3338,7 +3337,14 @@ int ObPluginVectorIndexAdaptor::check_index_id_table_readnext_status(ObVectorQue
     }
   } else if (check_if_complete_index(read_scn) &&
              OB_FAIL(complete_index_mem_data(
-                 ctx, read_scn, row_iter, datum_row, i_vid_count, task_ctx, mem_sync_tablet_id))) {
+                 ctx,
+                 read_scn,
+                 row_iter,
+                 datum_row,
+                 i_vid_count,
+                 complete_result,
+                 task_ctx,
+                 mem_sync_tablet_id))) {
     LOG_WARN("failed to check comple index mem data.", K(ret), K(read_scn), K(vbitmap_data_->scn_));
   } else if (OB_ISNULL(ctx->bitmaps_) || OB_ISNULL(ctx->bitmaps_->insert_bitmap_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -3409,7 +3415,10 @@ int ObPluginVectorIndexAdaptor::check_index_id_table_readnext_status(ObVectorQue
     }
   }
 
-  if (OB_SUCC(ret) && check_if_complete_index(read_scn) && !is_skip_4th_index) {
+  if (OB_SUCC(ret)
+      && check_if_complete_index(read_scn)
+      && !is_skip_4th_index
+      && VBITMAP_CTX_ONLY != complete_result) {
     update_index_id_read_scn();
   }
 
@@ -3574,10 +3583,12 @@ int ObPluginVectorIndexAdaptor::complete_index_mem_data(ObVectorQueryAdaptorResu
                                                         common::ObNewRowIterator *row_iter,
                                                         blocksstable::ObDatumRow *last_row,
                                                         int64_t &i_vid_count,
+                                                        ObVBitmapCompleteResult &complete_result,
                                                         ObVecIndexAsyncTaskCtx *task_ctx,
                                                         const common::ObTabletID &mem_sync_tablet_id)
 {
   INIT_SUCC(ret);
+  complete_result = VBITMAP_NOT_COMPLETED;
   SCN frozen_vbitmap_scn = SCN::min_scn();
   int64_t dim = 0;
   ObPluginVectorIndexMgr *ls_index_mgr = nullptr;
@@ -3664,8 +3675,11 @@ int ObPluginVectorIndexAdaptor::complete_index_mem_data(ObVectorQueryAdaptorResu
       } else {
         if (!ctx->get_is_refresh_adaptor()) {
           if (vbitmap->complete_lock_.try_wrlock()) {
+            DEBUG_SYNC(VEC_VBITMAP_AFTER_COMPLETE_LOCK);
             if (OB_FAIL(write_into_index_mem(vbitmap, dim, read_scn, i_vids, d_vids))) {
               LOG_WARN("failed to write into index mem.", K(ret), K(read_scn));
+            } else {
+              complete_result = VBITMAP_SHARED_COMPLETED;
             }
             int tmp_ret = vbitmap->complete_lock_.unlock();
             if (tmp_ret != OB_SUCCESS) {
@@ -3683,11 +3697,16 @@ int ObPluginVectorIndexAdaptor::complete_index_mem_data(ObVectorQueryAdaptorResu
             for (int64_t i = 0; OB_SUCC(ret) && i < d_vids.count(); i++) {
               ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_remove(ctx->bitmaps_->insert_bitmap_, d_vids.at(i)));
             }
+            if (OB_SUCC(ret)) {
+              complete_result = VBITMAP_CTX_ONLY;
+            }
           }
         } else {
           TCWLockGuard guard(vbitmap->complete_lock_);
           if (OB_FAIL(write_into_index_mem(vbitmap, dim, read_scn, i_vids, d_vids))) {
             LOG_WARN("failed to write into index mem.", K(ret), K(read_scn));
+          } else {
+            complete_result = VBITMAP_SHARED_COMPLETED;
           }
         }
       }
