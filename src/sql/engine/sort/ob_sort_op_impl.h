@@ -391,6 +391,14 @@ public:
   void set_input_width(int64_t input_width) { input_width_ = input_width; }
   void set_operator_type(ObPhyOperatorType op_type) { op_type_ = op_type; }
   void set_operator_id(uint64_t op_id) { op_id_ = op_id; }
+  OB_INLINE int64_t get_rows_count()
+  {
+    int64_t ret = 0;
+    if (OB_NOT_NULL(rows_)) {
+      ret = rows_->count();
+    }
+    return ret;
+  }
   void collect_memory_dump_info(ObMonitorNode &info)
   {
     info.otherstat_1_id_ = op_monitor_info_.otherstat_1_id_;
