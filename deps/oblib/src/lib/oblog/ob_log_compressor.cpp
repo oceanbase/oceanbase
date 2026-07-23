@@ -335,9 +335,9 @@ void ObLogCompressor::log_compress_loop_()
         if (max_disk_size_ > 0 && max_disk_size_ - total_size < disk_remaining_size) {
           disk_remaining_size = max_disk_size_ - total_size;
         }
-
+        const int64_t compress_reserve_size = MAX(OB_SYSLOG_COMPRESS_RESERVE_SIZE, max_disk_size_ * 0.05);
         // compress syslog file if necessary
-        if (OB_SUCC(ret) && !stopped_ && is_enable_compress() && disk_remaining_size < OB_SYSLOG_COMPRESS_RESERVE_SIZE && !fast_delete_log_mode) {
+        if (OB_SUCC(ret) && !stopped_ && is_enable_compress() && disk_remaining_size < compress_reserve_size && !fast_delete_log_mode) {
           if (compressor_ != next_compressor_) {
             compressor_ = next_compressor_;
           }
