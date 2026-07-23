@@ -182,6 +182,10 @@ int ObExprFuncRound::set_res_scale_prec(ObExprTypeCtx &type_ctx, ObExprResType *
         }
         res_prec = tmp_res_prec >= 0 ? tmp_res_prec : res_prec;
       } else if (ob_is_real_type(res_type)) {
+        if (lib::is_mysql_mode() && 2 == param_num) {
+          // Compatible with MySQL: ROUND(real, D) returns NOT_FIXED_DEC metadata.
+          res_scale = SCALE_UNKNOWN_YET;
+        }
         res_prec = (SCALE_UNKNOWN_YET == res_scale) ?
           PRECISION_UNKNOWN_YET : ObMySQLUtil::float_length(res_scale);
       }
