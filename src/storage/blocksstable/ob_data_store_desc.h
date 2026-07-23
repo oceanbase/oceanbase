@@ -253,6 +253,7 @@ public:
     return data_store_type_ == ObMacroBlockCommonHeader::SSTableData;
   }
   OB_INLINE bool is_major_merge_type() const { return compaction::is_major_merge_type(get_merge_type()); }
+  OB_INLINE bool is_inc_major_merge_type() const { return compaction::is_inc_major_merge(get_merge_type()); }
   OB_INLINE bool is_major_or_meta_merge_type() const { return compaction::is_major_or_meta_merge_type(get_merge_type()); }
   OB_INLINE bool is_use_pct_free() const { return get_macro_block_size() != get_macro_store_size(); }
   OB_INLINE bool decide_merge_by_row() const { return get_tablet_id().is_user_tablet() && !is_major_or_meta_merge_type() && !compaction::is_mds_merge(get_merge_type()); }

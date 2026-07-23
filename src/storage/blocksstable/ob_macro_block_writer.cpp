@@ -1799,7 +1799,9 @@ int ObMacroBlockWriter::build_micro_block_desc(
   } else if (OB_FAIL(build_micro_block_desc_with_rewrite(micro_block, micro_block_desc, header_for_rewrite))) {
     LOG_WARN("fail to build micro block desc v2", K(ret), K(micro_block), K(micro_block_desc));
   }
-  if (OB_SUCC(ret)) {
+  const bool need_fill_meta_info = (!data_store_desc_->is_major_merge_type() && !data_store_desc_->is_inc_major_merge_type())
+                           || data_store_desc_->get_major_working_cluster_version() >= DATA_VERSION_4_6_1_0;
+  if (OB_SUCC(ret) && need_fill_meta_info) {
     micro_block_desc.max_merged_trans_version_ = micro_block.header_.max_merged_trans_version_;
     micro_block_desc.contain_uncommitted_row_ = micro_block.micro_index_info_->contain_uncommitted_row();
     micro_block_desc.is_last_row_last_flag_ = micro_block.header_.is_last_row_last_flag();
