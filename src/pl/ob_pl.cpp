@@ -203,7 +203,7 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
                                 (void*)(ObPLEH::eh_personality));
 #endif
   jit::ObLLVMHelper::add_symbol(ObString("eh_convert_exception"),
-                                WRAP_SPI_CALL(ObPLEH::eh_convert_exception));
+                                (void *)(ObPLEH::eh_convert_exception));
   jit::ObLLVMHelper::add_symbol(ObString("eh_classify_exception"),
                                 (void*)(ObPLEH::eh_classify_exception));
   jit::ObLLVMHelper::add_symbol(ObString("eh_debug_int64"),
