@@ -5386,6 +5386,18 @@ int ObTscCgService::generate_table_lookup_ctdef(const ObLogTableScan &op,
         if (OB_FAIL(append_array_no_dup(result_outputs, aux_lookup_ctdef->result_output_))) {
           LOG_WARN("failed to append final result outputs", K(ret));
         }
+      } else if (doc_id_scan_ctdef->op_type_ == ObDASOpType::DAS_OP_SORT) {
+        // HNSW remote DAS: distance must be in root TABLE_LOOKUP result_output_ for RPC serialize.
+        // Same expr as generate_vec_id_lookup_ctdef pushes into aux_lookup->result_output_.
+        const ObDASSortCtDef *sort_def = static_cast<const ObDASSortCtDef *>(doc_id_scan_ctdef);
+        if (OB_UNLIKELY(sort_def->sort_exprs_.count() != 1)
+            || OB_ISNULL(sort_def->sort_exprs_.at(0))
+            || OB_UNLIKELY(!sort_def->sort_exprs_.at(0)->is_vector_sort_expr())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected sort exprs for vector index scan", K(ret), K(sort_def->sort_exprs_.count()));
+        } else if (OB_FAIL(add_var_to_array_no_dup(result_outputs, sort_def->sort_exprs_.at(0)))) {
+          LOG_WARN("failed to add distance expr to lookup result output", K(ret));
+        }
       }
     } else if (op.need_skip_rowkey_doc() && DAS_OP_IR_SCAN == scan_ctdef->op_type_) {
       //add relevance score pseudo column to final scan result output
