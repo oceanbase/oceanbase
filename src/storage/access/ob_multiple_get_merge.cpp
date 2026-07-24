@@ -157,6 +157,7 @@ int ObMultipleGetMerge::construct_iters()
   if (OB_UNLIKELY(tables_.count() == 0)) {
   } else {
     int64_t table_start_idx = tables_.count() - 1;
+    access_ctx_->query_flag_.set_not_use_row_cache();
     if (is_read_memtable_only() || exist_ddl_kv_) {
       access_ctx_->use_fuse_row_cache_ = false;
       if (OB_FAIL(construct_specified_iters(table_start_idx))) {
@@ -234,7 +235,6 @@ int ObMultipleGetMerge::init_resource()
                                     !(access_ctx_->is_inc_major_query_ && access_param_->iter_param_.is_use_column_store()) && // inc major query with co sstables does not use fuse row cache
                                     !exist_ddl_kv_ && // direct load memtable(ddl kv) does not use fuse row cache
                                     !is_fuse_row_cache_force_disable();
-  access_ctx_->query_flag_.set_not_use_row_cache();
   STORAGE_LOG(DEBUG, "multiple get merge start", K(rowkeys_->count()), K(tables_.count()), K(iters_.count()), K(access_ctx_->use_fuse_row_cache_),
               K(access_param_->iter_param_.enable_fuse_row_cache(access_ctx_->query_flag_)),
               K(tablet_meta.snapshot_version_), K(access_ctx_->get_fuse_row_cache_put_count_threshold()));
