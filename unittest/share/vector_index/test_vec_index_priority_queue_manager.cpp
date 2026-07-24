@@ -286,7 +286,7 @@ TEST(TestPriorityHelpers, get_priority_by_task_type)
       get_priority_by_task_type(OB_VECTOR_ASYNC_INDEX_IVF_CLEAN, OB_VEC_TRIGGER_AUTO));
   ASSERT_EQ(PRIORITY_P2,
       get_priority_by_task_type(OB_VECTOR_ASYNC_INDEX_FREEZE, OB_VEC_TRIGGER_AUTO));
-  ASSERT_EQ(PRIORITY_P2,
+  ASSERT_EQ(PRIORITY_P3,
       get_priority_by_task_type(OB_VECTOR_ASYNC_INDEX_MERGE, OB_VEC_TRIGGER_AUTO));
   ASSERT_EQ(PRIORITY_P3,
       get_priority_by_task_type(OB_VECTOR_ASYNC_HYBRID_VECTOR_EMBEDDING, OB_VEC_TRIGGER_AUTO));
@@ -304,10 +304,11 @@ TEST_F(TestVecIndexPriorityQueueManager, queued_count_by_priority)
 {
   FakeCtx ctx1, ctx2, ctx3;
   ASSERT_EQ(OB_SUCCESS, mgr_.push(&ctx1, OB_VECTOR_ASYNC_INDEX_FREEZE)); // P2
-  ASSERT_EQ(OB_SUCCESS, mgr_.push(&ctx2, OB_VECTOR_ASYNC_INDEX_MERGE));  // P2
+  ASSERT_EQ(OB_SUCCESS, mgr_.push(&ctx2, OB_VECTOR_ASYNC_INDEX_MERGE));  // P3
   ASSERT_EQ(OB_SUCCESS, mgr_.push(&ctx3, OB_VECTOR_ASYNC_INDEX_IVF_LOAD)); // P1
 
-  ASSERT_EQ(2, mgr_.get_queued_count_by_priority(PRIORITY_P2));
+  ASSERT_EQ(1, mgr_.get_queued_count_by_priority(PRIORITY_P2));
+  ASSERT_EQ(1, mgr_.get_queued_count_by_priority(PRIORITY_P3));
   ASSERT_EQ(1, mgr_.get_queued_count_by_priority(PRIORITY_P1));
   ASSERT_EQ(0, mgr_.get_queued_count_by_priority(PRIORITY_P4));
   ASSERT_EQ(3, mgr_.get_total_queued_count());
@@ -362,21 +363,21 @@ TEST_F(TestVecIndexPriorityQueueManager, double_push_same_ctx)
 //   manual queue  : threshold=100 (always schedulable)
 //   IVF_LOAD      : P1, threshold=90
 //   MEM_SYNC      : P1, threshold=90
-//   FREEZE/MERGE  : P2, threshold=70
-//   HYBRID_EMBED  : P3, threshold=50
+//   FREEZE        : P2, threshold=70
+//   MERGE/HYBRID  : P3, threshold=50
 //   OPTIONAL      : P4, threshold=35
 // ---------------------------------------------------------------------------
 TEST_F(TestVecIndexPriorityQueueManager, pop_order_full_priority_spectrum)
 {
-  // Push in arbitrary order: P4, P2, manual, P1, P3, P2-again
-  FakeCtx ctx_p4, ctx_p2a, ctx_manual, ctx_p1, ctx_p3, ctx_p2b;
+  // Push in arbitrary order: P4, P2, manual, P1, P3, P3-again
+  FakeCtx ctx_p4, ctx_p2, ctx_manual, ctx_p1, ctx_p3, ctx_merge;
 
   ASSERT_EQ(OB_SUCCESS, mgr_.push(&ctx_p4,  OB_VECTOR_ASYNC_INDEX_OPTINAL));       // P4
-  ASSERT_EQ(OB_SUCCESS, mgr_.push(&ctx_p2a, OB_VECTOR_ASYNC_INDEX_FREEZE));         // P2
+  ASSERT_EQ(OB_SUCCESS, mgr_.push(&ctx_p2, OB_VECTOR_ASYNC_INDEX_FREEZE));          // P2
   ASSERT_EQ(OB_SUCCESS, mgr_.push_manual(&ctx_manual));                              // manual
   ASSERT_EQ(OB_SUCCESS, mgr_.push(&ctx_p1,  OB_VECTOR_ASYNC_INDEX_IVF_LOAD));       // P1
   ASSERT_EQ(OB_SUCCESS, mgr_.push(&ctx_p3,  OB_VECTOR_ASYNC_HYBRID_VECTOR_EMBEDDING)); // P3
-  ASSERT_EQ(OB_SUCCESS, mgr_.push(&ctx_p2b, OB_VECTOR_ASYNC_INDEX_MERGE));          // P2
+  ASSERT_EQ(OB_SUCCESS, mgr_.push(&ctx_merge, OB_VECTOR_ASYNC_INDEX_MERGE));        // P3
   ASSERT_EQ(6, mgr_.get_total_queued_count());
 
   share::ObVecIndexAsyncTaskCtx *out = nullptr;
@@ -389,17 +390,17 @@ TEST_F(TestVecIndexPriorityQueueManager, pop_order_full_priority_spectrum)
   ASSERT_EQ(OB_SUCCESS, mgr_.pop(out, 0));
   ASSERT_EQ(&ctx_p1, out);
 
-  // 3rd pop: P2 (FREEZE was pushed before MERGE)
+  // 3rd pop: P2 (FREEZE)
   ASSERT_EQ(OB_SUCCESS, mgr_.pop(out, 0));
-  ASSERT_EQ(&ctx_p2a, out);
+  ASSERT_EQ(&ctx_p2, out);
 
-  // 4th pop: P2 (MERGE)
-  ASSERT_EQ(OB_SUCCESS, mgr_.pop(out, 0));
-  ASSERT_EQ(&ctx_p2b, out);
-
-  // 5th pop: P3 (HYBRID_EMBEDDING)
+  // 4th pop: P3 (HYBRID_EMBEDDING comes first in the P3 round-robin type map)
   ASSERT_EQ(OB_SUCCESS, mgr_.pop(out, 0));
   ASSERT_EQ(&ctx_p3, out);
+
+  // 5th pop: P3 (MERGE)
+  ASSERT_EQ(OB_SUCCESS, mgr_.pop(out, 0));
+  ASSERT_EQ(&ctx_merge, out);
 
   // 6th pop: P4 (OPTIONAL)
   ASSERT_EQ(OB_SUCCESS, mgr_.pop(out, 0));
@@ -550,10 +551,10 @@ TEST_F(TestVecIndexPriorityQueueManager, unconfigured_task_uses_default_priority
 // ---------------------------------------------------------------------------
 TEST_F(TestVecIndexPriorityQueueManager, ls_stop_invalidates_queued_nodes)
 {
-  // Push 3 tasks of the same priority level.
+  // Push tasks across multiple priority levels.
   FakeCtx ctx_a, ctx_b, ctx_c;
   ASSERT_EQ(OB_SUCCESS, mgr_.push(&ctx_a, OB_VECTOR_ASYNC_INDEX_FREEZE)); // P2
-  ASSERT_EQ(OB_SUCCESS, mgr_.push(&ctx_b, OB_VECTOR_ASYNC_INDEX_MERGE));  // P2
+  ASSERT_EQ(OB_SUCCESS, mgr_.push(&ctx_b, OB_VECTOR_ASYNC_INDEX_MERGE));  // P3
   ASSERT_EQ(OB_SUCCESS, mgr_.push(&ctx_c, OB_VECTOR_ASYNC_INDEX_IVF_LOAD)); // P1
   ASSERT_EQ(3, mgr_.get_total_queued_count());
 

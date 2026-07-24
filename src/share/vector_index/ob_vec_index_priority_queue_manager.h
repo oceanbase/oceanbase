@@ -54,7 +54,7 @@ extern const int64_t PRIORITY_QUEUE_MAX_SIZE[PRIORITY_MAX];
 // Map a task type + trigger type to a scheduling priority.
 // MANUAL trigger always gets PRIORITY_P0 (highest, user-triggered).
 // AUTO trigger matches ObVecIndexAsyncTaskType comments in ob_vector_index_async_task_util.h:
-// IVF_LOAD/MEM_SYNC -> P1; IVF_CLEAN/FREEZE/MERGE -> P2; HYBRID_EMBEDDING -> P3; OPTIONAL -> P4;
+// IVF_LOAD/MEM_SYNC -> P1; IVF_CLEAN/FREEZE -> P2; MERGE/HYBRID_EMBEDDING -> P3; OPTIONAL -> P4;
 // BUILT / unknown / OB_VECTOR_ASYNC_TASK_TYPE_INVALID -> PRIORITY_MAX (invalid, not scheduled).
 ObVecIndexTaskPriority get_priority_by_task_type(ObVecIndexAsyncTaskType task_type,
                                                   int64_t trigger_type);

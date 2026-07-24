@@ -3418,7 +3418,8 @@ int ObDASHNSWScanIter::process_adaptor_state_post_filter_once(
     }
 
     while (OB_SUCC(ret) && ObVidAdaLookupStatus::STATES_ERROR != cur_state && ObVidAdaLookupStatus::STATES_FINISH != cur_state) {
-      if ((last_state != cur_state || cur_state == ObVidAdaLookupStatus::QUERY_ROWKEY_VEC) && OB_FAIL(prepare_state(cur_state, *ada_ctx))) {
+      if ((last_state != cur_state || cur_state == ObVidAdaLookupStatus::QUERY_ROWKEY_VEC)
+          && OB_FAIL(prepare_state(cur_state, *ada_ctx, *adaptor))) {
         LOG_WARN("failed to prepare state", K(ret));
       } else if (OB_FAIL(call_pva_interface(cur_state, *ada_ctx, *adaptor))) {
         LOG_WARN("failed to call pva interface", K(ret));
@@ -3452,7 +3453,9 @@ int ObDASHNSWScanIter::get_single_row_from_data_filter_iter(bool is_vectorized)
   return ret;
 }
 
-int ObDASHNSWScanIter::prepare_state(const ObVidAdaLookupStatus& cur_state, ObVectorQueryAdaptorResultContext &ada_ctx)
+int ObDASHNSWScanIter::prepare_state(const ObVidAdaLookupStatus& cur_state,
+                                     ObVectorQueryAdaptorResultContext &ada_ctx,
+                                     ObPluginVectorIndexAdaptor &adaptor)
 {
   int ret = OB_SUCCESS;
 
@@ -3470,7 +3473,7 @@ int ObDASHNSWScanIter::prepare_state(const ObVidAdaLookupStatus& cur_state, ObVe
       break;
     }
     case ObVidAdaLookupStatus::QUERY_INDEX_ID_TBL: {
-      if (OB_FAIL(do_index_id_table_scan())) {
+      if (OB_FAIL(do_index_id_table_scan(adaptor))) {
         LOG_WARN("failed to do index id table scan.", K(ret));
       }
       break;
@@ -4329,17 +4332,27 @@ int ObDASHNSWScanIter::do_delta_buf_table_scan()
                                       delta_buf_tablet_id_);
 }
 
-int ObDASHNSWScanIter::do_index_id_table_scan()
+int ObDASHNSWScanIter::do_index_id_table_scan(ObPluginVectorIndexAdaptor &adaptor)
 {
+  int ret = OB_SUCCESS;
+  SCN bitmap_start_scn;
   const ObDASScanCtDef *index_id_ctdef = vec_aux_ctdef_->get_vec_aux_tbl_ctdef(vec_aux_ctdef_->get_index_id_tbl_idx(), ObTSCIRScanType::OB_VEC_IDX_ID_SCAN);
   ObDASScanRtDef *index_id_rtdef = vec_aux_rtdef_->get_vec_aux_tbl_rtdef(vec_aux_ctdef_->get_index_id_tbl_idx());
 
-  return do_aux_table_scan_need_reuse(index_id_iter_first_scan_,
-                                      index_id_scan_param_,
-                                      index_id_ctdef,
-                                      index_id_rtdef,
-                                      index_id_iter_,
-                                      index_id_tablet_id_);
+  if (OB_FAIL(adaptor.get_vbitmap_start_scn(bitmap_start_scn))) {
+    LOG_WARN("failed to get vbitmap start scn", K(ret), K(adaptor));
+  } else if (OB_FAIL(do_aux_table_scan_need_reuse(index_id_iter_first_scan_,
+                                                  index_id_scan_param_,
+                                                  index_id_ctdef,
+                                                  index_id_rtdef,
+                                                  index_id_iter_,
+                                                  index_id_tablet_id_,
+                                                  false,
+                                                  false,
+                                                  bitmap_start_scn))) {
+    LOG_WARN("failed to scan index id table", K(ret), K(bitmap_start_scn));
+  }
+  return ret;
 }
 
 int ObDASHNSWScanIter::do_snapshot_table_scan()
@@ -4504,6 +4517,66 @@ int ObDASHNSWScanIter::do_aux_table_scan_need_reuse(bool &first_scan,
     if (OB_FAIL(ObDasVecScanUtils::reuse_iter(ls_id_, iter, scan_param, tablet_id))) {
       LOG_WARN("failed to reuse scan iterator", K(ret));
     } else if (OB_FALSE_IT(ObDasVecScanUtils::set_whole_range(scan_range, ctdef->ref_table_id_))) {
+    } else if (OB_FAIL(scan_param.key_ranges_.push_back(scan_range))) {
+      LOG_WARN("failed to append scan range", K(ret));
+    } else if (OB_FAIL(iter->rescan())) {
+      LOG_WARN("failed to rescan scan iterator.", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDASHNSWScanIter::do_aux_table_scan_need_reuse(bool &first_scan,
+                                                    ObTableScanParam &scan_param,
+                                                    const ObDASScanCtDef *ctdef,
+                                                    ObDASScanRtDef *rtdef,
+                                                    ObDASScanIter *iter,
+                                                    ObTabletID &tablet_id,
+                                                    bool is_get,
+                                                    bool need_reverse,
+                                                    const SCN &bitmap_start_scn)
+{
+  int ret = OB_SUCCESS;
+
+  ObNewRange scan_range;
+  ObObj start_key_objs[3];
+  ObRowkey start_key;
+  if (OB_ISNULL(ctdef)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("scan ctdef is null", K(ret));
+  } else if (OB_UNLIKELY(ObTSCIRScanType::OB_VEC_IDX_ID_SCAN != ctdef->ir_scan_type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("bitmap start scn is only valid for index id table",
+             K(ret), K(ctdef->ir_scan_type_), K(ctdef->ref_table_id_));
+  } else {
+    start_key_objs[0].set_int(bitmap_start_scn.get_val_for_inner_table_field());
+    start_key_objs[1].set_min_value();
+    start_key_objs[2].set_min_value();
+    start_key.assign(start_key_objs, ARRAYSIZEOF(start_key_objs));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (first_scan) {
+    if (OB_FAIL(ObDasVecScanUtils::init_vec_aux_scan_param(ls_id_, tablet_id, ctdef, rtdef,tx_desc_, snapshot_, scan_param, is_get))) {
+      LOG_WARN("failed to init scan param", K(ret));
+    } else if (OB_FALSE_IT(ObDasVecScanUtils::set_whole_range(scan_range, ctdef->ref_table_id_))) {
+      LOG_WARN("failed to generate init scan range", K(ret));
+    } else if (OB_FAIL(start_key.deep_copy(scan_range.start_key_, mem_context_->get_arena_allocator()))) {
+      LOG_WARN("failed to set bitmap scan range start scn", K(ret), K(bitmap_start_scn));
+    } else if (OB_FAIL(scan_param.key_ranges_.push_back(scan_range))) {
+      LOG_WARN("failed to append scan range", K(ret));
+    } else if (need_reverse && FALSE_IT(scan_param.scan_flag_.scan_order_ = ObQueryFlag::Reverse)) {
+    } else if (OB_FALSE_IT(iter->set_scan_param(scan_param))) {
+    } else if (OB_FAIL(iter->do_table_scan())) {
+      LOG_WARN("failed to do scan", K(ret));
+    } else {
+      first_scan = false;
+    }
+  } else {
+    if (OB_FAIL(ObDasVecScanUtils::reuse_iter(ls_id_, iter, scan_param, tablet_id))) {
+      LOG_WARN("failed to reuse scan iterator", K(ret));
+    } else if (OB_FALSE_IT(ObDasVecScanUtils::set_whole_range(scan_range, ctdef->ref_table_id_))) {
+    } else if (OB_FAIL(start_key.deep_copy(scan_range.start_key_, mem_context_->get_arena_allocator()))) {
+      LOG_WARN("failed to set bitmap scan range start scn", K(ret), K(bitmap_start_scn));
     } else if (OB_FAIL(scan_param.key_ranges_.push_back(scan_range))) {
       LOG_WARN("failed to append scan range", K(ret));
     } else if (OB_FAIL(iter->rescan())) {

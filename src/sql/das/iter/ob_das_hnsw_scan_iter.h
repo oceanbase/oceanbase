@@ -390,7 +390,9 @@ private:
   int process_adaptor_state_post_filter_once(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor);
   int get_single_row_from_data_filter_iter(bool is_vectorized);
 
-  int prepare_state(const ObVidAdaLookupStatus& cur_state, ObVectorQueryAdaptorResultContext &ada_ctx);
+  int prepare_state(const ObVidAdaLookupStatus& cur_state,
+                    ObVectorQueryAdaptorResultContext &ada_ctx,
+                    ObPluginVectorIndexAdaptor &adaptor);
   int call_pva_interface(const ObVidAdaLookupStatus& cur_state,
                          ObVectorQueryAdaptorResultContext& ada_ctx,
                          ObPluginVectorIndexAdaptor &adaptor);
@@ -407,7 +409,7 @@ private:
   int get_vector_from_embedded_table(ObIAllocator &allocator, ObRowkey *rowkey, ObRowkey *vid, ObString &vector);
 
   int do_delta_buf_table_scan();
-  int do_index_id_table_scan();
+  int do_index_id_table_scan(ObPluginVectorIndexAdaptor &adaptor);
   int do_snapshot_table_scan();
   int do_com_aux_vec_table_scan();
   int do_embedded_table_scan();
@@ -429,6 +431,15 @@ private:
                                    ObTabletID &tablet_id,
                                    bool is_get = false,
                                    bool need_reverse = false);
+  int do_aux_table_scan_need_reuse(bool &first_scan,
+                                   ObTableScanParam &scan_param,
+                                   const ObDASScanCtDef *ctdef,
+                                   ObDASScanRtDef *rtdef,
+                                   ObDASScanIter *iter,
+                                   ObTabletID &tablet_id,
+                                   bool is_get,
+                                   bool need_reverse,
+                                   const SCN &bitmap_start_scn);
   int do_aux_table_scan(bool &first_scan, ObTableScanParam &scan_param, const ObDASScanCtDef *ctdef, ObDASScanRtDef *rtdef, ObDASScanIter *iter, ObTabletID &tablet_id);
   int reuse_vid_rowkey_iter() { return ObDasVecScanUtils::reuse_iter(ls_id_, vid_rowkey_iter_, vid_rowkey_scan_param_, vid_rowkey_tablet_id_); };
   int reuse_rowkey_vid_iter() { return ObDasVecScanUtils::reuse_iter(ls_id_, rowkey_vid_iter_, rowkey_vid_scan_param_, rowkey_vid_tablet_id_); };

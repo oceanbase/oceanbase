@@ -145,9 +145,9 @@ ObVecIndexTaskPriority get_auto_priority_by_task_type(ObVecIndexAsyncTaskType ta
       break;
     case OB_VECTOR_ASYNC_INDEX_IVF_CLEAN:
     case OB_VECTOR_ASYNC_INDEX_FREEZE:
-    case OB_VECTOR_ASYNC_INDEX_MERGE:
       p = PRIORITY_P2;
       break;
+    case OB_VECTOR_ASYNC_INDEX_MERGE:
     case OB_VECTOR_ASYNC_HYBRID_VECTOR_EMBEDDING:
       p = PRIORITY_P3;
       break;

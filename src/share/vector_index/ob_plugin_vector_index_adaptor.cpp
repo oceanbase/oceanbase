@@ -6502,6 +6502,19 @@ int ObPluginVectorIndexAdaptor::create_incr_active_segment(
   return ret;
 }
 
+int ObPluginVectorIndexAdaptor::get_vbitmap_start_scn(SCN &bitmap_start_scn) const
+{
+  int ret = OB_SUCCESS;
+  if (!vbitmap_data_.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("vbitmap data is invalid", K(ret), KPC(this));
+  } else {
+    TCRLockGuard lock_guard(vbitmap_data_->bitmap_rwlock_);
+    bitmap_start_scn = vbitmap_data_->scn_;
+  }
+  return ret;
+}
+
 int ObPluginVectorIndexAdaptor::complete_bitmap_data(
     const SCN& frozen_scn,
     common::ObNewRowIterator *row_iter)

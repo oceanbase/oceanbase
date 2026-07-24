@@ -736,6 +736,7 @@ public:
   ObVecIdxActiveDataHandle& get_incr_data() { return incr_data_; }
   const ObVecIdxVBitmapDataHandle& get_vbitmap_data() const { return vbitmap_data_; }
   ObVecIdxVBitmapDataHandle& get_vbitmap_data() { return vbitmap_data_; }
+  int get_vbitmap_start_scn(SCN &bitmap_start_scn) const;
   const ObVecIdxFrozenDataHandle& get_frozen_data() const { return frozen_data_; }
   ObVecIdxFrozenDataHandle& get_frozen_data() { return frozen_data_; }
   const ObVecIdxSnapshotDataHandle& get_snap_data() const { return snap_data_; }
