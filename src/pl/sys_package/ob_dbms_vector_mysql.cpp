@@ -304,7 +304,11 @@ int ObDBMSVectorMySql::index_vector_memory_advisor(ObPLExecCtx &ctx, ParamStore 
     ObString idx_param_str;
     ObVectorIndexParam index_param;
 
-    if (max_tablet_vectors > num_vectors) {
+    if (0 == num_vectors) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid num_vectors", KR(ret), K(num_vectors));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "num_vectors, must be greater than 0");
+    } else if (max_tablet_vectors > num_vectors) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("invalid max_tablet_vectors", KR(ret), K(max_tablet_vectors), K(num_vectors));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "max_tablet_vectors large than num_vectors");
