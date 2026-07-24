@@ -275,7 +275,6 @@ int ObResultSet::implicit_commit_before_cmd_execute(ObSQLSessionInfo &session_in
 {
   int ret = OB_SUCCESS;
   if (session_info.is_in_transaction() && session_info.associated_xa()) {
-    int tmp_ret = OB_SUCCESS;
     transaction::ObTxDesc *tx_desc = session_info.get_tx_desc();
     const transaction::ObXATransID xid = session_info.get_xid();
     const transaction::ObGlobalTxType global_tx_type = tx_desc->get_global_tx_type(xid);
@@ -291,9 +290,12 @@ int ObResultSet::implicit_commit_before_cmd_execute(ObSQLSessionInfo &session_in
             K(global_tx_type));
       }
       session_info.restore_auto_commit();
-      const bool force_disconnect = false;
-      if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = session_info.get_dblink_context().clean_dblink_conn(force_disconnect)))) {
-        LOG_WARN("dblink transaction failed to release dblink connections", K(tmp_ret), K(tx_id), K(xid));
+      if (OB_ISNULL(session_info.get_pl_context())) {
+        const bool force_disconnect = false;
+        int tmp_ret = OB_SUCCESS;
+        if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = session_info.get_dblink_context().clean_dblink_conn(force_disconnect)))) {
+          LOG_WARN("dblink transaction failed to release dblink connections", K(tmp_ret), K(tx_id), K(xid));
+        }
       }
     } else {
       ret = OB_ERR_UNEXPECTED;
