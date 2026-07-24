@@ -394,12 +394,19 @@ int ObDASBooleanQueryRtDef::req(const ObBooleanSubClause<ObIDASSearchRtDef> &mus
     //     knn+filter and should/must_not paths are not affected currently.
     for (int64_t i = 0; OB_SUCC(ret) && i < required_clauses.count(); i++) {
       ObIDASSearchRtDef *clause = nullptr;
+      const ObIDASSearchCtDef *ctdef = nullptr;
       if (OB_FAIL(required_clauses.at(i, clause))) {
         LOG_WARN("failed to get clause", KR(ret), K(i));
       } else if (OB_ISNULL(clause)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected nullptr clause", KR(ret), K(i));
-      } else if (i != 0 && clause->op_type_ == DAS_OP_SCALAR_QUERY && search_ctx.get_rowid_type() == DAS_ROWID_TYPE_UINT64) {
+      } else if (OB_ISNULL((ctdef = static_cast<const ObIDASSearchCtDef *>(clause->ctdef_)))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected nullptr ctdef", KR(ret));
+      } else if (i != 0 &&
+                 !ctdef->is_scoring() &&
+                 clause->op_type_ == DAS_OP_SCALAR_QUERY &&
+                 search_ctx.get_rowid_type() == DAS_ROWID_TYPE_UINT64) {
         clause->set_allow_probe(true);
       }
     }
