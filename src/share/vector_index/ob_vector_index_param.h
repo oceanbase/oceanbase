@@ -35,7 +35,10 @@ public:
     similarity_threshold_(0),
     ivf_nprobes_(0),
     strategy_(ObVecIdxQueryStrategy::RECALL_FIRST),
-    last_distance_(-FLT_MAX)
+    last_distance_(-FLT_MAX),
+    bruteforce_fallback_threshold_(0),
+    post_filter_max_scan_rows_(0),
+    pre_filter_threshold_(0)
   {}
   virtual ~ObVectorIndexQueryParam() {}
   int assign(const ObVectorIndexQueryParam &other);
@@ -51,7 +54,10 @@ public:
       uint64_t is_set_ivf_nprobes_          : 1;
       uint64_t is_set_strategy_             : 1;
       uint64_t is_set_last_distance_        : 1;
-      uint64_t reserved_                    : 57;
+      uint64_t is_set_bruteforce_fallback_threshold_ : 1;
+      uint64_t is_set_post_filter_max_scan_rows_ : 1;
+      uint64_t is_set_pre_filter_threshold_ : 1;
+      uint64_t reserved_                    : 54;
     };
   };
   int32_t ef_search_;
@@ -61,9 +67,12 @@ public:
   int32_t ivf_nprobes_;
   ObVecIdxQueryStrategy strategy_; // from sql query parameter
   float last_distance_; // FARM COMPAT WHITELIST
+  int32_t bruteforce_fallback_threshold_;
+  int64_t post_filter_max_scan_rows_;
+  float pre_filter_threshold_;
 
   TO_STRING_KV(K_(is_set_ef_search), K_(ef_search),
-      K_(is_set_refine_k), K_(refine_k), K_(is_set_drop_ratio_search), K_(ob_sparse_drop_ratio_search), K_(is_set_similarity_threshold), K_(similarity_threshold), K_(is_set_ivf_nprobes), K_(ivf_nprobes), K_(is_set_strategy), K_(strategy), K_(is_set_last_distance), K_(last_distance), K_(reserved));
+      K_(is_set_refine_k), K_(refine_k), K_(is_set_drop_ratio_search), K_(ob_sparse_drop_ratio_search), K_(is_set_similarity_threshold), K_(similarity_threshold), K_(is_set_ivf_nprobes), K_(ivf_nprobes), K_(is_set_strategy), K_(strategy), K_(is_set_last_distance), K_(last_distance), K_(is_set_bruteforce_fallback_threshold), K_(bruteforce_fallback_threshold), K_(is_set_post_filter_max_scan_rows), K_(post_filter_max_scan_rows), K_(is_set_pre_filter_threshold), K_(pre_filter_threshold), K_(reserved));
 
 };
 

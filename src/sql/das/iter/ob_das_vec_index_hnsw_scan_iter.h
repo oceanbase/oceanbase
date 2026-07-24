@@ -149,7 +149,6 @@ public:
   static constexpr double SPARSE_FIXED_MAGNIFICATION_RATIO = 50.0;
   static constexpr double ITER_CONSIDER_LAST_SEARCH_SELETIVITY = 0.05;
   static const uint64_t MAX_OPTIMIZE_BATCH_COUNT = 16;
-  static const uint64_t MAX_HNSW_BRUTE_FORCE_SIZE = 20000;
   static const int32_t CHANGE_PATH_WINDOW_SIZE = 30;
   static constexpr double DECAY_FACTOR = 0.5;
   static const uint64_t MIN_BQ_REORDER_SIZE_FOR_BRUTE_FORCE = 100;
