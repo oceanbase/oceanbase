@@ -187,7 +187,7 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
 #endif // defined(__aarch64__) && defined(CPP_STANDARD_20)
 
   jit::ObLLVMHelper::add_symbol(ObString("eh_convert_exception"),
-                                WRAP_SPI_CALL(ObPLEH::eh_convert_exception));
+                                (void *)(ObPLEH::eh_convert_exception));
   jit::ObLLVMHelper::add_symbol(ObString("eh_classify_exception"),
                                 (void*)(ObPLEH::eh_classify_exception));
   jit::ObLLVMHelper::add_symbol(ObString("eh_debug_int64"),
