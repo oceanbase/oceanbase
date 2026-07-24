@@ -205,6 +205,48 @@ int ObVectorIndexSegmentMeta::prepare_new_segment_meta(
   return ret;
 }
 
+ObVectorIndexSegmentMeta::ObVectorIndexSegmentMeta(const ObVectorIndexSegmentMeta &other)
+  : ObVectorIndexSegmentMeta()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(assign(other))) {
+    LOG_ERROR("failed to assign in copy ctor", K(ret), K(other));
+  }
+}
+
+ObVectorIndexSegmentMeta &ObVectorIndexSegmentMeta::operator=(const ObVectorIndexSegmentMeta &other)
+{
+  if (this != &other) {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(assign(other))) {
+      LOG_ERROR("failed to assign in operator=", K(ret), K(other));
+    }
+  }
+  return *this;
+}
+
+int ObVectorIndexSegmentMeta::assign(const ObVectorIndexSegmentMeta &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    seg_type_ = other.seg_type_;
+    index_type_ = other.index_type_;
+    flags_ = other.flags_;
+    scn_ = other.scn_;
+    blocks_cnt_ = other.blocks_cnt_;
+    segment_handle_ = other.segment_handle_;
+    if (other.start_key_.empty() && other.end_key_.empty()) {
+      MEMSET(start_key_buf_, 0, OB_VECTOR_INDEX_SNAPSHOT_KEY_LENGTH);
+      MEMSET(end_key_buf_, 0, OB_VECTOR_INDEX_SNAPSHOT_KEY_LENGTH);
+      start_key_.reset();
+      end_key_.reset();
+    } else if (OB_FAIL(deep_copy_seg_key(other.start_key_, other.end_key_))) {
+      LOG_WARN("failed to deep copy seg key during assign", K(ret), K(other));
+    }
+  }
+  return ret;
+}
+
 int ObVectorIndexSegmentMeta::deep_copy_seg_key(const ObString &src_start_key, const ObString &src_end_key)
 {
   int ret = OB_SUCCESS;

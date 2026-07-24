@@ -143,6 +143,9 @@ public:
     blocks_cnt_(0),
     segment_handle_()
   {}
+  ObVectorIndexSegmentMeta(const ObVectorIndexSegmentMeta &other);
+  ObVectorIndexSegmentMeta &operator=(const ObVectorIndexSegmentMeta &other);
+  int assign(const ObVectorIndexSegmentMeta &other);
 
   ~ObVectorIndexSegmentMeta() {}
 
