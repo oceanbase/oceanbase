@@ -432,39 +432,65 @@ TEST_F(TestLSService, test_remove_ls)
   }
 }
 
+static bool wait_ls_iter_cnt(ObLSService *ls_svr, const int64_t expected_iter_cnt)
+{
+  const int64_t timeout_us = 10 * 1000 * 1000;
+  const int64_t start_time = ObTimeUtil::current_time();
+  int64_t current_iter_cnt = ATOMIC_LOAD(&ls_svr->iter_cnt_);
+  while (expected_iter_cnt != current_iter_cnt
+         && ObTimeUtil::current_time() - start_time < timeout_us) {
+    ob_usleep(1000);
+    current_iter_cnt = ATOMIC_LOAD(&ls_svr->iter_cnt_);
+  }
+  if (expected_iter_cnt != current_iter_cnt) {
+    int ret = OB_TIMEOUT;
+    LOG_WARN("wait ls iter count timeout", K(ret), K(expected_iter_cnt), K(current_iter_cnt), K(timeout_us));
+  }
+  return expected_iter_cnt == current_iter_cnt;
+}
+
 TEST_F(TestLSService, check_ls_iter_cnt)
 {
   int ret = OB_SUCCESS;
   int64_t start_time = 0;
   int64_t end_time = 0;
-  EventItem item;
-  item.trigger_freq_ = 1;
-  item.error_code_ = 4013;
-  EventTable::instance().set_event("ALLOC_LS_ITER_GUARD_FAIL", item);
-
-  LOG_INFO("TestLSService::check_ls_iter_cnt");
   ObLS *ls = NULL;
   ObLSService* ls_svr = MTL(ObLSService*);
   common::ObSharedGuard<ObLSIterator> guard;
+  // Wait for unrelated background iterators to drain before checking for leaks.
+  ASSERT_TRUE(wait_ls_iter_cnt(ls_svr, 0));
+  EventItem item;
+  item.trigger_freq_ = 1;
+  item.error_code_ = 4013;
+  ASSERT_EQ(OB_SUCCESS, EventTable::instance().set_event("ALLOC_LS_ITER_GUARD_FAIL", item));
+
+  LOG_INFO("TestLSService::check_ls_iter_cnt");
   // 1. get ls iter 100 times.
   for (int i = 0; i < 100; i++) {
-    if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::OBSERVER_MOD))) {
+    ret = ls_svr->get_ls_iter(guard, ObLSGetMod::OBSERVER_MOD);
+    EXPECT_EQ(4013, ret);
+    if (OB_FAIL(ret)) {
       LOG_WARN("get ls iter failed");
     }
   }
-  // 2. check the iter cnt, it should smaller than 100.
-  ASSERT_EQ(0, ls_svr->iter_cnt_);
+  // Disable the global tracepoint before any fatal assertion to avoid leaking
+  // error injection into background workers and test teardown.
+  EventItem disable_item;
+  EXPECT_EQ(OB_SUCCESS, EventTable::instance().set_event("ALLOC_LS_ITER_GUARD_FAIL", disable_item));
+  // 2. injected failures must eventually release every iterator they allocate.
+  ASSERT_TRUE(wait_ls_iter_cnt(ls_svr, 0));
 
   // 3. get success 100 times.
-  item.trigger_freq_ = 0;
-  EventTable::instance().set_event("ALLOC_LS_ITER_GUARD_FAIL", item);
   for (int i = 0; i < 100; i++) {
-    if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::OBSERVER_MOD))) {
+    ret = ls_svr->get_ls_iter(guard, ObLSGetMod::OBSERVER_MOD);
+    EXPECT_EQ(OB_SUCCESS, ret);
+    if (OB_FAIL(ret)) {
       LOG_WARN("get ls iter failed again");
     }
   }
-  // 4. check the iter cnt, it should smaller than 100.
-  ASSERT_EQ(1, ls_svr->iter_cnt_);
+  ASSERT_NE(nullptr, guard.get_ptr());
+  // 4. replacing the test-owned guard eventually leaves exactly one iterator.
+  ASSERT_TRUE(wait_ls_iter_cnt(ls_svr, 1));
 
   // 5. iter the ls.
   ObLSIterator *iter = NULL;
