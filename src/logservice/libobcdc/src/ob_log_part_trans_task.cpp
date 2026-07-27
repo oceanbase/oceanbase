@@ -2624,6 +2624,7 @@ PartTransTask::PartTransTask() :
     wait_data_ready_cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::CDC_COMMON_COND_WAIT),
     wait_formatted_cond_(NULL),
     output_br_count_by_turn_(0),
+    pending_lob_format_count_(0),
     tic_update_infos_()
 {
 }
@@ -2758,6 +2759,7 @@ void PartTransTask::reset()
   is_data_ready_ = false;
   wait_formatted_cond_ = NULL;
   output_br_count_by_turn_ = 0;
+  pending_lob_format_count_ = 0;
   tic_update_infos_.reset();
   // reuse memory
   allocator_.reset();

@@ -1202,6 +1202,12 @@ public:
   {
     return ! sorted_redo_list_.has_dispatched_but_unsorted_redo();
   }
+  // Signal from LOB merger to dispatcher: indicates that the merger is waiting for
+  // LobAuxMeta data and needs the dispatcher to continue dispatching redo (including
+  // LobAuxMeta entries) even when global dispatch memory budget is exhausted.
+  OB_INLINE void inc_pending_lob_format_count() { ATOMIC_INC(&pending_lob_format_count_); }
+  OB_INLINE void dec_pending_lob_format_count() { ATOMIC_DEC(&pending_lob_format_count_); }
+  OB_INLINE int64_t get_pending_lob_format_count() const { return ATOMIC_LOAD(&pending_lob_format_count_); }
   transaction::ObTxBigSegmentBuf *get_segment_buf() { return &segment_buf_; }
   int push_multi_data_source_data(
       const palf::LSN &lsn,
@@ -1446,6 +1452,7 @@ private:
   common::ObCond          *wait_formatted_cond_;
 
   int64_t                 output_br_count_by_turn_; // sorted br count in each statistic round
+  int64_t                 pending_lob_format_count_;  // >0 when merger is waiting for LobAuxMeta, signals dispatcher to grant extra budget
 
   ObArray<TICUpdateInfo>  tic_update_infos_; // table id cache update info
 
