@@ -1,7 +1,7 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-#owner: shanyan.g
+#owner: handora.qc
 #owner group: transaction 
 #description: 测试可串行化隔离级别在各种语句类型场景下的表现，及其限制
 #
