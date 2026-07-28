@@ -8,6 +8,7 @@
 
 #include "ob_io_calibration.h"
 #include "observer/ob_server.h"
+#include "share/ob_io_device_helper.h"
 
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_file_manager.h"
@@ -949,7 +950,7 @@ int ObIOCalibration::parse_calibration_string(const ObString &calibration_string
         dup_str[i] = ' ';
       }
     }
-    int scan_ret = sscanf(dup_str, "%s %s %s %lf", mode_str, size_str, latency_str, &item.iops_);
+    int scan_ret = sscanf(dup_str, "%63s %63s %63s %lf", mode_str, size_str, latency_str, &item.iops_);
     if (OB_UNLIKELY(4 != scan_ret)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(scan_ret), K(calibration_string));
