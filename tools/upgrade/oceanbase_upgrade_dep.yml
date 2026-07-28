@@ -145,3 +145,7 @@
       - 5.0.1.0
 
 - version: 5.0.1.0
+  can_be_upgraded_to:
+      - 5.0.2.0
+
+- version: 5.0.2.0
