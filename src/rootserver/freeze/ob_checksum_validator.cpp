@@ -279,12 +279,10 @@ int ObChecksumValidatorBase::handle_table_can_not_verify(
   table_compaction_info.table_id_ = table_id;
   table_compaction_info.set_verified();
   if (OB_FAIL(table_compaction_map.set_refactored(table_id, table_compaction_info, true/*overwrite*/))) {
-    LOG_WARN("fail to set refactored", KR(ret), K(table_id), K(table_compaction_info));
-  }
-  if (OB_SUCC(ret)) {
-    LOG_INFO("succ to handle table can not verify", K(table_id));
+    LOG_WARN("fail to handle table can not verify", KR(ret), K(table_id), K(table_compaction_info));
+  } else if (OB_UNLIKELY(is_minimal_tablet_ckm_)) {
   } else {
-    LOG_INFO("fail to handle table can not verify", K(table_id));
+    LOG_INFO("succ to handle table can not verify", K(table_id));
   }
   return ret;
 }
@@ -313,6 +311,11 @@ int ObChecksumValidatorBase::write_ckm_and_update_report_scn(
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("table must finish index checksum valiation when arriving here", KR(ret),
                K(table_id), K(cur_compaction_info));
+    } else if (is_minimal_tablet_ckm_) {
+      // Only the completion marker is materialized in minimal mode.
+      if (OB_FAIL(handle_table_can_not_verify(table_id, table_compaction_map))) {
+        LOG_WARN("fail to mark table verified", KR(ret), K_(tenant_id), K(frozen_scn), K(table_id));
+      }
     } else {
       // set it to false, if succ to handle_table_can_not_verify
       bool need_update_map = true;
@@ -506,7 +509,7 @@ int ObChecksumValidatorBase::try_update_tablet_checksum_items(
                   if (OB_FAIL(mark_end_item.assign(curr_replica_item))) {
                     LOG_WARN("fail to assign tablet replica checksum item", KR(ret), K(curr_replica_item));
                   }
-                } else {
+                } else if (!is_minimal_tablet_ckm_) {
                   if (OB_FAIL(tmp_checksum_item.assign(curr_replica_item))) {
                     LOG_WARN("fail to assign tablet replica checksum item", KR(ret), K(curr_replica_item));
                   } else if (OB_FAIL(tablet_checksum_items.push_back(tmp_checksum_item))) {
@@ -1121,7 +1124,11 @@ int ObCrossClusterTabletChecksumValidator::validate_cross_cluster_checksum(
     }
     if (OB_FAIL(ret)) {
     } else if (is_all_tablet_checksum_exist_ || is_wait_tablet_checksum_timeout) { // all tablet checksum exist or timeout
-      if (OB_FAIL(check_cross_cluster_checksum(*simple_schema, frozen_scn))) {
+      if (is_minimal_tablet_ckm_) {
+        if (OB_FAIL(handle_table_can_not_verify(simple_schema->get_table_id(), table_compaction_map))) {
+          LOG_WARN("fail to mark table verified", KR(ret), K_(tenant_id), K(frozen_scn), "table_id", simple_schema->get_table_id());
+        }
+      } else if (OB_FAIL(check_cross_cluster_checksum(*simple_schema, frozen_scn))) {
         if (OB_ITEM_NOT_MATCH == ret) {
           if (OB_TMP_FAIL(handle_table_can_not_verify(simple_schema->get_table_id(), table_compaction_map))) {
             LOG_WARN("fail to handle table can not verify", KR(ret), "table_id", simple_schema->get_table_id());

@@ -187,6 +187,7 @@ private:
                                   const share::ObLSInfo &ls_info);
   int mark_uncompacted_tables_as_verified(const common::ObIArray<share::ObTableCompactionInfo> &uncompacted_tables);
   int refresh_ls_infos();
+  int try_refresh_minimal_tablet_ckm_mode(const share::SCN &global_broadcast_scn);
 
 private:
   bool is_inited_;
@@ -207,6 +208,7 @@ private:
   ObIndexChecksumValidator index_validator_;
   ObCrossClusterTabletChecksumValidator cross_cluster_validator_;
   common::ObArray<share::ObTabletReplica> uncompacted_tablets_; // record for diagnose
+  share::SCN minimal_ckm_snapshot_scn_;
   common::SpinRWLock diagnose_rw_lock_;
   // cache of ls_infos in __all_ls_meta_table
   common::hash::ObHashMap<share::ObLSID, share::ObLSInfo> ls_infos_map_;

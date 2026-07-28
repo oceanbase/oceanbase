@@ -26,6 +26,7 @@
 #include "share/ls/ob_ls_table_operator.h"
 #include "share/ob_freeze_info_proxy.h"
 #include "share/scn.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 namespace oceanbase
 {
@@ -40,8 +41,8 @@ ObMajorMergeProgressChecker::ObMajorMergeProgressChecker()
     schema_service_(nullptr), zone_merge_mgr_(nullptr), lst_operator_(nullptr),
     server_trace_(nullptr), tablet_compaction_map_(), table_count_(0), table_ids_(),
     table_compaction_map_(), tablet_validator_(), index_validator_(), cross_cluster_validator_(),
-    uncompacted_tablets_(), diagnose_rw_lock_(ObLatchIds::MAJOR_FREEZE_DIAGNOSE_LOCK),
-    ls_infos_map_()
+    uncompacted_tablets_(), minimal_ckm_snapshot_scn_(),
+    diagnose_rw_lock_(ObLatchIds::MAJOR_FREEZE_DIAGNOSE_LOCK), ls_infos_map_()
 {}
 
 int ObMajorMergeProgressChecker::init(
@@ -155,6 +156,36 @@ int ObMajorMergeProgressChecker::check_table_status(bool &exist_unverified)
         LOG_WARN("table_compaction_map element count should not be less than table count", KR(ret), K(ele_count),
           K_(table_count));
       }
+    }
+  }
+  return ret;
+}
+
+// Keep all validators on one config snapshot in a compaction round.
+int ObMajorMergeProgressChecker::try_refresh_minimal_tablet_ckm_mode(
+    const share::SCN &global_broadcast_scn)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K_(tenant_id));
+  } else if (OB_UNLIKELY(!global_broadcast_scn.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K_(tenant_id), K(global_broadcast_scn));
+  } else if (global_broadcast_scn == minimal_ckm_snapshot_scn_) {
+  } else {
+    bool is_minimal_tablet_ckm = false;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+    if (OB_UNLIKELY(!tenant_config.is_valid())) {
+      ret = OB_EAGAIN;
+      LOG_WARN("tenant config is not valid, retry to refresh later", KR(ret), K_(tenant_id), K(global_broadcast_scn));
+    } else {
+      is_minimal_tablet_ckm = tenant_config->_enable_minimal_tablet_checksum;
+      tablet_validator_.set_minimal_tablet_ckm(is_minimal_tablet_ckm);
+      index_validator_.set_minimal_tablet_ckm(is_minimal_tablet_ckm);
+      cross_cluster_validator_.set_minimal_tablet_ckm(is_minimal_tablet_ckm);
+      minimal_ckm_snapshot_scn_ = global_broadcast_scn;
+      LOG_INFO("success to refresh minimal tablet checksum mode", K_(tenant_id), K(global_broadcast_scn), K(is_minimal_tablet_ckm));
     }
   }
   return ret;
@@ -563,6 +594,8 @@ int ObMajorMergeProgressChecker::check_verification(
   } else if (stop) {
     ret = OB_CANCELED;
     LOG_WARN("already stop", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(try_refresh_minimal_tablet_ckm_mode(global_broadcast_scn))) {
+    LOG_WARN("fail to try refresh minimal tablet ckm mode", KR(ret), K_(tenant_id), K(global_broadcast_scn));
   }
   // check and set need_validate for index_validator and cross_cluster_validator. tablet_validator
   // always need validate, thus there is no need to check and set need_validate for tablet_validator.

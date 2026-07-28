@@ -355,6 +355,7 @@ _enable_insertup_direct_update
 _enable_insertup_replace_gts_opt
 _enable_in_range_optimization
 _enable_memleak_light_backtrace
+_enable_minimal_tablet_checksum
 _enable_mysql_compatible_dates
 _enable_newsort
 _enable_new_query_range_extraction

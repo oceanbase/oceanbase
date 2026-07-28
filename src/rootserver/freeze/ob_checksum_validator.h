@@ -60,7 +60,7 @@ class ObChecksumValidatorBase
 public:
   ObChecksumValidatorBase()
     : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), is_primary_service_(true),
-      need_validate_(false), sql_proxy_(NULL), zone_merge_mgr_(NULL), merge_err_cb_(),
+      need_validate_(false), is_minimal_tablet_ckm_(false), sql_proxy_(NULL), zone_merge_mgr_(NULL), merge_err_cb_(),
       tablet_checksum_items_(), tablet_ls_pairs_(), table_ids_()
   {}
   virtual ~ObChecksumValidatorBase() {}
@@ -70,6 +70,7 @@ public:
                    ObZoneMergeManager &zone_merge_mgr);
   void set_need_validate(const bool need_validate) { need_validate_ = need_validate; }
   bool need_validate() const { return need_validate_; }
+  void set_minimal_tablet_ckm(const bool is_minimal) { is_minimal_tablet_ckm_ = is_minimal; }
   int validate_checksum(const volatile bool &stop,
                         const share::SCN &frozen_scn,
                         const TabletCompactionMap &tablet_compaction_map,
@@ -161,6 +162,7 @@ protected:
   uint64_t tenant_id_;
   bool is_primary_service_;  // identify ObMajorFreezeServiceType::SERVICE_TYPE_PRIMARY
   bool need_validate_;
+  bool is_minimal_tablet_ckm_;
   common::ObMySQLProxy *sql_proxy_;
   ObZoneMergeManager *zone_merge_mgr_;
   ObMergeErrorCallback merge_err_cb_;
