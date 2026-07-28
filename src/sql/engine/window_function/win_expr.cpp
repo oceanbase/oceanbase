@@ -1034,6 +1034,7 @@ int LeadOrLag::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int
   char *default_val = nullptr;
   int32_t default_val_len = 0;
   bool has_default_val = false;
+  bool use_default_val = false;
   if (OB_UNLIKELY(params.count() > NUM_LEAD_LAG_PARAMS || params.count() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid number of params", K(ret), K(params.count()));
@@ -1076,6 +1077,9 @@ int LeadOrLag::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int
     if (OB_FAIL(NonAggrWinExpr::eval_param_int_value(params.at(OFFSET), eval_ctx, false, false,
                                                      param_status))) {
       LOG_WARN("eval param int value failed", K(ret));
+    } else if (lib::is_oracle_mode() && param_status.is_null_) {
+      // Oracle returns the default value when the lead/lag offset evaluates to NULL.
+      use_default_val = true;
     } else if (OB_UNLIKELY(param_status.is_null_ || param_status.int_val_ < 0
                            || (lib::is_oracle_mode() && ctx.win_col_.wf_info_.is_ignore_null_
                                && param_status.int_val_ == 0))) {
@@ -1099,7 +1103,8 @@ int LeadOrLag::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int
     const char *src = nullptr;
     int32_t src_len = 0;
     bool src_isnull = false;
-    for (int64_t i = row_idx; OB_SUCC(ret) && !found && (is_lead ? i < frame.tail_ : i >= frame.head_);
+    for (int64_t i = row_idx; OB_SUCC(ret) && !found && !use_default_val
+                              && (is_lead ? i < frame.tail_ : i >= frame.head_);
          i += lead_lag_offset_direction) {
       ctx.win_col_.op_.clear_evaluated_flag();
       if (OB_FAIL(
