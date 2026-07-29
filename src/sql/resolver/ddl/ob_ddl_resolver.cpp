@@ -7917,8 +7917,11 @@ int ObDDLResolver::get_udt_column_default_values(const ObObj &default_value,
     }
     LOG_DEBUG("finish check udt default value", K(input_default_value), K(expr_str),
               K(tmp_default_value), K(tmp_dest_obj), K(tmp_dest_obj_null), KPC(expr), K(ret));
-    if (OB_SUCC(ret) && tmp_default_value.is_pl_extend()) {
-      OZ (pl::ObUserDefinedType::destruct_obj(tmp_default_value, session_info));
+    if (tmp_default_value.is_pl_extend()) {
+      int tmp_ret = pl::ObUserDefinedType::destruct_obj(tmp_default_value, session_info);
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("failed to destruct tmp_default_value", K(tmp_ret), K(ret));
+      }
     }
   }
   return ret;
