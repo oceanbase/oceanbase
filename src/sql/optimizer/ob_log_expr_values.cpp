@@ -118,6 +118,8 @@ int ObLogExprValues::compute_fd_item_set()
   } else if (contain_array_binding_param()) {
     /* array binding param is not a single row */
     set_fd_item_set(&empty_fd_item_set_);
+  } else if (my_plan_->get_is_parent_set_stmt()) {
+    set_fd_item_set(&empty_fd_item_set_);
   } else {
     ObFdItemSet *fd_item_set = NULL;
     ObSEArray<ObRawExpr*, 8> select_exprs;

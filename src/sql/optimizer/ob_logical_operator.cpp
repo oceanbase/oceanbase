@@ -337,33 +337,33 @@ int ObAllocExprContext::add(const ExprProducer &producer)
   } else if (OB_FAIL(expr_map_.set_refactored(reinterpret_cast<uint64_t>(producer.expr_),
                                               expr_producers_.count() - 1))) {
     LOG_WARN("failed to add entry into hash map", K(ret));
-  } else if (OB_FAIL(add_flattern_expr(producer.expr_))) {
-    LOG_WARN("failed to add flattern expr", K(ret));
+  } else if (OB_FAIL(add_flatten_expr(producer.expr_, producer.consumer_id_))) {
+    LOG_WARN("failed to add flatten expr", K(ret));
   }
   return ret;
 }
 
-int ObAllocExprContext::add_flattern_expr(const ObRawExpr* expr)
+int ObAllocExprContext::add_flatten_expr(const ObRawExpr* expr, uint64_t consumer_id)
 {
   int ret = OB_SUCCESS;
-  int64_t ref_cnt = 0;
-  if (OB_FAIL(flattern_expr_map_.get_refactored(reinterpret_cast<uint64_t>(expr),
-                                                        ref_cnt)))
-  {
+  std::pair<int64_t, uint64_t> entry(0, OB_INVALID_ID);
+  if (OB_FAIL(flatten_expr_map_.get_refactored(reinterpret_cast<uint64_t>(expr), entry))) {
     if (OB_HASH_NOT_EXIST == ret) {
+      // first time we see this node: ref count 1, max consumer id is consumer_id
       ret = OB_SUCCESS;
-      if (OB_FAIL(flattern_expr_map_.set_refactored(reinterpret_cast<uint64_t>(expr),
-                                                    1))) {
+      if (OB_FAIL(flatten_expr_map_.set_refactored(reinterpret_cast<uint64_t>(expr),
+                                                   std::pair<int64_t, uint64_t>(1, consumer_id)))) {
         LOG_WARN("failed to add entry into hash map", K(ret));
       }
     } else {
       LOG_WARN("failed to get expr entry from the map", K(ret));
     }
-  } else if (OB_UNLIKELY(ref_cnt < 0)) {
+  } else if (OB_UNLIKELY(entry.first < 0)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ref_cnt is invalid", K(ret), K(ref_cnt));
-  } else if (OB_FAIL(flattern_expr_map_.set_refactored(reinterpret_cast<uint64_t>(expr),
-                                                       ref_cnt + 1, 1))) {
+    LOG_WARN("ref_cnt is invalid", K(ret), K(entry.first));
+  } else if (OB_FAIL(flatten_expr_map_.set_refactored(reinterpret_cast<uint64_t>(expr),
+                                                      std::pair<int64_t, uint64_t>(entry.first + 1, std::max(entry.second, consumer_id)),
+                                                      1))) {
     LOG_WARN("failed to add entry into hash map", K(ret));
   }
 
@@ -375,7 +375,21 @@ int ObAllocExprContext::add_flattern_expr(const ObRawExpr* expr)
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-    ret = SMART_CALL(add_flattern_expr(expr->get_param_expr(i)));
+    ret = SMART_CALL(add_flatten_expr(expr->get_param_expr(i), consumer_id));
+  }
+  return ret;
+}
+
+int ObAllocExprContext::get_flatten_entry(const ObRawExpr* expr, std::pair<int64_t, uint64_t> &entry)
+{
+  int ret = OB_SUCCESS;
+  entry = std::pair<int64_t, uint64_t>(0, OB_INVALID_ID);
+  if (OB_FAIL(flatten_expr_map_.get_refactored(reinterpret_cast<uint64_t>(expr), entry))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get expr entry from the flatten expr map", K(ret));
+    }
   }
   return ret;
 }
@@ -383,15 +397,23 @@ int ObAllocExprContext::add_flattern_expr(const ObRawExpr* expr)
 int ObAllocExprContext::get_expr_ref_cnt(const ObRawExpr* expr, int64_t &ref_cnt)
 {
   int ret = OB_SUCCESS;
-  ref_cnt = 0;
-  if (OB_FAIL(flattern_expr_map_.get_refactored(reinterpret_cast<uint64_t>(expr),
-                                                ref_cnt)))
-  {
-    if (OB_HASH_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("failed to get expr entry from the map", K(ret));
-    }
+  std::pair<int64_t, uint64_t> entry(0, OB_INVALID_ID);
+  if (OB_FAIL(get_flatten_entry(expr, entry))) {
+    LOG_WARN("failed to get expr entry from the map", K(ret));
+  } else {
+    ref_cnt = entry.first;
+  }
+  return ret;
+}
+
+int ObAllocExprContext::get_expr_max_consumer_id(const ObRawExpr* expr, uint64_t &max_consumer_id)
+{
+  int ret = OB_SUCCESS;
+  std::pair<int64_t, uint64_t> entry(0, OB_INVALID_ID);
+  if (OB_FAIL(get_flatten_entry(expr, entry))) {
+    LOG_WARN("failed to get expr entry from the map", K(ret));
+  } else {
+    max_consumer_id = entry.second;
   }
   return ret;
 }
@@ -399,7 +421,7 @@ int ObAllocExprContext::get_expr_ref_cnt(const ObRawExpr* expr, int64_t &ref_cnt
 ObAllocExprContext::~ObAllocExprContext()
 {
   expr_map_.destroy();
-  flattern_expr_map_.destroy();
+  flatten_expr_map_.destroy();
 }
 
 ObLogicalOperator::ObLogicalOperator(ObLogPlan &plan)
@@ -2241,8 +2263,7 @@ int ObLogicalOperator::add_expr_to_ctx(ObAllocExprContext &ctx,
       }
       LOG_TRACE("succeed to update shared expr producer id", KP(raw_expr),
                 K(producer_id), K(consumer_id), KPC(raw_producer), K(get_name()));
-    } else if (OB_FAIL(find_consumer_id_for_shared_expr(&ctx.expr_producers_, raw_expr,
-                                                        consumer_id))) {
+    } else if (OB_FAIL(find_consumer_id_for_shared_expr(&ctx, raw_expr, consumer_id))) {
       LOG_WARN("failed to find sharable expr consumer id", K(ret));
     } else if (OB_FAIL(find_producer_id_for_shared_expr(raw_expr, real_producer_id))) {
       LOG_WARN("failed to find sharable expr producer id", K(ret));
@@ -2415,7 +2436,7 @@ int ObLogicalOperator::extract_shared_exprs(ObRawExpr *raw_expr,
   return ret;
 }
 
-int ObLogicalOperator::find_consumer_id_for_shared_expr(const ObIArray<ExprProducer> *ctx,
+int ObLogicalOperator::find_consumer_id_for_shared_expr(ObAllocExprContext *ctx,
                                                         const ObRawExpr *expr,
                                                         uint64_t &consumer_id)
 {
@@ -2424,23 +2445,8 @@ int ObLogicalOperator::find_consumer_id_for_shared_expr(const ObIArray<ExprProdu
   if (OB_ISNULL(ctx) || OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < ctx->count(); i++) {
-      bool need_check_status = (i + 1) % 1000 == 0;
-      if (OB_ISNULL(ctx->at(i).expr_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (need_check_status &&
-                 OB_FAIL(THIS_WORKER.check_status())) {
-        LOG_WARN("check status fail", K(ret));
-      } else if (ObOptimizerUtil::is_point_based_sub_expr(expr, ctx->at(i).expr_)) {
-        if (OB_INVALID_ID == consumer_id) {
-          consumer_id = ctx->at(i).consumer_id_;
-        } else {
-          consumer_id = std::max(consumer_id, ctx->at(i).consumer_id_);
-        }
-      } else { /*do nothing*/}
-    }
+  } else if (OB_FAIL(ctx->get_expr_max_consumer_id(expr, consumer_id))) {
+    LOG_WARN("failed to get expr max_consumer_id from the flatten expr map", K(ret));
   }
   return ret;
 }

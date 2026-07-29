@@ -669,18 +669,19 @@ struct ObAllocExprContext
 
   int add(const ExprProducer &producer);
 
-  int add_flattern_expr(const ObRawExpr* expr);
-
+  int add_flatten_expr(const ObRawExpr* expr, uint64_t consumer_id);
+  int get_flatten_entry(const ObRawExpr* expr, std::pair<int64_t, uint64_t> &entry);
   int get_expr_ref_cnt(const ObRawExpr* expr, int64_t &ref_cnt);
+  int get_expr_max_consumer_id(const ObRawExpr* expr, uint64_t &max_consumer_id);
 
   DISALLOW_COPY_AND_ASSIGN(ObAllocExprContext);
 
   // record producers expr index to search producer by expr quickly
   //  {key => ExprProducer.expr_ , value => index of expr_producers_}
   hash::ObHashMap<uint64_t, int64_t> expr_map_;
-  // record each expr and its children expr reference count in expr producers
-  //  {key => flattern expr, value => reference count }
-  hash::ObHashMap<uint64_t, int64_t> flattern_expr_map_;
+  // record each flatten expr node's reference count and the max consumer id
+  //  {key => flatten expr node, value => <reference count, max consumer id> }
+  hash::ObHashMap<uint64_t, std::pair<int64_t, uint64_t>> flatten_expr_map_;
   common::ObSEArray<ExprProducer, 16> expr_producers_;
   // Exprs that cannot be used to extract shared child exprs
   common::ObSEArray<ObRawExpr *, 4> inseparable_exprs_;
@@ -1288,7 +1289,7 @@ public:
                            int64_t parent_ref_cnt,
                            ObIArray<ObRawExpr*> &shard_exprs);
 
-  int find_consumer_id_for_shared_expr(const ObIArray<ExprProducer> *ctx,
+  int find_consumer_id_for_shared_expr(ObAllocExprContext *ctx,
                                        const ObRawExpr *expr,
                                        uint64_t &consumer_id);
   int find_producer_id_for_shared_expr(const ObRawExpr *expr,

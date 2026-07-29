@@ -7425,38 +7425,37 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
                                                     const bool is_distinct,
                                                     ObIArray<ObSelectStmt*> &left_stmts,
                                                     ObIArray<ObSelectStmt*> &right_stmts,
-                                                    const bool is_mysql_recursive_union /* false */,
-                                                    ObIArray<ObString> *rcte_col_name /* null */,
-                                                    const bool need_merge_type /* true */)
+                                                    ObIArray<ObExprResType> &left_types,
+                                                    const bool is_mysql_recursive_union,
+                                                    ObIArray<ObString> *rcte_col_name,
+                                                    const bool need_merge_type)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObExprResType, 8> left_types;
   ObSEArray<ObExprResType, 8> right_types;
-  ObCollationType coll_type = CS_TYPE_INVALID;
   if (OB_ISNULL(allocator) || OB_ISNULL(session_info) || OB_ISNULL(expr_factory)) {
     ret = OB_NOT_INIT;
     LOG_WARN("params is invalid", K(ret));
   } else if (left_stmts.empty() || right_stmts.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("empty left/right stmts", K(ret), K(left_stmts), K(right_stmts));
-  } else if (OB_FAIL(get_set_res_types(allocator, session_info, need_merge_type,
-                                       left_stmts, false, left_types)) ||
+  } else if (left_types.empty() &&
              OB_FAIL(get_set_res_types(allocator, session_info, need_merge_type,
+                                       left_stmts, false, left_types))) {
+    LOG_WARN("failed to get left set res types", K(ret));
+  } else if (OB_FAIL(get_set_res_types(allocator, session_info, need_merge_type,
                                        right_stmts, false, right_types))) {
     LOG_WARN("failed to get set res types", K(ret));
   } else if (OB_UNLIKELY(left_types.count() != right_types.count())) {
     ret = OB_ERR_COLUMN_SIZE;
     LOG_WARN("The used SELECT statements have a different number of columns",
-                                        K(left_types.count()),  K(right_types.count()));
-  } else if (OB_FAIL(session_info->get_collation_connection(coll_type))) {
-    LOG_WARN("failed to get collation connection", K(ret));
+             K(left_types.count()), K(right_types.count()));
   } else {
-    const ObLengthSemantics length_semantics = session_info->get_actual_nls_length_semantics();
     const bool is_ps_prepare_stage = session_info->is_varparams_sql_prepare();
     const int64_t num = left_types.count();
     const bool is_oracle_mode = lib::is_oracle_mode();
     ObExprTypeCtx type_ctx;
     ObSQLUtils::init_type_ctx(session_info, type_ctx);
+    bool need_reset_left_types = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < num; i++) {
       ObExprResType res_type;
       ObExprResType &left_type = left_types.at(i);
@@ -7469,7 +7468,11 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
       if (OB_FAIL(check_set_child_res_types(left_type, right_type, is_ps_prepare_stage, is_distinct,
                                             is_mysql_recursive_union, skip_add_cast))) {
         LOG_WARN("failed to check set child res types", K(ret));
-      } else if (left_type != right_type || ob_is_enumset_tc(right_type.get_type()) || is_mysql_recursive_union) {
+      } else if (left_type == right_type
+                 && !ob_is_enumset_tc(right_type.get_type())
+                 && !is_mysql_recursive_union) {
+        // no need to add cast
+      } else {
         ObSEArray<ObExprResType, 2> types;
         ObExprVersion dummy_op(*allocator);
         if (skip_add_cast || is_mysql_recursive_union) {
@@ -7481,7 +7484,10 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
                                                                     need_merge_type))) {
           LOG_WARN("failed to aggregate result type for merge", K(ret));
         }
-        if (OB_FAIL(ret) || skip_add_cast) {
+        if (OB_FAIL(ret)) {
+        } else if (skip_add_cast) {
+          // the cached `left_types` are no longer correct after merging the right stmts without cast
+          need_reset_left_types = true;
         } else if (OB_UNLIKELY(ObMaxType == res_type.get_type())) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
           LOG_WARN("column type incompatible", K(left_type), K(right_type));
@@ -7495,10 +7501,14 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
                    OB_FAIL(add_column_conv_to_set_list(session_info, expr_factory, right_stmts,
                                                        res_type, i, rcte_col_name))) {
           LOG_WARN("failed to add column_conv to set list", K(ret));
+        } else {
+          // cache left_type
+          left_type = res_type;
         }
-      } else {
-        res_type = left_type;
       }
+    }
+    if (OB_SUCC(ret) && need_reset_left_types) {
+      left_types.reuse();
     }
   }
   return ret;
@@ -7510,16 +7520,17 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
                                                     const bool is_distinct,
                                                     ObIArray<ObSelectStmt*> &left_stmts,
                                                     ObSelectStmt *right_stmt,
-                                                    const bool is_mysql_recursive_union /* false */,
-                                                    ObIArray<ObString> *rcte_col_name /* null */,
-                                                    const bool need_merge_type /* true */)
+                                                    ObIArray<ObExprResType> &left_types,
+                                                    const bool is_mysql_recursive_union,
+                                                    ObIArray<ObString> *rcte_col_name,
+                                                    const bool need_merge_type)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObSelectStmt*, 1> child_stmts;
   if (OB_FAIL(child_stmts.push_back(right_stmt))) {
     LOG_WARN("failed to push back right_stmt", K(ret));
   } else if (OB_FAIL(try_add_cast_to_set_child_list(allocator, session_info, expr_factory,
-                                                    is_distinct, left_stmts, child_stmts,
+                                                    is_distinct, left_stmts, child_stmts, left_types,
                                                     is_mysql_recursive_union, rcte_col_name,
                                                     need_merge_type))) {
     LOG_WARN("failed to add cast to set child list", K(ret));

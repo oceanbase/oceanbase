@@ -132,6 +132,7 @@ ObLogPlan::ObLogPlan(ObOptimizerContext &ctx, const ObDMLStmt *stmt)
     is_parent_set_distinct_(false),
     is_rescan_subplan_(false),
     disable_child_batch_rescan_(false),
+    is_parent_set_stmt_(false),
     temp_table_info_(NULL),
     const_exprs_(allocator_),
     hash_dist_info_(allocator_),
@@ -10187,7 +10188,7 @@ int ObLogPlan::plan_tree_traverse(const TraverseOp &operation, void *ctx)
       case ALLOC_EXPR: {
         if (OB_FAIL(set_use_batch_for_table_scan(get_plan_root(), true, false))) {
           LOG_WARN("failed to set use batch for table scan", K(ret));
-        } else if (OB_FAIL(alloc_expr_ctx.flattern_expr_map_.create(128, "ExprAlloc"))) {
+        } else if (OB_FAIL(alloc_expr_ctx.flatten_expr_map_.create(128, "ExprAlloc"))) {
           LOG_WARN("failed to init hash map", K(ret));
         } else {
           ctx = &alloc_expr_ctx;

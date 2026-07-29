@@ -232,6 +232,7 @@ int ObSelectResolver::do_resolve_set_query_in_recursive_cte(const ParseNode &par
     LOG_WARN("failed to resolve with clause", K(ret));
   } else {
     const int64_t n_set_child = set_node->num_child_;
+    ObSEArray<ObExprResType, 8> left_types;
     for (int64_t i = 0; OB_SUCC(ret) && i < n_set_child; ++i) {
       ParseNode *child_node = NULL;
       ObSelectStmt *child_stmt = NULL;
@@ -298,11 +299,15 @@ int ObSelectResolver::do_resolve_set_query_in_recursive_cte(const ParseNode &par
               }
             }
           } else if (OB_FAIL(ObOptimizerUtil::try_add_cast_to_set_child_list(allocator_,
-                                                               session_info_, params_.expr_factory_,
-                                                               select_stmt->is_set_distinct(),
-                                                               select_stmt->get_set_query(),
-                                                               child_stmt, is_set_recursive_union && !is_oracle_mode,
-                                                               &cte_ctx_.cte_col_names_, need_merge_type))) {
+                                                                             session_info_,
+                                                                             params_.expr_factory_,
+                                                                             select_stmt->is_set_distinct(),
+                                                                             select_stmt->get_set_query(),
+                                                                             child_stmt,
+                                                                             left_types,
+                                                                             is_set_recursive_union && !is_oracle_mode,
+                                                                             &cte_ctx_.cte_col_names_,
+                                                                             need_merge_type))) {
             LOG_WARN("failed to try add cast to set child list", K(ret));
           } else if (OB_FAIL(select_stmt->add_set_query(child_stmt))) {
             LOG_WARN("failed to add set query", K(ret));
@@ -432,11 +437,11 @@ int ObSelectResolver::do_resolve_set_query_in_normal(const ParseNode &parse_tree
     LOG_WARN("failed to resolve with clause", K(ret));
   } else {
     const int64_t num_child = select_set->num_child_;
+    ObSEArray<ObExprResType, 8> left_types;
     select_stmt->get_set_query().reuse();
     for (int64_t i = 0; OB_SUCC(ret) && i < num_child; i++) {
       ParseNode *child_node = select_set->children_[i];
       ObSelectStmt *child_stmt = NULL;
-      bool is_type_same = false;
       bool enable_pullup = false;
       if (OB_ISNULL(child_node) ||
           OB_UNLIKELY(T_SELECT != child_node->type_)) {
@@ -451,23 +456,30 @@ int ObSelectResolver::do_resolve_set_query_in_normal(const ParseNode &parse_tree
         LOG_WARN("failed to check set child_stmt pullup", K(ret));
       } else if (!enable_pullup) {
         if (0 != i && OB_FAIL(ObOptimizerUtil::try_add_cast_to_set_child_list(allocator_,
-                                               session_info_, params_.expr_factory_,
-                                               select_stmt->is_set_distinct(),
-                                               select_stmt->get_set_query(), child_stmt,
-                                               false, NULL,
-                                               need_merge_type))) {
+                                                                              session_info_,
+                                                                              params_.expr_factory_,
+                                                                              select_stmt->is_set_distinct(),
+                                                                              select_stmt->get_set_query(),
+                                                                              child_stmt,
+                                                                              left_types,
+                                                                              false,
+                                                                              NULL,
+                                                                              need_merge_type))) {
           LOG_WARN("failed to try add cast to set child list", K(ret));
         } else if (OB_FAIL(select_stmt->get_set_query().push_back(child_stmt))) {
           LOG_WARN("failed to push back child_stmt", K(ret));
         }
       } else {
         if (0 != i && OB_FAIL(ObOptimizerUtil::try_add_cast_to_set_child_list(allocator_,
-                                               session_info_, params_.expr_factory_,
-                                               select_stmt->is_set_distinct(),
-                                               select_stmt->get_set_query(),
-                                               child_stmt->get_set_query(),
-                                               false, NULL,
-                                               need_merge_type))) {
+                                                                              session_info_,
+                                                                              params_.expr_factory_,
+                                                                              select_stmt->is_set_distinct(),
+                                                                              select_stmt->get_set_query(),
+                                                                              child_stmt->get_set_query(),
+                                                                              left_types,
+                                                                              false,
+                                                                              NULL,
+                                                                              need_merge_type))) {
           LOG_WARN("failed to try add cast to set child list", K(ret));
         } else if (OB_FAIL(append(select_stmt->get_set_query(), child_stmt->get_set_query()))) {
           LOG_WARN("failed set child stmts", K(ret));
