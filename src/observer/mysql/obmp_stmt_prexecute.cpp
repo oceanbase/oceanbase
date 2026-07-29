@@ -9,6 +9,7 @@
 #include "rpc/obmysql/packet/ompk_prexecute.h"
 #include "rpc/obmysql/packet/ompk_field.h"
 #include "observer/mysql/obmp_stmt_prepare.h"
+#include "observer/mysql/obmp_stmt_send_piece_data.h"
 #include "sql/ob_sql.h"
 #include "observer/mysql/ob_sync_cmd_driver.h"
 
@@ -198,6 +199,23 @@ int ObMPStmtPrexecute::before_process()
       PS_DEFENSE_CHECK(4)  // extend_flag(4)
       {
         ObMySQLUtil::get_uint4(pos, extend_flag_);
+      }
+      // before_process failure skips process(), clear leftover SEND_PIECE data
+      // while still holding query lock (same as ObMPStmtExecute::process).
+      if (OB_FAIL(ret) && stmt_id_ > 0) {
+        ObPieceCache *piece_cache = session->get_piece_cache();
+        if (OB_NOT_NULL(piece_cache)) {
+          for (uint64_t i = 0; i < params_num_; i++) {
+            int tmp_ret = piece_cache->remove_piece(
+                piece_cache->get_piece_key(stmt_id_, i), *session);
+            if (OB_HASH_NOT_EXIST == tmp_ret) {
+              tmp_ret = OB_SUCCESS;
+            } else if (OB_SUCCESS != tmp_ret) {
+              LOG_WARN("fail to clear piece cache on before_process error",
+                       K(tmp_ret), K_(stmt_id), K(i));
+            }
+          }
+        }
       }
     }
     if (OB_NOT_NULL(session)) {
