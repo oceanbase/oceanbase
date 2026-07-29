@@ -382,6 +382,11 @@ int ObColumnNamespaceChecker::check_column_exists(const TableItem &table_item, c
     } else {
       is_exist = false;
     }
+    if (OB_SUCC(ret) && !is_exist) {
+      if (0 == col_name.case_compare("ORA_ROWSCN")) {
+        is_exist = true;
+      }
+    }
   } else if (table_item.is_values_table()) {
     ObSEArray<ObColumnRefRawExpr *, 4> values_desc;
     if (OB_ISNULL(dml_stmt_)) {
