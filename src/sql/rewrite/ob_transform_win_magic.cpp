@@ -1990,6 +1990,9 @@ int ObTransformWinMagic::check_join_push_down(ObDMLStmt *main_stmt,
     //3. the set of join column from T2 should be unique. It can't be f(c), like abs(c) may break the unique property.
     ObSEArray<ObRawExpr *, 4> exprs_unqiue_check;
     bool is_unique = false;
+    bool is_duplication_safe = false;
+    bool is_full_partition = false;
+    bool has_view_join_cond = false;
     if (OB_FAIL(ret) || !is_valid) {
       //do nothing
     } else if (intersection_in_parent.count() <= 0) {
@@ -2061,6 +2064,7 @@ int ObTransformWinMagic::check_join_push_down(ObDMLStmt *main_stmt,
 
             if (OB_FAIL(exprs_unqiue_check.push_back(expr->get_param_expr(1)))) {
               LOG_WARN("failed to push back expr into array", K(ret));
+            } else if (FALSE_IT(has_view_join_cond = true)) {
             }
           } 
         }
@@ -2069,7 +2073,19 @@ int ObTransformWinMagic::check_join_push_down(ObDMLStmt *main_stmt,
 
     if (OB_FAIL(ret) || !is_valid) {
       //do nothing
-    } else if (OB_FAIL(ObTransformUtils::check_exprs_unique(*main_stmt, push_down_table, exprs_unqiue_check,
+    } else if (!has_view_join_cond) {
+      is_valid = false;
+    } else if (OB_FAIL(check_win_func_duplication_safe(*view_table->ref_query_,
+                                                       is_duplication_safe))) {
+      LOG_WARN("check win func duplication safe failed", K(ret));
+    } else if (is_duplication_safe &&
+               OB_FAIL(check_win_func_full_partition(*view_table->ref_query_, is_full_partition))) {
+      LOG_WARN("check win func full partition failed", K(ret));
+    } else if (is_duplication_safe && is_full_partition) {
+      // window functions are immune to row duplication, skip uniqueness check
+      LOG_TRACE("skip uniqueness check: win funcs are duplication safe");
+    } else if (OB_FAIL(ObTransformUtils::check_exprs_unique(*main_stmt, push_down_table,
+                                    exprs_unqiue_check,
                                     ctx_->session_info_, ctx_->schema_checker_, is_valid))) {
       LOG_WARN("check exprs unique failed", K(ret));
     }
@@ -2211,6 +2227,140 @@ int ObTransformWinMagic::push_down_join(ObDMLStmt *main_stmt,
     LOG_WARN("failed to formalize stmt info", K(ret));
   } else {
     LOG_DEBUG("push down join", K(*main_stmt));
+  }
+  return ret;
+}
+
+int ObTransformWinMagic::traverse_expr_for_win_refs(
+    ObRawExpr *expr,
+    const common::ObIArray<ObWinFunRawExpr *> &win_funcs,
+    common::ObIArray<int64_t> &total_refs,
+    common::ObIArray<int64_t> &avg_refs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else if (expr->is_win_func_expr()) {
+    int64_t idx = -1;
+    if (ObOptimizerUtil::find_item(win_funcs, expr, &idx)) {
+      total_refs.at(idx)++;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("window function expr not found in win_funcs", K(ret), KPC(expr));
+    }
+  } else if (T_OP_AGG_DIV == expr->get_expr_type() && expr->get_param_count() >= 2) {
+    // AVG expands to a direct SUM/COUNT T_OP_AGG_DIV pair with shared param.
+    ObRawExpr *left = expr->get_param_expr(0);
+    ObRawExpr *right = expr->get_param_expr(1);
+    if (OB_NOT_NULL(left) && T_FUN_SYS_CAST == left->get_expr_type()) {
+      left = left->get_param_expr(0);
+    }
+    if (OB_NOT_NULL(right) && T_FUN_SYS_CAST == right->get_expr_type()) {
+      right = right->get_param_expr(0);
+    }
+    bool is_avg_pair = false;
+    if (OB_NOT_NULL(left) && OB_NOT_NULL(right) && left->is_win_func_expr()
+        && right->is_win_func_expr()) {
+      ObWinFunRawExpr *left_win = static_cast<ObWinFunRawExpr *>(left);
+      ObWinFunRawExpr *right_win = static_cast<ObWinFunRawExpr *>(right);
+      ObAggFunRawExpr *left_agg = left_win->get_agg_expr();
+      ObAggFunRawExpr *right_agg = right_win->get_agg_expr();
+      is_avg_pair = T_FUN_SUM == left_win->get_func_type()
+                    && T_FUN_COUNT == right_win->get_func_type()
+                    && OB_NOT_NULL(left_agg)
+                    && OB_NOT_NULL(right_agg)
+                    && left_agg->has_flag(IS_INNER_ADDED_EXPR)
+                    && right_agg->has_flag(IS_INNER_ADDED_EXPR)
+                    && 1 == left_agg->get_real_param_count()
+                    && 1 == right_agg->get_real_param_count()
+                    && OB_NOT_NULL(left_agg->get_real_param_exprs().at(0))
+                    && left_agg->get_real_param_exprs().at(0)
+                       == right_agg->get_real_param_exprs().at(0);
+    }
+    if (is_avg_pair) {
+      int64_t l_idx = -1;
+      int64_t r_idx = -1;
+      if (OB_FALSE_IT(ObOptimizerUtil::find_item(win_funcs, left, &l_idx))) {
+      } else if (OB_FALSE_IT(ObOptimizerUtil::find_item(win_funcs, right, &r_idx))) {
+      } else if (OB_UNLIKELY(-1 == l_idx || -1 == r_idx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("window function expr not found in win_funcs", K(ret), KPC(left), KPC(right));
+      } else {
+        total_refs.at(l_idx)++;
+        total_refs.at(r_idx)++;
+        avg_refs.at(l_idx)++;
+        avg_refs.at(r_idx)++;
+      }
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
+        if (OB_FAIL(SMART_CALL(traverse_expr_for_win_refs(expr->get_param_expr(i), win_funcs,
+                                                          total_refs, avg_refs)))) {
+          LOG_WARN("traverse child expr failed", K(ret));
+        }
+      }
+    }
+  } else if (expr->has_flag(CNT_WINDOW_FUNC)) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
+      if (OB_FAIL(SMART_CALL(traverse_expr_for_win_refs(expr->get_param_expr(i), win_funcs,
+                                                        total_refs, avg_refs)))) {
+        LOG_WARN("traverse child expr failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformWinMagic::check_win_func_duplication_safe(ObSelectStmt &view, bool &is_safe)
+{
+  int ret = OB_SUCCESS;
+  is_safe = true;
+  const common::ObIArray<ObWinFunRawExpr *> &win_funcs = view.get_window_func_exprs();
+  if (win_funcs.empty()) {
+    is_safe = true;
+  } else {
+    ObSEArray<int64_t, 4> total_refs;
+    ObSEArray<int64_t, 4> avg_refs;
+    if (OB_FAIL(total_refs.prepare_allocate(win_funcs.count(), 0))) {
+      LOG_WARN("prepare allocate total_refs failed", K(ret));
+    } else if (OB_FAIL(avg_refs.prepare_allocate(win_funcs.count(), 0))) {
+      LOG_WARN("prepare allocate avg_refs failed", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < view.get_select_item_size(); i++) {
+      if (OB_FAIL(traverse_expr_for_win_refs(view.get_select_item(i).expr_,
+                                             win_funcs, total_refs, avg_refs))) {
+        LOG_WARN("traverse select item expr failed", K(ret));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && is_safe && i < win_funcs.count(); i++) {
+      ObItemType func_type = win_funcs.at(i)->get_func_type();
+      // MIN/MAX are naturally immune to row duplication
+      // SUM/COUNT only referenced independently without AVG pairing
+      if ((T_FUN_MIN != func_type && T_FUN_MAX != func_type)
+          && total_refs.at(i) != avg_refs.at(i)) {
+        // SUM/COUNT exposed independently without AVG pairing
+        is_safe = false;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformWinMagic::check_win_func_full_partition(ObSelectStmt &view, bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = true;
+  const common::ObIArray<ObWinFunRawExpr *> &win_funcs = view.get_window_func_exprs();
+  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < win_funcs.count(); ++i) {
+    ObWinFunRawExpr *win_expr = win_funcs.at(i);
+    if (OB_ISNULL(win_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("window function expr is null", K(ret));
+    } else if (win_expr->has_order_items() ||
+               BOUND_UNBOUNDED != win_expr->get_upper().type_ ||
+               BOUND_UNBOUNDED != win_expr->get_lower().type_) {
+      is_valid = false;
+    }
   }
   return ret;
 }

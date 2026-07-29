@@ -148,11 +148,20 @@ private:
                      TableItem *push_down_table, 
                      ObIArray<ObRawExpr *> &cond_to_push_down);
 
-  int check_join_push_down(ObDMLStmt *main_stmt, 
-                           TableItem *view_table, 
-                           TableItem *push_down_table, 
-                           ObIArray<ObRawExpr *> &cond_to_push_down, 
+  int check_join_push_down(ObDMLStmt *main_stmt,
+                           TableItem *view_table,
+                           TableItem *push_down_table,
+                           ObIArray<ObRawExpr *> &cond_to_push_down,
                            bool &is_valid);
+
+  int check_win_func_duplication_safe(ObSelectStmt &view, bool &is_safe);
+
+  int check_win_func_full_partition(ObSelectStmt &view, bool &is_valid);
+
+  int traverse_expr_for_win_refs(ObRawExpr *expr,
+                                 const common::ObIArray<ObWinFunRawExpr *> &win_funcs,
+                                 common::ObIArray<int64_t> &total_refs,
+                                 common::ObIArray<int64_t> &avg_refs);
 
   int get_reverse_map(ObIArray<int64_t> &map, ObIArray<int64_t> &reverse_map, int64_t size);
 
