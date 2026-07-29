@@ -159,6 +159,16 @@ public:
                          int64_t &leader_idx,
                          const bool with_mock_election,
                          PalfHandleImplGuard &leader);
+  int create_paxos_group_with_logonly(const int64_t id,
+                                      const int64_t logonly_idx,
+                                      int64_t &leader_idx,
+                                      PalfHandleImplGuard &leader);
+  int create_paxos_group_with_logonly(const int64_t id,
+                                      const ObMemberList &member_list,
+                                      const int64_t member_cnt,
+                                      const int64_t logonly_idx,
+                                      int64_t &leader_idx,
+                                      PalfHandleImplGuard &leader);
   int create_paxos_group_with_arb(const int64_t id, int64_t &arb_replica_idx, int64_t &leader_idx, PalfHandleImplGuard &leader);
   int create_paxos_group_with_arb(const int64_t id,
                                   palf::PalfLocationCacheCb *loc_cb,

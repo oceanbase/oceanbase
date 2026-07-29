@@ -85,6 +85,7 @@ public:
   int create(const int64_t id,
              const AccessMode &access_mode,
              const PalfBaseInfo &palf_base_info,
+             const LogReplicaType replica_type,
              PalfHandle &handle);
 
   // 打开一个id对应的Paxos Replica，返回文件句柄

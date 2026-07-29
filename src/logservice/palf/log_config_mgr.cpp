@@ -55,7 +55,7 @@ LogConfigMgr::LogConfigMgr()
       start_wait_barrier_time_us_(OB_INVALID_TIMESTAMP),
       last_wait_barrier_time_us_(OB_INVALID_TIMESTAMP),
       last_wait_committed_end_lsn_(),
-      last_sync_meta_for_arb_election_leader_time_us_(OB_INVALID_TIMESTAMP),
+      last_sync_meta_for_election_leader_time_us_(OB_INVALID_TIMESTAMP),
       forwarding_config_proposal_id_(INVALID_PROPOSAL_ID),
       parent_lock_(common::ObLatchIds::PALF_CM_PARENT_LOCK),
       register_time_us_(OB_INVALID_TIMESTAMP),
@@ -174,7 +174,7 @@ void LogConfigMgr::destroy()
     alive_paxos_memberlist_.reset();
     alive_paxos_replica_num_ = 0;
     all_learnerlist_.reset();
-    last_sync_meta_for_arb_election_leader_time_us_ = OB_INVALID_TIMESTAMP;
+    last_sync_meta_for_election_leader_time_us_ = OB_INVALID_TIMESTAMP;
     forwarding_config_proposal_id_ = INVALID_PROPOSAL_ID;
     region_ = DEFAULT_REGION_NAME;
     state_ = ConfigChangeState::INIT;
@@ -1474,16 +1474,26 @@ int LogConfigMgr::check_args_and_generate_config(const LogConfigChangeArgs &args
 
 int LogConfigMgr::sync_meta_for_arb_election_leader()
 {
+  return sync_meta_for_election_leader_(state_mgr_->is_arb_replica(), /* use_propagated_barrier */ true);
+}
+
+int LogConfigMgr::sync_meta_for_logonly_election_leader()
+{
+  return sync_meta_for_election_leader_(state_mgr_->is_logonly_replica(), /* use_propagated_barrier */ true);
+}
+
+int LogConfigMgr::sync_meta_for_election_leader_(const bool need_sync_meta,
+                                                 const bool use_propagated_barrier)
+{
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   SpinLockGuard guard(lock_);
-  const bool is_arb_replica = state_mgr_->is_arb_replica();
   common::ObAddr ele_leader;
   int64_t leader_epoch;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (false == is_arb_replica) {
-  } else if (false == palf_reach_time_interval(500 * 1000, last_sync_meta_for_arb_election_leader_time_us_)) {
+  } else if (false == need_sync_meta) {
+  } else if (false == palf_reach_time_interval(500 * 1000, last_sync_meta_for_election_leader_time_us_)) {
     // skip
   } else if (OB_SUCCESS != (tmp_ret = election_->get_current_leader_likely(ele_leader, leader_epoch))) {
     // skip
@@ -1495,13 +1505,13 @@ int LogConfigMgr::sync_meta_for_arb_election_leader()
         PALF_LOG(WARN, "get_member_by_index failed", KR(ret), K_(palf_id), K_(self), K(i), K(alive_paxos_memberlist_));
       } else if (self_ == member.get_server()) {
         // skip
-      } else if (OB_FAIL(pre_sync_config_log_and_mode_meta_(member, proposal_id, is_arb_replica))) {
+      } else if (OB_FAIL(pre_sync_config_log_and_mode_meta_(member, proposal_id, use_propagated_barrier))) {
         PALF_LOG(WARN, "pre_sync_config_log_and_mode_meta_ failed", KR(ret), K_(palf_id), K_(self), K(member), K(proposal_id));
       }
     }
     if (OB_SUCC(ret)) {
-      PALF_LOG(INFO, "sync_meta_for_arb_election_leader success", KR(ret), K_(palf_id), K_(self),
-          K_(alive_paxos_memberlist), K(proposal_id), K_(log_ms_meta));
+      PALF_LOG(INFO, "sync_meta_for_election_leader success", KR(ret), K_(palf_id), K_(self),
+          K_(alive_paxos_memberlist), K(proposal_id), K(use_propagated_barrier), K_(log_ms_meta));
     }
   }
   return ret;
@@ -1514,7 +1524,7 @@ int LogConfigMgr::pre_sync_config_log_and_mode_meta(const common::ObMember &serv
   SpinLockGuard guard(lock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (OB_FAIL(pre_sync_config_log_and_mode_meta_(server, proposal_id, false))) {
+  } else if (OB_FAIL(pre_sync_config_log_and_mode_meta_(server, proposal_id, /* use_propagated_barrier */ false))) {
     PALF_LOG(WARN, "pre_sync_config_log_and_mode_meta_ failed", KR(ret), K_(palf_id), K_(self), K(server), K(proposal_id));
   }
   return ret;
@@ -1522,15 +1532,16 @@ int LogConfigMgr::pre_sync_config_log_and_mode_meta(const common::ObMember &serv
 
 int LogConfigMgr::pre_sync_config_log_and_mode_meta_(const common::ObMember &server,
                                                      const int64_t proposal_id,
-                                                     const bool is_arb_replica)
+                                                     const bool use_propagated_barrier)
 {
   int ret = OB_SUCCESS;
   common::ObMemberList member_list;
-  // the log barrier must not be used in normal replica because of compatibility
-  const int64_t prev_log_proposal_id = (is_arb_replica)? log_ms_meta_.prev_log_proposal_id_: \
+  const bool is_arb_replica = state_mgr_->is_arb_replica();
+  // Election leaders which learned the config meta from another leader must reuse its propagated barrier.
+  const int64_t prev_log_proposal_id = (use_propagated_barrier)? log_ms_meta_.prev_log_proposal_id_: \
       reconfig_barrier_.prev_log_proposal_id_;
-  const LSN prev_lsn = (is_arb_replica)? log_ms_meta_.prev_lsn_: reconfig_barrier_.prev_lsn_;
-  const int64_t prev_mode_pid = (is_arb_replica)? log_ms_meta_.prev_mode_pid_: \
+  const LSN prev_lsn = (use_propagated_barrier)? log_ms_meta_.prev_lsn_: reconfig_barrier_.prev_lsn_;
+  const int64_t prev_mode_pid = (use_propagated_barrier)? log_ms_meta_.prev_mode_pid_: \
       reconfig_barrier_.prev_mode_pid_;
   if (false == server.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -2427,6 +2438,7 @@ int LogConfigMgr::check_servers_lsn_and_version_(const common::ObAddr &server,
         // K(server), K(need_purge_throttling), K(config_version), K(conn_timeout_us), K(resp));
     has_same_version = false;
   } else if (false == resp.is_normal_replica_) {
+    // The field means the target can join config change; logonly replicas may return true.
     has_same_version = false;
     ret = OB_EAGAIN;
   } else {

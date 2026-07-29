@@ -246,6 +246,8 @@ private:
                  const bool allow_log_sync,
                  ObLogHandler &log_handler,
                  ObLogRestoreHandler &restore_handler);
+  int get_palf_replica_type_(const common::ObReplicaType &replica_type,
+                             palf::LogReplicaType &palf_replica_type) const;
 private:
   bool is_inited_;
   bool is_running_;

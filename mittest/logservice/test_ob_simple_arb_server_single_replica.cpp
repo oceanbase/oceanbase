@@ -81,7 +81,8 @@ TEST_F(TestObSimpleMutilArbServer, create_mutil_tenant)
     IPalfHandleImpl *ipalf_handle_impl_2 = NULL;
     palflite::PalfEnvLite *palf_env_lite_2 = NULL;
     EXPECT_EQ(OB_SUCCESS, palf_env_mgr->palf_env_lite_map_.get(palflite::PalfEnvKey(cluster_id, 2), palf_env_lite_2));
-    EXPECT_EQ(OB_SUCCESS, palf_env_lite_2->create_palf_handle_impl(1, mode, info_2, ipalf_handle_impl_2));
+    EXPECT_EQ(OB_SUCCESS, palf_env_lite_2->create_palf_handle_impl(1, mode, info_2,
+        palf::LogReplicaType::ARBITRATION_REPLICA, ipalf_handle_impl_2));
     palf_env_lite_2->revert_palf_handle_impl(ipalf_handle_impl_2);
     palf_env_mgr->revert_palf_env_lite(palf_env_lite_2);
     CLOG_LOG(INFO, "revert_palf_env_lite2");
@@ -307,7 +308,8 @@ TEST_F(TestObSimpleMutilArbServer, restart_arb)
     PalfBaseInfo info; info.generate_by_default();
     AccessMode mode(palf::AccessMode::APPEND);
     EXPECT_EQ(OB_SUCCESS, palf_env_mgr->get_palf_env_lite(palflite::PalfEnvKey(cluster_ids[0], 1), palf_env_lite));
-    EXPECT_EQ(OB_SUCCESS, palf_env_lite->create_palf_handle_impl(1, mode, info, ipalf_handle_impl));
+    EXPECT_EQ(OB_SUCCESS, palf_env_lite->create_palf_handle_impl(1, mode, info,
+        palf::LogReplicaType::ARBITRATION_REPLICA, ipalf_handle_impl));
     palflite::PalfHandleLite *palf_handle_lite = dynamic_cast<palflite::PalfHandleLite*>(ipalf_handle_impl);
     ASSERT_NE(nullptr, palf_handle_lite);
     LogEngine *log_engine = &palf_handle_lite->log_engine_;

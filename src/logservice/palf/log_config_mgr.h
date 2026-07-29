@@ -496,6 +496,7 @@ public:
                         const LogConfigInfoV2 &new_config_info) const;
   int wait_log_barrier_before_start_working_(const LogConfigChangeArgs &args);
   int sync_meta_for_arb_election_leader();
+  int sync_meta_for_logonly_election_leader();
   void set_sync_to_degraded_learners();
   bool is_sync_to_degraded_learners() const;
   int forward_initial_config_meta_to_arb();
@@ -615,9 +616,11 @@ private:
   int check_follower_sync_status_(const LogConfigChangeArgs &args,
                                   const LogConfigInfoV2 &new_config_info,
                                   bool &added_member_has_new_version) const;
+  int sync_meta_for_election_leader_(const bool need_sync_meta,
+                                     const bool use_propagated_barrier);
   int pre_sync_config_log_and_mode_meta_(const common::ObMember &server,
                                          const int64_t proposal_id,
-                                         const bool is_arb_replica);
+                                         const bool use_propagated_barrier);
   int after_config_log_majority_(const int64_t proposal_id,
                                  const LogConfigVersion &config_version);
 
@@ -789,7 +792,7 @@ private:
   mutable int64_t start_wait_barrier_time_us_;
   mutable int64_t last_wait_barrier_time_us_;
   mutable LSN last_wait_committed_end_lsn_;
-  int64_t last_sync_meta_for_arb_election_leader_time_us_;
+  int64_t last_sync_meta_for_election_leader_time_us_;
   int64_t forwarding_config_proposal_id_;
   // ================= Config Change =================
   // ==================== Child ========================

@@ -205,9 +205,15 @@ int ObSimpleLogClusterTestEnv::delete_paxos_group(const int64_t id)
   for (auto svr : get_cluster()) {
     ObTenantEnv::set_tenant(svr->get_tenant_base());
     auto palf_env = svr->get_palf_env();
+    ObSimpleLogServer *log_server = dynamic_cast<ObSimpleLogServer *>(svr);
     if (OB_ISNULL(palf_env)) {
       ret = OB_ERR_UNEXPECTED;
       CLOG_LOG(WARN, "unexpected error", K(ret), KP(svr), K(svr->is_arb_server()));
+    } else if (OB_NOT_NULL(log_server)) {
+      if (OB_FAIL(log_server->remove_ls(id))) {
+        CLOG_LOG(WARN, "remove ls from log server failed", K(ret), K(id));
+        break;
+      }
     } else if (OB_FAIL(palf_env->remove_palf_handle_impl(id))) {
       CLOG_LOG(WARN, "remove_ls failed", K(ret));
       break;
@@ -275,7 +281,9 @@ int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id,
     if (svr->get_palf_env() == NULL) {
       ret = OB_ERR_UNEXPECTED;
       CLOG_LOG(ERROR, "svr is null", KPC(svr));
-    } else if (OB_FAIL(svr->get_palf_env()->create_palf_handle_impl(id, palf::AccessMode::APPEND, palf_base_info, handle))) {
+    } else if (OB_FAIL(svr->get_palf_env()->create_palf_handle_impl(
+        id, palf::AccessMode::APPEND, palf_base_info,
+        palf::LogReplicaType::NORMAL_REPLICA, handle))) {
       CLOG_LOG(WARN, "create_palf_handle_impl failed", K(ret), K(id), KPC(svr));
       break;
     } else {
@@ -320,6 +328,68 @@ int ObSimpleLogClusterTestEnv::create_paxos_group_with_mock_election(
   palf_base_info.generate_by_default();
   const bool with_mock_election = true;
   return create_paxos_group(id, palf_base_info, NULL, leader_idx, with_mock_election, leader);
+}
+
+int ObSimpleLogClusterTestEnv::create_paxos_group_with_logonly(const int64_t id,
+                                                               const int64_t logonly_idx,
+                                                               int64_t &leader_idx,
+                                                               PalfHandleImplGuard &leader)
+{
+  return create_paxos_group_with_logonly(id, get_member_list(), get_member_cnt(),
+      logonly_idx, leader_idx, leader);
+}
+
+int ObSimpleLogClusterTestEnv::create_paxos_group_with_logonly(const int64_t id,
+                                                               const ObMemberList &member_list,
+                                                               const int64_t member_cnt,
+                                                               const int64_t logonly_idx,
+                                                               int64_t &leader_idx,
+                                                               PalfHandleImplGuard &leader)
+{
+  int ret = OB_SUCCESS;
+  PalfBaseInfo palf_base_info;
+  palf_base_info.generate_by_default();
+  const int64_t cluster_size = static_cast<int64_t>(get_cluster().size());
+  if (logonly_idx < 0 || logonly_idx >= member_cnt || member_cnt > cluster_size ||
+      member_cnt != member_list.get_member_number()) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid logonly member list", K(ret), K(logonly_idx),
+        K(member_cnt), K(cluster_size), K(member_list));
+  } else {
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < cluster_size; ++idx) {
+      auto svr = get_cluster()[idx];
+      ObTenantEnv::set_tenant(svr->get_tenant_base());
+      IPalfHandleImpl *handle = NULL;
+      ObSimpleLogServer *server = dynamic_cast<ObSimpleLogServer *>(svr);
+      const LogReplicaType replica_type = (idx == logonly_idx) ?
+          LogReplicaType::LOGONLY_REPLICA : LogReplicaType::NORMAL_REPLICA;
+      if (NULL == svr->get_palf_env() || NULL == server) {
+        ret = OB_ERR_UNEXPECTED;
+        CLOG_LOG(ERROR, "svr is invalid", K(ret), KPC(svr), KP(server));
+      } else if (OB_FAIL(server->create_ls_with_replica_type(id, palf::AccessMode::APPEND,
+          palf_base_info, replica_type, handle))) {
+        CLOG_LOG(WARN, "create ls failed", K(ret), K(id), KPC(svr), K(replica_type));
+      } else {
+        handle->set_location_cache_cb(NULL);
+        handle->set_locality_cb(get_cluster()[0]->get_locality_manager());
+        GlobalLearnerList learner_list;
+        if (OB_FAIL(handle->set_initial_member_list(member_list, member_cnt, learner_list))) {
+          CLOG_LOG(WARN, "set_initial_member_list failed", K(ret), K(id), K(member_list), K(replica_type));
+        } else {
+          CLOG_LOG(INFO, "set_initial_member_list success", K(id), "addr", svr->get_addr(),
+              K(member_list), K(replica_type));
+        }
+      }
+      if (NULL != handle) {
+        svr->get_palf_env()->revert_palf_handle_impl(handle);
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ret = get_leader(id, leader, leader_idx);
+    ObTenantEnv::set_tenant(get_cluster()[leader_idx]->get_tenant_base());
+  }
+  return ret;
 }
 
 int ObSimpleLogClusterTestEnv::create_paxos_group_with_arb(
@@ -398,7 +468,11 @@ int ObSimpleLogClusterTestEnv::create_paxos_group_with_arb(
         ret = OB_ERR_UNEXPECTED;
         CLOG_LOG(ERROR, "svr is null", KPC(svr));
         break;
-      } else if (OB_FAIL(svr->get_palf_env()->create_palf_handle_impl(id, palf::AccessMode::APPEND, palf_base_info, handle))) {
+      } else if (OB_FAIL(svr->get_palf_env()->create_palf_handle_impl(
+          id, palf::AccessMode::APPEND, palf_base_info,
+          svr->is_arb_server() ? palf::LogReplicaType::ARBITRATION_REPLICA :
+              palf::LogReplicaType::NORMAL_REPLICA,
+          handle))) {
         CLOG_LOG(WARN, "create_palf_handle_impl failed", K(ret), K(id), KPC(svr));
       } else if (!svr->is_arb_server() && OB_FAIL(handle->set_initial_member_list(member_list, arb_replica, member_cnt-1, learner_list))) {
         CLOG_LOG(ERROR, "set_initial_member_list failed", K(ret), K(id), KPC(svr));

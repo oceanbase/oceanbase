@@ -81,6 +81,17 @@ TEST_F(TestLogStateMgr, test_init)
         &mock_reconfirm_, &mock_log_engine_, &mock_config_mgr_, &mock_mode_mgr_, &mock_role_change_cb_, &plugins_));
 }
 
+TEST_F(TestLogStateMgr, logonly_replica_state_caps)
+{
+  log_replica_property_meta_.generate(true, LogReplicaType::LOGONLY_REPLICA);
+  EXPECT_EQ(OB_SUCCESS, state_mgr_.init(palf_id_, self_, log_prepare_meta_, log_replica_property_meta_, &mock_election_, &mock_sw_,
+        &mock_reconfirm_, &mock_log_engine_, &mock_config_mgr_, &mock_mode_mgr_, &mock_role_change_cb_, &plugins_));
+  EXPECT_TRUE(state_mgr_.is_logonly_replica());
+  EXPECT_FALSE(state_mgr_.is_arb_replica());
+  EXPECT_FALSE(state_mgr_.can_be_active_leader());
+  EXPECT_TRUE(state_mgr_.is_sync_enabled());
+}
+
 TEST_F(TestLogStateMgr, replay_to_leader_active)
 {
   EXPECT_EQ(OB_SUCCESS, state_mgr_.init(palf_id_, self_, log_prepare_meta_, log_replica_property_meta_, &mock_election_, &mock_sw_,

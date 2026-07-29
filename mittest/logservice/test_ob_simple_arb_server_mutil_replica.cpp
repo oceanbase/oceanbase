@@ -63,7 +63,8 @@ int create_palf_handle_impl(palflite::PalfEnvLite *palf_env_lite, int64_t palf_i
   AccessMode access_mode(AccessMode::APPEND);
   PalfBaseInfo info;
   info.generate_by_default();
-  if (OB_FAIL(palf_env_lite->create_palf_handle_impl(palf_id, access_mode, info, ipalf_handle_impl))) {
+  if (OB_FAIL(palf_env_lite->create_palf_handle_impl(palf_id, access_mode, info,
+      palf::LogReplicaType::ARBITRATION_REPLICA, ipalf_handle_impl))) {
     CLOG_LOG(WARN, "create_palf_handle_impl failed", K(ret), KPC(palf_env_lite));
   }
   if (ipalf_handle_impl != NULL) {

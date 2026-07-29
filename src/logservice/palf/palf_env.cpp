@@ -99,16 +99,18 @@ void PalfEnv::destroy_()
 int PalfEnv::create(const int64_t id,
                     const AccessMode &access_mode,
                     const PalfBaseInfo &palf_base_info,
+                    const LogReplicaType replica_type,
                     PalfHandle &handle)
 {
   int ret = OB_SUCCESS;
   int64_t  palf_id(id);
   palf::IPalfHandleImpl *palf_handle_impl = NULL;
-  if (OB_FAIL(palf_env_impl_.create_palf_handle_impl(palf_id, access_mode, palf_base_info, palf_handle_impl))) {
-    PALF_LOG(WARN, "create_palf_handle_impl failed", K(ret), K(palf_id));
+  if (OB_FAIL(palf_env_impl_.create_palf_handle_impl(
+      palf_id, access_mode, palf_base_info, replica_type, palf_handle_impl))) {
+    PALF_LOG(WARN, "create_palf_handle_impl failed", K(ret), K(palf_id), K(replica_type));
   } else if (FALSE_IT(handle.palf_handle_impl_ = palf_handle_impl)) {
   } else {
-    PALF_LOG(INFO, "create palf handle success", K(id));
+    PALF_LOG(INFO, "create palf handle success", K(id), K(replica_type));
   }
   if (OB_FAIL(ret)) {
     handle.palf_handle_impl_ = NULL;

@@ -196,6 +196,7 @@ public:
   virtual int create_palf_handle_impl(const int64_t palf_id,
                                       const AccessMode &access_mode,
                                       const PalfBaseInfo &base_info,
+                                      const LogReplicaType replica_type,
                                       IPalfHandleImpl *&palf_handle_impl) = 0;
   virtual int remove_palf_handle_impl(const int64_t palf_id) = 0;
   virtual void revert_palf_handle_impl(IPalfHandleImpl *palf_handle_impl) = 0;
@@ -260,6 +261,7 @@ public:
   int create_palf_handle_impl(const int64_t palf_id,
                               const AccessMode &access_mode,
                               const PalfBaseInfo &palf_base_info,
+                              const LogReplicaType replica_type,
                               IPalfHandleImpl *&palf_handle_impl) override final;
   // 删除日志流, 由Garbage Collector调用
   //
