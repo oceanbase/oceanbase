@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX SQL_DAS
 #include "ob_das_location_router.h"
+#include "lib/hash/ob_hashset.h"
 #include "share/schema/ob_part_mgr_util.h"
 #include "storage/tx/wrs/ob_black_list.h"
 #include "storage/tx/ob_trans_service.h"
@@ -1465,11 +1466,27 @@ void ObDASLocationRouter::force_refresh_location_cache(bool is_nonblock, int err
     .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE);
   CREATE_WITH_TEMP_CONTEXT(param) {
     ObList<ObTabletID, ObIAllocator> failed_list(CURRENT_CONTEXT->get_allocator());
+    common::hash::ObHashSet<ObTabletID> handled_set;
+    const int64_t bucket_num = std::max(std::max(all_tablet_list_.size(), succ_tablet_list_.size()), (int64_t)1);
+    if (OB_FAIL(handled_set.create(bucket_num, "DASRefLC", "DASRefLC", MTL_ID()))) {
+      LOG_WARN("create handled_set failed", KR(ret), K(bucket_num));
+    }
+    FOREACH_X(succ_iter, succ_tablet_list_, OB_SUCC(ret)) {
+      if (OB_FAIL(handled_set.set_refactored(*succ_iter))) {
+        LOG_WARN("insert succ tablet id into handled_set failed", KR(ret), K(*succ_iter));
+      }
+    }
     FOREACH_X(id_iter, all_tablet_list_, OB_SUCC(ret)) {
-      if (!element_exist(succ_tablet_list_, *id_iter) && !element_exist(failed_list, *id_iter)) {
-        if (OB_FAIL(failed_list.push_back(*id_iter))) {
-          LOG_WARN("store failed tablet id failed", KR(ret), K(id_iter));
-        }
+      int tmp_ret = handled_set.exist_refactored(*id_iter);
+      if (OB_HASH_EXIST == tmp_ret) {
+        // already succeeded or collected, skip
+      } else if (OB_HASH_NOT_EXIST != tmp_ret) {
+        ret = tmp_ret;
+        LOG_WARN("lookup handled_set failed", KR(ret), K(*id_iter));
+      } else if (OB_FAIL(failed_list.push_back(*id_iter))) {
+        LOG_WARN("store failed tablet id failed", KR(ret), K(id_iter));
+      } else if (OB_FAIL(handled_set.set_refactored(*id_iter))) {
+        LOG_WARN("insert tablet id into handled_set failed", KR(ret), K(*id_iter));
       }
     }
     if (OB_SUCC(ret)) {
@@ -1483,6 +1500,9 @@ void ObDASLocationRouter::force_refresh_location_cache(bool is_nonblock, int err
         LOG_WARN("batch renew tablet locations failed", KR(ret),
             "tenant_id", MTL_ID(), K(err_no), K(is_nonblock), K(failed_list));
       }
+    }
+    if (handled_set.created()) {
+      handled_set.destroy();
     }
   }
   all_tablet_list_.clear();
