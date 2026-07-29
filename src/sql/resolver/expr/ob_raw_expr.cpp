@@ -3398,11 +3398,10 @@ bool ObOpRawExpr::is_white_runtime_filter_expr() const
     // <=> join is not allowed to pushdown as white filter
     bool_ret = false;
   } else if (RANGE == get_runtime_filter_type()) {
-    for (int i = 0; i < exprs_.count(); ++i) {
-      if (T_REF_COLUMN != exprs_.at(i)->get_expr_type()) {
-        bool_ret = false;
-        break;
-      }
+    if (exprs_.count() != 1) {
+      bool_ret = false;
+    } else if (exprs_.at(0)->get_expr_type() != T_REF_COLUMN) {
+      bool_ret = false;
     }
   // sort is compare in vectorize format, so only one column can pushdown as
   // white filter

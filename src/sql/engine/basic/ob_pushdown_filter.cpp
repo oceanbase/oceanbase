@@ -2787,6 +2787,11 @@ int ObDynamicFilterExecutor::try_preparing_data()
   }
   if (OB_FAIL(ret)) {
   } else if (is_data_prepared_) {
+    if (OB_UNLIKELY(OB_LOGGER.get_log_level() >= OB_LOG_LEVEL_TRACE) && runtime_filter_params.count() == 2) {
+      ObToStringDatum lower_bound(*filter_.expr_->args_[get_col_idx()], runtime_filter_params.at(0));
+      ObToStringDatum upper_bound(*filter_.expr_->args_[get_col_idx()], runtime_filter_params.at(1));
+      LOG_TRACE("prepare storage white filter data", K(lower_bound), K(upper_bound));
+    }
     if (OB_FAIL(init_array_param(datum_params_, runtime_filter_params.count()))) {
       LOG_WARN("Failed to alloc params", K(ret));
     } else if (OB_FAIL(datum_params_.assign(runtime_filter_params))) {
