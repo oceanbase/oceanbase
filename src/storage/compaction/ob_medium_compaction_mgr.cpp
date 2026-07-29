@@ -784,7 +784,12 @@ int ObMediumCompactionInfoList::get_next_schedule_info(
           || is_mv_refresh_or_restore_remote_tablet) {
         schedule_scn = info->medium_snapshot_;
         compaction_type = (ObMediumCompactionInfo::ObCompactionType)info->compaction_type_;
-        info->get_co_major_merge_strategy(co_major_merge_strategy);
+        // only V7 enable online column store switch to row store
+        if (info->storage_schema_.is_row_store() && info->medium_compat_version_ < ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V7) {
+          co_major_merge_strategy.reset();
+        } else {
+          info->get_co_major_merge_strategy(co_major_merge_strategy);
+        }
         if (info->storage_schema_.is_row_store() && !co_major_merge_strategy.is_valid()) {
           co_major_merge_strategy.reset();
         }

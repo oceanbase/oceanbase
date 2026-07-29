@@ -1075,10 +1075,16 @@ private:
   static const int64_t LOOP_PRINT_LOG_INTERVAL = 30 * 1000 * 1000L; // 30s
   static const int64_t STARVATION_LOG_INTERVAL = 30 * 1000 * 1000L; // 30s
 
-  // CO_MAJOR sub-cap = compaction_dag_limit * 90% (min 1), reserves ~10% for other types
-  // (MIGRATION/BACKUP/RESTORE, etc.) to avoid starvation from tablet-granularity CO_MAJOR floods.
+  // CO_MAJOR sub-cap = MIN(DEFAULT_MAX_RUNNING_DAG_NET_CNT, compaction_dag_limit) * 90% (min 1),
+  // reserves ~10% of the running list for other types (MIGRATION/BACKUP/RESTORE, etc.) to avoid
+  // starvation from tablet-granularity CO_MAJOR floods. Clamping by DEFAULT_MAX_RUNNING_DAG_NET_CNT
+  // keeps the sub-cap strictly below the running list cap even when compaction_dag_limit exceeds it.
   // Init snapshots from dag_limit; refresh_co_major_cap keeps it in sync at runtime.
   static constexpr int64_t CO_MAJOR_RATIO_PERCENT = 90;
+  static constexpr int64_t calc_co_major_cap_(const int64_t compaction_dag_limit)
+  {
+    return MAX(1L, MIN(DEFAULT_MAX_RUNNING_DAG_NET_CNT, compaction_dag_limit) * CO_MAJOR_RATIO_PERCENT / 100);
+  }
 private:
   ObIAllocator* allocator_;
   ObIAllocator* ha_allocator_;

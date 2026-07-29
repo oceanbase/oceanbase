@@ -125,7 +125,7 @@ public:
   // CO_MAJOR sub-cap is derived from dag_limit (= MAX_DAG_CNT here), so shrinking MAX_DAG_CNT
   // is enough to drive the cap small enough for a UT-sized end-to-end test.
   const static int64_t TEST_MAX_CO_MAJOR_RUNNING_CNT =
-      MAX(1L, MAX_DAG_CNT * ObDagNetScheduler::CO_MAJOR_RATIO_PERCENT / 100);
+      ObDagNetScheduler::calc_co_major_cap_(MAX_DAG_CNT);
 private:
   const uint64_t tenant_id_;
   compaction::ObTenantTabletScheduler *tablet_scheduler_;

@@ -3873,7 +3873,7 @@ int ObDagNetScheduler::init(
     scheduler_ = &scheduler;
     MEMSET(dag_net_cnts_, 0, sizeof(dag_net_cnts_));
     co_major_running_cnt_ = 0;
-    max_co_major_running_dag_net_cnt_ = MAX(1L, dag_limit * CO_MAJOR_RATIO_PERCENT / 100);
+    max_co_major_running_dag_net_cnt_ = calc_co_major_cap_(dag_limit);
   }
   return ret;
 }
@@ -3883,7 +3883,7 @@ void ObDagNetScheduler::refresh_co_major_cap(const int64_t compaction_dag_limit)
   if (OB_UNLIKELY(compaction_dag_limit <= 0)) {
     COMMON_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid compaction_dag_limit, skip", K(compaction_dag_limit));
   } else {
-    const int64_t new_cap = MAX(1L, compaction_dag_limit * CO_MAJOR_RATIO_PERCENT / 100);
+    const int64_t new_cap = calc_co_major_cap_(compaction_dag_limit);
     common::SpinWLockGuard guard(dag_net_map_rwlock_);
     if (max_co_major_running_dag_net_cnt_ != new_cap) {
       COMMON_LOG(INFO, "refresh max_co_major_running_dag_net_cnt",
