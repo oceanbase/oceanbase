@@ -51,6 +51,7 @@ enum ObDictMetaType : uint8_t
   TENANT_META,
   DATABASE_META,
   TABLE_META,
+  UDT_META,
   MAX_META
 };
 
