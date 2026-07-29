@@ -186,7 +186,9 @@ int ObExternalTableUtils::collect_iceberg_partition_values(
         const int hash_ret = partition_key_set.exist_refactored(partition_key);
         if (OB_HASH_NOT_EXIST == hash_ret) {
           ObString partition_desc;
-          if (OB_FAIL(build_iceberg_partition_json_desc(allocator,
+          if (partition_key.partition_values.count() == 0) { // 非分区表
+            // do nothing
+          } else if (OB_FAIL(build_iceberg_partition_json_desc(allocator,
                                                         entry->partition_spec,
                                                         entry->data_file.partition,
                                                         partition_desc))) {
