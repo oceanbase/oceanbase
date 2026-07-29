@@ -531,6 +531,7 @@ int ObHMSCatalog::fetch_hive_table_partitions(ObIAllocator &allocator,
       const schema::ObTableSchema &table_schema = hive_table_metadata->get_table_schema();
       const ObString &location = table_schema.get_external_file_location();
       const uint64_t location_id = table_schema.get_external_location_id();
+      const bool is_partitioned_table = table_schema.get_partition_key_column_num() > 0;
       ObString access_info;
       if (OB_NOT_NULL(location_schema_provider_)
           && OB_FAIL(location_schema_provider_->get_access_info_by_id(
@@ -541,6 +542,8 @@ int ObHMSCatalog::fetch_hive_table_partitions(ObIAllocator &allocator,
         access_info = table_schema.get_external_file_location_access_info();
       }
       if (OB_FAIL(ret)) {
+      } else if (is_partitioned_table && 0 == partition_infos.count()) {
+        LOG_TRACE("no partition stats for partitioned table without partitions", K(ret));
       } else if (OB_FAIL(fill_partition_stats(table_metadata,
                                               location,
                                               access_info,
