@@ -2248,6 +2248,10 @@ public:
                                        common::ObString &object_name);
 
   int check_fts_index_conflict(const uint64_t tenant_id, const uint64_t table_id);
+  int check_fts_rename_conflict(share::schema::ObSchemaGetterGuard &schema_guard,
+                                const share::schema::ObTableSchema &origin_table_schema,
+                                const common::ObString &database_name,
+                                const common::ObString &ori_index_name);
 
   int check_vec_index_conflict(const uint64_t tenant_id, const uint64_t table_id);
 

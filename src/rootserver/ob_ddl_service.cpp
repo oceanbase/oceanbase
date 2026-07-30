@@ -7512,6 +7512,11 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
               const ObString &data_table_name = origin_table_schema.get_table_name_str();
               ret = OB_ERR_KEY_DOES_NOT_EXISTS;
               LOG_USER_ERROR(OB_ERR_KEY_DOES_NOT_EXISTS, ori_index_name.length(), ori_index_name.ptr(), data_table_name.length(), data_table_name.ptr());
+          } else if (OB_FAIL(check_fts_rename_conflict(schema_guard,
+                                                       origin_table_schema,
+                                                       alter_table_arg.alter_table_schema_.get_database_name(),
+                                                       ori_index_name))) {
+            LOG_WARN("fail to check fts rename index conflict", K(ret), K(ori_index_name));
           } else if (OB_FAIL(ObVectorIndexUtil::check_rename_rebuild_confilt(schema_guard, trans, *this, origin_table_schema, ori_index_name))) {
             LOG_WARN("fail to check vector rename and rebuild confilt", K(ret), K(ori_index_name));
           } else {
@@ -36640,6 +36645,51 @@ int ObDDLService::check_fts_index_conflict(const uint64_t tenant_id, const uint6
         LOG_INFO("cur_record.ddl_type is: ", K(cur_record.ddl_type_));
         ret = OB_EAGAIN;
         LOG_WARN("fts index is building, will retry later", K(ret), K(table_id), K(cur_record));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::check_fts_rename_conflict(ObSchemaGetterGuard &schema_guard,
+                                            const ObTableSchema &origin_table_schema,
+                                            const ObString &database_name,
+                                            const ObString &ori_index_name)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *orig_index_schema = nullptr;
+  ObDropIndexArg tmp_drop_arg;
+  tmp_drop_arg.tenant_id_ = origin_table_schema.get_tenant_id();
+  tmp_drop_arg.index_name_ = ori_index_name;
+  ObSchemaGuardWrapper schema_guard_wrapper(origin_table_schema.get_tenant_id(), schema_service_);
+  if (OB_FAIL(schema_guard_wrapper.init(schema_guard))) {
+    LOG_WARN("fail to init schema guard wrapper", K(ret));
+  } else if (OB_FAIL(get_index_schema_by_name(origin_table_schema.get_table_id(),
+                                              origin_table_schema.get_database_id(),
+                                              tmp_drop_arg,
+                                              schema_guard_wrapper,
+                                              orig_index_schema))) {
+    LOG_WARN("failed to get index schema by name", K(ret), K(ori_index_name));
+  } else if (OB_NOT_NULL(orig_index_schema) && orig_index_schema->is_fts_index()) {
+    ObArenaAllocator allocator(lib::ObLabel("DdlTasRecord"));
+    ObArray<ObDDLTaskRecord> task_records;
+    const uint64_t tenant_id = origin_table_schema.get_tenant_id();
+    const uint64_t data_table_id = origin_table_schema.get_table_id();
+    const uint64_t index_table_id = orig_index_schema->get_table_id();
+    if (OB_FAIL(ObDDLTaskRecordOperator::get_ddl_task_record_by_table_id(tenant_id, data_table_id, get_sql_proxy(), allocator, task_records))) {
+      LOG_WARN("get task record failed", K(ret));
+    } else {
+      ObCStringHelper helper;
+      for (int64_t i = 0; OB_SUCC(ret) && i < task_records.count(); ++i) {
+        const ObDDLTaskRecord &cur_record = task_records.at(i);
+        if ((cur_record.ddl_type_ == ObDDLType::DDL_CREATE_FTS_INDEX
+             || cur_record.ddl_type_ == ObDDLType::DDL_DROP_FTS_INDEX)
+            && cur_record.target_object_id_ == index_table_id) {
+          ret = OB_TABLE_NOT_EXIST;
+          LOG_WARN("not support to rename fts index while build or drop is in progress",
+                   K(ret), K(ori_index_name), K(cur_record));
+          LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(database_name), helper.convert(ori_index_name));
+        }
       }
     }
   }
