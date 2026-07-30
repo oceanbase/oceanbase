@@ -6311,6 +6311,15 @@ int ObDDLOperator::purge_aux_table(
     } else if (OB_ISNULL(aux_table_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table schema should not be null", K(ret));
+    } else if (is_index && aux_table_schema->is_search_def_index()
+               && OB_FAIL(purge_aux_table(*aux_table_schema, schema_guard, trans, USER_INDEX))) {
+      // search_data_index hangs off search_def_index, not directly off the main table.
+      // The dependency chain is: search_data_index -> search_def_index -> main_table.
+      // purge_aux_table only expands one level of children from the main table, so when the
+      // child index is a search_def_index we must recursively purge its own search_data child
+      // index first (data before def), otherwise the search_data table is never expanded by
+      // anyone and is left behind in the recyclebin forever.
+      LOG_WARN("purge search data index under search def index failed", K(ret), KPC(aux_table_schema));
     } else if (OB_FAIL(purge_table_in_recyclebin(*aux_table_schema,
                                                  trans,
                                                  NULL /*ddl_stmt_str*/))) {

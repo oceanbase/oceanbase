@@ -17953,6 +17953,16 @@ int ObDDLService::gen_hidden_index_schema_columns(const ObTableSchema &orig_tabl
         obrpc::ObColumnSortItem sort_item;
         sort_item.column_name_ = col_name;
         sort_item.order_type_ = col->get_order_in_rowkey();
+        // For search_def_index, the per-column search config (INCLUDE_PATHS=.../INCLUDE_TYPES=...)
+        // is stored in the index column's comment. Carry it over from orig_index_schema so that
+        // offline ALTER TABLE rebuilds don't silently wipe path/type filter configs.
+        if (orig_index_schema.is_search_def_index()) {
+          const ObColumnSchemaV2 *orig_col =
+              orig_index_schema.get_column_schema(col->get_column_name_str());
+          if (OB_NOT_NULL(orig_col)) {
+            sort_item.column_comment_ = ObString(orig_col->get_comment());
+          }
+        }
         if (col->is_prefix_column()) {
           sort_item.prefix_len_ = col->get_data_length();
         }
@@ -23876,6 +23886,13 @@ int ObDDLService::flashback_aux_table(
     } else if (aux_table_schema->is_drop_index()) { // Temporarily keep the drop index into the recycle bin code
       ret = OB_SUCCESS;
       LOG_INFO("index table is dropped, can't flashback", K(ret));
+    } else if (table_type == USER_INDEX && aux_table_schema->is_search_def_index()
+               && OB_FAIL(flashback_aux_table(*aux_table_schema, schema_guard, trans, ddl_operator,
+                                              new_db_id, USER_INDEX))) {
+      // search_data_index hangs off search_def_index, not directly off the main table.
+      // Must flashback the search_data child before flashbacking the search_def itself,
+      // otherwise search_data_index is left stranded in the recyclebin.
+      LOG_WARN("flashback search data index under search def index failed", K(ret), KPC(aux_table_schema));
     } else if (OB_FAIL(ddl_operator.flashback_table_from_recyclebin(
         *aux_table_schema,
         new_table_schema,

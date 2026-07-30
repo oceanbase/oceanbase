@@ -535,7 +535,12 @@ int ObIndexBuilderUtil::set_index_table_columns(
             LOG_WARN("add column failed", "data_column", *data_column, K(is_index_column),
                 K(is_rowkey), "rowkey_order_type", arg.index_columns_.at(i).order_type_,
                 K(row_desc), K(ret));
-        } else if (arg.is_search_def_index() && !sort_item.column_comment_.empty()) {
+        } else if (arg.is_search_def_index()) {
+          // The index-def column inherits the base column's comment via add_column().
+          // For search index, this comment slot is repurposed to hold the search config
+          // (built from WITH(...)). Always overwrite it with sort_item.column_comment_ so
+          // that an inherited user comment never leaks through: an empty config clears the
+          // inherited comment, a non-empty config replaces it.
           ObColumnSchemaV2 *index_column = index_schema.get_column_schema(data_column->get_column_name());
           if (OB_ISNULL(index_column)) {
             ret = OB_ERR_UNEXPECTED;
