@@ -901,6 +901,8 @@ private:
   int loop_running_dag_net_map();
   ObFunctionType convert_priority_to_function_type(const int64_t priority);
   int finish_task_in_dag(ObITask *&task, ObIDag *&dag, ObIDagNet *&erase_dag_net);
+  // The caller must hold scheduler_sync_ to ensure that only one path takes
+  // ownership of the finished dag net.
   int finish_dag_(const ObIDag::ObDagStatus status, ObIDag *&dag, ObIDagNet *&erase_dag_net, const bool try_move_child);
   int finish_dag_net(ObIDagNet *dag_net);
   int deal_with_finish_task(ObITask *&task, ObIDag *&dag, ObTenantDagWorker &worker, int error_code);
@@ -946,12 +948,15 @@ private:
   common::ObIAllocator &get_allocator(const bool is_ha);
   int init_allocator(const uint64_t tenant_id, const lib::ObLabel &label, lib::MemoryContext &mem_context);
   void destroy_failed_dag_(DagNetList &failed_dag_net_list);
+  void loop_pending_finish_dag_net_list();
 
 private:
   bool is_inited_;
   DagMap dag_map_;
   DagNetMap dag_net_map_[DAG_NET_MAP_MAX];
   DagNetList blocking_dag_net_list_;
+  // Protected by scheduler_sync_ and drained outside the lock.
+  DagNetList pending_finish_dag_net_list_;
   PriorityDagList dag_list_[DAG_LIST_MAX];
   common::ObThreadCond scheduler_sync_;
   lib::ObMutex dag_net_map_lock_;
