@@ -65,6 +65,7 @@ inline bool allow_ddl_thread_rpc_not_match(const obrpc::ObRpcPacketCode pcode)
          || obrpc::OB_CREATE_RESOURCE_UNIT == pcode
          || obrpc::OB_DROP_RESOURCE_UNIT == pcode
          || obrpc::OB_CLONE_RESOURCE_POOL == pcode
+         || obrpc::OB_CLONE_TENANT == pcode
          || obrpc::OB_CREATE_RESOURCE_POOL == pcode
          || obrpc::OB_DROP_RESOURCE_POOL == pcode
          || obrpc::OB_SPLIT_RESOURCE_POOL == pcode
