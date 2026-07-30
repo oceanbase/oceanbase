@@ -437,7 +437,7 @@ int ObExprNvlUtil::calc_nvl_expr2(const ObExpr &expr, ObEvalCtx &ctx,
   ObDatum *arg0 = NULL;
   ObDatum *arg1 = NULL;
   ObDatum *arg2 = NULL;
-  bool is_udt_type = lib::is_oracle_mode() && expr.obj_meta_.is_ext();
+  bool is_udt_type = lib::is_oracle_mode() && expr.args_[0]->obj_meta_.is_ext();
   bool v = false;
 
   if (OB_FAIL(expr.eval_param_value(ctx, arg0, arg1, arg2))) {
