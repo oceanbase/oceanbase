@@ -2294,6 +2294,8 @@ all_profile_def = dict(
     ('password_reuse_max', 'int', 'false', '-1'),
     ('inactive_account_time', 'int', 'false', '-1'),
     ('password_rollover_time', 'int', 'false', '-1'),
+    ('idle_time', 'int', 'false', '-1'),
+    ('sessions_per_user', 'int', 'false', '-1'),
   ],
 )
 def_table_schema(**all_profile_def)
@@ -59669,6 +59671,28 @@ FROM
       9223372036854775807, 'UNLIMITED',
       -2, 'DEFAULT',
       PASSWORD_ROLLOVER_TIME) AS VARCHAR2(128)) AS LIMIT
+  FROM
+    SYS.ALL_VIRTUAL_TENANT_PROFILE_REAL_AGENT
+  UNION ALL
+  SELECT
+    PROFILE_NAME AS PROFILE,
+    CAST('IDLE_TIME' AS VARCHAR2(32)) AS RESOURCE_NAME,
+    CAST('KERNEL' AS VARCHAR2(8)) AS RESOURCE_TYPE,
+    CAST(DECODE(IDLE_TIME, -1, 'UNLIMITED',
+      9223372036854775807, 'UNLIMITED',
+      -2, 'DEFAULT',
+      IDLE_TIME) AS VARCHAR2(128)) AS LIMIT
+  FROM
+    SYS.ALL_VIRTUAL_TENANT_PROFILE_REAL_AGENT
+  UNION ALL
+  SELECT
+    PROFILE_NAME AS PROFILE,
+    CAST('SESSIONS_PER_USER' AS VARCHAR2(32)) AS RESOURCE_NAME,
+    CAST('KERNEL' AS VARCHAR2(8)) AS RESOURCE_TYPE,
+    CAST(DECODE(SESSIONS_PER_USER, -1, 'UNLIMITED',
+      9223372036854775807, 'UNLIMITED',
+      -2, 'DEFAULT',
+      SESSIONS_PER_USER) AS VARCHAR2(128)) AS LIMIT
   FROM
     SYS.ALL_VIRTUAL_TENANT_PROFILE_REAL_AGENT)
 ORDER BY PROFILE, RESOURCE_NAME

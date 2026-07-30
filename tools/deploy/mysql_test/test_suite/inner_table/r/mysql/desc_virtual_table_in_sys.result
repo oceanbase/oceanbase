@@ -4617,6 +4617,8 @@ password_reuse_time	bigint(20)	NO		-1
 password_reuse_max	bigint(20)	NO		-1	
 inactive_account_time	bigint(20)	NO		-1	
 password_rollover_time	bigint(20)	NO		-1	
+idle_time	bigint(20)	NO		-1	
+sessions_per_user	bigint(20)	NO		-1	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_profile;
 IF(count(*) >= 0, 1, 0)
 1
@@ -4639,6 +4641,8 @@ password_reuse_time	bigint(20)	YES		-1
 password_reuse_max	bigint(20)	YES		-1	
 inactive_account_time	bigint(20)	YES		-1	
 password_rollover_time	bigint(20)	YES		-1	
+idle_time	bigint(20)	YES		-1	
+sessions_per_user	bigint(20)	YES		-1	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_profile_history;
 IF(count(*) >= 0, 1, 0)
 1
