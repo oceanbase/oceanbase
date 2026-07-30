@@ -2345,8 +2345,11 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
       //select * from t1,t1 ==> NO
       //select 1 from t1,t1 ==> YES
       //select * from (select * from t1), (select * from t1) ==> YES
+      bool has_same_name = false;
       if (OB_FAIL(ret)) {
-      } else if (params_.have_same_table_name_) {
+      } else if (OB_FAIL(check_stmt_has_same_table_name(has_same_name))) {
+        LOG_WARN("failed to check stmt has same table name", K(ret));
+      } else if (has_same_name) {
         ret = OB_NON_UNIQ_ERROR;
         LOG_WARN("column in all tables is ambiguous", K(ret));
       } else if (OB_FAIL(resolve_star(project_node))) {
@@ -8853,6 +8856,49 @@ int ObSelectResolver::check_hybrid_search_stmt(ObSelectStmt *select_stmt)
   } else if (select_stmt->has_order_by()) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "use hybrid search with order by");
+  }
+  return ret;
+}
+
+int ObSelectResolver::check_stmt_has_same_table_name(bool &has_same_name)
+{
+  int ret=OB_SUCCESS;
+  has_same_name = false;
+  ObSelectStmt *select_stmt = get_select_stmt();
+  if (OB_ISNULL(select_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("select stmt is null", K(ret));
+  } else {
+    const common::ObIArray<TableItem*> &items=select_stmt->get_table_items();
+    for (int64_t i = 0; OB_SUCC(ret) && !has_same_name && i < items.count(); ++i){
+      const TableItem *left = items.at(i);
+      if (OB_ISNULL(left)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table item is null", K(ret));
+      } else {
+        for (int64_t j = i + 1; OB_SUCC(ret) && !has_same_name && j< items.count(); ++j){
+          const TableItem *right = items.at(j);
+          if (OB_ISNULL(right)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("table item is null", K(ret));
+          } else if (!ObCharset::case_insensitive_equal(left->get_table_name(),
+                                                        right->get_table_name())) {
+            //do nothing
+          }
+          else if(lib::is_mysql_mode()) {
+            if(ObCharset::case_insensitive_equal(left->database_name_, right->database_name_)) {
+              has_same_name=true;
+            }
+          }
+          else {
+            if(left->database_name_.empty() || right->database_name_.empty()
+              || ObCharset::case_insensitive_equal(left->database_name_, right->database_name_)) {
+                  has_same_name=true;
+            }
+          }
+        }
+      }
+    }
   }
   return ret;
 }
