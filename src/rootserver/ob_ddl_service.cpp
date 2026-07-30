@@ -3140,6 +3140,9 @@ int ObDDLService::add_primary_key(const ObIArray<ObString> &pk_column_names, ObT
   } else if (new_table_schema.is_oracle_tmp_table_v2()) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Adding primary key to global temporary table");
+  } else if (new_table_schema.is_random_part()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Adding primary key to random partitioned table");
   }
   for (; OB_SUCC(ret) && tmp_begin != tmp_end; tmp_begin++) {
     ObColumnSchemaV2 *col = (*tmp_begin);

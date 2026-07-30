@@ -89,6 +89,11 @@ public:
 
   // reset partitions of random-partitioned table back to the initial state, used by TRUNCATE TABLE
   static int reset_to_initial_partitions(const int64_t target_part_num, share::schema::ObTableSchema &table_schema);
+
+  static int check_and_adjust_unique_index(
+    common::ObIArray<obrpc::ObCreateIndexArg> &index_arg_list,
+    share::schema::ObTableSchema &table_schema,
+    ObIAllocator &allocator);
 };
 
 

@@ -21,6 +21,7 @@
 #include "rootserver/ob_table_creator.h"
 #include "rootserver/ob_root_service.h"
 #include "rootserver/ob_tenant_balance_service.h"
+#include "share/ob_index_builder_util.h"
 
 namespace oceanbase
 {
@@ -1023,6 +1024,46 @@ int ObRandomPartitionHelper::reset_to_initial_partitions(const int64_t target_pa
       LOG_INFO("reset random-partitioned table to initial partitions",
                KR(ret), K(tenant_id), "table_id", table_schema.get_table_id(),
                K(target_part_num), K(default_random_partition_interval));
+    }
+  }
+  return ret;
+}
+
+int ObRandomPartitionHelper::check_and_adjust_unique_index(
+    common::ObIArray<obrpc::ObCreateIndexArg> &index_arg_list,
+    share::schema::ObTableSchema &table_schema,
+    ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.count(); i++) {
+    obrpc::ObCreateIndexArg &index_arg = index_arg_list.at(i);
+    if (!index_arg.is_index_scope_specified_ && share::schema::is_local_unique_index_table(index_arg.index_type_)) {
+      if (INDEX_TYPE_UNIQUE_LOCAL == index_arg.index_type_ || INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == index_arg.index_type_) {
+        index_arg.index_type_ = INDEX_TYPE_UNIQUE_GLOBAL;
+
+        ObArray<ObColumnSchemaV2 *> gen_columns;
+        ObTableSchema &index_schema = index_arg.index_schema_;
+        index_schema.set_table_type(USER_INDEX);
+        index_schema.set_index_type(index_arg.index_type_);
+        index_schema.set_tenant_id(table_schema.get_tenant_id());
+        bool check_data_schema = false;
+        if (OB_FAIL(share::ObIndexBuilderUtil::adjust_expr_index_args(
+                index_arg, table_schema, allocator, gen_columns))) {
+          LOG_WARN("fail to adjust expr index args", K(ret));
+        } else if (OB_FAIL(share::ObIndexBuilderUtil::set_index_table_columns(
+                index_arg, table_schema, index_schema, check_data_schema))) {
+          LOG_WARN("fail to set index table columns", K(ret));
+        }
+      }
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.count(); i++) {
+    obrpc::ObCreateIndexArg &index_arg = index_arg_list.at(i);
+    if (share::schema::is_local_unique_index_table(index_arg.index_type_)) {
+      //TODO: support INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY
+      ret = OB_NOT_SUPPORTED;
+      LOG_INFO("random partitioned table doesn't support such index, not allow to enable auto_partition by default config", K(ret), K(index_arg.index_type_));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "random partitioned table with such index is");
     }
   }
   return ret;
