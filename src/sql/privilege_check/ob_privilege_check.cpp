@@ -394,6 +394,15 @@ int set_updatable_view_write_privs(
     LOG_WARN("view schema is null", K(ret), KPC(view_table_item));
   }
 
+  // Penetrate CTE/subquery layers, but stop at the first nested view or real base table.
+  const TableItem *write_target_table_item = base_table_item;
+  while (OB_NOT_NULL(write_target_table_item)
+         && !write_target_table_item->is_view_table_
+         && (write_target_table_item->is_temp_table() || write_target_table_item->is_generated_table())
+         && OB_NOT_NULL(write_target_table_item->view_base_item_)) {
+    write_target_table_item = write_target_table_item->view_base_item_;
+  }
+
   for (int64_t i = 0; OB_SUCC(ret) && i < view_need_privs.count(); ++i) {
     const ObNeedPriv &view_need_priv = view_need_privs.at(i);
     const ObPrivSet write_priv_set = view_need_priv.priv_set_ & (~OB_PRIV_SELECT);
@@ -401,11 +410,11 @@ int set_updatable_view_write_privs(
       // do nothing
     } else {
       ObNeedPriv mapped_need_priv = view_need_priv;
-      mapped_need_priv.catalog_ = base_table_item->catalog_name_;
-      mapped_need_priv.db_ = base_table_item->database_name_;
-      mapped_need_priv.table_ = base_table_item->table_name_;
-      mapped_need_priv.is_sys_table_ = base_table_item->is_system_table_;
-      mapped_need_priv.is_for_update_ = base_table_item->for_update_;
+      mapped_need_priv.catalog_ = write_target_table_item->catalog_name_;
+      mapped_need_priv.db_ = write_target_table_item->database_name_;
+      mapped_need_priv.table_ = write_target_table_item->table_name_;
+      mapped_need_priv.is_sys_table_ = write_target_table_item->is_system_table_;
+      mapped_need_priv.is_for_update_ = write_target_table_item->for_update_;
       mapped_need_priv.grantee_id_ = grantee_id;
       mapped_need_priv.priv_set_ = write_priv_set;
       mapped_need_priv.columns_.reuse();
@@ -459,23 +468,23 @@ int set_updatable_view_write_privs(
     }
   }
 
-  // recursively call if base_table_item is also a view table
+  // recursively call if write target is a nested view table
   if (OB_FAIL(ret)) {
-  } else if (!base_table_item->is_view_table_) {
+  } else if (!write_target_table_item->is_view_table_) {
     // do nothing
-  } else if (OB_ISNULL(base_table_item->ref_query_)) {
+  } else if (OB_ISNULL(write_target_table_item->ref_query_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("base table ref stmt is null", K(ret), KPC(base_table_item));
+    LOG_WARN("write target view ref stmt is null", K(ret), KPC(write_target_table_item));
   } else {
     uint64_t base_view_definer_id = OB_INVALID_ID;
-    if (OB_FAIL(get_view_definer(ctx, base_table_item, base_view_definer_id))) {
-      LOG_WARN("failed to get base view definer", K(ret), KPC(base_table_item));
+    if (OB_FAIL(get_view_definer(ctx, write_target_table_item, base_view_definer_id))) {
+      LOG_WARN("failed to get write target view definer", K(ret), KPC(write_target_table_item));
     } else if (OB_FAIL(SMART_CALL(set_updatable_view_write_privs(ctx,
-                                                                 base_table_item,
+                                                                 write_target_table_item,
                                                                  base_view_definer_id,
                                                                  mapped_need_privs,
                                                                  need_privs)))) {
-      LOG_WARN("failed to recursively call set_updatable_view_write_privs", K(ret), KPC(base_table_item));
+      LOG_WARN("failed to recursively call set_updatable_view_write_privs", K(ret), KPC(write_target_table_item));
     }
   }
   return ret;
@@ -1971,6 +1980,14 @@ int get_dml_stmt_need_privs_by_stmt(
                                                       table_priv_set,
                                                       need_privs))) {
           LOG_WARN("failed to set mysql privs by table item recursively", K(ret));
+        }
+      } else if (!table_item->is_view_table_ && NULL != table_item->ref_query_) {
+        // Drill into subquery/CTE/lateral ref_query for view definer privilege check.
+        if (OB_FAIL(SMART_CALL(get_dml_stmt_need_privs_by_stmt(table_item->ref_query_,
+                                                               need_privs,
+                                                               sql_ctx,
+                                                               grantee_id)))) {
+          LOG_WARN("failed to extract priv info of table ref query in view", K(i), KPC(table_item), K(ret));
         }
       }
     }
