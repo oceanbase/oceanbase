@@ -2117,8 +2117,8 @@ int ObInnerSQLConnection::set_timeout(int64_t &abs_timeout_us)
       LOG_WARN("already timeout", K(ret), K(abs_timeout_us), K(now), K(THIS_WORKER.get_timeout_ts()));
     } else {
       if (THIS_WORKER.get_timeout_remain() < OB_MAX_USER_SPECIFIED_TIMEOUT) {
-        timeout = THIS_WORKER.get_timeout_remain();
         abs_timeout_us = THIS_WORKER.get_timeout_ts();
+        timeout = abs_timeout_us - get_session().get_query_start_time();
         LOG_DEBUG("set timeout by worker", K(timeout), K(abs_timeout_us));
         trx_timeout = timeout;
         LOG_DEBUG("set timeout according to THIS_WORKER", K(timeout), K(trx_timeout), K(abs_timeout_us));
@@ -2135,7 +2135,7 @@ int ObInnerSQLConnection::set_timeout(int64_t &abs_timeout_us)
     if (ctx.is_timeout_set()) {
       if (ctx.get_abs_timeout() < abs_timeout_us || 0 == abs_timeout_us) {
         abs_timeout_us = ctx.get_abs_timeout();
-        timeout = ctx.get_timeout();
+        timeout = abs_timeout_us - get_session().get_query_start_time();
         trx_timeout = timeout;
       }
       if (ctx.is_trx_timeout_set()) {

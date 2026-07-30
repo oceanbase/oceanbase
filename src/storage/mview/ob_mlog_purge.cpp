@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/mview/ob_mlog_purge.h"
+#include "common/ob_timeout_ctx.h"
 #include "lib/mysqlclient/ob_mysql_transaction.h"
 #include "share/schema/ob_mview_info.h"
 #include "sql/engine/ob_exec_context.h"
@@ -206,14 +207,25 @@ int ObMLogPurger::do_purge()
   ObArenaAllocator allocator("MLogPurge");
   ObString database_name;
   uint64_t database_id = OB_INVALID_ID;
+  ObTimeoutCtx timeout_ctx;
   if (OB_FAIL(get_database_info(allocator, database_id, database_name))) {
     LOG_WARN("fail to get database info", KR(ret));
+  } else if (THIS_WORKER.is_timeout_ts_valid()) {
+    int64_t abs_timeout_ts = THIS_WORKER.get_timeout_ts();
+    if (timeout_ctx.is_timeout_set()) {
+      abs_timeout_ts = MIN(abs_timeout_ts, timeout_ctx.get_abs_timeout());
+    }
+    if (OB_FAIL(timeout_ctx.set_abs_timeout(abs_timeout_ts))) {
+      LOG_WARN("fail to set mlog purge timeout ctx", K(abs_timeout_ts));
+    }
   }
   // 1. batch delete loop
   while (OB_SUCC(ret) && !purge_finished) {
     int64_t affected_rows = 0;
     ObMViewTransaction trans;
-    if (OB_FAIL(start_trans(trans, database_id, database_name))) {
+    if (OB_FAIL(THIS_WORKER.check_status())) {
+      LOG_WARN("fail to check status", K(ret));
+    } else if (OB_FAIL(start_trans(trans, database_id, database_name))) {
       LOG_WARN("fail to start trans for batch purge", KR(ret));
     } else if (OB_FAIL(register_mds(trans))) {
       LOG_WARN("fail to register purge mds", KR(ret));

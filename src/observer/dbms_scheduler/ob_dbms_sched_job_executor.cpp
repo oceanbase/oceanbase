@@ -22,6 +22,7 @@
 #include "lib/mysqlclient/ob_isql_connection.h"
 #include "share/ob_define.h"
 #include "share/ob_errno.h"
+#include "share/schema/ob_mlog_info.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "rpc/obmysql/ob_mysql_global.h"
 
@@ -97,12 +98,6 @@ int ObDBMSSchedJobExecutor::init_session(
                                   ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_FORMAT));
   OZ (session.update_sys_variable(share::SYS_VAR_NLS_TIMESTAMP_TZ_FORMAT,
                                   ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_TZ_FORMAT));
-  // bound pl block timeout by max_run_duration for the spm stats job, otherwise it may run
-  // beyond its declared duration and overlap with the next scheduled run.
-  if (OB_SUCC(ret) && ObDbmsStatsMaintenanceWindow::is_spm_stats_job(job_info.get_job_name())) {
-    OZ (session.update_sys_variable(share::SYS_VAR_OB_PL_BLOCK_TIMEOUT,
-                                    job_info.get_max_run_duration() * 1000000L));
-  }
   OZ (session.set_default_database(database_name));
   OZ (session.get_pc_mem_conf(pc_mem_conf));
   CK (OB_NOT_NULL(GCTX.sql_engine_));
@@ -129,7 +124,13 @@ int ObDBMSSchedJobExecutor::init_session(
   OX (session.gen_gtt_trans_scope_unique_id());
   OX (session.set_client_sessid(session.get_sid()));
   if (OB_SUCC(ret)) {
-    if (job_info.is_mview_job()) {
+    if (ObDbmsStatsMaintenanceWindow::is_spm_stats_job(job_info.get_job_name()) ||
+        (job_info.is_mview_job() && job_info.get_job_name().prefix_match(ObMLogInfo::MLOG_PURGE_JOB_PREFIX))) {
+      const int64_t TIMEOUT_US = job_info.get_max_run_duration() * 1000000L;
+      OZ (session.update_sys_variable(SYS_VAR_OB_QUERY_TIMEOUT, TIMEOUT_US));
+      OZ (session.update_sys_variable(SYS_VAR_OB_TRX_TIMEOUT, TIMEOUT_US));
+      OZ (session.update_sys_variable(SYS_VAR_OB_PL_BLOCK_TIMEOUT, TIMEOUT_US));
+    } else if (job_info.is_mview_job()) {
       // set larger timeout for mview scheduler jobs
       const int64_t QUERY_TIMEOUT_US = (24 * 60 * 60 * 1000000L); // 24hours
       const int64_t TRX_TIMEOUT_US = (24 * 60 * 60 * 1000000L); // 24hours
