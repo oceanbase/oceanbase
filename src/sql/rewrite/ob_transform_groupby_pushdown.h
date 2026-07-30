@@ -260,11 +260,13 @@ private:
   int distribute_filter(ObSelectStmt *stmt,
                         ObIArray<PushDownParam> &params,
                         ObSqlBitSet<> &outer_table_set,
-                        ObRawExpr *cond);
+                        ObRawExpr *cond,
+                        bool &is_valid);
 
   int distribute_joined_on_conds(ObDMLStmt *stmt,
                                  ObIArray<PushDownParam> &params,
-                                 JoinedTable *joined_table);
+                                 JoinedTable *joined_table,
+                                 bool &is_valid);
 
   int do_double_eager_rewrite(ObSelectStmt *stmt,
                                   ObIArray<uint64_t> &flatten_joined_tables,

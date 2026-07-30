@@ -1966,7 +1966,7 @@ int ObTransformGroupByPushdown::distribute_stmt_context_to_params(
   bool &is_valid)
 {
   int ret = OB_SUCCESS;
-  is_valid = false;
+  is_valid = true;
   ObSQLSessionInfo *session_info = NULL;
   ObQueryCtx *query_ctx = NULL;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) ||
@@ -1998,21 +1998,22 @@ int ObTransformGroupByPushdown::distribute_stmt_context_to_params(
     }
   }
   /// distribute where filters
-  for (int64_t i = 0; OB_SUCC(ret) && i < trans_stmt->get_condition_size(); ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < trans_stmt->get_condition_size(); ++i) {
     ObRawExpr *cond_expr = trans_stmt->get_condition_expr(i);
-    if (OB_FAIL(distribute_filter(trans_stmt, params, outer_table_set, cond_expr))) {
+    if (OB_FAIL(distribute_filter(trans_stmt, params, outer_table_set, cond_expr, is_valid))) {
       LOG_WARN("failed to distributed filter to views", K(ret));
     }
   }
   /// distribute outer join on conditions
-  for (int64_t i = 0; OB_SUCC(ret) && i < flatten_joined_tables.count(); ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < flatten_joined_tables.count(); ++i) {
     uint64_t table_id = flatten_joined_tables.at(i);
-    if (OB_FAIL(distribute_joined_on_conds(trans_stmt, params, trans_stmt->get_joined_table(table_id)))) {
+    if (OB_FAIL(distribute_joined_on_conds(trans_stmt, params,
+                                           trans_stmt->get_joined_table(table_id),
+                                           is_valid))) {
       LOG_WARN("failed to distributed joined condition to view", K(ret));
     }
   }
-  if (OB_SUCC(ret)) {
-    is_valid = true;
+  if (OB_SUCC(ret) && is_valid) {
     if (OB_FAIL(distribute_group_aggr(trans_stmt, params))) {
       LOG_WARN("failed to distribute expr into view", K(ret));
     } else if (get_valid_eager_aggr_num(params) <= 0) {
@@ -2162,7 +2163,8 @@ int ObTransformGroupByPushdown::distribute_group_aggr(ObSelectStmt *stmt,
 int ObTransformGroupByPushdown::distribute_filter(ObSelectStmt *stmt,
                                                    ObIArray<PushDownParam> &params,
                                                    ObSqlBitSet<> &outer_join_tables,
-                                                   ObRawExpr *cond)
+                                                   ObRawExpr *cond,
+                                                   bool &is_valid)
 {
   int ret = OB_SUCCESS;
   bool is_simple_filter = false;
@@ -2180,6 +2182,10 @@ int ObTransformGroupByPushdown::distribute_filter(ObSelectStmt *stmt,
   } else if (OB_UNLIKELY(column_exprs.count() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("column exprs number is invalid", K(ret), K(*cond));
+  } else if (OB_FAIL(ObOptimizerUtil::expr_calculable_by_exprs(cond, column_exprs, true, true, is_valid))) {
+    LOG_WARN("failed to check filter calculable by columns", K(ret));
+  } else if (!is_valid) {
+    OPT_TRACE("filter can not be calculated by extracted columns: ", cond);
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && !is_simple_filter && i < params.count(); ++i) {
       PushDownParam &view = params.at(i);
@@ -2206,13 +2212,15 @@ int ObTransformGroupByPushdown::distribute_filter(ObSelectStmt *stmt,
 /// distribute l left join on 'cond' into views
 int ObTransformGroupByPushdown::distribute_joined_on_conds(ObDMLStmt *stmt,
                                                             ObIArray<PushDownParam> &params,
-                                                            JoinedTable *joined_table)
+                                                            JoinedTable *joined_table,
+                                                            bool &is_valid)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 4> column_exprs;
   ObSqlBitSet<> left_table_set;
   ObSqlBitSet<> right_table_set;
   bool is_stack_overflow = false;
+  is_valid = true;
   if (OB_ISNULL(stmt) || OB_ISNULL(joined_table) ||
       OB_ISNULL(joined_table->left_table_) ||
       OB_ISNULL(joined_table->right_table_)) {
@@ -2230,7 +2238,7 @@ int ObTransformGroupByPushdown::distribute_joined_on_conds(ObDMLStmt *stmt,
   }
   ObSEArray<ObRawExpr *, 4> filter_conds;
   ObSEArray<ObRawExpr *, 4> join_conds;
-  for (int64_t i = 0; OB_SUCC(ret) && i < joined_table->join_conditions_.count(); ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < joined_table->join_conditions_.count(); ++i) {
     ObRawExpr *expr = joined_table->join_conditions_.at(i);
     bool is_simple_filter = false;
     if (OB_ISNULL(expr)) {
@@ -2247,25 +2255,29 @@ int ObTransformGroupByPushdown::distribute_joined_on_conds(ObDMLStmt *stmt,
       }
     }
     if (OB_SUCC(ret)) {
+      ObSEArray<ObRawExpr *, 4> join_columns;
       if (is_simple_filter) {
         if (OB_FAIL(filter_conds.push_back(expr))) {
           LOG_WARN("failed to push back filter", K(ret));
         }
       } else if (OB_FAIL(join_conds.push_back(expr))) {
         LOG_WARN("failed to push back join cond", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr, join_columns, true))) {
+        LOG_WARN("failed to extract column exprs", K(ret));
+      } else if (OB_FAIL(ObOptimizerUtil::expr_calculable_by_exprs(expr, join_columns, true, true, is_valid))) {
+        LOG_WARN("failed to check expr calculable by columns", K(ret));
+      } else if (!is_valid) {
+        OPT_TRACE("expr can not be calculated by extracted columns: ", expr);
+      } else if (OB_FAIL(append_array_no_dup(column_exprs, join_columns))) {
+        LOG_WARN("failed to append column exprs", K(ret));
       }
     }
   }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObRawExprUtils::extract_column_exprs(join_conds,
-                                                     column_exprs,
-                                                     true))) {
-      LOG_WARN("failed to extract column exprs", K(ret));
-    } else if (OB_FAIL(joined_table->join_conditions_.assign(join_conds))) {
-      LOG_WARN("failed to assign join conditions", K(ret));
-    }
+  if (OB_FAIL(ret) || !is_valid) {
+  } else if (OB_FAIL(joined_table->join_conditions_.assign(join_conds))) {
+    LOG_WARN("failed to assign join conditions", K(ret));
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < params.count(); ++i) {
     int64_t old_filter_count = params.at(i).filter_exprs_.count();
     if (OB_FAIL(add_exprs(column_exprs,
                           params.at(i).table_bit_index_,
@@ -2283,7 +2295,7 @@ int ObTransformGroupByPushdown::distribute_joined_on_conds(ObDMLStmt *stmt,
       }
     }
   }
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && is_valid) {
     // some of the filter_conds may not be distributed to any param
     // those conditions should be pushed back to join-on conditions, otherwise they will be ditched
     ObSqlBitSet<> table_bit_indexes;
@@ -2303,15 +2315,17 @@ int ObTransformGroupByPushdown::distribute_joined_on_conds(ObDMLStmt *stmt,
       LOG_WARN("failed to add exprs to join on condition", K(ret));
     }
   }
-  if (OB_SUCC(ret) && joined_table->left_table_->is_joined_table()) {
+  if (OB_SUCC(ret) && is_valid && joined_table->left_table_->is_joined_table()) {
     if (OB_FAIL(SMART_CALL(distribute_joined_on_conds(
-                         stmt, params, static_cast<JoinedTable*>(joined_table->left_table_))))) {
+                         stmt, params, static_cast<JoinedTable*>(joined_table->left_table_),
+                         is_valid)))) {
       LOG_WARN("failed to distribute join condition to view", K(ret));
     }
   }
-  if (OB_SUCC(ret) && joined_table->right_table_->is_joined_table()) {
+  if (OB_SUCC(ret) && is_valid && joined_table->right_table_->is_joined_table()) {
     if (OB_FAIL(SMART_CALL(distribute_joined_on_conds(
-                         stmt, params, static_cast<JoinedTable*>(joined_table->right_table_))))) {
+                         stmt, params, static_cast<JoinedTable*>(joined_table->right_table_),
+                         is_valid)))) {
       LOG_WARN("failed to distribute join condition to view", K(ret));
     }
   }

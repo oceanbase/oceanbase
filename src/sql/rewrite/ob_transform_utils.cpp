@@ -15345,7 +15345,28 @@ int ObTransformUtils::check_can_replace(ObRawExpr *expr,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parameter", K(ret));
   } else if (!ob_is_string_or_lob_type(expr->get_result_type().get_type())) {
-    can_replace = true;
+    const ObObjType expr_type = expr->get_result_type().get_type();
+    if (ob_is_float_type(expr_type) || ob_is_double_type(expr_type)) {
+      // float/double equal values may produce different string representations
+      // after type conversion, e.g. 1.0 vs 1.00 -> '1.0' vs '1.00'
+      bool found_convert = false;
+      bool convert_to_string = false;
+      for (int i = parent_exprs.count() - 1; OB_SUCC(ret) && !found_convert && i >= 0; --i) {
+        ObRawExpr *cur_expr = parent_exprs.at(i);
+        if (OB_ISNULL(cur_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (cur_expr->get_result_type().get_type() != expr_type) {
+          found_convert = true;
+          convert_to_string = ob_is_string_or_lob_type(cur_expr->get_result_type().get_type());
+        }
+      }
+      if (OB_SUCC(ret)) {
+        can_replace = found_convert ? !convert_to_string : used_in_compare;
+      }
+    } else {
+      can_replace = true;
+    }
   } else if (lib::is_oracle_mode() && !expr->get_result_type().is_fixed_len_char_type()) {
     // oracle compare varchar in binary and no pad
     can_replace = true;
