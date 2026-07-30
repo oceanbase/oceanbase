@@ -53,6 +53,10 @@ int ObTransformPredicateMoveAround::transform_one_stmt(
     LOG_WARN("add param not null constraint failed", K(ret));
   } else if (OB_FAIL(append_array_no_dup(ctx_->equal_param_constraints_, equal_param_constraints_))) {
     LOG_WARN("add param equal constraint failed", K(ret));
+  } else if (OB_FAIL(append_array_no_dup(ctx_->plan_const_param_constraints_, const_param_constraints_))) {
+    LOG_WARN("add param const constraint failed", K(ret));
+  } else if (OB_FAIL(append_array_no_dup(ctx_->expr_constraints_, expr_constraints_))) {
+    LOG_WARN("add expr constraint failed", K(ret));
   }
   reset();
   return ret;
@@ -291,6 +295,10 @@ int ObTransformPredicateMoveAround::transform_one_stmt_with_outline(
     LOG_WARN("add param not null constraint failed", K(ret));
   } else if (OB_FAIL(append_array_no_dup(ctx_->equal_param_constraints_, equal_param_constraints_))) {
     LOG_WARN("add param equal constraint failed", K(ret));
+  } else if (OB_FAIL(append_array_no_dup(ctx_->plan_const_param_constraints_, const_param_constraints_))) {
+    LOG_WARN("add param const constraint failed", K(ret));
+  } else if (OB_FAIL(append_array_no_dup(ctx_->expr_constraints_, expr_constraints_))) {
+    LOG_WARN("add expr constraint failed", K(ret));
   } else {
     ctx_->trans_list_loc_ += transed_stmts_.count();
   }
@@ -715,6 +723,10 @@ int ObTransformPredicateMoveAround::check_pullup_predicates(ObSelectStmt *stmt,
     }
     if (FAILEDx(append(equal_param_constraints_, context.equal_param_info_))) {
       LOG_WARN("append equal param info failed", K(ret));
+    } else if (OB_FAIL(append(const_param_constraints_, context.const_param_info_))) {
+      LOG_WARN("append const param info failed", K(ret));
+    } else if (OB_FAIL(append(expr_constraints_, context.expr_cons_info_))) {
+      LOG_WARN("append expr cons info failed", K(ret));
     } else {/*do nothing*/}
   } else if (stmt->get_set_op() == ObSelectStmt::INTERSECT) {
     //合并谓词
@@ -746,6 +758,10 @@ int ObTransformPredicateMoveAround::check_pullup_predicates(ObSelectStmt *stmt,
     }
     if (FAILEDx(append(equal_param_constraints_, context.equal_param_info_))) {
       LOG_WARN("append equal param info failed", K(ret));
+    } else if (OB_FAIL(append(const_param_constraints_, context.const_param_info_))) {
+      LOG_WARN("append const param info failed", K(ret));
+    } else if (OB_FAIL(append(expr_constraints_, context.expr_cons_info_))) {
+      LOG_WARN("append expr cons info failed", K(ret));
     } else {/*do nothing*/}
   } else if (stmt->get_set_op() == ObSelectStmt::EXCEPT) {
     if (OB_FAIL(append(output_pullup_preds, left_pullup_preds))) {
@@ -4545,8 +4561,8 @@ int ObTransformPredicateMoveAround::inner_push_down_cte_filter(ObSqlTempTableInf
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(add_var_to_array_no_dup(transed_stmts_, info.table_infos_.at(i).upper_stmt_))) {
       LOG_WARN("append transed stmt failed", K(ret));
-    } else if (OB_FAIL(append(ctx_->equal_param_constraints_, check_context.equal_param_info_))) {
-      LOG_WARN("failed to append equal param constraints", K(ret));
+    } else if (OB_FAIL(check_context.append_constraints_to_trans_ctx(*ctx_))) {
+      LOG_WARN("failed to append constraints to trans ctx", K(ret));
     }
   }
   return ret;
@@ -4616,6 +4632,8 @@ void ObTransformPredicateMoveAround::reset()
   null_constraints_.reset();
   not_null_constraints_.reset();
   equal_param_constraints_.reset();
+  const_param_constraints_.reset();
+  expr_constraints_.reset();
   stmt_pulled_up_sel_ids_.reset();
   stmt_preds_pulled_up_.reset();
   real_happened_ = false;

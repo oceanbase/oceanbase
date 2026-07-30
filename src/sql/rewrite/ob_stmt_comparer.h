@@ -15,6 +15,10 @@ namespace oceanbase
 namespace sql
 {
 
+struct ObTransformerCtx;
+struct ObQueryCtx;
+struct ObStmtCompareContext;
+
 // NOTE (link.zt) remember to de-construct the struct
 /**
  * @brief The ObStmtMapInfo struct
@@ -82,6 +86,15 @@ struct ObStmtMapInfo {
 
   void reset();
   int assign(const ObStmtMapInfo& other);
+
+  // Append equal/const/expr constraints to trans_ctx accumulators.
+  int append_constraints_to_trans_ctx(ObTransformerCtx &trans_ctx) const;
+  // Append equal/const/expr constraints to query_ctx all_* accumulators.
+  int append_constraints_to_query_ctx(ObQueryCtx &query_ctx) const;
+  // Merge constraints from another map_info into this one.
+  int merge_constraints(const ObStmtMapInfo &other);
+  // Append equal/const/expr constraints from this map_info into a compare context.
+  int append_constraints_to_context(ObStmtCompareContext &context) const;
 
   TO_STRING_KV(K_(table_map),
                K_(from_map),
@@ -256,6 +269,21 @@ struct ObStmtCompareContext : ObExprEqualCheckContext
   int is_pre_calc_item(const ObConstRawExpr &const_expr, bool &is_calc);
 
   bool compare_set_op_expr(const ObSetOpRawExpr& left, const ObSetOpRawExpr& right) override;
+
+  // clear per-comparison working state and configuration from init() is kept.
+  void reuse();
+
+  // Append equal/const/expr constraints to trans_ctx accumulators.
+  int append_constraints_to_trans_ctx(ObTransformerCtx &trans_ctx);
+
+  // Append equal/const/expr constraints to query_ctx all_* accumulators.
+  int append_constraints_to_query_ctx(ObQueryCtx &query_ctx);
+
+  // Append equal/const/expr constraints from this context into an ObStmtMapInfo.
+  int append_constraints_to_map_info(ObStmtMapInfo &map_info) const;
+
+  // Merge constraints from another compare context into this one.
+  int merge_constraints(const ObStmtCompareContext &other);
 
   const ObIArray<ObHiddenColumnItem> *calculable_items_; // from query context
   // first is the table id from the inner stmt

@@ -1487,9 +1487,8 @@ int ObTransformSubqueryCoalesce::transform_or_expr(ObDMLStmt *stmt,
     }
     if (OB_SUCC(ret) && can_be_transform) {
       ObSelectStmt *union_stmt = NULL;
-      if (OB_FAIL(append(stmt->get_query_ctx()->all_equal_param_constraints_,
-                         compare_ctx.equal_param_info_))) {
-        LOG_WARN("append equal param info failed", K(ret));
+      if (OB_FAIL(compare_ctx.append_constraints_to_query_ctx(*stmt->get_query_ctx()))) {
+        LOG_WARN("failed to append constraints to query ctx", K(ret));
       } else if (OB_FAIL(ObTransformUtils::create_set_stmt(ctx_,
                                                           ObSelectStmt::UNION,
                                                           false, 
@@ -1953,9 +1952,8 @@ int ObTransformSubqueryCoalesce::coalesce_subquery(StmtCompareHelper &helper,
                                         coalesce_query,
                                         i == 0))) {
       LOG_WARN("failed to inner coalesce subquery", K(ret));
-    } else if (OB_FAIL(append(query_ctx->all_equal_param_constraints_, 
-                              helper.stmt_map_infos_.at(i).equal_param_map_))) {
-      LOG_WARN("failed to append equal param constraints", K(ret));
+    } else if (OB_FAIL(helper.stmt_map_infos_.at(i).append_constraints_to_query_ctx(*query_ctx))) {
+      LOG_WARN("failed to append constraints to query ctx", K(ret));
     }
   }
   return ret;
@@ -2110,9 +2108,8 @@ int ObTransformSubqueryCoalesce::inner_coalesce_subquery(ObSelectStmt *subquery,
     if (OB_SUCC(ret)) {
       if (OB_FAIL(coalesce_query->adjust_subquery_list())) {
         LOG_WARN("failed to adjust subquery list", K(ret));
-      } else if (OB_FAIL(append(query_ctx->all_equal_param_constraints_,
-                                context.equal_param_info_))) {
-        LOG_WARN("failed to append equal param constraints", K(ret));
+      } else if (OB_FAIL(context.append_constraints_to_query_ctx(*query_ctx))) {
+        LOG_WARN("failed to append constraints to query ctx", K(ret));
       }
     }
   } // end smart var

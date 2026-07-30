@@ -33,6 +33,8 @@ void ObStmtMapInfo::reset()
   is_distinct_equal_ = false;
   is_qualify_filter_equal_ = false;
   equal_param_map_.reset();
+  const_param_map_.reset();
+  expr_cons_map_.reset();
   view_select_item_map_.reset();
   cond_property_map_.reset();
 }
@@ -55,7 +57,11 @@ int ObStmtMapInfo::assign(const ObStmtMapInfo& other)
   } else if (OB_FAIL(select_item_map_.assign(other.select_item_map_))) {
     LOG_WARN("failed to assign table map", K(ret));
   } else if (OB_FAIL(equal_param_map_.assign(other.equal_param_map_))) {
-    LOG_WARN("failed to assign table map", K(ret));
+    LOG_WARN("failed to assign equal param map", K(ret));
+  } else if (OB_FAIL(const_param_map_.assign(other.const_param_map_))) {
+    LOG_WARN("failed to assign const param map", K(ret));
+  } else if (OB_FAIL(expr_cons_map_.assign(other.expr_cons_map_))) {
+    LOG_WARN("failed to assign expr cons map", K(ret));
   } else if (OB_FAIL(view_select_item_map_.assign(other.view_select_item_map_))) {
     LOG_WARN("failed to assign table map", K(ret));
   } else if (OB_FAIL(cond_property_map_.assign(other.cond_property_map_))) {
@@ -71,6 +77,84 @@ int ObStmtMapInfo::assign(const ObStmtMapInfo& other)
     is_select_item_equal_ = other.is_select_item_equal_;
     is_distinct_equal_ = other.is_distinct_equal_;
     is_qualify_filter_equal_ = other.is_qualify_filter_equal_;
+  }
+  return ret;
+}
+
+int ObStmtMapInfo::append_constraints_to_trans_ctx(ObTransformerCtx &trans_ctx) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(append(trans_ctx.equal_param_constraints_, equal_param_map_))) {
+    LOG_WARN("append equal param map failed", K(ret));
+  } else if (OB_FAIL(append(trans_ctx.plan_const_param_constraints_, const_param_map_))) {
+    LOG_WARN("append const param map failed", K(ret));
+  } else if (OB_FAIL(append(trans_ctx.expr_constraints_, expr_cons_map_))) {
+    LOG_WARN("append expr cons map failed", K(ret));
+  }
+  return ret;
+}
+
+int ObStmtMapInfo::append_constraints_to_query_ctx(ObQueryCtx &query_ctx) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(append(query_ctx.all_equal_param_constraints_, equal_param_map_))) {
+    LOG_WARN("append equal param map failed", K(ret));
+  } else if (OB_FAIL(append(query_ctx.all_plan_const_param_constraints_, const_param_map_))) {
+    LOG_WARN("append const param map failed", K(ret));
+  } else if (OB_FAIL(append(query_ctx.all_expr_constraints_, expr_cons_map_))) {
+    LOG_WARN("append expr cons map failed", K(ret));
+  }
+  return ret;
+}
+
+int ObStmtMapInfo::merge_constraints(const ObStmtMapInfo &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(append(equal_param_map_, other.equal_param_map_))) {
+    LOG_WARN("append equal param map failed", K(ret));
+  } else if (OB_FAIL(append(const_param_map_, other.const_param_map_))) {
+    LOG_WARN("append const param map failed", K(ret));
+  } else if (OB_FAIL(append(expr_cons_map_, other.expr_cons_map_))) {
+    LOG_WARN("append expr cons map failed", K(ret));
+  }
+  return ret;
+}
+
+int ObStmtMapInfo::append_constraints_to_context(ObStmtCompareContext &context) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(append(context.equal_param_info_, equal_param_map_))) {
+    LOG_WARN("append equal param map failed", K(ret));
+  } else if (OB_FAIL(append(context.const_param_info_, const_param_map_))) {
+    LOG_WARN("append const param map failed", K(ret));
+  } else if (OB_FAIL(append(context.expr_cons_info_, expr_cons_map_))) {
+    LOG_WARN("append expr cons map failed", K(ret));
+  }
+  return ret;
+}
+
+int ObStmtCompareContext::append_constraints_to_map_info(ObStmtMapInfo &map_info) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(append(map_info.equal_param_map_, equal_param_info_))) {
+    LOG_WARN("append equal param info failed", K(ret));
+  } else if (OB_FAIL(append(map_info.const_param_map_, const_param_info_))) {
+    LOG_WARN("append const param info failed", K(ret));
+  } else if (OB_FAIL(append(map_info.expr_cons_map_, expr_cons_info_))) {
+    LOG_WARN("append expr cons info failed", K(ret));
+  }
+  return ret;
+}
+
+int ObStmtCompareContext::merge_constraints(const ObStmtCompareContext &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(append(equal_param_info_, other.equal_param_info_))) {
+    LOG_WARN("append equal param info failed", K(ret));
+  } else if (OB_FAIL(append(const_param_info_, other.const_param_info_))) {
+    LOG_WARN("append const param info failed", K(ret));
+  } else if (OB_FAIL(append(expr_cons_info_, other.expr_cons_info_))) {
+    LOG_WARN("append expr cons info failed", K(ret));
   }
   return ret;
 }
@@ -105,6 +189,44 @@ int ObStmtCompareContext::init(const ObDMLStmt *inner,
     inner_ = inner;
     outer_ = outer;
     calculable_items_ = calculable_items;
+  }
+  return ret;
+}
+
+void ObStmtCompareContext::reuse()
+{
+  // Clear per-comparison working state; configuration from init() is kept.
+  err_code_ = common::OB_SUCCESS;
+  error_code_ = 0;
+  recursion_level_ = 0;
+  param_expr_.reuse();
+  equal_param_info_.reuse();
+  expr_cons_info_.reuse();
+  const_param_info_.reuse();
+}
+
+int ObStmtCompareContext::append_constraints_to_trans_ctx(ObTransformerCtx &trans_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(append(trans_ctx.equal_param_constraints_, equal_param_info_))) {
+    LOG_WARN("append equal param info failed", K(ret));
+  } else if (OB_FAIL(append(trans_ctx.plan_const_param_constraints_, const_param_info_))) {
+    LOG_WARN("append const param info failed", K(ret));
+  } else if (OB_FAIL(append(trans_ctx.expr_constraints_, expr_cons_info_))) {
+    LOG_WARN("append expr constraints failed", K(ret));
+  }
+  return ret;
+}
+
+int ObStmtCompareContext::append_constraints_to_query_ctx(ObQueryCtx &query_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(append(query_ctx.all_equal_param_constraints_, equal_param_info_))) {
+    LOG_WARN("append equal param info failed", K(ret));
+  } else if (OB_FAIL(append(query_ctx.all_plan_const_param_constraints_, const_param_info_))) {
+    LOG_WARN("append const param info failed", K(ret));
+  } else if (OB_FAIL(append(query_ctx.all_expr_constraints_, expr_cons_info_))) {
+    LOG_WARN("append expr cons info failed", K(ret));
   }
   return ret;
 }
@@ -461,8 +583,8 @@ bool ObStmtCompareContext::compare_query(const ObQueryRefRawExpr &first,
     err_code_ = ret;
   } else if (stmt_map_info.is_select_item_equal_ && QueryRelation::QUERY_EQUAL == relation) {
     bret = true;
-    if (OB_FAIL(append(equal_param_info_, stmt_map_info.equal_param_map_))) {
-      LOG_WARN("failed to append equal param", K(ret));
+    if (OB_FAIL(stmt_map_info.append_constraints_to_context(*this))) {
+      LOG_WARN("failed to append constraints to context", K(ret));
       err_code_ = ret;
     }
   }
@@ -1048,10 +1170,8 @@ int ObStmtComparer::compute_conditions_map(const ObDMLStmt *first,
             LOG_WARN("failed to check is condition equal", K(ret));
           } else if (!is_match) {
             // do nothing
-          } else if (OB_FAIL(append(map_info.equal_param_map_, context.equal_param_info_))) {
-            LOG_WARN("failed to append exprs", K(ret));
-          } else if (OB_FAIL(append(map_info.const_param_map_, context.const_param_info_))) {
-            LOG_WARN("failed to append exprs", K(ret));
+          } else if (OB_FAIL(context.append_constraints_to_map_info(map_info))) {
+            LOG_WARN("failed to append constraints to map info", K(ret));
           } else if (OB_FAIL(matched_items.add_member(j))) {
             LOG_WARN("failed to add member", K(ret));
           } else {
@@ -1069,10 +1189,8 @@ int ObStmtComparer::compute_conditions_map(const ObDMLStmt *first,
             LOG_WARN("failed to check is condition equal", K(ret));
           } else if (!is_match) {
             // do nothing
-          } else if (OB_FAIL(append(map_info.equal_param_map_, context.equal_param_info_))) {
-            LOG_WARN("failed to append exprs", K(ret));
-          } else if (OB_FAIL(append(map_info.const_param_map_, context.const_param_info_))) {
-            LOG_WARN("failed to append exprs", K(ret));
+          } else if (OB_FAIL(context.append_constraints_to_map_info(map_info))) {
+            LOG_WARN("failed to append constraints to map info", K(ret));
           } else if (OB_FAIL(matched_items.add_member(i))) {
             LOG_WARN("failed to add member", K(ret));
           } else {
@@ -1139,10 +1257,8 @@ int ObStmtComparer::compute_new_expr(const ObIArray<ObRawExpr*> &target_exprs,
         is_all_computable = false;
       } else if (OB_FAIL(expr_copier.copy_on_replace(target_exprs.at(i), new_expr))) {
         LOG_WARN("failed to copy expr", K(ret), KPC(target_exprs.at(i)));
-      } else if (OB_FAIL(append(map_info.equal_param_map_, context.equal_param_info_))) {
-        LOG_WARN("failed to append equal param info", K(ret));
-      } else if (OB_FAIL(append(map_info.const_param_map_, context.const_param_info_))) {
-        LOG_WARN("failed to append exprs", K(ret));
+      } else if (OB_FAIL(context.append_constraints_to_map_info(map_info))) {
+        LOG_WARN("failed to append constraints to map info", K(ret));
       } else {
         compute_exprs.at(i) = new_expr;
       }
@@ -1180,10 +1296,8 @@ int ObStmtComparer::inner_compute_expr(const ObRawExpr *target_expr,
       // do nothing
     } else if (OB_FAIL(expr_copier.add_replaced_expr(target_expr, source_exprs.at(i)))) {
       LOG_WARN("failed to add replaceed expr", K(ret), KPC(target_expr), KPC(source_exprs.at(i)));
-    } else if (OB_FAIL(append(context.equal_param_info_, new_ctx.equal_param_info_))) {
-      LOG_WARN("failed to append expr", K((ret)));
-    } else if (OB_FAIL(append(context.const_param_info_, new_ctx.const_param_info_))) {
-      LOG_WARN("failed to append exprs", K(ret));
+    } else if (OB_FAIL(context.merge_constraints(new_ctx))) {
+      LOG_WARN("failed to merge constraints from sub context", K(ret));
     }
   }
   // Try to match each param expr
@@ -1276,10 +1390,8 @@ int ObStmtComparer::compute_orderby_map(const ObDMLStmt *first,
         LOG_WARN("failed to check is condition equal", K(ret));
       } else if (!is_match) {
         first_match_all = false;
-      } else if (OB_FAIL(append(map_info.equal_param_map_, context.equal_param_info_))) {
-        LOG_WARN("failed to append exprs", K(ret));
-      } else if (OB_FAIL(append(map_info.const_param_map_, context.const_param_info_))) {
-        LOG_WARN("failed to append exprs", K(ret));
+      } else if (OB_FAIL(context.append_constraints_to_map_info(map_info))) {
+        LOG_WARN("failed to append constraints to map info", K(ret));
       } else {
         match_count++;
       }
@@ -1295,14 +1407,12 @@ int ObStmtComparer::is_same_condition(const ObRawExpr *left,
 {
   int ret = OB_SUCCESS;
   is_same = false;
-  context.equal_param_info_.reset();
-  context.const_param_info_.reset();
+  context.reuse();
   if (OB_ISNULL(left) || OB_ISNULL(right)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
   } else if (!(is_same = left->same_as(*right, &context))) {
-    context.equal_param_info_.reset();
-    context.const_param_info_.reset();
+    context.reuse();
     if (!IS_COMMON_COMPARISON_OP(left->get_expr_type()) ||
         get_opposite_compare_type(left->get_expr_type()) != right->get_expr_type()) {
       // do nothing
@@ -1837,8 +1947,8 @@ int ObStmtComparer::compare_table_item(const ObDMLStmt *first,
     } else if (QueryRelation::QUERY_UNCOMPARABLE != relation) {
       if (ref_query_map_info.is_select_item_equal_ && QueryRelation::QUERY_EQUAL == relation) {
         map_info.table_map_.at(first_table_index - 1) = second_table_index - 1;
-        if (OB_FAIL(append(map_info.equal_param_map_, ref_query_map_info.equal_param_map_))) {
-          LOG_WARN("failed to append equal param", K(ret));
+        if (OB_FAIL(map_info.merge_constraints(ref_query_map_info))) {
+          LOG_WARN("failed to merge constraints from ref query map info", K(ret));
         }
       } else {
         relation = QueryRelation::QUERY_UNCOMPARABLE;
@@ -1911,8 +2021,8 @@ int ObStmtComparer::compare_set_stmt(const ObSelectStmt *first,
       } else if (QueryRelation::QUERY_EQUAL == set_query_relation && ref_query_map_info.is_select_item_equal_) {
         if (OB_FAIL(map_info.view_select_item_map_.push_back(ref_query_map_info.select_item_map_))) {
           LOG_WARN("failed to push back map info", K(ret));
-        } else if (OB_FAIL(append(map_info.equal_param_map_, ref_query_map_info.equal_param_map_))) {
-          LOG_WARN("failed to append equal param", K(ret));
+        } else if (OB_FAIL(map_info.merge_constraints(ref_query_map_info))) {
+          LOG_WARN("failed to merge constraints from ref query map info", K(ret));
         }
       } else {
         set_query_relation = QueryRelation::QUERY_UNCOMPARABLE;

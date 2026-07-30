@@ -1766,7 +1766,7 @@ int ObTransformConstPropagate::check_set_op_expr_const(ObSelectStmt *stmt,
           } else if (OB_FAIL(append(equal_infos, context.equal_param_info_))) {
             LOG_WARN("failed to append equal param map", K(ret));
           } else {
-            context.equal_param_info_.reset();
+            context.reuse();
           }
         }
       }
