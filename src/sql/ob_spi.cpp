@@ -8683,12 +8683,21 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
           && lib::is_oracle_mode()) {
         cast_ctx.cast_mode_ |= CM_ENABLE_BLOB_CAST;
       }
-      if (OB_SUCC(ret) && ((result_type.is_ext() && (obj.is_user_defined_sql_type() || obj.is_geometry())))) {
+      if (OB_SUCC(ret) && ((result_type.is_ext() || result_type.is_null() || result_type.is_unknown()) && (obj.is_user_defined_sql_type() || obj.is_geometry()))) {
         cast_ctx.exec_ctx_ = ctx->exec_ctx_;
       }
       if (OB_FAIL(ret)) {
       } else if (result_type.is_null() || result_type.is_unknown()) {
-        tmp_obj = obj;
+        if (obj.is_user_defined_sql_type()) { //sql udt need to convert to pl extend upon entering PL scope.
+          ObExprResType extend_type;
+          extend_type.set_ext();
+          if (OB_FAIL(ObExprColumnConv::convert_with_null_check(tmp_obj, obj, extend_type,
+                                                               is_strict, cast_ctx, type_info))) {
+            LOG_WARN("fail to convert sql udt to pl extend for unknown into type", K(ret), K(obj), K(current_type));
+          }
+        } else {
+          tmp_obj = obj;
+        }
       } else {
         if (((obj.get_meta().is_ext())  // xmltype can not convert with other type in pl
               && !(result_type.get_type() == ObExtendType
