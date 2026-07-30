@@ -10,6 +10,7 @@
 #define protected public
 #include "lib/ob_errno.h"
 #include "lib/hash/ob_hashset.h"
+#include "storage/backup/ob_backup_data_struct.h"
 #include "storage/high_availability/ob_storage_ha_struct.h"
 
 namespace oceanbase
@@ -164,15 +165,33 @@ TEST_F(ObMacroBlockReuseMgrTest, test_duplicated_input)
 
 TEST_F(ObMacroBlockReuseMgrTest, test_invalid_input)
 {
-  const int64_t TEST_MACRO_BLOCK_COUNT = 3;
+  const int64_t TEST_MACRO_BLOCK_COUNT = 4;
   const ObLogicMacroBlockId invalid_logic_id;
   const MacroBlockId invalid_macro_id;
   const int64_t invalid_data_checksum = -1;
+  backup::ObBackupDeviceMacroBlockId backup_device_macro_id;
+  ASSERT_EQ(OB_SUCCESS, backup_device_macro_id.set(
+      1 /* backup_set_id */,
+      1 /* ls_id */,
+      1 /* data_type */,
+      1 /* turn_id */,
+      0 /* retry_id */,
+      1 /* file_id */,
+      0 /* offset */,
+      4096 /* length */,
+      backup::ObBackupDeviceMacroBlockId::DATA_BLOCK));
+  MacroBlockId backup_macro_id(
+      backup_device_macro_id.first_id(),
+      backup_device_macro_id.second_id(),
+      backup_device_macro_id.third_id(),
+      0 /* fourth_id */);
+  ASSERT_TRUE(backup_macro_id.is_valid());
 
   MacroBlockInfo macro_block_infos[TEST_MACRO_BLOCK_COUNT] = {
     {invalid_logic_id, MacroBlockId(1, 1, 1, 1), 1},
     {ObLogicMacroBlockId(2, 2, 2), invalid_macro_id, 2},
-    {ObLogicMacroBlockId(3, 3, 3), MacroBlockId(3, 3, 3, 3), invalid_data_checksum}
+    {ObLogicMacroBlockId(3, 3, 3), MacroBlockId(3, 3, 3, 3), invalid_data_checksum},
+    {ObLogicMacroBlockId(4, 4, 4), backup_macro_id, 4}
   };
 
   // test invalid add

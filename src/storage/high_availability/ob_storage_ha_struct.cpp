@@ -2589,7 +2589,10 @@ int ObMacroBlockReuseMgr::add_macro_block_reuse_info(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("macro block reuse mgr do not init", K(ret));
-  } else if (!logic_id.is_valid() || !macro_id.is_valid() || data_checksum < 0) {
+  } else if (!logic_id.is_valid()
+      || !macro_id.is_valid()
+      || !macro_id.is_local_id()
+      || data_checksum < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("add macro block reuse info get invalid argument", K(ret), K(logic_id), K(macro_id), K(data_checksum));
   } else {

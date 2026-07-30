@@ -1365,7 +1365,7 @@ int ObSSTableCopyFinishTask::get_latest_available_major_(const ObIArray<ObSSTabl
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid major sstable", K(ret), K(i), KPC(sstable));
     } else if (OB_FAIL(sstable->get_meta(sst_meta_hdl))) {
-      LOG_WARN("failed to get sstable meta", K(ret), KPC(sstable));
+      LOG_WARN("failed to get sstable meta", K(ret), K(i), KPC(sstable));
     } else if (sst_meta_hdl.get_sstable_meta().get_basic_meta().table_backup_flag_.has_backup()) {
       // stop at the first major sstable that has backup data
       break;
@@ -1494,7 +1494,14 @@ int ObSSTableCopyFinishTask::build_major_sstable_reuse_info_(
             macro_id = data_macro_block_meta.get_macro_id();
             int64_t data_checksum = data_macro_block_meta.get_meta_val().data_checksum_;
 
-            if (OB_FAIL(macro_block_reuse_mgr_.add_macro_block_reuse_info(logic_id, macro_id, data_checksum))) {
+            if (!macro_id.is_local_id()) {
+              // Only local macro blocks can be reused. A backup macro block must be replaced
+              // by a local macro block during RESTORE_REPLACE_REMOTE_SSTABLE, otherwise the
+              // new sstable will still hold backup macro blocks and fail the check in
+              // inner_replace_remote_major_sstable_.
+              LOG_INFO("macro block is not local id, skip to build reuse info",
+                  K(ret), K(logic_id), K(macro_id));
+            } else if (OB_FAIL(macro_block_reuse_mgr_.add_macro_block_reuse_info(logic_id, macro_id, data_checksum))) {
               LOG_WARN("failed to insert reuse info into reuse map", K(ret), K(logic_id), K(macro_id), K(data_checksum));
             }
           }
