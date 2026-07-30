@@ -495,6 +495,59 @@ int ObDBMSVectorMySql::index_vector_memory_estimate(ObPLExecCtx &ctx, ParamStore
   return ret;
 }
 
+// helper function to check the duplicate keys in param string
+static int check_duplicate_idx_params(const ObString &param_str, const ObString &idx_type_str)
+{
+  int ret = OB_SUCCESS;
+  ObString seen_keys[32]; // at most ~20 distinct param keys; keys beyond this limit skip duplicate tracking
+  int64_t key_count = 0;
+  int64_t type_count = 0;
+  const char *p = param_str.ptr();
+  const char *const end = (p != nullptr) ? (p + param_str.length()) : nullptr;
+  while (OB_SUCC(ret) && p != nullptr && p < end) {
+    while (p < end && *p == ',') { ++p; } // skip leading/consecutive commas
+    if (p >= end) {
+      break;
+    }
+    // locate key (up to '=')
+    const char *eq = p;
+    while (eq < end && *eq != '=') { ++eq; }
+    if (eq >= end) {
+      break; // malformed segment, leave to parser_params_from_string
+    }
+    ObString key(static_cast<int32_t>(eq - p), p);
+    const char *val_start = eq + 1;
+    const char *val_end = val_start;
+    while (val_end < end && *val_end != ',') { ++val_end; }
+    ObString val(static_cast<int32_t>(val_end - val_start), val_start);
+    if (key == ObString("TYPE")) {
+      ++type_count;
+      if (val.case_compare(idx_type_str) != 0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("TYPE in param string conflicts with index type argument", K(ret), K(val), K(idx_type_str));
+      } else if (type_count > 2) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("duplicate vector index param key", K(ret), K(key));
+      }
+    } else {
+      bool dup = false;
+      for (int64_t i = 0; !dup && i < key_count; ++i) {
+        if (seen_keys[i] == key) { dup = true; }
+      }
+      if (dup) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("duplicate vector index param key", K(ret), K(key));
+      } else if (key_count < 32) {
+        seen_keys[key_count++] = key;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      p = (val_end < end) ? val_end + 1 : end;
+    }
+  }
+  return ret;
+}
+
 int ObDBMSVectorMySql::parse_idx_param(const ObString &idx_type_str,
                                        const ObString &idx_param_str,
                                        uint32_t dim_count,
@@ -502,10 +555,12 @@ int ObDBMSVectorMySql::parse_idx_param(const ObString &idx_type_str,
 {
   int ret = OB_SUCCESS;
   const int64_t MAX_DIM_LIMITED = 4096;
+  const ObCollationType COLL_TYPE = CS_TYPE_UTF8MB4_GENERAL_CI;
   ObArenaAllocator tmp_alloc;
   ObVectorIndexType idx_type = VIT_MAX;
   ObStringBuffer param_str_buf(&tmp_alloc);
   ObString param_str;
+  bool set_default = true;
 
   // parse idx_type
   if (idx_type_str.case_compare("HNSW") == 0
@@ -514,6 +569,7 @@ int ObDBMSVectorMySql::parse_idx_param(const ObString &idx_type_str,
       || idx_type_str.case_compare("SINDI") == 0
       || idx_type_str.case_compare("SINDI_SQ") == 0) {
     idx_type = ObVectorIndexType::VIT_HNSW_INDEX;
+    set_default = (idx_type_str.case_compare("SINDI") != 0 && idx_type_str.case_compare("SINDI_SQ") != 0);
   } else if (idx_type_str.case_compare("IVF_FLAT") == 0
              || idx_type_str.case_compare("IVF_SQ8") == 0
              || idx_type_str.case_compare("IVF_PQ") == 0) {
@@ -536,10 +592,24 @@ int ObDBMSVectorMySql::parse_idx_param(const ObString &idx_type_str,
     LOG_WARN("failed to append string", K(ret), K(idx_type_str));
   } else if (OB_FAIL(param_str_buf.get_result_string(param_str))) {
     LOG_WARN("failed to get result string", K(ret), K(param_str_buf));
+  } else if (OB_FAIL(ob_strip_space(tmp_alloc, param_str, param_str))) {
+    LOG_WARN("failed to strip spaces from param string", K(ret), K(param_str));
   } else if (OB_FAIL(ob_simple_low_to_up(tmp_alloc, param_str, param_str))) {
     LOG_WARN("string low to up failed", K(ret), K(param_str));
-  } else if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(param_str, idx_type, index_param))) {
+  } else if (OB_FAIL(check_duplicate_idx_params(param_str, idx_type_str))) {
+    LOG_WARN("conflicting TYPE or duplicate key in vector index param", K(ret), K(param_str));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "conflicting or duplicate key in vector index param");
+  } else if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(param_str, idx_type, index_param, set_default))) {
     LOG_WARN("fail to parser params from string", K(ret), K(param_str));
+  } else if (index_param.m_ != 0 &&
+             index_param.type_ != VIAT_IVF_PQ &&
+             index_param.type_ != VIAT_HNSW &&
+             index_param.type_ != VIAT_HNSW_SQ &&
+             index_param.type_ != VIAT_HNSW_BQ &&
+             index_param.type_ != VIAT_HGRAPH) { // HGRAPH is promoted from HNSW when extra_info_actual_size > 0
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("vector index param m only need to be set in ivf_pq or hnsw mode", K(ret), K(index_param.type_));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "m for non ivf_pq or non hnsw vector index");
   } else if (index_param.type_ == VIAT_IVF_PQ && index_param.m_ == 0) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("ivf_pq vector index param m needs to be set", K(ret));
@@ -548,13 +618,60 @@ int ObDBMSVectorMySql::parse_idx_param(const ObString &idx_type_str,
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("ivf vector index param m needs to be divisible by dim, or less than dim", K(ret), K(dim_count), K(index_param.m_));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "this value of vector index m not to be divisible by dim or greater than dim is");
+  } else if (index_param.type_ != VIAT_IVF_PQ &&
+             ObCharset::locate(COLL_TYPE, param_str.ptr(), param_str.length(), "NBITS", 5, 1) > 0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("vector index param nbits only need to be set in ivf_pq mode", K(ret), K(index_param.type_));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "nbits for non ivf_pq vector index");
+  } else if ((idx_type == ObVectorIndexType::VIT_IVF_INDEX ||
+              ObVectorIndexUtil::is_ipivf_index_type(index_param.type_)) &&
+             (index_param.ef_construction_ != 0 ||
+              index_param.ef_search_ != 0 ||
+              index_param.extra_info_max_size_ != 0 ||
+              ObCharset::locate(COLL_TYPE, param_str.ptr(), param_str.length(), "EXTRA_INFO_MAX_SIZE", 19, 1) > 0)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("ivf vector index param ef_construction or ef_search or extra_info_max_size should not be set", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "ef_construction or ef_search or extra_info_max_size for ivf vector index");
+  } else if ((ObVectorIndexUtil::is_hnsw_index_type(index_param.type_) ||
+              ObVectorIndexUtil::is_ipivf_index_type(index_param.type_)) &&
+             (index_param.nlist_ != 0 ||
+              index_param.sample_per_nlist_ != 0)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("hnsw vector index no need to set nlist or sample_per_nlist", K(ret), K(index_param.nlist_), K(index_param.sample_per_nlist_));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "nlist or sample_per_nlist for hnsw vector index");
+  } else if (ObVectorIndexUtil::is_ipivf_index_type(index_param.type_) &&
+             (index_param.endpoint_[0] != '\0' ||
+              index_param.sync_interval_type_ != ObVectorIndexSyncIntervalType::VSIT_MAX ||
+              index_param.dim_ != 0)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("parameter for sparse vector index is not supported", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "endpoint or sync_interval_type or dim for sparse vector index");
+  } else if (ObVectorIndexUtil::is_ipivf_index_type(index_param.type_) &&
+             !index_param.prune_ &&
+             (index_param.refine_ || index_param.ob_sparse_drop_ratio_build_ != 0)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("sparse vector index not support to set refine or ob_sparse_drop_ratio_build when prune is false",
+             K(ret), K(index_param.refine_), K(index_param.ob_sparse_drop_ratio_build_));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "sparse vector index set refine or ob_sparse_drop_ratio_build when prune is false");
+  } else if ((index_param.type_ == VIAT_HNSW ||
+              index_param.type_ == VIAT_HNSW_SQ ||
+              index_param.type_ == VIAT_HNSW_BQ) &&
+             index_param.ef_construction_ <= index_param.m_) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("ef_construction value must be larger than m value", K(ret), K(index_param.ef_construction_), K(index_param.m_));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "the vector index params ef_construction less than or equal to m value");
   } else if (index_param.dist_algorithm_ == VIDA_MAX) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("unexpected setting of vector index param, distance has not been set",
       K(ret), K(index_param.dist_algorithm_));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "the vector index params of distance not set is");
+  } else if (ObVectorIndexUtil::is_ipivf_index_type(index_param.type_) &&
+             index_param.dist_algorithm_ != VIDA_IP) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support sparse vector index distance algorithm", K(ret), K(index_param.dist_algorithm_));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "distance algorithm for sparse vector index");
   } else if (index_param.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ
-             && ObCharset::locate(CS_TYPE_UTF8MB4_GENERAL_CI, param_str.ptr(), param_str.length(), "REFINE_TYPE", 11, 1) <= 0
+             && ObCharset::locate(COLL_TYPE, param_str.ptr(), param_str.length(), "REFINE_TYPE", 11, 1) <= 0
              && OB_FALSE_IT(index_param.refine_type_ = common::obvsag::QuantizationType::SQ8)) {
   } else if ((index_param.type_ != ObVectorIndexAlgorithmType::VIAT_IPIVF && index_param.type_ != ObVectorIndexAlgorithmType::VIAT_IPIVF_SQ) &&
             OB_UNLIKELY(dim_count == 0 || dim_count > MAX_DIM_LIMITED)) {
