@@ -4274,91 +4274,6 @@ int calc_high_bound_obj_new_engine(
 // }
 
 /* sync task, need response */
-int ObTableLocation::send_add_interval_partition_rpc(
-    ObExecContext &exec_ctx,
-    share::schema::ObSchemaGetterGuard *schema_guard,
-    ObNewRow &row) const
-{
-  int ret = OB_SUCCESS;
-  const ObTableSchema *table_schema = NULL;
-  const ObDatabaseSchema *db_schema = NULL;
-  ObSqlString sql;
-  ObMySQLProxy *sql_proxy = nullptr;
-  int64_t affected_rows = 0;
-  ObTimeZoneInfo tz_info;
-  ObObj result_obj;
-  uint64_t range_part_num = 0;
-  if (OB_ISNULL(exec_ctx.get_my_session())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(exec_ctx.get_my_session()));
-  }
-
-  if (OB_SUCC(ret) && row.get_cell(0).is_null()) {
-    ret = OB_ERR_PARTITIONING_KEY_MAPS_TO_A_PARTITION_OUTSIDE_MAXIMUM_PERMITTED_NUMBER_OF_PARTITIONS;
-    LOG_USER_WARN(OB_ERR_PARTITIONING_KEY_MAPS_TO_A_PARTITION_OUTSIDE_MAXIMUM_PERMITTED_NUMBER_OF_PARTITIONS);
-  }
-
-  CK (OB_NOT_NULL(schema_guard));
-  OZ (schema_guard->get_table_schema(exec_ctx.get_my_session()->get_effective_tenant_id(),
-                                     loc_meta_.table_loc_id_, table_schema));
-  CK (OB_NOT_NULL(table_schema));
-  OZ (schema_guard->get_database_schema(table_schema->get_tenant_id(), table_schema->get_database_id(), db_schema));
-  CK (OB_NOT_NULL(db_schema));
-
-  CK (1 <= row.get_count());
-  CK (table_schema->get_transition_point().is_valid());
-  CK (table_schema->get_interval_range().is_valid());
-  CK (1 == table_schema->get_transition_point().get_obj_cnt());
-  CK (1 == table_schema->get_interval_range().get_obj_cnt());
-  OZ (table_schema->get_interval_parted_range_part_num(range_part_num));
-
-  OZ (calc_high_bound_obj_new_engine(exec_ctx.get_allocator(),
-                                     exec_ctx.get_my_session(),
-                                     row.get_cell(0),
-                                     range_part_num,
-                                     *table_schema,
-                                     result_obj));
-
-  /* alter table table_name add partition ppp values less than (); */
-  if (OB_SUCC(ret)) {
-    ObRowkey high_bound_rowkey;
-    high_bound_rowkey.assign(&result_obj, 1);
-
-
-    tz_info.set_offset(0);
-    OZ (OTTZ_MGR.get_tenant_tz(table_schema->get_tenant_id(), tz_info.get_tz_map_wrap()));
-
-    SMART_VAR(char[OB_MAX_DEFAULT_VALUE_LENGTH], high_bound_buf) {
-      MEMSET(high_bound_buf, 0, OB_MAX_DEFAULT_VALUE_LENGTH);
-      int64_t high_bound_buf_pos = 0;
-
-      bool is_oracle_mode = false;
-      OZ (ObPartitionUtils::convert_rowkey_to_sql_literal(is_oracle_mode,
-                                                      high_bound_rowkey,
-                                                      high_bound_buf,
-                                                      OB_MAX_DEFAULT_VALUE_LENGTH,
-                                                      high_bound_buf_pos,
-                                                      false,
-                                                      &tz_info));
-
-      OZ (sql.assign_fmt("ALTER TABLE \"%.*s\".\"%.*s\" ADD PARTITION P_SYS_%d "
-                        "VALUES LESS THAN (%.*s);",
-                              db_schema->get_database_name_str().length(),
-                              db_schema->get_database_name_str().ptr(),
-                              table_schema->get_table_name_str().length(),
-                              table_schema->get_table_name_str().ptr(),
-                              1,
-                              static_cast<int>(high_bound_buf_pos), high_bound_buf
-                              ));
-      OX (sql_proxy = GCTX.sql_proxy_);
-      CK (OB_NOT_NULL(sql_proxy));
-      OZ (sql_proxy->write(table_schema->get_tenant_id(), sql.ptr(), affected_rows, ORACLE_MODE));
-    }
-  }
-  return ret;
-}
-
-/* sync task, need response */
 int ObTableLocation::send_add_interval_partition_rpc_new_engine(
     ObIAllocator &allocator,
     ObSQLSessionInfo *session,
@@ -4479,7 +4394,6 @@ int ObTableLocation::calc_partition_id_by_row(ObExecContext &exec_ctx,
 {
   int ret = OB_SUCCESS;
   ObObj func_result;
-  share::schema::ObPartitionLevel calc_range_part_level = part_level_;
   bool range_columns = false;
   if (NULL == part_ids) {
     if (PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_type_
@@ -4502,8 +4416,7 @@ int ObTableLocation::calc_partition_id_by_row(ObExecContext &exec_ctx,
       LOG_DEBUG("part expr func result", K(func_result), K(part_type_));
     }
   } else if (PARTITION_FUNC_TYPE_RANGE_COLUMNS == subpart_type_ || PARTITION_FUNC_TYPE_LIST_COLUMNS == subpart_type_) {
-    calc_range_part_level = PARTITION_LEVEL_TWO;
-    part_projector_.project_part_row(calc_range_part_level, row);
+    part_projector_.project_part_row(PARTITION_LEVEL_TWO, row);
     for (int64_t idx = 0; OB_SUCC(ret) && idx < part_ids->count(); ++idx) {
       ObObjectID partition_id = OB_INVALID_ID;
       ObTabletID tablet_id(ObTabletID::INVALID_TABLET_ID);
@@ -4523,25 +4436,6 @@ int ObTableLocation::calc_partition_id_by_row(ObExecContext &exec_ctx,
   } else if (OB_FAIL(calc_partition_id_by_func_value(tablet_mapper, func_result, false,
                                                       tablet_ids, partition_ids, part_ids))) {
     LOG_WARN("Failed to calc partition id by func value", K(ret));
-  }
-  if (0 == partition_ids.count() && PARTITION_LEVEL_ONE == calc_range_part_level) {
-    bool is_interval = false;
-    if (OB_ISNULL(tablet_mapper.get_table_schema())) {
-      // virtual table, do nothing
-    } else if (tablet_mapper.get_table_schema()->is_interval_part()) {
-      if (OB_FAIL(send_add_interval_partition_rpc(exec_ctx,
-                                                  exec_ctx.get_sql_ctx()->schema_guard_,
-                                                  row))) {
-        /* to do: already added, do same thing as add success */
-        if (is_need_retry_interval_part_error(ret)) {
-          set_interval_partition_insert_error(ret);
-        }
-        LOG_WARN("failed to send add interval partition rpc", K(ret));
-      } else {
-        /* change error */
-        set_interval_partition_insert_error(ret);
-      }
-    }
   }
   return ret;
 }

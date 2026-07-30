@@ -662,10 +662,6 @@ public:
                               const ObSqlCtx *sql_ctx,
                               bool &is_weak_read);
 
-  int send_add_interval_partition_rpc(ObExecContext &exec_ctx,
-                                      share::schema::ObSchemaGetterGuard *schema_guard,
-                                      ObNewRow &row) const;
-
   /**
    * Calculate the table's partition location list from the input parameters.
    *
