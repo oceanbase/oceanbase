@@ -5080,9 +5080,21 @@ int ObLSTabletService::build_tablet_with_batch_tables(
       LOG_WARN("tablet pointer should not be NULL", K(ret), K(old_tablet_handle));
     } else {
       uint64_t data_version = 0;
-      ObTabletMdsExclusiveLockGuard mds_truncate_log_guard(pointer->get_mds_truncate_lock(), true);
+      // The mds truncate lock is shared with the clog replay thread, which holds it in read
+      // mode for the whole do_replay_ (including check_transfer_table_replaced_). A one-shot
+      // try_wrlock here easily livelocks against the replay thread's ~11ms rdlock/rdunlock
+      // cycle: backfill only gets a few DAG retries and may keep colliding with the
+      // tens-of-us windows where the read lock is held. Acquire the write lock with a bounded
+      // wait instead, so we register as a pending writer and get waken up on the next rdunlock,
+      // breaking the livelock while still bounding how long we hold the bucket lock.
+      const int64_t mds_truncate_lock_timeout_us = 100 * 1000; // 100ms, replay rdlock/rdunlock cycle is ~11ms
+      ObTabletMdsExclusiveLockGuard mds_truncate_log_guard(pointer->get_mds_truncate_lock(),
+                                                           false /*try_lock*/,
+                                                           mds_truncate_lock_timeout_us /*warn_threshold*/,
+                                                           mds_truncate_lock_timeout_us /*wait_timeout_us*/);
       if (OB_FAIL(mds_truncate_log_guard.get_ret())) {
-        LOG_WARN("try lock mds truncate failed", K(ret), K(tablet_id), "release mds scn", param.release_mds_scn_);
+        LOG_WARN("lock mds truncate with timeout failed", K(ret), K(tablet_id),
+            K(mds_truncate_lock_timeout_us), "release mds scn", param.release_mds_scn_);
         ret = OB_EAGAIN;
       } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
         LOG_WARN("fail to get min data version", K(ret));

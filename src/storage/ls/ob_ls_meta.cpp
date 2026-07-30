@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_ls_meta.h"
+#include "storage/tablet/ob_tablet.h" // ObTablet, required by ObUpdateTabletPointerParam::to_string below
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
 
 namespace oceanbase
@@ -1161,7 +1162,8 @@ ObLSStoreFormat ObLSMeta::get_store_format() const
 
 ObLSMeta::ObReentrantWLockGuard::ObReentrantWLockGuard(ObLatch &lock,
                                                        const bool try_lock,
-                                                       const int64_t warn_threshold)
+                                                       const int64_t warn_threshold,
+                                                       const int64_t wait_timeout_us)
   : first_locked_(false),
     time_guard_("ls_meta", warn_threshold),
     lock_(lock),
@@ -1170,15 +1172,25 @@ ObLSMeta::ObReentrantWLockGuard::ObReentrantWLockGuard(ObLatch &lock,
   if (lock_.is_wrlocked_by()) {
     // I have locked with W, do nothing
   } else if (try_lock) {
+    // pure non-blocking try lock, fail immediately if conflict
     if (OB_UNLIKELY(OB_SUCCESS !=
                     (ret_ = lock_.try_wrlock(ObLatchIds::LS_META_LOCK)))) {
     } else {
       first_locked_ = true;
     }
   } else {
+    // blocking wrlock: bounded by wait_timeout_us when it is set (>0), otherwise wait
+    // indefinitely. A bounded wait still registers as a pending writer and gets waken up
+    // once the readers release the latch. OB_TIMEOUT (only possible with a bounded wait)
+    // is an expected soft failure left for the caller to handle, not an error.
+    const int64_t abs_timeout_us = wait_timeout_us > 0
+        ? common::ObTimeUtility::current_time() + wait_timeout_us
+        : INT64_MAX;
     if (OB_UNLIKELY(OB_SUCCESS !=
-                    (ret_ = lock_.wrlock(ObLatchIds::LS_META_LOCK)))) {
-      LOG_ERROR_RET(ret_, "Fail to lock");
+                    (ret_ = lock_.wrlock(ObLatchIds::LS_META_LOCK, abs_timeout_us)))) {
+      if (OB_TIMEOUT != ret_) {
+        LOG_ERROR_RET(ret_, "Fail to lock");
+      }
     } else {
       first_locked_ = true;
     }

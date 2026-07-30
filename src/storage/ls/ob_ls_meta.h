@@ -154,9 +154,19 @@ public:
   class ObReentrantWLockGuard
   {
   public:
+    // Locking mode is decided by (try_lock, wait_timeout_us), checked in this order:
+    //   1. try_lock == true:  pure non-blocking try lock (try_wrlock), fail immediately
+    //                          with OB_EAGAIN if conflict. wait_timeout_us is ignored.
+    //   2. wait_timeout_us > 0: blocking wrlock but bounded, wait at most wait_timeout_us
+    //                          for the write lock and return OB_TIMEOUT on timeout. The
+    //                          caller registers as a pending writer and can be waken up
+    //                          once the readers release, instead of blocking forever or
+    //                          racing a one-shot try_wrlock against transient readers.
+    //   3. otherwise:          blocking wrlock that waits indefinitely (original default).
     ObReentrantWLockGuard(common::ObLatch &lock,
                           const bool try_lock = false,
-                          const int64_t warn_threshold = 100 * 1000 /* 100 ms */);
+                          const int64_t warn_threshold = 100 * 1000 /* 100 ms */,
+                          const int64_t wait_timeout_us = 0);
     ~ObReentrantWLockGuard();
     inline int get_ret() const { return ret_; }
     void click(const char *mod = NULL) { time_guard_.click(mod); }
