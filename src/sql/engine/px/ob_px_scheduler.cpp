@@ -410,21 +410,24 @@ int ObPxMsgProc::process_sqc_finish_msg_once(ObExecContext &ctx, const ObPxFinis
     }
   }
 
+  // unregister check_item if the thread finishes no matter whether succeed before.
+  if (OB_NOT_NULL(edge)
+      && edge->is_thread_finish()
+      && OB_NOT_NULL(ctx.get_physical_plan_ctx())
+      && OB_NOT_NULL(ctx.get_physical_plan_ctx()->get_phy_plan())
+      && ctx.get_physical_plan_ctx()->get_phy_plan()->is_enable_px_fast_reclaim()) {
+    (void)ObDetectManagerUtils::qc_unregister_check_item_from_dm(edge);
+  }
+
   // schedule_next_dfo if this dfo is finished.
-  if (OB_SUCC(ret)) {
-    if (edge->is_thread_finish()) {
-      if (OB_NOT_NULL(ctx.get_physical_plan_ctx()->get_phy_plan()) &&
-          ctx.get_physical_plan_ctx()->get_phy_plan()->is_enable_px_fast_reclaim()) {
-        (void)ObDetectManagerUtils::qc_unregister_check_item_from_dm(edge);
-      }
-      ret = scheduler_->try_schedule_next_dfo(ctx);
-      if (OB_ITER_END == ret) {
-        coord_info_.all_threads_finish_ = true;
-        LOG_TRACE("TIMERECORD ",
-                  "reserve:=-1 name:=QC dfoid:=-1 sqcid:=-1 taskid:=-1 end:",
-                  ObTimeUtility::current_time());
-        ret = OB_SUCCESS; // 需要覆盖，否则无法跳出 loop
-      }
+  if (OB_SUCC(ret) && edge->is_thread_finish()) {
+    ret = scheduler_->try_schedule_next_dfo(ctx);
+    if (OB_ITER_END == ret) {
+      coord_info_.all_threads_finish_ = true;
+      LOG_TRACE("TIMERECORD ",
+                "reserve:=-1 name:=QC dfoid:=-1 sqcid:=-1 taskid:=-1 end:",
+                ObTimeUtility::current_time());
+      ret = OB_SUCCESS; // 需要覆盖，否则无法跳出 loop
     }
   }
   return ret;
