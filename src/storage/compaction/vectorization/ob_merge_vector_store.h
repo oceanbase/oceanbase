@@ -82,10 +82,18 @@ public:
 
   OB_INLINE int64_t get_row_count() const { return has_single_row() ? 1 : row_count_; }
   OB_INLINE int64_t get_column_count() const { return nullptr == layout_param_ ? 0 : layout_param_->column_count_; }
-  OB_INLINE bool is_full() const { return row_count_ >= get_batch_capacity() || total_mem_usage_ > mem_limit_; }
+  OB_INLINE bool is_full() const
+  {
+    return is_inited_
+        && (row_count_ >= get_batch_capacity()
+            || (is_continuous_ && total_mem_usage_ > mem_limit_));
+  }
   OB_INLINE bool is_empty() const { return row_count_ == 0; } // only means no rows in vectors, not single row
-  OB_INLINE bool is_continuous() const { return mem_limit_ != UINT64_MAX; }
-  OB_INLINE int64_t get_batch_capacity() const { return layout_param_->get_compaction_batch_size(); }
+  OB_INLINE bool is_continuous() const { return is_continuous_; }
+  OB_INLINE int64_t get_batch_capacity() const
+  {
+    return nullptr == layout_param_ ? 0 : layout_param_->get_compaction_batch_size();
+  }
   OB_INLINE bool need_flush() const { return need_force_flush_ || is_full(); }
   OB_INLINE void set_need_flush() { need_force_flush_ = true; }
   OB_INLINE int64_t get_incremental_row_count() const { return incremental_row_count_; }
@@ -132,10 +140,17 @@ private:
       blocksstable::ObIMicroBlockReader *reader,
       const int64_t begin_index,
       const int64_t row_cap);
+  int inner_fill_rows_one_by_one(
+      const common::ObIArrayWrap<uint16_t> *cols,
+      blocksstable::ObIMicroBlockReader &reader,
+      const int64_t begin_index,
+      const int64_t row_cap,
+      const bool force_deep_copy);
   int is_row_filtered(const int64_t idx, ObCompactionFilterHandle *filter_handle, bool &is_filtered);
 
 private:
   bool is_inited_;
+  bool is_continuous_;
   bool need_force_flush_; // Whether the store contains shallow pointers that must be flushed before switching micro blocks.
   const blocksstable::ObDatumRow *single_row_; // Non-null when a single row is returned instead of a vector batch.
   const ObMergeVectorStoreLayoutParam *layout_param_;
@@ -157,6 +172,7 @@ private:
   uint32_t *len_array_;
   int32_t *row_ids_;
   blocksstable::ObDatumRow row_buf_;
+  blocksstable::ObDatumRow decode_row_buf_;
   common::ObFixedArray<blocksstable::ObStorageDatum, common::ObIAllocator> default_datums_;
 
   DISALLOW_COPY_AND_ASSIGN(ObMergeVectorStore);

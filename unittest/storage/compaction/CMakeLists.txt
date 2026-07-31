@@ -1,5 +1,7 @@
 storage_unittest(test_medium_list_checker test_medium_list_checker.cpp)
 storage_unittest(test_diagnose_info_mgr test_diagnose_info_mgr.cpp)
 storage_unittest(test_compaction_iter test_compaction_iter.cpp)
+storage_unittest(test_compaction_batch_merger test_compaction_batch_merger.cpp)
+storage_unittest(test_compaction_vector test_compaction_vector.cpp)
 storage_unittest(test_window_compaction_utils test_window_compaction_utils.cpp)
 storage_unittest(test_window_loop test_window_loop.cpp)

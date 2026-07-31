@@ -231,6 +231,9 @@ int ObPartitionMajorBatchMerger::merge_batch_rows(MERGE_ITER_ARRAY &merge_iters)
 // -------------------------------- ObCOBatchMergeLogBuilder -------------------------------- //
 void ObCOBatchMergeLogBuilder::reset()
 {
+  set_need_move_flag(MoveNextOp::DO_NOTHING, MoveNextOp::DO_NOTHING);
+  batch_scan_iter_ = nullptr;
+  border_rowkey_.reset();
   read_store_.reset();
   ObCOMergeLogBuilder::reset();
   LOG_INFO("ObCOBatchMergeLogBuilder reset", K_(time_guard));

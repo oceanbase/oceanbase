@@ -1313,7 +1313,7 @@ DEF_INT(_compaction_prewarm_percentage, OB_TENANT_PARAMETER, "0", "[0,100]",
 DEF_INT(_compaction_batch_size, OB_TENANT_PARAMETER, "1", "[1, 1048576]",
         "specifies the batch row size limit of batch compaction"
         "Range: [1, 1048576] in integer"
-        "The default value is 256. 1 means not use batch compaction opt",
+        "The default value is 1. 1 means not use batch compaction opt",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(_ob_enable_background_thread_auto_adapt, OB_TENANT_PARAMETER, "True",

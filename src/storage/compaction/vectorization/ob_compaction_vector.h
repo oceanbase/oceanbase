@@ -64,6 +64,8 @@ public:
   OB_INLINE int64_t size() const { return size_; }
   OB_INLINE char *data() { return data_; }
   OB_INLINE const char *data() const { return data_; }
+  OB_INLINE char *data_or_empty() { return nullptr == data_ ? &empty_data_ : data_; }
+  OB_INLINE const char *data_or_empty() const { return nullptr == data_ ? &empty_data_ : data_; }
   OB_INLINE void advance(const int64_t len) { size_ += len; }
 
   int ensure(
@@ -82,8 +84,11 @@ public:
     int ret = OB_SUCCESS;
     int64_t expand_delta = 0; // UNUSED
     dst = nullptr;
-    if (len <= 0) {
-      // keep dst nullptr
+    if (OB_UNLIKELY(len < 0)) {
+      ret = OB_INVALID_ARGUMENT;
+      STORAGE_LOG(WARN, "invalid argument", KR(ret), K(len));
+    } else if (0 == len) {
+      dst = data_or_empty();
     } else if (OB_ISNULL(src)) {
       ret = OB_INVALID_ARGUMENT;
       STORAGE_LOG(WARN, "invalid argument", KR(ret), KP(src));
@@ -98,11 +103,13 @@ public:
   }
 
 private:
+  static char empty_data_;
   int64_t capacity_;
   int64_t size_;
   char *data_;
   compaction::ObLocalAllocator<common::DefaultPageAllocator> allocator_;
   int64_t page_size_;
+  DISABLE_COPY_ASSIGN(ObCompactionGrowableBuffer);
 };
 
 // nullable
@@ -121,18 +128,41 @@ public:
   virtual int64_t get_extra_mem_usage() const { return 0; }
 
   // --------- append interface --------- //
-  OB_INLINE void append_null(const int64_t batch_idx)
+  OB_INLINE int append_null(const int64_t batch_idx)
   {
-    ObBitmapNullVectorBase *base = reinterpret_cast<ObBitmapNullVectorBase *>(get_vector());
-    base->set_null(batch_idx);
+    int ret = check_batch_idx(batch_idx);
+    if (OB_FAIL(ret)) {
+      STORAGE_LOG(WARN, "invalid batch index", KR(ret), K(batch_idx), K_(max_batch_size));
+    } else {
+      ObBitmapNullVectorBase *base = reinterpret_cast<ObBitmapNullVectorBase *>(get_vector());
+      base->set_null(batch_idx);
+    }
+    return ret;
   }
   virtual int append_datum(const int64_t batch_idx, const blocksstable::ObStorageDatum &datum) = 0;
 
   // --------- get interface --------- //
   virtual int get_datum(const int64_t batch_idx, ObDatum &datum) = 0;
-  OB_INLINE bool is_null(const int64_t batch_idx) { return reinterpret_cast<ObBitmapNullVectorBase *>(get_vector())->is_null(batch_idx); }
+  OB_INLINE bool is_null(const int64_t batch_idx)
+  {
+    bool is_null = true;
+    if (OB_UNLIKELY(OB_SUCCESS != check_batch_idx(batch_idx))) {
+      STORAGE_LOG_RET(WARN, OB_INVALID_ARGUMENT,
+                      "invalid batch index", K(batch_idx), K_(max_batch_size));
+    } else {
+      is_null = reinterpret_cast<ObBitmapNullVectorBase *>(get_vector())->is_null(batch_idx);
+    }
+    return is_null;
+  }
 
   VIRTUAL_TO_STRING_KV("vector_format", vector_header_.get_format());
+
+  virtual int append_datum_deep_copy(
+      const int64_t batch_idx,
+      const blocksstable::ObStorageDatum &datum)
+  {
+    return append_datum(batch_idx, datum);
+  }
 
 public:
   static int create_vector(VectorFormat format, VecValueTypeClass value_tc,
@@ -145,6 +175,19 @@ public:
                            ObCompactionVector *&vector);
   static const int64_t PAGE_SIZE = 1024; // 1KB
 protected:
+  OB_INLINE int check_batch_idx(const int64_t batch_idx) const
+  {
+    return batch_idx >= 0 && batch_idx < max_batch_size_ ? OB_SUCCESS : OB_INVALID_ARGUMENT;
+  }
+  OB_INLINE bool is_valid_batch_size(const int64_t batch_size) const
+  {
+    return batch_size >= 0 && batch_size <= max_batch_size_;
+  }
+  OB_INLINE void set_max_batch_size(const int64_t max_batch_size)
+  {
+    max_batch_size_ = max_batch_size;
+  }
+
   // VectorFormat is uint8_t (1 byte), so vector_buf_ sits at offset+1 within VectorHeader.
   // ObCompactionVector has a vptr (8 bytes), putting vector_header_ at offset 8 and
   // vector_buf_ at offset 9 — misaligned for pointer-containing vector objects placed via
@@ -153,6 +196,7 @@ protected:
   static_assert(sizeof(VectorFormat) == 1, "adjust padding if VectorFormat size changes");
   char vector_header_align_pad_[7];
   sql::VectorHeader vector_header_;
+  int64_t max_batch_size_;
 };
 
 template <typename T>
@@ -186,10 +230,17 @@ public:
   virtual void reuse(const int64_t batch_size) override;
   virtual void init() override;
   virtual int append_datum(const int64_t batch_idx, const blocksstable::ObStorageDatum &datum) override;
+  virtual int append_datum_deep_copy(
+      const int64_t batch_idx,
+      const blocksstable::ObStorageDatum &datum) override;
   virtual int get_datum(const int64_t batch_idx, ObDatum &datum) override;
   virtual int64_t get_extra_mem_usage() const override { return buffer_.capacity(); }
 
 protected:
+  int inner_append_datum(
+      const int64_t batch_idx,
+      const blocksstable::ObStorageDatum &datum,
+      const bool force_deep_copy);
   ObLength *lens_;
   char **ptrs_;
   ObCompactionGrowableBuffer buffer_;
@@ -209,6 +260,7 @@ public:
 private:
   uint32_t *offsets_;
   ObCompactionGrowableBuffer buffer_;
+  int64_t next_append_idx_;
 };
 
 } // namespace compaction

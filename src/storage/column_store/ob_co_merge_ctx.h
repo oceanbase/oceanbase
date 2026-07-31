@@ -150,10 +150,15 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
     return MergeLogStorage::COLUMN_TMP_FILE == merge_log_storage_ ||
            MergeLogStorage::ROW_TMP_FILE == merge_log_storage_;
   }
+  OB_INLINE bool is_ttl_major_for_partial_update() const
+  {
+    return static_param_.ttl_major_for_partial_update_upper_snapshot_ > 0;
+  }
   virtual bool enable_vectorized_batch_merge() const override
   {
     return get_compaction_batch_size() > 1
         && !is_using_tmp_file() // TODO: add batch path for tmp file
+        && !is_ttl_major_for_partial_update()
         && nullptr != get_schema()
         && !get_schema()->has_all_column_group()
         && !is_build_all_cg_only();

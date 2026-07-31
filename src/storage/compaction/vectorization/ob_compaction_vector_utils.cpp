@@ -138,6 +138,9 @@ int ObCompactionVectorUtils::prepare_vector(
   if (OB_UNLIKELY(nullptr == vector || max_batch_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(vector), K(max_batch_size));
+  } else if (OB_UNLIKELY(max_batch_size > INT32_MAX)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("vector batch size overflow", KR(ret), K(max_batch_size));
   } else {
     const VectorFormat format = vector->get_format();
     switch (format) {
@@ -159,6 +162,14 @@ int ObCompactionVectorUtils::prepare_vector(
           MEMSET(data, 0, data_size);
           fixed_vec->set_nulls(nulls);
           fixed_vec->set_data(data);
+        }
+        if (OB_FAIL(ret)) {
+          if (nullptr != data) {
+            allocator.free(data);
+          }
+          if (nullptr != nulls) {
+            allocator.free(nulls);
+          }
         }
         break;
       }
@@ -187,6 +198,17 @@ int ObCompactionVectorUtils::prepare_vector(
           discrete_vec->set_lens(lens);
           discrete_vec->set_ptrs(ptrs);
         }
+        if (OB_FAIL(ret)) {
+          if (nullptr != ptrs) {
+            allocator.free(ptrs);
+          }
+          if (nullptr != lens) {
+            allocator.free(lens);
+          }
+          if (nullptr != nulls) {
+            allocator.free(nulls);
+          }
+        }
         break;
       }
       case VEC_CONTINUOUS: {
@@ -206,6 +228,14 @@ int ObCompactionVectorUtils::prepare_vector(
           MEMSET(offsets, 0, offsets_size);
           continuous_vec->set_nulls(nulls);
           continuous_vec->set_offsets(offsets);
+        }
+        if (OB_FAIL(ret)) {
+          if (nullptr != offsets) {
+            allocator.free(offsets);
+          }
+          if (nullptr != nulls) {
+            allocator.free(nulls);
+          }
         }
         break;
       }

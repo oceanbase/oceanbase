@@ -1441,7 +1441,7 @@ TEST_F(ObMajorWithTTLFilterTest, co_major_three_minor_all_virtual_rows)
   minor_handle3.reset();
 }
 
-TEST_F(ObMajorWithTTLFilterTest, co_major_multi_minor_virtual_ops_batch)
+TEST_F(ObMajorWithTTLFilterTest, co_major_multi_minor_virtual_ops_disables_batch)
 {
   int ret = OB_SUCCESS;
   merge_type_ = MAJOR_MERGE;
@@ -1520,11 +1520,12 @@ TEST_F(ObMajorWithTTLFilterTest, co_major_multi_minor_virtual_ops_batch)
 
   TestMergeBasic::co_major_merge(
     local_arena_,
-    ObCOMergeTestConfig(ObCOMergeTestConfig::ObCOMergeTestType::NORMAL, 1/*compaction_batch_size*/),
+    ObCOMergeTestConfig(ObCOMergeTestConfig::ObCOMergeTestType::NORMAL, 10/*compaction_batch_size*/),
     merge_context,
     0,
     0,
     2);
+  ASSERT_FALSE(merge_context.enable_vectorized_batch_merge());
 
   ObTableHandleV2 table_handle;
   ASSERT_EQ(2, merge_context.merged_cg_tables_handle_.get_count());

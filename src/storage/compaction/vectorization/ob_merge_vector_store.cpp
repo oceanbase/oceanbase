@@ -13,6 +13,24 @@ namespace oceanbase
 {
 namespace compaction
 {
+namespace
+{
+bool is_valid_projector(
+    const common::ObIArrayWrap<uint16_t> *cols,
+    const int64_t expected_count,
+    const int64_t source_count)
+{
+  bool is_valid = nullptr != cols
+      && expected_count >= 0
+      && source_count >= 0
+      && cols->count() == expected_count;
+  for (int64_t i = 0; is_valid && i < cols->count(); ++i) {
+    is_valid = cols->at(i) < source_count;
+  }
+  return is_valid;
+}
+}
+
 /* ObMergeVectorStoreLayoutParam */
 ObMergeVectorStoreLayoutParam::ObMergeVectorStoreLayoutParam()
   : column_count_(0),
@@ -105,6 +123,7 @@ void ObMergeVectorStorePair::reset()
 
 ObMergeVectorStore::ObMergeVectorStore()
   : is_inited_(false),
+    is_continuous_(false),
     need_force_flush_(false),
     single_row_(nullptr),
     layout_param_(nullptr),
@@ -120,6 +139,7 @@ ObMergeVectorStore::ObMergeVectorStore()
     len_array_(nullptr),
     row_ids_(nullptr),
     row_buf_(),
+    decode_row_buf_(),
     default_datums_()
 {
 }
@@ -145,6 +165,7 @@ int ObMergeVectorStore::init(
     LOG_WARN("Invalid arguments", K(ret), K(layout_param), K(col_descs), K(is_continuous), KPC(default_row));
   } else {
     layout_param_ = &layout_param;
+    is_continuous_ = is_continuous;
     row_count_ = 0;
     const int64_t batch_capacity = layout_param_->get_compaction_batch_size();
     if (OB_FAIL(init_default_datums(default_row))) {
@@ -152,12 +173,13 @@ int ObMergeVectorStore::init(
     } else if (OB_FAIL(init_vectors(col_descs, is_continuous))) {
       LOG_WARN("Failed to init vectors", K(ret), K(col_descs));
     } else {
-      // Allocate temporary buffers for batch scan.
-      // row_ids_ is placed first (int32_t, 4-byte aligned);
+      // Allocate temporary buffers for batch scan.  The pointer array must start
+      // at pointer alignment even when batch_capacity is odd.
       const int64_t row_ids_size = sizeof(int32_t) * batch_capacity;
+      const int64_t cell_data_ptrs_offset = ALIGN_UP(row_ids_size, sizeof(char *));
       const int64_t cell_data_ptrs_size = sizeof(char *) * batch_capacity;
       const int64_t len_array_size = sizeof(uint32_t) * batch_capacity;
-      const int64_t total_buf_size = row_ids_size + cell_data_ptrs_size + len_array_size;
+      const int64_t total_buf_size = cell_data_ptrs_offset + cell_data_ptrs_size + len_array_size;
       void *ptr = nullptr;
       if (OB_ISNULL(ptr = allocator_.alloc(total_buf_size))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -165,12 +187,14 @@ int ObMergeVectorStore::init(
       } else {
         MEMSET(ptr, 0, total_buf_size);
         row_ids_ = static_cast<int32_t*>(ptr);
-        ptr = (void*)(static_cast<char*>(ptr) + row_ids_size);
+        ptr = static_cast<char*>(ptr) + cell_data_ptrs_offset;
         cell_data_ptrs_ = reinterpret_cast<const char**>(ptr);
-        ptr = (void*)(static_cast<char*>(ptr) + cell_data_ptrs_size);
+        ptr = static_cast<char*>(ptr) + cell_data_ptrs_size;
         len_array_ = static_cast<uint32_t*>(ptr);
         if (OB_FAIL(row_buf_.init(allocator_, layout_param_->column_count_))) {
           LOG_WARN("Failed to init row_buf", K(ret), KPC(layout_param_));
+        } else if (OB_FAIL(decode_row_buf_.init(allocator_, layout_param_->column_count_))) {
+          LOG_WARN("Failed to init decode_row_buf", K(ret), KPC(layout_param_));
         } else if (layout_param_->datum_utils_ != nullptr) {
           if (OB_FAIL(last_row_.init(allocator_, layout_param_->rowkey_column_cnt_))) {
             LOG_WARN("Failed to init last row", K(ret), KPC(layout_param_));
@@ -236,6 +260,7 @@ int ObMergeVectorStore::init_vectors(const common::ObIArray<share::schema::ObCol
 void ObMergeVectorStore::reset()
 {
   is_inited_ = false;
+  is_continuous_ = false;
   need_force_flush_ = false;
   single_row_ = nullptr;
   for (int64_t i = 0; i < vectors_.count(); ++i) {
@@ -246,6 +271,7 @@ void ObMergeVectorStore::reset()
   }
   vectors_.reset();
   row_buf_.reset();
+  decode_row_buf_.reset();
   default_datums_.reset();
   last_row_.reset();
   layout_param_ = nullptr;
@@ -262,30 +288,35 @@ void ObMergeVectorStore::reset()
 
 void ObMergeVectorStore::reuse()
 {
-  // Simply reset row count; vectors will be overwritten on next append
-  total_mem_usage_ = 0;
-  incremental_row_count_ = 0;
-  need_force_flush_ = false;
-  single_row_ = nullptr;
-  const int64_t batch_capacity = get_batch_capacity();
-  if (0 < row_count_) {
-    for (int64_t i = 0; i < vectors_.count(); i++) {
-      if (OB_NOT_NULL(vectors_[i])) {
-        vectors_[i]->reuse(batch_capacity);
-      } else {
-        LOG_WARN_RET(OB_ERR_UNEXPECTED, "Unexpected null vector", K(i));
+  if (is_inited_) {
+    // Simply reset row count; vectors will be overwritten on next append.
+    total_mem_usage_ = 0;
+    incremental_row_count_ = 0;
+    need_force_flush_ = false;
+    single_row_ = nullptr;
+    const int64_t batch_capacity = get_batch_capacity();
+    if (0 < row_count_) {
+      for (int64_t i = 0; i < vectors_.count(); i++) {
+        if (OB_NOT_NULL(vectors_[i])) {
+          vectors_[i]->reuse(batch_capacity);
+        } else {
+          LOG_WARN_RET(OB_ERR_UNEXPECTED, "Unexpected null vector", K(i));
+        }
       }
     }
+    row_count_ = 0;
   }
-  row_count_ = 0;
 }
 
 int ObMergeVectorStore::set_single_row(const blocksstable::ObDatumRow *row)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(row)) {
+  if (OB_ISNULL(row) || OB_UNLIKELY(!row->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("single row is null", K(ret));
+    LOG_WARN("single row is invalid", K(ret), KPC(row));
+  } else if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObMergeVectorStore not initialized", K(ret));
   } else if (OB_UNLIKELY(get_row_count() != 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("single row already set", K(ret));
@@ -346,7 +377,7 @@ int ObMergeVectorStore::check_order(const blocksstable::ObDatumRow &cur_row, con
   const int64_t merge_snapshot_version = layout_param_->get_merge_snapshot_version();
   const blocksstable::ObStorageDatumUtils *datum_utils = layout_param_->datum_utils_;
 
-  if (cur_row_version >= 0) {
+  if (cur_row_version >= 0 || cur_row_sql_sequence > 0) {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "invalid trans_version or sql_sequence", K(ret), K(cur_row));
   } else if (-cur_row_version > merge_snapshot_version) {
@@ -379,9 +410,10 @@ int ObMergeVectorStore::append_row(
     LOG_WARN("ObMergeVectorStore not initialized", K(ret));
   } else if (OB_UNLIKELY(row_count_ >= get_batch_capacity() || has_single_row())) {
     ret = OB_BUF_NOT_ENOUGH;
-  } else if (OB_UNLIKELY(nullptr != cols && cols->count() != column_count)) {
+  } else if (OB_UNLIKELY(nullptr != cols
+                        && !is_valid_projector(cols, column_count, row.count_))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Column count mismatch", K(ret), K(cols->count()), K(column_count));
+    LOG_WARN("Invalid column projector", K(ret), K(cols->count()), K(column_count), K(row.count_));
   } else if (OB_UNLIKELY(nullptr == cols && row.count_ != column_count)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Column count mismatch", K(ret), K(column_count), K(row.count_));
@@ -445,12 +477,29 @@ int ObMergeVectorStore::append_batch(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObMergeVectorStore not initialized", K(ret));
-  } else if (OB_UNLIKELY(nullptr != cols && cols->count() != column_count)) {
+  } else if (OB_UNLIKELY(nullptr != cols
+                        && !is_valid_projector(
+                            cols,
+                            column_count,
+                            other.has_single_row()
+                                ? other.get_single_row()->count_
+                                : other.get_column_count()))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Column count mismatch", K(ret), K(cols->count()), K(column_count));
-  } else if (OB_UNLIKELY(nullptr == cols && column_count != other.get_column_count())) {
+    LOG_WARN("Invalid column projector", K(ret), K(cols->count()), K(column_count),
+             "source_column_count",
+             other.has_single_row() ? other.get_single_row()->count_ : other.get_column_count());
+  } else if (OB_UNLIKELY(
+                 nullptr == cols
+                 && column_count
+                        != (other.has_single_row()
+                                ? other.get_single_row()->count_
+                                : other.get_column_count()))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Column count mismatch", K(ret), K(column_count), K(other.get_column_count()));
+    LOG_WARN("Column count mismatch",
+             K(ret),
+             K(column_count),
+             "source_column_count",
+             other.has_single_row() ? other.get_single_row()->count_ : other.get_column_count());
   } else {
     int64_t append_rows = 0;
     bool is_filtered = false;
@@ -529,8 +578,14 @@ int ObMergeVectorStore::get_datum_row(
   datum_row.reuse();
   if (OB_UNLIKELY(row_idx < 0 || row_idx >= get_row_count() ||
                   !datum_row.is_valid() ||
-                  (nullptr != cols && cols->count() != datum_row.get_column_count()) ||
-                  (nullptr == cols && datum_row.get_column_count() != column_count))) {
+                  (nullptr != cols
+                   && !is_valid_projector(
+                       cols,
+                       datum_row.get_column_count(),
+                       has_single_row() ? single_row_->count_ : column_count)) ||
+                  (nullptr == cols
+                   && datum_row.get_column_count()
+                          != (has_single_row() ? single_row_->count_ : column_count)))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid arguments", K(ret), K(row_idx), K_(row_count), K(datum_row));
   } else {
@@ -674,28 +729,35 @@ int ObMergeVectorStore::inner_fill_rows_from_reader(
     {
       case blocksstable::ObIMicroBlockReader::Reader:
       case blocksstable::ObIMicroBlockReader::NewFlatReader: {
-        // For flat reader: read rows one by one
-        // The flat reader doesn't have optimized batch get_rows for vectors yet
-        int64_t row_idx = begin_index;
-        for (int64_t i = 0; OB_SUCC(ret) && i < row_cap; i++, row_idx++) {
-          if (OB_FAIL(reader->get_row(row_idx, row_buf_))) {
-            LOG_WARN("Failed to get row", K(ret), K(i), K(row_idx));
-          } else if (row_buf_.row_flag_.is_delete()) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("Unexpected delete row", K(ret), K(row_idx), K(row_buf_));
-          } else {
-            for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < column_count; col_idx++) {
-              const int64_t src_col_idx = nullptr == cols ? col_idx : cols->at(col_idx);
-              const blocksstable::ObStorageDatum &src_datum = row_buf_.storage_datums_[src_col_idx];
-              if (OB_FAIL(vectors_.at(col_idx)->append_datum(row_count_ + i, datum_or_default(src_datum, col_idx)))) {
-                LOG_WARN("failed to append datum to vector", K(ret), K(row_count_), K(i));
-              }
-            }
-          }
+        // Flat readers do not have an optimized vector get_rows implementation.
+        if (OB_FAIL(inner_fill_rows_one_by_one(
+            cols, *reader, begin_index, row_cap, false /*force_deep_copy*/))) {
+          LOG_WARN("Failed to fill rows one by one", K(ret), K(begin_index), K(row_cap));
         }
         break;
       }
-      case blocksstable::ObIMicroBlockReader::Decoder:
+      case blocksstable::ObIMicroBlockReader::Decoder: {
+        const blocksstable::ObMicroBlockHeader *micro_header = reader->get_micro_header();
+        if (OB_ISNULL(micro_header)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected null micro block header", K(ret), K(reader->get_type()));
+        } else if (micro_header->extend_value_bit_ > 1) {
+          // Encoding vector decoders use a one-bit NULL bitmap and do not preserve
+          // the distinction between NULL and NOP.  A two-bit extend value means
+          // this micro block contains NOP, so use scalar decoding and replace NOP
+          // with the column default before appending to compaction vectors.
+          if (OB_FAIL(inner_fill_rows_one_by_one(
+              cols, *reader, begin_index, row_cap, true /*force_deep_copy*/))) {
+            LOG_WARN("Failed to fill encoding rows containing NOP", K(ret), K(begin_index), K(row_cap));
+          }
+        } else if (OB_FAIL(get_row_ids(begin_index, row_cap))) {
+          LOG_WARN("Failed to get row ids", K(ret), K(begin_index), K(row_cap));
+        } else if (OB_FAIL(reader->get_rows(
+            cols, get_default_datums(), row_ids_, row_cap, row_count_, cell_data_ptrs_, len_array_, vectors_))) {
+          LOG_WARN("Failed to get rows", K(ret), K(row_cap));
+        }
+        break;
+      }
       case blocksstable::ObIMicroBlockReader::CSDecoder: {
         if (OB_FAIL(get_row_ids(begin_index, row_cap))) {
           LOG_WARN("Failed to get row ids", K(ret), K(begin_index), K(row_cap));
@@ -713,6 +775,59 @@ int ObMergeVectorStore::inner_fill_rows_from_reader(
     }
   }
 
+  return ret;
+}
+
+int ObMergeVectorStore::inner_fill_rows_one_by_one(
+    const common::ObIArrayWrap<uint16_t> *cols,
+    blocksstable::ObIMicroBlockReader &reader,
+    const int64_t begin_index,
+    const int64_t row_cap,
+    const bool force_deep_copy)
+{
+  int ret = OB_SUCCESS;
+  const int64_t column_count = get_column_count();
+  const int64_t reader_column_count = nullptr == reader.read_info_
+      ? reader.get_column_count()
+      : reader.read_info_->get_request_count();
+  int64_t row_idx = begin_index;
+  if (OB_UNLIKELY(reader_column_count <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Invalid reader column count", K(ret), K(reader_column_count), K(reader.get_type()));
+  } else if (decode_row_buf_.get_capacity() < reader_column_count
+             && OB_FAIL(decode_row_buf_.reserve(reader_column_count))) {
+    LOG_WARN("Failed to reserve scalar decode row",
+             K(ret), K(reader_column_count), K(decode_row_buf_));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < row_cap; ++i, ++row_idx) {
+    if (OB_FAIL(reader.get_row(row_idx, decode_row_buf_))) {
+      LOG_WARN("Failed to get row", K(ret), K(i), K(row_idx));
+    } else if (decode_row_buf_.row_flag_.is_delete()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected delete row", K(ret), K(row_idx), K(decode_row_buf_));
+    } else {
+      for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < column_count; ++col_idx) {
+        const int64_t src_col_idx = nullptr == cols ? col_idx : cols->at(col_idx);
+        if (OB_UNLIKELY(src_col_idx < 0 || src_col_idx >= decode_row_buf_.count_)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("Invalid column projector",
+                   K(ret), K(src_col_idx), K(decode_row_buf_.count_), K(col_idx));
+        } else {
+          const blocksstable::ObStorageDatum &datum =
+              datum_or_default(decode_row_buf_.storage_datums_[src_col_idx], col_idx);
+          if (OB_UNLIKELY(datum.is_nop())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("Missing default datum for NOP",
+                     K(ret), K(row_idx), K(src_col_idx), K(col_idx));
+          } else if (force_deep_copy
+                         ? OB_FAIL(vectors_.at(col_idx)->append_datum_deep_copy(row_count_ + i, datum))
+                         : OB_FAIL(vectors_.at(col_idx)->append_datum(row_count_ + i, datum))) {
+            LOG_WARN("Failed to append datum to vector", K(ret), K(row_count_), K(i), K(col_idx));
+          }
+        }
+      }
+    }
+  }
   return ret;
 }
 

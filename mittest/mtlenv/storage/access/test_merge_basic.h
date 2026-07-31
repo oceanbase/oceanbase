@@ -365,8 +365,9 @@ void TestMergeBasic::co_major_merge(
   }
   if (config.is_normal_test_type()) {
     merge_context.merge_log_storage_ = 0;
-    if (config.is_batch_merge_test_type()) {
-      merge_context.static_param_.compaction_batch_size_ = config.compaction_batch_size_;
+    merge_context.static_param_.compaction_batch_size_ = config.compaction_batch_size_;
+    if (config.is_batch_merge_test_type()
+        && !merge_context.is_ttl_major_for_partial_update()) {
       // build_ctx_after_init() already ran in prepare_merge_context() while compaction_batch_size_ was
       // still default 0, so prepare_row_store_layout_param / prepare_cg_layout_params were skipped.
       // Batch replay needs them; prepare here after applying the test config batch size.
