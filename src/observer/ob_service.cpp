@@ -708,6 +708,8 @@ int ObService::backup_completing_log(const obrpc::ObBackupComplLogArg &arg)
   SCN end_scn = arg.end_scn_;
   ObLSID ls_id = arg.ls_id_;
   const bool is_only_calc_stat = arg.is_only_calc_stat_;
+  const int64_t turn_id = arg.turn_id_;
+  const int64_t retry_id = arg.retry_id_;
   ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
   if (!arg.is_valid() || OB_ISNULL(sql_proxy)) {
     ret = OB_INVALID_ARGUMENT;
@@ -715,15 +717,15 @@ int ObService::backup_completing_log(const obrpc::ObBackupComplLogArg &arg)
   } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy, tenant_id, arg.backup_path_, backup_dest))) {
     LOG_WARN("failed to get backup dest", KR(ret), K(arg));
   } else if (OB_FAIL(ObBackupHandler::schedule_backup_complement_log_dag(
-      job_desc, backup_dest, tenant_id, backup_set_desc, ls_id, start_scn, end_scn, is_only_calc_stat))) {
+      job_desc, backup_dest, tenant_id, backup_set_desc, ls_id, start_scn, end_scn, is_only_calc_stat, turn_id, retry_id))) {
     LOG_WARN("failed to schedule backup data dag", KR(ret), K(arg));
   } else {
     SERVER_EVENT_ADD("backup_data", "schedule_backup_complement_log",
       "tenant_id", arg.tenant_id_,
       "backup_set_id", arg.backup_set_id_,
       "ls_id", arg.ls_id_.id(),
-      "start_scn", arg.start_scn_,
-      "end_scn", arg.end_scn_,
+      "turn_id", arg.turn_id_,
+      "retry_id", arg.retry_id_,
       "trace_id", arg.trace_id_);
     LOG_INFO("success recevied backup compl log rpc", K(arg));
   }

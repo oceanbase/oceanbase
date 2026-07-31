@@ -49,6 +49,8 @@ private:
   int gen_and_add_build_index_task_();
   int gen_and_add_backup_fuse_tablet_meta_task_();
   int finish_(int64_t &finish_cnt);
+  int reset_compl_log_progress_(common::ObISQLClient &trans,
+                                const share::ObBackupSetTaskAttr &locked_set_task_attr);
   int advance_status_(const share::ObBackupTaskStatus &next_status);
   static int add_file_list_(common::ObISQLClient &sql_proxy, const share::ObBackupLSTaskAttr &ls_attr);
 private:

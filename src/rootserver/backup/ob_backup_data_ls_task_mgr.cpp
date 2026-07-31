@@ -410,6 +410,45 @@ int ObBackupDataLSTaskMgr::redo_ls_task(
   return ret;
 }
 
+int ObBackupDataLSTaskMgr::reset_compl_log_progress_(
+    common::ObISQLClient &trans, const share::ObBackupSetTaskAttr &locked_set_task_attr)
+{
+  int ret = OB_SUCCESS;
+  const bool for_update = true;
+  share::ObBackupLSTaskAttr old_ls_attr;
+  share::ObBackupStats new_ls_stats;
+  share::ObBackupStats new_set_stats;
+  // the complement log ls task will copy all the log files again after redo, so the
+  // finish_log_file_count of the ls task must be cleared, and the count already accumulated
+  // into the set task stats must be deducted, otherwise the progress will be double counted.
+  if (OB_ISNULL(ls_attr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("[DATA_BACKUP]ls attr should not be null", K(ret));
+  } else if (OB_FAIL(ObBackupLSTaskOperator::get_ls_task(trans, for_update, ls_attr_->task_id_,
+      ls_attr_->tenant_id_, ls_attr_->ls_id_, old_ls_attr))) {
+    LOG_WARN("[DATA_BACKUP]failed to get ls task", K(ret), KPC(ls_attr_));
+  } else if (OB_FAIL(new_ls_stats.assign(old_ls_attr.stats_))) {
+    LOG_WARN("[DATA_BACKUP]failed to assign ls stats", K(ret), K(old_ls_attr));
+  } else if (OB_FAIL(new_set_stats.assign(locked_set_task_attr.stats_))) {
+    LOG_WARN("[DATA_BACKUP]failed to assign set task stats", K(ret), K(locked_set_task_attr));
+  } else {
+    new_set_stats.finish_log_file_count_ = MAX(0,
+        new_set_stats.finish_log_file_count_ - old_ls_attr.stats_.finish_log_file_count_);
+    new_ls_stats.finish_log_file_count_ = 0;
+    if (OB_FAIL(ObBackupLSTaskOperator::update_stats(trans, ls_attr_->task_id_,
+        ls_attr_->tenant_id_, ls_attr_->ls_id_, new_ls_stats))) {
+      LOG_WARN("[DATA_BACKUP]failed to update ls task stats", K(ret), KPC(ls_attr_));
+    } else if (OB_FAIL(ObBackupTaskOperator::update_stats(trans, ls_attr_->task_id_,
+        ls_attr_->tenant_id_, new_set_stats))) {
+      LOG_WARN("[DATA_BACKUP]failed to update set task stats", K(ret), KPC(ls_attr_));
+    } else {
+      LOG_INFO("[DATA_BACKUP]reset complement log progress for redo", KPC(ls_attr_),
+          K(new_ls_stats), K(new_set_stats));
+    }
+  }
+  return ret;
+}
+
 // TODO(yangyi.yyy): record tablet size when backup meta
 int ObBackupDataLSTaskMgr::finish_(int64_t &finish_cnt)
 {
@@ -480,10 +519,21 @@ int ObBackupDataLSTaskMgr::finish_(int64_t &finish_cnt)
         break;
       }
       case ObBackupDataTaskType::BACKUP_PLUS_ARCHIVE_LOG: {
-        // this task only retries when send task failed or disk full within the wait window
-        if (OB_REBALANCE_TASK_CANT_EXEC != ls_attr_->result_
-            && common::OB_TIMEOUT != ls_attr_->result_
-            && (!is_disk_full_error || disk_full_timeout)) {
+        // complement log task allows retry in the following cases:
+        // 1. send task failed (OB_REBALANCE_TASK_CANT_EXEC) or rpc timeout, always retry;
+        // 2. disk full error within the wait window;
+        // 3. other retryable errors reported by observer, limited by set level retry count.
+        // the copy of complement log is idempotent (overwrite the same dest path), so redoing
+        // the ls task is safe.
+        if (OB_REBALANCE_TASK_CANT_EXEC == ls_attr_->result_
+            || common::OB_TIMEOUT == ls_attr_->result_) {
+          // always retry, keep the original behavior
+        } else if (is_disk_full_error) {
+          if (disk_full_timeout) {
+            job_attr_->can_retry_ = false;
+          }
+        } else if (!ObBackupUtils::is_need_retry_error(ls_attr_->result_)
+            || set_task_attr_->retry_cnt_ + next_retry_id > OB_BACKUP_MAX_RETRY_TIMES) {
           job_attr_->can_retry_ = false;
         }
         break;
@@ -515,6 +565,9 @@ int ObBackupDataLSTaskMgr::finish_(int64_t &finish_cnt)
         } else if (OB_FAIL(redo_ls_task(*backup_service_, trans, *ls_attr_, ls_attr_->start_turn_id_,
           ls_attr_->turn_id_, next_retry_id))) {
             LOG_WARN("[DATA_BACKUP]failed to redo ls task", K(ret), KPC(ls_attr_));
+        } else if (ObBackupDataTaskType::BACKUP_PLUS_ARCHIVE_LOG == ls_attr_->task_type_.type_
+            && OB_FAIL(reset_compl_log_progress_(trans, lock_set_task_attr))) {
+          LOG_WARN("[DATA_BACKUP]failed to reset complement log progress", K(ret), KPC(ls_attr_));
         }
 
         int trans_ret = backup_service_->end_transaction(trans, ret);

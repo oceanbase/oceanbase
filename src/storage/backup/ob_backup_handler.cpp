@@ -125,22 +125,27 @@ int ObBackupHandler::schedule_build_tenant_level_index_dag(const ObBackupJobDesc
 
 int ObBackupHandler::schedule_backup_complement_log_dag(const ObBackupJobDesc &job_desc,
     const share::ObBackupDest &backup_dest, const uint64_t tenant_id, const share::ObBackupSetDesc &backup_set_desc,
-    const share::ObLSID &ls_id, const SCN &start_scn, const SCN &end_scn, const bool is_only_calc_stat)
+    const share::ObLSID &ls_id, const SCN &start_scn, const SCN &end_scn, const bool is_only_calc_stat,
+    const int64_t turn_id, const int64_t retry_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!job_desc.is_valid() || !backup_dest.is_valid() || OB_INVALID_ID == tenant_id
-      || !backup_set_desc.is_valid() || !ls_id.is_valid() || !start_scn.is_valid() || !end_scn.is_valid())) {
+      || !backup_set_desc.is_valid() || !ls_id.is_valid() || !start_scn.is_valid() || !end_scn.is_valid()
+      || turn_id <= 0 || retry_id < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(job_desc), K(backup_dest), K(tenant_id),
-        K(backup_set_desc), K(ls_id), K(start_scn), K(end_scn));
+        K(backup_set_desc), K(ls_id), K(start_scn), K(end_scn), K(turn_id), K(retry_id));
   } else {
     ObLSBackupDagNetInitParam param;
     param.job_desc_ = job_desc;
     param.tenant_id_ = tenant_id;
     param.backup_set_desc_ = backup_set_desc;
     param.ls_id_ = ls_id;
-    param.turn_id_ = 1;   // turn_id no use for complement log
-    param.retry_id_ = 0;  // retry id no use for complement log
+    // turn_id/retry_id are only for observability (server events), the complement log
+    // data path does not depend on them, and they are excluded from the dag net
+    // hash so that retried tasks are still deduplicated against the running one
+    param.turn_id_ = turn_id;
+    param.retry_id_ = retry_id;
     param.compl_start_scn_ = start_scn;
     param.compl_end_scn_ = end_scn;
     param.is_only_calc_stat_ = is_only_calc_stat;

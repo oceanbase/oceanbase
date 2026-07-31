@@ -5984,12 +5984,15 @@ public:
       backup_path_(),
       start_scn_(),
       end_scn_(),
-      is_only_calc_stat_(false) {}
+      is_only_calc_stat_(false),
+      turn_id_(1),
+      retry_id_(0) {}
 public:
   int assign(const ObBackupComplLogArg &arg);
   bool is_valid() const;
   TO_STRING_KV(K_(trace_id), K_(job_id), K_(tenant_id), K_(task_id), K_(backup_set_id), K_(incarnation_id),
-    K_(backup_type), K_(backup_date), K_(ls_id), K_(dst_server), K_(backup_path), K_(start_scn), K_(end_scn), K_(is_only_calc_stat));
+    K_(backup_type), K_(backup_date), K_(ls_id), K_(dst_server), K_(backup_path), K_(start_scn), K_(end_scn),
+    K_(is_only_calc_stat), K_(turn_id), K_(retry_id));
 public:
   share::ObTaskId trace_id_;
   int64_t job_id_;
@@ -6005,6 +6008,10 @@ public:
   share::SCN start_scn_;
   share::SCN end_scn_;
   bool is_only_calc_stat_;
+  // turn_id_/retry_id_ are only used for observability (server events),
+  // the complement log data path does not depend on them
+  int64_t turn_id_;
+  int64_t retry_id_;
 };
 
 struct ObBackupBuildIdxArg

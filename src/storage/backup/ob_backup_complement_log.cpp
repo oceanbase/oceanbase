@@ -103,6 +103,10 @@ bool ObBackupComplementLogCtx::is_valid() const
 bool ObBackupComplementLogCtx::operator==(const ObBackupComplementLogCtx &other) const
 {
   bool bret = false;
+  // turn_id_/retry_id_ are excluded on purpose: they are only for observability,
+  // and a retried complement log task must be treated as the same logical task,
+  // so that the dag net dedup rejects it while the previous dag net of the same
+  // ls is still running (they would write the same dest files concurrently).
   bret = job_desc_ == other.job_desc_
       && backup_dest_ == other.backup_dest_
       && tenant_id_ == other.tenant_id_
@@ -111,14 +115,13 @@ bool ObBackupComplementLogCtx::operator==(const ObBackupComplementLogCtx &other)
       && ls_id_ == other.ls_id_
       && compl_start_scn_ == other.compl_start_scn_
       && compl_end_scn_ == other.compl_end_scn_
-      && turn_id_ == other.turn_id_
-      && retry_id_ == other.retry_id_
       && is_only_calc_stat_ == other.is_only_calc_stat_;
   return bret;
 }
 
 uint64_t ObBackupComplementLogCtx::calc_hash(uint64_t seed) const
 {
+  // turn_id_/retry_id_ are excluded, see operator== for the reason
   uint64_t hash_code = 0;
   hash_code = murmurhash(&tenant_id_, sizeof(tenant_id_), seed);
   hash_code = murmurhash(&backup_set_desc_.backup_set_id_, sizeof(backup_set_desc_.backup_set_id_), hash_code);
@@ -126,8 +129,6 @@ uint64_t ObBackupComplementLogCtx::calc_hash(uint64_t seed) const
   hash_code = murmurhash(&ls_id_, sizeof(ls_id_), hash_code);
   hash_code = murmurhash(&compl_start_scn_, sizeof(compl_start_scn_), hash_code);
   hash_code = murmurhash(&compl_end_scn_, sizeof(compl_end_scn_), hash_code);
-  hash_code = murmurhash(&turn_id_, sizeof(turn_id_), hash_code);
-  hash_code = murmurhash(&retry_id_, sizeof(retry_id_), hash_code);
   hash_code = murmurhash(&is_only_calc_stat_, sizeof(is_only_calc_stat_), hash_code);
   return hash_code;
 }
@@ -1886,10 +1887,31 @@ int ObBackupLSLogFileTask::process()
   } else if (ctx_->is_failed()) {
     ret = OB_CANCELED;
     LOG_WARN("ctx already failed", K(ret));
-  } else if (OB_FAIL(inner_process_(backup_piece_file_))) {
-    LOG_WARN("failed to inner process", K(ret), K_(backup_piece_file));
   } else {
-    LOG_INFO("inner process backup log file", K_(backup_piece_file));
+#ifdef ERRSIM
+    // only fire after the first file of the ls has been copied and reported,
+    // to simulate the complement log copy failing halfway
+    if (file_idx_ > 0) {
+      ret = OB_E(EventTable::EN_BACKUP_COMPLEMENT_LOG_TASK_FAILED) OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        SERVER_EVENT_SYNC_ADD("backup_errsim", "complement_log_task_failed",
+                              "tenant_id", ctx_->tenant_id_,
+                              "task_id", ctx_->job_desc_.task_id_,
+                              "ls_id", ls_id_.id(),
+                              "file_idx", file_idx_,
+                              "retry_id", ctx_->retry_id_);
+        LOG_WARN("errsim backup complement log file task failed", K(ret), K_(file_idx));
+      }
+    }
+    if (OB_FAIL(ret)) {
+      // errsim injected error, skip process
+    } else
+#endif
+    if (OB_FAIL(inner_process_(backup_piece_file_))) {
+      LOG_WARN("failed to inner process", K(ret), K_(backup_piece_file));
+    } else {
+      LOG_INFO("inner process backup log file", K_(backup_piece_file));
+    }
   }
   if (OB_FAIL(ret)) {
     if (OB_TMP_FAIL(deal_with_fo(ctx_, ret))) {
@@ -1960,7 +1982,7 @@ int ObBackupLSLogFileTask::inner_process_(const ObBackupPieceFile &piece_file)
     SERVER_EVENT_ADD("backup", "backup_ls_log_file_task",
                     "tenant_id", ctx_->tenant_id_,
                     "backup_set_id", ctx_->backup_set_desc_.backup_set_id_,
-                    "dest_id", piece_file.dest_id_,
+                    "retry_id", ctx_->retry_id_,
                     "round_id", piece_file.round_id_,
                     "piece_id", piece_file.piece_id_,
                     "file_id", piece_file.file_id_);
@@ -2159,13 +2181,15 @@ int ObBackupLSLogFileTask::record_server_event_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctx should not be null", K(ret));
   } else {
+    // file copy task only exists in the real copy phase, is_only_calc_stat is
+    // always false here, record retry_id instead
     SERVER_EVENT_ADD("backup_complement_log", "backup_ls_file_task",
                      "tenant_id", ctx_->tenant_id_,
                      "backup_set_id", ctx_->backup_set_desc_.backup_set_id_,
                      "ls_id", ctx_->ls_id_.id(),
                      "round_id", backup_piece_file_.round_id_,
                      "piece_id", backup_piece_file_.piece_id_,
-                     "is_only_calc_stat", ctx_->is_only_calc_stat_,
+                     "retry_id", ctx_->retry_id_,
                      backup_piece_file_.file_id_);
   }
   return ret;
