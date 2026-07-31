@@ -746,7 +746,7 @@ int ObTableLoadTransStoreWriter::init_session_ctx_array()
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
-  ObDataTypeCastParams cast_params(trans_ctx_->ctx_->session_info_->get_timezone_info());
+  ObDataTypeCastParams cast_params(trans_ctx_->ctx_->session_info_->get_dtc_params());
   if (OB_UNLIKELY(session_count_ <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected session count", KR(ret), K(session_count_));

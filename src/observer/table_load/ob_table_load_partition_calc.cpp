@@ -57,7 +57,7 @@ int ObTableLoadPartitionCalc::init(const ObTableLoadParam &param,
     exec_ctx_.set_sql_ctx(&sql_ctx_);
     exec_ctx_.set_physical_plan_ctx(&phy_plan_ctx_);
     const ObTableSchema *table_schema = nullptr;
-    ObDataTypeCastParams cast_params(session_info->get_timezone_info());
+    ObDataTypeCastParams cast_params(session_info->get_dtc_params());
     if (OB_FAIL(time_cvrt_.init(cast_params.get_nls_format(ObDateTimeType)))) {
       LOG_WARN("fail to init time converter", KR(ret));
     } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(session_info, cast_mode_))) {
@@ -195,7 +195,7 @@ int ObTableLoadPartitionCalc::cast_part_key(common::ObNewRow &part_key, common::
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid part key count", KR(ret), K(part_key.count_), K(part_key_obj_index_.count()));
   } else {
-    ObDataTypeCastParams cast_params(session_info_->get_timezone_info());
+    ObDataTypeCastParams cast_params(session_info_->get_dtc_params());
     ObCastCtx cast_ctx(&allocator, &cast_params, cast_mode_, ObCharset::get_system_collation());
     ObTableLoadCastObjCtx cast_obj_ctx(*param_, &time_cvrt_, &cast_ctx, true);
     ObObj obj;
