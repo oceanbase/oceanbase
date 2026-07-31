@@ -8201,22 +8201,60 @@ int TenantServerUnitConfig::assign(const TenantServerUnitConfig &other)
   int ret = OB_SUCCESS;
   if (this == &other) {
     // do nothing
-#ifdef OB_BUILD_TDE_SECURITY
-  } else if (OB_FAIL(root_key_.assign(other.root_key_))) {
-    LOG_WARN("failed to assign root_key_", KR(ret));
-  } else if (FALSE_IT(with_root_key_ = other.with_root_key_)) {
-    // should not be here
-#endif
   } else {
-    tenant_id_ = other.tenant_id_;
-    unit_id_ = other.unit_id_;
-    compat_mode_ = other.compat_mode_;
-    unit_config_ = other.unit_config_;
-    replica_type_ = other.replica_type_;
-    if_not_grant_ = other.if_not_grant_;
-    is_delete_ = other.is_delete_;
-    data_version_ = other.data_version_;
-    meta_tenant_data_version_ = other.meta_tenant_data_version_;
+    reset();
+#ifdef OB_BUILD_TDE_SECURITY
+    if (OB_FAIL(root_key_.assign(other.root_key_))) {
+      LOG_WARN("failed to assign root_key_", KR(ret));
+    } else if (FALSE_IT(with_root_key_ = other.with_root_key_)) {
+      // should not be here
+    }
+#endif
+    if (OB_SUCC(ret)) {
+      tenant_id_ = other.tenant_id_;
+      unit_id_ = other.unit_id_;
+      compat_mode_ = other.compat_mode_;
+      unit_config_ = other.unit_config_;
+      replica_type_ = other.replica_type_;
+      if_not_grant_ = other.if_not_grant_;
+      is_delete_ = other.is_delete_;
+      data_version_ = other.data_version_;
+      meta_tenant_data_version_ = other.meta_tenant_data_version_;
+      for (int64_t i = 0; OB_SUCC(ret) && i < other.init_tenant_configs_.count(); ++i) {
+        if (OB_FAIL(add_init_tenant_config(other.init_tenant_configs_.at(i)))) {
+          LOG_WARN("fail to assign init tenant config", KR(ret), K(other));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int TenantServerUnitConfig::add_init_tenant_config(const ObTenantConfigArg &config)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(add_init_tenant_config_(config))) {
+    LOG_WARN("fail to add init tenant config", KR(ret), K(config));
+  }
+  return ret;
+}
+
+int TenantServerUnitConfig::add_init_tenant_config_(const ObTenantConfigArg &config)
+{
+  int ret = OB_SUCCESS;
+  ObTenantConfigArg new_config;
+  ObString config_str;
+  if (OB_UNLIKELY(!config.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid init tenant config", KR(ret), K(config));
+  } else if (OB_FAIL(ob_write_string(allocator_, config.config_str_, config_str, true /* c_like_str */))) {
+    LOG_WARN("fail to copy init tenant config string", KR(ret), K(config));
+  } else {
+    new_config.tenant_id_ = config.tenant_id_;
+    new_config.config_str_ = config_str;
+    if (OB_FAIL(init_tenant_configs_.push_back(new_config))) {
+      LOG_WARN("fail to push init tenant config", KR(ret), K(new_config));
+    }
   }
   return ret;
 }
@@ -8395,6 +8433,8 @@ void TenantServerUnitConfig::reset()
 #endif
   data_version_ = 0;
   meta_tenant_data_version_ = 0;
+  init_tenant_configs_.reset();
+  allocator_.clear();
 }
 
 OB_SERIALIZE_MEMBER(TenantServerUnitConfig,
@@ -8411,6 +8451,7 @@ OB_SERIALIZE_MEMBER(TenantServerUnitConfig,
 #endif
                     , data_version_
                     , meta_tenant_data_version_
+                    , init_tenant_configs_
 		                );
 
 int ObTenantSchemaVersions::add(const int64_t tenant_id, const int64_t schema_version)

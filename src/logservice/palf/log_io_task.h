@@ -27,6 +27,7 @@ enum class LogIOTaskType
   TRUNCATE_LOG_TYPE = 4,
 	FLASHBACK_LOG_TYPE = 5,
   PURGE_THROTTLING_TYPE = 6,
+  ASYNC_MARK_TYPE = 7,
 };
 
 OB_INLINE const char *log_io_task_type_str(const LogIOTaskType type)
@@ -40,6 +41,7 @@ OB_INLINE const char *log_io_task_type_str(const LogIOTaskType type)
     IO_TASK_TYPE_NAME(TRUNCATE_LOG_TYPE);
     IO_TASK_TYPE_NAME(FLASHBACK_LOG_TYPE);
     IO_TASK_TYPE_NAME(PURGE_THROTTLING_TYPE);
+    IO_TASK_TYPE_NAME(ASYNC_MARK_TYPE);
     default: str = "UNKNOWN_TYPE";
   }
   return str;

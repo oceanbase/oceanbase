@@ -11342,6 +11342,18 @@ private:
   int ret_;
 };
 
+struct ObTenantConfigArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTenantConfigArg() : tenant_id_(0), config_str_() {}
+  bool is_valid() const { return tenant_id_ > 0 && !config_str_.empty(); }
+  int assign(const ObTenantConfigArg &other);
+  int64_t tenant_id_;
+  common::ObString config_str_;
+  TO_STRING_KV(K_(tenant_id), K_(config_str));
+};
+
 struct TenantServerUnitConfig
 {
 public:
@@ -11358,9 +11370,12 @@ public:
       root_key_()
 #endif
       , data_version_(0),
-      meta_tenant_data_version_(0)
+      meta_tenant_data_version_(0),
+      init_tenant_configs_(),
+      allocator_("TenantUnitCfg")
       {}
   int assign(const TenantServerUnitConfig &other);
+  int add_init_tenant_config(const ObTenantConfigArg &config);
   // init with no data version
   int init(const uint64_t tenant_id,
            const uint64_t unit_id,
@@ -11419,6 +11434,7 @@ public:
   // data_version of the meta tenant will be set.
   uint64_t data_version_;
   uint64_t meta_tenant_data_version_;
+  common::ObSArray<ObTenantConfigArg> init_tenant_configs_;
 
   bool is_valid() const;
   TO_STRING_KV(K_(tenant_id),
@@ -11434,9 +11450,13 @@ public:
 #endif
                , KDV_(data_version)
                , KDV_(meta_tenant_data_version)
+               , K_(init_tenant_configs)
                );
 public:
   OB_UNIS_VERSION(1);
+private:
+  int add_init_tenant_config_(const ObTenantConfigArg &config);
+  common::ObArenaAllocator allocator_;
 };
 
 enum TransToolCmd
@@ -13360,18 +13380,6 @@ public:
   int64_t stmt_type_;
   share::schema::ObContextSchema ctx_schema_;
   bool or_replace_;
-};
-
-struct ObTenantConfigArg
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObTenantConfigArg() : tenant_id_(0), config_str_() {}
-  bool is_valid() const { return tenant_id_ > 0 && !config_str_.empty(); }
-  int assign(const ObTenantConfigArg &other);
-  int64_t tenant_id_;
-  common::ObString config_str_;
-  TO_STRING_KV(K_(tenant_id), K_(config_str));
 };
 
 struct ObCheckBackupConnectivityArg final
