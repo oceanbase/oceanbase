@@ -26585,6 +26585,7 @@ int ObDDLService::batch_upgrade_table_schema_(const uint64_t &tenant_id, const O
 int ObDDLService::get_alter_system_table_schema_(
     const ObTableSchema &orig_schema,
     const ObTableSchema &hard_code_schema,
+    ObSchemaGetterGuard &schema_guard,
     ObIArray<uint64_t> &add_column_ids,
     ObIArray<uint64_t> &alter_column_ids,
     ObTableSchema &new_schema)
@@ -26597,7 +26598,7 @@ int ObDDLService::get_alter_system_table_schema_(
     LOG_WARN("orig_schema and hard_code_schema table_id not match", KR(ret), K(orig_schema),
         K(hard_code_schema));
   } else if (OB_FAIL(ObRootInspection::check_and_get_system_table_column_diff(orig_schema,
-          hard_code_schema, add_column_ids, alter_column_ids))) {
+          hard_code_schema, schema_guard, add_column_ids, alter_column_ids))) {
     LOG_WARN("fail to check system table's column schemas", KR(ret), K(tenant_id), K(table_id));
   } else if (OB_FAIL(new_schema.assign(orig_schema))) {
     LOG_WARN("fail to assign table schema", KR(ret), K(tenant_id), K(table_id));
@@ -26692,13 +26693,17 @@ int ObDDLService::batch_alter_system_table_column_(
           orig_table_schema = NULL;
           add_column_ids.reset();
           alter_column_ids.reset();
-          if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, orig_table_schema))) {
+          if (OB_FAIL(ObRootInspection::errsim_inject_upgrade_system_table_offline_column(
+                  hard_code_schema))) {
+            // inject offline column for system table, only for test
+            LOG_WARN("failed to inject upgrade system table offline column", KR(ret), K(hard_code_schema));
+          } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, orig_table_schema))) {
             LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
           } else if (OB_ISNULL(orig_table_schema)) {
             ret = OB_TABLE_NOT_EXIST;
             LOG_WARN("table not exist", KR(ret), K(tenant_id), K(table_id));
           } else if (OB_FAIL(get_alter_system_table_schema_(*orig_table_schema, hard_code_schema,
-                  add_column_ids, alter_column_ids, new_table_schema))) {
+                  schema_guard, add_column_ids, alter_column_ids, new_table_schema))) {
             LOG_WARN("failed to get table new schema", KR(ret), K(*orig_table_schema), K(hard_code_schema));
           } else if (0 == add_column_ids.count() && 0 == alter_column_ids.count()) {
             LOG_INFO("system table's column schemas not changed, just skip", KR(ret), K(tenant_id), K(table_id));

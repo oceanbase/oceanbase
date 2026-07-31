@@ -1029,6 +1029,10 @@ int ObUpgradeExecutor::upgrade_system_table_(const uint64_t tenant_id)
           LOG_WARN("check_cancel failed", KR(ret));
         } else if (OB_FAIL((*creator_ptr)(table_schema))) {
           LOG_WARN("create table schema failed", KR(ret));
+        } else if (OB_FAIL(ObRootInspection::errsim_inject_upgrade_system_table_offline_column(
+                       table_schema))) {
+          // inject offline column for system table, only for test
+          LOG_WARN("failed to inject upgrade system table offline column", KR(ret), K(table_schema));
         } else if (!is_sys_tenant(tenant_id)
                    && OB_FAIL(ObSchemaUtils::construct_tenant_space_full_table(
                                   tenant_id, table_schema))) {

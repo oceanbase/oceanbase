@@ -31,6 +31,7 @@ namespace schema
 {
 class ObTableSchema;
 class ObColumnSchemaV2;
+class ObSchemaGetterGuard;
 class ObMultiVersionSchemaService;
 }
 }
@@ -70,6 +71,8 @@ public:
   // remember to check result.error_table_ids to get all error tables
   static int check_sys_table_schema(const obrpc::ObCheckSysTableSchemaArg &arg,
     obrpc::ObCheckSysTableSchemaResult &result);
+  static int errsim_inject_upgrade_system_table_offline_column(
+    share::schema::ObTableSchema &hard_code_schema);
 
   // For system tables, check and get column schemas' difference
   // between table schema in memory and hard code table schema.
@@ -79,6 +82,7 @@ public:
   static int check_and_get_system_table_column_diff(
     const share::schema::ObTableSchema &table_schema,
     const share::schema::ObTableSchema &hard_code_schema,
+    share::schema::ObSchemaGetterGuard &schema_guard,
     common::ObIArray<uint64_t> &add_column_ids,
     common::ObIArray<uint64_t> &alter_column_ids);
 private:

@@ -2755,6 +2755,7 @@ private:
   int get_alter_system_table_schema_(
       const ObTableSchema &orig_schema,
       const ObTableSchema &hard_code_schema,
+      ObSchemaGetterGuard &schema_guard,
       ObIArray<uint64_t> &add_column_ids,
       ObIArray<uint64_t> &alter_column_ids,
       ObTableSchema &new_schema);

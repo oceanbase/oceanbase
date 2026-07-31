@@ -12,6 +12,8 @@
 #include "share/location_cache/ob_location_service.h"
 #include "share/ob_heartbeat_handler.h"
 #include "share/ob_inspection_service.h"
+#include "share/inner_table/ob_inner_table_schema.h"
+#include "lib/utility/ob_tracepoint.h"
 
 namespace oceanbase
 {
@@ -22,6 +24,8 @@ using namespace share::schema;
 using namespace sql;
 namespace rootserver
 {
+ERRSIM_POINT_DEF(ERRSIM_UPGRADE_SYSTEM_TABLE_OFFLINE_COLUMN);
+
 ObRootInspection::ObRootInspection()
   : inited_(false), stopped_(false), zone_passed_(false),
     sys_param_passed_(false), sys_stat_passed_(false),
@@ -606,9 +610,28 @@ int ObRootInspection::check_sys_table_schema(const obrpc::ObCheckSysTableSchemaA
 
 #define PRINT_TABLE_INFO(table) "table_id", table.get_table_id(), "table_name", table.get_table_name()
 
+int ObRootInspection::errsim_inject_upgrade_system_table_offline_column(
+    ObTableSchema &hard_code_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ALL_ROOTSERVICE_JOB_TID == hard_code_schema.get_table_id()
+      && OB_UNLIKELY(ERRSIM_UPGRADE_SYSTEM_TABLE_OFFLINE_COLUMN)) {
+    ObColumnSchemaV2 *column = hard_code_schema.get_column_schema("extra_info");
+    if (OB_ISNULL(column)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get injected system table column", KR(ret), K(hard_code_schema));
+    } else {
+      column->set_data_type(ObLongTextType);
+      column->set_data_length(0);
+    }
+  }
+  return ret;
+}
+
 int ObRootInspection::check_and_get_system_table_column_diff(
     const share::schema::ObTableSchema &table_schema,
     const share::schema::ObTableSchema &hard_code_schema,
+    share::schema::ObSchemaGetterGuard &schema_guard,
     common::ObIArray<uint64_t> &add_column_ids,
     common::ObIArray<uint64_t> &alter_column_ids)
 {
@@ -639,6 +662,7 @@ int ObRootInspection::check_and_get_system_table_column_diff(
     // case 1. check if columns should be dropped.
     // case 2. check if column can be altered online.
     for (int64_t i = 0; OB_SUCC(ret) && i < table_schema.get_column_count(); i++) {
+      bool is_offline = false;
       column = table_schema.get_column_schema_by_idx(i);
       if (OB_ISNULL(column)) {
         ret = OB_ERR_UNEXPECTED;
@@ -662,6 +686,24 @@ int ObRootInspection::check_and_get_system_table_column_diff(
           LOG_WARN("fail to check column schema", KR(ret),
                    K(tenant_id), K(table_id), KPC(column), KPC(hard_code_column));
         } else if (OB_FAIL(tmp_column.assign(*hard_code_column))) {
+          LOG_WARN("fail to assign hard code column schema", KR(ret),
+                   K(tenant_id), K(table_id),  "column_id", hard_code_column->get_column_id());
+        } else if (OB_FAIL(table_schema.check_alter_column_is_offline(
+                       column, &tmp_column, schema_guard, is_offline))) {
+          LOG_WARN("fail to classify system table column alteration", KR(ret),
+                   K(tenant_id), K(table_id), KPC(column), KPC(hard_code_column));
+        } else if (is_offline) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("offline alteration of system table column is not supported during upgrade", KR(ret),
+                   K(tenant_id), K(table_id),
+                   "table_name", table_schema.get_table_name(),
+                   "column_id", column->get_column_id(),
+                   "column_name", column->get_column_name(),
+                   "src_type", column->get_data_type(),
+                   "dst_type", hard_code_column->get_data_type(),
+                   KPC(column), KPC(hard_code_column));
+        } else if (OB_FAIL(tmp_column.assign(*hard_code_column))) {
+          // check_column_can_be_altered_online() may change dst_column
           LOG_WARN("fail to assign hard code column schema", KR(ret),
                    K(tenant_id), K(table_id),  "column_id", hard_code_column->get_column_id());
         } else if (OB_FAIL(table_schema.check_column_can_be_altered_online(column, &tmp_column))) {
