@@ -17,7 +17,7 @@
 #include "lib/utility/ob_print_utils.h"       // TO_STRING_KV
 #include "lib/container/ob_se_array.h"        // ObSEArray
 
-#include "ob_server_priority.h"               // RegionPriority, ReplicaPriority
+#include "ob_server_priority.h"               // FetchPriority, ReplicaPriority, REGION_PRIORITY_*
 #include "ob_external_server_blacklist.h"     // ObLogSvrBlacklist
 #include "ob_log_all_svr_cache.h"             // ObLogAllSvrCache
 #include "ob_server_blacklist.h"              // BlackList
@@ -42,10 +42,11 @@ public:
 
   // Add a server
   // When the server exist, update the corresponding information
+  // fetch_prio: unified priority for fetch ordering (from region and/or zone_priority; smaller = higher)
   int add_server_or_update(const common::ObAddr &svr,
       const palf::LSN &start_lsn,
       const palf::LSN &end_lsn,
-      const RegionPriority region_prio,
+      const FetchPriority fetch_prio,
       const bool is_leader);
 
   // Iterate over the server that serves the next LSN
@@ -152,7 +153,7 @@ private:
 
     // Definition of priority
     bool            is_located_in_meta_table_;   // Is it in the meta table
-    RegionPriority  region_prio_;                // region priority definition
+    FetchPriority   fetch_prio_;                 // unified fetch priority (region/zone; smaller = higher)
     ReplicaPriority replica_prio_;               // replica type priority definition
     bool            is_leader_;                  // server is leader or not
 
@@ -162,7 +163,7 @@ private:
         const palf::LSN &start_lsn,
         const palf::LSN &end_lsn,
         const bool is_located_in_meta_table,
-        const RegionPriority region_prio,
+        const FetchPriority fetch_prio,
         const ReplicaPriority replica_prio,
         const bool is_leader);
 
@@ -174,7 +175,7 @@ private:
     void update(const palf::LSN &start_lsn,
         const palf::LSN &end_lsn,
         const bool is_located_in_meta_table,
-        const RegionPriority region_prio,
+        const FetchPriority fetch_prio,
         const ReplicaPriority replica_prio,
         const bool is_leader);
 
@@ -200,11 +201,11 @@ private:
   class SvrItemCompare
   {
     // 1. prioritize the server in the meta table to synchronize logs
-    // 2. sort by region priority from largest to smallest
+    // 2. sort by unified fetch priority (smaller value = higher priority)
     // 3. prioritize by replica type from largest to smallest
     // 4. prioritize synchronizing from followers, followed by leaders
     //
-    // Note: The lower the region and replica_type values, the higher the priority
+    // Note: The lower the fetch_prio and replica_type values, the higher the priority
   public:
     bool operator() (const SvrItem &a, const SvrItem &b)
     {
@@ -212,8 +213,8 @@ private:
 
       if (a.is_located_in_meta_table_ != b.is_located_in_meta_table_) {
         bool_ret = static_cast<int8_t>(a.is_located_in_meta_table_) > static_cast<int8_t>(b.is_located_in_meta_table_);
-      } else if (a.region_prio_ != b.region_prio_) {
-        bool_ret = a.region_prio_ < b.region_prio_;
+      } else if (a.fetch_prio_ != b.fetch_prio_) {
+        bool_ret = a.fetch_prio_ < b.fetch_prio_;
       } else if (a.replica_prio_ != b.replica_prio_) {
         bool_ret = a.replica_prio_ < b.replica_prio_;
       } else {

@@ -345,6 +345,7 @@ LATCH_DEF(DI_SUMMARY_LOCK, 340, "diagnostic info summary lock", LATCH_FIFO, 2000
 LATCH_DEF(DI_ALLOCATE_LOCK, 341, "diagnostic info allocator lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(DI_COLLECTOR_LOCK, 342, "diagnostic info collector lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(SPM_SET_LOCK, 347, "spm set latch", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(OB_LOG_ALL_SVR_CACHE_LOCK, 630, "ob log all svr cache lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(LATCH_END, 348, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
