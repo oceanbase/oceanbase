@@ -3471,10 +3471,32 @@ int ObTableScanOp::reassign_task_ranges(ObGranuleTaskInfo &info, bool &is_false_
       MY_INPUT.mbr_filters_.reuse();
     } else if (!MY_INPUT.get_need_extract_query_range()) {
       is_false_range = info.ranges_.empty();
-      if (OB_FAIL(MY_INPUT.key_ranges_.assign(info.ranges_)) ||
-          OB_FAIL(MY_INPUT.ss_key_ranges_.assign(info.ss_ranges_))) {
+      if (MY_CTDEF.enable_new_false_range_) {
+        const bool has_ss_range = !info.ss_ranges_.empty();
+        MY_INPUT.key_ranges_.reuse();
+        MY_INPUT.ss_key_ranges_.reuse();
+        if (OB_UNLIKELY(has_ss_range && info.ranges_.count() != info.ss_ranges_.count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected key range and skip scan range count", KR(ret), K(info));
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < info.ranges_.count(); ++i) {
+          if (!info.ranges_.at(i).empty()) {
+            if (OB_FAIL(MY_INPUT.key_ranges_.push_back(info.ranges_.at(i)))) {
+              LOG_WARN("failed to push back key range", KR(ret), K(i), K(info));
+            } else if (has_ss_range &&
+                       OB_FAIL(MY_INPUT.ss_key_ranges_.push_back(info.ss_ranges_.at(i)))) {
+              LOG_WARN("failed to push back skip scan range", KR(ret), K(i), K(info));
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          is_false_range = MY_INPUT.key_ranges_.empty();
+        }
+      } else if (OB_FAIL(MY_INPUT.key_ranges_.assign(info.ranges_)) ||
+                 OB_FAIL(MY_INPUT.ss_key_ranges_.assign(info.ss_ranges_))) {
         LOG_WARN("assign the range info failed", K(ret), K(info));
-      } else if (MY_SPEC.is_vt_mapping_) {
+      }
+      if (OB_SUCC(ret) && MY_SPEC.is_vt_mapping_) {
         if (OB_FAIL(vt_result_converter_->convert_key_ranges(MY_INPUT.key_ranges_))) {
           LOG_WARN("convert key ranges failed", K(ret));
         }
