@@ -74,6 +74,15 @@ ObResultSet::~ObResultSet()
     // Always called at the end of the ObResultSet destructor
     update_end_time();
   }
+  if (need_reset_pl_async_commit_flag_ &&
+      my_session_.is_pl_async_commit()) {
+    ObSpinLockGuard lock_guard(my_session_.get_pl_end_trans_cb().get_lock());
+    if (!my_session_.get_pl_end_trans_cb().get_can_release_tx_desc()) { // not submit pl callback
+      my_session_.set_is_pl_async_commit(false);
+      my_session_.set_has_async_query_sender(false);
+    }
+    need_reset_pl_async_commit_flag_ = false;
+  }
   is_init_ = false;
 }
 
@@ -1354,7 +1363,7 @@ void ObResultSet::force_refresh_location_cache(bool is_nonblock, int err)
 }
 
 // 告诉mysql是否要传入一个EndTransCallback
-bool ObResultSet::need_end_trans_callback(bool force_sync_resp) const
+bool ObResultSet::need_end_trans_callback(bool force_sync_resp)
 {
   int ret = OB_SUCCESS;
   bool need = false;
@@ -1393,6 +1402,7 @@ bool ObResultSet::need_end_trans_callback(bool force_sync_resp) const
         need = !is_with_rows();
         my_session_.set_is_pl_async_commit(true);
         my_session_.set_has_async_query_sender(need);
+        need_reset_pl_async_commit_flag_ = true;
       }
     } else if (stmt::T_ANONYMOUS_BLOCK == get_stmt_type() && is_oracle_mode()) {
       need = ac && !explicit_start_trans && !is_with_rows();
