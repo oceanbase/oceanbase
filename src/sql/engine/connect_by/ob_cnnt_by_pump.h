@@ -249,7 +249,15 @@ private:
     bool inited_;
     ModulePageAllocator *ht_alloc_;
   };
-  typedef common::hash::ObHashSet<ObHashColumn, common::hash::NoPthreadDefendMode> RowMap;
+  static const int64_t HASH_FILTER_EXTEND_RATIO = 4;
+  typedef common::hash::ObHashSet<ObHashColumn,
+                                  common::hash::NoPthreadDefendMode,
+                                  common::hash::hash_func<ObHashColumn>,
+                                  common::hash::equal_to<ObHashColumn>,
+                                  common::hash::SimpleAllocer<common::hash::HashSetTypes<ObHashColumn>::AllocType>,
+                                  common::hash::NormalPointer,
+                                  oceanbase::common::ObMalloc,
+                                  HASH_FILTER_EXTEND_RATIO> RowMap;
 public:
   ObConnectByOpPump()
       : ObConnectByOpPumpBase(),
