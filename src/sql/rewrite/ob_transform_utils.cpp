@@ -2191,16 +2191,15 @@ int ObTransformUtils::get_having_filters_for_deduce(const ObSelectStmt *sel_stmt
                                                     ObIArray<ObRawExpr*> &having_exprs_for_deduce)
 {
   int ret = OB_SUCCESS;
-  bool has_target = false;
+  UNUSED(group_clause_exprs);
   if (OB_ISNULL(sel_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (sel_stmt->get_rollup_expr_size() == 0 && sel_stmt->get_cube_items_size() == 0 &&
-             sel_stmt->get_grouping_sets_items_size() == 0) {
-    if (OB_FAIL(having_exprs_for_deduce.assign(raw_having_exprs))) {
-      LOG_WARN("failed to assign having exprs", K(ret));
-    }
   } else {
+    // Skip aggregate HAVING predicates for not-null deduce.
+    // Group-level facts (e.g. HAVING SUM(c0) IS NOT NULL) must not prove
+    // row-level column not-null, otherwise IFNULL/NVL(c0, ...) may be wrongly
+    // simplified to c0.
     for (int64_t i = 0; OB_SUCC(ret) && i < raw_having_exprs.count(); ++i) {
       if (OB_ISNULL(raw_having_exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
