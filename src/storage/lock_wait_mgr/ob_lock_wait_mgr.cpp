@@ -176,8 +176,14 @@ void ObLockWaitMgr::handle_lock_conflict(const ObExecContext &exec_ctx,
                                          bool &is_lock_wait_timeout)
 {
   if (OB_TRY_LOCK_ROW_CONFLICT == exec_errcode) {
+    if (session.is_real_inner_session()) {
+      rpc::ObLockWaitNode* node = NULL;
+      if ((node = get_thread_node()) != NULL) {
+        node->reset_need_wait();
+      }
+    }
     // save conflict infos to scheduler lock wait node
-    if (exec_ctx.get_trans_state().is_start_stmt_executed()) {
+    else if (exec_ctx.get_trans_state().is_start_stmt_executed()) {
       // have tx desc in session
       ObTxDesc *tx = NULL;
       if (OB_ISNULL(tx = session.get_tx_desc())) {
@@ -189,12 +195,6 @@ void ObLockWaitMgr::handle_lock_conflict(const ObExecContext &exec_ctx,
       transaction::ObTxExecResult &result = const_cast<ObExecContext&>(exec_ctx).get_trans_result();
       on_lock_conflict(const_cast<ObSArray<storage::ObRowConflictInfo>&>(result.get_conflict_info_array()),
          NULL, session.get_server_sid(), is_lock_wait_timeout);
-    }
-    if (session.is_real_inner_session()) {
-      rpc::ObLockWaitNode* node = NULL;
-      if ((node = get_thread_node()) != NULL) {
-        node->reset_need_wait();
-      }
     }
   } else {
     TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "exec errcode should be OB_TRY_LOCK_ROW_CONFLICT");
