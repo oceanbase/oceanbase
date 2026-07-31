@@ -7,7 +7,6 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#define  private public
 #include "rootserver/ob_root_service.h"
 #include "share/ob_max_id_cache.h"
 #include "share/ob_max_id_fetcher.h"
@@ -24,6 +23,8 @@ namespace share
 uint64_t current_max_id = OB_INVALID_ID;
 uint64_t target_size = OB_INVALID_SIZE;
 bool hit = false;
+// Avoid exposing private members through preprocessor tricks in OB_SO_CACHE builds.
+constexpr uint64_t TEST_CACHE_SIZE = 1024;
 int ObMaxIdFetcher::batch_fetch_new_max_id_from_inner_table(
     const uint64_t tenant_id,
     ObMaxIdType id_type,
@@ -56,61 +57,64 @@ TEST(MaxIdCache, basic)
 {
   rootserver::ObRootService rs;
   GCTX.root_service_ = &rs;
-  rs.rs_status_.rs_status_ = share::status::ObRootServiceStatus::FULL_SERVICE;
+  DEFER(GCTX.root_service_ = nullptr);
+  ASSERT_SUCCESS(rs.set_rs_status(share::status::STARTING));
+  ASSERT_SUCCESS(rs.set_rs_status(share::status::IN_SERVICE));
+  ASSERT_SUCCESS(rs.set_rs_status(share::status::FULL_SERVICE));
   ObMaxIdCacheMgr mgr;
   ObMySQLProxy proxy;
   uint64_t id = OB_INVALID_ID;
   ASSERT_SUCCESS(mgr.init(&proxy));
 
-  // 第一次查询，会缓存ObMaxIdCacheItem::CACHE_SIZE个ID
-  // 查询前内部表值为1，查询后变为ObMaxIdCacheItem::CACHE_SIZE + 1
-  set_id_size(1, ObMaxIdCacheItem::CACHE_SIZE);
+  // 第一次查询，会缓存TEST_CACHE_SIZE个ID
+  // 查询前内部表值为1，查询后变为TEST_CACHE_SIZE + 1
+  set_id_size(1, TEST_CACHE_SIZE);
   ASSERT_SUCCESS(mgr.fetch_max_id(OB_SYS_TENANT_ID, OB_MAX_USED_OBJECT_ID_TYPE, id, 1));
   ASSERT_EQ(id, 2);
   ASSERT_TRUE(hit);
   reset_id_size();
 
-  // 查询ObMaxIdCacheItem::CACHE_SIZE-1次，不会触发内部表读取
-  for (int64_t i = 1; i < ObMaxIdCacheItem::CACHE_SIZE; i++) {
+  // 查询TEST_CACHE_SIZE-1次，不会触发内部表读取
+  for (int64_t i = 1; i < TEST_CACHE_SIZE; i++) {
     ASSERT_SUCCESS(mgr.fetch_max_id(OB_SYS_TENANT_ID, OB_MAX_USED_OBJECT_ID_TYPE, id, 1));
     ASSERT_EQ(id, i + 2);
     ASSERT_FALSE(hit);
   }
 
   // cache用完，触发内部表读取
-  // 查询前内部表值为ObMaxIdCacheItem::CACHE_SIZE + 1，查询后变为ObMaxIdCacheItem::CACHE_SIZE * 2 + 1
-  set_id_size(ObMaxIdCacheItem::CACHE_SIZE + 1, ObMaxIdCacheItem::CACHE_SIZE);
+  // 查询前内部表值为TEST_CACHE_SIZE + 1，查询后变为TEST_CACHE_SIZE * 2 + 1
+  set_id_size(TEST_CACHE_SIZE + 1, TEST_CACHE_SIZE);
   ASSERT_SUCCESS(mgr.fetch_max_id(OB_SYS_TENANT_ID, OB_MAX_USED_OBJECT_ID_TYPE, id, 1));
-  ASSERT_EQ(id, ObMaxIdCacheItem::CACHE_SIZE + 2);
+  ASSERT_EQ(id, TEST_CACHE_SIZE + 2);
   ASSERT_TRUE(hit);
   reset_id_size();
 
-  // 读取ObMaxIdCacheItem::CACHE_SIZE - 1个值，不触发内部表读取
-  ASSERT_SUCCESS(mgr.fetch_max_id(OB_SYS_TENANT_ID, OB_MAX_USED_OBJECT_ID_TYPE, id, ObMaxIdCacheItem::CACHE_SIZE - 1));
-  ASSERT_EQ(id, ObMaxIdCacheItem::CACHE_SIZE + 3);
+  // 读取TEST_CACHE_SIZE - 1个值，不触发内部表读取
+  ASSERT_SUCCESS(mgr.fetch_max_id(OB_SYS_TENANT_ID, OB_MAX_USED_OBJECT_ID_TYPE, id, TEST_CACHE_SIZE - 1));
+  ASSERT_EQ(id, TEST_CACHE_SIZE + 3);
   ASSERT_FALSE(hit);
 
   // cache用完，触发内部表读取
-  // 查询前内部表值为ObMaxIdCacheItem::CACHE_SIZE * 2 + 1，查询后变为ObMaxIdCacheItem::CACHE_SIZE * 3 + 1
-  set_id_size(ObMaxIdCacheItem::CACHE_SIZE * 2 + 1, ObMaxIdCacheItem::CACHE_SIZE);
+  // 查询前内部表值为TEST_CACHE_SIZE * 2 + 1，查询后变为TEST_CACHE_SIZE * 3 + 1
+  set_id_size(TEST_CACHE_SIZE * 2 + 1, TEST_CACHE_SIZE);
   ASSERT_SUCCESS(mgr.fetch_max_id(OB_SYS_TENANT_ID, OB_MAX_USED_OBJECT_ID_TYPE, id, 1));
-  ASSERT_EQ(id, ObMaxIdCacheItem::CACHE_SIZE * 2 + 2);
+  ASSERT_EQ(id, TEST_CACHE_SIZE * 2 + 2);
   ASSERT_TRUE(hit);
   reset_id_size();
 
-  // 查询前内部表值为ObMaxIdCacheItem::CACHE_SIZE * 3 + 1，查询后变为ObMaxIdCacheItem::CACHE_SIZE * 4 + 2
-  set_id_size(ObMaxIdCacheItem::CACHE_SIZE * 3 + 1, ObMaxIdCacheItem::CACHE_SIZE + 1);
-  ASSERT_SUCCESS(mgr.fetch_max_id(OB_SYS_TENANT_ID, OB_MAX_USED_OBJECT_ID_TYPE, id, ObMaxIdCacheItem::CACHE_SIZE + 1));
+  // 查询前内部表值为TEST_CACHE_SIZE * 3 + 1，查询后变为TEST_CACHE_SIZE * 4 + 2
+  set_id_size(TEST_CACHE_SIZE * 3 + 1, TEST_CACHE_SIZE + 1);
+  ASSERT_SUCCESS(mgr.fetch_max_id(OB_SYS_TENANT_ID, OB_MAX_USED_OBJECT_ID_TYPE, id, TEST_CACHE_SIZE + 1));
   // 可以复用前一段的缓存
-  ASSERT_EQ(id, ObMaxIdCacheItem::CACHE_SIZE * 2 + 3);
+  ASSERT_EQ(id, TEST_CACHE_SIZE * 2 + 3);
   ASSERT_TRUE(hit);
   reset_id_size();
 
-  // 当前缓存的值为[ObMaxIdCacheItem::CACHE_SIZE * 3 + 4, ObMaxIdCacheItem::CACHE_SIZE * 4 + 2]
-  // 返回目前内部表使用的最大为ObMaxIdCacheItem::CACHE_SIZE * 4 + 3，表明有其他地方获取了id，无法连续，缓存的值需要丢弃
-  set_id_size(ObMaxIdCacheItem::CACHE_SIZE * 4 + 3, ObMaxIdCacheItem::CACHE_SIZE);
-  ASSERT_SUCCESS(mgr.fetch_max_id(OB_SYS_TENANT_ID, OB_MAX_USED_OBJECT_ID_TYPE, id, ObMaxIdCacheItem::CACHE_SIZE));
-  ASSERT_EQ(id, ObMaxIdCacheItem::CACHE_SIZE * 4 + 4);
+  // 当前缓存的值为[TEST_CACHE_SIZE * 3 + 4, TEST_CACHE_SIZE * 4 + 2]
+  // 返回目前内部表使用的最大为TEST_CACHE_SIZE * 4 + 3，表明有其他地方获取了id，无法连续，缓存的值需要丢弃
+  set_id_size(TEST_CACHE_SIZE * 4 + 3, TEST_CACHE_SIZE);
+  ASSERT_SUCCESS(mgr.fetch_max_id(OB_SYS_TENANT_ID, OB_MAX_USED_OBJECT_ID_TYPE, id, TEST_CACHE_SIZE));
+  ASSERT_EQ(id, TEST_CACHE_SIZE * 4 + 4);
   ASSERT_TRUE(hit);
   reset_id_size();
 }

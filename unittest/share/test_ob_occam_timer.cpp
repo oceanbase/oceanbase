@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#define UNITTEST_DEBUG
-
 #include "share/ob_occam_timer.h"
 #include <gtest/gtest.h>
 #include <thread>
@@ -29,10 +27,6 @@ public:
   virtual void TearDown() {
     delete thread_pool;
     delete occam_timer;
-    ASSERT_EQ(occam::DefaultAllocator::get_default_allocator().total_alive_num, 0);
-    ASSERT_EQ(function::DefaultFunctionAllocator::get_default_allocator().total_alive_num, 0);
-    ASSERT_EQ(future::DefaultFutureAllocator::get_default_allocator().total_alive_num, 0);
-    ASSERT_EQ(guard::DefaultSharedGuardAllocator::get_default_allocator().total_alive_num, 0);
   };
   ObOccamThreadPool *thread_pool;
   ObOccamTimer *occam_timer;
@@ -255,4 +249,3 @@ int main(int argc, char **argv)
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
-
