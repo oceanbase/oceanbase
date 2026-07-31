@@ -220,10 +220,18 @@ int ObTransformJoinElimination::check_eliminate_join_self_key_valid(ObDMLStmt *s
                                                            tmp_valid,
                                                            equal_sets))) {
     LOG_WARN("failed to check whether transformation is possible", K(ret));
-  } else if (tmp_valid) {
-    is_valid = tmp_valid;
-  } else {
+  } else if (!tmp_valid) {
     OPT_TRACE("not lossless join");
+  } else {
+    bool is_injection_safe = true;
+    if (OB_FAIL(check_select_item_injection_safe(source_table, target_table, stmt_map_info,
+                                                 is_injection_safe))) {
+      LOG_WARN("failed to check select item injection safe", K(ret));
+    } else if (!is_injection_safe) {
+      OPT_TRACE("abort join elimination: select item injection is not safe");
+    } else {
+      is_valid = true;
+    }
   }
   if (OB_SUCC(ret) && !is_valid) {
     OPT_TRACE(source_table, "can not eliminate", target_table, "with lossless join");
@@ -588,6 +596,55 @@ int ObTransformJoinElimination::create_missing_select_items(ObSelectStmt *source
   return ret;
 }
 
+int ObTransformJoinElimination::check_select_item_injection_safe(const TableItem *source_table,
+                                                                 const TableItem *target_table,
+                                                                 const ObStmtMapInfo &stmt_map_info,
+                                                                 bool &is_injection_safe)
+{
+  int ret = OB_SUCCESS;
+  const ObSelectStmt *source_ref = NULL;
+  const ObSelectStmt *target_ref = NULL;
+  const ObRawExpr *target_expr = NULL;
+  ObSEArray<int64_t, 16> reverse_map;
+  is_injection_safe = true;
+  if (OB_ISNULL(source_table) || OB_ISNULL(target_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(source_table), K(target_table));
+  } else if (!source_table->is_generated_table() || !target_table->is_generated_table()) {
+    // basic/temp tables merge columns directly, so injection is always safe.
+  } else if (OB_ISNULL(source_ref = source_table->ref_query_) || OB_ISNULL(target_ref = target_table->ref_query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null ref query", K(ret), K(source_ref), K(target_ref));
+  } else if (OB_FAIL(reverse_select_items_map(source_ref, target_ref, stmt_map_info.select_item_map_, reverse_map))) {
+    LOG_WARN("failed to reverse select items map", K(ret));
+  } else {
+    // 1. GROUP BY: injecting an aggregate into a non-groupby source turns it
+    // into a scalar group by and collapses cardinality. Source that already
+    // has grouping can accept more aggregates without changing its shape.
+    if (OB_SUCC(ret) && is_injection_safe && !source_ref->has_group_by()) {
+      for (int64_t i = 0; OB_SUCC(ret) && is_injection_safe && i < reverse_map.count(); ++i) {
+        if (OB_INVALID_ID != reverse_map.at(i)) {
+          // already mapped, nothing to inject
+        } else if (OB_ISNULL(target_expr = target_ref->get_select_item(i).expr_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null select item expr", K(ret), K(i));
+        } else if (target_expr->has_flag(CNT_AGG)) {
+          is_injection_safe = false;
+        }
+      }
+    }
+    // 2. DISTINCT: any injected select item widens the distinct key and may
+    // split rows that were previously merged.
+    if (source_ref->has_distinct()) {
+      for (int64_t i = 0; OB_SUCC(ret) && is_injection_safe && i < reverse_map.count(); ++i) {
+        if (OB_INVALID_ID == reverse_map.at(i)) {
+          is_injection_safe = false;
+        }
+      }
+    }
+  }
+  return ret;
+}
 
 int ObTransformJoinElimination::reverse_select_items_map(const ObSelectStmt *source_stmt,
                                                          const ObSelectStmt *target_stmt,
@@ -2122,10 +2179,10 @@ int ObTransformJoinElimination::convert_target_table_column_exprs(ObDMLStmt *sou
       } else if (OB_FAIL(create_missing_select_items(source_ref_query, target_ref_query,
                                                      column_map,
                                                      stmt_map_infos.at(i).table_map_))) {
+        LOG_WARN("failed to create missing select items", K(ret));
       } else if (OB_FAIL(adjust_source_table(source_stmt, target_stmt, source_table, target_table,
                                              &column_map, source_col_exprs, target_col_exprs))) {
         LOG_WARN("failed to merge table items", K(ret));
-        LOG_WARN("failed to create missing select items", K(ret));
       }
     }
   }
@@ -2266,6 +2323,7 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
   bool right_tables_have_filter = false;
   bool is_simple_filter = false;
   bool is_hint_valid = false;
+  bool is_injection_safe = true;
   ObSEArray<ObRawExpr*, 16> source_exprs;
   ObSEArray<ObRawExpr*, 16> target_exprs;
   ObSEArray<TableItem*, 4> left_tables;
@@ -2306,6 +2364,11 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
                                                   right_tables_have_filter,
                                                   is_simple_filter))) {
         LOG_WARN("check semi join condition failed", K(ret));
+      } else if (OB_FAIL(check_select_item_injection_safe(left_table, right_table, stmt_map_info,
+                                                          is_injection_safe))) {
+        LOG_WARN("failed to check select item injection safe", K(ret));
+      } else if (!is_injection_safe) {
+        OPT_TRACE("abort semi join elimination: select item injection is not safe");
       } else if (source_exprs.empty() && semi_info->is_anti_join()) {
         /*do nothing*/
         OPT_TRACE("anti join not have same join keys");
@@ -2340,7 +2403,7 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
         LOG_WARN("check expr unique in semi right tables failed", K(ret));
       } else {
         source_table = source_unique && target_unique ? left_table : NULL;
-        if (NULL != left_table) {
+        if (NULL != source_table) {
           OPT_TRACE("lossless semi join can be elimated");
         }
         LOG_TRACE("succeed to check lossless semi join", K(source_unique), K(target_unique));
@@ -2403,6 +2466,7 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
     bool can_be_eliminated = false;
     bool is_hint_valid = false;
     bool used = false;
+    bool is_injection_safe = true;
     for (int64_t i = 0; OB_SUCC(ret) && i < target_stmt->get_from_item_size(); ++i) {
       FromItem item = target_stmt->get_from_item(i);
       can_be_eliminated = false;
@@ -2447,6 +2511,11 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
                                                       right_tables_have_filter,
                                                       is_simple_filter))) {
             LOG_WARN("check semi join condition failed", K(ret));
+          } else if (OB_FAIL(check_select_item_injection_safe(left_table, right_table, stmt_map_info,
+                                                              is_injection_safe))) {
+            LOG_WARN("failed to check select item injection safe", K(ret));
+          } else if (!is_injection_safe) {
+            OPT_TRACE("abort semi join elimination: select item injection is not safe");
           } else if (is_simple_join_condition && !right_tables_have_filter) {
             /* if all semi join conditions are simple condition and there is no right table filter,
                 can eliminate right table without checking unique. */

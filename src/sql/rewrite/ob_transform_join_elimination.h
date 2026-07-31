@@ -232,6 +232,11 @@ private:
                                   ObSelectStmt *target_stmt,
                                   ObIArray<int64_t> &column_map,
                                   const ObIArray<int64_t> &table_map);
+
+  int check_select_item_injection_safe(const TableItem *source_table,
+                                       const TableItem *target_table,
+                                       const ObStmtMapInfo &stmt_map_info,
+                                       bool &is_injection_safe);
   /**
    * @brief trans_table_item
    * 将关联target_table的结构改写为关联source_table
