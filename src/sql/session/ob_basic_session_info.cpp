@@ -253,6 +253,8 @@ int ObBasicSessionInfo::init(uint32_t sessid, uint64_t proxy_sessid,
     if (OB_NOT_NULL(bucket_allocator) || !is_use_inner_allocator()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("session from pool must use inner allocator", K(ret));
+    } else if (OB_FAIL(set_sys_var_to_hardcode_default(SYS_VAR_OB_READ_CONSISTENCY))) {
+      LOG_WARN("failed to set read consistency to hardcode default", K(ret));
     }
   } else {
     if (NULL != bucket_allocator) {
@@ -1271,6 +1273,23 @@ int ObBasicSessionInfo::init_system_variables(const bool print_info_log, const b
     } else if (OB_FALSE_IT(exec_env_inited_ = false)) { //reset exec_env_inited_
     } else {
       global_vars_version_ = 0;
+    }
+  }
+  return ret;
+}
+
+int ObBasicSessionInfo::set_sys_var_to_hardcode_default(const share::ObSysVarClassType sys_var_id)
+{
+  int ret = OB_SUCCESS;
+  const int64_t store_idx = ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(sys_var_id));
+  if (OB_UNLIKELY(store_idx < 0 || store_idx >= ObSysVarFactory::ALL_SYS_VARS_COUNT)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid store idx", K(ret), K(store_idx), K(sys_var_id));
+  } else {
+    const ObObj &default_value = ObSysVariables::get_default_value(store_idx);
+    if (OB_FAIL(update_sys_variable(sys_var_id, default_value))) {
+      LOG_WARN("failed to update sys var to hardcode default", K(ret), K(sys_var_id),
+               K(default_value));
     }
   }
   return ret;

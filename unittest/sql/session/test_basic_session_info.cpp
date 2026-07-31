@@ -267,6 +267,154 @@ TEST(test_basic_session_info, reset_sys_vars)
   }
 }
 
+TEST(test_basic_session_info, reset_cached_global_read_consistency)
+{
+  int ret = OB_SUCCESS;
+  OBSERVER.init_schema();
+  OBSERVER.init_tz_info_mgr();
+  common::ObArenaAllocator source_allocator(ObModIds::OB_SQL_SESSION);
+  common::ObArenaAllocator serialize_allocator(ObModIds::OB_SQL_SESSION);
+  SMART_VAR(sql::ObSQLSessionInfo, source_session) {
+    SMART_VAR(sql::ObSQLSessionInfo, cached_session) {
+      ObBasicSessionInfo::LockGuard source_lock_guard(source_session.get_query_lock());
+      ObBasicSessionInfo::LockGuard cached_lock_guard(cached_session.get_query_lock());
+      ASSERT_EQ(OB_SUCCESS, ObPreProcessSysVars::init_sys_var());
+      ASSERT_EQ(OB_SUCCESS, source_session.test_init(0, 0, 0, &source_allocator));
+      // Pool sessions must use the inner allocator; nullptr keeps block_allocator_.
+      ASSERT_EQ(OB_SUCCESS, cached_session.test_init(0, 0, 0, nullptr));
+      ASSERT_EQ(OB_SUCCESS, source_session.init_tenant(
+          ObString::make_string("test"), OB_SYS_TENANT_ID));
+      ASSERT_EQ(OB_SUCCESS, cached_session.init_tenant(
+          ObString::make_string("test"), OB_SYS_TENANT_ID));
+      ASSERT_EQ(OB_SUCCESS, source_session.load_essential_sys_vars_only(true, true));
+      ASSERT_EQ(OB_SUCCESS, cached_session.load_essential_sys_vars_only(true, true));
+
+      int64_t store_idx = -1;
+      ASSERT_EQ(OB_SUCCESS, ObSysVarFactory::calc_sys_var_store_idx(
+          SYS_VAR_OB_READ_CONSISTENCY, store_idx));
+      ObBasicSysVar *read_consistency_var = cached_session.get_sys_var(store_idx);
+      ASSERT_NE(nullptr, read_consistency_var);
+
+      // Simulate a pooled session created while the global value was WEAK.
+      ObObj weak_read_consistency;
+      weak_read_consistency.set_int(common::WEAK);
+      const ObObj min_val = read_consistency_var->get_min_val();
+      const ObObj max_val = read_consistency_var->get_max_val();
+      const ObObjType data_type = read_consistency_var->get_data_type();
+      const int64_t flags = read_consistency_var->flags_;
+      read_consistency_var->clean_base_value();
+      read_consistency_var->clean_inc_value();
+      ASSERT_EQ(OB_SUCCESS, read_consistency_var->init(
+          weak_read_consistency, min_val, max_val, data_type, flags));
+      ASSERT_EQ(OB_SUCCESS, cached_session.sys_var_inc_info_.add_sys_var_id(
+          SYS_VAR_OB_READ_CONSISTENCY));
+      cached_session.consistency_level_ = common::WEAK;
+      cached_session.reset(true);
+      cached_session.set_acquire_from_pool(true);
+      const ObTZInfoMap *tz_map =
+          cached_session.tz_info_wrap_.get_tz_info_offset().get_tz_info_map();
+      ASSERT_NE(nullptr, tz_map);
+      ASSERT_EQ(OB_SUCCESS, cached_session.ObBasicSessionInfo::init(
+          0, 0, nullptr, tz_map));
+
+      // A new source session at the hardcoded STRONG value sends no delta.
+      ASSERT_FALSE(source_session.sys_var_inc_info_.all_has_sys_var_id(
+          SYS_VAR_OB_READ_CONSISTENCY));
+      const int64_t serialize_size =
+          source_session.ObBasicSessionInfo::get_serialize_size();
+      char *buf = static_cast<char *>(serialize_allocator.alloc(serialize_size));
+      ASSERT_NE(nullptr, buf);
+      int64_t pos = 0;
+      ASSERT_EQ(OB_SUCCESS, source_session.ObBasicSessionInfo::serialize(
+          buf, serialize_size, pos));
+
+      int64_t deserialize_pos = 0;
+      ASSERT_EQ(OB_SUCCESS, cached_session.ObBasicSessionInfo::deserialize(
+          buf, pos, deserialize_pos));
+      ASSERT_EQ(pos, deserialize_pos);
+
+      int64_t read_consistency = common::INVALID_CONSISTENCY;
+      ASSERT_EQ(OB_SUCCESS, cached_session.get_ob_read_consistency(read_consistency));
+      ASSERT_EQ(common::STRONG, read_consistency);
+      ASSERT_EQ(common::STRONG, cached_session.get_consistency_level());
+    }
+  }
+}
+
+TEST(test_basic_session_info, reset_cached_session_read_consistency)
+{
+  int ret = OB_SUCCESS;
+  OBSERVER.init_schema();
+  OBSERVER.init_tz_info_mgr();
+  common::ObArenaAllocator source_allocator(ObModIds::OB_SQL_SESSION);
+  common::ObArenaAllocator serialize_allocator(ObModIds::OB_SQL_SESSION);
+  SMART_VAR(sql::ObSQLSessionInfo, source_session) {
+    SMART_VAR(sql::ObSQLSessionInfo, cached_session) {
+      ObBasicSessionInfo::LockGuard source_lock_guard(source_session.get_query_lock());
+      ObBasicSessionInfo::LockGuard cached_lock_guard(cached_session.get_query_lock());
+      ASSERT_EQ(OB_SUCCESS, ObPreProcessSysVars::init_sys_var());
+      ASSERT_EQ(OB_SUCCESS, source_session.test_init(0, 0, 0, &source_allocator));
+      // Pool sessions must use the inner allocator; nullptr keeps block_allocator_.
+      ASSERT_EQ(OB_SUCCESS, cached_session.test_init(0, 0, 0, nullptr));
+      ASSERT_EQ(OB_SUCCESS, source_session.init_tenant(
+          ObString::make_string("test"), OB_SYS_TENANT_ID));
+      ASSERT_EQ(OB_SUCCESS, cached_session.init_tenant(
+          ObString::make_string("test"), OB_SYS_TENANT_ID));
+      ASSERT_EQ(OB_SUCCESS, source_session.load_essential_sys_vars_only(true, true));
+      ASSERT_EQ(OB_SUCCESS, cached_session.load_essential_sys_vars_only(true, true));
+
+      int64_t store_idx = -1;
+      ASSERT_EQ(OB_SUCCESS, ObSysVarFactory::calc_sys_var_store_idx(
+          SYS_VAR_OB_READ_CONSISTENCY, store_idx));
+      ObBasicSysVar *read_consistency_var = cached_session.get_sys_var(store_idx);
+      ASSERT_NE(nullptr, read_consistency_var);
+
+      // Simulate SET SESSION ob_read_consistency = WEAK: base stays STRONG, inc becomes WEAK.
+      ASSERT_EQ(common::STRONG, read_consistency_var->get_base_value().get_int());
+      ASSERT_EQ(OB_SUCCESS, cached_session.update_sys_variable(
+          SYS_VAR_OB_READ_CONSISTENCY, static_cast<int64_t>(common::WEAK)));
+      ASSERT_EQ(common::STRONG, read_consistency_var->get_base_value().get_int());
+      ASSERT_EQ(common::WEAK, read_consistency_var->get_value().get_int());
+      ASSERT_EQ(common::WEAK, cached_session.get_consistency_level());
+
+      cached_session.reset(true);
+      // reset(true) cleans inc but leaves consistency_level_ untouched.
+      ASSERT_EQ(common::STRONG, read_consistency_var->get_base_value().get_int());
+      ASSERT_EQ(common::STRONG, read_consistency_var->get_value().get_int());
+      ASSERT_EQ(common::WEAK, cached_session.get_consistency_level());
+
+      cached_session.set_acquire_from_pool(true);
+      const ObTZInfoMap *tz_map =
+          cached_session.tz_info_wrap_.get_tz_info_offset().get_tz_info_map();
+      ASSERT_NE(nullptr, tz_map);
+      ASSERT_EQ(OB_SUCCESS, cached_session.ObBasicSessionInfo::init(
+          0, 0, nullptr, tz_map));
+      ASSERT_EQ(common::STRONG, cached_session.get_consistency_level());
+
+      // A new source session at the hardcoded STRONG value sends no delta.
+      ASSERT_FALSE(source_session.sys_var_inc_info_.all_has_sys_var_id(
+          SYS_VAR_OB_READ_CONSISTENCY));
+      const int64_t serialize_size =
+          source_session.ObBasicSessionInfo::get_serialize_size();
+      char *buf = static_cast<char *>(serialize_allocator.alloc(serialize_size));
+      ASSERT_NE(nullptr, buf);
+      int64_t pos = 0;
+      ASSERT_EQ(OB_SUCCESS, source_session.ObBasicSessionInfo::serialize(
+          buf, serialize_size, pos));
+
+      int64_t deserialize_pos = 0;
+      ASSERT_EQ(OB_SUCCESS, cached_session.ObBasicSessionInfo::deserialize(
+          buf, pos, deserialize_pos));
+      ASSERT_EQ(pos, deserialize_pos);
+
+      int64_t read_consistency = common::INVALID_CONSISTENCY;
+      ASSERT_EQ(OB_SUCCESS, cached_session.get_ob_read_consistency(read_consistency));
+      ASSERT_EQ(common::STRONG, read_consistency);
+      ASSERT_EQ(common::STRONG, cached_session.get_consistency_level());
+    }
+  }
+}
+
 } // namespace sql
 } // namespace oceanbase
 

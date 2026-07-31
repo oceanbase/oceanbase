@@ -1747,6 +1747,8 @@ public:
   // 或 QUERY_SENSITIVE 标记)。这些系统变量在 inner connection 复用 PX Worker 的 session 时，拿到的变量值是 base_value
   // 而不是 default value。
   int init_default_value_changed_serialized_variables(const bool is_sys_tenant);
+  // Set sys var to hardcode default_value on pooled session reuse.
+  int set_sys_var_to_hardcode_default(share::ObSysVarClassType sys_var_id);
 protected:
   int process_session_variable(share::ObSysVarClassType var, const common::ObObj &value,
                                const bool check_timezone_valid = true,
