@@ -23,6 +23,7 @@ public:
     StrFormat f(buf, sizeof(buf));
     int active_cnt = 0;
     if (cur_us - last_report_us_ > 1000 * 1000) {
+      QRGuard("stat_report");
       collect_cfg(f);
       TC_INFO("QSched cfg: %s", buf);
       f.clear();
