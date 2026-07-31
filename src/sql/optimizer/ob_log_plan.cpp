@@ -16245,7 +16245,8 @@ int ObLogPlan::check_storage_distinct_pushdown(const ObIArray<ObRawExpr*> &disti
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (!distinct_exprs.at(0)->is_column_ref_expr() ||
-              table_item->table_id_ != static_cast<ObColumnRefRawExpr*>(distinct_exprs.at(0))->get_table_id()) {
+              table_item->table_id_ != static_cast<ObColumnRefRawExpr*>(distinct_exprs.at(0))->get_table_id() ||
+              static_cast<ObColumnRefRawExpr*>(distinct_exprs.at(0))->is_pseudo_column_ref()) {
     can_push = false;
   } else if (OB_FAIL(check_table_columns_can_storage_pushdown(session_info->get_effective_tenant_id(),
                                                     table_item->ref_id_, distinct_exprs, can_push))) {
