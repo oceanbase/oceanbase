@@ -161,7 +161,8 @@ struct ObCSVGeneralFormat {
     "PARALLEL_PARSE_ON_SINGLE_FILE",
     "PARALLEL_PARSE_FILE_SIZE_THRESHOLD",
     "MAX_ROW_LENGTH",
-    "EXPORT_HEADER"
+    "EXPORT_HEADER",
+    "BYTEORDERMARK"
   };
 
   // ObCSVOptionsEnum should keep the same order as OPTION_NAMES
@@ -186,6 +187,7 @@ struct ObCSVGeneralFormat {
     PARALLEL_PARSE_FILE_SIZE_THRESHOLD,
     MAX_ROW_LENGTH,
     EXPORT_HEADER,
+    BYTEORDERMARK,
     // put new options here, before MAX_OPTIONS
     // ....
     MAX_OPTIONS
