@@ -1029,15 +1029,6 @@ bool ObTableRedefinitionTask::check_task_status_is_pending(const share::ObDDLTas
   return task_status == ObDDLTaskStatus::REPENDING;
 }
 
-bool ObTableRedefinitionTask::is_ddl_task_can_be_cancelled() const
-{
-  bool can_be_cancelled = true;
-  if (has_rebuild_domain_indexes_) {
-    can_be_cancelled = task_status_ != ObDDLTaskStatus::COPY_TABLE_DEPENDENT_OBJECTS;
-  }
-  return can_be_cancelled;
-}
-
 int ObTableRedefinitionTask::process()
 {
   int ret = OB_SUCCESS;
