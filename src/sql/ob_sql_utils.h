@@ -623,7 +623,7 @@ public:
                                  const ObStmt *stmt = NULL,
                                  ObResultSet *result = NULL,
                                  share::schema::ObSchemaGetterGuard *schema_guard = NULL);
-  static void fixup_commit_time(ObSQLSessionInfo &session);
+  static void fixup_async_audit_record(ObSQLSessionInfo &session, const int cb_param);
   static int64_t get_query_record_size_limit(uint64_t tenant_id)
   {
     int64_t thredhold = OB_MAX_SQL_LENGTH;

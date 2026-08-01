@@ -13,11 +13,35 @@
 #include "share/cache/ob_kv_storecache.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "share/ash/ob_di_util.h"
+#include "lib/utility/ob_tracepoint.h"
+#include "lib/ob_define.h"
 
 namespace oceanbase
 {
 namespace observer
 {
+
+namespace {
+bool is_res_mgr_sysstat_output_group(const int64_t group_id, const bool output_all_groups)
+{
+  return output_all_groups || is_resource_manager_group(static_cast<uint64_t>(group_id));
+}
+
+int64_t next_res_mgr_sysstat_output_group_index(
+    const ObArray<std::pair<int64_t, common::ObDiagnoseTenantInfo>> &diag_infos,
+    const int64_t start_index,
+    const bool output_all_groups)
+{
+  int64_t index = start_index;
+  while (index < diag_infos.count()
+         && !is_res_mgr_sysstat_output_group(diag_infos.at(index).first, output_all_groups)) {
+    ++index;
+  }
+  return index;
+}
+} // namespace
+
+ERRSIM_POINT_DEF(ERRSIM_ENABLE_RES_MGR_SYS_STAT_ALL_METRICS);
 
 ObAllVirtualResMgrSysStat::ObAllVirtualResMgrSysStat()
     : ObVirtualTableScannerIterator(),
@@ -72,27 +96,36 @@ int ObAllVirtualResMgrSysStat::set_ip(common::ObAddr *addr)
   return ret;
 }
 
-int ObAllVirtualResMgrSysStat::update_all_stats(const int64_t tenant_id, ObStatEventSetStatArray &stat_events)
+int ObAllVirtualResMgrSysStat::update_all_stats(const int64_t tenant_id, const int64_t group_id, ObStatEventSetStatArray &stat_events)
 {
   int ret = OB_SUCCESS;
   if (is_virtual_tenant_id(tenant_id)) {
-    if (OB_FAIL(update_all_stats_(tenant_id, stat_events))) {
-      SERVER_LOG(WARN, "Fail to update_all_stats_ for virtual tenant", K(ret), K(tenant_id));
+    if (OB_FAIL(update_all_stats_(tenant_id, group_id, stat_events))) {
+      SERVER_LOG(WARN, "Fail to update_all_stats_ for virtual tenant", K(ret), K(tenant_id), K(group_id));
     }
   } else {
     MTL_SWITCH(tenant_id) {
-      if (OB_FAIL(update_all_stats_(tenant_id, stat_events))) {
-        SERVER_LOG(WARN, "Fail to update_all_stats_ for tenant", K(ret), K(tenant_id));
+      if (OB_FAIL(update_all_stats_(tenant_id, group_id, stat_events))) {
+        SERVER_LOG(WARN, "Fail to update_all_stats_ for tenant", K(ret), K(tenant_id), K(group_id));
       }
     }
   }
   return ret;
 }
 
-int ObAllVirtualResMgrSysStat::update_all_stats_(const int64_t tenant_id, ObStatEventSetStatArray &stat_events)
+int ObAllVirtualResMgrSysStat::update_all_stats_(const int64_t tenant_id, const int64_t group_id,
+    ObStatEventSetStatArray &stat_events, const bool update_all_metrics)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(get_cache_size_(tenant_id, stat_events))) {
+  if (!update_all_metrics) {
+    if (OB_NOT_NULL(GCTX.omt_)) {
+      int64_t cpu_time = 0;
+      if (OB_SUCC(GCTX.omt_->get_tenant_group_cpu_time(tenant_id, group_id, cpu_time))) {
+        stat_events.get(ObStatEventIds::CPU_TIME - ObStatEventIds::STAT_EVENT_ADD_END - 1)->stat_value_
+            = cpu_time;
+      }
+    }
+  } else if (OB_FAIL(get_cache_size_(tenant_id, stat_events))) {
     SERVER_LOG(WARN, "Fail to get cache size", K(ret));
   } else {
     int64_t unused = 0;
@@ -248,7 +281,11 @@ int ObAllVirtualResMgrSysStat::update_all_stats_(const int64_t tenant_id, ObStat
     }
 
     int64_t cpu_time = 0;
-    if (OB_SUCC(GCTX.omt_->get_tenant_cpu_time(tenant_id, cpu_time))) {
+    // For the resource group level stat, report the cpu time of this specific
+    // resource group. User-defined resource groups are read from their cgroup
+    // cpu time path, while internal thread groups fall back to the in-memory
+    // statistic when cgroup is unavailable.
+    if (OB_SUCC(GCTX.omt_->get_tenant_group_cpu_time(tenant_id, group_id, cpu_time))) {
       stat_events.get(ObStatEventIds::CPU_TIME - ObStatEventIds::STAT_EVENT_ADD_END - 1)->stat_value_
           = cpu_time;
     } else {
@@ -306,6 +343,10 @@ int ObAllVirtualResMgrSysStat::process_curr_tenant(ObNewRow *&row)
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "allocator is NULL", K(ret));
   } else {
+    const bool output_all_metrics =
+        OB_SUCCESS != (OB_E(EventTable::EN_ENABLE_RES_MGR_SYS_STAT_ALL_METRICS) OB_SUCCESS);
+    const bool output_all_groups =
+        OB_SUCCESS != (OB_E(EventTable::EN_ENABLE_RES_MGR_SYS_STAT_ALL_GROUPS) OB_SUCCESS);
     if (MTL_ID() != tenant_id_) {
       diag_infos_.reuse();
       tenant_id_ = MTL_ID(); // new tenant, init diag info
@@ -316,25 +357,30 @@ int ObAllVirtualResMgrSysStat::process_curr_tenant(ObNewRow *&row)
       } else if (diag_infos_.size() == 0) {
         ret = OB_ITER_END;
       } else {
-        stat_iter_ = 0;
-        cur_index_ = 0;
-        cur_group_id_ = diag_infos_.at(cur_index_).first;
-        ObStatEventSetStatArray &stat_events = diag_infos_.at(cur_index_).second.get_set_stat_stats();
-        if (OB_FAIL(update_all_stats_(tenant_id_, stat_events))) {
-          SERVER_LOG(WARN, "update all stats fail", K(ret), K(tenant_id_));
+        cur_index_ = next_res_mgr_sysstat_output_group_index(diag_infos_, 0, output_all_groups);
+        if (cur_index_ >= diag_infos_.size()) {
+          ret = OB_ITER_END;
         } else {
-          diag_info_ = &diag_infos_.at(cur_index_).second;
+          stat_iter_ = output_all_metrics ? 0 : ObStatEventIds::CPU_TIME;
+          cur_group_id_ = diag_infos_.at(cur_index_).first;
+          ObStatEventSetStatArray &stat_events = diag_infos_.at(cur_index_).second.get_set_stat_stats();
+          if (OB_FAIL(update_all_stats_(tenant_id_, cur_group_id_, stat_events, output_all_metrics))) {
+            SERVER_LOG(WARN, "update all stats fail", K(ret), K(tenant_id_), K(cur_group_id_));
+          } else {
+            diag_info_ = &diag_infos_.at(cur_index_).second;
+          }
         }
       }
     }
 
     if (OB_SUCC(ret) && stat_iter_ >= ObStatEventIds::STAT_EVENT_SET_END) {
-      if (++cur_index_ < diag_infos_.size()) {
+      cur_index_ = next_res_mgr_sysstat_output_group_index(diag_infos_, cur_index_ + 1, output_all_groups);
+      if (cur_index_ < diag_infos_.size()) {
         cur_group_id_ = diag_infos_.at(cur_index_).first;
-        stat_iter_ = 0;
+        stat_iter_ = output_all_metrics ? 0 : ObStatEventIds::CPU_TIME;
         ObStatEventSetStatArray &stat_events = diag_infos_.at(cur_index_).second.get_set_stat_stats();
-        if (OB_FAIL(update_all_stats_(tenant_id_, stat_events))) {
-          SERVER_LOG(WARN, "update all stats fail", K(ret), K(tenant_id_));
+        if (OB_FAIL(update_all_stats_(tenant_id_, cur_group_id_, stat_events, output_all_metrics))) {
+          SERVER_LOG(WARN, "update all stats fail", K(ret), K(tenant_id_), K(cur_group_id_));
         } else {
           diag_info_ = &diag_infos_.at(cur_index_).second;
         }
@@ -435,11 +481,15 @@ int ObAllVirtualResMgrSysStat::process_curr_tenant(ObNewRow *&row)
     }
 
     if (OB_SUCC(ret)) {
-      stat_iter_++;
-      row = &cur_row_;
-      if (ObStatEventIds::STAT_EVENT_ADD_END == stat_iter_) {
+      if (output_all_metrics) {
         stat_iter_++;
+        if (ObStatEventIds::STAT_EVENT_ADD_END == stat_iter_) {
+          stat_iter_++;
+        }
+      } else {
+        stat_iter_ = ObStatEventIds::STAT_EVENT_SET_END;
       }
+      row = &cur_row_;
     }
   }
   return ret;

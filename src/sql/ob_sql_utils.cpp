@@ -5234,30 +5234,50 @@ int ObSQLUtils::handle_audit_record(bool need_retry,
   return ret;
 }
 
-void ObSQLUtils::fixup_commit_time(ObSQLSessionInfo &session)
+void ObSQLUtils::fixup_async_audit_record(ObSQLSessionInfo &session, const int cb_param)
 {
-  if (common::EventTable::EN_SQL_AUDIT_NOASYNC_COMMIT_TIME) {
+  if (common::EventTable::EN_SQL_AUDIT_NOASYNC_FIXUP) {
+    // disable all async fixup when injected by EN_SQL_AUDIT_NOASYNC_FIXUP
   } else if (GCONF.enable_sql_audit && session.get_local_ob_enable_sql_audit()) {
     ObMySQLRequestManager *req_manager = session.get_request_manager();
     if (OB_ISNULL(req_manager)) {
       // failed to get request manager, maybe tenant has been dropped, NOT NEED TO record;
-    } else {
+    } else if (session.get_curr_request_id() > 0) {
+      // fixup async commit time
+      int64_t tx_commit_t = 0;
       const transaction::ObTxDesc *tx_ptr = session.get_tx_desc();
       if (OB_NOT_NULL(tx_ptr)) {
-        int64_t tx_commit_t = tx_ptr->get_trans_commit_time();
-        if (session.get_curr_request_id() > 0 && tx_commit_t > 0) {
-          void *rec = NULL;
-          common::ObDlQueue::DlRef ref;
-          int tmp_ret = OB_SUCCESS;
-          if (OB_TMP_FAIL(req_manager->get(session.get_curr_request_id(), rec, &ref))) {
-            LOG_INFO("audit record evicted when fixup commit time", K(tmp_ret));
-          } else if (NULL != rec) {
-            ObMySQLRequestRecord *record = static_cast<ObMySQLRequestRecord*> (rec);
+        tx_commit_t = tx_ptr->get_trans_commit_time();
+      }
+      const bool need_fixup_commit_time = (tx_commit_t > 0);
+      // fixup async commit ret code, only when async commit really failed.
+      // keep consistent with the canonical audit status mapping:
+      // status_ = (OB_SUCCESS == ret || OB_ITER_END == ret) ? REQUEST_SUCC : ret;
+      // OB_TRANS_COMMITED means the txn is already committed (a success), it should
+      // never be exposed as an error code in audit;
+      // note OB_TRANS_ROLLBACKED here means the async commit was rolled back (a failure),
+      // so it must be recorded as the ret code rather than treated as success.
+      const bool need_fixup_ret_code = (OB_SUCCESS != cb_param
+                                        && OB_ITER_END != cb_param
+                                        && OB_TRANS_COMMITED != cb_param);
+      if (need_fixup_commit_time || need_fixup_ret_code) {
+        void *rec = NULL;
+        common::ObDlQueue::DlRef ref;
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(req_manager->get(session.get_curr_request_id(), rec, &ref))) {
+          LOG_INFO("audit record evicted when fixup async audit record", K(tmp_ret), K(cb_param));
+        } else if (NULL != rec) {
+          ObMySQLRequestRecord *record = static_cast<ObMySQLRequestRecord*> (rec);
+          if (need_fixup_commit_time) {
             record->data_.exec_timestamp_.commit_t_ = tx_commit_t;  // fixup async commit time
             record->data_.exec_timestamp_.elapsed_t_ += tx_commit_t;  // adding async commit time to elapsed_time
-            if (ref.is_not_null()) {
-              req_manager->revert(&ref);
-            }
+          }
+          // only overwrite when SQL phase succeeded, keep the existing SQL error otherwise
+          if (need_fixup_ret_code && REQUEST_SUCC == record->data_.status_) {
+            record->data_.status_ = cb_param;  // fixup async commit ret code
+          }
+          if (ref.is_not_null()) {
+            req_manager->revert(&ref);
           }
         }
       }

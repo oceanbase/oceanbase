@@ -2743,12 +2743,15 @@ int ObMultiTenant::get_tenant_group_cpu_time(const uint64_t tenant_id, uint64_t 
   int ret = OB_SUCCESS;
   ObTenant *tenant = nullptr;
   cpu_time = 0;
-  uint64_t cg_group_id = OB_INVALID_GROUP_ID;
-  cg_group_id = ObTenantThreadGroupSet::instance().get_group_cg_id(group_id);
-  /*
-  if (OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid() && OB_INVALID_GROUP_ID != cg_group_id) {
-    ret = GCTX.cgroup_ctrl_->get_cpu_time(tenant_id, cpu_time, cg_group_id);
-  } else {
+  if (is_resource_manager_group(group_id)
+      && OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid()) {
+    // The cgroup cpu time path only takes effect for user-defined resource
+    // groups: the group_id itself identifies the cgroup directory, so the cpu
+    // time is read from the group's cgroup cpu time file.
+    ret = GCTX.cgroup_ctrl_->get_cpu_time(tenant_id, cpu_time, group_id);
+  } else if (group_id < share::OB_TENANT_THREAD_GROUP_MAXNUM) {
+    // All other (internal thread group) cases keep using the old path: read
+    // the in-memory per thread group cpu time statistic.
     if (!lock_.try_rdlock()) {
       ret = OB_EAGAIN;
     } else {
@@ -2758,16 +2761,9 @@ int ObMultiTenant::get_tenant_group_cpu_time(const uint64_t tenant_id, uint64_t 
       }
       lock_.unlock();
     }
-  }
-  */
-  if (!lock_.try_rdlock()) {
-    ret = OB_EAGAIN;
   } else {
-    if (OB_FAIL(get_tenant_unsafe(tenant_id, tenant))) {
-    } else {
-      cpu_time = tenant->get_group_cpu_time(group_id);
-    }
-    lock_.unlock();
+    // OBCG and other unsupported group ids: report 0 without error.
+    cpu_time = 0;
   }
   return ret;
 }

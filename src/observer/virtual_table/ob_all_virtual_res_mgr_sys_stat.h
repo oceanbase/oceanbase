@@ -29,11 +29,12 @@ public:
   virtual void reset();
   inline void set_addr(common::ObAddr &addr) {addr_ = &addr;}
   virtual int set_ip(common::ObAddr *addr);
-  static int update_all_stats(const int64_t tenant_id, ObStatEventSetStatArray &stat_events);
+  static int update_all_stats(const int64_t tenant_id, const int64_t group_id, ObStatEventSetStatArray &stat_events);
 protected:
   virtual int get_the_diag_info(const uint64_t tenant_id);
 private:
-  static int update_all_stats_(const int64_t tenant_id, ObStatEventSetStatArray &stat_events);
+  static int update_all_stats_(const int64_t tenant_id, const int64_t group_id,
+      ObStatEventSetStatArray &stat_events, const bool update_all_metrics = true);
   static int get_cache_size_(const int64_t tenant_id, ObStatEventSetStatArray &stat_events);
 
   // omt::ObMultiTenantOperator interface

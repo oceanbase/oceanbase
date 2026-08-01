@@ -145,6 +145,11 @@ int ObMySQLRequestManager::record_request(const ObAuditRecordData &audit_record,
                                           int64_t *request_id)
 {
   int ret = OB_SUCCESS;
+  // reset first, only a successfully recorded request owns a valid request id;
+  // otherwise async end trans callback may fixup a stale request's audit record
+  if (OB_NOT_NULL(request_id)) {
+    *request_id = 0;
+  }
   if (!inited_) {
     ret = OB_NOT_INIT;
   } else {

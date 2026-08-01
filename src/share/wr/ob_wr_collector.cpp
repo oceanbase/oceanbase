@@ -29,6 +29,12 @@ namespace share
 
 const int64_t default_value = INT64_MIN;
 
+// Cap the QUERY_TIMEOUT hint value to a fixed maximum. The raw value is computed as
+// (timeout_ts - now), which changes on every snapshot and makes the generated SQL text
+// (and thus the SQL ID) different each time. Capping it keeps the SQL text stable in the
+// common case where the remaining timeout is larger than this maximum.
+const int64_t WR_QUERY_TIMEOUT_MAX_US = 10LL * 60 * 1000 * 1000;  // 10 min
+
 #define FILL_NULLABLE_COLUMN(column)                                                         \
   }                                                                                          \
   else if (ash.column##_ == default_value && OB_FAIL(dml_splicer.add_column(true, #column))) \
@@ -145,7 +151,7 @@ int ObWrCollector::collect_sysstat()
   ObDMLSqlSplicer dml_splicer;
   ObSqlString sql;
   int64_t tmp_real_str_len = 0;
-  int64_t query_timeout = timeout_ts_ - common::ObTimeUtility::current_time();
+  int64_t query_timeout = MIN(timeout_ts_ - common::ObTimeUtility::current_time(), WR_QUERY_TIMEOUT_MAX_US);
   SMART_VAR(ObISQLClient::ReadResult, res)
   {
     ObMySQLResult *result = nullptr;
@@ -222,7 +228,7 @@ int ObWrCollector::collect_res_mgr_sysstat()
   ObDMLSqlSplicer dml_splicer;
   ObSqlString sql;
   int64_t tmp_real_str_len = 0;
-  int64_t query_timeout = timeout_ts_ - common::ObTimeUtility::current_time();
+  int64_t query_timeout = MIN(timeout_ts_ - common::ObTimeUtility::current_time(), WR_QUERY_TIMEOUT_MAX_US);
   SMART_VAR(ObISQLClient::ReadResult, res)
   {
     ObMySQLResult *result = nullptr;
@@ -302,7 +308,7 @@ int ObWrCollector::collect_ash()
   ObDMLSqlSplicer dml_splicer;
   ObSqlString sql;
   int64_t tmp_real_str_len = 0;
-  int64_t query_timeout = timeout_ts_ - common::ObTimeUtility::current_time();
+  int64_t query_timeout = MIN(timeout_ts_ - common::ObTimeUtility::current_time(), WR_QUERY_TIMEOUT_MAX_US);
   int64_t collected_ash_row_count = 0;
   int64_t collected_ash_min_sample_time = INT64_MAX;
   uint64_t data_version = 0;
@@ -769,7 +775,7 @@ int ObWrCollector::collect_system_event()
   ObDMLSqlSplicer dml_splicer;
   ObSqlString sql;
   int64_t tmp_real_str_len = 0;
-  int64_t query_timeout = timeout_ts_ - common::ObTimeUtility::current_time();
+  int64_t query_timeout = MIN(timeout_ts_ - common::ObTimeUtility::current_time(), WR_QUERY_TIMEOUT_MAX_US);
   SMART_VAR(ObISQLClient::ReadResult, res)
   {
     ObMySQLResult *result = nullptr;
@@ -864,7 +870,7 @@ int ObWrCollector::collect_sqlstat()
     SMART_VAR(ObISQLClient::ReadResult, res)
     {
       ObMySQLResult *result = nullptr;
-      int64_t query_timeout = timeout_ts_ - common::ObTimeUtility::current_time();
+      int64_t query_timeout = MIN(timeout_ts_ - common::ObTimeUtility::current_time(), WR_QUERY_TIMEOUT_MAX_US);
       if (OB_UNLIKELY(query_timeout <= 0)) {
         ret = OB_TIMEOUT;
         LOG_WARN("wr snapshot timeout", KR(ret), K_(timeout_ts));
@@ -898,7 +904,7 @@ int ObWrCollector::collect_sqlstat()
     SMART_VAR(ObISQLClient::ReadResult, res)
     {
       ObMySQLResult *result = nullptr;
-      int64_t query_timeout = timeout_ts_ - common::ObTimeUtility::current_time();
+      int64_t query_timeout = MIN(timeout_ts_ - common::ObTimeUtility::current_time(), WR_QUERY_TIMEOUT_MAX_US);
       if (OB_UNLIKELY(query_timeout <= 0)) {
         ret = OB_TIMEOUT;
         LOG_WARN("wr snapshot timeout", KR(ret), K_(timeout_ts));
@@ -1264,7 +1270,7 @@ int ObWrCollector::update_last_snapshot_end_time()
   {
     ObMySQLResult *result = nullptr;
     ObDMLSqlSplicer dml_splicer;
-    int64_t query_timeout = timeout_ts_ - common::ObTimeUtility::current_time();
+    int64_t query_timeout = MIN(timeout_ts_ - common::ObTimeUtility::current_time(), WR_QUERY_TIMEOUT_MAX_US);
     if (OB_UNLIKELY(query_timeout <= 0)) {
       ret = OB_TIMEOUT;
       LOG_WARN("wr snapshot timeout", KR(ret), K_(timeout_ts));
@@ -1320,7 +1326,7 @@ int ObWrCollector::collect_sqltext()
   SMART_VAR(ObISQLClient::ReadResult, res)
     {
       ObMySQLResult *result = nullptr;
-      int64_t query_timeout = timeout_ts_ - common::ObTimeUtility::current_time();
+      int64_t query_timeout = MIN(timeout_ts_ - common::ObTimeUtility::current_time(), WR_QUERY_TIMEOUT_MAX_US);
       if (OB_UNLIKELY(query_timeout <= 0)) {
         ret = OB_TIMEOUT;
         LOG_WARN("wr snapshot timeout", KR(ret), K_(timeout_ts));
@@ -1365,7 +1371,7 @@ int ObWrCollector::collect_sqltext()
               ObSqlString insert_sql;
               int64_t affected_rows = 0;
               uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
-              query_timeout = timeout_ts_ - common::ObTimeUtility::current_time();
+              query_timeout = MIN(timeout_ts_ - common::ObTimeUtility::current_time(), WR_QUERY_TIMEOUT_MAX_US);
               ObCStringHelper helper;
               const char* query_sql = helper.convert(ObHexEscapeSqlStr(ObString::make_string(sqltext.query_sql_)));
               if (OB_ISNULL(query_sql)) {
@@ -1414,7 +1420,7 @@ int ObWrCollector::collect_sql_plan()
   ObDMLSqlSplicer dml_splicer_aux;
   ObSqlString sql;
   int64_t tmp_real_str_len = 0;
-  int64_t query_timeout = timeout_ts_ - common::ObTimeUtility::current_time();
+  int64_t query_timeout = MIN(timeout_ts_ - common::ObTimeUtility::current_time(), WR_QUERY_TIMEOUT_MAX_US);
   SMART_VAR(ObISQLClient::ReadResult, res)
   {
     ObMySQLResult *result = nullptr;
@@ -1805,7 +1811,7 @@ int ObWrDeleter::do_delete()
 
   for (int64_t i = 0; OB_SUCC(ret) && i < purge_arg_.get_to_delete_snap_ids().count(); ++i) {
     int64_t snap_id = purge_arg_.get_to_delete_snap_ids().at(i);
-    query_timeout = purge_arg_.get_timeout_ts() - ObTimeUtility::current_time();
+    query_timeout = MIN(purge_arg_.get_timeout_ts() - ObTimeUtility::current_time(), WR_QUERY_TIMEOUT_MAX_US);
     if (OB_UNLIKELY(query_timeout <= 0)) {
       ret = OB_TIMEOUT;
       LOG_WARN("delete data task timed out, stop task", K(ret), K(tenant_id), K(cluster_id),

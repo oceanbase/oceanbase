@@ -7,6 +7,7 @@
 #define OCEANBASE_LOCK_TC_RWLOCK_H_
 #include "lib/lock/ob_tc_ref.h"
 #include "lib/stat/ob_latch_define.h"
+#include "lib/stat/ob_diagnose_info.h"
 #include "lib/lock/ob_latch.h"
 #include "lib/time/ob_time_utility.h"
 #include "lib/utility/utility.h"
@@ -184,6 +185,13 @@ public:
       ObLatch::current_wait = (uint32_t*)&(latch_.lock_);
       while(0 != ATOMIC_LOAD(&read_ref_)
             && (ttl = abs_timeout_us - ObTimeUtility::current_time()) >= 0) {
+        // record only when actual blocking happens (waiting for readers to drain)
+        ObWaitEventGuard wait_guard(
+            ObLatchDesc::wait_event_idx(latch_id_),
+            (abs_timeout_us - ObTimeUtility::current_time()) / 1000,
+            reinterpret_cast<int64_t>(&latch_),
+            static_cast<int64_t>(ATOMIC_LOAD((uint32_t*)&(latch_.lock_))),
+            0);
         lcond_.wait(std::min(ttl, (int64_t)10 * 1000));
       }
       if (ttl < 0) {
