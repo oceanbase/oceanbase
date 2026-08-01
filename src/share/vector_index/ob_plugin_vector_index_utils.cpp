@@ -883,6 +883,51 @@ int ObPluginVectorIndexUtils::get_snap_index_visible_row_key(ObLSID &ls_id,
   return ret;
 }
 
+static int try_reuse_single_base_seg_from_old_adapter(
+    ObPluginVectorIndexAdaptor *new_adapter,
+    ObPluginVectorIndexAdaptor *old_adapter,
+    const ObString &row_key)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(new_adapter) || OB_ISNULL(old_adapter)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("new_adapter or old_adapter is null", K(ret), KP(new_adapter), KP(old_adapter));
+  } else if (row_key.empty()) {
+    LOG_INFO("row key is empty, so can not reuse", K(row_key));
+  } else {
+    ObVecIdxSnapshotDataHandle &new_snap = new_adapter->get_snap_data();
+    const ObVecIdxSnapshotDataHandle &old_snap = old_adapter->get_snap_data();
+    if (!old_snap.is_valid()) {
+      LOG_INFO("old snap data may be not init, so can not reuse", KPC(old_adapter));
+    } else if (new_snap->meta_.bases_.count() > 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("new snap data already has base seg, so can not reuse", K(ret), KPC(new_adapter));
+    } else {
+      TCRLockGuard snap_mem_lock_guard(old_snap->mem_data_rwlock_);
+      ObVectorIndexMeta &new_meta = new_snap->meta_;
+      const ObVectorIndexMeta &old_meta = old_snap->meta_;
+      bool found = false;
+      for (int64_t i = 0; OB_SUCC(ret) && i < old_meta.bases_.count() && !found; ++i) {
+        const ObVectorIndexSegmentMeta &old_seg_meta = old_meta.bases_.at(i);
+        if (old_seg_meta.segment_handle_.is_valid() && (0 == old_seg_meta.start_key_.compare(row_key))) {
+          if (OB_FAIL(new_meta.bases_.push_back(old_seg_meta))) {
+            LOG_WARN("failed to add base seg meta", K(ret), K(old_seg_meta));
+          } else if (OB_FAIL(new_meta.bases_.at(new_meta.bases_.count() - 1).deep_copy_seg_key(
+              old_seg_meta.start_key_, old_seg_meta.end_key_))) {
+            LOG_WARN("failed to deep copy seg key", K(ret), K(old_seg_meta));
+          } else {
+            found = true;
+            LOG_INFO("reuse single base seg from old adapter", K(row_key), K(old_seg_meta));
+          }
+        } else {
+          LOG_INFO("current segment is not matched", K(row_key), K(old_seg_meta));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
                                                         ObPluginVectorIndexAdaptor *&adapter,
                                                         const bool create_new_adp,
@@ -1000,10 +1045,14 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
           param.allocator_ = &tmp_allocator;
           // ToDo: concurrency with weakread
           // name rule: TabletID_SCN_xxx_data_partn, we need TabletID_SCN
-          if (OB_FAIL(new_adapter->deserialize_snap_data(param, row_key))) {
+          if (OB_FAIL(try_reuse_single_base_seg_from_old_adapter(new_adapter, old_adapter, row_key))) {
+            LOG_WARN("fail to reuse single base seg from old adapter", K(ret));
+          } else if (OB_FAIL(new_adapter->deserialize_snap_data(param, row_key))) {
             LOG_WARN("deseriale snapshot data fail", K(ret));
           } else if (OB_FAIL(new_adapter->get_snap_index_row_cnt(index_count))) {
             LOG_WARN("fail to get snap index row cnt", K(ret), KP(new_adapter), KP(adapter));
+          } else {
+            LOG_INFO("deserialize snapshot data success", K(ret), K(row_key), KPC(new_adapter), KPC(adapter));
           }
         }
       }
