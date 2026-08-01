@@ -123,9 +123,9 @@ public:
   // for px_admission
   int apply_target(uint64_t tenant_id, hash::ObHashMap<ObAddr, int64_t> &worker_map,
                    int64_t wait_time_us, int64_t session_target, int64_t req_cnt,
-                   int64_t &admit_count, uint64_t &admit_version);
+                   int64_t &admit_count, uint64_t &admit_version, bool &session_count_inc);
   int release_target(uint64_t tenant_id, hash::ObHashMap<ObAddr, int64_t> &worker_map,
-                    uint64_t admit_version);
+                     uint64_t admit_version, bool session_count_inc);
 
   // for virtual_table iter
   int get_all_tenant(common::ObSEArray<uint64_t, 4> &tenant_array);

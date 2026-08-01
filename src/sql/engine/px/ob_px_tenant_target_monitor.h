@@ -134,8 +134,8 @@ public:
   // for px_admission
   int apply_target(hash::ObHashMap<ObAddr, int64_t> &worker_map,
                    int64_t wait_time_us, int64_t session_target, int64_t req_cnt,
-                   int64_t &admit_count, uint64_t &admit_version);
-  int release_target(hash::ObHashMap<ObAddr, int64_t> &worker_map, uint64_t version);
+                   int64_t &admit_count, uint64_t &admit_version, bool &session_count_inc);
+  int release_target(hash::ObHashMap<ObAddr, int64_t> &worker_map, uint64_t version, bool session_count_inc);
 
   // for virtual_table iter
   int get_all_target_info(common::ObIArray<ObPxTargetInfo> &target_info_array);

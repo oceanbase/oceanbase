@@ -107,6 +107,7 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     vt_ift_(nullptr),
     px_batch_id_(0),
     admission_version_(UINT64_MAX),
+    admission_session_count_inc_(false),
     admission_addr_map_(),
     use_temp_expr_ctx_cache_(false),
     temp_expr_ctx_map_(),
