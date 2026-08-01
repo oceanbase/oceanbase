@@ -195,6 +195,7 @@ public:
   int64_t co_base_snapshot_version_;
   share::SCN rec_scn_;
   int64_t min_merged_trans_version_;
+  int64_t reused_occupy_size_;
   //Add new variable need consider ObSSTableMetaChecker
 };
 

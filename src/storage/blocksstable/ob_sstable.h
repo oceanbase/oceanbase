@@ -112,6 +112,7 @@ public:
   int64_t min_merged_trans_version_;
   bool has_hidden_rowkey_cg_;
   // add new variables here, no need to inc version
+  int64_t reused_occupy_size_;
 };
 
 

@@ -62,7 +62,8 @@ ObSSTableBasicMeta::ObSSTableBasicMeta()
     tx_data_recycle_scn_(SCN::min_scn()),
     co_base_snapshot_version_(0),
     rec_scn_(),
-    min_merged_trans_version_(0)
+    min_merged_trans_version_(0),
+    reused_occupy_size_(0)
 {
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
 }
@@ -264,7 +265,8 @@ DEFINE_SERIALIZE(ObSSTableBasicMeta)
                   tx_data_recycle_scn_,
                   co_base_snapshot_version_,
                   rec_scn_,
-                  min_merged_trans_version_);
+                  min_merged_trans_version_,
+                  reused_occupy_size_);
       if (OB_FAIL(ret)) {
       } else if (OB_UNLIKELY(length_ != pos - start_pos)) {
         ret = OB_ERR_UNEXPECTED;
@@ -314,6 +316,7 @@ int ObSSTableBasicMeta::decode_for_compat(const char *buf, const int64_t data_le
   int ret = OB_SUCCESS;
   // set latest_row_store_type to invalid on deserialize for compatibility
   latest_row_store_type_ = ObRowStoreType::DUMMY_ROW_STORE;
+  reused_occupy_size_ = -1;
   MEMCPY(encrypt_key_, buf + pos, sizeof(encrypt_key_));
   pos += sizeof(encrypt_key_);
   LST_DO_CODE(OB_UNIS_DECODE,
@@ -354,7 +357,8 @@ int ObSSTableBasicMeta::decode_for_compat(const char *buf, const int64_t data_le
               tx_data_recycle_scn_,
               co_base_snapshot_version_,
               rec_scn_,
-              min_merged_trans_version_);
+              min_merged_trans_version_,
+              reused_occupy_size_);
   if (!rec_scn_.is_valid()) {
     rec_scn_.set_min();
     LOG_WARN("the sstable may be an old version sstable and with no rec_scn, set it to min", KPC(this));
@@ -406,7 +410,8 @@ DEFINE_GET_SERIALIZE_SIZE(ObSSTableBasicMeta)
               tx_data_recycle_scn_,
               co_base_snapshot_version_,
               rec_scn_,
-              min_merged_trans_version_);
+              min_merged_trans_version_,
+              reused_occupy_size_);
   return len;
 }
 
