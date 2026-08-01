@@ -18,8 +18,6 @@ namespace oceanbase
 namespace blocksstable
 {
 
-class ObISSTableObjectCleaner;
-
 class ObDataMacroBlockMergeWriter : public ObMacroBlockWriter
 {
 public:
@@ -31,9 +29,7 @@ public:
       const int64_t parallel_idx,
       const blocksstable::ObMacroSeqParam &macro_seq_param,
       const share::ObPreWarmerParam &pre_warm_param,
-      ObISSTableObjectCleaner &object_cleaner,
       ObIMacroBlockFlushCallback *callback = nullptr,
-      ObIMacroBlockValidator *validator = nullptr,
       ObIODevice *device_handle = nullptr,
       const storage::ObITableReadInfo *merge_micro_block_read_info = nullptr) override;
   virtual int append_row(const ObDatumRow &row, const ObMacroBlockDesc *curr_macro_desc = nullptr) override;

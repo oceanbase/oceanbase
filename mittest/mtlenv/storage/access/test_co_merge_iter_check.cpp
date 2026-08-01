@@ -270,8 +270,7 @@ public:
       seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
       seq_param.start_ = 0;
       ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-      ObSSTablePrivateObjectCleaner cleaner;
-      OK(macro_writer.open(data_store_desc.get_desc(), 0 /*parallel_idx*/, seq_param /*start_seq*/, pre_warm_param, cleaner));
+      OK(macro_writer.open(data_store_desc.get_desc(), 0 /*parallel_idx*/, seq_param /*start_seq*/, pre_warm_param));
       // 6 rows with micro_row_cnt=1, macro_row_cnt=2 → 3 macro blocks (2 micros each)
       // This ensures the SSTable is NOT small (multiple macro blocks).
       prepare_data(1 /*micro_row_cnt*/, 2 /*macro_row_cnt*/, table_schema.get_column_count(), data_iter, macro_writer, row_project);

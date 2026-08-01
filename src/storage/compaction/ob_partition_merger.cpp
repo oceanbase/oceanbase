@@ -207,7 +207,6 @@ ObPartitionMerger::ObPartitionMerger(
     macro_writer_(nullptr),
     minimum_iters_(DEFAULT_ITER_ARRAY_SIZE, ModulePageAllocator(allocator)),
     progressive_merge_helper_(),
-    validator_(nullptr),
     uncommit_tx_info_collector_(),
     sstable_merge_block_info_array_()
 {
@@ -230,11 +229,6 @@ void ObPartitionMerger::reset()
   }
   progressive_merge_helper_.reset();
   ObRowStoreMerger::reset();
-  if (OB_NOT_NULL(validator_)) {
-    validator_->~ObIMacroBlockValidator();
-    merger_arena_.free(validator_);
-    validator_ = nullptr;
-  }
   sstable_merge_block_info_array_.reset();
 }
 
@@ -292,24 +286,19 @@ int ObPartitionMerger::inner_open_macro_writer(
       macro_writer_ = alloc_helper<ObDataMacroBlockMergeWriter>(merger_arena_);
     }
 
-    ObISSTableObjectCleaner *object_cleaner = nullptr;
     if (OB_ISNULL(macro_writer_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "Failed to allocate memory for macro writer", K(ret), K(merge_param));
-    } else if (OB_FAIL(ObISSTableObjectCleaner::get_cleaner_from_data_store_desc(data_store_desc_, object_cleaner))) {
-      STORAGE_LOG(WARN, "Failed to get private object cleaner", K(ret), K(data_store_desc_));
     } else if (OB_FAIL(macro_writer_->open(
                    data_store_desc_, task_idx_, macro_seq_param,
                    ctx.get_pre_warm_param(),
-                   *object_cleaner,
-                   NULL /*ObIMacroBlockFlushCallback*/,
-                   validator_))) { // TODO: after allow batch_merge, need read_info for macro_block_writer
+                   NULL /*ObIMacroBlockFlushCallback*/))) { // TODO: after allow batch_merge, need read_info for macro_block_writer
       STORAGE_LOG(WARN, "Failed to open macro block writer", K(ret),
-                  K(macro_seq_param), K(data_store_desc_), KP(object_cleaner));
+                  K(macro_seq_param), K(data_store_desc_));
     } else {
       STORAGE_LOG(INFO, "success to open macro writer with pre warmer",
         K(blocksstable::ObSimplePrintDataStoreDesc(data_store_desc_)), K(macro_seq_param),
-        KPC(macro_writer_), K(ctx.get_pre_warm_param()), K_(validator));
+        KPC(macro_writer_), K(ctx.get_pre_warm_param()));
     }
 
     if (OB_FAIL(ret) && nullptr != macro_writer_) {

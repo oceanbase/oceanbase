@@ -328,6 +328,9 @@ int ObTabletReplicaChecksumOperator::construct_batch_get_sql_str_(
         SHARE_LOG(WARN, "fail to assign sql", KR(ret), K(tenant_id), K(compaction_scn));
       }
     }
+    if (OB_SUCC(ret) && OB_FAIL(sql.append(" ORDER BY tablet_id, ls_id"))) {
+      SHARE_LOG(WARN, "fail to append order by clause", KR(ret), K(tenant_id));
+    }
   }
   return ret;
 }

@@ -9,7 +9,6 @@ namespace oceanbase
 namespace compaction
 {
 static const int64_t MACRO_STEP_SIZE = 0x1 << 25;
-static const int64_t INVALID_TASK_IDX = -1;
 
 } // namespace compaction
 } // namespace oceanbase

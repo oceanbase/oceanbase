@@ -31,9 +31,6 @@ void ObBatchExecCollector::add(
     ADD_COMMENT("dag_type", OB_DAG_TYPES[dag.get_type()].dag_type_str_);
     ADD_COMMENT("success_cnt", info_.success_cnt_);
     ADD_COMMENT("failure_cnt", info_.failure_cnt_);
-    if (0 != info_.errno_) {
-      ADD_COMMENT("errno", info_.errno_);
-    }
 #undef ADD_COMMENT
     if (OB_FAIL(MTL(storage::ObTenantSSTableMergeInfoMgr*)->add_sstable_merge_info(merge_history_))) {
       STORAGE_LOG(WARN, "failed to add sstable merge info", KR(ret), K_(merge_history));

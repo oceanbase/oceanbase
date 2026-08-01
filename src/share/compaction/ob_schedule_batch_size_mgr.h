@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #ifndef OB_SHARE_COMPACTION_SCHEDULE_BATCH_SIZE_MGR_H_
 #define OB_SHARE_COMPACTION_SCHEDULE_BATCH_SIZE_MGR_H_
-#include "/usr/include/stdint.h"
+#include <stdint.h>
 namespace oceanbase
 {
 namespace compaction
@@ -27,7 +27,6 @@ struct ObScheduleBatchSizeMgr
     const int64_t cur_bucket_cnt,
     int64_t &recommend_map_bucked_cnt);
 private:
-  const static int64_t TABLET_ID_BATCH_CHECK_SIZE = 3000;
   const static int64_t TABLE_ID_BATCH_CHECK_SIZE = 200;
   const static int64_t TOTAL_TABLE_CNT_THREASHOLD = 100 * 1000; // 10w
   const static int64_t DEFAULT_INNER_TABLE_SCAN_BATCH_SIZE = 500;

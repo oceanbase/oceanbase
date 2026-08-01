@@ -171,10 +171,6 @@ inline bool is_output_exec_mode(const ObExecMode &exec_mode)
   return EXEC_MODE_OUTPUT == exec_mode ||
          EXEC_MODE_UPLOAD_MINOR == exec_mode;
 }
-inline bool is_local_with_private_block_mode(const ObExecMode &exec_mode)
-{
-  return EXEC_MODE_LOCAL == exec_mode;
-}
 inline bool is_local_with_shared_block_mode(const ObExecMode &exec_mode)
 {
   return EXEC_MODE_LOCAL_WITH_SHARED_BLOCK == exec_mode;
@@ -182,14 +178,6 @@ inline bool is_local_with_shared_block_mode(const ObExecMode &exec_mode)
 inline bool is_upload_minor_exec_mode(const ObExecMode &exec_mode)
 {
   return EXEC_MODE_UPLOAD_MINOR == exec_mode;
-}
-inline bool is_flush_macro_exec_mode(const ObExecMode &exec_mode)
-{
-  return is_local_exec_mode(exec_mode) || is_output_exec_mode(exec_mode);
-}
-inline bool is_validate_exec_mode(const ObExecMode &exec_mode)
-{
-  return EXEC_MODE_VALIDATE == exec_mode;
 }
 const char *exec_mode_to_str(const ObExecMode &exec_mode);
 

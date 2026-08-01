@@ -64,7 +64,6 @@ int ObCgMacroBlockWriter::init(
 
     ObMacroSeqParam macro_seq_param;
     ObPreWarmerParam pre_warm_param;
-    ObISSTableObjectCleaner *object_cleaner = nullptr;
     ObDDLIncRedoLogWriterCallback *inc_redo_callback = nullptr;
 
     macro_seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
@@ -155,35 +154,13 @@ int ObCgMacroBlockWriter::init(
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObISSTableObjectCleaner::get_cleaner_from_data_store_desc(
-                 data_desc_.get_desc(), object_cleaner))) {
-      LOG_WARN("fail to get cleaner from data store desc", KR(ret));
-    } else if (OB_ISNULL(object_cleaner)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("object cleaner is nullptr", KR(ret));
-    }
-#ifdef OB_BUILD_SHARED_STORAGE
-    else if (GCTX.is_shared_storage_mode()) {
-      if (!is_inc_major && OB_FAIL(object_cleaner->mark_succeed())) {
-        LOG_WARN("fail to mark succeed", KR(ret), K(is_inc_major));
-      } else if (OB_FAIL(macro_block_writer_.open_for_ss_ddl(data_desc_.get_desc(),
-                                                             parallel_idx,
-                                                             macro_seq_param,
-                                                             pre_warm_param,
-                                                             *object_cleaner,
-                                                             ddl_redo_callback_))) {
-        LOG_WARN("fail to open for ss ddl", KR(ret));
-      }
-    }
-#endif
-    else if (OB_FAIL(macro_block_writer_.open(data_desc_.get_desc(),
+    } else if (OB_FAIL(macro_block_writer_.open(data_desc_.get_desc(),
                                                 parallel_idx,
                                                 macro_seq_param,
                                                 pre_warm_param,
-                                                *object_cleaner,
                                                 ddl_redo_callback_))) {
       LOG_WARN("fail to open macro block writer", KR(ret), K(param), K(table_key), K(data_desc_),
-               K(start_sequence), KPC(object_cleaner));
+               K(start_sequence));
     }
   } else { // 全量
     const ObWriteTabletParam &tablet_param = table_key.tablet_id_ != param.tablet_id_ ?
@@ -199,7 +176,6 @@ int ObCgMacroBlockWriter::init(
     const ObStorageColumnGroupSchema *cg_schema = nullptr;
     ObMacroSeqParam macro_seq_param;
     ObPreWarmerParam pre_warm_param;
-    ObISSTableObjectCleaner *object_cleaner = nullptr;
     ObDDLRedoLogWriterCallback *ddl_redo_callback = nullptr;
     compaction::ObExecMode exec_mode = GCTX.is_shared_storage_mode() ?
                                        compaction::ObExecMode::EXEC_MODE_OUTPUT :
@@ -289,30 +265,13 @@ int ObCgMacroBlockWriter::init(
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObISSTableObjectCleaner::get_cleaner_from_data_store_desc(data_desc_.get_desc(), object_cleaner))) {
-      LOG_WARN("fail to get cleaner from data store desc", K(ret), K(data_desc_.get_desc()));
-#ifdef OB_BUILD_SHARED_STORAGE
-    } else if (GCTX.is_shared_storage_mode()) {
-      if (OB_FAIL(macro_block_writer_.open_for_ss_ddl(data_desc_.get_desc(),
-                                                      parallel_idx,
-                                                      macro_seq_param,
-                                                      pre_warm_param,
-                                                      *object_cleaner,
-                                                      ddl_redo_callback_))) {
-        LOG_WARN("fail to open macro block writer in ss mode",
-            K(ret), K(ls_id), K(table_key), K(data_desc_), K(start_sequence), KPC(object_cleaner));
-      }
-#endif
-    } else {
-      if (OB_FAIL(macro_block_writer_.open(data_desc_.get_desc(),
-                                           parallel_idx,
-                                           macro_seq_param,
-                                           pre_warm_param,
-                                           *object_cleaner,
-                                           ddl_redo_callback_))) {
-        LOG_WARN("fail to open macro block writer",
-            K(ret), K(ls_id), K(table_key), K(data_desc_), K(start_sequence), KPC(object_cleaner));
-      }
+    } else if (OB_FAIL(macro_block_writer_.open(data_desc_.get_desc(),
+                                                parallel_idx,
+                                                macro_seq_param,
+                                                pre_warm_param,
+                                                ddl_redo_callback_))) {
+      LOG_WARN("fail to open macro block writer",
+          K(ret), K(ls_id), K(table_key), K(data_desc_), K(start_sequence));
     }
   }
   if (OB_SUCC(ret)) {

@@ -58,7 +58,6 @@ public:
     const ObDataStoreDesc &data_store_desc,
     const int64_t parallel_idx,
     const blocksstable::ObMacroSeqParam &macro_seq_param,
-    ObISSTableObjectCleaner &object_cleaner,
     ObCGBlockFileWriter *cg_block_writer);
 protected:
   virtual bool is_alloc_block_needed() const override { return false; }
@@ -85,13 +84,6 @@ public:
       const ObDataStoreDesc &data_store_desc,
       const int64_t parallel_idx,
       const blocksstable::ObMacroSeqParam &macro_seq_param,
-      ObISSTableObjectCleaner &object_cleaner,
-      ObIMacroBlockFlushCallback *callback);
-  int open_for_ss_ddl(
-      const ObDataStoreDesc &data_store_desc,
-      const int64_t parallel_idx,
-      const blocksstable::ObMacroSeqParam &macro_seq_param,
-      ObISSTableObjectCleaner &object_cleaner,
       ObIMacroBlockFlushCallback *callback);
   int append_cg_block(ObCGBlock &cg_block, const int64_t macro_block_fill_ratio);
 

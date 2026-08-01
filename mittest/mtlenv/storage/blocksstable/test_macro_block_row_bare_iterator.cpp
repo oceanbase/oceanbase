@@ -236,11 +236,10 @@ void TestMacroBlockRowBareIterator::generate_cg_block_without_batch(ObCGBlockFil
   ObMacroSeqParam seq_param;
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = data_seq.macro_data_seq_;
-  ObSSTablePrivateObjectCleaner cleaner;
 
   ObCGBlockFileWriter cg_block_writer;
   ASSERT_EQ(OB_SUCCESS, cg_block_writer.init(&cg_block_file));
-  ASSERT_EQ(OB_SUCCESS, dag_temp_macro_writer->open(data_desc.get_desc(), data_seq.get_parallel_idx(), seq_param, cleaner, &cg_block_writer));
+  ASSERT_EQ(OB_SUCCESS, dag_temp_macro_writer->open(data_desc.get_desc(), data_seq.get_parallel_idx(), seq_param, &cg_block_writer));
   static const int64_t MAX_TEST_COLUMN_CNT = TestMacroBlockRowBareIterator::TEST_COLUMN_CNT + 3;
   ObDatumRow multi_row;
   ASSERT_EQ(OB_SUCCESS, multi_row.init(allocator_, MAX_TEST_COLUMN_CNT));
@@ -523,9 +522,8 @@ TEST_F(TestMacroBlockRowBareIterator, test_macro_block_row_bare_iterator)
   ObMacroSeqParam seq_param;
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = data_seq.macro_data_seq_;
-  ObSSTablePrivateObjectCleaner cleaner;
   const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ASSERT_EQ(OB_SUCCESS, macro_writer->open(data_desc.get_desc(), data_seq.get_parallel_idx(), seq_param, pre_warm_param, cleaner, nullptr, nullptr, nullptr));
+  ASSERT_EQ(OB_SUCCESS, macro_writer->open(data_desc.get_desc(), data_seq.get_parallel_idx(), seq_param, pre_warm_param));
   static const int64_t MAX_TEST_COLUMN_CNT = TestMacroBlockRowBareIterator::TEST_COLUMN_CNT + 2;
   ObDatumRow multi_row;
   ASSERT_EQ(OB_SUCCESS, multi_row.init(allocator_, MAX_TEST_COLUMN_CNT));
@@ -542,7 +540,7 @@ TEST_F(TestMacroBlockRowBareIterator, test_macro_block_row_bare_iterator)
   }
   ASSERT_EQ(OB_SUCCESS, macro_writer->close());
   macro_writer->reset();
-  ASSERT_EQ(OB_SUCCESS, macro_writer->open(data_desc.get_desc(), data_seq.get_parallel_idx(), seq_param, pre_warm_param, cleaner, nullptr, nullptr, nullptr));
+  ASSERT_EQ(OB_SUCCESS, macro_writer->open(data_desc.get_desc(), data_seq.get_parallel_idx(), seq_param, pre_warm_param));
   for (int64_t i = test_row_num; i < test_row_num * 2; ++i) {
     OK(row_generate_.get_next_row(i, row));
     convert_to_multi_version_row(row, table_schema_.get_rowkey_column_num(), table_schema_.get_column_count(), SNAPSHOT_VERSION, dml, multi_row);
@@ -567,9 +565,8 @@ TEST_F(TestMacroBlockRowBareIterator, test_micro_clustered_index_and_skip_index)
   ObMacroSeqParam seq_param;
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = data_seq.macro_data_seq_;
-  ObSSTablePrivateObjectCleaner cleaner;
   const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ASSERT_EQ(OB_SUCCESS, macro_writer->open(data_desc.get_desc(), data_seq.get_parallel_idx(), seq_param, pre_warm_param, cleaner, nullptr, nullptr, nullptr));
+  ASSERT_EQ(OB_SUCCESS, macro_writer->open(data_desc.get_desc(), data_seq.get_parallel_idx(), seq_param, pre_warm_param));
   static const int64_t MAX_TEST_COLUMN_CNT = TestMacroBlockRowBareIterator::TEST_COLUMN_CNT + 2;
   ObDatumRow multi_row;
   ASSERT_EQ(OB_SUCCESS, multi_row.init(allocator_, MAX_TEST_COLUMN_CNT));
@@ -610,9 +607,8 @@ TEST_F(TestMacroBlockRowBareIterator, test_micro_clustered_index_on_buf_not_enou
   ObMacroSeqParam seq_param;
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = data_seq.macro_data_seq_;
-  ObSSTablePrivateObjectCleaner cleaner;
   const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ASSERT_EQ(OB_SUCCESS, macro_writer->open(data_desc.get_desc(), data_seq.get_parallel_idx(), seq_param, pre_warm_param, cleaner, nullptr, nullptr, nullptr));
+  ASSERT_EQ(OB_SUCCESS, macro_writer->open(data_desc.get_desc(), data_seq.get_parallel_idx(), seq_param, pre_warm_param));
   static const int64_t MAX_TEST_COLUMN_CNT = TestMacroBlockRowBareIterator::TEST_COLUMN_CNT + 2;
   ObDatumRow multi_row;
   ASSERT_EQ(OB_SUCCESS, multi_row.init(allocator_, MAX_TEST_COLUMN_CNT));

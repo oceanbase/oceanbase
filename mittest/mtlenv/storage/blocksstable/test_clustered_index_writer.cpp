@@ -128,8 +128,7 @@ TEST_F(TestClusteredIndexWriter, test_reuse_macro_block)
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+  OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param));
 
   // prepare dual iterator
   const ObITableReadInfo &index_read_info = tablet_handle_.get_obj()->get_rowkey_read_info();

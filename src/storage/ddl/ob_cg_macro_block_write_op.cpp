@@ -30,23 +30,9 @@ int ObDAGCGMacroBlockWriter::open(const ObWriteMacroParam &param)
     LOG_WARN("there are invalid argument", K(ret), K(param));
   } else if (OB_FAIL(writer_args_.init(param, ObWriterType::DAG_CG_MACRO_BLOCK_WRITER_TYPE))) {
     LOG_WARN("fail to initialize writer args", K(ret), K(param));
-  } else if (OB_UNLIKELY(nullptr == writer_args_.object_cleaner_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("object cleaner is null", K(ret));
-#ifdef OB_BUILD_SHARED_STORAGE
-  } else if (GCTX.is_shared_storage_mode()) {
-    if (OB_FAIL(cg_macro_block_writer_.open_for_ss_ddl(writer_args_.data_desc_.get_desc(),
-                                                       writer_args_.parallel_idx_,
-                                                       writer_args_.macro_seq_param_,
-                                                       *writer_args_.object_cleaner_,
-                                                       writer_args_.ddl_redo_callback_))) {
-      LOG_WARN("fail to open macro block writer in ss mode", K(ret), K(writer_args_));
-    }
-#endif
   } else if (OB_FAIL(cg_macro_block_writer_.open(writer_args_.data_desc_.get_desc(),
                                                   writer_args_.parallel_idx_,
                                                   writer_args_.macro_seq_param_,
-                                                  *writer_args_.object_cleaner_,
                                                   writer_args_.ddl_redo_callback_))) {
     LOG_WARN("fail to open macro block writer", K(ret), K(writer_args_));
   }

@@ -88,7 +88,7 @@ void ObCompactionTimeGuard::fmt_ts_to_meaningful_str(
 }
 void ObCompactionTimeGuard::add_time_guard(const ObCompactionTimeGuard &other)
 {
-  if (OB_LIKELY(guard_type_ == other.guard_type_ && CAPACITY == other.capacity_)) {
+  if (OB_LIKELY(guard_type_ == other.guard_type_ && capacity_ == other.capacity_)) {
     size_ = std::max(size_, other.size_);
     for (uint16_t i = 0; i < size_; i++) {
       event_times_[i] += other.event_times_[i];

@@ -13,6 +13,7 @@
 #include "share/schema/ob_part_mgr_util.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "storage/ddl/ob_column_clustered_dag.h"
+#include "storage/ddl/ob_ddl_seq_generator.h"
 
 namespace oceanbase
 {

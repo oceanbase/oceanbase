@@ -421,8 +421,7 @@ void TestIndexTree::prepare_data()
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  ret = writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner);
+  ret = writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObDatumRow row;
@@ -454,8 +453,7 @@ void TestIndexTree::prepare_data()
 
   writer.reset();
 
-  ObSSTablePrivateObjectCleaner another_cleaner;
-  ret = writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, another_cleaner);
+  ret = writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   for (int64_t i = border_row_id + 1; i < border_row_id + 10000; ++i) {
@@ -538,8 +536,7 @@ void TestIndexTreeStress::run1()
     seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
     seq_param.start_ = start_seq_->macro_data_seq_;
     const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-    ObSSTablePrivateObjectCleaner cleaner;
-    ret = macro_writer->open(data_store_desc_->get_desc(), start_seq_->get_parallel_idx(), seq_param, pre_warm_param, cleaner);
+    ret = macro_writer->open(data_store_desc_->get_desc(), start_seq_->get_parallel_idx(), seq_param, pre_warm_param);
   //}
   ASSERT_EQ(OB_SUCCESS, ret);
   static const int64_t MAX_TEST_COLUMN_CNT = TestIndexTree::TEST_COLUMN_CNT + 3;
@@ -650,8 +647,7 @@ void TestIndexTree::mock_compaction(const int64_t test_row_num,
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param));
 
   ObDatumRow row;
   ASSERT_EQ(OB_SUCCESS, row.init(allocator_, TEST_COLUMN_CNT));
@@ -807,8 +803,7 @@ void TestIndexTree::mock_cg_compaction(const int64_t test_row_num,
   seq_param.start_ = 0;
   const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
   ObMacroBlockWriter data_writer;
-  ObSSTablePrivateObjectCleaner cleaner;
-  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param, pre_warm_param, cleaner));
+  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param, pre_warm_param));
 
   ObDatumRow cg_row;
   ASSERT_EQ(OB_SUCCESS, cg_row.init(1));
@@ -866,8 +861,7 @@ TEST_F(TestIndexTree, test_macro_id_index_block)
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = num;
   const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param, pre_warm_param, cleaner));
+  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param, pre_warm_param));
   ObDataIndexBlockBuilder *builder = data_writer.builder_;
   ASSERT_NE(data_writer.builder_, nullptr);
 
@@ -960,8 +954,7 @@ TEST_F(TestIndexTree, test_macro_writer_bug1)
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+  OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param));
 
   OK(row_generate_.get_next_row(0, row));
   convert_to_multi_version_row(row, table_schema_.get_rowkey_column_num(), table_schema_.get_column_count(), SNAPSHOT_VERSION, dml, multi_row);
@@ -999,8 +992,7 @@ TEST_F(TestIndexTree, test_index_macro_writer)
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  ret = container_macro_writer.open(desc, 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner);
+  ret = container_macro_writer.open(desc, 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   const int64_t test_row_num = 100;
@@ -1029,8 +1021,7 @@ TEST_F(TestIndexTree, test_empty_index_tree)
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param));
   // do not insert any data
   ASSERT_EQ(OB_SUCCESS, data_writer.close());
   ASSERT_EQ(1, sstable_builder.roots_.count());
@@ -1043,8 +1034,7 @@ TEST_F(TestIndexTree, test_empty_index_tree)
   ASSERT_EQ(false, res.table_backup_flag_.has_local());
 
   // test rebuild macro blocks
-  ObSSTablePrivateObjectCleaner cleaner2;
-  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner2));
+  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param));
   // do not insert any data
   ASSERT_EQ(OB_SUCCESS, data_writer.close());
   ASSERT_EQ(1, sstable_builder.roots_.count());
@@ -1076,8 +1066,7 @@ TEST_F(TestIndexTree, test_empty_index_tree)
       prepare_index_builder(other_data_desc, other_sstable_builder);
       prepare_data_desc(other_data_desc, &other_sstable_builder);
       OK(rebuilder.init(other_sstable_builder, macro_seq_param, nullptr, ObITable::TableKey()));
-      ObSSTablePrivateObjectCleaner cleaner;
-      OK(data_writer.open(other_data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+      OK(data_writer.open(other_data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param));
       for(int64_t i = 0; i < 10; ++i) {
         ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(i, row));
         convert_to_multi_version_row(row, table_schema_.get_rowkey_column_num(), table_schema_.get_column_count(), SNAPSHOT_VERSION, dml, multi_row);
@@ -1104,8 +1093,7 @@ TEST_F(TestIndexTree, test_accumulative_info)
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  ASSERT_EQ(OB_SUCCESS, index_macro_writer.open(index_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+  ASSERT_EQ(OB_SUCCESS, index_macro_writer.open(index_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param));
   ObBaseIndexBlockBuilder builder;
   ret = builder.init(data_desc.get_desc(), index_desc.get_desc(), allocator_, &index_macro_writer, 0);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -1176,8 +1164,7 @@ TEST_F(TestIndexTree, test_index_micro_header_serialize_before_pre_warm_transfor
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  ASSERT_EQ(OB_SUCCESS, index_macro_writer.open(index_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+  ASSERT_EQ(OB_SUCCESS, index_macro_writer.open(index_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param));
 
   ObBaseIndexBlockBuilder builder;
   ASSERT_EQ(OB_SUCCESS, builder.init(data_desc.get_desc(), index_desc.get_desc(), allocator_, &index_macro_writer, 0));
@@ -1469,8 +1456,7 @@ TEST_F(TestIndexTree, test_meta_builder_mem_and_disk)
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param, pre_warm_param, cleaner));
+  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param, pre_warm_param));
 
   ObDatumRow row;
   ASSERT_EQ(OB_SUCCESS, row.init(allocator_, TEST_COLUMN_CNT));
@@ -1496,8 +1482,7 @@ TEST_F(TestIndexTree, test_meta_builder_mem_and_disk)
 
   ObMacroDataSeq data_seq2(data_writer.get_last_macro_seq() + 1);
   ObMacroBlockWriter data_writer2;
-  ObSSTablePrivateObjectCleaner cleaner2;
-  ASSERT_EQ(OB_SUCCESS, data_writer2.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param, pre_warm_param, cleaner2));
+  ASSERT_EQ(OB_SUCCESS, data_writer2.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param, pre_warm_param));
   for(int64_t i = 0; i < 10; ++i){
     ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(i + test_row_num - 10, row));
     convert_to_multi_version_row(row, table_schema_.get_rowkey_column_num(), table_schema_.get_column_count(), SNAPSHOT_VERSION, dml, multi_row);
@@ -1763,8 +1748,7 @@ TEST_F(TestIndexTree, test_single_row_desc)
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+  OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param));
 
   ObDatumRow row;
   const int64_t test_col_cnt = 4096;
@@ -1858,8 +1842,7 @@ TEST_F(TestIndexTree, test_extend_micro_block_size)
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param));
 
   ObDatumRow row;
   ASSERT_EQ(OB_SUCCESS, row.init(allocator_, TEST_COLUMN_CNT));
@@ -1940,8 +1923,7 @@ TEST_F(TestIndexTree, test_reuse_macro_block)
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+  OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param));
   for (int64_t i = 0; i < test_row_num; ++i) {
     ObMacroBlockDesc macro_desc;
     macro_desc.macro_meta_ = macro_metas->at(i);
@@ -1982,8 +1964,7 @@ TEST_F(TestIndexTree, DISABLED_test_writer_try_to_append_row)
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+  OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param));
   ObIMicroBlockWriter *micro_writer = data_writer.micro_writer_;
   const int64_t test_num = 1; // only add one row to avoid encoding optimization
   for (int64_t i = 0; i < test_num; ++i) {
@@ -2003,8 +1984,7 @@ TEST_F(TestIndexTree, DISABLED_test_writer_try_to_append_row)
 
 
   { // set size upper bound after reset
-    ObSSTablePrivateObjectCleaner cleaner;
-    OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+    OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param));
     micro_writer = data_writer.micro_writer_;
     micro_writer->set_block_size_upper_bound(need_store_size - 1);
     // if append succeeded, set_block_size_upper_bound has not limited the block size
@@ -2034,8 +2014,7 @@ TEST_F(TestIndexTree, test_writer_try_to_append_row)
   const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
   for (int64_t j = 0; j < ObRowStoreType::MAX_ROW_STORE; ++j) {
     data_desc.get_desc().row_store_type_ = static_cast<ObRowStoreType>(j);
-    ObSSTablePrivateObjectCleaner cleaner;
-    OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+    OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param));
     ObIMicroBlockWriter *micro_writer = data_writer.micro_writer_;
     const int64_t test_num = 10;
     for (int64_t i = 0; i < test_num; ++i) {
@@ -2071,8 +2050,7 @@ TEST_F(TestIndexTree, test_writer_try_to_append_row)
     }
 
     { // set size upper bound after reset
-      ObSSTablePrivateObjectCleaner cleaner;
-      OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+      OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param));
       micro_writer = data_writer.micro_writer_;
       micro_writer->set_block_size_upper_bound(estimate_size);
       for (int64_t i = 0; i < test_num; ++i) {
@@ -2108,8 +2086,7 @@ TEST_F(TestIndexTree, test_rebuilder)
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  OK(data_writer.open(data_desc1.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+  OK(data_writer.open(data_desc1.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param));
   for (int64_t i = 0; i < test_num; ++i) {
     OK(row_generate_.get_next_row(i, row));
     convert_to_multi_version_row(row, table_schema_.get_rowkey_column_num(), table_schema_.get_column_count(), SNAPSHOT_VERSION, dml, multi_row);
@@ -2210,8 +2187,7 @@ TEST_F(TestIndexTree, test_diagnose_dump)
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param));
 
   ObDatumRow row;
   ASSERT_EQ(OB_SUCCESS, row.init(allocator_, TEST_COLUMN_CNT));
@@ -2244,8 +2220,7 @@ TEST_F(TestIndexTree, test_estimate_meta_block_size)
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+  OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param));
 
   ObDatumRow multi_row;
   OK(multi_row.init(allocator_, MAX_TEST_COLUMN_CNT));
@@ -2472,8 +2447,7 @@ TEST_F(TestIndexTree, test_rebuilder_backup_disable_dump_disk)
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param, pre_warm_param, cleaner));
+  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param, pre_warm_param));
   for (int64_t i = 0; i < test_num; ++i) {
     OK(row_generate_.get_next_row(i, row));
     convert_to_multi_version_row(row, table_schema_.get_rowkey_column_num(), table_schema_.get_column_count(), SNAPSHOT_VERSION, dml, multi_row);
@@ -2587,8 +2561,7 @@ TEST_F(TestIndexTree, test_rebuilder_backup_all_mem)
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param, pre_warm_param, cleaner));
+  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param, pre_warm_param));
   for (int64_t i = 0; i < test_num; ++i) {
     OK(row_generate_.get_next_row(i, row));
     convert_to_multi_version_row(row, table_schema_.get_rowkey_column_num(), table_schema_.get_column_count(), SNAPSHOT_VERSION, dml, multi_row);
@@ -2702,8 +2675,7 @@ TEST_F(TestIndexTree, test_rebuilder_backup_all_disk)
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param, pre_warm_param, cleaner));
+  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param, pre_warm_param));
   for (int64_t i = 0; i < test_num; ++i) {
     OK(row_generate_.get_next_row(i, row));
     convert_to_multi_version_row(row, table_schema_.get_rowkey_column_num(), table_schema_.get_column_count(), SNAPSHOT_VERSION, dml, multi_row);
@@ -2815,8 +2787,7 @@ TEST_F(TestIndexTree, test_rebuilder_backup_mem_and_disk)
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param, pre_warm_param, cleaner));
+  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param, pre_warm_param));
   for (int64_t i = 0; i < test_num; ++i) {
     OK(row_generate_.get_next_row(i, row));
     convert_to_multi_version_row(row, table_schema_.get_rowkey_column_num(), table_schema_.get_column_count(), SNAPSHOT_VERSION, dml, multi_row);

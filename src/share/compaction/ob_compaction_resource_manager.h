@@ -69,8 +69,6 @@ public:
   static bool is_window_plan_(const ObString &plan) { return 0 == plan.case_compare(INNER_DAILY_WINDOW_PLAN_NAME); }
   static bool is_window_consumer_group_(const ObString &consumer_group) { return 0 == consumer_group.case_compare(INNER_DAILY_WINDOW_COMPACTION_LOW_GROUP_NAME); }
 private:
-  bool could_skip_switch_(const bool to_window) const;
-  void update_resource_cache_(const bool to_window);
   int check_window_plan_and_consumer_group_exist_();
   int check_window_resources_ready_(ObMySQLTransaction &trans);
   int get_current_resource_manager_plan_(ObSqlString &current_plan);

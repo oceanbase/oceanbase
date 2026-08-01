@@ -83,6 +83,8 @@ int ObArrayWithMap<ITEM>::init(
     }
   } else if (OB_FAIL(array_.assign(other.array_))) {
     STORAGE_LOG(WARN, "failed to assign array", K(ret), K(other));
+  } else {
+    tablet_cnt_ = other.tablet_cnt_;
   }
   return ret;
 }

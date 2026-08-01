@@ -13,7 +13,6 @@
 #define ASSERT_FAIL(expr) ASSERT_NE(common::OB_SUCCESS, (expr))
 using namespace oceanbase;
 using namespace oceanbase::common;
-using namespace oceanbase::storage;
 using namespace oceanbase::blocksstable;
 
 TEST(macro_seq_generator, param)
@@ -22,12 +21,12 @@ TEST(macro_seq_generator, param)
   ASSERT_FALSE(seq_param.is_valid());
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   ASSERT_TRUE(seq_param.is_valid());
-  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_SKIP;
+  seq_param.start_ = -1;
   ASSERT_FALSE(seq_param.is_valid());
-  seq_param.interval_ = 1;
-  ASSERT_FALSE(seq_param.is_valid());
-  seq_param.step_ = 1;
+  seq_param.start_ = 0;
   ASSERT_TRUE(seq_param.is_valid());
+  seq_param.reset();
+  ASSERT_FALSE(seq_param.is_valid());
 }
 
 TEST(macro_seq_generator, inc_generator)
@@ -35,12 +34,9 @@ TEST(macro_seq_generator, inc_generator)
   ObMacroIncSeqGenerator inc_generator;
   ASSERT_FALSE(inc_generator.is_inited_);
   ObMacroSeqParam seq_param;
-  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_SKIP;
-  seq_param.start_ = 11;
-  seq_param.interval_ = 10;
-  seq_param.step_ = 100;
   ASSERT_FAIL(inc_generator.init(seq_param));
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+  seq_param.start_ = 11;
   ASSERT_SUCC(inc_generator.init(seq_param));
   ASSERT_TRUE(inc_generator.is_inited_);
   int64_t seq_val = -1;
@@ -57,34 +53,24 @@ TEST(macro_seq_generator, inc_generator)
   ASSERT_EQ(seq_val, inc_generator.get_current());
 }
 
-TEST(macro_seq_generator, skip_generator)
+TEST(macro_seq_generator, inc_generator_threshold)
 {
-  ObMacroSkipSeqGenerator skip_generator;
-  ASSERT_FALSE(skip_generator.ddl_seq_generator_.is_inited_);
+  ObMacroIncSeqGenerator inc_generator;
   ObMacroSeqParam seq_param;
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
-  ASSERT_FAIL(skip_generator.init(seq_param));
-  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_SKIP;
-  seq_param.start_ = 22;
-  seq_param.interval_ = 3;
-  seq_param.step_ = 100;
-  ASSERT_SUCC(skip_generator.init(seq_param));
-  ASSERT_TRUE(skip_generator.ddl_seq_generator_.is_inited_);
+  seq_param.start_ = 11;
+  ASSERT_SUCC(inc_generator.init(seq_param));
+
+  inc_generator.current_ = inc_generator.seq_threshold_ - 2;
   int64_t seq_val = -1;
-  ASSERT_SUCC(skip_generator.get_next(seq_val)); ASSERT_EQ(seq_val, 22);
-  ASSERT_SUCC(skip_generator.get_next(seq_val)); ASSERT_EQ(seq_val, 23);
-  ASSERT_SUCC(skip_generator.get_next(seq_val)); ASSERT_EQ(seq_val, 24);
-  ASSERT_SUCC(skip_generator.get_next(seq_val)); ASSERT_EQ(seq_val, 122);
-  ASSERT_SUCC(skip_generator.get_next(seq_val)); ASSERT_EQ(seq_val, 123);
-  ASSERT_SUCC(skip_generator.get_next(seq_val)); ASSERT_EQ(seq_val, 124);
-  ASSERT_EQ(seq_val, skip_generator.get_current());
-  int64_t preview_next_val = -1;
-  ASSERT_SUCC(skip_generator.preview_next(seq_val, preview_next_val));
-  ASSERT_GT(preview_next_val, seq_val);
-  ASSERT_EQ(seq_val, skip_generator.get_current());
+  ASSERT_SUCC(inc_generator.get_next(seq_val));
+  ASSERT_EQ(inc_generator.seq_threshold_ - 1, seq_val);
+  ASSERT_EQ(seq_val, inc_generator.get_current());
+
+  ASSERT_EQ(OB_SIZE_OVERFLOW, inc_generator.get_next(seq_val));
+  ASSERT_EQ(inc_generator.seq_threshold_, seq_val);
+  ASSERT_EQ(inc_generator.seq_threshold_ - 1, inc_generator.get_current());
 }
-
-
 
 #define LOG_FILE_PATH "./test_macro_seq_generator.log"
 

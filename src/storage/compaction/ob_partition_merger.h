@@ -148,7 +148,7 @@ public:
   ObUncommitTxInfoCollector &get_uncommit_tx_info_collector() { return uncommit_tx_info_collector_; }
   ObMemUncommitTxInfo &get_uncommit_tx_info() { return uncommit_tx_info_collector_.uncommit_tx_info_; }
   INHERIT_TO_STRING_KV("ObPartitionMerger", ObRowStoreMerger, KPC_(merge_progress), K_(data_store_desc),
-    K_(minimum_iters), KP_(validator));
+    K_(minimum_iters));
 protected:
   virtual int inner_process(const blocksstable::ObDatumRow &row, bool is_incremental_row = true) = 0;
   virtual int inner_close() override;
@@ -190,7 +190,6 @@ protected:
   blocksstable::ObMacroBlockWriter *macro_writer_;
   MERGE_ITER_ARRAY minimum_iters_;
   ObProgressiveMergeHelper progressive_merge_helper_;
-  ObIMacroBlockValidator *validator_;
   ObUncommitTxInfoCollector uncommit_tx_info_collector_;
   ObSEArray<ObSSTableMergeBlockInfo, 1> sstable_merge_block_info_array_;
 };

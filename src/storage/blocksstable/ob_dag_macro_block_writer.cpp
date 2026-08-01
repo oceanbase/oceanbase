@@ -88,7 +88,6 @@ int ObDagTempMacroBlockWriter::open(
     const ObDataStoreDesc &data_store_desc,
     const int64_t parallel_idx,
     const blocksstable::ObMacroSeqParam &macro_seq_param,
-    ObISSTableObjectCleaner &object_cleaner,
     ObCGBlockFileWriter *cg_block_writer)
 {
   int ret = OB_SUCCESS;
@@ -105,9 +104,7 @@ int ObDagTempMacroBlockWriter::open(
       macro_seq_param,
       pre_warm_param,
       false,
-      object_cleaner,
       nullptr /*callback*/,
-      nullptr /*validator*/,
       nullptr /*device_handle*/,
       nullptr /*merge_micro_block_read_info*/))) {
     LOG_WARN("failed to inner init macro block writer", K(ret));
@@ -143,7 +140,6 @@ int ObDagMacroBlockWriter::open(
     const ObDataStoreDesc &data_store_desc,
     const int64_t parallel_idx,
     const blocksstable::ObMacroSeqParam &macro_seq_param,
-    ObISSTableObjectCleaner &object_cleaner,
     ObIMacroBlockFlushCallback *callback)
 {
   int ret = OB_SUCCESS;
@@ -153,41 +149,8 @@ int ObDagMacroBlockWriter::open(
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid callback", K(ret), KP(callback));
   } else if (OB_FAIL(ObMacroBlockWriter::open(
-      data_store_desc, parallel_idx, macro_seq_param, pre_warm_param, object_cleaner, callback))) {
+      data_store_desc, parallel_idx, macro_seq_param, pre_warm_param, callback))) {
     STORAGE_LOG(WARN, "Fail to open macro block writer", K(ret));
-  } else {
-    set_dag_stage(ObDagMacroWriterStage::WAITTING_APPEND_CG_BLOCK);
-  }
-  return ret;
-}
-
-int ObDagMacroBlockWriter::open_for_ss_ddl(
-    const ObDataStoreDesc &data_store_desc,
-    const int64_t parallel_idx,
-    const blocksstable::ObMacroSeqParam &macro_seq_param,
-    ObISSTableObjectCleaner &object_cleaner,
-    ObIMacroBlockFlushCallback *callback)
-{
-  int ret = OB_SUCCESS;
-  // No need pre_warmer in dag_macro_block_writer.
-  share::ObPreWarmerParam pre_warm_param(PRE_WARM_TYPE_NONE);
-  ObBlockWriterConcurrentGuard guard(concurrent_lock_);
-  ObMacroBlockWriter::reset_for_open();
-  if (OB_ISNULL(callback)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument to open macro writer for ss ddl", K(ret));
-  } else if (OB_FAIL(ObMacroBlockWriter::inner_init(
-      data_store_desc,
-      parallel_idx,
-      macro_seq_param,
-      pre_warm_param,
-      false,
-      object_cleaner,
-      callback,
-      nullptr, /* validator */
-      nullptr /* device handle */,
-      nullptr /* merge_micro_block_read_info */))) {
-    LOG_WARN("failed to inner init macro block writer", K(ret));
   } else {
     set_dag_stage(ObDagMacroWriterStage::WAITTING_APPEND_CG_BLOCK);
   }

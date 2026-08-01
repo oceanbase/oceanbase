@@ -10,6 +10,7 @@
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "observer/ob_server_struct.h"
 #include "share/schema/ob_schema_getter_guard.h"
+#include "storage/ddl/ob_ddl_seq_generator.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

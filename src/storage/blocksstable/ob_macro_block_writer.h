@@ -47,11 +47,9 @@ namespace blocksstable
 class ObDataIndexBlockBuilder;
 class ObSSTableIndexBuilder;
 class ObSSTableSecMetaIterator;
-class ObISSTableObjectCleaner;
 struct ObIndexBlockRowDesc;
 struct ObMacroBlockDesc;
 class ObIMacroBlockFlushCallback;
-struct ObIMacroBlockValidator;
 class ObIMicroBlockReader;
 // macro block store struct
 //  |- ObMacroBlockCommonHeader
@@ -151,18 +149,9 @@ public:
       const int64_t parallel_idx,
       const blocksstable::ObMacroSeqParam &macro_seq_param,
       const share::ObPreWarmerParam &pre_warm_param,
-      ObISSTableObjectCleaner &object_cleaner,
       ObIMacroBlockFlushCallback *callback = nullptr,
-      ObIMacroBlockValidator *validator = nullptr,
       ObIODevice *device_handle = nullptr,
       const storage::ObITableReadInfo *merge_micro_block_read_info = nullptr);
-  int open_for_ss_ddl(
-      const ObDataStoreDesc &data_store_desc,
-      const int64_t parallel_idx,
-      const blocksstable::ObMacroSeqParam &macro_seq_param,
-      const share::ObPreWarmerParam &pre_warm_param,
-      ObISSTableObjectCleaner &object_cleaner,
-      ObIMacroBlockFlushCallback *callback);
   virtual int append_macro_block(const ObMacroBlockDesc &macro_desc,
                                  const ObMicroBlockData *micro_block_data);
   virtual int append_micro_block(const ObMicroBlock &micro_block,
@@ -173,7 +162,6 @@ public:
   virtual int append_row(const ObDatumRow &row, const ObMacroBlockDesc *curr_macro_desc = nullptr);
   virtual int append_batch(const ObBatchDatumRows &datum_rows,
                            const ObMacroBlockDesc *curr_macro_desc = nullptr);
-  // TODO(baichangmin): SSTableRebuilder disabled in SS mode. Finish SN route later.
   int append_macro_block(const ObDataMacroBlockMeta &macro_meta);
   int get_estimate_meta_block_size(const ObDataMacroBlockMeta &macro_meta, int64_t &estimate_size);
   int check_data_macro_block_need_merge(const ObMacroBlockDesc &macro_desc, bool &need_merge) const;
@@ -209,9 +197,7 @@ protected:
       const blocksstable::ObMacroSeqParam &macro_seq_param,
       const share::ObPreWarmerParam &pre_warm_param,
       const bool cluster_micro_index_on_flush,
-      ObISSTableObjectCleaner &object_cleaner,
       ObIMacroBlockFlushCallback *callback,
-      ObIMacroBlockValidator *validator,
       ObIODevice *device_handle,
       const storage::ObITableReadInfo *merge_micro_block_read_info);
 private:
@@ -391,21 +377,11 @@ private:
   ObDataIndexBlockBuilder *builder_;
   ObMicroBlockAdaptiveSplitter micro_block_adaptive_splitter_;
   share::ObIPreWarmer *pre_warmer_;
-  ObISSTableObjectCleaner *object_cleaner_;
   char *io_buf_;
-  ObIMacroBlockValidator *validator_;
   bool can_append_batch_;
   const storage::ObITableReadInfo *merge_micro_block_read_info_;
   ObDefaultMacroBlockFlusher default_macro_flusher_;
   ObSmallSStableMacroBlockFlusher small_sstable_macro_flusher_;
-};
-
-struct ObIMacroBlockValidator
-{
-  ObIMacroBlockValidator() = default;
-  virtual ~ObIMacroBlockValidator() = default;
-  virtual void validate_and_dump(const blocksstable::ObMacroBlock &macro_block) = 0;
-  virtual void close() = 0;
 };
 
 }//end namespace blocksstable

@@ -349,7 +349,6 @@ int ObSSTableSplitWriteHelper::prepare_macro_block_writer(
       pre_warm_param.reset();
       ObDataStoreDesc *data_desc = nullptr;
       ObMacroBlockWriter *macro_block_writer = nullptr;
-      ObISSTableObjectCleaner *object_cleaner = nullptr;
       const ObTabletID &dst_tablet_id = param_->dest_tablets_id_.at(i);
       const ObSplitIndexBuilderCtx &index_builder_ctx = index_builder_ctx_arr.at(i);
       const ObMacroSeqParam &macro_seq_param = macro_seq_param_arr.at(i);
@@ -369,10 +368,8 @@ int ObSSTableSplitWriteHelper::prepare_macro_block_writer(
         LOG_WARN("alloc memory failed", K(ret));
       } else if (OB_FAIL(pre_warm_param.init(param_->ls_id_, dst_tablet_id))) {
         LOG_WARN("failed to init pre warm param", K(ret), K(dst_tablet_id), KPC(param_));
-      } else if (OB_FAIL(ObISSTableObjectCleaner::get_cleaner_from_data_store_desc(*data_desc, object_cleaner))) {
-        LOG_WARN("failed to get cleaner from data store desc", K(ret));
       } else if (OB_FAIL(macro_block_writer->open(*data_desc, task_idx/*parallel_idx*/,
-          macro_seq_param, pre_warm_param, *object_cleaner))) {
+          macro_seq_param, pre_warm_param))) {
         LOG_WARN("open macro_block_writer failed", K(ret), KPC(data_desc));
       } else if (OB_FAIL(macro_block_writer_arr.push_back(macro_block_writer))) {
         LOG_WARN("push back failed", K(ret));

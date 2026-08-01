@@ -958,8 +958,7 @@ int ObSSTableIndexBuilder::merge_index_tree(
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "object cleaner is null", K(ret));
   } else if (OB_FAIL(macro_writer_.open(container_store_desc_, 0 /*parallel_idx*/,
-                                 macro_seq_param, pre_warm_param, *object_cleaner_, callback,
-                                 nullptr, device_handle_))) {
+                                 macro_seq_param, pre_warm_param, callback, device_handle_))) {
     STORAGE_LOG(WARN, "fail to open index macro writer", K(ret));
   } else {
     switch (task_type) {
@@ -1472,7 +1471,7 @@ int ObSSTableIndexBuilder::build_meta_tree(
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "object cleaner is null", K(ret));
   } else if (OB_FAIL(macro_writer_.open(desc, 0 /*parallel_idx*/, macro_seq_param,
-                                 pre_warm_param, *object_cleaner_, callback, nullptr, device_handle_))) {
+                                 pre_warm_param, callback, device_handle_))) {
     STORAGE_LOG(WARN, "fail to open index macro writer", K(ret));
   } else if (OB_FAIL(builder.init(desc, self_allocator_, macro_writer_))) {
     STORAGE_LOG(WARN, "fail to init index builder", K(ret));

@@ -406,7 +406,6 @@ int ObMdsTableMiniMerger::init(
       }
     }
 
-    ObISSTableObjectCleaner *object_cleaner = nullptr;
     if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(storage_schema)) {
       ret = OB_ERR_UNEXPECTED;
@@ -422,13 +421,10 @@ int ObMdsTableMiniMerger::init(
     } else if (FALSE_IT(data_desc_.get_desc().sstable_index_builder_ = &sstable_builder_)) {
     } else if (OB_FAIL(sstable_builder_.init(data_desc_.get_desc()))) {
       LOG_WARN("Failed to init sstable builder", K(ret), K(data_desc_.get_desc()));
-    } else if (OB_FAIL(ObISSTableObjectCleaner::
-                           get_cleaner_from_data_store_desc(data_desc_.get_desc(), object_cleaner))) {
-      LOG_WARN("Failed to get cleaner from data store desc", K(ret), K(data_desc_.get_desc()), KP(object_cleaner));
     } else if (OB_FAIL(macro_writer_.open(
                    data_desc_.get_desc(), 0 /*parallel_idx*/, macro_seq_param,
-                   ctx.get_pre_warm_param(), *object_cleaner))) {
-      LOG_WARN("Failed to open macro block writer", K(ret), K(data_desc_.get_desc()), KPC(object_cleaner));
+                   ctx.get_pre_warm_param()))) {
+      LOG_WARN("Failed to open macro block writer", K(ret), K(data_desc_.get_desc()));
     } else if (OB_FAIL(op.init(data_desc_.get_desc(), macro_writer_))) {
       LOG_WARN("fail to init op", K(ret), "row column count", data_desc_.get_desc().get_row_column_count());
     } else {

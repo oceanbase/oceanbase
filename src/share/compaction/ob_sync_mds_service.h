@@ -25,12 +25,10 @@ public:
     const T &arg,
     const transaction::ObTxDataSourceType &type);
 
-  template<typename T>
   static int retry_register_mds(
     observer::ObInnerSQLConnection &conn,
     const uint64_t tenant_id,
     const share::ObLSID &ls_id,
-    const T &arg,
     const transaction::ObTxDataSourceType &type,
     const char *buf,
     const int64_t buf_len);
@@ -59,20 +57,17 @@ int ObSyncMDSService::register_mds(
     COMMON_LOG(WARN, "fail alloc memory", KR(ret), K(buf_len));
   } else if (OB_FAIL(arg.serialize(buf, buf_len, pos))) {
     COMMON_LOG(WARN, "fail to serialize", KR(ret), K(arg));
-  } else if (OB_FAIL(ObSyncMDSService::retry_register_mds<T>(
-      conn, tenant_id, arg.ls_id_, arg,
-      type, buf, buf_len))) {
+  } else if (OB_FAIL(ObSyncMDSService::retry_register_mds(
+      conn, tenant_id, arg.ls_id_, type, buf, buf_len))) {
     COMMON_LOG(WARN, "fail to register mds", KR(ret), K(tenant_id), K(arg));
   }
   return ret;
 }
 
-template<typename T>
-int ObSyncMDSService::retry_register_mds(
+inline int ObSyncMDSService::retry_register_mds(
   observer::ObInnerSQLConnection &conn,
   const uint64_t tenant_id,
   const ObLSID &ls_id,
-  const T &arg,
   const transaction::ObTxDataSourceType &type,
   const char *buf,
   const int64_t buf_len)
@@ -95,7 +90,7 @@ int ObSyncMDSService::retry_register_mds(
           COMMON_LOG(INFO, "fail to register_tx_data, try again", KR(ret), K(tenant_id), K(type));
           ob_usleep(SLEEP_INTERVAL);
         } else {
-          COMMON_LOG(WARN, "fail to register_tx_data", KR(ret), K(type), K(buf), K(buf_len));
+          COMMON_LOG(WARN, "fail to register_tx_data", KR(ret), K(tenant_id), K(ls_id), K(type), K(buf_len));
         }
       }
     } while (need_retry_errno(ret));

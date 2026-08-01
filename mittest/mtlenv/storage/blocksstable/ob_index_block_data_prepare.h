@@ -30,7 +30,6 @@
 #include "storage/test_dml_common.h"
 #include "storage/test_tablet_helper.h"
 #include "storage/ddl/ob_ddl_merge_task.h"
-#include "storage/blocksstable/ob_sstable_private_object_cleaner.h"
 
 namespace oceanbase
 {
@@ -781,8 +780,7 @@ void TestIndexBlockDataPrepare::prepare_data(const int64_t micro_block_size)
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  ASSERT_EQ(OB_SUCCESS, writer.open(desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+  ASSERT_EQ(OB_SUCCESS, writer.open(desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param));
   ASSERT_EQ(OB_SUCCESS, row_generate_.init(table_schema_, &allocator_));
 
   insert_data(writer);
@@ -822,8 +820,7 @@ void TestIndexBlockDataPrepare::prepare_all_cg_data()
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  ASSERT_EQ(OB_SUCCESS, writer.open(desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+  ASSERT_EQ(OB_SUCCESS, writer.open(desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param));
   ASSERT_EQ(OB_SUCCESS, row_generate_.init(table_schema_, &allocator_));
 
   insert_data(writer);
@@ -871,8 +868,7 @@ void TestIndexBlockDataPrepare::prepare_discontinuous_data(const int64_t micro_b
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  ASSERT_EQ(OB_SUCCESS, writer.open(desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+  ASSERT_EQ(OB_SUCCESS, writer.open(desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param));
   ASSERT_EQ(OB_SUCCESS, row_generate_.init(table_schema_, &allocator_));
 
   if (split_seed > 0) {
@@ -961,8 +957,7 @@ void TestIndexBlockDataPrepare::prepare_cg_data()
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+  OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param));
   OK(row_generate_.init(table_schema_, &allocator_));
   insert_cg_data(data_writer);
   OK(data_writer.close());
@@ -1139,8 +1134,7 @@ void TestIndexBlockDataPrepare::prepare_partial_ddl_data()
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  ASSERT_EQ(OB_SUCCESS, writer.open(desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+  ASSERT_EQ(OB_SUCCESS, writer.open(desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param));
   ASSERT_EQ(OB_SUCCESS, row_generate_.init(table_schema_, &allocator_));
   // Make partial row count end at a macro boundary of `sstable_` when possible.
   //
@@ -1287,8 +1281,7 @@ void TestIndexBlockDataPrepare::prepare_partial_cg_data()
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  ASSERT_EQ(OB_SUCCESS, writer.open(desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+  ASSERT_EQ(OB_SUCCESS, writer.open(desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param));
   ASSERT_EQ(OB_SUCCESS, row_generate_.init(table_schema_, &allocator_));
   const int64_t partial_row_cnt = max_partial_row_cnt_;
   insert_partial_data(writer, partial_row_cnt);
@@ -1523,8 +1516,7 @@ void TestIndexBlockDataPrepare::prepare_contrastive_sstable()
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  ASSERT_EQ(OB_SUCCESS, writer.open(desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+  ASSERT_EQ(OB_SUCCESS, writer.open(desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param));
   ASSERT_EQ(OB_SUCCESS, row_generate_.init(table_schema_, &allocator_));
 
   insert_data(writer);

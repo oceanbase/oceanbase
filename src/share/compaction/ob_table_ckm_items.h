@@ -62,7 +62,7 @@ struct ObSortColumnIdArray
 public:
   ObSortColumnIdArray()
     : is_inited_(false),
-      build_map_flag_(false),
+      get_func_(nullptr),
       array_()
   {}
   ~ObSortColumnIdArray() { reset(); }
@@ -73,7 +73,7 @@ public:
     return NULL == sort_array.get_func_ ? -1 : sort_array.get_func_(sort_array, column_id, array_idx);
   }
   void reset();
-  TO_STRING_KV(K_(is_inited), K_(build_map_flag), K_(array), "map_size", map_.size());
+  TO_STRING_KV(K_(is_inited), K_(array), "map_size", map_.size());
 
 private:
   int build_hash_map(const uint64_t tenant_id, const ObIArray<share::schema::ObColDesc> &column_descs);
@@ -86,7 +86,6 @@ private:
 
   static const int64_t BUILD_HASH_MAP_TABLET_CNT_THRESHOLD = 2048;
   bool is_inited_;
-  bool build_map_flag_;
   GET_FUNC get_func_;
   ColIdToIdxArray array_;
   ColIdToIdxMap map_;
@@ -122,7 +121,6 @@ public:
   int build_column_ckm_sum_array(
     const bool is_data_table,
     const share::SCN &compaction_scn,
-    const share::schema::ObTableSchema &table_schema,
     int64_t &row_cnt);
   typedef int (*VALIDATE_CKM_FUNC)(
     const share::ObFreezeInfo &freeze_info,

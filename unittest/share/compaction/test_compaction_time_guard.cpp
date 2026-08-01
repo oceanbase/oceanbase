@@ -9,6 +9,7 @@
 #define protected public
 
 #include "share/compaction/ob_compaction_time_guard.h"
+#include "share/compaction/ob_compaction_info_param.h"
 
 namespace oceanbase
 {
@@ -137,6 +138,48 @@ TEST_F(TestCompactionTimeGuard, time_guard_to_string)
   ASSERT_EQ(ObCompactionScheduleTimeGuard::COMPACTION_EVENT_MAX, schedule_guard.size_);
   schedule_guard.event_times_[ObCompactionScheduleTimeGuard::SCHEDULER_NEXT_ROUND] += 2 * ObCompactionTimeGuard::WARN_THRESHOLD;
   STORAGE_LOG(INFO, "schedule guard is", K(schedule_guard));
+}
+
+TEST_F(TestCompactionTimeGuard, add_derived_time_guard)
+{
+  ObRSCompactionTimeGuard source_guard;
+  ObRSCompactionTimeGuard summary_guard;
+  source_guard.size_ = ObRSCompactionTimeGuard::COMPACTION_EVENT_MAX;
+  source_guard.event_times_[ObRSCompactionTimeGuard::CKM_VERIFICATION] = 100;
+
+  summary_guard.add_time_guard(source_guard);
+
+  ASSERT_EQ(source_guard.size_, summary_guard.size_);
+  ASSERT_EQ(100, summary_guard.event_times_[ObRSCompactionTimeGuard::CKM_VERIFICATION]);
+}
+
+TEST_F(TestCompactionTimeGuard, compaction_info_param_buffer_boundary)
+{
+  char normal_buf[64] = {0};
+  ADD_COMPACTION_INFO_PARAM(normal_buf, sizeof(normal_buf), "value", 1);
+  ASSERT_NE('\0', normal_buf[0]);
+  ASSERT_EQ(';', normal_buf[strlen(normal_buf) - 1]);
+
+  char zero_size_buf = 'x';
+  ADD_COMPACTION_INFO_PARAM(nullptr, 8, "value", 1);
+  ADD_COMPACTION_INFO_PARAM(&zero_size_buf, 0, "value", 1);
+  ASSERT_EQ('x', zero_size_buf);
+
+  char one_byte_buf[1] = {'x'};
+  ADD_COMPACTION_INFO_PARAM(one_byte_buf, sizeof(one_byte_buf), "value", 1);
+  ASSERT_EQ('\0', one_byte_buf[0]);
+
+  struct {
+    char buf_[4];
+    char guard_;
+  } unterminated_buf = {{'a', 'b', 'c', 'd'}, 'x'};
+  ADD_COMPACTION_INFO_PARAM(
+      unterminated_buf.buf_, sizeof(unterminated_buf.buf_), "value", 1);
+  ASSERT_EQ('a', unterminated_buf.buf_[0]);
+  ASSERT_EQ('b', unterminated_buf.buf_[1]);
+  ASSERT_EQ('c', unterminated_buf.buf_[2]);
+  ASSERT_EQ('\0', unterminated_buf.buf_[3]);
+  ASSERT_EQ('x', unterminated_buf.guard_);
 }
 
 } // namespace unittest

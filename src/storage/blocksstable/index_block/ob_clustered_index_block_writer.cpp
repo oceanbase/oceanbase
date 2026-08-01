@@ -94,23 +94,18 @@ int ObClusteredIndexBlockWriter::init(const ObDataStoreDesc &data_store_desc,
     task_allocator_ = &task_allocator;
   }
   // Build macro writer.
-  ObISSTableObjectCleaner *object_cleaner = nullptr;
   if (OB_SUCC(ret)) {
     abort_unless(macro_writer_ == nullptr);
     if (OB_ISNULL(macro_writer_ = OB_NEWx(ObMacroBlockWriter, task_allocator_, true /* use double buffer */))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate and construct macro writer in clustered index block writer", K(ret));
-    } else if (OB_FAIL(ObISSTableObjectCleaner::get_cleaner_from_data_store_desc(leaf_block_desc,
-                                                                                       object_cleaner))) {
-      LOG_WARN("fail to get cleaner from data store desc", K(ret), K(leaf_block_desc), KP(object_cleaner));
     } else if (OB_FAIL(macro_writer_->open(clustered_index_store_desc_,
                                            0 /* parallel_idx */,
                                            macro_seq_param,
                                            pre_warm_param,
-                                           *object_cleaner,
                                            ddl_callback))) {
       LOG_WARN("fail to open macro writer in clustered index block writer",
-               K(ret), K(leaf_block_desc), KPC(object_cleaner));
+               K(ret), K(leaf_block_desc));
     } else if (OB_FAIL(init_pre_agg_util(data_store_desc))) {
       LOG_WARN("fail to init pre agg util", K(ret));
     }

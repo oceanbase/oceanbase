@@ -41,23 +41,17 @@ int ObWriteHelper::open_macro_writer(
   int64_t macro_start_seq = 0;
   ObMacroSeqParam macro_seq_param;
   macro_seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
-  ObISSTableObjectCleaner *object_cleaner = nullptr;
   if (OB_FAIL(ctx.generate_macro_seq_info(parallel_idx, macro_start_seq))) {
     LOG_WARN("failed to generate macro seq info for cur merge task", K(ret), K(parallel_idx), K(ctx));
   } else if (FALSE_IT(macro_seq_param.start_ = macro_start_seq)) {
-  } else if (OB_FAIL(ObISSTableObjectCleaner::get_cleaner_from_data_store_desc(
-                                                        data_store_desc_, object_cleaner))) {
-    LOG_WARN("failed to get cleaner from data store desc", K(ret), K(data_store_desc_), KP(object_cleaner));
   } else if (OB_FAIL(macro_writer_.open(
                  data_store_desc_, parallel_idx, macro_seq_param,
                  ctx.get_pre_warm_param(),
-                 *object_cleaner,
                  nullptr /*callback*/,
-                 nullptr /*validator*/, // TODO: remove ss related parameters
                  nullptr /*device_handle*/,
                  merge_micro_block_read_info))) {
     STORAGE_LOG(WARN, "Failed to open macro writer",
-                K(ret), K(parallel_idx), K(data_store_desc_), KPC(object_cleaner), KP(merge_micro_block_read_info));
+                K(ret), K(parallel_idx), K(data_store_desc_), KP(merge_micro_block_read_info));
   } else if (cg_schema.is_all_column_group()) {
     skip_project_ = true;
   } else if (OB_FAIL(projector_.init(cg_schema, allocator))) {

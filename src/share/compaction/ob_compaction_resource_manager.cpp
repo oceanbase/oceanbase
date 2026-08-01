@@ -362,7 +362,7 @@ int ObCompactionResourceManager::submit_prev_info_(
     LOG_WARN("failed to set prev plan", K(ret), K(current_plan));
   } else if (OB_FAIL(job_cfg.set_prev_group(current_consumer_group))) {
     LOG_WARN("failed to set prev group", K(ret), K(current_consumer_group));
-  } else if (OB_FAIL(ObScheduleDailyMaintenanceWindow::set_job_config(trans, allocator_, tenant_id_, job_cfg))) {
+  } else if (OB_FAIL(ObScheduleDailyMaintenanceWindow::set_job_config(trans, tenant_id_, job_cfg))) {
     LOG_WARN("failed to set job config", K(ret), K(job_cfg));
   }
   return ret;
@@ -383,7 +383,7 @@ int ObCompactionResourceManager::switch_plan_and_consumer_group_(
   } else if (OB_FAIL(switch_consumer_group_(trans, job_cfg, to_window))) {
     LOG_WARN("failed to switch to target consumer group", K(ret), K(job_cfg));
   } else if (!to_window && FALSE_IT(job_cfg.reset_prev_info())) {
-  } else if (OB_FAIL(ObScheduleDailyMaintenanceWindow::set_job_config(trans, allocator_, tenant_id_, job_cfg))) {
+  } else if (OB_FAIL(ObScheduleDailyMaintenanceWindow::set_job_config(trans, tenant_id_, job_cfg))) {
     LOG_WARN("failed to set job config", K(ret), K(job_cfg));
   }
   return ret;

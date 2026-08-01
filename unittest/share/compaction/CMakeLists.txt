@@ -1,3 +1,4 @@
 storage_unittest(test_compaction_time_guard)
 storage_unittest(test_checksum_operator)
 storage_unittest(test_daily_maintenance_window)
+storage_unittest(test_compaction_locality_cache)

@@ -1430,7 +1430,6 @@ int ObTabletLobWriteDataTask::prepare_sstable_macro_writer(const ObTabletLobWrit
   } else {
     ObMacroSeqParam macro_seq_param;
     ObPreWarmerParam pre_warm_param;
-    ObISSTableObjectCleaner *object_cleaner = nullptr;
     if (OB_FAIL(prepare_macro_seq_param(write_sstable_ctx, dest_tablet_index, macro_seq_param))) {
       LOG_WARN("prepare macro seq param failed", K(ret), K(write_sstable_ctx));
     } else if (OB_ISNULL(buf = ctx_->allocator_.alloc(sizeof(ObMacroBlockWriter)))) {
@@ -1438,13 +1437,9 @@ int ObTabletLobWriteDataTask::prepare_sstable_macro_writer(const ObTabletLobWrit
       LOG_WARN("alloc mem failed", K(ret));
     } else if (OB_FAIL(pre_warm_param.init(param_->ls_id_, new_tablet_id))) {
       LOG_WARN("failed to init pre warm param", K(ret), "ls_id", param_->ls_id_, K(new_tablet_id));
-    } else if (OB_FAIL(ObISSTableObjectCleaner::get_cleaner_from_data_store_desc(
-                               data_desc.get_desc(),
-                               object_cleaner))) {
-      LOG_WARN("failed to get cleaner from data store desc", K(ret));
     } else if (FALSE_IT(slice_writer = new (buf) ObMacroBlockWriter(true/*is_need_macro_buffer*/))) {
     } else if (OB_FAIL(slice_writer->open(data_desc.get_desc(), task_id_/*parallel_idx*/,
-        macro_seq_param, pre_warm_param, *object_cleaner))) {
+        macro_seq_param, pre_warm_param))) {
       LOG_WARN("open macro_block_writer failed", K(ret), K(data_desc));
     }
     if (OB_FAIL(ret)) {

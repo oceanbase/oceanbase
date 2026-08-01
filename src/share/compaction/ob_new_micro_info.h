@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #ifndef OB_SHARE_COMPACTION_NEW_MICRO_INFO_H_
 #define OB_SHARE_COMPACTION_NEW_MICRO_INFO_H_
-#include "/usr/include/stdint.h"
+#include <stdint.h>
 #include "lib/utility/ob_print_utils.h"
 namespace oceanbase
 {
@@ -22,10 +22,6 @@ struct ObNewMicroInfo
   {
     meta_micro_size_ = 0;
     data_micro_size_ = 0;
-  }
-  bool is_empty() const
-  {
-    return meta_micro_size_ > 0 && data_micro_size_ >= 0;
   }
   void add(const ObNewMicroInfo &input_info);
   int64_t get_data_micro_size() const { return data_micro_size_; }

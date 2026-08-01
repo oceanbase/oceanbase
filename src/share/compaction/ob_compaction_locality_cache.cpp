@@ -76,6 +76,8 @@ int ObCompactionLocalityCache::inner_refresh_ls_locality()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObStorageLocalityCache is not inited", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(ls_infos_map_.reuse())) {
+    LOG_WARN("fail to clear ls locality cache", KR(ret), K_(tenant_id));
   } else if (nullptr != merge_info_mgr_) {
     if (OB_FAIL(merge_info_mgr_->get_zone_merge_mgr().get_zone(zone_list))) {
       LOG_WARN("failed to get zone list", KR(ret));
@@ -86,24 +88,22 @@ int ObCompactionLocalityCache::inner_refresh_ls_locality()
 
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(zone_list.empty())) {
-    LOG_INFO("zone list is empty, skip get ls locality", K(ret), K_(tenant_id));
+    LOG_WARN("zone list is empty, fail to refresh ls locality", KR(ret), K_(tenant_id));
     MTL(compaction::ObDiagnoseTabletMgr *)->add_diagnose_tablet(UNKNOW_LS_ID, UNKNOW_TABLET_ID, ObDiagnoseTabletType::TYPE_MEDIUM_MERGE);
   } else {
-    // 1. clear ls_infos cached in memory
-    ls_infos_map_.reuse();
-    // 2. load ls_infos from __all_ls_meta_table
     ObArray<ObLSInfo> ls_infos;
     ls_infos.set_attr(ObMemAttr(tenant_id_, "RefLSInfos"));
     if (OB_ISNULL(GCTX.lst_operator_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("lst_operator is null", KR(ret), K_(tenant_id));
-    } else if (OB_TMP_FAIL(GCTX.lst_operator_->get_by_tenant(tenant_id_, false/*inner_table_only*/, ls_infos))) {
-      LOG_WARN("fail to get ls infos", KR(tmp_ret), K_(tenant_id));
+    } else if (OB_FAIL(GCTX.lst_operator_->get_by_tenant(
+        tenant_id_, false/*inner_table_only*/, ls_infos))) {
+      LOG_WARN("fail to get ls infos", KR(ret), K_(tenant_id));
     } else if (OB_UNLIKELY(ls_infos.empty())) {
-      LOG_INFO("ls_infos is empty, skip refresh ls locality", K_(tenant_id));
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls_infos is empty, fail to refresh ls locality", KR(ret), K_(tenant_id));
       MTL(compaction::ObDiagnoseTabletMgr *)->add_diagnose_tablet(UNKNOW_LS_ID, UNKNOW_TABLET_ID, ObDiagnoseTabletType::TYPE_MEDIUM_MERGE);
     } else {
-      // 3. update ls_infos cached in memory
       for (int64_t i = 0; i < ls_infos.count(); ++i) {
         const ObLSInfo &ls_info = ls_infos.at(i);
         if (OB_FAIL(refresh_by_zone(ls_info, zone_list))) {
@@ -149,21 +149,6 @@ int ObCompactionLocalityCache::get_ls_info(const share::ObLSID &ls_id, share::Ob
   }
   return ret;
 }
-
-//struct ObMemberListInfo
-//{
-//  ObMemberListInfo(const uint64_t tenant_id)
-//    : member_list_array_()
-//  {
-//    member_list_array_.set_attr(ObMemAttr(tenant_id, "MemListInfo"));
-//  }
-//  ~ObMemberListInfo() {}
-//  int build(const ObLSReplica &tmp_replica);
-//  bool check_exist(const common::ObAddr &addr);
-//  bool empty() { return member_list_array_.empty(); }
-//  TO_STRING_KV("member_list_cnt", member_list_array_.count(), K(member_list_array_));
-//  ObSEArray<common::ObAddr, 6> member_list_array_; // including member_list & learner_list
-//};
 
 int ObMemberListInfo::build(const ObLSReplica &tmp_replica)
 {
@@ -247,7 +232,11 @@ int ObCompactionLocalityCache::refresh_by_zone(
         LOG_WARN("fail to init ls_info by replica", KR(ret), K(tmp_replica));
       }
     }
-    if (FAILEDx(ls_infos_map_.set_refactored(ls_id, tmp_ls_info, 1/*overwrite*/))) {
+    if (OB_SUCC(ret) && OB_UNLIKELY(0 == tmp_ls_info.replica_count())) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("no valid replica remains after filtering, skip caching ls",
+          KR(ret), K(ls_id), K(zone_list), K(all_replicas));
+    } else if (FAILEDx(ls_infos_map_.set_refactored(ls_id, tmp_ls_info, 1/*overwrite*/))) {
       LOG_WARN("fail to set refactored", KR(ret), K(ls_id), K(tmp_ls_info));
     }
     if (OB_FAIL(ret)) {

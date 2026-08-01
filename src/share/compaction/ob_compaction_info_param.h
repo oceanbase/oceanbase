@@ -12,19 +12,28 @@ namespace compaction
   template <LOG_TYPENAME_TN##n>                                                \
   void ADD_COMPACTION_INFO_PARAM(char *buf, const int64_t buf_size,            \
                                  LOG_PARAMETER_KV##n) {                        \
-    int64_t __pos = strlen(buf);                                               \
-    int ret = OB_SUCCESS;                                                      \
-    SIMPLE_TO_STRING_##n                                                       \
-    if (__pos < 0) {                                                           \
-      __pos = 0;                                                               \
-    } else if (__pos > 0) {                                                    \
-      if (__pos >= buf_size) {                                                 \
-        __pos = buf_size - 1;                                                  \
+    if (OB_NOT_NULL(buf) && buf_size > 0) {                                    \
+      int64_t __pos = 0;                                                       \
+      while (__pos < buf_size && '\0' != buf[__pos]) {                         \
+        ++__pos;                                                               \
+      }                                                                        \
+      if (__pos >= buf_size || 1 == buf_size) {                                \
+        buf[buf_size - 1] = '\0';                                              \
       } else {                                                                 \
-        buf[__pos - 1] = ';';                                                  \
+        int ret = OB_SUCCESS;                                                  \
+        SIMPLE_TO_STRING_##n                                                   \
+        if (__pos < 0) {                                                       \
+          __pos = 0;                                                           \
+        } else if (__pos > 0) {                                                \
+          if (__pos >= buf_size) {                                             \
+            __pos = buf_size - 1;                                              \
+          } else {                                                             \
+            buf[__pos - 1] = ';';                                              \
+          }                                                                    \
+        }                                                                      \
+        buf[__pos] = '\0';                                                     \
       }                                                                        \
     }                                                                          \
-    buf[__pos] = '\0';                                                         \
   }
 
 #define SIMPLE_TO_STRING(n)                                                                       \

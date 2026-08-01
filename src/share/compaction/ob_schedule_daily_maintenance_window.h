@@ -9,7 +9,6 @@
 #include "lib/json/ob_json.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
 #include "sql/engine/ob_exec_context.h"
-#include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
 
 namespace oceanbase
 {
@@ -160,12 +159,10 @@ public:
     const common::ObString &repeat_interval_str);
   static int set_job_config(
     ObMySQLTransaction &trans,
-    ObIAllocator &allocator,
     const uint64_t tenant_id,
     const ObDailyWindowJobConfig &job_cfg);
   static int set_job_config(
     ObMySQLTransaction &trans,
-    ObIAllocator &allocator,
     const uint64_t tenant_id,
     const common::ObString &new_job_config);
   static int check_supported(const uint64_t tenant_id);

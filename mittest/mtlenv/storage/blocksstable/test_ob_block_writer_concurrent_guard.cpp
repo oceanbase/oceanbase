@@ -389,10 +389,9 @@ void TestConcurrencyDefensesStressMacroWriter::run1()
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = start_seq_->macro_data_seq_;
   const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
   try {
     ret = index_writer_->open(data_store_desc_->get_desc(), start_seq_->get_parallel_idx(),
-                         seq_param, pre_warm_param, cleaner);
+                         seq_param, pre_warm_param);
     ASSERT_EQ(OB_SUCCESS, ret);
   }
   catch (const std::runtime_error& e) {
@@ -545,8 +544,7 @@ TEST_F(TestConcurrencyDefenses, test_concurrency_defense_effect)
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param));
 
   static const int64_t MAX_TEST_COLUMN_CNT = TestConcurrencyDefenses::TEST_COLUMN_CNT + 3;
   ObDatumRow multi_row;

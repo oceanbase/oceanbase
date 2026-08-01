@@ -115,12 +115,10 @@ public:
     seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
     seq_param.start_ = 0;
     ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-    ObSSTablePrivateObjectCleaner cleaner;
     OK(data_writer.open(data_desc.get_desc(),
                         0 /*parallel_idx*/,
                         seq_param /*start_seq*/,
-                        pre_warm_param,
-                        cleaner));
+                        pre_warm_param));
     OK(row_generate_.init(table_schema_, &allocator_));
     insert_cg_data(data_writer);
     OK(data_writer.close());

@@ -397,7 +397,7 @@ int ObScheduleDailyMaintenanceWindow::set_thread_count(
   } else if (FALSE_IT(job_cfg.thread_cnt_ = thread_cnt)) {
   } else if (OB_FAIL(job_cfg.encode_to_string(new_job_config))) {
     LOG_WARN("failed to encode job config", K(ret), K(job_cfg));
-  } else if (OB_FAIL(set_job_config(trans, allocator, tenant_id, new_job_config.string()))) {
+  } else if (OB_FAIL(set_job_config(trans, tenant_id, new_job_config.string()))) {
     LOG_WARN("failed to set job config", KR(ret), K(new_job_config));
   }
 
@@ -437,7 +437,6 @@ int ObScheduleDailyMaintenanceWindow::set_repeat_interval(
 
 int ObScheduleDailyMaintenanceWindow::set_job_config(
     ObMySQLTransaction &trans,
-    ObIAllocator &allocator,
     const uint64_t tenant_id,
     const ObDailyWindowJobConfig &job_cfg)
 {
@@ -445,7 +444,7 @@ int ObScheduleDailyMaintenanceWindow::set_job_config(
   ObSqlString new_job_config;
   if (OB_FAIL(job_cfg.encode_to_string(new_job_config))) {
     LOG_WARN("failed to encode job config", K(ret), K(job_cfg));
-  } else if (OB_FAIL(set_job_config(trans, allocator, tenant_id, new_job_config.string()))) {
+  } else if (OB_FAIL(set_job_config(trans, tenant_id, new_job_config.string()))) {
     LOG_WARN("failed to set job config", K(ret), K(new_job_config));
   }
   return ret;
@@ -453,7 +452,6 @@ int ObScheduleDailyMaintenanceWindow::set_job_config(
 
 int ObScheduleDailyMaintenanceWindow::set_job_config(
     ObMySQLTransaction &trans,
-    ObIAllocator &allocator,
     const uint64_t tenant_id,
     const common::ObString &new_job_config)
 {
@@ -640,7 +638,6 @@ int ObScheduleDailyMaintenanceWindow::create_daily_job_(
   int64_t job_id = OB_INVALID_ID;
   int64_t next_start_usec = 0;
   int32_t offset_sec = 0;
-  int64_t current_time = ObTimeUtility::current_time();
 
   if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;

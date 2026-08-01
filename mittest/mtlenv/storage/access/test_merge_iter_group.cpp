@@ -328,8 +328,7 @@ public:
       seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
       seq_param.start_    = 0;
       ObPreWarmerParam pre_warm(MEM_PRE_WARM);
-      ObSSTablePrivateObjectCleaner cleaner;
-      OK(cg_writer.open(whole_desc.get_desc(), 0, seq_param, pre_warm, cleaner));
+      OK(cg_writer.open(whole_desc.get_desc(), 0, seq_param, pre_warm));
 
       ObCOMergeProjector projector;
       ObCOMergeProjector *proj_ptr = nullptr;

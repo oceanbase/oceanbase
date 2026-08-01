@@ -33,7 +33,6 @@
 #include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/compaction/ob_compaction_memory_context.h"
 #include "storage/ob_storage_schema_util.h"
-#include "storage/blocksstable/ob_sstable_private_object_cleaner.h"
 #include "storage/compaction/ob_tablet_merge_ctx.h"
 #include "storage/blocksstable/ob_micro_block_writer.h"
 
@@ -274,7 +273,6 @@ public:
   ObITable::TableKey table_key_;
   ObWholeDataStoreDesc data_desc_;
   ObWholeDataStoreDesc index_desc_;
-  ObSSTablePrivateObjectCleaner cleaner_;
   ObMacroBlockWriter macro_writer_;
   ObRowStoreType row_store_type_;
   ObSSTableIndexBuilder *root_index_builder_;
@@ -507,7 +505,7 @@ void ObMultiVersionSSTableTest::reset_writer(
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = start_seq.macro_data_seq_;
   ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ASSERT_EQ(OB_SUCCESS, macro_writer_.open(data_desc_.get_desc(), 0/*parallel_idx*/, seq_param, pre_warm_param, cleaner_));
+  ASSERT_EQ(OB_SUCCESS, macro_writer_.open(data_desc_.get_desc(), 0/*parallel_idx*/, seq_param, pre_warm_param));
   macro_writer_.micro_block_adaptive_splitter_.need_reduce_cross_mb_multi_version_rows_ = false;
 }
 

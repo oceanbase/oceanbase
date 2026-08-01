@@ -6,7 +6,7 @@
 #ifndef OCEANBASE_STORAGE_BLOCKSSTABLE_OB_MACRO_SEQ_GENERATOR_H
 #define OCEANBASE_STORAGE_BLOCKSSTABLE_OB_MACRO_SEQ_GENERATOR_H
 
-#include "storage/ddl/ob_ddl_seq_generator.h"
+#include "lib/utility/ob_print_utils.h"
 
 namespace oceanbase
 {
@@ -20,18 +20,16 @@ public:
   enum SeqType
   {
     SEQ_TYPE_INC = 0,
-    SEQ_TYPE_SKIP = 1,
+    SEQ_TYPE_SKIP = 1, // for SS ddl, useless
     SEQ_TYPE_MAX,
   };
-  ObMacroSeqParam() : seq_type_(SEQ_TYPE_MAX), start_(0), interval_(0), step_(0) {}
+  ObMacroSeqParam() : seq_type_(SEQ_TYPE_MAX), start_(0) {}
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K_(seq_type), K_(start), K_(interval), K_(step));
+  TO_STRING_KV(K_(seq_type), K_(start));
 
   SeqType seq_type_;
   int64_t start_;
-  int64_t interval_;
-  int64_t step_;
 };
 
 class ObMacroSeqGenerator
@@ -63,21 +61,6 @@ private:
   int64_t start_;
   int64_t current_;
   int64_t seq_threshold_;
-};
-
-class ObMacroSkipSeqGenerator: public ObMacroSeqGenerator
-{
-public:
-  ObMacroSkipSeqGenerator() : ddl_seq_generator_() {}
-  virtual ~ObMacroSkipSeqGenerator() {}
-  virtual void reset() override;
-  virtual int init(const ObMacroSeqParam &seq_param) override;
-  virtual int get_next(int64_t &seq_val) override;
-  virtual int preview_next(const int64_t current_val, int64_t &next_val) const override;
-  virtual int64_t get_current() override { return ddl_seq_generator_.get_current(); }
-  TO_STRING_KV(K_(ddl_seq_generator));
-private:
-  storage::ObDDLSeqGenerator ddl_seq_generator_;
 };
 
 }// namespace blocksstable

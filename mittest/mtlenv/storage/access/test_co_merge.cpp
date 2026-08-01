@@ -427,8 +427,7 @@ void TestCOMerge::prepare_co_sstable(
       seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
       seq_param.start_ = 0;
       ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-      ObSSTablePrivateObjectCleaner cleaner;
-      OK(macro_writer.open(data_store_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+      OK(macro_writer.open(data_store_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param));
       prepare_data(micro_row_cnt[cg_idx], macro_row_cnt[cg_idx],
               table_schema.get_column_count(), data_iter, macro_writer, row_project);
       OK(macro_writer.close());

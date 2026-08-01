@@ -8,7 +8,6 @@
 #include "storage/ddl/ob_cg_micro_block_write_op.h"
 #include "storage/ddl/ob_ddl_independent_dag.h"
 #include "storage/ddl/ob_ddl_tablet_context.h"
-#include "storage/blocksstable/ob_sstable_private_object_cleaner.h"
 #include "storage/blocksstable/index_block/ob_macro_meta_temp_store.h"
 #include "storage/ddl/ob_direct_load_struct.h"
 
@@ -39,13 +38,9 @@ int ObCGMicroBlockWriter::open(const ObWriteMacroParam &param,
       LOG_WARN("fail to initialize cg block file", K(ret), KPC(cg_block_file));
     } else if (OB_FAIL(writer_args_.init(param, ObWriterType::CG_MICRO_BLOCK_WRITER_TYPE))) {
       LOG_WARN("fail to initialize writer args", K(ret), K(param));
-    } else if (OB_UNLIKELY(nullptr == writer_args_.object_cleaner_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("object cleaner is null", K(ret));
     } else if (OB_FAIL(cg_micro_block_writer_.open(writer_args_.data_desc_.get_desc(),
                                                    writer_args_.parallel_idx_,
                                                    writer_args_.macro_seq_param_,
-                                                   *writer_args_.object_cleaner_,
                                                    &cg_block_file_writer_))) {
       LOG_WARN("fail to open macro block writer", K(ret), K(writer_args_), K(cg_block_file_writer_));
     } else {

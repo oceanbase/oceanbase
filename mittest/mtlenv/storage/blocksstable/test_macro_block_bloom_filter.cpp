@@ -565,8 +565,7 @@ TEST_F(TestMacroBlockBloomFilter, test_disable_get_bf_size)
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+  OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param));
 
   ASSERT_EQ(data_writer.data_store_desc_->enable_macro_block_bloom_filter(), false);
   ASSERT_EQ(data_writer.macro_blocks_[0].get_macro_block_bloom_filter_serialize_size(), 0);
