@@ -1094,7 +1094,9 @@ int ObPLDependencyCheck::check_dup_pl_cache_obj(const ObPLCacheBasicCtx &pc_ctx,
   is_dup = false;
   bool is_same = true;
   bool is_old_version = false;
-  if (schema_array.count() != 0) {
+  if (schema_array.count() == 0) {
+    is_dup = stored_schema_array.count() == 0;
+  } else {
     if (OB_FAIL(match_dep_schema(pc_ctx, stored_schema_array, schema_array, is_same))) {
       LOG_WARN("failed to match_dep_schema", K(ret));
     } else if (!is_same) {
