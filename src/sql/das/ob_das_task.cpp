@@ -194,7 +194,10 @@ OB_DEF_DESERIALIZE(ObDASRemoteInfo)
   }
   OB_UNIS_DECODE(sql_id_len);
   if (OB_FAIL(ret)) {
-  } else if (OB_UNLIKELY(pos + sql_id_len > data_len)) {
+  } else if (OB_UNLIKELY(sql_id_len != static_cast<int64_t>(sizeof(sql_id_)))) {
+    ret = OB_DESERIALIZE_ERROR;
+    LOG_WARN("invalid serialized sql id length", KR(ret), K(sql_id_len), K(sizeof(sql_id_)));
+  } else if (OB_UNLIKELY(data_len < 0 || pos < 0 || pos > data_len || sql_id_len > data_len - pos)) {
     ret = OB_BUF_NOT_ENOUGH;
     LOG_WARN("deserialization of ObDASRemoteInfo has not enough buffer", KR(ret), K(pos), K(data_len), K(sql_id_len));
   } else {
