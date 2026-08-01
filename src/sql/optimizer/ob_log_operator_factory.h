@@ -147,7 +147,8 @@ enum DistAlgo
   DIST_MAX_JOIN_METHOD = (1UL << 22), // represents max join method
   // only for set operator
   DIST_SET_RANDOM = (1UL << 23),
-  DIST_SET_PARTITION_WISE = (1UL << 24) // non-strict set pw with phy_table_location_info_
+  DIST_SET_PARTITION_WISE = (1UL << 24), // non-strict set pw with phy_table_location_info_
+  DIST_DML_PARTITION_WISE = (1UL << 25)
 };
 
 inline const ObString &ob_dist_algo_str(DistAlgo algo)
@@ -179,7 +180,8 @@ inline const ObString &ob_dist_algo_str(DistAlgo algo)
     "RANDOM BROADCAST",
     "UNKNOWN ALGO",
     "SET RANDOM",
-    "SET PARTITION WISE"
+    "SET PARTITION WISE",
+    "DML PARTITION WISE"
   };
   int64_t idx = 0;
   int64_t value = algo;

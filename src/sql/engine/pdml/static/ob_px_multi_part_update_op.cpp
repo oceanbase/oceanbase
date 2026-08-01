@@ -16,7 +16,8 @@ OB_SERIALIZE_MEMBER((ObPxMultiPartUpdateOpInput, ObPxMultiPartModifyOpInput));
 
 OB_SERIALIZE_MEMBER((ObPxMultiPartUpdateSpec, ObTableModifySpec),
                     row_desc_,
-                    upd_ctdef_);
+                    upd_ctdef_,
+                    partition_id_expr_);
 
 //////////////////////ObPxMultiPartInsertOp///////////////////
 int ObPxMultiPartUpdateOp::inner_open()

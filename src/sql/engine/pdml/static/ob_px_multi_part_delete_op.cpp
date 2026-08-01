@@ -20,7 +20,8 @@ OB_SERIALIZE_MEMBER((ObPxMultiPartDeleteOpInput, ObPxMultiPartModifyOpInput));
 OB_SERIALIZE_MEMBER((ObPxMultiPartDeleteSpec, ObTableModifySpec),
                     row_desc_,
                     del_ctdef_,
-                    with_barrier_);
+                    with_barrier_,
+                    partition_id_expr_);
 
 //////////////////////ObPxMultiPartDeleteSpec///////////////////
 int ObPxMultiPartDeleteSpec::register_to_datahub(ObExecContext &ctx) const

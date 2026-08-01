@@ -50,7 +50,9 @@ public:
   ObPxMultiPartInsertSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type)
     : ObTableModifySpec(alloc, type),
     row_desc_(),
-    ins_ctdef_(alloc)
+    ins_ctdef_(alloc),
+    partition_id_expr_(nullptr),
+    hidden_pk_expr_(nullptr)
   {
   }
   //This interface is only allowed to be used in a single-table DML operator,
@@ -64,6 +66,8 @@ public:
 public:
   ObDMLOpRowDesc row_desc_;  // 记录partition id column所在row的第几个cell
   ObInsCtDef ins_ctdef_;
+  ObExpr *partition_id_expr_;
+  ObExpr *hidden_pk_expr_;
   DISALLOW_COPY_AND_ASSIGN(ObPxMultiPartInsertSpec);
 };
 

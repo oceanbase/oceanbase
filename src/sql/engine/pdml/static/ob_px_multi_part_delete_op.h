@@ -41,7 +41,8 @@ public:
     : ObTableModifySpec(alloc, type),
     row_desc_(),
     del_ctdef_(alloc),
-    with_barrier_(false)
+    with_barrier_(false),
+    partition_id_expr_(nullptr)
   {
   }
   //This interface is only allowed to be used in a single-table DML operator,
@@ -64,6 +65,7 @@ public:
   //
   // INSERT需要等待DELETE算子全部执行完毕，才能够output数据
   bool with_barrier_;
+  ObExpr *partition_id_expr_;
   DISALLOW_COPY_AND_ASSIGN(ObPxMultiPartDeleteSpec);
 };
 

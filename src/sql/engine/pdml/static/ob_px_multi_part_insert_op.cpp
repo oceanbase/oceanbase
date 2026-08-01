@@ -17,7 +17,9 @@ OB_SERIALIZE_MEMBER((ObPxMultiPartInsertOpInput, ObPxMultiPartModifyOpInput));
 
 OB_SERIALIZE_MEMBER((ObPxMultiPartInsertSpec, ObTableModifySpec),
                     row_desc_,
-                    ins_ctdef_);
+                    ins_ctdef_,
+                    partition_id_expr_,
+                    hidden_pk_expr_);
 
 
 //////////////////////ObPxMultiPartInsertOp///////////////////

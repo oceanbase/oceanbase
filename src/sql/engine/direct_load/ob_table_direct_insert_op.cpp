@@ -28,7 +28,8 @@ OB_SERIALIZE_MEMBER((ObTableDirectInsertOpInput, ObPxMultiPartModifyOpInput));
 
 OB_SERIALIZE_MEMBER((ObTableDirectInsertSpec, ObTableModifySpec),
                     row_desc_,
-                    ins_ctdef_);
+                    ins_ctdef_,
+                    partition_id_expr_);
 
 //////////////////////ObTableDirectInsertOp///////////////////
 ObTableDirectInsertOp::ObTableDirectInsertOp(
