@@ -2036,6 +2036,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
       stmt::StmtType stmt_type = static_cast<stmt::StmtType>(type);
       ObString sqlstr(sql);
       lib::MemoryContext mem_context = nullptr;
+      bool is_ddl_stmt = ObStmt::is_ddl_stmt(stmt_type, true);
 
       if (is_forall && !session->is_enable_batched_multi_statement()) {
         /* forall need rollback to for loop */
@@ -2075,7 +2076,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
               *(ctx->exec_ctx_), *(session), *spi_result, audit_record, ret, (sql != NULL ? sql : ps_sql), retry_ctrl, trace_id_guard, static_cast<stmt::StmtType>(type));
             OZ (spi_result->init_result_set(*session));
 
-            ObSPIRetryCtrlGuard retry_guard(retry_ctrl, *spi_result, *session, ctx, ret, is_retry);
+            ObSPIRetryCtrlGuard retry_guard(retry_ctrl, *spi_result, *session, ctx, ret, is_retry, !is_ddl_stmt);
 
             OX (session->get_pl_sqlcode_info()->set_sqlcode(OB_SUCCESS));
 
@@ -2143,21 +2144,21 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
 
 
       if (OB_SUCC(ret)
-          && (ObStmt::is_ddl_stmt(stmt_type, true)
+          && (is_ddl_stmt
               || ObStmt::is_tcl_stmt(stmt_type)
               || (lib::is_mysql_mode() && session->get_local_autocommit()))) {
         OX (session->set_pl_can_retry(false));
       }
-      if (OB_SUCC(ret) && ObStmt::is_ddl_stmt(stmt_type, true)) {
+      if (OB_SUCC(ret) && is_ddl_stmt) {
         CK (OB_NOT_NULL(session->get_pl_context()));
         OX (session->get_pl_context()->set_disable_pl_exec_cache(true));
       }
 
       if (OB_SUCC(ret) && 0 == param_count) {
-        if (ObStmt::is_ddl_stmt(stmt_type, true)
+        if (is_ddl_stmt
             || ObStmt::is_tcl_stmt(stmt_type)
             || ObStmt::is_savepoint_stmt(stmt_type)) {
-          if (ObStmt::is_ddl_stmt(stmt_type, true)) {
+          if (is_ddl_stmt) {
             OZ (force_refresh_schema(session->get_effective_tenant_id()), sql);
           }
           recreate_implicit_savapoint_if_need(ctx, ret);
