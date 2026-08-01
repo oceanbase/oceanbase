@@ -114,6 +114,7 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
     memtable::ObMvccAccessCtx &ctx = context_->store_ctx_->mvcc_acc_ctx_;
     const transaction::ObTransID &read_trans_id = ctx.get_tx_id();
     const bool is_major_sstable = sstable_->is_major_type_sstable() || sstable_->is_ddl_type_sstable() || sstable_->is_ddl_merge_sstable();
+    const bool is_inc_major_sstable = sstable_->is_inc_major_related_sstable();
     int64_t trans_version = INT64_MAX;
     int64_t current;
     row = &row_;
@@ -175,14 +176,20 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
         LOG_WARN("failed to check mds filter", K(ret), K(current), K(trans_version), K(is_major_sstable));
       } else if (is_filtered) {
       } else {
-        lock_state->trans_version_ = sstable_->is_inc_major_related_sstable()
+        lock_state->trans_version_ = is_inc_major_sstable
                                        ? inc_major_trans_version_
                                        : sstable_->get_end_scn();
         lock_state->lock_dml_flag_ = blocksstable::ObDmlFlag::DF_INSERT;
       }
       if (OB_SUCC(ret) && !is_filtered) {
         bool need_stop = false;
-        if (is_major_sstable) {
+        if (is_inc_major_sstable) {
+          const ObDmlRowFlag dml_row_flag(ObDmlFlag::DF_INSERT);
+          const ObMultiVersionRowFlag mvcc_row_flag(ObMultiVersionRowFlag::MAJOR_FLAG);
+          if (OB_FAIL(check_row(dml_row_flag, mvcc_row_flag, read_trans_id, *lock_state, need_stop))) {
+            LOG_WARN("Failed to check row", K(ret), KPC_(range), K(read_trans_id), K(sql_sequence), KPC(lock_state));
+          }
+        } else if (is_major_sstable) {
           check_row_in_major_sstable(need_stop);
         } else if (OB_FAIL(check_row(multi_version_info.dml_row_flag_, multi_version_info.mvcc_row_flag_, read_trans_id, *lock_state, need_stop))) {
           LOG_WARN("Failed to check row", K(ret), K(ret), KPC_(range), K(read_trans_id), K(multi_version_info),

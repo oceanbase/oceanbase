@@ -15,6 +15,7 @@
 #include "storage/test_schema_prepare.h"
 #include "storage/test_tablet_helper.h"
 #include "storage/high_availability/ob_storage_ha_tablet_builder.h"
+#include "storage/tx_table/ob_tx_table.h"
 
 namespace oceanbase
 {
@@ -72,6 +73,10 @@ public:
     const int64_t max_merged_trans_version,
     const int64_t upper_trans_version,
     ObTableHandleV2 &table_handle);
+  int mock_tx_data(
+    const int64_t tx_id,
+    const int64_t commit_version,
+    const int32_t state);
   int mock_column_sstable(
     common::ObArenaAllocator &allocator,
     const ObITable::TableType &type,
@@ -320,6 +325,48 @@ int TestCompactionPolicy::mock_sstable(
     sstable->meta_cache_.upper_trans_version_ = upper_trans_version;
     sstable->meta_cache_.nested_size_ = 0;
     sstable->meta_cache_.nested_offset_ = 0;
+  }
+  return ret;
+}
+
+int TestCompactionPolicy::mock_tx_data(
+  const int64_t tx_id,
+  const int64_t commit_version,
+  const int32_t state)
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  ObLSService *ls_service = MTL(ObLSService *);
+  ObTxTableGuard tx_table_guard;
+  ObTxTable *tx_table = nullptr;
+  ObTxDataGuard tx_data_guard;
+  ObTxData *tx_data = nullptr;
+  if (OB_ISNULL(ls_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls service is nullptr", KR(ret));
+  } else if (OB_FAIL(ls_service->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    LOG_WARN("fail to get ls", KR(ret), K_(ls_id));
+  } else if (OB_FAIL(ls_handle.get_ls()->get_tx_table_guard(tx_table_guard))) {
+    LOG_WARN("fail to get tx table guard", KR(ret), K_(ls_id));
+  } else if (OB_ISNULL(tx_table = tx_table_guard.get_tx_table())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tx table is nullptr", KR(ret), K_(ls_id));
+  } else if (OB_FAIL(tx_table->alloc_tx_data(tx_data_guard))) {
+    LOG_WARN("fail to allocate tx data", KR(ret), K_(ls_id));
+  } else if (OB_ISNULL(tx_data = tx_data_guard.tx_data())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tx data is nullptr", KR(ret), K_(ls_id));
+  } else if (OB_FAIL(tx_data->commit_version_.convert_for_tx(commit_version))) {
+    LOG_WARN("fail to convert commit version", KR(ret), K(commit_version));
+  } else if (OB_FAIL(tx_data->start_scn_.convert_for_tx(commit_version - 1))) {
+    LOG_WARN("fail to convert start scn", KR(ret), K(commit_version));
+  } else {
+    tx_data->tx_id_ = transaction::ObTransID(tx_id);
+    tx_data->end_scn_ = tx_data->commit_version_;
+    tx_data->state_ = state;
+    if (OB_SUCC(ret) && OB_FAIL(tx_table->insert(tx_data))) {
+      LOG_WARN("fail to insert tx data", KR(ret), KPC(tx_data));
+    }
   }
   return ret;
 }
@@ -868,6 +915,126 @@ TEST_F(TestCompactionPolicy, basic_create_sstable)
   ObTableHandleV2 minor_table_handle;
   ret = TestCompactionPolicy::mock_sstable(allocator_, ObITable::MINOR_SSTABLE, 120, 180, 180, INT64_MAX, minor_table_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
+}
+
+TEST_F(TestCompactionPolicy, check_inc_major_can_access_for_update)
+{
+  const int64_t commit_version_value = 250;
+  const int64_t snapshot_version = 200;
+  ObStoreCtx store_ctx;
+  SCN snapshot_scn;
+  ASSERT_EQ(OB_SUCCESS, snapshot_scn.convert_for_tx(snapshot_version));
+  ASSERT_EQ(OB_SUCCESS,
+            store_ctx.init_for_read(
+                ls_id_, tablet_id_, INT64_MAX, -1 /*lock_timeout_us*/, snapshot_scn));
+  ObVersionRange version_range;
+  version_range.base_version_ = 0;
+  version_range.multi_version_start_ = 0;
+  version_range.snapshot_version_ = snapshot_version;
+  ObQueryFlag query_flag;
+  ObTableAccessContext context;
+  ASSERT_EQ(OB_SUCCESS,
+            context.init(query_flag, store_ctx, allocator_, allocator_, version_range));
+  context.ls_id_ = ls_id_;
+
+  ObTableHandleV2 inc_major_table_handle;
+  ASSERT_EQ(OB_SUCCESS,
+            mock_sstable(allocator_,
+                         ObITable::INC_MAJOR_SSTABLE,
+                         100,
+                         snapshot_version,
+                         commit_version_value,
+                         commit_version_value,
+                         inc_major_table_handle));
+  ObSSTable *inc_major_sstable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, inc_major_table_handle.get_sstable(inc_major_sstable));
+  ASSERT_NE(nullptr, inc_major_sstable);
+
+  bool can_access = false;
+  SCN commit_version = SCN::max_scn();
+  ASSERT_EQ(OB_SUCCESS,
+            ObIncMajorTxHelper::check_can_access_for_update(
+                context, *inc_major_sstable, can_access, commit_version));
+  EXPECT_TRUE(can_access);
+  EXPECT_EQ(commit_version_value, commit_version.get_val_for_tx());
+
+  const int64_t abort_tx_id = 666;
+  const int64_t sql_seq = 111;
+  ObTableHandleV2 abort_table_handle;
+  ASSERT_EQ(OB_SUCCESS,
+            mock_sstable(allocator_,
+                         ObITable::INC_MAJOR_SSTABLE,
+                         100,
+                         snapshot_version,
+                         snapshot_version,
+                         snapshot_version,
+                         abort_table_handle));
+  ObSSTable *abort_sstable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, abort_table_handle.get_sstable(abort_sstable));
+  ASSERT_NE(nullptr, abort_sstable);
+  abort_sstable->meta_->basic_meta_.upper_trans_version_ = INT64_MAX;
+  abort_sstable->meta_cache_.upper_trans_version_ = INT64_MAX;
+  ASSERT_EQ(abort_tx_id, abort_sstable->meta_->uncommit_tx_info_.tx_infos_[0].tx_id_);
+  ASSERT_EQ(sql_seq, abort_sstable->meta_->uncommit_tx_info_.tx_infos_[0].sql_seq_);
+  ASSERT_EQ(OB_SUCCESS,
+            mock_tx_data(abort_tx_id, snapshot_version, transaction::ObTxData::ABORT));
+
+  can_access = true;
+  commit_version = SCN::max_scn();
+  ASSERT_EQ(OB_SUCCESS,
+            ObIncMajorTxHelper::check_can_access_for_update(
+                context, *abort_sstable, can_access, commit_version));
+  EXPECT_FALSE(can_access);
+  EXPECT_TRUE(commit_version.is_min());
+
+  const int64_t commit_tx_id = 667;
+  const int64_t future_commit_version = snapshot_version + 100;
+  ObTableHandleV2 future_commit_table_handle;
+  ASSERT_EQ(OB_SUCCESS,
+            mock_sstable(allocator_,
+                         ObITable::INC_MAJOR_SSTABLE,
+                         100,
+                         snapshot_version,
+                         snapshot_version,
+                         snapshot_version,
+                         future_commit_table_handle));
+  ObSSTable *future_commit_sstable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, future_commit_table_handle.get_sstable(future_commit_sstable));
+  ASSERT_NE(nullptr, future_commit_sstable);
+  future_commit_sstable->meta_->basic_meta_.upper_trans_version_ = INT64_MAX;
+  future_commit_sstable->meta_cache_.upper_trans_version_ = INT64_MAX;
+  future_commit_sstable->meta_->uncommit_tx_info_.tx_infos_[0].tx_id_ = commit_tx_id;
+  ASSERT_EQ(OB_SUCCESS,
+            mock_tx_data(commit_tx_id, future_commit_version, transaction::ObTxData::COMMIT));
+
+  can_access = false;
+  commit_version.set_min();
+  ASSERT_EQ(OB_SUCCESS,
+            ObIncMajorTxHelper::check_can_access_for_update(
+                context, *future_commit_sstable, can_access, commit_version));
+  EXPECT_TRUE(can_access);
+  EXPECT_EQ(future_commit_version, commit_version.get_val_for_tx());
+
+  ObTableHandleV2 major_table_handle;
+  ASSERT_EQ(OB_SUCCESS,
+            mock_sstable(allocator_,
+                         ObITable::MAJOR_SSTABLE,
+                         0,
+                         200,
+                         commit_version_value,
+                         commit_version_value,
+                         major_table_handle));
+  ObSSTable *major_sstable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, major_table_handle.get_sstable(major_sstable));
+  ASSERT_NE(nullptr, major_sstable);
+
+  can_access = true;
+  commit_version = SCN::max_scn();
+  EXPECT_EQ(OB_INVALID_ARGUMENT,
+            ObIncMajorTxHelper::check_can_access_for_update(
+                context, *major_sstable, can_access, commit_version));
+  EXPECT_FALSE(can_access);
+  EXPECT_TRUE(commit_version.is_min());
 }
 
 TEST_F(TestCompactionPolicy, basic_create_tablet)

@@ -941,7 +941,7 @@ int ObSSTable::check_rows_locked(
   } else if (OB_UNLIKELY(!is_valid())) {
     ret = OB_NOT_INIT;
     LOG_WARN("The SSTable has not been inited", K(ret), K_(valid_for_reading), KP_(meta));
-  } else if (no_data_to_read() || (!check_exist && !is_multi_version_minor_sstable())) {
+  } else if (no_data_to_read() || (!check_exist && !is_multi_version_minor_sstable() && !is_inc_major_related_sstable())) {
   } else if (is_inc_major_related_sstable()
              && OB_FAIL(compaction::ObIncMajorTxHelper::check_can_access_for_update(context, *this, can_access, inc_major_trans_version))) {
     LOG_WARN("fail to check can access for update", K(ret), K(context), K(*this));
@@ -1002,7 +1002,7 @@ int ObSSTable::check_row_locked(
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_NOT_INIT;
     LOG_WARN("The SSTable has not been inited", K(ret), K_(key), K_(valid_for_reading), KPC_(meta));
-  } else if (no_data_to_read() || (!check_exist && !is_multi_version_minor_sstable())) {
+  } else if (no_data_to_read() || (!check_exist && !is_multi_version_minor_sstable() && !is_inc_major_related_sstable())) {
   } else if (is_inc_major_related_sstable()
              && OB_FAIL(compaction::ObIncMajorTxHelper::check_can_access_for_update(context, *this, can_access, inc_major_trans_version))) {
     LOG_WARN("fail to check can access for update", K(ret), K(context), K(*this));

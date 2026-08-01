@@ -2801,6 +2801,20 @@ int ObIncMajorTxHelper::check_can_access(
   return ret;
 }
 
+// Called before row lock check when DML accesses an inc major sstable:
+// - Filter out aborted inc major transactions (can_access = false);
+// - Output the inc major commit_version for downstream conflict detection.
+//
+// Based on commit_version vs. the current transaction read snapshot, subsequent row
+// lock checks may report three conflict types:
+// 1. Write-write conflict: row locked by another transaction -> OB_TRY_LOCK_ROW_CONFLICT.
+//    No concurrent DML while inc major holds the table lock; by the time DML reaches here,
+//    the inc major transaction has finished, so only aborted transactions need filtering.
+// 2. Transaction set violation (TSV): after inc major commits and releases the table lock,
+//    a stale-snapshot transaction may still write; if read snapshot < commit_version ->
+//    OB_TRANSACTION_SET_VIOLATION.
+// 3. Primary key conflict: commit_version <= read snapshot -> OB_ERR_PRIMARY_KEY_DUPLICATE;
+//                          commit_version > read snapshot -> OB_TRANSACTION_SET_VIOLATION.
 int ObIncMajorTxHelper::check_can_access_for_update(
   ObTableAccessContext &context,
   const ObSSTable &sstable,
@@ -2808,23 +2822,36 @@ int ObIncMajorTxHelper::check_can_access_for_update(
   SCN &commit_version)
 {
   int ret = OB_SUCCESS;
-  can_access = true;
-  return ret;
+  can_access = false;
+  commit_version.set_min();
   if (OB_UNLIKELY(!sstable.is_inc_major_related_sstable())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(sstable));
-  } else {
-    if (INT64_MAX != sstable.get_upper_trans_version()) {
-      can_access = true;
+  } else if (INT64_MAX != sstable.get_upper_trans_version()) {
+    if (OB_FAIL(commit_version.convert_for_tx(sstable.get_upper_trans_version()))) {
+      LOG_WARN("fail to convert for tx", KR(ret), K(sstable));
     } else {
-      ObTransID trans_id;
-      ObTxSEQ seq_no;
-      if (OB_FAIL(get_trans_id_and_seq_no(sstable, trans_id, seq_no))) {
-        LOG_WARN("fail to get trans id and seq no", KR(ret), K(sstable));
-      } else if (OB_FAIL(check_can_access(context, trans_id, seq_no, can_access, commit_version))) {
-        LOG_WARN("fail to check can access for update", KR(ret));
-      } else if (!can_access && commit_version.is_valid_and_not_min()) {
-        can_access = true;
+      can_access = true;
+    }
+  } else {
+    ObMvccAccessCtx &mvcc_acc_ctx = context.store_ctx_->mvcc_acc_ctx_;
+    ObTxTableGuards &tx_table_guards = mvcc_acc_ctx.get_tx_table_guards();
+    ObTransID trans_id;
+    ObTxSEQ seq_no;
+    int64_t trans_state = ObTxData::UNKOWN;
+    if (OB_FAIL(get_trans_id_and_seq_no(sstable, trans_id, seq_no))) {
+      LOG_WARN("fail to get trans id and seq no", KR(ret), K(sstable));
+    } else if (OB_FAIL(tx_table_guards.get_tx_state_with_scn(trans_id, SCN::max_scn(), trans_state, commit_version))) {
+      LOG_WARN("fail to get tx state", KR(ret), K(trans_id));
+    } else if (ObTxData::RUNNING == trans_state) {
+      // Inc major holds the table lock while running, so DML should not reach here normally.
+      // If the tx is still RUNNING, allow access with a conservative commit_version so
+      // downstream reports TSV; this is safer than skipping the lock check.
+      can_access = true;
+      commit_version.set_max();
+    } else if (ObTxData::ABORT != trans_state) {
+      if (OB_FAIL(tx_table_guards.check_sql_sequence_can_read(trans_id, seq_no, SCN::max_scn(), can_access))) {
+        LOG_WARN("fail to check sql sequence can read", KR(ret), K(trans_id), K(seq_no));
       }
     }
   }
