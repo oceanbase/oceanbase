@@ -48,7 +48,9 @@ public:
       group_distinct_exprs_(alloc),
       group_sort_collations_(alloc),
       limit_expr_(nullptr),
-      hash_val_expr_(nullptr)
+      hash_val_expr_(nullptr),
+      ordered_gby_phase_aggr_ranges_(alloc),
+      ordered_gby_phase_aggregate_(false)
     {
     }
 
@@ -83,6 +85,9 @@ public:
   ObFixedArray<ObSortCollations, common::ObIAllocator> group_sort_collations_;
   ObExpr *limit_expr_; // limit pushdown from parent Limit operator (limit + offset combined)
   ObExpr *hash_val_expr_;
+  // Only for serialization compatibility with 5.0.2.
+  common::ObFixedArray<int64_t, common::ObIAllocator> ordered_gby_phase_aggr_ranges_;
+  bool ordered_gby_phase_aggregate_;
 };
 
 // 输入数据已经按照groupby列排序

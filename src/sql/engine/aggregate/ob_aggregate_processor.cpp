@@ -102,6 +102,8 @@ OB_DEF_SERIALIZE(ObAggrInfo)
   OB_UNIS_ENCODE(enable_fast_bypass_);
   OB_UNIS_ENCODE(is_statistic_agg_);
   OB_UNIS_ENCODE(has_ignore_null_);
+  OB_UNIS_ENCODE(is_filter_distinct_bitmap_aggr_);
+  OB_UNIS_ENCODE(filter_distinct_param_exprs_);
   return ret;
 }
 
@@ -190,6 +192,8 @@ OB_DEF_DESERIALIZE(ObAggrInfo)
   OB_UNIS_DECODE(enable_fast_bypass_);
   OB_UNIS_DECODE(is_statistic_agg_);
   OB_UNIS_DECODE(has_ignore_null_);
+  OB_UNIS_DECODE(is_filter_distinct_bitmap_aggr_);
+  OB_UNIS_DECODE(filter_distinct_param_exprs_);
   return ret;
 }
 
@@ -251,6 +255,8 @@ OB_DEF_SERIALIZE_SIZE(ObAggrInfo)
   OB_UNIS_ADD_LEN(enable_fast_bypass_);
   OB_UNIS_ADD_LEN(is_statistic_agg_);
   OB_UNIS_ADD_LEN(has_ignore_null_);
+  OB_UNIS_ADD_LEN(is_filter_distinct_bitmap_aggr_);
+  OB_UNIS_ADD_LEN(filter_distinct_param_exprs_);
   return len;
 }
 
@@ -327,6 +333,7 @@ int ObAggrInfo::assign(const ObAggrInfo &rhs)
   hash_rollup_info_ = nullptr;
   enable_fast_bypass_ = rhs.enable_fast_bypass_;
   is_statistic_agg_ = rhs.is_statistic_agg_;
+  is_filter_distinct_bitmap_aggr_ = rhs.is_filter_distinct_bitmap_aggr_;
   if (OB_FAIL(param_exprs_.assign(rhs.param_exprs_))) {
     LOG_WARN("fail to assign param exprs", K(ret));
   } else if (OB_FAIL(distinct_collations_.assign(rhs.distinct_collations_))) {
@@ -345,6 +352,9 @@ int ObAggrInfo::assign(const ObAggrInfo &rhs)
     LOG_WARN("fail to assign group_idxs_", K(ret));
   } else if (OB_FAIL(distinct_hash_funcs_.assign(rhs.distinct_hash_funcs_))) {
     LOG_WARN("fail to assign distinct_hash_funcs_", K(ret));
+  } else if (OB_FAIL(filter_distinct_param_exprs_.assign(
+               rhs.filter_distinct_param_exprs_))) {
+    LOG_WARN("fail to assign filter distinct param exprs", K(ret));
   }
   if (OB_FAIL(ret)) {
   } else if (rhs.hash_rollup_info_ != nullptr) {

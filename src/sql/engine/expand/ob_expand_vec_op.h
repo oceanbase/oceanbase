@@ -49,7 +49,8 @@ public:
   ObExpandVecSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type) :
     ObOpSpec(alloc, type), expand_exprs_(alloc), gby_exprs_(alloc), grouping_id_expr_(nullptr),
     dup_expr_pairs_(alloc), group_set_exprs_(alloc), pruned_groupby_exprs_(alloc),
-    is_ordered_output_(false), hash_val_expr_(nullptr)
+    is_ordered_output_(false), hash_val_expr_(nullptr), active_value_bitmap_exprs_(alloc),
+    marker_condition_exprs_(alloc)
   {}
   virtual ~ObExpandVecSpec() {}
 public:
@@ -66,6 +67,9 @@ public:
   ExprFixedArray pruned_groupby_exprs_;
   bool is_ordered_output_;
   ObExpr *hash_val_expr_;
+  // Only for serialization compatibility with 5.0.2.
+  ExprFixedArray active_value_bitmap_exprs_;
+  ObFixedArray<ExprFixedArray, ObIAllocator> marker_condition_exprs_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExpandVecSpec);
 };

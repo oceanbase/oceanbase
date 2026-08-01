@@ -42,7 +42,9 @@ public:
     dup_expr_list_(alloc),
     encoded_dup_expr_(NULL),
     aggr_code_expr_(NULL),
-    max_aggr_code_(0)
+    max_aggr_code_(0),
+    mark_expr_list_(alloc),
+    encoded_mark_expr_(NULL)
   {}
   ~ObPxDistTransmitSpec() {}
   virtual int register_to_datahub(ObExecContext &ctx) const override;
@@ -56,6 +58,9 @@ public:
   ObExpr *encoded_dup_expr_;
   ObExpr *aggr_code_expr_;
   int64_t max_aggr_code_;
+  // Only for serialization compatibility with 5.0.2.
+  ExprFixedArray mark_expr_list_;
+  ObExpr *encoded_mark_expr_;
 };
 
 class ObPxDistTransmitOp : public ObPxTransmitOp

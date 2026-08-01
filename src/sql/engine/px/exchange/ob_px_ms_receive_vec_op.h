@@ -54,6 +54,9 @@ public:
   ExprFixedArray dup_expr_list_;
   ObExpr *aggr_code_;
   ObExpr *encoded_dup_expr_;
+  // Only for serialization compatibility with 5.0.2.
+  ExprFixedArray mark_expr_list_;
+  ObExpr *encoded_mark_expr_;
 };
 
 class ObPxMSReceiveVecOp : public ObPxReceiveOp

@@ -30,7 +30,8 @@ OB_SERIALIZE_MEMBER((ObPxDistTransmitOpInput, ObPxTransmitOpInput));
 
 OB_SERIALIZE_MEMBER((ObPxDistTransmitSpec, ObPxTransmitSpec), dist_exprs_, dist_hash_funcs_,
                     sort_cmp_funs_, sort_collations_, calc_tablet_id_expr_, popular_values_hash_,
-                    dup_expr_list_, encoded_dup_expr_, aggr_code_expr_, max_aggr_code_);
+                    dup_expr_list_, encoded_dup_expr_, aggr_code_expr_, max_aggr_code_,
+                    mark_expr_list_, encoded_mark_expr_);
 
 int ObPxDistTransmitOp::inner_open()
 {

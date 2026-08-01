@@ -25,7 +25,9 @@ OB_SERIALIZE_MEMBER((ObPxMSReceiveVecSpec, ObPxReceiveSpec),
                     max_ordered_aggr_code_,
                     dup_expr_list_,
                     aggr_code_,
-                    encoded_dup_expr_);
+                    encoded_dup_expr_,
+                    mark_expr_list_,
+                    encoded_mark_expr_);
 
 ObPxMSReceiveVecSpec::ObPxMSReceiveVecSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type)
   : ObPxReceiveSpec(alloc, type),
@@ -36,7 +38,9 @@ ObPxMSReceiveVecSpec::ObPxMSReceiveVecSpec(common::ObIAllocator &alloc, const Ob
     max_ordered_aggr_code_(0),
     dup_expr_list_(alloc),
     aggr_code_(nullptr),
-    encoded_dup_expr_(nullptr)
+    encoded_dup_expr_(nullptr),
+    mark_expr_list_(alloc),
+    encoded_mark_expr_(nullptr)
 {
 }
 
