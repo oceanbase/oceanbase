@@ -1482,7 +1482,8 @@ public:
   ObPL() :
     sql_proxy_(NULL),
     package_manager_(),
-    interface_service_() {}
+    interface_service_(),
+    codegen_lock_() {}
   virtual ~ObPL() {}
 
   int init(common::ObMySQLProxy &sql_proxy);
@@ -1646,6 +1647,7 @@ private:
   common::ObMySQLProxy *sql_proxy_;
   ObPLPackageManager package_manager_;
   ObPLInterfaceService interface_service_;
+  common::ObBucketLock codegen_lock_[4];
 
   // first bucket is for deduplication, second bucket is for concurrency control
   std::pair<common::ObBucketLock, common::ObBucketLock> jit_lock_;
