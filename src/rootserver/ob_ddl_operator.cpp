@@ -4865,7 +4865,12 @@ int ObDDLOperator::update_aux_table(
           new_aux_table_schema.set_tablet_size(new_table_schema.get_tablet_size());
           new_aux_table_schema.set_pctfree(new_table_schema.get_pctfree());
           new_aux_table_schema.set_block_size(new_table_schema.get_block_size());
-          new_aux_table_schema.set_row_store_type(new_table_schema.get_row_store_type());
+          // Only sync row_store_type when they actually changed on the data table.
+          // Aux tables (e.g. FTS index) may have intentionally different row_store_type;
+          // see ObIndexBuilder::get_index_row_store_type.
+          if (table_schema.get_row_store_type() != new_table_schema.get_row_store_type()) {
+            new_aux_table_schema.set_row_store_type(new_table_schema.get_row_store_type());
+          }
           new_aux_table_schema.set_store_format(new_table_schema.get_store_format());
           new_aux_table_schema.set_progressive_merge_round(
               std::max(new_table_schema.get_progressive_merge_round(),
