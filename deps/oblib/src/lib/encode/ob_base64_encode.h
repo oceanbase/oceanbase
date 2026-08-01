@@ -41,9 +41,17 @@ public:
     return (buf_size / 4) * 3;
   }
 
-  static inline bool is_base64_skip_space(char c)
+  static inline bool is_base64_skip_space(char c, bool oracle_mode = false)
   {
-    return FROM_BASE64_TABLE[(uint8_t) c] == -2;
+    bool ret = true;
+    if (oracle_mode) {
+      ret = (c == '\n' || c == '\r');
+    }
+    if (FROM_BASE64_TABLE[(uint8_t) c] != -2) {
+      ret = false;
+    }
+
+    return ret;
   }
 
   static int encode(const uint8_t* input, const int64_t input_len,
@@ -52,7 +60,8 @@ public:
 
   static int decode(const char* input, const int64_t input_len,
                     uint8_t* output, const int64_t output_len,
-                    int64_t &pos, bool skip_spaces = false);
+                    int64_t &pos, bool skip_spaces = false,
+                    bool oracle_mode = false);
 
   static int decode_with_simd(const char* input, const int64_t input_len,
                     uint8_t* output, const int64_t output_len,
