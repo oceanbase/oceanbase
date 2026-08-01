@@ -8770,12 +8770,7 @@ semistruct_properties
 ;
 
 semistruct_encoding_type_option:
-ENCODING
-{
-  malloc_terminal_node($$, result->malloc_pool_, T_INT);
-  $$->value_ = 1;
-}
-| NONE
+NONE
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = 0;
