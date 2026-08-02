@@ -443,6 +443,8 @@ void ObArchiveSender::handle(ObArchiveSendTask &task, TaskConsumeStatus &consume
                                          backup_dest, *ls_archive_task))) {
           ARCHIVE_LOG(WARN, "do compensate piece failed", K(ret), K(task), KPC(ls_archive_task));
         }
+      } else if (OB_UNLIKELY(ERRSIM_OB_ARCHIVE_SENDER_ERROR)) {
+        ret = ERRSIM_OB_ARCHIVE_SENDER_ERROR;
       } else if (OB_FAIL(archive_log_(backup_dest, dest_id, arg, task, *ls_archive_task))) {
         ARCHIVE_LOG(WARN, "archive log failed", K(ret), K(task), KPC(ls_archive_task));
       } else {
@@ -451,10 +453,6 @@ void ObArchiveSender::handle(ObArchiveSendTask &task, TaskConsumeStatus &consume
         ARCHIVE_LOG(TRACE, "archive log succ", K(id));
       }
     }
-  }
-
-  if (OB_SUCC(ret) && OB_UNLIKELY(ERRSIM_OB_ARCHIVE_SENDER_ERROR)) {
-    ret = ERRSIM_OB_ARCHIVE_SENDER_ERROR;
   }
 
   if (OB_FAIL(ret)) {
