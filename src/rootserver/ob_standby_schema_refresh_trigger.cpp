@@ -86,6 +86,8 @@ int ObStandbySchemaRefreshTrigger::check_inner_stat_()
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_STANDBY_REFRESH_SCHEMA);
+
 int ObStandbySchemaRefreshTrigger::submit_tenant_refresh_schema_task_()
 {
   int ret = OB_SUCCESS;
@@ -93,7 +95,9 @@ int ObStandbySchemaRefreshTrigger::submit_tenant_refresh_schema_task_()
   bool is_standby_normal_status = false;
   DEBUG_SYNC(BLOCK_STANDBY_REFRESH_SCHEMA);
 
-  if (OB_FAIL(check_inner_stat_())) {
+  if (OB_FAIL(ERRSIM_STANDBY_REFRESH_SCHEMA)) {
+    LOG_WARN("ERRSIM_STANDBY_REFRESH_SCHEMA", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(check_inner_stat_())) {
     WSTAT("error unexpected", KR(ret), K(tenant_id_), KP(sql_proxy_));
   } else if (!is_user_tenant(tenant_id_)) {
     ret = OB_ERR_UNEXPECTED;
