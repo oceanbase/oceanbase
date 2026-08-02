@@ -114,13 +114,16 @@ int ObMPStmtFetch::before_process()
   }
   return ret;
 }
-int ObMPStmtFetch::set_session_active(ObSQLSessionInfo &session) const
+int ObMPStmtFetch::set_session_active(ObSQLSessionInfo &session, const bool is_async_cursor) const
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(session.set_session_state(QUERY_ACTIVE))) {
     LOG_WARN("fail to set session state", K(ret));
   } else {
-    session.set_query_start_time(get_receive_timestamp());
+    // The async cursor fill thread still uses the execute-level session state.
+    if (!is_async_cursor) {
+      session.set_query_start_time(get_receive_timestamp());
+    }
     session.set_mysql_cmd(obmysql::COM_STMT_FETCH);
     session.update_last_active_time();
     session.set_is_request_end(false);
@@ -174,17 +177,23 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session,
         LOG_ERROR("invalid sql engine", K(ret), K(gctx_));
       } else if (FALSE_IT(execution_id = gctx_.sql_engine_->get_execution_id())) {
         //nothing to do
-      } else if (OB_FAIL(set_session_active(session))) {
-        LOG_WARN("fail to set session active", K(ret));
       } else {
-        exec_start_timestamp_ = ObTimeUtility::current_time();
+        session.set_fetch_execution_id(execution_id);
+        audit_record.execution_id_ = session.get_fetch_execution_id();
+        if (OB_FAIL(set_session_active(session, cursor->is_async()))) {
+          LOG_WARN("fail to set session active", K(ret));
+        } else {
+          exec_start_timestamp_ = ObTimeUtility::current_time();
+        }
       }
       if (OB_SUCC(ret)) {
         //监控项统计开始
         exec_start_timestamp_ = ObTimeUtility::current_time();
         // 本分支内如果出错，全部会在response_result内部处理妥当
         // 无需再额外处理回复错误包
-        session.set_current_execution_id(execution_id);
+        if (!cursor->is_async()) {
+          session.set_current_execution_id(execution_id);
+        }
         if (0 == fetch_limit && !cursor->is_streaming() && cursor->is_ps_cursor()
             && lib::is_oracle_mode() && OB_NOT_NULL(cursor->get_spi_cursor())
             && cursor->get_spi_cursor()->row_store_.get_row_cnt() > 0) {
@@ -651,6 +660,7 @@ int ObMPStmtFetch::process()
   ObSMConnection *conn = get_conn();
   const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
   bool cursor_fetched = false;
+  bool fetch_request_info_set = false;
   reset_close_cursor();
   if (OB_ISNULL(req_) || OB_ISNULL(conn) || OB_ISNULL(cur_trace_id)) {
     ret = OB_ERR_UNEXPECTED;
@@ -672,6 +682,8 @@ int ObMPStmtFetch::process()
     LOG_WARN("rdlock session failed", K(ret));
   } else {
     ObSQLSessionInfo &session = *sess;
+    session.set_fetch_request_info(get_receive_timestamp(), -1);
+    fetch_request_info_set = true;
     int64_t tenant_version = 0;
     int64_t sys_version = 0;
     THIS_WORKER.set_session(sess);
@@ -753,6 +765,9 @@ int ObMPStmtFetch::process()
 
   if (!THIS_WORKER.need_retry()) {
     flush_ret = flush_buffer(true);
+  }
+  if (fetch_request_info_set && OB_NOT_NULL(sess)) {
+    sess->reset_fetch_request_info();
   }
   THIS_WORKER.set_session(NULL);
   if (sess != NULL) {
@@ -1064,4 +1079,3 @@ int ObMPStmtFetch::cursor_fetch_last_row(ObSQLSessionInfo &session,
 
 } //end of namespace observer
 } //end of namespace oceanbase
-

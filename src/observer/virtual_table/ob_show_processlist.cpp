@@ -388,7 +388,7 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
                 if(0 != sess_info->get_pl_cur_query_start_time_bak()) {
                   time_sec = (static_cast<double> (current_time - sess_info->get_pl_cur_query_start_time_bak())) / 1000000;
                 } else {
-                  time_sec = (static_cast<double> (current_time - sess_info->get_query_start_time())) / 1000000;
+                  time_sec = (static_cast<double> (current_time - sess_info->get_current_request_start_time())) / 1000000;
                 }
                 cur_row_->cells_[cell_idx].set_double(time_sec);
               } else {
@@ -403,7 +403,7 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
                 if(0 != sess_info->get_pl_cur_query_start_time_bak()) {
                   time_sec = (current_time - sess_info->get_pl_cur_query_start_time_bak()) / 1000000;
                 } else {
-                  time_sec = (current_time - sess_info->get_query_start_time()) / 1000000;
+                  time_sec = (current_time - sess_info->get_current_request_start_time()) / 1000000;
                 }
                 cur_row_->cells_[cell_idx].set_int(time_sec);
               } else {

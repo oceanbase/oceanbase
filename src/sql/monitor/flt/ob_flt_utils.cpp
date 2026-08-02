@@ -125,7 +125,7 @@ namespace sql
 
     // reserver memmory for query info
     if (sess.is_trace_enable()) {
-      query_info.query_start_time_ = sess.get_query_start_time();
+      query_info.query_start_time_ = sess.get_current_request_start_time();
       query_info.query_end_time_ = ::oceanbase::common::ObTimeUtility::current_time();
       size += query_info.get_serialize_size();
     }

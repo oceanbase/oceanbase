@@ -67,8 +67,38 @@ TEST(test_basic_session_info, init_set_get)
   ASSERT_EQ(NULL, session_info.get_log_id_level_map());
   session_info.log_id_level_map_valid_ = true;
   ASSERT_EQ(&session_info.log_id_level_map_, session_info.get_log_id_level_map());
+  const int64_t serialize_size = session_info.get_serialize_size();
+  // dima 2026072800117796771
+  session_info.set_fetch_request_info(16384, 16384);
+  ASSERT_EQ(serialize_size, session_info.get_serialize_size());
+  session_info.reset_fetch_request_info();
   ObBasicSessionInfo::LockGuard lock_guard(session_info.get_query_lock());
   sleep(1);
+}
+
+TEST(test_basic_session_info, fetch_request_info)
+{
+  // dima 2026072800117796771
+  ObBasicSessionInfo session_info(OB_SERVER_TENANT_ID);
+  const int64_t query_start_time = 100;
+  const int64_t fetch_start_time = 200;
+  const int64_t fetch_execution_id = 300;
+
+  session_info.set_query_start_time(query_start_time);
+  ASSERT_EQ(0, session_info.get_fetch_start_time());
+  ASSERT_EQ(-1, session_info.get_fetch_execution_id());
+  ASSERT_EQ(query_start_time, session_info.get_current_request_start_time());
+
+  session_info.set_fetch_request_info(fetch_start_time, fetch_execution_id);
+  ASSERT_EQ(fetch_start_time, session_info.get_fetch_start_time());
+  ASSERT_EQ(fetch_execution_id, session_info.get_fetch_execution_id());
+  ASSERT_EQ(fetch_start_time, session_info.get_current_request_start_time());
+  ASSERT_EQ(query_start_time, session_info.get_query_start_time());
+
+  session_info.reset_fetch_request_info();
+  ASSERT_EQ(0, session_info.get_fetch_start_time());
+  ASSERT_EQ(-1, session_info.get_fetch_execution_id());
+  ASSERT_EQ(query_start_time, session_info.get_current_request_start_time());
 }
 
 TEST(test_basic_session_info, load_variables)

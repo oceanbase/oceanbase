@@ -76,7 +76,7 @@ protected:
   virtual int process();
 private:
   int do_process(sql::ObSQLSessionInfo &session, bool &need_response_error);
-  int set_session_active(sql::ObSQLSessionInfo &session) const;
+  int set_session_active(sql::ObSQLSessionInfo &session, const bool is_async_cursor) const;
   int process_fetch_stmt(sql::ObSQLSessionInfo &session, bool &need_response_error);
   int response_result(pl::ObPLCursorInfo &cursor,
                       sql::ObSQLSessionInfo &session,
