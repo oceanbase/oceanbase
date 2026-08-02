@@ -542,7 +542,7 @@ int ObPlanSet::match_priv_cons(ObPlanCacheCtx &pc_ctx, bool &is_matched)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("rule schema is null", K(ret));
       } else if (OB_FAIL(ObPrivilegeCheck::check_sensitive_rule_plainaccess_priv(rule_schema, *session_info))) {
-        if (OB_ERR_NO_PRIVILEGE == ret) {
+        if (OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE == ret || OB_ERR_NO_PRIVILEGE == ret) {
           has_priv = false;
           ret = OB_SUCCESS;
           LOG_DEBUG("lack plainaccess privilege", K(priv_info.sensitive_rule_id_));

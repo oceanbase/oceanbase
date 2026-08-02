@@ -289,10 +289,13 @@ int ObDropSensitiveRuleResolver::resolve(const ParseNode &parse_tree)
   } else if (FALSE_IT(tenant_id = session_info_->get_effective_tenant_id())) {
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("failed to get data version", K(ret));
-  } else if ((lib::is_mysql_mode() && !((data_version >= MOCK_DATA_VERSION_4_3_5_3 && data_version < DATA_VERSION_4_4_0_0) ||
-                                        (data_version >= MOCK_DATA_VERSION_4_4_2_0 && data_version < DATA_VERSION_4_5_0_0) ||
-               (data_version >= DATA_VERSION_4_5_1_0)))
-             || (lib::is_oracle_mode() && !(data_version >= MOCK_DATA_VERSION_4_4_2_0))) {
+  } else if ((lib::is_oracle_mode()
+              && !((data_version >= MOCK_DATA_VERSION_4_4_2_0 && data_version < DATA_VERSION_4_5_0_0)
+                   || (data_version >= DATA_VERSION_4_5_1_0)))
+             || (lib::is_mysql_mode()
+                 && !((data_version >= MOCK_DATA_VERSION_4_3_5_3 && data_version < DATA_VERSION_4_4_0_0)
+                      || (data_version >= MOCK_DATA_VERSION_4_4_2_0 && data_version < DATA_VERSION_4_5_0_0)
+                      || (data_version >= DATA_VERSION_4_5_1_0)))) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("sensitive rule not supported", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "sensitive rule");

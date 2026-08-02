@@ -11750,15 +11750,22 @@ int ObRootService::handle_sensitive_rule_ddl(const obrpc::ObSensitiveRuleDDLArg 
 {
   int ret = OB_NOT_SUPPORTED;
   uint64_t data_version = 0;
+  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
   ObSensitiveRuleDDLService sensitive_rule_ddl_service(&ddl_service_);
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(arg.exec_tenant_id_, compat_mode))) {
+    LOG_WARN("failed to get compat mode", K(ret), K(arg.exec_tenant_id_));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(arg.exec_tenant_id_, data_version))) {
     LOG_WARN("failed to get min data version", K(ret));
-  } else if (!((data_version >= MOCK_DATA_VERSION_4_3_5_3 && data_version < DATA_VERSION_4_4_0_0) ||
-               (data_version >= MOCK_DATA_VERSION_4_4_2_0 && data_version < DATA_VERSION_4_5_0_0) ||
-               (data_version >= DATA_VERSION_4_5_1_0))) {
+  } else if ((lib::Worker::CompatMode::ORACLE == compat_mode
+              && !((data_version >= MOCK_DATA_VERSION_4_4_2_0 && data_version < DATA_VERSION_4_5_0_0)
+                   || (data_version >= DATA_VERSION_4_5_1_0)))
+             || (lib::Worker::CompatMode::ORACLE != compat_mode
+                 && !((data_version >= MOCK_DATA_VERSION_4_3_5_3 && data_version < DATA_VERSION_4_4_0_0)
+                      || (data_version >= MOCK_DATA_VERSION_4_4_2_0 && data_version < DATA_VERSION_4_5_0_0)
+                      || (data_version >= DATA_VERSION_4_5_1_0)))) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "sensitive rule");
   } else if (OB_FAIL(sensitive_rule_ddl_service.handle_sensitive_rule_ddl(arg))) {

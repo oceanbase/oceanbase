@@ -2163,9 +2163,13 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
         uint64_t min_version = OB_INVALID_VERSION;
         if (OB_FAIL(GET_MIN_DATA_VERSION(real_tenant_id, min_version))) {
             LOG_WARN("get min data_version failed", K(ret), K(real_tenant_id));
-        } else if (!((min_version >= MOCK_DATA_VERSION_4_3_5_3 && min_version < DATA_VERSION_4_4_0_0) ||
-                     (min_version >= MOCK_DATA_VERSION_4_4_2_0 && min_version < DATA_VERSION_4_5_0_0) ||
-                     (min_version >= DATA_VERSION_4_5_1_0))) {
+        } else if ((is_oracle_mode
+                    && !((min_version >= MOCK_DATA_VERSION_4_4_2_0 && min_version < DATA_VERSION_4_5_0_0)
+                         || (min_version >= DATA_VERSION_4_5_1_0)))
+                   || (!is_oracle_mode
+                       && !((min_version >= MOCK_DATA_VERSION_4_3_5_3 && min_version < DATA_VERSION_4_4_0_0)
+                            || (min_version >= MOCK_DATA_VERSION_4_4_2_0 && min_version < DATA_VERSION_4_5_0_0)
+                            || (min_version >= DATA_VERSION_4_5_1_0)))) {
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "show sensitive rules");
           LOG_WARN("not support to show sensitive rules", K(ret), K(real_tenant_id));

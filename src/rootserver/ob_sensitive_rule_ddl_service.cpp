@@ -33,7 +33,7 @@ int ObSensitiveRuleDDLService::sensitive_field_validation_check(const ObSensitiv
     } else if (OB_ISNULL(table_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table schema is null", K(ret), K(item));
-    } else if (!(table_schema->is_user_table() || table_schema->is_user_view())) {
+    } else if (!(table_schema->is_user_table() || table_schema->is_user_view() || table_schema->is_materialized_view())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("table is not user table or user view", K(ret), K(item));
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "Can not apply sensitive rule to non-user table or view");
@@ -128,6 +128,7 @@ int ObSensitiveRuleDDLService::handle_sensitive_rule_ddl(const ObSensitiveRuleDD
   const uint64_t tenant_id = arg.schema_.get_tenant_id();
   int64_t refreshed_schema_version = 0;
   uint64_t data_version = 0;
+  bool is_oracle_mode = false;
   ObSensitiveRuleSchema schema = arg.schema_; // make a copy
   ObSqlString ddl_stmt_str;
   ObString ddl_sql;
@@ -135,9 +136,15 @@ int ObSensitiveRuleDDLService::handle_sensitive_rule_ddl(const ObSensitiveRuleDD
   // 1. get the newest schema
   if (OB_FAIL(GET_MIN_DATA_VERSION(arg.exec_tenant_id_, data_version))) {
     LOG_WARN("failed to get min data version", K(ret));
-  } else if (!((data_version >= MOCK_DATA_VERSION_4_3_5_3 && data_version < DATA_VERSION_4_4_0_0) ||
-               (data_version >= MOCK_DATA_VERSION_4_4_2_0 && data_version < DATA_VERSION_4_5_0_0) ||
-               (data_version >= DATA_VERSION_4_5_1_0))) {
+  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(arg.exec_tenant_id_, is_oracle_mode))) {
+    LOG_WARN("fail to check tenant mode", K(ret), K(arg.exec_tenant_id_));
+  } else if ((is_oracle_mode
+              && !((data_version >= MOCK_DATA_VERSION_4_4_2_0 && data_version < DATA_VERSION_4_5_0_0)
+                   || (data_version >= DATA_VERSION_4_5_1_0)))
+             || (!is_oracle_mode
+                 && !((data_version >= MOCK_DATA_VERSION_4_3_5_3 && data_version < DATA_VERSION_4_4_0_0)
+                      || (data_version >= MOCK_DATA_VERSION_4_4_2_0 && data_version < DATA_VERSION_4_5_0_0)
+                      || (data_version >= DATA_VERSION_4_5_1_0)))) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("sensitive rule not supported", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "sensitive rule");
@@ -256,11 +263,13 @@ int ObSensitiveRuleDDLService::grant_revoke_sensitive_rule(const ObSensitiveRule
     LOG_WARN("fail to check is oracle mode", K(ret));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("failed to get min data version", K(ret));
-  } else if ((lib::is_mysql_mode() && !((data_version >= MOCK_DATA_VERSION_4_3_5_3 && data_version < DATA_VERSION_4_4_0_0) ||
-                                        (data_version >= MOCK_DATA_VERSION_4_4_2_0 && data_version < DATA_VERSION_4_5_0_0) ||
-                                        (data_version >= DATA_VERSION_4_5_1_0)))
-             || (lib::is_oracle_mode() && !((data_version >= MOCK_DATA_VERSION_4_4_2_0 && data_version < DATA_VERSION_4_5_0_0) ||
-                                            (data_version >= DATA_VERSION_4_5_1_0)))) {
+  } else if ((is_ora_mode
+              && !((data_version >= MOCK_DATA_VERSION_4_4_2_0 && data_version < DATA_VERSION_4_5_0_0)
+                   || (data_version >= DATA_VERSION_4_5_1_0)))
+             || (!is_ora_mode
+                 && !((data_version >= MOCK_DATA_VERSION_4_3_5_3 && data_version < DATA_VERSION_4_4_0_0)
+                      || (data_version >= MOCK_DATA_VERSION_4_4_2_0 && data_version < DATA_VERSION_4_5_0_0)
+                      || (data_version >= DATA_VERSION_4_5_1_0)))) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("sensitive rule not supported", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "sensitive rule");
