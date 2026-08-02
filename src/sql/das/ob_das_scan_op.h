@@ -29,6 +29,35 @@ class ObLocalIndexLookupOp;
 struct ObDASTCBInterruptInfo;
 class ObDASSearchCtx;
 
+struct ObBatchRescanFilterParam
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObBatchRescanFilterParam()
+    : filter_params_(),
+      filter_param_setters_()
+  {}
+  ObBatchRescanFilterParam(common::ObIAllocator &alloc)
+    : filter_params_(&alloc),
+      filter_param_setters_(&alloc)
+  {}
+  void set_allocator(common::ObIAllocator &alloc)
+  {
+    filter_params_.set_allocator(&alloc);
+    filter_param_setters_.set_allocator(&alloc);
+  }
+  bool is_valid() const
+  {
+    return filter_params_.count() > 0
+        && filter_param_setters_.count() > 0
+        && filter_params_.count() == filter_param_setters_.count();
+  }
+  TO_STRING_KV("filter_params_count", filter_params_.count(),
+               "setter_count", filter_param_setters_.count());
+  common::ObFixedArray<common::ObSqlArrayObj*, common::ObIAllocator> filter_params_;
+  common::ObFixedArray<ObDynamicParamSetter, common::ObIAllocator> filter_param_setters_;
+};
+
 struct ObDASTCBMemProfileKey {
   ObDASTCBMemProfileKey(): fake_unique_id_(0), timestamp_(0)
   {}
@@ -309,7 +338,8 @@ public:
       do_local_dynamic_filter_(false),
       local_dynamic_filter_params_(),
       topn_param_(),
-      scan_resume_point_(nullptr)
+      scan_resume_point_(nullptr),
+      batch_rescan_filter_param_(nullptr)
   { }
 
   virtual ~ObDASScanRtDef();
@@ -337,7 +367,8 @@ public:
                        K_(in_row_cache_threshold),
                        K_(do_local_dynamic_filter),
                        K_(local_dynamic_filter_params),
-                       K_(topn_param));
+                       K_(topn_param),
+                       KP_(batch_rescan_filter_param));
   int init_pd_op(ObExecContext &exec_ctx, const ObDASScanCtDef &scan_ctdef);
 
   storage::ObRow2ExprsProjector *p_row2exprs_projector_;
@@ -382,6 +413,8 @@ public:
   common::ObLimitParam topn_param_;
 
   ScanResumePoint *scan_resume_point_;
+  // Reserved for batch rescan dynamic filter pushdown serialization; default remains null on master.
+  ObBatchRescanFilterParam *batch_rescan_filter_param_;
 private:
   union {
     storage::ObRow2ExprsProjector row2exprs_projector_;

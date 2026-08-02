@@ -153,6 +153,7 @@ int ObTableScanCtDef::serialize_(char *buf, int64_t buf_len, int64_t &pos) const
   if (is_new_query_range) {
     OB_UNIS_ENCODE(pre_range_graph_);
   }
+  OB_UNIS_ENCODE(batchrescan_filter_params_idxs_);
   return ret;
 }
 
@@ -191,6 +192,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableScanCtDef)
   if (is_new_query_range) {
     OB_UNIS_ADD_LEN(pre_range_graph_);
   }
+  OB_UNIS_ADD_LEN(batchrescan_filter_params_idxs_);
   return len;
 }
 
@@ -273,6 +275,9 @@ int ObTableScanCtDef::deserialize(const char *buf, const int64_t data_len, int64
       if (is_new_query_range) {
         OB_UNIS_DECODE(pre_range_graph_);
       }
+    }
+    if (OB_SUCC(ret) && pos < data_len) {
+      OB_UNIS_DECODE(batchrescan_filter_params_idxs_);
     }
 
     pos = pos_orig + len;

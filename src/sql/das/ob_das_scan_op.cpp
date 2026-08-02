@@ -81,6 +81,62 @@ OB_SERIALIZE_MEMBER(ObDASScanCtDef, // FARM COMPAT WHITELIST
                     cache_aware_row_num_,
                     external_file_pattern_type_);
 
+OB_DEF_SERIALIZE(ObBatchRescanFilterParam)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_ENCODE(filter_param_setters_);
+  OB_UNIS_ENCODE(filter_params_.count());
+  for (int64_t i = 0; OB_SUCC(ret) && i < filter_params_.count(); ++i) {
+    if (OB_ISNULL(filter_params_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null filter params element", K(ret), K(i));
+    } else if (OB_FAIL(filter_params_.at(i)->serialize(buf, buf_len, pos))) {
+      LOG_WARN("serialize ObSqlArrayObj failed", K(ret), K(i));
+    }
+  }
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObBatchRescanFilterParam)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_DECODE(filter_param_setters_);
+  int64_t count = 0;
+  OB_UNIS_DECODE(count);
+  if (OB_SUCC(ret) && count > 0) {
+    OZ(filter_params_.reserve(count));
+    for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+      common::ObIAllocator *alloc = filter_params_.get_allocator();
+      common::ObSqlArrayObj *obj = nullptr;
+      if (OB_ISNULL(alloc)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("allocator is null", K(ret));
+      } else if (OB_ISNULL(obj = common::ObSqlArrayObj::alloc(*alloc, 0))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc ObSqlArrayObj failed", K(ret), K(i));
+      } else if (OB_FAIL(obj->deserialize(*alloc, buf, data_len, pos))) {
+        LOG_WARN("deserialize ObSqlArrayObj failed", K(ret), K(i));
+      } else {
+        OZ(filter_params_.push_back(obj));
+      }
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObBatchRescanFilterParam)
+{
+  int64_t len = 0;
+  OB_UNIS_ADD_LEN(filter_param_setters_);
+  OB_UNIS_ADD_LEN(filter_params_.count());
+  for (int64_t i = 0; i < filter_params_.count(); ++i) {
+    if (OB_NOT_NULL(filter_params_.at(i))) {
+      len += filter_params_.at(i)->get_serialize_size();
+    }
+  }
+  return len;
+}
+
 OB_DEF_SERIALIZE(ObDASScanRtDef)
 {
   int ret = OB_SUCCESS;
@@ -111,6 +167,15 @@ OB_DEF_SERIALIZE(ObDASScanRtDef)
     local_dynamic_filter_params_,
     topn_param_,
     do_local_dynamic_filter_);
+  if (OB_SUCC(ret)) {
+    bool has_batch_rescan_filter_param = (nullptr != batch_rescan_filter_param_);
+    OB_UNIS_ENCODE(has_batch_rescan_filter_param);
+    if (OB_SUCC(ret) && has_batch_rescan_filter_param) {
+      if (OB_FAIL(batch_rescan_filter_param_->serialize(buf, buf_len, pos))) {
+        LOG_WARN("serialize batch rescan filter param failed", K(ret));
+      }
+    }
+  }
   return ret;
 }
 
@@ -144,6 +209,28 @@ OB_DEF_DESERIALIZE(ObDASScanRtDef)
     local_dynamic_filter_params_,
     topn_param_,
     do_local_dynamic_filter_);
+  if (OB_SUCC(ret)) {
+    bool has_batch_rescan_filter_param = false;
+    OB_UNIS_DECODE(has_batch_rescan_filter_param);
+    if (OB_SUCC(ret) && has_batch_rescan_filter_param) {
+      ObDASRemoteInfo *remote_info = ObDASRemoteInfo::get_remote_info();
+      common::ObIAllocator *alloc = OB_ISNULL(remote_info) || OB_ISNULL(remote_info->exec_ctx_)
+          ? nullptr : &remote_info->exec_ctx_->get_allocator();
+      void *ptr = OB_ISNULL(alloc) ? nullptr : alloc->alloc(sizeof(ObBatchRescanFilterParam));
+      if (OB_ISNULL(alloc)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("deserialize allocator is null", K(ret), KP(remote_info));
+      } else if (OB_ISNULL(ptr)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc ObBatchRescanFilterParam failed", K(ret));
+      } else {
+        batch_rescan_filter_param_ = new (ptr) ObBatchRescanFilterParam(*alloc);
+        if (OB_FAIL(batch_rescan_filter_param_->deserialize(buf, data_len, pos))) {
+          LOG_WARN("deserialize batch rescan filter param failed", K(ret));
+        }
+      }
+    }
+  }
   if (OB_SUCC(ret)) {
     (void)ObSQLUtils::adjust_time_by_ntp_offset(timeout_ts_);
   }
@@ -180,6 +267,13 @@ OB_DEF_SERIALIZE_SIZE(ObDASScanRtDef)
     local_dynamic_filter_params_,
     topn_param_,
     do_local_dynamic_filter_);
+  {
+    bool has_batch_rescan_filter_param = (nullptr != batch_rescan_filter_param_);
+    OB_UNIS_ADD_LEN(has_batch_rescan_filter_param);
+    if (has_batch_rescan_filter_param) {
+      len += batch_rescan_filter_param_->get_serialize_size();
+    }
+  }
   return len;
 }
 

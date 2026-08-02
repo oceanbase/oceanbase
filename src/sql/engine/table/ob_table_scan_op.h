@@ -166,7 +166,8 @@ public:
       global_index_rowkey_exprs_(allocator),
       pre_range_graph_(allocator),
       attach_spec_(allocator_, &scan_ctdef_),
-      flags_(0)
+      flags_(0),
+      batchrescan_filter_params_idxs_(allocator)
   { }
   const ExprFixedArray &get_das_output_exprs() const
   {
@@ -205,7 +206,8 @@ public:
                K_(use_index_merge),
                K_(is_hybrid_search),
                K_(hint_cache_set),
-               K_(hint_cache_enabled));
+               K_(hint_cache_enabled),
+               K_(batchrescan_filter_params_idxs));
   //the query range of index scan/table scan
   ObQueryRange pre_query_range_;
   FlashBackItem flashback_item_;
@@ -247,6 +249,7 @@ public:
       uint64_t reserved_                     : 57;
     };
   };
+  Int64FixedArray batchrescan_filter_params_idxs_;
 };
 
 struct ObTableScanRtDef
