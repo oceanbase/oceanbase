@@ -568,6 +568,7 @@ _enable_trace_session_leak
 _enable_trace_tablet_leak
 _enable_transaction_internal_routing
 _enable_tree_based_io_scheduler
+_enable_trigger_dml_snapshot_opt
 _enable_two_phase_fts_index_merge
 _enable_unit_gc_wait
 _enable_values_table_folding

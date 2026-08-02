@@ -3601,3 +3601,10 @@ DEF_BOOL(_enable_schema_history_archive, OB_TENANT_PARAMETER, "False",
 DEF_BOOL(_enable_sql_parse_fullwidth_symbols, OB_CLUSTER_PARAMETER, "False",
          "specifies whether to enable recognizing fullwidth symbols in SQL parser of Oracle mode.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_trigger_dml_snapshot_opt, OB_TENANT_PARAMETER, "False",
+         "enable snapshot optimization for DML with row-level triggers."
+         " When true, INSERT skips unnecessary snapshot acquisition,"
+         " UPDATE/DELETE try local LS read snapshot instead of remote GTS,"
+         " reducing RPC count on data-local execution.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

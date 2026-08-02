@@ -877,7 +877,8 @@ public:
       has_hybrid_search_(false),
       pl_sql_transpiled_exprs_(allocator),
       forbid_pl_sql_transpiler_(false),
-      is_mview_refresh_sql_(false)
+      is_mview_refresh_sql_(false),
+      has_dml_trigger_(false)
   {
   }
   TO_STRING_KV(N_PARAM_NUM, question_marks_count_,
@@ -930,6 +931,7 @@ public:
     pl_sql_transpiled_exprs_.reuse();
     forbid_pl_sql_transpiler_ = false;
     is_mview_refresh_sql_ = false;
+    has_dml_trigger_ = false;
   }
 
   int64_t get_new_stmt_id() { return stmt_count_++; }
@@ -1066,6 +1068,7 @@ public:
   ObSqlArray<ObUDFRawExpr *> pl_sql_transpiled_exprs_;
   bool forbid_pl_sql_transpiler_ = false;
   bool is_mview_refresh_sql_;
+  bool has_dml_trigger_;
 };
 
 template<typename... Args>

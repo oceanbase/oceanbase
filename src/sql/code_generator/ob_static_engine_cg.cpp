@@ -10818,10 +10818,52 @@ int ObStaticEngineCG::set_properties_post(const ObLogPlan &log_plan, ObPhysicalP
           log_plan.get_stmt()->is_update_stmt() ||
           log_plan.get_stmt()->is_delete_stmt() ||
           log_plan.get_stmt()->is_merge_stmt()) {
-        //为了支持触发器/UDF支持异常捕获，要求含有pl udf的涉及修改表数据的dml串行执行
         phy_plan_->set_need_serial_exec(true);
       }
       phy_plan_->set_has_nested_sql(true);
+    } else if (log_plan.get_stmt()->get_query_ctx()->has_dml_trigger_) {
+      phy_plan_->set_has_nested_sql(true);
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(my_session->get_effective_tenant_id()));
+      if (tenant_config.is_valid() && tenant_config->_enable_trigger_dml_snapshot_opt) {
+        bool can_try_ls_snapshot = false;
+        const ObDelUpdStmt *dml_stmt = static_cast<const ObDelUpdStmt *>(log_plan.get_stmt());
+        const ObOptimizerContext &opt_ctx = log_plan.get_optimizer_context();
+        // use query_ctx->has_pl_udf_ instead of opt_ctx.has_pl_udf() because
+        // opt_ctx.has_pl_udf_ is set to true by trigger (ob_optimizer.cpp)
+        // which would always block LS snapshot optimization.
+        // query_ctx->has_pl_udf_ is only set in resolver when SQL actually
+        // contains PL UDF expressions (ob_dml_resolver.cpp).
+        if (dml_stmt->has_instead_of_trigger()) {
+          can_try_ls_snapshot = false;
+        } else if (opt_ctx.in_nested_sql() || opt_ctx.has_fk()
+            || opt_ctx.has_subquery_in_function_table() || opt_ctx.has_dblink()
+            || opt_ctx.has_cursor_expression()
+            || log_plan.get_stmt()->get_query_ctx()->has_pl_udf_) {
+          can_try_ls_snapshot = false;
+        } else if (dml_stmt->has_global_index()) {
+          can_try_ls_snapshot = false;
+        } else if (log_plan.get_stmt()->is_delete_stmt()) {
+          can_try_ls_snapshot = true;
+        } else if (log_plan.get_stmt()->is_update_stmt()) {
+          bool part_key_updated = false;
+          const ObUpdateStmt &upd_stmt = static_cast<const ObUpdateStmt &>(*log_plan.get_stmt());
+          if (OB_FAIL(upd_stmt.part_key_is_updated(part_key_updated))) {
+            LOG_WARN("failed to check part key is updated", K(ret));
+          } else if (!part_key_updated) {
+            can_try_ls_snapshot = true;
+          }
+        }
+        if (OB_SUCC(ret) && can_try_ls_snapshot) {
+          phy_plan_->set_try_ls_snapshot_first(true);
+        }
+      } else {
+        if (log_plan.get_stmt()->is_insert_stmt() ||
+            log_plan.get_stmt()->is_update_stmt() ||
+            log_plan.get_stmt()->is_delete_stmt() ||
+            log_plan.get_stmt()->is_merge_stmt()) {
+          phy_plan_->set_need_serial_exec(true);
+        }
+      }
     } else {/*do nothing*/}
     if (OB_SUCC(ret)) {
       if (!phy_plan_->contain_pl_udf_or_trigger()) {
