@@ -12172,6 +12172,8 @@ int ObDDLResolver::check_only_modify_auto_partition_attr(ObPartitionedStmt *stmt
   } else if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", KR(ret), K(stmt));
+  } else if (T_RANDOM_PARTITION == node->type_) {
+    // handled by check_only_modify_auto_random_attr; node has only 1 child
   } else if (!table_schema.is_partitioned_table() ||
              table_schema.get_part_option().is_valid_split_part_type()) {
     static const int32_t RANGE_PARTITION_NODE_NUM = 7;
