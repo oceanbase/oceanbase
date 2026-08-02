@@ -109,12 +109,6 @@ private:
                        ObSchemaGetterGuard *schema_guard,
                        const RtMvCheckType rt_expand_type,
                        ObTableReferencedColumnsInfo *table_referenced_columns_info = NULL);
-  int check_mv_column_type(const ObTableSchema *mv_schema, const ObSelectStmt *view_stmt,
-                           ObSQLSessionInfo &session);
-  int check_mv_column_type(const ObColumnSchemaV2 &org_column, const ObColumnSchemaV2 &cur_column);
-  int check_column_type_and_accuracy(const ObColumnSchemaV2 &org_column,
-                                     const ObColumnSchemaV2 &cur_column,
-                                     bool &is_match);
   static int collect_tables_need_mlog(const ObSelectStmt* stmt,
                                       ObIArray<uint64_t> &tables_need_mlog);
   static int check_fast_refresh_dep_consistency(const uint64_t tenant_id,

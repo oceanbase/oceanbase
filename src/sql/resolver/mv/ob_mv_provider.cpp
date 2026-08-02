@@ -134,13 +134,6 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
             LOG_WARN("get unexpected null stmt", K(ret));
           } else if (OB_FAIL(ObMVChecker::pre_process_view_stmt(expr_factory_, session_info, *mv_def_stmt_))) {
             LOG_WARN("failed to pre process view stmt", K(ret));
-          } else if (OB_FAIL(check_mv_column_type(mv_container_schema_, mv_def_stmt_, *session_info))) {
-            if (OB_LIKELY(OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH == ret)) {
-              refreshable_type_ = OB_MV_REFRESH_INVALID;
-              ret = OB_SUCCESS;
-            } else {
-              LOG_WARN("failed to check mv column type", K(ret));
-            }
           } else if (OB_UNLIKELY(NEED_RT_EXPAND == rt_expand_type && !mv_schema_->mv_on_query_computation())) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("need to check rt expand, but the mview is not defined with on query computation", KR(ret));
@@ -525,104 +518,6 @@ int ObMVProvider::get_real_time_mv_expand_view(const uint64_t tenant_id,
     expand_view = operators.at(0);
     is_major_refresh_mview = OB_MV_FAST_REFRESH_MAJOR_REFRESH_MJV == mv_provider.refreshable_type_;
     LOG_TRACE("finish generate rt mv expand view", K(mview_id), K(is_major_refresh_mview), K(expand_view));
-  }
-  return ret;
-}
-
-// check mv can refresh.
-// if the result type from mv_schema and view_stmt is different, no refresh method is allowed
-// get new column info same as ObCreateViewResolver::add_column_infos
-int ObMVProvider::check_mv_column_type(const ObTableSchema *mv_schema,
-                                       const ObSelectStmt *view_stmt,
-                                       ObSQLSessionInfo &session)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(mv_schema) || OB_ISNULL(view_stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), K(mv_schema), K(view_stmt));
-  } else {
-    const ObIArray<SelectItem> &select_items = view_stmt->get_select_items();
-    const ObColumnSchemaV2 *org_column = NULL;
-    ObColumnSchemaV2 cur_column;
-    for (int64_t i = 0; OB_SUCC(ret) && i < select_items.count(); ++i) {
-      cur_column.reset();
-      if (OB_ISNULL(org_column = mv_schema->get_column_schema(i + OB_APP_MIN_COLUMN_ID))
-          || OB_ISNULL(select_items.at(i).expr_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null", K(ret), K(i), K(org_column), K(select_items.at(i)));
-      } else if (select_items.at(i).expr_->is_const_expr()) {
-        /* do nothing */
-      } else if (OB_FAIL(ObCreateViewResolver::fill_column_meta_infos(*select_items.at(i).expr_,
-                                                                      mv_schema->get_charset_type(),
-                                                                      mv_schema->get_table_id(),
-                                                                      session,
-                                                                      cur_column))) {
-        LOG_WARN("failed to fill column meta infos", K(ret), K(cur_column));
-      } else if (OB_FAIL(check_mv_column_type(*org_column, cur_column))) {
-        LOG_WARN("mv column changed", K(ret), K(i));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObMVProvider::check_mv_column_type(const ObColumnSchemaV2 &org_column,
-                                       const ObColumnSchemaV2 &cur_column)
-{
-  int ret = OB_SUCCESS;
-  const ObIArray<ObString> &orig_strs = org_column.get_extended_type_info();
-  const ObIArray<ObString> &cur_strs = cur_column.get_extended_type_info();
-  bool is_valid_col = // org_column.get_meta_type() == cur_column.get_meta_type()
-                     org_column.get_sub_data_type() == cur_column.get_sub_data_type()
-                     // && org_column.get_charset_type() == cur_column.get_charset_type() todo: org_column charset_type is invalid now
-                     && org_column.is_zero_fill() == cur_column.is_zero_fill()
-                     && orig_strs.count() == cur_strs.count();
-  if (is_valid_col && OB_FAIL(check_column_type_and_accuracy(org_column, cur_column, is_valid_col))) {
-    LOG_WARN("failed to check column type and accuracy", K(ret));
-  }
-  for (int64_t i = 0; is_valid_col && OB_SUCC(ret) && i < orig_strs.count(); ++i) {
-   if (orig_strs.at(i) == cur_strs.at(i)) {
-     /* do nothing */
-   } else {
-     is_valid_col = false;
-     LOG_WARN("enum or set column in mv changed", K(orig_strs), K(cur_strs));
-   }
-  }
-
-  if (OB_SUCC(ret) && !is_valid_col) {
-   ret = OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH;
-   LOG_WARN("mv column changed", K(ret), K(org_column), K(cur_column));
-  }
-  return ret;
-}
-
-int ObMVProvider::check_column_type_and_accuracy(const ObColumnSchemaV2 &org_column,
-                                                 const ObColumnSchemaV2 &cur_column,
-                                                 bool &is_match)
-{
-  int ret = OB_SUCCESS;
-  is_match = false;
-  if (org_column.get_meta_type().is_number()
-      && cur_column.get_meta_type().is_decimal_int()
-      && lib::is_oracle_mode()) {
-    /* in oracle mode, const number is resolved as decimal int except ddl stmt */
-    is_match = true;
-  } else if (org_column.get_meta_type().get_type() != cur_column.get_meta_type().get_type()) {
-    is_match = false;
-  } else if (ob_is_string_type(org_column.get_meta_type().get_type())) {
-    is_match = org_column.get_accuracy().get_length() >= cur_column.get_accuracy().get_length();
-  } else if (ob_is_numeric_type(org_column.get_meta_type().get_type())) {
-    // only check scale for number
-    // check scale and length for decimal int
-    // not need to check precision here
-    is_match = true;
-    const ObAccuracy &org = org_column.get_accuracy();
-    const ObAccuracy &cur = cur_column.get_accuracy();
-    is_match &= (-1 == org.get_scale() || org.get_scale() >= cur.get_scale());
-    is_match &= (cur_column.get_meta_type().is_number() || -1 == org.get_length() || org.get_length() >= cur.get_length());
-  } else {
-    // for columns neither string nor numeric, only check the type
-    is_match = true;
   }
   return ret;
 }
