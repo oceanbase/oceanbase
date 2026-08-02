@@ -210,8 +210,12 @@ private:
       const blocksstable::ObDmlFlag dml_flag,
       const transaction::ObTxSEQ &seq_no_cur,
       const ObLobId &lob_id,
-      ObString &data);
-  int check_is_during_freeze(bool &is_during_freeze);
+      ObString &data,
+      int64_t &freeze_start_time,
+      const int64_t retry_cnt);
+  int check_is_during_freeze(bool &is_during_freeze,
+                             int64_t &freeze_start_time,
+                             const int64_t retry_cnt);
 
 public:
   TO_STRING_KV(K(timeout_), K(data_size_), K(seq_no_st_), K(seq_no_cnt_), K(header_writed_));
