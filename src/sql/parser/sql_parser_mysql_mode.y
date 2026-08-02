@@ -1186,6 +1186,18 @@ STRING_VALUE %prec LOWER_THAN_COMP
   make_name_node(concat_node, result->malloc_pool_, "concat");
   concat_node->reserved_ = 1; /* mark special concat */
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, concat_node, string_list_node);
+  $$->reserved_ = 1;
+   /* lexer concat first string, e.g. select 'a' 'b' "c",
+   * $1->str_value_ is merged "ab", take first atom "a" from children_[0]
+   */
+  if (1 == $1->num_child_ && NULL != $1->children_ && NULL != $1->children_[0]
+      && T_CONCAT_STRING == $1->children_[0]->type_) {
+    $$->str_value_ = $1->children_[0]->str_value_;
+    $$->str_len_ = $1->children_[0]->str_len_;
+  } else {
+    $$->str_value_ = $1->str_value_;
+    $$->str_len_ = $1->str_len_;
+  }
 }
 | NATIONAL_LITERAL
 {
@@ -15148,10 +15160,22 @@ expr %prec LOWER_PARENS
     if (T_COLUMN_REF == $1->type_ && 3 == $1->num_child_ &&
         NULL != $1->children_[2] && T_STAR == $1->children_[2]->type_) {
           /* do nothing */
+    } else if (T_FUN_SYS == $1->type_ && 1 == $1->reserved_) {
+          /* implicit concat, skip add_alias_name */
     } else {
       lookup_pl_exec_symbol($$, result, @1.first_column, @1.last_column, false, true, false);
     }
 #endif
+    if (T_FUN_SYS == $1->type_ && 1 == $1->reserved_) {
+      $$->raw_text_ = $$->str_value_;
+      $$->text_len_ = $$->str_len_;
+      if (NULL == $1->str_value_) {
+        $$->str_value_ = NULL;
+        $$->str_len_ = 0;
+      } else {
+        dup_node_string($1, $$, result->malloc_pool_);
+      }
+    }
   }
   $$->raw_sql_offset_ = @1.first_column - 1;
 }
