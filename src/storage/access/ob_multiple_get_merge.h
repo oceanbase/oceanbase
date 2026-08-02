@@ -80,6 +80,7 @@ public:
 class ObMultipleGetMerge : public ObMultipleMerge
 {
 public:
+  static constexpr int64_t FUSE_ROW_CACHE_RING_SIZE = common::OB_MULTI_GET_OPEN_ROWKEY_NUM + 1;
   ObMultipleGetMerge();
   virtual ~ObMultipleGetMerge();
   int open(const common::ObIArray<blocksstable::ObDatumRowkey> &rowkeys);
@@ -122,7 +123,7 @@ private:
 private:
   common::ObIArray<blocksstable::ObDatumRowkey> *rowkeys_;
   ObFuseRowCacheFetcher fuse_row_cache_fetcher_;
-  ObFuseRowValueHandle cache_handles_[common::OB_MULTI_GET_OPEN_ROWKEY_NUM];
+  ObFuseRowValueHandle cache_handles_[FUSE_ROW_CACHE_RING_SIZE];
   ObQueryRowInfo *full_rows_;
   int64_t prefetch_row_range_idx_;
   int64_t get_row_range_idx_;

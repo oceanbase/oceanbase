@@ -55,7 +55,7 @@ void ObMultipleGetMerge::reset()
 {
   rowkeys_ = nullptr;
   if (OB_NOT_NULL(full_rows_)) {
-    for (int64_t i = 0; i < common::OB_MULTI_GET_OPEN_ROWKEY_NUM; ++i) {
+    for (int64_t i = 0; i < FUSE_ROW_CACHE_RING_SIZE; ++i) {
       cache_handles_[i].reset();
       full_rows_[i].reset();
     }
@@ -72,7 +72,7 @@ void ObMultipleGetMerge::reuse()
 {
   ObMultipleMerge::reuse();
   if (OB_NOT_NULL(full_rows_)) {
-    for (int64_t i = 0; i < common::OB_MULTI_GET_OPEN_ROWKEY_NUM; ++i) {
+    for (int64_t i = 0; i < FUSE_ROW_CACHE_RING_SIZE; ++i) {
       cache_handles_[i].reset();
       full_rows_[i].reuse();
     }
@@ -86,7 +86,7 @@ void ObMultipleGetMerge::reclaim()
   ObMultipleMerge::reclaim();
   rowkeys_ = nullptr;
   if (OB_NOT_NULL(full_rows_)) {
-    for (int64_t i = 0; i < common::OB_MULTI_GET_OPEN_ROWKEY_NUM; ++i) {
+    for (int64_t i = 0; i < FUSE_ROW_CACHE_RING_SIZE; ++i) {
       cache_handles_[i].reset();
       full_rows_[i].reclaim();
     }
@@ -99,7 +99,7 @@ void ObMultipleGetMerge::reclaim()
 int ObMultipleGetMerge::prepare()
 {
   if (OB_NOT_NULL(full_rows_)) {
-    for (int64_t i = 0; i < common::OB_MULTI_GET_OPEN_ROWKEY_NUM; ++i) {
+    for (int64_t i = 0; i < FUSE_ROW_CACHE_RING_SIZE; ++i) {
       cache_handles_[i].reset();
       full_rows_[i].reuse();
     }
@@ -208,12 +208,12 @@ int ObMultipleGetMerge::alloc_resource()
   if (OB_LIKELY(nullptr != full_rows_)) {
   } else {
     void *buf = nullptr;
-    size_t buf_len = sizeof(ObQueryRowInfo) * common::OB_MULTI_GET_OPEN_ROWKEY_NUM;
+    size_t buf_len = sizeof(ObQueryRowInfo) * FUSE_ROW_CACHE_RING_SIZE;
     if (OB_ISNULL(buf = long_life_allocator_->alloc(buf_len))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "Failed to allocate buffer", K(ret), K(buf_len));
     } else {
-      full_rows_ = new(buf) ObQueryRowInfo[common::OB_MULTI_GET_OPEN_ROWKEY_NUM]();
+      full_rows_ = new(buf) ObQueryRowInfo[FUSE_ROW_CACHE_RING_SIZE]();
     }
     STORAGE_LOG(DEBUG, "alloc memory", K(ret), K(buf_len));
   }
@@ -252,7 +252,7 @@ int ObMultipleGetMerge::init_resource()
   } else if (OB_FAIL(alloc_resource())) {
     STORAGE_LOG(WARN, "fail to alloc resource", K(ret));
   } else {
-    int64_t max_rowkey_cnt = MIN(rowkeys_->count(), common::OB_MULTI_GET_OPEN_ROWKEY_NUM);
+    int64_t max_rowkey_cnt = MIN(rowkeys_->count(), FUSE_ROW_CACHE_RING_SIZE);
     for (int64_t i = 0; OB_SUCC(ret) && i < max_rowkey_cnt; ++i) {
       cache_handles_[i].reset();
       ObQueryRowInfo &row_info = full_rows_[i];
@@ -523,7 +523,7 @@ int ObMultipleGetMerge::get_rows_from_memory()
   ObITable *table = tables_.at(tables_.count() - 1);
   if (table->is_memtable()) {
     for (int64_t i = 0; OB_SUCC(ret) && i < max_prefetch_rowkey_cnt; ++i) {
-      ObQueryRowInfo &row_info = full_rows_[i % common::OB_MULTI_GET_OPEN_ROWKEY_NUM];
+      ObQueryRowInfo &row_info = full_rows_[i % FUSE_ROW_CACHE_RING_SIZE];
       ObDatumRowkey &rowkey = rowkeys_->at(i);
       if (OB_FAIL(iter_fuse_row_from_specified_tables(rowkey, row_info.row_, row_info.nop_pos_, row_info.has_uncommitted_row_, true/*only memtables*/))) {
         STORAGE_LOG(WARN, "fail to iterate rows for memory tables", K(ret), K(rowkey), K(row_info));
@@ -538,7 +538,7 @@ int ObMultipleGetMerge::get_rows_from_memory()
   if (OB_FAIL(ret)) {
   } else if (in_mem_cnt < max_prefetch_rowkey_cnt && access_ctx_->use_fuse_row_cache_) {
     for (int64_t i = 0; OB_SUCC(ret) && i < max_prefetch_rowkey_cnt; ++i) {
-      int64_t prefetch_idx = i % common::OB_MULTI_GET_OPEN_ROWKEY_NUM;
+      int64_t prefetch_idx = i % FUSE_ROW_CACHE_RING_SIZE;
       ObQueryRowInfo &row_info = full_rows_[prefetch_idx];
       ObDatumRowkey &rowkey = rowkeys_->at(i);
       if (rowkey.is_skip_prefetch_) {
@@ -563,7 +563,7 @@ int ObMultipleGetMerge::prepare_prefetch_next_rowkey(
   int ret = OB_SUCCESS;
   ObITable *table = tables_.at(tables_.count() - 1);
   ObDatumRowkey &rowkey = rowkeys_->at(prefetch_row_range_idx_);
-  int64_t prefetch_idx = prefetch_row_range_idx_ % common::OB_MULTI_GET_OPEN_ROWKEY_NUM;
+  int64_t prefetch_idx = prefetch_row_range_idx_ % FUSE_ROW_CACHE_RING_SIZE;
   ObQueryRowInfo &row_info = full_rows_[prefetch_idx];
   ObFuseRowValueHandle &handle = cache_handles_[prefetch_idx];
   row_info.reuse();
@@ -658,7 +658,7 @@ int ObMultipleGetMerge::inner_get_next_row_for_sstables_exist(ObDatumRow &row)
       if (get_row_range_idx_ >= rowkey_cnt) {
         ret = OB_ITER_END;
       } else {
-        idx = get_row_range_idx_ % common::OB_MULTI_GET_OPEN_ROWKEY_NUM;
+        idx = get_row_range_idx_ % FUSE_ROW_CACHE_RING_SIZE;
         ObQueryRowInfo &row_info = full_rows_[idx];
         ObFuseRowValueHandle &handle = cache_handles_[idx];
         is_valid_row = false;
@@ -678,9 +678,10 @@ int ObMultipleGetMerge::inner_get_next_row_for_sstables_exist(ObDatumRow &row)
             access_ctx_->table_store_stat_.fuse_row_cache_put_cnt_++;
           }
         }
-        // prepare to prefetch next rowkey
+        // Keep one extra slot so the next rowkey can be prepared without
+        // invalidating the cache-backed row returned in this iteration.
         if (OB_FAIL(ret)) {
-        } else if (prefetch_row_range_idx_ < rowkey_cnt && prefetch_row_range_idx_ - get_row_range_idx_ < common::OB_MULTI_GET_OPEN_ROWKEY_NUM) {
+        } else if (prefetch_row_range_idx_ < rowkey_cnt) {
           if (OB_FAIL(prepare_prefetch_next_rowkey(multi_version_start, read_snapshot_version))) {
             STORAGE_LOG(WARN, "fail to prepare to prefetch next rowkey", K(ret), K(prefetch_row_range_idx_), K(rowkey_cnt));
           } else {
