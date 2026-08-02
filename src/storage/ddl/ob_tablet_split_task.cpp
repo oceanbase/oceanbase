@@ -311,6 +311,7 @@ int ObTabletSplitCtx::get_split_majors_infos()
       false/*is_table_restore*/,
       ObArray<ObITable::TableKey>()/*skip_split_majors*/,
       false/*filter_normal_cg_sstables*/,
+      false/*filter_meta_major_sstables*/,
       major_sstables))) {
     LOG_WARN("get participant sstables failed", K(ret));
   } else if (OB_UNLIKELY(major_sstables.empty())) {
@@ -344,6 +345,7 @@ int ObTabletSplitCtx::get_index_in_source_sstables(
       false/*is_table_restore*/,
       ObArray<ObITable::TableKey>()/*skip_split_majors*/,
       false/*filter_normal_cg_sstables*/,
+      false/*filter_meta_major_sstables*/,
       source_sstables))) {
     LOG_WARN("get participant sstables failed", K(ret));
   } else {
@@ -1123,6 +1125,7 @@ int ObTabletSplitPrepareTask::generate_next_tasks()
       param_->split_sstable_type_, context_->table_store_iterator_, false/*is_table_restore*/,
       context_->skipped_split_major_keys_,
       true/*filter_normal_cg_sstables*/,
+      false/*filter_meta_major_sstables*/,
       source_sstables))) {
     LOG_WARN("get all sstables failed", K(ret));
   } else {
@@ -2569,6 +2572,7 @@ int ObSplitDownloadSSTableTask::collect_split_sstables(
       false/*is_table_restore*/,
       ObArray<ObITable::TableKey>()/*skip_split_majors*/,
       true/*filter_normal_cg_sstables*/,
+      false/*filter_meta_major_sstables*/,
       sstables_in_table_store))) {
     LOG_WARN("get participant sstables failed", K(ret));
   } else if (OB_UNLIKELY(share::ObSplitSSTableType::SPLIT_MAJOR == split_sstable_type

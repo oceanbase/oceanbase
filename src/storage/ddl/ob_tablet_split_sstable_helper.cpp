@@ -1089,6 +1089,7 @@ int ObSpecialSplitWriteHelper::create_empty_minor_sstable()
   } else if (OB_FAIL(ObTabletSplitUtil::get_participants(
       share::ObSplitSSTableType::SPLIT_MINOR, context_->table_store_iterator_, false/*is_table_restore*/,
       context_->skipped_split_major_keys_, false/*filter_normal_cg_sstables*/,
+      false/*filter_meta_major_sstables*/,
       participants))) {
     LOG_WARN("get participants failed", K(ret));
   } else if (participants.empty()) {
