@@ -964,6 +964,10 @@ int ObDDLKV::create_ddl_memtable(ObTablet &tablet, const ObITable::TableKey &tab
   } else if (OB_ISNULL(arena_allocator_buf = ddl_memtable_allocator_.alloc(sizeof(ObArenaAllocator)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret));
+    tmp_ddl_memtable->~ObDDLMemtable();
+    ddl_memtable_allocator_.free(buf);
+    tmp_ddl_memtable = nullptr;
+    ddl_memtable = nullptr;
   } else if (OB_FALSE_IT(allocator_for_ddl_memtable = new (arena_allocator_buf) ObArenaAllocator("AllocForDdlMem", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()))) {
   } else {
     ObStorageSchema *storage_schema = nullptr;
