@@ -200,6 +200,21 @@ int ObDDLMergeScheduler::check_need_merge_for_idem_sn(ObTablet &tablet, ObArray<
         ddl_kv_type = ObDDLKVType::DDL_KV_FULL;
       }
 
+      /* schedule merge when ddl kv active && ddl complete mds exists,
+       * ddl complete replay may be skipped when tablet_change_checkpoint_scn is copied
+       * from the migration source, while redo replay rebuilds an active ddl kv */
+      if (OB_FAIL(ret) || need_schedule_merge || is_full_major_exist) {
+      } else if (OB_FAIL(tablet.get_ddl_complete(share::SCN::max_scn(), arena, user_data))) {
+        if (OB_EMPTY_RESULT == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to get ddl complete", K(ret), K(tablet.get_tablet_id()));
+        }
+      } else if (user_data.has_complete_ && is_full_direct_load(user_data.direct_load_type_)) {
+        need_schedule_merge = true;
+        ddl_kv_type = ObDDLKVType::DDL_KV_FULL;
+      }
+
       /* schedule merge when ddl kv active && not enough mem */
       if (OB_FAIL(ret) || need_schedule_merge) {
       } else {
