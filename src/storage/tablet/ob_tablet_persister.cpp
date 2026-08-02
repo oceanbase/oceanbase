@@ -101,9 +101,11 @@ int ObTabletPersister::persist_and_transform_tablet(
   } else if (OB_UNLIKELY(param.for_ss_persist())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("shared tablet meta persistence should not call this method", K(ret), K(lbt()));
-  } else if (OB_UNLIKELY(new_handle.is_valid())) {
+  } else if (OB_UNLIKELY(nullptr != new_handle.get_obj() && new_handle.get_obj()->is_valid())) {
+    // new_handle may be a pre-acquired but not-yet-transformed tablet buffer, which is allowed.
+    // only reject a handle that already holds a transformed tablet.
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("new handle should not be valid", K(ret), K(new_handle));
+    LOG_WARN("new handle should not hold a transformed tablet", K(ret), K(new_handle));
   } else if (OB_FAIL(inner_persist_and_transform(param, old_tablet, new_handle))) {
     LOG_WARN("persist and transform fail", K(ret), K(param));
   }
@@ -642,7 +644,7 @@ int ObTabletPersister::persist_and_fill_tablet(
   }
 
   if (OB_FAIL(ret)) {
-  } else if (!ctx.new_tablet_handle_.is_valid() && OB_FAIL(acquire_tablet(ctx.pool_type_, key, try_smaller_pool, ctx.new_tablet_handle_))) {
+  } else if (nullptr == ctx.new_tablet_handle_.get_obj() && OB_FAIL(acquire_tablet(ctx.pool_type_, key, try_smaller_pool, ctx.new_tablet_handle_))) {
     LOG_WARN("fail to acquire tablet", K(ret), K(key), K(ctx.pool_type_));
   } else if (OB_FAIL(transform(param, arg, multi_stats, ctx.new_tablet_handle_.get_buf(), ctx.new_tablet_handle_.get_buf_len()))) {
     LOG_WARN("fail to transform old tablet", K(ret), K(arg), "new_handle", ctx.new_tablet_handle_, K(ctx.pool_type_));

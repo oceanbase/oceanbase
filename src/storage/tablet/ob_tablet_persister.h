@@ -252,6 +252,11 @@ public:
       const ObTabletHandle* tablet_handles,
       const int64_t tablet_hdl_cnt,
       /*out*/ObTabletHandle *new_tablet_handles);
+  static int acquire_tablet(
+      const ObTabletPoolType &type,
+      const ObTabletMapKey &key,
+      const bool try_smaller_pool,
+      ObTabletHandle &new_handle);
 private:
 #ifdef OB_BUILD_SHARED_STORAGE
   static int delete_blocks_(
@@ -290,11 +295,6 @@ private:
   static int check_tablet_meta_ids(
       const ObIArray<blocksstable::MacroBlockId> &shared_meta_id_arr,
       const ObTablet &tablet);
-  static int acquire_tablet(
-      const ObTabletPoolType &type,
-      const ObTabletMapKey &key,
-      const bool try_smaller_pool,
-      ObTabletHandle &new_handle);
   static int convert_tablet_to_mem_arg(
       const ObTablet &tablet,
       ObTabletTransformArg &arg);
