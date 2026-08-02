@@ -185,6 +185,8 @@ class ObPXServerAddrUtil
     TO_STRING_KV(K_(partition_count), K_(thread_count), K_(time), K_(idx), K_(finish));
   };
 public:
+  static const int USE_HASHMAP_THRESHOLD = 32;
+public:
   ObPXServerAddrUtil() = default;
   ~ObPXServerAddrUtil() = default;
   static int alloc_by_data_distribution(const ObIArray<ObTableLocation> *table_locations,

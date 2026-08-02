@@ -760,56 +760,108 @@ int ObPXServerAddrUtil::build_dfo_sqc(ObExecContext &ctx,
   }
 
   if (OB_SUCC(ret) && addrs.count() > 0) {
+    const bool use_hashmap = (addrs.count() >= USE_HASHMAP_THRESHOLD);
     ObIArray<ObPxSqcMeta> &sqcs = dfo.get_sqcs();
     int64_t total_part_cnt = locations.size();
     int64_t total_row_cnt = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && i < addrs.count(); ++i) {
-      SMART_VAR(ObPxSqcMeta, sqc) {
-        sqc.set_dfo_id(dfo.get_dfo_id());
-        sqc.set_sqc_id(i);
-        sqc.set_exec_addr(addrs.at(i));
-        sqc.set_qc_addr(GCTX.self_addr());
-        sqc.set_execution_id(dfo.get_execution_id());
-        sqc.set_px_sequence_id(dfo.get_px_sequence_id());
-        sqc.set_qc_id(dfo.get_qc_id());
-        sqc.set_interrupt_id(dfo.get_interrupt_id());
-        sqc.set_px_detectable_ids(dfo.get_px_detectable_ids());
-        sqc.set_fulltree(dfo.is_fulltree());
-        sqc.set_qc_server_id(dfo.get_qc_server_id());
-        sqc.set_parent_dfo_id(dfo.get_parent_dfo_id());
-        sqc.set_single_tsc_leaf_dfo(dfo.is_single_tsc_leaf_dfo());
-        sqc.get_monitoring_info().init(dfo);
-        sqc.set_partition_random_affinitize(dfo.partition_random_affinitize());
-        if (OB_SUCC(ret)) {
-          if (!dfo.get_p2p_dh_map_info().is_empty()) {
-            if (OB_FAIL(sqc.get_p2p_dh_map_info().assign(dfo.get_p2p_dh_map_info()))) {
-              LOG_WARN("fail to assign p2p dh map info", K(ret));
-            }
+    common::hash::ObHashMap<common::ObAddr, int64_t> addr_to_sqc_idx;
+
+    if (use_hashmap && OB_FAIL(addr_to_sqc_idx.create(addrs.count(), "AddrToSqcIdx"))) {
+      LOG_WARN("fail to create addr_to_sqc_idx map", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < addrs.count(); ++i) {
+        if (use_hashmap && OB_FAIL(addr_to_sqc_idx.set_refactored(addrs.at(i), i))) {
+          if (OB_HASH_EXIST == ret) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("fail to set addr_to_sqc_idx", K(ret));
           }
         }
-        if (is_opt_stat_valid) {
-          for (int64_t k = 0; k < px_tablets_info.count() && OB_SUCC(ret); ++k) {
-            const ObPxTabletInfo &table_info = px_tablets_info.at(k);
-            if (addrs.at(i) == table_info.tablet_loc_->server_) {
-              sqc_row_count.at(i) += table_info.estimated_row_count_;
-              if (!send_px_tablets_info_to_sqc) {
-              } else if (OB_FAIL(sqc.get_px_tablets_info().push_back(table_info))) {
-                LOG_WARN("failed to push back");
+        if (OB_SUCC(ret)) {
+          SMART_VAR(ObPxSqcMeta, new_sqc) {
+            if (OB_FAIL(dfo.add_sqc(new_sqc))) {
+              LOG_WARN("Failed to add sqc", K(ret), K(new_sqc));
+            } else {
+              ObPxSqcMeta &sqc = dfo.get_sqcs().at(dfo.get_sqcs_count() - 1);
+              sqc.set_dfo_id(dfo.get_dfo_id());
+              sqc.set_sqc_id(i);
+              sqc.set_exec_addr(addrs.at(i));
+              sqc.set_qc_addr(GCTX.self_addr());
+              sqc.set_execution_id(dfo.get_execution_id());
+              sqc.set_px_sequence_id(dfo.get_px_sequence_id());
+              sqc.set_qc_id(dfo.get_qc_id());
+              sqc.set_interrupt_id(dfo.get_interrupt_id());
+              sqc.set_px_detectable_ids(dfo.get_px_detectable_ids());
+              sqc.set_fulltree(dfo.is_fulltree());
+              sqc.set_qc_server_id(dfo.get_qc_server_id());
+              sqc.set_parent_dfo_id(dfo.get_parent_dfo_id());
+              sqc.set_single_tsc_leaf_dfo(dfo.is_single_tsc_leaf_dfo());
+              sqc.get_monitoring_info().init(dfo);
+              sqc.set_partition_random_affinitize(dfo.partition_random_affinitize());
+              if (OB_SUCC(ret)) {
+                if (!dfo.get_p2p_dh_map_info().is_empty()) {
+                  if (OB_FAIL(sqc.get_p2p_dh_map_info().assign(dfo.get_p2p_dh_map_info()))) {
+                    LOG_WARN("fail to assign p2p dh map info", K(ret));
+                  }
+                }
               }
             }
           }
-          total_row_cnt += sqc_row_count.at(i);
-        } else {
-          for (DASTabletLocList::const_iterator iter = locations.begin();
-               OB_SUCC(ret) && iter != locations.end(); ++iter) {
-            if (addrs.at(i) == (*iter)->server_) {
-              sqc_part_count.at(i)++;
+        }
+      }
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (is_opt_stat_valid) {
+        for (int64_t k = 0; OB_SUCC(ret) && k < px_tablets_info.count(); ++k) {
+          const ObPxTabletInfo &table_info = px_tablets_info.at(k);
+          int64_t sqc_idx = -1;
+          if (use_hashmap) {
+            if (OB_FAIL(addr_to_sqc_idx.get_refactored(table_info.tablet_loc_->server_, sqc_idx))) {
+              if (OB_HASH_NOT_EXIST == ret) {
+                ret = OB_SUCCESS;
+                sqc_idx = -1;
+              } else {
+                LOG_WARN("fail to get sqc_idx", K(ret), K(table_info.tablet_loc_->server_));
+              }
+            }
+          } else {
+            ARRAY_FOREACH_X(sqcs, i, cnt, OB_SUCC(ret)) {
+              if (sqcs.at(i).get_exec_addr() == table_info.tablet_loc_->server_) {
+                sqc_idx = i;
+                break;
+              }
+            }
+          }
+          if (OB_SUCC(ret) && sqc_idx >= 0) {
+            sqc_row_count.at(sqc_idx) += table_info.estimated_row_count_;
+            total_row_cnt += table_info.estimated_row_count_;
+            if (send_px_tablets_info_to_sqc && OB_FAIL(sqcs.at(sqc_idx).get_px_tablets_info().push_back(table_info))) {
+              LOG_WARN("fail to push back px tablets info", K(ret));
             }
           }
         }
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(dfo.add_sqc(sqc))) {
-            LOG_WARN("Failed to add sqc", K(ret), K(sqc));
+      } else {
+        for (DASTabletLocList::const_iterator iter = locations.begin(); OB_SUCC(ret) && iter != locations.end(); ++iter) {
+          int64_t sqc_idx = -1;
+          if (use_hashmap) {
+            if (OB_FAIL(addr_to_sqc_idx.get_refactored((*iter)->server_, sqc_idx))) {
+              if (OB_HASH_NOT_EXIST == ret) {
+                ret = OB_SUCCESS;
+                sqc_idx = -1;
+              } else {
+                LOG_WARN("fail to get sqc_idx", K(ret), K((*iter)->server_));
+              }
+            }
+          } else {
+            ARRAY_FOREACH_X(sqcs, i, cnt, OB_SUCC(ret)) {
+              if (sqcs.at(i).get_exec_addr() == (*iter)->server_) {
+                sqc_idx = i;
+                break;
+              }
+            }
+          }
+          if (OB_SUCC(ret) && sqc_idx >= 0) {
+            sqc_part_count.at(sqc_idx)++;
           }
         }
       }
@@ -851,6 +903,9 @@ int ObPXServerAddrUtil::build_dfo_sqc(ObExecContext &ctx,
       if (OB_FAIL(assign_extra_lake_table_files_to_sqc(ctx, dfo))) {
         LOG_WARN("failed to assign extra lake table files to sqc");
       }
+    }
+    if (addr_to_sqc_idx.created()) {
+      addr_to_sqc_idx.destroy();
     }
   }
   return ret;
@@ -1502,48 +1557,81 @@ int ObPXServerAddrUtil::set_sqcs_accessed_location(
     }
   }
 
-  // 将一个表涉及到的所有partition按照server addr划分到对应的sqc中
-  ARRAY_FOREACH_X(sqcs, sqc_idx, sqc_cnt, OB_SUCC(ret)) {
-    ObPxSqcMeta &sqc_meta = sqcs.at(sqc_idx);
-    DASTabletLocIArray &sqc_locations = sqc_meta.get_access_table_locations_for_update();
-    ObIArray<ObSqcTableLocationKey> &sqc_location_keys = sqc_meta.get_access_table_location_keys();
-    ObIArray<ObSqcTableLocationIndex> &sqc_location_indexes = sqc_meta.get_access_table_location_indexes();
-    int64_t location_start_pos = sqc_locations.count();
-    int64_t location_end_pos = sqc_locations.count();
-    const common::ObAddr &sqc_server = sqc_meta.get_exec_addr();
-    ARRAY_FOREACH_X(temp_locations, idx, cnt, OB_SUCC(ret)) {
-      const common::ObAddr &server = temp_locations.at(idx)->server_;
-      if (server == sqc_server) {
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(sqc_locations.push_back(temp_locations.at(idx)))) {
-          LOG_WARN("sqc push back table location failed", K(ret));
-        } else if (OB_FAIL(sqc_location_keys.push_back(ObSqcTableLocationKey(
-              table_loc->get_table_location_key(),
-              table_loc->get_ref_table_id(),
-              temp_locations.at(idx)->tablet_id_,
-              IS_DML(phy_op->get_type()),
-              IS_DML(phy_op->get_type()) ?
-                static_cast<const ObTableModifySpec *>(phy_op)->is_table_location_uncertain() :
-                false)))) {
-        } else {
-          ++n_locations;
-          ++location_end_pos;
+  if (OB_SUCC(ret)) {
+    // 将一个表涉及到的所有partition按照server addr划分到对应的sqc中
+    const bool use_hashmap = (sqcs.count() >= USE_HASHMAP_THRESHOLD);
+    const bool is_dml = IS_DML(phy_op->get_type());
+    const bool loc_uncertain = is_dml ? static_cast<const ObTableModifySpec *>(phy_op)->is_table_location_uncertain() : false;
+    const int64_t loc_key = table_loc->get_table_location_key();
+    const uint64_t ref_table_id = table_loc->get_ref_table_id();
+    common::hash::ObHashMap<common::ObAddr, int64_t> addr_to_sqc_idx;
+    ObArray<int64_t> start_pos_sqcs;
+
+    if (use_hashmap && OB_FAIL(addr_to_sqc_idx.create(sqcs.count(), "AddrToSqcIdx"))) {
+      LOG_WARN("fail to create addr_to_sqc_idx map", K(ret));
+    } else {
+      ARRAY_FOREACH_X(sqcs, sqc_idx, sqc_cnt, OB_SUCC(ret)) {
+        if (OB_FAIL(start_pos_sqcs.push_back(sqcs.at(sqc_idx).get_access_table_locations_for_update().count()))) {
+          LOG_WARN("fail to push back start_pos_sqcs", K(ret));
+        } else if (use_hashmap && OB_FAIL(addr_to_sqc_idx.set_refactored(sqcs.at(sqc_idx).get_exec_addr(), sqc_idx))) {
+          if (OB_HASH_EXIST == ret) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("fail to set addr_to_sqc_idx", K(ret));
+          }
         }
       }
     }
-    if (OB_SUCC(ret) && location_start_pos < location_end_pos) {
-      if (OB_FAIL(sqc_location_indexes.push_back(ObSqcTableLocationIndex(
-          table_loc->get_table_location_key(),
-          location_start_pos,
-          location_end_pos - 1)))) {
-        LOG_WARN("fail to push back table location index", K(ret));
+    ARRAY_FOREACH_X(temp_locations, idx, cnt, OB_SUCC(ret)) {
+      int64_t sqc_idx = -1;
+      const common::ObAddr &server = temp_locations.at(idx)->server_;
+      if (use_hashmap) {
+        if (OB_FAIL(addr_to_sqc_idx.get_refactored(server, sqc_idx))) {
+          if (OB_HASH_NOT_EXIST == ret) {
+            ret = OB_SUCCESS;
+            sqc_idx = -1;
+          } else {
+            LOG_WARN("fail to get sqc_idx", K(ret), K(server));
+          }
+        }
+      } else {
+        ARRAY_FOREACH_X(sqcs, i, cnt, OB_SUCC(ret)) {
+          if (sqcs.at(i).get_exec_addr() == server) {
+            sqc_idx = i;
+            break;
+          }
+        }
+      }
+      if (OB_SUCC(ret) && sqc_idx >= 0) {
+        ObPxSqcMeta &sqc_meta = sqcs.at(sqc_idx);
+        if (OB_FAIL(sqc_meta.get_access_table_locations_for_update().push_back(temp_locations.at(idx)))) {
+          LOG_WARN("sqc push back table location failed", K(ret));
+        } else if (OB_FAIL(sqc_meta.get_access_table_location_keys().push_back(ObSqcTableLocationKey(
+                    loc_key, ref_table_id, temp_locations.at(idx)->tablet_id_, is_dml, loc_uncertain
+                  )))) {
+          LOG_WARN("sqc push back table location keys failed", K(ret));
+        } else {
+          ++n_locations;
+        }
       }
     }
-  }
-  if (OB_SUCC(ret) && n_locations != locations.size()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("we do not find this addr's execution sqc", K(ret), K(n_locations),
-             K(locations.size()), K(sqcs), K(locations));
+    ARRAY_FOREACH_X(sqcs, sqc_idx, sqc_cnt, OB_SUCC(ret)) {
+      int64_t location_end_pos = sqcs.at(sqc_idx).get_access_table_locations_for_update().count();
+      if (start_pos_sqcs.at(sqc_idx) < location_end_pos) {
+        if (OB_FAIL(sqcs.at(sqc_idx).get_access_table_location_indexes().push_back(
+            ObSqcTableLocationIndex(table_loc->get_table_location_key(), start_pos_sqcs.at(sqc_idx), location_end_pos - 1)))) {
+          LOG_WARN("fail to push back table location index", K(ret));
+        }
+      }
+    }
+    if (addr_to_sqc_idx.created()) {
+      addr_to_sqc_idx.destroy();
+    }
+    if (OB_SUCC(ret) && n_locations != locations.size()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("we do not find this addr's execution sqc", K(ret), K(n_locations),
+              K(locations.size()), K(sqcs), K(locations));
+    }
   }
   return ret;
 }

@@ -1090,14 +1090,11 @@ int ObPxSubCoord::rebuild_sqc_access_table_locations()
         ret = ERRSIM_TABLET_LOC_NOT_FOUND;
         LOG_INFO("ERRSIM here", KR(ret));
       } else {
-        for (DASTabletLocListIter tmp_node = table_loc->tablet_locs_begin();
-             tmp_node != table_loc->tablet_locs_end(); ++tmp_node) {
-          ObDASTabletLoc *tablet_loc = *tmp_node;
-          if (tablet_loc->tablet_id_ == location_keys.at(i).tablet_id_) {
-            if (OB_FAIL(access_locations.push_back(tablet_loc))) {
-              LOG_WARN("fail to push back access locations", K(ret));
-            }
-          }
+        ObDASTabletLoc *tablet_loc = nullptr;
+        if (OB_FAIL(table_loc->get_tablet_loc_by_id(location_keys.at(i).tablet_id_, tablet_loc))) {
+          LOG_WARN("fail to get tablet loc by id", K(ret), K(location_keys.at(i).tablet_id_));
+        } else if (OB_NOT_NULL(tablet_loc) && OB_FAIL(access_locations.push_back(tablet_loc))) {
+          LOG_WARN("fail to push back access locations", K(ret));
         }
       }
     }
