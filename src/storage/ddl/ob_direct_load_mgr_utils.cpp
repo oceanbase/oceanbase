@@ -384,7 +384,7 @@ int ObDirectLoadMgrUtil::generate_merge_param(const ObTabletDDLCompleteMdsUserDa
       merge_param.ls_id_               = tablet.get_ls_id();
       merge_param.tablet_id_           = tablet.get_tablet_id();
       merge_param.data_format_version_ = ddl_kvs_handle.at(0).get_obj()->get_data_format_version();
-      merge_param.snapshot_version_    = ddl_kvs_handle.at(0).get_obj()->get_snapshot_version();
+      merge_param.snapshot_version_    = ddl_kvs_handle.at(0).get_obj()->get_ddl_snapshot_version();
       merge_param.start_scn_           = mock_scn;
       merge_param.is_commit_           = false;
       int64_t base_cg_idx = 0;
@@ -402,7 +402,7 @@ int ObDirectLoadMgrUtil::generate_merge_param(const ObTabletDDLCompleteMdsUserDa
         merge_param.table_key_.tablet_id_ = tablet.get_tablet_id();
         merge_param.table_key_.scn_range_.start_scn_ = SCN::scn_dec(mock_scn);
         merge_param.table_key_.scn_range_.end_scn_ = mock_scn;
-        merge_param.table_key_.version_range_.snapshot_version_ = ddl_kvs_handle.at(0).get_obj()->get_snapshot_version();
+        merge_param.table_key_.version_range_.snapshot_version_ = ddl_kvs_handle.at(0).get_obj()->get_ddl_snapshot_version();
         merge_param.table_key_.column_group_idx_ = base_cg_idx;
       }
     }
