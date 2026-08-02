@@ -907,15 +907,17 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
                                       : expr->get_result_type().is_mysql_question_mark_type()))) {
     OX (match_info =
             (ObRoutineMatchInfo::MatchInfo(false, ObUnknownType, dst_pl_type.get_obj_type())));
-  } else if (resolve_ctx.is_prepare_with_params_
+  } else if (lib::is_oracle_mode()
+             && resolve_ctx.is_prepare_with_params_
              && resolve_ctx.is_prepare_protocol_
              && (IS_LOB_TYPE(dst_pl_type.get_obj_type())
                  && CS_TYPE_BINARY == dst_pl_type.get_meta_type()->get_collation_type())
-             && expr->get_result_type().is_oracle_question_mark_type()) {
+             && (expr->get_result_type().is_oracle_question_mark_type()
+                 || (T_QUESTIONMARK == expr->get_expr_type()
+                     && ObCharType == src_type))) {
     // JDBC sends blob params with MYSQL_TYPE_STRING type, which observer would parse as ObCharType.
-    //   => expr result type here is deduced to ObCharType + length == 2000.
-    //   => blob params would branch to ObUnknownType branch above, because it's recognized as a
-    //      oracle question mark.
+    // In prepare without params, its length is deduced to PS_QUESTION_MARK_DEDUCE_LEN; in prepare
+    // with params, setBytes() carries the actual hex string and therefore has the actual length.
     // for blob formal type in prepare with params scenario, keep it compatible with that in prepare
     // without params scenario.
     OX (match_info =
