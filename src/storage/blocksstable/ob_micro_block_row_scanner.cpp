@@ -2460,15 +2460,16 @@ void ObMultiVersionMicroBlockRowScanner::classify_committed_trans_version(
     // filter multi version row whose trans version is smaller than base_version
     version_fit = false;
     final_result = true;
-  } else if (trans_version > version_range_.snapshot_version_) {
+  } else if (!context_->query_flag_.iter_uncommitted_row()
+             && trans_version > version_range_.snapshot_version_) {
     // beyond snapshot: filter it.
     version_fit = false;
   }
-  // In-range (base_version < trans_version <= snapshot_version): leave version_fit
-  // UNTOUCHED. For the committed branch the caller sets it true beforehand; for the
-  // uncommitted branch it must preserve the can_read_ / lock_for_read verdict, so that a
-  // row rolled back to a savepoint (committed trans_version, but can_read_ == false)
-  // stays filtered instead of being resurrected.
+  // In-range for ordinary read (base_version < trans_version <= snapshot_version): leave version_fit
+  // UNTOUCHED. iter_uncommitted_row intentionally bypasses only the snapshot boundary.
+  // For the committed branch the caller seeds it true; for the uncommitted branch it
+  // must preserve the can_read_ / lock_for_read verdict, so that a row rolled back to a
+  // savepoint (committed trans_version, but can_read_ == false) stays filtered.
 }
 
 int ObMultiVersionMicroBlockRowScanner::check_trans_version(
@@ -2539,18 +2540,12 @@ int ObMultiVersionMicroBlockRowScanner::check_trans_version(
     } else {
       // Case3: Data is committed, so we use the version on the data to decide
       //        whether uncommitted txns are readable
-      if (context_->query_flag_.iter_uncommitted_row()) {
-        version_fit = true;
-      } else {
-        // committed row: in-range is readable, so seed version_fit true and let
-        // classify_committed_trans_version only filter out-of-range versions.
-        version_fit = true;
-        classify_committed_trans_version(trans_version, version_fit, final_result);
-        // mds query side channel: a committed version newer than snapshot exists.
-        if (trans_version > snapshot_version && OB_NOT_NULL(context_->get_mds_collector())) {
-          context_->get_mds_collector()->exist_new_committed_node_ = true;
-          LOG_TRACE("exist new committed node", KR(ret), K(trans_version), K(snapshot_version), KPC(context_->get_mds_collector()));
-        }
+      version_fit = true;
+      classify_committed_trans_version(trans_version, version_fit, final_result);
+      // mds query side channel: a committed version newer than snapshot exists.
+      if (trans_version > snapshot_version && OB_NOT_NULL(context_->get_mds_collector())) {
+        context_->get_mds_collector()->exist_new_committed_node_ = true;
+        LOG_TRACE("exist new committed node", KR(ret), K(trans_version), K(snapshot_version), KPC(context_->get_mds_collector()));
       }
     }
   }

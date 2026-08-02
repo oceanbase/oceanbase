@@ -429,7 +429,8 @@ protected:
   // Not const: owns the cur_rowkey_exist_new_version_ cross-row side effect for ttl-major.
   RowReadAction decide_row_read_action_for_ttl(
       const int64_t trans_version, const bool version_fit, const bool final_result);
-  // Generic committed-version verdict by version_range (base/snapshot). ttl-major-blind;
+  // Generic committed-version verdict by version_range. The base boundary is always
+  // enforced; iter_uncommitted_row bypasses only the snapshot boundary. ttl-major-blind;
   // shared by all three check_trans_version branches.
   void classify_committed_trans_version(
       const int64_t trans_version,
