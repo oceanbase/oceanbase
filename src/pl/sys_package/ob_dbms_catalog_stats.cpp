@@ -665,6 +665,12 @@ int ObDbmsCatalogStats::parse_table_part_info(
                      refresh_interval_sec * 1000,
                      partition_infos))) {
         LOG_WARN("failed get table partitions from cache", K(ret), K(table_schema));
+      } else if (OB_FAIL(ObExternalTableUtils::fill_catalog_partition_stats(
+                     *table_schema,
+                     *ctx.get_sql_ctx()->schema_guard_,
+                     lake_table_metadata->lake_table_metadata_version_,
+                     partition_infos))) {
+        LOG_WARN("failed to fill catalog partition stats", K(ret), K(table_schema));
       }
 
       if (OB_FAIL(ret)) {

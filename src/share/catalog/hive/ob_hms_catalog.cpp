@@ -13,7 +13,6 @@
 #include "ob_hive_catalog_stat_helper.h"
 #include "ob_iceberg_catalog_stat_helper.h"
 #include "share/catalog/rest/client/ob_catalog_client_pool.h"
-#include "share/external_table/ob_external_table_utils.h"
 
 namespace oceanbase
 {
@@ -517,91 +516,6 @@ int ObHMSCatalog::fetch_hive_table_partitions(ObIAllocator &allocator,
       }
       OZ(ob_write_string(allocator, ObString(hive_part.sd.location.c_str()), p_info.path_));
       OZ(partition_infos.push_back(p_info));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else {
-    const sql::hive::ObHiveTableMetadata *hive_table_metadata = nullptr;
-    hive_table_metadata = static_cast<const sql::hive::ObHiveTableMetadata *>(table_metadata);
-    if (OB_ISNULL(hive_table_metadata)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null hive table metadata", K(ret));
-    } else {
-      const schema::ObTableSchema &table_schema = hive_table_metadata->get_table_schema();
-      const ObString &location = table_schema.get_external_file_location();
-      const uint64_t location_id = table_schema.get_external_location_id();
-      const bool is_partitioned_table = table_schema.get_partition_key_column_num() > 0;
-      ObString access_info;
-      if (OB_NOT_NULL(location_schema_provider_)
-          && OB_FAIL(location_schema_provider_->get_access_info_by_id(
-                 tenant_id_, location_id, access_info))) {
-        LOG_WARN("failed to get access info by location id", K(ret),
-                 K(location_id), K(tenant_id_));
-      } else if (access_info.empty()) {
-        access_info = table_schema.get_external_file_location_access_info();
-      }
-      if (OB_FAIL(ret)) {
-      } else if (is_partitioned_table && 0 == partition_infos.count()) {
-        LOG_TRACE("no partition stats for partitioned table without partitions", K(ret));
-      } else if (OB_FAIL(fill_partition_stats(table_metadata,
-                                              location,
-                                              access_info,
-                                              partition_infos))) {
-        LOG_WARN("failed to fill partition stats", K(ret), K(location), K(access_info));
-      } else {
-        LOG_INFO("fill partition stats successfully", K(ret), K(location), K(access_info));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObHMSCatalog::fill_partition_stats(const ObILakeTableMetadata *table_metadata,
-                                       const ObString &location,
-                                       const ObString &access_info,
-                                       ObIArray<common::ObCatalogExtPartitionInfo> &partition_infos)
-{
-  int ret = OB_SUCCESS;
-  if (table_metadata->get_format_type() == ObLakeTableFormat::ICEBERG) {
-    // iceberg table does not need to set partition stats.
-  } else {
-    ObArray<ObString> partition_names;
-    ObArray<int64_t> file_nums;
-    ObArray<int64_t> data_sizes;
-    ObArray<int64_t> modify_times;
-
-    for (int64_t i = 0; OB_SUCC(ret) && i < partition_infos.count(); ++i) {
-      const ObString &full_path = partition_infos.at(i).path_;
-      ObString relative_path;
-      if (full_path.length() > location.length() + 1
-          && full_path.prefix_match(location)) {
-        relative_path.assign_ptr(full_path.ptr() + location.length() + 1,
-                                 full_path.length() - location.length() - 1);
-      } else {
-        relative_path = partition_infos.at(i).partition_;
-      }
-      OZ(partition_names.push_back(relative_path));
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObExternalTableUtils::fetch_external_table_simple_stats(location,
-                                                                               access_info,
-                                                                               partition_names,
-                                                                               file_nums,
-                                                                               data_sizes,
-                                                                               modify_times))) {
-      LOG_WARN("failed to get external table simple stats", K(ret));
-    } else if (OB_UNLIKELY(file_nums.count() != partition_infos.count())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("stats count mismatch", K(ret), K(file_nums.count()), K(partition_infos.count()));
-    } else {
-      for (int64_t i = 0; i < partition_infos.count(); ++i) {
-        partition_infos.at(i).file_num_ = file_nums.at(i);
-        partition_infos.at(i).data_size_ = data_sizes.at(i);
-        partition_infos.at(i).modify_ts_ = modify_times.at(i);
-        partition_infos.at(i).schema_version_ = table_metadata->lake_table_metadata_version_;
-      }
     }
   }
   return ret;

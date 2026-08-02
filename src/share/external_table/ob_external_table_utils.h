@@ -470,6 +470,15 @@ public:
                                                ObIArray<int64_t> &data_sizes,
                                                ObIArray<int64_t> &modify_times);
 
+  // Fill per-partition simple stats (file_num/data_size/modify_ts/schema_version) into
+  // partition_infos by listing files under each partition path. This performs one remote
+  // list per partition, so it must only be invoked on the statistics-gathering path, never
+  // on the query/partition-pruning path.
+  static int fill_catalog_partition_stats(const ObTableSchema &table_schema,
+                                          ObSchemaGetterGuard &schema_guard,
+                                          const int64_t schema_version,
+                                          ObIArray<common::ObCatalogExtPartitionInfo *> &partition_infos);
+
   static int get_part_col_names(const ObTableSchema &table_schema,
                                 ObIArray<ObString> &part_col_names);
   static int collect_iceberg_partition_values(
