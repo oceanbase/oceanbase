@@ -35,7 +35,8 @@ public:
   void reset();
   int assign(const ObPartFieldBound &other);
   int deep_copy(ObPartFieldBound &src);
-  TO_STRING_KV(K_(column_id), K_(transform_type), K_(is_whole_range), K_(is_always_false), K_(bounds));
+  TO_STRING_KV(K_(column_id), K_(transform_type), K_(is_whole_range), K_(is_always_false),
+               K_(bounds), K_(range_exprs));
 
   common::ObIAllocator &allocator_;
   uint64_t column_id_;
@@ -43,6 +44,10 @@ public:
   bool is_whole_range_;
   bool is_always_false_;
   ObFixedArray<ObFieldBound*, ObIAllocator> bounds_;
+  // Optimizer-only pointers to predicates that produced precise ranges.  They
+  // are intentionally not serialized because row-filter elimination happens
+  // while the logical plan is built, before the pruner is sent to workers.
+  ObFixedArray<ObRawExpr*, ObIAllocator> range_exprs_;
 private:
   DISABLE_COPY_ASSIGN(ObPartFieldBound);
 };
@@ -113,6 +118,9 @@ public:
                        const bool is_hash_aggregate,
                        hash::ObHashMap<ObLakeTablePartKey, uint64_t> &part_key_map,
                        ObIArray<ObIcebergFileDesc*> &file_descs);
+
+  int get_part_id_and_range_exprs(ObIArray<uint64_t> &part_column_ids,
+                                  ObIArray<ObRawExpr*> &range_exprs) override;
 
   static int transform_bucket_range(ObNewRange &range, const int64_t N);
 private:

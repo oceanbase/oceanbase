@@ -88,14 +88,17 @@ OB_DEF_DESERIALIZE(ObPartFieldBound)
 ObPartFieldBound::ObPartFieldBound(common::ObIAllocator &allocator)
 : allocator_(allocator),
   column_id_(OB_INVALID_ID),
+  transform_type_(iceberg::TransformType::Invalid),
   is_whole_range_(false),
   is_always_false_(false),
-  bounds_(allocator)
+  bounds_(allocator),
+  range_exprs_(allocator)
 {}
 
 void ObPartFieldBound::reset()
 {
   column_id_ = OB_INVALID_ID;
+  transform_type_ = iceberg::TransformType::Invalid;
   is_whole_range_ = false;
   is_always_false_ = false;
   for (int64_t i = 0; i < bounds_.count(); ++i) {
@@ -104,6 +107,7 @@ void ObPartFieldBound::reset()
     }
   }
   bounds_.reset();
+  range_exprs_.reset();
 }
 
 int ObPartFieldBound::assign(const ObPartFieldBound &other)
@@ -116,6 +120,8 @@ int ObPartFieldBound::assign(const ObPartFieldBound &other)
     is_always_false_ = other.is_always_false_;
     if (OB_FAIL(bounds_.assign(other.bounds_))) {
       LOG_WARN("failed to assign field bound");
+    } else if (OB_FAIL(range_exprs_.assign(other.range_exprs_))) {
+      LOG_WARN("failed to assign range exprs");
     }
   }
   return ret;
@@ -125,10 +131,13 @@ int ObPartFieldBound::deep_copy(ObPartFieldBound &src)
 {
   int ret = OB_SUCCESS;
   column_id_ = src.column_id_;
+  transform_type_ = src.transform_type_;
   is_whole_range_ = src.is_whole_range_;
   is_always_false_ = src.is_always_false_;
   if (OB_FAIL(bounds_.init(src.bounds_.count()))) {
     LOG_WARN("failed to init fixed array");
+  } else if (OB_FAIL(range_exprs_.assign(src.range_exprs_))) {
+    LOG_WARN("failed to assign range exprs");
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < src.bounds_.count(); ++i) {
     ObFieldBound *bound = OB_NEWx(ObFieldBound, &allocator_);
@@ -509,6 +518,9 @@ int ObIcebergFilePrunner::genearte_partition_bound(const ObDMLStmt &stmt,
               LOG_WARN("failed to transform bound by part type");
             } else if (OB_FAIL(build_field_bound_from_ranges(ranges, *part_field_bound))) {
               LOG_WARN("failed to build field bound from ranges");
+            } else if (OB_FAIL(part_field_bound->range_exprs_.assign(
+                           pre_range_graph.get_range_exprs()))) {
+              LOG_WARN("failed to assign range exprs");
             } else if (ranges.count() == 1) {
               ObNewRange *range = ranges.at(0);
               if (range->is_false_range()) {
@@ -534,6 +546,81 @@ int ObIcebergFilePrunner::genearte_partition_bound(const ObDMLStmt &stmt,
     if (OB_SUCC(ret)) {
       if (OB_FAIL(part_column_descs_.assign(part_column_descs))) {
         LOG_WARN("failed to assign part column ids");
+      }
+    }
+  }
+  return ret;
+}
+
+int ObIcebergFilePrunner::get_part_id_and_range_exprs(
+    ObIArray<uint64_t> &part_column_ids,
+    ObIArray<ObRawExpr*> &range_exprs)
+{
+  int ret = OB_SUCCESS;
+  ObIcebergPartBound *base_part_bound = nullptr;
+  if (part_bound_.empty()) {
+    // Unpartitioned table or no usable partition bounds.
+  } else if (OB_ISNULL(base_part_bound = part_bound_.at(0).second)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("base partition bound is null", K(ret));
+  } else {
+    for (int64_t field_idx = 0;
+         OB_SUCC(ret) && field_idx < base_part_bound->part_field_bounds_.count();
+         ++field_idx) {
+      ObPartFieldBound *candidate = base_part_bound->part_field_bounds_.at(field_idx);
+      bool exact_in_all_specs = true;
+      if (OB_ISNULL(candidate)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("partition field bound is null", K(ret), K(field_idx));
+      } else if (iceberg::TransformType::Identity != candidate->transform_type_
+                 || candidate->range_exprs_.empty()) {
+        exact_in_all_specs = false;
+      }
+
+      // Iceberg partition evolution allows files written by different specs to
+      // coexist.  A row predicate is redundant only when the same source column
+      // uses an identity transform in every spec known to the current table metadata.
+      for (int64_t spec_idx = 1;
+           OB_SUCC(ret) && exact_in_all_specs && spec_idx < part_bound_.count();
+           ++spec_idx) {
+        ObIcebergPartBound *part_bound = part_bound_.at(spec_idx).second;
+        bool matching_identity_field = false;
+        if (OB_ISNULL(part_bound)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("partition bound is null", K(ret), K(spec_idx));
+        } else {
+          for (int64_t other_field_idx = 0;
+               OB_SUCC(ret) && !matching_identity_field
+               && other_field_idx < part_bound->part_field_bounds_.count();
+               ++other_field_idx) {
+            ObPartFieldBound *other = part_bound->part_field_bounds_.at(other_field_idx);
+            if (OB_ISNULL(other)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("partition field bound is null", K(ret), K(spec_idx), K(other_field_idx));
+            } else if (candidate->column_id_ == other->column_id_
+                       && iceberg::TransformType::Identity == other->transform_type_) {
+              matching_identity_field = true;
+            }
+          }
+        }
+        exact_in_all_specs = matching_identity_field;
+      }
+
+      if (OB_FAIL(ret) || !exact_in_all_specs) {
+        // Keep the row filter for non-identity or mixed partition specs.
+      } else if (!ObOptimizerUtil::find_item(part_column_ids, candidate->column_id_) &&
+                 OB_FAIL(part_column_ids.push_back(candidate->column_id_))) {
+        LOG_WARN("failed to push back partition column id", K(ret));
+      } else {
+        for (int64_t expr_idx = 0;
+             OB_SUCC(ret) && expr_idx < candidate->range_exprs_.count();
+             ++expr_idx) {
+          ObRawExpr *expr = candidate->range_exprs_.at(expr_idx);
+          if (!ObOptimizerUtil::find_item(range_exprs, expr) &&
+              OB_FAIL(range_exprs.push_back(expr))) {
+            LOG_WARN("failed to push back range expr", K(ret));
+          }
+        }
       }
     }
   }

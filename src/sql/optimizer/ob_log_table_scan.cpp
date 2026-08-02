@@ -3349,7 +3349,8 @@ int ObLogTableScan::has_pushdown_filters(bool &has)
 {
   int ret = OB_SUCCESS;
   has = !range_conds_.empty();
-  if (!has && lake_table_format_ == share::ObLakeTableFormat::HIVE) {
+  if (!has && (lake_table_format_ == share::ObLakeTableFormat::HIVE ||
+               lake_table_format_ == share::ObLakeTableFormat::ICEBERG)) {
     // check has filters
     ObTablePartitionInfo *part_info = get_table_partition_info();
     ObILakeTableFilePruner *file_pruner = nullptr;
@@ -3360,7 +3361,7 @@ int ObLogTableScan::has_pushdown_filters(bool &has)
         OB_ISNULL(file_pruner = static_cast<ObLakeTablePartitionInfo*>(part_info)->get_file_pruner())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(part_info), K(file_pruner));
-    } else if (OB_FAIL(static_cast<ObHiveFilePruner*>(file_pruner)->get_part_id_and_range_exprs(part_column_ids, range_exprs))) {
+    } else if (OB_FAIL(file_pruner->get_part_id_and_range_exprs(part_column_ids, range_exprs))) {
       LOG_WARN("failed to get part id and range exprs", K(ret));
     } else if (!range_exprs.empty()) {
       has = true;
@@ -6876,8 +6877,10 @@ int ObLogTableScan::build_column_expr(ObRawExprFactory &expr_factory,
 int ObLogTableScan::pick_out_lake_table_part_exprs()
 {
   int ret = OB_SUCCESS;
-  // only process HIVE tables
-  if (lake_table_format_ != share::ObLakeTableFormat::HIVE) {
+  // Hive partition columns and Iceberg identity transforms are exact: after
+  // file pruning, a precise partition predicate is redundant at row-scan time.
+  if (lake_table_format_ != share::ObLakeTableFormat::HIVE &&
+      lake_table_format_ != share::ObLakeTableFormat::ICEBERG) {
     // do nothing
   } else {
     ObTablePartitionInfo *part_info = get_table_partition_info();
@@ -6889,7 +6892,7 @@ int ObLogTableScan::pick_out_lake_table_part_exprs()
         OB_ISNULL(file_pruner = static_cast<ObLakeTablePartitionInfo*>(part_info)->get_file_pruner())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(part_info), K(file_pruner));
-    } else if (OB_FAIL(static_cast<ObHiveFilePruner*>(file_pruner)->get_part_id_and_range_exprs(part_column_ids, range_exprs))) {
+    } else if (OB_FAIL(file_pruner->get_part_id_and_range_exprs(part_column_ids, range_exprs))) {
       LOG_WARN("failed to get part id and range exprs", K(ret));
     } else if (part_column_ids.empty() || range_exprs.empty()) {
       // do nothing

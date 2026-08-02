@@ -88,6 +88,18 @@ public:
   virtual int assign(const ObILakeTableFilePruner &o) = 0;
   virtual void reset();
   int generate_column_meta_info(const ObDMLStmt &stmt);
+  // Return partition predicates that were converted into exact file-pruning
+  // ranges.  The optimizer may remove these predicates from the row scan when
+  // the concrete table format guarantees that every selected file satisfies
+  // them (for example, Hive partition columns and Iceberg identity transforms).
+  virtual int get_part_id_and_range_exprs(
+      common::ObIArray<uint64_t> &part_column_ids,
+      common::ObIArray<ObRawExpr *> &range_exprs)
+  {
+    UNUSED(part_column_ids);
+    UNUSED(range_exprs);
+    return common::OB_SUCCESS;
+  }
 
 public:
   bool is_partitioned_;

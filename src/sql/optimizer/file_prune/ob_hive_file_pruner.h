@@ -67,7 +67,7 @@ public:
   int prunner_files(ObExecContext &exec_ctx,
                     ObIArray<ObHiveFileDesc> &filtered_files);
   int get_part_id_and_range_exprs(ObIArray<uint64_t> &part_column_ids,
-                                  ObIArray<ObRawExpr*> &range_exprs);
+                                  ObIArray<ObRawExpr*> &range_exprs) override;
 private:
   int prune_partition_by_hms(ObExecContext &exec_ctx,
                              ObIArray<ObHiveFileDesc> &filtered_files);
