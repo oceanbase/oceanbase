@@ -31,6 +31,9 @@ using namespace share::schema;
 using namespace omt;
 namespace sql
 {
+
+ERRSIM_POINT_DEF(EN_AUTO_RESET_TTL_IF_NOT_SUP);
+
 ObCreateTableResolver::ObCreateTableResolver(ObResolverParams &params)
     : ObCreateTableResolverBase(params),
       cur_column_id_(OB_APP_MIN_COLUMN_ID - 1),
@@ -1175,6 +1178,18 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
       } else if (OB_FAIL(ObCompactionTTLUtil::check_create_ttl_schema_valid(
                      table_schema, tenant_id))) {
         LOG_WARN("fail to check ttl schema valid", K(ret));
+        if (ret == OB_NOT_SUPPORTED && EN_AUTO_RESET_TTL_IF_NOT_SUP) {
+          ret = OB_SUCCESS;
+          const ObString empty_ttl_definition;
+          const ObTTLFlag empty_ttl_flag;
+          if (OB_FAIL(table_schema.set_ttl_definition(empty_ttl_definition, empty_ttl_flag))) {
+            LOG_WARN("fail to clear ttl definition injected by errsim", K(ret));
+          } else {
+            ttl_definition_.reset();
+            ttl_flag_.reset();
+            FLOG_INFO("clear invalid ttl definition injected by EN_AUTO_RESET_TTL_IF_NOT_SUP");
+          }
+        }
       }
     }
   }

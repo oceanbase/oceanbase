@@ -1201,7 +1201,8 @@ int ObDDLResolver::resolve_table_options(ParseNode *node, bool is_index_option)
       if (OB_NOT_NULL(stmt_) && stmt::T_CREATE_TABLE == stmt_->get_stmt_type() && ttl_definition_.empty()) {
         ObCreateTableArg &arg = static_cast<ObCreateTableStmt*>(stmt_)->get_create_table_arg();
         bool merge_engine_valid = arg.schema_.get_merge_engine_type() == ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY
-                                  || arg.schema_.get_merge_engine_type() == ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT;
+                                  || arg.schema_.get_merge_engine_type() == ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT
+                                  || arg.schema_.get_merge_engine_type() == ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE;
 
         int64_t time_s = EN_CREATE_TABLE_WITH_TTL.item_.cond_;
         if (time_s >= 0 && merge_engine_valid) {
