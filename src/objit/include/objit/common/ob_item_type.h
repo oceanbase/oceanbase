@@ -920,6 +920,9 @@ typedef enum ObItemType
   T_FUN_SYS_VECTOR_L2_SIMILARITY = 1790,
   T_FUN_SYS_VECTOR_IP_SIMILARITY = 1791,
   T_FUN_SYS_VECTOR_COS_SIMILARITY = 1792,
+  T_FUNC_SYS_ARRAY_DIMS = 1793,
+  T_FUNC_SYS_ARRAY_UPPER = 1794,
+  T_FUNC_SYS_ARRAY_LOWER = 1795,
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table

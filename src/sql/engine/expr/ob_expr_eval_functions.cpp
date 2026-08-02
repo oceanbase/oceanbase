@@ -1511,6 +1511,9 @@ ObExprRandCanonical::calc_random_expr_canonical,                    /* 890 */
   ObExprRegexpLike::eval_re2_regexp_like,                             /* 915 */
   ObExprRegexpReplace::eval_re2_regexp_replace,                       /* 916 */
   ObExprRegexpSubstr::eval_re2_regexp_substr,                         /* 917 */
+  NULL, // ObExprArrayDims::eval_array_dims,                           /* 918 */
+  NULL, // ObExprArrayUpper::eval_array_upper,                         /* 919 */
+  NULL, // ObExprArrayLower::eval_array_lower,                         /* 920 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -2034,6 +2037,9 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprCountSubstrings::eval_count_substrings_vector,          /* 332 */
   NULL, // ObExprImageType::eval_image_type_vector,                      /* 333 */
   ObExprRegexpReplace::eval_re2_regexp_replace_vector,                   /* 334 */
+  NULL, // ObExprArrayDims::eval_array_dims_vector,                       /* 335 */
+  NULL, // ObExprArrayUpper::eval_array_upper_vector,                     /* 336 */
+  NULL, // ObExprArrayLower::eval_array_lower_vector,                     /* 337 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
