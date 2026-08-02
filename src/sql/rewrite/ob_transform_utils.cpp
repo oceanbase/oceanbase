@@ -16430,8 +16430,12 @@ int ObTransformUtils::rebuild_columns_for_view_and_conds(ObTransformerCtx *ctx,
              && OB_FAIL(ObRawExprUtils::extract_column_exprs(conds, subquery_table_ids, cond_column_exprs))) {
     LOG_WARN("fail to extract column exprs", K(ret));
   } else if (keep_orig_select_columns) {
-    if (OB_FAIL(subquery->get_select_exprs(subquery_column_exprs))) {
+    ObSEArray<ObRawExpr *, 4> orig_select_exprs;
+    if (OB_FAIL(subquery->get_select_exprs(orig_select_exprs))) {
       LOG_WARN("fail to get select exprs", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(orig_select_exprs,
+                                                            subquery_column_exprs))) {
+      LOG_WARN("fail to extract column exprs from select", K(ret));
     } else if (OB_FAIL(append_array_no_dup(subquery_column_exprs, cond_column_exprs))) {
       LOG_WARN("fail to append array no dup", K(ret));
     }
