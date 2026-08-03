@@ -84,7 +84,7 @@ public:
   TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(query_cnt), K_(merge_cnt), K_(scan_logical_row_cnt),
                K_(scan_physical_row_cnt), K_(scan_micro_block_cnt), K_(pushdown_micro_block_cnt),
                K_(exist_row_total_table_cnt), K_(exist_row_read_table_cnt), K_(insert_row_cnt),
-               K_(update_row_cnt), K_(delete_row_cnt));
+               K_(update_row_cnt), K_(delete_row_cnt), K_(is_clear_mark));
 
 public:
   static constexpr int64_t QUERY_REPORT_INEFFICIENT_THRESHOLD = 3;
@@ -103,6 +103,7 @@ public:
   uint64_t insert_row_cnt_;
   uint64_t update_row_cnt_;
   uint64_t delete_row_cnt_;
+  bool is_clear_mark_;
 };
 
 class ObTableQueuingModeCfg
@@ -359,6 +360,10 @@ public:
 
   int report_stat(
       const ObTabletStat &stat,
+      bool &succ_report);
+  int report_clear_tablet_stat(
+      const int64_t ls_id,
+      const uint64_t tablet_id,
       bool &succ_report);
   int get_latest_tablet_stat(
       const share::ObLSID &ls_id,

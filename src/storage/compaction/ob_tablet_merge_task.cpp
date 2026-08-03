@@ -1249,6 +1249,21 @@ int ObTabletMergeFinishTask::process()
         LOG_WARN("failed to update tablet report status", K(tmp_ret), K(tablet_id));
       }
     }
+    if (OB_SUCC(ret) && is_major_merge_type(ctx->param_.merge_type_)) {
+      // clear the follower's accumulated tablet stat after a major/medium merge finishes.
+      // the leader is excluded since it clears in the medium schedule path.
+      int tmp_ret = OB_SUCCESS;
+      ObRole role = INVALID_ROLE;
+      if (OB_TMP_FAIL(ObMediumCompactionScheduleFunc::get_palf_role(ls_id, role))) {
+        if (OB_LS_NOT_EXIST != tmp_ret) {
+          LOG_WARN("failed to get palf role for clearing tablet stat", K(tmp_ret), K(ls_id), K(tablet_id));
+        }
+      } else if (!is_leader_by_election(role)) {
+        if (OB_TMP_FAIL(MTL(ObTenantTabletStatMgr *)->clear_tablet_stat(ls_id, tablet_id))) {
+          LOG_WARN("failed to clear tablet stat after merge", K(tmp_ret), K(ls_id), K(tablet_id));
+        }
+      }
+    }
 
     if (OB_SUCC(ret) && OB_NOT_NULL(ctx->merge_progress_)) {
       if (OB_TMP_FAIL(ctx->merge_progress_->update_merge_info(ctx->merge_info_.get_sstable_merge_info()))) {
