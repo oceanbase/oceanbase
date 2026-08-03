@@ -59,11 +59,25 @@
 #define FETCH_ALL_RECYCLEBIN_SQL "SELECT * FROM %s " \
     "WHERE tenant_id = %lu and object_name = '%.*s' and type = %d "
 
+// INDEX/AUX_VP/TRIGGER/AUX_LOB_META/AUX_LOB_PIECE are purged together with
+// their parent table. Dropped tenants are only purged by foreground SYS
+// tenant requests. Use an exclusion list so a new top-level type is not
+// silently skipped by the batch query.
 #define FETCH_EXPIRE_ALL_RECYCLEBIN_SQL "SELECT * FROM %s " \
-    "WHERE tenant_id = %lu and time_to_usec(gmt_create) < %ld order by gmt_create"
+    "WHERE tenant_id = %lu and TYPE NOT IN (2, 5, 6, 7, 8, 9) " \
+    "and time_to_usec(gmt_create) < %ld order by gmt_create"
+
+#define FETCH_EXPIRE_ALL_RECYCLEBIN_SQL_WITH_LIMIT "SELECT * FROM %s " \
+    "WHERE tenant_id = %lu and TYPE NOT IN (2, 5, 6, 7, 8, 9) " \
+    "and time_to_usec(gmt_create) < %ld order by gmt_create LIMIT %ld"
 
 #define FETCH_EXPIRE_SYS_ALL_RECYCLEBIN_SQL "SELECT * FROM %s " \
-    "WHERE (tenant_id = %lu or TYPE = 7) and time_to_usec(gmt_create) < %ld order by gmt_create"
+    "WHERE ((tenant_id = %lu and TYPE NOT IN (2, 5, 6, 7, 8, 9)) or TYPE = 7) " \
+    "and time_to_usec(gmt_create) < %ld order by gmt_create"
+
+#define FETCH_EXPIRE_SYS_ALL_RECYCLEBIN_SQL_WITH_LIMIT "SELECT * FROM %s " \
+    "WHERE ((tenant_id = %lu and TYPE NOT IN (2, 5, 6, 7, 8, 9)) or TYPE = 7) " \
+    "and time_to_usec(gmt_create) < %ld order by gmt_create LIMIT %ld"
 
 #define FETCH_ALL_RECYCLEBIN_SQL_WITH_CONDITION COMMON_SQL_WITH_TENANT
 
@@ -7582,27 +7596,46 @@ int ObSchemaServiceSQLImpl::fetch_expire_recycle_objects(
     const uint64_t tenant_id,
     const int64_t expire_time,
     ObISQLClient &sql_client,
-    ObIArray<ObRecycleObject> &recycle_objs)
+    ObIArray<ObRecycleObject> &recycle_objs,
+    const bool include_dropped_tenant,
+    const int64_t limit)
 {
   int ret = OB_SUCCESS;
-  if (OB_INVALID == tenant_id || expire_time <= 0) {
+  if (OB_INVALID == tenant_id || expire_time <= 0 || limit <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("argument is invalid", K(ret), K(tenant_id), K(expire_time));
+    LOG_WARN("argument is invalid", K(ret), K(tenant_id), K(expire_time), K(limit));
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       ObMySQLResult *result = NULL;
       ObSqlString sql;
       // FIXME: The query may time out.
       const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-      if (tenant_id == OB_SYS_TENANT_ID) {
-        if (OB_FAIL(sql.append_fmt(FETCH_EXPIRE_SYS_ALL_RECYCLEBIN_SQL,
+      const bool use_limit = (limit > 0 && limit < INT64_MAX);
+      if (tenant_id == OB_SYS_TENANT_ID && include_dropped_tenant) {
+        if (use_limit) {
+          if (OB_FAIL(sql.append_fmt(FETCH_EXPIRE_SYS_ALL_RECYCLEBIN_SQL_WITH_LIMIT,
+                                     OB_ALL_RECYCLEBIN_TNAME,
+                                     ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+                                     expire_time,
+                                     limit))) {
+            LOG_WARN("append sql failed", K(ret), K(tenant_id), K(expire_time), K(limit));
+          }
+        } else if (OB_FAIL(sql.append_fmt(FETCH_EXPIRE_SYS_ALL_RECYCLEBIN_SQL,
                                    OB_ALL_RECYCLEBIN_TNAME,
                                    ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
                                    expire_time))) {
           LOG_WARN("append sql failed", K(ret), K(tenant_id), K(expire_time));
         }
       } else {
-        if (OB_FAIL(sql.append_fmt(FETCH_EXPIRE_ALL_RECYCLEBIN_SQL,
+        if (use_limit) {
+          if (OB_FAIL(sql.append_fmt(FETCH_EXPIRE_ALL_RECYCLEBIN_SQL_WITH_LIMIT,
+                                     OB_ALL_RECYCLEBIN_TNAME,
+                                     ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+                                     expire_time,
+                                     limit))) {
+            LOG_WARN("append sql failed", K(ret), K(tenant_id), K(expire_time), K(limit));
+          }
+        } else if (OB_FAIL(sql.append_fmt(FETCH_EXPIRE_ALL_RECYCLEBIN_SQL,
                                    OB_ALL_RECYCLEBIN_TNAME,
                                    ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
                                    expire_time))) {
