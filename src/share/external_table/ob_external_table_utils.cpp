@@ -1918,6 +1918,60 @@ int ObExternalTableUtils::dedup_shared_local_files(common::ObIArray<share::ObExt
   return ret;
 }
 
+int ObExternalTableUtils::check_is_absolute_local_file_path(const ObString &location,
+                                                            bool &is_absolute_path)
+{
+  int ret = OB_SUCCESS;
+  const int64_t PREFIX_LEN = STRLEN(OB_FILE_PREFIX);
+  if (location.length() <= PREFIX_LEN) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid location", K(ret), K(location));
+  } else {
+    is_absolute_path = '/' == location.ptr()[PREFIX_LEN];
+  }
+  return ret;
+}
+
+int ObExternalTableUtils::select_external_file_for_sample(
+    const ObString &location,
+    const ObIArray<share::ObExternalTableBasicFileInfo> &basic_file_infos,
+    ObString &sampled_file_name)
+{
+  int ret = OB_SUCCESS;
+  const bool is_local_file = ObSQLUtils::is_external_files_on_local_disk(location);
+  bool is_absolute_local_file = false;
+  if (is_local_file
+      && OB_FAIL(check_is_absolute_local_file_path(location, is_absolute_local_file))) {
+    LOG_WARN("failed to check external local file path", K(ret), K(location));
+  }
+
+  bool has_valid_file = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !has_valid_file && i < basic_file_infos.count(); i++) {
+    const ObString &file_url = basic_file_infos.at(i).url_;
+    bool is_valid_sample = basic_file_infos.at(i).size_ > 0;
+    if (is_valid_sample && is_local_file) {
+      ObString tmp_file_url = file_url;
+      const ObString file_addr_str = tmp_file_url.split_on('%');
+      ObAddr file_addr;
+      if (OB_FAIL(file_addr.parse_from_string(file_addr_str))) {
+        LOG_WARN("failed to parse external file addr", K(ret), K(file_url), K(file_addr_str));
+      } else {
+        is_valid_sample = is_absolute_local_file ? file_addr.is_equal_except_port(GCTX.self_addr())
+                                                 : file_addr == GCTX.self_addr();
+      }
+    }
+    if (OB_SUCC(ret) && is_valid_sample) {
+      sampled_file_name = file_url;
+      has_valid_file = true;
+    }
+  }
+  if (OB_SUCC(ret) && !has_valid_file) {
+    ret = OB_FILE_NOT_EXIST;
+    LOG_WARN("missing file", K(ret), K(location));
+  }
+  return ret;
+}
+
 int ObExternalTableUtils::collect_local_files_on_servers(
     const uint64_t tenant_id,
     const ObString &location,
@@ -1937,12 +1991,8 @@ int ObExternalTableUtils::collect_local_files_on_servers(
   ObArray<ObString> server_ip_port;
 
   bool is_absolute_path = false;
-  const int64_t PREFIX_LEN = STRLEN(OB_FILE_PREFIX);
-  if (location.length() <= PREFIX_LEN) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid location", K(ret), K(location));
-  } else {
-    is_absolute_path = ('/' == location.ptr()[PREFIX_LEN]);
+  if (OB_FAIL(check_is_absolute_local_file_path(location, is_absolute_path))) {
+    LOG_WARN("failed to check external local file path", K(ret), K(location));
   }
 
   struct Functor {

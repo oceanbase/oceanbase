@@ -345,6 +345,11 @@ public:
     common::ObSqlString &full_path,
     ObIArray<share::ObExternalTableBasicFileInfo> &basic_file_infos);
 
+  static int select_external_file_for_sample(
+      const ObString &location,
+      const ObIArray<share::ObExternalTableBasicFileInfo> &basic_file_infos,
+      ObString &sampled_file_name);
+
   static int collect_local_files_on_servers(
     const uint64_t tenant_id,
     const ObString &location,
@@ -519,6 +524,8 @@ private:
   static int normalize_shared_file_location(common::ObIAllocator &allocator,
                                             common::ObString &location,
                                             bool &is_shared);
+  static int check_is_absolute_local_file_path(const common::ObString &location,
+                                               bool &is_absolute_path);
   static int classification_file_basic_info(
     const ObIArray<share::ObExternalTableBasicFileInfo> &basic_file_infos,
     ObIArray<common::ObString> &file_urls, ObIArray<int64_t> *file_sizes = nullptr,

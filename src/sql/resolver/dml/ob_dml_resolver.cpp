@@ -5734,18 +5734,10 @@ int ObDMLResolver::sample_external_file_name(common::ObIAllocator &allocator,
       FORWARD_USER_ERROR_MSG(ret,
                              "File not exist, please check the location or confirm whether the pattern is a glob or a regexp");
       LOG_WARN("missing file", K(ret));
-    } else {
-      bool has_valid_file = false;
-      for (int64_t i = 0; !has_valid_file && i < basic_file_infos.count(); i++) {
-        if (basic_file_infos.at(i).size_ > 0) {
-          sampled_file_name = basic_file_infos.at(i).url_;
-          has_valid_file = true;
-        }
-      }
-      if (!has_valid_file) {
-        ret = OB_FILE_NOT_EXIST;
-        LOG_WARN("missing file", K(ret));
-      }
+    } else if (OB_FAIL(ObExternalTableUtils::select_external_file_for_sample(file_location,
+                                                                             basic_file_infos,
+                                                                             sampled_file_name))) {
+      LOG_WARN("failed to select external file for sample", K(ret), K(file_location));
     }
   }
   return ret;
