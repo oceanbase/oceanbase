@@ -5083,10 +5083,10 @@ int ObRawExprUtils::get_exec_param_expr(ObRawExprFactory &expr_factory,
     // todo use visitor
     // if it is terminal
     // if it is fixed create new exec param
-    // stop if #relid <= 1
+    // stop if #relid <= 1, except T_OP_ROW to preserve row arity
     bool is_fixed = false;
     bool is_cross_rel = false;
-    if (1 >= outer_val_expr->get_relation_ids().num_members()) {
+    if (1 >= outer_val_expr->get_relation_ids().num_members() && T_OP_ROW != outer_val_expr->get_expr_type()) {
       if (outer_val_expr->is_static_const_expr()) {
       } else if (OB_FAIL(create_new_exec_param(outer_val_expr))) {
         LOG_WARN("failed to create new exec param", K(ret));
