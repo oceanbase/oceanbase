@@ -58,6 +58,14 @@ protected:
     ObBasicTabletMergeCtx &merge_context);
 
   void prepare_merge_context(const ObMergeType &merge_type, const bool is_full_merge, const ObVersionRange &trans_version_range, ObBasicTabletMergeCtx &merge_context);
+  void check_single_column_cg(
+      ObCOTabletMergeCtx &merge_context,
+      const int64_t cg_idx,
+      const int64_t column_idx,
+      const char *expected_data);
+  void run_partial_update_skip_then_ttl_delete_range(
+      const ObCOMergeTestConfig &config);
+  void run_partial_update_skip_then_compacted_ttl_delete_range();
   int64_t schema_rowkey_cnt_;
   ObTabletMergeExecuteDag merge_dag_;
   int64_t row_id_seed_;
@@ -551,6 +559,277 @@ TEST_F(ObMajorWithTTLFilterTest, co_major_partial_macro_reused) {
   ASSERT_EQ(filter_statistics.row_cnt_[ObICompactionFilter::ObFilterRet::FILTER_RET_REMOVE], 2);
   ASSERT_EQ(filter_statistics.row_cnt_[ObICompactionFilter::ObFilterRet::FILTER_RET_KEEP], 5);
   ASSERT_EQ(filter_statistics.filter_block_row_cnt_, 30);
+}
+
+void ObMajorWithTTLFilterTest::check_single_column_cg(
+    ObCOTabletMergeCtx &merge_context,
+    const int64_t cg_idx,
+    const int64_t column_idx,
+    const char *expected_data)
+{
+  ObArray<ObColDesc> col_ids;
+  ASSERT_EQ(OB_SUCCESS, table_schema_.get_store_column_ids(col_ids));
+  ASSERT_LT(column_idx, col_ids.count());
+  ASSERT_LT(cg_idx, merge_context.merged_cg_tables_handle_.get_count());
+
+  ObTableReadInfo cg_read_info;
+  ASSERT_EQ(OB_SUCCESS, ObTenantCGReadInfoMgr::construct_cg_read_info(
+      allocator_,
+      lib::is_oracle_mode(),
+      col_ids.at(column_idx),
+      nullptr,
+      cg_read_info));
+
+  ObVersionRange read_version_range;
+  read_version_range.base_version_ = 1;
+  read_version_range.multi_version_start_ = 1;
+  read_version_range.snapshot_version_ = INT64_MAX;
+  ObStoreCtx store_ctx;
+  ObTableIterParam iter_param;
+  ObTableAccessContext context;
+  prepare_scan_param(&cg_read_info, read_version_range, store_ctx, iter_param, context);
+
+  ObDatumRange range;
+  range.set_whole_range();
+  ObStoreRowIterator *scanner = nullptr;
+  ObSSTable *cg_sstable =
+      static_cast<ObSSTable *>(merge_context.merged_cg_tables_handle_.get_table(cg_idx));
+  ASSERT_NE(nullptr, cg_sstable);
+  ASSERT_EQ(OB_SUCCESS, cg_sstable->scan(iter_param, context, range, scanner));
+  ASSERT_NE(nullptr, scanner);
+
+  ObMockDirectReadIterator actual_iter;
+  ASSERT_EQ(OB_SUCCESS, actual_iter.init(scanner, allocator_, cg_read_info));
+  ObMockIterator expected_iter;
+  ASSERT_EQ(OB_SUCCESS, expected_iter.from(expected_data));
+  const bool is_equal = expected_iter.equals<ObMockDirectReadIterator, ObStoreRow>(
+      actual_iter, false/*cmp multi version row flag*/);
+  ASSERT_TRUE(is_equal);
+  scanner->~ObStoreRowIterator();
+}
+
+void ObMajorWithTTLFilterTest::run_partial_update_skip_then_ttl_delete_range(
+    const ObCOMergeTestConfig &config)
+{
+  merge_type_ = MAJOR_MERGE;
+  fake_freeze_info();
+  ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
+
+  // Old major: rows 0..3 are older than the TTL border. Rows 0..2 are updated
+  // below, row 3 should be removed, and row 4 should be retained.
+  ObTableHandleV2 major_handle;
+  const char *major_data[1];
+  major_data[0] =
+      "bigint   bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "0        -5       0        10       100    EXIST   N    \n"
+      "1        -5       0        11       101    EXIST   N    \n"
+      "2        -5       0        12       102    EXIST   N    \n"
+      "3        -5       0        13       103    EXIST   N    \n"
+      "4        -15      0        14       104    EXIST   N    \n";
+
+  int64_t snapshot_version = 20;
+  ObScnRange scn_range;
+  scn_range.start_scn_.set_min();
+  scn_range.end_scn_.convert_for_tx(snapshot_version);
+  prepare_table_schema(major_data, schema_rowkey_cnt_, scn_range, snapshot_version);
+  TestSchemaPrepare::add_rowkey_and_each_column_group(allocator_, table_schema_);
+  reset_writer(snapshot_version, MAJOR_MERGE);
+  prepare_one_macro(major_data, 1);
+  prepare_data_end(major_handle, storage::ObITable::COLUMN_ORIENTED_SSTABLE);
+  ASSERT_EQ(OB_SUCCESS, merge_context.static_param_.tables_handle_.add_table(major_handle));
+
+  // Partial updates modify c1 only. Projecting these rows into the c2 column
+  // group produces all NOPs, leaving a deferred replay boundary at row 2.
+  ObTableHandleV2 minor_handle;
+  const char *minor_data[1];
+  minor_data[0] =
+      "bigint   bigint   bigint   bigint   bigint dml           flag    multi_version_row_flag \n"
+      "0        -35      0        1000     NOP    T_DML_UPDATE  EXIST   LF   \n"
+      "1        -35      0        1001     NOP    T_DML_UPDATE  EXIST   LF   \n"
+      "2        -35      0        1002     NOP    T_DML_UPDATE  EXIST   LF   \n";
+
+  snapshot_version = 40;
+  scn_range.start_scn_.convert_for_tx(20);
+  scn_range.end_scn_.convert_for_tx(snapshot_version);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(snapshot_version);
+  prepare_one_macro(minor_data, 1);
+  prepare_data_end(minor_handle);
+  ASSERT_EQ(OB_SUCCESS, merge_context.static_param_.tables_handle_.add_table(minor_handle));
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 40;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.base_version_ = 20;
+  const int64_t filter_max_version = 10;
+
+  TestMergeBasic::prepare_co_major_merge_context(
+      MAJOR_MERGE, false/*is_full_merge*/, trans_version_range, &merge_dag_, merge_context);
+  ASSERT_EQ(OB_SUCCESS, prepare_ttl_filter(filter_max_version, merge_context));
+  merge_context.static_param_.ttl_major_for_partial_update_upper_snapshot_ = 50;
+
+  // Three user columns produce one rowkey CG plus three single-column CGs.
+  TestMergeBasic::co_major_merge(
+      local_arena_,
+      config,
+      merge_context,
+      0,
+      0,
+      4);
+
+  ASSERT_EQ(4, merge_context.merged_cg_tables_handle_.get_count());
+  for (int64_t i = 0; i < merge_context.merged_cg_tables_handle_.get_count(); ++i) {
+    ObSSTable *merged_sstable =
+        static_cast<ObSSTable *>(merge_context.merged_cg_tables_handle_.get_table(i));
+    ASSERT_NE(nullptr, merged_sstable);
+    EXPECT_EQ(4, merged_sstable->get_row_count()) << "unexpected row count for CG " << i;
+  }
+
+  const ObICompactionFilter::ObFilterStatistics &filter_statistics =
+      merge_context.filter_ctx_.filter_statistics_;
+  ASSERT_EQ(4, filter_statistics.row_cnt_[ObICompactionFilter::ObFilterRet::FILTER_RET_KEEP]);
+  ASSERT_EQ(1, filter_statistics.row_cnt_[ObICompactionFilter::ObFilterRet::FILTER_RET_REMOVE]);
+
+  const char *expected_c2 =
+      "bigint flag multi_version_row_flag\n"
+      "100 EXIST\n"
+      "101 EXIST\n"
+      "102 EXIST\n"
+      "104 EXIST\n";
+  check_single_column_cg(merge_context, 3/*cg_idx*/, 2/*column_idx*/, expected_c2);
+
+  major_handle.reset();
+  minor_handle.reset();
+}
+
+// Regression test for a partial-update CO major merge where an untouched
+// column group defers replaying a prefix and the following major-only row is
+// removed by the TTL filter.
+TEST_F(ObMajorWithTTLFilterTest, co_major_partial_update_skip_then_ttl_delete_range)
+{
+  run_partial_update_skip_then_ttl_delete_range(
+      ObCOMergeTestConfig(
+          ObCOMergeTestConfig::ObCOMergeTestType::NORMAL,
+          1/*compaction_batch_size*/));
+}
+
+// Cover the projected column temporary-file path together with direct base
+// replay. The projected c2 updates are all NOP and must still preserve the
+// deferred major prefix across DELETE_RANGE.
+TEST_F(
+    ObMajorWithTTLFilterTest,
+    co_major_partial_update_skip_then_ttl_delete_range_column_tmp_with_base_replay)
+{
+  run_partial_update_skip_then_ttl_delete_range(
+      ObCOMergeTestConfig(
+          ObCOMergeTestConfig::ObCOMergeTestType::USE_COLUMN_TMP_FILE_WITH_BASE_REPLAY,
+          1/*compaction_batch_size*/));
+}
+
+void ObMajorWithTTLFilterTest::run_partial_update_skip_then_compacted_ttl_delete_range()
+{
+  merge_type_ = MAJOR_MERGE;
+  fake_freeze_info();
+  ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
+
+  // macro0 is opened by the three minor updates. macro1 and macro2 are
+  // completely removed by TTL and their adjacent DELETE_RANGEs are compacted
+  // to one range ending at row_id 6. macro3 remains as the suffix.
+  ObTableHandleV2 major_handle;
+  const char *major_data[4] = {
+      "bigint bigint bigint bigint bigint flag multi_version_row_flag\n"
+      "0 -5 0 10 100 EXIST N\n"
+      "1 -5 0 11 101 EXIST N\n"
+      "2 -5 0 12 102 EXIST N\n",
+      "bigint bigint bigint bigint bigint flag multi_version_row_flag\n"
+      "3 -5 0 13 103 EXIST N\n"
+      "4 -5 0 14 104 EXIST N\n",
+      "bigint bigint bigint bigint bigint flag multi_version_row_flag\n"
+      "5 -5 0 15 105 EXIST N\n"
+      "6 -5 0 16 106 EXIST N\n",
+      "bigint bigint bigint bigint bigint flag multi_version_row_flag\n"
+      "7 -15 0 17 107 EXIST N\n"};
+
+  int64_t snapshot_version = 20;
+  ObScnRange scn_range;
+  scn_range.start_scn_.set_min();
+  scn_range.end_scn_.convert_for_tx(snapshot_version);
+  prepare_table_schema(major_data, schema_rowkey_cnt_, scn_range, snapshot_version);
+  TestSchemaPrepare::add_rowkey_and_each_column_group(allocator_, table_schema_);
+  reset_writer(snapshot_version, MAJOR_MERGE);
+  for (int64_t i = 0; i < ARRAYSIZEOF(major_data); ++i) {
+    prepare_one_macro(&major_data[i], 1);
+  }
+  prepare_data_end(major_handle, storage::ObITable::COLUMN_ORIENTED_SSTABLE);
+  ASSERT_EQ(OB_SUCCESS, merge_context.static_param_.tables_handle_.add_table(major_handle));
+
+  ObTableHandleV2 minor_handle;
+  const char *minor_data[1];
+  minor_data[0] =
+      "bigint bigint bigint bigint bigint dml flag multi_version_row_flag\n"
+      "0 -35 0 1000 NOP T_DML_UPDATE EXIST LF\n"
+      "1 -35 0 1001 NOP T_DML_UPDATE EXIST LF\n"
+      "2 -35 0 1002 NOP T_DML_UPDATE EXIST LF\n";
+
+  snapshot_version = 40;
+  scn_range.start_scn_.convert_for_tx(20);
+  scn_range.end_scn_.convert_for_tx(snapshot_version);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(snapshot_version);
+  prepare_one_macro(minor_data, 1);
+  prepare_data_end(minor_handle);
+  ASSERT_EQ(OB_SUCCESS, merge_context.static_param_.tables_handle_.add_table(minor_handle));
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 40;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.base_version_ = 20;
+  const int64_t filter_max_version = 10;
+  TestMergeBasic::prepare_co_major_merge_context(
+      MAJOR_MERGE, false/*is_full_merge*/, trans_version_range, &merge_dag_, merge_context);
+  ASSERT_EQ(OB_SUCCESS, prepare_ttl_filter(filter_max_version, merge_context));
+  merge_context.static_param_.ttl_major_for_partial_update_upper_snapshot_ = 50;
+
+  TestMergeBasic::co_major_merge(
+      local_arena_,
+      ObCOMergeTestConfig(
+          ObCOMergeTestConfig::ObCOMergeTestType::NORMAL,
+          1/*compaction_batch_size*/),
+      merge_context,
+      0,
+      0,
+      4);
+
+  ASSERT_EQ(4, merge_context.merged_cg_tables_handle_.get_count());
+  for (int64_t i = 0; i < merge_context.merged_cg_tables_handle_.get_count(); ++i) {
+    ObSSTable *merged_sstable =
+        static_cast<ObSSTable *>(merge_context.merged_cg_tables_handle_.get_table(i));
+    ASSERT_NE(nullptr, merged_sstable);
+    EXPECT_EQ(4, merged_sstable->get_row_count()) << "unexpected row count for CG " << i;
+  }
+
+  const ObICompactionFilter::ObFilterStatistics &filter_statistics =
+      merge_context.filter_ctx_.filter_statistics_;
+  ASSERT_EQ(2, filter_statistics.macro_cnt_[ObBlockOp::OP_FILTER]);
+  ASSERT_EQ(4, filter_statistics.filter_block_row_cnt_);
+
+  const char *expected_c2 =
+      "bigint flag multi_version_row_flag\n"
+      "100 EXIST\n"
+      "101 EXIST\n"
+      "102 EXIST\n"
+      "107 EXIST\n";
+  check_single_column_cg(merge_context, 3/*cg_idx*/, 2/*column_idx*/, expected_c2);
+
+  major_handle.reset();
+  minor_handle.reset();
+}
+
+TEST_F(
+    ObMajorWithTTLFilterTest,
+    co_major_partial_update_skip_then_compacted_ttl_delete_range)
+{
+  run_partial_update_skip_then_compacted_ttl_delete_range();
 }
 
 TEST_F(ObMajorWithTTLFilterTest, co_major_multi_minor_all_virtual_rows)

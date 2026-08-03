@@ -394,8 +394,14 @@ int ObCOMergeWriter::replay_mergelog(
   } else if (OB_UNLIKELY(!mergelog.is_valid() || (nullptr != vector_store && nullptr != row))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid merge log", K(ret), K(mergelog), K(vector_store), K(row));
-  } else if (OB_FAIL(replay_last_skip_major(mergelog.major_idx_, mergelog.row_id_))) {
-    LOG_WARN("failed to replay last skip major", K(ret));
+  } else {
+    const int64_t major_idx = ObMergeLog::DELETE_RANGE == mergelog.op_ ? -1 : mergelog.major_idx_;
+    const int64_t row_id = ObMergeLog::DELETE_RANGE == mergelog.op_ ? -1 : mergelog.row_id_;
+    if (OB_FAIL(replay_last_skip_major(major_idx, row_id))) { // force replay when DELETE_RANGE
+      LOG_WARN("failed to replay last skip major", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (mergelog.is_range_mergelog()) {
     if (OB_FAIL(replay_range_mergelog(mergelog))) {
       LOG_WARN("failed to replay merge log", K(ret), K(mergelog));
@@ -475,12 +481,7 @@ int ObCOMergeWriter::replay_range_mergelog(const ObMergeLog &mergelog)
   bool skip_curr_row = false; // no used
   blocksstable::ObDatumRow row; // no used
   ObCOMajorMergeIter *merge_iter = nullptr;
-  if (ObMergeLog::DELETE_RANGE == mergelog.op_) {
-    if (OB_FAIL(replay_last_skip_major(-1))) {
-      LOG_WARN("failed to replay last skip major", K(ret));
-    }
-  }
-  if (FAILEDx(get_curr_major_iter(mergelog, merge_iter))) {
+  if (OB_FAIL(get_curr_major_iter(mergelog, merge_iter))) {
     LOG_WARN("failed to get curr major iter", K(ret), K(mergelog));
   }
   while (OB_SUCC(ret) && !finish) {
@@ -1125,7 +1126,7 @@ int ObCOMergeRowWriter::replay_single_mergelog(const ObMergeLog &mergelog, const
 int ObCOMergeRowWriter::end_write(ObCOTabletMergeCtx &co_ctx)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(replay_last_skip_major(-1))) {
+  if (OB_FAIL(replay_last_skip_major(-1/*force_replay*/))) {
     LOG_WARN("failed to replay last skip major", K(ret));
   } else if (OB_FAIL(flush_pending_buffered_rows())) {
     LOG_WARN("failed to flush last data", K(ret));
@@ -1284,7 +1285,7 @@ int ObCOMergeSingleWriter::end_write(ObCOTabletMergeCtx &co_ctx)
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "invalid count or unexpected null merge info array", K(ret),
       K(write_helpers_.count()), K(start_cg_idx_), K(end_cg_idx_), K(merge_infos));
-  } else if (OB_FAIL(replay_last_skip_major(-1))) {
+  } else if (OB_FAIL(replay_last_skip_major(-1/*force_replay*/))) {
     LOG_WARN("failed to replay last skip major", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < write_helpers_.count(); i++) {
