@@ -358,7 +358,7 @@ int ObMViewUtils::generate_mview_complete_refresh_sql(
   ObSqlString insert_columns;
   const int64_t real_parallelism = ObDDLUtil::get_real_parallelism(parallelism, true/*is mv refresh*/);
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == mview_table_id || OB_INVALID_ID == container_table_id ||
-                  execution_id < 0 || task_id <= 0 || based_schema_object_infos.empty())) {
+                  execution_id < 0 || task_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", KR(ret), K(tenant_id), K(mview_table_id), K(container_table_id),
              K(execution_id), K(task_id), K(based_schema_object_infos));
