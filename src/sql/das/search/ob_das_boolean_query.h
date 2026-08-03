@@ -53,7 +53,9 @@ public:
         filter_(),
         should_(),
         must_not_(),
-        min_should_match_(0) {}
+        min_should_match_(0),
+        merged_probe_(),
+        primary_get_ratio_(0) {}
   virtual ~ObDASBooleanQueryCtDef() {}
   int must(ObBooleanSubClause<ObIDASSearchCtDef> &clause) const;
   int filter(ObBooleanSubClause<ObIDASSearchCtDef> &clause) const;
@@ -87,6 +89,15 @@ private:
   SubClauseInfo should_;
   SubClauseInfo must_not_;
   int64_t min_should_match_;
+    // Merged primary-probe ctdef slot info.
+  // When exist_=true, children_[merged_probe_.offset_] is an ObDASScalarCtDef (DAS_OP_SCALAR_QUERY)
+  // whose single child is an ObDASScalarScanCtDef primary point-get evaluating the complete
+  // extracted bool filter. get_merged_probe_rtdef digs into the shell to get the scan rtdef.
+  SubClauseInfo merged_probe_;
+  // Primary-get optimization ratio for this boolean query; 0 means disabled. Sourced from the
+  // DSL search option (same as scalar). Used by prefer_primary_probe to decide whether this
+  // clause's filter (extracted into the merged probe) can replace its own scan.
+  int64_t primary_get_ratio_;
 };
 
 struct ObDASBooleanQueryRtDef : ObIDASSearchRtDef {

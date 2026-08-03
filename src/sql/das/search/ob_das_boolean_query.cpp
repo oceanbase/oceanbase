@@ -39,7 +39,9 @@ OB_SERIALIZE_MEMBER((ObDASBooleanQueryCtDef, ObIDASSearchCtDef),
                     must_not_,
                     min_should_match_,
                     min_should_match_expr_,
-                    is_msm_unresolved_expr_);
+                    is_msm_unresolved_expr_,
+                    merged_probe_,
+                    primary_get_ratio_);
 
 OB_SERIALIZE_MEMBER(ObDASBooleanQueryCtDef::SubClauseInfo,
                     exist_,
