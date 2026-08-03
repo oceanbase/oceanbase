@@ -9,6 +9,7 @@
 
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/resolver/expr/ob_raw_expr_util.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -30,24 +31,64 @@ ObExprRepeat::~ObExprRepeat()
 {
 }
 
+int ObExprRepeat::set_res_types_for_params(ObExprTypeCtx &type_ctx,
+                                           ObExprResType &text,
+                                           ObExprResType &count)
+{
+  int ret = OB_SUCCESS;
+  // skip implicit cast for param exprs, or else re-deduction can be idempotent
+  const ObRawExpr *raw_expr = type_ctx.get_raw_expr();
+  if (OB_ISNULL(raw_expr) || T_FUN_SYS_REPEAT != raw_expr->get_expr_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("UNEXPECTED REPEAT expr", K(ret), KP(raw_expr));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < 2; ++i) {
+    const ObRawExpr *param_expr = ObRawExprUtils::skip_implicit_cast(raw_expr->get_param_expr(i));
+    if (OB_ISNULL(param_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("UNEXPECTED NULL param expr", K(ret), K(i), KP(raw_expr));
+    } else {
+      ObExprResType type = param_expr->get_result_type();
+      type.set_calc_meta(type);
+      if (param_expr->is_const_raw_expr()) {
+        const ObConstRawExpr *const_expr = static_cast<const ObConstRawExpr *>(param_expr);
+        type.set_param(const_expr->get_param());
+      }
+      if (0 == i) {
+        text = type;
+      } else if (1 == i) {
+        count = type;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_0_0) {
+      text.set_calc_type(common::ObVarcharType);
+    } else if (!ob_is_text_tc(text.get_type()) && !text.is_null()) {
+      text.set_calc_type(common::ObVarcharType);
+    }
+    if (!count.is_null()) {
+      count.set_calc_type(common::ObIntType);
+    }
+    // Set cast mode for %count parameter, truncate string to integer.
+    type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_STRING_INTEGER_TRUNC);
+  }
+
+  return ret;
+}
+
 int ObExprRepeat::calc_result_type2(ObExprResType &type,
                                     ObExprResType &text,
                                     ObExprResType &count,
                                     ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_0_0) {
-    text.set_calc_type(common::ObVarcharType);
-  } else if (!ob_is_text_tc(text.get_type()) && !text.is_null()) {
-    text.set_calc_type(common::ObVarcharType);
-  }
-  if (!count.is_null()) {
-    count.set_calc_type(common::ObIntType);
-  }
-  // Set cast mode for %count parameter, truncate string to integer.
-  type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_STRING_INTEGER_TRUNC);
   // repeat is mysql only epxr.
   CK(lib::is_mysql_mode());
+  if (FAILEDx(set_res_types_for_params(type_ctx, text, count))) {
+    LOG_WARN("failed to set params res types for REPEAT expr", K(ret));
+  }
   if (OB_SUCC(ret)) {
     ObObjType res_type = ObMaxType;
     if (text.is_null() && !count.is_null()) {

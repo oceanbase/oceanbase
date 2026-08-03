@@ -58,6 +58,9 @@ public:
                          const int64_t max_result_size);
   DECLARE_SET_LOCAL_SESSION_VARS;
 private:
+  static int set_res_types_for_params(common::ObExprTypeCtx &type_ctx,
+                                      ObExprResType &text,
+                                      ObExprResType &count);
   template <typename Arg0Vec, typename Arg1Vec, typename ResVec>
   static int repeat_vector(VECTOR_EVAL_FUNC_ARG_DECL);
 
