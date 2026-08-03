@@ -723,10 +723,10 @@ int ObMergeLogPlan::get_const_expr_values(const ObRawExpr *part_expr,
         LOG_WARN("failed to get expr without lossless cast", K(ret));
       } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(param_2, param_2))) {
         LOG_WARN("failed to get expr without lossless cast", K(ret));
-      } else if (part_expr == param_1 && param_2->is_const_expr()) {
+      } else if (part_expr == param_1 && param_2->is_static_const_expr()) {
         const_expr = param_2;
         orig_const_expr = cur_expr->get_param_expr(1);
-      } else if (part_expr == param_2 && param_1->is_const_expr()) {
+      } else if (part_expr == param_2 && param_1->is_static_const_expr()) {
         const_expr = param_1;
         orig_const_expr = cur_expr->get_param_expr(0);
       }
