@@ -670,11 +670,19 @@ int ObLogPlan::pre_process_quals(TableItem *table_item)
   } else if (OB_FAIL(SMART_CALL(pre_process_quals(joined_table->right_table_)))) {
     LOG_WARN("failed to distribute special quals", K(ret));
   } else {
-    if (FULL_OUTER_JOIN == joined_table->joined_type_ &&
-             !ObOptimizerUtil::has_equal_join_conditions(joined_table->join_conditions_)) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("full outer join without equal join conditions is not supported now", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "full outer join without equal join conditions");
+    if (FULL_OUTER_JOIN == joined_table->joined_type_) {
+      if (!ObOptimizerUtil::has_equal_join_conditions(joined_table->join_conditions_)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("full outer join without equal join conditions is not supported now", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "full outer join without equal join conditions");
+      } else if (bool has_subquery = false;
+                 OB_FAIL(ObRawExprUtils::exprs_contain_subquery(joined_table->join_conditions_, has_subquery))) {
+        LOG_WARN("failed to check if join conditions contain subquery", K(ret));
+      } else if (has_subquery) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("full outer join with subquery in on condition is not supported now", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "full outer join with subquery in on condition");
+      }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < joined_table->join_conditions_.count(); ++i) {
       ObRawExpr *expr = joined_table->join_conditions_.at(i);
