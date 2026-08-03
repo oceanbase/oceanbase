@@ -48,7 +48,7 @@ void LSSvrList::reset()
 int LSSvrList::add_server_or_update(const common::ObAddr &svr,
     const palf::LSN &start_lsn,
     const palf::LSN &end_lsn,
-    const RegionPriority region_prio,
+    const FetchPriority fetch_prio,
     const bool is_leader)
 {
   int ret = OB_SUCCESS;
@@ -64,7 +64,7 @@ int LSSvrList::add_server_or_update(const common::ObAddr &svr,
     if (svr_item.svr_ == svr) {
       found_svr = true;
       // update is_located_in_meta_table/replica_prior if server exist
-      svr_item.update(start_lsn, end_lsn, is_located_in_meta_table, region_prio, replica_prio, is_leader);
+      svr_item.update(start_lsn, end_lsn, is_located_in_meta_table, fetch_prio, replica_prio, is_leader);
     }
   }
 
@@ -75,7 +75,7 @@ int LSSvrList::add_server_or_update(const common::ObAddr &svr,
         start_lsn,
         end_lsn,
         is_located_in_meta_table,
-        region_prio,
+        fetch_prio,
         replica_prio,
         is_leader);
 
@@ -381,7 +381,7 @@ void LSSvrList::SvrItem::reset()
   svr_.reset();
   log_ranges_.reset();
   is_located_in_meta_table_ = false;
-  region_prio_ = REGION_PRIORITY_UNKNOWN;
+  fetch_prio_ = REGION_PRIORITY_UNKNOWN;
   replica_prio_ = REPLICA_PRIORITY_UNKNOWN;
   is_leader_ = false;
 }
@@ -390,7 +390,7 @@ void LSSvrList::SvrItem::reset(const common::ObAddr &svr,
     const palf::LSN &start_lsn,
     const palf::LSN &end_lsn,
     const bool is_located_in_meta_table,
-    const RegionPriority region_prio,
+    const FetchPriority fetch_prio,
     const ReplicaPriority replica_prio,
     const bool is_leader)
 {
@@ -398,7 +398,7 @@ void LSSvrList::SvrItem::reset(const common::ObAddr &svr,
   log_ranges_.reset(start_lsn, end_lsn);
   // Initialization priority
   is_located_in_meta_table_ = is_located_in_meta_table;
-  region_prio_ = region_prio;
+  fetch_prio_ = fetch_prio;
   replica_prio_ = replica_prio;
   is_leader_ = is_leader;
 }
@@ -406,13 +406,13 @@ void LSSvrList::SvrItem::reset(const common::ObAddr &svr,
 void LSSvrList::SvrItem::update(const palf::LSN &start_lsn,
     const palf::LSN &end_lsn,
     const bool is_located_in_meta_table,
-    const RegionPriority region_prio,
+    const FetchPriority fetch_prio,
     const ReplicaPriority replica_prio,
     const bool is_leader)
 {
   log_ranges_.reset(start_lsn, end_lsn);
   is_located_in_meta_table_ = is_located_in_meta_table;
-  region_prio_ = region_prio;
+  fetch_prio_ = fetch_prio;
   replica_prio_ = replica_prio;
   is_leader_ = is_leader;
 }
@@ -443,7 +443,7 @@ bool LSSvrList::SvrItem::is_priority_equal(const SvrItem &svr_item) const
   bool bool_ret = false;
 
   bool_ret = (is_located_in_meta_table_ == svr_item.is_located_in_meta_table_)
-    && (region_prio_ == svr_item.region_prio_)
+    && (fetch_prio_ == svr_item.fetch_prio_)
     && (replica_prio_ == svr_item.replica_prio_)
     && (is_leader_ == svr_item.is_leader_);
 
@@ -460,9 +460,9 @@ int64_t LSSvrList::SvrItem::to_string(char *buffer, int64_t length) const
   (void)databuff_printf(buffer, length, pos, "], ");
 
   (void)databuff_printf(buffer, length, pos,
-      "priority:[is_meta_table:%d region:%s, replica:%s, is_leader:%d]}",
+      "priority:[is_meta_table:%d fetch:%d, replica:%s, is_leader:%d]}",
       is_located_in_meta_table_,
-      print_region_priority(region_prio_),
+      fetch_prio_,
       print_replica_priority(replica_prio_),
       is_leader_);
 

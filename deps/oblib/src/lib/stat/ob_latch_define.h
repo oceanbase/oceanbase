@@ -436,6 +436,7 @@ LATCH_DEF(VECTOR_SYNC_SWITCH_LOCK, 396, "vector sync switch lock", LATCH_FIFO, 5
 LATCH_DEF(VECTOR_IVF_CACHE_LOCK, 397, "vector ivf cache lock", LATCH_READ_PREFER, 1000, 0, true)
 LATCH_DEF(VECTOR_COMPLETE_LOCK, 399, "vector complete lock", LATCH_FIFO, 200, 0, true)
 
+LATCH_DEF(OB_LOG_ALL_SVR_CACHE_LOCK, 630, "ob log all svr cache lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(LATCH_END, 400, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
