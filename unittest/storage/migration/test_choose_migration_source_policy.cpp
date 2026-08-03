@@ -7,6 +7,7 @@
 #define private public
 #define protected public
 #include "storage/high_availability/ob_storage_ha_src_provider.h"
+#include "storage/high_availability/ob_storage_ha_service.h"
 #include "storage/ls/ob_ls.h"
 #include "test_migration.h"
 
@@ -30,6 +31,27 @@ public:
 
   MOCK_METHOD4(post_ls_meta_info_request, int(const uint64_t, const ObStorageHASrcInfo &,
       const share::ObLSID &, obrpc::ObFetchLSMetaInfoResp &));
+  MOCK_METHOD4(post_ls_member_list_request, int(const uint64_t, const ObStorageHASrcInfo &,
+      const share::ObLSID &, obrpc::ObFetchLSMemberListInfo &));
+};
+
+class ScopedStorageHAMtl
+{
+public:
+  ScopedStorageHAMtl(const uint64_t tenant_id, ObStorageHAService &ha_service)
+    : old_tenant_(ObTenantEnv::get_tenant()),
+      tenant_(tenant_id)
+  {
+    tenant_.set<ObStorageHAService *>(&ha_service);
+    ObTenantEnv::set_tenant(&tenant_);
+  }
+  ~ScopedStorageHAMtl()
+  {
+    ObTenantEnv::set_tenant(old_tenant_);
+  }
+private:
+  ObTenantBase *old_tenant_;
+  ObTenantBase tenant_;
 };
 
 class MockGetMemberHelper : public ObStorageHAGetMemberHelper
@@ -776,6 +798,8 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_diff_region_leader)
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::check_tenant_primary_true));
   const uint64_t tenant_id = 1001;
   const share::ObLSID ls_id(1);
+  ObStorageHAService ha_service;
+  ScopedStorageHAMtl mtl_guard(tenant_id, ha_service);
   share::SCN local_ls_checkpoint_scn;
   local_ls_checkpoint_scn.set_min();
   ObMigrationOpArg mock_arg;
@@ -793,6 +817,10 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_diff_region_leader)
   common::ObAddr expect_addr;
   EXPECT_EQ(OB_SUCCESS, mock_addr("192.168.1.1:1234", expect_addr));
   EXPECT_EQ(expect_addr, src_info.src_addr_);
+  ObArray<ObMigrationSrcBook::ReservationSnapshot> reservations;
+  ASSERT_EQ(OB_SUCCESS, ha_service.get_migration_src_book().list_reservations(reservations));
+  ASSERT_EQ(1, reservations.count());
+  EXPECT_EQ(ls_id, reservations.at(0).ls_id_);
 }
 // test idc policy
 // candidate addr: ["192.168.1.1:1234", "192.168.1.2:1234"]
@@ -1037,6 +1065,36 @@ TEST_F(TestChooseMigrationSourcePolicy, member_helper_get_member_list)
   common::ObMemberList addr_list;
   EXPECT_EQ(OB_SUCCESS, member_helper_.get_ls_member_list(tenant_id, ls_id, addr_list));
 }
+
+TEST_F(TestChooseMigrationSourcePolicy, retry_member_list_when_election_leader_unchanged)
+{
+  const uint64_t tenant_id = 1001;
+  const share::ObLSID ls_id(1);
+  common::ObAddr leader_addr;
+  ASSERT_EQ(OB_SUCCESS, mock_addr("192.168.1.1:1234", leader_addr));
+
+  MockMemberList mock_member_list;
+  mock_member_list.mock_palf_handle_impl_.election_.self_addr_ = leader_addr;
+  mock_member_list.mock_palf_handle_impl_.election_.proposer_.leader_lease_and_epoch_
+      .set_lease_and_epoch_if_lease_expired_or_just_set_lease(
+          palf::election::get_monotonic_ts() + 60L * 1000 * 1000, 1);
+  EXPECT_CALL(member_helper_, get_ls(ls_id, _))
+      .WillOnce(Invoke(&mock_member_list, &MockMemberList::get_ls_succ_with_palf));
+  EXPECT_CALL(storage_rpc_, post_ls_member_list_request(
+      tenant_id, ::testing::Field(&ObStorageHASrcInfo::src_addr_, leader_addr), ls_id, _))
+      .Times(2)
+      .WillOnce(::testing::Return(OB_TIMEOUT))
+      .WillOnce(::testing::Return(OB_SUCCESS));
+
+  common::GlobalLearnerList learner_list;
+  common::ObMemberList fetched_member_list;
+  EXPECT_EQ(OB_SUCCESS,
+      member_helper_.ObStorageHAGetMemberHelper::get_ls_member_list_and_learner_list_(
+          tenant_id, ls_id, false /*need_learner_list*/, leader_addr,
+          learner_list, fetched_member_list));
+  EXPECT_EQ(mock_member_list.mock_palf_handle_impl_.election_.self_addr_, leader_addr);
+}
+
 // test ObMigrationSrcByLocationProvider init fail
 TEST_F(TestChooseMigrationSourcePolicy, src_provider_init_idc_fail)
 {

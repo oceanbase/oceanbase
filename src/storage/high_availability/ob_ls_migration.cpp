@@ -12,6 +12,7 @@
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "ob_rebuild_service.h"
 #include "ob_storage_ha_src_provider.h"
+#include "ob_storage_ha_service.h"
 #include "ob_cs_replica_migration.h"
 #include "ob_sstable_copy_start_task.h"
 #include "ob_tablet_copy_dependency_mgr.h"
@@ -174,6 +175,24 @@ ObMigrationCtx::ObMigrationCtx()
 
 ObMigrationCtx::~ObMigrationCtx()
 {
+}
+
+void ObMigrationCtx::release_src_reservation()
+{
+  // Drop this LS's entry from the src book (no-op if absent). pick_coolest
+  // records the entry at choose time; this releases it when the migration dag
+  // net ends. Called from ObMigrationDagNet::clear_dag_net_ctx, which is the
+  // dag net's guaranteed exit point (success / failure / cancel), and runs on
+  // a thread with this tenant's MTL context.
+  if (arg_.ls_id_.is_valid()) {
+    ObStorageHAService *ha_service = MTL(ObStorageHAService *);
+    if (OB_NOT_NULL(ha_service)) {
+      const int tmp_ret = ha_service->get_migration_src_book().release(arg_.ls_id_);
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN_RET(tmp_ret, "release migration src failed", K(tmp_ret), "ls_id", arg_.ls_id_);
+      }
+    }
+  }
 }
 
 bool ObMigrationCtx::is_valid() const
@@ -579,6 +598,8 @@ int ObMigrationDagNet::clear_dag_net_ctx()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("migration dag net do not init", K(ret));
+  } else if (FALSE_IT(ctx_->release_src_reservation())) {
+    // Release before LS lookup so a missing LS cannot leave stale heat behind.
   } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {

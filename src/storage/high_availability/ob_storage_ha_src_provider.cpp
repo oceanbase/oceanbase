@@ -9,6 +9,7 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "src/storage/ls/ob_ls.h"
 #include "storage/ob_locality_manager.h"
+#include "storage/high_availability/ob_storage_ha_service.h"
 
 namespace oceanbase {
 using namespace share;
@@ -135,6 +136,43 @@ int ObStorageHAGetMemberHelper::get_ls_member_list_and_learner_list(
   return ret;
 }
 
+// Fetch-from-leader with leader-refresh retry. FETCH_EXPR is the RPC call
+// against src_info; OUTPUT is its result struct (reset before each try).
+// On failure, probe the election leader and retry once whenever the probe
+// succeeds. A same-address leader can still recover from a transient RPC
+// failure (or be re-elected with a new term), so address equality must not
+// suppress the retry. When the probe fails, ret keeps the FIRST error so the
+// real fault is not overwritten. Expects
+// ret/ls/src_info/leader_addr/tenant_id/ls_id in scope.
+#define FETCH_WITH_LEADER_RETRY(FETCH_EXPR, OUTPUT)                                            \
+  do {                                                                                         \
+    OUTPUT.reset();                                                                            \
+    if (OB_FAIL(FETCH_EXPR)) {                                                                 \
+      const int first_ret = ret;                                                               \
+      const common::ObAddr old_leader = src_info.src_addr_;                                    \
+      common::ObAddr new_leader;                                                               \
+      int tmp_ret = OB_SUCCESS;                                                                \
+      LOG_WARN("failed to fetch from leader", K(ret), K(tenant_id), K(ls_id), K(old_leader));  \
+      if (OB_TMP_FAIL(ls->get_log_handler()->get_election_leader(new_leader))) {               \
+        /* keep the first failure: the election lookup is only the retry probe */              \
+        LOG_WARN("failed to get election leader, keep first error",                            \
+            K(ret), K(tmp_ret), K(tenant_id), K(ls_id), K(old_leader));                        \
+      } else {                                                                                 \
+        src_info.src_addr_ = new_leader;                                                       \
+        leader_addr = new_leader;                                                              \
+        OUTPUT.reset();                                                                        \
+        /* retry even when the address is unchanged; transient failures may recover */         \
+        if (OB_FAIL(FETCH_EXPR)) {                                                             \
+          LOG_WARN("failed to retry fetch from election leader",                               \
+              K(ret), K(first_ret), K(tenant_id), K(ls_id), K(new_leader));                    \
+        } else {                                                                               \
+          LOG_INFO("retry fetch from election leader succeeded",                               \
+              K(tenant_id), K(ls_id), K(old_leader), K(new_leader));                           \
+        }                                                                                      \
+      }                                                                                        \
+    }                                                                                          \
+  } while (false)
+
 int ObStorageHAGetMemberHelper::get_ls_member_list_and_learner_list_(
     const uint64_t tenant_id,
     const share::ObLSID &ls_id,
@@ -160,38 +198,18 @@ int ObStorageHAGetMemberHelper::get_ls_member_list_and_learner_list_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(tenant_id), K(ls_id));
   } else if (need_learner_list) {
-    if (OB_FAIL(storage_rpc_->fetch_ls_member_and_learner_list(tenant_id, ls_id, src_info, member_and_learner_info))) {
-      LOG_WARN("failed to fetch ls member list and learner list request", K(ret), K(tenant_id), K(src_info), K(ls_id));
-      //overwrite ret
-      member_and_learner_info.reset();
-      if (OB_FAIL(ls->get_log_handler()->get_election_leader(src_info.src_addr_))) {
-        LOG_WARN("failed to get election leader", K(ret), K(tenant_id), K(ls_id));
-      } else {
-        leader_addr = src_info.src_addr_;
-        if (OB_FAIL(storage_rpc_->fetch_ls_member_and_learner_list(tenant_id, ls_id, src_info, member_and_learner_info))) {
-          LOG_WARN("failed to post ls member list and learner list request", K(ret), K(tenant_id), K(src_info), K(ls_id));
-        }
-      }
-    }
+    FETCH_WITH_LEADER_RETRY(
+        storage_rpc_->fetch_ls_member_and_learner_list(tenant_id, ls_id, src_info, member_and_learner_info),
+        member_and_learner_info);
     if (FAILEDx(member_list.deep_copy(member_and_learner_info.member_list_))) {
       LOG_WARN("failed to deep copy member list", K(ret), K(member_and_learner_info));
     } else if (OB_FAIL(learner_list.deep_copy(member_and_learner_info.learner_list_))) {
       LOG_WARN("failed to deep copy learner list", K(ret), K(member_and_learner_info));
     }
   } else {
-    if (OB_FAIL(storage_rpc_->post_ls_member_list_request(tenant_id, src_info, ls_id, member_info))) {
-      LOG_WARN("failed to post ls member list request", K(ret), K(tenant_id), K(src_info), K(ls_id));
-      //overwrite ret
-      member_info.reset();
-      if (OB_FAIL(ls->get_log_handler()->get_election_leader(src_info.src_addr_))) {
-        LOG_WARN("failed to get election leader", K(ret), K(tenant_id), K(ls_id));
-      } else {
-        leader_addr = src_info.src_addr_;
-        if (OB_FAIL(storage_rpc_->post_ls_member_list_request(tenant_id, src_info, ls_id, member_info))) {
-          LOG_WARN("failed to post ls member list request", K(ret), K(tenant_id), K(src_info), K(ls_id));
-        }
-      }
-    }
+    FETCH_WITH_LEADER_RETRY(
+        storage_rpc_->post_ls_member_list_request(tenant_id, src_info, ls_id, member_info),
+        member_info);
     if (FAILEDx(member_list.deep_copy(member_info.member_list_))) {
       LOG_WARN("failed to get member list", K(ret), K(member_info));
     } else {
@@ -201,6 +219,7 @@ int ObStorageHAGetMemberHelper::get_ls_member_list_and_learner_list_(
   }
   return ret;
 }
+#undef FETCH_WITH_LEADER_RETRY
 
 int ObStorageHAGetMemberHelper::get_ls_leader(const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObAddr &leader)
 {
@@ -1293,14 +1312,58 @@ int ObMigrationSrcByLocationProvider::find_src_in_sorted_addr_list_(
         LOG_INFO("no available data source exist in this area", K(ret), "tenant_id", get_tenant_id(),
             "ls_id", get_ls_id(), K(addr_list), K(dst), K(learner_list));
       } else if (!candidate_addr_list.empty()) {
-        const int64_t num = candidate_addr_list.count();
-        chosen_src_addr = addr_list.at(candidate_addr_list.at(rand() % num));
-        LOG_INFO("found available data follower source in this area", "tenant_id", get_tenant_id(),
-            "ls_id", get_ls_id(), K(addr_list), K(dst), K(learner_list), K(chosen_src_addr));
+        // Pick the candidate with the lowest in-flight migration count on this
+        // observer; pick_coolest records the choice under its own lock so
+        // concurrent picks see each other. The book is a balancing hint only —
+        // any failure on this path (MTL unavailable, alloc failure) falls back
+        // to plain rand and never fails the src selection.
+        int tmp_ret = OB_SUCCESS;
+        bool picked = false;
+        ObStorageHAService *ha_service = MTL(ObStorageHAService *);
+        if (OB_NOT_NULL(ha_service)) {
+          common::ObArray<common::ObAddr> raw_pool;
+          for (int64_t i = 0; OB_SUCCESS == tmp_ret && i < candidate_addr_list.count(); ++i) {
+            if (OB_TMP_FAIL(raw_pool.push_back(addr_list.at(candidate_addr_list.at(i))))) {
+              LOG_WARN_RET(tmp_ret, "failed to push raw_pool", K(tmp_ret), "ls_id", get_ls_id());
+            }
+          }
+          if (OB_SUCCESS == tmp_ret
+              && OB_TMP_FAIL(ha_service->get_migration_src_book().pick_coolest(
+                  get_ls_id(), raw_pool, chosen_src_addr))) {
+            LOG_WARN_RET(tmp_ret, "pick_coolest failed; fallback to rand", K(tmp_ret), "ls_id", get_ls_id());
+          }
+          picked = (OB_SUCCESS == tmp_ret);
+        }
+        if (picked) {
+          LOG_INFO("found available data follower source in this area",
+              "tenant_id", get_tenant_id(), "ls_id", get_ls_id(),
+              K(addr_list), K(dst), K(learner_list), K(chosen_src_addr),
+              "candidate_count", candidate_addr_list.count());
+        } else {
+          const int64_t num = candidate_addr_list.count();
+          chosen_src_addr = addr_list.at(candidate_addr_list.at(rand() % num));
+          LOG_INFO("found available data follower source via rand fallback",
+              "tenant_id", get_tenant_id(), "ls_id", get_ls_id(),
+              K(addr_list), K(dst), K(learner_list), K(chosen_src_addr));
+        }
       } else {
-        chosen_src_addr = addr_list.at(leader_index);
+        const common::ObAddr leader_src = addr_list.at(leader_index);
+        int tmp_ret = OB_SUCCESS;
+        bool reserved = false;
+        chosen_src_addr = leader_src;
+        ObStorageHAService *ha_service = MTL(ObStorageHAService *);
+        if (OB_NOT_NULL(ha_service)) {
+          if (OB_TMP_FAIL(ha_service->get_migration_src_book().reserve(
+              get_ls_id(), leader_src))) {
+            LOG_WARN_RET(tmp_ret, "failed to reserve leader src; fallback without reservation",
+                K(tmp_ret), "ls_id", get_ls_id(), K(leader_src));
+          } else {
+            reserved = true;
+          }
+        }
         LOG_INFO("found available data leader source in this area", "tenant_id", get_tenant_id(),
-            "ls_id", get_ls_id(), K(addr_list), K(dst), K(learner_list), K(chosen_src_addr), K(leader_index));
+            "ls_id", get_ls_id(), K(addr_list), K(dst), K(learner_list),
+            K(chosen_src_addr), K(leader_index), K(reserved));
       }
     }
   }

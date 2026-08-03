@@ -72,8 +72,11 @@ public:
 
   void reset();
   void reuse();
-public:
-  typedef hash::ObHashMap<common::ObTabletID, ObCopyTabletSimpleInfo> CopyTabletSimpleInfoMap;
+  // Drop this LS's entry from the migration src book (no-op if absent).
+  // pick_coolest records the entry at choose time; ObMigrationDagNet::
+  // clear_dag_net_ctx calls this on the dag net's guaranteed exit point
+  // (success / failure / cancel), which runs with this tenant's MTL context.
+  void release_src_reservation();
 public:
   uint64_t tenant_id_;
   ObMigrationOpArg arg_;
