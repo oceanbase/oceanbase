@@ -334,6 +334,7 @@ struct ObEvalCostHelper
     src_qb_name_(),
     outline_trans_hints_count_(0),
     used_trans_hints_count_(0),
+    push_down_filters_count_(0),
     tmp_expr_factory_(NULL)
   {}
 
@@ -357,6 +358,7 @@ struct ObEvalCostHelper
   ObString src_qb_name_;
   int64_t outline_trans_hints_count_;
   int64_t used_trans_hints_count_;
+  int64_t push_down_filters_count_;
   ObRawExprFactory *tmp_expr_factory_;
 };
 
