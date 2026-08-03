@@ -1648,7 +1648,9 @@ int ObResolverUtils::record_deduced_type(const pl::ObPLResolveCtx &resolve_ctx,
         CK (OB_NOT_NULL(routine_param));
         if (OB_FAIL(ret)) {
         } else if (is_from_overloaded_routine) {
-          if (OB_NOT_NULL(symbol_table)) {
+          // ObExecParamRawExpr also uses T_QUESTIONMARK, but its param index
+          // belongs to QueryCtx rather than the PL symbol table.
+          if (OB_NOT_NULL(symbol_table) && !expr->is_exec_param_expr()) {
             CK (param_idx >= 0 && param_idx < symbol_table->get_count());
             ObPLVar *var = const_cast<ObPLVar*>(symbol_table->get_symbol(param_idx));
             if (OB_NOT_NULL(var)) {
