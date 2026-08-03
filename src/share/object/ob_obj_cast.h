@@ -66,6 +66,7 @@ namespace common
 #define CM_ORA_SYS_VIEW_CAST             (1ULL << 23)
 #define CM_DEMOTE_CAST                   (1ULL << 24)
 #define CM_IMPLICIT_FIRST_CENTURY_YEAR   (1ULL << 25)
+#define CM_NULL_ON_CAST_FAIL             (1ULL << 26)
 // string->integer(int/uint)时默认进行round(round to nearest)，
 // 如果设置该标记，则会进行trunc(round to zero)
 // ceil(round to +inf)以及floor(round to -inf)暂时没有支持
@@ -141,6 +142,7 @@ typedef uint64_t ObCastMode;
 #define CM_SET_GEOMETRY_GEOMETRYCOLLECTION(mode)  ((mode) &= 0xFFFE0FFF, (mode) |= (7 << 12))
 #define CM_IS_DEMOTE_CAST(mode)                   ((CM_DEMOTE_CAST & (mode)) != 0)
 #define CM_IS_IMPLICIT_FIRST_CENTURY_YEAR(mode)   ((CM_IMPLICIT_FIRST_CENTURY_YEAR & (mode)) != 0)
+#define CM_IS_NULL_ON_CAST_FAIL(mode)             ((CM_NULL_ON_CAST_FAIL & (mode)) != 0)
 
 #define CM_GET_CS_LEVEL(mode)                     (((mode) >> CM_CS_LEVEL_SHIFT) & CM_CS_LEVEL_MASK)
 #define CM_SET_CS_LEVEL(mode, level) \

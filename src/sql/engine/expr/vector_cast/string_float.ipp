@@ -13,6 +13,14 @@ namespace sql
 template<typename Vector, typename ResFmt>
 struct StringFloatCastImpl
 {
+  OB_INLINE static void handle_string_float_cast_fail(const ObExpr &expr, ResFmt *output_vector, int i, int &ret)
+  {
+    if (CastHelperImpl::is_null_on_cast_fail_expr(expr) && ret == OB_ERR_DATA_TRUNCATED) {
+      SQL_LOG(WARN, "failed to cast string datum to ob float datum, set the value to null", K(ret), K(i));
+      output_vector->set_null(i);
+      ret = OB_SUCCESS;
+    }
+  }
   template<typename OUT_TYPE>
   static int eval_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
                          const EvalBound &bound)
@@ -61,6 +69,7 @@ struct StringFloatCastImpl
         if (!input_vector->has_null()) {
           for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
             convert_string_to_float_task(i);
+            handle_string_float_cast_fail(expr, output_vector, i, ret);
             if(OB_FAIL(ret) && is_diagnosis) {
               // overwrite ret on diagnosis node
               if (OB_FAIL(ctx.exec_ctx_.get_diagnosis_manager().add_warning_info(ret, i))) {
@@ -78,6 +87,7 @@ struct StringFloatCastImpl
               output_vector->set_null(i);
             } else {
               convert_string_to_float_task(i);
+              handle_string_float_cast_fail(expr, output_vector, i, ret);
               if(OB_FAIL(ret) && is_diagnosis) {
                 // overwrite ret on diagnosis node
                 if (OB_FAIL(ctx.exec_ctx_.get_diagnosis_manager().add_warning_info(ret, i))) {
@@ -99,6 +109,7 @@ struct StringFloatCastImpl
             output_vector->set_null(i);
           } else {
             convert_string_to_float_task(i);
+            handle_string_float_cast_fail(expr, output_vector, i, ret);
             if(OB_FAIL(ret) && is_diagnosis) {
               // overwrite ret on diagnosis node
               if (OB_FAIL(ctx.exec_ctx_.get_diagnosis_manager().add_warning_info(ret, i))) {

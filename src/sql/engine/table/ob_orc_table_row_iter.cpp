@@ -2541,6 +2541,30 @@ int64_t ObOrcTableRowIterator::DataLoader::calc_tz_adjust_us(ObEvalCtx &eval_ctx
                            eval_ctx.exec_ctx_.get_my_session());
 }
 
+int64_t ObOrcTableRowIterator::DataLoader::convert_hive_year_zero_to_ob_timestamp(const int64_t timestamp_us)
+{
+  // OceanBase uses astronomical year numbering for its internal datetime:
+  // year 0000 exists and is a leap year. Hive's Java timestamp presentation
+  // has no year zero and presents the same ORC value as AD 0001. Only values
+  // in OceanBase's year 0000 need rebasing; later years already agree.
+  //
+  // 0000-01-01 00:00:00 = -719528 days from the Unix epoch
+  // 0001-01-01 00:00:00 = -719162 days from the Unix epoch
+  static const int64_t OB_YEAR_ZERO_BEGIN_US = -719528LL * USECS_PER_DAY;
+  static const int64_t OB_YEAR_ZERO_MARCH_BEGIN_US = (-719528LL + 60LL) * USECS_PER_DAY;
+  static const int64_t OB_YEAR_ONE_BEGIN_US = -719162LL * USECS_PER_DAY;
+
+  int64_t result = timestamp_us;
+  if (timestamp_us >= OB_YEAR_ZERO_BEGIN_US && timestamp_us < OB_YEAR_ONE_BEGIN_US) {
+    // Year 0000 is a leap year while AD 0001 is not. Preserve month/day by
+    // adding 366 days in January and February, and 365 days from March onward.
+    // The leap day itself consequently maps to AD 0001-03-01.
+    const int64_t days = timestamp_us < OB_YEAR_ZERO_MARCH_BEGIN_US ? 366LL : 365LL;
+    result += days * USECS_PER_DAY;
+  }
+  return result;
+}
+
 int ObOrcTableRowIterator::DataLoader::load_data_for_col(ObEvalCtx &eval_ctx)
 {
   int ret = OB_SUCCESS;
@@ -3208,6 +3232,9 @@ int ObOrcTableRowIterator::DataLoader::load_timestamp_vec(ObEvalCtx &eval_ctx)
         if (not_null == 1) {
           int64_t adjusted_value = orc_timestamp_to_ob_timestamp(
               timestamp_batch->data[i], timestamp_batch->nanoseconds[i], adjust_us);
+          if (is_hive_lake_table_) {
+            adjusted_value = convert_hive_year_zero_to_ob_timestamp(adjusted_value);
+          }
           if (ObTimestampType == file_col_expr_->datum_meta_.type_) {
             dec_vec->set_timestamp(i, adjusted_value);
           } else if (ObDateTimeType == file_col_expr_->datum_meta_.type_) {

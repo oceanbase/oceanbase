@@ -15381,6 +15381,11 @@ int vector_accuracy_check(const ObExpr &expr,
         break;
       }
     }
+    // if accuracy check failed, but the data type change is compatible with hive ,set the datum to null
+    if (ret == OB_DATA_OUT_OF_RANGE && CM_IS_NULL_ON_CAST_FAIL(cast_mode)) {
+      out_vec.set_null(idx);
+      ret = OB_SUCCESS;
+    }
   } else {
     out_vec.set_null(idx);
   }

@@ -7,6 +7,7 @@
 #define _OB_RAW_EXPR_DEDUCE_TYPE_H 1
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/resolver/expr/ob_raw_expr_type_demotion.h"
+#include "sql/engine/expr/ob_expr_column_conv.h"
 #include "lib/container/ob_iarray.h"
 #include "lib/udt/ob_collection_type.h"
 #include "common/ob_accuracy.h"
@@ -230,6 +231,10 @@ int ObRawExprDeduceType::try_add_cast_expr(RawExprType &parent,
         SQL_RESV_LOG(WARN, "cast to lob type not allowed", K(ret));
       }
 
+      if (T_FUN_COLUMN_CONV == parent.get_expr_type() && child_idx == ObExprColumnConv::VALUE_EXPR &&
+          T_FUN_SYS_CAST == new_expr->get_expr_type() && CM_IS_NULL_ON_CAST_FAIL(parent.get_cast_mode())) {
+        new_expr->set_cast_mode(new_expr->get_cast_mode() | CM_NULL_ON_CAST_FAIL);  // for vector evalue's batch_cast
+      }
       // for consistent with mysql, if const cast as json, should regard as scalar, don't need parse
       if (ObStringTC == ori_tc && ObJsonTC == expect_tc && IS_JSON_COMPATIBLE_OP(parent.get_expr_type())) {
         uint64_t extra = new_expr->get_cast_mode();

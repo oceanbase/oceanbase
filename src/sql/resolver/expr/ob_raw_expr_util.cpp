@@ -5342,7 +5342,8 @@ int ObRawExprUtils::build_column_conv_expr(ObRawExprFactory &expr_factory,
                                            const share::schema::ObColumnSchemaV2 *column_schema,
                                            ObRawExpr *&expr,
                                            const ObSQLSessionInfo *session_info,
-                                           const ObLocalSessionVar *local_vars)
+                                           const ObLocalSessionVar *local_vars,
+                                           bool allow_null_on_cast_fail)
 {
   int ret = OB_SUCCESS;
   CK(OB_NOT_NULL(session_info));
@@ -5365,7 +5366,8 @@ int ObRawExprUtils::build_column_conv_expr(ObRawExprFactory &expr_factory,
                                               expr,
                                               false,
                                               false,
-                                              local_vars))) {
+                                              local_vars,
+                                              allow_null_on_cast_fail))) {
       LOG_WARN("failed to build column convert expr", K(ret));
     }
   }
@@ -5389,7 +5391,8 @@ int ObRawExprUtils::build_column_conv_expr(ObRawExprFactory &expr_factory,
                                            const ObSQLSessionInfo *session_info,
                                            bool is_generated_column,
                                            const ObLocalSessionVar *local_vars,
-                                           int64_t local_var_id)
+                                           int64_t local_var_id,
+                                           bool allow_null_on_cast_fail)
 {
   int ret = OB_SUCCESS;
   ObString column_conv_info;
@@ -5461,7 +5464,8 @@ int ObRawExprUtils::build_column_conv_expr(ObRawExprFactory &expr_factory,
                                               type_infos,
                                               expr, false, is_generated_column,
                                               local_vars,
-                                              local_var_id))) {
+                                              local_var_id,
+                                              allow_null_on_cast_fail))) {
       LOG_WARN("fail to build column convert expr", K(ret));
     }
   }
@@ -5480,7 +5484,8 @@ int ObRawExprUtils::build_column_conv_expr(const ObSQLSessionInfo *session_info,
                                            bool is_in_pl,
                                            bool is_generated_column,
                                            const ObLocalSessionVar *local_vars,
-                                           int64_t local_var_id)
+                                           int64_t local_var_id,
+                                           bool allow_null_on_cast_fail)
 {
   int ret = OB_SUCCESS;
   ObObjType dest_type = type;
@@ -5609,6 +5614,10 @@ int ObRawExprUtils::build_column_conv_expr(const ObSQLSessionInfo *session_info,
     }
     if (OB_SUCC(ret)) {
       f_expr->set_cast_mode(def_cast_mode);
+      if (allow_null_on_cast_fail) {
+        // for column convert vector accuracy check
+        f_expr->set_cast_mode(f_expr->get_cast_mode() | CM_NULL_ON_CAST_FAIL);
+      }
       f_expr->set_func_name(ObString::make_string(N_COLUMN_CONV));
       f_expr->set_data_type(dest_type);
       f_expr->set_expr_type(T_FUN_COLUMN_CONV);

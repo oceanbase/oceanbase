@@ -11554,6 +11554,22 @@ int ObDMLResolver::handle_duplicate_mapped_column_id(ObRawExpr *real_ref_expr, u
   }
   return ret;
 }
+bool ObDMLResolver::is_hive_csv_external_table(const ObTableSchema &table_schema, ObIAllocator &allocator)
+{
+  bool result = false;
+  int ret = OB_SUCCESS;
+  if (table_schema.is_external_table() && table_schema.get_lake_table_format() == share::ObLakeTableFormat::HIVE) {
+    ObExternalFileFormat format;
+    const ObString &format_str = table_schema.get_external_file_format().empty()
+                                     ? table_schema.get_external_properties()
+                                     : table_schema.get_external_file_format();
+
+    if (OB_SUCC(format.load_from_string(format_str, allocator))) {
+      result = format.format_type_ == ObExternalFileFormat::CSV_FORMAT;
+    }
+  }
+  return result;
+}
 
 int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
     const TableItem &table_item, const ObColumnSchemaV2 *column_schema,
@@ -11815,7 +11831,8 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
                                                          column, ref_expr, session_info,
                                                          used_for_generated_column,
                                                          &local_vars,
-                                                         var_array_idx))) {
+                                                         var_array_idx,
+                                                         is_hive_csv_external_table(*table_schema, *allocator_)))) {
         LOG_WARN("build column convert expr failed", K(ret));
       }
     }

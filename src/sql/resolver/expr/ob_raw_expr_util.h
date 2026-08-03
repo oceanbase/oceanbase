@@ -700,7 +700,8 @@ public:
                                     const share::schema::ObColumnSchemaV2 *column_schema,
                                     ObRawExpr *&expr,
                                     const sql::ObSQLSessionInfo *session_info,
-                                    const ObLocalSessionVar *local_vars = NULL);
+                                    const ObLocalSessionVar *local_vars = NULL,
+                                    bool allow_null_on_cast_fail = false);
   static int build_column_conv_expr(ObRawExprFactory &expr_factory,
                                     common::ObIAllocator &allocator,
                                     const ObColumnRefRawExpr &col_expr,
@@ -708,7 +709,8 @@ public:
                                     const ObSQLSessionInfo *session_info,
                                     bool is_generated_column = false,
                                     const ObLocalSessionVar *local_vars = NULL,
-                                    int64_t local_var_id = OB_INVALID_INDEX_INT64);
+                                    int64_t local_var_id = OB_INVALID_INDEX_INT64,
+                                    bool allow_null_on_cast_fail = false);
   static int build_column_conv_expr(const ObSQLSessionInfo *session_info,
                                     ObRawExprFactory &expr_factory,
                                     const common::ObObjType &type,
@@ -721,7 +723,8 @@ public:
                                     bool is_in_pl = false,
                                     bool is_generated_column = false,
                                     const ObLocalSessionVar *local_vars = NULL,
-                                    int64_t local_var_id = OB_INVALID_INDEX_INT64);
+                                    int64_t local_var_id = OB_INVALID_INDEX_INT64,
+                                    bool allow_null_on_cast_fail = false);
   static int build_var_int_expr(ObRawExprFactory &expr_factory,
                                 ObConstRawExpr *&expr);
   static int build_default_expr(ObRawExprFactory &expr_factory,

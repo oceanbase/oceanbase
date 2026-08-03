@@ -46,23 +46,42 @@ struct CastHelperImpl
 {
 public:
   static const int64_t INT_TC_PRECISION = INT64_MAX;
-  template<typename Calc, typename ArgVec, typename ResVec>
-  OB_INLINE static int batch_cast(Calc calc, const ObExpr &expr,
-                                  ArgVec *arg_vec, ResVec *res_vec,
-                                  ObBitVector &eval_flags,
-                                  const ObBitVector &skip,
-                                  const EvalBound &bound,
-                                  bool is_diagnosis,
-                                  ObDiagnosisManager& diagnosis_manager) {
-    int ret = OB_SUCCESS;
+  template <typename ResVec>
+  OB_INLINE static void set_null_on_cast_fail_err(ResVec *res_vec, int idx, int &ret)
+  {
+    if (ret == OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD || ret == OB_INVALID_NUMERIC || ret == OB_ERR_DATA_TRUNCATED ||
+        ret == OB_INVALID_DATE_FORMAT) {
+      SQL_LOG(WARN, "failed to cast expr value to ob data type, set the value to null", K(ret), K(idx));
+      res_vec->set_null(idx);
+      ret = OB_SUCCESS;
+    }
+  }
 
-    bool no_skip_no_null = bound.get_all_rows_active()
-                     && eval_flags.accumulate_bit_cnt(bound) == 0
-                     && !arg_vec->has_null()
-                     && !is_diagnosis;
+  OB_INLINE static bool is_null_on_cast_fail_expr(const ObExpr &expr)
+  {
+    return expr.type_ == T_FUN_SYS_CAST && CM_IS_NULL_ON_CAST_FAIL(expr.extra_);
+  }
+
+  template <typename Calc, typename ArgVec, typename ResVec>
+  OB_INLINE static int batch_cast(Calc calc, const ObExpr &expr, ArgVec *arg_vec, ResVec *res_vec,
+      ObBitVector &eval_flags, const ObBitVector &skip, const EvalBound &bound, bool is_diagnosis,
+      ObDiagnosisManager &diagnosis_manager)
+  {
+    int ret = OB_SUCCESS;
+    bool no_skip_no_null = bound.get_all_rows_active() && eval_flags.accumulate_bit_cnt(bound) == 0 &&
+                           !arg_vec->has_null() && !is_diagnosis;
     if (no_skip_no_null) {
-      for (int idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+      int idx = bound.start();
+      for (; OB_SUCC(ret) && idx < bound.end(); ++idx) {
         ret = calc(expr, idx);
+      }
+      if (OB_FAIL(ret) && is_null_on_cast_fail_expr(expr)) {
+        int failed_idx = idx - 1;
+        set_null_on_cast_fail_err(res_vec, failed_idx, ret);
+        for (; OB_SUCC(ret) && idx < bound.end(); ++idx) {
+          ret = calc(expr, idx);
+          set_null_on_cast_fail_err(res_vec, idx, ret);
+        }
       }
     } else {
       for (int idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
@@ -73,6 +92,9 @@ public:
           continue;
         }
         ret = calc(expr, idx);
+        if (OB_FAIL(ret) && is_null_on_cast_fail_expr(expr)) {
+          set_null_on_cast_fail_err(res_vec, idx, ret);
+        }
         if (OB_FAIL(ret) && is_diagnosis) {
           // overwrite ret on diagnosis node
           if (OB_FAIL(diagnosis_manager.add_warning_info(ret, idx))) {

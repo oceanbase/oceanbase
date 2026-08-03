@@ -192,6 +192,7 @@ public:
                                     ObRawExpr *&ref_expr,
                                     const bool used_for_generated_column = true,
                                     ObDMLStmt *stmt = NULL);
+  bool is_hive_csv_external_table(const ObTableSchema &table_schema, ObIAllocator &allocator);
   int do_resolve_generate_table(const ParseNode &table_node,
                                 const ParseNode *alias_node,
                                 ObChildStmtResolver &child_resolver,

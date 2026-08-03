@@ -399,6 +399,10 @@ private:
     int load_default(ObEvalCtx &eval_ctx);
     static bool is_orc_read_utc(const orc::Type *type);
     static bool is_ob_type_store_utc(const ObObjType &type);
+    // Hive formats the astronomical year zero as AD 0001.  Apache ORC C++
+    // exposes the underlying epoch seconds, which OceanBase would otherwise
+    // format as 0000, so translate that single compatibility year here.
+    static int64_t convert_hive_year_zero_to_ob_timestamp(const int64_t timestamp_us);
     int64_t calc_tz_adjust_us(ObEvalCtx &eval_ctx);
     ObExpr *file_col_expr_;
     ObCollectionTypeBase *collection_type_;
