@@ -43,12 +43,12 @@ static int init_task(ObMViewPendingTask &task,
 }
 
 // ===========================================================================
-// Manager Pre-Init Contract Tests
+// Manager local-operation pre-init contract tests
 // ===========================================================================
 //
-// Every public method of ObMViewPendingTaskManager checks is_inited_ first.
-// These tests exercise that contract without needing MTL context, SQL proxy,
-// or RPC proxy — the early-return path is exercised in isolation.
+// Local operations of ObMViewPendingTaskManager check is_inited_ first. These
+// tests exercise that contract without needing MTL context, SQL proxy, or RPC
+// proxy — the early-return path is exercised in isolation.
 //
 // DISABLED_ tests are full-stack cases that require:
 //   - MTL context (MTL_ID() must return a valid tenant_id)
@@ -129,16 +129,11 @@ TEST_F(ObMViewPendingTaskManagerTest, AllOpsBeforeInitReturnNotInit)
 }
 
 // ---------------------------------------------------------------------------
-// 2. New public methods added in kill/cancel feature also return OB_NOT_INIT
+// 2. Local kill/cancel methods before init also return OB_NOT_INIT
 // ---------------------------------------------------------------------------
 
-TEST_F(ObMViewPendingTaskManagerTest, KillMethodsBeforeInitReturnNotInit)
+TEST_F(ObMViewPendingTaskManagerTest, LocalKillMethodsBeforeInitReturnNotInit)
 {
-  obrpc::ObKillMViewRefreshArg kill_arg;
-  kill_arg.tenant_id_ = MGR_TENANT_ID;
-  kill_arg.refresh_id_ = MGR_REFRESH_ID;
-  kill_arg.is_kill_by_mview_id_ = false;
-  EXPECT_EQ(OB_NOT_INIT, manager_.kill_refresh(kill_arg));
   EXPECT_EQ(OB_NOT_INIT, manager_.kill_refresh_local(MGR_TENANT_ID, MGR_REFRESH_ID));
   EXPECT_EQ(OB_NOT_INIT, manager_.mark_all_tasks_canceled(MGR_TENANT_ID, MGR_REFRESH_ID));
 }

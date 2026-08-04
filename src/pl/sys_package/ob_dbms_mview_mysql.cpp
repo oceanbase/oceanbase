@@ -398,17 +398,11 @@ int ObDBMSMViewMysql::kill(ObPLExecCtx &pl_ctx, ParamStore &params, ObObj &resul
       LOG_WARN("fail to check kill privilege", KR(ret));
     } else {
       const int64_t refresh_id = params.at(0).get_int();
-      rootserver::ObMViewMaintenanceService *service = MTL(rootserver::ObMViewMaintenanceService *);
-      if (OB_ISNULL(service) || OB_ISNULL(service->get_pending_task_manager())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("mview maintenance service or pending task manager is null", KR(ret));
-      } else {
-        obrpc::ObKillMViewRefreshArg arg;
-        arg.tenant_id_ = tenant_id;
-        arg.refresh_id_ = refresh_id;
-        if (OB_FAIL(service->get_pending_task_manager()->kill_refresh(arg))) {
-          LOG_WARN("fail to kill mview refresh", KR(ret), K(tenant_id), K(refresh_id));
-        }
+      obrpc::ObKillMViewRefreshArg arg;
+      arg.tenant_id_ = tenant_id;
+      arg.refresh_id_ = refresh_id;
+      if (OB_FAIL(rootserver::ObMViewPendingTaskManager::kill_refresh(arg))) {
+        LOG_WARN("fail to kill mview refresh", KR(ret), K(tenant_id), K(refresh_id));
       }
     }
   }

@@ -7,7 +7,6 @@
 
 #include "storage/mview/cmd/ob_mview_executor_util.h"
 #include "lib/mysqlclient/ob_mysql_result.h"
-#include "rootserver/mview/ob_mview_maintenance_service.h"
 #ifdef OB_BUILD_MV_REFRESH_QUEUEING
 #include "rootserver/mview/ob_mview_pending_task_define.h"
 #include "rootserver/mview/ob_mview_pending_task_manager.h"
@@ -403,23 +402,16 @@ int ObMViewExecutorUtil::wait_mview_refresh(sql::ObExecContext &ctx,
   // Preserve the original ret — kill is informational; failures are logged.
   if (OB_FAIL(ret)) {
     int tmp_ret = OB_SUCCESS;
-    rootserver::ObMViewMaintenanceService *service = MTL(rootserver::ObMViewMaintenanceService *);
-    if (OB_ISNULL(service) || OB_ISNULL(service->get_pending_task_manager())) {
-      tmp_ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null service or pending task manager", K(tmp_ret), K(tenant_id), K(refresh_id));
-    // force_rpc=true: the current session is interrupted (kill query), its
-    // interrupted state would cause inner-SQL inside kill_refresh_local to
-    // fail with OB_ERR_QUERY_INTERRUPTED; sending RPC runs on a clean thread.
+    // The interrupted session must not execute the inner-SQL kill path itself;
+    // the RPC processor runs it on a clean thread in the target tenant's MTL.
+    obrpc::ObKillMViewRefreshArg arg;
+    arg.tenant_id_ = tenant_id;
+    arg.refresh_id_ = refresh_id;
+    if (OB_TMP_FAIL(rootserver::ObMViewPendingTaskManager::kill_refresh(arg))) {
+      LOG_WARN("kill mview refresh failed after abnormal sync wait exit", K(tmp_ret), K(tenant_id), K(refresh_id));
     } else {
-      obrpc::ObKillMViewRefreshArg arg;
-      arg.tenant_id_ = tenant_id;
-      arg.refresh_id_ = refresh_id;
-      if (OB_TMP_FAIL(service->get_pending_task_manager()->kill_refresh(arg, true /*force_rpc*/))) {
-        LOG_WARN("kill mview refresh failed after abnormal sync wait exit", K(tmp_ret), K(tenant_id), K(refresh_id));
-      } else {
-        LOG_INFO("kill mview refresh issued after abnormal sync wait exit",
-                  K(tenant_id), K(refresh_id), K(ret));
-      }
+      LOG_INFO("kill mview refresh issued after abnormal sync wait exit",
+                K(tenant_id), K(refresh_id), K(ret));
     }
   }
   if (OB_SUCC(ret)) {
