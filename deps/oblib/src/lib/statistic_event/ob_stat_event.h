@@ -160,6 +160,7 @@ STAT_EVENT_ADD_DEF(DBLINK_TRANS_COMMIT_FAIL_COUNT, "failed dblink trans commit t
 STAT_EVENT_ADD_DEF(DBLINK_TRANS_ROLLBACK_COUNT, "dblink trans rollback total count", ObStatClassIds::TRANS, 30238, false, true, true, "Total number of DBLink transaction rollbacks. Each time a DBLink transaction executes a rollback statement, this count is incremented by 1.")
 STAT_EVENT_ADD_DEF(DBLINK_TRANS_ROLLBACK_USED_TIME, "dblink trans rollback total used time", ObStatClassIds::TRANS, 30239, false, true, true, "Total rollback duration (in microseconds) for DBLink transactions. Each time a DBLink transaction completes a rollback statement, the duration of that rollback is added to this count.")
 STAT_EVENT_ADD_DEF(DBLINK_TRANS_ROLLBACK_FAIL_COUNT, "failed dblink trans rollback total count", ObStatClassIds::TRANS, 30240, false, true, true, "Total number of failed DBLink transaction rollbacks. Each time a DBLink transaction executes a rollback statement and fails, this count is incremented by 1.")
+STAT_EVENT_ADD_DEF(FREEZE_BY_SMALL_FREEZE_TRIGGER_COUNT, "memtable freeze by small pool trigger count", ObStatClassIds::TRANS, 30241, false, true, true, "Number of MemTable freezes submitted by the small-pool age or pressure trigger.")
 
 // SQL
 STAT_EVENT_ADD_DEF(PLAN_CACHE_HIT, "PLAN_CACHE_HIT", SQL, "PLAN_CACHE_HIT", true, true, false, "Deprecated since V4.4.1.")
