@@ -41,17 +41,18 @@ class ObPSAnalysisChecker
 public:
   ObPSAnalysisChecker()
     : pos_(nullptr), begin_pos_(nullptr), end_pos_(nullptr),
-      data_len_(0), need_check_(true)
+      data_len_(0)
   {}
   void init(const char*& pos, const int64_t len)
   {
     pos_ = &pos;
     begin_pos_ = pos;
-    end_pos_ = pos + len;
+    end_pos_ = len >= 0 ? pos + len : pos;
     data_len_ = len;
-    need_check_ = true;
   }
   int detection(const int64_t len);
+  int detection_unsigned(const uint64_t len);
+  int decode_length(const char *&pos, uint64_t &length);
   inline int64_t remain_len()
   { return end_pos_ - (*pos_); }
 
@@ -60,8 +61,13 @@ public:
   const char* begin_pos_;
   const char* end_pos_;
   int64_t data_len_;
-  bool need_check_;
 };
+
+// PL UDT deserialization does not depend on observer/mysql headers.  The
+// observer-side parser installs the checker for the duration of a network
+// deserialization call; parse_basic_param_value consumes it when the PL
+// callback cannot carry an observer-specific checker argument.
+extern thread_local ObPSAnalysisChecker *G_PS_ANALYSIS_CHECKER;
 
 #define PS_DEFENSE_CHECK(len)                              \
   if (OB_FAIL(ret)) {                                      \
@@ -74,6 +80,19 @@ public:
   } else if (nullptr != (checker)                          \
     && OB_FAIL((checker)->detection(len))) {               \
     LOG_WARN("memory access out of bounds", K(ret));       \
+  } else
+
+#define PS_UNSIGNED_DEFENSE_CHECK(len)                              \
+  if (OB_FAIL(ret)) {                                               \
+  } else if (OB_FAIL(analysis_checker_.detection_unsigned(len))) {  \
+    LOG_WARN("memory access out of bounds", K(ret));                \
+  } else
+
+#define PS_STATIC_UNSIGNED_DEFENSE_CHECK(checker, len)              \
+  if (OB_FAIL(ret)) {                                               \
+  } else if (nullptr != (checker)                                   \
+    && OB_FAIL((checker)->detection_unsigned(len))) {                \
+    LOG_WARN("memory access out of bounds", K(ret));                \
   } else
 
 struct ObPsSessionInfoParamsAssignment
@@ -346,8 +365,6 @@ private:
   int get_pl_type_by_type_info(ObIAllocator &allocator,
                         const sql::TypeInfo *type_info,
                         const pl::ObUserDefinedType *&pl_type);
-  bool is_contain_complex_element(const sql::ParamTypeArray &param_types) const;
-
   virtual int before_process();
   virtual int after_process(int error_code);
   int response_query_header(sql::ObSQLSessionInfo &session, pl::ObPsCursorInfo &cursor);

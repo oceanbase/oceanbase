@@ -23,6 +23,7 @@
 #include "observer/mysql/obmp_stmt_prexecute.h"
 #include "observer/mysql/obmp_stmt_send_piece_data.h"
 #include "sql/plan_cache/ob_ps_cache.h"
+#include "lib/udt/ob_array_type.h"
 #include "sql/ob_sql_mock_schema_utils.h"
 
 void __attribute__((weak)) request_finish_callback();
@@ -37,15 +38,51 @@ using namespace sql;
 using namespace pl;
 namespace observer
 {
-inline int ObPSAnalysisChecker::detection(const int64_t len)
+thread_local ObPSAnalysisChecker *G_PS_ANALYSIS_CHECKER = nullptr;
+int ObPSAnalysisChecker::detection(const int64_t len)
 {
   int ret = OB_SUCCESS;
-  if (!need_check_) {
-  } else if (*pos_ + len > end_pos_) {
+  if (len < 0) {
+    ret = OB_ERR_MALFORMED_PS_PACKET;
+  } else {
+    ret = detection_unsigned(static_cast<uint64_t>(len));
+  }
+  return ret;
+}
+
+int ObPSAnalysisChecker::detection_unsigned(const uint64_t len)
+{
+  int ret = OB_SUCCESS;
+  if (data_len_ < 0
+      || OB_ISNULL(pos_) || OB_ISNULL(*pos_) || OB_ISNULL(begin_pos_) || OB_ISNULL(end_pos_)
+      || *pos_ < begin_pos_ || *pos_ > end_pos_
+      || len > static_cast<uint64_t>(end_pos_ - *pos_)) {
     ret = OB_ERR_MALFORMED_PS_PACKET;
     LOG_USER_ERROR(OB_ERR_MALFORMED_PS_PACKET);
-    LOG_ERROR("malformed ps data packet, please check the number and content of data packet parameters", K(ret), KP(pos_), KP(begin_pos_),
-    K(end_pos_ - begin_pos_), K(len), K(data_len_), K(remain_len()));
+    LOG_ERROR("malformed ps data packet, please check the number and content of data packet parameters",
+              K(ret), KP(pos_), KP(begin_pos_), KP(end_pos_), K(len), K(data_len_));
+  }
+  return ret;
+}
+
+int ObPSAnalysisChecker::decode_length(const char *&pos, uint64_t &length)
+{
+  int ret = OB_SUCCESS;
+  uint64_t header_len = 1;
+  if (pos_ != &pos) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("length cursor is not bound to checker", K(ret), KP(pos_), KP(&pos));
+  } else if (OB_FAIL(detection_unsigned(1))) {
+  } else {
+    const uint8_t first = static_cast<uint8_t>(*pos);
+    header_len = 252 == first ? 3 : (253 == first ? 4 : (254 == first ? 9 : 1));
+    if (255 == first) {
+      ret = OB_INVALID_DATA;
+      LOG_WARN("invalid length encoded integer prefix", K(ret), K(first));
+    } else if (OB_FAIL(detection_unsigned(header_len))) {
+    } else if (OB_FAIL(ObMySQLUtil::get_length(pos, length))) {
+      LOG_WARN("failed to decode length encoded integer", K(ret));
+    }
   }
   return ret;
 }
@@ -825,19 +862,6 @@ int ObMPStmtExecute::parse_request_param_value(ObIAllocator &alloc,
   return ret;
 }
 
-bool ObMPStmtExecute::is_contain_complex_element(const sql::ParamTypeArray &param_types) const
-{
-  bool b_ret = false;
-  for (int64_t i = 0; i < param_types.count(); i++) {
-    const obmysql::EMySQLFieldType field_type = param_types.at(i);
-    if (MYSQL_TYPE_COMPLEX == field_type) {
-      b_ret = true;
-      break;
-    }
-  }
-  return b_ret;
-}
-
 int ObMPStmtExecute::verify_ps_stmt_checksum(ObSQLSessionInfo &session,
                                             ObPsSessionInfo &ps_session_info,
                                             uint32_t ps_stmt_checksum)
@@ -956,8 +980,6 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
                                      param_types,
                                      param_type_infos))) {
         LOG_WARN("fail to parse input params type");
-      } else if (is_contain_complex_element(param_types)) {
-        analysis_checker_.need_check_ = false;
       }
 
       // Step3-2: 获取returning into params type信息
@@ -1043,40 +1065,37 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
 int ObMPStmtExecute::decode_type_info(const char*& buf, TypeInfo &type_info)
 {
   int ret = OB_SUCCESS;
-  PS_DEFENSE_CHECK(1) // check first byte
-  {
-    uint64_t length = 0;
-    if (OB_FAIL(ObMySQLUtil::get_length(buf, length))) {
-      LOG_WARN("failed to get length", K(ret));
-    } else {
-      PS_DEFENSE_CHECK(length)
-      {
-        type_info.relation_name_.assign_ptr(buf, static_cast<ObString::obstr_size_t>(length));
-        buf += length;
-      }
+  uint64_t length = 0;
+  if (OB_FAIL(analysis_checker_.decode_length(buf, length))) {
+    LOG_WARN("failed to get relation name length", K(ret));
+  } else if (length > static_cast<uint64_t>(INT32_MAX)) {
+    ret = OB_ERR_MALFORMED_PS_PACKET;
+    LOG_WARN("relation name is too long", K(ret), K(length));
+  } else {
+    PS_UNSIGNED_DEFENSE_CHECK(length)
+    {
+      type_info.relation_name_.assign_ptr(buf, static_cast<ObString::obstr_size_t>(length));
+      buf += length;
     }
   }
-  PS_DEFENSE_CHECK(1)
-  {
-    uint64_t length = 0;
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObMySQLUtil::get_length(buf, length))) {
-      LOG_WARN("failed to get length", K(ret));
-    } else {
-      PS_DEFENSE_CHECK(length)
-      {
-        type_info.type_name_.assign_ptr(buf, static_cast<ObString::obstr_size_t>(length));
-        buf += length;
-      }
+  length = 0;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(analysis_checker_.decode_length(buf, length))) {
+    LOG_WARN("failed to get type name length", K(ret));
+  } else if (length > static_cast<uint64_t>(INT32_MAX)) {
+    ret = OB_ERR_MALFORMED_PS_PACKET;
+    LOG_WARN("type name is too long", K(ret), K(length));
+  } else {
+    PS_UNSIGNED_DEFENSE_CHECK(length)
+    {
+      type_info.type_name_.assign_ptr(buf, static_cast<ObString::obstr_size_t>(length));
+      buf += length;
     }
   }
-  PS_DEFENSE_CHECK(1)
-  {
-    uint64_t version = 0;
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObMySQLUtil::get_length(buf, version))) {
-      LOG_WARN("failed to get version", K(ret));
-    }
+  uint64_t version = 0;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(analysis_checker_.decode_length(buf, version))) {
+    LOG_WARN("failed to get version", K(ret));
   }
   return ret;
 }
@@ -2443,26 +2462,31 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
       uint64_t length = 0;
       ObCollationType cur_cs_type = ObCharset::get_default_collation(charset);
       ObCollationType cur_ncs_type = ObCollationType::CS_TYPE_INVALID;
+      ObPSAnalysisChecker *effective_checker = nullptr != checker ? checker : G_PS_ANALYSIS_CHECKER;
       if (ncharset == ObCharsetType::CHARSET_INVALID || ncharset == ObCharsetType::CHARSET_BINARY) {
         cur_ncs_type = ObCharset::get_default_collation(charset);
       } else {
         cur_ncs_type = ObCharset::get_default_collation(ncharset);
       }
-      PS_STATIC_DEFENSE_CHECK(checker, 1)
-      {
-        // check first byte of `length` field and trust the encoder reguarding the remaining bytes.
-        if (OB_FAIL(ObMySQLUtil::get_length(data, length))) {
-          LOG_ERROR("decode varchar param value failed", K(ret));
+      if (nullptr != effective_checker) {
+        if (OB_FAIL(effective_checker->decode_length(data, length))) {
+          LOG_WARN("decode varchar param value length failed", K(ret));
         }
-        PS_STATIC_DEFENSE_CHECK(checker, length)
+      } else if (OB_FAIL(ObMySQLUtil::get_length(data, length))) {
+        LOG_WARN("decode varchar param value length failed", K(ret));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (length > OB_MAX_LONGTEXT_LENGTH
+                 || length > static_cast<uint64_t>(INT32_MAX)) {
+        ret = OB_ERR_INVALID_INPUT_ARGUMENT;
+        LOG_WARN("input param len is over size", K(ret), K(length));
+      } else {
+        PS_STATIC_UNSIGNED_DEFENSE_CHECK(effective_checker, length)
         {
           str.assign_ptr(data, static_cast<ObString::obstr_size_t>(length));
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (length > OB_MAX_LONGTEXT_LENGTH) {
-        ret = OB_ERR_INVALID_INPUT_ARGUMENT;
-        LOG_WARN("input param len is over size", K(ret), K(length));
       } else if (MYSQL_TYPE_OB_NVARCHAR2 == type
                 || MYSQL_TYPE_OB_NCHAR == type) {
         OZ(copy_or_convert_str(allocator, cur_ncs_type, ncs_type, str, dst));
@@ -2716,11 +2740,14 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
         const_cast<ObObjMeta &>(param.get_param_meta()).set_collation_level(CS_LEVEL_COERCIBLE);
       }
     } else if (OB_UNLIKELY(MYSQL_TYPE_COMPLEX == type)) {
+      ObPSAnalysisChecker *old_checker = G_PS_ANALYSIS_CHECKER;
+      G_PS_ANALYSIS_CHECKER = &analysis_checker_;
       if (OB_FAIL(parse_complex_param_value(allocator, charset, cs_type, ncs_type,
                                             data, tz_info, type_info,
                                             param))) {
         LOG_WARN("failed to parse complex value", K(ret));
       }
+      G_PS_ANALYSIS_CHECKER = old_checker;
     } else if (OB_UNLIKELY(MYSQL_TYPE_CURSOR == type)) {
       CK (OB_NOT_NULL(ctx_.session_info_));
       if (OB_SUCC(ret)) {
@@ -2757,20 +2784,39 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
         LOG_DEBUG("param is null", K(param_id), K(param), K(type));
       } else {
         // 1. read count
-        PS_DEFENSE_CHECK(1)
-        {
-          if (OB_FAIL(ObMySQLUtil::get_length(data, count))) {
-            LOG_WARN("failed to get length", K(ret));
-          }
+        if (OB_FAIL(analysis_checker_.decode_length(data, count))) {
+          LOG_WARN("failed to get complex element count", K(ret));
+        } else if (count > static_cast<uint64_t>(common::MAX_ARRAY_ELEMENT_SIZE)) {
+          ret = OB_ERR_MALFORMED_PS_PACKET;
+          LOG_WARN("complex element count exceeds maximum array size", K(ret), K(count),
+                   "max_count", common::MAX_ARRAY_ELEMENT_SIZE);
+        } else if (count > static_cast<uint64_t>(INT64_MAX - 7)) {
+          ret = OB_ERR_MALFORMED_PS_PACKET;
+          LOG_WARN("complex element count is too large", K(ret), K(count));
         }
         // 2. make null map
-        int64_t bitmap_bytes = ((count + 7) / 8);
-        char is_null_map[bitmap_bytes];
-        MEMSET(is_null_map, 0, bitmap_bytes);
-        length = piece_cache->get_length_length(count) + bitmap_bytes;
+        const int64_t bitmap_bytes = OB_SUCC(ret) ? static_cast<int64_t>((count + 7) / 8) : 0;
+        char *is_null_map = nullptr;
+        if (OB_SUCC(ret) && bitmap_bytes > 0
+            && OB_ISNULL(is_null_map = static_cast<char *>(allocator.alloc(bitmap_bytes)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate complex null bitmap", K(ret), K(bitmap_bytes));
+        } else if (bitmap_bytes > 0) {
+          MEMSET(is_null_map, 0, bitmap_bytes);
+        }
+        if (OB_SUCC(ret)) {
+          const uint64_t header_len = piece_cache->get_length_length(count);
+          if (header_len > static_cast<uint64_t>(OB_MAX_LONGTEXT_LENGTH)
+              || static_cast<uint64_t>(bitmap_bytes) > static_cast<uint64_t>(OB_MAX_LONGTEXT_LENGTH) - header_len) {
+            ret = OB_ERR_MALFORMED_PS_PACKET;
+            LOG_WARN("complex piece payload length overflow", K(ret), K(header_len), K(bitmap_bytes));
+          } else {
+            length = header_len + static_cast<uint64_t>(bitmap_bytes);
+          }
+        }
         // 3. get string buffer (include length + value)
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(str_buf.prepare_allocate(count))) {
+        } else if (OB_FAIL(str_buf.prepare_allocate(static_cast<int64_t>(count)))) {
           LOG_WARN("prepare fail.", K(ret), K(count));
         } else if (OB_FAIL(piece_cache->get_buffer(stmt_id_,
                                                   param_id,
@@ -2803,12 +2849,17 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
           if (OB_FAIL(ret)) {
             // do nothing.
           } else {
-            const char* src = tmp;
+            ObPSAnalysisChecker piece_checker;
+            const char *piece_pos = tmp;
+            piece_checker.init(piece_pos, static_cast<int64_t>(length));
+            ObPSAnalysisChecker *old_checker = G_PS_ANALYSIS_CHECKER;
+            G_PS_ANALYSIS_CHECKER = &piece_checker;
             if (OB_FAIL(parse_complex_param_value(allocator, charset, cs_type, ncs_type,
-                                                  src, tz_info, type_info,
+                                                  piece_pos, tz_info, type_info,
                                                   param))) {
               LOG_WARN("failed to parse complex value", K(ret));
             }
+            G_PS_ANALYSIS_CHECKER = old_checker;
           }
           piece->get_allocator()->free(tmp);
         }

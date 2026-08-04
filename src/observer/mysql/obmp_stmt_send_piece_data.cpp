@@ -663,8 +663,15 @@ int ObPieceCache::get_oracle_buffer(int32_t stmt_id,
       if (OB_FAIL(merge_piece_buffer(piece, str_buf.at(i)))) {
         LOG_WARN("merge piece buffer fail.", K(ret), K(stmt_id));
       } else {
-        length = length + get_length_length(str_buf.at(i).length());
-        length = length + str_buf.at(i).length();
+        const uint64_t encoded_len = get_length_length(str_buf.at(i).length());
+        const uint64_t value_len = static_cast<uint64_t>(str_buf.at(i).length());
+        if (encoded_len > static_cast<uint64_t>(OB_MAX_LONGTEXT_LENGTH) - length
+            || value_len > static_cast<uint64_t>(OB_MAX_LONGTEXT_LENGTH) - length - encoded_len) {
+          ret = OB_ERR_MALFORMED_PS_PACKET;
+          LOG_WARN("complex piece payload length exceeds limit", K(ret), K(length), K(encoded_len), K(value_len));
+        } else {
+          length += encoded_len + value_len;
+        }
       }
     }
     if (OB_SUCC(ret) && NULL != is_null_map) {
@@ -852,9 +859,15 @@ int ObPieceCache::merge_piece_buffer(ObPiece *piece,
       if (NULL != piece_buffer->get_piece_buffer()) {
         const ObString buffer = *(piece_buffer->get_piece_buffer());
         // reduce alloc/free/memcpy for large buffers
-        OZ (pre_extend_str(piece, str, buffer_array, buffer.length(), array_size, enable_pre_extern));
-        OZ (str.append(buffer));
-        OX (len += buffer.length());
+        if (static_cast<uint64_t>(buffer.length()) > static_cast<uint64_t>(OB_MAX_LONGTEXT_LENGTH) -
+            static_cast<uint64_t>(len)) {
+          ret = OB_ERR_MALFORMED_PS_PACKET;
+          LOG_WARN("piece buffer length overflow", K(ret), K(len), K(buffer.length()));
+        } else {
+          OZ (pre_extend_str(piece, str, buffer_array, buffer.length(), array_size, enable_pre_extern));
+          OZ (str.append(buffer));
+          OX (len += buffer.length());
+        }
       }
     } while (ObLastPiece != buffer_array->at(index).get_piece_mode()
               && ObInvalidPiece != buffer_array->at(index).get_piece_mode()

@@ -78,18 +78,21 @@ int ObMPStmtPrexecute::before_process()
       ObMySQLUtil::get_int4(pos, iteration_count_);
       stmt_id_ = static_cast<int64_t>(stmt_id);
     }
-    PS_DEFENSE_CHECK(1)  // sql(variable length string)
-    {
-      if (FAILEDx(ObMySQLUtil::get_length(pos, sql_len_))) {
-        LOG_WARN("failed to get length");
-      }
-      PS_DEFENSE_CHECK(sql_len_)
+    if (OB_SUCC(ret) && OB_FAIL(analysis_checker_.decode_length(pos, sql_len_))) {
+      LOG_WARN("failed to get sql length", K(ret));
+    } else if (OB_SUCC(ret)
+               && (sql_len_ > static_cast<uint64_t>(OB_MAX_SQL_LENGTH)
+                   || sql_len_ > static_cast<uint64_t>(INT32_MAX))) {
+      ret = OB_ERR_MALFORMED_PS_PACKET;
+      LOG_WARN("prexecute sql is too long", K(ret), K_(sql_len));
+    } else {
+      PS_UNSIGNED_DEFENSE_CHECK(sql_len_)
       {
         sql_.assign_ptr(pos, static_cast<ObString::obstr_size_t>(sql_len_));
         pos += sql_len_;
       }
-      LOG_DEBUG("prexecute protocol packet sql info", K(ret), K(stmt_id_), K(sql_));
     }
+    LOG_DEBUG("prexecute protocol packet sql info", K(ret), K(stmt_id_), K(sql_));
     PS_DEFENSE_CHECK(4)  // params_num(4)
     {
       int32_t params_num = 0;
