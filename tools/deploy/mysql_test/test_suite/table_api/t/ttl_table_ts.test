@@ -55,7 +55,40 @@ while($count < 600)
 sleep 3;
 alter system trigger ttl;
 
-sleep 60;
+--disable_query_log
+let $__wait_start_us__ = `select time_to_usec(current_timestamp(6)) from dual`;
+let $__wait_timeout_us__ = 180000000;
+let $__ttl_done__ = 0;
+while($__ttl_done__ == 0)
+{
+  real_sleep 1;
+  let $__wait_used_us__ = `select time_to_usec(current_timestamp(6)) - $__wait_start_us__ from dual`;
+  if($__wait_used_us__ > $__wait_timeout_us__)
+  {
+    let $__ttl_done__ = -1;
+  }
+  if($__ttl_done__ == 0)
+  {
+    let $__row_cnt__ = query_get_value(select count(*) as c from ttl_table_ts, c, 1);
+    let $__history_cnt__ = query_get_value(select count(*) as c from oceanbase.DBA_OB_KV_TTL_TASK_HISTORY where table_name = 'ttl_table_ts' and STATUS = 'FINISHED' and RET_CODE = 'OB_SUCCESS', c, 1);
+    let $__global_history_cnt__ = query_get_value(select count(*) as c from oceanbase.DBA_OB_KV_TTL_TASK_HISTORY h where h.table_id = -1 and h.STATUS = 'FINISHED' and h.RET_CODE = 'OB_SUCCESS' and exists (select 1 from oceanbase.DBA_OB_KV_TTL_TASK_HISTORY t where t.table_name = 'ttl_table_ts' and t.task_id = h.task_id), c, 1);
+    if($__row_cnt__ == 100)
+    {
+      if($__history_cnt__ == 7)
+      {
+        if($__global_history_cnt__ > 0)
+        {
+          let $__ttl_done__ = 1;
+        }
+      }
+    }
+  }
+}
+if($__ttl_done__ != 1)
+{
+  --die ttl_table_ts ttl task timeout
+}
+--enable_query_log
 select count(*) from ttl_table_ts;
 select TABLE_NAME, TRIGGER_TYPE, STATUS, TTL_DEL_CNT, MAX_VERSION_DEL_CNT, SCAN_CNT, RET_CODE from oceanbase.DBA_OB_KV_TTL_TASK_HISTORY where table_name = 'ttl_table_ts' order by tablet_id;
 
@@ -89,7 +122,40 @@ call insert_data(500, 100);
 sleep 3;
 alter system trigger ttl;
 
-sleep 70; 
+--disable_query_log
+let $__wait_start_us__ = `select time_to_usec(current_timestamp(6)) from dual`;
+let $__wait_timeout_us__ = 180000000;
+let $__ttl_done__ = 0;
+while($__ttl_done__ == 0)
+{
+  real_sleep 1;
+  let $__wait_used_us__ = `select time_to_usec(current_timestamp(6)) - $__wait_start_us__ from dual`;
+  if($__wait_used_us__ > $__wait_timeout_us__)
+  {
+    let $__ttl_done__ = -1;
+  }
+  if($__ttl_done__ == 0)
+  {
+    let $__row_cnt__ = query_get_value(select count(*) as c from ttl_table_ts_column_order, c, 1);
+    let $__history_cnt__ = query_get_value(select count(*) as c from oceanbase.DBA_OB_KV_TTL_TASK_HISTORY where table_name = 'ttl_table_ts_column_order' and STATUS = 'FINISHED' and RET_CODE = 'OB_SUCCESS', c, 1);
+    let $__global_history_cnt__ = query_get_value(select count(*) as c from oceanbase.DBA_OB_KV_TTL_TASK_HISTORY h where h.table_id = -1 and h.STATUS = 'FINISHED' and h.RET_CODE = 'OB_SUCCESS' and exists (select 1 from oceanbase.DBA_OB_KV_TTL_TASK_HISTORY t where t.table_name = 'ttl_table_ts_column_order' and t.task_id = h.task_id), c, 1);
+    if($__row_cnt__ == 100)
+    {
+      if($__history_cnt__ == 7)
+      {
+        if($__global_history_cnt__ > 0)
+        {
+          let $__ttl_done__ = 1;
+        }
+      }
+    }
+  }
+}
+if($__ttl_done__ != 1)
+{
+  --die ttl_table_ts_column_order ttl task timeout
+}
+--enable_query_log
 select count(*) from ttl_table_ts_column_order;
 select TABLE_NAME, TRIGGER_TYPE, STATUS, TTL_DEL_CNT, MAX_VERSION_DEL_CNT, SCAN_CNT, RET_CODE from oceanbase.DBA_OB_KV_TTL_TASK_HISTORY where table_name = 'ttl_table_ts_column_order' order by tablet_id;
 
