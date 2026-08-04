@@ -56,7 +56,8 @@ private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprDateFormat);
 
-  static const int64_t OB_MAX_DATE_FORMAT_BUF_LEN = 1024;
+  // '%r' => hh:mm:ss AM/PM => 11 : buf_len => 2*6
+  static const int64_t OB_MAX_BUF_LEN_MULTIPLIER = 6;
   static void check_reset_status(common::ObExprCtx &expr_ctx, int &ret, common::ObObj &result);
 public:
   static int calc_date_format_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
