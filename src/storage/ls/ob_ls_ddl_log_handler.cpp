@@ -424,7 +424,7 @@ SCN ObLSDDLLogHandler::get_rec_scn()
     }
   }
   if (OB_FAIL(ret)) {
-    rec_scn = SCN::max(last_rec_scn_, ls_->get_clog_checkpoint_scn());
+    rec_scn = ls_->get_clog_checkpoint_scn();
   } else if (!rec_scn.is_max()) {
     last_rec_scn_ = SCN::max(last_rec_scn_, rec_scn);
   }
