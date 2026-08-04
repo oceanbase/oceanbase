@@ -6860,7 +6860,10 @@ int ObCheckTabletDataComplementOp::calculate_build_finish(
         LOG_WARN("fail to check task tablet, unexpected!",
           K(ret), K(paxos_member_count), K(tablet_id), K(tenant_id));
       } else if (OB_FAIL(tablets_commited_map.get_refactored(tablet_id, commited_count))){
-        LOG_WARN("fail to get tablet commited map, unexpected!", K(ret), K(tablet_id));
+        LOG_WARN("fail to get tablet commited map", K(ret), K(tablet_id));
+        if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS; // not finished in any replica
+        }
       } else if (only_check_one_replica && commited_count < 0) { // not finished in any replica
         // do nothing
       } else if (!only_check_one_replica && commited_count < ((paxos_member_count >> 1) + 1)) {  // not finished majority
