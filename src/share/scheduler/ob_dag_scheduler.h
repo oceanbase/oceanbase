@@ -930,12 +930,15 @@ private:
   OB_INLINE int64_t get_dag_limit(const ObDagPrio::ObDagPrioEnum dag_prio);
   common::ObIAllocator &get_allocator(const bool is_ha);
   int init_allocator(const uint64_t tenant_id, const lib::ObLabel &label, lib::MemoryContext &mem_context);
+  void loop_pending_finish_dag_net_list();
 
 private:
   bool is_inited_;
   DagMap dag_map_;
   DagNetMap dag_net_map_[DAG_NET_MAP_MAX];
   DagNetList blocking_dag_net_list_;
+  // Protected by scheduler_sync_ and drained outside the lock.
+  DagNetList pending_finish_dag_net_list_;
   PriorityDagList dag_list_[DAG_LIST_MAX];
   common::ObThreadCond scheduler_sync_;
   lib::ObMutex dag_net_map_lock_;

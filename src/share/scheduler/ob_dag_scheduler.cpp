@@ -1738,6 +1738,7 @@ void ObTenantDagScheduler::reset()
     dag_list_[j].reset();
   } // end of for
   blocking_dag_net_list_.reset();
+  pending_finish_dag_net_list_.reset();
 
   if (dag_map_.created()) {
     dag_map_.destroy();
@@ -1966,10 +1967,12 @@ void ObTenantDagScheduler::dump_dag_status(const bool force_dump/*false*/)
     int64_t dag_net_count[ObDagNetType::DAG_NET_TYPE_MAX];
     int64_t ready_dag_count[ObDagPrio::DAG_PRIO_MAX];
     int64_t waiting_dag_count[ObDagPrio::DAG_PRIO_MAX];
+    int64_t pending_finish_dag_net_count = 0;
     {
       ObThreadCondGuard guard(scheduler_sync_);
       scheduled_task_cnt = scheduled_task_cnt_;
       scheduled_task_cnt_ = 0;
+      pending_finish_dag_net_count = pending_finish_dag_net_list_.get_size();
       for (int64_t i = 0; i < ObDagPrio::DAG_PRIO_MAX; ++i) {
         running_task[i] = running_task_cnts_[i];
         low_limits[i] = low_limits_[i];
@@ -1992,7 +1995,8 @@ void ObTenantDagScheduler::dump_dag_status(const bool force_dump/*false*/)
 
       COMMON_LOG(INFO, "dump_dag_status",
           "running_dag_net_map_size", dag_net_map_[RUNNING_DAG_NET_MAP].size(),
-          "blocking_dag_net_list_size", blocking_dag_net_list_.get_size());
+          "blocking_dag_net_list_size", blocking_dag_net_list_.get_size(),
+          K(pending_finish_dag_net_count));
     }
 
     for (int64_t i = 0; i < ObDagPrio::DAG_PRIO_MAX; ++i) {
@@ -2616,6 +2620,23 @@ int ObTenantDagScheduler::finish_dag_net(ObIDagNet *dag_net)
   return ret;
 }
 
+void ObTenantDagScheduler::loop_pending_finish_dag_net_list()
+{
+  int tmp_ret = OB_SUCCESS;
+  DagNetList finish_list;
+  {
+    ObThreadCondGuard guard(scheduler_sync_);
+    (void) pending_finish_dag_net_list_.move(finish_list);
+  }
+  ObIDagNet *dag_net = finish_list.remove_first();
+  while (OB_NOT_NULL(dag_net)) {
+    if (OB_TMP_FAIL(finish_dag_net(dag_net))) {
+      COMMON_LOG_RET(WARN, tmp_ret, "failed to finish dag net", K(tmp_ret), KP(dag_net));
+    }
+    dag_net = finish_list.remove_first();
+  }
+}
+
 int ObTenantDagScheduler::finish_dag_(
     const ObIDag::ObDagStatus status,
     ObIDag &dag,
@@ -3000,8 +3021,9 @@ int ObTenantDagScheduler::pop_task_from_ready_list(
           COMMON_LOG(ERROR, "failed to finish dag", K(ret), KPC(tmp_dag));
           ob_abort();
         } else if (OB_NOT_NULL(erase_dag_net)) {
-          if (OB_FAIL(finish_dag_net(erase_dag_net))) {
-            COMMON_LOG(WARN, "failed to erase dag net", K(ret), KPC(erase_dag_net));
+          if (!pending_finish_dag_net_list_.add_last(erase_dag_net)) {
+            ret = OB_ERR_UNEXPECTED;
+            COMMON_LOG(WARN, "failed to add erase dag net to pending finish list", K(ret));
           }
         }
         continue;
@@ -3098,6 +3120,8 @@ int ObTenantDagScheduler::schedule()
 void ObTenantDagScheduler::loop_dag_net()
 {
   int tmp_ret = OB_SUCCESS;
+  loop_pending_finish_dag_net_list();
+
   if (OB_TMP_FAIL(loop_blocking_dag_net_list())) {
     COMMON_LOG_RET(WARN, tmp_ret, "failed to loop blocking dag net list", K(tmp_ret));
   }
@@ -3107,6 +3131,7 @@ void ObTenantDagScheduler::loop_dag_net()
       COMMON_LOG_RET(WARN, tmp_ret, "failed to add dag from running_dag_net_map", K(tmp_ret));
     }
   }
+
 }
 
 int ObTenantDagScheduler::loop_ready_dag_lists()
