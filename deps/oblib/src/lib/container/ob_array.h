@@ -137,7 +137,12 @@ public:
   inline int reserve(int64_t capacity)
   {
     int ret = OB_SUCCESS;
-    if (capacity > data_size_ / (int64_t)sizeof(T)) {
+    // Round INT64_MAX down to a multiple of block_size_.
+    const int64_t max_aligned_size = 0 < block_size_ ? INT64_MAX - INT64_MAX % block_size_ : INT64_MAX;
+    if (OB_UNLIKELY(capacity > max_aligned_size / static_cast<int64_t>(sizeof(T)))) {
+      ret = OB_SIZE_OVERFLOW;
+      LIB_LOG(WARN, "array size overflow", K(ret), K(capacity), K(sizeof(T)));
+    } else if (capacity > data_size_ / (int64_t)sizeof(T)) {
       int64_t new_size = capacity * sizeof(T);
       int64_t plus = new_size % block_size_;
       new_size += (0 == plus) ? 0 : (block_size_ - plus);
