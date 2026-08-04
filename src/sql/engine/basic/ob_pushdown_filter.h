@@ -844,6 +844,10 @@ public:
   OB_INLINE bool is_base_version_node() const { return is_base_version_node(type_); }
 
   virtual bool filter_can_continuous_filter() const { return true; }
+  // Whether this filter node contains a dynamic filter, excluding child nodes
+  virtual bool filter_contain_dynamic_filter() const { return false; }
+
+  static bool filter_tree_contain_dynamic_filter(ObPushdownFilterExecutor *pushdown_filter);
 
   int prepare_skip_filter(bool disable_bypass);
 
@@ -1091,6 +1095,18 @@ public:
   INHERIT_TO_STRING_KV("ObPushdownBlackFilterExecutor", ObPhysicalFilterExecutor,
                        K_(filter), KP_(skip_bit));
   virtual int filter(ObEvalCtx &eval_ctx, const sql::ObBitVector &skip_bit, bool &filtered) override;
+  OB_INLINE bool filter_contain_dynamic_filter() const override final
+  {
+    bool contain_dynamic_filter = false;
+    for (int64_t i = 0; !contain_dynamic_filter && i < filter_.filter_exprs_.count(); ++i) {
+      const ObExpr *expr = filter_.filter_exprs_.at(i);
+      contain_dynamic_filter = nullptr != expr
+          && (T_OP_RUNTIME_FILTER == expr->type_
+              || T_OP_PUSHDOWN_TOPN_FILTER == expr->type_
+              || T_OP_LOCAL_DYNAMIC_FILTER == expr->type_);
+    }
+    return contain_dynamic_filter;
+  }
   OB_INLINE bool filter_can_continuous_filter() const override final {
     bool can_continuous_filter = true;
     for (int64_t i = 0; i < filter_.filter_exprs_.count();++i) {
@@ -1462,6 +1478,10 @@ public:
   {
     // for runtime filter, the filter can not do continuously check
     return false;
+  }
+  OB_INLINE bool filter_contain_dynamic_filter() const override final
+  {
+    return true;
   }
   inline const ObWhiteFilterSmallHashSet &get_small_set() const {return small_set_;}
   void clear() override;

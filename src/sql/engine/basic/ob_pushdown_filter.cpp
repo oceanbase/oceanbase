@@ -1968,6 +1968,22 @@ DEF_TO_STRING(ObPushdownFilterExecutor)
   return pos;
 }
 
+bool ObPushdownFilterExecutor::filter_tree_contain_dynamic_filter(ObPushdownFilterExecutor *pushdown_filter)
+{
+  bool contain_dynamic_filter = false;
+  if (nullptr != pushdown_filter) {
+    if (pushdown_filter->is_logic_op_node()) {
+      for (uint32_t i = 0; !contain_dynamic_filter && i < pushdown_filter->get_child_count(); ++i) {
+        contain_dynamic_filter =
+            filter_tree_contain_dynamic_filter(pushdown_filter->get_childs()[i]);
+      }
+    } else {
+      contain_dynamic_filter = pushdown_filter->filter_contain_dynamic_filter();
+    }
+  }
+  return contain_dynamic_filter;
+}
+
 int ObPushdownFilterExecutor::prepare_skip_filter(bool disable_bypass)
 {
   int ret = OB_SUCCESS;

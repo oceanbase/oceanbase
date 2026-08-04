@@ -791,19 +791,39 @@ public:
     }
     return ret;
   }
-  OB_INLINE void pre_process_filter(sql::ObPushdownFilterExecutor &filter)
+  // Apply cached skipping-filter results before filter evaluation.
+  // skip_dynamic_filter_always_true_result: used when border changes within an opened micro block
+  //   and dynamic filter results may be stale. Dynamic filters are assumed to be monotonically
+  //   tightened, so ALWAYS_FALSE cached results remain valid and are still applied; only
+  //   ALWAYS_TRUE cached results on dynamic filter nodes are skipped and left for re-evaluation.
+  OB_INLINE void pre_process_filter(sql::ObPushdownFilterExecutor &filter, const bool skip_dynamic_filter_always_true_result = false)
   {
-    if (!is_filter_uncertain()) {
-      filter.set_filter_bool_mask(get_filter_constant_type());
+    if (!skip_dynamic_filter_always_true_result) {
+      if (!is_filter_uncertain()) {
+        filter.set_filter_bool_mask(get_filter_constant_type());
+      } else {
+        for (int64_t i = 0; i < skipping_filter_results_.count(); ++i) {
+          skipping_filter_results_[i].apply_filter_result();
+        }
+      }
     } else {
-      for (int64_t i = 0; i < skipping_filter_results_.count(); ++i) {
-        skipping_filter_results_[i].apply_filter_result();
+      // When skip_dynamic_filter_always_true_result is true, means the filter tree contain dynamic filter
+      // If the root result is ALWAYS_TRUE (or uncertain), only reuse cached results from child filter nodes.
+      if (is_filter_always_false()) {
+        filter.set_filter_bool_mask(get_filter_constant_type());
+      } else {
+        for (int64_t i = 0; i < skipping_filter_results_.count(); ++i) {
+          ObSkippingFilterResult &filter_result = skipping_filter_results_[i];
+          if (!(filter_result.bool_mask_.is_always_true() && filter_result.filter_->filter_contain_dynamic_filter())) {
+            filter_result.apply_filter_result();
+          }
+        }
       }
     }
   }
   OB_INLINE void post_process_filter(sql::ObPushdownFilterExecutor &filter)
   {
-    if (!is_filter_uncertain()) {
+    if (filter.is_filter_constant()) {
       filter.set_filter_uncertain();
     } else {
       for (int64_t i = 0; i < skipping_filter_results_.count(); ++i) {
