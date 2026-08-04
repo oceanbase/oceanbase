@@ -37,8 +37,13 @@ int ObExprTime::calc_result_type1(ObExprResType &type,
   type.set_type(ObTimeType);
   //deduce scale now.
   int16_t scale1 = MIN(type1.get_scale(), MAX_SCALE_FOR_TEMPORAL);
-  int16_t scale = (SCALE_UNKNOWN_YET == scale1) ? MAX_SCALE_FOR_TEMPORAL : scale1;
+  int16_t scale = (SCALE_UNKNOWN_YET == scale1)
+                  ? (type1.is_temporal_type()
+                     ? 0
+                     : MAX_SCALE_FOR_TEMPORAL)
+                  : scale1;
   type.set_scale(scale);
+  type1.set_calc_scale(scale);
   type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_NULL_ON_WARN);
   return ret;
 }
