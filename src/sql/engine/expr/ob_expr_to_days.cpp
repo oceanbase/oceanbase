@@ -31,7 +31,9 @@ int ObExprToDays::calc_result_type1(ObExprResType &type,
   type.set_int();
   type.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].scale_);
   type.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].precision_);
-  date.set_calc_type(ObDateType);
+  if (ObMySQLDateType != date.get_type() && ObMySQLDateTimeType != date.get_type()) {
+    date.set_calc_type(ObDateType);
+  }
   return ret;
 }
 
@@ -47,14 +49,43 @@ int calc_todays_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
   } else if (day_datum->is_null()) {
     res_datum.set_null();
   } else {
-    int64_t day_int = day_datum->get_date() + DAYS_FROM_ZERO_TO_BASE;
-    if (day_int < 0 || ObTimeConverter::ZERO_DATE == day_int) {
+    int64_t date_value = ObTimeConverter::ZERO_DATE;
+    const ObObjType arg_type = expr.args_[0]->datum_meta_.type_;
+    if (ObMySQLDateType == arg_type) {
+      const ObMySQLDate mysql_date = day_datum->get_mysql_date();
+      if (ObTimeConverter::MYSQL_ZERO_DATE != mysql_date.date_) {
+        date_value = ObTimeConverter::calc_date(mysql_date);
+      }
+    } else if (ObMySQLDateTimeType == arg_type) {
+      const ObMySQLDateTime mysql_datetime = day_datum->get_mysql_datetime();
+      if (ObTimeConverter::MYSQL_ZERO_DATETIME != mysql_datetime.datetime_) {
+        date_value = ObTimeConverter::calc_date(mysql_datetime.year(),
+                                                mysql_datetime.month(),
+                                                mysql_datetime.day_);
+      }
+    } else {
+      date_value = day_datum->get_date();
+    }
+    const int64_t day_int = date_value + DAYS_FROM_ZERO_TO_BASE;
+    if (ObTimeConverter::ZERO_DATE == date_value || day_int < 0) {
       res_datum.set_null();
     } else {
       res_datum.set_int(day_int);
     }
   }
   return ret;
+}
+
+OB_INLINE int32_t get_to_days_date_value(ObObjType arg_type, ObIVector *input_vec, int64_t idx)
+{
+  if (ObMySQLDateType == arg_type) {
+    return ObTimeConverter::calc_date(ObMySQLDate(input_vec->get_mysql_date(idx)));
+  } else if (ObMySQLDateTimeType == arg_type) {
+    ObMySQLDateTime mysql_datetime = input_vec->get_mysql_datetime(idx);
+    return ObTimeConverter::calc_date(mysql_datetime.year(), mysql_datetime.month(), mysql_datetime.day_);
+  } else {
+    return input_vec->get_date(idx);
+  }
 }
 
 template <typename ArgVec, typename ResVec>
@@ -69,7 +100,9 @@ int vector_to_days_impl(const ObExpr &expr, ObEvalCtx &ctx,
                          && eval_flags.accumulate_bit_cnt(bound) == 0;
   if (OB_LIKELY(no_skip_no_null)) {
     for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
-      int32_t date = arg_vec->get_date(idx);
+      int32_t date = get_to_days_date_value(expr.args_[0]->datum_meta_.type_,
+                                            expr.args_[0]->get_vector(ctx),
+                                            idx);
       int64_t day_int = date + DAYS_FROM_ZERO_TO_BASE;
       if (day_int < 0 || ObTimeConverter::ZERO_DATE == day_int) {
         res_vec->set_null(idx);
@@ -85,7 +118,9 @@ int vector_to_days_impl(const ObExpr &expr, ObEvalCtx &ctx,
       if (arg_vec->is_null(idx)) {
         res_vec->set_null(idx);
       } else {
-        int32_t date = arg_vec->get_date(idx);
+        int32_t date = get_to_days_date_value(expr.args_[0]->datum_meta_.type_,
+                                              expr.args_[0]->get_vector(ctx),
+                                              idx);
         int64_t day_int = date + DAYS_FROM_ZERO_TO_BASE;
         if (day_int < 0 || ObTimeConverter::ZERO_DATE == day_int) {
           res_vec->set_null(idx);
@@ -143,7 +178,9 @@ int ObExprToDays::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
   if (OB_UNLIKELY(1 != raw_expr.get_param_count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("raw_expr should got one child", K(ret), K(raw_expr));
-  } else if (ObDateType != rt_expr.args_[0]->datum_meta_.type_) {
+  } else if (ObDateType != rt_expr.args_[0]->datum_meta_.type_
+             && ObMySQLDateType != rt_expr.args_[0]->datum_meta_.type_
+             && ObMySQLDateTimeType != rt_expr.args_[0]->datum_meta_.type_) {
     // 类型推导部分有针对enum/set设置的calc type，但是新框架cast目前对enum/set支持不完整
     // 这里先报错，后续补上对enum/set的处理
     // enum/set->varchar->date
