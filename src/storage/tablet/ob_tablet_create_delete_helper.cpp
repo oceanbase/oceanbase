@@ -334,9 +334,12 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_for_create_tx(
       LOG_WARN("read snapshot is smaller than prepare version",
           K(ret), K(ls_id), K(tablet_id), K(trans_state), K(read_snapshot), K(trans_version));
     } else if (MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
-      // primary tenant
-      ret = OB_SNAPSHOT_DISCARDED;
-      LOG_WARN("tablet creation transaction has not committed",
+      // Primary tenant: creation tx not committed, but snapshot is new enough that the read
+      // should succeed after ON_COMMIT. Return OB_DATA_NOT_UPTODATE so SQL/inner-SQL can retry.
+      // Do NOT use OB_SNAPSHOT_DISCARDED here: flashback path converts it to
+      // OB_TABLE_DEFINITION_CHANGED (non-retryable false ORA-01466 / MySQL 1412).
+      ret = OB_DATA_NOT_UPTODATE;
+      LOG_WARN("tablet creation transaction has not committed, should retry",
           K(ret), K(ls_id), K(tablet_id), K(trans_state), K(read_snapshot), K(trans_version));
     } else {
       // standby tenant(including restore/invalid role): call interface from, get "potential" commit version, then decide
