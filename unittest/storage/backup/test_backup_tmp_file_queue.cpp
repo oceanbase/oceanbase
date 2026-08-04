@@ -129,6 +129,7 @@ TEST_F(TestBackupTmpFileQueue, test_backup_tmp_file)
   int ret = OB_SUCCESS;
   ObBackupTmpFileQueue queue;
   EXPECT_EQ(OB_SUCCESS, queue.init(1 /*tenant_id*/));
+  EXPECT_TRUE(queue.is_empty());
   const int64_t count = 1000000;
   ObBackupDataType backup_data_type;
   backup_data_type.set_major_data_backup();
@@ -137,11 +138,13 @@ TEST_F(TestBackupTmpFileQueue, test_backup_tmp_file)
     OK(item.set_with_fake(ObBackupProviderItemType::PROVIDER_ITEM_TABLET_AND_SSTABLE_META, ObTabletID(i), backup_data_type));
     OK(queue.put_item(item));
   }
+  EXPECT_FALSE(queue.is_empty());
   for (int64_t i = 1; OB_SUCC(ret) && i <= count; ++i) {
     ObBackupProviderItem item;
     OK(queue.get_item(item));
     EXPECT_EQ(item.tablet_id_, ObTabletID(i));
   }
+  EXPECT_TRUE(queue.is_empty());
 }
 
 }  // namespace backup
