@@ -67,6 +67,7 @@ int64_t ObPxAdmission::admit(ObSQLSessionInfo &session, ObExecContext &exec_ctx,
   int ret = OB_SUCCESS;
   uint64_t tenant_id = session.get_effective_tenant_id();
   uint64_t admission_version = UINT64_MAX;
+  bool session_count_inc = false;
   // when pmas enabled, block thread until got expected thread resource
   int64_t left_time_us = wait_time_us;
   int64_t start_time_us = ObClockGenerator::getClock();
@@ -74,12 +75,15 @@ int64_t ObPxAdmission::admit(ObSQLSessionInfo &session, ObExecContext &exec_ctx,
   do {
     if (OB_FAIL(THIS_WORKER.check_status())) {
       LOG_WARN("fail check query status", K(ret));
-    } else if (OB_FAIL(OB_PX_TARGET_MGR.apply_target(tenant_id, worker_map, wait_time_us, session_target, req_cnt, admit_cnt, admission_version))) {
+    } else if (OB_FAIL(OB_PX_TARGET_MGR.apply_target(tenant_id, worker_map, wait_time_us,
+                                                     session_target, req_cnt, admit_cnt,
+                                                     admission_version, session_count_inc))) {
       LOG_WARN("apply target failed", K(ret), K(tenant_id), K(req_cnt));
     } else if (0 != admit_cnt) {
       exec_ctx.set_admission_version(admission_version);
       LOG_TRACE("after enter admission", K(ret), K(req_cnt), K(admit_cnt));
     }
+    exec_ctx.set_admission_session_count_inc(session_count_inc);
     left_time_us = wait_time_us - (ObClockGenerator::getClock() - start_time_us);
     if (OB_SUCC(ret) && 0 == admit_cnt && left_time_us > 0) {
       if (!need_retry) {
@@ -204,14 +208,14 @@ void ObPxAdmission::exit_query_admission(ObSQLSessionInfo &session,
 {
   if (stmt::T_EXPLAIN != stmt_type
       && plan.is_use_px()
-      && 1 != plan.get_px_dop()
-      && exec_ctx.get_admission_version() != UINT64_MAX) {
+      && 1 != plan.get_px_dop()) {
     int ret = OB_SUCCESS;
     uint64_t tenant_id = session.get_effective_tenant_id();
     hash::ObHashMap<ObAddr, int64_t> &addr_map = exec_ctx.get_admission_addr_map();
     if (OB_FAIL(OB_PX_TARGET_MGR.release_target(tenant_id,
                                                 addr_map,
-                                                exec_ctx.get_admission_version()))) {
+                                                exec_ctx.get_admission_version(),
+                                                exec_ctx.get_admission_session_count_inc()))) {
       LOG_WARN("release target failed", K(ret), K(tenant_id), K(exec_ctx.get_admission_version()));
     }
     (void)addr_map.destroy();
