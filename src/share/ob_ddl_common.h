@@ -1177,11 +1177,12 @@ public:
       obrpc::ObAlterTableArg &alter_table_arg);
 
   static int generate_ddl_schema_hint_str(
+      const ObString &database_name,
       const ObString &table_name,
       const int64_t schema_version,
       const bool is_oracle_mode,
       ObSqlString &sql_string);
-  
+
   static int generate_mview_ddl_schema_hint_str(
       const uint64_t tenant_id,
       const uint64_t mview_table_id,
