@@ -386,11 +386,12 @@ int ObPxTenantTargetMonitor::reset_leader_statistics()
 
 int ObPxTenantTargetMonitor::apply_target(hash::ObHashMap<ObAddr, int64_t> &worker_map,
                               int64_t wait_time_us, int64_t session_target, int64_t req_cnt,
-                              int64_t &admit_count, uint64_t &admit_version)
+                              int64_t &admit_count, uint64_t &admit_version, bool &session_count_inc)
 {
   int ret = OB_SUCCESS;
   admit_count = 0;
   admit_version = UINT64_MAX;
+  session_count_inc = false;
   bool need_wait = false;
   if (OB_SUCC(ret)) {
     // read lock to avoid reset map.
@@ -438,12 +439,12 @@ int ObPxTenantTargetMonitor::apply_target(hash::ObHashMap<ObAddr, int64_t> &work
     if (OB_SUCC(ret)) {
       if (is_first_query || is_target_enough) {
         int64_t total_admit_count = 0;
+        int64_t applied_count = 0; // used to rollback
         for (hash::ObHashMap<ObAddr, int64_t>::iterator it = worker_map.begin();
             OB_SUCC(ret) && it != worker_map.end(); it++) {
           it->second = std::min(it->second, target);
           ObAddr &server = it->first;
           int64_t acquired_cnt = it->second;
-          total_admit_count += acquired_cnt;
           auto apply_local_target = [=](hash::HashMapPair<ObAddr, ServerTargetUsage> &entry) -> void {
             entry.second.update_local_used(acquired_cnt);
             if (is_leader()) {
@@ -454,14 +455,42 @@ int ObPxTenantTargetMonitor::apply_target(hash::ObHashMap<ObAddr, int64_t> &work
           };
           if (OB_FAIL(global_target_usage_.atomic_refactored(server, apply_local_target))) {
             LOG_WARN("atomic refactored, update_peer_used failed", K(ret));
-          } else if (print_debug_log_) {
-            LOG_INFO("apply target success", K(tenant_id_), K(server), K(acquired_cnt), K(version), K(version_),
-                                              K(parallel_servers_target_));
+          } else {
+            total_admit_count += acquired_cnt;
+            applied_count++;
+            if (print_debug_log_) {
+              LOG_INFO("apply target success", K(tenant_id_), K(server), K(acquired_cnt), K(version), K(version_),
+                                                K(parallel_servers_target_));
+            }
           }
         }
-        admit_count = total_admit_count;
-        admit_version = version;
-        parallel_session_count_++;
+        if (OB_SUCC(ret)) {
+          admit_count = total_admit_count;
+          admit_version = version;
+          ATOMIC_INC(&parallel_session_count_);
+          session_count_inc = true;
+        } else {
+          // rollback
+          int tmp_ret = OB_SUCCESS;
+          int64_t rollback_idx = 0;
+          for (hash::ObHashMap<ObAddr, int64_t>::iterator rb_it = worker_map.begin();
+               rollback_idx < applied_count && rb_it != worker_map.end(); ++rollback_idx, rb_it++) {
+            ObAddr &server = rb_it->first;
+            int64_t rollback_cnt = rb_it->second;
+            auto rollback_local_target = [=](hash::HashMapPair<ObAddr, ServerTargetUsage> &entry) -> void {
+              entry.second.update_local_used(-rollback_cnt);
+              if (is_leader()) {
+                // leader no need report, so set as all reported
+                entry.second.set_report_used(entry.second.get_local_used());
+                entry.second.update_peer_used(-rollback_cnt);
+              }
+            };
+            if (OB_TMP_FAIL(global_target_usage_.atomic_refactored(server, rollback_local_target))) {
+              LOG_WARN("rollback apply_local_target failed", K(tmp_ret), K(server));
+            }
+          }
+          LOG_WARN("apply_target half-failed, rollback applied entries", K(ret), K(applied_count));
+        }
       } else {
         need_wait = true;
       }
@@ -481,11 +510,14 @@ int ObPxTenantTargetMonitor::apply_target(hash::ObHashMap<ObAddr, int64_t> &work
   return ret;
 }
 
-int ObPxTenantTargetMonitor::release_target(hash::ObHashMap<ObAddr, int64_t> &worker_map, uint64_t version)
+int ObPxTenantTargetMonitor::release_target(hash::ObHashMap<ObAddr, int64_t> &worker_map, uint64_t version,
+                                             bool session_count_inc)
 {
   int ret = OB_SUCCESS;
   SpinRLockGuard rlock_guard(spin_lock_);
-  if (version == version_) {
+  if (version == UINT64_MAX) {
+    // do nothing
+  } else if (version == version_) {
     for (hash::ObHashMap<ObAddr, int64_t>::iterator it = worker_map.begin();
         OB_SUCC(ret) && it != worker_map.end(); it++) {
       ObAddr &server = it->first;
@@ -525,7 +557,9 @@ int ObPxTenantTargetMonitor::release_target(hash::ObHashMap<ObAddr, int64_t> &wo
   } else {
     LOG_INFO("version changed", K(tenant_id_), K(version_), K(version));
   }
-  parallel_session_count_--;
+  if (session_count_inc) {
+    ATOMIC_DEC(&parallel_session_count_);
+  }
   return ret;
 }
 

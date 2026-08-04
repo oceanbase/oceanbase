@@ -320,6 +320,16 @@ public:
   uint64_t get_admission_version() const;
 
   /**
+   * @brief set whether apply_target has incremented parallel_session_count_.
+   */
+  void set_admission_session_count_inc(bool session_count_inc);
+
+  /**
+   * @brief get whether apply_target has incremented parallel_session_count_.
+   */
+  bool get_admission_session_count_inc() const;
+
+  /**
    * @brief get admission addr set
    */
   hash::ObHashMap<ObAddr, int64_t> &get_admission_addr_map();
@@ -751,6 +761,7 @@ protected:
   int64_t px_batch_id_;
 
   uint64_t admission_version_;
+  bool admission_session_count_inc_;
   hash::ObHashMap<ObAddr, int64_t> admission_addr_map_;
   // used for temp expr ctx manager
   bool use_temp_expr_ctx_cache_;
@@ -904,6 +915,16 @@ inline void ObExecContext::set_admission_version(uint64_t admission_version)
 inline uint64_t ObExecContext::get_admission_version() const
 {
   return admission_version_;
+}
+
+inline void ObExecContext::set_admission_session_count_inc(bool session_count_inc)
+{
+  admission_session_count_inc_ = session_count_inc;
+}
+
+inline bool ObExecContext::get_admission_session_count_inc() const
+{
+  return admission_session_count_inc_;
 }
 
 inline hash::ObHashMap<ObAddr, int64_t> &ObExecContext::get_admission_addr_map()
