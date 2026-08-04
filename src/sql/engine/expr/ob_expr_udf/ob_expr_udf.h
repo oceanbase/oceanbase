@@ -44,6 +44,7 @@ public:
       params_type_(alloc),
       params_desc_(alloc),
       nocopy_params_(alloc),
+      has_udt_self_param_(false),
       dblink_id_(OB_INVALID_ID),
       is_result_cache_(false),
       is_deterministic_(false),
@@ -79,6 +80,7 @@ public:
   uint64_t loc_;
   bool is_udt_cons_;
   bool is_called_in_sql_;
+  bool has_udt_self_param_;
   uint64_t dblink_id_;
   bool is_result_cache_;
   bool is_deterministic_;

@@ -289,6 +289,7 @@ int ObExprUDFInfo::deep_copy(common::ObIAllocator &allocator,
     other->is_deterministic_ = is_deterministic_;
     other->external_routine_type_ = external_routine_type_;
     other->is_mysql_udtf_ = is_mysql_udtf_;
+    other->has_udt_self_param_ = has_udt_self_param_;
     OZ(ob_write_string(allocator, external_routine_entry_, other->external_routine_entry_, true));
     OZ(ob_write_string(allocator, external_routine_url_, other->external_routine_url_, true));
     OZ(ob_write_string(allocator, external_routine_resource_, other->external_routine_resource_, true));
@@ -319,7 +320,8 @@ OB_DEF_SERIALIZE(ObExprUDFInfo)
               external_routine_resource_,
               dblink_id_,
               is_mysql_udtf_,
-              out_params_type_);
+              out_params_type_,
+              has_udt_self_param_);
   return ret;
 }
 
@@ -346,7 +348,8 @@ OB_DEF_DESERIALIZE(ObExprUDFInfo)
               external_routine_resource_,
               dblink_id_,
               is_mysql_udtf_,
-              out_params_type_);
+              out_params_type_,
+              has_udt_self_param_);
   return ret;
 }
 
@@ -373,7 +376,8 @@ OB_DEF_SERIALIZE_SIZE(ObExprUDFInfo)
               external_routine_resource_,
               dblink_id_,
               is_mysql_udtf_,
-              out_params_type_);
+              out_params_type_,
+              has_udt_self_param_);
   return len;
 }
 
@@ -406,6 +410,9 @@ int ObExprUDFInfo::from_raw_expr(RE &raw_expr)
   OX (is_result_cache_ = udf_expr.is_result_cache());
   OX (is_deterministic_ = udf_expr.is_deterministic());
   OX (is_mysql_udtf_ = udf_expr.is_mysql_udtf());
+  OX (has_udt_self_param_ = udf_expr.get_param_count() > 0
+                            && OB_NOT_NULL(udf_expr.get_param_expr(0))
+                            && udf_expr.get_param_expr(0)->has_flag(IS_UDT_UDF_SELF_PARAM));
   return ret;
 }
 
@@ -727,45 +734,57 @@ int ObExprUDF::eval_udf_single(const ObExpr &expr, ObEvalCtx &eval_ctx, ObExprUD
   } else if (found) {
     result = tmp_result;
   } else {
-    try {
-      ObExprUDFEnvGuard env_guard(eval_ctx, udf_ctx, ret, tmp_result);
-      if (OB_FAIL(process_in_params(udf_ctx, env_guard.get_deep_in_objs()))) {
-        LOG_WARN("failed to process in params", K(ret));
-      } else if (OB_FAIL(GCTX.pl_engine_->execute(eval_ctx.exec_ctx_,
-                                                  udf_ctx.get_allocator(),
-                                                  udf_ctx.get_package_id(),
-                                                  udf_ctx.get_info()->udf_id_,
-                                                  udf_ctx.get_info()->subprogram_path_,
-                                                  *udf_ctx.get_param_store(),
-                                                  udf_ctx.get_info()->nocopy_params_,
-                                                  tmp_result,
-                                                  udf_ctx.get_pl_execute_arg(),
-                                                  nullptr,
-                                                  false,
-                                                  true,
-                                                  udf_ctx.get_info()->loc_,
-                                                  udf_ctx.get_info()->is_called_in_sql_,
-                                                  udf_ctx.get_info()->dblink_id_,
-                                                  nullptr))) {
-        LOG_WARN("failed to eval udf use pl engine", K(ret));
+    bool is_null_self = udf_ctx.get_info()->has_udt_self_param_
+                        && udf_ctx.get_arg_count() > 0
+                        && pl::ObPLComposite::obj_is_null(udf_ctx.get_obj_stack());
+    if (is_null_self) {
+      if (udf_ctx.get_info()->is_called_in_sql_) {
+        result.set_null();
+      } else {
+        ret = OB_ERR_SELF_IS_NULL;
+        LOG_WARN("method dispatch on NULL SELF argument is disallowed", K(ret));
       }
-      // Out Params will rewrite to Parent ParamStore, so this function must called after ~ObExprUDFEnvGuard
-      if (OB_SUCC(ret) && OB_FAIL(process_out_params(udf_ctx, eval_ctx))) {
-        LOG_WARN("failed to process out params", K(ret));
+    } else {
+      try {
+        ObExprUDFEnvGuard env_guard(eval_ctx, udf_ctx, ret, tmp_result);
+        if (OB_FAIL(process_in_params(udf_ctx, env_guard.get_deep_in_objs()))) {
+          LOG_WARN("failed to process in params", K(ret));
+        } else if (OB_FAIL(GCTX.pl_engine_->execute(eval_ctx.exec_ctx_,
+                                                    udf_ctx.get_allocator(),
+                                                    udf_ctx.get_package_id(),
+                                                    udf_ctx.get_info()->udf_id_,
+                                                    udf_ctx.get_info()->subprogram_path_,
+                                                    *udf_ctx.get_param_store(),
+                                                    udf_ctx.get_info()->nocopy_params_,
+                                                    tmp_result,
+                                                    udf_ctx.get_pl_execute_arg(),
+                                                    nullptr,
+                                                    false,
+                                                    true,
+                                                    udf_ctx.get_info()->loc_,
+                                                    udf_ctx.get_info()->is_called_in_sql_,
+                                                    udf_ctx.get_info()->dblink_id_,
+                                                    nullptr))) {
+          LOG_WARN("failed to eval udf use pl engine", K(ret));
+        }
+        // Out Params will rewrite to Parent ParamStore, so this function must called after ~ObExprUDFEnvGuard
+        if (OB_SUCC(ret) && OB_FAIL(process_out_params(udf_ctx, eval_ctx))) {
+          LOG_WARN("failed to process out params", K(ret));
+        }
+        if (OB_SUCC(ret) && OB_FAIL(process_return_value(result, tmp_result, eval_ctx, udf_ctx, env_guard))) {
+          LOG_WARN("failed to process return value", K(ret), K(result), K(tmp_result));
+        }
+        if (OB_SUCC(ret) && OB_FAIL(adjust_return_value(result, expr.obj_meta_, udf_ctx.get_allocator(), udf_ctx))) {
+          LOG_WARN("failed to adjust return value", K(ret), K(result));
+        }
+      } catch(...) {
+        LOG_ERROR("UDF eval resource not released by now, must be bug here !!!!");
+        throw;
       }
-      if (OB_SUCC(ret) && OB_FAIL(process_return_value(result, tmp_result, eval_ctx, udf_ctx, env_guard))) {
-        LOG_WARN("failed to process return value", K(ret), K(result), K(tmp_result));
+      if (OB_READ_NOTHING == ret && udf_ctx.get_info()->is_called_in_sql_ && lib::is_oracle_mode()) {
+        result.set_null();
+        ret = OB_SUCCESS;
       }
-      if (OB_SUCC(ret) && OB_FAIL(adjust_return_value(result, expr.obj_meta_, udf_ctx.get_allocator(), udf_ctx))) {
-        LOG_WARN("failed to adjust return value", K(ret), K(result));
-      }
-    } catch(...) {
-      LOG_ERROR("UDF eval resource not released by now, must be bug here !!!!");
-      throw;
-    }
-    if (OB_READ_NOTHING == ret && udf_ctx.get_info()->is_called_in_sql_ && lib::is_oracle_mode()) {
-      result.set_null();
-      ret = OB_SUCCESS;
     }
     // add result cache
     if (OB_SUCC(ret) && OB_FAIL(udf_ctx.add_result_to_cache(result))) {
