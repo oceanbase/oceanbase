@@ -377,10 +377,34 @@ int ObBackupDeleteSelector::apply_current_path_retention_policy_(
         failure_info.failure_id = INVALID_CLEAN_ID;
         failure_info.failure_reason = "cannot delete backup set in current path when delete policy is set";
       } else {
-        // get the latest full backup set for the current path
-        if (OB_FAIL(data_provider_->get_latest_valid_full_backup_set(
+        // The retention policy only exists to protect usable restore baselines on the
+        // current active path. Only SUCCESS backup sets can ever act as a restore baseline;
+        // FAILED backup sets (including those produced by a canceled backup, which are
+        // persisted as FAILED in __all_backup_set_files) are never restorable and therefore
+        // are always safe to delete regardless of whether a valid full baseline exists.
+        //
+        // So we only apply the baseline protection against the newest SUCCESS candidate.
+        // If every candidate on the current path is FAILED, there is nothing to protect and
+        // the deletion is allowed to proceed.
+        const ObBackupSetFileDesc *newest_success_candidate = nullptr;
+        for (int64_t i = candidate_descs_in_group.count() - 1; OB_ISNULL(newest_success_candidate) && i >= 0; --i) {
+          const ObBackupSetFileDesc &desc = candidate_descs_in_group.at(i);
+          if (ObBackupSetFileDesc::BackupSetStatus::SUCCESS == desc.status_) {
+            // candidates are sorted ascending by backup_set_id, so the first SUCCESS
+            // one found while iterating backwards is the newest SUCCESS candidate.
+            newest_success_candidate = &desc;
+          }
+        }
+        if (OB_ISNULL(newest_success_candidate)) {
+          LOG_INFO("all candidate backup sets on current path are not SUCCESS, "
+                   "no restore baseline to protect, allow delete",
+                   K(candidate_path), K(candidate_descs_in_group));
+        } else if (OB_FAIL(data_provider_->get_latest_valid_full_backup_set(
                       job_attr_->tenant_id_, *archive_helper_, current_backup_path_str, clean_point))) {
           if (OB_ENTRY_NOT_EXIST == ret) {
+            // There are SUCCESS candidate(s) but no valid full baseline can be located.
+            // Deleting a SUCCESS set here could remove the only restore baseline, so keep
+            // rejecting to stay safe.
             ret = OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED;
             LOG_WARN("No full backup exists in this dest. No sets will be deleted", K(ret), K(candidate_path));
             failure_info.failure_id = INVALID_CLEAN_ID;
@@ -389,13 +413,12 @@ int ObBackupDeleteSelector::apply_current_path_retention_policy_(
             LOG_WARN("failed to get latest full backup set", K(ret));
           }
         } else {
-          const ObBackupSetFileDesc &largest_desc = candidate_descs_in_group.at(candidate_descs_in_group.count() - 1);
-          if (largest_desc.backup_set_id_ >= clean_point.backup_set_id_) {
+          if (newest_success_candidate->backup_set_id_ >= clean_point.backup_set_id_) {
             ret = OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED;
             LOG_WARN("Candidate backup set is newer than or equal to the latest full backup on the current path",
-              K(ret), "candidate_set_id", largest_desc.backup_set_id_, "latest_full_set_id", clean_point.backup_set_id_,
-              K(candidate_path));
-            failure_info.failure_id = largest_desc.backup_set_id_;
+              K(ret), "candidate_set_id", newest_success_candidate->backup_set_id_,
+              "latest_full_set_id", clean_point.backup_set_id_, K(candidate_path));
+            failure_info.failure_id = newest_success_candidate->backup_set_id_;
             failure_info.failure_reason = "newer than latest full backupset";
             failure_info.related_id = clean_point.backup_set_id_;
           }
