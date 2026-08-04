@@ -1073,9 +1073,22 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
       if (OB_ITER_END == ret) {
         ret = OB_SUCCESS;
         is_empty_snapshot_table = true;
-        if (!create_new_adp) {
+        int64_t current_snapshot_count = 0;
+        // Snapshot table is empty at target_scn. If old snap mem is also empty, reuse old
+        // adapter instead of cloning a same-empty one; otherwise replace stale snap.
+        if (OB_ISNULL(old_adapter)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("empty snapshot table requires new adapter", K(ret), K(ls_id), KPC(adapter));
+          LOG_WARN("unexpected null old adapter", K(ret), K(ls_id));
+        } else if (OB_FAIL(old_adapter->get_snap_index_row_cnt_safe(current_snapshot_count))) {
+          LOG_WARN("fail to get snap index number", K(ret), K(ls_id), KPC(old_adapter));
+        } else if (0 == current_snapshot_count) {
+          old_adapter->set_snap_data_has_complete();
+          LOG_INFO("[VECTOR INDEX ADAPTOR] skip clone empty adaptor, old snap already empty",
+              KP(old_adapter), K(ls_id), K(current_snapshot_count), K(lbt()));
+        } else if (!create_new_adp) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("empty snapshot table requires new adapter", K(ret), K(ls_id),
+              K(current_snapshot_count), KPC(adapter));
         } else if (OB_FAIL(create_refresh_adaptor(
             ls_id, vector_index_service, adapter, new_adapter, adpt_buff))) {
           LOG_WARN("failed to create empty refresh adaptor", K(ret), K(ls_id), KPC(adapter));
@@ -1083,7 +1096,7 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
           new_adapter->set_snap_data_has_complete();
           adapter = new_adapter;
           LOG_INFO("[VECTOR INDEX ADAPTOR] clone empty adaptor success for refresh",
-              KP(new_adapter), KP(old_adapter), K(lbt()));
+              KP(new_adapter), KP(old_adapter), K(current_snapshot_count), K(lbt()));
         }
       } else {
         LOG_WARN("failed to get next row", K(ret));

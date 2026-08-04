@@ -6259,7 +6259,7 @@ int ObPluginVectorIndexAdaptor::check_need_freeze(const int64_t freeze_threshold
   // 所以这里不需要考虑其他线程并发修改, 故不需要加锁
   } else if (is_in_opt_task_) {
     LOG_INFO("there is rebuild task doing, can not freeze", KPC(this));
-  } else if (is_snap_inited() && ! snap_data_->has_complete_) {
+  } else if (! snap_data_.is_valid() || ! snap_data_->has_complete_) {
     LOG_INFO("snap data is not loaded, can not freeze", KPC(this));
   } else if (! incr_data_->segment_handle_.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
