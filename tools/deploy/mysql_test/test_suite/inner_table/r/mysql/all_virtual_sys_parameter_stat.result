@@ -804,6 +804,7 @@ _tx_data_memory_limit_percentage
 _tx_debug_level
 _tx_result_retention
 _tx_share_memory_limit_percentage
+_union_dual_rewrite_threshold
 _update_all_columns_for_trigger
 _upgrade_stage
 _use_distinct_with_expansion
