@@ -1216,6 +1216,10 @@ int ObIndexBuilderUtil::generate_prefix_column(
         if (ob_is_text_tc(prefix_column.get_data_type())) {
           prefix_column.set_data_type(ObVarcharType);
           prefix_column.set_data_scale(0);
+          // A prefix generated column stores the bounded SUBSTR result as
+          // VARCHAR. STRING_LOB_COLUMN_FLAG belongs to the source STRING
+          // column and must not survive the TEXT-to-VARCHAR conversion.
+          prefix_column.erase_string_lob_flag();
         }
         prefix_column.set_rowkey_position(0); //非主键列
         prefix_column.set_index_position(0); //非索引列

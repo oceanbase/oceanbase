@@ -2196,6 +2196,7 @@ public:
                                     ObColumnSchemaV2 *dst_schema,
                                     ObSchemaGetterGuard &schema_guard,
                                     bool &is_offline) const;
+  static bool is_modify_column_with_prefix_index_supported(const uint64_t data_version);
   int check_prohibition_rules(const ObColumnSchemaV2 &src_schema,
                               const ObColumnSchemaV2 &dst_schema,
                               ObSchemaGetterGuard &schema_guard,
