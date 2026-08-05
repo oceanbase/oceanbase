@@ -2054,7 +2054,8 @@ int ObMultipleMerge::handle_4377(const char* func)
     LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
     LOG_ERROR_RET(OB_ERR_DEFENSIVE_CHECK,
                   "Fatal Error!!! Catch a defensive error! index lookup: row not found in data-table",
-                  K(ret), KPC(access_ctx_->store_ctx_));
+                  K(ret), K_(read_memtable_only), K_(exist_ddl_kv),
+                  "table_cnt", tables_.count(), KPC(access_ctx_->store_ctx_));
     LOG_DBA_ERROR_V2(OB_STORAGE_DEFENSIVE_CHECK_FAIL,
                      OB_ERR_DEFENSIVE_CHECK,
                      "msg", "Fatal Error!!! Catch a defensive error!",

@@ -118,7 +118,7 @@ private:
   int get_rows_from_memory();
   int prepare_prefetch_next_rowkey(const int64_t &multi_version_start, const int64_t &read_snapshot_version);
   int try_get_next_row(ObQueryRowInfo &row_info, ObFuseRowValueHandle &handle);
-  int inner_get_next_row_for_all_tables(ObDatumRow &row, const bool only_memtables = true);
+  int inner_get_next_row_for_all_tables(ObDatumRow &row);
   int inner_get_next_row_for_sstables_exist(ObDatumRow &row);
 private:
   common::ObIArray<blocksstable::ObDatumRowkey> *rowkeys_;
