@@ -8856,6 +8856,13 @@ int ObLSTabletService::apply_defragment_tablet(
         K(old_addr), K(tablet_addr_from_t3m));
     } else if (OB_FAIL(new_handle.get_obj()->get_ls_epoch(ls_epoch))) {
       LOG_WARN("fail to get ls epoch", K(ret), K(tablet_key), K(new_handle));
+    // Refresh the address sequence before building param, since CAS installs the address from param.
+    } else if (OB_FAIL(refresh_memtable_for_ckpt(old_addr, tablet_addr_from_t3m, new_handle))) {
+      /// @c old_addr and @c tablet_addr_from_t3m must be equal for persister
+      OB_ASSERT(ret != OB_NOT_THE_OBJECT);
+      LOG_WARN("failed to update tablet", K(ret),
+        K(old_addr), K(tablet_addr_from_t3m), K(new_handle));
+    } else if (FALSE_IT(time_guard.click("UpdateTablet"))) {
     } else if (OB_FAIL(new_handle.get_obj()->get_updating_tablet_pointer_param(param))) {
       LOG_WARN("failed to get updating tablet pointer parameters", K(ret), K(tablet_key), K(new_handle));
     } else if (OB_FAIL(tsms.update_tablet(tablet_key.ls_id_,
@@ -8865,12 +8872,6 @@ int ObLSTabletService::apply_defragment_tablet(
       // tablet must exists at t3m!!!
       OB_ASSERT(ret != OB_ENTRY_NOT_EXIST && ret != OB_ITEM_NOT_SETTED);
       LOG_WARN("failed to get tablet from t3m", K(ret), K(tablet_key));
-    } else if (OB_FAIL(refresh_memtable_for_ckpt(old_addr, tablet_addr_from_t3m, new_handle))) {
-      /// @c old_addr and @c tablet_addr_from_t3m must be equal for persister
-      OB_ASSERT(ret != OB_NOT_THE_OBJECT);
-      LOG_WARN("failed to update tablet", K(ret),
-        K(old_addr), K(tablet_addr_from_t3m), K(new_handle));
-    } else if (FALSE_IT(time_guard.click("UpdateTablet"))) {
     } else if (OB_FAIL(t3m.compare_and_swap_tablet(tablet_key, tablet_handle_from_t3m,
         new_handle, param))) {
       LOG_WARN("fail to compare and swap tablet", K(ret), K(tablet_handle_from_t3m),
