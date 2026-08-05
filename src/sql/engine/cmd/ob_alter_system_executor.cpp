@@ -35,6 +35,7 @@
 #include "storage/fts/dict/ob_ft_dict_def.h"
 #include "storage/fts/dict/ob_ft_cache_container.h"
 #include "storage/fts/dict/ob_ft_range_dict.h"
+#include "sql/ob_sql_utils.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_ss_local_cache_util.h"
 #endif
@@ -1710,17 +1711,27 @@ int ObRefreshFulltextDictExecutor::execute(ObExecContext &ctx, ObRefreshFulltext
     LOG_WARN("table is not a fulltext dictionary table", K(ret), K(stmt.get_table_name()));
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "table is not a fulltext dictionary table");
   } else {
-    // Build full table name
+    // Build full table name with quoted identifiers to avoid SQL injection
     const uint64_t table_id = table_schema->get_table_id();
-    const ObString &table_name = stmt.get_table_name();
-    const int64_t MAX_FULL_TABLE_NAME_LEN = common::OB_MAX_DATABASE_NAME_LENGTH + 1 + common::OB_MAX_TABLE_NAME_LENGTH;
+    const ObString &db_name = database_schema->get_database_name_str();
+    const ObString &table_name = table_schema->get_table_name_str();
+    const int64_t MAX_FULL_TABLE_NAME_LEN =
+        2 * common::OB_MAX_DATABASE_NAME_LENGTH + 2 * common::OB_MAX_TABLE_NAME_LENGTH + 5;
     char full_table_name_buf[MAX_FULL_TABLE_NAME_LEN];
     int64_t pos = 0;
     ObString full_table_name;
-    if (OB_FAIL(databuff_printf(full_table_name_buf, MAX_FULL_TABLE_NAME_LEN, pos, "%.*s.%.*s",
-                                database_name.length(), database_name.ptr(),
-                                table_name.length(), table_name.ptr()))) {
-      LOG_WARN("fail to print full table name", K(ret));
+    if (OB_FAIL(databuff_printf(full_table_name_buf, MAX_FULL_TABLE_NAME_LEN, pos, "`"))) {
+      LOG_WARN("fail to print quote", K(ret));
+    } else if (OB_FAIL(ObSQLUtils::print_identifier(full_table_name_buf, MAX_FULL_TABLE_NAME_LEN, pos,
+                                                    CS_TYPE_UTF8MB4_GENERAL_CI, db_name, false))) {
+      LOG_WARN("fail to print database name", K(ret), K(db_name));
+    } else if (OB_FAIL(databuff_printf(full_table_name_buf, MAX_FULL_TABLE_NAME_LEN, pos, "`.`"))) {
+      LOG_WARN("fail to print quote", K(ret));
+    } else if (OB_FAIL(ObSQLUtils::print_identifier(full_table_name_buf, MAX_FULL_TABLE_NAME_LEN, pos,
+                                                    CS_TYPE_UTF8MB4_GENERAL_CI, table_name, false))) {
+      LOG_WARN("fail to print table name", K(ret), K(table_name));
+    } else if (OB_FAIL(databuff_printf(full_table_name_buf, MAX_FULL_TABLE_NAME_LEN, pos, "`"))) {
+      LOG_WARN("fail to print quote", K(ret));
     } else {
       full_table_name.assign_ptr(full_table_name_buf, static_cast<int32_t>(pos));
 
