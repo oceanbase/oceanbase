@@ -1228,6 +1228,13 @@ int ObPLDataType::deserialize(ObSchemaGetterGuard &schema_guard,
         // get_data_type() is null, its a extend type, unsigned need false.
         LOG_WARN("failed to parse basic param value", K(ret));
       } else {
+        if (OB_NOT_NULL(get_data_type()) && (ObCharType == get_obj_type() || ObNCharType == get_obj_type())) {
+          OZ (ObSPIService::spi_pad_char_or_varchar(session,
+                                                    get_obj_type(),
+                                                    get_data_type()->get_accuracy(),
+                                                    &local_allocator,
+                                                    &param));
+        }
         ObObj *obj = reinterpret_cast<ObObj *>(dst + dst_pos);
         OZ (deep_copy_obj(allocator, param, *obj));
         OX (dst_pos += sizeof(ObObj));
