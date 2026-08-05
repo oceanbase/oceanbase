@@ -545,7 +545,12 @@ int ObRawDecoder::decode_vector(
         data_offset = (data_offset + CHAR_BIT - 1) / CHAR_BIT;
       }
       const char *fixed_buf = meta_data_ + data_offset;
-      DataFixedLocator fixed_locator(vector_ctx.row_ids_, fixed_buf, fixed_packing_len, col_data);
+      DataFixedLocator fixed_locator(
+          vector_ctx.row_ids_,
+          fixed_buf,
+          fixed_packing_len,
+          decoder_ctx.has_extend_value() ? col_data : nullptr,
+          decoder_ctx.micro_block_header_->extend_value_bit_);
       if (OB_FAIL(ObVecDecodeUtils::load_byte_aligned_vector<DataFixedLocator>(
           decoder_ctx.obj_meta_, decoder_ctx.col_header_->get_store_obj_type(), fixed_packing_len,
           decoder_ctx.has_extend_value(), fixed_locator, vector_ctx.row_cap_,
@@ -672,11 +677,13 @@ int ObRawDecoder::decode_vector_bitpacked(
     if (decoder_ctx.has_extend_value()) {
       data_offset = decoder_ctx.micro_block_header_->row_count_ * decoder_ctx.micro_block_header_->extend_value_bit_;
     }
-    const sql::ObBitVector *null_bitset = sql::to_bit_vector(col_data);
     for (int64_t i = 0; i < vector_ctx.row_cap_; ++i) {
       const int64_t curr_vec_offset = vector_ctx.vec_offset_ + i;
       const int64_t row_id = vector_ctx.row_ids_[i];
-      if (HAS_NULL && null_bitset->contain(row_id)) {
+      if (HAS_NULL && is_stored_extend_value(
+          col_data,
+          row_id * decoder_ctx.micro_block_header_->extend_value_bit_,
+          decoder_ctx.micro_block_header_->extend_value_bit_)) {
         vector->set_null(curr_vec_offset);
       } else {
         int64_t unpacked_val = 0;

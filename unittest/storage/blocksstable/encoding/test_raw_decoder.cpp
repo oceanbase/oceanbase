@@ -17,6 +17,11 @@
 #include "storage/compaction_ttl/ob_ttl_filter.h"
 #include "storage/compaction_ttl/ob_ttl_filter_info.h"
 #include "unittest/storage/ob_ttl_filter_info_helper.h"
+#include "lib/alloc/memory_sanity.h"
+
+#ifdef ENABLE_SANITY
+extern void *sanity_mmap(size_t size);
+#endif
 
 namespace oceanbase
 {
@@ -32,6 +37,70 @@ class ObMicroBlockRawEncoder : public ObMicroBlockEncoder
 public:
   int build_block(char *&buf, int64_t &size);
 
+};
+
+class TightExtendBitmapRowIndex : public ObIRowIndex
+{
+public:
+  TightExtendBitmapRowIndex(const char *row_data, const uint32_t row_len)
+      : row_data_(row_data), row_len_(row_len)
+  {
+  }
+
+  virtual int get(const int64_t row_id, const char *&data, int64_t &len) const override
+  {
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(0 != row_id)) {
+      ret = OB_INVALID_ARGUMENT;
+    } else {
+      data = row_data_;
+      len = row_len_;
+    }
+    return ret;
+  }
+
+  virtual int batch_get(
+      const int32_t *row_ids,
+      const int64_t row_cap,
+      const bool has_ext,
+      const char **row_datas,
+      ObDatum *datums) const override
+  {
+    int ret = OB_SUCCESS;
+    UNUSEDx(has_ext, datums);
+    for (int64_t i = 0; OB_SUCC(ret) && i < row_cap; ++i) {
+      if (OB_UNLIKELY(0 != row_ids[i])) {
+        ret = OB_INVALID_ARGUMENT;
+      } else {
+        row_datas[i] = row_data_;
+      }
+    }
+    return ret;
+  }
+
+  virtual int batch_get(
+      const int32_t *row_ids,
+      const int64_t row_cap,
+      const bool has_ext,
+      const char **row_datas,
+      uint32_t *row_lens) const override
+  {
+    int ret = OB_SUCCESS;
+    UNUSED(has_ext);
+    for (int64_t i = 0; OB_SUCC(ret) && i < row_cap; ++i) {
+      if (OB_UNLIKELY(0 != row_ids[i])) {
+        ret = OB_INVALID_ARGUMENT;
+      } else {
+        row_datas[i] = row_data_;
+        row_lens[i] = row_len_;
+      }
+    }
+    return ret;
+  }
+
+private:
+  const char *row_data_;
+  uint32_t row_len_;
 };
 
 /** This function is to override the function in ObMicroBlockEncoder to perform unittest on
@@ -1274,6 +1343,174 @@ TEST_F(TestRawDecoder, batch_decode_to_vector)
   TEST_ONE(VEC_CONTINUOUS);
   #undef TEST_ONE
   #undef TEST_ONE_WITH_ALIGN
+}
+
+TEST_F(TestRawDecoder, bitpacked_vector_decode_null_with_tight_extend_bitmap)
+{
+  static const int64_t SMALL_ROW_CNT = 8;
+  static const int64_t BATCH_ROW_CNT = 1;
+#ifdef ENABLE_SANITY
+  if (0 == get_global_addr()) {
+    ASSERT_TRUE(init_sanity());
+  }
+#endif
+  ObArenaAllocator test_allocator;
+  encoder_.reuse();
+  encoder_.ctx_.encoder_opt_.enable_bit_packing_ = true;
+
+  void *row_buf = test_allocator.alloc(sizeof(ObDatumRow) * SMALL_ROW_CNT);
+  ASSERT_TRUE(nullptr != row_buf);
+  ObDatumRow *rows = new (row_buf) ObDatumRow[SMALL_ROW_CNT];
+  for (int64_t i = 0; i < SMALL_ROW_CNT; ++i) {
+    ASSERT_EQ(OB_SUCCESS, rows[i].init(test_allocator, full_column_cnt_));
+  }
+  ObDatumRow row;
+  ASSERT_EQ(OB_SUCCESS, row.init(test_allocator, full_column_cnt_));
+
+  int64_t target_col = -1;
+  for (int64_t i = 0; i < full_column_cnt_; ++i) {
+    if (i >= ROWKEY_CNT && i < read_info_.get_rowkey_count()) {
+      continue;
+    }
+    const ObObjMeta &col_meta = col_descs_.at(i).col_type_;
+    const ObObjTypeClass tc = ob_obj_type_class(col_meta.get_type());
+    if (ObIntTC == tc || ObUIntTC == tc) {
+      target_col = i;
+      break;
+    }
+  }
+  ASSERT_NE(-1, target_col);
+
+  for (int64_t i = 0; i < SMALL_ROW_CNT; ++i) {
+    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(i, row));
+    if (1 == i) {
+      row.storage_datums_[target_col].set_null();
+    }
+    ASSERT_EQ(OB_SUCCESS, encoder_.append_row(row)) << "i: " << i;
+    rows[i].deep_copy(row, test_allocator);
+  }
+
+  ObMicroBlockDesc micro_block_desc;
+  ASSERT_EQ(OB_SUCCESS, encoder_.build_micro_block_desc_in_unittest(micro_block_desc));
+  ObMicroBlockDecoder decoder;
+  ObMicroBlockData data;
+  ASSERT_EQ(OB_SUCCESS, data.init_with_prepare_micro_header(
+      encoder_.data_buffer_.data(), encoder_.data_buffer_.length()));
+  ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_));
+
+  const int32_t col_offset = static_cast<int32_t>(target_col);
+  ASSERT_EQ(ObColumnHeader::RAW, decoder.decoders_[col_offset].decoder_->get_type());
+  const ObColumnDecoderCtx &decoder_ctx = *decoder.decoders_[col_offset].ctx_;
+  ASSERT_TRUE(decoder_ctx.is_bit_packing());
+  ASSERT_TRUE(decoder_ctx.has_extend_value());
+
+  const ObRawDecoder *raw_decoder =
+      static_cast<const ObRawDecoder *>(decoder.decoders_[col_offset].decoder_);
+  const unsigned char *col_data =
+      reinterpret_cast<const unsigned char *>(raw_decoder->meta_data_);
+  const int64_t extend_bits =
+      decoder_ctx.micro_block_header_->row_count_
+      * decoder_ctx.micro_block_header_->extend_value_bit_;
+  const int64_t extend_bytes = (extend_bits + CHAR_BIT - 1) / CHAR_BIT;
+  const int64_t bitpacked_bits =
+      decoder_ctx.col_header_->length_ * decoder_ctx.micro_block_header_->row_count_;
+  const int64_t total_bits = extend_bits + bitpacked_bits;
+  const int64_t total_bytes = (total_bits + CHAR_BIT - 1) / CHAR_BIT;
+  ASSERT_LT(extend_bytes, static_cast<int64_t>(sizeof(uint64_t)));
+  ASSERT_GT(total_bytes, extend_bytes);
+
+  ObRawDecoder *raw_decoder_mutable = const_cast<ObRawDecoder *>(raw_decoder);
+  void *sanity_buf = nullptr;
+#ifdef ENABLE_SANITY
+  const size_t sanity_alloc_size = sizeof(void *) + sizeof(uint64_t);
+  sanity_buf = sanity_mmap(sanity_alloc_size);
+  ASSERT_NE(nullptr, sanity_buf);
+  unsigned char *tight_meta = reinterpret_cast<unsigned char *>(sanity_buf) + sizeof(void *);
+  MEMCPY(tight_meta, col_data, extend_bytes);
+  SANITY_UNPOISON(tight_meta, static_cast<size_t>(extend_bytes));
+  SANITY_POISON(tight_meta + extend_bytes,
+      static_cast<size_t>(sizeof(uint64_t) - extend_bytes));
+  raw_decoder_mutable->meta_data_ = reinterpret_cast<char *>(tight_meta);
+#endif
+
+  ObArenaAllocator frame_allocator;
+  sql::ObExecContext exec_context(test_allocator);
+  sql::ObEvalCtx eval_ctx(exec_context);
+  const char *ptr_arr[BATCH_ROW_CNT];
+  uint32_t len_arr[BATCH_ROW_CNT];
+  const ObObjMeta &col_meta = col_descs_.at(target_col).col_type_;
+  sql::ObExpr col_expr;
+  ASSERT_EQ(OB_SUCCESS, VectorDecodeTestUtil::generate_column_output_expr(
+      BATCH_ROW_CNT, col_meta, VEC_FIXED, eval_ctx, col_expr, frame_allocator));
+
+  int32_t row_ids[BATCH_ROW_CNT];
+  for (int64_t i = 0; i < BATCH_ROW_CNT; ++i) {
+    row_ids[i] = 1;
+  }
+  ObVectorDecodeCtx vector_ctx(
+      ptr_arr, len_arr, row_ids, BATCH_ROW_CNT, 0, col_expr.get_vector_header(eval_ctx));
+  ASSERT_EQ(OB_SUCCESS, decoder.decoders_[col_offset].decode_vector(decoder.row_index_, vector_ctx));
+  for (int64_t vec_idx = 0; vec_idx < BATCH_ROW_CNT; ++vec_idx) {
+    const int64_t row_id = row_ids[vec_idx];
+    ASSERT_TRUE(VectorDecodeTestUtil::verify_vector_and_datum_match(
+        *(col_expr.get_vector_header(eval_ctx).get_vector()),
+        vec_idx, rows[row_id].storage_datums_[target_col]));
+  }
+#ifdef ENABLE_SANITY
+  SANITY_MUNMAP(sanity_buf, sanity_alloc_size);
+#endif
+}
+
+TEST_F(TestRawDecoder, batch_locate_var_len_row_with_tight_extend_bitmap)
+{
+#ifdef ENABLE_SANITY
+  if (0 == get_global_addr()) {
+    ASSERT_TRUE(init_sanity());
+  }
+#endif
+  ObMicroBlockHeader micro_block_header;
+  micro_block_header.extend_value_bit_ = 1;
+  ObColumnHeader column_header;
+  column_header.type_ = ObColumnHeader::RAW;
+  column_header.set_has_extend_value_attr();
+  column_header.extend_value_index_ = 0;
+
+  ObColumnDecoderCtx decoder_ctx;
+  ObObjMeta obj_meta;
+  decoder_ctx.fill(obj_meta, &micro_block_header, &column_header, &allocator_, 0);
+  ASSERT_TRUE(decoder_ctx.has_extend_value());
+
+  void *sanity_buf = nullptr;
+  unsigned char *row_data = nullptr;
+#ifdef ENABLE_SANITY
+  const size_t sanity_alloc_size = sizeof(void *) + sizeof(uint64_t);
+  sanity_buf = sanity_mmap(sanity_alloc_size);
+  ASSERT_NE(nullptr, sanity_buf);
+  row_data = reinterpret_cast<unsigned char *>(sanity_buf) + sizeof(void *);
+  SANITY_UNPOISON(row_data, 1);
+  SANITY_POISON(row_data + 1, sizeof(uint64_t) - 1);
+#else
+  row_data = reinterpret_cast<unsigned char *>(allocator_.alloc(1));
+  ASSERT_NE(nullptr, row_data);
+#endif
+  row_data[0] = 1;
+
+  TightExtendBitmapRowIndex row_index(reinterpret_cast<const char *>(row_data), 1);
+  const int32_t row_ids[1] = {0};
+  const char *ptr_arr[1];
+  uint32_t len_arr[1];
+  sql::VectorHeader vec_header;
+  ObVectorDecodeCtx vector_ctx(ptr_arr, len_arr, row_ids, 1, 0, vec_header);
+  bool has_null = false;
+  ObRawDecoder raw_decoder;
+  ASSERT_EQ(OB_SUCCESS, raw_decoder.batch_locate_var_len_row(
+      decoder_ctx, &row_index, vector_ctx, has_null));
+  ASSERT_TRUE(has_null);
+  ASSERT_EQ(nullptr, ptr_arr[0]);
+  ASSERT_EQ(0, len_arr[0]);
+#ifdef ENABLE_SANITY
+  SANITY_MUNMAP(sanity_buf, sanity_alloc_size);
+#endif
 }
 
 TEST_F(TestRawDecoder, opt_batch_decode_to_datum)

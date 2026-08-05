@@ -293,7 +293,6 @@ int ObIntegerBaseDiffDecoder::inner_decode_vector(
   int64_t data_offset = 0;
   const unsigned char *col_data = reinterpret_cast<const unsigned char *>(header_)
       + decoder_ctx.col_header_->length_;
-  const sql::ObBitVector *null_bitmap = nullptr;
   uint32_t vec_data_len = 0;
   if (OB_FAIL(get_uint_data_datum_len(
       ObDatum::get_obj_datum_map_type(decoder_ctx.obj_meta_.get_type()), vec_data_len))) {
@@ -301,7 +300,6 @@ int ObIntegerBaseDiffDecoder::inner_decode_vector(
   } else {
     VectorType *vector = static_cast<VectorType *>(vector_ctx.get_vector());
     if (decoder_ctx.has_extend_value()) {
-      null_bitmap = sql::to_bit_vector(col_data);
       data_offset = decoder_ctx.micro_block_header_->row_count_ * decoder_ctx.micro_block_header_->extend_value_bit_;
     }
     if (decoder_ctx.is_bit_packing()) {
@@ -310,7 +308,10 @@ int ObIntegerBaseDiffDecoder::inner_decode_vector(
       for (int64_t i = 0; i < vector_ctx.row_cap_; ++i) {
         const int64_t curr_vec_offset = vector_ctx.vec_offset_ + i;
         const int64_t row_id = vector_ctx.row_ids_[i];
-        if (!HAS_NULL || !null_bitmap->contain(row_id)) {
+        if (!HAS_NULL || !is_stored_extend_value(
+            col_data,
+            row_id * decoder_ctx.micro_block_header_->extend_value_bit_,
+            decoder_ctx.micro_block_header_->extend_value_bit_)) {
           int64_t unpacked_val = 0;
           unpack_func(
               col_data,
@@ -330,7 +331,10 @@ int ObIntegerBaseDiffDecoder::inner_decode_vector(
       for (int64_t i = 0; i < vector_ctx.row_cap_; ++i) {
         const int64_t curr_vec_offset = vector_ctx.vec_offset_ + i;
         const int64_t row_id = vector_ctx.row_ids_[i];
-        if (!HAS_NULL || !null_bitmap->contain(row_id)) {
+        if (!HAS_NULL || !is_stored_extend_value(
+            col_data,
+            row_id * decoder_ctx.micro_block_header_->extend_value_bit_,
+            decoder_ctx.micro_block_header_->extend_value_bit_)) {
           int64_t unpacked_val = 0;
           MEMCPY(&unpacked_val, col_data + data_offset + row_id * header_->length_, header_->length_);
           unpacked_val += base_;

@@ -12,6 +12,7 @@
 #include "common/ob_action_flag.h"
 #include "storage/blocksstable/ob_datum_row.h"
 #include "share/rc/ob_tenant_base.h"
+#include "ob_bit_stream.h"
 
 namespace oceanbase
 {
@@ -276,6 +277,19 @@ enum ObStoredExtValue
   STORED_NOPE = 2,
   STORED_EXT_MAX
 };
+
+// Returns true for any non-normal stored extend value, including NULL and NOP.
+// Callers that need to distinguish NULL from NOP must decode and inspect the
+// complete extend value instead of using this boolean helper.
+OB_INLINE bool is_stored_extend_value(
+    const unsigned char *data,
+    const int64_t bit_offset,
+    const int64_t bit_count)
+{
+  int64_t value = STORED_NOT_EXT;
+  ObBitStream::get(data, bit_offset, bit_count, value);
+  return STORED_NOT_EXT != value;
+}
 
 OB_INLINE ObStoredExtValue get_stored_ext_value(const ObDatum &datum)
 {

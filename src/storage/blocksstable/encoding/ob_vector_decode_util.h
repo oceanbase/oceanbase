@@ -145,11 +145,18 @@ struct DataDiscreteLocator
 
 struct DataFixedLocator
 {
-  explicit DataFixedLocator(const int32_t *&row_ids, const char *&fixed_buf, const int64_t len, const void *null_bitmap)
-    : row_ids_(row_ids), fixed_buf_(fixed_buf), len_(len)
-  {
-    null_bitmap_ = nullptr == null_bitmap ? nullptr : sql::to_bit_vector(null_bitmap);
-  }
+  explicit DataFixedLocator(
+      const int32_t *&row_ids,
+      const char *&fixed_buf,
+      const int64_t len,
+      const unsigned char *extend_data,
+      const int64_t extend_value_bit)
+    : row_ids_(row_ids),
+      fixed_buf_(fixed_buf),
+      len_(len),
+      extend_data_(extend_data),
+      extend_value_bit_(extend_value_bit)
+  {}
   ~DataFixedLocator() = default;
   inline void get_data(const int64_t idx, const char *&__restrict data, uint32_t &__restrict len) const
   {
@@ -159,13 +166,15 @@ struct DataFixedLocator
   inline void get_data(const int64_t idx, const char *&__restrict data, uint32_t &__restrict len, bool &__restrict is_null) const
   {
     get_data(idx, data, len);
-    is_null = null_bitmap_->contain(row_ids_[idx]);
+    is_null = nullptr != extend_data_ && is_stored_extend_value(
+        extend_data_, row_ids_[idx] * extend_value_bit_, extend_value_bit_);
   }
 
   const int32_t *__restrict row_ids_;
   const char *__restrict fixed_buf_;
   const int64_t len_;
-  const sql::ObBitVector *__restrict null_bitmap_;
+  const unsigned char *__restrict extend_data_;
+  const int64_t extend_value_bit_;
 };
 
 struct DataConstLoactor
@@ -718,7 +727,10 @@ struct LoadVectorDataFunc_T<common::ObDiscreteFormat, ValueType, DataFixedLocato
       for (int64_t i = 0; i < row_cap; ++i) {
         const int64_t row_id = row_ids[i];
         const int64_t curr_vec_offset = vec_offset + i;
-        if (data_locator.null_bitmap_->contain(row_id)) {
+        if (is_stored_extend_value(
+            data_locator.extend_data_,
+            row_id * data_locator.extend_value_bit_,
+            data_locator.extend_value_bit_)) {
           vector.set_null(curr_vec_offset);
         } else {
           ptr_arr[curr_vec_offset] = const_cast<char *>(fixed_buf + row_id * fix_len);
@@ -913,7 +925,10 @@ struct LoadVectorDataFromFixedFunc_T
       for (int64_t i = 0; i < row_cap; ++i) {
         const int64_t row_id = row_ids[i];
         const int64_t curr_vec_offset = vec_offset + i;
-        if (data_locator.null_bitmap_->contain(row_id)) {
+        if (is_stored_extend_value(
+            data_locator.extend_data_,
+            row_id * data_locator.extend_value_bit_,
+            data_locator.extend_value_bit_)) {
           vector.set_null(curr_vec_offset);
         } else {
           vec_arr[i] = store_arr[row_id];

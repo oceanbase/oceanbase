@@ -283,9 +283,7 @@ int ObHexStringDecoder::inner_decode_vector(
     LOG_WARN("Failed to allocate hex unpack memory", K(ret), KPC_(header), K(vector_ctx));
   } else if (decoder_ctx.is_fix_length()) {
     int64_t data_offset = 0;
-    const sql::ObBitVector *null_bitmap = nullptr;
     if (decoder_ctx.has_extend_value()) {
-      null_bitmap = sql::to_bit_vector(col_data);
       data_offset = decoder_ctx.micro_block_header_->row_count_
           * decoder_ctx.micro_block_header_->extend_value_bit_;
       data_offset = (data_offset + CHAR_BIT - 1) / CHAR_BIT;
@@ -293,7 +291,10 @@ int ObHexStringDecoder::inner_decode_vector(
     for (int64_t i = 0; i < vector_ctx.row_cap_; ++i) {
       const int64_t row_id = vector_ctx.row_ids_[i];
       const int64_t curr_vec_offset = vector_ctx.vec_offset_ + i;
-      if (decoder_ctx.has_extend_value() && null_bitmap->contain(row_id)) {
+      if (decoder_ctx.has_extend_value() && is_stored_extend_value(
+          col_data,
+          row_id * decoder_ctx.micro_block_header_->extend_value_bit_,
+          decoder_ctx.micro_block_header_->extend_value_bit_)) {
         vector->set_null(curr_vec_offset);
       } else {
         const unsigned char *cell_data = reinterpret_cast<const unsigned char *>(

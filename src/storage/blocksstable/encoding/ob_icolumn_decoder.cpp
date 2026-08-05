@@ -264,11 +264,10 @@ int ObIColumnDecoder::set_null_vector_from_fixed_column(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("multi extend value bits, not a null bitmap");
   } else {
-    const sql::ObBitVector *null_bitset = sql::to_bit_vector(col_data);
     for (int64_t i = 0; i < row_cap; ++i) {
       const int64_t row_id = row_ids[i];
       const int64_t curr_vec_offset = vec_offset + i;
-      if (null_bitset->contain(row_id)) {
+      if (is_stored_extend_value(col_data, row_id, 1)) {
         vector.set_null(curr_vec_offset);
       }
     }
@@ -295,8 +294,10 @@ int ObIColumnDecoder::batch_locate_var_len_row(
   } else if (ctx.has_extend_value()) {
     const int64_t null_idx = ctx.col_header_->extend_value_index_;
     for (int64_t i = 0; OB_SUCC(ret) && i < vector_ctx.row_cap_; ++i) {
-      const sql::ObBitVector *null_bitset = sql::to_bit_vector(vector_ctx.ptr_arr_[i]);
-      if (null_bitset->contain(null_idx)) {
+      if (is_stored_extend_value(
+          reinterpret_cast<const unsigned char *>(vector_ctx.ptr_arr_[i]),
+          null_idx,
+          1)) {
         vector_ctx.ptr_arr_[i] = nullptr;
         vector_ctx.len_arr_[i] = 0;
         has_null = true;
