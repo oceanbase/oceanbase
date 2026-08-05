@@ -855,6 +855,7 @@ public:
   const common::ObTimeZoneInfo *get_timezone_info() const { return tz_info_wrap_.get_time_zone_info(); }
   const common::ObTimeZoneInfoWrap &get_tz_info_wrap() const { return tz_info_wrap_; }
   inline int set_tz_info_wrap(const common::ObTimeZoneInfoWrap &other) { return tz_info_wrap_.deep_copy(other); }
+  void set_tz_info_map(const common::ObTZInfoMap *tz_info_map) { tz_info_wrap_.set_tz_info_map(tz_info_map); }
   inline void set_nls_formats(const common::ObString *nls_formats)
   {
     sys_vars_cache_.set_nls_date_format(nls_formats[ObNLSFormatEnum::NLS_DATE]);

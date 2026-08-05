@@ -8,6 +8,7 @@
 #include "ob_inner_sql_rpc_processor.h"
 #include "ob_inner_sql_result.h"
 #include "ob_resource_inner_sql_connection_pool.h"
+#include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
 #include "storage/ob_inner_tablet_access_service.h"
 
@@ -486,6 +487,19 @@ int ObInnerSqlRpcP::set_session_param_to_conn(
       LOG_WARN("fail to set sql mode", K(ret), K(transmit_arg));
     } else if (transmit_arg.get_tz_info_wrap().is_valid() && OB_FAIL(conn->set_tz_info_wrap(transmit_arg.get_tz_info_wrap()))) {
       LOG_WARN("fail to set tz info wrap", K(ret), K(transmit_arg));
+    }
+    // tz_info_map is a process-local pointer not included in serialization,
+    // so after RPC it becomes NULL. Restore from the local tenant timezone manager
+    // unconditionally — SQL resolution may reference named timezones in column defaults
+    // even when the session's own timezone is offset-based.
+    if (OB_SUCC(ret)) {
+      ObTZMapWrap tz_map_wrap;
+      if (OB_FAIL(OTTZ_MGR.get_tenant_tz(transmit_arg.get_tenant_id(), tz_map_wrap))) {
+        LOG_WARN("get tenant tz failed", K(ret), K(transmit_arg.get_tenant_id()));
+      } else {
+        static_cast<observer::ObInnerSQLConnection *>(conn)
+            ->get_session().set_tz_info_map(tz_map_wrap.get_tz_map());
+      }
     }
   }
   return ret;
