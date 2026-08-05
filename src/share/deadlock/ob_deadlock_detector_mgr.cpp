@@ -540,8 +540,11 @@ uint64_t ObDeadLockDetectorMgr::calculate_cycle_hash_(
   uint64_t hash = 0;
   const ObSArray<ObDetectorInnerReportInfo> &collected_info = collect_info_msg.get_collected_info();
   for (int64_t idx = 0; idx < collected_info.count(); ++idx) {
-    const ObAddr &addr = collected_info.at(idx).get_addr();
-    const uint64_t id = collected_info.at(idx).get_detector_id();
+    const ObDetectorInnerReportInfo &info = collected_info.at(idx);
+    const uint64_t tenant_id = info.get_tenant_id();
+    const ObAddr &addr = info.get_addr();
+    const uint64_t id = info.get_detector_id();
+    hash = murmurhash(&tenant_id, sizeof(tenant_id), hash);
     hash = murmurhash(&addr, sizeof(addr), hash);
     hash = murmurhash(&id, sizeof(id), hash);
   }
@@ -590,21 +593,199 @@ int ObDeadLockDetectorMgr::check_and_record_cycle_hash_(const uint64_t hash)
   return reported_cycle_record.check_and_push(hash);
 }
 
-int get_last_trans_blocked_sql_seq(const ObSArray<ObDetectorInnerReportInfo> &collected_info_array,
+static void collect_cycle_audit_exec_addrs_(
+  const ObSArray<ObDetectorInnerReportInfo> &collected_info_array,
+  const int64_t waiter_idx,
+  ObIArray<ObAddr> &addrs)
+{
+  addrs.reset();
+  if (waiter_idx >= 0 && waiter_idx < collected_info_array.count()) {
+    const ObAddr &waiter_addr = collected_info_array.at(waiter_idx).get_addr();
+    if (waiter_addr.is_valid()) {
+      (void)addrs.push_back(waiter_addr);
+    }
+  }
+  for (int64_t i = 0; i < collected_info_array.count(); ++i) {
+    if (i == waiter_idx) {
+      continue;
+    }
+    const ObAddr &addr = collected_info_array.at(i).get_addr();
+    if (!addr.is_valid()) {
+      continue;
+    }
+    bool exists = false;
+    for (int64_t j = 0; j < addrs.count(); ++j) {
+      if (addrs.at(j) == addr) {
+        exists = true;
+        break;
+      }
+    }
+    if (!exists) {
+      (void)addrs.push_back(addr);
+    }
+  }
+}
+
+static int get_wait_sql_from_report_info_(
+  const ObDetectorUserReportInfo &user_report_info,
+  ObString &wait_sql)
+{
+  int ret = OB_ENTRY_NOT_EXIST;
+  const ObIArray<ObString> &names = user_report_info.get_extra_columns_names();
+  const ObIArray<ObString> &values = user_report_info.get_extra_columns_values();
+  wait_sql.reset();
+  for (int64_t i = 0; i < names.count() && i < values.count(); ++i) {
+    if (names.at(i) == ObString("wait_sql")) {
+      wait_sql = values.at(i);
+      ret = OB_SUCCESS;
+      break;
+    }
+  }
+  return ret;
+}
+
+static bool is_same_wait_sql_body_(const ObString &audit_query_sql, const ObString &wait_sql_with_trace)
+{
+  if (audit_query_sql.empty() || OB_ISNULL(audit_query_sql.ptr())
+      || wait_sql_with_trace.empty() || OB_ISNULL(wait_sql_with_trace.ptr())) {
+    return false;
+  }
+  const char *lhs_ptr = audit_query_sql.ptr();
+  const int64_t lhs_len = audit_query_sql.length();
+  const char *rhs_ptr = wait_sql_with_trace.ptr();
+  const char *rhs_end = wait_sql_with_trace.ptr() + wait_sql_with_trace.length();
+  const char *colon = static_cast<const char *>(memchr(rhs_ptr, ':', wait_sql_with_trace.length()));
+  if (OB_NOT_NULL(colon) && colon + 1 < rhs_end) {
+    rhs_ptr = colon + 1;
+  }
+  const int64_t rhs_len = rhs_end - rhs_ptr;
+  return lhs_len == rhs_len && lhs_len > 0 && 0 == MEMCMP(lhs_ptr, rhs_ptr, lhs_len);
+}
+
+static int pick_hold_sql_from_merged_history_(
+  const ObIArray<ObTuple<ObStringHolder, ObStringHolder, int64_t>> &sql_history,
+  const transaction::ObTxSEQ &hold_seq,
+  const ObString &wait_sql_to_exclude,
+  ObStringHolder &holding_sql_request_time,
+  ObStringHolder &holding_sql)
+{
+  int ret = OB_ENTRY_NOT_EXIST;
+  const int64_t seq_upper_bound = hold_seq.is_valid() ? hold_seq.get_seq() : INT64_MAX;
+  int64_t best_seq = -1;
+  int64_t best_idx = -1;
+  for (int64_t i = 0; i < sql_history.count(); ++i) {
+    const int64_t seq = sql_history.at(i).template element<2>();
+    const ObString &sql = sql_history.at(i).template element<1>().get_ob_string();
+    if (sql.empty() || seq > seq_upper_bound) {
+      continue;
+    }
+    if (!wait_sql_to_exclude.empty()
+        && (sql == wait_sql_to_exclude || is_same_wait_sql_body_(sql, wait_sql_to_exclude))) {
+      continue;
+    }
+    if (seq > best_seq) {
+      best_seq = seq;
+      best_idx = i;
+    }
+  }
+  if (best_idx >= 0) {
+    if (OB_FAIL(holding_sql_request_time.assign(sql_history.at(best_idx).template element<0>()))) {
+    } else if (OB_FAIL(holding_sql.assign(sql_history.at(best_idx).template element<1>()))) {
+    } else {
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
+}
+
+static bool is_associated_zero_visitor_(const ObString &visitor)
+{
+  if (visitor.empty() || OB_ISNULL(visitor.ptr())) {
+    return false;
+  }
+  static const ObString marker("(associated:0)");
+  return OB_NOT_NULL(memmem(visitor.ptr(), visitor.length(), marker.ptr(), marker.length()));
+}
+
+static bool parse_trans_detector_visitor_(
+  const ObDetectorInnerReportInfo &info,
+  ObStringHolder &sess_id,
+  ObStringHolder &trans_id)
+{
+  bool is_trans_detector = false;
+  const ObString &visitor = info.get_user_report_info().get_resource_visitor();
+  ObSEArray<ObStringHolder, 3> match_result;
+  if (OB_SUCCESS == ObOccamRegex::regex_match(visitor, "\\{session_id:([0-9]+).*txid:([0-9]+)\\}", match_result)
+      && match_result.count() == 3
+      && OB_SUCCESS == sess_id.assign(match_result[1])
+      && OB_SUCCESS == trans_id.assign(match_result[2])) {
+    is_trans_detector = true;
+  }
+  return is_trans_detector;
+}
+
+static int get_last_trans_blocked_sql_seq(const ObSArray<ObDetectorInnerReportInfo> &collected_info_array,
                                    const int64_t current_idx,
                                    transaction::ObTxSEQ &this_tx_hold_lock_seq) {
-  int ret = OB_SUCCESS;
-  int64_t last_idx = current_idx - 1;
-  if (collected_info_array.empty() || collected_info_array.count() == 1) {
-    ret = OB_ERR_UNEXPECTED;
-    DETECT_LOG(WARN, "not expected collected info size", K(collected_info_array));
-  } else if (last_idx == -1) {
-    last_idx = collected_info_array.count() - 1;
+  int ret = OB_ENTRY_NOT_EXIST;
+  const int64_t count = collected_info_array.count();
+  if (count <= 1 || current_idx < 0 || current_idx >= count) {
+    ret = OB_INVALID_ARGUMENT;
+    DETECT_LOG(WARN, "not expected collected info size", K(collected_info_array), K(current_idx));
+  } else {
+    int64_t prev_idx = (current_idx + count - 1) % count;
+    for (int64_t i = 0; i < count; ++i) {
+      if (prev_idx == current_idx) {
+        break;
+      }
+      if (collected_info_array.at(prev_idx).get_user_report_info().get_module_name() == ObString("transaction")) {
+        this_tx_hold_lock_seq = collected_info_array.at(prev_idx).get_user_report_info().get_blocked_seq();
+        if (this_tx_hold_lock_seq.is_valid()) {
+          ret = OB_SUCCESS;
+          break;
+        }
+      }
+      prev_idx = (prev_idx + count - 1) % count;
+    }
   }
-  if (OB_SUCC(ret)) {
-    const ObDetectorInnerReportInfo &collected_info = collected_info_array[last_idx];
-    const ObDetectorUserReportInfo &user_report_info = collected_info.get_user_report_info();
-    this_tx_hold_lock_seq = user_report_info.get_blocked_seq();
+  return ret;
+}
+
+static int get_hold_seq_from_canonical_local_trans_(
+  const ObSArray<ObDetectorInnerReportInfo> &collected_info_array,
+  const int64_t current_idx,
+  const ObStringHolder &trans_id,
+  transaction::ObTxSEQ &holding_seq)
+{
+  int ret = OB_ENTRY_NOT_EXIST;
+  if (current_idx < 0 || current_idx >= collected_info_array.count()) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    const ObString &current_visitor = collected_info_array.at(current_idx).get_user_report_info().get_resource_visitor();
+    if (!is_associated_zero_visitor_(current_visitor)) {
+      ret = OB_INVALID_ARGUMENT;
+    } else {
+      for (int64_t idx = 0; idx < collected_info_array.count() && OB_SUCCESS != ret; ++idx) {
+        if (idx == current_idx) {
+          continue;
+        }
+        const ObDetectorInnerReportInfo &candidate_info = collected_info_array.at(idx);
+        const ObString &candidate_visitor = candidate_info.get_user_report_info().get_resource_visitor();
+        if (is_associated_zero_visitor_(candidate_visitor)) {
+          continue;
+        }
+        ObStringHolder candidate_sess_id;
+        ObStringHolder candidate_trans_id;
+        if (!parse_trans_detector_visitor_(candidate_info, candidate_sess_id, candidate_trans_id)) {
+          continue;
+        } else if (candidate_trans_id.get_ob_string() != trans_id.get_ob_string()) {
+          continue;
+        } else if (OB_FAIL(get_last_trans_blocked_sql_seq(collected_info_array, idx, holding_seq))) {
+          DETECT_LOG(INFO, "failed to fetch hold seq from canonical local trans node",
+                     KR(ret), K(idx), K(current_idx), K(candidate_info));
+        }
+      }
+    }
   }
   return ret;
 }
@@ -614,33 +795,50 @@ void ObDeadLockDetectorMgr::get_trans_history_sql_from_audit_(const ObDeadLockCo
   int ret = OB_SUCCESS;
   const ObSArray<ObDetectorInnerReportInfo> &collected_info_array = collect_info_msg.get_collected_info();
   if (collected_info_array.empty() || collected_info_array.count() == 1) {
-    ret = OB_ERR_UNEXPECTED;
-    DETECT_LOG(WARN, "not expected collected info size", K(collected_info_array));
+    DETECT_LOG(WARN, "not expected collected info size", K(collected_info_array), K(collect_info_msg));
   } else {
-    for (int64_t idx = 0; idx < collected_info_array.count() && OB_SUCC(ret); ++idx) {
+    for (int64_t idx = 0; idx < collected_info_array.count(); ++idx) {
       const ObDetectorInnerReportInfo &collected_info = collected_info_array[idx];
       ObDetectorUserReportInfo &user_report_info = const_cast<ObDetectorUserReportInfo &>(collected_info.get_user_report_info());
       ObStringHolder sess_id;
       ObStringHolder trans_id;
-      int64_t last_idx = (idx + collected_info_array.count() - 1) % collected_info_array.count();
-      transaction::ObTxSEQ holding_seq = collected_info_array[last_idx].get_user_report_info().get_blocked_seq();
+      transaction::ObTxSEQ holding_seq;
       if (is_trans_detector_(collected_info, sess_id, trans_id)) {
+        int tmp_ret = get_last_trans_blocked_sql_seq(collected_info_array, idx, holding_seq);
+        if (OB_SUCCESS != tmp_ret) {
+          int tmp_ret2 = get_hold_seq_from_canonical_local_trans_(collected_info_array, idx, trans_id, holding_seq);
+          if (OB_SUCCESS != tmp_ret2) {
+            DETECT_LOG(WARN, "no prev trans blocked_seq for hold_sql", KR(tmp_ret), KR(tmp_ret2), K(idx), K(collected_info));
+            continue;
+          } else {
+            DETECT_LOG(INFO, "resolved hold seq from canonical local trans node", K(idx), K(collected_info), K(holding_seq));
+          }
+        }
+        if (!holding_seq.is_valid()) {
+          DETECT_LOG(WARN, "resolved hold seq is invalid", K(idx), K(collected_info), K(holding_seq));
+          continue;
+        }
+        ObString wait_sql_to_exclude;
+        (void)get_wait_sql_from_report_info_(user_report_info, wait_sql_to_exclude);
+        ObSEArray<ObAddr, 8> audit_exec_addrs;
+        collect_cycle_audit_exec_addrs_(collected_info_array, idx, audit_exec_addrs);
         ObStringHolder holding_sql;
         ObStringHolder hold_sql_request_time;
         ObSharedGuard<char> holding_sql_guard;
         ObSharedGuard<char> hold_sql_request_time_guard;
-        if (OB_FAIL(get_holding_sql(sess_id, trans_id, holding_seq, hold_sql_request_time, holding_sql))) {
-          DETECT_LOG(WARN, "fail to get holding sql", KR(ret), K(collected_info), K(collect_info_msg), K(holding_seq), K(idx), K(last_idx));
-        } else if (OB_FAIL(convert_string_holder_to_shared_guard_(holding_sql, holding_sql_guard))) {
-          DETECT_LOG(WARN, "failed to convert string holder to shared guard", KR(ret), K(holding_sql));
-        } else if (OB_FAIL(convert_string_holder_to_shared_guard_(hold_sql_request_time, hold_sql_request_time_guard))) {
-          DETECT_LOG(WARN, "failed to convert string holder to shared guard", KR(ret), K(hold_sql_request_time));
-        } else if (OB_FAIL(user_report_info.append_column("hold_sql_request_time", hold_sql_request_time_guard))) {
-          DETECT_LOG(WARN, "fail to appened request time", KR(ret), K(collected_info), K(collect_info_msg));
-        } else if (OB_FAIL(user_report_info.append_column("hold_sql", holding_sql_guard))) {
-          DETECT_LOG(WARN, "fail to appened hold sql", KR(ret), K(collected_info), K(collect_info_msg));
+        if (OB_SUCCESS != (tmp_ret = get_holding_sql(trans_id, holding_seq, hold_sql_request_time, holding_sql,
+                                                     collected_info.get_tenant_id(), wait_sql_to_exclude, &audit_exec_addrs))) {
+          DETECT_LOG(WARN, "fail to get holding sql", KR(tmp_ret), K(collected_info), K(collect_info_msg), K(holding_seq), K(idx));
+        } else if (OB_SUCCESS != (tmp_ret = convert_string_holder_to_shared_guard_(holding_sql, holding_sql_guard))) {
+          DETECT_LOG(WARN, "failed to convert string holder to shared guard", KR(tmp_ret), K(holding_sql));
+        } else if (OB_SUCCESS != (tmp_ret = convert_string_holder_to_shared_guard_(hold_sql_request_time, hold_sql_request_time_guard))) {
+          DETECT_LOG(WARN, "failed to convert string holder to shared guard", KR(tmp_ret), K(hold_sql_request_time));
+        } else if (OB_SUCCESS != (tmp_ret = user_report_info.append_column("hold_sql_request_time", hold_sql_request_time_guard))) {
+          DETECT_LOG(WARN, "fail to appened request time", KR(tmp_ret), K(collected_info), K(collect_info_msg));
+        } else if (OB_SUCCESS != (tmp_ret = user_report_info.append_column("hold_sql", holding_sql_guard))) {
+          DETECT_LOG(WARN, "fail to appened hold sql", KR(tmp_ret), K(collected_info), K(collect_info_msg));
         } else {
-          DETECT_LOG(INFO, "get trans sql history done", KR(ret), K(collected_info), K(holding_sql));
+          DETECT_LOG(INFO, "get trans sql history done", KR(tmp_ret), K(collected_info), K(holding_sql));
         }
       }
     }
@@ -667,78 +865,159 @@ bool ObDeadLockDetectorMgr::is_trans_detector_(const ObDetectorInnerReportInfo &
   return is_trans_detector;
 }
 
-int ObDeadLockDetectorMgr::get_sql_history_(const ObStringHolder &sess_id,
+int ObDeadLockDetectorMgr::get_sql_history_(const uint64_t query_tenant_id,
                                             const ObStringHolder &trans_id,
-                                            ObIArray<ObTuple<ObStringHolder, ObStringHolder, int64_t>> &sql_hisory)
+                                            ObIArray<ObTuple<ObStringHolder, ObStringHolder, int64_t>> &sql_hisory,
+                                            const ObAddr *exec_sql_addr)
 {
   int ret = OB_SUCCESS;
   constexpr int64_t BUFFER_SIZE = 512;
   ObCStringHelper helper;
   char condition_buffer[BUFFER_SIZE] = {0};
-  if (OB_FAIL(databuff_printf(condition_buffer,
-                              BUFFER_SIZE,
-                              "where session_id = %s and transaction_id = %s order by request_time limit 128",
-                              helper.convert(sess_id),
-                              helper.convert(trans_id)))) {
-    DETECT_LOG(WARN, "fail to construct where condition", KR(ret), K(sess_id), K(trans_id));
+  char svr_ip[MAX_IP_ADDR_LENGTH] = {0};
+  const uint64_t tenant_id = (OB_INVALID_ID == query_tenant_id) ? MTL_ID() : query_tenant_id;
+  if (OB_NOT_NULL(exec_sql_addr) && exec_sql_addr->is_valid() && exec_sql_addr->get_port() > 0
+      && exec_sql_addr->ip_to_string(svr_ip, MAX_IP_ADDR_LENGTH)) {
+    if (OB_FAIL(databuff_printf(condition_buffer,
+                               BUFFER_SIZE,
+                               "where tenant_id = %lu and transaction_id = %s "
+                               "and svr_ip = '%s' and svr_port = %d "
+                               "and is_executor_rpc = 0 and is_inner_sql = 0 order by request_time limit 128 ",
+                               tenant_id, helper.convert(trans_id), svr_ip, exec_sql_addr->get_port()))) {
+      DETECT_LOG(WARN, "fail to construct where condition", KR(ret), K(tenant_id), K(trans_id), KPC(exec_sql_addr));
+    }
+  } else if (OB_FAIL(databuff_printf(condition_buffer,
+                                     BUFFER_SIZE,
+                                     "where tenant_id = %lu and transaction_id = %s "
+                                     "and is_executor_rpc = 0 and is_inner_sql = 0 order by request_time limit 128 ",
+                                     tenant_id, helper.convert(trans_id)))) {
+    DETECT_LOG(WARN, "fail to construct where condition", KR(ret), K(tenant_id), K(trans_id));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_NOT_NULL(exec_sql_addr) && exec_sql_addr->is_valid()
+             && *exec_sql_addr != GCTX.self_addr()) {
+    ObSqlString sql;
+    if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      DETECT_LOG(WARN, "GCTX.sql_proxy_ is null", KR(ret), K(tenant_id), K(trans_id), KPC(exec_sql_addr));
+    } else if (OB_FAIL(sql.append_fmt("SELECT CAST(USEC_TO_TIME(request_time) AS CHAR(32)), query_sql, seq_num "
+                                      "FROM %s %s",
+                                      share::OB_ALL_VIRTUAL_SQL_AUDIT_TNAME,
+                                      condition_buffer))) {
+      DETECT_LOG(WARN, "fail to construct sql", KR(ret), K(tenant_id), K(trans_id), K(condition_buffer));
+    } else {
+      HEAP_VAR(ObMySQLProxy::MySQLResult, res) {
+        sqlclient::ObMySQLResult *result = nullptr;
+        if (OB_FAIL(GCTX.sql_proxy_->read(res, OB_SYS_TENANT_ID, sql.ptr(), exec_sql_addr))) {
+          DETECT_LOG(WARN, "fail to read sql audit remotely", KR(ret), K(tenant_id), K(trans_id), K(sql), KPC(exec_sql_addr));
+        } else if (OB_ISNULL(result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          DETECT_LOG(WARN, "fail to get sql result", KR(ret), K(tenant_id), K(trans_id), K(sql), KPC(exec_sql_addr));
+        } else {
+          while (OB_SUCC(ret)) {
+            if (OB_FAIL(result->next())) {
+              if (OB_ITER_END == ret) {
+                ret = OB_SUCCESS;
+                break;
+              } else {
+                DETECT_LOG(WARN, "fail to iterate sql audit result", KR(ret), K(tenant_id), K(trans_id), KPC(exec_sql_addr));
+              }
+            } else {
+              ObTuple<ObStringHolder, ObStringHolder, int64_t> row;
+              ObString request_time;
+              ObString query_sql;
+              int64_t seq_num = 0;
+              if (OB_FAIL(result->get_varchar(static_cast<int64_t>(0), request_time))) {
+                DETECT_LOG(WARN, "fail to get request_time", KR(ret), K(tenant_id), K(trans_id), KPC(exec_sql_addr));
+              } else if (OB_FAIL(row.template element<0>().assign(request_time))) {
+                DETECT_LOG(WARN, "fail to assign request_time", KR(ret), K(tenant_id), K(trans_id), KPC(exec_sql_addr));
+              } else if (OB_FAIL(result->get_varchar(static_cast<int64_t>(1), query_sql))) {
+                DETECT_LOG(WARN, "fail to get query_sql", KR(ret), K(tenant_id), K(trans_id), KPC(exec_sql_addr));
+              } else if (OB_FAIL(row.template element<1>().assign(query_sql))) {
+                DETECT_LOG(WARN, "fail to assign query_sql", KR(ret), K(tenant_id), K(trans_id), KPC(exec_sql_addr));
+              } else if (OB_FAIL(result->get_int(static_cast<int64_t>(2), seq_num))) {
+                DETECT_LOG(WARN, "fail to get seq_num", KR(ret), K(tenant_id), K(trans_id), KPC(exec_sql_addr));
+              } else {
+                row.template element<2>() = seq_num;
+                if (OB_FAIL(sql_hisory.push_back(row))) {
+                  DETECT_LOG(WARN, "fail to push sql history row", KR(ret), K(tenant_id), K(trans_id), KPC(exec_sql_addr));
+                }
+              }
+            }
+          }
+        }
+      }
+    }
   } else if (OB_FAIL(ObTableAccessHelper::read_multi_row(OB_SYS_TENANT_ID,
                                                          {"CAST(USEC_TO_TIME(request_time) AS CHAR(32))", "query_sql", "seq_num"},
                                                          share::OB_ALL_VIRTUAL_SQL_AUDIT_TNAME,
                                                          condition_buffer,
                                                          sql_hisory))) {
-    DETECT_LOG(WARN, "fail to read multi row", KR(ret), K(sess_id), K(trans_id), K(condition_buffer));
+    DETECT_LOG(WARN, "fail to read multi row", KR(ret), K(tenant_id), K(trans_id), K(condition_buffer));
   }
   return ret;
 }
 
-int ObDeadLockDetectorMgr::get_holding_sql(const ObStringHolder &sess_id,
-                                           const ObStringHolder &trans_id,
+int ObDeadLockDetectorMgr::get_holding_sql(const ObStringHolder &trans_id,
                                            const transaction::ObTxSEQ &hold_seq,
                                            ObStringHolder &holding_sql_request_time,
-                                           ObStringHolder &holding_sql)
+                                           ObStringHolder &holding_sql,
+                                           const uint64_t query_tenant_id,
+                                           const ObString &wait_sql_to_exclude,
+                                           const ObIArray<ObAddr> *audit_exec_addrs)
 {
-  #define PRINT_WRAPPER KR(ret), K(sess_id), K(trans_id), K(hold_seq), K(holding_sql_request_time), K(holding_sql)
+  #define PRINT_WRAPPER KR(ret), K(trans_id), K(hold_seq), K(query_tenant_id), K(wait_sql_to_exclude), KPC(audit_exec_addrs), K(holding_sql_request_time), K(holding_sql)
   int ret = OB_SUCCESS;
-  constexpr int64_t CONDITION_BUFFER_SIZE = 512;
-  char condition_buffer[CONDITION_BUFFER_SIZE] = {0};
   char *sql_translate_buffer = nullptr;
   constexpr int64_t BUFFER_SIZE = 1_MB;
-  int64_t pos = 0;
-  ObCStringHelper helper;
-  if (OB_FAIL(databuff_printf(condition_buffer,
-                              BUFFER_SIZE,
-                              "where session_id = %s and transaction_id = %s and seq_num <= %ld order by seq_num desc limit 1",
-                              helper.convert(sess_id),
-                              helper.convert(trans_id),
-                              hold_seq.get_seq()))) {
-    DETECT_LOG(WARN, "fail to construct where condition", PRINT_WRAPPER);
-  } else if (OB_FAIL(ObTableAccessHelper::read_single_row(OB_SYS_TENANT_ID,
-                                                          {"CAST(USEC_TO_TIME(request_time) AS CHAR(32))", "query_sql"},
-                                                          share::OB_ALL_VIRTUAL_SQL_AUDIT_TNAME,
-                                                          condition_buffer,
-                                                          holding_sql_request_time,
-                                                          holding_sql))) {
-    DETECT_LOG(WARN, "fail to read single row", PRINT_WRAPPER);
-    int tmp_ret = OB_SUCCESS;
-    ObArray<ObTuple<ObStringHolder, ObStringHolder, int64_t>> sql_hisory;
-    if (OB_TMP_FAIL(get_sql_history_(sess_id, trans_id, sql_hisory))) {
-      DETECT_LOG(WARN, "failed to get sql history in transaction", KR(tmp_ret), K(sql_hisory), PRINT_WRAPPER);
-    } else {
-      DETECT_LOG(INFO, "print trans all sql history", K(sql_hisory), PRINT_WRAPPER);
+  const uint64_t tenant_id = (OB_INVALID_ID == query_tenant_id) ? MTL_ID() : query_tenant_id;
+  ObArray<ObTuple<ObStringHolder, ObStringHolder, int64_t>> merged_sql_history;
+  if (OB_NOT_NULL(audit_exec_addrs) && audit_exec_addrs->count() > 0) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < audit_exec_addrs->count(); ++i) {
+      const ObAddr &audit_addr = audit_exec_addrs->at(i);
+      ObArray<ObTuple<ObStringHolder, ObStringHolder, int64_t>> part_sql_history;
+      const ObAddr *audit_addr_ptr = audit_addr.is_valid() ? &audit_addr : nullptr;
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(get_sql_history_(tenant_id, trans_id, part_sql_history, audit_addr_ptr))) {
+        DETECT_LOG(WARN, "get sql history from one audit addr failed", KR(tmp_ret), K(trans_id), K(audit_addr));
+      } else {
+        for (int64_t j = 0; OB_SUCC(ret) && j < part_sql_history.count(); ++j) {
+          if (OB_FAIL(merged_sql_history.push_back(part_sql_history.at(j)))) {
+            DETECT_LOG(WARN, "merge sql audit history failed", KR(ret), K(trans_id), K(audit_addr));
+            break;
+          }
+        }
+      }
     }
-  } else if (OB_ISNULL(sql_translate_buffer = (char *)mtl_malloc(BUFFER_SIZE, "DETECT.sql"))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    DETECT_LOG(WARN, "fail to alloc heap memory", PRINT_WRAPPER);
   } else {
-    transaction::ObTransDeadlockDetectorAdapter::
-    copy_str_and_translate_apostrophe(holding_sql.get_ob_string().ptr(),
-                                      holding_sql.get_ob_string().length(),
-                                      sql_translate_buffer,
-                                      BUFFER_SIZE);
-    if (OB_FAIL(holding_sql.assign(ObString(sql_translate_buffer)))) {
-      DETECT_LOG(WARN, "failed to translate sql", PRINT_WRAPPER);
+    // Fallback: cluster-wide audit scan (tenant_id + transaction_id), same as base when no svr filter.
+    if (OB_FAIL(get_sql_history_(tenant_id, trans_id, merged_sql_history, nullptr))) {
+      DETECT_LOG(WARN, "fail to get sql history", KR(ret), K(tenant_id), K(trans_id));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else {
+    if (merged_sql_history.count() <= 0) {
+      ret = OB_ENTRY_NOT_EXIST;
+      DETECT_LOG(WARN, "no sql audit history for hold_sql", PRINT_WRAPPER);
+    } else if (OB_FAIL(pick_hold_sql_from_merged_history_(merged_sql_history, hold_seq, wait_sql_to_exclude,
+                                                          holding_sql_request_time, holding_sql))) {
+      DETECT_LOG(WARN, "fail to pick hold sql from merged audit", PRINT_WRAPPER);
+    } else if (OB_ISNULL(sql_translate_buffer = (char *)mtl_malloc(BUFFER_SIZE, "DETECT.sql"))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      DETECT_LOG(WARN, "fail to alloc heap memory", PRINT_WRAPPER);
     } else {
-      DETECT_LOG(TRACE, "success to translate sql", PRINT_WRAPPER);
+      transaction::ObTransDeadlockDetectorAdapter::copy_str_and_translate_apostrophe(
+          holding_sql.get_ob_string().ptr(),
+          holding_sql.get_ob_string().length(),
+          sql_translate_buffer,
+          BUFFER_SIZE);
+      if (OB_FAIL(holding_sql.assign(ObString(sql_translate_buffer)))) {
+        DETECT_LOG(WARN, "failed to translate sql", PRINT_WRAPPER);
+      } else {
+        DETECT_LOG(INFO, "get holding sql from merged audit", PRINT_WRAPPER, K(holding_sql),
+                   "merged_row_cnt", merged_sql_history.count());
+      }
     }
   }
   // release dynamic buffer

@@ -158,11 +158,13 @@ public:
   int for_each_detector(OP &op) {
     return detector_map_.for_each(op);
   }
-  int get_holding_sql(const ObStringHolder &sess_id,
-                      const ObStringHolder &trans_id,
+  int get_holding_sql(const ObStringHolder &trans_id,
                       const transaction::ObTxSEQ &hold_seq,
                       ObStringHolder &holding_sql_request_time,
-                      ObStringHolder &holding_sql);
+                      ObStringHolder &holding_sql,
+                      const uint64_t query_tenant_id = OB_INVALID_ID,
+                      const common::ObString &wait_sql_to_exclude = common::ObString(),
+                      const common::ObIArray<common::ObAddr> *audit_exec_addrs = nullptr);
 private:
   // exposed to deadlock detector, shouldn't called from others
   common::ObTimeWheel& get_time_wheel() { return time_wheel_; }
@@ -172,9 +174,11 @@ private:
   int check_and_record_cycle_hash_(const uint64_t hash);
   void get_trans_history_sql_from_audit_(const ObDeadLockCollectInfoMessage &collect_info_msg);
   bool is_trans_detector_(const ObDetectorInnerReportInfo &info, ObStringHolder &sess_id, ObStringHolder &trans_id);
-  int get_sql_history_(const ObStringHolder &sess_id,
+
+  int get_sql_history_(const uint64_t query_tenant_id,
                        const ObStringHolder &trans_id,
-                       ObIArray<ObTuple<ObStringHolder, ObStringHolder, int64_t>> &sql_history);
+                       ObIArray<ObTuple<ObStringHolder, ObStringHolder, int64_t>> &sql_history,
+                       const common::ObAddr *exec_sql_addr = nullptr);
   int convert_string_holder_to_shared_guard_(const ObStringHolder &holder,
                                              ObSharedGuard<char> &shared_guard);
   // define for ObLinkHashMap

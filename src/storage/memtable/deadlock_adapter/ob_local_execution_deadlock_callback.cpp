@@ -155,12 +155,10 @@ int LocalExecutionWaitingForRowFillVirtualInfoOperation::operator()(const bool n
   ObAddr conflict_tx_scheduler;
   SessionIDPair sess_id_pair;
   constexpr int64_t buffer_size = 64;
-  ObStringHolder sess_id_string;
   ObStringHolder trans_id_string;
   ObStringHolder holding_sql;
   ObStringHolder holding_sql_request_time;
   ObCStringHelper helper;
-  char sess_id_buffer[buffer_size] = {0};
   char trans_id_buffer[buffer_size] = {0};
   int64_t pos_begin = 0;
   if (CUSTOM_FAIL(mapper_.get_hash_holder(hash_, row_holder_info))) {
@@ -170,12 +168,8 @@ int LocalExecutionWaitingForRowFillVirtualInfoOperation::operator()(const bool n
                                                                                        conflict_tx_scheduler,
                                                                                        sess_id_pair))) {
     DETECT_LOG(WARN, "get trans info failed", PRINT_WRAPPER);
-  } else if (CUSTOM_FAIL(databuff_printf(sess_id_buffer, buffer_size, "%ld", (int64_t)sess_id_pair.get_valid_sess_id()))) {
-    DETECT_LOG(WARN, "failed to_string", PRINT_WRAPPER);
   } else if (CUSTOM_FAIL(databuff_printf(trans_id_buffer, buffer_size, "%ld", row_holder_info.tx_id_.get_id()))) {
     DETECT_LOG(WARN, "failed to_string", PRINT_WRAPPER);
-  } else if (CUSTOM_FAIL(sess_id_string.assign(ObString(sess_id_buffer)))) {
-    DETECT_LOG(WARN, "failed to construct string holder", PRINT_WRAPPER);
   } else if (CUSTOM_FAIL(trans_id_string.assign(ObString(trans_id_buffer)))) {
     DETECT_LOG(WARN, "failed to construct string holder", PRINT_WRAPPER);
   } else if (FALSE_IT(pos_begin = pos)) {
@@ -188,11 +182,19 @@ int LocalExecutionWaitingForRowFillVirtualInfoOperation::operator()(const bool n
   } else if (FALSE_IT(virtual_info.dynamic_block_list_.assign(buffer + pos_begin, pos - pos_begin))) {
   } else {
     if (need_fill_conflict_actions_flag) {
-      if (CUSTOM_FAIL(MTL(ObDeadLockDetectorMgr*)->get_holding_sql(sess_id_string,
-                                                                   trans_id_string,
+      ObSEArray<ObAddr, 1> audit_exec_addrs;
+      if (conflict_tx_scheduler.is_valid()) {
+        (void)audit_exec_addrs.push_back(conflict_tx_scheduler);
+      }
+      const ObIArray<ObAddr> *audit_exec_addrs_ptr =
+          audit_exec_addrs.count() > 0 ? &audit_exec_addrs : nullptr;
+      if (CUSTOM_FAIL(MTL(ObDeadLockDetectorMgr*)->get_holding_sql(trans_id_string,
                                                                    row_holder_info.seq_,
                                                                    holding_sql_request_time,
-                                                                   holding_sql))) {
+                                                                   holding_sql,
+                                                                   OB_INVALID_ID,
+                                                                   ObString(),
+                                                                   audit_exec_addrs_ptr))) {
         DETECT_LOG(WARN, "failed to get holding sql", PRINT_WRAPPER);
       }
       if (OB_FAIL(ret)) {
@@ -243,25 +245,19 @@ int LocalExecutionWaitingForTransFillVirtualInfoOperation::operator()(const bool
   ObAddr conflict_tx_scheduler;
   SessionIDPair sess_id_pair;
   constexpr int64_t buffer_size = 64;
-  ObStringHolder sess_id_string;
   ObStringHolder trans_id_string;
   ObStringHolder holding_sql;
   ObStringHolder holding_sql_request_time;
   int64_t pos_begin = 0;
   ObCStringHelper helper;
-  char sess_id_buffer[buffer_size] = {0};
   char trans_id_buffer[buffer_size] = {0};
   if (CUSTOM_FAIL(ObTransDeadlockDetectorAdapter::get_trans_info_on_participant(conflict_tx_id_,
                                                                                 ls_id_,
                                                                                 conflict_tx_scheduler,
                                                                                 sess_id_pair))) {
     DETECT_LOG(WARN, "get trans info failed", PRINT_WRAPPER);
-  } else if (CUSTOM_FAIL(databuff_printf(sess_id_buffer, buffer_size, "%ld", (int64_t)sess_id_pair.get_valid_sess_id()))) {
-    DETECT_LOG(WARN, "failed to_string", PRINT_WRAPPER);
   } else if (CUSTOM_FAIL(databuff_printf(trans_id_buffer, buffer_size, "%ld", conflict_tx_id_.get_id()))) {
     DETECT_LOG(WARN, "failed to_string", PRINT_WRAPPER);
-  } else if (CUSTOM_FAIL(sess_id_string.assign(ObString(sess_id_buffer)))) {
-    DETECT_LOG(WARN, "failed to construct string holder", PRINT_WRAPPER);
   } else if (CUSTOM_FAIL(trans_id_string.assign(ObString(trans_id_buffer)))) {
     DETECT_LOG(WARN, "failed to construct string holder", PRINT_WRAPPER);
   } else if (FALSE_IT(pos_begin = pos)) {
@@ -274,11 +270,19 @@ int LocalExecutionWaitingForTransFillVirtualInfoOperation::operator()(const bool
   } else if (FALSE_IT(virtual_info.static_block_list_.assign(buffer + pos_begin, pos - pos_begin))) {
   } else {
     if (need_fill_conflict_actions_flag) {
-      if (CUSTOM_FAIL(MTL(ObDeadLockDetectorMgr*)->get_holding_sql(sess_id_string,
-                                                                   trans_id_string,
+      ObSEArray<ObAddr, 1> audit_exec_addrs;
+      if (conflict_tx_scheduler.is_valid()) {
+        (void)audit_exec_addrs.push_back(conflict_tx_scheduler);
+      }
+      const ObIArray<ObAddr> *audit_exec_addrs_ptr =
+          audit_exec_addrs.count() > 0 ? &audit_exec_addrs : nullptr;
+      if (CUSTOM_FAIL(MTL(ObDeadLockDetectorMgr*)->get_holding_sql(trans_id_string,
                                                                    conflict_tx_seq_,
                                                                    holding_sql_request_time,
-                                                                   holding_sql))) {
+                                                                   holding_sql,
+                                                                   OB_INVALID_ID,
+                                                                   ObString(),
+                                                                   audit_exec_addrs_ptr))) {
         DETECT_LOG(WARN, "failed to get holding sql", PRINT_WRAPPER);
       }
       if (OB_FAIL(ret)) {

@@ -181,30 +181,32 @@ int ObTransDeadLockRemoteExecutionFillVirtualInfoOperation::operator()(const boo
   ObArray<ConflictSqlInfo> conflict_sqls;
   for (int64_t idx = 0; idx < conflict_info_array_.count() && OB_SUCC(ret); ++idx) {
     ObRowConflictInfo &conflict_info = conflict_info_array_[idx];
-    ObStringHolder sess_id_string;
     ObStringHolder trans_id_string;
     constexpr int64_t buffer_size = 64;
-    char sess_id_buffer[buffer_size] = {0};
     char trans_id_buffer[buffer_size] = {0};
     ConflictSqlInfo *p_current_conflict_sql_info = nullptr;
     if (CUSTOM_FAIL(conflict_sqls.push_back(ConflictSqlInfo()))) {
       DETECT_LOG(WARN, "failed to push back", PRINT_WRAPPER);
     } else if (FALSE_IT(p_current_conflict_sql_info = &conflict_sqls[conflict_sqls.count() - 1])) {
-    } else if (CUSTOM_FAIL(databuff_printf(sess_id_buffer, buffer_size, "%ld", (int64_t)conflict_info.conflict_sess_id_pair_.get_valid_sess_id()))) {
-      DETECT_LOG(WARN, "failed to_string", PRINT_WRAPPER);
     } else if (CUSTOM_FAIL(databuff_printf(trans_id_buffer, buffer_size, "%ld", conflict_info.conflict_tx_id_.get_id()))) {
       DETECT_LOG(WARN, "failed to_string", PRINT_WRAPPER);
-    } else if (CUSTOM_FAIL(sess_id_string.assign(ObString(sess_id_buffer)))) {
-      DETECT_LOG(WARN, "failed to construct string holder", PRINT_WRAPPER);
     } else if (CUSTOM_FAIL(trans_id_string.assign(ObString(trans_id_buffer)))) {
       DETECT_LOG(WARN, "failed to construct string holder", PRINT_WRAPPER);
     } else {
       if (need_fill_conflict_actions_flag) {
-        if (CUSTOM_FAIL(MTL(ObDeadLockDetectorMgr*)->get_holding_sql(sess_id_string,
-                                                                     trans_id_string,
+        ObSEArray<ObAddr, 1> audit_exec_addrs;
+        if (conflict_info.conflict_tx_scheduler_.is_valid()) {
+          (void)audit_exec_addrs.push_back(conflict_info.conflict_tx_scheduler_);
+        }
+        const ObIArray<ObAddr> *audit_exec_addrs_ptr =
+            audit_exec_addrs.count() > 0 ? &audit_exec_addrs : nullptr;
+        if (CUSTOM_FAIL(MTL(ObDeadLockDetectorMgr*)->get_holding_sql(trans_id_string,
                                                                      conflict_info.conflict_tx_hold_seq_,
                                                                      p_current_conflict_sql_info->element<0>(),
-                                                                     p_current_conflict_sql_info->element<1>()))) {
+                                                                     p_current_conflict_sql_info->element<1>(),
+                                                                     OB_INVALID_ID,
+                                                                     ObString(),
+                                                                     audit_exec_addrs_ptr))) {
           DETECT_LOG(WARN, "failed to get holding sql", PRINT_WRAPPER);
           int tmp_ret = ret;
           ret = OB_SUCCESS;
