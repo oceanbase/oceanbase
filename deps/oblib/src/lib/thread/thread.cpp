@@ -7,8 +7,10 @@
 
 #include "thread.h"
 #include "lib/rc/context.h"
+#include "lib/lock/ob_futex.h"
 #include "lib/thread/protected_stack_allocator.h"
 #include "lib/utility/ob_hang_fatal_error.h"
+#include "lib/utility/utility.h"
 #include "lib/signal/ob_signal_struct.h"
 #include "lib/ash/ob_active_session_guard.h"
 #include "lib/stat/ob_session_stat.h"
@@ -97,11 +99,17 @@ int Thread::start()
         LOG_ERROR("pthread create failed", K(pret), K(errno));
         pth_ = 0;
       } else {
-        while (ATOMIC_LOAD(&create_ret_) == OB_NOT_RUNNING) {
-          sched_yield();
+        int create_ret = ATOMIC_LOAD(&create_ret_);
+        while (OB_NOT_RUNNING == create_ret) {
+          const int futex_ret = futex_wait(&create_ret_, OB_NOT_RUNNING, nullptr);
+          if (OB_UNLIKELY(0 != futex_ret && EAGAIN != futex_ret && EINTR != futex_ret)) {
+            LOG_WARN_RET(OB_ERR_SYS, "wait thread create result failed", K(futex_ret));
+            ob_usleep(1000);
+          }
+          create_ret = ATOMIC_LOAD(&create_ret_);
         }
-        if (OB_FAIL(create_ret_)) {
-          LOG_ERROR("thread create failed", K(create_ret_));
+        if (OB_FAIL(create_ret)) {
+          LOG_ERROR("thread create failed", K(create_ret));
         }
       }
     }
@@ -118,6 +126,12 @@ int Thread::start()
     destroy();
   }
   return ret;
+}
+
+void Thread::publish_create_ret(const int create_ret)
+{
+  ATOMIC_STORE(&create_ret_, create_ret);
+  IGNORE_RETURN futex_wake(&create_ret_, 1);
 }
 
 void Thread::stop()
@@ -334,7 +348,7 @@ void* Thread::__th_start(void *arg)
               LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "thread_pre_run_cost_time is too long", K(thread_pre_run_cost_time));
             }
             in_try_stmt = true;
-            ATOMIC_STORE(&th->create_ret_, OB_SUCCESS);
+            th->publish_create_ret(OB_SUCCESS);
             th->run();
             in_try_stmt = false;
           } catch (OB_BASE_EXCEPTION &except) {
@@ -355,7 +369,7 @@ void* Thread::__th_start(void *arg)
     }
   }
   if (OB_FAIL(ret)) {
-    ATOMIC_STORE(&th->create_ret_, ret);
+    th->publish_create_ret(ret);
   }
   ATOMIC_FAA(&total_thread_count_, -1);
   return nullptr;

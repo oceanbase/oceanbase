@@ -174,6 +174,7 @@ public:
   static thread_local bool is_doing_ddl_;
 private:
   static void* __th_start(void *th);
+  void publish_create_ret(const int create_ret);
   void destroy_stack();
   static thread_local Thread* current_thread_;
 
