@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_ddl_server_client.h"
+#include "share/ob_debug_sync.h"
 #include "share/ob_ddl_sim_point.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
 #include "observer/ob_server_event_history_table_operator.h"
@@ -193,8 +194,11 @@ int ObDDLServerClient::copy_table_dependents(
         if (OB_TMP_FAIL(ObDDLExecutorUtil::cancel_ddl_task(tenant_id, common_rpc_proxy))) {
           LOG_WARN("cancel ddl task failed", K(tmp_ret), K(tenant_id));
         }
+      } else if (OB_FAIL(THIS_WORKER.check_status())) {
+        LOG_WARN("worker check_status failed, stop copy table dependents", K(ret), K(arg));
       } else if (OB_TMP_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_leader_addr))) {
         LOG_WARN("fail to get rootservice address", K(ret));
+      } else if (OB_FALSE_IT(DEBUG_SYNC(BEFORE_COPY_TABLE_DEPENDENTS_RPC_IN_LOAD))) {
       } else if (OB_FAIL(common_rpc_proxy->to(rs_leader_addr).copy_table_dependents(arg))) {
         LOG_WARN("copy table dependents failed", K(ret), K(arg));
         if (OB_ENTRY_NOT_EXIST == ret) {
@@ -328,8 +332,11 @@ int ObDDLServerClient::finish_redef_table(const obrpc::ObFinishRedefTableArg &fi
           LOG_WARN("cancel ddl task failed", K(tmp_ret));
           ret = OB_SUCCESS;
         }
+      } else if (OB_FAIL(THIS_WORKER.check_status())) {
+        LOG_WARN("worker check_status failed, stop finish redef table", K(ret), K(finish_redef_arg));
       } else if (OB_TMP_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_leader_addr))) {
         LOG_WARN("fail to rootservice address", K(tmp_ret));
+      } else if (OB_FALSE_IT(DEBUG_SYNC(BEFORE_FINISH_REDEF_TABLE_RPC_IN_LOAD))) {
       } else if (OB_FAIL(common_rpc_proxy->to(rs_leader_addr).finish_redef_table(finish_redef_arg))) {
         LOG_WARN("finish redef table failed", K(ret), K(finish_redef_arg));
         if (OB_ENTRY_NOT_EXIST == ret) {
@@ -348,10 +355,20 @@ int ObDDLServerClient::finish_redef_table(const obrpc::ObFinishRedefTableArg &fi
       }
     }
     if (OB_FAIL(ret)) {
+    } else if (OB_FALSE_IT(DEBUG_SYNC(BEFORE_BUILD_DDL_SINGLE_REPLICA_RESPONSE_IN_LOAD))) {
     } else if (OB_FAIL(build_ddl_single_replica_response(build_single_arg))) {
         LOG_WARN("build ddl single replica response", K(ret), K(build_single_arg));
-    } else if (OB_FAIL(sql::ObDDLExecutorUtil::wait_ddl_finish(finish_redef_arg.tenant_id_, finish_redef_arg.task_id_, DDL_DIRECT_LOAD, &session, common_rpc_proxy))) {
-      LOG_WARN("failed to wait ddl finish", K(ret), K(finish_redef_arg.tenant_id_), K(finish_redef_arg.task_id_));
+    } else {
+      // pass caller-remaining timeout so wait_ddl_finish honors caller
+      // query_timeout instead of default ~102 years.
+      const int64_t origin_timeout_ts = THIS_WORKER.get_timeout_ts();
+      const int64_t wait_us = MAX(origin_timeout_ts - ObTimeUtility::current_time(), 0L);
+      if (OB_FAIL(sql::ObDDLExecutorUtil::wait_ddl_finish(finish_redef_arg.tenant_id_,
+              finish_redef_arg.task_id_, DDL_DIRECT_LOAD, &session, common_rpc_proxy,
+              true /*is_support_cancel*/, wait_us))) {
+        LOG_WARN("failed to wait ddl finish", K(ret), K(finish_redef_arg.tenant_id_), K(finish_redef_arg.task_id_));
+      }
+      THIS_WORKER.set_timeout_ts(origin_timeout_ts);
     }
     if (OB_TMP_FAIL(heart_beat_clear(finish_redef_arg.task_id_, tenant_id))) {
       LOG_WARN("heart beat clear failed", K(tmp_ret), K(finish_redef_arg.task_id_));
@@ -402,7 +419,6 @@ int ObDDLServerClient::wait_task_reach_pending(
   snapshot_version = 0;
   data_format_version = 0;
   const int64_t retry_interval = 100 * 1000;
-  THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + OB_MAX_USER_SPECIFIED_TIMEOUT);
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
     sqlclient::ObMySQLResult *result = NULL;
     if (OB_UNLIKELY(task_id <= 0 || OB_INVALID_ID == tenant_id)) {
@@ -437,6 +453,10 @@ int ObDDLServerClient::wait_task_reach_pending(
           }
         } else if (rootserver::ObTableRedefinitionTask::check_task_status_is_pending(task_status)) {
           break;
+        } else if (OB_FAIL(THIS_WORKER.check_status())) {
+          LOG_WARN("worker check_status failed, stop wait task reach pending", K(ret), K(tenant_id), K(task_id));
+        } else {
+          ob_usleep(retry_interval);
         }
       }
     }
