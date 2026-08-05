@@ -67,7 +67,7 @@ int ObExprDateFormat::calc_date_format(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   int ret = OB_SUCCESS;
   ObTime ob_time;
   char *buf = NULL;
-  int64_t buf_len = OB_MAX_DATE_FORMAT_BUF_LEN;
+  int64_t buf_len = 0;
   int64_t pos = 0;
   const ObSQLSessionInfo *session = NULL;
   ObDatum *date = NULL;
@@ -94,9 +94,6 @@ int ObExprDateFormat::calc_date_format(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     LOG_WARN("calc param failed", K(ret));
   } else if (date->is_null() || format->is_null()) {
     expr_datum.set_null();
-  } else if (OB_ISNULL(buf = expr.get_str_res_mem(ctx, buf_len))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("no more memory to alloc for buf");
   } else if (FALSE_IT(date_sql_mode.init(sql_mode))) {
   } else if (OB_FAIL(ob_datum_to_ob_time_with_date(*date,
                                             expr.args_[0]->datum_meta_.type_,
@@ -121,6 +118,10 @@ int ObExprDateFormat::calc_date_format(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     expr_datum.set_null();
   } else if (OB_FAIL(session->get_locale_name(locale_name))) {
       LOG_WARN("failed to get locale time name", K(expr), K(expr_datum));
+  } else if (FALSE_IT(buf_len = (int64_t)format->get_string().length() * OB_MAX_BUF_LEN_MULTIPLIER)) {
+  } else if (OB_ISNULL(buf = expr.get_str_res_mem(ctx, buf_len))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("no more memory to alloc for buf", K(ret), K(buf_len));
   } else if (OB_FAIL(ObTimeConverter::ob_time_to_str_format(ob_time,
                                                             format->get_string(),
                                                             buf,
@@ -575,9 +576,9 @@ int ObExprDateFormat::vector_date_format(const ObExpr &expr,
         int8_t week_monday[batch_size];
         int8_t delta_sunday[batch_size];
         int8_t delta_monday[batch_size];
-        int16_t len[batch_size];
+        int32_t len[batch_size];
         char *buf[batch_size];
-        int buf_len = format_string.length() * 5; // september / 2 <= 5
+        int64_t buf_len = (int64_t)format_string.length() * OB_MAX_BUF_LEN_MULTIPLIER;
         bool res_null[batch_size];
         bool no_null = true;
         memset(len, 0, sizeof(len));

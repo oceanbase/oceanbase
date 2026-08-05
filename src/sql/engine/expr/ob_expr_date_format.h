@@ -19,7 +19,7 @@
   YearType year, MonthType month, DateType dt_yday, DateType dt_mday, DateType dt_wday,            \
     int32_t hour, int32_t minute, int32_t sec, int32_t fsec, WeekType &week_sunday,                \
     WeekType &week_monday, int8_t &delta_sunday, int8_t &delta_monday, char *res_buf,              \
-    int16_t &len, bool &res_null, bool no_null, const char *const *day_name,                       \
+    int32_t &len, bool &res_null, bool no_null, const char *const *day_name,                       \
     const char *const *ab_day_name, const char *const *month_name,                                 \
     const char *const *ab_month_name
 
@@ -46,7 +46,8 @@ private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprDateFormat);
 
-  static const int64_t OB_MAX_DATE_FORMAT_BUF_LEN = 1024;
+  // '%r' => hh:mm:ss AM/PM => 11 : buf_len => 2*6
+  static const int64_t OB_MAX_BUF_LEN_MULTIPLIER = 6;
   static void check_reset_status(common::ObExprCtx &expr_ctx, int &ret, common::ObObj &result);
 public:
   static int calc_date_format_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
