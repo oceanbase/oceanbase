@@ -720,17 +720,25 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
       disable_list |= (~unpivot_enable_list);
     }
     if (func.contain_fulltext_search_) {
-      ObTransformRule::add_trans_type(disable_list, SUBQUERY_UNNEST);
-      ObTransformRule::add_trans_type(disable_list, AGGR_SUBQUERY);
-      ObTransformRule::add_trans_type(disable_list, WIN_MAGIC);
-      ObTransformRule::add_trans_type(disable_list, OR_EXPANSION);
-      ObTransformRule::add_trans_type(disable_list, GROUPBY_PUSHDOWN);
-      ObTransformRule::add_trans_type(disable_list, GROUPBY_PULLUP);
-      ObTransformRule::add_trans_type(disable_list, SUBQUERY_COALESCE);
-      ObTransformRule::add_trans_type(disable_list, TEMP_TABLE_OPTIMIZATION);
-      ObTransformRule::add_trans_type(disable_list, CONST_PROPAGATE);
-      ObTransformRule::add_trans_type(disable_list, SELECT_EXPR_PULLUP);
-      ObTransformRule::add_trans_type(disable_list, LATE_MATERIALIZATION);
+      uint64_t fulltext_enable_list = 0;
+      ObTransformRule::add_trans_type(fulltext_enable_list, SIMPLIFY_DISTINCT);
+      ObTransformRule::add_trans_type(fulltext_enable_list, SIMPLIFY_EXPR);
+      ObTransformRule::add_trans_type(fulltext_enable_list, SIMPLIFY_GROUPBY);
+      ObTransformRule::add_trans_type(fulltext_enable_list, SIMPLIFY_LIMIT);
+      ObTransformRule::add_trans_type(fulltext_enable_list, SIMPLIFY_ORDERBY);
+      ObTransformRule::add_trans_type(fulltext_enable_list, SIMPLIFY_SUBQUERY);
+      ObTransformRule::add_trans_type(fulltext_enable_list, SIMPLIFY_WINFUNC);
+      ObTransformRule::add_trans_type(fulltext_enable_list, PROJECTION_PRUNING);
+      ObTransformRule::add_trans_type(fulltext_enable_list, COUNT_TO_EXISTS);
+      ObTransformRule::add_trans_type(fulltext_enable_list, ELIMINATE_OJ);
+      ObTransformRule::add_trans_type(fulltext_enable_list, VIEW_MERGE);
+      ObTransformRule::add_trans_type(fulltext_enable_list, QUERY_PUSH_DOWN);
+      ObTransformRule::add_trans_type(fulltext_enable_list, SIMPLIFY_SET);
+      ObTransformRule::add_trans_type(fulltext_enable_list, JOIN_ELIMINATION);
+      ObTransformRule::add_trans_type(fulltext_enable_list, PREDICATE_MOVE_AROUND);
+      ObTransformRule::add_trans_type(fulltext_enable_list, JOIN_LIMIT_PUSHDOWN);
+      ObTransformRule::add_trans_type(fulltext_enable_list, DECORRELATE);
+      disable_list |= (~fulltext_enable_list);
     }
     if (func.contain_enum_set_values_) {
       uint64_t enum_set_enable_list = 0;

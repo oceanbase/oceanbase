@@ -443,8 +443,11 @@ int ObMPConnect::process()
         case OB_PASSWORD_WRONG:
         case OB_ERR_INVALID_TENANT_NAME: {
           ret = OB_PASSWORD_WRONG;
-          const bool using_password = (NULL != session) ? !session->get_login_info().passwd_.empty()
-                                                        : !hsr_.get_auth_response().empty();
+          // The handshake auth response reflects whether the client offered a password
+          // even when auth fails early (e.g. user dropped), where session login_info
+          // passwd_ may not have been populated yet;
+          const bool using_password = !hsr_.get_auth_response().empty()
+                                      || ((NULL != session) && !session->get_login_info().passwd_.empty());
           snprintf(buf, OB_MAX_ERROR_MSG_LEN, ob_errpkt_str_user_error(ret, lib::is_oracle_mode()),
                    user_name_.length(), user_name_.ptr(),
                    host_name.length(), host_name.ptr(),

@@ -17052,7 +17052,7 @@ int ObTransformUtils::inner_check_expr_used_as_condition(ObRawExpr *cur_expr,
         bool tmp_used_as_condition = false;
         if (OB_FAIL(SMART_CALL(inner_check_expr_used_as_condition(then_else_exprs.at(i),
                                                                   expr,
-                                                                  true,
+                                                                  parent_as_condition,
                                                                   tmp_used_as_condition)))) {
           LOG_WARN("failed to inner check expr used as condition", K(ret));
         } else if (tmp_used_as_condition) {
