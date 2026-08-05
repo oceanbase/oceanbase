@@ -116,6 +116,8 @@ int ObAIGatewaySqlService::alter_ai_gateway(const ObAIGatewaySchema &new_schema,
     LOG_WARN("failed to add column", K(ret), K(new_schema));
   } else if (OB_FAIL(sql.add_column("circuit_breaker", ObHexEscapeSqlStr(new_schema.get_circuit_breaker())))) {
     LOG_WARN("failed to add column", K(ret), K(new_schema));
+  } else if (OB_FAIL(sql.add_gmt_modified())) {
+    LOG_WARN("failed to add column", K(ret), K(new_schema));
   } else if (OB_FAIL(sql.splice_update_sql(OB_ALL_AI_GATEWAY_TNAME, buffer))) {
     LOG_WARN("failed to splice_update_sql", K(ret));
   } else if (OB_FAIL(sql_client.write(tenant_id, buffer.ptr(), affected_rows))) {
