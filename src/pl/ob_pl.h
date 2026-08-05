@@ -968,6 +968,8 @@ public:
     is_inner_mock_ = false;
     is_system_trigger_ = false;
     saved_pl_internal_time_split_point_ = 0;
+    saved_cur_query_string_.reset();
+    saved_cur_query_buf_len_ = 0;
     saved_use_pl_inner_info_string_ = false;
   }
 
@@ -1176,6 +1178,8 @@ private:
   bool is_inner_mock_;
   bool is_system_trigger_;
   int64_t saved_pl_internal_time_split_point_;
+  ObString saved_cur_query_string_;
+  int64_t saved_cur_query_buf_len_;
   bool saved_use_pl_inner_info_string_;
 };
 
