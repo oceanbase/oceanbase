@@ -2571,6 +2571,9 @@ int ObTransformGroupByPushdown::push_down_groupby_into_cross_join(
   if (OB_SUCC(ret)) {
     if (OB_FAIL(append_array_no_dup(view_select_exprs, stmt->get_group_exprs()))) {
       LOG_WARN("failed to push back having exprs into where", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::remove_const_exprs(view_select_exprs,
+                                                            view_select_exprs))) {
+      LOG_WARN("failed to remove const exprs", K(ret));
     } else if (OB_FAIL(view_cond_exprs.assign(stmt->get_condition_exprs()))) {
       LOG_WARN("failed to assign view cond exprs", K(ret));
     } else if (OB_FALSE_IT(stmt->get_condition_exprs().reset())) {
