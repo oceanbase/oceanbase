@@ -87,35 +87,8 @@ int ObAlterPrimaryZoneChecker::create_alter_tenant_primary_zone_rs_job_if_needed
   ObArray<ObZone> orig_first_primary_zone;
   ObArray<ObZone> new_first_primary_zone;
   bool is_primary_zone_changed = false;
-  uint64_t tenant_data_version = 0;
-  bool need_skip = false;
   if (!arg.alter_option_bitset_.has_member(obrpc::ObModifyTenantArg::PRIMARY_ZONE)) {
-    need_skip = true;
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
-    LOG_WARN("fail to get min data version", KR(ret), K(tenant_id));
-  } else if (tenant_data_version < DATA_VERSION_4_2_1_0) {
-    need_skip = true;
-  } else {
-    // step 1: cancel rs job ALTER_TENANT_PRIMARY_ZONE if exists
-    int64_t job_id = 0;
-    if(OB_FAIL(RS_JOB_FIND(
-        ALTER_TENANT_PRIMARY_ZONE,
-        job_id,
-        trans,
-        "tenant_id", tenant_id))) {
-      if (OB_ENTRY_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("fail to find rs job ALTER_TENANT_PRIMARY_ZONE", KR(ret));
-      }
-    } else {
-      ret = RS_JOB_COMPLETE(job_id, OB_CANCELED, trans);
-      FLOG_INFO("[ALTER_TENANT_PRIMARY_ZONE NOTICE] cancel an old inprogress rs job", KR(ret),
-          K(tenant_id), K(job_id));
-    }
-  }
-  int64_t new_job_id = 0;
-  if (OB_FAIL(ret) || need_skip) {
+    // do nothing
   } else if (OB_FAIL(ObRootUtils::is_first_priority_primary_zone_changed(
       orig_tenant_schema,
       new_tenant_schema,
@@ -126,34 +99,68 @@ int ObAlterPrimaryZoneChecker::create_alter_tenant_primary_zone_rs_job_if_needed
     LOG_WARN("fail to execute is_first_priority_primary_zone_changed", KR(ret),
         K(orig_tenant_schema), K(new_first_primary_zone));
   } else {
-    // step 2: create a new rs job ALTER_TENANT_PRIMARY_ZONE
-    const int64_t extra_info_len = common::MAX_ROOTSERVICE_JOB_EXTRA_INFO_LENGTH;
-    HEAP_VAR(char[extra_info_len], extra_info) {
-      memset(extra_info, 0, extra_info_len);
-      int64_t pos = 0;
-      if (OB_FAIL(databuff_printf(extra_info, extra_info_len, pos,
-              "FROM: '%.*s', TO: '%.*s'", orig_tenant_schema.get_primary_zone().length(),
-              orig_tenant_schema.get_primary_zone().ptr(), new_tenant_schema.get_primary_zone().length(),
-              new_tenant_schema.get_primary_zone().ptr()))) {
-        LOG_WARN("format extra_info failed", KR(ret), K(orig_tenant_schema), K(new_tenant_schema));
-      } else if (OB_FAIL(RS_JOB_CREATE_WITH_RET(
-        new_job_id,
-        JOB_TYPE_ALTER_TENANT_PRIMARY_ZONE,
+    int64_t old_job_id = 0;
+    bool has_old_rs_job = false;
+    int64_t new_job_id = 0;
+    // step 1: find rs job ALTER_TENANT_PRIMARY_ZONE if exists
+    if (OB_FAIL(RS_JOB_FIND(
+        ALTER_TENANT_PRIMARY_ZONE,
+        old_job_id,
         trans,
-        "tenant_id", tenant_id,
-        "tenant_name", new_tenant_schema.get_tenant_name(),
-        "sql_text", ObHexEscapeSqlStr(arg.ddl_stmt_str_),
-        "extra_info", ObHexEscapeSqlStr(extra_info)))) {
-        LOG_WARN("failed to create new job", KR(ret), K(new_job_id), K(tenant_id),
-            K(extra_info), K(new_tenant_schema), K(arg));
+        "tenant_id", tenant_id))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to find rs job ALTER_TENANT_PRIMARY_ZONE", KR(ret));
       }
+    } else {
+      has_old_rs_job = true;
     }
-    FLOG_INFO("[ALTER_TENANT_PRIMARY_ZONE NOTICE] create a new rs job", KR(ret), K(arg), K(new_job_id));
-    if (OB_SUCC(ret) && !is_primary_zone_changed) {
-      // step 3: complete the rs job if the first priority primary zone is not changed
-      //         otherwise wait for alter_primary_zone_checker to complete it
-      ret = RS_JOB_COMPLETE(new_job_id, 0, trans);
-      FLOG_INFO("[ALTER_TENANT_PRIMARY_ZONE NOTICE] no change of ls, complete immediately", KR(ret), K(new_job_id));
+    if (OB_FAIL(ret)) {
+    } else if (has_old_rs_job && !is_primary_zone_changed) {
+      // Keep the in-progress job when the first priority primary zone is not changed.
+      FLOG_INFO("[ALTER_TENANT_PRIMARY_ZONE NOTICE] keep old inprogress rs job for no-op primary zone alter",
+          K(tenant_id), K(old_job_id), K(is_primary_zone_changed));
+    } else {
+      // step 2: cancel old rs job if exists
+      if (has_old_rs_job) {
+        ret = RS_JOB_COMPLETE(old_job_id, OB_CANCELED, trans);
+        FLOG_INFO("[ALTER_TENANT_PRIMARY_ZONE NOTICE] cancel an old inprogress rs job", KR(ret),
+            K(tenant_id), K(old_job_id), K(is_primary_zone_changed));
+      }
+      // step 3: create a new rs job ALTER_TENANT_PRIMARY_ZONE
+      if (OB_SUCC(ret)) {
+        const int64_t extra_info_len = common::MAX_ROOTSERVICE_JOB_EXTRA_INFO_LENGTH;
+        HEAP_VAR(char[extra_info_len], extra_info) {
+          memset(extra_info, 0, extra_info_len);
+          int64_t pos = 0;
+          if (OB_FAIL(databuff_printf(extra_info, extra_info_len, pos,
+                  "FROM: '%.*s', TO: '%.*s'", orig_tenant_schema.get_primary_zone().length(),
+                  orig_tenant_schema.get_primary_zone().ptr(), new_tenant_schema.get_primary_zone().length(),
+                  new_tenant_schema.get_primary_zone().ptr()))) {
+            LOG_WARN("format extra_info failed", KR(ret), K(orig_tenant_schema), K(new_tenant_schema));
+          } else if (OB_FAIL(RS_JOB_CREATE_WITH_RET(
+            new_job_id,
+            JOB_TYPE_ALTER_TENANT_PRIMARY_ZONE,
+            trans,
+            "tenant_id", tenant_id,
+            "tenant_name", new_tenant_schema.get_tenant_name(),
+            "sql_text", ObHexEscapeSqlStr(arg.ddl_stmt_str_),
+            "extra_info", ObHexEscapeSqlStr(extra_info)))) {
+            LOG_WARN("failed to create new job", KR(ret), K(new_job_id), K(tenant_id),
+                K(extra_info), K(new_tenant_schema), K(arg));
+          }
+        }
+        FLOG_INFO("[ALTER_TENANT_PRIMARY_ZONE NOTICE] create a new rs job", KR(ret), K(arg), K(new_job_id));
+
+        // step 4: complete the rs job if the first priority primary zone is not changed
+        //         otherwise wait for alter_primary_zone_checker to complete it
+        if (OB_SUCC(ret) && !is_primary_zone_changed) {
+          ret = RS_JOB_COMPLETE(new_job_id, 0, trans);
+          FLOG_INFO("[ALTER_TENANT_PRIMARY_ZONE NOTICE] no change of ls, complete immediately",
+              KR(ret), K(new_job_id));
+        }
+      }
     }
   }
   return ret;
