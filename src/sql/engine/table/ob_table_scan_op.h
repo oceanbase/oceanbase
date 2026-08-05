@@ -488,7 +488,8 @@ public:
       uint64_t need_check_outrow_lob_           : 1;
       uint64_t is_spiv_ddl_                     : 1;
       uint64_t ft_doc_token_need_sort_          : 1;
-      uint64_t reserved_                        : 46;
+      uint64_t external_table_file_size_load_balance_ : 1;
+      uint64_t reserved_                        : 45;
     };
   };
   int64_t tenant_id_col_idx_;
