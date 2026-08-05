@@ -566,7 +566,6 @@ private:
       const ObMergeType merge_type,
       const ObLSID &ls_id,
       const ObTabletID &tablet_id,
-      const lib::Worker::CompatMode &compat_mode,
       const int64_t merge_version,
       const ObCompactionDagSnapshot &snapshot);
   int diagnose_no_dag(

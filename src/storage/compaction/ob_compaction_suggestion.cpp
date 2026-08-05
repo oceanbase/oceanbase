@@ -508,7 +508,6 @@ int ObCompactionSuggestionMgr::analyze_merge_info(
   } else {
     ObCompactionSuggestion suggestion;
     char * buf = suggestion.suggestion_;
-    int64_t *scan_row_array = nullptr;
     bool need_suggestion = false;
     const int64_t buf_len = OB_DIAGNOSE_INFO_LENGTH;
     const ObMergeStaticInfo &static_info = merge_history.static_info_;

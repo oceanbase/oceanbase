@@ -183,7 +183,11 @@ public:
   ObStartTransferBackfillTXDag();
   virtual ~ObStartTransferBackfillTXDag();
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
-  virtual int create_first_task() override { ObStartTransferBackfillTXTask *task = nullptr; return create_task(nullptr, task); }
+  virtual int create_first_task() override
+  {
+    ObStartTransferBackfillTXTask *task = nullptr;
+    return create_task(nullptr/*parent_task*/, task);
+  }
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   int init(share::ObIDagNet *dag_net);
   INHERIT_TO_STRING_KV("ObStorageHADag", ObStorageHADag, KP(this));

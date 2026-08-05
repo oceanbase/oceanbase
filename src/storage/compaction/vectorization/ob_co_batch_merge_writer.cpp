@@ -22,11 +22,8 @@ int ObCOBatchMergeRowWriter::inner_init(ObBasicTabletMergeCtx &ctx)
 {
   int ret = OB_SUCCESS;
   const ObMergeVectorStoreLayoutParam *layout_param = nullptr;
-  ObCOTabletMergeCtx *co_ctx = nullptr;
-  if (OB_ISNULL(co_ctx = static_cast<ObCOTabletMergeCtx *>(&ctx))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null co merge ctx", K(ret), KP(co_ctx));
-  } else if (OB_FAIL(co_ctx->get_cg_layout_param(cg_idx_, layout_param))) {
+  ObCOTabletMergeCtx &co_ctx = static_cast<ObCOTabletMergeCtx &>(ctx);
+  if (OB_FAIL(co_ctx.get_cg_layout_param(cg_idx_, layout_param))) {
     LOG_WARN("failed to get cg layout param", K(ret), K(cg_idx_));
   } else if (OB_ISNULL(layout_param)) {
     ret = OB_ERR_UNEXPECTED;
@@ -115,7 +112,6 @@ int ObCOBatchMergeRowWriter::replay_range_mergelog(const ObMergeLog &mergelog)
     bool reuse_curr_range = false;
     bool need_move_next = true;
     ObMergeVectorStore &read_store = stores_.read_store();
-    ObMergeVectorStore &write_store = stores_.write_store();
     common::ObArrayWrap<uint16_t> cols(write_helper_.get_projector(), write_helper_.get_projector_count());
     while (OB_SUCC(ret) && !reach_border) {
       read_store.reuse();
@@ -128,6 +124,7 @@ int ObCOBatchMergeRowWriter::replay_range_mergelog(const ObMergeLog &mergelog)
               merge_iter->need_project_ ? &cols : nullptr))) {
         LOG_WARN("failed to get next batch rows", K(ret), K(mergelog), K(read_store));
       } else {
+        OB_ASSERT(!reuse_curr_range || read_store.is_empty());
         if (0 < read_store.get_row_count()) {
           ObMergeLog batch_log(ObMergeLog::INSERT, -1/*major_idx*/, INT64_MAX/*row_id*/);
           // batch row from major is projected

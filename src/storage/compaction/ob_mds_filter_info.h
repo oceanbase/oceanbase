@@ -6,7 +6,6 @@
 #include "storage/truncate_info/ob_truncate_info.h"
 #include "storage/compaction_ttl/ob_ttl_filter_info.h"
 #include "lib/oblog/ob_log_module.h"
-#include "storage/compaction_ttl/ob_ttl_filter_info.h"
 namespace oceanbase
 {
 namespace common

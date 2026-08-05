@@ -277,7 +277,6 @@ public:
   { return param_.compat_mode_; }
   virtual uint64_t get_consumer_group_id() const override
   { return consumer_group_id_; }
-  virtual bool is_ha_dag() const override { return false; }
   ObUniqueCheckingParam &get_param() { return param_; }
   ObUniqueCheckingContext &get_context() { return context_; }
   int prepare_context();

@@ -13,7 +13,6 @@
 #include "common/ob_member.h"
 #include "common/ob_tablet_id.h"
 #include "lib/container/ob_array.h"
-#include "ob_storage_ha_struct.h"
 #include "share/ob_common_rpc_proxy.h"
 #include "observer/ob_rpc_processor_simple.h"
 #include "share/scheduler/ob_tenant_dag_scheduler.h"

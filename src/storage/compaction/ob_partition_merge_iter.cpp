@@ -2826,7 +2826,6 @@ void ObPartitionMinorMicroMergeIter::reset()
     micro_row_scanner_->~ObIMicroBlockRowScanner();
     micro_row_scanner_ = nullptr;
   }
-  row_iter_ = nullptr;
   curr_micro_block_ = nullptr;
   curr_micro_block_op_.set_none();
   ObPartitionMinorMacroMergeIter::reset();

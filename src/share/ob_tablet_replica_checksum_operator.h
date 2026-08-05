@@ -8,7 +8,6 @@
 
 #include "lib/container/ob_se_array.h"
 #include "lib/net/ob_addr.h"
-#include "lib/hash/ob_hashmap.h"
 #include "lib/string/ob_sql_string.h"
 #include "common/ob_tablet_id.h"
 #include "share/ob_ls_id.h"
@@ -25,8 +24,6 @@ namespace oceanbase
 namespace common
 {
 class ObISQLClient;
-class ObAddr;
-class ObTabletID;
 class ObMySQLTransaction;
 namespace sqlclient
 {
@@ -35,8 +32,6 @@ class ObMySQLResult;
 }
 namespace share
 {
-class ObTabletReplica;
-
 struct ObTabletReplicaReportColumnMeta
 {
 public:
@@ -92,10 +87,8 @@ public:
   bool is_key_valid() const;
   bool is_valid() const;
   bool is_same_tablet(const ObTabletReplicaChecksumItem &other) const;
-  int verify_checksum(const ObTabletReplicaChecksumItem &other) const;
   int verify_column_checksum(const ObTabletReplicaChecksumItem &other) const;
   int verify_column_checksum_between_diffrent_replica(const ObTabletReplicaChecksumItem &other) const;
-  int assign_key(const ObTabletReplicaChecksumItem &other);
   int assign(const ObTabletReplicaChecksumItem &other);
   int set_tenant_id(const uint64_t tenant_id);
   int check_data_checksum_type(bool &is_cs_replica) const;
@@ -141,12 +134,6 @@ public:
       common::ObMySQLTransaction &trans,
       const uint64_t tenant_id,
       const common::ObIArray<share::ObTabletReplica> &tablet_replicas);
-  static int batch_update_compaction_scn(
-      const uint64_t tenant_id,
-      const share::ObLSID &ls_id,
-      const common::ObIArray<common::ObTabletID> &tablet_array,
-      const int64_t compaction_scn,
-      common::ObISQLClient &sql_client);
   static int get_tablets_replica_checksum(
       const uint64_t tenant_id,
       const ObIArray<compaction::ObTabletCheckInfo> &pairs,
@@ -155,30 +142,6 @@ public:
       const ObTabletReplicaReportColumnMeta &column_meta,
       common::ObIAllocator &allocator,
       common::ObString &column_meta_visible_str);
-  static int range_get(
-      const uint64_t tenant_id,
-      const common::ObTabletID &start_tablet_id,
-      const int64_t range_size,
-      const int32_t group_id,
-      common::ObISQLClient &sql_proxy,
-      ObIArray<ObTabletReplicaChecksumItem> &items,
-      int64_t &tablet_cnt);
-  static int range_get(
-      const uint64_t tenant_id,
-      const common::ObTabletID &start_tablet_id,
-      const common::ObTabletID &end_tablet_id,
-      const int64_t compaction_scn,
-      common::ObISQLClient &sql_proxy,
-      ObIArray<ObTabletReplicaChecksumItem> &items);
-  static int multi_get(
-    const uint64_t tenant_id,
-    const ObIArray<ObTabletID> &tablet_id_list,
-    const int64_t compaction_scn,
-    common::ObISQLClient &sql_proxy,
-    ObIArray<ObTabletReplicaChecksumItem> &items);
-  static int get_min_compaction_scn(
-      const uint64_t tenant_id,
-      SCN &min_compaction_scn);
   static int mock_large_column_meta(
       const ObTabletReplicaReportColumnMeta &column_meta,
       ObTabletReplicaReportColumnMeta &mock_column_meta);
@@ -189,31 +152,6 @@ public:
       const int64_t batch_size);
 
 private:
-  struct ObSimpleCkmInfo
-  {
-    ObSimpleCkmInfo()
-      : ls_id_(),
-        compaction_scn_(0)
-    {}
-    void reset() {
-      ls_id_.reset();
-      compaction_scn_ = 0;
-    }
-    TO_STRING_KV(K_(ls_id), K_(compaction_scn));
-    ObLSID ls_id_;
-    int64_t compaction_scn_;
-  };
-
-  typedef common::hash::ObHashMap<ObTabletID, ObSimpleCkmInfo> ObTabletSimpleCkmInfoMap;
-
-  static int range_get_(
-      const uint64_t tenant_id,
-      const ObSqlString &sql,
-      const int32_t group_id,
-      const int64_t range_size,
-      common::ObISQLClient &sql_proxy,
-      ObIArray<ObTabletReplicaChecksumItem> &items,
-      int64_t &tablet_cnt);
   static int inner_batch_insert_or_update_by_sql_(
       const uint64_t tenant_id,
       const common::ObIArray<ObTabletReplicaChecksumItem> &items,
@@ -246,10 +184,6 @@ private:
       const bool with_compaction_scn);
 
   static int construct_tablet_replica_checksum_items_(
-      common::sqlclient::ObMySQLResult &res,
-      common::ObIArray<ObTabletReplicaChecksumItem> &items,
-      int64_t &tablet_items_cnt);
-  static int construct_tablet_replica_checksum_items_(
     sqlclient::ObMySQLResult &res,
     ObReplicaCkmArray &items);
   static int construct_tablet_replica_checksum_item_(
@@ -271,8 +205,6 @@ private:
       const common::ObTabletID &end_tablet_id);
 
 public:
-  // get column checksum from item and store result in map
-  // KV of @column_ckm_map is: <column_id, column_checksum>
   static int get_tablet_replica_checksum_items(
       const uint64_t tenant_id,
       common::ObMySQLProxy &mysql_proxy,
@@ -280,10 +212,8 @@ public:
       const common::ObIArray<ObTabletLSPair> &tablet_pairs,
       const bool include_greater_scn,
       ObReplicaCkmArray &items);
-  static int construct_tablet_id_list(const ObIArray<ObTabletID> &tablet_ids, ObSqlString &sql);
 private:
   const static int64_t MAX_BATCH_COUNT = 128;
-  const static int64_t PRINT_LOG_INVERVAL = 2 * 60 * 1000 * 1000L; // 2m
   const static int64_t MOCK_COLUMN_CHECKSUM = 580000000000000;
 };
 

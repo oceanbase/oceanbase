@@ -374,6 +374,7 @@ TEST_F(TestWindowCompaction, test_priority_queue_avg_score)
     ASSERT_LT(diff, 1e-5);
   }
   ASSERT_EQ(THRESHOLD_MIN, priority_queue.score_prio_queue_.count());
+  ASSERT_EQ(OB_SUCCESS, priority_queue.check_admission(INT64_MAX));
 
   // 3. check addmission
   // 3.1 when size in [THRESHOLD_MIN, THRESHOLD_LOW) 50000 ~ 100000, only score > 0.5 * avg_score can be pushed

@@ -155,6 +155,28 @@ TEST_F(TestMediumListChecker, test_check_extra_info)
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
+TEST_F(TestMediumListChecker, test_parallel_info_v0_is_not_special_serial_merge)
+{
+  ObParallelMergeInfo parallel_info;
+  ObStoreRowkey store_rowkey;
+  parallel_info.compat_ = ObParallelMergeInfo::PARALLEL_INFO_VERSION_V0;
+  parallel_info.list_size_ = 1;
+  parallel_info.parallel_store_rowkey_list_ = &store_rowkey;
+
+  ASSERT_TRUE(parallel_info.is_valid());
+  ASSERT_FALSE(parallel_info.is_special_serial_merge());
+  parallel_info.clear();
+
+  blocksstable::ObDatumRowkey datum_rowkey;
+  datum_rowkey.set_max_rowkey();
+  parallel_info.compat_ = ObParallelMergeInfo::PARALLEL_INFO_VERSION_V1;
+  parallel_info.list_size_ = 1;
+  parallel_info.parallel_datum_rowkey_list_ = &datum_rowkey;
+  ASSERT_TRUE(parallel_info.is_valid());
+  ASSERT_TRUE(parallel_info.is_special_serial_merge());
+  parallel_info.clear();
+}
+
 TEST_F(TestMediumListChecker, test_check_next_schedule_medium)
 {
   int ret = OB_SUCCESS;

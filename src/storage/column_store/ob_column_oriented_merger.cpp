@@ -67,7 +67,7 @@ int ObCOMergeLogBuilder::inner_init()
     const ObITableReadInfo *full_read_info = &(merge_ctx_->read_info_);
     if (is_batch_merge_builder()) {
       full_read_info = ctx->get_full_read_info();
-      ALLOC_AND_INIT_MERGE_HELPER(merge_helper_, ObCORowBatchMergeIter, *full_read_info, merger_arena_, *partition_fuser_);
+      ALLOC_AND_INIT_MERGE_HELPER(merge_helper_, ObCOMinorBatchMergeIter, *full_read_info, merger_arena_, *partition_fuser_);
     } else {
       ALLOC_AND_INIT_MERGE_HELPER(merge_helper_, ObCOMinorSSTableMergeIter, *full_read_info, merger_arena_, *partition_fuser_);
     }
@@ -653,10 +653,13 @@ int ObCOMinorSSTableMergeIter::get_curr_row(const blocksstable::ObDatumRow *&row
   return ret;
 }
 
-int ObCORowBatchMergeIter::get_next_row(const blocksstable::ObDatumRow *&row)
+int ObCOMinorBatchMergeIter::get_next_row(const blocksstable::ObDatumRow *&row)
 {
   int ret = OB_SUCCESS;
   row = nullptr;
+  // get_curr_row() has already removed the current minimum group from
+  // rows_merger_. Its top is therefore the next competing rowkey and is only
+  // observed here; no input iterator is advanced.
   if (OB_UNLIKELY(is_iter_end())) {
     ret = OB_ITER_END;
   } else {

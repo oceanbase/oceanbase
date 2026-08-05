@@ -725,33 +725,6 @@ int ObMediumCompactionInfoList::get_max_sync_medium_scn(int64_t &max_sync_medium
   return ret;
 }
 
-int ObMediumCompactionInfoList::get_specific_medium_reason(
-    const int64_t medium_scn,
-    ObAdaptiveMergePolicy::AdaptiveMergeReason &medium_merge_reason) const
-{
-  int ret = OB_SUCCESS;
-  medium_merge_reason = ObAdaptiveMergePolicy::NONE;
-
-  if (OB_UNLIKELY(!is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("medium list is invalid", KR(ret), KPC(this));
-  } else {
-    bool is_found = false;
-    DLIST_FOREACH_NORET(info, get_list()) {
-      if (info->medium_snapshot_ == medium_scn) {
-        medium_merge_reason = (ObAdaptiveMergePolicy::AdaptiveMergeReason) info->medium_merge_reason_;
-        is_found = true;
-        break;
-      }
-    }
-
-    if (OB_SUCC(ret) && !is_found) {
-      ret = OB_ENTRY_NOT_EXIST;
-    }
-  }
-  return ret;
-}
-
 bool ObMediumCompactionInfoList::need_check_finish() const
 {
   const int64_t wait_check_scn = get_wait_check_medium_scn();

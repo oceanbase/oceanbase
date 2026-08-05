@@ -821,7 +821,8 @@ int ObTableLoadStoreCtx::init_dag()
     LOG_WARN("fail to generate plan", KR(ret));
   }
   // generate dag
-  else if (OB_FAIL(ObTenantDagScheduler::alloc_dag(allocator_, false /*is_ha_dag*/, dag_exec_ctx_.dag_))) {
+  else if (OB_FAIL(ObTenantDagScheduler::alloc_dag_from_allocator(
+      allocator_, dag_exec_ctx_.dag_))) {
     LOG_WARN("fail to alloc dag", K(ret));
   } else if (OB_FAIL(dag_exec_ctx_.dag_->init(this))) {
     LOG_WARN("fail to init dag", KR(ret));

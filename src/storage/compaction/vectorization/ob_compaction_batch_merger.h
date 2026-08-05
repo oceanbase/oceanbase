@@ -48,7 +48,8 @@ public:
     : ObCOMergeLogBuilder(allocator, static_param, need_replay_base_cg),
       read_store_(),
       batch_scan_iter_(nullptr),
-      border_rowkey_()
+      border_rowkey_(),
+      batch_row_count_(0)
   {}
   virtual ~ObCOBatchMergeLogBuilder() { reset(); }
   virtual void reset() override;
@@ -62,15 +63,14 @@ protected:
 private:
   int get_next_batch_log(ObMergeLog &mergelog, const ObMergeVectorStore *&vector_store);
   OB_INLINE bool can_batch_scan() const { return nullptr != batch_scan_iter_; }
-  int calculate_border_rowkey(ObMergeLog &mergelog,
-                              const ObMergeVectorStore *&vector_store,
-                              ObPartitionMergeIter *winner_iter,
-                              ObPartitionMergeHelper *winner_helper,
-                              ObPartitionMergeIter *loser_iter);
+  int calculate_border_rowkey(ObPartitionMergeIter *batch_scan_minor_iter,
+                              ObPartitionMergeHelper *minor_merge_helper,
+                              ObPartitionMergeIter *major_iter);
 private:
   ObMergeVectorStore read_store_; // read buffer // save full row
   ObPartitionMergeIter *batch_scan_iter_;
   blocksstable::ObDatumRowkey border_rowkey_;
+  int64_t batch_row_count_; // rows emitted through non-empty batch merge logs
 };
 
 class ObCOBatchMergeLogReplayer : public ObCOMergeLogReplayer

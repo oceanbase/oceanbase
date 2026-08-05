@@ -1733,12 +1733,6 @@ bool ObAdaptiveMergePolicy::is_user_request_merge_reason(const AdaptiveMergeReas
     || ObAdaptiveMergePolicy::CRAZY_MEDIUM_FOR_TEST == reason;
 }
 
-bool ObAdaptiveMergePolicy::is_valid_compaction_policy(const AdaptiveCompactionPolicy &policy)
-{
-  return policy >= AdaptiveCompactionPolicy::NORMAL &&
-         policy < AdaptiveCompactionPolicy::INVALID_POLICY;
-}
-
 bool ObAdaptiveMergePolicy::is_skip_merge_reason(const AdaptiveMergeReason &reason)
 {
   return reason == AdaptiveMergeReason::NO_INC_DATA ||

@@ -406,35 +406,18 @@ int ObTabletGroupRestoreDagNet::start_running_for_restore_()
 {
   int ret = OB_SUCCESS;
   ObInitialTabletGroupRestoreDag *initial_restore_dag = nullptr;
-  ObTenantDagScheduler *scheduler = nullptr;
+  ObIDagNet *dag_net = this;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet group dag net do not init", K(ret));
   } else if (FALSE_IT(ctx_->start_ts_ = ObTimeUtil::current_time())) {
-  } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag(initial_restore_dag, true/*is_ha_dag*/))) {
-    LOG_WARN("failed to alloc inital restore dag ", K(ret));
-  } else if (OB_FAIL(initial_restore_dag->init(this))) {
-    LOG_WARN("failed to init initial restore dag", K(ret));
-  } else if (OB_FAIL(add_dag_into_dag_net(*initial_restore_dag))) {
-    LOG_WARN("failed to add initial restore dag into dag net", K(ret));
-  } else if (OB_FAIL(initial_restore_dag->create_first_task())) {
-    LOG_WARN("failed to create first task", K(ret));
-  } else if (OB_FAIL(scheduler->add_dag(initial_restore_dag))) {
-    LOG_WARN("failed to add initial restore dag", K(ret), K(*initial_restore_dag));
-    if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-      LOG_WARN("Fail to add task", K(ret));
-      ret = OB_EAGAIN;
-    }
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_schedule_single_dag(
+      dag_net, ObDagPrio::DAG_PRIO_MAX, false/*emergency*/,
+      initial_restore_dag, dag_net))) {
+    LOG_WARN("failed to schedule initial tablet group restore dag", K(ret));
   } else {
     initial_restore_dag = nullptr;
-  }
-
-  if (OB_NOT_NULL(initial_restore_dag) && OB_NOT_NULL(scheduler)) {
-    scheduler->free_dag(*initial_restore_dag);
   }
 
   return ret;
@@ -726,12 +709,8 @@ int ObInitialTabletGroupRestoreDag::create_first_task()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("initial tablet group restore dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init())) {
-    LOG_WARN("failed to init initial tablet group restore task", K(ret), KPC(ha_dag_net_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
+  } else if (OB_FAIL(create_task(nullptr/*parent_task*/, task))) {
+    LOG_WARN("failed to create initial tablet group restore task", K(ret), KPC(ha_dag_net_ctx_));
   } else {
     LOG_DEBUG("success to create first task", K(ret), KPC(this));
   }
@@ -1035,41 +1014,28 @@ int ObInitialTabletGroupRestoreTask::generate_tablet_restore_dags_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("initial tablets group restore dag should not be NULL", K(ret), KP(initial_tablets_group_restore_dag));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag(start_restore_dag, true/*is_ha_dag*/))) {
-      LOG_WARN("failed to alloc start restore dag ", K(ret));
-    } else if (OB_FAIL(scheduler->alloc_dag(finish_restore_dag, true/*is_ha_dag*/))) {
-      LOG_WARN("failed to alloc finish restore dag", K(ret));
-    } else if (OB_FAIL(start_restore_dag->init(dag_net_, finish_restore_dag))) {
-      LOG_WARN("failed to init start restore dag", K(ret));
-    } else if (OB_FAIL(finish_restore_dag->init(dag_net_))) {
-      LOG_WARN("failed to init finish restore dag", K(ret));
+    if (OB_FAIL(scheduler->create_dag(
+        dag_net_, ObDagPrio::DAG_PRIO_MAX, finish_restore_dag, dag_net_))) {
+      LOG_WARN("failed to create finish restore dag", K(ret));
+    } else if (OB_FAIL(scheduler->create_dag(
+        dag_net_, ObDagPrio::DAG_PRIO_MAX,
+        start_restore_dag, dag_net_, finish_restore_dag))) {
+      LOG_WARN("failed to create start restore dag", K(ret));
     } else if (OB_FAIL(this->get_dag()->add_child(*start_restore_dag))) {
       LOG_WARN("failed to add start restore dag as child", K(ret), KPC(start_restore_dag));
-    } else if (OB_FAIL(start_restore_dag->create_first_task())) {
-      LOG_WARN("failed to create first task", K(ret));
     } else if (OB_FAIL(start_restore_dag->add_child(*finish_restore_dag))) {
       LOG_WARN("failed to add finish restore dag as child", K(ret));
-    } else if (OB_FAIL(finish_restore_dag->create_first_task())) {
-      LOG_WARN("failed to create first task", K(ret));
-    } else if (OB_FAIL(scheduler->add_dag(finish_restore_dag))) {
-      LOG_WARN("failed to add finish restore dag", K(ret), K(*finish_restore_dag));
-      if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-        LOG_WARN("Fail to add task", K(ret));
-        ret = OB_EAGAIN;
-      }
-    } else if (OB_FAIL(scheduler->add_dag(start_restore_dag))) {
-      LOG_WARN("failed to add dag", K(ret), K(*start_restore_dag));
-      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(finish_restore_dag))) {
-        LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(start_restore_dag));
-      } else {
-        finish_restore_dag = nullptr;
-      }
+    } else if (OB_FAIL(scheduler->add_dag_pair(start_restore_dag, finish_restore_dag))) {
+      LOG_WARN("failed to add restore dag pair", K(ret),
+          K(*start_restore_dag), K(*finish_restore_dag));
       if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
         LOG_WARN("Fail to add task", K(ret));
         ret = OB_EAGAIN;
       }
     } else {
       LOG_INFO("succeed to schedule start restore dag", K(*start_restore_dag));
+      start_restore_dag = nullptr;
+      finish_restore_dag = nullptr;
     }
 
     if (OB_FAIL(ret)) {
@@ -1268,12 +1234,8 @@ int ObStartTabletGroupRestoreDag::create_first_task()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("start tablet group restore dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init(finish_dag_))) {
-    LOG_WARN("failed to init start tablet group restore task", K(ret), KPC(ha_dag_net_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
+  } else if (OB_FAIL(create_task(nullptr/*parent_task*/, task, finish_dag_))) {
+    LOG_WARN("failed to create start tablet group restore task", K(ret), KPC(ha_dag_net_ctx_));
   } else {
     LOG_DEBUG("success to create first task", K(ret), KPC(this));
   }
@@ -1383,9 +1345,8 @@ int ObStartTabletGroupRestoreTask::process()
 int ObStartTabletGroupRestoreTask::generate_tablet_restore_dag_()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  ObTenantDagScheduler *scheduler = nullptr;
   ObIDagNet *dag_net = nullptr;
+  ObTenantDagScheduler *scheduler = nullptr;
   ObStartTabletGroupRestoreDag *start_tablet_group_restore_dag = nullptr;
   ObLogicTabletID logic_tablet_id;
 
@@ -1433,43 +1394,19 @@ int ObStartTabletGroupRestoreTask::generate_tablet_restore_dag_()
       if (!param.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("init tablet restore param not valid", K(ret), K(param), KPC(ctx_));
-      } else if (OB_FAIL(scheduler->alloc_dag(tablet_restore_dag, true/*is_ha_dag*/))) {
-        LOG_WARN("failed to alloc tablet restore dag ", K(ret));
-      } else if (OB_FAIL(tablet_restore_dag->init(param))) {
+      } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_schedule_dag(
+          dag_net, parent, finish_dag_, ObDagPrio::DAG_PRIO_MAX,
+          false/*emergency*/, tablet_restore_dag, param))) {
         if (OB_TABLET_NOT_EXIST == ret) {
-          //overwrite ret
           LOG_INFO("tablet is deleted, skip restore", K(logic_tablet_id), K(param));
-          scheduler->free_dag(*tablet_restore_dag);
-          tablet_restore_dag = nullptr;
           ret = OB_SUCCESS;
         } else {
-          LOG_WARN("failed to init tablet restore dag", K(ret), K(*ctx_));
-        }
-      } else if (OB_FAIL(dag_net->add_dag_into_dag_net(*tablet_restore_dag))) {
-        LOG_WARN("failed to add dag into dag net", K(ret), K(*ctx_));
-      } else if (OB_FAIL(parent->add_child_without_inheritance(*tablet_restore_dag))) {
-        LOG_WARN("failed to add child dag", K(ret), K(*ctx_));
-      } else if (OB_FAIL(tablet_restore_dag->create_first_task())) {
-        LOG_WARN("failed to create first task", K(ret), K(*ctx_));
-      } else if (OB_FAIL(tablet_restore_dag->add_child_without_inheritance(*finish_dag_))) {
-        LOG_WARN("failed to add finish dag as child", K(ret), K(*ctx_));
-      } else if (OB_FAIL(scheduler->add_dag(tablet_restore_dag))) {
-        LOG_WARN("failed to add tablet restore dag", K(ret), K(*tablet_restore_dag));
-        if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-          LOG_WARN("Fail to add task", K(ret));
-          ret = OB_EAGAIN;
+          LOG_WARN("failed to schedule tablet restore dag", K(ret), K(*ctx_));
         }
       } else {
-        LOG_INFO("succeed to schedule tablet restore dag", K(*tablet_restore_dag));
         tablet_restore_dag = nullptr;
+        LOG_INFO("succeed to schedule tablet restore dag", K(logic_tablet_id));
         break;
-      }
-
-      if (OB_FAIL(ret)) {
-        if (OB_NOT_NULL(tablet_restore_dag)) {
-          scheduler->free_dag(*tablet_restore_dag);
-          tablet_restore_dag = nullptr;
-        }
       }
     }
   }
@@ -1597,12 +1534,8 @@ int ObFinishTabletGroupRestoreDag::create_first_task()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("finish tablet group restore dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init())) {
-    LOG_WARN("failed to init finish tablet group restore task", K(ret), KPC(ha_dag_net_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
+  } else if (OB_FAIL(create_task(nullptr/*parent_task*/, task))) {
+    LOG_WARN("failed to create finish tablet group restore task", K(ret), KPC(ha_dag_net_ctx_));
   } else {
     LOG_DEBUG("success to create first task", K(ret), KPC(this));
   }
@@ -1718,7 +1651,7 @@ int ObFinishTabletGroupRestoreTask::generate_restore_init_dag_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag(initial_restore_dag, true/*is_ha_dag*/))) {
+    if (OB_FAIL(scheduler->alloc_dag(initial_restore_dag))) {
       LOG_WARN("failed to alloc initial restore dag ", K(ret));
     } else if (OB_FAIL(initial_restore_dag->init(dag_net_))) {
       LOG_WARN("failed to init initial restore dag", K(ret));
@@ -1998,12 +1931,8 @@ int ObTabletRestoreDag::create_first_task()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet restore dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init(tablet_restore_ctx_))) {
-    LOG_WARN("failed to init sys tablets restore task", K(ret), K(tablet_restore_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
+  } else if (OB_FAIL(create_task(nullptr/*parent_task*/, task, tablet_restore_ctx_))) {
+    LOG_WARN("failed to create sys tablets restore task", K(ret), K(tablet_restore_ctx_));
   } else {
     LOG_DEBUG("success to create first task", K(ret), KPC(this));
   }
@@ -2111,7 +2040,7 @@ int ObTabletRestoreDag::generate_next_dag(share::ObIDag *&dag)
         if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-        } else if (OB_FAIL(scheduler->alloc_dag(tablet_restore_dag, true/*is_ha_dag*/))) {
+        } else if (OB_FAIL(scheduler->alloc_dag(tablet_restore_dag))) {
           LOG_WARN("failed to alloc tablet restore dag", K(ret));
         } else if (OB_FAIL(tablet_restore_dag->init(param))) {
           if (OB_TABLET_NOT_EXIST == ret) {
@@ -3232,4 +3161,3 @@ int ObTabletGroupRestoreUtils::init_ha_tablets_builder(
 
 }
 }
-

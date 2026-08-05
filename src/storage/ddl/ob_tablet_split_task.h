@@ -193,7 +193,6 @@ public:
   { return param_.compat_mode_; }
   virtual uint64_t get_consumer_group_id() const override
   { return consumer_group_id_; }
-  virtual bool is_ha_dag() const override { return false; }
   virtual int report_replica_build_status() const override;
   virtual int get_complement_data_ret() const override {
     return context_.complement_data_ret_;

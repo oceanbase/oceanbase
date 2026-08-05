@@ -151,7 +151,6 @@ public:
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual lib::Worker::CompatMode get_compat_mode() const { return lib::Worker::CompatMode::MYSQL; }
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
-  virtual bool is_ha_dag() const override { return true; }
 
 protected:
   bool is_inited_;
@@ -196,7 +195,6 @@ public:
   virtual uint64_t hash() const override;
   virtual lib::Worker::CompatMode get_compat_mode() const { return lib::Worker::CompatMode::MYSQL; }
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
-  virtual bool is_ha_dag() const override { return true; }
 
 protected:
   bool is_inited_;
@@ -358,7 +356,6 @@ public:
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual lib::Worker::CompatMode get_compat_mode() const { return lib::Worker::CompatMode::MYSQL; }
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
-  virtual bool is_ha_dag() const override { return true; }
 
 protected:
   bool is_inited_;

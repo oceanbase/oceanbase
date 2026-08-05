@@ -10,7 +10,6 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "ob_storage_ha_utils.h"
-#include "ob_storage_ha_utils.h"
 #include "storage/high_availability/ob_transfer_service.h"
 #include "storage/high_availability/ob_rebuild_service.h"
 
@@ -205,7 +204,7 @@ int ObLSCompleteMigrationDagNet::start_running_for_migration_()
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
   } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx_.arg_.type_, prio))) {
     LOG_WARN("failed to get dag priority", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, initial_dag))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(initial_dag, prio))) {
     LOG_WARN("failed to alloc initial dag ", K(ret), K(prio));
   } else if (OB_FAIL(initial_dag->init(this))) {
     LOG_WARN("failed to init initial dag", K(ret));
@@ -799,12 +798,8 @@ int ObInitialCompleteMigrationDag::create_first_task()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("initial complete migration dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init())) {
-    LOG_WARN("failed to init initial complete migration task", K(ret), KPC(ha_dag_net_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
+  } else if (OB_FAIL(create_task(nullptr/*parent_task*/, task))) {
+    LOG_WARN("failed to create initial complete migration task", K(ret), KPC(ha_dag_net_ctx_));
   } else {
     LOG_DEBUG("success to create first task", K(ret), KPC(this));
   }
@@ -905,75 +900,23 @@ int ObInitialCompleteMigrationTask::generate_migration_dags_()
   int tmp_ret = OB_SUCCESS;
   ObWaitDataReadyDag *wait_data_ready_dag = nullptr;
   ObFinishCompleteMigrationDag *finish_complete_dag = nullptr;
-  ObTenantDagScheduler *scheduler = nullptr;
   ObInitialCompleteMigrationDag *initial_complete_migration_dag = nullptr;
   ObDagPrio::ObDagPrioEnum prio = ObDagPrio::DAG_PRIO_MAX;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("initial prepare migration task do not init", K(ret));
-  } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
   } else if (OB_ISNULL(initial_complete_migration_dag = static_cast<ObInitialCompleteMigrationDag *>(this->get_dag()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("initial complete migration dag should not be NULL", K(ret), KP(initial_complete_migration_dag));
   } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx_->arg_.type_, prio))) {
     LOG_WARN("failed to get dag priority", K(ret));
-  } else {
-    if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, wait_data_ready_dag))) {
-      LOG_WARN("failed to alloc wait data ready dag ", K(ret));
-    } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, finish_complete_dag))) {
-      LOG_WARN("failed to alloc finish complete migration dag", K(ret));
-    } else if (OB_FAIL(wait_data_ready_dag->init(dag_net_))) {
-      LOG_WARN("failed to init wait data ready dag", K(ret));
-    } else if (OB_FAIL(finish_complete_dag->init(dag_net_))) {
-      LOG_WARN("failed to init finish complete migration dag", K(ret));
-    } else if (OB_FAIL(this->get_dag()->add_child(*wait_data_ready_dag))) {
-      LOG_WARN("failed to add wait data ready dag", K(ret), KPC(wait_data_ready_dag));
-    } else if (OB_FAIL(wait_data_ready_dag->create_first_task())) {
-      LOG_WARN("failed to create first task", K(ret));
-    } else if (OB_FAIL(wait_data_ready_dag->add_child(*finish_complete_dag))) {
-      LOG_WARN("failed to add finish complete migration dag as child", K(ret));
-    } else if (OB_FAIL(finish_complete_dag->create_first_task())) {
-      LOG_WARN("failed to create first task", K(ret));
-    } else if (OB_FAIL(scheduler->add_dag(finish_complete_dag))) {
-      LOG_WARN("failed to add finish complete migration dag", K(ret), K(*finish_complete_dag));
-      if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-        LOG_WARN("Fail to add task", K(ret));
-        ret = OB_EAGAIN;
-      }
-    } else if (OB_FAIL(scheduler->add_dag(wait_data_ready_dag))) {
-      LOG_WARN("failed to add dag", K(ret), K(*wait_data_ready_dag));
-      if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-        LOG_WARN("Fail to add task", K(ret));
-        ret = OB_EAGAIN;
-      }
-
-      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(finish_complete_dag))) {
-        LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(initial_complete_migration_dag));
-      }
-      finish_complete_dag = nullptr;
-    } else {
-      LOG_INFO("succeed to add all dag", K(*wait_data_ready_dag), K(*finish_complete_dag));
-      wait_data_ready_dag = nullptr;
-      finish_complete_dag = nullptr;
-    }
-
-    if (OB_FAIL(ret)) {
-      if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(finish_complete_dag)) {
-        scheduler->free_dag(*finish_complete_dag);
-        finish_complete_dag = nullptr;
-      }
-
-      if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(wait_data_ready_dag)) {
-        scheduler->free_dag(*wait_data_ready_dag);
-        wait_data_ready_dag = nullptr;
-      }
-
-      if (OB_SUCCESS != (tmp_ret = ctx_->set_result(ret, true /*allow_retry*/, this->get_dag()->get_type()))) {
-        LOG_WARN("failed to set complete migration result", K(ret), K(tmp_ret), K(*ctx_));
-      }
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_schedule_pair_dags(
+      prio, this->get_dag()/*parent_dag*/,
+      wait_data_ready_dag, finish_complete_dag, dag_net_))) {
+    LOG_WARN("failed to schedule complete migration dag pair", K(ret));
+    if (OB_SUCCESS != (tmp_ret = ctx_->set_result(ret, true /*allow_retry*/, this->get_dag()->get_type()))) {
+      LOG_WARN("failed to set complete migration result", K(ret), K(tmp_ret), K(*ctx_));
     }
   }
   return ret;
@@ -1002,12 +945,8 @@ int ObWaitDataReadyDag::create_first_task()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("wait data ready dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init())) {
-    LOG_WARN("failed to init wait data ready task", K(ret), KPC(ha_dag_net_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
+  } else if (OB_FAIL(create_task(nullptr/*parent_task*/, task))) {
+    LOG_WARN("failed to create wait data ready task", K(ret), KPC(ha_dag_net_ctx_));
   } else {
     LOG_DEBUG("success to create first task", K(ret), KPC(this));
   }
@@ -2622,12 +2561,8 @@ int ObFinishCompleteMigrationDag::create_first_task()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("finish complete migration dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init())) {
-    LOG_WARN("failed to init finish complete migration task", K(ret), KPC(ha_dag_net_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
+  } else if (OB_FAIL(create_task(nullptr/*parent_task*/, task))) {
+    LOG_WARN("failed to create finish complete migration task", K(ret), KPC(ha_dag_net_ctx_));
   } else {
     LOG_DEBUG("success to create first task", K(ret), KPC(this));
   }
@@ -2731,7 +2666,7 @@ int ObFinishCompleteMigrationTask::generate_prepare_initial_dag_()
   } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx_->arg_.type_, prio))) {
     LOG_WARN("failed to get dag priority", K(ret));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, initial_complete_dag))) {
+    if (OB_FAIL(scheduler->alloc_dag(initial_complete_dag, prio))) {
       LOG_WARN("failed to alloc initial complete migration dag ", K(ret));
     } else if (OB_FAIL(initial_complete_dag->init(dag_net_))) {
       LOG_WARN("failed to init initial complete migration dag", K(ret));
@@ -2776,4 +2711,3 @@ int ObFinishCompleteMigrationTask::record_server_event_()
   }
   return ret;
 }
-

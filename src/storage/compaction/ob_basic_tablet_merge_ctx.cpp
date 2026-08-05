@@ -1857,7 +1857,6 @@ int ObBasicTabletMergeCtx::alloc_mds_info_compaction_filter()
   } else if (OB_FAIL(ObCompactionFilterFactory::alloc_compaction_filter<ObMdsInfoCompactionFilter>(
       mem_ctx_.get_allocator(),
       filter_ctx_.compaction_filter_,
-      mem_ctx_.get_allocator(),
       get_tablet_id(),
       get_schema(),
       schema_rowkey_cnt,

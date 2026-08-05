@@ -146,22 +146,6 @@ bool ObLSStatusCache::is_restore_ready_for_merge(ObLS &ls)
   return is_restore_ready;
 }
 
-bool ObLSStatusCache::check_weak_read_ts_ready(
-    const int64_t &merge_version,
-    ObLS &ls)
-{
-  bool is_ready_for_compaction = false;
-  const SCN &weak_read_scn = ls.get_ls_wrs_handler()->get_ls_weak_read_ts();
-
-  if (weak_read_scn.get_val_for_tx() < merge_version) {
-    FLOG_INFO("current slave_read_ts is smaller than freeze_ts, try later",
-              "ls_id", ls.get_ls_id(), K(merge_version), K(weak_read_scn));
-  } else {
-    is_ready_for_compaction = true;
-  }
-  return is_ready_for_compaction;
-}
-
 /********************************************ObTabletStatusCache impl******************************************/
 const static char * ObTabletExecuteStateStr[] = {
     "CAN_MERGE",

@@ -232,7 +232,6 @@ public:
   { return consumer_group_id_; }
   virtual int create_first_task() override;
   virtual bool ignore_warning() override;
-  virtual bool is_ha_dag() const override { return false; }
   // report lob tablet split status to RS.
   virtual int report_replica_build_status() const override;
   virtual int get_complement_data_ret() const override {

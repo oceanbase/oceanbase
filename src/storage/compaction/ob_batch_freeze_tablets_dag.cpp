@@ -115,8 +115,6 @@ int ObBatchFreezeTabletsTask::inner_process()
     weak_read_ts = ls->get_ls_wrs_handler()->get_ls_weak_read_ts().get_val_for_tx();
   }
 
-  int64_t fail_freeze_cnt = 0;
-  int64_t succ_schedule_cnt = 0;
   const int64_t start_idx = get_start_idx();
   const int64_t end_idx = MIN(param.tablet_info_array_.count(), get_end_idx());
   for (int64_t i = start_idx; OB_SUCC(ret) && i < end_idx; ++i) {

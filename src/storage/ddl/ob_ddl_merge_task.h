@@ -58,7 +58,6 @@ public:
   { return lib::Worker::CompatMode::MYSQL; } // TODO@wenqu: confirm it
   virtual uint64_t get_consumer_group_id() const override
   { return consumer_group_id_; }
-  virtual bool is_ha_dag() const override { return false; }
 private:
   int check_allow_major_merge();
   void reset_tablet_ctx();

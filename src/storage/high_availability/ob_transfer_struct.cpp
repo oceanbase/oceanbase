@@ -18,8 +18,6 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "src/storage/tx_storage/ob_ls_map.h"
 #include "storage/compaction/ob_medium_compaction_func.h"
-#include "storage/ob_storage_schema_util.h"
-#include "share/schema/ob_tenant_schema_service.h"
 
 using namespace oceanbase;
 using namespace share;

@@ -83,15 +83,13 @@ int ObCGMicroBlockWriter::append_row(const ObDatumRow &row,
   return ret;
 }
 
-int ObCGMicroBlockWriter::append_batch(const ObBatchDatumRows &datum_rows,
-                                       const ObMacroBlockDesc *curr_macro_desc)
+int ObCGMicroBlockWriter::append_batch(const ObBatchDatumRows &datum_rows)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("cg micro block writer has not been initialized", K(ret));
-  } else if (OB_FAIL(cg_micro_block_writer_.append_batch(datum_rows,
-                                                         curr_macro_desc))) {
+  } else if (OB_FAIL(cg_micro_block_writer_.append_batch(datum_rows))) {
     LOG_WARN("fail to append batch", K(ret));
   }
   return ret;

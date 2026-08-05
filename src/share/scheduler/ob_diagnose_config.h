@@ -109,7 +109,7 @@ static constexpr ObDiagnoseInfoStruct OB_SUSPECT_INFO_TYPES[] = {
 static_assert(sizeof(OB_SUSPECT_INFO_TYPES) / sizeof(ObDiagnoseInfoStruct) == SUSPECT_INFO_TYPE_MAX + 1, "Not enough initializer");
 
 static constexpr ObDiagnoseInfoStruct OB_DAG_WARNING_INFO_TYPES[] = {
-#define DAG_SCHEDULER_DAG_TYPE_DEF(dag_type, init_dag_prio, sys_task_type, dag_type_str, dag_module_str, diagnose_with_comment, diagnose_int_info_cnt, ...) \
+#define DAG_SCHEDULER_DAG_TYPE_DEF(dag_type, init_dag_prio, sys_task_type, dag_type_str, dag_module_str, is_ha_dag, diagnose_with_comment, diagnose_int_info_cnt, ...) \
     {diagnose_int_info_cnt, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH, diagnose_with_comment, dag_type_str, ##__VA_ARGS__},
 #include "ob_dag_scheduler_config.h"
 #undef DAG_SCHEDULER_DAG_TYPE_DEF

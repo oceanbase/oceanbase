@@ -235,7 +235,6 @@ public:
   virtual void set_dag_error_location() override;
   int update_compaction_param(const ObTabletMergeDagParam &param);
   int generate_merge_task(ObBasicTabletMergeCtx &ctx, share::ObITask *prepare_task);
-  virtual bool is_ha_dag() const override { return false; }
   int alloc_merge_ctx();
   int get_min_sstable_end_scn(share::SCN &min_end_scn);
   int init_min_sstable_end_scn();

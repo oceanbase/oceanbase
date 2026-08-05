@@ -3645,7 +3645,7 @@ int ObTransferHandler::generate_parallel_tablet_info_dag_(
     ret = OB_EAGAIN;
     LOG_WARN("parallel tabelt info dag is already exist, need wait it finish", K(ret), K(task_info));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, build_tablet_dag))) {
+    if (OB_FAIL(scheduler->alloc_dag(build_tablet_dag, prio))) {
       LOG_WARN("failed to alloc tablet group migration dag ", K(ret));
     } else if (OB_FAIL(build_tablet_dag->init(task_info.src_ls_id_, &ctx_, &timeout_ctx))) {
       LOG_WARN("failed to init transfer parallel build tablet dag", K(ret), K(task_info));
@@ -3764,7 +3764,7 @@ int ObTransferHandler::wait_parallel_tablet_info_dag_finish_(
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else if (OB_FAIL(fake_dag.init(task_info.dest_ls_id_, &ctx_, &timeout_ctx))) {
+  } else if (OB_FAIL(fake_dag.init(task_info.src_ls_id_, &ctx_, &timeout_ctx))) {
     LOG_WARN("failed to create fake dag", K(ret), K(task_info));
   } else {
     while (true) {
@@ -3821,4 +3821,3 @@ void ObTransferHandler::finish_parallel_tablet_info_dag_(
 
 }
 }
-

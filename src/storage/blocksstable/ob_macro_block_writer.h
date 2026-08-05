@@ -160,8 +160,7 @@ public:
   int append_micro_block(ObMicroBlockDesc &micro_block_desc, const ObMicroIndexData &micro_index_data);
   int append_index_micro_block(ObMicroBlockDesc &micro_block_desc);
   virtual int append_row(const ObDatumRow &row, const ObMacroBlockDesc *curr_macro_desc = nullptr);
-  virtual int append_batch(const ObBatchDatumRows &datum_rows,
-                           const ObMacroBlockDesc *curr_macro_desc = nullptr);
+  virtual int append_batch(const ObBatchDatumRows &datum_rows);
   int append_macro_block(const ObDataMacroBlockMeta &macro_meta);
   int get_estimate_meta_block_size(const ObDataMacroBlockMeta &macro_meta, int64_t &estimate_size);
   int check_data_macro_block_need_merge(const ObMacroBlockDesc &macro_desc, bool &need_merge) const;
@@ -221,7 +220,7 @@ private:
                            const bool need_fill_logic_id);
   int init_pre_warmer(const share::ObPreWarmerParam &pre_warm_param);
   int data_aggregator_eval(const ObBatchDatumRows &datum_rows, const int64_t start, const int64_t write_row_count);
-  int append_row_inner(const ObDatumRow &row, const ObMacroBlockDesc *curr_macro_desc);
+  int append_row_inner(const ObDatumRow &row);
   int append_row(const ObDatumRow &row, const int64_t split_size);
   int append_batch(const ObBatchDatumRows &datum_rows,
                    const int64_t split_size);

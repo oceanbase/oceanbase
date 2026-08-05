@@ -339,7 +339,7 @@ int ObBackupValidateDagNet::schedule_prepare_validate_()
   if (OB_ISNULL(dag_scheduler = MTL(ObTenantDagScheduler *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, dag scheduler must not be nullptr", KR(ret), KP(dag_scheduler));
-  } else if (OB_FAIL(dag_scheduler->alloc_dag(prepare_dag, true/*is_ha_dag*/))) {
+  } else if (OB_FAIL(dag_scheduler->alloc_dag(prepare_dag))) {
     LOG_WARN("failed to alloc dag", KR(ret));
   } else if (OB_ISNULL(prepare_dag)) {
     ret = OB_ERR_UNEXPECTED;

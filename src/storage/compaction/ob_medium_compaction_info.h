@@ -70,7 +70,13 @@ public:
     const int64_t idx,
     ObIAllocator &allocator,
     blocksstable::ObDatumRowkey &rowkey) const;
-  OB_INLINE bool is_special_serial_merge() const { return (list_size_ == 1) && parallel_datum_rowkey_list_[0].is_max_rowkey(); }
+  OB_INLINE bool is_special_serial_merge() const
+  {
+    return compat_ >= PARALLEL_INFO_VERSION_V1
+        && 1 == list_size_
+        && nullptr != parallel_datum_rowkey_list_
+        && parallel_datum_rowkey_list_[0].is_max_rowkey();
+  }
 public:
   int64_t to_string(char* buf, const int64_t buf_len) const;
   static const int64_t MAX_PARALLEL_RANGE_SERIALIZE_LEN = 1 * 1024 * 1024;
@@ -346,7 +352,6 @@ public:
   int64_t to_string(char* buf, const int64_t buf_len) const;
   void set_co_major_merge_strategy(const ObCOMajorMergeStrategy &strategy);
   void get_co_major_merge_strategy(ObCOMajorMergeStrategy &strategy) const;
-  void set_contain_noinc_storage_schema();
 private:
   bool contain_storage_schema() const;
 public:

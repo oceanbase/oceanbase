@@ -261,7 +261,11 @@ public:
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual bool operator == (const share::ObIDag &other) const override;
   virtual uint64_t hash() const override;
-  virtual int create_first_task() override { ObFinishBackfillTXTask *task = nullptr; return create_task(nullptr, task); }
+  virtual int create_first_task() override
+  {
+    ObFinishBackfillTXTask *task = nullptr;
+    return create_task(nullptr/*parent_task*/, task);
+  }
 
   int init(
       const share::ObTaskId &task_id,

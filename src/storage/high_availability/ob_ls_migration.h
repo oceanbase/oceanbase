@@ -627,10 +627,10 @@ private:
   public:                                                                                             \
     DAG_NAME() : ObMigrationDag(DAG_TYPE) {}                                                          \
     virtual ~DAG_NAME() = default;                                                                    \
-    virtual int fill_dag_key(char *buf, const int64_t buf_len) const override { return fill_dag_key_impl_("DAG_NAME", buf, buf_len); } \
-    virtual int create_first_task() override { TASK_NAME *task = nullptr; return create_task(nullptr, task); } \
+    virtual int fill_dag_key(char *buf, const int64_t buf_len) const override { return fill_dag_key_impl_(#DAG_NAME, buf, buf_len); } \
+    virtual int create_first_task() override { TASK_NAME *task = nullptr; return create_task(nullptr/*parent_task*/, task); } \
     int init(share::ObIDagNet *dag_net) { return init_from_dag_net_(dag_net); }                        \
-    INHERIT_TO_STRING_KV("DAG_NAME", ObMigrationDag, KP(this));                                       \
+    INHERIT_TO_STRING_KV(#DAG_NAME, ObMigrationDag, KP(this));                                        \
   };
 
 DEFINE_MIGRATION_DAG(ObInitialMigrationDag, ObDagType::DAG_TYPE_INITIAL_MIGRATION, ObInitialMigrationTask);

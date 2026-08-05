@@ -1367,10 +1367,12 @@ int ObTransferUtils::check_inc_major_backfill(
     const share::ObLSID &ls_id,
     const share::SCN &backfill_scn,
     ObTableHandleV2 &table_handle,
+    int64_t &commit_version,
     bool &need_backfill,
     bool &is_trans_abort)
 {
   int ret = OB_SUCCESS;
+  commit_version = OB_INVALID_VERSION;
   need_backfill = true;
   is_trans_abort = false;
   ObSSTable *sstable = nullptr;
@@ -1378,7 +1380,6 @@ int ObTransferUtils::check_inc_major_backfill(
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
   int64_t trans_state = ObTxData::MAX_STATE_CNT;
-  int64_t commit_version = -1;
 
   if (!ls_id.is_valid() || !backfill_scn.is_valid() ||!table_handle.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -1396,7 +1397,8 @@ int ObTransferUtils::check_inc_major_backfill(
   } else if (!sstable->is_inc_major_type_sstable()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sstable is not inc major type sstable, unexpected", K(ret), K(table_handle), KPC(sstable));
-  } else if (INT64_MAX != sstable->get_upper_trans_version()) {
+  } else if (FALSE_IT(commit_version = sstable->get_upper_trans_version())) {
+  } else if (INT64_MAX != commit_version) {
     need_backfill = false;
   } else if (OB_UNLIKELY(!sstable->is_loaded())) {
     ret = OB_ERR_UNEXPECTED;

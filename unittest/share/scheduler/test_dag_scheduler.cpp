@@ -668,6 +668,32 @@ TEST_F(TestDagScheduler, test_init)
   EXPECT_EQ(OB_INIT_TWICE, scheduler->init(MTL_ID()));
 }
 
+TEST_F(TestDagScheduler, test_alloc_dag_priority)
+{
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
+  ASSERT_NE(nullptr, scheduler);
+  ASSERT_EQ(OB_SUCCESS, scheduler->init(MTL_ID(), time_slice));
+
+  TestDag *dag = nullptr;
+  ASSERT_EQ(OB_SUCCESS, scheduler->alloc_dag(dag));
+  ASSERT_NE(nullptr, dag);
+  EXPECT_EQ(ObDagPrio::DAG_PRIO_COMPACTION_MID, dag->get_priority());
+  scheduler->free_dag(*dag);
+  dag = nullptr;
+
+  ASSERT_EQ(OB_SUCCESS,
+      scheduler->alloc_dag(dag, ObDagPrio::DAG_PRIO_HA_LOW));
+  ASSERT_NE(nullptr, dag);
+  EXPECT_EQ(ObDagPrio::DAG_PRIO_HA_LOW, dag->get_priority());
+  scheduler->free_dag(*dag);
+  dag = nullptr;
+
+  const ObDagPrio::ObDagPrioEnum invalid_priority =
+      static_cast<ObDagPrio::ObDagPrioEnum>(ObDagPrio::DAG_PRIO_MAX + 1);
+  EXPECT_EQ(OB_INVALID_ARGUMENT,
+      scheduler->alloc_dag(dag, invalid_priority));
+  EXPECT_EQ(nullptr, dag);
+}
 
 TEST_F(TestDagScheduler, basic_test)
 {

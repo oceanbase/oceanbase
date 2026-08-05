@@ -1169,7 +1169,9 @@ int ObMicroBlockDecoder::add_decoder(
     if (store_idx < 0) {
       dest.decoder_ = &none_exist_column_decoder_;
       dest.ctx_ = &none_exist_column_decoder_ctx_;
-    } else if (store_idx >= micro_header_->column_count_) { // new added column
+    } else if (store_idx >= micro_header_->column_count_) {
+      // A column added after this encoded micro block was written has no physical datum;
+      // decode its schema default instead of exposing NOP.
       dest.decoder_ = &new_column_decoder_;
       dest.ctx_ = &ctxs_[store_idx];
       dest.ctx_->fill_for_new_column(col_param, &decoder_allocator_.get_inner_allocator());

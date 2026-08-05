@@ -818,7 +818,8 @@ int ObTransferBackfillTXDagNet::start_running()
       static_cast<ObIDagNet*>(this)))) {
     LOG_WARN("failed to schedule transfer backfill tx dag", K(ret));
   } else {
-    FLOG_INFO("[TRANSFER_BACKFILL]succeed to schedule transfer backfill tx dag", KPC(backfill_tx_dag));
+    backfill_tx_dag = nullptr;
+    FLOG_INFO("[TRANSFER_BACKFILL]succeed to schedule transfer backfill tx dag");
   }
   return ret;
 }
@@ -1175,9 +1176,9 @@ int ObStartTransferBackfillTXTask::process()
 int ObStartTransferBackfillTXTask::generate_transfer_backfill_tx_dags_()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   ObTabletBackfillTXDag *tablet_backfill_tx_dag = nullptr;
   ObFinishBackfillTXDag *finish_backfill_tx_dag = nullptr;
+  ObTenantDagScheduler *scheduler = nullptr;
   ObIDagNet *dag_net = nullptr;
   ObBackfillTXCtx *backfill_tx_ctx = nullptr;
   storage::ObTabletBackfillInfo tablet_info;
@@ -1196,31 +1197,48 @@ int ObStartTransferBackfillTXTask::generate_transfer_backfill_tx_dags_()
   } else if (OB_ISNULL(dag_net = backfill_tx_dag->get_dag_net())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net should not be NULL", K(ret), KP(dag_net));
-  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_schedule_dag(
+  } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
+  } else if (OB_FAIL(scheduler->create_dag(
       dag_net,
-      this->get_dag()/*parent_dag*/,
-      nullptr/*child_dag*/,
       ObDagPrio::DAG_PRIO_MAX,
-      true/*emergency*/,
       finish_backfill_tx_dag,
       ctx_->task_id_, ctx_->src_ls_id_, ctx_->backfill_scn_, ctx_->tablet_infos_, ctx_, &ctx_->tablets_table_mgr_))) {
-    LOG_WARN("failed to schedule finish backfill tx dag", K(ret));
+    LOG_WARN("failed to create finish backfill tx dag", K(ret));
+  } else if (OB_FAIL(this->get_dag()->add_child_without_inheritance(*finish_backfill_tx_dag))) {
+    LOG_WARN("failed to add finish backfill tx dag as child", K(ret));
   } else if (OB_ISNULL(backfill_tx_ctx = finish_backfill_tx_dag->get_backfill_tx_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("backfill tx ctx should not be NULL", K(ret), KP(backfill_tx_ctx));
   } else if (backfill_tx_ctx->is_empty()) {
-    // finish_backfill_tx_dag is child of cur dag
+    if (OB_FAIL(scheduler->add_dag(finish_backfill_tx_dag, true/*emergency*/))) {
+      LOG_WARN("failed to schedule finish backfill tx dag", K(ret), KPC(finish_backfill_tx_dag));
+      if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
+        ret = OB_EAGAIN;
+      }
+    } else {
+      finish_backfill_tx_dag = nullptr;
+    }
   } else if (OB_FAIL(backfill_tx_ctx->get_tablet_info(tablet_info))) {
     LOG_WARN("failed to get tablet id", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_schedule_dag(
+  } else if (OB_FAIL(scheduler->create_dag(
       dag_net,
-      this->get_dag()/*parent_dag*/,
-      finish_backfill_tx_dag/*child_dag*/,
       ObDagPrio::DAG_PRIO_MAX,
-      true/*emergency*/,
       tablet_backfill_tx_dag,
       ctx_->task_id_, ctx_->src_ls_id_, tablet_info, ctx_, backfill_tx_ctx, &ctx_->tablets_table_mgr_))) {
-    LOG_WARN("failed to schedule tablet backfill tx dag", K(ret));
+    LOG_WARN("failed to create tablet backfill tx dag", K(ret));
+  } else if (OB_FAIL(this->get_dag()->add_child_without_inheritance(*tablet_backfill_tx_dag))) {
+    LOG_WARN("failed to add tablet backfill tx dag as child", K(ret));
+  } else if (OB_FAIL(tablet_backfill_tx_dag->add_child_without_inheritance(*finish_backfill_tx_dag))) {
+    LOG_WARN("failed to add finish backfill tx dag as child", K(ret));
+  } else if (OB_FAIL(scheduler->add_dag_pair(
+      tablet_backfill_tx_dag, finish_backfill_tx_dag, true/*emergency*/))) {
+    LOG_WARN("failed to schedule tablet and finish backfill tx dag pair", K(ret),
+        KPC(tablet_backfill_tx_dag), KPC(finish_backfill_tx_dag));
+    if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
+      ret = OB_EAGAIN;
+    }
   } else {
     LOG_INFO("[TRANSFER_BACKFILL]succeed to schedule tablet backfill tx dag and finish backfill tx dag",
         KPC(tablet_backfill_tx_dag), KPC(finish_backfill_tx_dag));
@@ -1228,13 +1246,12 @@ int ObStartTransferBackfillTXTask::generate_transfer_backfill_tx_dags_()
     finish_backfill_tx_dag = nullptr;
   }
 
-  if (OB_FAIL(ret) && OB_NOT_NULL(finish_backfill_tx_dag)) {
-    ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
-    if (OB_NOT_NULL(scheduler)) {
-      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(finish_backfill_tx_dag))) {
-        LOG_WARN("failed to cancel finish backfill tx dag", K(tmp_ret), KPC(finish_backfill_tx_dag));
-      }
-    }
+  if (OB_FAIL(ret) && OB_NOT_NULL(scheduler) && OB_NOT_NULL(tablet_backfill_tx_dag)) {
+    scheduler->free_dag(*tablet_backfill_tx_dag);
+    tablet_backfill_tx_dag = nullptr;
+  }
+  if (OB_FAIL(ret) && OB_NOT_NULL(scheduler) && OB_NOT_NULL(finish_backfill_tx_dag)) {
+    scheduler->free_dag(*finish_backfill_tx_dag);
     finish_backfill_tx_dag = nullptr;
   }
   return ret;

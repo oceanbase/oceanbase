@@ -6,6 +6,8 @@
 #ifndef SRC_SHARE_SCHEDULER_OB_DAG_SCHEDULER_H_
 #define SRC_SHARE_SCHEDULER_OB_DAG_SCHEDULER_H_
 
+#include <utility>
+
 #include "lib/ob_define.h"
 #include "lib/container/ob_se_array.h"
 #include "lib/hash/ob_hashmap.h"
@@ -677,7 +679,6 @@ public:
   virtual int generate_next_dag(ObIDag *&next_dag) { UNUSED(next_dag); return common::OB_ITER_END; }
   int fill_comment(char *buf, const int64_t buf_len);
 
-  virtual bool is_ha_dag() const { return false; }
   void set_dag_emergency(const bool emergency) { emergency_ = emergency; }
   bool get_emergency() const { return emergency_; }
   int handle_retry_strategy(const int errcode);
@@ -1125,6 +1126,7 @@ public:
 
 class ObDagPrioScheduler
 {
+  friend class ObTenantDagScheduler;
 public:
   typedef common::ObDList<ObTenantDagWorker> WorkerList;
   ObDagPrioScheduler()
@@ -1281,10 +1283,14 @@ private:
   int add_dag_into_list_and_map_(
     const ObDagListIndex list_index,
     ObIDag &dag);
+  int erase_dag_from_list_and_map_(ObIDag &dag);
   int get_stored_dag_(ObIDag &dag, ObIDag *&stored_dag);
   int inner_add_dag_(
     const bool check_size_overflow,
     ObIDag *&dag);
+  int inner_add_dag_pair(
+    ObIDag *first_dag,
+    ObIDag *second_dag);
   void add_schedule_info_(const ObDagType::ObDagTypeEnum dag_type, const int64_t data_size);
   void add_added_info_(const ObDagType::ObDagTypeEnum dag_type);
   int schedule_one_();
@@ -1358,21 +1364,34 @@ public:
            const int64_t loop_waiting_list_period = LOOP_WAITING_DAG_LIST_INTERVAL,
            const int64_t dag_limit = DEFAULT_MAX_DAG_NUM);
   int add_dag(ObIDag *dag, const bool emergency = false, const bool check_size_overflow = true);
+  // On success, both dags are owned by the scheduler. On failure, neither dag
+  // is added to the scheduler and both remain owned by the caller. The two
+  // dags must have the same priority and different types.
+  int add_dag_pair(
+      ObIDag *first_dag,
+      ObIDag *second_dag,
+      const bool emergency = false);
   int add_dag_net(ObIDagNet *dag_net);
   template<typename T>
   int create_dag(
       const ObIDagInitParam *param,
+      T *&dag);
+  // Allocates, initializes, adds the DAG into dag_net and creates its first task.
+  // DAG_PRIO_MAX keeps the DAG type's default priority. On failure, dag may be
+  // non-null and remains owned by the caller.
+  template<typename T, typename... Args>
+  int create_dag(
+      ObIDagNet *dag_net,
+      const ObDagPrio::ObDagPrioEnum priority,
       T *&dag,
-      const bool is_ha_dag = false);
+      Args&&... init_args);
   template<typename T>
   int create_and_add_dag(
       const ObIDagInitParam *param,
       const bool emergency = false,
       const bool check_size_overflow = true);
   template<typename T>
-  int alloc_dag(T *&dag, const bool is_ha_dag = false);
-  template<typename T>
-  int alloc_dag_with_priority(const ObDagPrio::ObDagPrioEnum &prio, T *&dag);
+  int alloc_dag(T *&dag, const ObDagPrio::ObDagPrioEnum priority = ObDagPrio::DAG_PRIO_MAX);
   template<typename T>
   int create_and_add_dag_net(const ObIDagInitParam *param);
   void free_dag(ObIDag &dag);
@@ -1490,7 +1509,7 @@ public:
   common::ObIAllocator &get_independent_allocator() { return independent_mem_context_->get_malloc_allocator(); }
 public:
   template<typename T>
-  static int alloc_dag(ObIAllocator &allocator, const bool is_ha_dag, T *&dag);
+  static int alloc_dag_from_allocator(ObIAllocator &allocator, T *&dag);
   static void inner_free_dag(ObIAllocator &allocator, ObIDag &dag);
 private:
   static const int64_t SCHEDULER_WAIT_TIME_MS = 1000; // 1s
@@ -1618,26 +1637,37 @@ int ObIDag::create_task(ObITask *parent, T *&task, Args&&... args)
 }
 
 template <typename T>
-int ObTenantDagScheduler::alloc_dag(T *&dag, const bool is_ha_dag)
+int ObTenantDagScheduler::alloc_dag(T *&dag, const ObDagPrio::ObDagPrioEnum priority)
 {
   int ret = common::OB_SUCCESS;
   dag = nullptr;
   if (IS_NOT_INIT) {
     ret = common::OB_NOT_INIT;
     COMMON_LOG(WARN, "scheduler is not init", K(ret));
+  } else if (OB_UNLIKELY(ObDagPrio::DAG_PRIO_MAX != priority
+      && !ObDagPrio::is_valid_prio(priority))) {
+    ret = common::OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid dag priority", K(ret), K(priority));
   } else {
+    T dag_meta;
+    const ObDagType::ObDagTypeEnum dag_type = dag_meta.get_type();
+    const bool is_ha_dag = OB_DAG_TYPES[dag_type].is_ha_dag_;
     ObIAllocator &allocator = get_allocator(is_ha_dag);
-    if (OB_FAIL(alloc_dag(allocator, is_ha_dag, dag))) {
+    if (OB_FAIL(alloc_dag_from_allocator(allocator, dag))) {
       STORAGE_LOG(WARN, "fail to alloc dag", K(ret));
+    } else if (OB_ISNULL(dag)) {
+      ret = common::OB_ERR_UNEXPECTED;
+      COMMON_LOG(WARN, "dag should not be null", K(ret), KP(dag));
+    } else if (ObDagPrio::DAG_PRIO_MAX != priority) {
+      dag->set_priority(priority);
     }
   }
   return ret;
 }
 
 template<typename T>
-int ObTenantDagScheduler::alloc_dag(
+int ObTenantDagScheduler::alloc_dag_from_allocator(
     ObIAllocator &allocator,
-    const bool is_ha_dag,
     T *&dag)
 {
   int ret = OB_SUCCESS;
@@ -1650,10 +1680,7 @@ int ObTenantDagScheduler::alloc_dag(
     COMMON_LOG(WARN, "failed to alloc dag", K(ret));
   } else {
     ObIDag *new_dag = new (buf) T();
-    if (new_dag->is_ha_dag() != is_ha_dag) {
-      ret = OB_ERR_UNEXPECTED;
-      COMMON_LOG(WARN, "dag type is not matched", K(ret), KPC(new_dag), K(is_ha_dag));
-    } else if (OB_FAIL(new_dag->basic_init(allocator))) {
+    if (OB_FAIL(new_dag->basic_init(allocator))) {
       COMMON_LOG(WARN, "failed to init dag", K(ret));
     } else {
       dag = static_cast<T*>(new_dag);
@@ -1663,29 +1690,6 @@ int ObTenantDagScheduler::alloc_dag(
       inner_free_dag(allocator, *new_dag);
       new_dag = nullptr;
     }
-  }
-  return ret;
-}
-
-template <typename  T>
-int ObTenantDagScheduler::alloc_dag_with_priority(
-    const ObDagPrio::ObDagPrioEnum &prio, T *&dag)
-{
-  int ret = OB_SUCCESS;
-  dag = NULL;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    COMMON_LOG(WARN, "ObTenantDagScheduler is not inited", K(ret));
-  } else if (OB_UNLIKELY(!ObDagPrio::is_valid_prio(prio))) {
-    ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "get invalid arg", K(ret), K(prio));
-  } else if (OB_FAIL(alloc_dag(dag, is_ha_prio_dag(prio)))) {
-    COMMON_LOG(WARN, "failed to alloc dag", K(ret));
-  } else if (OB_ISNULL(dag)) {
-    ret = OB_ERR_UNEXPECTED;
-    COMMON_LOG(WARN, "dag should not be null", K(ret), KP(dag));
-  } else {
-    dag->set_priority(prio);
   }
   return ret;
 }
@@ -1744,19 +1748,50 @@ int ObTenantDagScheduler::create_and_add_dag_net(const ObIDagInitParam *param)
 template<typename T>
 int ObTenantDagScheduler::create_dag(
     const ObIDagInitParam *param,
-    T *&dag,
-    const bool is_ha_dag)
+    T *&dag)
 {
   int ret = common::OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "ObTenantDagScheduler is not inited", K(ret));
-  } else if (OB_FAIL(alloc_dag(dag, is_ha_dag))) {
+  } else if (OB_FAIL(alloc_dag(dag))) {
     COMMON_LOG(WARN, "failed to alloc dag", K(ret));
   } else if (OB_FAIL(dag->init_by_param(param))) {
     COMMON_LOG(WARN, "failed to init dag", K(ret), KPC(dag));
   } else if (OB_FAIL(dag->create_first_task())) {
     COMMON_LOG(WARN, "failed to create first task", K(ret), KPC(dag));
+  }
+  return ret;
+}
+
+template<typename T, typename... Args>
+int ObTenantDagScheduler::create_dag(
+    ObIDagNet *dag_net,
+    const ObDagPrio::ObDagPrioEnum priority,
+    T *&dag,
+    Args&&... init_args)
+{
+  int ret = common::OB_SUCCESS;
+  dag = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    COMMON_LOG(WARN, "ObTenantDagScheduler is not inited", K(ret));
+  } else if (OB_ISNULL(dag_net)
+      || OB_UNLIKELY(ObDagPrio::DAG_PRIO_MAX != priority
+          && !ObDagPrio::is_valid_prio(priority))) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid arguments for creating dag", K(ret), K(priority), KP(dag_net));
+  } else {
+    if (OB_FAIL(alloc_dag(dag, priority))) {
+      COMMON_LOG(WARN, "failed to alloc dag", K(ret), K(priority));
+    } else if (OB_FAIL(dag->init(std::forward<Args>(init_args)...))) {
+      COMMON_LOG(WARN, "failed to init dag", K(ret), K(priority), KPC(dag));
+    } else if (OB_FAIL(dag_net->add_dag_into_dag_net(*dag))) {
+      COMMON_LOG(WARN, "failed to add dag into dag net", K(ret),
+          K(priority), KPC(dag_net), KPC(dag));
+    } else if (OB_FAIL(dag->create_first_task())) {
+      COMMON_LOG(WARN, "failed to create first task", K(ret), K(priority), KPC(dag));
+    }
   }
   return ret;
 }
@@ -1778,9 +1813,6 @@ int ObTenantDagScheduler::create_and_add_dag(
     if (common::OB_SIZE_OVERFLOW != ret && common::OB_EAGAIN != ret) {
       COMMON_LOG(WARN, "failed to add dag", K(ret), KPC(dag));
     }
-  } else {
-    ObThreadCondGuard guard(scheduler_sync_);
-    scheduler_sync_.signal(); // wake up scheduler
   }
   if (OB_FAIL(ret) && nullptr != dag) {
     free_dag(*dag);

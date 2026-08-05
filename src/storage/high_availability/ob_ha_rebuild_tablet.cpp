@@ -22,7 +22,6 @@
 #include "share/ls/ob_ls_table_operator.h"
 #include "ob_rebuild_service.h"
 #include "share/ob_cluster_version.h"
-#include "ob_storage_ha_utils.h"
 
 namespace oceanbase
 {
@@ -276,42 +275,21 @@ int ObRebuildTabletDagNet::start_running()
 int ObRebuildTabletDagNet::start_running_for_rebuild_tablet_()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   ObInitialRebuildTabletDag *initial_rebuild_tablet_dag = nullptr;
-  ObTenantDagScheduler *scheduler = nullptr;
+  ObIDagNet *dag_net = this;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("rebuild tablet dag net do not init", K(ret));
   } else if (FALSE_IT(ctx_->start_ts_ = ObTimeUtil::current_time())) {
-  } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag(initial_rebuild_tablet_dag, true/*is_ha_dag*/))) {
-    LOG_WARN("failed to alloc rebuild tablet dag ", K(ret));
-  } else if (OB_FAIL(initial_rebuild_tablet_dag->init(this))) {
-    LOG_WARN("failed to init rebuild tablet dag", K(ret));
-  } else if (OB_FAIL(add_dag_into_dag_net(*initial_rebuild_tablet_dag))) {
-    LOG_WARN("failed to add rebuild tablet initial dag into dag net", K(ret));
-  } else if (OB_FAIL(initial_rebuild_tablet_dag->create_first_task())) {
-    LOG_WARN("failed to create first task", K(ret));
-  } else if (OB_FAIL(scheduler->add_dag(initial_rebuild_tablet_dag))) {
-    LOG_WARN("failed to add initial rebuild tablet dag", K(ret), K(*initial_rebuild_tablet_dag));
-    if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-      LOG_WARN("Fail to add task", K(ret));
-      ret = OB_EAGAIN;
-    }
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_schedule_single_dag(
+      dag_net, ObDagPrio::DAG_PRIO_MAX, false/*emergency*/,
+      initial_rebuild_tablet_dag, dag_net))) {
+    LOG_WARN("failed to schedule initial rebuild tablet dag", K(ret));
   } else {
     initial_rebuild_tablet_dag = nullptr;
   }
 
-  if (OB_NOT_NULL(initial_rebuild_tablet_dag) && OB_NOT_NULL(scheduler)) {
-    initial_rebuild_tablet_dag->reset_children();
-    if (OB_SUCCESS != (tmp_ret = erase_dag_from_dag_net(*initial_rebuild_tablet_dag))) {
-      LOG_WARN("failed to erase dag from dag net", K(tmp_ret), KPC(initial_rebuild_tablet_dag));
-    }
-    scheduler->free_dag(*initial_rebuild_tablet_dag);
-  }
   return ret;
 }
 
@@ -556,12 +534,8 @@ int ObInitialRebuildTabletDag::create_first_task()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("initial rebuild tablet dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init())) {
-    LOG_WARN("failed to init initial rebuild tablet task", K(ret), KPC(ha_dag_net_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
+  } else if (OB_FAIL(create_task(nullptr/*parent_task*/, task))) {
+    LOG_WARN("failed to create initial rebuild tablet task", K(ret), KPC(ha_dag_net_ctx_));
   } else {
     LOG_DEBUG("success to create first task", K(ret), KPC(this));
   }
@@ -658,42 +632,29 @@ int ObInitialRebuildTabletTask::generate_rebuild_tablet_dags_()
   } else if (OB_ISNULL(initial_rebuild_tablet_dag = static_cast<ObInitialRebuildTabletDag *>(this->get_dag()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("initial rebuild tablet dag is null", K(ret), KP(initial_rebuild_tablet_dag));
-  } else if (OB_FAIL(scheduler->alloc_dag(start_rebuild_tablet_dag, true/*is_ha_dag*/))) {
-    LOG_WARN("failed to alloc start rebuild tablet dag ", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag(finish_rebuild_tablet_dag, true/*is_ha_dag*/))) {
-    LOG_WARN("failed to alloc finish rebuild tablet dag", K(ret));
-  } else if (OB_FAIL(start_rebuild_tablet_dag->init(dag_net_, finish_rebuild_tablet_dag))) {
-    LOG_WARN("failed to init start rebuild tablet dag", K(ret));
-  } else if (OB_FAIL(finish_rebuild_tablet_dag->init(dag_net_))) {
-    LOG_WARN("failed to init finish rebuild tablet dag", K(ret));
+  } else if (OB_FAIL(scheduler->create_dag(
+      dag_net_, ObDagPrio::DAG_PRIO_MAX, finish_rebuild_tablet_dag, dag_net_))) {
+    LOG_WARN("failed to create finish rebuild tablet dag", K(ret));
+  } else if (OB_FAIL(scheduler->create_dag(
+      dag_net_, ObDagPrio::DAG_PRIO_MAX,
+      start_rebuild_tablet_dag, dag_net_, finish_rebuild_tablet_dag))) {
+    LOG_WARN("failed to create start rebuild tablet dag", K(ret));
   } else if (OB_FAIL(initial_rebuild_tablet_dag->add_child(*start_rebuild_tablet_dag))) {
     LOG_WARN("failed to add start rebuild tablet dag", K(ret), KPC(start_rebuild_tablet_dag));
-  } else if (OB_FAIL(start_rebuild_tablet_dag->create_first_task())) {
-    LOG_WARN("failed to create first task", K(ret));
   } else if (OB_FAIL(start_rebuild_tablet_dag->add_child(*finish_rebuild_tablet_dag))) {
     LOG_WARN("failed to add finish rebuild tablet dag as child", K(ret));
-  } else if (OB_FAIL(finish_rebuild_tablet_dag->create_first_task())) {
-    LOG_WARN("failed to create first task", K(ret));
-  } else if (OB_FAIL(scheduler->add_dag(finish_rebuild_tablet_dag))) {
-    LOG_WARN("failed to add finish rebuild tablet dag", K(ret), K(*finish_rebuild_tablet_dag));
-    if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-      LOG_WARN("Fail to add task", K(ret));
-      ret = OB_EAGAIN;
-    }
-  } else if (OB_FAIL(scheduler->add_dag(start_rebuild_tablet_dag))) {
-    LOG_WARN("failed to add dag", K(ret), K(*start_rebuild_tablet_dag));
-    if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(finish_rebuild_tablet_dag, start_rebuild_tablet_dag))) {
-      LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(initial_rebuild_tablet_dag));
-    } else {
-      finish_rebuild_tablet_dag = nullptr;
-    }
-
+  } else if (OB_FAIL(scheduler->add_dag_pair(
+      start_rebuild_tablet_dag, finish_rebuild_tablet_dag))) {
+    LOG_WARN("failed to add rebuild tablet dag pair", K(ret),
+        K(*start_rebuild_tablet_dag), K(*finish_rebuild_tablet_dag));
     if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
       LOG_WARN("Fail to add task", K(ret));
       ret = OB_EAGAIN;
     }
   } else {
     LOG_INFO("succeed to schedule start rebuild tablet dag", K(*start_rebuild_tablet_dag));
+    start_rebuild_tablet_dag = nullptr;
+    finish_rebuild_tablet_dag = nullptr;
   }
 
   if (OB_FAIL(ret)) {
@@ -875,12 +836,8 @@ int ObStartRebuildTabletDag::create_first_task()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("start rebuild tablet dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init(finish_dag_))) {
-    LOG_WARN("failed to init start rebuild tablet task", K(ret), KPC(ha_dag_net_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
+  } else if (OB_FAIL(create_task(nullptr/*parent_task*/, task, finish_dag_))) {
+    LOG_WARN("failed to create start rebuild tablet task", K(ret), KPC(ha_dag_net_ctx_));
   } else {
     LOG_DEBUG("success to create first task", K(ret), KPC(this));
   }
@@ -988,7 +945,8 @@ int ObStartRebuildTabletTask::generate_rebuild_tablets_dag_()
         logic_tablet_id.tablet_id_, dag_net, finish_dag_))) {
       LOG_WARN("failed to schedule tablet rebuild dag", K(ret), K(*ctx_));
     } else {
-      LOG_INFO("succeed to schedule tablet rebuild dag", K(*tablet_rebuild_dag), K(logic_tablet_id));
+      tablet_rebuild_dag = nullptr;
+      LOG_INFO("succeed to schedule tablet rebuild dag", K(logic_tablet_id));
     }
   }
   return ret;
@@ -1154,12 +1112,8 @@ int ObTabletRebuildMajorDag::create_first_task()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet rebuild major dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init(copy_tablet_ctx_))) {
-    LOG_WARN("failed to init tablet rebuild major task", K(ret), KPC(ha_dag_net_ctx_), K(copy_tablet_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
+  } else if (OB_FAIL(create_task(nullptr/*parent_task*/, task, copy_tablet_ctx_))) {
+    LOG_WARN("failed to create tablet rebuild major task", K(ret), KPC(ha_dag_net_ctx_), K(copy_tablet_ctx_));
   } else {
     LOG_DEBUG("success to create first task", K(ret), KPC(this));
   }
@@ -1247,7 +1201,7 @@ int ObTabletRebuildMajorDag::generate_next_dag(share::ObIDag *&dag)
         } else {
           LOG_WARN("failed to get tablet", K(ret), K(logic_tablet_id));
         }
-      } else if (OB_FAIL(scheduler->alloc_dag(tablet_rebuild_dag, true/*is_ha_dag*/))) {
+      } else if (OB_FAIL(scheduler->alloc_dag(tablet_rebuild_dag))) {
         LOG_WARN("failed to alloc tablet rebuild dag", K(ret));
       } else {
         if (OB_FAIL(tablet_rebuild_dag->init(logic_tablet_id.tablet_id_, dag_net, finish_dag_))) {
@@ -1848,12 +1802,8 @@ int ObFinishRebuildTabletDag::create_first_task()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("finish rebuild tablet dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init())) {
-    LOG_WARN("failed to init log stream migration task", K(ret), KPC(ha_dag_net_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
+  } else if (OB_FAIL(create_task(nullptr/*parent_task*/, task))) {
+    LOG_WARN("failed to create finish rebuild tablet task", K(ret), KPC(ha_dag_net_ctx_));
   } else {
     LOG_DEBUG("success to create first task", K(ret), KPC(this));
   }
@@ -1944,7 +1894,7 @@ int ObFinishRebuildTabletTask::generate_rebuild_tablet_init_dag_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("finish rebuild tablet dag should not be NULL", K(ret), KP(finish_rebuild_tablet_dag));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag(initial_rebuild_tablet_dag, true/*is_ha_dag*/))) {
+    if (OB_FAIL(scheduler->alloc_dag(initial_rebuild_tablet_dag))) {
       LOG_WARN("failed to alloc initial rebuild tablet dag ", K(ret));
     } else if (OB_FAIL(initial_rebuild_tablet_dag->init(dag_net_))) {
       LOG_WARN("failed to init initial rebuild tablet dag", K(ret));

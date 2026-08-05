@@ -1121,15 +1121,10 @@ void ObCompactionDiagnoseMgr::diagnose_count_info()
 }
 
 struct ObDiagnoseTabletComparator final {
-public:
-  ObDiagnoseTabletComparator(int &sort_ret)
-    : result_code_(sort_ret)
-  {}
   bool operator()(const ObDiagnoseTablet &lhs, const ObDiagnoseTablet &rhs)
   {
     return lhs.ls_id_ < rhs.ls_id_;
   }
-  int &result_code_;
 };
 
 int ObCompactionDiagnoseMgr::diagnose_tenant_tablet()
@@ -1158,7 +1153,7 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_tablet()
     if (OB_TMP_FAIL(MTL(ObDiagnoseTabletMgr*)->get_diagnose_tablets(diagnose_tablets))) {
       LOG_WARN("failed to get all diagnose tablets", K(tmp_ret));
     } else {
-      ObDiagnoseTabletComparator cmp(ret);
+      ObDiagnoseTabletComparator cmp;
       ob_sort(diagnose_tablets.begin(), diagnose_tablets.end(), cmp);
     }
 
@@ -1642,7 +1637,6 @@ int ObCompactionDiagnoseMgr::diagnose_column_store_dag(
     const ObMergeType merge_type,
     const ObLSID &ls_id,
     const ObTabletID &tablet_id,
-    const lib::Worker::CompatMode &compat_mode,
     const int64_t compaction_scn,
     const ObCompactionDagSnapshot &snapshot)
 {
@@ -1702,12 +1696,12 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_merge(
 {
   int ret = OB_SUCCESS;
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
-  lib::Worker::CompatMode compat_mode = tablet.get_tablet_meta().compat_mode_;
   if (!compaction::is_major_merge_type(merge_type) || tablet.is_row_store()) {
     if (OB_FAIL(diagnose_row_store_dag(merge_type, ls_id, tablet_id, compaction_scn, snapshot))) {
       LOG_WARN("failed to diagnose row store dag", K(ret), K(ls_id), K(tablet_id), K(merge_type), K(compaction_scn));
     }
-  } else if (OB_FAIL(diagnose_column_store_dag(merge_type, ls_id, tablet_id, compat_mode, compaction_scn, snapshot))) {
+  } else if (OB_FAIL(diagnose_column_store_dag(
+      merge_type, ls_id, tablet_id, compaction_scn, snapshot))) {
     LOG_WARN("failed to diagnose column store dag", K(ret), K(ls_id), K(tablet_id), K(merge_type), K(compaction_scn));
   }
   return ret;
@@ -1727,7 +1721,6 @@ int ObCompactionDiagnoseMgr::get_suspect_and_warning_info(
 
   suspect_type = ObSuspectInfoType::SUSPECT_INFO_TYPE_MAX;
   ObDagWarningInfo warning_info;
-  bool add_schedule_info = false;
   ObInfoParamBuffer allocator;
   compaction::ObMergeDagHash dag_hash;
   dag_hash.merge_type_ = merge_type;

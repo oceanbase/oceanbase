@@ -51,8 +51,7 @@ class ObCOBatchMergeBaseRowWriter : public ObCOBatchMergeRowWriter
 public:
   ObCOBatchMergeBaseRowWriter(bool need_co_scan = false)
   : ObCOBatchMergeRowWriter(need_co_scan),
-    merge_iter_(nullptr, false, allocator_),
-    border_key_()
+    merge_iter_(nullptr, false, allocator_)
   {}
   virtual ~ObCOBatchMergeBaseRowWriter()
   {
@@ -65,7 +64,6 @@ protected:
   virtual OB_INLINE bool is_base_cg_writer() const override { return true; }
 private:
   ObCOMajorMergeIter merge_iter_;
-  ObDatumRowkey border_key_; // TODO: used to batch scan base cg
 };
 }
 }

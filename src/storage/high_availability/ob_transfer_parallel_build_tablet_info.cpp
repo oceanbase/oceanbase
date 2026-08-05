@@ -105,12 +105,8 @@ int ObTransferParallelBuildTabletDag::create_first_task()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer parallel build tablet dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init(tablet_info, ctx_, timeout_ctx_))) {
-    LOG_WARN("failed to init tablet rebuild major task", K(ret), KPC(this));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
+  } else if (OB_FAIL(create_task(nullptr/*parent_task*/, task, tablet_info, ctx_, timeout_ctx_))) {
+    LOG_WARN("failed to create tablet rebuild major task", K(ret), KPC(this));
   } else {
     LOG_DEBUG("success to create first task", K(ret), KPC(this));
   }

@@ -182,7 +182,7 @@ int ObMergeFuser::fuse_delete_row(
       result_row_.row_flag_.set_flag(ObDmlFlag::DF_DELETE);
       result_row_.mvcc_row_flag_ = del_row.mvcc_row_flag_;
       result_row_.set_compacted_multi_version_row();
-      STORAGE_LOG(DEBUG, "fuse delete row", K(ret), K_(original_merge_engine_type), K(del_row), K(result_row_));
+      STORAGE_LOG(DEBUG, "fuse delete row", K(ret), K(del_row), K(result_row_));
     }
   }
 
@@ -277,14 +277,12 @@ int ObMajorPartitionMergeFuser::inner_init(const ObMergeParameter &merge_param)
   const common::ObIArray<share::schema::ObColDesc> &multi_version_column_ids = merge_param.static_param_.multi_version_column_descs_;
   const ObStorageSchema *schema = merge_param.get_schema();
   column_cnt_ = multi_version_column_ids.count();
-  const bool need_trim_default_row = cluster_version_ >= DATA_VERSION_4_3_1_0 || cluster_version_ < DATA_VERSION_4_3_0_0;
 
   if (OB_FAIL(init_default_row(merge_param))) {
     LOG_WARN("Failed to init default row", K(ret));
   } else if (OB_FAIL(generated_cols_.init(column_cnt_))) {
     LOG_WARN("Fail to init generated_cols", K(ret), K_(column_cnt));
   } else {
-    const ObColumnSchemaV2 *column_schema = NULL;
     for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt_; ++i) {
       if (OB_HIDDEN_TRANS_VERSION_COLUMN_ID == multi_version_column_ids.at(i).col_id_ ||
           OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID == multi_version_column_ids.at(i).col_id_) {
@@ -330,6 +328,7 @@ int ObMajorPartitionMergeFuser::end_fuse_row(const storage::ObNopPos &nop_pos, b
       }
     }
     if (OB_SUCC(ret)) {
+      // Major SSTables must not persist NOP datums; resolve them from the schema default row.
       bool final_result = false;
       if (OB_FAIL(add_fuse_row(default_row_, final_result))) {
         STORAGE_LOG(WARN, "Failed to fuse default row", K(ret));

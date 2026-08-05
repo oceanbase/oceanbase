@@ -17,60 +17,6 @@ using namespace storage;
 namespace compaction
 {
 
-// TODO(@DanLing) optimize compaction mem usage
-int ObCompactionEstimator::estimate_compaction_memory(
-    const int64_t priority,
-    const ObCompactionParam &param,
-    int64_t &estimate_mem_usage)
-{
-  int ret = OB_SUCCESS;
-  estimate_mem_usage = 0;
-
-  if (ObDagPrio::DAG_PRIO_COMPACTION_HIGH != priority &&
-      ObDagPrio::DAG_PRIO_COMPACTION_MID != priority &&
-      ObDagPrio::DAG_PRIO_COMPACTION_LOW != priority) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(priority));
-  } else if (ObDagPrio::DAG_PRIO_COMPACTION_LOW == priority) {
-    if (param.estimate_concurrent_cnt_ <= 0 || param.sstable_cnt_ <= 0 || param.batch_size_ <= 0) {
-      // not ObCOMergeBatchExeDag, use default mem usage.
-      estimate_mem_usage = DEFAULT_COMPACTION_MEM;
-    } else {
-      estimate_mem_usage = COMPACTION_RESERVED_MEM + COMPACTION_BLOCK_FIXED_MEM;
-      estimate_mem_usage += COMPACTION_ITER_BASE_MEM * param.estimate_concurrent_cnt_ * param.sstable_cnt_;
-      estimate_mem_usage += COMPACTION_CONCURRENT_MEM_FACTOR * param.estimate_concurrent_cnt_ * param.batch_size_;
-    }
-  } else { // mini && minor compaction
-    estimate_mem_usage = COMPACTION_RESERVED_MEM + COMPACTION_BLOCK_FIXED_MEM;
-    estimate_mem_usage += COMPACTION_CONCURRENT_MEM_FACTOR * MAX(1, param.estimate_concurrent_cnt_);
-    if (ObDagPrio::DAG_PRIO_COMPACTION_MID == priority) {
-      estimate_mem_usage += COMPACTION_ITER_BASE_MEM * MAX(1, param.estimate_concurrent_cnt_) * MAX(2, param.parallel_sstable_cnt_);
-    }
-  }
-  return ret;
-}
-
-int64_t ObCompactionEstimator::estimate_compaction_batch_size(
-    const compaction::ObMergeType merge_type,
-    const int64_t compaction_mem_limit,
-    const int64_t concurrent_cnt,
-    const int64_t sstable_cnt)
-{
-  int64_t mem_allow_batch_size = DEFAULT_BATCH_SIZE;
-
-  if (concurrent_cnt <= 0 || sstable_cnt <= 0) {
-    // do nothing
-  } else if (is_major_merge_type(merge_type)) {
-    int64_t base_mem_usage = COMPACTION_RESERVED_MEM + COMPACTION_BLOCK_FIXED_MEM;
-    base_mem_usage += COMPACTION_ITER_BASE_MEM * concurrent_cnt * sstable_cnt;
-
-    mem_allow_batch_size = (compaction_mem_limit - base_mem_usage) / (COMPACTION_CONCURRENT_MEM_FACTOR * concurrent_cnt);
-    mem_allow_batch_size = MAX(mem_allow_batch_size, 1);
-  }
-  return mem_allow_batch_size;
-}
-
-
 // holder: the object that holds min_/max_ members (e.g. common_param_ or (*this))
 #define CALCULATE_NORMALIZED_RANK_SCORE(holder, dimension, val, weight, score)     \
   ({                                                                               \
@@ -422,7 +368,8 @@ int ObCompactionDagRanker::prepare_rank_dags_(const int64_t batch_size)
     }
 
     if (OB_SUCC(ret)) {
-      if (rank_dags_.count() >= batch_size || add_co_dag_cnt >= fetch_co_dag_limit_) {
+      if (rank_dags_.count() >= batch_size
+          || (fetch_co_dag_limit_ > 0 && add_co_dag_cnt >= fetch_co_dag_limit_)) {
         break;
       }
       cur = cur->get_next();

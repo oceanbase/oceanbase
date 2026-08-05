@@ -792,13 +792,13 @@ int ObMacroBlockWriter::inner_init(
 int ObMacroBlockWriter::append_row(const ObDatumRow &row, const ObMacroBlockDesc *curr_macro_desc)
 {
   ObBlockWriterConcurrentGuard guard(concurrent_lock_);
-  return append_row_inner(row, curr_macro_desc);
+  UNUSED(curr_macro_desc);
+  return append_row_inner(row);
 }
 
-int ObMacroBlockWriter::append_row_inner(const ObDatumRow &row, const ObMacroBlockDesc *curr_macro_desc)
+int ObMacroBlockWriter::append_row_inner(const ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
-  UNUSED(curr_macro_desc);
   LOG_DEBUG("append row", K(row));
 
   if (OB_UNLIKELY(nullptr == data_store_desc_)) {
@@ -817,8 +817,7 @@ int ObMacroBlockWriter::append_row_inner(const ObDatumRow &row, const ObMacroBlo
   return ret;
 }
 
-int ObMacroBlockWriter::append_batch(const ObBatchDatumRows &datum_rows,
-                                     const ObMacroBlockDesc *curr_macro_desc)
+int ObMacroBlockWriter::append_batch(const ObBatchDatumRows &datum_rows)
 {
   int ret = OB_SUCCESS;
   ObBlockWriterConcurrentGuard guard(concurrent_lock_);
@@ -827,7 +826,7 @@ int ObMacroBlockWriter::append_batch(const ObBatchDatumRows &datum_rows,
     for (int64_t i = 0; OB_SUCC(ret) && i < datum_rows.row_count_; i ++) {
       if (OB_FAIL(datum_rows.to_datum_row(i, row))) {
         LOG_WARN("fail to to datum row", KR(ret), K(i));
-      } else if (OB_FAIL(append_row_inner(row, curr_macro_desc))) {
+      } else if (OB_FAIL(append_row_inner(row))) {
         LOG_WARN("fail to append row", K(row), KR(ret));
       }
     }

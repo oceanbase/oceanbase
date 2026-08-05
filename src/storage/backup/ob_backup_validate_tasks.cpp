@@ -57,7 +57,7 @@ static int alloc_and_add_dag_into_dag_net(
   } else if (ObDagNetType::DAG_NET_TYPE_BACKUP_VALIDATE != dag_net->get_type()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), KPC(dag_net), KPC(parent_dag));
-  } else if (OB_FAIL(dag_scheduler->alloc_dag(dag, true/*is_ha_dag*/))) {
+  } else if (OB_FAIL(dag_scheduler->alloc_dag(dag))) {
     LOG_WARN("failed to alloc dag", KR(ret));
   } else if (OB_ISNULL(dag)) {
     ret = OB_ERR_UNEXPECTED;

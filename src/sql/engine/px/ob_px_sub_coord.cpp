@@ -977,7 +977,8 @@ int ObPxSubCoord::start_ddl()
       ddl_dag_param.ddl_task_param_.is_partition_local_ = GET_MY_SESSION(*exec_ctx)->get_ddl_info().is_partition_local_ddl();
       if (OB_FAIL(get_participants(sqc_arg_.sqc_, ddl_table_id, ddl_dag_param.ls_tablet_ids_))) {
         LOG_WARN("fail to get tablet ids", K(ret), K(ddl_task_id), K(ddl_table_id));
-      } else if (OB_FAIL(ObTenantDagScheduler::alloc_dag(exec_ctx->get_allocator(), false/*is_ha_dag*/, ddl_dag_))) {
+      } else if (OB_FAIL(ObTenantDagScheduler::alloc_dag_from_allocator(
+          exec_ctx->get_allocator(), ddl_dag_))) {
         LOG_WARN("alloc ddl dag failed", K(ret), K(ddl_task_id), KP(ddl_dag_));
       } else if (OB_FAIL(ddl_dag_->init(&ddl_dag_param, nullptr, true/*trace id*/))) {
         LOG_WARN("init ddl dag failed", K(ret), K(ddl_dag_param));

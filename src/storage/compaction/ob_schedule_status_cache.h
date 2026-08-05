@@ -48,9 +48,6 @@ struct ObLSStatusCache final
   void reset();
   static void check_ls_state(storage::ObLS &ls, LSState &state);
   static bool is_restore_ready_for_merge(storage::ObLS &ls);
-  static bool check_weak_read_ts_ready(
-      const int64_t &merge_version,
-      storage::ObLS &ls);
   bool is_valid() const { return ls_id_.is_valid() && ls_handle_.is_valid(); }
   storage::ObLS &get_ls()
   {

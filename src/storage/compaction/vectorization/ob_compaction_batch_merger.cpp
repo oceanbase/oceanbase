@@ -64,7 +64,6 @@ int ObPartitionMajorBatchMerger::flush_write_store()
 {
   int ret = OB_SUCCESS;
   ObMergeVectorStore &write_store = stores_.write_store();
-  const blocksstable::ObMacroBlockDesc *macro_desc = nullptr;
   if (!write_store.is_empty()) {
     blocksstable::ObBatchDatumRows batch_rows;
     if (OB_FAIL(write_store.get_batch_datum_rows(batch_rows))) {
@@ -72,9 +71,7 @@ int ObPartitionMajorBatchMerger::flush_write_store()
     } else if (OB_UNLIKELY(batch_rows.row_count_ <= 0)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected empty batch rows", K(ret), K(batch_rows));
-    } else if (OB_FAIL(get_base_iter_curr_macro_block(macro_desc))) {
-      LOG_WARN("failed to get base iter curr macro block", K(ret));
-    } else if (OB_FAIL(macro_writer_->append_batch(batch_rows, macro_desc))) {
+    } else if (OB_FAIL(macro_writer_->append_batch(batch_rows))) {
       LOG_WARN("failed to append batch to macro writer", K(ret), K(batch_rows));
     } else {
       macro_writer_->add_incremental_row_count(write_store.get_incremental_row_count());
@@ -141,7 +138,7 @@ int ObPartitionMajorBatchMerger::inner_process(const blocksstable::ObDatumRow &r
 #endif
   ObMergeVectorStore &write_store = stores_.write_store();
   int tmp_ret = OB_SUCCESS;
-  while (OB_SUCC(ret) && OB_SUCCESS != (tmp_ret = write_store.append_row(row, true, nullptr, is_incremental_row))) {
+  while (OB_SUCC(ret) && OB_TMP_FAIL(write_store.append_row(row, true/*need_check_order*/, nullptr/*cols*/, is_incremental_row))) {
     if (OB_BUF_NOT_ENOUGH == tmp_ret) {
       if (OB_FAIL(flush_write_store())) {
         LOG_WARN("failed to flush read store", K(ret));
@@ -160,10 +157,10 @@ int ObPartitionMajorBatchMerger::merge_batch_rows(MERGE_ITER_ARRAY &merge_iters)
   ObPartitionMergeIter *iter = nullptr;
   const ObDatumRow *border_row = nullptr;
   blocksstable::ObDatumRowkey border_rowkey;
-  if (OB_UNLIKELY(1 != minimum_iters_.count())) {
+  if (OB_UNLIKELY(1 != merge_iters.count())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected minimum iters count", K(ret), K(minimum_iters_));
-  } else if (OB_ISNULL(iter = minimum_iters_.at(0))) {
+    LOG_WARN("unexpected merge iters count", K(ret), K(merge_iters));
+  } else if (OB_ISNULL(iter = merge_iters.at(0))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Unexpected null iter", K(ret));
   } else if (OB_FAIL(merge_helper_->get_next_row(border_row))) {
@@ -236,7 +233,8 @@ void ObCOBatchMergeLogBuilder::reset()
   border_rowkey_.reset();
   read_store_.reset();
   ObCOMergeLogBuilder::reset();
-  LOG_INFO("ObCOBatchMergeLogBuilder reset", K_(time_guard));
+  LOG_INFO("ObCOBatchMergeLogBuilder reset", K_(batch_row_count), K_(time_guard));
+  batch_row_count_ = 0;
 }
 
 int ObCOBatchMergeLogBuilder::init(ObBasicTabletMergeCtx &ctx, const int64_t idx, const int64_t cg_idx)
@@ -291,6 +289,7 @@ int ObCOBatchMergeLogBuilder::get_next_batch_log(
     if (0 < read_store_.get_row_count()) {
       vector_store = &read_store_;
       mergelog.set_value(ObMergeLog::INSERT, -1/*major_idx*/, INT64_MAX/*row_id*/);
+      batch_row_count_ += read_store_.get_row_count();
     }
     const blocksstable::ObDatumRow *row = nullptr;
     if (OB_FAIL(replay_base_cg(mergelog, vector_store, row, nullptr/*iter*/))) {
@@ -308,49 +307,48 @@ int ObCOBatchMergeLogBuilder::get_next_batch_log(
 }
 
 int ObCOBatchMergeLogBuilder::calculate_border_rowkey(
-    ObMergeLog &mergelog,
-    const ObMergeVectorStore *&vector_store,
-    ObPartitionMergeIter *winner_iter,
-    ObPartitionMergeHelper *winner_helper,
-    ObPartitionMergeIter *loser_iter)
+    ObPartitionMergeIter *batch_scan_minor_iter,
+    ObPartitionMergeHelper *minor_merge_helper,
+    ObPartitionMergeIter *major_iter)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(nullptr == winner_iter || nullptr == winner_helper)) {
+  if (OB_UNLIKELY(nullptr == batch_scan_minor_iter || nullptr == minor_merge_helper)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null winner iter or winner helper", K(ret), KP(winner_iter), KP(winner_helper));
+    LOG_WARN("unexpected null batch scan minor iter or minor merge helper",
+        K(ret), KP(batch_scan_minor_iter), KP(minor_merge_helper));
   } else {
-    const ObDatumRow *winner_next_row = nullptr;
+    const ObDatumRow *next_competing_minor_row = nullptr;
     const ObDatumRow *border_row = nullptr;
 
-    // Get next row from winner helper
-    if (OB_FAIL(winner_helper->get_next_row(winner_next_row))) {
-      LOG_WARN("failed to get next row", K(ret));
-    } else if (nullptr == winner_next_row && nullptr == loser_iter) {
+    // The batch-scan minor iterator has already been removed from the minor helper's loser tree.
+    // This row is the minimum current row among the remaining minor iterators; it does
+    // not belong to batch_scan_minor_iter, and observing it does not advance that iterator.
+    if (OB_FAIL(minor_merge_helper->get_next_row(next_competing_minor_row))) {
+      LOG_WARN("failed to get next competing minor row", K(ret));
+    } else if (nullptr == next_competing_minor_row && nullptr == major_iter) {
       // border_rowkey is max rowkey
-    } else if (nullptr == loser_iter) {
-      // No loser iterator, use winner if available
-      border_row = winner_next_row;
+    } else if (nullptr == major_iter) {
+      // No major iterator, use the next competing minor row if available.
+      border_row = next_competing_minor_row;
     } else {
-      // Handle both winner and loser iterators present
-      const ObDatumRow *loser_row = nullptr;
+      // Both a competing minor row and a major iterator may constrain the batch border.
+      const ObDatumRow *major_row = nullptr;
       int64_t compare_ret = 0;
-      if (OB_ISNULL(loser_row = loser_iter->get_curr_row())) {
-        if (OB_FAIL(loser_iter->get_curr_range_first_row(loser_row))) {
-          LOG_WARN("failed to get next row", K(ret));
+      if (OB_ISNULL(major_row = major_iter->get_curr_row())) {
+        if (OB_FAIL(major_iter->get_curr_range_first_row(major_row))) {
+          LOG_WARN("failed to get current major row", K(ret));
         }
       }
       if (OB_SUCC(ret)) {
-        // Loser has current row, perform direct comparison
-        if (nullptr == winner_next_row) {
-          // Winner has no next row, use loser current row
-          border_row = loser_row;
+        if (nullptr == next_competing_minor_row) {
+          // No other minor iterator is competing, use the major current row.
+          border_row = major_row;
         } else {
-          // Compare the rows directly
-          if (OB_FAIL(cmp_->compare_rowkey(*winner_next_row, *loser_row, compare_ret))) {
-            LOG_WARN("failed to compare rowkey", K(ret), K(*winner_next_row), K(*loser_row));
+          if (OB_FAIL(cmp_->compare_rowkey(*next_competing_minor_row, *major_row, compare_ret))) {
+            LOG_WARN("failed to compare rowkey", K(ret), K(*next_competing_minor_row), K(*major_row));
           } else {
-            border_row = (compare_ret < 0) ? winner_next_row : loser_row;
+            border_row = (compare_ret < 0) ? next_competing_minor_row : major_row;
           }
         }
       }
@@ -365,7 +363,7 @@ int ObCOBatchMergeLogBuilder::calculate_border_rowkey(
     }
 
     if (OB_SUCC(ret)) {
-      batch_scan_iter_ = winner_iter;
+      batch_scan_iter_ = batch_scan_minor_iter;
     }
   }
   return ret;
@@ -374,7 +372,7 @@ int ObCOBatchMergeLogBuilder::calculate_border_rowkey(
 int ObCOBatchMergeLogBuilder::inner_get_next_log(ObMergeLog &mergelog, const ObMergeVectorStore *&vector_store, const blocksstable::ObDatumRow *&row)
 {
   int ret = OB_SUCCESS;
-  bool is_single_iter_end = false;
+  bool unused_is_single_iter_end = false;
   mergelog.reset();
   vector_store = nullptr;
   row = nullptr;
@@ -389,19 +387,18 @@ int ObCOBatchMergeLogBuilder::inner_get_next_log(ObMergeLog &mergelog, const ObM
     time_guard_.set_last_click_ts(common::ObTimeUtility::current_time());
     int64_t cmp_ret = 0;
     ObMergeLog::OpType op;
-    ObCORowBatchMergeIter *incre_iter = static_cast<ObCORowBatchMergeIter*>(merge_helper_);
-    ObPartitionMergeIter *row_store_iter = nullptr;
+    ObCOMinorBatchMergeIter *incre_iter = static_cast<ObCOMinorBatchMergeIter*>(merge_helper_);
+    ObPartitionMergeIter *major_iter = nullptr;
     // move iter next first to prevent inc row changes,
     // cause fuser will not deep copy inc row
-    if (OB_FAIL(move_iters_next(is_single_iter_end))) {
+    if (OB_FAIL(move_iters_next(unused_is_single_iter_end))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("failed to move incre iter next", K(ret));
       }
     }
     time_guard_.click(ObCOMergeTimeGuard::MOVE_NEXT);
     // decide merge log
-    if (OB_FAIL(ret)) {
-    } else {
+    if (OB_SUCC(ret)) {
       bool need_get_incre_row = true;
       bool need_get_major_iter = true;
       if (incre_iter->is_iter_end()) {
@@ -413,10 +410,10 @@ int ObCOBatchMergeLogBuilder::inner_get_next_log(ObMergeLog &mergelog, const ObM
       }
       if (need_get_incre_row && OB_FAIL(incre_iter->get_curr_row(row))) {
         LOG_WARN("failed to get curr row", K(ret), K(row));
-      } else if (need_get_major_iter && OB_FAIL(majors_merge_iter_->get_current_major_iter(row_store_iter))) {
+      } else if (need_get_major_iter && OB_FAIL(majors_merge_iter_->get_current_major_iter(major_iter))) {
         LOG_WARN("failed to get current major iter", K(ret));
-      } else if (need_get_incre_row && need_get_major_iter && OB_FAIL(compare(*row, *row_store_iter, cmp_ret))) {
-        LOG_WARN("failed to compare iter", K(ret), K(*row), KPC(row_store_iter));
+      } else if (need_get_incre_row && need_get_major_iter && OB_FAIL(compare(*row, *major_iter, cmp_ret))) {
+        LOG_WARN("failed to compare iter", K(ret), K(*row), KPC(major_iter));
       }
     }
     time_guard_.click(ObCOMergeTimeGuard::COMPARE);
@@ -427,7 +424,7 @@ int ObCOBatchMergeLogBuilder::inner_get_next_log(ObMergeLog &mergelog, const ObM
     } else if (cmp_ret < 0) { // inc row < major row/range
       op = ObMergeLog::INSERT;
       if (incre_iter->can_batch_scan()) {
-        if (OB_FAIL(calculate_border_rowkey(mergelog, vector_store, incre_iter->get_top_iter(), incre_iter, row_store_iter))) {
+        if (OB_FAIL(calculate_border_rowkey(incre_iter->get_top_iter(), incre_iter, major_iter))) {
           LOG_WARN("failed to try do batch scan", K(ret));
         } else {
           set_need_move_flag(MoveNextOp::DO_NOTHING/*need_move_minor_iter*/, MoveNextOp::DO_NOTHING/*need_move_major_iter*/);
@@ -441,7 +438,7 @@ int ObCOBatchMergeLogBuilder::inner_get_next_log(ObMergeLog &mergelog, const ObM
     }
     // build merge log
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(build_merge_log(op, row_store_iter, row, mergelog, false/*replay_to_end*/))) {
+    } else if (OB_FAIL(build_merge_log(op, major_iter, row, mergelog, false/*replay_to_end*/))) {
       LOG_WARN("failed to build merge log", K(ret), K(op));
     } else if (can_batch_scan()) {
       batch_scan_iter_->set_curr_row_returned_in_batch();

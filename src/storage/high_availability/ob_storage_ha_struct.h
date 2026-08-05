@@ -11,6 +11,7 @@
 #include "common/ob_member.h"
 #include "common/ob_tablet_id.h"
 #include "lib/container/ob_array.h"
+#include "lib/container/ob_array_serialization.h"
 #include "lib/queue/ob_link_queue.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/blocksstable/ob_macro_block_meta_mgr.h"
@@ -19,11 +20,9 @@
 #include "share/ls/ob_ls_i_life_manager.h"
 #include "share/ob_rpc_struct.h"
 #include "share/scheduler/ob_dag_scheduler_config.h"
-#include "ob_ls_transfer_info.h"
 #include "share/rebuild_tablet/ob_rebuild_tablet_location.h"
 #include "common/ob_learner_list.h"
 #include "storage/high_availability/ob_tablet_ha_status.h"
-#include "share/rebuild_tablet/ob_rebuild_tablet_location.h"
 namespace oceanbase
 {
 using namespace share;
@@ -41,6 +40,138 @@ class ObStorageRpcProxy;
 namespace storage
 {
 class ObStorageRpc;
+struct ObLSTransferMetaInfo;
+
+template <int64_t MAX_TABLET_COUNT>
+class ObStorageHATabletIDArray
+{
+  static_assert(MAX_TABLET_COUNT > 0, "tablet id array capacity must be positive");
+  OB_UNIS_VERSION(1);
+public:
+  ObStorageHATabletIDArray()
+    : count_(0)
+  {
+  }
+  ~ObStorageHATabletIDArray() = default;
+
+  int assign(const common::ObIArray<common::ObTabletID> &tablet_id_array)
+  {
+    return assign_(tablet_id_array);
+  }
+
+  int assign(const ObStorageHATabletIDArray &tablet_id_array)
+  {
+    return this == &tablet_id_array ? OB_SUCCESS : assign_(tablet_id_array);
+  }
+
+  int push_back(const common::ObTabletID &tablet_id)
+  {
+    int ret = OB_SUCCESS;
+    if (!tablet_id.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      STORAGE_LOG(WARN, "tablet id is invalid", K(ret), K(tablet_id));
+    } else if (count_ >= MAX_TABLET_COUNT) {
+      ret = OB_SIZE_OVERFLOW;
+      STORAGE_LOG(WARN, "tablet id array is size overflow", K(ret), K(count_));
+    } else {
+      id_array_[count_] = tablet_id;
+      ++count_;
+    }
+    return ret;
+  }
+
+  int get_tablet_id_array(common::ObIArray<common::ObTabletID> &tablet_id_array)
+  {
+    int ret = OB_SUCCESS;
+    tablet_id_array.reset();
+    for (int64_t i = 0; OB_SUCC(ret) && i < count_; ++i) {
+      if (OB_FAIL(tablet_id_array.push_back(id_array_[i]))) {
+        STORAGE_LOG(WARN, "failed to push tablet id into array", K(ret), K(count_), K(i));
+      }
+    }
+    return ret;
+  }
+
+  const common::ObTabletID &at(const int64_t idx) const
+  {
+    OB_ASSERT(idx >= 0 && idx < count_);
+    return id_array_[idx];
+  }
+
+  common::ObTabletID &at(const int64_t idx)
+  {
+    OB_ASSERT(idx >= 0 && idx < count_);
+    return id_array_[idx];
+  }
+
+  int64_t count() const { return count_; }
+  bool empty() const { return 0 == count(); }
+  void reset() { count_ = 0; }
+
+  int64_t to_string(char *buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_NAME("id_array");
+    J_COLON();
+    (void)databuff_print_obj_array(buf, buf_len, pos, id_array_, count_);
+    J_OBJ_END();
+    return pos;
+  }
+
+private:
+  template <typename TabletIDArray>
+  int assign_(const TabletIDArray &tablet_id_array)
+  {
+    int ret = OB_SUCCESS;
+    if (tablet_id_array.count() > MAX_TABLET_COUNT) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "cannot assign tablet id array", K(ret), K(tablet_id_array));
+    } else {
+      count_ = 0;
+      for (int64_t i = 0; OB_SUCC(ret) && i < tablet_id_array.count(); ++i) {
+        if (OB_FAIL(push_back(tablet_id_array.at(i)))) {
+          STORAGE_LOG(WARN, "failed to push tablet id into array", K(ret), K(i));
+        }
+      }
+    }
+    return ret;
+  }
+
+private:
+  int64_t count_;
+  common::ObTabletID id_array_[MAX_TABLET_COUNT];
+};
+
+OB_DEF_SERIALIZE(ObStorageHATabletIDArray<MAX_TABLET_COUNT>, template <int64_t MAX_TABLET_COUNT>)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_ENCODE_ARRAY(id_array_, count_);
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObStorageHATabletIDArray<MAX_TABLET_COUNT>, template <int64_t MAX_TABLET_COUNT>)
+{
+  int64_t len = 0;
+  OB_UNIS_ADD_LEN_ARRAY(id_array_, count_);
+  return len;
+}
+
+OB_DEF_DESERIALIZE(ObStorageHATabletIDArray<MAX_TABLET_COUNT>, template <int64_t MAX_TABLET_COUNT>)
+{
+  int ret = OB_SUCCESS;
+  int64_t count = 0;
+  OB_UNIS_DECODE(count);
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(count < 0 || count > MAX_TABLET_COUNT)) {
+    ret = OB_DESERIALIZE_ERROR;
+    STORAGE_LOG(WARN, "invalid tablet id array count", K(ret), K(count));
+  } else {
+    count_ = count;
+  }
+  OB_UNIS_DECODE_ARRAY(id_array_, count_);
+  return ret;
+}
 
 struct ObStorageHAServiceCtx
 {
@@ -459,45 +590,8 @@ private:
   TYPE type_;
 };
 
-struct ObRebuildTabletIDArray final
+struct ObRebuildTabletIDArray final : public ObStorageHATabletIDArray<64>
 {
-  OB_UNIS_VERSION(1);
-public:
-  ObRebuildTabletIDArray();
-  ~ObRebuildTabletIDArray();
-  int assign(const common::ObIArray<common::ObTabletID> &tablet_id_array);
-  int assign(const ObRebuildTabletIDArray&tablet_id_array);
-  int push_back(const common::ObTabletID &tablet_id);
-  int get_tablet_id_array(common::ObIArray<common::ObTabletID> &tablet_id_array);
-
-  inline const common::ObTabletID &at(int64_t idx) const
-  {
-    OB_ASSERT(idx >= 0 && idx < count_);
-    return id_array_[idx];
-  }
-  inline common::ObTabletID &at(int64_t idx)
-  {
-    OB_ASSERT(idx >= 0 && idx < count_);
-    return id_array_[idx];
-  }
-  inline int64_t count() const { return count_; }
-  inline bool empty() const { return 0 == count(); }
-  void reset() { count_ = 0; }
-
-  int64_t to_string(char* buf, const int64_t buf_len) const
-  {
-    int64_t pos = 0;
-    J_OBJ_START();
-    J_NAME("id_array");
-    J_COLON();
-    (void)databuff_print_obj_array(buf, buf_len, pos, id_array_, count_);
-    J_OBJ_END();
-    return pos;
-  }
-private:
-  static const int64_t MAX_TABLET_COUNT = 64;
-  int64_t count_;
-  common::ObTabletID id_array_[MAX_TABLET_COUNT];
 };
 
 struct ObLSRebuildInfo final

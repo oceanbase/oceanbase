@@ -275,39 +275,25 @@ int ObLSRestoreDagNet::start_running_for_ls_restore_()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObInitialLSRestoreDag *initial_ls_restore_dag = nullptr;
-  ObTenantDagScheduler *scheduler = nullptr;
+  ObIDagNet *dag_net = this;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls restore dag net do not init", K(ret));
   } else if (FALSE_IT(ctx_->start_ts_ = ObTimeUtil::current_time())) {
-  } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag(initial_ls_restore_dag, true/*is_ha_dag*/))) {
-    LOG_WARN("failed to alloc initial ls restore dag ", K(ret));
-  } else if (OB_FAIL(initial_ls_restore_dag->init(this))) {
-    LOG_WARN("failed to initial ls restore dag", K(ret));
-  } else if (OB_FAIL(add_dag_into_dag_net(*initial_ls_restore_dag))) {
-    LOG_WARN("failed to ad initial ls restore dag into dag net", K(ret));
-  } else if (OB_FAIL(initial_ls_restore_dag->create_first_task())) {
-    LOG_WARN("failed to create first task", K(ret));
-  } else if (OB_FAIL(scheduler->add_dag(initial_ls_restore_dag))) {
-    LOG_WARN("failed to add initial ls restore dag", K(ret), K(*initial_ls_restore_dag));
-    if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-      LOG_WARN("Fail to add task", K(ret));
-      ret = OB_EAGAIN;
-    }
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_schedule_single_dag(
+      dag_net, ObDagPrio::DAG_PRIO_MAX, false/*emergency*/,
+      initial_ls_restore_dag, dag_net))) {
+    LOG_WARN("failed to schedule initial ls restore dag", K(ret));
   } else {
     initial_ls_restore_dag = nullptr;
   }
 
-  if (OB_NOT_NULL(initial_ls_restore_dag) && OB_NOT_NULL(scheduler)) {
-    if (OB_SUCCESS != (tmp_ret = erase_dag_from_dag_net(*initial_ls_restore_dag))) {
-      LOG_WARN("failed to erase dag from dag net", K(tmp_ret), KPC(initial_ls_restore_dag));
+  if (OB_FAIL(ret) && OB_NOT_NULL(ctx_)) {
+    const bool need_retry = false;
+    if (OB_SUCCESS != (tmp_ret = ctx_->set_result(ret, need_retry))) {
+      LOG_ERROR("failed to set restore ctx result", K(ret), K(tmp_ret), KPC(ctx_));
     }
-    scheduler->free_dag(*initial_ls_restore_dag); // contain reset_children
-    initial_ls_restore_dag = nullptr;
   }
 
   return ret;
@@ -585,12 +571,8 @@ int ObInitialLSRestoreDag::create_first_task()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls restore dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init())) {
-    LOG_WARN("failed to init initial ls restore task", K(ret), KPC(ha_dag_net_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
+  } else if (OB_FAIL(create_task(nullptr/*parent_task*/, task))) {
+    LOG_WARN("failed to create initial ls restore task", K(ret), KPC(ha_dag_net_ctx_));
   } else {
     LOG_DEBUG("success to create first task", K(ret), KPC(this));
   }
@@ -660,73 +642,21 @@ int ObInitialLSRestoreTask::generate_ls_restore_dags_()
   int tmp_ret = OB_SUCCESS;
   ObStartLSRestoreDag *start_ls_restore_dag = nullptr;
   ObFinishLSRestoreDag *finish_ls_restore_dag = nullptr;
-  ObTenantDagScheduler *scheduler = nullptr;
   ObInitialLSRestoreDag *initial_ls_restore_dag = nullptr;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls restore init task do not init", K(ret));
-  } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
   } else if (OB_ISNULL(initial_ls_restore_dag = static_cast<ObInitialLSRestoreDag *>(this->get_dag()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("initial ls restore dag should not be NULL", K(ret), KP(initial_ls_restore_dag));
-  } else {
-    if (OB_FAIL(scheduler->alloc_dag(start_ls_restore_dag, true/*is_ha_dag*/))) {
-      LOG_WARN("failed to alloc start ls restore dag ", K(ret));
-    } else if (OB_FAIL(scheduler->alloc_dag(finish_ls_restore_dag, true/*is_ha_dag*/))) {
-      LOG_WARN("failed to alloc finish ls restore dag", K(ret));
-    } else if (OB_FAIL(start_ls_restore_dag->init(dag_net_))) {
-      LOG_WARN("failed to init start ls restore dag", K(ret));
-    } else if (OB_FAIL(finish_ls_restore_dag->init(dag_net_))) {
-      LOG_WARN("failed to init finish ls restore dag", K(ret));
-    } else if (OB_FAIL(this->get_dag()->add_child(*start_ls_restore_dag))) {
-      LOG_WARN("failed to add start ls restore dag as child", K(ret), KPC(start_ls_restore_dag));
-    } else if (OB_FAIL(start_ls_restore_dag->create_first_task())) {
-      LOG_WARN("failed to create first task", K(ret));
-    } else if (OB_FAIL(start_ls_restore_dag->add_child(*finish_ls_restore_dag))) {
-      LOG_WARN("failed to add finish ls retore dag as child", K(ret));
-    } else if (OB_FAIL(finish_ls_restore_dag->create_first_task())) {
-      LOG_WARN("failed to create first task", K(ret));
-    } else if (OB_FAIL(scheduler->add_dag(finish_ls_restore_dag))) {
-      LOG_WARN("failed to add ls restore finish dag", K(ret), K(*finish_ls_restore_dag));
-      if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-        LOG_WARN("Fail to add task", K(ret));
-        ret = OB_EAGAIN;
-      }
-    } else if (OB_FAIL(scheduler->add_dag(start_ls_restore_dag))) {
-      LOG_WARN("failed to add dag", K(ret), K(*start_ls_restore_dag));
-      if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-        LOG_WARN("Fail to add task", K(ret));
-        ret = OB_EAGAIN;
-      }
-
-      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(finish_ls_restore_dag))) {
-        LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(start_ls_restore_dag));
-      } else {
-        finish_ls_restore_dag = nullptr;
-      }
-    } else {
-      LOG_INFO("succeed to schedule ls restore start dag", K(*start_ls_restore_dag));
-      start_ls_restore_dag = nullptr;
-      finish_ls_restore_dag = nullptr;
-    }
-
-    if (OB_FAIL(ret)) {
-      if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(finish_ls_restore_dag)) {
-        scheduler->free_dag(*finish_ls_restore_dag);
-        finish_ls_restore_dag = nullptr;
-      }
-
-      if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(start_ls_restore_dag)) {
-        scheduler->free_dag(*start_ls_restore_dag);
-        start_ls_restore_dag = nullptr;
-      }
-      const bool need_retry = true;
-      if (OB_SUCCESS != (tmp_ret = ctx_->set_result(ret, need_retry, this->get_dag()->get_type()))) {
-        LOG_WARN("failed to set ls restore result", K(ret), K(tmp_ret), K(*ctx_));
-      }
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_schedule_pair_dags(
+      ObDagPrio::DAG_PRIO_MAX, this->get_dag()/*parent_dag*/,
+      start_ls_restore_dag, finish_ls_restore_dag, dag_net_))) {
+    LOG_WARN("failed to schedule ls restore dag pair", K(ret));
+    const bool need_retry = true;
+    if (OB_SUCCESS != (tmp_ret = ctx_->set_result(ret, need_retry, this->get_dag()->get_type()))) {
+      LOG_WARN("failed to set ls restore result", K(ret), K(tmp_ret), K(*ctx_));
     }
   }
   return ret;
@@ -798,12 +728,8 @@ int ObStartLSRestoreDag::create_first_task()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("start ls restore dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init())) {
-    LOG_WARN("failed to init ls restore start task", K(ret), KPC(ha_dag_net_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
+  } else if (OB_FAIL(create_task(nullptr/*parent_task*/, task))) {
+    LOG_WARN("failed to create ls restore start task", K(ret), KPC(ha_dag_net_ctx_));
   } else {
     LOG_DEBUG("success to create first task", K(ret), KPC(this));
   }
@@ -1141,7 +1067,7 @@ int ObStartLSRestoreTask::generate_tablets_restore_dag_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag(sys_tablets_restore_dag, true/*is_ha_dag*/))) {
+    if (OB_FAIL(scheduler->alloc_dag(sys_tablets_restore_dag))) {
       LOG_WARN("failed to alloc sys tablets restore dag ", K(ret));
     } else if (OB_FAIL(sys_tablets_restore_dag->init(dag_net))) {
       LOG_WARN("failed to init sys tablets restore dag", K(ret), K(*ctx_));
@@ -1251,12 +1177,8 @@ int ObSysTabletsRestoreDag::create_first_task()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("sys tablets restore dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init())) {
-    LOG_WARN("failed to init sys tablets restore task", K(ret), KPC(ha_dag_net_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
+  } else if (OB_FAIL(create_task(nullptr/*parent_task*/, task))) {
+    LOG_WARN("failed to create sys tablets restore task", K(ret), KPC(ha_dag_net_ctx_));
   } else {
     LOG_DEBUG("success to create first task", K(ret), KPC(this));
   }
@@ -1436,7 +1358,7 @@ int ObSysTabletsRestoreTask::generate_sys_tablet_restore_dag_()
       if (!param.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("init tablet restore param is invalid", K(ret), K(param), KPC(ctx_));
-      } else if (OB_FAIL(scheduler->alloc_dag(tablet_restore_dag, true/*is_ha_dag*/))) {
+      } else if (OB_FAIL(scheduler->alloc_dag(tablet_restore_dag))) {
         LOG_WARN("failed to alloc tablet restore dag", K(ret));
       } else if (OB_FAIL(tablet_restore_dag_array.push_back(tablet_restore_dag))) {
         LOG_WARN("failed to push tablet restore dag into array", K(ret), K(*ctx_));
@@ -1598,12 +1520,8 @@ int ObDataTabletsMetaRestoreDag::create_first_task()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("data tablets meta restore dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init())) {
-    LOG_WARN("failed to init data tablets meta restore task", K(ret), KPC(ha_dag_net_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
+  } else if (OB_FAIL(create_task(nullptr/*parent_task*/, task))) {
+    LOG_WARN("failed to create data tablets meta restore task", K(ret), KPC(ha_dag_net_ctx_));
   } else {
     LOG_DEBUG("success to create first task", K(ret), KPC(this));
   }
@@ -1875,12 +1793,8 @@ int ObTabletGroupMetaRestoreDag::create_first_task()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet group meta restore dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init(tablet_id_array_, finish_dag_))) {
-    LOG_WARN("failed to tablet group meta restore task", K(ret), KPC(ha_dag_net_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
+  } else if (OB_FAIL(create_task(nullptr/*parent_task*/, task, tablet_id_array_, finish_dag_))) {
+    LOG_WARN("failed to create tablet group meta restore task", K(ret), KPC(ha_dag_net_ctx_));
   } else {
     LOG_DEBUG("success to create first task", K(ret), KPC(this));
   }
@@ -1928,7 +1842,7 @@ int ObTabletGroupMetaRestoreDag::generate_next_dag(share::ObIDag *&dag)
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag(tablet_group_meta_restore_dag, true/*is_ha_dag*/))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(tablet_group_meta_restore_dag))) {
     LOG_WARN("failed to alloc tablet group meta restore dag ", K(ret));
   } else if (OB_FAIL(tablet_group_meta_restore_dag->init(tablet_id_array, dag_net, finish_dag_))) {
     LOG_WARN("failed to init tablet migration dag", K(ret), KPC(ctx));
@@ -2139,6 +2053,8 @@ int ObTabletGroupMetaRestoreTask::create_or_update_tablet_(
       LOG_WARN("failed to set restore status", K(ret), K(restore_status));
     } else if (OB_FAIL(param.ha_status_.set_data_status(data_status))) {
       LOG_WARN("failed to set data status", K(ret), K(data_status));
+    } else if (OB_FAIL(param.ha_status_.set_expected_status(ObTabletExpectedStatus::NORMAL))) {
+      LOG_WARN("failed to set expected status", K(ret));
     } else if (OB_FAIL(ObMigrationTabletParam::construct_placeholder_storage_schema_and_medium(
         param.allocator_,
         param.storage_schema_,
@@ -2222,12 +2138,8 @@ int ObFinishLSRestoreDag::create_first_task()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("finish ls restore dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init())) {
-    LOG_WARN("failed to init log stream restore task", K(ret), KPC(ha_dag_net_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
+  } else if (OB_FAIL(create_task(nullptr/*parent_task*/, task))) {
+    LOG_WARN("failed to create log stream restore task", K(ret), KPC(ha_dag_net_ctx_));
   } else {
     LOG_DEBUG("success to create first task", K(ret), KPC(this));
   }
@@ -2314,7 +2226,7 @@ int ObFinishLSRestoreTask::generate_initial_ls_restore_dag_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag(initial_ls_restore_dag, true/*is_ha_dag*/))) {
+    if (OB_FAIL(scheduler->alloc_dag(initial_ls_restore_dag))) {
       LOG_WARN("failed to alloc ls restore dag", K(ret));
     } else if (OB_FAIL(initial_ls_restore_dag->init(dag_net_))) {
       LOG_WARN("failed to init initial ls restore dag", K(ret));
@@ -2345,4 +2257,3 @@ int ObFinishLSRestoreTask::generate_initial_ls_restore_dag_()
 
 }
 }
-

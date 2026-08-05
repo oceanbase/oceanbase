@@ -92,8 +92,6 @@ public:
   virtual void reset();
   virtual int basic_prepare(ObBasicTabletMergeCtx &ctx, const int64_t idx);
   virtual bool use_co_inc_fuser() const { return false; }
-protected:
-  int try_filter_row(const blocksstable::ObDatumRow &row, ObICompactionFilter::ObFilterRet &filter_ret);
 public:
   ObIPartitionMergeFuser *partition_fuser_;
   ObPartitionMergeHelper *merge_helper_;
@@ -249,7 +247,6 @@ protected:
                                            common::ObIArray<int64_t> &iter_idxs,
                                            const bool is_delete_insert_merge);
   int skip_shadow_row(MERGE_ITER_ARRAY &merge_iters);
-  int check_need_prebuild_bloomfilter();
 private:
   virtual int inner_init() override;
   int init_progressive_merge_helper();

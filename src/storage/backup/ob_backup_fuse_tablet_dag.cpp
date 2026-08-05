@@ -604,7 +604,7 @@ int ObBackupTabletFuseDag::generate_next_dag(share::ObIDag *&dag)
     } else {
       LOG_WARN("failed to get next tablet id", K(ret), KPC(this));
     }
-  } else if (OB_FAIL(scheduler->alloc_dag(tablet_fuse_dag, true/*is_ha_dag*/))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(tablet_fuse_dag))) {
     LOG_WARN("failed to alloc tablet fuse dag", K(ret));
   } else if (OB_FAIL(tablet_fuse_dag->init(group_ctx_->param_, fuse_item, *group_ctx_))) {
     LOG_WARN("failed to init tablet fuse dag", K(ret), "param", group_ctx_->param_, K(fuse_item));

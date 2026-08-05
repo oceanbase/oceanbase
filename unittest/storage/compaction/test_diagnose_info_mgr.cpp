@@ -7,6 +7,7 @@
 #define private public
 #define protected public
 #include "src/storage/ob_i_store.h"
+#include "src/storage/compaction/ob_i_compaction_filter.h"
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 namespace oceanbase
 {
@@ -103,6 +104,35 @@ bool judge_equal(const ObScheduleSuspectInfo &a, const ObScheduleSuspectInfo &b)
     && a.ls_id_ == b.ls_id_
     && a.tablet_id_ == b.tablet_id_
     && a.merge_type_ == b.merge_type_;
+}
+
+class InitFailCompactionFilter final : public ObICompactionFilter
+{
+public:
+  InitFailCompactionFilter() = default;
+  ~InitFailCompactionFilter() override { ++destructor_count_; }
+  int init() { return OB_ERR_UNEXPECTED; }
+  int filter(const blocksstable::ObDatumRow &, ObFilterRet &) const override
+  {
+    return OB_NOT_SUPPORTED;
+  }
+  CompactionFilterType get_filter_type() const override { return FILTER_TYPE_MAX; }
+  static int64_t destructor_count_;
+};
+
+int64_t InitFailCompactionFilter::destructor_count_ = 0;
+
+TEST_F(TestDiagnoseInfoMgr, test_filter_factory_destroys_failed_filter)
+{
+  ObArenaAllocator allocator;
+  ObICompactionFilter *filter = nullptr;
+  InitFailCompactionFilter::destructor_count_ = 0;
+
+  ASSERT_EQ(OB_ERR_UNEXPECTED,
+            ObCompactionFilterFactory::alloc_compaction_filter<InitFailCompactionFilter>(
+                allocator, filter));
+  ASSERT_EQ(nullptr, filter);
+  ASSERT_EQ(1, InitFailCompactionFilter::destructor_count_);
 }
 
 TEST_F(TestDiagnoseInfoMgr, test_add_del_suspect_info)

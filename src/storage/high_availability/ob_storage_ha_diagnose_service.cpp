@@ -18,7 +18,6 @@
 #include "share/ob_dml_sql_splicer.h"
 #include "share/ob_storage_ha_diagnose_operator.h"
 #include "share/rc/ob_tenant_base.h"
-#include "share/ob_dml_sql_splicer.h"
 
 namespace oceanbase
 {
@@ -146,6 +145,7 @@ void ObStorageHADiagService::run1()
   ObSEArray<uint64_t, 8> tenant_ids;
   while (!has_set_stop()) {
     ret = OB_SUCCESS;
+    tenant_ids.reuse();
     int tmp_ret = OB_SUCCESS;
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;

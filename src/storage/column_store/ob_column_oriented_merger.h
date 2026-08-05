@@ -110,6 +110,14 @@ protected:
   blocksstable::ObDatumRow default_row_;
 };
 
+/**
+ * Maintains an online k-way merge over minor/incremental SSTable row iterators.
+ * The underlying RowsMerger may be a simple merger or a loser tree, depending
+ * on the number of inputs. get_curr_row() removes all iterators at the current
+ * minimum rowkey into minimum_iters_, then returns the only row directly or
+ * fuses rows with the same rowkey. next() advances those selected iterators and
+ * inserts them back into RowsMerger.
+ */
 class ObCOMinorSSTableMergeIter : public ObPartitionMergeHelper
 {
 public:
@@ -149,10 +157,17 @@ protected:
   MERGE_ITER_ARRAY minimum_iters_;
 };
 
-class ObCORowBatchMergeIter : public ObCOMinorSSTableMergeIter
+/**
+ * Adapts the incremental k-way merge for CO batch merge-log generation.
+ * When the current minimum belongs to one batch-scannable iterator, this class
+ * exposes the next competing rowkey so that the builder can use it as an
+ * exclusive batch border. It also applies the CO-specific full-row scan and
+ * full-merge SSTable selection policies.
+ */
+class ObCOMinorBatchMergeIter : public ObCOMinorSSTableMergeIter
 {
 public:
-  ObCORowBatchMergeIter(
+  ObCOMinorBatchMergeIter(
       const ObITableReadInfo &read_info,
       ObIAllocator &allocator,
       ObIPartitionMergeFuser &fuser)
@@ -165,6 +180,7 @@ public:
       ObCompactionFilterHandle &filter_handle) override
   {
     UNUSEDx(merge_param, iter_idx, filter_handle);
+    // Reconstruct a full row when the input is the base rowkey CG of a CO SSTable.
     const bool need_co_sstable_scan = table != nullptr && table->is_co_sstable() && static_cast<const ObCOSSTableV2*>(table)->is_rowkey_cg_base();
     return alloc_helper<ObPartitionRowMergeIter> (allocator_, allocator_, need_co_sstable_scan);
   }
@@ -172,6 +188,7 @@ public:
   {
     return table.is_major_type_sstable() && !table_need_full_merge;
   }
+  // Peek the next competing row without advancing any input iterator.
   virtual int get_next_row(const blocksstable::ObDatumRow *&row) override;
 };
 

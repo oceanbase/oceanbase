@@ -228,7 +228,8 @@ int ObTableLoadEmptyInsertTabletCtxManager::execute_for_dag(
     const ObDagId *cur_dag_id = ObCurTraceId::get_trace_id();
     ObArenaAllocator allocator;
     allocator.set_attr(ObMemAttr(MTL_ID(), "TLD_EI_Dag"));
-    if (OB_FAIL(ObTenantDagScheduler::alloc_dag(allocator, false /*is_ha_dag*/, dag))) {
+    if (OB_FAIL(ObTenantDagScheduler::alloc_dag_from_allocator(
+        allocator, dag))) {
       LOG_WARN("alloc ddl dag failed", KR(ret));
     } else if (OB_FAIL(dag->init(&dag_init_param, cur_dag_id))) {
       LOG_WARN("fail to init dag", KR(ret));

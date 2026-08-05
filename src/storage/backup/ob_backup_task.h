@@ -191,7 +191,7 @@ int ObLSBackupDataDagNet::generate_downstream_dag_(
   } else if (OB_ISNULL(scheduler)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN( "unexpected null MTL scheduler", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag(dag, true/*is_ha_dag*/))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(dag))) {
     LOG_WARN( "failed to alloc dag", K(ret));
   } else if (OB_FAIL(dag->init(std::forward<InitArgs>(init_args)...))) {
     LOG_WARN( "failed to init dag", K(ret));
@@ -257,7 +257,6 @@ public:
   virtual uint64_t hash() const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override { return compat_mode_; }
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
-  virtual bool is_ha_dag() const override { return true; }
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, K_(is_inited));
 
 private:
@@ -284,7 +283,6 @@ public:
   virtual uint64_t hash() const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override { return compat_mode_; }
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
-  virtual bool is_ha_dag() const override { return true; }
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, K_(is_inited));
 
 private:
@@ -317,7 +315,6 @@ public:
   virtual bool check_can_schedule() override;
   virtual lib::Worker::CompatMode get_compat_mode() const override { return compat_mode_; }
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
-  virtual bool is_ha_dag() const override { return true; }
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, K_(is_inited));
 
 private:
@@ -346,7 +343,6 @@ public:
   virtual uint64_t hash() const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override { return compat_mode_; }
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
-  virtual bool is_ha_dag() const override { return true; }
   INHERIT_TO_STRING_KV("ObLSBackupDataInitDag", ObIDag, K_(is_inited), K_(param));
 
 private:
@@ -387,7 +383,6 @@ public:
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override { return compat_mode_; }
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
-  virtual bool is_ha_dag() const override { return true; }
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, K_(param));
 
 protected:
@@ -433,7 +428,6 @@ public:
   virtual uint64_t hash() const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override { return compat_mode_; }
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
-  virtual bool is_ha_dag() const override { return true; }
 
 private:
   int get_file_id_list_(common::ObIArray<int64_t> &file_id_list);

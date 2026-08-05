@@ -178,7 +178,7 @@ TEST_F(TestMdsInfoCompactionFilter, test_get_ttl_filter_op)
   ObMdsInfoCompactionFilter filter;
   ObBlockOp op;
 
-  ASSERT_EQ(OB_SUCCESS, filter.init(allocator_, tablet_id, nullptr, schema_rowkey_cnt_, cols_desc_, mds_info_mgr));
+  ASSERT_EQ(OB_SUCCESS, filter.init(tablet_id, nullptr, schema_rowkey_cnt_, cols_desc_, mds_info_mgr));
 
 // TTL filter data: commit_ver=[1000,2000,3000,6000], filter_value=[1,1000,2000,4000] (ROWSCN type)
 // The effective TTL filter for a block is: all rows with rowscn <= max_filter_value=4000 are filtered.
@@ -261,7 +261,7 @@ TEST_F(TestMdsInfoCompactionFilter, test_get_truncate_filter_op)
   ObMdsInfoCompactionFilter filter;
   ObBlockOp op;
 
-  ASSERT_EQ(OB_SUCCESS, filter.init(allocator_, tablet_id, nullptr, schema_rowkey_cnt_, cols_desc_, mds_info_mgr));
+  ASSERT_EQ(OB_SUCCESS, filter.init(tablet_id, nullptr, schema_rowkey_cnt_, cols_desc_, mds_info_mgr));
 
 // Truncate filter data: commit_ver=[1000,2000,3000,4000], get_filter_max_val()=4000.
 // Truncate skip_index logic: if filter_max_val(=4000) >= min_snapshot => OP_OPEN, else OP_NONE.
@@ -360,7 +360,7 @@ TEST_F(TestMdsInfoCompactionFilter, test_get_combined_filter_op)
 
   ObMdsInfoCompactionFilter filter;
   ObBlockOp op;
-  ASSERT_EQ(OB_SUCCESS, filter.init(allocator_, tablet_id, nullptr, schema_rowkey_cnt_, cols_desc_, mds_info_mgr));
+  ASSERT_EQ(OB_SUCCESS, filter.init(tablet_id, nullptr, schema_rowkey_cnt_, cols_desc_, mds_info_mgr));
   ASSERT_TRUE(filter.ttl_filter_.is_valid());
   ASSERT_TRUE(filter.truncate_filter_.is_valid());
 

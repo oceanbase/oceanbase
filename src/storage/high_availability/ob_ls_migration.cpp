@@ -465,7 +465,7 @@ int ObMigrationDagNet::start_running_for_migration_()
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
   } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx_->arg_.type_, prio))) {
     LOG_WARN("failed to get dag priority", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, initial_migration_dag))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(initial_migration_dag, prio))) {
     LOG_WARN("failed to alloc migration dag ", K(ret), K(prio));
   } else if (OB_FAIL(initial_migration_dag->init(this))) {
     LOG_WARN("failed to init migration dag", K(ret));
@@ -848,14 +848,12 @@ int ObInitialMigrationTask::generate_migration_dags_()
     LOG_WARN("initial migration dag is null", K(ret), KP(initial_migration_dag));
   } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx_->arg_.type_, prio))) {
     LOG_WARN("failed to get dag priority", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, start_migration_dag))) {
-    LOG_WARN("failed to alloc start migration dag ", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, migration_finish_dag))) {
-    LOG_WARN("failed to alloc migration finish dag", K(ret));
-  } else if (OB_FAIL(start_migration_dag->init(dag_net_))) {
-    LOG_WARN("failed to init start migration dag", K(ret));
-  } else if (OB_FAIL(migration_finish_dag->init(dag_net_))) {
-    LOG_WARN("failed to init migration finish dag", K(ret));
+  } else if (OB_FAIL(scheduler->create_dag(
+      dag_net_, prio, migration_finish_dag, dag_net_))) {
+    LOG_WARN("failed to create migration finish dag", K(ret));
+  } else if (OB_FAIL(scheduler->create_dag(
+      dag_net_, prio, start_migration_dag, dag_net_))) {
+    LOG_WARN("failed to create start migration dag", K(ret));
   } else if (OB_FAIL(this->get_dag()->add_child(*start_migration_dag))) {
     LOG_WARN("failed to add start migration dag", K(ret), KPC(start_migration_dag));
 #ifdef ERRSIM
@@ -864,32 +862,19 @@ int ObInitialMigrationTask::generate_migration_dags_()
                           "ls_id", ctx_->arg_.ls_id_.id(),
                           "ret", ret);
 #endif
-  } else if (OB_FAIL(start_migration_dag->create_first_task())) {
-    LOG_WARN("failed to create first task", K(ret));
   } else if (OB_FAIL(start_migration_dag->add_child(*migration_finish_dag))) {
     LOG_WARN("failed to add migration finish dag as child", K(ret));
-  } else if (OB_FAIL(migration_finish_dag->create_first_task())) {
-    LOG_WARN("failed to create first task", K(ret));
-  } else if (OB_FAIL(scheduler->add_dag(migration_finish_dag))) {
-    LOG_WARN("failed to add migration finish dag", K(ret), K(*migration_finish_dag));
-    if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-      LOG_WARN("Fail to add task", K(ret));
-      ret = OB_EAGAIN;
-    }
-  } else if (OB_FAIL(scheduler->add_dag(start_migration_dag))) {
-    LOG_WARN("failed to add dag", K(ret), K(*start_migration_dag));
-    if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(migration_finish_dag))) {
-      LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(initial_migration_dag));
-    } else {
-      migration_finish_dag = nullptr;
-    }
-
+  } else if (OB_FAIL(scheduler->add_dag_pair(start_migration_dag, migration_finish_dag))) {
+    LOG_WARN("failed to add migration dag pair", K(ret),
+        K(*start_migration_dag), K(*migration_finish_dag));
     if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
       LOG_WARN("Fail to add task", K(ret));
       ret = OB_EAGAIN;
     }
   } else {
     LOG_INFO("succeed to schedule migration dag", K(*start_migration_dag));
+    start_migration_dag = nullptr;
+    migration_finish_dag = nullptr;
   }
 
   if (OB_FAIL(ret)) {
@@ -1359,7 +1344,6 @@ int ObLSMigrationUtils::generate_tablets_migration_dag(
     ObMigrationCtx *ctx)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   ObSysTabletsMigrationDag *sys_tablets_migration_dag = nullptr;
   ObDataTabletsMigrationDag *data_tablets_migration_dag = nullptr;
   ObTenantDagScheduler *scheduler = nullptr;
@@ -1385,10 +1369,10 @@ int ObLSMigrationUtils::generate_tablets_migration_dag(
   } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx->arg_.type_, prio))) {
     LOG_WARN("failed to get dag priority", K(ret));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, sys_tablets_migration_dag))) {
-      LOG_WARN("failed to alloc sys tablets migration dag ", K(ret));
-    } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, data_tablets_migration_dag))) {
-      LOG_WARN("failed to alloc data tablets migration dag ", K(ret));
+    if (OB_FAIL(scheduler->alloc_dag(sys_tablets_migration_dag, prio))) {
+      LOG_WARN("failed to alloc sys tablets migration dag", K(ret));
+    } else if (OB_FAIL(scheduler->alloc_dag(data_tablets_migration_dag, prio))) {
+      LOG_WARN("failed to alloc data tablets migration dag", K(ret));
     } else if (OB_FAIL(sys_tablets_migration_dag->init(dag_net))) {
       LOG_WARN("failed to init sys tablets migration dag", K(ret), K(*ctx));
     } else if (OB_FAIL(data_tablets_migration_dag->init(dag_net))) {
@@ -1412,21 +1396,20 @@ int ObLSMigrationUtils::generate_tablets_migration_dag(
     }
 #endif
 
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(scheduler->add_dag(sys_tablets_migration_dag))) {
-      LOG_WARN("failed to add sys tablets migration dag", K(ret), K(*sys_tablets_migration_dag));
-      if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-        LOG_WARN("Fail to add task", K(ret));
-        ret = OB_EAGAIN;
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = OB_E(EventTable::EN_MIGRATION_GENERATE_SYS_TABLETS_DAG_FAILED) OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        STORAGE_LOG(ERROR, "fake EN_MIGRATION_GENERATE_SYS_TABLETS_DAG_FAILED", K(ret));
       }
-    } else if (OB_FAIL(scheduler->add_dag(data_tablets_migration_dag))) {
-      LOG_WARN("failed to add data tablets migration dag", K(ret), K(*data_tablets_migration_dag));
-      if (OB_TMP_FAIL(scheduler->cancel_dag(sys_tablets_migration_dag))) {
-        LOG_WARN("failed to cancel ha dag", K(ret), KPC(start_migration_dag));
-      } else {
-        sys_tablets_migration_dag = nullptr;
-      }
+    }
+#endif
 
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(scheduler->add_dag_pair(
+        sys_tablets_migration_dag, data_tablets_migration_dag))) {
+      LOG_WARN("failed to add tablets migration dag pair", K(ret),
+          K(*sys_tablets_migration_dag), K(*data_tablets_migration_dag));
       if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
         LOG_WARN("Fail to add task", K(ret));
         ret = OB_EAGAIN;
@@ -1434,28 +1417,9 @@ int ObLSMigrationUtils::generate_tablets_migration_dag(
     } else {
       LOG_INFO("succeed to schedule sys tablets migration dag and data tablets migration dag",
           K(*sys_tablets_migration_dag), K(*data_tablets_migration_dag));
+      sys_tablets_migration_dag = nullptr;
+      data_tablets_migration_dag = nullptr;
     }
-
-  #ifdef ERRSIM
-    if (OB_SUCC(ret)) {
-      ret = OB_E(EventTable::EN_MIGRATION_GENERATE_SYS_TABLETS_DAG_FAILED) OB_SUCCESS;
-      if (OB_FAIL(ret)) {
-        STORAGE_LOG(ERROR, "fake EN_MIGRATION_GENERATE_SYS_TABLETS_DAG_FAILED", K(ret));
-
-        if (OB_TMP_FAIL(scheduler->cancel_dag(data_tablets_migration_dag))) {
-          LOG_WARN("failed to cancel ha dag", K(ret), KPC(sys_tablets_migration_dag));
-        } else {
-          data_tablets_migration_dag = nullptr;
-        }
-
-        if (OB_TMP_FAIL(scheduler->cancel_dag(sys_tablets_migration_dag))) {
-          LOG_WARN("failed to cancel ha dag", K(ret), KPC(start_migration_dag));
-        } else {
-          sys_tablets_migration_dag = nullptr;
-        }
-      }
-    }
-  #endif
 
     if (OB_FAIL(ret)) {
       if (OB_NOT_NULL(data_tablets_migration_dag)) {
@@ -2331,7 +2295,7 @@ int ObSysTabletsMigrationTask::generate_sys_tablet_migartion_dag_()
       } else if (logic_tablet_id.transfer_seq_ != tablet->get_tablet_meta().transfer_info_.transfer_seq_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ls inner tablet transfer seq not match, uexpected", K(ret), K(logic_tablet_id), KPC(tablet));
-      } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, tablet_migration_dag))) {
+      } else if (OB_FAIL(scheduler->alloc_dag(tablet_migration_dag, prio))) {
         LOG_WARN("failed to alloc tablet migration dag ", K(ret));
       } else if (OB_FAIL(tablet_migration_dag_array.push_back(tablet_migration_dag))) {
         LOG_WARN("failed to push tablet migration dag into array", K(ret), K(*ctx_));
@@ -2613,12 +2577,8 @@ int ObTabletMigrationDag::create_first_task()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet migration dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init(copy_tablet_ctx_))) {
-    LOG_WARN("failed to init sys tablets migration task", K(ret), KPC(ha_dag_net_ctx_), K(copy_tablet_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
+  } else if (OB_FAIL(create_task(nullptr/*parent_task*/, task, copy_tablet_ctx_))) {
+    LOG_WARN("failed to create sys tablets migration task", K(ret), KPC(ha_dag_net_ctx_), K(copy_tablet_ctx_));
   } else {
     LOG_DEBUG("success to create first task", K(ret), KPC(this));
   }
@@ -2718,7 +2678,7 @@ int ObTabletMigrationDag::generate_next_dag(share::ObIDag *&dag)
       } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-      } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, tablet_migration_dag))) {
+      } else if (OB_FAIL(scheduler->alloc_dag(tablet_migration_dag, prio))) {
         LOG_WARN("failed to alloc tablet migration dag", K(ret));
       } else {
         if (OB_FAIL(tablet_migration_dag->init(logic_tablet_id.tablet_id_, tablet_handle, dag_net, tablet_group_ctx_, ObTabletMigrationDag::ObTabletType::DATA_TABLET_TYPE))) {
@@ -4481,12 +4441,8 @@ int ObTabletGroupMigrationDag::create_first_task()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet group migration dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init(tablet_id_array_, finish_dag_, tablet_group_ctx_))) {
-    LOG_WARN("failed to tablet group migration task", K(ret), KPC(ha_dag_net_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
+  } else if (OB_FAIL(create_task(nullptr/*parent_task*/, task, tablet_id_array_, finish_dag_, tablet_group_ctx_))) {
+    LOG_WARN("failed to create tablet group migration task", K(ret), KPC(ha_dag_net_ctx_));
   } else {
     LOG_DEBUG("success to create first task", K(ret), KPC(this));
   }
@@ -4659,7 +4615,8 @@ int ObTabletGroupMigrationTask::generate_tablet_migration_dag_()
           ObTabletMigrationDag::ObTabletType::DATA_TABLET_TYPE))) {
         LOG_WARN("failed to schedule tablet migration dag", K(ret), K(*ctx_));
       } else {
-        LOG_INFO("succeed to schedule tablet migration dag", K(*tablet_migration_dag), K(logic_tablet_id));
+        tablet_migration_dag = nullptr;
+        LOG_INFO("succeed to schedule tablet migration dag", K(logic_tablet_id));
         break;
       }
     }
@@ -4847,16 +4804,10 @@ int ObTabletGroupGenerateDag::create_first_task()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet group generate dag do not init", K(ret));
+  } else if (OB_FAIL(create_task(nullptr/*parent_task*/, task, dag_idx_, finish_dag_))) {
+    LOG_WARN("failed to create first task", K(ret));
   } else {
-    if (OB_FAIL(alloc_task(task))) {
-      LOG_WARN("failed to alloc task", K(ret));
-    } else if (OB_FAIL(task->init(dag_idx_, finish_dag_))) {
-      LOG_WARN("failed to init task", K(ret));
-    } else if (OB_FAIL(add_task(*task))) {
-      LOG_WARN("failed to add task", K(ret));
-    } else {
-      LOG_INFO("success to create first task", K(ret), KPC(this));
-    }
+    LOG_INFO("success to create first task", K(ret), KPC(this));
   }
   return ret;
 }
@@ -5052,7 +5003,7 @@ int ObTabletGroupGenerateTask::generate_tablet_group_migration_dag_(ObHATabletGr
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
   } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx_->arg_.type_, prio))) {
     LOG_WARN("failed to get dag priority", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, tablet_group_dag))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(tablet_group_dag, prio))) {
     LOG_WARN("failed to alloc tablet backfill tx migration dag ", K(ret));
   } else if (OB_FAIL(tablet_group_dag->init(tablet_id_array, dag_net, finish_dag_, tablet_group_ctx))) {
     LOG_WARN("failed to init tablet migration dag", K(ret), KPC(ctx_));
@@ -5248,7 +5199,7 @@ int ObMigrationFinishTask::generate_migration_init_dag_()
   } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx_->arg_.type_, prio))) {
     LOG_WARN("failed to get dag priority", K(ret));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, initial_migration_dag))) {
+    if (OB_FAIL(scheduler->alloc_dag(initial_migration_dag, prio))) {
       LOG_WARN("failed to alloc initial migration dag ", K(ret));
     } else if (OB_FAIL(initial_migration_dag->init(dag_net_))) {
       LOG_WARN("failed to init initial migration dag", K(ret));

@@ -177,12 +177,8 @@ int ObLSRemoveMemberDag::create_first_task()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls remove member dag is not init", K(ret));
-  } else if (OB_FAIL(alloc_task(remove_member_task))) {
-    STORAGE_LOG(WARN, "fail to alloc task", K(ret));
-  } else if (OB_FAIL(remove_member_task->init())) {
-    STORAGE_LOG(WARN, "failed to init remove member task", K(ret));
-  } else if (OB_FAIL(add_task(*remove_member_task))) {
-    STORAGE_LOG(WARN, "fail to add task", K(ret), K_(ctx));
+  } else if (OB_FAIL(create_task(nullptr/*parent_task*/, remove_member_task))) {
+    STORAGE_LOG(WARN, "failed to create remove member task", K(ret), K_(ctx));
   }
   return ret;
 }

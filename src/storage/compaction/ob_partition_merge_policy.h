@@ -294,7 +294,6 @@ public:
   static bool is_recycle_mds_info_merge_reason(const AdaptiveMergeReason &reason);
   static bool is_window_merge_reason(const AdaptiveMergeReason &reason);
   static bool is_need_mlog_purge_catchup_reason(const AdaptiveMergeReason &reason);
-  static bool is_valid_compaction_policy(const AdaptiveCompactionPolicy &policy);
   static bool is_schedule_medium(const share::schema::ObTableModeFlag &mode);
   static bool is_schedule_meta(const share::schema::ObTableModeFlag &mode);
   static bool take_normal_policy(const share::schema::ObTableModeFlag &mode);

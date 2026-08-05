@@ -266,7 +266,6 @@ public:
   { return consumer_group_id_; }
   virtual int create_first_task() override;
   virtual bool ignore_warning() override;
-  virtual bool is_ha_dag() const override { return false; }
   // report replica build status to RS.
   int report_replica_build_status();
   int calc_total_row_count();

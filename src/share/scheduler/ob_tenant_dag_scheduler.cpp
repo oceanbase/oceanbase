@@ -2509,6 +2509,20 @@ int ObDagPrioScheduler::add_dag_into_list_and_map_(
 }
 
 // call this func with locked
+int ObDagPrioScheduler::erase_dag_from_list_and_map_(ObIDag &dag)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(dag_map_.erase_refactored(&dag))) {
+    COMMON_LOG(ERROR, "failed to erase dag from dag map", K(ret), K(dag));
+    ob_abort();
+  } else if (OB_ISNULL(dag_list_[dag.get_list_idx()].remove(&dag))) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(ERROR, "failed to erase dag from dag list", K(ret), K(dag));
+  }
+  return ret;
+}
+
+// call this func with locked
 int ObDagPrioScheduler::inner_add_dag_(
     const bool check_size_overflow,
     ObIDag *&dag)
@@ -2957,12 +2971,8 @@ int ObDagPrioScheduler::erase_dag_(ObIDag &dag)
   if (OB_UNLIKELY(OB_ISNULL(scheduler_))) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(WARN, "unexpected null scheduler", K(ret), KP_(scheduler));
-  } else if (OB_FAIL(dag_map_.erase_refactored(&dag))) {
-    COMMON_LOG(ERROR, "failed to erase dag from dag_map", K(ret), K(dag));
-    ob_abort();
-  } else if (!dag_list_[dag.get_list_idx()].remove(&dag)) {
-    ret = OB_ERR_UNEXPECTED;
-    COMMON_LOG(ERROR, "failed to remove dag from dag list", K(dag));
+  } else if (OB_FAIL(erase_dag_from_list_and_map_(dag))) {
+    COMMON_LOG(ERROR, "failed to erase dag from list and map", K(ret), K(dag));
   } else {
     scheduler_->sub_cur_dag_cnt();
     scheduler_->sub_type_dag_cnt(dag.get_type());
@@ -3138,6 +3148,42 @@ int ObDagPrioScheduler::inner_add_dag(
 {
   common::SpinWLockGuard guard(prio_rwlock_);
   return inner_add_dag_(check_size_overflow, dag);
+}
+
+int ObDagPrioScheduler::inner_add_dag_pair(
+    ObIDag *first_dag,
+    ObIDag *second_dag)
+{
+  int ret = OB_SUCCESS;
+  common::SpinWLockGuard guard(prio_rwlock_);
+  const ObDagType::ObDagTypeEnum first_type = first_dag->get_type();
+  const ObDagType::ObDagTypeEnum second_type = second_dag->get_type();
+
+  if (scheduler_->dag_count_overflow(first_type)
+      || scheduler_->dag_count_overflow(second_type)) {
+    ret = OB_SIZE_OVERFLOW;
+    COMMON_LOG(WARN, "ObTenantDagScheduler is full for dag pair", K(ret),
+        K(first_type), K(second_type));
+  } else if (OB_FAIL(add_dag_into_list_and_map_(
+      is_rank_dag_type(first_type) ? RANK_DAG_LIST : READY_DAG_LIST,
+      *first_dag))) {
+  } else if (OB_FAIL(add_dag_into_list_and_map_(
+      is_rank_dag_type(second_type) ? RANK_DAG_LIST : READY_DAG_LIST,
+      *second_dag))) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(erase_dag_from_list_and_map_(*first_dag))) {
+      COMMON_LOG(ERROR, "failed to rollback first dag", K(tmp_ret), KPC(first_dag));
+      ob_abort();
+    } else {
+      first_dag->set_dag_status(ObIDag::DAG_STATUS_INITING);
+      first_dag->set_list_idx(DAG_LIST_MAX);
+    }
+  } else {
+    add_added_info_(first_type);
+    add_added_info_(second_type);
+    COMMON_LOG(INFO, "add dag pair success", KPC(first_dag), KPC(second_dag));
+  }
+  return ret;
 }
 
 #define ADD_DAG_SCHEDULER_INFO(value_type, key_str, value) \
@@ -4632,7 +4678,7 @@ void ObTenantDagScheduler::free_dag(ObIDag &dag)
 
 void ObTenantDagScheduler::inner_free_dag(ObIDag &dag)
 {
-  ObIAllocator &allocator = get_allocator(dag.is_ha_dag());
+  ObIAllocator &allocator = get_allocator(OB_DAG_TYPES[dag.get_type()].is_ha_dag_);
   inner_free_dag(allocator, dag);
 }
 
@@ -4698,12 +4744,50 @@ int ObTenantDagScheduler::add_dag(
       LOG_WARN("failed to inner add dag", K(ret), KPC(dag));
     }
   } else {
-    ObThreadCondGuard guard(scheduler_sync_);
-    if (OB_SUCC(guard.get_ret())) {
-      if(OB_FAIL(scheduler_sync_.signal())) {
-        COMMON_LOG(WARN, "Failed to signal", K(ret), KPC(dag));
-      }
+    notify();
+  }
+  return ret;
+}
+
+int ObTenantDagScheduler::add_dag_pair(
+    ObIDag *first_dag,
+    ObIDag *second_dag,
+    const bool emergency)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    COMMON_LOG(WARN, "ObTenantDagScheduler is not inited", K(ret));
+  } else if (OB_ISNULL(first_dag) || OB_ISNULL(second_dag)
+      || OB_UNLIKELY(first_dag == second_dag)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid dag pair", K(ret), KP(first_dag), KP(second_dag));
+  } else if (OB_UNLIKELY(!first_dag->is_valid())
+      || OB_UNLIKELY(!second_dag->is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid dag pair", K(ret), KPC(first_dag), KPC(second_dag));
+  } else if (OB_UNLIKELY(!ObDagPrio::is_valid_prio(first_dag->get_priority()))
+      || OB_UNLIKELY(!ObDagPrio::is_valid_prio(second_dag->get_priority()))) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid dag pair priority", K(ret),
+        K(first_dag->get_priority()), K(second_dag->get_priority()));
+  } else if (OB_UNLIKELY(first_dag->get_priority() != second_dag->get_priority())) {
+    ret = OB_NOT_SUPPORTED;
+    COMMON_LOG(WARN, "dag pair with different priorities is not supported", K(ret),
+        K(first_dag->get_priority()), K(second_dag->get_priority()));
+  } else if (OB_UNLIKELY(first_dag->get_type() == second_dag->get_type())) {
+    ret = OB_NOT_SUPPORTED;
+    COMMON_LOG(WARN, "dag pair with the same type is not supported", K(ret),
+        K(first_dag->get_type()));
+  } else if (FALSE_IT(first_dag->set_dag_emergency(emergency))) {
+  } else if (FALSE_IT(second_dag->set_dag_emergency(emergency))) {
+  } else if (OB_FAIL(prio_sche_[first_dag->get_priority()].inner_add_dag_pair(
+      first_dag, second_dag))) {
+    if (OB_EAGAIN != ret) {
+      COMMON_LOG(WARN, "failed to inner add dag pair", K(ret), KPC(first_dag), KPC(second_dag));
     }
+  } else {
+    notify();
   }
   return ret;
 }
@@ -5185,9 +5269,12 @@ int64_t ObReclaimUtil::compute_expected_reclaim_worker_cnt(
 
 void ObTenantDagScheduler::notify()
 {
+  int tmp_ret = OB_SUCCESS;
   ObThreadCondGuard cond_guard(scheduler_sync_);
-  if (OB_SUCCESS == cond_guard.get_ret()) {
-    scheduler_sync_.signal();
+  if (OB_TMP_FAIL(cond_guard.get_ret())) {
+    COMMON_LOG_RET(WARN, tmp_ret, "failed to lock scheduler condition");
+  } else if (OB_TMP_FAIL(scheduler_sync_.signal())) {
+    COMMON_LOG_RET(WARN, tmp_ret, "failed to signal scheduler condition");
   }
 }
 

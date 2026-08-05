@@ -137,9 +137,8 @@ void ObTabletCompactionScore::update_with(const ObTabletCompactionScoreDecisionI
 
 /*------------------------ ObWindowCompactionMemoryContext ----------------------*/
 ObWindowCompactionMemoryContext::ObWindowCompactionMemoryContext()
-  : allocator_()
+  : allocator_(ObMemAttr(MTL_ID(), "WinComAlloc"))
 {
-  allocator_.set_attr(ObMemAttr(MTL_ID(), "WinComAlloc"));
   allocator_.set_nway(2); // only window loop and medium loop will use this allocator
 }
 
@@ -691,7 +690,7 @@ int ObWindowCompactionPriorityQueue::check_admission(const int64_t score)
   if (current_size >= THRESHOLD_MAX /* 200000*/) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("priority queue size overflow", K(ret), K(current_size), K(score), K_(avg_score));
-  } else if (2 * score <= avg_score_ * (current_size / BASE_THRESHOLD)) {
+  } else if (2.0 * static_cast<double>(score) <= avg_score_ * (current_size / BASE_THRESHOLD)) {
     ret = OB_EAGAIN;
     LOG_TRACE("score is too small, wait a moment", K(ret), K(current_size), K(score), K_(avg_score));
   }

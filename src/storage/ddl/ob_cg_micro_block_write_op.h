@@ -32,8 +32,7 @@ public:
   void reset();
   int append_row(const blocksstable::ObDatumRow &row,
                  const blocksstable::ObMacroBlockDesc *curr_macro_desc = nullptr);
-  int append_batch(const blocksstable::ObBatchDatumRows &datum_rows,
-                   const blocksstable::ObMacroBlockDesc *curr_macro_desc = nullptr);
+  int append_batch(const blocksstable::ObBatchDatumRows &datum_rows);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCGMicroBlockWriter);

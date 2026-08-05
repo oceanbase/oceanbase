@@ -40,7 +40,6 @@ public:
   { return lib::Worker::CompatMode::MYSQL; }
   virtual uint64_t get_consumer_group_id() const override
   { return consumer_group_id_; }
-  virtual bool is_ha_dag() const override { return true; }
 
   virtual int create_first_task() = 0;
   bool is_inited() const { return is_inited_; }

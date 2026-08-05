@@ -13,7 +13,6 @@ namespace compaction
 {
 
 int ObMdsInfoCompactionFilter::init(
-  ObIAllocator &allocator,
   const ObTabletID &tablet_id,
   const ObStorageSchema *schema,
   const int64_t schema_rowkey_cnt,

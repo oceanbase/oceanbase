@@ -63,7 +63,6 @@ public:
   OB_INLINE int64_t capacity() const { return capacity_; }
   OB_INLINE int64_t size() const { return size_; }
   OB_INLINE char *data() { return data_; }
-  OB_INLINE const char *data() const { return data_; }
   OB_INLINE char *data_or_empty() { return nullptr == data_ ? &empty_data_ : data_; }
   OB_INLINE const char *data_or_empty() const { return nullptr == data_ ? &empty_data_ : data_; }
   OB_INLINE void advance(const int64_t len) { size_ += len; }
@@ -120,9 +119,7 @@ public:
   virtual ~ObCompactionVector() = default;
 
   OB_INLINE sql::VectorHeader &get_vector_header() { return vector_header_; }
-  OB_INLINE VectorFormat get_format() const { return vector_header_.get_format(); }
   OB_INLINE ObIVector *get_vector() { return vector_header_.get_vector(); }
-  OB_INLINE const ObIVector *get_vector() const { return reinterpret_cast<const ObIVector *>(vector_header_.vector_buf_); }
   virtual void reuse(const int64_t batch_size);
   virtual void init() = 0;
   virtual int64_t get_extra_mem_usage() const { return 0; }

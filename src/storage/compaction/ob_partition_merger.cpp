@@ -202,6 +202,7 @@ ObPartitionMerger::ObPartitionMerger(
   compaction::ObLocalArena &allocator,
   const ObStaticMergeParam &static_param)
   : ObRowStoreMerger(allocator, static_param),
+    reuse_row_cnt_(0),
     merge_progress_(nullptr),
     data_store_desc_(),
     macro_writer_(nullptr),
@@ -219,6 +220,7 @@ ObPartitionMerger::~ObPartitionMerger()
 
 void ObPartitionMerger::reset()
 {
+  reuse_row_cnt_ = 0;
   minimum_iters_.reset();
   data_store_desc_.reset();
   merge_progress_ = nullptr;

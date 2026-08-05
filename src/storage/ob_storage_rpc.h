@@ -19,6 +19,7 @@
 #include "observer/ob_server_struct.h"
 #include "storage/ob_storage_schema.h"
 #include "storage/high_availability/ob_storage_ha_struct.h"
+#include "storage/high_availability/ob_ls_transfer_info.h"
 #include "storage/blocksstable/ob_sstable_meta.h"
 #include "storage/ls/ob_ls_meta_package.h"
 #include "tablet/ob_tablet_meta.h"

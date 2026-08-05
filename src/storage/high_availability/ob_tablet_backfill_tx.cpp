@@ -318,12 +318,8 @@ int ObTabletBackfillTXDag::create_first_task()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet backfill tx dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init(dag_net_id_, ls_id_, tablet_info_))) {
-    LOG_WARN("failed to init tablet backfill tx task", K(ret), KPC(ha_dag_net_ctx_), KPC(backfill_tx_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
+  } else if (OB_FAIL(create_task(nullptr/*parent_task*/, task, dag_net_id_, ls_id_, tablet_info_))) {
+    LOG_WARN("failed to create tablet backfill tx task", K(ret), KPC(ha_dag_net_ctx_), KPC(backfill_tx_ctx_));
   } else {
     LOG_DEBUG("success to create first task", K(ret), KPC(this));
   }
@@ -362,7 +358,7 @@ int ObTabletBackfillTXDag::generate_next_dag(share::ObIDag *&dag)
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag(tablet_backfill_tx_dag, true/*is_ha_dag*/))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(tablet_backfill_tx_dag))) {
     LOG_WARN("failed to alloc tablet backfill tx migration dag ", K(ret));
   } else if (OB_FAIL(tablet_backfill_tx_dag->init(dag_net_id_, ls_id_, next_tablet_info, ha_dag_net_ctx_,
       backfill_tx_ctx_, tablets_table_mgr_))) {
@@ -407,9 +403,6 @@ int ObTabletBackfillTXDag::inner_reset_status_for_retry()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  ObBackfillTXCtx *ctx = nullptr;
-  int32_t result = OB_SUCCESS;
-  int32_t retry_count = 0;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -421,10 +414,6 @@ int ObTabletBackfillTXDag::inner_reset_status_for_retry()
     } else {
       LOG_INFO("set inner set status for retry failed", K(ret), KPC(ha_dag_net_ctx_));
     }
-  } else if (OB_FAIL(result_mgr_.get_result(result))) {
-    LOG_WARN("failed to get result", K(ret), KP(ctx));
-  } else if (OB_FAIL(result_mgr_.get_retry_count(retry_count))) {
-    LOG_WARN("failed to get retry count", K(ret));
   } else {
     LOG_INFO("start retry", KPC(this));
     result_mgr_.reuse();
@@ -2399,7 +2388,7 @@ int ObTabletIncMajorTableBackfillTXTask::process()
   while (OB_SUCC(ret)) {
     cur_table_hdl.reset();
     ObSSTable *cur_table = nullptr;
-    int64_t commit_version = -1;
+    int64_t commit_version = OB_INVALID_VERSION;
     const SCN &backfill_scn = backfill_tx_ctx_->backfill_scn_;
     bool need_backfill = true;
     bool is_trans_abort = false;
@@ -2414,7 +2403,10 @@ int ObTabletIncMajorTableBackfillTXTask::process()
     } else if (OB_UNLIKELY(!cur_table_hdl.is_valid() || !cur_table_hdl.get_table()->is_inc_major_type_sstable())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected not valid table handle", K(ret));
-    } else if (OB_FAIL(ObTransferUtils::check_inc_major_backfill(ls_id_, backfill_scn, cur_table_hdl, need_backfill, is_trans_abort))) {
+    } else if (OB_FAIL(cur_table_hdl.get_sstable(cur_table))) {
+      LOG_WARN("failed to get inc major sstable", K(ret), K(cur_table_hdl));
+    } else if (OB_FAIL(ObTransferUtils::check_inc_major_backfill(
+        ls_id_, backfill_scn, cur_table_hdl, commit_version, need_backfill, is_trans_abort))) {
       LOG_WARN("failed to check inc major backfill", K(ret), K(ls_id_), K(backfill_scn), K(cur_table_hdl));
     } else if (is_trans_abort) {
       continue;

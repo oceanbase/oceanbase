@@ -29,7 +29,6 @@ public:
     is_inited_ = false;
   }
   int init(
-    common::ObIAllocator &allocator,
     const ObTabletID &tablet_id,
     const ObStorageSchema *schema,
     const int64_t schema_rowkey_cnt,

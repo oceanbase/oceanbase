@@ -645,7 +645,8 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(bool &medium_clog_sub
 
     bool exists_unfinished_inc_major = false;
     if (OB_FAIL(ret)) {
-    } else if (ObTabletStatusCache::check_unfinished_inc_major(ls_, medium_info.medium_snapshot_, *tablet, exists_unfinished_inc_major)) {
+    } else if (OB_FAIL(ObTabletStatusCache::check_unfinished_inc_major(
+        ls_, medium_info.medium_snapshot_, *tablet, exists_unfinished_inc_major))) {
       LOG_WARN("failed to check unfinished inc major", K(ret), KPC(this));
     } else if (exists_unfinished_inc_major) {
       ret = OB_EAGAIN;
@@ -1112,7 +1113,7 @@ int ObMediumCompactionScheduleFunc::prepare_medium_info(
   } else if (OB_FAIL(choose_batch_size(medium_info))) {
     LOG_WARN("Failed to choose batch size", K(ret), K(medium_info));
   } else if (FALSE_IT(medium_info.last_medium_snapshot_ = result.handle_.get_table(0)->get_snapshot_version())) {
-  } else if (OB_FAIL(fill_mds_filter_info(result, medium_info))) {
+  } else if (OB_FAIL(fill_mds_filter_info(medium_info))) {
     if (OB_NO_NEED_MERGE != ret) {
       LOG_WARN("Failed to fill mds filter info", K(ret), K(medium_info));
     }
@@ -1701,7 +1702,6 @@ bool ObMediumCompactionScheduleFunc::need_read_mds(const ObMediumCompactionInfo 
 }
 
 int ObMediumCompactionScheduleFunc::fill_mds_filter_info(
-  const ObGetMergeTablesResult &result,
   ObMediumCompactionInfo &medium_info)
 {
   int ret = OB_SUCCESS;

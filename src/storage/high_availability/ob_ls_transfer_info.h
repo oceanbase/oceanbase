@@ -11,6 +11,7 @@
 #include "share/scn.h"
 #include "lib/container/ob_array_serialization.h"
 #include "share/schema/ob_schema_struct.h"
+#include "storage/high_availability/ob_storage_ha_struct.h"
 
 namespace oceanbase
 {
@@ -61,43 +62,8 @@ public:
 };
 
 struct ObTransferTabletIDArray final
+  : public ObStorageHATabletIDArray<share::schema::OB_MAX_TRANSFER_BINDING_TABLET_CNT>
 {
-  OB_UNIS_VERSION(1);
-public:
-  ObTransferTabletIDArray();
-  ~ObTransferTabletIDArray();
-  int assign(const common::ObIArray<common::ObTabletID> &tablet_id_array);
-  int push_back(const common::ObTabletID &tablet_id);
-  int get_tablet_id_array(common::ObIArray<common::ObTabletID> &tablet_id_array);
-
-  inline const common::ObTabletID &at(int64_t idx) const
-  {
-    OB_ASSERT(idx >= 0 && idx < count_);
-    return id_array_[idx];
-  }
-  inline common::ObTabletID &at(int64_t idx)
-  {
-    OB_ASSERT(idx >= 0 && idx < count_);
-    return id_array_[idx];
-  }
-  inline int64_t count() const { return count_; }
-  inline bool empty() const { return 0 == count(); }
-  void reset() { count_ = 0; }
-
-  int64_t to_string(char* buf, const int64_t buf_len) const
-  {
-    int64_t pos = 0;
-    J_OBJ_START();
-    J_NAME("id_array");
-    J_COLON();
-    (void)databuff_print_obj_array(buf, buf_len, pos, id_array_, count_);
-    J_OBJ_END();
-    return pos;
-  }
-private:
-  static const int64_t MAX_TABLET_COUNT = share::schema::OB_MAX_TRANSFER_BINDING_TABLET_CNT;
-  int64_t count_;
-  common::ObTabletID id_array_[MAX_TABLET_COUNT];
 };
 
 struct ObLSTransferMetaInfo final

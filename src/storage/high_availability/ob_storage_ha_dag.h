@@ -101,7 +101,6 @@ public:
   virtual uint64_t get_consumer_group_id() const override
   { return consumer_group_id_; }
   ObIHADagNetCtx *get_ha_dag_net_ctx() const { return ha_dag_net_ctx_; }
-  virtual bool is_ha_dag() const override { return true; }
   bool is_failed() const { return result_mgr_.is_failed(); }
 
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, KPC_(ha_dag_net_ctx), K_(result_mgr));
@@ -207,9 +206,9 @@ public:
       DAG *&dag,
       Args&&... init_args);
 
-  // Alloc two DAGs (first_dag, second_dag) with priority, init both with forwarded args,
-  // set up the chain: parent_dag -> first_dag -> second_dag, create first tasks for both,
-  // and schedule them (second_dag first, then first_dag) with proper error handling.
+  // Create two DAGs (first_dag, second_dag) in parent_dag's DAG net with priority
+  // and forwarded init args, set up parent_dag -> first_dag -> second_dag, then atomically add
+  // both DAGs to the scheduler.
   // On failure both DAGs are freed and pointers set to nullptr.
   template <typename FIRST_DAG, typename SECOND_DAG, typename... Args>
   static int alloc_and_schedule_pair_dags(
@@ -336,17 +335,11 @@ int ObStorageHADagUtils::alloc_and_schedule_dag(
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument for alloc_and_schedule_dag", K(ret),
         KP(scheduler), KP(dag_net), KP(parent_dag), KP(child_dag));
-  } else if (OB_FAIL(scheduler->alloc_dag(dag, true/*is_ha_dag*/))) {
-    STORAGE_LOG(WARN, "failed to alloc dag with priority", K(ret), K(prio));
-  } else if (ObDagPrio::is_valid_prio(prio) && FALSE_IT(dag->set_priority(prio))) {
-  } else if (OB_FAIL(dag->init(std::forward<Args>(init_args)...))) {
-    STORAGE_LOG(WARN, "failed to init dag", K(ret));
-  } else if (OB_FAIL(dag_net->add_dag_into_dag_net(*dag))) {
-    STORAGE_LOG(WARN, "failed to add dag into dag net", K(ret));
+  } else if (OB_FAIL(scheduler->create_dag(
+      dag_net, prio, dag, std::forward<Args>(init_args)...))) {
+    STORAGE_LOG(WARN, "failed to create dag", K(ret), K(prio));
   } else if (OB_NOT_NULL(parent_dag) && OB_FAIL(parent_dag->add_child_without_inheritance(*dag))) {
     STORAGE_LOG(WARN, "failed to add child dag to parent dag", K(ret), KP(parent_dag));
-  } else if (OB_FAIL(dag->create_first_task())) {
-    STORAGE_LOG(WARN, "failed to create first task", K(ret));
   } else if (OB_NOT_NULL(child_dag) && OB_FAIL(dag->add_child_without_inheritance(*child_dag))) {
     STORAGE_LOG(WARN, "failed to add child dag", K(ret), KP(child_dag));
   } else if (OB_FAIL(scheduler->add_dag(dag, emergency))) {
@@ -384,46 +377,32 @@ int ObStorageHADagUtils::alloc_and_schedule_pair_dags(
     Args&&... init_args)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   first_dag = nullptr;
   second_dag = nullptr;
   share::ObTenantDagScheduler *scheduler = MTL(share::ObTenantDagScheduler*);
-  if (OB_ISNULL(scheduler)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, first_dag))) {
-    STORAGE_LOG(WARN, "failed to alloc first dag", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, second_dag))) {
-    STORAGE_LOG(WARN, "failed to alloc second dag", K(ret));
-  } else if (OB_FAIL(first_dag->init(std::forward<Args>(init_args)...))) {
-    STORAGE_LOG(WARN, "failed to init first dag", K(ret));
-  } else if (OB_FAIL(second_dag->init(std::forward<Args>(init_args)...))) {
-    STORAGE_LOG(WARN, "failed to init second dag", K(ret));
-  } else if (OB_NOT_NULL(parent_dag) && OB_FAIL(parent_dag->add_child(*first_dag))) {
+  share::ObIDagNet *dag_net = nullptr;
+  if (OB_ISNULL(scheduler) || OB_ISNULL(parent_dag)
+      || OB_ISNULL(dag_net = parent_dag->get_dag_net())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument for creating dag pair", K(ret),
+        KP(scheduler), KP(parent_dag), KP(dag_net));
+  } else if (OB_FAIL(scheduler->create_dag(
+      dag_net, prio, first_dag, init_args...))) {
+    STORAGE_LOG(WARN, "failed to create first dag", K(ret));
+  } else if (OB_FAIL(scheduler->create_dag(
+      dag_net, prio, second_dag, init_args...))) {
+    STORAGE_LOG(WARN, "failed to create second dag", K(ret));
+  } else if (OB_FAIL(parent_dag->add_child(*first_dag))) {
     STORAGE_LOG(WARN, "failed to add first dag as child of parent", K(ret), KP(parent_dag));
-  } else if (OB_FAIL(first_dag->create_first_task())) {
-    STORAGE_LOG(WARN, "failed to create first task for first dag", K(ret));
   } else if (OB_FAIL(first_dag->add_child(*second_dag))) {
     STORAGE_LOG(WARN, "failed to add second dag as child of first dag", K(ret));
-  } else if (OB_FAIL(second_dag->create_first_task())) {
-    STORAGE_LOG(WARN, "failed to create first task for second dag", K(ret));
-  } else if (OB_FAIL(scheduler->add_dag(second_dag))) {
-    STORAGE_LOG(WARN, "failed to add second dag to scheduler", K(ret), KPC(second_dag));
+  } else if (OB_FAIL(scheduler->add_dag_pair(first_dag, second_dag))) {
+    STORAGE_LOG(WARN, "failed to add dag pair to scheduler",
+        K(ret), KPC(first_dag), KPC(second_dag));
     if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
       ret = OB_EAGAIN;
-    }
-  } else if (OB_FAIL(scheduler->add_dag(first_dag))) {
-    STORAGE_LOG(WARN, "failed to add first dag to scheduler", K(ret), KPC(first_dag));
-    if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-      ret = OB_EAGAIN;
-    }
-    if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(second_dag))) {
-      STORAGE_LOG(WARN, "failed to cancel second dag", K(tmp_ret), KPC(second_dag));
-    } else {
-      second_dag = nullptr;
     }
   } else {
-    STORAGE_LOG(INFO, "succeed to schedule two dags", KPC(first_dag), KPC(second_dag));
     first_dag = nullptr;
     second_dag = nullptr;
   }

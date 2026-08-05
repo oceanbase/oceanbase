@@ -102,7 +102,6 @@ public:
   void handle_init_failed_ret_code(int ret) { param_.delete_lob_meta_ret_ = ret; }
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
-  virtual bool is_ha_dag() const { return false; }
   virtual int create_first_task() override;
   virtual bool ignore_warning() override;
 private:

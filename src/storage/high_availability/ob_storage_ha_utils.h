@@ -151,6 +151,7 @@ public:
       const share::ObLSID &ls_id,
       const share::SCN &backfill_scn,
       ObTableHandleV2 &table_handle,
+      int64_t &commit_version,
       bool &need_backfill,
       bool &is_trans_abort);
   static int check_ddl_merge_finished(

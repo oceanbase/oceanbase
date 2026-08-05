@@ -815,16 +815,6 @@ bool ObMediumCompactionInfo::contain_storage_schema() const
   return contain_schema;
 }
 
-void ObMediumCompactionInfo::set_contain_noinc_storage_schema()
-{
-  if (MEDIUM_COMPAT_VERSION_V6 <= medium_compat_version_) {
-    contain_noinc_storage_schema_ = true;
-  } else {
-    contain_noinc_storage_schema_ = false;
-    storage_schema_.reset();
-  }
-}
-
 int ObMediumCompactionInfo::serialize(char *buf, const int64_t buf_len, int64_t &pos) const  // FARM COMPAT WHITELIST
 {
   int ret = OB_SUCCESS;

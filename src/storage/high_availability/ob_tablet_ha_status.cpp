@@ -165,6 +165,7 @@ int ObTabletExpectedStatus::check_can_change_status(
 ObTabletHAStatus::ObTabletHAStatus()
   : restore_status_(ObTabletRestoreStatus::RESTORE_STATUS_MAX),
     data_status_(ObTabletDataStatus::DATA_STATUS_MAX),
+    expected_status_(ObTabletExpectedStatus::EXPECTED_STATUS_MAX),
     reserved_(0)
 {
 }
@@ -172,7 +173,8 @@ ObTabletHAStatus::ObTabletHAStatus()
 bool ObTabletHAStatus::is_valid() const
 {
   return ObTabletRestoreStatus::is_valid(restore_status_)
-      && ObTabletDataStatus::is_valid(data_status_);
+      && ObTabletDataStatus::is_valid(data_status_)
+      && ObTabletExpectedStatus::is_valid(expected_status_);
 }
 
 int ObTabletHAStatus::serialize(char *buf, const int64_t len, int64_t &pos) const

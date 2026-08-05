@@ -545,7 +545,7 @@ int ObDataTabletsCheckCOConvertDag::create_first_task()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet check convert dag not init", K(ret));
-  } else if (OB_FAIL(create_task(nullptr /*parent*/, task, ha_dag_net_ctx_, ls_))) {
+  } else if (OB_FAIL(create_task(nullptr/*parent_task*/, task, ha_dag_net_ctx_, ls_))) {
     LOG_WARN("failed to create tablet check convert task", K(ret));
   } else {
     LOG_INFO("[CS-Replica] Success to create tablet check convert task", K(ret), KPC(this), KPC(task));

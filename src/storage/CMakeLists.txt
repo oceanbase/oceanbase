@@ -338,7 +338,6 @@ ob_set_subtarget(ob_storage high_availability
   high_availability/ob_cs_replica_migration.cpp
   high_availability/ob_transfer_parallel_build_tablet_info.cpp
   high_availability/ob_ha_rebuild_tablet.cpp
-  high_availability/ob_sstable_copy_start_task.cpp
   high_availability/ob_tenant_startup_status.cpp
 )
 

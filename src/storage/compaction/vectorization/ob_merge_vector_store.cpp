@@ -679,7 +679,7 @@ int ObMergeVectorStore::get_row_ids(const int64_t begin_index, const int64_t row
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid index range", K(ret), K(begin_index), K(row_count));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < row_count; i++) {
+    for (int64_t i = 0; i < row_count; i++) {
       row_ids_[i] = begin_index + i;
     }
   }
@@ -759,6 +759,8 @@ int ObMergeVectorStore::inner_fill_rows_from_reader(
         break;
       }
       case blocksstable::ObIMicroBlockReader::CSDecoder: {
+        // PAX formats are not valid minor formats: major fusion removes physical NOPs and
+        // ObNewColumnDecoder materializes schema-added columns. CSDecoder handles minor NOP defaults.
         if (OB_FAIL(get_row_ids(begin_index, row_cap))) {
           LOG_WARN("Failed to get row ids", K(ret), K(begin_index), K(row_cap));
         } else if (OB_FAIL(reader->get_rows(

@@ -451,7 +451,6 @@ int TestMergeBasic::prepare_ttl_filter(
     if (OB_FAIL(ObCompactionFilterFactory::alloc_compaction_filter<ObMdsInfoCompactionFilter>(
       allocator_,
       merge_context.filter_ctx_.compaction_filter_,
-      allocator_,
       tablet_id,
       merge_context.get_schema(),
       schema_rowkey_cnt,
