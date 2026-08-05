@@ -79,7 +79,7 @@ public:
   int analyze_package(const ObString &source, const ObPLBlockNS *parent_ns,
                       ObPLPackageAST &package_ast, bool is_for_trigger, bool &is_wrap);
   int generate_package(const ObString &exec_env, ObPLPackageAST &package_ast, ObPLPackage &package, bool &is_from_disk);
-  int compile_package(const share::schema::ObPackageInfo &package_info, const ObPLBlockNS *parent_ns,
+  int compile_package(const share::schema::ObPackageInfo &package_info, const ObPLBlockNS *parent_ns, const ObPLPackageAST *package_spec_ast,
                       ObPLPackageAST &package_ast, ObPLPackage &package); //package
   static int compile_subprogram_table(common::ObIAllocator &allocator,
                                  sql::ObSQLSessionInfo &session_info,

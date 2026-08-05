@@ -1200,6 +1200,7 @@ int ObPLPackageManager::load_package_spec(const ObPLResolveCtx &resolve_ctx,
       OZ (package_spec->init(package_spec_ast));
       OZ (compiler.compile_package(package_spec_info,
                                   null_parent_ns,
+                                  nullptr,
                                   package_spec_ast,
                                   *package_spec));
       if (OB_SUCC(ret)) {
@@ -1307,6 +1308,7 @@ int ObPLPackageManager::load_package_body(const ObPLResolveCtx &resolve_ctx,
       OZ (ObPLDependencyUtil::add_dependency_objects(&package_body_ast.get_dependency_table(), package_spec_ast.get_dependency_table()));
       OZ (compiler.compile_package(package_body_info,
                                   &(package_spec_ast.get_body()->get_namespace()),
+                                  &package_spec_ast,
                                   package_body_ast,
                                   *package_body));
       if (OB_SUCC(ret)
