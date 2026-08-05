@@ -1027,33 +1027,52 @@ int ObSRBlockMaxTopKIterImpl::project_rows_from_top_k_heap(const int64_t capacit
     ObExpr *relevance_proj_expr = iter_param_->relevance_proj_expr_;
     ObExpr *id_proj_expr = iter_param_->id_proj_expr_;
     ObEvalCtx *eval_ctx = iter_param_->eval_ctx_;
-    sql::ObBitVector &id_evaluated_flags = id_proj_expr->get_evaluated_flags(*eval_ctx);
-    sql::ObBitVector *relevance_evaluated_flags = nullptr;
-    ObDatum *id_datums = id_proj_expr->locate_datums_for_update(*eval_ctx, capacity);
-    ObDatum *relevance_datums = nullptr;
-    if (iter_param_->need_project_relevance()) {
-      relevance_datums = relevance_proj_expr->locate_datums_for_update(*eval_ctx, capacity);
-      relevance_evaluated_flags = &relevance_proj_expr->get_evaluated_flags(*eval_ctx);
-    }
-
     ObEvalCtx::BatchInfoScopeGuard guard(*eval_ctx);
     count = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && i < capacity && !top_k_heap_.empty(); ++i) {
-      guard.set_batch_idx(i);
+    if (eval_ctx->is_vectorized()) {
+      sql::ObBitVector &id_evaluated_flags = id_proj_expr->get_evaluated_flags(*eval_ctx);
+      sql::ObBitVector *relevance_evaluated_flags = nullptr;
+      ObDatum *id_datums = id_proj_expr->locate_datums_for_update(*eval_ctx, capacity);
+      ObDatum *relevance_datums = nullptr;
+      if (iter_param_->need_project_relevance()) {
+        relevance_datums = relevance_proj_expr->locate_datums_for_update(*eval_ctx, capacity);
+        relevance_evaluated_flags = &relevance_proj_expr->get_evaluated_flags(*eval_ctx);
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < capacity && !top_k_heap_.empty(); ++i) {
+        guard.set_batch_idx(i);
+        const TopKItem &top_k_item = top_k_heap_.top();
+        const ObDocIdExt &id = id_cache_.at(top_k_item.cache_idx_);
+        set_datum_func_(id_datums[i], id);
+        id_evaluated_flags.set(i);
+        id_proj_expr->set_evaluated_projected(*eval_ctx);
+
+        if (iter_param_->need_project_relevance()) {
+          relevance_datums[i].set_double(top_k_item.relevance_);
+          relevance_evaluated_flags->set(i);
+          relevance_proj_expr->set_evaluated_projected(*eval_ctx);
+        }
+        ++count;
+        if (OB_FAIL(top_k_heap_.pop())) {
+          LOG_WARN("failed to pop top k heap", K(ret));
+        }
+      }
+    } else {
+      guard.set_batch_idx(0);
       const TopKItem &top_k_item = top_k_heap_.top();
       const ObDocIdExt &id = id_cache_.at(top_k_item.cache_idx_);
-      set_datum_func_(id_datums[i], id);
-      id_evaluated_flags.set(i);
+      ObDatum &id_datum = id_proj_expr->locate_datum_for_write(*eval_ctx);
+      set_datum_func_(id_datum, id);
       id_proj_expr->set_evaluated_projected(*eval_ctx);
 
       if (iter_param_->need_project_relevance()) {
-        relevance_datums[i].set_double(top_k_item.relevance_);
-        relevance_evaluated_flags->set(i);
+        ObDatum &relevance_datum = relevance_proj_expr->locate_datum_for_write(*eval_ctx);
+        relevance_datum.set_double(top_k_item.relevance_);
         relevance_proj_expr->set_evaluated_projected(*eval_ctx);
       }
-      ++count;
       if (OB_FAIL(top_k_heap_.pop())) {
         LOG_WARN("failed to pop top k heap", K(ret));
+      } else {
+        count = 1;
       }
     }
   }
