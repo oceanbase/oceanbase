@@ -4514,12 +4514,17 @@ int ObDDLService::check_convert_to_character(obrpc::ObAlterTableArg &alter_table
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("col is NULL", K(ret));
         } else if (ObDDLUtil::check_can_convert_character(col->get_meta_type(), col->is_domain_index_column(), col->is_string_lob())) {
+          bool is_part_key = false;
           if (orig_table_schema.is_column_in_foreign_key(col->get_column_id())) {
             ret = OB_NOT_SUPPORTED;
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "Alter column charset or collation with foreign key");
+          // is_column_in_partition_key always resets the output flag, so use a temp
+          // and OR into convert_partition_key to keep "any partition-key column" semantics.
           } else if (OB_FAIL(orig_table_schema.is_column_in_partition_key(col->get_column_id(),
-                                                                          convert_partition_key))) {
+                                                                          is_part_key))) {
             LOG_WARN("fail to check if column in partition key", K(ret), "column id", col->get_column_id());
+          } else if (is_part_key) {
+            convert_partition_key = true;
           }
         }
       }
