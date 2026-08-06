@@ -151,8 +151,12 @@ static int build_compressed_buffer(ObEasyBuffer &orig_send_buf,
              && next_read_size > 0
              && max_comp_pkt_size <= comp_send_buf.write_avail_size()) {
         // v2 compress protocol not do this check
-        //error+ok/ok packet should use last seq
-        if (!is_v2_compress && context.last_pkt_pos_ == orig_send_buf.read_pos() && context.is_proxy_compress_based()) {
+        // error+ok/ok packet should use last seq on the final compressed fragment
+        if (!is_v2_compress
+            && context.is_proxy_compress_based()
+            && NULL != context.last_pkt_pos_
+            && context.last_pkt_pos_ <= orig_send_buf.read_pos()
+            && next_read_size == orig_send_buf.read_avail_size()) {
           --context.seq_;
         }
 
