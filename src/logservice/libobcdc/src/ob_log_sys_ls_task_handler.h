@@ -158,6 +158,7 @@ public:
 
   private:
     SafePartTransTaskQueue  queue_;
+    common::ObCond          not_empty_cond_;
   };
 
 private:
