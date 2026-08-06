@@ -689,7 +689,7 @@ protected:
   }
 protected:
   int prepare_das_task();
-  int prepare_all_das_tasks();
+  int prepare_all_das_tasks(const bool gi_above_is_false_range);
   int prepare_pushdown_limit_param();
   bool has_das_scan_op(const ObDASTabletLoc *tablet_loc, ObDASScanOp *&das_op);
   int create_one_das_task(ObDASTabletLoc *tablet_loc);

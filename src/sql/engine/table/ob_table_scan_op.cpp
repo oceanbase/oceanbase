@@ -1161,7 +1161,7 @@ int ObTableScanOp::prepare_das_task()
   }
   return ret;
 }
-int ObTableScanOp::prepare_all_das_tasks()
+int ObTableScanOp::prepare_all_das_tasks(const bool gi_above_is_false_range)
 {
   // get grop size of batch rescan
   int ret = OB_SUCCESS;
@@ -1176,7 +1176,9 @@ int ObTableScanOp::prepare_all_das_tasks()
   if (OB_SUCC(ret)) {
     // if use gi schedule and index merge, need to prepare scan range at the time of the first scan
     // or if the tasks are not all local tasks
-    if (MY_SPEC.gi_above_ && (!MY_INPUT.key_ranges_.empty() || !MY_INPUT.scan_tasks_.empty())
+    if (MY_SPEC.gi_above_
+        && ((gi_above_is_false_range && MY_CTDEF.enable_new_false_range_)
+            || !MY_INPUT.key_ranges_.empty() || !MY_INPUT.scan_tasks_.empty())
         && !MY_CTDEF.use_index_merge_) {
       if (OB_FAIL(prepare_das_task())) {
         LOG_WARN("prepare das task failed", K(ret));
@@ -2246,6 +2248,7 @@ int ObTableScanOp::inner_close()
 int ObTableScanOp::do_init_before_get_row()
 {
   int ret = OB_SUCCESS;
+  bool gi_above_is_false_range = false;
   if (need_init_before_get_row_) {
     LOG_DEBUG("do init before get row", K(MY_SPEC.id_), K(MY_SPEC.use_dist_das_), K(MY_SPEC.gi_above_));
     if (OB_UNLIKELY(iter_end_)) {
@@ -2253,16 +2256,15 @@ int ObTableScanOp::do_init_before_get_row()
     } else {
       if (MY_SPEC.gi_above_) {
         ObGranuleTaskInfo info;
-        bool is_false_range = false;
         if (OB_FAIL(get_access_tablet_loc(info))) {
           LOG_WARN("fail to get access partition failed", K(ret));
-        } else if (OB_FAIL(reassign_task_ranges(info, is_false_range))) {
+        } else if (OB_FAIL(reassign_task_ranges(info, gi_above_is_false_range))) {
           LOG_WARN("assign task ranges failed", K(ret));
         }
       }
       if (OB_FAIL(ret) || OB_UNLIKELY(iter_end_)) {
         // do nothing
-      } else if (OB_FAIL(prepare_all_das_tasks())) {
+      } else if (OB_FAIL(prepare_all_das_tasks(gi_above_is_false_range))) {
         LOG_WARN("prepare das task failed", K(ret));
       } else if (OB_FAIL(do_table_scan())) {
         if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
