@@ -3337,8 +3337,10 @@ int WinFuncColExpr::init_aggregate_ctx(const int64_t tenant_id)
   if (OB_ISNULL(aggr_infos)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret));
-  } else if (OB_FAIL(aggr_infos->push_back(wf_info_.aggr_info_))) {
-    LOG_WARN("push back element failed");
+  } else if (OB_FAIL(aggr_infos->prepare_allocate(1, local_allocator))) {
+    LOG_WARN("prepare allocate aggr infos failed", K(ret));
+  } else if (OB_FAIL(aggr_infos->at(0).assign(wf_info_.aggr_info_))) {
+    LOG_WARN("assign aggr info failed", K(ret));
   } else {
     winfunc::AggrExpr *agg_expr = static_cast<winfunc::AggrExpr *>(wf_expr_);
     agg_expr->aggr_processor_ = OB_NEWx(aggregate::Processor, &local_allocator,

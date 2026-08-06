@@ -181,7 +181,8 @@ int ObPxSqcHandler::init()
   } else if (OB_ISNULL(buf = allocator->alloc(sizeof(ObDesExecContext)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Failed to alloc des execontext", K(ret));
-  } else if (FALSE_IT(exec_ctx_ = new(buf) ObDesExecContext(*allocator, gctx.session_mgr_))) {
+  } else if (FALSE_IT(exec_ctx_ = new(buf) ObDesExecContext(
+      mem_context_->get_safe_arena_allocator(), gctx.session_mgr_))) {
   } else if (OB_ISNULL(buf = allocator->alloc(sizeof(ObPhysicalPlan)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Failed to alloc physical plan", K(ret));

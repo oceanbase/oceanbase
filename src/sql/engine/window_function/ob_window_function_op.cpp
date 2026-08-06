@@ -1296,14 +1296,16 @@ int ObWindowFunctionOp::init()
           case T_FUNC_SYS_ARRAY_AGG: {
             void *tmp_ptr = local_allocator_.alloc(sizeof(AggrCell));
             void *tmp_array = local_allocator_.alloc(sizeof(AggrInfoFixedArray));
-            ObIArray<ObAggrInfo> *aggr_infos = NULL;
+            AggrInfoFixedArray *aggr_infos = NULL;
             if (OB_ISNULL(tmp_ptr) || OB_ISNULL(tmp_array)) {
               ret = OB_ALLOCATE_MEMORY_FAILED;
               LOG_WARN("failed to alloc", KP(tmp_ptr), KP(tmp_array), K(ret));
             } else if (FALSE_IT(aggr_infos = new (tmp_array) AggrInfoFixedArray(local_allocator_,
                                                                                 1))) {
-            } else if (OB_FAIL(aggr_infos->push_back(wf_info.aggr_info_))) {
-              LOG_WARN("failed to push_back", K(wf_info.aggr_info_), K(ret));
+            } else if (OB_FAIL(aggr_infos->prepare_allocate(1, local_allocator_))) {
+              LOG_WARN("failed to prepare allocate aggr infos", K(ret));
+            } else if (OB_FAIL(aggr_infos->at(0).assign(wf_info.aggr_info_))) {
+              LOG_WARN("failed to assign aggr info", K(wf_info.aggr_info_), K(ret));
             } else {
               AggrCell *aggr_func = new (tmp_ptr) AggrCell(wf_info, *this, *aggr_infos, tenant_id);
               aggr_func->aggr_processor_.set_in_window_func();
