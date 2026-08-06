@@ -18704,7 +18704,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
 
 # 12623: __all_virtual_backup_archive_piece_task_history
 
-# 12624: __all_virtual_tenant_memstore_analysis_info
+# 12624: __all_virtual_tenant_memstore_diagnose_info
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -19313,7 +19313,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15556', all_def_keyword
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15557', all_def_keywords['__all_mview_refresh_pending_task']))
 
 # 15558: __all_virtual_migration_table_cache_info
-# 15559: __all_virtual_tenant_memstore_analysis_info
+# 15559: __all_virtual_tenant_memstore_diagnose_info
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
 # - 示例：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
