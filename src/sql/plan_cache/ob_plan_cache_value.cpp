@@ -811,7 +811,12 @@ int ObPlanCacheValue::choose_plan_from_plan_sets(ObPlanCacheCtx &pc_ctx,
                   tenant_id, session.get_user_id(), final_choosed_group_id))) {
               LOG_WARN("get group id by user failed", K(ret));
             } else if (OB_INVALID_ID == final_choosed_group_id) {
-              final_choosed_group_id = 0;
+              final_choosed_group_id = share::OBCG_DEFAULT;
+            }
+          }
+          if (OB_SUCC(ret)) {
+            if (final_choosed_group_id == share::OBCG_DEFAULT && THIS_WORKER.get_group_id() == share::OBCG_LQ) {
+              final_choosed_group_id = share::OBCG_LQ;
             }
           }
           if (OB_SUCC(ret) && need_resource_group_check) {
