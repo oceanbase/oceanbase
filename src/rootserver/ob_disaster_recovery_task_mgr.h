@@ -73,6 +73,12 @@ private:
   // @params[in]  task, which task to update
   int update_task_schedule_status_(
       const ObDRTask &task);
+  // record task history and clean task with the service epoch owned by this manager
+  int record_history_and_clean_task_(
+      ObDRTask &task,
+      const int ret_code,
+      const ObDRTaskRetComment &ret_comment,
+      const bool check_service_epoch);
 
   int check_and_set_parallel_migrate_task_();
 

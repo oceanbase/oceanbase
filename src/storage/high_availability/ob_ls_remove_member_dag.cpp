@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_ls_remove_member_dag.h"
 #include "rootserver/ob_disaster_recovery_task_utils.h"
+#include "share/ob_debug_sync.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "logservice/ob_log_service.h"
 
@@ -229,6 +230,8 @@ int ObLSRemoveMemberTask::process()
     ret = OB_NOT_INIT;
     LOG_WARN("ls remove member task do not init", K(ret));
   } else {
+    // Pause before executing the LS remove member task for test synchronization.
+    DEBUG_SYNC(BEFORE_LS_REMOVE_MEMBER_TASK_PROCESS);
 
     if (OB_FAIL(do_change_member_())) {
       LOG_WARN("failed to change member", K(ret), KPC(ctx_));

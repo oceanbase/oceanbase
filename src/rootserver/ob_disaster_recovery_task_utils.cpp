@@ -564,7 +564,8 @@ ERRSIM_POINT_DEF(ERRSIM_CLEAN_TASK_FROM_DRTASK_TABLE_ERROR);
 int DisasterRecoveryUtils::record_history_and_clean_task(
     ObDRTask &task,
     const int ret_code,
-    const ObDRTaskRetComment &ret_comment)
+    const ObDRTaskRetComment &ret_comment,
+    const int64_t expected_service_epoch)
 {
   DEBUG_SYNC(BEFORE_DELETE_DRTASK_FROM_INNER_TABLE);
   int ret = OB_SUCCESS;
@@ -592,8 +593,8 @@ int DisasterRecoveryUtils::record_history_and_clean_task(
     LOG_WARN("failed to get service epoch and persistent tenant id", KR(ret), K(task));
   } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, persistent_tenant))) {
     LOG_WARN("failed to start trans", KR(ret), K(task), K(persistent_tenant));
-  } else if (OB_FAIL(lock_service_epoch(trans, service_epoch_tenant, DisasterRecoveryUtils::INVALID_DR_SERVICE_EPOCH_VALUE))) {
-    LOG_WARN("failed to lock server epoch", KR(ret), K(task), K(service_epoch_tenant));
+  } else if (OB_FAIL(lock_service_epoch(trans, service_epoch_tenant, expected_service_epoch))) {
+    LOG_WARN("failed to lock server epoch", KR(ret), K(task), K(service_epoch_tenant), K(expected_service_epoch));
   } else if (OB_FAIL(task_table_operator.delete_task(trans, persistent_tenant, task))) {
     // only when the task is successfully cleared, will the history table be written
     LOG_WARN("delete task failed", KR(ret), K(task));

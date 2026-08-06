@@ -213,6 +213,7 @@ int ObDRTaskMgr::execute_task_(
     LOG_WARN("rpc_proxy is null", KR(ret), KP(GCTX.srv_rpc_proxy_));
   } else {
     DEBUG_SYNC(BEFORE_SEND_DRTASK_RPC);
+    bool need_check_service_epoch = true;
     task.log_execute_start();
     if (OB_FAIL(check_befor_execute_dr_task_(task, ret_comment))) {
       LOG_WARN("failed to check before execute dr task", KR(ret), K(task));
@@ -221,19 +222,50 @@ int ObDRTaskMgr::execute_task_(
     } else if (OB_UNLIKELY(ERRSIM_DISASTER_RECOVERY_SKIP_SEND_TASK_RPC)) {
       LOG_INFO("errsim disaster recovery skip send task rpc");
     } else if (OB_FAIL(task.execute(*GCTX.srv_rpc_proxy_, ret_comment))) {
-      // task can only be executed after task status update success
+      // if rpc send failed, the task must be cleaned up
+      // because the task status has been updated to INPROGRESS
+      need_check_service_epoch = false;
       LOG_WARN("fail to execute task", KR(ret), K(task));
     } else {
       LOG_INFO("succeed to execute task", K(task));
     }
-    // if a task execute failed, it should be cleaned up for any reason.
+    // if a task execute failed, it should be cleaned up.
     // avoid duplicate scheduling tasks.
     if (OB_FAIL(ret)) {
       LOG_WARN("failed to execute task", KR(ret), KR(tmp_ret), K(task));
-      if (OB_TMP_FAIL(DisasterRecoveryUtils::record_history_and_clean_task(task, ret, ret_comment))) {
-        LOG_WARN("clean task while task execute failed", KR(ret), KR(tmp_ret), K(task));
+      if (OB_TMP_FAIL(record_history_and_clean_task_(task, ret, ret_comment, need_check_service_epoch))) {
+        LOG_WARN("clean task while task execute failed", KR(ret), KR(tmp_ret), K(task), K(need_check_service_epoch));
       }
     }
+  }
+  return ret;
+}
+
+int ObDRTaskMgr::record_history_and_clean_task_(
+    ObDRTask &task,
+    const int ret_code,
+    const ObDRTaskRetComment &ret_comment,
+    const bool check_service_epoch)
+{
+  int ret = OB_SUCCESS;
+  int64_t expected_service_epoch = DisasterRecoveryUtils::INVALID_DR_SERVICE_EPOCH_VALUE;
+  if (OB_UNLIKELY(!task.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(task));
+  } else if (check_service_epoch && OB_FAIL(DisasterRecoveryUtils::get_service_epoch_value_to_check(
+                                              task,
+                                              tenant_id_,
+                                              service_epoch_,
+                                              expected_service_epoch))) {
+    LOG_WARN("failed to get service epoch value to check",
+             KR(ret), K(task), K_(tenant_id), K_(service_epoch), K(expected_service_epoch));
+  } else if (OB_FAIL(DisasterRecoveryUtils::record_history_and_clean_task(
+                                              task,
+                                              ret_code,
+                                              ret_comment,
+                                              expected_service_epoch))) {
+    LOG_WARN("failed to record history and clean task",
+             KR(ret), K(task), K(ret_code), K(expected_service_epoch));
   }
   return ret;
 }

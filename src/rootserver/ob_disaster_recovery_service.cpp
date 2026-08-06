@@ -205,11 +205,16 @@ int ObDRService::schedule_and_manage_tasks_(
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < table_tenant_ids.count(); ++i) {
         const uint64_t table_tenant_id = table_tenant_ids.at(i);
-        if (OB_TMP_FAIL(dr_mgr.try_pop_and_execute_task(table_tenant_id))) {
-          LOG_WARN("failed to execute task", KR(ret), KR(tmp_ret));
-        }
-        if (need_clean_task && OB_TMP_FAIL(dr_mgr.try_clean_and_cancel_task(table_tenant_id))) {
-          LOG_WARN("failed to clean task", KR(ret), KR(tmp_ret));
+        if (has_set_stop()) {
+          ret = OB_IN_STOP_STATE;
+          LOG_WARN("thread has been stopped", KR(ret), K_(tenant_id));
+        } else {
+          if (OB_TMP_FAIL(dr_mgr.try_pop_and_execute_task(table_tenant_id))) {
+            LOG_WARN("failed to execute task", KR(ret), KR(tmp_ret));
+          }
+          if (need_clean_task && OB_TMP_FAIL(dr_mgr.try_clean_and_cancel_task(table_tenant_id))) {
+            LOG_WARN("failed to clean task", KR(ret), KR(tmp_ret));
+          }
         }
       } // end for tenant
     } // end else
@@ -383,8 +388,8 @@ int ObDRService::ensure_service_epoch_exist_()
     }
   } // end while
   if (has_set_stop()) {
-    LOG_WARN("thread has been stopped", K_(tenant_id));
     ret = OB_IN_STOP_STATE;
+    LOG_WARN("thread has been stopped", KR(ret), K_(tenant_id));
   }
   return ret;
 }

@@ -119,11 +119,14 @@ public:
   // record task history in task history table and clean task in task table, and record rs event
   // @params[in]  task, target task to update
   // @params[in]  ret_code, ret code of task
-  // @params[out] ret_comment, ret_comment of task
+  // @params[in]  ret_comment, ret_comment of task
+  // @params[in]  expected_service_epoch, expected disaster recovery service epoch,
+  //              skip epoch check when it is INVALID_DR_SERVICE_EPOCH_VALUE
   static int record_history_and_clean_task(
       ObDRTask &task,
       const int ret_code,
-      const ObDRTaskRetComment &ret_comment);
+      const ObDRTaskRetComment &ret_comment,
+      const int64_t expected_service_epoch = INVALID_DR_SERVICE_EPOCH_VALUE);
 
   // send rpc to cancel migrate task
   // @params[in]  task, target task to cancel
