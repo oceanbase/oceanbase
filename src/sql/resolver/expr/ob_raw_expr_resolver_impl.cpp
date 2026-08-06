@@ -7113,8 +7113,34 @@ int ObRawExprResolverImpl::process_call_param_node(const ParseNode *node, ObRawE
       CK (OB_LIKELY(2 == node->children_[0]->num_child_));
       CK (OB_NOT_NULL(node->children_[0]->children_[0]));
       CK (OB_ISNULL(node->children_[0]->children_[1]));
-      CK (OB_LIKELY(T_IDENT == node->children_[0]->children_[0]->type_));
-      name_node = node->children_[0]->children_[0];
+      if (OB_SUCC(ret)) {
+        const ParseNode *inner_node = node->children_[0]->children_[0];
+        if (T_IDENT == inner_node->type_) {
+          name_node = inner_node;
+        } else if (T_FUN_SYS_SYSDATE == inner_node->type_) {
+          name = ObString::make_string("SYSDATE");
+        } else if (T_FUN_SYS_SYSTIMESTAMP == inner_node->type_) {
+          name = ObString::make_string("SYSTIMESTAMP");
+        } else if (T_FUN_SYS_CUR_TIMESTAMP == inner_node->type_) {
+          name = ObString::make_string("CURRENT_TIMESTAMP");
+        } else if (T_FUN_SYS_LOCALTIMESTAMP == inner_node->type_) {
+          name = ObString::make_string("LOCALTIMESTAMP");
+        } else if (T_FUN_SYS_CUR_DATE == inner_node->type_) {
+          name = ObString::make_string("CURRENT_DATE");
+        } else if (T_FUN_SYS_SESSIONTIMEZONE == inner_node->type_) {
+          name = ObString::make_string("SESSIONTIMEZONE");
+        } else if (T_FUN_SYS_DBTIMEZONE == inner_node->type_) {
+          name = ObString::make_string("DBTIMEZONE");
+        } else if (T_FUN_SYS_USER == inner_node->type_) {
+          name = ObString::make_string("USER");
+        } else if (T_FUN_SYS_UID == inner_node->type_) {
+          name = ObString::make_string("UID");
+        } else {
+          ret = OB_ERR_CALL_WRONG_ARG;
+          LOG_WARN("PLS-00306: wrong number or types of arguments in call",
+                   K(inner_node->type_), K(ret));
+        }
+      }
     } else if (T_IDENT == node->children_[0]->type_) {
       name_node = node->children_[0];
     } else if (T_COLUMN_REF == node->children_[0]->type_ &&
@@ -7129,7 +7155,9 @@ int ObRawExprResolverImpl::process_call_param_node(const ParseNode *node, ObRawE
     }
     OZ (ctx_.expr_factory_.create_raw_expr(T_SP_CPARAM, call_param_expr));
     CK (OB_NOT_NULL(call_param_expr));
-    OX (name = ObString(static_cast<int32_t>(name_node->str_len_), name_node->str_value_));
+    if (OB_SUCC(ret) && OB_NOT_NULL(name_node)) {
+      name = ObString(static_cast<int32_t>(name_node->str_len_), name_node->str_value_);
+    }
     OX (call_param_expr->set_name(name));
     OZ (recursive_resolve(node->children_[1], child_expr));
     CK (OB_NOT_NULL(child_expr));
