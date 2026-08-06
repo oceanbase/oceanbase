@@ -14254,9 +14254,6 @@ int ObDMLResolver::resolve_generated_table_column_item(const TableItem &table_it
           //because of view table, generated table item may be has database_name and table name,
           //also alias name maybe be empty
           col_expr->set_result_type(select_expr->get_result_type());
-          if (table_item.is_view_table_ && col_expr->get_result_type().is_string_type() && CS_LEVEL_EXPLICIT != col_expr->get_collation_level()) {
-            col_expr->set_collation_level(CS_LEVEL_IMPLICIT);
-          }
           col_expr->set_column_id(i + OB_APP_MIN_COLUMN_ID);
           col_expr->set_column_name(ref_select_item.alias_name_);
           col_expr->set_table_item_info(table_item);

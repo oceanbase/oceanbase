@@ -64,7 +64,7 @@ inline int ObExprSpace::calc_result_type1(
     res_type = ObLongTextType;
   }
   type.set_type(res_type);
-  type.set_collation_level(type1.get_collation_level());
+  type.set_collation_level(CS_LEVEL_COERCIBLE);
   type.set_collation_type(get_default_collation_type(type.get_type(), type_ctx));
   if (ObVarcharType == type.get_type()) {
     if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_0_0) {
