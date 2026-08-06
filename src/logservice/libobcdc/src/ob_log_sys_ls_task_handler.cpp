@@ -35,7 +35,8 @@ int64_t ObLogSysLsTaskHandler::g_sys_ls_task_op_timeout_msec = ObLogConfig::defa
 ////////////////////////////// ObLogSysLsTaskHandler::TaskQueue //////////////////////////////
 
 ObLogSysLsTaskHandler::TaskQueue::TaskQueue() :
-    queue_()
+    queue_(),
+    not_empty_cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::CDC_COMMON_COND_WAIT)
 {}
 
 ObLogSysLsTaskHandler::TaskQueue::~TaskQueue()
@@ -52,6 +53,7 @@ int ObLogSysLsTaskHandler::TaskQueue::push(PartTransTask *task)
     LOG_ERROR("invalid task", KR(ret), K(task));
   } else {
     queue_.push(task);
+    not_empty_cond_.signal();
   }
 
   return ret;
@@ -84,7 +86,7 @@ int ObLogSysLsTaskHandler::TaskQueue::next_ready_to_handle(
     if (wait_time <= 0) {
       ret = OB_TIMEOUT;
     } else {
-      cond.timedwait(wait_time);
+      not_empty_cond_.timedwait(wait_time);
       cur_time = get_timestamp();
     }
   }
