@@ -1435,17 +1435,19 @@ int ObParquetTableRowIterator::DataLoader::to_numeric(
 
 int ObParquetTableRowIterator::DataLoader::to_numeric_hive(
   const int64_t idx,
-  const char *str,
-  const int32_t length,
+  const char *raw_str,
+  const int32_t raw_length,
   char *buf,
-  const int64_t data_len)
+  const int64_t data_len,
+  const parquet::Type::type phy_type)
 {
 int ret = OB_SUCCESS;
 ObDecimalInt *decint = NULL;
 int32_t val_len = 0;
-if (OB_UNLIKELY(length > data_len)) {
-  ret = OB_DECIMAL_PRECISION_OVERFLOW;
-  LOG_WARN("overflow", K(length), K(data_len));
+const char *str = NULL;
+int32_t length = 0;
+if (OB_FAIL(prepare_decimal_hive_input(raw_str, raw_length, data_len, phy_type, str, length))) {
+  LOG_WARN("failed to prepare decimal hive input", K(raw_length), K(data_len));
 } else {
   //to little endian
   // fill 1 when the input value is negetive, otherwise fill 0
@@ -1496,10 +1498,11 @@ return ret;
 }
 
 int ObParquetTableRowIterator::to_numeric_hive(
-    const char *str,
-    const int32_t length,
+    const char *raw_str,
+    const int32_t raw_length,
     char *buf,
     const int64_t data_len,
+    const parquet::Type::type phy_type,
     const ObDatumMeta &meta,
     ObIAllocator &alloc,
     ObStorageDatum &datum)
@@ -1507,9 +1510,11 @@ int ObParquetTableRowIterator::to_numeric_hive(
   int ret = OB_SUCCESS;
   ObDecimalInt *decint = NULL;
   int32_t val_len = 0;
-  if (OB_UNLIKELY(length > data_len)) {
-    ret = OB_DECIMAL_PRECISION_OVERFLOW;
-    LOG_WARN("overflow", K(length), K(data_len));
+  const char *str = NULL;
+  int32_t length = 0;
+  if (OB_FAIL(DataLoader::prepare_decimal_hive_input(raw_str, raw_length, data_len, phy_type,
+                                                     str, length))) {
+    LOG_WARN("failed to prepare decimal hive input", K(raw_length), K(data_len));
   } else {
     //to little endian
     // fill 1 when the input value is negetive, otherwise fill 0
@@ -1556,6 +1561,28 @@ int ObParquetTableRowIterator::to_numeric_hive(
   return ret;
 }
 
+int ObParquetTableRowIterator::DataLoader::prepare_decimal_hive_input(
+    const char *raw_str,
+    const int32_t raw_length,
+    const int64_t data_len,
+    const parquet::Type::type phy_type,
+    const char *&str,
+    int32_t &length)
+{
+  int ret = OB_SUCCESS;
+  str = raw_str;
+  length = raw_length;
+  if (OB_UNLIKELY(raw_length > data_len)) {
+    if (parquet::Type::FIXED_LEN_BYTE_ARRAY == phy_type) {
+      str += raw_length - static_cast<int32_t>(data_len);
+      length = static_cast<int32_t>(data_len);
+    } else {
+      ret = OB_DECIMAL_PRECISION_OVERFLOW;
+      LOG_WARN("overflow", K(raw_length), K(data_len), K(phy_type));
+    }
+  }
+  return ret;
+}
 
 //convert int32/int64/string value(from parquet file) to decimal int or number(ob types)
 int ObParquetTableRowIterator::DataLoader::load_decimal_any_col()
@@ -1635,7 +1662,8 @@ int ObParquetTableRowIterator::DataLoader::load_decimal_any_col()
         file_col_expr_->get_vector(eval_ctx_)->set_null(i + row_offset_);
       } else {
         parquet::FixedLenByteArray &cur_v = values.at(j++);
-        OZ (to_numeric_hive(i + row_offset_, pointer_cast<const char*>(cur_v.ptr), fixed_length, buffer.get_data(), buffer.count()));
+        OZ (to_numeric_hive(i + row_offset_, pointer_cast<const char*>(cur_v.ptr), fixed_length,
+                            buffer.get_data(), buffer.count(), reader_->descr()->physical_type()));
         //OZ (to_numeric(i, pointer_cast<const char*>(cur_v.ptr), fixed_length));
       }
     }
@@ -1658,7 +1686,8 @@ int ObParquetTableRowIterator::DataLoader::load_decimal_any_col()
         file_col_expr_->get_vector(eval_ctx_)->set_null(i + row_offset_);
       } else {
         parquet::ByteArray &cur_v = values.at(j++);
-        OZ (to_numeric_hive(i + row_offset_, pointer_cast<const char*>(cur_v.ptr), cur_v.len, buffer.get_data(), buffer.count()));
+        OZ (to_numeric_hive(i + row_offset_, pointer_cast<const char*>(cur_v.ptr), cur_v.len,
+                            buffer.get_data(), buffer.count(), reader_->descr()->physical_type()));
         //OZ (to_numeric(i, pointer_cast<const char*>(cur_v.ptr), cur_v.len));
       }
     }
@@ -3267,11 +3296,11 @@ int ObParquetTableRowIterator::read_min_max_datum(const std::string &min_val, co
           ObArrayWrap<char> buffer;
           OZ (buffer.allocate_array(tmp_alloc_g.get_allocator(), int_bytes));
           if (OB_FAIL(to_numeric_hive(pointer_cast<const char*>(min_val.data()), min_val.size(),
-                                                                buffer.get_data(), buffer.count(),
+                                                                buffer.get_data(), buffer.count(), physical_type,
                                                                 column_meta, tmp_alloc_g.get_allocator(), min_datum))) {
             LOG_WARN("failed to convert numeric", K(ret));
           } else if (OB_FAIL(to_numeric_hive(pointer_cast<const char*>(max_val.data()), max_val.size(),
-                                                                       buffer.get_data(), buffer.count(),
+                                                                       buffer.get_data(), buffer.count(), physical_type,
                                                                        column_meta, tmp_alloc_g.get_allocator(), max_datum))) {
             LOG_WARN("failed to convert numeric", K(ret));
           }

@@ -490,7 +490,11 @@ private:
     int load_map();
     int to_numeric(const int64_t idx, const int64_t int_value);
     int to_numeric(const int64_t idx, const char *str, const int32_t length);
-    int to_numeric_hive(const int64_t idx, const char *str, const int32_t length, char *buf, const int64_t data_len);
+    int to_numeric_hive(const int64_t idx, const char *raw_str, const int32_t raw_length,
+                        char *buf, const int64_t data_len, const parquet::Type::type phy_type);
+    static int prepare_decimal_hive_input(const char *raw_str, const int32_t raw_length,
+                                          const int64_t data_len, const parquet::Type::type phy_type,
+                                          const char *&str, int32_t &length);
     static int64_t calc_tz_adjust_us(const parquet::LogicalType *logtype, const ObDatumMeta &meta, ObSQLSessionInfo *session);
     bool check_char_len(const char *ptr, int32_t len);
 
@@ -533,7 +537,8 @@ private:
   static int convert_timestamp_datum(const ObDatumMeta &datum_type, int64_t adjusted_min_value,
                               int64_t adjusted_max_value, blocksstable::ObStorageDatum &min_datum,
                               blocksstable::ObStorageDatum &max_datum);
-  static int to_numeric_hive(const char *str, const int32_t length, char *buf, const int64_t data_len,
+  static int to_numeric_hive(const char *raw_str, const int32_t raw_length,
+                             char *buf, const int64_t data_len, const parquet::Type::type phy_type,
                              const ObDatumMeta &meta, common::ObIAllocator &alloc, blocksstable::ObStorageDatum &datum);
   int pre_buffer(std::shared_ptr<parquet::RowGroupReader> rg_reader);
   int prepare_parquet_page_mgr();
