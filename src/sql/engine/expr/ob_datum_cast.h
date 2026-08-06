@@ -455,6 +455,12 @@ int ob_datum_to_ob_time_without_date(const T &datum,
       ret = ObTimeConverter::mdatetime_to_ob_time<true>(datum.get_mysql_datetime(), ob_time);
       break;
     }
+    case ObYearTC: {
+      if (OB_FAIL(ObTimeConverter::year_to_ob_time(datum.get_year(), ob_time))) {
+        SQL_ENG_LOG(WARN, "year to ob time failed", K(ret));
+      }
+      break;
+    }
     default: {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "cast to time without date");

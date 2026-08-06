@@ -597,6 +597,7 @@ public:
   static int time_to_mdatetime(int64_t t_value, int64_t cur_dt_value,
                                const ObTimeZoneInfo *tz_info, ObMySQLDateTime &mdt_value);
   static int year_to_int(uint8_t value, int64_t &int64);
+  static int year_to_ob_time(uint8_t value, ObTime &ob_time);
   static int year_to_str(uint8_t value, char *buf, int64_t buf_len, int64_t &pos);
   // inner cast between datetime, timestamp, date, time, year.
   static int datetime_to_timestamp(int64_t dt_value, const ObTimeZoneInfo *tz_info, int64_t &ts_value);

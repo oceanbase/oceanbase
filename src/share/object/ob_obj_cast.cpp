@@ -17177,6 +17177,12 @@ int ob_obj_to_ob_time_without_date(const ObObj &obj, const ObTimeZoneInfo *tz_in
       }
       break;
     }
+    case ObYearTC: {
+      if (OB_FAIL(ObTimeConverter::year_to_ob_time(obj.get_year(), ob_time))) {
+        LOG_WARN("year to ob time failed", K(ret));
+      }
+      break;
+    }
     default: {
       ret = OB_NOT_SUPPORTED;
     }

@@ -1325,6 +1325,18 @@ int ObTimeConverter::year_to_int(uint8_t value, int64_t &int64)
   return OB_SUCCESS;
 }
 
+int ObTimeConverter::year_to_ob_time(uint8_t value, ObTime &ob_time)
+{
+  int ret = OB_SUCCESS;
+  int64_t year_int = 0;
+  if (OB_FAIL(year_to_int(value, year_int))) {
+    LOG_WARN("year to int failed", K(ret), K(value));
+  } else if (OB_FAIL(int_to_ob_time_without_date(year_int, ob_time))) {
+    LOG_WARN("int to ob time without date failed", K(ret), K(year_int));
+  }
+  return ret;
+}
+
 #define YEAR_STR_FMT  "%.4d"
 #define YEAR_STR_LEN  4
 
