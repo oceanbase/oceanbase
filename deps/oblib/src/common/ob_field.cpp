@@ -103,6 +103,7 @@ int ObField::full_deep_copy(const ObField &other, ObIAllocator *allocator)
           // do nothing
         }
       }
+      param_store_idx_ = other.param_store_idx_;
     }
   }
   return ret;
@@ -159,6 +160,7 @@ int ObField::deep_copy(const ObField &other, ObIAllocator *allocator)
           // do nothing
         }
       }
+      param_store_idx_ = other.param_store_idx_;
     }
   }
   return ret;
@@ -166,6 +168,19 @@ int ObField::deep_copy(const ObField &other, ObIAllocator *allocator)
 
 OB_SERIALIZE_MEMBER(ObField, type_.meta_, type_owner_, type_name_, accuracy_, flags_, length_,
                     cname_);
+
+void ObField::reset()
+{
+  cname_.assign(NULL, 0);
+  org_cname_.assign(NULL, 0);
+  dname_.assign(NULL, 0);
+  tname_.assign(NULL, 0);
+  org_tname_.assign(NULL, 0);
+  type_.reset();
+  type_.set_type(ObExtendType);
+  paramed_ctx_ = NULL;
+  param_store_idx_ = OB_INVALID_INDEX;
+}
 
 //deep copy size
 int64_t ObField::get_convert_size() const
@@ -191,6 +206,7 @@ int64_t ObField::get_convert_size() const
 int64_t ObField::to_string(char *buffer, int64_t len) const
 {
   int64_t pos = 0;
+  databuff_printf(buffer, len, pos,"{");
   databuff_printf(buffer, len, pos,
                   "dname:%.*s, tname: %.*s, org_tname: %.*s, "
                   "cname: %.*s, org_cname: %.*s, type: ",
@@ -203,18 +219,23 @@ int64_t ObField::to_string(char *buffer, int64_t len) const
   databuff_printf(buffer, len, pos,
                   ", type_owner: %.*s, type_name: %.*s,"
                   "charset: %hu, "
-                  "decimal_scale: %hu, flags: %x, inout_mode_: %x"
+                  "decimal_scale: %hu, flags: %x, inout_mode_: %x, "
+                  "length_: %d, "
                   "is_paramed_select_item: %d,"
-                  "is_hidden_rowid: %d",
+                  "is_hidden_rowid: %d, "
+                  "param_store_idx: %ld",
                   type_owner_.length(), type_owner_.ptr(),
                   type_name_.length(), type_name_.ptr(),
                   charsetnr_, accuracy_.get_scale(), flags_,
                   inout_mode_,
+                  length_,
                   is_paramed_select_item_,
-                  is_hidden_rowid_);
+                  is_hidden_rowid_,
+                  param_store_idx_);
   if (is_paramed_select_item_ && NULL != paramed_ctx_) {
     pos = paramed_ctx_->to_string(buffer + pos, len - pos) + pos;
   }
+  databuff_printf(buffer, len, pos, "}");
   return pos;
 }
 

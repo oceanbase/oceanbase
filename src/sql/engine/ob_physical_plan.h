@@ -531,6 +531,7 @@ public:
   }
 
   inline bool contain_paramed_column_field() const { return contain_paramed_column_field_; }
+  inline bool need_update_paramed_field() const { return need_update_paramed_field_; }
   inline ObExprFrameInfo &get_expr_frame_info() { return expr_frame_info_; }
   inline const ObExprFrameInfo &get_expr_frame_info() const { return expr_frame_info_; }
 
@@ -768,6 +769,7 @@ private:
   // column field数组中是否有参数化的column
   // 如果有参数化的column，每次都ob_result_set必须深拷column_fields_，并用模板构造column
   bool contain_paramed_column_field_;
+  bool need_update_paramed_field_;
   int64_t first_array_index_;
   bool need_consistent_snapshot_;
   bool is_batched_multi_stmt_;

@@ -86,6 +86,7 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     is_plain_insert_(false),
     flashback_query_items_(allocator_),
     contain_paramed_column_field_(false),
+    need_update_paramed_field_(false),
     first_array_index_(OB_INVALID_INDEX),
     need_consistent_snapshot_(true),
     is_batched_multi_stmt_(false),
@@ -391,6 +392,9 @@ int ObPhysicalPlan::set_field_columns(const ColumnsFieldArray &fields)
         } else if (ofield.paramed_ctx_->param_idxs_.count() > 0) {
           contain_paramed_column_field_ = true;
         }
+      }
+      if (!need_update_paramed_field_ && ofield.param_store_idx_ != OB_INVALID_INDEX) {
+        need_update_paramed_field_ = true;
       }
       if (OB_FAIL(ret)) {
         // do nothing

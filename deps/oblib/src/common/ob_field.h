@@ -82,6 +82,7 @@ public:
   // element type info for anonymous collection with complex element type
   ObString elem_type_owner_;
   ObString elem_type_name_;
+  int64_t param_store_idx_;
 
   ObField()
     : dname_(), tname_(), org_tname_(), cname_(), org_cname_(), type_(),
@@ -90,9 +91,12 @@ public:
       charsetnr_(CS_TYPE_UTF8MB4_GENERAL_CI),
       flags_(0), length_(0), paramed_ctx_(NULL), is_paramed_select_item_(false),
       is_hidden_rowid_(false), inout_mode_(0),
-      elem_type_owner_(), elem_type_name_()
+      elem_type_owner_(), elem_type_name_(),
+      param_store_idx_(-1)
   {
   }
+
+  void reset();
 
   int64_t get_convert_size() const; //deep copy size
   int64_t to_string(char *buffer, int64_t length) const;
@@ -101,7 +105,6 @@ public:
   int deep_copy(const ObField &other, ObIAllocator *allocator);
 
   int update_field_mb_length();
-
   static int get_field_mb_length(const ObObjType type,
                                  const ObAccuracy &accuracy,
                                  const ObCollationType charsetnr,

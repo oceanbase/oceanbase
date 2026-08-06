@@ -101,15 +101,17 @@ inline int64_t ObMySQLField::to_string(char *buffer, int64_t len) const
   if (OB_ISNULL(buffer)) {
   } else {
     common::databuff_printf(buffer, len, pos,
+        "{"
         "dname: %.*s, tname: %.*s, org_tname: %.*s, "
         "cname: %.*s, org_cname, %.*s, type: %d, type_owner: %.*s, type_name: %.*s, "
         "charset: %hu, decimal_scale: %hu, flag: %x, default_type_: %d, "
-        "elem_type_owner: %.*s, elem_type_name: %.*s",
+        "length: %d, elem_type_owner: %.*s, elem_type_name: %.*s"
+        "}",
         dname_.length(), dname_.ptr(), tname_.length(), tname_.ptr(), org_tname_.length(), org_tname_.ptr(),
         cname_.length(), cname_.ptr(), org_cname_.length(), org_cname_.ptr(),
         type_, type_owner_.length(), type_owner_.ptr(), type_name_.length(), type_name_.ptr(),
         charsetnr_, accuracy_.get_scale(), flags_, default_value_,
-        elem_type_owner_.length(), elem_type_owner_.ptr(), elem_type_name_.length(), elem_type_name_.ptr());
+        length_, elem_type_owner_.length(), elem_type_owner_.ptr(), elem_type_name_.length(), elem_type_name_.ptr());
   }
   return pos;
 }
