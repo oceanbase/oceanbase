@@ -1508,6 +1508,7 @@ int ObTransformDBlink::extract_limit(ObDMLStmt *stmt, ObDMLStmt *&dblink_stmt)
             || NULL != stmt->get_limit_percent_expr()) {
     dblink_stmt = stmt;
   } else if (OB_FAIL(ObTransformUtils::pack_stmt(ctx_, static_cast<ObSelectStmt *>(stmt),
+                                                 false,
                                                  &child_stmt))) {
     LOG_WARN("failed to pack the stmt", K(ret));
   } else {
