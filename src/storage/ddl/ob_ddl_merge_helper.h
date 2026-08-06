@@ -17,9 +17,6 @@
 #include "storage/blocksstable/ob_macro_block_struct.h"
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 #include "storage/ddl/ob_direct_load_struct.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "close_modules/shared_storage/storage/ddl/ob_ss_ddl_util.h"
-#endif
 namespace oceanbase
 {
 namespace storage
@@ -109,63 +106,6 @@ protected:
   int set_ddl_complete(ObIDag *dag, ObTablet &tablet, ObDDLTabletMergeDagParamV2 &ddl_merge_param);
 };
 
-#ifdef OB_BUILD_SHARED_STORAGE
-class ObSSDDLMergeHelper: public ObIDDLMergeHelper
-{
-public:
-  ObSSDDLMergeHelper(): max_meta_seq_(0), lock_() {}
-  virtual ~ObSSDDLMergeHelper() {}
-  int process_prepare_task(ObIDag *dag,
-                           ObDDLTabletMergeDagParamV2 &ddl_merge_param,
-                           ObIArray<ObTuple<int64_t, int64_t, int64_t>> &cg_slices) override;
-  int merge_cg_slice(ObIDag* dag,
-                     ObDDLTabletMergeDagParamV2 &merge_param,
-                     const int64_t cg_idx,
-                     const int64_t start_slice,
-                     const int64_t end_slice);
-  int assemble_sstable(ObDDLTabletMergeDagParamV2 &param) override;
-  int get_rec_scn(ObDDLTabletMergeDagParamV2 &merge_param) override;
-public:
-  static int build_sstable(
-             ObDDLTabletMergeDagParamV2 &dag_merge_param,
-             ObTablesHandleArray &co_sstable_array,
-             const int64_t start_macro_seq,
-             int64_t &out_macro_seq,
-             ObSSTable *&major_sstable);
-  static int get_meta_store_store(
-             ObDDLTabletMergeDagParamV2 &merge_param,
-             const ObTabletID tablet_id,
-             const int64_t cg_idx,
-             ObArray<ObMacroMetaStoreManager::StoreItem> &sorted_meta_stores);
-  static int write_partial_sstable(
-             ObDDLTabletMergeDagParamV2 &dag_merge_param,
-             const int64_t start_macro_seq,
-             int64_t &out_macro_seq,
-             ObSSTable *&major_sstable,
-             ObSSTable *&out_sstable);
-
-protected:
-  int update_tablet_table_store(ObDDLTabletMergeDagParamV2 &dag_merge_param,
-                                ObTablesHandleArray &table_array,
-                                ObSSTable *&major_sstable);
-  void update_max_meta_seq(const int64_t seq);
-  int64_t get_next_max_meta_seq();
-  int merge_dump_sstable(ObDDLTabletMergeDagParamV2 &merge_param);
-  int merge_cg_sstable(ObIDag* dag, ObDDLTabletMergeDagParamV2 &merge_param, int64_t cg_idx);
-  int update_major_table_store(ObDDLTabletMergeDagParamV2 &dag_merge_param,
-                               ObSSTable *&major_sstable);
-  bool is_supported_direct_load_type(const ObDirectLoadType direct_load_type) override ;
-  int prepare_cg_table_key(const ObDDLTabletMergeDagParamV2 &dag_merge_param,
-                           const int64_t cg_idx,
-                           const ObStorageSchema *storage_schema,
-                           ObITable::TableKey &cur_cg_table_key);
-  int write_ddl_finish_log(ObDDLTabletMergeDagParamV2 &dag_merge_param,
-                           ObSSTable *&major_sstable);
-private:
-  int64_t max_meta_seq_;
-  common::ObLatch lock_;
-};
-#endif
 } // namespace storage
 } // namespace oceanbase
 
