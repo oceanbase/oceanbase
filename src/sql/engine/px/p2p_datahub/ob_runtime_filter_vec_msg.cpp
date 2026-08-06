@@ -1126,6 +1126,9 @@ int ObRFInFilterVecMsg::assign(const ObP2PDatahubMsgBase &msg)
   int ret = OB_SUCCESS;
   const ObRFInFilterVecMsg &other_msg = static_cast<const ObRFInFilterVecMsg &>(msg);
   int64_t bucket_cnt = max(other_msg.row_store_.get_row_cnt(), 1);
+  null_reject_vectors_.reuse();
+  valid_row_idxs_.reuse();
+  is_null_reject_vectors_inited_ = false;
   if (OB_FAIL(ObP2PDatahubMsgBase::assign(msg))) {
     LOG_WARN("failed to assign base data", K(ret));
   } else if (OB_FAIL(need_null_cmp_flags_.assign(other_msg.need_null_cmp_flags_))) {
@@ -1236,11 +1239,41 @@ int ObRFInFilterVecMsg::do_insert_by_row_vector(const ObBatchRows *child_brs,
       }
     }
 
+    if (!is_null_reject_vectors_inited_) {
+      null_reject_vectors_.reuse();
+      if (OB_UNLIKELY(need_null_cmp_flags_.count() != expr_array.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null compare flags count", K(ret), K(need_null_cmp_flags_.count()),
+                 K(expr_array.count()));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < expr_array.count(); ++i) {
+        if (!need_null_cmp_flags_.at(i)
+            && OB_FAIL(null_reject_vectors_.push_back(expr_array.at(i)->get_vector(eval_ctx)))) {
+          LOG_WARN("failed to add null reject vector", K(ret), K(i));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        is_null_reject_vectors_inited_ = true;
+      }
+    }
+    valid_row_idxs_.reuse();
+    for (int64_t batch_i = 0; OB_SUCC(ret) && batch_i < child_brs->size_; ++batch_i) {
+      bool ignore_null = child_brs->skip_->at(batch_i);
+      for (int64_t i = 0; !ignore_null && i < null_reject_vectors_.count(); ++i) {
+        ignore_null = null_reject_vectors_.at(i)->is_null(batch_i);
+      }
+      if (!ignore_null && OB_FAIL(valid_row_idxs_.push_back(batch_i))) {
+        LOG_WARN("failed to add valid row index", K(ret), K(batch_i));
+      }
+    }
+
     SmallHashSetBatchInsertOP sm_hash_set_batch_ins_op(sm_hash_set_, batch_hash_values);
+    for (int64_t i = 0; OB_SUCC(ret) && i < valid_row_idxs_.count(); ++i) {
+      if (OB_FAIL(sm_hash_set_batch_ins_op(valid_row_idxs_.at(i)))) {
+        LOG_WARN("failed insert batch_hash_values into sm_hash_set_", K(ret));
+      }
+    }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(
-                   ObBitVector::flip_foreach(*child_brs->skip_, bound, sm_hash_set_batch_ins_op))) {
-      LOG_WARN("failed insert batch_hash_values into sm_hash_set_");
     } else if (sm_hash_set_.size() > max_in_num_) {
       is_active_ = false;
     } else if (is_empty_ && sm_hash_set_.size() > 0) {
@@ -1255,27 +1288,19 @@ int ObRFInFilterVecMsg::do_insert_by_row_vector(const ObBatchRows *child_brs,
       ObDatum datum;
       ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx);
       batch_info_guard.set_batch_size(child_brs->size_);
-      for (int64_t batch_i = 0; OB_SUCC(ret) && is_active_ && batch_i < child_brs->size_; ++batch_i) {
-        if (child_brs->skip_->at(batch_i)) {
-          continue;
-        }
+      for (int64_t i = 0; OB_SUCC(ret) && is_active_ && i < valid_row_idxs_.count(); ++i) {
+        const int64_t batch_i = valid_row_idxs_.at(i);
         batch_info_guard.set_batch_idx(batch_i);
-        bool ignore_null = false;
         for (int64_t arg_i = 0; OB_SUCC(ret) && arg_i < expr_array.count(); ++arg_i) {
           ObExpr *expr = expr_array.at(arg_i);
           ObIVector *arg_vec = expr->get_vector(eval_ctx);
-          if (arg_vec->is_null(batch_i) && !need_null_cmp_flags_.at(arg_i)) {
-            ignore_null = true;
-            break;
-          } else {
-            datum.ptr_ = arg_vec->get_payload(batch_i);
-            datum.len_ = arg_vec->get_length(batch_i);
-            datum.null_ = arg_vec->is_null(batch_i) ? 1 : 0;
-            cur_row.row_.at(arg_i) = (datum);
-            cur_row.hash_val_ = batch_hash_values[batch_i];
-          }
+          datum.ptr_ = arg_vec->get_payload(batch_i);
+          datum.len_ = arg_vec->get_length(batch_i);
+          datum.null_ = arg_vec->is_null(batch_i) ? 1 : 0;
+          cur_row.row_.at(arg_i) = (datum);
+          cur_row.hash_val_ = batch_hash_values[batch_i];
         }
-        if (OB_SUCC(ret) && !ignore_null) {
+        if (OB_SUCC(ret)) {
           if (build_send_opt_ && row_store_.get_row_cnt() > max_in_num_) {
             // do not insert any more
             break;
@@ -1540,6 +1565,9 @@ int ObRFInFilterVecMsg::reuse()
   row_store_.reset();
   rows_set_.reuse();
   sm_hash_set_.clear();
+  null_reject_vectors_.reuse();
+  valid_row_idxs_.reuse();
+  is_null_reject_vectors_inited_ = false;
   (void)reuse_query_range();
   is_active_ = true;
   return ret;
@@ -1918,6 +1946,9 @@ int ObRFInFilterVecMsg::destroy()
   cur_row_with_hash_.row_.reset();
   rows_set_.destroy();
   sm_hash_set_.~ObSmallHashSet<true>();
+  null_reject_vectors_.reset();
+  valid_row_idxs_.reset();
+  is_null_reject_vectors_inited_ = false;
   need_null_cmp_flags_.reset();
   row_store_.reset();
   hash_funcs_for_insert_.reset();

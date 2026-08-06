@@ -229,7 +229,8 @@ public:
         build_row_meta_(&allocator_), cur_row_with_hash_(allocator_), rows_set_(),
         row_store_(allocator_), need_null_cmp_flags_(allocator_), max_in_num_(0),
         hash_funcs_for_insert_(allocator_),query_range_info_(allocator_),
-        query_range_(), is_query_range_ready_(false), query_range_allocator_(), sm_hash_set_()
+        query_range_(), is_query_range_ready_(false), query_range_allocator_(), sm_hash_set_(),
+        null_reject_vectors_(), valid_row_idxs_(), is_null_reject_vectors_inited_(false)
   {}
   virtual int assign(const ObP2PDatahubMsgBase &);
   virtual int merge(ObP2PDatahubMsgBase &) final;
@@ -352,6 +353,10 @@ public:
   common::ObArenaAllocator query_range_allocator_;
   // ---end---
   ObSmallHashSet<true> sm_hash_set_;
+  // Runtime caches used by vectorized insertion, not need to serialize.
+  ObSEArray<ObIVector *, 4> null_reject_vectors_;
+  ObSEArray<int64_t, 16> valid_row_idxs_;
+  bool is_null_reject_vectors_inited_;
   bool use_hash_join_seed_ {false};
 
   // if enable
