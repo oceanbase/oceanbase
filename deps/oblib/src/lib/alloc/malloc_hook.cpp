@@ -218,9 +218,9 @@ public:
   #define BIN_SIZE_MAP(sc_idx) SIZE_CLASS_MAP[sc_idx][0]
   #define BLOCK_SIZE_MAP(sc_idx) SIZE_CLASS_MAP[sc_idx][1]
 
-  ObjectSetV2()
+  ObjectSetV2(bool is_mmap_only = false)
     : ObDLinkBase<ObjectSetV2>(),
-      ta_(NULL), mgr_(NULL), deferred_list_(NULL)
+      ta_(NULL), mgr_(NULL), deferred_list_(NULL), is_mmap_only_(is_mmap_only)
   {}
   static int calc_sc_idx(const int64_t x)
   {
@@ -268,7 +268,7 @@ public:
     bool in_hook_bak = in_hook();
     in_hook() = true;
     DEFER(in_hook() = in_hook_bak);
-    if (OB_UNLIKELY(!g_malloc_hook_inited || in_hook_bak)) {
+    if (OB_UNLIKELY(!g_malloc_hook_inited || in_hook_bak || is_mmap_only_)) {
       if (MAP_FAILED == (ptr = ob_mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0))) {
         ptr = nullptr;
       } else {
@@ -453,7 +453,10 @@ public:
   IBlockMgr *mgr_;
   ABlock *deferred_list_; // use ABlock::next2_
   SizeClass scs_[SIZE_CLASS_CNT + 1];
+  const bool is_mmap_only_;
 } CACHE_ALIGNED;
+
+static ObjectSetV2 g_mmap_only_os(true/*is_mmap_only*/);
 
 
 struct ObjectSetList
@@ -488,6 +491,7 @@ public:
     ObjectSetV2* os = static_cast<ObjectSetV2*>(ptr);
     os->reclaim_deferred_to_local();
     global_os_list.push(os);
+    tl_os = &g_mmap_only_os;
   }
 
   GlibcMalloc()

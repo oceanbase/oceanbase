@@ -5,6 +5,7 @@
 
 #include <gtest/gtest.h>
 #include <malloc.h>
+#include <pthread.h>
 #include "lib/oblog/ob_log.h"
 #include "lib/alloc/malloc_hook.h"
 
@@ -19,6 +20,38 @@ int main(int argc, char *argv[])
   OB_LOGGER.set_log_level("INFO");
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
+}
+
+
+static pthread_key_t  g_late_key;
+static pthread_once_t g_late_key_once = PTHREAD_ONCE_INIT;
+
+static void late_destructor(void * /*val*/)
+{
+  void *p = malloc(128);
+  fprintf(stderr,"late_destructor, %p\n", p);
+  free(p);
+}
+
+static void init_late_key()
+{
+  pthread_key_create(&g_late_key, late_destructor);
+}
+
+static void *worker_thread(void * /*arg*/)
+{
+  // 首次 malloc：触发 GlibcMalloc 构造，注册 GlibcMalloc::tls_key（索引小）
+  void *p = malloc(8);
+  fprintf(stderr,"worker_thread, %p\n", p);
+  free(p);
+
+  // late_key 在 GlibcMalloc::tls_key 之后创建，析构顺序靠后
+  pthread_once(&g_late_key_once, init_late_key);
+  pthread_setspecific(g_late_key, reinterpret_cast<void *>(1));
+
+  // 线程退出 TSD 析构序列：
+  //   GlibcMalloc::destructor → late_destructor
+  return nullptr;
 }
 
 class TestMallocHook
@@ -229,4 +262,12 @@ TEST_F(TestMallocHook, test_cpp_operator)
   ASSERT_TRUE(header->check_magic_code());
   ptr_array[n - 1] = 10;
   delete[] ptr_array;
+}
+
+TEST_F(TestMallocHook, test_thread_exit)
+{
+  pthread_t t;
+  pthread_create(&t, nullptr, worker_thread, nullptr);
+  pthread_join(t, nullptr);  // late_destructor 在 join 返回前已执行完毕
+  // 到这里说明没有 crash，修复有效
 }
