@@ -1035,10 +1035,15 @@ int ObDelUpdLogPlan::compute_hash_dist_exprs_for_pdml_insert(ObExchangeInfo &exc
         bool found = false;
         for (int64_t j = 0; OB_SUCC(ret) && j < dml_info.column_exprs_.count(); ++j) {
           ObColumnRefRawExpr *col_expr = dml_info.column_exprs_.at(j);
+          const ColumnItem *column_item = NULL;
           if (OB_ISNULL(col_expr)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexpected null column expr", K(ret), K(j));
-          } else if (col_expr->get_column_id() == pk_id) {
+          } else if (OB_ISNULL(column_item = stmt->get_column_item_by_id(col_expr->get_table_id(),
+                                                                         col_expr->get_column_id()))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected null column item", K(ret), K(j), KPC(col_expr));
+          } else if (column_item->base_cid_ == pk_id) {
             if (OB_UNLIKELY(j >= dml_info.column_convert_exprs_.count())) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("convert expr not found for logic pk", K(ret), K(j), K(pk_id),
