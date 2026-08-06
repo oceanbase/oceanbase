@@ -1190,24 +1190,10 @@ int ObDDLService::generate_tables_array(const obrpc::ObAlterTableArg &alter_tabl
 {
   int ret = OB_SUCCESS;
   const ObAlterTableArg::AlterPartitionType op_type = alter_table_arg.alter_part_type_;
-  const AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
   const uint64_t tenant_id = orig_table_schema.get_tenant_id();
   ObSEArray<uint64_t, 20> aux_table_ids;
   ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
   AlterTableSchema tmp_inc_table_schema;
-  bool modify_sub_part_template_flags = false;
-  if (PARTITION_LEVEL_TWO == orig_table_schema.get_part_level()
-      && orig_table_schema.sub_part_template_def_valid()) {
-    // sub_part_template_def_valid() is only used for schema printer.
-    // To simplify relate logic, we consider that add partition/subpartition or add subpartition
-    // make cause partitions different.
-    if (obrpc::ObAlterTableArg::ADD_SUB_PARTITION == op_type
-        || obrpc::ObAlterTableArg::DROP_SUB_PARTITION == op_type
-        || (obrpc::ObAlterTableArg::ADD_PARTITION == op_type && !alter_table_schema.sub_part_template_def_valid())) {
-      modify_sub_part_template_flags = true;
-      new_table_schema.unset_sub_part_template_def_valid();
-    }
-  }
   const ObString new_part_name = inc_table_schema.get_new_part_name();
   if ((!orig_table_schema.has_tablet() && !orig_table_schema.is_external_table())
       || orig_table_schema.is_index_local_storage()
@@ -1338,8 +1324,6 @@ int ObDDLService::generate_tables_array(const obrpc::ObAlterTableArg &alter_tabl
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(new_aux_table_schema->assign(*orig_aux_table_schema))) {
         LOG_WARN("fail to assign schema", KR(ret), KPC(orig_aux_table_schema));
-      } else if (modify_sub_part_template_flags
-                 && FALSE_IT(new_aux_table_schema->unset_sub_part_template_def_valid())) {
       } else if (OB_FAIL(inc_aux_table_schema->assign(*new_aux_table_schema))) {
         LOG_WARN("failed to push back table_schema", KR(ret), KPC(new_aux_table_schema));
       } else if (!need_set_random_part_attr &&

@@ -1277,7 +1277,7 @@ int ObDDLService::try_format_partition_schema(ObPartitionSchema &partition_schem
     LOG_WARN("fail to generate_subpart_by_template", KR(ret), K(partition_schema));
   }
   if (OB_SUCC(ret) && generated) {
-    partition_schema.set_sub_part_template_def_valid();
+    partition_schema.set_sub_part_template_def_exist();
     LOG_INFO("convert schema to nontemplate", K(partition_schema));
   }
   // 2. generate part_idx/subpart_idx.
