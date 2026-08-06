@@ -2787,6 +2787,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_INVALID_RELATIONAL_OPERATOR, -9845, -1, "HY000", "inv
 DEFINE_ORACLE_ERROR(OB_ERR_XML_NOT_MATCH_TYPE_DEF, -9846, -1, "HY000", "XML element or attribute does not match any in type", 19031, "XML element or attribute %.*s does not match any in type %.*s");
 DEFINE_ORACLE_ERROR(OB_ERR_JAVA_SESSION_STATE_CLEARED, -9847, -1, "HY000", "Java session state cleared", 29550, "Java session state cleared");
 DEFINE_ORACLE_ERROR(OB_ERR_XML_CANNOT_CONVERT_TO_TYPE, -9848, -1, "HY000", "Cannot convert the given XMLType to the required type", 19029, "Cannot convert the given XMLType to the required type");
+DEFINE_ORACLE_ERROR(OB_ERR_PL_XML_STRING_ARG_INVALID, -9849, -1, "HY000", "NULL or invalid string argument specified", 64505, "NULL or invalid string argument specified");
 
 // 余留位置
 ////////////////////////////////////////////////////////////////

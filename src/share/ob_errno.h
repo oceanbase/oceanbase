@@ -1973,6 +1973,7 @@ constexpr int OB_ERR_INVALID_RELATIONAL_OPERATOR = -9845;
 constexpr int OB_ERR_XML_NOT_MATCH_TYPE_DEF = -9846;
 constexpr int OB_ERR_JAVA_SESSION_STATE_CLEARED = -9847;
 constexpr int OB_ERR_XML_CANNOT_CONVERT_TO_TYPE = -9848;
+constexpr int OB_ERR_PL_XML_STRING_ARG_INVALID = -9849;
 constexpr int OB_ERR_KV_GLOBAL_INDEX_ROUTE = -10500;
 constexpr int OB_TTL_NOT_ENABLE = -10501;
 constexpr int OB_TTL_COLUMN_NOT_EXIST = -10502;
@@ -4485,6 +4486,7 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_XML_NOT_MATCH_TYPE_DEF__USER_ERROR_MSG "XML element or attribute does not match any in type"
 #define OB_ERR_JAVA_SESSION_STATE_CLEARED__USER_ERROR_MSG "Java session state cleared"
 #define OB_ERR_XML_CANNOT_CONVERT_TO_TYPE__USER_ERROR_MSG "Cannot convert the given XMLType to the required type"
+#define OB_ERR_PL_XML_STRING_ARG_INVALID__USER_ERROR_MSG "NULL or invalid string argument specified"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__USER_ERROR_MSG "incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__USER_ERROR_MSG "TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__USER_ERROR_MSG "TTL column '%.*s' not exists"
@@ -9429,6 +9431,8 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_JAVA_SESSION_STATE_CLEARED__OBE_USER_ERROR_MSG "OBE-29550: Java session state cleared"
 #define OB_ERR_XML_CANNOT_CONVERT_TO_TYPE__ORA_USER_ERROR_MSG "ORA-19029: Cannot convert the given XMLType to the required type"
 #define OB_ERR_XML_CANNOT_CONVERT_TO_TYPE__OBE_USER_ERROR_MSG "OBE-19029: Cannot convert the given XMLType to the required type"
+#define OB_ERR_PL_XML_STRING_ARG_INVALID__ORA_USER_ERROR_MSG "ORA-64505: NULL or invalid string argument specified"
+#define OB_ERR_PL_XML_STRING_ARG_INVALID__OBE_USER_ERROR_MSG "OBE-64505: NULL or invalid string argument specified"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10501, TTL feature is not enabled"
@@ -9806,7 +9810,7 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 
-extern int g_all_ob_errnos[2563];
+extern int g_all_ob_errnos[2564];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
