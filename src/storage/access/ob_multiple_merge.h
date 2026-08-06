@@ -39,6 +39,14 @@ protected:
     BATCH,
     DI_BASE,
   };
+  // for drain refresh table
+  enum class RefreshTableState
+  {
+    NONE,
+    HOLD_DRAIN,
+    CLONE_DRAIN,
+    SUSPEND_REFRESH,
+  };
 public:
   ObMultipleMerge();
   virtual ~ObMultipleMerge();
@@ -77,12 +85,30 @@ public:
   OB_INLINE bool need_iter_del_row() const { return iter_del_row_ || get_di_base_table_cnt() > 0; }
   OB_INLINE blocksstable::ObDatumRow &get_unprojected_row() { return unprojected_row_; }
 
+  static int calc_scan_range_by_rowkey(
+    ObTableAccessContext *access_ctx,
+    const blocksstable::ObDatumRange *&range,
+    blocksstable::ObDatumRange &cow_range,
+    const blocksstable::ObDatumRowkey &curr_rowkey,
+    const bool calc_di_base_range);
+  static int calc_scan_range_by_rowkey(
+    ObTableAccessParam *access_param,
+    ObTableAccessContext *access_ctx,
+    const common::ObIArray<blocksstable::ObDatumRange> *&ranges,
+    common::ObIArray<blocksstable::ObDatumRange> &cow_ranges,
+    const int64_t curr_scan_index,
+    const blocksstable::ObDatumRowkey &curr_rowkey,
+    int64_t &range_idx_delta,
+    const bool calc_di_base_range);
+
   INHERIT_TO_STRING_KV("ObQueryRowIterator", ObQueryRowIterator, K_(scan_cnt),
                        K_(range_idx_delta), K_(curr_scan_index), K_(major_table_version),
                        K_(need_padding), K_(need_fill_default),
                        K_(need_output_row_with_nop), K_(inited),
                        K_(iter_del_row), K_(read_memtable_only),
-                       K_(is_unprojected_row_valid), K_(scan_state), K_(exist_ddl_kv));
+                       K_(is_unprojected_row_valid), K_(need_scan_di_base),
+                       K_(scan_state), K_(refresh_table_state),
+                       K_(exist_ddl_kv));
 
 protected:
   int open();
@@ -147,6 +173,9 @@ private:
   int refresh_table_on_demand();
   int refresh_tablet_iter();
   OB_INLINE int check_need_refresh_table(bool &need_refresh, bool &need_retry);
+  int do_refresh_table(const bool can_refresh_tablet = true);
+  int switch_refresh_table_state_on_demand();
+  int switch_refresh_table_state(const RefreshTableState refresh_table_state);
   int save_curr_rowkey();
   int reset_tables();
   int check_filtered(const blocksstable::ObDatumRow &row, bool &filtered);
@@ -193,6 +222,7 @@ protected:
   bool read_memtable_only_;
   bool exist_ddl_kv_; // whether there is a ddl kv(direct load memtable) in read tables, fuse row cache is disabled if true
   bool is_unprojected_row_valid_; // whether unprojected_row_ is ready for refresh_table_on_demand currently
+  bool need_scan_di_base_;
   ObTabletReadTables *tablet_read_tables_;
   ObBlockRowStore *block_row_store_;
   ObGroupByCellBase *group_by_cell_;
@@ -202,6 +232,7 @@ protected:
   common::ObSEArray<share::schema::ObColDesc, 32> out_project_cols_;
   ObLobDataReader lob_reader_;
   ScanState scan_state_;
+  RefreshTableState refresh_table_state_;
   ObDIBaseSSTableRowScanner *di_base_sstable_row_scanner_;
   int64_t start_time_ns_;
 private:

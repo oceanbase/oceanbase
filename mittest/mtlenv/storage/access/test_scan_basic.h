@@ -112,7 +112,7 @@ public:
 
   void fake_freeze_info();
   void get_tx_table_guard(ObTxTableGuard &tx_table_guard);
-  void mock_tablet_table_store(ObTableStoreIterator &table_store_iter);
+  void mock_tablet_table_store(ObTableStoreIterator &table_store_iter, const bool reuse_tablet = true);
   void refresh_iter(ObMultipleMerge &merge);
   int refresh_table(ObMultipleMerge &merge,
                     ObTableStoreIterator &table_store_iter);
@@ -673,9 +673,43 @@ void TestScanBasic::get_tx_table_guard(ObTxTableGuard &tx_table_guard)
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tx_table_guard(tx_table_guard));
 }
 
-void TestScanBasic::mock_tablet_table_store(ObTableStoreIterator &table_store_iter)
+void TestScanBasic::mock_tablet_table_store(ObTableStoreIterator &table_store_iter, const bool reuse_tablet)
 {
   int ret = OB_SUCCESS;
+  if (!reuse_tablet) {
+    const ObLSID ls_id(ls_id_);
+    const ObTabletID tablet_id(tablet_id_);
+    ObLSService *ls_svr = MTL(ObLSService *);
+    ObLSHandle ls_handle;
+    ObTabletHandle old_handle;
+    OK(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+    OK(ls_handle.get_ls()->get_tablet(tablet_id, old_handle));
+    ObTablet *old_tablet = old_handle.get_obj();
+    ASSERT_NE(nullptr, old_tablet);
+    ObStorageSchema *storage_schema = nullptr;
+    OK(old_tablet->load_storage_schema(allocator_, storage_schema));
+
+    SCN clog_checkpoint_scn = old_tablet->get_tablet_meta().clog_checkpoint_scn_;
+    ObTabletTableStore *store = nullptr;
+    TestScanBasic::get_tablet_table_store(store);
+    ObITable *last_minor_table = store->minor_tables_.get_boundary_table(true/*last*/);
+    if (nullptr != last_minor_table) {
+      clog_checkpoint_scn = MAX(clog_checkpoint_scn, last_minor_table->get_end_scn());
+    }
+
+    ObUpdateTableStoreParam table_store_param(
+      old_tablet->get_snapshot_version(),
+      old_tablet->get_multi_version_start(),
+      storage_schema,
+      ls_handle.get_ls()->get_rebuild_seq());
+    table_store_param.compaction_info_.clog_checkpoint_scn_ = clog_checkpoint_scn;
+    table_store_param.ha_info_.need_check_transfer_seq_ = true;
+    table_store_param.ha_info_.transfer_seq_ = old_tablet->get_tablet_meta().transfer_info_.transfer_seq_;
+    ObTabletHandle new_tablet_handle;
+    OK(ls_handle.get_ls()->update_tablet_table_store(tablet_id, table_store_param, new_tablet_handle));
+    ObTabletObjLoadHelper::free(allocator_, storage_schema);
+  }
+
   table_store_iter.resume();
   ObTabletTableStore *store = nullptr;
   TestScanBasic::get_tablet_table_store(store);

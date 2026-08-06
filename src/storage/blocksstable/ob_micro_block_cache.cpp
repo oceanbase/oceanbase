@@ -994,9 +994,13 @@ int ObIMicroBlockCache::prefetch(
       read_info.io_desc_.set_preread();
     }
 
+    macro_handle.reuse();
     if (OB_FAIL(ObObjectManager::async_read_object(read_info, macro_handle))) {
       STORAGE_LOG(WARN, "Fail to async read block, ", K(ret), K(read_info));
-      if (OB_NOT_NULL(callback.get_allocator())) { //Avoid double_free with io_handle
+      if (macro_handle.is_valid()) {
+        // aio_read submitted, callback is owned by io_handle
+        macro_handle.reset();
+      } else if (OB_NOT_NULL(callback.get_allocator())) {
         ObIAllocator *allocator = callback.get_allocator();
         callback.~ObIMicroBlockIOCallback();
         allocator->free(&callback);
@@ -1046,9 +1050,13 @@ int ObIMicroBlockCache::prefetch(
   // only prefetch_multi_block need preread major macro
   read_info.io_desc_.set_preread();
 
+  macro_handle.reuse();
   if (OB_FAIL(ObObjectManager::async_read_object(read_info, macro_handle))) {
     STORAGE_LOG(WARN, "Fail to async read block, ", K(ret), K(read_info));
-    if (OB_NOT_NULL(callback.get_allocator())) { //Avoid double_free with io_handle
+    if (macro_handle.is_valid()) {
+      // aio_read submitted, callback is owned by io_handle
+      macro_handle.reset();
+    } else if (OB_NOT_NULL(callback.get_allocator())) {
       ObIAllocator *allocator = callback.get_allocator();
       callback.~ObIMicroBlockIOCallback();
       allocator->free(&callback);
@@ -1292,7 +1300,14 @@ int ObDataMicroBlockCache::load_block(
 
       if (OB_FAIL(ObObjectManager::async_read_object(macro_read_info, macro_handle))) {
         LOG_WARN("Fail to async read block", K(ret), K(macro_read_info));
-        if (OB_NOT_NULL(callback->get_allocator())) { //Avoid double_free with io_handle
+        if (macro_handle.is_valid()) {
+          // aio_read submitted, callback is owned by io_handle
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(macro_handle.wait())) {
+            LOG_WARN("Fail to wait io finish", K(tmp_ret), K(macro_read_info));
+          }
+          macro_handle.reset();
+        } else if (OB_NOT_NULL(callback->get_allocator())) {
           callback->~ObSyncSingleMicroBLockIOCallback();
           allocator->free(callback);
         }
@@ -1613,7 +1628,14 @@ int ObIndexMicroBlockCache::load_block(
       char *raw_idx_block_buf = nullptr;
       if (OB_FAIL(ObObjectManager::async_read_object(macro_read_info, macro_handle))) {
         LOG_WARN("Fail to async read block", K(ret), K(macro_read_info));
-        if (OB_NOT_NULL(callback->get_allocator())) { //Avoid double_free with io_handle
+        if (macro_handle.is_valid()) {
+          // aio_read submitted, callback is owned by io_handle
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(macro_handle.wait())) {
+            LOG_WARN("Fail to wait io finish", K(tmp_ret), K(macro_read_info));
+          }
+          macro_handle.reset();
+        } else if (OB_NOT_NULL(callback->get_allocator())) {
           callback->~ObSyncSingleMicroBLockIOCallback();
           allocator->free(callback);
         }

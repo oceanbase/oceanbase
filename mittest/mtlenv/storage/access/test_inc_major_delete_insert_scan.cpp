@@ -898,7 +898,7 @@ TEST_P(TestIncMajorDeleteInsertScan, test_scan_with_refresh_retry_number_changed
       "8        -60      DI_VERSION    19     19    INSERT    NORMAL        CLF\n";
 
   snapshot_version = 60;
-  scn_range.start_scn_.convert_for_tx(0);
+  scn_range.start_scn_.convert_for_tx(1);
   scn_range.end_scn_.convert_for_tx(60);
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data2, 1);
@@ -918,7 +918,7 @@ TEST_P(TestIncMajorDeleteInsertScan, test_scan_with_refresh_retry_number_changed
       "6        -80      0             99     99    DELETE    NORMAL        CL\n";
 
   snapshot_version = 80;
-  scn_range.start_scn_.convert_for_tx(0);
+  scn_range.start_scn_.convert_for_tx(1);
   scn_range.end_scn_.convert_for_tx(80);
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data3, 1);
@@ -936,7 +936,7 @@ TEST_P(TestIncMajorDeleteInsertScan, test_scan_with_refresh_retry_number_changed
       "10       -80      DI_VERSION    19     19    INSERT    NORMAL        CLF\n";
 
   snapshot_version = 80;
-  scn_range.start_scn_.convert_for_tx(0);
+  scn_range.start_scn_.convert_for_tx(60);
   scn_range.end_scn_.convert_for_tx(80);
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data4, 1);
@@ -948,7 +948,16 @@ TEST_P(TestIncMajorDeleteInsertScan, test_scan_with_refresh_retry_number_changed
   STORAGE_LOG(INFO, "finish prepare inc major sstable 4");
 
   const char *result1 = "bigint   bigint bigint  flag     flag_type\n"
-                        "6        99      99     INSERT    NORMAL\n";
+                        "6        99      99     INSERT    NORMAL\n"
+                        "1        9       9      INSERT    NORMAL\n"
+                        "3        9       9      INSERT    NORMAL\n"
+                        "5        9       9      INSERT    NORMAL\n"
+                        "2        19      19     INSERT    NORMAL\n"
+                        "4        19      19     INSERT    NORMAL\n"
+                        "7        9       9      INSERT    NORMAL\n"
+                        "9        9       9      INSERT    NORMAL\n"
+                        "8        19      19     INSERT    NORMAL\n"
+                        "10       19      19     INSERT    NORMAL\n";
 
   ObDatumRange range;
   range.set_whole_range();
@@ -988,12 +997,34 @@ TEST_P(TestIncMajorDeleteInsertScan, test_scan_with_refresh_retry_number_changed
   table_store_iter.add_table(handle2.get_table());
   table_store_iter.add_table(handle4.get_table());
   table_store_iter.add_table(handle3.get_table());
-  mock_tablet_table_store(table_store_iter);
+  mock_tablet_table_store(table_store_iter, false/*reuse_tablet*/);
   OK(refresh_table(scan_merge, tablet_read_tables_.tablet_iter_.table_store_iter_));
   ob_usleep(2 * 1000 * 1000); // sleep 2s
-  ASSERT_EQ(OB_SNAPSHOT_DISCARDED, refresh_table(scan_merge, tablet_read_tables_.tablet_iter_.table_store_iter_));
+  OK(refresh_table(scan_merge, tablet_read_tables_.tablet_iter_.table_store_iter_));
   STORAGE_LOG(INFO, "refresh tablet iter", K(tablet_read_tables_.tablet_iter_.table_store_iter_));
-  ASSERT_EQ(1, total_count);
+
+  // get residual rows
+  while (OB_SUCC(ret)) {
+    ret = scan_merge.get_next_rows(count, SQL_BATCH_SIZE);
+    if (ret != OB_SUCCESS && ret != OB_ITER_END) {
+      STORAGE_LOG(ERROR, "error return value", K(ret), K(count));
+      ASSERT_EQ(1, 0);
+    }
+    if (count > 0) {
+      ObMockScanMergeIterator merge_iter(count);
+      ASSERT_EQ(OB_SUCCESS, merge_iter.init(reinterpret_cast<ObVectorStore *>(scan_merge.block_row_store_),
+                                            query_allocator_,
+                                            *access_param_.iter_param_.get_read_info()));
+      bool is_equal = res_iter.equals<ObMockScanMergeIterator, ObStoreRow>(merge_iter, false, false, false, true);
+      ASSERT_TRUE(is_equal);
+
+      total_count += count;
+      STORAGE_LOG(INFO, "get next rows", K(count), K(total_count));
+    } else {
+      break;
+    }
+  }
+  ASSERT_EQ(10, total_count);
 
   handle1.reset();
   handle2.reset();
@@ -1077,13 +1108,13 @@ TEST_P(TestIncMajorDeleteInsertScan, test_scan_with_refresh_retry_inc_major_chan
 
   const char *result1 = "bigint   bigint bigint  flag     flag_type\n"
                         "1        9       9      INSERT    NORMAL\n"
-                        "5        99      99     INSERT    NORMAL\n"
                         "3        9       9      INSERT    NORMAL\n"
-                        "6        99      99     INSERT    NORMAL\n"
-                        "2        19      19     INSERT    NORMAL\n"
-                        "4        19      19     INSERT    NORMAL\n"
+                        "5        9       9      INSERT    NORMAL\n"
                         "7        9       9      INSERT    NORMAL\n"
                         "9        9       9      INSERT    NORMAL\n"
+                        "2        19      19     INSERT    NORMAL\n"
+                        "4        19      19     INSERT    NORMAL\n"
+                        "6        19      19     INSERT    NORMAL\n"
                         "8        19      19     INSERT    NORMAL\n";
 
   ObDatumRange range;
@@ -1122,12 +1153,34 @@ TEST_P(TestIncMajorDeleteInsertScan, test_scan_with_refresh_retry_inc_major_chan
   table_store_iter.reset();
   table_store_iter.add_table(handle1.get_table());
   table_store_iter.add_table(handle3.get_table());
-  mock_tablet_table_store(table_store_iter);
+  mock_tablet_table_store(table_store_iter, false/*reuse_tablet*/);
   OK(refresh_table(scan_merge, tablet_read_tables_.tablet_iter_.table_store_iter_));
   ob_usleep(2 * 1000 * 1000); // sleep 2s
-  ASSERT_EQ(OB_SNAPSHOT_DISCARDED, refresh_table(scan_merge, tablet_read_tables_.tablet_iter_.table_store_iter_));
+  OK(refresh_table(scan_merge, tablet_read_tables_.tablet_iter_.table_store_iter_));
   STORAGE_LOG(INFO, "refresh tablet iter", K(tablet_read_tables_.tablet_iter_.table_store_iter_));
-  ASSERT_EQ(1, total_count);
+
+  // get residual rows
+  while (OB_SUCC(ret)) {
+    ret = scan_merge.get_next_rows(count, SQL_BATCH_SIZE);
+    if (ret != OB_SUCCESS && ret != OB_ITER_END) {
+      STORAGE_LOG(ERROR, "error return value", K(ret), K(count));
+      ASSERT_EQ(1, 0);
+    }
+    if (count > 0) {
+      ObMockScanMergeIterator merge_iter(count);
+      ASSERT_EQ(OB_SUCCESS, merge_iter.init(reinterpret_cast<ObVectorStore *>(scan_merge.block_row_store_),
+                                            query_allocator_,
+                                            *access_param_.iter_param_.get_read_info()));
+      bool is_equal = res_iter.equals<ObMockScanMergeIterator, ObStoreRow>(merge_iter, false, false, false, true);
+      ASSERT_TRUE(is_equal);
+
+      total_count += count;
+      STORAGE_LOG(INFO, "get next rows", K(count), K(total_count));
+    } else {
+      break;
+    }
+  }
+  ASSERT_EQ(9, total_count);
 
   handle1.reset();
   handle2.reset();
@@ -1251,11 +1304,11 @@ TEST_P(TestIncMajorDeleteInsertScan, test_scan_with_refresh_single_row)
 
   const char *result1 = "bigint   bigint bigint  flag     flag_type\n"
                         "5        9       9      INSERT    NORMAL\n"
-                        "6        99      99     INSERT    NORMAL\n"
                         "1        9       9      INSERT    NORMAL\n"
                         "3        9       9      INSERT    NORMAL\n"
                         "2        19      19     INSERT    NORMAL\n"
                         "4        19      19     INSERT    NORMAL\n"
+                        "6        99      99     INSERT    NORMAL\n"
                         "7        99      99     INSERT    NORMAL\n"
                         "12       99      99     INSERT    NORMAL\n"
                         "8        19      19     INSERT    NORMAL\n"

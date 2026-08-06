@@ -25,11 +25,6 @@ public:
 
 protected:
   virtual int calc_scan_range() override;
-  int inner_calc_scan_range(const common::ObIArray<blocksstable::ObDatumRange> *&ranges,
-                            common::ObIArray<blocksstable::ObDatumRange> &cow_ranges,
-                            const int64_t curr_scan_index,
-                            const blocksstable::ObDatumRowkey &curr_rowkey,
-                            const bool calc_di_base_range);
   virtual int construct_iters() override;
   virtual int inner_get_next_row(blocksstable::ObDatumRow &row);
   virtual int pause(bool& do_pause) override;

@@ -518,6 +518,7 @@ int MockTenantModuleEnv::construct_default_tenant_meta(const uint64_t tenant_id,
 int MockTenantModuleEnv::init_dir()
 {
   system(("rm -rf " + run_dir_).c_str());
+  system(("rm -rf " + unix_dir_).c_str());
 
   curr_dir_ = get_current_dir_name();
 
@@ -1117,6 +1118,7 @@ void MockTenantModuleEnv::destroy()
   destroyed_ = true;
 
   system(("rm -rf " + run_dir_).c_str());
+  system(("rm -rf " + unix_dir_).c_str());
   system(("rm -rf " + mysql_unix_path_).c_str());
   system(("rm -rf " + rpc_unix_path_).c_str());
 }

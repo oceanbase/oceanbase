@@ -364,7 +364,7 @@ public:
     }
 
     if (OB_SUCC(ret) && get_di_base_table_cnt() > 0) {
-      if (OB_FAIL(di_base_sstable_row_scanner_->construct_iters(false/*is_multi_scan*/))) {
+      if (OB_FAIL(di_base_sstable_row_scanner_->construct_iters())) {
         STORAGE_LOG(WARN, "fail to construct di base iters", K(ret));
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < get_di_base_iter_cnt(); ++i) {

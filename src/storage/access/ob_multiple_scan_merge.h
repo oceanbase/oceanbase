@@ -66,10 +66,6 @@ protected:
   virtual int get_current_range(ObDatumRange& current_range) const;
 private:
   int prepare_blockscan(ObStoreRowIterator &iter);
-  void inner_calc_scan_range(const blocksstable::ObDatumRange *&range,
-                             blocksstable::ObDatumRange &cow_range,
-                             const blocksstable::ObDatumRowkey &curr_rowkey,
-                             const bool calc_di_base_range);
 protected:
   ObScanMergeLoserTreeCmp tree_cmp_;
   ObScanSimpleMerger *simple_merge_;
