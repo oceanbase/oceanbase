@@ -162,6 +162,7 @@ void ObDAGCGMacroBlockWriteOp::reset()
   }
   cg_block_files_iter_arr_.reset();
   cg_macro_block_writer_.reset();
+  table_stat_.reset();
   flushed_bitmap_.reuse(false);
   allocator_.reset();
 }
@@ -252,11 +253,22 @@ int ObDAGCGMacroBlockWriteOp::execute(const ObChunk &input_chunk,
             } else if (OB_FAIL(flushed_bitmap_.set(cg_iter_idx))) {
               LOG_WARN("flush bitmap set failed", K(ret));
             } else {
+              if (ObDDLUtil::need_collect_table_stat(
+                      write_macro_param.tablet_param_.with_cs_replica_, cg_macro_block_writer_.get_table_key())) {
+                table_stat_.add_merge_block_info(cg_macro_block_writer_.get_merge_block_info());
+              }
               start_seqences_.at(cg_iter_idx) = cg_macro_block_writer_.get_last_macro_seq();
               cg_macro_block_writer_.reset();
             }
           }
         }
+      }
+    }
+    if (OB_SUCC(ret) && input_chunk.is_end_chunk()) {
+      if (OB_FAIL(tablet_context->add_table_stat(table_stat_))) {
+        LOG_WARN("fail to add table stat", K(ret), K(tablet_id_), K(slice_idx_));
+      } else {
+        table_stat_.reset();
       }
     }
   }

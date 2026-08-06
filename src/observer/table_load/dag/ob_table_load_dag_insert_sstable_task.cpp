@@ -13,6 +13,7 @@
 #include "storage/ddl/ob_cg_macro_block_writer.h"
 #include "storage/ddl/ob_tablet_slice_row_iterator.h"
 #include "storage/direct_load/ob_direct_load_i_merge_task.h"
+#include "storage/ddl/ob_ddl_tablet_context.h"
 #include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
 
 namespace oceanbase
@@ -434,13 +435,14 @@ int ObTableLoadMacroBlockWriteTask::process()
   int ret = OB_SUCCESS;
   ObITabletSliceRowIterator *row_iter = nullptr;
   ObITabletSliceWriter *storage_writer = nullptr;
+  ObWriteMacroParam writer_param;
+  ObDDLTableStat table_stat;
   ObArenaAllocator allocator(ObMemAttr(MTL_ID(), "TLMBWTask"));
   if (OB_FAIL(merge_task_->init_iterator(row_iter))) {
     LOG_WARN("fail to init iterator", KR(ret));
   } else {
     const ObTabletID tablet_id = row_iter->get_tablet_id();
     const int64_t slice_idx = row_iter->get_slice_idx();
-    ObWriteMacroParam writer_param;
     writer_param.is_sorted_table_load_ = true;
     if (OB_FAIL(ObDDLUtil::fill_writer_param(tablet_id, slice_idx, -1 /*cg_idx*/, dag_, writer_param))) {
       LOG_WARN("fail to fill writer param", K(ret), K(tablet_id), K(slice_idx), K(dag_));
@@ -467,6 +469,16 @@ int ObTableLoadMacroBlockWriteTask::process()
     }
     if (FAILEDx(storage_writer->close())) {
       LOG_WARN("fail to close storage writer", K(ret));
+    } else if (OB_FAIL(storage_writer->collect_table_stat(table_stat))) {
+      LOG_WARN("fail to collect table stat", K(ret), KPC(storage_writer));
+    } else {
+      // Accumulate the statistics produced by this writer into the tablet context.
+      if (OB_ISNULL(writer_param.tablet_context_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tablet context is null", KR(ret), K(writer_param));
+      } else if (OB_FAIL(writer_param.tablet_context_->add_table_stat(table_stat))) {
+        LOG_WARN("fail to add table stat", KR(ret), KPC(storage_writer));
+      }
     }
   }
   if (OB_LIKELY(nullptr != row_iter)) {

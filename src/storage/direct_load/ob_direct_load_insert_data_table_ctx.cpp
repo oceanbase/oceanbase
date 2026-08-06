@@ -17,6 +17,7 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/ddl/ob_ddl_independent_dag.h"
+#include "storage/ddl/ob_ddl_tablet_context.h"
 #include "storage/ddl/ob_direct_load_mgr_utils.h"
 
 namespace oceanbase
@@ -1151,11 +1152,29 @@ int ObDirectLoadInsertDataTableContext::collect_sql_statistics(
       if (OB_FAIL(sql_statistics.get_table_stat(0, table_stat))) {
         LOG_WARN("fail to get table stat", KR(ret));
       } else {
-        int64_t row_count = 0;
-        FOREACH(iter, tablet_ctx_map_)
-        {
-          ObDirectLoadInsertTabletContext *tablet_ctx = iter->second;
-          row_count += tablet_ctx->get_row_count();
+        ObDDLTableStat ddl_table_stat;
+        if (param_.enable_dag_) {
+          // New DAG path: row, macro and micro counts are all collected from
+          // ObDDLTabletContext after writer close.
+          FOREACH_X(iter, tablet_ctx_map_, OB_SUCC(ret))
+          {
+            ObDirectLoadInsertTabletContext *tablet_ctx = iter->second;
+            ObDDLTabletContext *ddl_tctx = nullptr;
+            if (OB_FAIL(param_.dag_->get_tablet_context(tablet_ctx->get_tablet_id(), ddl_tctx))) {
+              LOG_WARN("fail to get tablet context", KR(ret), K(tablet_ctx->get_tablet_id()));
+            } else if (OB_ISNULL(ddl_tctx)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("tablet context is null", KR(ret), K(tablet_ctx->get_tablet_id()));
+            } else {
+              ddl_table_stat.add(ddl_tctx->get_table_stat());
+            }
+          }
+        } else {
+          // Legacy path: keep collecting row count from the import context.
+          FOREACH(iter, tablet_ctx_map_)
+          {
+            ddl_table_stat.row_count_ += iter->second->get_row_count();
+          }
         }
         if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_2_0) {
           FOREACH_X(iter, sql_stats_, OB_SUCC(ret))
@@ -1173,9 +1192,11 @@ int ObDirectLoadInsertDataTableContext::collect_sql_statistics(
           table_stat->set_table_id(param_.table_id_);
           table_stat->set_partition_id(partition_id);
           table_stat->set_object_type(stat_level);
-          table_stat->set_row_count(row_count);
+          table_stat->set_row_count(ddl_table_stat.row_count_);
           table_stat->set_avg_row_size(table_avg_len);
           table_stat->set_sample_size(sample_value);
+          table_stat->set_macro_block_num(ddl_table_stat.macro_block_count_);
+          table_stat->set_micro_block_num(ddl_table_stat.micro_block_count_);
         }
       }
     }

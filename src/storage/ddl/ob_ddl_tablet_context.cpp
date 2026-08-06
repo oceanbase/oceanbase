@@ -353,8 +353,10 @@ int ObDDLSlice::get_remain_block(const int64_t cg_idx, ObRemainCgBlock &remain_b
 
 ObDDLTabletContext::ObDDLTabletContext()
   : is_inited_(false), arena_(ObMemAttr(MTL_ID(), "ddl_tblt_ctx")),
-    slice_count_(0), table_slice_offset_(0), scan_task_(nullptr), mutex_(common::ObLatchIds::DDL_TABLET_CONTEXT_LOCK),
+    slice_count_(0), table_slice_offset_(0), scan_task_(nullptr),
+    mutex_(common::ObLatchIds::DDL_TABLET_CONTEXT_LOCK),
     last_lob_id_(0), last_autoinc_val_(0), bucket_count_(0),
+    table_stat_(),
     macro_meta_store_mgr_(nullptr), vector_index_ctx_(nullptr),
     fts_expect_range_cnt_(0), fts_parallel_cnt_(0)
 {
@@ -364,6 +366,18 @@ ObDDLTabletContext::ObDDLTabletContext()
 ObDDLTabletContext::~ObDDLTabletContext()
 {
   reset();
+}
+
+int ObDDLTabletContext::add_table_stat(const ObDDLTableStat &table_stat)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!table_stat.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("table stat is invalid", K(ret), K(table_stat));
+  } else {
+    table_stat_.atomic_add(table_stat);
+  }
+  return ret;
 }
 
 int init_tablet_param(ObTablet *tablet, ObStorageSchema *storage_schema, const ObDirectLoadType direct_load_type, ObIAllocator &allocator, ObWriteTabletParam &tablet_param)
@@ -538,6 +552,7 @@ void ObDDLTabletContext::reset()
   fts_inverted_final_range_.reset();
   fts_expect_range_cnt_ = 0;
   fts_parallel_cnt_ = 0;
+  table_stat_.reset();
   arena_.reset();
 }
 

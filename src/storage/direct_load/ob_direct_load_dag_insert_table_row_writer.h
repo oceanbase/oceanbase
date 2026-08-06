@@ -7,6 +7,7 @@
 
 #include "storage/blocksstable/ob_batch_datum_rows.h"
 #include "storage/ddl/ob_ddl_struct.h"
+#include "storage/ddl/ob_ddl_table_stat.h"
 #include "storage/direct_load/ob_direct_load_batch_rows.h"
 #include "storage/direct_load/ob_direct_load_dag_insert_table_row_handler.h"
 #include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
@@ -32,7 +33,7 @@ public:
   int close();
 
   TO_STRING_KV(K_(tablet_id), KP_(insert_tablet_ctx), KP_(dml_row_handler), K_(write_param),
-               KP_(slice_writer), K_(write_ctx), K_(insert_table_result));
+               KP_(slice_writer), K_(write_ctx), K_(insert_table_result), K_(table_stat));
 
 private:
   int init_batch_rows();
@@ -53,6 +54,7 @@ private:
   ObITabletSliceWriter *slice_writer_;
   ObDirectLoadInsertTabletWriteCtx write_ctx_;
   ObDirectLoadInsertTableResult insert_table_result_;
+  ObDDLTableStat table_stat_;
   bool is_inited_;
 };
 

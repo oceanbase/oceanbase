@@ -89,6 +89,7 @@ public:
 
   using ObMacroBlockWriter::close;
   using ObMacroBlockWriter::get_last_macro_seq;
+  using ObMacroBlockWriter::get_merge_block_info;
   OB_INLINE int64_t get_written_row_count() const { return macro_blocks_[current_index_].get_row_count(); }
 public:
   static const int64_t DEFAULT_MACRO_BLOCK_FILL_RATIO = 80;

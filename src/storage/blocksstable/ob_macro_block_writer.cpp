@@ -1199,6 +1199,8 @@ int ObMacroBlockWriter::append_micro_block(ObMicroBlockDesc &micro_block_desc, c
     STORAGE_LOG(WARN, "fail to aggregate micro block", K(ret), K(micro_index_data));
   } else if (OB_FAIL(write_micro_block(micro_block_desc, false))) {
     STORAGE_LOG(WARN, "fail to write micro block", K(ret), K(micro_block_desc));
+  } else {
+    merge_block_info_.multiplexed_micro_count_in_new_macro_++;
   }
 
   if (OB_SUCC(ret) && nullptr != data_aggregator_) {

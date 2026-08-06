@@ -26,6 +26,7 @@ using namespace oceanbase::transaction;
 */
 ObCgMacroBlockWriter::ObCgMacroBlockWriter()
   : is_inited_(false),
+    table_key_(),
     data_desc_(),
     index_builder_(true/*use_double_write_macro_buffer*/),
     ddl_redo_callback_(),
@@ -275,6 +276,7 @@ int ObCgMacroBlockWriter::init(
     }
   }
   if (OB_SUCC(ret)) {
+    table_key_ = table_key;
     is_inited_ = true;
   }
   return ret;
@@ -319,6 +321,7 @@ int ObCgMacroBlockWriter::close(ObDagSliceMacroFlusher *macro_block_flusher)
 void ObCgMacroBlockWriter::reset()
 {
   is_inited_ = false;
+  table_key_.reset();
   data_desc_.reset();
   index_builder_.reset();
   OB_DELETE(ObIMacroBlockFlushCallback, ObMemAttr(MTL_ID(), "ddl_redo_cb"), ddl_redo_callback_);

@@ -769,6 +769,7 @@ ob_set_subtarget(ob_storage ddl
   ddl/ob_cg_block_tmp_file.cpp
   ddl/ob_cg_block_tmp_files_iterator.cpp
   ddl/ob_tablet_slice_writer.cpp
+  ddl/ob_ddl_table_stat.cpp
   ddl/ob_ddl_tablet_context.cpp
   ddl/ob_pipeline.cpp
   ddl/ob_macro_meta_store_manager.cpp

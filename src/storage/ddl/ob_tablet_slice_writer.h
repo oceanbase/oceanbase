@@ -7,6 +7,7 @@
 #define _STORAGE_DDL_OB_TABLET_SLICE_WRITER_
 
 #include "storage/ddl/ob_ddl_struct.h"
+#include "storage/ddl/ob_ddl_table_stat.h"
 #include "share/ob_tablet_autoincrement_param.h"
 #include "storage/direct_load/ob_direct_load_batch_rows.h"
 #include "share/ob_batch_selector.h"
@@ -45,6 +46,7 @@ public:
   virtual int append_batch(const blocksstable::ObBatchDatumRows &batch_rows) = 0;
   virtual int64_t get_row_count() const = 0;
   virtual int close() = 0;
+  virtual int collect_table_stat(ObDDLTableStat &table_stat) const = 0;
   DECLARE_PURE_VIRTUAL_TO_STRING;
 };
 
@@ -59,6 +61,7 @@ public:
   int append_batch(const blocksstable::ObBatchDatumRows &batch_rows);
   int64_t get_row_count() const { return row_count_; }
   int close();
+  int collect_table_stat(ObDDLTableStat &table_stat) const override;
   int close_and_set_remain_block(
     const ObIArray<int64_t> &start_seq,
     ObDDLIndependentDag *ddl_dag);
@@ -71,7 +74,9 @@ public:
   int get_last_macro_seqs(ObIArray<int64_t> &last_macro_seqs);
   const ObTabletID &get_tablet_id() const { return tablet_id_; }
   int64_t get_slice_idx() const { return slice_idx_; }
-  TO_STRING_KV(K(is_inited_), K(tablet_id_), K(slice_idx_), K(storage_column_count_), K(row_count_), KP(storage_schema_), K(cg_macro_block_writers_.count()), K(unique_index_id_));
+  TO_STRING_KV(K(is_inited_), K(tablet_id_), K(slice_idx_), K(with_cs_replica_),
+      K(storage_column_count_), K(row_count_), KP(storage_schema_),
+      K(cg_macro_block_writers_.count()), K(unique_index_id_));
 protected:
   static constexpr int64_t GROUP_WRITE_MACRO_THRESHOLD = common::OB_MAX_LOG_BUFFER_SIZE;
 protected:
@@ -79,6 +84,7 @@ protected:
   ObArenaAllocator allocator_;
   common::ObTabletID tablet_id_;
   int64_t slice_idx_;
+  bool with_cs_replica_;
   int64_t storage_column_count_;
   const ObStorageSchema *storage_schema_;
   ObArray<ObCgMacroBlockWriter *> cg_macro_block_writers_;
@@ -104,6 +110,7 @@ public:
   virtual int append_batch(const blocksstable::ObBatchDatumRows &batch_rows);
   virtual int64_t get_row_count() const { return row_count_; }
   virtual int close();
+  int collect_table_stat(ObDDLTableStat &table_stat) const override;
   TO_STRING_KV(K(is_inited_), KP(ddl_dag_), K(row_count_));
 
 protected:
@@ -123,6 +130,7 @@ public:
   int append_batch(const blocksstable::ObBatchDatumRows &batch_rows) override;
   int close() override;
   int64_t get_row_count() const override { return row_count_; }
+  int collect_table_stat(ObDDLTableStat &table_stat) const override;
   TO_STRING_KV(K_(is_inited), K_(storage_column_count), KP_(macro_block_writer), K_(row_count));
 
 private:

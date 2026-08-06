@@ -212,6 +212,7 @@ int ObWriterArgs::init(const ObWriteMacroParam &param,
           }
         }
         if (OB_SUCC(ret)) {
+          table_key_ = cg_table_key;
           is_inited_ = true;
         } else if (OB_NOT_NULL(ddl_redo_callback_)) {
           common::ob_delete(ddl_redo_callback_);
@@ -226,6 +227,7 @@ int ObWriterArgs::init(const ObWriteMacroParam &param,
 void ObWriterArgs::reset()
 {
   is_inited_ = false;
+  table_key_.reset();
   parallel_idx_ = -1;
   data_desc_.reset();
   index_builder_.reset();

@@ -7,6 +7,7 @@
 #define _OCEANBASE_STORAGE_DDL_OB_DDL_TABLET_CONTEXT_H_
 
 #include "storage/ddl/ob_ddl_struct.h"
+#include "storage/ddl/ob_ddl_table_stat.h"
 #include "storage/ddl/ob_pipeline.h"
 #include "storage/ddl/ob_tablet_slice_writer.h"
 #include "lib/lock/ob_mutex.h"
@@ -222,9 +223,12 @@ public:
   int64_t get_parallel_cnt() const { return fts_parallel_cnt_; }
   void set_start_scn(const share::SCN &start_scn) { start_scn_ = start_scn; }
   const share::SCN &get_start_scn() const { return start_scn_; }
+  int add_table_stat(const ObDDLTableStat &table_stat);
+  const ObDDLTableStat &get_table_stat() const { return table_stat_; }
   TO_STRING_KV(K_(is_inited), K_(ls_id), K_(tablet_id), K_(tablet_param), K_(lob_meta_tablet_id), K_(lob_meta_tablet_param),
                K_(slice_count), K_(table_slice_offset), K_(last_lob_id), K_(last_autoinc_val), K(bucket_count_),
                K(slice_map_.size()), KP(macro_meta_store_mgr_), K_(start_scn));
+
 private:
   int init_vector_index_context(
       const int64_t snapshot_version,
@@ -264,6 +268,10 @@ private:
   // In full direct load, start_scn_ is a mock value
   // In incremental direct load, start_scn_ is set by ObDDLIncStartTask
   share::SCN start_scn_;
+  // Per-tablet online statistics accumulated from row-store and column-store
+  // writers after each writer has aggregated its column group statistics.
+  // read by collect_sql_statistics() to write into __all_table_stat.
+  ObDDLTableStat table_stat_;
 
 public:
   ObMacroMetaStoreManager *macro_meta_store_mgr_;

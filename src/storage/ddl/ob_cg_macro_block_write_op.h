@@ -9,6 +9,7 @@
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "storage/ddl/ob_cg_block_tmp_files_iterator.h"
 #include "storage/ddl/ob_column_clustered_dag.h"
+#include "storage/ddl/ob_ddl_table_stat.h"
 #include "storage/ddl/ob_pipeline.h"
 #include "storage/blocksstable/ob_dag_macro_block_writer.h"
 #include "storage/ddl/ob_writer_args_struct.h"
@@ -37,6 +38,14 @@ public:
   {
     return cg_macro_block_writer_.get_written_row_count();
   }
+  const ObITable::TableKey &get_table_key() const
+  {
+    return writer_args_.table_key_;
+  }
+  const compaction::ObMergeBlockInfo &get_merge_block_info() const
+  {
+    return cg_macro_block_writer_.get_merge_block_info();
+  }
 public:
   static const int64_t MACRO_BLOCK_REUSE_THRESHOLD = 100;
 
@@ -61,6 +70,7 @@ public:
     cg_block_files_iter_arr_(),
     flushed_bitmap_(allocator_),
     cg_macro_block_writer_(),
+    table_stat_(),
     start_seqences_(),
     row_offsets_()
     {
@@ -104,6 +114,7 @@ private:
   ObArray<ObCGBlockFilesIterator *> cg_block_files_iter_arr_;
   common::ObBitmap flushed_bitmap_;
   ObDAGCGMacroBlockWriter cg_macro_block_writer_;
+  ObDDLTableStat table_stat_;
   ObArray<blocksstable::ObMacroDataSeq> start_seqences_;
   ObArray<int64_t> row_offsets_;
 };

@@ -17,7 +17,9 @@ OB_DEF_SERIALIZE(ObOptTableStat) {
               object_type_,
               row_count_,
               avg_row_size_,
-              sample_size_
+              sample_size_,
+              macro_block_num_,
+              micro_block_num_
               );
   return ret;
 }
@@ -30,7 +32,9 @@ OB_DEF_SERIALIZE_SIZE(ObOptTableStat) {
               object_type_,
               row_count_,
               avg_row_size_,
-              sample_size_
+              sample_size_,
+              macro_block_num_,
+              micro_block_num_
               );
   return len;
 }
@@ -43,7 +47,9 @@ OB_DEF_DESERIALIZE(ObOptTableStat) {
               object_type_,
               row_count_,
               avg_row_size_,
-              sample_size_
+              sample_size_,
+              macro_block_num_,
+              micro_block_num_
               );
   return ret;
 }
@@ -63,6 +69,8 @@ int ObOptTableStat::merge_table_stat(const ObOptTableStat &other)
       sample_size_ = row_count_;
     }
     row_count_ += other.get_row_count();
+    macro_block_num_ += other.get_macro_block_num();
+    micro_block_num_ += other.get_micro_block_num();
     stattype_locked_ = other.get_stattype_locked();
     sample_size_ += (other.sample_size_ == 0 ? other.get_row_count() : other.sample_size_);
   }

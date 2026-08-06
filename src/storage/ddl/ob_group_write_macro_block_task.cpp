@@ -305,6 +305,7 @@ int ObGroupCGBlockFileWriteTask::process()
   } else {
     int64_t row_offset = 0;
     ObWriteMacroParam write_param;
+    ObDDLTableStat table_stat;
     HEAP_VAR(ObDAGCGMacroBlockWriter, cg_writer) {
     if (OB_FAIL(ObDDLUtil::fill_writer_param(tablet_id_, slice_idx_, cg_idx_, ddl_dag_, write_param))) {
       LOG_WARN("fill write param failed", K(ret));
@@ -344,6 +345,10 @@ int ObGroupCGBlockFileWriteTask::process()
               if (OB_FAIL(cg_writer.close())) {
                 LOG_WARN("dag cg writer close failed", K(ret));
               } else {
+                if (ObDDLUtil::need_collect_table_stat(
+                        write_param.tablet_param_.with_cs_replica_, cg_writer.get_table_key())) {
+                  table_stat.add_merge_block_info(cg_writer.get_merge_block_info());
+                }
                 write_param.row_offset_ = row_offset;
                 write_param.start_sequence_ = cg_writer.get_last_macro_seq();
                 cg_writer.reset();
@@ -361,6 +366,14 @@ int ObGroupCGBlockFileWriteTask::process()
     if (OB_SUCC(ret)) {
       if (OB_FAIL(cg_writer.close())) {
         LOG_WARN("dag cg writer close failed", K(ret));
+      } else {
+        if (ObDDLUtil::need_collect_table_stat(
+                write_param.tablet_param_.with_cs_replica_, cg_writer.get_table_key())) {
+          table_stat.add_merge_block_info(cg_writer.get_merge_block_info());
+        }
+        if (OB_FAIL(write_param.tablet_context_->add_table_stat(table_stat))) {
+          LOG_WARN("fail to add table stat", K(ret), K(cg_idx_));
+        }
       }
     }
     } // HEAP_VAR

@@ -26,6 +26,7 @@ struct ObWriterArgs
 public:
   ObWriterArgs() :
     is_inited_(false),
+    table_key_(),
     parallel_idx_(-1),
     data_desc_(),
     index_builder_(true/*use_double_write_macro_buffer*/),
@@ -59,11 +60,12 @@ public:
     return writer_type < ObWriterType::MAX_WRITER_TYPE &&
            writer_type > ObWriterType::INVALID_WRITER_TYPE;
   }
-  TO_STRING_KV(K(is_inited_), K(parallel_idx_), K(data_desc_), K(index_builder_),
+  TO_STRING_KV(K(is_inited_), K(table_key_), K(parallel_idx_), K(data_desc_), K(index_builder_),
                K(macro_seq_param_), K(pre_warm_param_), KP(object_cleaner_));
 
 public:
   bool is_inited_;
+  ObITable::TableKey table_key_;
   int64_t parallel_idx_;
   blocksstable::ObWholeDataStoreDesc data_desc_;
   blocksstable::ObSSTableIndexBuilder index_builder_;

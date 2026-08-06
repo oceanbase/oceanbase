@@ -27,7 +27,9 @@ using namespace oceanbase::blocksstable;
 using namespace oceanbase::sql;
 
 ObTabletSliceWriter::ObTabletSliceWriter()
-  : is_inited_(false), allocator_(ObMemAttr(MTL_ID(), "cg_mb_writers")), slice_idx_(-1), storage_column_count_(0), storage_schema_(nullptr), row_count_(0), unique_index_id_(0)
+  : is_inited_(false), allocator_(ObMemAttr(MTL_ID(), "cg_mb_writers")), slice_idx_(-1),
+    with_cs_replica_(false), storage_column_count_(0), storage_schema_(nullptr),
+    row_count_(0), unique_index_id_(0)
 {
 
 }
@@ -42,6 +44,7 @@ void ObTabletSliceWriter::reset()
   is_inited_ = false;
   tablet_id_.reset();
   slice_idx_ = -1;
+  with_cs_replica_ = false;
   storage_column_count_ = 0;
   storage_schema_ = nullptr;
   for (int64_t i = 0; i < cg_macro_block_writers_.count(); ++i) {
@@ -69,6 +72,7 @@ int ObTabletSliceWriter::init(const ObWriteMacroParam &param)
   } else {
     tablet_id_ = param.tablet_id_;
     slice_idx_ = param.slice_idx_;
+    with_cs_replica_ = param.tablet_param_.with_cs_replica_;
     storage_column_count_ = param.ddl_table_schema_.column_items_.count();
     if (is_full_direct_load(param.direct_load_type_) && param.ddl_table_schema_.table_item_.is_unique_index_) {
       unique_index_id_ = param.ddl_table_schema_.table_id_;
@@ -202,11 +206,34 @@ int ObTabletSliceWriter::close()
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < cg_macro_block_writers_.count(); ++i) {
     ObCgMacroBlockWriter *cg_macro_block_writer = cg_macro_block_writers_.at(i);
-    if (OB_FAIL(cg_macro_block_writer->close())) {
+    if (OB_ISNULL(cg_macro_block_writer)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cg macro block writer is null", K(ret), K(i));
+    } else if (OB_FAIL(cg_macro_block_writer->close())) {
       LOG_WARN("fail to close macro block writer", K(ret), KPC(cg_macro_block_writer));
     }
   }
   FLOG_INFO("tablet slice writer close finished", K(ret), KPC(this));
+  return ret;
+}
+
+int ObTabletSliceWriter::collect_table_stat(ObDDLTableStat &table_stat) const
+{
+  int ret = OB_SUCCESS;
+  table_stat.reset();
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret), K(is_inited_));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < cg_macro_block_writers_.count(); ++i) {
+    const ObCgMacroBlockWriter *cg_macro_block_writer = cg_macro_block_writers_.at(i);
+    if (OB_ISNULL(cg_macro_block_writer)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cg macro block writer is null", K(ret), K(i));
+    } else if (ObDDLUtil::need_collect_table_stat(with_cs_replica_, cg_macro_block_writer->get_table_key())) {
+      table_stat.add_merge_block_info(cg_macro_block_writer->get_merge_block_info());
+    }
+  }
   return ret;
 }
 
@@ -395,6 +422,26 @@ int ObTabletSliceIncWriter::close()
     LOG_WARN("ObTabletSliceIncWriter not init", KR(ret), KP(this));
   } else if (OB_FAIL(macro_block_writer_->close())) {
     LOG_WARN("fail to close macro block writer", KR(ret));
+  }
+  return ret;
+}
+
+int ObTabletSliceIncWriter::collect_table_stat(ObDDLTableStat &table_stat) const
+{
+  int ret = OB_SUCCESS;
+  table_stat.reset();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTabletSliceIncWriter not init", KR(ret), KP(this));
+  } else if (OB_ISNULL(macro_block_writer_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("macro block writer is null", KR(ret));
+  } else {
+    // ObTabletSliceIncWriter is allocated only for incremental minor direct load
+    // and owns exactly one row-format MINI SSTable writer. A MINI SSTable is not
+    // a column-store output, so need_collect_table_stat() would always return true;
+    // there are no multiple CG or F+C column-store outputs to filter here.
+    table_stat.add_merge_block_info(macro_block_writer_->get_merge_block_info());
   }
   return ret;
 }
@@ -1666,6 +1713,19 @@ int ObTabletSliceTempFileWriter::close()
       LOG_WARN("fail to add scan chunk", K(ret), K(output_ddl_chunk));
     }
   }
+  return ret;
+}
+
+int ObTabletSliceTempFileWriter::collect_table_stat(ObDDLTableStat &table_stat) const
+{
+  int ret = OB_SUCCESS;
+  table_stat.reset();
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("the ObTabletSliceTempFileWriter has not been initialized", K(ret));
+  }
+  // row_count_ is runtime state of the temp-file writer. The final table stat
+  // is collected from the base CG output by ObDAGCGMacroBlockWriter.
   return ret;
 }
 

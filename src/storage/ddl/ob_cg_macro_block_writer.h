@@ -44,14 +44,18 @@ public:
   bool is_inited() const { return is_inited_; }
   int64_t get_last_macro_seq() const { return macro_block_writer_.get_last_macro_seq(); }
   inline int64_t get_macro_data_size() const { return macro_block_writer_.get_macro_data_size(); }
+  const ObITable::TableKey &get_table_key() const { return table_key_; }
+  const compaction::ObMergeBlockInfo &get_merge_block_info() const { return macro_block_writer_.get_merge_block_info(); }
   int try_finish_last_micro_block() { return macro_block_writer_.try_finish_last_micro_block(); }
-  TO_STRING_KV(K(is_inited_), K(macro_block_writer_), KP(ddl_redo_callback_), K(index_builder_), K(data_desc_));
+  TO_STRING_KV(K(is_inited_), K(table_key_), K(macro_block_writer_),
+      KP(ddl_redo_callback_), K(index_builder_), K(data_desc_));
 
 private:
   DISABLE_COPY_ASSIGN(ObCgMacroBlockWriter);
 
 private:
   bool is_inited_;
+  ObITable::TableKey table_key_;
   blocksstable::ObWholeDataStoreDesc data_desc_;
   blocksstable::ObSSTableIndexBuilder index_builder_;
   ObIMacroBlockFlushCallback *ddl_redo_callback_;

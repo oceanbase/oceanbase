@@ -1741,6 +1741,9 @@ public:
       const ObWriteMacroParam &param,
       ObIAllocator &allocator,
       ObITabletSliceWriter *&tablet_slice_writer);
+  static bool need_collect_table_stat(
+      const bool with_cs_replica,
+      const ObITable::TableKey &table_key);
   static int get_ddl_write_stat(
       const ObWriteMacroParam &param,
       const ObITable::TableKey &table_key,

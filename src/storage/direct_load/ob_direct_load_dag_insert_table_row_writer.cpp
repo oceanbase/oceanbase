@@ -5,6 +5,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_dag_insert_table_row_writer.h"
+#include "storage/ddl/ob_ddl_tablet_context.h"
 #include "storage/direct_load/ob_direct_load_datum_row.h"
 #include "storage/direct_load/ob_direct_load_dml_row_handler.h"
 #include "storage/direct_load/ob_direct_load_vector_utils.h"
@@ -28,6 +29,7 @@ ObDirectLoadDagInsertTableBatchRowDirectWriter::ObDirectLoadDagInsertTableBatchR
     allocator_(ObMemAttr(MTL_ID(), "storage_writer")),
     slice_writer_(nullptr),
     insert_table_result_(),
+    table_stat_(),
     is_inited_(false)
 {
 }
@@ -189,11 +191,17 @@ int ObDirectLoadDagInsertTableBatchRowDirectWriter::switch_slice(const bool is_f
 {
   int ret = OB_SUCCESS;
   // close slice
-  if (nullptr != slice_writer_ && OB_FAIL(slice_writer_->close())) {
-    LOG_WARN("fail to close slice writer", KR(ret));
-  } else {
-    OB_DELETEx(ObITabletSliceWriter, &allocator_, slice_writer_);
-    allocator_.reuse();
+  if (nullptr != slice_writer_) {
+    ObDDLTableStat slice_table_stat;
+    if (OB_FAIL(slice_writer_->close())) {
+      LOG_WARN("fail to close slice writer", KR(ret));
+    } else if (OB_FAIL(slice_writer_->collect_table_stat(slice_table_stat))) {
+      LOG_WARN("fail to collect table stat", KR(ret), KPC(slice_writer_));
+    } else {
+      table_stat_.add(slice_table_stat);
+      OB_DELETEx(ObITabletSliceWriter, &allocator_, slice_writer_);
+      allocator_.reuse();
+    }
   }
   // open slice
   if (OB_FAIL(ret)) {
@@ -270,7 +278,10 @@ int ObDirectLoadDagInsertTableBatchRowDirectWriter::close()
       LOG_WARN("fail to switch slice", KR(ret));
     } else if (OB_FAIL(row_handler_.close())) {
       LOG_WARN("fail to close", KR(ret));
+    } else if (OB_FAIL(write_param_.tablet_context_->add_table_stat(table_stat_))) {
+      LOG_WARN("fail to add table stat", KR(ret), K(table_stat_));
     } else {
+      table_stat_.reset();
       insert_tablet_ctx_->update_insert_table_result(insert_table_result_);
       FLOG_INFO("direct add sstable slice end", K(tablet_id_), K(insert_table_result_));
     }

@@ -7480,6 +7480,16 @@ int ObDDLUtil::alloc_storage_macro_block_writer(
   return ret;
 }
 
+bool ObDDLUtil::need_collect_table_stat(
+    const bool with_cs_replica,
+    const ObITable::TableKey &table_key)
+{
+  // Table-level statistics follow the normal gather-statistics semantics: a pure
+  // column-store table counts only its CO/base CG, while an F+C table counts the
+  // row-store output generated for the primary F replica.
+  return !table_key.is_column_store_sstable() || (!with_cs_replica && table_key.is_co_sstable());
+}
+
 int ObDDLUtil::get_ddl_write_stat(
     const ObWriteMacroParam &param,
     const ObITable::TableKey &table_key,
