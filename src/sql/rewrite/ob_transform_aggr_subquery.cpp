@@ -1222,11 +1222,41 @@ int ObTransformAggrSubquery::transform_from_list(ObDMLStmt &stmt,
 }
 
 /**
- * @brief ObTransformAggrSubquery::do_join_first_transform
- * STEP 1: 找到一个可改写的子查询 (同时确定改写的策略 INNER JON/ OUTER JOIN)
- * STEP 2: 从 STMT 上构造一个 SPJ 查询
- * STEP 3: 在 SPJ 查询上执行改写
- * @return
+ * @brief ObTransformAggrSubquery::transform_with_join_first
+ *
+ * Join-First aggregate subquery pullup: "unfolds" a correlated aggregate subquery
+ * into a JOIN with the outer query, then restores the "one aggregate value per row"
+ * semantics by adding a GROUP BY on the outer table's primary key,
+ * eliminating the per-row execution cost of correlated subqueries.
+ *
+ * The following example query is used throughout the three steps to illustrate the rewrite:
+ *   Original: SELECT t1.c1, (SELECT sum(t2.c2) FROM t2 WHERE t2.c1 = t1.c1) AS s
+ *             FROM t1 WHERE t1.c2 > 0;
+ *
+ * STEP 1: Find rewritable subqueries and determine the JOIN strategy.
+ *         In the example, the outer WHERE t1.c2>0 null-rejects the subquery result
+ *         (outer rows are filtered out when t2 has no match), so INNER JOIN suffices
+ *         to preserve semantic equivalence.
+ *         If no such outer filter exists (e.g., removing WHERE t1.c2>0), LEFT JOIN
+ *         must be used to ensure t1 rows are not lost when t2 has no match
+ *         (sum returns NULL rather than dropping the whole row).
+ *
+ * STEP 2: Determine which stmt to rewrite on (view_stmt).
+ *         In the example, the outer query has no GROUP BY / ROWNUM, so the rewrite
+ *         can be applied directly on the original stmt without constructing a view.
+ *         If the outer query has GROUP BY (e.g., adding GROUP BY t1.c3): when the
+ *         subquery appears in HAVING/SELECT, push the GROUP BY down into a subview
+ *         and apply the rewrite on the outer (post-groupby) level;
+ *         in other cases (including ROWNUM), wrap FROM/WHERE into an inner view first.
+ *
+ * STEP 3: Apply the rewrite on view_stmt, producing:
+ *           SELECT t1.c1, sum(t2.c2) AS s
+ *           FROM t1, t2
+ *           WHERE t1.c2 > 0 AND t2.c1 = t1.c1
+ *           GROUP BY t1.pk;
+ *         Key actions: replace subquery references with aggregate expressions, merge
+ *         the subquery's FROM/WHERE into the outer query, decorrelate join conditions,
+ *         and GROUP BY t1's primary key to restore "one aggregate value per t1 row".
  */
 int ObTransformAggrSubquery::transform_with_join_first(ObDMLStmt *&stmt,
                                                        bool &trans_happened)
@@ -1253,6 +1283,10 @@ int ObTransformAggrSubquery::transform_with_join_first(ObDMLStmt *&stmt,
     ObSelectStmt *view_stmt = NULL;
     ObRawExpr *root_expr = NULL;
     bool post_group_by = false;
+    // STEP 1: In the example, root_expr = the SELECT list item (the entire (...) AS s expression),
+    //         param.ja_query_ref_ = the subquery reference within it (SELECT sum(t2.c2)...),
+    //         param.pullup_flag_ = INNER JOIN (determined by null-reject from outer WHERE t1.c2>0),
+    //         post_group_by = false (root_expr is not after GROUP BY, affects view selection in STEP 2).
     if (OB_FAIL(get_trans_param(*target_stmt, param, root_expr, post_groupby_only, post_group_by))) {
       LOG_WARN("failed to find trans params", K(ret));
     } else if (NULL == root_expr) {
@@ -1261,19 +1295,30 @@ int ObTransformAggrSubquery::transform_with_join_first(ObDMLStmt *&stmt,
                param.limit_value_ > 0 &&
                OB_FAIL(convert_limit_as_aggr(param.ja_query_ref_->get_ref_stmt(),
                                              param))) {
+      // Subquery contains LIMIT N (non-EXISTS case): convert LIMIT to equivalent aggregate form before pullup
       LOG_WARN("fail to transform for limit");
     } else if (OB_FAIL(fill_query_refs(target_stmt, root_expr->has_flag(CNT_ALIAS), param))) {
+      // param.query_refs_ collects all query_refs in target_stmt pointing to the same ref_stmt,
+      // ensuring that when the same subquery is referenced multiple times (e.g., appears twice
+      // in SELECT), all occurrences are replaced in one pass
       LOG_WARN("failed to fill query refs", K(ret));
-    } else if (OB_FAIL(get_trans_view(*target_stmt,
+    }
+    // STEP 2: view_stmt is the target stmt on which the rewrite is actually performed;
+    //         see the three selection paths in the function header comment.
+    else if (OB_FAIL(get_trans_view(*target_stmt,
                                       view_stmt,
                                       root_expr,
                                       post_group_by))) {
       LOG_WARN("failed to get transform view", K(ret));
     } else if (OB_UNLIKELY(!ObOptimizerUtil::find_item(view_stmt->get_subquery_exprs(),
                                                        param.ja_query_ref_))) {
+      // After view_stmt is selected, param.ja_query_ref_ must be present in its subquery_exprs; otherwise the logic is incorrect
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("the subquery is not found in view stmt", K(ret), KPC(view_stmt), KPC(param.ja_query_ref_));
-    } else if (OB_FAIL(do_join_first_transform(*view_stmt, param, root_expr, !join_first_happened_))) {
+      LOG_WARN("the subquery is not found in view stmt", K(ret), KPC(view_stmt), KPC(param.ja_query_ref_), K(post_groupby_only));
+    }
+    // STEP 3: is_first_trans controls whether unique keys need to be collected for view_stmt's tables
+    //         (collected only on the first rewrite)
+    else if (OB_FAIL(do_join_first_transform(*view_stmt, param, root_expr, !join_first_happened_))) {
       LOG_WARN("failed to do join first transform", K(ret));
     } else if (OB_FAIL(ObTransformUtils::add_param_not_null_constraint(*ctx_, param.not_null_const_))) {
       LOG_WARN("failed to add param not null constraints", K(ret));
@@ -1402,7 +1447,7 @@ int ObTransformAggrSubquery::get_trans_param(ObDMLStmt &stmt,
       if (OB_ISNULL(params.at(j))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("transform param is null", K(ret));
-      } else if (OB_FAIL(ObOptimizerUtil::find_item(invalid_list, params.at(j)->ja_query_ref_))) {
+      } else if (ObOptimizerUtil::find_item(invalid_list, params.at(j)->ja_query_ref_)) {
         is_valid = false;
       } else if (post_groupby_only &&
                  OB_FAIL(ObTransformUtils::recursive_find_shared_expr(pre_group_by_exprs,
@@ -1429,6 +1474,17 @@ int ObTransformAggrSubquery::get_trans_param(ObDMLStmt &stmt,
         if (OB_FAIL(check_can_use_outer_join(*params.at(j), is_valid))) {
           LOG_WARN("failed to check use outer join", K(ret));
         }
+      }
+      // create_simple_view only moves filters, scalar subqueries, and vector assignments
+      // into the inner view. Reject candidates that would remain in the upper stmt before
+      // mutating the statement tree.
+      const bool has_groupby = stmt.is_select_stmt() && static_cast<ObSelectStmt &>(stmt).has_group_by();
+      const bool transform_on_inner_view = !stmt.is_select_stmt() || has_rownum || (has_groupby && !post_group_by);
+      const bool push_vector_assign = stmt.is_update_stmt() && expr->has_flag(CNT_ALIAS);
+      if (OB_SUCC(ret) && is_valid && transform_on_inner_view && !is_filter && !push_vector_assign
+          && !params.at(j)->ja_query_ref_->is_scalar()) {
+        is_valid = false;
+        OPT_TRACE("non-scalar subquery cannot be moved into transform view");
       }
       if (OB_SUCC(ret)) {
         if (!is_valid) {
