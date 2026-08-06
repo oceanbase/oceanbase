@@ -1326,7 +1326,7 @@ ObTabletTableFinishBackfillTXTask::ObTabletTableFinishBackfillTXTask()
     tablet_handle_(),
     table_handle_(),
     param_(),
-    allocator_("TableBackfillTX"),
+    allocator_(lib::ObMemAttr(get_ha_mem_tenant_id(), "TableBackfillTX")),
     tablet_merge_ctx_(param_, allocator_),
     tablets_table_mgr_(nullptr),
     child_(nullptr)
@@ -1660,7 +1660,7 @@ ObTabletMdsTableBackfillTXTask::ObTabletMdsTableBackfillTXTask()
     ls_id_(),
     tablet_info_(),
     tablet_handle_(),
-    allocator_("MdsBackfillTX"),
+    allocator_(lib::ObMemAttr(get_ha_mem_tenant_id(), "MdsBackfillTX")),
     merger_arena_("TblBkfilMerger", OB_MALLOC_NORMAL_BLOCK_SIZE),
     tablets_table_mgr_(nullptr)
 {

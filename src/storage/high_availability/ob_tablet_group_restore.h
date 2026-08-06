@@ -102,6 +102,11 @@ public:
   ObCopyTabletRecordExtraInfo extra_info_;
   // the size of data that still reside on backup
   int64_t backup_size_;
+  // Macro range info of every sstable to be copied for this tablet. It is put into the tablet
+  // ctx (which is owned by the dag) instead of the task, because a task is freed as soon as it
+  // finishes (see ObIDag::inner_finish_task) while the macro range info is still referenced by the
+  // sstable copy tasks generated later.
+  ObStorageHACopySSTableInfoMgr copy_sstable_info_mgr_;
 private:
   common::SpinRWLock lock_;
   ObCopyTabletStatus::STATUS status_;
@@ -435,7 +440,6 @@ private:
   bool need_check_seq_;
   int64_t ls_rebuild_seq_;
   common::ObArray<ObITable::TableKey> copy_table_key_array_;
-  ObStorageHACopySSTableInfoMgr copy_sstable_info_mgr_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletRestoreTask);
 };
 

@@ -42,7 +42,8 @@ struct ObPhysicalCopyTaskInitParam final
                K_(tablet_id),
                K_(src_info),
                KPC_(sstable_param),
-               K_(sstable_macro_range_info),
+               K_(copy_table_key),
+               KPC_(sstable_macro_range_info),
                KP_(tablet_copy_finish_task),
                KP_(ls),
                K_(is_leader_restore),
@@ -62,7 +63,11 @@ struct ObPhysicalCopyTaskInitParam final
   common::ObTabletID tablet_id_;
   ObStorageHASrcInfo src_info_;
   const ObMigrationSSTableParam *sstable_param_;
-  ObCopySSTableMacroRangeInfo sstable_macro_range_info_;
+  ObITable::TableKey copy_table_key_;
+  // ATTENTION: it references the macro range info hold by ObStorageHACopySSTableInfoMgr which is
+  // owned by the dag, NO deep copy is made here. It is nullptr when the sstable does not need to
+  // copy any macro block.
+  const ObCopySSTableMacroRangeInfo *sstable_macro_range_info_;
   ObTabletCopyFinishTask *tablet_copy_finish_task_;
   ObLS *ls_;
   bool is_leader_restore_;
@@ -194,11 +199,15 @@ public:
   const ObMacroBlockReuseMgr &get_macro_block_reuse_mgr() const { return macro_block_reuse_mgr_; }
   virtual int process() override;
   OB_INLINE int64_t get_copy_task_concurrent_cnt() const {
-    return sstable_macro_range_info_.copy_macro_range_array_.count();
+    return get_macro_range_count_();
   }
   VIRTUAL_TO_STRING_KV(K("ObSSTableCopyFinishTask"), KP(this), K(copy_ctx_));
 
 private:
+  OB_INLINE int64_t get_macro_range_count_() const {
+    return nullptr == sstable_macro_range_info_
+        ? 0 : sstable_macro_range_info_->copy_macro_range_array_.count();
+  }
   bool is_sstable_should_rebuild_index_(const ObMigrationSSTableParam *sstable_param) const;
   bool is_shared_sstable_without_copy_(const ObMigrationSSTableParam *sstable_param) const;
   int get_cluster_version_(
@@ -275,7 +284,12 @@ private:
   ObPhysicalCopyCtx copy_ctx_;
   common::SpinRWLock lock_;
   const ObMigrationSSTableParam *sstable_param_;
-  ObCopySSTableMacroRangeInfo sstable_macro_range_info_;
+  ObITable::TableKey copy_table_key_;
+  // reference to the macro range info hold by ObStorageHACopySSTableInfoMgr, which is owned by the
+  // dag and outlives this task. nullptr means there is no macro block to copy.
+  const ObCopySSTableMacroRangeInfo *sstable_macro_range_info_;
+  // returned by get_copy_macro_range_array() when sstable_macro_range_info_ is nullptr
+  common::ObArray<ObCopyMacroRangeIdInfo> empty_macro_range_array_;
   int64_t macro_range_info_index_;
   ObTabletCopyFinishTask *tablet_copy_finish_task_;
   storage::ObLS *ls_;

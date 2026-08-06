@@ -134,6 +134,11 @@ public:
   common::ObArenaAllocator tablet_allocator_;
   ObTabletHandle tablet_handle_;
   ObCopyTabletRecordExtraInfo extra_info_; // extra info of server event
+  // Macro range info of every sstable to be copied for this tablet. It is put into the tablet copy
+  // ctx (which is owned by the dag) instead of the task, because a task is freed as soon as it
+  // finishes (see ObIDag::inner_finish_task) while the macro range info is still referenced by the
+  // sstable copy tasks generated later.
+  ObStorageHACopySSTableInfoMgr copy_sstable_info_mgr_;
 private:
   common::SpinRWLock lock_;
   ObCopyTabletStatus::STATUS status_;
@@ -446,7 +451,6 @@ private:
   ObStorageHAServiceCtx ha_svc_ctx_;
   ObCopyTabletCtx *copy_tablet_ctx_;
   common::ObArray<ObITable::TableKey> copy_table_key_array_;
-  ObStorageHACopySSTableInfoMgr copy_sstable_info_mgr_;
 
   DISALLOW_COPY_AND_ASSIGN(ObTabletMigrationTask);
 };

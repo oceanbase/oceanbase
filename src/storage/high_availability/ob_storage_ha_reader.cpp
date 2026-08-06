@@ -29,7 +29,7 @@ ObICopyMacroBlockReader::CopyMacroBlockReadData::CopyMacroBlockReadData()
     is_reuse_macro_block_(false),
     macro_data_(),
     macro_block_id_(),
-    allocator_("CopyMacroRead"),
+    allocator_(lib::ObMemAttr(get_ha_mem_tenant_id(), "CopyMacroRead")),
     macro_meta_(nullptr)
 {
 }
@@ -955,7 +955,7 @@ int ObCopyDDLMacroBlockRestoreReader::get_next_macro_block(ObICopyMacroBlockRead
 ObCopyMacroBlockHandle::ObCopyMacroBlockHandle()
   : is_reuse_macro_block_(false),
     read_handle_(),
-    allocator_("CMacBlockHandle"),
+    allocator_(lib::ObMemAttr(get_ha_mem_tenant_id(), "CMacBlockHandle")),
     macro_meta_(nullptr)
 {
 }
@@ -3430,7 +3430,7 @@ ObDDLCopySSTableMacroRangeObProducer::ObDDLCopySSTableMacroRangeObProducer()
     macro_range_count_(0),
     macro_range_index_(0),
     macro_range_max_marco_count_(0),
-    allocator_("CopyDDLMacro"),
+    allocator_(lib::ObMemAttr(get_ha_mem_tenant_id(), "CopyDDLMacro")),
     tablet_handle_(),
     table_handle_(),
     meta_handle_(),
@@ -3562,7 +3562,10 @@ int ObDDLCopySSTableMacroRangeObProducer::get_next_macro_range_info(
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObStorageHAUtils::make_macro_id_to_datum(macro_block_id_array, buf_, MAX_BUF_SIZE,  macro_range_info.start_macro_block_end_key_))) {
+      // this path writes start_macro_block_end_key_.datums_ directly
+      if (OB_FAIL(macro_range_info.prepare_datum_buffer())) {
+        LOG_WARN("failed to prepare datum buffer", K(ret), K(table_key_));
+      } else if (OB_FAIL(ObStorageHAUtils::make_macro_id_to_datum(macro_block_id_array, buf_, MAX_BUF_SIZE,  macro_range_info.start_macro_block_end_key_))) {
         LOG_WARN("failed to make macro id to datum", K(ret), K(macro_block_id_array), K(table_key_));
       } else {
         macro_range_info.end_macro_block_id_ = end_macro_block_id;
@@ -4398,7 +4401,7 @@ int ObCopyRemoteSSTableMacroBlockRestoreReader::do_read_backup_macro_block_data_
 ObRebuildTabletSSTableInfoObReader::ObRebuildTabletSSTableInfoObReader()
   : is_inited_(false),
     rpc_reader_(),
-    allocator_("RTObReader"),
+    allocator_(lib::ObMemAttr(get_ha_mem_tenant_id(), "RTObReader")),
     is_sstable_iter_end_(true),
     sstable_index_(0),
     sstable_count_(0)

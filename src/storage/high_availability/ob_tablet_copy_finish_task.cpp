@@ -54,7 +54,7 @@ ObTabletCopyFinishTask::ObTabletCopyFinishTask()
     is_inited_(false),
     lock_(common::ObLatchIds::OB_TABLET_COPY_FINISH_TASK_SPIN_RW_LOCK),
     ha_dag_(nullptr),
-    arena_allocator_("TabCopyFinish"),
+    arena_allocator_(lib::ObMemAttr(get_ha_mem_tenant_id(), "TabCopyFinish")),
     minor_tables_handle_(),
     ddl_tables_handle_(),
     inc_major_ddl_tables_handle_(),
