@@ -135,7 +135,6 @@ int ObExprFuncRound::set_res_scale_prec(ObExprTypeCtx &type_ctx, ObExprResType *
                                         ObExprResType &type)
 {
   int ret = OB_SUCCESS;
-  UNUSED(type_ctx);
   ObObjTypeClass res_tc = ob_obj_type_class(res_type);
   const bool is_oracle = lib::is_oracle_mode();
   const bool is_oracle_date = is_oracle && (ObDateTimeTC == res_tc || ObOTimestampTC == res_tc);
@@ -203,7 +202,14 @@ int ObExprFuncRound::set_res_scale_prec(ObExprTypeCtx &type_ctx, ObExprResType *
   }
   if (OB_SUCC(ret)) {
     if (!is_oracle_mode()) {
-      if (ob_is_number_tc(res_type) || ob_is_decimal_int_tc(res_type)) {
+      const ObSQLSessionInfo *session = type_ctx.get_session();
+      share::ObCompatType compat_type = share::COMPAT_MYSQL57;
+      if (OB_ISNULL(session)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("session info is null", K(ret));
+      } else if (OB_FAIL(session->get_compatibility_control(compat_type))) {
+        LOG_WARN("failed to get compatibility control", K(ret));
+      } else if (ob_is_number_tc(res_type) || ob_is_decimal_int_tc(res_type)) {
         ObPrecision tmp_res_prec = -1;
         if (1 == param_num) {
           tmp_res_prec = static_cast<ObPrecision>(params[0].get_precision() -
@@ -216,8 +222,8 @@ int ObExprFuncRound::set_res_scale_prec(ObExprTypeCtx &type_ctx, ObExprResType *
         }
         res_prec = tmp_res_prec >= 0 ? tmp_res_prec : res_prec;
       } else if (ob_is_real_type(res_type)) {
-        if (lib::is_mysql_mode() && 2 == param_num) {
-          // Compatible with MySQL: ROUND(real, D) returns NOT_FIXED_DEC metadata.
+        if (share::COMPAT_MYSQL8 == compat_type && 2 == param_num) {
+          // Compatible with MySQL 8.0: ROUND(real, D) returns NOT_FIXED_DEC metadata.
           res_scale = SCALE_UNKNOWN_YET;
         }
         res_prec = (SCALE_UNKNOWN_YET == res_scale) ?
@@ -228,8 +234,10 @@ int ObExprFuncRound::set_res_scale_prec(ObExprTypeCtx &type_ctx, ObExprResType *
         }
       }
     }
-    type.set_scale(res_scale);
-    type.set_precision(res_prec);
+    if (OB_SUCC(ret)) {
+      type.set_scale(res_scale);
+      type.set_precision(res_prec);
+    }
   }
   return ret;
 }
