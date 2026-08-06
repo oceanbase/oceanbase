@@ -416,7 +416,7 @@ int ObMViewUtils::generate_mview_complete_refresh_sql(
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(generate_mview_insert_hint(
                      insert_hint_str, real_parallelism, execution_id, task_id,
-                     true/*load_data_hint*/, true/*use_pdml_hint*/))) {
+                     true/*load_data_hint*/, true/*use_pdml_hint*/, need_gather_stats))) {
     LOG_WARN("failed to generate mview insert hint", KR(ret));
   } else if (OB_FAIL(extract_columns_from_schema(*container_table_schema, is_oracle_mode, insert_columns, allocator))) {
     LOG_WARN("failed to extract columns from container table schema", KR(ret));
