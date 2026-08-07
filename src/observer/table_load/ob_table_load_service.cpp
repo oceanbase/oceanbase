@@ -713,7 +713,7 @@ int ObTableLoadService::check_support_direct_load_for_columns(
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("direct-load does not support table has geometry column", KR(ret), KPC(column_schema));
         FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has geometry column", tmp_prefix);
-      } else if (column_schema->is_roaringbitmap()) {
+      } else if (!is_px_mode && column_schema->is_roaringbitmap()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("direct-load does not support table has roaringbitmap column", KR(ret), KPC(column_schema));
         FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has roaringbitmap column", tmp_prefix);
