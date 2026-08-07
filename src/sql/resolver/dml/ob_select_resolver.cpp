@@ -8875,30 +8875,47 @@ int ObSelectResolver::check_stmt_has_same_table_name(bool &has_same_name)
     LOG_WARN("select stmt is null", K(ret));
   } else {
     const common::ObIArray<TableItem*> &items=select_stmt->get_table_items();
-    for (int64_t i = 0; OB_SUCC(ret) && !has_same_name && i < items.count(); ++i){
+    for (int64_t i = 0; OB_SUCC(ret) && !has_same_name && i < items.count(); ++i) {
       const TableItem *left = items.at(i);
+      bool is_equal = false;
       if (OB_ISNULL(left)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table item is null", K(ret));
       } else {
-        for (int64_t j = i + 1; OB_SUCC(ret) && !has_same_name && j< items.count(); ++j){
+        for (int64_t j = i + 1; OB_SUCC(ret) && !has_same_name && j< items.count(); ++j) {
           const TableItem *right = items.at(j);
           if (OB_ISNULL(right)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("table item is null", K(ret));
-          } else if (!ObCharset::case_insensitive_equal(left->get_table_name(),
-                                                        right->get_table_name())) {
+          } else if (OB_FAIL(ObResolverUtils::name_case_cmp(session_info_,
+                                                           left->get_object_name(),
+                                                           right->get_object_name(),
+                                                           OB_TABLE_NAME_CLASS,
+                                                           is_equal))) {
+            LOG_WARN("failed to compare table name", K(ret));
+          } else if (!is_equal) {
             //do nothing
-          }
-          else if(lib::is_mysql_mode()) {
-            if(ObCharset::case_insensitive_equal(left->database_name_, right->database_name_)) {
+          } else if(lib::is_mysql_mode()) {
+            if (OB_FAIL(ObResolverUtils::name_case_cmp(session_info_,
+                                                     left->get_object_db_name(),
+                                                     right->get_object_db_name(),
+                                                     OB_TABLE_NAME_CLASS,
+                                                     is_equal))) {
+              LOG_WARN("failed to compare database name", K(ret));
+            } else if (is_equal) {
               has_same_name=true;
             }
-          }
-          else {
-            if(left->database_name_.empty() || right->database_name_.empty()
-              || ObCharset::case_insensitive_equal(left->database_name_, right->database_name_)) {
-                  has_same_name=true;
+          } else {
+            if (left->get_object_db_name().empty() || right->get_object_db_name().empty()) {
+              has_same_name=true;
+            } else if (OB_FAIL(ObResolverUtils::name_case_cmp(session_info_,
+                                                             left->get_object_db_name(),
+                                                             right->get_object_db_name(),
+                                                             OB_TABLE_NAME_CLASS,
+                                                             is_equal))) {
+              LOG_WARN("failed to compare database name", K(ret));
+            } else if (is_equal) {
+              has_same_name=true;
             }
           }
         }
