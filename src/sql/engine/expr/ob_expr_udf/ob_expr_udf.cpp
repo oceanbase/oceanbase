@@ -734,57 +734,61 @@ int ObExprUDF::eval_udf_single(const ObExpr &expr, ObEvalCtx &eval_ctx, ObExprUD
   } else if (found) {
     result = tmp_result;
   } else {
-    bool is_null_self = udf_ctx.get_info()->has_udt_self_param_
-                        && udf_ctx.get_arg_count() > 0
-                        && pl::ObPLComposite::obj_is_null(udf_ctx.get_obj_stack());
-    if (is_null_self) {
-      if (udf_ctx.get_info()->is_called_in_sql_) {
-        result.set_null();
+    try {
+      bool is_null_self = false;
+      ObExprUDFEnvGuard env_guard(eval_ctx, udf_ctx, ret, tmp_result);
+      if (OB_FAIL(process_in_params(udf_ctx, env_guard.get_deep_in_objs()))) {
+        LOG_WARN("failed to process in params", K(ret));
       } else {
-        ret = OB_ERR_SELF_IS_NULL;
-        LOG_WARN("method dispatch on NULL SELF argument is disallowed", K(ret));
-      }
-    } else {
-      try {
-        ObExprUDFEnvGuard env_guard(eval_ctx, udf_ctx, ret, tmp_result);
-        if (OB_FAIL(process_in_params(udf_ctx, env_guard.get_deep_in_objs()))) {
-          LOG_WARN("failed to process in params", K(ret));
+        is_null_self = udf_ctx.get_info()->has_udt_self_param_
+                       && !udf_ctx.get_info()->is_udt_cons_
+                       && udf_ctx.get_arg_count() > 0
+                       && pl::ObPLComposite::obj_is_null(&udf_ctx.get_param_store()->at(0));
+        if (is_null_self) {
+          if (udf_ctx.get_info()->is_called_in_sql_) {
+            result.set_null();
+          } else {
+            ret = OB_ERR_SELF_IS_NULL;
+            LOG_WARN("method dispatch on NULL SELF argument is disallowed", K(ret));
+          }
         } else if (OB_FAIL(GCTX.pl_engine_->execute(eval_ctx.exec_ctx_,
-                                                    udf_ctx.get_allocator(),
-                                                    udf_ctx.get_package_id(),
-                                                    udf_ctx.get_info()->udf_id_,
-                                                    udf_ctx.get_info()->subprogram_path_,
-                                                    *udf_ctx.get_param_store(),
-                                                    udf_ctx.get_info()->nocopy_params_,
-                                                    tmp_result,
-                                                    udf_ctx.get_pl_execute_arg(),
-                                                    nullptr,
-                                                    false,
-                                                    true,
-                                                    udf_ctx.get_info()->loc_,
-                                                    udf_ctx.get_info()->is_called_in_sql_,
-                                                    udf_ctx.get_info()->dblink_id_,
-                                                    nullptr))) {
+                                                   udf_ctx.get_allocator(),
+                                                   udf_ctx.get_package_id(),
+                                                   udf_ctx.get_info()->udf_id_,
+                                                   udf_ctx.get_info()->subprogram_path_,
+                                                   *udf_ctx.get_param_store(),
+                                                   udf_ctx.get_info()->nocopy_params_,
+                                                   tmp_result,
+                                                   udf_ctx.get_pl_execute_arg(),
+                                                   nullptr,
+                                                   false,
+                                                   true,
+                                                   udf_ctx.get_info()->loc_,
+                                                   udf_ctx.get_info()->is_called_in_sql_,
+                                                   udf_ctx.get_info()->dblink_id_,
+                                                   nullptr))) {
           LOG_WARN("failed to eval udf use pl engine", K(ret));
         }
-        // Out Params will rewrite to Parent ParamStore, so this function must called after ~ObExprUDFEnvGuard
-        if (OB_SUCC(ret) && OB_FAIL(process_out_params(udf_ctx, eval_ctx))) {
-          LOG_WARN("failed to process out params", K(ret));
-        }
-        if (OB_SUCC(ret) && OB_FAIL(process_return_value(result, tmp_result, eval_ctx, udf_ctx, env_guard))) {
-          LOG_WARN("failed to process return value", K(ret), K(result), K(tmp_result));
-        }
-        if (OB_SUCC(ret) && OB_FAIL(adjust_return_value(result, expr.obj_meta_, udf_ctx.get_allocator(), udf_ctx))) {
-          LOG_WARN("failed to adjust return value", K(ret), K(result));
-        }
-      } catch(...) {
-        LOG_ERROR("UDF eval resource not released by now, must be bug here !!!!");
-        throw;
       }
-      if (OB_READ_NOTHING == ret && udf_ctx.get_info()->is_called_in_sql_ && lib::is_oracle_mode()) {
-        result.set_null();
-        ret = OB_SUCCESS;
+      // Out Params will rewrite to Parent ParamStore, so this function must called after ~ObExprUDFEnvGuard
+      if (OB_SUCC(ret) && !is_null_self && OB_FAIL(process_out_params(udf_ctx, eval_ctx))) {
+        LOG_WARN("failed to process out params", K(ret));
       }
+      if (OB_SUCC(ret) && !is_null_self
+          && OB_FAIL(process_return_value(result, tmp_result, eval_ctx, udf_ctx, env_guard))) {
+        LOG_WARN("failed to process return value", K(ret), K(result), K(tmp_result));
+      }
+      if (OB_SUCC(ret) && !is_null_self
+          && OB_FAIL(adjust_return_value(result, expr.obj_meta_, udf_ctx.get_allocator(), udf_ctx))) {
+        LOG_WARN("failed to adjust return value", K(ret), K(result));
+      }
+    } catch(...) {
+      LOG_ERROR("UDF eval resource not released by now, must be bug here !!!!");
+      throw;
+    }
+    if (OB_READ_NOTHING == ret && udf_ctx.get_info()->is_called_in_sql_ && lib::is_oracle_mode()) {
+      result.set_null();
+      ret = OB_SUCCESS;
     }
     // add result cache
     if (OB_SUCC(ret) && OB_FAIL(udf_ctx.add_result_to_cache(result))) {
