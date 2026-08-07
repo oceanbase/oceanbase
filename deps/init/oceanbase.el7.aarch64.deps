@@ -58,7 +58,7 @@ devdeps-kafka-2.12.1-52026012814.el7.aarch64.rpm
 obdevtools-binutils-2.30-12022100413.el7.aarch64.rpm
 obdevtools-bison-2.4.1-12022100413.el7.aarch64.rpm
 obdevtools-ccache-3.7.12-12022100417.el7.aarch64.rpm
-obdevtools-cmake-3.30.3-52024111819.el7.aarch64.rpm
+obdevtools-cmake-4.2.7-32026080610.el7.aarch64.rpm
 obdevtools-flex-2.5.35-12022100417.el7.aarch64.rpm
 obdevtools-gcc-12.3.0-32024122017.el7.aarch64.rpm
 obdevtools-llvm-17.0.6-72025060300.el7.aarch64.rpm
