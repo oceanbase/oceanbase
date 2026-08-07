@@ -152,7 +152,8 @@ public:
                               const DependencyTable &dep_schema_objs,
                               int64_t merge_version,
                               bool &match,
-                              bool is_check_package_state = false);
+                              bool is_check_package_state = false,
+                              bool check_null_table_schema = true);
 
   int read_dll_from_disk(ObSQLSessionInfo *session_info,
                           schema::ObSchemaGetterGuard &schema_guard,

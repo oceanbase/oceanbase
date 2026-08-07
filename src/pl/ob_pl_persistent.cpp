@@ -513,7 +513,8 @@ int ObRoutinePersistentInfo::check_dep_schema(ObSchemaGetterGuard &schema_guard,
                                               const DependencyTable &dep_schema_objs,
                                               int64_t merge_version,
                                               bool &match,
-                                              bool is_check_package_state)
+                                              bool is_check_package_state,
+                                              bool check_null_table_schema)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = OB_INVALID_ID;
@@ -551,8 +552,12 @@ int ObRoutinePersistentInfo::check_dep_schema(ObSchemaGetterGuard &schema_guard,
                                                       table_schema))) {
         LOG_WARN("failed to get table schema", K(ret), K(dep_schema_objs.at(i)));
       } else if (nullptr == table_schema) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get an unexpected null table schema", K(dep_schema_objs.at(i).object_id_));
+        if (check_null_table_schema) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get an unexpected null table schema", K(dep_schema_objs.at(i).object_id_));
+        } else { //dbms_utility.pl_recompile does not check table schema, so treat as outdated
+          match = false;
+        }
       } else if (table_schema->is_index_table()) {
         // do nothing
       } else if (table_schema->get_schema_version() <= merge_version) {
@@ -579,13 +584,15 @@ template int ObRoutinePersistentInfo::check_dep_schema<ObPLDependencyTable>(ObSc
                                           const ObPLDependencyTable &dep_schema_objs,
                                           int64_t merge_version,
                                           bool &match,
-                                          bool is_check_package_state);
+                                          bool is_check_package_state,
+                                          bool check_null_table_schema);
 
 template int ObRoutinePersistentInfo::check_dep_schema<sql::DependenyTableStore>(ObSchemaGetterGuard &schema_guard,
                                           const sql::DependenyTableStore &dep_schema_objs,
                                           int64_t merge_version,
                                           bool &match,
-                                          bool is_check_package_state);
+                                          bool is_check_package_state,
+                                          bool check_null_table_schema);
 
 int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
                                             schema::ObSchemaGetterGuard &schema_guard,
