@@ -64,8 +64,16 @@ inline int ObExprTimeDiff::calc_result_type2(ObExprResType &type,
   //e.g. select timediff(tableA.left,tableB.right) from tableA,tableB
   //when left and right are both STRING type(varchar)
   //the scale of result type may be 6, always.
+
+  // NOTE: comments above are hard to implement in current OB. One option is to take the max
+  // literal fsp and add plan-cache constraints to avoid wrong scale reuse,
+  // so we won’t keep MySQL compatibility here.
   int ret = common::OB_SUCCESS;
   common::ObScale scale = static_cast<common::ObScale>(common::max(left.get_scale(), right.get_scale()));
+  if (scale < 0) {
+    scale = common::MAX_SCALE_FOR_TEMPORAL;
+  }
+
   if (scale > common::MAX_SCALE_FOR_TEMPORAL) {
     scale = common::MAX_SCALE_FOR_TEMPORAL;
   }
@@ -82,6 +90,7 @@ inline int ObExprTimeDiff::calc_result_type2(ObExprResType &type,
   }
   type.set_time();
   type.set_scale(scale);
+
   UNUSED(type_ctx);
   return ret;
 }

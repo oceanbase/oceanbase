@@ -48,3 +48,8 @@ select timediff("13:34:23.01","13:34:23.02");
 connection default;
 --echo bugfix: dima 2026032000114767332
 select timediff("", '12:00:00') from t1;
+
+--echo bugfix: dima 2026073000117880179
+CREATE TABLE t2 AS SELECT CAST(TIMEDIFF('10:04:15.013','09:30:20.477') AS CHAR) AS c;
+DESC t2;
+DROP TABLE t2;
