@@ -2841,10 +2841,22 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
 {
   int ret = OB_SUCCESS;
   ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
+  const ObTableSchema *index_data_table_schema = table_schema_;
+  ObString mv_container_table_name;
   uint64_t tenant_data_version = 0;
-  if (OB_ISNULL(session_info_) || OB_ISNULL(alter_table_stmt)) {
+  if (OB_ISNULL(session_info_) || OB_ISNULL(alter_table_stmt) || OB_ISNULL(table_schema_)) {
     ret = OB_ERR_UNEXPECTED;
-    SQL_RESV_LOG(WARN, "session info should not be null", K(session_info_), K(alter_table_stmt));
+    SQL_RESV_LOG(WARN, "unexpected null", K(ret), K(session_info_), K(alter_table_stmt), K(table_schema_));
+  } else if (SEARCH_KEY == index_keyname_
+             && table_schema_->is_materialized_view()
+             && OB_FAIL(get_mv_container_table(table_schema_->get_tenant_id(),
+                                                table_schema_->get_data_table_id(),
+                                                index_data_table_schema,
+                                                mv_container_table_name))) {
+    LOG_WARN("fail to get materialized view container table", KR(ret), KPC(table_schema_));
+    if (OB_TABLE_NOT_EXIST == ret) {
+      ret = OB_ERR_UNEXPECTED;
+    }
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
     LOG_WARN("get tenant data version failed", K(ret));
   } else {
@@ -2950,7 +2962,9 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("tenant data version is less than 4.3.1, multivalue index not supported", K(ret), K(tenant_data_version));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.1, multivalue index");
-        } else if (index_keyname_ == SEARCH_KEY && (!table_schema_->is_heap_organized_table() || table_schema_->is_table_with_clustering_key())) {
+        } else if (SEARCH_KEY == index_keyname_
+                   && (!index_data_table_schema->is_heap_organized_table()
+                       || index_data_table_schema->is_table_with_clustering_key())) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("Non-heap organized tables is not support Search index yet", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "Search index for a non-heap organized table is");

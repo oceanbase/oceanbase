@@ -12099,6 +12099,52 @@ int ObResolverUtils::check_schema_valid_for_mview(const ObTableSchema &table_sch
   return ret;
 }
 
+int ObResolverUtils::check_heap_organized_mview_container_schema(const ObTableSchema &table_schema,
+                                                                  const uint64_t tenant_data_version)
+{
+  int ret = OB_SUCCESS;
+  const bool is_heap_organized_table = table_schema.is_heap_organized_table();
+  const ObColumnSchemaV2 *rowkey_column = NULL;
+  uint64_t rowkey_column_id = OB_INVALID_ID;
+  if (OB_UNLIKELY(is_heap_organized_table && DATA_VERSION_4_3_5_1 > tenant_data_version)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("heap organized materialized view is not supported before data version 4.3.5.1", KR(ret),
+             K(tenant_data_version));
+  } else if (OB_UNLIKELY(is_heap_organized_table
+                         && (!table_schema.is_table_without_pk()
+                             || table_schema.is_table_with_clustering_key()))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("heap organized materialized view cannot have primary key or clustering key", KR(ret),
+             K(table_schema));
+  } else if (OB_UNLIKELY(is_heap_organized_table
+                         && (ObTableType::USER_TABLE != table_schema.get_table_type()
+                             || !table_schema.mv_container_table()
+                             || !table_schema.is_table_with_hidden_pk_column()
+                             || TPKM_TABLET_SEQ_PK != table_schema.get_table_pk_mode()
+                             || 1 != table_schema.get_rowkey_column_num()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected heap organized materialized view schema", KR(ret), K(table_schema));
+  } else if (is_heap_organized_table
+             && OB_FAIL(table_schema.get_rowkey_info().get_column_id(0, rowkey_column_id))) {
+    LOG_WARN("fail to get heap organized materialized view rowkey", KR(ret), K(table_schema));
+  } else if (OB_UNLIKELY(is_heap_organized_table
+                         && OB_HIDDEN_PK_INCREMENT_COLUMN_ID != rowkey_column_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected heap organized materialized view rowkey", KR(ret), K(rowkey_column_id));
+  } else if (is_heap_organized_table
+             && OB_ISNULL(rowkey_column = table_schema.get_column_schema(rowkey_column_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("heap organized materialized view rowkey column is null", KR(ret), K(rowkey_column_id));
+  } else if (OB_UNLIKELY(is_heap_organized_table
+                         && (!rowkey_column->is_hidden()
+                             || rowkey_column->is_nullable()
+                             || 1 != rowkey_column->get_rowkey_position()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected heap organized materialized view rowkey column", KR(ret), KPC(rowkey_column));
+  }
+  return ret;
+}
+
 bool ObResolverUtils::is_external_pseudo_column(const ObRawExpr &expr)
 {
   bool ret = false;

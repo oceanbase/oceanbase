@@ -1048,6 +1048,9 @@ public:
 
   static int64_t get_mysql_max_partition_num(const uint64_t tenant_id);
   static int check_schema_valid_for_mview(const share::schema::ObTableSchema &table_schema);
+  static int check_heap_organized_mview_container_schema(
+      const share::schema::ObTableSchema &table_schema,
+      const uint64_t tenant_data_version);
   static int generate_subschema_id(ObSQLSessionInfo &session_info,
                                    const common::ObIArray<common::ObString> &extended_type_info,
                                    uint16_t &subschema_id);

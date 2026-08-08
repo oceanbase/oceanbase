@@ -55,8 +55,14 @@ public:
                                          uint64_t &compat_version);
 
 private:
+  static int resolve_mview_table_organization(const ParseNode *table_option_node,
+                                               const ParseNode *mv_primary_key_node,
+                                               ObTableOrganizationMode &organization_mode,
+                                               ObCreateViewResolver &resolver);
   static int resolve_materialized_view_container_table(ParseNode *partition_node,
                                                        ParseNode *mv_primary_key_node,
+                                                       const ObTableOrganizationMode organization_mode,
+                                                       const uint64_t tenant_data_version,
                                                        ObTableSchema &container_table_schema,
                                                        ObSEArray<ObConstraint,4>& csts,
                                                        ObCreateViewResolver &resolver);

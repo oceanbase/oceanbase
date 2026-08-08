@@ -52,6 +52,7 @@ int ObCreateMaterializedViewHelper::generate_container_table_schema_()
     LOG_WARN("new view schema is null", KR(ret));
   } else {
     SMART_VAR(ObTableSchema, container_table_schema) {
+    uint64_t tenant_data_version = OB_INVALID_VERSION;
     if (arg_.mv_ainfo_.count() >= 2) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("container table should be less than two", KR(ret), K(arg_.mv_ainfo_.count()));
@@ -68,6 +69,11 @@ int ObCreateMaterializedViewHelper::generate_container_table_schema_()
       if (OB_SUCC(ret)) {
         if (OB_FAIL(container_table_schema.assign(arg_.mv_ainfo_.at(i).container_table_schema_))) {
           LOG_WARN("fail to assign index schema", KR(ret));
+        } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
+          LOG_WARN("fail to get min data version", KR(ret), K_(tenant_id));
+        } else if (OB_FAIL(ObResolverUtils::check_heap_organized_mview_container_schema(
+                       container_table_schema, tenant_data_version))) {
+          LOG_WARN("fail to check materialized view container schema", KR(ret), K(container_table_schema));
         } else if (OB_FAIL(databuff_printf(buf, OB_MAX_TABLE_NAME_LENGTH, "__mv_container_%ld", new_view_schema_->get_table_id()))) {
           LOG_WARN("fail to print table name", KR(ret));
         } else if (OB_FAIL(container_table_schema.set_table_name(buf))) {

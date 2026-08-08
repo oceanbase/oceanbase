@@ -1787,7 +1787,9 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
       && !is_no_field_options(sql_mode) && !is_no_table_options(sql_mode)) {
     if (is_oracle_mode) {
       //do not print table organization when in oracle mode
-    } else if (data_version >= DATA_VERSION_4_3_5_1 && !strict_compat_ && !table_schema.mv_container_table()) {
+    } else if (data_version >= DATA_VERSION_4_3_5_1
+               && !strict_compat_
+               && (!table_schema.mv_container_table() || table_schema.is_heap_organized_table())) {
       if (OB_FAIL(databuff_printf(buf, buf_len, pos, "ORGANIZATION %s ",
                                   table_schema.is_heap_organized_table() ? "HEAP" : "INDEX"))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print default charset", KR(ret), K(table_schema));

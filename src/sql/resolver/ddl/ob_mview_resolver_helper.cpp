@@ -26,9 +26,65 @@ namespace oceanbase
 namespace sql
 {
 
+int ObMViewResolverHelper::resolve_mview_table_organization(const ParseNode *table_option_node,
+                                                            const ParseNode *mv_primary_key_node,
+                                                            ObTableOrganizationMode &organization_mode,
+                                                            ObCreateViewResolver &resolver)
+{
+  int ret = OB_SUCCESS;
+  organization_mode = TOM_INDEX_ORGANIZED;
+  if (NULL == table_option_node) {
+    // do nothing
+  } else if (OB_ISNULL(resolver.session_info_)
+             || OB_UNLIKELY(T_TABLE_OPTION_LIST != table_option_node->type_
+                            || (0 < table_option_node->num_child_ && NULL == table_option_node->children_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected table option or session info", KR(ret), K(resolver.session_info_),
+             K(table_option_node->type_), K(table_option_node->num_child_), K(table_option_node->children_));
+  } else {
+    const ParseNode *option_node = NULL;
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_option_node->num_child_; ++i) {
+      if (OB_ISNULL(option_node = table_option_node->children_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null table option node", KR(ret), K(i), K(table_option_node->num_child_));
+      } else if (T_ORGANIZATION != option_node->type_) {
+        // do nothing
+      } else if (resolver.session_info_->is_oracle_compatible()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("oracle mode should not specify organization type", KR(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "specify organization type in oracle mode");
+      } else if (OB_UNLIKELY(1 != option_node->num_child_)
+                 || OB_ISNULL(option_node->children_)
+                 || OB_ISNULL(option_node->children_[0])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected organization option node", KR(ret), K(i), K(option_node->num_child_),
+                 K(option_node->children_), K(option_node));
+      } else if (OB_UNLIKELY(T_ORGANIZATION_INDEX != option_node->children_[0]->type_
+                             && T_ORGANIZATION_HEAP != option_node->children_[0]->type_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected organization type", KR(ret), K(i), K(option_node->children_[0]->type_));
+      } else if (T_ORGANIZATION_INDEX == option_node->children_[0]->type_) {
+        organization_mode = TOM_INDEX_ORGANIZED;
+      } else if (T_ORGANIZATION_HEAP == option_node->children_[0]->type_) {
+        organization_mode = TOM_HEAP_ORGANIZED;
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(TOM_HEAP_ORGANIZED == organization_mode && NULL != mv_primary_key_node)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("primary key on heap organized materialized view is not supported", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "primary key on heap organized materialized view is");
+  }
+  return ret;
+}
+
 
 int ObMViewResolverHelper::resolve_materialized_view_container_table(ParseNode *partition_node,
                                                                      ParseNode *mv_primary_key_node,
+                                                                     const ObTableOrganizationMode organization_mode,
+                                                                     const uint64_t tenant_data_version,
                                                                      ObTableSchema &container_table_schema,
                                                                      ObSEArray<ObConstraint,4>& csts,
                                                                      ObCreateViewResolver &resolver)
@@ -45,6 +101,7 @@ int ObMViewResolverHelper::resolve_materialized_view_container_table(ParseNode *
     LOG_WARN("fail to resolve_partition_option", KR(ret));
   } else if (OB_FAIL(resolver.set_table_option_to_schema(container_table_schema))) {
     SQL_RESV_LOG(WARN, "set table option to schema failed", KR(ret));
+  } else if (OB_FALSE_IT(container_table_schema.set_table_organization_mode(organization_mode))) {
   } else if (NULL != mv_primary_key_node
              && OB_FAIL(resolve_primary_key_node(*mv_primary_key_node, container_table_schema, resolver))) {
     LOG_WARN("failed to resolve primary key node", K(ret));
@@ -67,6 +124,11 @@ int ObMViewResolverHelper::resolve_materialized_view_container_table(ParseNode *
     container_table_schema.set_collation_type(resolver.collation_type_);
     container_table_schema.set_charset_type(resolver.charset_type_);
     container_table_schema.set_mv_container_table(IS_MV_CONTAINER_TABLE);
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObResolverUtils::check_heap_organized_mview_container_schema(
+                 container_table_schema, tenant_data_version))) {
+    LOG_WARN("fail to check materialized view container schema", KR(ret), K(container_table_schema));
   }
   return ret;
 }
@@ -698,6 +760,7 @@ int ObMViewResolverHelper::resolve_materialized_view(const ParseNode &parse_tree
     ObMVAdditionalInfo *mv_ainfo = nullptr;
     ObSEArray<ObConstraint, 4> &csts = stmt->get_create_table_arg().constraint_list_;
     uint64_t tenant_data_version = 0;
+    ObTableOrganizationMode organization_mode = TOM_INDEX_ORGANIZED;
     if (OB_FAIL(GET_MIN_DATA_VERSION(resolver.session_info_->get_effective_tenant_id(),
                                      tenant_data_version))) {
       LOG_WARN("get tenant data version failed", KR(ret));
@@ -706,6 +769,12 @@ int ObMViewResolverHelper::resolve_materialized_view(const ParseNode &parse_tree
     } else if (OB_FAIL(resolver.resolve_table_options(
                    parse_tree.children_[ObCreateViewResolver::TABLE_OPTION_NODE], false))) {
       LOG_WARN("fail to resolve table options", KR(ret));
+    } else if (OB_FAIL(resolve_mview_table_organization(
+                   parse_tree.children_[ObCreateViewResolver::TABLE_OPTION_NODE],
+                   mv_primary_key_node,
+                   organization_mode,
+                   resolver))) {
+      LOG_WARN("fail to resolve materialized view table organization", KR(ret));
     } else if (OB_ISNULL(mv_ainfo = create_arg.mv_ainfo_.alloc_place_holder())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("Allocate ObMVAdditionalInfo from array error", K(ret));
@@ -714,6 +783,8 @@ int ObMViewResolverHelper::resolve_materialized_view(const ParseNode &parse_tree
     } else if (OB_FAIL(resolve_materialized_view_container_table(
                    parse_tree.children_[ObCreateViewResolver::PARTITION_NODE],
                    mv_primary_key_node,
+                   organization_mode,
+                   tenant_data_version,
                    mv_ainfo->container_table_schema_, csts, resolver))) {
       LOG_WARN("fail do resolve for materialized view", K(ret));
     } else if (OB_FAIL(load_mview_dep_session_vars(*resolver.session_info_, select_stmt,
