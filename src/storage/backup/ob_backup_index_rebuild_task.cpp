@@ -526,7 +526,12 @@ int ObBackupMacroIndexMergeFinishTask::feed_prev_backup_set_to_sort_()
             LOG_WARN("failed to add item", K(ret), K(macro_index));
           }
           if (OB_SUCC(ret) && OB_FAIL(iter->next())) {
-            LOG_WARN("failed to get next", K(ret));
+            if (OB_ITER_END == ret) {
+              ret = OB_SUCCESS;
+              break;
+            } else {
+              LOG_WARN("failed to get next", K(ret));
+            }
           }
         }
       }
@@ -1428,7 +1433,6 @@ ObBackupIndexRebuildPrepareTask::ObBackupIndexRebuildPrepareTask()
       ls_backup_ctx_(NULL),
       provider_(NULL),
       task_mgr_(NULL),
-      index_kv_cache_(NULL),
       report_ctx_(),
       compressor_type_()
 {}
@@ -1438,7 +1442,7 @@ ObBackupIndexRebuildPrepareTask::~ObBackupIndexRebuildPrepareTask()
 
 int ObBackupIndexRebuildPrepareTask::init(const ObLSBackupDataParam &param, const ObBackupIndexLevel &index_level,
     ObLSBackupCtx *ls_backup_ctx, ObIBackupTabletProvider *provider, ObBackupMacroBlockTaskMgr *task_mgr,
-    ObBackupIndexKVCache *kv_cache, const ObBackupReportCtx &report_ctx, const ObCompressorType &compressor_type)
+    const ObBackupReportCtx &report_ctx, const ObCompressorType &compressor_type)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -1455,7 +1459,6 @@ int ObBackupIndexRebuildPrepareTask::init(const ObLSBackupDataParam &param, cons
     ls_backup_ctx_ = ls_backup_ctx;
     provider_ = provider;
     task_mgr_ = task_mgr;
-    index_kv_cache_ = kv_cache;
     compressor_type_ = compressor_type;
     is_inited_ = true;
   }
@@ -1468,7 +1471,6 @@ int ObBackupIndexRebuildPrepareTask::process()
   int tmp_ret = OB_SUCCESS;
   bool need_report_error = false;
   DEBUG_SYNC(BEFORE_BACKUP_BUILD_INDEX);
-  const int64_t start_ts = ObTimeUtility::current_time();
   ObArray<ObBackupIndexRebuildWorkItem> work_items;
   ObBackupIndexMergeParam merge_param;
   LOG_INFO("start backup index rebuild prepare", K_(index_level), K_(param));
@@ -1516,8 +1518,6 @@ int ObBackupIndexRebuildPrepareTask::process()
     if (0 == param_.ls_id_.id() || need_report_error) {
       REPORT_TASK_RESULT(this->get_dag()->get_dag_id(), ret);
     }
-    const int64_t cost_us = ObTimeUtility::current_time() - start_ts;
-    UNUSED(cost_us);
   }
   return ret;
 }
@@ -1534,6 +1534,7 @@ int ObBackupIndexRebuildPrepareTask::check_all_tablet_released_()
   } else {
     bool all_released = ls_backup_ctx_->tablet_holder_.is_empty();
     if (!all_released) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("tablet handle not released", K(ret));
       if (OB_SUCCESS != (tmp_ret = ls_backup_ctx_->tablet_stat_.print_tablet_stat())) {
         LOG_WARN("failed to print tablet stat", K(ret), K(tmp_ret));

@@ -110,7 +110,7 @@ int ObTabletLogicMacroIdReader::init(const common::ObTabletID &tablet_id, const 
     ret = OB_INIT_TWICE;
     LOG_WARN("cannot init twice", K(ret));
   } else if (!tablet_id.is_valid() || !tablet_handle.is_valid() || !table_key.is_valid() || !sstable.is_valid() ||
-             batch_size < 0) {
+             batch_size <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid argument", K(ret), K(tablet_id), K(table_key), K(batch_size));
   } else if (FALSE_IT(datum_range_.set_whole_range())) {
@@ -145,7 +145,7 @@ int ObTabletLogicMacroIdReader::get_next_batch(common::ObIArray<ObBackupMacroBlo
     ObDataMacroBlockMeta data_macro_block_meta;
     while (OB_SUCC(ret)) {
       data_macro_block_meta.reset();
-      if (id_array.count() >= MACRO_BLOCK_BATCH_SIZE) {
+      if (id_array.count() >= batch_size_) {
         break;
       } else if (OB_FAIL(meta_iter_.get_next(data_macro_block_meta))) {
         if (OB_ITER_END == ret) {
@@ -160,7 +160,6 @@ int ObTabletLogicMacroIdReader::get_next_batch(common::ObIArray<ObBackupMacroBlo
         macro_id.macro_block_id_ = data_macro_block_meta.get_macro_id();
         macro_id.nested_offset_ = data_macro_block_meta.nested_offset_;
         macro_id.nested_size_ = data_macro_block_meta.nested_size_;
-        macro_id.is_ss_ddl_other_block_ = false;
         cur_total_row_count_ += data_macro_block_meta.val_.row_count_;
         macro_id.absolute_row_offset_ = cur_total_row_count_ - 1;
         if (OB_FAIL(id_array.push_back(macro_id))) {
@@ -386,7 +385,7 @@ int ObMacroBlockBackupReader::get_other_macro_block_size_(const blocksstable::Ob
 /* ObMultiMacroBlockBackupReader */
 
 ObMultiMacroBlockBackupReader::ObMultiMacroBlockBackupReader()
-    : is_inited_(false), read_size_(0), reader_idx_(0), reader_type_(), macro_list_(), readers_()
+    : is_inited_(false), reader_idx_(0), reader_type_(), macro_list_(), readers_()
 {}
 
 ObMultiMacroBlockBackupReader::~ObMultiMacroBlockBackupReader()
@@ -414,12 +413,11 @@ int ObMultiMacroBlockBackupReader::init(const uint64_t tenant_id,
         LOG_WARN("failed to alloc macro block reader", K(ret), K(reader_type));
       } else if (OB_FAIL(readers_.push_back(reader))) {
         LOG_WARN("failed to push back reader", K(ret));
-        reader->~ObIMacroBlockBackupReader();
+        ObLSBackupFactory::free(reader);
       }
     }
     if (OB_SUCC(ret)) {
       reader_idx_ = 0;
-      read_size_ = 0;
       is_inited_ = true;
     }
   }
@@ -453,6 +451,7 @@ void ObMultiMacroBlockBackupReader::reset()
       ObLSBackupFactory::free(readers_.at(i));
     }
   }
+  readers_.reset();
   is_inited_ = false;
   LOG_INFO("free multi macro block backup reader");
 }
@@ -597,8 +596,8 @@ int ObTabletMetaBackupReader::get_meta_data(blocksstable::ObBufferReader &buffer
   char *buf = NULL;
   int64_t pos = 0;
   if (IS_NOT_INIT) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("cannot init twice", K(ret));
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet meta backup reader do not init", K(ret));
   } else if (OB_ISNULL(tablet_handle_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet handle is null", K(ret));
@@ -684,7 +683,6 @@ int ObSSTableMetaBackupReader::get_meta_data(blocksstable::ObBufferReader &buffe
     LOG_WARN("failed to check all sstable macro block ready", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < sstable_array_.count(); ++i) {
-      int64_t pos = 0;
       ObSSTable *sstable_ptr = sstable_array_.at(i).get_sstable();
       if (OB_ISNULL(sstable_ptr)) {
         ret = OB_ERR_UNEXPECTED;

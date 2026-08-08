@@ -13,7 +13,6 @@
 #include "share/backup/ob_backup_connectivity.h"
 #include "storage/restore/ob_tenant_restore_info_mgr.h"
 #include "share/backup/ob_backup_validate_table_operator.h"
-#include "src/storage/restore/ob_tenant_restore_info_mgr.h"
 
 namespace oceanbase
 {

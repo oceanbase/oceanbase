@@ -106,7 +106,6 @@ const int64_t OB_MAX_BACKUP_DEST_COUNT = 256;
 const int64_t OB_BACKUP_MAX_FILE_NAME_LENGTH = 256;
 const int64_t OB_MAX_BACKUP_PIECE_NUM = 1000000;
 const int64_t OB_MAX_BACKUP_DELETE_IDS_COUNT = 32;
-const int64_t OB_MAX_FILES_PER_VALIDATE_GROUP = 20;  // Maximum files per validation group for basic validate
 const int64_t OB_MAX_TABLETS_PER_VALIDATE_GROUP = 50;  // Maximum tablets per validation group for physical validate
 const int64_t MIN_LAG_TARGET_FOR_S3 = 60 * 1000 * 1000UL/*60s*/;
 const int64_t OB_BACKUP_MACRO_BLOCK_LIST_MAX_FILE_SIZE = 64L * 1024L * 1024L; // 64MB

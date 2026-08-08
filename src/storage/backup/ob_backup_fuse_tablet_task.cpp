@@ -373,7 +373,6 @@ int ObStartBackupTabletGroupFuseTask::record_server_event_()
 ObFinishBackupTabletGroupFuseTask::ObFinishBackupTabletGroupFuseTask()
   : ObITask(TASK_TYPE_BACKUP_FINISH_FUSE),
     is_inited_(false),
-    dag_net_(NULL),
     group_ctx_(NULL)
 {
 }
@@ -400,7 +399,6 @@ int ObFinishBackupTabletGroupFuseTask::init()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net should not be NULL", K(ret), KP(dag_net));
   } else {
-    dag_net_ = dag_net;
     group_ctx_ = fuse_dag_net->get_fuse_ctx();
     is_inited_ = true;
     LOG_INFO("succeed init finish tablet group fuse task");
@@ -471,53 +469,6 @@ int ObFinishBackupTabletGroupFuseTask::abort_extern_writer_()
     LOG_WARN("failed to abort extern writer", K(ret));
   } else {
     LOG_INFO("abort extern tablet meta writer", K(ret));
-  }
-  return ret;
-}
-
-int ObFinishBackupTabletGroupFuseTask::generate_init_dag_()
-{
-  int ret = OB_SUCCESS;
-  ObTenantDagScheduler *scheduler = NULL;
-  ObInitialBackupTabletGroupFuseDag *initial_dag = NULL;
-  ObFinishBackupTabletGroupFuseDag  *finish_dag  = NULL;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("finish tablet group task do not init", K(ret));
-  } else if (ObDagType::DAG_TYPE_FINISH_BACKUP_FUSE != this->get_dag()->get_type()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dag type is not finish backup fuse", K(ret), "dag_type", this->get_dag()->get_type());
-  } else if (OB_ISNULL(finish_dag = static_cast<ObFinishBackupTabletGroupFuseDag *>(this->get_dag()))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("finish tablet group fuse dag should not be NULL", K(ret), KP(finish_dag));
-  } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else {
-    if (OB_FAIL(scheduler->alloc_dag(initial_dag))) {
-      LOG_WARN("failed to alloc initial fuse dag ", K(ret));
-    } else if (OB_FAIL(initial_dag->init(dag_net_))) {
-      LOG_WARN("failed to init initial fuse dag", K(ret));
-    } else if (OB_FAIL(this->get_dag()->add_child(*initial_dag))) {
-      LOG_WARN("failed to add initial fuse dag as chiild", K(ret), KPC(initial_dag));
-    } else if (OB_FAIL(initial_dag->create_first_task())) {
-      LOG_WARN("failed to create first task", K(ret));
-    } else if (OB_FAIL(scheduler->add_dag(initial_dag))) {
-      LOG_WARN("failed to add initial fuse dag", K(ret), K(*initial_dag));
-      if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-        LOG_WARN("Fail to add task", K(ret));
-        ret = OB_EAGAIN;
-      }
-    } else {
-      LOG_INFO("start create tablet group initial fuse dag", K(ret));
-      initial_dag = NULL;
-    }
-
-    if (OB_NOT_NULL(initial_dag) && OB_NOT_NULL(scheduler)) {
-      scheduler->free_dag(*initial_dag);
-      initial_dag = NULL;
-    }
   }
   return ret;
 }
@@ -667,7 +618,6 @@ int ObBackupTabletFuseTask::check_tablet_reorganized_(
 {
   int ret = OB_SUCCESS;
   share::ObLSID tmp_ls_id;
-  int64_t tablet_count = 0;
   if (OB_ISNULL(sql_proxy_)) {
     ret = OB_ERR_UNDEFINED;
     LOG_WARN("sql proxy should not be null", K(ret));

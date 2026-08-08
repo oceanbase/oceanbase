@@ -435,7 +435,6 @@ int ObBackupMetaIndexStore::get_tablet_meta_index_(const ObBackupMetaKey &meta_k
   ObBufferReader buffer_reader;
   int64_t offset = trailer_.last_block_offset_;
   int64_t length = trailer_.last_block_length_;
-  int64_t current_level = trailer_.tree_height_;
   ObBackupFileType backup_file_type = BACKUP_FILE_TYPE_MAX;
   if (OB_UNLIKELY(!meta_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -505,7 +504,6 @@ int ObBackupMetaIndexStore::find_index_lower_bound_(
   } else {
     ObCompareBackupMetaIndexTabletId compare;
     typedef common::ObArray<ObBackupMetaIndex>::const_iterator Iter;
-    bool found = false;
     Iter iter = std::lower_bound(index_list.begin(), index_list.end(), meta_key, compare);
     if (iter != index_list.end()) {
       if (iter->meta_key_ != meta_key) {
@@ -733,7 +731,6 @@ int ObBackupMacroBlockIndexStore::inner_get_macro_block_range_index_(
   ObBufferReader buffer_reader;
   int64_t offset = trailer_.last_block_offset_;
   int64_t length = trailer_.last_block_length_;
-  int64_t current_level = trailer_.tree_height_;
   const ObBackupFileType &backup_file_type = BACKUP_MACRO_RANGE_INDEX_FILE;
   if (OB_UNLIKELY(!logic_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -747,7 +744,6 @@ int ObBackupMacroBlockIndexStore::inner_get_macro_block_range_index_(
     ObBackupMacroRangeIndexIndex index_index;
     ObArray<ObBackupMacroRangeIndexIndex> index_index_list;
     ObKVCacheHandle handle;
-    int64_t round = 0;
     while (OB_SUCC(ret)) {
       buffer_reader.assign(NULL, 0);
       handle.reset();
@@ -1298,35 +1294,6 @@ int ObBackupTenantIndexRetryIDGetter::get_max_retry_id(int64_t &retry_id)
     LOG_WARN("failed to get tenant index file name", K(ret));
   } else if (OB_FAIL(get_ls_info_data_info_dir_path_(backup_path))) {
     LOG_WARN("failed to get dir path", K(ret));
-  } else if (OB_FAIL(list_files_(backup_path, backup_dest_.get_storage_info(), file_name_prefix, id_list))) {
-    LOG_WARN("failed to list files", K(ret), K(backup_path), K(backup_dest_), K(file_name_prefix));
-  } else if (OB_FAIL(find_largest_id_(id_list, retry_id))) {
-    LOG_WARN("failed to find largest id", K(ret), K(id_list));
-  } else {
-    LOG_INFO("get max tenant index retry id", K_(backup_dest), K_(backup_data_type),
-        K_(turn_id), K_(is_restore), K_(is_macro_index), K_(is_sec_meta), K(retry_id));
-  }
-  return ret;
-}
-
-int ObBackupTenantIndexRetryIDGetter::get_max_retry_id_v_4_1_x(int64_t &retry_id)
-{
-  int ret = OB_SUCCESS;
-  retry_id = 0;
-  ObArray<int64_t> id_list;
-  const char *file_name_prefix = NULL;
-  share::ObBackupPath backup_path;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("retry id getter not init", K(ret));
-  } else if (OB_FAIL(get_tenant_index_file_name_(file_name_prefix))) {
-    LOG_WARN("failed to get tenant index file name", K(ret));
-  } else if (is_restore_ &&
-      OB_FAIL(share::ObBackupPathUtilV_4_1::get_ls_info_data_info_dir_path(backup_dest_,
-                                                                              turn_id_,
-                                                                              backup_path))) {
-    LOG_WARN("failed to get ls info data info dir path",
-             K(ret), K_(backup_dest), K_(backup_data_type), K_(backup_set_desc), K_(turn_id));
   } else if (OB_FAIL(list_files_(backup_path, backup_dest_.get_storage_info(), file_name_prefix, id_list))) {
     LOG_WARN("failed to list files", K(ret), K(backup_path), K(backup_dest_), K(file_name_prefix));
   } else if (OB_FAIL(find_largest_id_(id_list, retry_id))) {

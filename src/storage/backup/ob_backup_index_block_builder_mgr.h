@@ -121,7 +121,6 @@ public:
   int get_sstable_index_builder(const storage::ObITable::TableKey &table_key,
       blocksstable::ObSSTableIndexBuilder *&index_builder);
   int get_sstable_merge_result(const storage::ObITable::TableKey &table_key, blocksstable::ObSSTableMergeRes *&merge_res);
-  int get_sstable_index_builders(common::ObIArray<blocksstable::ObSSTableIndexBuilder *> &builders);
   int free_sstable_index_builder(const storage::ObITable::TableKey &table_key);
   int close_sstable_index_builder(const storage::ObITable::TableKey &table_key, ObIODevice *device_handle);
   bool is_major_compaction_mview_dep_tablet() const { return is_major_compaction_mview_dep_tablet_; }

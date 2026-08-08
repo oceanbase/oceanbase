@@ -60,10 +60,6 @@ public:
       const ObTableSchema &table_schema,
       const ObTablet &tablet,
       bool &is_cs_replica);
-  // is local ls cs replica
-  static int check_local_is_cs_replica(
-      const share::ObLSID &ls_id,
-      bool &is_cs_replica);
   static int check_has_cs_replica(
       const share::ObLSID &ls_id,
       bool &has_column_store_replica);
@@ -119,8 +115,6 @@ public:
   static void diagnose_trim_default_value_checksum_error(
       const ObSSTable &row_sstable,
       const ObStorageSchema &storage_schema);
-public:
-  static const int64_t DEFAULT_CHECK_LS_REPLICA_LOCATION_TIMEOUT = 10 * 1000 * 1000L; // 10s
 };
 
 class ObCSReplicaStorageSchemaGuard

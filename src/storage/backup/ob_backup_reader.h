@@ -118,7 +118,6 @@ public:
 private:
   typedef common::hash::ObCuckooHashMap<blocksstable::ObLogicMacroBlockId, blocksstable::MacroBlockId> MacroBlockIdMap;
   typedef MacroBlockIdMap::const_iterator MacroBlockIDIterator;
-  static const int64_t MACRO_BLOCK_BATCH_SIZE = 128;
 
 private:
   common::ObSpinLock lock_;
@@ -210,7 +209,6 @@ private:
 
 private:
   bool is_inited_;
-  int64_t read_size_;
   int64_t reader_idx_;
   ObMacroBlockReaderType reader_type_;
   common::ObArray<ObBackupMacroBlockId> macro_list_;

@@ -342,7 +342,6 @@ public:
   int init(const share::ObBackupDest &backup_dest, const share::ObBackupDataType &backup_data_type, const int64_t turn_id, const bool is_restore,
       const bool is_macro_index, const bool is_sec_meta);
   int get_max_retry_id(int64_t &retry_id);
-  int get_max_retry_id_v_4_1_x(int64_t &retry_id);
 
 private:
   int get_ls_info_data_info_dir_path_(share::ObBackupPath &backup_path);

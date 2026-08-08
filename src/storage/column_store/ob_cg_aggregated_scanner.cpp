@@ -62,7 +62,7 @@ int ObCGAggregatedScanner::init(
   } else if (OB_UNLIKELY(nullptr == iter_param.aggregate_exprs_ ||
                          0 == iter_param.aggregate_exprs_->count())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected aggregated expr count", K(ret), KPC(iter_param.output_exprs_));
+    LOG_WARN("Unexpected aggregated expr count", K(ret), KPC(iter_param.aggregate_exprs_));
   } else if (OB_FAIL(check_need_access_data(iter_param, access_ctx))) {
     LOG_WARN("Fail to check need access data", K(ret));
   }

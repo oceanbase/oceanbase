@@ -50,9 +50,6 @@ public:
 
 private:
   int parse_storage_device_type_(const common::ObString &storage_type_prefix);
-  int check_need_realloc_(bool &need_realloc);
-  int pre_alloc_block_array_();
-  int realloc_block_array_();
   int get_min_unused_block_(int64_t &idx);
   int convert_block_id_to_addr_(const int64_t idx, ObIOFd &block_id);
   int get_offset_and_length_(const int64_t idx, int64_t &offset, int64_t &length);
@@ -60,7 +57,6 @@ private:
   int get_opt_value_(ObIODOpts *opts, const char* key, int64_t& value);
 
 private:
-  static const int64_t DEFAULT_BLOCK_COUNT = 4096;
   static const int64_t DEFAULT_ALLOC_BLOCK_SIZE = OB_DEFAULT_MACRO_BLOCK_SIZE;
   static const char *FIRST_ID_STR;
   static const char *SECOND_ID_STR;
@@ -70,10 +66,6 @@ private:
   bool is_inited_;
   bool is_opened_;
   lib::ObMutex mutex_;
-  int64_t used_block_cnt_;
-  int64_t total_block_cnt_;
-  int64_t block_size_;
-  int64_t *block_list_;
   int64_t max_alloced_block_idx_;
   int64_t backup_set_id_;
   share::ObBackupDataType backup_data_type_;

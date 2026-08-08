@@ -178,3 +178,5 @@ storage_unittest(test_sstable_log_ts_range_cut test_sstable_log_ts_range_cut.cpp
 storage_unittest(test_cg_bitmap column_store/test_cg_bitmap.cpp)
 storage_unittest(test_co_sstable column_store/test_co_sstable.cpp)
 storage_unittest(test_co_sstable_rows_filter column_store/test_co_sstable_rows_filter.cpp)
+storage_unittest(test_co_merge_log column_store/test_co_merge_log.cpp)
+storage_unittest(test_co_merge_dag_state column_store/test_co_merge_dag_state.cpp)

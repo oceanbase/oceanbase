@@ -135,7 +135,6 @@ public:
 private:
   bool is_inited_;
   ObBackupComplementLogCtx ctx_;
-  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupComplementLogDagNet);
 };
 
@@ -243,8 +242,6 @@ private:
   int get_src_backup_piece_dir_(const share::ObLSID &ls_id, const ObTenantArchivePieceAttr &piece_attr, share::ObBackupPath &backup_path);
 
 private:
-  int write_format_file_();
-  int generate_format_desc_(share::ObBackupFormatDesc &format_desc);
   int transform_and_copy_meta_file_(const ObTenantArchivePieceAttr &piece_attr);
   // ls_file_info
   int copy_ls_file_info_(const ObTenantArchivePieceAttr &piece_attr, const share::ObArchiveStore &src_store, const share::ObArchiveStore &dest_store);
@@ -337,7 +334,6 @@ private:
   bool is_inited_;
   ObMutex mutex_;
   int64_t idx_;
-  share::ObLSID ls_id_;
   ObBackupComplementLogCtx *ctx_;
   common::ObArray<ObBackupPieceFile> file_list_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupLSLogFinishTask);

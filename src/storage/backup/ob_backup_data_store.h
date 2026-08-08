@@ -416,8 +416,7 @@ public:
       ObBackupDataTabletToLSDesc &tablet_to_ls_info);
   int read_tablet_list(const share::ObBackupDataType &type, const int64_t turn_id, const share::ObLSID &ls_id,
       ObIArray<common::ObTabletID> &tablet_ids);
-  int read_deleted_tablet_info(const ObLSID &ls_id, ObIArray<ObTabletID> &deleted_tablet_ids);
-  
+
   // write tenant backup set infos
   int write_tenant_backup_set_infos(const ObTenantBackupSetInfosDesc &tenant_backup_set_infos);
 
@@ -451,7 +450,6 @@ public:
   int get_max_sys_ls_retry_id(
       const share::ObBackupPath &backup_path, const share::ObLSID &ls_id, const int64_t turn_id, int64_t &retry_id);
   int write_root_key_info(const uint64_t tenant_id);
-  int read_root_key_info(const uint64_t tenant_id);
 
   int read_base_tablet_list(const share::ObLSID &ls_id, const int64_t dest_id, ObIArray<common::ObTabletID> &tablet_id_array);
 // 4.1 interface to get tablet to ls

@@ -604,10 +604,7 @@ int ObCOMergeLogBufferReader::read_next_piece(ObCOMergeLogPieceHeader *&header)
     header = reinterpret_cast<ObCOMergeLogPieceHeader *>(current());
     pos_ += (sizeof(ObCOMergeLogPieceHeader) + header->length_);
     block_read_piece_count_++;
-    if (OB_ISNULL(header)) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "header is null", K(ret), K(pos_));
-    } else if (pos_ > current_block_.block_max_readable_size()) {
+    if (pos_ > current_block_.block_max_readable_size()) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "read piece pos is out of block", K(ret), K(pos_), K(*header), K(*current_block_.header_));
     }
@@ -635,6 +632,7 @@ int ObCOMergeLogFileMgr::init(
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc row file fds", K(ret));
   } else if (FALSE_IT(row_files_ = static_cast<ObCOMergeLogFile**>(buf))) {
+  } else if (FALSE_IT(MEMSET(row_files_, 0, sizeof(ObCOMergeLogFile*) * row_file_count_))) {
   } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.alloc_dir(MTL_ID(), dir_id_))) {
     LOG_WARN("failed to alloc dir", K(ret));
   } else if (OB_FAIL(log_file_.open(dir_id_, file_block_size))) {

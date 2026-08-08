@@ -19,7 +19,6 @@ namespace oceanbase
 {
 namespace compaction
 {
-class ObPartitionMergeIter;
 struct ObCOMergeLogBuffer;
 struct ObMergeLog final {
 public:
@@ -124,14 +123,6 @@ public:
   // when mergelog.op_ = REPLAY, row = nullptr, vector_store = nullptr
   virtual int get_next_log(ObMergeLog &mergelog, const ObMergeVectorStore *&vector_store, const blocksstable::ObDatumRow *&row) = 0;
   virtual int close() = 0;
-  // for unittest / debug: expose major-merge-helper allocated iterators (major sstable) to check iterator type.
-  // NOTE: this API appends into `iters`; caller should pass an empty array.
-  // default: not supported (e.g. file reader mode).
-  virtual int get_major_sstable_merge_iters_for_check(common::ObIArray<ObPartitionMergeIter *> &iters)
-  {
-    UNUSED(iters);
-    return OB_NOT_SUPPORTED;
-  }
   OB_INLINE bool is_inited() const { return is_inited_; }
   VIRTUAL_TO_STRING_KV(K_(is_inited));
 protected:
@@ -491,7 +482,6 @@ public:
   void set_readable() { readable_ = true; }
 
   OB_INLINE bool is_inited() const { return is_inited_; }
-  OB_INLINE int64_t get_block_count() const { return log_file_.get_block_count(); } // for unittest
   OB_INLINE int64_t get_row_file_count() const { return row_file_count_; }
   OB_INLINE bool is_readable() const { return readable_; } // use this flag to skip build retry
   TO_STRING_KV(K_(is_inited), K_(readable), K_(dir_id),

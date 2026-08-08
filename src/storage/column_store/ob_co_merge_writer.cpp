@@ -195,7 +195,7 @@ int ObCOMergeWriter::move_iters_next()
   ObCOMajorMergeIter *iter = nullptr;
   for (int64_t i = 0; OB_SUCC(ret) && i < iters_.count(); ++i) {
     if (OB_ISNULL(iter = iters_.at(i))) {
-      // do thing // empty major
+      // do nothing // empty major
     } else if (OB_ISNULL(iter->iter_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected null iter", K(ret), K(i), K(iters_));
@@ -410,8 +410,8 @@ int ObCOMergeWriter::replay_mergelog(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid row", K(ret), K(mergelog), K(vector_store), K(row));
   } else if (nullptr != row) {
-    if (ObMergeLog::INSERT == mergelog.op_ && row->row_flag_.is_delete()) {
-    } else if (OB_FAIL(replay_single_mergelog(mergelog, *row))) {
+    if ((ObMergeLog::INSERT != mergelog.op_ || !row->row_flag_.is_delete())
+        && OB_FAIL(replay_single_mergelog(mergelog, *row))) {
       LOG_WARN("failed to replay merge log", K(ret), K(mergelog), KPC(row));
     }
   } else { // nullptr != vector_store
@@ -478,8 +478,8 @@ int ObCOMergeWriter::replay_range_mergelog(const ObMergeLog &mergelog)
   int ret = OB_SUCCESS;
   bool finish = false;
   int64_t cmp_ret = 0;
-  bool skip_curr_row = false; // no used
-  blocksstable::ObDatumRow row; // no used
+  bool skip_curr_row = false; // out param of compare, never set for range mergelog
+  blocksstable::ObDatumRow row; // out param of compare, only used to check whether to open range for UPDATE in cg
   ObCOMajorMergeIter *merge_iter = nullptr;
   if (OB_FAIL(get_curr_major_iter(mergelog, merge_iter))) {
     LOG_WARN("failed to get curr major iter", K(ret), K(mergelog));
@@ -551,7 +551,6 @@ int ObCOMergeWriter::append_iter_curr_row_or_range(
   } else {
     const ObMacroBlockDesc *macro_desc = nullptr;
     const ObMicroBlockData *micro_block_data = nullptr;
-    bool need_rewrite = false;
 
     if (OB_FAIL(iter->get_curr_macro_block(macro_desc, micro_block_data))) {
       STORAGE_LOG(WARN, "Failed to get current micro block", K(ret), KPC(iter));
@@ -1115,8 +1114,7 @@ int ObCOMergeRowWriter::replay_single_mergelog(const ObMergeLog &mergelog, const
   const blocksstable::ObDatumRow *tmp_row = nullptr;
   if (OB_FAIL(prepare_replay_row(mergelog, row, tmp_row, skip_replay))) {
     LOG_WARN("failed to prepare replay row", K(ret), K(mergelog), K(row));
-  } else if (skip_replay) {
-  } else if (OB_FAIL(ObCOMergeWriter::replay_single_mergelog(mergelog, *tmp_row))) {
+  } else if (!skip_replay && OB_FAIL(ObCOMergeWriter::replay_single_mergelog(mergelog, *tmp_row))) {
     STORAGE_LOG(WARN, "failed to replay mergelog", K(ret), K(mergelog), K(*tmp_row));
   }
 

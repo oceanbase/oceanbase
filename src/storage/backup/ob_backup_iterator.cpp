@@ -403,7 +403,6 @@ int ObIBackupIndexIterator::extract_backup_file_id_(
   } else {
     const int64_t suffix_length = file_name.length() - (prefix.length() + 1);
     const char *suffix_ptr = file_name.ptr() + prefix.length() + 1;
-    ObString suffix_str = ObString(suffix_length, suffix_ptr);
     char *end_ptr = NULL;
     if (OB_FAIL(ob_strtoll(suffix_ptr, end_ptr, tmp_file_id))) {
       LOG_WARN("failed to convert str to ll", K(suffix_ptr), K(tmp_file_id));
@@ -940,7 +939,7 @@ int ObBackupMacroRangeIndexIterator::get_macro_range_index_list_(
     if (OB_UNLIKELY(!buffer_reader.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("get invalid args", K(ret), K(buffer_reader));
-    } else if (buffer_reader.remain() <= 0 || buffer_reader.remain() < sizeof(ObBackupCommonHeader)) {
+    } else if (buffer_reader.remain() < sizeof(ObBackupCommonHeader)) {
       ret = OB_BUF_NOT_ENOUGH;
       LOG_WARN("buffer reader is not enough", K(ret), K(buffer_reader));
     } else if (OB_FAIL(buffer_reader.get(common_header))) {
@@ -953,12 +952,11 @@ int ObBackupMacroRangeIndexIterator::get_macro_range_index_list_(
     } else if (BACKUP_BLOCK_MARCO_RANGE_INDEX_INDEX == common_header->data_type_) {
       meet_end_ = true;
       LOG_INFO("macro range index meet end", K_(file_length), K_(read_offset), KPC(common_header));
-    } else if (common_header->data_length_ + common_header->align_length_ > buffer_reader.remain()) {
+    } else if (common_header->data_length_ < 0
+        || common_header->data_length_ > buffer_reader.remain()
+        || common_header->align_length_ > buffer_reader.remain() - common_header->data_length_) {
       ret = OB_BUF_NOT_ENOUGH;
       LOG_WARN("backup data has incomplete data, skip it", K(ret), K(*common_header), K(buffer_reader.remain()));
-    } else if (common_header->data_length_ > buffer_reader.remain()) {
-      ret = OB_BUF_NOT_ENOUGH;
-      LOG_WARN("buffer reader not enough", K(ret));
     } else if (OB_FAIL(common_header->check_data_checksum(buffer_reader.current(), common_header->data_length_))) {
       LOG_WARN("failed to check common header data checksum", K(ret), K(*common_header));
     } else {
@@ -1718,7 +1716,7 @@ int ObBackupOrderedMacroBlockIndexIterator::get_macro_block_index_list_(
     if (OB_UNLIKELY(!buffer_reader.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("get invalid args", K(ret), K(buffer_reader));
-    } else if (buffer_reader.remain() <= 0 || buffer_reader.remain() < sizeof(ObBackupCommonHeader)) {
+    } else if (buffer_reader.remain() < sizeof(ObBackupCommonHeader)) {
       ret = OB_BUF_NOT_ENOUGH;
       LOG_WARN("buffer reader is not enough", K(ret), K(buffer_reader));
     } else if (OB_FAIL(buffer_reader.get(common_header))) {
@@ -1731,12 +1729,11 @@ int ObBackupOrderedMacroBlockIndexIterator::get_macro_block_index_list_(
     } else if (BACKUP_BLOCK_MACRO_BLOCK_INDEX_INDEX == common_header->data_type_) {
       meet_end_ = true;
       LOG_INFO("macro block index meet end", K_(file_length), K_(read_offset), KPC(common_header));
-    } else if (common_header->data_zlength_ + common_header->align_length_ > buffer_reader.remain()) {
+    } else if (common_header->data_zlength_ < 0
+        || common_header->data_zlength_ > buffer_reader.remain()
+        || common_header->align_length_ > buffer_reader.remain() - common_header->data_zlength_) {
       ret = OB_BUF_NOT_ENOUGH;
       LOG_WARN("backup data has incomplete data, skip it", K(ret), K(*common_header), K(buffer_reader.remain()));
-    } else if (common_header->data_zlength_ > buffer_reader.remain()) {
-      ret = OB_BUF_NOT_ENOUGH;
-      LOG_WARN("buffer reader not enough", K(ret));
     } else if (OB_FAIL(common_header->check_data_checksum(buffer_reader.current(), common_header->data_zlength_))) {
       LOG_WARN("failed to check common header data checksum", K(ret), K(*common_header));
     } else {
@@ -2031,7 +2028,7 @@ int ObBackupTenantOrderedMetaIndexIterator::get_meta_index_list_(
     if (OB_UNLIKELY(!buffer_reader.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("get invalid args", K(ret), K(buffer_reader));
-    } else if (buffer_reader.remain() <= 0 || buffer_reader.remain() < sizeof(ObBackupCommonHeader)) {
+    } else if (buffer_reader.remain() < sizeof(ObBackupCommonHeader)) {
       ret = OB_BUF_NOT_ENOUGH;
       LOG_WARN("buffer reader is not enough", K(ret), K(buffer_reader));
     } else if (OB_FAIL(buffer_reader.get(common_header))) {
@@ -2044,12 +2041,11 @@ int ObBackupTenantOrderedMetaIndexIterator::get_meta_index_list_(
     } else if (BACKUP_BLOCK_META_INDEX_INDEX == common_header->data_type_) {
       meet_end_ = true;
       LOG_INFO("meta block index meet end", K_(file_length), K_(read_offset), KPC(common_header));
-    } else if (common_header->data_zlength_ + common_header->align_length_ > buffer_reader.remain()) {
+    } else if (common_header->data_zlength_ < 0
+        || common_header->data_zlength_ > buffer_reader.remain()
+        || common_header->align_length_ > buffer_reader.remain() - common_header->data_zlength_) {
       ret = OB_BUF_NOT_ENOUGH;
       LOG_WARN("backup data has incomplete data, skip it", K(ret), K(*common_header), K(buffer_reader.remain()));
-    } else if (common_header->data_zlength_ > buffer_reader.remain()) {
-      ret = OB_BUF_NOT_ENOUGH;
-      LOG_WARN("buffer reader not enough", K(ret));
     } else if (OB_FAIL(common_header->check_data_checksum(buffer_reader.current(), common_header->data_zlength_))) {
       LOG_WARN("failed to check common header data checksum", K(ret), K(*common_header));
     } else {
@@ -2213,9 +2209,8 @@ int ObExternBackupTabletMetaIterator::inner_do_next_()
         is_iter_end_ = true;
         break;
       } else {
-        LOG_WARN("failed to do next", K(ret));
+        LOG_WARN("failed to get next", K(ret));
       }
-      LOG_WARN("failed to get next", K(ret));
     } else {
       LOG_INFO("backup tablet meta index do next", K_(idx));
       idx_++;
@@ -2246,8 +2241,8 @@ int ObBackupTabletMetaIndexIterator::init(const share::ObBackupDest &backup_dest
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("is not init", K(ret));
+    ret = OB_INIT_TWICE;
+    LOG_WARN("backup tablet meta index iterator init twice", K(ret));
   } else if (!backup_dest.is_valid() || OB_INVALID_ID == tenant_id || !backup_set_desc.is_valid()
       || !ls_id.is_valid() || turn_id <= 0 || retry_id < 0) {
     ret = OB_INVALID_ARGUMENT;

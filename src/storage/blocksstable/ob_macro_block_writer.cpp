@@ -1210,22 +1210,6 @@ int ObMacroBlockWriter::append_micro_block(ObMicroBlockDesc &micro_block_desc, c
   return ret;
 }
 
-int ObMacroBlockWriter::check_data_macro_block_need_merge(const ObMacroBlockDesc &macro_desc, bool &need_merge) const
-{
-  int ret = OB_SUCCESS;
-  need_merge = false;
-
-  if (!macro_desc.is_valid_with_macro_meta()) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid macro desc", K(ret), K(macro_desc));
-  } else if (macro_desc.macro_meta_->val_.data_zsize_
-     < data_store_desc_->get_macro_block_size() * DEFAULT_MACRO_BLOCK_REWRTIE_THRESHOLD / 100) {
-      need_merge = true;
-  }
-
-  return ret;
-}
-
 int ObMacroBlockWriter::check_meta_macro_block_need_rewrite(bool &need_rewrite) const
 {
   int ret = OB_SUCCESS;

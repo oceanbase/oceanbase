@@ -137,11 +137,6 @@ void ObBackupTabletGroupFuseCtx::reset()
   param_.reset();
 }
 
-void ObBackupTabletGroupFuseCtx::reuse()
-{
-  reset();
-}
-
 int ObBackupTabletGroupFuseCtx::init()
 {
   int ret = OB_SUCCESS;
@@ -270,17 +265,6 @@ bool ObBackupTabletGroupFuseCtx::is_failed() const
   return result_mgr_.is_failed();
 }
 
-int ObBackupTabletGroupFuseCtx::check_allow_retry(bool &allow_retry)
-{
-  int ret = OB_SUCCESS;
-  lib::ObMutexGuard guard(mutex_);
-  allow_retry = false;
-  if (OB_FAIL(result_mgr_.check_allow_retry(allow_retry))) {
-    LOG_WARN("failed to check need retry", K(ret), K(*this));
-  }
-  return ret;
-}
-
 int ObBackupTabletGroupFuseCtx::get_result(int32_t &result)
 {
   int ret = OB_SUCCESS;
@@ -309,13 +293,6 @@ bool ObBackupTabletFuseCtx::is_valid() const
   return param_.is_valid()
       && fuse_item_.is_valid()
       && OB_NOT_NULL(group_ctx_);
-}
-
-void ObBackupTabletFuseCtx::reset()
-{
-  param_.reset();
-  fuse_item_.reset();
-  group_ctx_ = NULL;
 }
 
 }

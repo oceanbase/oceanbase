@@ -10,7 +10,7 @@ namespace oceanbase
 {
 namespace compaction
 {
-enum ObBatchExecParamType : uint8_t
+enum ObBatchExecParamType : uint8_t // FARM COMPAT WHITELIST
 {
   BATCH_FREEZE = 0
 };

@@ -491,6 +491,7 @@ void ObCGRowScanner::reset()
   read_info_ = nullptr;
   datum_infos_.reset();
   col_params_.reset();
+  default_datums_.reset();
   ObCGScanner::reset();
 }
 
@@ -890,7 +891,6 @@ int ObCGSingleRowScanner::fetch_row(const blocksstable::ObDatumRow *&datum_row)
       }
     }
   }
-  int64_t row_cap = 0;
   while (OB_SUCC(ret)) {
     if (end_of_scan()) {
       ret = OB_ITER_END;

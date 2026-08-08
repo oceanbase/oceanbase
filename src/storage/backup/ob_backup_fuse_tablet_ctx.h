@@ -64,7 +64,6 @@ public:
   ~ObBackupTabletGroupFuseCtx();
   bool is_valid() const;
   void reset();
-  void reuse();
   int init();
   int do_fuse();
   int get_next_tablet_item(ObBackupTabletFuseItem &tablet_item);
@@ -77,7 +76,6 @@ public:
       const enum share::ObDagType::ObDagTypeEnum type = ObDagType::DAG_TYPE_MAX);
   bool is_failed() const;
   int get_result(int32_t &result);
-  int check_allow_retry(bool &allow_retry);
 
 public:
   bool is_inited_;
@@ -105,7 +103,6 @@ public:
   ObBackupTabletFuseCtx();
   virtual ~ObBackupTabletFuseCtx();
   bool is_valid() const;
-  void reset();
   VIRTUAL_TO_STRING_KV(KP_(group_ctx), K_(param), K_(fuse_item));
 
 public:

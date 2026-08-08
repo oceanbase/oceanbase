@@ -102,9 +102,18 @@ public:
     const int64_t turn_id = 1;
     const int64_t retry_id = 0;
     const ObBackupIndexIteratorType type = BACKUP_ORDERED_MACRO_BLOCK_INDEX_ITERATOR;
-    FakeMacroBlockIndexIterator *tmp_iter = new FakeMacroBlockIndexIterator;
-    if (OB_FAIL(iterators.push_back(tmp_iter))) {
+    lib::ObMemAttr attr(tenant_id, ObModIds::BACKUP);
+    ObIMacroBlockIndexIterator *tmp_iter = OB_NEW(FakeMacroBlockIndexIterator, attr);
+    if (OB_ISNULL(tmp_iter)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate fake macro block index iterator", K(ret));
+    } else if (OB_FAIL(iterators.push_back(tmp_iter))) {
       LOG_WARN("failed to push back", K(ret));
+    } else {
+      tmp_iter = NULL;
+    }
+    if (OB_NOT_NULL(tmp_iter)) {
+      ObLSBackupFactory::free(tmp_iter);
     }
     return ret;
   }

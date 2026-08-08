@@ -57,9 +57,7 @@ public:
   ~ObCOSSTableMeta() = default;
   OB_INLINE void reset() { MEMSET(this, 0, sizeof(ObCOSSTableMeta)); }
   OB_INLINE bool is_valid() const { return column_group_cnt_ > 0; }
-  OB_INLINE bool is_empty() const { return 0 == data_macro_block_cnt_; }
   OB_INLINE uint64_t get_total_macro_block_count() const { return data_macro_block_cnt_ + index_macro_block_cnt_; }
-  OB_INLINE uint64_t get_total_use_old_macro_block_count() const { return use_old_macro_block_cnt_; }
 
   int64_t get_serialize_size() const;
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
@@ -134,7 +132,6 @@ public:
   virtual int set_upper_trans_version(
       common::ObArenaAllocator &allocator,
       const int64_t upper_trans_version) override;
-  int set_progressive_merge_step(const int64_t progressive_merge_step);
   OB_INLINE const ObCOSSTableMeta &get_cs_meta() const { return cs_meta_; }
   bool has_hidden_rowkey_cg() const;
   int64_t get_column_group_count(const bool include_hidden_cg) const;

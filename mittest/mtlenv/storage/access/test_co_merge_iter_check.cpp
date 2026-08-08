@@ -523,8 +523,10 @@ TEST_P(TestCOMergeIterType, test_co_merge_major_iter_type)
   // ===== Check builder's major iters via expected_major_iter_kinds_ =====
   if (!p.expected_major_iter_kinds_.empty()) {
     ASSERT_NE(nullptr, replayer.mergelog_iter_);
-    common::ObSEArray<ObPartitionMergeIter *, 8> builder_iters;
-    ASSERT_EQ(OB_SUCCESS, replayer.mergelog_iter_->get_major_sstable_merge_iters_for_check(builder_iters));
+    ObCOMergeLogBuilder *builder = dynamic_cast<ObCOMergeLogBuilder *>(replayer.mergelog_iter_);
+    ASSERT_NE(nullptr, builder);
+    ASSERT_NE(nullptr, builder->majors_merge_iter_);
+    const MERGE_ITER_ARRAY &builder_iters = builder->majors_merge_iter_->get_merge_iters();
     ASSERT_EQ(static_cast<int64_t>(p.expected_major_iter_kinds_.size()), builder_iters.count())
         << "builder major iter count mismatch";
     for (int64_t i = 0; i < builder_iters.count(); ++i) {

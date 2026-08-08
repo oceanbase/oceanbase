@@ -29,10 +29,6 @@ ObBackupWrapperIODevice::ObBackupWrapperIODevice()
   : is_inited_(false),
     is_opened_(false),
     mutex_(0),
-    used_block_cnt_(0),
-    total_block_cnt_(0),
-    block_size_(0),
-    block_list_(),
     max_alloced_block_idx_(-1),
     backup_set_id_(),
     ls_id_(),
@@ -51,10 +47,6 @@ ObBackupWrapperIODevice::ObBackupWrapperIODevice()
 ObBackupWrapperIODevice::~ObBackupWrapperIODevice()
 {
   destroy();
-  if (OB_NOT_NULL(block_list_)) {
-    ob_free(block_list_);
-    block_list_ = NULL;
-  }
 }
 
 int ObBackupWrapperIODevice::setup_io_storage_info(const share::ObBackupDest &backup_dest,
@@ -133,8 +125,6 @@ int ObBackupWrapperIODevice::open(
     LOG_WARN("failed to parse storage device type", K(ret), K(pathname));
   } else if (OB_FAIL(parse_io_device_opts_(opts))) {
     LOG_WARN("failed to parse io device opts", K(ret));
-  } else if (OB_FAIL(pre_alloc_block_array_())) {
-    LOG_WARN("failed to pre alloc block array", K(ret));
   } else if (OB_FAIL(ObObjectDevice::start(*opts))) {
     LOG_WARN("failed to start opts", K(ret));
   } else if (OB_FAIL(ObObjectDevice::open(pathname, flags, mode, fd, opts))) {
@@ -154,14 +144,9 @@ int ObBackupWrapperIODevice::alloc_block(const ObIODOpts *opts, ObIOFd &block_id
   int ret = OB_SUCCESS;
   ObMutexGuard guard(mutex_);
   int64_t idx = 0;
-  bool need_realloc = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup wrapper io device do not init", K(ret));
-  } else if (OB_FAIL(check_need_realloc_(need_realloc))) {
-    LOG_WARN("failed to check need realloc", K(ret));
-  } else if (need_realloc && OB_FAIL(realloc_block_array_())) {
-    LOG_WARN("failed to realloc block array", K(ret));
   } else if (OB_FAIL(get_min_unused_block_(idx))) {
     LOG_WARN("failed to get min unused block", K(ret));
   } else if (OB_FAIL(convert_block_id_to_addr_(idx, block_id))) {
@@ -299,53 +284,6 @@ int ObBackupWrapperIODevice::parse_storage_device_type_(
     this->device_type_ = device_type;
   }
 
-  return ret;
-}
-
-int ObBackupWrapperIODevice::pre_alloc_block_array_()
-{
-  int ret = OB_SUCCESS;
-  const ObMemAttr mem_attr(MTL_ID(), ObModIds::BACKUP);
-  const int64_t total_block_cnt = DEFAULT_BLOCK_COUNT;
-  if (OB_ISNULL(block_list_ = static_cast<int64_t *>(
-      ob_malloc(sizeof(int64_t) * total_block_cnt, mem_attr)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate memory", K(ret), K(total_block_cnt));
-  } else {
-    total_block_cnt_ = total_block_cnt;
-  }
-  return ret;
-}
-
-int ObBackupWrapperIODevice::check_need_realloc_(bool &need_realloc)
-{
-  int ret = OB_SUCCESS;
-  need_realloc = used_block_cnt_ == total_block_cnt_;
-  return ret;
-}
-
-int ObBackupWrapperIODevice::realloc_block_array_()
-{
-  int ret = OB_SUCCESS;
-  const ObMemAttr mem_attr(MTL_ID(), ObModIds::BACKUP);
-  const int64_t new_total_block_cnt = total_block_cnt_ * 2;
-  int64_t *new_block_list = NULL;
-  if (OB_ISNULL(new_block_list
-      = static_cast<int64_t *>(ob_malloc(sizeof(int64_t) * new_total_block_cnt, mem_attr)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate memory", K(ret), K(new_total_block_cnt));
-  } else {
-    MEMCPY(new_block_list, block_list_, total_block_cnt_ * sizeof(int64_t));
-    ob_free(block_list_);
-    block_list_ = new_block_list;
-    total_block_cnt_ = new_total_block_cnt;
-  }
-  if (OB_FAIL(ret)) {
-    if (OB_NOT_NULL(new_block_list)) {
-      ob_free(new_block_list);
-      new_block_list = NULL;
-    }
-  }
   return ret;
 }
 

@@ -357,7 +357,6 @@ public:
   int get_min_sstable_end_scn(SCN &min_end_scn); // return min_end_scn from ctx
   INHERIT_TO_STRING_KV("ObCOMergeDagNet", ObIDagNet, K_(is_inited), K_(basic_param), K_(min_sstable_end_scn), K_(prepare_dag_running_ts));
 private:
-  static const int64_t DELAY_SCHEDULE_FINISH_DAG_CG_CNT = 150;
   static const int64_t DEFAULT_MAX_RETRY_TIMES = 2;
 private:
   bool is_inited_;

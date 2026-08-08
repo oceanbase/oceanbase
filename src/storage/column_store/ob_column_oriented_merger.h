@@ -54,7 +54,6 @@ public:
   virtual void reset() override;
   virtual int get_next_log(ObMergeLog &mergelog, const ObMergeVectorStore *&vector_store, const blocksstable::ObDatumRow *&row) override;
   virtual int close() override;
-  virtual int get_major_sstable_merge_iters_for_check(common::ObIArray<ObPartitionMergeIter *> &iters) override;
   virtual bool use_co_inc_fuser() const override { return true; }
   VIRTUAL_TO_STRING_KV(KP_(cmp), K_(need_replay_base_cg), KP_(base_writer));
 protected:
@@ -193,7 +192,6 @@ public:
 };
 
 typedef oceanbase::common::ObSEArray<oceanbase::compaction::ObCOMergeWriter *, DEFAULT_CG_MERGE_BATCH_SIZE, common::ObIAllocator&> MERGEWRITERS;
-typedef oceanbase::common::ObSEArray<oceanbase::compaction::ObCOMergeLogIterator *, DEFAULT_CG_MERGE_BATCH_SIZE, common::ObIAllocator&> MERGE_LOG_ITERS;
 class ObCOMergeLogReplayer : public ObMergerBasic
 {
   class ObCOMergeLogReplayerCallback

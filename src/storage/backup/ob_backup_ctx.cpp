@@ -9,7 +9,6 @@
 #include "storage/backup/ob_backup_factory.h"
 #include "storage/backup/ob_backup_operator.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "share/backup/ob_backup_data_table_operator.h"
 #include "storage/blocksstable/ob_macro_block_common_header.h"
 
 
@@ -564,30 +563,6 @@ int ObBackupDataCtx::write_meta_data_(const blocksstable::ObBufferReader &reader
   return ret;
 }
 
-int ObBackupDataCtx::write_other_block(const blocksstable::ObBufferReader &reader, int64_t &offset, int64_t &length)
-{
-  int ret = OB_SUCCESS;
-  const int64_t alignment = DIO_READ_ALIGN_SIZE;
-  const ObBackupBlockType block_type = BACKUP_BLOCK_OTHER_BLOCK;
-  if (!reader.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(reader));
-  } else if (OB_FAIL(write_data_align_(reader, block_type, alignment))) {
-    LOG_WARN("failed to write data align", K(ret), K(reader));
-  } else {
-    ObBufferReader buffer_reader(tmp_buffer_.data(), tmp_buffer_.length(), tmp_buffer_.length());
-    if (OB_FAIL(file_write_ctx_.append_buffer(buffer_reader))) {
-      LOG_WARN("failed to append buffer", K(ret), K_(tmp_buffer), K(buffer_reader));
-    } else {
-      offset = file_offset_;
-      length = tmp_buffer_.length();
-      file_offset_ += length;
-      LOG_INFO("write other block", K(offset), K(length), K_(file_offset));
-    }
-  }
-  return ret;
-}
-
 int ObBackupDataCtx::build_macro_block_index_(const storage::ObITable::TableKey &table_key,
     const blocksstable::ObLogicMacroBlockId &logic_id, const int64_t offset,
     const int64_t length, ObBackupMacroBlockIndex &macro_index)
@@ -880,7 +855,6 @@ ObBackupRetryCtx::ObBackupRetryCtx()
       sql_proxy_(NULL),
       has_last_tablet_id_(false),
       last_tablet_id_(),
-      last_tablet_meta_index_(),
       last_tablet_meta_retry_ctx_(),
       reused_pair_list_()
 {}
@@ -897,7 +871,6 @@ void ObBackupRetryCtx::reset()
 {
   has_last_tablet_id_ = false;
   last_tablet_id_.reset();
-  last_tablet_meta_index_.reset();
   reused_pair_list_.reset();
 }
 
@@ -1071,7 +1044,6 @@ int ObBackupRetryCtx::inner_get_last_persist_tablet_meta_(
     const ObBackupMetaIndex &meta_index = meta_index_list.at(i);
     if (meta_index.meta_key_.meta_type_ == BACKUP_TABLET_META) {
       tablet_id = meta_index.meta_key_.tablet_id_;
-      last_tablet_meta_index_ = meta_index;
       found = true;
       break;
     }
@@ -1367,28 +1339,6 @@ int ObLSBackupCtx::next(common::ObTabletID &tablet_id)
   return ret;
 }
 
-void ObLSBackupCtx::set_backup_data_type(const share::ObBackupDataType &backup_data_type)
-{
-  ObMutexGuard guard(mutex_);
-  backup_data_type_ = backup_data_type;
-  tablet_stat_.set_backup_data_type(backup_data_type);
-};
-
-void ObLSBackupCtx::reset()
-{
-  ObMutexGuard guard(mutex_);
-  task_idx_ = 0;
-  max_file_id_ = 0;
-  prefetch_task_id_ = 0;
-  finished_file_id_ = 0;
-  tablet_stat_.reset();
-  sys_tablet_id_list_.reset();
-  data_tablet_id_list_.reset();
-  backup_retry_ctx_.reset();
-  rebuild_seq_ = 0;
-  check_tablet_info_cost_time_ = 0;
-}
-
 void ObLSBackupCtx::reuse()
 {
   ObMutexGuard guard(mutex_);
@@ -1474,13 +1424,6 @@ void ObLSBackupCtx::set_finished()
 bool ObLSBackupCtx::is_finished() const
 {
   return ATOMIC_LOAD(&is_finished_);
-}
-
-int ObLSBackupCtx::close()
-{
-  int ret = OB_SUCCESS;
-  is_inited_ = false;
-  return ret;
 }
 
 int ObLSBackupCtx::get_max_file_id(int64_t &max_file_id)
@@ -1633,30 +1576,6 @@ int ObLSBackupCtx::get_all_tablet_id_list_(
   return ret;
 }
 
-int ObLSBackupCtx::get_backup_scn_(const ObLSBackupParam &param,
-    const share::ObBackupDataType &backup_data_type, share::SCN &backup_scn)
-{
-  int ret = OB_SUCCESS;
-  ObBackupDataStore store;
-  ObBackupDataLSAttrDesc ls_info;
-  ObBackupSetTaskAttr task_attr;
-  if (OB_ISNULL(sql_proxy_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql proxy should not be null", K(ret));
-  } else if (OB_FAIL(ObBackupTaskOperator::get_backup_task(
-      *sql_proxy_, param.job_id_, param.tenant_id_, false, task_attr))) {
-    LOG_WARN("failed to get backup task", K(ret), K_(param));
-  } else if (OB_FAIL(store.init(param.backup_dest_, param.backup_set_desc_))) {
-    LOG_WARN("failed to init backup data source", K(ret), K(param));
-  } else if (OB_FAIL(store.read_ls_attr_info(task_attr.meta_turn_id_, ls_info))) {
-    LOG_WARN("failed to read ls attr info", K(ret));
-  } else {
-    backup_scn = ls_info.backup_scn_;
-    LOG_INFO("get backup scn", K(param), K(backup_data_type), K(backup_scn));
-  }
-  return ret;
-}
-
 int ObLSBackupCtx::prepare_mview_dep_tablet_set_(const ObLSBackupParam &param,
     const share::ObBackupDataType &backup_data_type)
 {
@@ -1670,7 +1589,7 @@ int ObLSBackupCtx::prepare_mview_dep_tablet_set_(const ObLSBackupParam &param,
   } else if (OB_FAIL(store.read_major_compaction_mview_dep_tablet_list(desc))) {
     LOG_WARN("failed to read mview dep tablet list", K(ret));
   } else {
-    const common::ObSArray<common::ObTabletID> &mview_tablet_list = desc.tablet_id_list_;;
+    const common::ObSArray<common::ObTabletID> &mview_tablet_list = desc.tablet_id_list_;
     const ObSArray<share::SCN> &tablet_mview_dep_scn_list = desc.mview_dep_scn_list_;
     if (mview_tablet_list.count() != tablet_mview_dep_scn_list.count()) {
       ret = OB_ERR_UNEXPECTED;

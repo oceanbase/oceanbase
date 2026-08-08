@@ -24,7 +24,6 @@ public:
   ObBackupTabletFuseItem();
   ~ObBackupTabletFuseItem();
   int64_t get_deep_copy_size() const;
-  int deep_copy(const ObBackupTabletFuseItem &src);
   int deep_copy(const ObBackupTabletFuseItem &src, char *buf, int64_t len, int64_t &pos);
   int assign(const ObBackupTabletFuseItem &item);
   bool is_valid() const;

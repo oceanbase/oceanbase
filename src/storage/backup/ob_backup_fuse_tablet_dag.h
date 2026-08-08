@@ -7,6 +7,7 @@
 #define OCEANBASE_STORAGE_BACKUP_FUSE_TABLET_DAG_H_
 
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
+#include "storage/backup/ob_backup_task.h"
 #include "storage/backup/ob_backup_fuse_tablet_ctx.h"
 #include "storage/backup/ob_backup_tablet_meta_fuser.h"
 #include "storage/high_availability/ob_storage_ha_dag.h"
@@ -22,7 +23,7 @@ namespace oceanbase
 namespace backup
 {
 
-class ObBackupTabletFuseDagNet: public share::ObIDagNet
+class ObBackupTabletFuseDagNet: public ObBackupDagNet
 {
 public:
   ObBackupTabletFuseDagNet();

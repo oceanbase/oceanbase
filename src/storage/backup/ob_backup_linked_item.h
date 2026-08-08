@@ -30,7 +30,6 @@ public:
 public:
   ObBackupLinkedBlockHeader();
   ~ObBackupLinkedBlockHeader();
-  void set_previous_block_id(const ObBackupLinkedBlockAddr &physical_id) { prev_block_addr_ = physical_id; }
 
   TO_STRING_KV(K_(version), K_(magic), K_(item_count), K_(tablet_id), K_(table_key), K_(prev_block_addr), K_(has_prev));
   int32_t version_;

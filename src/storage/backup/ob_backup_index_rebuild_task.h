@@ -240,7 +240,6 @@ public:
            ObLSBackupCtx *ls_backup_ctx,
            ObIBackupTabletProvider *provider,
            ObBackupMacroBlockTaskMgr *task_mgr,
-           ObBackupIndexKVCache *kv_cache,
            const ObBackupReportCtx &report_ctx,
            const ObCompressorType &compressor_type);
   virtual int process() override;
@@ -261,7 +260,6 @@ private:
   ObLSBackupCtx *ls_backup_ctx_;
   ObIBackupTabletProvider *provider_;
   ObBackupMacroBlockTaskMgr *task_mgr_;
-  ObBackupIndexKVCache *index_kv_cache_;
   ObBackupReportCtx report_ctx_;
   ObCompressorType compressor_type_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupIndexRebuildPrepareTask);

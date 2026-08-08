@@ -25,7 +25,6 @@ public:
   static ObITabletMetaBackupReader *get_tablet_meta_backup_reader(const ObTabletMetaReaderType &type, const uint64_t tenant_id);
   static ObIBackupIndexIterator *get_backup_index_iterator(const ObBackupIndexIteratorType &type, const uint64_t tenant_id);
   static ObIBackupTabletProvider *get_backup_tablet_provider(const ObBackupTabletProviderType &type, const uint64_t tenant_id);
-  static ObIBackupMacroBlockIndexFuser *get_backup_macro_index_fuser(const ObBackupMacroIndexFuserType &type, const uint64_t tenant_id);
   static ObBackupTabletCtx *get_backup_tablet_ctx(const uint64_t tenant_id);
   static ObBackupSSTableSecMetaIterator *get_backup_sstable_sec_meta_iterator(const uint64_t tenant_id);
   static ObBackupWrapperIODevice *get_backup_wrapper_io_device(const uint64_t tenant_id);
@@ -43,22 +42,12 @@ public:
   static void free(ObBackupMacroRangeIndexIterator *&iterator);
   static void free(ObIBackupTabletProvider *&provider);
   static void free(ObBackupTabletProvider *&provider);
-  static void free(ObIBackupMacroBlockIndexFuser *&fuser);
   static void free(ObBackupTabletCtx *&ctx);
   static void free(ObBackupSSTableSecMetaIterator *&iterator);
   static void free(ObBackupWrapperIODevice *device);
   static void free(ObIBackupTabletMetaIterator *device);
   static void free(ObBackupUnorderedMacroBlockIndexIterator *&iterator);
   static void free(ObBackupOrderedMacroBlockIndexIterator *&iterator);
-private:
-  template <class IT>
-  static void component_free(IT *component)
-  {
-    if (OB_LIKELY(NULL != component)) {
-      op_free(component);
-      component = NULL;
-    }
-  }
 };
 
 }  // namespace backup

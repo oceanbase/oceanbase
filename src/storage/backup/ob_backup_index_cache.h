@@ -71,7 +71,6 @@ public:
   }
   virtual int64_t size() const override;
   virtual int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheValue *&value) const override;
-  bool is_valid() const;
   TO_STRING_KV(KP_(buf), K_(len));
 
 private:

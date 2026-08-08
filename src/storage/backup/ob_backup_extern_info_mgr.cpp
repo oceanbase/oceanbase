@@ -145,7 +145,6 @@ int ObExternLSMetaMgr::write_ls_meta_info(const ObBackupLSMetaInfo &ls_meta)
   ObStorageIdMod mod;
   mod.storage_id_ = dest_id_;
   mod.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_BACKUP;
-  const int64_t dest_id = dest_id_;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup data extern mgr not init", K(ret));
@@ -182,7 +181,6 @@ int ObExternLSMetaMgr::read_ls_meta_info(ObBackupLSMetaInfo &ls_meta)
   ObBackupPath path;
   ObArenaAllocator allocator;
   ObBackupIoAdapter util;
-  share::ObBackupStorageInfo storage_info;
   ObStorageIdMod mod;
   mod.storage_id_ = dest_id_;
   mod.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_BACKUP;

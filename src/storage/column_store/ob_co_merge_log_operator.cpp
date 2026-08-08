@@ -38,6 +38,7 @@ int ObCOMergeLogFileWriter::init(ObIAllocator &allocator, ObBasicTabletMergeCtx 
       allocator_->alloc(sizeof(ObCOMergeLogBufferWriter *) * cg_count_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
+  } else if (FALSE_IT(MEMSET(row_buffer_writers_, 0, sizeof(ObCOMergeLogBufferWriter *) * cg_count_))) {
   } else if (OB_FAIL(mgr_->get_log_file(log_file))) {
     LOG_WARN("failed to get log file", K(ret));
   } else if (OB_FAIL(init_buffer_writer(log_buffer_writer_, *log_file, nullptr/*projector*/))) {

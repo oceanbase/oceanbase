@@ -49,7 +49,7 @@ SUSPECT_INFO_TYPE_DEF(SUSPECT_MULTI_VERSION_START_NOT_ADVANCE, ObDiagnoseInfoPri
     2, {"multi_version_start", "current_time"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_SCHEDULE_DAG_FAILED, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_MID, false, "failed to submit merge dag to scheduler",
     1, {"error_code"})
-SUSPECT_INFO_TYPE_DEF(SUSPECT_SCHEDULE_NEW_ROUND_FAILED, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_MID, false, "failed to submit merge dag to scheduler",
+SUSPECT_INFO_TYPE_DEF(SUSPECT_SCHEDULE_NEW_ROUND_FAILED, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "failed to submit merge dag to scheduler",
     1, {"error_code"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_INFO_TYPE_MAX, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "", 0, {})
 #endif

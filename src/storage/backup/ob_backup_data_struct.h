@@ -29,9 +29,7 @@ namespace backup {
 static const int64_t OB_DEFAULT_BACKUP_CONCURRENCY = 2;
 static const int64_t OB_MAX_BACKUP_CONCURRENCY = 128;
 static const int64_t OB_MAX_BACKUP_MEM_BUF_LEN = 8 * 1024 * 1024;  // 8MB
-static const int64_t OB_MAX_BACKUP_INDEX_BUF_SIZE = 16 * 1024;     // 16KB;
 static const int64_t OB_MAX_BACKUP_FILE_SIZE = 4 * 1024 * 1024;
-static const int64_t OB_BACKUP_INDEX_BLOCK_SIZE = 16 * 1024;
 static const int64_t OB_BACKUP_INDEX_BLOCK_NODE_CAPACITY = 256;
 static const int64_t OB_BACKUP_MULTI_LEVEL_INDEX_BASE_LEVEL = 0;
 static const int64_t OB_BACKUP_READ_BLOCK_SIZE = 2 << 20;  // 2 MB
@@ -73,7 +71,7 @@ enum ObBackupBlockType {
   BACKUP_BLOCK_MARCO_RANGE_INDEX = 4,
   BACKUP_BLOCK_MARCO_RANGE_INDEX_INDEX = 5,
   BACKUP_BLOCK_META_INDEX_INDEX = 6,
-  BACKUP_BLOCK_OTHER_BLOCK = 7,
+  BACKUP_BLOCK_OTHER_BLOCK = 7, // deprecated: ddl other block backup is removed, keep the value for backup media format stability
   BACKUP_BLOCK_OTHER_BLOCK_IDS = 8,
   BACKUP_BLOCK_MACRO_BLOCK_INDEX = 9,
   BACKUP_BLOCK_MACRO_BLOCK_INDEX_INDEX = 10,
@@ -195,13 +193,12 @@ struct ObBackupMacroBlockId {
   bool is_valid() const;
   int assign(const ObBackupMacroBlockId &other);
   void reset();
-  TO_STRING_KV(K_(table_key), K_(logic_id), K_(macro_block_id), K_(nested_offset), K_(nested_size), K_(absolute_row_offset), K_(is_ss_ddl_other_block));
+  TO_STRING_KV(K_(table_key), K_(logic_id), K_(macro_block_id), K_(nested_offset), K_(nested_size), K_(absolute_row_offset));
   storage::ObITable::TableKey table_key_;
   blocksstable::ObLogicMacroBlockId logic_id_;
   blocksstable::MacroBlockId macro_block_id_;
   int64_t nested_offset_;
   int64_t nested_size_;
-  bool is_ss_ddl_other_block_; // is ddl sstable macro block in shared storage mode
   int64_t absolute_row_offset_;
 };
 
@@ -367,10 +364,6 @@ public:
 };
 
 class ObBackupMacroRangeIndex;
-
-struct ObBackupMacroBlockIndexComparator {
-  int operator()(const ObBackupMacroRangeIndex &lhs, const ObBackupMacroRangeIndex &rhs) const;
-};
 
 class ObBackupMetaIndex;
 

@@ -89,7 +89,6 @@ int ObVirtualCGScanner::locate(
     const ObCSRange &range,
     const ObCGBitmap *bitmap)
 {
-  UNUSEDx(range, bitmap);
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -396,8 +395,6 @@ int ObDefaultCGScanner::init_datum_infos_and_default_row(const ObTableIterParam 
       if (OB_ISNULL(expr = iter_param.output_exprs_->at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected null expr", K(ret), K(i), K(iter_param.output_exprs_));
-      } else if (!iter_param.vectorized_enabled_) {
-        datums = &expr->locate_datum_for_write(iter_param.op_->get_eval_ctx());
       } else if (OB_ISNULL(datums = expr->locate_batch_datums(eval_ctx))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected null datums", K(ret), K(i), KPC(expr));
@@ -459,8 +456,6 @@ int ObDefaultCGScanner::locate(const ObCSRange &range, const ObCGBitmap *bitmap)
               (nullptr != bitmap && bitmap->get_start_id() + bitmap->size() > total_row_count_))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(range), K(total_row_count_), KPC(bitmap));
-  } else if (range.start_row_id_ >= total_row_count_) {
-    ret = OB_ITER_END;
   } else {
     query_range_valid_row_count_ = nullptr == bitmap ? range.get_row_count() : bitmap->popcnt();
   }
@@ -773,8 +768,8 @@ int ObDefaultCGGroupByScanner::calc_aggregate(const bool is_group_by_col)
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < datum_infos_.count(); ++i) {
     ObGroupByAggIdxArray &agg_idxs = group_by_agg_idxs_.at(i);
-    for (int64_t i = 0; OB_SUCC(ret) && i < agg_idxs.count(); ++i) {
-      const int32_t agg_idx = agg_idxs.at(i);
+    for (int64_t j = 0; OB_SUCC(ret) && j < agg_idxs.count(); ++j) {
+      const int32_t agg_idx = agg_idxs.at(j);
       if (OB_FAIL(group_by_cell_->eval_batch(default_row_.storage_datums_, group_by_cell_->get_ref_cnt(), agg_idx, is_group_by_col, true))) {
         LOG_WARN("Failed to eval batch", K(ret));
       }

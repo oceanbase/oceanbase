@@ -535,20 +535,6 @@ TEST_F(TestLogStreamBackup, test_backup_index_merger)
 {
   int ret = OB_SUCCESS;
   const ObBackupIndexLevel index_level = BACKUP_INDEX_LEVEL_LOG_STREAM;
-  ObBackupMacroBlockIndexMerger macro_index_merger;
-  ret = macro_index_merger.init(backup_dest_,
-      tenant_id_,
-      backup_set_desc_,
-      backup_data_type_,
-      index_level,
-      ls_id_,
-      turn_id_,
-      retry_id_,
-      throttle_);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = macro_index_merger.merge_index();
-  ASSERT_EQ(OB_SUCCESS, ret);
-
   ObBackupMetaIndexMerger meta_index_merger;
   ret = meta_index_merger.init(backup_dest_,
       tenant_id_,

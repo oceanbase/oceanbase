@@ -103,21 +103,6 @@ ObIBackupTabletProvider *ObLSBackupFactory::get_backup_tablet_provider(
   return provider;
 }
 
-ObIBackupMacroBlockIndexFuser *ObLSBackupFactory::get_backup_macro_index_fuser(
-  const ObBackupMacroIndexFuserType &type, const uint64_t tenant_id)
-{
-  ObIBackupMacroBlockIndexFuser *fuser = NULL;
-  lib::ObMemAttr attr(tenant_id, ObModIds::BACKUP);
-  if (type == BACKUP_MACRO_INDEX_MINOR_FUSER) {
-    fuser = OB_NEW(ObBackupMacroIndexMinorFuser, attr);
-  } else if (type == BACKUP_MACRO_INDEX_MAJOR_FUSER) {
-    fuser = OB_NEW(ObBackupMacroIndexMajorFuser, attr);
-  } else {
-    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unknown fuser type", K(type));
-  }
-  return fuser;
-}
-
 ObBackupTabletCtx *ObLSBackupFactory::get_backup_tablet_ctx(const uint64_t tenant_id)
 {
   lib::ObMemAttr attr(tenant_id, ObModIds::BACKUP);
@@ -211,6 +196,10 @@ void ObLSBackupFactory::free(ObIMacroBlockIndexIterator *&iterator)
       OB_DELETE(ObIMacroBlockIndexIterator, ObModIds::BACKUP, iterator);
     } else if (BACKUP_MACRO_RANGE_INDEX_ITERATOR == iterator->get_type()) {
       OB_DELETE(ObIMacroBlockIndexIterator, ObModIds::BACKUP, iterator);
+    } else if (BACKUP_UNOREDRED_MACRO_BLOCK_INDEX_ITERATOR == iterator->get_type()) {
+      OB_DELETE(ObIMacroBlockIndexIterator, ObModIds::BACKUP, iterator);
+    } else if (BACKUP_ORDERED_MACRO_BLOCK_INDEX_ITERATOR == iterator->get_type()) {
+      OB_DELETE(ObIMacroBlockIndexIterator, ObModIds::BACKUP, iterator);
     } else {
       LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unknown iterator type", "type", iterator->get_type());
     }
@@ -246,19 +235,6 @@ void ObLSBackupFactory::free(ObBackupTabletProvider *&provider)
 {
   if (OB_NOT_NULL(provider)) {
     OB_DELETE(ObBackupTabletProvider, ObModIds::BACKUP, provider);
-  }
-}
-
-void ObLSBackupFactory::free(ObIBackupMacroBlockIndexFuser *&fuser)
-{
-  if (OB_NOT_NULL(fuser)) {
-    if (BACKUP_MACRO_INDEX_MINOR_FUSER == fuser->get_type()) {
-      OB_DELETE(ObIBackupMacroBlockIndexFuser, ObModIds::BACKUP, fuser);
-    } else if (BACKUP_MACRO_INDEX_MAJOR_FUSER == fuser->get_type()) {
-      OB_DELETE(ObIBackupMacroBlockIndexFuser, ObModIds::BACKUP, fuser);
-    } else {
-      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unknown fuser type", "type", fuser->get_type());
-    }
   }
 }
 

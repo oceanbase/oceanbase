@@ -163,7 +163,6 @@ public:
   virtual int append_batch(const ObBatchDatumRows &datum_rows);
   int append_macro_block(const ObDataMacroBlockMeta &macro_meta);
   int get_estimate_meta_block_size(const ObDataMacroBlockMeta &macro_meta, int64_t &estimate_size);
-  int check_data_macro_block_need_merge(const ObMacroBlockDesc &macro_desc, bool &need_merge) const;
   int check_meta_macro_block_need_rewrite(bool &need_rewrite) const;
   int close();
   void dump_block_and_writer_buffer();

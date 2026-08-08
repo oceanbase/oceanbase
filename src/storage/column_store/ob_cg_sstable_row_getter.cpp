@@ -469,7 +469,7 @@ int ObCGSSTableRowGetter::get_not_exist_row(const ObDatumRowkey &rowkey, ObDatum
     LOG_WARN("fail to reserve datum row", K(ret), K(rowkey.get_datum_cnt()));
   } else {
     row.row_flag_.reset();
-    row_.mvcc_row_flag_.reset();
+    row.mvcc_row_flag_.reset();
     row.row_flag_.set_flag(ObDmlFlag::DF_NOT_EXIST);
     row.count_ = rowkey.get_datum_cnt();
     //TODO maybe we do not need to copy the rowkey datum

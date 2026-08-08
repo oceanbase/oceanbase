@@ -11,6 +11,7 @@ namespace oceanbase
 namespace storage
 {
 class ObAggGroupBase;
+class ObGroupByCellBase;
 // virtual cg scanner which handles SCAN without referenced column, such as
 // - RAND() < 2 filter
 // - COUNT(*) aggregation
@@ -94,7 +95,7 @@ public:
   virtual ObCGIterType get_type() override
   { return OB_CG_DEFAULT_SCANNER; }
   TO_STRING_KV(K_(is_inited), K_(total_row_count), K_(default_row), K_(query_range_valid_row_count),
-			KPC_(iter_param), KPC_(access_ctx), K_(datum_infos), K_(default_row), KPC_(agg_group));
+			KPC_(iter_param), KPC_(access_ctx), K_(datum_infos), KPC_(agg_group));
 
 private:
 	int init_datum_infos_and_default_row(const ObTableIterParam &iter_param, ObTableAccessContext &access_ctx);

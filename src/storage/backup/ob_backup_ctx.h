@@ -55,21 +55,12 @@ public:
   int add_sstable_meta(const share::ObBackupDataType &backup_data_type, const common::ObTabletID &tablet_id);
   int add_tablet_meta(const share::ObBackupDataType &backup_data_type, const common::ObTabletID &tablet_id);
   int add_bytes(const share::ObBackupDataType &backup_data_type, const int64_t bytes);
-  int do_compare(const ObSimpleBackupStatMgr &other);
   void print_stat();
 
 private:
   int get_stat_(const share::ObBackupDataType &backup_data_type, ObSimpleBackupStat *&stat);
   int get_idx_(const share::ObBackupDataType &backup_data_type, int64_t &idx);
   void reset_stat_list_();
-  int inner_do_compare_(const char *backup_data_event, const ObSimpleBackupStat &lhs, const ObSimpleBackupStat &rhs);
-  int add_missing_event_(const char *backup_data_event, const common::ObIArray<common::ObTabletID> &missing_tablets,
-      const common::ObIArray<storage::ObITable::TableKey> &missing_table_keys,
-      const common::ObIArray<blocksstable::ObLogicMacroBlockId> &missing_logic_ids);
-  template <class T>
-  int get_missing_items_(const common::ObIArray<T> &lhs, const common::ObIArray<T> &rhs, common::ObIArray<T> &missing);
-  template <class T>
-  int print_missing_items_(const common::ObIArray<T> &list);
 
 private:
   static const int64_t STAT_ARRAY_SIZE = 2;
@@ -83,47 +74,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObSimpleBackupStatMgr);
 };
 
-template <class T>
-int ObSimpleBackupStatMgr::get_missing_items_(
-    const common::ObIArray<T> &lhs, const common::ObIArray<T> &rhs, common::ObIArray<T> &missing)
-{
-  int ret = OB_SUCCESS;
-  missing.reset();
-  if (lhs.count() < rhs.count()) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "count not expected", K(ret), K(lhs.count()), K(rhs.count()));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < lhs.count(); ++i) {
-      bool exist = false;
-      const T &lhs_item = lhs.at(i);
-      for (int64_t j = 0; OB_SUCC(ret) && j < rhs.count(); ++j) {
-        const T &rhs_item = rhs.at(j);
-        if (lhs_item == rhs_item) {
-          exist = true;
-          break;
-        }
-      }
-      if (OB_SUCC(ret) && !exist) {
-        if (OB_FAIL(missing.push_back(lhs_item))) {
-          STORAGE_LOG(WARN, "failed to push back", K(ret), K(lhs_item));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-template <class T>
-int ObSimpleBackupStatMgr::print_missing_items_(const common::ObIArray<T> &missing)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < missing.count(); ++i) {
-    const T &item = missing.at(i);
-    STORAGE_LOG(ERROR, "BACKUP ITEM IS MISSING", K_(tenant_id), K_(ls_id), K(item));
-  }
-  return ret;
-}
-
 struct ObBackupDataCtx {
 public:
   ObBackupDataCtx();
@@ -135,7 +85,6 @@ public:
       const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index);
   int write_meta_data(const blocksstable::ObBufferReader &meta_data, const common::ObTabletID &tablet_id,
       const ObBackupMetaType &meta_type, ObBackupMetaIndex &meta_index);
-  int write_other_block(const blocksstable::ObBufferReader &reader, int64_t &offset, int64_t &length);
   int64_t get_file_size() const
   {
     return file_write_ctx_.get_file_size();
@@ -189,9 +138,6 @@ private:
   int check_trailer_(const ObBackupDataFileTrailer &trailer);
   int flush_trailer_();
 
-private:
-  static const int64_t TMP_FILE_READ_TIMEOUT_MS = 5000;  // 5s
-
 public:
   bool is_inited_;
   int64_t file_id_;
@@ -239,7 +185,6 @@ private:
       const int64_t cur_turn_id, const int64_t cur_retry_id, common::ObArray<ObBackupRetryDesc> &retry_list);
   int do_recover_last_retry_ctx_(common::ObArray<ObBackupRetryDesc> &retry_list);
   int inner_do_recover_last_retry_ctx_(const ObBackupRetryDesc &retry_desc, bool &found);
-  int get_last_persist_macro_block_(const ObBackupRetryDesc &retry_desc, bool &found);
   int init_backup_meta_iterator_(const ObBackupRetryDesc &retry_desc, ObBackupMetaIndexIterator &iter);
   int get_last_persist_tablet_meta_(const ObBackupRetryDesc &retry_desc, bool &found);
   int inner_get_last_persist_tablet_meta_(
@@ -261,7 +206,6 @@ private:
 public:
   bool has_last_tablet_id_;
   common::ObTabletID last_tablet_id_;
-  ObBackupMetaIndex last_tablet_meta_index_;
   ObBackupRetryDesc last_tablet_meta_retry_ctx_;
   common::ObArray<ObBackupMacroBlockIDPair> reused_pair_list_; // need be sorted
 };
@@ -274,7 +218,6 @@ public:
       const ObLSBackupParam &param, const share::ObBackupDataType &backup_data_type, common::ObMySQLProxy &sql_proxy,
       common::ObInOutBandwidthThrottle &bandwidth_throttle);
   int next(common::ObTabletID &tablet_id);
-  void set_backup_data_type(const share::ObBackupDataType &backup_data_type);
   int set_tablet(const common::ObTabletID &tablet_id, ObBackupTabletHandleRef *tablet_handle);
   int get_tablet(const common::ObTabletID &tablet_id, ObBackupTabletHandleRef *&tablet_handle);
   int release_tablet(const common::ObTabletID &tablet_id);
@@ -282,8 +225,6 @@ public:
   int64_t get_result_code() const;
   void set_finished();
   bool is_finished() const;
-  int close();
-  void reset();
   void reuse();
 
   int get_max_file_id(int64_t &max_file_id);
@@ -304,7 +245,6 @@ private:
   int recover_last_retry_ctx_();
   int prepare_tablet_id_reader_(ObILSTabletIdReader *&reader);
   int get_all_tablet_id_list_(ObILSTabletIdReader *reader, common::ObIArray<common::ObTabletID> &tablet_list);
-  int get_backup_scn_(const ObLSBackupParam &param, const share::ObBackupDataType &backup_data_type, share::SCN &backup_scn);
   int prepare_mview_dep_tablet_set_(const ObLSBackupParam &param, const share::ObBackupDataType &backup_data_type);
   int check_mview_tablet_set_(const uint64_t tenant_id, common::ObMySQLProxy &sql_proxy);
   int seperate_tablet_id_list_(const common::ObIArray<common::ObTabletID> &tablet_id_list,

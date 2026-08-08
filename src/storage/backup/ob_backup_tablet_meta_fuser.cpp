@@ -326,9 +326,7 @@ int ObBackupTabletMetaFuser::inner_do_fuse_()
   int64_t round = 0;
   MERGE_ITER_ARRAY unfinished_iters;
   MERGE_ITER_ARRAY min_iters;
-  ObBackupMetaIndex meta_index;
   ObBackupTabletFuseItem fuse_item;
-  ObMigrationTabletParam param;
   bool need_add = true;
   if (OB_FAIL(prepare_fuse_ctx_())) {
     LOG_WARN("failed to prepare fuse ctx", K(ret));
@@ -338,7 +336,6 @@ int ObBackupTabletMetaFuser::inner_do_fuse_()
   while (OB_SUCC(ret)) {
     unfinished_iters.reset();
     min_iters.reset();
-    meta_index.reset();
     fuse_item.reset();
     need_add = true;
     if (OB_FAIL(get_unfinished_iters_(fuse_iter_array_, unfinished_iters))) {
@@ -361,7 +358,7 @@ int ObBackupTabletMetaFuser::inner_do_fuse_()
       LOG_WARN("failed to move iters next", K(ret), K_(ls_id), K(round), K(min_iters));
     } else {
       round++;
-      LOG_INFO("meta index fuse round", K(round), K_(ls_id), K(min_iters), K(meta_index));
+      LOG_INFO("meta index fuse round", K(round), K_(ls_id), K(min_iters));
     }
   }
   if (OB_SUCC(ret)) {

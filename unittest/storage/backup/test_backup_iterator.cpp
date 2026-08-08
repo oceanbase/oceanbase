@@ -40,8 +40,6 @@ public:
   }
 
 private:
-  void fake_init_macro_index_merger_(const int64_t file_count, const int64_t per_file_item_count,
-    ObFakeBackupMacroIndexMerger &merger);
   void build_backup_index_merge_param_(ObBackupIndexMergeParam &merge_param);
   void init_macro_range_index_iterator(ObBackupMacroRangeIndexIterator &iter);
   void iterate_macro_range_index_iterator(const int64_t start_id, const int64_t end_id,
@@ -192,18 +190,6 @@ void TestBackupIndexIterator::inner_init_()
   } else {
     ASSERT_EQ(OB_SUCCESS, ret);
   }
-}
-
-void TestBackupIndexIterator::fake_init_macro_index_merger_(const int64_t file_count,
-  const int64_t per_file_item_count, ObFakeBackupMacroIndexMerger &merger)
-{
-  int ret = OB_SUCCESS;
-  common::ObMySQLProxy sql_proxy;
-  ObBackupIndexMergeParam merge_param;
-  build_backup_index_merge_param_(merge_param);
-  merger.set_count(file_count, per_file_item_count);
-  ret = merger.init(merge_param, sql_proxy, bandwidth_throttle_);
-  ASSERT_EQ(OB_SUCCESS, ret);
 }
 
 void TestBackupIndexIterator::build_backup_index_merge_param_(ObBackupIndexMergeParam &merge_param)

@@ -19,81 +19,10 @@ using namespace oceanbase::share;
 namespace oceanbase {
 namespace backup {
 
-/* ObIBackupMacroBlockIndexFuser */
-
-ObIBackupMacroBlockIndexFuser::ObIBackupMacroBlockIndexFuser() : iter_array_(), result_()
-{}
-
-ObIBackupMacroBlockIndexFuser::~ObIBackupMacroBlockIndexFuser()
-{}
-
-int ObIBackupMacroBlockIndexFuser::get_result(ObBackupMacroRangeIndex &result)
-{
-  int ret = OB_SUCCESS;
-  result = result_;
-  return ret;
-}
-
-/* ObBackupMacroIndexMinorFuser */
-
-ObBackupMacroIndexMinorFuser::ObBackupMacroIndexMinorFuser() : ObIBackupMacroBlockIndexFuser()
-{}
-
-ObBackupMacroIndexMinorFuser::~ObBackupMacroIndexMinorFuser()
-{}
-
-int ObBackupMacroIndexMinorFuser::fuse(MERGE_ITER_ARRAY &iter_array)
-{
-  int ret = OB_SUCCESS;
-  ObBackupMacroRangeIndex output;
-  bool found = false;
-  for (int64_t i = 0; OB_SUCC(ret) && i < iter_array.count(); ++i) {
-    ObIMacroBlockIndexIterator *iter = iter_array.at(i);
-    if (OB_ISNULL(iter)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("iter should not be null", K(ret));
-    } else if (OB_UNLIKELY(iter->is_iter_end())) {
-      continue;
-    } else if (OB_FAIL(iter->get_cur_index(output))) {
-      LOG_WARN("failed to get cur index", K(ret));
-    } else {
-      found = true;
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (found) {
-      result_ = output;
-    } else {
-      ret = OB_ITER_END;
-    }
-  }
-  return ret;
-}
-
-/* ObBackupMacroIndexMajorFuser */
-
-ObBackupMacroIndexMajorFuser::ObBackupMacroIndexMajorFuser() : ObIBackupMacroBlockIndexFuser()
-{}
-
-ObBackupMacroIndexMajorFuser::~ObBackupMacroIndexMajorFuser()
-{}
-
-int ObBackupMacroIndexMajorFuser::fuse(MERGE_ITER_ARRAY &iter_array)
-{
-  int ret = OB_SUCCESS;
-  if (iter_array.count() != 1) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("iter array count unexpected", K(ret), K(iter_array));
-  } else if (OB_FAIL(iter_array.at(0)->get_cur_index(result_))) {
-    LOG_WARN("failed to get cur index", K(ret), K(iter_array));
-  }
-  return ret;
-}
-
-/* ObBackupMacroIndexMajorFuser */
+/* ObBackupMetaIndexFuser */
 
 ObBackupMetaIndexFuser::ObBackupMetaIndexFuser()
-  : iter_array_(), result_()
+  : result_()
 {}
 
 ObBackupMetaIndexFuser::~ObBackupMetaIndexFuser()
@@ -155,7 +84,6 @@ ObIBackupMultiLevelIndexBuilder::ObIBackupMultiLevelIndexBuilder()
       cur_block_length_(0),
       leaf_(NULL),
       dummy_(NULL),
-      root_(NULL),
       write_ctx_(NULL),
       allocator_(),
       buffer_writer_(ObModIds::BACKUP),
@@ -191,12 +119,15 @@ int ObIBackupMultiLevelIndexBuilder::init(const int64_t start_offset, const ObCo
   } else if (start_offset <= 0 || !node.is_inited() || !write_ctx.is_opened()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("node or file writer is not valid", K(ret), K(start_offset), K(node), "opened", write_ctx.is_opened());
+  } else if (OB_BACKUP_MULTI_LEVEL_INDEX_BASE_LEVEL + 1 != node.get_node_level()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid leaf node level", K(ret), "expected_level", OB_BACKUP_MULTI_LEVEL_INDEX_BASE_LEVEL + 1,
+        "actual_level", node.get_node_level());
   } else {
     cur_block_offset_ = start_offset;
     cur_block_length_ = 0;
     leaf_ = &node;
     dummy_ = NULL;
-    root_ = NULL;
     write_ctx_ = &write_ctx;
     compressor_type_ = compressor_type;
     is_inited_ = true;
@@ -302,8 +233,6 @@ int ObIBackupMultiLevelIndexBuilder::check_need_build_next_level_(ObBackupIndexB
   if (OB_ISNULL(node)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid args", K(ret), K(node));
-  } else if (OB_BACKUP_MULTI_LEVEL_INDEX_BASE_LEVEL + 1 == node->get_node_level()) {
-    need_build = true;
   } else {
     const int64_t write_count = node->get_write_count();
     if (write_count <= 1) {
@@ -513,14 +442,6 @@ int ObIBackupMultiLevelIndexBuilder::flush_trailer_()
   return ret;
 }
 
-/* ObBackupMultiLevelMacroIndexBuilder */
-
-int ObBackupMultiLevelMacroIndexBuilder::build_next_level_index_(
-    ObBackupIndexBufferNode &cur_node, ObBackupIndexBufferNode &next_node)
-{
-  return build_next_level_index_impl_<ObBackupMacroRangeIndexIndex>(cur_node, next_node);
-}
-
 /* ObBackupMultiLevelMetaIndexBuilder */
 
 int ObBackupMultiLevelMetaIndexBuilder::build_next_level_index_(
@@ -547,8 +468,7 @@ ObIBackupIndexMerger::ObIBackupIndexMerger()
       dev_handle_(NULL),
       io_fd_(),
       write_ctx_(),
-      buffer_node_(),
-      sql_proxy_(NULL)
+      buffer_node_()
 {}
 
 ObIBackupIndexMerger::~ObIBackupIndexMerger()
@@ -757,536 +677,6 @@ int ObIBackupIndexMerger::write_backup_file_header_(const ObBackupFileHeader &fi
   return ret;
 }
 
-/* ObBackupMacroBlockIndexMerger */
-
-ObBackupMacroBlockIndexMerger::ObBackupMacroBlockIndexMerger()
-    : ObIBackupIndexMerger(), comparator_(), merge_iter_array_(), tmp_index_list_()
-{}
-
-ObBackupMacroBlockIndexMerger::~ObBackupMacroBlockIndexMerger()
-{
-  reset();
-}
-
-int ObBackupMacroBlockIndexMerger::init(const ObBackupIndexMergeParam &merge_param, common::ObISQLClient &sql_proxy,
-    common::ObInOutBandwidthThrottle &bandwidth_throttle)
-{
-  int ret = OB_SUCCESS;
-  const ObBackupBlockType block_type = BACKUP_BLOCK_MACRO_DATA;
-  const int64_t node_level = OB_BACKUP_MULTI_LEVEL_INDEX_BASE_LEVEL + 1;
-  const ObBackupFileType file_type = BACKUP_MACRO_RANGE_INDEX_FILE;
-  if (IS_INIT) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("index merger init twice", K(ret));
-  } else if (!merge_param.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(merge_param));
-  } else if (OB_FAIL(buffer_writer_.ensure_space(OB_DEFAULT_MACRO_BLOCK_SIZE))) {
-    LOG_WARN("failed to ensure space", K(ret));
-  } else if (OB_FAIL(buffer_node_.init(merge_param.tenant_id_, block_type, node_level))) {
-    LOG_WARN("failed to init buffer node", K(ret), K(merge_param), K(block_type), K(node_level));
-  } else if (OB_FAIL(prepare_merge_ctx_(merge_param, sql_proxy, bandwidth_throttle))) {
-    LOG_WARN("failed to prepare merge ctx", K(ret), K(merge_param));
-  } else if (OB_FAIL(write_backup_file_header_(file_type))) {
-    LOG_WARN("failed to write backup file header", K(ret));
-  } else if (OB_FAIL(merge_param_.assign(merge_param))) {
-    LOG_WARN("failed to assign param", K(ret), K(merge_param));
-  } else {
-    sql_proxy_ = &sql_proxy;
-    is_inited_ = true;
-  }
-  return ret;
-}
-
-void ObBackupMacroBlockIndexMerger::reset()
-{
-  for (int64_t i = 0; i < merge_iter_array_.count(); ++i) {
-    ObIMacroBlockIndexIterator *&iter = merge_iter_array_.at(i);
-    if (OB_NOT_NULL(iter)) {
-      ObLSBackupFactory::free(iter);
-    }
-  }
-  merge_iter_array_.reset();
-}
-
-int ObBackupMacroBlockIndexMerger::merge_index()
-{
-  int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  ObBackupIoAdapter util;
-  ObIBackupMacroBlockIndexFuser *fuser = NULL;
-  MERGE_ITER_ARRAY unfinished_iters;
-  MERGE_ITER_ARRAY min_iters;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("index merger do not init", K(ret));
-  } else if (OB_FAIL(prepare_merge_fuser_(fuser))) {
-    LOG_WARN("failed to prepare merge fuser", K(ret));
-  } else {
-    ObBackupMacroRangeIndex range_index;
-    int64_t count = 0;
-    while (OB_SUCC(ret)) {
-      unfinished_iters.reset();
-      min_iters.reset();
-      range_index.reset();
-      if (OB_FAIL(get_unfinished_iters_(merge_iter_array_, unfinished_iters))) {
-        LOG_WARN("failed to get unfinished iters", K(ret), K(unfinished_iters));
-      } else if (unfinished_iters.empty()) {
-        LOG_INFO("merge index finish", K(count), K(merge_iter_array_));
-        break;
-      } else if (OB_FAIL(find_minimum_iters_(unfinished_iters, min_iters))) {
-        LOG_WARN("failed to find minumum iters", K(ret), K(unfinished_iters));
-      } else if (min_iters.empty()) {
-        LOG_INFO("merge index finish");
-        break;
-      } else if (OB_FAIL(fuse_iters_(min_iters, fuser))) {
-        if (OB_ITER_END == ret) {
-          ret = OB_SUCCESS;
-          LOG_INFO("iterator end", K(min_iters));
-          break;
-        } else {
-          LOG_WARN("failed to fuse iters", K(ret), K(min_iters));
-        }
-      } else if (OB_FAIL(fuser->get_result(range_index))) {
-        LOG_WARN("failed to get fuse result", K(ret), K(min_iters));
-      } else if (OB_FAIL(process_result_(range_index))) {
-        LOG_WARN("failed to process result", K(ret), K(min_iters));
-      } else if (OB_FAIL(move_iters_next_(min_iters))) {
-        LOG_WARN("failed to move iters next", K(ret), K(min_iters));
-      } else {
-        LOG_INFO("macro index merge round", K(count), K(range_index));
-        count++;
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(write_macro_index_list_())) {
-        LOG_WARN("failed to write index list", K(ret));
-      } else if (OB_FAIL(flush_index_tree_())) {
-        LOG_WARN("failed to flush index tree", K(ret));
-      }
-    }
-  }
-  if (OB_NOT_NULL(fuser)) {
-    ObLSBackupFactory::free(fuser);
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(dev_handle_->complete(io_fd_))) {
-      LOG_WARN("fail to complete multipart upload", K(ret), K_(dev_handle), K_(io_fd));
-    }
-  } else {
-    if (OB_NOT_NULL(dev_handle_) && OB_TMP_FAIL(dev_handle_->abort(io_fd_))) {
-      ret = COVER_SUCC(tmp_ret);
-      LOG_WARN("fail to abort multipart upload", K(ret), K(tmp_ret), K_(dev_handle), K_(io_fd));
-    }
-  }
-  if (OB_TMP_FAIL(util.close_device_and_fd(dev_handle_, io_fd_))) {
-    ret = COVER_SUCC(tmp_ret);
-    LOG_WARN("fail to close device or fd", K(ret), K(tmp_ret), K_(dev_handle), K_(io_fd));
-  } else {
-    dev_handle_ = NULL;
-    io_fd_.reset();
-  }
-  return ret;
-}
-
-int ObBackupMacroBlockIndexMerger::prepare_merge_ctx_(
-    const ObBackupIndexMergeParam &merge_param, common::ObISQLClient &sql_proxy,
-    common::ObInOutBandwidthThrottle &bandwidth_throttle)
-{
-  int ret = OB_SUCCESS;
-  ObArray<ObBackupRetryDesc> retry_list;
-  ObBackupPath backup_path;
-  if (OB_FAIL(get_all_retries_(merge_param.task_id_,
-          merge_param.tenant_id_,
-          merge_param.backup_data_type_,
-          merge_param.ls_id_,
-          sql_proxy,
-          retry_list))) {
-    LOG_WARN("failed to get all retries", K(ret), K(merge_param));
-  } else if (OB_FAIL(prepare_merge_iters_(merge_param, retry_list, sql_proxy, merge_iter_array_))) {
-    LOG_WARN("failed to prepare merge iters", K(ret), K(retry_list));
-  } else if (OB_FAIL(get_output_file_path_(merge_param, backup_path))) {
-    LOG_WARN("failed to get output file path", K(ret), K(merge_param));
-  } else if (OB_FAIL(open_file_writer_(backup_path, merge_param.backup_dest_.get_storage_info(), merge_param.dest_id_))) {
-    LOG_WARN("failed to prepare file writer", K(ret), K(backup_path), K(merge_param));
-  } else if (OB_FAIL(prepare_file_write_ctx_(bandwidth_throttle, write_ctx_))) {
-    LOG_WARN("failed to prepare file write ctx", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupMacroBlockIndexMerger::prepare_merge_iters_(const ObBackupIndexMergeParam &merge_param,
-    const common::ObIArray<ObBackupRetryDesc> &retry_list, common::ObISQLClient &sql_proxy,
-    MERGE_ITER_ARRAY &merge_iters)
-{
-  int ret = OB_SUCCESS;
-  merge_iters.reset();
-  for (int64_t i = 0; OB_SUCC(ret) && i < retry_list.count(); ++i) {
-    ObIMacroBlockIndexIterator *iter = NULL;
-    const ObBackupRetryDesc &retry_desc = retry_list.at(i);
-    const bool tenant_level = 0 == merge_param_.ls_id_.id();
-    if (OB_FAIL(alloc_merge_iter_(tenant_level, merge_param, retry_desc, iter))) {
-      LOG_WARN("failed to alloc merge iter", K(ret), K(merge_param), K(retry_desc));
-    } else if (OB_FAIL(merge_iters.push_back(iter))) {
-      LOG_WARN("failed to push back", K(ret), K(iter));
-      ObLSBackupFactory::free(iter);
-    } else {
-      FLOG_INFO("prepare macro block merge iter", K(retry_desc));
-    }
-  }
-  if (merge_param.backup_set_desc_.backup_type_.is_inc_backup() && merge_param.backup_data_type_.is_user_backup()
-      && 0 == merge_param.ls_id_.id()) {
-    ObIMacroBlockIndexIterator *iter = NULL;
-    if (OB_FAIL(prepare_prev_backup_set_index_iter_(merge_param, sql_proxy, iter))) {
-      LOG_WARN("failed to prepare prev backup set index iter", K(ret), K(merge_param));
-    } else if (OB_FAIL(merge_iters.push_back(iter))) {
-      LOG_WARN("failed to push back", K(ret), K(iter));
-      ObLSBackupFactory::free(iter);
-    }
-  }
-  return ret;
-}
-
-int ObBackupMacroBlockIndexMerger::prepare_prev_backup_set_index_iter_(
-    const ObBackupIndexMergeParam &merge_param, common::ObISQLClient &sql_proxy, ObIMacroBlockIndexIterator *&iter)
-{
-  int ret = OB_SUCCESS;
-  share::ObBackupSetFileDesc prev_backup_set_info;
-  share::ObBackupSetDesc prev_backup_set_desc;
-  ObBackupMacroRangeIndexIterator *tmp_iter = NULL;
-  const ObBackupIndexIteratorType type = BACKUP_MACRO_RANGE_INDEX_ITERATOR;
-  int64_t prev_tenant_index_retry_id = 0;
-  int64_t prev_tenant_index_turn_id = 0;
-  if (!merge_param.backup_set_desc_.backup_type_.is_inc_backup()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("no need to prepare if not incremental", K(ret));
-  } else if (OB_ISNULL(tmp_iter = static_cast<ObBackupMacroRangeIndexIterator *>(
-                           ObLSBackupFactory::get_backup_index_iterator(type, merge_param.tenant_id_)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to get backup index iterator", K(ret), K(type));
-  } else if (OB_FAIL(ObLSBackupOperator::get_prev_backup_set_desc(merge_param.tenant_id_,
-                 merge_param.backup_set_desc_.backup_set_id_, merge_param.dest_id_,
-                 prev_backup_set_info,
-                 sql_proxy))) {
-    LOG_WARN("failed to get prev backup set desc", K(ret), K(merge_param));
-  } else if (OB_FALSE_IT(prev_backup_set_desc.backup_set_id_ = prev_backup_set_info.backup_set_id_)) {
-  } else if (OB_FALSE_IT(prev_backup_set_desc.backup_type_ = prev_backup_set_info.backup_type_)) {
-  } else if (OB_FALSE_IT(prev_tenant_index_turn_id = prev_backup_set_info.major_turn_id_)) {
-  } else if (OB_FAIL(get_prev_tenant_index_retry_id_(merge_param,
-                                                     prev_backup_set_desc,
-                                                     prev_tenant_index_turn_id,
-                                                     prev_tenant_index_retry_id))) {
-    LOG_WARN("failed to get prev tenant index retry id", K(ret), K(merge_param), K(prev_backup_set_desc));
-  } else if (OB_FAIL(tmp_iter->init(merge_param.task_id_,
-                 merge_param.backup_dest_,
-                 merge_param.tenant_id_,
-                 prev_backup_set_desc,
-                 merge_param.ls_id_,
-                 merge_param.backup_data_type_,
-                 prev_tenant_index_turn_id,
-                 prev_tenant_index_retry_id,
-                 merge_param.dest_id_))) {
-    LOG_WARN("failed to init backup macro range index iterator", K(ret), K(merge_param), K(prev_backup_set_desc), K(prev_tenant_index_retry_id));
-  } else {
-    iter = tmp_iter;
-    tmp_iter = NULL;
-    LOG_INFO("prepare prev backup set index iter", K(prev_backup_set_desc), K(merge_param));
-  }
-  if (OB_NOT_NULL(tmp_iter)) {
-    ObLSBackupFactory::free(tmp_iter);
-  }
-  return ret;
-}
-
-int ObBackupMacroBlockIndexMerger::get_prev_tenant_index_retry_id_(const ObBackupIndexMergeParam &param,
-    const share::ObBackupSetDesc &prev_backup_set_desc, const int64_t prev_turn_id, int64_t &retry_id)
-{
-  int ret = OB_SUCCESS;
-  const bool is_restore = false;
-  const bool is_macro_index = true;
-  ObBackupTenantIndexRetryIDGetter retry_id_getter;
-  if (OB_FAIL(retry_id_getter.init(param.backup_dest_, prev_backup_set_desc,
-      param.backup_data_type_, prev_turn_id, is_restore, is_macro_index, false/*is_sec_meta*/))) {
-    LOG_WARN("failed to init retry id getter", K(ret), K(param), K(prev_turn_id));
-  } else if (OB_FAIL(retry_id_getter.get_max_retry_id(retry_id))) {
-    LOG_WARN("failed to get max retry id", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupMacroBlockIndexMerger::alloc_merge_iter_(const bool tenant_level,
-    const ObBackupIndexMergeParam &merge_param, const ObBackupRetryDesc &retry_desc, ObIMacroBlockIndexIterator *&iter)
-{
-  int ret = OB_SUCCESS;
-  const share::ObLSID &ls_id = retry_desc.ls_id_;
-  const int64_t turn_id = retry_desc.turn_id_;
-  const int64_t retry_id = retry_desc.retry_id_;
-  if (!retry_desc.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(retry_desc));
-  } else {
-    if (!tenant_level) {
-      const ObBackupIndexIteratorType type = BACKUP_MACRO_BLOCK_INDEX_ITERATOR;
-      ObBackupMacroBlockIndexIterator *tmp_iter = NULL;
-      if (OB_ISNULL(tmp_iter = static_cast<ObBackupMacroBlockIndexIterator *>(
-                        ObLSBackupFactory::get_backup_index_iterator(type, merge_param.tenant_id_)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc iterator", K(ret));
-      } else if (OB_FAIL(tmp_iter->init(merge_param.task_id_,
-                     merge_param.backup_dest_,
-                     merge_param.tenant_id_,
-                     merge_param.backup_set_desc_,
-                     ls_id,
-                     merge_param.backup_data_type_,
-                     turn_id,
-                     retry_id,
-                     merge_param.dest_id_,
-                     true/*need_read_inner_table*/))) {
-        LOG_WARN("failed to init macro block index iterator", K(ret), K(merge_param), K(ls_id), K(turn_id));
-      } else {
-        iter = tmp_iter;
-        tmp_iter = NULL;
-      }
-      if (OB_NOT_NULL(tmp_iter)) {
-        ObLSBackupFactory::free(tmp_iter);
-      }
-    } else {
-      const ObBackupIndexIteratorType type = BACKUP_MACRO_RANGE_INDEX_ITERATOR;
-      ObBackupMacroRangeIndexIterator *tmp_iter = NULL;
-      if (OB_ISNULL(tmp_iter = static_cast<ObBackupMacroRangeIndexIterator *>(
-                        ObLSBackupFactory::get_backup_index_iterator(type, merge_param.tenant_id_)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc iterator", K(ret));
-      } else if (OB_FAIL(tmp_iter->init(merge_param.task_id_,
-                     merge_param.backup_dest_,
-                     merge_param.tenant_id_,
-                     merge_param.backup_set_desc_,
-                     ls_id,
-                     merge_param.backup_data_type_,
-                     turn_id,
-                     retry_id,
-                     merge_param.dest_id_))) {
-        LOG_WARN(
-            "failed to init macro block index iterator", K(ret), K(merge_param), K(ls_id), K(turn_id), K(retry_id));
-      } else {
-        iter = tmp_iter;
-        tmp_iter = NULL;
-      }
-      if (OB_NOT_NULL(tmp_iter)) {
-        ObLSBackupFactory::free(tmp_iter);
-      }
-    }
-  }
-  return ret;
-}
-
-int ObBackupMacroBlockIndexMerger::get_unfinished_iters_(
-    const MERGE_ITER_ARRAY &merge_iters, MERGE_ITER_ARRAY &unfinished_iters)
-{
-  int ret = OB_SUCCESS;
-  unfinished_iters.reset();
-  for (int i = 0; OB_SUCC(ret) && i < merge_iters.count(); ++i) {
-    ObIMacroBlockIndexIterator *iter = merge_iters.at(i);
-    if (OB_ISNULL(iter)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("iter should not be null", K(ret));
-    } else if (iter->is_iter_end()) {
-      continue;
-    } else if (OB_FAIL(unfinished_iters.push_back(iter))) {
-      LOG_WARN("failed to push back", K(ret), K(iter));
-    }
-  }
-  return ret;
-}
-
-int ObBackupMacroBlockIndexMerger::find_minimum_iters_(const MERGE_ITER_ARRAY &merge_iters, MERGE_ITER_ARRAY &min_iters)
-{
-  int ret = OB_SUCCESS;
-  min_iters.reset();
-  int64_t cmp_ret = 0;
-  ObIMacroBlockIndexIterator *iter = NULL;
-  for (int64_t i = merge_iters.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
-    if (OB_ISNULL(iter = merge_iters.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null index iter", K(ret));
-    } else if (iter->is_iter_end()) {
-      continue;  // skip
-    } else if (min_iters.empty()) {
-      if (OB_FAIL(min_iters.push_back(iter))) {
-        LOG_WARN("failed to push back", K(ret), K(iter));
-      }
-    } else if (OB_FAIL(compare_index_iters_(min_iters.at(0), iter, cmp_ret))) {
-      LOG_WARN("failed to compare index iters", K(ret), K(min_iters), K(*iter));
-    } else {
-      if (cmp_ret < 0) {
-        min_iters.reset();
-      }
-      if (cmp_ret <= 0) {
-        if (OB_FAIL(min_iters.push_back(iter))) {
-          LOG_WARN("failed to push iter to min_iters", K(ret));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObBackupMacroBlockIndexMerger::prepare_merge_fuser_(ObIBackupMacroBlockIndexFuser *&fuser)
-{
-  int ret = OB_SUCCESS;
-  ObBackupMacroIndexFuserType type;
-  ObIBackupMacroBlockIndexFuser *tmp_fuser = NULL;
-  if (merge_param_.backup_data_type_.is_major_backup()) {
-    type = BACKUP_MACRO_INDEX_MAJOR_FUSER;
-  } else {
-    type = BACKUP_MACRO_INDEX_MINOR_FUSER;
-  }
-  if (OB_ISNULL(tmp_fuser = ObLSBackupFactory::get_backup_macro_index_fuser(type, merge_param_.tenant_id_))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate provider", K(ret), K(type));
-  } else {
-    fuser = tmp_fuser;
-  }
-  return ret;
-}
-
-int ObBackupMacroBlockIndexMerger::fuse_iters_(MERGE_ITER_ARRAY &merge_iters, ObIBackupMacroBlockIndexFuser *fuser)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(fuser)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fuser should not be null", K(ret));
-  } else if (OB_FAIL(fuser->fuse(merge_iters))) {
-    LOG_WARN("failed to fuse iters", K(ret), KP(fuser));
-  }
-  return ret;
-}
-
-int ObBackupMacroBlockIndexMerger::process_result_(const ObBackupMacroRangeIndex &index)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!index.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(index));
-  } else if (OB_FAIL(tmp_index_list_.push_back(index))) {
-    LOG_WARN("failed to push back", K(ret), K(index));
-  } else if (tmp_index_list_.count() >= OB_BACKUP_INDEX_BLOCK_NODE_CAPACITY) {
-    if (OB_FAIL(write_macro_index_list_())) {
-      LOG_WARN("failed to write macro block index list", K(ret));
-    } else {
-      LOG_INFO("process result", K_(tmp_index_list));
-      tmp_index_list_.reset();
-    }
-  }
-  return ret;
-}
-
-int ObBackupMacroBlockIndexMerger::move_iters_next_(MERGE_ITER_ARRAY &merge_iters)
-{
-  int ret = OB_SUCCESS;
-  for (int i = 0; OB_SUCC(ret) && i < merge_iters.count(); ++i) {
-    ObIMacroBlockIndexIterator *iter = merge_iters.at(i);
-    if (OB_ISNULL(iter)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("iter should not be null", K(ret));
-    } else if (iter->is_iter_end()) {
-      continue;
-    } else if (OB_FAIL(iter->next())) {
-      if (OB_ITER_END == ret) {
-        ret = OB_SUCCESS;
-        LOG_INFO("iter has reach end", K(ret), K(iter));
-      } else {
-        LOG_WARN("failed to do next", K(ret), K(iter));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObBackupMacroBlockIndexMerger::compare_index_iters_(
-    ObIMacroBlockIndexIterator *lhs, ObIMacroBlockIndexIterator *rhs, int64_t &cmp_ret)
-{
-  int ret = OB_SUCCESS;
-  ObBackupMacroRangeIndex lvalue, rvalue;
-  if (OB_ISNULL(lhs) || OB_ISNULL(rhs)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), KP(lhs), K(rhs));
-  } else if (OB_UNLIKELY(lhs->is_iter_end() || rhs->is_iter_end())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected end row iters", K(ret));
-  } else if (OB_FAIL(lhs->get_cur_index(lvalue))) {
-    LOG_WARN("failed to get cur index", K(ret), K(*lhs));
-  } else if (OB_FAIL(rhs->get_cur_index(rvalue))) {
-    LOG_WARN("failed to get cur index", K(ret), K(*rhs));
-  } else {
-    cmp_ret = comparator_.operator()(lvalue, rvalue);
-  }
-  return ret;
-}
-
-int ObBackupMacroBlockIndexMerger::write_macro_index_list_()
-{
-  int ret = OB_SUCCESS;
-  const ObBackupBlockType block_type = BACKUP_BLOCK_MARCO_RANGE_INDEX;
-  if (OB_SUCCESS != (ret = 
-          (write_index_list_<ObBackupMacroRangeIndex, ObBackupMacroRangeIndexIndex>(block_type, tmp_index_list_)))) {
-    LOG_WARN("failed to write index list", K(ret), K(block_type), K_(tmp_index_list));
-  } else {
-    LOG_INFO("write macro index list", K_(tmp_index_list));
-  }
-  return ret;
-}
-
-int ObBackupMacroBlockIndexMerger::get_output_file_path_(
-    const ObBackupIndexMergeParam &merge_param, share::ObBackupPath &backup_path)
-{
-  int ret = OB_SUCCESS;
-  if (merge_param.index_level_ == BACKUP_INDEX_LEVEL_LOG_STREAM) {
-    if (OB_FAIL(share::ObBackupPathUtil::get_ls_macro_range_index_backup_path(merge_param.backup_dest_,
-            merge_param.backup_set_desc_,
-            merge_param.ls_id_,
-            merge_param.backup_data_type_,
-            merge_param.turn_id_,
-            merge_param.retry_id_,
-            backup_path))) {
-      LOG_WARN("failed to get log stream macro range index file path", K(ret), K(merge_param));
-    } else {
-      LOG_INFO("get ls macro range index backup path", K(backup_path), K(merge_param));
-    }
-  } else if (merge_param.index_level_ == BACKUP_INDEX_LEVEL_TENANT) {
-    if (OB_FAIL(share::ObBackupPathUtil::get_tenant_macro_range_index_backup_path(merge_param.backup_dest_,
-            merge_param.backup_set_desc_,
-            merge_param.backup_data_type_,
-            merge_param.turn_id_,
-            merge_param.retry_id_,
-            backup_path))) {
-      LOG_WARN("failed to get tenant macro range index file path", K(ret), K(merge_param));
-    } else {
-      LOG_INFO("get tenant macro range index backup path", K(backup_path), K(merge_param));
-    }
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid index level type", K(ret), K(merge_param));
-  }
-
-  return ret;
-}
-
-int ObBackupMacroBlockIndexMerger::flush_index_tree_()
-{
-  int ret = OB_SUCCESS;
-  ObBackupMultiLevelMacroIndexBuilder builder;
-  const ObCompressorType compressor_type = merge_param_.compressor_type_;
-  if (OB_FAIL(builder.init(offset_, compressor_type, buffer_node_, write_ctx_))) {
-    LOG_WARN("failed to init multi level index builder", K(ret), K_(offset));
-  } else if (OB_FAIL(builder.build_index<ObBackupMacroRangeIndexIndex>())) {
-    LOG_WARN("failed to build index tree", K(ret));
-  } else {
-    LOG_INFO("flush macro block index tree", K_(offset), K_(buffer_node));
-  }
-  return ret;
-}
-
 /* ObBackupMetaIndexMerger */
 
 ObBackupMetaIndexMerger::ObBackupMetaIndexMerger()
@@ -1322,7 +712,6 @@ int ObBackupMetaIndexMerger::init(const ObBackupIndexMergeParam &merge_param,
   } else if (OB_FAIL(merge_param_.assign(merge_param))) {
     LOG_WARN("failed to assign param", K(ret), K(merge_param));
   } else {
-    sql_proxy_ = &sql_proxy;
     is_inited_ = true;
   }
   return ret;
@@ -1711,14 +1100,11 @@ bool ObBackupUnorderdMacroBlockIndexMerger::BackupMacroBlockIndexComparator::ope
 
 ObBackupUnorderdMacroBlockIndexMerger::ObBackupUnorderdMacroBlockIndexMerger()
   : is_inited_(false),
-    mutex_(common::ObLatchIds::BACKUP_UNORDERED_MACRO_BLOCK_INDEX_MERGER_MUTEX),
     total_count_(0),
     consume_count_(0),
     external_sort_(),
     result_(OB_SUCCESS),
     comparator_(result_),
-    input_size_(0),
-    output_size_(0),
     compressor_(),
     sql_proxy_(NULL),
     bandwidth_throttle_(NULL)

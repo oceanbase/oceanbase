@@ -1059,7 +1059,7 @@ int ObCOSSTableRowsFilter::do_mds_defensive_check()
   for (int64_t i = 0; OB_SUCC(ret) && i < iter_filter_node_.count(); ++i) {
     if (iter_filter_node_[i]->is_mds_node()) {
       has_finded_mds_filter = true;
-    } else if ( /* iter_filter_node_[i]->is_not_mds_node() && */ has_finded_mds_filter) {
+    } else if (has_finded_mds_filter) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected iterate filter node order, mds filter should be at last", K(ret), KPC(access_ctx_), KPC(iter_param_));
       for (int64_t j = 0; j < iter_filter_node_.count(); ++j) {

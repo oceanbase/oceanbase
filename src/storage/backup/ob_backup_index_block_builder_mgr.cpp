@@ -808,20 +808,6 @@ int ObBackupTabletSSTableIndexBuilderMgr::get_sstable_merge_result(
   return ret;
 }
 
-int ObBackupTabletSSTableIndexBuilderMgr::get_sstable_index_builders(
-    common::ObIArray<blocksstable::ObSSTableIndexBuilder *> &builders)
-{
-  int ret = OB_SUCCESS;
-  ObMutexGuard guard(mutex_);
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("builder mgr do not init", K(ret));
-  } else if (OB_FAIL(builders.assign(builders_))) {
-    LOG_WARN("failed to assign", K(ret));
-  }
-  return ret;
-}
-
 int ObBackupTabletSSTableIndexBuilderMgr::close_sstable_index_builder(
     const storage::ObITable::TableKey &table_key, ObIODevice *device_handle)
 {

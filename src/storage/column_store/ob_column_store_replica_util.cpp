@@ -34,32 +34,6 @@ int ObCSReplicaUtil::check_is_cs_replica(
   return ret;
 }
 
-int ObCSReplicaUtil::check_local_is_cs_replica(
-    const share::ObLSID &ls_id,
-    bool &is_cs_replica)
-{
-  int ret = OB_SUCCESS;
-  is_cs_replica = false;
-  ObLS *ls = nullptr;
-  ObLSHandle ls_handle;
-
-  if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
-    if (OB_LS_NOT_EXIST == ret) {
-      // Only use weak consistency locally read for cs replica, so local ls must exist.
-      // If ls not exist, table param or dml param is constructed remotely, ignore it.
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("failed to get ls", K(ret), K(ls_id));
-    }
-  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get nullptr ls", K(ret), K(ls_id), K(ls_handle));
-  } else {
-    is_cs_replica = ls->is_cs_replica();
-  }
-  return ret;
-}
-
 int ObCSReplicaUtil::check_has_cs_replica(
     const share::ObLSID &ls_id,
     bool &has_column_store_replica)
@@ -416,7 +390,7 @@ int ObCSReplicaUtil::get_column_array_from_full_storage_schema(
   if (OB_UNLIKELY(column_cnt <= 0 || column_cnt > full_storage_schema.column_array_.count()
                || expected_stored_column_cnt <= 0 || expected_stored_column_cnt != stored_column_cnt)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected column cnt", K(ret), K(column_cnt), K(stored_column_cnt), K(expected_stored_column_cnt), K(stored_column_cnt), K(full_storage_schema));
+    LOG_WARN("unexpected column cnt", K(ret), K(column_cnt), K(stored_column_cnt), K(expected_stored_column_cnt), K(full_storage_schema.column_array_.count()), K(full_storage_schema));
   } else if (OB_FAIL(column_array.init(column_cnt))) {
     LOG_WARN("failed to init column array", K(ret), K(column_cnt));
   } else {

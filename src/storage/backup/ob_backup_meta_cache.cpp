@@ -125,6 +125,7 @@ int ObBackupMetaKVCache::init()
 void ObBackupMetaKVCache::destroy()
 {
   ObKVCache<ObBackupMetaCacheKey, ObBackupMetaCacheValue>::destroy();
+  is_inited_ = false;
 }
 
 bool ObBackupMetaKVCache::is_inited() const

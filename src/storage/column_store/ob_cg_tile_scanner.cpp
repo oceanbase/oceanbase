@@ -97,6 +97,9 @@ int ObCGTileScanner::switch_context(
       } else if (OB_UNLIKELY(col_cnt_changed)) {
         if (FALSE_IT(access_ctx.cg_iter_pool_->return_cg_iter(cg_scanner, cg_scanner->get_cg_idx()))) {
         } else if (OB_FAIL(co_sstable->cg_scan(cg_param, access_ctx, cg_scanner, true, project_single_row))) {
+          // the old cg scanner has been returned to the iter pool, null the slot
+          // to avoid double free when this tile scanner gets reset
+          cg_scanner = nullptr;
           LOG_WARN("Failed to cg scan", K(ret));
         }
       } else if (!is_virtual_cg(cg_param.cg_idx_) && OB_FAIL(co_sstable->fetch_cg_sstable(cg_param.cg_idx_, cg_wrapper))) {
@@ -284,18 +287,26 @@ int ObCGTileScanner::get_next_rows(uint64_t &count, const uint64_t capacity)
 int ObCGTileScanner::get_next_row(const blocksstable::ObDatumRow *&datum_row)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < cg_scanners_.count(); ++i) {
-    const ObDatumRow *tmp_datum_row = nullptr;
-    if (OB_FAIL(cg_scanners_[i]->get_next_row(tmp_datum_row))) {
-      if (OB_UNLIKELY(OB_ITER_END != ret)) {
-        LOG_WARN("Failed to get next row", K(ret), K(i), KP(cg_scanners_[i]));
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Not init", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < cg_scanners_.count(); ++i) {
+      const ObDatumRow *tmp_datum_row = nullptr;
+      if (OB_ISNULL(cg_scanners_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected null cg scanner", K(ret), K(i));
+      } else if (OB_FAIL(cg_scanners_[i]->get_next_row(tmp_datum_row))) {
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+          LOG_WARN("Failed to get next row", K(ret), K(i), KP(cg_scanners_[i]));
+        }
+      } else {
+        datum_row_.storage_datums_[i] = tmp_datum_row->storage_datums_[0];
       }
-    } else {
-      datum_row_.storage_datums_[i] = tmp_datum_row->storage_datums_[0];
     }
-  }
-  if (OB_SUCC(ret)) {
-    datum_row = &datum_row_;
+    if (OB_SUCC(ret)) {
+      datum_row = &datum_row_;
+    }
   }
   return ret;
 }

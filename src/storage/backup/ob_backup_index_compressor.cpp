@@ -46,10 +46,7 @@ int ObBackupIndexBlockCompressor::init(const int64_t block_size, const ObCompres
   int ret = OB_SUCCESS;
   reset();
 
-  if (IS_INIT) {
-    ret = OB_INIT_TWICE;
-    STORAGE_LOG(WARN, "backup index block compressor init twice", K(ret));
-  } else if (OB_UNLIKELY(block_size <= 0)) {
+  if (OB_UNLIKELY(block_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument, ", K(ret), K(block_size), K(comp_type));
   } else if (comp_type == NONE_COMPRESSOR) {

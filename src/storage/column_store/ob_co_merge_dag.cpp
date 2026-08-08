@@ -554,8 +554,8 @@ int ObCOMergeExeDag::set_cg_merge_status(
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(range_idx < 0 || range_idx >= range_count_ ||
-      start_cg_idx >= end_cg_idx || end_cg_idx > cg_count_ ||
-      status < CGMergeStatus::CG_NEED_REPLAY || status > CGMergeStatus::CG_SSTABLE_CREATED)) {
+      start_cg_idx < 0 || start_cg_idx >= end_cg_idx || end_cg_idx > cg_count_ ||
+      status > CGMergeStatus::CG_SSTABLE_CREATED)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(range_idx), K(start_cg_idx), K(end_cg_idx),
                                  K(range_count_), K(cg_count_), K(status));
@@ -576,13 +576,12 @@ int ObCOMergeExeDag::finish_replay(
   ObCOMergeDagNet *dag_net = nullptr;
   ObCOTabletMergeCtx *ctx = nullptr;
   if (OB_UNLIKELY(range_idx < 0 || range_idx >= range_count_ ||
-      start_cg_idx >= end_cg_idx || end_cg_idx > cg_count_)) {
+      start_cg_idx < 0 || start_cg_idx >= end_cg_idx || end_cg_idx > cg_count_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(range_idx), K(start_cg_idx), K(end_cg_idx), K(range_count_), K(cg_count_));
   } else if (OB_FAIL(get_dag_net_and_ctx(dag_net, ctx))) {
     LOG_WARN("failed to get dag net and ctx", K(ret));
   } else {
-    ObCOMergeFinishTask *finish_task = nullptr;
     bool range_replay_finished = false;
     {
       ObSpinLockGuard lock_guard(exe_lock_);
@@ -628,7 +627,7 @@ int ObCOMergeExeDag::set_range_merge_status(const int64_t range_idx, const Range
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(range_idx < 0 || range_idx >= range_count_ ||
-      status < RangeMergeStatus::RANGE_NEED_PERSIST || status > RangeMergeStatus::RANGE_PERSIST_FINISH)) {
+      status > RangeMergeStatus::RANGE_PERSIST_FINISH)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(range_idx), K(range_count_), K(cg_count_));
   } else {
@@ -958,7 +957,7 @@ int ObCOMergeExeTask::init(ObCOMergeDagNet &dag_net, const int64_t range_idx)
     LOG_WARN("failed to init ObCOMergeTask", K(ret));
   } else if (OB_FAIL(get_ctx_from_dag_net(dag_net, ctx))) {
     LOG_WARN("fail to get ctx from dag net", K(ret));
-  } else if (0 > range_idx || range_idx > ctx->get_concurrent_cnt()) {
+  } else if (0 > range_idx || range_idx >= ctx->get_concurrent_cnt()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid range idx", K(ret), K(range_idx), KPC(ctx));
   } else {
@@ -1160,7 +1159,6 @@ int ObCOMergeLogReplayTask::process()
   bool all_cg_replay_finished = false;
   ObCOMergeExeDag *exe_dag = static_cast<ObCOMergeExeDag*>(dag_);
   ObCOTabletMergeCtx *ctx = nullptr;
-  void *buf = nullptr;
   const int64_t start_time = ObClockGenerator::getClock();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;

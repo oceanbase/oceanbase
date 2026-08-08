@@ -56,11 +56,11 @@ int ObBackupLinkedBlockReader::init(const share::ObBackupDest &backup_set_dest,
       K(tablet_id), K(table_key));
   } else if (OB_FAIL(backup_set_dest_.deep_copy(backup_set_dest))) {
     LOG_WARN("failed to deep copy", K(ret), K(backup_set_dest));
+  } else if (FALSE_IT(allocator_.set_attr(mem_attr))) {
   } else if (OB_ISNULL(buf_ = static_cast<char *>(allocator_.alloc(BLOCK_SIZE)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
   } else {
-    allocator_.set_attr(mem_attr);
     mod_ = mod;
     buf_len_ = BLOCK_SIZE;
     total_block_cnt_ = total_block_cnt;
@@ -267,12 +267,10 @@ int ObBackupLinkedBlockItemReader::get_next_item(ObBackupLinkedItem &link_item)
     LOG_WARN("ObBackupLinkedBlockItemReader has reach end", K_(has_prev), K_(item_idx), "count", block_item_list_.count());
   } else if (OB_FAIL(check_need_fetch_new_block_(need_fetch_new))) {
     LOG_WARN("failed to check need fetch new block", K(ret));
-  } else if (!need_fetch_new) {
-    // do nothing
-  } else if (OB_FAIL(read_item_block_())) {
+  } else if (need_fetch_new && OB_FAIL(read_item_block_())) {
     LOG_WARN("failed to read item block", K(ret));
   }
-  if (FAILEDx(inner_get_next_item_(link_item))) {
+  if (OB_SUCC(ret) && OB_FAIL(inner_get_next_item_(link_item))) {
     LOG_WARN("failed to parse item", K(ret));
   }
   return ret;

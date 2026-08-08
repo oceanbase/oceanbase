@@ -233,8 +233,7 @@ bool CompareArchivePiece::operator()(
 ObBackupComplementLogDagNet::ObBackupComplementLogDagNet()
     : ObBackupDagNet(ObBackupDagNetSubType::LOG_STREAM_BACKUP_COMPLEMENT_LOG_DAG_NET),
       is_inited_(false),
-      ctx_(),
-      bandwidth_throttle_(NULL)
+      ctx_()
 {}
 
 ObBackupComplementLogDagNet::~ObBackupComplementLogDagNet()
@@ -382,7 +381,6 @@ bool ObBackupComplementLogDagNet::is_valid() const
 
 uint64_t ObBackupComplementLogDagNet::hash() const
 {
-  int ret = OB_SUCCESS;
   uint64_t hash_value = 0;
   const int64_t type = ObBackupDagNetSubType::LOG_STREAM_BACKUP_COMPLEMENT_LOG_DAG_NET;
   hash_value = common::murmurhash(&type, sizeof(type), hash_value);
@@ -1054,10 +1052,13 @@ int ObBackupLSLogTask::update_ls_task_stat_(const share::ObBackupStats &old_back
     new_backup_stat.input_bytes_ = old_backup_stat.input_bytes_;
     new_backup_stat.output_bytes_ = old_backup_stat.output_bytes_;
     new_backup_stat.tablet_count_ = old_backup_stat.tablet_count_;
+    new_backup_stat.finish_tablet_count_ = old_backup_stat.finish_tablet_count_;
     new_backup_stat.macro_block_count_ = old_backup_stat.macro_block_count_;
     new_backup_stat.finish_macro_block_count_ = old_backup_stat.finish_macro_block_count_;
-    new_backup_stat.finish_tablet_count_ = old_backup_stat.finish_tablet_count_;
-    new_backup_stat.finish_macro_block_count_ = new_backup_stat.finish_macro_block_count_;
+    new_backup_stat.extra_bytes_ = old_backup_stat.extra_bytes_;
+    new_backup_stat.finish_file_count_ = old_backup_stat.finish_file_count_;
+    new_backup_stat.log_file_count_ = old_backup_stat.log_file_count_;
+    new_backup_stat.finish_log_file_count_ = old_backup_stat.finish_log_file_count_;
     new_backup_stat.log_file_count_ += compl_log_file_count;
   }
   return ret;
@@ -1069,7 +1070,6 @@ int ObBackupLSLogTask::report_complement_log_stat_(const common::ObIArray<ObBack
   int tmp_ret = OB_SUCCESS;
   const int64_t compl_log_file_count = file_list.count();
   ObMySQLTransaction trans;
-  int64_t max_file_id = 0;
   const bool for_update = true;
   const int64_t job_id = ctx_->job_desc_.job_id_;
   const int64_t task_id = ctx_->job_desc_.task_id_;
@@ -1417,67 +1417,6 @@ int ObBackupLSLogTask::get_src_backup_piece_dir_(const share::ObLSID &ls_id,
   return ret;
 }
 
-int ObBackupLSLogTask::write_format_file_()
-{
-  int ret = OB_SUCCESS;
-  share::ObBackupStore store;
-  share::ObBackupFormatDesc format_desc;
-  bool is_exist = false;
-  ObBackupDest new_backup_dest;
-  if (OB_FAIL(ObBackupPathUtil::construct_backup_complement_log_dest(
-      ctx_->backup_dest_, ctx_->backup_set_desc_, new_backup_dest))) {
-    LOG_WARN("failed to set archive dest", K(ret));
-  } else if (OB_FAIL(store.init(new_backup_dest))) {
-    LOG_WARN("fail to init store", K(ret), K(new_backup_dest));
-  } else if (OB_FAIL(store.is_format_file_exist(is_exist))) {
-    LOG_WARN("fail to check format file exist", K(ret));
-  } else if (is_exist) {
-    // do not recreate the format file
-  } else if (OB_FAIL(generate_format_desc_(format_desc))) {
-    LOG_WARN("fail to generate format desc", K(ret));
-  } else if (OB_FAIL(store.write_format_file(format_desc))) {
-    LOG_WARN("fail to write format file", K(ret), K(format_desc));
-  }
-  return ret;
-}
-
-int ObBackupLSLogTask::generate_format_desc_(share::ObBackupFormatDesc &format_desc)
-{
-  int ret = OB_SUCCESS;
-  schema::ObSchemaGetterGuard schema_guard;
-  share::ObBackupPathString root_path;
-  const schema::ObTenantSchema *tenant_schema = nullptr;
-  ObBackupDest new_backup_dest;
-  const ObBackupDestType::TYPE &dest_type = ObBackupDestType::DEST_TYPE_ARCHIVE_LOG;
-  if (OB_FAIL(ObBackupPathUtil::construct_backup_complement_log_dest(
-      ctx_->backup_dest_, ctx_->backup_set_desc_, new_backup_dest))) {
-    LOG_WARN("failed to set archive dest", K(ret));
-  } else if (OB_ISNULL(GCTX.schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid argument", K(ret), K(GCTX.schema_service_));
-  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
-    LOG_WARN("get_schema_guard failed", K(ret));
-  } else if (OB_FAIL(schema_guard.get_tenant_info(ctx_->tenant_id_, tenant_schema))) {
-    LOG_WARN("failed to get tenant info", K(ret), KPC_(ctx));
-  } else if (OB_ISNULL(tenant_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid tenant schema", K(ret));
-  } else if (OB_FAIL(format_desc.cluster_name_.assign(GCONF.cluster.str()))) {
-    LOG_WARN("failed to assign cluster name", K(ret));
-  } else if (OB_FAIL(format_desc.tenant_name_.assign(tenant_schema->get_tenant_name()))) {
-    LOG_WARN("failed to assign tenant name", K(ret));
-  } else if (OB_FAIL(new_backup_dest.get_backup_path_str(format_desc.path_.ptr(), format_desc.path_.capacity()))) {
-    LOG_WARN("failed to get backup path", K(ret));
-  } else {
-    format_desc.tenant_id_ = ctx_->tenant_id_;
-    format_desc.incarnation_ = OB_START_INCARNATION;
-    format_desc.dest_id_ = ctx_->dest_id_;
-    format_desc.dest_type_ = dest_type;
-    format_desc.cluster_id_ = GCONF.cluster_id;
-  }
-  return ret;
-}
-
 int ObBackupLSLogTask::transform_and_copy_meta_file_(const ObTenantArchivePieceAttr &piece_attr)
 {
   int ret = OB_SUCCESS;
@@ -1555,8 +1494,8 @@ int ObBackupLSLogTask::copy_ls_file_info_(
     } else {
       const int64_t file_size = desc.get_serialize_size() + sizeof(ObBackupCommonHeader);
       ObBackupPath ls_file_info_path;
-      if (OB_FAIL(ObArchivePathUtil::get_ls_file_info_path(dest, src_dest_id, round_id, piece_id, ls_id, ls_file_info_path))) {
-        LOG_WARN("failed to get ls file info path", K(ret), K(dest), K(src_dest_id), K(round_id), K(piece_id), K(ls_id));
+      if (OB_FAIL(ObArchivePathUtil::get_ls_file_info_path(dest, dest_dest_id, round_id, piece_id, ls_id, ls_file_info_path))) {
+        LOG_WARN("failed to get ls file info path", K(ret), K(dest), K(dest_dest_id), K(round_id), K(piece_id), K(ls_id));
       } else if (OB_FAIL(file_list_info.push_file_info(ls_file_info_path, file_size))) {
         LOG_WARN("failed to push file info", K(ret), K(ls_file_info_path), K(file_size));
       } else if (OB_FAIL(ObBackupFileListWriterUtil::write_file_list_to_path(dest.get_storage_info(),
@@ -2277,7 +2216,6 @@ int ObBackupLSLogFinishTask::init(const share::ObLSID &ls_id,
   } else if (OB_FAIL(file_list_.assign(file_list))) {
     LOG_WARN("failed to assign file list", K(ret), K(file_list));
   } else {
-    ls_id_ = ls_id;
     ctx_ = ctx;
     is_inited_ = true;
   }
@@ -2580,8 +2518,6 @@ int ObBackupLSLogGroupFinishTask::process()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup ls log copy finish task do not init", K(ret));
-  } else {
-    // do nothing
   }
   if (OB_TMP_FAIL(report_task_result_())) {
     LOG_WARN("failed to report task result", K(tmp_ret), K(ret));

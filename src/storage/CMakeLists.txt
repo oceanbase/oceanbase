@@ -377,7 +377,6 @@ ob_set_subtarget(ob_storage backup
   backup/ob_backup_linked_item.cpp
   backup/ob_backup_linked_block_writer.cpp
   backup/ob_backup_linked_block_reader.cpp
-  backup/ob_backup_other_blocks_mgr.cpp
   backup/ob_backup_device_wrapper.cpp
   backup/ob_backup_index_block_builder_mgr.cpp
   backup/ob_backup_sstable_sec_meta_iterator.cpp

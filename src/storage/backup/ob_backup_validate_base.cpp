@@ -30,22 +30,6 @@ ObBackupValidateDagNetInitParam::ObBackupValidateDagNetInitParam()
 {
 }
 
-void ObBackupValidateDagNetInitParam::reset()
-{
-  trace_id_.reset();
-  job_id_ = 0;
-  tenant_id_ = 0;
-  incarnation_ = 0;
-  task_id_ = 0;
-  ls_id_.reset();
-  task_type_.reset();
-  validate_id_ = 0;
-  dest_id_ = 0;
-  round_id_ = 0;
-  validate_level_.reset();
-  validate_path_.reset();
-}
-
 bool ObBackupValidateDagNetInitParam::is_valid() const
 {
   return trace_id_.is_valid() && job_id_ > 0 && tenant_id_ > 0
@@ -88,11 +72,6 @@ bool ObBackupValidateDagNetInitParam::operator == (const ObBackupValidateDagNetI
           && validate_path_ == other.validate_path_;
 }
 
-bool ObBackupValidateDagNetInitParam::operator != (const ObBackupValidateDagNetInitParam &other) const
-{
-  return !(*this == other);
-}
-
 uint64_t ObBackupValidateDagNetInitParam::hash() const
 {
   uint64_t hash_value = 0;
@@ -131,45 +110,6 @@ int ObBackupValidateDagNetInitParam::assign(const ObBackupValidateDagNetInitPara
     dest_id_ = other.dest_id_;
     round_id_ = other.round_id_;
     validate_level_ = other.validate_level_;
-  }
-  return ret;
-}
-
-/*
--------------------------ObBackupFileGroup-------------------------------
-*/
-ObBackupFileGroup::ObBackupFileGroup()
-  : group_id_(-1), accumulated_file_count_(0), file_list_()
-{
-}
-
-void ObBackupFileGroup::reset()
-{
-  group_id_ = -1;
-  accumulated_file_count_ = 0;
-  file_list_.reset();
-}
-
-bool ObBackupFileGroup::is_valid() const
-{
-  return group_id_ >= 0 && file_list_.count() > 0 && file_list_.count() <= OB_MAX_FILES_PER_VALIDATE_GROUP
-            && accumulated_file_count_ > 0;
-}
-
-int ObBackupFileGroup::assign(const ObBackupFileGroup &other)
-{
-  int ret = OB_SUCCESS;
-  if (is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("file group already valid", KR(ret));
-  } else if (!other.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid file group", KR(ret), K(other));
-  } else if (OB_FAIL(file_list_.assign(other.file_list_))) {
-    LOG_WARN("failed to assign file list", KR(ret));
-  } else {
-    group_id_ = other.group_id_;
-    accumulated_file_count_ = other.accumulated_file_count_;
   }
   return ret;
 }
@@ -221,22 +161,6 @@ ObBackupValidateTaskContext::ObBackupValidateTaskContext()
 {
 }
 
-void ObBackupValidateTaskContext::reset()
-{
-  tablet_array_.reset();
-  dir_queue_.reset();
-  archive_piece_lsn_ranges_.reset();
-  running_groups_.clear();
-  result_ = OB_SUCCESS;
-  next_task_id_ = 0;
-  total_task_count_ = 0;
-  total_read_bytes_ = 0;
-  delta_read_bytes_ = 0;
-  last_reported_checkpoint_ = 0;
-  running_groups_.destroy();
-  inited_ = false;
-}
-
 int ObBackupValidateTaskContext::init()
 {
   int ret = OB_SUCCESS;
@@ -249,11 +173,6 @@ int ObBackupValidateTaskContext::init()
     inited_ = true;
   }
   return ret;
-}
-
-bool ObBackupValidateTaskContext::is_valid() const
-{
-  return inited_ && (!dir_queue_.empty() || !tablet_array_.empty() || !archive_piece_lsn_ranges_.empty()) ;
 }
 
 int ObBackupValidateTaskContext::set_dir_queue(const common::ObIArray<ObBackupPathString> &dir_queue)
@@ -597,10 +516,7 @@ int ObBackupValidateObUtils::init_meta_index_store(
     const backup::ObBackupIndexLevel index_level = backup::ObBackupIndexLevel::BACKUP_INDEX_LEVEL_LOG_STREAM;
     backup::ObBackupIndexStoreParam index_store_param;
     int64_t retry_id = 0;
-    int64_t dest_id = 0;
     const ObLSID &ls_id = param.ls_id_;
-    share::ObBackupDataType data_type;
-    data_type.set_sys_data_backup();
     index_store_param.index_level_ = index_level;
     index_store_param.tenant_id_ = param.tenant_id_;
     index_store_param.backup_set_id_ = backup_set_info.backup_set_file_.backup_set_id_;

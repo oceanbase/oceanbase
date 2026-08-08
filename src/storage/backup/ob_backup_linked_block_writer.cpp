@@ -104,6 +104,8 @@ int ObBackupLinkedBlockWriter::calc_next_block_addr_()
 
 // ObBackupLinkedBlockItemWriter
 
+const int64_t ObBackupLinkedBlockItemWriter::BLOCK_SIZE;
+
 ObBackupLinkedBlockItemWriter::ObBackupLinkedBlockItemWriter()
   : is_inited_(false),
     is_closed_(false),
@@ -369,18 +371,26 @@ int ObBackupLinkedBlockItemWriter::write_block_()
 {
   int ret = OB_SUCCESS;
   ObBackupLinkedBlockAddr block_addr;
-  ObBufferReader buffer_reader(buffer_writer_.data(), BLOCK_SIZE, BLOCK_SIZE);
-  if (!buffer_reader.is_valid()) {
+  const int64_t padding_size = BLOCK_SIZE - buffer_writer_.length();
+  if (padding_size < 0) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("buffer reader is not valid", K(ret), K(buffer_reader));
-  } else if (OB_FAIL(block_writer_.write_block(buffer_reader, block_addr))) {
-    LOG_WARN("failed to write block", K(ret), K(buffer_reader), K(block_addr));
-  } else if (OB_FAIL(written_block_list_.push_back(block_addr))) {
-    LOG_WARN("failed to push back block id", K(ret), K(block_addr));
+    LOG_WARN("buffer length is larger than block size", K(ret), K(buffer_writer_.length()), K(BLOCK_SIZE));
+  } else if (padding_size > 0 && OB_FAIL(buffer_writer_.advance_zero(padding_size))) {
+    LOG_WARN("failed to advance zero padding", K(ret), K(padding_size));
   } else {
-    prev_block_addr_ = block_addr;
-    has_prev_ = true;
-    linked_header_.item_count_ = 0;
+    ObBufferReader buffer_reader(buffer_writer_.data(), BLOCK_SIZE, BLOCK_SIZE);
+    if (!buffer_reader.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("buffer reader is not valid", K(ret), K(buffer_reader));
+    } else if (OB_FAIL(block_writer_.write_block(buffer_reader, block_addr))) {
+      LOG_WARN("failed to write block", K(ret), K(buffer_reader), K(block_addr));
+    } else if (OB_FAIL(written_block_list_.push_back(block_addr))) {
+      LOG_WARN("failed to push back block id", K(ret), K(block_addr));
+    } else {
+      prev_block_addr_ = block_addr;
+      has_prev_ = true;
+      linked_header_.item_count_ = 0;
+    }
   }
   return ret;
 }

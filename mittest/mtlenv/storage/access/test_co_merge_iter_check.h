@@ -55,8 +55,7 @@ struct CaseParam
   int64_t major_row_cnt_; // drives policy's merge_type decision
   uint64_t data_version_;
 
-  // Expected iter types for all major iters obtained from the builder
-  // (via get_major_sstable_merge_iters_for_check). One entry per major iter.
+  // Expected concrete iterator type for each major iterator owned by the merge-log builder.
   std::vector<IterKind> expected_major_iter_kinds_;
 
   // Expected iter types for each writer's iters.

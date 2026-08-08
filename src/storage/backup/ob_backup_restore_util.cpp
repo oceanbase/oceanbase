@@ -225,38 +225,6 @@ int ObLSBackupRestoreUtil::read_macro_block_data_with_retry(const common::ObStri
   return ret;
 }
 
-int ObLSBackupRestoreUtil::read_ddl_sstable_other_block_id_list_in_ss_mode(
-    const share::ObBackupDest &backup_set_dest, const common::ObString &path, const share::ObBackupStorageInfo *storage_info, const ObStorageIdMod &mod,
-    const ObBackupMetaIndex &meta_index, const storage::ObITable::TableKey &table_key, common::ObIArray<ObBackupLinkedItem> &link_item_list)
-{
-  int ret = OB_SUCCESS;
-  link_item_list.reset();
-  ObBackupLinkedBlockItemReader reader;
-  bool has_any_block = true;
-  if (OB_FAIL(prepare_ddl_sstable_other_block_id_reader_(
-      backup_set_dest, path, storage_info, mod, meta_index, table_key, reader, has_any_block))) {
-    LOG_WARN("failed to prepare ddl sstable other block id reader", K(ret));
-  } else if (!has_any_block) {
-    // do nothing
-  } else {
-    ObBackupLinkedItem link_item;
-    while (OB_SUCC(ret)) {
-      link_item.reset();
-      if (OB_FAIL(reader.get_next_item(link_item))) {
-        if (OB_ITER_END == ret) {
-          ret = OB_SUCCESS;
-          break;
-        } else {
-          LOG_WARN("failed to get next item", K(ret));
-        }
-      } else if (OB_FAIL(link_item_list.push_back(link_item))) {
-        LOG_WARN("failed to push back", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObLSBackupRestoreUtil::read_ddl_sstable_other_block_id_list_in_ss_mode_with_batch(
     const share::ObBackupDest &backup_set_dest, const common::ObString &path, const share::ObBackupStorageInfo *storage_info, const ObStorageIdMod &mod,
     const ObBackupMetaIndex &meta_index, const storage::ObITable::TableKey &table_key, const blocksstable::MacroBlockId &start_macro_id,

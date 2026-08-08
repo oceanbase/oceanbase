@@ -142,7 +142,6 @@ int ObBackupValidateBasicTask::init(
     LOG_WARN("failed to assign storage info", KR(ret), K(storage_info));
   } else {
     share::ObIDag *dag = nullptr;
-    share::ObIDagNet *dag_net = nullptr;
     if (OB_ISNULL(dag = this->get_dag())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("dag is null", KR(ret));
@@ -154,8 +153,7 @@ int ObBackupValidateBasicTask::init(
       LOG_WARN("ctx is null", KR(ret));
     }
   }
-  if (OB_FAIL(ret)) {
-  } else {
+  if (OB_SUCC(ret)) {
     task_id_ = task_id;
     report_ctx_ = report_ctx;
     is_inited_ = true;
@@ -572,7 +570,6 @@ int ObBackupValidatePrepareTask::prepare_archive_piece_physical_validate_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy is null", KR(ret), KP(report_ctx_.sql_proxy_));
   } else {
-    share::ObPieceKey piece_key;
     share::ObBackupDest piece_dest;
     share::ObSinglePieceDesc single_piece_desc;
     share::ObArchiveStore archive_store;
@@ -746,7 +743,6 @@ int ObBackupValidatePrepareTask::prepare_basic_validate_()
     ObBackupDest set_dest;
     ObBackupPath ls_dir_path;
     const share::ObLSID ls_id = param_.ls_id_;
-    ObArchiveStore store;
     if (OB_FAIL(ObBackupUtils::get_raw_path(param_.validate_path_.ptr(), raw_path, OB_MAX_BACKUP_PATH_LENGTH))) {
       LOG_WARN("failed to get root path", KR(ret), K_(param));
     } else if (OB_FAIL(set_dest.set(raw_path, &storage_info_))) {
@@ -920,8 +916,7 @@ int ObBackupValidateFinishTask::init(
       LOG_WARN("ctx is null", KR(ret));
     }
   }
-  if (OB_FAIL(ret)) {
-  } else {
+  if (OB_SUCC(ret)) {
     report_ctx_ = report_ctx;
     is_inited_ = true;
     LOG_INFO("ObBackupValidateFinishTask init success", K(param));
@@ -1321,6 +1316,9 @@ int ObBackupValidateBackupSetPhysicalTask::get_backup_tx_data_table_filled_tx_sc
   }
   if (OB_FAIL(meta_index_store_->get_backup_meta_index_store(sys_backup_data_type, meta_index_store))) {
     LOG_WARN("failed to get meta index store", KR(ret), K(sys_backup_data_type), K(backup_set_info_), K(backup_dest_));
+  } else if (OB_ISNULL(meta_index_store)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("meta index store is null", KR(ret), K(sys_backup_data_type));
   } else if (OB_FAIL(backup::ObBackupUtils::get_backup_tx_data_table_filled_tx_scn(*meta_index_store,
                         is_backup_set_support_quick_restore, backup_dest_, param_.dest_id_, filled_tx_scn))) {
     LOG_WARN("failed to get backup tx data table filled tx scn", KR(ret), K_(param), K_(backup_dest),
@@ -1906,7 +1904,6 @@ int ObBackupValidateMacroBlockTask::process()
     common::ObArenaAllocator allocator;
     share::ObBackupDataType data_type;
     const ObITable::TableKey &table_key = sstable_meta_.sstable_meta_.table_key_;
-    const int64_t backup_set_id = backup_set_info_.backup_set_file_.backup_set_id_;
     if (OB_FAIL(alloc_macro_block_data_buffer_(allocator, read_buffer, data_buffer))) {
       LOG_WARN("failed to alloc macro block data buffer", KR(ret));
     } else if (OB_FAIL(ObRestoreUtils::get_backup_data_type(table_key, data_type))) {
@@ -2078,7 +2075,6 @@ ObBackupValidateMacroBlockFinishTask::ObBackupValidateMacroBlockFinishTask()
     is_inited_(false),
     lock_(common::ObLatchIds::BACKUP_LOCK),
     ctx_(nullptr),
-    next_macro_index(0),
     allocator_(),
     param_(),
     sstable_meta_(),
@@ -2118,7 +2114,7 @@ int ObBackupValidateMacroBlockFinishTask::init(
     const common::ObTabletID &tablet_id = sstable_meta.tablet_id_;
     const ObITable::TableKey &table_key = sstable_meta.sstable_meta_.table_key_;
     ObBackupValidateTaskContext *ctx = base_dag.get_task_context();
-    if (OB_ISNULL(ctx) || !report_ctx.is_valid() || !param.is_valid() || !backup_dest.is_valid() || OB_ISNULL(ctx)) {
+    if (OB_ISNULL(ctx) || !report_ctx.is_valid() || !param.is_valid() || !backup_dest.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("report ctx or param or backup dest is invalid", KR(ret), K(report_ctx), K(param), K(backup_dest), KP(ctx));
     } else if (OB_FAIL(param_.assign(param))) {
@@ -2271,7 +2267,6 @@ int ObBackupValidateArchivePiecePhysicalTask::init(
   } else if (FALSE_IT(report_ctx_ = report_ctx)) {
   } else {
     share::ObIDag *dag = nullptr;
-    share::ObIDagNet *dag_net = nullptr;
     if (OB_ISNULL(dag = this->get_dag())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("dag is null", KR(ret));
@@ -2362,7 +2357,6 @@ int ObBackupValidateArchivePiecePhysicalTask::do_validate_ls_range_()
     std::pair<share::ObBackupPathString, share::ObBackupPathString> dir_pair;
     char storage_info_str[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = {0};
     share::ObBackupPathString raw_path;
-    share::SCN archive_scn;
     logservice::ObRemoteRawPathParent raw_parent(param_.ls_id_);
     if (OB_FAIL(storage_info_.get_storage_info_str(storage_info_str, sizeof(storage_info_str)))) {
       LOG_WARN("failed to get storage info str", KR(ret));
@@ -2401,7 +2395,6 @@ int ObBackupValidateArchivePiecePhysicalTask::do_validate_ls_range_()
                                       palf::MAX_LOG_BUFFER_SIZE, enable_logservice))) {
         LOG_WARN("failed to init remote log iter", KR(ret), KPC(lsn_range_));
       } else {
-        const share::SCN checkpoint_scn = ctx_->get_ls_info()->checkpoint_scn_;
         while (OB_SUCC(ret)) {
           if (OB_FAIL(iter.next(entry, lsn, buf, buf_len))) {
             if (OB_ITER_END == ret) {

@@ -22,33 +22,15 @@ namespace oceanbase
 {
 namespace storage
 {
-struct ObBackupFileGroup
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObBackupFileGroup();
-  ~ObBackupFileGroup() {}
-  void reset();
-  bool is_valid() const;
-  int assign(const ObBackupFileGroup &other);
-  TO_STRING_KV(K_(group_id), K_(accumulated_file_count), K_(file_list));
-
-  int64_t group_id_;
-  int64_t accumulated_file_count_;
-  common::ObSArray<backup::ObBackupFilePathInfo> file_list_;
-};
-
 struct ObBackupValidateDagNetInitParam : public share::ObIDagInitParam
 {
 public:
   ObBackupValidateDagNetInitParam();
   virtual ~ObBackupValidateDagNetInitParam() {}
-  void reset();
   bool is_valid() const override;
   int assign(const ObBackupValidateDagNetInitParam &other);
   int set(const obrpc::ObBackupValidateLSArg &args);
   bool operator == (const ObBackupValidateDagNetInitParam &other) const;
-  bool operator != (const ObBackupValidateDagNetInitParam &other) const;
   uint64_t hash() const;
   VIRTUAL_TO_STRING_KV(K_(ls_id), K_(trace_id), K_(tenant_id), K_(incarnation),
       K_(task_id), K_(task_type), K_(validate_id), K_(dest_id),
@@ -93,11 +75,8 @@ public:
   ObBackupValidateTaskContext();
   virtual ~ObBackupValidateTaskContext() { running_groups_.destroy(); }
   int init();
-  void reset();
-  bool is_valid() const;
   int set_dir_queue(const common::ObIArray<ObBackupPathString> &dir_queue);
   int get_dir_path(const int64_t dir_queue_idx, ObBackupPathString &dir_path);
-  int64_t get_dir_queue_count() const { return dir_queue_.count(); }
   int set_tablet_array(const common::ObIArray<common::ObTabletID> &tablet_array);
   int get_tablet_id(const int64_t task_id, common::ObTabletID &tablet_id);
   int add_archive_piece_lsn_range(const ObBackupArchivePieceLSNRange &lsn_range);

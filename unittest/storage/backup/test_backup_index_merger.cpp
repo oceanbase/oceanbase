@@ -243,7 +243,6 @@ public:
 
 private:
   void fake_init_meta_index_merger_(ObFakeBackupMetaIndexMerger &merger);
-  void fake_init_macro_index_merger_(ObFakeBackupMacroIndexMerger &merger);
   void init_backup_meta_index_store_(ObBackupMetaIndexStore &meta_index_store);
   void init_backup_macro_index_store_(ObMockBackupMacroBlockIndexStore &macro_index_store);
   void iterate_meta_index_store_(
@@ -401,19 +400,6 @@ void TestBackupIndexMerger::fake_init_meta_index_merger_(ObFakeBackupMetaIndexMe
   common::ObMySQLProxy sql_proxy;
   ObBackupIndexMergeParam merge_param;
   build_backup_index_merge_param_(merge_param);
-  ret = merger.init(merge_param, sql_proxy, throttle_);
-  EXPECT_EQ(OB_SUCCESS, ret);
-}
-
-void TestBackupIndexMerger::fake_init_macro_index_merger_(ObFakeBackupMacroIndexMerger &merger)
-{
-  int ret = OB_SUCCESS;
-  common::ObMySQLProxy sql_proxy;
-  ObBackupIndexMergeParam merge_param;
-  build_backup_index_merge_param_(merge_param);
-  const int64_t file_count = 80;
-  const int64_t per_file_item_count = 1024;
-  merger.set_count(file_count, per_file_item_count);
   ret = merger.init(merge_param, sql_proxy, throttle_);
   EXPECT_EQ(OB_SUCCESS, ret);
 }

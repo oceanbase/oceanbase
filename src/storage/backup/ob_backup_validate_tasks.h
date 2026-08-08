@@ -298,7 +298,6 @@ private:
   bool is_inited_;
   mutable common::ObSpinLock lock_;
   ObBackupValidateTaskContext *ctx_;
-  int64_t next_macro_index;
   ObArenaAllocator allocator_;
   backup::ObBackupReportCtx report_ctx_;
   ObBackupValidateDagNetInitParam param_;
@@ -322,11 +321,6 @@ public:
       ObBackupValidateTabletFinishTask *tablet_finish_task);
   virtual int process() override;
   virtual int generate_next_task(share::ObITask *&next_task) override;
-
-public:
-  static int get_next_batch_macro_indexs(
-      ObRestoreMacroBlockIdMgr &macro_block_id_mgr,
-      common::ObArray<blocksstable::ObDataMacroBlockMeta> &macro_metas);
 
 private:
   int read_macro_block_(

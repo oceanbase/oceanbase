@@ -259,25 +259,18 @@ int ObBackupDataFileTrailer::check_valid() const
 ObBackupMacroBlockId::ObBackupMacroBlockId()
  : table_key_(), logic_id_(), macro_block_id_(),
    nested_offset_(0), nested_size_(0),
-   is_ss_ddl_other_block_(false), absolute_row_offset_(0)
+   absolute_row_offset_(0)
 {}
 
 bool ObBackupMacroBlockId::is_valid() const
 {
   bool bret = false;
-  if (!is_ss_ddl_other_block_) {
-    bret = table_key_.is_valid()
-        && logic_id_.is_valid()
-        && macro_block_id_.is_valid()
-        && nested_offset_ >= 0
-        && nested_size_ >= 0
-        && absolute_row_offset_ >= 0;
-  } else {
-    // other block has no logic id
-    bret = macro_block_id_.is_valid()
-        && nested_offset_ >= 0
-        && nested_size_ >= 0;
-  }
+  bret = table_key_.is_valid()
+      && logic_id_.is_valid()
+      && macro_block_id_.is_valid()
+      && nested_offset_ >= 0
+      && nested_size_ >= 0
+      && absolute_row_offset_ >= 0;
   return bret;
 }
 
@@ -294,7 +287,6 @@ int ObBackupMacroBlockId::assign(const ObBackupMacroBlockId &other)
     nested_offset_ = other.nested_offset_;
     nested_size_ = other.nested_size_;
     absolute_row_offset_ = other.absolute_row_offset_;
-    is_ss_ddl_other_block_ = other.is_ss_ddl_other_block_;
   }
   return ret;
 }
@@ -307,7 +299,6 @@ void ObBackupMacroBlockId::reset()
   nested_offset_ = 0;
   nested_size_ = 0;
   absolute_row_offset_ = 0;
-  is_ss_ddl_other_block_ = false;
 }
 
 /* ObBackupPhysicalID */
@@ -608,24 +599,6 @@ void ObBackupMacroRangeIndexIndex::reset()
 bool ObBackupMacroRangeIndexIndex::is_valid() const
 {
   return end_key_.is_valid() && offset_ > 0 && length_ > 0;
-}
-
-/* ObBackupMacroBlockIndexComparator */
-
-int ObBackupMacroBlockIndexComparator::operator()(
-    const ObBackupMacroRangeIndex &lhs, const ObBackupMacroRangeIndex &rhs) const
-{
-  int ret = 0;
-  const ObLogicMacroBlockId &lvalue = lhs.end_key_;
-  const ObLogicMacroBlockId &rvalue = rhs.end_key_;
-  if (lvalue > rvalue) {
-    ret = -1;
-  } else if (lvalue < rvalue) {
-    ret = 1;
-  } else {
-    ret = 0;
-  }
-  return ret;
 }
 
 /* ObBackupMetaIndexComparator */
@@ -1607,11 +1580,27 @@ ObBackupLSTaskInfo::~ObBackupLSTaskInfo()
 
 bool ObBackupLSTaskInfo::is_valid() const
 {
-  return task_id_ > 0 && OB_INVALID_ID == tenant_id_ && ls_id_.is_valid() && turn_id_ > 0 && retry_id_ > 0;
+  return task_id_ > 0 && OB_INVALID_ID != tenant_id_ && ls_id_.is_valid() && turn_id_ > 0 && retry_id_ >= 0;
 }
 
 void ObBackupLSTaskInfo::reset()
-{}
+{
+  task_id_ = 0;
+  tenant_id_ = 0;
+  ls_id_.reset();
+  turn_id_ = 0;
+  retry_id_ = 0;
+  backup_data_type_ = 0;
+  backup_set_id_ = 0;
+  input_bytes_ = 0;
+  output_bytes_ = 0;
+  tablet_count_ = 0;
+  finish_tablet_count_ = 0;
+  macro_block_count_ = 0;
+  finish_macro_block_count_ = 0;
+  max_file_id_ = -1;
+  is_final_ = false;
+}
 
 /* ObBackupSkippedTablet */
 
@@ -1762,7 +1751,7 @@ const ObBackupDeviceMacroBlockId ObBackupDeviceMacroBlockId::get_default()
   default_value.backup_set_id_ = MAX_BACKUP_SET_ID;
   default_value.turn_id_ = MAX_BACKUP_TURN_ID;
   default_value.retry_id_ = MAX_BACKUP_RETRY_ID;
-  default_value.file_id_ = BACKUP_FILE_ID_BIT;
+  default_value.file_id_ = MAX_BACKUP_FILE_ID;
   default_value.offset_ = 0;
   default_value.length_ = MAX_BACKUP_BLOCK_SIZE;
   default_value.id_mode_ = static_cast<uint64_t>(blocksstable::ObMacroBlockIdMode::ID_MODE_BACKUP);

@@ -38,7 +38,6 @@ private:
 private:
   bool is_inited_;
   int64_t file_size_;
-  int64_t max_file_size_;
   common::ObIOFd io_fd_;
   common::ObIODevice *dev_handle_;
   blocksstable::ObSelfBufferWriter data_buffer_;

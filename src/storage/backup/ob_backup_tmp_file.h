@@ -68,13 +68,10 @@ public:
 
 public:
   bool is_inited() const;
-  ObBackupTmpFile &get_tmp_file();
-  int64_t get_estimate_write_size() const;
   uint64_t get_tenant_id() const;
   ObBackupBlockType get_block_type() const;
   int64_t get_node_level() const;
   void add_estimate_write_size(const int64_t size);
-  int64_t get_read_offset() const;
   void set_next(ObBackupIndexBufferNode *next);
   ObBackupIndexBufferNode *get_next() const;
   int64_t get_read_count() const;

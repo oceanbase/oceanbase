@@ -28,8 +28,6 @@ public:
   int destroy_mgr(const int64_t task_id);
   int get_mgr(const int64_t idx, ObCOMergeLogFileMgr *&mgr);
   int close_files(const int64_t task_id, const int64_t start_cg_idx, const int64_t end_cg_idx);
-  // for unittest now
-  OB_INLINE void set_file_block_size(const int64_t block_size) { file_block_size_ = block_size; }
   void reset();
   bool is_valid();
 
@@ -70,7 +68,6 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
 
   /* PREPARE SECTION */
   int init_major_sstable_status();
-  int prepare_row_store_cg_schema();
   int construct_column_param(
       const uint64_t column_id,
       const ObStorageColumnSchema *column_schema,
@@ -79,7 +76,6 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   int prepare_mocked_row_store_cg_schema();
   bool should_mock_row_store_cg_schema();
   int prepare_cs_replica_param(const ObMediumCompactionInfo *medium_info);
-  int handle_alter_cg_delayed_in_cs_replica();
 
   int prepare_index_builder(const int64_t start_cg_idx, const int64_t end_cg_idx, const bool reuse_merge_info = true);
   int inner_loop_prepare_index_tree(
@@ -166,7 +162,7 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   int get_merge_log_mgr(const int64_t idx, ObCOMergeLogFileMgr *&mgr);
 
   INHERIT_TO_STRING_KV("ObCOTabletMergeCtx", ObBasicTabletMergeCtx,
-      K_(need_replay_base_directly), K_(merge_log_storage), K_(array_count), K_(retry_cnt), K_(prefer_reuse_macro_block), K_(base_rowkey_cg_idx));
+      K_(need_replay_base_directly), K_(merge_log_storage), K_(array_count), K_(prefer_reuse_macro_block), K_(base_rowkey_cg_idx));
 
   /* STATIC CONST */
   static const int64_t PREFER_REUSE_MACRO_BLOCKS_RAITO = 2;
@@ -186,9 +182,7 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
     uint16_t merge_flag_;
   };
   int64_t array_count_; // equal to cg count
-  int64_t start_schedule_cg_idx_;
   int64_t base_rowkey_cg_idx_;
-  int64_t retry_cnt_;
   bool prefer_reuse_macro_block_;
   ObIDagNet &dag_net_;
   ObTabletMergeInfo **cg_merge_info_array_;

@@ -174,16 +174,6 @@ bool ObBackupIndexBufferNode::is_inited() const
   return is_inited_;
 }
 
-ObBackupTmpFile &ObBackupIndexBufferNode::get_tmp_file()
-{
-  return tmp_file_;
-}
-
-int64_t ObBackupIndexBufferNode::get_estimate_write_size() const
-{
-  return estimate_size_;
-}
-
 uint64_t ObBackupIndexBufferNode::get_tenant_id() const
 {
   return tenant_id_;
@@ -202,11 +192,6 @@ int64_t ObBackupIndexBufferNode::get_node_level() const
 void ObBackupIndexBufferNode::add_estimate_write_size(const int64_t size)
 {
   estimate_size_ += size;
-}
-
-int64_t ObBackupIndexBufferNode::get_read_offset() const
-{
-  return read_offset_;
 }
 
 void ObBackupIndexBufferNode::set_next(ObBackupIndexBufferNode *next)

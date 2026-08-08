@@ -56,10 +56,6 @@ public:
   }
   int project(const blocksstable::ObDatumRow &row, const blocksstable::ObDatumRow *&result_row);
   bool need_project() const { return !skip_project_; }
-  int check_data_macro_block_need_merge(const ObMacroBlockDesc &macro_desc, bool &need_rewrite)
-  {
-    return macro_writer_.check_data_macro_block_need_merge(macro_desc, need_rewrite);
-  }
   const common::ObIArray<share::schema::ObColDesc>& get_col_desc_array() const { return data_store_desc_.get_col_desc_array(); }
   const blocksstable::ObDataStoreDesc& get_data_store_desc() const { return data_store_desc_; }
   bool is_cg() const { return data_store_desc_.is_cg(); }

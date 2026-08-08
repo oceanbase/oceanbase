@@ -1798,7 +1798,7 @@ int ObBackupFileListReaderUtil::get_all_dir_list(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(storage_info), K(dir_path), K(storage_id_mod), K(suffix));
   } else {
-    ObArray<ObBackupPathString> tmp_dir_list;;
+    ObArray<ObBackupPathString> tmp_dir_list;
     ObBackupPath cur_path;
     ObBackupPathString root_path;
     int64_t cur_index = 0;
@@ -1957,7 +1957,7 @@ int ObBackupFileListReaderUtil::get_ls_id_list(
           LOG_WARN("failed to get next item", KR(ret));
         }
       } else if (item.is_dir()) {
-        if (OB_FAIL(item.path_.is_empty())) {
+        if (item.path_.is_empty()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("item path is empty", KR(ret), K(item));
         } else if (0 != STRNCMP(OB_STR_LS, item.path_.ptr(), strlen(OB_STR_LS))) {

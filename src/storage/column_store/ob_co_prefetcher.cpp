@@ -38,8 +38,6 @@ int ObCOPrefetcher::refresh_blockscan_checker(const int64_t start_micro_idx, con
   } else if (!is_in_row_store_scan_mode()) {
     // TODO(hanling): ObMultipleScanMerge will call 'refresh_blockscan_checker' each time
     // when 'consume_count' == 1 after 'get_next_row', it can be modified in the future.
-    // ret = OB_ERR_UNEXPECTED;
-    // LOG_WARN("Unexpected block scan state", K(ret), K_(block_scan_state));
   } else {
     // -1 == cur_micro_data_fetch_idx_: we does not fetch any data micro block yet.
     // We give up vectorized query for the whole micro data block if there are any out rows
@@ -575,7 +573,7 @@ int ObCOPrefetcher::update_end_rowid_for_column_store(
   } else {
     block_scan_border_row_id_ = start_row_id + end_offset - 1;
   }
-  LOG_DEBUG("update_start_and_end_rowid_for_column_store", K(ret), K(is_reverse_scan),
+  LOG_DEBUG("update_end_rowid_for_column_store", K(ret), K(is_reverse_scan),
             K(start_row_id), K(start_offset), K(end_offset));
 
   return ret;

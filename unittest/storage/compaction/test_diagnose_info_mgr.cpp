@@ -169,6 +169,57 @@ TEST_F(TestDiagnoseInfoMgr, test_add_del_suspect_info)
   ASSERT_EQ(static_cast<uint32_t>(ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH), ret_info.priority_);
 }
 
+TEST_F(TestDiagnoseInfoMgr, test_generic_schedule_failure_does_not_cover_specific_failure)
+{
+  ObArenaAllocator allocator;
+  const ObTabletID tablet_id(1);
+  ASSERT_EQ(OB_SUCCESS, ObScheduleSuspectInfoMgr::mtl_init(suspect_info_mgr_));
+
+  ObDiagnoseInfoParam<4, 0> specific_param;
+  specific_param.struct_type_ = ObInfoParamStructType::SUSPECT_INFO_PARAM;
+  specific_param.type_.suspect_type_ = ObSuspectInfoType::SUSPECT_SCHEDULE_MEDIUM_FAILED;
+  ObScheduleSuspectInfo specific_info;
+  ASSERT_EQ(OB_SUCCESS,
+            gene_suspect_info(
+                OB_SUSPECT_INFO_TYPES[ObSuspectInfoType::SUSPECT_SCHEDULE_MEDIUM_FAILED].priority,
+                MEDIUM_MERGE,
+                tablet_id,
+                specific_info));
+  specific_info.info_param_ = &specific_param;
+  ASSERT_EQ(OB_SUCCESS, suspect_info_mgr_->add_suspect_info(specific_info.hash(), specific_info));
+
+  ObDiagnoseInfoParam<1, 0> generic_param;
+  generic_param.struct_type_ = ObInfoParamStructType::SUSPECT_INFO_PARAM;
+  generic_param.type_.suspect_type_ = ObSuspectInfoType::SUSPECT_SCHEDULE_NEW_ROUND_FAILED;
+  ObScheduleSuspectInfo generic_info;
+  ASSERT_EQ(OB_SUCCESS,
+            gene_suspect_info(
+                OB_SUSPECT_INFO_TYPES[ObSuspectInfoType::SUSPECT_SCHEDULE_NEW_ROUND_FAILED].priority,
+                MEDIUM_MERGE,
+                tablet_id,
+                generic_info));
+  generic_info.info_param_ = &generic_param;
+  ASSERT_LT(generic_info.priority_, specific_info.priority_);
+  ASSERT_EQ(OB_SUCCESS, suspect_info_mgr_->add_suspect_info(generic_info.hash(), generic_info));
+
+  ObScheduleSuspectInfo ret_info;
+  ASSERT_EQ(OB_SUCCESS, suspect_info_mgr_->get_with_param(specific_info.hash(), ret_info, allocator));
+  ASSERT_EQ(ObSuspectInfoType::SUSPECT_SCHEDULE_MEDIUM_FAILED,
+            ret_info.info_param_->type_.suspect_type_);
+
+  // The generic fallback is still recorded when there is no specific failure for the key.
+  const ObTabletID fallback_only_tablet_id(2);
+  generic_info.tablet_id_ = fallback_only_tablet_id;
+  ASSERT_EQ(OB_SUCCESS, suspect_info_mgr_->add_suspect_info(generic_info.hash(), generic_info));
+  ObScheduleSuspectInfo fallback_ret_info;
+  ASSERT_EQ(OB_SUCCESS,
+            suspect_info_mgr_->get_with_param(generic_info.hash(), fallback_ret_info, allocator));
+  ASSERT_EQ(static_cast<uint32_t>(ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW),
+            fallback_ret_info.priority_);
+  ASSERT_EQ(ObSuspectInfoType::SUSPECT_SCHEDULE_NEW_ROUND_FAILED,
+            fallback_ret_info.info_param_->type_.suspect_type_);
+}
+
 TEST_F(TestDiagnoseInfoMgr, test_diagnose_tablet_mgr)
 {
   int ret = OB_SUCCESS;

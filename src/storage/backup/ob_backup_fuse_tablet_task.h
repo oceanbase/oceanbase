@@ -65,12 +65,10 @@ public:
 private:
   int close_extern_writer_();
   int abort_extern_writer_();
-  int generate_init_dag_();
   int record_server_event_();
   int report_task_result_();
 private:
   bool is_inited_;
-  share::ObIDagNet *dag_net_;
   ObBackupTabletGroupFuseCtx *group_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObFinishBackupTabletGroupFuseTask);
 };

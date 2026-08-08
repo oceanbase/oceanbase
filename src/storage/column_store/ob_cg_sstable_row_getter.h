@@ -39,6 +39,7 @@ public:
       ObSSTableWrapper &wrapper);
   int open(const blocksstable::ObDatumRowkey &idx_key);
   int get_next_row(ObMacroBlockReader &block_reader, const blocksstable::ObDatumRow *&store_row);
+  // called by copy_assign (utility.h) when ObCGGetter is stored in ObFixedArray
   int assign(const ObCGGetter &other)
   {
     int ret = OB_SUCCESS;
@@ -107,7 +108,6 @@ public:
 
 private:
   int init_cg_param_pool(ObTableAccessContext &context);
-  int prepare_reader(const ObRowStoreType store_type);
   int get_row_id(ObSSTableReadHandle &read_handle, ObCSRowId &row_id);
   int prepare_cg_row_getter(const ObNopPos *nop_pos, ObIArray<int32_t> &project_idxs);
   int fetch_rowkey_row(ObSSTableReadHandle &read_handle, const ObDatumRow *&store_row);

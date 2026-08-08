@@ -710,6 +710,9 @@ int ObBackupDataStore::read_tablet_to_ls_info(const int64_t turn_id, const share
   int ret = OB_SUCCESS;
   share::ObBackupPath path;
   ObBackupPathString full_path;
+  // the tablet_to_ls file is always written under the user data path regardless of
+  // the caller's backup data type (see all write_tablet_to_ls_info call sites), so
+  // `type` here only serves the sys/turn sanity check below, not the read path.
   share::ObBackupDataType tmp_type;
   tmp_type.set_user_data_backup();
   if (!is_init()) {
@@ -776,41 +779,6 @@ int ObBackupDataStore::write_tenant_backup_set_infos(const ObTenantBackupSetInfo
     LOG_WARN("fail to write single file", K(ret));
   }
 
-  return ret;
-}
-
-int ObBackupDataStore::read_deleted_tablet_info(const ObLSID &ls_id, ObIArray<ObTabletID> &deleted_tablet_ids)
-{
-  int ret = OB_SUCCESS;
-  deleted_tablet_ids.reset();
-  share::ObBackupPath path;
-  ObBackupPathString full_path;
-  ObBackupDeletedTabletToLSDesc deleted_tablet_info;
-  if (!is_init()) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObBackupDataStore not init", K(ret));
-  } else if (OB_FAIL(ObBackupPathUtil::get_deleted_tablet_info_path(backup_set_dest_, path))) {
-    LOG_WARN("fail to get tenant ls attr info path", K(ret));
-  } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
-    LOG_WARN("fail to assign full path", K(ret));
-  } else if (OB_FAIL(read_single_file(full_path, deleted_tablet_info))) {
-    if (OB_OBJECT_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-      LOG_INFO("backup deleted file not exist", K(ret));
-    } else {
-      LOG_WARN("failed to read single file", K(ret), K(full_path));
-    }
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < deleted_tablet_info.deleted_tablet_to_ls_.count(); ++i) {
-      const ObBackupDataTabletToLSInfo &info = deleted_tablet_info.deleted_tablet_to_ls_.at(i);
-      if (info.ls_id_ == ls_id) {
-        if (OB_FAIL(deleted_tablet_ids.assign(info.tablet_id_list_))) {
-          LOG_WARN("failed to assign", K(ret), K(info));
-        }
-        break;
-      }
-    }
-  }
   return ret;
 }
 
@@ -1072,25 +1040,6 @@ int ObBackupDataStore::write_root_key_info(const uint64_t tenant_id)
   } else if (OB_FAIL(ObBackupPathUtil::get_backup_root_key_path(backup_set_dest_, path))) {
     LOG_WARN("fail to get path", K(ret));
   } else if (OB_FAIL(ObMasterKeyUtil::backup_root_key(tenant_id, path.get_obstr(),
-                                              backup_set_dest_.get_storage_info(), empty_str))) {
-    LOG_WARN("fail to backup root key", K(ret));
-  }
-#endif
-  return ret;
-}
-
-int ObBackupDataStore::read_root_key_info(const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-#ifdef OB_BUILD_TDE_SECURITY
-  share::ObBackupPath path;
-  ObString empty_str;
-  if (!is_init()) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("backup data extern mgr not init", K(ret));
-  } else if (OB_FAIL(ObBackupPathUtil::get_backup_root_key_path(backup_set_dest_, path))) {
-    LOG_WARN("fail to get path", K(ret));
-  } else if (OB_FAIL(ObMasterKeyUtil::restore_root_key(tenant_id, path.get_obstr(),
                                               backup_set_dest_.get_storage_info(), empty_str))) {
     LOG_WARN("fail to backup root key", K(ret));
   }
@@ -1423,7 +1372,6 @@ int ObBackupDataStore::do_get_backup_set_array_(
         }
       } else if (backup_set_file.backup_type_.is_inc_backup()) {
         share::ObBackupSetDesc value;
-        value.backup_set_id_ = backup_set_file.prev_full_backup_set_id_;
         backup_set_desc.min_restore_scn_ = backup_set_file.min_restore_scn_;
         backup_set_desc.total_bytes_ = backup_set_file.stats_.output_bytes_;
         if (OB_FAIL(backup_set_map.get_refactored(backup_set_file.prev_full_backup_set_id_, value))) {

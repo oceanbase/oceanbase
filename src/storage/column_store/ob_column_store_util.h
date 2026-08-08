@@ -63,15 +63,10 @@ struct ObCSRange
   OB_INLINE void reset() { start_row_id_ = OB_INVALID_CS_ROW_ID; end_row_id_ = OB_INVALID_CS_ROW_ID; }
   OB_INLINE bool is_valid() const { return start_row_id_ >= OB_MIN_CS_ROW_ID && end_row_id_ >= start_row_id_; }
   OB_INLINE int64_t get_row_count() const { return end_row_id_ - start_row_id_ + 1; }
-  bool contain(const ObCSRowId idx) const { return idx >= start_row_id_ && idx <= end_row_id_; }
   void set_whole_range()
   {
     start_row_id_ = OB_MIN_CS_ROW_ID;
     end_row_id_ = OB_MAX_CS_ROW_ID;
-  }
-  bool is_whole_range() const
-  {
-    return OB_MIN_CS_ROW_ID == start_row_id_ && OB_MAX_CS_ROW_ID == end_row_id_;
   }
   int compare(const ObCSRowId idx) const
   {

@@ -18,7 +18,6 @@ ERRSIM_POINT_DEF(EN_BACKUP_TRIGGER_BANDWIDTH_THROTTLE);
 ObBackupFileWriteCtx::ObBackupFileWriteCtx()
     : is_inited_(false),
       file_size_(0),
-      max_file_size_(0),
       io_fd_(),
       dev_handle_(NULL),
       data_buffer_("BackupFileWriteCtx"),
@@ -43,7 +42,6 @@ int ObBackupFileWriteCtx::open(const int64_t max_file_size, const common::ObIOFd
     LOG_WARN("failed to ensure space", K(ret));
   } else {
     file_size_ = 0;
-    max_file_size_ = max_file_size;
     io_fd_ = io_fd;
     dev_handle_ = &dev_handle;
     bandwidth_throttle_ = &bandwidth_throttle;

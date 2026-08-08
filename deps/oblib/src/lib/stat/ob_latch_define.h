@@ -592,7 +592,7 @@ LATCH_DEF(BACKUP_LS_LOG_FINISH_TASK_MUTEX, 563, "backup ls log finish task mutex
 LATCH_DEF(BACKUP_TABLET_INDEX_BLOCK_BUILDER_MUTEX, 564, "backup tablet index block builder mutex", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(BACKUP_TABLET_SS_TABLE_INDEX_BUILDER_MUTEX, 565, "backup tablet ss table index builder mutex", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(BACKUP_UNORDERED_MACRO_BLOCK_INDEX_MERGER_MUTEX, 566, "backup unordered macro block index merger mutex", LATCH_FIFO, 2000, 0, true)
-LATCH_DEF(BACKUP_OTHER_BLOCKS_MGR_MUTEX, 567, "backup other blocks mgr mutex", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(BACKUP_OTHER_BLOCKS_MGR_MUTEX, 567, "backup other blocks mgr mutex", LATCH_FIFO, 2000, 0, false)
 LATCH_DEF(TRANSFER_FINISH_TRANSFER_MUTEX, 568, "transfer finish transfer mutex", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(LS_BLOCK_TX_SERVICE_MUTEX, 569, "ls block tx service mutex", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(SHARED_MACRO_BLOCK_MGR_MUTEX, 570, "shared macro block manager mutex", LATCH_FIFO, 2000, 0, true)

@@ -20,9 +20,7 @@ ObCOTabletMergeCtx::ObCOTabletMergeCtx(
   : ObBasicTabletMergeCtx(param, allocator),
     merge_flag_(0),
     array_count_(0),
-    start_schedule_cg_idx_(0),
     base_rowkey_cg_idx_(-1),
-    retry_cnt_(0),
     prefer_reuse_macro_block_(false),
     dag_net_(dag_net),
     cg_merge_info_array_(nullptr),
@@ -438,7 +436,6 @@ int ObCOTabletMergeCtx::collect_running_info()
   } else {
     ObCOMergeDagNet &co_dag_net = static_cast<ObCOMergeDagNet&>(dag_net_);
     dag_net_merge_history_.running_info_.merge_start_time_ = co_dag_net.get_prepare_dag_running_ts();
-    dag_net_merge_history_.diagnose_info_.retry_cnt_ = retry_cnt_;
     const ObSSTable *new_sstable = static_cast<ObSSTable *>(new_table);
     ObBasicTabletMergeCtx::add_sstable_merge_info(dag_net_merge_history_,
                                                   dag_net_.get_dag_id(),
@@ -677,7 +674,7 @@ void ObCOTabletMergeCtx::destroy_merge_info_array(
 
 void ObCOTabletMergeCtx::destroy_merge_info(const uint32_t cg_idx, const bool release_mem_flag)
 {
-  if (OB_UNLIKELY(0 > cg_idx || cg_idx >= array_count_ || nullptr == cg_merge_info_array_)) {
+  if (OB_UNLIKELY(cg_idx >= array_count_ || nullptr == cg_merge_info_array_)) {
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "co merge info array is null", K(cg_idx), K(array_count_), KP(cg_merge_info_array_));
   } else {
     if (nullptr != cg_merge_info_array_[cg_idx]) {
