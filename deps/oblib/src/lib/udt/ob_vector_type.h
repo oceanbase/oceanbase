@@ -397,22 +397,14 @@ int ObVectorData<T>::compare_at(uint32_t left_begin, uint32_t left_len, uint32_t
     OB_LOG(WARN, "right_begin + right_len > right.size()", K(ret), K(right_begin), K(right_len), K(right.size()));
   } else {
     uint32_t cmp_len = std::min(left_len, right_len);
-    uint32_t left_max = left_begin + cmp_len;
-    uint32_t right_max = right_begin + cmp_len;
     cmp_ret = 0;
-
-    if (this->length_ < left_max || this->length_ < right_max) {
-      ret = OB_INVALID_ARGUMENT;
-      OB_LOG(WARN, "invalid argument", K(ret), K(left_begin), K(left_len), K(right_begin), K(right_len), K(this->length_));
-    } else {
-      for (uint32_t i = 0; i < cmp_len && !cmp_ret; ++i) {
-        if (data_[left_begin + i] != (*right_data)[right_begin + i]) {
-          cmp_ret = data_[left_begin + i] > (*right_data)[right_begin + i] ? 1 : -1;
-        }
+    for (uint32_t i = 0; i < cmp_len && !cmp_ret; ++i) {
+      if (data_[left_begin + i] != (*right_data)[right_begin + i]) {
+        cmp_ret = data_[left_begin + i] > (*right_data)[right_begin + i] ? 1 : -1;
       }
-      if (cmp_ret == 0 && left_len != right_len) {
-        cmp_ret = left_len > right_len ? 1 : -1;
-      }
+    }
+    if (cmp_ret == 0 && left_len != right_len) {
+      cmp_ret = left_len > right_len ? 1 : -1;
     }
   }
   return ret;
