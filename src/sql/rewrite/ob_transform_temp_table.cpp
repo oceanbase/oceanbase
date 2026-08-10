@@ -150,6 +150,8 @@ int ObTransformTempTable::generate_with_clause(ObDMLStmt *&stmt, bool &trans_hap
   if (OB_FAIL(ret)) {
   } else if (ctx_->eval_cost_) {
     OPT_TRACE("disable CTE extraction during cost evaluation");
+  } else if (ObTransformerImpl::is_type_needed(ctx_->happened_cost_based_trans_, OR_EXPANSION)) {
+    OPT_TRACE("disable CTE extraction since or expansion happened");
   } else if (ctx_->is_set_stmt_oversize_) {
     OPT_TRACE("stmt containt oversize set stmt");
   } else if (!enable_temp_table_transform || ctx_->is_force_inline_) {
@@ -158,10 +160,15 @@ int ObTransformTempTable::generate_with_clause(ObDMLStmt *&stmt, bool &trans_hap
     OPT_TRACE("stmt has for update, can not extract CTE");
   } else if (OB_FAIL(parent_map.create(128, "TempTable"))) {
     LOG_WARN("failed to init stmt map", K(ret));
-  } else if (!ObOptimizerUtil::find_item(ctx_->temp_table_ignore_stmts_, stmt) &&
-             OB_FAIL(ObTransformUtils::get_all_child_stmts(stmt, child_stmts, &parent_map, &ctx_->temp_table_ignore_stmts_))) {
+  } else if (!ObOptimizerUtil::find_item(ctx_->temp_table_ignore_stmts_, stmt)
+             && OB_FAIL(ObTransformUtils::get_all_child_stmts(stmt,
+                                                              child_stmts,
+                                                              &parent_map,
+                                                              &ctx_->temp_table_ignore_stmts_))) {
     LOG_WARN("failed to get all child stmts", K(ret));
-  } else if (stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5, COMPAT_VERSION_4_3_0, COMPAT_VERSION_4_3_5)) {
+  } else if (stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5,
+                                                             COMPAT_VERSION_4_3_0,
+                                                             COMPAT_VERSION_4_3_5)) {
     if (OB_FAIL(get_all_view_stmts(stmt, view_stmts))) {
       LOG_WARN("failed to get non correlated subquery", K(ret));
     } else if (OB_FAIL(ObOptimizerUtil::intersect(child_stmts, view_stmts, child_stmts))) {
