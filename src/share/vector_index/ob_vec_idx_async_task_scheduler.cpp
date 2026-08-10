@@ -1345,6 +1345,8 @@ int ObVecIdxAsyncTaskScheduler::check_and_execute_adapter_maintenance_tasks()
       } else if (OB_ISNULL(ls_handle.get_ls())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get null ls", K(ret), K(ls_id));
+      } else if (ls_handle.get_ls()->is_logonly_replica()) {
+        LOG_INFO("skip adapter maintenance for log replica", K(ls_id));
       } else if (OB_FAIL(service_->acquire_vector_index_mgr(ls_id, mgr))) {
         LOG_WARN("fail to acquire vector index mgr", K(ret), K(ls_id));
       } else if (OB_ISNULL(mgr)) {
@@ -1357,7 +1359,8 @@ int ObVecIdxAsyncTaskScheduler::check_and_execute_adapter_maintenance_tasks()
       // Sync last_transfer_scn regardless of maintenance result: the transfer event has
       // already occurred, and keeping mgr out of sync would re-trigger maintenance every
       // tick even when maintenance failed for unrelated reasons.
-      if (OB_NOT_NULL(mgr) && OB_NOT_NULL(ls_handle.get_ls())) {
+      if (OB_NOT_NULL(mgr) && OB_NOT_NULL(ls_handle.get_ls())
+          && !ls_handle.get_ls()->is_logonly_replica()) {
         share::SCN current_transfer_scn;
         int tmp_ret = OB_SUCCESS;
         if (OB_TMP_FAIL(ls_handle.get_ls()->get_transfer_scn(current_transfer_scn))) {
@@ -1507,6 +1510,8 @@ int ObVecIdxAsyncTaskScheduler::sync_ls_executors()
     } else if (OB_ISNULL(ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null ls", KR(ret), K(ls_id));
+    } else if (ls_handle.get_ls()->is_logonly_replica()) {
+      LOG_INFO("skip create vec idx executors for log replica", K(ls_id));
     } else {
       ObPluginVectorIndexMgr *ls_mgr = nullptr;
       const int mgr_ret = service_->get_ls_index_mgr_map().get_refactored(ls_id, ls_mgr);
@@ -1635,6 +1640,9 @@ int ObVecIdxAsyncTaskScheduler::collect_leader_executors_to_run(
     ObVecIdxLeaderExecutors *exec = entry.second;
     if (OB_ISNULL(exec) || !exec->is_inited_ || exec->is_removed_) {
       // skip uninited or retiring executors
+    } else if (OB_NOT_NULL(exec->async_task_exec_.get_ls())
+               && exec->async_task_exec_.get_ls()->is_logonly_replica()) {
+      LOG_INFO("skip collect leader executors to run for log replica", K(entry.first));
     } else if (OB_SUCCESS != (inner_ret = mgr_map.get_refactored(entry.first, mgr))) {
       if (OB_HASH_NOT_EXIST == inner_ret) {
         inner_ret = OB_SUCCESS;
@@ -1678,6 +1686,9 @@ int ObVecIdxAsyncTaskScheduler::collect_follower_executors_to_run(
     ObVecIdxFollowerExecutors *exec = entry.second;
     if (OB_ISNULL(exec) || !exec->is_inited_ || exec->is_removed_) {
       // skip uninited or retiring executors
+    } else if (OB_NOT_NULL(exec->mem_sync_exec_.get_ls())
+               && exec->mem_sync_exec_.get_ls()->is_logonly_replica()) {
+      LOG_INFO("skip collect follower executors to run for log replica", K(entry.first));
     } else if (OB_SUCCESS != (inner_ret = mgr_map.get_refactored(entry.first, mgr))) {
       if (OB_HASH_NOT_EXIST == inner_ret) {
         inner_ret = OB_SUCCESS;
@@ -1724,7 +1735,7 @@ int ObVecIdxAsyncTaskScheduler::find_ls_holding_tablet_(const ObTabletID &tablet
       int last_err_;  // most recent per-LS error; surfaced only when no LS holds tablet
       int operator()(ObLS &ls)
       {
-        if (!found_ && ls.get_ls_id().is_user_ls()) {
+        if (!found_ && ls.get_ls_id().is_user_ls() && !ls.is_logonly_replica()) {
           ObTabletHandle th;
           int gt_ret = ls.get_tablet_svr()->get_tablet(tid_, th);
           if (OB_TABLET_NOT_EXIST == gt_ret) {

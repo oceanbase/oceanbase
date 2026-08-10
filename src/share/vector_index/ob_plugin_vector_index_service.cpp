@@ -1135,16 +1135,23 @@ int ObPluginVectorIndexService::acquire_vector_index_mgr(ObLSID ls_id,
       // before add_ls_to_map_).
       if (check_ls_exist) {
         storage::ObLSService *ls_service = MTL(storage::ObLSService *);
-        if (OB_NOT_NULL(ls_service)) {
-          bool ls_exist = false;
-          if (OB_FAIL(ls_service->check_ls_exist(ls_id, ls_exist))) {
-            LOG_WARN("[VEC_INDEX] failed to check ls existence before creating vec index mgr",
-                     K(ls_id), KR(ret));
-          } else if (!ls_exist) {
-            ret = OB_LS_NOT_EXIST;
-            LOG_WARN("[VEC_INDEX] skip creating vec index mgr for non-existent ls",
-                     K(ls_id), KR(ret));
-          }
+        storage::ObLSHandle ls_handle;
+        if (OB_ISNULL(ls_service)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("[VEC_INDEX] ls service is null before creating vec index mgr",
+                   K(ls_id), KR(ret));
+        } else if (OB_FAIL(ls_service->get_ls(
+                       ls_id, ls_handle, storage::ObLSGetMod::SHARE_MOD))) {
+          LOG_WARN("[VEC_INDEX] failed to get ls before creating vec index mgr",
+                   K(ls_id), KR(ret));
+        } else if (OB_ISNULL(ls_handle.get_ls())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("[VEC_INDEX] ls is null before creating vec index mgr",
+                   K(ls_id), KR(ret));
+        } else if (ls_handle.get_ls()->is_logonly_replica()) {
+          ret = OB_REPLICA_NOT_READABLE;
+          LOG_INFO("[VEC_INDEX] skip creating vec index mgr for logonly replica",
+                   K(ls_id), KR(ret));
         }
       }
       if (OB_SUCC(ret)) {
