@@ -24,6 +24,51 @@
  using namespace share::schema;
  using namespace sql;
 
+ namespace {
+  // explain_refresh generates the refresh SQL by resolving the mview definition through the same
+  // path as the real refresh (ObMVProvider). That resolution enforces that the session's sys vars
+  // (e.g. sql_mode) match the values solidified when the mview was created, otherwise it raises
+  // OB_ERR_SESSION_VAR_CHANGED. The real refresh satisfies this by applying the mview's solidified
+  // vars onto the (inner) refresh session; explain runs in the user session, whose vars may differ.
+  // This guard temporarily applies the mview's solidified vars to the session and restores the
+  // original values on destruction, mirroring ObMViewTransaction::ObSessionParamSaved.
+  class ObExplainSessionVarGuard
+  {
+  public:
+    explicit ObExplainSessionVarGuard(ObSQLSessionInfo *session)
+      : session_(session), allocator_(ObMemAttr(MTL_ID(), "MViewExpVar")), saved_vars_() {}
+    ~ObExplainSessionVarGuard() { (void)restore(); }
+    int apply(const ObLocalSessionVar &solidified_vars)
+    {
+      int ret = OB_SUCCESS;
+      if (OB_ISNULL(session_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("session is null", KR(ret));
+      } else if (OB_FAIL(solidified_vars.apply_different_vars_to_session(
+                     *session_, &allocator_, &saved_vars_))) {
+        LOG_WARN("fail to apply different vars to session", KR(ret));
+      }
+      return ret;
+    }
+  private:
+    int restore()
+    {
+      int ret = OB_SUCCESS;
+      if (OB_NOT_NULL(session_)
+          && OB_FAIL(ObLocalSessionVar::restore_saved_session_vars(*session_, saved_vars_))) {
+        LOG_WARN("fail to restore saved session vars", KR(ret));
+      }
+      if (OB_NOT_NULL(session_)) {
+        saved_vars_.reuse();
+      }
+      return ret;
+    }
+    ObSQLSessionInfo *session_;
+    ObArenaAllocator allocator_;
+    ObSEArray<ObSessionSysVar, 8> saved_vars_;
+  };
+  } // anonymous namespace
+
  ObMViewExplainRefreshExecutor::ObMViewExplainRefreshExecutor()
    : ctx_(nullptr), arg_(nullptr), session_info_(nullptr), schema_checker_(),
      tenant_id_(OB_INVALID_TENANT_ID)
@@ -263,6 +308,7 @@
    ObArenaAllocator str_alloc("MViewExplain", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_);
    ObArray<ObString> operators;
    ObMVRefreshType refresh_type = ObMVRefreshType::MAX;
+   ObExplainSessionVarGuard session_var_guard(session_info_);
 
    // 1. get schema and mview info
    if (OB_ISNULL(GCTX.schema_service_)) {
@@ -278,6 +324,8 @@
    } else if (OB_UNLIKELY(!mview_table_schema->is_materialized_view())) {
      ret = OB_ERR_MVIEW_NOT_EXIST;
      LOG_WARN("table is not mview", KR(ret), K(tenant_id_), K(mview_id));
+   } else if (OB_FAIL(session_var_guard.apply(mview_table_schema->get_local_session_var()))) {
+    LOG_WARN("fail to apply mview solidified session vars", KR(ret), K(tenant_id_), K(mview_id));
    } else if (OB_FAIL(ObMViewRefreshHelper::get_current_scn(current_scn))) {
      LOG_WARN("fail to get current scn", KR(ret));
      // 1. get mview info
