@@ -2720,6 +2720,7 @@ int ObTimeConverter::str_to_ob_time_without_date(const ObString &str, ObTime &ob
           for (int i = 0; i < DATETIME_PART_CNT; ++i) {
             ob_time.parts_[i] = 0;
           }
+          ob_time.parts_[DT_DATE] = 0;
           ret = OB_SUCCESS;
         } else if (OB_FAIL(ret)) {
           LOG_WARN("failed to convert string to datetime", K(ret));
