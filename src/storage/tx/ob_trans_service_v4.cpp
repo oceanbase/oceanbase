@@ -241,7 +241,7 @@ int ObTransService::do_commit_tx_(ObTxDesc &tx,
   return ret;
 }
 
-#define DELETED_UNRETRYABLE_ERROR(ret) (OB_LS_IS_DELETED == ret || OB_TENANT_HAS_BEEN_DROPPED)
+#define DELETED_UNRETRYABLE_ERROR(ret) (OB_LS_IS_DELETED == ret || OB_TENANT_HAS_BEEN_DROPPED == ret)
 /*
  * try send commit msg to coordinator, and register retry task
  * if msg send fail, the retry task will retry later
