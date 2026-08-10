@@ -100,7 +100,8 @@ public:
                           const ObTableStoreIterator &table_store_iter);
   void prepare_scan_param(const ObVersionRange &version_range,
                           const ObTableStoreIterator &table_store_iter,
-                          const bool is_delete_insert);
+                          const bool is_delete_insert,
+                          const int64_t batch_size = SQL_BATCH_SIZE);
   void prepare_output_expr(const ObIArray<int32_t> &projector,
                            const ObIArray<ObColDesc> &cols_desc);
   int create_pushdown_filter(const bool is_white, const int64_t col_id,
@@ -440,7 +441,8 @@ void TestScanBasic::prepare_get_param(
 void TestScanBasic::prepare_scan_param(
     const ObVersionRange &version_range,
     const ObTableStoreIterator &table_store_iter,
-    const bool is_delete_insert)
+    const bool is_delete_insert,
+    const int64_t batch_size)
 {
   context_.reset();
   access_param_.reset();
@@ -474,8 +476,9 @@ void TestScanBasic::prepare_scan_param(
   int64_t schema_column_count = full_read_info_.get_schema_column_count();
   int64_t schema_rowkey_count = full_read_info_.get_schema_rowkey_count();
   eval_ctx_.batch_idx_ = 0;
-  eval_ctx_.batch_size_ = SQL_BATCH_SIZE;
-  expr_spec_.max_batch_size_ = SQL_BATCH_SIZE;
+  eval_ctx_.batch_size_ = batch_size;
+  eval_ctx_.max_batch_size_ = batch_size;
+  expr_spec_.max_batch_size_ = batch_size;
   datum_buf_ = query_allocator_.alloc((sizeof(sql::ObDatum) + OBJ_DATUM_NUMBER_RES_SIZE) * DATUM_ARRAY_CNT * 2 * schema_column_count);
   ASSERT_NE(nullptr, datum_buf_);
   eval_ctx_.frames_ = (char **)(&datum_buf_);
