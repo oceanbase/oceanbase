@@ -254,9 +254,6 @@ protected:
                                              const ObTableSchema &base_index_schema,
                                              const ObTableSchema &inc_index_schema,
                                              const bool is_oracle_mode);
-  int get_column_position_in_table_(const ObTableSchema &table_schema,
-                                    const ObColumnSchemaV2 *column_schema,
-                                    int64_t &position);
   int generate_lob_table_mapping_(const ObTableSchema &base_table_schema,
                                   ObIArray<const ObTableSchema*> &inc_table_schemas,
                                   const bool is_oracle_mode,

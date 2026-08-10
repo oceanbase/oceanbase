@@ -2783,73 +2783,121 @@ int ObPartitionExchange::check_index_column_data_table_mapping_(const ObTableSch
         ret = OB_TABLES_DIFFERENT_DEFINITIONS;
       }
       LOG_WARN("index column count mismatch", K(ret), K(is_oracle_mode), K(base_index_info), K(inc_index_info));
-    } else if (!is_oracle_mode) {
-      // check whether each index column refers to the same data table column
-      for (int64_t i = 0; OB_SUCC(ret) && (i < base_index_info.get_size()); ++i) {
-        common::ObIndexColumn base_index_col;
-        common::ObIndexColumn inc_index_col;
-        if (OB_FAIL(base_index_info.get_column(i, base_index_col))) {
-          LOG_WARN("failed to get base index column", K(ret), K(i));
-        } else if (OB_FAIL(inc_index_info.get_column(i, inc_index_col))) {
-          LOG_WARN("failed to get inc index column", K(ret), K(i));
+    } else {
+      // Check whether each stored column of the index table (index keys and storing columns)
+      // refers to the same data table column position. Different storage mappings cause wrong
+      // index lookup semantics after partition exchange (MySQL checksum / Oracle ORA-14098).
+      ObArray<ObColDesc> base_store_cols;
+      ObArray<ObColDesc> inc_store_cols;
+      if (OB_FAIL(base_index_schema.get_store_column_ids(base_store_cols))) {
+        LOG_WARN("failed to get base index store column ids", K(ret), K(base_index_schema));
+      } else if (OB_FAIL(inc_index_schema.get_store_column_ids(inc_store_cols))) {
+        LOG_WARN("failed to get inc index store column ids", K(ret), K(inc_index_schema));
+      } else if (OB_UNLIKELY(base_store_cols.count() != inc_store_cols.count())) {
+        if (is_oracle_mode) {
+          ret = OB_ERR_INDEX_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION;
         } else {
-          // get the data table column that the index column refers to
-          const ObColumnSchemaV2 *base_data_col = base_data_table_schema.get_column_schema(base_index_col.column_id_);
-          const ObColumnSchemaV2 *inc_data_col = inc_data_table_schema.get_column_schema(inc_index_col.column_id_);
-          int64_t base_col_idx = -1;
-          int64_t inc_col_idx = -1;
-
-          if (OB_ISNULL(base_data_col)) {
+          ret = OB_TABLES_DIFFERENT_DEFINITIONS;
+        }
+        LOG_WARN("index store column count mismatch", K(ret), K(is_oracle_mode),
+                 K(base_store_cols.count()), K(inc_store_cols.count()));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < base_store_cols.count(); ++i) {
+          const uint64_t base_col_id = base_store_cols.at(i).col_id_;
+          const uint64_t inc_col_id = inc_store_cols.at(i).col_id_;
+          const ObColumnSchemaV2 *base_index_col = base_index_schema.get_column_schema(base_col_id);
+          const ObColumnSchemaV2 *inc_index_col = inc_index_schema.get_column_schema(inc_col_id);
+          uint64_t base_data_col_id = base_col_id;
+          uint64_t inc_data_col_id = inc_col_id;
+          if (OB_ISNULL(base_index_col) || OB_ISNULL(inc_index_col)) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("base data table column not found", K(ret), K(base_index_col.column_id_), K(base_data_table_schema));
-          } else if (OB_ISNULL(inc_data_col)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("inc data table column not found", K(ret), K(inc_index_col.column_id_), K(inc_data_table_schema));
-          } else if (OB_FAIL(get_column_position_in_table_(base_data_table_schema, base_data_col, base_col_idx))) {
-            LOG_WARN("failed to get base data column position", K(ret), K(base_index_col.column_id_), K(base_data_table_schema));
-          } else if (OB_FAIL(get_column_position_in_table_(inc_data_table_schema, inc_data_col, inc_col_idx))) {
-            LOG_WARN("failed to get inc data column position", K(ret), K(inc_index_col.column_id_), K(inc_data_table_schema));
-          } else if (OB_UNLIKELY(base_col_idx != inc_col_idx)) {
-            ret = OB_TABLES_DIFFERENT_DEFINITIONS;
-            LOG_WARN("index column references different data table column positions", K(ret),
-                      K(base_index_col.column_id_), K(inc_index_col.column_id_), K(base_col_idx), K(inc_col_idx));
+            LOG_WARN("index column schema not found", K(ret), K(base_col_id), K(inc_col_id),
+                     KP(base_index_col), KP(inc_index_col));
+          } else if (base_index_col->is_shadow_column() || inc_index_col->is_shadow_column()) {
+            // shadow pk columns only exist on index tables; map back to the real pk columns
+            if (!base_index_col->is_shadow_column() || !inc_index_col->is_shadow_column()) {
+              if (is_oracle_mode) {
+                ret = OB_ERR_INDEX_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION;
+              } else {
+                ret = OB_TABLES_DIFFERENT_DEFINITIONS;
+              }
+              LOG_WARN("index shadow column mapping mismatch", K(ret), K(is_oracle_mode),
+                       K(base_col_id), K(inc_col_id),
+                       K(base_index_col->is_shadow_column()), K(inc_index_col->is_shadow_column()));
+            } else {
+              base_data_col_id = base_col_id - common::OB_MIN_SHADOW_COLUMN_ID;
+              inc_data_col_id = inc_col_id - common::OB_MIN_SHADOW_COLUMN_ID;
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else {
+            const ObColumnSchemaV2 *base_data_col = base_data_table_schema.get_column_schema(base_data_col_id);
+            const ObColumnSchemaV2 *inc_data_col = inc_data_table_schema.get_column_schema(inc_data_col_id);
+            int64_t base_col_idx = -1;
+            int64_t inc_col_idx = -1;
+            if (OB_ISNULL(base_data_col) && OB_ISNULL(inc_data_col)) {
+              // neither maps to data table columns, skip
+            } else if (OB_ISNULL(base_data_col) || OB_ISNULL(inc_data_col)) {
+              if (is_oracle_mode) {
+                ret = OB_ERR_INDEX_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION;
+              } else {
+                ret = OB_TABLES_DIFFERENT_DEFINITIONS;
+              }
+              LOG_WARN("index store column data table mapping mismatch", K(ret), K(is_oracle_mode),
+                       K(base_data_col_id), K(inc_data_col_id), KP(base_data_col), KP(inc_data_col));
+            } else if (base_data_col->is_generated_column() || inc_data_col->is_generated_column()) {
+              // Functional / generated index columns are stored on the index table; their identity
+              // is the data-table generated expression (column id alone is insufficient).
+              // NOTE: comparing expr strings effectively requires the referenced data-table column
+              // names in the expression text to be identical. This matches OB's existing oracle-mode
+              // exchange check (check_column_conditions_in_oracle_mode_), which already requires
+              // data-table column names to match. Native Oracle matches columns by position and may
+              // allow different names; OB does not, so this is an intentional known difference.
+              ObString base_col_expr_str;
+              ObString inc_col_expr_str;
+              if (OB_UNLIKELY(base_data_col->is_generated_column() != inc_data_col->is_generated_column())
+                  || OB_UNLIKELY(base_data_col->is_virtual_generated_column()
+                                 != inc_data_col->is_virtual_generated_column())
+                  || OB_UNLIKELY(base_data_col->is_stored_generated_column()
+                                 != inc_data_col->is_stored_generated_column())) {
+                if (is_oracle_mode) {
+                  ret = OB_ERR_INDEX_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION;
+                } else {
+                  ret = OB_TABLES_DIFFERENT_DEFINITIONS;
+                }
+                LOG_WARN("index generated column attribute mismatch", K(ret), K(is_oracle_mode),
+                         K(base_data_col_id), K(inc_data_col_id));
+              } else if (OB_FAIL(base_data_col->get_cur_default_value().get_string(base_col_expr_str))) {
+                LOG_WARN("fail to get base generated column expr", K(ret), KPC(base_data_col));
+              } else if (OB_FAIL(inc_data_col->get_cur_default_value().get_string(inc_col_expr_str))) {
+                LOG_WARN("fail to get inc generated column expr", K(ret), KPC(inc_data_col));
+              } else if (OB_UNLIKELY(0 != base_col_expr_str.compare(inc_col_expr_str))) {
+                if (is_oracle_mode) {
+                  ret = OB_ERR_INDEX_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION;
+                } else {
+                  ret = OB_TABLES_DIFFERENT_DEFINITIONS;
+                }
+                LOG_WARN("index generated column expr mismatch", K(ret), K(is_oracle_mode),
+                         K(base_col_expr_str), K(inc_col_expr_str),
+                         K(base_data_col_id), K(inc_data_col_id));
+              }
+            } else if (OB_FAIL(base_data_table_schema.get_store_column_idx(base_data_col_id, base_col_idx))) {
+              LOG_WARN("failed to get base data store column idx", K(ret), K(base_data_col_id));
+            } else if (OB_FAIL(inc_data_table_schema.get_store_column_idx(inc_data_col_id, inc_col_idx))) {
+              LOG_WARN("failed to get inc data store column idx", K(ret), K(inc_data_col_id));
+            } else if (OB_UNLIKELY(base_col_idx != inc_col_idx)) {
+              if (is_oracle_mode) {
+                ret = OB_ERR_INDEX_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION;
+              } else {
+                ret = OB_TABLES_DIFFERENT_DEFINITIONS;
+              }
+              LOG_WARN("index store column references different data table column positions", K(ret),
+                       K(is_oracle_mode), K(base_data_col_id), K(inc_data_col_id),
+                       K(base_col_idx), K(inc_col_idx));
+            }
           }
         }
       }
-    }
-  }
-  return ret;
-}
-
-int ObPartitionExchange::get_column_position_in_table_(const ObTableSchema &table_schema,
-                                                       const ObColumnSchemaV2 *column_schema,
-                                                       int64_t &position)
-{
-  int ret = OB_SUCCESS;
-  position = -1;
-  if (OB_ISNULL(column_schema)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument, column_schema is null", K(ret));
-  } else {
-    // iterate columns in show create table order, instead of column id order
-    ObColumnIterByPrevNextID iter(table_schema);
-    const ObColumnSchemaV2 *col = NULL;
-    for (int64_t idx = 0; OB_SUCC(ret) && OB_SUCC(iter.next(col)); ++idx) {
-      if (OB_ISNULL(col)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("The column is null", K(ret));
-      } else if (col->get_column_id() == column_schema->get_column_id()) {
-        if (col->is_virtual_generated_column()) {
-          // we cannot handle virtual generated column for now because its position is not fixed
-          position = -1;
-        } else {
-          position = idx;
-        }
-        break;
-      }
-    }
-    if (OB_ITER_END == ret) {
-      ret = OB_SUCCESS;
     }
   }
   return ret;
