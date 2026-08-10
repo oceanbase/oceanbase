@@ -423,7 +423,7 @@ int ObTableLoadInstance::build_base_lock_arg(ObLockTableRequest &lock_arg)
   const uint64_t table_id = stmt_ctx_.table_id_;
   lock_arg.owner_id_.set_default();
   lock_arg.lock_mode_ = tablelock::EXCLUSIVE;
-  lock_arg.op_type_ = ObTableLockOpType::IN_TRANS_DML_LOCK;
+  lock_arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
   lock_arg.timeout_us_ = 0; // try lock
   lock_arg.table_id_ = table_id;
   return ret;
