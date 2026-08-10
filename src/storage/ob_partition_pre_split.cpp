@@ -343,6 +343,10 @@ int ObPartitionPreSplit::get_global_index_pre_split_schema_if_need(
       if (index_arg->index_action_type_ == ObIndexArg::ADD_INDEX) {
         HEAP_VAR(ObTableSchema, index_schema) {
           ObCreateIndexArg *create_index_arg = static_cast<ObCreateIndexArg *>(index_arg);
+          bool has_prefix_index_column = false;
+          for (int64_t j = 0; !has_prefix_index_column && j < create_index_arg->index_columns_.count(); ++j) {
+            has_prefix_index_column = create_index_arg->index_columns_.at(j).prefix_len_ > 0;
+          }
           if (OB_FAIL(index_schema.assign(create_index_arg->index_schema_))) {
             LOG_WARN("fail to assign index schema", K(ret));
           } else if (OB_FALSE_IT(index_schema.set_tenant_id(data_table_schema->get_tenant_id()))) {
@@ -350,6 +354,12 @@ int ObPartitionPreSplit::get_global_index_pre_split_schema_if_need(
           } else if (index_schema.get_column_count() == 0 &&
               OB_FAIL(ObIndexBuilderUtil::set_index_table_columns(*create_index_arg, *data_table_schema, index_schema))) {
             LOG_WARN("[PRE_SPLIT] fail to set index table columns", K(ret));
+          } else if (has_prefix_index_column
+                     && index_schema.get_partition_key_info().get_size() == 0
+                     && index_schema.get_part_option().get_part_func_expr_str().empty()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("[PRE_SPLIT] not support prefix global index without explicit partition key pre-split",
+                     K(ret), K(index_schema));
           } else if (OB_FAIL(check_table_can_do_pre_split(*data_table_schema, index_schema))) {
             LOG_WARN("[PRE_SPLIT] fail to check table info", K(ret), K(index_schema));
           } else if (OB_FAIL(do_pre_split_global_index(database_name, *data_table_schema, index_schema, auto_part_size, index_schema))) {
@@ -572,6 +582,26 @@ int ObPartitionPreSplit::do_pre_split_main_table(
   return ret;
 }
 
+static int check_prefix_part_key(
+    const ObTableSchema &data_table_schema,
+    const ObTableSchema &index_schema,
+    const uint64_t column_id)
+{
+  int ret = OB_SUCCESS;
+  const ObColumnSchemaV2 *index_col = index_schema.get_column_schema(column_id);
+  const ObColumnSchemaV2 *data_col = data_table_schema.get_column_schema(column_id);
+  if (OB_ISNULL(index_col)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("[PRE_SPLIT] partition key column schema is null", K(ret), K(column_id), K(index_schema));
+  } else if (index_col->is_prefix_index_column()
+             || (OB_NOT_NULL(data_col) && data_col->is_prefix_column())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_INFO("[PRE_SPLIT] not support prefix column as global index pre-split partition key",
+             K(ret), KPC(index_col), KPC(data_col));
+  }
+  return ret;
+}
+
 /*
   function description:
     constraint check:
@@ -614,6 +644,31 @@ int ObPartitionPreSplit::check_table_can_do_pre_split(
     } else {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("[PRE_SPLIT] not support none range partition table", K(ret), K(part_option));
+    }
+  }
+  if (OB_SUCC(ret) && is_global_index_table) {
+    // With PARTITION BY, only check real partition keys; otherwise fall back to index_info.
+    const ObPartitionKeyInfo &part_key_info = table_schema.get_partition_key_info();
+    if (part_key_info.is_valid() && part_key_info.get_size() > 0) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < part_key_info.get_size(); ++i) {
+        uint64_t part_key_col_id = OB_INVALID_ID;
+        if (OB_FAIL(part_key_info.get_column_id(i, part_key_col_id))) {
+          LOG_WARN("[PRE_SPLIT] fail to get partition key column id", K(ret), K(i), K(part_key_info));
+        } else if (OB_FAIL(check_prefix_part_key(data_table_schema, table_schema, part_key_col_id))) {
+          LOG_WARN("[PRE_SPLIT] fail to check prefix part key", K(ret), K(i), K(part_key_col_id));
+        }
+      }
+    } else if (part_option.get_part_func_expr_str().empty()) {
+      const ObRowkeyInfo &index_info = table_schema.get_index_info();
+      for (int64_t i = 0; OB_SUCC(ret) && i < index_info.get_size(); ++i) {
+        const ObRowkeyColumn *index_column = index_info.get_column(i);
+        if (OB_ISNULL(index_column)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("[PRE_SPLIT] index column is null", K(ret), K(i), K(index_info));
+        } else if (OB_FAIL(check_prefix_part_key(data_table_schema, table_schema, index_column->column_id_))) {
+          LOG_WARN("[PRE_SPLIT] fail to check prefix part key", K(ret), K(i), K(index_column->column_id_));
+        }
+      }
     }
   }
   if (OB_SUCC(ret)) {

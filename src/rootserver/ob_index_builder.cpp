@@ -2533,13 +2533,20 @@ int ObIndexBuilder::set_global_index_auto_partition_infos(const share::schema::O
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("the partition column is NULL, ", KR(ret), K(i), K(presetting_partition_keys));
           } else {
-            ObObjType type = partition_column->get_meta_type().get_type();
-            if (ObResolverUtils::is_partition_range_column_type(type)) {
-              /* case: create index idx1 on t1(c1) global, c1 is double type*/
-              part_type = ObPartitionFuncType::PARTITION_FUNC_TYPE_RANGE_COLUMNS;
+            const ObColumnSchemaV2 *index_col_schema = schema.get_column_schema(partition_column->column_id_);
+            const ObColumnSchemaV2 *data_col_schema = data_schema.get_column_schema(partition_column->column_id_);
+            if ((OB_NOT_NULL(index_col_schema) && index_col_schema->is_prefix_index_column())
+                || (OB_NOT_NULL(data_col_schema) && data_col_schema->is_prefix_column())) {
+              enable_auto_split = false;
+            } else {
+              ObObjType type = partition_column->get_meta_type().get_type();
+              if (ObResolverUtils::is_partition_range_column_type(type)) {
+                /* case: create index idx1 on t1(c1) global, c1 is double type*/
+                part_type = ObPartitionFuncType::PARTITION_FUNC_TYPE_RANGE_COLUMNS;
+              }
+              enable_auto_split = ObResolverUtils::is_valid_partition_column_type(
+                                    partition_column->get_meta_type().get_type(), part_type, false);
             }
-            enable_auto_split = ObResolverUtils::is_valid_partition_column_type(
-                                  partition_column->get_meta_type().get_type(), part_type, false);
           }
         }
       }

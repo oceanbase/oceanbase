@@ -287,6 +287,7 @@ tools/deploy/yclean.sh
 tools/deploy/.obd
 tools/deploy/distributed-with-proxy.yaml
 tools/deploy/distributed.yaml
+tools/deploy/distributed.yaml.*
 tools/deploy/obd_profile.sh
 tools/deploy/single-with-proxy.yaml
 tools/deploy/single.yaml
