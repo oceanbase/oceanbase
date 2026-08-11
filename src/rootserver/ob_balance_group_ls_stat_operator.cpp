@@ -1503,8 +1503,8 @@ int ObNewTableTabletAllocator::alloc_ls_for_in_tablegroup_tablet(
                "tenant_id", tenant_id_,
                "tablegroup_id", tablegroup_schema.get_tablegroup_id());
     } else if (OB_NOT_NULL(primary_table_schema)) {
-      if (!is_add_partition_ || tablegroup_schema.is_sharding_none()) {
-        if (!is_add_partition_ && primary_table_schema->get_table_id() == table_schema.get_table_id()) {
+      if (!is_add_partition_) {
+        if (primary_table_schema->get_table_id() == table_schema.get_table_id()) {
           // In the scene of creating multi tables in one ddl transaction,
           // the schema of the creating table will be getted by latest schema guard
           if (OB_FAIL(alloc_tablet_for_tablegroup(table_schema, tablegroup_schema))) {
@@ -1514,6 +1514,10 @@ int ObNewTableTabletAllocator::alloc_ls_for_in_tablegroup_tablet(
           if (OB_FAIL(alloc_tablet_for_tablegroup(*primary_table_schema, table_schema, tablegroup_schema))) {
             LOG_WARN("fail to alloc tablet for tablegroup", KR(ret), K(is_add_partition_), K(tablegroup_schema), KPC(primary_table_schema), K(table_schema));
           }
+        }
+      } else if (tablegroup_schema.is_sharding_none()) {
+        if (OB_FAIL(alloc_tablet_for_tablegroup(*primary_table_schema, table_schema, tablegroup_schema))) {
+          LOG_WARN("fail to alloc tablet for tablegroup", KR(ret), K(tablegroup_schema), KPC(primary_table_schema), K(table_schema));
         }
       } else if (tablegroup_schema.is_sharding_adaptive() || tablegroup_schema.is_sharding_subpartition()) {
         // add partition for tablegroup table may break the constraint of sharding ADAPTIVE/SUBPARTITION
