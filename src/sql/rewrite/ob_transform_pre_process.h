@@ -638,6 +638,9 @@ struct DistinctObjMeta
   int remove_last_insert_id(ObRawExpr *&expr);
   int check_last_insert_id_removable(const ObRawExpr *expr, bool &is_removable);
 
+  int transform_complex_order_by_for_set(ObDMLStmt *stmt, bool &trans_happened);
+  int add_no_merge_hint_for_set_view(ObSelectStmt *parent_stmt, ObSelectStmt *child_stmt);
+
   int expand_correlated_cte(ObDMLStmt *stmt, bool& trans_happened);
   int check_exec_param_correlated(const ObRawExpr *expr, bool &is_correlated);
   int check_is_correlated_cte(ObSelectStmt *stmt, ObIArray<ObSelectStmt *> &visited_cte, bool &is_correlated);

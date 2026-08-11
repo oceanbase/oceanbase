@@ -295,12 +295,145 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
       }
     }
     if (OB_SUCC(ret)) {
+      if (OB_FAIL(transform_complex_order_by_for_set(stmt, is_happened))) {
+        LOG_WARN("failed to transform complex order by for set", K(ret));
+      } else {
+        trans_happened |= is_happened;
+        LOG_TRACE("succeed to transform complex order by for set", K(is_happened), K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
       LOG_DEBUG("transform pre process succ", K(*stmt));
      if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
         LOG_WARN("failed to formalize stmt", K(ret));
       //} else if (OB_FAIL(stmt->formalize_stmt_expr_reference())) {
       //  LOG_WARN("failed to formalize stmt reference", K(ret));
       }
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::transform_complex_order_by_for_set(ObDMLStmt *stmt,
+                                                               bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  trans_happened = false;
+  ObSelectStmt *select_stmt = NULL;
+  ObSelectStmt *child_stmt = NULL;
+  TableItem *view_table = NULL;
+  ObSEArray<ObRawExpr *, 8> select_exprs;
+  ObSEArray<ObRawExpr *, 8> set_exprs;
+  ObSEArray<ObRawExpr *, 8> column_exprs;
+  bool need_transform = false;
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(stmt), K(ctx_));
+  } else if (!stmt->is_select_stmt()) {
+    // do nothing
+  } else if (FALSE_IT(select_stmt = static_cast<ObSelectStmt *>(stmt))) {
+  } else if (!select_stmt->is_set_stmt() || !select_stmt->has_order_by()) {
+    // do nothing
+  } else if (OB_FAIL(select_stmt->get_select_exprs(select_exprs))) {
+    LOG_WARN("failed to get select exprs", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !need_transform && i < select_stmt->get_order_item_size(); ++i) {
+      ObRawExpr *order_expr = select_stmt->get_order_item(i).expr_;
+      if (OB_ISNULL(order_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null order expr", K(ret));
+      } else if (!ObOptimizerUtil::find_item(select_exprs, order_expr)) {
+        need_transform = true;
+      }
+    }
+  }
+
+  if (OB_FAIL(ret) || !need_transform) {
+  } else if (OB_FAIL(ObTransformUtils::pack_stmt(ctx_, select_stmt, true, &child_stmt))) {
+    LOG_WARN("failed to pack set stmt", K(ret));
+  } else if (OB_ISNULL(child_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null child stmt", K(ret));
+  } else if (OB_UNLIKELY(1 != select_stmt->get_table_size())
+             || OB_ISNULL(view_table = select_stmt->get_table_item(0))
+             || OB_UNLIKELY(!view_table->is_generated_table())
+             || OB_UNLIKELY(view_table->ref_query_ != child_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected view table", K(ret), K(select_stmt->get_table_size()), KPC(view_table));
+  } else if (OB_FAIL(add_no_merge_hint_for_set_view(select_stmt, child_stmt))) {
+    LOG_WARN("failed to add no merge hint for set view", K(ret));
+  } else if (OB_FAIL(child_stmt->get_pure_set_exprs(set_exprs))) {
+    LOG_WARN("failed to get set exprs", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < set_exprs.count(); ++i) {
+      ObRawExpr *set_expr = set_exprs.at(i);
+      ObRawExpr *column_expr = NULL;
+      if (OB_ISNULL(set_expr) || OB_UNLIKELY(!set_expr->is_set_op_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected set expr", K(ret), KPC(set_expr));
+      } else {
+        int64_t idx = static_cast<ObSetOpRawExpr *>(set_expr)->get_idx();
+        if (OB_UNLIKELY(idx < 0 || idx >= child_stmt->get_select_item_size())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get invalid set expr index", K(ret), K(idx), K(child_stmt->get_select_item_size()));
+        } else if (OB_ISNULL(column_expr = select_stmt->get_column_expr_by_id(
+                                      view_table->table_id_, OB_APP_MIN_COLUMN_ID + idx))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null view column", K(ret), K(idx), K(view_table->table_id_));
+        } else if (OB_FAIL(column_exprs.push_back(column_expr))) {
+          LOG_WARN("failed to push back view column", K(ret));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(select_stmt->get_order_items().assign(child_stmt->get_order_items()))) {
+      LOG_WARN("failed to pull up order items", K(ret));
+    } else {
+      select_stmt->set_limit_offset(child_stmt->get_limit_expr(), child_stmt->get_offset_expr());
+      select_stmt->set_limit_percent_expr(child_stmt->get_limit_percent_expr());
+      select_stmt->set_fetch_with_ties(child_stmt->is_fetch_with_ties());
+      select_stmt->set_has_fetch(child_stmt->has_fetch());
+      select_stmt->set_has_top_limit(child_stmt->has_top_limit());
+      child_stmt->get_order_items().reset();
+      child_stmt->set_limit_offset(NULL, NULL);
+      child_stmt->set_limit_percent_expr(NULL);
+      child_stmt->set_fetch_with_ties(false);
+      child_stmt->set_has_fetch(false);
+      child_stmt->set_has_top_limit(false);
+      if (OB_FAIL(select_stmt->replace_relation_exprs(set_exprs, column_exprs))) {
+        LOG_WARN("failed to replace set exprs with view columns", K(ret));
+      } else {
+        trans_happened = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::add_no_merge_hint_for_set_view(ObSelectStmt *parent_stmt, ObSelectStmt *child_stmt) {
+  int ret = OB_SUCCESS;
+  ObString parent_qb_name;
+  ObString child_qb_name;
+  ObViewMergeHint *no_merge_hint = NULL;
+  ObSEArray<ObItemType, 4> conflict_hints;
+  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->allocator_) || OB_ISNULL(parent_stmt) || OB_ISNULL(child_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(ctx_), K(parent_stmt), K(child_stmt));
+  } else if (OB_FAIL(parent_stmt->get_qb_name(parent_qb_name))) {
+    LOG_WARN("failed to get parent qb name", K(ret));
+  } else if (OB_FAIL(child_stmt->get_qb_name(child_qb_name))) {
+    LOG_WARN("failed to get child qb name", K(ret));
+  } else if (OB_FAIL(ObQueryHint::create_hint(ctx_->allocator_, T_NO_MERGE_HINT, no_merge_hint))) {
+    LOG_WARN("failed to create no merge hint", K(ret));
+  } else if (OB_ISNULL(no_merge_hint)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null no merge hint", K(ret));
+  } else {
+    // Keep query push down from moving the complex expression back into the set output.
+    no_merge_hint->set_parent_qb_name(parent_qb_name);
+    no_merge_hint->set_qb_name(child_qb_name);
+    if (OB_FAIL(child_stmt->get_stmt_hint().merge_hint(*no_merge_hint, RIGHT_HINT_DOMINATED, conflict_hints))) {
+      LOG_WARN("failed to merge no merge hint", K(ret));
     }
   }
   return ret;
