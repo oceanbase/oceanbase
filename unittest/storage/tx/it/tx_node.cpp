@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX TRANS
 #include "tx_node.h"
 #include "share/scn.h"
+#include "observer/report/ob_i_meta_report.h"
 #include "storage/tx/ob_trans_define_v4.h"
 #include "lib/utility/ob_unify_serialize.h"         // OB_UNIS_VERSION
 #define FAST_FAIL() \
@@ -142,6 +143,9 @@ ObTxNode::ObTxNode(const int64_t ls_id,
   tenant_.set(&fake_tenant_freezer_);
   tenant_.set(&fake_part_trans_ctx_pool_);
   fake_shared_mem_alloc_mgr_.init();
+  if (OB_SUCCESS != fake_bandwidth_throttle_.init(64 * 1024 * 1024)) {
+    ob_abort();
+  }
   tenant_.set(&fake_shared_mem_alloc_mgr_);
   tenant_.set(&fake_lock_wait_mgr_);
   ObTenantEnv::set_tenant(&tenant_);
@@ -412,6 +416,40 @@ int ObTxNode::create_ls_(const ObLSID ls_id) {
   fake_ls_.get_ref_mgr().inc(ObLSGetMod::TXSTORAGE_MOD);
   MTL(ObLSService*)->ls_map_.add_ls(fake_ls_);
   return ret;
+}
+
+int ObTxNode::init_ls_for_test(ObLS &ls,
+                               const ObLSID &ls_id,
+                               const ObReplicaType replica_type,
+                               observer::ObIMetaReport *reporter)
+{
+  int ret = OB_SUCCESS;
+  ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
+  ObLSRestoreStatus restore_status(ObLSRestoreStatus::Status::RESTORE_NONE);
+  ObTenantEnv::set_tenant(&tenant_);
+  common::ObInOutBandwidthThrottle *old_bandwidth_throttle = GCTX.bandwidth_throttle_;
+  GCTX.bandwidth_throttle_ = &fake_bandwidth_throttle_;
+  if (OB_FAIL(ls.init(ls_id,
+                      tenant_id_,
+                      migration_status,
+                      restore_status,
+                      SCN::base_scn(),
+                      replica_type,
+                      reporter))) {
+    TRANS_LOG(WARN, "init test ls failed", KR(ret), K(ls_id), K(replica_type));
+  }
+  GCTX.bandwidth_throttle_ = old_bandwidth_throttle;
+  return ret;
+}
+
+int ObTxNode::add_ls_for_test(ObLS &ls)
+{
+  return ls_service_.ls_map_.add_ls(ls);
+}
+
+int ObTxNode::remove_ls_for_test(const ObLSID &ls_id)
+{
+  return ls_service_.ls_map_.del_ls(ls_id);
 }
 
 int ObTxNode::drop_ls_(const ObLSID ls_id) {

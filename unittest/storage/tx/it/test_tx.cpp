@@ -2669,6 +2669,45 @@ TEST_F(ObTestTx, seq_base_invalid_value_handling)
   ASSERT_EQ(OB_SUCCESS, n1->txs_.tx_ctx_mgr_.revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr));
 }
 
+TEST_F(ObTestTx, logonly_replica_local_read_snapshot_no_core)
+{
+  ObAddr addr(ObAddr::VER::IPV4, "119.119.0.1", 2023);
+  ObTxNode node(1, addr, bus_);
+  ASSERT_EQ(OB_SUCCESS, node.start());
+
+  class TestMetaReport final : public observer::ObIMetaReport {
+  public:
+    int submit_ls_update_task(const uint64_t, const share::ObLSID &) override { return OB_SUCCESS; }
+    int submit_tablet_update_task(const uint64_t,
+                                  const share::ObLSID &,
+                                  const common::ObTabletID &) override
+    {
+      return OB_SUCCESS;
+    }
+  } reporter;
+  const ObLSID logonly_ls_id(node.ls_id_.id() + 10000);
+  ObLS logonly_ls;
+  SCN snapshot;
+  ObRole role = INVALID_ROLE;
+
+  ASSERT_EQ(OB_SUCCESS,
+            node.init_ls_for_test(logonly_ls, logonly_ls_id, REPLICA_TYPE_LOGONLY, &reporter));
+  ASSERT_NE(nullptr, logonly_ls.get_tx_svr()->get_tx_ls_log_adapter());
+  ASSERT_TRUE(logonly_ls.get_tx_table()->is_inited_);
+  ASSERT_TRUE(logonly_ls.get_lock_table()->is_inited_);
+  // Keep a caller-owned reference for this stack-allocated LS.  ls_map_ only
+  // owns the reference added by add_ls(); otherwise del_ls() would try to
+  // release this stack address through its allocator.
+  ASSERT_EQ(OB_SUCCESS, logonly_ls.get_ref_mgr().inc(ObLSGetMod::TXSTORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, node.add_ls_for_test(logonly_ls));
+  EXPECT_EQ(OB_NOT_MASTER,
+            node.txs_.acquire_local_snapshot_(logonly_ls_id,
+                                               snapshot,
+                                               true /* is_read_only */,
+                                               role));
+  ASSERT_EQ(OB_SUCCESS, node.remove_ls_for_test(logonly_ls_id));
+}
+
 ////
 /// APPEND NEW TEST HERE, USE PRE DEFINED MACRO IN FILE `test_tx.dsl`
 /// SEE EXAMPLE: TEST_F(ObTestTx, rollback_savepoint_timeout)

@@ -161,7 +161,9 @@ int ObLS::init(const share::ObLSID &ls_id,
 
     // tx_table_.init() should after ls_table_svr.init()
     if (ObReplicaTypeCheck::is_log_replica(replica_type)) {
-      if (OB_FAIL(gc_handler_.init(this))) {
+      if (OB_FAIL(txs_svr->create_ls(ls_id, *this, &tx_palf_param, nullptr))) {
+        LOG_WARN("create trans service failed.", K(ret), K(ls_id));
+      } else if (OB_FAIL(gc_handler_.init(this))) {
         LOG_WARN("init gc handler failed", K(ret));
       } else if (OB_FAIL(ls_restore_handler_.init(this))) {
         LOG_WARN("init ls restore handler", K(ret));
@@ -176,6 +178,10 @@ int ObLS::init(const share::ObLSID &ls_id,
         LOG_WARN("failed to init member list service", K(ret));
       } else if (OB_FAIL(logonly_ls_init_for_dup_table_())) {
         LOG_WARN("logonly ls init for dup_table_ls_handler failed", K(ret), K(get_ls_id()));
+      } else if (OB_FAIL(tx_table_.init(this))) {
+        LOG_WARN("init tx table failed", K(ret));
+      } else if (OB_FAIL(lock_table_.init(this))) {
+        LOG_WARN("init lock table failed", K(ret));
       }
       if (OB_SUCC(ret)) {
         election_priority_.set_ls_id(ls_id);
@@ -883,6 +889,14 @@ void ObLS::destroy()
       MTL(transaction::ObTransIDService *)->reset_ls();
       MTL(transaction::ObTimestampService *)->reset_ls();
       MTL(sql::ObDASIDService *)->reset_ls();
+    }
+    tx_table_.destroy();
+    lock_table_.destroy();
+    if (OB_ISNULL(txs_svr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tx service is null, may be memory leak", K(ret), KP(txs_svr));
+    } else if (OB_FAIL(txs_svr->remove_ls(ls_meta_.ls_id_, false))) {
+      LOG_WARN("remove log stream from txs service failed", K(ret), K(ls_meta_.ls_id_));
     }
     (void)logonly_ls_destory_for_dup_table_();
     gc_handler_.reset();

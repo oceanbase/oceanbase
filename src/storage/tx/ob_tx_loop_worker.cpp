@@ -13,6 +13,11 @@
 #include "storage/tx/ob_tx_loop_worker.h"
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx/ob_leak_checker.h"
+#include "lib/mysqlclient/ob_mysql_proxy.h"
+#include "lib/mysqlclient/ob_mysql_transaction.h"
+#include "lib/string/ob_sql_string.h"
+#include "observer/ob_sql_client_decorator.h"
+#include "lib/time/ob_time_utility.h"
 
 namespace oceanbase
 {
@@ -22,6 +27,9 @@ using namespace logservice;
 
 namespace transaction
 {
+ERRSIM_POINT_DEF(ERRSIM_LOGONLY_REPLICA_INNER_SQL_TRIGGER);
+static const char LOGONLY_REPLICA_INNER_SQL_REPRO_TAG[] =
+    "/* ERRSIM_LOGONLY_REPLICA_INNER_SQL_REPRO */";
 
 int ObTxLoopWorker::mtl_init(ObTxLoopWorker *& ka)
 {
@@ -180,8 +188,12 @@ int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc,
       common::ObRole role = common::ObRole::INVALID_ROLE;
       int64_t base_proposal_id, proposal_id;
 
+      ERRSIM_test_for_do_logonly_replica_inner_sql_repro_(cur_ls_ptr);
+
       if (ObReplicaTypeCheck::is_log_replica(cur_ls_ptr->get_replica_type())) {
-        // do nothing
+        // LOGONLY replicas do not run normal transaction maintenance.  The
+        // ERRSIM helper above is deliberately isolated from this production
+        // behavior.
       } else {
         if (OB_TMP_FAIL(cur_ls_ptr->get_log_handler()->get_role(role, base_proposal_id))) {
           TRANS_LOG(WARN, "get role failed", K(tmp_ret), K(cur_ls_ptr->get_ls_id()));
@@ -256,6 +268,74 @@ int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc,
   }
 
   return ret;
+}
+
+void ObTxLoopWorker::ERRSIM_test_for_do_logonly_replica_inner_sql_repro_(ObLS *ls)
+{
+  if (OB_ISNULL(ls)
+      || !ObReplicaTypeCheck::is_log_replica(ls->get_replica_type())
+      || ls->get_ls_id() != share::WRS_LS_ID) {
+    return;
+  }
+
+  const int errsim_ret = OB_E(ERRSIM_LOGONLY_REPLICA_INNER_SQL_TRIGGER, MTL_ID()) OB_SUCCESS;
+  const uint64_t target_meta_tenant_id = errsim_ret < 0 ? -errsim_ret : OB_INVALID_TENANT_ID;
+  if (is_meta_tenant(MTL_ID()) && target_meta_tenant_id == MTL_ID()) {
+    int ret = OB_SUCCESS;
+    ObSqlString sql;
+    TRANS_LOG(INFO, "ERRSIM logonly opt stat inner sql trigger consumed",
+              K(target_meta_tenant_id), K(MTL_ID()), K(ls->get_ls_id()),
+              "sql_tag", LOGONLY_REPLICA_INNER_SQL_REPRO_TAG);
+    if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "logonly inner sql repro sql proxy is not ready", KR(ret), K(MTL_ID()));
+    } else if (OB_FAIL(sql.assign_fmt(
+                   "%s SELECT partition_id, object_type, row_cnt as row_count, "
+                   "avg_row_len as avg_row_size, macro_blk_cnt as macro_block_num, "
+                   "micro_blk_cnt as micro_block_num, stattype_locked as stattype_locked, "
+                   "stale_stats as stale_stats, last_analyzed, "
+                   "sstable_row_cnt as sstable_row_cnt, memtable_row_cnt as memtable_row_cnt, "
+                   "spare1 as sample_size FROM %s WHERE TENANT_ID = %lu AND TABLE_ID = %lu",
+                   LOGONLY_REPLICA_INNER_SQL_REPRO_TAG,
+                   share::OB_ALL_TABLE_STAT_TNAME,
+                   target_meta_tenant_id,
+                   share::OB_ALL_WEAK_READ_SERVICE_TID))) {
+      TRANS_LOG(WARN, "build logonly inner sql repro query failed", KR(ret));
+    } else {
+      // Match ObOptStatSqlService::batch_fetch_table_stats(): the production
+      // nested statistics SQL uses ObSQLClientRetryWeak with
+      // check_sys_variable=false, rather than a bare ObMySQLProxy::read().
+      // Keep the inner SQL in an explicit transaction on this connection.  It
+      // prevents a REMOTE plan from skipping the coordinator's start_stmt().
+      ObMySQLTransaction trans;
+      if (OB_FAIL(trans.start(GCTX.sql_proxy_,
+                              target_meta_tenant_id,
+                              false /* with_snapshot */))) {
+        TRANS_LOG(WARN, "start logonly inner sql repro transaction failed",
+                  KR(ret), K(target_meta_tenant_id), K(MTL_ID()));
+      } else {
+        ObSQLClientRetryWeak sql_client_retry_weak(
+            &trans, false, OB_INVALID_TIMESTAMP, false);
+        {
+          SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+            ret = sql_client_retry_weak.read(res, target_meta_tenant_id, sql.ptr());
+          }
+        }
+        const bool commit = OB_SUCC(ret);
+        const int tmp_ret = trans.end(commit);
+        if (OB_SUCCESS != tmp_ret) {
+          TRANS_LOG(WARN, "end logonly inner sql repro transaction failed",
+                    K(tmp_ret), K(commit), K(target_meta_tenant_id), K(MTL_ID()));
+          if (OB_SUCC(ret)) {
+            ret = tmp_ret;
+          }
+        }
+      }
+      TRANS_LOG(INFO, "ERRSIM logonly opt stat inner sql completed",
+                KR(ret), "sql_tag", LOGONLY_REPLICA_INNER_SQL_REPRO_TAG,
+                K(sql), K(target_meta_tenant_id), K(MTL_ID()), K(ls->get_ls_id()));
+    }
+  }
 }
 
 void ObTxLoopWorker::do_keep_alive_(ObLS *ls_ptr, const SCN &min_start_scn, MinStartScnStatus status)
@@ -370,4 +450,3 @@ void ObTxLoopWorker::do_log_cb_pool_adjust_(ObLS *ls_ptr, const common::ObRole r
 
 }
 }
-

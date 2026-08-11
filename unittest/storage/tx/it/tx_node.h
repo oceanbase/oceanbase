@@ -325,6 +325,15 @@ public:
   int handle_request_retry(ObLockWaitNode *node);
   ObLockWaitNode* get_wait_head(uint64_t key);
   ObLockWaitNode* fetch_wait_head(uint64_t key);
+
+  // Test LS lifecycle helpers.  They use the production ObLS::init() path and
+  // deliberately do not create an ObLSTxCtxMgr as create_ls_() does.
+  int init_ls_for_test(storage::ObLS &ls,
+                       const share::ObLSID &ls_id,
+                       const common::ObReplicaType replica_type,
+                       observer::ObIMetaReport *reporter);
+  int add_ls_for_test(storage::ObLS &ls);
+  int remove_ls_for_test(const share::ObLSID &ls_id);
 public:
   struct MsgPack : ObLink {
     MsgPack(const ObAddr &addr, ObString &body, bool is_sync_msg = false)
@@ -439,6 +448,7 @@ public:
   ObFakeTxTable fake_tx_table_;
   ObTenantFreezer fake_tenant_freezer_;
   ObSharedMemAllocMgr fake_shared_mem_alloc_mgr_;
+  common::ObInOutBandwidthThrottle fake_bandwidth_throttle_;
   ObLS fake_ls_;
   ObFreezer fake_freezer_;
   ObTxNodeRole role_;

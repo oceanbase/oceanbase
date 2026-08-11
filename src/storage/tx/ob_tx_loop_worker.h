@@ -62,6 +62,7 @@ private:
   void update_max_commit_ts_();
   void do_retain_ctx_gc_(ObLS * ls);  // 15s
   void do_log_cb_pool_adjust_(ObLS *ls, const common::ObRole role);
+  void ERRSIM_test_for_do_logonly_replica_inner_sql_repro_(ObLS *ls);
   void refresh_tenant_config_();
 
 private:

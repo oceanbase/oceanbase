@@ -635,6 +635,45 @@ int ObSqlTransControl::rollback_trans(ObSQLSessionInfo *session,
 }
 
 ERRSIM_POINT_DEF(SQL_DO_END_TX_FAIL)
+ERRSIM_POINT_DEF(ERRSIM_LOGONLY_REPLICA_INNER_SQL_LOCAL_SNAPSHOT)
+
+static inline bool ERRSIM_test_for_logonly_inner_sql_local_snapshot(
+    const ObSQLSessionInfo *session,
+    const ObPhysicalPlan *plan)
+{
+  static const char LOGONLY_REPLICA_INNER_SQL_REPRO_TAG[] =
+      "/* ERRSIM_LOGONLY_REPLICA_INNER_SQL_REPRO */";
+  bool force_local_snapshot = false;
+  if (OB_NOT_NULL(session)
+      && OB_NOT_NULL(plan)
+      && is_meta_tenant(MTL_ID())) {
+    const ObString current_query = session->get_current_query_string();
+    // Check the fixed leading tag before evaluating the one-shot TP.  This
+    // keeps unrelated SQL in the same meta tenant from consuming occur=1.
+    if (current_query.prefix_match(LOGONLY_REPLICA_INNER_SQL_REPRO_TAG)) {
+      const int errsim_ret =
+          OB_E(ERRSIM_LOGONLY_REPLICA_INNER_SQL_LOCAL_SNAPSHOT, MTL_ID()) OB_SUCCESS;
+      if (errsim_ret < 0) {
+        const uint64_t errsim_tenant_id = -errsim_ret;
+        if (errsim_tenant_id == MTL_ID()
+            && errsim_tenant_id > OB_SYS_TENANT_ID) {
+          force_local_snapshot = true;
+          TRANS_LOG(INFO, "ERRSIM logonly local snapshot injection enabled",
+                    K(errsim_tenant_id), K(MTL_ID()),
+                    "sql_tag", LOGONLY_REPLICA_INNER_SQL_REPRO_TAG,
+                    K(current_query));
+          TRANS_LOG(INFO, "ERRSIM force local snapshot for logonly inner sql",
+                    K(MTL_ID()), "plan_type", plan->get_plan_type(),
+                    "location_type", plan->get_location_type(),
+                    "need_trans", plan->is_need_trans(),
+                    "sql_tag", LOGONLY_REPLICA_INNER_SQL_REPRO_TAG);
+        }
+      }
+    }
+  }
+  return force_local_snapshot;
+}
+
 int ObSqlTransControl::do_end_trans_(ObSQLSessionInfo *session,
                                      const bool is_rollback,
                                      const bool is_explicit,
@@ -1135,8 +1174,11 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
     share::ObLSID first_ls_id;
     bool local_single_ls_plan = false;
     bool is_single_tablet = false;
-    const bool local_single_ls_plan_maybe = plan->is_local_plan() &&
-                                            OB_PHY_PLAN_LOCAL == plan->get_location_type();
+    bool local_single_ls_plan_maybe = (plan->is_local_plan() &&
+                                       OB_PHY_PLAN_LOCAL == plan->get_location_type());
+    if (ERRSIM_test_for_logonly_inner_sql_local_snapshot(session, plan)) {
+      local_single_ls_plan_maybe = true;
+    }
     if (local_single_ls_plan_maybe) {
       if (OB_FAIL(get_first_lsid(das_ctx, first_ls_id, is_single_tablet))) {
       } else if (!first_ls_id.is_valid()) {
