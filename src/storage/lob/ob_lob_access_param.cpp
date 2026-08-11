@@ -506,6 +506,36 @@ int ObLobAccessParam::get_tx_read_snapshot(ObLobLocatorV2 &locator, transaction:
   return ret;
 }
 
+bool ObLobAccessParam::need_transfer_own_write_read_latest() const
+{
+  bool need_read_latest = false;
+  bool has_read_snapshot = false;
+  ObMemLobExternHeader *extern_header = nullptr;
+  if (OB_NOT_NULL(lob_locator_)
+      && OB_SUCCESS == lob_locator_->get_extern_header(extern_header)
+      && OB_NOT_NULL(extern_header)) {
+    has_read_snapshot = extern_header->flags_.has_read_snapshot_;
+  }
+  if (has_read_snapshot
+      && snapshot_.is_valid()
+      && !snapshot_.is_committed()
+      && snapshot_.tx_id().is_valid()
+      && !snapshot_.parts_.empty()
+      && ls_id_.is_valid()) {
+    bool current_ls_in_snapshot = false;
+    for (int64_t i = 0; !current_ls_in_snapshot && i < snapshot_.parts_.count(); ++i) {
+      current_ls_in_snapshot = (snapshot_.parts_.at(i).left_ == ls_id_);
+    }
+    // Transfer can move the LOB tablet to an LS which is absent from the
+    // serialized snapshot.  READ_LATEST only changes visibility for Case 2.0
+    // (reader_tx_id == data_tx_id): it restores the transaction's latest
+    // non-rolled-back own write.  Other transactions still obey the normal
+    // snapshot/prepare-version checks.
+    need_read_latest = !current_ls_in_snapshot;
+  }
+  return need_read_latest;
+}
+
 int ObLobAccessParam::set_tx_read_snapshot(ObLobLocatorV2 &locator)
 {
   int ret = OB_SUCCESS;

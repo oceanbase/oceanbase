@@ -173,6 +173,7 @@ endif()
 
 if(OB_BUILD_CLOSE_MODULES)
   storage_unittest(test_lob_seq_id)
+  storage_unittest(test_lob_transfer_read_latest)
 endif()
 storage_unittest(test_sstable_log_ts_range_cut test_sstable_log_ts_range_cut.cpp)
 storage_unittest(test_cg_bitmap column_store/test_cg_bitmap.cpp)

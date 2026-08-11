@@ -197,14 +197,19 @@ int ObLobLocationUtil::lob_refresh_location(ObLobAccessParam &param, int last_er
       LOG_WARN("tablet id is changed", K(ret), K(tablet_loc), K(param), KPC(location_info));
     } else {
       param.addr_ = tablet_loc.server_;
-      if (tablet_loc.ls_id_ != param.ls_id_) {
+      const bool ls_changed = tablet_loc.ls_id_ != param.ls_id_;
+      if (ls_changed) {
         LOG_INFO("[LOB RETRY] lob retry find tablet ls id is changed",
                  K(param.tablet_id_), K(param.ls_id_), K(tablet_loc.ls_id_), K(last_err), K(retry_cnt));
-        param.ls_id_ = tablet_loc.ls_id_;
-        location_info->ls_id_ = tablet_loc.ls_id_.id();
-        if (OB_FAIL(fix_stale_local_leader(loc_meta, tablet_loc, router, param, location_info))) {
-          LOG_WARN("fail to fix stale local leader", K(ret), K(param), K(tablet_loc));
-        }
+      }
+      param.ls_id_ = tablet_loc.ls_id_;
+      location_info->ls_id_ = tablet_loc.ls_id_.id();
+      // Whether the selected local server is the real leader is independent
+      // of whether the tablet's LS id changed.
+      if (OB_FAIL(fix_stale_local_leader(loc_meta, tablet_loc, router, param, location_info))) {
+        LOG_WARN("fail to fix stale local leader", K(ret), K(param), K(tablet_loc));
+      } else {
+        retry_info->addr_ = param.addr_;
       }
     }
   }

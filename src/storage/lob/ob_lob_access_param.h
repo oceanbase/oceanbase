@@ -157,6 +157,7 @@ public:
 
   int set_tx_read_snapshot(ObLobLocatorV2 &locator);
   int get_tx_read_snapshot(ObLobLocatorV2 &locator, transaction::ObTxReadSnapshot &read_snapshot);
+  bool need_transfer_own_write_read_latest() const;
 
   // for outrow ctx
   int init_out_row_ctx(uint64_t len);
