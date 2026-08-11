@@ -261,7 +261,7 @@ struct ObGetTableIdOp
       LOG_WARN("unexpected null plan", K(ret), K(plan));
     } else if (OB_FAIL(plan->get_base_table_version(table_id_, version))) {
       LOG_WARN("failed to get base table version", K(ret));
-    } else if (version > 0) {
+    } else if (version > 0 && !plan->is_plain_insert() && !plan->get_outline_state().is_plan_fixed_) {
       if (!plan->is_plan_expired_time_exists()) {
         int64_t current_time = ObTimeUtility::current_time();
         int64_t plan_expired_at = plan_expired_before_ <= current_time ?
