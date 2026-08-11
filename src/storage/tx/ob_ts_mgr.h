@@ -409,6 +409,10 @@ public:
   int wait_gts_elapse(const uint64_t tenant_id, const share::SCN &scn);
   bool is_external_consistent(const uint64_t tenant_id) { UNUSED(tenant_id); return true; }
   int refresh_gts_location(const uint64_t tenant_id);
+  // Best effort: OB_SUCCESS means that no refresh was needed or one local/
+  // remote attempt succeeded; it does not guarantee cache >= target_version.
+  int refresh_gts_if_cache_behind(const uint64_t tenant_id,
+                                  const share::SCN &target_version);
   int remove_dropped_tenant(const uint64_t tenant_id);
 public:
   TO_STRING_KV("ts_source", "GTS");

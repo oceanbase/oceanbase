@@ -44,6 +44,7 @@ class CtxLockArg
 public:
   CtxLockArg() : ls_id_(), trans_id_(), task_list_(), commit_cb_(),
       has_pending_callback_(false), need_retry_redo_sync_(false),
+      gts_refresh_target_(share::SCN::invalid_scn()),
       p_mt_ctx_(NULL) {}
 public:
   share::ObLSID ls_id_;
@@ -52,6 +53,7 @@ public:
   ObTxCommitCallback commit_cb_;
   bool has_pending_callback_;
   bool need_retry_redo_sync_;
+  share::SCN gts_refresh_target_;
   // It is used to wake up lock queue after submitting the log for elr transaction
   memtable::ObIMemtableCtx *p_mt_ctx_;
 };

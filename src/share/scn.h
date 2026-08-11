@@ -48,7 +48,9 @@ public:
   static SCN scn_dec(const SCN &ref);
 
   SCN atomic_load() const;
+  SCN atomic_load_acq() const;
   void atomic_store(const SCN &ref);
+  void atomic_store_rel(const SCN &ref);
   void atomic_set(const SCN &ref);
   SCN atomic_get() const;
   bool atomic_bcas(const SCN &old_v, const SCN &new_val);

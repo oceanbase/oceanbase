@@ -644,12 +644,16 @@ int ObPartTransCtx::handle_timeout(const int64_t delay)
               K(tx_expired),
               K(commit_expired),
               K(delay));
-    if (busy_cbs_.get_size() > 0 || hotspot_redo_cache_.get_busy_cb_count() > 0) {
+    const ObTxHotspotRedoCacheHandle::HotspotLogCbView hotspot_view = hotspot_redo_cache_.get_cb_list_snapshot();
+    if (busy_cbs_.get_size() > 0 || !hotspot_view.empty()) {
       // Safely acquire pointers: return nullptr when list is empty to avoid KPC dereference crash
       ObTxLogCb *first_cb = busy_cbs_.get_size() > 0 ? busy_cbs_.get_first() : nullptr;
       ObTxLogCb *last_cb = busy_cbs_.get_size() > 0 ? busy_cbs_.get_last() : nullptr;
-      TRANS_LOG(INFO, "trx is waiting log_cb", K(busy_cbs_.get_size()),
-                K(hotspot_redo_cache_.get_busy_cb_count()),
+      TRANS_LOG(INFO, "trx is waiting log_cb",
+                "normal_busy", busy_cbs_.get_size(),
+                "hotspot_idle", hotspot_view.idle_cb_count,
+                "hotspot_free", hotspot_view.free_cb_count,
+                "hotspot_busy", hotspot_view.busy_cb_count,
                 KP(first_cb), KP(last_cb));
     }
   } else {
@@ -1232,8 +1236,33 @@ int ObPartTransCtx::get_gts_callback(const MonotonicTs srr,
     } else if (OB_UNLIKELY(is_follower_())) {
       sub_state_.clear_gts_waiting();
       need_revert_ctx = true;
+    } else if (is_secondary_status(redo_flush_status_)) {
+      if (sub_state_.is_gts_waiting()) {
+        sub_state_.clear_gts_waiting();
+      }
+      need_revert_ctx = true;
+      TRANS_LOG(WARN, "ignore GTS callback for hotspot secondary",
+                K(gts), K(trans_id_), K(ls_id_),
+                "redo_flush_status", to_cstr(redo_flush_status_));
     } else if (srr < get_stc_()) {
       ret = OB_EAGAIN;
+    } else if (OB_FAIL(publish_mvcc_prepare_barrier_(gts))) {
+      if (OB_EAGAIN == ret) {
+        int tmp_ret = OB_SUCCESS;
+        // The barrier waits for hotspot aggregation state, not for a newer GTS.
+        ret = OB_NEED_RETRY;
+        if (OB_TMP_FAIL(restart_2pc_trans_timer_())) {
+          TRANS_LOG(WARN, "restart transaction timer after deferred prepare barrier failed",
+                    KR(tmp_ret), K(gts), K(trans_id_), K(ls_id_),
+                    "redo_flush_status", to_cstr(redo_flush_status_));
+        }
+      }
+      // Consume this GTS task and release its reference. The transaction timer
+      // or commit retry will request another GTS after aggregation progresses.
+      need_revert_ctx = true;
+      TRANS_LOG(WARN, "publish prepare version in GTS callback failed",
+                KR(ret), K(gts), K(trans_id_), K(ls_id_),
+                "redo_flush_status", to_cstr(redo_flush_status_));
     } else {
       if (OB_LIKELY(sub_state_.is_gts_waiting())) {
         sub_state_.clear_gts_waiting();
@@ -1246,8 +1275,6 @@ int ObPartTransCtx::get_gts_callback(const MonotonicTs srr,
         GET_GTS_AHEAD_INTERVAL = 100000 < gts_ahead ? 100000 : gts_ahead;
       }
       set_trans_need_wait_wrap_(receive_gts_ts, GET_GTS_AHEAD_INTERVAL);
-      // the same as before prepare
-      mt_ctx_.set_trans_version(gts);
       const SCN max_read_ts = trans_service_->get_tx_version_mgr().get_max_read_ts();
       // TRANS_LOG(INFO, "get_gts_callback mid", K(*this), K(log_type));
       if (is_local_tx_() && exec_info_.is_dup_tx_) {
@@ -1256,8 +1283,10 @@ int ObPartTransCtx::get_gts_callback(const MonotonicTs srr,
       }
 
       if (is_local_tx_()) {
+        int tmp_ret = OB_SUCCESS;
         if (OB_FAIL(ctx_tx_data_.set_commit_version(SCN::max(gts, max_read_ts)))) {
-          TRANS_LOG(WARN, "set commit_version failed", K(ret));
+          TRANS_LOG(WARN, "set commit version in GTS callback failed",
+                    KR(ret), K(gts), K(max_read_ts), K(trans_id_), K(ls_id_));
         } else if (part_trans_action_ != ObPartTransAction::COMMIT) {
           // one phase commit failed or abort
           TRANS_LOG(INFO, "one phase commit has not been successful, need retry", K(ret), KPC(this));
@@ -1265,18 +1294,16 @@ int ObPartTransCtx::get_gts_callback(const MonotonicTs srr,
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(WARN, "the commit log has been submitted", K(ret), KPC(this));
         } else if (is_2pc_blocking()) {
-          int tmp_ret = OB_SUCCESS;
           if (OB_TMP_FAIL(restart_2pc_trans_timer_())) {
             TRANS_LOG(WARN, "fail to restart 2pc trans timer", K(tmp_ret), KPC(this));
           } else {
             TRANS_LOG(WARN, "need not drive 2pc phase when 2pc blocking", K(ret), KPC(this));
           }
-        } else if (OB_FAIL(submit_log_impl_(ObTxLogType::TX_COMMIT_LOG))) {
-          TRANS_LOG(WARN, "submit commit log in gts callback failed", K(ret), KPC(this));
+        } else if (OB_TMP_FAIL(submit_log_impl_(ObTxLogType::TX_COMMIT_LOG))) {
+          TRANS_LOG(WARN, "submit commit log in gts callback failed", KR(tmp_ret), KPC(this));
           // log submitting will retry in handle_timeout
-          int tmp_ret = OB_SUCCESS;
           if (OB_TMP_FAIL(restart_2pc_trans_timer_())) {
-            TRANS_LOG(WARN, "restart_2pc_trans_timer_ error", KR(ret), KR(tmp_ret), KPC(this));
+            TRANS_LOG(WARN, "restart_2pc_trans_timer_ error", KR(tmp_ret), KPC(this));
           }
         }
       } else {
@@ -1293,10 +1320,10 @@ int ObPartTransCtx::get_gts_callback(const MonotonicTs srr,
           }
         } else if (get_upstream_state() <= ObTxState::PREPARE) {
           int tmp_ret = OB_SUCCESS;
-          if (OB_FAIL(drive_self_2pc_phase(ObTxState::PREPARE))) {
-            TRANS_LOG(WARN, "drive into prepare phase failed in gts callback", K(ret), KPC(this));
+          if (OB_TMP_FAIL(drive_self_2pc_phase(ObTxState::PREPARE))) {
+            TRANS_LOG(WARN, "drive into prepare phase failed in gts callback", KR(tmp_ret), KPC(this));
           } else if (OB_TMP_FAIL(ObTxCycleTwoPhaseCommitter::retransmit_downstream_msg_())) {
-            TRANS_LOG(WARN, "post prepare request failed", K(ret), KPC(this));
+            TRANS_LOG(WARN, "post prepare request failed", KR(tmp_ret), KPC(this));
           }
         }
       }
@@ -2244,6 +2271,9 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
     ObTransStatistic::get_instance().add_clog_sync_time(tenant_id_, log_sync_used_time);
     ObTransStatistic::get_instance().add_clog_sync_count(tenant_id_, 1);
     const int64_t ctx_lock_wait_time = guard.get_lock_acquire_used_time();
+    if (log_cb->is_hotspot_logging()) {
+      hotspot_redo_cache_.record_on_success_ctx_lock_wait(ctx_lock_wait_time);
+    }
     if (log_sync_used_time + ctx_lock_wait_time >= ObServerConfig::get_instance().clog_sync_time_warn_threshold) {
       TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "transaction log sync use too much time", KPC(log_cb),
                     K(log_sync_used_time), K(ctx_lock_wait_time));
@@ -3130,8 +3160,9 @@ int ObPartTransCtx::generate_prepare_version_()
       // the txn version upper than all previous read version. So we record all
       // read version each access begins and get the max read version to handle
       // the dependency conflict
-      mt_ctx_.before_prepare(gts);
-      if (OB_FAIL(get_local_max_read_version_(local_max_read_version))) {
+      if (OB_FAIL(publish_mvcc_prepare_barrier_(gts))) {
+        TRANS_LOG(WARN, "publish prepare version failed", KR(ret), K(gts), K(*this));
+      } else if (OB_FAIL(get_local_max_read_version_(local_max_read_version))) {
         TRANS_LOG(WARN, "get local max read version failed", KR(ret), K(*this));
       } else if(exec_info_.is_dup_tx_) {
         if (!dup_table_follower_max_read_version_.is_valid()) {
@@ -3153,17 +3184,112 @@ int ObPartTransCtx::generate_prepare_version_()
                     K(trans_id_),
                     K(ls_id_));
         }
-        if (exec_info_.prepare_version_ > gts) {
-          mt_ctx_.before_prepare(exec_info_.prepare_version_);
+        if (OB_SUCC(ret) && exec_info_.prepare_version_ > gts
+            && OB_FAIL(publish_mvcc_prepare_barrier_(exec_info_.prepare_version_))) {
+          TRANS_LOG(WARN, "publish final prepare version failed",
+                    KR(ret), K(gts), K(exec_info_.prepare_version_), K(*this));
         }
       } else {
         // should not overwrite the prepare version of other participants
         exec_info_.prepare_version_ = SCN::max(SCN::max(gts, local_max_read_version),
                                                exec_info_.prepare_version_);
-        if (exec_info_.prepare_version_ > gts) {
-          mt_ctx_.before_prepare(exec_info_.prepare_version_);
+        if (exec_info_.prepare_version_ > gts
+            && OB_FAIL(publish_mvcc_prepare_barrier_(exec_info_.prepare_version_))) {
+          TRANS_LOG(WARN, "publish final prepare version failed",
+                    KR(ret), K(gts), K(exec_info_.prepare_version_), K(*this));
         }
       }
+    }
+  }
+
+  return ret;
+}
+
+int ObPartTransCtx::publish_mvcc_prepare_barrier_(const SCN &version)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!version.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid prepare version", KR(ret), K(version), K(*this));
+  } else if (is_secondary_status(redo_flush_status_)) {
+    ret = OB_EAGAIN;
+    TRANS_LOG(DEBUG, "hotspot secondary cannot publish primary prepare version",
+              KR(ret), K(version), K(trans_id_), K(ls_id_),
+              "redo_flush_status", to_cstr(redo_flush_status_));
+  } else if (is_primary_tx_aggregating(redo_flush_status_)) {
+    // The primary cannot become visible as prepared before all aggregated redo
+    // has completed. The caller must retry after aggregation state advances.
+    ret = OB_EAGAIN;
+    TRANS_LOG(DEBUG, "defer prepare version while hotspot aggregation is active",
+              KR(ret), K(version), K(trans_id_), K(ls_id_),
+              "redo_flush_status", to_cstr(redo_flush_status_));
+  } else if (is_normal_status(redo_flush_status_)) {
+    mt_ctx_.before_prepare(version);
+  } else if (has_primary_aggregation_succeeded(redo_flush_status_)) {
+    // Publish the secondary barriers first. Only after every secondary has a
+    // finite prepare version may the primary publish its own barrier and let a
+    // reader sample max_read_ts for the final version floor.
+    if (OB_FAIL(hotspot_redo_cache_.before_prepare_secondaries(version))) {
+      TRANS_LOG(WARN, "publish prepare version to hotspot secondaries failed",
+                KR(ret), K(version), K(trans_id_), K(ls_id_),
+                "redo_flush_status", to_cstr(redo_flush_status_));
+    } else {
+      mt_ctx_.before_prepare(version);
+    }
+  } else {
+    ret = OB_STATE_NOT_MATCH;
+    TRANS_LOG(WARN, "redo status cannot publish prepare version",
+              KR(ret), K(version), K(trans_id_), K(ls_id_),
+              "redo_flush_status", to_cstr(redo_flush_status_));
+  }
+
+  return ret;
+}
+
+SCN ObPartTransCtx::get_gts_refresh_target_() const
+{
+  SCN target = SCN::invalid_scn();
+
+  // Only a successfully aggregated hotspot primary needs this acceleration.
+  // Replay must not issue another GTS request. Log callbacks are eligible so
+  // the final prepare/commit version can trigger refresh after ctx unlock.
+  if (!is_for_replay()
+      && has_primary_aggregation_succeeded(redo_flush_status_)) {
+    const SCN prepare_version = exec_info_.prepare_version_;
+    const SCN commit_version = ctx_tx_data_.get_commit_version();
+    if (prepare_version.is_valid_and_not_min() && !prepare_version.is_max()) {
+      target = prepare_version;
+    }
+    if (commit_version.is_valid_and_not_min()
+        && !commit_version.is_max()
+        && (!target.is_valid_and_not_min() || target < commit_version)) {
+      target = commit_version;
+    }
+  }
+
+  return target;
+}
+
+int ObPartTransCtx::before_prepare_for_hotspot(const SCN &version)
+{
+  int ret = OB_SUCCESS;
+  CtxLockGuard guard(lock_);
+
+  if (!can_publish_secondary_prepare_barrier(redo_flush_status_)) {
+    ret = OB_STATE_NOT_MATCH;
+    TRANS_LOG(ERROR, "invalid secondary status when publishing prepare version",
+              KR(ret), K(version), K(trans_id_), K(ls_id_),
+              "redo_flush_status", to_cstr(redo_flush_status_));
+  } else {
+    const SCN old_version = mt_ctx_.get_trans_version();
+    if (old_version.is_max() || old_version < version) {
+      mt_ctx_.before_prepare(version);
+    } else if (old_version != version) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "hotspot secondary prepare version moves backwards",
+                KR(ret), K(version), K(old_version), K(trans_id_), K(ls_id_),
+                "redo_flush_status", to_cstr(redo_flush_status_));
     }
   }
 
@@ -3174,18 +3300,29 @@ int ObPartTransCtx::generate_prepare_version_()
 int ObPartTransCtx::generate_commit_version_()
 {
   int ret = OB_SUCCESS;
-  if (!ctx_tx_data_.get_commit_version().is_valid()) {
+  if (is_secondary_status(redo_flush_status_)) {
+    ret = OB_EAGAIN;
+    TRANS_LOG(DEBUG, "hotspot secondary skips commit version",
+              K(trans_id_), K(ls_id_),
+              "redo_flush_status", to_cstr(redo_flush_status_));
+  } else if (!ctx_tx_data_.get_commit_version().is_valid()) {
     SCN gts;
     if (OB_FAIL(get_gts_(gts))) {
       if (OB_EAGAIN != ret) {
         TRANS_LOG(WARN, "get gts failed", KR(ret), K(*this));
       }
+    } else if (OB_FAIL(publish_mvcc_prepare_barrier_(gts))) {
+      TRANS_LOG(WARN, "publish prepare version before commit failed",
+                KR(ret), K(gts), K(trans_id_), K(ls_id_),
+                "redo_flush_status", to_cstr(redo_flush_status_));
     } else {
-      // the same as before prepare
-      mt_ctx_.set_trans_version(gts);
+      // The prepare barrier above must be visible before max_read_ts is sampled.
+      // Otherwise a reader can skip an apparently unprepared transaction while
+      // the final commit version still falls below that reader's snapshot.
       const SCN max_read_ts = trans_service_->get_tx_version_mgr().get_max_read_ts();
       if (OB_FAIL(ctx_tx_data_.set_commit_version(SCN::max(gts, max_read_ts)))) {
-        TRANS_LOG(WARN, "set tx data commit version", K(ret));
+        TRANS_LOG(WARN, "set commit version failed",
+                  KR(ret), K(gts), K(max_read_ts), K(trans_id_), K(ls_id_));
       }
       TRANS_LOG(DEBUG, "generate_commit_version_", KR(ret), K(gts), K(max_read_ts), K(*this));
     }
@@ -9552,6 +9689,8 @@ int ObPartTransCtx::after_local_commit_succ_()
 int ObPartTransCtx::on_local_abort_tx_()
 {
   int ret = OB_SUCCESS;
+  const bool hotspot_result_sent =
+      redo_flush_status_ == TxRedoFlushStatus::SECONDARY_MIGRATE_SUCCEEDED;
 
   if (OB_FAIL(tx_end_(false /*commit*/))) {
     TRANS_LOG(WARN, "trans end error", KR(ret), "context", *this);
@@ -9569,7 +9708,8 @@ int ObPartTransCtx::on_local_abort_tx_()
 
   } else if (FALSE_IT(unregister_timeout_task_())) {
 
-  } else if (ObPartTransAction::COMMIT == part_trans_action_) {
+  } else if (ObPartTransAction::COMMIT == part_trans_action_
+             && !hotspot_result_sent) {
     (void)post_tx_commit_resp_(OB_TRANS_KILLED);
   }
 

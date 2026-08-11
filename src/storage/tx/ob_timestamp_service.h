@@ -57,6 +57,13 @@ public:
   static const int64_t PREALLOCATE_RANGE_FOR_SWITHOVER =  2 * TIMESTAMP_PREALLOCATED_RANGE;
   int handle_request(const ObGtsRequest &request, obrpc::ObGtsRpcResult &result);
   int get_timestamp(int64_t &gts);
+  // Allocate one timestamp while trying to advance to target_gts. OB_SUCCESS
+  // means gts is valid; is_target_reached reports whether gts reached the
+  // lower bound. OB_EAGAIN means no publishable timestamp was returned in this
+  // attempt, usually because the preallocated range first needs to be extended.
+  int get_timestamp_with_target(const int64_t target_gts,
+                                int64_t &gts,
+                                bool &is_target_reached);
   int switch_to_follower_gracefully();
   void switch_to_follower_forcedly();
   int resume_leader();

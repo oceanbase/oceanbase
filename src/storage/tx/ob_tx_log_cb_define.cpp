@@ -149,7 +149,7 @@ int ObTxLogCbPool::acquire_log_cb_group(ObTxLogCbGroup *&group_ptr)
 
       if (cur_free_group_no >= MAX_LOG_CB_GROUP_COUNT_IN_POOL) {
         ret = OB_TX_NOLOGCB;
-        TRANS_LOG(INFO, "none free log_cb_group in pool", K(ret), K(cur_free_group_no),
+        TRANS_LOG(DEBUG, "none free log_cb_group in pool", K(ret), K(cur_free_group_no),
                   K(prev_free_group_no), KPC(this));
       } else if (cur_free_group_no != prev_free_group_no) {
         ret = OB_EAGAIN;
@@ -175,7 +175,7 @@ int ObTxLogCbPool::acquire_log_cb_group(ObTxLogCbGroup *&group_ptr)
       } else {
         ret = OB_SUCCESS;
         cur_free_group_no = tmp_group_ptr->get_group_no();
-        TRANS_LOG(INFO, "reuse a log group in the pool", K(ret), K(*tmp_group_ptr), KPC(this));
+        TRANS_LOG(DEBUG, "reuse a log group in the pool", K(ret), K(*tmp_group_ptr), KPC(this));
       }
     }
   }

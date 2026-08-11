@@ -51,6 +51,14 @@ public:
   void inc_try_get_gts_with_stc_cnt() { ATOMIC_INC(&try_get_gts_with_stc_cnt_); }
   void inc_wait_gts_elapse_cnt() { ATOMIC_INC(&wait_gts_elapse_cnt_); }
   void inc_try_wait_gts_elapse_cnt() { ATOMIC_INC(&try_wait_gts_elapse_cnt_); }
+  void inc_hotspot_refresh_check_cnt() { ATOMIC_INC(&hotspot_refresh_check_cnt_); }
+  void inc_hotspot_refresh_skip_cnt() { ATOMIC_INC(&hotspot_refresh_skip_cnt_); }
+  void inc_hotspot_refresh_cache_miss_cnt() { ATOMIC_INC(&hotspot_refresh_cache_miss_cnt_); }
+  void inc_hotspot_refresh_local_cnt() { ATOMIC_INC(&hotspot_refresh_local_cnt_); }
+  void inc_hotspot_refresh_remote_cnt() { ATOMIC_INC(&hotspot_refresh_remote_cnt_); }
+  void inc_hotspot_refresh_fail_cnt() { ATOMIC_INC(&hotspot_refresh_fail_cnt_); }
+  void inc_hotspot_refresh_local_behind_cnt() { ATOMIC_INC(&hotspot_refresh_local_behind_cnt_); }
+  void record_hotspot_refresh_trigger(const int64_t gap_ns);
   void statistics();
 private:
   uint64_t tenant_id_;
@@ -64,6 +72,17 @@ private:
 
   int64_t wait_gts_elapse_cnt_;
   int64_t try_wait_gts_elapse_cnt_;
+
+  int64_t hotspot_refresh_check_cnt_;
+  int64_t hotspot_refresh_skip_cnt_;
+  int64_t hotspot_refresh_cache_miss_cnt_;
+  int64_t hotspot_refresh_trigger_cnt_;
+  int64_t hotspot_refresh_local_cnt_;
+  int64_t hotspot_refresh_remote_cnt_;
+  int64_t hotspot_refresh_fail_cnt_;
+  int64_t hotspot_refresh_local_behind_cnt_;
+  int64_t hotspot_refresh_gap_ns_sum_;
+  int64_t hotspot_refresh_gap_ns_max_;
 };
 
 class ObGtsSource
@@ -90,6 +109,11 @@ public:
   int wait_gts_elapse(const int64_t ts, ObTsCbTask *task, bool &need_wait);
   int wait_gts_elapse(const int64_t ts);
   int refresh_gts(const bool need_refresh);
+  // If the cache is absent or below target_gts, make at most one refresh
+  // attempt. Local access is synchronous but may remain below the target;
+  // remote access only posts an asynchronous range=1 request. OB_SUCCESS does
+  // not mean that the cache has already caught up.
+  int refresh_gts_if_cache_behind(const int64_t target_gts);
   bool is_external_consistent() { return true; }
   int refresh_gts_location() { return refresh_gts_location_(); }
   TO_STRING_KV(K_(tenant_id), K_(gts_local_cache), K_(server), K_(gts_cache_leader));
@@ -102,8 +126,19 @@ private:
   int get_gts_from_local_timestamp_service_(common::ObAddr &leader,
                                             int64_t &gts,
                                             MonotonicTs &receive_gts_ts);
+  int get_gts_from_local_timestamp_service_with_target_(common::ObAddr &leader,
+                                                        const int64_t target_gts,
+                                                        int64_t &gts,
+                                                        MonotonicTs &receive_gts_ts,
+                                                        bool &is_target_reached);
   int get_gts_from_local_timestamp_service_(common::ObAddr &leader,
                                             int64_t &gts);
+  int get_gts_from_local_timestamp_service_impl_(common::ObAddr &leader,
+                                                 const bool use_target,
+                                                 const int64_t target_gts,
+                                                 int64_t &gts,
+                                                 MonotonicTs &receive_gts_ts,
+                                                 bool &is_target_reached);
 public:
   static const int64_t GET_GTS_QUEUE_COUNT = 1;
   static const int64_t WAIT_GTS_QUEUE_COUNT = 1;

@@ -154,6 +154,7 @@ TEST_F(TestHotspotRedoStat, test_reset_clears_all)
   stat.dispatch_msg_sent_cnt_       = 3;
   stat.dispatch_msg_skipped_cnt_    = 2;
   stat.response_msg_sent_cnt_       = 9;
+  stat.resp_retry_cnt_              = 5;
   stat.aggr_start_ts_        = ObTimeUtility::current_time();
   stat.dispatch_start_ts_       = ObTimeUtility::current_time();
   stat.redo_submit_done_ts_        = ObTimeUtility::current_time();
@@ -164,6 +165,7 @@ TEST_F(TestHotspotRedoStat, test_reset_clears_all)
   stat.resp_finish_ts_   = ObTimeUtility::current_time();
   stat.aggr_end_ts_                 = ObTimeUtility::current_time();
   stat.terminal_ret_                = OB_ERR_UNEXPECTED;
+  stat.last_resp_error_             = OB_TIMEOUT;
 
   stat.reset();
 
@@ -186,6 +188,7 @@ TEST_F(TestHotspotRedoStat, test_reset_clears_all)
   EXPECT_EQ(0, stat.dispatch_msg_sent_cnt_);
   EXPECT_EQ(0, stat.dispatch_msg_skipped_cnt_);
   EXPECT_EQ(0, stat.response_msg_sent_cnt_);
+  EXPECT_EQ(0, stat.resp_retry_cnt_);
   EXPECT_EQ(OB_INVALID_TIMESTAMP, stat.aggr_start_ts_);
   EXPECT_EQ(OB_INVALID_TIMESTAMP, stat.dispatch_start_ts_);
   EXPECT_EQ(OB_INVALID_TIMESTAMP, stat.redo_submit_done_ts_);
@@ -196,6 +199,7 @@ TEST_F(TestHotspotRedoStat, test_reset_clears_all)
   EXPECT_EQ(OB_INVALID_TIMESTAMP, stat.resp_finish_ts_);
   EXPECT_EQ(OB_INVALID_TIMESTAMP, stat.aggr_end_ts_);
   EXPECT_EQ(OB_SUCCESS, stat.terminal_ret_);
+  EXPECT_EQ(OB_SUCCESS, stat.last_resp_error_);
 }
 
 // ============================================================================
@@ -231,7 +235,10 @@ TEST_F(TestHotspotRedoStat, test_compact_stat_layout)
   EXPECT_NEXT_INT64_FIELD(sec_redo_cnt_, dispatch_msg_sent_cnt_);
   EXPECT_NEXT_INT64_FIELD(dispatch_msg_sent_cnt_, dispatch_msg_skipped_cnt_);
   EXPECT_NEXT_INT64_FIELD(dispatch_msg_skipped_cnt_, response_msg_sent_cnt_);
-  EXPECT_NEXT_INT64_FIELD(response_msg_sent_cnt_, aggr_start_ts_);
+  EXPECT_NEXT_INT64_FIELD(response_msg_sent_cnt_, resp_retry_cnt_);
+  EXPECT_NEXT_INT64_FIELD(resp_retry_cnt_, aggr_start_ts_);
+  EXPECT_EQ(offsetof(ObTxHotspotRedoStat, terminal_ret_) + sizeof(int),
+            offsetof(ObTxHotspotRedoStat, last_resp_error_));
 
 #undef EXPECT_NEXT_INT64_FIELD
 }
@@ -251,6 +258,24 @@ TEST_F(TestHotspotRedoStat, test_add_redo_bytes_guards_negative)
   stat.add_sec_redo_bytes(0);     // must be ignored
   stat.add_sec_redo_bytes(200);
   EXPECT_EQ(300, stat.sec_redo_bytes_);
+}
+
+// ============================================================================
+// TC-08: last response error keeps the latest non-success result.
+// A successful retry must not erase the error that explains resp_retry_cnt_.
+// ============================================================================
+TEST_F(TestHotspotRedoStat, test_last_response_error)
+{
+  ObTxHotspotRedoStat stat;
+
+  stat.set_last_resp_error(OB_TIMEOUT);
+  EXPECT_EQ(OB_TIMEOUT, ATOMIC_LOAD_ACQ(&stat.last_resp_error_));
+
+  stat.set_last_resp_error(OB_SUCCESS);
+  EXPECT_EQ(OB_TIMEOUT, ATOMIC_LOAD_ACQ(&stat.last_resp_error_));
+
+  stat.set_last_resp_error(OB_EAGAIN);
+  EXPECT_EQ(OB_EAGAIN, ATOMIC_LOAD_ACQ(&stat.last_resp_error_));
 }
 
 } // namespace oceanbase

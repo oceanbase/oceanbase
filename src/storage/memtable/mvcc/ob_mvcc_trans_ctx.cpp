@@ -2043,17 +2043,14 @@ int ObMvccRowCallback::hotspot_log_submitted(const transaction::ObTransID primar
   int ret = OB_SUCCESS;
 
   if (OB_NOT_NULL(memtable_)) {
-
+    // Publish owner first to ensure tnode is updated before dec_unsubmitted_cnt
+    // may unblock the frozen memtable toward flush (when unsubmitted_cnt reaches
+    // 0 together with write_ref_cnt == 0). This prevents flush/compaction from
+    // reading stale tx_id/scn/seq_no. dec_unsubmitted_cnt() always succeeds in
+    // current implementation, so the "dec fails after publish" case is unreachable.
+    tnode_->publish_hotspot_owner(primary_tx_id, log_scn, remap_seq);
     if (OB_FAIL(dec_unsubmitted_cnt_())) {
       TRANS_LOG(ERROR, "dec unsubmitted cnt failed", K(ret), K(*this));
-    } else {
-      tnode_->tx_id_ = primary_tx_id;
-      tnode_->fill_scn(log_scn);
-      // Remap tnode seq_no at the same level as tx_id/scn modification.
-      // Only modify tnode->seq_no_, callback's own seq_no_ stays unchanged.
-      if (remap_seq.is_valid()) {
-        tnode_->set_seq_no(remap_seq);
-      }
     }
     TRANS_LOG(DEBUG, "fill hotspot tx_id, scn and seq", K(ret), K(primary_tx_id), K(log_scn),
               K(remap_seq), KPC(tnode_));
@@ -2311,7 +2308,7 @@ int ObMvccRowCallback::checkpoint_callback()
     ObAddr tx_scheduler = get_trans_ctx()->get_scheduler();
     (void) MTL(ObLockWaitMgr*)->transform_row_lock_to_tx_lock(get_tablet_id(),
                                                               *get_key(),
-                                                              tnode_->tx_id_,
+                                                              tnode_->get_tx_id(),
                                                               tx_scheduler);
     tnode_->set_delayed_cleanout();
     (void)value_.update_dml_flag_(get_dml_flag(), tnode_->get_scn());

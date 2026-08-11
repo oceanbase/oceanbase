@@ -49,6 +49,11 @@ public:
   ServiceType get_service_type() const { return service_type_; }
   int handle_request(const ObGtsRequest &request, obrpc::ObGtsRpcResult &result);
   int get_number(int64_t &gts);
+  // On OB_SUCCESS, gts is valid and is_target_reached indicates whether it is
+  // no smaller than target_gts. On OB_EAGAIN, no publishable timestamp was returned.
+  int get_number_with_target(const int64_t target_gts,
+                             int64_t &gts,
+                             bool &is_target_reached);
   void get_virtual_info(int64_t &ts_value,
                         ServiceType &service_type,
                         common::ObRole &role,

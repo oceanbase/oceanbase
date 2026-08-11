@@ -986,6 +986,47 @@ TEST_F(ObTestRedoFill, test_remap_overflow_boundary)
 // exercising the same invariants without requiring a full ObMvccRowCallback
 // object graph (which needs ObMemtable for hotspot_log_submitted_cb).
 
+TEST_F(ObTestRedoFill, test_hotspot_owner_publication)
+{
+  const transaction::ObTransID secondary_tx_id(1001);
+  const transaction::ObTransID primary_tx_id(2001);
+  const transaction::ObTxSEQ original_seq(10, 0);
+  const transaction::ObTxSEQ remapped_seq(500, 0);
+  share::SCN log_scn;
+  log_scn.convert_for_tx(123456);
+
+  ObMvccTransNode tnode;
+  tnode.tx_id_ = secondary_tx_id;
+  tnode.seq_no_ = original_seq;
+  tnode.publish_hotspot_owner(primary_tx_id, log_scn, remapped_seq);
+
+  EXPECT_EQ(primary_tx_id, tnode.get_tx_id());
+  EXPECT_EQ(remapped_seq, tnode.get_seq_no());
+  EXPECT_EQ(log_scn, tnode.get_scn());
+
+  transaction::ObTransID loaded_tx_id;
+  transaction::ObTxSEQ loaded_seq;
+  tnode.get_trans_id_and_seq_no(loaded_tx_id, loaded_seq);
+  EXPECT_EQ(primary_tx_id, loaded_tx_id);
+  EXPECT_EQ(remapped_seq, loaded_seq);
+}
+
+TEST_F(ObTestRedoFill, test_hotspot_owner_publication_without_seq_remap)
+{
+  const transaction::ObTransID primary_tx_id(2002);
+  const transaction::ObTxSEQ original_seq(20, 0);
+  share::SCN log_scn;
+  log_scn.convert_for_tx(123457);
+
+  ObMvccTransNode tnode;
+  tnode.seq_no_ = original_seq;
+  tnode.publish_hotspot_owner(primary_tx_id, log_scn, transaction::ObTxSEQ::INVL());
+
+  EXPECT_EQ(primary_tx_id, tnode.get_tx_id());
+  EXPECT_EQ(original_seq, tnode.get_seq_no());
+  EXPECT_EQ(log_scn, tnode.get_scn());
+}
+
 // Test 1: tnode seq_no remapped correctly, callback seq unchanged
 TEST_F(ObTestRedoFill, test_hotspot_log_submitted_remaps_tnode_seq)
 {

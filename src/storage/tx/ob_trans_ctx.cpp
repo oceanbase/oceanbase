@@ -60,6 +60,8 @@ void ObTransCtx::before_unlock(CtxLockArg &arg)
     need_retry_redo_sync_by_task_ = false;
   }
 
+  arg.gts_refresh_target_ = get_gts_refresh_target_();
+
   if (elr_handler_.is_elr_prepared()
       && NULL != (arg.p_mt_ctx_ = elr_handler_.get_memtable_ctx())) {
     elr_handler_.set_memtable_ctx(NULL);
@@ -77,6 +79,14 @@ void ObTransCtx::after_unlock(CtxLockArg &arg)
   }
   if (arg.need_retry_redo_sync_) {
     (void)MTL(ObTransService *)->retry_redo_sync_by_task(arg.trans_id_, arg.ls_id_);
+  }
+
+  if (arg.gts_refresh_target_.is_valid_and_not_min()
+      && !arg.gts_refresh_target_.is_max()
+      && OB_NOT_NULL(trans_service_)
+      && OB_NOT_NULL(trans_service_->get_ts_mgr())) {
+    (void)trans_service_->get_ts_mgr()->refresh_gts_if_cache_behind(
+        tenant_id_, arg.gts_refresh_target_);
   }
 
   if (arg.has_pending_callback_) {

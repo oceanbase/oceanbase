@@ -146,6 +146,28 @@ static inline bool is_primary_tx_aggregating(TxRedoFlushStatus s)
 }
 
 /**
+ * @brief Checks whether a primary has successfully finished aggregation.
+ * PRIMARY_COMPLETED keeps this property after the primary resumes its normal
+ * redo/commit-log flow.
+ */
+static inline bool has_primary_aggregation_succeeded(TxRedoFlushStatus s)
+{
+  return s == TxRedoFlushStatus::PRIMARY_AGGR_SUCCEEDED
+      || s == TxRedoFlushStatus::PRIMARY_COMPLETED;
+}
+
+/**
+ * @brief Checks whether a secondary may publish the primary prepare barrier.
+ * A failed or terminal secondary must not change its MVCC prepare version.
+ */
+static inline bool can_publish_secondary_prepare_barrier(TxRedoFlushStatus s)
+{
+  return s == TxRedoFlushStatus::SECONDARY_PREPARING
+      || s == TxRedoFlushStatus::SECONDARY_MIGRATING
+      || s == TxRedoFlushStatus::SECONDARY_MIGRATE_SYNCED;
+}
+
+/**
  * @brief Validates state transition from one status to another.
  */
 static inline int is_valid_transition(TxRedoFlushStatus from, TxRedoFlushStatus to)

@@ -28,7 +28,9 @@ using namespace transaction;
 // These upper bounds prevent unintended memory growth.
 static constexpr int64_t PRE_OPT_PART_TRANS_CTX_SIZE = 37312;
 static constexpr int64_t PRE_OPT_HOTSPOT_REDO_CACHE_SIZE = 18336;
-static constexpr int64_t PRE_OPT_TX_REDO_EXTRACT_ARG_SIZE = 4392;
+// The compact phase tracker reuses tail padding for phase/round and adds only
+// one int64_t start timestamp to the historical 4392B element.
+static constexpr int64_t EXPECTED_TX_REDO_EXTRACT_ARG_SIZE = 4400;
 
 class ObTxCtxMemoryTest : public ::testing::Test
 {
@@ -66,11 +68,11 @@ TEST_F(ObTxCtxMemoryTest, extract_arg_size_stable)
 {
   const int64_t arg_size = sizeof(ObTxRedoExtractArg);
   LOG_INFO("ObTxRedoExtractArg sizeof", K(arg_size),
-           "pre_opt", PRE_OPT_TX_REDO_EXTRACT_ARG_SIZE);
+           "expected", EXPECTED_TX_REDO_EXTRACT_ARG_SIZE);
 
-  EXPECT_EQ(arg_size, PRE_OPT_TX_REDO_EXTRACT_ARG_SIZE)
+  EXPECT_EQ(arg_size, EXPECTED_TX_REDO_EXTRACT_ARG_SIZE)
       << "ObTxRedoExtractArg element size changed unexpectedly. "
-      << "Current: " << arg_size << ", Expected: " << PRE_OPT_TX_REDO_EXTRACT_ARG_SIZE;
+      << "Current: " << arg_size << ", Expected: " << EXPECTED_TX_REDO_EXTRACT_ARG_SIZE;
 }
 
 TEST_F(ObTxCtxMemoryTest, hotspot_percentage_reduced)

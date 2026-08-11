@@ -385,14 +385,18 @@ int ObTxLogCbPoolMgr::acquire_idle_log_cb_group(ObTxLogCbGroup *&group_ptr, ObPa
   } else if (OB_FAIL(ref_guard.get_pool_ptr()->acquire_log_cb_group(group_ptr))) {
     if (OB_TX_NOLOGCB == ret) {
       ATOMIC_BCAS(&idle_pool_ptr_, ref_guard.get_pool_ptr(), nullptr);
+      // OB_TX_NOLOGCB is expected under pressure; upper layers do rate-limited diagnostic.
+      TRANS_LOG(DEBUG, "acquire a log cb group failed", K(ret), K(ref_guard), KPC(group_ptr),
+                KPC(this));
+    } else {
+      TRANS_LOG(WARN, "acquire a log cb group failed", K(ret), K(ref_guard), KPC(group_ptr),
+                KPC(this));
     }
-    TRANS_LOG(WARN, "acquire a log cb group failed", K(ret), K(ref_guard), KPC(group_ptr),
-              KPC(this));
   } else if (OB_FAIL(group_ptr->occupy_by_tx(tx_ctx, tx_ctx->get_trans_id()))) {
     TRANS_LOG(WARN, "occupy log cb group by a tx_ctx failed", K(ret), K(ref_guard), KPC(group_ptr),
               KPC(this));
   } else {
-    TRANS_LOG(INFO, "[Log Cb Group Life] occupy a idle group by tx", K(ret),
+    TRANS_LOG(DEBUG, "[Log Cb Group Life] occupy a idle group by tx", K(ret),
               K(tx_ctx->get_trans_id()), K(tx_ctx->get_ls_id()), K(ref_guard), KPC(group_ptr));
   }
 

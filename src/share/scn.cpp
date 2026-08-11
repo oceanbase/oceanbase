@@ -34,9 +34,22 @@ SCN SCN::atomic_load() const
   return result;
 }
 
+SCN SCN::atomic_load_acq() const
+{
+  SCN result;
+  const uint64_t val = ATOMIC_LOAD_ACQ(&val_);
+  result.val_ = val;
+  return result;
+}
+
 void SCN::atomic_store(const SCN &ref)
 {
   ATOMIC_STORE(&val_, ATOMIC_LOAD(&ref.val_));
+}
+
+void SCN::atomic_store_rel(const SCN &ref)
+{
+  ATOMIC_STORE_REL(&val_, ATOMIC_LOAD(&ref.val_));
 }
 
 void SCN::atomic_set(const SCN &ref)

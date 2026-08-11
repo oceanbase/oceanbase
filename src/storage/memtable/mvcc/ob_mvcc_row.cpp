@@ -113,8 +113,27 @@ void ObMvccTransNode::get_snapshot_version_barrier(int64_t &version,
 void ObMvccTransNode::get_trans_id_and_seq_no(ObTransID &tx_id,
                                               ObTxSEQ &seq_no)
 {
-  tx_id = tx_id_;
-  seq_no = seq_no_;
+  tx_id = tx_id_.atomic_load();
+  seq_no = seq_no_.atomic_load();
+}
+
+void ObMvccTransNode::publish_hotspot_owner(const ObTransID &primary_tx_id,
+                                            const SCN &log_scn,
+                                            const ObTxSEQ &remapped_seq)
+{
+  // Write payload fields first with release stores (x86: mov, ARM: str).
+  // x86 TSO guarantees store-store ordering, so these will be visible
+  // before the tx_id publication marker below.
+  scn_.atomic_store_rel(log_scn);
+  if (remapped_seq.is_valid()) {
+    seq_no_.atomic_store_rel(remapped_seq);
+  }
+  // The transaction id is the publication marker (release store).
+  // Readers that observe the primary owner (via acquire load on tx_id)
+  // are guaranteed to also observe the primary SCN and remapped sequence.
+  // x86: mov + compiler barrier (NOT xchg, no LOCK# assertion)
+  // ARM: stlr instruction
+  tx_id_.atomic_store_rel(primary_tx_id);
 }
 
 int ObMvccTransNode::fill_trans_version(const SCN version)
@@ -566,7 +585,7 @@ int ObMvccRow::elr(const ObTransID &tx_id,
       && !iter->is_committed()
       && !iter->is_aborted()) {
     while (NULL != iter && OB_SUCC(ret)) {
-      if (tx_id != iter->tx_id_) {
+      if (tx_id != iter->get_tx_id()) {
         break;
       } else if (SCN::max_scn() != iter->trans_version_ && iter->trans_version_ > elr_commit_version) {
         // leader revoke
@@ -991,7 +1010,7 @@ int ObMvccRow::check_row_locked(ObMvccAccessCtx &ctx,
       lock_state.lock_dml_flag_ = blocksstable::ObDmlFlag::DF_NOT_EXIST;
       need_retry = false;
     } else {
-      const ObTransID data_tx_id = iter->tx_id_;
+      const ObTransID data_tx_id = iter->get_tx_id();
       if (!(iter->is_committed() || iter->is_aborted())
           && iter->is_delayed_cleanout()
           && OB_FAIL(ctx.get_tx_table_guards().cleanout_tx_node(data_tx_id,

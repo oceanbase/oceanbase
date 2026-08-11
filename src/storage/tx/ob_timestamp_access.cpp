@@ -51,6 +51,36 @@ int ObTimestampAccess::get_number(int64_t &gts)
   return ret;
 }
 
+int ObTimestampAccess::get_number_with_target(const int64_t target_gts,
+                                              int64_t &gts,
+                                              bool &is_target_reached)
+{
+  int ret = OB_SUCCESS;
+  is_target_reached = false;
+  if (OB_UNLIKELY(target_gts <= 0 || target_gts >= INT64_MAX / 2)) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid target gts", KR(ret), K(target_gts));
+  } else if (GTS_LEADER == service_type_) {
+    ret = MTL(ObTimestampService *)->get_timestamp_with_target(
+        target_gts, gts, is_target_reached);
+  } else if (STS_LEADER == service_type_) {
+    if (OB_FAIL(MTL(ObStandbyTimestampService *)->get_number(gts))) {
+      // Propagate the STS allocation failure unchanged.
+    } else {
+      // STS has no targeted allocation API, so preserve its normal allocation
+      // and report separately whether the returned value reached the target.
+      is_target_reached = gts >= target_gts;
+    }
+  } else {
+    ret = OB_NOT_MASTER;
+    if (EXECUTE_COUNT_PER_SEC(16)) {
+      TRANS_LOG(INFO, "ObTimestampAccess service type is FOLLOWER",
+                K(ret), K_(service_type), K(target_gts));
+    }
+  }
+  return ret;
+}
+
 void ObTimestampAccess::get_virtual_info(int64_t &ts_value,
                                          ServiceType &service_type,
                                          common::ObRole &role,

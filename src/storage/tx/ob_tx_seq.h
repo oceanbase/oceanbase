@@ -102,7 +102,9 @@ public:
   // atomic Load/Store
   void atomic_reset() { ATOMIC_SET(&raw_val_, 0); }
   ObTxSEQ atomic_load() const { int64_t v = ATOMIC_LOAD(&raw_val_); ObTxSEQ s; s.raw_val_ = v; return s; }
+  ObTxSEQ atomic_load_acq() const { int64_t v = ATOMIC_LOAD_ACQ(&raw_val_); ObTxSEQ s; s.raw_val_ = v; return s; }
   void atomic_store(ObTxSEQ seq) { ATOMIC_STORE(&raw_val_, seq.raw_val_); }
+  void atomic_store_rel(ObTxSEQ seq) { ATOMIC_STORE_REL(&raw_val_, seq.raw_val_); }
   NEED_SERIALIZE_AND_DESERIALIZE;
   DECLARE_TO_STRING;
 private:

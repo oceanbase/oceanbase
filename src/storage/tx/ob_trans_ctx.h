@@ -185,6 +185,7 @@ public:
                        K_(ctx_create_time));
 protected:
   virtual bool is_in_active_aggregation_() const { return false; }
+  virtual share::SCN get_gts_refresh_target_() const { return share::SCN::invalid_scn(); }
   void set_exiting_();
   void print_trace_log_();
   void print_trace_log_if_necessary_();

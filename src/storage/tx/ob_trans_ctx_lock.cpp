@@ -156,6 +156,7 @@ void CtxLock::unlock_ctx(CtxLockArg &arg)
   // Reset arg state flags to avoid stale data from previous cycle
   arg.has_pending_callback_ = false;
   arg.need_retry_redo_sync_ = false;
+  arg.gts_refresh_target_.reset();
   arg.p_mt_ctx_ = NULL;
   before_unlock(arg);
   ctx_lock_.unlock();

@@ -137,7 +137,7 @@ int ObMultiVersionValueIterator::get_next_uncommitted_node(
     while (OB_SUCC(ret) && OB_ISNULL(tnode)) {
       if (OB_ISNULL(version_iter_)) {
         ret = OB_ITER_END;
-      } else if (SCN::max_scn() == version_iter_->scn_) {
+      } else if (SCN::max_scn() == version_iter_->get_scn()) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "current trans node has not submit clog yet", K(ret), KPC_(version_iter));
       } else if (NDT_COMPACT == version_iter_->type_) { // ignore compact node
@@ -159,7 +159,7 @@ int ObMultiVersionValueIterator::get_next_uncommitted_node(
           } else {
             tnode = static_cast<const void *>(version_iter_);
             trans_version = SCN::max_scn();
-            sql_sequence = version_iter_->seq_no_;
+            sql_sequence = version_iter_->get_seq_no();
             version_iter_ = version_iter_->prev_;
           }
         // when tx_end_scn <= memtable_end_scn, trans is end
@@ -214,7 +214,7 @@ int ObMultiVersionValueIterator::check_next_sql_sequence(
         }
       } else if (ObTxData::RUNNING == state) { // return this node
         if (input_trans_id == trans_id) {
-          if (version_iter_->seq_no_ == input_sql_sequence) {
+          if (version_iter_->get_seq_no() == input_sql_sequence) {
             same_sql_sequence_flag = true;
           }
         }
@@ -565,7 +565,7 @@ int ObMultiVersionRowIterator::try_cleanout_mvcc_row_(ObMvccRow *value)
 int ObMultiVersionRowIterator::try_cleanout_tx_node_(ObMvccRow *value, ObMvccTransNode *tnode)
 {
   int ret = OB_SUCCESS;
-  const ObTransID data_tx_id = tnode->tx_id_;
+  const ObTransID data_tx_id = tnode->get_tx_id();
   if (!(tnode->is_committed() || tnode->is_aborted())
       && tnode->is_delayed_cleanout()
       && OB_FAIL(ctx_->get_tx_table_guards().cleanout_tx_node(data_tx_id,

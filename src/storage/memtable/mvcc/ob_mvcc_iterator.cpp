@@ -15,6 +15,9 @@
 #include "storage/memtable/ob_row_conflict_handler.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/access/ob_rows_info.h"
+#ifdef ENABLE_DEBUG_LOG
+#include "share/ob_debug_sync.h"
+#endif
 
 namespace oceanbase
 {
@@ -121,7 +124,7 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
   const ObTxSEQ &snapshot_seq_no = ctx_->snapshot_.scn_;
 
   const bool read_latest = flag.is_read_latest();
-  const ObTransID &data_tx_id = iter->get_tx_id();
+  const ObTransID data_tx_id = iter->get_tx_id();
 
   const bool read_uncommitted = flag.iter_uncommitted_row();
 
@@ -135,7 +138,6 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
   const bool is_aborted = iter->is_aborted();
   const bool is_elr = iter->is_elr();
   const bool is_delayed_cleanout = iter->is_delayed_cleanout();
-  const SCN &scn = iter->get_scn();
   const bool is_incomplete = iter->is_incomplete();
 
   // only read elr committed data if reader has created TxCtx
@@ -217,6 +219,31 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
     //         one operation, whether cleanout or normal processing, so we use
     //         is_delay_cleanout() to check the state and we only cleanout it
     //         when data is delay cleanout
+    // A hotspot row changes owner exactly once, from the secondary to the
+    // primary. The owner tuple (tx_id, seq_no, scn) is published through
+    // ordered atomic stores, with tx_id as the publication marker (release).
+    // Ownership transfer always happens before the secondary ctx is reclaimed
+    // (transfer in clog callback, reclaim in scheduler response). Therefore:
+    // - If lock_for_read returns OB_TRANS_CTX_NOT_EXIST, the secondary ctx
+    //   has been reclaimed, so transfer must have completed. We re-read
+    //   tx_id to detect this and retry with the new owner.
+    // - If the secondary ctx is still alive, the sampled old tuple remains
+    //   safe because the old ctx can still serve the lookup, regardless of
+    //   whether ownership transfer has already happened.
+    //
+    // The retry relies on the invariant that a hotspot row's owner is
+    // published at most once (secondary -> primary). On retry, the outer
+    // while loop re-enters lock_for_read_inner_() which re-reads the node
+    // state with the new owner. If the node has been cleanout in the
+    // meantime, it may take a different (decided) case, which is correct.
+    const ObTransID queried_tx_id = iter->get_tx_id();
+    const ObTxSEQ queried_seq = iter->get_seq_no();
+    const SCN queried_scn = iter->get_scn();
+#ifdef ENABLE_DEBUG_LOG
+    // Used by the test_tx integration test to reproduce the owner publication
+    // race deterministically after the old tuple has been sampled.
+    DEBUG_SYNC(AFTER_HOTSPOT_LOCK_FOR_READ_OWNER_SNAPSHOT);
+#endif
     bool can_read = false;
     SCN data_version;
     data_version.set_invalid();
@@ -235,20 +262,38 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
                                                               can_read,
                                                               data_version);
     ObReCheckOp *recheck_op = &recheck_tx_node_op;
+    ObLockForReadArg query_arg(*ctx_,
+                               queried_tx_id,
+                               queried_seq,
+                               read_latest,
+                               read_uncommitted,
+                               queried_scn);
 
-    ObLockForReadArg lock_for_read_arg(*ctx_,
-                                       data_tx_id,
-                                       iter->get_seq_no(),
-                                       read_latest,
-                                       read_uncommitted,
-                                       scn);
+    ret = ctx_->get_tx_table_guards().lock_for_read(query_arg,
+                                                    can_read,
+                                                    data_version,
+                                                    *cleanout_op,
+                                                    *recheck_op);
 
-    if (OB_FAIL(ctx_->get_tx_table_guards().lock_for_read(lock_for_read_arg,
-                                                          can_read,
-                                                          data_version,
-                                                          *cleanout_op,
-                                                          *recheck_op))) {
-      TRANS_LOG(WARN, "lock for read failed", KPC(iter), K(lock_for_read_arg));
+    // If the secondary ctx has been reclaimed (CTX_NOT_EXIST) AND the owner
+    // has changed, reset ret so the outer while loop retries with the new
+    // owner. On retry, queried_tx_id will equal iter->get_tx_id(), so this
+    // branch won't trigger again — at most one retry.
+    bool owner_changed = false;
+    if (OB_TRANS_CTX_NOT_EXIST == ret
+        && iter->get_tx_id() != queried_tx_id) {
+      owner_changed = true;
+      TRANS_LOG(DEBUG, "hotspot row owner changed while locking for read, will retry with new owner",
+                "lookup_ret", OB_TRANS_CTX_NOT_EXIST,
+                K(queried_tx_id), "new_tx_id", iter->get_tx_id(),
+                K(queried_seq), K(queried_scn), KPC(iter));
+      ret = OB_SUCCESS;
+    }
+
+    if (OB_FAIL(ret)) {
+      TRANS_LOG(WARN, "lock for read failed", KPC(iter), K(query_arg));
+    } else if (owner_changed) {
+      // owner changed, iter/version_iter_ unchanged, outer while loop will retry
     } else if (can_read) {
       // Case 5.1: data is cleanout by lock for read and can be read by reader's
       //           snapshot
@@ -267,7 +312,7 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
         if (0 == (++counter) % 10000
             && REACH_TIME_INTERVAL(1_s)) {
           TRANS_LOG(WARN, "waiting for the iter to be cleanout", K(ret),
-                    KPC(iter), K(lock_for_read_arg), KPC(value_), KPC(ctx_));
+                    KPC(iter), K(query_arg), KPC(value_), KPC(ctx_));
         }
 
         // Tip2: In the transfer scenario, the tx_table and data at the src and
@@ -279,15 +324,14 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
             && !MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
           ctx_->is_standby_read_ = true;
           TRANS_LOG(WARN, "encounter standyby read with uncleanout data", K(ret),
-                    KPC(iter), K(lock_for_read_arg), KPC(value_), KPC(ctx_));
-
+                    KPC(iter), K(query_arg), KPC(value_), KPC(ctx_));
         }
 
         ob_usleep(10); // 10us
       }
       version_iter_ = iter;
     } else {
-      // Case 5.1: data is cleanout by lock for read and cannot be read by
+      // Case 5.2: data is cleanout by lock for read and cannot be read by
       //           reader's snapshot, so we need go to next
       iter = iter->prev_;
     }
@@ -302,7 +346,7 @@ int ObMvccValueIterator::try_cleanout_tx_node_(ObMvccTransNode *tnode)
   ObTxTableGuards &tx_table_guards = ctx_->get_tx_table_guards();
   if (!(tnode->is_committed() || tnode->is_aborted())
       && tnode->is_delayed_cleanout()
-      && OB_FAIL(tx_table_guards.cleanout_tx_node(tnode->tx_id_,
+      && OB_FAIL(tx_table_guards.cleanout_tx_node(tnode->get_tx_id(),
                                             *value_,
                                             *tnode,
                                             true     /*need_row_latch*/))) {

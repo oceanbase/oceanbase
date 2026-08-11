@@ -39,11 +39,11 @@ public:
 };
 
 // ============================================================================
-// Test 1: is_valid_status - 验证所有 11 个有效枚举值
+// Test 1: is_valid_status - 验证所有 12 个有效枚举值
 // ============================================================================
 TEST_F(ObTestTxRedoFlushStatusEnum, test_is_valid_status_all_enum_values)
 {
-  // 所有 11 个有效状态
+  // 所有 12 个有效状态
   EXPECT_TRUE(is_valid_status(TxRedoFlushStatus::NORMAL_START));
   EXPECT_TRUE(is_valid_status(TxRedoFlushStatus::NORMAL_FLUSHED));
   EXPECT_TRUE(is_valid_status(TxRedoFlushStatus::PRIMARY_PREPARING));
@@ -51,6 +51,7 @@ TEST_F(ObTestTxRedoFlushStatusEnum, test_is_valid_status_all_enum_values)
   EXPECT_TRUE(is_valid_status(TxRedoFlushStatus::PRIMARY_AGGR_SUCCEEDED));
   EXPECT_TRUE(is_valid_status(TxRedoFlushStatus::PRIMARY_AGGR_FAILED));
   EXPECT_TRUE(is_valid_status(TxRedoFlushStatus::PRIMARY_COMPLETED));
+  EXPECT_TRUE(is_valid_status(TxRedoFlushStatus::SECONDARY_PREPARING));
   EXPECT_TRUE(is_valid_status(TxRedoFlushStatus::SECONDARY_MIGRATING));
   EXPECT_TRUE(is_valid_status(TxRedoFlushStatus::SECONDARY_MIGRATE_SYNCED));
   EXPECT_TRUE(is_valid_status(TxRedoFlushStatus::SECONDARY_MIGRATE_SUCCEEDED));
@@ -344,6 +345,46 @@ TEST_F(ObTestTxRedoFlushStatusEnum, test_is_primary_tx_aggregating)
   EXPECT_FALSE(is_primary_tx_aggregating(TxRedoFlushStatus::SECONDARY_MIGRATE_SUCCEEDED));
   EXPECT_FALSE(is_primary_tx_aggregating(TxRedoFlushStatus::SECONDARY_MIGRATE_FAILED));
 
+}
+
+// ============================================================================
+// Test 12: prepare barrier and GTS-refresh status predicates
+// ============================================================================
+TEST_F(ObTestTxRedoFlushStatusEnum, test_version_publication_status_predicates)
+{
+  struct StatusExpectation
+  {
+    TxRedoFlushStatus status_;
+    bool primary_aggregation_succeeded_;
+    bool secondary_can_publish_barrier_;
+  };
+  const StatusExpectation cases[] = {
+      {TxRedoFlushStatus::NORMAL_START, false, false},
+      {TxRedoFlushStatus::NORMAL_FLUSHED, false, false},
+      {TxRedoFlushStatus::PRIMARY_PREPARING, false, false},
+      {TxRedoFlushStatus::PRIMARY_COLLECTING, false, false},
+      {TxRedoFlushStatus::PRIMARY_AGGR_SUCCEEDED, true, false},
+      {TxRedoFlushStatus::PRIMARY_AGGR_FAILED, false, false},
+      {TxRedoFlushStatus::PRIMARY_COMPLETED, true, false},
+      {TxRedoFlushStatus::SECONDARY_PREPARING, false, true},
+      {TxRedoFlushStatus::SECONDARY_MIGRATING, false, true},
+      {TxRedoFlushStatus::SECONDARY_MIGRATE_SYNCED, false, true},
+      {TxRedoFlushStatus::SECONDARY_MIGRATE_FAILED, false, false},
+      {TxRedoFlushStatus::SECONDARY_MIGRATE_SUCCEEDED, false, false},
+  };
+
+  for (const StatusExpectation &item : cases) {
+    EXPECT_EQ(item.primary_aggregation_succeeded_,
+              has_primary_aggregation_succeeded(item.status_))
+        << to_cstr(item.status_);
+    EXPECT_EQ(item.secondary_can_publish_barrier_,
+              can_publish_secondary_prepare_barrier(item.status_))
+        << to_cstr(item.status_);
+  }
+
+  const TxRedoFlushStatus invalid_status = static_cast<TxRedoFlushStatus>(999);
+  EXPECT_FALSE(has_primary_aggregation_succeeded(invalid_status));
+  EXPECT_FALSE(can_publish_secondary_prepare_barrier(invalid_status));
 }
 
 // ============================================================================

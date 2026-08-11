@@ -56,8 +56,7 @@ int ObPartTransCtx::extend_log_cb_group_()
   ObTxLogCbGroup *group_ptr = nullptr;
   if (OB_FAIL(
           get_ls_tx_ctx_mgr()->get_log_cb_pool_mgr().acquire_idle_log_cb_group(group_ptr, this))) {
-    TRANS_LOG(WARN, "acquire a idle log cb group failed", K(ret), KPC(group_ptr), K(trans_id_),
-              K(ls_id_));
+    // Error already logged in acquire_idle_log_cb_group_, no duplicate here
   } else if (false == (extra_cb_group_list_.add_last(group_ptr))) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "insert into extra_cb_group_list_ failed", K(ret), KPC(group_ptr),
@@ -69,7 +68,12 @@ int ObPartTransCtx::extend_log_cb_group_()
     }
   }
 
-  TRANS_LOG(INFO, "extend a log cb group", K(ret), K(trans_id_), K(ls_id_), KPC(group_ptr));
+  // Success: DEBUG log
+  // Failure: OB_TX_NOLOGCB is expected under pressure (logged at DEBUG by pool layer).
+  // Non-retryable errors are logged at WARN by pool layer (acquire_idle_log_cb_group).
+  if (OB_SUCC(ret)) {
+    TRANS_LOG(DEBUG, "extend a log cb group success", K(ret), K(trans_id_), K(ls_id_), KPC(group_ptr));
+  }
 
   return ret;
 }
@@ -110,8 +114,17 @@ void ObPartTransCtx::reset_log_cbs_()
 int ObPartTransCtx::prepare_log_cb_(const bool need_freeze_cb, ObTxLogCb *&log_cb)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(get_log_cb_(need_freeze_cb, log_cb)) && REACH_TIME_INTERVAL(100 * 1000)) {
-    TRANS_LOG(WARN, "failed to get log_cb", KR(ret), K(need_freeze_cb), K(*this));
+  if (OB_FAIL(get_log_cb_(need_freeze_cb, log_cb))) {
+    if (OB_TX_NOLOGCB == ret) {
+      // Retryable resource shortage: already logged as rate-limited INFO in get_log_cb_().
+      // No duplicate log here.
+    } else {
+      // Non-retryable error: immediate WARN with concise fields
+      TRANS_LOG(WARN, "failed to get log_cb",
+                KR(ret), K(need_freeze_cb), K(trans_id_), K(ls_id_),
+                "normal_busy_cb_cnt", busy_cbs_.get_size(),
+                "normal_free_cb_cnt", free_cbs_.get_size());
+    }
   }
   return ret;
 }
@@ -145,30 +158,58 @@ int ObPartTransCtx::get_log_cb_(const bool need_freeze_cb, ObTxLogCb *&log_cb)
 
     if (OB_TX_NOLOGCB == ret || (OB_SUCCESS == ret && OB_ISNULL(log_cb))) {
       ObSpinLockGuard guard(log_cb_lock_);
+      // Track extend attempt for unified failure summary at function end
+      int extend_ret = OB_SUCCESS;
+      bool extend_attempted = false;
+      bool configured_limit_hit = false;
+      int64_t limit_snapshot = 0;
+
       if (free_cbs_.is_empty()) {
         const int64_t busy_cbs_cnt = busy_cbs_.get_size();
         const int64_t trx_max_log_cb_limit =
             trans_service_->get_tx_elr_util().get_trx_max_log_cb_limit() >= 0
                 ? trans_service_->get_tx_elr_util().get_trx_max_log_cb_limit()
                 : 16;
+        limit_snapshot = trx_max_log_cb_limit;
         if (busy_cbs_cnt < trx_max_log_cb_limit || trx_max_log_cb_limit <= 0) {
-          if (OB_TMP_FAIL(extend_log_cb_group_())) {
-            TRANS_LOG(WARN, "extend a log cb group  failed", K(ret), K(tmp_ret), K(trans_id_),
-                      K(ls_id_));
-          } else {
-            TRANS_LOG(INFO, "extend log cb group success", K(ret), K(tmp_ret), K(trans_id_),
-                      K(ls_id_), K(busy_cbs_cnt), K(busy_cbs_.get_size()), K(free_cbs_.get_size()));
-          }
-        } else if (EXECUTE_COUNT_PER_SEC(10)) {
-          TRANS_LOG(INFO, "The configured limit of log_cbs has been reached", K(ret), K(tmp_ret),
-                    K(trans_id_), K(ls_id_), K(busy_cbs_cnt), K(trx_max_log_cb_limit),
-                    K(free_cbs_.get_size()));
+          extend_attempted = true;
+          extend_ret = extend_log_cb_group_();
+        } else {
+          configured_limit_hit = true;
         }
       }
 
       if (OB_ISNULL(log_cb = free_cbs_.remove_first())) {
-        ret = OB_TX_NOLOGCB;
-        TRANS_LOG(WARN, "no free cbs in ctx", KR(ret), K(free_cbs_.get_size()), K(*this));
+        // Determine failure reason from saved state (not re-reading mutable config)
+        const char *reason = nullptr;
+        if (configured_limit_hit) {
+          reason = "configured_limit_reached";
+        } else if (extend_attempted && OB_SUCCESS != extend_ret && OB_TX_NOLOGCB != extend_ret) {
+          reason = "extend_unexpected";
+        } else {
+          reason = "pool_exhausted";
+        }
+
+        if (extend_attempted && OB_SUCCESS != extend_ret && OB_TX_NOLOGCB != extend_ret) {
+          // Non-retryable extend error: propagate real error code + immediate WARN
+          ret = extend_ret;
+          TRANS_LOG(WARN, "get log cb failed, extend unexpected",
+                    KR(ret), K(extend_ret), K(reason), K(trans_id_), K(ls_id_),
+                    "normal_free_cb_cnt", free_cbs_.get_size(),
+                    "normal_busy_cb_cnt", busy_cbs_.get_size(),
+                    "trx_max_log_cb_limit", limit_snapshot);
+        } else {
+          // Retryable resource shortage: single rate-limited INFO (1s)
+          ret = OB_TX_NOLOGCB;
+          if (REACH_TIME_INTERVAL(1000 * 1000)) {
+            TRANS_LOG(INFO, "get log cb failed, retryable",
+                      KR(ret), K(extend_ret), K(reason), K(trans_id_), K(ls_id_),
+                      "normal_free_cb_cnt", free_cbs_.get_size(),
+                      "normal_busy_cb_cnt", busy_cbs_.get_size(),
+                      "trx_max_log_cb_limit", limit_snapshot,
+                      "has_extra_group", ATOMIC_LOAD(&has_extra_log_cb_group_));
+          }
+        }
       } else if (!log_cb->try_acquire_busy()) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(ERROR, "free log cb is already busy", KR(ret), KPC(log_cb), K(free_cbs_.get_size()),

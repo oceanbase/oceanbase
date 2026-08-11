@@ -6,7 +6,7 @@
  *          http://license.coscl.org.cn/MulanPubL-2.0
  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
  * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
- * NON-INFRINGEMENT, MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE. See the
+ * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE. See the
  * Mulan PubL v2 for more details.
  */
 
@@ -14,6 +14,7 @@
 #define OCEANBASE_TRANSACTION_OB_TX_HOTSPOT_DEFINE_PUBLIC_HEADER
 
 #include "lib/lock/ob_spin_rwlock.h"
+#include "lib/atomic/ob_atomic.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_trans_submit_log_cb.h"
 #include "storage/tx/ob_tx_log.h"
@@ -104,6 +105,7 @@ public:
     int64_t busy_cb_count;
     int64_t idle_cb_count;
     bool all_redo_synced;
+    bool empty() const { return free_cb_count == 0 && busy_cb_count == 0 && idle_cb_count == 0; }
   };
 
   explicit ObTxHotspotRedoCacheHandle(TransModulePageAllocator &allocator)
@@ -134,6 +136,12 @@ public:
   int64_t get_hotspot_cache_count() const;
   int64_t get_free_cb_count() const;
   int64_t get_busy_cb_count() const;
+  int64_t get_idle_cb_count() const;
+  // Try-lock versions for to_string_() diagnostic output only.
+  // Return -1 when lock is unavailable (e.g., caller holds write lock).
+  int64_t try_get_free_cb_count() const;
+  int64_t try_get_busy_cb_count() const;
+  int64_t try_get_idle_cb_count() const;
   void get_cb_list_count(int64_t &free_cb_cnt, int64_t &busy_cb_cnt, int64_t &idle_cb_cnt) const;
   HotspotLogCbView get_cb_list_snapshot() const;
   share::SCN get_min_busy_log_ts() const;
@@ -173,7 +181,9 @@ public:
   bool need_rollback_primary_tx() const;
   int abort_secondary_txs(const int reason);
   int cleanup_hotspot_cache_and_revert_secondary_ctxs();
+  int before_prepare_secondaries(const share::SCN &version);
   int response_scheduler(const int ret_code, const share::SCN commit_version);
+  void record_on_success_ctx_lock_wait(const int64_t wait_us);
   void record_aggr_start_ts();
   void record_dispatch_start_ts();
   void record_aggr_end_ts();
@@ -212,12 +222,62 @@ private:
   int check_no_active_cache_ref_locked_(const char *op) const;
   void force_destroy_cache_core_locked_();
 
-  common::SpinRWLock hotspot_lock_;
+  // Lock contention stats for clog callback hot paths.
+  // Lives on Handle (not Cache) so updates are lock-free — no cache_ pointer
+  // dereference needed. Handle is a direct member of ObPartTransCtx, always
+  // alive during on_success/after_sync callbacks.
+  struct CallbackLockWaitStats
+  {
+    int64_t lock_attempt_cnt_ = 0;
+    int64_t max_wait_us_ = 0;
+
+    void atomic_reset()
+    {
+      ATOMIC_STORE(&lock_attempt_cnt_, 0);
+      ATOMIC_STORE(&max_wait_us_, 0);
+    }
+
+    // Merge locally aggregated samples with one shared counter update.
+    void atomic_merge(const int64_t lock_attempt_cnt, const int64_t max_wait_us)
+    {
+      if (lock_attempt_cnt > 0) {
+        ATOMIC_FAA(&lock_attempt_cnt_, lock_attempt_cnt);
+      }
+      int64_t old = ATOMIC_LOAD(&max_wait_us_);
+      while (max_wait_us > old && !ATOMIC_BCAS(&max_wait_us_, old, max_wait_us)) {
+        old = ATOMIC_LOAD(&max_wait_us_);
+      }
+    }
+
+    void atomic_snapshot_and_reset(int64_t &lock_attempt_cnt, int64_t &max_wait_us)
+    {
+      lock_attempt_cnt = ATOMIC_TAS(&lock_attempt_cnt_, 0);
+      max_wait_us = ATOMIC_TAS(&max_wait_us_, 0);
+    }
+
+    int64_t load_lock_attempt_cnt() const { return ATOMIC_LOAD(&lock_attempt_cnt_); }
+    int64_t load_max_wait_us() const { return ATOMIC_LOAD(&max_wait_us_); }
+  };
+
+  void reset_lock_stats_()
+  {
+    on_success_ctx_lock_wait_stats_.atomic_reset();
+    after_sync_lock_wait_stats_.atomic_reset();
+  }
+
+  // mutable: allow const methods (e.g. try_get_*_cb_count) to acquire read lock
+  mutable common::SpinRWLock hotspot_lock_;
   TransModulePageAllocator &allocator_;
   ObTxHotspotRedoCache *cache_;
   int64_t active_ref_cnt_;
   ObHotspotSchedulerResponseTask resp_task_;
   ObTxSEQ primary_last_seq_no_;
+
+  // Lock contention stats (moved from Cache for lock-free updates).
+  // on_success_ctx_lock_wait: primary ctx lock_ wait during on_success callback.
+  // after_sync_lock_wait: hotspot_lock_ wait during after_sync callback.
+  CallbackLockWaitStats on_success_ctx_lock_wait_stats_;
+  CallbackLockWaitStats after_sync_lock_wait_stats_;
 };
 
 } // namespace transaction

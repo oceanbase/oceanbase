@@ -33,6 +33,16 @@ void ObGtsStatistics::reset()
   try_get_gts_with_stc_cnt_ = 0;
   wait_gts_elapse_cnt_ = 0;
   try_wait_gts_elapse_cnt_ = 0;
+  hotspot_refresh_check_cnt_ = 0;
+  hotspot_refresh_skip_cnt_ = 0;
+  hotspot_refresh_cache_miss_cnt_ = 0;
+  hotspot_refresh_trigger_cnt_ = 0;
+  hotspot_refresh_local_cnt_ = 0;
+  hotspot_refresh_remote_cnt_ = 0;
+  hotspot_refresh_fail_cnt_ = 0;
+  hotspot_refresh_local_behind_cnt_ = 0;
+  hotspot_refresh_gap_ns_sum_ = 0;
+  hotspot_refresh_gap_ns_max_ = 0;
 }
 
 int ObGtsStatistics::init(const uint64_t tenant_id)
@@ -45,12 +55,39 @@ int ObGtsStatistics::init(const uint64_t tenant_id)
   return ret;
 }
 
+void ObGtsStatistics::record_hotspot_refresh_trigger(const int64_t gap_ns)
+{
+  ATOMIC_INC(&hotspot_refresh_trigger_cnt_);
+  if (gap_ns > 0) {
+    ATOMIC_FAA(&hotspot_refresh_gap_ns_sum_, gap_ns);
+    int64_t old_gap_ns_max = ATOMIC_LOAD(&hotspot_refresh_gap_ns_max_);
+    while (gap_ns > old_gap_ns_max
+           && !ATOMIC_BCAS(&hotspot_refresh_gap_ns_max_, old_gap_ns_max, gap_ns)) {
+      old_gap_ns_max = ATOMIC_LOAD(&hotspot_refresh_gap_ns_max_);
+    }
+  }
+}
+
 void ObGtsStatistics::statistics()
 {
   const int64_t cur_ts = ObTimeUtility::current_time();
   const int64_t last_stat_ts = ATOMIC_LOAD(&last_stat_ts_);
   if (cur_ts - last_stat_ts >= STAT_INTERVAL) {
     if (ATOMIC_BCAS(&last_stat_ts_, last_stat_ts, cur_ts)) {
+      // Atomically take the new high-frequency counters so increments racing
+      // with this reporting round are retained for either this or the next one.
+      const int64_t hotspot_refresh_check_cnt = ATOMIC_TAS(&hotspot_refresh_check_cnt_, 0);
+      const int64_t hotspot_refresh_skip_cnt = ATOMIC_TAS(&hotspot_refresh_skip_cnt_, 0);
+      const int64_t hotspot_refresh_cache_miss_cnt =
+          ATOMIC_TAS(&hotspot_refresh_cache_miss_cnt_, 0);
+      const int64_t hotspot_refresh_trigger_cnt = ATOMIC_TAS(&hotspot_refresh_trigger_cnt_, 0);
+      const int64_t hotspot_refresh_local_cnt = ATOMIC_TAS(&hotspot_refresh_local_cnt_, 0);
+      const int64_t hotspot_refresh_remote_cnt = ATOMIC_TAS(&hotspot_refresh_remote_cnt_, 0);
+      const int64_t hotspot_refresh_fail_cnt = ATOMIC_TAS(&hotspot_refresh_fail_cnt_, 0);
+      const int64_t hotspot_refresh_local_behind_cnt =
+          ATOMIC_TAS(&hotspot_refresh_local_behind_cnt_, 0);
+      const int64_t hotspot_refresh_gap_ns_sum = ATOMIC_TAS(&hotspot_refresh_gap_ns_sum_, 0);
+      const int64_t hotspot_refresh_gap_ns_max = ATOMIC_TAS(&hotspot_refresh_gap_ns_max_, 0);
       TRANS_LOG(INFO, "gts statistics",
                       K_(tenant_id),
                       "gts_rpc_cnt", ATOMIC_LOAD(&gts_rpc_cnt_),
@@ -59,7 +96,17 @@ void ObGtsStatistics::statistics()
                       "try_get_gts_cache_cnt", ATOMIC_LOAD(&try_get_gts_cache_cnt_),
                       "try_get_gts_with_stc_cnt", ATOMIC_LOAD(&try_get_gts_with_stc_cnt_),
                       "wait_gts_elapse_cnt", ATOMIC_LOAD(&wait_gts_elapse_cnt_),
-                      "try_wait_gts_elapse_cnt", ATOMIC_LOAD(&try_wait_gts_elapse_cnt_));
+                      "try_wait_gts_elapse_cnt", ATOMIC_LOAD(&try_wait_gts_elapse_cnt_),
+                      K(hotspot_refresh_check_cnt),
+                      K(hotspot_refresh_skip_cnt),
+                      K(hotspot_refresh_cache_miss_cnt),
+                      K(hotspot_refresh_trigger_cnt),
+                      K(hotspot_refresh_local_cnt),
+                      K(hotspot_refresh_remote_cnt),
+                      K(hotspot_refresh_fail_cnt),
+                      K(hotspot_refresh_local_behind_cnt),
+                      K(hotspot_refresh_gap_ns_sum),
+                      K(hotspot_refresh_gap_ns_max));
       ATOMIC_STORE(&gts_rpc_cnt_, 0);
       ATOMIC_STORE(&get_gts_cache_cnt_, 0);
       ATOMIC_STORE(&get_gts_with_stc_cnt_, 0);
@@ -270,15 +317,58 @@ int ObGtsSource::get_gts_from_local_timestamp_service_(ObAddr &leader,
                                                        int64_t &gts,
                                                        MonotonicTs &receive_gts_ts)
 {
+  bool unused_is_target_reached = false;
+  return get_gts_from_local_timestamp_service_impl_(
+      leader, false, 0, gts, receive_gts_ts, unused_is_target_reached);
+}
+
+int ObGtsSource::get_gts_from_local_timestamp_service_with_target_(
+    ObAddr &leader,
+    const int64_t target_gts,
+    int64_t &gts,
+    MonotonicTs &receive_gts_ts,
+    bool &is_target_reached)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(target_gts <= 0 || target_gts >= INT64_MAX / 2)) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid target gts for local timestamp service",
+              KR(ret), K(target_gts), K_(tenant_id));
+  } else {
+    ret = get_gts_from_local_timestamp_service_impl_(
+        leader, true, target_gts, gts, receive_gts_ts, is_target_reached);
+  }
+  return ret;
+}
+
+int ObGtsSource::get_gts_from_local_timestamp_service_impl_(
+    ObAddr &leader,
+    const bool use_target,
+    const int64_t target_gts,
+    int64_t &gts,
+    MonotonicTs &receive_gts_ts,
+    bool &is_target_reached)
+{
   int ret = OB_SUCCESS;
   int64_t tmp_gts = 0;
   const MonotonicTs cur_ts = MonotonicTs::current_time();
+  is_target_reached = false;
 
   ObTimestampAccess *timestamp_access = MTL(ObTimestampAccess *);
   if (OB_ISNULL(timestamp_access)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "timestamp access is null", KR(ret), KP(timestamp_access), K_(tenant_id), K(leader));
-  } else if (OB_FAIL(timestamp_access->get_number(tmp_gts))) {
+  } else if (use_target
+             && OB_FAIL(timestamp_access->get_number_with_target(
+                 target_gts, tmp_gts, is_target_reached))) {
+    if (OB_EAGAIN != ret && EXECUTE_COUNT_PER_SEC(100)) {
+      TRANS_LOG(WARN, "advance local gts toward target failed",
+                K(leader), K(target_gts), K(tmp_gts), KR(ret));
+    }
+    if (OB_NOT_MASTER == ret) {
+      gts_cache_leader_.reset();
+    }
+  } else if (!use_target && OB_FAIL(timestamp_access->get_number(tmp_gts))) {
     if (EXECUTE_COUNT_PER_SEC(100)) {
       TRANS_LOG(WARN, "global_timestamp_service get gts fail", K(leader), K(tmp_gts), KR(ret));
     }
@@ -508,6 +598,96 @@ int ObGtsSource::refresh_gts(const bool need_refresh)
   if (log_interval_.reach()) {
     TRANS_LOG(INFO, "refresh gts", KR(ret), K_(tenant_id), K(need_refresh), K_(gts_local_cache));
   }
+  return ret;
+}
+
+int ObGtsSource::refresh_gts_if_cache_behind(const int64_t target_gts)
+{
+  int ret = OB_SUCCESS;
+  int64_t cached_gts = 0;
+  bool need_refresh = false;
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "gts source is not inited", KR(ret), K_(tenant_id));
+  } else if (OB_UNLIKELY(target_gts <= 0 || target_gts >= INT64_MAX / 2)) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid hotspot refresh target", KR(ret), K(target_gts), K_(tenant_id));
+  } else {
+    gts_statistics_.inc_hotspot_refresh_check_cnt();
+    const int cache_ret = gts_local_cache_.get_gts(cached_gts);
+    if (OB_SUCCESS == cache_ret && cached_gts >= target_gts) {
+      gts_statistics_.inc_hotspot_refresh_skip_cnt();
+    } else if (OB_SUCCESS == cache_ret) {
+      need_refresh = true;
+      gts_statistics_.record_hotspot_refresh_trigger(target_gts - cached_gts);
+    } else if (OB_EAGAIN == cache_ret) {
+      need_refresh = true;
+      gts_statistics_.inc_hotspot_refresh_cache_miss_cnt();
+      gts_statistics_.record_hotspot_refresh_trigger(0);
+    } else {
+      ret = cache_ret;
+      TRANS_LOG(WARN, "get gts cache for hotspot refresh failed",
+                KR(ret), K(target_gts), K_(tenant_id));
+    }
+  }
+
+  if (OB_SUCC(ret) && need_refresh) {
+    ObAddr leader;
+    if (OB_FAIL(get_gts_leader_(leader))) {
+      if (EXECUTE_COUNT_PER_SEC(16)) {
+        TRANS_LOG(WARN, "get gts leader for hotspot refresh failed",
+                  KR(ret), K(target_gts), K(cached_gts), K_(tenant_id));
+      }
+      (void)refresh_gts_location_();
+    } else if (leader == server_) {
+      gts_statistics_.inc_hotspot_refresh_local_cnt();
+      int64_t gts = 0;
+      MonotonicTs receive_gts_ts;
+      bool is_target_reached = false;
+      const int gts_ret = get_gts_from_local_timestamp_service_with_target_(
+          leader, target_gts, gts, receive_gts_ts, is_target_reached);
+      if (OB_EAGAIN == gts_ret) {
+        // The target may require a larger durable ID range. The range request
+        // has already been attempted; a later eligible unlock will retry.
+        gts_statistics_.inc_hotspot_refresh_local_behind_cnt();
+      } else if (OB_SUCCESS != gts_ret) {
+        ret = gts_ret;
+        if (EXECUTE_COUNT_PER_SEC(16)) {
+          TRANS_LOG(WARN, "get local gts for hotspot refresh failed",
+                    KR(ret), K(target_gts), K(cached_gts), K_(tenant_id));
+        }
+        if (OB_GTS_NOT_READY != gts_ret) {
+          const int tmp_ret = refresh_gts_location_();
+          if (OB_SUCCESS != tmp_ret && EXECUTE_COUNT_PER_SEC(16)) {
+            TRANS_LOG(WARN, "refresh gts location after local access failed",
+                      KR(tmp_ret), "gts_ret", gts_ret, K_(tenant_id));
+          }
+        }
+      } else if (!is_target_reached) {
+        // A valid partial allocation has already advanced the monotonic cache;
+        // a later eligible unlock can continue closing the remaining gap.
+        gts_statistics_.inc_hotspot_refresh_local_behind_cnt();
+      }
+    } else {
+      gts_statistics_.inc_hotspot_refresh_remote_cnt();
+      // Do not coalesce with an in-flight range=1 request here: the approved
+      // policy permits each eligible ctx unlock to make one advancement
+      // attempt so a multi-tick gap can be closed by subsequent unlocks.
+      if (OB_FAIL(query_gts_(leader))) {
+        if (EXECUTE_COUNT_PER_SEC(16)) {
+          TRANS_LOG(WARN, "post remote gts request for hotspot refresh failed",
+                    KR(ret), K(leader), K(target_gts), K(cached_gts), K_(tenant_id));
+        }
+      }
+    }
+  }
+
+  if (OB_SUCCESS != ret) {
+    gts_statistics_.inc_hotspot_refresh_fail_cnt();
+  }
+  statistics_();
+
   return ret;
 }
 

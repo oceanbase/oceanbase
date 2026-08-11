@@ -180,7 +180,8 @@ int ObMemtableRowCompactor::try_cleanout_tx_node_during_compact_(ObTxTableGuard 
       // fill back order is undefined, so this out of order can happened.
       // ret = OB_ERR_UNEXPECTED;
       // TRANS_LOG(ERROR, "unexpected non cleanout uncommitted node", KPC(tnode), KPC(row_));
-    } else if (OB_FAIL(tx_table_guard.cleanout_tx_node(tnode->tx_id_, *row_, *tnode, false /*need_row_latch*/))) {
+    } else if (OB_FAIL(tx_table_guard.cleanout_tx_node(
+                   tnode->get_tx_id(), *row_, *tnode, false /*need_row_latch*/))) {
       TRANS_LOG(WARN, "cleanout tx state failed", K(ret), KPC(row_), KPC(tnode));
     }
   }

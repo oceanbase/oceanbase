@@ -257,6 +257,22 @@ public:
     return bool_ret;
   }
   int64_t get_id() const { return tx_id_; }
+  ObTransID atomic_load() const
+  {
+    return ObTransID(ATOMIC_LOAD(&tx_id_));
+  }
+  ObTransID atomic_load_acq() const
+  {
+    return ObTransID(ATOMIC_LOAD_ACQ(&tx_id_));
+  }
+  void atomic_store(const ObTransID &tx_id)
+  {
+    ATOMIC_STORE(&tx_id_, tx_id.tx_id_);
+  }
+  void atomic_store_rel(const ObTransID &tx_id)
+  {
+    ATOMIC_STORE_REL(&tx_id_, tx_id.tx_id_);
+  }
   uint64_t hash() const
   {
     return murmurhash(&tx_id_, sizeof(tx_id_), 0);

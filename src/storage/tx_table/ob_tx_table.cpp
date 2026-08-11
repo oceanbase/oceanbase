@@ -1101,7 +1101,7 @@ int ObTxTable::cleanout_tx_node(ObReadTxDataArg &read_tx_data_arg,
                                 const bool need_row_latch)
 {
   ObCleanoutTxNodeOperation op(value, tnode, need_row_latch);
-  CleanoutTxStateFunctor fn(tnode.seq_no_, op);
+  CleanoutTxStateFunctor fn(tnode.get_seq_no(), op);
   int ret = check_with_tx_data(read_tx_data_arg, fn);
   if (OB_TRANS_CTX_NOT_EXIST == ret) {
     if (tnode.is_committed() || tnode.is_aborted()) {

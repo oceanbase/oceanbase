@@ -789,6 +789,114 @@ TEST_F(ObTestHotspotTxLeaderSwitch,
   ASSERT_EQ(OB_SUCCESS, n1->txs_.tx_ctx_mgr_.revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr1));
 }
 
+// ============================================================================
+// Leader switch during aggregation: primary enters AGGR_FAILED terminal state,
+// secondaries are aborted, and all ctxs are eventually cleaned up.
+// ============================================================================
+TEST_F(ObTestHotspotTxLeaderSwitch,
+       hotspot_leader_switch_during_aggregation_aborts_and_cleans_up)
+{
+  ObTxNode::reset_localtion_adapter();
+  START_ONE_TX_NODE(n1);
+
+  PREPARE_TX_PARAM(tx_param);
+  tx_param.timeout_us_ = 1000 * 1000 * 1000;
+
+  ObTxDescGuard primary_guard = n1->get_tx_guard();
+  ObTxDesc &primary_tx = primary_guard.get_tx_desc();
+  ASSERT_EQ(OB_SUCCESS, n1->start_tx(primary_tx, tx_param));
+
+  ObTxReadSnapshot snapshot;
+  ASSERT_EQ(OB_SUCCESS,
+            n1->get_read_snapshot(primary_tx, tx_param.isolation_, n1->ts_after_ms(100), snapshot));
+
+  const int SECONDARY_TX_COUNT = 2;
+  ObTransID secondary_tx_ids[SECONDARY_TX_COUNT];
+  ObTxDescGuard sec_guard0 = n1->get_tx_guard();
+  ObTxDescGuard sec_guard1 = n1->get_tx_guard();
+  ObTxDesc *sec_txs[SECONDARY_TX_COUNT] = {&sec_guard0.get_tx_desc(), &sec_guard1.get_tx_desc()};
+
+  for (int i = 0; i < SECONDARY_TX_COUNT; i++) {
+    ASSERT_EQ(OB_SUCCESS, n1->start_tx(*sec_txs[i], tx_param));
+    secondary_tx_ids[i] = sec_txs[i]->tx_id_;
+    ASSERT_EQ(OB_SUCCESS, n1->write(*sec_txs[i], snapshot, 5000 + i, 6000 + i));
+  }
+  ASSERT_EQ(OB_SUCCESS, n1->write(primary_tx, snapshot, 50000, 60000));
+
+  const ObTransID primary_tx_id = primary_tx.tx_id_;
+
+  ObTxPart participant;
+  participant.id_ = n1->ls_id_;
+  participant.addr_ = n1->addr_;
+  participant.epoch_ = ObTxPart::EPOCH_UNKNOWN;
+  ObAggregatedTxIDArray aggre_members;
+  for (int i = 0; i < SECONDARY_TX_COUNT; i++) {
+    ASSERT_EQ(OB_SUCCESS, aggre_members.push_back(secondary_tx_ids[i]));
+  }
+
+  // Start aggregation
+  ASSERT_EQ(OB_SUCCESS,
+            n1->txs_.sync_hotspot_legality_validation(participant, primary_tx.tx_id_, aggre_members));
+  n1->wait_all_msg_consumed();
+
+  // Force leader switch while aggregation is active
+  ObLSTxCtxMgr *ls_tx_ctx_mgr = nullptr;
+  ASSERT_EQ(OB_SUCCESS, n1->txs_.tx_ctx_mgr_.get_ls_tx_ctx_mgr(n1->ls_id_, ls_tx_ctx_mgr));
+
+  ASSERT_EQ(OB_SUCCESS, ls_tx_ctx_mgr->switch_to_follower_forcedly());
+  ASSERT_FALSE(ls_tx_ctx_mgr->is_master());
+
+  // Wait for async callbacks to drain
+  for (int i = 0; i < 200; i++) {
+    n1->wait_all_msg_consumed();
+    n1->wait_all_redolog_applied();
+    usleep(1000);
+  }
+
+  // Switch back to leader so ctx cleanup can proceed
+  ASSERT_EQ(OB_SUCCESS, ls_tx_ctx_mgr->switch_to_leader());
+  for (int i = 0; i < 200; i++) {
+    n1->wait_all_msg_consumed();
+    n1->wait_all_redolog_applied();
+    usleep(1000);
+  }
+
+  // Commit should fail (rolled back due to leader switch)
+  const int commit_ret = n1->commit_tx(primary_tx, n1->ts_after_ms(500));
+  ASSERT_EQ(OB_TRANS_ROLLBACKED, commit_ret)
+      << "Primary tx should be rolled back after leader switch during aggregation";
+
+  n1->wait_all_msg_consumed();
+
+  // Wait for primary ctx to be cleaned up
+  bool primary_cleaned = false;
+  for (int i = 0; i < 300; i++) {
+    ObPartTransCtx *pctx = nullptr;
+    int get_ret = ls_tx_ctx_mgr->get_tx_ctx_directly_from_hash_map(primary_tx_id, pctx);
+    if (OB_TRANS_CTX_NOT_EXIST == get_ret) {
+      primary_cleaned = true;
+      break;
+    }
+    if (OB_SUCCESS == get_ret && pctx != nullptr) {
+      if (pctx->is_exiting_) {
+        primary_cleaned = true;
+        ASSERT_EQ(OB_SUCCESS, ls_tx_ctx_mgr->revert_tx_ctx(pctx));
+        break;
+      }
+      ASSERT_EQ(OB_SUCCESS, ls_tx_ctx_mgr->revert_tx_ctx(pctx));
+    }
+    n1->wait_all_msg_consumed();
+    usleep(1000);
+  }
+  ASSERT_TRUE(primary_cleaned) << "Primary ctx should be cleaned up after leader switch + rollback";
+
+  ASSERT_EQ(OB_SUCCESS, n1->txs_.tx_ctx_mgr_.revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr));
+  ASSERT_EQ(OB_SUCCESS, primary_guard.release());
+  ASSERT_EQ(OB_SUCCESS, sec_guard0.release());
+  ASSERT_EQ(OB_SUCCESS, sec_guard1.release());
+  n1->wait_all_msg_consumed();
+}
+
 } // namespace oceanbase
 
 int main(int argc, char **argv)

@@ -329,6 +329,9 @@ private:
                 K(is_root()),
                 K(extra_cb_group_list_.get_size()),
                 K(busy_cbs_.get_size()),
+                "hotspot_idle", hotspot_redo_cache_.try_get_idle_cb_count(),
+                "hotspot_free", hotspot_redo_cache_.try_get_free_cb_count(),
+                "hotspot_busy", hotspot_redo_cache_.try_get_busy_cb_count(),
                 K(ctx_tx_data_),
                 K(role_state_),
                 K(create_ctx_scn_),
@@ -457,6 +460,7 @@ public:
   void reset_hotspot_redo_status();
   int wait_hotspot_redo_frozen_flushed(const uint32_t freeze_clock,
                                        bool &submitted_primary_log);
+  int before_prepare_for_hotspot(const share::SCN &version);
 #ifdef OB_HOTSPOT_GROUP_COMMIT
   int extract_redo_log_content(memtable::ObTxFillRedoCtx &fill_redo_ctx);
   int hotspot_log_submitted(const ObTransID primary_tx_id,
@@ -780,6 +784,8 @@ private:
 
   int generate_prepare_version_();
   int generate_commit_version_();
+  int publish_mvcc_prepare_barrier_(const share::SCN &version);
+  virtual share::SCN get_gts_refresh_target_() const override;
 
   bool is_committing_() const;
   // int insert_to_tx_table_(ObTxData *tx_data);

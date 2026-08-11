@@ -580,7 +580,7 @@ TEST_F(ObTestHotspotTxBugfix, test_hotspot_redo_cache_reuse_reset_basic_members)
   // Guard against regressing to the old large inline arrays. The current
   // implementation keeps the cache array in dynamically allocated storage, so
   // the exact object size may shrink but should not exceed this upper bound.
-  constexpr int64_t HOTSPOT_REDO_CACHE_SIZE_UPPER_BOUND = 1600;
+  constexpr int64_t HOTSPOT_REDO_CACHE_SIZE_UPPER_BOUND = 640;
   ASSERT_LE(static_cast<int64_t>(sizeof(ObTxHotspotRedoCache)),
             HOTSPOT_REDO_CACHE_SIZE_UPPER_BOUND);
 
@@ -603,6 +603,10 @@ TEST_F(ObTestHotspotTxBugfix, test_hotspot_redo_cache_reuse_reset_basic_members)
   hotspot_cache.need_rollback_primary_tx_ = true;
   hotspot_cache.max_sub_tx_seq_no_ = ObTxSEQ(88, 2);
   hotspot_cache.last_response_succ_ret_code_ = OB_SUCCESS;
+  hotspot_cache.secondary_publish_wait_stats_.record(7, 23);
+  hotspot_cache.extract_phase_timing_stats_.record(1, 11);
+  hotspot_cache.submit_phase_timing_stats_.record(2, 22);
+  hotspot_cache.sync_phase_timing_stats_.record(3, 33);
 
   ASSERT_EQ(OB_SUCCESS, hotspot_cache.reuse());
 
@@ -616,6 +620,104 @@ TEST_F(ObTestHotspotTxBugfix, test_hotspot_redo_cache_reuse_reset_basic_members)
   ASSERT_FALSE(hotspot_cache.need_rollback_primary_tx_);
   ASSERT_TRUE(hotspot_cache.max_sub_tx_seq_no_ == ObTxSEQ());
   ASSERT_EQ(OB_INVALID_ARGUMENT, hotspot_cache.last_response_succ_ret_code_);
+  ASSERT_EQ(0, hotspot_cache.secondary_publish_wait_stats_.count_);
+  ASSERT_EQ(-1, hotspot_cache.secondary_publish_wait_stats_.max_secondary_idx_);
+  ASSERT_EQ(0U, hotspot_cache.extract_phase_timing_stats_.sample_cnt_);
+  ASSERT_EQ(0U, hotspot_cache.submit_phase_timing_stats_.sample_cnt_);
+  ASSERT_EQ(0U, hotspot_cache.sync_phase_timing_stats_.sample_cnt_);
+}
+
+TEST_F(ObTestHotspotTxBugfix, test_hotspot_lock_wait_stats_are_bounded_and_reset_safely)
+{
+  ASSERT_EQ(2 * sizeof(int64_t),
+            sizeof(ObTxHotspotRedoCacheHandle::CallbackLockWaitStats));
+
+  ObTxHotspotRedoCache hotspot_cache;
+  for (int64_t i = 0; i < 128; ++i) {
+    hotspot_cache.secondary_publish_wait_stats_.record(i, i);
+  }
+  ASSERT_EQ(128, hotspot_cache.secondary_publish_wait_stats_.count_);
+  ASSERT_EQ(127 * 128 / 2, hotspot_cache.secondary_publish_wait_stats_.total_us_);
+  ASSERT_EQ(127, hotspot_cache.secondary_publish_wait_stats_.max_us_);
+  ASSERT_EQ(127, hotspot_cache.secondary_publish_wait_stats_.max_secondary_idx_);
+
+  TransModulePageAllocator allocator;
+  ObTxHotspotRedoCacheHandle handle(allocator);
+  ASSERT_EQ(OB_SUCCESS, handle.init(ObTransID(20260806001), 1, nullptr));
+  handle.on_success_ctx_lock_wait_stats_.atomic_merge(2, 17);
+  handle.after_sync_lock_wait_stats_.atomic_merge(3, 29);
+
+  ATOMIC_STORE(&handle.active_ref_cnt_, 1);
+  ASSERT_EQ(OB_EAGAIN, handle.cleanup_hotspot_cache_and_revert_secondary_ctxs());
+  ASSERT_EQ(2, handle.on_success_ctx_lock_wait_stats_.load_lock_attempt_cnt());
+  ASSERT_EQ(17, handle.on_success_ctx_lock_wait_stats_.load_max_wait_us());
+  ASSERT_EQ(3, handle.after_sync_lock_wait_stats_.load_lock_attempt_cnt());
+  ASSERT_EQ(29, handle.after_sync_lock_wait_stats_.load_max_wait_us());
+
+  ATOMIC_STORE(&handle.active_ref_cnt_, 0);
+  ASSERT_EQ(OB_SUCCESS, handle.cleanup_hotspot_cache_and_revert_secondary_ctxs());
+  ASSERT_EQ(0, handle.on_success_ctx_lock_wait_stats_.load_lock_attempt_cnt());
+  ASSERT_EQ(0, handle.on_success_ctx_lock_wait_stats_.load_max_wait_us());
+  ASSERT_EQ(0, handle.after_sync_lock_wait_stats_.load_lock_attempt_cnt());
+  ASSERT_EQ(0, handle.after_sync_lock_wait_stats_.load_max_wait_us());
+}
+
+TEST_F(ObTestHotspotTxBugfix, test_hotspot_phase_timing_keeps_overlapping_secondaries_independent)
+{
+  ASSERT_EQ(24, sizeof(ObTxHotspotRedoCache::PhaseTimingStats));
+
+  TransModulePageAllocator allocator;
+  ObTxHotspotRedoCache hotspot_cache;
+  hotspot_cache.hotspot_cache_capacity_ = 2;
+  hotspot_cache.hotspot_cache_count_ = 2;
+  hotspot_cache.hotspot_cache_ = static_cast<ObTxRedoExtractArg *>(
+      allocator.alloc(2 * sizeof(ObTxRedoExtractArg)));
+  ASSERT_NE(nullptr, hotspot_cache.hotspot_cache_);
+  new (&hotspot_cache.hotspot_cache_[0]) ObTxRedoExtractArg();
+  new (&hotspot_cache.hotspot_cache_[1]) ObTxRedoExtractArg();
+
+  // sec0 and sec1 intervals deliberately overlap across both identical and
+  // different phases. Each transition must close only the selected secondary.
+  hotspot_cache.transition_redo_timing_phase_(0, HotspotRedoTimingPhase::EXTRACT, 100);
+  hotspot_cache.transition_redo_timing_phase_(1, HotspotRedoTimingPhase::EXTRACT, 110);
+  hotspot_cache.transition_redo_timing_phase_(0, HotspotRedoTimingPhase::NONE, 150);
+  hotspot_cache.transition_redo_timing_phase_(0, HotspotRedoTimingPhase::SUBMIT_WAIT, 160);
+  hotspot_cache.transition_redo_timing_phase_(1, HotspotRedoTimingPhase::NONE, 180);
+  hotspot_cache.transition_redo_timing_phase_(0, HotspotRedoTimingPhase::SYNC_WAIT, 200);
+  hotspot_cache.transition_redo_timing_phase_(1, HotspotRedoTimingPhase::SUBMIT_WAIT, 210);
+  hotspot_cache.transition_redo_timing_phase_(1, HotspotRedoTimingPhase::SYNC_WAIT, 250);
+  hotspot_cache.transition_redo_timing_phase_(0, HotspotRedoTimingPhase::NONE, 260);
+  hotspot_cache.transition_redo_timing_phase_(1, HotspotRedoTimingPhase::NONE, 330);
+
+  const ObTxHotspotRedoCache::PhaseTimingStats &extract_stats =
+      hotspot_cache.extract_phase_timing_stats_;
+  ASSERT_EQ(2U, extract_stats.sample_cnt_);
+  ASSERT_EQ(120, extract_stats.total_us_);  // 50 + 70, including overlap
+  ASSERT_EQ(70, extract_stats.max_us_);
+  ASSERT_EQ(1, extract_stats.max_secondary_idx_);
+
+  const ObTxHotspotRedoCache::PhaseTimingStats &submit_stats =
+      hotspot_cache.submit_phase_timing_stats_;
+  ASSERT_EQ(2U, submit_stats.sample_cnt_);
+  ASSERT_EQ(80, submit_stats.total_us_);
+  ASSERT_EQ(40, submit_stats.max_us_);
+  ASSERT_EQ(0, submit_stats.max_secondary_idx_);  // first sample wins a tie
+
+  const ObTxHotspotRedoCache::PhaseTimingStats &sync_stats =
+      hotspot_cache.sync_phase_timing_stats_;
+  ASSERT_EQ(2U, sync_stats.sample_cnt_);
+  ASSERT_EQ(140, sync_stats.total_us_);
+  ASSERT_EQ(80, sync_stats.max_us_);
+  ASSERT_EQ(1, sync_stats.max_secondary_idx_);
+
+  // 340us of secondary-time exceeds the 230us wall interval precisely because
+  // different secondaries overlap; this is intentional and documented.
+  ASSERT_EQ(340, extract_stats.total_us_ + submit_stats.total_us_ + sync_stats.total_us_);
+  ASSERT_GT(extract_stats.total_us_ + submit_stats.total_us_ + sync_stats.total_us_, 330 - 100);
+  ASSERT_EQ(1U, hotspot_cache.hotspot_cache_[0].redo_round_cnt_);
+  ASSERT_EQ(1U, hotspot_cache.hotspot_cache_[1].redo_round_cnt_);
+  ASSERT_EQ(HotspotRedoTimingPhase::NONE, hotspot_cache.hotspot_cache_[0].timing_phase_);
+  ASSERT_EQ(HotspotRedoTimingPhase::NONE, hotspot_cache.hotspot_cache_[1].timing_phase_);
 }
 
 // Verifies extract_redo_log_content behavior for partial submit scenario.

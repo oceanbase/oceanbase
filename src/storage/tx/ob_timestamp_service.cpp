@@ -112,6 +112,35 @@ int ObTimestampService::get_timestamp(int64_t &gts)
   return ret;
 }
 
+int ObTimestampService::get_timestamp_with_target(const int64_t target_gts,
+                                                  int64_t &gts,
+                                                  bool &is_target_reached)
+{
+  int ret = OB_SUCCESS;
+  int64_t unused_end_id = 0;
+  is_target_reached = false;
+
+  if (OB_UNLIKELY(target_gts <= 0 || target_gts >= INT64_MAX / 2)) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid target gts", KR(ret), K(target_gts));
+  } else {
+    const int64_t current_time = ObClockGenerator::getClock() * 1000;
+    const int64_t base_id = max(current_time, target_gts);
+    if (OB_FAIL(get_number(1, base_id, gts, unused_end_id))) {
+      if (OB_EAGAIN != ret && EXECUTE_COUNT_PER_SEC(16)) {
+        TRANS_LOG(WARN, "get target-aware timestamp failed",
+                  KR(ret), K(target_gts), K(base_id));
+      }
+    } else {
+      // A lost CAS makes get_number() fall back to FAA, which can return a
+      // valid timestamp below target_gts. Preserve that partial advancement.
+      is_target_reached = gts >= target_gts;
+    }
+  }
+
+  return ret;
+}
+
 int ObTimestampService::handle_request(const ObGtsRequest &request, ObGtsRpcResult &result)
 {
   static int64_t total_cnt = 0;

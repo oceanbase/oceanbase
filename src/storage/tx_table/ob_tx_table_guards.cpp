@@ -252,7 +252,8 @@ int ObTxTableGuards::cleanout_tx_node(
   ObCleanoutTxNodeOperation op(value,
                                tnode,
                                need_row_latch);
-  CleanoutTxStateFunctor fn(tnode.seq_no_, op);
+  const transaction::ObTxSEQ seq_no = tnode.get_seq_no();
+  CleanoutTxStateFunctor fn(seq_no, op);
 
   if (!src_tx_table_guard_.is_valid()) {
     ret = check_with_tx_data(data_tx_id, fn);
@@ -264,7 +265,7 @@ int ObTxTableGuards::cleanout_tx_node(
     }
   } else {
     bool use_dest = false;
-    CleanoutTxStateFunctor src_fn(tnode.seq_no_, op);
+    CleanoutTxStateFunctor src_fn(seq_no, op);
 
     ret = check_with_tx_data(data_tx_id,
                              fn,

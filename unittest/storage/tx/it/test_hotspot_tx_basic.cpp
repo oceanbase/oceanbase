@@ -11,11 +11,14 @@
  */
 
 #include <gtest/gtest.h>
+#include <atomic>
+#include <thread>
 #define private public
 #define protected public
 #define USING_LOG_PREFIX TRANS
 #include "lib/utility/ob_tracepoint.h"
 #include "lib/time/ob_time_utility.h"
+#include "share/ob_debug_sync.h"
 #include "../mock_utils/async_util.h"
 #include "test_tx_dsl.h"
 #include "tx_node.h"
@@ -1281,6 +1284,298 @@ TEST_F(ObTestHotspotTxBasic, test_hotspot_replay_with_rollback_e2e)
 
   LOG_INFO("test_hotspot_replay_with_rollback_e2e passed (follower replay and read verified)");
 }
+
+// ============================================================================
+// Verify prepare version propagation and owner publication end-to-end:
+// after successful aggregation commit, a reader transaction sees the
+// committed data through the primary owner path.
+// ============================================================================
+TEST_F(ObTestHotspotTxBasic, test_hotspot_prepare_version_and_read_e2e)
+{
+  GCONF._ob_trans_rpc_timeout = 50;
+  ObTxNode::reset_localtion_adapter();
+
+  START_ONE_TX_NODE(n1);
+
+  PREPARE_TX(n1, primary_tx);
+  PREPARE_TX_PARAM(tx_param);
+  tx_param.timeout_us_ = 1000 * 1000 * 1000;
+  GET_READ_SNAPSHOT(n1, primary_tx, tx_param, snapshot);
+  ASSERT_EQ(OB_SUCCESS, n1->start_tx(primary_tx, tx_param));
+
+  const int SECONDARY_TX_COUNT = 2;
+  ObTransID secondary_tx_ids[SECONDARY_TX_COUNT];
+  ObTxDescGuard sec_guard0 = n1->get_tx_guard();
+  ObTxDescGuard sec_guard1 = n1->get_tx_guard();
+  ObTxDesc *sec_txs[SECONDARY_TX_COUNT] = {&sec_guard0.get_tx_desc(), &sec_guard1.get_tx_desc()};
+
+  for (int i = 0; i < SECONDARY_TX_COUNT; i++) {
+    ASSERT_EQ(OB_SUCCESS, n1->start_tx(*sec_txs[i], tx_param));
+    secondary_tx_ids[i] = sec_txs[i]->tx_id_;
+    ASSERT_EQ(OB_SUCCESS, n1->write(*sec_txs[i], snapshot, 8000 + i, 9000 + i));
+  }
+  ASSERT_EQ(OB_SUCCESS, n1->write(primary_tx, snapshot, 80000, 90000));
+
+  ObTxPart participant;
+  participant.id_ = n1->ls_id_;
+  participant.addr_ = n1->addr_;
+  participant.epoch_ = ObTxPart::EPOCH_UNKNOWN;
+
+  ObAggregatedTxIDArray aggre_members;
+  for (int i = 0; i < SECONDARY_TX_COUNT; i++) {
+    ASSERT_EQ(OB_SUCCESS, aggre_members.push_back(secondary_tx_ids[i]));
+  }
+
+  ASSERT_EQ(OB_SUCCESS,
+            n1->txs_.sync_hotspot_legality_validation(participant, primary_tx.tx_id_, aggre_members));
+  n1->wait_all_msg_consumed();
+
+  // Commit primary -> triggers prepare version broadcast + owner publication
+  COMMIT_TX(n1, primary_tx, 500 * 1000);
+  n1->wait_all_msg_consumed();
+
+  // Verify all secondaries committed
+  for (int i = 0; i < SECONDARY_TX_COUNT; i++) {
+    int commit_ret = n1->commit_tx(*sec_txs[i], n1->ts_after_us(500 * 1000));
+    ASSERT_TRUE(commit_ret == OB_SUCCESS || commit_ret == OB_TRANS_COMMITED)
+        << "Secondary tx " << i << " commit failed: " << commit_ret;
+  }
+
+  // New reader transaction: reads through primary owner path (owner already published)
+  {
+    ObTxDescGuard read_guard = n1->get_tx_guard();
+    ObTxDesc &read_tx = read_guard.get_tx_desc();
+    PREPARE_TX_PARAM(read_tx_param);
+    GET_READ_SNAPSHOT(n1, read_tx, read_tx_param, read_snapshot);
+
+    // Read primary data
+    int64_t val = 0;
+    ASSERT_EQ(OB_SUCCESS, n1->read(read_snapshot, 80000, val));
+    ASSERT_EQ(90000, val) << "Primary data should be readable via primary owner";
+
+    // Read secondary data (owner changed to primary, read through primary ctx)
+    for (int i = 0; i < SECONDARY_TX_COUNT; i++) {
+      int64_t sec_val = 0;
+      ASSERT_EQ(OB_SUCCESS, n1->read(read_snapshot, 8000 + i, sec_val))
+          << "Secondary tx " << i << " data should be readable after owner publication";
+      ASSERT_EQ(9000 + i, sec_val);
+    }
+
+    ASSERT_EQ(OB_SUCCESS, n1->commit_tx(read_tx, n1->ts_after_ms(500)));
+  }
+
+  // Verify secondary ctx cleanup: after response_scheduler, secondary ctxs should be GC'd
+  ObLSTxCtxMgr *ls_tx_ctx_mgr = nullptr;
+  ASSERT_EQ(OB_SUCCESS, n1->txs_.tx_ctx_mgr_.get_ls_tx_ctx_mgr(n1->ls_id_, ls_tx_ctx_mgr));
+
+  for (int i = 0; i < SECONDARY_TX_COUNT; i++) {
+    ObPartTransCtx *sec_ctx = nullptr;
+    int get_ret = ls_tx_ctx_mgr->get_tx_ctx_directly_from_hash_map(
+        secondary_tx_ids[i], sec_ctx);
+    if (OB_SUCCESS == get_ret && sec_ctx != nullptr) {
+      // If ctx still exists, it should be in exiting state or SECONDARY_MIGRATE_SUCCEEDED
+      EXPECT_TRUE(sec_ctx->is_exiting_
+                  || sec_ctx->redo_flush_status_ == TxRedoFlushStatus::SECONDARY_MIGRATE_SUCCEEDED)
+          << "Secondary ctx " << i << " should be exiting or terminal after commit";
+      ASSERT_EQ(OB_SUCCESS, ls_tx_ctx_mgr->revert_tx_ctx(sec_ctx));
+    }
+    // OB_TRANS_CTX_NOT_EXIST is also fine (ctx already GC'd)
+  }
+  ASSERT_EQ(OB_SUCCESS, n1->txs_.tx_ctx_mgr_.revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr));
+
+  ASSERT_EQ(OB_SUCCESS, guard.release());
+  ASSERT_EQ(OB_SUCCESS, sec_guard0.release());
+  ASSERT_EQ(OB_SUCCESS, sec_guard1.release());
+  n1->wait_all_msg_consumed();
+}
+
+#ifdef ENABLE_DEBUG_LOG
+// Reproduce the original -6213 race deterministically:
+// 1. The reader samples the secondary owner from the undecided MVCC node.
+// 2. Hotspot validation publishes the primary as the new owner, then commit
+//    processing reclaims the secondary context while the reader is paused.
+// 3. The reader looks up the sampled secondary and gets CTX_NOT_EXIST. It must
+//    detect the changed owner and retry instead of returning -6213.
+TEST_F(ObTestHotspotTxBasic, test_hotspot_lock_for_read_retries_after_owner_change)
+{
+  static const char *OWNER_SAMPLED_EVENT = "hotspot_owner_sampled";
+  static const char *OWNER_PUBLISHED_EVENT = "hotspot_owner_published";
+  static const int64_t DEBUG_SYNC_TIMEOUT_US = 30_s;
+  static const int64_t WAIT_SECONDARY_CTX_GC_US = 10_s;
+  static const int64_t SECONDARY_KEY = 8100;
+  static const int64_t SECONDARY_VALUE = 9100;
+
+  GCONF._ob_trans_rpc_timeout = 50;
+  ObTxNode::reset_localtion_adapter();
+  START_ONE_TX_NODE(n1);
+
+  PREPARE_TX(n1, primary_tx);
+  PREPARE_TX_PARAM(tx_param);
+  tx_param.timeout_us_ = 1000 * 1000 * 1000;
+  GET_READ_SNAPSHOT(n1, primary_tx, tx_param, write_snapshot);
+  ASSERT_EQ(OB_SUCCESS, n1->start_tx(primary_tx, tx_param));
+
+  ObTxDescGuard secondary_guard = n1->get_tx_guard();
+  ObTxDesc &secondary_tx = secondary_guard.get_tx_desc();
+  ASSERT_EQ(OB_SUCCESS, n1->start_tx(secondary_tx, tx_param));
+  const ObTransID secondary_tx_id = secondary_tx.tx_id_;
+  ASSERT_EQ(OB_SUCCESS,
+            n1->write(secondary_tx, write_snapshot, SECONDARY_KEY, SECONDARY_VALUE));
+  ASSERT_EQ(OB_SUCCESS, n1->write(primary_tx, write_snapshot, 8101, 9101));
+
+  ObTxPart participant;
+  participant.id_ = n1->ls_id_;
+  participant.addr_ = n1->addr_;
+  participant.epoch_ = ObTxPart::EPOCH_UNKNOWN;
+  ObAggregatedTxIDArray aggre_members;
+  ASSERT_EQ(OB_SUCCESS, aggre_members.push_back(secondary_tx_id));
+
+  // Take the read snapshot before hotspot validation publishes the new owner.
+  // The post-retry result may legally be either the committed value or no
+  // visible row; returning -6213 is never legal after observing the change.
+  ObTxDescGuard read_guard = n1->get_tx_guard();
+  ObTxDesc &read_tx = read_guard.get_tx_desc();
+  PREPARE_TX_PARAM(read_tx_param);
+  ObTxReadSnapshot read_snapshot;
+  ASSERT_EQ(OB_SUCCESS,
+            n1->get_read_snapshot(read_tx,
+                                  read_tx_param.isolation_,
+                                  n1->ts_after_ms(1000),
+                                  read_snapshot));
+
+  const int64_t old_debug_sync_timeout = GCONF.debug_sync_timeout;
+  ASSERT_TRUE(GCONF.debug_sync_timeout.set_value("30s"));
+  ObDebugSyncAction reset_action;
+  ASSERT_EQ(OB_SUCCESS, GDS.set_global_action(true, false, reset_action));
+  NAMED_DEFER(debug_sync_cleanup,
+              (void)GDS.set_global_action(true, false, reset_action);
+              GCONF.debug_sync_timeout = old_debug_sync_timeout);
+
+  ObDebugSyncAction pause_reader_action;
+  pause_reader_action.sync_point_ = AFTER_HOTSPOT_LOCK_FOR_READ_OWNER_SNAPSHOT;
+  pause_reader_action.timeout_ = DEBUG_SYNC_TIMEOUT_US;
+  pause_reader_action.execute_ = 1;
+  pause_reader_action.signal_ = OWNER_SAMPLED_EVENT;
+  pause_reader_action.wait_ = OWNER_PUBLISHED_EVENT;
+  ASSERT_TRUE(pause_reader_action.is_valid());
+  ASSERT_EQ(OB_SUCCESS, GDS.set_global_action(false, false, pause_reader_action));
+
+  std::atomic<int> read_ret(OB_ERR_UNEXPECTED);
+  std::atomic<int64_t> read_value(0);
+  std::thread reader([&]() {
+    int64_t value = 0;
+    const int tmp_ret = n1->read(read_snapshot, SECONDARY_KEY, value);
+    read_value.store(value);
+    read_ret.store(tmp_ret);
+  });
+
+  // Wait until the reader has sampled the old secondary owner. The elapsed
+  // check distinguishes a real signal from ObDSEventControl's timeout, which
+  // intentionally also returns OB_SUCCESS.
+  ObDebugSyncAction wait_sampled_action;
+  wait_sampled_action.sync_point_ = NOW;
+  wait_sampled_action.timeout_ = 10_s;
+  wait_sampled_action.execute_ = 1;
+  wait_sampled_action.wait_ = OWNER_SAMPLED_EVENT;
+  const int64_t wait_sampled_start_ts = ObTimeUtility::current_time();
+  const int wait_sampled_ret =
+      GDS.set_global_action(false, false, wait_sampled_action);
+  const bool owner_sampled =
+      ObTimeUtility::current_time() - wait_sampled_start_ts < 9_s;
+
+  // Do not use fatal assertions until the reader has been released and joined.
+  // Validation performs the secondary -> primary owner publication after the
+  // reader has sampled the old tuple.
+  const int hotspot_validation_ret =
+      n1->txs_.sync_hotspot_legality_validation(
+          participant, primary_tx.tx_id_, aggre_members);
+  n1->wait_all_msg_consumed();
+  const int primary_commit_ret =
+      n1->commit_tx(primary_tx, n1->ts_after_us(500 * 1000));
+  n1->wait_tx_log_synced();
+  n1->wait_all_msg_consumed();
+
+  // The test_tx framework models each scheduler with its own ObTxDesc. Finish
+  // the secondary scheduler request and release its descriptor so the
+  // response task can transition the secondary ctx to its terminal state and
+  // reclaim it, as a real client does after receiving the commit result.
+  const int secondary_commit_ret =
+      n1->commit_tx(secondary_tx, n1->ts_after_us(500 * 1000));
+  const int secondary_guard_release_ret = secondary_guard.release();
+  n1->wait_all_msg_consumed();
+
+  ObLSTxCtxMgr *ls_tx_ctx_mgr = nullptr;
+  const int get_mgr_ret =
+      n1->txs_.tx_ctx_mgr_.get_ls_tx_ctx_mgr(n1->ls_id_, ls_tx_ctx_mgr);
+  int secondary_lookup_ret = get_mgr_ret;
+  int secondary_ctx_revert_ret = OB_SUCCESS;
+  bool secondary_ctx_reclaimed = false;
+  if (OB_SUCCESS == get_mgr_ret && nullptr != ls_tx_ctx_mgr) {
+    const int64_t gc_deadline =
+        ObTimeUtility::current_time() + WAIT_SECONDARY_CTX_GC_US;
+    do {
+      ObPartTransCtx *secondary_ctx = nullptr;
+      secondary_lookup_ret =
+          ls_tx_ctx_mgr->get_tx_ctx_directly_from_hash_map(secondary_tx_id,
+                                                           secondary_ctx);
+      if (OB_TRANS_CTX_NOT_EXIST == secondary_lookup_ret) {
+        secondary_ctx_reclaimed = true;
+        break;
+      } else if (OB_SUCCESS == secondary_lookup_ret && nullptr != secondary_ctx) {
+        const int tmp_ret = ls_tx_ctx_mgr->revert_tx_ctx(secondary_ctx);
+        if (OB_SUCCESS != tmp_ret) {
+          secondary_ctx_revert_ret = tmp_ret;
+          break;
+        }
+      } else {
+        break;
+      }
+      ob_usleep(1_ms);
+    } while (ObTimeUtility::current_time() < gc_deadline);
+  }
+
+  int revert_mgr_ret = OB_SUCCESS;
+  if (nullptr != ls_tx_ctx_mgr) {
+    revert_mgr_ret =
+        n1->txs_.tx_ctx_mgr_.revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr);
+  }
+
+  ObDebugSyncAction resume_reader_action;
+  resume_reader_action.sync_point_ = NOW;
+  resume_reader_action.timeout_ = DEBUG_SYNC_TIMEOUT_US;
+  resume_reader_action.execute_ = 1;
+  resume_reader_action.signal_ = OWNER_PUBLISHED_EVENT;
+  const int resume_reader_ret =
+      GDS.set_global_action(false, false, resume_reader_action);
+  reader.join();
+
+  EXPECT_EQ(OB_SUCCESS, wait_sampled_ret);
+  EXPECT_TRUE(owner_sampled);
+  EXPECT_EQ(OB_SUCCESS, hotspot_validation_ret);
+  EXPECT_EQ(OB_SUCCESS, primary_commit_ret);
+  EXPECT_TRUE(OB_SUCCESS == secondary_commit_ret
+              || OB_TRANS_COMMITED == secondary_commit_ret);
+  EXPECT_EQ(OB_SUCCESS, secondary_guard_release_ret);
+  EXPECT_EQ(OB_SUCCESS, get_mgr_ret);
+  EXPECT_EQ(OB_SUCCESS, secondary_ctx_revert_ret);
+  EXPECT_TRUE(secondary_ctx_reclaimed)
+      << "secondary ctx was not reclaimed, last lookup ret="
+      << secondary_lookup_ret;
+  EXPECT_EQ(OB_SUCCESS, revert_mgr_ret);
+  EXPECT_EQ(OB_SUCCESS, resume_reader_ret);
+  EXPECT_NE(OB_TRANS_CTX_NOT_EXIST, read_ret.load());
+  EXPECT_TRUE(OB_SUCCESS == read_ret.load()
+              || OB_ENTRY_NOT_EXIST == read_ret.load())
+      << "unexpected read ret=" << read_ret.load();
+  if (OB_SUCCESS == read_ret.load()) {
+    EXPECT_EQ(SECONDARY_VALUE, read_value.load());
+  }
+
+  ASSERT_EQ(OB_SUCCESS, guard.release());
+  ASSERT_EQ(OB_SUCCESS, read_guard.release());
+  n1->wait_all_msg_consumed();
+}
+#endif
 
 } // namespace oceanbase
 

@@ -188,6 +188,64 @@ TEST_F(ObTestTx, tx_2pc_blocking_and_get_gts_callback_concurrent_problem)
   n1->get_ts_mgr_().repair_get_gts_error();
 }
 
+TEST_F(ObTestTx, hotspot_prepare_barrier_eagain_retries_by_tx_timer)
+{
+  GCONF._ob_trans_rpc_timeout = 50;
+  const int64_t old_2pc_retry_interval = GCONF.trx_2pc_retry_interval;
+  ASSERT_TRUE(GCONF.trx_2pc_retry_interval.set_value("5s"));
+  NAMED_DEFER(reset_2pc_retry_interval,
+              GCONF.trx_2pc_retry_interval = old_2pc_retry_interval);
+  ObTxNode::reset_localtion_adapter();
+
+  START_ONE_TX_NODE(n1);
+  PREPARE_TX(n1, tx);
+  PREPARE_TX_PARAM(tx_param);
+  GET_READ_SNAPSHOT(n1, tx, tx_param, snapshot);
+  ASSERT_EQ(OB_SUCCESS, n1->start_tx(tx, tx_param));
+  ASSERT_EQ(OB_SUCCESS, n1->write(tx, snapshot, 100, 112));
+
+  ObPartTransCtx *part_ctx = nullptr;
+  const ObLSID ls_id(1);
+  ASSERT_EQ(OB_SUCCESS, n1->get_tx_ctx(ls_id, tx.tx_id_, part_ctx));
+
+  const ObMonotonicTs stc(99);
+  const ObMonotonicTs srr(100);
+  const ObMonotonicTs receive_gts_ts(100);
+  share::SCN gts;
+  gts.convert_for_gts(100);
+  {
+    CtxLockGuard guard(part_ctx->lock_);
+    ASSERT_EQ(OB_SUCCESS, part_ctx->unregister_timeout_task_());
+    ASSERT_FALSE(part_ctx->timeout_task_.is_registered());
+    part_ctx->sub_state_.set_gts_waiting();
+    part_ctx->redo_flush_status_ = TxRedoFlushStatus::PRIMARY_COLLECTING;
+    part_ctx->part_trans_action_ = ObPartTransAction::COMMIT;
+    part_ctx->stc_ = stc;
+  }
+
+  // The callback consumes the current GTS task instead of returning OB_EAGAIN
+  // to TsMgr. A transaction timer is armed before its GTS reference is released.
+  ASSERT_EQ(OB_SUCCESS, part_ctx->get_gts_callback(srr, gts, receive_gts_ts));
+
+  // The callback consumed the reference returned by get_tx_ctx(), so acquire a
+  // fresh one before inspecting and cleaning up the context.
+  part_ctx = nullptr;
+  ASSERT_EQ(OB_SUCCESS, n1->get_tx_ctx(ls_id, tx.tx_id_, part_ctx));
+  {
+    CtxLockGuard guard(part_ctx->lock_);
+    EXPECT_FALSE(part_ctx->sub_state_.is_gts_waiting());
+    EXPECT_TRUE(part_ctx->timeout_task_.is_registered());
+    EXPECT_FALSE(part_ctx->ctx_tx_data_.get_commit_version().is_valid());
+    EXPECT_TRUE(part_ctx->mt_ctx_.get_trans_version().is_max());
+
+    // Restore the synthetic hotspot/commit state before normal test teardown.
+    part_ctx->redo_flush_status_ = TxRedoFlushStatus::NORMAL_START;
+    part_ctx->part_trans_action_ = ObPartTransAction::START;
+  }
+  ASSERT_EQ(OB_SUCCESS, part_ctx->unregister_timeout_task_());
+  ASSERT_EQ(OB_SUCCESS, n1->revert_tx_ctx(part_ctx));
+}
+
 TEST_F(ObTestTx, start_trans_expired)
 {
   GCONF._ob_trans_rpc_timeout = 50;

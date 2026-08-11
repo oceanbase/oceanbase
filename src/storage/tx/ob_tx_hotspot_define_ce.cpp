@@ -6,7 +6,7 @@
  *          http://license.coscl.org.cn/MulanPubL-2.0
  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
  * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
- * NON-INFRINGEMENT, MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE. See the
+ * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE. See the
  * Mulan PubL v2 for more details.
  */
 
@@ -140,6 +140,11 @@ int ObTxHotspotRedoCacheHandle::insert_into(ObPartTransCtx *)
   return OB_NOT_SUPPORTED;
 }
 
+int ObTxHotspotRedoCacheHandle::before_prepare_secondaries(const share::SCN &)
+{
+  return OB_NOT_SUPPORTED;
+}
+
 int ObTxHotspotRedoCacheHandle::append_hotspot_idle_cb(ObTxLogCb *, const int64_t)
 {
   return OB_NOT_SUPPORTED;
@@ -198,6 +203,26 @@ int64_t ObTxHotspotRedoCacheHandle::get_free_cb_count() const
 int64_t ObTxHotspotRedoCacheHandle::get_busy_cb_count() const
 {
   return 0;
+}
+
+int64_t ObTxHotspotRedoCacheHandle::get_idle_cb_count() const
+{
+  return 0;
+}
+
+int64_t ObTxHotspotRedoCacheHandle::try_get_free_cb_count() const
+{
+  return -1;
+}
+
+int64_t ObTxHotspotRedoCacheHandle::try_get_busy_cb_count() const
+{
+  return -1;
+}
+
+int64_t ObTxHotspotRedoCacheHandle::try_get_idle_cb_count() const
+{
+  return -1;
 }
 
 void ObTxHotspotRedoCacheHandle::get_cb_list_count(
@@ -368,6 +393,10 @@ int ObTxHotspotRedoCacheHandle::cleanup_hotspot_cache_and_revert_secondary_ctxs(
 int ObTxHotspotRedoCacheHandle::response_scheduler(const int, const share::SCN)
 {
   return OB_NOT_SUPPORTED;
+}
+
+void ObTxHotspotRedoCacheHandle::record_on_success_ctx_lock_wait(const int64_t)
+{
 }
 
 void ObTxHotspotRedoCacheHandle::record_aggr_start_ts()

@@ -6,7 +6,7 @@
  *          http://license.coscl.org.cn/MulanPubL-2.0
  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
 
@@ -89,6 +89,8 @@ TEST_F(ObTestHotspotCeFallback, progression_apis_fail_explicitly)
   EXPECT_EQ(OB_NOT_SUPPORTED, cache.after_flush_hotspot_redo(0, share::SCN::min_scn(), OB_SUCCESS));
   EXPECT_EQ(OB_NOT_SUPPORTED, cache.after_sync_hotspot_redo(0, true, share::SCN::min_scn()));
   EXPECT_EQ(OB_NOT_SUPPORTED, cache.remove_synced_hotspot_redo(0, need_remove_count));
+  EXPECT_EQ(OB_NOT_SUPPORTED,
+            cache.before_prepare_secondaries(share::SCN::min_scn()));
   EXPECT_EQ(OB_NOT_SUPPORTED, cache.response_scheduler(OB_SUCCESS, share::SCN::invalid_scn()));
   EXPECT_EQ(OB_NOT_SUPPORTED, cache.abort_secondary_txs(OB_TRANS_KILLED));
 }

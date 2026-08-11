@@ -236,9 +236,12 @@ public:
   int fill_trans_version(const share::SCN version);
   int fill_scn(const share::SCN scn);
   void get_trans_id_and_seq_no(transaction::ObTransID &trans_id, transaction::ObTxSEQ &seq_no);
-  transaction::ObTxSEQ get_seq_no() const { return seq_no_; }
-  transaction::ObTransID get_tx_id() const { return tx_id_; }
+  transaction::ObTxSEQ get_seq_no() const { return seq_no_.atomic_load(); }
+  transaction::ObTransID get_tx_id() const { return tx_id_.atomic_load_acq(); }
   void set_seq_no(const transaction::ObTxSEQ seq_no) { seq_no_ = seq_no; }
+  void publish_hotspot_owner(const transaction::ObTransID &primary_tx_id,
+                             const share::SCN &log_scn,
+                             const transaction::ObTxSEQ &remapped_seq);
   int is_lock_node(bool &is_lock) const;
   int64_t to_string(char *buf, const int64_t buf_len) const;
   void set_tx_end_scn(const share::SCN tx_end_scn)

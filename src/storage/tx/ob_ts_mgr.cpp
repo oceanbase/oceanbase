@@ -583,6 +583,49 @@ int ObTsMgr::refresh_gts_location(const uint64_t tenant_id)
   return ret;
 }
 
+int ObTsMgr::refresh_gts_if_cache_behind(const uint64_t tenant_id,
+                                         const SCN &target_version)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "ObTsMgr is not inited", K(ret));
+  } else if (OB_UNLIKELY(!is_running_)) {
+    ret = OB_NOT_RUNNING;
+    TRANS_LOG(WARN, "ObTsMgr is not running", K(ret));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid tenant id", K(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(!target_version.is_valid_and_not_min())
+             || OB_UNLIKELY(target_version.is_max())) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid hotspot gts refresh target",
+              KR(ret), K(tenant_id), K(target_version));
+  } else {
+    ObTsSourceInfo *ts_source_info = NULL;
+    ObGtsSource *gts_source = NULL;
+    ObTsSourceInfoGuard guard;
+    if (OB_FAIL(get_ts_source_info_opt_(tenant_id, guard, true, true))) {
+      TRANS_LOG(WARN, "get ts source info failed", K(ret), K(tenant_id));
+    } else if (OB_ISNULL(ts_source_info = guard.get_ts_source_info())) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "ts source info is NULL", K(ret), K(tenant_id));
+    } else if (OB_ISNULL(gts_source = ts_source_info->get_gts_source())) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "gts source is NULL", K(ret), K(tenant_id));
+    } else if (OB_FAIL(gts_source->refresh_gts_if_cache_behind(
+                           target_version.get_val_for_gts()))) {
+      if (EXECUTE_COUNT_PER_SEC(16)) {
+        TRANS_LOG(WARN, "refresh gts for hotspot version failed",
+                  KR(ret), K(tenant_id), K(target_version));
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObTsMgr::handle_gts_result(const uint64_t tenant_id, const int64_t queue_index, const int ts_type)
 {
   int ret = OB_SUCCESS;

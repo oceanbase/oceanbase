@@ -11,6 +11,7 @@
  */
 
 #include <gtest/gtest.h>
+#include "storage/tx/ob_timestamp_access.h"
 #include "storage/tx/ob_timestamp_service.h"
 
 namespace oceanbase
@@ -237,6 +238,43 @@ TEST_F(TestObGtsMgr, invalid_argument)
   EXPECT_EQ(OB_INVALID_ARGUMENT, request.init(tenant_id, stc, ts_range, client));
   EXPECT_EQ(OB_INVALID_ARGUMENT, request.init(tenant_id, srr, 0, client));
   EXPECT_EQ(OB_INVALID_ARGUMENT, request.init(tenant_id, srr, ts_range, ObAddr()));
+}
+
+TEST_F(TestObGtsMgr, get_timestamp_with_target_rejects_invalid_target)
+{
+  ObTimestampService ts_service;
+  ObTimestampAccess timestamp_access;
+  int64_t gts = 0;
+  bool is_target_reached = true;
+
+  EXPECT_EQ(OB_INVALID_ARGUMENT,
+            ts_service.get_timestamp_with_target(0, gts, is_target_reached));
+  EXPECT_FALSE(is_target_reached);
+  is_target_reached = true;
+  EXPECT_EQ(OB_INVALID_ARGUMENT,
+            ts_service.get_timestamp_with_target(INT64_MAX / 2, gts, is_target_reached));
+  EXPECT_FALSE(is_target_reached);
+  is_target_reached = true;
+  EXPECT_EQ(OB_INVALID_ARGUMENT,
+            timestamp_access.get_number_with_target(0, gts, is_target_reached));
+  EXPECT_FALSE(is_target_reached);
+  is_target_reached = true;
+  EXPECT_EQ(OB_INVALID_ARGUMENT,
+            timestamp_access.get_number_with_target(
+                INT64_MAX / 2, gts, is_target_reached));
+  EXPECT_FALSE(is_target_reached);
+}
+
+TEST_F(TestObGtsMgr, get_number_with_target_rejects_follower)
+{
+  ObTimestampAccess timestamp_access;
+  int64_t gts = 0;
+  bool is_target_reached = true;
+
+  timestamp_access.set_service_type(ObTimestampAccess::FOLLOWER);
+  EXPECT_EQ(OB_NOT_MASTER,
+            timestamp_access.get_number_with_target(1, gts, is_target_reached));
+  EXPECT_FALSE(is_target_reached);
 }
 
 }//end of unittest

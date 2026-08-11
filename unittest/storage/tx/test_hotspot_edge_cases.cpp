@@ -22,8 +22,11 @@
 
 #include "storage/tx/ob_tx_hotspot_define.h"
 #include "storage/tx/ob_tx_hotspot_helper.h"
+#include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/tx/ob_tx_log_cb_define.h"
 #include "storage/tx/ob_trans_submit_log_cb.h"
+#include "storage/tx/ob_tx_data_define.h"
+#include "storage/tx/ob_gts_rpc.h"
 #include "share/ob_errno.h"
 #include "lib/utility/utility.h"
 #include "lib/allocator/ob_malloc.h"
@@ -41,6 +44,77 @@ public:
     oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
   }
   virtual void TearDown() override {}
+};
+
+class MockHotspotGtsRequestRpc : public ObIGtsRequestRpc
+{
+public:
+  MockHotspotGtsRequestRpc() : post_count_(0), last_range_size_(0) {}
+  virtual ~MockHotspotGtsRequestRpc() {}
+  virtual int start() override { return OB_SUCCESS; }
+  virtual int stop() override { return OB_SUCCESS; }
+  virtual int wait() override { return OB_SUCCESS; }
+  virtual void destroy() override {}
+  virtual int post(const uint64_t tenant_id,
+                   const common::ObAddr &server,
+                   const ObGtsRequest &msg) override
+  {
+    UNUSED(tenant_id);
+    UNUSED(server);
+    ++post_count_;
+    last_range_size_ = msg.range_size_;
+    return OB_SUCCESS;
+  }
+  int64_t post_count_;
+  int64_t last_range_size_;
+};
+
+class MockHotspotGtsLocationAdapter : public ObILocationAdapter
+{
+public:
+  explicit MockHotspotGtsLocationAdapter(const common::ObAddr &leader) : leader_(leader) {}
+  virtual ~MockHotspotGtsLocationAdapter() {}
+  virtual int init(share::schema::ObMultiVersionSchemaService *schema_service,
+                   share::ObLocationService *location_service) override
+  {
+    UNUSED(schema_service);
+    UNUSED(location_service);
+    return OB_SUCCESS;
+  }
+  virtual void destroy() override {}
+  virtual int nonblock_get_leader(const int64_t cluster_id,
+                                  const int64_t tenant_id,
+                                  const share::ObLSID &ls_id,
+                                  common::ObAddr &leader) override
+  {
+    UNUSED(cluster_id);
+    UNUSED(tenant_id);
+    UNUSED(ls_id);
+    leader = leader_;
+    return OB_SUCCESS;
+  }
+  virtual int nonblock_renew(const int64_t cluster_id,
+                             const int64_t tenant_id,
+                             const share::ObLSID &ls_id) override
+  {
+    UNUSED(cluster_id);
+    UNUSED(tenant_id);
+    UNUSED(ls_id);
+    return OB_SUCCESS;
+  }
+  virtual int nonblock_get(const int64_t cluster_id,
+                           const int64_t tenant_id,
+                           const share::ObLSID &ls_id,
+                           share::ObLSLocation &location) override
+  {
+    UNUSED(cluster_id);
+    UNUSED(tenant_id);
+    UNUSED(ls_id);
+    UNUSED(location);
+    return OB_NOT_SUPPORTED;
+  }
+private:
+  common::ObAddr leader_;
 };
 
 // ============================================================================
@@ -312,6 +386,315 @@ TEST_F(ObTestHotspotEdgeCases, test_handle_reuse_blocked_by_active_ref)
   EXPECT_EQ(nullptr, cache.cache_);
 
   TRANS_LOG(INFO, "test_handle_reuse_blocked_by_active_ref: verified active ref guard");
+}
+
+// ============================================================================
+// TC-14: Secondary prepare version is status-gated, idempotent, and monotonic
+// ============================================================================
+TEST_F(ObTestHotspotEdgeCases, test_secondary_prepare_version_is_monotonic)
+{
+  ObPartTransCtx secondary;
+  ASSERT_EQ(OB_SUCCESS, secondary.lock_.init(&secondary));
+  ASSERT_EQ(OB_SUCCESS, secondary.set_trans_id(ObTransID(20260720001)));
+  ASSERT_EQ(OB_SUCCESS, secondary.set_ls_id(share::ObLSID(1001)));
+
+  share::SCN version_100;
+  share::SCN version_200;
+  share::SCN version_150;
+  version_100.convert_for_tx(100);
+  version_200.convert_for_tx(200);
+  version_150.convert_for_tx(150);
+
+  secondary.redo_flush_status_ = TxRedoFlushStatus::SECONDARY_PREPARING;
+  EXPECT_EQ(OB_SUCCESS, secondary.before_prepare_for_hotspot(version_100));
+  EXPECT_EQ(version_100, secondary.mt_ctx_.get_trans_version());
+  EXPECT_EQ(OB_SUCCESS, secondary.before_prepare_for_hotspot(version_100));
+
+  secondary.redo_flush_status_ = TxRedoFlushStatus::SECONDARY_MIGRATING;
+  EXPECT_EQ(OB_SUCCESS, secondary.before_prepare_for_hotspot(version_200));
+  EXPECT_EQ(version_200, secondary.mt_ctx_.get_trans_version());
+  EXPECT_EQ(OB_ERR_UNEXPECTED, secondary.before_prepare_for_hotspot(version_150));
+  EXPECT_EQ(version_200, secondary.mt_ctx_.get_trans_version());
+
+  secondary.redo_flush_status_ = TxRedoFlushStatus::SECONDARY_MIGRATE_FAILED;
+  EXPECT_EQ(OB_STATE_NOT_MATCH, secondary.before_prepare_for_hotspot(version_200));
+  secondary.lock_.reset();
+}
+
+// ============================================================================
+// TC-17: Secondary skips commit version generation (returns OB_EAGAIN)
+// ============================================================================
+TEST_F(ObTestHotspotEdgeCases, test_secondary_skips_commit_version)
+{
+  ObPartTransCtx secondary;
+  ASSERT_EQ(OB_SUCCESS, secondary.lock_.init(&secondary));
+  ASSERT_EQ(OB_SUCCESS, secondary.set_trans_id(ObTransID(20260721002)));
+  ASSERT_EQ(OB_SUCCESS, secondary.set_ls_id(share::ObLSID(1001)));
+
+  // All secondary statuses must cause generate_commit_version_() to return
+  // OB_EAGAIN before checking commit version validity or calling get_gts_().
+  const TxRedoFlushStatus secondary_statuses[] = {
+    TxRedoFlushStatus::SECONDARY_PREPARING,
+    TxRedoFlushStatus::SECONDARY_MIGRATING,
+    TxRedoFlushStatus::SECONDARY_MIGRATE_SYNCED,
+  };
+
+  for (int64_t i = 0; i < static_cast<int64_t>(sizeof(secondary_statuses) / sizeof(secondary_statuses[0])); ++i) {
+    secondary.redo_flush_status_ = secondary_statuses[i];
+    EXPECT_EQ(OB_EAGAIN, secondary.generate_commit_version_())
+        << "status=" << static_cast<int>(secondary_statuses[i]);
+  }
+
+  secondary.lock_.reset();
+}
+
+// ============================================================================
+// TC-21: before_prepare_secondaries success and partial failure
+// ============================================================================
+TEST_F(ObTestHotspotEdgeCases, test_before_prepare_secondaries_success_and_partial_failure)
+{
+  ObPartTransCtx primary;
+  ObPartTransCtx sec0;
+  ObPartTransCtx sec1;
+  ASSERT_EQ(OB_SUCCESS, primary.lock_.init(&primary));
+  ASSERT_EQ(OB_SUCCESS, sec0.lock_.init(&sec0));
+  ASSERT_EQ(OB_SUCCESS, sec1.lock_.init(&sec1));
+  const ObTransID primary_tx_id(20260730001);
+  ASSERT_EQ(OB_SUCCESS, primary.set_trans_id(primary_tx_id));
+  ASSERT_EQ(OB_SUCCESS, primary.set_ls_id(share::ObLSID(1001)));
+  ASSERT_EQ(OB_SUCCESS, sec0.set_trans_id(ObTransID(20260730002)));
+  ASSERT_EQ(OB_SUCCESS, sec0.set_ls_id(share::ObLSID(1001)));
+  ASSERT_EQ(OB_SUCCESS, sec1.set_trans_id(ObTransID(20260730003)));
+  ASSERT_EQ(OB_SUCCESS, sec1.set_ls_id(share::ObLSID(1001)));
+
+  ASSERT_EQ(OB_SUCCESS, primary.hotspot_redo_cache_.init(primary_tx_id, 2, nullptr));
+  ASSERT_EQ(OB_SUCCESS, primary.hotspot_redo_cache_.insert_into(&sec0));
+  ASSERT_EQ(OB_SUCCESS, primary.hotspot_redo_cache_.insert_into(&sec1));
+
+  share::SCN gts;
+  gts.convert_for_tx(500);
+
+  // Case 1: Both secondaries in SECONDARY_MIGRATING -> success
+  sec0.redo_flush_status_ = TxRedoFlushStatus::SECONDARY_MIGRATING;
+  sec1.redo_flush_status_ = TxRedoFlushStatus::SECONDARY_MIGRATING;
+  EXPECT_EQ(OB_SUCCESS, primary.hotspot_redo_cache_.before_prepare_secondaries(gts));
+  EXPECT_EQ(gts, sec0.mt_ctx_.get_trans_version());
+  EXPECT_EQ(gts, sec1.mt_ctx_.get_trans_version());
+
+  // Case 2: sec0 in SECONDARY_MIGRATE_FAILED -> returns OB_STATE_NOT_MATCH
+  // Loop stops on first failure, sec1 is NOT touched
+  sec0.redo_flush_status_ = TxRedoFlushStatus::SECONDARY_MIGRATE_FAILED;
+  sec0.mt_ctx_.set_trans_version(share::SCN::min_scn());
+  sec1.mt_ctx_.set_trans_version(share::SCN::min_scn());
+  EXPECT_EQ(OB_STATE_NOT_MATCH, primary.hotspot_redo_cache_.before_prepare_secondaries(gts));
+  // sec1 was not processed because loop stopped at sec0
+  EXPECT_TRUE(sec1.mt_ctx_.get_trans_version().is_min());
+
+  // Case 3: sec0 SECONDARY_MIGRATING, sec1 SECONDARY_MIGRATE_SYNCED -> success
+  sec0.redo_flush_status_ = TxRedoFlushStatus::SECONDARY_MIGRATING;
+  sec1.redo_flush_status_ = TxRedoFlushStatus::SECONDARY_MIGRATE_SYNCED;
+  EXPECT_EQ(OB_SUCCESS, primary.hotspot_redo_cache_.before_prepare_secondaries(gts));
+  EXPECT_EQ(gts, sec0.mt_ctx_.get_trans_version());
+  EXPECT_EQ(gts, sec1.mt_ctx_.get_trans_version());
+
+  // Detach raw test pointers for safe cleanup
+  if (OB_NOT_NULL(primary.hotspot_redo_cache_.cache_)) {
+    SpinWLockGuard guard(primary.hotspot_redo_cache_.hotspot_lock_);
+    primary.hotspot_redo_cache_.cache_->hotspot_cache_[0].other_ctx_ = nullptr;
+    primary.hotspot_redo_cache_.cache_->hotspot_cache_[1].other_ctx_ = nullptr;
+  }
+  EXPECT_EQ(OB_SUCCESS, primary.hotspot_redo_cache_.reuse());
+  primary.lock_.reset();
+  sec0.lock_.reset();
+  sec1.lock_.reset();
+}
+
+// ============================================================================
+// TC-22: before_prepare_secondaries version monotonicity and idempotency
+// ============================================================================
+TEST_F(ObTestHotspotEdgeCases, test_before_prepare_secondaries_version_monotonicity)
+{
+  ObPartTransCtx primary;
+  ObPartTransCtx secondary;
+  ASSERT_EQ(OB_SUCCESS, primary.lock_.init(&primary));
+  ASSERT_EQ(OB_SUCCESS, secondary.lock_.init(&secondary));
+  const ObTransID primary_tx_id(20260730004);
+  ASSERT_EQ(OB_SUCCESS, primary.set_trans_id(primary_tx_id));
+  ASSERT_EQ(OB_SUCCESS, primary.set_ls_id(share::ObLSID(1001)));
+  ASSERT_EQ(OB_SUCCESS, secondary.set_trans_id(ObTransID(20260730005)));
+  ASSERT_EQ(OB_SUCCESS, secondary.set_ls_id(share::ObLSID(1001)));
+
+  ASSERT_EQ(OB_SUCCESS, primary.hotspot_redo_cache_.init(primary_tx_id, 1, nullptr));
+  ASSERT_EQ(OB_SUCCESS, primary.hotspot_redo_cache_.insert_into(&secondary));
+
+  secondary.redo_flush_status_ = TxRedoFlushStatus::SECONDARY_MIGRATING;
+
+  // Case 1: Set version 200 first
+  share::SCN v200;
+  v200.convert_for_tx(200);
+  EXPECT_EQ(OB_SUCCESS, primary.hotspot_redo_cache_.before_prepare_secondaries(v200));
+  EXPECT_EQ(v200, secondary.mt_ctx_.get_trans_version());
+
+  // Case 2: Try lower version 150 -> OB_ERR_UNEXPECTED (monotonicity violation)
+  share::SCN v150;
+  v150.convert_for_tx(150);
+  EXPECT_EQ(OB_ERR_UNEXPECTED, primary.hotspot_redo_cache_.before_prepare_secondaries(v150));
+  // Version unchanged
+  EXPECT_EQ(v200, secondary.mt_ctx_.get_trans_version());
+
+  // Case 3: Same version 200 -> success (idempotent, no-op)
+  EXPECT_EQ(OB_SUCCESS, primary.hotspot_redo_cache_.before_prepare_secondaries(v200));
+  EXPECT_EQ(v200, secondary.mt_ctx_.get_trans_version());
+
+  // Case 4: Higher version 300 -> success, version updated
+  share::SCN v300;
+  v300.convert_for_tx(300);
+  EXPECT_EQ(OB_SUCCESS, primary.hotspot_redo_cache_.before_prepare_secondaries(v300));
+  EXPECT_EQ(v300, secondary.mt_ctx_.get_trans_version());
+
+  // Detach raw test pointer for safe cleanup
+  if (OB_NOT_NULL(primary.hotspot_redo_cache_.cache_)) {
+    SpinWLockGuard guard(primary.hotspot_redo_cache_.hotspot_lock_);
+    primary.hotspot_redo_cache_.cache_->hotspot_cache_[0].other_ctx_ = nullptr;
+  }
+  EXPECT_EQ(OB_SUCCESS, primary.hotspot_redo_cache_.reuse());
+  primary.lock_.reset();
+  secondary.lock_.reset();
+}
+
+// ============================================================================
+// TC-23: Shared prepare publication preserves primary/secondary barrier order
+// ============================================================================
+TEST_F(ObTestHotspotEdgeCases, test_publish_mvcc_prepare_barrier_status_and_order)
+{
+  ObPartTransCtx primary;
+  ObPartTransCtx secondary;
+  ASSERT_EQ(OB_SUCCESS, primary.lock_.init(&primary));
+  ASSERT_EQ(OB_SUCCESS, secondary.lock_.init(&secondary));
+  const ObTransID primary_tx_id(20260806001);
+  ASSERT_EQ(OB_SUCCESS, primary.set_trans_id(primary_tx_id));
+  ASSERT_EQ(OB_SUCCESS, primary.set_ls_id(share::ObLSID(1001)));
+  ASSERT_EQ(OB_SUCCESS, secondary.set_trans_id(ObTransID(20260806002)));
+  ASSERT_EQ(OB_SUCCESS, secondary.set_ls_id(share::ObLSID(1001)));
+
+  share::SCN version;
+  version.convert_for_tx(600);
+
+  // Normal transactions publish only their local barrier.
+  primary.redo_flush_status_ = TxRedoFlushStatus::NORMAL_START;
+  ASSERT_EQ(OB_SUCCESS, primary.publish_mvcc_prepare_barrier_(version));
+  EXPECT_EQ(version, primary.mt_ctx_.get_trans_version());
+
+  ASSERT_EQ(OB_SUCCESS, primary.hotspot_redo_cache_.init(primary_tx_id, 1, nullptr));
+  ASSERT_EQ(OB_SUCCESS, primary.hotspot_redo_cache_.insert_into(&secondary));
+
+  // An aggregating primary must remain unprepared, as must its secondary.
+  primary.mt_ctx_.set_trans_version(share::SCN::max_scn());
+  secondary.mt_ctx_.set_trans_version(share::SCN::max_scn());
+  primary.redo_flush_status_ = TxRedoFlushStatus::PRIMARY_COLLECTING;
+  secondary.redo_flush_status_ = TxRedoFlushStatus::SECONDARY_MIGRATING;
+  EXPECT_EQ(OB_EAGAIN, primary.publish_mvcc_prepare_barrier_(version));
+  EXPECT_TRUE(primary.mt_ctx_.get_trans_version().is_max());
+  EXPECT_TRUE(secondary.mt_ctx_.get_trans_version().is_max());
+
+  // A secondary publication failure must not publish the primary barrier.
+  primary.redo_flush_status_ = TxRedoFlushStatus::PRIMARY_AGGR_SUCCEEDED;
+  secondary.redo_flush_status_ = TxRedoFlushStatus::SECONDARY_MIGRATE_FAILED;
+  EXPECT_EQ(OB_STATE_NOT_MATCH, primary.publish_mvcc_prepare_barrier_(version));
+  EXPECT_TRUE(primary.mt_ctx_.get_trans_version().is_max());
+
+  // Once aggregation succeeds, secondary is published first and the primary
+  // becomes prepared only after that succeeds.
+  secondary.redo_flush_status_ = TxRedoFlushStatus::SECONDARY_MIGRATING;
+  EXPECT_EQ(OB_SUCCESS, primary.publish_mvcc_prepare_barrier_(version));
+  EXPECT_EQ(version, secondary.mt_ctx_.get_trans_version());
+  EXPECT_EQ(version, primary.mt_ctx_.get_trans_version());
+
+  if (OB_NOT_NULL(primary.hotspot_redo_cache_.cache_)) {
+    SpinWLockGuard guard(primary.hotspot_redo_cache_.hotspot_lock_);
+    primary.hotspot_redo_cache_.cache_->hotspot_cache_[0].other_ctx_ = nullptr;
+  }
+  EXPECT_EQ(OB_SUCCESS, primary.hotspot_redo_cache_.reuse());
+  primary.lock_.reset();
+  secondary.lock_.reset();
+}
+
+// ============================================================================
+// TC-24: Unlock refresh target is dynamic and skips replay
+// ============================================================================
+TEST_F(ObTestHotspotEdgeCases, test_gts_refresh_target_and_replay_filter)
+{
+  ObPartTransCtx primary;
+  storage::ObTxData tx_data;
+  primary.ctx_tx_data_.test_init(tx_data, nullptr);
+
+  share::SCN prepare_version;
+  share::SCN commit_version;
+  ASSERT_EQ(OB_SUCCESS, prepare_version.convert_for_tx(700));
+  ASSERT_EQ(OB_SUCCESS, commit_version.convert_for_tx(800));
+  primary.exec_info_.prepare_version_ = prepare_version;
+  ASSERT_EQ(OB_SUCCESS, primary.ctx_tx_data_.set_commit_version(commit_version));
+
+  // Valid versions alone must not affect normal or unfinished hotspot txs.
+  primary.redo_flush_status_ = TxRedoFlushStatus::NORMAL_START;
+  EXPECT_FALSE(primary.get_gts_refresh_target_().is_valid_and_not_min());
+  primary.redo_flush_status_ = TxRedoFlushStatus::PRIMARY_COLLECTING;
+  EXPECT_FALSE(primary.get_gts_refresh_target_().is_valid_and_not_min());
+
+  // A completed hotspot primary uses the greater finite version on every
+  // eligible unlock, including unlocks reached from log callbacks. Replay is
+  // the only execution-path filter; there is no one-shot path flag.
+  primary.redo_flush_status_ = TxRedoFlushStatus::PRIMARY_AGGR_SUCCEEDED;
+  EXPECT_EQ(commit_version, primary.get_gts_refresh_target_());
+  CtxLockArg unlock_arg;
+  primary.before_unlock(unlock_arg);
+  EXPECT_EQ(commit_version, unlock_arg.gts_refresh_target_);
+
+  primary.set_for_replay(true);
+  EXPECT_FALSE(primary.get_gts_refresh_target_().is_valid_and_not_min());
+  primary.set_for_replay(false);
+
+  EXPECT_EQ(commit_version, primary.get_gts_refresh_target_());
+
+  // test_init() points at stack storage without a production tx-data
+  // allocator, so detach it directly instead of invoking dec_ref().
+  primary.ctx_tx_data_.tx_data_guard_.tx_data_ = nullptr;
+}
+
+// ============================================================================
+// TC-25: Remote refresh is range=1 and a caught-up cache skips it
+// ============================================================================
+TEST_F(ObTestHotspotEdgeCases, test_hotspot_gts_refresh_remote_and_skip)
+{
+  ObGtsSource source;
+  const uint64_t tenant_id = 1001;
+  common::ObAddr server;
+  common::ObAddr leader;
+  ASSERT_TRUE(server.set_ip_addr("127.0.0.1", 2881));
+  ASSERT_TRUE(leader.set_ip_addr("127.0.0.1", 2882));
+  MockHotspotGtsRequestRpc rpc;
+  MockHotspotGtsLocationAdapter location_adapter(leader);
+  ASSERT_EQ(OB_SUCCESS, source.init(tenant_id, server, &rpc, &location_adapter));
+
+  bool updated = false;
+  ASSERT_EQ(OB_SUCCESS, source.update_gts(700, updated));
+  ASSERT_TRUE(updated);
+  EXPECT_EQ(OB_SUCCESS, source.refresh_gts_if_cache_behind(800));
+  EXPECT_EQ(OB_SUCCESS, source.refresh_gts_if_cache_behind(800));
+  EXPECT_EQ(2, rpc.post_count_);
+  EXPECT_EQ(1, rpc.last_range_size_);
+
+  // Once the cache reaches the target, the same unlock-side check is a no-op.
+  updated = false;
+  ASSERT_EQ(OB_SUCCESS, source.update_gts(800, updated));
+  ASSERT_TRUE(updated);
+  EXPECT_EQ(OB_SUCCESS, source.refresh_gts_if_cache_behind(800));
+  EXPECT_EQ(2, rpc.post_count_);
+  EXPECT_EQ(3, ATOMIC_LOAD(&source.gts_statistics_.hotspot_refresh_check_cnt_));
+  EXPECT_EQ(1, ATOMIC_LOAD(&source.gts_statistics_.hotspot_refresh_skip_cnt_));
+  EXPECT_EQ(2, ATOMIC_LOAD(&source.gts_statistics_.hotspot_refresh_trigger_cnt_));
+  EXPECT_EQ(0, ATOMIC_LOAD(&source.gts_statistics_.hotspot_refresh_local_cnt_));
+  EXPECT_EQ(2, ATOMIC_LOAD(&source.gts_statistics_.hotspot_refresh_remote_cnt_));
 }
 
 } // namespace oceanbase
