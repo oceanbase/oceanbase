@@ -391,7 +391,7 @@ OB_INLINE int ObDatumRange::partial_copy(const ObDatumRange& src, ObIAllocator& 
 OB_INLINE int64_t ObDatumRange::get_group_idx() const
 {
   return GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_2_0 ? group_idx_ :
-  (static_cast<int64_t>(group_idx_) << 32) | (index_ordered_idx_ * 0xffffffff);
+  (static_cast<int64_t>(group_idx_) << 32) | (index_ordered_idx_ & 0xffffffff);
 }
 
 OB_INLINE void ObDatumRange::set_group_idx(const int64_t group_idx)
