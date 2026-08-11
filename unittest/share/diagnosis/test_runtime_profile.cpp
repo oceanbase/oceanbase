@@ -7,6 +7,8 @@
 #define private public
 #define protected public
 #include "share/diagnosis/ob_runtime_profile.h"
+#include "sql/engine/ob_exec_context.h"
+#include "sql/engine/ob_operator.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -15,6 +17,41 @@ using namespace std;
 
 class ObRuntimeProfileTest : public ::testing::Test
 {};
+
+class MockMonitorOperator : public ObOperator
+{
+public:
+  MockMonitorOperator(ObExecContext &exec_ctx, const ObOpSpec &spec)
+      : ObOperator(exec_ctx, spec, nullptr)
+  {}
+  virtual int inner_get_next_row() override { return OB_ITER_END; }
+  virtual void destroy() override {}
+};
+
+TEST_F(ObRuntimeProfileTest, add_block_time_only_when_db_time_is_counting)
+{
+  ObArenaAllocator allocator;
+  ObExecContext exec_ctx(allocator);
+  ObOpSpec spec(allocator, PHY_INVALID);
+  MockMonitorOperator op(exec_ctx, spec);
+  ObMonitorNode monitor_node;
+  monitor_node.set_op(&op);
+
+  op.cpu_begin_level_ = 0;
+  monitor_node.add_block_time(100);
+  ASSERT_EQ(0, monitor_node.block_time_);
+
+  op.cpu_begin_level_ = 1;
+  monitor_node.add_block_time(100);
+  ASSERT_EQ(100, monitor_node.block_time_);
+}
+
+TEST_F(ObRuntimeProfileTest, add_block_time_for_monitor_node_without_operator)
+{
+  ObMonitorNode monitor_node;
+  monitor_node.add_block_time(100);
+  ASSERT_EQ(100, monitor_node.block_time_);
+}
 
 inline void join_filter()
 {

@@ -239,6 +239,13 @@ void ObMonitorNode::update_tempseg(int64_t delta_size)
   workarea_max_tempseg_ = MAX(workarea_tempseg_, workarea_max_tempseg_);
 }
 
+void ObMonitorNode::add_block_time(uint64_t delta)
+{
+  if (OB_ISNULL(op_) || op_->cpu_begin_level_ > 0) {
+    block_time_ += delta;
+  }
+}
+
 uint64_t ObMonitorNode::calc_db_time()
 {
   int64_t db_time = 0;

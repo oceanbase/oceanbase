@@ -96,7 +96,7 @@ private:
   }
   inline void end_wait_time_counting()
   {
-    op_monitor_info_.block_time_ += rdtsc() - begin_wait_time_;
+    op_monitor_info_.add_block_time(rdtsc() - begin_wait_time_);
   }
 public:
   int unblock_channels(int64_t data_channel_idx);

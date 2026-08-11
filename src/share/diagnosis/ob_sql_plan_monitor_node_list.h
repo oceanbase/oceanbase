@@ -128,6 +128,7 @@ public:
   void set_rich_format(bool v) { enable_rich_format_ = v; }
   void update_memory(int64_t delta_size);
   void update_tempseg(int64_t delta_size);
+  void add_block_time(uint64_t delta);
   uint64_t calc_db_time();
   void convert_to_static_node();
   int set_sql_id(const ObString &sql_id);
