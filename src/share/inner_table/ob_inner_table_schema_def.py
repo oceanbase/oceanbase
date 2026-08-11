@@ -18705,6 +18705,8 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12623: __all_virtual_backup_archive_piece_task_history
 
 # 12624: __all_virtual_tenant_memstore_diagnose_info
+# 12625: __all_virtual_jvm_status
+# 12626: __all_virtual_java_udf_stats
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -19314,6 +19316,8 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15557', all_def_ke
 
 # 15558: __all_virtual_migration_table_cache_info
 # 15559: __all_virtual_tenant_memstore_diagnose_info
+# 15560: __all_virtual_jvm_status
+# 15561: __all_virtual_java_udf_stats
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
 # - 示例：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
@@ -48244,6 +48248,13 @@ def_table_schema(
 
 # 21751: GV$OB_RESOURCE_FUNCTION_INFO
 # 21752: V$OB_RESOURCE_FUNCTION_INFO
+
+# 21753: GV$OB_JVM_STATUS
+# 21754: V$OB_JVM_STATUS
+# 21755: GV$OB_JAVA_SANDBOX_STATUS
+# 21756: V$OB_JAVA_SANDBOX_STATUS
+# 21757: GV$OB_JAVA_UDF_STATS
+# 21758: V$OB_JAVA_UDF_STATS
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -83804,6 +83815,12 @@ def_table_schema(
 )
 # 28302: GV$OB_MIGRATION_TABLE_CACHE_INFO
 # 28303: V$OB_MIGRATION_TABLE_CACHE_INFO
+# 28304: GV$OB_JVM_STATUS
+# 28305: V$OB_JVM_STATUS
+# 28306: GV$OB_JAVA_SANDBOX_STATUS
+# 28307: V$OB_JAVA_SANDBOX_STATUS
+# 28308: GV$OB_JAVA_UDF_STATS
+# 28309: V$OB_JAVA_UDF_STATS
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
