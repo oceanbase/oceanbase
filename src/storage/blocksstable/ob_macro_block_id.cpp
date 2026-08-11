@@ -185,10 +185,12 @@ uint64_t MacroBlockId::hash() const
   uint64_t hash_val = 0;
   switch ((ObMacroBlockIdMode)id_mode_) {
   case ObMacroBlockIdMode::ID_MODE_LOCAL:
-  case ObMacroBlockIdMode::ID_MODE_BACKUP:
     hash_val = block_index_ * HASH_MAGIC_NUM;
     break;
+  case ObMacroBlockIdMode::ID_MODE_BACKUP:
   case ObMacroBlockIdMode::ID_MODE_SHARE: {
+    // For backup mode, second_id_ is just ls_id, which is the same for all
+    // macro blocks in one ls. Must mix all ids to avoid hash collision.
     int64_t tmp_val = first_id_ ^ second_id_^ third_id_ ^ fourth_id_;
     hash_val = murmurhash(&tmp_val, sizeof(tmp_val), hash_val);
     break;
@@ -206,10 +208,12 @@ int MacroBlockId::hash(uint64_t &hash_val) const
   hash_val = 0;
   switch ((ObMacroBlockIdMode)id_mode_) {
     case ObMacroBlockIdMode::ID_MODE_LOCAL:
-    case ObMacroBlockIdMode::ID_MODE_BACKUP:
       hash_val = block_index_ * HASH_MAGIC_NUM;
       break;
+    case ObMacroBlockIdMode::ID_MODE_BACKUP:
     case ObMacroBlockIdMode::ID_MODE_SHARE: {
+      // For backup mode, second_id_ is just ls_id, which is the same for all
+      // macro blocks in one ls. Must mix all ids to avoid hash collision.
       int64_t tmp_val = first_id_ ^ second_id_^ third_id_ ^ fourth_id_;
       hash_val = murmurhash(&tmp_val, sizeof(tmp_val), hash_val);
       break;
