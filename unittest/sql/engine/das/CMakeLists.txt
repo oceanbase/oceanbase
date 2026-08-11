@@ -1,3 +1,4 @@
 sql_unittest(test_das_boolean_query)
 sql_unittest(test_das_fusion_iter)
 sql_unittest(test_das_fusion_parallel)
+sql_unittest(test_vec_index_pre_brute)

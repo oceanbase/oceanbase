@@ -152,6 +152,7 @@ public:
   static const int32_t CHANGE_PATH_WINDOW_SIZE = 30;
   static constexpr double DECAY_FACTOR = 0.5;
   static const uint64_t MIN_BQ_REORDER_SIZE_FOR_BRUTE_FORCE = 100;
+  static const int64_t BRUTE_FORCE_BATCH_SIZE = 20000;
 
 protected:
   int save_distance_expr_result(ObNewRow *row, int64_t size);
@@ -172,14 +173,19 @@ private:
   int process_adaptor_state_brute_force(ObIAllocator &allocator, bool is_vectorized);
   int process_adaptor_state_pre_filter(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor, bool is_vectorized);
   int process_adaptor_state_pre_filter_brute_force(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor,
-                                                    int64_t *&brute_vids, int64_t& brute_cnt, bool& need_complete_data,
-                                                    bool check_need_complete_data = true);
+                                                    bool& need_complete_data, bool check_need_complete_data = true);
   int process_adaptor_state_pre_filter_brute_force_not_bq(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor,
                                                     int64_t *&brute_vids, int64_t& brute_cnt, bool& need_complete_data,
                                                     bool check_need_complete_data = true);
   int process_adaptor_state_pre_filter_brute_force_bq(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor,
                                                     int64_t *&brute_vids, int64_t& brute_cnt, bool& need_complete_data,
                                                     bool check_need_complete_data = true);
+  int process_adaptor_state_pre_filter_brute_force_not_bq_from_bitmap(
+                                                    ObPluginVectorIndexAdaptor* adaptor, bool& need_complete_data,
+                                                    bool check_need_complete_data = true);
+  int process_adaptor_state_pre_filter_brute_force_bq_from_bitmap(
+                                                    ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor,
+                                                    bool& need_complete_data, bool check_need_complete_data = true);
   int process_adaptor_state_post_filter(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor, bool is_vectorized);
   int process_adaptor_state_post_filter_once(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor);
 
@@ -245,6 +251,14 @@ private:
                                   int64_t* brute_vids,
                                   int64_t brute_cnt,
                                   ObVecIdxQueryResult& dist_result);
+  int merge_brute_force_results(const ObVecIdxQueryResult& dist_result,
+                                int64_t* brute_vids,
+                                int64_t brute_cnt,
+                                ObSimpleMaxHeap& max_heap,
+                                bool& need_complete_data,
+                                bool check_need_complete_data);
+  int build_brute_force_result_iterator(ObPluginVectorIndexAdaptor* adaptor,
+                                        ObSimpleMaxHeap& max_heap);
   int merge_and_sort_brute_force_results_bq(const ObVecIdxQueryResult& dist_result,
                                             int64_t* brute_vids,
                                             int64_t brute_cnt,

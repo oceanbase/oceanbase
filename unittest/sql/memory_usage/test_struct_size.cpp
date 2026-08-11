@@ -102,8 +102,7 @@ void verify_results(const char* result_file, const char* tmp_file) {
   std::remove(tmp_file);
 }
 
-// Temporarily disabled until stmt::vector_index_query_param_ is changed to a pointer.
-TEST_F(TestSQLCompile, DISABLED_stmt_size)
+TEST_F(TestSQLCompile, stmt_size)
 {
   static const char* tmp_file = "./resolver/test_stmt_size.tmp";
   static const char* result_file = "./resolver/test_stmt_size.result";
@@ -124,8 +123,7 @@ TEST_F(TestSQLCompile, DISABLED_stmt_size)
   verify_results(result_file, tmp_file);
 }
 
-// Temporarily disabled until stmt::vector_index_query_param_ is changed to a pointer.
-TEST_F(TestSQLCompile, DISABLED_stmt_member_size)
+TEST_F(TestSQLCompile, stmt_member_size)
 {
   static const char* tmp_file = "./resolver/test_stmt_member_size.tmp";
   static const char* result_file = "./resolver/test_stmt_member_size.result";
@@ -371,8 +369,7 @@ TEST_F(TestSQLCompile, join_order_size)
   verify_results(result_file, tmp_file);
 }
 
-// Temporarily disabled until stmt::vector_index_query_param_ is changed to a pointer.
-TEST_F(TestSQLCompile, DISABLED_log_plan_size)
+TEST_F(TestSQLCompile, log_plan_size)
 {
   static const char* tmp_file = "./optimizer/test_log_plan_size.tmp";
   static const char* result_file = "./optimizer/test_log_plan_size.result";
@@ -426,8 +423,7 @@ TEST_F(TestSQLCompile, DISABLED_log_plan_size)
   verify_results(result_file, tmp_file);
 }
 
-// Temporarily disabled until stmt::vector_index_query_param_ is changed to a pointer.
-TEST_F(TestSQLCompile, DISABLED_optimizer_related_struct_size)
+TEST_F(TestSQLCompile, optimizer_related_struct_size)
 {
   static const char* tmp_file = "./optimizer/test_optimizer_related_struct_size.tmp";
   static const char* result_file = "./optimizer/test_optimizer_related_struct_size.result";

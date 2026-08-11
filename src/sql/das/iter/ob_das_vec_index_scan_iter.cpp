@@ -289,15 +289,25 @@ int ObVecIndexBitmapIter::init(ObVecIndexBitmap *bitmap)
   if (OB_ISNULL(bitmap)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("bitmap is null", K(ret));
-  } else if (bitmap->type_ != ObVecIndexBitmap::ROARING_BITMAP) {
+  } else if (bitmap->type_ != ObVecIndexBitmap::BYTE_ARRAY
+             && bitmap->type_ != ObVecIndexBitmap::ROARING_BITMAP) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("bitmap iterator only supports ROARING_BITMAP type", K(ret), K(bitmap->type_));
-  } else if (OB_ISNULL(bitmap->roaring_bitmap_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("roaring bitmap is null", K(ret));
+    LOG_WARN("bitmap iterator only supports bitmap types", K(ret), K(bitmap->type_));
   } else if (inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("iterator already inited", K(ret));
+  } else if (bitmap->type_ == ObVecIndexBitmap::BYTE_ARRAY) {
+    if (OB_ISNULL(bitmap->bitmap_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("byte array bitmap is null", K(ret));
+    } else {
+      bitmap_ = bitmap;
+      curr_vid_ = bitmap->min_vid_;
+      inited_ = true;
+    }
+  } else if (OB_ISNULL(bitmap->roaring_bitmap_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("roaring bitmap is null", K(ret));
   } else {
     ROARING_TRY_CATCH(iter_ = roaring::api::roaring64_iterator_create(bitmap->roaring_bitmap_));
     if (OB_FAIL(ret)) {
@@ -313,6 +323,68 @@ int ObVecIndexBitmapIter::init(ObVecIndexBitmap *bitmap)
       bitmap_ = bitmap;
       inited_ = true;
     }
+  }
+  return ret;
+}
+
+int ObVecIndexBitmapIter::get_vid_batch(int64_t *vids,
+                                        int64_t capacity,
+                                        int64_t &vid_cnt)
+{
+  int ret = OB_SUCCESS;
+  vid_cnt = 0;
+  if (OB_ISNULL(vids) || capacity <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid vids buffer", K(ret), KP(vids), K(capacity));
+  } else if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("iterator not inited", K(ret));
+  } else if (OB_ISNULL(bitmap_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("bitmap is null", K(ret));
+  } else if (is_end()) {
+    ret = OB_ITER_END;
+  } else if (bitmap_->type_ == ObVecIndexBitmap::BYTE_ARRAY) {
+    uint64_t real_idx = static_cast<uint64_t>(
+        max(curr_vid_, bitmap_->min_vid_) - bitmap_->min_vid_bound_);
+    const uint64_t max_real_idx = static_cast<uint64_t>(
+        bitmap_->max_vid_ - bitmap_->min_vid_bound_);
+    while (vid_cnt < capacity && real_idx <= max_real_idx) {
+      const uint64_t byte_idx = real_idx >> 3;
+      if (bitmap_->bitmap_[byte_idx] == 0) {
+        real_idx = (byte_idx + 1) << 3;
+      } else {
+        const uint64_t bit_idx = real_idx & 0x7;
+        if (bitmap_->bitmap_[byte_idx] & (1 << bit_idx)) {
+          vids[vid_cnt++] = bitmap_->min_vid_bound_ + static_cast<int64_t>(real_idx);
+        }
+        ++real_idx;
+      }
+    }
+    curr_vid_ = real_idx > max_real_idx
+        ? OB_INVALID_INDEX
+        : bitmap_->min_vid_bound_ + static_cast<int64_t>(real_idx);
+  } else if (bitmap_->type_ == ObVecIndexBitmap::ROARING_BITMAP) {
+    int64_t vid = OB_INVALID_INDEX;
+    if (OB_FAIL(get_curr_vid(vid))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("failed to get current vid", K(ret));
+      }
+    } else {
+      while (OB_SUCC(ret) && vid_cnt < capacity) {
+        vids[vid_cnt++] = vid;
+        if (OB_FAIL(next_vid(vid)) && OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          break;
+        }
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid filter type", K(ret), K(bitmap_->type_));
+  }
+  if (OB_SUCC(ret) && vid_cnt == 0) {
+    ret = OB_ITER_END;
   }
   return ret;
 }

@@ -527,8 +527,7 @@ int64_t TestSQLCompile::parse_table_field(const std::string& field)
 }
 
 
-// Temporarily disabled until stmt::vector_index_query_param_ is changed to a pointer.
-TEST_F(TestSQLCompile, DISABLED_memory_usage_tpcds)
+TEST_F(TestSQLCompile, memory_usage_tpcds)
 {
   int ret = OB_SUCCESS;
   const char *file_name_prefix = "test_sql_compile_tpcds.";
@@ -536,16 +535,14 @@ TEST_F(TestSQLCompile, DISABLED_memory_usage_tpcds)
 }
 
 
-// Temporarily disabled until stmt::vector_index_query_param_ is changed to a pointer.
-TEST_F(TestSQLCompile, DISABLED_memory_usage_tpch)
+TEST_F(TestSQLCompile, memory_usage_tpch)
 {
   int ret = OB_SUCCESS;
   const char *file_name_prefix = "test_sql_compile_tpch.";
   test_sql_compile(file_name_prefix);
 }
 
-// Temporarily disabled until stmt::vector_index_query_param_ is changed to a pointer.
-TEST_F(TestSQLCompile, DISABLED_memory_usage_others)
+TEST_F(TestSQLCompile, memory_usage_others)
 {
   int ret = OB_SUCCESS;
   const char *tpcx_prefix = "test_sql_compile_tpc";

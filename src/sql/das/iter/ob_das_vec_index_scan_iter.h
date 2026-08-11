@@ -78,11 +78,13 @@ struct ObVecIndexBitmapIter
   {}
 
   int init(ObVecIndexBitmap *bitmap);
+  int get_vid_batch(int64_t *vids, int64_t capacity, int64_t &vid_cnt);
   int advance_to(int64_t target_vid, int64_t &return_vid);
   int next_vid(int64_t &next_vid);
   int get_curr_vid(int64_t &curr_vid);
   void reset();
   bool is_inited() const { return inited_; }
+  bool is_end() const { return curr_vid_ == OB_INVALID_INDEX; }
 
 private:
   ObVecIndexBitmap *bitmap_;
