@@ -176,14 +176,23 @@ int ObIStreamBuf::do_callback()
 int ObVectorIndexSerializer::serialize_meta(ObVectorIndexSegment *segment, ObOStreamBuf::CbParam &cb_param, ObOStreamBuf::Callback &cb)
 {
   int ret = OB_SUCCESS;
-  int64_t serde_size = segment->get_serialize_meta_size();
+  int64_t serde_size = 0;
   char* serde_buf = nullptr;
   int64_t pos = 0;
-  if (OB_ISNULL(serde_buf = reinterpret_cast<char*>(allocator_.alloc(serde_size)))) {
+  if (OB_ISNULL(segment)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("segment is null", K(ret));
+  } else if (OB_UNLIKELY((serde_size = segment->get_serialize_meta_size()) < 0)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to get segment meta serialize size", K(ret), K(serde_size), KPC(segment));
+  } else if (OB_UNLIKELY(serde_size == 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid segment meta serialize size", K(ret), K(serde_size), KPC(segment));
+  } else if (OB_ISNULL(serde_buf = reinterpret_cast<char*>(allocator_.alloc(serde_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc memory fail", K(ret), K(serde_size));
   } else if (OB_FAIL(segment->serialize_meta(serde_buf, serde_size, pos))) {
-    LOG_WARN("serialize meta fail", K(ret), K(serde_size), KP(serde_buf), K(segment->get_serialize_meta_size()), KPC(segment));
+    LOG_WARN("serialize meta fail", K(ret), K(serde_size), KP(serde_buf), KPC(segment));
   } else if (OB_FAIL(cb(serde_buf, pos, cb_param))) {
     LOG_WARN("failed to do callback", K(ret), K(serde_size), K(pos));
   } else {

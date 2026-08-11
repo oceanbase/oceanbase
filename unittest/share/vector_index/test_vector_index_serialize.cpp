@@ -8,6 +8,7 @@
 #define private public
 #define protected public
 #include "share/vector_index/ob_plugin_vector_index_serialize.h"
+#include "share/vector_index/ob_vector_index_segment.h"
 #undef private
 #undef protected
 
@@ -86,6 +87,42 @@ TEST_F(TestVectorIndexSerialize, serialize_failed)
   out.write(data_str, strlen(data_str));
   ASSERT_EQ(OB_ERR_UNEXPECTED, streambuf.get_error_code());
   ASSERT_EQ(0, cb_param.total_size_);
+}
+
+TEST_F(TestVectorIndexSerialize, bitmap_serialize_buffer_overflow)
+{
+  const int64_t SMALL_BUF_SIZE = 64;
+  ObArenaAllocator allocator(ObModIds::TEST);
+  share::ObVectorIndexRoaringBitMap bitmap(&allocator, OB_SYS_TENANT_ID);
+  ASSERT_EQ(OB_SUCCESS, bitmap.init(true, false));
+  ASSERT_NE(nullptr, bitmap.insert_bitmap_);
+  {
+    lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(OB_SYS_TENANT_ID, "VecSerTest"));
+    for (uint64_t i = 0; i < 1024; ++i) {
+      roaring::api::roaring64_bitmap_add(bitmap.insert_bitmap_, i * 2);
+    }
+  }
+
+  const int64_t serialize_size = bitmap.get_serialize_size();
+  ASSERT_GT(serialize_size, SMALL_BUF_SIZE);
+  char *buf = static_cast<char *>(allocator.alloc(serialize_size));
+  ASSERT_NE(nullptr, buf);
+  MEMSET(buf, 0x5A, serialize_size);
+
+  int64_t pos = 0;
+  EXPECT_EQ(OB_SIZE_OVERFLOW, bitmap.serialize(buf, SMALL_BUF_SIZE, pos));
+  for (int64_t i = SMALL_BUF_SIZE; i < serialize_size; ++i) {
+    EXPECT_EQ(static_cast<char>(0x5A), buf[i]);
+  }
+
+  pos = 0;
+  EXPECT_EQ(OB_SUCCESS, bitmap.serialize(buf, serialize_size, pos));
+  EXPECT_EQ(serialize_size, pos);
+  {
+    lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(OB_SYS_TENANT_ID, "VecSerTest"));
+    roaring::api::roaring64_bitmap_free(bitmap.insert_bitmap_);
+  }
+  bitmap.insert_bitmap_ = nullptr;
 }
 
 struct TestIStreamCbParam : public share::ObIStreamBuf::CbParam {

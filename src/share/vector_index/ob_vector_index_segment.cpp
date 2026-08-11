@@ -690,18 +690,30 @@ int ObVectorIndexSegment::check_id_exist(const int64_t vid, bool &exist) const
 
 int64_t ObVectorIndexSegment::get_serialize_meta_size() const
 {
-  int ret = OB_SUCCESS;
-  int64_t len = 0;
-  len += ObVectorIndexSegmentHeader::HEAD_LEN;
+  int64_t len = ObVectorIndexSegmentHeader::HEAD_LEN;
   bool has_ibitmap = nullptr != ibitmap_;
   OB_UNIS_ADD_LEN(has_ibitmap);
   if (has_ibitmap) {
-    OB_UNIS_ADD_LEN(*ibitmap_);
+    const int64_t bitmap_size = ibitmap_->get_serialize_size();
+    if (OB_UNLIKELY(bitmap_size < 0)) {
+      len = -1;
+      LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "failed to get ibitmap serialize size", KP(ibitmap_));
+    } else {
+      len += bitmap_size;
+    }
   }
-  bool has_vbitmap = nullptr != vbitmap_;
-  OB_UNIS_ADD_LEN(has_vbitmap);
-  if (has_vbitmap) {
-    OB_UNIS_ADD_LEN(*vbitmap_);
+  if (len >= 0) {
+    bool has_vbitmap = nullptr != vbitmap_;
+    OB_UNIS_ADD_LEN(has_vbitmap);
+    if (has_vbitmap) {
+      const int64_t bitmap_size = vbitmap_->get_serialize_size();
+      if (OB_UNLIKELY(bitmap_size < 0)) {
+        len = -1;
+        LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "failed to get vbitmap serialize size", KP(vbitmap_));
+      } else {
+        len += bitmap_size;
+      }
+    }
   }
   return len;
 }
@@ -918,28 +930,40 @@ int ObVectorIndexRoaringBitMap::init(const bool is_init_ibitmap, const bool is_i
   return ret;
 }
 
-OB_DEF_SERIALIZE_SIZE(ObVectorIndexRoaringBitMap)
+int64_t ObVectorIndexRoaringBitMap::get_serialize_size() const
+{
+  int64_t len = get_serialize_size_();
+  if (len >= 0) {
+    OB_UNIS_ADD_LEN(UNIS_VERSION);
+    len += serialization::OB_SERIALIZE_SIZE_NEED_BYTES;
+  }
+  return len;
+}
+
+int64_t ObVectorIndexRoaringBitMap::get_serialize_size_() const
 {
   int ret = OB_SUCCESS;
   int64_t len = 0;
   int64_t insert_bitmap_size = 0;
   int64_t delete_bitmap_size = 0;
-  if (nullptr != insert_bitmap_) {
-    ROARING_TRY_CATCH(insert_bitmap_size = roaring::api::roaring64_bitmap_portable_size_in_bytes(insert_bitmap_));
+  if (OB_NOT_NULL(insert_bitmap_)) {
+    ROARING_TRY_CATCH(
+        insert_bitmap_size = roaring::api::roaring64_bitmap_portable_size_in_bytes(insert_bitmap_));
+  }
+  if (OB_SUCC(ret)) {
     OB_UNIS_ADD_LEN(insert_bitmap_size);
     len += insert_bitmap_size;
-  } else {
-    insert_bitmap_size = 0;
-    OB_UNIS_ADD_LEN(insert_bitmap_size);
   }
-  if (OB_FAIL(ret)) {
-  } else if (nullptr != delete_bitmap_) {
-    ROARING_TRY_CATCH(delete_bitmap_size = roaring::api::roaring64_bitmap_portable_size_in_bytes(delete_bitmap_));
+  if (OB_SUCC(ret) && OB_NOT_NULL(delete_bitmap_)) {
+    ROARING_TRY_CATCH(
+        delete_bitmap_size = roaring::api::roaring64_bitmap_portable_size_in_bytes(delete_bitmap_));
+  }
+  if (OB_SUCC(ret)) {
     OB_UNIS_ADD_LEN(delete_bitmap_size);
     len += delete_bitmap_size;
   } else {
-    delete_bitmap_size = 0;
-    OB_UNIS_ADD_LEN(delete_bitmap_size);
+    len = -1;
+    LOG_WARN("failed to get bitmap serialize size", K(ret));
   }
   return len;
 }
@@ -954,7 +978,14 @@ OB_DEF_SERIALIZE(ObVectorIndexRoaringBitMap)
     OB_UNIS_ENCODE(insert_bitmap_size);
     if (OB_SUCC(ret) && insert_bitmap_size > 0) {
       int64_t real_serial_size = 0;
-      ROARING_TRY_CATCH(real_serial_size = roaring::api::roaring64_bitmap_portable_serialize(insert_bitmap_, buf + pos));
+      if (OB_UNLIKELY(pos < 0 || pos > buf_len || insert_bitmap_size > buf_len - pos)) {
+        ret = OB_SIZE_OVERFLOW;
+        LOG_WARN("buffer is not enough to serialize insert bitmap",
+            K(ret), K(buf_len), K(pos), K(insert_bitmap_size));
+      } else {
+        ROARING_TRY_CATCH(
+            real_serial_size = roaring::api::roaring64_bitmap_portable_serialize(insert_bitmap_, buf + pos));
+      }
       if (OB_FAIL(ret)) {
       } else if (insert_bitmap_size != real_serial_size) {
         ret = OB_SERIALIZE_ERROR;
@@ -973,7 +1004,14 @@ OB_DEF_SERIALIZE(ObVectorIndexRoaringBitMap)
     OB_UNIS_ENCODE(delete_bitmap_size);
     if (OB_SUCC(ret) && delete_bitmap_size > 0) {
       int64_t real_serial_size = 0;
-      ROARING_TRY_CATCH(real_serial_size = roaring::api::roaring64_bitmap_portable_serialize(delete_bitmap_, buf + pos));
+      if (OB_UNLIKELY(pos < 0 || pos > buf_len || delete_bitmap_size > buf_len - pos)) {
+        ret = OB_SIZE_OVERFLOW;
+        LOG_WARN("buffer is not enough to serialize delete bitmap",
+            K(ret), K(buf_len), K(pos), K(delete_bitmap_size));
+      } else {
+        ROARING_TRY_CATCH(
+            real_serial_size = roaring::api::roaring64_bitmap_portable_serialize(delete_bitmap_, buf + pos));
+      }
       if (OB_FAIL(ret)) {
       } else if (delete_bitmap_size != real_serial_size) {
         ret = OB_SERIALIZE_ERROR;
