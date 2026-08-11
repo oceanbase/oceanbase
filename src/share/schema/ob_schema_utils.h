@@ -451,6 +451,7 @@ public:
     DROP_SUB_PARTITION = 10,
     TRUNCATE_PARTITION = 11,
     TRUNCATE_SUB_PARTITION = 12,
+    DROP_INDEX = 13,
     MAX_TYPE // can not > 32
   };
 
