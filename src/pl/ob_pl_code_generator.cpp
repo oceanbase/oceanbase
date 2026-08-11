@@ -1590,6 +1590,16 @@ int ObPLCodeGenerateVisitor::visit(const ObPLReturnStmt &s)
       ObLLVMValue p_result;
       ObPLCGBufferGuard buffer_guard(generator_);
 
+      if (lib::is_mysql_mode()) {
+        // Mark the RETURN as executed before evaluating its expression. If the expression error is
+        // handled by a handler, the function keeps this NULL result instead of reporting no RETURN.
+        ObObj null_result;
+        ObLLVMValue p_returned_result;
+        OX (null_result.set_null());
+        OZ (generator_.extract_result_from_context(
+          generator_.get_vars().at(generator_.CTX_IDX), p_returned_result));
+        OZ (generator_.store_obj(null_result, p_returned_result));
+      }
       OZ (buffer_guard.get_objparam_buffer(p_result_obj));
       OZ (generator_.generate_expr(s.get_ret(), s, OB_INVALID_INDEX, p_result_obj));
       if (OB_SUCC(ret) && lib::is_oracle_mode()) { // check logic need before store function ret value
