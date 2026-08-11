@@ -358,8 +358,10 @@ public:
       event_list_[event_list_size_].time_ = time;
       event_list_[event_list_size_].event_idx_ = event_idx;
       event_list_size_++;
-      is_sorted_ = event_list_size_ > 1 ?
-        (is_sorted_ && (event_list_[event_list_size_ - 2].time_ <= event_list_[event_list_size_ - 1].time_)) : true;
+      is_sorted_ = event_list_size_ > 1
+        ? (is_sorted_
+           && !(event_list_[event_list_size_ - 1] < event_list_[event_list_size_ - 2]))
+        : true;
     }
 
     if (event_list_size_ >= MAX_EVENT_LIST_LENGTH) {
