@@ -27761,13 +27761,15 @@ int ObDDLService::check_object_name_matches_db_name(
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
+  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
   HEAP_VAR(ObMySQLProxy::MySQLResult, res) {
     common::sqlclient::ObMySQLResult *result = NULL;
     is_match = false;
 
     if (OB_FAIL(sql.append_fmt(
-        "SELECT 1 FROM __all_recyclebin WHERE OBJECT_NAME = '%.*s' \
-        AND DATABASE_ID = %lu",
+        "SELECT 1 FROM __all_recyclebin WHERE TENANT_ID = %lu \
+        AND OBJECT_NAME = '%.*s' AND DATABASE_ID = %lu LIMIT 1",
+        ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
         static_cast<int>(origin_table_name.length()), origin_table_name.ptr(),
         database_id))) {
       LOG_WARN("failed to append sql",
@@ -28502,7 +28504,9 @@ int ObDDLService::purge_tenant_expire_recycle_objects(const ObPurgeRecycleBinArg
     ObArray<ObRecycleObject> recycle_objs;
     if (OB_FAIL(ddl_operator.fetch_expire_recycle_objects(arg.tenant_id_,
                                                           arg.expire_time_,
-                                                          recycle_objs))) {
+                                                          recycle_objs,
+                                                          !arg.auto_purge_,
+                                                          arg.purge_num_))) {
       LOG_WARN("fetch expire recycle objects failed", K(ret), K(arg));
     } else {
       LOG_INFO("purge expire recycle object of tenant start", K(arg),

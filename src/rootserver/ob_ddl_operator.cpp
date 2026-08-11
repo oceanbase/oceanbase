@@ -6168,7 +6168,9 @@ int ObDDLOperator::purge_database_in_recyclebin(const ObDatabaseSchema &database
 int ObDDLOperator::fetch_expire_recycle_objects(
     const uint64_t tenant_id,
     const int64_t expire_time,
-    ObIArray<ObRecycleObject> &recycle_objs)
+    ObIArray<ObRecycleObject> &recycle_objs,
+    const bool include_dropped_tenant,
+    const int64_t limit)
 {
   int ret = OB_SUCCESS;
   ObSchemaService *schema_service = schema_service_.get_schema_service();
@@ -6178,9 +6180,11 @@ int ObDDLOperator::fetch_expire_recycle_objects(
   } else if (OB_FAIL(schema_service->fetch_expire_recycle_objects(tenant_id,
                                                           expire_time,
                                                           sql_proxy_,
-                                                          recycle_objs))) {
+                                                          recycle_objs,
+                                                          include_dropped_tenant,
+                                                          limit))) {
     LOG_WARN("fetch expire recycle objects failed", K(ret),
-             K(expire_time), K(tenant_id));
+             K(expire_time), K(tenant_id), K(include_dropped_tenant), K(limit));
   }
   return ret;
 }
