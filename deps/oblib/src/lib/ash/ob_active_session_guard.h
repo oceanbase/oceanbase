@@ -286,7 +286,10 @@ public:
     p1_ = 0;
     p2_ = 0;
     p3_ = 0;
-    wait_event_begin_ts_ = 0;
+    // 在当前实现下，如果retry_wait_event_no_不为空，那么wait_event_begin_ts_一定是retry wait event设置的，不应该被普通等待事件重置
+    if (0 == retry_wait_event_no_) {
+      wait_event_begin_ts_ = 0;
+    }
 #if !defined(NDEBUG)
     MEMSET(bt_, 0, sizeof(bt_));
 #endif

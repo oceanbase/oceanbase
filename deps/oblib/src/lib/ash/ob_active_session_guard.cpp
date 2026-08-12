@@ -264,11 +264,23 @@ void ObActiveSessionStat::begin_retry_wait_event(const int64_t retry_wait_event_
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "ASH's retry_wait_event concurrency may occur ", K(retry_wait_event_no_), K(retry_wait_event_no), K(retry_wait_event_p1));
   }
 #endif
+//普通等待事件或者retry等待事件已经存在，又开始新的等待事件，会遗漏掉一部分等待时间。
+  const int64_t cur_ts = rdtsc();
+  const int64_t cur_event_no = retry_wait_event_no_ > 0 ? retry_wait_event_no_ : event_no_;
+  if (cur_event_no > 0 && wait_event_begin_ts_ > 0 && wait_event_begin_ts_ < cur_ts) {
+    const uint64_t cur_wait_time =
+        (cur_ts - wait_event_begin_ts_) * 1000 / static_cast<int64_t>(lib_get_cpu_khz());
+    if (OB_WAIT_EVENTS[cur_event_no].wait_class_ != ObWaitClassIds::IDLE) {
+      total_non_idle_wait_time_ += cur_wait_time;
+    } else {
+      total_idle_wait_time_ += cur_wait_time;
+    }
+  }
   retry_wait_event_no_ = retry_wait_event_no;
   retry_wait_event_p1_ = retry_wait_event_p1;
   retry_wait_event_p2_ = retry_wait_event_p2;
   retry_wait_event_p3_ = retry_wait_event_p3;
-  wait_event_begin_ts_ = rdtsc();
+  wait_event_begin_ts_ = cur_ts;
 }
 
 void ObActiveSessionStat::end_retry_wait_event()
