@@ -365,6 +365,7 @@ public:
                        K_(scan_rows_size),
                        K_(das_tasks_key),
                        K_(in_row_cache_threshold),
+                       K_(task_type),
                        K_(do_local_dynamic_filter),
                        K_(local_dynamic_filter_params),
                        K_(topn_param),

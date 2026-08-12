@@ -301,6 +301,7 @@ DEF_TO_STRING(ObTableScanParam)
        K_(need_scn),
        K_(need_switch_param),
        K_(is_mds_query),
+       K_(is_index_back_index_scan),
        K_(fb_read_tx_uncommitted),
        K_(external_file_format),
        K_(external_file_location),

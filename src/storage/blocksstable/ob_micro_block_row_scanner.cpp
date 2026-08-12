@@ -388,14 +388,12 @@ int ObIMicroBlockRowScanner::apply_filter(const bool can_blockscan)
       LOG_WARN("Failed to apply pushdown filter in block reader", K(ret), KPC_(block_row_store));
     } else {
       can_blockscan_ = can_blockscan;
+      is_filter_applied_ = true;
       if (param_->has_lob_column_out()) {
         context_->reuse_lob_locator_helper();
       }
-      if (!is_filter_applied_) {
-        is_filter_applied_ = true;
-        ++context_->table_store_stat_.pushdown_micro_access_cnt_;
-        context_->table_store_stat_.blockscan_row_cnt_ += get_access_cnt();
-      }
+      ++context_->table_store_stat_.pushdown_micro_access_cnt_;
+      context_->table_store_stat_.blockscan_row_cnt_ += get_access_cnt();
     }
   }
 
@@ -1128,17 +1126,7 @@ int ObIMicroBlockRowScanner::filter_micro_block_in_blockscan(sql::PushdownFilter
     pd_filter_info.context_ = context_;
     pd_filter_info.disable_bypass_ = block_row_store_->disable_bypass();
     if (use_private_bitmap_) {
-      // for di_base iter with dynamic filters, recalculate filter results when switching borders in opened micro block
-      if (is_filter_applied_) {
-        if (pd_filter_info.start_ != filter_bitmap_->get_start_id() &&
-            OB_FAIL(filter_bitmap_->switch_context(pd_filter_info.count_, false/*is_reverse*/))) {
-          LOG_WARN("fail to switch context of filter bitmap", K(ret), K(pd_filter_info.count_));
-        } else {
-          filter_bitmap_->reuse(pd_filter_info.start_, true/*is_all_true*/);
-        }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_UNLIKELY(pd_filter_info.start_ != filter_bitmap_->get_start_id()
+      if (OB_UNLIKELY(pd_filter_info.start_ != filter_bitmap_->get_start_id()
                       || (is_di_bitmap_valid() && pd_filter_info.start_ != di_bitmap_->get_start_id()))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected start row id", K(ret), K(pd_filter_info.start_), KPC_(filter_bitmap), KPC_(di_bitmap));
@@ -1169,8 +1157,7 @@ int ObIMicroBlockRowScanner::filter_micro_block_in_blockscan(sql::PushdownFilter
         LOG_WARN("Fail to filter", K(ret), KPC(pd_filter_info.filter_));
       }
     }
-    // TODO: recalculate filter result for di_base iter will make the statistics inaccurate.
-    if (OB_SUCC(ret) && !is_filter_applied_) {
+    if (OB_SUCC(ret)) {
       const int64_t bitmap_cnt = use_private_bitmap_ ? filter_bitmap_->size() : pd_filter_info.filter_->get_result()->size();
       const int64_t select_cnt = use_private_bitmap_ ? filter_bitmap_->popcnt() : pd_filter_info.filter_->get_result()->popcnt();
       context_->table_store_stat_.storage_filtered_row_cnt_ += (bitmap_cnt - select_cnt);

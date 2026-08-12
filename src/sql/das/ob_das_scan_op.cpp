@@ -410,6 +410,9 @@ int ObDASScanOp::init_scan_param()
   scan_param_.tx_lock_timeout_ = scan_rtdef_->tx_lock_timeout_;
   scan_param_.index_id_ = scan_ctdef_->ref_table_id_;
   scan_param_.is_get_ = scan_ctdef_->is_get_;
+  scan_param_.is_index_back_index_scan_ =
+      ObDASScanTaskType::LOCAL_LOOKUP == scan_rtdef_->task_type_
+      || ObDASScanTaskType::GLOBAL_LOOKUP_INDEX_SCAN == scan_rtdef_->task_type_;
   scan_param_.is_for_foreign_check_ = scan_rtdef_->is_for_foreign_check_;
   scan_param_.timeout_ = scan_rtdef_->timeout_ts_;
   scan_param_.scan_flag_ = scan_rtdef_->scan_flag_;

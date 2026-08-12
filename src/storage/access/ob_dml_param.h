@@ -172,6 +172,7 @@ public:
         need_scn_(false),
         need_switch_param_(false),
         is_mds_query_(false),
+        is_index_back_index_scan_(false),
         is_thread_scope_(true),
         tx_seq_base_(-1),
         read_version_range_(),
@@ -199,6 +200,7 @@ public:
   bool need_scn_;
   bool need_switch_param_;
   bool is_mds_query_;
+  bool is_index_back_index_scan_;
   OB_INLINE virtual bool is_valid() const {
     return  snapshot_.valid_ && ObVTableScanParam::is_valid() && (!is_mds_query_ || nullptr != mds_collector_);
   }

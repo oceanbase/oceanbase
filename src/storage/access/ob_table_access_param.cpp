@@ -66,7 +66,6 @@ ObTableIterParam::ObTableIterParam()
       is_sample_(false),
       filter_canbe_handle_in_di_(false),
       enable_append_only_blockscan_(false),
-      contain_dynamic_filter_(false),
       reserved_(0),
       merge_engine_upper_version_()
 {}
@@ -140,7 +139,6 @@ void ObTableIterParam::reset()
   is_get_ = false;
   is_sample_ = false;
   filter_canbe_handle_in_di_ = false;
-  contain_dynamic_filter_ = false;
   reserved_ = 0;
   plan_enable_rich_format_ = false;
   ObSSTableIndexFilterFactory::destroy_sstable_index_filter(sstable_index_filter_);
@@ -258,7 +256,6 @@ DEF_TO_STRING(ObTableIterParam)
        K_(is_get),
        K_(is_sample),
        K_(filter_canbe_handle_in_di),
-       K_(contain_dynamic_filter),
        K_(merge_engine_type),
        K_(reserved),
        K_(plan_enable_rich_format),
@@ -376,9 +373,6 @@ int ObTableAccessParam::init(
       iter_param_.table_scan_opt_.storage_rowsets_size_ = 1;
     }
     iter_param_.pushdown_filter_ = scan_param.pd_storage_filters_;
-    iter_param_.contain_dynamic_filter_ =
-        sql::ObPushdownFilterExecutor::filter_tree_contain_dynamic_filter(
-            iter_param_.pushdown_filter_);
     iter_param_.ls_id_ = scan_param.ls_id_;
     iter_param_.is_column_replica_table_ = table_param.is_column_replica_table();
     iter_param_.is_normal_cgs_at_the_end_ = table_param.is_normal_cgs_at_the_end();
@@ -433,7 +427,12 @@ int ObTableAccessParam::init(
       iter_param_.filter_canbe_handle_in_di_ = table_param.is_safe_filter_with_di();
       iter_param_.enable_append_only_blockscan_ = iter_param_.is_append_only_can_blockscan();
 
-      if (iter_param_.can_use_delete_insert_query_path(scan_param.scan_flag_.scan_order_)) {
+      if (iter_param_.can_use_delete_insert_query_path(scan_param.scan_flag_.scan_order_) &&
+          // Disable delete-insert for index-back index scans with dynamic filters: cached
+          // pushdown filter results may be invalid when switching ranges in an open micro block.
+          !(scan_param.is_index_back_index_scan_ &&
+            sql::ObPushdownFilterExecutor::filter_tree_contain_dynamic_filter(
+              iter_param_.pushdown_filter_))) {
         iter_param_.is_delete_insert_ = true;
       }
 

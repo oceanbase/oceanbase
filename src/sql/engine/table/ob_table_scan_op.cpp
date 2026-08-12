@@ -1421,6 +1421,10 @@ OB_INLINE int ObTableScanOp::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef
   das_rtdef.scan_flag_ = MY_CTDEF.scan_flags_;
   LOG_DEBUG("scan flag", K(MY_CTDEF.scan_flags_));
   das_rtdef.scan_flag_.index_back_ = is_lookup && MY_SPEC.is_index_back();
+  das_rtdef.task_type_ = MY_SPEC.is_index_back() && (&das_ctdef == &MY_CTDEF.scan_ctdef_)
+      ? (MY_SPEC.is_index_global_ ? ObDASScanTaskType::GLOBAL_LOOKUP_INDEX_SCAN
+                                  : ObDASScanTaskType::LOCAL_LOOKUP)
+      : ObDASScanTaskType::SCAN;
   das_rtdef.scan_flag_.is_show_seed_ = plan_ctx->get_show_seed();
   LOG_DEBUG("scan flag", K(das_rtdef.scan_flag_));
   das_rtdef.tsc_monitor_info_ = &tsc_monitor_info_;

@@ -549,24 +549,6 @@ int ObSSTableRowScanner<PrefetchType>::refresh_blockscan_checker(const blockssta
     LOG_WARN("Failed to prepare blockscan check info", K(ret), K(rowkey), KPC(this));
   } else {
     LOG_DEBUG("refresh blockscan", K(ret), K(rowkey));
-    // Fix issue 2026070800117272511
-    // Dynamic filter results maybe invalid when switching borders in opened micro block, recalculate filter results
-    // This fix requires dynamic filter results to be monotonically tightened.
-    if (is_di_base_iter_
-        && iter_param_->contain_dynamic_filter_
-        && nullptr != micro_scanner_ && OB_ITER_END != micro_scanner_->end_of_block()) {
-      sql::ObPushdownFilterExecutor *filter = block_row_store_->get_pd_filter();
-      blocksstable::ObMicroIndexInfo &micro_info = prefetcher_.current_micro_info();
-      micro_info.pre_process_filter(*filter, true/*skip_dynamic_filter_always_true_result*/);
-      if (OB_FAIL(micro_scanner_->apply_filter(false/*can_blockscan*/))) {
-        if (OB_UNLIKELY(OB_ITER_END != ret)) {
-          LOG_WARN("Fail to apply filter on opened micro block", K(ret));
-        } else {
-          ret = OB_SUCCESS;
-        }
-      }
-      micro_info.post_process_filter(*filter);
-    }
   }
   return ret;
 }

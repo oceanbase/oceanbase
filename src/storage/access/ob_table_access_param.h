@@ -344,10 +344,8 @@ public:
       // column storage tables created after v435 will place the rowkey/all cg at the start of the table schema column group array
       uint64_t is_normal_cgs_at_the_end_ : 1;
       uint64_t enable_append_only_blockscan_ : 1;
-      // whether the pushdown filter tree contains a dynamic filter
-      uint64_t contain_dynamic_filter_ : 1;
 
-      uint64_t reserved_ : 36;
+      uint64_t reserved_ : 37;
     };
   };
   ObMergeEngineUpperVersion merge_engine_upper_version_;
