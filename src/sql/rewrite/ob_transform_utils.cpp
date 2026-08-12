@@ -2350,17 +2350,17 @@ int ObTransformUtils::is_expr_not_null(ObNotNullContext &ctx,
   } else if (ObOptimizerUtil::find_item(ctx.group_clause_exprs_, expr)) {
     in_group_clause = true;
   } else if (expr->is_column_ref_expr()) {
-    if (OB_FAIL(is_column_expr_not_null(ctx,
-                                        static_cast<const ObColumnRefRawExpr *>(expr),
-                                        is_not_null,
-                                        constraints))) {
+    if (OB_FAIL(SMART_CALL(is_column_expr_not_null(ctx,
+                                                   static_cast<const ObColumnRefRawExpr *>(expr),
+                                                   is_not_null,
+                                                   constraints)))) {
       LOG_WARN("failed to check expr not null", K(ret), K(*expr));
     }
   } else if (expr->is_set_op_expr()) {
-    if (OB_FAIL(is_set_expr_not_null(ctx,
-                                     static_cast<const ObSetOpRawExpr *>(expr),
-                                     is_not_null,
-                                     constraints))) {
+    if (OB_FAIL(SMART_CALL(is_set_expr_not_null(ctx,
+                                                static_cast<const ObSetOpRawExpr *>(expr),
+                                                is_not_null,
+                                                constraints)))) {
       LOG_WARN("failed to check expr not null", K(ret));
     }
   } else if (expr->is_exec_param_expr()) {
@@ -2508,10 +2508,10 @@ int ObTransformUtils::is_column_expr_not_null(ObNotNullContext &ctx,
       LOG_WARN("stmt is invalid", K(ret), K(idx));
     } else if (OB_FAIL(child_ctx.generate_stmt_context(NULLABLE_SCOPE::NS_TOP))) {
       LOG_WARN("failed to generate stmt context", K(ret));
-    } else if (OB_FAIL(is_expr_not_null(child_ctx,
-                                        child_expr,
-                                        is_not_null,
-                                        constraints))) {
+    } else if (OB_FAIL(SMART_CALL(is_expr_not_null(child_ctx,
+                                                   child_expr,
+                                                   is_not_null,
+                                                   constraints)))) {
       LOG_WARN("failed to check expr not null", K(ret));
     }
   } else if (table->is_values_table()) {
