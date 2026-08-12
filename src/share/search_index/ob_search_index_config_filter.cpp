@@ -601,41 +601,50 @@ int ObSearchIndexConfigFilter::print_schema(const ObString &comment,
     const int64_t len = comment.length();
     int64_t idx = 0;
     const char *paths_key = NULL;
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos, " WITH ("))) {
-      LOG_WARN("fail to print WITH (", K(ret));
-    } else if (idx + 14 <= len && 0 == MEMCMP(data + idx, "INCLUDE_PATHS=", 14)) {
+    bool has_inc_types_prefix = false;
+    // Detect the leading config key first WITHOUT emitting anything, so that a comment
+    // that is not a search-index config (e.g. a user comment inherited from the base
+    // column on an older table) does not produce a spurious empty " WITH ()".
+    if (idx + 14 <= len && 0 == MEMCMP(data + idx, "INCLUDE_PATHS=", 14)) {
       paths_key = "INCLUDE_PATHS";
-      idx += 14;
     } else if (idx + 14 <= len && 0 == MEMCMP(data + idx, "EXCLUDE_PATHS=", 14)) {
       paths_key = "EXCLUDE_PATHS";
-      idx += 14;
+    } else if (idx + 14 <= len && 0 == MEMCMP(data + idx, "INCLUDE_TYPES=", 14)) {
+      has_inc_types_prefix = true;
     }
 
-    if (OB_SUCC(ret) && paths_key != NULL) {
-      if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s = (", paths_key))) {
-        LOG_WARN("fail to print paths key", K(ret));
-      } else if (OB_FAIL(print_length_prefixed_values(data, len, idx, buf, buf_len, pos, true))) {
-        LOG_WARN("fail to print paths value", K(ret));
-      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, ")"))) {
-        LOG_WARN("fail to print closing paren", K(ret));
+    if (paths_key == NULL && !has_inc_types_prefix) {
+      // not a recognized search-index config, print nothing
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, " WITH ("))) {
+      LOG_WARN("fail to print WITH (", K(ret));
+    } else {
+      if (OB_SUCC(ret) && paths_key != NULL) {
+        idx += 14;
+        if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s = (", paths_key))) {
+          LOG_WARN("fail to print paths key", K(ret));
+        } else if (OB_FAIL(print_length_prefixed_values(data, len, idx, buf, buf_len, pos, true))) {
+          LOG_WARN("fail to print paths value", K(ret));
+        } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, ")"))) {
+          LOG_WARN("fail to print closing paren", K(ret));
+        }
       }
-    }
 
-    if (OB_SUCC(ret) && idx + 14 <= len && 0 == MEMCMP(data + idx, "INCLUDE_TYPES=", 14)) {
-      idx += 14;
-      if (paths_key != NULL && OB_FAIL(databuff_printf(buf, buf_len, pos, ", "))) {
-        LOG_WARN("fail to print comma", K(ret));
-      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "INCLUDE_TYPES = ("))) {
-        LOG_WARN("fail to print INCLUDE_TYPES", K(ret));
-      } else if (OB_FAIL(print_length_prefixed_values(data, len, idx, buf, buf_len, pos, false))) {
-        LOG_WARN("fail to print types value", K(ret));
-      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, ")"))) {
-        LOG_WARN("fail to print closing paren", K(ret));
+      if (OB_SUCC(ret) && idx + 14 <= len && 0 == MEMCMP(data + idx, "INCLUDE_TYPES=", 14)) {
+        idx += 14;
+        if (paths_key != NULL && OB_FAIL(databuff_printf(buf, buf_len, pos, ", "))) {
+          LOG_WARN("fail to print comma", K(ret));
+        } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "INCLUDE_TYPES = ("))) {
+          LOG_WARN("fail to print INCLUDE_TYPES", K(ret));
+        } else if (OB_FAIL(print_length_prefixed_values(data, len, idx, buf, buf_len, pos, false))) {
+          LOG_WARN("fail to print types value", K(ret));
+        } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, ")"))) {
+          LOG_WARN("fail to print closing paren", K(ret));
+        }
       }
-    }
 
-    if (OB_SUCC(ret) && OB_FAIL(databuff_printf(buf, buf_len, pos, ")"))) {
-      LOG_WARN("fail to print )", K(ret));
+      if (OB_SUCC(ret) && OB_FAIL(databuff_printf(buf, buf_len, pos, ")"))) {
+        LOG_WARN("fail to print )", K(ret));
+      }
     }
   }
   return ret;
