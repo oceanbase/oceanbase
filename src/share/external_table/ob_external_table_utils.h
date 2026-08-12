@@ -7,9 +7,11 @@
 #define _OB_EXTERNAL_TABLE_UTILS_H_
 
 #include "lib/allocator/page_arena.h"
+#include "lib/container/ob_heap.h"
 #include "lib/container/ob_iarray.h"
 #include "lib/string/ob_string.h"
 #include "objit/common/ob_item_type.h"
+#include "lib/utility/ob_sort.h"
 #include "sql/engine/px/ob_dfo.h"
 #include "sql/optimizer/file_prune/ob_hive_file_pruner.h"
 #include "src/share/external_table/ob_external_table_file_mgr.h"
@@ -301,10 +303,11 @@ public:
                                                 ObIAllocator &allocator,
                                                 ObIArray<ObNewRange *> &ranges,
                                                 ObIArray<ObIExtTblScanTask *> &scan_tasks);
+  template <typename FileInfo>
   static int calc_assigned_files_to_sqcs(
-    const common::ObIArray<ObExternalFileInfo> &files,
-    common::ObIArray<int64_t> &assigned_idx,
-    int64_t sqc_count);
+      const common::ObIArray<FileInfo> &files,
+      common::ObIArray<int64_t> &assigned_idx,
+      int64_t sqc_count);
   static int assigned_files_to_sqcs_by_load_balancer(
     const common::ObIArray<ObExternalFileInfo> &files,
     const ObIArray<ObPxSqcMeta> &sqcs,
@@ -1125,6 +1128,73 @@ public:
       ObIAllocator &range_allocator);
 
 };
+
+template <typename FileInfo>
+int ObExternalTableUtils::calc_assigned_files_to_sqcs(
+    const common::ObIArray<FileInfo> &files,
+    common::ObIArray<int64_t> &assigned_idx,
+    int64_t sqc_count)
+{
+  int ret = OB_SUCCESS;
+
+  struct SqcFileSet {
+    int64_t total_file_size_;
+    int64_t sqc_idx_;
+    TO_STRING_KV(K(total_file_size_), K(sqc_idx_));
+  };
+
+  struct SqcFileSetCmp {
+    bool operator()(const SqcFileSet &l, const SqcFileSet &r)
+    {
+      return l.total_file_size_ > r.total_file_size_;
+    }
+    int get_error_code() { return OB_SUCCESS; }
+  };
+
+  struct FileInfoWithIdx {
+    const FileInfo *file_info_;
+    int64_t file_idx_;
+    TO_STRING_KV(K(file_idx_));
+  };
+
+  if (sqc_count <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid sqc count", K(ret), K(sqc_count));
+  }
+  SqcFileSetCmp temp_cmp;
+  common::ObBinaryHeap<SqcFileSet, SqcFileSetCmp> heap(temp_cmp);
+  common::ObArray<FileInfoWithIdx> sorted_files;
+  OZ(sorted_files.reserve(files.count()));
+  OZ(assigned_idx.prepare_allocate(files.count()));
+  for (int64_t i = 0; OB_SUCC(ret) && i < files.count(); ++i) {
+    FileInfoWithIdx file_info;
+    file_info.file_info_ = &(files.at(i));
+    file_info.file_idx_ = i;
+    OZ(sorted_files.push_back(file_info));
+  }
+  lib::ob_sort(sorted_files.begin(), sorted_files.end(),
+               [](const FileInfoWithIdx &l, const FileInfoWithIdx &r) -> bool {
+                 return l.file_info_->file_size_ > r.file_info_->file_size_;
+               });
+
+  const int64_t initial_file_count = std::min(sqc_count, sorted_files.count());
+  for (int64_t i = 0; OB_SUCC(ret) && i < initial_file_count; ++i) {
+    SqcFileSet new_set;
+    new_set.total_file_size_ = sorted_files.at(i).file_info_->file_size_;
+    new_set.sqc_idx_ = i;
+    OZ(heap.push(new_set));
+    assigned_idx.at(sorted_files.at(i).file_idx_) = i;
+  }
+
+  for (int64_t i = initial_file_count; OB_SUCC(ret) && i < sorted_files.count(); ++i) {
+    SqcFileSet cur_min_set = heap.top();
+    cur_min_set.total_file_size_ += sorted_files.at(i).file_info_->file_size_;
+    assigned_idx.at(sorted_files.at(i).file_idx_) = cur_min_set.sqc_idx_;
+    OZ(heap.pop());
+    OZ(heap.push(cur_min_set));
+  }
+  return ret;
+}
 }
 }
 #endif /* OBDEV_SRC_EXTERNAL_TABLE_UTILS_H_ */

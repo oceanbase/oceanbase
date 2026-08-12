@@ -6205,6 +6205,13 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
       CK(op.get_offset_expr()->get_result_type().is_integer_type());
       OZ(generate_rt_expr(*op.get_offset_expr(), spec.offset_));
     }
+    if (OB_SUCC(ret) && op.get_table_type() == share::schema::EXTERNAL_TABLE) {
+      bool use_file_size_load_balance = false;
+      OZ(op.get_plan()->get_optimizer_context().get_global_hint().opt_params_.get_bool_opt_param(
+          ObOptParamHint::EXTERNAL_TABLE_FILE_SIZE_LOAD_BALANCE,
+          use_file_size_load_balance));
+      spec.external_table_file_size_load_balance_ = use_file_size_load_balance;
+    }
   }
 
   if (OB_SUCC(ret)) {

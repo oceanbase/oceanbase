@@ -20,6 +20,7 @@
 #include "share/schema/ob_table_schema.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/ob_sql_context.h"
+#include "sql/resolver/dml/ob_hint.h"
 #ifdef OB_BUILD_CPP_ODPS
 #include "sql/engine/table/ob_odps_table_row_iter.h"
 #endif
@@ -398,6 +399,7 @@ int ObPXServerAddrUtil::assign_external_files_to_sqc(
     const ObOpSpec *root_op = NULL;
     ObString external_table_format_str;
     dfo.get_root(root_op);
+    bool use_file_size_load_balance = false;
     if (OB_ISNULL(root_op)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null ptr", K(ret));
@@ -407,6 +409,7 @@ int ObPXServerAddrUtil::assign_external_files_to_sqc(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("empty scan_ops", K(ret));
     } else if (FALSE_IT(external_table_format_str = scan_ops.at(0)->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_)) {
+    } else if (FALSE_IT(use_file_size_load_balance = scan_ops.at(0)->external_table_file_size_load_balance_)) {
     } else if (OB_FAIL(ObSQLUtils::get_external_table_type(external_table_format_str, external_table_type))) {
       LOG_WARN("failed to get external table type", K(ret), K(external_table_format_str));
     } else if (FALSE_IT(is_odps_external_table = (ObExternalFileFormat::ODPS_FORMAT == external_table_type))) {
@@ -423,6 +426,25 @@ int ObPXServerAddrUtil::assign_external_files_to_sqc(
       if (OB_FAIL(ObExternalTableUtils::plugin_split_tasks(
               exec_ctx.get_allocator(), external_table_format_str, dfo, sqcs, parallel))) {
         LOG_WARN("failed to do plugin_split_tasks", K(ret));
+      }
+    } else if (use_file_size_load_balance) {
+      ObArray<int64_t> file_assigned_sqc_ids;
+      if (OB_FAIL(ObExternalTableUtils::calc_assigned_files_to_sqcs(files, file_assigned_sqc_ids,
+                                                       sqcs.count()))) {
+        LOG_WARN("failed to assign external files to sqcs by size", K(ret));
+      } else if (file_assigned_sqc_ids.count() != files.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid result of assigned sqc", K(file_assigned_sqc_ids.count()), K(files.count()));
+      } else {
+        for (int i = 0; OB_SUCC(ret) && i < file_assigned_sqc_ids.count(); i++) {
+          int64_t assign_sqc_idx = file_assigned_sqc_ids.at(i);
+          if (OB_UNLIKELY(assign_sqc_idx >= sqcs.count() || assign_sqc_idx < 0)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected file idx", K(file_assigned_sqc_ids.at(i)));
+          } else {
+            OZ (sqcs.at(assign_sqc_idx).get_access_external_table_files().push_back(files.at(i)));
+          }
+        }
       }
     } else {
       ObArray<int64_t> file_assigned_sqc_ids;

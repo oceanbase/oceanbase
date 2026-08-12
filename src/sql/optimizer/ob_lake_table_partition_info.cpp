@@ -13,6 +13,7 @@
 #include "sql/engine/basic/ob_consistent_hashing_load_balancer.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/ob_sql_context.h"
+#include "share/external_table/ob_external_table_utils.h"
 #include "sql/table_format/iceberg/ob_iceberg_table_metadata.h"
 #include "sql/table_format/iceberg/spec/table_metadata.h"
 #include "sql/optimizer/file_prune/ob_hive_file_pruner.h"
@@ -469,9 +470,15 @@ int ObLakeTablePartitionInfo::select_location_for_hive(ObExecContext *exec_ctx,
   candi_tablet_locs.reset();
   ObDefaultLoadBalancer load_balancer;
   ObAddr addr;
+  bool use_file_size_load_balance = false;
   if (OB_ISNULL(exec_ctx) || OB_ISNULL(exec_ctx->get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null");
+  } else if (OB_NOT_NULL(exec_ctx->get_query_ctx())
+             && OB_FAIL(exec_ctx->get_query_ctx()->get_global_hint().opt_params_.get_bool_opt_param(
+                    ObOptParamHint::EXTERNAL_TABLE_FILE_SIZE_LOAD_BALANCE,
+                    use_file_size_load_balance))) {
+    LOG_WARN("failed to get external table file size load balance hint", K(ret));
   } else if (OB_FAIL(GCTX.location_service_->external_table_get(
                  exec_ctx->get_my_session()->get_effective_tenant_id(),
                  all_servers))) {
@@ -496,6 +503,54 @@ int ObLakeTablePartitionInfo::select_location_for_hive(ObExecContext *exec_ctx,
       }
     } else if (OB_FAIL(candi_tablet_locs.reserve(all_servers.count()))) {
       LOG_WARN("failed to reserve candi tablet locs", K(ret));
+    } else if (use_file_size_load_balance) {
+      ObArray<int64_t> file_assigned_idxs;
+      ObSEArray<int64_t, 16> tablet_loc_idxs;
+      if (OB_FAIL(ObExternalTableUtils::calc_assigned_files_to_sqcs(
+              file_descs, file_assigned_idxs, all_servers.count()))) {
+        LOG_WARN("failed to assign hive files to sqcs by size", K(ret));
+      } else if (file_assigned_idxs.count() != file_descs.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid hive file assignment result", K(ret),
+                 K(file_assigned_idxs.count()), K(file_descs.count()));
+      }
+
+      for (int64_t i = 0; OB_SUCC(ret) && i < all_servers.count(); ++i) {
+        if (OB_FAIL(tablet_loc_idxs.push_back(-1))) {
+          LOG_WARN("failed to init tablet location indexes", K(ret));
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < file_descs.count(); ++i) {
+        const int64_t idx = file_assigned_idxs.at(i);
+        if (OB_UNLIKELY(idx < 0 || idx >= all_servers.count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid assigned sqc index", K(ret), K(idx), K(all_servers.count()));
+        } else {
+          int64_t &tablet_loc_idx = tablet_loc_idxs.at(idx);
+          if (tablet_loc_idx < 0) {
+            ObCandiTabletLoc *tablet_loc = candi_tablet_locs.alloc_place_holder();
+            if (OB_ISNULL(tablet_loc)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("failed to alloc place holder for ObCandiTabletLoc", K(ret));
+            } else if (OB_FAIL(init_tablet_loc_by_addr(*tablet_loc,
+                                                       all_servers.at(idx),
+                                                       idx + 1))) {
+              LOG_WARN("failed to init tablet loc by addr", K(ret));
+            } else {
+              tablet_loc_idx = candi_tablet_locs.count() - 1;
+            }
+          }
+
+          if (OB_FAIL(ret)) {
+          } else if (OB_UNLIKELY(tablet_loc_idx < 0 || tablet_loc_idx >= candi_tablet_locs.count())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected idx", K(ret), K(tablet_loc_idx));
+          } else if (OB_FAIL(add_table_file_for_hive(candi_tablet_locs.at(tablet_loc_idx),
+                                                     file_descs.at(i)))) {
+            LOG_WARN("failed to add hive table file", K(ret));
+          }
+        }
+      }
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < file_descs.count(); ++i) {
         int64_t idx = -1;
