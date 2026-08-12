@@ -37,9 +37,10 @@ public:
   {
     int ret = OB_SUCCESS;
     T *sqlstat = nullptr;
-    if (ATOMIC_LOAD(&alloc_count_) > alloc_limit_) {
+    const int64_t alloc_count = ATOMIC_LOAD(&alloc_count_);
+    if (alloc_count >= alloc_limit_) {
       ret = OB_EAGAIN;
-      COMMON_LOG(WARN, "sql stat record node alloc count exceed limit", K(alloc_count_), K(alloc_limit_));
+      COMMON_LOG(WARN, "sql stat record node alloc count exceed limit", K(alloc_count), K(alloc_limit_));
     } else {
       void *buf = allocator_->alloc(sizeof(T));
       if (OB_ISNULL(buf)) {
@@ -94,8 +95,8 @@ public:
     return node;
   }
 
-  int64_t get_alloc_count() const { return alloc_count_; }
-  int64_t get_alloc_node_count() const { return alloc_node_count_; }
+  int64_t get_alloc_count() const { return ATOMIC_LOAD(&alloc_count_); }
+  int64_t get_alloc_node_count() const { return ATOMIC_LOAD(&alloc_node_count_); }
 
 private:
   int64_t alloc_count_;
@@ -153,8 +154,8 @@ public:
   int64_t get_memory_limit() const;
   void set_memory_limit(int64_t memory_limit_percentage, int64_t memory_evict_high_percentage, int64_t memory_evict_low_percentage);
   ObSqlStatInfoHashMap *get_sql_stat_infos() { return &sql_stat_infos_; }
-  bool is_stopped() const { return is_stopped_; }
-  void set_stopped(bool stopped) { is_stopped_ = stopped; }
+  bool is_stopped() const { return ATOMIC_LOAD(&is_stopped_); }
+  void set_stopped(bool stopped) { ATOMIC_STORE(&is_stopped_, stopped); }
 
   ~ObSqlStatManager();
 
@@ -166,7 +167,6 @@ private:
   int64_t memory_evict_high_percentage_;
   int64_t memory_evict_low_percentage_;
   common::ObConcurrentFIFOAllocator allocator_;
-  ObSqlStatAlloc alloc_handle_;
   ObSqlStatInfoHashMap sql_stat_infos_;
   ObSqlStatTask stat_task_;
   lib::ObMutex mutex_;

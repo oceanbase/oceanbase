@@ -23,8 +23,7 @@ ObSqlStatManager::ObSqlStatManager(int64_t tenant_id)
       memory_evict_high_percentage_(MEMORY_EVICT_HIGH_DEFAULT),
       memory_evict_low_percentage_(MEMORY_EVICT_LOW_DEFAULT),
       allocator_(),
-      alloc_handle_(&allocator_, SQL_STAT_MAX_COUNT),
-      sql_stat_infos_(alloc_handle_),
+      sql_stat_infos_(ObSqlStatAlloc(&allocator_, SQL_STAT_MAX_COUNT)),
       mutex_(common::ObLatchIds::SQL_STAT_MGR_LOCK)
 {}
 
@@ -140,20 +139,17 @@ void ObSqlStatManager::wait() {
     LOG_WARN("sql stat manager is not stopped", K(ret));
   } else {
     TG_WAIT_TASK(MTL(omt::ObSharedTimer *)->get_tg_id(), stat_task_);
+    const ObSqlStatAlloc &alloc_handle = sql_stat_infos_.get_alloc_handle();
     sql_stat_infos_.reset();
     //wait for all sql stat values to be freed, or will memory leak
-    while(alloc_handle_.get_alloc_count() > 0) {
+    while(alloc_handle.get_alloc_count() > 0) {
       ob_usleep(1000 * 1000);
-      LOG_WARN("wait sql stat linkhash map to be empty", K(alloc_handle_.get_alloc_count()));
+      LOG_WARN("wait sql stat linkhash map to be empty", K(alloc_handle.get_alloc_count()));
     }
-    LOG_INFO("sql stat manager values freed, before purge",
-             K(MTL_ID()), K(alloc_handle_.get_alloc_count()), K(alloc_handle_.get_alloc_node_count()), K(allocator_.allocated()));
     sql_stat_infos_.purge();
-    LOG_INFO("sql stat manager after hashmap purge",
-             K(MTL_ID()), K(alloc_handle_.get_alloc_count()), K(alloc_handle_.get_alloc_node_count()), K(allocator_.allocated()));
     allocator_.purge();
     LOG_INFO("success to wait sql stat manager",
-             K(MTL_ID()), K(alloc_handle_.get_alloc_count()), K(alloc_handle_.get_alloc_node_count()), K(allocator_.allocated()));
+             K(MTL_ID()), K(alloc_handle.get_alloc_count()), K(alloc_handle.get_alloc_node_count()), K(allocator_.allocated()));
   }
 }
 
@@ -168,8 +164,9 @@ void ObSqlStatManager::destroy() {
     ret = OB_ERROR;
     LOG_WARN("sql stat manager is not stopped", K(ret));
   } else {
+    const ObSqlStatAlloc &alloc_handle = sql_stat_infos_.get_alloc_handle();
     LOG_INFO("sql stat manager before destroy",
-             K(MTL_ID()), K(alloc_handle_.get_alloc_count()), K(alloc_handle_.get_alloc_node_count()), K(allocator_.allocated()));
+             K(MTL_ID()), K(alloc_handle.get_alloc_count()), K(alloc_handle.get_alloc_node_count()), K(allocator_.allocated()));
     is_inited_ = false;
   }
 }
