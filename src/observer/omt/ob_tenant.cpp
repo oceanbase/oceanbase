@@ -1730,17 +1730,15 @@ void ObTenant::regist_threads_to_cgroup()
     {
       Thread *thread = thread_list_node_->get_data();
       char *thread_base = (char *)thread->get_pthread();
-      Worker *worker = nullptr;
       if (OB_NOT_NULL(thread_base)) {
-        GET_OTHER_TSI_ADDR(worker, &Worker::self_);
-        if (OB_NOT_NULL(worker) && OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid() &&
-            OB_FAIL(GCTX.cgroup_ctrl_->add_thread_to_cgroup_(thread->get_tid(), id_, worker->get_group_id()))) {
+        GET_OTHER_TSI_ADDR(worker_group_id, &Worker::worker_group_id_);
+        if (OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid() &&
+            OB_FAIL(GCTX.cgroup_ctrl_->add_thread_to_cgroup_(thread->get_tid(), id_, worker_group_id))) {
           LOG_WARN("regist thread to cgroup failed",
               K(ret),
               K(thread->get_tid()),
               K(id_),
-              KP(worker),
-              K(worker->get_group_id()));
+              K(worker_group_id));
         }
       }
     }
