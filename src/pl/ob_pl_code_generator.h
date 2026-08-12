@@ -68,6 +68,8 @@ public:
     jit::ObLLVMFunction spi_extend_collection_;
     jit::ObLLVMFunction spi_delete_collection_;
     jit::ObLLVMFunction spi_cursor_init_;
+    jit::ObLLVMFunction spi_cursor_scope_push_close_only_;
+    jit::ObLLVMFunction spi_cursor_scope_leave_;
     jit::ObLLVMFunction spi_cursor_open_with_param_idx_;
     jit::ObLLVMFunction spi_dynamic_open_;
     jit::ObLLVMFunction spi_cursor_fetch_;
@@ -269,6 +271,14 @@ public:
   int generate_eh_adjust_call_stack(jit::ObLLVMValue &loc, jit::ObLLVMValue &error_code);
 #endif
   int generate_declare_cursor(const ObPLStmt &s, const int64_t  &cursor_index);
+  int generate_cursor_scope_push_close_only(const ObPLStmt &s,
+                                            int64_t block_level,
+                                            uint64_t package_id,
+                                            uint64_t routine_id,
+                                            int64_t cursor_index);
+  int generate_cursor_scope_leave(const ObPLStmt &s,
+                                  int64_t target_level,
+                                  bool check_result);
   int generate_open(const ObPLStmt &s,
                     const ObPLSql &cursor_sql,
                     const uint64_t package_id,

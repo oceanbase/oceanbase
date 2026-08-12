@@ -3560,7 +3560,41 @@ int ObSPIService::spi_cursor_alloc(ObIAllocator &allocator, ObObj &obj)
   return ret;
 }
 
-int ObSPIService::spi_cursor_init(ObPLExecCtx *ctx, int64_t cursor_index)
+int ObSPIService::spi_cursor_init(ObPLExecCtx *ctx,
+                                  int64_t cursor_index,
+                                  int64_t block_level,
+                                  bool track_scope)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(spi_cursor_init_impl(ctx, cursor_index))) {
+    LOG_WARN("failed to init cursor", K(ret), K(cursor_index));
+  } else if (track_scope) {
+    if (OB_ISNULL(ctx) || OB_ISNULL(ctx->func_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("pl exec context is null", K(ret));
+    } else if (OB_FAIL(ctx->get_cursor_scope_stack().push(
+                   block_level,
+                   ctx->func_->get_package_id(),
+                   ctx->func_->get_routine_id(),
+                   cursor_index,
+                   CURSOR_SCOPE_OWNERSHIP))) {
+      int tmp_ret = OB_SUCCESS;
+      tmp_ret = spi_handle_ref_cursor_refcount(ctx,
+                                              ctx->func_->get_package_id(),
+                                              ctx->func_->get_routine_id(),
+                                              cursor_index,
+                                              -1);
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("failed to rollback cursor ownership after scope push failure",
+                 K(tmp_ret), K(block_level), K(cursor_index));
+      }
+      LOG_WARN("failed to track cursor scope", K(ret), K(block_level), K(cursor_index));
+    }
+  }
+  return ret;
+}
+
+int ObSPIService::spi_cursor_init_impl(ObPLExecCtx *ctx, int64_t cursor_index)
 {
   int ret = OB_SUCCESS;
   CK(OB_NOT_NULL(ctx));
@@ -3598,6 +3632,70 @@ int ObSPIService::spi_cursor_init(ObPLExecCtx *ctx, int64_t cursor_index)
             && obj.get_ext() != 0
             && OB_NOT_NULL(cursor_info = reinterpret_cast<ObPLCursorInfo *>(obj.get_ext()))) {
           OX (cursor_info->set_ref_count(1));  //resue cursorInfo, set ref_count to 1
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSPIService::spi_cursor_scope_push_close_only(ObPLExecCtx *ctx,
+                                                   int64_t block_level,
+                                                   uint64_t package_id,
+                                                   uint64_t routine_id,
+                                                   int64_t cursor_index)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(ctx));
+  CK (OB_NOT_NULL(ctx->func_));
+  if (OB_SUCC(ret)
+      && OB_FAIL(ctx->get_cursor_scope_stack().push(
+          block_level, package_id, routine_id, cursor_index, CURSOR_SCOPE_CLOSE_ONLY))) {
+    int tmp_ret = spi_cursor_close(ctx,
+                                   package_id,
+                                   routine_id,
+                                   cursor_index,
+                                   true);
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("failed to close cursor after scope push failure",
+               K(tmp_ret), K(block_level), K(package_id), K(routine_id), K(cursor_index));
+    }
+    LOG_WARN("failed to track cursor close scope",
+             K(ret), K(block_level), K(package_id), K(routine_id), K(cursor_index));
+  }
+  return ret;
+}
+
+int ObSPIService::spi_cursor_scope_leave(ObPLExecCtx *ctx, int64_t target_level)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(ctx));
+  CK (OB_NOT_NULL(ctx->func_));
+  if (OB_SUCC(ret)) {
+    ObPLCursorScopeStack &stack = ctx->get_cursor_scope_stack();
+    while (!stack.empty() && (target_level == OB_INVALID_INDEX || stack.top().block_level_ > target_level)) {
+      ObPLCursorScopeItem item = stack.top();
+      stack.pop();
+      if (CURSOR_SCOPE_CLOSE_ONLY == item.action_) {
+        tmp_ret = spi_cursor_close(ctx,
+                                   item.package_id_,
+                                   item.routine_id_,
+                                   item.cursor_index_,
+                                   true);
+      } else {
+        tmp_ret = spi_handle_ref_cursor_refcount(ctx,
+                                                item.package_id_,
+                                                item.routine_id_,
+                                                item.cursor_index_,
+                                                -1);
+      }
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("failed to release cursor scope item",
+                 K(tmp_ret), K(item.block_level_), K(item.package_id_),
+                 K(item.routine_id_), K(item.cursor_index_), K(item.action_));
+        if (OB_SUCCESS == ret) {
+          ret = tmp_ret;
         }
       }
     }

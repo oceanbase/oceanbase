@@ -92,6 +92,10 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
                                 WRAP_SPI_CALL(sql::ObSPIService::spi_execute_immediate));
   jit::ObLLVMHelper::add_symbol(ObString("spi_cursor_init"),
                                 WRAP_SPI_CALL(sql::ObSPIService::spi_cursor_init));
+  jit::ObLLVMHelper::add_symbol(ObString("spi_cursor_scope_push_close_only"),
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_cursor_scope_push_close_only));
+  jit::ObLLVMHelper::add_symbol(ObString("spi_cursor_scope_leave"),
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_cursor_scope_leave));
   jit::ObLLVMHelper::add_symbol(ObString("spi_cursor_open_with_param_idx"),
                                 WRAP_SPI_CALL(sql::ObSPIService::spi_cursor_open_with_param_idx));
   jit::ObLLVMHelper::add_symbol(ObString("spi_dynamic_open"),
@@ -3872,6 +3876,31 @@ int ObPLExecCtx::calc_expr(uint64_t package_id, int64_t expr_idx, ObObjParam &re
   return ret;
 }
 
+int ObPLCursorScopeStack::push(int64_t block_level,
+                               uint64_t package_id,
+                               uint64_t routine_id,
+                               int64_t cursor_index,
+                               ObPLCursorScopeAction action)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(block_level < 0 || cursor_index < 0
+      || (CURSOR_SCOPE_OWNERSHIP != action && CURSOR_SCOPE_CLOSE_ONLY != action))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid cursor scope item",
+             K(ret), K(block_level), K(package_id), K(routine_id), K(cursor_index), K(action));
+  } else if (OB_UNLIKELY(!empty() && top().block_level_ > block_level)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cursor scope stack level is not monotonic",
+             K(ret), "top_level", top().block_level_, K(block_level),
+             K(package_id), K(routine_id), K(cursor_index), K(action));
+  } else if (OB_FAIL(items_.push_back(
+               ObPLCursorScopeItem(block_level, package_id, routine_id, cursor_index, action)))) {
+    LOG_WARN("failed to push cursor scope item",
+             K(ret), K(block_level), K(package_id), K(routine_id), K(cursor_index), K(action));
+  }
+  return ret;
+}
+
 ObPLExecCtx::~ObPLExecCtx()
 {
   if (calc_once_results_.created()) {
@@ -4044,6 +4073,15 @@ int ObPLExecState::final(int ret)
     }
   }
 
+  // release cursor scope stack first
+  if (!ctx_.get_cursor_scope_stack().empty()) {
+    tmp_ret = ObSPIService::spi_cursor_scope_leave(&ctx_, OB_INVALID_INDEX);
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("failed to leave cursor scope at routine final",
+               K(tmp_ret), K(func_.get_package_id()), K(func_.get_routine_id()), K(ret));
+    }
+  }
+
   //release the out ref cursor formal param when failed
   for (int i = 0; OB_SUCCESS != ret && OB_NOT_NULL(phy_plan_ctx_) && i < func_.get_arg_count() && i < get_params().count(); i++) {
     if (func_.get_out_args().has_member(i)
@@ -4141,7 +4179,8 @@ int ObPLExecState::final(int ret)
           * 上例中c1 调用了cursor init，但是c2没有调用，因为被execption打断，这个时候在final函数里面调用cursor close
           * 函数，这个obj就是null，因为c2没有调用cursor init。 另外goto也可能导致执行流变动，没有open就去close
           */
-          if (OB_SUCCESS != (tmp_ret = ObSPIService::spi_add_ref_cursor_refcount(&ctx_, &param, -1))) {
+          if (cursor->get_ref_count() > 0
+              && OB_SUCCESS != (tmp_ret = ObSPIService::spi_add_ref_cursor_refcount(&ctx_, &param, -1))) {
             LOG_WARN("failed to spi_add_ref_cursor_refcount", K(tmp_ret),
               K(func_.get_package_id()), K(func_.get_routine_id()), K(i));
           }
@@ -4254,6 +4293,12 @@ int ObPLExecState::final(int ret)
     ObPlJsonTypeManager::release_useless_resource(session->get_json_pl_mngr());
 #endif
   }
+
+  if (!ctx_.get_cursor_scope_stack().empty()) {
+    LOG_ERROR("cursor scope stack is not empty after leave at routine final",
+             "count", ctx_.get_cursor_scope_stack().count(), K(func_.get_package_id()), K(func_.get_routine_id()), K(ret));
+  }
+  ctx_.get_cursor_scope_stack().reset();
 
   return OB_SUCCESS;
 }

@@ -144,13 +144,11 @@ int ObPLCodeGenerateVisitor::visit(const ObPLStmtBlock &s)
       }
     }
 
-    //释放内存
     if (OB_SUCC(ret) && NULL != generator_.get_current().get_v()) {
-      // close cursor
-      for (int64_t i = 0; OB_SUCC(ret) && i < s.get_namespace().get_cursors().count(); ++i) {
-        const ObPLCursor *cursor = s.get_cursor(s.get_namespace().get_cursors().at(i));
-        OZ (generator_.generate_handle_ref_cursor(cursor, s, s.in_notfound(), s.in_warning()));
-      }
+      const int64_t target_level = OB_ISNULL(s.get_block())
+                                 ? OB_INVALID_INDEX
+                                 : s.get_level();
+      OZ (generator_.generate_cursor_scope_leave(s, target_level, true));
     }
   }
   return ret;
@@ -1228,10 +1226,22 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCursorForLoopStmt &s)
                                                       s.get_cursor()->get_routine_id(),
                                                       s.get_index()))) {
             LOG_WARN("failed to generate_open", K(s), K(ret));
-          } else if (OB_FAIL(generator_.set_loop(s.get_level(), cursor_forloop_fetch, cursor_forloop_end, &s))) {
-            LOG_WARN("failed to set_loop for CursorForLoop", K(ret));
-          } else if (OB_FAIL(generator_.get_helper().create_br(cursor_forloop_fetch))) {
-            LOG_WARN("failed to create_br cursor_forloop_fetch", K(ret));
+          } else if (!s.get_need_declare()) {
+            // Register CLOSE_ONLY at body level (deeper than stmt/sibling declare level)
+            CK (OB_NOT_NULL(s.get_body()));
+            OZ (generator_.generate_cursor_scope_push_close_only(
+                s,
+                s.get_body()->get_level(),
+                s.get_cursor()->get_package_id(),
+                s.get_cursor()->get_routine_id(),
+                s.get_index()));
+          }
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(generator_.set_loop(s.get_level(), cursor_forloop_fetch, cursor_forloop_end, &s))) {
+              LOG_WARN("failed to set_loop for CursorForLoop", K(ret));
+            } else if (OB_FAIL(generator_.get_helper().create_br(cursor_forloop_fetch))) {
+              LOG_WARN("failed to create_br cursor_forloop_fetch", K(ret));
+            }
           }
         }
       }
@@ -1288,15 +1298,12 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCursorForLoopStmt &s)
         }
       }
     }
-    // 循环结束, 关闭游标
+    //use s.get_level() instead of s.get_block()->get_level(), because block is outside begin/end block
     if (OB_SUCC(ret)) {
       OZ (generator_.reset_loop());
       OZ (generator_.set_current(cursor_forloop_end));
       CK (OB_NOT_NULL(s.get_cursor()));
-      OZ (generator_.generate_close(static_cast<const ObPLStmt&>(s),
-                                    s.get_cursor()->get_package_id(),
-                                    s.get_cursor()->get_routine_id(),
-                                    s.get_index()));
+      OZ (generator_.generate_cursor_scope_leave(s, s.get_level(), true));
       if (s.has_label()) {
         OZ (generator_.reset_label());
       }
@@ -1746,13 +1753,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLReturnStmt &s)
       }
     }
 
-    // close cursor
-    OZ (generator_.generate_close_loop_cursor(false, 0));
-
-    for (int64_t i = 0; OB_SUCC(ret) && i < generator_.get_ast().get_cursor_table().get_count(); ++i) {
-      const ObPLCursor *cursor = generator_.get_ast().get_cursor_table().get_cursor(i);
-      OZ (generator_.generate_handle_ref_cursor(cursor, s, false, false));
-    }
+    OZ (generator_.generate_cursor_scope_leave(s, OB_INVALID_INDEX, true));
 
     // adjust error trace
     OZ (generator_.generate_spi_adjust_error_trace(s, 0));
@@ -2551,6 +2552,14 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareHandlerStmt &s)
     } else if (nullptr == s.get_handler(i).get_desc()->get_body()) {
       if (OB_FAIL(generator_.get_helper().set_insert_point(case_branch))) {
         LOG_WARN("failed to set_insert_point", K(ret));
+      } else if (lib::is_oracle_mode()
+                 && OB_FAIL(generator_.generate_cursor_scope_leave(
+                     s,
+                     s.get_handler(i).is_original()
+                       ? s.get_level()
+                       : s.get_handler(i).get_level(),
+                     false))) {
+        LOG_WARN("failed to generate cursor scope cleanup for handler", K(ret));
       } else if (OB_FAIL(generator_.get_helper().create_br(exit_handler))) {
         LOG_WARN("failed to create_br", K(ret));
       } else { /* do nothing */ }
@@ -2566,6 +2575,13 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareHandlerStmt &s)
       ObLLVMValue level;
 
       OZ (generator_.set_current(case_branch));
+      if (lib::is_oracle_mode()) {
+        const int64_t handler_boundary_level = s.get_handler(i).is_original()
+                                             ? s.get_level()
+                                             : s.get_handler(i).get_level();
+        OZ (generator_.generate_cursor_scope_leave(
+            s, handler_boundary_level, false));
+      }
 #ifndef NDEBUG
       OZ (generator_.get_helper().get_int64(1111+i, int_value));
       OZ (generator_.generate_debug(ObString("debug"), int_value));
@@ -3578,33 +3594,12 @@ int ObPLCodeGenerateVisitor::visit(const ObPLGotoStmt &s)
 
         #define GEN_BR_WITH_COLSE_CURSOR(goto_dst) \
         do { \
-          for (int64_t i = 0; OB_SUCC(ret) && i < s.get_cursor_stmt_count(); ++i) { \
-            const ObPLCursorForLoopStmt *cs = static_cast<const ObPLCursorForLoopStmt *>(s.get_cursor_stmt(i)); \
-            CK (OB_NOT_NULL(cs)); \
-            CK (OB_NOT_NULL(cs->get_cursor())); \
-            OZ (generator_.generate_close(static_cast<const ObPLStmt&>(*cs), \
-                                          cs->get_cursor()->get_package_id(), \
-                                          cs->get_cursor()->get_routine_id(), \
-                                          cs->get_index())); \
-          } \
-          if (OB_SUCC(ret) && OB_NOT_NULL(s.get_block())) { \
-            const ObPLBlockNS &ns = s.get_block()->get_namespace(); \
-            if (OB_NOT_NULL(ns.get_cursor_table())) { \
-              for (int64_t i = 0; OB_SUCC(ret) && i < s.get_cursor_info_count(); ++i) { \
-                const ObPLGotoCursorInfo *cursor_info = s.get_cursor_info(i); \
-                if (OB_NOT_NULL(cursor_info)) { \
-                  const ObPLCursor *cursor = ns.get_cursor_table()->get_cursor( \
-                      cursor_info->package_id_, \
-                      cursor_info->routine_id_, \
-                      cursor_info->cursor_index_); \
-                  if (OB_NOT_NULL(cursor)) { \
-                    OZ (generator_.generate_handle_ref_cursor(cursor, s, \
-                                                              s.get_block()->in_notfound(), \
-                                                              s.get_block()->in_warning())); \
-                  } \
-                } \
-              } \
-            } \
+          if (OB_SUCC(ret) \
+              && OB_NOT_NULL(s.get_block()) \
+              && OB_NOT_NULL(s.get_dst_stmt()) \
+              && s.get_block() != s.get_dst_stmt()->get_block()) { \
+            OZ (generator_.generate_cursor_scope_leave( \
+                s, s.get_dst_stmt()->get_level(), true)); \
           } \
           if (OB_SUCC(ret)) { \
             ObSEArray<ObLLVMValue, 1> args; \
@@ -4618,11 +4613,38 @@ int ObPLCodeGenerator::init_spi_service()
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(arg_types.push_back(int64_type))) {
       LOG_WARN("push_back error", K(ret));
+    } else if (OB_FAIL(arg_types.push_back(int64_type))) {
+      LOG_WARN("push_back error", K(ret));
+    } else if (OB_FAIL(arg_types.push_back(bool_type))) {
+      LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(ObLLVMFunctionType::get(int32_type, arg_types, ft))) {
       LOG_WARN("failed to get function type", K(ret));
     } else if (OB_FAIL(helper_.create_function(ObString("spi_cursor_init"), ft, spi_service_.spi_cursor_init_))) {
       LOG_WARN("failed to create function", K(ret));
     } else { /*do nothing*/ }
+  }
+
+  if (OB_SUCC(ret)) {
+    arg_types.reset();
+    OZ (arg_types.push_back(pl_exec_context_pointer_type));
+    OZ (arg_types.push_back(int64_type)); // block_level
+    OZ (arg_types.push_back(int64_type)); // package_id
+    OZ (arg_types.push_back(int64_type)); // routine_id
+    OZ (arg_types.push_back(int64_type)); // cursor_index
+    OZ (ObLLVMFunctionType::get(int32_type, arg_types, ft));
+    OZ (helper_.create_function(ObString("spi_cursor_scope_push_close_only"),
+                                ft,
+                                spi_service_.spi_cursor_scope_push_close_only_));
+  }
+
+  if (OB_SUCC(ret)) {
+    arg_types.reset();
+    OZ (arg_types.push_back(pl_exec_context_pointer_type));
+    OZ (arg_types.push_back(int64_type));
+    OZ (ObLLVMFunctionType::get(int32_type, arg_types, ft));
+    OZ (helper_.create_function(ObString("spi_cursor_scope_leave"),
+                                ft,
+                                spi_service_.spi_cursor_scope_leave_));
   }
 
   if (OB_SUCC(ret)) {
@@ -5688,16 +5710,92 @@ int ObPLCodeGenerator::generate_declare_cursor(const ObPLStmt &s, const int64_t 
     CK (ObPLCursor::INVALID != cursor->get_state());
     if (OB_SUCC(ret) && ObPLCursor::DUP_DECL != cursor->get_state()) { //如果是无效的cursor跳过即可
       ObLLVMValue cursor_index_value;
-      ObLLVMValue cursor_value;
+      ObLLVMValue block_level_value;
+      ObLLVMValue track_scope_value;
       ObLLVMValue ret_err;
-      ObSEArray<ObLLVMValue, 2> args;
+      ObSEArray<ObLLVMValue, 4> args;
+      const ObPLBlockNS *ns = s.get_namespace();
+      // Ordinary declare: stmt level (true lexical level of containing block).
+      // Cursor FOR: body level, strictly deeper than stmt/sibling declare level.
+      int64_t block_level = s.get_level();
+      if (PL_CURSOR_FOR_LOOP == s.get_type()) {
+        const ObPLCursorForLoopStmt &for_loop = static_cast<const ObPLCursorForLoopStmt&>(s);
+        CK (OB_NOT_NULL(for_loop.get_body()));
+        OX (block_level = for_loop.get_body()->get_level());
+      }
+      const bool track_scope = ObPLCursor::PASSED_IN != cursor->get_state()
+                            && !cursor->is_package_cursor()
+                            && OB_NOT_NULL(ns)
+                            && cursor->get_routine_id() == ns->get_routine_id();
       OZ (get_helper().set_insert_point(get_current()));
       OZ (set_debug_location(s));
       OZ (get_helper().get_int64(cursor->get_index(), cursor_index_value));
+      OZ (get_helper().get_int64(block_level, block_level_value));
+      OZ (get_helper().get_int8(track_scope, track_scope_value));
       OZ (args.push_back(get_vars().at(CTX_IDX)));
       OZ (args.push_back(cursor_index_value));
+      OZ (args.push_back(block_level_value));
+      OZ (args.push_back(track_scope_value));
       OZ (get_helper().create_call(ObString("spi_cursor_init"), get_spi_service().spi_cursor_init_, args, ret_err));
       OZ (check_success(ret_err, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning()));
+    }
+  }
+  return ret;
+}
+
+int ObPLCodeGenerator::generate_cursor_scope_push_close_only(const ObPLStmt &s,
+                                                             int64_t block_level,
+                                                             uint64_t package_id,
+                                                             uint64_t routine_id,
+                                                             int64_t cursor_index)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(get_current().get_v())) {
+    ObSEArray<ObLLVMValue, 5> args;
+    ObLLVMValue value;
+    ObLLVMValue ret_err;
+    OZ (args.push_back(get_vars().at(CTX_IDX)));
+    OZ (get_helper().get_int64(block_level, value));
+    OZ (args.push_back(value));
+    OZ (get_helper().get_int64(package_id, value));
+    OZ (args.push_back(value));
+    OZ (get_helper().get_int64(routine_id, value));
+    OZ (args.push_back(value));
+    OZ (get_helper().get_int64(cursor_index, value));
+    OZ (args.push_back(value));
+    OZ (get_helper().create_call(ObString("spi_cursor_scope_push_close_only"),
+                                 get_spi_service().spi_cursor_scope_push_close_only_,
+                                 args,
+                                 ret_err));
+    OZ (check_success(ret_err,
+                      s.get_stmt_id(),
+                      s.get_block()->in_notfound(),
+                      s.get_block()->in_warning()));
+  }
+  return ret;
+}
+
+int ObPLCodeGenerator::generate_cursor_scope_leave(const ObPLStmt &s,
+                                                   int64_t target_level,
+                                                   bool check_result)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(get_current().get_v())) {
+    ObSEArray<ObLLVMValue, 2> args;
+    ObLLVMValue target_level_value;
+    ObLLVMValue ret_err;
+    OZ (args.push_back(get_vars().at(CTX_IDX)));
+    OZ (get_helper().get_int64(target_level, target_level_value));
+    OZ (args.push_back(target_level_value));
+    OZ (get_helper().create_call(ObString("spi_cursor_scope_leave"),
+                                 get_spi_service().spi_cursor_scope_leave_,
+                                 args,
+                                 ret_err));
+    if (check_result) {
+      OZ (check_success(ret_err,
+                        s.get_stmt_id(),
+                        OB_NOT_NULL(s.get_block()) ? s.get_block()->in_notfound() : false,
+                        OB_NOT_NULL(s.get_block()) ? s.get_block()->in_warning() : false));
     }
   }
   return ret;
@@ -7732,24 +7830,6 @@ int ObPLCodeGenerator::generate_expression_array(const ObIArray<int64_t> &exprs,
         LOG_USER_ERROR(OB_ERR_LABEL_ILLEGAL, control.get_next_label().length(), control.get_next_label().ptr()); \
       } else if (OB_FAIL(generate_spi_adjust_error_trace(control, label_info->level_))) { \
         LOG_WARN("failed to generate spi adjust error trace", K(ret), K(label_info->level_)); \
-      } else { \
-        LOG_DEBUG("label info is not null", K(control.get_next_label()), K(label_info->name_), K(label_info->level_)); \
-        for (int64_t i = get_loop_count() - 1; OB_SUCC(ret) && i >= 0; --i) { \
-          ObPLCodeGenerator::LoopStack::LoopInfo &loop_info = get_loops()[i]; \
-          LOG_DEBUG("loop info", K(i), K(loop_info.level_), K(control.get_level())); \
-          if (loop_info.level_ <= control.get_level() && loop_info.level_ >= label_info->level_) { \
-            if (OB_NOT_NULL(loop_info.cursor_) \
-                && loop_info.level_ != label_info->level_ \
-                && OB_FAIL(generate_close(*loop_info.cursor_, \
-                                          loop_info.cursor_->get_cursor()->get_package_id(), \
-                                          loop_info.cursor_->get_cursor()->get_routine_id(), \
-                                          loop_info.cursor_->get_index(), \
-                                          false, \
-                                          false))) { \
-              LOG_WARN("failed to generate close for loop cursor", K(ret)); \
-            } \
-          } \
-        } \
       } \
     } \
   } while(0)
@@ -7776,9 +7856,32 @@ int ObPLCodeGenerator::generate_loop_control(const ObPLLoopControl &control)
 
     if (OB_SUCC(ret)) {
       ObLLVMBasicBlock next = PL_LEAVE == control.get_type() ? get_label(control.get_next_label())->exit_ : get_label(control.get_next_label())->start_;
+      const ObPLCodeGenerator::LabelStack::LabelInfo *label_info = get_label(control.get_next_label());
+      // FOR cursor scope is at body level (> stmt level). EXIT leave(stmt_level) pops it
+      // without touching same-level sibling ownership; CONTINUE leave(body_level) keeps it.
+      int64_t leave_level = OB_INVALID_INDEX;
+      if (OB_NOT_NULL(label_info)) {
+        leave_level = label_info->level_;
+        if (PL_LEAVE != control.get_type()) {
+          for (int64_t i = get_loop_count() - 1; i >= 0; --i) {
+            if (get_loops()[i].level_ == label_info->level_) {
+              if (OB_NOT_NULL(get_loops()[i].cursor_)
+                  && OB_NOT_NULL(get_loops()[i].cursor_->get_body())) {
+                leave_level = get_loops()[i].cursor_->get_body()->get_level();
+              }
+              break;
+            }
+          }
+        }
+      }
       if (OB_ISNULL(next.get_v())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("a loop must have valid body", K(next), K(ret));
+      } else if (OB_ISNULL(label_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("label info is null", K(ret), K(control.get_next_label()));
+      } else if (OB_FAIL(generate_cursor_scope_leave(control, leave_level, true))) {
+        LOG_WARN("failed to leave cursor scope for loop control", K(ret));
       } else if (OB_FAIL(generate_spi_pl_profiler_after_record(control))) {
         LOG_WARN("failed to generate spi profiler after record call", K(ret), K(control));
       } else if (OB_FAIL(helper_.create_br(next))) {
@@ -7801,9 +7904,18 @@ int ObPLCodeGenerator::generate_loop_control(const ObPLLoopControl &control)
         LOG_WARN("illegal EXIT/CONTINUE statement; it must appear inside a loop", K(ret));
       } else {
         ObLLVMBasicBlock next = PL_LEAVE == control.get_type() ? loop_info->exit_ : loop_info->start_;
+        // EXIT leave(stmt_level); CONTINUE on cursor-for leave(body_level) to keep FOR cursor.
+        int64_t leave_level = loop_info->level_;
+        if (PL_LEAVE != control.get_type()
+            && OB_NOT_NULL(loop_info->cursor_)
+            && OB_NOT_NULL(loop_info->cursor_->get_body())) {
+          leave_level = loop_info->cursor_->get_body()->get_level();
+        }
         if (OB_ISNULL(next.get_v())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("a loop must have valid body", K(ret));
+        } else if (OB_FAIL(generate_cursor_scope_leave(control, leave_level, true))) {
+          LOG_WARN("failed to leave cursor scope for loop control", K(ret));
         } else if (OB_FAIL(generate_spi_adjust_error_trace(control, loop_info->level_))) {
           LOG_WARN("failed to generate spi adjust error trace", K(ret));
         } else if (OB_FAIL(helper_.create_br(next))) {

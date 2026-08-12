@@ -751,7 +751,18 @@ public:
   static int spi_cursor_alloc(common::ObIAllocator &allocator,
                               ObObj &obj);
   static int spi_cursor_init(pl::ObPLExecCtx *ctx,
-                             int64_t cursor_index);
+                             int64_t cursor_index,
+                             int64_t block_level,
+                             bool track_scope);
+  static int spi_cursor_init_impl(pl::ObPLExecCtx *ctx,
+                                  int64_t cursor_index);
+  static int spi_cursor_scope_push_close_only(pl::ObPLExecCtx *ctx,
+                                              int64_t block_level,
+                                              uint64_t package_id,
+                                              uint64_t routine_id,
+                                              int64_t cursor_index);
+  static int spi_cursor_scope_leave(pl::ObPLExecCtx *ctx,
+                                    int64_t target_level);
   static int cursor_open_check(pl::ObPLExecCtx *ctx,
                                    int64_t package_id,
                                    int64_t routine_id,
