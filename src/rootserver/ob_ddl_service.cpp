@@ -22176,6 +22176,10 @@ int ObDDLService::inner_drop_and_create_tablet_(const int64_t &schema_version,
         }
         if (FAILEDx(table_creator.execute())) {
           LOG_WARN("execute table_creator failed", KR(ret), K(tenant_id));
+        } else if (new_table_schemas.at(0)->is_random_part()
+                   && OB_FAIL(storage::ObTabletRandomMdsHelper::set_autoinc_seq_for_create(
+                         *new_table_schemas.at(0), 1/*prev_high_bound_val*/, trans))) {
+          LOG_WARN("failed to set autoinc seq for create", KR(ret), KPC(new_table_schemas.at(0)));
         }
       }
     }
@@ -23003,6 +23007,15 @@ int ObDDLService::truncate_table(const ObTruncateTableArg &arg,
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("truncate materialized view log is not supported", KR(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "truncate materialized view log is");
+      } else if (orig_table_schema->is_random_part()) {
+        // Random-distributed tables rely on the parallel truncate path to reset
+        // partitions and re-init the hidden pk autoinc sequence; the legacy path
+        // does neither, so reject it here (reachable only when parallel truncate
+        // is disabled via _parallel_ddl_control).
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("truncate random-distributed table with parallel truncate disabled is not supported",
+                 KR(ret), KPC(orig_table_schema));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "truncate random-distributed table with parallel truncate disabled is");
       } else if (OB_FAIL(ObCompactionTTLUtil::check_truncate_table_for_append_only_valid(*orig_table_schema))) {
         LOG_WARN("fail to check truncate table for append only valid", KR(ret), KPC(orig_table_schema));
       } else if (!orig_table_schema->is_user_table() && !orig_table_schema->is_tmp_table()) {
