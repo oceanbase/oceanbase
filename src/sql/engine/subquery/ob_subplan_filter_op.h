@@ -173,6 +173,9 @@ public:
   common::ObFixedArray<ObDynamicParamSetter, common::ObIAllocator> right_rescan_params_;
   // end index of px rescan param positions per child, include unuse px batch rescan child
   common::ObFixedArray<int64_t, common::ObIAllocator> px_rescan_param_positions_per_child_;
+  // alias ref exprs collected from update set subqueries (e.g. SET (a,b) = (SELECT ...))
+  // stored separately from output_ to handle nested cases like MERGE INTO CASE WHEN
+  ExprFixedArray alias_ref_exprs_;
 };
 
 class ObSubPlanFilterOp : public ObOperator

@@ -12474,13 +12474,8 @@ int ObLogPlan::adjust_final_plan_info(ObLogicalOperator *&op)
         ObDelUpdLogPlan *plan = static_cast<ObDelUpdLogPlan *>(op->get_plan());
         // stmt is only allowed to be modified in the function;
         ObDelUpdStmt *stmt = const_cast<ObDelUpdStmt* >(plan->get_stmt());
-        // TODO tuliwei.tlw change to new version
-        // if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0
-        //     && OB_FAIL(plan->perform_vector_assign_expr_replacement(stmt))) {
-        //   LOG_WARN("failed to perform vector assgin expr replace", K(ret));
-        // }
-        // TODO tuliwei.tlw: 这里放开会暴露一个core，暂时封上，等core修好了恢复回来
-        if (OB_FAIL(plan->perform_vector_assign_expr_replacement(stmt))) {
+        if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_5_0_1_0
+            && OB_FAIL(plan->perform_vector_assign_expr_replacement(stmt))) {
           LOG_WARN("failed to perform vector assgin expr replace", K(ret));
         }
         for (int64_t i = 1; OB_SUCC(ret) && i < op->get_num_of_child(); ++i) {

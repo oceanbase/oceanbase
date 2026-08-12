@@ -421,7 +421,8 @@ ObSubPlanFilterSpec::ObSubPlanFilterSpec(ObIAllocator &alloc, const ObPhyOperato
     output_exprs_(alloc),
     left_rescan_params_(alloc),
     right_rescan_params_(alloc),
-    px_rescan_param_positions_per_child_(alloc)
+    px_rescan_param_positions_per_child_(alloc),
+    alias_ref_exprs_(alloc)
 {
 }
 
@@ -439,7 +440,8 @@ OB_SERIALIZE_MEMBER((ObSubPlanFilterSpec, ObOpSpec),
                     output_exprs_,
                     left_rescan_params_,
                     right_rescan_params_,
-                    px_rescan_param_positions_per_child_);
+                    px_rescan_param_positions_per_child_,
+                    alias_ref_exprs_);
 
 DEF_TO_STRING(ObSubPlanFilterSpec)
 {
@@ -754,14 +756,15 @@ int ObSubPlanFilterOp::inner_open()
   }
 
   // check for alias ref
-  for (int64_t j = 0; OB_SUCC(ret) && j < MY_SPEC.output_.count(); ++j) {
-    ObExpr *expr = MY_SPEC.output_.at(j);
+  for (int64_t j = 0; OB_SUCC(ret) && j < MY_SPEC.alias_ref_exprs_.count(); ++j) {
+    ObExpr *expr = MY_SPEC.alias_ref_exprs_.at(j);
     ObExpr *subquery_expr = NULL;
     if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null expr", K(ret), K(j));
+      LOG_WARN("unexpected null alias ref expr", K(ret), K(j));
     } else if (expr->type_ != T_REF_ALIAS_COLUMN) {
-      // do nothing
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected alias ref expr type", K(ret), K(j), K(expr->type_));
     } else if (OB_UNLIKELY(expr->arg_cnt_ != 1) || OB_ISNULL(expr->args_)
                || OB_ISNULL(subquery_expr = expr->args_[0])) {
       ret = OB_ERR_UNEXPECTED;
@@ -819,13 +822,11 @@ int ObSubPlanFilterOp::inner_get_next_row()
 
   if (OB_SUCC(ret)) {
     if (!MY_SPEC.update_set_.empty()) {
-      // TODO tuliwei.tlw: 这里放开会暴露一个core，暂时封上，等core修好了恢复回来
-      // TODO tuliwei.tlw change to new version
-      // if (MY_SPEC.get_phy_plan()->get_min_cluster_version() >= CLUSTER_VERSION_4_4_1_0) {
-      //   OZ(handle_update_set_with_alias_ref());
-      // } else {
+      if (MY_SPEC.get_phy_plan()->get_min_cluster_version() >= CLUSTER_VERSION_5_0_1_0) {
+        OZ(handle_update_set_with_alias_ref());
+      } else {
         OZ(handle_update_set());
-      // }
+      }
     }
   }
   if (OB_ITER_END == ret) {
@@ -1431,6 +1432,13 @@ int ObSubPlanFilterOp::handle_update_set()
 {
   int ret = OB_SUCCESS;
   const int64_t extra_size = 0;
+  // The subplan iterators below are rescanned via rewind() + get_next_row() in a loop.
+  // When batch rescan is enabled, the underlying DASGroupFoldIter/ObDASMergeIter relies on
+  // in_das_group_scan_ to reset access expr datums to the frame buffer in reset_datum_ptr.
+  // Without this guard the mark stays false, reset_datum_ptr takes the wrong branch, leaving
+  // access_exprs_ datum pointers stale and causing a wild-pointer write in project2output_exprs.
+  // Align with handle_next_batch_with_group_rescan, which sets the same guard.
+  DASGroupScanMarkGuard mark_guard(ctx_.get_das_ctx(), MY_SPEC.enable_das_group_rescan_);
   if (NULL == update_set_mem_) {
     lib::ContextParam param;
     param.set_mem_attr(ctx_.get_my_session()->get_effective_tenant_id(),
@@ -1512,6 +1520,13 @@ int ObSubPlanFilterOp::handle_update_set()
 int ObSubPlanFilterOp::handle_update_set_with_alias_ref()
 {
   int ret = OB_SUCCESS;
+  // The subplan iterators below are rescanned via rewind() + get_next_row() in a loop.
+  // When batch rescan is enabled, the underlying DASGroupFoldIter/ObDASMergeIter relies on
+  // in_das_group_scan_ to reset access expr datums to the frame buffer in reset_datum_ptr.
+  // Without this guard the mark stays false, reset_datum_ptr takes the wrong branch, leaving
+  // access_exprs_ datum pointers stale and causing a wild-pointer write in project2output_exprs.
+  // Align with handle_next_batch_with_group_rescan, which sets the same guard.
+  DASGroupScanMarkGuard mark_guard(ctx_.get_das_ctx(), MY_SPEC.enable_das_group_rescan_);
   Iterator *iter = NULL;
   subplan_iters_to_check_.reset();
   int64_t update_set_pos = 0;
@@ -1532,12 +1547,12 @@ int ObSubPlanFilterOp::handle_update_set_with_alias_ref()
       ret = OB_SUCCESS;
       set_null = true;
     }
-    for (int64_t j = 0; OB_SUCC(ret) && j < MY_SPEC.output_.count(); ++j) {
-      ObExpr *expr = MY_SPEC.output_.at(j);
+    for (int64_t j = 0; OB_SUCC(ret) && j < MY_SPEC.alias_ref_exprs_.count(); ++j) {
+      ObExpr *expr = MY_SPEC.alias_ref_exprs_.at(j);
       if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected expr", K(ret));
-      } else if (expr->type_ == T_REF_ALIAS_COLUMN) {
+        LOG_WARN("unexpected null alias ref expr", K(ret));
+      } else {
         ObExpr *subquery_expr = expr->args_[0];
         Iterator *alias_iter = NULL;
         const ObExprSubQueryRef::Extra &extra = ObExprSubQueryRef::Extra::get_info(*subquery_expr);
@@ -1552,10 +1567,11 @@ int ObSubPlanFilterOp::handle_update_set_with_alias_ref()
           int64_t project_idx = expr->extra_;
           ObExpr *output_expr = alias_iter->get_output().at(project_idx);
           ObDatum *datum = NULL;
-          if (OB_FAIL(output_expr->eval(eval_ctx_, datum))) {
+          ObEvalCtx &child_eval_ctx = alias_iter->get_op().get_eval_ctx();
+          if (OB_FAIL(output_expr->eval(child_eval_ctx, datum))) {
             LOG_WARN("failed to evaluate subquery output expr", K(ret));
           } else if (OB_FAIL(expr->deep_copy_datum(eval_ctx_, *datum))) {
-            LOG_WARN("deep copy datum failed", K(ret), K(datum));
+            LOG_WARN("deep copy datum failed", K(ret));
           } else {
             expr->set_evaluated_projected(eval_ctx_);
           }

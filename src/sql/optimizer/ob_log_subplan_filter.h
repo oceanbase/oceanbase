@@ -64,6 +64,9 @@ public:
    */
   inline const common::ObIArray<ObExecParamRawExpr*> &get_exec_params() const { return exec_params_; }
 
+  inline const common::ObIArray<ObAliasRefRawExpr *> &get_project_ref_exprs() const
+  { return project_ref_exprs_; }
+
   inline common::ObIArray<ObExecParamRawExpr *> &get_exec_params() { return exec_params_; }
 
   inline bool has_exec_params() const { return !exec_params_.empty(); }

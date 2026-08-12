@@ -7980,6 +7980,23 @@ int ObStaticEngineCG::generate_spec(
   if (op.is_update_set() && OB_FAIL(add_update_set(spec))) {
     LOG_WARN("failed to add update set", K(ret));
   }
+  if (OB_SUCC(ret) && op.is_update_set()) {
+    const ObIArray<ObAliasRefRawExpr *> &project_refs = op.get_project_ref_exprs();
+    if (project_refs.count() > 0) {
+      OZ(spec.alias_ref_exprs_.init(project_refs.count()));
+      for (int64_t i = 0; OB_SUCC(ret) && i < project_refs.count(); ++i) {
+        ObExpr *rt_expr = nullptr;
+        if (OB_FAIL(generate_rt_expr(*project_refs.at(i), rt_expr))) {
+          LOG_WARN("failed to generate rt expr for alias ref", K(ret));
+        } else if (OB_ISNULL(rt_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null rt expr for alias ref", K(ret));
+        } else if (OB_FAIL(spec.alias_ref_exprs_.push_back(rt_expr))) {
+          LOG_WARN("failed to push back alias ref expr", K(ret));
+        }
+      }
+    }
+  }
   CK(NULL != op.get_plan() && NULL != op.get_plan()->get_stmt());
   if (OB_SUCC(ret)) {
     const ObIArray<ObExecParamRawExpr *> *exec_params[] = {
