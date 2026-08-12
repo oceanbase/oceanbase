@@ -928,7 +928,7 @@ int ObOrcMinMaxIter::get_next_rows(int64_t &count, int64_t capacity)
   int64_t read_count = 0;
   UNUSED(capacity);
   ObMallocHookAttrGuard guard(mem_attr_);
-  if (state_.file_idx_ >= scan_param_->key_ranges_.count()) {
+  if (state_.file_idx_ >= scan_param_->scan_tasks_.count()) {
     ret = OB_ITER_END;
   } else if (need_partition_info_) {
     if (OB_FAIL(collect_partition_aggregate())) {
@@ -943,7 +943,7 @@ int ObOrcMinMaxIter::get_next_rows(int64_t &count, int64_t capacity)
   } else if (OB_FAIL(output_aggregate_result(read_count))) {
     LOG_WARN("failed to output aggregate result", K(ret));
   } else {
-    state_.file_idx_ = scan_param_->key_ranges_.count();
+    state_.file_idx_ = scan_param_->scan_tasks_.count();
     count = read_count;
   }
   return ret;
