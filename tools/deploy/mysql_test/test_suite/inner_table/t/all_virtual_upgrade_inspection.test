@@ -1,8 +1,8 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-#owner       : zhenjiang.xzj
-#owner group : STORAGE
+#owner       : chaser.ch
+#owner group : storage
 #description : 测试虚拟表__all_virtual_upgrade_inspection
 
 --disable_abort_on_error

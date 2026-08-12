@@ -1,8 +1,8 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-# owner: yuya.yu
-# owner group: Storage Group
+# owner: suzhi.yt
+# owner group: storage
 # description: direct load data to heap table
 
 --source mysql_test/test_suite/direct_load_data/include/copy_data_for_direct_load.inc
