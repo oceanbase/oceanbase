@@ -3726,6 +3726,7 @@ all_log_archive_piece_files_def = dict(
     ('cp_file_id', 'int', 'false', '0'),
     ('cp_file_offset', 'int', 'false', '0'),
     ('path', 'varchar:OB_MAX_BACKUP_DEST_LENGTH', 'false', ''),
+    ('backup_file_status', 'varchar:OB_DEFAULT_STATUS_LENTH', 'false', 'INCOMPLETE'),
   ],
 )
 def_table_schema(**all_log_archive_piece_files_def)

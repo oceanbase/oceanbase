@@ -104,6 +104,7 @@ static const char *backup_clean_task_type_str[] = {
     "BACKUP SET",
     "BACKUP PIECE",
     "BACKUP COMPLEMENT LOG",
+    "BACKUP ARCHIVE PIECE",
 };
 
 const char *ObBackupCleanTaskType::get_str(const TYPE &type)

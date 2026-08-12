@@ -2619,6 +2619,7 @@ file_status	varchar(64)	NO		INVALID
 cp_file_id	bigint(20)	NO		0	
 cp_file_offset	bigint(20)	NO		0	
 path	varchar(2048)	NO			
+backup_file_status	varchar(64)	NO		INCOMPLETE	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_log_archive_piece_files;
 IF(count(*) >= 0, 1, 0)
 1
