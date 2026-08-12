@@ -33,6 +33,7 @@ public:
       step_(0),
       count_(0),
       is_from_gi_pump_(false),
+      need_complete_(true),
       cur_line_number_(0),
       download_handle_(NULL),
       record_reader_handle_(NULL) {}
@@ -43,6 +44,7 @@ public:
                  K(step_),
                  K(count_),
                  K(is_from_gi_pump_),
+                 K(need_complete_),
                  K(cur_line_number_),
                  K(ObString(download_id_.c_str())));
     int64_t task_idx_;
@@ -51,6 +53,7 @@ public:
     int64_t step_;
     int64_t count_;
     bool is_from_gi_pump_;
+    bool need_complete_;
     int64_t cur_line_number_;
     apsara::odps::sdk::IDownloadPtr download_handle_;
     apsara::odps::sdk::IRecordReaderPtr record_reader_handle_;
@@ -248,7 +251,7 @@ public:
   struct OdpsPartitionDownloader {
     OdpsPartitionDownloader()
         : odps_driver_(), odps_partition_downloader_(NULL),
-          downloader_init_status_(0) {}
+          downloader_init_status_(0), need_complete_(true) {}
     ~OdpsPartitionDownloader() { reset(); }
     int reset();
     ObODPSTableRowIterator odps_driver_;
@@ -256,6 +259,7 @@ public:
     common::ObThreadCond tunnel_ready_cond_;
     int downloader_init_status_; // 0 is uninitialized, 1 is successfully
                                  // initialized, -1 is failed to initialize
+    bool need_complete_;
   };
   class DeleteDownloaderFunc {
   private:
