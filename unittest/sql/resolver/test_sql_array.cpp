@@ -368,9 +368,11 @@ TEST_F(TestSqlArray, construct_with_allocator)
   EXPECT_EQ(8, a.count_);
   EXPECT_EQ(12, a.capacity_);
   ASSERT_EQ(OB_ERR_UNEXPECTED, a.assign(b));
-  b.reset();
+  b.reuse();
+  OK(a.assign(b));
+  EXPECT_EQ(0, a.count_);
+  EXPECT_EQ(12, a.capacity_);
   OK(b.prepare_allocate(15));
-  a.reuse();
   OK(a.assign(b));
   EXPECT_EQ(15, a.count_);
   EXPECT_EQ(15, a.capacity_);

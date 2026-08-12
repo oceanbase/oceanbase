@@ -677,6 +677,8 @@ int ObSqlArrayImpl<T, construct_with_allocator>::assign_(const ObIArray<T> &othe
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(this == &other)) {
     // do nothing
+  } else if (OB_UNLIKELY(other.empty())) {
+    reuse();
   } else if (OB_UNLIKELY(count_ > 0)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_LOG(WARN, "assign to non-empty array is not allowed", K(ret), K(count_));
