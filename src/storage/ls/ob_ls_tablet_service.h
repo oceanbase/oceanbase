@@ -519,6 +519,12 @@ private:
       ObTabletHandle &old_tablet,
       ObMetaDiskAddr &old_tablet_addr,
       ObTimeGuard &time_guard);
+  int try_update_tablet_after_persist(
+      const ObTabletMapKey &key,
+      const ObMetaDiskAddr &old_tablet_addr,
+      const ObTabletHandle &old_tablet_handle,
+      const ObTabletHandle &new_tablet_handle,
+      ObTimeGuard &time_guard);
   int acquire_new_tablet(
       const ObTabletMapKey &key,
       const ObTabletHandle &old_tablet,

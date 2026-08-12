@@ -20,6 +20,7 @@
 #define protected public
 #define private public
 
+#include "lib/utility/ob_tracepoint.h"
 #include "storage/schema_utils.h"
 #include "storage/test_dml_common.h"
 #include "storage/test_tablet_helper.h"
@@ -192,6 +193,99 @@ TEST_F(TestLSTabletService, test_bucket_cnt)
   // ASSERT_EQ(unify_bucket_num, lock_bkt_cnt);
   ASSERT_EQ(unify_bucket_num, id_set_lock_bkt_cnt);
   ASSERT_EQ(unify_bucket_num, id_set_bkt_cnt);
+}
+
+TEST_F(TestLSTabletService, test_try_update_tablet_after_persist_stale_addr)
+{
+  const ObTabletID tablet_id(10000013);
+  const ObTabletMapKey key(ls_id_, tablet_id);
+  ObLSHandle ls_handle;
+  ObTableSchema schema;
+  TestSchemaUtils::prepare_data_schema(schema);
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(ls_handle, tablet_id, schema, allocator_));
+
+  ObTimeGuard time_guard("TestTryUpdateAfterPersistStale");
+  ObTabletHandle old_handle;
+  ObMetaDiskAddr expected_addr;
+  ASSERT_EQ(OB_SUCCESS, ls_tablet_service_->get_tablet_and_address(key, old_handle, expected_addr, time_guard));
+  ObTablet *const old_tablet = old_handle.get_obj();
+
+  ObTabletHandle new_handle;
+  ASSERT_EQ(OB_SUCCESS, ObTabletPersister::persist_and_transform_tablet(*old_tablet, new_handle));
+  const ObMetaDiskAddr persisted_addr = new_handle.get_obj()->get_tablet_addr();
+  ASSERT_TRUE(persisted_addr.is_disked());
+
+  // Emulate create_memtable publishing an incremented tablet address sequence after the new tablet has been persisted.
+  ObMetaDiskAddr advanced_addr = expected_addr;
+  advanced_addr.inc_seq();
+  old_tablet->set_tablet_addr(advanced_addr);
+  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+  ASSERT_EQ(OB_SUCCESS, t3m->compare_and_swap_tablet(key, old_handle, old_handle));
+  ObMetaDiskAddr published_addr;
+  ASSERT_EQ(OB_SUCCESS, t3m->get_tablet_addr(key, published_addr));
+  ASSERT_TRUE(expected_addr.is_equal_for_persistence(published_addr));
+  ASSERT_EQ(expected_addr.seq() + 1, published_addr.seq());
+  ASSERT_TRUE(expected_addr != published_addr);
+
+  ObStorageLogger *slogger = MTL(ObStorageLogger*);
+  ASSERT_NE(nullptr, slogger);
+  ObLogCursor slog_before;
+  ObLogCursor slog_after;
+  ASSERT_EQ(OB_SUCCESS, slogger->get_active_cursor(slog_before));
+  EXPECT_EQ(OB_EAGAIN, ls_tablet_service_->try_update_tablet_after_persist(key, expected_addr, old_handle, new_handle,
+      time_guard));
+  ASSERT_EQ(OB_SUCCESS, slogger->get_active_cursor(slog_after));
+  EXPECT_TRUE(slog_before.equal(slog_after));
+
+  ObTabletHandle current_handle;
+  ObMetaDiskAddr current_addr;
+  ASSERT_EQ(OB_SUCCESS, ls_tablet_service_->get_tablet(
+      tablet_id, current_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK));
+  ASSERT_EQ(OB_SUCCESS, t3m->get_tablet_addr(key, current_addr));
+  EXPECT_EQ(old_tablet, current_handle.get_obj());
+  EXPECT_NE(new_handle.get_obj(), current_handle.get_obj());
+  EXPECT_TRUE(published_addr == current_addr);
+  EXPECT_TRUE(persisted_addr != current_addr);
+  ASSERT_EQ(OB_SUCCESS, t3m->del_tablet(key));
+}
+
+TEST_F(TestLSTabletService, test_build_new_tablet_from_mds_table_retry)
+{
+  const ObTabletID tablet_id(10000014);
+  const ObTabletMapKey key(ls_id_, tablet_id);
+  ObLSHandle ls_handle;
+  ObTableSchema schema;
+  TestSchemaUtils::prepare_data_schema(schema);
+  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+  ASSERT_NE(nullptr, t3m);
+  const int64_t inner_tablet_count = INNER_TABLET_CNT;
+  valid_tablet_num(inner_tablet_count);
+  const int64_t normal_tablet_count = t3m->tablet_buffer_pool_.get_used_obj_cnt();
+  const int64_t large_tablet_count = t3m->large_tablet_buffer_pool_.get_used_obj_cnt();
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(ls_handle, tablet_id, schema, allocator_));
+
+  EventItem retry_once;
+  retry_once.occur_ = 2;
+  retry_once.error_code_ = OB_EAGAIN;
+  retry_once.cond_ = tablet_id.id();
+  ASSERT_EQ(OB_SUCCESS, EventTable::set_event("EN_MDS_TABLE_DUMP_RETRY", retry_once));
+  const SCN flush_scn = SCN::plus(SCN::base_scn(), 1);
+  const int ret = ls_tablet_service_->build_new_tablet_from_mds_table(tablet_id, 0, flush_scn);
+  EventItem reset_event;
+  EXPECT_EQ(OB_SUCCESS, EventTable::set_event("EN_MDS_TABLE_DUMP_RETRY", reset_event));
+
+  EXPECT_EQ(OB_SUCCESS, ret);
+  ObTabletHandle current_handle;
+  ASSERT_EQ(OB_SUCCESS, ls_tablet_service_->get_tablet(
+      tablet_id, current_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK));
+  EXPECT_EQ(flush_scn, current_handle.get_obj()->get_tablet_meta().mds_checkpoint_scn_);
+  ASSERT_EQ(OB_SUCCESS, t3m->del_tablet(key));
+  current_handle.reset();
+  valid_tablet_num(inner_tablet_count);
+  ASSERT_EQ(normal_tablet_count, t3m->tablet_buffer_pool_.get_used_obj_cnt());
+  ASSERT_EQ(large_tablet_count, t3m->large_tablet_buffer_pool_.get_used_obj_cnt());
 }
 
 void TestLSTabletService::construct_sstable(

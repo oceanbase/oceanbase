@@ -88,6 +88,7 @@ namespace storage
 using namespace mds;
 
 ERRSIM_POINT_DEF(EN_CREATE_EMPTY_SHELL_TABLET_ERROR);
+ERRSIM_POINT_DEF(EN_MDS_TABLE_DUMP_RETRY);
 
 ObLSTabletService::ObLSTabletService()
   : ls_(nullptr),
@@ -1135,6 +1136,9 @@ int ObLSTabletService::update_tablet_table_store(
       old_tablet_hdl.reset();
       tmp_tablet_hdl.reset();
       old_tablet_addr.reset();
+      if (retry_count > 0) {
+        allocator.reuse();
+      }
       if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tmp_tablet(key, allocator, tmp_tablet_hdl))) {
         if (OB_ENTRY_NOT_EXIST == ret) {
           ret = OB_TABLET_NOT_EXIST;
@@ -1159,28 +1163,13 @@ int ObLSTabletService::update_tablet_table_store(
           LOG_WARN("fail to persist and transform tablet", K(ret), KPC(tmp_tablet), K(new_tablet_hdl));
         } else {
           time_guard.click("PersistNew");
-          ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-          ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
-          time_guard.click("WLock");
           ObMetaDiskAddr &new_addr = new_tablet_hdl.get_obj()->tablet_addr_;
-          ObMetaDiskAddr cur_addr;
-          if (OB_FAIL(MTL(ObTenantMetaMemMgr *)->get_tablet_addr(key, cur_addr))) {
-            LOG_WARN("fail to get tablet addr from t3m", K(ret), K(key));
-          } else if (old_tablet_addr != cur_addr) {
-            ret = OB_EAGAIN;
-            LOG_INFO("The tablet address in tablet pointer has changed, please try again", K(ret), K(cur_addr),
-                K(old_tablet_addr), KPC(old_tablet));
-          } else if (OB_FAIL(ObTabletSlogHelper::write_update_tablet_slog(ls_id, tablet_id, new_addr))) {
-            LOG_WARN("fail to write update tablet slog", K(ret), K(ls_id), K(tablet_id), K(new_addr));
-          } else if (FALSE_IT(time_guard.click("WrSlog"))) {
-          } else if (OB_FAIL(t3m->compare_and_swap_tablet(key, old_tablet_hdl, new_tablet_hdl))) {
-            LOG_ERROR("failed to compare and swap tablet", K(ret), K(key), K(old_tablet_hdl), K(new_tablet_hdl));
-            ob_usleep(1000 * 1000);
-            ob_abort();
+          if (OB_FAIL(try_update_tablet_after_persist(key, old_tablet_addr, old_tablet_hdl, new_tablet_hdl, time_guard))) {
+            LOG_WARN("fail to try update tablet after persist", K(ret), K(key), K(old_tablet_addr), K(old_tablet_hdl));
           } else {
             handle = new_tablet_hdl;
             time_guard.click("SLOGAndCAS");
-            LOG_INFO("succeeded to build new tablet", K(ret), K(key), K(old_tablet_addr), K(cur_addr), K(new_addr), K(param), K(handle));
+            LOG_INFO("succeeded to build new tablet", K(ret), K(key), K(old_tablet_addr), K(new_addr), K(param), K(handle));
           }
         }
       }
@@ -1201,6 +1190,60 @@ int ObLSTabletService::update_tablet_table_store(
         }
       }
     } while (OB_EAGAIN == ret);
+  }
+  return ret;
+}
+
+// old_tablet_handle and old_tablet_addr must be captured together by
+// get_tablet_and_address(). The caller must not hold bucket_lock_.
+int ObLSTabletService::try_update_tablet_after_persist(
+    const ObTabletMapKey &key,
+    const ObMetaDiskAddr &old_tablet_addr,
+    const ObTabletHandle &old_tablet_handle,
+    const ObTabletHandle &new_tablet_handle,
+    ObTimeGuard &time_guard)
+{
+  TIMEGUARD_INIT(STORAGE, 10_ms);
+  int ret = OB_SUCCESS;
+  ObTablet *new_tablet = nullptr;
+  ObMetaDiskAddr new_tablet_addr;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_UNLIKELY(!key.is_valid()
+      || !old_tablet_addr.is_valid()
+      || !old_tablet_handle.is_valid()
+      || !new_tablet_handle.is_valid()
+      || !(new_tablet = new_tablet_handle.get_obj())->is_valid()
+      || !(new_tablet_addr = new_tablet->get_tablet_addr()).is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(key), K(old_tablet_addr), K(old_tablet_handle), K(new_tablet_handle), KPC(new_tablet), K(new_tablet_addr));
+  } else {
+    ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+    ObMetaDiskAddr cur_tablet_addr;
+    ObBucketHashWLockGuard lock_guard(bucket_lock_, key.tablet_id_.hash());
+    CLICK();
+    time_guard.click("WLock");
+    if (CLICK_FAIL(t3m->get_tablet_addr(key, cur_tablet_addr))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_TABLET_NOT_EXIST;
+      }
+      LOG_WARN("fail to get tablet addr from t3m", K(ret), K(key));
+    } else if (old_tablet_addr != cur_tablet_addr) {
+      ret = OB_EAGAIN;
+      LOG_INFO("tablet address has changed after persist", K(ret), K(key), K(old_tablet_addr), K(cur_tablet_addr));
+    } else if (CLICK_FAIL(ObTabletSlogHelper::write_update_tablet_slog(key.ls_id_, key.tablet_id_, new_tablet_addr))) {
+      LOG_WARN("fail to write update tablet slog", K(ret), K(key), K(new_tablet_addr));
+    } else if (FALSE_IT(time_guard.click("WrSlog"))) {
+    } else if (CLICK_FAIL(t3m->compare_and_swap_tablet(key, old_tablet_handle, new_tablet_handle))) {
+      LOG_ERROR("failed to compare and swap tablet", K(ret), K(key), K(old_tablet_addr), K(cur_tablet_addr),
+          K(new_tablet_addr), K(old_tablet_handle), K(new_tablet_handle));
+      ob_usleep(1000 * 1000);
+      ob_abort();
+    } else {
+      time_guard.click("CASwap");
+    }
   }
   return ret;
 }
@@ -1392,6 +1435,7 @@ int ObLSTabletService::build_new_tablet_from_mds_table(
     const int64_t mds_construct_sequence,
     const share::SCN &flush_scn)
 {
+  static const int64_t MAX_MDS_DUMP_ATTEMPT_CNT = 1000;
   TIMEGUARD_INIT(STORAGE, 10_ms);
   int ret = OB_SUCCESS;
   common::ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "BuildMSD"));
@@ -1400,6 +1444,7 @@ int ObLSTabletService::build_new_tablet_from_mds_table(
   ObTabletHandle old_tablet_handle;
   ObTabletHandle tmp_tablet_hdl;
   ObTabletHandle new_tablet_handle;
+  ObMetaDiskAddr old_tablet_addr;
   ObTimeGuard time_guard("MdsDump", 3_s);
 
   if (IS_NOT_INIT) {
@@ -1408,70 +1453,93 @@ int ObLSTabletService::build_new_tablet_from_mds_table(
   } else if (OB_UNLIKELY(!tablet_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(tablet_id));
-  } else if (CLICK_FAIL(ObTabletCreateDeleteHelper::acquire_tmp_tablet(key, allocator, tmp_tablet_hdl))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      ret = OB_TABLET_NOT_EXIST;
-    } else {
-      LOG_WARN("fail to acquire temporary tablet", K(ret), K(key));
-    }
   } else {
-    ObTablet *tmp_tablet = tmp_tablet_hdl.get_obj();
-    time_guard.click("Acquire");
-    CLICK();
-    ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
-    time_guard.click("Lock");
-    if (CLICK_FAIL(direct_get_tablet(tablet_id, old_tablet_handle))) {
-      LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
-    } else if (old_tablet_handle.get_obj()->is_empty_shell()) {
-      LOG_INFO("old tablet is empty shell tablet, should skip mds table dump operation", K(ret), K(ls_id), K(tablet_id),
-          "old_tablet", *old_tablet_handle.get_obj());
-    } else {
-      time_guard.click("GetOld");
-      ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-      ObTablet *old_tablet = old_tablet_handle.get_obj();
-      ObMetaDiskAddr disk_addr;
-      ObTabletMdsData mds_data;
-
-      if (OB_FAIL(ret)) {
-      } else if (CLICK_FAIL(old_tablet->read_mds_table(allocator, mds_data, true, mds_construct_sequence))) {
-        if (OB_EMPTY_RESULT == ret) {
-          const share::SCN &old_mds_checkpoint_scn = old_tablet->get_tablet_meta().mds_checkpoint_scn_;
-          if (ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN != old_mds_checkpoint_scn) {
-            // mds checkpoint scn is NOT initial scn, it means mds table dump has happened,
-            // use empty mds data
-            ret = OB_SUCCESS;
-            LOG_INFO("read empty mds data from mds table, just advance mds checkpoint scn",
-                K(ret), K(key), K(old_mds_checkpoint_scn));
-          } else if (OB_FAIL(ObTablet::build_user_data_for_aborted_tx_tablet(allocator, flush_scn, mds_data))) {
-            LOG_WARN("failed to build user data for aborted tx tablet", K(ret), K(key), K(flush_scn));
-          } else {
-            LOG_INFO("read empty mds data from mds table, mock mds data for first time mds table dump",
-                K(ret), K(key), K(old_mds_checkpoint_scn), K(flush_scn), K(mds_data));
-          }
+    int64_t attempt_count = 0;
+    do {
+      ret = OB_SUCCESS;
+      ++attempt_count;
+      new_tablet_handle.reset();
+      tmp_tablet_hdl.reset();
+      old_tablet_handle.reset();
+      old_tablet_addr.reset();
+      if (attempt_count > 1) {
+        allocator.reuse();
+      }
+      if (CLICK_FAIL(ObTabletCreateDeleteHelper::acquire_tmp_tablet(key, allocator, tmp_tablet_hdl))) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          ret = OB_TABLET_NOT_EXIST;
         } else {
-          LOG_WARN("failed to read mds table", K(ret), K(key));
+          LOG_WARN("fail to acquire temporary tablet", K(ret), K(key));
+        }
+      } else {
+        ObTablet *tmp_tablet = tmp_tablet_hdl.get_obj();
+        time_guard.click("Acquire");
+        CLICK();
+        if (CLICK_FAIL(get_tablet_and_address(key, old_tablet_handle, old_tablet_addr, time_guard))) {
+          LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
+        } else if (old_tablet_handle.get_obj()->is_empty_shell()) {
+          LOG_INFO("old tablet is empty shell tablet, should skip mds table dump operation", K(ret), K(ls_id), K(tablet_id),
+              "old_tablet", *old_tablet_handle.get_obj());
+        } else {
+          time_guard.click("GetOld");
+          ObTablet *old_tablet = old_tablet_handle.get_obj();
+          ObMetaDiskAddr disk_addr;
+          ObTabletMdsData mds_data;
+
+          if (OB_FAIL(ret)) {
+          } else if (CLICK_FAIL(old_tablet->read_mds_table(allocator, mds_data, true, mds_construct_sequence))) {
+            if (OB_EMPTY_RESULT == ret) {
+              const share::SCN &old_mds_checkpoint_scn = old_tablet->get_tablet_meta().mds_checkpoint_scn_;
+              if (ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN != old_mds_checkpoint_scn) {
+                // mds checkpoint scn is NOT initial scn, it means mds table dump has happened,
+                // use empty mds data
+                ret = OB_SUCCESS;
+                LOG_INFO("read empty mds data from mds table, just advance mds checkpoint scn",
+                    K(ret), K(key), K(old_mds_checkpoint_scn));
+              } else if (OB_FAIL(ObTablet::build_user_data_for_aborted_tx_tablet(allocator, flush_scn, mds_data))) {
+                LOG_WARN("failed to build user data for aborted tx tablet", K(ret), K(key), K(flush_scn));
+              } else {
+                LOG_INFO("read empty mds data from mds table, mock mds data for first time mds table dump",
+                    K(ret), K(key), K(old_mds_checkpoint_scn), K(flush_scn), K(mds_data));
+              }
+            } else {
+              LOG_WARN("failed to read mds table", K(ret), K(key));
+            }
+          }
+
+          if (OB_FAIL(ret)) {
+          } else if (CLICK_FAIL(tmp_tablet->init_for_mds_table_dump(allocator, *old_tablet, flush_scn, mds_data, old_tablet->mds_data_))) {
+            LOG_WARN("failed to init tablet", K(ret), KPC(old_tablet), K(flush_scn));
+          } else if (CLICK_FAIL(ObTabletPersister::persist_and_transform_tablet(*tmp_tablet, new_tablet_handle))) {
+            LOG_WARN("fail to persist and transform tablet", K(ret), KPC(tmp_tablet), K(new_tablet_handle));
+          } else {
+            disk_addr = new_tablet_handle.get_obj()->tablet_addr_;
+            const int inject_ret = OB_E(EN_MDS_TABLE_DUMP_RETRY, tablet_id.id()) OB_SUCCESS;
+            if (OB_SUCCESS != inject_ret) {
+              ret = inject_ret;
+              LOG_INFO("inject mds table dump retry", K(ret), K(key));
+            } else if (CLICK_FAIL(try_update_tablet_after_persist(key, old_tablet_addr, old_tablet_handle, new_tablet_handle, time_guard))) {
+              LOG_WARN("fail to try update tablet after persist", K(ret), K(old_tablet_addr), K(old_tablet_handle));
+            } else {
+              CLICK();
+              LOG_INFO("succeeded to build new tablet", K(ret), K(key), K(disk_addr), K(new_tablet_handle), K(mds_data));
+            }
+          }
         }
       }
 
-      if (OB_FAIL(ret)) {
-      } else if (CLICK_FAIL(tmp_tablet->init_for_mds_table_dump(allocator, *old_tablet, flush_scn, mds_data, old_tablet->mds_data_))) {
-        LOG_WARN("failed to init tablet", K(ret), KPC(old_tablet), K(flush_scn));
-      } else if (CLICK_FAIL(ObTabletPersister::persist_and_transform_tablet(*tmp_tablet, new_tablet_handle))) {
-        LOG_WARN("fail to persist and transform tablet", K(ret), KPC(tmp_tablet), K(new_tablet_handle));
-      } else if (FALSE_IT(disk_addr = new_tablet_handle.get_obj()->tablet_addr_)) {
-      } else if (CLICK_FAIL(ObTabletSlogHelper::write_update_tablet_slog(ls_id, tablet_id, disk_addr))) {
-      } else if (FALSE_IT(time_guard.click("WrSlog"))) {
-        LOG_WARN("fail to write update tablet slog", K(ret), K(ls_id), K(tablet_id), K(disk_addr));
-      } else if (CLICK_FAIL(t3m->compare_and_swap_tablet(key, old_tablet_handle, new_tablet_handle))) {
-        LOG_ERROR("failed to compare and swap tablet", K(ret), K(key), K(disk_addr), K(old_tablet_handle));
-        ob_usleep(1000 * 1000);
-        ob_abort();
-      } else {
-        CLICK();
-        time_guard.click("CASwap");
-        LOG_INFO("succeeded to build new tablet", K(ret), K(key), K(disk_addr), K(new_tablet_handle), K(mds_data));
+      if (OB_EAGAIN == ret) {
+        if (attempt_count >= MAX_MDS_DUMP_ATTEMPT_CNT) {
+          LOG_WARN("reach maximum attempt count for mds table dump", K(ret), K(key), K(attempt_count), K(MAX_MDS_DUMP_ATTEMPT_CNT));
+          break;
+        } else {
+          if (1 == attempt_count || REACH_TIME_INTERVAL(10_s)) {
+            LOG_INFO("retry mds table dump after OB_EAGAIN", K(ret), K(key), K(attempt_count), K(MAX_MDS_DUMP_ATTEMPT_CNT));
+          }
+          ob_usleep(100_ms);
+        }
       }
-    }
+    } while (OB_EAGAIN == ret);
   }
 
   return ret;
