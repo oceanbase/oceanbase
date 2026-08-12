@@ -271,6 +271,86 @@ int ObSimpleLogServer::add_ls_to_ls_map_(const int64_t palf_id)
   return ret;
 }
 
+int ObSimpleLogServer::add_empty_ls_to_ls_map_(const int64_t palf_id, ObLS *&ls)
+{
+  int ret = OB_SUCCESS;
+  void *buf = NULL;
+  ObLSHandle ls_handle;
+  ObLSGetMod mod = ObLSGetMod::LOG_MOD;
+  ls = NULL;
+
+  if (OB_SUCCESS == ls_service_->get_ls(ObLSID(palf_id), ls_handle, mod)) {
+    ls = ls_handle.get_ls();
+    LOG_INFO("ls exists", K(palf_id));
+  } else if (OB_ISNULL(buf = ls_service_->ls_allocator_.alloc(sizeof(ObLS)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc ls", K(ret));
+  } else {
+    LOG_INFO("ls not exists", K(palf_id));
+    ls = new (buf) ObLS();
+    ls->ls_meta_.ls_id_ = ObLSID(palf_id);
+    if (OB_FAIL(ls_service_->add_ls_to_map_(ls))) {
+      LOG_WARN("failed to add_ls_to_map_", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && OB_ISNULL(ls)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls is null", K(ret), K(palf_id));
+  }
+  return ret;
+}
+
+int ObSimpleLogServer::start_log_service_for_role_change_()
+{
+  int ret = OB_SUCCESS;
+  if (log_service_started_for_role_change_) {
+  } else if (OB_FAIL(log_service_.apply_service_.start())) {
+    CLOG_LOG(WARN, "failed to start apply_service_", K(ret));
+  } else if (OB_FAIL(log_service_.replay_service_.start())) {
+    CLOG_LOG(WARN, "failed to start replay_service_", K(ret));
+  } else if (OB_FAIL(log_service_.role_change_service_.start())) {
+    CLOG_LOG(WARN, "failed to start role_change_service_", K(ret));
+  } else if (OB_FAIL(log_service_.cdc_service_.start())) {
+    CLOG_LOG(WARN, "failed to start cdc_service_", K(ret));
+  } else if (OB_FAIL(log_service_.restore_service_.start())) {
+    CLOG_LOG(WARN, "failed to start restore_service_", K(ret));
+  } else {
+    log_service_started_for_role_change_ = true;
+  }
+  return ret;
+}
+
+int ObSimpleLogServer::create_ls_with_log_service_(const int64_t palf_id,
+                                                   const AccessMode &access_mode,
+                                                   const PalfBaseInfo &base_info,
+                                                   const LogReplicaType replica_type,
+                                                   IPalfHandleImpl *&palf_handle_impl)
+{
+  int ret = OB_SUCCESS;
+  IPalfEnvImpl *palf_env_impl = get_palf_env();
+  ObLS *ls = NULL;
+
+  if (OB_ISNULL(palf_env_impl)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "unexpected error", K(ret), K(palf_id));
+  } else if (palf::AccessMode::APPEND != access_mode) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid access mode", K(ret), K(palf_id), K(access_mode), K(replica_type));
+  } else if (OB_FAIL(palf_env_impl->create_palf_handle_impl(palf_id, access_mode,
+      base_info, replica_type, palf_handle_impl))) {
+    CLOG_LOG(WARN, "create palf handle impl failed", K(ret), K(palf_id), K(replica_type));
+  } else if (OB_FAIL(add_empty_ls_to_ls_map_(palf_id, ls))) {
+    CLOG_LOG(WARN, "add_empty_ls_to_ls_map_ failed", K(ret), K(palf_id));
+  } else if (OB_FAIL(start_log_service_for_role_change_())) {
+    CLOG_LOG(WARN, "start_log_service_for_role_change_ failed", K(ret), K(palf_id));
+  } else if (OB_FAIL(log_service_.add_ls(ObLSID(palf_id), ls->log_handler_, ls->restore_handler_))) {
+    CLOG_LOG(WARN, "add ls with log service failed", K(ret), K(palf_id), K(replica_type));
+  } else {
+    CLOG_LOG(INFO, "create ls with log service success", K(ret), K(palf_id), K(replica_type));
+  }
+  return ret;
+}
+
 
 int ObSimpleLogServer::update_disk_opts(const PalfDiskOptions &opts)
 {
@@ -491,6 +571,11 @@ int ObSimpleLogServer::init_ls_service_(const bool is_bootstrap)
                                               node_id_,
                                               1024*1024*1024))) {
       LOG_WARN("fail to init ls allocator, ", K(ret));
+    } else if (OB_FAIL(ls_service_->iter_allocator_.init(common::OB_MALLOC_NORMAL_BLOCK_SIZE,
+                                                         "mittest",
+                                                         node_id_,
+                                                         1024*1024*1024))) {
+      LOG_WARN("fail to init ls iter allocator, ", K(ret));
     } else if (OB_FAIL(ls_service_->ls_map_.init(node_id_, &ls_service_->ls_allocator_))) {
       LOG_WARN("fail to init ls map", K(ret));
     } else {
@@ -1135,18 +1220,31 @@ int ObSimpleLogServer::create_ls(const int64_t palf_id,
                                  const PalfBaseInfo &base_info,
                                  IPalfHandleImpl *&palf_handle_impl)
 {
+  return create_ls_with_replica_type(palf_id, access_mode, base_info,
+      LogReplicaType::NORMAL_REPLICA, palf_handle_impl);
+}
+
+int ObSimpleLogServer::create_ls_with_replica_type(const int64_t palf_id,
+                                                   const AccessMode &access_mode,
+                                                   const PalfBaseInfo &base_info,
+                                                   const LogReplicaType replica_type,
+                                                   IPalfHandleImpl *&palf_handle_impl)
+{
   int ret = OB_SUCCESS;
 
   IPalfEnvImpl *palf_env_impl = get_palf_env();
-  if (OB_ISNULL(palf_env_impl)) {
+  if (LogReplicaType::LOGONLY_REPLICA == replica_type) {
+    ret = create_ls_with_log_service_(palf_id, access_mode, base_info, replica_type, palf_handle_impl);
+  } else if (OB_ISNULL(palf_env_impl)) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "unexpected error", K(ret), K(palf_id));
-  } else if (OB_FAIL(palf_env_impl->create_palf_handle_impl(palf_id, palf::AccessMode::APPEND, base_info, palf_handle_impl))) {
-    CLOG_LOG(WARN, "create palf handle impll failed", K(ret), K(palf_id));
+  } else if (OB_FAIL(palf_env_impl->create_palf_handle_impl(palf_id, access_mode,
+      base_info, replica_type, palf_handle_impl))) {
+    CLOG_LOG(WARN, "create palf handle impll failed", K(ret), K(palf_id), K(replica_type));
   } else if (OB_FAIL(add_ls_to_ls_map_(palf_id))) {
     CLOG_LOG(WARN, "add_ls_to_ls_map_ failed", K(ret), K(palf_id));
   } else {
-    LOG_INFO("add ls success", K(ret), K(palf_id));
+    LOG_INFO("add ls success", K(ret), K(palf_id), K(replica_type));
   }
   return ret;
 }
@@ -1156,9 +1254,17 @@ int ObSimpleLogServer::remove_ls(const int64_t palf_id)
   int ret = OB_SUCCESS;
 
   IPalfEnvImpl *palf_env_impl = get_palf_env();
+  ObLSHandle ls_handle;
+  ObLS *ls = NULL;
   if (OB_ISNULL(palf_env_impl)) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "unexpected error", K(ret), K(palf_id));
+  } else if (OB_SUCCESS == ls_service_->get_ls(ObLSID(palf_id), ls_handle, ObLSGetMod::LOG_MOD)
+      && OB_NOT_NULL(ls = ls_handle.get_ls())
+      && OB_NOT_NULL(ls->log_handler_.palf_handle_)) {
+    if (OB_FAIL(log_service_.remove_ls(ObLSID(palf_id), ls->log_handler_, ls->restore_handler_))) {
+      CLOG_LOG(WARN, "remove ls with log service failed", K(ret), K(palf_id));
+    }
   } else if (OB_FAIL(palf_env_impl->remove_palf_handle_impl(palf_id))) {
     CLOG_LOG(WARN, "create palf handle impll failed", K(ret), K(palf_id));
 //  Don't remove ls, otherwise the destroy function of ObLS may be executed.

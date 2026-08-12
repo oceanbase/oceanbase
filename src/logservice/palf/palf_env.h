@@ -81,6 +81,7 @@ public:
   virtual int create(const int64_t id,
                      const ipalf::AccessMode &access_mode,
                      const palf::PalfBaseInfo &palf_base_info,
+                     const palf::LogReplicaType replica_type,
                      ipalf::IPalfHandle *&handle) override final;
   virtual int start() override final;
 

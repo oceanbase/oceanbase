@@ -52,6 +52,7 @@ public:
   virtual int create(const int64_t id,
              const AccessMode &access_mode,
              const palf::PalfBaseInfo &palf_base_info,
+             const palf::LogReplicaType replica_type,
              IPalfHandle *&handle) = 0;
   virtual int start() = 0;
 

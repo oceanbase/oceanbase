@@ -342,7 +342,8 @@ public:
       transport_(NULL),
       batch_rpc_transport_(NULL),
       high_prio_rpc_transport_(NULL),
-      log_disk_lock_(common::ObLatchIds::TEST_LATCH_LOCK)
+      log_disk_lock_(common::ObLatchIds::TEST_LATCH_LOCK),
+      log_service_started_for_role_change_(false)
   {
   }
   ~ObSimpleLogServer()
@@ -466,6 +467,11 @@ public:
                 const AccessMode &access_mode,
                 const PalfBaseInfo &base_info,
                 IPalfHandleImpl *&palf_handle_impl) override final;
+  int create_ls_with_replica_type(const int64_t palf_id,
+                                  const AccessMode &access_mode,
+                                  const PalfBaseInfo &base_info,
+                                  const LogReplicaType replica_type,
+                                  IPalfHandleImpl *&palf_handle_impl);
   int remove_ls(const int64_t palf_id) override final;
   MockObLocalityManager *get_locality_manager() { return &mock_locality_manager_; }
   TO_STRING_KV(K_(node_id), K_(addr), KP(palf_env_));
@@ -482,6 +488,13 @@ protected:
                                    int64_t &allowed_log_disk_size);
   int update_disk_opts_no_lock_(const PalfDiskOptions &opts);
   int add_ls_to_ls_map_(const int64_t palf_id);
+  int add_empty_ls_to_ls_map_(const int64_t palf_id, ObLS *&ls);
+  int start_log_service_for_role_change_();
+  int create_ls_with_log_service_(const int64_t palf_id,
+                                  const AccessMode &access_mode,
+                                  const PalfBaseInfo &base_info,
+                                  const LogReplicaType replica_type,
+                                  IPalfHandleImpl *&palf_handle_impl);
   int init_log_kv_cache_();
 
 private:
@@ -523,6 +536,7 @@ private:
   palf::PalfDiskOptions disk_opts_;
   // 内部表中记录日志盘规格
   palf::PalfDiskOptions inner_table_disk_opts_;
+  bool log_service_started_for_role_change_;
   ObLooper looper_;
   MockCkptMap ckpt_map_;
   MockObLocalityManager mock_locality_manager_;

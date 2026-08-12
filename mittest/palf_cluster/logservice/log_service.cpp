@@ -638,7 +638,8 @@ int LogService::create_ls_(const share::ObLSID &id,
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", K(ret), K(id), K(id), K(tenant_role), K(palf_base_info));
   } else if (!is_arb_replica &&
-      OB_FAIL(palf_env_->create(id.id(), get_palf_access_mode(tenant_role), palf_base_info, palf_handle))) {
+      OB_FAIL(palf_env_->create(id.id(), get_palf_access_mode(tenant_role), palf_base_info,
+          palf::LogReplicaType::NORMAL_REPLICA, palf_handle))) {
     CLOG_LOG(WARN, "failed to get palf_handle", K(ret), K(id), K(replica_type));
   } else if (false == allow_log_sync && OB_FAIL(palf_handle->disable_sync())) {
     CLOG_LOG(WARN, "failed to disable_sync", K(ret), K(id));

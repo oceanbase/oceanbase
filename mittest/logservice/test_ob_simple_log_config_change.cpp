@@ -7,7 +7,10 @@
  */
 
 #define private public
+#define protected public
 #include "env/ob_simple_log_cluster_env.h"
+#include "logservice/leader_coordinator/election_priority_impl/election_priority_impl.h"
+#undef protected
 #undef private
 
 const std::string TEST_NAME = "config_change";
@@ -114,6 +117,248 @@ int check_log_sync(const std::vector<PalfHandleImplGuard*> &palf_list,
 
 MockLocCB loc_cb;
 
+bool wait_election_leader(PalfHandleImplGuard *palf, const int64_t timeout_us)
+{
+  const int64_t end_ts = ObTimeUtility::current_time() + timeout_us;
+  bool bool_ret = false;
+  while (!bool_ret && ObTimeUtility::current_time() < end_ts) {
+    ObRole election_role = INVALID_ROLE;
+    int64_t election_epoch = OB_INVALID_TIMESTAMP;
+    if (OB_SUCCESS == palf->palf_handle_impl_->state_mgr_.get_election_role(election_role, election_epoch) &&
+        LEADER == election_role) {
+      bool_ret = true;
+    } else {
+      ob_usleep(200 * 1000);
+    }
+  }
+  return bool_ret;
+}
+
+bool wait_election_leader_in_replicas(const std::vector<PalfHandleImplGuard*> &palf_list,
+                                      const int64_t idx1,
+                                      const int64_t idx2,
+                                      const int64_t timeout_us,
+                                      int64_t &leader_idx)
+{
+  const int64_t end_ts = ObTimeUtility::current_time() + timeout_us;
+  bool bool_ret = false;
+  leader_idx = OB_INVALID_INDEX;
+  while (!bool_ret && ObTimeUtility::current_time() < end_ts) {
+    ObRole election_role = INVALID_ROLE;
+    int64_t election_epoch = OB_INVALID_TIMESTAMP;
+    if (OB_SUCCESS == palf_list[idx1]->palf_handle_impl_->state_mgr_.get_election_role(
+        election_role, election_epoch) && LEADER == election_role) {
+      leader_idx = idx1;
+      bool_ret = true;
+    } else if (OB_SUCCESS == palf_list[idx2]->palf_handle_impl_->state_mgr_.get_election_role(
+        election_role, election_epoch) && LEADER == election_role) {
+      leader_idx = idx2;
+      bool_ret = true;
+    } else {
+      ob_usleep(200 * 1000);
+    }
+  }
+  return bool_ret;
+}
+
+bool wait_config_version_ge(PalfHandleImplGuard *palf,
+                            const LogConfigVersion &target_config_version,
+                            const int64_t timeout_us)
+{
+  const int64_t end_ts = ObTimeUtility::current_time() + timeout_us;
+  bool bool_ret = false;
+  while (!bool_ret && ObTimeUtility::current_time() < end_ts) {
+    LogConfigVersion config_version;
+    if (OB_SUCCESS == palf->palf_handle_impl_->get_config_version(config_version) &&
+        config_version >= target_config_version) {
+      bool_ret = true;
+    } else {
+      ob_usleep(200 * 1000);
+    }
+  }
+  return bool_ret;
+}
+
+TEST_F(TestObSimpleLogClusterConfigChange, logonly_election_leader_is_blocked_after_config_change)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "logonly_election_leader_is_blocked_after_config_change");
+  const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  const int64_t member_cnt = 4;
+  const int64_t logonly_idx = 3;
+  const int64_t WAIT_TIMEOUT_US = 90 * 1000 * 1000L;
+  int64_t leader_idx = -1;
+  int64_t other_f_idx = OB_INVALID_INDEX;
+  int64_t peer_f_idx = OB_INVALID_INDEX;
+  ObMemberList member_list;
+  PalfHandleImplGuard leader;
+  std::vector<PalfHandleImplGuard*> palf_list;
+
+  PALF_LOG(INFO, "begin logonly_election_leader_is_blocked_after_config_change", K(id));
+  for (int64_t i = 0; i < member_cnt; ++i) {
+    ASSERT_EQ(OB_SUCCESS, member_list.add_member(ObMember(get_cluster()[i]->get_addr(), 1)));
+  }
+  ASSERT_EQ(OB_SUCCESS, create_paxos_group_with_logonly(id, member_list, member_cnt,
+      logonly_idx, leader_idx, leader));
+  ASSERT_NE(logonly_idx, leader_idx);
+  ASSERT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
+  ASSERT_EQ(LogReplicaType::LOGONLY_REPLICA,
+      palf_list[logonly_idx]->palf_handle_impl_->state_mgr_.get_replica_type());
+  for (int64_t i = 0; i < member_cnt; ++i) {
+    if (i != leader_idx && i != logonly_idx) {
+      if (OB_INVALID_INDEX == other_f_idx) {
+        other_f_idx = i;
+      } else {
+        peer_f_idx = i;
+        break;
+      }
+    }
+  }
+  ASSERT_NE(OB_INVALID_INDEX, other_f_idx);
+  ASSERT_NE(OB_INVALID_INDEX, peer_f_idx);
+  DEFER({
+    unblock_all_net(leader_idx);
+    unblock_pcode(other_f_idx, ObRpcPacketCode::OB_LOG_CHANGE_CONFIG_META_REQ);
+    unblock_pcode(peer_f_idx, ObRpcPacketCode::OB_LOG_CHANGE_CONFIG_META_REQ);
+    revert_cluster_palf_handle_guard(palf_list);
+    leader.reset();
+    delete_paxos_group(id);
+  });
+
+  ASSERT_EQ(OB_SUCCESS, submit_log(leader, 20, id));
+  ASSERT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->get_max_lsn()));
+  for (int64_t i = 0; i < member_cnt; ++i) {
+    if (i != leader_idx && i != logonly_idx) {
+      ASSERT_EQ(OB_SUCCESS, check_replica_sync(id, &leader, palf_list[i], WAIT_TIMEOUT_US));
+    }
+  }
+
+  block_pcode(other_f_idx, ObRpcPacketCode::OB_LOG_CHANGE_CONFIG_META_REQ);
+  block_pcode(peer_f_idx, ObRpcPacketCode::OB_LOG_CHANGE_CONFIG_META_REQ);
+
+  LogConfigVersion leader_config_version;
+  LogConfigVersion logonly_config_version;
+  LogConfigVersion other_f_config_version;
+  LogConfigVersion peer_f_config_version;
+  ASSERT_EQ(OB_SUCCESS, palf_list[other_f_idx]->palf_handle_impl_->get_config_version(other_f_config_version));
+  ASSERT_EQ(OB_SUCCESS, palf_list[peer_f_idx]->palf_handle_impl_->get_config_version(peer_f_config_version));
+  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_member(
+      ObMember(palf_list[peer_f_idx]->palf_handle_impl_->self_, 1), member_cnt - 1, WAIT_TIMEOUT_US));
+  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(leader_config_version));
+  ASSERT_TRUE(wait_config_version_ge(palf_list[logonly_idx], leader_config_version, WAIT_TIMEOUT_US));
+  ASSERT_EQ(OB_SUCCESS, palf_list[logonly_idx]->palf_handle_impl_->get_config_version(logonly_config_version));
+  ASSERT_EQ(OB_SUCCESS, palf_list[other_f_idx]->palf_handle_impl_->get_config_version(other_f_config_version));
+  ASSERT_EQ(OB_SUCCESS, palf_list[peer_f_idx]->palf_handle_impl_->get_config_version(peer_f_config_version));
+  ASSERT_EQ(leader_config_version, logonly_config_version);
+  ASSERT_GT(logonly_config_version, other_f_config_version);
+  ASSERT_GT(logonly_config_version, peer_f_config_version);
+
+  block_all_net(leader_idx);
+  ASSERT_TRUE(wait_election_leader(palf_list[logonly_idx], WAIT_TIMEOUT_US));
+  ASSERT_FALSE(palf_list[logonly_idx]->palf_handle_impl_->state_mgr_.is_leader_active());
+  unblock_pcode(other_f_idx, ObRpcPacketCode::OB_LOG_CHANGE_CONFIG_META_REQ);
+  ASSERT_TRUE(wait_config_version_ge(palf_list[other_f_idx], logonly_config_version,
+      WAIT_TIMEOUT_US));
+  ASSERT_TRUE(wait_election_leader(palf_list[other_f_idx], WAIT_TIMEOUT_US));
+  ASSERT_EQ(LogReplicaType::NORMAL_REPLICA,
+      palf_list[other_f_idx]->palf_handle_impl_->state_mgr_.get_replica_type());
+  PALF_LOG(INFO, "end logonly_election_leader_is_blocked_after_config_change", K(id));
+}
+
+TEST_F(TestObSimpleLogClusterConfigChange, logonly_is_not_elected_when_all_f_have_clog_full)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "logonly_is_not_elected_when_all_f_have_clog_full");
+  const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  const int64_t member_cnt = 4;
+  const int64_t logonly_idx = 3;
+  const int64_t WAIT_TIMEOUT_US = 90 * 1000 * 1000L;
+  int64_t leader_idx = -1;
+  int64_t other_f_idx = OB_INVALID_INDEX;
+  int64_t peer_f_idx = OB_INVALID_INDEX;
+  int64_t new_f_leader_idx = OB_INVALID_INDEX;
+  ObMemberList member_list;
+  PalfHandleImplGuard leader;
+  std::vector<PalfHandleImplGuard*> palf_list;
+  logservice::coordinator::ElectionPriorityImpl election_priority_list[member_cnt];
+
+  PALF_LOG(INFO, "begin logonly_is_not_elected_when_all_f_have_clog_full", K(id));
+  for (int64_t i = 0; i < member_cnt; ++i) {
+    ASSERT_EQ(OB_SUCCESS, member_list.add_member(ObMember(get_cluster()[i]->get_addr(), 1)));
+  }
+  ASSERT_EQ(OB_SUCCESS, create_paxos_group_with_logonly(id, member_list, member_cnt,
+      logonly_idx, leader_idx, leader));
+  ASSERT_NE(logonly_idx, leader_idx);
+  ASSERT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
+  ASSERT_EQ(LogReplicaType::LOGONLY_REPLICA,
+      palf_list[logonly_idx]->palf_handle_impl_->state_mgr_.get_replica_type());
+  for (int64_t i = 0; i < member_cnt; ++i) {
+    election_priority_list[i].set_ls_id(share::ObLSID(id));
+    ASSERT_EQ(OB_SUCCESS,
+        palf_list[i]->palf_handle_impl_->set_election_priority(&election_priority_list[i]));
+  }
+  for (int64_t i = 0; i < member_cnt; ++i) {
+    if (i != leader_idx && i != logonly_idx) {
+      if (OB_INVALID_INDEX == other_f_idx) {
+        other_f_idx = i;
+      } else {
+        peer_f_idx = i;
+        break;
+      }
+    }
+  }
+  ASSERT_NE(OB_INVALID_INDEX, other_f_idx);
+  ASSERT_NE(OB_INVALID_INDEX, peer_f_idx);
+  DEFER({
+    unblock_all_net(leader_idx);
+    for (int64_t i = 0; i < member_cnt; ++i) {
+      if (i < static_cast<int64_t>(palf_list.size())) {
+        (void)palf_list[i]->palf_handle_impl_->reset_election_priority();
+      }
+    }
+    revert_cluster_palf_handle_guard(palf_list);
+    leader.reset();
+    delete_paxos_group(id);
+  });
+
+  ASSERT_EQ(OB_SUCCESS, submit_log(leader, 20, id));
+  ASSERT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->get_max_lsn()));
+  for (int64_t i = 0; i < member_cnt; ++i) {
+    palf::election::ElectionPriority *priority =
+        palf_list[i]->palf_handle_impl_->election_.priority_;
+    ASSERT_TRUE(NULL != priority);
+    logservice::coordinator::PriorityV1 &priority_v1 =
+        election_priority_list[i].priority_tuple_.element<1>();
+    priority_v1.fatal_failures_.reset();
+    if (i != logonly_idx) {
+      ASSERT_EQ(OB_SUCCESS, priority_v1.fatal_failures_.push_back(
+          logservice::coordinator::FailureEvent(
+              logservice::coordinator::FailureType::RESOURCE_NOT_ENOUGH,
+              logservice::coordinator::FailureModule::LOG,
+              logservice::coordinator::FailureLevel::FATAL)));
+    }
+    priority_v1.is_valid_ = true;
+    ASSERT_EQ(i != logonly_idx, priority->has_fatal_failure());
+  }
+  for (int64_t i = 0; i < member_cnt; ++i) {
+    if (i != logonly_idx) {
+      int compare_result = 0;
+      ObStringHolder reason;
+      ASSERT_EQ(OB_SUCCESS, election_priority_list[i].compare_with(
+          election_priority_list[logonly_idx], CLUSTER_VERSION_4_0_0_0,
+          true /* decentralized_voting */, compare_result, reason));
+      ASSERT_LT(compare_result, 0);
+    }
+  }
+
+  block_all_net(leader_idx);
+  ASSERT_TRUE(wait_election_leader_in_replicas(palf_list, other_f_idx, peer_f_idx,
+      WAIT_TIMEOUT_US, new_f_leader_idx));
+  ASSERT_EQ(LogReplicaType::NORMAL_REPLICA,
+      palf_list[new_f_leader_idx]->palf_handle_impl_->state_mgr_.get_replica_type());
+  ASSERT_FALSE(wait_election_leader(palf_list[logonly_idx], 3 * 1000 * 1000L));
+  PALF_LOG(INFO, "end logonly_is_not_elected_when_all_f_have_clog_full",
+      K(id), K(new_f_leader_idx));
+}
+
 TEST_F(TestObSimpleLogClusterConfigChange, split_brain)
 {
   SET_CASE_LOG_FILE(TEST_NAME, "split_brain");
@@ -168,7 +413,8 @@ TEST_F(TestObSimpleLogClusterConfigChange, split_brain)
     palf_base_info.generate_by_default();
     //PalfHandleImplGuard leader;
     palf_base_info.prev_log_info_.scn_ = share::SCN::min_scn();
-    EXPECT_EQ(OB_SUCCESS, get_cluster()[follower_C_idx]->get_palf_env()->create_palf_handle_impl(id, palf::AccessMode::APPEND, palf_base_info, follower_C_handle));
+    EXPECT_EQ(OB_SUCCESS, get_cluster()[follower_C_idx]->get_palf_env()->create_palf_handle_impl(
+        id, palf::AccessMode::APPEND, palf_base_info, palf::LogReplicaType::NORMAL_REPLICA, follower_C_handle));
     get_cluster()[follower_C_idx]->get_palf_env()->revert_palf_handle_impl(follower_C_handle);
     sleep(5);
     // check if split-brain happens

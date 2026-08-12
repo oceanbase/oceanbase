@@ -98,6 +98,7 @@ int LogStateMgr::init(const int64_t palf_id,
     allow_vote_ = replica_property_meta.allow_vote_;
     allow_vote_persisted_ = replica_property_meta.allow_vote_;
     replica_type_ = replica_property_meta.replica_type_;
+    // Logonly replicas sync logs like normal replicas; only arbitration disables sync.
     is_sync_enabled_ = !is_arb_replica();
     broadcast_leader_.reset();
     is_inited_ = true;
@@ -801,8 +802,9 @@ bool LogStateMgr::follower_active_need_switch_()
     state_changed = true;
   } else if (new_leader.is_valid()
              && self_ == new_leader) {
-    if (is_arb_replica()) {
-      PALF_LOG(INFO, "arb replica is leader, skip", K_(palf_id), K_(self), K(new_leader));
+    if (!can_be_active_leader()) {
+      PALF_LOG(INFO, "replica can not be active leader, skip", K_(palf_id), K_(self),
+          K(new_leader), K_(replica_type));
     } else {
       state_changed = true;
     }
@@ -975,8 +977,9 @@ bool LogStateMgr::follower_need_update_role_(common::ObAddr &new_leader,
     new_leader_epoch = OB_INVALID_TIMESTAMP;
   } else {
     bool_ret = (self_ == new_leader);
-    if (bool_ret && is_arb_replica()) {
-      PALF_LOG(INFO, "arb replica is leader, skip", K_(palf_id), K_(self), K(new_leader), K(new_leader_epoch));
+    if (bool_ret && !can_be_active_leader()) {
+      PALF_LOG(INFO, "replica can not be active leader, skip", K_(palf_id), K_(self),
+          K(new_leader), K(new_leader_epoch), K_(replica_type));
       bool_ret = false;
     }
     PALF_LOG(TRACE, "follower_need_update_role_", K(new_leader), K(new_leader_epoch));
@@ -1191,6 +1194,17 @@ LogReplicaType LogStateMgr::get_replica_type() const
 bool LogStateMgr::is_arb_replica() const
 {
   return get_replica_type() == LogReplicaType::ARBITRATION_REPLICA;
+}
+
+bool LogStateMgr::is_logonly_replica() const
+{
+  return get_replica_type() == LogReplicaType::LOGONLY_REPLICA;
+}
+
+bool LogStateMgr::can_be_active_leader() const
+{
+  // Logonly replicas remain voting members, but must not become active leaders.
+  return get_replica_type() == LogReplicaType::NORMAL_REPLICA;
 }
 
 int LogStateMgr::get_election_role(common::ObRole &role, int64_t &epoch) const

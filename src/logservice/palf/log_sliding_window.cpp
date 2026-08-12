@@ -199,7 +199,7 @@ int LogSlidingWindow::init(const int64_t palf_id,
                            common::ObILogAllocator *alloc_mgr,
                            LogPlugins *plugins,
                            const PalfBaseInfo &palf_base_info,
-                           const bool is_normal_replica)
+                           const bool need_init_mem)
 {
   int ret = OB_SUCCESS;
   const LogInfo &prev_log_info = palf_base_info.prev_log_info_;
@@ -217,7 +217,7 @@ int LogSlidingWindow::init(const int64_t palf_id,
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argumetns", K(ret), K(palf_id), K(self), K(palf_base_info),
         KP(state_mgr), KP(mm), KP(mode_mgr), KP(log_engine), KP(palf_fs_cb), KP(plugins));
-  } else if (is_normal_replica && OB_FAIL(do_init_mem_(palf_id, palf_base_info, alloc_mgr))) {
+  } else if (need_init_mem && OB_FAIL(do_init_mem_(palf_id, palf_base_info, alloc_mgr))) {
     PALF_LOG(WARN, "do_init_mem_ failed", K(ret), K(palf_id));
   } else {
     palf_id_ = palf_id;
