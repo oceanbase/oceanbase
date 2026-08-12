@@ -495,7 +495,7 @@ int ObDbmsWorkloadRepository::generate_ash_report_text(
         LOG_WARN("failed to print ash summary info", K(ret));
       }
     }
-    num_samples = num_samples + 10 * wr_num_samples;
+    num_samples = num_samples + wr_num_samples;
     // print other infos
     if (OB_SUCC(ret) && !no_data) {
       if (OB_FAIL(print_ash_top_active_tenants(
@@ -2379,7 +2379,7 @@ int ObDbmsWorkloadRepository::get_ash_num_samples(
     {
       common::sqlclient::ObMySQLResult *result = nullptr;
       if (OB_FAIL(sql_string.append_fmt(
-              "SELECT COUNT(weight) AS NUM_SAMPLES FROM   ("))) {
+              "SELECT SUM(count_weight) AS NUM_SAMPLES FROM   ("))) {
         LOG_WARN("append sql failed", K(ret));
       } else if (OB_FAIL(append_fmt_ash_view_sql(ash_report_params, sql_string))) {
         LOG_WARN("failed to append fmt ash view sql", K(ret));
@@ -2431,7 +2431,7 @@ int ObDbmsWorkloadRepository::get_wr_num_samples(
     {
       ObMySQLResult *result = nullptr;
       if (OB_FAIL(sql_string.append_fmt(
-              "SELECT COUNT(weight) AS WR_NUM_SAMPLES FROM   ("))) {
+              "SELECT SUM(count_weight) AS WR_NUM_SAMPLES FROM   ("))) {
         LOG_WARN("append sql failed", K(ret));
       } else if (OB_FAIL(append_fmt_wr_view_sql(ash_report_params, sql_string))) {
         LOG_WARN("failed to append fmt wr view sql", K(ret));
@@ -2471,7 +2471,7 @@ int ObDbmsWorkloadRepository::print_ash_summary_info(
 {
   int ret = OB_SUCCESS;
   int64_t dur_elapsed_time = ash_report_params.get_elapsed_time() / 1000000LL;
-  int64_t num_samples = ash_report_params.ash_num_samples + 10 * ash_report_params.wr_num_samples;
+  int64_t num_samples = ash_report_params.ash_num_samples + ash_report_params.wr_num_samples;
   no_data = false;
   const int64_t time_buf_len = 128;
   const int64_t data_source_len = 64;
@@ -2593,7 +2593,7 @@ int ObDbmsWorkloadRepository::print_ash_summary_info(
                OB_FAIL(temp_string.append_fmt("      Ash Num of Sample: %ld \n", ash_report_params.ash_num_samples))) {
       LOG_WARN("failed to assign Ash Num of Sample string", K(ret));
     } else if (ash_report_params.wr_end_time > 0 && OB_FAIL(temp_string.append_fmt("       Wr Num of Sample: %ld \n",
-                                                        ash_report_params.wr_num_samples * 10))) {
+                                                        ash_report_params.wr_num_samples))) {
       LOG_WARN("failed to assign Wr Num of Sample string", K(ret));
     } else if (OB_FAIL(temp_string.append_fmt("Average Active Sessions: %.2f \n", avg_active_sess))) {
       LOG_WARN("failed to assign Average Active Sessions string", K(ret));
