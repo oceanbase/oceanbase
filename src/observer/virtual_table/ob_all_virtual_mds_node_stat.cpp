@@ -67,7 +67,9 @@ struct ApplyOnLSOp {
   apply_on_tablet_op_(apply_on_tablet_op) {}
   int operator()(ObLS &ls) {
     int ret = OB_SUCCESS;
-    if (table_->judege_in_ranges(ls.get_ls_id(), table_->ls_ranges_)) {
+    if (ObReplicaTypeCheck::is_log_replica(ls.get_replica_type())) {
+      MDS_LOG(TRACE, "skip logonly replica", K(ls));
+    } else if (table_->judege_in_ranges(ls.get_ls_id(), table_->ls_ranges_)) {
       (void) table_->get_tablet_info_(ls, apply_on_tablet_op_);
     } else {
       MDS_LOG(TRACE, "not in ranges", K(ret), K(*table_));
