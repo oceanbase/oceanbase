@@ -139,10 +139,11 @@ int ObDASMatchPhraseOp::do_rescan()
     LOG_WARN("not initialized", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < token_helpers_.count(); ++i) {
-    if (OB_FAIL(token_helpers_[i]->rescan())) {
+    if (OB_FAIL(token_helpers_[i]->reuse())) {
+      LOG_WARN("failed to reuse token iter", K(ret));
+    } else if (FALSE_IT(token_iters_[i]->reuse())) {
+    } else if (OB_FAIL(token_helpers_[i]->rescan())) {
       LOG_WARN("failed to rescan token iter", K(ret));
-    } else {
-      token_iters_[i]->reuse();
     }
   }
   if (OB_SUCC(ret) && !token_helpers_.empty()) {

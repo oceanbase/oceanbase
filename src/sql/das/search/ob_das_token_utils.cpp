@@ -221,7 +221,7 @@ void ObDASTokenOpHelper::reset_scan_range()
   inv_idx_scan_range_.border_flag_.set_inclusive_end();
 }
 
-int ObDASTokenOpHelper::rescan()
+int ObDASTokenOpHelper::reuse()
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -240,9 +240,19 @@ int ObDASTokenOpHelper::rescan()
     } else if (need_relevance && OB_FAIL(inv_idx_agg_iter_.reuse())) {
       LOG_WARN("failed to reuse inv idx agg iter", K(ret));
     }
+  }
+  return ret;
+}
 
-    if (OB_FAIL(ret)) {
-    } else if (OB_UNLIKELY(!inv_idx_scan_param_.key_ranges_.empty())) {
+int ObDASTokenOpHelper::rescan()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not initialized", K(ret));
+  } else {
+    const bool need_relevance = ir_ctdef_->need_calc_relevance();
+    if (OB_UNLIKELY(!inv_idx_scan_param_.key_ranges_.empty())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected non-empty scan range", K(ret), K(inv_idx_scan_param_.key_ranges_));
     } else if (OB_FAIL(inv_idx_scan_param_.key_ranges_.push_back(inv_idx_scan_range_))) {

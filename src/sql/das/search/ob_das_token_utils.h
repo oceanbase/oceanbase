@@ -26,6 +26,7 @@ public:
   int init(const ObDASTokenOpParam &param);
   int init_bm25_param_estimator(ObBM25IndexParamEstimator &estimator);
   int init_text_retrieval_iter(ObTextRetrievalBlockMaxIter &iter);
+  int reuse();
   int rescan();
   int close();
   const ObTabletID &get_inv_idx_tablet_id() const { return inv_idx_tablet_id_; }
