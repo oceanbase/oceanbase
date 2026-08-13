@@ -873,6 +873,7 @@ void ObLS::destroy()
       MTL(transaction::ObTransIDService *)->reset_ls();
       MTL(transaction::ObTimestampService *)->reset_ls();
       MTL(sql::ObDASIDService *)->reset_ls();
+      MTL(observer::ObTableSessIDService *)->reset_ls();
     }
     (void)logonly_ls_destory_for_dup_table_();
     gc_handler_.reset();
