@@ -684,7 +684,7 @@ static lib::ObMemAttr get_mem_attr_from_storage_info(const ObObjectStorageInfo *
   return ret_attr;
 }
 
-// when accessing the object storage, if the error code returned is OB_BACKUP_PERMISSION_DENIED,
+// when accessing the object storage, if the error code returned is OB_OBJECT_STORAGE_PERMISSION_DENIED,
 // it may be due to expired temporary ak/sk
 // attempt to refresh the temporary ak/sk, and if the refresh fails,
 // only log the error message to avoid overriding the original error code.
@@ -692,7 +692,7 @@ static void try_refresh_device_credential(
     const int ob_errcode, const ObObjectStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
-  if (ob_errcode != OB_BACKUP_PERMISSION_DENIED) {
+  if (ob_errcode != OB_OBJECT_STORAGE_PERMISSION_DENIED) {
     // do nothing
   } else if (OB_ISNULL(storage_info) || OB_UNLIKELY(!storage_info->is_valid())) {
     ret = OB_INVALID_ARGUMENT;

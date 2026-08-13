@@ -239,6 +239,7 @@ public:
   TO_STRING_KV(K_(endpoint), K_(access_id), K_(extension), "type", get_type_str(),
       K_(checksum_type), KP_(role_arn), KP_(external_id), K_(enable_worm));
   bool is_assume_role_mode() const;
+  int reset_access_id_and_access_key(const char *access_id, const char *access_key);
   static int register_cluster_version_mgr(ObClusterVersionBaseMgr *cluster_version_mgr);
 
   virtual int to_account(ObStorageAccount &account) const;

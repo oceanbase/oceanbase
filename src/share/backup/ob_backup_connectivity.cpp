@@ -21,6 +21,7 @@
 #include "lib/utility/ob_print_utils.h"
 #include "share/backup/ob_backup_helper.h"
 #include "share/backup/ob_archive_persist_helper.h"
+#include "share/backup/ob_backup_config.h"
 
 namespace oceanbase
 {
@@ -2124,60 +2125,32 @@ int ObBackupChangeExternalStorageDestUtil::change_external_storage_dest(const ob
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
   } else {
-    const uint64_t tenant_id = arg.items_.at(0).exec_tenant_id_;
+    const uint64_t tenant_id = gen_user_tenant_id(arg.items_.at(0).exec_tenant_id_);
     const common::ObFixedLengthString<common::OB_MAX_CONFIG_VALUE_LEN> &path = arg.items_.at(0).value_;
     const common::ObFixedLengthString<common::OB_MAX_CONFIG_VALUE_LEN> &access_info = arg.items_.at(1).value_;
     const common::ObFixedLengthString<common::OB_MAX_CONFIG_VALUE_LEN> &attribute = arg.items_.at(2).value_;
 
+    ObChangeExternalStorageDestMgr change_mgr;
     const bool has_access_info = !access_info.is_empty();
     const bool has_attribute = !attribute.is_empty();
 
-    share::ObBackupDest backup_dest;
-    ObBackupDestAttribute access_info_option;
-    ObBackupDestAttribute attribute_option;
-    ObMySQLTransaction trans;
-    if (is_sys_tenant(tenant_id)) {
+    if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sql proxy is null", K(ret), K(tenant_id));
+    } else if (!is_user_tenant(tenant_id)) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("sys tenant is not supported", K(ret));
-    } else if (OB_FAIL(backup_dest.set_storage_path(path.str()))) {
-      LOG_WARN("failed to set backup dest", K(ret));
-    }
-    if (OB_SUCC(ret) && has_access_info) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not support reset access info", K(ret));
-    }
-    if (OB_SUCC(ret) && has_attribute) {
-      if (FAILEDx(ObBackupDestAttributeParser::parse(attribute.str(), attribute_option))) {
-        LOG_WARN("failed to parse attribute", K(ret), K(attribute));
-      }
-    }
-
-    if (FAILEDx(trans.start(GCTX.sql_proxy_, gen_meta_tenant_id(tenant_id)))) {
-      LOG_WARN("failed to start trans", K(ret), K(tenant_id));
+      LOG_WARN("The instruction is only supported by user tenant.", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, " using the syntax under sys tenant or meta tenant is");
+    } else if (OB_FAIL(change_mgr.init(tenant_id, path, *GCTX.sql_proxy_))) {
+      LOG_WARN("failed to init change_external_storage_dest_mgr", K(ret), K(tenant_id));
+    } else if (has_access_info && OB_FAIL(change_mgr.set_authorization(access_info.str()))) {
+      LOG_WARN("failed to set authorization", K(ret), K(access_info));
+    } else if (has_attribute && OB_FAIL(change_mgr.set_attribute(attribute.str()))) {
+      LOG_WARN("failed to set attribute", K(ret), K(attribute));
+    } else if (OB_FAIL(change_mgr.change_external_storage_dest())) {
+      LOG_WARN("failed to change external storage dest", K(ret), K(tenant_id));
     } else {
-      if (OB_SUCC(ret) && has_attribute) {
-        share::ObBackupDestIOPermissionMgr *dest_io_permission_mgr = nullptr;
-        char extension[OB_MAX_BACKUP_EXTENSION_LENGTH] = { 0 };
-        if (OB_SUCC(ret) && '\0' != attribute_option.src_info_[0]) {
-          if (OB_FAIL(change_src_info(trans, gen_user_tenant_id(tenant_id), attribute_option, backup_dest))) {
-            if (OB_ITER_END == ret) {
-              ret = OB_ENTRY_NOT_EXIST;
-              LOG_WARN("path is not exist, please check the path", K(ret), K(tenant_id));
-            } else {
-              LOG_WARN("failed to change src info", K(ret), K(tenant_id));
-            }
-          } else {
-            LOG_INFO("admin change external storage dest", K(arg));
-          }
-        }
-      }
-      if (trans.is_started()) {
-        int tmp_ret = OB_SUCCESS;
-        if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(tmp_ret));
-          ret = COVER_SUCC(tmp_ret);
-        }
-      }
+      LOG_INFO("admin change external storage dest", K(arg));
     }
   }
   ROOTSERVICE_EVENT_ADD("root_service", "change_external_storage_dest", K(ret), K(arg));
@@ -2188,7 +2161,7 @@ int ObBackupChangeExternalStorageDestUtil::change_external_storage_dest(const ob
 int ObBackupChangeExternalStorageDestUtil::change_src_info(
     common::ObISQLClient &proxy,
     const uint64_t tenant_id,
-    ObBackupDestAttribute &option,
+    const ObBackupDestAttribute &option,
     const ObBackupDest &backup_dest)
 {
   int ret = OB_SUCCESS;
@@ -2199,7 +2172,7 @@ int ObBackupChangeExternalStorageDestUtil::change_src_info(
     LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(backup_dest));
   } else {
     char extension[OB_MAX_BACKUP_EXTENSION_LENGTH] = { 0 };
-    char *src_info = option.src_info_;
+    const char *src_info = option.src_info_;
     if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest_extension(
               proxy, tenant_id, backup_dest, extension, sizeof(extension)))) {
       LOG_WARN("failed to get backup dest extension", K(ret), K(tenant_id), K(backup_dest));

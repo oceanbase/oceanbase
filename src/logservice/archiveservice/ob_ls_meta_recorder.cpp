@@ -71,6 +71,14 @@
       } else if (OB_FAIL(insert_or_update_record_context_(t.get_type(), record_context))) {  \
          ARCHIVE_LOG(WARN, "insert or update record context failed", K(ret), K(id), K(task_type));    \
       }  \
+      if (OB_OBJECT_STORAGE_PERMISSION_DENIED == ret) {  \
+        if (OB_ISNULL(round_mgr_)) {  \
+          ret = OB_ERR_UNEXPECTED;  \
+          ARCHIVE_LOG(WARN, "round_mgr is null", K(ret));  \
+        } else if (OB_FAIL(round_mgr_->reset_backup_dest(key))) {  \
+          ARCHIVE_LOG(WARN, "reset backup dest failed", K(ret), K(key));  \
+        }  \
+      }  \
     }   \
   } \
 }

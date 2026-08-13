@@ -12,6 +12,7 @@
 
 #include "ob_archive_round_mgr.h"
 #include "observer/ob_server_event_history_table_operator.h"   // SERVER_EVENT
+#include "share/backup/ob_backup_connectivity.h"               // ObBackupStorageInfoOperator
 
 namespace oceanbase
 {
@@ -128,6 +129,60 @@ void ObArchiveRoundMgr::set_archive_suspend(const ArchiveKey &key)
     key_ = key;
     log_archive_state_.status_ = ObArchiveRoundState::Status::SUSPEND;
   }
+}
+
+int ObArchiveRoundMgr::get_backup_path_str_(const ArchiveKey &key, char *buf, const int64_t buf_size) const
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(rwlock_);
+  if (key != key_) {
+    ret = OB_EAGAIN;
+  } else if (!backup_dest_.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    ARCHIVE_LOG(WARN, "backup_dest is invalid", KR(ret));
+  } else if (OB_FAIL(backup_dest_.get_backup_path_str(buf, buf_size))) {
+    ARCHIVE_LOG(WARN, "get backup path str failed", KR(ret));
+  }
+  return ret;
+}
+
+int ObArchiveRoundMgr::reset_backup_dest(const ArchiveKey &key)
+{
+  int ret = OB_SUCCESS;
+
+  ObBackupPathString backup_path;
+  ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
+  const uint64_t tenant_id = gen_user_tenant_id(MTL_ID());
+  share::ObBackupDest backup_dest;
+  bool is_equal = false;
+  if (OB_ISNULL(sql_proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    ARCHIVE_LOG(WARN, "sql_proxy is null", K(ret), KP(sql_proxy));
+  } else if (OB_FAIL(get_backup_path_str_(key, backup_path.ptr(), backup_path.capacity()))) {
+    ARCHIVE_LOG(WARN, "fail to get backup path str", K(ret));
+  } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy, tenant_id, backup_path, backup_dest))) {
+    ARCHIVE_LOG(WARN, "fail to get backup dest", K(ret), K(tenant_id), K(backup_path));
+  } else {
+    WLockGuard guard(rwlock_);
+    if (key != key_) {
+      ret = OB_EAGAIN;
+    } else if (!backup_dest_.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      ARCHIVE_LOG(WARN, "backup_dest is invalid", KR(ret));
+    } else if (OB_FAIL(backup_dest_.is_backup_path_equal(backup_dest, is_equal))) {
+      ARCHIVE_LOG(WARN, "fail to compare backup path", K(ret), K(backup_dest), K_(backup_dest), K(is_equal));
+    } else if (is_equal) {
+      if (OB_FAIL(backup_dest_.deep_copy(backup_dest))) {
+        ARCHIVE_LOG(WARN, "fail to deep copy dest", K(ret), K(backup_dest));
+      } else {
+        ARCHIVE_LOG(INFO, "reset_backup_dest succ", K(ret), K_(backup_dest));
+      }
+    } else {
+      ARCHIVE_LOG(INFO, "backup dest has changed, do not need update", K(ret));
+    }
+  }
+
+  return ret;
 }
 
 int ObArchiveRoundMgr::get_backup_dest(const ArchiveKey &key,

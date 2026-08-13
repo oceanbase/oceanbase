@@ -79,7 +79,15 @@ int ObChangeExternalStorageDestResolver::resolve(const ParseNode &parse_tree)
           // access info may be null
           if (OB_SUCC(ret) && OB_NOT_NULL(parse_tree.children_[1])) {
             const ObString access_info_value = parse_tree.children_[1]->str_value_;
-            if (OB_FAIL(item.value_.assign(access_info_value))) {
+            uint64_t tenant_data_version = 0;
+            if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+              LOG_WARN("failed to get tenant data version", K(ret));
+            } else if (tenant_data_version < DATA_VERSION_4_2_5_8) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2.5.8, changing ak&sk is");
+              LOG_WARN("tenant data version is less than 4.2.5.8, changing ak&sk is not supported",
+                  K(ret), K(tenant_data_version));
+            } else if (OB_FAIL(item.value_.assign(access_info_value))) {
               LOG_WARN("failed to assign config value", K(ret));
             }
           }

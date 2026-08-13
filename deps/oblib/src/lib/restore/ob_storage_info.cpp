@@ -204,6 +204,25 @@ bool ObObjectStorageInfo::is_assume_role_mode() const
   return is_assume_role_mode_;
 }
 
+int ObObjectStorageInfo::reset_access_id_and_access_key(
+    const char *access_id, const char *access_key)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(access_id)) {
+    int64_t pos = 0;
+    if (OB_FAIL(databuff_printf(access_id_, OB_MAX_BACKUP_ACCESSID_LENGTH, pos, "%s%s", ACCESS_ID, access_id))) {
+      LOG_WARN("failed to databuff printf", K(ret), KCSTRING(access_id));
+    }
+  }
+  if (OB_NOT_NULL(access_key)) {
+    int64_t pos = 0;
+    if (FAILEDx(databuff_printf(access_key_, OB_MAX_BACKUP_ACCESSKEY_LENGTH, pos, "%s%s", ACCESS_KEY, access_key))) {
+      LOG_WARN("failed to databuff printf", K(ret));
+    }
+  }
+  return ret;
+}
+
 bool ObObjectStorageInfo::is_enable_worm() const
 {
   return enable_worm_;

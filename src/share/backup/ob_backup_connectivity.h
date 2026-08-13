@@ -287,12 +287,12 @@ class ObBackupChangeExternalStorageDestUtil
 {
 public:
   static int change_external_storage_dest(const obrpc::ObAdminSetConfigArg &arg);
-private:
   static int change_src_info(
       common::ObISQLClient &proxy,
       const uint64_t tenant_id,
-      share::ObBackupDestAttribute &option,
+      const share::ObBackupDestAttribute &option,
       const share::ObBackupDest &backup_dest);
+private:
   static int process_src_info_in_extension_before_update(
       const char *src_info,
       char *extension,

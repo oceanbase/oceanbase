@@ -49,6 +49,7 @@ public:
   void set_archive_force_stop(const ArchiveKey &key);
   void set_archive_interrupt(const ArchiveKey &key);
   void set_archive_suspend(const ArchiveKey &key);
+  int reset_backup_dest(const ArchiveKey &key);
   int get_backup_dest(const ArchiveKey &key,
       share::ObBackupDest &dest);
   int get_piece_info(const ArchiveKey &key,
@@ -71,6 +72,8 @@ public:
                K_(compatible),
                K_(log_archive_state),
                K_(backup_dest));
+private:
+  int get_backup_path_str_(const ArchiveKey &key, char *buf, const int64_t buf_size) const;
 
 private:
   typedef common::SpinRWLock RWLock;

@@ -815,6 +815,21 @@ void ObArchiveSender::handle_archive_ret_code_(const ObLSID &id,
           "archive_dest_id", key.dest_id_,
           "archive_round", key.round_);
     }
+  } else if (OB_OBJECT_STORAGE_PERMISSION_DENIED == ret_code) {
+    // object storage permission denied, may be caused by ak/sk changed, try to refresh backup_dest
+    if (REACH_TIME_INTERVAL(ARCHIVE_DBA_ERROR_LOG_PRINT_INTERVAL)) {
+      LOG_DBA_ERROR(OB_OBJECT_STORAGE_PERMISSION_DENIED,
+          "msg", "archive dest permission denied, retrying after reset backup_dest", "ret", ret_code,
+          "archive_dest_id", key.dest_id_,
+          "archive_round", key.round_);
+      // reset round_mgr backup_dest
+      if (OB_ISNULL(round_mgr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        ARCHIVE_LOG(WARN, "round_mgr is null", K(ret));
+      } else if (OB_FAIL(round_mgr_->reset_backup_dest(key))) {
+        ARCHIVE_LOG(WARN, "reset backup dest failed", K(ret), K(key));
+      }
+    }
   } else if (OB_ERR_AES_ENCRYPT == ret_code) {
     // archive dest encrypt failed
     if (REACH_TIME_INTERVAL(ARCHIVE_DBA_ERROR_LOG_PRINT_INTERVAL)) {
@@ -892,6 +907,7 @@ bool ObArchiveSender::is_retry_ret_code_(const int ret_code) const
     || OB_COS_ERROR == ret_code
     || OB_S3_ERROR == ret_code
     || OB_BACKUP_PERMISSION_DENIED == ret_code
+    || OB_OBJECT_STORAGE_PERMISSION_DENIED == ret_code
     || OB_ERR_AES_ENCRYPT == ret_code
     || OB_ERR_AES_DECRYPT == ret_code
     || OB_BACKUP_IO_PROHIBITED == ret_code

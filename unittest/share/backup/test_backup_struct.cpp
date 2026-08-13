@@ -259,6 +259,50 @@ TEST(ObBackupDest, cos_encrypt)
 }
 #endif
 
+TEST(ObBackupDestAttributeParser, parse_access_info)
+{
+  const char *option = "access_id=AAA&access_key=BBB";
+  ObBackupDestAttribute dest_option;
+  dest_option.reset();
+  ASSERT_EQ(OB_SUCCESS, ObBackupDestAttributeParser::parse_access_info(ObString(option), dest_option));
+  ASSERT_EQ(0, strcmp(dest_option.access_id_, "AAA"));
+  ASSERT_EQ(0, strcmp(dest_option.access_key_, "BBB"));
+
+  // empty access info is invalid
+  ObBackupDestAttribute empty_option;
+  empty_option.reset();
+  ASSERT_NE(OB_SUCCESS, ObBackupDestAttributeParser::parse_access_info(ObString(""), empty_option));
+}
+
+TEST(ObBackupDest, reset_access_id_and_access_key)
+{
+  const char *backup_test = "oss://backup_dir/?host=xxx.com&access_id=111&access_key=222";
+  ObBackupDest dest;
+#ifdef OB_BUILD_TDE_SECURITY
+  EXPECT_EQ(OB_SUCCESS, ObMasterKeyGetter::instance().init(NULL));
+  EXPECT_EQ(OB_SUCCESS, ObMasterKeyGetter::instance().set_root_key(OB_SYS_TENANT_ID,
+                                                        obrpc::RootKeyType::DEFAULT, ObString()));
+#endif
+  ASSERT_EQ(OB_SUCCESS, dest.set(backup_test));
+  ASSERT_TRUE(dest.storage_info_->device_type_ == 0);
+
+  // reset to a different ak/sk succeeds and updates the raw fields
+  ASSERT_EQ(OB_SUCCESS, dest.reset_access_id_and_access_key("newid", "newkey"));
+  ASSERT_EQ(0, strcmp(dest.storage_info_->access_id_, "access_id=newid"));
+  ASSERT_EQ(0, strcmp(dest.storage_info_->access_key_, "access_key=newkey"));
+
+#ifndef OB_BUILD_TDE_SECURITY
+  // resetting to the same ak/sk is rejected (only detectable when ak/sk are stored unencrypted)
+  ASSERT_EQ(OB_INVALID_ARGUMENT, dest.reset_access_id_and_access_key("newid", "newkey"));
+#endif
+
+#ifdef OB_BUILD_TDE_SECURITY
+  ObMasterKeyGetter::instance().stop();
+  ObMasterKeyGetter::instance().wait();
+  ObMasterKeyGetter::instance().reset();
+#endif
+}
+
 int main(int argc, char **argv)
 {
   system("rm -f test_backup_struct.log*");

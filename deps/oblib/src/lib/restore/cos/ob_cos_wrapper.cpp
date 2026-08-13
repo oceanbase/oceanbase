@@ -45,6 +45,7 @@ constexpr int OB_COS_ERROR                           = -9060;
 constexpr int OB_IO_LIMIT                            = -9061;
 constexpr int OB_BACKUP_PERMISSION_DENIED            = -9071;
 constexpr int OB_BACKUP_PWRITE_OFFSET_NOT_MATCH      = -9083;
+constexpr int OB_OBJECT_STORAGE_PERMISSION_DENIED    = -9116;
 constexpr int OB_INVALID_OBJECT_STORAGE_ENDPOINT     = -9118;
 constexpr int OB_OBJECT_STORAGE_IO_ERROR              = -9129;
 constexpr int OB_OBJECT_STORAGE_CHECKSUM_ERROR       = -9132;
@@ -84,7 +85,7 @@ static void convert_io_error(cos_status_t *cos_ret, int &ob_errcode)
   } else if (!cos_status_is_ok(cos_ret)) {
     switch (cos_ret->code) {
       case COS_PERMISSION_DENIED: {
-        ob_errcode = OB_BACKUP_PERMISSION_DENIED;
+        ob_errcode = OB_OBJECT_STORAGE_PERMISSION_DENIED;
         break;
       }
       case COS_OBJECT_NOT_EXIST: {

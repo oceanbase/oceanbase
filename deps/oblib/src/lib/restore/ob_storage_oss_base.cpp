@@ -217,11 +217,11 @@ static void convert_io_error(aos_status_t *aos_ret, int &ob_errcode)
     switch (aos_ret->code) {
       case OSS_PERMISSION_DENIED: {
         if (OB_ISNULL(aos_ret->error_code)) {
-          ob_errcode = OB_BACKUP_PERMISSION_DENIED;
+          ob_errcode = OB_OBJECT_STORAGE_PERMISSION_DENIED;
         } else if (0 == STRCMP(OB_OBJECT_FORBIDDEN_BY_OBJECT_LOCK, aos_ret->error_code)) {
           ob_errcode = OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM;
         } else {
-          ob_errcode = OB_BACKUP_PERMISSION_DENIED;
+          ob_errcode = OB_OBJECT_STORAGE_PERMISSION_DENIED;
         }
         break;
       }
