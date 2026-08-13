@@ -35,6 +35,11 @@ class ObVectorIndexSegmentQuerier;
 
 class ObVectorIndexSegment;
 
+// Single-writer / multi-reader handle.
+// Mutating APIs (operator=/reset/set_segment) must be externally serialized on the same
+// handle instance; concurrent writers can double-dec_ref or leak. ATOMIC_* only publishes
+// the pointer so concurrent readers do not observe a transient null during replace. Lock-free
+// dereference still requires another live ref (e.g. a copied handle or an extra holder).
 class ObVectorIndexSegmentHandle
 {
 public:
@@ -43,7 +48,7 @@ public:
   {}
   ~ObVectorIndexSegmentHandle() { reset(); }
 
-  bool is_valid() const { return nullptr != segment_; }
+  bool is_valid() const { return nullptr != ATOMIC_LOAD(&segment_); }
   void reset();
 
   ObVectorIndexSegmentHandle(const ObVectorIndexSegmentHandle &other);
@@ -58,6 +63,8 @@ public:
   TO_STRING_KV(KPC_(segment));
 
 private:
+  static void release_segment(ObVectorIndexSegment *segment);
+  // Atomically published for lock-free is_valid()/get()/operator->() reads.
   ObVectorIndexSegment *segment_;
 
 };
@@ -514,6 +521,10 @@ public:
   TCRWLock complete_lock_;
 };
 
+// Single-writer / multi-reader handle (same contract as ObVectorIndexSegmentHandle).
+// Mutate operator=/reset/set_memdata under external serialization only. ATOMIC_* on
+// memdata_ avoids a transient null for readers; safe lock-free field access still needs
+// another live ref (copied handle or extra holder such as frozen_data_->vbitmap_).
 template<typename T>
 class ObVectorIndexMemDataHandle
 {
@@ -533,61 +544,77 @@ public:
   ObVectorIndexMemDataHandle &operator= (const ObVectorIndexMemDataHandle &other)
   {
     if (this != &other) {
-      reset();
-      if (nullptr != other.memdata_) {
-        memdata_ = other.memdata_;
-        memdata_->inc_ref();
-        allocator_ = other.allocator_;
-        tenant_id_ = other.tenant_id_;
+      T *old_memdata = ATOMIC_LOAD(&memdata_);
+      ObIAllocator *old_allocator = allocator_;
+      const uint64_t old_tenant_id = tenant_id_;
+      T *new_memdata = ATOMIC_LOAD(&other.memdata_);
+      if (OB_NOT_NULL(new_memdata)) {
+        new_memdata->inc_ref();
       }
+      ATOMIC_STORE(&memdata_, new_memdata);
+      allocator_ = other.allocator_;
+      tenant_id_ = other.tenant_id_;
+      release_memdata(old_memdata, old_allocator, old_tenant_id);
     }
     return *this;
   }
 
   ~ObVectorIndexMemDataHandle() { reset(); }
 
-  bool is_valid() const { return nullptr != memdata_; }
+  bool is_valid() const { return nullptr != ATOMIC_LOAD(&memdata_); }
 
   void reset()
   {
-    if (nullptr != memdata_) {
-      const int64_t ref_cnt = memdata_->dec_ref();
-      if (0 == ref_cnt) {
-        destroy();
-      }
-      memdata_ = nullptr;
-    }
+    T *old_memdata = ATOMIC_LOAD(&memdata_);
+    ObIAllocator *old_allocator = allocator_;
+    const uint64_t old_tenant_id = tenant_id_;
+    ATOMIC_STORE(&memdata_, static_cast<T *>(nullptr));
     allocator_ = nullptr;
     tenant_id_ = OB_INVALID_TENANT_ID;
+    release_memdata(old_memdata, old_allocator, old_tenant_id);
   }
 
-  T* operator->() const { return memdata_; }
-  T* operator->() { return memdata_; }
+  T* operator->() const { return ATOMIC_LOAD(&memdata_); }
+  T* operator->() { return ATOMIC_LOAD(&memdata_); }
   const T* get() const { return ATOMIC_LOAD(&memdata_); }
 
   int set_memdata(T *memdata, ObIAllocator *allocator, const uint64_t tenant_id)
   {
     int ret = OB_SUCCESS;
-    reset();
-    if (OB_ISNULL(memdata)) {
+    if (OB_ISNULL(memdata) || OB_ISNULL(allocator)) {
       ret = OB_INVALID_ARGUMENT;
-      SHARE_LOG(WARN, "invalid argument", K(ret), KP(memdata));
+      SHARE_LOG(WARN, "invalid argument", K(ret), KP(memdata), KP(allocator));
     } else {
-      memdata_ = memdata;
-      memdata_->inc_ref();
+      T *old_memdata = ATOMIC_LOAD(&memdata_);
+      ObIAllocator *old_allocator = allocator_;
+      const uint64_t old_tenant_id = tenant_id_;
+      memdata->inc_ref();
+      ATOMIC_STORE(&memdata_, memdata);
       allocator_ = allocator;
       tenant_id_ = tenant_id;
+      release_memdata(old_memdata, old_allocator, old_tenant_id);
     }
     return ret;
   }
 
 private:
-  void destroy()
+  static void release_memdata(T *memdata, ObIAllocator *allocator, const uint64_t tenant_id)
   {
-    if (nullptr != memdata_) {
-      memdata_->free_memdata_resource(allocator_, tenant_id_);
-      memdata_->~T();
-      allocator_->free(memdata_);
+    if (OB_NOT_NULL(memdata)) {
+      const int64_t ref_cnt = memdata->dec_ref();
+      if (0 == ref_cnt) {
+        // Always free owned resources first, then destroy and free the object shell.
+        // Null allocator is unexpected (set_memdata validates it); if it still happens we free
+        // resources and ~T() for best-effort cleanup, log ERROR, and may leak the object shell.
+        memdata->free_memdata_resource(allocator, tenant_id);
+        memdata->~T();
+        if (OB_ISNULL(allocator)) {
+          SHARE_LOG_RET(ERROR, OB_ERR_UNEXPECTED,
+                        "allocator is null when release memdata", KP(memdata), K(tenant_id));
+        } else {
+          allocator->free(memdata);
+        }
+      }
     }
   }
 
@@ -595,6 +622,11 @@ public:
   TO_STRING_KV(KPC_(memdata), KP_(allocator), K_(tenant_id));
 
 private:
+  // memdata_ is atomically published so readers do not see a transient null during replace.
+  // That does NOT make concurrent mutate safe, nor make bare operator->() UAF-proof without
+  // an extra ref. allocator_/tenant_id_ are intentionally non-atomic: only written by the
+  // single mutator and snapshotted into locals before release_memdata(); public readers never
+  // access them.
   T *memdata_;
   ObIAllocator *allocator_;
   uint64_t tenant_id_;

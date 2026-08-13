@@ -77,39 +77,48 @@ ObVectorIndexSegmentHandle::ObVectorIndexSegmentHandle(const ObVectorIndexSegmen
   *this = other;
 }
 
+void ObVectorIndexSegmentHandle::release_segment(ObVectorIndexSegment *segment)
+{
+  if (OB_NOT_NULL(segment)) {
+    const int64_t ref_cnt = segment->dec_ref();
+    if (0 == ref_cnt) {
+      ObVectorIndexSegment::destroy(segment);
+    }
+  }
+}
+
 ObVectorIndexSegmentHandle &ObVectorIndexSegmentHandle::operator= (const ObVectorIndexSegmentHandle &other)
 {
   if (this != &other) {
-    reset();
-    if (nullptr != other.segment_) {
-      segment_ = other.segment_;
-      segment_->inc_ref();
+    ObVectorIndexSegment *old_segment = ATOMIC_LOAD(&segment_);
+    ObVectorIndexSegment *new_segment = ATOMIC_LOAD(&other.segment_);
+    if (OB_NOT_NULL(new_segment)) {
+      new_segment->inc_ref();
     }
+    ATOMIC_STORE(&segment_, new_segment);
+    release_segment(old_segment);
   }
   return *this;
 }
 
 void ObVectorIndexSegmentHandle::reset()
 {
-  if (nullptr != segment_) {
-    const int64_t ref_cnt = segment_->dec_ref();
-    if (0 == ref_cnt) {
-      ObVectorIndexSegment::destroy(segment_);
-    }
-    segment_ = nullptr;
-  }
+  ObVectorIndexSegment *old_segment = ATOMIC_LOAD(&segment_);
+  ATOMIC_STORE(&segment_, static_cast<ObVectorIndexSegment *>(nullptr));
+  release_segment(old_segment);
 }
 
 int ObVectorIndexSegmentHandle::set_segment(ObVectorIndexSegment *segment)
 {
   int ret = OB_SUCCESS;
-  reset();
   if (OB_ISNULL(segment)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(segment));
   } else {
-    segment_ = segment;
+    ObVectorIndexSegment *old_segment = ATOMIC_LOAD(&segment_);
     segment->inc_ref();
+    ATOMIC_STORE(&segment_, segment);
+    release_segment(old_segment);
   }
   return ret;
 }

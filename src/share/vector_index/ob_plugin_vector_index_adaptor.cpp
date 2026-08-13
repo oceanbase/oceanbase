@@ -3487,12 +3487,18 @@ int ObPluginVectorIndexAdaptor::write_into_bitmap_without_lock(ObVecIdxVBitmapDa
 bool ObPluginVectorIndexAdaptor::check_if_complete_index(SCN read_scn)
 {
   bool res = false;
-  SCN bitmap_scn = vbitmap_data_->scn_;
-  if (read_scn > bitmap_scn) {
+  ObVecIdxVBitmapDataHandle local = vbitmap_data_;
+  if (local.is_valid()) {
+    DEBUG_SYNC(BEFORE_VECTOR_INDEX_VBITMAP_SCN_ACCESS);
+    SCN bitmap_scn = local->scn_;
+    if (read_scn > bitmap_scn) {
+      res = true;
+      LOG_INFO("[VEC_INDEX][COMPLETE_INDEX] need complete index mem data.", K(read_scn), K(bitmap_scn), KPC(this));
+    }
+  } else {
     res = true;
-    LOG_INFO("[VEC_INDEX][COMPLETE_INDEX] need complete index mem data.", K(read_scn), K(bitmap_scn), KPC(this));
+    LOG_INFO("[VEC_INDEX][COMPLETE_INDEX] vbitmap data is not valid, trigger complete index mem data", KPC(this));
   }
-
   return res;
 }
 
@@ -6574,14 +6580,29 @@ int ObPluginVectorIndexAdaptor::complete_bitmap_data(
     } else if (OB_FAIL(get_dim(dim))) {
       LOG_WARN("failed to get dim.", K(ret));
     } else {
-      TCWLockGuard lock_guard(vbitmap_data_->bitmap_rwlock_);
-      if (OB_FAIL(write_into_bitmap_without_lock(vbitmap_data_, dim, max_scn, i_vids, d_vids))) {
-        LOG_WARN("failed to write into index mem.", K(ret), K(frozen_scn), K(max_scn));
+      // Hold an extra ref on the locked object so replace cannot destroy it while
+      // TCWLockGuard still owns old bitmap_rwlock_ (do not rely only on frozen).
+      ObVecIdxVBitmapDataHandle old_holder = vbitmap_data_;
+      if (!old_holder.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("vbitmap is invalid before complete", K(ret), KPC(this));
+      } else if (frozen_data_->vbitmap_.get() != old_holder.get()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("frozen vbitmap changed before replace", K(ret), KPC(this));
       } else {
-        new_vbitmap->scn_ = vbitmap_data_->scn_;
-        vbitmap_data_ = new_vbitmap;
-        LOG_INFO("complete vbitmap for frozen success", KP(this), K(vbitmap_data_), K(frozen_data_),
-          K(frozen_scn), K(max_scn), K(skip_row_cnt), K(scan_row_cnt), K(i_vids.count()), K(d_vids.count()), K(d_vids));
+        TCWLockGuard lock_guard(old_holder->bitmap_rwlock_);
+        if (OB_FAIL(write_into_bitmap_without_lock(old_holder, dim, max_scn, i_vids, d_vids))) {
+          LOG_WARN("failed to write into index mem.", K(ret), K(frozen_scn), K(max_scn));
+        } else if (OB_UNLIKELY(frozen_data_->vbitmap_.get() != old_holder.get())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("frozen vbitmap changed during replace", K(ret), KPC(this));
+        } else {
+          new_vbitmap->scn_ = old_holder->scn_;
+          DEBUG_SYNC(BEFORE_VECTOR_INDEX_COMPLETE_BITMAP_REPLACE);
+          vbitmap_data_ = new_vbitmap;
+          LOG_INFO("complete vbitmap for frozen success", KP(this), K(vbitmap_data_), K(frozen_data_),
+            K(frozen_scn), K(max_scn), K(skip_row_cnt), K(scan_row_cnt), K(i_vids.count()), K(d_vids.count()), K(d_vids));
+        }
       }
     }
   }
