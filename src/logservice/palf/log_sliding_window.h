@@ -43,6 +43,7 @@ class LogTaskHeaderInfo;
 class LogStateMgr;
 class LogConfigMgr;
 class LogModeMgr;
+class LogQuorumPolicy;
 class LogTask;
 class LogGroupEntry;
 class TruncateLogCbCtx;
@@ -211,7 +212,8 @@ public:
                    common::ObILogAllocator *alloc_mgr,
                    LogPlugins *plugins,
                    const PalfBaseInfo &palf_base_info,
-                   const bool need_init_mem);
+                   const bool need_init_mem,
+                   const LogQuorumPolicy *quorum_policy);
   virtual int sliding_cb(const int64_t sn, const FixedSlidingWindowSlot *data);
   virtual int64_t get_max_log_id() const;
   virtual const share::SCN get_max_scn() const;
@@ -510,6 +512,8 @@ private:
   LogModeMgr *mode_mgr_;
   LogEngine *log_engine_;
   LogPlugins *plugins_;
+  // Non-owning; owned by PalfHandleImpl or PalfHandleLite and must outlive this object.
+  const LogQuorumPolicy *quorum_policy_;
   palf::PalfFSCbWrapper *palf_fs_cb_;
   LSNAllocator lsn_allocator_;
   mutable RWLock group_buffer_lock_;

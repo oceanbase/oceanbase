@@ -46,7 +46,8 @@ public:
   void reset();
   int64_t to_string(char *buf, const int64_t buf_len) const;
 private:
-  const static int64_t ACK_LIST_SERVER_NUM = common::OB_MAX_MEMBER_NUMBER / 2;
+  // LogReconfirm records remote PREPARE responses and counts self separately.
+  const static int64_t ACK_LIST_SERVER_NUM = common::OB_MAX_MEMBER_NUMBER - 1;
   common::ObAddr server_[ACK_LIST_SERVER_NUM];
 };
 } // namespace palf

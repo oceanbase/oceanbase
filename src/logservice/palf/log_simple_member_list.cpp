@@ -142,13 +142,16 @@ int LogAckList::add_server(const common::ObAddr &server)
       }
     }
     if (!found) {
-      if (count >= ACK_LIST_SERVER_NUM) {
-        // do nothing
+      if (OB_UNLIKELY(count >= ACK_LIST_SERVER_NUM)) {
+        ret = OB_ERROR_OUT_OF_RANGE;
+        PALF_LOG(WARN, "ack list is full", K(ret), K(count), K(server));
       } else {
         server_[count] = server;
       }
     }
-    PALF_LOG(INFO, "add_server success", K(count), K(server), K(count));
+    if (OB_SUCC(ret)) {
+      PALF_LOG(INFO, "add_server success", K(count), K(server));
+    }
   }
   return ret;
 }

@@ -10,6 +10,7 @@
 #include "log_sliding_window.h"
 #include "log_mode_mgr.h"
 #include "log_reconfirm.h"
+#include "log_quorum_policy.h"
 
 namespace oceanbase
 {
@@ -69,6 +70,7 @@ LogConfigMgr::LogConfigMgr()
       mode_mgr_(NULL),
       reconfirm_(NULL),
       plugins_(NULL),
+      quorum_policy_(NULL),
       is_inited_(false)
 {}
 
@@ -87,7 +89,8 @@ int LogConfigMgr::init(const int64_t palf_id,
                        election::Election* election,
                        LogModeMgr *mode_mgr,
                        LogReconfirm *reconfirm,
-                       LogPlugins *plugins)
+                       LogPlugins *plugins,
+                       const LogQuorumPolicy *quorum_policy)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -102,11 +105,12 @@ int LogConfigMgr::init(const int64_t palf_id,
              OB_ISNULL(election) ||
              OB_ISNULL(mode_mgr) ||
              OB_ISNULL(reconfirm) ||
-             OB_ISNULL(plugins)) {
+             OB_ISNULL(plugins) ||
+             OB_ISNULL(quorum_policy)) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", KR(ret), K(palf_id), K(self),
         K(log_ms_meta), KP(log_engine), KP(sw), KP(state_mgr), KP(election), KP(mode_mgr),
-        KP(reconfirm), KP(plugins));
+        KP(reconfirm), KP(plugins), KP(quorum_policy));
   } else {
     palf_id_ = palf_id;
     self_ = self;
@@ -118,6 +122,7 @@ int LogConfigMgr::init(const int64_t palf_id,
     mode_mgr_ = mode_mgr;
     reconfirm_ = reconfirm;
     plugins_ = plugins;
+    quorum_policy_ = quorum_policy;
     if (true == log_ms_meta.curr_.is_valid()) {
       if (OB_FAIL(append_config_info_(log_ms_meta.curr_))) {
         PALF_LOG(WARN, "append_config_info_ failed", K(ret), K(palf_id), K(log_ms_meta));
@@ -147,6 +152,7 @@ void LogConfigMgr::destroy()
     log_engine_ = NULL;
     reconfirm_ = NULL;
     plugins_ = NULL;
+    quorum_policy_ = NULL;
     register_time_us_ = OB_INVALID_TIMESTAMP;
     register_parent_reason_ = RegisterParentReason::INVALID;
     parent_.reset();
@@ -1441,21 +1447,25 @@ int LogConfigMgr::check_config_change_args_by_type_(const LogConfigChangeArgs &a
 
 bool LogConfigMgr::can_memberlist_majority_(const int64_t new_member_list_len, const int64_t new_replica_num) const
 {
-  // NB: new_replica_num is not the number of paxos member after config changing,
-  // it means that after config changing, availability of this paxos group should be like
-  // 'new_replica_num' member group, even if paxos member number is smaller than 'new_replica_num'.
+  // In normal mode, new_replica_num is not necessarily the number of paxos members after
+  // config changing. It describes the availability of the paxos group even when the actual
+  // paxos member count is smaller than new_replica_num.
   // For example, 'member_list' is (A, B, C, D) and 'replica_num' is 4, then request remove(D, 4) arrives,
   // after removing D, 'member_list' is (A, B, C) and 'replica_num' is still 4 (rather than 3). A new log will
   // be committed only when it has been flushed by 3 replicas at least. Even if there are only 3 replicas in
   // this paxos group, its availibility is equal to 4 replicas paxos group.
-  // constraints:
+  // Normal-mode constraints:
   // 1. replica_num >= len(member_list)
   // 2. len(member_list) >= replica_num / 2 + 1
   bool bool_ret = false;
+  const int64_t prepare_quorum = quorum_policy_->get_prepare_quorum(new_replica_num);
   if (new_member_list_len > new_replica_num) {
     PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "replica_num too small", K_(palf_id), K_(self), K(new_replica_num), K(new_member_list_len));
   } else if (new_member_list_len < (new_replica_num / 2 + 1)) {
     PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "replica_num too large", K_(palf_id), K_(self), K(new_replica_num), K(new_member_list_len));
+  } else if (new_member_list_len < prepare_quorum) {
+    PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "member list count does not reach prepare quorum",
+        K_(palf_id), K_(self), K(new_replica_num), K(new_member_list_len), K(prepare_quorum));
   } else {
     bool_ret = true;
   }
@@ -2354,6 +2364,10 @@ int LogConfigMgr::check_follower_sync_status_(const LogConfigChangeArgs &args,
 
   (void) sw_->get_committed_end_lsn(first_leader_committed_end_lsn);
   const bool need_skip_log_barrier = mode_mgr_->need_skip_log_barrier();
+  const int64_t new_log_sync_accept_quorum =
+      quorum_policy_->get_accept_quorum(new_config_info.config_.log_sync_replica_num_);
+  const int64_t curr_log_sync_accept_quorum =
+      quorum_policy_->get_accept_quorum(log_ms_meta_.curr_.config_.log_sync_replica_num_);
   // A migrating learner is excluded from log_sync_children_ and may not fetch new logs within
   // the 500 ms progress sampling below. Temporarily push incremental logs to a nearly caught-up
   // learner so it can satisfy the existing sync check without relaxing the check.
@@ -2374,12 +2388,14 @@ int LogConfigMgr::check_follower_sync_status_(const LogConfigChangeArgs &args,
   } else if (first_committed_end_lsn >= first_leader_committed_end_lsn) {
     // if committed lsn of new majority do not retreat, then start config change
     PALF_LOG(INFO, "majority of new_member_list are sync with leader, start config change", K(ret), K_(palf_id), K_(self),
-            K(first_committed_end_lsn), K(first_leader_committed_end_lsn), K(new_config_info), K(conn_timeout_us));
+        K(first_committed_end_lsn), K(first_leader_committed_end_lsn), K(new_config_info), K(conn_timeout_us));
   // when quorum has been changed (e.g., 1 -> 2), committed_end_lsn of new memberlist may always be behind the committed_end_lsn of
   // leader, so we relax the condition for adding members which has changed quorum
   } else if (is_add_log_sync_member_list(args.type_) &&
-            (new_config_info.config_.log_sync_replica_num_ / 2) > (log_ms_meta_.curr_.config_.log_sync_replica_num_ / 2) &&
-            log_ms_meta_.curr_.config_.arbitration_member_.is_valid()) {
+      new_log_sync_accept_quorum > curr_log_sync_accept_quorum &&
+      log_ms_meta_.curr_.config_.arbitration_member_.is_valid()) {
+    // When the accept quorum is increased, committed_end_lsn of the new memberlist
+    // may always be behind the leader, so relax the condition for adding members.
     if (added_member_flushed_end_lsn.is_valid() &&
         first_leader_committed_end_lsn - added_member_flushed_end_lsn < LEADER_DEFAULT_GROUP_BUFFER_SIZE &&
         (added_member_last_slide_log_id != INT64_MAX &&
@@ -2583,20 +2599,22 @@ int LogConfigMgr::sync_get_committed_end_lsn_(const LogConfigChangeArgs &args,
     added_member_last_slide_log_id = (is_added_member)? last_slide_log_id: added_member_last_slide_log_id;
   }
 
+  const int64_t log_sync_accept_quorum = quorum_policy_->get_accept_quorum(new_log_sync_replica_num);
   if (false == added_member_has_new_version) {
     ret = OB_EAGAIN;
     PALF_LOG(WARN, "added member don't have new version, eagain", K(ret), K_(palf_id),
         K_(self), K(args), K(config_version));
   } else if ((paxos_resp_cnt < new_paxos_replica_num / 2 + 1) ||
-             (log_sync_resp_cnt < new_log_sync_replica_num / 2 + 1)) {
+             (log_sync_resp_cnt < log_sync_accept_quorum)) {
     // do not recv majority resp, can not change member
     ret = OB_EAGAIN;
     PALF_LOG(WARN, "connection timeout with majority of new_member_list, can't change member!",
         K_(palf_id), K_(self), K(new_paxos_replica_num), K(paxos_resp_cnt),
-        K(new_log_sync_replica_num), K(log_sync_resp_cnt), K(conn_timeout_us));
+        K(new_log_sync_replica_num), K(log_sync_resp_cnt), K(log_sync_accept_quorum), K(conn_timeout_us));
   } else {
     lib::ob_sort(lsn_array, lsn_array + log_sync_resp_cnt, LSNCompare());
-    committed_end_lsn = lsn_array[new_log_sync_replica_num / 2];
+    // Pick the largest LSN that has been flushed by at least log_sync_accept_quorum members.
+    committed_end_lsn = lsn_array[log_sync_accept_quorum - 1];
   }
   PALF_LOG(INFO, "sync_get_committed_end_lsn_ finish", K(ret), K_(palf_id), K_(self), K(args),
       K(new_config_info), K(need_purge_throttling), K(need_remote_check),

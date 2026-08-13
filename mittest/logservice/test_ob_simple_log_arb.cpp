@@ -1068,5 +1068,6 @@ TEST_F(TestObSimpleLogClusterArbService, test_degradation_policy)
 
 int main(int argc, char **argv)
 {
+  GCONF.prometheus_metrics_port = 0;  // disable exposer in mittest
   RUN_SIMPLE_LOG_CLUSTER_TEST(TEST_NAME);
 }

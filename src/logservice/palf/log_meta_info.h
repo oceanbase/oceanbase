@@ -89,6 +89,8 @@ public:
   bool operator<(const LogConfigVersion &config_version) const;
   bool operator>=(const LogConfigVersion &config_version) const;
   bool operator<=(const LogConfigVersion &config_version) const;
+  int64_t get_proposal_id() const { return proposal_id_; }
+  int64_t get_config_seq() const { return config_seq_; }
   TO_STRING_KV(K_(proposal_id), K_(config_seq));
   NEED_SERIALIZE_AND_DESERIALIZE;
   // Ensure that:

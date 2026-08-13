@@ -275,6 +275,7 @@ plsql_code_type
 plsql_debug
 plsql_v2_compatibility
 plugins_load
+prometheus_metrics_port
 px_node_policy
 px_target_high_watermark
 px_target_low_watermark

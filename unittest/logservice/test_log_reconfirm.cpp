@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 #define private public
 #include "logservice/palf/log_reconfirm.h"
+#include "logservice/palf/log_quorum_policy.h"
 #include "mock_logservice_container/mock_log_config_mgr.h"
 #include "mock_logservice_container/mock_log_engine.h"
 #include "mock_logservice_container/mock_log_sliding_window.h"
@@ -20,6 +21,33 @@ using namespace share;
 
 namespace unittest
 {
+
+TEST(LogAckList, track_all_remote_prepare_responses)
+{
+  LogAckList ack_list;
+  const int64_t remote_server_count = OB_MAX_MEMBER_NUMBER - 1;
+  for (int64_t i = 0; i < remote_server_count; ++i) {
+    ObAddr server;
+    ASSERT_TRUE(server.set_ip_addr("127.0.0.1", 12346 + i));
+    ASSERT_EQ(OB_SUCCESS, ack_list.add_server(server));
+  }
+  EXPECT_EQ(remote_server_count, ack_list.get_count());
+}
+
+TEST(LogAckList, report_capacity_overflow)
+{
+  LogAckList ack_list;
+  const int64_t remote_server_count = OB_MAX_MEMBER_NUMBER - 1;
+  for (int64_t i = 0; i < remote_server_count; ++i) {
+    ObAddr server;
+    ASSERT_TRUE(server.set_ip_addr("127.0.0.1", 12346 + i));
+    ASSERT_EQ(OB_SUCCESS, ack_list.add_server(server));
+  }
+  ObAddr overflow_server;
+  ASSERT_TRUE(overflow_server.set_ip_addr("127.0.0.1", 12346 + remote_server_count));
+  EXPECT_EQ(OB_ERROR_OUT_OF_RANGE, ack_list.add_server(overflow_server));
+  EXPECT_EQ(remote_server_count, ack_list.get_count());
+}
 
 class TestLogReconfirm : public ::testing::Test
 {
@@ -45,6 +73,7 @@ public:
   MockLogConfigMgr mock_mm_;
   MockLogModeMgr mock_mode_mgr_;
   MockLogEngine mock_log_engine_;
+  LogQuorumPolicy quorum_policy_;
   MockLogReconfirm log_reconfirm_;
 };
 
@@ -63,25 +92,27 @@ void TestLogReconfirm::TearDown()
 TEST_F(TestLogReconfirm, test_init)
 {
   EXPECT_EQ(OB_INVALID_ARGUMENT, log_reconfirm_.init(palf_id_, self_, NULL,
-        &mock_state_mgr_, &mock_mm_, &mock_mode_mgr_, &mock_log_engine_));
+        &mock_state_mgr_, &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &quorum_policy_));
   EXPECT_EQ(OB_INVALID_ARGUMENT, log_reconfirm_.init(palf_id_, self_, &mock_sw_,
-        NULL, &mock_mm_, &mock_mode_mgr_, &mock_log_engine_));
+        NULL, &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &quorum_policy_));
   EXPECT_EQ(OB_INVALID_ARGUMENT, log_reconfirm_.init(palf_id_, self_, &mock_sw_,
-        &mock_state_mgr_, NULL, &mock_mode_mgr_, &mock_log_engine_));
+        &mock_state_mgr_, NULL, &mock_mode_mgr_, &mock_log_engine_, &quorum_policy_));
   EXPECT_EQ(OB_INVALID_ARGUMENT, log_reconfirm_.init(palf_id_, self_, &mock_sw_,
-        &mock_state_mgr_, &mock_mm_, NULL, &mock_log_engine_));
+        &mock_state_mgr_, &mock_mm_, NULL, &mock_log_engine_, &quorum_policy_));
   EXPECT_EQ(OB_INVALID_ARGUMENT, log_reconfirm_.init(palf_id_, self_, &mock_sw_,
-        &mock_state_mgr_, &mock_mm_, &mock_mode_mgr_, NULL));
+        &mock_state_mgr_, &mock_mm_, &mock_mode_mgr_, NULL, &quorum_policy_));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, log_reconfirm_.init(palf_id_, self_, &mock_sw_,
+        &mock_state_mgr_, &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, NULL));
   EXPECT_EQ(OB_SUCCESS, log_reconfirm_.init(palf_id_, self_, &mock_sw_,
-        &mock_state_mgr_, &mock_mm_, &mock_mode_mgr_, &mock_log_engine_));
+        &mock_state_mgr_, &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &quorum_policy_));
   EXPECT_EQ(OB_INIT_TWICE, log_reconfirm_.init(palf_id_, self_, &mock_sw_,
-        &mock_state_mgr_, &mock_mm_, &mock_mode_mgr_, &mock_log_engine_));
+        &mock_state_mgr_, &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &quorum_policy_));
 }
 
 TEST_F(TestLogReconfirm, test_reset_state)
 {
   EXPECT_EQ(OB_SUCCESS, log_reconfirm_.init(palf_id_, self_, &mock_sw_,
-        &mock_state_mgr_, &mock_mm_, &mock_mode_mgr_, &mock_log_engine_));
+        &mock_state_mgr_, &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &quorum_policy_));
   log_reconfirm_.reset_state();
   log_reconfirm_.state_ = MockLogReconfirm::WAITING_LOG_FLUSHED;
   log_reconfirm_.reset_state();
@@ -106,7 +137,7 @@ void TestLogReconfirm::set_default_config_meta()
 TEST_F(TestLogReconfirm, test_init_reconfirm)
 {
   EXPECT_EQ(OB_SUCCESS, log_reconfirm_.init(palf_id_, self_, &mock_sw_,
-        &mock_state_mgr_, &mock_mm_, &mock_mode_mgr_, &mock_log_engine_));
+        &mock_state_mgr_, &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &quorum_policy_));
   EXPECT_EQ(OB_NOT_INIT, log_reconfirm_.init_reconfirm_());
   set_default_config_meta();
   EXPECT_EQ(OB_SUCCESS, log_reconfirm_.init_reconfirm_());
@@ -122,7 +153,7 @@ TEST_F(TestLogReconfirm, test_handle_prepare_response)
   EXPECT_EQ(OB_NOT_INIT, log_reconfirm_.handle_prepare_response(src_server, src_proposal_id,
         src_accept_proposal_id, last_lsn, committed_end_lsn));
   EXPECT_EQ(OB_SUCCESS, log_reconfirm_.init(palf_id_, self_, &mock_sw_,
-        &mock_state_mgr_, &mock_mm_, &mock_mode_mgr_, &mock_log_engine_));
+        &mock_state_mgr_, &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &quorum_policy_));
   EXPECT_EQ(OB_INVALID_ARGUMENT, log_reconfirm_.handle_prepare_response(src_server, src_proposal_id,
         src_accept_proposal_id, last_lsn, committed_end_lsn));
   src_server = self_;
@@ -132,14 +163,14 @@ TEST_F(TestLogReconfirm, test_handle_prepare_response)
   log_reconfirm_.new_proposal_id_ = 2;
   EXPECT_EQ(OB_STATE_NOT_MATCH, log_reconfirm_.handle_prepare_response(src_server, src_proposal_id,
         src_accept_proposal_id, last_lsn, committed_end_lsn));
-  // src_proposal_id < majority_max_accept_pid_, not receive
-  log_reconfirm_.majority_max_accept_pid_ = 2;
-  log_reconfirm_.majority_max_lsn_.val_ = 100;
+  // src_accept_proposal_id < prepare_quorum_max_accepted_log_pid_, not receive
+  log_reconfirm_.prepare_quorum_max_accepted_log_pid_ = 2;
+  log_reconfirm_.prepare_quorum_max_accepted_lsn_.val_ = 100;
   last_lsn.val_ = 50;
   log_reconfirm_.state_ = MockLogReconfirm::FETCH_MAX_LOG_LSN;
   EXPECT_EQ(OB_SUCCESS, log_reconfirm_.handle_prepare_response(src_server, src_proposal_id,
         src_accept_proposal_id, last_lsn, committed_end_lsn));
-  // src_proposal_id == majority_max_accept_pid_, receive
+  // src_accept_proposal_id == prepare_quorum_max_accepted_log_pid_, receive
   src_accept_proposal_id = 2;
   last_lsn.val_ = 120;
   committed_end_lsn.val_ = 100;
@@ -148,8 +179,8 @@ TEST_F(TestLogReconfirm, test_handle_prepare_response)
         src_accept_proposal_id, last_lsn, committed_end_lsn));
   EXPECT_EQ(1, log_reconfirm_.follower_end_lsn_list_.count());
   EXPECT_EQ(committed_end_lsn, log_reconfirm_.follower_end_lsn_list_[0].last_flushed_end_lsn_);
-  EXPECT_EQ(last_lsn, log_reconfirm_.majority_max_lsn_);
-  log_reconfirm_.majority_max_accept_pid_ = 1;
+  EXPECT_EQ(last_lsn, log_reconfirm_.prepare_quorum_max_accepted_lsn_);
+  log_reconfirm_.prepare_quorum_max_accepted_log_pid_ = 1;
   EXPECT_EQ(OB_SUCCESS, log_reconfirm_.handle_prepare_response(src_server, src_proposal_id,
         src_accept_proposal_id, last_lsn, committed_end_lsn));
 }
@@ -157,9 +188,9 @@ TEST_F(TestLogReconfirm, test_handle_prepare_response)
 TEST_F(TestLogReconfirm, test_try_fetch_log)
 {
   EXPECT_EQ(OB_SUCCESS, log_reconfirm_.init(palf_id_, self_, &mock_sw_,
-        &mock_state_mgr_, &mock_mm_, &mock_mode_mgr_, &mock_log_engine_));
+        &mock_state_mgr_, &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &quorum_policy_));
   mock_sw_.max_flushed_end_lsn_.val_ = 100;
-  log_reconfirm_.majority_max_lsn_.val_ = 100;
+  log_reconfirm_.prepare_quorum_max_accepted_lsn_.val_ = 100;
   EXPECT_EQ(true, log_reconfirm_.is_fetch_log_finished_());
   mock_sw_.mock_start_id_ = 1;
   EXPECT_EQ(OB_SUCCESS, log_reconfirm_.try_fetch_log_());

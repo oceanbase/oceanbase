@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 #define private public
 #include "logservice/palf/log_mode_mgr.h"
+#include "logservice/palf/log_quorum_policy.h"
 #include "mock_logservice_container/mock_election.h"
 #include "mock_logservice_container/mock_log_sliding_window.h"
 #include "mock_logservice_container/mock_log_engine.h"
@@ -79,7 +80,8 @@ public:
     EXPECT_TRUE(mode_meta.is_valid());
     PALF_LOG(INFO, "init_test_mode_mgr_env", K(role), K(state), K(mock_state_mgr_->leader_), K(mock_state_mgr_->role_));
     mock_log_engine_->reset_register_parent_resp_ret();
-    EXPECT_EQ(OB_SUCCESS, mode_mgr.init(1, self, mode_meta, mock_state_mgr_, mock_log_engine_, mock_config_mgr_, mock_sw_));
+    EXPECT_EQ(OB_SUCCESS, mode_mgr.init(1, self, mode_meta, mock_state_mgr_, mock_log_engine_,
+        mock_config_mgr_, mock_sw_, &quorum_policy_));
   }
 public:
   mockelection::MockElection *mock_election_;
@@ -87,6 +89,7 @@ public:
   palf::MockLogSlidingWindow *mock_sw_;
   palf::MockLogEngine *mock_log_engine_;
   palf::MockLogConfigMgr *mock_config_mgr_;
+  palf::LogQuorumPolicy quorum_policy_;
 };
 
 TEST_F(TestLogModeMgr, test_init)
@@ -97,23 +100,25 @@ TEST_F(TestLogModeMgr, test_init)
   ObAddr invalid_addr;
   EXPECT_EQ(OB_SUCCESS, valid_meta.generate(1, 1, AccessMode::APPEND, share::SCN::base_scn()));
   EXPECT_EQ(OB_INVALID_ARGUMENT, mode_mgr.init(-1, addr1, valid_meta,
-      mock_state_mgr_, mock_log_engine_, mock_config_mgr_, mock_sw_));
+      mock_state_mgr_, mock_log_engine_, mock_config_mgr_, mock_sw_, &quorum_policy_));
   EXPECT_EQ(OB_INVALID_ARGUMENT, mode_mgr.init(1, invalid_addr, valid_meta,
-      mock_state_mgr_, mock_log_engine_, mock_config_mgr_, mock_sw_));
+      mock_state_mgr_, mock_log_engine_, mock_config_mgr_, mock_sw_, &quorum_policy_));
   EXPECT_EQ(OB_INVALID_ARGUMENT, mode_mgr.init(1, addr1, invalid_meta,
-      mock_state_mgr_, mock_log_engine_, mock_config_mgr_, mock_sw_));
+      mock_state_mgr_, mock_log_engine_, mock_config_mgr_, mock_sw_, &quorum_policy_));
   EXPECT_EQ(OB_INVALID_ARGUMENT, mode_mgr.init(1, addr1, valid_meta,
-      NULL, mock_log_engine_, mock_config_mgr_, mock_sw_));
+      NULL, mock_log_engine_, mock_config_mgr_, mock_sw_, &quorum_policy_));
   EXPECT_EQ(OB_INVALID_ARGUMENT, mode_mgr.init(1, addr1, valid_meta,
-      mock_state_mgr_, NULL, mock_config_mgr_, mock_sw_));
+      mock_state_mgr_, NULL, mock_config_mgr_, mock_sw_, &quorum_policy_));
   EXPECT_EQ(OB_INVALID_ARGUMENT, mode_mgr.init(1, addr1, valid_meta,
-      mock_state_mgr_, mock_log_engine_, NULL, mock_sw_));
+      mock_state_mgr_, mock_log_engine_, NULL, mock_sw_, &quorum_policy_));
   EXPECT_EQ(OB_INVALID_ARGUMENT, mode_mgr.init(1, addr1, valid_meta,
-      mock_state_mgr_, mock_log_engine_, mock_config_mgr_, NULL));
+      mock_state_mgr_, mock_log_engine_, mock_config_mgr_, NULL, &quorum_policy_));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, mode_mgr.init(1, addr1, valid_meta,
+      mock_state_mgr_, mock_log_engine_, mock_config_mgr_, mock_sw_, NULL));
   EXPECT_EQ(OB_SUCCESS, mode_mgr.init(1, addr1, valid_meta,
-      mock_state_mgr_, mock_log_engine_, mock_config_mgr_, mock_sw_));
+      mock_state_mgr_, mock_log_engine_, mock_config_mgr_, mock_sw_, &quorum_policy_));
   EXPECT_EQ(OB_INIT_TWICE, mode_mgr.init(1, addr1, valid_meta,
-      mock_state_mgr_, mock_log_engine_, mock_config_mgr_, mock_sw_));
+      mock_state_mgr_, mock_log_engine_, mock_config_mgr_, mock_sw_, &quorum_policy_));
   PALF_LOG(INFO, "test_init case");
 }
 
@@ -193,7 +198,7 @@ TEST_F(TestLogModeMgr, test_receive_mode_meta)
     EXPECT_FALSE(mode_mgr.can_receive_mode_meta(pid, valid_meta, has_accepted));
 
     EXPECT_EQ(OB_SUCCESS, mode_mgr.init(1, addr1, valid_meta,
-        mock_state_mgr_, mock_log_engine_, mock_config_mgr_, mock_sw_));
+        mock_state_mgr_, mock_log_engine_, mock_config_mgr_, mock_sw_, &quorum_policy_));
 
     EXPECT_FALSE(mode_mgr.can_receive_mode_meta(INVALID_PROPOSAL_ID, valid_meta, has_accepted));
     EXPECT_FALSE(mode_mgr.can_receive_mode_meta(pid, invalid_meta, has_accepted));
@@ -345,6 +350,8 @@ TEST_F(TestLogModeMgr, test_change_access_mode)
     EXPECT_EQ(MODE_PREPARE, mode_mgr.state_);
     // handle prepare resp
     EXPECT_EQ(OB_SUCCESS, mode_mgr.handle_prepare_response(addr2, 2, 1, LSN(0), valid_meta));
+    // Collect all prepare responses so both majority and FPAXOS prepare quorums are covered.
+    EXPECT_EQ(OB_SUCCESS, mode_mgr.handle_prepare_response(addr3, 2, 1, LSN(0), valid_meta));
     // switch to accept
     EXPECT_EQ(OB_EAGAIN, mode_mgr.change_access_mode(mode_version, AccessMode::RAW_WRITE, share::SCN::base_scn()));
     EXPECT_EQ(MODE_ACCEPT, mode_mgr.state_);

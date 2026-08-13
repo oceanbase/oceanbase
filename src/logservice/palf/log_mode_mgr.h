@@ -25,6 +25,7 @@ class LogStateMgr;
 class LogEngine;
 class LogConfigMgr;
 class LogSlidingWindow;
+class LogQuorumPolicy;
 
 enum ModeChangeState
 {
@@ -45,7 +46,8 @@ public:
            LogStateMgr *state_mgr,
            LogEngine *log_engine,
            LogConfigMgr *config_mgr,
-           LogSlidingWindow *sw);
+           LogSlidingWindow *sw,
+           const LogQuorumPolicy *quorum_policy);
   virtual void destroy();
   virtual void reset_status();
   virtual int get_access_mode(AccessMode &access_mode) const;
@@ -92,8 +94,9 @@ public:
     J_OBJ_START();
     J_KV(K_(palf_id), K_(self), K_(applied_mode_meta), K_(accepted_mode_meta),
         K_(last_submit_mode_meta), "state", state2str_(state_), K_(new_proposal_id), K_(local_max_lsn),
-        K_(local_max_log_pid), K_(max_majority_accepted_pid), K_(max_majority_lsn),
-        K_(max_majority_accepted_mode_meta), K_(follower_list), K_(ack_list), K_(majority_cnt),
+        K_(local_max_log_pid), K_(prepare_quorum_max_accepted_log_pid), K_(prepare_quorum_max_accepted_lsn),
+        K_(prepare_quorum_max_accepted_mode_meta), K_(follower_list), K_(ack_list),
+        K_(prepare_quorum_cnt), K_(accept_quorum_cnt),
         K_(last_submit_req_ts), K_(resend_mode_meta_list));
     J_OBJ_END();
     return pos;
@@ -103,7 +106,7 @@ private:
   void reset_status_();
   int init_change_mode_();
   int can_change_access_mode_(const int64_t mode_version) const;
-  bool is_reach_majority_() const;
+  bool is_reach_quorum_() const;
   bool can_finish_change_mode_() const;
   bool is_need_retry_() const;
   int switch_state_(const AccessMode &access_mode,
@@ -142,8 +145,7 @@ private:
   bool is_inited_;
   int64_t palf_id_;
   common::ObAddr self_;
-  // applied_mode_meta, it has been flushed in majority,
-  // external modules could see this meta
+  // applied_mode_meta_ has been flushed by the accept quorum and is visible to external modules.
   LogModeMeta applied_mode_meta_;
   // NB: protected by SpinLock
   // log_mode_meta has been accepted/flushed
@@ -161,13 +163,14 @@ private:
   LogSimpleMemberList ack_list_;
   // all paxos folowers, not include self
   common::ObMemberList follower_list_;
-  int64_t majority_cnt_;
+  int64_t prepare_quorum_cnt_;
+  int64_t accept_quorum_cnt_;
   int64_t last_submit_req_ts_;
-  LogModeMeta max_majority_accepted_mode_meta_;
+  LogModeMeta prepare_quorum_max_accepted_mode_meta_;
   LSN local_max_lsn_;
   int64_t local_max_log_pid_;
-  int64_t max_majority_accepted_pid_;
-  LSN max_majority_lsn_;
+  int64_t prepare_quorum_max_accepted_log_pid_;
+  LSN prepare_quorum_max_accepted_lsn_;
   ResendConfigLogList resend_mode_meta_list_;
   mutable int64_t wait_committed_log_slide_warn_ts_;
   // =========access_mode changing state============
@@ -175,6 +178,8 @@ private:
   LogEngine *log_engine_;
   LogConfigMgr *config_mgr_;
   LogSlidingWindow *sw_;
+  // Non-owning; owned by PalfHandleImpl or PalfHandleLite and must outlive this object.
+  const LogQuorumPolicy *quorum_policy_;
 };
 } // namespace palf
 } // namespace oceanbase

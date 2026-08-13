@@ -62,6 +62,10 @@ DEF_INT(rpc_port, OB_CLUSTER_PARAMETER, "2882", "(1024,65536)",
 DEF_INT(mysql_port, OB_CLUSTER_PARAMETER, "2881", "(1024,65536)",
         "port number for mysql connection. Range: (1024, 65536) in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::READONLY));
+DEF_INT(prometheus_metrics_port, OB_CLUSTER_PARAMETER, "2886", "[0,65535]",
+        "port for prometheus /metrics exposer. 0 disables the exposer. "
+        "Takes effect only after arbserver restart. Range: [0, 65535] in integer",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
 DEF_STR(devname, OB_CLUSTER_PARAMETER, "bond0", "name of network adapter",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::READONLY));
 DEF_STR(zone, OB_CLUSTER_PARAMETER, "", "specifies the zone name",

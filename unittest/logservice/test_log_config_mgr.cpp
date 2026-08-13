@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 #define private public
 #include "logservice/palf/log_config_mgr.h"
+#include "logservice/palf/log_quorum_policy.h"
 #include "mock_logservice_container/mock_election.h"
 #include "mock_logservice_container/mock_log_sliding_window.h"
 #include "mock_logservice_container/mock_log_engine.h"
@@ -90,7 +91,7 @@ public:
     LogConfigMeta config_meta;
     EXPECT_EQ(OB_SUCCESS, config_meta.generate(init_pid, config_info, config_info, 1, LSN(0), 1));
     EXPECT_EQ(OB_SUCCESS, cm.init(1, self, config_meta, mock_log_engine_, mock_sw_, mock_state_mgr_, mock_election_,
-        mock_mode_mgr_, mock_reconfirm_, mock_plugins_));
+        mock_mode_mgr_, mock_reconfirm_, mock_plugins_, &quorum_policy_));
   }
 public:
   mockelection::MockElection *mock_election_;
@@ -102,6 +103,7 @@ public:
   palf::LogPlugins *mock_plugins_;
   unittest::MockObLocalityManager *mock_locality_cb_;
   LogMemberRegionMap region_map_;
+  palf::LogQuorumPolicy quorum_policy_;
 };
 
 TEST_F(TestLogConfigMgr, test_set_initial_member_list)
@@ -2031,9 +2033,12 @@ TEST_F(TestLogConfigMgr, test_init_by_default_config_meta)
   LogConfigMgr cm;
   EXPECT_EQ(OB_SUCCESS, log_config_meta.generate_for_default(init_log_proposal_id,
       init_config_info, init_config_info));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, cm.init(1, addr1, log_config_meta, mock_log_engine_,
+      mock_sw_, mock_state_mgr_, mock_election_,
+      mock_mode_mgr_, mock_reconfirm_, mock_plugins_, NULL));
   EXPECT_EQ(OB_SUCCESS, cm.init(1, addr1, log_config_meta, mock_log_engine_,
       mock_sw_, mock_state_mgr_, mock_election_,
-      mock_mode_mgr_, mock_reconfirm_, mock_plugins_));
+      mock_mode_mgr_, mock_reconfirm_, mock_plugins_, &quorum_policy_));
 }
 
 TEST_F(TestLogConfigMgr, test_too_many_learners)

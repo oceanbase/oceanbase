@@ -6,6 +6,7 @@
 #define private public
 #include "env/ob_simple_log_cluster_env.h"
 #undef private
+#include "prometheus/gauge.h"
 const std::string TEST_NAME = "single_arb_server";
 
 using namespace oceanbase::common;
@@ -171,6 +172,59 @@ TEST_F(TestObSimpleMutilArbServer, out_interface)
   CLOG_LOG(INFO, "end test out_interface");
 }
 
+TEST_F(TestObSimpleMutilArbServer, gc_tenant_updates_arb_ls_count)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "gc_tenant_updates_arb_ls_count");
+  ObISimpleLogServer *iserver = get_cluster()[0];
+  ASSERT_TRUE(iserver->is_arb_server());
+  ObSimpleArbServer *arb_server = dynamic_cast<ObSimpleArbServer*>(iserver);
+  ASSERT_NE(nullptr, arb_server);
+  palflite::PalfEnvLiteMgr *palf_env_mgr = &arb_server->palf_env_mgr_;
+  ASSERT_NE(nullptr, palf_env_mgr->ls_count_.impl_);
+
+  const double baseline_ls_count = palf_env_mgr->ls_count_.impl_->Value();
+  const int64_t cluster_id = 2001;
+  const uint64_t removed_tenant_id = 3001;
+  const uint64_t retained_tenant_id = 3002;
+  const char *cluster_name = "arb_ls_count_test";
+  const arbserver::GCMsgEpoch initial_epoch(1, 1);
+  const arbserver::GCMsgEpoch gc_epoch(2, 1);
+  const ObTenantRole tenant_role(ObTenantRole::PRIMARY_TENANT);
+  const int64_t removed_ls_ids[] = {1, 1001, 1002};
+  const palflite::PalfEnvKey removed_tenant_key(cluster_id, removed_tenant_id);
+  const palflite::PalfEnvKey retained_tenant_key(cluster_id, retained_tenant_id);
+
+  ASSERT_EQ(OB_SUCCESS, palf_env_mgr->add_cluster(
+      arb_server->self_, cluster_id, cluster_name, initial_epoch));
+  for (const int64_t ls_id : removed_ls_ids) {
+    ASSERT_EQ(OB_SUCCESS, palf_env_mgr->create_arbitration_instance(
+        removed_tenant_key, arb_server->self_, ls_id, tenant_role));
+  }
+  ASSERT_EQ(OB_SUCCESS, palf_env_mgr->create_arbitration_instance(
+      retained_tenant_key, arb_server->self_, 1, tenant_role));
+  EXPECT_DOUBLE_EQ(baseline_ls_count + ARRAYSIZEOF(removed_ls_ids) + 1,
+                   palf_env_mgr->ls_count_.impl_->Value());
+
+  arbserver::TenantLSIDS retained_tenant_ls_ids;
+  ASSERT_EQ(OB_SUCCESS, retained_tenant_ls_ids.push_back(ObLSID(1)));
+  retained_tenant_ls_ids.set_max_ls_id(
+      arbserver::TenantLSID(retained_tenant_id, ObLSID(1)));
+  arbserver::TenantLSIDSArray gc_ls_ids;
+  ASSERT_EQ(OB_SUCCESS, gc_ls_ids.push_back(retained_tenant_ls_ids));
+  gc_ls_ids.set_max_tenant_id(retained_tenant_id);
+
+  ASSERT_EQ(OB_SUCCESS, palf_env_mgr->handle_gc_message(
+      gc_epoch, arb_server->self_, cluster_id, gc_ls_ids));
+  EXPECT_DOUBLE_EQ(baseline_ls_count + 1, palf_env_mgr->ls_count_.impl_->Value());
+  ASSERT_EQ(OB_SUCCESS, palf_env_mgr->handle_gc_message(
+      gc_epoch, arb_server->self_, cluster_id, gc_ls_ids));
+  EXPECT_DOUBLE_EQ(baseline_ls_count + 1, palf_env_mgr->ls_count_.impl_->Value());
+
+  ASSERT_EQ(OB_SUCCESS, palf_env_mgr->remove_cluster(
+      arb_server->self_, cluster_id, cluster_name, gc_epoch));
+  EXPECT_DOUBLE_EQ(baseline_ls_count, palf_env_mgr->ls_count_.impl_->Value());
+}
+
 TEST_F(TestObSimpleMutilArbServer, create_mutil_cluster)
 {
   SET_CASE_LOG_FILE(TEST_NAME, "create_mutil_cluster");
@@ -330,6 +384,8 @@ TEST_F(TestObSimpleMutilArbServer, multi_thread)
   EXPECT_EQ(true, iserver->is_arb_server());
   ObSimpleArbServer *arb_server = dynamic_cast<ObSimpleArbServer*>(iserver);
   palflite::PalfEnvLiteMgr *palf_env_mgr = &arb_server->palf_env_mgr_;
+  ASSERT_NE(nullptr, palf_env_mgr->ls_count_.impl_);
+  const double baseline_ls_count = palf_env_mgr->ls_count_.impl_->Value();
   int64_t cluster_id = 100;
   arbserver::GCMsgEpoch epoch = arbserver::GCMsgEpoch(1, 1);
 
@@ -377,6 +433,7 @@ TEST_F(TestObSimpleMutilArbServer, multi_thread)
     create_threads[i].join();
   }
   ASSERT_EQ(thread_count*ls_ids.size(), create_success_count);
+  EXPECT_DOUBLE_EQ(baseline_ls_count + 1, palf_env_mgr->ls_count_.impl_->Value());
   std::vector<std::thread> remove_threads;
   remove_threads.reserve(thread_count);
   for (int i = 0; i < thread_count; i++) {
@@ -386,7 +443,7 @@ TEST_F(TestObSimpleMutilArbServer, multi_thread)
     remove_threads[i].join();
   }
   ASSERT_EQ(thread_count*ls_ids.size(), remove_success_count);
-
+  EXPECT_DOUBLE_EQ(baseline_ls_count, palf_env_mgr->ls_count_.impl_->Value());
 }
 
 } // end unittest
@@ -394,5 +451,6 @@ TEST_F(TestObSimpleMutilArbServer, multi_thread)
 
 int main(int argc, char **argv)
 {
+  GCONF.prometheus_metrics_port = 0;  // disable exposer in mittest
   RUN_SIMPLE_LOG_CLUSTER_TEST(TEST_NAME);
 }

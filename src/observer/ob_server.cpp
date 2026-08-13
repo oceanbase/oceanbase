@@ -3849,6 +3849,8 @@ int ObServer::init_server_in_arb_mode()
     LOG_ERROR("log_io_adapter init failed", K(ret));
   } else if (OB_FAIL(palf_env_mgr.init(GCONF.data_dir, self_addr_, net_work_farme.get_req_transport(), LOG_IO_DEVICE_WRAPPER.get_local_device(), &G_RES_MGR, &OB_IO_MANAGER))) {
     LOG_ERROR("init PalfEnvLiteMgr failed", K(ret), K(arb_opts));
+  } else if (OB_FAIL(net_work_farme.set_registry(palf_env_mgr.get_arb_monitor()->get_registry()))) {
+    LOG_ERROR("set_registry on arb network frame failed", K(ret));
   } else if (OB_FAIL(arb_timer_.init(lib::TGDefIDs::ArbServerTimer, &palf_env_mgr))) {
     LOG_ERROR("init ArbServerTimer failed", K(ret));
   #ifndef OB_USE_ASAN
@@ -3989,9 +3991,12 @@ int ObServer::destroy_server_in_arb_mode()
   signal_handle_->destroy();
   palflite::PalfEnvLiteMgr &palf_env_mgr = palflite::PalfEnvLiteMgr::get_instance();
   arbserver::ObArbSrvNetworkFrame &net_work_farme = arbserver::ObArbSrvNetworkFrame::get_instance();
+  arb_timer_.destroy();
+  (void) net_work_farme.rpc_shutdown();
+  (void) net_work_farme.stop();
+  net_work_farme.wait();
   palf_env_mgr.destroy();
   net_work_farme.destroy();
-  arb_timer_.destroy();
   ObMemoryDump::get_instance().destroy();
   ASCONF.destroy();
   palf::election::GLOBAL_REPORT_TIMER.destroy();

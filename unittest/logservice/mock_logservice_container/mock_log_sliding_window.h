@@ -112,7 +112,7 @@ public:
   {
     return true;
   }
-  int get_majority_match_lsn(LSN &majority_match_lsn)
+  int get_majority_match_lsn(LSN &majority_match_lsn) override
   {
     UNUSED(majority_match_lsn);
     return OB_SUCCESS;

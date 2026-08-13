@@ -38,6 +38,7 @@ class LogEngine;
 class LogConfigVersion;
 class LogLearner;
 class LogModeMgr;
+class LogQuorumPolicy;
 namespace election
 {
 class Election;
@@ -347,7 +348,8 @@ public:
                    election::Election *election,
                    LogModeMgr *mode_mgr,
                    LogReconfirm *reconfirm,
-                   LogPlugins *plugins);
+                   LogPlugins *plugins,
+                   const LogQuorumPolicy *quorum_policy);
   virtual void destroy();
 
   // require caller holds WLock in PalfHandleImpl
@@ -814,6 +816,8 @@ private:
   LogModeMgr *mode_mgr_;
   LogReconfirm *reconfirm_;
   LogPlugins *plugins_;
+  // Non-owning; owned by PalfHandleImpl or PalfHandleLite and must outlive this object.
+  const LogQuorumPolicy *quorum_policy_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(LogConfigMgr);
 };

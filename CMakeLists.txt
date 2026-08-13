@@ -155,6 +155,7 @@ if (${ARCHITECTURE} STREQUAL "x86_64")
   message(STATUS "HYPERSCAN_SHARED_LIB: ${HYPERSCAN_SHARED_LIB}")
 endif()
 
+
 if(EXISTS ${CMAKE_SOURCE_DIR}/close_modules)
   message(STATUS "will add close_modules sub directory")
   add_subdirectory(close_modules)

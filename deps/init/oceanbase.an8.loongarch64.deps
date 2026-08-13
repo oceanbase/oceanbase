@@ -32,6 +32,7 @@ devdeps-zstd-1.3.8-1.an8.loongarch64.rpm
 devdeps-zstd-1.5.7-1.an8.loongarch64.rpm
 devdeps-obcharset-1.0.0-1.an8.loongarch64.rpm
 devdeps-hms-client-1.0.0-1.an8.loongarch64.rpm
+devdeps-prometheus-cpp-1.3.0-22026071014.an8.loongarch64.rpm
 devdeps-rocksdb-6.22.1-20260701.an8.loongarch64.rpm
 devdeps-abseil-cpp-20250814.1-20260630.an8.loongarch64.rpm
 devdeps-re2-20250812-20260630.an8.loongarch64.rpm

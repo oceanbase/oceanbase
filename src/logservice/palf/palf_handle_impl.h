@@ -24,6 +24,7 @@
 #include "lsn.h"
 #include "log_config_mgr.h"
 #include "log_mode_mgr.h"
+#include "log_quorum_policy.h"
 #include "log_reconfirm.h"
 #include "log_sliding_window.h"
 #include "log_state_mgr.h"
@@ -1291,6 +1292,8 @@ private:
 private:
   mutable RWLock lock_;
   char log_dir_[common::MAX_PATH_SIZE];
+  // Owns the quorum policy injected into PALF components.
+  LogQuorumPolicy quorum_policy_;
   LogSlidingWindow sw_;
   LogConfigMgr config_mgr_;
   LogModeMgr mode_mgr_;

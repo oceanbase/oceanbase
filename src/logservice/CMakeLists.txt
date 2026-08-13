@@ -1,3 +1,12 @@
+get_property(LOG_QUORUM_POLICY_IMPL GLOBAL PROPERTY OB_LOG_QUORUM_POLICY_IMPL)
+if(NOT LOG_QUORUM_POLICY_IMPL)
+  set(LOG_QUORUM_POLICY_IMPL
+    "${CMAKE_CURRENT_SOURCE_DIR}/palf/log_majority_quorum_policy.cpp")
+endif()
+if(NOT EXISTS "${LOG_QUORUM_POLICY_IMPL}")
+  message(FATAL_ERROR "Log quorum policy implementation does not exist: ${LOG_QUORUM_POLICY_IMPL}")
+endif()
+
 ob_set_subtarget(ob_logservice archiveservice
   archiveservice/ob_archive_allocator.cpp
   archiveservice/ob_archive_define.cpp
@@ -132,6 +141,7 @@ ob_set_subtarget(ob_logservice palf
   palf/log_net_service.cpp
   palf/log_reader.cpp
   palf/log_reader_utils.cpp
+  ${LOG_QUORUM_POLICY_IMPL}
   palf/log_reconfirm.cpp
   palf/log_req.cpp
   palf/log_request_handler.cpp

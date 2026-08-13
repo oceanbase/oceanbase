@@ -28,6 +28,7 @@ class LogConfigMgr;
 class LogEngine;
 class LogGroupEntry;
 class LogModeMgr;
+class LogQuorumPolicy;
 
 class LogReconfirm
 {
@@ -41,7 +42,8 @@ public:
            LogStateMgr *state_mgr,
            LogConfigMgr *mm,
            LogModeMgr *mode_mgr,
-           LogEngine *log_engine);
+           LogEngine *log_engine,
+           const LogQuorumPolicy *quorum_policy);
   virtual void destroy();
   virtual void reset_state();
   virtual bool need_wlock();
@@ -54,9 +56,10 @@ public:
                                       const LSN &last_lsn,
                                       const LSN &committed_end_lsn);
   TO_STRING_KV(K_(palf_id), K_(self), "state", state_to_string(state_), K_(new_proposal_id), K_(prepare_log_ack_list), \
-  K_(curr_paxos_follower_list), K_(majority_cnt), K_(majority_max_log_server),       \
-  K_(majority_max_accept_pid), K_(majority_max_lsn), K_(saved_end_lsn), K_(last_submit_prepare_req_time_us),         \
-  K_(last_fetch_log_time_us), K_(last_record_sw_start_id), K_(last_notify_fetch_time_us), K_(last_purge_throttling_time_us), KP(this));
+  K_(curr_paxos_follower_list), K_(prepare_quorum_cnt), K_(prepare_quorum_max_accepted_log_server), \
+  K_(prepare_quorum_max_accepted_log_pid), K_(prepare_quorum_max_accepted_lsn), K_(saved_end_lsn), \
+  K_(last_submit_prepare_req_time_us), K_(last_fetch_log_time_us), K_(last_record_sw_start_id), \
+  K_(last_notify_fetch_time_us), K_(last_purge_throttling_time_us), KP(this));
 private:
   int init_reconfirm_();
   int submit_prepare_log_();
@@ -66,7 +69,7 @@ private:
   int try_fetch_log_();
   int update_follower_end_lsn_(const common::ObAddr &server, const LSN &committed_end_lsn);
   int ack_log_with_end_lsn_();
-  bool is_majority_catch_up_();
+  bool is_accept_quorum_catch_up_();
   int purge_throttling_();
 private:
   enum State
@@ -79,7 +82,7 @@ private:
     WAITING_LOG_FLUSHED = 1,
 	// this state is used to query who is the newest server, records it as 'newest_server_',
     FETCH_MAX_LOG_LSN = 2,
-	// this state is used to reconfirm mode_meta to majority.
+    // this state is used to reconfirm mode_meta through prepare/accept quorum.
     RECONFIRM_MODE_META = 3,
 	// this state is used to fetch all logs from the 'newest_server_'.
     RECONFIRM_FETCH_LOG = 4,
@@ -126,11 +129,11 @@ private:
   //    │             │               │                       │
   // start id     committed id    max flushed id             end id
 	//
-	// After reconfirm, election leader will be the newest server of majority.
+  // After reconfirm, election leader will have learned the max accepted log from prepare quorum.
 	// 'max_lsn_' is max flushed id;
 	// 'max_log_proposal_id_' is the proposal of 'max_lsn_';
 	// 'fetching_lsn_' is current fetch id, will be updated by receive_log;
-	// end id is the max flushed id of 'majority_max_log_server_'.
+  // end id is the max flushed id of 'prepare_quorum_max_accepted_log_server_'.
 	// NB: before reconfirm, election leader will behind others too much,
 	//     however, the maximum numbers of uncommitted logs for any replica can
 	//     not exceed the max size of ObGroupBuffer, we just only advance the
@@ -146,13 +149,14 @@ private:
   LogAckList prepare_log_ack_list_;
   // all paxos folowers, not include self
   common::ObMemberList curr_paxos_follower_list_;
-  int64_t majority_cnt_;
-  // the server whose log is newest among majority
-  common::ObAddr majority_max_log_server_;
+  // The prepare quorum is used to learn the max accepted log.
+  int64_t prepare_quorum_cnt_;
+  // the server whose log is newest among prepare quorum
+  common::ObAddr prepare_quorum_max_accepted_log_server_;
   // the accept_proposal_id of that server
-  int64_t majority_max_accept_pid_;
+  int64_t prepare_quorum_max_accepted_log_pid_;
   // the max_lsn of that server
-  LSN majority_max_lsn_;
+  LSN prepare_quorum_max_accepted_lsn_;
   // the max lsn when generate start_working log
   LSN saved_end_lsn_;
   LogMemberAckInfoList follower_end_lsn_list_;
@@ -163,6 +167,8 @@ private:
   LogConfigMgr *mm_;
   LogModeMgr *mode_mgr_;
   LogEngine *log_engine_;
+  // Non-owning; owned by PalfHandleImpl or PalfHandleLite and must outlive this object.
+  const LogQuorumPolicy *quorum_policy_;
 
   mutable common::ObSpinLock lock_;
   // last time of sending prepare log
@@ -171,7 +177,7 @@ private:
   int64_t last_fetch_log_time_us_;
   int64_t last_record_sw_start_id_;
   int64_t wait_slide_print_time_us_;
-  int64_t wait_majority_time_us_;
+  int64_t wait_accept_quorum_time_us_;
   int64_t last_notify_fetch_time_us_;
   int64_t last_purge_throttling_time_us_;
   bool is_inited_;

@@ -44,5 +44,9 @@ ob_unittest_clog(test_ob_simple_log_shared_storage test_ob_simple_log_shared_sto
 #ob_unittest_clog(test_ob_simple_log_iterator_performance test_ob_simple_log_iterator_performance.cpp)
 ob_unittest_clog(test_ob_simple_log_cache test_ob_simple_log_cache.cpp)
 ob_unittest_clog(test_ob_simple_log_disk_hang test_ob_simple_log_disk_hang.cpp)
+if(OB_BUILD_FPAXOS)
+  ob_unittest_clog(test_ob_simple_log_flexible_paxos test_ob_simple_log_flexible_paxos.cpp)
+  ob_unittest_clog(test_ob_simple_log_flexible_paxos_arb test_ob_simple_log_flexible_paxos_arb.cpp)
+endif()
 
 add_subdirectory(archiveservice)

@@ -8,6 +8,7 @@
 #include "log_engine.h"
 #include "log_config_mgr.h"
 #include "log_io_task_cb_utils.h"
+#include "log_quorum_policy.h"
 #include "log_sliding_window.h"
 
 namespace oceanbase
@@ -30,18 +31,20 @@ LogModeMgr::LogModeMgr()
       new_proposal_id_(INVALID_PROPOSAL_ID),
       ack_list_(),
       follower_list_(),
-      majority_cnt_(-1),
+      prepare_quorum_cnt_(-1),
+      accept_quorum_cnt_(-1),
       last_submit_req_ts_(OB_INVALID_TIMESTAMP),
-      max_majority_accepted_mode_meta_(),
+      prepare_quorum_max_accepted_mode_meta_(),
       local_max_lsn_(),
       local_max_log_pid_(INVALID_PROPOSAL_ID),
-      max_majority_accepted_pid_(INVALID_PROPOSAL_ID),
-      max_majority_lsn_(),
+      prepare_quorum_max_accepted_log_pid_(INVALID_PROPOSAL_ID),
+      prepare_quorum_max_accepted_lsn_(),
       resend_mode_meta_list_(),
       state_mgr_(NULL),
       log_engine_(NULL),
       config_mgr_(NULL),
-      sw_(NULL)
+      sw_(NULL),
+      quorum_policy_(NULL)
     { }
 
 int LogModeMgr::init(const int64_t palf_id,
@@ -50,7 +53,8 @@ int LogModeMgr::init(const int64_t palf_id,
                      LogStateMgr *state_mgr,
                      LogEngine *log_engine,
                      LogConfigMgr *config_mgr,
-                     LogSlidingWindow *sw)
+                     LogSlidingWindow *sw,
+                     const LogQuorumPolicy *quorum_policy)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -62,10 +66,11 @@ int LogModeMgr::init(const int64_t palf_id,
              OB_ISNULL(state_mgr) ||
              OB_ISNULL(log_engine) ||
              OB_ISNULL(config_mgr) ||
-             OB_ISNULL(sw)) {
+             OB_ISNULL(sw) ||
+             OB_ISNULL(quorum_policy)) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", K(ret), K(palf_id), K(self), K(log_mode_meta),
-        KP(state_mgr), KP(log_engine), KP(config_mgr), KP(sw));
+        KP(state_mgr), KP(log_engine), KP(config_mgr), KP(sw), KP(quorum_policy));
   } else {
     palf_id_ = palf_id;
     self_ = self;
@@ -78,6 +83,7 @@ int LogModeMgr::init(const int64_t palf_id,
     log_engine_ = log_engine;
     config_mgr_ = config_mgr;
     sw_ = sw;
+    quorum_policy_ = quorum_policy;
     is_inited_ = true;
   }
   return ret;
@@ -98,6 +104,7 @@ void LogModeMgr::destroy()
     log_engine_ = NULL;
     config_mgr_ = NULL;
     sw_ = NULL;
+    quorum_policy_ = NULL;
   }
 }
 
@@ -206,11 +213,13 @@ int LogModeMgr::can_change_access_mode_(const int64_t mode_version) const
   int ret = OB_SUCCESS;
   const bool is_leader_active = state_mgr_->is_leader_active();
   const bool is_epoch_changed = !state_mgr_->check_epoch_is_same_with_election(leader_epoch_);
-  const bool see_newer_mode_meta = (max_majority_accepted_mode_meta_.is_valid() &&
-    max_majority_accepted_mode_meta_.proposal_id_ > accepted_mode_meta_.proposal_id_);
+  const bool see_newer_mode_meta = (prepare_quorum_max_accepted_mode_meta_.is_valid() &&
+    prepare_quorum_max_accepted_mode_meta_.proposal_id_ > accepted_mode_meta_.proposal_id_);
   const bool see_newer_log =  \
-      (max_majority_accepted_pid_ != INVALID_PROPOSAL_ID && max_majority_accepted_pid_ > local_max_log_pid_) ||
-      (max_majority_accepted_pid_ == local_max_log_pid_ && max_majority_lsn_ > local_max_lsn_);
+      (prepare_quorum_max_accepted_log_pid_ != INVALID_PROPOSAL_ID &&
+       prepare_quorum_max_accepted_log_pid_ > local_max_log_pid_) ||
+      (prepare_quorum_max_accepted_log_pid_ == local_max_log_pid_ &&
+       prepare_quorum_max_accepted_lsn_ > local_max_lsn_);
   // leader_epoch_ hasn't been updated when state_ is equal to MODE_INIT, so don't check epoch when init
   if ((false == is_leader_active) || (state_ != ModeChangeState::MODE_INIT && is_epoch_changed)) {
     ret = OB_NOT_MASTER;
@@ -219,9 +228,9 @@ int LogModeMgr::can_change_access_mode_(const int64_t mode_version) const
   } else if (state_ != ModeChangeState::MODE_INIT && (see_newer_mode_meta || see_newer_log)) {
     ret = OB_NOT_MASTER;
     PALF_LOG(WARN, "see newer mode_meta/log, cann't change_acces_mode", K(ret), K_(palf_id), K_(self),
-        K(see_newer_mode_meta), K_(max_majority_accepted_mode_meta), K_(accepted_mode_meta),
-        K(see_newer_log), K_(max_majority_accepted_pid), K_(local_max_log_pid),
-        K_(max_majority_lsn), K_(local_max_lsn));
+        K(see_newer_mode_meta), K_(prepare_quorum_max_accepted_mode_meta), K_(accepted_mode_meta),
+        K(see_newer_log), K_(prepare_quorum_max_accepted_log_pid), K_(local_max_log_pid),
+        K_(prepare_quorum_max_accepted_lsn), K_(local_max_lsn));
   } else if (applied_mode_meta_.mode_version_ != mode_version) {
     // mode_version is the proposal_id of PALF when access_mode was applied
     ret = OB_STATE_NOT_MATCH;
@@ -240,12 +249,13 @@ int LogModeMgr::init_change_mode_()
   } else if (OB_FAIL(follower_list_.remove_server(self_))) {
     PALF_LOG(WARN, "remove_server failed", K(ret), K_(palf_id), K_(self), K_(follower_list));
   } else {
-    majority_cnt_ = replica_num / 2 + 1;
+    prepare_quorum_cnt_ = quorum_policy_->get_prepare_quorum(replica_num);
+    accept_quorum_cnt_ = quorum_policy_->get_accept_quorum(replica_num);
     leader_epoch_ = state_mgr_->get_leader_epoch();
     local_max_lsn_ = sw_->get_max_lsn();
     local_max_log_pid_ = state_mgr_->get_proposal_id();
-    max_majority_accepted_pid_ = local_max_log_pid_;
-    max_majority_lsn_ = local_max_lsn_;
+    prepare_quorum_max_accepted_log_pid_ = local_max_log_pid_;
+    prepare_quorum_max_accepted_lsn_ = local_max_lsn_;
   }
   return ret;
 }
@@ -275,14 +285,14 @@ bool LogModeMgr::is_state_changed() const
       case (ModeChangeState::MODE_PREPARE):
       case (ModeChangeState::MODE_ACCEPT):
       {
-        const bool is_reach_majority = is_reach_majority_();
+        const bool is_reach_quorum = is_reach_quorum_();
         const bool is_need_retry = is_need_retry_();
         const bool is_epoch_changed = !state_mgr_->check_epoch_is_same_with_election(leader_epoch_);
-        bool_ret = (is_reach_majority || is_need_retry || is_epoch_changed);
+        bool_ret = (is_reach_quorum || is_need_retry || is_epoch_changed);
         if (true == bool_ret) {
           PALF_LOG(INFO, "is_state_changed", K_(palf_id), K_(self), "state", state2str_(state_),
-              K(is_reach_majority), K(is_need_retry), K(is_epoch_changed), K_(follower_list),
-              K_(majority_cnt), K_(ack_list), K_(last_submit_req_ts));
+              K(is_reach_quorum), K(is_need_retry), K(is_epoch_changed), K_(follower_list),
+              K_(prepare_quorum_cnt), K_(accept_quorum_cnt), K_(ack_list), K_(last_submit_req_ts));
         }
         break;
       }
@@ -296,9 +306,15 @@ bool LogModeMgr::is_state_changed() const
   return bool_ret;
 }
 
-bool LogModeMgr::is_reach_majority_() const
+bool LogModeMgr::is_reach_quorum_() const
 {
-  return ack_list_.get_count() >= majority_cnt_;
+  int64_t quorum_cnt = INT64_MAX;
+  if (ModeChangeState::MODE_PREPARE == state_) {
+    quorum_cnt = prepare_quorum_cnt_;
+  } else if (ModeChangeState::MODE_ACCEPT == state_) {
+    quorum_cnt = accept_quorum_cnt_;
+  }
+  return ack_list_.get_count() >= quorum_cnt;
 }
 
 bool LogModeMgr::can_finish_change_mode_() const
@@ -336,13 +352,14 @@ void LogModeMgr::reset_status_()
   new_proposal_id_ = INVALID_PROPOSAL_ID;
   ack_list_.reset();
   follower_list_.reset();
-  majority_cnt_ = INT64_MAX;
+  prepare_quorum_cnt_ = INT64_MAX;
+  accept_quorum_cnt_ = INT64_MAX;
   last_submit_req_ts_ = OB_INVALID_TIMESTAMP;
-  max_majority_accepted_mode_meta_.reset();
+  prepare_quorum_max_accepted_mode_meta_.reset();
   local_max_lsn_.reset();
   local_max_log_pid_ = INVALID_PROPOSAL_ID;
-  max_majority_accepted_pid_ = INVALID_PROPOSAL_ID;
-  max_majority_lsn_.reset();
+  prepare_quorum_max_accepted_log_pid_ = INVALID_PROPOSAL_ID;
+  prepare_quorum_max_accepted_lsn_.reset();
 }
 
 int LogModeMgr::change_access_mode(
@@ -421,7 +438,7 @@ int LogModeMgr::switch_state_(const AccessMode &access_mode,
     }
     case (ModeChangeState::MODE_PREPARE):
     {
-      if (is_reach_majority_()) {
+      if (is_reach_quorum_()) {
         ack_list_.reset();
         last_submit_req_ts_ = OB_INVALID_TIMESTAMP;
         ATOMIC_STORE(&state_, ModeChangeState::MODE_ACCEPT);
@@ -439,10 +456,10 @@ int LogModeMgr::switch_state_(const AccessMode &access_mode,
     }
     case (ModeChangeState::MODE_ACCEPT):
     {
-      if (is_reach_majority_()) {
+      if (is_reach_quorum_()) {
         //TODO(yunlong):check conflict
 
-        // not reaches majority until LogModeMeta is been flushed by leader,
+        // Do not finish until LogModeMeta has been flushed by the accept quorum,
         // otherwise next change_access_mode/reconfirm may learn wrong ModeMeta
         if (accepted_mode_meta_.proposal_id_ == new_proposal_id_) {
           // Scenario: There are 3 replicas A, B and C, they are all flashbacked, in this time,
@@ -486,7 +503,7 @@ int LogModeMgr::switch_state_(const AccessMode &access_mode,
         }
       } else if (is_need_retry_()) {
         const int64_t mode_version = new_proposal_id_;
-        LogModeMeta mode_meta = max_majority_accepted_mode_meta_;
+        LogModeMeta mode_meta = prepare_quorum_max_accepted_mode_meta_;
         mode_meta.proposal_id_ = new_proposal_id_;
         const bool is_applied_mode_meta = false;
         if (false == is_reconfirm && OB_FAIL(mode_meta.generate(new_proposal_id_, mode_version, access_mode, ref_scn))) {
@@ -511,12 +528,12 @@ int LogModeMgr::switch_state_(const AccessMode &access_mode,
     reset_status_();
   } else if (OB_SUCCESS != ret && OB_EAGAIN != ret) {
     PALF_LOG(ERROR, "switch_state failed", K(ret), K_(palf_id), "state", state2str_(state_), K_(follower_list),
-        K_(majority_cnt), K_(ack_list));
+        K_(prepare_quorum_cnt), K_(accept_quorum_cnt), K_(ack_list));
   } else {
     ret = OB_EAGAIN;
     if (REACH_TIME_INTERVAL(10 * 1000)) {
       PALF_LOG(INFO, "change_access_mode waiting retry", K(ret), K_(palf_id), "state", state2str_(state_),
-          K_(follower_list), K_(majority_cnt), K_(ack_list));
+          K_(follower_list), K_(prepare_quorum_cnt), K_(accept_quorum_cnt), K_(ack_list));
     }
   }
   return ret;
@@ -600,7 +617,7 @@ int LogModeMgr::submit_prepare_req_(const bool need_inc_pid, const bool need_sen
     PALF_LOG(WARN, "add_server failed", K(ret), K_(palf_id), K_(self));
   } else {
     last_submit_req_ts_ = common::ObTimeUtility::current_time();
-    max_majority_accepted_mode_meta_ = accepted_mode_meta_;
+    prepare_quorum_max_accepted_mode_meta_ = accepted_mode_meta_;
     PALF_LOG(INFO, "submit_prepare_meta_req success", K(ret), K_(palf_id), K_(self),
         K_(follower_list), K_(ack_list), K_(new_proposal_id));
   }
@@ -656,15 +673,17 @@ int LogModeMgr::handle_prepare_response(const common::ObAddr &server,
   } else if (OB_FAIL(ack_list_.add_server(server))) {
     PALF_LOG(WARN, "add_server failed", K(ret), K_(palf_id), K_(self), K(server));
   } else {
-    if (false == max_majority_accepted_mode_meta_.is_valid() ||
-        max_majority_accepted_mode_meta_.proposal_id_ < mode_meta.proposal_id_) {
-      max_majority_accepted_mode_meta_ = mode_meta;
+    if (false == prepare_quorum_max_accepted_mode_meta_.is_valid() ||
+        prepare_quorum_max_accepted_mode_meta_.proposal_id_ < mode_meta.proposal_id_) {
+      prepare_quorum_max_accepted_mode_meta_ = mode_meta;
     }
-    max_majority_accepted_pid_ = max_proposal_id(max_majority_accepted_pid_, accept_log_proposal_id);
-    max_majority_lsn_ = MAX(max_majority_lsn_, last_lsn);
+    prepare_quorum_max_accepted_log_pid_ =
+        max_proposal_id(prepare_quorum_max_accepted_log_pid_, accept_log_proposal_id);
+    prepare_quorum_max_accepted_lsn_ = MAX(prepare_quorum_max_accepted_lsn_, last_lsn);
     PALF_LOG(INFO, "handle_prepare_response finish", K(ret), K_(palf_id), K_(self), K(server), K(msg_proposal_id),
-        K(accept_log_proposal_id), K(last_lsn), K(mode_meta), K_(ack_list), K_(follower_list), K_(majority_cnt),
-        K_(max_majority_accepted_mode_meta), K_(max_majority_accepted_pid), K_(max_majority_lsn));
+        K(accept_log_proposal_id), K(last_lsn), K(mode_meta), K_(ack_list), K_(follower_list),
+        K_(prepare_quorum_cnt), K_(accept_quorum_cnt), K_(prepare_quorum_max_accepted_mode_meta),
+        K_(prepare_quorum_max_accepted_log_pid), K_(prepare_quorum_max_accepted_lsn));
   }
   return ret;
 }
@@ -785,7 +804,8 @@ int LogModeMgr::ack_mode_meta(const common::ObAddr &server, const int64_t propos
     PALF_LOG(WARN, "add_server failed", K(ret), K_(palf_id), K_(self), K(server));
   } else {
     PALF_LOG(INFO, "ack_mode_meta finish", K(ret), K_(palf_id), K_(self), K(server),
-        K(proposal_id), K_(follower_list), K_(majority_cnt), K_(ack_list), K_(resend_mode_meta_list));
+        K(proposal_id), K_(follower_list), K_(prepare_quorum_cnt), K_(accept_quorum_cnt),
+        K_(ack_list), K_(resend_mode_meta_list));
   }
   (void) resend_mode_meta_list_.remove_learner(server);
   return ret;

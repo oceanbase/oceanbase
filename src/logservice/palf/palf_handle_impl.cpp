@@ -3006,7 +3006,8 @@ int PalfHandleImpl::do_init_mem_(
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "error unexpected", K(ret), K(palf_id));
   } else if (OB_FAIL(sw_.init(palf_id, self, &state_mgr_, &config_mgr_, &mode_mgr_,
-          &log_engine_, &fs_cb_wrapper_, alloc_mgr, &plugins_, palf_base_info, is_log_sync_replica))) {
+          &log_engine_, &fs_cb_wrapper_, alloc_mgr, &plugins_, palf_base_info,
+          is_log_sync_replica, &quorum_policy_))) {
     PALF_LOG(WARN, "sw_ init failed", K(ret), K(palf_id));
   } else if (OB_FAIL(election_.init_and_start(palf_id,
                                               election_timer,
@@ -3025,11 +3026,15 @@ int PalfHandleImpl::do_init_mem_(
           &election_, &sw_, &reconfirm_, &log_engine_, &config_mgr_, &mode_mgr_, &role_change_cb_wrpper_, &plugins_))) {
     PALF_LOG(WARN, "state_mgr_ init failed", K(ret), K(palf_id));
   } else if (OB_FAIL(config_mgr_.init(palf_id, self, log_meta.get_log_config_meta(), &log_engine_,
-          &sw_, &state_mgr_, &election_, &mode_mgr_, &reconfirm_, &plugins_))) {
+          &sw_, &state_mgr_, &election_, &mode_mgr_, &reconfirm_,
+          &plugins_, &quorum_policy_))) {
     PALF_LOG(WARN, "config_mgr_ init failed", K(ret), K(palf_id));
-  } else if (can_be_active_leader && OB_FAIL(reconfirm_.init(palf_id, self, &sw_, &state_mgr_, &config_mgr_, &mode_mgr_, &log_engine_))) {
+  } else if (can_be_active_leader && OB_FAIL(reconfirm_.init(palf_id, self, &sw_, &state_mgr_,
+          &config_mgr_, &mode_mgr_,
+          &log_engine_, &quorum_policy_))) {
     PALF_LOG(WARN, "reconfirm_ init failed", K(ret), K(palf_id));
-  } else if (OB_FAIL(mode_mgr_.init(palf_id, self, log_meta.get_log_mode_meta(), &state_mgr_, &log_engine_, &config_mgr_, &sw_))) {
+  } else if (OB_FAIL(mode_mgr_.init(palf_id, self, log_meta.get_log_mode_meta(),
+          &state_mgr_, &log_engine_, &config_mgr_, &sw_, &quorum_policy_))) {
     PALF_LOG(WARN, "mode_mgr_ init failed", K(ret), K(palf_id));
   } else if (FALSE_IT(log_engine_.set_enable_fill_cache_functor(enable_fill_cache_functor))) {
   } else {
@@ -3506,7 +3511,7 @@ int PalfHandleImpl::check_need_rebuild_(const LSN &base_lsn,
 int PalfHandleImpl::handle_notify_fetch_log_req(const common::ObAddr &server)
 {
   // This req is sent by reconfirming leader.
-  // Self is lag behind majority_max_lsn, so it need fetch log immediately.
+  // Self is lag behind max_accepted_lsn, so it need fetch log immediately.
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
   if (IS_NOT_INIT) {
