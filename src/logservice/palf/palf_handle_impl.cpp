@@ -1553,6 +1553,7 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
     }
   }
   if (OB_SUCCESS == get_lock) {
+    config_mgr_.reset_pre_sync_learner();
     config_change_lock_.unlock();
     if (DEGRADE_ACCEPTOR_TO_LEARNER == args.type_) {
       ATOMIC_STORE(&has_higher_prio_config_change_, false);

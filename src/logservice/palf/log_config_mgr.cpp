@@ -60,6 +60,7 @@ LogConfigMgr::LogConfigMgr()
       child_lock_(common::ObLatchIds::PALF_CM_CHILD_LOCK),
       children_(),
       log_sync_children_(),
+      pre_sync_learner_(),
       last_submit_keepalive_time_us_(OB_INVALID_TIMESTAMP),
       log_engine_(NULL),
       sw_(NULL),
@@ -154,6 +155,7 @@ void LogConfigMgr::destroy()
     reset_registering_state_();
     children_.reset();
     log_sync_children_.reset();
+    pre_sync_learner_.reset();
     last_submit_keepalive_time_us_ = OB_INVALID_TIMESTAMP;
     ms_ack_list_.reset();
     resend_config_version_.reset();
@@ -504,11 +506,20 @@ int LogConfigMgr::get_children_list(LogLearnerList &children) const
 int LogConfigMgr::get_log_sync_children_list(LogLearnerList &children) const
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  LogLearner pre_sync_learner;
   SpinLockGuard gaurd(child_lock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (OB_FAIL(children.deep_copy(log_sync_children_))) {
     PALF_LOG(WARN, "deep_copy children_list failed", KR(ret), K_(palf_id), K_(self));
+  } else if (pre_sync_learner_.is_valid() && !children.contains(pre_sync_learner_)) {
+    if (OB_TMP_FAIL(children_.get_learner_by_addr(pre_sync_learner_, pre_sync_learner))) {
+      // The target may have been removed from children_ before the config change exits.
+    } else if (OB_FAIL(children.add_learner(pre_sync_learner))) {
+      PALF_LOG(WARN, "add pre-sync learner failed", KR(ret), K_(palf_id), K_(self),
+          K_(pre_sync_learner), K(pre_sync_learner), K(children));
+    }
   } else {
     //pass
   }
@@ -783,6 +794,7 @@ int LogConfigMgr::start_change_config(int64_t &proposal_id,
   } else if (OB_FAIL(election_->get_role(ele_role, election_epoch))) {
     PALF_LOG(ERROR, "election get_role failed", K(ret), K_(self), K_(palf_id));
   } else {
+    reset_pre_sync_learner();
     proposal_id = state_mgr_->get_proposal_id();
     start_wait_barrier_time_us_ = OB_INVALID_TIMESTAMP;
     last_wait_barrier_time_us_ = OB_INVALID_TIMESTAMP;
@@ -1961,6 +1973,7 @@ int LogConfigMgr::wait_config_log_persistence(const LogConfigVersion &config_ver
 void LogConfigMgr::reset_status()
 {
   SpinLockGuard guard(lock_);
+  reset_pre_sync_learner();
   state_ = ConfigChangeState::INIT;
   ms_ack_list_.reset();
   need_change_config_bkgd_ = false;
@@ -2221,9 +2234,18 @@ void LogConfigChangeArgs::reset()
   new_member_list_.reset();
 }
 
+void LogConfigMgr::reset_pre_sync_learner()
+{
+  SpinLockGuard guard(child_lock_);
+  if (pre_sync_learner_.is_valid()) {
+    PALF_LOG(INFO, "reset pre-sync learner", K_(palf_id), K_(self), K_(pre_sync_learner));
+    pre_sync_learner_.reset();
+  }
+}
+
 int LogConfigMgr::check_follower_sync_status(const LogConfigChangeArgs &args,
                                              const LogConfigInfoV2 &new_config_info,
-                                             bool &added_member_has_new_version) const
+                                             bool &added_member_has_new_version)
 {
   int ret = OB_SUCCESS;
   SpinLockGuard guard(lock_);
@@ -2316,7 +2338,7 @@ int LogConfigMgr::wait_log_barrier_(const LogConfigChangeArgs &args,
 
 int LogConfigMgr::check_follower_sync_status_(const LogConfigChangeArgs &args,
                                               const LogConfigInfoV2 &new_config_info,
-                                              bool &added_member_has_new_version) const
+                                              bool &added_member_has_new_version)
 {
   int ret = OB_SUCCESS;
   LSN first_leader_committed_end_lsn, second_leader_committed_end_lsn;
@@ -2332,6 +2354,9 @@ int LogConfigMgr::check_follower_sync_status_(const LogConfigChangeArgs &args,
 
   (void) sw_->get_committed_end_lsn(first_leader_committed_end_lsn);
   const bool need_skip_log_barrier = mode_mgr_->need_skip_log_barrier();
+  // A migrating learner is excluded from log_sync_children_ and may not fetch new logs within
+  // the 500 ms progress sampling below. Temporarily push incremental logs to a nearly caught-up
+  // learner so it can satisfy the existing sync check without relaxing the check.
   if (new_config_info.config_.log_sync_memberlist_.get_member_number() == 0) {
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(sync_get_committed_end_lsn_(args, new_config_info, need_purge_throttling,
@@ -2339,6 +2364,9 @@ int LogConfigMgr::check_follower_sync_status_(const LogConfigChangeArgs &args,
       added_member_flushed_end_lsn, added_member_last_slide_log_id))) {
     PALF_LOG(WARN, "sync_get_committed_end_lsn failed", K(ret), K_(palf_id), K_(self), K(new_config_info),
         K(added_member_has_new_version));
+  } else if (FALSE_IT(try_enable_pre_sync_learner_(args, sw_->get_max_lsn(),
+      added_member_flushed_end_lsn, sw_->get_max_log_id(),
+      added_member_last_slide_log_id, added_member_has_new_version))) {
   } else if (need_skip_log_barrier) {
     ret = OB_SUCCESS;
     PALF_LOG(INFO, "PALF is in FLASHBACK mode, skip log barrier", K(ret), K_(palf_id), K_(self), \
@@ -2404,6 +2432,41 @@ int LogConfigMgr::check_follower_sync_status_(const LogConfigChangeArgs &args,
     }
   }
   return ret;
+}
+
+void LogConfigMgr::try_enable_pre_sync_learner_(const LogConfigChangeArgs &args,
+                                                const LSN &leader_max_lsn,
+                                                const LSN &added_member_flushed_end_lsn,
+                                                const int64_t leader_max_log_id,
+                                                const int64_t added_member_last_slide_log_id,
+                                                const bool added_member_has_new_version)
+{
+  const bool is_switch_migrating_learner =
+      (SWITCH_LEARNER_TO_ACCEPTOR == args.type_ ||
+       SWITCH_LEARNER_TO_ACCEPTOR_AND_NUM == args.type_) &&
+      args.server_.is_migrating();
+  const bool is_lsn_gap_small = leader_max_lsn.is_valid() &&
+      added_member_flushed_end_lsn.is_valid() &&
+      leader_max_lsn >= added_member_flushed_end_lsn &&
+      leader_max_lsn - added_member_flushed_end_lsn < LEADER_DEFAULT_GROUP_BUFFER_SIZE;
+  const bool is_log_id_gap_small = OB_INVALID_LOG_ID != leader_max_log_id &&
+      INT64_MAX != added_member_last_slide_log_id &&
+      leader_max_log_id >= added_member_last_slide_log_id &&
+      leader_max_log_id - added_member_last_slide_log_id < PALF_SLIDING_WINDOW_SIZE;
+  const common::ObAddr &target = args.server_.get_server();
+  SpinLockGuard guard(child_lock_);
+  if (is_switch_migrating_learner &&
+      added_member_has_new_version &&
+      is_lsn_gap_small &&
+      is_log_id_gap_small &&
+      target.is_valid() &&
+      children_.contains(target) &&
+      pre_sync_learner_ != target) {
+    pre_sync_learner_ = target;
+    PALF_LOG(INFO, "enable pre-sync learner", K_(palf_id), K_(self), K(target),
+        K(leader_max_lsn), K(added_member_flushed_end_lsn),
+        K(leader_max_log_id), K(added_member_last_slide_log_id));
+  }
 }
 
 int LogConfigMgr::check_servers_lsn_and_version_(const common::ObAddr &server,

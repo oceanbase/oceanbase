@@ -482,9 +482,10 @@ public:
   // broadcast leader info to global learners, only called in leader active
   virtual int submit_broadcast_leader_info(const int64_t proposal_id) const;
   virtual void reset_status();
+  void reset_pre_sync_learner();
   int check_follower_sync_status(const LogConfigChangeArgs &args,
                                  const LogConfigInfoV2 &new_config_info,
-                                 bool &added_member_has_new_version) const;
+                                 bool &added_member_has_new_version);
   int wait_log_barrier_(const LogConfigChangeArgs &args,
                         const LogConfigInfoV2 &new_config_info) const;
   int wait_log_barrier_before_start_working_(const LogConfigChangeArgs &args);
@@ -608,7 +609,13 @@ private:
                                   int64_t &added_member_last_slide_log_id) const;
   int check_follower_sync_status_(const LogConfigChangeArgs &args,
                                   const LogConfigInfoV2 &new_config_info,
-                                  bool &added_member_has_new_version) const;
+                                  bool &added_member_has_new_version);
+  void try_enable_pre_sync_learner_(const LogConfigChangeArgs &args,
+                                    const LSN &leader_max_lsn,
+                                    const LSN &added_member_flushed_end_lsn,
+                                    const int64_t leader_max_log_id,
+                                    const int64_t added_member_last_slide_log_id,
+                                    const bool added_member_has_new_version);
   int sync_meta_for_election_leader_(const bool need_sync_meta,
                                      const bool use_propagated_barrier);
   int pre_sync_config_log_and_mode_meta_(const common::ObMember &server,
@@ -797,6 +804,7 @@ private:
   // cached children_ for pushing logs
   // log_sync_children_ = children_ - migrating learners - learners not in learnerlist_
   LogLearnerList log_sync_children_;
+  common::ObAddr pre_sync_learner_;
   int64_t last_submit_keepalive_time_us_;
   // ==================== Parent ========================
   LogEngine *log_engine_;
