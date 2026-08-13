@@ -871,6 +871,7 @@ int ObDASVecIndexHNSWScanIter::process_adaptor_state_pre_filter(
       query_cond_->only_complete_data_ = true;
       if (OB_FAIL(process_adaptor_state_post_filter(ada_ctx, adaptor, is_vectorized))) {
         LOG_WARN("failed to process adaptor state post filter", K(ret));
+      } else if (OB_FALSE_IT(need_complete_data = false)) {
       } else if (OB_FAIL(process_adaptor_state_pre_filter_brute_force(ada_ctx, adaptor, need_complete_data, false))) {
         LOG_WARN("hnsw pre filter(brute force) failed to query result.", K(ret));
       }
