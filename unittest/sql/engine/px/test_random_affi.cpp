@@ -10,6 +10,11 @@ using namespace std;
 #include <gtest/gtest.h>
 
 #include "sql/ob_sql_init.h"
+#define private public
+#define protected public
+#include "sql/engine/px/exchange/ob_px_transmit_op.h"
+#undef private
+#undef protected
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -127,6 +132,32 @@ TEST_F(ObRandomAffiTaskSplitTest, split_task_test) {
     ASSERT_EQ(2, result.at(4).worker_id_);
  }
 
+}
+
+TEST_F(ObRandomAffiTaskSplitTest, px_transmit_fallback_offset_exceeds_uint16)
+{
+  ObArenaAllocator allocator(ObModIds::TEST);
+  ObPxTransmitOp::VectorSendParams params(allocator);
+  const int64_t row_count = 104;
+  const int64_t fallback_slice_count = 640;
+  void *buf = allocator.alloc(row_count * sizeof(*params.fallback_array_));
+  ASSERT_NE(nullptr, buf);
+  params.fallback_array_ = static_cast<decltype(params.fallback_array_)>(buf);
+
+  // The first row takes the direct-send path. Each of the remaining 103 rows
+  // falls back to 640 channels, so the final cumulative offset is 65920.
+  params.fallback_cnt_ = 0;
+  params.fallback_array_[0] = params.fallback_cnt_;
+  for (int64_t i = 1; i < row_count; ++i) {
+    params.fallback_cnt_ += fallback_slice_count;
+    params.fallback_array_[i] = params.fallback_cnt_;
+  }
+
+  ASSERT_EQ(65920, params.fallback_cnt_);
+  EXPECT_EQ(params.fallback_cnt_, static_cast<int64_t>(params.fallback_array_[row_count - 1]));
+  EXPECT_EQ(fallback_slice_count,
+            static_cast<int64_t>(params.fallback_array_[row_count - 1])
+                - static_cast<int64_t>(params.fallback_array_[row_count - 2]));
 }
 
 int main(int argc, char **argv)

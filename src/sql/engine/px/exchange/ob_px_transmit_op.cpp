@@ -1825,8 +1825,8 @@ int ObPxTransmitOp::VectorSendParams::init_basic_params(const int64_t max_batch_
     LOG_WARN("failed to alloc return rows", K(ret), K(max_batch_size));
   } else if (OB_FAIL(vectors_.init(output_cnt))) {
     LOG_WARN("failed to init vector array", K(ret));
-  } else if (OB_ISNULL(fallback_array_ = static_cast<uint16_t *>
-              (alloc.alloc(max_batch_size * sizeof(uint16_t))))) {
+  } else if (OB_ISNULL(fallback_array_ = static_cast<int64_t *>
+              (alloc.alloc(max_batch_size * sizeof(int64_t))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc row size array", K(ret), K(max_batch_size));
   } else if (OB_ISNULL(selector_array_ = static_cast<uint16_t *>
