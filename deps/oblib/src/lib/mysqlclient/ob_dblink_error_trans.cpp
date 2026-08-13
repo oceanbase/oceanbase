@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX LIB_MYSQLC
 #include "lib/mysqlclient/ob_dblink_error_trans.h"
+#include "lib/utility/ob_tracepoint.h"
 
 int __attribute__((weak)) get_oracle_errno(int index)
 {
@@ -102,6 +103,9 @@ int sqlclient::ObDblinkErrorTrans::external_errno_to_ob_errno(bool is_oracle_err
 }
 
 #ifdef OB_BUILD_DBLINK
+ERRSIM_POINT_DEF(ERRSIM_DBLINK_KEEPER_PING_FAIL,
+                 "simulate cached dblink connection ping failure");
+
 int ObTenantDblinkKeeper::clean_dblink_conn(uint32_t sessid, bool force_disconnect)
 {
   int ret = OB_SUCCESS;
@@ -226,8 +230,11 @@ int ObTenantDblinkKeeper::get_dblink_conn(uint32_t sessid, uint64_t dblink_id,
       LOG_WARN("failed to get connection", K(ret), K(sessid));
     }
   } else if (NULL != get_conn_call.dblink_conn_) {
-    if (OB_SUCCESS != get_conn_call.dblink_conn_->ping()) {
+    if (!get_conn_call.dblink_conn_->usable()
+        || OB_SUCCESS != (OB_E(ERRSIM_DBLINK_KEEPER_PING_FAIL, sessid)
+                          get_conn_call.dblink_conn_->ping())) {
       ret = OB_ERR_DBLINK_SESSION_KILLED;
+      get_conn_call.dblink_conn_->set_usable(false);
       get_conn_call.dblink_conn_->dblink_unrlock();
       LOG_WARN("connection is invalid", K(ret), K(get_conn_call.dblink_conn_->usable()),
                KP(get_conn_call.dblink_conn_), K(sessid), K(tenant_id_));

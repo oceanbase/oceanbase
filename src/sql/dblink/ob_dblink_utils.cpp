@@ -783,10 +783,20 @@ int ObDblinkCtxInSession::get_dblink_conn(uint64_t dblink_id, common::sqlclient:
     // do nothing
   } else if (OB_SUCCESS != (conn->ping())) {
     ret = OB_ERR_DBLINK_SESSION_KILLED;
+    conn->set_usable(false);
     conn->dblink_unrlock();
     LOG_WARN("connection is invalid", K(ret), K(conn->usable()), KP(conn));
   } else {
     dblink_conn = conn;
+  }
+  if (OB_ERR_DBLINK_SESSION_KILLED == ret && 0 == tm_sessid) {
+    ObSQLSessionInfo::LockGuard data_lock_guard(session_info_->get_thread_data_lock());
+    transaction::ObTxDesc *tx_desc = session_info_->get_tx_desc();
+    if (OB_NOT_NULL(tx_desc)
+        && transaction::ObGlobalTxType::DBLINK_TRANS
+            == tx_desc->get_global_tx_type(session_info_->get_xid())) {
+      ret = OB_TRANS_NEED_ROLLBACK;
+    }
   }
   LOG_TRACE("get_dblink_conn", K(ret), K(dblink_id), KP(dblink_conn), K(tm_sessid), K(sessid), K(lbt()));
 #endif
