@@ -7,6 +7,7 @@
 
 #include "ob_static_engine_cg.h"
 #include "sql/resolver/dml/ob_dml_stmt.h"
+#include "sql/hybrid_search/ob_hybrid_search_dsl_resolver.h"
 #include "sql/optimizer/ob_log_group_by.h"
 #include "sql/optimizer/ob_log_sort.h"
 #include "sql/optimizer/ob_log_limit.h"
@@ -705,7 +706,25 @@ int ObStaticEngineCG::check_vectorize_supported(bool &support,
       if (OB_FAIL(ret)) {
       } else if (log_op_def::LOG_TABLE_SCAN == op->get_type()) {
          LOG_DEBUG("TableScan base table rows ", K(op->get_card()));
-         scan_cardinality = common::max(scan_cardinality, op->get_card());
+         double table_scan_cardinality = op->get_card();
+         const ObLogTableScan *table_scan = static_cast<const ObLogTableScan *>(op);
+         const ObDMLStmt *stmt = table_scan->get_stmt();
+         const TableItem *table_item =
+             OB_NOT_NULL(stmt) ? stmt->get_table_item_by_id(table_scan->get_table_id()) : NULL;
+         const bool is_topk_hybrid_search =
+             table_scan->get_is_hybrid_search()
+             && OB_NOT_NULL(table_item)
+             && OB_NOT_NULL(table_item->dsl_query_)
+             && table_item->dsl_query_->is_top_k_query_;
+         if (is_topk_hybrid_search) {
+           // Hybrid search can use default cardinality after skipping expensive estimation.
+           // Keep it out of the OLTP workload classification to avoid degrading vectorized
+           // execution to OLTP_WORKLOAD_CARDINALITY.
+           table_scan_cardinality = common::max(
+               table_scan_cardinality,
+               static_cast<double>(ObStaticEngineExprCG::OLTP_WORKLOAD_CARDINALITY));
+         }
+         scan_cardinality = common::max(scan_cardinality, table_scan_cardinality);
       }
       if (OB_SUCC(ret) && !disable_vectorize) {
         const ObDMLStmt *stmt = NULL;

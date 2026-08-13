@@ -7,6 +7,7 @@
 #include "sql/optimizer/ob_access_path_estimation.h"
 #include "sql/optimizer/ob_storage_estimator.h"
 #include "sql/engine/table/ob_table_scan_op.h"
+#include "sql/hybrid_search/ob_hybrid_search_dsl_resolver.h"
 #include "ob_opt_est_parameter_normal.h"
 #include "sql/optimizer/ob_sel_estimator.h"
 namespace oceanbase {
@@ -302,6 +303,22 @@ int ObAccessPathEstimation::get_valid_est_methods(ObOptimizerContext &ctx,
       if (!share::is_oracle_mapping_real_virtual_table(ref_table_id)) {
         valid_methods &= ~EST_STORAGE;
       }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    const ObDMLStmt *stmt = log_plan->get_stmt();
+    const TableItem *table_item = stmt->get_table_item_by_id(paths.at(0)->table_id_);
+    const bool skip_hybrid_storage_estimation =
+        1 == stmt->get_table_size()
+        && 1 == stmt->get_from_item_size()
+        && OB_NOT_NULL(table_item)
+        && table_item->is_hybrid_search()
+        && OB_NOT_NULL(table_item->dsl_query_)
+        && table_item->dsl_query_->is_top_k_query_;
+    if (skip_hybrid_storage_estimation) {
+      valid_methods &= ~EST_STORAGE;
+      valid_methods &= ~EST_DS_METHODS;
     }
   }
 

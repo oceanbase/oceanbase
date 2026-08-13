@@ -18941,6 +18941,14 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
   } else if (OB_FAIL(get_plan()->get_column_exprs(table_id, column_exprs))) {
     LOG_WARN("failed to get column exprs", K(ret));
   } else {
+    const ObDMLStmt *stmt = get_plan()->get_stmt();
+    const TableItem *table_item =
+        OB_NOT_NULL(stmt) ? stmt->get_table_item_by_id(table_id) : NULL;
+    const bool is_topk_hybrid_search_table =
+        OB_NOT_NULL(table_item)
+        && table_item->is_hybrid_search()
+        && OB_NOT_NULL(table_item->dsl_query_)
+        && table_item->dsl_query_->is_top_k_query_;
     ObSEArray<int64_t, 64> all_used_part_id;
     ObSEArray<ObTabletID, 64> all_used_tablet_id;
     ObSEArray<int64_t, 10> table_stat_part_ids;
@@ -19004,7 +19012,8 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
       //2. if the table row count is 0 and not to force use default stat, we try refine it.
       if (OB_SUCC(ret) && !table_schema.is_external_table() &&
           table_meta_info_.table_row_count_ <= 0 &&
-          !OPT_CTX.use_default_stat()) {
+          !OPT_CTX.use_default_stat() &&
+          !is_topk_hybrid_search_table) {
         if (OB_FAIL(ObAccessPathEstimation::estimate_full_table_rowcount(OPT_CTX,
                                                                          *table_partition_info_,
                                                                          table_meta_info_))) {

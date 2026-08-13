@@ -220,6 +220,9 @@ int ObBM25IndexParamEstimator::do_total_doc_cnt_estimation_on_demand(sql::ObDASS
   const uint64_t estimated_total_doc_cnt = ir_scan_ctdef_->estimated_total_doc_cnt_;
   if (estimated_total_doc_cnt > 0) {
     total_doc_cnt_ = estimated_total_doc_cnt;
+  } else if (ir_scan_ctdef_->use_scalar_scan_def_
+             && search_ctx.get_row_count().is_valid()) {
+    total_doc_cnt_ = search_ctx.get_row_count().cost();
   } else {
     // get total doc cnt by aggregation
     ObTableScanParam total_doc_cnt_scan_param;
