@@ -46,8 +46,8 @@ if ($merge_stage == 0) {
     {
         sleep 1;
         dec $__i__;
-        let $cur_frozen_scn = query_get_value(select frozen_scn from __all_zone_merge_info where tenant_id = $sys_tenant_id, frozen_scn, 1);
-        let $cur_last_merged_scn = query_get_value(select last_merged_scn from __all_zone_merge_info where tenant_id = $sys_tenant_id, last_merged_scn, 1);
+        let $cur_frozen_scn = query_get_value(select frozen_scn from __all_merge_info where tenant_id = $sys_tenant_id, frozen_scn, 1);
+        let $cur_last_merged_scn = query_get_value(select last_merged_scn from __all_merge_info where tenant_id = $sys_tenant_id, last_merged_scn, 1);
         if ($cur_frozen_scn == $cur_last_merged_scn) {
             let $__i__ = -5;
         }
@@ -63,7 +63,7 @@ if ($merge_stage == 0) {
     {
         sleep 1;
         dec $__i__;
-        let $cur_is_merging = query_get_value(select is_merging from __all_zone_merge_info where tenant_id = $sys_tenant_id, is_merging, 1);
+        let $cur_is_merging = query_get_value(select merge_status from __all_merge_info where tenant_id = $sys_tenant_id, merge_status, 1);
         if ($cur_is_merging == 0) {
             let $__i__ = -5;
         }
@@ -79,7 +79,7 @@ if ($merge_stage == 0) {
     {
         sleep 1;
         dec $__i__;
-        let $cur_merge_status = query_get_value(select merge_status from __all_zone_merge_info where tenant_id = $sys_tenant_id, merge_status, 1);
+        let $cur_merge_status = query_get_value(select merge_status from __all_merge_info where tenant_id = $sys_tenant_id, merge_status, 1);
         if ($cur_merge_status == 0) {
             let $__i__ = -5;
         }
@@ -97,7 +97,7 @@ if ($merge_stage == 1) {
     {
         sleep 1;
         dec $__i__;
-        let $cur_is_merging = query_get_value(select is_merging from __all_zone_merge_info where tenant_id = $sys_tenant_id, is_merging, 1);
+        let $cur_is_merging = query_get_value(select merge_status from __all_merge_info where tenant_id = $sys_tenant_id, merge_status, 1);
         if ($cur_is_merging == 1) {
             let $__i__ = -5;
         }
@@ -113,7 +113,7 @@ if ($merge_stage == 1) {
     {
         sleep 1;
         dec $__i__;
-        let $cur_merge_status = query_get_value(select merge_status from __all_zone_merge_info where tenant_id = $sys_tenant_id, merge_status, 1);
+        let $cur_merge_status = query_get_value(select merge_status from __all_merge_info where tenant_id = $sys_tenant_id, merge_status, 1);
         if ($cur_merge_status >= 1) {
             let $__i__ = -5;
         }
@@ -129,7 +129,7 @@ if ($merge_stage == 1) {
     {
         sleep 1;
         dec $__i__;
-        let $cur_frozen_scn = query_get_value(select frozen_scn from __all_zone_merge_info where tenant_id = $sys_tenant_id, frozen_scn, 1);
+        let $cur_frozen_scn = query_get_value(select frozen_scn from __all_merge_info where tenant_id = $sys_tenant_id, frozen_scn, 1);
         let $ret = query_get_value(select $cur_frozen_scn > $frozen_scn_ori as val, val, 1);
         if ($ret == 1) {
             let $__i__ = -5;
@@ -146,7 +146,7 @@ if ($merge_stage == 1) {
     {
         sleep 1;
         dec $__i__;
-        let $cur_broadcast_scn = query_get_value(select broadcast_scn from __all_zone_merge_info where tenant_id = $sys_tenant_id, broadcast_scn, 1);
+        let $cur_broadcast_scn = query_get_value(select global_broadcast_scn from __all_merge_info where tenant_id = $sys_tenant_id, global_broadcast_scn, 1);
         let $ret = query_get_value(select $cur_broadcast_scn > $broadcast_scn_ori as val, val, 1);
         if ($ret == 1) {
             let $__i__ = -5;

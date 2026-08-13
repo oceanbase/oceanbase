@@ -111,8 +111,8 @@ TEST_F(TestWindowLoop, test_window_compaction_params)
   ASSERT_EQ(OB_NOT_INIT, params.check_need_do_window_compaction(need_do_window_compaction));
   params.tenant_id_ = 1002;
   params.is_inited_ = true;
-  params.merge_mode_ = ObGlobalMergeInfo::MERGE_MODE_TENANT;
-  params.merge_status_ = ObZoneMergeInfo::MERGE_STATUS_IDLE;
+  params.merge_mode_ = ObGlobalMergeInfo::MergeMode::MERGE_MODE_TENANT;
+  params.merge_status_ = ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_IDLE;
   ASSERT_TRUE(params.is_valid());
 
   // 1. enable_window_compaction_ is false, do not need do window compaction
@@ -132,7 +132,7 @@ TEST_F(TestWindowLoop, test_window_compaction_params)
   params.window_duration_us_ = 5 * 1000 * 1000L; // 5s
   ASSERT_FALSE(params.is_window_compaction_stopped());
   // 3 merge_status_ is idle
-  params.merge_status_ = ObZoneMergeInfo::MERGE_STATUS_IDLE;
+  params.merge_status_ = ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_IDLE;
   ASSERT_FALSE(params.is_window_compaction_forever());
   ASSERT_EQ(OB_SUCCESS, params.check_need_do_window_compaction(need_do_window_compaction));
   ASSERT_FALSE(need_do_window_compaction);
@@ -142,23 +142,23 @@ TEST_F(TestWindowLoop, test_window_compaction_params)
   ASSERT_TRUE(need_do_window_compaction);
 
   // 4. merge_status_ is not idle
-  params.merge_mode_ = ObGlobalMergeInfo::MERGE_MODE_TENANT;
-  params.merge_status_ = ObZoneMergeInfo::MERGE_STATUS_MERGING;
+  params.merge_mode_ = ObGlobalMergeInfo::MergeMode::MERGE_MODE_TENANT;
+  params.merge_status_ = ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_MERGING;
   need_do_window_compaction = false;
   ASSERT_EQ(OB_SUCCESS, params.check_need_do_window_compaction(need_do_window_compaction));
   ASSERT_FALSE(need_do_window_compaction);
-  params.merge_status_ = ObZoneMergeInfo::MERGE_STATUS_VERIFYING;
+  params.merge_status_ = ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_VERIFYING;
   need_do_window_compaction = false;
   ASSERT_EQ(OB_SUCCESS, params.check_need_do_window_compaction(need_do_window_compaction));
   ASSERT_FALSE(need_do_window_compaction);
 
-  params.merge_mode_ = ObGlobalMergeInfo::MERGE_MODE_WINDOW;
-  params.merge_status_ = ObZoneMergeInfo::MERGE_STATUS_VERIFYING; // window compaction
+  params.merge_mode_ = ObGlobalMergeInfo::MergeMode::MERGE_MODE_WINDOW;
+  params.merge_status_ = ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_VERIFYING; // window compaction
   need_do_window_compaction = false;
   ASSERT_EQ(OB_ERR_UNEXPECTED, params.check_need_do_window_compaction(need_do_window_compaction));
   ASSERT_FALSE(need_do_window_compaction);
 
-  params.merge_status_ = ObZoneMergeInfo::MERGE_STATUS_MERGING;
+  params.merge_status_ = ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_MERGING;
   const int64_t current_time_us = ObTimeUtility::current_time_us();
   params.window_start_time_us_ = current_time_us;
   params.window_duration_us_ = 1 * 1000 * 1000L;

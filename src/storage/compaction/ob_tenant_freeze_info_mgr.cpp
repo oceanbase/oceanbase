@@ -5,7 +5,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_tenant_freeze_info_mgr.h"
-#include "share/ob_zone_merge_info.h"
 #include "share/ob_global_merge_table_operator.h"
 #include "storage/compaction/ob_compaction_schedule_util.h"
 #include "storage/concurrency_control/ob_multi_version_garbage_collector.h"
@@ -568,14 +567,14 @@ int ObTenantFreezeInfoMgr::ReloadTask::refresh_merge_info()
   int64_t cur_broadcast_version = 0;
   int64_t global_broadcast_version = 0;
   int64_t current_window_start_time = 0;
-  ObZoneMergeInfo::MergeStatus merge_status = ObZoneMergeInfo::MERGE_STATUS_MAX;
-  ObGlobalMergeInfo::MergeMode merge_mode = ObGlobalMergeInfo::MERGE_MODE_MAX;
+  ObGlobalMergeInfo::MergeStatus merge_status = ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_MAX;
+  ObGlobalMergeInfo::MergeMode merge_mode = ObGlobalMergeInfo::MergeMode::MERGE_MODE_MAX;
 
   if (OB_FAIL(ObGlobalMergeTableOperator::load_global_merge_info(*GCTX.sql_proxy_, tenant_id, global_merge_info))) {
     LOG_WARN("failed to load global merge info", KR(ret), K(global_merge_info));
   } else {
-    merge_status = static_cast<ObZoneMergeInfo::MergeStatus>(global_merge_info.merge_status_.get_value());
-    merge_mode = static_cast<ObGlobalMergeInfo::MergeMode>(global_merge_info.merge_mode_.get_value());
+    merge_status = global_merge_info.merge_status();
+    merge_mode = global_merge_info.merge_mode();
     current_window_start_time = global_merge_info.merge_start_time();
     // set merged version
     MERGE_SCHEDULER_PTR->set_inner_table_merged_scn(global_merge_info.last_merged_scn_.get_scn().get_val_for_tx());

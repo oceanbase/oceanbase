@@ -13,7 +13,6 @@ endfunction()
 
 #rs_unittest(test_bootstrap)
 rs_unittest(test_rs_reentrant_thread)
-rs_unittest(test_tenant_all_zone_merge_strategy)
 rs_unittest(test_primary_ls_service)
 rs_unittest(test_ls_balance_helper)
 #rs_unittest(test_multi_cluster_manager)

@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX RS_COMPACTION
 
 #include "rootserver/freeze/ob_major_merge_progress_checker.h"
+#include "rootserver/freeze/ob_major_merge_info_manager.h"
 #include "share/tablet/ob_tablet_table_iterator.h"
 #include "storage/compaction/ob_server_compaction_event_history.h"
 #include "observer/ob_server_event_history_table_operator.h"
@@ -52,7 +53,7 @@ int ObMajorMergeProgressChecker::init(
     LOG_WARN("fail to create table compaction info map", KR(ret), K_(tenant_id), K(TABLE_MAP_BUCKET_CNT));
   } else if (OB_FAIL(ckm_validator_.init(is_primary_service, sql_proxy))) {
     LOG_WARN("fail to init checksum validator", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(ls_locality_cache_.init(tenant_id_, &merge_info_mgr))) {
+  } else if (OB_FAIL(ls_locality_cache_.init(tenant_id_))) {
     LOG_WARN("failed to init ls locality cache", K(ret));
   } else {
     (void) tablet_ls_pair_cache_.set_tenant_id(tenant_id_);

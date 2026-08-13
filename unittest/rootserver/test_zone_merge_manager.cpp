@@ -14,6 +14,7 @@
 #include "lib/container/ob_array_iterator.h"
 #include "rootserver/freeze/ob_zone_merge_manager.h"
 #include "share/ob_zone_merge_table_operator.h"
+#include "share/ob_global_merge_table_operator.h"
 
 using ::testing::_;
 using ::testing::Invoke;
@@ -51,13 +52,10 @@ private:
 void TestZoneMergeManager::build_global_merge_info()
 {
   global_merge_info_.tenant_id_ = DEFAULT_TENANT_ID;
-  global_merge_info_.zone_ = "";
-  global_merge_info_.try_frozen_version_.value_ = 1;
-  global_merge_info_.frozen_version_.value_ = 1;
-  global_merge_info_.frozen_time_.value_ = 99999;
-  global_merge_info_.global_broadcast_version_.value_ = 1;
-  global_merge_info_.last_merged_version_.value_ = 1;
   global_merge_info_.is_merge_error_.value_ = 0;
+  // NOTE: Old version-based fields (zone_, try_frozen_version_, frozen_version_,
+  // frozen_time_, global_broadcast_version_, last_merged_version_) have been removed.
+  // The new implementation uses SCN-based fields with default-constructed values.
 }
 
 void TestZoneMergeManager::SetUp()
@@ -69,17 +67,19 @@ void TestZoneMergeManager::SetUp()
   ASSERT_EQ(OB_SUCCESS, db_initer_.create_tenant_space_tables(DEFAULT_TENANT_ID));
 
   build_global_merge_info();
-  ASSERT_EQ(OB_SUCCESS, ObZoneMergeTableOperator::insert_global_merge_info(
-      db_initer_.get_sql_proxy(), global_merge_info_));
+  ASSERT_EQ(OB_SUCCESS, ObGlobalMergeTableOperator::insert_global_merge_info(
+      db_initer_.get_sql_proxy(), DEFAULT_TENANT_ID, global_merge_info_));
   ObZone zones[] = { "zone1", "zone2" };
+  ObArray<ObZoneMergeInfo> infos_to_insert;
   for (int64_t i = 0; i < static_cast<int64_t>(sizeof(zones) / sizeof(ObZone)); ++i) {
     ObZoneMergeInfo info;
     info.tenant_id_ = DEFAULT_TENANT_ID;
     info.zone_ = zones[i];
-    ASSERT_EQ(OB_SUCCESS, ObZoneMergeTableOperator::insert_zone_merge_info(
-            db_initer_.get_sql_proxy(), info));
+    ASSERT_EQ(OB_SUCCESS, infos_to_insert.push_back(info));
     ASSERT_EQ(OB_SUCCESS, zone_merge_infos_.push_back(info));
   }
+  ASSERT_EQ(OB_SUCCESS, ObZoneMergeTableOperator::insert_zone_merge_infos(
+      db_initer_.get_sql_proxy(), DEFAULT_TENANT_ID, infos_to_insert));
 }
 
 void TestZoneMergeManager::check_info(
@@ -88,11 +88,11 @@ void TestZoneMergeManager::check_info(
 {
   ASSERT_EQ(l.tenant_id_, r.tenant_id_);
   ASSERT_EQ(l.zone_, r.zone_);
-  ASSERT_EQ(l.broadcast_version_.value_, r.broadcast_version_.value_);
-  ASSERT_EQ(l.last_merged_version_.value_, r.last_merged_version_.value_);
+  ASSERT_EQ(l.broadcast_scn_.value_, r.broadcast_scn_.value_);
+  ASSERT_EQ(l.last_merged_scn_.value_, r.last_merged_scn_.value_);
   ASSERT_EQ(l.last_merged_time_.value_, r.last_merged_time_.value_);
   ASSERT_EQ(l.merge_start_time_.value_, r.merge_start_time_.value_);
-  ASSERT_EQ(l.is_merge_timeout_.value_, r.is_merge_timeout_.value_);
+  // is_merge_timeout_ removed; merge timeout is no longer tracked per zone
 }
 
 // TEST_F(TestZoneMergeManager, common)
@@ -126,152 +126,75 @@ void TestZoneMergeManager::check_info(
 //   check_info(zone_merge_infos_[1], infos[1]);
 // }
 
-TEST_F(TestZoneMergeManager, merge)
+TEST_F(TestZoneMergeManager, reload_and_get_status)
 {
   ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.init(DEFAULT_TENANT_ID, db_initer_.get_sql_proxy()));
   ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.reload());
 
-  // increase frozen_version
-  int64_t frozen_time = 0;
-  int64_t frozen_version = 0;
-  int64_t try_frozen_version = 0;
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.get_global_frozen_info(frozen_version, frozen_time));
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.get_global_try_frozen_version(try_frozen_version));
-  ASSERT_EQ(frozen_version, try_frozen_version);
-  ASSERT_EQ(OB_INVALID_ARGUMENT, zone_merge_mgr_.set_global_try_frozen_version(9));
-  try_frozen_version += 1;
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.set_global_try_frozen_version(try_frozen_version));
-  frozen_time = ObTimeUtility::current_time();
-  frozen_version = try_frozen_version;
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.set_global_frozen_info(frozen_version, frozen_time));
-  int64_t got_frozen_version = 0;
-  int64_t got_frozen_time = 0;
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.get_global_frozen_info(got_frozen_version, got_frozen_time));
-  ASSERT_EQ(frozen_version, got_frozen_version);
-  ASSERT_EQ(frozen_time, got_frozen_time);
+  // initial status should be IDLE
+  ObGlobalMergeInfo::MergeStatus status = ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_MAX;
+  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.get_global_merge_status(status));
+  ASSERT_EQ(ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_IDLE, status);
 
-  bool in_merge = false;
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.is_in_merge(in_merge));
-  ASSERT_FALSE(in_merge);
-  int64_t next_version = 0;
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.generate_next_global_broadcast_version(next_version));
-  ASSERT_EQ(frozen_version, next_version);
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.is_in_merge(in_merge));
-  ASSERT_TRUE(in_merge);
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.try_update_global_last_merged_version());
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.is_in_merge(in_merge));
-  ASSERT_TRUE(in_merge);
+  // global snapshot: correct tenant_id, no merge error
+  ObGlobalMergeInfo global_info;
+  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.get_snapshot(global_info));
+  ASSERT_EQ(DEFAULT_TENANT_ID, global_info.tenant_id_);
+  ASSERT_FALSE(global_info.is_merge_error());
 
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.set_zone_merging("zone1"));
-  {
-    ObZoneMergeInfo info;
-    info.zone_ = "zone1";
-    info.tenant_id_ = DEFAULT_TENANT_ID;
-    ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.get_zone(info));
-    ASSERT_EQ(1, info.is_merging_);
-  }
+  // default merge mode is MERGE_MODE_TENANT
+  ObGlobalMergeInfo::MergeMode mode = ObGlobalMergeInfo::MergeMode::MERGE_MODE_MAX;
+  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.get_global_merge_mode(mode));
+  ASSERT_EQ(ObGlobalMergeInfo::MergeMode::MERGE_MODE_TENANT, mode);
 
-  ASSERT_NE(OB_SUCCESS, zone_merge_mgr_.set_zone_merging("")); // invalid argument
-  ASSERT_NE(OB_SUCCESS, zone_merge_mgr_.start_zone_merge("zone_not_exit")); // OB_ENTRY_NOT_EXIST
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.start_zone_merge("zone1"));
-  ASSERT_NE(OB_SUCCESS, zone_merge_mgr_.finish_zone_merge("", 2, 2));
-  ASSERT_NE(OB_SUCCESS, zone_merge_mgr_.finish_zone_merge("zone1", 20, 20)); // last_merged_version not continue
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.finish_zone_merge("zone1", 2, 2));
-  { // finish merge zone will clear merging flag
-    ObZoneMergeInfo info;
-    info.zone_ = "zone1";
-    info.tenant_id_ = DEFAULT_TENANT_ID;
-    ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.get_zone(info));
-    ASSERT_EQ(0, info.is_merging_);
-  }
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.try_update_global_last_merged_version());
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.is_in_merge(in_merge));
-  ASSERT_TRUE(in_merge);
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.start_zone_merge("zone2"));
-  { // auto set merging flag when start zone merge
-    ObZoneMergeInfo info;
-    info.zone_ = "zone2";
-    info.tenant_id_ = DEFAULT_TENANT_ID;
-    ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.get_zone(info));
-    ASSERT_EQ(1, info.is_merging_);
-  }
-
-  ASSERT_NE(OB_SUCCESS, zone_merge_mgr_.set_zone_merge_timeout(""));
-  ASSERT_NE(OB_SUCCESS, zone_merge_mgr_.set_zone_merge_timeout("zone_not_exit"));
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.set_zone_merge_timeout("zone2"));
-  { // set merge timeout clear merging flag too
-    ObZoneMergeInfo info;
-    info.zone_ = "zone2";
-    info.tenant_id_ = DEFAULT_TENANT_ID;
-    ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.get_zone(info));
-    ASSERT_EQ(0, info.is_merging_);
-  }
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.finish_zone_merge("zone2", 2, 2));
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.try_update_global_last_merged_version());
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.is_in_merge(in_merge));
-  ASSERT_FALSE(in_merge); // all zone finish merge
-
-  // suspend && resume
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.suspend_zone_merge("zone1"));
-  {
-    ObZoneMergeInfo info;
-    info.zone_ = "zone1";
-    info.tenant_id_ = DEFAULT_TENANT_ID;
-    ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.get_zone(info));
-    ASSERT_EQ(1, info.suspend_merging_);
-
-    ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.resume_zone_merge("zone1"));
-    ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.get_zone(info));
-    ASSERT_EQ(0, info.suspend_merging_);
-  }
-  ASSERT_EQ(OB_ZONE_INFO_NOT_EXIST, zone_merge_mgr_.suspend_zone_merge("not_exist_zone"));
+  // zone_merge_infos_ array is removed from ObZoneMergeManagerBase; zone rows are
+  // accessed directly from the DB. Verify 2 rows exist as inserted in SetUp.
+  ObArray<ObZoneMergeInfo> zone_infos;
+  ASSERT_EQ(OB_SUCCESS, ObZoneMergeTableOperator::load_zone_merge_infos(
+      db_initer_.get_sql_proxy(), DEFAULT_TENANT_ID, zone_infos));
+  ASSERT_EQ(2, zone_infos.count());
 }
 
-TEST_F(TestZoneMergeManager, global_merge_status)
+TEST_F(TestZoneMergeManager, batch_update_all_zone_merge_info)
 {
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.init(DEFAULT_TENANT_ID, db_initer_.get_sql_proxy()));
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.reload());
+  // Mark all zones as MERGING in a single SQL (mirrors generate_next_global_broadcast_scn)
+  ObZoneMergeInfo start_info;
+  start_info.tenant_id_ = DEFAULT_TENANT_ID;
+  start_info.is_merging_.set_val(1, true);
+  start_info.set_merge_status(ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_MERGING, true);
 
-  ASSERT_EQ(ObZoneMergeInfo::MERGE_STATUS_IDLE, zone_merge_mgr_.global_merge_info_.merge_status_);
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.reset_global_merge_status());
-  ASSERT_EQ(ObZoneMergeInfo::MERGE_STATUS_IDLE, zone_merge_mgr_.global_merge_info_.merge_status_);
+  ASSERT_EQ(OB_SUCCESS, ObZoneMergeTableOperator::update_tenant_all_zone_merge_info(
+      db_initer_.get_sql_proxy(), DEFAULT_TENANT_ID, start_info));
 
-  zone_merge_mgr_.global_merge_info_.try_frozen_version_.value_ = 2;
-  zone_merge_mgr_.global_merge_info_.frozen_version_.value_ = 2;
-  zone_merge_mgr_.global_merge_info_.global_broadcast_version_.value_ = 2;
+  // all zone rows should be updated
+  ObArray<ObZoneMergeInfo> zone_infos;
+  ASSERT_EQ(OB_SUCCESS, ObZoneMergeTableOperator::load_zone_merge_infos(
+      db_initer_.get_sql_proxy(), DEFAULT_TENANT_ID, zone_infos));
+  ASSERT_EQ(2, zone_infos.count());
+  for (int64_t i = 0; i < zone_infos.count(); ++i) {
+    ASSERT_EQ(1, zone_infos.at(i).is_merging_.get_value());
+    ASSERT_EQ(ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_MERGING,
+              zone_infos.at(i).merge_status());
+  }
 
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.reset_global_merge_status());
-  ASSERT_EQ(ObZoneMergeInfo::MERGE_STATUS_MERGING, zone_merge_mgr_.global_merge_info_.merge_status_);
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.start_zone_merge("zone1"));
-  ASSERT_EQ(ObZoneMergeInfo::MERGE_STATUS_MERGING, zone_merge_mgr_.global_merge_info_.merge_status_);
-  ASSERT_EQ(ObZoneMergeInfo::MERGE_STATUS_MERGING, zone_merge_mgr_.zone_merge_infos_[0].merge_status_);
+  // Mark all zones as IDLE in a single SQL (mirrors try_update_global_last_merged_scn)
+  ObZoneMergeInfo finish_info;
+  finish_info.tenant_id_ = DEFAULT_TENANT_ID;
+  finish_info.is_merging_.set_val(0, true);
+  finish_info.set_merge_status(ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_IDLE, true);
 
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.set_merge_error(1));
-  ASSERT_EQ(ObZoneMergeInfo::MERGE_STATUS_ERROR, zone_merge_mgr_.global_merge_info_.merge_status_);
+  ASSERT_EQ(OB_SUCCESS, ObZoneMergeTableOperator::update_tenant_all_zone_merge_info(
+      db_initer_.get_sql_proxy(), DEFAULT_TENANT_ID, finish_info));
 
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.set_merge_error(0));
-  ASSERT_EQ(ObZoneMergeInfo::MERGE_STATUS_MERGING, zone_merge_mgr_.global_merge_info_.merge_status_);
-
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.finish_zone_merge("zone1", 2, 1));
-  ASSERT_EQ(ObZoneMergeInfo::MERGE_STATUS_MERGING, zone_merge_mgr_.global_merge_info_.merge_status_);
-  ASSERT_EQ(ObZoneMergeInfo::MERGE_STATUS_MOST_MERGED, zone_merge_mgr_.zone_merge_infos_[0].merge_status_);
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.finish_zone_merge("zone1", 2, 2));
-  ASSERT_EQ(ObZoneMergeInfo::MERGE_STATUS_IDLE, zone_merge_mgr_.zone_merge_infos_[0].merge_status_);
-
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.start_zone_merge("zone2"));
-  ASSERT_EQ(ObZoneMergeInfo::MERGE_STATUS_MERGING, zone_merge_mgr_.global_merge_info_.merge_status_);
-  ASSERT_EQ(ObZoneMergeInfo::MERGE_STATUS_MERGING, zone_merge_mgr_.zone_merge_infos_[1].merge_status_);
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.set_zone_merge_timeout("zone2"));
-  ASSERT_EQ(ObZoneMergeInfo::MERGE_STATUS_TIMEOUT, zone_merge_mgr_.global_merge_info_.merge_status_);
-  ASSERT_EQ(ObZoneMergeInfo::MERGE_STATUS_TIMEOUT, zone_merge_mgr_.zone_merge_infos_[1].merge_status_);
-
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.finish_zone_merge("zone2", 2, 2));
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.try_update_global_last_merged_version());
-  ASSERT_EQ(ObZoneMergeInfo::MERGE_STATUS_IDLE, zone_merge_mgr_.global_merge_info_.merge_status_);
-  ASSERT_EQ(ObZoneMergeInfo::MERGE_STATUS_IDLE, zone_merge_mgr_.zone_merge_infos_[1].merge_status_);
-
-  ASSERT_EQ(OB_SUCCESS, zone_merge_mgr_.reset_global_merge_status());
-  ASSERT_EQ(ObZoneMergeInfo::MERGE_STATUS_IDLE, zone_merge_mgr_.global_merge_info_.merge_status_);
+  zone_infos.reuse();
+  ASSERT_EQ(OB_SUCCESS, ObZoneMergeTableOperator::load_zone_merge_infos(
+      db_initer_.get_sql_proxy(), DEFAULT_TENANT_ID, zone_infos));
+  ASSERT_EQ(2, zone_infos.count());
+  for (int64_t i = 0; i < zone_infos.count(); ++i) {
+    ASSERT_EQ(0, zone_infos.at(i).is_merging_.get_value());
+    ASSERT_EQ(ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_IDLE,
+              zone_infos.at(i).merge_status());
+  }
 }
 
 } // namespace rootserver

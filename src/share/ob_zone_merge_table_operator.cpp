@@ -5,9 +5,10 @@
 
 #define USING_LOG_PREFIX SHARE
 
+#include "lib/mysqlclient/ob_mysql_transaction.h"
+#include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/ob_zone_merge_table_operator.h"
 
-#include "share/inner_table/ob_inner_table_schema.h"
 #include "share/ob_zone_merge_info.h"
 #include "share/ob_dml_sql_splicer.h"
 
@@ -18,27 +19,6 @@ namespace share
 using namespace oceanbase::common;
 using namespace oceanbase::common::sqlclient;
 
-int ObZoneMergeTableOperator::load_zone_merge_info(
-    ObISQLClient &sql_client,
-    const uint64_t tenant_id,
-    ObZoneMergeInfo &info,
-    const bool print_sql)
-{
-  int ret = OB_SUCCESS;
-  ObArray<ObZoneMergeInfo> infos;
-  if (OB_FAIL(infos.push_back(info))) {
-    LOG_WARN("fail to push back zone merge info", KR(ret), K(info));
-  } else if (OB_FAIL(load_zone_merge_infos(sql_client, tenant_id, infos, print_sql))) {
-    LOG_WARN("fail to load zone merge infos", KR(ret), K(info));
-  } else if (OB_UNLIKELY(infos.count() != 1)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected err about info count", KR(ret), K(tenant_id), K(info));
-  } else if (OB_FAIL(info.assign_value(infos.at(0)))) {
-    LOG_WARN("fail to assign zone merge info value", KR(ret), K(info));
-  }
-  return ret;
-}
-
 int ObZoneMergeTableOperator::load_zone_merge_infos(
     ObISQLClient &sql_client,
     const uint64_t tenant_id,
@@ -48,30 +28,15 @@ int ObZoneMergeTableOperator::load_zone_merge_infos(
   return inner_load_zone_merge_infos_(sql_client, tenant_id, infos, print_sql);
 }
 
-int ObZoneMergeTableOperator::insert_zone_merge_info(
-    ObISQLClient &sql_client,
-    const uint64_t tenant_id,
-    const ObZoneMergeInfo &info)
-{
-  int ret = OB_SUCCESS;
-  ObArray<ObZoneMergeInfo> infos;
-  if (OB_FAIL(infos.push_back(info))) {
-    LOG_WARN("fail to push back zone merge info", KR(ret), K(tenant_id), K(info));
-  } else if (OB_FAIL(insert_zone_merge_infos(sql_client, tenant_id, infos))) {
-    LOG_WARN("fail to insert zone merge infos", KR(ret), K(tenant_id), K(info));
-  }
-  return ret;
-}
-
 int ObZoneMergeTableOperator::insert_zone_merge_infos(
     ObISQLClient &sql_client,
     const uint64_t tenant_id,
     const ObIArray<ObZoneMergeInfo> &infos)
 {
-  return inner_insert_or_update_zone_merge_infos_(sql_client, tenant_id, false, infos);
+  return inner_insert_zone_merge_infos_(sql_client, tenant_id, InsertMode::INSERT, infos);
 }
 
-int ObZoneMergeTableOperator::update_partial_zone_merge_info(
+int ObZoneMergeTableOperator::update_tenant_all_zone_merge_info(
     ObISQLClient &sql_client,
     const uint64_t tenant_id,
     const ObZoneMergeInfo &info)
@@ -86,8 +51,7 @@ int ObZoneMergeTableOperator::update_partial_zone_merge_info(
     const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
     ObDMLExecHelper exec(sql_client, meta_tenant_id);
 
-    if (OB_FAIL(dml.add_pk_column("tenant_id", tenant_id))
-        || OB_FAIL(dml.add_pk_column("zone", info.zone_.ptr()))) {
+    if (OB_FAIL(dml.add_pk_column("tenant_id", tenant_id))) {
       LOG_WARN("fail to add pk column", KR(ret), K(tenant_id), K(info));
     } else {
       bool need_update = false;
@@ -110,7 +74,7 @@ int ObZoneMergeTableOperator::update_partial_zone_merge_info(
                 }
               } else {
                 if (OB_FAIL(dml.get_extra_condition().append_fmt(" AND %s < %ld", it->name_, it->get_scn_val()))) {
-                  LOG_WARN("fail to assign extra_condition", KR(ret), K(tenant_id));
+                  LOG_WARN("fail to append extra_condition", KR(ret), K(tenant_id));
                 }
               }
             } else {
@@ -127,13 +91,8 @@ int ObZoneMergeTableOperator::update_partial_zone_merge_info(
       if (need_update) {
         if (FAILEDx(exec.exec_update(OB_ALL_ZONE_MERGE_INFO_TNAME, dml, affected_rows))) {
           LOG_WARN("fail to exec_update zone_merge_info", KR(ret), K(meta_tenant_id), K(info));
-        } else if (!(is_single_row(affected_rows) || is_zero_row(affected_rows))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("unexpected affected rows", KR(ret), K(affected_rows), K(meta_tenant_id), K(info));
         } else if (is_zero_row(affected_rows)) {
-          if (OB_FAIL(check_scn_revert(sql_client, tenant_id, info))) {
-            LOG_WARN("fail to check scn revert", KR(ret), K(tenant_id));
-          }
+          LOG_WARN("no row updated, maybe because of scn revert, check it", KR(ret), K(tenant_id), K(info));
         }
       } else {
         ret = OB_INVALID_ARGUMENT;
@@ -144,33 +103,93 @@ int ObZoneMergeTableOperator::update_partial_zone_merge_info(
   return ret;
 }
 
-int ObZoneMergeTableOperator::update_zone_merge_info(
-    ObISQLClient &sql_client,
-    const uint64_t tenant_id,
-    const ObZoneMergeInfo &info)
+int ObZoneMergeTableOperator::sync_zone_merge_info_with_zone_list(
+    ObMySQLTransaction &trans, const uint64_t tenant_id,
+    const ObIArray<ObZone> &zone_list)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObZoneMergeInfo> infos;
-  if (OB_FAIL(infos.push_back(info))) {
-    LOG_WARN("fail to push back zone merge info", KR(ret), K(info));
-  } else if (OB_FAIL(update_zone_merge_infos(sql_client, tenant_id, infos))) {
-    LOG_WARN("fail to update zone merge infos", KR(ret), K(tenant_id), K(info));
+  if (!is_valid_tenant_id(tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(delete_zone_merge_info_not_in_zones(trans, tenant_id, zone_list))) {
+    LOG_WARN("fail to delete zone merge info not in zones", KR(ret), K(tenant_id), K(zone_list));
+  } else if (OB_FAIL(insert_ignore_zone_merge_infos(trans, tenant_id, zone_list))) {
+    LOG_WARN("fail to insert ignore zone merge infos", KR(ret), K(tenant_id), K(zone_list));
   }
   return ret;
 }
 
-int ObZoneMergeTableOperator::update_zone_merge_infos(
-    ObISQLClient &sql_client,
-    const uint64_t tenant_id,
-    const ObIArray<ObZoneMergeInfo> &infos)
+int ObZoneMergeTableOperator::delete_zone_merge_info_not_in_zones(
+    ObISQLClient &sql_client, const uint64_t tenant_id,
+    const ObIArray<ObZone> &zone_list)
 {
-  return inner_insert_or_update_zone_merge_infos_(sql_client, tenant_id, true, infos);
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  const int64_t zone_cnt = zone_list.count();
+  const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (zone_cnt < 1) {
+    // zone_list is empty, delete all rows for this tenant
+    if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE tenant_id = %lu",
+        OB_ALL_ZONE_MERGE_INFO_TNAME, tenant_id))) {
+      LOG_WARN("fail to assign sql", KR(ret), K(tenant_id));
+    }
+  } else if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE tenant_id = %lu AND zone NOT IN(",
+      OB_ALL_ZONE_MERGE_INFO_TNAME, tenant_id))) {
+    LOG_WARN("fail to assign sql", KR(ret), K(tenant_id));
+  } else {
+    for (int64_t i = 0; i < zone_cnt && OB_SUCC(ret); ++i) {
+      if (OB_FAIL(sql.append_fmt("'%s'%s", zone_list.at(i).ptr(),
+          (i == zone_cnt - 1) ? ")" : ", "))) {
+        LOG_WARN("fail to append sql", KR(ret), K(i), "zone", zone_list.at(i));
+      }
+    }
+  }
+
+  if (FAILEDx(sql_client.write(meta_tenant_id, sql.ptr(), affected_rows))) {
+    LOG_WARN("fail to execute sql", KR(ret), K(tenant_id), K(meta_tenant_id), K(sql));
+  } else {
+    LOG_INFO("succ to delete zone_merge_info not in zone_list", K(tenant_id), K(sql), K(affected_rows));
+  }
+  return ret;
 }
 
-int ObZoneMergeTableOperator::inner_insert_or_update_zone_merge_infos_(
+int ObZoneMergeTableOperator::insert_ignore_zone_merge_infos(
+    ObISQLClient &sql_client, const uint64_t tenant_id,
+    const ObIArray<ObZone> &zone_list)
+{
+  int ret = OB_SUCCESS;
+  const int64_t zone_cnt = zone_list.count();
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (zone_cnt > 0) {
+    ObSEArray<ObZoneMergeInfo, 5> to_insert_infos;
+    for (int64_t i = 0; i < zone_cnt && OB_SUCC(ret); ++i) {
+      ObZoneMergeInfo tmp_info;
+      tmp_info.tenant_id_ = tenant_id;
+      tmp_info.zone_ = zone_list.at(i);
+      if (OB_FAIL(to_insert_infos.push_back(tmp_info))) {
+        LOG_WARN("fail to push back", KR(ret), K(tenant_id), K(tmp_info));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(inner_insert_zone_merge_infos_(
+              sql_client, tenant_id, InsertMode::INSERT_IGNORE, to_insert_infos))) {
+        LOG_WARN("fail to insert ignore zone merge infos", KR(ret), K(tenant_id));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObZoneMergeTableOperator::inner_insert_zone_merge_infos_(
     ObISQLClient &sql_client,
     const uint64_t tenant_id,
-    const bool is_update,
+    const InsertMode mode,
     const ObIArray<ObZoneMergeInfo> &infos)
 {
   int ret = OB_SUCCESS;
@@ -214,9 +233,13 @@ int ObZoneMergeTableOperator::inner_insert_or_update_zone_merge_infos_(
     }
   }
 
-  if (is_update) {
+  if (InsertMode::REPLACE == mode) {
     if (FAILEDx(dml.splice_batch_replace_sql(OB_ALL_ZONE_MERGE_INFO_TNAME, sql))) {
-      LOG_WARN("fail to splice batch update sql", KR(ret), K(sql));
+      LOG_WARN("fail to splice batch replace sql", KR(ret), K(sql));
+    }
+  } else if (InsertMode::INSERT_IGNORE == mode) {
+    if (FAILEDx(dml.splice_batch_insert_ignore_sql(OB_ALL_ZONE_MERGE_INFO_TNAME, sql))) {
+      LOG_WARN("fail to splice insert ignore sql", KR(ret), K(sql));
     }
   } else {
     if (FAILEDx(dml.splice_batch_insert_sql(OB_ALL_ZONE_MERGE_INFO_TNAME, sql))) {
@@ -227,100 +250,6 @@ int ObZoneMergeTableOperator::inner_insert_or_update_zone_merge_infos_(
     LOG_WARN("fail to execute sql", KR(ret), K(tenant_id), K(meta_tenant_id), K(sql));
   }
   
-  return ret;
-}
-
-int ObZoneMergeTableOperator::delete_tenant_merge_info(
-    ObISQLClient &sql_client,
-    const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  ObSqlString sql;
-  int64_t affected_rows = 0;
-  const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
-  if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE tenant_id = %lu",
-      OB_ALL_ZONE_MERGE_INFO_TNAME, tenant_id))) {
-    LOG_WARN("fail to assign sql", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(sql_client.write(meta_tenant_id, sql.ptr(), affected_rows))) {
-    LOG_WARN("fail to execute sql", KR(ret), K(tenant_id), K(meta_tenant_id), K(sql));
-  } else {
-    LOG_TRACE("succ to delete tenant_merge_info", K(tenant_id), K(sql), K(affected_rows));
-  }
-  return ret;
-}
-
-int ObZoneMergeTableOperator::delete_tenant_merge_info_by_zone(
-    ObISQLClient &sql_client, 
-    const uint64_t tenant_id,
-    const common::ObIArray<common::ObZone> &zone_list)
-{
-  int ret = OB_SUCCESS;
-  ObSqlString sql;
-  int64_t affected_rows = 0;
-  const int64_t zone_cnt = zone_list.count();
-  const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
-  if (!is_valid_tenant_id(tenant_id) || zone_cnt < 1) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(zone_cnt));
-  } else if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE tenant_id = %lu AND zone in(",
-      OB_ALL_ZONE_MERGE_INFO_TNAME, tenant_id))) {
-    LOG_WARN("fail to assign sql", KR(ret), K(tenant_id));
-  } else {
-    for (int64_t i = 0; i < zone_cnt && OB_SUCC(ret); ++i) {
-      if (OB_FAIL(sql.append_fmt("'%s'%s", zone_list.at(i).ptr(), (i == zone_cnt - 1) ? ")" : ", "))) {
-        LOG_WARN("fail to append sql", KR(ret), K(i), "zone", zone_list.at(i));
-      }
-    }
-
-    if (FAILEDx(sql_client.write(meta_tenant_id, sql.ptr(), affected_rows))) {
-      LOG_WARN("fail to execute sql", KR(ret), K(tenant_id), K(meta_tenant_id), K(sql));
-    } else {
-      LOG_INFO("succ to delete zone_merge_info", K(tenant_id), K(sql), K(affected_rows));
-    }
-  }
-  return ret;
-}
-
-int ObZoneMergeTableOperator::get_zone_list(
-    ObISQLClient &sql_client,
-    const uint64_t tenant_id,
-    ObIArray<ObZone> &zone_list)
-{
-  int ret = OB_SUCCESS;
-
-  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-    zone_list.reset();
-    ObZone zone;
-    ObMySQLResult *result = nullptr;
-    char sql[OB_SHORT_SQL_LENGTH];
-    const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
-    int n = snprintf(sql, sizeof(sql), "SELECT zone FROM %s WHERE tenant_id = '%lu'",
-                     OB_ALL_ZONE_MERGE_INFO_TNAME, tenant_id);
-    if (n < 0 || n >= OB_SHORT_SQL_LENGTH) {
-      ret = OB_BUF_NOT_ENOUGH;
-      LOG_WARN("sql buf not enough", KR(ret), K(tenant_id), K(n));
-    } else if (OB_FAIL(sql_client.read(res, meta_tenant_id, sql))) {
-      LOG_WARN("fail to do read", KR(ret), K(tenant_id), K(meta_tenant_id), K(sql));
-    } else if (OB_ISNULL(result = res.get_result())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail to get result", KR(ret), K(tenant_id), K(sql));
-    } else {
-      int64_t tmp_real_str_len = 0; // only used for output parameter
-      while (OB_SUCC(ret) && OB_SUCC(result->next())) {
-        EXTRACT_STRBUF_FIELD_MYSQL(*result, "zone", zone.ptr(), MAX_ZONE_LENGTH, tmp_real_str_len);
-        (void) tmp_real_str_len; // make compiler happy
-        if (OB_FAIL(zone_list.push_back(zone))) {
-          LOG_WARN("fail to add zone list", KR(ret), K(tenant_id));
-        }
-      }
-
-      if (OB_ITER_END != ret) {
-        LOG_WARN("fail to get zone list", KR(ret), K(sql));
-      } else {
-        ret = OB_SUCCESS;
-      }
-    }
-  }
   return ret;
 }
 
@@ -455,61 +384,6 @@ int ObZoneMergeTableOperator::construct_zone_merge_info_(
     }
   }
   
-  return ret;
-}
-
-int ObZoneMergeTableOperator::check_scn_revert(
-    common::ObISQLClient &sql_client,
-    const uint64_t tenant_id,
-    const share::ObZoneMergeInfo &info)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !info.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(info));
-  } else {
-    HEAP_VAR(ObZoneMergeInfo, zone_merge_info) {
-      zone_merge_info.tenant_id_ = tenant_id;
-      zone_merge_info.zone_ = info.zone_;
-      if (OB_FAIL(ObZoneMergeTableOperator::load_zone_merge_info(sql_client, tenant_id,
-                                                                 zone_merge_info))) {
-        LOG_WARN("fail to load zone merge info", KR(ret), K(tenant_id));
-      } else {
-        const ObMergeInfoItem *it = info.list_.get_first();
-        while (OB_SUCC(ret) && (it != info.list_.get_header())) {
-          if (NULL == it) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("null item", KR(ret), KP(it), K(tenant_id), K(info));
-          } else {
-            if (it->need_update_ && it->is_scn_) {
-              if (0 == STRCMP(it->name_, "frozen_scn")) {
-                if (it->get_scn() < zone_merge_info.frozen_scn_.get_scn()) {
-                  LOG_WARN("frozen_scn revert", K(tenant_id), "new_frozen_scn", it->get_scn(),
-                    "origin_frozen_scn", zone_merge_info.frozen_scn_.get_scn());
-                }
-              } else if (0 == STRCMP(it->name_, "broadcast_scn")) {
-                if (it->get_scn() < zone_merge_info.broadcast_scn_.get_scn()) {
-                  LOG_WARN("broadcast_scn revert", K(tenant_id), "new_broadcast_scn",
-                    it->get_scn(), "origin_broadcast_scn", zone_merge_info.broadcast_scn_.get_scn());
-                }
-              } else if (0 == STRCMP(it->name_, "last_merged_scn")) {
-                if (it->get_scn() < zone_merge_info.last_merged_scn_.get_scn()) {
-                  LOG_WARN("last_merged_scn revert", K(tenant_id), "new_last_merged_scn",
-                    it->get_scn(), "origin_last_merged_scn", zone_merge_info.last_merged_scn_.get_scn());
-                }
-              } else if (0 == STRCMP(it->name_, "all_merged_scn")) {
-                if (it->get_scn() < zone_merge_info.all_merged_scn_.get_scn()) {
-                  LOG_WARN("all_merged_scn revert", K(tenant_id), "new_all_merged_scn",
-                    it->get_scn(), "origin_all_merged_scn", zone_merge_info.all_merged_scn_.get_scn());
-                }
-              }
-            }
-            it = it->get_next();
-          }
-        }
-      }
-    }
-  }
   return ret;
 }
 

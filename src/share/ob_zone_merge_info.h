@@ -7,19 +7,11 @@
 #define OCEANBASE_SHARE_OB_ZONE_MERGE_INFO_
 
 #include "lib/list/ob_dlink_node.h"
-#include "lib/atomic/ob_atomic.h"
 #include "lib/list/ob_dlist.h"
-#include "lib/string/ob_fixed_length_string.h"
 #include "lib/utility/ob_print_utils.h"
-#include "common/ob_region.h"
+#include "lib/container/ob_se_array.h"
 #include "common/ob_zone.h"
-#include "common/ob_region.h"
-#include "common/ob_zone_status.h"
-#include "common/ob_zone_type.h"
-#include "share/ob_replica_info.h"
 #include "share/scn.h"
-#include "common/ob_tablet_id.h"
-#include "share/tablet/ob_tablet_info.h"
 
 namespace oceanbase
 {
@@ -55,62 +47,28 @@ public:
   bool need_update_; // used to mark the table field need to be updated or not
 };
 
-struct ObZoneMergeInfo
+struct ObGlobalMergeInfo
 {
 public:
-  enum MergeStatus
+  enum class MergeMode : uint8_t
+  {
+    MERGE_MODE_TENANT = 0,
+    MERGE_MODE_WINDOW = 1,
+    MERGE_MODE_MAX
+  };
+  enum class MergeStatus : uint8_t
   {
     MERGE_STATUS_IDLE,
     MERGE_STATUS_MERGING,
     MERGE_STATUS_VERIFYING,
     MERGE_STATUS_MAX
   };
-  enum ObMergeErrorType
+
+  enum class MergeErrorType : uint8_t
   {
     NONE_ERROR,
     CHECKSUM_ERROR,
     ERROR_TYPE_MAX
-  };
-  ObZoneMergeInfo();
-  ObZoneMergeInfo &operator =(const ObZoneMergeInfo &other) = delete;
-  int assign(const ObZoneMergeInfo &other);
-  // differ from assign, only exclude 'need_update_' copy
-  int assign_value(const ObZoneMergeInfo &other);
-  void reset();
-  bool is_valid() const;
-  const SCN &broadcast_scn() const { return broadcast_scn_.get_scn(); }
-  const SCN &last_merged_scn() const { return last_merged_scn_.get_scn(); }
-  const SCN &all_merged_scn() const { return all_merged_scn_.get_scn(); }
-  const SCN &frozen_scn() const { return frozen_scn_.get_scn(); }
-
-  TO_STRING_KV(K_(tenant_id), K_(zone), K_(is_merging), K_(broadcast_scn), K_(last_merged_scn),
-    K_(last_merged_time), K_(all_merged_scn), K_(merge_start_time), K_(merge_status), K_(frozen_scn),
-    K_(start_merge_fail_times));
-
-public:
-  uint64_t tenant_id_;
-  common::ObZone zone_;
-  ObMergeInfoItem::ItemList list_;
-
-  ObMergeInfoItem is_merging_;
-  ObMergeInfoItem broadcast_scn_;
-  ObMergeInfoItem last_merged_scn_;
-  ObMergeInfoItem last_merged_time_;
-  ObMergeInfoItem all_merged_scn_;
-  ObMergeInfoItem merge_start_time_;
-  ObMergeInfoItem merge_status_;
-  ObMergeInfoItem frozen_scn_;
-  int64_t start_merge_fail_times_;
-};
-
-struct ObGlobalMergeInfo
-{
-public:
-  enum MergeMode : uint8_t
-  {
-    MERGE_MODE_TENANT = 0,
-    MERGE_MODE_WINDOW = 1,
-    MERGE_MODE_MAX
   };
 public:
   ObGlobalMergeInfo();
@@ -131,6 +89,15 @@ public:
   const SCN &global_broadcast_scn() const { return global_broadcast_scn_.get_scn(); }
   const SCN &last_merged_scn() const { return last_merged_scn_.get_scn(); }
   int64_t merge_start_time() const { return merge_start_time_.get_value(); }
+  MergeStatus merge_status() const { return static_cast<MergeStatus>(merge_status_.get_value()); }
+  MergeMode merge_mode() const { return static_cast<MergeMode>(merge_mode_.get_value()); }
+  MergeErrorType error_type() const { return static_cast<MergeErrorType>(error_type_.get_value()); }
+  void set_merge_status(const MergeStatus status, const bool need_update)
+  { merge_status_.set_val(static_cast<int64_t>(status), need_update); }
+  void set_merge_mode(const MergeMode mode, const bool need_update)
+  { merge_mode_.set_val(static_cast<int64_t>(mode), need_update); }
+  void set_error_type(const MergeErrorType type, const bool need_update)
+  { error_type_.set_val(static_cast<int64_t>(type), need_update); }
 
   TO_STRING_KV(K_(tenant_id), K_(cluster), K_(frozen_scn),
     K_(global_broadcast_scn), K_(last_merged_scn), K_(is_merge_error),
@@ -152,6 +119,48 @@ public:
   ObMergeInfoItem merge_start_time_;
   ObMergeInfoItem last_merged_time_;
   ObMergeInfoItem merge_mode_;
+};
+
+struct ObZoneMergeInfo
+{
+public:
+  using MergeStatus = ObGlobalMergeInfo::MergeStatus;
+  using MergeMode = ObGlobalMergeInfo::MergeMode;
+  using MergeErrorType = ObGlobalMergeInfo::MergeErrorType;
+
+  ObZoneMergeInfo();
+  ObZoneMergeInfo &operator =(const ObZoneMergeInfo &other) = delete;
+  int assign(const ObZoneMergeInfo &other);
+  // differ from assign, only exclude 'need_update_' copy
+  int assign_value(const ObZoneMergeInfo &other);
+  void reset();
+  bool is_valid() const;
+  const SCN &broadcast_scn() const { return broadcast_scn_.get_scn(); }
+  const SCN &last_merged_scn() const { return last_merged_scn_.get_scn(); }
+  const SCN &all_merged_scn() const { return all_merged_scn_.get_scn(); }
+  const SCN &frozen_scn() const { return frozen_scn_.get_scn(); }
+  MergeStatus merge_status() const { return static_cast<MergeStatus>(merge_status_.get_value()); }
+  void set_merge_status(const MergeStatus status, const bool need_update)
+  { merge_status_.set_val(static_cast<int64_t>(status), need_update); }
+
+  TO_STRING_KV(K_(tenant_id), K_(zone), K_(is_merging), K_(broadcast_scn), K_(last_merged_scn),
+    K_(last_merged_time), K_(all_merged_scn), K_(merge_start_time), K_(merge_status), K_(frozen_scn),
+    K_(start_merge_fail_times));
+
+public:
+  uint64_t tenant_id_;
+  common::ObZone zone_;
+  ObMergeInfoItem::ItemList list_;
+
+  ObMergeInfoItem is_merging_;
+  ObMergeInfoItem broadcast_scn_;
+  ObMergeInfoItem last_merged_scn_;
+  ObMergeInfoItem last_merged_time_;
+  ObMergeInfoItem all_merged_scn_;
+  ObMergeInfoItem merge_start_time_;
+  ObMergeInfoItem merge_status_;
+  ObMergeInfoItem frozen_scn_;
+  int64_t start_merge_fail_times_;
 };
 
 typedef common::ObSEArray<common::ObZone, DEFAULT_ZONE_COUNT> ObZoneArray;

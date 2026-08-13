@@ -264,17 +264,17 @@ bool ObGlobalMergeInfo::is_merge_error() const
 
 bool ObGlobalMergeInfo::is_in_verifying_status() const
 {
-  return (ObZoneMergeInfo::MERGE_STATUS_VERIFYING == merge_status_.get_value());
+  return (MergeStatus::MERGE_STATUS_VERIFYING == merge_status());
 }
 
 bool ObGlobalMergeInfo::is_idle_status() const
 {
-  return (ObZoneMergeInfo::MERGE_STATUS_IDLE == merge_status_.get_value());
+  return (MergeStatus::MERGE_STATUS_IDLE == merge_status());
 }
 
 bool ObGlobalMergeInfo::is_window_merge_mode() const
 {
-  return (ObGlobalMergeInfo::MERGE_MODE_WINDOW == merge_mode_.get_value());
+  return (MergeMode::MERGE_MODE_WINDOW == merge_mode());
 }
 
 bool ObGlobalMergeInfo::is_valid() const
@@ -284,10 +284,10 @@ bool ObGlobalMergeInfo::is_valid() const
       || (!frozen_scn_.is_valid())
       || (!global_broadcast_scn_.is_valid())
       || (!last_merged_scn_.is_valid())
-      || (merge_status_.get_value() < ObZoneMergeInfo::MERGE_STATUS_IDLE)
-      || (merge_status_.get_value() >= ObZoneMergeInfo::MERGE_STATUS_MAX)
-      || (merge_mode_.get_value() < ObGlobalMergeInfo::MERGE_MODE_TENANT)
-      || (merge_mode_.get_value() >= ObGlobalMergeInfo::MERGE_MODE_MAX)) {
+      || (merge_status() < MergeStatus::MERGE_STATUS_IDLE)
+      || (merge_status() >= MergeStatus::MERGE_STATUS_MAX)
+      || (merge_mode() < MergeMode::MERGE_MODE_TENANT)
+      || (merge_mode() >= MergeMode::MERGE_MODE_MAX)) {
     is_valid = false;
   }
   return is_valid;

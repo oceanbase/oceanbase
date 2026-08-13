@@ -248,7 +248,11 @@ TEST_F(ObWindowCompactionControllerTest, test_basic_init)
   ASSERT_NE(nullptr, scheduler);
   ObWindowLoop &window_loop = scheduler->get_window_loop();
   const int64_t merge_start_time = ObTimeUtility::current_time();
-  ASSERT_EQ(OB_SUCCESS, scheduler->update_merge_info(share::ObGlobalMergeInfo::MERGE_MODE_WINDOW, share::ObZoneMergeInfo::MERGE_STATUS_MERGING, merge_start_time));
+  ASSERT_EQ(OB_SUCCESS,
+            scheduler->update_merge_info(
+                share::ObGlobalMergeInfo::MergeMode::MERGE_MODE_WINDOW,
+                share::ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_MERGING,
+                merge_start_time));
   ASSERT_EQ(OB_SUCCESS, window_loop.start_window_compaction(merge_start_time));
   ASSERT_TRUE(window_loop.is_active());
   ObWindowCompactionPriorityQueue &prio_queue = window_loop.score_prio_queue_;

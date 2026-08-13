@@ -6,7 +6,7 @@ connect (sys_conn,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
 connection sys_conn;
 
 let $sys_tenant_id = query_get_value(select tenant_id from __all_tenant where tenant_name = 'sys', tenant_id, 1);
-let $frozen_scn_ori = query_get_value(select frozen_scn from __all_zone_merge_info where tenant_id = $sys_tenant_id, frozen_scn, 1);
+let $frozen_scn_ori = query_get_value(select frozen_scn from __all_merge_info where tenant_id = $sys_tenant_id, frozen_scn, 1);
 alter system set major_freeze_duty_time = 'Disable' tenant sys;
 alter system set enable_major_freeze = true;
 let $interval_minute = 1;
@@ -29,7 +29,7 @@ connection sys_conn;
 alter system set major_freeze_duty_time = 'Disable' tenant sys;
 sleep 3;
 --enable_query_log
-let $cur_frozen_scn = query_get_value(select frozen_scn from __all_zone_merge_info where tenant_id = $sys_tenant_id, frozen_scn, 1);
+let $cur_frozen_scn = query_get_value(select frozen_scn from __all_merge_info where tenant_id = $sys_tenant_id, frozen_scn, 1);
 if ($cur_frozen_scn == $frozen_scn_ori)
 {
     --echo daily major freeze launch failed

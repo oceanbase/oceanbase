@@ -218,7 +218,6 @@ ob_set_subtarget(ob_rootserver freeze
   freeze/ob_major_merge_progress_checker.cpp
   freeze/ob_freeze_info_detector.cpp
   freeze/ob_freeze_reentrant_thread.cpp
-  freeze/ob_tenant_all_zone_merge_strategy.cpp
   freeze/ob_tenant_major_merge_strategy.cpp
   freeze/ob_zone_merge_manager.cpp
   freeze/ob_major_merge_info_manager.cpp

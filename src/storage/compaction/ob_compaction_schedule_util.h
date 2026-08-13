@@ -83,26 +83,26 @@ struct ObMergeInfo final // For atomic store and load
 {
 public:
   ObMergeInfo()
-    : merge_mode_(share::ObGlobalMergeInfo::MERGE_MODE_TENANT),
-      merge_status_(share::ObZoneMergeInfo::MERGE_STATUS_IDLE),
+    : merge_mode_(share::ObGlobalMergeInfo::MergeMode::MERGE_MODE_TENANT),
+      merge_status_(share::ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_IDLE),
       merge_start_time_(0)
   {}
   virtual ~ObMergeInfo() { reset(); }
   void reset()
   {
-    merge_mode_ = share::ObGlobalMergeInfo::MERGE_MODE_TENANT;
-    merge_status_ = share::ObZoneMergeInfo::MERGE_STATUS_IDLE;
+    merge_mode_ = share::ObGlobalMergeInfo::MergeMode::MERGE_MODE_TENANT;
+    merge_status_ = share::ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_IDLE;
     merge_start_time_ = 0;
   }
   bool is_global_during_window_compaction() const
   {
-    return share::ObGlobalMergeInfo::MERGE_MODE_WINDOW == merge_mode_
-        && share::ObZoneMergeInfo::MERGE_STATUS_MERGING == merge_status_;
+    return share::ObGlobalMergeInfo::MergeMode::MERGE_MODE_WINDOW == merge_mode_
+        && share::ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_MERGING == merge_status_;
   }
   TO_STRING_KV(K_(merge_mode), K_(merge_status), K_(merge_start_time));
 public:
   share::ObGlobalMergeInfo::MergeMode merge_mode_;
-  share::ObZoneMergeInfo::MergeStatus merge_status_;
+  share::ObGlobalMergeInfo::MergeStatus merge_status_;
   int64_t merge_start_time_;
 };
 
@@ -127,7 +127,7 @@ public:
   int during_restore(bool &during_restore) { return tenant_status_.during_restore(during_restore); }
   virtual int schedule_merge(const int64_t broadcast_version) = 0;
   void update_merged_version(const int64_t merged_version);
-  int update_merge_info(const share::ObGlobalMergeInfo::MergeMode merge_mode, const share::ObZoneMergeInfo::MergeStatus merge_status, const int64_t merge_start_time);
+  int update_merge_info(const share::ObGlobalMergeInfo::MergeMode merge_mode, const share::ObGlobalMergeInfo::MergeStatus merge_status, const int64_t merge_start_time);
   int64_t get_merged_version() const { return merged_version_; }
   bool enable_adaptive_compaction() const { return tenant_status_.enable_adaptive_compaction(); }
   bool enable_adaptive_merge_schedule() const { return tenant_status_.enable_adaptive_merge_schedule(); }

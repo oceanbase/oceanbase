@@ -364,7 +364,7 @@ int ObTenantMajorFreeze::resume_merge()
 int ObTenantMajorFreeze::clear_merge_error()
 {
   int ret = OB_SUCCESS;
-  const ObZoneMergeInfo::ObMergeErrorType error_type = ObZoneMergeInfo::ObMergeErrorType::NONE_ERROR;
+  const ObGlobalMergeInfo::MergeErrorType error_type = ObGlobalMergeInfo::MergeErrorType::NONE_ERROR;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K_(tenant_id));
@@ -431,7 +431,7 @@ int ObTenantMajorFreeze::check_freeze_info_and_merge_mode(bool is_window_compact
   int ret = OB_SUCCESS;
   share::ObFreezeInfo latest_freeze_info;
   SCN global_last_merged_scn;
-  ObZoneMergeInfo::MergeStatus global_merge_status = ObZoneMergeInfo::MergeStatus::MERGE_STATUS_MAX;
+  ObGlobalMergeInfo::MergeStatus global_merge_status = ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_MAX;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -449,7 +449,7 @@ int ObTenantMajorFreeze::check_freeze_info_and_merge_mode(bool is_window_compact
     } else {
       // check pending freeze_info
       if (latest_freeze_info.frozen_scn_ > global_last_merged_scn) {
-        if (global_merge_status == ObZoneMergeInfo::MergeStatus::MERGE_STATUS_IDLE) {
+        if (global_merge_status == ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_IDLE) {
           ret = OB_FROZEN_INFO_ALREADY_EXIST;
         } else {
           ret = OB_MAJOR_FREEZE_NOT_FINISHED;
@@ -478,7 +478,7 @@ int ObTenantMajorFreeze::check_freeze_info_and_merge_mode(bool is_window_compact
         if (OB_FAIL(zone_merge_mgr.get_global_merge_mode(global_merge_mode))) {
           LOG_WARN("fail to get_global_merge_mode", KR(ret), K_(tenant_id));
         } else if (global_merge_mode == ObGlobalMergeInfo::MergeMode::MERGE_MODE_WINDOW
-                && global_merge_status == ObZoneMergeInfo::MergeStatus::MERGE_STATUS_MERGING) {
+                && global_merge_status == ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_MERGING) {
           ret = OB_MAJOR_FREEZE_NOT_FINISHED;
           LOG_WARN("last round window compaction is not finished, cannot launch window compaction again",
                   KR(ret), K(global_merge_mode), K(global_merge_status), K_(tenant_id));

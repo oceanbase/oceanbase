@@ -6,6 +6,7 @@
 #include "ob_storage_ha_utils.h"
 #include "share/tablet/ob_tablet_table_operator.h"
 #include "share/ob_global_merge_table_operator.h"
+#include "share/ob_zone_merge_info.h"
 #include "share/ob_tablet_replica_checksum_operator.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/tx/ob_ts_mgr.h"

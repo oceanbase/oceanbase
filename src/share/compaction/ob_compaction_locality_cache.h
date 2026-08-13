@@ -7,7 +7,6 @@
 #include "share/ls/ob_ls_table_operator.h"
 #include "deps/oblib/src/lib/net/ob_addr.h"
 #include "deps/oblib/src/common/ob_zone.h"
-#include "rootserver/freeze/ob_major_merge_info_manager.h"
 namespace oceanbase
 {
 namespace common
@@ -27,7 +26,7 @@ class ObCompactionLocalityCache
 public:
   ObCompactionLocalityCache();
   ~ObCompactionLocalityCache();
-  int init(const uint64_t tenant_id, rootserver::ObMajorMergeInfoManager *merge_info_mgr = nullptr);
+  int init(const uint64_t tenant_id);
   void destroy();
   bool empty() const { return ls_infos_map_.empty(); }
   int refresh_ls_locality(const bool force_refresh);
@@ -49,7 +48,6 @@ private:
 private:
   bool is_inited_;
   uint64_t tenant_id_;
-  rootserver::ObMajorMergeInfoManager *merge_info_mgr_;
   common::hash::ObHashMap<share::ObLSID, share::ObLSInfo> ls_infos_map_;
 };
 

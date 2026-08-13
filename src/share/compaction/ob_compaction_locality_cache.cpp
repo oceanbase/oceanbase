@@ -14,7 +14,6 @@ namespace share
 ObCompactionLocalityCache::ObCompactionLocalityCache()
   : is_inited_(false),
     tenant_id_(OB_INVALID_TENANT_ID),
-    merge_info_mgr_(nullptr),
     ls_infos_map_()
 {}
 
@@ -23,7 +22,7 @@ ObCompactionLocalityCache::~ObCompactionLocalityCache()
   destroy();
 }
 
-int ObCompactionLocalityCache::init(const uint64_t tenant_id, rootserver::ObMajorMergeInfoManager *merge_info_mgr)
+int ObCompactionLocalityCache::init(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -39,7 +38,6 @@ int ObCompactionLocalityCache::init(const uint64_t tenant_id, rootserver::ObMajo
     destroy();
   } else {
     tenant_id_ = tenant_id;
-    merge_info_mgr_ = merge_info_mgr;
     is_inited_ = true;
   }
   return ret;
@@ -48,7 +46,6 @@ int ObCompactionLocalityCache::init(const uint64_t tenant_id, rootserver::ObMajo
 void ObCompactionLocalityCache::destroy()
 {
   is_inited_ = false;
-  merge_info_mgr_ = nullptr;
   if (ls_infos_map_.created()) {
     ls_infos_map_.destroy();
   }
@@ -78,10 +75,6 @@ int ObCompactionLocalityCache::inner_refresh_ls_locality()
     LOG_WARN("ObStorageLocalityCache is not inited", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(ls_infos_map_.reuse())) {
     LOG_WARN("fail to clear ls locality cache", KR(ret), K_(tenant_id));
-  } else if (nullptr != merge_info_mgr_) {
-    if (OB_FAIL(merge_info_mgr_->get_zone_merge_mgr().get_zone(zone_list))) {
-      LOG_WARN("failed to get zone list", KR(ret));
-    }
   } else if (OB_FAIL(get_zone_list_from_inner_table(zone_list))) {
     LOG_WARN("failed to get zone list", K(ret), K_(tenant_id));
   }

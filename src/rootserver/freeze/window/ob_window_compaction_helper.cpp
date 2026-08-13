@@ -28,15 +28,15 @@ ObWindowParameters::ObWindowParameters()
     enable_window_compaction_(false),
     window_duration_us_(0),
     window_start_time_us_(0),
-    merge_status_(ObZoneMergeInfo::MERGE_STATUS_MAX),
-    merge_mode_(ObGlobalMergeInfo::MERGE_MODE_MAX)
+    merge_status_(ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_MAX),
+    merge_mode_(ObGlobalMergeInfo::MergeMode::MERGE_MODE_MAX)
 {}
 
 void ObWindowParameters::reset()
 {
   tenant_id_ = OB_INVALID_TENANT_ID;
-  merge_status_ = ObZoneMergeInfo::MERGE_STATUS_MAX;
-  merge_mode_ = ObGlobalMergeInfo::MERGE_MODE_MAX;
+  merge_status_ = ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_MAX;
+  merge_mode_ = ObGlobalMergeInfo::MergeMode::MERGE_MODE_MAX;
   window_start_time_us_ = 0;
   window_duration_us_ = 0;
   enable_window_compaction_ = false;
@@ -57,8 +57,8 @@ int ObWindowParameters::init(
     LOG_WARN("fail to refresh window duration us", KR(ret), K_(tenant_id));
   } else {
     window_start_time_us_ = global_info.merge_start_time();
-    merge_status_ = static_cast<ObZoneMergeInfo::MergeStatus>(global_info.merge_status_.get_value());
-    merge_mode_ = static_cast<ObGlobalMergeInfo::MergeMode>(global_info.merge_mode_.get_value());
+    merge_status_ = global_info.merge_status();
+    merge_mode_ = global_info.merge_mode();
     is_inited_ = true;
   }
   return ret;
@@ -417,8 +417,10 @@ int ObWindowCompactionHelper::check_window_compaction_global_active(
   } else if (!enable_window_compaction) {
   } else if (OB_FAIL(ObGlobalMergeTableOperator::load_global_merge_info(*GCTX.sql_proxy_, tenant_id, global_merge_info))) {
     LOG_WARN("failed to load global merge info", KR(ret), K(tenant_id));
-  } else if (ObGlobalMergeInfo::MERGE_MODE_WINDOW == global_merge_info.merge_mode_.get_value()
-         && ObZoneMergeInfo::MERGE_STATUS_MERGING == global_merge_info.merge_status_.get_value()) {
+  } else if (ObGlobalMergeInfo::MergeMode::MERGE_MODE_WINDOW ==
+                 global_merge_info.merge_mode() &&
+             ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_MERGING ==
+                 global_merge_info.merge_status()) {
     is_active = true;
   }
   return ret;

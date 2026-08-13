@@ -26,28 +26,15 @@ public:
   int init(const uint64_t tenant_id, common::ObMySQLProxy &proxy);
   virtual int reload();
   virtual int try_reload();
-  void reset_merge_info();
-  void reset_merge_info_without_lock();
-
-  int get_zone_merge_info(share::ObZoneMergeInfo &info) const;
-  int get_zone_merge_info(const common::ObZone &zone, share::ObZoneMergeInfo &info) const;
-  int get_zone(common::ObIArray<common::ObZone> &zone_list) const;
-  int get_snapshot(share::ObGlobalMergeInfo &global_info,
-                   common::ObIArray<share::ObZoneMergeInfo> &info_array);
+  virtual int reset_merge_info();
   int get_snapshot(share::ObGlobalMergeInfo &global_info);
-  virtual int finish_all_zone_merge(const int64_t expected_epoch,
-                                    const uint64_t &merged_scn_val);
 
-  virtual int start_zone_merge(const common::ObZone &zone, const int64_t expected_epoch);
-  virtual int finish_zone_merge(const common::ObZone &zone,
-                                const int64_t expected_epoch,
-                                const share::SCN &new_last_merged_scn,
-                                const share::SCN &new_all_merged_scn);
   int suspend_merge(const int64_t expected_epoch);
   int resume_merge(const int64_t expected_epoch);
-  int set_merge_status(const int64_t merge_error, const int64_t expected_epoch);
+  int set_merge_status(
+      const share::ObGlobalMergeInfo::MergeErrorType merge_error,
+      const int64_t expected_epoch);
 
-  int set_zone_merging(const common::ObZone &zone, const int64_t expected_epoch);
   int check_need_broadcast(const share::SCN &frozen_scn, bool &need_broadcast);
   int set_global_freeze_info(const share::SCN &frozen_scn, const int64_t expected_epoch);
   int set_window_compaction_info(const ObWindowCompactionParam &param, const int64_t expected_epoch);
@@ -55,7 +42,7 @@ public:
 
   int get_global_broadcast_scn(share::SCN &global_broadcast_scn) const;
   int get_global_last_merged_scn(share::SCN &global_last_merged_scn) const;
-  int get_global_merge_status(share::ObZoneMergeInfo::MergeStatus &global_merge_status) const;
+  int get_global_merge_status(share::ObGlobalMergeInfo::MergeStatus &global_merge_status) const;
   int get_global_last_merged_time(int64_t &global_last_merged_time) const;
   int get_global_merge_start_time(int64_t &global_merge_start_time) const;
   int get_global_merge_mode(share::ObGlobalMergeInfo::MergeMode &global_merge_mode) const;
@@ -67,8 +54,6 @@ public:
   virtual int adjust_global_merge_info(const int64_t expected_epoch);
 
 private:
-  int check_valid(const common::ObZone &zone, int64_t &idx) const;
-  int find_zone(const common::ObZone &zone, int64_t &idx) const;
   inline int check_inner_stat() const;
   int check_freeze_service_epoch(common::ObMySQLTransaction &trans, const int64_t expected_epoch);
   void handle_trans_stat(common::ObMySQLTransaction &trans, int &ret);
@@ -77,14 +62,6 @@ private:
 
   int get_tenant_zone_list(common::ObIArray<ObZone> &zone_list);
   int str2zone_list(const char *str, common::ObIArray<ObZone> &zone_list);
-  int handle_zone_merge_info_to_delete(common::ObMySQLTransaction &trans,
-                                       const common::ObIArray<share::ObZoneMergeInfo> &ori_merge_infos,
-                                       const common::ObIArray<common::ObZone> &zone_list,
-                                       common::ObIArray<common::ObZone> &to_delete_infos);
-  int handle_zone_merge_info_to_insert(common::ObMySQLTransaction &trans,
-                                       const common::ObIArray<share::ObZoneMergeInfo> &ori_merge_infos,
-                                       const common::ObIArray<common::ObZone> &zone_list,
-                                       common::ObIArray<share::ObZoneMergeInfo> &to_insert_infos);
   int inner_adjust_global_merge_info(const share::SCN &frozen_scn,
                                      const int64_t expected_epoch);
 protected:
@@ -95,8 +72,6 @@ private:
   bool is_inited_;
   bool is_loaded_;
   uint64_t tenant_id_;
-  int64_t zone_count_;
-  share::ObZoneMergeInfo zone_merge_infos_[common::MAX_ZONE_NUM];
   share::ObGlobalMergeInfo global_merge_info_;
   common::ObMySQLProxy *proxy_;
 
@@ -130,13 +105,10 @@ public:
   int init(const uint64_t tenant_id, common::ObMySQLProxy &proxy);
   ZONE_MERGE_MANAGER_FUNC(reload);
   ZONE_MERGE_MANAGER_FUNC(try_reload);
-  ZONE_MERGE_MANAGER_FUNC(start_zone_merge);
-  ZONE_MERGE_MANAGER_FUNC(finish_zone_merge);
-  ZONE_MERGE_MANAGER_FUNC(finish_all_zone_merge);
+  ZONE_MERGE_MANAGER_FUNC(reset_merge_info);
   ZONE_MERGE_MANAGER_FUNC(suspend_merge);
   ZONE_MERGE_MANAGER_FUNC(resume_merge);
   ZONE_MERGE_MANAGER_FUNC(set_merge_status);
-  ZONE_MERGE_MANAGER_FUNC(set_zone_merging);
   ZONE_MERGE_MANAGER_FUNC(check_need_broadcast);
   ZONE_MERGE_MANAGER_FUNC(set_global_freeze_info);
   ZONE_MERGE_MANAGER_FUNC(set_window_compaction_info);

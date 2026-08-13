@@ -17,7 +17,6 @@ namespace rootserver
 struct ObWindowParameters final
 {
 public:
-  using ObZoneMergeInfo = share::ObZoneMergeInfo;
   using ObGlobalMergeInfo = share::ObGlobalMergeInfo;
 public:
   ObWindowParameters();
@@ -29,19 +28,19 @@ public:
   int check_need_do_window_compaction(bool &need_do_window_compaction) const;
   OB_INLINE bool is_valid() const { return is_inited_
                                         && OB_INVALID_TENANT_ID != tenant_id_
-                                        && merge_status_ >= ObZoneMergeInfo::MERGE_STATUS_IDLE
-                                        && merge_status_ < ObZoneMergeInfo::MERGE_STATUS_MAX
-                                        && merge_mode_ >= ObGlobalMergeInfo::MERGE_MODE_TENANT
-                                        && merge_mode_ < ObGlobalMergeInfo::MERGE_MODE_MAX; }
-  OB_INLINE bool is_global_during_window_compaction() const { return ObGlobalMergeInfo::MERGE_MODE_WINDOW == merge_mode_
-                                                                  && ObZoneMergeInfo::MERGE_STATUS_MERGING == merge_status_; }
+                                        && merge_status_ >= ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_IDLE
+                                        && merge_status_ < ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_MAX
+                                        && merge_mode_ >= ObGlobalMergeInfo::MergeMode::MERGE_MODE_TENANT
+                                        && merge_mode_ < ObGlobalMergeInfo::MergeMode::MERGE_MODE_MAX; }
+  OB_INLINE bool is_global_during_window_compaction() const { return ObGlobalMergeInfo::MergeMode::MERGE_MODE_WINDOW == merge_mode_
+                                                                  && ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_MERGING == merge_status_; }
   OB_INLINE bool is_window_compaction_forever() const { return FULL_DAY_US == window_duration_us_; }
   OB_INLINE bool is_window_compaction_stopped() const { return 0 == window_duration_us_ || !enable_window_compaction_; }
-  OB_INLINE bool is_window_merge_mode() const { return ObGlobalMergeInfo::MERGE_MODE_WINDOW == merge_mode_; }
-  OB_INLINE bool is_tenant_merge_mode() const { return ObGlobalMergeInfo::MERGE_MODE_TENANT == merge_mode_; }
-  OB_INLINE bool is_idle_merge_status() const { return ObZoneMergeInfo::MERGE_STATUS_IDLE == merge_status_; }
-  OB_INLINE bool is_merging_merge_status() const { return ObZoneMergeInfo::MERGE_STATUS_MERGING == merge_status_; }
-  OB_INLINE bool is_merge_verifying() const { return ObZoneMergeInfo::MERGE_STATUS_VERIFYING == merge_status_; }
+  OB_INLINE bool is_window_merge_mode() const { return ObGlobalMergeInfo::MergeMode::MERGE_MODE_WINDOW == merge_mode_; }
+  OB_INLINE bool is_tenant_merge_mode() const { return ObGlobalMergeInfo::MergeMode::MERGE_MODE_TENANT == merge_mode_; }
+  OB_INLINE bool is_idle_merge_status() const { return ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_IDLE == merge_status_; }
+  OB_INLINE bool is_merging_merge_status() const { return ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_MERGING == merge_status_; }
+  OB_INLINE bool is_merge_verifying() const { return ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_VERIFYING == merge_status_; }
 
   TO_STRING_KV(K_(is_inited), K_(tenant_id), K_(enable_window_compaction), K_(window_duration_us), K_(window_start_time_us), K_(merge_status), K_(merge_mode));
 public:
@@ -55,7 +54,7 @@ public:
   int64_t window_duration_us_;
   // updated in ObTenantFreezeInfoMgr::ReloadTask
   int64_t window_start_time_us_;
-  ObZoneMergeInfo::MergeStatus merge_status_;
+  ObGlobalMergeInfo::MergeStatus merge_status_;
   ObGlobalMergeInfo::MergeMode merge_mode_;
 };
 

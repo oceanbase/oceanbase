@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX SHARE
 
+#include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "share/ob_global_merge_table_operator.h"
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "share/ob_zone_merge_info.h"
@@ -68,10 +69,10 @@ int ObGlobalMergeTableOperator::load_global_merge_info(
             LOG_WARN("fail to set global broadcast scn val", KR(ret), K(global_broadcast_scn_val));
           } else if (OB_FAIL(info.last_merged_scn_.set_scn(last_merged_scn_val))) {
             LOG_WARN("fail to set last merged scn val", KR(ret), K(last_merged_scn_val));
-          } else if (OB_UNLIKELY(info.merge_status_.value_ < ObZoneMergeInfo::MERGE_STATUS_IDLE
-                              || info.merge_status_.value_ >= ObZoneMergeInfo::MERGE_STATUS_MAX
-                              || info.merge_mode_.value_ < ObGlobalMergeInfo::MERGE_MODE_TENANT
-                              || info.merge_mode_.value_ >= ObGlobalMergeInfo::MERGE_MODE_MAX)) {
+          } else if (OB_UNLIKELY(info.merge_status() < ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_IDLE
+                              || info.merge_status() >= ObGlobalMergeInfo::MergeStatus::MERGE_STATUS_MAX
+                              || info.merge_mode() < ObGlobalMergeInfo::MergeMode::MERGE_MODE_TENANT
+                              || info.merge_mode() >= ObGlobalMergeInfo::MergeMode::MERGE_MODE_MAX)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("invalid merge status or merge mode", KR(ret), K(tenant_id), K(info));
           } else {

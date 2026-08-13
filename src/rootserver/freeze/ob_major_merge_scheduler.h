@@ -12,7 +12,6 @@
 #include "share/ob_zone_info.h"
 #include "share/ob_zone_merge_info.h"
 #include "rootserver/ob_thread_idling.h"
-#include "rootserver/freeze/ob_tenant_all_zone_merge_strategy.h"
 #include "rootserver/freeze/ob_major_merge_progress_checker.h"
 #include "rootserver/freeze/ob_checksum_validator.h"
 #include "rootserver/freeze/ob_freeze_reentrant_thread.h"
@@ -92,11 +91,6 @@ private:
   int do_one_round_major_merge(const int64_t expected_epoch);
 
   int generate_next_global_broadcast_scn(const int64_t expected_epoch);
-  int get_next_merge_zones(share::ObZoneArray &to_merge);
-  int schedule_zones_to_merge(const share::ObZoneArray &to_merge, const int64_t expected_epoch);
-  int start_zones_merge(const share::ObZoneArray &to_merge, const int64_t expected_epoch);
-  int set_zone_merging(const ObZone &zone, const int64_t expected_epoch);
-
   int update_merge_status(
     const share::SCN &global_broadcast_scn,
     const int64_t expected_epoch);
@@ -130,7 +124,6 @@ private:
 
   ObMajorMergeInfoManager *merge_info_mgr_;
   common::ObServerConfig *config_;
-  ObTenantAllZoneMergeStrategy merge_strategy_;
   common::ObMySQLProxy *sql_proxy_;
   ObMajorMergeProgressChecker progress_checker_;
   ObWindowResourceCache window_resource_cache_;
