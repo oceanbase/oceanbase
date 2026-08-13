@@ -12,6 +12,8 @@ namespace oceanbase
 namespace sql
 {
 
+class ObTableScanSpec;
+
 class ObTableLockOpInput : public ObTableModifyOpInput
 {
   OB_UNIS_VERSION_V(1);
@@ -106,6 +108,9 @@ public:
   int init_lock_rtdef();
 
 protected:
+  int handle_gi_task_not_found(GIPrepareTaskMap *gi_prepare_map,
+                               const common::ObTableID &table_loc_id,
+                               const common::ObTableID &ref_table_id) override;
   OB_INLINE int get_next_batch_from_child(const int64_t max_row_cnt,
                                           const ObBatchRows *&child_brs);
   int lock_row_to_das();
@@ -116,6 +121,20 @@ protected:
   int lock_one_row_post_proc();
   virtual int write_rows_post_proc(int last_errno) override;
   int submit_row_by_strategy();
+
+private:
+  // PHY_LOCK is excluded from GI task scheduling, so it follows the matched
+  // table scan tasks below it to lock the current partition.
+  int get_gi_task_from_subtree_tsc(GIPrepareTaskMap *gi_prepare_map,
+                                   const common::ObTableID &table_loc_id,
+                                   const common::ObTableID &ref_table_id);
+  int collect_gi_tsc_specs(const ObOpSpec *spec,
+                           const common::ObTableID &table_loc_id,
+                           common::ObIArray<const ObTableScanSpec *> &matched_tscs);
+  int resolve_lock_tablet_id(const ObTableScanSpec &tsc_spec,
+                             const common::ObTabletID &tsc_tablet_id,
+                             const common::ObTableID &ref_table_id,
+                             common::ObTabletID &lock_tablet_id);
 
 protected:
   transaction::ObTxSEQ savepoint_no_;

@@ -306,7 +306,7 @@ int ObDASCtx::extended_tablet_loc(ObDASTableLoc &table_loc,
   return ret;
 }
 
-OB_INLINE int ObDASCtx::build_related_tablet_loc(ObDASTabletLoc &tablet_loc)
+int ObDASCtx::build_related_tablet_loc(ObDASTabletLoc &tablet_loc)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < tablet_loc.loc_meta_->related_table_ids_.count(); ++i) {
