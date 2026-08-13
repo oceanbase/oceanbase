@@ -20,3 +20,4 @@ else()
 endif()
 
 ob_unittest(test_vsag_adaptor)
+ob_unittest(test_vector_extra_info)

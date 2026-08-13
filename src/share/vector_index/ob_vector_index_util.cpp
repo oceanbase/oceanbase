@@ -12,6 +12,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "share/ob_vec_index_builder_util.h"
 #include "share/ob_fts_index_builder_util.h"
+#include "share/ob_get_compat_mode.h"
 #include "share/vector_index/ob_plugin_vector_index_util.h"
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
@@ -2914,6 +2915,11 @@ int ObVectorIndexUtil::check_extra_info_size(const ObTableSchema &tbl_schema,
     ObVecExtraInfoObj tmp_obj;
     ObRowkeyColumn rowkey_column;
     bool is_column_valid = true;
+    bool is_oracle_mode = false;
+    if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(
+            tbl_schema.get_tenant_id(), is_oracle_mode))) {
+      LOG_WARN("fail to check oracle mode", K(ret));
+    }
     for (int64_t i = 0; i < rowkey_info.get_size() && OB_SUCC(ret) && is_column_valid; i++) {
       if (OB_FAIL(rowkey_info.get_column(i, rowkey_column))) {
         LOG_WARN("fail to get rowkey column", K(ret), K(i));
@@ -2930,11 +2936,21 @@ int ObVectorIndexUtil::check_extra_info_size(const ObTableSchema &tbl_schema,
           rowkey_size += ObVecExtraInfo::FIXED_TYPE_LENGTH;
           tmp_obj.len_ = ObVecExtraInfo::FIXED_TYPE_LENGTH;
         } else {
-          rowkey_size += rowkey_column.length_;
-          tmp_obj.len_ = rowkey_column.length_;
+          const ObColumnSchemaV2 *column_schema = tbl_schema.get_column_schema(rowkey_column.column_id_);
+          int64_t byte_length = 0;
+          if (OB_ISNULL(column_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("column schema is null", K(ret), K(rowkey_column.column_id_));
+          } else if (OB_FAIL(column_schema->get_byte_length(byte_length, is_oracle_mode,
+                                                            false /* for_check_length */))) {
+            LOG_WARN("fail to get column byte length", K(ret), K(rowkey_column.column_id_));
+          } else {
+            rowkey_size += byte_length;
+            tmp_obj.len_ = byte_length;
+          }
         }
         // for get extra_info actual_size
-        if (OB_FAIL(extra_objs.push_back(tmp_obj))) {
+        if (OB_SUCC(ret) && OB_FAIL(extra_objs.push_back(tmp_obj))) {
           LOG_WARN("push back failed", K(ret), K(tmp_obj));
         }
       }
@@ -7681,7 +7697,11 @@ int ObVecExtraInfo::extra_infos_to_buf(ObIAllocator &allocator, const ObVecExtra
       if (OB_ISNULL(extra_info_i)) {
         ret = OB_INVALID_DATA;
         LOG_WARN("extra_info_i is null", K(ret), KP(extra_info_i), K(i));
-      } else if (OB_FAIL(extra_info_to_buf(extra_info_i, extra_column_count, begin_buf, extra_info_actual_size, pos))) {
+      } else if (get_to_buf_size(extra_info_i, extra_column_count) > extra_info_actual_size) {
+        ret = OB_SIZE_OVERFLOW;
+        LOG_WARN("extra info row size overflow", K(ret), K(extra_info_actual_size), K(i));
+      } else if (OB_FAIL(extra_info_to_buf(extra_info_i, extra_column_count, begin_buf,
+                                           extra_info_actual_size, pos))) {
         LOG_WARN("fail to serialize value", K(ret), K(extra_info_actual_size), K(count));
       }
     }
@@ -7764,14 +7784,31 @@ int ObVecExtraInfo::extra_info_to_buf(const ObVecExtraInfoObj *extra_obj, int64_
               obj_map_type == common::ObObjDatumMapType::OBJ_DATUM_4BYTE_DATA ||
               obj_map_type == common::ObObjDatumMapType::OBJ_DATUM_1BYTE_DATA) {
             len = ObDatum::get_reserved_size(obj_map_type);
-            memcpy(buf + pos, extra_obj[i].ptr_, len);
-            pos += len;
+            if (pos < 0 || pos > buf_len || len < 0 || len > buf_len - pos) {
+              ret = OB_SIZE_OVERFLOW;
+              LOG_WARN("extra info fixed value size overflow", K(ret), K(len), K(buf_len), K(pos), K(i));
+            } else {
+              MEMCPY(buf + pos, extra_obj[i].ptr_, len);
+              pos += len;
+            }
           } else if (obj_map_type == common::ObObjDatumMapType::OBJ_DATUM_STRING) {
             len = extra_obj[i].len_;
-            memcpy(buf + pos, &extra_obj[i].len_, sizeof(len));
-            pos += sizeof(len);
-            memcpy(buf + pos, extra_obj[i].ptr_, len);
-            pos += len;
+            if (pos < 0 || pos > buf_len || static_cast<int64_t>(sizeof(len)) > buf_len - pos) {
+              ret = OB_SIZE_OVERFLOW;
+              LOG_WARN("extra info string length size overflow", K(ret), K(buf_len), K(pos), K(i));
+            } else {
+              MEMCPY(buf + pos, &extra_obj[i].len_, sizeof(len));
+              pos += sizeof(len);
+            }
+            if (OB_SUCC(ret)) {
+              if (len < 0 || pos < 0 || pos > buf_len || len > buf_len - pos) {
+                ret = OB_SIZE_OVERFLOW;
+                LOG_WARN("extra info string value size overflow", K(ret), K(len), K(buf_len), K(pos), K(i));
+              } else {
+                MEMCPY(buf + pos, extra_obj[i].ptr_, len);
+                pos += len;
+              }
+            }
           }
         }
       }
