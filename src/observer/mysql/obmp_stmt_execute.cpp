@@ -1576,6 +1576,7 @@ int ObMPStmtExecute::response_result(
       ObSqlEndTransCb &sql_end_cb = session.get_mysql_end_trans_cb();
       ObAsyncCmdDriver drv(gctx_, ctx_, session, retry_ctrl_, *this, is_prexecute());
       session.set_pl_query_sender(&drv);
+      session.set_ps_protocol(result.is_ps_protocol());
       if (OB_FAIL(sql_end_cb.init(packet_sender_, &session,
                                     stmt_id_, params_num_,
                                     is_prexecute() ? packet_sender_.get_comp_seq() : 0))) {
