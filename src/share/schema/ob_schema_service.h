@@ -1075,7 +1075,9 @@ public:
       const uint64_t tenant_id,
       const int64_t expire_time,
       common::ObISQLClient &sql_client,
-      common::ObIArray<ObRecycleObject> &recycle_objs) = 0;
+      common::ObIArray<ObRecycleObject> &recycle_objs,
+      const bool include_dropped_tenant,
+      const int64_t limit) = 0;
   virtual int fetch_recycle_objects_of_db(
       const uint64_t tenant_id,
       const uint64_t database_id,

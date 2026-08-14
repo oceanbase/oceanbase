@@ -504,7 +504,9 @@ public:
   virtual int fetch_expire_recycle_objects(
       const uint64_t tenant_id,
       const int64_t expire_time,
-      common::ObIArray<share::schema::ObRecycleObject> &recycle_objs);
+      common::ObIArray<share::schema::ObRecycleObject> &recycle_objs,
+      const bool include_dropped_tenant,
+      const int64_t limit = INT64_MAX);
 
   virtual int init_tenant_env(const share::schema::ObTenantSchema &tenant_schema,
                               const share::schema::ObSysVariableSchema &sys_variable,
