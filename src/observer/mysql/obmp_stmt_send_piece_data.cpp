@@ -665,13 +665,8 @@ int ObPieceCache::get_oracle_buffer(int32_t stmt_id,
       } else {
         const uint64_t encoded_len = get_length_length(str_buf.at(i).length());
         const uint64_t value_len = static_cast<uint64_t>(str_buf.at(i).length());
-        if (encoded_len > static_cast<uint64_t>(OB_MAX_LONGTEXT_LENGTH) - length
-            || value_len > static_cast<uint64_t>(OB_MAX_LONGTEXT_LENGTH) - length - encoded_len) {
-          ret = OB_ERR_MALFORMED_PS_PACKET;
-          LOG_WARN("complex piece payload length exceeds limit", K(ret), K(length), K(encoded_len), K(value_len));
-        } else {
-          length += encoded_len + value_len;
-        }
+        length += encoded_len;
+        length += value_len;
       }
     }
     if (OB_SUCC(ret) && NULL != is_null_map) {

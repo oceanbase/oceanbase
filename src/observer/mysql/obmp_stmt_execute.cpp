@@ -23,7 +23,6 @@
 #include "observer/mysql/obmp_stmt_prexecute.h"
 #include "observer/mysql/obmp_stmt_send_piece_data.h"
 #include "sql/plan_cache/ob_ps_cache.h"
-#include "lib/udt/ob_array_type.h"
 #include "sql/ob_sql_mock_schema_utils.h"
 
 void __attribute__((weak)) request_finish_callback();
@@ -2789,10 +2788,6 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
         // 1. read count
         if (OB_FAIL(analysis_checker_.decode_length(data, count))) {
           LOG_WARN("failed to get complex element count", K(ret));
-        } else if (count > static_cast<uint64_t>(common::MAX_ARRAY_ELEMENT_SIZE)) {
-          ret = OB_ERR_MALFORMED_PS_PACKET;
-          LOG_WARN("complex element count exceeds maximum array size", K(ret), K(count),
-                   "max_count", common::MAX_ARRAY_ELEMENT_SIZE);
         } else if (count > static_cast<uint64_t>(INT64_MAX - 7)) {
           ret = OB_ERR_MALFORMED_PS_PACKET;
           LOG_WARN("complex element count is too large", K(ret), K(count));
@@ -2809,13 +2804,7 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
         }
         if (OB_SUCC(ret)) {
           const uint64_t header_len = piece_cache->get_length_length(count);
-          if (header_len > static_cast<uint64_t>(OB_MAX_LONGTEXT_LENGTH)
-              || static_cast<uint64_t>(bitmap_bytes) > static_cast<uint64_t>(OB_MAX_LONGTEXT_LENGTH) - header_len) {
-            ret = OB_ERR_MALFORMED_PS_PACKET;
-            LOG_WARN("complex piece payload length overflow", K(ret), K(header_len), K(bitmap_bytes));
-          } else {
-            length = header_len + static_cast<uint64_t>(bitmap_bytes);
-          }
+          length = header_len + static_cast<uint64_t>(bitmap_bytes);
         }
         // 3. get string buffer (include length + value)
         if (OB_FAIL(ret)) {

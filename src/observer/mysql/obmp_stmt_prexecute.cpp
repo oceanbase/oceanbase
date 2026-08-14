@@ -68,7 +68,7 @@ int ObMPStmtPrexecute::before_process()
   } else {
     const ObMySQLRawPacket &pkt = static_cast<const ObMySQLRawPacket &>(req_->get_packet());
     const char *pos = pkt.get_cdata();
-    analysis_checker_.init(pos, pkt.get_clen());
+    analysis_checker_.init(pos, static_cast<int64_t>(pkt.get_clen()) - 1);
     PS_DEFENSE_CHECK(9)  // stmt_id(4) + flag(1) + iteration_count(4)
     {
       int32_t stmt_id = -1;
@@ -80,9 +80,7 @@ int ObMPStmtPrexecute::before_process()
     }
     if (OB_SUCC(ret) && OB_FAIL(analysis_checker_.decode_length(pos, sql_len_))) {
       LOG_WARN("failed to get sql length", K(ret));
-    } else if (OB_SUCC(ret)
-               && (sql_len_ > static_cast<uint64_t>(OB_MAX_SQL_LENGTH)
-                   || sql_len_ > static_cast<uint64_t>(INT32_MAX))) {
+    } else if (OB_SUCC(ret) && sql_len_ > static_cast<uint64_t>(INT32_MAX)) {
       ret = OB_ERR_MALFORMED_PS_PACKET;
       LOG_WARN("prexecute sql is too long", K(ret), K_(sql_len));
     } else {
