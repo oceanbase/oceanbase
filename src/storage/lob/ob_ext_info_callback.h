@@ -185,20 +185,23 @@ private:
 
   int get_lob_id(ObObj &index_data, ObLobId &lob_id);
 
-  int append_callback(
-      storage::ObStoreCtx &store_ctx,
-      const blocksstable::ObDmlFlag dml_flag,
-      const transaction::ObTxSEQ &seq_no_cur,
-      const ObLobId &lob_id,
-      ObString &data);
-
   int append_callback_with_retry(
       storage::ObStoreCtx &store_ctx,
       const blocksstable::ObDmlFlag dml_flag,
       const transaction::ObTxSEQ &seq_no_cur,
       const ObLobId &lob_id,
       ObString &data);
-  int check_is_during_freeze(bool &is_during_freeze);
+  int append_callback(
+      storage::ObStoreCtx &store_ctx,
+      const blocksstable::ObDmlFlag dml_flag,
+      const transaction::ObTxSEQ &seq_no_cur,
+      const ObLobId &lob_id,
+      ObString &data,
+      int64_t &freeze_start_time,
+      const int64_t retry_cnt);
+  int check_is_during_freeze(bool &is_during_freeze,
+                             int64_t &freeze_start_time,
+                             const int64_t retry_cnt);
 
 public:
   TO_STRING_KV(K(timeout_), K(data_size_), K(seq_no_st_), K(seq_no_cnt_), K(header_writed_));

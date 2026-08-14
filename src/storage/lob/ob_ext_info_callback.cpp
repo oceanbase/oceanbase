@@ -526,13 +526,12 @@ int ObExtInfoCbRegister::append_callback_with_retry(
 {
   int ret = OB_SUCCESS;
   static const int64_t SLEEP_INTERVAL = 10000; //10ms
+  static const int64_t MAX_SLEEP_INTERVAL = 50000; //50ms
   static const int64_t tigger_sleep_retry_cnt = 5;
   int64_t retry_cnt = 0;
+  int64_t freeze_start_time = 0;
   do {
-    if (retry_cnt > tigger_sleep_retry_cnt) {
-      ob_usleep(OB_MIN(SLEEP_INTERVAL * (retry_cnt - tigger_sleep_retry_cnt), THIS_WORKER.get_timeout_remain()));
-    }
-    ++retry_cnt;
+    ret = OB_SUCCESS;
     if (OB_UNLIKELY(THIS_WORKER.is_timeout())) {
       ret = OB_TIMEOUT;
       LOG_WARN("worker timeout", KR(ret), K(THIS_WORKER.get_timeout_ts()), K(retry_cnt));
@@ -543,8 +542,22 @@ int ObExtInfoCbRegister::append_callback_with_retry(
     } else if (lib::Worker::WS_OUT_OF_THROTTLE == THIS_WORKER.check_wait()) {
       ret = OB_KILLED_BY_THROTTLING;
       LOG_INFO("retry is interrupted by worker check wait", K(ret), K(retry_cnt));
-    } else if (OB_FAIL(append_callback(store_ctx, dml_flag, seq_no_cur, lob_id, data))) {
-      LOG_WARN("set row callback failed", K(ret), K(dml_flag), K(seq_no_cur), K(lob_id), K(retry_cnt));
+    } else {
+      if (retry_cnt > tigger_sleep_retry_cnt) {
+        const int64_t timeout_remain = THIS_WORKER.get_timeout_remain();
+        if (OB_UNLIKELY(timeout_remain <= 0)) {
+          ret = OB_TIMEOUT;
+          LOG_WARN("worker timeout", KR(ret), K(THIS_WORKER.get_timeout_ts()), K(retry_cnt), K(timeout_remain));
+        } else {
+          ob_usleep(OB_MIN(OB_MIN(SLEEP_INTERVAL * (retry_cnt - tigger_sleep_retry_cnt), MAX_SLEEP_INTERVAL), timeout_remain));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        ++retry_cnt;
+        if (OB_FAIL(append_callback(store_ctx, dml_flag, seq_no_cur, lob_id, data, freeze_start_time, retry_cnt))) {
+          LOG_WARN("set row callback failed", K(ret), K(dml_flag), K(seq_no_cur), K(lob_id), K(retry_cnt));
+        }
+      }
     }
   } while (OB_NEED_RETRY == ret);
   return ret;
@@ -555,18 +568,21 @@ int ObExtInfoCbRegister::append_callback(
     const blocksstable::ObDmlFlag dml_flag,
     const transaction::ObTxSEQ &seq_no_cur,
     const ObLobId &lob_id,
-    ObString &data)
+    ObString &data,
+    int64_t &freeze_start_time,
+    const int64_t retry_cnt)
 {
   int ret = OB_SUCCESS;
   memtable::ObMvccWriteGuard guard(false);
   storage::ObExtInfoCallback *cb = nullptr;
   bool is_during_freeze = false;
-  if (OB_FAIL(check_is_during_freeze(is_during_freeze))) {
+  if (OB_FAIL(check_is_during_freeze(is_during_freeze, freeze_start_time, retry_cnt))) {
     LOG_WARN("check is during freeze failed", K(ret));
   } else if (is_during_freeze) {
     ret = OB_NEED_RETRY;
     if (REACH_TIME_INTERVAL(100 * 1000)) {
-      LOG_WARN("during freeze, we need wait freeze finished", K(ret));
+      LOG_WARN("during freeze, we need wait freeze finished",
+               K(ret), K(freeze_start_time), K(retry_cnt));
     }
   } else if (OB_ISNULL(cb = mvcc_ctx_->alloc_ext_info_callback())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -589,10 +605,14 @@ int ObExtInfoCbRegister::append_callback(
   return ret;
 }
 
-int ObExtInfoCbRegister::check_is_during_freeze(bool &is_during_freeze)
+int ObExtInfoCbRegister::check_is_during_freeze(bool &is_during_freeze,
+                                                int64_t &freeze_start_time,
+                                                const int64_t retry_cnt)
 {
   int ret = OB_SUCCESS;
+  static const int64_t SKIP_FREEZE_RETRY_CNT = 5;
   ObLSHandle ls_handle;
+  ObFreezer *freezer = nullptr;
   is_during_freeze = false;
   if (OB_ISNULL(lob_param_)) { // if lob_param_ is null, means this is not outrow lob reading, so no need check
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls(lob_param_->ls_id_,
@@ -602,9 +622,28 @@ int ObExtInfoCbRegister::check_is_during_freeze(bool &is_during_freeze)
   } else if (ls_handle.get_ls()->is_logonly_replica()) {
     is_during_freeze = false;
     LOG_TRACE("logonly replica do not need to freeze", K(lob_param_->ls_id_));
+  } else if (OB_ISNULL(freezer = ls_handle.get_ls()->get_freezer())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get freezer failed", KR(ret), K(lob_param_->ls_id_));
   } else {
-    ObFreezer *freezer = ls_handle.get_ls()->get_freezer();
-    is_during_freeze = freezer->is_freeze(freezer->get_freeze_flag());
+    int64_t cur_freeze_start_time = 0;
+    if (!freezer->is_freeze(freezer->get_freeze_flag())) {
+      is_during_freeze = false;
+    } else if (OB_FALSE_IT(cur_freeze_start_time = freezer->get_stat().get_start_time())) {
+    } else if (retry_cnt >= SKIP_FREEZE_RETRY_CNT
+               && 0 != freeze_start_time
+               && freeze_start_time != cur_freeze_start_time) {
+      // retry enough times and the freeze we are waiting for has finished, do not wait anymore
+      is_during_freeze = false;
+      LOG_INFO("freeze round changed after enough retries, stop waiting freeze",
+               K(freeze_start_time), K(cur_freeze_start_time), K(retry_cnt));
+    } else {
+      is_during_freeze = true;
+      // only record the first freeze round we are waiting for, otherwise later comparison always fails
+      if (0 == freeze_start_time) {
+        freeze_start_time = cur_freeze_start_time;
+      }
+    }
   }
   return ret;
 }
