@@ -6358,7 +6358,7 @@ int ObTablet::build_migration_tablet_param(
     mig_tablet_param.min_ss_tablet_version_ = tablet_meta_.min_ss_tablet_version_;
     mig_tablet_param.inc_major_snapshot_ = tablet_meta_.inc_major_snapshot_;
     mig_tablet_param.inc_major_replay_scn_ = tablet_meta_.inc_major_replay_scn_;
-
+    mig_tablet_param.need_memtable_filter_after_truncate_tablet_ = tablet_meta_.need_memtable_filter_after_truncate_tablet_;
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(build_migration_tablet_param_storage_schema(mig_tablet_param))) {
       LOG_WARN("fail to build storage schema", K(ret));

@@ -39,9 +39,9 @@ enum class ObFreezeSourceFlag : int64_t
   TABLET_SPLIT        = 14,
   GC_TABLET           = 15,
   MIGRATION           = 16,
-
   SMALL_FREEZE_TRIGGER = 17,
-  MAX_SOURCE          = 18,
+  TABLET_TRUNCATE     = 18,
+  MAX_SOURCE          = 19,
 };
 
 static const int64_t MAX_FREEZE_SOURCE_TYPE_COUNT = static_cast<int64_t>(ObFreezeSourceFlag::MAX_SOURCE);

@@ -176,7 +176,8 @@ public:
                K_(split_info),
                K_(has_merged_with_mds_info),
                K_(inc_major_snapshot),
-               K_(inc_major_replay_scn));
+               K_(inc_major_replay_scn),
+               K_(need_memtable_filter_after_truncate_tablet));
 
 public:
   int32_t version_; // alignment: 4B, size: 4B
@@ -246,6 +247,7 @@ public:
   int64_t inc_major_snapshot_; // recording the latest inc major merge snapshot
   int32_t min_ss_flush_op_id_; // the min referenced flush op id in local tablet
   share::SCN inc_major_replay_scn_; // alignment: 8B, size: 8B, only used for inc major direct load
+  bool need_memtable_filter_after_truncate_tablet_; // alignment: 1B
 private:
   void update_extra_medium_info(
       const compaction::ObMergeType merge_type,
@@ -344,7 +346,8 @@ public:
                K_(inc_major_snapshot),
                K_(inc_major_replay_scn),
                K_(mock_rowkey_cg_schema),
-               K_(mock_single_cg_schema));
+               K_(mock_single_cg_schema),
+               K_(need_memtable_filter_after_truncate_tablet));
 private:
   int deserialize_v2_v3(const char *buf, const int64_t len, int64_t &pos);
   int deserialize_v1(const char *buf, const int64_t len, int64_t &pos);
@@ -409,6 +412,7 @@ public:
   // used for online row col switch
   ObStorageColumnGroupSchema mock_rowkey_cg_schema_;
   ObStorageColumnGroupSchema mock_single_cg_schema_;
+  bool need_memtable_filter_after_truncate_tablet_;
   // Add new serialization member before this line, below members won't serialize
   common::ObArenaAllocator allocator_; // for storage schema
 private:
