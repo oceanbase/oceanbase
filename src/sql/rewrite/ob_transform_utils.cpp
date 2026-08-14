@@ -13564,7 +13564,8 @@ int ObTransformUtils::get_join_keys(ObIArray<ObRawExpr*> &conditions,
  * @brief check joined table can combin with target table
  * @param is_right_child: target table is right child of joined table
  */
-int ObTransformUtils::check_joined_table_combinable(ObDMLStmt *stmt,
+int ObTransformUtils::check_joined_table_combinable(ObTransformerCtx *ctx,
+                                                    ObDMLStmt *stmt,
                                                     JoinedTable *joined_table,
                                                     TableItem *target_table,
                                                     bool is_right_child,
@@ -13572,7 +13573,7 @@ int ObTransformUtils::check_joined_table_combinable(ObDMLStmt *stmt,
 {
   int ret = OB_SUCCESS;
   combinable = false;
-  if (OB_ISNULL(stmt) || OB_ISNULL(joined_table) ||
+  if (OB_ISNULL(ctx) || OB_ISNULL(stmt) || OB_ISNULL(joined_table) ||
       OB_ISNULL(target_table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null param", K(ret));
@@ -13581,7 +13582,8 @@ int ObTransformUtils::check_joined_table_combinable(ObDMLStmt *stmt,
     //TODO: INNER JOIN、FULL JOIN、SEMI JOIN、ANTI JOIN
   } else if (is_right_child) {
     if (target_table->is_generated_table()) {
-      if (OB_FAIL(check_left_join_right_view_combinable(stmt, 
+      if (OB_FAIL(check_left_join_right_view_combinable(ctx,
+                                                        stmt,
                                                         target_table, 
                                                         joined_table->join_conditions_, 
                                                         combinable))) {
@@ -17544,14 +17546,18 @@ int ObTransformUtils::check_const_select(ObTransformerCtx *ctx,
 }
 
 // 搜集下层 stmt 中会被上层过滤空值的投影项
-int ObTransformUtils::get_extra_condition_from_parent(ObDMLStmt *parent_stmt,
+int ObTransformUtils::get_extra_condition_from_parent(ObTransformerCtx *ctx,
+                                                      ObDMLStmt *parent_stmt,
                                                       ObDMLStmt *stmt,
                                                       ObIArray<ObRawExpr *> &conditions)
 {
   int ret = OB_SUCCESS;
   bool has_rownum = false;
   TableItem *table_item = NULL;
-  if (OB_ISNULL(parent_stmt)) {
+  if (OB_ISNULL(ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_ISNULL(parent_stmt)) {
     // do nothing
   } else if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
@@ -17573,6 +17579,7 @@ int ObTransformUtils::get_extra_condition_from_parent(ObDMLStmt *parent_stmt,
     bool has_null_reject = false;
     ObColumnRefRawExpr *col = NULL;
     ObRawExpr *select_expr = NULL;
+    ObRawExpr *is_not_null_expr = NULL;
     if (OB_FAIL(parent_stmt->get_column_exprs(table_item->table_id_, table_columns))) {
       LOG_WARN("failed to get column exprs", K(ret));
     } else if (OB_FAIL(ObTransformUtils::get_table_related_condition(*parent_stmt,
@@ -17600,7 +17607,13 @@ int ObTransformUtils::get_extra_condition_from_parent(ObDMLStmt *parent_stmt,
                                                                        col,
                                                                        has_null_reject))) {
           LOG_WARN("faield to check has null reject condition", K(ret));
-        } else if (has_null_reject && OB_FAIL(conditions.push_back(select_expr))) {
+        } else if (!has_null_reject) {
+          // do nothing
+        } else if (OB_FAIL(ObTransformUtils::add_is_not_null(ctx,
+                                                             select_expr,
+                                                             is_not_null_expr))) {
+          LOG_WARN("failed to build is not null expr", K(ret));
+        } else if (OB_FAIL(conditions.push_back(is_not_null_expr))) {
           LOG_WARN("failed to push back expr", K(ret));
         }
       }
@@ -17612,7 +17625,8 @@ int ObTransformUtils::get_extra_condition_from_parent(ObDMLStmt *parent_stmt,
 // left join 右表视图合并后可能会丧失条件下推的机会，需要限制 merge 场景
 // 场景1：view 中只引用唯一一张表，可以直接 merge
 // 场景2：view 中引用多张表，要求合并后能构成 left join 链式连接，即 A ⟕ (B ⟕ C) => (A ⟕ B) ⟕ C
-int ObTransformUtils::check_left_join_right_view_combinable(ObDMLStmt *parent_stmt,
+int ObTransformUtils::check_left_join_right_view_combinable(ObTransformerCtx *ctx,
+                                                            ObDMLStmt *parent_stmt,
                                                             TableItem *view_table,
                                                             ObIArray<ObRawExpr*> &outer_join_conditions,
                                                             bool &combinable)
@@ -17628,7 +17642,7 @@ int ObTransformUtils::check_left_join_right_view_combinable(ObDMLStmt *parent_st
   ObSqlBitSet<> upper_join_right_rels;
   ObSEArray<ObRawExpr*, 4> view_exprs;
   ObSqlBitSet<> null_reject_rels;
-  if (OB_ISNULL(parent_stmt) || OB_ISNULL(view_table) ||
+  if (OB_ISNULL(ctx) || OB_ISNULL(parent_stmt) || OB_ISNULL(view_table) ||
       !view_table->is_generated_table() ||
       OB_ISNULL(child_stmt = view_table->ref_query_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -17644,7 +17658,7 @@ int ObTransformUtils::check_left_join_right_view_combinable(ObDMLStmt *parent_st
     LOG_WARN("unexpect null joined table", K(ret));
   } else if (!view_joined_table->is_left_join() && !view_joined_table->is_right_join()) {
     // 无法与上层构成 left/right 链式连接，不合并
-  } else if (OB_FAIL(get_extra_condition_from_parent(parent_stmt, child_stmt, conditions))) {
+  } else if (OB_FAIL(get_extra_condition_from_parent(ctx, parent_stmt, child_stmt, conditions))) {
     LOG_WARN("failed to get extra condition from parent", K(ret));
   } else if (OB_FAIL(append(conditions, child_stmt->get_condition_exprs()))) {
     LOG_WARN("failed to append exprs", K(ret));

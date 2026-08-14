@@ -769,11 +769,12 @@ int ObTransformViewMerge::check_left_join_right_view_need_merge(ObDMLStmt *paren
     LOG_WARN("failed to check hint allowed merge", K(ret));
   } else if (force_merge) {
     need_merge = true;
-  } else if (ObTransformUtils::check_joined_table_combinable(parent_stmt, 
+  } else if (OB_FAIL(ObTransformUtils::check_joined_table_combinable(ctx_,
+                                                             parent_stmt,
                                                              joined_table, 
                                                              view_table, 
                                                              true,
-                                                             need_merge)) {
+                                                             need_merge))) {
     LOG_WARN("failed to check joined table combinable", K(ret));
   } else if (!need_merge) {
     OPT_TRACE("right tables not combinable, no need merge view");

@@ -52,7 +52,7 @@ int ObTransformEliminateOuterJoin::eliminate_outer_join(ObIArray<ObParentDMLStmt
     /*do nothing*/
   } else if (OB_FAIL(stmt->get_equal_set_conditions(conditions, true))) {
     LOG_WARN("failed to get equal set conditions", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::get_extra_condition_from_parent(parent_stmt, stmt, conditions))) {
+  } else if (OB_FAIL(ObTransformUtils::get_extra_condition_from_parent(ctx_, parent_stmt, stmt, conditions))) {
     LOG_WARN("failed to get null reject select", K(ret));
   } else {
     common::ObArray<FromItem> from_item_list;
