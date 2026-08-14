@@ -7135,9 +7135,16 @@ int ObVectorIndexUtil::get_ivf_centers_cache(bool is_vectorized,
       LOG_WARN("Failed to get ls_id by centroid_tablet_id", K(ret), K(table_id), K(centroid_tablet_id));
     }
   } else if (OB_FAIL(vec_index_service->acquire_ivf_cache_mgr_guard(ls_id, centroid_tablet_id, cache_guard))) {
-    // Cache manager not exist, mark as not usable and return success (will use table scan)
-    if (ret == OB_HASH_NOT_EXIST) {
-      LOG_DEBUG("Cache manager not exist, will use table scan", K(ls_id), K(table_id), K(centroid_tablet_id));
+    // The SQL coordinator may not hold a replica of the target LS. Treat a missing
+    // local LS the same as a local cache miss and fall back to scanning the centroid table.
+    if (ret == OB_HASH_NOT_EXIST || ret == OB_LS_NOT_EXIST) {
+      if (ret == OB_LS_NOT_EXIST && REACH_TIME_INTERVAL(10L * 1000 * 1000)) {
+        LOG_INFO("[IVF_NON_LS_CACHE_FALLBACK] coordinator does not hold target LS, will use table scan",
+                 K(ret), K(ls_id), K(table_id), K(centroid_tablet_id));
+      } else {
+        LOG_DEBUG("Local IVF cache is unavailable, will use table scan",
+                  K(ret), K(ls_id), K(table_id), K(centroid_tablet_id));
+      }
       is_cache_usable = false;
       ret = OB_SUCCESS;
     } else {
