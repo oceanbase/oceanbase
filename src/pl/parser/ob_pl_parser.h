@@ -57,6 +57,10 @@ public:
                     bool need_unwrap = true /* for wrapped package */,
                     sql::ObSQLSessionInfo *session = nullptr);
 #ifdef OB_BUILD_ORACLE_PL
+  static int parse_obj_access_idents_from_type_path(const common::ObString &type_path,
+                                                    common::ObIAllocator &allocator,
+                                                    sql::ObSQLSessionInfo &session_info,
+                                                    const ParseNode *&node);
   static bool is_wrapped_parse_tree(const ParseNode &parse_tree);
   static int check_wrapped_parse_tree_legal(const ParseNode &parse_tree);
 #endif

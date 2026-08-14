@@ -7,6 +7,7 @@
 #include "ob_pl_parser.h"
 #include "pl/ob_pl_resolver.h"
 #include "sql/parser/parse_malloc.h"
+#include "lib/string/ob_sql_string.h"
 
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/wrap/ob_pl_wrap_allocator.h"
@@ -711,6 +712,48 @@ int ObPLParser::decode_cipher_text(ObIAllocator &allocator,
   CK (OB_NOT_NULL(out));
   CK (OB_LIKELY(out_size > 0));
   plain_text.assign(out, static_cast<int32_t>(out_size));
+  return ret;
+}
+
+int ObPLParser::parse_obj_access_idents_from_type_path(const common::ObString &type_path,
+                                                      common::ObIAllocator &allocator,
+                                                      sql::ObSQLSessionInfo &session_info,
+                                                      const ParseNode *&node)
+{
+  int ret = OB_SUCCESS;
+  node = nullptr;
+  ObSqlString pl_block;
+  OZ (pl_block.append_fmt("DECLARE x %.*s%%TYPE; BEGIN NULL; END;",
+                          static_cast<int>(type_path.length()),
+                          type_path.ptr()));
+  if (OB_SUCC(ret)) {
+    ParseResult parse_result;
+    memset(&parse_result, 0, sizeof(parse_result));
+    ObPLParser pl_parser(allocator,
+                        session_info.get_charsets4parser(),
+                        session_info.get_sql_mode());
+    OZ (pl_parser.fast_parse(pl_block.string(), parse_result));
+    if (OB_SUCC(ret)) {
+      /* Fixed input "DECLARE x <path>%TYPE; BEGIN NULL; END;" has deterministic parse tree.
+       * T_STMT_LIST -> T_SP_ANONYMOUS_BLOCK -> T_SP_BLOCK_CONTENT -> T_SP_DECL_LIST -> T_SP_DECL -> T_SP_TYPE -> T_SP_OBJ_ACCESS_REF */
+      const ParseNode *cur = parse_result.result_tree_;
+      CK (OB_NOT_NULL(cur));
+      CK (T_STMT_LIST == cur->type_ && cur->num_child_ > 0);
+      OX (cur = cur->children_[0]);
+      CK (OB_NOT_NULL(cur) && T_SP_ANONYMOUS_BLOCK == cur->type_ && cur->num_child_ > 0);
+      OX (cur = cur->children_[0]);
+      CK (OB_NOT_NULL(cur) && T_SP_BLOCK_CONTENT == cur->type_ && cur->num_child_ > 0);
+      OX (cur = cur->children_[0]);
+      CK (OB_NOT_NULL(cur) && T_SP_DECL_LIST == cur->type_ && cur->num_child_ > 0);
+      OX (cur = cur->children_[0]);
+      CK (OB_NOT_NULL(cur) && T_SP_DECL == cur->type_ && cur->num_child_ > 1);
+      OX (cur = cur->children_[1]);
+      CK (OB_NOT_NULL(cur) && T_SP_TYPE == cur->type_ && cur->num_child_ > 0);
+      OX (cur = cur->children_[0]);
+      CK (OB_NOT_NULL(cur) && T_SP_OBJ_ACCESS_REF == cur->type_);
+      OX (node = cur);
+    }
+  }
   return ret;
 }
 #endif

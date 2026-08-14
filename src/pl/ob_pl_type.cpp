@@ -15,6 +15,7 @@
 #include "sql/resolver/ob_stmt_resolver.h"
 #include "observer/mysql/ob_query_driver.h"
 #include "pl/ob_pl_dependency_util.h"
+#include "pl/ob_pl_resolver.h"
 namespace oceanbase
 {
 using namespace common;
@@ -150,26 +151,77 @@ int ObPLDataType::get_pkg_type_by_name(uint64_t tenant_id,
   }
   OX (package_manager = &(session_info.get_pl_engine()->get_package_manager()));
   CK (OB_NOT_NULL(package_manager));
-  if (is_pkg_var) {
-    const ObPLVar *pkg_var = NULL;
-    int64_t var_idx = OB_INVALID_ID;
-    CK (OB_NOT_NULL(package_info));
-    OZ (package_manager->get_package_var(resolve_ctx,
-                                         package_info->get_package_id(),
-                                         type,
-                                         pkg_var,
-                                         var_idx));
-    if (OB_SUCC(ret) && OB_ISNULL(pkg_var)) {
-      ret = OB_ERR_SP_UNDECLARED_TYPE;
-      LOG_WARN("package variable is not exist", K(ret), K(tenant_id), K(owner_id), K(pkg), K(type));
-      LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_TYPE, type.length(), type.ptr());
+  if (OB_FAIL(ret)){
+  } else if (is_pkg_var) {
+    ObPLDataType pkg_var_type;
+    // pkg.var type str is 'var', pkg.var.member type str is '.var.member'
+    if (type.length() > 0 && type.ptr()[0] != '.') {
+      const ObPLVar *pkg_var = NULL;
+      int64_t var_idx = OB_INVALID_ID;
+      CK (OB_NOT_NULL(package_info));
+      OZ (package_manager->get_package_var(resolve_ctx,
+                                          package_info->get_package_id(),
+                                          type,
+                                          pkg_var,
+                                          var_idx));
+      if (OB_SUCC(ret) && OB_ISNULL(pkg_var)) {
+        ret = OB_ERR_SP_UNDECLARED_TYPE;
+        LOG_WARN("package variable is not exist", K(ret), K(tenant_id), K(owner_id), K(pkg), K(type));
+        LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_TYPE, type.length(), type.ptr());
+      }
+      if (OB_SUCC(ret) && OB_NOT_NULL(pkg_var)) {
+        OX (pkg_var_type = pkg_var->get_type());
+      }
+    } else {
+      ObSqlString full_path;
+      ObSEArray<ObObjAccessIdent, 4> obj_access_idents;
+      ObSEArray<ObObjAccessIdx, 4> obj_access_idxs;
+      ObPLExternalNS external_ns(resolve_ctx, NULL);
+      const ObDatabaseSchema *database_schema = NULL;
+      OZ (schema_guard.get_database_schema(tenant_id, owner_id, database_schema));
+      if (OB_SUCC(ret) && OB_NOT_NULL(database_schema)
+          && owner_id != session_info.get_database_id()) {
+        OZ (full_path.append_fmt("%.*s.%.*s%.*s",
+                                  static_cast<int>(database_schema->get_database_name_str().length()),
+                                  database_schema->get_database_name_str().ptr(),
+                                  static_cast<int>(pkg.length()), pkg.ptr(),
+                                  static_cast<int>(type.length()), type.ptr()));
+      } else {
+        OZ (full_path.append_fmt("%.*s%.*s",
+                                  static_cast<int>(pkg.length()), pkg.ptr(),
+                                  static_cast<int>(type.length()), type.ptr()));
+      }
+      if (OB_SUCC(ret)) {
+        const ParseNode *type_path_node = nullptr;
+        OZ (ObPLParser::parse_obj_access_idents_from_type_path(full_path.string(),
+                                                              allocator,
+                                                              session_info,
+                                                              type_path_node));
+        if (OB_SUCC(ret) && OB_NOT_NULL(type_path_node)) {
+          ObRawExprFactory expr_factory(allocator);
+          OZ (ObPLResolver::resolve_obj_access_idents(*type_path_node,
+                                                      expr_factory,
+                                                      obj_access_idents,
+                                                      session_info));
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < obj_access_idents.count(); ++i) {
+        OZ (ObPLResolver::resolve_access_ident(obj_access_idents.at(i), external_ns,
+                                                obj_access_idxs, true));
+      }
+      if (OB_SUCC(ret) && obj_access_idxs.empty()) {
+        ret = OB_ERR_SP_UNDECLARED_TYPE;
+        LOG_WARN("package variable is not exist", K(ret), K(tenant_id), K(owner_id), K(pkg), K(type));
+        LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_TYPE, type.length(), type.ptr());
+      }
+      OX (pkg_var_type = ObObjAccessIdx::get_final_type(obj_access_idxs));
     }
-    if (OB_FAIL(ret) || OB_ISNULL(pkg_var)) {
-    } else if (pl::PL_CURSOR_TYPE == pkg_var->get_type().get_type()) {
-      OX (pl_type.set_user_type_id(PL_RECORD_TYPE, pkg_var->get_type().get_user_type_id()));
+    if (OB_FAIL(ret)) {
+    } else if (pl::PL_CURSOR_TYPE == pkg_var_type.get_type()) {
+      OX (pl_type.set_user_type_id(PL_RECORD_TYPE, pkg_var_type.get_user_type_id()));
       OX (pl_type.set_type_from(PL_TYPE_PACKAGE));
     } else {
-      OX (pl_type = pkg_var->get_type());
+      OX (pl_type = pkg_var_type);
       OX (pl_type.set_type_from(PL_TYPE_ATTR_TYPE));
     }
   } else {

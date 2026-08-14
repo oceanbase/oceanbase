@@ -2888,46 +2888,48 @@ int ObPLResolver::resolve_extern_type_info(ObSchemaGetterGuard &guard,
                                 access_idxs.at(access_idxs.count() - 2).var_index_,
                                 *extern_type_info));
   } else if (ObObjAccessIdx::is_package_variable(access_idxs)) {
-    ObObjAccessIdx::AccessType type = ObObjAccessIdx::IS_INVALID;
-    uint64_t package_id = OB_INVALID_ID;
-    CK (access_idxs.count() <= 3);
-    OX (extern_type_info->flag_ = ObParamExternType::SP_EXTERN_PKG_VAR);
-    OX (extern_type_info->type_name_ = access_idxs.at(access_idxs.count() - 1).var_name_);
-    OX (access_idxs.count() > 1 ?
-      extern_type_info->type_subname_ = access_idxs.at(access_idxs.count() - 2).var_name_
-      // 这里处理特殊情况，当前ns为package，变量也是pacakge local var的情况下，ObParamExternType被强制修改为
-      // SP_EXTERN_PKG_VAR(ns.resolve_symbol)，但是access_idxs只有一个，因为没有使用.这种feild access，
-      // 因此也需要赋值pacakge name, type_owner_则会在函数底部赋值为当前的database_id.
-      : extern_type_info->type_subname_ = current_block_->get_namespace().get_package_name());
-    if (OB_FAIL(ret)) {
-    } else if (3 == access_idxs.count()) {
-      if (OB_SYS_TENANT_ID == get_tenant_id_by_object_id(access_idxs.at(1).var_index_)) {
-        extern_type_info->type_owner_ = OB_SYS_DATABASE_ID;
-      } else {
-        extern_type_info->type_owner_ = access_idxs.at(0).var_index_;
-      }
-      OX (package_id = access_idxs.at(1).var_index_);
-      OX (type = access_idxs.at(1).access_type_);
-    } else if (2 == access_idxs.count()) {
-      if (OB_SYS_TENANT_ID == get_tenant_id_by_object_id(access_idxs.at(0).var_index_)) { // 系统包中的Var
-        extern_type_info->type_owner_ = OB_SYS_DATABASE_ID;
-      } else {
-        OZ(resolve_ctx_.session_info_.get_database_id(extern_type_info->type_owner_));
-      }
-      OX (package_id = access_idxs.at(0).var_index_);
-      OX (type = access_idxs.at(0).access_type_);
+    int64_t first_pkg_var_idx = 0;
+    ObSqlString type_name_str;
+    if (ObObjAccessIdx::IS_PKG == access_idxs.at(0).access_type_) { //var
+      first_pkg_var_idx = 0;
+    } else if (access_idxs.count() > 1 && ObObjAccessIdx::IS_PKG == access_idxs.at(1).access_type_) { //pkg.var
+      first_pkg_var_idx = 1;
+    } else if (access_idxs.count() > 2 && ObObjAccessIdx::IS_PKG == access_idxs.at(2).access_type_) { //db.pkg.var
+      first_pkg_var_idx = 2;
     } else {
-      OZ (resolve_ctx_.session_info_.get_database_id(extern_type_info->type_owner_));
-      OX (package_id = current_block_->get_namespace().get_package_id());
-      OX (type = ObObjAccessIdx::IS_PKG_NS);
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid package variable access path", K(ret), K(access_idxs));
     }
-    if (ObObjAccessIdx::IS_LABEL_NS == type) {
-      // do nothing
-    } else {
-      OZ (fill_schema_obj_version(guard,
-                                  ObParamExternType::SP_EXTERN_PKG_VAR,
-                                  package_id,
-                                  *extern_type_info));
+    if (OB_SUCC(ret)) {
+      for (int64_t i = first_pkg_var_idx; OB_SUCC(ret) && i < access_idxs.count(); ++i) {
+        // pkg.var save var, pkg.var.member save .var.member
+        OZ (type_name_str.append_fmt((first_pkg_var_idx == access_idxs.count() - 1 ? "%.*s" : ".%.*s"),
+                                     access_idxs.at(i).var_name_.length(),
+                                     access_idxs.at(i).var_name_.ptr()));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      uint64_t package_id = OB_INVALID_ID;
+      uint64_t var_idx = OB_INVALID_ID;
+      ObString type_name;
+      OZ (ob_write_string(resolve_ctx_.allocator_, type_name_str.string(), type_name));
+      OX (extern_type_info->type_name_ = type_name);
+      OZ (ObObjAccessIdx::get_package_id(access_idxs, package_id, var_idx));
+      if (OB_SUCC(ret)) {
+        OX (extern_type_info->flag_ = ObParamExternType::SP_EXTERN_PKG_VAR);
+        if (OB_INVALID_ID == package_id || package_id == current_block_->get_namespace().get_package_id()) {
+          OX (extern_type_info->type_subname_ = current_block_->get_namespace().get_package_name());
+          OX (extern_type_info->type_owner_ = current_block_->get_namespace().get_database_id());
+        } else {
+          const ObPackageInfo *package_info = NULL;
+          const uint64_t tenant_id = get_tenant_id_by_object_id(package_id);
+          OZ (guard.get_package_info(tenant_id, package_id, package_info));
+          CK (OB_NOT_NULL(package_info));
+          OX (extern_type_info->type_subname_ = package_info->get_package_name());
+          OX (extern_type_info->type_owner_ = package_info->get_database_id());
+          OZ (fill_schema_obj_version(guard, ObParamExternType::SP_EXTERN_PKG_VAR, package_id, *extern_type_info));
+        }
+      }
     }
   } else if (ObObjAccessIdx::is_table(access_idxs)) {
     CK (1 == access_idxs.count() || 2 == access_idxs.count());
@@ -8776,6 +8778,9 @@ int ObPLResolver::resolve_cursor_def(const ObString &cursor_name,
     if (OB_INVALID_ID ==  cursor_index) {
       ObPLDataType type(PL_CURSOR_TYPE);
       type.set_user_type_id(PL_CURSOR_TYPE, record_type->get_user_type_id());
+      if (func.is_package()) {
+        type.set_type_from(PL_TYPE_PACKAGE);
+      }
       if (OB_FAIL(current_block_->get_namespace().add_cursor(cursor_name,
                                                              type,
                                                              prepare_result.route_sql_,
@@ -8818,6 +8823,9 @@ int ObPLResolver::resolve_cursor_def(const ObString &cursor_name,
         if (OB_SUCC(ret)) {
           ObPLDataType type(PL_CURSOR_TYPE);
           type.set_user_type_id(PL_CURSOR_TYPE, record_type->get_user_type_id());
+          if (func.is_package()) {
+            type.set_type_from(PL_TYPE_PACKAGE);
+          }
           const_cast<ObPLVar *>(var)->set_type(type);
         }
         /*
@@ -15678,6 +15686,38 @@ int ObPLResolver::resolve_access_ident(const ObObjAccessIdent &access_ident,
       access_idx.var_index_ = var_index;
     }
     OZ (access_idxs.push_back(access_idx));
+  } else if (access_idxs.at(cnt - 1).elem_type_.is_composite_type()) {
+    const ObPLDataType &parent_type = access_idxs.at(cnt - 1).elem_type_;
+    const ObUserDefinedType *user_type = NULL;
+    OZ (external_ns.get_resolve_ctx().get_user_type(
+        parent_type.get_user_type_id(), user_type, NULL/*allocator*/));
+    CK (OB_NOT_NULL(user_type));
+    if (OB_FAIL(ret)) {
+    } else if (user_type->is_record_type()) {
+      const ObRecordType &record_type = static_cast<const ObRecordType &>(*user_type);
+      int64_t member_index = record_type.get_record_member_index(access_ident.access_name_);
+      if (OB_INVALID_INDEX == member_index) {
+        ret = OB_ERR_SP_UNDECLARED_VAR;
+        LOG_WARN("record member not found", K(ret), K(access_ident.access_name_));
+        LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_VAR,
+                       access_ident.access_name_.length(), access_ident.access_name_.ptr());
+      } else {
+        CK (OB_NOT_NULL(record_type.get_record_member_type(member_index)));
+        if (OB_SUCC(ret)) {
+          new(&access_idx)ObObjAccessIdx(*record_type.get_record_member_type(member_index),
+                                         ObObjAccessIdx::IS_CONST,
+                                         access_ident.access_name_,
+                                         *record_type.get_record_member_type(member_index),
+                                         member_index);
+          OZ (access_idxs.push_back(access_idx));
+        }
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("collection access not supported in simple resolve_access_ident",
+               K(ret), K(cnt), K(access_idxs.at(cnt - 1).access_type_));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "collection access in this context");
+    }
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported condition in resovle_access_ident",
