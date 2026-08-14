@@ -4,6 +4,7 @@
  */
 #define USING_LOG_PREFIX SERVER
 #include "ob_plugin_vector_index_scheduler.h"
+#include "lib/utility/ob_tracepoint.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
 #include "share/vector_index/ob_vector_index_util.h"
@@ -1670,8 +1671,9 @@ int ObPluginVectorIndexLoadScheduler::switch_to_leader()
     ATOMIC_STORE(&need_refresh_, true);
   }
   if (OB_SUCC(ret) && check_can_do_work()) {
-    (void) ObPluginVectorIndexUtils::set_ls_leader_flag(ls_->get_ls_id(), is_leader_);
+    // reset has_complete before announcing leadership
     refresh_adapter_rb_flag();
+    (void) ObPluginVectorIndexUtils::set_ls_leader_flag(ls_->get_ls_id(), is_leader_);
   }
   const int64_t cost_us = ObTimeUtility::current_time() - start_time_us;
   FLOG_INFO("vector index scheduler: finish to switch_to_leader", KR(ret), K_(tenant_id), KPC_(ls), K(cost_us));
@@ -1926,7 +1928,11 @@ int ObVectorIndexTask::process_one()
   ObPluginVectorIndexAdapterGuard new_adpt_guard;
   bool is_leader = false;
 
-  if (OB_FAIL(ObPluginVectorIndexUtils::get_ls_leader_flag(ls_id_, is_leader))) {
+  ret = OB_E(common::EventTable::EN_VEC_MEM_SYNC_TASK_FAIL) OB_SUCCESS;
+  if (OB_FAIL(ret)) {
+    LOG_INFO("[VEC_ASYNC_TASK] errsim EN_VEC_MEM_SYNC_TASK_FAIL, fail mem sync tablet",
+        KR(ret), K(ls_id_), K(task_ctx_->index_tablet_id_));
+  } else if (OB_FAIL(ObPluginVectorIndexUtils::get_ls_leader_flag(ls_id_, is_leader))) {
     LOG_WARN("memdata sync fail to get ls leader flag", KR(ret), K(ls_id_), KPC(task_ctx_));
   } else if (OB_FAIL(ObPluginVectorIndexUtils::get_read_scn(is_leader, ls_id_, read_snapshot_))) {
     LOG_WARN("memdata sync fail to get read scn", KR(ret), K(ls_id_), KPC(task_ctx_));
