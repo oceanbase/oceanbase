@@ -661,11 +661,35 @@ int ObJsonExprHelper::cast_to_res(ObIAllocator &allocator,
       ObObjType obj_type = expr.datum_meta_.type_;
       ObCollationType cs_type = expr.datum_meta_.cs_type_;
       ObPhysicalPlanCtx *phy_plan_ctx = ctx.exec_ctx_.get_physical_plan_ctx();
+      const ObEnumSetMeta *enum_set_meta = NULL;
       const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(session);
+      if (ob_is_enumset_tc(obj_type)) {
+        const uint16_t subschema_id = expr.obj_meta_.get_subschema_id();
+        if (OB_FAIL(ctx.exec_ctx_.get_enumset_meta_by_subschema_id(
+                        subschema_id, false, enum_set_meta))) {
+          LOG_WARN("failed to get enum meta", K(ret), K(subschema_id));
+        } else if (OB_UNLIKELY(OB_ISNULL(enum_set_meta)
+                               || !enum_set_meta->is_valid()
+                               || obj_type != enum_set_meta->get_type())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid enum meta", K(ret), K(subschema_id), KP(enum_set_meta));
+        } else {
+          cs_type = enum_set_meta->get_collation_type();
+        }
+      }
       ObCastCtx cast_ctx(&allocator, &dtc_params, get_cur_time(phy_plan_ctx), def_cm,
                          cs_type, NULL, NULL);
-      if (OB_FAIL(ObObjCaster::to_type(obj_type, cs_type, cast_ctx, src_obj, dst_obj))) {
+      if (OB_FAIL(ret)) {
+      } else if (ob_is_enumset_tc(obj_type)) {
+        ObExpectType expect_type(obj_type, cs_type);
+        expect_type.set_type_infos(enum_set_meta->get_str_values());
+        if (OB_FAIL(ObObjCaster::to_type(expect_type, cast_ctx, src_obj, dst_obj))) {
+          LOG_WARN("failed to cast object to enum", K(ret));
+        }
+      } else if (OB_FAIL(ObObjCaster::to_type(obj_type, cs_type, cast_ctx, src_obj, dst_obj))) {
         LOG_WARN("failed to cast object to ", K(ret), K(src_obj), K(obj_type));
+      }
+      if (OB_FAIL(ret)) {
       } else if (FALSE_IT(get_accuracy_from_expr(expr, out_acc))) {
       } else if (FALSE_IT(res_obj = &dst_obj)) {
       } else if (OB_FAIL(obj_accuracy_check(cast_ctx, out_acc, cs_type, dst_obj, buf_obj, res_obj))) {

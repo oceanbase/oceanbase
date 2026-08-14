@@ -34,7 +34,7 @@ ObDMLStmtPrinter::ObDMLStmtPrinter(char *buf, int64_t buf_len, int64_t *pos, con
     print_cte_(false),
     schema_guard_(schema_guard),
     print_params_(print_params),
-    expr_printer_(buf, buf_len, pos, schema_guard_, print_params_, param_store),
+    expr_printer_(buf, buf_len, pos, schema_guard_, print_params_, param_store, session),
     param_store_(param_store),
     session_(session)
 {
@@ -1531,6 +1531,40 @@ int ObDMLStmtPrinter::print_mysql_json_return_type(int64_t value, ObDataType dat
       }
       break;
     }
+    case T_ENUM:
+    case T_SET: {
+      const ObExecContext *exec_ctx = NULL;
+      const ObEnumSetMeta *enum_meta = NULL;
+      uint16_t subschema_id = data_type.get_subschema_id();
+      if (OB_UNLIKELY(OB_ISNULL(session_)
+                      || OB_ISNULL(exec_ctx = session_->get_cur_exec_ctx()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("session or exec ctx is null", K(ret), KP(session_), KP(exec_ctx));
+      } else if (OB_FAIL(exec_ctx->get_enumset_meta_by_subschema_id(
+                            subschema_id, false, enum_meta))) {
+        LOG_WARN("fail to get enum set meta", K(ret), K(subschema_id));
+      } else if (OB_ISNULL(enum_meta) || !enum_meta->is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid enum set meta", K(ret), K(subschema_id), KP(enum_meta));
+      } else if (OB_FAIL(common::ob_sql_type_str(enum_meta->get_obj_meta(),
+                                                 data_type.get_accuracy(),
+                                                 *enum_meta->get_str_values(),
+                                                 LS_DEFAULT,  // unused
+                                                 buf_,
+                                                 buf_len_,
+                                                 *pos_))) {
+        LOG_WARN("failed to print enum/set type", K(ret), K(subschema_id));
+      } else {
+        DATA_PRINTF(" ");
+        ObDataType tmp_data_type = data_type;
+        tmp_data_type.set_collation_type(enum_meta->get_collation_type());
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(print_binary_charset_collation(value, tmp_data_type))) {
+          LOG_WARN("failed to print enum/set charset and collation", K(ret));
+        }
+      }
+      break;
+    }
     case T_JSON: {
       DATA_PRINTF("json ");
       break;
@@ -2872,6 +2906,5 @@ int ObDMLStmtPrinter::print_flashback_info(const TableItem *table_item)
 
 } //end of namespace sql
 } //end of namespace oceanbase
-
 
 

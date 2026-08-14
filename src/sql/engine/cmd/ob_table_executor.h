@@ -51,11 +51,13 @@ class ObCreateTableExecutor
   {
   public:
     ObInsSQLPrinter(ObCreateTableStmt *stmt,
+                    const ObSQLSessionInfo *session,
                     ObSchemaGetterGuard *schema_guard,
                     ObObjPrintParams print_params,
                     const ParamStore *param_store,
                     bool do_osg) :
       stmt_(stmt),
+      session_(session),
       schema_guard_(schema_guard),
       print_params_(print_params),
       param_store_(param_store),
@@ -66,6 +68,7 @@ class ObCreateTableExecutor
     bool is_direct_load() const { return is_direct_load_; }
   private:
     ObCreateTableStmt *stmt_;
+    const ObSQLSessionInfo *session_;
     ObSchemaGetterGuard *schema_guard_;
     ObObjPrintParams print_params_;
     const ParamStore *param_store_;

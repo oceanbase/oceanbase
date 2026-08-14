@@ -1046,7 +1046,7 @@ int ObCreateViewResolver::print_rebuilt_view_stmt(const ObSelectStmt *stmt,
       obj_print_params.not_print_internal_catalog_ = true;
       ObSelectStmtPrinter stmt_printer(buf, buf_len, &pos, stmt,
                                       params_.schema_checker_->get_schema_guard(),
-                                      obj_print_params, true);
+                                      obj_print_params, NULL, true, session_info_);
       stmt_printer.set_column_list(column_list);
       stmt_printer.set_is_first_stmt_for_hint(true);  // need print global hint
       if (OB_FAIL(stmt_printer.do_print())) {

@@ -207,7 +207,8 @@ int ObCreateTableExecutor::ObInsSQLPrinter::inner_print(char *buf, int64_t buf_l
                                             schema_guard_,
                                             print_params_,
                                             param_store_,
-                                            true);
+                                            true,
+                                            session_);
     select_stmt_printer.set_is_first_stmt_for_hint(true);  // need print global hint
     if (OB_FAIL(databuff_printf(buf, buf_len, pos1, ") "))) {
       LOG_WARN("fail to append ')'", K(ret));
@@ -261,7 +262,8 @@ int ObCreateTableExecutor::prepare_ins_arg(ObCreateTableStmt &stmt,
   }
 
   if (OB_SUCC(ret)) {
-    ObInsSQLPrinter sql_printer(&stmt, schema_guard, obj_print_params, param_store, !no_osg_hint && online_sys_var);
+    ObInsSQLPrinter sql_printer(&stmt, my_session, schema_guard, obj_print_params,
+                                param_store, !no_osg_hint && online_sys_var);
     ObString sql;
     if (OB_FAIL(sql_printer.do_print(allocator, sql))) {
       LOG_WARN("failed  to print", K(ret));

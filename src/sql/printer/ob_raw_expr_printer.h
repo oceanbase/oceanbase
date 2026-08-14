@@ -107,7 +107,8 @@ public:
   ObRawExprPrinter();
   ObRawExprPrinter(char *buf, int64_t buf_len, int64_t *pos, ObSchemaGetterGuard *schema_guard,
                    common::ObObjPrintParams print_params = common::ObObjPrintParams(),
-                   const ParamStore *param_store = NULL);
+                   const ParamStore *param_store = NULL,
+                   const ObSQLSessionInfo *session = NULL);
   virtual ~ObRawExprPrinter();
 
   void init(char *buf, int64_t buf_len, int64_t *pos, ObSchemaGetterGuard *schema_guard,
@@ -192,6 +193,8 @@ private:
   const ParamStore *param_store_;
   ObSchemaGetterGuard *schema_guard_;
   bool print_cte_;
+  // ObSQLSessionInfo is used to get enum/set meta
+  const ObSQLSessionInfo *session_;
 };
 
 } // end namespace sql

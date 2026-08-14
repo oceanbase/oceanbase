@@ -13218,6 +13218,51 @@ int ObDMLResolver::resolve_json_table_column_type(const ParseNode &parse_tree,
           data_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
         }
       }
+      if (OB_SUCC(ret) && data_type.get_meta_type().is_enum_or_set()) {
+        ObArray<ObString> type_info_array;
+        ObExecContext *exec_ctx = NULL;
+        uint16_t subschema_id = 0;
+        int32_t data_length = 0;
+        const ParseNode *str_list_node = NULL;
+
+        if (OB_UNLIKELY(parse_tree.num_child_ != 4
+                        || OB_ISNULL(parse_tree.children_)
+                        || OB_ISNULL(str_list_node = parse_tree.children_[3]))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid enum/set type node",
+                    K(ret), K(parse_tree.type_), K(parse_tree.num_child_));
+        } else if (OB_FAIL(ObResolverUtils::resolve_extended_type_info(*str_list_node,
+                                                                        type_info_array))) {
+          LOG_WARN("fail to resolve extended type info", K(ret));
+        } else if (OB_UNLIKELY(OB_ISNULL(session_info_)
+                               || OB_ISNULL(exec_ctx = session_info_->get_cur_exec_ctx()))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get exec_ctx", KP(session_info_), K(ret));
+        } else if (OB_FAIL(ObResolverUtils::check_extended_type_info(
+                            *allocator_,
+                            type_info_array,
+                            session_info_->get_local_collation_connection(),
+                            col_def->col_base_info_.col_name_,
+                            data_type.get_obj_type(),
+                            data_type.get_collation_type(),
+                            session_info_->get_sql_mode()))) {
+          LOG_WARN("fail to check extended type info", K(ret));
+        } else if (OB_FAIL(ObDDLResolver::calc_enum_or_set_data_length(
+                            type_info_array,
+                            data_type.get_collation_type(),
+                            data_type.get_obj_type(),
+                            data_length))) {
+          LOG_WARN("failed to calculate enum/set data length", K(ret), K(type_info_array));
+        } else if (OB_FAIL(exec_ctx->get_subschema_id_by_type_info(
+                            data_type.get_meta_type(),
+                            type_info_array,
+                            subschema_id))) {
+          LOG_WARN("failed to get subschema id", K(ret));
+        } else {
+          data_type.set_length(data_length);
+          data_type.set_subschema_id(subschema_id);
+        }
+      }
     } else {
       if (ObNumberType == obj_type
           && parse_tree.int16_values_[2] == -1 && parse_tree.int16_values_[3] == 0) {
@@ -13330,12 +13375,15 @@ int ObDMLResolver::generate_json_table_output_column_item(TableItem *table_item,
   OX (col_expr->set_column_name(column_name));
   OX (col_expr->set_table_item_info(*table_item));
   if (OB_FAIL(ret)) {
-  } else if (lib::is_oracle_mode() && ob_is_enumset_tc(col_expr->get_data_type())) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not support enum set in table function", K(ret));
-  } else {
-    col_expr->unset_result_flag(NOT_NULL_FLAG);
+  } else if (ob_is_enumset_tc(col_expr->get_data_type())) {
+    if (lib::is_oracle_mode()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not support enum set in table function", K(ret));
+    } else {
+      col_expr->mark_sql_enum_set_with_subschema();
+    }
   }
+  OX (col_expr->unset_result_flag(NOT_NULL_FLAG));
   OX (column_item.expr_ = col_expr);
   OX (column_item.table_id_ = col_expr->get_table_id());
   OX (column_item.column_id_ = col_expr->get_column_id());

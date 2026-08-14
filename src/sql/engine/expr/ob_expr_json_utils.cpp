@@ -1539,6 +1539,287 @@ int cast_to_bit(common::ObIAllocator *allocator,
   return ret;
 }
 
+class ObJsonCastEnumSetHelper
+{
+public:
+  explicit ObJsonCastEnumSetHelper(common::ObIAllocator *allocator, ObSQLMode sql_mode)
+    : allocator_(allocator), json_buf_(allocator), sql_mode_(sql_mode)
+  {}
+
+  ~ObJsonCastEnumSetHelper() = default;
+
+  int json_uint_to_enum(const uint64_t input_value,
+                              const ObIArray<ObString> &str_values,
+                              uint64_t &enum_value) const
+  {
+    INIT_SUCC(ret);
+    if (OB_UNLIKELY(input_value > static_cast<uint64_t>(str_values.count()))) {
+      ret = OB_ERR_DATA_TRUNCATED;
+      LOG_WARN("enum index out of range", K(ret), K(input_value), K(str_values.count()));
+    } else if (input_value == 0 && is_strict_mode(sql_mode_)) {
+      ret = OB_ERR_DATA_TRUNCATED;
+      LOG_WARN("enum index 0 is invalid in strict mode",
+               K(ret), K(input_value), K(str_values.count()));
+    } else {
+      enum_value = input_value;
+    }
+    return ret;
+  }
+
+  int json_uint_to_set(const uint64_t input_value,
+                              const ObIArray<ObString> &str_values,
+                              uint64_t &set_value) const
+  {
+    INIT_SUCC(ret);
+    const int64_t value_count = str_values.count();
+    if (OB_UNLIKELY(value_count < 64 &&
+                    input_value > ((1ULL << value_count) - 1))) {
+      // if value_count == 64, input_value can be any value of uint64_t
+      ret = OB_ERR_DATA_TRUNCATED;
+      LOG_WARN("set bitmask out of range", K(ret), K(input_value), K(value_count));
+    } else {
+      set_value = input_value;
+    }
+    return ret;
+  }
+
+  int json_string_to_enum(ObIJsonBase *j_base,
+                          const ObCollationType in_cs_type,
+                          const ObEnumSetMeta &enum_meta,
+                          uint64_t &enum_value)
+  {
+    INIT_SUCC(ret);
+    ObString in_str;
+    int32_t pos = 0;
+    size_t len_no_sp = 0;
+    const ObIArray<ObString> &str_values = *enum_meta.get_str_values();
+    const ObCollationType out_cs_type = enum_meta.get_collation_type();
+    if (OB_FAIL(json_scalar_to_string(j_base, in_cs_type, out_cs_type, in_str, len_no_sp))) {
+      LOG_WARN("failed to convert json scalar to enum input", K(ret));
+    } else {
+      ObString no_sp_val(0, static_cast<int32_t>(len_no_sp), in_str.ptr());
+      if (OB_FAIL(find_type(str_values, out_cs_type, no_sp_val, pos))) {
+        LOG_WARN("failed to find enum value", K(ret), K(no_sp_val), K(out_cs_type));
+      } else if (pos >= 0) {
+        enum_value = static_cast<uint64_t>(pos + 1);
+      } else if (!in_str.is_numeric()) {
+        ret = OB_ERR_DATA_TRUNCATED;
+        LOG_WARN("numeric value of enum not found", K(ret));
+      } else {
+        int err = 0;
+        enum_value = ObCharset::strntoull(in_str.ptr(), in_str.length(), 10, &err);
+        if (OB_UNLIKELY(0 != err ||
+                        enum_value > static_cast<uint64_t>(str_values.count()))) {
+          enum_value = 0;
+          ret = OB_ERR_DATA_TRUNCATED;
+          LOG_WARN("enum index out of range", K(ret), K(err), K(str_values.count()));
+        }
+      }
+    }
+    return ret;
+  }
+
+  int json_string_to_set(ObIJsonBase *j_base,
+                         const ObCollationType in_cs_type,
+                         const ObEnumSetMeta &set_meta,
+                         uint64_t &set_value)
+  {
+    INIT_SUCC(ret);
+    ObString in_str;
+    const ObIArray<ObString> *str_values = set_meta.get_str_values();
+    const ObCollationType out_cs_type = set_meta.get_collation_type();
+    size_t len_no_sp = 0;
+    bool set_value_not_found = false;
+    ObString member;
+    if (OB_ISNULL(str_values)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("set string values is null", K(ret));
+    } else if (OB_FAIL(json_scalar_to_string(j_base, in_cs_type, out_cs_type,
+                                             in_str, len_no_sp))) {
+      LOG_WARN("failed to convert json scalar to set input", K(ret));
+    } else if (!in_str.empty()) {
+      bool is_last_value = false;
+      const ObString &separator = ObCharsetUtils::get_const_str(out_cs_type, ',');
+      const char *remain = in_str.ptr();
+      do {
+        int32_t pos = 0;
+        const char *separator_pos = static_cast<const char *>(
+            memmem(remain, len_no_sp, separator.ptr(), separator.length()));
+        if (OB_ISNULL(separator_pos)) {
+          is_last_value = true;
+          member.assign_ptr(remain, len_no_sp);
+        } else {
+          member.assign_ptr(remain, separator_pos - remain);
+          len_no_sp -= separator_pos - remain + separator.length();
+          remain = separator_pos + separator.length();
+        }
+
+        if (OB_FAIL(find_type(*str_values, out_cs_type, member, pos))) {
+          LOG_WARN("failed to find set value", K(ret), K(member), K(out_cs_type));
+        } else if (pos < 0) {
+          set_value_not_found = true;
+        } else {
+          pos %= 64;
+          set_value |= (1ULL << pos);
+        }
+      } while (OB_SUCC(ret) && !set_value_not_found && !is_last_value);
+    }
+
+    if (OB_SUCC(ret) && set_value_not_found) {
+      if (in_str.is_numeric()) {
+        int err = 0;
+        const uint64_t input_value = ObCharset::strntoull(in_str.ptr(), in_str.length(), 10, &err);
+        if (0 != err) {
+          set_value = 0;
+          ret = OB_ERR_DATA_TRUNCATED;
+          LOG_WARN("failed to parse set bitmask", K(ret), K(err));
+        } else if (OB_FAIL(json_uint_to_set(input_value, *str_values, set_value))) {
+          LOG_WARN("failed to check set bitmask", K(ret), K(input_value));
+        }
+      } else {
+        ret = OB_ERR_DATA_TRUNCATED;
+        LOG_WARN("set value not found", K(ret), K(member), K(in_str));
+      }
+    }
+    return ret;
+  }
+
+private:
+  int json_scalar_to_string(ObIJsonBase *j_base,
+                            const ObCollationType in_cs_type,
+                            const ObCollationType out_cs_type,
+                            ObString &in_str,
+                            size_t &length_no_sp)
+  {
+    INIT_SUCC(ret);
+    ObString orig_in_str;
+    if (OB_ISNULL(allocator_) || OB_ISNULL(j_base)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), KP(allocator_), KP(j_base));
+    } else if (ObJsonNodeType::J_STRING == j_base->json_type()) {
+      orig_in_str.assign_ptr(j_base->get_data(),
+                             static_cast<int32_t>(j_base->get_data_length()));
+    } else if (OB_FAIL(j_base->print(json_buf_, false, 0, false))) {
+      LOG_WARN("failed to print json scalar", K(ret), K(j_base->json_type()));
+    } else {
+      orig_in_str.assign_ptr(json_buf_.ptr(),
+                             static_cast<int32_t>(json_buf_.length()));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObCharset::charset_convert(*allocator_, orig_in_str, in_cs_type,
+                                                  out_cs_type, in_str))) {
+      LOG_WARN("failed to convert json scalar collation",
+                K(ret), K(in_cs_type), K(out_cs_type));
+    } else {
+      length_no_sp = ObCharset::strlen_byte_no_sp(out_cs_type, in_str.ptr(),
+                                                  in_str.length());
+    }
+    return ret;
+  }
+
+  common::ObIAllocator *allocator_;
+  ObJsonBuffer json_buf_;
+  ObSQLMode sql_mode_;
+
+  DISALLOW_COPY_AND_ASSIGN(ObJsonCastEnumSetHelper);
+};
+
+int cast_to_enum_set(common::ObIAllocator *allocator,
+                     ObEvalCtx &ctx,
+                     ObIJsonBase *j_base,
+                     common::ObAccuracy &accuracy,
+                     ObJsonCastParam &cast_param,
+                     ObDatum &res,
+                     uint8_t &is_type_mismatch)
+{
+  INIT_SUCC(ret);
+  UNUSED(accuracy);
+  const ObEnumSetMeta *enum_set_meta = NULL;
+  uint64_t enum_set_value = 0;
+  bool is_null = false;
+  ObSQLSessionInfo *session = NULL;
+  if (OB_ISNULL(j_base)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("json base is null", K(ret));
+  } else if (OB_ISNULL(allocator) || OB_ISNULL(cast_param.rt_expr_)
+             || OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator, runtime expression or session is null",
+             K(ret), KP(allocator), KP(cast_param.rt_expr_), KP(session));
+  } else if (ObEnumType != cast_param.dst_type_ && ObSetType != cast_param.dst_type_) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("dst_type is not supported", K(ret), K(cast_param.dst_type_));
+  } else {
+    const uint16_t subschema_id = cast_param.rt_expr_->obj_meta_.get_subschema_id();
+    ObJsonCastEnumSetHelper cast_helper(allocator, session->get_sql_mode());
+    if (OB_FAIL(ctx.exec_ctx_.get_enumset_meta_by_subschema_id(subschema_id, false,
+                                                               enum_set_meta))) {
+      LOG_WARN("failed to get enum or set meta", K(ret), K(subschema_id));
+    } else if (OB_ISNULL(enum_set_meta) || OB_UNLIKELY(!enum_set_meta->is_valid()) ||
+               OB_UNLIKELY(cast_param.dst_type_ != enum_set_meta->get_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid enum or set meta", K(ret), K(subschema_id), K(cast_param.dst_type_),
+               KP(enum_set_meta));
+    } else if (ObJsonNodeType::J_NULL == j_base->json_type()) {
+      is_null = true;
+    } else if (j_base->is_json_number(j_base->json_type()) ||
+               ObJsonNodeType::J_BOOLEAN == j_base->json_type()) {
+      uint64_t input_value = 0;
+      if (OB_FAIL(j_base->to_uint(input_value, true, true))) {
+        is_type_mismatch = 1;
+        LOG_WARN("failed to cast json number to enum or set value", K(ret),
+                 K(j_base->json_type()), K(cast_param.dst_type_));
+      } else {
+        if (ObEnumType == cast_param.dst_type_) {
+          ret = cast_helper.json_uint_to_enum(input_value,
+                                              *enum_set_meta->get_str_values(),
+                                              enum_set_value);
+        } else {
+          ret = cast_helper.json_uint_to_set(input_value,
+                                             *enum_set_meta->get_str_values(),
+                                             enum_set_value);
+        }
+        if (OB_FAIL(ret)) {
+          is_type_mismatch = 1;
+          LOG_WARN("failed to check enum or set value", K(ret), K(input_value),
+                   K(cast_param.dst_type_));
+        }
+      }
+    } else if (ObJsonNodeType::J_STRING == j_base->json_type()
+               || j_base->is_json_scalar(j_base->json_type())) {
+      if (ObEnumType == cast_param.dst_type_) {
+        ret = cast_helper.json_string_to_enum(j_base, cast_param.in_coll_type_,
+                                              *enum_set_meta, enum_set_value);
+      } else {
+        ret = cast_helper.json_string_to_set(j_base, cast_param.in_coll_type_,
+                                              *enum_set_meta, enum_set_value);
+      }
+      if (OB_FAIL(ret)) {
+        is_type_mismatch = 1;
+        LOG_WARN("failed to cast json to enum or set", K(ret), K(j_base->json_type()),
+                 K(cast_param.dst_type_));
+      }
+    } else {
+      ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
+      is_type_mismatch = 1;
+      LOG_WARN("invalid json value for enum or set cast", K(ret), K(j_base->json_type()),
+               K(cast_param.dst_type_));
+    }
+  }
+
+  if (OB_SUCC(ret) && !cast_param.is_only_check_) {
+    if (is_null) {
+      res.set_null();
+    } else if (ObEnumType == cast_param.dst_type_) {
+      res.set_enum(enum_set_value);
+    } else {
+      res.set_set(enum_set_value);
+    }
+  }
+  return ret;
+}
+
 int cast_to_json(common::ObIAllocator *allocator,
                  ObEvalCtx &ctx,
                  ObIJsonBase *j_base,
@@ -1836,7 +2117,7 @@ ObJsonUtil::ObJsonCastSqlScalar OB_JSON_CAST_SQL_EXPLICIT[ObMaxTC] =
   // ObBitTC       = 14,   // bit
   cast_to_bit,
   // ObEnumSetTC   = 15,   // enum, set
-  cast_not_expected,
+  cast_to_enum_set,
   // ObEnumSetInnerTC  = 16,
   cast_not_expected,
   // ObOTimestampTC    = 17, //timestamp with time zone
