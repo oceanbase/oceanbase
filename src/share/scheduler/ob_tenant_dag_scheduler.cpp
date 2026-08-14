@@ -4008,7 +4008,11 @@ bool ObDagNetScheduler::is_empty() {
 int ObDagNetScheduler::add_dag_net(ObIDagNet &dag_net)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!dag_net.is_valid())) {
+  const ObDagNetType::ObDagNetTypeEnum type = dag_net.get_type();
+  // dag_net_cnts_ is indexed by the type, so an out-of-range type must be rejected.
+  if (OB_UNLIKELY(!dag_net.is_valid()
+      || type < ObDagNetType::DAG_NET_TYPE_MIGRATION
+      || type >= ObDagNetType::DAG_NET_TYPE_MAX)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid argument", K(ret), K(dag_net));
   } else {
@@ -4034,10 +4038,10 @@ int ObDagNetScheduler::add_dag_net(ObIDagNet &dag_net)
       COMMON_LOG(ERROR, "failed to add into blocking_dag_net_list", K(ret), K(dag_net));
       (void) erase_dag_net_id_or_abort(dag_net);
     } else {
-      ++dag_net_cnts_[dag_net.get_type()];
+      ++dag_net_cnts_[type];
       dag_net.set_add_time();
       COMMON_LOG(INFO, "add dag net success", K(dag_net), "add_time", dag_net.get_add_time(),
-          "dag_net_type_cnts", dag_net_cnts_[dag_net.get_type()]);
+          "dag_net_type_cnts", dag_net_cnts_[type]);
     }
   }
   return ret;
@@ -4124,26 +4128,6 @@ int64_t ObDagNetScheduler::get_dag_net_count(const ObDagNetType::ObDagNetTypeEnu
   return count;
 }
 
-bool ObDagNetScheduler::is_dag_map_full_()
-{
-  bool bret = false;
-  if (OB_UNLIKELY(OB_ISNULL(scheduler_))) {
-    COMMON_LOG_RET(WARN, OB_ERR_UNEXPECTED, "scheduler is null", KP(scheduler_));
-  } else {
-    if (((double)scheduler_->get_cur_dag_cnt() / DEFAULT_MAX_DAG_MAP_CNT) >= ((double)STOP_ADD_DAG_PERCENT / 100)) {
-      bret = true;
-      if (REACH_THREAD_TIME_INTERVAL(LOOP_PRINT_LOG_INTERVAL))  {
-        COMMON_LOG(INFO, "dag map is almost full, stop loop blocking dag_net_map",
-            "dag_map_size", scheduler_->get_cur_dag_cnt(), "dag_net_map_size", dag_net_map_.size(),
-            "blocking_dag_net_list_size", dag_net_list_[BLOCKING_DAG_NET_LIST].get_size(),
-            "running_dag_net_list_size", dag_net_list_[RUNNING_DAG_NET_LIST].get_size());
-      }
-    }
-  }
-
-  return bret;
-}
-
 int ObDagNetScheduler::loop_running_dag_net_list()
 {
   int ret = OB_SUCCESS;
@@ -4227,20 +4211,32 @@ int ObDagNetScheduler::loop_blocking_dag_net_list()
     ObIDagNet *head = dag_net_list_[BLOCKING_DAG_NET_LIST].get_header();
     ObIDagNet *cur = head->get_next();
     ObIDagNet *tmp = nullptr;
-    int64_t rest_cnt = DEFAULT_MAX_RUNNING_DAG_NET_CNT - (dag_net_map_.size() - dag_net_list_[BLOCKING_DAG_NET_LIST].get_size());
     int64_t co_major_skipped = 0;
-    while (NULL != cur && head != cur && rest_cnt > 0 && !is_dag_map_full_()) {
-      LOG_DEBUG("loop blocking dag net list", K(ret), KPC(cur), K(rest_cnt));
+    int64_t dag_full_skipped = 0;
+    // OB_SIZE_OVERFLOW means this dag type hit its hard limit, so the rest of the same type would be
+    // rejected the same way in this round; skip them and let the next round retry.
+    // OB_EAGAIN is not a capacity signal (a duplicated dag already exists), so it must not skip anything.
+    bool is_dag_full[ObDagNetType::DAG_NET_TYPE_MAX];
+    MEMSET(is_dag_full, 0, sizeof(is_dag_full));
+    while (NULL != cur && head != cur) {
+      LOG_DEBUG("loop blocking dag net list", K(ret), KPC(cur));
       tmp = cur;
       cur = cur->get_next();
+      // add_dag_net() rejects invalid types, so indexing by type is safe here.
+      const ObDagNetType::ObDagNetTypeEnum type = tmp->get_type();
       if (tmp->is_cancel()) {
         (void) erase_dag_net_list_or_abort(BLOCKING_DAG_NET_LIST, tmp);
         (void) add_dag_net_list_or_abort(FINISHED_DAG_NET_LIST, tmp);
         COMMON_LOG(WARN, "dag net has been cancelled, move to finished list", KPC(tmp));
-      } else if (ObDagNetType::DAG_NET_TYPE_CO_MAJOR == tmp->get_type()
+      } else if (ObDagNetType::DAG_NET_TYPE_CO_MAJOR == type
           && co_major_running_cnt_ >= max_co_major_running_dag_net_cnt_) {
         ++co_major_skipped;
+      } else if (is_dag_full[type]) {
+        ++dag_full_skipped;
       } else if (OB_TMP_FAIL(tmp->start_running())) {
+        if (OB_SIZE_OVERFLOW == tmp_ret) {
+          is_dag_full[type] = true;
+        }
         // If dag net failed to start running, move dag net to finished list.
         // Function clear_dag_net_ctx() will be called to release some resources after being scheduled at finish list.
         // Move this dag net from blocking to finished list to avoid dead lock.
@@ -4249,14 +4245,14 @@ int ObDagNetScheduler::loop_blocking_dag_net_list()
         COMMON_LOG(WARN, "dag net failed to start running, move to finished list", K(tmp_ret), KPC(tmp));
       } else {
         tmp->set_start_time();
-        --rest_cnt;
         (void) erase_dag_net_list_or_abort(BLOCKING_DAG_NET_LIST, tmp);
         (void) add_dag_net_list_or_abort(RUNNING_DAG_NET_LIST, tmp);
       }
     }
-    if (co_major_skipped > 0 && REACH_THREAD_TIME_INTERVAL(STARVATION_LOG_INTERVAL)) {
-      COMMON_LOG(INFO, "co_major dag_net skipped by type cap",
+    if ((co_major_skipped > 0 || dag_full_skipped > 0) && REACH_THREAD_TIME_INTERVAL(STARVATION_LOG_INTERVAL)) {
+      COMMON_LOG(INFO, "dag_net skipped in blocking list",
           K(co_major_skipped),
+          K(dag_full_skipped),
           K_(co_major_running_cnt),
           "max_co_major_running", max_co_major_running_dag_net_cnt_,
           "blocking_list_size", dag_net_list_[BLOCKING_DAG_NET_LIST].get_size(),

@@ -2077,19 +2077,68 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObHoldingMigrationDagNet);
 };
 
-static int64_t count_running_dag_net(ObTenantDagScheduler &scheduler,
+// start_running() creates no dag, so admission can be driven by calling the loop functions
+// directly while the scheduler threads are stopped.
+class ObAdmissionDagNetBase : public ObHoldingDagNetBase
+{
+public:
+  explicit ObAdmissionDagNetBase(ObDagNetType::ObDagNetTypeEnum type) : ObHoldingDagNetBase(type) {}
+  virtual int start_running() override { return OB_SUCCESS; }
+};
+
+class ObAdmissionBackupDagNet : public ObAdmissionDagNetBase
+{
+public:
+  ObAdmissionBackupDagNet() : ObAdmissionDagNetBase(ObDagNetType::DAG_NET_TYPE_BACKUP) {}
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObAdmissionBackupDagNet);
+};
+
+class ObAdmissionMigrationDagNet : public ObAdmissionDagNetBase
+{
+public:
+  ObAdmissionMigrationDagNet() : ObAdmissionDagNetBase(ObDagNetType::DAG_NET_TYPE_MIGRATION) {}
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObAdmissionMigrationDagNet);
+};
+
+// Mimics add_dag() rejected by the per dag type hard limit.
+class ObDagFullBackupDagNet : public ObHoldingDagNetBase
+{
+public:
+  ObDagFullBackupDagNet() : ObHoldingDagNetBase(ObDagNetType::DAG_NET_TYPE_BACKUP) {}
+  virtual int start_running() override
+  {
+    ATOMIC_INC(&start_running_cnt_);
+    return OB_SIZE_OVERFLOW;
+  }
+  static int64_t start_running_cnt_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObDagFullBackupDagNet);
+};
+
+int64_t ObDagFullBackupDagNet::start_running_cnt_ = 0;
+
+static int64_t count_dag_net_in_list(ObTenantDagScheduler &scheduler,
+                                     const ObDagNetListIndex list_index,
                                      const ObDagNetType::ObDagNetTypeEnum type)
 {
   int64_t count = 0;
   ObDagNetScheduler &dag_net_sche = scheduler.dag_net_sche_;
   common::SpinRLockGuard guard(dag_net_sche.dag_net_map_rwlock_);
-  ObIDagNet *head = dag_net_sche.dag_net_list_[RUNNING_DAG_NET_LIST].get_header();
+  ObIDagNet *head = dag_net_sche.dag_net_list_[list_index].get_header();
   for (ObIDagNet *cur = head->get_next(); NULL != cur && head != cur; cur = cur->get_next()) {
     if (cur->get_type() == type) {
       ++count;
     }
   }
   return count;
+}
+
+static int64_t count_running_dag_net(ObTenantDagScheduler &scheduler,
+                                     const ObDagNetType::ObDagNetTypeEnum type)
+{
+  return count_dag_net_in_list(scheduler, RUNNING_DAG_NET_LIST, type);
 }
 
 // ---------------------------------------------------------------------------
@@ -2185,6 +2234,74 @@ TEST_F(TestDagScheduler, test_co_major_flood_does_not_block_other_types)
   // Release and drain
   ATOMIC_STORE(&exit_flag, true);
   wait_scheduler();
+}
+
+// ---------------------------------------------------------------------------
+// Case 3: the total dag count no longer gates dag net admission. 105000 was the
+// removed soft watermark (150000 * 70%) that used to stop the whole BLOCKING scan.
+// ---------------------------------------------------------------------------
+TEST_F(TestDagScheduler, test_total_dag_count_does_not_block_dag_net)
+{
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
+  ASSERT_TRUE(nullptr != scheduler);
+  scheduler->stop();
+  scheduler->notify();
+  scheduler->wait();
+
+  ObHoldingDagNetInitParam param;
+  ASSERT_EQ(OB_SUCCESS, scheduler->create_and_add_dag_net<ObAdmissionBackupDagNet>(&param));
+
+  const int64_t high_total_dag_cnt = 105000;
+  const int64_t saved_dag_cnt = ATOMIC_LOAD(&scheduler->dag_cnt_);
+  ATOMIC_STORE(&scheduler->dag_cnt_, high_total_dag_cnt);
+  const int loop_ret = scheduler->dag_net_sche_.loop_blocking_dag_net_list();
+  ATOMIC_STORE(&scheduler->dag_cnt_, saved_dag_cnt);
+  ASSERT_EQ(OB_SUCCESS, loop_ret);
+  EXPECT_EQ(1, count_running_dag_net(*scheduler, ObDagNetType::DAG_NET_TYPE_BACKUP));
+
+  EXPECT_EQ(OB_SUCCESS, scheduler->dag_net_sche_.loop_running_dag_net_list());
+  EXPECT_EQ(OB_SUCCESS, scheduler->dag_net_sche_.loop_finished_dag_net_list());
+  EXPECT_EQ(0, scheduler->dag_net_sche_.get_dag_net_count());
+}
+
+// ---------------------------------------------------------------------------
+// Case 4: when start_running() reports the per dag type hard limit, only the first
+// dag net of that type is moved to the finished list; the rest of the same type stay
+// on BLOCKING for the next round, and other types are still admitted in this round.
+// ---------------------------------------------------------------------------
+TEST_F(TestDagScheduler, test_dag_limit_skips_rest_of_same_type)
+{
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
+  ASSERT_TRUE(nullptr != scheduler);
+  scheduler->stop();
+  scheduler->notify();
+  scheduler->wait();
+
+  ObDagFullBackupDagNet::start_running_cnt_ = 0;
+  ObHoldingDagNetInitParam param;
+  const int64_t backup_cnt = 3;
+  for (int64_t i = 0; i < backup_cnt; ++i) {
+    ASSERT_EQ(OB_SUCCESS, scheduler->create_and_add_dag_net<ObDagFullBackupDagNet>(&param));
+  }
+  ASSERT_EQ(OB_SUCCESS, scheduler->create_and_add_dag_net<ObAdmissionMigrationDagNet>(&param));
+
+  ASSERT_EQ(OB_SUCCESS, scheduler->dag_net_sche_.loop_blocking_dag_net_list());
+  EXPECT_EQ(1, ATOMIC_LOAD(&ObDagFullBackupDagNet::start_running_cnt_));
+  EXPECT_EQ(backup_cnt - 1,
+      count_dag_net_in_list(*scheduler, BLOCKING_DAG_NET_LIST, ObDagNetType::DAG_NET_TYPE_BACKUP));
+  // the flooded type does not block other types in the same round
+  EXPECT_EQ(1, count_running_dag_net(*scheduler, ObDagNetType::DAG_NET_TYPE_MIGRATION));
+
+  // each following round retries exactly one more dag net of the same type
+  for (int64_t i = 2; i <= backup_cnt; ++i) {
+    EXPECT_EQ(OB_SUCCESS, scheduler->dag_net_sche_.loop_blocking_dag_net_list());
+    EXPECT_EQ(i, ATOMIC_LOAD(&ObDagFullBackupDagNet::start_running_cnt_));
+  }
+  EXPECT_EQ(0, count_dag_net_in_list(*scheduler, BLOCKING_DAG_NET_LIST, ObDagNetType::DAG_NET_TYPE_BACKUP));
+
+  EXPECT_EQ(OB_SUCCESS, scheduler->dag_net_sche_.loop_running_dag_net_list());
+  EXPECT_EQ(OB_SUCCESS, scheduler->dag_net_sche_.loop_finished_dag_net_list());
+  EXPECT_EQ(0, scheduler->dag_net_sche_.get_dag_net_count());
 }
 
 }

@@ -1059,7 +1059,6 @@ public:
   int check_ls_compaction_dag_exist_with_cancel(const ObLSID &ls_id, bool &exist);
   int get_min_end_scn_from_major_dag(const ObLSID &ls_id, SCN &min_end_scn);
 private:
-  bool is_dag_map_full_();
   typedef common::ObDList<ObIDagNet> DagNetList;
   typedef common::hash::ObHashMap<const ObIDagNet*,
                           ObIDagNet*,
@@ -1067,24 +1066,16 @@ private:
                           common::hash::hash_func<const ObIDagNet*>,
                           common::hash::equal_to<const ObIDagNet*> > DagNetMap;
   typedef common::hash::ObHashMap<ObDagId, const ObIDagNet *>DagNetIdMap;
-  static const int64_t DEFAULT_MAX_DAG_MAP_CNT = 150000;
-  static const int64_t DEFAULT_MAX_RUNNING_DAG_NET_CNT = 30000;
-  static const int64_t DEFAULT_MAX_DAG_NET_CNT = 500000;
-  static const int64_t STOP_ADD_DAG_PERCENT = 70;
   static const int64_t PRINT_SLOW_DAG_NET_THREASHOLD = 30 * 60 * 1000 * 1000L; // 30m
   static const int64_t SLOW_COMPACTION_DAG_NET_THREASHOLD = 6 * 60 * 60 * 1000 * 1000L; // 6hours
   static const int64_t LOOP_PRINT_LOG_INTERVAL = 30 * 1000 * 1000L; // 30s
   static const int64_t STARVATION_LOG_INTERVAL = 30 * 1000 * 1000L; // 30s
 
-  // CO_MAJOR sub-cap = MIN(DEFAULT_MAX_RUNNING_DAG_NET_CNT, compaction_dag_limit) * 90% (min 1),
-  // reserves ~10% of the running list for other types (MIGRATION/BACKUP/RESTORE, etc.) to avoid
-  // starvation from tablet-granularity CO_MAJOR floods. Clamping by DEFAULT_MAX_RUNNING_DAG_NET_CNT
-  // keeps the sub-cap strictly below the running list cap even when compaction_dag_limit exceeds it.
-  // Init snapshots from dag_limit; refresh_co_major_cap keeps it in sync at runtime.
-  static constexpr int64_t CO_MAJOR_RATIO_PERCENT = 90;
+  static constexpr int64_t CO_MAJOR_RUNNING_DAG_NET_LIMIT = 30000;
+  static constexpr int64_t CO_MAJOR_CAP_PERCENT = 90;
   static constexpr int64_t calc_co_major_cap_(const int64_t compaction_dag_limit)
   {
-    return MAX(1L, MIN(DEFAULT_MAX_RUNNING_DAG_NET_CNT, compaction_dag_limit) * CO_MAJOR_RATIO_PERCENT / 100);
+    return MAX(1L, MIN(CO_MAJOR_RUNNING_DAG_NET_LIMIT, compaction_dag_limit) * CO_MAJOR_CAP_PERCENT / 100);
   }
 private:
   ObIAllocator* allocator_;
@@ -1533,7 +1524,6 @@ private:
   void inner_get_suggestion_reason(const ObDagType::ObDagTypeEnum type, int64_t &reason);
   void dump_dag_status(const bool force_dump = false);
   void diagnose_for_suggestion();
-  bool is_dag_map_full();
   int gene_basic_info(
       ObDagSchedulerInfo *info_list,
       common::ObIArray<void *> &scheduler_infos,
