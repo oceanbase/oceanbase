@@ -143,8 +143,13 @@ int ObAlterRoutineResolver::resolve_clause_list(
           } else if (SP_CONTAINS_SQL == child->value_) {
             crt_routine_arg.routine_info_.set_contains_sql();
           }
+        } else if (T_SP_ASYNC_COMMIT == child->type_) {
+          if (0 == child->value_) {
+            crt_routine_arg.routine_info_.set_async_commit();
+          } else {
+            crt_routine_arg.routine_info_.clear_async_commit();
+          }
         } else {
-          // do nothing
           /* Currently, ob only support SQL SECURITY and LANGUAGE SQL opt clause,
              other clauses have no real meaning, they are advisory only.
              MYSQL server does not use them to constrain what kinds of statements

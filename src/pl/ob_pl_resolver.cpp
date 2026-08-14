@@ -14132,6 +14132,10 @@ int ObPLResolver::resolve_sf_clause(
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "ASYNC COMMIT for function or trigger");
           LOG_WARN("ASYNC COMMIT is only supported for procedure", K(ret));
+        } else if (1 == child->value_) {
+          ObRoutineInfo *schema_routine_info = dynamic_cast<ObRoutineInfo*>(routine_info);
+          CK (OB_NOT_NULL(schema_routine_info));
+          OX (schema_routine_info->clear_async_commit());
         } else {
           ObRoutineInfo *schema_routine_info = dynamic_cast<ObRoutineInfo*>(routine_info);
           CK (OB_NOT_NULL(schema_routine_info));

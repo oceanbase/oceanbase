@@ -535,6 +535,7 @@ public:
   OB_INLINE void set_has_out_param() { flag_ |= SP_FLAG_HAS_OUT_PARAM;}
   OB_INLINE void set_external_state() { flag_ |= SP_FLAG_EXTERNAL_STATE;}
   OB_INLINE void set_async_commit() { flag_ |= SP_FLAG_ASYNC_COMMIT;}
+  OB_INLINE void clear_async_commit() { flag_ &= (~((uint64_t)SP_FLAG_ASYNC_COMMIT)); }
   OB_INLINE bool is_async_commit() const { return SP_FLAG_ASYNC_COMMIT == (flag_ & SP_FLAG_ASYNC_COMMIT); }
 
   OB_INLINE bool is_aggregate() const { return SP_FLAG_AGGREGATE == (flag_ & SP_FLAG_AGGREGATE); }

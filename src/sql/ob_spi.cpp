@@ -973,6 +973,13 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
       bool explicit_trans = ctx->exec_ctx_->get_my_session()->has_explicit_start_trans();
       ObPLContext *pl_ctx = ctx->exec_ctx_->get_pl_stack_ctx();
       CK (OB_NOT_NULL(pl_ctx));
+      if (OB_SUCC(ret) && OB_NOT_NULL(ctx->func_)
+          && lib::is_mysql_mode() && ctx->func_->is_async_commit()
+          && OB_NOT_NULL(ctx->pl_ctx_) && ctx->pl_ctx_->is_pl_async_commit_pending()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "ASYNC COMMIT procedure: SQL statement after COMMIT");
+        LOG_WARN("ASYNC COMMIT procedure: expression evaluation after COMMIT is not allowed", K(ret));
+      }
       if (OB_SUCC(ret) && lib::is_mysql_mode() && !pl_ctx->is_function_or_trigger()) {
         if (ctx->exec_ctx_->get_my_session()->is_in_transaction()) {
           DISABLE_SQL_MEMLEAK_GUARD;
@@ -4155,6 +4162,12 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
      || (NULL == sql && 0 == sql_param_count)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Argument passed in is NULL", K(ctx), K(sql), K(ps_sql), K(type), K(sql_param_exprs), K(sql_param_count), K(ret));
+  } else if (OB_NOT_NULL(ctx->func_) && OB_NOT_NULL(ctx->pl_ctx_)
+             && lib::is_mysql_mode() && ctx->func_->is_async_commit()
+             && ctx->pl_ctx_->is_pl_async_commit_pending()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "ASYNC COMMIT procedure: SQL statement after COMMIT");
+    LOG_WARN("ASYNC COMMIT procedure: cursor open after COMMIT is not allowed", K(ret), K(sql));
   } else if (OB_FAIL(spi_get_cursor_info(ctx, package_id, routine_id, cursor_index, cursor, cursor_var, loc))) {
     LOG_WARN("failed to get cursor info", K(ret), K(cursor_index));
   } else if (OB_FAIL(cursor_open_check(ctx, package_id, routine_id, cursor_index, cursor, cursor_var, loc))) {

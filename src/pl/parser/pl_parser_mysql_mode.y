@@ -1510,6 +1510,12 @@ sp_chistic:
   | ASYNC_COMMIT
   {
     malloc_terminal_node($$, parse_ctx->mem_pool_, T_SP_ASYNC_COMMIT);
+    $$->value_ = 0;
+  }
+  | NOT ASYNC_COMMIT
+  {
+    malloc_terminal_node($$, parse_ctx->mem_pool_, T_SP_ASYNC_COMMIT);
+    $$->value_ = 1;
   }
 ;
 
