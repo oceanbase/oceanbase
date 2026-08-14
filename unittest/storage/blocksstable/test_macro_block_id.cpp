@@ -96,6 +96,36 @@ TEST_F(TestMacroBlockId, verification)
   ASSERT_EQ(0, pos);
 }
 
+TEST_F(TestMacroBlockId, backup_mode_hash)
+{
+  // In backup mode, second_id_ is just ls_id, which is the same for all
+  // macro blocks within one ls. Hash must distinguish them by other ids,
+  // otherwise all ids of one ls fall into the same hash bucket.
+  const int64_t ls_id = 1001;
+  MacroBlockId id1;
+  id1.set_first_id(1L << 20);
+  id1.set_second_id(ls_id);
+  id1.set_third_id(7);
+  id1.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_BACKUP);
+  ASSERT_EQ((uint64_t)ObMacroBlockIdMode::ID_MODE_BACKUP, id1.id_mode_);
+
+  MacroBlockId id2 = id1;
+  id2.set_first_id(id1.first_id() + (1L << 6)); // different offset
+  id2.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_BACKUP);
+
+  MacroBlockId id3 = id1;
+  id3.set_third_id(8); // different file_id
+  id3.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_BACKUP);
+
+  ASSERT_NE(id1.hash(), id2.hash());
+  ASSERT_NE(id1.hash(), id3.hash());
+  ASSERT_EQ(id1.hash(), id1.hash());
+
+  uint64_t hash_val = 0;
+  ASSERT_EQ(OB_SUCCESS, id1.hash(hash_val));
+  ASSERT_EQ(id1.hash(), hash_val);
+}
+
 TEST_F(TestMacroBlockId, test_transfer_seq)
 {
   int ret = OB_SUCCESS;
