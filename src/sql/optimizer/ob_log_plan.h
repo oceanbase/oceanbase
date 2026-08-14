@@ -1727,6 +1727,7 @@ public:
                                       int64_t current_dfo_level,
                                       const ObIArray<ObRawExpr*> &left_join_conditions,
                                       const ObIArray<ObRawExpr*> &right_join_conditions,
+                                      const ObIArray<bool> &is_null_safe_cmps,
                                       common::ObIAllocator &allocator,
                                       ObIArray<JoinFilterInfo*> &join_filter_infos);
 
@@ -1746,11 +1747,13 @@ public:
                                          int64_t current_dfo_level,
                                          const ObIArray<ObRawExpr*> &left_join_conditions,
                                          const ObIArray<ObRawExpr*> &right_join_conditions,
+                                         const ObIArray<bool> &is_null_safe_cmps,
                                          common::ObIAllocator &allocator,
                                          ObIArray<JoinFilterInfo*> &join_filter_infos);
 
   int get_join_filter_exprs(const ObIArray<ObRawExpr*> &left_join_conditions,
                             const ObIArray<ObRawExpr*> &right_join_conditions,
+                            const ObIArray<bool> &is_null_safe_cmps,
                             JoinFilterInfo &join_filter_info);
 
   int fill_join_filter_info(JoinFilterInfo &join_filter_info);

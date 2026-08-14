@@ -10074,7 +10074,8 @@ int ObOptimizerUtil::build_rel_ids_by_equal_set(const EqualSet& equal_set,
 int ObOptimizerUtil::extract_equal_join_conditions(const ObIArray<ObRawExpr *> &equal_join_conditions,
                                                    const ObRelIds &left_tables,
                                                    ObIArray<ObRawExpr *> &left_exprs,
-                                                   ObIArray<ObRawExpr *> &right_exprs)
+                                                   ObIArray<ObRawExpr *> &right_exprs,
+                                                   ObIArray<bool> *is_null_safe_cmps)
 {
   int ret = OB_SUCCESS;
   for (int64_t j = 0; OB_SUCC(ret) && j < equal_join_conditions.count(); ++j) {
@@ -10097,12 +10098,18 @@ int ObOptimizerUtil::extract_equal_join_conditions(const ObIArray<ObRawExpr *> &
           LOG_WARN("failed to push back expr", K(ret));
         } else if (OB_FAIL(right_exprs.push_back(rexpr))) {
           LOG_WARN("failed to push back expr", K(ret));
+        } else if (OB_NOT_NULL(is_null_safe_cmps)
+                   && OB_FAIL(is_null_safe_cmps->push_back(T_OP_NSEQ == expr->get_expr_type()))) {
+          LOG_WARN("failed to push back null safe flag", K(ret));
         }
       } else if (rexpr->get_relation_ids().is_subset(left_tables)) {
         if (OB_FAIL(left_exprs.push_back(rexpr))) {
           LOG_WARN("failed to push back expr", K(ret));
         } else if (OB_FAIL(right_exprs.push_back(lexpr))) {
           LOG_WARN("failed to push back expr", K(ret));
+        } else if (OB_NOT_NULL(is_null_safe_cmps)
+                   && OB_FAIL(is_null_safe_cmps->push_back(T_OP_NSEQ == expr->get_expr_type()))) {
+          LOG_WARN("failed to push back null safe flag", K(ret));
         }
       }
     }
@@ -10132,12 +10139,15 @@ int ObOptimizerUtil::build_rel_ids_by_equal_sets(const EqualSets& equal_sets,
 
 int ObOptimizerUtil::extract_pushdown_join_filter_quals(const ObIArray<ObRawExpr *> &left_quals,
                                                         const ObIArray<ObRawExpr *> &right_quals,
+                                                        const ObIArray<bool> &is_null_safe_cmps,
                                                         const ObSqlBitSet<> &right_tables,
                                                         ObIArray<ObRawExpr *> &pushdown_left_quals,
-                                                        ObIArray<ObRawExpr *> &pushdown_right_quals)
+                                                        ObIArray<ObRawExpr *> &pushdown_right_quals,
+                                                        ObIArray<bool> &pushdown_is_null_safe_cmps)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(left_quals.count() != right_quals.count())) {
+  if (OB_UNLIKELY(left_quals.count() != right_quals.count()
+               || left_quals.count() != is_null_safe_cmps.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("quals count unexpected", K(ret));
   }
@@ -10159,6 +10169,8 @@ int ObOptimizerUtil::extract_pushdown_join_filter_quals(const ObIArray<ObRawExpr
       LOG_WARN("failed to push back qual", K(ret));
     } else if (OB_FAIL(pushdown_left_quals.push_back(left_qual))) {
       LOG_WARN("failed to push back qual", K(ret));
+    } else if (OB_FAIL(pushdown_is_null_safe_cmps.push_back(is_null_safe_cmps.at(i)))) {
+      LOG_WARN("failed to push back null safe flag", K(ret));
     } else { /*do nothing*/ }
   }
   return ret;
@@ -10168,8 +10180,10 @@ int ObOptimizerUtil::pushdown_join_filter_into_subquery(const ObDMLStmt &parent_
                                                         const ObSelectStmt &subquery,
                                                         const ObIArray<ObRawExpr*> &pushdown_left_quals,
                                                         const ObIArray<ObRawExpr*> &pushdown_right_quals,
+                                                        const ObIArray<bool> &pushdown_is_null_safe_cmps,
                                                         ObIArray<ObRawExpr*> &candi_left_quals,
                                                         ObIArray<ObRawExpr*> &candi_right_quals,
+                                                        ObIArray<bool> &candi_is_null_safe_cmps,
                                                         bool &can_pushdown)
 {
   int ret = OB_SUCCESS;
@@ -10183,8 +10197,10 @@ int ObOptimizerUtil::pushdown_join_filter_into_subquery(const ObDMLStmt &parent_
                                                         subquery,
                                                         pushdown_left_quals,
                                                         pushdown_right_quals,
+                                                        pushdown_is_null_safe_cmps,
                                                         candi_left_quals,
-                                                        candi_right_quals))) {
+                                                        candi_right_quals,
+                                                        candi_is_null_safe_cmps))) {
       LOG_WARN("failed to check pushdown filter", K(ret));
     } else if (candi_right_quals.empty()) {
       //do thing
@@ -10207,8 +10223,10 @@ int ObOptimizerUtil::pushdown_join_filter_into_subquery(const ObDMLStmt &parent_
                                                         subquery,
                                                         pushdown_left_quals,
                                                         pushdown_right_quals,
+                                                        pushdown_is_null_safe_cmps,
                                                         candi_left_quals,
-                                                        candi_right_quals))) {
+                                                        candi_right_quals,
+                                                        candi_is_null_safe_cmps))) {
       LOG_WARN("failed to check pushdown filter", K(ret));
     } else if (candi_right_quals.empty()) {
       //do thing
@@ -10223,17 +10241,25 @@ int ObOptimizerUtil::check_pushdown_join_filter_quals(const ObDMLStmt &parent_st
                                                       const ObSelectStmt &subquery,
                                                       const ObIArray<ObRawExpr*> &pushdown_left_quals,
                                                       const ObIArray<ObRawExpr*> &pushdown_right_quals,
+                                                      const ObIArray<bool> &pushdown_is_null_safe_cmps,
                                                       ObIArray<ObRawExpr*> &candi_left_quals,
-                                                      ObIArray<ObRawExpr*> &candi_right_quals)
+                                                      ObIArray<ObRawExpr*> &candi_right_quals,
+                                                      ObIArray<bool> &candi_is_null_safe_cmps)
 {
   int ret = OB_SUCCESS;
   bool is_valid = false;
   ObSEArray<ObRawExpr *, 4> common_exprs;
-  if (!parent_stmt.is_set_stmt() && subquery.is_set_stmt()) {
+  if (OB_UNLIKELY(pushdown_left_quals.count() != pushdown_right_quals.count()
+               || pushdown_left_quals.count() != pushdown_is_null_safe_cmps.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected pushdown join filter metadata count", K(ret));
+  } else if (!parent_stmt.is_set_stmt() && subquery.is_set_stmt()) {
     if (OB_FAIL(candi_left_quals.assign(pushdown_left_quals))) {
       LOG_WARN("failed to assign quals", K(ret));
     } else if (OB_FAIL(candi_right_quals.assign(pushdown_right_quals))) {
       LOG_WARN("failed to assign quals", K(ret));
+    } else if (OB_FAIL(candi_is_null_safe_cmps.assign(pushdown_is_null_safe_cmps))) {
+      LOG_WARN("failed to assign null safe flags", K(ret));
     }
   } else if (OB_FAIL(get_groupby_win_func_common_exprs(subquery,
                                                        common_exprs,
@@ -10247,8 +10273,10 @@ int ObOptimizerUtil::check_pushdown_join_filter_quals(const ObDMLStmt &parent_st
                                                    common_exprs,
                                                    pushdown_left_quals,
                                                    pushdown_right_quals,
+                                                   pushdown_is_null_safe_cmps,
                                                    candi_left_quals,
-                                                   candi_right_quals))) {
+                                                   candi_right_quals,
+                                                   candi_is_null_safe_cmps))) {
       LOG_WARN("failed to check pushdown filter for set stmt", K(ret));
     }
   } else {
@@ -10257,8 +10285,10 @@ int ObOptimizerUtil::check_pushdown_join_filter_quals(const ObDMLStmt &parent_st
                                                         common_exprs,
                                                         pushdown_left_quals,
                                                         pushdown_right_quals,
+                                                        pushdown_is_null_safe_cmps,
                                                         candi_left_quals,
-                                                        candi_right_quals))) {
+                                                        candi_right_quals,
+                                                        candi_is_null_safe_cmps))) {
       LOG_WARN("failed to check pushdown filter for subquery", K(ret));
     }
   }
@@ -10270,12 +10300,15 @@ int ObOptimizerUtil::check_pushdown_join_filter_for_subquery(const ObDMLStmt &pa
                                                              ObIArray<ObRawExpr*> &common_exprs,
                                                              const ObIArray<ObRawExpr*> &pushdown_left_quals,
                                                              const ObIArray<ObRawExpr*> &pushdown_right_quals,
+                                                             const ObIArray<bool> &pushdown_is_null_safe_cmps,
                                                              ObIArray<ObRawExpr*> &candi_left_quals,
-                                                             ObIArray<ObRawExpr*> &candi_right_quals)
+                                                             ObIArray<ObRawExpr*> &candi_right_quals,
+                                                             ObIArray<bool> &candi_is_null_safe_cmps)
 {
   int ret = OB_SUCCESS;
-  if (parent_stmt.is_set_stmt() ||
-      OB_UNLIKELY(pushdown_right_quals.count() != pushdown_left_quals.count())) {
+  if (parent_stmt.is_set_stmt()
+      || OB_UNLIKELY(pushdown_right_quals.count() != pushdown_left_quals.count()
+                  || pushdown_right_quals.count() != pushdown_is_null_safe_cmps.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect set stmt here", K(ret));
   } else {
@@ -10321,6 +10354,8 @@ int ObOptimizerUtil::check_pushdown_join_filter_for_subquery(const ObDMLStmt &pa
           LOG_WARN("failed to push back predicate", K(ret));
         } else if (OB_FAIL(candi_left_quals.push_back(pushdown_left_quals.at(i)))) {
           LOG_WARN("failed to push back predicate", K(ret));
+        } else if (OB_FAIL(candi_is_null_safe_cmps.push_back(pushdown_is_null_safe_cmps.at(i)))) {
+          LOG_WARN("failed to push back null safe flag", K(ret));
         }
       }
     }
@@ -10350,13 +10385,16 @@ int ObOptimizerUtil::check_pushdown_join_filter_for_set(const ObSelectStmt &pare
                                                         ObIArray<ObRawExpr*> &common_exprs,
                                                         const ObIArray<ObRawExpr*> &pushdown_left_quals,
                                                         const ObIArray<ObRawExpr*> &pushdown_right_quals,
+                                                        const ObIArray<bool> &pushdown_is_null_safe_cmps,
                                                         ObIArray<ObRawExpr*> &candi_left_quals,
-                                                        ObIArray<ObRawExpr*> &candi_right_quals)
+                                                        ObIArray<ObRawExpr*> &candi_right_quals,
+                                                        ObIArray<bool> &candi_is_null_safe_cmps)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 4> child_select_list;
   ObSEArray<ObRawExpr *, 4> parent_select_list;
-  if (OB_UNLIKELY(pushdown_right_quals.count() != pushdown_left_quals.count())) {
+  if (OB_UNLIKELY(pushdown_right_quals.count() != pushdown_left_quals.count()
+               || pushdown_right_quals.count() != pushdown_is_null_safe_cmps.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect quals count", K(ret));
   } else if (OB_FAIL(subquery.get_select_exprs(child_select_list))) {
@@ -10403,6 +10441,8 @@ int ObOptimizerUtil::check_pushdown_join_filter_for_set(const ObSelectStmt &pare
       LOG_WARN("failed to push back predicate", K(ret));
     } else if (OB_FAIL(candi_left_quals.push_back(pushdown_left_quals.at(i)))) {
       LOG_WARN("failed to push back predicate", K(ret));
+    } else if (OB_FAIL(candi_is_null_safe_cmps.push_back(pushdown_is_null_safe_cmps.at(i)))) {
+      LOG_WARN("failed to push back null safe flag", K(ret));
     }
   }
   return ret;

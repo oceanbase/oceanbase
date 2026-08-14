@@ -1579,44 +1579,55 @@ public:
   static int extract_equal_join_conditions(const ObIArray<ObRawExpr *> &equal_join_conditions,
                                            const ObRelIds &left_tables,
                                            ObIArray<ObRawExpr *> &left_exprs,
-                                           ObIArray<ObRawExpr *> &right_exprs);
+                                           ObIArray<ObRawExpr *> &right_exprs,
+                                           ObIArray<bool> *is_null_safe_cmps = NULL);
 
   static int extract_pushdown_join_filter_quals(const ObIArray<ObRawExpr *> &left_quals,
                                                 const ObIArray<ObRawExpr *> &right_quals,
+                                                const ObIArray<bool> &is_null_safe_cmps,
                                                 const ObSqlBitSet<> &right_tables,
                                                 ObIArray<ObRawExpr *> &pushdown_left_quals,
-                                                ObIArray<ObRawExpr *> &pushdown_right_quals);
+                                                ObIArray<ObRawExpr *> &pushdown_right_quals,
+                                                ObIArray<bool> &pushdown_is_null_safe_cmps);
 
   static int pushdown_join_filter_into_subquery(const ObDMLStmt &parent_stmt,
                                                 const ObSelectStmt &subquery,
                                                 const ObIArray<ObRawExpr*> &pushdown_left_quals,
                                                 const ObIArray<ObRawExpr*> &pushdown_right_quals,
+                                                const ObIArray<bool> &pushdown_is_null_safe_cmps,
                                                 ObIArray<ObRawExpr*> &candi_left_quals,
                                                 ObIArray<ObRawExpr*> &candi_right_quals,
+                                                ObIArray<bool> &candi_is_null_safe_cmps,
                                                 bool &can_pushdown);
 
   static int check_pushdown_join_filter_quals(const ObDMLStmt &parent_stmt,
                                               const ObSelectStmt &subquery,
                                               const ObIArray<ObRawExpr*> &pushdown_left_quals,
                                               const ObIArray<ObRawExpr*> &pushdown_right_quals,
+                                              const ObIArray<bool> &pushdown_is_null_safe_cmps,
                                               ObIArray<ObRawExpr*> &candi_left_quals,
-                                              ObIArray<ObRawExpr*> &candi_right_quals);
+                                              ObIArray<ObRawExpr*> &candi_right_quals,
+                                              ObIArray<bool> &candi_is_null_safe_cmps);
 
   static int check_pushdown_join_filter_for_subquery(const ObDMLStmt &parent_stmt,
                                                      const ObSelectStmt &subquery,
                                                      ObIArray<ObRawExpr*> &common_exprs,
                                                      const ObIArray<ObRawExpr*> &pushdown_left_quals,
                                                      const ObIArray<ObRawExpr*> &pushdown_right_quals,
+                                                     const ObIArray<bool> &pushdown_is_null_safe_cmps,
                                                      ObIArray<ObRawExpr*> &candi_left_quals,
-                                                     ObIArray<ObRawExpr*> &candi_right_quals);
+                                                     ObIArray<ObRawExpr*> &candi_right_quals,
+                                                     ObIArray<bool> &candi_is_null_safe_cmps);
 
   static int check_pushdown_join_filter_for_set(const ObSelectStmt &parent_stmt,
                                                 const ObSelectStmt &subquery,
                                                 ObIArray<ObRawExpr*> &common_exprs,
                                                 const ObIArray<ObRawExpr*> &pushdown_left_quals,
                                                 const ObIArray<ObRawExpr*> &pushdown_right_quals,
+                                                const ObIArray<bool> &pushdown_is_null_safe_cmps,
                                                 ObIArray<ObRawExpr*> &candi_left_quals,
-                                                ObIArray<ObRawExpr*> &candi_right_quals);
+                                                ObIArray<ObRawExpr*> &candi_right_quals,
+                                                ObIArray<bool> &candi_is_null_safe_cmps);
 
   static int replace_gen_column(ObLogPlan *log_plan,
                                 ObRawExpr *part_expr,

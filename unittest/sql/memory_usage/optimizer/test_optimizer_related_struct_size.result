@@ -2,7 +2,7 @@
 | class | sizeof(class) |
 | --- | --- |
 | BaseTableOptInfo | 168 |
-| JoinFilterInfo | 304 |
+| JoinFilterInfo | 344 |
 | DomainIndexAccessInfo | 288 |
 | ObIndexMergeNode | 208 |
 | InnerPathInfo | 264 |

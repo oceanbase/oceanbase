@@ -1092,9 +1092,13 @@ struct NoSpecialExprPredicate {
         if (OB_ISNULL(rtf)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null", K(ret));
+        } else if (OB_FAIL(info->rexprs_.push_back(rtf->use_expr_))) {
+          LOG_WARN("failed to push back rexprs_", K(ret));
+        } else if (OB_FAIL(info->lexprs_.push_back(rtf->create_expr_))) {
+          LOG_WARN("failed to push back lexprs_", K(ret));
+        } else if (OB_FAIL(info->is_null_safe_cmps_.push_back(rtf->is_null_safe_cmp_))) {
+          LOG_WARN("failed to push back is_null_safe_cmps_", K(ret));
         } else {
-          info->rexprs_.push_back(rtf->use_expr_);
-          info->lexprs_.push_back(rtf->create_expr_);
           is_current_dfo &= (rtf->pushdown_level_count_ == 0);
           is_partition_wise |= rtf->is_partition_wise_;
         }
@@ -1413,6 +1417,7 @@ struct NoSpecialExprPredicate {
                                                              rtf->origin_join_op_,
                                                              rtf->create_expr_,
                                                              rtf->use_expr_,
+                                                             rtf->is_null_safe_cmp_,
                                                              rtf->is_partition_wise_
                                                                && !exchangenode->is_px_coord(),
                                                              rtf->pushdown_level_count_ + 1,
@@ -1808,6 +1813,7 @@ struct NoSpecialExprPredicate {
                                                        rtf->origin_join_op_,
                                                        rtf->create_expr_,
                                                        rtf->use_expr_,
+                                                       rtf->is_null_safe_cmp_,
                                                        false,
                                                        rtf->pushdown_level_count_,
                                                        rtf->filter_table_id_ == OB_INVALID_ID ?
@@ -1888,6 +1894,7 @@ struct NoSpecialExprPredicate {
                                                         rtf->origin_join_op_,
                                                         rtf->create_expr_,
                                                         rtf->use_expr_,
+                                                        rtf->is_null_safe_cmp_,
                                                         !scannode->use_das() && rtf->is_partition_wise_,
                                                         rtf->pushdown_level_count_,
                                                         scannode->get_table_id()))) {
@@ -1940,13 +1947,15 @@ struct NoSpecialExprPredicate {
         ObSEArray<ObRawExpr*, 4> left_producer_exprs;
         ObSEArray<int64_t, 4> left_producer_ids;
         ObSEArray<ObRawExpr*, 4> right_join_exprs;
+        ObSEArray<bool, 4> is_null_safe_cmps;
         NoSpecialExprPredicate predicate;
         bool has_other_conditions = false;
         // use extract_equal_join_conditions
         if (OB_FAIL(ObOptimizerUtil::extract_equal_join_conditions(joinnode->get_equal_join_conditions(),
                                                                    joinnode->get_child(0)->get_table_set(),
                                                                    left_join_exprs,
-                                                                   right_join_exprs))) {
+                                                                   right_join_exprs,
+                                                                   &is_null_safe_cmps))) {
               LOG_WARN("failed format equal join conditions", K(ret));
         } else {
           // for each left keys, generate a new id if not met before and
@@ -1987,6 +1996,7 @@ struct NoSpecialExprPredicate {
                                                            joinnode,
                                                            left_join_exprs.at(i),
                                                            right_join_exprs.at(i),
+                                                           is_null_safe_cmps.at(i),
                                                            DIST_PARTITION_WISE != joinnode->get_join_distributed_method()))) {
               LOG_WARN("failed to add runtime filter", K(ret));
             }
@@ -2170,6 +2180,7 @@ struct NoSpecialExprPredicate {
                                                       rtf->origin_join_op_,
                                                       rtf->create_expr_,
                                                       replaced_expr,
+                                                      rtf->is_null_safe_cmp_,
                                                       rtf->is_partition_wise_,
                                                       rtf->pushdown_level_count_,
                                                       rtf->filter_table_id_))) {
@@ -2219,6 +2230,7 @@ struct NoSpecialExprPredicate {
                                                           rtf->origin_join_op_,
                                                           rtf->create_expr_,
                                                           mapped_expr,
+                                                          rtf->is_null_safe_cmp_,
                                                           rtf->is_partition_wise_,
                                                           rtf->pushdown_level_count_,
                                                           rtf->filter_table_id_))) {
@@ -2240,10 +2252,12 @@ struct NoSpecialExprPredicate {
       ObLogicalOperator *origin_join_op,
       ObRawExpr* create_expr,
       ObRawExpr* use_expr,
+      bool is_null_safe_cmp,
       bool is_partition_wise)
     {
       int ret = OB_SUCCESS;
-      if (OB_FAIL(add_runtime_filter(allocator, msg_id, origin_join_op, create_expr, use_expr, is_partition_wise, 0, OB_INVALID_ID))) {
+      if (OB_FAIL(add_runtime_filter(allocator, msg_id, origin_join_op, create_expr, use_expr,
+                                     is_null_safe_cmp, is_partition_wise, 0, OB_INVALID_ID))) {
         LOG_WARN("failed to add runtime filter", K(ret));
       }
       return ret;
@@ -2254,6 +2268,7 @@ struct NoSpecialExprPredicate {
                                                       ObLogicalOperator *origin_join_op,
                                                       ObRawExpr* create_expr,
                                                       ObRawExpr* use_expr,
+                                                      bool is_null_safe_cmp,
                                                       bool is_partition_wise,
                                                       uint64_t pushdown_level_count,
                                                       uint64_t filter_table_id)
@@ -2267,6 +2282,7 @@ struct NoSpecialExprPredicate {
                                            origin_join_op,
                                            create_expr,
                                            use_expr,
+                                           is_null_safe_cmp,
                                            is_partition_wise,
                                            pushdown_level_count,
                                            filter_table_id))) {
@@ -2285,6 +2301,7 @@ struct NoSpecialExprPredicate {
                                  ObLogicalOperator *origin_join_op,
                                  ObRawExpr* create_expr,
                                  ObRawExpr* use_expr,
+                                 bool is_null_safe_cmp,
                                  bool is_partition_wise,
                                  uint64_t pushdown_level_count,
                                  uint64_t filter_table_id)
@@ -2301,6 +2318,7 @@ struct NoSpecialExprPredicate {
         meta_info->origin_join_op_ = origin_join_op;
         meta_info->create_expr_ = create_expr;
         meta_info->use_expr_ = use_expr;
+        meta_info->is_null_safe_cmp_ = is_null_safe_cmp;
         meta_info->is_partition_wise_ = is_partition_wise;
         meta_info->pushdown_level_count_ = pushdown_level_count;
         meta_info->filter_table_id_ = filter_table_id;

@@ -5358,18 +5358,6 @@ int ObLogicalOperator::add_partition_join_filter_info(
     LOG_WARN("fail to generate p2p dh id", K(ret));
   } else if (OB_FAIL(join_filter_create->add_p2p_sequence_id(p2p_sequence_id))) {
     LOG_WARN("fail to add join filter use", K(ret));
-  } else {
-    ObLogJoin *join_op = static_cast<ObLogJoin*>(this);
-    ObLogJoinFilter *join_filter_create = static_cast<ObLogJoinFilter *>(join_filter_create_op);
-    if (LOG_JOIN != get_type()) {
-    //do nothing
-    } else {
-      for (int i = 0; i < join_op->get_join_conditions().count(); ++i) {
-        if (OB_FAIL(join_filter_create->get_is_null_safe_cmps().push_back(false))) {
-          LOG_WARN("fail to push back is null safe flag", K(ret));
-        }
-      }
-    }
   }
   return ret;
 }
@@ -5444,13 +5432,17 @@ int ObLogicalOperator::generate_runtime_filter_expr(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("join_use_exprs's size doesn't match join_create_exprs's size",
         K(join_use_exprs.count()), K(join_create_exprs.count()));
+  } else if (OB_UNLIKELY(join_create_exprs.count() != join_filter_create->get_is_null_safe_cmps().count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("runtime filter key metadata count does not match",
+             K(ret), K(join_create_exprs.count()),
+             K(join_filter_create->get_is_null_safe_cmps().count()));
   } else if (OB_FAIL(expr_factory.create_raw_expr(T_OP_RUNTIME_FILTER, join_filter_expr))) {
     LOG_WARN("fail to create raw expr", K(ret));
   } else if (OB_FAIL(join_filter_expr->init_param_exprs(join_use_exprs.count()))) {
     LOG_WARN("failed to init param exprs", K(ret));
   } else {
     join_filter_expr->set_runtime_filter_type(type);
-    ObLogJoin *join_op = static_cast<ObLogJoin*>(this);
     for (int i = 0; i < join_use_exprs.count() && OB_SUCC(ret); ++i) {
       ObRawExpr *join_use_expr = join_use_exprs.at(i);
       ObRawExpr *join_create_expr = join_create_exprs.at(i);
@@ -5462,13 +5454,8 @@ int ObLogicalOperator::generate_runtime_filter_expr(
       } else if (join_filter_use->get_join_filter_cmp_funcs().count() < join_use_exprs.count()
           && OB_FAIL(cal_runtime_filter_compare_func(join_filter_use, join_use_expr, join_create_expr))) {
         LOG_WARN("fail to cal compare function", K(ret));
-      } else {
-        if (i < join_op->get_join_conditions().count()
-            && OB_NOT_NULL(join_op->get_join_conditions().at(i))) {
-          if (T_OP_NSEQ == join_op->get_join_conditions().at(i)->get_expr_type()) {
-            join_filter_expr->set_with_null_equal_cond(true);
-          }
-        }
+      } else if (join_filter_create->get_is_null_safe_cmps().at(i)) {
+        join_filter_expr->set_with_null_equal_cond(true);
       }
     }
     if (OB_SUCC(ret)) {
@@ -5662,19 +5649,6 @@ int ObLogicalOperator::create_runtime_filter_info(ObLogicalOperator *op,
       OB_FAIL(generate_runtime_filter_expr(op, join_filter_create_op,
       join_filter_use_op, join_filter_rate, RuntimeFilterType::BLOOM_FILTER))) {
     LOG_WARN("fail to generate range filter expr", K(ret));
-  } else {
-    ObLogJoin *join_op = static_cast<ObLogJoin*>(this);
-    ObLogJoinFilter *join_filter_create = static_cast<ObLogJoinFilter *>(join_filter_create_op);
-    if (LOG_JOIN != get_type()) {
-    //do nothing
-    } else {
-      for (int i = 0; OB_SUCC(ret) && i < join_op->get_join_conditions().count(); ++i) {
-        if (OB_FAIL(join_filter_create->get_is_null_safe_cmps().push_back(
-              T_OP_NSEQ == join_op->get_join_conditions().at(i)->get_expr_type()))) {
-          LOG_WARN("fail to push back is null safe flag", K(ret));
-        }
-      }
-    }
   }
   return ret;
 }
@@ -6205,6 +6179,7 @@ int ObLogicalOperator::allocate_partition_join_filter(ObIArray<JoinFilterInfo*> 
         ObRawExpr *expr = info->lexprs_.at(j);
         CK(OB_NOT_NULL(expr));
         OZ(join_filter_create->get_join_exprs().push_back(expr));
+        OZ(join_filter_create->get_is_null_safe_cmps().push_back(false));
       }
     }
   }
@@ -6255,6 +6230,12 @@ int ObLogicalOperator::allocate_normal_join_filter(ObIArray<JoinFilterInfo*> &in
         LOG_WARN("join filter info is null", K(ret));
       } else if (!info->can_use_join_filter_) {
         //do nothing
+      } else if (OB_UNLIKELY(info->lexprs_.count() != info->rexprs_.count()
+                          || info->lexprs_.count() != info->is_null_safe_cmps_.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("runtime filter key metadata count does not match", K(ret),
+                 K(info->lexprs_.count()), K(info->rexprs_.count()),
+                 K(info->is_null_safe_cmps_.count()));
       } else if (OB_ISNULL(filter_create = factory.allocate(*(get_plan()), LOG_JOIN_FILTER))
           || OB_ISNULL(filter_use = factory.allocate(*(get_plan()), LOG_JOIN_FILTER))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -6349,6 +6330,7 @@ int ObLogicalOperator::allocate_normal_join_filter(ObIArray<JoinFilterInfo*> &in
           CK(OB_NOT_NULL(lexpr) && OB_NOT_NULL(rexpr));
           OZ(join_filter_create->get_join_exprs().push_back(lexpr));
           OZ(join_filter_use->get_join_exprs().push_back(rexpr));
+          OZ(join_filter_create->get_is_null_safe_cmps().push_back(info->is_null_safe_cmps_.at(j)));
         }
         OZ(create_runtime_filter_info(node,
             join_filter_create, join_filter_use, info->join_filter_selectivity_));

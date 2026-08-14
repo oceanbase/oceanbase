@@ -193,6 +193,7 @@ namespace sql
   JoinFilterInfo(common::ObIAllocator &allocator)
   : lexprs_(allocator),
     rexprs_(allocator),
+    is_null_safe_cmps_(allocator),
     all_join_key_left_exprs_(allocator),
     sharding_(NULL),
     calc_part_id_expr_(NULL),
@@ -219,6 +220,7 @@ namespace sql
   TO_STRING_KV(
     K_(lexprs),
     K_(rexprs),
+    K_(is_null_safe_cmps),
     K_(all_join_key_left_exprs),
     K_(sharding),
     K_(calc_part_id_expr),
@@ -245,6 +247,8 @@ namespace sql
   ObSqlArray<ObRawExpr*> lexprs_;
   // join filter's right join keys
   ObSqlArray<ObRawExpr*> rexprs_;
+  // null-safe semantics for each (lexprs_, rexprs_) runtime-filter key pair
+  ObSqlArray<bool> is_null_safe_cmps_;
   // all hash join's join keys, maybe count greater than lexpr's count
   ObSqlArray<ObRawExpr*> all_join_key_left_exprs_;
   ObShardingInfo *sharding_;      //join filter use基表的sharding
@@ -2722,10 +2726,12 @@ struct MergeKeyInfoHelper
                                         int64_t current_dfo_level,
                                         const ObIArray<ObRawExpr*> &left_join_conditions,
                                         const ObIArray<ObRawExpr*> &right_join_conditions,
+                                        const ObIArray<bool> &is_null_safe_cmps,
                                         ObIArray<JoinFilterInfo*> &join_filter_infos);
 
     int get_join_filter_exprs(const ObIArray<ObRawExpr*> &left_join_conditions,
                               const ObIArray<ObRawExpr*> &right_join_conditions,
+                              const ObIArray<bool> &is_null_safe_cmps,
                               JoinFilterInfo &join_filter_info);
 
     int fill_join_filter_info(JoinFilterInfo &join_filter_info);

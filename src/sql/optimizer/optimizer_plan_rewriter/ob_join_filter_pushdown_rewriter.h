@@ -51,12 +51,14 @@ struct JoinFilterPushdownContext : public RewriterContext {
                          ObLogicalOperator *origin_join_op,
                          ObRawExpr* create_expr,
                          ObRawExpr* use_expr,
+                         bool is_null_safe_cmp,
                          bool is_partition_wise);
   int add_runtime_filter(ObIAllocator* allocator,
                          int64_t msg_id,
                          ObLogicalOperator *origin_join_op,
                          ObRawExpr* create_expr,
                          ObRawExpr* use_expr,
+                         bool is_null_safe_cmp,
                          bool is_partition_wise,
                          uint64_t pushdown_level_count,
                          uint64_t filter_table_id);
@@ -167,6 +169,7 @@ struct JoinFilterMetaInfo {
       pushdown_level_count_(0),
       create_expr_(NULL),
       use_expr_(NULL),
+      is_null_safe_cmp_(false),
       is_partition_wise_(false),
       filter_table_id_(OB_INVALID_ID)
   { }
@@ -181,6 +184,7 @@ struct JoinFilterMetaInfo {
                   ObLogicalOperator* origin_join_op_,
                   ObRawExpr* create_expr,
                   ObRawExpr* use_expr,
+                  bool is_null_safe_cmp,
                   bool is_partition_wise,
                   uint64_t pushdown_level_count,
                   uint64_t filter_table_id);
@@ -189,6 +193,7 @@ struct JoinFilterMetaInfo {
   uint64_t pushdown_level_count_;
   ObRawExpr* create_expr_;
   ObRawExpr* use_expr_;
+  bool is_null_safe_cmp_;
   bool is_partition_wise_;
 
   uint64_t filter_table_id_;      // for version compatible
@@ -198,6 +203,7 @@ struct JoinFilterMetaInfo {
   K_(pushdown_level_count),
   K_(create_expr),
   K_(use_expr),
+  K_(is_null_safe_cmp),
   K_(is_partition_wise),
   K_(filter_table_id));
 };
