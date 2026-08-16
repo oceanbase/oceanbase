@@ -830,13 +830,15 @@ public:
     : allocator_(nullptr),
       ha_allocator_(nullptr),
       scheduler_(nullptr),
-      dag_net_map_lock_(ObLatchIds::DAG_NET_SCHEDULER)
+      dag_net_map_lock_(ObLatchIds::DAG_NET_SCHEDULER),
+      max_co_major_running_dag_net_cnt_(0),
+      co_major_running_cnt_(0)
   {}
   ~ObDagNetScheduler() { destroy(); }
   void destroy();
   int init(
       const uint64_t tenant_id,
-      const int64_t dag_limit, 
+      const int64_t dag_limit,
       ObIAllocator &allocator,
       ObIAllocator &ha_allocator,
       ObTenantDagScheduler &scheduler);
@@ -848,7 +850,15 @@ public:
   void finish_dag_net_without_lock(ObIDagNet &dag_net);
   void erase_dag_net_list_or_abort(const ObDagNetListIndex &dag_net_list_index, ObIDagNet *dag_net);
   void add_dag_net_list_or_abort(const ObDagNetListIndex &dag_net_list_index, ObIDagNet *dag_net);
+  static inline bool is_co_major_running_event_(const ObDagNetListIndex &dag_net_list_index,
+                                                const ObIDagNet *dag_net)
+  {
+    return RUNNING_DAG_NET_LIST == dag_net_list_index
+        && OB_NOT_NULL(dag_net)
+        && ObDagNetType::DAG_NET_TYPE_CO_MAJOR == dag_net->get_type();
+  }
   void finish_dag_net(ObIDagNet &dag_net);
+  void refresh_co_major_cap(const int64_t compaction_dag_limit);
   void dump_dag_status();
   int64_t get_dag_net_count();
   void get_all_dag_scheduler_info(
@@ -876,7 +886,6 @@ public:
   int check_ls_compaction_dag_exist_with_cancel(const ObLSID &ls_id, bool &exist);
   int get_min_end_scn_from_major_dag(const ObLSID &ls_id, SCN &min_end_scn);
 private:
-  bool is_dag_map_full_();
   typedef common::ObDList<ObIDagNet> DagNetList;
   typedef common::hash::ObHashMap<const ObIDagNet*,
                           ObIDagNet*,
@@ -884,14 +893,17 @@ private:
                           common::hash::hash_func<const ObIDagNet*>,
                           common::hash::equal_to<const ObIDagNet*> > DagNetMap;
   typedef common::hash::ObHashMap<ObDagId, const ObIDagNet *>DagNetIdMap;
-  static const int64_t DEFAULT_MAX_DAG_MAP_CNT = 150000;
-  static const int64_t DEFAULT_MAX_RUNNING_DAG_NET_CNT = 30000;
-  static const int64_t DEFAULT_MAX_DAG_NET_CNT = 500000;
-  static const int64_t STOP_ADD_DAG_PERCENT = 70;
   static const int64_t PRINT_SLOW_DAG_NET_THREASHOLD = 30 * 60 * 1000 * 1000L; // 30m
   static const int64_t SLOW_COMPACTION_DAG_NET_THREASHOLD = 6 * 60 * 60 * 1000 * 1000L; // 6hours
   static const int64_t LOOP_PRINT_LOG_INTERVAL = 30 * 1000 * 1000L; // 30s
+  static const int64_t STARVATION_LOG_INTERVAL = 30 * 1000 * 1000L; // 30s
 
+  static constexpr int64_t CO_MAJOR_RUNNING_DAG_NET_LIMIT = 30000;
+  static constexpr int64_t CO_MAJOR_CAP_PERCENT = 90;
+  static constexpr int64_t calc_co_major_cap_(const int64_t compaction_dag_limit)
+  {
+    return MAX(1L, MIN(CO_MAJOR_RUNNING_DAG_NET_LIMIT, compaction_dag_limit) * CO_MAJOR_CAP_PERCENT / 100);
+  }
 private:
   ObIAllocator* allocator_;
   ObIAllocator* ha_allocator_;
@@ -905,6 +917,8 @@ private:
   DagNetList dag_net_list_[DAG_NET_LIST_MAX]; 
   DagNetIdMap dag_net_id_map_; // for HA to search dag_net of specified dag_id  // lock by dag_net_map_lock_
   int64_t dag_net_cnts_[ObDagNetType::DAG_NET_TYPE_MAX];  // lock by dag_net_map_lock_
+  int64_t max_co_major_running_dag_net_cnt_;  // lock by dag_net_map_lock_; refreshed via refresh_co_major_cap
+  int64_t co_major_running_cnt_;  // lock by dag_net_map_lock_
 };
 
 class ObReclaimUtil
@@ -1304,7 +1318,6 @@ private:
   void inner_get_suggestion_reason(const ObDagType::ObDagTypeEnum type, int64_t &reason);
   void dump_dag_status(const bool force_dump = false);
   void diagnose_for_suggestion();
-  bool is_dag_map_full();
   int gene_basic_info(
       ObDagSchedulerInfo *info_list,
       common::ObIArray<void *> &scheduler_infos,
