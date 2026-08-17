@@ -760,6 +760,7 @@ public:
       primary_rtdef_(nullptr),
       is_row_changed_(false),
       has_table_cycle_(false),
+      has_vec_inc_index_(false),
       found_rows_(0),
       related_upd_rtdefs_(),
       related_del_rtdefs_(),
@@ -793,6 +794,7 @@ public:
                        KPC_(dlock_rtdef),
                        K_(is_row_changed),
                        K_(has_table_cycle),
+                       K_(has_vec_inc_index),
                        K_(found_rows),
                        K_(related_upd_rtdefs),
                        K_(related_del_rtdefs),
@@ -805,6 +807,7 @@ public:
   ObUpdRtDef *primary_rtdef_; //reference the data table's rtdef
   bool is_row_changed_;
   bool has_table_cycle_;
+  bool has_vec_inc_index_;
   int64_t found_rows_;
   DASUpdRtDefArray related_upd_rtdefs_;
   DASDelRtDefArray related_del_rtdefs_;

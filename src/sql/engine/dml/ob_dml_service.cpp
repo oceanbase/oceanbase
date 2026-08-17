@@ -25,6 +25,20 @@ using namespace transaction;
 namespace sql
 {
 
+static bool has_vec_inc_index(const DASDMLCtDefArray &related_ctdefs)
+{
+  bool found = false;
+  for (int64_t i = 0; !found && i < related_ctdefs.count(); ++i) {
+    const ObDASDMLBaseCtDef *related_ctdef = related_ctdefs.at(i);
+    if (OB_NOT_NULL(related_ctdef)) {
+      const schema::ObIndexType index_type =
+          related_ctdef->table_param_.get_data_table().get_index_type();
+      found = schema::is_vec_inc_aux_table(index_type);
+    }
+  }
+  return found;
+}
+
 bool ObDMLService::check_cascaded_reference(const ObExpr *expr, const ObExprPtrIArray &row)
 {
   bool bret = false;
@@ -1478,6 +1492,9 @@ int ObDMLService::split_upd_to_del_and_ins(const ObUpdCtDef &upd_ctdef,
   }
 
   if (OB_SUCC(ret)) {
+    const bool need_set_hidden_pk = upd_ctdef.is_vec_hnsw_index_vid_opt_
+        || (old_tablet_loc != new_tablet_loc && (upd_ctdef.is_table_without_pk_ || upd_ctdef.is_table_with_clustering_key_))
+        || (upd_ctdef.is_table_without_pk_ && !upd_rtdef.dupd_rtdef_.is_immediate_row_conflict_check_ && upd_rtdef.has_vec_inc_index_);
     //because of this bug:
     //if the updated row is moved across partitions, we must delete old row at first
     //and then store new row to a temporary buffer,
@@ -1490,12 +1507,11 @@ int ObDMLService::split_upd_to_del_and_ins(const ObUpdCtDef &upd_ctdef,
                                                          upd_ctdef.trans_info_expr_,
                                                          old_row))) {
       LOG_WARN("delete row to das op failed", K(ret), K(upd_ctdef), K(upd_rtdef));
-    } else if (((upd_ctdef.is_table_without_pk_ && old_tablet_loc != new_tablet_loc) || (upd_ctdef.is_vec_hnsw_index_vid_opt_)
-             || (upd_ctdef.is_table_with_clustering_key_ && old_tablet_loc != new_tablet_loc)) &&
-        OB_FAIL(set_update_hidden_pk(dml_rtctx.get_eval_ctx(),
-                                     upd_ctdef,
-                                     new_tablet_loc->tablet_id_))) {
-      LOG_WARN("update across partitions fail to set new_hidden_pk", K(ret), KPC(new_tablet_loc));
+    } else if (need_set_hidden_pk
+               && OB_FAIL(set_update_hidden_pk(dml_rtctx.get_eval_ctx(),
+                                               upd_ctdef,
+                                               new_tablet_loc->tablet_id_))) {
+      LOG_WARN("fail to set new_hidden_pk for update", K(ret), KPC(new_tablet_loc));
     } else if (OB_FAIL(write_row_to_das_op<DAS_OP_TABLE_INSERT>(*upd_ctdef.dins_ctdef_,
                                                                 *upd_rtdef.dins_rtdef_,
                                                                 new_tablet_loc,
@@ -1595,6 +1611,9 @@ int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
                                                     new_row))) {
           LOG_WARN("fail to update row", K(ret), KPC(old_row), KPC(new_row));
         }
+      } else if ((upd_ctdef.is_table_without_pk_ || upd_ctdef.is_table_with_clustering_key_) && upd_rtdef.has_vec_inc_index_
+                  && OB_FAIL(set_update_hidden_pk(dml_rtctx.get_eval_ctx(), upd_ctdef, new_tablet_loc->tablet_id_))) {
+        LOG_WARN("failed to regenerate hidden pk for vector index update", K(ret), KPC(new_tablet_loc));
       } else if (OB_FAIL(write_row_to_das_op<DAS_OP_TABLE_UPDATE>(upd_ctdef.dupd_ctdef_,
                                                                 upd_rtdef.dupd_rtdef_,
                                                                 old_tablet_loc,
@@ -2061,6 +2080,7 @@ int ObDMLService::init_upd_rtdef(
   } else if (OB_FAIL(init_fk_checker_array(dml_rtctx, upd_ctdef, upd_rtdef.fk_checker_array_))) {
     LOG_WARN("failed to init foreign key checker array", K(ret));
   } else {
+    upd_rtdef.has_vec_inc_index_ = has_vec_inc_index(upd_ctdef.related_upd_ctdefs_);
     upd_rtdef.dupd_rtdef_.related_ctdefs_ = &upd_ctdef.related_upd_ctdefs_;
     upd_rtdef.dupd_rtdef_.related_rtdefs_ = &upd_rtdef.related_upd_rtdefs_;
     dml_rtctx.get_exec_ctx().set_update_columns(&upd_ctdef.assign_columns_);
