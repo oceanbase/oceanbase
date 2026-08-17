@@ -233,7 +233,7 @@ public:
   ObMicroBlockDataHandle &get_last_data_handle() { return last_micro_block_handle_; }
   VIRTUAL_TO_STRING_KV(K_(is_inited), K_(prefetcher_type), K_(iter_type), K_(cur_level), K_(index_tree_height),
       K_(max_rescan_height), K_(max_rescan_range_cnt), K_(data_version), K_(table_scan_cnt), K_(index_scanner),
-      KPC_(sstable), KPC_(iter_param), K_(last_micro_block_handle));
+      KP_(sstable), KP_(iter_param), K_(last_micro_block_handle));
 protected:
   void inner_reset();
   int init_index_scanner(ObIndexBlockRowScanner &index_scanner);
