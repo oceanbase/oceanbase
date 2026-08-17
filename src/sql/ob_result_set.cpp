@@ -76,7 +76,6 @@ ObResultSet::~ObResultSet()
   }
   if (need_reset_pl_async_commit_flag_ &&
       my_session_.is_pl_async_commit()) {
-    ObSpinLockGuard lock_guard(my_session_.get_pl_end_trans_cb().get_lock());
     if (!my_session_.get_pl_end_trans_cb().get_can_release_tx_desc()) { // not submit pl callback
       my_session_.set_is_pl_async_commit(false);
       my_session_.set_has_async_query_sender(false);
