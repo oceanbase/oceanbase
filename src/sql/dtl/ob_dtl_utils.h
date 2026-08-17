@@ -85,7 +85,8 @@ struct ObDtlPeerCtlBatch {
 struct ObWaitChannelInfo {
   ObDtlChannel *ch;
   ObDtlPeerCtlBatch *slot;
-  TO_STRING_KV(KP(ch), KP(slot));
+  bool wait_all_payload_responses{false};
+  TO_STRING_KV(KP(ch), KP(slot), K(wait_all_payload_responses));
 };
 
 class ObDtlBatchAsyncSender : public ObDtlAsynSender {

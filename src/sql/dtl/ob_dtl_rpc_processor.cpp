@@ -235,8 +235,11 @@ int ObDtlBatchSendMessageP::process_batch_control_msg(ObDtlBatchMsg &msg)
           if (bc->get_dfc()->is_block(bc)) {
             // transmit's rpc response is already processed,
             // we can unblock the channel directly
-            bc->get_dfc()->unblock_channel(bc);
-            LOG_TRACE("[DTL BATCH BLOCK] unblock channel", K(bc->get_id()), K(bc->get_peer()));
+            if (OB_FAIL(bc->get_dfc()->unblock_channel(bc))) {
+              LOG_WARN("failed to unblock channel", K(ret), K(bc->get_id()), K(bc->get_peer()));
+            } else {
+              LOG_TRACE("[DTL BATCH BLOCK] unblock channel", K(bc->get_id()), K(bc->get_peer()));
+            }
           } else {
             // response message is not processed yet, we should feedup a unblocking msg
             // for later processing

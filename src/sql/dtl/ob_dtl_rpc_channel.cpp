@@ -419,12 +419,16 @@ int ObDtlRpcChannel::send_message(ObDtlLinkedBuffer *&buf)
     K(get_send_buffer_cnt()), K(belong_to_receive_data()), K(belong_to_transmit_data()),
     K(bcast_mode), K(get_msg_seq_no()));
 
+  const bool has_logical_payloads = OB_NOT_NULL(buf)
+                                    && buf->is_batch_send()
+                                    && !buf->get_payload_channels().empty();
+
   if (OB_FAIL(ret)) {
   } else if (bcast_mode) {
     if (OB_FAIL(bc_service_->send_message(buf, is_drain()))) {
       LOG_WARN("failed to send message by bc service", K(ret));
     }
-  } else if (!is_drain() || buf->is_eof()) {
+  } else if (!is_drain() || buf->is_eof() || has_logical_payloads) {
     if (!buf->is_batch_send()) {
       if (OB_FAIL(do_single_send(buf, *cur_trace_id))) {
         LOG_WARN("failed to do single send", K(ret));

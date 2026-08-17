@@ -324,6 +324,7 @@ int ObDtlBatchAsyncSender::async_send_batch()
           if (OB_FAIL(post_batch_dtl_msg(slot, carrier_ch))) {
             LOG_WARN("failed to post batch msg", K(ret));
           } else {
+            const bool wait_all_payload_responses = !batch_msg_.payload_channels_.empty();
             slot.total_sent_payload_bytes_ += batch_msg_.get_accum_payload_bytes();
             if (OB_FAIL(after_send_batch(slot))) {
               LOG_WARN("failed to after send batch", K(ret));
@@ -334,6 +335,7 @@ int ObDtlBatchAsyncSender::async_send_batch()
               ObWaitChannelInfo wait_channel_info;
               wait_channel_info.ch = carrier_ch;
               wait_channel_info.slot = &slot;
+              wait_channel_info.wait_all_payload_responses = wait_all_payload_responses;
               if (OB_FAIL(round_wait_channels.push_back(wait_channel_info))) {
                 LOG_WARN("failed to push wait channel", K(ret));
               } else {
@@ -501,25 +503,54 @@ int ObDtlBatchAsyncSender::wait_batch_response(ObIArray<ObWaitChannelInfo> &wait
   int64_t begin_time = 0;
   int64_t end_time = 0;
   bool is_trace_log_level = OB_LOGGER.get_log_level() >= OB_LOG_LEVEL_TRACE;
-  for (int64_t w = 0; w < wait_channels.count() && OB_SUCC(ret); ++w) {
+  for (int64_t w = 0; w < wait_channels.count(); ++w) {
     ObWaitChannelInfo &wait_channel_info = wait_channels.at(w);
     ObDtlBasicChannel *w_ch = static_cast<ObDtlBasicChannel *>(wait_channel_info.ch);
     ObDtlPeerCtlBatch *w_slot = wait_channel_info.slot;
-    const ObIArray<int64_t> &batch_ch_slot_indices = w_slot->cur_batch_ch_slot_indices_;
-    w_slot->wait_count_++;
+    int tmp_ret = OB_SUCCESS;
     if (OB_UNLIKELY(is_trace_log_level)) {
       begin_time = rdtsc();
     }
-    if (OB_NOT_NULL(w_ch) && OB_FAIL(w_ch->flush())) {
-      LOG_WARN("failed to flush after batch round", K(ret));
+    if (OB_ISNULL(w_ch) || OB_ISNULL(w_slot)) {
+      tmp_ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null wait channel info", K(tmp_ret), KP(w_ch), KP(w_slot));
+    } else if (wait_channel_info.wait_all_payload_responses) {
+      const ObIArray<int64_t> &batch_ch_slot_indices = w_slot->cur_batch_ch_slot_indices_;
+      for (int64_t i = 0; i < batch_ch_slot_indices.count(); ++i) {
+        const int64_t ch_idx = batch_ch_slot_indices.at(i);
+        int wait_ret = OB_SUCCESS;
+        ObDtlBasicChannel *payload_ch = nullptr;
+        if (OB_UNLIKELY(ch_idx < 0 || ch_idx >= w_slot->chs_.count())) {
+          wait_ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid payload channel index while waiting batch response",
+                   K(wait_ret), K(ch_idx), K(w_slot->chs_.count()));
+        } else if (OB_ISNULL(payload_ch = static_cast<ObDtlBasicChannel *>(w_slot->chs_.at(ch_idx)))) {
+          wait_ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null payload channel while waiting batch response", K(wait_ret), K(ch_idx));
+        } else if (OB_SUCCESS != (wait_ret = payload_ch->wait_response())) {
+          LOG_WARN("failed to wait payload response after batch round",
+                   K(wait_ret), K(ch_idx), K(payload_ch->get_id()));
+        }
+        if (OB_SUCCESS == tmp_ret && OB_SUCCESS != wait_ret) {
+          tmp_ret = wait_ret;
+        }
+      }
+    } else if (OB_SUCCESS != (tmp_ret = w_ch->flush())) {
+      LOG_WARN("failed to flush after batch round", K(tmp_ret));
     }
-    if (OB_UNLIKELY(is_trace_log_level)) {
+    if (OB_NOT_NULL(w_slot)) {
+      w_slot->wait_count_++;
+    }
+    if (OB_NOT_NULL(w_slot) && OB_UNLIKELY(is_trace_log_level)) {
       end_time = rdtsc();
       int64_t delta = end_time - begin_time;
       w_slot->total_wait_time_ += delta;
       if (delta > w_slot->max_wait_time_) {
         w_slot->max_wait_time_ = delta;
       }
+    }
+    if (OB_SUCCESS == ret && OB_SUCCESS != tmp_ret) {
+      ret = tmp_ret;
     }
   }
   return ret;
@@ -630,8 +661,11 @@ int ObDfcUnblockAsynSender::process_local(ObDtlChannel *self_ch, ObDtlChannel *p
     if (peer_ch->get_dfc()->is_block(peer_ch)) {
       // transmit's message response is already processed,
       // we can unblock the channel directly
-      peer_ch->get_dfc()->unblock_channel(peer_ch);
-      LOG_TRACE("[DTL BATCH BLOCK] unblock channel", K(peer_ch->get_id()), K(peer_ch->get_peer()));
+      if (OB_FAIL(peer_ch->get_dfc()->unblock_channel(peer_ch))) {
+        LOG_WARN("failed to unblock channel", K(ret), K(peer_ch->get_id()), K(peer_ch->get_peer()));
+      } else {
+        LOG_TRACE("[DTL BATCH BLOCK] unblock channel", K(peer_ch->get_id()), K(peer_ch->get_peer()));
+      }
     } else {
       // response message is not processed yet, we should send a unblocking msg
       // for later processing
