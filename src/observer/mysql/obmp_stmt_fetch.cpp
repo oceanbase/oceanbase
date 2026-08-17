@@ -859,8 +859,27 @@ int ObMPStmtFetch::response_row(ObSQLSessionInfo &session,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("piece is null before use.", K(ret), K(stmt_id), K(i));
         } else if (is_lob_storage(value.get_type())) {
-          if (OB_FAIL(ObQueryDriver::convert_text_value_charset(
-                  value, target_charset_type, arena_allocator, &session))) {
+          if (value.is_text()) {
+            ObString lob_data;
+            ObTextStringIter iter(value);
+            if (OB_FAIL(iter.init(0, &session, &arena_allocator))) {
+              LOG_WARN("Lob: init lob str iter failed ", K(ret), K(value));
+            } else if (OB_FAIL(iter.get_full_data(lob_data))) {
+              LOG_WARN("Lob: get full data failed ", K(ret), K(value));
+            } else {
+              ObObj tmp_value;
+              tmp_value.set_string(value.get_type(), lob_data);
+              tmp_value.set_collation_type(value.get_collation_type());
+              if (OB_FAIL(tmp_value.convert_string_value_charset(
+                          target_charset_type, arena_allocator))) {
+                LOG_WARN("convert materialized lob data charset failed",
+                         K(ret), K(value), K(target_charset_type));
+              } else if (OB_FAIL(tmp_value.get_string(str))) {
+                LOG_WARN("get converted lob data failed", K(ret), K(tmp_value));
+              }
+            }
+          } else if (OB_FAIL(ObQueryDriver::convert_text_value_charset(
+                         value, target_charset_type, arena_allocator, &session))) {
             LOG_WARN("convert text value charset failed", K(ret), K(value));
           } else {
             ObTextStringIter iter(value);
