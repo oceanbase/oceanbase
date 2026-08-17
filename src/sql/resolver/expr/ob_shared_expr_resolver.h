@@ -89,14 +89,15 @@ private:
                             ObRawExpr *&new_expr);
   inline bool is_blacklist_share_expr(const ObRawExpr &expr)
   {
-    return expr.is_column_ref_expr() ||
-           expr.is_aggr_expr() ||
-           expr.is_win_func_expr() ||
-           expr.is_query_ref_expr() ||
-           expr.is_exec_param_expr() ||
-           expr.is_pseudo_column_expr() ||
-           expr.get_expr_type() == T_OP_ROW ||
-           expr.get_expr_type() == T_QUESTIONMARK;
+    return expr.is_column_ref_expr()
+           || expr.is_aggr_expr()
+           || expr.is_win_func_expr()
+           || expr.is_query_ref_expr()
+           || expr.is_exec_param_expr()
+           || expr.is_pseudo_column_expr()
+           || expr.get_expr_type() == T_OP_ROW
+           || expr.get_expr_type() == T_QUESTIONMARK
+           || !expr.check_is_deterministic_expr();
   }
   inline bool is_blacklist_share_child(const ObRawExpr &expr)
   {

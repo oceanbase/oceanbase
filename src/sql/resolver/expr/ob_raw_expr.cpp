@@ -936,7 +936,9 @@ bool ObRawExpr::check_is_deterministic_expr() const
       || T_FUN_SYS_STMT_ID == type_
       || T_FUN_LABEL_SE_SESSION_LABEL == type_
       || T_FUN_LABEL_SE_SESSION_ROW_LABEL == type_
-      || IS_LABEL_SE_POLICY_FUNC(type_)) {
+      || IS_LABEL_SE_POLICY_FUNC(type_)
+      // JSON_OBJECT() is non-const so we prohibit it to be shared to avoid generating invalid plans.
+      || T_FUN_SYS_JSON_OBJECT == type_) {
     ret = false; // lost expr deterministic
   }
   return ret;
