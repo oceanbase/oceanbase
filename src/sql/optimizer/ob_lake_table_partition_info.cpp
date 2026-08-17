@@ -670,6 +670,8 @@ int ObLakeTablePartitionInfo::add_table_file(ObCandiTabletLoc &tablet_loc,
         delete_file->file_size_ = delete_entry->data_file.file_size_in_bytes;
         delete_file->modification_time_ = delete_entry->snapshot_id;
         delete_file->file_format_ = delete_entry->data_file.file_format;
+        delete_file->is_file_scoped_ =
+            delete_entry->data_file.referenced_data_file.has_value();
 
         switch (delete_entry->data_file.content) {
           case iceberg::DataFileContent::POSITION_DELETES: {

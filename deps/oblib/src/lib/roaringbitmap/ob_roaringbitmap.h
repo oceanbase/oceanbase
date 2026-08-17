@@ -97,6 +97,7 @@ public:
 
   int value_add(uint64_t value);
   int value_add_many(const ObIArray<uint64_t> &values);
+  int value_add_many(const uint64_t *values, int64_t count);
   int value_remove(uint64_t value);
   int value_and(ObRoaringBitmap *rb);
   int value_or(ObRoaringBitmap *rb);
@@ -113,6 +114,7 @@ public:
 
   int optimize();
   int deserialize(const ObString &rb_bin, bool need_validate = false);
+  int deserialize_portable(const char *rb_bin, int64_t rb_bin_size, bool need_validate = false);
   int serialize(ObStringBuffer &res_rb_bin);
 
   inline void set_empty() {

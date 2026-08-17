@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX SQL
 
 #include "ob_external_table_access_service.h"
+#include "lib/container/ob_bitmap.h"
 #include "share/backup/ob_backup_io_adapter.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "share/ob_device_manager.h"
@@ -47,6 +48,32 @@ using namespace plugin;
 
 namespace sql
 {
+
+template <typename T>
+static int compact_selected_rows_impl(const ObBitmap &selection,
+                                      const int64_t row_count,
+                                      T *rows,
+                                      int64_t &compacted_count)
+{
+  int ret = OB_SUCCESS;
+  compacted_count = 0;
+  if (OB_ISNULL(rows) || OB_UNLIKELY(row_count < 0)
+      || OB_UNLIKELY(static_cast<uint64_t>(row_count) > selection.size())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments for compacting selected rows",
+             K(ret), K(row_count), "selection_size", selection.size(), KP(rows));
+  } else {
+    for (int64_t src_idx = 0; src_idx < row_count; ++src_idx) {
+      if (selection[src_idx]) {
+        if (compacted_count != src_idx) {
+          rows[compacted_count] = rows[src_idx];
+        }
+        ++compacted_count;
+      }
+    }
+  }
+  return ret;
+}
 
 ObExternalDataAccessDriver::~ObExternalDataAccessDriver() {
   close();
@@ -1001,6 +1028,32 @@ int ObExternalTableRowIterator::build_delete_bitmap(const ObString &data_file_pa
   return delete_bitmap_builder_->build_delete_bitmap(data_file_path, task_idx, delete_bitmap_);
 }
 
+int ObExternalTableRowIterator::compact_selected_rows(const ObBitmap &selection,
+                                                      const int64_t row_count,
+                                                      int64_t *row_numbers,
+                                                      int64_t &compacted_count)
+{
+  return compact_selected_rows_impl(selection, row_count, row_numbers, compacted_count);
+}
+
+int ObExternalTableRowIterator::compact_selected_rows(const ObBitmap &selection,
+                                                      const int64_t row_count,
+                                                      ObDatum *row_number_datums,
+                                                      int64_t &compacted_count)
+{
+  return compact_selected_rows_impl(selection, row_count, row_number_datums, compacted_count);
+}
+
+void ObExternalTableRowIterator::update_iceberg_delete_apply_metrics(
+    const int64_t input_row_count, const int64_t deleted_row_count,
+    const int64_t elapsed_time_ns)
+{
+  if (OB_NOT_NULL(delete_bitmap_builder_)) {
+    delete_bitmap_builder_->get_metrics().update_apply_metrics(
+        input_row_count, deleted_row_count, elapsed_time_ns);
+  }
+}
+
 int ObExternalTableRowIterator::init_default_batch(ExprFixedArray &file_column_exprs)
 {
   int ret = OB_SUCCESS;
@@ -1117,6 +1170,8 @@ int ObExternalTableRowIterator::init_for_iceberg(ObExternalTableAccessOptions *o
     LOG_WARN("failed to alloc bitmap builder", K(ret), K(sizeof(ObIcebergDeleteBitmapBuilder)));
   } else if (OB_FAIL(delete_bitmap_builder_->init(scan_param_, options))) {
     LOG_WARN("failed to init bitmap builder", K(ret));
+  } else if (OB_FAIL(delete_bitmap_builder_->register_metrics(reader_profile_))) {
+    LOG_WARN("failed to register iceberg delete metrics", K(ret));
   }
 
   return ret;
@@ -1232,5 +1287,3 @@ const std::string ObExternalTableRowIterator::ICEBERG_ID_KEY = "iceberg.id";
 
 }
 }
-
-

@@ -4,6 +4,7 @@
  */
  #define USING_LOG_PREFIX SQL_ENG
 #include "ob_orc_table_row_iter.h"
+#include "lib/time/ob_time_utility.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 
@@ -4100,7 +4101,9 @@ int ObOrcTableRowIterator::SectorReader::next(int64_t &count, int64_t capacity)
       }
     }
     if (OB_SUCC(ret) && OB_UNLIKELY(is_finished())) {
-      eager_reader_.row_id_ += sector_size_;
+      if (!orc_row_iter_->is_count_aggr_with_filter_) {
+        eager_reader_.row_id_ += sector_size_;
+      }
       reset_sector_state();
     }
   }
@@ -4186,7 +4189,8 @@ int ObOrcTableRowIterator::SectorReader::popcnt_rows_by_filter(bool &has_active_
         if (OB_FAIL(filter->execute(nullptr, &filter_column_loader, 0, batch_size))) {
           LOG_WARN("fail to execute filter", K(ret));
         } else if (OB_FAIL(merge_bitmap_with_delete_bitmap(filter->get_result(), batch_size,
-                                                          eager_reader_.row_id_))) {
+                                                          state.orc_reader_cur_row_id_ +
+                                                            state.cur_range_read_row_count_))) {
           LOG_WARN("fail to merge bitmap with delete bitmap", K(ret));
         } else {
           sector_size_ += filter->get_result()->popcnt();
@@ -4196,6 +4200,9 @@ int ObOrcTableRowIterator::SectorReader::popcnt_rows_by_filter(bool &has_active_
     }
   }
   if (OB_SUCC(ret)) {
+    // Count-with-filter consumes the whole physical row range while building one count sector.
+    // Keep the eager reader position independent of the filtered survivor count.
+    eager_reader_.row_id_ = state.orc_reader_cur_row_id_ + state.cur_range_read_row_count_;
     sector_end_ = sector_size_;
     has_active_row = sector_size_ > 0;
   }
@@ -4301,27 +4308,64 @@ int ObOrcTableRowIterator::create_file_reader(const ObString& data_file_path,
   return ret;
 }
 
-int ObOrcTableRowIterator::SectorReader::merge_bitmap_with_delete_bitmap(ObBitmap *bitmap,
-                                                                  const int64_t eval_count,
-                                                                  const int64_t sector_start_row_id)
+int ObOrcTableRowIterator::SectorReader::merge_bitmap_with_delete_bitmap(
+    ObBitmap *bitmap,
+    const int64_t eval_count,
+    const int64_t sector_start_row_id)
 {
   int ret = OB_SUCCESS;
 
   if (OB_ISNULL(bitmap)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("bitmap is null", K(ret));
-  } else if (OB_NOT_NULL(orc_row_iter_->delete_bitmap_) &&
-            !orc_row_iter_->delete_bitmap_->is_empty_type()
-            && orc_row_iter_->delete_bitmap_->get_range_cardinality(sector_start_row_id,
-                                                            sector_start_row_id + eval_count) > 0) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < eval_count; i++) {
-      int64_t global_row_id = sector_start_row_id + i;
-      if (orc_row_iter_->delete_bitmap_->is_contains(global_row_id)) {
-        // 如果该行在 delete_bitmap_ 中被标记为删除，则直接在 bitmap 中设置为 false
-        if (OB_FAIL(bitmap->set(i, false))) {
-          LOG_WARN("fail to set bitmap to false for deleted row", K(ret));
+  } else if (OB_NOT_NULL(orc_row_iter_->delete_bitmap_)
+             && !orc_row_iter_->delete_bitmap_->is_empty_type()) {
+    const int64_t apply_start_time_ns = ObTimeUtility::current_time_ns();
+    const uint64_t range_begin = static_cast<uint64_t>(sector_start_row_id);
+    const uint64_t range_end = range_begin + static_cast<uint64_t>(eval_count);
+    int64_t deleted_row_count = 0;
+    const uint64_t delete_position_count
+        = orc_row_iter_->delete_bitmap_->get_range_cardinality(range_begin, range_end);
+    if (delete_position_count > 0) {
+      ObRoaringBitmapIter delete_iter(orc_row_iter_->delete_bitmap_);
+      bool iter_end = false;
+      if (OB_FAIL(delete_iter.advance_to(range_begin))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          iter_end = true;
+        } else {
+          LOG_WARN("failed to seek iceberg delete bitmap", K(ret), K(range_begin), K(range_end));
         }
       }
+      while (OB_SUCC(ret) && !iter_end && delete_iter.get_curr_value() < range_end) {
+        const int64_t row_offset
+            = static_cast<int64_t>(delete_iter.get_curr_value() - range_begin);
+        if (bitmap->test(row_offset)) {
+          if (OB_FAIL(bitmap->set(row_offset, false))) {
+            LOG_WARN("failed to clear bitmap for deleted row", K(ret), K(row_offset));
+          } else {
+            ++deleted_row_count;
+          }
+        }
+        if (OB_SUCC(ret) && OB_FAIL(delete_iter.get_next())) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+            iter_end = true;
+          } else {
+            LOG_WARN("failed to iterate iceberg delete bitmap",
+                     K(ret),
+                     K(range_begin),
+                     K(range_end));
+          }
+        }
+      }
+      delete_iter.deinit();
+    }
+    if (OB_SUCC(ret)) {
+      orc_row_iter_->update_iceberg_delete_apply_metrics(eval_count,
+                                                         deleted_row_count,
+                                                         ObTimeUtility::current_time_ns()
+                                                             - apply_start_time_ns);
     }
   }
 

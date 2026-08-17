@@ -308,7 +308,6 @@ namespace sql {
     virtual ~ObOrcTableRowIterator()
     {
       file_prebuffer_.destroy();
-      reader_profile_.dump_metrics();
       reader_profile_.update_profile();
       if (nullptr != inner_sector_reader_) {
         inner_sector_reader_->~SectorReader();

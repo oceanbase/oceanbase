@@ -84,6 +84,7 @@ int ObLakeDeleteFile::assign(const ObLakeDeleteFile &other)
     file_format_ = other.file_format_;
     dv_content_offset_ = other.dv_content_offset_;
     dv_content_size_in_bytes_ = other.dv_content_size_in_bytes_;
+    is_file_scoped_ = other.is_file_scoped_;
   }
   return ret;
 }
@@ -95,7 +96,8 @@ OB_SERIALIZE_MEMBER(ObLakeDeleteFile,
                     modification_time_,
                     file_format_,
                     dv_content_offset_,
-                    dv_content_size_in_bytes_);
+                    dv_content_size_in_bytes_,
+                    is_file_scoped_);
 
 int ObIOptLakeTableFile::assign(const ObIOptLakeTableFile &other)
 {

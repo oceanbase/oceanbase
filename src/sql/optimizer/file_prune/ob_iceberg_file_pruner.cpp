@@ -1267,7 +1267,6 @@ int ObIcebergFilePrunner::prune_data_files(ObExecContext &exec_ctx,
                                            ObIArray<ObIcebergFileDesc*> &file_descs)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<const iceberg::ManifestEntry*, 16> data_entries;
   ObSEArray<const iceberg::ManifestEntry*, 16> delete_entries;
   iceberg::DeleteFileIndex delete_file_index;
   ObIcebergFileFilter file_filter(exec_ctx, file_filter_spec_, &part_column_descs_);

@@ -27,6 +27,9 @@ static constexpr const char *PREBUFFER_METRICS_LABEL = "PREBUFFER_METRICS";
 static constexpr const char *EAGER_PREBUFFER_METRICS_LABEL = "EAGER_PREBUFFER_METRICS";
 static constexpr const char *PARQUET_PAGE_MGR_IO_METRICS_LABEL = "PARQUET_PAGE_MGR_IO_METRICS";
 static constexpr const char *PARQUET_PAGE_MGR_METRICS_LABEL = "PARQUET_PAGE_MGR_METRICS";
+static constexpr const char *ICEBERG_DELETE_METRICS_LABEL = "ICEBERG_DELETE_METRICS";
+static constexpr const char *ICEBERG_DELETE_IO_METRICS_LABEL = "ICEBERG_DELETE_IO_METRICS";
+static constexpr const char *ICEBERG_DELETE_PREBUFFER_METRICS_LABEL = "ICEBERG_DELETE_PREBUFFER_METRICS";
 
 struct ObLakeTableIMetrics
 {
@@ -117,6 +120,40 @@ public:
   // For the orc files, after loading all the bloom filter of the same stripes at once, only some of them may be used.
   int64_t use_bloom_filter_index_count_ = 0;
   // --- METRICS ON BLOOM FILTER END ---
+};
+
+struct ObLakeTableIcebergDeleteMetrics : public ObLakeTableIMetrics
+{
+public:
+  ObLakeTableIcebergDeleteMetrics() = default;
+  ~ObLakeTableIcebergDeleteMetrics() = default;
+  virtual int update_profile() override;
+  virtual void dump_metrics() override;
+
+  OB_INLINE void update_apply_metrics(const int64_t input_row_count,
+                                      const int64_t deleted_row_count,
+                                      const int64_t elapsed_time_ns)
+  {
+    apply_input_row_count_ += input_row_count;
+    apply_deleted_row_count_ += deleted_row_count;
+    apply_time_ns_ += elapsed_time_ns;
+  }
+
+  VIRTUAL_TO_STRING_KV(K_(data_file_build_count),
+                       K_(delete_file_open_count),
+                       K_(built_deleted_row_count),
+                       K_(build_time_ns),
+                       K_(apply_input_row_count),
+                       K_(apply_deleted_row_count),
+                       K_(apply_time_ns));
+
+  int64_t data_file_build_count_ = 0;
+  int64_t delete_file_open_count_ = 0;
+  int64_t built_deleted_row_count_ = 0;
+  int64_t build_time_ns_ = 0;
+  int64_t apply_input_row_count_ = 0;
+  int64_t apply_deleted_row_count_ = 0;
+  int64_t apply_time_ns_ = 0;
 };
 
 struct ObLakeTablePreBufferMetrics : public ObLakeTableIMetrics
@@ -269,7 +306,7 @@ public:
   void dump_metrics();
 
 private:
-  typedef common::ObSEArray<ObLakeTableIMetrics*, 8> MetricsList;
+  typedef common::ObSEArray<ObLakeTableIMetrics*, 12> MetricsList;
   MetricsList metrics_list_;
 };
 

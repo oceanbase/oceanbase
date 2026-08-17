@@ -113,6 +113,8 @@ public:
 class PartitionKey
 {
 public:
+  static constexpr int64_t EXPECTED_PARTITION_FIELD_COUNT = 4;
+  PartitionKey();
   int assign(const PartitionKey &other);
   int init_from_manifest_entry(const ManifestEntry &manifest_entry);
   int hash(uint64_t &hash_val) const;

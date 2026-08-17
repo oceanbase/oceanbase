@@ -6,6 +6,7 @@
 #define UNITTEST_DEBUG
 #define USING_LOG_PREFIX SHARE
 #include "lib/oblog/ob_log_module.h"
+#include "lib/string/ob_sql_string.h"
 #include "lib/string/ob_string.h"
 #include "sql/table_format/iceberg/scan/conversions.h"
 #include "sql/table_format/iceberg/scan/delete_file_index.h"
@@ -26,6 +27,15 @@ public:
   ~TestDeleteFileIndex() = default;
 
 protected:
+  ObString create_path(const char *prefix, const int64_t index)
+  {
+    ObSqlString path;
+    ObString stored_path;
+    EXPECT_EQ(OB_SUCCESS, path.append_fmt("%s-%ld", prefix, index));
+    EXPECT_EQ(OB_SUCCESS, ob_write_string(allocator_, path.string(), stored_path));
+    return stored_path;
+  }
+
   ManifestEntry *create_data_file(int64_t seq,
                                   int32_t partition_spec_id,
                                   int64_t partition_value,
@@ -207,6 +217,71 @@ TEST_F(TestDeleteFileIndex, find_eq_deletes)
   }
 }
 
+TEST_F(TestDeleteFileIndex, empty_delete_files)
+{
+  ObArray<const ManifestEntry *> delete_files;
+  DeleteFileIndex delete_file_index;
+  ASSERT_EQ(OB_SUCCESS, delete_file_index.init(delete_files));
+
+  ManifestEntry *data_file = create_data_file(1, 1, 1, "data-file");
+  ObArray<const ManifestEntry *> result;
+  ASSERT_EQ(OB_SUCCESS, delete_file_index.match_delete_files(*data_file, result));
+  EXPECT_TRUE(result.empty());
+}
+
+TEST_F(TestDeleteFileIndex, reject_null_manifest_entry)
+{
+  ObArray<const ManifestEntry *> delete_files;
+  ASSERT_EQ(OB_SUCCESS, delete_files.push_back(nullptr));
+  DeleteFileIndex delete_file_index;
+  EXPECT_EQ(OB_INVALID_ARGUMENT, delete_file_index.init(delete_files));
+}
+
+TEST_F(TestDeleteFileIndex, more_than_default_bucket_count)
+{
+  static constexpr int64_t KEY_COUNT = 128;
+  ObArray<const ManifestEntry *> delete_files;
+  for (int64_t i = 0; i < KEY_COUNT; ++i) {
+    ASSERT_EQ(OB_SUCCESS, delete_files.push_back(create_pos_path(
+        10, create_path("pos-delete", i), create_path("pos-data", i))));
+    ASSERT_EQ(OB_SUCCESS, delete_files.push_back(create_dv(
+        10, create_path("dv-delete", i), create_path("dv-data", i))));
+    ASSERT_EQ(OB_SUCCESS, delete_files.push_back(create_par_delete(
+        10, create_path("partition-pos-delete", i),
+        DataFileContent::POSITION_DELETES, 1, i)));
+    ASSERT_EQ(OB_SUCCESS, delete_files.push_back(create_par_delete(
+        11, create_path("partition-eq-delete", i),
+        DataFileContent::EQUALITY_DELETES, 1, i)));
+  }
+
+  DeleteFileIndex delete_file_index;
+  ASSERT_EQ(OB_SUCCESS, delete_file_index.init(delete_files));
+
+  const int64_t keys_to_check[] = {0, KEY_COUNT / 2, KEY_COUNT - 1};
+  for (const int64_t key : keys_to_check) {
+    ObArray<const ManifestEntry *> pos_result;
+    ObArray<const ManifestEntry *> eq_result;
+    ObArray<const ManifestEntry *> dv_result;
+    ManifestEntry *pos_data_file =
+        create_data_file(10, 1, key, create_path("pos-data", key));
+    ASSERT_EQ(OB_SUCCESS,
+              delete_file_index.match_delete_files(
+                  *pos_data_file, pos_result, eq_result, dv_result));
+    EXPECT_EQ(2, pos_result.count());
+    EXPECT_EQ(1, eq_result.count());
+    EXPECT_TRUE(dv_result.empty());
+
+    ManifestEntry *dv_data_file =
+        create_data_file(10, 1, key, create_path("dv-data", key));
+    ASSERT_EQ(OB_SUCCESS,
+              delete_file_index.match_delete_files(
+                  *dv_data_file, pos_result, eq_result, dv_result));
+    EXPECT_TRUE(pos_result.empty());
+    EXPECT_EQ(1, eq_result.count());
+    EXPECT_EQ(1, dv_result.count());
+  }
+}
+
 // test dv + global eq + partition eq
 TEST_F(TestDeleteFileIndex, dv_global_eq_partition_eq)
 {
@@ -249,11 +324,13 @@ TEST_F(TestDeleteFileIndex, dv_global_eq_partition_eq)
   ManifestEntry *datafile = create_data_file(5, 0, 1, "datafile");
 
   DeleteFileIndex delete_file_index;
-  delete_file_index.init(delete_files);
+  ASSERT_EQ(OB_SUCCESS, delete_file_index.init(delete_files));
   ObArray<const ManifestEntry *> dv_result;
   ObArray<const ManifestEntry *> eq_result;
   ObArray<const ManifestEntry *> pos_result;
-  delete_file_index.match_delete_files(*datafile, pos_result, eq_result, dv_result);
+  ASSERT_EQ(OB_SUCCESS,
+            delete_file_index.match_delete_files(
+                *datafile, pos_result, eq_result, dv_result));
 
   ASSERT_EQ(1, dv_result.count());
   ASSERT_EQ(ObString("dv"), dv_result.at(0)->data_file.file_path);
@@ -331,11 +408,13 @@ TEST_F(TestDeleteFileIndex, pos_path_pos_partition_global_eq_partition_eq)
   ManifestEntry *datafile = create_data_file(5, 0, 1, "datafile");
 
   DeleteFileIndex delete_file_index;
-  delete_file_index.init(delete_files);
+  ASSERT_EQ(OB_SUCCESS, delete_file_index.init(delete_files));
   ObArray<const ManifestEntry *> dv_result;
   ObArray<const ManifestEntry *> eq_result;
   ObArray<const ManifestEntry *> pos_result;
-  delete_file_index.match_delete_files(*datafile, pos_result, eq_result, dv_result);
+  ASSERT_EQ(OB_SUCCESS,
+            delete_file_index.match_delete_files(
+                *datafile, pos_result, eq_result, dv_result));
 
   ASSERT_EQ(0, dv_result.count());
   ASSERT_EQ(3, pos_result.count());

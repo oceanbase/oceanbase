@@ -188,7 +188,7 @@ int ObLakeTableStatUtils::construct_stat_from_iceberg(const uint64_t tenant_id,
 
 int ObLakeTableStatUtils::scale_column_stats(const int64_t row_cnt,
                                              const double scale_ratio,
-                                             ObIArray<ObLakeColumnStat*> &column_stats)
+                                             ObIArray<ObLakeColumnStat *> &column_stats)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < column_stats.count(); ++i) {
@@ -197,11 +197,15 @@ int ObLakeTableStatUtils::scale_column_stats(const int64_t row_cnt,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null column stat");
     } else if (column_stat->last_analyzed_ > 0) {
-      column_stat->null_count_ = std::min(row_cnt, static_cast<int64_t>(column_stat->null_count_ * scale_ratio));
+      column_stat->null_count_
+          = std::min(row_cnt, static_cast<int64_t>(column_stat->null_count_ * scale_ratio));
+      column_stat->size_ = static_cast<int64_t>(column_stat->size_ * scale_ratio);
       column_stat->record_count_ = row_cnt;
 
       if (scale_ratio < 1.0) {
-        column_stat->num_distinct_ = ObOptSelectivity::scale_distinct(row_cnt, row_cnt / scale_ratio, column_stat->num_distinct_);
+        column_stat->num_distinct_ = ObOptSelectivity::scale_distinct(row_cnt,
+                                                                      row_cnt / scale_ratio,
+                                                                      column_stat->num_distinct_);
       }
       column_stat->num_distinct_ = std::min(row_cnt, column_stat->num_distinct_);
     }

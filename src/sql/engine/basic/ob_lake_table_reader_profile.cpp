@@ -55,17 +55,51 @@ void ObLakeTableParquetReaderMetrics::dump_metrics()
   LOG_INFO("dump metrics", K_(label), KPC(this));
 }
 
+int ObLakeTableIcebergDeleteMetrics::update_profile()
+{
+  int ret = OB_SUCCESS;
+  ObProfileSwitcher switcher(ObProfileId::LAKE_TABLE_ICEBERG_DELETE);
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_ICEBERG_DELETE_DATA_FILE_COUNT,
+                 data_file_build_count_);
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_ICEBERG_DELETE_FILE_OPEN_COUNT,
+                 delete_file_open_count_);
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_ICEBERG_DELETE_ROW_COUNT,
+                 built_deleted_row_count_);
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_ICEBERG_DELETE_BUILD_TIME,
+                 build_time_ns_);
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_ICEBERG_DELETE_APPLY_INPUT_ROW_COUNT,
+                 apply_input_row_count_);
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_ICEBERG_DELETE_APPLY_ROW_COUNT,
+                 apply_deleted_row_count_);
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_ICEBERG_DELETE_APPLY_TIME,
+                 apply_time_ns_);
+  return ret;
+}
+
+void ObLakeTableIcebergDeleteMetrics::dump_metrics()
+{
+  LOG_INFO("dump metrics", K_(label), KPC(this));
+}
+
 int ObLakeTablePreBufferMetrics::update_profile()
 {
   int ret = OB_SUCCESS;
-  ObProfileSwitcher switcher(ObProfileId::LAKE_TABLE_PREFETCH);
-  if (label_.case_compare_equal(PREBUFFER_METRICS_LABEL)) {
+  if (label_.case_compare_equal(ICEBERG_DELETE_PREBUFFER_METRICS_LABEL)) {
+    // Nest delete-file prefetch metrics under the Iceberg Delete profile
+    // instead of the data-file scan profile.
+    ObProfileSwitcher delete_switcher(ObProfileId::LAKE_TABLE_ICEBERG_DELETE);
+    ObProfileSwitcher prefetch_switcher(ObProfileId::LAKE_TABLE_PREFETCH);
     ret = update_specific_profile_(ObProfileId::LAKE_TABLE_NON_EAGER);
-  } else if (label_.case_compare_equal(EAGER_PREBUFFER_METRICS_LABEL)) {
-    ret = update_specific_profile_(ObProfileId::LAKE_TABLE_EAGER);
   } else {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid metric label", K_(label), K(ret));
+    ObProfileSwitcher prefetch_switcher(ObProfileId::LAKE_TABLE_PREFETCH);
+    if (label_.case_compare_equal(PREBUFFER_METRICS_LABEL)) {
+      ret = update_specific_profile_(ObProfileId::LAKE_TABLE_NON_EAGER);
+    } else if (label_.case_compare_equal(EAGER_PREBUFFER_METRICS_LABEL)) {
+      ret = update_specific_profile_(ObProfileId::LAKE_TABLE_EAGER);
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid metric label", K_(label), K(ret));
+    }
   }
   return ret;
 }
@@ -132,6 +166,9 @@ int ObLakeTableIOMetrics::update_profile()
   } else if (label_.case_compare_equal(PARQUET_PAGE_MGR_IO_METRICS_LABEL)) {
     ObProfileSwitcher switcher(ObProfileId::LAKE_TABLE_PARQUET_PAGE_MGR);
     ret = update_specific_profile_(std::nullopt);
+  } else if (label_.case_compare_equal(ICEBERG_DELETE_IO_METRICS_LABEL)) {
+    ObProfileSwitcher switcher(ObProfileId::LAKE_TABLE_ICEBERG_DELETE);
+    ret = update_specific_profile_(ObProfileId::LAKE_TABLE_NON_EAGER);
   } else {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid metric label", K_(label), K(ret));

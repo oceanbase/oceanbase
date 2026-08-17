@@ -6,6 +6,7 @@
 
 #include "sql/table_format/iceberg/spec/partition.h"
 
+#include "common/object/ob_object.h"
 #include "lib/string/ob_sql_string.h"
 #include "share/ob_define.h"
 #include "sql/table_format/iceberg/ob_iceberg_type_fwd.h"
@@ -469,6 +470,11 @@ int PartitionSpec::get_partition_field_by_field_id(int32_t field_id,
     LOG_WARN("failed to find specific PartitionField", K(ret), K(field_id));
   }
   return ret;
+}
+
+PartitionKey::PartitionKey()
+    : partition_spec_id(0), partition_values(EXPECTED_PARTITION_FIELD_COUNT * sizeof(ObObj))
+{
 }
 
 int PartitionKey::assign(const PartitionKey &other)

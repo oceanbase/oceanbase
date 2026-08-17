@@ -32,13 +32,38 @@
 namespace oceanbase {
 namespace sql {
 
-struct ParquetStatInfo {
-  ParquetStatInfo() : projected_eager_cnt_(0), projected_lazy_cnt_(0), cross_page_cnt_(0), in_page_cnt_(0) {}
+struct ParquetStatInfo
+{
+  ParquetStatInfo()
+      : projected_eager_cnt_(0), projected_lazy_cnt_(0), cross_page_cnt_(0), in_page_cnt_(0),
+        direct_fixed_decode_batch_cnt_(0), direct_fixed_decode_row_cnt_(0),
+        selection_decode_batch_cnt_(0), selection_decode_input_row_cnt_(0),
+        selection_decode_output_row_cnt_(0), selection_lazy_decode_batch_cnt_(0),
+        avoided_fragmented_range_cnt_(0)
+  {
+  }
   int64_t projected_eager_cnt_;
   int64_t projected_lazy_cnt_;
   int64_t cross_page_cnt_;
   int64_t in_page_cnt_;
-  TO_STRING_KV(K_(projected_eager_cnt), K_(projected_lazy_cnt), K_(cross_page_cnt), K_(in_page_cnt));
+  int64_t direct_fixed_decode_batch_cnt_;
+  int64_t direct_fixed_decode_row_cnt_;
+  int64_t selection_decode_batch_cnt_;
+  int64_t selection_decode_input_row_cnt_;
+  int64_t selection_decode_output_row_cnt_;
+  int64_t selection_lazy_decode_batch_cnt_;
+  int64_t avoided_fragmented_range_cnt_;
+  TO_STRING_KV(K_(projected_eager_cnt),
+               K_(projected_lazy_cnt),
+               K_(cross_page_cnt),
+               K_(in_page_cnt),
+               K_(direct_fixed_decode_batch_cnt),
+               K_(direct_fixed_decode_row_cnt),
+               K_(selection_decode_batch_cnt),
+               K_(selection_decode_input_row_cnt),
+               K_(selection_decode_output_row_cnt),
+               K_(selection_lazy_decode_batch_cnt),
+               K_(avoided_fragmented_range_cnt));
 };
 
 enum FilterCalcMode {
@@ -207,6 +232,10 @@ public:
     cur_eager_id_(-1),
     rg_bitmap_(nullptr),
     malloc_allocator_(),
+    // ObBitmap::reserve() frees replaced buffers; the arena allocator cannot
+    // reclaim them until reset, while this allocator supports individual free.
+    batch_selection_(malloc_allocator_),
+    batch_selection_pending_(false),
     cross_pages_(allocator_),
     page_index_reader_(nullptr),
     rg_page_index_reader_(nullptr),
@@ -253,7 +282,7 @@ public:
   int64_t get_eager_count() const { return is_eager_calc() ? eager_columns_.count() : 0; }
   int64_t get_lazy_file_count() const { return is_eager_calc() ? lazy_columns_.count() : file_column_exprs_.count(); }
   int64_t get_lazy_access_count() const { return is_eager_calc() ? lazy_columns_.count() : column_exprs_.count();  }
-  int64_t get_lazy_column_id(const int64_t i) const { return is_eager_calc() ? lazy_columns_.at(i) : i; }
+  int64_t get_lazy_file_column_idx(const int64_t i) const { return is_eager_calc() ? lazy_columns_.at(i) : i; }
   bool is_dict_load_func(int32_t file_col_idx) const
   {
     return load_funcs_.at(file_col_idx) == &DataLoader::load_string_col_dict;
@@ -420,18 +449,19 @@ private:
     static int get_column_idx_by_node(std::shared_ptr<parquet::FileMetaData> file_metadata,
                                       const ::parquet::schema::Node *node,
                                       common::hash::ObHashMap<int64_t, int> &node_to_column_idx);
-    static bool
-    check_array_column_schema(std::shared_ptr<parquet::FileMetaData> file_metadata,
-                              const ::parquet::schema::Node *node,
-                              common::ObArrayWrap<int> &coll_column_index, int &col_idx,
-                              common::hash::ObHashMap<int64_t, int> &node_to_column_idx);
+    static bool check_array_column_schema(
+        std::shared_ptr<parquet::FileMetaData> file_metadata,
+        const ::parquet::schema::Node *node,
+        common::ObArrayWrap<int> &coll_column_index,
+        int &col_idx,
+        common::hash::ObHashMap<int64_t, int> &node_to_column_idx);
     static bool check_map_column_schema(std::shared_ptr<parquet::FileMetaData> file_metadata,
                                         const ::parquet::schema::Node *node,
-                                        common::ObArrayWrap<int> &coll_column_index, int &col_idx,
+                                        common::ObArrayWrap<int> &coll_column_index,
+                                        int &col_idx,
                                         common::hash::ObHashMap<int64_t, int> &node_to_column_idx);
     int16_t get_max_def_level();
     int load_data_for_col(LOAD_FUNC &func);
-
     int load_int64_to_int64_vec();
     int load_int32_to_int64_vec();
     int load_uint32_to_int64_vec();
@@ -532,6 +562,19 @@ private:
   int next_row_group();
   int advance_next_batch(const int64_t capacity, ObEvalCtx &eval_ctx, int64_t &read_count);
   int read_batch(const int64_t actual_capacity, ObEvalCtx &eval_ctx, int64_t &read_count);
+  int read_fragmented_batch(const int64_t actual_capacity,
+                            ObEvalCtx &eval_ctx,
+                            int64_t &read_count,
+                            ObPushdownFilterExecutor *filter);
+  int project_eager_batch(const int64_t actual_capacity,
+                          const bool sequential_decode,
+                          int64_t &read_count);
+  int project_lazy_batch(const int64_t actual_capacity,
+                         const bool sequential_decode,
+                         int64_t &read_count);
+  int apply_eager_filter_pipeline(const int64_t read_count,
+                                  ObEvalCtx &eval_ctx,
+                                  ObPushdownFilterExecutor *filter);
   int calc_pseudo_exprs(const int64_t read_count);
   ObExternalTableAccessOptions& make_external_table_access_options(stmt::StmtType stmt_type);
   static int convert_timestamp_datum(const ObDatumMeta &datum_type, int64_t adjusted_min_value,
@@ -580,21 +623,35 @@ private:
   int64_t get_real_skip_count(const int64_t curr_idx,
                               const int64_t num_rows_to_skip,
                               const int64_t column_id);
-  int reorder_output(const oceanbase::common::ObBitmap &bitmap,
+  int compact_line_number_output(const common::ObBitmap &bitmap,
+                                 ObEvalCtx &ctx,
+                                 const int64_t read_count,
+                                 const int64_t output_count);
+  int reorder_output(const common::ObBitmap &bitmap,
                      ObEvalCtx &ctx,
                      int64_t &read_count,
-                     bool only_eager_output = false);
+                     bool only_eager_output = false,
+                     bool only_lazy_file_columns = false);
   // Compact projected eager columns
-  int reorder_eager_output_columns(const oceanbase::common::ObBitmap &bitmap,
+  int reorder_eager_output_columns(const common::ObBitmap &bitmap,
                                    ObEvalCtx &ctx,
                                    int64_t &read_count);
   void check_cross_pages(const int64_t capacity);
-  bool is_cross_page(const int64_t column_id) { return cross_pages_.at(column_id); }
+  bool is_cross_page(const int64_t column_id)
+  {
+    return cross_pages_.at(column_id);
+  }
   bool check_if_batch_cross_page(const int64_t column_id,
-                                  const int64_t current_row_pos,
-                                  const int64_t batch_size);
+                                 const int64_t current_row_pos,
+                                 const int64_t batch_size);
   int fill_rg_skip_read_ranges(const int64_t capacity);
   int fill_lazy_ranges(const ObPushdownFilterExecutor &filter);
+  int fill_lazy_ranges_from_selection(const common::ObBitmap &selection, const int64_t capacity);
+  int build_batch_selection(const int64_t capacity, common::ObBitmap &selection);
+  bool should_use_fragmented_selection(const int64_t capacity) const;
+  bool should_decode_selection_sequentially(const common::ObBitmap &selection,
+                                            const int64_t capacity) const;
+  bool has_skipped_data_pages() const;
   int prepare_rg_bitmap(std::shared_ptr<parquet::RowGroupReader> rg_reader);
   int prepare_page_index(const int64_t cur_row_group,
                          std::shared_ptr<parquet::RowGroupReader> rg_reader,
@@ -702,6 +759,8 @@ private:
   int64_t cur_eager_id_;
   ObBitVector *rg_bitmap_;
   common::ObFIFOAllocator malloc_allocator_;
+  common::ObBitmap batch_selection_;
+  bool batch_selection_pending_;
   // single-layer iteration state
   common::ObFixedArray<bool, common::ObIAllocator> cross_pages_;
   common::ObArrayWrap<std::shared_ptr<parquet::OffsetIndex>> offset_indexs_;

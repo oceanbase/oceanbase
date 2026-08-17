@@ -253,6 +253,15 @@ SQL_MONITOR_STATNAME_DEF(HS_FUSION_EXEC_MODE, metric::Unit::INT, "fusion exec mo
 SQL_MONITOR_STATNAME_DEF(HS_PROBE_COUNT, metric::Unit::INT, "probe count", "probe count", M_SUM, metric::Level::STANDARD)
 SQL_MONITOR_STATNAME_DEF(HS_PROBE_TIME, metric::Unit::TIME_NS, "probe time", "probe time", M_SUM, metric::Level::STANDARD)
 
+// Iceberg Delete (position delete files and deletion vectors)
+SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_ICEBERG_DELETE_DATA_FILE_COUNT, metric::Unit::INT, "iceberg delete data file count", "data files for which an Iceberg delete bitmap was built", M_SUM | E_MIN | E_MAX, metric::Level::CRITICAL)
+SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_ICEBERG_DELETE_FILE_OPEN_COUNT, metric::Unit::INT, "iceberg delete file open count", "successfully opened Iceberg delete files", M_SUM | E_MIN | E_MAX, metric::Level::CRITICAL)
+SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_ICEBERG_DELETE_ROW_COUNT, metric::Unit::INT, "iceberg built delete row count", "rows stored in successfully built Iceberg delete bitmaps", M_SUM | E_MIN | E_MAX, metric::Level::CRITICAL)
+SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_ICEBERG_DELETE_BUILD_TIME, metric::Unit::TIME_NS, "iceberg delete build time", "elapsed time building Iceberg delete bitmaps", M_SUM | E_MIN | E_MAX, metric::Level::CRITICAL)
+SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_ICEBERG_DELETE_APPLY_INPUT_ROW_COUNT, metric::Unit::INT, "iceberg delete apply input rows", "rows checked while applying Iceberg delete bitmaps", M_SUM | E_MIN | E_MAX, metric::Level::CRITICAL)
+SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_ICEBERG_DELETE_APPLY_ROW_COUNT, metric::Unit::INT, "iceberg delete applied row count", "rows removed while applying Iceberg delete bitmaps", M_SUM | E_MIN | E_MAX, metric::Level::CRITICAL)
+SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_ICEBERG_DELETE_APPLY_TIME, metric::Unit::TIME_NS, "iceberg delete apply time", "elapsed time applying Iceberg delete bitmaps", M_SUM | E_MIN | E_MAX, metric::Level::CRITICAL)
+
 //end
 SQL_MONITOR_STATNAME_DEF(MONITOR_STATNAME_END, metric::Unit::INVALID, "monitor end", "monitor stat name end", E_MIN | E_MAX, metric::Level::AD_HOC)
 #endif

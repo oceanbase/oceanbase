@@ -54,13 +54,15 @@ public:
   iceberg::DataFileFormat file_format_;
   int64_t dv_content_offset_ = 0;
   int64_t dv_content_size_in_bytes_ = 0;
+  bool is_file_scoped_ = false;
   TO_STRING_KV(K_(type),
                K_(file_url),
                K_(file_size),
                K_(modification_time),
                K_(file_format),
                K_(dv_content_offset),
-               K_(dv_content_size_in_bytes));
+               K_(dv_content_size_in_bytes),
+               K_(is_file_scoped));
 };
 
 enum class LakeFileType{

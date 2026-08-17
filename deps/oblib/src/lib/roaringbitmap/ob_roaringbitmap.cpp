@@ -132,14 +132,21 @@ int ObRoaringBitmap::value_add(uint64_t value)
 
 int ObRoaringBitmap::value_add_many(const ObIArray<uint64_t> &values)
 {
+  return value_add_many(
+      reinterpret_cast<const uint64_t *>(values.get_data()), values.count());
+}
+
+int ObRoaringBitmap::value_add_many(const uint64_t *values, const int64_t count)
+{
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(values.empty())) {
+  if (OB_ISNULL(values) || OB_UNLIKELY(count <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("count must be greater than 0", K(ret));
+    LOG_WARN("invalid values for batch add", K(ret), KP(values), K(count));
   } else if (type_ != ObRbType::BITMAP && OB_FAIL(convert_to_bitmap())) {
     LOG_WARN("failed to convert roaringbitmap to bitmap type", K(ret));
   } else {
-    ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add_many(bitmap_, values.count(), reinterpret_cast<const uint64_t*>(values.get_data())));
+    ROARING_TRY_CATCH(
+        roaring::api::roaring64_bitmap_add_many(bitmap_, static_cast<size_t>(count), values));
     if (OB_FAIL(ret)) {
       LOG_WARN("failed to add values to the bitmap", K(ret));
     }
@@ -668,6 +675,48 @@ int ObRoaringBitmap::deserialize(const ObString &rb_bin, bool need_validate)
         break;
       }
     } // end switch
+    if (OB_FAIL(ret)) {
+      set_empty();
+    }
+  }
+  return ret;
+}
+
+int ObRoaringBitmap::deserialize_portable(const char *rb_bin,
+                                          const int64_t rb_bin_size,
+                                          const bool need_validate)
+{
+  int ret = OB_SUCCESS;
+  size_t deserialize_size = 0;
+  if (OB_ISNULL(rb_bin) || OB_UNLIKELY(rb_bin_size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid portable roaring bitmap binary", K(ret), KP(rb_bin), K(rb_bin_size));
+  } else {
+    set_empty();
+    ROARING_TRY_CATCH(deserialize_size = roaring::api::roaring64_bitmap_portable_deserialize_size(
+                          rb_bin,
+                          static_cast<size_t>(rb_bin_size)));
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(deserialize_size != static_cast<size_t>(rb_bin_size))) {
+      ret = OB_DESERIALIZE_ERROR;
+      LOG_WARN("invalid portable roaring bitmap size", K(ret), K(deserialize_size), K(rb_bin_size));
+    } else {
+      ROARING_TRY_CATCH(bitmap_ = roaring::api::roaring64_bitmap_portable_deserialize_safe(
+                            rb_bin,
+                            static_cast<size_t>(rb_bin_size)));
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(bitmap_)) {
+        ret = OB_DESERIALIZE_ERROR;
+        LOG_WARN("failed to deserialize portable roaring bitmap", K(ret), K(rb_bin_size));
+      } else if (need_validate
+                 && !roaring::api::roaring64_bitmap_internal_validate(bitmap_, nullptr)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("portable roaring bitmap consistency check failed", K(ret), K(rb_bin_size));
+      } else {
+        version_ = BITMAP_VESION_1;
+        type_ = ObRbType::BITMAP;
+      }
+    }
     if (OB_FAIL(ret)) {
       set_empty();
     }

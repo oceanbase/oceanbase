@@ -25,6 +25,8 @@ namespace oceanbase
 namespace common
 {
 class ObIVector;
+class ObBitmap;
+struct ObDatum;
 }
 
 namespace share
@@ -306,6 +308,17 @@ protected:
   int init_for_iceberg(ObExternalTableAccessOptions *options);
   int init_default_batch(ExprFixedArray &file_column_exprs);
   int build_delete_bitmap(const ObString &data_file_path, const int64_t task_idx);
+  static int compact_selected_rows(const common::ObBitmap &selection,
+                                   const int64_t row_count,
+                                   int64_t *row_numbers,
+                                   int64_t &compacted_count);
+  static int compact_selected_rows(const common::ObBitmap &selection,
+                                   const int64_t row_count,
+                                   common::ObDatum *row_number_datums,
+                                   int64_t &compacted_count);
+  void update_iceberg_delete_apply_metrics(const int64_t input_row_count,
+                                           const int64_t deleted_row_count,
+                                           const int64_t elapsed_time_ns);
   int check_can_skip_conv();
   ObExpr* get_column_expr_by_id(int64_t file_column_expr_idx);
   int generate_mapping_column_id(ObExpr* ext_file_column_expr,
