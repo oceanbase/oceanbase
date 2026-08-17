@@ -354,8 +354,7 @@ ObSSTableCopyFinishTask::ObSSTableCopyFinishTask()
     sstable_index_builder_(false /* not use writer buffer*/),
     restore_macro_block_id_mgr_(nullptr),
     macro_block_reuse_mgr_(),
-    allocator_(ObMemAttr(MTL_ID(), "SSTCopyFinish")),
-    split_src_sstable_handle_()
+    allocator_(ObMemAttr(MTL_ID(), "SSTCopyFinish"))
 {
 }
 
@@ -1187,6 +1186,7 @@ int ObSSTableCopyFinishTask::build_split_src_sstable_reuse_info_()
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
   ObTabletHandle split_src_tablet_handle;
+  ObTableHandleV2 split_src_sstable_handle;
   ObTablet *tablet = nullptr;
   ObTablet *split_src_tablet = nullptr;
   ObTabletID src_tablet_id;
@@ -1249,13 +1249,12 @@ int ObSSTableCopyFinishTask::build_split_src_sstable_reuse_info_()
   } else if (OB_ISNULL(sstable = sstable_wrapper.get_sstable())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sstable should not be NULL", K(ret), KP(sstable), KPC(sstable_param_));
-  } else if (OB_FAIL(split_src_sstable_handle_.set_sstable(sstable, &allocator_))) {
-    // hold this sstable until copy task finish
+  } else if (OB_FAIL(split_src_sstable_handle.set_sstable_with_tablet(sstable))) {
     LOG_WARN("failed to set sstable with tablet", K(ret), KPC(sstable_param_));
-  } else if (OB_FAIL(build_major_sstable_reuse_info_(split_src_sstable_handle_, split_src_tablet_handle))) {
+  } else if (OB_FAIL(build_major_sstable_reuse_info_(split_src_sstable_handle, split_src_tablet_handle))) {
     LOG_WARN("failed to build major sstable reuse info", K(ret), KPC(sstable_param_));
   } else {
-    LOG_INFO("succeed build major sstable reuse info", K(split_src_tablet_handle), K(split_src_sstable_handle_), KPC(sstable_param_));
+    LOG_INFO("succeed build major sstable reuse info", K(split_src_tablet_handle), K(split_src_sstable_handle), KPC(sstable_param_));
   }
   return ret;
 }
