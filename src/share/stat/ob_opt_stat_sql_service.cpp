@@ -636,7 +636,7 @@ int ObOptStatSqlService::construct_delete_column_histogram_sql(const uint64_t te
     if (OB_ISNULL(column_stats.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(column_stats.at(i)));
-    } else if (where_str.append_fmt(" %s (%lu, %ld, %ld, %lu) %s",
+    } else if (OB_FAIL(where_str.append_fmt(" %s (%lu, %ld, %ld, %lu) %s",
                                      i != 0 ? "," : "(TENANT_ID, TABLE_ID, PARTITION_ID, COLUMN_ID) IN (",
                                      ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
                                      ObSchemaUtils::get_extract_schema_id(exec_tenant_id, column_stats.at(i)->get_table_id()),
@@ -676,7 +676,7 @@ int ObOptStatSqlService::check_column_histogram_valid(const uint64_t tenant_id,
     if (OB_ISNULL(column_stats.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(column_stats.at(i)));
-    } else if (where_str.append_fmt(
+    } else if (OB_FAIL(where_str.append_fmt(
                    " %s (%lu, %ld, %ld, %lu) %s",
                    i != 0 ? "," : "(TENANT_ID, TABLE_ID, PARTITION_ID, COLUMN_ID) IN (",
                    ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
