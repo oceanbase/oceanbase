@@ -46,7 +46,8 @@ public:
     bounded_end_pos_(INT64_MAX),
     already_read_size_(0),
     is_scan_full_file_(true),
-    chunk_idx_(OB_INVALID_INDEX) {}
+    chunk_idx_(OB_INVALID_INDEX),
+    need_check_bom_(false) {}
 
   virtual void reuse() override
   {
@@ -68,6 +69,7 @@ public:
     already_read_size_ = 0;
     is_scan_full_file_ = true;
     chunk_idx_ = OB_INVALID_INDEX;
+    need_check_bom_ = false;
   }
   DECLARE_VIRTUAL_TO_STRING;
   char *buf_;
@@ -90,6 +92,7 @@ public:
   int64_t already_read_size_;
   bool is_scan_full_file_;
   int64_t chunk_idx_;
+  bool need_check_bom_;
 };
 
 class ObCSVTableRowIterator : public ObExternalTableRowIterator {
@@ -102,7 +105,8 @@ public:
                             max_buffer_size_(1024 * 1024 * 1024),
                             enable_prefetch_(false),
                             prefetch_mgr_(),
-                            storage_type_(OB_STORAGE_MAX_TYPE) {}
+                            storage_type_(OB_STORAGE_MAX_TYPE),
+                            enable_check_bom_(false) {}
   virtual ~ObCSVTableRowIterator();
   virtual int init(const storage::ObTableScanParam *scan_param) override;
   int get_next_row() override;
@@ -144,7 +148,9 @@ private:
     uint64_t hash_value = murmurhash(&row_num, sizeof(row_num), row_sample_seed_);
     return hash_value > row_sample_cut_off_;
   }
+  static bool has_utf8_bom(const char *buf, const int64_t len);
 private:
+  static const int64_t UTF8_BOM_LEN = 3;
   ObCSVIteratorState state_;
   ObBitVector *bit_vector_cache_;
   common::ObMalloc malloc_alloc_; //for internal data buffers
@@ -163,6 +169,7 @@ private:
   bool is_row_sample_ = false;
   uint64_t row_sample_seed_ = 0;
   uint64_t row_sample_cut_off_ = 0;
+  bool enable_check_bom_;
 };
 
 

@@ -284,7 +284,7 @@ GLOBAL_ALIAS SESSION_ALIAS WITH_COLUMN_GROUP
         BACKUP BACKUP_COPIES BALANCE BANDWIDTH BASE BASELINE BASELINE_ID BASIC BEGI BINDING SHARDING BINARY_FORMAT BINLOG BIT BIT_AND
         BIT_OR BIT_XOR BLOCK BLOCK_INDEX BLOCK_SIZE BLOOM_FILTER BOOL BOOLEAN BOOTSTRAP BTREE BYTE
         BREADTH BUCKETS BISON_LIST BACKUPSET BACKED BACKUPPIECE BACKUP_BACKUP_DEST BACKUPROUND
-        BADFILE BOUNDARY_COLUMN BOUNDARY_COLUMN_UNIT BUFFER_SIZE BIGINT_PRECISION
+        BADFILE BOUNDARY_COLUMN BOUNDARY_COLUMN_UNIT BUFFER_SIZE BIGINT_PRECISION BYTEORDERMARK
 
         CACHE CALIBRATION CALIBRATION_INFO CANCEL CASCADED CAST CATALOG CATALOGS CATALOG_NAME CHAIN CHANGED CHARSET CHECKSUM CHECKPOINT CHUNK CIPHER
         CLASS_ORIGIN CLEAN CLEAR CLIENT CLONE CLOG CLOSE CLUSTER CLUSTERING CLUSTER_ID CLUSTER_NAME COALESCE COLUMN_BLOOM_FILTER COLUMN_STAT
@@ -336,7 +336,7 @@ GLOBAL_ALIAS SESSION_ALIAS WITH_COLUMN_GROUP
         MATERIALIZED MEMBER MEMSTORE_PERCENT MINVALUE MY_NAME MERGE_ENGINE MAX_CLIENT_POOL_SIZE
 
         NAME NAMES NAMESPACE NATIONAL NCHAR NDB NDBCLUSTER NESTED NEW NEXT NO NOAUDIT NODEGROUP NONE NORMAL NOW NOWAIT NEVER NGRAM_TOKEN_SIZE
-        NOMINVALUE NOMAXVALUE NOORDER NOCYCLE NOCACHE NO_WAIT NULLS NUMBER NVARCHAR NTILE NTH_VALUE NOARCHIVELOG NETWORK NET_BANDWIDTH_WEIGHT NOPARALLEL
+        NOMINVALUE NOMAXVALUE NOORDER NOCYCLE NOCACHE NOCHECK NO_WAIT NULLS NUMBER NVARCHAR NTILE NTH_VALUE NOARCHIVELOG NETWORK NET_BANDWIDTH_WEIGHT NOPARALLEL
         NULL_IF_EXETERNAL
 
         OAUTH2_SVR_URI OBSOLETE OBJECT OBJECT_NAME_DISPLAY OCCUR OF OFF OFFSET OLD OLD_PASSWORD ONE ONE_SHOT ONLY OPEN OPTIONS ORDINALITY ORIG_DEFAULT OWNER OLD_KEY OVER
@@ -570,7 +570,7 @@ GLOBAL_ALIAS SESSION_ALIAS WITH_COLUMN_GROUP
 %type <node> opt_storage_name opt_calibration_list calibration_info_list
 %type <node> switchover_tenant_stmt switchover_clause opt_verify
 %type <node> recover_tenant_stmt recover_point_clause
-%type <node> external_file_format_list external_file_format external_properties_list external_properties external_table_partition_option opt_pattern opt_as_alias pattern_expr format_expr url_expr url_table_function_expr location_expr load_export_location_expr
+%type <node> external_file_format_list external_file_format byte_order_mark_option external_properties_list external_properties external_table_partition_option opt_pattern opt_as_alias pattern_expr format_expr url_expr url_table_function_expr location_expr load_export_location_expr
 %type <node> storage_cache_policy_attribute_list storage_cache_time_policy_attribute_list storage_cache_time_policy_attribute retention_time_unit opt_storage_cache_policy
 %type <node> opt_path_info opt_access_info opt_storage_use_for opt_attribute opt_scope_type
 %type <node> dynamic_sampling_hint add_external_table_partition_actions add_external_table_partition_action
@@ -10429,9 +10429,26 @@ TYPE COMP_EQ STRING_VALUE
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_MAX_ROW_LENGTH, 1, $3);
 }
+| BYTEORDERMARK COMP_EQ byte_order_mark_option
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_BYTE_ORDER_MARK, 1, $3);
+}
 | HEADER COMP_EQ BOOL_VALUE
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_EXPORT_CSV_HEADER, 1, $3);
+}
+;
+
+byte_order_mark_option:
+CHECK
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 1;
+}
+| NOCHECK
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 0;
 }
 ;
 
@@ -28493,6 +28510,7 @@ ACCESS_INFO
 |       BOUNDARY_COLUMN_UNIT
 |       BTREE
 |       BYTE
+|       BYTEORDERMARK
 |       BREADTH
 |       BUCKETS
 |       BUFFER_SIZE
@@ -28922,6 +28940,7 @@ ACCESS_INFO
 |       NOARCHIVELOG
 |       NOAUDIT
 |       NOCACHE
+|       NOCHECK
 |       NOCYCLE
 |       NODEGROUP
 |       NOMINVALUE
