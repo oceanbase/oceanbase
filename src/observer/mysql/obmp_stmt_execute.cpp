@@ -2515,6 +2515,10 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
                 int64_t data_len = 0;
                 if (OB_FAIL(lob.get_lob_data_byte_len(data_len))) {
                   LOG_WARN("fail to get inrow data len", K(ret), K(lob));
+                } else if (OB_UNLIKELY(data_len < 0 || data_len > str.length())) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("got invalid ps lob param, data_len out of bound",
+                           K(ret), K(length), K(data_len), K(lob), K(type), K(cs_type));
                 } else {
                   extra_len = str.length() - data_len;
                 }
