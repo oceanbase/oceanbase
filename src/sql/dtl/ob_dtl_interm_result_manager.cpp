@@ -7,6 +7,7 @@
 #include "ob_dtl_interm_result_manager.h"
 #include "observer/virtual_table/ob_all_virtual_dtl_interm_result_monitor.h"
 #include "share/detect/ob_detect_manager_utils.h"
+#include "sql/engine/px/ob_px_util.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -341,6 +342,45 @@ int ObDTLIntermResultManager::erase_interm_result_info(const ObDTLIntermResultKe
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_PX_BATCH_RESCAN_ERASE_FAIL,
+                 "fail to erase the first px batch rescan intermediate result");
+int ObDTLIntermResultManager::erase_px_batch_rescan_interm_results(
+    int64_t channel_id,
+    int64_t batch_count,
+    bool need_unregister_check_item_from_dm)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(batch_count < 0
+                  || batch_count > PX_RESCAN_BATCH_ROW_COUNT)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid px batch rescan cleanup argument",
+             K(ret), K(channel_id), K(batch_count));
+  } else if (0 == batch_count) {
+    // Channel setup may fail before the first batch is materialized.
+  } else {
+    ObDTLIntermResultKey key;
+    key.channel_id_ = channel_id;
+    for (int64_t batch_id = 0; batch_id < batch_count; ++batch_id) {
+      key.batch_id_ = batch_id;
+      int tmp_ret = OB_SUCCESS;
+      if (0 == batch_id) {
+        tmp_ret = OB_E(ERRSIM_PX_BATCH_RESCAN_ERASE_FAIL)
+            erase_interm_result_info(key, need_unregister_check_item_from_dm);
+      } else {
+        tmp_ret = erase_interm_result_info(key, false /* need_unregister_check_item_from_dm */);
+      }
+      if (OB_SUCCESS != tmp_ret && OB_HASH_NOT_EXIST != tmp_ret) {
+        LOG_WARN("failed to erase px batch rescan interm result",
+                 K(tmp_ret), K(channel_id), K(batch_id), K(batch_count));
+        if (OB_SUCCESS == ret) {
+          ret = tmp_ret;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDTLIntermResultManager::clear_timeout_result_info()
 {
   int ret = OB_SUCCESS;
@@ -513,6 +553,11 @@ int ObDTLIntermResultManager::erase_tenant_interm_result_info()
 int ObDTLIntermResultManager::process_interm_result(ObDtlLinkedBuffer *buffer, int64_t channel_id)
 {
   int ret = OB_SUCCESS;
+  // dfo_key_ identifies the parent DFO. Only a root-adjacent transmit produces
+  // PX batch-rescan results for the Coord; ordinary single-DFO intermediate results
+  // have a non-root parent and retain their original per-key DM callback.
+  const bool is_px_batch_rescan = OB_NOT_NULL(buffer)
+      && ObDfo::MAX_DFO_ID == buffer->get_dfo_key().get_dfo_id();
   if (OB_ISNULL(buffer)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to process buffer", K(ret));
@@ -528,7 +573,9 @@ int ObDTLIntermResultManager::process_interm_result(ObDtlLinkedBuffer *buffer, i
       const int64_t length = batch_info.end_ - start_pos;
       const int64_t rows = batch_info.rows_;
       const bool is_eof = infos.count() - 1 == i ? buffer->is_eof() : true;
-      if (OB_FAIL(process_interm_result_inner(*buffer, key, start_pos, length, rows, is_eof, false))) {
+      if (OB_FAIL(process_interm_result_inner(
+              *buffer, key, start_pos, length, rows, is_eof, false,
+              is_px_batch_rescan))) {
         LOG_WARN("process interm result inner", K(ret));
       }
     }
@@ -539,7 +586,9 @@ int ObDTLIntermResultManager::process_interm_result(ObDtlLinkedBuffer *buffer, i
     key.timeout_ts_ = buffer->timeout_ts();
     key.batch_id_ = buffer->get_batch_id();
     key.channel_id_ = channel_id;
-    if (OB_FAIL(process_interm_result_inner(*buffer, key, 0, buffer->size(), 0, buffer->is_eof(), true))) {
+    if (OB_FAIL(process_interm_result_inner(
+            *buffer, key, 0, buffer->size(), 0, buffer->is_eof(), true,
+            is_px_batch_rescan))) {
       LOG_WARN("process interm result inner", K(ret));
     }
     LOG_TRACE("process interm result", K(key), K(buffer->size()), K(buffer->get_batch_info().count()),
@@ -555,9 +604,11 @@ int ObDTLIntermResultManager::process_interm_result_inner(ObDtlLinkedBuffer &buf
                                                           int64_t length,
                                                           int64_t rows,
                                                           bool is_eof,
-                                                          bool append_whole_block)
+                                                          bool append_whole_block,
+                                                          bool is_px_batch_rescan)
 {
   int ret = OB_SUCCESS;
+  bool should_register_px_dm = false;
   ObDTLIntermResultInfo interm_res_info;
   ObDTLIntermResultInfoGuard result_info_guard;
   ObDTLMemProfileKey mem_profile_key(buffer.get_px_sequence_id(), buffer.get_dfo_id());
@@ -599,15 +650,21 @@ int ObDTLIntermResultManager::process_interm_result_inner(ObDtlLinkedBuffer &buf
       } else if (OB_FAIL(insert_interm_result_info(interm_res_key, result_info_guard.result_info_))) {
         LOG_WARN("fail to insert row store", K(ret));
       } else {
-        int reg_dm_ret = ObDetectManagerUtils::single_dfo_register_check_item_into_dm(
-            buffer.get_register_dm_info(), interm_res_key, result_info_guard.result_info_);
-        if (OB_SUCCESS != reg_dm_ret) {
-          LOG_WARN("[DM] single dfo fail to register_check_item_into_dm",
-                   K(reg_dm_ret), K(buffer.get_register_dm_info()), K(interm_res_key));
+        if (is_px_batch_rescan) {
+          should_register_px_dm = 0 == interm_res_key.batch_id_
+              && buffer.get_register_dm_info().is_valid();
+          LOG_TRACE("insert px batch rescan interm result", K(interm_res_key));
+        } else {
+          int reg_dm_ret = ObDetectManagerUtils::single_dfo_register_check_item_into_dm(
+              buffer.get_register_dm_info(), interm_res_key, result_info_guard.result_info_);
+          if (OB_SUCCESS != reg_dm_ret) {
+            LOG_WARN("[DM] single dfo fail to register_check_item_into_dm",
+                      K(reg_dm_ret), K(buffer.get_register_dm_info()), K(interm_res_key));
+          }
+          LOG_TRACE("register single dfo check item", K(reg_dm_ret),
+                    K(buffer.get_register_dm_info()), K(interm_res_key),
+                    K(result_info_guard.result_info_->unregister_dm_info_.node_sequence_id_));
         }
-        LOG_TRACE("register_check_item_into_dm", K(reg_dm_ret),
-            K(buffer.get_register_dm_info()), K(interm_res_key),
-            K(result_info_guard.result_info_->unregister_dm_info_.node_sequence_id_));
       }
     } else {
       LOG_WARN("fail to get interm_result_info", K(ret), K(interm_res_key));
@@ -641,6 +698,20 @@ int ObDTLIntermResultManager::process_interm_result_inner(ObDtlLinkedBuffer &buf
         LOG_WARN("fail to append part block", K(ret), K(interm_res_key));
       }
     }
+  }
+
+  if (OB_SUCC(ret) && should_register_px_dm) {
+    int reg_dm_ret = ObDetectManagerUtils::px_batch_rescan_register_check_item_into_dm(
+        buffer.get_register_dm_info(),
+        interm_res_key.channel_id_,
+        result_info_guard.result_info_);
+    if (OB_SUCCESS != reg_dm_ret) {
+      LOG_WARN("[DM] px batch rescan fail to register_check_item_into_dm",
+               K(reg_dm_ret), K(buffer.get_register_dm_info()), K(interm_res_key));
+    }
+    LOG_TRACE("register px batch rescan check item", K(reg_dm_ret),
+              K(buffer.get_register_dm_info()), K(interm_res_key),
+              K(result_info_guard.result_info_->unregister_dm_info_.node_sequence_id_));
   }
 
   if (OB_FAIL(ret)) {

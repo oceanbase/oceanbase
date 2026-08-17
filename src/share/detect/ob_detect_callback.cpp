@@ -7,6 +7,7 @@
 #include "ob_detect_callback.h"
 #include "src/share/detect/ob_detect_rpc_proxy.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
+#include "sql/engine/px/ob_px_util.h"
 #include "sql/dtl/ob_dtl_rpc_channel.h"
 #include "sql/session/ob_sql_session_mgr.h"
 
@@ -15,7 +16,7 @@ namespace common {
 DEFINE_ENUM_FUNC(DetectCallBackType, detect_callback_type, DETECT_CALLBACK_TYPE);
 
 ObIDetectCallback::ObIDetectCallback(uint64_t tenant_id, const ObIArray<ObPeerTaskState> &peer_states)
-    : ref_count_(0), sequence_id_(0), executed_(false), d_node_()
+    : ref_count_(0), callback_failure_count_(0), sequence_id_(0), executed_(false), d_node_()
 {
   int ret = OB_SUCCESS;
   peer_states_.set_attr(ObMemAttr(tenant_id, "DmCbStArr"));
@@ -67,6 +68,11 @@ int64_t ObIDetectCallback::inc_ref_count(int64_t count)
 int64_t ObIDetectCallback::dec_ref_count()
 {
   return ATOMIC_SAF(&ref_count_, 1);
+}
+
+int64_t ObIDetectCallback::inc_callback_failure_count()
+{
+  return ATOMIC_AAF(&callback_failure_count_, 1);
 }
 
 class ObDmInterruptQcCall
@@ -264,6 +270,24 @@ int ObSingleDfoDetectCB::do_callback()
       ret = ret == OB_HASH_NOT_EXIST ? OB_SUCCESS : ret;
       LIB_LOG(WARN, "[DM] single dfo erase_interm_result_info", K(ret), K(key_), K_(trace_id));
     }
+  }
+  return ret;
+}
+
+int ObPxBatchRescanDetectCB::do_callback()
+{
+  int ret = OB_SUCCESS;
+  dtl::ObDTLIntermResultManager *interm_res_manager = MTL(dtl::ObDTLIntermResultManager*);
+  if (OB_ISNULL(interm_res_manager)) {
+    //ignore ret
+    LIB_LOG(WARN, "[DM] px batch rescan cleanup failed because interm_res_manager is null",
+            K(ret), K_(channel_id), K_(trace_id));
+  } else {
+    ret = interm_res_manager->erase_px_batch_rescan_interm_results(
+        channel_id_, sql::PX_RESCAN_BATCH_ROW_COUNT,
+        false /* need_unregister_check_item_from_dm */);
+    LIB_LOG(WARN, "[DM] px batch rescan erase interm results",
+            K(ret), K_(channel_id), K_(trace_id));
   }
   return ret;
 }

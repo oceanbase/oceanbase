@@ -1079,20 +1079,23 @@ int ObPxCoordOp::erase_dtl_interm_result()
   }
 #endif
   if (static_cast<const ObPxCoordSpec&>(get_spec()).batch_op_info_.is_inited()) {
-    ObDTLIntermResultKey key;
     ObDtlChannelInfo ci;
     // no need OB_SUCCESS in for-loop.
     for (int64_t idx = 0; idx < task_ch_set_.count(); ++idx) {
-      if (OB_FAIL(task_ch_set_.get_channel_info(idx, ci))) {
-        LOG_WARN("fail get channel info", K(ret));
+      int tmp_ret = task_ch_set_.get_channel_info(idx, ci);
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("fail get channel info", K(tmp_ret), K(idx));
       } else {
-        key.channel_id_ = ci.chid_;
-        for (int j = 0; j < last_px_batch_rescan_size_; ++j) {
-          key.batch_id_ = j;
-          if (OB_FAIL(MTL(ObDTLIntermResultManager*)->erase_interm_result_info(key))) {
-            LOG_TRACE("fail to release receive internal result", K(ret));
-          }
+        tmp_ret = MTL(ObDTLIntermResultManager*)->erase_px_batch_rescan_interm_results(
+            ci.chid_, last_px_batch_rescan_size_,
+            true /* need_unregister_check_item_from_dm */);
+        if (OB_SUCCESS != tmp_ret) {
+          LOG_WARN("fail to erase px batch rescan interm results",
+                   K(tmp_ret), K(ci.chid_), K_(last_px_batch_rescan_size));
         }
+      }
+      if (OB_SUCCESS == ret && OB_SUCCESS != tmp_ret) {
+        ret = tmp_ret;
       }
     }
     last_px_batch_rescan_size_ = 0;

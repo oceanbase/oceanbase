@@ -98,6 +98,7 @@ public:
   int64_t get_ref_count() { return ATOMIC_LOAD(&ref_count_); }
   int64_t inc_ref_count(int64_t count = 1);
   int64_t dec_ref_count();
+  int64_t inc_callback_failure_count();
 
   void set_from_svr_addr(const common::ObAddr &from) { from_svr_addr_ = from; }
   const common::ObAddr &get_from_svr_addr() { return from_svr_addr_; }
@@ -113,6 +114,8 @@ public:
   inline int64_t to_string(char *buf, const int64_t len) const { return 0; }
 private:
   int64_t ref_count_;
+  // Cumulative failures during this callback's lifetime. Success does not reset the leak-prevention cap.
+  int64_t callback_failure_count_;
   ObSEArray<ObPeerTaskState, 8, common::ModulePageAllocator, true> peer_states_;
 protected:
   common::ObAddr from_svr_addr_; // in which server the task is detected as finished
@@ -173,6 +176,23 @@ public:
   }
 private:
   sql::dtl::ObDTLIntermResultKey key_;
+};
+
+class ObPxBatchRescanDetectCB : public ObIDetectCallback
+{
+public:
+  ObPxBatchRescanDetectCB(uint64_t tenant_id,
+                         const ObIArray<ObPeerTaskState> &peer_states,
+                         int64_t channel_id)
+    : ObIDetectCallback(tenant_id, peer_states), channel_id_(channel_id) {}
+
+  int do_callback() override;
+  const char *get_type() const override
+  {
+    return get_detect_callback_type_string(DetectCallBackType::PX_BATCH_RESCAN_DETECT_CB);
+  }
+private:
+  int64_t channel_id_;
 };
 
 class ObTempTableDetectCB : public ObIDetectCallback

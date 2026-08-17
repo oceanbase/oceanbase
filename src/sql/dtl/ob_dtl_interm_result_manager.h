@@ -420,12 +420,16 @@ public:
                                   int64_t length,
                                   int64_t rows,
                                   bool is_eof,
-                                  bool append_whole_block);
+                                  bool append_whole_block,
+                                  bool is_px_batch_rescan);
   int get_interm_result_info(ObDTLIntermResultKey &key, ObDTLIntermResultInfo &result_info);
   int create_interm_result_info(ObMemAttr &attr, ObDTLIntermResultInfoGuard &result_info_guard,
                     const ObDTLIntermResultMonitorInfo &monitor_info,
                     ObDTLIntermResultInfo::StoreType store_type);
   int erase_interm_result_info(const ObDTLIntermResultKey &key, bool need_unregister_check_item_from_dm=true);
+  int erase_px_batch_rescan_interm_results(int64_t channel_id,
+                                           int64_t batch_count,
+                                           bool need_unregister_check_item_from_dm);
   int insert_interm_result_info(ObDTLIntermResultKey &key, ObDTLIntermResultInfo *&result_info);
   // 以下两个接口会持有bucket读锁.
   int clear_timeout_result_info();

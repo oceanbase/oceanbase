@@ -55,11 +55,15 @@ public:
   static int single_dfo_register_check_item_into_dm(const common::ObRegisterDmInfo &register_dm_info,
                                                     const sql::dtl::ObDTLIntermResultKey &key,
                                                     sql::dtl::ObDTLIntermResultInfo *result_info);
+  static int px_batch_rescan_register_check_item_into_dm(
+      const common::ObRegisterDmInfo &register_dm_info,
+      int64_t channel_id,
+      sql::dtl::ObDTLIntermResultInfo *result_info);
   static int temp_table_register_check_item_into_dm(const common::ObDetectableId &qc_detectable_id,
                                                     const common::ObAddr &qc_addr,
                                                     const sql::dtl::ObDTLIntermResultKey &dtl_int_key,
                                                     sql::dtl::ObDTLIntermResultInfo *&row_store);
-  // both for single_dfo and temp_table
+  // for single_dfo, px batch rescan and temp_table
   static void intern_result_unregister_check_item_from_dm(sql::dtl::ObDTLIntermResultInfo *result_info);
 
   static int p2p_datahub_register_check_item_into_dm(const common::ObRegisterDmInfo &register_dm_info,

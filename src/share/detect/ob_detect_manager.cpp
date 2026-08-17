@@ -9,6 +9,8 @@
 namespace oceanbase {
 namespace common {
 
+static const int64_t MAX_DETECT_CALLBACK_FAILURE_COUNT = 3;
+
 ObDetectableIdGen::ObDetectableIdGen()
 {
   detect_sequence_id_ = ObTimeUtil::current_time();
@@ -204,7 +206,8 @@ void ObDetectManager::destroy()
       ObIDetectCallback *prev = curr->get_prev();
       // DM is destroying means that all tenant threads have already exited,
       // the remain detect callbacks must be
-      // ObSingleDfoDetectCB, ObTempTableDetectCB, or ObP2PDataHubDetectCB
+      // ObSingleDfoDetectCB, ObPxBatchRescanDetectCB, ObTempTableDetectCB,
+      // or ObP2PDataHubDetectCB
       int temp_ret = curr->do_callback();
       LIB_LOG(WARN, "[DM] do callback during mtl destroy",
             K(temp_ret), K(curr->get_trace_id()),
@@ -506,12 +509,29 @@ bool ObDetectManager::ObDetectCallbackExecuteCall::operator()(hash::HashMapPair<
               K(curr->get_trace_id()), K(from_svr_addr_), K(detectable_id),
               K(curr->get_type()), K(curr->get_sequence_id()));
       curr->set_from_svr_addr(from_svr_addr_);
+      bool callback_finished = false;
       if (OB_FAIL(curr->do_callback())) {
-        // if do_callback failed, reset state to running for next detect loop
-        curr->atomic_set_running(from_svr_addr_);
-        LIB_LOG(WARN, "[DM] failed to do_callback", K(curr->get_trace_id()), K(from_svr_addr_),
-                K(detectable_id), K(curr->get_type()), K(curr->get_sequence_id()));
+        const int64_t failure_count = curr->inc_callback_failure_count();
+        if (failure_count >= MAX_DETECT_CALLBACK_FAILURE_COUNT) {
+          callback_finished = true;
+          LIB_LOG(ERROR,
+                  "[DM] detect callback failure limit reached, ignore error and stop retrying current peer",
+                  KR(ret), K(failure_count), K(MAX_DETECT_CALLBACK_FAILURE_COUNT),
+                  K(curr->get_trace_id()), K(from_svr_addr_), K(detectable_id),
+                  K(curr->get_type()), K(curr->get_sequence_id()),
+                  K(curr->reentrant()), K(curr->get_ref_count()));
+        } else {
+          // Reset the current peer state so this callback can be retried in the next detect loop.
+          const int state_ret = curr->atomic_set_running(from_svr_addr_);
+          LIB_LOG(WARN, "[DM] failed to do_callback, retry later",
+                  K(ret), K(failure_count), K(state_ret),
+                  K(curr->get_trace_id()), K(from_svr_addr_), K(detectable_id),
+                  K(curr->get_type()), K(curr->get_sequence_id()));
+        }
       } else {
+        callback_finished = true;
+      }
+      if (callback_finished) {
         if (!curr->reentrant()) {
           curr->set_executed();
         }
@@ -557,7 +577,7 @@ void ObDetectManager::ObDetectReqGetCall::operator()(hash::HashMapPair<ObDetecta
       ARRAY_FOREACH_NORET(peer_states, idx) {
         ObPeerTaskState &peer_state = peer_states.at(idx);
         // only detect running tasks
-        if ((int32_t)ObTaskState::FINISHED == ATOMIC_LOAD((int32_t*)&peer_state)) {
+        if ((int32_t)ObTaskState::FINISHED == ATOMIC_LOAD((int32_t*)&peer_state.peer_state_)) {
           continue;
         }
         obrpc::ObTaskStateDetectReq **req_ptr_ptr = req_map_.get(peer_state.peer_addr_);

@@ -241,6 +241,45 @@ int ObDetectManagerUtils::single_dfo_register_check_item_into_dm(const common::O
   return ret;
 }
 
+int ObDetectManagerUtils::px_batch_rescan_register_check_item_into_dm(
+    const common::ObRegisterDmInfo &register_dm_info,
+    int64_t channel_id,
+    ObDTLIntermResultInfo *result_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(result_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LIB_LOG(WARN, "[DM] px batch rescan result info is null", K(ret), K(channel_id));
+  } else if (register_dm_info.is_valid()) {
+    uint64_t node_sequence_id = 0;
+    common::ObPxBatchRescanDetectCB *cb = nullptr;
+    ObSEArray<ObPeerTaskState, 1> peer_states;
+    if (OB_FAIL(peer_states.push_back(ObPeerTaskState{register_dm_info.addr_}))) {
+      LIB_LOG(WARN, "[DM] failed to push_back to peer_states",
+              K(ret), K(register_dm_info), K(channel_id));
+    }
+    if (OB_SUCC(ret)) {
+      uint64_t tenant_id = register_dm_info.detectable_id_.tenant_id_;
+      MTL_SWITCH(tenant_id) {
+        ObDetectManager* dm = MTL(ObDetectManager*);
+        if (OB_ISNULL(dm)) {
+          // ignore ret
+          LIB_LOG(WARN, "[DM] dm is null", K(tenant_id));
+        } else if (OB_FAIL(dm->register_check_item(
+                          register_dm_info.detectable_id_, cb, node_sequence_id, false,
+                          peer_states, channel_id))) {
+          LIB_LOG(WARN, "[DM] px batch rescan register_check_item failed ",
+                  K(ret), K(register_dm_info), K(channel_id));
+        } else {
+          result_info->unregister_dm_info_.detectable_id_ = register_dm_info.detectable_id_;
+          result_info->unregister_dm_info_.node_sequence_id_ = node_sequence_id;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDetectManagerUtils::temp_table_register_check_item_into_dm(const common::ObDetectableId &qc_detectable_id,
                                                                  const common::ObAddr &qc_addr,
                                                                  const dtl::ObDTLIntermResultKey &dtl_int_key,
