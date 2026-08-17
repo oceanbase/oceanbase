@@ -8,6 +8,7 @@
 #include "ob_backup_index_rebuild_task.h"
 #include "storage/backup/ob_backup_factory.h"
 #include "storage/backup/ob_backup_operator.h"
+#include "storage/backup/ob_backup_task.h"
 #include "storage/backup/ob_backup_utils.h"
 #include "storage/high_availability/ob_storage_ha_dag.h"
 #include "observer/ob_server_event_history_table_operator.h"
@@ -24,19 +25,10 @@ using namespace oceanbase::blocksstable;
 namespace oceanbase {
 namespace backup {
 
-#ifndef REPORT_TASK_RESULT
-#define REPORT_TASK_RESULT(dag_id, result)\
-    if (OB_SUCCESS != (tmp_ret = ObBackupUtils::report_task_result(param_.job_desc_.job_id_, \
-                              param_.job_desc_.task_id_, \
-                              param_.tenant_id_, \
-                              param_.ls_id_, \
-                              param_.turn_id_, \
-                              param_.retry_id_, \
-                              param_.job_desc_.trace_id_, \
-                              (dag_id), \
-                              (result), \
-                              report_ctx_))) { \
-      LOG_WARN("failed to report task result", K(tmp_ret)); \
+#ifndef SET_DAG_NET_RESULT
+#define SET_DAG_NET_RESULT(result)\
+    if (OB_SUCCESS != (tmp_ret = ObBackupDagNet::set_result_from_dag(this->get_dag(), (result)))) { \
+      LOG_WARN("failed to set dag net result", K(tmp_ret), K(result)); \
     }
 #endif
 
@@ -710,7 +702,7 @@ void ObBackupMacroIndexMergeFinishTask::report_read_task_failed(const int result
     need_report_error = is_set;
   }
   if (0 == param_.ls_id_.id() || need_report_error) {
-    REPORT_TASK_RESULT(this->get_dag()->get_dag_id(), result_code);
+    SET_DAG_NET_RESULT(result_code);
   }
 }
 
@@ -1056,7 +1048,7 @@ int ObBackupMetaIndexMergeFinishTask::process()
     need_report_error = is_set;
   }
   if (0 == param_.ls_id_.id() || need_report_error) {
-    REPORT_TASK_RESULT(this->get_dag()->get_dag_id(), ret);
+    SET_DAG_NET_RESULT(ret);
   }
   const int64_t cost_us = ObTimeUtility::current_time() - start_ts;
   record_server_event_(cost_us);
@@ -1291,7 +1283,7 @@ void ObBackupMetaIndexMergeFinishTask::report_read_task_failed(const int result_
     need_report_error = is_set;
   }
   if (0 == param_.ls_id_.id() || need_report_error) {
-    REPORT_TASK_RESULT(this->get_dag()->get_dag_id(), result_code);
+    SET_DAG_NET_RESULT(result_code);
   }
 }
 
@@ -1506,8 +1498,8 @@ int ObBackupIndexRebuildPrepareTask::process()
     }
   }
 
-  // If the prepare task itself fails, no follow-up finish task will report the
-  // result, so report here. On success the meta finish task does the reporting.
+  // If the prepare task itself fails, no follow-up finish task will select the
+  // terminal result. On success the meta finish task selects it.
   if (OB_FAIL(ret)) {
     if (OB_NOT_NULL(ls_backup_ctx_)) {
       ls_backup_ctx_->set_finished();
@@ -1516,7 +1508,7 @@ int ObBackupIndexRebuildPrepareTask::process()
       need_report_error = is_set;
     }
     if (0 == param_.ls_id_.id() || need_report_error) {
-      REPORT_TASK_RESULT(this->get_dag()->get_dag_id(), ret);
+      SET_DAG_NET_RESULT(ret);
     }
   }
   return ret;

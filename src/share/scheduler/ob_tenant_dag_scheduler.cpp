@@ -4,6 +4,7 @@
  */
 #define USING_LOG_PREFIX COMMON
 #include "ob_tenant_dag_scheduler.h"
+#include "share/scheduler/ob_dag_net_finalizer.h"
 #include "lib/thread/thread_mgr.h"
 #include "storage/compaction/ob_tenant_compaction_progress.h"
 #include "storage/compaction/ob_compaction_diagnose.h"
@@ -504,6 +505,7 @@ const char *ObITask::ObITaskTypeStr[] = {
   "BACKUP_MACRO_INDEX_READ",
   "BACKUP_META_INDEX_MERGE_FINISH",
   "BACKUP_META_INDEX_READ",
+  "DAG_NET_FINALIZER",
   "MAX"
 };
 
@@ -558,7 +560,8 @@ int ObITask::do_work(bool is_sys_task)
     const ObDagId &dag_id = dag_->get_dag_id();
     const int64_t start_time = ObTimeUtility::fast_current_time();
     COMMON_LOG(DEBUG, "task start process", K(start_time), K(*this));
-    if (!is_sys_task) {
+    if (!is_sys_task
+        || ObDagType::DAG_TYPE_DAG_NET_FINALIZER == dag_->get_type()) {
     } else if (OB_TMP_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(dag_id, is_cancel))) {
       COMMON_LOG(WARN, "failed to check is task canceled", K(tmp_ret), K(*this));
     } else if (is_cancel) {
@@ -701,19 +704,6 @@ void ObITask::prepare_check_cycle()
   } else {
     color_ = ObITaskColor::BLACK;
   }
-}
-
-int ObITask::cancel_task()
-{
-  int ret = OB_SUCCESS;
-  if (!is_valid()) {
-    ret = OB_NOT_INIT;
-    COMMON_LOG(WARN, "task is invalid", K(ret), K_(type), KP_(dag));
-  } else {
-    lib::ObMutexGuard guard(lock_);
-    reset_node();
-  }
-  return ret;
 }
 
 const char *ObITask::get_task_status_str(enum ObITaskStatus status)
@@ -1459,33 +1449,6 @@ int ObIDag::inner_add_child_without_inheritance(ObIDag &child)
   return ret;
 }
 
-int ObIDag::cancel_task(const ObITask::ObITaskType &type)
-{
-  int ret = OB_SUCCESS;
-  ObMutexGuard guard(lock_);
-  ObITask *cur_task = task_list_.get_first();
-  const ObITask *head = task_list_.get_header();
-  while (head != cur_task && nullptr != cur_task && OB_SUCC(ret)) {
-    ObITask *task = cur_task;
-    cur_task = cur_task->get_next();
-    if ((ObITask::TASK_STATUS_WAITING == task->get_status()
-            || ObITask::TASK_STATUS_RETRY == task->get_status())
-        && task->get_type() == type) {
-      if (OB_FAIL(task->cancel_task())) {
-        LOG_WARN("failed to cancel task", K(ret), KPC(task));
-      } else if (OB_ISNULL(task_list_.remove(task))) {
-        ret = OB_ERR_UNEXPECTED;
-        COMMON_LOG(WARN, "failed to remove finished task from task_list", K(ret));
-      } else {
-        COMMON_LOG(INFO, "cancel task", K(type), KPC(task));
-        task->~ObITask();
-        allocator_->free(task);
-      }
-    }
-  }
-  return ret;
-}
-
 int ObIDag::fill_comment(char *buf, const int64_t buf_len)
 {
   int ret = OB_SUCCESS;
@@ -1550,7 +1513,8 @@ const char *dag_net_list_to_str(const ObDagNetListIndex &dag_net_list_index)
 }
 
 ObIDagNet::ObIDagNet(
-    const ObDagNetType::ObDagNetTypeEnum type)
+    const ObDagNetType::ObDagNetTypeEnum type,
+    const ObDagPrio::ObDagPrioEnum finalizer_priority)
    : is_stopped_(false),
      lock_(common::ObLatchIds::WORK_DAG_NET_LOCK),
      allocator_(nullptr),
@@ -1559,7 +1523,8 @@ ObIDagNet::ObIDagNet(
      start_time_(0),
      dag_record_map_(),
      is_cancel_(false),
-     is_finishing_last_dag_(false)
+     is_finishing_last_dag_(false),
+     dag_net_finalizer_info_(finalizer_priority)
 {
 }
 
@@ -1643,6 +1608,7 @@ void ObIDagNet::reset()
   type_ = ObDagNetType::DAG_NET_TYPE_MAX;
   add_time_ = 0;
   start_time_ = 0;
+  dag_net_finalizer_info_.reset();
 }
 
 int ObIDagNet::basic_init(ObIAllocator &allocator)
@@ -1753,7 +1719,12 @@ int64_t ObIDagNet::to_string(char* buf, const int64_t buf_len) const
     J_NAME("ObIDagNet");
     J_COLON();
     J_KV(KP(this), K_(type), K_(dag_net_id), "dag_record_cnt", dag_record_map_.size(),
-        K_(is_stopped), K_(is_cancel), K_(is_finishing_last_dag), KP_(allocator));
+        K_(is_stopped), K_(is_cancel), K_(is_finishing_last_dag),
+        KP_(allocator));
+    if (need_dag_net_finalizer()) {
+      J_COMMA();
+      J_KV(K_(dag_net_finalizer_info));
+    }
     J_OBJ_END();
   }
   return pos;
@@ -2184,6 +2155,8 @@ bool ObTenantDagWorker::get_force_cancel_flag()
     COMMON_LOG(WARN, "task does not belong to dag");
   } else if (dag->has_set_stop()) {
     flag = true;
+  } else if (ObDagType::DAG_TYPE_DAG_NET_FINALIZER == dag->get_type()) {
+    // The finalizer ignores ordinary DagNet and sys-task cancellation.
   } else if (dag->is_dag_net_canceled()) {
     flag = true;
     (void) dag->simply_set_stop();
@@ -3722,6 +3695,8 @@ int ObDagPrioScheduler::cancel_dag(const ObIDag &dag, const bool force_cancel)
     } else if (cur_dag->get_priority() != dag.get_priority()) {
       ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(WARN, "unexpected priority value", K(ret), K(cur_dag->get_priority()), K(dag.get_priority()));
+    } else if (ObDagType::DAG_TYPE_DAG_NET_FINALIZER == cur_dag->get_type()) {
+      LOG_INFO("ignore cancel request for dag net finalizer", KPC(cur_dag));
     } else if (cur_dag->get_dag_status() == ObIDag::DAG_STATUS_READY) {
       LOG_INFO("cancel dag", K(ret), KP(cur_dag));
       if (OB_FAIL(finish_dag_(ObIDag::DAG_STATUS_ABORT, cur_dag, true/*try_move_child*/))) {
@@ -3904,33 +3879,6 @@ bool ObDagPrioScheduler::check_need_load_shedding_(const bool for_schedule)
   return need_shedding;
 }
 
-int ObDagPrioScheduler::cancel_task(const ObIDag &dag, const ObITask::ObITaskType &type)
-{
-  int ret = OB_SUCCESS;
-  int hash_ret = OB_SUCCESS;
-  ObIDag *cur_dag = nullptr;
-  {
-    common::SpinWLockGuard guard(prio_rwlock_);
-    if (OB_SUCCESS != (hash_ret = dag_map_.get_refactored(&dag, cur_dag))) {
-      if (OB_HASH_NOT_EXIST != hash_ret) {
-        ret = hash_ret;
-        LOG_WARN("failed to get from dag map", K(ret));
-      } else {
-        LOG_INFO("dag is not in dag_map", K(ret));
-      }
-    } else if (OB_ISNULL(cur_dag)) {
-      ret = OB_ERR_SYS;
-      LOG_WARN("dag should not be null", K(ret));
-    } else if (cur_dag->get_priority() != dag.get_priority()) {
-      ret = OB_ERR_UNEXPECTED;
-      COMMON_LOG(WARN, "unexpected priority value", K(ret), K(cur_dag->get_priority()), K(dag.get_priority()));
-    } else if (OB_FAIL(cur_dag->cancel_task(type))) {
-      LOG_WARN("failed to cancel task", K(ret), KPC(cur_dag), K(type));
-    }
-  }
-  return ret;
-}
-
 /***************************************ObDagNetScheduler impl********************************************/
 void ObDagNetScheduler::destroy()
 {
@@ -3938,7 +3886,7 @@ void ObDagNetScheduler::destroy()
     dag_net_list_[i].reset();
   }
 
-  const ObIDagNet *cur_dag_net = nullptr;
+  ObIDagNet *cur_dag_net = nullptr;
   ObIAllocator *allocator = nullptr;
   DagNetMap::iterator iter = dag_net_map_.begin();
   for (; iter != dag_net_map_.end(); ++iter) { // ignore failure
@@ -3948,7 +3896,7 @@ void ObDagNetScheduler::destroy()
       allocator = cur_dag_net->is_ha_dag_net() ? ha_allocator_ : allocator_;
       cur_dag_net->~ObIDagNet();
       if (OB_NOT_NULL(allocator)) {
-        allocator->free((void*)cur_dag_net);
+        allocator->free(cur_dag_net);
       }
     }
   }
@@ -4054,34 +4002,27 @@ void ObDagNetScheduler::add_dag_net_list_or_abort(const ObDagNetListIndex &dag_n
 }
 
 bool ObDagNetScheduler::is_empty() {
-  bool bret = true;
   common::SpinRLockGuard guard(dag_net_map_rwlock_);
-  if (!dag_net_list_[BLOCKING_DAG_NET_LIST].is_empty()) {
-    bret = false;
-  } else if (!dag_net_list_[RUNNING_DAG_NET_LIST].is_empty()) {
-    ObIDagNet *head = dag_net_list_[RUNNING_DAG_NET_LIST].get_header();
-    ObIDagNet *cur = head->get_next();
-    while (NULL != cur && head != cur && bret) {
-      if (!cur->check_finished_and_mark_stop()) {
-        bret = false;
-      } else {
-        cur = cur->get_next();
-      }
-    }
-  }
-  return bret;
+  return 0 == dag_net_map_.size();
 }
 
 int ObDagNetScheduler::add_dag_net(ObIDagNet &dag_net)
 {
   int ret = OB_SUCCESS;
   const ObDagNetType::ObDagNetTypeEnum type = dag_net.get_type();
+  const ObDagPrio::ObDagPrioEnum finalizer_priority =
+      dag_net.get_dag_net_finalizer_priority();
   // dag_net_cnts_ is indexed by the type, so an out-of-range type must be rejected.
   if (OB_UNLIKELY(!dag_net.is_valid()
       || type < ObDagNetType::DAG_NET_TYPE_MIGRATION
       || type >= ObDagNetType::DAG_NET_TYPE_MAX)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid argument", K(ret), K(dag_net));
+  } else if (OB_UNLIKELY(ObDagPrio::DAG_PRIO_MAX != finalizer_priority
+      && !ObDagPrio::is_ha_prio(finalizer_priority))) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid dag net finalizer priority",
+        K(ret), K(finalizer_priority), K(dag_net));
   } else {
     common::SpinWLockGuard guard(dag_net_map_rwlock_);
     if (OB_FAIL(dag_net_map_.set_refactored(&dag_net, &dag_net))) {
@@ -4195,6 +4136,23 @@ int64_t ObDagNetScheduler::get_dag_net_count(const ObDagNetType::ObDagNetTypeEnu
   return count;
 }
 
+int ObDagNetScheduler::move_terminal_dag_net_to_finished_(
+    const ObDagNetListIndex from_list_index,
+    ObIDagNet &dag_net)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(BLOCKING_DAG_NET_LIST != from_list_index
+      && RUNNING_DAG_NET_LIST != from_list_index)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid source list for terminal dag net",
+        K(ret), K(from_list_index), K(dag_net));
+  } else {
+    (void) erase_dag_net_list_or_abort(from_list_index, &dag_net);
+    (void) add_dag_net_list_or_abort(FINISHED_DAG_NET_LIST, &dag_net);
+  }
+  return ret;
+}
+
 int ObDagNetScheduler::loop_running_dag_net_list()
 {
   int ret = OB_SUCCESS;
@@ -4213,9 +4171,11 @@ int ObDagNetScheduler::loop_running_dag_net_list()
     if (dag_net->is_started() && OB_TMP_FAIL(dag_net->schedule_rest_dag())) {
       LOG_WARN("failed to schedule rest dag", K(tmp_ret));
     } else if (dag_net->check_finished_and_mark_stop()) {
-      LOG_INFO("dag net is in finish state, move to finished list", K(ret), KPC(dag_net));
-      (void) erase_dag_net_list_or_abort(RUNNING_DAG_NET_LIST, dag_net);
-      (void) add_dag_net_list_or_abort(FINISHED_DAG_NET_LIST, dag_net);
+      if (OB_TMP_FAIL(move_terminal_dag_net_to_finished_(RUNNING_DAG_NET_LIST, *dag_net))) {
+        COMMON_LOG(WARN, "failed to move finished dag net", K(tmp_ret), KPC(dag_net));
+      } else {
+        LOG_INFO("dag net finished, move to finished list", KPC(dag_net));
+      }
     } else if (dag_net->is_co_dag_net()
         && dag_net->get_start_time() + SLOW_COMPACTION_DAG_NET_THREASHOLD < ObTimeUtility::fast_current_time()) {
       ++slow_dag_net_cnt;
@@ -4242,6 +4202,7 @@ int ObDagNetScheduler::loop_running_dag_net_list()
 int ObDagNetScheduler::loop_finished_dag_net_list()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   if (OB_ISNULL(scheduler_)) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(WARN, "scheduler is null", KP(scheduler_));
@@ -4250,14 +4211,29 @@ int ObDagNetScheduler::loop_finished_dag_net_list()
     ObIDagNet *cur = head->get_next();
     ObIDagNet *dag_net = nullptr;
     while (NULL != cur && head != cur) {
-      LOG_DEBUG("loop blocking dag net list", K(ret), KPC(cur));
+      LOG_DEBUG("loop finished dag net list", K(ret), KPC(cur));
       dag_net = cur;
       cur = cur->get_next();
-      (void) erase_dag_net_list_or_abort(FINISHED_DAG_NET_LIST, dag_net);
-      (void) scheduler_->finish_dag_net(dag_net);
+      const ObIDagNet::ObDagNetFinalizerState finalizer_state =
+          dag_net->get_dag_net_finalizer_state();
+      if (ObIDagNet::DAG_NET_FINALIZER_NONE == finalizer_state
+          && dag_net->need_dag_net_finalizer()) {
+        if (OB_TMP_FAIL(scheduler_->create_and_schedule_dag_net_finalizer_(*dag_net))) {
+          scheduler_->set_fast_schedule_dag_net();
+          COMMON_LOG(WARN, "failed to submit dag net finalizer",
+              K(tmp_ret), KPC(dag_net));
+        }
+      } else if (ObIDagNet::DAG_NET_FINALIZER_NONE == finalizer_state
+          || ObIDagNet::DAG_NET_FINALIZER_DONE == finalizer_state) {
+        (void) erase_dag_net_list_or_abort(FINISHED_DAG_NET_LIST, dag_net);
+        (void) scheduler_->finish_dag_net(dag_net);
+      } else if (ObIDagNet::DAG_NET_FINALIZER_SUBMITTED != finalizer_state) {
+        COMMON_LOG_RET(ERROR, OB_STATE_NOT_MATCH,
+            "unexpected dag net finalizer state", K(finalizer_state), KPC(dag_net));
+      }
     }
   }
-  COMMON_LOG(INFO, "loop finsihed dag net list", K(ret), "finished_dag_net_list_size", dag_net_list_[FINISHED_DAG_NET_LIST].get_size());
+  COMMON_LOG(INFO, "loop finished dag net list", K(ret), "finished_dag_net_list_size", dag_net_list_[FINISHED_DAG_NET_LIST].get_size());
   return ret;
 }
 
@@ -4292,24 +4268,30 @@ int ObDagNetScheduler::loop_blocking_dag_net_list()
       // add_dag_net() rejects invalid types, so indexing by type is safe here.
       const ObDagNetType::ObDagNetTypeEnum type = tmp->get_type();
       if (tmp->is_cancel()) {
-        (void) erase_dag_net_list_or_abort(BLOCKING_DAG_NET_LIST, tmp);
-        (void) add_dag_net_list_or_abort(FINISHED_DAG_NET_LIST, tmp);
-        COMMON_LOG(WARN, "dag net has been cancelled, move to finished list", KPC(tmp));
+        if (OB_TMP_FAIL(move_terminal_dag_net_to_finished_(BLOCKING_DAG_NET_LIST, *tmp))) {
+          COMMON_LOG(WARN, "failed to move canceled dag net", K(tmp_ret), KPC(tmp));
+        } else {
+          scheduler_->set_fast_schedule_dag_net();
+          COMMON_LOG(WARN, "dag net has been cancelled, move to finished list", KPC(tmp));
+        }
       } else if (ObDagNetType::DAG_NET_TYPE_CO_MAJOR == type
           && co_major_running_cnt_ >= max_co_major_running_dag_net_cnt_) {
         ++co_major_skipped;
       } else if (is_dag_full[type]) {
         ++dag_full_skipped;
       } else if (OB_TMP_FAIL(tmp->start_running())) {
-        if (OB_SIZE_OVERFLOW == tmp_ret) {
+        const int start_ret = tmp_ret;
+        if (OB_SIZE_OVERFLOW == start_ret) {
           is_dag_full[type] = true;
         }
-        // If dag net failed to start running, move dag net to finished list.
-        // Function clear_dag_net_ctx() will be called to release some resources after being scheduled at finish list.
-        // Move this dag net from blocking to finished list to avoid dead lock.
-        (void) erase_dag_net_list_or_abort(BLOCKING_DAG_NET_LIST, tmp);
-        (void) add_dag_net_list_or_abort(FINISHED_DAG_NET_LIST, tmp);
-        COMMON_LOG(WARN, "dag net failed to start running, move to finished list", K(tmp_ret), KPC(tmp));
+        const int move_ret = move_terminal_dag_net_to_finished_(BLOCKING_DAG_NET_LIST, *tmp);
+        if (OB_SUCCESS != move_ret) {
+          COMMON_LOG(WARN, "dag net failed to start and move to finished list",
+              K(start_ret), K(move_ret), KPC(tmp));
+        } else {
+          scheduler_->set_fast_schedule_dag_net();
+          COMMON_LOG(WARN, "dag net failed to start, move to finished list", K(start_ret), KPC(tmp));
+        }
       } else {
         tmp->set_start_time();
         (void) erase_dag_net_list_or_abort(BLOCKING_DAG_NET_LIST, tmp);
@@ -4751,6 +4733,37 @@ void ObTenantDagScheduler::inner_free_dag(ObIAllocator &allocator, ObIDag &dag)
   }
   dag.~ObIDag();
   allocator.free(&dag);
+}
+
+int ObTenantDagScheduler::create_and_schedule_dag_net_finalizer_(ObIDagNet &dag_net)
+{
+  int ret = OB_SUCCESS;
+  const ObDagPrio::ObDagPrioEnum priority = dag_net.get_dag_net_finalizer_priority();
+  ObDagNetFinalizerDag *finalizer_dag = nullptr;
+  if (OB_UNLIKELY(!ObDagPrio::is_ha_prio(priority))) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid dag net finalizer priority", K(ret), K(priority), K(dag_net));
+  } else if (OB_UNLIKELY(ObIDagNet::DAG_NET_FINALIZER_NONE
+      != dag_net.get_dag_net_finalizer_state())) {
+    ret = OB_STATE_NOT_MATCH;
+    COMMON_LOG(WARN, "dag net is not ready to submit finalizer", K(ret), K(dag_net));
+  } else if (OB_FAIL(create_dag(
+      nullptr/*dag_net_to_attach*/, priority, finalizer_dag, dag_net))) {
+    COMMON_LOG(WARN, "failed to create dag net finalizer dag", K(ret), K(priority), K(dag_net));
+  } else if (OB_FAIL(add_dag(finalizer_dag, true/*emergency*/, false/*check_size_overflow*/))) {
+    COMMON_LOG(WARN, "failed to add dag net finalizer dag", K(ret), K(priority), K(dag_net));
+  } else {
+    // A worker may run the carrier through try_switch() before this marker.
+    // set_dag_net_finalizer_submitted() preserves DONE in that case.
+    dag_net.set_dag_net_finalizer_submitted();
+    finalizer_dag = nullptr;
+    COMMON_LOG(INFO, "submitted dag net finalizer", K(dag_net));
+  }
+  if (OB_NOT_NULL(finalizer_dag)) {
+    free_dag(*finalizer_dag);
+    finalizer_dag = nullptr;
+  }
+  return ret;
 }
 
 int ObTenantDagScheduler::add_dag_net(ObIDagNet *dag_net)
@@ -5377,7 +5390,20 @@ void ObTenantDagScheduler::finish_dag_net(ObIDagNet *dag_net)
   int tmp_ret = OB_SUCCESS;
   if (OB_NOT_NULL(dag_net)) {
     COMMON_LOG(INFO, "start finish dag net", KPC(dag_net));
-    if (OB_TMP_FAIL(dag_net->clear_dag_net_ctx())) {
+    const ObIDagNet::ObDagNetFinalizerState finalizer_state =
+        dag_net->get_dag_net_finalizer_state();
+    if (ObIDagNet::DAG_NET_FINALIZER_SUBMITTED == finalizer_state) {
+      COMMON_LOG_RET(ERROR, OB_STATE_NOT_MATCH,
+          "cannot reclaim dag net before finalizer finishes", KPC(dag_net));
+      return;
+    } else if (ObIDagNet::DAG_NET_FINALIZER_DONE == finalizer_state) {
+      if (OB_SUCCESS != dag_net->get_dag_net_finalizer_ret()) {
+        COMMON_LOG_RET(WARN, dag_net->get_dag_net_finalizer_ret(),
+            "reclaim dag net after failed finalizer attempt",
+            "finalizer_ret", dag_net->get_dag_net_finalizer_ret(), KPC(dag_net));
+      }
+    } else if (ObIDagNet::DAG_NET_FINALIZER_NONE == finalizer_state
+        && OB_TMP_FAIL(dag_net->clear_dag_net_ctx())) {
       COMMON_LOG_RET(WARN, tmp_ret, "failed to clear dag net ctx", K(tmp_ret), KPC(dag_net));
     }
     (void) dag_net_sche_.finish_dag_net(*dag_net);
@@ -5777,21 +5803,6 @@ int ObTenantDagScheduler::get_first_dag_net(ObIDagNet *&dag_net)
     COMMON_LOG(WARN, "ObDagScheduler is not inited", K(ret));
   } else if (OB_FAIL(dag_net_sche_.get_first_dag_net(dag_net))) {
     LOG_WARN("fail to cancel dag net", K(ret));
-  }
-  return ret;
-}
-
-int ObTenantDagScheduler::cancel_task(const ObIDag *dag, const ObITask::ObITaskType &type)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    COMMON_LOG(WARN, "ObTenantDagScheduler is not inited", K(ret));
-  } else if (OB_ISNULL(dag)) {
-    ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "invalid argument", KP(dag));
-  } else if (OB_FAIL(prio_sche_[dag->get_priority()].cancel_task(*dag, type))) {
-    COMMON_LOG(WARN, "fail to cancel task", K(ret), KPC(dag));
   }
   return ret;
 }

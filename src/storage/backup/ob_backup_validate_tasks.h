@@ -59,18 +59,17 @@ class ObBackupValidateFinishTask: public share::ObITask
 public:
   ObBackupValidateFinishTask();
   virtual ~ObBackupValidateFinishTask();
-  int init(const ObBackupValidateDagNetInitParam &param, const backup::ObBackupReportCtx &report_ctx);
+  int init(const ObBackupValidateDagNetInitParam &param);
   virtual int process() override;
   bool is_valid() const { return is_inited_; }
 
 private:
-  int report_validate_succ_();
+  int select_validate_succ_();
 
 private:
   bool is_inited_;
   ObBackupValidateDagNetInitParam param_;
   ObBackupValidateTaskContext *ctx_;
-  backup::ObBackupReportCtx report_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupValidateFinishTask);
 };
 
@@ -218,7 +217,7 @@ private:
   int get_and_add_dir_list_(const common::ObArray<ObBackupPath> &path_list);
 // physical validate methods
   int prepare_backupset_physical_validate_();
-  int report_validate_succ_();
+  int select_validate_succ_();
   int get_tablet_list_(common::ObIArray<common::ObTabletID> &all_tablets);
   int prepare_archive_piece_physical_validate_();
   // piece meta ls info collection (align with ob_admin prepare/meta tasks)

@@ -155,15 +155,19 @@ int ObBackupArchivePieceLSNRange::assign(const ObBackupArchivePieceLSNRange &oth
 -------------------------ObBackupValidateTaskContext-------------------------------
 */
 ObBackupValidateTaskContext::ObBackupValidateTaskContext()
-  : tablet_array_(), dir_queue_(), archive_piece_lsn_ranges_(), ls_info_(), running_groups_(), result_(OB_SUCCESS),
-    ctx_lock_(common::ObLatchIds::BACKUP_LOCK), next_task_id_(0), total_task_count_(0),
+  : tablet_array_(), dir_queue_(), archive_piece_lsn_ranges_(), ls_info_(), running_groups_(),
+    result_(OB_SUCCESS), result_dag_id_(), error_msg_(), report_state_(REPORT_IDLE),
+    ctx_lock_(common::ObLatchIds::BACKUP_LOCK),
+    next_task_id_(0), total_task_count_(0),
     total_read_bytes_(0), delta_read_bytes_(0), last_reported_checkpoint_(0), inited_(false)
 {
+  MEMSET(error_msg_, 0, sizeof(error_msg_));
 }
 
 int ObBackupValidateTaskContext::init()
 {
   int ret = OB_SUCCESS;
+  common::SpinWLockGuard guard(ctx_lock_);
   if (inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret));
@@ -282,45 +286,107 @@ int ObBackupValidateTaskContext::get_archive_piece_lsn_range(
 
 int ObBackupValidateTaskContext::set_validate_result(
   const int result,
-  const char *error_msg,
-  const ObBackupValidateDagNetInitParam &param,
-  const common::ObAddr &src_server,
-  const ObTaskId &dag_id,
-  backup::ObBackupReportCtx &report_ctx)
+  const char *src_error_msg,
+  const ObTaskId &dag_id)
 {
   int ret = OB_SUCCESS;
+  int64_t pos = 0;
   common::SpinWLockGuard guard(ctx_lock_);
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_ISNULL(error_msg)) {
+  } else if (REPORT_IDLE != report_state_) {
+    // The first terminal result owns reporting.  Later failures or cancellation
+    // must not replace a success that has already won, and vice versa.
+    LOG_INFO("ignore validate result after terminal result selected",
+        K(result), K_(result), K_(report_state), K(dag_id), K_(result_dag_id));
+  } else if (OB_ISNULL(src_error_msg)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("error message is null", KR(ret), KP(error_msg));
-  } else if (!param.is_valid() || !src_server.is_valid() || !dag_id.is_valid() || !report_ctx.is_valid()) {
+    LOG_WARN("error message is null", KR(ret), KP(src_error_msg));
+  } else if (!dag_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(param), K(src_server), K(dag_id), K(report_ctx));
-  } else if (OB_SUCCESS != result && OB_SUCCESS == result_) {
+    LOG_WARN("invalid argument", KR(ret), K(dag_id));
+  } else if (OB_FAIL(databuff_printf(
+      error_msg_, sizeof(error_msg_), pos, "%s", src_error_msg))) {
+    LOG_WARN("failed to copy validate error message", KR(ret), K(src_error_msg));
+  } else {
     result_ = result;
-    LOG_INFO("set validate result", KR(ret), K(result), K(error_msg));
-    if ('\0' != error_msg[0] && OB_FAIL(share::ObBackupValidateTaskOperator::add_comment(
+    result_dag_id_ = dag_id;
+    report_state_ = REPORT_SELECTED;
+    LOG_INFO("set validate result", KR(ret), K(result), K(src_error_msg));
+  }
+  return ret;
+}
+
+int ObBackupValidateTaskContext::report_validate_result(
+    const ObBackupValidateDagNetInitParam &param,
+    const common::ObAddr &src_server,
+    backup::ObBackupReportCtx &report_ctx)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  bool need_report = false;
+  int validate_result = OB_SUCCESS;
+  share::ObTaskId result_dag_id;
+  char error_msg[share::OB_MAX_VALIDATE_LOG_INFO_LENGTH] = {0};
+  {
+    common::SpinWLockGuard guard(ctx_lock_);
+    if (!inited_) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("not init", KR(ret));
+    } else if (REPORTED == report_state_) {
+      // A repeated finalizer invocation has nothing left to report.
+    } else if (REPORT_IDLE == report_state_) {
+      ret = OB_STATE_NOT_MATCH;
+      LOG_WARN("validate terminal result has not been selected", KR(ret), K_(report_state));
+    } else if (REPORT_FAILED == report_state_) {
+      // The finalizer skips retries. Keep the selected payload immutable and
+      // do not issue an uncoordinated duplicate report.
+      ret = OB_STATE_NOT_MATCH;
+      LOG_WARN("validate result report already failed", KR(ret), K_(report_state));
+    } else if (!param.is_valid() || !src_server.is_valid() || !report_ctx.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret), K(param), K(src_server), K(report_ctx));
+    } else {
+      need_report = true;
+      validate_result = result_;
+      result_dag_id = result_dag_id_;
+      MEMCPY(error_msg, error_msg_, sizeof(error_msg));
+    }
+  }
+
+  if (OB_SUCC(ret) && need_report) {
+    if ('\0' != error_msg[0] && OB_TMP_FAIL(share::ObBackupValidateTaskOperator::add_comment(
           *report_ctx.sql_proxy_, param.tenant_id_, param.task_id_, error_msg))) {
-      LOG_WARN("failed to add validate task comment", KR(ret), K(param), KP(error_msg));
+      // Reporting the terminal result is more important than its diagnostic comment.
+      LOG_WARN("failed to add validate task comment", KR(tmp_ret), K(param), K(error_msg));
     }
     obrpc::ObBackupTaskRes res;
     res.job_id_ = param.job_id_;
     res.task_id_ = param.task_id_;
     res.tenant_id_ = param.tenant_id_;
     res.ls_id_ = param.ls_id_;
-    res.result_ = result;
+    res.result_ = validate_result;
     res.src_server_ = src_server;
     res.trace_id_ = param.trace_id_;
-    res.dag_id_ = dag_id;
-    if (OB_FAIL(ret)) {
-    } else if (!res.is_valid()) {
+    res.dag_id_ = result_dag_id;
+    if (!res.is_valid()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", KR(ret), K(res));
     } else if (OB_FAIL(ObBackupValidateObUtils::report_validate_over(res, report_ctx))) {
       LOG_WARN("failed to report validate over", KR(ret), K(res), K(report_ctx));
+    }
+
+    {
+      common::SpinWLockGuard guard(ctx_lock_);
+      if (OB_UNLIKELY(REPORT_SELECTED != report_state_)) {
+        tmp_ret = OB_STATE_NOT_MATCH;
+        LOG_ERROR("unexpected validate report state", KR(tmp_ret), K_(report_state), K(ret));
+      } else {
+        // Never return to IDLE: an RPC failure can be ambiguous, so no other
+        // terminal result may take ownership.
+        report_state_ = OB_SUCC(ret) ? REPORTED : REPORT_FAILED;
+      }
     }
   }
   return ret;

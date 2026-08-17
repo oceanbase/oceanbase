@@ -72,6 +72,15 @@ public:
 class ObBackupValidateTaskContext final
 {
 public:
+  enum ReportState
+  {
+    REPORT_IDLE = 0,
+    REPORT_SELECTED,
+    REPORTED,
+    REPORT_FAILED,
+    REPORT_STATE_MAX,
+  };
+
   ObBackupValidateTaskContext();
   virtual ~ObBackupValidateTaskContext() { running_groups_.destroy(); }
   int init();
@@ -83,10 +92,11 @@ public:
   int get_archive_piece_lsn_range(const int64_t group_id, ObBackupArchivePieceLSNRange* &lsn_range);
   int set_validate_result(
       const int result,
-      const char *error_msg,
+      const char *src_error_msg,
+      const ObTaskId &dag_id);
+  int report_validate_result(
       const ObBackupValidateDagNetInitParam &param,
       const common::ObAddr &src_server,
-      const ObTaskId &dag_id,
       backup::ObBackupReportCtx &report_ctx);
   int set_next_task_id_and_read_bytes(const int64_t next_task_id, const int64_t read_bytes);
   int get_next_task_id(int64_t &task_id);
@@ -103,7 +113,7 @@ public:
     int64_t &delta_read_bytes,
     int64_t &total_read_bytes);
 
-  TO_STRING_KV(K_(running_groups), K_(result), K_(next_task_id), K_(total_task_count), K_(ls_info),
+  TO_STRING_KV(K_(running_groups), K_(result), K_(report_state), K_(next_task_id), K_(total_task_count), K_(ls_info),
       K_(total_read_bytes), K_(delta_read_bytes), K_(last_reported_checkpoint));
 
 private:
@@ -115,6 +125,9 @@ private:
   share::ObSingleLSInfoDesc ls_info_;
   hash::ObHashSet<int64_t> running_groups_;
   int result_;
+  share::ObTaskId result_dag_id_;
+  char error_msg_[share::OB_MAX_VALIDATE_LOG_INFO_LENGTH];
+  ReportState report_state_;
   mutable common::SpinRWLock ctx_lock_;
   int64_t next_task_id_;
   int64_t total_task_count_;

@@ -36,6 +36,7 @@ public:
   virtual int init(share::ObIDagNet *dag_net);
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
+  virtual int report_result() override;
   virtual lib::Worker::CompatMode get_compat_mode() const override
   { return lib::Worker::CompatMode::MYSQL; }
   virtual uint64_t get_consumer_group_id() const override
@@ -159,6 +160,8 @@ public:
   virtual ~ObBackupValidateDagNet();
   int init_by_param(const share::ObIDagInitParam *param) override;
   int start_running() override;
+  int clear_dag_net_ctx() override;
+  int deal_with_cancel() override;
   bool operator == (const share::ObIDagNet &other) const override;
   uint64_t hash() const override;
   int fill_comment(char *buf, const int64_t buf_len) const override;

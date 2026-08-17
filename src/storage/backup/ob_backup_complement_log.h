@@ -125,6 +125,7 @@ public:
   virtual ~ObBackupComplementLogDagNet();
   virtual int init_by_param(const share::ObIDagInitParam *param) override;
   virtual int start_running() override;
+  virtual int clear_dag_net_ctx() override;
   virtual bool operator==(const share::ObIDagNet &other) const override;
   virtual bool is_valid() const override;
   virtual uint64_t hash() const override;
@@ -368,7 +369,7 @@ public:
   virtual int process() override;
 
 private:
-  int report_task_result_();
+  int set_dag_net_result_();
   int record_server_event_();
 
 private:

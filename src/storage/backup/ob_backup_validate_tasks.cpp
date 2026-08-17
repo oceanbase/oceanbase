@@ -199,8 +199,7 @@ int ObBackupValidateBasicTask::process()
   if (OB_FAIL(ret)) {
     int tmp_ret = OB_SUCCESS;
     const share::ObTaskId dag_id = this->get_dag()->get_dag_id();
-    if (OB_NOT_NULL(ctx_) && OB_TMP_FAIL(ctx_->set_validate_result(ret, error_msg_, param_, GCTX.self_addr(),
-                                                        dag_id, report_ctx_))) {
+    if (OB_NOT_NULL(ctx_) && OB_TMP_FAIL(ctx_->set_validate_result(ret, error_msg_, dag_id))) {
       LOG_WARN("failed to set validate result", KR(ret), KR(tmp_ret), K_(param), K_(error_msg), K(dag_id));
     }
   }
@@ -252,7 +251,7 @@ int ObBackupValidateBasicTask::generate_next_task(share::ObITask *&next_task)
       LOG_WARN("failed to print error message", KR(ret), KR(tmp_ret));
     }
     if (OB_NOT_NULL(ctx_)) {
-      if (OB_TMP_FAIL(ctx_->set_validate_result(ret, error_msg, param_, GCTX.self_addr(), dag_id, report_ctx_))) {
+      if (OB_TMP_FAIL(ctx_->set_validate_result(ret, error_msg, dag_id))) {
         LOG_WARN("failed to set validate result", KR(ret), KR(tmp_ret), K(error_msg), K(dag_id), K_(param));
       }
     }
@@ -423,40 +422,27 @@ int ObBackupValidatePrepareTask::process()
     int tmp_ret = OB_SUCCESS;
     const share::ObTaskId dag_id = this->get_dag()->get_dag_id();
     if (OB_NOT_NULL(ctx_)) {
-      if (OB_TMP_FAIL(ctx_->set_validate_result(ret, "failed to prepare validate task", param_,
-                                                    GCTX.self_addr(), dag_id, report_ctx_))) {
+      if (OB_TMP_FAIL(ctx_->set_validate_result(ret, "failed to prepare validate task", dag_id))) {
         LOG_WARN("failed to set validate result", KR(ret), KR(tmp_ret), K(dag_id), K_(param));
       }
     }
   } else if (!has_task) {
-    if (OB_FAIL(report_validate_succ_())) {
-      LOG_WARN("failed to report validate succ", KR(ret));
+    if (OB_FAIL(select_validate_succ_())) {
+      LOG_WARN("failed to select validate success result", KR(ret));
     }
   }
   return ret;
 }
 
-int ObBackupValidatePrepareTask::report_validate_succ_()
+int ObBackupValidatePrepareTask::select_validate_succ_()
 {
   int ret = OB_SUCCESS;
-  obrpc::ObBackupTaskRes res;
-  res.job_id_ = param_.job_id_;
-  res.task_id_ = param_.task_id_;
-  res.tenant_id_ = param_.tenant_id_;
-  res.ls_id_ = param_.ls_id_;
-  res.result_ = OB_SUCCESS;
-  res.src_server_ = GCTX.self_addr();
-  res.trace_id_ = param_.trace_id_;
   ObIDag *dag = nullptr;
   if (OB_ISNULL(dag = this->get_dag())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag is null", KR(ret));
-  } else if (FALSE_IT(res.dag_id_ = dag->get_dag_id())) {
-  } else if (!res.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(res));
-  } else if (OB_FAIL(ObBackupValidateObUtils::report_validate_over(res, report_ctx_))) {
-    LOG_WARN("failed to report validate over", KR(ret), K(res), K(report_ctx_));
+  } else if (OB_FAIL(ctx_->set_validate_result(OB_SUCCESS, "", dag->get_dag_id()))) {
+    LOG_WARN("failed to select validate success result", KR(ret), KPC(dag));
   }
   return ret;
 }
@@ -881,8 +867,7 @@ ObBackupValidateFinishTask::ObBackupValidateFinishTask()
   : ObITask(ObITaskType::TASK_TYPE_BACKUP_VALIDATE_FINISH),
     is_inited_(false),
     param_(),
-    ctx_(nullptr),
-    report_ctx_()
+    ctx_(nullptr)
 {
 }
 
@@ -891,8 +876,7 @@ ObBackupValidateFinishTask::~ObBackupValidateFinishTask()
 }
 
 int ObBackupValidateFinishTask::init(
-    const ObBackupValidateDagNetInitParam &param,
-    const backup::ObBackupReportCtx &report_ctx)
+    const ObBackupValidateDagNetInitParam &param)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -917,7 +901,6 @@ int ObBackupValidateFinishTask::init(
     }
   }
   if (OB_SUCC(ret)) {
-    report_ctx_ = report_ctx;
     is_inited_ = true;
     LOG_INFO("ObBackupValidateFinishTask init success", K(param));
   }
@@ -927,26 +910,18 @@ int ObBackupValidateFinishTask::init(
 int ObBackupValidateFinishTask::process()
 {
   int ret = OB_SUCCESS;
-  int64_t result = OB_SUCCESS;
-  ObIDag *dag = nullptr;
   int tmp_ret = OB_SUCCESS;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObBackupValidateFinishTask not init", KR(ret));
-  } else if (OB_SUCCESS != ctx_->get_result()) {
-  } else {
-    if (OB_ISNULL(dag = this->get_dag())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("dag is null", KR(ret));
-    } else if (OB_FAIL(report_validate_succ_())) {
-      LOG_WARN("failed to report validate over", KR(ret), K(dag->get_dag_id()));
-    }
+  } else if (OB_FAIL(select_validate_succ_())) {
+    LOG_WARN("failed to select validate success result", KR(ret));
   }
 
   if (OB_FAIL(ret)) {
     const share::ObTaskId dag_id = this->get_dag()->get_dag_id();
     if (OB_NOT_NULL(ctx_)) {
-      if (OB_TMP_FAIL(ctx_->set_validate_result(ret, "", param_, GCTX.self_addr(), dag_id, report_ctx_))) {
+      if (OB_TMP_FAIL(ctx_->set_validate_result(ret, "", dag_id))) {
         LOG_WARN("failed to set validate result", KR(ret), KR(tmp_ret), K(dag_id), K_(param));
       }
     }
@@ -955,27 +930,15 @@ int ObBackupValidateFinishTask::process()
   return ret;
 }
 
-int ObBackupValidateFinishTask::report_validate_succ_()
+int ObBackupValidateFinishTask::select_validate_succ_()
 {
   int ret = OB_SUCCESS;
-  obrpc::ObBackupTaskRes res;
-  res.job_id_ = param_.job_id_;
-  res.task_id_ = param_.task_id_;
-  res.tenant_id_ = param_.tenant_id_;
-  res.ls_id_ = param_.ls_id_;
-  res.result_ = OB_SUCCESS;
-  res.src_server_ = GCTX.self_addr();
-  res.trace_id_ = param_.trace_id_;
   ObIDag *dag = nullptr;
   if (OB_ISNULL(dag = this->get_dag())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag is null", KR(ret));
-  } else if (FALSE_IT(res.dag_id_ = dag->get_dag_id())) {
-  } else if (!res.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(res));
-  } else if (OB_FAIL(ObBackupValidateObUtils::report_validate_over(res, report_ctx_))) {
-    LOG_WARN("failed to report validate over", KR(ret), K(res), K(report_ctx_));
+  } else if (OB_FAIL(ctx_->set_validate_result(OB_SUCCESS, "", dag->get_dag_id()))) {
+    LOG_WARN("failed to select validate success result", KR(ret), KPC(dag));
   }
   return ret;
 }
@@ -1095,7 +1058,7 @@ int ObBackupValidateBackupSetPhysicalTask::process()
       LOG_WARN("failed to print error message", KR(ret), KR(tmp_ret), K(tablet_id_));
     }
     if (OB_NOT_NULL(ctx_)) {
-      if (OB_TMP_FAIL(ctx_->set_validate_result(ret, error_msg, param_, GCTX.self_addr(), dag_id, report_ctx_))) {
+      if (OB_TMP_FAIL(ctx_->set_validate_result(ret, error_msg, dag_id))) {
         LOG_WARN("failed to set validate result", KR(ret), KR(tmp_ret), K(error_msg), K(dag_id), K_(param));
       }
     }
@@ -1226,8 +1189,8 @@ int ObBackupValidateBackupSetPhysicalTask::generate_next_task(share::ObITask *&n
     int tmp_ret = OB_SUCCESS;
     const share::ObTaskId dag_id = this->get_dag()->get_dag_id();
     if (OB_NOT_NULL(ctx_)) {
-      if (OB_TMP_FAIL(ctx_->set_validate_result(ret, "failed to generate next tablet validate task", param_,
-                                                    GCTX.self_addr(), dag_id, report_ctx_))) {
+      if (OB_TMP_FAIL(ctx_->set_validate_result(
+          ret, "failed to generate next tablet validate task", dag_id))) {
         LOG_WARN("failed to set validate result", KR(ret), KR(tmp_ret), K(dag_id), K_(param));
       }
     }
@@ -1502,7 +1465,7 @@ int ObBackupValidateTabletFinishTask::process()
       LOG_WARN("failed to print error message", KR(ret), KR(tmp_ret), K(tablet_id_));
     }
     if (OB_NOT_NULL(ctx_)) {
-      if (OB_TMP_FAIL(ctx_->set_validate_result(ret, error_msg, param_, GCTX.self_addr(), dag_id, report_ctx_))) {
+      if (OB_TMP_FAIL(ctx_->set_validate_result(ret, error_msg, dag_id))) {
         LOG_WARN("failed to set validate result", KR(ret), KR(tmp_ret), K(error_msg), K(dag_id), K_(param));
       }
     }
@@ -1672,8 +1635,8 @@ int ObBackupValidateSSTableTask::generate_next_task(share::ObITask *&next_task)
     int tmp_ret = OB_SUCCESS;
     const share::ObTaskId dag_id = this->get_dag()->get_dag_id();
     if (OB_NOT_NULL(ctx_)) {
-      if (OB_TMP_FAIL(ctx_->set_validate_result(ret, "failed to generate next tablet validate task", param_,
-                                                    GCTX.self_addr(), dag_id, report_ctx_))) {
+      if (OB_TMP_FAIL(ctx_->set_validate_result(
+          ret, "failed to generate next tablet validate task", dag_id))) {
         LOG_WARN("failed to set validate result", KR(ret), KR(tmp_ret), K(dag_id), K_(param));
       }
     }
@@ -1710,7 +1673,7 @@ int ObBackupValidateSSTableTask::process()
       LOG_WARN("failed to print error message", KR(ret), KR(tmp_ret));
     }
     if (OB_NOT_NULL(ctx_)) {
-      if (OB_TMP_FAIL(ctx_->set_validate_result(ret, error_msg, param_, GCTX.self_addr(), dag_id, report_ctx_))) {
+      if (OB_TMP_FAIL(ctx_->set_validate_result(ret, error_msg, dag_id))) {
         LOG_WARN("failed to set validate result", KR(ret), KR(tmp_ret), K(error_msg), K(dag_id), K_(param));
       }
     }
@@ -1922,8 +1885,7 @@ int ObBackupValidateMacroBlockTask::process()
     int tmp_ret = OB_SUCCESS;
     const share::ObTaskId dag_id = this->get_dag()->get_dag_id();
     if (OB_NOT_NULL(ctx_)) {
-      if (OB_TMP_FAIL(ctx_->set_validate_result(ret, "failed to validate macro block", param_, GCTX.self_addr(),
-                                                    dag_id, report_ctx_))) {
+      if (OB_TMP_FAIL(ctx_->set_validate_result(ret, "failed to validate macro block", dag_id))) {
         LOG_WARN("failed to set validate result", KR(ret), KR(tmp_ret), K(dag_id), K_(param));
       }
     }
@@ -2059,8 +2021,8 @@ int ObBackupValidateMacroBlockTask::generate_next_task(share::ObITask *&next_tas
     int tmp_ret = OB_SUCCESS;
     const share::ObTaskId dag_id = this->get_dag()->get_dag_id();
     if (OB_NOT_NULL(ctx_)) {
-      if (OB_TMP_FAIL(ctx_->set_validate_result(ret, "failed to generate next macro block task", param_,
-                                                    GCTX.self_addr(), dag_id, report_ctx_))) {
+      if (OB_TMP_FAIL(ctx_->set_validate_result(
+          ret, "failed to generate next macro block task", dag_id))) {
         LOG_WARN("failed to set validate result", KR(ret), KR(tmp_ret), K(dag_id), K_(param));
       }
     }
@@ -2151,7 +2113,7 @@ int ObBackupValidateMacroBlockFinishTask::process()
     int tmp_ret = OB_SUCCESS;
     const share::ObTaskId dag_id = this->get_dag()->get_dag_id();
     if (OB_NOT_NULL(ctx_)) {
-      if (OB_TMP_FAIL(ctx_->set_validate_result(ret, "", param_, GCTX.self_addr(), dag_id, report_ctx_))) {
+      if (OB_TMP_FAIL(ctx_->set_validate_result(ret, "", dag_id))) {
         LOG_WARN("failed to set validate result", KR(ret), KR(tmp_ret), K(dag_id), K_(param));
       }
     }
@@ -2336,8 +2298,7 @@ int ObBackupValidateArchivePiecePhysicalTask::process()
     int tmp_ret = OB_SUCCESS;
     const share::ObTaskId dag_id = this->get_dag()->get_dag_id();
     if (OB_NOT_NULL(ctx_)) {
-      if (OB_TMP_FAIL(ctx_->set_validate_result(ret, "failed to validate piece log entry", param_,
-                                                    GCTX.self_addr(), dag_id, report_ctx_))) {
+      if (OB_TMP_FAIL(ctx_->set_validate_result(ret, "failed to validate piece log entry", dag_id))) {
         LOG_WARN("failed to set validate result", KR(ret), KR(tmp_ret), K(dag_id), K_(param));
       }
     }
@@ -2458,8 +2419,8 @@ int ObBackupValidateArchivePiecePhysicalTask::generate_next_task(share::ObITask 
     int tmp_ret = OB_SUCCESS;
     const share::ObTaskId dag_id = this->get_dag()->get_dag_id();
     if (OB_NOT_NULL(ctx_)) {
-      if (OB_TMP_FAIL(ctx_->set_validate_result(ret, "failed to generate next piece log entry task", param_,
-                                                    GCTX.self_addr(), dag_id, report_ctx_))) {
+      if (OB_TMP_FAIL(ctx_->set_validate_result(
+          ret, "failed to generate next piece log entry task", dag_id))) {
         LOG_WARN("failed to set validate result", KR(ret), KR(tmp_ret), K(dag_id), K_(param));
       }
     }

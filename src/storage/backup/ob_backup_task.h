@@ -104,12 +104,28 @@ enum ObBackupAddDagErrsimKind : int64_t {
 class ObBackupDagNet : public share::ObIDagNet
 {
 public:
-  explicit ObBackupDagNet(const ObBackupDagNetSubType &sub_type);
+  explicit ObBackupDagNet(
+      const ObBackupDagNetSubType &sub_type,
+      const share::ObDagPrio::ObDagPrioEnum finalizer_priority = share::ObDagPrio::DAG_PRIO_MAX);
   virtual ~ObBackupDagNet();
   ObBackupDagNetSubType get_sub_type() const { return sub_type_; };
+  int set_result(const int result, const share::ObDagId &dag_id);
+  static int set_result_from_dag(share::ObIDag *dag, const int result);
+  virtual int deal_with_cancel() override;
   INHERIT_TO_STRING_KV("ObIDagNet", ObIDagNet, K_(sub_type));
 protected:
+  int report_result_(
+      const ObBackupJobDesc &job_desc,
+      const uint64_t tenant_id,
+      const share::ObLSID &ls_id,
+      const int64_t turn_id,
+      const int64_t retry_id,
+      ObBackupReportCtx &report_ctx) const;
   ObBackupDagNetSubType sub_type_;
+  mutable common::SpinRWLock result_lock_;
+  int result_;
+  share::ObDagId result_dag_id_;
+  bool result_selected_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupDagNet);
 };
 
@@ -122,6 +138,7 @@ public:
   virtual ~ObLSBackupDataDagNet();
   virtual int init_by_param(const share::ObIDagInitParam *param) override;
   virtual int start_running() override;
+  virtual int clear_dag_net_ctx() override;
   virtual bool operator==(const share::ObIDagNet &other) const override;
   virtual bool is_valid() const override;
   virtual uint64_t hash() const override;
@@ -230,6 +247,7 @@ public:
   virtual ~ObBackupBuildTenantIndexDagNet();
   virtual int init_by_param(const share::ObIDagInitParam *param) override;
   virtual int start_running() override;
+  virtual int clear_dag_net_ctx() override;
   virtual bool operator==(const share::ObIDagNet &other) const override;
   virtual bool is_valid() const override;
   virtual uint64_t hash() const override;

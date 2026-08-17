@@ -99,7 +99,7 @@ private:
       ObLS *ls,
       const ObMigrationStatus current_migration_status,
       ObMigrationStatus &next_migration_status);
-  int report_ls_meta_table_(ObLS *ls);
+  int enqueue_ls_meta_report_(ObLS *ls);
   int report_result_();
   int trans_rebuild_fail_status_(
       ObLS &ls,
@@ -107,6 +107,7 @@ private:
       ObMigrationStatus &new_migration_status);
   int check_tenant_is_dropped_(
       bool &is_tenan_dropped);
+  void mark_dag_net_cleared_();
 
 private:
   bool is_inited_;

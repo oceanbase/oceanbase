@@ -136,6 +136,21 @@ int ObBackupValidateBaseDag::fill_dag_key(char *buf, const int64_t buf_len) cons
   return ret;
 }
 
+int ObBackupValidateBaseDag::report_result()
+{
+  int ret = OB_SUCCESS;
+  const int dag_ret = get_dag_ret();
+  if (!is_inited_ || OB_ISNULL(ctx_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup validate dag is not initialized", KR(ret), K_(is_inited), KP_(ctx));
+  } else if (OB_SUCCESS != dag_ret
+      && OB_FAIL(ctx_->set_validate_result(
+          dag_ret, "backup validate DAG failed in scheduler", get_dag_id()))) {
+    LOG_WARN("failed to save backup validate dag result", KR(ret), K(dag_ret), KPC(this));
+  }
+  return ret;
+}
+
 /*
 **************************ObBackupValidateScheduler**************************
 */
@@ -164,7 +179,7 @@ int ObLSBackupValidateScheduler::schedule_backup_validate_dag(const obrpc::ObBac
 **************************ObBackupValidateDagNet**************************
 */
 ObBackupValidateDagNet::ObBackupValidateDagNet()
-  : ObIDagNet(ObDagNetType::DAG_NET_TYPE_BACKUP_VALIDATE),
+  : ObIDagNet(ObDagNetType::DAG_NET_TYPE_BACKUP_VALIDATE, ObDagPrio::DAG_PRIO_HA_LOW),
     is_inited_(false),
     param_(),
     report_ctx_(),
@@ -227,7 +242,7 @@ int ObBackupValidateDagNet::init_by_param(const share::ObIDagInitParam *param)
 int ObBackupValidateDagNet::start_running()
 {
   int ret = OB_SUCCESS;
-  ObTenantDagScheduler *dag_scheduler = nullptr;
+  int tmp_ret = OB_SUCCESS;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -238,26 +253,26 @@ int ObBackupValidateDagNet::start_running()
   } else if (OB_FAIL(schedule_prepare_validate_())) {
     LOG_WARN("failed to schedule prepare validate chain", KR(ret));
   }
-  if (OB_FAIL(ret)) {
-    obrpc::ObBackupTaskRes res;
-    int tmp_ret = OB_SUCCESS;
-    const common::ObAddr src_server = GCTX.self_addr();
-    res.job_id_ = param_.job_id_;
-    res.task_id_ = param_.task_id_;
-    res.tenant_id_ = param_.tenant_id_;
-    res.ls_id_ = param_.ls_id_;
-    res.result_ = ret;
-    res.src_server_ = src_server;
-    res.trace_id_ = param_.trace_id_;
-    res.dag_id_ = get_dag_id();
-    if (!res.is_valid()) {
-      tmp_ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to init backup task res", KR(ret), KR(tmp_ret), K(src_server), K(param_));
-    } else if (OB_TMP_FAIL(ObBackupValidateObUtils::report_validate_over(res, report_ctx_))) {
-      LOG_WARN("failed to report validate over", KR(ret), KR(tmp_ret), K(res), K(report_ctx_));
-    }
+  if (OB_FAIL(ret) && OB_TMP_FAIL(task_context_.set_validate_result(
+      ret, "failed to start backup validate dag net", get_dag_id()))) {
+    LOG_WARN("failed to select validate start failure", KR(ret), KR(tmp_ret), K_(param));
   }
   return ret;
+}
+
+int ObBackupValidateDagNet::clear_dag_net_ctx()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(task_context_.report_validate_result(param_, GCTX.self_addr(), report_ctx_))) {
+    LOG_WARN("failed to report validate result", KR(ret), K_(param));
+  }
+  return ret;
+}
+
+int ObBackupValidateDagNet::deal_with_cancel()
+{
+  return task_context_.set_validate_result(
+      OB_CANCELED, "backup validate dag net canceled", get_dag_id());
 }
 
 bool ObBackupValidateDagNet::operator == (const share::ObIDagNet &other) const
@@ -635,7 +650,7 @@ int ObBackupValidateFinishDag::create_first_task()
     ret = OB_NOT_INIT;
     LOG_WARN("ObBackupValidateFinishDag not init", KR(ret));
   } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_add_single_task(
-                 this, task, param_, report_ctx_))) {
+                 this, task, param_))) {
     LOG_WARN("failed to alloc and add finish task", KR(ret));
   } else {
     LOG_INFO("success create finish task", KPC(task));

@@ -243,6 +243,9 @@ DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_TABLET_REBUILD, ObDagPrio::DAG_PRIO_HA_HIGH,
     false, 0, {})
 // DAG_TYPE_REBUILD_TABLET END
 
+DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_DAG_NET_FINALIZER, ObDagPrio::DAG_PRIO_HA_LOW, ObSysTaskType::DAG_NET_FINALIZER_TASK, "DAG_NET_FINALIZER", "DAG_NET_FINALIZER", true,
+    false, 1, {"dag_net_type"})
+
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_MAX, ObDagPrio::DAG_PRIO_MAX, ObSysTaskType::MAX_SYS_TASK_TYPE, "DAG_TYPE_MAX", "INVALID", false, false, 0, {})
 #endif
 
@@ -291,6 +294,13 @@ struct ObDagPrio
   static bool is_valid_prio(const ObDagPrioEnum prio)
   {
     return prio >= DAG_PRIO_COMPACTION_HIGH && prio < DAG_PRIO_MAX;
+  }
+
+  static bool is_ha_prio(const ObDagPrioEnum prio)
+  {
+    return DAG_PRIO_HA_HIGH == prio
+        || DAG_PRIO_HA_MID == prio
+        || DAG_PRIO_HA_LOW == prio;
   }
 };
 

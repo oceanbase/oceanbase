@@ -18,7 +18,8 @@ namespace backup
 {
 
 ObBackupTabletFuseDagNet::ObBackupTabletFuseDagNet()
-  : ObBackupDagNet(ObBackupDagNetSubType::LOG_STREAM_BACKUP_TABLET_FUSE_DAG_NET),
+  : ObBackupDagNet(ObBackupDagNetSubType::LOG_STREAM_BACKUP_TABLET_FUSE_DAG_NET,
+        ObDagPrio::DAG_PRIO_HA_LOW),
     is_inited_(false),
     ctx_(NULL),
     compat_mode_(lib::Worker::CompatMode::INVALID)
@@ -63,6 +64,7 @@ bool ObBackupTabletFuseDagNet::is_valid() const
 int ObBackupTabletFuseDagNet::start_running()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObInitialBackupTabletGroupFuseDag *initial_dag = NULL;
 
   if (IS_NOT_INIT) {
@@ -73,6 +75,9 @@ int ObBackupTabletFuseDagNet::start_running()
       this, ObDagPrio::DAG_PRIO_MAX,
       false/*emergency*/, initial_dag/*new_dag*/, this))) {
     LOG_WARN("failed to alloc and schedule initial fuse dag", K(ret));
+  }
+  if (OB_FAIL(ret) && OB_TMP_FAIL(set_result(ret, get_dag_id()))) {
+    LOG_WARN("failed to set backup dag net start result", K(tmp_ret), K(ret));
   }
   return ret;
 }
@@ -165,6 +170,11 @@ int ObBackupTabletFuseDagNet::clear_dag_net_ctx()
     ctx_->finish_ts_ = ObTimeUtil::current_time();
     const int64_t cost_ts = ctx_->finish_ts_ - ctx_->start_ts_;
     FLOG_INFO("finish tablet group fuse dag net", K(cost_ts), KPC_(ctx));
+    if (OB_FAIL(report_result_(ctx_->param_.job_desc_, ctx_->param_.tenant_id_,
+        ctx_->param_.ls_id_, ctx_->param_.turn_id_, ctx_->param_.retry_id_,
+        ctx_->report_ctx_))) {
+      LOG_WARN("failed to report tablet fuse dag net result", K(ret), KPC_(ctx));
+    }
   }
   return ret;
 }
@@ -183,6 +193,8 @@ int ObBackupTabletFuseDagNet::deal_with_cancel()
     LOG_WARN("ctx should not be null", K(ret), KP_(ctx));
   } else if (OB_FAIL(ctx_->set_result(result, need_retry))) {
     LOG_WARN("failed to set result", K(ret), KPC(this));
+  } else if (OB_FAIL(ObBackupDagNet::deal_with_cancel())) {
+    LOG_WARN("failed to set canceled dag net result", K(ret), KPC(this));
   }
   return ret;
 }

@@ -125,7 +125,7 @@ void ObLSCompleteMigrationParam::reset()
 
 
 ObLSCompleteMigrationDagNet::ObLSCompleteMigrationDagNet()
-    : ObIDagNet(ObDagNetType::DAG_NET_TYPE_COMPLETE_MIGARTION),
+    : ObIDagNet(ObDagNetType::DAG_NET_TYPE_COMPLETE_MIGARTION, ObDagPrio::DAG_PRIO_HA_HIGH),
       is_inited_(false),
       ctx_(),
       ha_svc_ctx_()
@@ -352,8 +352,9 @@ int ObLSCompleteMigrationDagNet::clear_dag_net_ctx()
       LOG_WARN("failed to update migration status", K(tmp_ret), K(ret), K(ctx_));
     }
 
-    if (OB_TMP_FAIL(report_ls_meta_table_(ls))) {
-      LOG_WARN("failed to report ls meta table", K(tmp_ret), K(ret), K(ctx_));
+    if (OB_TMP_FAIL(enqueue_ls_meta_report_(ls))) {
+      // ObTenantMetaChecker provides the periodic repair path if enqueue fails.
+      LOG_WARN("failed to enqueue ls meta report", K(tmp_ret), K(ret), K(ctx_));
     }
 
     if (OB_FAIL(ctx_.get_result(result))) {
@@ -370,8 +371,33 @@ int ObLSCompleteMigrationDagNet::clear_dag_net_ctx()
 
   if (OB_NOT_NULL(ls_migration_handler)) {
     ls_migration_handler->set_dag_net_cleared();
+  } else {
+    // This cleanup runs in the finalizer worker, outside scheduler priority locks.
+    mark_dag_net_cleared_();
   }
   return ret;
+}
+
+void ObLSCompleteMigrationDagNet::mark_dag_net_cleared_()
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  ObLSMigrationHandler *ls_migration_handler = nullptr;
+  if (!is_inited_ || !ctx_.arg_.ls_id_.is_valid()) {
+    // The migration handler is not associated with this dag net yet.
+  } else if (OB_SUCCESS != (ret = ObStorageHADagUtils::get_ls(ctx_.arg_.ls_id_, ls_handle))) {
+    LOG_WARN("failed to get ls when marking dag net cleared", K(ret), K(ctx_));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("ls should not be NULL when marking dag net cleared", K(ret), K(ctx_));
+  } else if (OB_ISNULL(ls_migration_handler = ls->get_ls_migration_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls migration handler should not be NULL when marking dag net cleared",
+        K(ret), K(ctx_));
+  } else {
+    ls_migration_handler->set_dag_net_cleared();
+  }
 }
 
 int ObLSCompleteMigrationDagNet::trans_rebuild_fail_status_(
@@ -420,6 +446,7 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
   bool is_finish = false;
   static const int64_t UPDATE_MIGRATION_STATUS_INTERVAL_MS = 100 * 1000; //100ms
   ObTenantDagScheduler *scheduler = nullptr;
+  ObTenantDagWorker *worker = ObTenantDagWorker::self();
   int32_t result = OB_SUCCESS;
 
   DEBUG_SYNC(BEFORE_COMPLETE_MIGRATION_UPDATE_STATUS);
@@ -449,7 +476,11 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
     }
 #endif
 
-      if (ls->is_stopped()) {
+      if (OB_NOT_NULL(worker) && worker->get_force_cancel_flag()) {
+        ret = OB_CANCELED;
+        LOG_WARN("migration finalizer is canceled, stop updating migration status", K(ret), K(ctx_));
+        break;
+      } else if (ls->is_stopped()) {
         ret = OB_NOT_RUNNING;
         LOG_WARN("ls is not running, stop migration dag net", K(ret), K(ctx_));
         break;
@@ -576,12 +607,9 @@ int ObLSCompleteMigrationDagNet::deal_with_cancel()
   return ret;
 }
 
-int ObLSCompleteMigrationDagNet::report_ls_meta_table_(ObLS *ls)
+int ObLSCompleteMigrationDagNet::enqueue_ls_meta_report_(ObLS *ls)
 {
   int ret = OB_SUCCESS;
-  ObMigrationStatus status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
-  const int64_t MAX_RETRY_NUM = 3;
-  const int64_t REPORT_INTERVAL = 200_ms;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -589,27 +617,9 @@ int ObLSCompleteMigrationDagNet::report_ls_meta_table_(ObLS *ls)
   } else if (OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("update migration status get invalid argument", K(ret), KP(ls));
-  } else if (OB_FAIL(ls->get_migration_status(status))) {
-    LOG_WARN("failed to get migration status", K(ret), KPC(ls));
-  } else {
-    for (int64_t i = 0; i < MAX_RETRY_NUM; ++i) {
-      //overwrite ret
-      if (OB_FAIL(ObStorageHAUtils::report_ls_meta_table(ctx_.tenant_id_, ctx_.arg_.ls_id_, status))) {
-        LOG_WARN("failed to report ls meta table", K(ret), K(ctx_));
-      } else {
-        break;
-      }
-      if (OB_FAIL(ret)) {
-        ob_usleep(REPORT_INTERVAL);
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      //do nothing
-    } else if (OB_FAIL(GCTX.ob_service_->submit_ls_update_task(ctx_.tenant_id_, ctx_.arg_.ls_id_))) {
-      //overwrite ret
-      LOG_WARN("failed to submit ls update task", K(ret), K(ctx_));
-    }
+  } else if (OB_FAIL(ls->report_replica_info())) {
+    // ObLSTableUpdater performs the SQL/RS work asynchronously.
+    LOG_WARN("failed to enqueue ls replica info report", K(ret), K(ctx_));
   }
   return ret;
 }

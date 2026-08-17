@@ -66,7 +66,7 @@ private:
   int close_extern_writer_();
   int abort_extern_writer_();
   int record_server_event_();
-  int report_task_result_();
+  int set_dag_net_result_();
 private:
   bool is_inited_;
   ObBackupTabletGroupFuseCtx *group_ctx_;

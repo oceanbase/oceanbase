@@ -9,6 +9,7 @@
 #define protected public
 #define private public
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
+#include "share/scheduler/ob_dag_net_finalizer.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 
 int64_t dag_cnt = 1;
@@ -139,9 +140,11 @@ private:
 void wait_scheduler() {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
-  while (!scheduler->is_empty()) {
+  const int64_t deadline = ObTimeUtility::current_time() + 60 * 1000 * 1000L;
+  while (!scheduler->is_empty() && ObTimeUtility::current_time() < deadline) {
     usleep(100000);
   }
+  ASSERT_TRUE(scheduler->is_empty());
 }
 
 class ObBasicDag : public ObIDag
@@ -2454,6 +2457,447 @@ TEST_F(TestDagScheduler, test_co_major_flood_does_not_block_other_types)
   // Release and drain
   ATOMIC_STORE(&exit_flag, true);
   wait_scheduler();
+}
+
+struct ObFinalizerTestCtx : public ObIDagInitParam
+{
+  ObFinalizerTestCtx()
+    : start_ret_(OB_SUCCESS),
+      finalizer_ret_(OB_SUCCESS),
+      need_finalizer_(true),
+      cancel_before_add_(false),
+      cancel_from_finalizer_(false),
+      finalizer_priority_(ObDagPrio::DAG_PRIO_HA_LOW),
+      start_count_(0),
+      finalizer_count_(0),
+      clear_count_(0),
+      cancel_count_(0),
+      ran_on_worker_(false)
+  {}
+  bool is_valid() const override { return true; }
+
+  int start_ret_;
+  int finalizer_ret_;
+  bool need_finalizer_;
+  bool cancel_before_add_;
+  bool cancel_from_finalizer_;
+  ObDagPrio::ObDagPrioEnum finalizer_priority_;
+  int64_t start_count_;
+  int64_t finalizer_count_;
+  int64_t clear_count_;
+  int64_t cancel_count_;
+  bool ran_on_worker_;
+};
+
+class ObFinalizerTestDagNet : public ObIDagNet
+{
+public:
+  ObFinalizerTestDagNet()
+    : ObIDagNet(ObDagNetType::DAG_NET_TYPE_MIGRATION), ctx_(nullptr)
+  {}
+
+  int init_by_param(const ObIDagInitParam *param) override
+  {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(param) || !param->is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+    } else {
+      ctx_ = const_cast<ObFinalizerTestCtx *>(
+          static_cast<const ObFinalizerTestCtx *>(param));
+      if (ctx_->need_finalizer_
+          && OB_FAIL(set_dag_net_finalizer_priority(ctx_->finalizer_priority_))) {
+      } else if (ctx_->cancel_before_add_) {
+        ret = set_cancel();
+      }
+    }
+    return ret;
+  }
+
+  bool is_valid() const override { return OB_NOT_NULL(ctx_); }
+  int start_running() override
+  {
+    ATOMIC_INC(&ctx_->start_count_);
+    return ctx_->start_ret_;
+  }
+  int clear_dag_net_ctx() override
+  {
+    ATOMIC_INC(&ctx_->clear_count_);
+    const bool ran_on_worker = nullptr != ObTenantDagWorker::self();
+    ATOMIC_STORE(&ctx_->ran_on_worker_, ran_on_worker);
+    if (ran_on_worker) {
+      ATOMIC_INC(&ctx_->finalizer_count_);
+      if (ctx_->cancel_from_finalizer_) {
+        (void) set_cancel();
+      }
+    }
+    return ran_on_worker ? ctx_->finalizer_ret_ : OB_SUCCESS;
+  }
+  int deal_with_cancel() override
+  {
+    ATOMIC_INC(&ctx_->cancel_count_);
+    return OB_SUCCESS;
+  }
+  uint64_t hash() const override
+  {
+    return murmurhash(&ctx_, sizeof(ctx_), 0);
+  }
+  bool operator ==(const ObIDagNet &other) const override
+  {
+    return get_type() == other.get_type()
+        && ctx_ == static_cast<const ObFinalizerTestDagNet &>(other).ctx_;
+  }
+  int fill_comment(char *buf, const int64_t buf_len) const override
+  {
+    UNUSEDx(buf, buf_len);
+    return OB_SUCCESS;
+  }
+  int fill_dag_net_key(char *buf, const int64_t buf_len) const override
+  {
+    UNUSEDx(buf, buf_len);
+    return OB_SUCCESS;
+  }
+
+private:
+  ObFinalizerTestCtx *ctx_;
+};
+
+TEST_F(TestDagScheduler, test_dag_net_finalizer_state_transition)
+{
+  ObFinalizerTestCtx ctx;
+  ObFinalizerTestDagNet dag_net;
+  ASSERT_EQ(OB_SUCCESS, dag_net.init_by_param(&ctx));
+  EXPECT_EQ(ObDagPrio::DAG_PRIO_HA_LOW,
+      dag_net.get_dag_net_finalizer_priority());
+  EXPECT_EQ(ObIDagNet::DAG_NET_FINALIZER_NONE, dag_net.get_dag_net_finalizer_state());
+  dag_net.set_dag_net_finalizer_submitted();
+  EXPECT_EQ(ObIDagNet::DAG_NET_FINALIZER_SUBMITTED,
+      dag_net.get_dag_net_finalizer_state());
+  EXPECT_EQ(OB_SUCCESS, dag_net.set_cancel());
+  EXPECT_TRUE(dag_net.is_cancel());
+  EXPECT_EQ(1, ATOMIC_LOAD(&ctx.cancel_count_));
+
+  EXPECT_TRUE(dag_net.finish_dag_net_finalizer(OB_ERR_UNEXPECTED));
+  EXPECT_EQ(ObIDagNet::DAG_NET_FINALIZER_DONE, dag_net.get_dag_net_finalizer_state());
+  EXPECT_EQ(OB_ERR_UNEXPECTED, dag_net.get_dag_net_finalizer_ret());
+  EXPECT_FALSE(dag_net.finish_dag_net_finalizer(OB_SUCCESS));
+  EXPECT_EQ(OB_SUCCESS, dag_net.set_cancel());
+  EXPECT_EQ(1, ATOMIC_LOAD(&ctx.cancel_count_));
+
+  // Submission marking is tolerant of a carrier that finishes immediately
+  // after add_dag() exposes it to the scheduler.
+  ObFinalizerTestCtx fast_ctx;
+  ObFinalizerTestDagNet fast_dag_net;
+  ASSERT_EQ(OB_SUCCESS, fast_dag_net.init_by_param(&fast_ctx));
+  EXPECT_TRUE(fast_dag_net.finish_dag_net_finalizer(OB_SUCCESS));
+  fast_dag_net.set_dag_net_finalizer_submitted();
+  EXPECT_EQ(ObIDagNet::DAG_NET_FINALIZER_DONE,
+      fast_dag_net.get_dag_net_finalizer_state());
+}
+
+TEST_F(TestDagScheduler, test_dag_net_finalizer_to_string)
+{
+  ObFinalizerTestCtx ctx;
+  ctx.need_finalizer_ = false;
+  ObFinalizerTestDagNet dag_net;
+  ASSERT_EQ(OB_SUCCESS, dag_net.init_by_param(&ctx));
+  char buf[2048];
+
+  MEMSET(buf, 0, sizeof(buf));
+  ASSERT_GT(dag_net.to_string(buf, sizeof(buf)), 0);
+  EXPECT_EQ(nullptr, strstr(buf, "dag_net_finalizer_info"));
+  EXPECT_EQ(nullptr, strstr(buf, "state:"));
+  EXPECT_EQ(nullptr, strstr(buf, "ret:"));
+
+  ASSERT_EQ(OB_SUCCESS,
+      dag_net.set_dag_net_finalizer_priority(ObDagPrio::DAG_PRIO_HA_LOW));
+  MEMSET(buf, 0, sizeof(buf));
+  ASSERT_GT(dag_net.to_string(buf, sizeof(buf)), 0);
+  EXPECT_NE(nullptr, strstr(buf, "dag_net_finalizer_info"));
+  EXPECT_NE(nullptr, strstr(buf, "priority"));
+  EXPECT_NE(nullptr, strstr(buf, "state"));
+  EXPECT_EQ(nullptr, strstr(buf, "ret:"));
+
+  dag_net.set_dag_net_finalizer_submitted();
+  MEMSET(buf, 0, sizeof(buf));
+  ASSERT_GT(dag_net.to_string(buf, sizeof(buf)), 0);
+  EXPECT_NE(nullptr, strstr(buf, "dag_net_finalizer_info"));
+  EXPECT_NE(nullptr, strstr(buf, "priority"));
+  EXPECT_NE(nullptr, strstr(buf, "state"));
+  EXPECT_EQ(nullptr, strstr(buf, "ret:"));
+
+  ASSERT_TRUE(dag_net.finish_dag_net_finalizer(OB_ERR_UNEXPECTED));
+  MEMSET(buf, 0, sizeof(buf));
+  ASSERT_GT(dag_net.to_string(buf, sizeof(buf)), 0);
+  EXPECT_NE(nullptr, strstr(buf, "dag_net_finalizer_info"));
+  EXPECT_NE(nullptr, strstr(buf, "priority"));
+  EXPECT_NE(nullptr, strstr(buf, "state"));
+  EXPECT_NE(nullptr, strstr(buf, "ret:"));
+}
+
+static ObIDag *find_ready_finalizer_dag(
+    ObTenantDagScheduler &scheduler,
+    const ObDagPrio::ObDagPrioEnum priority)
+{
+  ObIDag *finalizer_dag = nullptr;
+  ObDagPrioScheduler &prio_scheduler = scheduler.prio_sche_[priority];
+  common::SpinRLockGuard guard(prio_scheduler.prio_rwlock_);
+  ObIDag *head = prio_scheduler.dag_list_[READY_DAG_LIST].get_header();
+  ObIDag *cur = head->get_next();
+  while (nullptr != cur && head != cur && nullptr == finalizer_dag) {
+    if (ObDagType::DAG_TYPE_DAG_NET_FINALIZER == cur->get_type()) {
+      finalizer_dag = cur;
+    }
+    cur = cur->get_next();
+  }
+  return finalizer_dag;
+}
+
+TEST_F(TestDagScheduler, test_dag_net_finalizer_rejects_non_ha_priority)
+{
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler *);
+  ASSERT_NE(nullptr, scheduler);
+
+  ObFinalizerTestCtx ctx;
+  ctx.finalizer_priority_ = ObDagPrio::DAG_PRIO_COMPACTION_LOW;
+  const int64_t dag_net_cnt = scheduler->dag_net_sche_.get_dag_net_count();
+  const int64_t dag_cnt = scheduler->get_cur_dag_cnt();
+  EXPECT_EQ(OB_INVALID_ARGUMENT,
+      scheduler->create_and_add_dag_net<ObFinalizerTestDagNet>(&ctx));
+  EXPECT_EQ(dag_net_cnt, scheduler->dag_net_sche_.get_dag_net_count());
+  EXPECT_EQ(dag_cnt, scheduler->get_cur_dag_cnt());
+  EXPECT_EQ(0, ATOMIC_LOAD(&ctx.start_count_));
+  EXPECT_EQ(0, ATOMIC_LOAD(&ctx.finalizer_count_));
+  EXPECT_TRUE(scheduler->is_empty());
+}
+
+TEST_F(TestDagScheduler, test_dag_net_finalizer_cannot_be_canceled)
+{
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler *);
+  ASSERT_NE(nullptr, scheduler);
+  // Drive the lifecycle synchronously so the carrier cannot race with a
+  // DagWorker while this test sends a cancel request.
+  scheduler->stop();
+  scheduler->notify();
+  scheduler->wait();
+
+  ObFinalizerTestCtx ctx;
+  const int64_t dag_cnt_before_admission = scheduler->get_cur_dag_cnt();
+  ASSERT_EQ(OB_SUCCESS,
+      scheduler->create_and_add_dag_net<ObFinalizerTestDagNet>(&ctx));
+
+  ObIDagNet *dag_net = nullptr;
+  ASSERT_EQ(OB_SUCCESS, scheduler->dag_net_sche_.get_first_dag_net(dag_net));
+  ASSERT_NE(nullptr, dag_net);
+  ASSERT_EQ(ObIDagNet::DAG_NET_FINALIZER_NONE,
+      dag_net->get_dag_net_finalizer_state());
+  EXPECT_EQ(dag_cnt_before_admission, scheduler->get_cur_dag_cnt());
+  EXPECT_EQ(1, scheduler->dag_net_sche_.dag_net_list_[BLOCKING_DAG_NET_LIST].get_size());
+  EXPECT_EQ(0, scheduler->dag_net_sche_.dag_net_list_[RUNNING_DAG_NET_LIST].get_size());
+  EXPECT_FALSE(scheduler->is_empty());
+
+  // Starting business work does not allocate the finalizer carrier.
+  ASSERT_EQ(OB_SUCCESS, scheduler->dag_net_sche_.loop_blocking_dag_net_list());
+  EXPECT_EQ(1, ATOMIC_LOAD(&ctx.start_count_));
+  EXPECT_EQ(ObIDagNet::DAG_NET_FINALIZER_NONE,
+      dag_net->get_dag_net_finalizer_state());
+  EXPECT_EQ(0, scheduler->dag_net_sche_.dag_net_list_[BLOCKING_DAG_NET_LIST].get_size());
+  EXPECT_EQ(1, scheduler->dag_net_sche_.dag_net_list_[RUNNING_DAG_NET_LIST].get_size());
+  EXPECT_EQ(dag_cnt_before_admission, scheduler->get_cur_dag_cnt());
+
+  // Terminal detection only moves the owner to FINISHED.  Carrier allocation
+  // and submission are centralized in loop_finished_dag_net_list().
+  scheduler->clear_fast_schedule_dag_net();
+  ASSERT_EQ(OB_SUCCESS, scheduler->dag_net_sche_.loop_running_dag_net_list());
+  EXPECT_EQ(ObIDagNet::DAG_NET_FINALIZER_NONE,
+      dag_net->get_dag_net_finalizer_state());
+  EXPECT_EQ(0, scheduler->dag_net_sche_.dag_net_list_[RUNNING_DAG_NET_LIST].get_size());
+  EXPECT_EQ(1, scheduler->dag_net_sche_.dag_net_list_[FINISHED_DAG_NET_LIST].get_size());
+  EXPECT_EQ(1, ATOMIC_LOAD(&ctx.start_count_));
+  EXPECT_EQ(dag_cnt_before_admission, scheduler->get_cur_dag_cnt());
+
+  // Terminal DagNets must still submit an emergency carrier when the normal
+  // per-type DAG limit has been reached.
+  const ObDagType::ObDagTypeEnum finalizer_type =
+      ObDagType::DAG_TYPE_DAG_NET_FINALIZER;
+  const int64_t saved_finalizer_dag_cnt =
+      ATOMIC_LOAD(&scheduler->dag_cnts_[finalizer_type]);
+  const int64_t saved_dag_cnt = scheduler->get_cur_dag_cnt();
+  ATOMIC_STORE(&scheduler->dag_cnts_[finalizer_type],
+      scheduler->get_dag_limit(ctx.finalizer_priority_));
+  const int loop_ret = scheduler->dag_net_sche_.loop_finished_dag_net_list();
+  const int64_t carrier_delta = scheduler->get_cur_dag_cnt() - saved_dag_cnt;
+  ATOMIC_STORE(&scheduler->dag_cnts_[finalizer_type],
+      saved_finalizer_dag_cnt + carrier_delta);
+  ASSERT_EQ(OB_SUCCESS, loop_ret);
+  ASSERT_EQ(1, carrier_delta);
+
+  ASSERT_EQ(OB_SUCCESS, scheduler->dag_net_sche_.get_first_dag_net(dag_net));
+  ASSERT_NE(nullptr, dag_net);
+  ASSERT_EQ(ObIDagNet::DAG_NET_FINALIZER_SUBMITTED,
+      dag_net->get_dag_net_finalizer_state());
+  EXPECT_EQ(1, scheduler->dag_net_sche_.dag_net_list_[FINISHED_DAG_NET_LIST].get_size());
+
+  ObDagPrioScheduler &prio_scheduler = scheduler->prio_sche_[ctx.finalizer_priority_];
+  ObIDag *finalizer_dag = find_ready_finalizer_dag(*scheduler, ctx.finalizer_priority_);
+  ASSERT_NE(nullptr, finalizer_dag);
+  EXPECT_EQ(finalizer_dag, prio_scheduler.dag_list_[READY_DAG_LIST].get_first());
+  ASSERT_EQ(ObIDag::DAG_STATUS_READY, finalizer_dag->get_dag_status());
+  EXPECT_TRUE(finalizer_dag->get_emergency());
+  ASSERT_EQ(1, finalizer_dag->get_task_list_count());
+
+  // The carrier only keeps the owner as payload.  Canceling the owner after
+  // submission must not attach cancellation semantics to the carrier.
+  EXPECT_EQ(nullptr, finalizer_dag->get_dag_net());
+  ASSERT_EQ(OB_SUCCESS, scheduler->cancel_dag_net(dag_net->get_dag_id()));
+  EXPECT_TRUE(dag_net->is_cancel());
+  EXPECT_EQ(1, ATOMIC_LOAD(&ctx.cancel_count_));
+
+  // Moving cleanup out of the scheduler thread must not make it cancelable.
+  ASSERT_EQ(OB_SUCCESS, scheduler->cancel_dag(finalizer_dag));
+  ASSERT_EQ(OB_SUCCESS, scheduler->cancel_dag(finalizer_dag, true/*force_cancel*/));
+  EXPECT_FALSE(finalizer_dag->has_set_stop());
+  EXPECT_EQ(finalizer_dag,
+      find_ready_finalizer_dag(*scheduler, ctx.finalizer_priority_));
+  EXPECT_EQ(0, ATOMIC_LOAD(&ctx.finalizer_count_));
+  EXPECT_EQ(0, ATOMIC_LOAD(&ctx.clear_count_));
+  EXPECT_EQ(ObIDagNet::DAG_NET_FINALIZER_SUBMITTED,
+      dag_net->get_dag_net_finalizer_state());
+  EXPECT_EQ(1, scheduler->dag_net_sche_.dag_net_list_[FINISHED_DAG_NET_LIST].get_size());
+  EXPECT_FALSE(scheduler->dag_net_sche_.is_empty());
+  EXPECT_FALSE(scheduler->is_empty());
+
+  // Execute and finish the same carrier.  report_result publishes DONE.
+  ObITask *finalizer_task = finalizer_dag->task_list_.get_first();
+  ASSERT_NE(nullptr, finalizer_task);
+  const int finalizer_ret = finalizer_task->process();
+  finalizer_dag->set_dag_ret(finalizer_ret);
+  ASSERT_EQ(OB_SUCCESS,
+      prio_scheduler.finish_dag_(ObIDag::DAG_STATUS_FINISH, finalizer_dag,
+          true/*try_move_child*/));
+  EXPECT_EQ(nullptr, finalizer_dag);
+  // This carrier is executed synchronously after the scheduler is stopped,
+  // so no DagWorker TLS is installed; clear_count_ is the execution oracle.
+  EXPECT_EQ(0, ATOMIC_LOAD(&ctx.finalizer_count_));
+  EXPECT_EQ(1, ATOMIC_LOAD(&ctx.clear_count_));
+  EXPECT_EQ(ObIDagNet::DAG_NET_FINALIZER_DONE,
+      dag_net->get_dag_net_finalizer_state());
+  EXPECT_EQ(OB_SUCCESS, dag_net->get_dag_net_finalizer_ret());
+  ASSERT_EQ(OB_SUCCESS, scheduler->dag_net_sche_.loop_finished_dag_net_list());
+  EXPECT_EQ(0, ATOMIC_LOAD(&ctx.finalizer_count_));
+  EXPECT_EQ(1, ATOMIC_LOAD(&ctx.clear_count_));
+  EXPECT_TRUE(scheduler->is_empty());
+}
+
+TEST_F(TestDagScheduler, test_dag_net_finalizer_terminal_paths)
+{
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler *);
+  ASSERT_NE(nullptr, scheduler);
+
+  ObFinalizerTestCtx normal_ctx;
+  ASSERT_EQ(OB_SUCCESS,
+      scheduler->create_and_add_dag_net<ObFinalizerTestDagNet>(&normal_ctx));
+  scheduler->notify_when_dag_net_finish();
+  wait_scheduler();
+  EXPECT_EQ(1, ATOMIC_LOAD(&normal_ctx.start_count_));
+  EXPECT_EQ(1, ATOMIC_LOAD(&normal_ctx.finalizer_count_));
+  EXPECT_EQ(1, ATOMIC_LOAD(&normal_ctx.clear_count_));
+  EXPECT_TRUE(ATOMIC_LOAD(&normal_ctx.ran_on_worker_));
+
+  ObFinalizerTestCtx start_failure_ctx;
+  start_failure_ctx.start_ret_ = OB_ERR_UNEXPECTED;
+  ASSERT_EQ(OB_SUCCESS,
+      scheduler->create_and_add_dag_net<ObFinalizerTestDagNet>(&start_failure_ctx));
+  scheduler->notify_when_dag_net_finish();
+  wait_scheduler();
+  EXPECT_EQ(1, ATOMIC_LOAD(&start_failure_ctx.start_count_));
+  EXPECT_EQ(1, ATOMIC_LOAD(&start_failure_ctx.finalizer_count_));
+  EXPECT_EQ(1, ATOMIC_LOAD(&start_failure_ctx.clear_count_));
+  EXPECT_TRUE(ATOMIC_LOAD(&start_failure_ctx.ran_on_worker_));
+
+  ObFinalizerTestCtx cancel_ctx;
+  cancel_ctx.cancel_before_add_ = true;
+  ASSERT_EQ(OB_SUCCESS,
+      scheduler->create_and_add_dag_net<ObFinalizerTestDagNet>(&cancel_ctx));
+  scheduler->notify_when_dag_net_finish();
+  wait_scheduler();
+  EXPECT_EQ(0, ATOMIC_LOAD(&cancel_ctx.start_count_));
+  EXPECT_EQ(1, ATOMIC_LOAD(&cancel_ctx.finalizer_count_));
+  EXPECT_EQ(1, ATOMIC_LOAD(&cancel_ctx.clear_count_));
+  EXPECT_EQ(1, ATOMIC_LOAD(&cancel_ctx.cancel_count_));
+  EXPECT_TRUE(ATOMIC_LOAD(&cancel_ctx.ran_on_worker_));
+
+  ObFinalizerTestCtx late_cancel_ctx;
+  late_cancel_ctx.cancel_from_finalizer_ = true;
+  ASSERT_EQ(OB_SUCCESS,
+      scheduler->create_and_add_dag_net<ObFinalizerTestDagNet>(&late_cancel_ctx));
+  scheduler->notify_when_dag_net_finish();
+  wait_scheduler();
+  EXPECT_EQ(1, ATOMIC_LOAD(&late_cancel_ctx.start_count_));
+  EXPECT_EQ(1, ATOMIC_LOAD(&late_cancel_ctx.finalizer_count_));
+  EXPECT_EQ(1, ATOMIC_LOAD(&late_cancel_ctx.clear_count_));
+  EXPECT_EQ(1, ATOMIC_LOAD(&late_cancel_ctx.cancel_count_));
+  EXPECT_TRUE(ATOMIC_LOAD(&late_cancel_ctx.ran_on_worker_));
+
+  // A failed finalizer attempt is terminal for the carrier and the owner is
+  // reclaimed after the result is published through DONE.
+  ObFinalizerTestCtx failure_ctx;
+  failure_ctx.finalizer_ret_ = OB_ERR_UNEXPECTED;
+  ASSERT_EQ(OB_SUCCESS,
+      scheduler->create_and_add_dag_net<ObFinalizerTestDagNet>(&failure_ctx));
+  scheduler->notify_when_dag_net_finish();
+  wait_scheduler();
+  EXPECT_EQ(1, ATOMIC_LOAD(&failure_ctx.start_count_));
+  EXPECT_EQ(1, ATOMIC_LOAD(&failure_ctx.finalizer_count_));
+  EXPECT_EQ(1, ATOMIC_LOAD(&failure_ctx.clear_count_));
+  EXPECT_TRUE(ATOMIC_LOAD(&failure_ctx.ran_on_worker_));
+  EXPECT_EQ(0, scheduler->dag_net_sche_.get_dag_net_count());
+
+  // DagNets that do not opt in keep the legacy direct-clear path.
+  ObFinalizerTestCtx legacy_ctx;
+  legacy_ctx.need_finalizer_ = false;
+  ASSERT_EQ(OB_SUCCESS,
+      scheduler->create_and_add_dag_net<ObFinalizerTestDagNet>(&legacy_ctx));
+  scheduler->notify_when_dag_net_finish();
+  wait_scheduler();
+  EXPECT_EQ(1, ATOMIC_LOAD(&legacy_ctx.start_count_));
+  EXPECT_EQ(0, ATOMIC_LOAD(&legacy_ctx.finalizer_count_));
+  EXPECT_EQ(1, ATOMIC_LOAD(&legacy_ctx.clear_count_));
+  EXPECT_FALSE(ATOMIC_LOAD(&legacy_ctx.ran_on_worker_));
+  EXPECT_EQ(0, scheduler->dag_net_sche_.get_dag_net_count());
+}
+
+TEST_F(TestDagScheduler, test_dag_net_finalizer_cancel_while_blocking)
+{
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler *);
+  ASSERT_NE(nullptr, scheduler);
+  scheduler->stop();
+  scheduler->notify();
+  scheduler->wait();
+
+  ObFinalizerTestCtx ctx;
+  ASSERT_EQ(OB_SUCCESS, scheduler->create_and_add_dag_net<ObFinalizerTestDagNet>(&ctx));
+  ObIDagNet *owner = nullptr;
+  ASSERT_EQ(OB_SUCCESS, scheduler->dag_net_sche_.get_first_dag_net(owner));
+  ASSERT_NE(nullptr, owner);
+  EXPECT_EQ(1, scheduler->dag_net_sche_.dag_net_list_[BLOCKING_DAG_NET_LIST].get_size());
+
+  ASSERT_EQ(OB_SUCCESS, scheduler->cancel_dag_net(owner->get_dag_id()));
+  EXPECT_TRUE(owner->is_cancel());
+  ASSERT_EQ(OB_SUCCESS, scheduler->dag_net_sche_.loop_blocking_dag_net_list());
+  EXPECT_EQ(0, ATOMIC_LOAD(&ctx.start_count_));
+  EXPECT_EQ(1, scheduler->dag_net_sche_.dag_net_list_[FINISHED_DAG_NET_LIST].get_size());
+
+  ASSERT_EQ(OB_SUCCESS, scheduler->dag_net_sche_.loop_finished_dag_net_list());
+  ObIDag *carrier = find_ready_finalizer_dag(*scheduler, ctx.finalizer_priority_);
+  ASSERT_NE(nullptr, carrier);
+  ObITask *task = carrier->task_list_.get_first();
+  ASSERT_NE(nullptr, task);
+  const int carrier_ret = task->process();
+  carrier->set_dag_ret(carrier_ret);
+  ObDagPrioScheduler &prio = scheduler->prio_sche_[ctx.finalizer_priority_];
+  ASSERT_EQ(OB_SUCCESS, prio.finish_dag_(ObIDag::DAG_STATUS_FINISH, carrier, true));
+  EXPECT_EQ(1, ATOMIC_LOAD(&ctx.clear_count_));
+  EXPECT_EQ(ObIDagNet::DAG_NET_FINALIZER_DONE, owner->get_dag_net_finalizer_state());
 }
 
 // ---------------------------------------------------------------------------

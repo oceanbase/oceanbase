@@ -46,6 +46,7 @@ class ObIDagNet;
 class ObTenantDagScheduler;
 class ObTenantDagWorker;
 class ObDagPrioScheduler;
+class ObDagNetFinalizerDag;
 
 
 struct ObDiagnoseLocation final
@@ -363,6 +364,7 @@ public:
     TASK_TYPE_BACKUP_MACRO_INDEX_READ = 205,
     TASK_TYPE_BACKUP_META_INDEX_MERGE_FINISH = 206,
     TASK_TYPE_BACKUP_META_INDEX_READ = 207,
+    TASK_TYPE_DAG_NET_FINALIZER = 208,
     TASK_TYPE_MAX,
   };
 
@@ -428,7 +430,6 @@ public:
   int generate_next_task();
   virtual int post_generate_next_task(); // genearte task after task process successfully, without inherit children nodes
   virtual int64_t get_sub_task_id() const { return 0; }
-  int cancel_task();
   virtual void task_debug_info_to_string(char *buf, const int64_t buf_len, int64_t &pos) const { BUF_PRINTF("Impl for task info"); }
   virtual int reset_status_for_suspend() { return common::OB_SUCCESS; }
   int copy_children_to(ObITask &next_task) const;
@@ -707,7 +708,6 @@ public:
   virtual lib::Worker::CompatMode get_compat_mode() const = 0;
   virtual uint64_t get_consumer_group_id() const = 0;
   int remove_task(ObITask &task);
-  int cancel_task(const ObITask::ObITaskType &type);
 protected:
   void inc_running_task_cnt() { ++running_task_cnt_; }
   void dec_running_task_cnt() { --running_task_cnt_; }
@@ -792,7 +792,16 @@ public:
 
 class ObIDagNet : public common::ObDLinkBase<ObIDagNet>
 {
+  friend class ObDagNetFinalizerDag;
+  friend class ObTenantDagScheduler;
 public:
+  enum ObDagNetFinalizerState
+  {
+    DAG_NET_FINALIZER_NONE = 0,  // Submission has not been published yet.
+    DAG_NET_FINALIZER_SUBMITTED, // Carrier submission has been published.
+    DAG_NET_FINALIZER_DONE,      // The carrier has reported its terminal result.
+  };
+
   static const int64_t DEFAULT_DAG_BUCKET = 1024;
   typedef common::hash::ObHashMap<const ObIDag *,
                           ObDagRecord *,
@@ -800,7 +809,9 @@ public:
                           common::hash::hash_func<const ObIDag *>,
                           common::hash::equal_to<const ObIDag *> > DagRecordMap;
 
-  explicit ObIDagNet(const ObDagNetType::ObDagNetTypeEnum type);
+  explicit ObIDagNet(
+      const ObDagNetType::ObDagNetTypeEnum type,
+      const ObDagPrio::ObDagPrioEnum finalizer_priority = ObDagPrio::DAG_PRIO_MAX);
   virtual ~ObIDagNet()
   {
     ObIDagNet::reset();
@@ -837,10 +848,30 @@ public:
   int64_t get_add_time() const { return add_time_; }
   void set_start_time() { start_time_ = ObTimeUtility::fast_current_time(); }
   int64_t get_start_time() const { return start_time_; }
+  // This hook runs directly on the scheduler thread by default.  If it may
+  // block, configure an HA finalizer priority before the DagNet becomes
+  // terminal (in the constructor, via set_dag_net_finalizer_priority(), or via
+  // enable_dag_net_finalizer_on_failure() for a failure-only path).  It will
+  // then run in an ObDagNetFinalizerDag worker.
   virtual int clear_dag_net_ctx()
   {
     return OB_SUCCESS;
   }
+  // A priority other than DAG_PRIO_MAX opts this DagNet into cleanup on a
+  // DagWorker.  Conditional finalizers may enable it before the DagNet becomes
+  // terminal; the framework then keeps the DagNet alive until it reports DONE.
+  bool need_dag_net_finalizer() const
+  {
+    return ObDagPrio::DAG_PRIO_MAX != get_dag_net_finalizer_priority();
+  }
+  ObDagPrio::ObDagPrioEnum get_dag_net_finalizer_priority() const;
+  int set_dag_net_finalizer_priority(const ObDagPrio::ObDagPrioEnum priority);
+  void enable_dag_net_finalizer_on_failure(
+      const int failure_ret,
+      const ObDagPrio::ObDagPrioEnum priority);
+  ObDagNetFinalizerState get_dag_net_finalizer_state() const;
+  // Valid after an acquire load of state observes DONE.
+  int get_dag_net_finalizer_ret() const;
   int set_cancel();
   bool is_cancel();
   void set_last_dag_finished();
@@ -869,9 +900,28 @@ public:
 
   virtual int64_t to_string(char* buf, const int64_t buf_len) const;
 private:
+  void set_dag_net_finalizer_submitted();
+  // Single publisher: only ObDagNetFinalizerDag::report_result() may commit
+  // the final result and DONE state.
+  bool finish_dag_net_finalizer(const int ret);
   void remove_dag_record_(ObDagRecord &dag_record);
 
 private:
+  struct ObDagNetFinalizerInfo
+  {
+    explicit ObDagNetFinalizerInfo(
+        const ObDagPrio::ObDagPrioEnum priority = ObDagPrio::DAG_PRIO_MAX)
+      : priority_(priority),
+        state_(DAG_NET_FINALIZER_NONE),
+        ret_(OB_SUCCESS)
+    {}
+    void reset();
+    int64_t to_string(char *buf, const int64_t buf_len) const;
+    ObDagPrio::ObDagPrioEnum priority_; // relaxed atomic
+    ObDagNetFinalizerState state_; // acquire/acq_rel atomic; DONE publishes ret_
+    int ret_; // single writer, valid after DONE
+  };
+
   bool is_stopped_;
   lib::ObMutex lock_;
   common::ObIAllocator *allocator_; // use to alloc dag in dag_net later
@@ -882,6 +932,7 @@ private:
   ObDagId dag_net_id_;
   bool is_cancel_;
   bool is_finishing_last_dag_; // making dag net freed after last dag freed if dag net can be freed after finish last dag
+  ObDagNetFinalizerInfo dag_net_finalizer_info_;
 };
 
 struct ObDagInfo
@@ -1023,7 +1074,6 @@ public:
       ObIAllocator &ha_allocator,
       ObTenantDagScheduler &scheduler);
 
-  bool is_empty(); // only for unittest
   int add_dag_net(ObIDagNet &dag_net);
   void erase_dag_net_or_abort(ObIDagNet &dag_net);
   void erase_dag_net_id_or_abort(ObIDagNet &dag_net);
@@ -1051,7 +1101,8 @@ public:
       int64_t &idx, const int64_t total_cnt);
   int64_t get_dag_net_count(const ObDagNetType::ObDagNetTypeEnum type);
   int loop_running_dag_net_list();
-  // do not hold dag_net_map_rwlock_, otherwise deadlock when clear_dag_net_ctx,  see
+  // Do not hold dag_net_map_rwlock_: this path may submit a carrier or invoke
+  // the legacy clear_dag_net_ctx() reclaim hook.
   int loop_finished_dag_net_list();
   int loop_blocking_dag_net_list();
   int check_dag_net_exist(
@@ -1062,6 +1113,10 @@ public:
   int check_ls_compaction_dag_exist_with_cancel(const ObLSID &ls_id, bool &exist);
   int get_min_end_scn_from_major_dag(const ObLSID &ls_id, SCN &min_end_scn);
 private:
+  bool is_empty(); // only for unittest
+  int move_terminal_dag_net_to_finished_(
+      const ObDagNetListIndex from_list_index,
+      ObIDagNet &dag_net);
   typedef common::ObDList<ObIDagNet> DagNetList;
   typedef common::hash::ObHashMap<const ObIDagNet*,
                           ObIDagNet*,
@@ -1228,7 +1283,6 @@ public:
   int64_t get_running_task_cnt();
   int set_thread_score(const int64_t score, int64_t &old_val, int64_t &new_val);
   bool try_switch(ObTenantDagWorker &worker);
-  int cancel_task(const ObIDag &dag, const ObITask::ObITaskType &type);
 
   void adapt_window_thread_cnt(); // only for DAG_PRIO_COMPACTION_LOW
 
@@ -1344,6 +1398,7 @@ private:
 
 class ObTenantDagScheduler : public lib::TGRunnable
 {
+  friend class ObDagNetScheduler;
 public:
   static int mtl_init(ObTenantDagScheduler* &scheduler);
 public:
@@ -1370,12 +1425,13 @@ public:
   int create_dag(
       const ObIDagInitParam *param,
       T *&dag);
-  // Allocates, initializes, adds the DAG into dag_net and creates its first task.
+  // Allocates and initializes a DAG, optionally adds it into dag_net, then
+  // creates its first task. A null dag_net creates a standalone DAG.
   // DAG_PRIO_MAX keeps the DAG type's default priority. On failure, dag may be
   // non-null and remains owned by the caller.
   template<typename T, typename... Args>
   int create_dag(
-      ObIDagNet *dag_net,
+      ObIDagNet *dag_net_to_attach,
       const ObDagPrio::ObDagPrioEnum priority,
       T *&dag,
       Args&&... init_args);
@@ -1409,7 +1465,7 @@ public:
     for (int64_t i = 0; i < ObDagPrio::DAG_PRIO_MAX; ++i) {
       bret &= prio_sche_[i].is_empty();
     }
-    bret &= dag_net_sche_.is_empty();
+    bret &= (0 == dag_net_sche_.get_dag_net_count());
     return bret;
   } // only for unittest
 
@@ -1498,7 +1554,6 @@ public:
   }
   // for unittest
   int get_first_dag_net(ObIDagNet *&dag_net);
-  int cancel_task(const ObIDag *dag, const ObITask::ObITaskType &type);
 
   common::ObIAllocator &get_independent_allocator() { return independent_mem_context_->get_malloc_allocator(); }
 public:
@@ -1519,6 +1574,7 @@ private:
   int schedule();
   void loop_dag_net();
   int loop_ready_dag_lists();
+  int create_and_schedule_dag_net_finalizer_(ObIDagNet &dag_net);
   int create_worker();
   int try_reclaim_threads();
   void destroy_all_workers();
@@ -1759,7 +1815,7 @@ int ObTenantDagScheduler::create_dag(
 
 template<typename T, typename... Args>
 int ObTenantDagScheduler::create_dag(
-    ObIDagNet *dag_net,
+    ObIDagNet *dag_net_to_attach,
     const ObDagPrio::ObDagPrioEnum priority,
     T *&dag,
     Args&&... init_args)
@@ -1769,19 +1825,19 @@ int ObTenantDagScheduler::create_dag(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "ObTenantDagScheduler is not inited", K(ret));
-  } else if (OB_ISNULL(dag_net)
-      || OB_UNLIKELY(ObDagPrio::DAG_PRIO_MAX != priority
-          && !ObDagPrio::is_valid_prio(priority))) {
+  } else if (OB_UNLIKELY(ObDagPrio::DAG_PRIO_MAX != priority
+      && !ObDagPrio::is_valid_prio(priority))) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "invalid arguments for creating dag", K(ret), K(priority), KP(dag_net));
+    COMMON_LOG(WARN, "invalid priority for creating dag", K(ret), K(priority));
   } else {
     if (OB_FAIL(alloc_dag(dag, priority))) {
       COMMON_LOG(WARN, "failed to alloc dag", K(ret), K(priority));
     } else if (OB_FAIL(dag->init(std::forward<Args>(init_args)...))) {
       COMMON_LOG(WARN, "failed to init dag", K(ret), K(priority), KPC(dag));
-    } else if (OB_FAIL(dag_net->add_dag_into_dag_net(*dag))) {
+    } else if (OB_NOT_NULL(dag_net_to_attach)
+        && OB_FAIL(dag_net_to_attach->add_dag_into_dag_net(*dag))) {
       COMMON_LOG(WARN, "failed to add dag into dag net", K(ret),
-          K(priority), KPC(dag_net), KPC(dag));
+          K(priority), KPC(dag_net_to_attach), KPC(dag));
     } else if (OB_FAIL(dag->create_first_task())) {
       COMMON_LOG(WARN, "failed to create first task", K(ret), K(priority), KPC(dag));
     }

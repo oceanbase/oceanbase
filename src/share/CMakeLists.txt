@@ -421,6 +421,7 @@ ob_set_subtarget(ob_share common_mixed
   index_usage/ob_index_usage_report_task.cpp
   table/ob_table_util.cpp
   table/ob_table_object.cpp
+  scheduler/ob_dag_net_finalizer.cpp
   scheduler/ob_tenant_dag_scheduler.cpp
   scheduler/ob_independent_dag.cpp
   scheduler/ob_sys_task_stat.cpp

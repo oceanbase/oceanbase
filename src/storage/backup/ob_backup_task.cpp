@@ -28,19 +28,10 @@ using namespace oceanbase::archive;
 namespace oceanbase {
 namespace backup {
 
-#ifndef REPORT_TASK_RESULT
-#define REPORT_TASK_RESULT(dag_id, result)\
-    if (OB_SUCCESS != (tmp_ret = ObBackupUtils::report_task_result(param_.job_desc_.job_id_, \
-                              param_.job_desc_.task_id_, \
-                              param_.tenant_id_, \
-                              param_.ls_id_, \
-                              param_.turn_id_, \
-                              param_.retry_id_, \
-                              param_.job_desc_.trace_id_, \
-                              (dag_id), \
-                              (result), \
-                              report_ctx_))) { \
-      LOG_WARN("failed to report task result", K(tmp_ret)); \
+#ifndef SET_DAG_NET_RESULT
+#define SET_DAG_NET_RESULT(result)\
+    if (OB_SUCCESS != (tmp_ret = ObBackupDagNet::set_result_from_dag(this->get_dag(), (result)))) { \
+      LOG_WARN("failed to set dag net result", K(tmp_ret), K(result)); \
     }
 #endif
 ERRSIM_POINT_DEF(EN_LS_BACKUP_FAILED);
@@ -302,14 +293,129 @@ int ObLSBackupDagInitParam::convert_to(const share::ObBackupDataType &backup_dat
 
 /* ObBackupDagNet */
 
-ObBackupDagNet::ObBackupDagNet(const ObBackupDagNetSubType &sub_type)
-  : ObIDagNet(share::ObDagNetType::DAG_NET_TYPE_BACKUP),
-    sub_type_(sub_type)
+ObBackupDagNet::ObBackupDagNet(
+    const ObBackupDagNetSubType &sub_type,
+    const share::ObDagPrio::ObDagPrioEnum finalizer_priority)
+  : ObIDagNet(share::ObDagNetType::DAG_NET_TYPE_BACKUP, finalizer_priority),
+    sub_type_(sub_type),
+    result_lock_(common::ObLatchIds::BACKUP_LOCK),
+    result_(OB_SUCCESS),
+    result_dag_id_(),
+    result_selected_(false)
 {
 }
 
 ObBackupDagNet::~ObBackupDagNet()
 {
+}
+
+int ObBackupDagNet::set_result(const int result, const share::ObDagId &dag_id)
+{
+  int ret = OB_SUCCESS;
+  common::SpinWLockGuard guard(result_lock_);
+  if (OB_UNLIKELY(!dag_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid dag id", K(ret), K(result), K(dag_id), K_(sub_type));
+  } else if (result_selected_) {
+    // The first terminal result owns reporting.  In particular, a finish task
+    // or cancellation racing with an earlier failure must not overwrite it.
+    LOG_INFO("ignore backup dag net result after terminal result selected",
+        K(result), K_(result), K(dag_id), K_(result_dag_id), K_(sub_type));
+  } else {
+    result_ = result;
+    result_dag_id_ = dag_id;
+    result_selected_ = true;
+  }
+  return ret;
+}
+
+int ObBackupDagNet::set_result_from_dag(share::ObIDag *dag, const int result)
+{
+  int ret = OB_SUCCESS;
+  share::ObIDagNet *dag_net = nullptr;
+  if (OB_ISNULL(dag)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("dag is null", K(ret), K(result));
+  } else if (OB_ISNULL(dag_net = dag->get_dag_net())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag net is null", K(ret), K(result), KPC(dag));
+  } else {
+    ObBackupDagNet *backup_dag_net = static_cast<ObBackupDagNet *>(dag_net);
+    ret = backup_dag_net->set_result(result, dag->get_dag_id());
+  }
+  return ret;
+}
+
+int ObBackupDagNet::deal_with_cancel()
+{
+  return set_result(OB_CANCELED, get_dag_id());
+}
+
+int ObBackupDagNet::report_result_(
+    const ObBackupJobDesc &job_desc,
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const int64_t turn_id,
+    const int64_t retry_id,
+    ObBackupReportCtx &report_ctx) const
+{
+  int ret = OB_SUCCESS;
+  int result = OB_SUCCESS;
+  share::ObDagId result_dag_id;
+  common::ObAddr leader_addr;
+  obrpc::ObBackupTaskRes backup_ls_res;
+  {
+    common::SpinRLockGuard guard(result_lock_);
+    if (!result_selected_) {
+      ret = OB_STATE_NOT_MATCH;
+      LOG_WARN("backup dag net result has not been selected", K(ret), K_(sub_type));
+    } else {
+      result = result_;
+      result_dag_id = result_dag_id_;
+    }
+  }
+  backup_ls_res.job_id_ = job_desc.job_id_;
+  backup_ls_res.task_id_ = job_desc.task_id_;
+  backup_ls_res.tenant_id_ = tenant_id;
+  backup_ls_res.src_server_ = GCTX.self_addr();
+  backup_ls_res.ls_id_ = ls_id;
+  backup_ls_res.result_ = result;
+  backup_ls_res.trace_id_ = job_desc.trace_id_;
+  backup_ls_res.dag_id_ = result_dag_id;
+  const int64_t cluster_id = GCONF.cluster_id;
+  const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = OB_E(EventTable::EN_BACKUP_META_REPORT_RESULT_FAILED) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      SERVER_EVENT_SYNC_ADD("backup_errsim", "before report task result");
+      LOG_WARN("errsim backup dag net result failed", K(ret), K(backup_ls_res));
+    }
+  }
+#endif
+  if (OB_FAIL(ret)) {
+  } else if (!job_desc.is_valid() || job_desc.trace_id_.is_invalid()
+      || OB_INVALID_ID == tenant_id || !ls_id.is_valid() || !report_ctx.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid backup dag net report argument",
+        K(ret), K(job_desc), K(tenant_id), K(ls_id), K(report_ctx));
+  } else if (OB_FAIL(report_ctx.location_service_->get_leader_with_retry_until_timeout(
+      cluster_id, meta_tenant_id, ObLSID(ObLSID::SYS_LS_ID), leader_addr))) {
+    LOG_WARN("failed to get leader address", K(ret), K(tenant_id));
+  } else if (OB_FAIL(report_ctx.rpc_proxy_->to(leader_addr).by(tenant_id).report_backup_over(backup_ls_res))) {
+    LOG_WARN("failed to post backup dag net result", K(ret), K(backup_ls_res));
+  } else {
+    SERVER_EVENT_ADD("backup_data", "report_result",
+        "job_id", job_desc.job_id_,
+        "task_id", job_desc.task_id_,
+        "tenant_id", tenant_id,
+        "ls_id", ls_id.id(),
+        "turn_id", turn_id,
+        "retry_id", retry_id,
+        result);
+    LOG_INFO("reported backup dag net result", K(backup_ls_res), K_(sub_type));
+  }
+  return ret;
 }
 
 /* ObLSBackupMetaDagNet */
@@ -371,8 +477,8 @@ int ObLSBackupMetaDagNet::start_running()
     dag_scheduler->free_dag(*backup_meta_dag);
   }
 
-  if (OB_FAIL(ret)) {
-    REPORT_TASK_RESULT(this->get_dag_id(), ret);
+  if (OB_FAIL(ret) && OB_TMP_FAIL(set_result(ret, get_dag_id()))) {
+    LOG_WARN("failed to set backup dag net start result", K(tmp_ret), K(ret), K_(param));
   }
   return ret;
 }
@@ -450,7 +556,8 @@ int ObLSBackupMetaDagNet::fill_dag_net_key(char *buf, const int64_t buf_len) con
 /* ObLSBackupDataDagNet */
 
 ObLSBackupDataDagNet::ObLSBackupDataDagNet()
-    : ObBackupDagNet(ObBackupDagNetSubType::LOG_STREAM_BACKUP_DAG_DAG_NET),
+    : ObBackupDagNet(ObBackupDagNetSubType::LOG_STREAM_BACKUP_DAG_DAG_NET,
+          ObDagPrio::DAG_PRIO_HA_LOW),
       is_inited_(false),
       start_stage_(),
       param_(),
@@ -562,10 +669,16 @@ int ObLSBackupDataDagNet::start_running()
     scheduler->free_dag(*init_dag);
   }
 
-  if (OB_FAIL(ret)) {
-    REPORT_TASK_RESULT(this->get_dag_id(), ret);
+  if (OB_FAIL(ret) && OB_TMP_FAIL(set_result(ret, get_dag_id()))) {
+    LOG_WARN("failed to set backup dag net start result", K(tmp_ret), K(ret), K_(param));
   }
   return ret;
+}
+
+int ObLSBackupDataDagNet::clear_dag_net_ctx()
+{
+  return report_result_(param_.job_desc_, param_.tenant_id_,
+      param_.ls_id_, param_.turn_id_, param_.retry_id_, report_ctx_);
 }
 
 int ObLSBackupDataDagNet::inner_init_before_run()
@@ -827,7 +940,8 @@ int ObLSBackupDataDagNet::prepare_backup_tablet_provider_(const ObLSBackupParam 
 /* ObBackupBuildTenantIndexDagNet */
 
 ObBackupBuildTenantIndexDagNet::ObBackupBuildTenantIndexDagNet()
-    : ObBackupDagNet(ObBackupDagNetSubType::LOG_STREAM_BACKUP_BUILD_INDEX_DAG_NET),
+    : ObBackupDagNet(ObBackupDagNetSubType::LOG_STREAM_BACKUP_BUILD_INDEX_DAG_NET,
+          ObDagPrio::DAG_PRIO_HA_LOW),
       is_inited_(false),
       param_(),
       backup_data_type_(),
@@ -872,7 +986,7 @@ int ObBackupBuildTenantIndexDagNet::init_by_param(const share::ObIDagInitParam *
 int ObBackupBuildTenantIndexDagNet::start_running()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS; // used in REPORT_TASK_RESULT macro
+  int tmp_ret = OB_SUCCESS;
   MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
   ObLSBackupIndexRebuildDag *rebuild_dag = NULL;
   const ObBackupIndexLevel index_level = BACKUP_INDEX_LEVEL_TENANT;
@@ -890,10 +1004,16 @@ int ObBackupBuildTenantIndexDagNet::start_running()
       (ObLSBackupCtx *)nullptr))) {
     LOG_WARN("failed to alloc and schedule rebuild index dag", K(ret), K_(param));
   }
-  if (OB_FAIL(ret)) {
-    REPORT_TASK_RESULT(this->get_dag_id(), ret);
+  if (OB_FAIL(ret) && OB_TMP_FAIL(set_result(ret, get_dag_id()))) {
+    LOG_WARN("failed to set backup dag net start result", K(tmp_ret), K(ret), K_(param));
   }
   return ret;
+}
+
+int ObBackupBuildTenantIndexDagNet::clear_dag_net_ctx()
+{
+  return report_result_(param_.job_desc_, param_.tenant_id_,
+      param_.ls_id_, param_.turn_id_, param_.retry_id_, report_ctx_);
 }
 
 bool ObBackupBuildTenantIndexDagNet::operator==(const share::ObIDagNet &other) const
@@ -1479,7 +1599,7 @@ int ObLSBackupDataInitTask::process()
 
   if (OB_FAIL(ret) && OB_NOT_NULL(this->get_dag())) {
     // Surface failure so the init dag fails — the dag net then moves to finished list.
-    REPORT_TASK_RESULT(this->get_dag()->get_dag_id(), ret);
+    SET_DAG_NET_RESULT(ret);
   }
   return ret;
 }
@@ -1926,7 +2046,7 @@ int ObPrefetchBackupInfoTask::process()
     need_report_error = is_set;
   }
   if (OB_NOT_NULL(ls_backup_ctx_) && need_report_error) {
-    REPORT_TASK_RESULT(this->get_dag()->get_dag_id(), ls_backup_ctx_->get_result_code());
+    SET_DAG_NET_RESULT(ls_backup_ctx_->get_result_code());
   }
   const int64_t cost_us = ObTimeUtility::current_time() - start_ts;
   record_server_event_(task_id, cost_us);
@@ -2659,7 +2779,7 @@ int ObLSBackupDataTask::process()
     } else {
       LOG_INFO("mark ls task info final", K(ret), K_(param), K_(task_id));
     }
-    REPORT_TASK_RESULT(this->get_dag()->get_dag_id(), result);
+    SET_DAG_NET_RESULT(result);
   }
   const int64_t cost_us = ObTimeUtility::current_time() - start_ts;
   record_server_event_(cost_us);
@@ -4156,7 +4276,7 @@ int ObLSBackupMetaTask::process()
     bool is_set = false;
     ls_backup_ctx_->set_result_code(ret, is_set);
     ls_backup_ctx_->set_finished();
-    REPORT_TASK_RESULT(this->get_dag()->get_dag_id(), ret);
+    SET_DAG_NET_RESULT(ret);
   }
   return ret;
 }
@@ -4631,7 +4751,7 @@ int ObLSBackupPrepareTask::process()
     need_report_error = is_set;
   }
   if (OB_NOT_NULL(ls_backup_ctx_) && need_report_error) {
-    REPORT_TASK_RESULT(this->get_dag()->get_dag_id(), ls_backup_ctx_->get_result_code());
+    SET_DAG_NET_RESULT(ls_backup_ctx_->get_result_code());
   }
   return ret;
 }
@@ -4989,7 +5109,7 @@ int ObBackupIndexRebuildTask::process()
     need_report_error = is_set;
   }
   if (0 == param_.ls_id_.id() || need_report_error) {
-    REPORT_TASK_RESULT(this->get_dag()->get_dag_id(), ret);
+    SET_DAG_NET_RESULT(ret);
   }
   const int64_t cost_us = ObTimeUtility::current_time() - start_ts;
   record_server_event_(cost_us);
@@ -5206,7 +5326,7 @@ int ObLSBackupFinishTask::process()
     }
   }
 #endif
-  REPORT_TASK_RESULT(this->get_dag()->get_dag_id(), result);
+  SET_DAG_NET_RESULT(result);
 
   return ret;
 }

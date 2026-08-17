@@ -54,9 +54,6 @@ public:
   static int check_tablet_with_major_sstable(const storage::ObTabletHandle &tablet_handle, bool &with_major);
   static int fetch_macro_block_logic_id_list(const storage::ObTabletHandle &tablet_handle,
       const blocksstable::ObSSTable &sstable, common::ObIArray<blocksstable::ObLogicMacroBlockId> &logic_id_list);
-  static int report_task_result(const int64_t job_id, const int64_t task_id, const uint64_t tenant_id,
-      const share::ObLSID &ls_id, const int64_t turn_id, const int64_t retry_id, const share::ObTaskId trace_id,
-      const share::ObTaskId &dag_id, const int64_t result, ObBackupReportCtx &report_ctx);
   static int check_ls_validity(const uint64_t tenant_id, const share::ObLSID &ls_id);
   static int check_ls_valid_for_backup(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t local_rebuild_seq);
   static int calc_start_replay_scn(const uint64_t tenant_id,

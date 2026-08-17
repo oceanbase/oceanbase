@@ -504,55 +504,6 @@ int ObBackupUtils::fetch_macro_block_logic_id_list(const storage::ObTabletHandle
   return ret;
 }
 
-int ObBackupUtils::report_task_result(const int64_t job_id, const int64_t task_id, const uint64_t tenant_id,
-    const share::ObLSID &ls_id, const int64_t turn_id, const int64_t retry_id, const share::ObTaskId trace_id,
-    const share::ObTaskId &dag_id, const int64_t result, ObBackupReportCtx &report_ctx)
-{
-  int ret = OB_SUCCESS;
-  common::ObAddr leader_addr;
-  obrpc::ObBackupTaskRes backup_ls_res;
-  backup_ls_res.job_id_ = job_id;
-  backup_ls_res.task_id_ = task_id;
-  backup_ls_res.tenant_id_ = tenant_id;
-  backup_ls_res.src_server_ = GCTX.self_addr();
-  backup_ls_res.ls_id_ = ls_id;
-  backup_ls_res.result_ = result;
-  backup_ls_res.trace_id_ = trace_id;
-  backup_ls_res.dag_id_ = dag_id;
-  const int64_t cluster_id = GCONF.cluster_id;
-  const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
-
-#ifdef ERRSIM
-  ret = OB_E(EventTable::EN_BACKUP_META_REPORT_RESULT_FAILED) OB_SUCCESS;
-  if (OB_FAIL(ret)) {
-    SERVER_EVENT_SYNC_ADD("backup_errsim", "before report task result");
-    LOG_WARN("errsim backup meta task failed", K(ret), K(backup_ls_res));
-  }
-#endif
-  if (OB_FAIL(ret)) {
-  } else if (job_id <= 0 || task_id <= 0 || OB_INVALID_ID == tenant_id || !ls_id.is_valid() || !report_ctx.is_valid()
-      || trace_id.is_invalid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(job_id), K(task_id), K(tenant_id), K(ls_id));
-  } else if (OB_FAIL(report_ctx.location_service_->get_leader_with_retry_until_timeout(
-      cluster_id, meta_tenant_id, ObLSID(ObLSID::SYS_LS_ID), leader_addr))) {
-    LOG_WARN("failed to get leader address", K(ret));
-  } else if (OB_FAIL(report_ctx.rpc_proxy_->to(leader_addr).by(tenant_id).report_backup_over(backup_ls_res))) {
-    LOG_WARN("failed to post backup ls data res", K(ret), K(backup_ls_res));
-  } else {
-    SERVER_EVENT_ADD("backup_data", "report_result",
-        "job_id", job_id,
-        "task_id", task_id,
-        "tenant_id", tenant_id,
-        "ls_id", ls_id.id(),
-        "turn_id", turn_id,
-        "retry_id", retry_id,
-        result);
-    LOG_INFO("finish task post rpc result", K(backup_ls_res));
-  }
-  return ret;
-}
-
 int ObBackupUtils::check_tablet_minor_sstable_validity_(const storage::ObTabletHandle &tablet_handle,
     const common::ObIArray<storage::ObSSTableWrapper> &minor_sstable_array)
 {

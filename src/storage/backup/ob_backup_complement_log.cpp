@@ -231,7 +231,8 @@ bool CompareArchivePiece::operator()(
 // ObBackupComplementLogDagNet
 
 ObBackupComplementLogDagNet::ObBackupComplementLogDagNet()
-    : ObBackupDagNet(ObBackupDagNetSubType::LOG_STREAM_BACKUP_COMPLEMENT_LOG_DAG_NET),
+    : ObBackupDagNet(ObBackupDagNetSubType::LOG_STREAM_BACKUP_COMPLEMENT_LOG_DAG_NET,
+          share::ObDagPrio::DAG_PRIO_HA_LOW),
       is_inited_(false),
       ctx_()
 {}
@@ -338,21 +339,16 @@ int ObBackupComplementLogDagNet::start_running()
     dag_scheduler->free_dag(*finish_dag);
   }
 
-  if (OB_FAIL(ret)) {
-    if (OB_TMP_FAIL(ObBackupUtils::report_task_result(ctx_.job_desc_.job_id_,
-                ctx_.job_desc_.task_id_,
-                ctx_.tenant_id_,
-                ctx_.ls_id_,
-                ctx_.turn_id_,
-                ctx_.retry_id_,
-                ctx_.job_desc_.trace_id_,
-                this->get_dag_id(),
-                ret,
-                ctx_.report_ctx_))) {
-      LOG_WARN("failed to report task result", K(ret), K_(ctx));
-    }
+  if (OB_FAIL(ret) && OB_TMP_FAIL(set_result(ret, get_dag_id()))) {
+    LOG_WARN("failed to set backup dag net start result", K(tmp_ret), K(ret), K_(ctx));
   }
   return ret;
+}
+
+int ObBackupComplementLogDagNet::clear_dag_net_ctx()
+{
+  return report_result_(ctx_.job_desc_, ctx_.tenant_id_,
+      ctx_.ls_id_, ctx_.turn_id_, ctx_.retry_id_, ctx_.report_ctx_);
 }
 
 bool ObBackupComplementLogDagNet::operator==(const share::ObIDagNet &other) const
@@ -2519,8 +2515,8 @@ int ObBackupLSLogGroupFinishTask::process()
     ret = OB_NOT_INIT;
     LOG_WARN("backup ls log copy finish task do not init", K(ret));
   }
-  if (OB_TMP_FAIL(report_task_result_())) {
-    LOG_WARN("failed to report task result", K(tmp_ret), K(ret));
+  if (OB_TMP_FAIL(set_dag_net_result_())) {
+    LOG_WARN("failed to set dag net result", K(tmp_ret), K(ret));
   }
   if (OB_TMP_FAIL(record_server_event_())) {
     LOG_WARN("failed to record server event", K(tmp_ret), K(ret));
@@ -2528,7 +2524,7 @@ int ObBackupLSLogGroupFinishTask::process()
   return ret;
 }
 
-int ObBackupLSLogGroupFinishTask::report_task_result_()
+int ObBackupLSLogGroupFinishTask::set_dag_net_result_()
 {
   int ret = OB_SUCCESS;
   int32_t result = OB_SUCCESS;
@@ -2537,17 +2533,8 @@ int ObBackupLSLogGroupFinishTask::report_task_result_()
     LOG_WARN("group ctx should not be null", K(ret));
   } else if (OB_FAIL(ctx_->get_result(result))) {
     LOG_WARN("failed to get result", K(ret));
-  } else if (OB_FAIL(ObBackupUtils::report_task_result(ctx_->job_desc_.job_id_,
-                                                       ctx_->job_desc_.task_id_,
-                                                       ctx_->tenant_id_,
-                                                       ctx_->ls_id_,
-                                                       ctx_->turn_id_,
-                                                       ctx_->retry_id_,
-                                                       ctx_->job_desc_.trace_id_,
-                                                       this->get_dag()->get_dag_id(),
-                                                       result,
-                                                       ctx_->report_ctx_))) {
-    LOG_WARN("failed to report task result", K(ret));
+  } else if (OB_FAIL(ObBackupDagNet::set_result_from_dag(this->get_dag(), result))) {
+    LOG_WARN("failed to set dag net result", K(ret), K(result));
   }
   return ret;
 }

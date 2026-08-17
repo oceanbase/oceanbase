@@ -436,8 +436,8 @@ int ObFinishBackupTabletGroupFuseTask::process()
       LOG_WARN("failed to deal with fo", K(ret), K(tmp_ret));
     }
   }
-  if (OB_TMP_FAIL(report_task_result_())) {
-    LOG_WARN("failed to report task result", K(tmp_ret), K(ret));
+  if (OB_TMP_FAIL(set_dag_net_result_())) {
+    LOG_WARN("failed to set dag net result", K(tmp_ret), K(ret));
   }
   if (OB_TMP_FAIL(record_server_event_())) {
     LOG_WARN("failed to record server event", K(tmp_ret), K(ret));
@@ -490,7 +490,7 @@ int ObFinishBackupTabletGroupFuseTask::record_server_event_()
   return ret;
 }
 
-int ObFinishBackupTabletGroupFuseTask::report_task_result_()
+int ObFinishBackupTabletGroupFuseTask::set_dag_net_result_()
 {
   int ret = OB_SUCCESS;
   int32_t result = OB_SUCCESS;
@@ -499,17 +499,8 @@ int ObFinishBackupTabletGroupFuseTask::report_task_result_()
     LOG_WARN("group ctx should not be null", K(ret));
   } else if (OB_FAIL(group_ctx_->get_result(result))) {
     LOG_WARN("failed to get result", K(ret));
-  } else if (OB_FAIL(ObBackupUtils::report_task_result(group_ctx_->param_.job_desc_.job_id_,
-                                                       group_ctx_->param_.job_desc_.task_id_,
-                                                       group_ctx_->param_.tenant_id_,
-                                                       group_ctx_->param_.ls_id_,
-                                                       group_ctx_->param_.turn_id_,
-                                                       group_ctx_->param_.retry_id_,
-                                                       group_ctx_->param_.job_desc_.trace_id_,
-                                                       this->get_dag()->get_dag_id(),
-                                                       result,
-                                                       group_ctx_->report_ctx_))) {
-    LOG_WARN("failed to report task result", K(ret));
+  } else if (OB_FAIL(ObBackupDagNet::set_result_from_dag(this->get_dag(), result))) {
+    LOG_WARN("failed to set dag net result", K(ret), K(result));
   }
   return ret;
 }
