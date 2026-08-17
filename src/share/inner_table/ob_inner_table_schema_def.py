@@ -18708,6 +18708,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12624: __all_virtual_tenant_memstore_diagnose_info
 # 12625: __all_virtual_jvm_status
 # 12626: __all_virtual_java_udf_stats
+# 12627: __all_virtual_ext_plugin_info
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
