@@ -23,6 +23,21 @@
 
 #ifdef OB_BUILD_CDC_DISABLE_VSAG
 
+namespace oceanbase {
+namespace common {
+namespace obvsag {
+
+std::string version()
+{
+  // OBCDC does not link VSAG. Keep a non-empty sentinel so an unexpected
+  // runtime comparison cannot be mistaken for an old server without a version.
+  return "obcdc-vsag-disabled";
+}
+
+} // namespace obvsag
+} // namespace common
+} // namespace oceanbase
+
 #else
 
 namespace oceanbase {
