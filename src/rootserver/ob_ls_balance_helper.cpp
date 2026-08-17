@@ -235,7 +235,8 @@ int ObLSBalanceTaskHelper::generate_ls_balance_task()
     LOG_WARN("sql proxy or schema service is null", KR(ret), K(sql_proxy_), K(schema_service));
   }
   // build tenant all balance group info for ALL LS
-  else if (OB_FAIL(tenant_ls_bg_info_.build("LS_BALANCE", *sql_proxy_, *schema_service))) {
+  else if (OB_FAIL(tenant_ls_bg_info_.build(
+      "LS_BALANCE", *sql_proxy_, *schema_service, need_load_tablet_size_()))) {
     LOG_WARN("build tenant all balance group info for all LS fail", KR(ret));
   } else {
     if (0 == job_.get_balance_strategy().string().compare(share::LS_BALANCE_BY_ALTER)) {
@@ -268,6 +269,27 @@ int ObLSBalanceTaskHelper::generate_ls_balance_task()
     ISTAT("generate task", KR(ret), K(job_), K(task_array_));
   }
   return ret;
+}
+
+bool ObLSBalanceTaskHelper::need_load_tablet_size_() const
+{
+  bool need_load_tablet_size = false;
+  const ObString &balance_strategy = job_.get_balance_strategy().string();
+  if (0 == balance_strategy.compare(share::LS_BALANCE_BY_EXPAND)) {
+    need_load_tablet_size = true;
+  } else if (0 == balance_strategy.compare(share::LS_BALANCE_BY_SHRINK)) {
+    int64_t redundant_ls_count = 0;
+    for (int64_t i = 0; i < unit_group_balance_array_.count(); ++i) {
+      redundant_ls_count += unit_group_balance_array_.at(i).get_redundant_ls_array().count();
+    }
+    const int64_t target_ls_count = job_.get_primary_zone_num() * job_.get_unit_group_num();
+    // R/T is the number of source LSs assigned to each destination. A remainder
+    // means at least one source LS must be split; an integer ratio only merges whole LSs.
+    need_load_tablet_size = redundant_ls_count > 0
+        && target_ls_count > 0
+        && 0 != redundant_ls_count % target_ls_count;
+  }
+  return need_load_tablet_size;
 }
 
 int ObLSBalanceTaskHelper::generate_balance_job_()

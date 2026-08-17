@@ -75,6 +75,7 @@ public:
   const ObBalanceGroupID &id() const { return id_; }
   const common::ObArray<ObTransferPartGroup *> get_part_groups() const { return part_groups_; }
   int64_t get_part_group_count() const { return part_groups_.count(); }
+  int64_t get_data_size() const;
 
   // append partition at the newest partition group. create new partition group if needed
   //
@@ -89,19 +90,30 @@ public:
       const int64_t data_size,
       const uint64_t part_group_uid);
 
-  // pop partition groups from back of array, and push back into part list
+  // Select a fixed number of partition groups and append their partitions to part_list.
+  // Keep the historical suffix selection when it meets the data size threshold;
+  // otherwise replace oversized groups with smaller unselected groups.
   //
   // @param [in] part_group_count           partition group count that need be popped
-  // @param [in/out] part_list              push popped part into the part list
-  // @param [out] popped_part_count         popped partition count
+  // @param [in] data_size_threshold       expected upper bound of popped data size
+  // @param [in/out] part_list             push popped part into the part list
+  // @param [out] popped_part_count        popped partition count
+  // @param [out] popped_data_size         popped partition group data size
   int pop_back(const int64_t part_group_count,
+      const int64_t data_size_threshold,
       share::ObTransferPartList &part,
-      int64_t &popped_part_count);
+      int64_t &popped_part_count,
+      int64_t &popped_data_size);
 
   TO_STRING_KV(K_(id), "part_group_count", part_groups_.count());
 
 private:
   int create_new_part_group_if_needed_(const uint64_t part_group_uid);
+  int select_part_groups_(
+      const int64_t part_group_count,
+      const int64_t data_size_threshold,
+      common::ObArray<int64_t> &selected_indexes,
+      int64_t &selected_data_size) const;
 
 private:
   ObBalanceGroupID id_;

@@ -57,7 +57,8 @@ void ObTenantLSBalanceGroupInfo::destroy()
 
 int ObTenantLSBalanceGroupInfo::build(const char *mod,
   common::ObMySQLProxy &sql_proxy,
-  share::schema::ObMultiVersionSchemaService &schema_service)
+  share::schema::ObMultiVersionSchemaService &schema_service,
+  const bool need_load_tablet_size)
 {
   int ret = OB_SUCCESS;
   ObAllBalanceGroupBuilder bg_builder;
@@ -67,8 +68,8 @@ int ObTenantLSBalanceGroupInfo::build(const char *mod,
     LOG_WARN("ObTenantLSBalanceGroupInfo not init", KR(ret), KR(inited_));
   } else if (OB_FAIL(bg_builder.init(tenant_id_, mod, *this, sql_proxy, schema_service))) {
     LOG_WARN("balance group builder init fail", KR(ret), K(tenant_id_), K(mod));
-  } else if (OB_FAIL(bg_builder.prepare())) {
-    LOG_WARN("prepare for balance group builder fail", KR(ret));
+  } else if (OB_FAIL(bg_builder.prepare(need_load_tablet_size))) {
+    LOG_WARN("prepare for balance group builder fail", KR(ret), K(need_load_tablet_size));
   } else if (OB_FAIL(bg_builder.build())) {
     LOG_WARN("build balance group fail", KR(ret));
   } else {

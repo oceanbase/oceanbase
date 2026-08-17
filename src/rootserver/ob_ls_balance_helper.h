@@ -216,6 +216,7 @@ private:
   int generate_migrate_task_();
   int generate_expand_task_();
   int generate_shrink_task_();
+  bool need_load_tablet_size_() const;
   /* description: get index of the unit_group_id in unit_group_balance_array 
    * param[in] unit_group_id : unit_group_id
    * param[out] index : index of unit_group in unit_group_balance_array

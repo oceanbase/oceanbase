@@ -43,7 +43,8 @@ public:
   // build All LS Balance Group Info
   int build(const char *mod,
       common::ObMySQLProxy &sql_proxy,
-      share::schema::ObMultiVersionSchemaService &schema_service);
+      share::schema::ObMultiVersionSchemaService &schema_service,
+      const bool need_load_tablet_size);
 
   int get(const share::ObLSID &ls_id, ObLSBalanceGroupInfo *&ls_bg_info) const
   {

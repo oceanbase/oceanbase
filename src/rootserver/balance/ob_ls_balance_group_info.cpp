@@ -11,6 +11,7 @@
  */
 #define USING_LOG_PREFIX BALANCE
 
+#include <cmath>
 
 #include "ob_ls_balance_group_info.h"
 
@@ -153,21 +154,29 @@ int ObLSBalanceGroupInfo::transfer_out_by_factor(const float factor, share::ObTr
         const int64_t remove_count = std::min(can_remove_count_upper_bound, expected_remove_count);
 
         int64_t removed_part_count = 0;
+        int64_t removed_data_size = 0;
+        int64_t data_size_threshold = 0;
 
         if (remove_count >= avail_count) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("remove count should be greater than avail count", K(avail_count), K(remove_count));
         }
         // transfer out part only when remove count > 0
-        else if (remove_count > 0 && OB_FAIL(bg_info->pop_back(remove_count, part_list, removed_part_count))) {
-          LOG_WARN("pop back from balance group fail", KR(ret), K(remove_count), K(part_list),
-              KPC(bg_info));
+        else if (remove_count > 0) {
+          data_size_threshold = static_cast<int64_t>(std::ceil(
+              static_cast<double>(bg_info->get_data_size()) * remove_count / total_count));
+          if (OB_FAIL(bg_info->pop_back(
+              remove_count, data_size_threshold, part_list, removed_part_count, removed_data_size))) {
+            LOG_WARN("pop back from balance group fail", KR(ret), K(remove_count), K(part_list),
+                KPC(bg_info));
+          }
         }
 
         FLOG_INFO("transfer out partition groups from LS one balance group by factor", KR(ret),
             K(factor), K_(ls_id), K(bg_id),
             "removed_part_group_count", remove_count,
             K(removed_part_count),
+            K(removed_data_size), K(data_size_threshold),
             K(total_count), K(avail_count), K(expected_remove_count));
       }
     }
