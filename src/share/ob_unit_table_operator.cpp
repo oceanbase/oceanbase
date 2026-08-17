@@ -1045,6 +1045,29 @@ int ObUnitTableOperator::get_units_by_resource_pools(
   return ret;
 }
 
+int ObUnitTableOperator::get_all_servers_by_pool_names(
+    const common::ObIArray<share::ObResourcePoolName> &pool_names,
+    common::ObIArray<common::ObAddr> &servers)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObUnit> units;
+  servers.reset();
+  if (OB_UNLIKELY(pool_names.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid empty pool names", KR(ret), K(pool_names));
+  } else if (OB_FAIL(get_units_by_resource_pools(pool_names, units))) {
+    LOG_WARN("fail to get units by resource pools", KR(ret), K(pool_names));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < units.count(); ++i) {
+      const ObUnit &unit = units.at(i);
+      if (OB_FAIL(servers.push_back(unit.server_))) {
+        LOG_WARN("fail to push back server", KR(ret), K(unit));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObUnitTableOperator::get_units_by_unit_ids(const ObIArray<uint64_t> &unit_ids,
   common::ObIArray<ObUnit> &units)
 {

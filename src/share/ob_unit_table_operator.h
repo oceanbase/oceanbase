@@ -151,6 +151,9 @@ public:
                                       common::ObIArray<ObUnit> &units) const;
   int get_units_by_resource_pools(const ObIArray<share::ObResourcePoolName> &pools,
                                       common::ObIArray<ObUnit> &units);
+  int get_all_servers_by_pool_names(
+      const ObIArray<share::ObResourcePoolName> &pool_names,
+      common::ObIArray<common::ObAddr> &servers);
   int get_units_by_tenant(const uint64_t tenant_id,
                           common::ObIArray<ObUnit> &units) const;
   int get_units_by_unit_ids(const ObIArray<uint64_t> &unit_ids,

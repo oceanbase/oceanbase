@@ -25024,12 +25024,17 @@ int ObDDLService::create_tenant_schema(
                "cost", ObTimeUtility::fast_current_time() - tmp_start_time);
     }
 
+    DEBUG_SYNC(AFTER_GRANT_POOLS_BEFORE_GET_SERVERS);
+
     // 3. persist initial tenant config
     if (OB_SUCC(ret)) {
       LOG_INFO("[CREATE_TENANT] STEP 1.3. start persist tenant config", K(user_tenant_id));
       const int64_t tmp_start_time = ObTimeUtility::fast_current_time();
       ObArray<ObAddr> addrs;
-      if (OB_FAIL(unit_mgr_->get_servers_by_pools(pools, addrs))) {
+      ObUnitTableOperator unit_operator;
+      if (OB_FAIL(unit_operator.init(*sql_proxy_))) {
+        LOG_WARN("fail to init unit table operator", KR(ret), K(user_tenant_id));
+      } else if (OB_FAIL(unit_operator.get_all_servers_by_pool_names(pools, addrs))) {
         LOG_WARN("fail to get tenant's servers", KR(ret), K(user_tenant_id));
       } else if (OB_FAIL(notify_init_tenant_config(*rpc_proxy_, init_configs, addrs))) {
         LOG_WARN("fail to notify broadcast tenant config", KR(ret), K(addrs), K(init_configs));
