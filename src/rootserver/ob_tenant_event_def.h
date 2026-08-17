@@ -234,6 +234,17 @@
               OLD_LS_FLAG,
               SQL);
   };
+
+  class BALANCE {
+    public:
+      DEF_MODULE(BALANCE, "BALANCE");
+      DEF_EVENT(BALANCE, UPDATE_JOB_STRATEGY, "UPDATE JOB STRATEGY",
+                job_id,
+                status,
+                old_strategy,
+                new_strategy);
+  };
+
 #endif
 #endif
 ////////////////////////////////////////////////////////////////
