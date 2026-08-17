@@ -131,7 +131,7 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet &result)
   if (tmp_ret != OB_SUCCESS) {
     LOG_WARN("failed to add changed package info", K(tmp_ret));
   }
-  OX (session_.reset_top_query_string());
+  session_.reset_top_query_string();
   session_.set_top_trace_id(nullptr);
 
   if (OB_SUCC(ret)) {

@@ -52,7 +52,7 @@ int ObAsyncPlanDriver::response_result(ObMySQLResultSet &result)
     // open 成功，允许异步回包
     result.set_end_trans_async(true);
   }
-  OX (session_.reset_top_query_string());
+  session_.reset_top_query_string();
   session_.set_top_trace_id(nullptr);
   int tmp_ret = ObMPUtils::try_add_changed_package_info(session_, result.get_exec_context());
   if (tmp_ret != OB_SUCCESS) {

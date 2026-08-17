@@ -254,7 +254,7 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
       }
     }
   }
-  OX (session_.reset_top_query_string());
+  session_.reset_top_query_string();
   session_.set_top_trace_id(nullptr);
   //if the error code is ob_timeout, we add more error info msg for dml query.
   ObSQLUtils::log_user_error_for_timeout(ret, session_, result.get_exec_context().get_physical_plan_ctx());
