@@ -411,6 +411,7 @@ public:
   ~ObCompactionDagSnapshot() { reset(); }
 
   int init(const int64_t dag_capacity = 512, const int64_t dag_net_capacity = 64);
+  int reuse();
   void reset();
 
   int put_dag(const ObMergeType merge_type,

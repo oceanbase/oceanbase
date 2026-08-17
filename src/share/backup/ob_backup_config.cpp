@@ -575,12 +575,6 @@ int ObDataBackupDestConfigParser::check_doing_backup_(common::ObISQLClient &tran
   return ret;
 }
 
-int ObDataBackupDestConfigParser::check_backup_dest_has_been_used_(bool &is_used)
-{
-  int ret = OB_SUCCESS;
-  return ret;
-}
-
 int ObLogArchiveDestConfigParser::parse_from(const common::ObSqlString &value)
 {
   int ret = OB_SUCCESS;
@@ -841,29 +835,6 @@ int ObLogArchiveDestConfigParser::do_parse_piece_switch_interval_(const common::
     LOG_WARN("invalid piece_switch_interval", K(ret), K(value));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "invalid piece_switch_interval out of range [1d,7d] is");
 #endif
-  }
-  return ret;
-}
-
-int ObLogArchiveDestConfigParser::do_parse_compression_(const common::ObString &name, const common::ObString &value)
-{
-  int ret = OB_SUCCESS;
-  if (name.empty() || value.empty()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid log archve dest config", K(ret), K(name), K(value));
-  } else if (0 == STRCASECMP(value.ptr(), OB_STR_ENABLE)
-      || 0 == STRCASECMP(value.ptr(), OB_STR_DISABLE)) {
-    share::BackupConfigItemPair pair;
-    if (OB_FAIL(pair.key_.assign(name))) {
-      LOG_WARN("fail to assign compression", K(ret), K(name));
-    } else if (OB_FAIL(pair.value_.assign(value))) {
-      LOG_WARN("fail to assign value", K(ret), K(value));
-    } else if (OB_FAIL(config_items_.push_back(pair))) {
-      LOG_WARN("fail to push back pair", K(ret), K(pair));
-    }
-  } else {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("compression not support value", K(ret), K(value));
   }
   return ret;
 }

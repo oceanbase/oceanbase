@@ -86,7 +86,6 @@ int64_t ObTXStartTransferOutInfo::to_string(char *buf, const int64_t buf_len) co
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
-  int64_t save_pos = 0;
   if (OB_ISNULL(buf) || buf_len <= 0) {
       // do nothing
   } else {
@@ -172,7 +171,6 @@ int64_t ObTXStartTransferInInfo::to_string(char *buf, const int64_t buf_len) con
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
-  int64_t save_pos = 0;
   if (OB_ISNULL(buf) || buf_len <= 0) {
       // do nothing
   } else {
@@ -244,7 +242,6 @@ int64_t ObTXFinishTransferInInfo::to_string(char *buf, const int64_t buf_len) co
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
-  int64_t save_pos = 0;
   if (OB_ISNULL(buf) || buf_len <= 0) {
       // do nothing
   } else {
@@ -313,7 +310,6 @@ int64_t ObTXFinishTransferOutInfo::to_string(char *buf, const int64_t buf_len) c
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
-  int64_t save_pos = 0;
   if (OB_ISNULL(buf) || buf_len <= 0) {
       // do nothing
   } else {
@@ -369,7 +365,6 @@ int64_t ObTXTransferInAbortedInfo::to_string(char *buf, const int64_t buf_len) c
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
-  int64_t save_pos = 0;
   if (OB_ISNULL(buf) || buf_len <= 0) {
       // do nothing
   } else {

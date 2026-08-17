@@ -127,19 +127,6 @@ void ObArchiveCheckpointMgr::reset()
   storage_info_ = nullptr;
 }
 
-int ObArchiveCheckpointMgr::check_is_tagging_(const ObBackupStorageInfo *storage_info, bool &is_tagging) const
-{
-  int ret = OB_SUCCESS;
-  is_tagging = false;
-  if (OB_ISNULL(storage_info)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("storage info is nullptr", K(ret));
-  } else if (ObStorageDeleteMode::STORAGE_TAGGING_MODE == storage_info->get_delete_mode()) {
-    is_tagging = true;
-  }
-  return ret;
-}
-
 int ObArchiveCheckpointMgr::write(const uint64_t old_checkpoint_scn, const uint64_t checkpoint_scn) const
 {
   int ret = OB_SUCCESS;

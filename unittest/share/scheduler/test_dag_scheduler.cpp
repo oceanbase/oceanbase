@@ -1189,6 +1189,28 @@ TEST_F(TestDagScheduler, test_get_dag_count)
   EXPECT_EQ(-1, scheduler->get_dag_count(ObDagType::DAG_TYPE_MAX));
 }
 
+TEST_F(TestDagScheduler, test_get_compaction_dag_count)
+{
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
+  ASSERT_TRUE(nullptr != scheduler);
+  ASSERT_EQ(OB_SUCCESS, scheduler->init(MTL_ID(), time_slice));
+  scheduler->stop();
+
+  TestCompMidDag *dag = nullptr;
+  TestMulTask *mul_task = nullptr;
+  int64_t counter = 1;
+  ASSERT_EQ(OB_SUCCESS, scheduler->alloc_dag(dag));
+  ASSERT_EQ(OB_SUCCESS, dag->init(1));
+  ASSERT_EQ(OB_SUCCESS, dag->alloc_task(mul_task));
+  ASSERT_EQ(OB_SUCCESS, mul_task->init(&counter));
+  ASSERT_EQ(OB_SUCCESS, dag->add_task(*mul_task));
+  ASSERT_EQ(OB_SUCCESS, scheduler->add_dag(dag));
+
+  int64_t dag_count = -1;
+  ASSERT_EQ(OB_SUCCESS, scheduler->get_compaction_dag_count(dag_count));
+  EXPECT_EQ(1, dag_count);
+}
+
 TEST_F(TestDagScheduler, test_destroy_when_running)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);

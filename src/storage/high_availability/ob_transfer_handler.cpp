@@ -484,7 +484,6 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
   const int32_t group_id = share::OBCG_TRANSFER;
   bool can_retry = false;
   SCN dest_max_desided_scn;
-  int64_t tmp_round = round_;
   diag_ctx_.set_cost_item(ObStorageHACostItemName::TRANSFER_START_BEGIN);
   bool commit_succ = false;
   bool new_transfer = true;
@@ -769,7 +768,6 @@ int ObTransferHandler::reset_timeout_for_trans_(ObTimeoutCtx &timeout_ctx, ObMyS
     const int64_t transfer_trans_timeout = tenant_config->_transfer_start_trans_timeout;
     if (left_trans_timeout > 0) {
       const int64_t stmt_timeout = std::min(transfer_trans_timeout, left_trans_timeout);
-      const int64_t expire_ts = ObClockGenerator::getClock() + stmt_timeout;
       if (OB_FAIL(timeout_ctx.set_trx_timeout_us(stmt_timeout))) {
         LOG_WARN("fail to set trx timeout", K(ret), K(stmt_timeout));
       } else if (OB_FAIL(timeout_ctx.set_timeout(stmt_timeout))) {
@@ -973,7 +971,6 @@ int ObTransferHandler::check_start_status_transfer_tablets_(
     ObTimeoutCtx &timeout_ctx)
 {
   int ret = OB_SUCCESS;
-  const int64_t cluster_id = GCONF.cluster_id;
   storage::ObCheckStartTransferTabletsProxy batch_rpc_proxy(
       *(GCTX.storage_rpc_proxy_), &obrpc::ObStorageRpcProxy::check_start_transfer_tablets);
   ObHAAsyncRpcArg async_rpc_arg;
@@ -1129,7 +1126,6 @@ int ObTransferHandler::wait_tablet_write_end_(
     ObTimeoutCtx &timeout_ctx)
 {
   int ret = OB_SUCCESS;
-  const uint64_t tenant_id = task_info.tenant_id_;
   const share::ObLSID &src_ls_id = task_info.src_ls_id_;
   ObLSHandle ls_handle;
   ObLSService *ls_srv = NULL;
@@ -1507,12 +1503,8 @@ int ObTransferHandler::get_start_transfer_out_scn_(
     share::SCN &start_scn)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   start_scn.set_min();
-  ObTabletHandle tablet_handle;
-  ObTabletCreateDeleteMdsUserData user_data;
   const int64_t start_ts = ObTimeUtil::current_time();
-  const int64_t OB_CHECK_START_SCN_READY_INTERVAL = 1 * 1000; //1ms
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1523,7 +1515,6 @@ int ObTransferHandler::get_start_transfer_out_scn_(
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < task_info.tablet_list_.count(); ++i) {
       const ObTransferTabletInfo &tablet_info = task_info.tablet_list_.at(i);
-      ObTablet *tablet = nullptr;
       if (timeout_ctx.is_timeouted()) {
         ret = OB_TIMEOUT;
         LOG_WARN("already timeout", K(ret), K(task_info));
@@ -1727,7 +1718,6 @@ int ObTransferHandler::wait_ls_replay_event_(
     ObTimeoutCtx &timeout_ctx)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   const int64_t OB_CHECK_START_SCN_READY_INTERVAL = 5 * 1000; //5ms
   const int64_t start_ts = ObTimeUtil::current_time();
   common::ObArray<ObAddr> member_addr_list;
@@ -2071,7 +2061,6 @@ int ObTransferHandler::update_transfer_status_aborted_(
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  int64_t tmp_round = round_;
   const share::ObTransferStatus next_status(ObTransferStatus::ABORTED);
   ObTimeoutCtx timeout_ctx;
   ObMySQLTransaction trans;
@@ -2189,7 +2178,6 @@ int ObTransferHandler::report_to_meta_table_(
 int ObTransferHandler::do_with_doing_status_(const share::ObTransferTaskInfo &task_info)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   ObTxFinishTransfer finish_transfer;
   const ObTransferTaskID task_id = task_info.task_id_;
   const uint64_t tenant_id = task_info.tenant_id_;
@@ -2597,7 +2585,6 @@ int ObTransferHandler::do_move_tx_to_dest_ls_(const share::ObTransferTaskInfo &t
   // TODO lana optimise transfer_epoch value
   collect_res.transfer_epoch_ = task_info.task_id_.id();
   collect_res.transfer_scn_ = transfer_scn;
-  int64_t tx_count = 0;
   int64_t buf_len = 0;
   int64_t collect_count = 0;
   if (OB_FAIL(MTL(ObLSService*)->get_ls(task_info.src_ls_id_,src_ls_handle, ObLSGetMod::HA_MOD))) {
@@ -2963,14 +2950,12 @@ int ObTransferHandler::wait_transfer_in_tablet_abort_(
     const common::ObMemberList &member_list)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   const int64_t OB_CHECK_TRANSFER_IN_ABORT_INTERVAL = 100 * 1000; //100ms
   const int64_t OB_CHECK_TRANSFER_IN_ABORT_TIMEOUT = 10 * 1000 * 1000L; //10s
   const int64_t start_ts = ObTimeUtil::current_time();
   common::ObArray<ObAddr> member_addr_list;
   common::ObArray<ObAddr> finished_member_addr_list;
   common::ObArray<ObAddr> total_addr_list;
-  const uint64_t tenant_id = task_info.tenant_id_;
   SCN max_decided_scn;
   ObTimeoutCtx timeout_ctx;
   bool is_leader = false;
@@ -3418,7 +3403,6 @@ int ObTransferHandler::inner_do_with_abort_status_(
   const SCN scn = task_info.start_scn_;
   const int32_t result = task_info.result_;
   const ObTransferLockStatus status(ObTransferLockStatus::ABORTED);
-  const int64_t start_ts = ObTimeUtil::current_time();
   diag_ctx_.set_cost_item(ObStorageHACostItemName::TRANSFER_ABORT_BEGIN);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -3516,7 +3500,6 @@ int ObTransferHandler::inner_do_with_abort_status_before_4230_(
   ObTimeoutCtx timeout_ctx;
   ObMySQLTransaction trans;
   const int64_t tmp_round = round_;
-  const int64_t start_ts = ObTimeUtil::current_time();
   diag_ctx_.set_cost_item(ObStorageHACostItemName::TRANSFER_ABORT_BEGIN);
   const int32_t group_id = share::OBCG_STORAGE;
   int64_t stmt_timeout = 10_s;

@@ -492,6 +492,7 @@ ObBackupTabletFuseDag::ObBackupTabletFuseDag()
     is_inited_(false),
     fuse_ctx_(),
     group_ctx_(NULL),
+    next_item_(),
     compat_mode_(lib::Worker::CompatMode::INVALID)
 {
 }
@@ -603,7 +604,6 @@ int ObBackupTabletFuseDag::generate_next_dag(share::ObIDag *&dag)
   dag = NULL;
   ObTenantDagScheduler *scheduler = NULL;
   ObBackupTabletFuseDag *tablet_fuse_dag = NULL;
-  ObBackupTabletFuseItem fuse_item;
   ObDagId dag_id;
 
   if (IS_NOT_INIT) {
@@ -613,23 +613,26 @@ int ObBackupTabletFuseDag::generate_next_dag(share::ObIDag *&dag)
     ret = OB_ERR_UNEXPECTED;
     LOG_INFO("tablet fuse dag not has next dag", KPC(this));
   } else if (group_ctx_->is_failed()) {
-    // do nothing
+    ret = OB_ITER_END;
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else if (OB_FAIL(group_ctx_->get_next_tablet_item(fuse_item))) {
+  } else if (OB_FAIL(next_item_.get_or_fetch(
+      *group_ctx_, &ObBackupTabletGroupFuseCtx::get_next_tablet_item))) {
     if (OB_ITER_END == ret) {
-      ret = OB_SUCCESS;
+      LOG_INFO("no next tablet fuse dag", K(ret), KPC(this));
     } else {
       LOG_WARN("failed to get next tablet id", K(ret), KPC(this));
     }
   } else if (OB_FAIL(scheduler->alloc_dag(tablet_fuse_dag))) {
     LOG_WARN("failed to alloc tablet fuse dag", K(ret));
-  } else if (OB_FAIL(tablet_fuse_dag->init(group_ctx_->param_, fuse_item, *group_ctx_))) {
-    LOG_WARN("failed to init tablet fuse dag", K(ret), "param", group_ctx_->param_, K(fuse_item));
+  } else if (OB_FAIL(tablet_fuse_dag->init(group_ctx_->param_, next_item_.value(), *group_ctx_))) {
+    LOG_WARN("failed to init tablet fuse dag", K(ret), "param", group_ctx_->param_,
+        "next_fuse_item", next_item_.value(), "has_next_item", next_item_.has_value());
   } else if (FALSE_IT(dag_id.init(MYADDR))) {
   } else if (OB_FAIL(tablet_fuse_dag->set_dag_id(dag_id))) {
-    LOG_WARN("failed to set dag id", K(ret), K(fuse_item));
+    LOG_WARN("failed to set dag id", K(ret), "next_fuse_item", next_item_.value(),
+        "has_next_item", next_item_.has_value());
   } else {
     LOG_INFO("succeed generate next dag", KPC(tablet_fuse_dag));
     dag = tablet_fuse_dag;
@@ -641,12 +644,26 @@ int ObBackupTabletFuseDag::generate_next_dag(share::ObIDag *&dag)
     tablet_fuse_dag = NULL;
   }
 
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) && OB_ITER_END != ret && OB_NOT_NULL(group_ctx_)) {
     int tmp_ret = OB_SUCCESS;
     const bool need_retry = false;
     if (OB_TMP_FAIL(group_ctx_->set_result(ret, need_retry, get_type()))) {
      LOG_WARN("failed to set result", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObBackupTabletFuseDag::report_result()
+{
+  int ret = OB_SUCCESS;
+  const int dag_ret = get_dag_ret();
+  if (OB_ISNULL(group_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("group fuse ctx should not be null", K(ret), KPC(this));
+  } else if (OB_SUCCESS != dag_ret
+      && OB_FAIL(group_ctx_->set_result(dag_ret, false /*need_retry*/, get_type()))) {
+    LOG_WARN("failed to report tablet fuse dag result", K(ret), K(dag_ret), KPC(this));
   }
   return ret;
 }

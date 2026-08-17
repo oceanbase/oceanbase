@@ -191,7 +191,6 @@ int ObStorageHAGetMemberHelper::get_ls_member_list_and_learner_list_(
   src_info.cluster_id_ = GCONF.cluster_id;
   obrpc::ObFetchLSMemberListInfo member_info;
   obrpc::ObFetchLSMemberAndLearnerListInfo member_and_learner_info;
-  ObLSService *ls_service = nullptr;
   if (OB_FAIL(get_ls(ls_id, ls_handle))) {
     LOG_WARN("failed to get ls handle", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
@@ -1263,8 +1262,6 @@ int ObMigrationSrcByLocationProvider::find_src_in_sorted_addr_list_(
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  int64_t choose_member_idx = -1;
-  bool is_leader = false;
   obrpc::ObFetchLSMetaInfoResp ls_info;
   common::ObArray<int64_t> candidate_addr_list;
   int64_t leader_index = -1;
@@ -2070,8 +2067,8 @@ int ObStorageHAChooseSrcHelper::choose_src_to_advance_checkpoint_by_location(
 
 void ObStorageHAChooseSrcHelper::errsim_test_(const ObMigrationOpArg &arg, ObStorageHASrcInfo &src_info)
 {
-  int ret = OB_SUCCESS;
 #ifdef ERRSIM
+  int ret = OB_SUCCESS;
   if (ObMigrationOpType::ADD_LS_OP == arg.type_ || ObMigrationOpType::MIGRATE_LS_OP == arg.type_) {
     const ObString &errsim_server = GCONF.errsim_migration_src_server_addr.str();
     if (!errsim_server.empty()) {

@@ -34,6 +34,7 @@ namespace share
 {
 ERRSIM_POINT_DEF(EN_SKIP_LOOP_BLOCKING_DAG);
 ERRSIM_POINT_DEF(EN_FINISH_DAG_FAILURE);
+ERRSIM_POINT_DEF(EN_TABLET_MIGRATION_NEXT_DAG_ADD_FAILED);
 #define DEFINE_TASK_ADD_KV(n)                                                               \
   template <LOG_TYPENAME_TN##n>                                                                  \
   int ADD_TASK_INFO_PARAM(char *buf, const int64_t buf_size, LOG_PARAMETER_KV##n)                  \
@@ -994,8 +995,10 @@ int ObIDag::update_status_in_dag_net(bool &dag_net_finished)
 {
   int ret = OB_SUCCESS;
   ObMutexGuard guard(lock_);
-  if (OB_NOT_NULL(dag_net_)) {
-    dag_net_->update_dag_status(*this, dag_net_finished);
+  if (OB_NOT_NULL(dag_net_)
+      && OB_FAIL(dag_net_->update_dag_status(*this, dag_net_finished))) {
+    COMMON_LOG(ERROR, "failed to update dag status in dag net",
+        K(ret), KP(this), KP_(dag_net));
   }
   return ret;
 }
@@ -1332,7 +1335,16 @@ int ObIDag::finish(const ObDagStatus status, bool &dag_net_finished)
   if (OB_SUCC(ret)) {
     set_dag_status(status);
     set_dag_error_location();
-    update_status_in_dag_net(dag_net_finished);
+    if (OB_FAIL(update_status_in_dag_net(dag_net_finished))) {
+      // The reachable failure modes are duplicate terminal-state publication
+      // (e.g. finish racing with cancel): the first finish has already
+      // removed the dag record, so the dag net side is clean and continuing
+      // is safe. Tolerate it as the code always did before, but keep an
+      // ERROR log so the race is observable.
+      COMMON_LOG(ERROR, "failed to publish dag finish status to dag net, tolerate it",
+          K(ret), K(status), KP(this));
+      ret = OB_SUCCESS;
+    }
   }
   return ret;
 }
@@ -1648,7 +1660,6 @@ int ObIDagNet::basic_init(ObIAllocator &allocator)
 bool ObIDagNet::check_finished_and_mark_stop()
 {
   ObMutexGuard guard(lock_);
-  int ret = OB_SUCCESS;
   if (inner_check_finished_without_lock() && !is_finishing_last_dag_) {
     WEAK_BARRIER();
     is_stopped_ = true;
@@ -2652,6 +2663,7 @@ int ObDagPrioScheduler::schedule_dag_(ObIDag &dag, bool &move_dag_to_waiting_lis
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  bool need_retry_generate = false;
   bool unused_tmp_bret = false;
   ObIDag::ObDagStatus next_dag_status = dag.get_dag_status();
   if (dag.is_dag_net_canceled()) {
@@ -2662,20 +2674,49 @@ int ObDagPrioScheduler::schedule_dag_(ObIDag &dag, bool &move_dag_to_waiting_lis
     move_dag_to_waiting_list = true;
   } else { // dag can be scheduled
     if (ObIDag::DAG_STATUS_READY == dag.get_dag_status()) {
-      if (OB_TMP_FAIL(sys_task_start(dag))) {
-        COMMON_LOG(WARN, "failed to start sys task", K(tmp_ret));
+      if (OB_FAIL(generate_next_dag_(dag, need_retry_generate))) {
+        if (need_retry_generate) {
+          // Keep the source DAG in READY state. Its cached next item will be
+          // reused after the waiting-list scan moves it back to the ready list.
+          move_dag_to_waiting_list = true;
+          COMMON_LOG(INFO, "retry generating next dag later", K(ret), K(dag));
+          ret = OB_SUCCESS;
+        } else {
+          const int generate_ret = ret;
+          next_dag_status = ObIDag::DAG_STATUS_NODE_FAILED;
+          dag.set_dag_ret(generate_ret);
+          COMMON_LOG(WARN, "failed to generate next dag", K(generate_ret), K(dag));
+          // The failure has been recorded on the dag. Keep the scheduler loop
+          // alive so that its normal failed-dag branch can report and free it.
+          ret = OB_SUCCESS;
+        }
+      } else {
+        if (OB_TMP_FAIL(sys_task_start(dag))) {
+          COMMON_LOG(WARN, "failed to start sys task", K(tmp_ret));
+        }
+        next_dag_status = ObIDag::DAG_STATUS_NODE_RUNNING;
       }
-      if (OB_TMP_FAIL(generate_next_dag_(dag))) {
-        LOG_WARN("failed to generate next dag", K(ret), K(dag));
-      }
+    } else {
+      next_dag_status = ObIDag::DAG_STATUS_NODE_RUNNING;
     }
-    next_dag_status = ObIDag::DAG_STATUS_NODE_RUNNING;
   }
-  dag.set_dag_status(next_dag_status);
-  dag.update_status_in_dag_net(unused_tmp_bret /* dag_net_finished */);
-  dag.set_start_time(); // dag start running
-  scheduler_->add_scheduled_dag_cnts(dag.get_type());
-  COMMON_LOG(DEBUG, "dag start running", K(ret), K(dag));
+  if (!need_retry_generate) {
+    dag.set_dag_status(next_dag_status);
+    if (OB_FAIL(dag.update_status_in_dag_net(unused_tmp_bret /* dag_net_finished */))) {
+      // A stale dag-net record here heals itself: the record is still present
+      // and not in a finish status, so the later finish() publishes the
+      // terminal status normally. Tolerate the transient inconsistency as
+      // the code always did before, but keep an ERROR log for observability.
+      COMMON_LOG(ERROR, "failed to update dag status in dag net, tolerate it",
+          K(ret), K(next_dag_status), KP(&dag));
+      ret = OB_SUCCESS;
+    }
+    if (ObIDag::DAG_STATUS_NODE_RUNNING == next_dag_status) {
+      dag.set_start_time(); // dag start running
+      scheduler_->add_scheduled_dag_cnts(dag.get_type());
+      COMMON_LOG(DEBUG, "dag start running", K(ret), K(dag));
+    }
+  }
   return ret;
 }
 
@@ -2762,7 +2803,12 @@ int ObDagPrioScheduler::pop_task_from_ready_list_(ObITask *&task)
         continue;
       }
 
-      if (move_dag_to_waiting_list) {
+      if (ObIDag::DAG_STATUS_NODE_FAILED == cur->get_dag_status()) {
+        // generate_next_dag_ failed permanently. Leave it in the ready list;
+        // the failed-dag branch will finish it on the next scheduler pass.
+        cur = cur->get_next();
+        continue;
+      } else if (move_dag_to_waiting_list) {
         tmp_dag = cur;
         cur = cur->get_next();
         if (OB_FAIL(move_dag_to_list_(*tmp_dag, READY_DAG_LIST, WAITING_DAG_LIST))) {
@@ -2789,14 +2835,18 @@ int ObDagPrioScheduler::pop_task_from_ready_list_(ObITask *&task)
   return ret;
 }
 
-int ObDagPrioScheduler::generate_next_dag_(ObIDag &dag)
+int ObDagPrioScheduler::generate_next_dag_(ObIDag &dag, bool &need_retry)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   ObIDag *next_dag = nullptr;
-  ObIDag *child_dag = nullptr;
+  ObIDag *generated_dag = nullptr;
   ObIDagNet *dag_net = nullptr;
-  const bool check_size_overflow = true;
+  // A generated DAG is the continuation of the frontier DAG that is about to
+  // run. Do not apply the normal admission quota here; otherwise every
+  // frontier can wait for a slot that only its own completion could release.
+  const bool check_size_overflow = false;
+
+  need_retry = false;
 
   if (OB_UNLIKELY(dag.get_priority() != priority_ || OB_ISNULL(scheduler_))) {
     ret = OB_ERR_UNEXPECTED;
@@ -2806,12 +2856,13 @@ int ObDagPrioScheduler::generate_next_dag_(ObIDag &dag)
       if (OB_ITER_END == ret) {
         ret = OB_SUCCESS;
       } else {
-        COMMON_LOG(WARN, "failed to generate_next_dag", K(ret), K(tmp_ret));
+        COMMON_LOG(WARN, "failed to generate_next_dag", K(ret));
       }
     } else if (OB_ISNULL(next_dag)) {
       ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(WARN, "next dag should not be NULL", K(ret), KP(next_dag));
     } else {
+      generated_dag = next_dag;
       ObCurTraceId::set(next_dag->get_dag_id());
       if (FALSE_IT(dag_net = dag.get_dag_net())) {
       } else if (OB_NOT_NULL(dag_net) && OB_FAIL(dag_net->add_dag_into_dag_net(*next_dag))) {
@@ -2829,18 +2880,36 @@ int ObDagPrioScheduler::generate_next_dag_(ObIDag &dag)
       }
 
       if (OB_FAIL(ret)) {
+#ifdef ERRSIM
+      } else if (ObDagType::DAG_TYPE_TABLET_MIGRATION == dag.get_type()
+          && OB_SUCCESS != (ret = EN_TABLET_MIGRATION_NEXT_DAG_ADD_FAILED)) {
+        COMMON_LOG(WARN, "[ERRSIM] failed to add generated next tablet migration dag",
+            K(ret), K(dag), KPC(next_dag));
+        SERVER_EVENT_ADD("storage_ha", "tablet_next_dag_add_failed",
+            "tenant_id", MTL_ID(), "ret", ret);
+#endif
       } else if (OB_FAIL(inner_add_dag_(check_size_overflow, next_dag))) {
         LOG_WARN("failed to add next dag", K(ret), KPC(next_dag));
       }
     }
 
-    if (OB_FAIL(ret)) {
-      if (OB_NOT_NULL(next_dag)) {
-        if (OB_TMP_FAIL(dag.report_result())) {
-          COMMON_LOG(WARN, "failed to report result", K(tmp_ret), K(dag));
-        }
-        scheduler_->free_dag(*next_dag);
-      }
+    if (OB_FAIL(ret) && OB_NOT_NULL(generated_dag)) {
+      scheduler_->free_dag(*generated_dag);
+      // generate_next_dag() has succeeded at this point; only transient
+      // errors in scheduler-owned post-generation steps are retried.
+      // The source DAG has not started and remains READY, so its cached cursor
+      // item must be kept to rebuild the same successor on the next attempt.
+      // Admission quota checking is disabled above, so OB_SIZE_OVERFLOW is
+      // not expected from that quota path. It is retained for ERRSIM and for
+      // conservative handling if a post-generation helper propagates it.
+      // OB_EAGAIN is deliberately excluded: here it only comes from a hash
+      // conflict in add_dag_into_list_and_map_ (an equivalent dag already
+      // exists), which is a deterministic state. Retrying would rebuild the
+      // same successor from the cached item and conflict forever, so it is
+      // treated as a permanent failure and reported through the failed-dag
+      // branch instead.
+      need_retry = OB_SIZE_OVERFLOW == ret
+                || OB_ALLOCATE_MEMORY_FAILED == ret;
     }
   }
   return ret;
@@ -3405,9 +3474,10 @@ int ObDagPrioScheduler::get_min_end_scn_from_major_dag(const ObLSID &ls_id, SCN 
   return ret;
 }
 
-int ObDagPrioScheduler::get_compaction_dag_count(int64_t dag_count)
+int ObDagPrioScheduler::get_compaction_dag_count(int64_t &dag_count)
 {
   int ret = OB_SUCCESS;
+  common::SpinRLockGuard guard(prio_rwlock_);
   for (int64_t i = 0; i < ObDagListIndex::DAG_LIST_MAX; ++i) {
     dag_count += dag_list_[i].get_size();
   }
@@ -3636,7 +3706,6 @@ int ObDagPrioScheduler::cancel_dag(const ObIDag &dag, const bool force_cancel)
 {
   int ret = OB_SUCCESS;
   int hash_ret = OB_SUCCESS;
-  bool free_flag = false;
   ObIDag *cur_dag = nullptr;
   {
     common::SpinWLockGuard guard(prio_rwlock_);
@@ -3655,8 +3724,7 @@ int ObDagPrioScheduler::cancel_dag(const ObIDag &dag, const bool force_cancel)
       COMMON_LOG(WARN, "unexpected priority value", K(ret), K(cur_dag->get_priority()), K(dag.get_priority()));
     } else if (cur_dag->get_dag_status() == ObIDag::DAG_STATUS_READY) {
       LOG_INFO("cancel dag", K(ret), KP(cur_dag));
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(finish_dag_(ObIDag::DAG_STATUS_ABORT, cur_dag, true/*try_move_child*/))) {
+      if (OB_FAIL(finish_dag_(ObIDag::DAG_STATUS_ABORT, cur_dag, true/*try_move_child*/))) {
         COMMON_LOG(WARN, "failed to erase dag and dag net", K(ret), KPC(cur_dag));
         ob_abort();
       }
@@ -3840,7 +3908,6 @@ int ObDagPrioScheduler::cancel_task(const ObIDag &dag, const ObITask::ObITaskTyp
 {
   int ret = OB_SUCCESS;
   int hash_ret = OB_SUCCESS;
-  bool free_flag = false;
   ObIDag *cur_dag = nullptr;
   {
     common::SpinWLockGuard guard(prio_rwlock_);
@@ -4268,7 +4335,6 @@ int ObDagNetScheduler::check_dag_net_exist(
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   const ObIDagNet *dag_net = nullptr;
-  bool locked = false;
   if (OB_FAIL(dag_net_map_rwlock_.wrlock(abs_timeout_us))) {
     LOG_WARN("failed to lock dag_net_map_rwlock_", K(ret), K(dag_id));
   } else {
@@ -4853,11 +4919,7 @@ void ObTenantDagScheduler::diagnose_for_suggestion()
 
 void ObTenantDagScheduler::dump_dag_status(const bool force_dump/*false*/)
 {
-  int tmp_ret = OB_SUCCESS;
   if (force_dump || REACH_THREAD_TIME_INTERVAL(DUMP_DAG_STATUS_INTERVAL)) {
-    int64_t total_worker_cnt = 0;
-    int64_t work_thread_num = 0;
-
     for (int64_t i = 0; i < ObDagPrio::DAG_PRIO_MAX; ++i) {
       prio_sche_[i].dump_dag_status();
     }
@@ -5084,7 +5146,7 @@ int ObTenantDagScheduler::get_min_end_scn_from_major_dag(const ObLSID &ls_id, SC
   return ret;
 }
 
-int ObTenantDagScheduler::get_compaction_dag_count(int64_t dag_count)
+int ObTenantDagScheduler::get_compaction_dag_count(int64_t &dag_count)
 {
   int ret = OB_SUCCESS;
   dag_count = 0;
@@ -5645,7 +5707,6 @@ int ObTenantDagScheduler::set_adaptive_limit(const int64_t prio, const int64_t l
 int ObTenantDagScheduler::check_dag_exist(const ObIDag *dag, bool &exist, bool &is_emergency)
 {
   int ret = OB_SUCCESS;
-  int hash_ret = OB_SUCCESS;
   exist = true;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -5665,7 +5726,6 @@ int ObTenantDagScheduler::check_dag_exist(const ObIDag *dag, bool &exist, bool &
 int ObTenantDagScheduler::cancel_dag(const ObIDag *dag, const bool force_cancel)
 {
   int ret = OB_SUCCESS;
-  ObIDagNet *erase_dag_net = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "ObTenantDagScheduler is not inited", K(ret));
@@ -5724,7 +5784,6 @@ int ObTenantDagScheduler::get_first_dag_net(ObIDagNet *&dag_net)
 int ObTenantDagScheduler::cancel_task(const ObIDag *dag, const ObITask::ObITaskType &type)
 {
   int ret = OB_SUCCESS;
-  ObIDagNet *erase_dag_net = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "ObTenantDagScheduler is not inited", K(ret));

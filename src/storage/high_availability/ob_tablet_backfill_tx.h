@@ -111,7 +111,7 @@ public:
       ObIHADagNetCtx *ha_dag_net_ctx,
       ObBackfillTXCtx *backfill_tx_ctx,
       ObBackfillTabletsTableMgr *tablets_table_mgr);
-  virtual int generate_next_dag(share::ObIDag *&dag);
+  virtual int generate_next_dag(share::ObIDag *&dag) override;
   int get_tablet_handle(ObTabletHandle &tablet_handle);
   int init_tablet_handle();
 
@@ -121,6 +121,7 @@ protected:
   share::ObTaskId dag_net_id_;
   share::ObLSID ls_id_;
   ObTabletBackfillInfo tablet_info_;
+  ObCachedNextItem<ObTabletBackfillInfo> next_item_;
   ObBackfillTXCtx *backfill_tx_ctx_;
   ObTabletHandle tablet_handle_;
   ObBackfillTabletsTableMgr *tablets_table_mgr_;

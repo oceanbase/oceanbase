@@ -559,7 +559,6 @@ int ObPartitionMerger::process(
 int ObPartitionMerger::merge_macro_block_iter(ObPartitionMergeIter &iter)
 {
   int ret = OB_SUCCESS;
-  bool rewrite = false;
 
   if (iter.is_macro_block_opened()) {
     ret = OB_ERR_UNEXPECTED;

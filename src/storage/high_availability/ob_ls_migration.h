@@ -365,7 +365,7 @@ public:
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual int create_first_task() override;
   virtual int inner_reset_status_for_retry() override;
-  virtual int generate_next_dag(share::ObIDag *&dag);
+  virtual int generate_next_dag(share::ObIDag *&dag) override;
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   int init(
       const common::ObTabletID &tablet_id,
@@ -383,6 +383,7 @@ protected:
   ObCopyTabletCtx copy_tablet_ctx_;
   ObHATabletGroupCtx *tablet_group_ctx_;
   ObTabletType tablet_type_;
+  ObCachedNextItem<ObLogicTabletID> next_item_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletMigrationDag);
 };
 
@@ -527,12 +528,14 @@ public:
       share::ObIDagNet *dag_net,
       share::ObIDag *finish_dag,
       ObHATabletGroupCtx *tablet_group_ctx);
+  ObCachedNextItem<ObLogicTabletID> &get_next_item() { return next_item_; }
 
   INHERIT_TO_STRING_KV("ObIMigrationDag", ObMigrationDag, KP(this));
 protected:
   ObArray<ObLogicTabletID> tablet_id_array_;
   share::ObIDag *finish_dag_;
   ObHATabletGroupCtx *tablet_group_ctx_;
+  ObCachedNextItem<ObLogicTabletID> next_item_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletGroupMigrationDag);
 };
 

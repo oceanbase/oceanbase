@@ -289,7 +289,7 @@ public:
   virtual uint64_t hash() const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual int create_first_task() override;
-  virtual int generate_next_dag(share::ObIDag *&dag);
+  virtual int generate_next_dag(share::ObIDag *&dag) override;
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
 
   int init(
@@ -301,6 +301,7 @@ protected:
   bool is_inited_;
   ObArray<ObLogicTabletID> tablet_id_array_;
   share::ObIDag *finish_dag_;
+  ObCachedNextItem<ObHATabletGroupCtx *> next_item_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletGroupMetaRestoreDag);
 };
 

@@ -781,79 +781,6 @@ int ObLSRestoreTaskMgr::check_tablet_need_discard_when_reload_(
   return ret;
 }
 
-int ObLSRestoreTaskMgr::check_tablet_is_deleted_(
-    const ObTabletHandle &tablet_handle,
-    bool &is_deleted) const
-{
-  int ret = OB_SUCCESS;
-  ObTablet *tablet = nullptr;
-  ObTabletCreateDeleteMdsUserData data;
-
-  is_deleted = false;
-
-  if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tablet is null", K(ret));
-  } else if (tablet->is_empty_shell()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tablet is empty shell", K(ret), KPC(tablet));
-  } else if (OB_FAIL(tablet->get_latest_committed_tablet_status(data))) {
-    if (OB_EMPTY_RESULT == ret || OB_ERR_SHARED_LOCK_CONFLICT == ret) {
-      LOG_WARN("tablet_status is null or not committed", K(ret), KPC(tablet));
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("failed to get latest tablet status", K(ret), KPC(tablet));
-    }
-  } else if (data.tablet_status_.is_deleted_for_gc()) {
-    is_deleted = true;
-  }
-  return ret;
-}
-
-int ObLSRestoreTaskMgr::check_need_discard_transfer_tablet_(
-    const ObTabletHandle &tablet_handle,
-    bool &discard) const
-{
-  int ret = OB_SUCCESS;
-  bool is_finish = false;
-  discard = false;
-  if (OB_FAIL(check_transfer_start_finish_(tablet_handle, is_finish))) {
-    if (OB_ERR_SHARED_LOCK_CONFLICT == ret) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(restore_state_handler_->check_recover_finish(is_finish))) {
-        LOG_WARN("fail to check recover finish", K(ret), K(tmp_ret), KPC_(restore_state_handler), K_(ls_id));
-      } else if (!is_finish) {
-        // overwrite error code if transfer start has stepped into 2-phase transaction before recover finished.
-        ret = OB_SUCCESS;
-      } else {
-        discard = true;
-        ObTablet *tablet = tablet_handle.get_obj();
-        LOG_INFO("uncommitted tablet created by transfer, but log has been recovered, "
-                 "discard this tablet from restore task mgr", KPC(tablet), K(discard));
-      }
-    } else {
-      LOG_WARN("fail to check transfer start finish", K(ret), K_(ls_id), K(tablet_handle));
-    }
-  } else if (!is_finish && OB_FAIL(check_need_discard_uncommit_transfer_tablet_(discard))) {
-    LOG_WARN("fail to check need discard uncommit transfer tablet", K(ret));
-  }
-  return ret;
-}
-
-int ObLSRestoreTaskMgr::check_need_discard_uncommit_transfer_tablet_(
-    bool &discard) const
-{
-  int ret = OB_SUCCESS;
-  bool is_finish = false;
-  discard = false;
-  if (OB_FAIL(restore_state_handler_->check_recover_finish(is_finish))) {
-    LOG_WARN("fail to check recover finish", K(ret), KPC_(restore_state_handler), K_(ls_id));
-  } else if (is_finish) {
-    discard = true;
-  }
-  return ret;
-}
-
 bool ObLSRestoreTaskMgr::is_follower_() const
 {
   return is_follower(restore_state_handler_->get_role());
@@ -1028,40 +955,6 @@ int ObLSRestoreTaskMgr::check_tablet_status_(
     LOG_WARN("fail to check tablet restore finish", K(ret), K(ls_restore_status), K(tablet_handle));
   }
   return ret;
-}
-
-ObTabletRestoreAction::ACTION ObLSRestoreTaskMgr::get_common_restore_action_(
-    const share::ObLSRestoreStatus &ls_restore_status) const
-{
-  ObTabletRestoreAction::ACTION action = ObTabletRestoreAction::RESTORE_NONE;
-  switch (ls_restore_status.get_status()) {
-    case ObLSRestoreStatus::RESTORE_TABLETS_META : {
-      action = ObTabletRestoreAction::RESTORE_TABLET_META;
-      break;
-    }
-
-    case ObLSRestoreStatus::RESTORE_TO_CONSISTENT_SCN : {
-      action = ObTabletRestoreAction::RESTORE_TABLET_META;
-      break;
-    }
-
-    case ObLSRestoreStatus::QUICK_RESTORE: {
-      action = ObTabletRestoreAction::RESTORE_MINOR;
-      break;
-    }
-
-    case ObLSRestoreStatus::RESTORE_MAJOR_DATA : {
-      action = ObTabletRestoreAction::RESTORE_MAJOR;
-      break;
-    }
-
-    default: {
-      action = ObTabletRestoreAction::RESTORE_NONE;
-      break;
-    }
-  }
-
-  return action;
 }
 
 void ObLSRestoreTaskMgr::unset_force_reload_()

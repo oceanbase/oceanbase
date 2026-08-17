@@ -950,46 +950,6 @@ TEST_F(TestTransferHandler, finish_transfer_in_failed)
   ASSERT_EQ(OB_SUCCESS, wait_transfer_out_deleted_tablet_gc(task));
 }
 
-TEST_F(TestTransferHandler, doing_wait_all_dest_tablet_normal_failed)
-{
-  int ret = OB_SUCCESS;
-  ObMySQLProxy &inner_sql_proxy = get_curr_observer().get_mysql_proxy();
-  ObSqlString sql;
-  int64_t affected_rows = 0;
-  // inject error
-  ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("alter system set_tp tp_name = EN_DOING_WAIT_ALL_DEST_TABLET_NORAML, error_code = 4023, frequency = 1"));
-  ASSERT_EQ(OB_SUCCESS, inner_sql_proxy.write(OB_SYS_TENANT_ID, sql.ptr(), affected_rows));
-  usleep(100000); // wait for debug_sync_timeout to take effect
-  sql.reset();
-
-  //1 ls transfer to 1001 ls
-  // generate transfer task
-  ObTransferTaskID task_id;
-  ASSERT_EQ(OB_SUCCESS, generate_transfer_task(ObLSID(1), ObLSID(1001), task_id));
-
-  //check observer transfer status
-  ObTransferStatus expected_status(ObTransferStatus::DOING);
-  ObTransferTask task;
-  ASSERT_EQ(OB_SUCCESS, wait_transfer_task(task_id, expected_status, false/*is_from_his*/, task));
-  LOG_INFO("generate transfer task", K(task));
-  ASSERT_EQ(OB_SUCCESS, wait_error_happen(task));
-
-  //remove error
-  ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("alter system set_tp tp_name = EN_DOING_WAIT_ALL_DEST_TABLET_NORAML, error_code = 4023, frequency = 0"));
-  ASSERT_EQ(OB_SUCCESS, inner_sql_proxy.write(OB_SYS_TENANT_ID, sql.ptr(), affected_rows));
-  usleep(100000); // wait for debug_sync_timeout to take effect
-  sql.reset();
-
-  //check observer transfer
-  expected_status = ObTransferStatus::COMPLETED;
-  task.reset();
-  ASSERT_EQ(OB_SUCCESS, wait_transfer_task(task_id, expected_status, true/*is_from_his*/, task));
-  LOG_INFO("generate transfer task", K(task));
-  ASSERT_EQ(OB_SUCCESS, task.result_);
-  //wait 1001 ls transfer out tablet deleted gc.
-  ASSERT_EQ(OB_SUCCESS, wait_transfer_out_deleted_tablet_gc(task));
-}
-
 TEST_F(TestTransferHandler, finish_transfer_out_failed)
 {
   int ret = OB_SUCCESS;

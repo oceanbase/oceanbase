@@ -16,6 +16,55 @@ namespace oceanbase
 namespace storage
 {
 
+template <typename Item>
+struct ObCachedNextItemTraits
+{
+  static bool has_value(const Item &item) { return item.is_valid(); }
+  static void reset(Item &item) { item.reset(); }
+};
+
+template <typename Item>
+struct ObCachedNextItemTraits<Item *>
+{
+  static bool has_value(Item *const &item) { return nullptr != item; }
+  static void reset(Item *&item) { item = nullptr; }
+};
+
+// Keeps the item consumed by a source DAG until that DAG successfully generates
+// and registers its successor.  A repeated call on the same source DAG reuses
+// the item; only a business-level skip should call reset().
+template <typename Item, typename Traits = ObCachedNextItemTraits<Item>>
+class ObCachedNextItem
+{
+public:
+  ObCachedNextItem() : item_() {}
+  ~ObCachedNextItem() = default;
+
+  bool has_value() const { return Traits::has_value(item_); }
+  Item &value() { return item_; }
+  const Item &value() const { return item_; }
+  void reset() { Traits::reset(item_); }
+
+  template <typename Cursor>
+  int get_or_fetch(Cursor &cursor, int (Cursor::*get_next)(Item &))
+  {
+    int ret = OB_SUCCESS;
+    if (has_value()) {
+      // reuse the item when the same source DAG retries
+    } else if (OB_FAIL((cursor.*get_next)(item_))) {
+      Traits::reset(item_);
+    } else if (!has_value()) {
+      ret = OB_ERR_UNEXPECTED;
+      Traits::reset(item_);
+    }
+    return ret;
+  }
+
+private:
+  Item item_;
+  DISALLOW_COPY_AND_ASSIGN(ObCachedNextItem);
+};
+
 struct ObStorageHAResultMgr final
 {
 public:

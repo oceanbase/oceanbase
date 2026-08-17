@@ -746,72 +746,6 @@ int ObBackupTaskSchedulerQueue::get_all_zones_(ObIArray<ObBackupZone> &zones)
   return ret;
 }
 
-int ObBackupTaskSchedulerQueue::get_zone_list_from_region_(const common::ObRegion &region, ObIArray<ObZone> &zone_list)
-{
-  int ret = OB_SUCCESS;
-  ObArray<common::ObZone> tmp_zone_list;
-  common::ObRegion tmp_region;
-  if (region.is_empty()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("region is empty", K(region), K(ret));
-  } else if (OB_FAIL(get_tenant_zone_list_(task_scheduler_->get_exec_tenant_id(), tmp_zone_list))) {
-    LOG_WARN("fail to get zone list of tenant", K(ret), "tenant_id", task_scheduler_->get_exec_tenant_id());
-  }
-  SMART_VAR(share::ObZoneInfo, info) {
-    ARRAY_FOREACH_X(tmp_zone_list, i, cur, OB_SUCC(ret)) {
-      const common::ObZone &zone = tmp_zone_list.at(i);
-      info.reset();
-      info.zone_ = zone;
-      if (OB_FAIL(share::ObZoneTableOperation::load_zone_info(*sql_proxy_, info))) {
-        LOG_WARN("fail to load zone info", K(ret));
-      } else if (!info.is_valid()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid zone info", K(ret), K(info));
-      } else if (OB_FAIL(info.get_region(tmp_region))) {
-        LOG_WARN("fail to get region", K(ret));
-      } else if (region == tmp_region) {
-        if (OB_FAIL(zone_list.push_back(zone))) {
-          LOG_WARN("fail to push backup zone", K(ret));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObBackupTaskSchedulerQueue::get_zone_list_from_idc_(const ObIDC &idc, ObIArray<common::ObZone> &zone_list)
-{
-  int ret = OB_SUCCESS;
-  ObArray<common::ObZone> tmp_zone_list;
-  common::ObIDC tmp_idc;
-  if (idc.is_empty()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("idc is empty", K(idc), K(ret));
-  } else if (OB_FAIL(get_tenant_zone_list_(task_scheduler_->get_exec_tenant_id(), tmp_zone_list))) {
-    LOG_WARN("fail to get zone list of tenant", K(ret), "tenant_id", task_scheduler_->get_exec_tenant_id());
-  }
-  SMART_VAR(share::ObZoneInfo, info) {
-    ARRAY_FOREACH_X(tmp_zone_list, i, cur, OB_SUCC(ret)) {
-      const common::ObZone &zone = tmp_zone_list.at(i);
-      info.reset();
-      info.zone_ = zone;
-      if (OB_FAIL(share::ObZoneTableOperation::load_zone_info(*sql_proxy_, info))) {
-        LOG_WARN("fail to load zone info", K(ret));
-      } else if (!info.is_valid()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid zone info", K(ret), K(info));
-      } else if (OB_FAIL(info.get_idc(tmp_idc))) {
-        LOG_WARN("fail to get idc", K(ret));
-      } else if (idc == tmp_idc) {
-        if (OB_FAIL(zone_list.push_back(zone))) {
-          LOG_WARN("fail to push backup zone", K(ret));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 int ObBackupTaskSchedulerQueue::get_tenant_zone_list_(const uint64_t tenant_id, ObIArray<common::ObZone> &zone_list)
 {
   int ret = OB_SUCCESS;
@@ -830,33 +764,6 @@ int ObBackupTaskSchedulerQueue::get_tenant_zone_list_(const uint64_t tenant_id, 
     if (OB_FAIL(zone_list.push_back(unit.zone_))) {
       LOG_WARN("fail to push back zone", K(ret), K(unit));
     }
-  }
-  return ret;
-}
-
-int ObBackupTaskSchedulerQueue::choose_dst_(
-    ObBackupScheduleTask *task,
-    const ObIArray<ObBackupServer> &servers,
-    ObAddr &dst,
-    bool &can_schedule)
-{
-  // Fetch the backup dest extension (an SQL query against __all_backup_storage_info)
-  // and delegate the in-memory server selection to choose_dst_with_extension_, so the
-  // two entry points share a single implementation. Callers that need to keep the SQL
-  // out of a critical section should pre-fetch the extension and call
-  // choose_dst_with_extension_ directly (see pop_task).
-  int ret = OB_SUCCESS;
-  can_schedule = false;
-  dst.reset();
-  char extension[OB_MAX_BACKUP_EXTENSION_LENGTH] = {0};
-  if (servers.empty() || OB_ISNULL(task)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(servers), KP(task));
-  } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest_extension(
-                 task->get_tenant_id(), task->get_dest_id(), extension, sizeof(extension)))) {
-    LOG_WARN("fail to get backup dest extension", K(ret), KPC(task));
-  } else if (OB_FAIL(choose_dst_with_extension_(task, servers, extension, dst, can_schedule))) {
-    LOG_WARN("fail to choose dst with extension", K(ret), KPC(task));
   }
   return ret;
 }

@@ -60,7 +60,6 @@ private:
   int inner_calculate_consistent_scn_(ObIArray<share::ObBackupLSTaskAttr> &ls_tasks, share::SCN &consistent_scn);
   int check_need_change_meta_turn_(ObIArray<share::ObBackupLSTaskAttr> &ls_tasks, bool &need_change_turn);
   int change_meta_turn_(const share::ObBackupLSTaskAttr &sys_ls_task);
-  int get_backup_user_meta_task_(ObIArray<share::ObBackupLSTaskAttr> &ls_task);
   int merge_tablet_to_ls_info_(const share::SCN &consistent_scn,
       const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks,
       common::ObIArray<share::ObLSID> &ls_ids);
@@ -129,7 +128,6 @@ private:
   int do_backup_completing_log_(ObArray<share::ObBackupLSTaskAttr> &ls_task, int64_t &finish_cnt);
   int calculate_start_replay_scn_(share::SCN &start_replay_scn);
   int do_cancel_();
-  int check_and_handle_sslog_table_size_(const share::ObBackupStatus::Status &status);
   // Top-level disk-full wait timer judgment. Reads first_disk_full_ts_ from
   // set_task_attr_.extra_info_ and compares against _backup_disk_full_max_wait_duration.
   // On timeout, sets job_attr_->can_retry_=false and returns OB_SERVER_OUTOF_DISK_SPACE

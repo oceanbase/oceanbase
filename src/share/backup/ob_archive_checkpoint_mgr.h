@@ -89,7 +89,6 @@ private:
   int get_max_checkpoint_scn_(const ObBackupPath &path, uint64_t &max_checkpoint_scn) const;
   int del_last_ckpt_file_(const ObBackupPath &dir_path, const uint64_t write_checkpoint_scn) const;
   int write_checkpoint_file_(const ObBackupPath &path) const;
-  int check_is_tagging_(const ObBackupStorageInfo *storage_info, bool &is_tagging) const;
 
   TO_STRING_KV(K_(is_inited), K_(path), KP_(file_name), K_(type));
 

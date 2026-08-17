@@ -135,6 +135,43 @@ TEST_F(TestDiagnoseInfoMgr, test_filter_factory_destroys_failed_filter)
   ASSERT_EQ(1, InitFailCompactionFilter::destructor_count_);
 }
 
+TEST_F(TestDiagnoseInfoMgr, test_compaction_dag_snapshot_reuse)
+{
+  ObCompactionDagSnapshot snapshot;
+  const ObTabletID tablet_id(1);
+  ASSERT_EQ(OB_SUCCESS, snapshot.init(4, 4));
+
+  ObDiagnoseTabletCompProgress first_progress;
+  first_progress.create_time_ = 1;
+  ObDagNetProgressSnapshot first_dag_net;
+  first_dag_net.start_time_ = 1;
+  ASSERT_EQ(OB_SUCCESS, snapshot.put_dag(MINOR_MERGE, ls_id_, tablet_id, first_progress));
+  ASSERT_EQ(OB_SUCCESS, snapshot.put_dag_net(ls_id_, tablet_id, first_dag_net));
+
+  const ObDiagnoseTabletCompProgress *progress = nullptr;
+  const ObDagNetProgressSnapshot *dag_net = nullptr;
+  ASSERT_EQ(OB_SUCCESS, snapshot.get_dag_progress(MINOR_MERGE, ls_id_, tablet_id, progress));
+  ASSERT_EQ(1, progress->create_time_);
+  ASSERT_EQ(OB_SUCCESS, snapshot.get_dag_net_snapshot(ls_id_, tablet_id, dag_net));
+  ASSERT_EQ(1, dag_net->start_time_);
+
+  ASSERT_EQ(OB_SUCCESS, snapshot.reuse());
+  ASSERT_EQ(OB_HASH_NOT_EXIST,
+      snapshot.get_dag_progress(MINOR_MERGE, ls_id_, tablet_id, progress));
+  ASSERT_EQ(OB_HASH_NOT_EXIST, snapshot.get_dag_net_snapshot(ls_id_, tablet_id, dag_net));
+
+  ObDiagnoseTabletCompProgress second_progress;
+  second_progress.create_time_ = 2;
+  ObDagNetProgressSnapshot second_dag_net;
+  second_dag_net.start_time_ = 2;
+  ASSERT_EQ(OB_SUCCESS, snapshot.put_dag(MINOR_MERGE, ls_id_, tablet_id, second_progress));
+  ASSERT_EQ(OB_SUCCESS, snapshot.put_dag_net(ls_id_, tablet_id, second_dag_net));
+  ASSERT_EQ(OB_SUCCESS, snapshot.get_dag_progress(MINOR_MERGE, ls_id_, tablet_id, progress));
+  ASSERT_EQ(2, progress->create_time_);
+  ASSERT_EQ(OB_SUCCESS, snapshot.get_dag_net_snapshot(ls_id_, tablet_id, dag_net));
+  ASSERT_EQ(2, dag_net->start_time_);
+}
+
 TEST_F(TestDiagnoseInfoMgr, test_add_del_suspect_info)
 {
   int ret = OB_SUCCESS;

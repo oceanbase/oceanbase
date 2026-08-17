@@ -1087,26 +1087,6 @@ int ObBackupTabletStat::mark_item_finished(const share::ObBackupDataType &backup
   return ret;
 }
 
-int ObBackupTabletStat::add_finished_tablet_meta_count(const common::ObTabletID &tablet_id)
-{
-  int ret = OB_SUCCESS;
-  ObMutexGuard guard(mutex_);
-  const bool create_if_not_exist = false;
-  ObBackupTabletCtx *ctx = NULL;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("backup tablet stat do not init", K(ret));
-  } else if (!tablet_id.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(tablet_id));
-  } else if (OB_FAIL(get_tablet_stat_(tablet_id, create_if_not_exist, ctx))) {
-    LOG_WARN("failed to get tablet stat", K(ret), K(tablet_id));
-  } else {
-    ctx->finish_tablet_meta_count_++;
-  }
-  return ret;
-}
-
 int ObBackupTabletStat::add_opened_rebuilder_count(const common::ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
@@ -1147,34 +1127,6 @@ int ObBackupTabletStat::add_closed_rebuilder_count(const common::ObTabletID &tab
   return ret;
 }
 
-int ObBackupTabletStat::check_can_release_tablet(const common::ObTabletID &tablet_id, bool &can_release, bool &already_released)
-{
-  int ret = OB_SUCCESS;
-  can_release = false;
-  already_released = false;
-  ObMutexGuard guard(mutex_);
-  const bool create_if_not_exist = false;
-  ObBackupTabletCtx *ctx = NULL;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("backup tablet stat do not init", K(ret));
-  } else if (!tablet_id.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(tablet_id));
-  } else if (OB_FAIL(get_tablet_stat_(tablet_id, create_if_not_exist, ctx))) {
-    if (OB_HASH_NOT_EXIST == ret) {
-      // tablet stat not found, already released by another thread
-      already_released = true;
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("failed to get tablet stat", K(ret), K(tablet_id));
-    }
-  } else {
-    can_release = ctx->can_release();
-  }
-  return ret;
-}
-
 int ObBackupTabletStat::get_tablet_stat(const common::ObTabletID &tablet_id, ObBackupTabletCtx *&ctx)
 {
   int ret = OB_SUCCESS;
@@ -1188,29 +1140,6 @@ int ObBackupTabletStat::get_tablet_stat(const common::ObTabletID &tablet_id, ObB
     LOG_WARN("get invalid args", K(ret), K(tablet_id));
   } else if (OB_FAIL(get_tablet_stat_(tablet_id, create_if_not_exist, ctx))) {
     LOG_WARN("failed to get tablet stat", K(ret), K(tablet_id));
-  }
-  return ret;
-}
-
-int ObBackupTabletStat::free_tablet_stat(const common::ObTabletID &tablet_id)
-{
-  int ret = OB_SUCCESS;
-  ObMutexGuard guard(mutex_);
-  const bool create_if_not_exist = false;
-  ObBackupTabletCtx *ctx = NULL;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("backup tablet stat do not init", K(ret));
-  } else if (!tablet_id.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(tablet_id));
-  } else if (OB_FAIL(get_tablet_stat_(tablet_id, create_if_not_exist, ctx))) {
-    LOG_WARN("failed to get tablet stat", K(ret), K(tablet_id));
-  } else {
-    free_stat_(tablet_id, ctx);
-    if (OB_FAIL(stat_map_.erase_refactored(tablet_id))) {
-      LOG_WARN("failed to erase", K(ret), K(tablet_id));
-    }
   }
   return ret;
 }

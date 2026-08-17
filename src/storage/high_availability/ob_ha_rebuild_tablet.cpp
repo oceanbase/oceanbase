@@ -739,7 +739,8 @@ int ObInitialRebuildTabletTask::check_tablet_status_()
 ObStartRebuildTabletDag::ObStartRebuildTabletDag()
   : ObRebuildTabletDag(ObDagType::DAG_TYPE_START_REBUILD_TABLET),
     is_inited_(false),
-    finish_dag_(nullptr)
+    finish_dag_(nullptr),
+    next_item_()
 {
 }
 
@@ -918,7 +919,6 @@ int ObStartRebuildTabletTask::process()
 int ObStartRebuildTabletTask::generate_rebuild_tablets_dag_()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   ObIDagNet *dag_net = nullptr;
   ObStartRebuildTabletDag *start_rebuild_tablet_dag = nullptr;
   ObTabletRebuildMajorDag *tablet_rebuild_dag = nullptr;
@@ -934,8 +934,10 @@ int ObStartRebuildTabletTask::generate_rebuild_tablets_dag_()
     LOG_WARN("rebuild tablet dag net should not be NULL", K(ret), KP(dag_net));
   } else {
     ObIDag *parent = this->get_dag();
-    ObLogicTabletID logic_tablet_id;
-    if (OB_FAIL(ctx_->tablet_group_ctx_.get_next_tablet_id(logic_tablet_id))) {
+    ObCachedNextItem<ObLogicTabletID> &next_item = start_rebuild_tablet_dag->get_next_item();
+    ObLogicTabletID &logic_tablet_id = next_item.value();
+    if (OB_FAIL(next_item.get_or_fetch(
+        ctx_->tablet_group_ctx_, &ObHATabletGroupCtx::get_next_tablet_id))) {
       if (OB_ITER_END == ret) {
         ret = OB_SUCCESS;
       } else {
@@ -978,7 +980,8 @@ ObTabletRebuildMajorDag::ObTabletRebuildMajorDag()
     is_inited_(false),
     ls_handle_(),
     copy_tablet_ctx_(),
-    finish_dag_(nullptr)
+    finish_dag_(nullptr),
+    next_item_()
 {
 }
 
@@ -1165,7 +1168,6 @@ int ObTabletRebuildMajorDag::generate_next_dag(share::ObIDag *&dag)
   ObTenantDagScheduler *scheduler = nullptr;
   ObIDagNet *dag_net = nullptr;
   ObTabletRebuildMajorDag *tablet_rebuild_dag = nullptr;
-  ObLogicTabletID logic_tablet_id;
   ObDagId dag_id;
   const int64_t start_ts = ObTimeUtil::current_time();
   ObRebuildTabletCtx *ctx = nullptr;
@@ -1189,11 +1191,20 @@ int ObTabletRebuildMajorDag::generate_next_dag(share::ObIDag *&dag)
   } else {
     while (OB_SUCC(ret)) {
       ObTabletHandle tablet_handle;
-      if (OB_FAIL(ctx->tablet_group_ctx_.get_next_tablet_id(logic_tablet_id))) {
+      ObLogicTabletID &logic_tablet_id = next_item_.value();
+      if (OB_FAIL(next_item_.get_or_fetch(
+          ctx->tablet_group_ctx_, &ObHATabletGroupCtx::get_next_tablet_id))) {
         if (OB_ITER_END == ret) {
           need_set_failed_result = false;
         } else {
           LOG_WARN("failed to get next tablet id", K(ret), KPC(this));
+        }
+      } else if (OB_FAIL(ls->ha_get_tablet(logic_tablet_id.tablet_id_, tablet_handle))) {
+        if (OB_TABLET_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+          next_item_.reset();
+        } else {
+          LOG_WARN("failed to get tablet", K(ret), K(logic_tablet_id));
         }
       } else if (OB_ISNULL(dag_net = this->get_dag_net())) {
         ret = OB_ERR_UNEXPECTED;
@@ -1201,16 +1212,11 @@ int ObTabletRebuildMajorDag::generate_next_dag(share::ObIDag *&dag)
       } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-      } else if (OB_FAIL(ls->ha_get_tablet(logic_tablet_id.tablet_id_, tablet_handle))) {
-        if (OB_TABLET_NOT_EXIST == ret) {
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("failed to get tablet", K(ret), K(logic_tablet_id));
-        }
       } else if (OB_FAIL(scheduler->alloc_dag(tablet_rebuild_dag))) {
         LOG_WARN("failed to alloc tablet rebuild dag", K(ret));
       } else {
-        if (OB_FAIL(tablet_rebuild_dag->init(logic_tablet_id.tablet_id_, dag_net, finish_dag_))) {
+        if (OB_FAIL(tablet_rebuild_dag->init(
+            logic_tablet_id.tablet_id_, dag_net, finish_dag_))) {
           LOG_WARN("failed to init tablet rebuild major dag", K(ret), K(logic_tablet_id));
         } else if (FALSE_IT(dag_id.init(MYADDR))) {
         } else if (OB_FAIL(tablet_rebuild_dag->set_dag_id(dag_id))) {
@@ -1238,7 +1244,8 @@ int ObTabletRebuildMajorDag::generate_next_dag(share::ObIDag *&dag)
     }
   }
 
-  LOG_INFO("generate_next_dag", K(ret), K(logic_tablet_id), "cost", ObTimeUtil::current_time() - start_ts,
+  LOG_INFO("generate_next_dag", K(ret), "next_tablet_id", next_item_.value(),
+      "cost", ObTimeUtil::current_time() - start_ts,
       "dag_id", dag_id);
   return ret;
 }

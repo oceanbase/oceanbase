@@ -676,6 +676,9 @@ public:
     return OB_SUCCESS;
   }
 
+  // The scheduler may call this method again while the source DAG remains
+  // READY if registering next_dag fails transiently. Implementations that
+  // consume a cursor must reuse the same item on such a retry.
   virtual int generate_next_dag(ObIDag *&next_dag) { UNUSED(next_dag); return common::OB_ITER_END; }
   int fill_comment(char *buf, const int64_t buf_len);
 
@@ -1178,7 +1181,7 @@ public:
   // 2. cancel ls compaction waiting dag
   int check_ls_compaction_dag_exist_with_cancel(const ObLSID &ls_id, bool &exist);
   int get_min_end_scn_from_major_dag(const ObLSID &ls_id, SCN &min_end_scn);
-  int get_compaction_dag_count(int64_t dag_count);
+  int get_compaction_dag_count(int64_t &dag_count);
   int get_max_major_finish_time(const int64_t version, int64_t &estimated_finish_time);
   int diagnose_dag(
     const ObIDag &dag,
@@ -1288,7 +1291,7 @@ private:
   int schedule_dag_(ObIDag &dag, bool &move_dag_to_waiting_list);
   int pop_task_from_ready_list_(ObITask *&task);
   int rank_compaction_dags_();
-  int generate_next_dag_(ObIDag &dag);
+  int generate_next_dag_(ObIDag &dag, bool &need_retry);
   int finish_dag_(
     const ObIDag::ObDagStatus status,
     ObIDag *&dag,
@@ -1458,7 +1461,7 @@ public:
    * dag_net_map_rwlock_ read lock (from dag_net_sche_.export_dag_net_states).
    */
   int collect_compaction_dag_snapshot(compaction::ObCompactionDagSnapshot &snapshot);
-  int get_compaction_dag_count(int64_t dag_count);
+  int get_compaction_dag_count(int64_t &dag_count);
   void get_suggestion_reason(const int64_t priority, int64_t &reason);
 
   // 1. check ls compaction exist

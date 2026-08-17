@@ -465,34 +465,6 @@ int ObILSRestoreState::follower_fill_tablet_group_restore_arg_(
   return ret;
 }
 
-int ObILSRestoreState::notify_follower_restore_tablet_(const ObIArray<common::ObTabletID> &tablet_ids)
-{
-  int ret = OB_SUCCESS;
-  ObArray<ObStorageHASrcInfo> follower;
-  ObLSService *ls_service = nullptr;
-  ObStorageRpc *storage_rpc = nullptr;
-  obrpc::ObNotifyRestoreTabletsResp restore_resp;
-  if (OB_ISNULL(ls_service =  (MTL(ObLSService *)))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls service should not be NULL", K(ret), KP(ls_service));
-  } else if (OB_ISNULL(storage_rpc = ls_service->get_storage_rpc())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("storage_rpc should not be NULL", K(ret), KP(ls_service));
-  } else if (OB_FAIL(get_follower_server_(follower))) {
-    LOG_WARN("fail to get follower server", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < follower.count(); ++i) {
-      const ObStorageHASrcInfo &follower_info = follower.at(i);
-      if (OB_FAIL(storage_rpc->notify_restore_tablets(ls_restore_arg_->get_tenant_id(), follower_info, ls_->get_ls_id(),
-          proposal_id_, tablet_ids, ls_restore_status_, restore_resp))) {
-        LOG_WARN("fail to notify follower restore tablets", K(ret), K(follower_info), K(tablet_ids), KPC(ls_));
-      }
-    }
-  }
-
-  return ret;
-}
-
 int ObILSRestoreState::get_follower_server_(ObIArray<ObStorageHASrcInfo> &follower)
 {
   int ret = OB_SUCCESS;
@@ -899,21 +871,6 @@ int ObILSRestoreState::report_unfinished_tablet_cnt(const int64_t unfinished_tab
   return ret;
 }
 
-int ObILSRestoreState::add_finished_bytes(const int64_t bytes)
-{
-  int ret = OB_SUCCESS;
-  storage::ObLSRestoreHandler *ls_restore_handler = nullptr;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_FALSE_IT(ls_restore_handler = ls_->get_ls_restore_handler())) {
-  } else if (OB_FAIL(ls_restore_handler->restore_stat().add_finished_bytes(bytes))) {
-    LOG_WARN("failed to add finished bytes", K(ret), KPC_(ls), K(bytes));
-  }
-
-  return ret;
-}
-
 int ObILSRestoreState::report_unfinished_bytes(const int64_t bytes)
 {
   int ret = OB_SUCCESS;
@@ -997,18 +954,6 @@ int ObILSRestoreState::check_ls_leader_ready_(bool &is_ready)
         is_ready = 1 == count ? true : false;
       }
     }
-  }
-  return ret;
-}
-
-int ObILSRestoreState::advance_restore_status(const ObLSRestoreStatus &next_status)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("restore state not init", K(ret));
-  } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
-    LOG_WARN("fail to advance status", K(ret), KPC(ls_), K(next_status));
   }
   return ret;
 }

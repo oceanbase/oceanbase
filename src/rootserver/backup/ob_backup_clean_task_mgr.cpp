@@ -488,66 +488,6 @@ int ObBackupCleanTaskMgr::get_ls_ids_(ObIArray<ObLSID> &ls_ids)
   return ret;
 }
 
-int ObBackupCleanTaskMgr::parse_int_(const char *str, int64_t &val)
-{
-  int ret = OB_SUCCESS;
-  bool is_valid = true;
-  val = 0;
-  if (OB_ISNULL(str)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), KP(str));
-  } else {
-    char *p_end = NULL;
-    if ('\0' == str[0]) {
-      is_valid = false;
-    } else if (OB_FAIL(ob_strtoll(str, p_end, val))) {
-      LOG_WARN("failed to get value from string", K(ret), K(str));
-    } else if ('\0' == *p_end) {
-      is_valid = true;
-    } else {
-      is_valid = false;
-      LOG_WARN("set int error", K(str), K(is_valid));
-    }
-
-    if (!is_valid) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid int str", K(ret), K(str));
-    }
-  }
-
-  return ret;
-}
-
-int ObBackupCleanTaskMgr::parse_ls_id_(const char *dir_name, int64_t &id_val)
-{
-  int ret = OB_SUCCESS;
-  id_val = 0;
-  const char *LOGSTREAM = "logstream";
-  char *token = NULL;
-  char *saved_ptr = NULL;
-  char tmp_name[OB_MAX_URI_LENGTH] = { 0 };
-  if (OB_ISNULL(dir_name)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), KP(dir_name));
-  } else if (OB_FAIL(databuff_printf(tmp_name, sizeof(tmp_name), "%s", dir_name))) {
-    LOG_WARN("failed to set dir name", K(ret), KP(dir_name));
-  } else {
-    token = tmp_name;
-    for (char *str = token; OB_SUCC(ret); str = NULL) {
-      token = ::strtok_r(str, "_", &saved_ptr);
-      if (NULL == token) {
-        break;
-      } else if (0 == strncmp(LOGSTREAM, token, strlen(LOGSTREAM))) {
-        continue;
-      } else if (OB_FAIL(parse_int_(token, id_val))) {
-        LOG_WARN("invalid number", K(token), K(id_val)); 
-      }
-    }
-  }
-
-  return ret;
-}
-
 int ObBackupCleanTaskMgr::get_ls_ids_from_traverse_(const ObBackupPath &path, ObIArray<ObLSID> &ls_ids)
 {
   int ret = OB_SUCCESS;

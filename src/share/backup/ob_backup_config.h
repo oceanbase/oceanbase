@@ -168,7 +168,6 @@ public:
   virtual int check_before_update_inner_config(obrpc::ObSrvRpcProxy &rpc_proxy, common::ObISQLClient &trans) override;
 private:
   int check_doing_backup_(common::ObISQLClient &trans, bool &is_doing);
-  int check_backup_dest_has_been_used_(bool &is_used);
   int update_data_backup_dest_config_(common::ObISQLClient &trans);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDataBackupDestConfigParser);
@@ -188,7 +187,6 @@ protected:
   virtual int do_parse_sub_config_(const common::ObString &config_str);
   int do_parse_log_archive_dest_(const common::ObString &dest_type_str, const common::ObString &url);
   int do_parse_piece_switch_interval_(const common::ObString &name, const common::ObString &value);
-  int do_parse_compression_(const common::ObString &name, const common::ObString &value);
   int do_parse_log_archive_mode_(const common::ObString &name, const common::ObString &value);
   int update_archive_dest_config_(common::ObISQLClient &trans);
 protected:

@@ -86,28 +86,6 @@ private:
       const common::ObIArray<common::ObAddr> &addr_list, const common::ObArray<share::ObTransferTabletInfo> &tablet_list,
       bool &all_backfilled);
 
-  // wait until all ls replay scn satisfy
-  // @param[in]: tenant_id
-  // @param[in]: ls_id
-  // @param[in]: member_list
-  // @param[in]: tablet_list
-  // @param[in]: timeout_ctx
-  int wait_all_ls_replica_replay_scn_(const share::ObTransferTaskID &task_id, const uint64_t tenant_id,
-      const share::ObLSID &ls_id, const common::ObArray<common::ObAddr> &addr_list, const share::SCN &finish_scn,
-      ObTimeoutCtx &timeout_ctx, bool &check_passed);
-
-  // check ls replica match scn
-  // @param[in]: task_id
-  // @param[in]: tenant_id
-  // @param[in]: ls_id
-  // @param[in]: server addr
-  // @param[in]: dest_ls_scn
-  // @param[in]: current scn
-  // @param[in]: timeout_ctx
-  // @param[in/out]: finished_addr_list
-  int check_all_ls_replica_replay_scn_(const share::ObTransferTaskID &task_id, const uint64_t tenant_id,
-      const share::ObLSID &ls_id, const common::ObIArray<common::ObAddr> &total_addr_list, const share::SCN &finish_scn,
-      ObTimeoutCtx &timeout_ctx, common::ObIArray<common::ObAddr> &finished_addr_list);
 private:
   /* helper functions */
 
@@ -116,22 +94,6 @@ private:
   // @param[in]: ls_id
   // @param[out]: ls handle
   int get_ls_handle_(const uint64_t tenant_id, const share::ObLSID &ls_id, storage::ObLSHandle &ls_handle);
-
-  // get ls member list and learner list
-  // @param[in]: tenant_id
-  // @param[in]: ls_id
-  // @param[out]: member_list
-  // @param[out]: learner_list
-  int get_ls_member_and_learner_list_(const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObMemberList &member_list,
-      common::GlobalLearnerList &learner_list);
-
-  // check src ls and dest ls has same member list
-  // @param[in]: tenant_id
-  // @param[in]: src_ls_id
-  // @param[in]: dest_ls_id
-  // @param[out]: same member list
-  int check_same_member_list_(const uint64_t tenant_id, const share::ObLSID &src_ls_id, const share::ObLSID &dest_ls_id,
-      bool &same_member_list);
 
   // unlock ls member list and learner list
   // @param[in]: tenant_id

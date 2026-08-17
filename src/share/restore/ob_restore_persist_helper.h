@@ -163,59 +163,6 @@ struct ObLSRestoreJobPersistKey final : public ObIInnerTableKey
 };
 
 
-// Define log stream restore history table row structure.
-struct ObLSHisRestorePersistInfo final : public ObIInnerTableRow
-{
-  ObLSRestoreJobPersistKey key_;
-  SCN restore_scn_;
-  SCN start_replay_scn_;
-  SCN last_replay_scn_;
-  int64_t tablet_count_;
-  int64_t finish_tablet_count_;
-  int64_t total_bytes_;
-  int64_t finish_bytes_;
-  int result_;
-  ObTaskId trace_id_;
-  common::ObSqlString comment_;
-
-  ObLSHisRestorePersistInfo() {
-    restore_scn_ = share::SCN::min_scn();
-    start_replay_scn_ = share::SCN::min_scn();
-    last_replay_scn_ = share::SCN::min_scn();
-    tablet_count_ = 0;
-    finish_tablet_count_ = 0;
-    total_bytes_ = 0;
-    finish_bytes_ = 0;
-    result_ = OB_SUCCESS;
-  }
-
-  // Return if primary key valid.
-  bool is_pkey_valid() const override
-  {
-    return key_.is_pkey_valid();
-  }
-
-  // Fill primary key to dml.
-  int fill_pkey_dml(share::ObDMLSqlSplicer &dml) const override
-  {
-    return key_.fill_pkey_dml(dml);
-  }
-
-  // Return if both primary key and value are valid.
-  bool is_valid() const override;
-  
-  // Parse row from the sql result, the result has full columns.
-  int parse_from(common::sqlclient::ObMySQLResult &result) override;
-
-  // Fill primary key and value to dml.
-  int fill_dml(share::ObDMLSqlSplicer &dml) const override;
-
-  TO_STRING_KV(K_(key), K_(restore_scn), K_(start_replay_scn), 
-    K_(last_replay_scn), K_(tablet_count), K_(finish_tablet_count),
-    K_(total_bytes), K_(finish_bytes), K_(result), K_(trace_id));
-};
-
-
 // Define log stream restore progress table row structure.
 struct ObLSRestoreProgressPersistInfo final : public ObIInnerTableRow
 {
@@ -243,8 +190,6 @@ struct ObLSRestoreProgressPersistInfo final : public ObIInnerTableRow
     result_ = OB_SUCCESS;
   }
   int assign(const ObLSRestoreProgressPersistInfo &that);
-
-  int generate_his_progress(ObLSHisRestorePersistInfo &his) const;
   
   // Return if primary key valid.
   bool is_pkey_valid() const override
@@ -443,32 +388,6 @@ public:
   int insert_initial_ls_restore_progress(
       common::ObISQLClient &proxy, const ObLSRestoreProgressPersistInfo &persist_info) const;
 
-  int record_ls_his_restore_progress(
-    common::ObISQLClient &proxy, const ObLSHisRestorePersistInfo &persist_info) const;
-
-  int inc_need_restore_ls_count_by_one(
-      common::ObMySQLTransaction &trans, const ObLSRestoreJobPersistKey &ls_key, int result) const;
-      
-  // One log stream restore finish.
-  int inc_finished_ls_count_by_one(
-      common::ObMySQLTransaction &trans, const ObLSRestoreJobPersistKey &ls_key) const;
-
-  // One tablet restore finish. New info will be updated to both
-  // restore progress table and log stream restore progress table.
-  int inc_finished_tablet_count_by_one(
-      common::ObMySQLTransaction &trans, const ObLSRestoreJobPersistKey &ls_key) const;
-
-  // Some more major block bytes restore finished. New info will be updated to both
-  // restore progress table and log stream restore progress table.
-  int inc_finished_restored_block_bytes(
-      common::ObMySQLTransaction &trans, const ObLSRestoreJobPersistKey &ls_key, 
-      const int64_t inc_finished_bytes) const;
-
-  // Update log restore progress will be updated to log stream restore progress table.
-  int update_log_restore_progress(
-    common::ObISQLClient &proxy, const ObLSRestoreJobPersistKey &ls_key,
-    const SCN &last_replay_scn) const;
-
   int update_ls_restore_status(
       common::ObISQLClient &proxy, const ObLSRestoreJobPersistKey &ls_key,
       const share::ObTaskId &trace_id, const share::ObLSRestoreStatus &status,
@@ -488,13 +407,6 @@ public:
   int get_ls_total_tablet_cnt(
       common::ObISQLClient &proxy, const ObLSRestoreJobPersistKey &ls_key,
       int64_t &total_tablet_cnt) const;
-  int get_ls_finish_tablet_cnt(
-      common::ObISQLClient &proxy, const ObLSRestoreJobPersistKey &ls_key,
-      int64_t &finish_tablet_cnt) const;
-  int inc_total_tablet_count_by_one(
-      common::ObISQLClient &proxy, const ObLSRestoreJobPersistKey &ls_key) const;
-  int dec_total_tablet_count_by_one(
-      common::ObISQLClient &proxy, const ObLSRestoreJobPersistKey &ls_key) const;
   // The restore of one tablet is transfered from src ls to dest ls.
   int transfer_tablet(
     common::ObMySQLTransaction &trans, const ObLSRestoreJobPersistKey &src_ls_key,

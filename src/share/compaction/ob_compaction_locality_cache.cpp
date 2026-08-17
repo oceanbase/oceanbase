@@ -73,16 +73,17 @@ int ObCompactionLocalityCache::inner_refresh_ls_locality()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObStorageLocalityCache is not inited", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(ls_infos_map_.reuse())) {
-    LOG_WARN("fail to clear ls locality cache", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(get_zone_list_from_inner_table(zone_list))) {
     LOG_WARN("failed to get zone list", K(ret), K_(tenant_id));
   }
 
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(zone_list.empty())) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("zone list is empty, fail to refresh ls locality", KR(ret), K_(tenant_id));
     MTL(compaction::ObDiagnoseTabletMgr *)->add_diagnose_tablet(UNKNOW_LS_ID, UNKNOW_TABLET_ID, ObDiagnoseTabletType::TYPE_MEDIUM_MERGE);
+  } else if (OB_FAIL(ls_infos_map_.reuse())) {
+    LOG_WARN("fail to clear ls locality cache", KR(ret), K_(tenant_id));
   } else {
     ObArray<ObLSInfo> ls_infos;
     ls_infos.set_attr(ObMemAttr(tenant_id_, "RefLSInfos"));

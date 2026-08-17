@@ -512,43 +512,6 @@ int ObRecoverTableInitiator::fill_recover_table_arg_(
   return ret;
 }
 
-int ObRecoverTableInitiator::check_aux_tenant_restore_type_(const share::ObPhysicalRestoreJob &job)
-{
-  int ret = OB_SUCCESS;
-  /* 4.3.3 share noting mode support quick restore.
-   * 4.3.5 support mds table standby tenant read.
-   * tenant_compatible_ & backup_compatible has been check in fill physical restore job. */
-  const uint64_t source_data_version = job.get_source_data_version();
-  const ObBackupSetFileDesc::Compatible backup_compatible =
-    static_cast<ObBackupSetFileDesc::Compatible>(job.get_backup_compatible());
-  const bool is_allow_quick_restore = ObBackupSetFileDesc::is_allow_quick_restore(backup_compatible);
-  const bool is_allow_mds_standby_read = ObTransferUtils::enable_transfer_dml_ctrl(source_data_version);
-  const bool is_allow_quick_restore_aux_tenant = is_allow_quick_restore && is_allow_mds_standby_read;
-
-  if (job.get_restore_type().is_quick_restore() && !is_allow_quick_restore_aux_tenant) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("Quick restore of auxiliary tenant is not support when data_version < 4.3.5.0.", K(ret), K(backup_compatible),
-      K(is_allow_quick_restore), K(source_data_version), K(is_allow_mds_standby_read), K(is_allow_quick_restore_aux_tenant));
-    int tmp_ret = OB_SUCCESS;
-    ObFixedLengthString<DEFAULT_BUF_LENGTH> message_to_user;
-    ObFixedLengthString<OB_SERVER_VERSION_LENGTH> version_str;
-    if (OB_INVALID_INDEX ==
-      VersionUtil::print_version_str(version_str.ptr(), version_str.capacity(), source_data_version)) {
-      LOG_WARN("fail to print data_version str", K(source_data_version));
-    } else if (OB_TMP_FAIL(databuff_printf(message_to_user.ptr(), message_to_user.capacity(),
-      "Quick restore of auxiliary tenant when data_version(%.*s) < 4.3.5.0 is", version_str.size(), version_str.ptr()))) {
-      LOG_WARN("failed to databuff printf", K(tmp_ret));
-    } else {
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, message_to_user.ptr());
-    }
-  } else {
-    LOG_INFO("[RECOVER_TABLE] set restore type", "restore_type", job.get_restore_type(),
-      "progress_display_mode", job.get_progress_display_mode());
-  }
-
-  return ret;
-}
-
 int ObRecoverTableInitiator::check_specified_database_remap_table_target_(const share::ObImportTableArg &import_table_arg,
     const share::ObImportRemapArg &import_remap_arg, const uint64_t target_tenant_id)
 {

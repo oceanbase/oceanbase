@@ -434,15 +434,6 @@ int ObILSRestoreState::check_all_follower_restore_finish_(bool &finish)
   return OB_SUCCESS;
 }
 
-int ObLSRestoreSysTabletState::follower_fill_ls_restore_arg_(ObLSRestoreArg &arg)
-{
-  int ret = OB_SUCCESS;
-  arg.tenant_id_ = ls_restore_arg_->get_tenant_id();
-  arg.ls_id_ = ls_->get_ls_id();
-  arg.is_leader_ = false;
-  return ret;
-}
-
 int ObLSRestoreHandler::handle_execute_over(
     const share::ObTaskId &task_id,
     const ObIArray<common::ObTabletID> &restore_succeed_tablets,

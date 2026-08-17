@@ -167,53 +167,69 @@ int ObLSSortedIterator<ItemType>::iterate(
     Args&&... args)
 {
   int ret = OB_SUCCESS;
-  storage::ObLSHandle ls_handle;
   // TODO(chengkong): break loop when window compaction is stop
-  for (int64_t i = 0; i < items.count(); i++) { // ignore OB_FAIL to iterate all items
-    const ItemType &item = items.at(i);
-    const int64_t ls_id = LSIDExtractor::get_ls_id(item);
-    const int64_t tablet_id = TabletIDExtractor::get_tablet_id(item);
-    ObTabletHandle tablet_handle;
-    bool can_merge = false;
-    bool need_schedule = false;
-    if (func.get_ls_status().ls_id_.id() == ls_id) {
-      // do nothing, use old ls_handle
-    } else if (OB_FAIL(MTL(storage::ObLSService *)->get_ls(ObLSID(ls_id), ls_handle, storage::ObLSGetMod::COMPACT_MODE))) {
-      if (OB_LS_NOT_EXIST == ret) {
-        STORAGE_LOG(TRACE, "ls not exist, skip it", K(ret), K(ls_id));
+  for (int64_t group_begin = 0; group_begin < items.count();) {
+    const ItemType &first_item = items.at(group_begin);
+    const int64_t ls_id = LSIDExtractor::get_ls_id(first_item);
+    const int64_t first_tablet_id = TabletIDExtractor::get_tablet_id(first_item);
+    int64_t group_end = group_begin + 1;
+    while (group_end < items.count() && LSIDExtractor::get_ls_id(items.at(group_end)) == ls_id) {
+      ++group_end;
+    }
+
+    int tmp_ret = OB_SUCCESS;
+    storage::ObLSHandle ls_handle;
+    if (OB_TMP_FAIL(MTL(storage::ObLSService *)->get_ls(
+        ObLSID(ls_id), ls_handle, storage::ObLSGetMod::COMPACT_MODE))) {
+      if (OB_LS_NOT_EXIST == tmp_ret) {
+        STORAGE_LOG(TRACE, "ls not exist, skip it", K(tmp_ret), K(ls_id));
       } else {
-        STORAGE_LOG(WARN, "failed to get ls", K(ret), K(ls_id));
+        STORAGE_LOG(WARN, "failed to get ls", K(tmp_ret), K(ls_id));
       }
     } else if (OB_UNLIKELY(!ls_handle.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "ls handle is not valid", K(ret), K(ls_id));
-    } else if (OB_FAIL(func.switch_ls(ls_handle))) {
-      if (OB_STATE_NOT_MATCH != ret) {
-        STORAGE_LOG(WARN, "failed to switch ls", K(ret), K(ls_id));
+      tmp_ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "ls handle is not valid", K(tmp_ret), K(ls_id));
+    } else if (OB_TMP_FAIL(func.switch_ls(ls_handle))) {
+      if (OB_STATE_NOT_MATCH != tmp_ret) {
+        STORAGE_LOG(WARN, "failed to switch ls", K(tmp_ret), K(ls_id));
       } else {
-        STORAGE_LOG(WARN, "not support schedule medium for ls", K(ret), K(ls_id), K(tablet_id), K(func));
+        STORAGE_LOG(WARN, "not support schedule medium for ls", K(tmp_ret), K(ls_id), K(first_tablet_id), K(func));
       }
     } else if (func.is_window_compaction_func() && !func.is_window_compaction_active()) {
-      STORAGE_LOG(INFO, "window compaction is not active, skip iterate", K(ret), K(ls_id), K(tablet_id), K(func));
+      STORAGE_LOG(INFO, "window compaction is not active, skip iterate", K(tmp_ret), K(ls_id), K(first_tablet_id), K(func));
       break;
     }
 
-    // In window compaction, candidate in ready list should be removed if it's not leader, so don't need to skip follower
-    if (OB_FAIL(ret)) {
-    } else if (!func.get_ls_status().is_leader_ && skip_follower) {
-      // not leader, can't schedule
-      STORAGE_LOG(TRACE, "not ls leader, can't schedule medium", K(ret), K(ls_id), K(tablet_id), K(func));
-    } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_tablet(
-                 ObTabletID(tablet_id), tablet_handle, 0 /*timeout_us*/))) {
-      STORAGE_LOG(WARN, "get tablet failed", K(ret), K(ls_id), K(tablet_id));
-    } else if (OB_FAIL(func.iterate_switch_tablet(tablet_handle, can_merge, need_schedule))) {
-      STORAGE_LOG(WARN, "failed to switch tablet", K(ret), K(ls_id), K(tablet_id));
-    } else if ((!can_merge && skip_follower) || !need_schedule) {
-    } else if (OB_FAIL(processor(func, item, tablet_handle, std::forward<Args>(args)...))) {
-      // ATTENTION:don't print item here, since it may be a pointer and be freed when process
-      STORAGE_LOG(WARN, "failed to process item", K(ret), K(ls_id), K(tablet_id));
+    const int ls_ret = tmp_ret;
+    for (int64_t i = group_begin; i < group_end; ++i) {
+      tmp_ret = ls_ret;
+      const ItemType &item = items.at(i);
+      const int64_t tablet_id = TabletIDExtractor::get_tablet_id(item);
+      ObTabletHandle tablet_handle;
+      bool can_merge = false;
+      bool need_schedule = false;
+
+      // In window compaction, candidate in ready list should be removed if it's not leader, so don't need to skip follower
+      if (OB_SUCCESS != tmp_ret) {
+      } else if (!func.get_ls_status().is_leader_ && skip_follower) {
+        // not leader, can't schedule
+        STORAGE_LOG(TRACE, "not ls leader, can't schedule medium", K(tmp_ret), K(ls_id), K(tablet_id), K(func));
+      } else if (OB_TMP_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_tablet(
+                   ObTabletID(tablet_id), tablet_handle, 0 /*timeout_us*/))) {
+        STORAGE_LOG(WARN, "get tablet failed", K(tmp_ret), K(ls_id), K(tablet_id));
+      } else if (OB_TMP_FAIL(func.iterate_switch_tablet(tablet_handle, can_merge, need_schedule))) {
+        STORAGE_LOG(WARN, "failed to switch tablet", K(tmp_ret), K(ls_id), K(tablet_id));
+      } else if ((!can_merge && skip_follower) || !need_schedule) {
+      } else if (OB_TMP_FAIL(processor(func, item, tablet_handle, std::forward<Args>(args)...))) {
+        // ATTENTION:don't print item here, since it may be a pointer and be freed when process
+        STORAGE_LOG(WARN, "failed to process item", K(tmp_ret), K(ls_id), K(tablet_id));
+      }
+      (void) func.destroy_tablet_status();
+      if (OB_SUCC(ret) && OB_SUCCESS != tmp_ret) {
+        ret = tmp_ret;
+      }
     }
-    (void) func.destroy_tablet_status();
+    group_begin = group_end;
   }
   return ret;
 }

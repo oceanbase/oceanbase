@@ -157,33 +157,7 @@ private:
       const ObTabletHandle &tablet_handle,
       bool &discard) const;
 
-  // Discard restore the uncommitted tablet created by transfer in,
-  // while the log has been recovered.
-  int check_need_discard_transfer_tablet_(
-      const ObTabletHandle &tablet_handle,
-      bool &discard) const;
-
-  // check tablet status is DELETED or TRANSFER_OUT_DELETED.
-  int check_tablet_is_deleted_(
-    const ObTabletHandle &tablet_handle,
-    bool &is_deleted) const;
-
-  // At phase QUICK_RESTORE, for tablets created by transfer, the initial status
-  // is FULL. Its next status may be EMPTY if source tablet is UNDEFINED. Therefore,
-  // the transfer table can only be restored from backup, rather than be replaced by
-  // the table from source tablet. That is to say, for FULL tablet with transfer
-  // table, there are two ways to replace it with actual table. One is from source tablet,
-  // the other is from backup. We should ensure which way to use. So, when we find a FULL
-  // tablet with transfer table during reload, the transfer table is first considered to be
-  // replaced by table from backup. But can only be schedulered to restore before turn into EMPTY.
-
-  // If the transfer in commit scn is smaller than the specified restore scn, the transfer table of
-  // the tablet is no need to be replaced during QUICK_RESTORE.
-  int check_need_discard_uncommit_transfer_tablet_(
-      bool &discard) const;
   bool is_follower_() const;
-  ObTabletRestoreAction::ACTION get_common_restore_action_(
-      const share::ObLSRestoreStatus &ls_restore_status) const;
 
   int reload_tablets_();
   int handle_task_finish_(

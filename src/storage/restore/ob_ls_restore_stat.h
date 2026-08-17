@@ -37,9 +37,6 @@ public:
   int load_restore_stat();
   int get_finished_tablet_cnt(int64_t &finished_tablet_cnt) const;
   int set_total_bytes(const int64_t bytes);
-  int increase_total_bytes_by(const int64_t bytes);
-  int decrease_total_bytes_by(const int64_t bytes);
-  int add_finished_bytes(const int64_t bytes);
   int report_unfinished_bytes(const int64_t bytes);
   void reset();
 
@@ -54,7 +51,6 @@ private:
   int do_report_finished_tablet_cnt_(const int64_t finished_tablet_cnt);
   int do_report_finished_bytes_(const int64_t finished_bytes);
   int64_t get_finished_tablet_cnt_() const;
-  int64_t get_finished_bytes() const;
 
 private:
   bool is_inited_;

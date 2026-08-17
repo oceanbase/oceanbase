@@ -25,7 +25,6 @@ ERRSIM_POINT_DEF(EN_DOING_UNLOCK_TRANSFER_MEMBER_LIST_FAILED);
 ERRSIM_POINT_DEF(EN_DOING_LOCK_TRANSFER_TASK_FAILED);
 ERRSIM_POINT_DEF(EN_DOING_LOCK_MEMBER_LIST_FAILED);
 ERRSIM_POINT_DEF(EN_FINISH_TRANSFER_IN_FAILED);
-ERRSIM_POINT_DEF(EN_DOING_WAIT_ALL_DEST_TABLET_NORAML);
 ERRSIM_POINT_DEF(EN_FINISH_TRANSFER_OUT_FAILED);
 ERRSIM_POINT_DEF(EN_DOING_UPDATE_TRANSFER_TASK_FAILED);
 ERRSIM_POINT_DEF(EN_DOING_COMMIT_TRANS_FAILED);
@@ -103,7 +102,6 @@ int ObTxFinishTransfer::do_tx_transfer_doing_(const ObTransferTaskID &task_id, c
   obrpc::ObSrvRpcProxy *svr_rpc_proxy = GCTX.srv_rpc_proxy_;
   int64_t result = OB_SUCCESS;
   common::ObArray<common::ObAddr> addr_list;
-  bool majority_backfilled = false;
   ObLSLocation ls_location;
   bool is_leader = false;
   bool is_ready = false;
@@ -112,7 +110,6 @@ int ObTxFinishTransfer::do_tx_transfer_doing_(const ObTransferTaskID &task_id, c
   ObLSHandle ls_handle;
   ObDisplayTabletList table_lock_tablet_list;
   transaction::tablelock::ObTableLockOwnerID lock_owner_id;
-  ObTimeoutCtx timeout_ctx;
   round_ = round;
   diag_.reset();
   diag_.set_cost_item(ObStorageHACostItemName::TRANSFER_FINISH_BEGIN);
@@ -341,7 +338,6 @@ int ObTxFinishTransfer::unlock_src_and_dest_ls_member_and_learner_list_(const ui
   int ret = OB_SUCCESS;
   const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L;
   const int64_t lock_timeout = CONFIG_CHANGE_TIMEOUT;
-  bool same_member_list = true;
   const ObTransferLockStatus start_status(ObTransferLockStatus::START);
   const ObTransferLockStatus doing_status(ObTransferLockStatus::DOING);
   if (!src_ls_id.is_valid() || !dest_ls_id.is_valid()) {
@@ -412,7 +408,6 @@ int ObTxFinishTransfer::wait_transfer_tablet_status_normal_(
     share::SCN &finish_scn)
 {
   int ret = OB_SUCCESS;
-  int64_t begin_us = ObTimeUtility::current_time();
   const int64_t CHECK_TABLET_STATUS_INTERVAL = 100_ms;
   if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || tablet_list.empty() || !start_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -459,7 +454,6 @@ int ObTxFinishTransfer::check_transfer_tablet_status_normal_(
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_list.count(); ++i) {
       ObTabletHandle tablet_handle;
-      ObTablet *tablet = NULL;
       ObTabletCreateDeleteMdsUserData user_data;
       const ObTransferTabletInfo &tablet_info = tablet_list.at(i);
       const common::ObTabletID &tablet_id = tablet_info.tablet_id_;
@@ -502,7 +496,6 @@ int ObTxFinishTransfer::check_ls_logical_table_replaced(const uint64_t tenant_id
     const common::ObArray<ObTransferTabletInfo> &tablet_list, bool &all_backfilled)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   bool is_leader = false;
   if (OB_FAIL(check_self_ls_leader_(dest_ls_id, is_leader))) {
     LOG_WARN("failed to check self ls leader", K(ret), K(dest_ls_id));
@@ -558,8 +551,6 @@ int ObTxFinishTransfer::do_tx_finish_transfer_in_(const ObTransferTaskID &task_i
     const common::ObArray<ObTransferTabletInfo> &tablet_list, observer::ObInnerSQLConnection *conn)
 {
   int ret = OB_SUCCESS;
-  bool force_flush_redo = true;
-  bool is_leader = false;
   char *buf = NULL;
   int64_t buf_len = 0;
   const transaction::ObTxDataSourceType type = transaction::ObTxDataSourceType::FINISH_TRANSFER_IN;
@@ -606,8 +597,6 @@ int ObTxFinishTransfer::do_tx_finish_transfer_out_(const ObTransferTaskID &task_
     const common::ObArray<ObTransferTabletInfo> &tablet_list, observer::ObInnerSQLConnection *conn)
 {
   int ret = OB_SUCCESS;
-  bool force_flush_redo = true;
-  bool is_leader = false;
   char *buf = NULL;
   int64_t buf_len = 0;
   const transaction::ObTxDataSourceType type = transaction::ObTxDataSourceType::FINISH_TRANSFER_OUT;
@@ -652,66 +641,6 @@ int ObTxFinishTransfer::do_tx_finish_transfer_out_(const ObTransferTaskID &task_
   return ret;
 }
 
-int ObTxFinishTransfer::wait_all_ls_replica_replay_scn_(const ObTransferTaskID &task_id, const uint64_t tenant_id,
-    const share::ObLSID &ls_id, const common::ObArray<common::ObAddr> &addr_list, const share::SCN &finish_scn,
-    ObTimeoutCtx &timeout_ctx, bool &check_passed)
-{
-  int ret = OB_SUCCESS;
-  common::ObArray<common::ObAddr> finished_addr_list;
-
-  while (OB_SUCC(ret)) {
-    check_passed = false;
-    if (timeout_ctx.is_timeouted()) {
-      ret = OB_TIMEOUT;
-      LOG_WARN("some ls replay not finished", K(ret), K(tenant_id), K(ls_id));
-    } else if (OB_FAIL(check_all_ls_replica_replay_scn_(
-            task_id, tenant_id, ls_id, addr_list, finish_scn, timeout_ctx, finished_addr_list))) {
-      LOG_WARN("failed to check all ls replica replay scn",
-          K(ret),
-          K(tenant_id),
-          K(addr_list),
-          K(ls_id));
-    } else if (finished_addr_list.count() == addr_list.count()) {
-      check_passed = true;
-      LOG_INFO("all ls has passed ls replica replay scn", K(tenant_id), K(ls_id));
-      break;
-    } else {
-      ob_usleep(DEFAULT_WAIT_INTERVAL_US);
-    }
-  }
-
-#ifdef ERRSIM
-    if (OB_SUCC(ret)) {
-      ret = EN_DOING_WAIT_ALL_DEST_TABLET_NORAML ? : OB_SUCCESS;
-      if (OB_FAIL(ret)) {
-        STORAGE_LOG(ERROR, "fake EN_DOING_WAIT_ALL_DEST_TABLET_NORAML", K(ret));
-      }
-    }
-#endif
-
-  DEBUG_SYNC(AFTER_DOING_TRANSFER_WAIT_REPLAY_SCN);
-  diag_.update_cost_item(ret, ObStorageHACostItemName::WAIT_ALL_LS_REPLICA_REPLAY_FINISH_SCN);
-  return ret;
-}
-
-int ObTxFinishTransfer::check_all_ls_replica_replay_scn_(const ObTransferTaskID &task_id, const uint64_t tenant_id,
-    const share::ObLSID &ls_id, const common::ObIArray<common::ObAddr> &total_addr_list, const share::SCN &finish_scn,
-    ObTimeoutCtx &timeout_ctx, common::ObIArray<common::ObAddr> &finished_addr_list)
-{
-  int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  int64_t cur_quorum = 0;
-  common::ObArray<ObAddr> member_addr_list;
-  const int32_t group_id = share::OBCG_STORAGE;
-  if (OB_FAIL(ObTransferUtils::get_need_check_member(total_addr_list, finished_addr_list, member_addr_list))) {
-    LOG_WARN("failed to get need check member", K(ret), K(task_id), K(tenant_id), K(ls_id));
-  } else if (OB_FAIL(ObTransferUtils::check_ls_replay_scn(
-      tenant_id, ls_id, finish_scn, group_id, member_addr_list, timeout_ctx, finished_addr_list))) {
-    LOG_WARN("failed to check ls replay scn", K(ret), K(total_addr_list), K(finish_scn));
-  }
-  return ret;
-}
-
 int ObTxFinishTransfer::get_ls_handle_(
     const uint64_t tenant_id, const share::ObLSID &ls_id, storage::ObLSHandle &ls_handle)
 {
@@ -727,47 +656,6 @@ int ObTxFinishTransfer::get_ls_handle_(
   } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(tenant_id), K(ls_id));
   }
-  return ret;
-}
-
-int ObTxFinishTransfer::get_ls_member_and_learner_list_(
-    const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObMemberList &member_list, common::GlobalLearnerList &learner_list)
-{
-  int ret = OB_SUCCESS;
-  storage::ObLS *ls = NULL;
-  storage::ObLSHandle ls_handle;
-  int64_t quorum = 0;
-  bool is_leader = false;
-  if (OB_FAIL(get_ls_handle_(tenant_id, ls_id, ls_handle))) {
-    LOG_WARN("failed to get ls", K(ret), K(tenant_id), K(ls_id));
-  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("log stream not exist", K(ret), K(ls_id));
-  } else if (OB_FAIL(check_self_ls_leader_(ls_id, is_leader))) {
-    LOG_WARN("failed to check self ls leader", K(ret), K(ls_id));
-  } else if (!is_leader) {
-    ret = OB_IS_CHANGING_LEADER;
-    LOG_WARN("self is not leader", K(ret), K(ls_id));
-  } else if (OB_FAIL(ls->get_paxos_member_list_and_learner_list(member_list, quorum, learner_list, true/*filter_logonly_replica*/))) {
-    LOG_WARN("failed to get paxos member list and learner list", K(ret));
-  } else if (OB_FAIL(check_self_ls_leader_(ls_id, is_leader))) {
-    LOG_WARN("failed to check self ls leader", K(ret), K(ls_id));
-  } else if (!is_leader) {
-    ret = OB_IS_CHANGING_LEADER;
-    LOG_WARN("self is not leader", K(ret), K(ls_id));
-  } else {
-    LOG_INFO("get ls member list", K(tenant_id), K(ls_id), K(member_list), K(learner_list));
-  }
-  return ret;
-}
-
-// TODO(yangyi.yyy): impl later
-// extract common function later
-int ObTxFinishTransfer::check_same_member_list_(
-    const uint64_t tenant_id, const share::ObLSID &src_ls_id, const share::ObLSID &dest_ls_id, bool &same_member_list)
-{
-  int ret = OB_SUCCESS;
-  UNUSEDx(tenant_id, src_ls_id, dest_ls_id, same_member_list);
   return ret;
 }
 

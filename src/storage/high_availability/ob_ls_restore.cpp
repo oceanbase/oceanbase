@@ -1690,7 +1690,8 @@ ObTabletGroupMetaRestoreDag::ObTabletGroupMetaRestoreDag()
   : ObLSRestoreDag(ObDagType::DAG_TYPE_TABLET_GROUP_META_RESTORE),
     is_inited_(false),
     tablet_id_array_(),
-    finish_dag_(nullptr)
+    finish_dag_(nullptr),
+    next_item_()
 {
 }
 
@@ -1811,7 +1812,7 @@ int ObTabletGroupMetaRestoreDag::generate_next_dag(share::ObIDag *&dag)
   ObTabletGroupMetaRestoreDag *tablet_group_meta_restore_dag = nullptr;
   bool need_set_failed_result = true;
   ObLSRestoreCtx *ctx = nullptr;
-  ObHATabletGroupCtx *tablet_group_ctx = nullptr;
+  ObHATabletGroupCtx *&tablet_group_ctx = next_item_.value();
   ObArray<ObLogicTabletID> tablet_id_array;
   ObDagId dag_id;
 
@@ -1826,13 +1827,17 @@ int ObTabletGroupMetaRestoreDag::generate_next_dag(share::ObIDag *&dag)
       LOG_WARN("failed to get result", K(tmp_ret), KPC(ctx));
       ret = tmp_ret;
     }
-  } else if (OB_FAIL(ctx->tablet_group_mgr_.get_next_tablet_group_ctx(tablet_group_ctx))) {
+  } else if (OB_FAIL(next_item_.get_or_fetch(
+      ctx->tablet_group_mgr_, &ObHATabletGroupMgr::get_next_tablet_group_ctx))) {
     if (OB_ITER_END == ret) {
       //do nothing
       need_set_failed_result = false;
     } else {
       LOG_WARN("failed to get group ctx", K(ret), KPC(ctx));
     }
+  } else if (OB_ISNULL(tablet_group_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("next tablet group ctx should not be NULL", K(ret), KPC(ctx));
   } else if (FALSE_IT(dag_id.init(MYADDR))) {
   } else if (OB_FAIL(tablet_group_ctx->get_all_tablet_ids(tablet_id_array))) {
     LOG_WARN("failed to get all tablet ids", K(ret), KPC(ctx));

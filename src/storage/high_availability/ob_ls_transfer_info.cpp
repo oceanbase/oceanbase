@@ -131,7 +131,6 @@ int ObLSTransferMetaInfo::set_transfer_info(
     const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
-  bool can_change = false;
   const bool skip_check_trans_status = src_scn > src_scn_ ? true : false;
 
   if (!src_ls.is_valid() || !src_scn.is_valid() || !ObTransferInTransStatus::is_valid(trans_status) || 0 == data_version) {
@@ -153,7 +152,6 @@ int ObLSTransferMetaInfo::set_transfer_info(
 int ObLSTransferMetaInfo::cleanup_transfer_info()
 {
   int ret = OB_SUCCESS;
-  bool can_change = false;
   const ObTransferInTransStatus::STATUS trans_status = ObTransferInTransStatus::NONE;
   const bool skip_check_trans_status = false;
 
@@ -362,7 +360,6 @@ int64_t ObLSTransferMetaInfo::to_string(char *buf, const int64_t buf_len) const
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
-  int64_t save_pos = 0;
   if (OB_ISNULL(buf) || buf_len <= 0) {
       // do nothing
   } else {

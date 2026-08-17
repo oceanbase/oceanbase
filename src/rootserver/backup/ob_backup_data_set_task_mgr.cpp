@@ -168,49 +168,6 @@ int ObBackupSetTaskMgr::check_disk_full_timeout_()
   return ret;
 }
 
-ERRSIM_POINT_DEF(EN_BACKUP_SSLOG_TABLE_SIZE_EXCEEDED);
-int ObBackupSetTaskMgr::check_and_handle_sslog_table_size_(const ObBackupStatus::Status &status)
-{
-  int ret = OB_SUCCESS;
-#ifdef OB_BUILD_SHARED_STORAGE
-  if (ObBackupStatus::Status::FAILED == status
-      || ObBackupStatus::Status::CANCELED == status
-      || ObBackupStatus::Status::CANCELING == status) {
-    // No need to check in terminal or canceling status
-  } else if (GCTX.is_shared_storage_mode()) {
-    bool is_exceeded = false;
-#ifdef ERRSIM
-    if (OB_FAIL(EN_BACKUP_SSLOG_TABLE_SIZE_EXCEEDED)) {
-      is_exceeded = true;
-      ret = OB_SUCCESS;
-      LOG_INFO("[DATA_BACKUP]errsim: force sslog table size exceeded", K(status), K(set_task_attr_));
-    }
-#endif
-    if (OB_SUCC(ret) && !is_exceeded) {
-      storage::ObSSGarbageCollectorService *gc_service = nullptr;
-      if (OB_ISNULL(gc_service = MTL(storage::ObSSGarbageCollectorService *))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ObSSGarbageCollectorService should not be null", K(ret), K_(meta_tenant_id));
-      } else if (OB_FAIL(gc_service->sslog_table_size_exceeded(is_exceeded))) {
-        LOG_WARN("failed to check sslog table size", K(ret));
-      }
-    }
-    if (OB_SUCC(ret) && is_exceeded) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(do_enable_ss_gc_())) {
-        LOG_ERROR("[DATA_BACKUP]failed to enable ss gc when sslog table size exceeded",
-                  K(tmp_ret), K(status), K(set_task_attr_));
-      }
-      ret = OB_BACKUP_SSLOG_TABLE_SIZE_EXCEEDED;
-      LOG_ERROR("[DATA_BACKUP]sslog table size exceeded during backup, "
-                "backup must fail to allow gc to reclaim space",
-                K(ret), K(status), K(set_task_attr_));
-    }
-  }
-#endif
-  return ret;
-}
-
 int ObBackupSetTaskMgr::process()
 {
   int ret = OB_SUCCESS;
@@ -810,25 +767,6 @@ int ObBackupSetTaskMgr::change_meta_turn_(const share::ObBackupLSTaskAttr &sys_l
     if (OB_SUCC(ret)) {
       LOG_INFO("change meta turn", K(ret), K(next_meta_turn_id), KPC(job_attr_));
       backup_service_->wakeup();
-    }
-  }
-  return ret;
-}
-
-int ObBackupSetTaskMgr::get_backup_user_meta_task_(ObIArray<share::ObBackupLSTaskAttr> &ls_task)
-{
-  int ret = OB_SUCCESS;
-  ObArray<share::ObBackupLSTaskAttr> tmp_ls_task;
-  if (OB_FAIL(ObBackupLSTaskOperator::get_ls_tasks(*sql_proxy_, job_attr_->job_id_, job_attr_->tenant_id_, false/*update*/, tmp_ls_task))) {
-    LOG_WARN("[DATA_BACKUP]failed to get log stream tasks", K(ret), "job_id", job_attr_->job_id_, "tenant_id", job_attr_->tenant_id_);
-  } else {
-    ARRAY_FOREACH(tmp_ls_task, i) {
-      const ObBackupLSTaskAttr &task = tmp_ls_task.at(i);
-      if (task.task_type_.is_backup_meta()) {
-        if (OB_FAIL(ls_task.push_back(task))) {
-          LOG_WARN("failed to push back", K(ret), K(task));
-        }
-      }
     }
   }
   return ret;

@@ -9,6 +9,8 @@
 #define private public
 
 #include "src/storage/ob_i_store.h"
+#include "storage/compaction/ob_compaction_schedule_iterator.h"
+#include "storage/compaction/ob_partition_merge_iter.h"
 #include "mtlenv/mock_tenant_module_env.h"
 namespace oceanbase
 {
@@ -208,6 +210,19 @@ public:
     const int64_t error_tablet_idx = -1,
     const int input_errno = OB_SUCCESS);
 };
+
+TEST_F(TestCompactionIter, test_macro_merge_iter_propagates_error)
+{
+  ObArenaAllocator allocator("MacroMergeIter");
+  compaction::ObPartitionMacroMergeIter iter(allocator);
+  const blocksstable::ObMacroBlockDesc *macro_desc = nullptr;
+  const blocksstable::ObMicroBlockData *micro_block_data = nullptr;
+
+  iter.is_small_sstable_iter_ = true;
+  ASSERT_EQ(OB_ERR_UNEXPECTED, iter.get_curr_macro_block(macro_desc, micro_block_data));
+  ASSERT_EQ(nullptr, macro_desc);
+  ASSERT_EQ(nullptr, micro_block_data);
+}
 
 void TestCompactionIter::test_iter(
   const int64_t ls_cnt,

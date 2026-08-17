@@ -164,12 +164,9 @@ public:
       const ObITable::TableKey &table_key, const ObBackupMacroBlockIDPair &id_pair);
   int mark_item_finished(const share::ObBackupDataType &backup_data_type, const ObBackupProviderItem &item,
       const ObBackupDeviceMacroBlockId &physical_id);
-  int add_finished_tablet_meta_count(const common::ObTabletID &tablet_id);
   int add_opened_rebuilder_count(const common::ObTabletID &tablet_id);
   int add_closed_rebuilder_count(const common::ObTabletID &tablet_id);
-  int check_can_release_tablet(const common::ObTabletID &tablet_id, bool &can_release, bool &already_released);
   int get_tablet_stat(const common::ObTabletID &tablet_id, ObBackupTabletCtx *&ctx);
-  int free_tablet_stat(const common::ObTabletID &tablet_id);
   // Try to free tablet stat if it can be released.
   // Returns:
   //   - succ_freed: true if tablet stat was freed successfully in this call

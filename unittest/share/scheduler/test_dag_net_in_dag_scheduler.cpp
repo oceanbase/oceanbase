@@ -848,6 +848,25 @@ int ObFatherFinishTask::process()
   return OB_SUCCESS;
 }
 
+TEST_F(TestDagScheduler, test_update_status_in_dag_net_propagates_error)
+{
+  ObArenaAllocator allocator;
+  ObFatherDagNet dag_net;
+  ObBasicDag dag;
+  bool dag_net_finished = false;
+
+  ASSERT_EQ(OB_SUCCESS, dag_net.basic_init(allocator));
+  ASSERT_EQ(OB_SUCCESS, dag_net.add_dag_into_dag_net(dag));
+  ASSERT_EQ(OB_SUCCESS, dag_net.erase_dag_from_dag_net(dag));
+
+  // Simulate an inconsistent DAG Net reference: the DAG still points to the
+  // DAG Net, while its record is already absent from the DAG Net map.
+  dag.dag_net_ = &dag_net;
+  EXPECT_EQ(OB_HASH_NOT_EXIST, dag.update_status_in_dag_net(dag_net_finished));
+  EXPECT_FALSE(dag_net_finished);
+  dag.dag_net_ = nullptr;
+}
+
 TEST_F(TestDagScheduler, test_basic_dag_net)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
@@ -1360,6 +1379,207 @@ private:
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObStartGenerateNextDag);
 };
+
+struct ObGenerateNextRetryCtx
+{
+  ObGenerateNextRetryCtx()
+    : generate_count_(0),
+      cached_item_(-1),
+      first_generated_item_(-1),
+      second_generated_item_(-1),
+      size_overflow_injected_(false)
+  {}
+
+  int64_t generate_count_;
+  int64_t cached_item_;
+  int64_t first_generated_item_;
+  int64_t second_generated_item_;
+  bool size_overflow_injected_;
+};
+
+class ObGenerateNextRetryDag : public ObIDag
+{
+public:
+  ObGenerateNextRetryDag()
+    : ObIDag(ObDagType::DAG_TYPE_UNIQUE_CHECKING),
+      id_(-1),
+      need_generate_next_(false),
+      ctx_(nullptr)
+  {}
+
+  int init(
+      const int64_t id,
+      const bool need_generate_next,
+      ObGenerateNextRetryCtx *ctx)
+  {
+    int ret = OB_SUCCESS;
+    if (id < 0 || OB_ISNULL(ctx)) {
+      ret = OB_INVALID_ARGUMENT;
+    } else {
+      id_ = id;
+      need_generate_next_ = need_generate_next;
+      ctx_ = ctx;
+    }
+    return ret;
+  }
+
+  virtual uint64_t hash() const override
+  {
+    return murmurhash(&id_, sizeof(id_), 0);
+  }
+
+  virtual bool operator ==(const ObIDag &other) const override
+  {
+    bool is_same = false;
+    if (get_type() == other.get_type()) {
+      const ObGenerateNextRetryDag &other_dag =
+          static_cast<const ObGenerateNextRetryDag &>(other);
+      is_same = id_ == other_dag.id_;
+    }
+    return is_same;
+  }
+
+  virtual int fill_dag_key(char *buf, const int64_t buf_len) const override
+  {
+    return databuff_printf(buf, buf_len, "ObGenerateNextRetryDag: id = %ld", id_);
+  }
+
+  virtual int fill_info_param(
+      compaction::ObIBasicInfoParam *&out_param,
+      ObIAllocator &allocator) const override
+  {
+    return ADD_DAG_WARN_INFO_PARAM(
+        out_param, allocator, get_type(), id_, id_ + 1);
+  }
+
+  virtual lib::Worker::CompatMode get_compat_mode() const override
+  {
+    return lib::Worker::CompatMode::MYSQL;
+  }
+
+  virtual uint64_t get_consumer_group_id() const override
+  {
+    return 0;
+  }
+
+  virtual int create_first_task() override
+  {
+    int ret = OB_SUCCESS;
+    ObFakeTask *task = nullptr;
+    if (NEXT_DAG_ID == id_
+        && OB_NOT_NULL(ctx_)
+        && !ctx_->size_overflow_injected_) {
+      ctx_->size_overflow_injected_ = true;
+      ret = OB_SIZE_OVERFLOW;
+    } else if (OB_FAIL(alloc_task(task))) {
+      COMMON_LOG(WARN, "failed to alloc retry test task", K(ret));
+    } else if (OB_FAIL(add_task(*task))) {
+      COMMON_LOG(WARN, "failed to add retry test task", K(ret));
+    }
+    return ret;
+  }
+
+  virtual int generate_next_dag(share::ObIDag *&dag) override
+  {
+    int ret = OB_SUCCESS;
+    ObTenantDagScheduler *scheduler = nullptr;
+    ObGenerateNextRetryDag *next_dag = nullptr;
+    dag = nullptr;
+
+    if (!need_generate_next_) {
+      ret = OB_ITER_END;
+    } else if (OB_ISNULL(ctx_)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      if (ctx_->cached_item_ < 0) {
+        ctx_->cached_item_ = NEXT_ITEM;
+      }
+      ++ctx_->generate_count_;
+      if (1 == ctx_->generate_count_) {
+        ctx_->first_generated_item_ = ctx_->cached_item_;
+      } else if (2 == ctx_->generate_count_) {
+        ctx_->second_generated_item_ = ctx_->cached_item_;
+      }
+
+      if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
+        ret = OB_ERR_UNEXPECTED;
+      } else if (OB_FAIL(scheduler->alloc_dag(next_dag))) {
+        COMMON_LOG(WARN, "failed to alloc generated retry test dag", K(ret));
+      } else if (OB_FAIL(next_dag->init(NEXT_DAG_ID, false, ctx_))) {
+        COMMON_LOG(WARN, "failed to init generated retry test dag", K(ret));
+      } else {
+        dag = next_dag;
+        next_dag = nullptr;
+      }
+    }
+
+    if (OB_NOT_NULL(next_dag)) {
+      scheduler->free_dag(*next_dag);
+    }
+    return ret;
+  }
+
+  enum : int64_t {
+    SOURCE_DAG_ID = 100,
+    NEXT_DAG_ID = 101,
+    NEXT_ITEM = 42
+  };
+
+private:
+  int64_t id_;
+  bool need_generate_next_;
+  ObGenerateNextRetryCtx *ctx_;
+  DISALLOW_COPY_AND_ASSIGN(ObGenerateNextRetryDag);
+};
+
+TEST_F(TestDagScheduler, generate_next_dag_retry_keeps_source_ready)
+{
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
+  ASSERT_TRUE(nullptr != scheduler);
+  scheduler->stop();
+
+  ObGenerateNextRetryCtx ctx;
+  ObGenerateNextRetryDag *source_dag = nullptr;
+  ASSERT_EQ(OB_SUCCESS, scheduler->alloc_dag(source_dag));
+  ASSERT_EQ(OB_SUCCESS, source_dag->init(
+      ObGenerateNextRetryDag::SOURCE_DAG_ID, true, &ctx));
+  ASSERT_EQ(OB_SUCCESS, source_dag->create_first_task());
+  ASSERT_EQ(OB_SUCCESS, scheduler->add_dag(source_dag));
+
+  ObDagPrioScheduler &prio_scheduler =
+      scheduler->prio_sche_[source_dag->get_priority()];
+  ObITask *task = nullptr;
+  {
+    common::SpinWLockGuard guard(prio_scheduler.prio_rwlock_);
+    // Fail once after generate_next_dag() has consumed its item, but before
+    // the generated DAG is registered in the scheduler.
+    EXPECT_EQ(OB_ENTRY_NOT_EXIST,
+        prio_scheduler.pop_task_from_ready_list_(task));
+    EXPECT_EQ(nullptr, task);
+    EXPECT_EQ(ObIDag::DAG_STATUS_READY, source_dag->get_dag_status());
+    EXPECT_EQ(WAITING_DAG_LIST, source_dag->get_list_idx());
+    EXPECT_EQ(1, prio_scheduler.dag_list_[WAITING_DAG_LIST].get_size());
+    EXPECT_EQ(1, ctx.generate_count_);
+    EXPECT_EQ(ObGenerateNextRetryDag::NEXT_ITEM, ctx.first_generated_item_);
+    EXPECT_TRUE(ctx.size_overflow_injected_);
+  }
+
+  ASSERT_EQ(OB_SUCCESS, prio_scheduler.loop_waiting_dag_list());
+  EXPECT_EQ(READY_DAG_LIST, source_dag->get_list_idx());
+  EXPECT_EQ(ObIDag::DAG_STATUS_READY, source_dag->get_dag_status());
+
+  {
+    common::SpinWLockGuard guard(prio_scheduler.prio_rwlock_);
+    ASSERT_EQ(OB_SUCCESS, prio_scheduler.pop_task_from_ready_list_(task));
+    ASSERT_NE(nullptr, task);
+    EXPECT_EQ(source_dag, task->get_dag());
+    EXPECT_EQ(ObIDag::DAG_STATUS_NODE_RUNNING, source_dag->get_dag_status());
+    EXPECT_EQ(2, ctx.generate_count_);
+    EXPECT_EQ(ctx.first_generated_item_, ctx.second_generated_item_);
+    source_dag->reset_task_running_status(
+        *task, ObITask::TASK_STATUS_WAITING);
+  }
+}
 
 TEST_F(TestDagScheduler, generate_next_dag)
 {

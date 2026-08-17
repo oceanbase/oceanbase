@@ -64,34 +64,6 @@ int ObLSRestoreStat::dec_total_tablet_cnt()
   return ret;
 }
 
-int ObLSRestoreStat::increase_total_bytes_by(const int64_t bytes)
-{
-  int ret = OB_SUCCESS;
-  lib::ObMutexGuard guard(mtx_);
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObLSRestoreStat not init", K(ret));
-  } else {
-    total_bytes_ += bytes;
-  }
-
-  return ret;
-}
-
-int ObLSRestoreStat::decrease_total_bytes_by(const int64_t bytes)
-{
-  int ret = OB_SUCCESS;
-  lib::ObMutexGuard guard(mtx_);
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObLSRestoreStat not init", K(ret));
-  } else {
-    total_bytes_ -= bytes;
-  }
-
-  return ret;
-}
-
 int ObLSRestoreStat::add_finished_tablet_cnt(const int64_t inc_finished_tablet_cnt)
 {
   int ret = OB_SUCCESS;
@@ -135,44 +107,22 @@ int ObLSRestoreStat::report_unfinished_tablet_cnt(const int64_t unfinished_table
   return ret;
 }
 
-int ObLSRestoreStat::add_finished_bytes(const int64_t bytes)
-{
-  int ret = OB_SUCCESS;
-  lib::ObMutexGuard guard(mtx_);
-  int64_t old_finished_bytes = get_finished_bytes();
-  int64_t new_finished_bytes = old_finished_bytes + bytes;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObLSRestoreStat not init", K(ret));
-  } else if (ObTimeUtility::current_time() - last_report_ts_ >= REPORT_INTERVAL) {
-    if (OB_FAIL(do_report_finished_bytes_(new_finished_bytes))) {
-      LOG_WARN("fail to report finished tablet cnt", K(ret), K_(ls_key));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    unfinished_tablet_cnt_ = total_tablet_cnt_ - new_finished_bytes;
-  }
-
-  return ret;
-}
-
 int ObLSRestoreStat::report_unfinished_bytes(const int64_t bytes)
 {
   int ret = OB_SUCCESS;
   lib::ObMutexGuard guard(mtx_);
-  int64_t finished_bytes_ = total_bytes_ - bytes;
+  const int64_t finished_bytes = total_bytes_ - bytes;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLSRestoreStat not init", K(ret));
-  } else if (total_bytes_ > 0 && finished_bytes_ > 0) {
-    if (OB_FAIL(do_report_finished_bytes_(finished_bytes_))) {
-      LOG_WARN("fail to report finished tablet cnt", K(ret), K_(total_bytes), K_(unfinished_bytes));
+  } else if (total_bytes_ > 0 && finished_bytes > 0) {
+    if (OB_FAIL(do_report_finished_bytes_(finished_bytes))) {
+      LOG_WARN("fail to report finished bytes", K(ret), K_(total_bytes), K(bytes));
     }
   }
 
   if (OB_SUCC(ret)) {
-    unfinished_bytes_ = unfinished_bytes_;
+    unfinished_bytes_ = bytes;
   }
 
   return ret;
@@ -273,12 +223,6 @@ int ObLSRestoreStat::do_report_finished_bytes_(const int64_t finished_bytes)
 
   return ret;
 }
-
-int64_t ObLSRestoreStat::get_finished_bytes() const
-{
-  return total_bytes_ - unfinished_bytes_;
-}
-
 
 int ObLSRestoreStat::set_total_bytes(const int64_t bytes)
 {

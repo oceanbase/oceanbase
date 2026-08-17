@@ -109,7 +109,6 @@ int ObMediumCompactionScheduleFunc::find_valid_freeze_info(
   const bool is_create_as_split_dst = tablet.get_tablet_meta().split_info_.get_split_src_tablet_id().is_valid();
   const int64_t create_schema_version = tablet.get_tablet_meta().create_schema_version_;
   int64_t schedule_snapshot = 0;
-  bool schedule_with_newer_info = false;
   const int64_t scheduler_frozen_version = MERGE_SCHEDULER_PTR->get_frozen_version();
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   ObSSTable *last_major = nullptr;
@@ -175,7 +174,6 @@ int ObMediumCompactionScheduleFunc::find_valid_freeze_info(
           FLOG_INFO("table schema may recycled, use newer freeze info instead", K(ret), KPC(last_major), K(freeze_info),
             K(scheduler_frozen_version));
           schedule_snapshot = freeze_info.frozen_scn_.get_val_for_tx();
-          schedule_with_newer_info = true;
           medium_info.is_skip_tenant_major_ = true;
           ret = OB_SUCCESS;
           FLOG_INFO("schedule with newer freeze info", K(ret), K(freeze_info));
@@ -1392,7 +1390,6 @@ int ObMediumCompactionScheduleFunc::check_medium_meta_table(
     int64_t unfinish_cnt = 0;
     int64_t filter_cnt = 0;
     bool pass = true;
-    const ObLSReplica *ls_replica = nullptr;
     for (int i = 0; OB_SUCC(ret) && i < replica_array.count(); ++i) {
       const ObTabletReplica &replica = replica_array.at(i);
       if (OB_UNLIKELY(!replica.is_valid())) {

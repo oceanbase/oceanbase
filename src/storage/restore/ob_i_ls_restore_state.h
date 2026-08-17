@@ -44,9 +44,7 @@ public:
   int add_finished_tablet_cnt(const int64_t cnt);
   int report_unfinished_tablet_cnt(const int64_t cnt);
 
-  int add_finished_bytes(const int64_t bytes);
   int report_unfinished_bytes(const int64_t bytes);
-  int advance_restore_status(const ObLSRestoreStatus &next_status);
 
   TO_STRING_KV(K_(*ls), K_(ls_restore_status));
 protected:
@@ -55,7 +53,6 @@ protected:
   int follower_fill_tablet_group_restore_arg_(const ObIArray<ObTabletID> &tablet_need_restore,
       const ObTabletRestoreAction::ACTION &action, ObTabletGroupRestoreArg &tablet_group_restore_arg);
 
-  int notify_follower_restore_tablet_(const ObIArray<common::ObTabletID> &tablet_ids);
   int get_follower_server_(ObIArray<ObStorageHASrcInfo> &follower);
   int check_all_follower_restore_finish_(bool &finish);
   int check_follower_restore_finish(const share::ObLSRestoreStatus &leader_status,

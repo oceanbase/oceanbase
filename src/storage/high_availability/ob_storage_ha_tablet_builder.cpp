@@ -88,7 +88,6 @@ int ObStorageHATabletsBuilderParam::assign(const ObStorageHATabletsBuilderParam 
     ha_table_info_mgr_ = param.ha_table_info_mgr_;
     ha_svc_ctx_ = param.ha_svc_ctx_;
     restore_base_info_ = param.restore_base_info_;
-    restore_action_ = param.restore_action_;
     meta_index_store_ = param.meta_index_store_;
   }
   return ret;
@@ -108,8 +107,6 @@ ObStorageHATabletsBuilder::~ObStorageHATabletsBuilder()
 int ObStorageHATabletsBuilder::init(const ObStorageHATabletsBuilderParam &param)
 {
   int ret = OB_SUCCESS;
-  const int64_t MAX_BUCKET_NUM = 1024;
-  int64_t bucket_num = 0;
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
@@ -119,7 +116,6 @@ int ObStorageHATabletsBuilder::init(const ObStorageHATabletsBuilderParam &param)
     LOG_WARN("init storage ha tablets builder get invalid argument", K(ret), K(param));
   } else if (OB_FAIL(param_.assign(param))) {
     LOG_WARN("failed to assign storage ha tablets builder param", K(ret), K(param));
-  } else if (FALSE_IT(bucket_num = std::max(MAX_BUCKET_NUM, param.tablet_id_array_.count()))) {
   } else {
     is_inited_ = true;
   }
@@ -132,7 +128,6 @@ int ObStorageHATabletsBuilder::create_or_update_tablets(ObIDagNet *dag_net)
   ObLS *ls = nullptr;
   ObICopyTabletInfoReader *reader = nullptr;
   obrpc::ObCopyTabletInfo tablet_info;
-  const int overwrite = 1;
   const bool need_check_tablet_limit = false;
 
   if (!is_inited_) {
@@ -249,7 +244,6 @@ int ObStorageHATabletsBuilder::create_all_tablets(
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
   obrpc::ObCopyTabletInfo tablet_info;
-  const int overwrite = 1;
   sys_tablet_id_list.reset();
 
   if (!is_inited_) {
@@ -384,7 +378,6 @@ int ObStorageHATabletsBuilder::create_all_tablets_with_4_1_rpc(
   ObLS *ls = nullptr;
   ObICopyTabletInfoReader *reader = nullptr;
   obrpc::ObCopyTabletInfo tablet_info;
-  const int overwrite = 1;
   ObCopyTabletSimpleInfo tablet_simple_info;
   const bool need_check_tablet_limit = false;
   ObLogicTabletID logic_tablet_id;
@@ -566,7 +559,6 @@ int ObStorageHATabletsBuilder::get_tablet_info_reader_(
 {
   int ret = OB_SUCCESS;
   reader = nullptr;
-  void *buf = nullptr;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("storage ha tablets buidler do not init", K(ret));
@@ -1356,7 +1348,6 @@ int ObStorageHATabletsBuilder::hold_local_reuse_sstable_(
   ObTablet *tablet = nullptr;
   ObArenaAllocator arena_allocator;
   ObStorageSchema *tablet_storage_schema = nullptr;
-  const compaction::ObMediumCompactionInfoList *tablet_medium_list = nullptr;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("storage ha tablets builder do not init", K(ret));
@@ -1615,7 +1606,6 @@ int ObStorageHATableInfoMgr::ObStorageHATabletTableInfoMgr::add_copy_table_info(
     const blocksstable::ObMigrationSSTableParam &copy_table_info)
 {
   int ret = OB_SUCCESS;
-  bool is_exist = false;
   bool found = false;
 
   if (!is_inited_) {
@@ -2650,7 +2640,6 @@ int ObStorageHATabletBuilderUtil::build_tablet_for_column_store_(
   ObTabletHandle tablet_handle;
   ObTablet *tablet = nullptr;
   ObTablesHandleArray co_tables;
-  int64_t co_table_cnt = 0;
   int64_t multi_version_start = 0;
 
   if (OB_UNLIKELY(NULL == ls || !tablet_id.is_valid() || major_tables.empty())) {
@@ -3211,4 +3200,3 @@ int ObStorageHATabletBuilderUtil::BatchBuildMinorSSTablesParam::assign_sstables(
 
 }
 }
-

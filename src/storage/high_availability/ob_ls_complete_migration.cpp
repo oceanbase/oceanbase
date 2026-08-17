@@ -421,7 +421,6 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
   static const int64_t UPDATE_MIGRATION_STATUS_INTERVAL_MS = 100 * 1000; //100ms
   ObTenantDagScheduler *scheduler = nullptr;
   int32_t result = OB_SUCCESS;
-  bool is_tenant_deleted = false;
 
   DEBUG_SYNC(BEFORE_COMPLETE_MIGRATION_UPDATE_STATUS);
 
@@ -622,7 +621,6 @@ int ObLSCompleteMigrationDagNet::check_tenant_is_dropped_(
   schema::ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
   schema::ObSchemaGetterGuard guard;
   is_tenant_dropped = false;
-  const ObTenantSchema *tenant_schema = nullptr;
 
   if (OB_ISNULL(schema_service)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1064,7 +1062,6 @@ int ObWaitDataReadyTask::wait_log_sync_()
   bool need_wait = true;
   ObTimeoutCtx timeout_ctx;
   int64_t timeout = 10_min;
-  const bool is_primay_tenant = MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID();
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1088,7 +1085,6 @@ int ObWaitDataReadyTask::wait_log_sync_()
 #endif
     DEBUG_SYNC(BEFORE_WAIT_LOG_SYNC);
     const int64_t wait_replay_start_ts = ObTimeUtility::current_time();
-    int64_t current_ts = 0;
     int64_t last_wait_replay_ts = ObTimeUtility::current_time();
     while (OB_SUCC(ret) && !is_log_sync) {
       if (timeout_ctx.is_timeouted()) {
@@ -1096,11 +1092,6 @@ int ObWaitDataReadyTask::wait_log_sync_()
         LOG_WARN("already timeout", K(ret), KPC(ctx_));
       } else if (OB_FAIL(check_ls_and_task_status_(ls))) {
         LOG_WARN("failed to check ls and task status", K(ret), KPC(ctx_));
-        //TODO(mingqiao): remove this after is_in_sync is modified
-#ifdef OB_BUILD_SHARED_STORAGE
-      } else if (!is_primay_tenant && GCTX.is_shared_storage_mode()) {
-        is_log_sync = true;
-#endif
       } else if (OB_FAIL(ls->is_in_sync(is_log_sync, is_need_rebuild))) {
         LOG_WARN("failed to check is in sync", K(ret), KPC(ctx_));
       }
@@ -1822,7 +1813,6 @@ int ObWaitDataReadyTask::change_member_list_with_leader_()
       LOG_WARN("change member list get invalid type", K(ret), KPC(ctx_));
     }
   } else {
-    const int64_t change_member_list_timeout_us = GCONF.sys_bkgd_migration_change_member_list_timeout;
     if (ObMigrationOpType::ADD_LS_OP == ctx_->arg_.type_) {
       if (ObReplicaTypeCheck::is_paxos_replica(ctx_->arg_.dst_.get_replica_type())) {
         if (OB_FAIL(switch_learner_to_acceptor_(ls))) {
@@ -2282,8 +2272,6 @@ int ObWaitDataReadyTask::inner_check_tablet_transfer_table_ready_(
   need_check_again = true;
   ObTabletHandle tablet_handle;
   ObTablet *tablet = nullptr;
-  const ObMDSGetTabletMode read_mode = ObMDSGetTabletMode::READ_WITHOUT_CHECK;
-  bool can_skip = true;
   ObTabletCreateDeleteMdsUserData user_data;
   ObLSService *ls_service = nullptr;
   ObLSHandle src_ls_handle;
@@ -2457,7 +2445,6 @@ int ObWaitDataReadyTask::check_ls_and_task_status_(
     ObLS *ls)
 {
   int ret = OB_SUCCESS;
-  bool is_cancel = false;
   bool is_ls_deleted = true;
   int32_t result = OB_SUCCESS;
   ObIDagNet *dag_net = nullptr;
@@ -2648,7 +2635,6 @@ int ObFinishCompleteMigrationTask::process()
 int ObFinishCompleteMigrationTask::generate_prepare_initial_dag_()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   ObInitialCompleteMigrationDag *initial_complete_dag = nullptr;
   ObTenantDagScheduler *scheduler = nullptr;
   ObFinishCompleteMigrationDag *finish_complete_migration_dag = nullptr;

@@ -25,7 +25,6 @@ private:
   int check_ls_created_(bool &is_created);
   int check_sys_ls_restore_finished_(bool &restore_finish);
   int do_with_uncreated_ls_();
-  int inc_need_restore_ls_cnt_();
   DISALLOW_COPY_AND_ASSIGN(ObLSRestoreStartState);
 };
 
@@ -42,7 +41,6 @@ private:
   int do_restore_sys_tablet();
   bool is_need_retry_();
   int leader_fill_ls_restore_arg_(ObLSRestoreArg &arg);
-  int follower_fill_ls_restore_arg_(ObLSRestoreArg &arg);
 private:
   bool retry_flag_;
   DISALLOW_COPY_AND_ASSIGN(ObLSRestoreSysTabletState);

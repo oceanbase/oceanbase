@@ -126,38 +126,6 @@ int ObLSRestoreStartState::do_with_uncreated_ls_()
   return ret;
 }
 
-int ObLSRestoreStartState::inc_need_restore_ls_cnt_()
-{
-  int ret = OB_SUCCESS;
-  share::ObRestorePersistHelper helper;
-  common::ObMySQLTransaction trans;
-  ObLSRestoreJobPersistKey key;
-  key.job_id_ = ls_restore_arg_->job_id_;
-  key.tenant_id_ = ls_restore_arg_->tenant_id_;
-  key.ls_id_ = ls_->get_ls_id();
-  key.addr_ = self_addr_;
-  if (OB_FAIL(helper.init(key.tenant_id_, share::OBCG_STORAGE))) {
-    LOG_WARN("fail to init helper", K(ret), K(key.tenant_id_));
-  } else if (OB_FAIL(trans.start(proxy_, gen_meta_tenant_id(key.tenant_id_)))) {
-    LOG_WARN("fail to start trans", K(ret), K(key.tenant_id_));
-  } else {
-    if (OB_FAIL(helper.inc_need_restore_ls_count_by_one(trans, key, ret))) {
-      LOG_WARN("fail to inc finished ls cnt", K(ret));
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(trans.end(true))) {
-        LOG_WARN("fail to commit trans", KR(ret));
-      }
-    } else {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
-        LOG_WARN("fail to rollback", KR(ret), K(tmp_ret));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObLSRestoreStartState::check_ls_created_(bool &is_created)
 {
   int ret = OB_SUCCESS;
@@ -345,21 +313,12 @@ int ObLSRestoreSysTabletState::do_restore_sys_tablet()
 {
   int ret = OB_SUCCESS;
   ObLSRestoreArg arg;
-  uint64_t tenant_id = arg.tenant_id_;
   ObTaskId task_id;
   task_id.init(GCONF.self_addr_);
   // always restore from backup.
   if (OB_FAIL(leader_fill_ls_restore_arg_(arg))) {
     LOG_WARN("fail to fill ls restore arg", K(ret));
   }
-#if 0
-  // TODO(wangxiaohui.wxh): 4.3, let leader restore from backup and follower restore from leader.
-  if (!is_follower(role_) && OB_FAIL(leader_fill_ls_restore_arg_(arg))) {
-    LOG_WARN("fail to fill ls restore arg", K(ret));
-  } else if (is_follower(role_) && OB_FAIL(follower_fill_ls_restore_arg_(arg))) {
-    LOG_WARN("fail to fill ls restore arg", K(ret));
-  }
-#endif
   if (FAILEDx(tablet_mgr_.schedule_ls_restore(task_id))) {
     LOG_WARN("fail to schedule tablet", K(ret), KPC(ls_));
   } else if (OB_FAIL(schedule_ls_restore_(arg, task_id))) {
@@ -380,34 +339,6 @@ int ObLSRestoreSysTabletState::leader_fill_ls_restore_arg_(ObLSRestoreArg &arg)
   if (OB_FAIL(arg.restore_base_info_.copy_from(*ls_restore_arg_))) {
     LOG_WARN("fail to fill restore base info from ls restore args", K(ret), KPC(ls_restore_arg_));
   }
-  return ret;
-}
-
-int ObLSRestoreSysTabletState::follower_fill_ls_restore_arg_(ObLSRestoreArg &arg)
-{
-  int ret = OB_SUCCESS;
-  uint64_t tenant_id = ls_restore_arg_->get_tenant_id();
-  bool is_cache_hit = false;
-  share::ObLSLocation location;
-  arg.reset();
-  arg.tenant_id_ = ls_restore_arg_->get_tenant_id();
-  arg.ls_id_ = ls_->get_ls_id();
-  arg.is_leader_ = false;
-  share::ObLSReplicaLocation leader;
-  const int64_t expire_renew_time = INT64_MAX;
-  if (OB_FAIL(location_service_->get(cluster_id_, tenant_id, ls_->get_ls_id(), expire_renew_time,
-      is_cache_hit, location))) {
-    LOG_WARN("fail to get location", K(ret), KPC(ls_));
-  } else if (OB_FAIL(location.get_leader(leader))) {
-    LOG_WARN("fail to get leader location", K(ret), K(location));
-  } else if (OB_FAIL(arg.src_.init(leader.get_server(), 0/*invalid timestamp is ok*/, leader.get_replica_type()))) {
-    LOG_WARN("fail to init src_", K(ret), K(leader));
-  } else if (OB_FAIL(arg.dst_.init(GCTX.self_addr(), 0/*invalid timestamp is ok*/, REPLICA_TYPE_FULL))) {
-    LOG_WARN("fail to init dst_", K(ret), K(GCTX.self_addr()));
-  } else if (OB_FAIL(arg.restore_base_info_.copy_from(*ls_restore_arg_))) {
-    LOG_WARN("fail to fill restore base info from ls restore args", K(ret), KPC(ls_restore_arg_));
-  }
-
   return ret;
 }
 
@@ -473,18 +404,6 @@ int ObLSRestoreCreateUserTabletState::leader_create_user_tablet_()
     LOG_WARN("fail to do quick restore", K(ret), K(tablet_need_restore), KPC(ls_));
   }
 
-#if 0
-  // TODO(wangxiaohui.wxh): 4.3, let leader restore from backup and follower restore from leader.
-
-  int tmp_ret = OB_SUCCESS; // try rpc's best
-  if (restored_tablets.empty()) {
-  } else if (OB_SUCCESS != (tmp_ret = notify_follower_restore_tablet_(restored_tablets))) {
-    LOG_WARN("fail to notify follower restore tablet", K(tmp_ret), KPC(ls_));
-  } else {
-    LOG_INFO("success send tablets to follower for restore", K(restored_tablets));
-  }
-#endif
-
   return ret;
 }
 
@@ -505,8 +424,6 @@ int ObLSRestoreCreateUserTabletState::follower_create_user_tablet_()
     LOG_WARN("fail to choose need restore tablets", K(ret), KPC(ls_));
   } else if (tablet_need_restore.empty()) {
     ObLSRestoreStatus next_status(ObLSRestoreStatus::Status::WAIT_RESTORE_TABLETS_META);
-    ObLSRestoreStatus leader_restore_status;
-    bool finish = false;
     if (!tablet_mgr_.is_restore_completed()) {
     } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
       LOG_WARN("fail to advance status", K(ret), KPC(ls_), K(next_status));
@@ -532,15 +449,6 @@ int ObLSRestoreCreateUserTabletState::do_create_user_tablet_(
   if (OB_FAIL(leader_fill_tablet_group_restore_arg_(tablet_need_restore.get_tablet_list(), tablet_need_restore.action(), arg))) {
     LOG_WARN("fail to fill tablet group restore arg", K(ret));
   }
-
-#if 0
-  // TODO(wangxiaohui.wxh): 4.3, let leader restore from backup and follower restore from leader.
-  if (!is_follower(role_) && OB_FAIL(leader_fill_tablet_group_restore_arg_(tablet_need_restore.get_tablet_list(), tablet_need_restore.action(), arg))) {
-    LOG_WARN("fail to fill tablet group restore arg", K(ret));
-  } else if (is_follower(role_) && OB_FAIL(follower_fill_tablet_group_restore_arg_(tablet_need_restore.get_tablet_list(), tablet_need_restore.action(), arg))) {
-    LOG_WARN("fail to fill tablet group restore arg", K(ret));
-  }
-#endif
 
   if (FAILEDx(check_new_election_(is_new_election))) {
     LOG_WARN("fail to check change role", K(ret));
@@ -741,7 +649,6 @@ int ObLSQuickRestoreState::do_restore()
 int ObLSQuickRestoreState::leader_quick_restore_()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   ObSArray<ObTabletID> restored_tablets;
   ObLSRestoreTaskMgr::ToRestoreTabletGroup tablet_need_restore;
   logservice::ObLogRestoreHandler *log_restore_handle = ls_->get_log_restore_handler();
@@ -791,25 +698,12 @@ int ObLSQuickRestoreState::leader_quick_restore_()
 #endif
   }
 
-#if 0
-  // TODO(wangxiaohui.wxh): 4.3, let leader restore from backup and follower restore from leader.
-
-  int tmp_ret = OB_SUCCESS; // try rpc's best
-  if (restored_tablets.empty()) {
-  } else if (OB_SUCCESS != (tmp_ret = notify_follower_restore_tablet_(restored_tablets))) {
-    LOG_WARN("fail to notify follower restore tablet", K(tmp_ret), KPC(ls_));
-  } else {
-    LOG_INFO("success send tablets to follower for restore", K(restored_tablets));
-  }
-#endif
-
   return ret;
 }
 
 int ObLSQuickRestoreState::follower_quick_restore_()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   ObSArray<ObTabletID> restored_tablets;
   ObLSRestoreTaskMgr::ToRestoreTabletGroup tablet_need_restore;
   logservice::ObLogRestoreHandler *log_restore_handle = ls_->get_log_restore_handler();
@@ -867,20 +761,6 @@ int ObLSQuickRestoreState::do_quick_restore_(const ObLSRestoreTaskMgr::ToRestore
   if (OB_FAIL(leader_fill_tablet_group_restore_arg_(tablet_need_restore.get_tablet_list(), tablet_need_restore.action(), arg))) {
     LOG_WARN("fail to fill leader ls restore arg", K(ret));
   }
-
-#if 0
-  // TODO(wangxiaohui.wxh): 4.3, let leader restore from backup and follower restore from leader.
-  if (!is_follower(role_)
-      || tablet_need_restore.action() == ObTabletRestoreAction::ACTION::RESTORE_TABLET_META) {
-    if (OB_FAIL(leader_fill_tablet_group_restore_arg_(tablet_need_restore.get_tablet_list(), tablet_need_restore.action(), arg))) {
-      LOG_WARN("fail to fill leader ls restore arg", K(ret));
-    }
-  } else {
-    if (OB_FAIL(follower_fill_tablet_group_restore_arg_(tablet_need_restore.get_tablet_list(), tablet_need_restore.action(), arg))) {
-      LOG_WARN("fail to fill follower ls restore arg", K(ret));
-    }
-  }
-#endif
 
   if (FAILEDx(check_new_election_(is_new_election))) {
     LOG_WARN("fail to check change role", K(ret));
@@ -1145,18 +1025,6 @@ int ObLSRestoreMajorState::leader_restore_major_data_()
     LOG_WARN("fail to do restore major", K(ret), K(tablet_need_restore), KPC(ls_));
   }
 
-#if 0
-  // TODO(wangxiaohui.wxh): 4.3, let leader restore from backup and follower restore from leader.
-
-  int tmp_ret = OB_SUCCESS; // try rpc's best
-  if (restored_tablets.empty()) {
-  } else if (OB_SUCCESS != (tmp_ret = notify_follower_restore_tablet_(restored_tablets))) {
-    LOG_WARN("fail to notify follower restore tablet", K(tmp_ret), KPC(ls_));
-  } else {
-    LOG_INFO("success send tablets to follower for restore", K(restored_tablets));
-  }
-#endif
-
   return ret;
 }
 
@@ -1349,7 +1217,9 @@ int ObLSRestoreWaitState::check_all_tablets_has_finished_(bool &all_finished)
     all_finished = true;
   }
 
-  has_confirmed_ = true;
+  if (OB_SUCC(ret) && all_finished) {
+    has_confirmed_ = true;
+  }
 
   return ret;
 }

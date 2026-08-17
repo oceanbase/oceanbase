@@ -957,7 +957,7 @@ int ObPartitionMacroMergeIter::get_curr_macro_block(
   } else {
     macro_desc = &curr_block_desc_;
   }
-  return OB_SUCCESS;
+  return ret;
 }
 
 int ObPartitionMacroMergeIter::need_open_curr_range(const blocksstable::ObDatumRow &row, bool &need_open, const int64_t row_id_for_cg)
@@ -1256,7 +1256,6 @@ bool ObPartitionMicroMergeIter::inner_check(const ObMergeParameter &merge_param)
 int ObPartitionMicroMergeIter::inner_init(const ObMergeParameter &merge_param)
 {
   int ret = OB_SUCCESS;
-  void *buf = nullptr;
   ObSSTable *sstable = nullptr;
 
   if (OB_FAIL(ObPartitionMacroMergeIter::inner_init(merge_param))) {
@@ -3243,7 +3242,6 @@ int ObPartitionMinorMicroMergeIter::get_row_from_iter(const ObDatumRow *&row)
 {
   int ret = OB_SUCCESS;
   row = nullptr;
-  bool open_block = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObPartitionMinorMicroMergeIter is not inited", K(ret));

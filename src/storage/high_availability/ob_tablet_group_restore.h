@@ -238,10 +238,12 @@ public:
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual int create_first_task() override;
   int init(share::ObIDagNet *dag_net, share::ObIDag *finish_dag);
+  ObCachedNextItem<ObLogicTabletID> &get_next_item() { return next_item_; }
   INHERIT_TO_STRING_KV("ObTabletGroupRestoreDag", ObTabletGroupRestoreDag, KP(this));
 protected:
   bool is_inited_;
   share::ObIDag *finish_dag_;
+  ObCachedNextItem<ObLogicTabletID> next_item_;
   DISALLOW_COPY_AND_ASSIGN(ObStartTabletGroupRestoreDag );
 };
 
@@ -350,7 +352,7 @@ public:
   virtual int create_first_task() override;
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int inner_reset_status_for_retry() override;
-  virtual int generate_next_dag(share::ObIDag *&dag);
+  virtual int generate_next_dag(share::ObIDag *&dag) override;
   virtual int decide_retry_strategy(const int error_code, ObDagRetryStrategy &retry_strategy) override;
 
   int init(const ObInitTabletRestoreParam &param);
@@ -367,6 +369,7 @@ protected:
   ObStorageHAServiceCtx ha_svc_ctx_;
   ObLSHandle ls_handle_;
   ObHATabletGroupCtx *tablet_group_ctx_;
+  ObCachedNextItem<ObLogicTabletID> next_item_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletRestoreDag);
 };
 

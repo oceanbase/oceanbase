@@ -95,6 +95,20 @@ int ObCompactionDagSnapshot::init(const int64_t dag_capacity, const int64_t dag_
   return ret;
 }
 
+int ObCompactionDagSnapshot::reuse()
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObCompactionDagSnapshot not inited", K(ret));
+  } else if (OB_FAIL(dag_map_.reuse())) {
+    STORAGE_LOG(WARN, "fail to reuse dag_map", K(ret));
+  } else if (OB_FAIL(dag_net_map_.reuse())) {
+    STORAGE_LOG(WARN, "fail to reuse dag_net_map", K(ret));
+  }
+  return ret;
+}
+
 void ObCompactionDagSnapshot::reset()
 {
   if (is_inited_) {
@@ -1134,6 +1148,8 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_tablet()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObCompactionDiagnoseMgr is not init", K(ret));
+  } else if (OB_FAIL(dag_snapshot_.reuse())) {
+    LOG_WARN("failed to reuse compaction dag snapshot", K(ret));
   } else {
     // Phase 1: collect compaction dag snapshot
     if (OB_TMP_FAIL(MTL(ObTenantDagScheduler*)->collect_compaction_dag_snapshot(dag_snapshot_))) {

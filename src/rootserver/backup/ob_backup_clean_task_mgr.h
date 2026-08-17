@@ -75,8 +75,6 @@ private:
   int get_set_ls_ids_(common::ObIArray<share::ObLSID> &ls_ids);
   int get_piece_ls_ids_(common::ObIArray<share::ObLSID> &ls_ids);
   int get_ls_ids_(common::ObIArray<share::ObLSID> &ls_ids);
-  int parse_int_(const char *str, int64_t &val);
-  int parse_ls_id_(const char *dir_name, int64_t &id_val);
   int get_ls_ids_from_traverse_(const share::ObBackupPath &path, common::ObIArray<share::ObLSID> &ls_ids);
   int get_set_ls_ids_from_traverse_(common::ObIArray<share::ObLSID> &ls_ids);
   int get_piece_ls_ids_from_traverse_(common::ObIArray<share::ObLSID> &ls_ids);

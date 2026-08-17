@@ -1372,6 +1372,7 @@ int ObBackupDataStore::do_get_backup_set_array_(
         }
       } else if (backup_set_file.backup_type_.is_inc_backup()) {
         share::ObBackupSetDesc value;
+        value.backup_set_id_ = backup_set_file.prev_full_backup_set_id_;
         backup_set_desc.min_restore_scn_ = backup_set_file.min_restore_scn_;
         backup_set_desc.total_bytes_ = backup_set_file.stats_.output_bytes_;
         if (OB_FAIL(backup_set_map.get_refactored(backup_set_file.prev_full_backup_set_id_, value))) {

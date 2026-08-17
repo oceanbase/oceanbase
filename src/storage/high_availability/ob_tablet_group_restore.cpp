@@ -1167,7 +1167,8 @@ int ObInitialTabletGroupRestoreTask::errsim_debug_sync_before_follower_replace_r
 ObStartTabletGroupRestoreDag::ObStartTabletGroupRestoreDag()
   : ObTabletGroupRestoreDag(ObDagType::DAG_TYPE_START_TABLET_GROUP_RESTORE),
     is_inited_(false),
-    finish_dag_(nullptr)
+    finish_dag_(nullptr),
+    next_item_()
 {
 }
 
@@ -1349,7 +1350,6 @@ int ObStartTabletGroupRestoreTask::generate_tablet_restore_dag_()
   ObIDagNet *dag_net = nullptr;
   ObTenantDagScheduler *scheduler = nullptr;
   ObStartTabletGroupRestoreDag *start_tablet_group_restore_dag = nullptr;
-  ObLogicTabletID logic_tablet_id;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1364,8 +1364,11 @@ int ObStartTabletGroupRestoreTask::generate_tablet_restore_dag_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
   } else {
+    ObCachedNextItem<ObLogicTabletID> &next_item = start_tablet_group_restore_dag->get_next_item();
     while (OB_SUCC(ret)) {
-      if (OB_FAIL(ctx_->tablet_group_ctx_.get_next_tablet_id(logic_tablet_id))) {
+      ObLogicTabletID &logic_tablet_id = next_item.value();
+      if (OB_FAIL(next_item.get_or_fetch(
+          ctx_->tablet_group_ctx_, &ObHATabletGroupCtx::get_next_tablet_id))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
           LOG_INFO("no tablets need restore", KPC(ctx_));
@@ -1400,6 +1403,7 @@ int ObStartTabletGroupRestoreTask::generate_tablet_restore_dag_()
           false/*emergency*/, tablet_restore_dag, param))) {
         if (OB_TABLET_NOT_EXIST == ret) {
           LOG_INFO("tablet is deleted, skip restore", K(logic_tablet_id), K(param));
+          next_item.reset();
           ret = OB_SUCCESS;
         } else {
           LOG_WARN("failed to schedule tablet restore dag", K(ret), K(*ctx_));
@@ -1762,7 +1766,8 @@ ObTabletRestoreDag::ObTabletRestoreDag()
     tablet_restore_ctx_(),
     ha_svc_ctx_(),
     ls_handle_(),
-    tablet_group_ctx_(nullptr)
+    tablet_group_ctx_(nullptr),
+    next_item_()
 {
 }
 
@@ -1773,7 +1778,9 @@ ObTabletRestoreDag::~ObTabletRestoreDag()
   // tasks here explicitly, otherwise they would be freed by ~ObIDag() which runs AFTER the members
   // of this dag have been destructed.
   clear_task_list_with_lock();
-  if (OB_NOT_NULL(tablet_restore_ctx_.ha_table_info_mgr_)) {
+  // An unregistered DAG does not own the shared tablet table info.
+  if (ObIDag::DAG_STATUS_INITING != get_dag_status()
+      && OB_NOT_NULL(tablet_restore_ctx_.ha_table_info_mgr_)) {
     if (OB_SUCCESS != (tmp_ret = tablet_restore_ctx_.ha_table_info_mgr_->remove_tablet_table_info(
         tablet_restore_ctx_.tablet_id_))) {
       LOG_WARN_RET(tmp_ret, "failed to remove tablet table info", K(tmp_ret), K(tablet_restore_ctx_));
@@ -2004,7 +2011,6 @@ int ObTabletRestoreDag::generate_next_dag(share::ObIDag *&dag)
   ObTenantDagScheduler *scheduler = nullptr;
   ObTabletRestoreDag *tablet_restore_dag = nullptr;
   bool need_set_failed_result = true;
-  ObLogicTabletID logic_tablet_id;
   ObInitTabletRestoreParam param;
   ObDagId dag_id;
 
@@ -2022,7 +2028,9 @@ int ObTabletRestoreDag::generate_next_dag(share::ObIDag *&dag)
     }
   } else {
     while (OB_SUCC(ret)) {
-      if (OB_FAIL(tablet_group_ctx_->get_next_tablet_id(logic_tablet_id))) {
+      ObLogicTabletID &logic_tablet_id = next_item_.value();
+      if (OB_FAIL(next_item_.get_or_fetch(
+          *tablet_group_ctx_, &ObHATabletGroupCtx::get_next_tablet_id))) {
         if (OB_ITER_END == ret) {
           //do nothing
           need_set_failed_result = false;
@@ -2053,6 +2061,7 @@ int ObTabletRestoreDag::generate_next_dag(share::ObIDag *&dag)
             LOG_INFO("tablet is deleted, skip restore", K(logic_tablet_id), K(param));
             scheduler->free_dag(*tablet_restore_dag);
             tablet_restore_dag = nullptr;
+            next_item_.reset();
             ret = OB_SUCCESS;
           } else {
             LOG_WARN("failed to init tablet restore dag", K(ret), K(param));

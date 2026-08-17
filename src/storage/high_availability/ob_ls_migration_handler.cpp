@@ -365,7 +365,6 @@ int ObLSMigrationHandler::handle_current_task_(
   bool is_exist = false;
   bool is_migration_failed = false;
   ObLSMigrationTask ls_migration_task;
-  ObTenantDagScheduler *scheduler = nullptr;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -890,7 +889,6 @@ int ObLSMigrationHandler::do_prepare_ls_status_()
   const ObLSMigrationHandlerStatus status = ObLSMigrationHandlerStatus::PREPARE_LS;
   bool need_to_abort = false;
   bool can_skip_prepare = false;
-  int32_t result = OB_SUCCESS;
 
   DEBUG_SYNC(BEFORE_MIGRATION_DO_PREPARE_LS_STATUS);
 

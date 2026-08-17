@@ -185,6 +185,7 @@ ObTabletBackfillTXDag::ObTabletBackfillTXDag()
     dag_net_id_(),
     ls_id_(),
     tablet_info_(),
+    next_item_(),
     backfill_tx_ctx_(nullptr),
     tablet_handle_(),
     tablets_table_mgr_(nullptr)
@@ -332,7 +333,6 @@ int ObTabletBackfillTXDag::generate_next_dag(share::ObIDag *&dag)
   int tmp_ret = OB_SUCCESS;
   dag = nullptr;
   ObTenantDagScheduler *scheduler = nullptr;
-  ObTabletBackfillInfo next_tablet_info;
   ObIDagNet *dag_net = nullptr;
   ObTabletBackfillTXDag *tablet_backfill_tx_dag = nullptr;
   bool need_set_failed_result = true;
@@ -345,7 +345,8 @@ int ObTabletBackfillTXDag::generate_next_dag(share::ObIDag *&dag)
       LOG_WARN("failed to get result", K(tmp_ret), KPC(this));
       ret = tmp_ret;
     }
-  } else if (OB_FAIL(backfill_tx_ctx_->get_tablet_info(next_tablet_info))) {
+  } else if (OB_FAIL(next_item_.get_or_fetch(
+      *backfill_tx_ctx_, &ObBackfillTXCtx::get_tablet_info))) {
     if (OB_ITER_END == ret) {
       //do nothing
       need_set_failed_result = false;
@@ -360,7 +361,8 @@ int ObTabletBackfillTXDag::generate_next_dag(share::ObIDag *&dag)
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
   } else if (OB_FAIL(scheduler->alloc_dag(tablet_backfill_tx_dag))) {
     LOG_WARN("failed to alloc tablet backfill tx migration dag ", K(ret));
-  } else if (OB_FAIL(tablet_backfill_tx_dag->init(dag_net_id_, ls_id_, next_tablet_info, ha_dag_net_ctx_,
+  } else if (OB_FAIL(tablet_backfill_tx_dag->init(
+      dag_net_id_, ls_id_, next_item_.value(), ha_dag_net_ctx_,
       backfill_tx_ctx_, tablets_table_mgr_))) {
     LOG_WARN("failed to init tablet migration dag", K(ret), KPC(ha_dag_net_ctx_), KPC(backfill_tx_ctx_));
   } else {

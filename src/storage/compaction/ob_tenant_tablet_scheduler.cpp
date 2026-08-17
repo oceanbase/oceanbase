@@ -395,7 +395,6 @@ int ObTenantTabletScheduler::start()
 int ObTenantTabletScheduler::reload_tenant_config()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("The ObTenantTabletScheduler has not been inited", K(ret));
@@ -1012,7 +1011,6 @@ int ObTenantTabletScheduler::check_ready_for_major_merge(
     cs_replica_status = ObCSReplicaTabletStatus::NORMAL;
     ObLSHandle ls_handle;
     ObLS *ls = nullptr;
-    bool need_wait_major_convert = false;
     bool exist_unfinished_inc_major = false;
 
     if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
