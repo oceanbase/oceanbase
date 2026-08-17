@@ -122,7 +122,8 @@ public:
   void update_plan_stat(const ObAuditRecordData &record,
                         const bool is_first,
                         const ObIArray<ObTableRowCount> *table_row_count_list,
-                        const AdaptivePCConf *adpt_pc_conf = nullptr);
+                        const AdaptivePCConf *adpt_pc_conf = nullptr,
+                        const bool update_evolution_statistics = true);
   void update_cache_access_stat(const ObTableScanStat &scan_stat)
   {
     stat_.update_cache_stat(scan_stat);
@@ -139,7 +140,9 @@ public:
   bool get_evolution() const { return stat_.is_evolution_; }
   inline bool inner_check_if_is_expired(const int64_t first_exec_row_count,
                                         const int64_t current_row_count) const;
-  void update_evolution_stat(const ObAuditRecordData &record);
+  void update_evolution_stat(const ObAuditRecordData &record,
+                             const int64_t cpu_time = -1,
+                             const int64_t elapsed_time = -1);
   void update_evolution_stat_time(const int64_t cpu_time,
                                   const int64_t elapsed_time,
                                   const int64_t last_exec_ts);

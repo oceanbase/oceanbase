@@ -39,6 +39,7 @@ public:
     for (int i = 0; !find && i < RECORDS_SIZE; ++i) {
       if (receive_ts == receive_ts_[i]) {
         elapsed_t_[i] = elapsed_t;
+        find = true;
       }
     }
   }

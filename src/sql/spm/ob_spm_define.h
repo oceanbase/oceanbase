@@ -384,6 +384,7 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
   {
     return STAT_START_EVOLUTION == spm_stat_;
   }
+  int64_t get_timeout_penalty() const { return spm_plan_timeout_ * 2; }
   // query from ObMPQuery/ObMPStmtExecute is allowed. query from ObInnerSQLConnection is not supported
   // TODO: supported spm for query from ObInnerSQLConnection
   bool is_spm_supported() { return NULL != baseline_plan_hash_array_.get_allocator(); }
