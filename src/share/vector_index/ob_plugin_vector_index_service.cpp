@@ -174,7 +174,12 @@ int ObPluginVectorIndexMgr::try_reuse_adaptor_from_tenant_map(
     if (OB_FAIL(get_adapter_inst_guard(inc_tablet_id, ls_adaptor_guard))) {
       if (OB_HASH_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
-        LOG_INFO("adaptor detached from ls_map during try_reuse", K(ret),K(inc_tablet_id));
+        // The migration controller creates all adaptor shells before scheduling
+        // adaptor migration DAGs. A missing shell here means that this DAG became
+        // stale after the shell was detached, so skip fetching data for it.
+        reused = true;
+        LOG_INFO("adaptor detached from ls_map during try_reuse, skip fetch",
+            K(ret), K(inc_tablet_id));
       } else {
         LOG_WARN("failed to get adapter instance guard", KR(ret), K(inc_tablet_id));
       }
