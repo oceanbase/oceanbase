@@ -2426,6 +2426,7 @@ REF	bigint(20)	NO		NULL
 UPPER_TRANS_VERSION	bigint(20) unsigned	NO		NULL	
 IS_ACTIVE	varchar(3)	NO		NULL	
 CONTAIN_UNCOMMITTED_ROW	varchar(3)	NO		NULL	
+ORIGINAL_SIZE	bigint(20)	NO		NULL	
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_SSTABLES|%') then 2
@@ -2453,6 +2454,7 @@ REF	bigint(20)	NO
 UPPER_TRANS_VERSION	bigint(20) unsigned	NO			
 IS_ACTIVE	varchar(3)	NO			
 CONTAIN_UNCOMMITTED_ROW	varchar(3)	NO			
+ORIGINAL_SIZE	bigint(20)	NO			
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_SSTABLES|%') then 2

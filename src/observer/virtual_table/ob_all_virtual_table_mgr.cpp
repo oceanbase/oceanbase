@@ -379,6 +379,14 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
           }
           break;
         }
+        case ORIGINAL_SIZE: {
+          cur_row_.cells_[i].set_int(0);
+          break;
+        }
+        case REUSED_OCCUPY_SIZE: {
+          cur_row_.cells_[i].set_int(0);
+          break;
+        }
         default:
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid col_id", K(ret), K(col_id));

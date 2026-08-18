@@ -12694,7 +12694,9 @@ def_table_schema(
       ('table_flag', 'int'),
       ('rec_scn', 'int'),
       ('row_count','int'),
-      ('uncommit_tx_info', 'varchar:MAX_UNCOMMIT_TX_INFO_LENGTH')
+      ('uncommit_tx_info', 'varchar:MAX_UNCOMMIT_TX_INFO_LENGTH'),
+      ('original_size', 'int'),
+      ('reused_occupy_size', 'int')
     ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -22692,7 +22694,8 @@ SELECT
  M.REF,
  M.UPPER_TRANS_VERSION,
  M.IS_ACTIVE,
- M.CONTAIN_UNCOMMITTED_ROW
+ M.CONTAIN_UNCOMMITTED_ROW,
+ M.ORIGINAL_SIZE
 FROM
  oceanbase.__all_virtual_table_mgr M
 """.replace("\n", " ")
@@ -22722,7 +22725,8 @@ SELECT M.SVR_IP,
  M.REF,
  M.UPPER_TRANS_VERSION,
  M.IS_ACTIVE,
- M.CONTAIN_UNCOMMITTED_ROW
+ M.CONTAIN_UNCOMMITTED_ROW,
+ M.ORIGINAL_SIZE
 FROM OCEANBASE.GV$OB_SSTABLES M
 WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
@@ -73305,7 +73309,8 @@ SELECT
  M.REF,
  M.UPPER_TRANS_VERSION,
  M.IS_ACTIVE,
- M.CONTAIN_UNCOMMITTED_ROW
+ M.CONTAIN_UNCOMMITTED_ROW,
+ M.ORIGINAL_SIZE
 FROM
  SYS.ALL_VIRTUAL_TABLE_MGR M
 """.replace("\n", " ")
@@ -73334,7 +73339,8 @@ SELECT M.SVR_IP,
  M.REF,
  M.UPPER_TRANS_VERSION,
  M.IS_ACTIVE,
- M.CONTAIN_UNCOMMITTED_ROW
+ M.CONTAIN_UNCOMMITTED_ROW,
+ M.ORIGINAL_SIZE
 FROM SYS.GV$OB_SSTABLES M
 WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
