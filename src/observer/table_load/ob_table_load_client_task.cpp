@@ -577,9 +577,9 @@ int ObTableLoadClientTask::create_session_info()
     OX(query_str.assign_fmt("DIRECT LOAD: %.*s, task_id:%ld",
                             static_cast<int>(param_.get_table_name().length()),
                             param_.get_table_name().ptr(), param_.get_task_id()));
-    OZ(session_info_->load_default_sys_variable(false /*print_info_log*/, false /*is_sys_tenant*/)); //加载默认的session参数
+    OZ(session_info_->init_tenant(tenant_info->get_tenant_name(), tenant_id));
+    OZ(session_info_->load_all_sys_vars(schema_guard_));
     OZ(session_info_->load_default_configs_in_pc());
-    OX(session_info_->init_tenant(tenant_info->get_tenant_name(), tenant_id));
     OX(session_info_->set_priv_user_id(user_id));
     OX(session_info_->store_query_string(query_str.string()));
     OX(session_info_->set_user(user_info->get_user_name(), user_info->get_host_name_str(),
