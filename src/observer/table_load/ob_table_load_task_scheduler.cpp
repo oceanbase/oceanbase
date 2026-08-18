@@ -157,6 +157,10 @@ int ObTableLoadTaskThreadPoolScheduler::start()
     state_ = STATE_STARTING;
     if (OB_FAIL(thread_pool_.start())) {
       LOG_WARN("fail to start thread pool", KR(ret));
+      // ThreadPool::start() has already stopped, waited for and destroyed all
+      // partially started threads on failure.  Mark the scheduler stopped so
+      // that the direct load abort path does not wait forever on STARTING.
+      state_ = STATE_STOPPED_NO_WAIT;
     } else {
       while (STATE_STARTING == state_) {
         PAUSE();
