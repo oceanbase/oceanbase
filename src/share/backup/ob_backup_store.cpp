@@ -10,6 +10,7 @@
 #include "share/backup/ob_backup_data_table_operator.h"
 #include "share/backup/ob_archive_persist_helper.h"
 #include "share/backup/ob_backup_path.h"
+#include "observer/ob_server_event_history_table_operator.h"
 #include "lib/random/ob_mysql_random.h"
 #include "share/location_cache/ob_location_service.h"
 
@@ -845,7 +846,16 @@ int ObBackupDestMgr::write_format_file()
     LOG_WARN("fail to write format file", K(ret), K(format_desc));
   } else if (OB_FAIL(ObBackupStorageInfoOperator::insert_backup_storage_info(
       *sql_proxy_, tenant_id_, backup_dest_, dest_type_, dest_id, io_info, true/*can_update*/))) {
-    LOG_WARN("fail to insert backup storage info", K(ret), K(backup_dest_)); 
+    LOG_ERROR("fail to write inner table after format file written , backup dest is partially initialized, switch to a new empty dest",
+              K(ret), K_(tenant_id), K(dest_id), K_(backup_dest));
+    LOG_DBA_ERROR(OB_BACKUP_INFO_NOT_EXIST,"msg", "backup dest is partially initialized, please switch to a new empty backup dest",
+                  K(ret), K_(tenant_id), K(dest_id));
+    FORWARD_USER_ERROR(ret, "backup dest is partially initialized, please switch to a new empty backup dest");
+    SERVER_EVENT_ADD("backup_data", "write_format_file_failed",
+                     "tenant_id", tenant_id_,
+                     "error_code", ret,
+                     "dest_id", dest_id,
+                     "comment", "backup dest partially initialized, switch to a new empty backup dest");
   }
   return ret;
 }
