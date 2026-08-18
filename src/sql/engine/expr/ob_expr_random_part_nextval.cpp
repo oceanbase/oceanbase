@@ -313,7 +313,10 @@ int ObExprRandomPartNextval::eval_nextval(
     } else if (OB_FAIL(eval_nextval(sql_mode, is_ddl_idempotent_autoinc, seq_used_out_action, *schema_guard, *autoinc_param, input_tc_ptr, input_value, tc, expr_datum, is_to_generate, new_val))) {
       LOG_WARN("failed to eval next val", K(ret), K(autoinc_table_id), K(autoinc_col_id), K(sql_mode), K(is_ddl_idempotent_autoinc),
           KPC(autoinc_param), KPC(input_value));
-    } else {
+    } else if (OB_HIDDEN_PK_INCREMENT_COLUMN_ID != autoinc_col_id) {
+      // User AUTO_INCREMENT that is also the RANDOM partkey still uses this expr
+      // and must keep LAST_INSERT_ID / OK packet insert-id semantics.
+      // Hidden __pk_increment is an internal routing sequence and must not leak.
       if (is_to_generate) {
         plan_ctx->set_autoinc_id_tmp(new_val);
       }
