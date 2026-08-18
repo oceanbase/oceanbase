@@ -3174,7 +3174,11 @@ int ObTransformPredicateMoveAround::pushdown_into_semi_info(ObDMLStmt *stmt,
   } else if (OB_FAIL(stmt->get_column_exprs(all_cols))) {
     LOG_WARN("failed to get all column exprs", K(ret));
   } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(*stmt, all_cols, right_rel_ids, cols))) {
-    LOG_WARN("failed to get related columns", K(ret));
+    LOG_WARN("failed to get right table related columns", K(ret));
+  } else if (semi_info->is_semi_join()
+             && stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_2_BP3, COMPAT_VERSION_4_5_0, COMPAT_VERSION_5_0_2)
+             && OB_FAIL(ObTransformUtils::extract_table_exprs(*stmt, all_cols, left_rel_ids, cols))) {
+    LOG_WARN("failed to get left table related columns", K(ret));
   } else if (OB_FAIL(transform_predicates(*stmt, semi_info->semi_conditions_, all_preds, cols,
                                           new_preds, is_needed))) {
     LOG_WARN("failed to deduce predicates", K(ret));
