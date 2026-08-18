@@ -929,27 +929,30 @@ bool ObSQLSessionMgr::CheckSessionFunctor::operator()(sql::ObSQLSessionMgr::Key 
         } else if (true == is_timeout) {
           LOG_INFO("session is timeout, kill this session", K(key.sessid_));
           ret = sess_mgr_->kill_session(*sess_info);
-        } else if (sess_info->is_txn_free_route_temp()) {
-          sess_info->check_txn_free_route_alive();
         } else {
           //借助于session遍历的功能，尝试revert session上缓存的schema guard，
           //避免长时间持有guard，导致schema mgr的槽位无法释放
           sess_info->get_cached_schema_guard_info().try_revert_schema_guard();
-          //定期更新租户级别的配置项，避免频繁获取租户级配置项给性能带来的开销
-          sess_info->refresh_tenant_config();
-          // send client commit result if txn commit timeout
-          if (OB_FAIL(sess_info->is_trx_commit_timeout(commit_cb, callback_retcode))) {
-            LOG_WARN("fail to check transaction commit timeout", K(ret));
-          } else if (commit_cb) {
-            LOG_INFO("transaction commit reach timeout", K(callback_retcode), K(key.sessid_));
-          } else if (OB_FAIL(sess_info->is_trx_idle_timeout(is_timeout))) {
-            // kill transaction which is idle more than configuration 'ob_trx_idle_timeout'
-            LOG_WARN("fail to check transaction idle timeout", K(ret));
-          } else if (true == is_timeout && !sess_info->associated_xa()) {
-            LOG_INFO("transaction is idle timeout, start to rollback", K(key.sessid_));
-            int tmp_ret;
-            if (OB_SUCCESS != (tmp_ret = sess_mgr_->kill_idle_timeout_tx(sess_info))) {
-              LOG_WARN("fail to kill transaction", K(ret), K(key.sessid_));
+          // Txn free-route temporary sessions must also release expired cached schema guards.
+          if (sess_info->is_txn_free_route_temp()) {
+            sess_info->check_txn_free_route_alive();
+          } else {
+            //定期更新租户级别的配置项，避免频繁获取租户级配置项给性能带来的开销
+            sess_info->refresh_tenant_config();
+            // send client commit result if txn commit timeout
+            if (OB_FAIL(sess_info->is_trx_commit_timeout(commit_cb, callback_retcode))) {
+              LOG_WARN("fail to check transaction commit timeout", K(ret));
+            } else if (commit_cb) {
+              LOG_INFO("transaction commit reach timeout", K(callback_retcode), K(key.sessid_));
+            } else if (OB_FAIL(sess_info->is_trx_idle_timeout(is_timeout))) {
+              // kill transaction which is idle more than configuration 'ob_trx_idle_timeout'
+              LOG_WARN("fail to check transaction idle timeout", K(ret));
+            } else if (true == is_timeout && !sess_info->associated_xa()) {
+              LOG_INFO("transaction is idle timeout, start to rollback", K(key.sessid_));
+              int tmp_ret;
+              if (OB_SUCCESS != (tmp_ret = sess_mgr_->kill_idle_timeout_tx(sess_info))) {
+                LOG_WARN("fail to kill transaction", K(ret), K(key.sessid_));
+              }
             }
           }
         }
