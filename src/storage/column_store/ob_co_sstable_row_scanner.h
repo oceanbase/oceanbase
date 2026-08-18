@@ -58,6 +58,7 @@ public:
             support_pd_rowscn_filter_if_contain(*table_, block_row_store_);
   }
   virtual int get_next_rows() override;
+  virtual int probe_next_rowkey() const final;
   virtual int get_next_rowkey(int64_t &curr_scan_index,
                               blocksstable::ObDatumRowkey& rowkey,
                               common::ObIAllocator &allocator) final;
@@ -155,6 +156,7 @@ private:
     bool &continue_filter);
   int fetch_rows();
   int get_next_group_size(const ObCSRowId begin, int64_t &group_size);
+  int get_current_row_id(ObCSRowId &current_row_id) const;
   int check_limit(
       const ObCGBitmap *bitmap,
       bool &limit_end,

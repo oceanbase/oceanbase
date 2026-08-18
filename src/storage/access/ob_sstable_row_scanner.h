@@ -47,6 +47,7 @@ public:
   virtual bool can_blockscan() const override;
   virtual bool can_batch_scan() const override;
   OB_INLINE bool is_di_base_iter() { return is_di_base_iter_; }
+  virtual int probe_next_rowkey() const final { return OB_SUCCESS; }
   virtual int get_next_rowkey(int64_t &curr_scan_index,
                               blocksstable::ObDatumRowkey& rowkey,
                               common::ObIAllocator &allocator) final;

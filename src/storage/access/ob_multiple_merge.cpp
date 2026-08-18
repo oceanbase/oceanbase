@@ -1808,13 +1808,16 @@ int ObMultipleMerge::refresh_table_on_demand()
         && access_param_->iter_param_.plan_use_new_format()
         && OB_FAIL(static_cast<ObAggregatedStoreVec *>(block_row_store_)->do_aggregate())) {
       STORAGE_LOG(WARN, "fail to aggregate rows", K(ret));
-    } else if (OB_FAIL(save_curr_rowkey())) {
-      if (OB_ERR_UNSUPPORTED_TYPE == ret) {
-        ret = OB_SUCCESS;
-        // do nothing
+    } else if (need_scan_di_base_ && OB_FAIL(di_base_sstable_row_scanner_->probe_next_rowkey())) {
+      if (OB_UNLIKELY(OB_ERR_UNSUPPORTED_TYPE != ret)) {
+        LOG_WARN("fail to probe di base rowkey", K(ret), KPC(di_base_sstable_row_scanner_));
       } else {
-        STORAGE_LOG(WARN, "fail to save current rowkey", K(ret));
+        // not support refresh table when di base cannot get next rowkey
+        // NOTE: with heavy incremental data or multi di base, memtable may not be released for a long time
+        ret = OB_SUCCESS;
       }
+    } else if (OB_FAIL(save_curr_rowkey())) {
+      STORAGE_LOG(WARN, "fail to save current rowkey", K(ret));
     } else {
       bool fast_refresh_table = true;
       bool can_refresh_tablet = true;
@@ -1844,12 +1847,7 @@ int ObMultipleMerge::refresh_table_on_demand()
       } else if (fast_refresh_table) {
         if (use_di_merge_scan() &&
             OB_FAIL(di_base_sstable_row_scanner_->save_curr_rowkey(need_scan_di_base_))) {
-          if (OB_ERR_UNSUPPORTED_TYPE == ret) {
-            ret = OB_SUCCESS;
-            // do nothing
-          } else {
-            LOG_WARN("fail to save di base curr rowkey", K(ret), KPC(di_base_sstable_row_scanner_));
-          }
+          LOG_WARN("fail to save di base curr rowkey", K(ret), KPC(di_base_sstable_row_scanner_));
         } else if (OB_FAIL(do_refresh_table(can_refresh_tablet))) {
           STORAGE_LOG(WARN, "fail to refresh table", K(ret));
         }
@@ -1966,6 +1964,7 @@ int ObMultipleMerge::switch_refresh_table_state_on_demand()
 int ObMultipleMerge::switch_refresh_table_state(const RefreshTableState refresh_table_state)
 {
   int ret = OB_SUCCESS;
+  bool update_state = true;
   switch (refresh_table_state) {
     case RefreshTableState::NONE:
       // drain end, do refresh table
@@ -2002,7 +2001,8 @@ int ObMultipleMerge::switch_refresh_table_state(const RefreshTableState refresh_
         } else if (OB_UNLIKELY(ScanState::DI_BASE != scan_state_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected scan state", K(ret), K(scan_state_));
-        } else {
+        }
+        if (OB_SUCC(ret)) {
           FLOG_INFO("hold tablet drain di base", "tablet_id", access_param_->iter_param_.tablet_id_,
               K(curr_scan_index_), K(scan_state_), K(refresh_table_state_), K(major_table_version_), KPC(di_base_sstable_row_scanner_));
         }
@@ -2013,6 +2013,14 @@ int ObMultipleMerge::switch_refresh_table_state(const RefreshTableState refresh_
       if (OB_UNLIKELY(RefreshTableState::HOLD_DRAIN != refresh_table_state_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected refresh table state", K(ret), K(refresh_table_state_), K(refresh_table_state));
+      } else if (OB_FAIL(di_base_sstable_row_scanner_->probe_next_rowkey())) {
+        if (OB_UNLIKELY(OB_ERR_UNSUPPORTED_TYPE != ret)) {
+          LOG_WARN("fail to probe di base rowkey", K(ret), KPC(di_base_sstable_row_scanner_));
+        } else {
+          // current di base may scan to range end and cannot get next rowkey, wait for next round
+          ret = OB_SUCCESS;
+          update_state = false;
+        }
       } else if (OB_FAIL(di_base_sstable_row_scanner_->clone_and_switch_tables(curr_rowkey_))) {
         LOG_WARN("fail to clone and switch tables", K(ret));
       } else if (nullptr != block_row_store_ && OB_FAIL(block_row_store_->reuse_for_refresh_table())) {
@@ -2038,7 +2046,7 @@ int ObMultipleMerge::switch_refresh_table_state(const RefreshTableState refresh_
       LOG_WARN("unexpected refresh table state", K(ret), K(refresh_table_state_));
       break;
   }
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && update_state) {
     refresh_table_state_ = refresh_table_state;
   }
   return ret;

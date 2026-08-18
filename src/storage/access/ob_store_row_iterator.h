@@ -172,6 +172,7 @@ public:
         IteratorCOMultiScan == iter_type;
   }
   OB_INLINE bool is_reclaimed() const { return is_reclaimed_; }
+  virtual int probe_next_rowkey() const { return OB_NOT_IMPLEMENT; }
   virtual int get_next_rowkey(int64_t &curr_scan_index,
                               blocksstable::ObDatumRowkey& rowkey,
                               common::ObIAllocator &allocator)

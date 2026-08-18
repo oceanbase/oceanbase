@@ -306,6 +306,23 @@ int ObDIBaseSSTableRowScanner::refresh_blockscan_checker(const blocksstable::ObD
   return ret;
 }
 
+int ObDIBaseSSTableRowScanner::probe_next_rowkey() const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = curr_di_base_idx_; OB_SUCC(ret) && i < di_base_iters_.count(); ++i) {
+    ObStoreRowIterator *iter = get_di_base_iter(i);
+    if (OB_ISNULL(iter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected di base iter", K(i));
+    } else if (OB_FAIL(iter->probe_next_rowkey())) {
+      if (OB_UNLIKELY(OB_ERR_UNSUPPORTED_TYPE != ret)) {
+        LOG_WARN("fail to probe di base rowkey", K(ret), KPC(iter));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDIBaseSSTableRowScanner::switch_param(ObTableAccessParam *access_param,
                                             ObTableAccessContext *access_ctx,
                                             const common::ObIArray<ObITable *> &tables,
@@ -600,9 +617,7 @@ int ObDIBaseSSTableRowScanner::save_curr_rowkey(const bool need_scan_di_base)
     } else if (OB_FAIL(iter->get_next_rowkey(di_base_curr_scan_index_,
                                              di_base_curr_rowkey_,
                                              *access_ctx_->allocator_))) {
-      if (OB_ERR_UNSUPPORTED_TYPE != ret) {
-        LOG_WARN("fail to get di base rowkey", K(ret), KPC(iter));
-      }
+      LOG_WARN("fail to get di base rowkey", K(ret), KPC(iter));
     }
     if (nullptr != agg_store) {
       int tmp_ret = OB_SUCCESS;

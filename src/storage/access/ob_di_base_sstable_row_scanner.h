@@ -38,6 +38,7 @@ public:
   }
   virtual int get_next_rows() override;
   virtual int refresh_blockscan_checker(const blocksstable::ObDatumRowkey &border_rowkey) override;
+  virtual int probe_next_rowkey() const final;
   int switch_param(ObTableAccessParam *access_param,
                    ObTableAccessContext *access_ctx,
                    const common::ObIArray<ObITable *> &tables,
