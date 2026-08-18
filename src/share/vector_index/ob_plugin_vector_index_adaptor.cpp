@@ -5707,7 +5707,9 @@ void ObPluginVectorIndexAdaptor::do_identity_refresh(int64_t mgr_ts)
 {
   reset_complete();
   set_reload_finish(false);
-  update_can_skip(NOT_INITED);
+  if (incr_data_.is_valid() && get_can_skip() == SKIP) {
+    update_can_skip(NOT_INITED);
+  }
   ATOMIC_STORE(&identity_ts_, mgr_ts);
   FLOG_INFO("identity refresh triggered", K(inc_tablet_id_), K(mgr_ts));
 }
