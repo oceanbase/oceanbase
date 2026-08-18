@@ -2005,6 +2005,11 @@ int ObSql::inner_handle_pl_execute(const ObString &sql,
   }
   //todo:@hr351303下面的逻辑后续挪到spi层
   if (OB_SUCC(ret)) {
+    const int64_t exec_start_timestamp = ObTimeUtility::current_time();
+    if (OB_NOT_NULL(result.get_physical_plan())) {
+      result.get_physical_plan()->stat_.set_executing_record(exec_start_timestamp);
+    }
+    result.get_exec_context().set_plan_start_time(exec_start_timestamp);
     if (OB_ISNULL(context.schema_guard_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("schema guard is null");

@@ -155,12 +155,19 @@ ObPLSqlAuditGuard::~ObPLSqlAuditGuard()
   session_info_.add_plsql_compile_time(plsql_compile_time_);
 }
 
-void ObPLSqlAuditGuard::set_exec_start_timestamp()
+void ObPLSqlAuditGuard::set_exec_start_timestamp(bool is_fetch)
 {
-  record_.time_record_.set_exec_start_timestamp(ObTimeUtility::current_time());
-  if (OB_NOT_NULL(spi_result_.get_result_set())
+  int64_t exec_start_timestamp = ObTimeUtility::current_time();
+  if (!is_fetch
+      && OB_NOT_NULL(spi_result_.get_result_set())
+      && OB_NOT_NULL(spi_result_.get_result_set()->get_exec_context().get_physical_plan_ctx())) {
+    exec_start_timestamp = spi_result_.get_result_set()->get_exec_context().get_plan_start_time();
+  }
+  record_.time_record_.set_exec_start_timestamp(exec_start_timestamp);
+  if (is_fetch
+      && OB_NOT_NULL(spi_result_.get_result_set())
       && OB_NOT_NULL(spi_result_.get_result_set()->get_physical_plan())) {
-    spi_result_.get_result_set()->get_physical_plan()->stat_.set_executing_record(record_.time_record_.get_exec_start_timestamp());
+    spi_result_.get_result_set()->get_physical_plan()->stat_.set_executing_record(exec_start_timestamp);
   }
 }
 

@@ -4900,7 +4900,7 @@ int ObSPIService::do_cursor_fetch(ObPLExecCtx *ctx,
       ObPLSubPLSqlTimeGuard guard(ctx);                                               \
       ObPLSqlAuditGuard audit_guard(                                                  \
         *(ctx->exec_ctx_), *session, *spi_result, audit_record, ret, ps_sql, retry_ctrl, trace_id_guard, spi_result->get_sql_ctx().stmt_type_, false, cursor); \
-      audit_guard.set_exec_start_timestamp();                                         \
+      audit_guard.set_exec_start_timestamp(true);                                     \
       if (cursor->get_sql_trace_id()->is_invalid()                                    \
             && OB_NOT_NULL(ObCurTraceId::get_trace_id())) {                           \
         cursor->get_sql_trace_id()->set(*ObCurTraceId::get_trace_id());               \

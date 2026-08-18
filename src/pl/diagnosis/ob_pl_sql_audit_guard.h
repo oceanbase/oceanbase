@@ -99,7 +99,7 @@ public:
 
   ~ObPLSqlAuditGuard();
 
-  void set_exec_start_timestamp();
+  void set_exec_start_timestamp(bool is_fetch = false);
 
 private:
   bool enable_perf_event_;
