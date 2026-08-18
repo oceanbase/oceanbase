@@ -453,13 +453,7 @@ bool ObTmpFileIOReadCtx::ObIOReadHandle::is_valid()
               handle_.is_valid();
 
   if (bret) {
-    if (!GCTX.is_shared_storage_mode()) {
-      bret = read_size_ <= ObTmpFileGlobal::SN_BLOCK_SIZE && block_handle_.is_inited();
-    #ifdef OB_BUILD_SHARED_STORAGE
-    } else {
-      bret = read_size_ <= ObTmpFileGlobal::SS_BLOCK_SIZE;
-    #endif
-    }
+    bret = read_size_ <= ObTmpFileGlobal::SN_BLOCK_SIZE && block_handle_.is_inited();
   }
 
   return bret;

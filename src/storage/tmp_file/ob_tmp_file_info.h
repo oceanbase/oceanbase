@@ -195,49 +195,6 @@ public:
                        K(tree_info_), K(write_info_), K(read_info_));
 };
 
-#ifdef OB_BUILD_SHARED_STORAGE
-class ObSSTmpFileInfo final : public ObTmpFileBaseInfo
-{
-public:
-  ObSSTmpFileInfo() :
-    ObTmpFileBaseInfo(),
-    cached_data_page_num_(0),
-    write_back_data_page_num_(0),
-    flushed_data_page_num_(0) {}
-  int init(const ObCurTraceId::TraceId &trace_id,
-           const uint64_t tenant_id,
-           const int64_t dir_id,
-           const int64_t fd,
-           const int64_t file_size,
-           const int64_t truncated_offset,
-           const bool is_deleting,
-           const int64_t cached_page_num,
-           const int64_t write_back_data_page_num,
-           const int64_t flushed_data_page_num,
-           const int64_t ref_cnt,
-           const int64_t birth_ts,
-           const void* const tmp_file_ptr,
-           const char* const label,
-           const OB_TMP_FILE_TYPE file_type,
-           const int64_t compressible_fd,
-           const ObTmpFileWriteInfo &write_info,
-           const ObTmpFileReadInfo &read_info);
-  virtual ~ObSSTmpFileInfo() { reset(); }
-  virtual void reset() override;
-  virtual ObTmpFileWriteInfo &get_write_info() override { return write_info_; }
-  virtual ObTmpFileReadInfo &get_read_info() override { return read_info_; }
-public:
-  int64_t cached_data_page_num_;
-  int64_t write_back_data_page_num_;
-  int64_t flushed_data_page_num_;
-  ObTmpFileWriteInfo write_info_;
-  ObTmpFileReadInfo read_info_;
-  INHERIT_TO_STRING_KV("ObTmpFileBaseInfo", ObTmpFileBaseInfo,
-                       K(cached_data_page_num_), K(write_back_data_page_num_),
-                       K(flushed_data_page_num_), K(write_info_), K(read_info_));
-};
-#endif
-
 }  // end namespace tmp_file
 }  // end namespace oceanbase
 

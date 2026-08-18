@@ -38,9 +38,6 @@ private:
   int get_next_tmp_file_info_(tmp_file::ObTmpFileBaseInfo *tmp_file_info);
   int fill_columns_(tmp_file::ObTmpFileBaseInfo *tmp_file_info);
   int fill_sn_column_(const uint64_t col_index, tmp_file::ObSNTmpFileInfo *tmp_file_info);
-  #ifdef OB_BUILD_SHARED_STORAGE
-  int fill_ss_column_(const uint64_t col_index, tmp_file::ObSSTmpFileInfo *tmp_file_info);
-  #endif
 
 private:
   enum

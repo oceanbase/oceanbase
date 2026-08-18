@@ -174,51 +174,5 @@ void ObSNTmpFileInfo::reset()
   ObTmpFileBaseInfo::reset();
 }
 
-#ifdef OB_BUILD_SHARED_STORAGE
-int ObSSTmpFileInfo::init(
-    const ObCurTraceId::TraceId &trace_id,
-    const uint64_t tenant_id,
-    const int64_t dir_id,
-    const int64_t fd,
-    const int64_t file_size,
-    const int64_t truncated_offset,
-    const bool is_deleting,
-    const int64_t cached_page_num,
-    const int64_t write_back_data_page_num,
-    const int64_t flushed_data_page_num,
-    const int64_t ref_cnt,
-    const int64_t birth_ts,
-    const void* const tmp_file_ptr,
-    const char* const label,
-    const OB_TMP_FILE_TYPE file_type,
-    const int64_t compressible_fd,
-    const ObTmpFileWriteInfo &write_info,
-    const ObTmpFileReadInfo &read_info)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObTmpFileBaseInfo::init(trace_id, tenant_id, dir_id, fd, file_size,
-                                      truncated_offset, is_deleting, ref_cnt, birth_ts,
-                                      tmp_file_ptr, label, file_type, compressible_fd))) {
-    LOG_WARN("fail to init ObTmpFileBaseInfo", KR(ret), K(trace_id), K(tenant_id), K(dir_id), K(fd),
-             K(file_size), K(truncated_offset), K(is_deleting), K(ref_cnt), K(birth_ts),
-             K(tmp_file_ptr), K(label), K(file_type), K(compressible_fd));
-  } else {
-    cached_data_page_num_ = cached_page_num;
-    write_back_data_page_num_ = write_back_data_page_num;
-    flushed_data_page_num_ = flushed_data_page_num;
-    write_info_ = write_info;
-    read_info_ = read_info;
-  }
-  return ret;
-}
-
-void ObSSTmpFileInfo::reset()
-{
-  write_info_.reset();
-  read_info_.reset();
-  ObTmpFileBaseInfo::reset();
-}
-#endif
-
 }  // end namespace tmp_file
 }  // end namespace oceanbase

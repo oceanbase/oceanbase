@@ -7,7 +7,6 @@
 #include "storage/tmp_file/ob_tmp_file_global.h"
 #include "storage/tmp_file/ob_tmp_file_manager.h"
 #include "storage/blocksstable/ob_storage_object_handle.h"
-#include "observer/ob_server_struct.h"
 
 using namespace oceanbase::storage;
 using namespace oceanbase::share;
@@ -187,13 +186,8 @@ bool ObTmpPageCacheReadInfo::is_valid()
   bool ret = is_inited_ && macro_block_id_.is_valid() && read_size_ > 0 && begin_offset_ >= 0 &&
              io_desc_.is_valid() && io_timeout_ms_ > 0 &&
              OB_NOT_NULL(object_handle_);
-  if(OB_UNLIKELY(!ret)) {
-  } else if (!GCTX.is_shared_storage_mode()) {
+  if (OB_LIKELY(ret)) {
     ret = begin_offset_ + read_size_ <= ObTmpFileGlobal::SN_BLOCK_SIZE;
-  #ifdef OB_BUILD_SHARED_STORAGE
-  } else {
-    ret = begin_offset_ + read_size_ <= ObTmpFileGlobal::SS_BLOCK_SIZE;
-  #endif
   }
   return ret;
 }
@@ -213,16 +207,10 @@ int ObTmpPageCacheReadInfo::init_read(const blocksstable::MacroBlockId &macro_bl
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid arguments", KR(ret), K(macro_block_id), K(read_size),
                 K(begin_offset), K(io_flag), K(io_timeout_ms), KP(handle));
-  } else if (!GCTX.is_shared_storage_mode() && begin_offset + read_size > ObTmpFileGlobal::SN_BLOCK_SIZE) {
+  } else if (begin_offset + read_size > ObTmpFileGlobal::SN_BLOCK_SIZE) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid arguments", KR(ret), K(macro_block_id), K(read_size),
                 K(begin_offset), K(io_flag), K(io_timeout_ms), KP(handle));
-  #ifdef OB_BUILD_SHARED_STORAGE
-  } else if (GCTX.is_shared_storage_mode() && begin_offset + read_size > ObTmpFileGlobal::SS_BLOCK_SIZE) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid arguments", KR(ret), K(macro_block_id), K(read_size),
-                K(begin_offset), K(io_flag), K(io_timeout_ms), KP(handle));
-  #endif
   } else {
     macro_block_id_ = macro_block_id;
     read_size_ = read_size;
@@ -346,9 +334,6 @@ int ObTmpPageCache::load_page(const ObTmpPageCacheKey &key,
   } else if (OB_ISNULL(callback_allocator)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "callback_allocator is unexpected nullptr", KR(ret), K(key));
-  } else if (OB_UNLIKELY(GCTX.is_shared_storage_mode())) {
-    ret = OB_NOT_SUPPORTED;
-    STORAGE_LOG(WARN, "shared storage mode not support this function", KR(ret), K(key));
   } else if (OB_FAIL(alloc(key.get_tenant_id(), key.size(),
       sizeof(ObTmpPageCacheValue) + ObTmpFileGlobal::PAGE_SIZE,
       kvpair, p_handle.handle_, inst_handle))) {

@@ -204,6 +204,9 @@ namespace blocksstable
 {
 class MacroBlockId;
 class ObStorageObjectOpt;
+struct ObStorageObjectReadInfo;
+struct ObStorageObjectWriteInfo;
+class ObStorageObjectHandle;
 
 #define STI(object_type) (ObStorageObjectTypeInstance::get_instance(object_type))
 
@@ -339,6 +342,7 @@ def start_generate_cpp(cpp_file_name):
 #define USING_LOG_PREFIX STORAGE
 #include "ob_storage_object_type.h"
 #include "storage/blocksstable/ob_object_manager.h"
+#include "storage/tablet/ob_tablet.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/shared_storage/ob_file_helper.h"

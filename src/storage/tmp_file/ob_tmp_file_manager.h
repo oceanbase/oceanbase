@@ -8,9 +8,6 @@
 
 #include "storage/tmp_file/ob_tmp_file_io_info.h"
 #include "storage/tmp_file/ob_tmp_file_io_handle.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/tmp_file/ob_ss_tmp_file_manager.h"
-#endif
 #include "storage/tmp_file/ob_sn_tmp_file_manager.h"
 
 namespace oceanbase
@@ -25,9 +22,6 @@ public:
   virtual ~ObTenantTmpFileManager() { destroy(); }
   static int mtl_init(ObTenantTmpFileManager *&manager);
   virtual ObSNTenantTmpFileManager &get_sn_file_manager() { return sn_file_manager_; }
-#ifdef OB_BUILD_SHARED_STORAGE
-  ObSSTenantTmpFileManager &get_ss_file_manager() { return ss_file_manager_; }
-#endif
   virtual int init();
   int start();
   void stop();
@@ -96,10 +90,6 @@ public:
 private:
   bool is_inited_;
   ObSNTenantTmpFileManager sn_file_manager_;
-
-#ifdef OB_BUILD_SHARED_STORAGE
-  ObSSTenantTmpFileManager ss_file_manager_;
-#endif
 };
 
 class ObTenantTmpFileManagerWithMTLSwitch final

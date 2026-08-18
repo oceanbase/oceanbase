@@ -157,14 +157,6 @@ public:
   OB_INLINE int64_t get_total_uncached_page_read_cnt() const { return total_uncached_page_read_cnt_; }
   OB_INLINE int64_t get_uncached_page_read_hits() const { return uncached_page_read_hits_; }
 
-  #ifdef OB_BUILD_SHARED_STORAGE
-  // for ss mode
-  OB_INLINE void update_read_wbp_page_stat(const int64_t page_num)
-  {
-    total_wbp_page_read_cnt_ += page_num;
-    wbp_page_read_hits_++;
-  }
-  #endif
   // for sn mode
   OB_INLINE void update_read_wbp_page_stat(const int64_t hit_cache_cnt, const int64_t read_cache_cnt)
   {

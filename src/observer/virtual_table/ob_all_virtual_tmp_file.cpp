@@ -230,14 +230,6 @@ int ObAllVirtualTmpFileInfo::fill_columns_(tmp_file::ObTmpFileBaseInfo *tmp_file
         case WRITE_BACK_DATA_PAGE_NUM:
         case FLUSHED_DATA_PAGE_NUM:
         case AGGREGATE_READ_IO_CNT:
-          #ifdef OB_BUILD_SHARED_STORAGE
-          if (GCTX.is_shared_storage_mode()) {
-            tmp_file::ObSSTmpFileInfo *ss_tmp_file_info = static_cast<tmp_file::ObSSTmpFileInfo *>(tmp_file_info);
-            if (OB_FAIL(fill_ss_column_(i, ss_tmp_file_info))) {
-              SERVER_LOG(WARN, "fail to fill ss column", KR(ret), K(i), KPC(ss_tmp_file_info));
-            }
-          }
-          #endif
           break;
         /* columns in ss modes end */
         /* columns in sn modes begin */
@@ -246,14 +238,13 @@ int ObAllVirtualTmpFileInfo::fill_columns_(tmp_file::ObTmpFileBaseInfo *tmp_file
         case META_BYTES:
         case CACHED_META_PAGE_NUM:
         case WRITE_BACK_META_PAGE_NUM:
-        case PAGE_FLUSH_CNT:
-          if (!GCTX.is_shared_storage_mode()) {
-            tmp_file::ObSNTmpFileInfo *sn_tmp_file_info = static_cast<tmp_file::ObSNTmpFileInfo *>(tmp_file_info);
-            if (OB_FAIL(fill_sn_column_(i, sn_tmp_file_info))) {
-              SERVER_LOG(WARN, "fail to fill sn column", KR(ret), K(i), KPC(sn_tmp_file_info));
-            }
+        case PAGE_FLUSH_CNT: {
+          tmp_file::ObSNTmpFileInfo *sn_tmp_file_info = static_cast<tmp_file::ObSNTmpFileInfo *>(tmp_file_info);
+          if (OB_FAIL(fill_sn_column_(i, sn_tmp_file_info))) {
+            SERVER_LOG(WARN, "fail to fill sn column", KR(ret), K(i), KPC(sn_tmp_file_info));
           }
           break;
+        }
         /* columns in sn modes end */
         default:
           ret = OB_ERR_UNEXPECTED;
@@ -300,38 +291,6 @@ int ObAllVirtualTmpFileInfo::fill_sn_column_(const uint64_t col_index, tmp_file:
   return ret;
 }
 
-#ifdef OB_BUILD_SHARED_STORAGE
-int ObAllVirtualTmpFileInfo::fill_ss_column_(const uint64_t col_index, tmp_file::ObSSTmpFileInfo *tmp_file_info)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(tmp_file_info)) {
-    ret = OB_INVALID_ARGUMENT;
-    SERVER_LOG(WARN, "invalid argument", KR(ret), KP(tmp_file_info));
-  } else {
-    uint64_t col_id = output_column_ids_.at(col_index);
-    switch (col_id) {
-      case CACHED_DATA_PAGE_NUM:
-          cur_row_.cells_[col_index].set_int(tmp_file_info->cached_data_page_num_);
-          break;
-      case WRITE_BACK_DATA_PAGE_NUM:
-        cur_row_.cells_[col_index].set_int(tmp_file_info->write_back_data_page_num_);
-        break;
-      case FLUSHED_DATA_PAGE_NUM:
-        cur_row_.cells_[col_index].set_int(tmp_file_info->flushed_data_page_num_);
-        break;
-      case AGGREGATE_READ_IO_CNT:
-        cur_row_.cells_[col_index].set_int(tmp_file_info->read_info_.aggregate_read_io_cnt_);
-        break;
-      default:
-        ret = OB_ERR_UNEXPECTED;
-        SERVER_LOG(WARN, "invalid column_id", KR(ret), K(col_id));
-        break;
-    }
-  }
-  return ret;
-}
-#endif
-
 int ObAllVirtualTmpFileInfo::process_curr_tenant(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
@@ -359,13 +318,7 @@ int ObAllVirtualTmpFileInfo::process_curr_tenant(common::ObNewRow *&row)
   if (OB_SUCC(ret)) {
     tmp_file::ObTmpFileBaseInfo *tmp_file_info = nullptr;
     ObMemAttr attr(MTL_ID(), "TmpFileInfo");
-    if (!GCTX.is_shared_storage_mode()) {
-      tmp_file_info = OB_NEW(tmp_file::ObSNTmpFileInfo, attr);
-    #ifdef OB_BUILD_SHARED_STORAGE
-    } else {
-      tmp_file_info = OB_NEW(tmp_file::ObSSTmpFileInfo, attr);
-    #endif
-    }
+    tmp_file_info = OB_NEW(tmp_file::ObSNTmpFileInfo, attr);
     if (OB_FAIL(get_next_tmp_file_info_(tmp_file_info))) {
       if (OB_ITER_END != ret) {
         SERVER_LOG(WARN, "fail to get next tmp file info", KR(ret));

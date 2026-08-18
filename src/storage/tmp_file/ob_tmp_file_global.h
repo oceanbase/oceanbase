@@ -38,42 +38,6 @@ struct ObTmpFileGlobal final
   static const uint32_t INVALID_PAGE_ID;
   static const int64_t INVALID_VIRTUAL_PAGE_ID;
 
-#ifdef OB_BUILD_SHARED_STORAGE
-  // SS_TMP_FILE
-  static const int64_t SHARE_STORAGE_DIR_ID = 1;
-  // Attention:
-  // SS_TMP_FILE_FLUSH_WAIT_TIMEOUT_MS is just a hint value.
-  // the real wait timeout period is also depend on GCONF._data_storage_io_timeout and tenant_config->_object_storage_io_timeout
-  static const int64_t SS_TMP_FILE_FLUSH_WAIT_TIMEOUT_MS = 30 * 1000;   // 30s
-  static constexpr double SS_TMP_FILE_FLUSH_PROP = 0.2;
-  static constexpr double SS_TMP_FILE_SAFE_WBP_PROP = 0.8;
-  static constexpr int64_t SS_BLOCK_SIZE = 2 << 20; // 2MB
-  static constexpr int64_t SS_BLOCK_PAGE_NUMS =
-                           SS_BLOCK_SIZE / PAGE_SIZE;   // 256 pages per macro block
-
-  // TMP_FILE_FLUSH_STAGE
-  enum FlushCtxState //FARM COMPAT WHITELIST
-  {
-    FSM_F1 = 0,  // flush data list L1
-    FSM_F2,  // flush data list L2 & L3 & L4
-    FSM_F3,  // flush data list L5
-    FSM_FINISHED
-  };
-  static int advance_flush_ctx_state(const FlushCtxState cur_stage, FlushCtxState &next_stage);
-  static const int64_t MAX_FLUSHING_BLOCK_NUM = 200;
-
-  enum FileList {
-    INVALID = -1,
-    L1 = 0, // [2MB, INFINITE)
-    L2,     // [1MB, 2MB)
-    L3,     // [128KB, 1MB)
-    L4,     // [8KB, 128KB)
-    L5,     // (0, 8KB)
-    MAX
-  };
-  static int switch_data_list_level_to_flush_state(const FileList list_level, FlushCtxState &flush_state);
-  static const int64_t TMP_FILE_STAT_FREQUENCY = 1 * 1000 * 1000; // 1s
-#endif
 };
 
 enum OB_TMP_FILE_TYPE

@@ -5045,8 +5045,55 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 ''',
 )
 
-# Import optimized SHARED_MINI_DATA_MACRO_V2, SHARED_MINI_META_MACRO_V2, SHARED_MINOR_DATA_MACRO_V2, SHARED_MINOR_META_MACRO_V2 configurations
-exec(open("shared_mini_minor_data_macro_config.py").read())
+# Keep the legacy V2 type identities so persisted MacroBlockId values 84-87
+# remain recognizable after their shared-storage path implementations retire.
+legacy_v2_is_valid = '''
+bool is_valid(const MacroBlockId &file_id) const
+{
+  // second_id:tablet_id, third_id:op_id+macro_seq_id
+  return (file_id.second_id() > 0) && (file_id.second_id() < INT64_MAX) && (file_id.third_id() >= 0);
+}
+'''
+
+legacy_v2_get_object_id = '''
+int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
+{
+  int ret = OB_SUCCESS;
+  const int64_t default_incarnation_id = 0;
+  set_ss_object_first_id_(default_incarnation_id, opt.ss_share_opt_.column_group_id_, object_id);
+  object_id.set_second_id(opt.ss_share_opt_.tablet_id_);
+  object_id.set_third_id(opt.ss_share_opt_.data_seq_);
+  object_id.set_ss_fourth_id(!false && opt.ss_share_opt_.is_ls_inner_tablet_,
+                             opt.ss_share_opt_.ls_id_, opt.ss_share_opt_.reorganization_scn_);
+  return ret;
+}
+'''
+
+legacy_v2_macro_types = (
+    ('SHARED_MINI_V2_DATA_MACRO', 'macro_data', 84, True),
+    ('SHARED_MINI_V2_META_MACRO', 'macro_meta', 85, True),
+    ('SHARED_MINOR_V2_DATA_MACRO', 'macro_data', 86, False),
+    ('SHARED_MINOR_V2_META_MACRO', 'macro_meta', 87, False),
+)
+
+for obj_type, data_type, type_id, include_write_back in legacy_v2_macro_types:
+    write_strategy = ["WRITE_THROUGH", "WRITE_THROUGH_AND_TRY_WRITE_LCACHE"]
+    if include_write_back:
+        write_strategy.insert(1, "WRITE_BACK")
+    def_storage_object_type_cfg(
+        obj_type=obj_type,
+        owner='yunxing.cyx',
+        id=type_id,
+        access_mode='shared',
+        data_type=data_type,
+        read_odirect=False,
+        write_strategy=write_strategy,
+        is_support_fd_cache=True,
+        is_read_out_of_bounds=False,
+        is_path_include_inner_tablet=True,
+        is_valid=legacy_v2_is_valid,
+        get_object_id=legacy_v2_get_object_id,
+    )
 
 def_storage_object_type_cfg(
     obj_type = 'SHARED_TABLET_MACRO_DIFF',  #ObSharedTabletMacroDiffType
