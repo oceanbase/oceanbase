@@ -606,9 +606,15 @@ int ObBackupCheckFile::check_appender_permission_(const ObBackupDest &backup_des
   const static int64_t BUF_LENGTH = 64;
   char data[BUF_LENGTH];
   ObBackupPath path;
-  // here mtl_id is 0, use sys tenant's memory instead of 500 tenant
+  // This direct IO path cannot use the server tenant for IO accounting. Keep
+  // the explicit object storage tenant when one is set, and otherwise retain
+  // the original sys tenant fallback.
+  uint64_t io_tenant_id = ObBackupIoAdapter::get_tenant_id();
+  if (OB_SERVER_TENANT_ID == io_tenant_id) {
+    io_tenant_id = OB_SYS_TENANT_ID;
+  }
   ObObjectStorageTenantGuard object_storage_tenant_guard(
-  OB_SYS_TENANT_ID, OB_IO_MANAGER.get_object_storage_io_timeout_ms(OB_SYS_TENANT_ID) * 1000LL);
+      io_tenant_id, OB_IO_MANAGER.get_object_storage_io_timeout_ms(io_tenant_id) * 1000LL);
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;

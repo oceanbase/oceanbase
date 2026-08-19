@@ -87,6 +87,8 @@
 #include "close_modules/arbitration/share/arbitration_service/ob_arbitration_service_utils.h" // for ObArbitrationServiceUtils
 #endif
 #include "share/backup/ob_backup_connectivity.h"
+#include "share/io/ob_io_manager.h"
+#include "lib/restore/ob_object_storage_base.h"
 #include "rootserver/mview/ob_mview_maintenance_service.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "share/backup/ob_ss_ha_macro_block_table_operator.h"
@@ -5223,6 +5225,10 @@ int ObRpcCheckBackupDestRWConsistencyP::process()
     LOG_WARN("invalid argument", K(ret), K_(arg));
   } else {
     MTL_SWITCH(arg_.tenant_id_) {
+      // MTL_SWITCH does not update the object storage tenant context.
+      ObObjectStorageTenantGuard object_storage_tenant_guard(
+          arg_.tenant_id_,
+          OB_IO_MANAGER.get_object_storage_io_timeout_ms(arg_.tenant_id_) * 1000LL);
       if (OB_FAIL(backup_dest.set(arg_.backup_dest_str_))) {
         LOG_WARN("fail to set backup_dest", K(ret), K_(arg));
       } else if (OB_FAIL(io_util.get_file_length(backup_dest.get_root_path(), backup_dest.get_storage_info(), read_file_len))) {
@@ -5282,6 +5288,9 @@ int ObRpcCheckBackupDestVaildityP::process()
     LOG_WARN("gctx sql proxy or gctx rpc proxy is null", KR(ret));
   } else {
     MTL_SWITCH(arg_.tenant_id_) {
+      ObObjectStorageTenantGuard object_storage_tenant_guard(
+          arg_.tenant_id_,
+          OB_IO_MANAGER.get_object_storage_io_timeout_ms(arg_.tenant_id_) * 1000LL);
       share::ObBackupDestMgr dest_mgr;
       if (OB_FAIL(dest_mgr.init_for_rpc(
             arg_.tenant_id_,
@@ -5305,6 +5314,9 @@ int ObRpcWriteBackupDestFormatFileP::process()
     LOG_WARN("invalid argument", K(ret), K_(arg));
   } else {
     MTL_SWITCH(arg_.tenant_id_) {
+      ObObjectStorageTenantGuard object_storage_tenant_guard(
+          arg_.tenant_id_,
+          OB_IO_MANAGER.get_object_storage_io_timeout_ms(arg_.tenant_id_) * 1000LL);
       share::ObBackupDestMgr dest_mgr;
       if (OB_FAIL(dest_mgr.init_for_rpc(
             arg_.tenant_id_,

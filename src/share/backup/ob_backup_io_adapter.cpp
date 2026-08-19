@@ -1741,9 +1741,12 @@ int ObBackupIoAdapter::async_io_manager_upload(
 
 uint64_t ObBackupIoAdapter::get_tenant_id()
 {
-  uint64_t tenant_id = MTL_ID();
-  if (is_virtual_tenant_id(tenant_id) || (0 == tenant_id)) {
-    tenant_id = OB_SERVER_TENANT_ID; // use 500 tenant in io manager
+  uint64_t tenant_id = ObObjectStorageTenantGuard::get_tenant_id();
+  if (OB_SERVER_TENANT_ID == tenant_id) {
+    tenant_id = MTL_ID();
+    if (is_virtual_tenant_id(tenant_id) || (0 == tenant_id)) {
+      tenant_id = OB_SERVER_TENANT_ID; // use 500 tenant in io manager
+    }
   }
   return tenant_id;
 }

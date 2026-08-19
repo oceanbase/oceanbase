@@ -16,6 +16,8 @@
 #include "share/ob_rpc_struct.h"
 #include "share/ob_license_utils.h"
 #include "share/ob_server_struct.h"
+#include "share/io/ob_io_manager.h"
+#include "lib/restore/ob_object_storage_base.h"
 
 
 using namespace oceanbase;
@@ -1272,6 +1274,9 @@ int ObBackupConfigUtil::admin_set_backup_config(
       }
 
       if (OB_SUCC(ret)) {
+        common::ObObjectStorageTenantGuard object_storage_tenant_guard(
+            exec_tenant_id,
+            OB_IO_MANAGER.get_object_storage_io_timeout_ms(exec_tenant_id) * 1000LL);
         common::ObSqlString name;
         common::ObSqlString value;
         if (OB_FAIL(name.assign(item.name_.ptr()))) {
