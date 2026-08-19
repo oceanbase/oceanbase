@@ -61,11 +61,13 @@ namespace sql
       } else if (OB_BATCHED_MULTI_STMT_ROLLBACK == ret) { \
         /*forall optimal rollback, forall will rollback to single sql mode*/ \
         cursor->set_forall_rollback(); \
-      } else if (!cursor->get_in_forall() \
-                 || !cursor->get_save_exception() \
-                 /*|| !cursor->is_forall_rollback()*/) { \
-        /*not in forall or in forall rollback, do nothing*/ \
-        /*we just handle bulk exception in single sql mode*/ \
+      } else if (!cursor->get_in_forall()) { \
+        /* Oracle: failed SQL sets SQL%ROWCOUNT to 0, OB_ERR_TOO_MANY_ROWS is an exception */ \
+        if (OB_ERR_TOO_MANY_ROWS != ret) { \
+          (void)cursor->set_rowcount(0); \
+        } \
+      } else if (!cursor->get_save_exception()) { \
+        /*in forall without SAVE EXCEPTIONS, do nothing*/ \
       } else if (OB_SUCCESS != cursor->set_bulk_exception(ret)) { \
         LOG_WARN("failed to set bulk exception"); \
       } else { \
@@ -2064,6 +2066,12 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
 // #endif
         ObSPIExecEnvGuard env_guard(*session);
         ctx->set_saved_sql_code_info();
+        if (lib::is_oracle_mode()) {
+          ObPLCursorInfo *implicit_cursor = session->get_pl_implicit_cursor();
+          if (OB_NOT_NULL(implicit_cursor) && !implicit_cursor->get_in_forall()) {
+            implicit_cursor->reset_sql_rowcount();
+          }
+        }
 
         do {
           ParamStore *array_params = NULL;
@@ -2285,12 +2293,22 @@ void ObSPIService::spi_save_sqlcode(pl::ObPLExecCtx *ctx)
   }
 }
 
-void ObSPIService::spi_set_rowcount(pl::ObPLExecCtx *ctx)
+void ObSPIService::spi_reset_sql_rowcount(pl::ObPLExecCtx *ctx)
+{
+  if (OB_NOT_NULL(ctx)
+      && OB_NOT_NULL(ctx->exec_ctx_)
+      && OB_NOT_NULL(ctx->exec_ctx_->get_my_session())
+      && OB_NOT_NULL(ctx->exec_ctx_->get_my_session()->get_pl_implicit_cursor())) {
+    ctx->exec_ctx_->get_my_session()->get_pl_implicit_cursor()->reset_sql_rowcount();
+  }
+}
+
+void ObSPIService::spi_set_rowcount(pl::ObPLExecCtx *ctx, int64_t rowcount)
 {
   if (OB_NOT_NULL(ctx->exec_ctx_)
     && OB_NOT_NULL(ctx->exec_ctx_->get_my_session())
     && OB_NOT_NULL(ctx->exec_ctx_->get_my_session()->get_pl_implicit_cursor())) {
-    ctx->exec_ctx_->get_my_session()->get_pl_implicit_cursor()->set_rowcount(1);
+    ctx->exec_ctx_->get_my_session()->get_pl_implicit_cursor()->set_rowcount(rowcount);
   }
 }
 
@@ -8585,7 +8603,7 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
         }
         OX(implicit_cursor->set_rowcount(into_count > 0 ? 1 : 0));
       }
-    } else if (stmt::T_ANONYMOUS_BLOCK != ob_result_set->get_stmt_type()) {
+    } else {
       // 不带Returing的INSERT，DELETE，UPDATE
       if (stmt::T_UPDATE == ob_result_set->get_stmt_type()) {
         ObPhysicalPlanCtx *phy_ctx

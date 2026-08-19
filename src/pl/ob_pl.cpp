@@ -239,6 +239,8 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
                                 (void*)(sql::ObSPIService::spi_restore_sqlcode));
   jit::ObLLVMHelper::add_symbol(ObString("spi_save_sqlcode"),
                                 (void*)(sql::ObSPIService::spi_save_sqlcode));
+  jit::ObLLVMHelper::add_symbol(ObString("spi_reset_sql_rowcount"),
+                                (void*)(sql::ObSPIService::spi_reset_sql_rowcount));
   jit::ObLLVMHelper::add_symbol(ObString("spi_set_rowcount"),
                                 (void*)(sql::ObSPIService::spi_set_rowcount));
 #undef WRAP_SPI_CALL

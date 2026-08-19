@@ -600,7 +600,8 @@ public:
   static void spi_reset_allocator(ObIAllocator *allocator);
   static void spi_restore_sqlcode(pl::ObPLExecCtx *ctx);
   static void spi_save_sqlcode(pl::ObPLExecCtx *ctx);
-  static void spi_set_rowcount(pl::ObPLExecCtx *ctx);
+  static void spi_reset_sql_rowcount(pl::ObPLExecCtx *ctx);
+  static void spi_set_rowcount(pl::ObPLExecCtx *ctx, int64_t rowcount);
   static int spi_init_composite(ObIAllocator *current_allcator, int64_t addr, bool is_record, bool need_allocator);
   static int spi_get_parent_allocator(ObIAllocator *current_allcator, int64_t *parent_allocator_addr);
   static int spi_prepare(common::ObIAllocator &allocator,

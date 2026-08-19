@@ -1151,6 +1151,12 @@ public:
       bulk_rowcount_.reset();
     }
   }
+
+  inline void reset_sql_rowcount()
+  {
+    isopen_ = false;
+    rowcount_ = 0;
+  }
   inline void clear_row_count() { rowcount_ = 0; }
   inline int add_bulk_row_count(int64_t row_count) { return bulk_rowcount_.push_back(row_count); }
   inline int add_bulk_exception(int64_t index, int64_t code) { return bulk_exceptions_.push_back(ObCursorBulkException(index, code)); }
