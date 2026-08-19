@@ -16233,12 +16233,22 @@ int ObDMLResolver::convert_udf_to_agg_expr(ObRawExpr *&expr,
   int ret = OB_SUCCESS;
   ObUDFRawExpr *udf_expr = NULL;
   bool parent_is_win_expr = parent_expr != NULL && parent_expr->is_win_func_expr() ? true : false;
+  bool is_pl_agg_udf_win_expr = false;
+  if (parent_is_win_expr) {
+    ObWinFunRawExpr *win_expr = static_cast<ObWinFunRawExpr *>(parent_expr);
+    is_pl_agg_udf_win_expr = T_FUN_PL_AGG_UDF == win_expr->get_func_type()
+                             && win_expr->get_pl_agg_udf_expr() == expr;
+  }
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(expr));
     //only pl agg udf allow have distinct/unique/all as common aggr.
-  } else if (expr->is_udf_expr() && !static_cast<ObUDFRawExpr *>(expr)->get_is_aggregate_udf() &&
-             static_cast<ObUDFRawExpr *>(expr)->get_is_aggr_udf_distinct()) {
+  } else if (is_pl_agg_udf_win_expr
+             && (!expr->is_udf_expr() || !static_cast<ObUDFRawExpr *>(expr)->get_is_aggregate_udf())) {
+    ret = OB_ERR_INVALID_WINDOW_FUNC_USE;
+    LOG_WARN("only pl aggregate udf can be used as window function", K(ret), KPC(expr));
+  } else if (expr->is_udf_expr() && !static_cast<ObUDFRawExpr *>(expr)->get_is_aggregate_udf()
+             && static_cast<ObUDFRawExpr *>(expr)->get_is_aggr_udf_distinct()) {
     ret = OB_DISTINCT_NOT_ALLOWED;
     LOG_WARN("distinct/all/unique not allowed here", K(ret));
   } else if (!expr->is_udf_expr() || !static_cast<ObUDFRawExpr *>(expr)->get_is_aggregate_udf()) {
@@ -16283,7 +16293,7 @@ int ObDMLResolver::convert_udf_to_agg_expr(ObRawExpr *&expr,
         } else {
           expr = agg_expr;
         }
-        LOG_TRACE("Succeed to convert udf to agg expr", K(*expr));
+        LOG_TRACE("Succeed to convert udf to agg expr", KPC(agg_expr));
       }
     }
 
