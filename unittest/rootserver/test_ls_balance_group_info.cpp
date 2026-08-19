@@ -114,7 +114,7 @@ protected:
 TEST_F(TestLSBalanceGroupInfo, BasicTransferByFactor)
 {
   const ObBalanceGroupID bg_id(1, 1);
-  const int64_t part_count = 10;
+  const int64_t part_count = 9;
   const int64_t data_size_per_part = 100 * GB;
   const float factor = 0.5f;
 
@@ -140,12 +140,9 @@ TEST_F(TestLSBalanceGroupInfo, BasicTransferByFactor)
 
   // Expected remove count should be ceil(factor * total_count)
   int64_t expected_remove_count = static_cast<int64_t>(std::ceil(factor * src_original_count));
-  // But we should leave at least as many as we remove
-  int64_t max_remove_count = src_original_count - expected_remove_count;
-  int64_t actual_remove_count = std::min(max_remove_count, expected_remove_count);
+  int64_t actual_remove_count = std::min(src_original_count, expected_remove_count);
 
-  ASSERT_GT(transferred_count, 0);
-  ASSERT_LE(transferred_count, actual_remove_count);
+  ASSERT_EQ(transferred_count, actual_remove_count);
   ASSERT_EQ(src_after_count, src_original_count - transferred_count);
   ASSERT_EQ(dst_after_count, transferred_count);
 }
@@ -168,21 +165,19 @@ TEST_F(TestLSBalanceGroupInfo, SmallFactorTransfer)
       *dst_ls_bg_info_, factor, part_list));
 
   int64_t transferred_count = part_list.count();
-  int64_t expected_min = static_cast<int64_t>(std::ceil(factor * src_original_count));
-  int64_t max_remove = src_original_count - expected_min;
-  int64_t expected_max = std::min(max_remove, expected_min);
+  int64_t expected_remove_count = static_cast<int64_t>(std::ceil(factor * src_original_count));
+  int64_t actual_remove_count = std::min(src_original_count, expected_remove_count);
 
-  LOG_INFO("Small factor transfer", K(src_original_count), K(transferred_count), K(expected_min));
+  LOG_INFO("Small factor transfer", K(src_original_count), K(transferred_count), K(expected_remove_count));
 
-  ASSERT_GE(transferred_count, 0);
-  ASSERT_LE(transferred_count, expected_max);
+  ASSERT_EQ(transferred_count, actual_remove_count);
 }
 
 // Test case 3: Transfer with large factor (0.8)
 TEST_F(TestLSBalanceGroupInfo, LargeFactorTransfer)
 {
   const ObBalanceGroupID bg_id(3, 3);
-  const int64_t part_count = 15;
+  const int64_t part_count = 3;
   const int64_t data_size_per_part = 80 * GB;
   const float factor = 0.8f;
 
@@ -203,12 +198,24 @@ TEST_F(TestLSBalanceGroupInfo, LargeFactorTransfer)
   LOG_INFO("Large factor transfer", K(src_original_count), K(transferred_count),
       K(src_after_count), K(dst_after_count));
 
-  // Should transfer out a significant portion
-  ASSERT_GT(transferred_count, 0);
+  int64_t expected_remove_count = static_cast<int64_t>(std::ceil(factor * src_original_count));
+  int64_t expected_actual_remove = std::min(src_original_count - 1, expected_remove_count);
+
+  ASSERT_EQ(transferred_count, expected_actual_remove);
   ASSERT_LT(src_after_count, src_original_count);
   ASSERT_EQ(dst_after_count, transferred_count);
-  // Should leave at least as many as transferred
-  ASSERT_GE(src_after_count, transferred_count);
+
+  // Repeated transfers must keep one group in the source balance group.
+  ObTransferPartList remaining_part_list;
+  ASSERT_EQ(OB_SUCCESS, src_ls_bg_info_->transfer_out_by_factor(
+      *dst_ls_bg_info_, factor, remaining_part_list));
+  int64_t remaining_count = remaining_part_list.count();
+  int64_t src_final_count = get_part_group_count(*src_ls_bg_info_, bg_id);
+  int64_t dst_final_count = get_part_group_count(*dst_ls_bg_info_, bg_id);
+
+  ASSERT_EQ(remaining_count, std::min(src_after_count - 1, expected_remove_count));
+  ASSERT_EQ(src_final_count, 1);
+  ASSERT_EQ(dst_final_count, src_original_count - 1);
 }
 
 // Test case 4: Multiple balance groups
@@ -291,8 +298,7 @@ TEST_F(TestLSBalanceGroupInfo, SwapStrategyWithManyZeroSizePartitions)
   int64_t src_original_count = get_part_group_count(*src_ls_bg_info_, bg_id);
   int64_t src_original_data_size = get_total_data_size(*src_ls_bg_info_, bg_id);
   int64_t expected_remove_count = static_cast<int64_t>(std::ceil(factor * src_original_count));
-  int64_t max_remove = src_original_count - expected_remove_count;
-  int64_t actual_remove_count = std::min(max_remove, expected_remove_count);
+  int64_t actual_remove_count = std::min(src_original_count, expected_remove_count);
   int64_t data_size_threshold = static_cast<int64_t>(
       std::ceil(static_cast<double>(actual_remove_count) / src_original_count * src_original_data_size));
 
@@ -362,8 +368,7 @@ TEST_F(TestLSBalanceGroupInfo, SwapStrategyWithHugePartition)
   int64_t src_original_count = get_part_group_count(*src_ls_bg_info_, bg_id);
   int64_t src_original_data_size = get_total_data_size(*src_ls_bg_info_, bg_id);
   int64_t expected_remove_count = static_cast<int64_t>(std::ceil(factor * src_original_count));
-  int64_t max_remove = src_original_count - expected_remove_count;
-  int64_t actual_remove_count = std::min(max_remove, expected_remove_count);
+  int64_t actual_remove_count = std::min(src_original_count, expected_remove_count);
   int64_t data_size_threshold = static_cast<int64_t>(
       std::ceil(static_cast<double>(actual_remove_count) / src_original_count * src_original_data_size));
 
@@ -451,8 +456,7 @@ TEST_F(TestLSBalanceGroupInfo, SwapStrategyWithUnbalancedDataSizes)
   int64_t src_original_count = get_part_group_count(*src_ls_bg_info_, bg_id);
   int64_t src_original_data_size = get_total_data_size(*src_ls_bg_info_, bg_id);
   int64_t expected_remove_count = static_cast<int64_t>(std::ceil(factor * src_original_count));
-  int64_t max_remove = src_original_count - expected_remove_count;
-  int64_t actual_remove_count = std::min(max_remove, expected_remove_count);
+  int64_t actual_remove_count = std::min(src_original_count, expected_remove_count);
   int64_t data_size_threshold = static_cast<int64_t>(
       std::ceil(static_cast<double>(actual_remove_count) / src_original_count * src_original_data_size));
 
@@ -542,8 +546,7 @@ TEST_F(TestLSBalanceGroupInfo, SwapStrategyEffectiveness)
   int64_t src_original_count = get_part_group_count(*src_ls_bg_info_, bg_id);
   int64_t src_original_data_size = get_total_data_size(*src_ls_bg_info_, bg_id);
   int64_t expected_remove_count = static_cast<int64_t>(std::ceil(factor * src_original_count));
-  int64_t max_remove = src_original_count - expected_remove_count;
-  int64_t actual_remove_count = std::min(max_remove, expected_remove_count);
+  int64_t actual_remove_count = std::min(src_original_count, expected_remove_count);
   int64_t data_size_threshold = static_cast<int64_t>(
       std::ceil(static_cast<double>(actual_remove_count) / src_original_count * src_original_data_size));
 
@@ -594,7 +597,8 @@ TEST_F(TestLSBalanceGroupInfo, SwapStrategyEffectiveness)
 TEST_F(TestLSBalanceGroupInfo, VerySmallFactor)
 {
   const ObBalanceGroupID bg_id(8, 8);
-  const int64_t part_count = 100;
+  // Even with a very small factor, transfer one group when at least two are available.
+  const int64_t part_count = 2;
   const int64_t data_size_per_part = 10 * GB;
   const float factor = 0.01f; // Very small factor
 
@@ -608,15 +612,28 @@ TEST_F(TestLSBalanceGroupInfo, VerySmallFactor)
       *dst_ls_bg_info_, factor, part_list));
 
   int64_t transferred_count = part_list.count();
-  int64_t expected_min = static_cast<int64_t>(std::ceil(factor * src_original_count));
-  int64_t max_remove = src_original_count - expected_min;
-  int64_t expected_max = std::min(max_remove, expected_min);
+  int64_t expected_remove_count = static_cast<int64_t>(std::ceil(factor * src_original_count));
+  int64_t actual_remove_count = std::min(src_original_count - 1, expected_remove_count);
 
-  LOG_INFO("Very small factor", K(src_original_count), K(transferred_count), K(expected_min));
+  LOG_INFO("Very small factor", K(src_original_count), K(transferred_count), K(expected_remove_count));
 
-  // With very small factor, might transfer 0 or 1 partition
-  ASSERT_GE(transferred_count, 0);
-  ASSERT_LE(transferred_count, expected_max);
+  ASSERT_EQ(transferred_count, actual_remove_count);
+  ASSERT_EQ(get_part_group_count(*src_ls_bg_info_, bg_id), 1);
+
+  // A subsequent transfer must not remove the last group from the source.
+  ObTransferPartList remaining_part_list;
+  ASSERT_EQ(OB_SUCCESS, src_ls_bg_info_->transfer_out_by_factor(
+      *dst_ls_bg_info_, factor, remaining_part_list));
+
+  int64_t remaining_expected_remove_count = static_cast<int64_t>(
+      std::ceil(factor * src_original_count));
+  int64_t remaining_actual_remove_count = std::min(
+      get_part_group_count(*src_ls_bg_info_, bg_id) - 1,
+      remaining_expected_remove_count);
+
+  ASSERT_EQ(remaining_part_list.count(), remaining_actual_remove_count);
+  ASSERT_EQ(remaining_part_list.count(), 0);
+  ASSERT_EQ(get_part_group_count(*src_ls_bg_info_, bg_id), 1);
 }
 
 // Test case 10: Invalid arguments
@@ -805,20 +822,17 @@ TEST_F(TestLSBalanceGroupInfo, ComplexSwapScenarioWithMultipleBGs)
 
   // Calculate thresholds for each BG to verify swap behavior
   int64_t bg1_expected_remove = static_cast<int64_t>(std::ceil(factor1 * bg1_src_count));
-  int64_t bg1_max_remove = bg1_src_count - bg1_expected_remove;
-  int64_t bg1_actual_remove = std::min(bg1_max_remove, bg1_expected_remove);
+  int64_t bg1_actual_remove = std::min(bg1_src_count, bg1_expected_remove);
   int64_t bg1_threshold = static_cast<int64_t>(
       std::ceil(static_cast<double>(bg1_actual_remove) / bg1_src_count * bg1_src_size));
 
   int64_t bg2_expected_remove = static_cast<int64_t>(std::ceil(factor1 * bg2_src_count));
-  int64_t bg2_max_remove = bg2_src_count - bg2_expected_remove;
-  int64_t bg2_actual_remove = std::min(bg2_max_remove, bg2_expected_remove);
+  int64_t bg2_actual_remove = std::min(bg2_src_count, bg2_expected_remove);
   int64_t bg2_threshold = static_cast<int64_t>(
       std::ceil(static_cast<double>(bg2_actual_remove) / bg2_src_count * bg2_src_size));
 
   int64_t bg3_expected_remove = static_cast<int64_t>(std::ceil(factor1 * bg3_src_count));
-  int64_t bg3_max_remove = bg3_src_count - bg3_expected_remove;
-  int64_t bg3_actual_remove = std::min(bg3_max_remove, bg3_expected_remove);
+  int64_t bg3_actual_remove = std::min(bg3_src_count, bg3_expected_remove);
   int64_t bg3_threshold = static_cast<int64_t>(
       std::ceil(static_cast<double>(bg3_actual_remove) / bg3_src_count * bg3_src_size));
 
@@ -892,8 +906,7 @@ TEST_F(TestLSBalanceGroupInfo, ComplexSwapScenarioWithMultipleBGs)
   int64_t new_bg1_src_count = get_part_group_count(src_ls_bg_info_new, bg_id1);
   int64_t new_bg1_src_size = get_total_data_size(src_ls_bg_info_new, bg_id1);
   int64_t new_bg1_expected_remove = static_cast<int64_t>(std::ceil(0.4f * new_bg1_src_count));
-  int64_t new_bg1_max_remove = new_bg1_src_count - new_bg1_expected_remove;
-  int64_t new_bg1_actual_remove = std::min(new_bg1_max_remove, new_bg1_expected_remove);
+  int64_t new_bg1_actual_remove = std::min(new_bg1_src_count, new_bg1_expected_remove);
   int64_t new_bg1_threshold = static_cast<int64_t>(
       std::ceil(static_cast<double>(new_bg1_actual_remove) / new_bg1_src_count * new_bg1_src_size));
 

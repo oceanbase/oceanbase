@@ -157,16 +157,14 @@ int ObLSBalanceGroupInfo::transfer_out_by_factor(
         // Remove the appropriate proportion of partitions from the balance group
         //
         // expected remove count should be computed by factor of total count.
-        // It should be ceil()
+        // It should be ceil(), to make expected remove count >= 1.
         const int64_t total_count = *total_count_ptr;
         const int64_t expected_remove_count = ceil(factor * total_count);
         const int64_t avail_count = src_bg_info->get_part_groups_count();
 
-        // left count after remove should be greater than remove count
-        const int64_t left_count_lower_bound = expected_remove_count;
-        const int64_t can_remove_count_upper_bound = avail_count - left_count_lower_bound;
-
-        const int64_t remove_count = std::min(can_remove_count_upper_bound, expected_remove_count);
+        // Actual remove count should be less than avail count,
+        // to make sure src_bg_info remained part count >= 1 after transfer out.
+        const int64_t remove_count = std::min(avail_count - 1, expected_remove_count);
         // Get data size threshold
         const float data_size_ratio = static_cast<float>(remove_count) / total_count;
         const int64_t data_size_threshold = ceil(src_bg_info->get_part_groups_data_size() * data_size_ratio);
@@ -175,47 +173,41 @@ int ObLSBalanceGroupInfo::transfer_out_by_factor(
         int64_t selected_data_size = 0;
         ObArray<ObPartGroupInfo *> selected_part_groups;
 
-        if (OB_UNLIKELY(remove_count >= avail_count)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("remove count should be greater than avail count", K(avail_count), K(remove_count));
-          // transfer out part only when remove count > 0
-        } else {
-          // Step 1: Use round-robin to select part groups (for even distribution by count)
-          // Collect selected part groups temporarily to check data size
-          for (int64_t i = 0; OB_SUCC(ret) && i < remove_count; i++) {
-            ObPartGroupInfo *part_group = nullptr;
-            if (OB_FAIL(src_bg_info->transfer_out_by_round_robin(*dst_bg_info, part_group))) {
-              LOG_WARN("fail to transfer out part group", KR(ret), K(dst_bg_info));
-            } else if (OB_ISNULL(part_group)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("part group is null", KR(ret), KP(part_group));
-            } else if (OB_FAIL(selected_part_groups.push_back(part_group))) {
-              LOG_WARN("fail to push back part group", KR(ret), KPC(part_group));
-            }
+        // Step 1: Use round-robin to select part groups (for even distribution by count)
+        // Collect selected part groups temporarily to check data size
+        for (int64_t i = 0; OB_SUCC(ret) && i < remove_count; i++) {
+          ObPartGroupInfo *part_group = nullptr;
+          if (OB_FAIL(src_bg_info->transfer_out_by_round_robin(*dst_bg_info, part_group))) {
+            LOG_WARN("fail to transfer out part group", KR(ret), K(dst_bg_info));
+          } else if (OB_ISNULL(part_group)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("part group is null", KR(ret), KP(part_group));
+          } else if (OB_FAIL(selected_part_groups.push_back(part_group))) {
+            LOG_WARN("fail to push back part group", KR(ret), KPC(part_group));
           }
+        }
 
-          // Step 2: If selected data size is too large, replace large part groups with smaller ones
-          if (FAILEDx(try_reduce_selected_data_size_by_swap_(
-              data_size_threshold,
-              src_bg_info,
-              dst_bg_info,
-              selected_part_groups))) {
-            LOG_WARN("fail to reduce selected data size by swap", KR(ret),
-                K(data_size_threshold), K(selected_part_groups));
-          }
+        // Step 2: If selected data size is too large, replace large part groups with smaller ones
+        if (FAILEDx(try_reduce_selected_data_size_by_swap_(
+            data_size_threshold,
+            src_bg_info,
+            dst_bg_info,
+            selected_part_groups))) {
+          LOG_WARN("fail to reduce selected data size by swap", KR(ret),
+              K(data_size_threshold), K(selected_part_groups));
+        }
 
-          // Step 3: Append all selected part groups to part_list
-          ARRAY_FOREACH(selected_part_groups, j) {
-            ObPartGroupInfo *part_group = selected_part_groups.at(j);
-            if (OB_ISNULL(part_group)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("part group is null", KR(ret), KP(part_group));
-            } else if (OB_FAIL(append(part_list, part_group->get_part_list()))) {
-              LOG_WARN("fail to append part list", KR(ret), K(part_list), KPC(part_group));
-            } else {
-              removed_part_count += part_group->get_part_list().count();
-              selected_data_size += part_group->get_data_size();
-            }
+        // Step 3: Append all selected part groups to part_list
+        ARRAY_FOREACH(selected_part_groups, j) {
+          ObPartGroupInfo *part_group = selected_part_groups.at(j);
+          if (OB_ISNULL(part_group)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("part group is null", KR(ret), KP(part_group));
+          } else if (OB_FAIL(append(part_list, part_group->get_part_list()))) {
+            LOG_WARN("fail to append part list", KR(ret), K(part_list), KPC(part_group));
+          } else {
+            removed_part_count += part_group->get_part_list().count();
+            selected_data_size += part_group->get_data_size();
           }
         }
         FLOG_INFO("transfer out partition groups from LS one balance group by factor", KR(ret),
