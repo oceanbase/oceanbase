@@ -201,6 +201,9 @@ int ObMPChangeUser::process()
   const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
   int64_t query_timeout = 0;
   bool support_auth_switch = true;
+  uint64_t auth_user_id = OB_INVALID_ID;
+  ObSchemaGetterGuard schema_guard;
+  share::schema::ObUserLoginInfo login_info;
   if (get_conn()->client_type_ == common::OB_CLIENT_JDBC) {
     support_auth_switch = get_conn()->client_version_ >= OBJDBC_CHANGE_USER_AUTHSWITCH_MIN_VERSION;
   }
@@ -234,8 +237,7 @@ int ObMPChangeUser::process()
         OB_LOG(WARN,"load log info failed", K(ret),K(session->get_server_sid()));
       } else {
         // ========== Step 1: Get user's authentication plugin ==========
-        ObSchemaGetterGuard schema_guard;
-        share::schema::ObUserLoginInfo login_info = session->get_login_info();
+        login_info = session->get_login_info();
         ObString required_plugin;
         ObSEArray<const ObUserInfo *, 2> user_infos;
         const ObUserInfo *matched_user_info = nullptr;
@@ -252,12 +254,18 @@ int ObMPChangeUser::process()
         } else if (OB_FAIL(get_user_required_plugin(schema_guard,
                                                     login_info,
                                                     get_conn(),
+                                                    *session,
                                                     required_plugin,
                                                     user_infos,
                                                     matched_user_info))) {
           LOG_WARN("failed to get user required plugin", K(ret));
+        } else if (OB_INVALID_ID == matched_user_info->get_user_id()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid matched user id", K(ret));
         } else {
           // Update login_info with scramble and auth response
+          auth_user_id = matched_user_info->get_user_id();
+          login_info.auth_user_id_ = auth_user_id;
           login_info.scramble_str_.assign_ptr(get_conn()->scramble_result_buf_,
                                               ObSMConnection::SCRAMBLE_BUF_SIZE);
           login_info.passwd_ = auth_response_;
@@ -317,6 +325,39 @@ int ObMPChangeUser::process()
           }
         }
       }
+    }
+  }
+
+  if (OB_NOT_NULL(session)
+      && MYSQL_MODE == session->get_compatibility_mode()
+      && (OB_SUCC(ret) || OB_PASSWORD_WRONG == ret || OB_ERR_USER_IS_LOCKED == ret)) {
+    const int login_ret = ret;
+    const bool is_login_success = OB_SUCCESS == login_ret;
+    bool is_unlocked_now = false;
+    if (OB_FAIL(update_login_stat_mysql(session->get_effective_tenant_id(),
+                                        login_info.user_name_,
+                                        login_info.client_ip_,
+                                        auth_user_id,
+                                        is_login_success,
+                                        schema_guard,
+                                        is_unlocked_now))) {
+      LOG_WARN("fail to update login stat for change user", K(ret));
+    } else if (OB_ERR_USER_IS_LOCKED == login_ret && is_unlocked_now) {
+      ret = OB_PASSWORD_WRONG;
+      LOG_WARN("user under connection control and temporarily not locked",
+               K(session->get_effective_tenant_id()), K(ret));
+    } else {
+      ret = login_ret;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    session->set_password_expired(false);
+    if (OB_FAIL(check_password_expired(session->get_effective_tenant_id(),
+                                       auth_user_id,
+                                       schema_guard,
+                                       *session))) {
+      LOG_WARN("fail to check password expired for change user", K(ret));
     }
   }
 

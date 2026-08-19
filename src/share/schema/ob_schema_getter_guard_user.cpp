@@ -8,6 +8,7 @@
 #include "share/schema/ob_schema_getter_guard.h"
 #include "lib/encrypt/ob_encrypted_helper.h"
 #include "lib/encrypt/ob_sha256_crypt.h"
+#include "lib/net/ob_addr.h"
 #include "lib/net/ob_net_util.h"
 #include "lib/allocator/ob_allocator.h"
 #include "lib/time/ob_time_utility.h"
@@ -24,6 +25,206 @@ namespace share
 {
 namespace schema
 {
+
+// MySQL sorts exact IPs before CIDR ranges and dotted subnet-mask ranges.
+enum class ObSchemaGetterGuard::ObHostMatchType
+{
+  INVALID = 0,
+  SUBNET_MASK = 1,
+  CIDR = 2,
+  EXACT_IP = 3
+};
+
+struct ObSchemaGetterGuard::ObHostMatchRange
+{
+  ObHostMatchRange() : type_(ObHostMatchType::INVALID), address_(), mask_() {}
+
+  ObHostMatchType type_;
+  ObAddr address_;
+  ObAddr mask_;
+};
+
+bool ObSchemaGetterGuard::has_host_wildcard(const ObString &host_name)
+{
+  return OB_NOT_NULL(host_name.find('%')) || OB_NOT_NULL(host_name.find('_'));
+}
+
+bool ObSchemaGetterGuard::parse_host_mask_bits(const ObString &mask_str, int64_t &mask_bits)
+{
+  bool is_valid = !mask_str.empty();
+  mask_bits = 0;
+  for (int64_t i = 0; i < mask_str.length() && is_valid; ++i) {
+    const char ch = mask_str.ptr()[i];
+    if (ch < '0' || ch > '9') {
+      is_valid = false;
+    } else {
+      mask_bits = mask_bits * 10 + ch - '0';
+      // Network-mask notation cannot be used for IPv6 addresses.
+      is_valid = mask_bits <= 32;
+    }
+  }
+  return is_valid && mask_bits > 0;
+}
+
+bool ObSchemaGetterGuard::parse_ipv4_subnet_mask(const ObString &mask_str, ObAddr &mask)
+{
+  bool is_valid = false;
+  const int64_t MAX_IPV4_MASK_BITS = 32;
+  ObAddr expected_mask;
+  if (mask.set_ip_addr(mask_str, 0) && mask.using_ipv4()) {
+    for (int64_t mask_bits = 1; mask_bits <= MAX_IPV4_MASK_BITS && !is_valid; ++mask_bits) {
+      if (expected_mask.as_mask(mask_bits, ObAddr::IPV4)
+          && expected_mask.is_equal_except_port(mask)) {
+        is_valid = true;
+      }
+    }
+  }
+  return is_valid;
+}
+
+bool ObSchemaGetterGuard::build_host_match_range(const ObString &host_name,
+                                                 ObHostMatchRange &range)
+{
+  bool is_valid = false;
+  const char *slash = host_name.find('/');
+  if (OB_ISNULL(slash)) {
+    if (range.address_.set_ip_addr(host_name, 0)) {
+      const int64_t mask_bits = range.address_.using_ipv4() ? 32 : 128;
+      is_valid = range.mask_.as_mask(mask_bits, range.address_.get_version());
+      if (is_valid) {
+        range.type_ = ObHostMatchType::EXACT_IP;
+      }
+    }
+  } else if (slash > host_name.ptr() && slash + 1 < host_name.ptr() + host_name.length()) {
+    ObString host_ip;
+    ObString mask_str;
+    int64_t mask_bits = 0;
+    host_ip.assign_ptr(host_name.ptr(), slash - host_name.ptr());
+    mask_str.assign_ptr(slash + 1, host_name.ptr() + host_name.length() - slash - 1);
+    if (range.address_.set_ip_addr(host_ip, 0) && range.address_.using_ipv4()) {
+      if (OB_NOT_NULL(mask_str.find('.'))) {
+        is_valid = parse_ipv4_subnet_mask(mask_str, range.mask_);
+        if (is_valid) {
+          range.type_ = ObHostMatchType::SUBNET_MASK;
+        }
+      } else if (parse_host_mask_bits(mask_str, mask_bits)) {
+        is_valid = range.mask_.as_mask(mask_bits, range.address_.get_version());
+        if (is_valid) {
+          range.type_ = ObHostMatchType::CIDR;
+        }
+      }
+    }
+  }
+  return is_valid;
+}
+
+bool ObSchemaGetterGuard::is_host_match_range_subset(const ObHostMatchRange &lhs,
+                                                     const ObHostMatchRange &rhs)
+{
+  bool is_subset = false;
+  if (lhs.address_.get_version() == rhs.address_.get_version()
+      && lhs.mask_.get_version() == rhs.mask_.get_version()) {
+    ObAddr lhs_mask = lhs.mask_;
+    ObAddr lhs_network = lhs.address_;
+    ObAddr rhs_network = rhs.address_;
+    lhs_mask.as_subnet(rhs.mask_);
+    lhs_network.as_subnet(rhs.mask_);
+    rhs_network.as_subnet(rhs.mask_);
+    is_subset = lhs_mask.is_equal_except_port(rhs.mask_)
+                && lhs_network.is_equal_except_port(rhs_network);
+  }
+  return is_subset;
+}
+
+bool ObSchemaGetterGuard::is_auth_user_host_match(const ObString &client_ip,
+                                                  const ObString &host_name,
+                                                  const bool enable_host_match_priority)
+{
+  bool is_match = false;
+  if (!enable_host_match_priority || OB_ISNULL(host_name.find('/'))) {
+    // Keep the legacy behavior before the feature is enabled and for non-range Hosts.
+    is_match = obsys::ObNetUtil::is_match(client_ip, host_name);
+  } else {
+    ObHostMatchRange host_range;
+    ObAddr client_address;
+    if (build_host_match_range(host_name, host_range)
+        && client_address.set_ip_addr(client_ip, 0)
+        && client_address.get_version() == host_range.address_.get_version()) {
+      // MySQL range matching requires (client_ip & mask) to equal host_ip.
+      client_address.as_subnet(host_range.mask_);
+      is_match = client_address.is_equal_except_port(host_range.address_);
+    }
+  }
+  return is_match;
+}
+
+int64_t ObSchemaGetterGuard::get_host_pattern_sort(const ObString &host_name)
+{
+  const int64_t LITERAL_HOST_SORT = 128;
+  const int64_t MAX_PATTERN_HOST_SORT = 127;
+  int64_t sort_value = host_name.empty() ? 0 : LITERAL_HOST_SORT;
+  // Literal hosts sort before patterns, while '%' is the least-specific nonempty pattern.
+  // A later first wildcard makes a host pattern more specific.
+  for (int64_t i = 0; i < host_name.length() && LITERAL_HOST_SORT == sort_value; ++i) {
+    if ('%' == host_name.ptr()[i] || '_' == host_name.ptr()[i]) {
+      if (0 == i && '%' == host_name.ptr()[i] && 1 == host_name.length()) {
+        sort_value = 1;
+      } else {
+        sort_value = i + 2;
+        if (sort_value > MAX_PATTERN_HOST_SORT) {
+          sort_value = MAX_PATTERN_HOST_SORT;
+        }
+      }
+    }
+  }
+  return sort_value;
+}
+
+// Returns 1 if lhs is more specific, 0 if lhs should not replace rhs, and -1 if incomparable.
+int ObSchemaGetterGuard::compare_auth_user_host_specificity(const ObString &lhs,
+                                                            const ObString &rhs)
+{
+  int compare_result = -1;
+  ObHostMatchRange lhs_range;
+  ObHostMatchRange rhs_range;
+  const bool lhs_is_range = build_host_match_range(lhs, lhs_range);
+  const bool rhs_is_range = build_host_match_range(rhs, rhs_range);
+  const bool lhs_has_wildcard = has_host_wildcard(lhs);
+  const bool rhs_has_wildcard = has_host_wildcard(rhs);
+  const int64_t lhs_pattern_sort = get_host_pattern_sort(lhs);
+  const int64_t rhs_pattern_sort = get_host_pattern_sort(rhs);
+
+  if (0 == lhs.compare(rhs)) {
+    compare_result = 0;
+  } else if (lhs_is_range && rhs_is_range) {
+    if (lhs_range.type_ != rhs_range.type_) {
+      if (static_cast<int64_t>(lhs_range.type_) > static_cast<int64_t>(rhs_range.type_)) {
+        compare_result = 1;
+      } else {
+        compare_result = 0;
+      }
+    } else {
+      const bool lhs_subset_rhs = is_host_match_range_subset(lhs_range, rhs_range);
+      const bool rhs_subset_lhs = is_host_match_range_subset(rhs_range, lhs_range);
+      if (lhs_subset_rhs && rhs_subset_lhs) {
+        compare_result = 0;
+      } else if (lhs_subset_rhs) {
+        compare_result = 1;
+      } else if (rhs_subset_lhs) {
+        compare_result = 0;
+      }
+    }
+  } else if (lhs_is_range && rhs_has_wildcard) {
+    compare_result = 1;
+  } else if (rhs_is_range && lhs_has_wildcard) {
+    compare_result = 0;
+  } else if (!lhs_is_range && !rhs_is_range && lhs_pattern_sort > rhs_pattern_sort) {
+    compare_result = 1;
+  } else if (!lhs_is_range && !rhs_is_range && lhs_pattern_sort <= rhs_pattern_sort) {
+    compare_result = 0;
+  }
+  return compare_result;
+}
 
 int64_t combine_default_value(int64_t value, int64_t default_value)
 {
@@ -327,135 +528,124 @@ int ObSchemaGetterGuard::is_user_empty_passwd(const ObUserLoginInfo &login_info,
   } else if (OB_FAIL(get_tenant_compat_mode(tenant_id, compat_mode))) {
     LOG_WARN("fail to get tenant compat mode", K(ret));
   } else {
-    const int64_t DEFAULT_SAME_USERNAME_COUNT = 4;
-    ObSEArray<const ObUserInfo *, DEFAULT_SAME_USERNAME_COUNT> users_info;
-    if (OB_FAIL(get_user_info(tenant_id, login_info.user_name_, users_info))) {
-      LOG_WARN("get user info failed", KR(ret), K(tenant_id), K(login_info));
-    } else if (users_info.empty()) {
+    const uint64_t auth_user_id = login_info.auth_user_id_;
+    const ObUserInfo *user_info = NULL;
+    if (!is_valid_id(auth_user_id)) {
       ret = OB_PASSWORD_WRONG;
-      LOG_WARN("No tenant user", K(login_info), KR(ret));
-    } else {
-      const ObUserInfo *user_info = NULL;
-      const ObUserInfo *matched_user_info = NULL;
-      for (int64_t i = 0; i < users_info.count() && OB_SUCC(ret); ++i) {
-        user_info = users_info.at(i);
-        if (NULL == user_info) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("user info is null", K(login_info), KR(ret));
-        } else if (user_info->is_role() && lib::Worker::CompatMode::ORACLE == compat_mode) {
-          ret = OB_PASSWORD_WRONG;
-          LOG_INFO("password error", "tenant_name", login_info.tenant_name_,
-              "user_name", login_info.user_name_,
-              "client_ip_", login_info.client_ip_, KR(ret));
-        } else if (!obsys::ObNetUtil::is_match(login_info.client_ip_, user_info->get_host_name_str())) {
-          LOG_TRACE("account not matched, try next", KPC(user_info), K(login_info));
-        } else {
-          matched_user_info = user_info;
-          if (0 == login_info.passwd_.length() && 0 == user_info->get_passwd_str().length()) {
-            is_empty_passwd_account = true;
-            break;
-          }
-        }
-      }
+      LOG_WARN("invalid authentication user id", KR(ret), K(auth_user_id));
+    } else if (OB_FAIL(get_user_info(tenant_id, auth_user_id, user_info))) {
+      LOG_WARN("get user info failed", KR(ret), K(tenant_id), K(auth_user_id));
+    } else if (NULL == user_info) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("user info is null", K(login_info), KR(ret));
+    } else if (user_info->get_user_name_str() != login_info.user_name_) {
+      ret = OB_PASSWORD_WRONG;
+      LOG_WARN("authentication user does not match login info", KR(ret), K(auth_user_id));
+    } else if (user_info->is_role() && lib::Worker::CompatMode::ORACLE == compat_mode) {
+      ret = OB_PASSWORD_WRONG;
+      LOG_INFO("password error", "tenant_name", login_info.tenant_name_,
+          "user_name", login_info.user_name_,
+          "client_ip_", login_info.client_ip_, KR(ret));
+    } else if (0 == login_info.passwd_.length() && 0 == user_info->get_passwd_str().length()) {
+      is_empty_passwd_account = true;
     }
   }
   return ret;
 }
 
 // for user authentication
-int ObSchemaGetterGuard::check_user_access(
-    const ObUserLoginInfo &login_info,
-    ObSessionPrivInfo &s_priv,
-    common::ObIArray<uint64_t> &enable_role_id_array,
-    SSL *ssl_st,
-    const ObUserInfo *&sel_user_info)
+int ObSchemaGetterGuard::check_user_access(const ObUserLoginInfo &login_info,
+                                           ObSessionPrivInfo &s_priv,
+                                           common::ObIArray<uint64_t> &enable_role_id_array,
+                                           SSL *ssl_st,
+                                           const ObUserInfo *&sel_user_info)
 {
   int ret = OB_SUCCESS;
   lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
   sel_user_info = NULL;
   bool is_oracle_mode = false;
+  uint64_t auth_user_id = login_info.auth_user_id_;
+  // Table API legacy login has no auth_user_id and an empty client_ip.
+  const bool is_legacy_table_login = OB_INVALID_ID == auth_user_id && login_info.client_ip_.empty();
   if (OB_FAIL(get_tenant_id(login_info.tenant_name_, s_priv.tenant_id_))) {
     LOG_WARN("Invalid tenant", "tenant_name", login_info.tenant_name_, KR(ret));
   } else if (OB_FAIL(check_tenant_schema_guard(s_priv.tenant_id_))) {
     LOG_WARN("fail to check tenant schema guard", KR(ret), K(s_priv), K_(tenant_id));
   } else if (OB_FAIL(get_tenant_compat_mode(s_priv.tenant_id_, compat_mode))) {
     LOG_WARN("fail to get tenant compat mode", K(ret));
+  } else if (is_legacy_table_login
+             && OB_FAIL(get_user_id(s_priv.tenant_id_,
+                                    login_info.user_name_,
+                                    ObString::make_string("%"),
+                                    auth_user_id))) {
+    LOG_WARN("fail to resolve legacy authentication user", KR(ret), K(s_priv.tenant_id_));
   } else {
     const int64_t DEFAULT_SAME_USERNAME_COUNT = 4;
-    ObSEArray<const ObUserInfo *, DEFAULT_SAME_USERNAME_COUNT> users_info;
+    const ObUserInfo *user_info = nullptr;
+    bool pwd_match = false;
+    ObSEArray<const ObUserInfo *, DEFAULT_SAME_USERNAME_COUNT> proxied_users_info;
+    const ObUserInfo *proxied_user_info = nullptr;
+    uint64_t proxied_info_idx = OB_INVALID_INDEX;
     is_oracle_mode = (compat_mode == lib::Worker::CompatMode::ORACLE);
-    if (OB_FAIL(get_user_info(s_priv.tenant_id_, login_info.user_name_, users_info))) {
-      LOG_WARN("get user info failed", KR(ret), K(s_priv.tenant_id_), K(login_info));
-    } else if (users_info.empty()) {
+    if (OB_INVALID_ID == auth_user_id) {
       ret = OB_PASSWORD_WRONG;
-      LOG_WARN("No tenant user", K(login_info), KR(ret));
+      LOG_WARN("invalid authentication user id", KR(ret), K(auth_user_id), K(login_info.auth_user_id_));
+    } else if (OB_FAIL(get_user_info(s_priv.tenant_id_, auth_user_id, user_info))) {
+      LOG_WARN("get user info failed", KR(ret), K(s_priv.tenant_id_), K(auth_user_id));
+    } else if (OB_ISNULL(user_info)) {
+      ret = OB_PASSWORD_WRONG;
+      LOG_WARN("authentication user does not exist", KR(ret), K(s_priv.tenant_id_), K(auth_user_id));
+    } else if (user_info->get_user_name_str() != login_info.user_name_) {
+      ret = OB_PASSWORD_WRONG;
+      LOG_WARN("authentication user does not match login info", KR(ret), K(auth_user_id));
     } else {
-      bool pwd_match = false;
-      const ObUserInfo *user_info = NULL;
-      const ObUserInfo *matched_user_info = NULL;
-      for (int64_t i = 0; i < users_info.count() && OB_SUCC(ret) && !pwd_match; ++i) {
-        user_info = users_info.at(i);
-        matched_user_info = NULL;
-        if (!obsys::ObNetUtil::is_match(login_info.client_ip_, user_info->get_host_name_str())) {
-          LOG_TRACE("account not matched, try next", KPC(user_info), K(login_info));
-        } else {
-          matched_user_info = user_info;
-        }
-        if (OB_ISNULL(matched_user_info)) {
-          // do nothing
-        } else if (OB_FAIL(verify_user_password_authentication(user_info,
-                                                               login_info,
-                                                               compat_mode,
-                                                               s_priv.tenant_id_,
-                                                               pwd_match))) {
-          LOG_WARN("Failed to verify user password authentication", K(login_info), KR(ret));
-        } else if (pwd_match) {
-          // do nothing
-        } else if (user_info->get_old_password_start_time() != OB_INVALID_TIMESTAMP) {
-          // try dual password
-          bool dual_password_valid = true;
-          if (is_oracle_mode) {
-            int64_t password_rollover_time = 0;
-            if (OB_FAIL(get_user_password_rollover_time(s_priv.tenant_id_,
-                                                        user_info->get_user_id(),
-                                                        password_rollover_time))) {
-              LOG_WARN("fail to get password rollover time", KR(ret), K(s_priv.tenant_id_), KPC(user_info));
-            } else if (password_rollover_time > 0) {
-              const int64_t start_ts = user_info->get_old_password_start_time();
-              int64_t expire_ts = start_ts + password_rollover_time;
-              expire_ts = (expire_ts < start_ts) ? INT64_MAX : expire_ts;
-              dual_password_valid = (ObTimeUtility::current_time() < expire_ts);
-            }
+      if (OB_FAIL(verify_user_password_authentication(user_info, login_info, compat_mode, s_priv.tenant_id_, pwd_match))) {
+        LOG_WARN("Failed to verify user password authentication", K(login_info), KR(ret));
+      } else if (pwd_match) {
+        // do nothing
+      } else if (user_info->get_old_password_start_time() != OB_INVALID_TIMESTAMP) {
+        // try dual password
+        bool dual_password_valid = true;
+        if (is_oracle_mode) {
+          int64_t password_rollover_time = 0;
+          if (OB_FAIL(get_user_password_rollover_time(s_priv.tenant_id_,
+                                                      user_info->get_user_id(),
+                                                      password_rollover_time))) {
+            LOG_WARN("fail to get password rollover time", KR(ret), K(s_priv.tenant_id_), KPC(user_info));
+          } else if (password_rollover_time > 0) {
+            const int64_t start_ts = user_info->get_old_password_start_time();
+            int64_t expire_ts = start_ts + password_rollover_time;
+            expire_ts = (expire_ts < start_ts) ? INT64_MAX : expire_ts;
+            dual_password_valid = (ObTimeUtility::current_time() < expire_ts);
           }
-          if (OB_SUCC(ret) && dual_password_valid) {
-            ObUserInfo temp_user_info;
-            if (OB_FAIL(temp_user_info.assign(*user_info))) {
-              LOG_WARN("failed to assign user info", KR(ret));
-            } else if (OB_FALSE_IT(temp_user_info.set_passwd(user_info->get_old_password_str()))) {
-            } else if (OB_FALSE_IT(temp_user_info.set_password_last_changed(user_info->get_old_password_start_time()))) {
-            } else if (OB_FAIL(verify_user_password_authentication(&temp_user_info,
-                                                                   login_info,
-                                                                   compat_mode,
-                                                                   s_priv.tenant_id_,
-                                                                   pwd_match))) {
-              LOG_WARN("Failed to verify user password authentication", K(login_info), KR(ret));
-            } else if (pwd_match) {
-              // do nothing
-            }
+        }
+        if (OB_SUCC(ret) && dual_password_valid) {
+          ObUserInfo temp_user_info;
+          if (OB_FAIL(temp_user_info.assign(*user_info))) {
+            LOG_WARN("failed to assign user info", KR(ret));
+          } else if (OB_FALSE_IT(temp_user_info.set_passwd(user_info->get_old_password_str()))) {
+          } else if (OB_FALSE_IT(temp_user_info.set_password_last_changed(user_info->get_old_password_start_time()))) {
+          } else if (OB_FAIL(verify_user_password_authentication(&temp_user_info,
+                                                                 login_info,
+                                                                 compat_mode,
+                                                                 s_priv.tenant_id_,
+                                                                 pwd_match))) {
+            LOG_WARN("Failed to verify user password authentication", K(login_info), KR(ret));
+          } else if (pwd_match) {
+            // do nothing
           }
         }
       }
       if (OB_SUCC(ret)) {
-        if (matched_user_info != NULL
-            && matched_user_info->get_is_locked()
-            && !sql::ObOraSysChecker::is_super_user(matched_user_info->get_user_id())) {
+        if (user_info->get_is_locked()
+            && !sql::ObOraSysChecker::is_super_user(user_info->get_user_id())) {
           if (pwd_match) {
-            s_priv.user_id_ = matched_user_info->get_user_id();
+            s_priv.user_id_ = user_info->get_user_id();
           }
           ret = OB_ERR_USER_IS_LOCKED;
           LOG_WARN("User is locked", KR(ret));
         } else if (!pwd_match) {
-          user_info = NULL;
+          user_info = nullptr;
           ret = OB_PASSWORD_WRONG;
           LOG_INFO("password error", "tenant_name", login_info.tenant_name_,
                    "user_name", login_info.user_name_,
@@ -466,17 +656,15 @@ int ObSchemaGetterGuard::check_user_access(
                    "client_ip_", login_info.client_ip_, KR(ret));
         }
       }
-      const ObUserInfo *proxied_user_info = NULL;
-      uint64_t proxied_info_idx = OB_INVALID_INDEX;
       if (OB_SUCC(ret) && compat_mode == lib::Worker::CompatMode::ORACLE) {
         if (!login_info.proxied_user_name_.empty()) {
-          users_info.reuse();
-          if (OB_FAIL(get_user_info(s_priv.tenant_id_, login_info.proxied_user_name_, users_info))) {
+          if (OB_FAIL(get_user_info(s_priv.tenant_id_, login_info.proxied_user_name_,
+                                    proxied_users_info))) {
             LOG_WARN("get user info failed", KR(ret), K(s_priv.tenant_id_), K(login_info));
-          } else if (users_info.count() <= 0) {
+          } else if (proxied_users_info.count() <= 0) {
             ret = OB_PASSWORD_WRONG;
             LOG_WARN("proxy user not existed", K(ret));
-          } else if (OB_ISNULL(proxied_user_info = users_info.at(0))) {
+          } else if (OB_ISNULL(proxied_user_info = proxied_users_info.at(0))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected error", K(ret));
           } else {
@@ -486,7 +674,7 @@ int ObSchemaGetterGuard::check_user_access(
               if (OB_ISNULL(proxied_info)) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("unexpected error", K(ret));
-              } else if (proxied_info->user_id_ == user_info->get_user_id()) {
+              } else if (proxied_info->user_id_ == auth_user_id) {
                 pwd_match = true;
                 proxied_info_idx = i;
               }

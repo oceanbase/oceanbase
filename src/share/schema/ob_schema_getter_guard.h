@@ -34,6 +34,7 @@ class Worker;
 }
 namespace common
 {
+class ObAddr;
 class ObString;
 class ObKVCacheHandle;
 template <class T>
@@ -455,6 +456,11 @@ public:
   int get_user_info(const uint64_t tenant_id,
                     const common::ObString &user_name,
                     common::ObIArray<const ObUserInfo *> &users_info);
+  static bool is_auth_user_host_match(const common::ObString &client_ip,
+                                      const common::ObString &host_name,
+                                      const bool enable_host_match_priority);
+  static int compare_auth_user_host_specificity(const common::ObString &lhs,
+                                                const common::ObString &rhs);
   int get_column_schema(const uint64_t tenant_id,
                         const uint64_t table_id,
                         const uint64_t column_id,
@@ -1328,6 +1334,14 @@ public:
   int get_ccl_rule_count(const uint64_t tenant_id, uint64_t & count);
 
 private:
+  enum class ObHostMatchType;
+  struct ObHostMatchRange;
+  static bool has_host_wildcard(const common::ObString &host_name);
+  static bool parse_host_mask_bits(const common::ObString &mask_str, int64_t &mask_bits);
+  static bool parse_ipv4_subnet_mask(const common::ObString &mask_str, common::ObAddr &mask);
+  static bool build_host_match_range(const common::ObString &host_name, ObHostMatchRange &range);
+  static bool is_host_match_range_subset(const ObHostMatchRange &lhs, const ObHostMatchRange &rhs);
+  static int64_t get_host_pattern_sort(const common::ObString &host_name);
   int verify_user_password_authentication(
       const ObUserInfo *user_info,
       const ObUserLoginInfo &login_info,

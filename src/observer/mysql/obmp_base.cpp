@@ -24,7 +24,6 @@
 #include "lib/encrypt/ob_caching_sha2_cache_mgr.h"
 #include "lib/encrypt/ob_rsa_getter.h"
 #include "common/ob_version_def.h"
-#include "lib/net/ob_net_util.h"
 #include "share/ob_get_compat_mode.h"
 namespace oceanbase
 {
@@ -797,10 +796,53 @@ int ObMPBase::load_privilege_info_for_change_user(sql::ObSQLSessionInfo *session
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(schema_guard.check_user_access(login_info, session_priv,
                 enable_role_id_array, ssl_st, user_info))) {
-      OB_LOG(WARN, "User access denied", K(login_info), K(ret));
-    } else if (OB_FAIL(session->on_user_connect(session_priv, user_info))) {
+      int inner_ret = OB_SUCCESS;
+      bool is_unlocked = false;
+      if (MYSQL_MODE == session->get_compatibility_mode()
+          && OB_ERR_USER_IS_LOCKED == ret
+          && OB_SUCCESS != (inner_ret = unlock_user_if_time_is_up_mysql(
+              session->get_effective_tenant_id(), login_info.user_name_, session_priv.user_id_,
+              schema_guard, is_unlocked))) {
+        LOG_WARN("fail to check user unlock for change user", K(inner_ret));
+      }
+
+      int tmp_ret = OB_SUCCESS;
+      int64_t local_version = OB_INVALID_VERSION;
+      int64_t global_version = OB_INVALID_VERSION;
+      if (OB_SUCCESS != (tmp_ret = gctx_.schema_service_->get_tenant_refreshed_schema_version(
+          session->get_effective_tenant_id(), local_version))) {
+        LOG_WARN("fail to get local schema version", K(tmp_ret),
+                 "tenant_id", session->get_effective_tenant_id());
+      } else if (OB_SUCCESS != (tmp_ret = gctx_.schema_service_->get_tenant_received_broadcast_version(
+          session->get_effective_tenant_id(), global_version))) {
+        LOG_WARN("fail to get global schema version", K(tmp_ret),
+                 "tenant_id", session->get_effective_tenant_id());
+      } else if (local_version < global_version || is_unlocked) {
+        LOG_INFO("try to refresh schema for change user",
+                 "tenant_id", session->get_effective_tenant_id(), K(is_unlocked),
+                 K(local_version), K(global_version));
+        if (OB_SUCCESS != (tmp_ret = gctx_.schema_service_->async_refresh_schema(
+            session->get_effective_tenant_id(), global_version))) {
+          LOG_WARN("failed to refresh schema", K(tmp_ret),
+                   "tenant_id", session->get_effective_tenant_id(), K(global_version));
+        } else if (OB_SUCCESS != (tmp_ret = gctx_.schema_service_->get_tenant_schema_guard(
+            session->get_effective_tenant_id(), schema_guard))) {
+          LOG_WARN("get schema guard failed", K(tmp_ret),
+                   "tenant_id", session->get_effective_tenant_id());
+        } else if (OB_SUCCESS == inner_ret
+                   && OB_FAIL(schema_guard.check_user_access(login_info, session_priv,
+                       enable_role_id_array, ssl_st, user_info))) {
+          LOG_WARN("user access denied after schema refresh", K(login_info), K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+        OB_LOG(WARN, "User access denied", K(login_info), K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(session->on_user_connect(session_priv, user_info))) {
       OB_LOG(WARN, "user connect failed", K(ret), K(session_priv));
-    } else {
+    }
+    if (OB_SUCC(ret)) {
       uint64_t db_id = OB_INVALID_ID;
       const ObSysVariableSchema *sys_variable_schema = NULL;
       session->set_user(session_priv.user_name_, session_priv.host_name_, session_priv.user_id_);
@@ -867,38 +909,63 @@ int ObMPBase::get_user_required_plugin(
     ObSchemaGetterGuard &schema_guard,
     const ObUserLoginInfo &login_info,
     ObSMConnection *conn,
+    const ObSQLSessionInfo &session,
     ObString &required_plugin,
     const ObSEArray<const ObUserInfo *, 2> &user_infos,
     const ObUserInfo *&matched_user_info)
 {
   int ret = OB_SUCCESS;
+  int compare_result = -1;
+  bool enable_host_match_priority = false;
+  bool need_continue_host_match = true;
   matched_user_info = nullptr;
 
-  for (int64_t i = 0; i < user_infos.count() && OB_ISNULL(matched_user_info) && OB_SUCC(ret); ++i) {
+  if (OB_FAIL(session.check_feature_enable(ObCompatFeatureType::MYSQL_USER_HOST_MATCH_PRIORITY,
+                                           enable_host_match_priority))) {
+    LOG_WARN("failed to check user host match compatibility", K(ret));
+  }
+
+  for (int64_t i = 0; i < user_infos.count() && need_continue_host_match && OB_SUCC(ret); ++i) {
     const ObUserInfo *tmp_user = user_infos.at(i);
     if (OB_ISNULL(tmp_user)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("user info is null", K(ret), K(i));
-    } else if (obsys::ObNetUtil::is_match(login_info.client_ip_, tmp_user->get_host_name_str())) {
-      matched_user_info = tmp_user;
+    } else if (ObSchemaGetterGuard::is_auth_user_host_match(login_info.client_ip_,
+                                                            tmp_user->get_host_name_str(),
+                                                            enable_host_match_priority)) {
+      if (OB_ISNULL(matched_user_info)) {
+        matched_user_info = tmp_user;
+      } else if (enable_host_match_priority) {
+        compare_result = ObSchemaGetterGuard::compare_auth_user_host_specificity(tmp_user->get_host_name_str(),
+                                                                                 matched_user_info->get_host_name_str());
+        if (1 == compare_result) {  // 1 : the current host is more accurate
+          matched_user_info = tmp_user;
+        }
+      }
+      need_continue_host_match = enable_host_match_priority;
     }
   }
-
-  if (OB_SUCC(ret) && OB_NOT_NULL(matched_user_info)) {
-    // Get the user's authentication plugin
-    ObString user_plugin = matched_user_info->get_plugin();
-    if (user_plugin.empty()) {
-      // At this early authentication stage, lib::is_mysql_mode() may not be properly set yet
-      // explicitly set the plugin name to mysql_native_password
-      required_plugin = ObEncryptedHelper::get_native_password_plugin(true);
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(matched_user_info)) {
+      ret = OB_PASSWORD_WRONG;
+      LOG_WARN("no matched user for authentication", K(login_info.user_name_), K(login_info.client_ip_), K(ret));
     } else {
-      required_plugin = user_plugin;
+      // Get the user's authentication plugin
+      ObString user_plugin = matched_user_info->get_plugin();
+      if (user_plugin.empty()) {
+        // At this early authentication stage, lib::is_mysql_mode() may not be properly set yet
+        // explicitly set the plugin name to mysql_native_password
+        required_plugin = ObEncryptedHelper::get_native_password_plugin(true);
+      } else {
+        required_plugin = user_plugin;
+      }
+      LOG_TRACE("found matched user for authentication",
+                K(login_info.user_name_),
+                K(login_info.client_ip_),
+                K(matched_user_info->get_host_name_str()),
+                K(required_plugin));
     }
-    LOG_TRACE("found matched user for authentication",
-              K(login_info.user_name_), K(login_info.client_ip_),
-              K(matched_user_info->get_host_name_str()), K(required_plugin));
   }
-
   return ret;
 }
 

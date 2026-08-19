@@ -74,54 +74,14 @@ private:
   int convert_oracle_object_name(const uint64_t tenant_id, ObString &object_name);
 
   int switch_lock_status_for_current_login_user(const uint64_t tenant_id, bool do_lock);
-  int switch_lock_status_for_user(const uint64_t tenant_id, const ObString &host_name,
-                                  ObCompatibilityMode compat_mode, bool do_lock);
-  int get_last_failed_login_info(const uint64_t tenant_id,
-                                 const uint64_t user_id,
-                                 ObISQLClient &sql_client,
-                                 int64_t &current_failed_login_num,
-                                 int64_t &last_failed_timestamp);
-
-  int update_current_user_failed_login_num(const uint64_t tenant_id,
-                                           const uint64_t user_id,
-                                           ObISQLClient &sql_client,
-                                           int64_t new_failed_login_num);
-  int clear_current_user_failed_login_num(const uint64_t tenant_id,
-                                          const uint64_t user_id,
-                                          ObISQLClient &sql_client);
 
   int update_login_stat_in_trans(const uint64_t tenant_id,
                                  const bool is_login_succ,
                                  share::schema::ObSchemaGetterGuard &schema_guard);
-  int update_login_stat_mysql(const uint64_t tenant_id,
-                              const bool is_login_succ,
-                              ObSchemaGetterGuard &schema_guard,
-                              bool &is_unlocked_now);
-  int update_login_stat_in_trans_mysql(const uint64_t tenant_id,
-                                       const ObUserInfo &user_info,
-                                       const bool is_login_succ,
-                                       bool &is_locked_now);
-  bool is_connection_control_enabled(const uint64_t tenant_id);
-  int get_connection_control_stat_mysql(const uint64_t tenant_id,
-                                        const int64_t current_failed_login_num,
-                                        const int64_t last_failed_login_timestamp,
-                                        bool &is_locked);
-  int is_need_lock_user_mysql(const uint64_t tenant_id,
-                              const int64_t current_failed_login_num,
-                              const int64_t last_failed_login_timestamp,
-                              bool &need_lock);
-
 
   int unlock_user_if_time_is_up(const uint64_t tenant_id,
                                 share::schema::ObSchemaGetterGuard &schema_guard,
                                 bool &is_unlock);
-  int unlock_user_if_time_is_up_mysql(const uint64_t tenant_id,
-                                      const uint64_t user_id,
-                                      share::schema::ObSchemaGetterGuard &schema_guard,
-                                      bool &is_unlock);
-  int check_password_expired(const uint64_t tenant_id,
-                             share::schema::ObSchemaGetterGuard &schema_guard,
-                             sql::ObSQLSessionInfo &session);
 #ifdef OB_BUILD_AUDIT_SECURITY
   int check_audit_user(const uint64_t tenant_id, ObString &user_name);
 #endif

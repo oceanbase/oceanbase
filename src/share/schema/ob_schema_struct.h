@@ -6423,14 +6423,15 @@ struct ObSessionPrivInfo
 
 struct ObUserLoginInfo
 {
-  ObUserLoginInfo() : is_passwd_plaintext_(false) {}
+  ObUserLoginInfo() : auth_user_id_(OB_INVALID_ID), is_passwd_plaintext_(false) {}
   ObUserLoginInfo(const common::ObString &tenant_name,
                   const common::ObString &user_name,
                   const common::ObString &client_ip,
                   const common::ObString &passwd,
                   const common::ObString &db)
       : tenant_name_(tenant_name), user_name_(user_name), proxied_user_name_(), client_ip_(client_ip),
-        passwd_(passwd), db_(db), scramble_str_(), is_passwd_plaintext_(false)
+        passwd_(passwd), db_(db), scramble_str_(), auth_user_id_(OB_INVALID_ID),
+        is_passwd_plaintext_(false)
   {}
 
   ObUserLoginInfo(const common::ObString &tenant_name,
@@ -6440,7 +6441,8 @@ struct ObUserLoginInfo
                   const common::ObString &db,
                   const common::ObString &scramble_str)
       : tenant_name_(tenant_name), user_name_(user_name), proxied_user_name_(), client_ip_(client_ip),
-        passwd_(passwd), db_(db), scramble_str_(scramble_str), is_passwd_plaintext_(false)
+        passwd_(passwd), db_(db), scramble_str_(scramble_str), auth_user_id_(OB_INVALID_ID),
+        is_passwd_plaintext_(false)
   {}
 
   ObUserLoginInfo(const common::ObString &tenant_name,
@@ -6451,10 +6453,13 @@ struct ObUserLoginInfo
                   const common::ObString &db,
                   const common::ObString &scramble_str)
       : tenant_name_(tenant_name), user_name_(user_name), proxied_user_name_(proxied_user_name), client_ip_(client_ip),
-        passwd_(passwd), db_(db), scramble_str_(scramble_str), is_passwd_plaintext_(false)
+        passwd_(passwd), db_(db), scramble_str_(scramble_str), auth_user_id_(OB_INVALID_ID),
+        is_passwd_plaintext_(false)
   {}
 
-  TO_STRING_KV(K_(tenant_name), K_(user_name), K_(proxied_user_name), K_(client_ip), K_(db), K_(scramble_str), K_(is_passwd_plaintext));
+  TO_STRING_KV(K_(tenant_name), K_(user_name), K_(proxied_user_name), K_(client_ip),
+               K_(db), K_(scramble_str),
+               K_(auth_user_id), K_(is_passwd_plaintext));
   common::ObString tenant_name_;
   common::ObString user_name_;
   common::ObString proxied_user_name_;
@@ -6462,6 +6467,7 @@ struct ObUserLoginInfo
   common::ObString passwd_;
   common::ObString db_;
   common::ObString scramble_str_;
+  uint64_t auth_user_id_; // The account selected for the current authentication attempt.
   bool is_passwd_plaintext_; // true if the passwd_ is plaintext, false if the password is encrypted
 };
 
