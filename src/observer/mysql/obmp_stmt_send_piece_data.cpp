@@ -593,6 +593,9 @@ int ObPieceCache::get_piece_buffer(int32_t stmt_id,
       // data array
       ret = OB_NOT_SUPPORTED;
       LOG_WARN(" not support array type yet.", K(ret));
+    } else if (OB_UNLIKELY(offset < 0)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid piece offset", K(ret), K(offset), K(buf_array->count()));
     } else if (offset < buf_array->count()) {
       // text
       old_piece_buf = &buf_array->at(offset);
