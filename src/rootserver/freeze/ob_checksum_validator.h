@@ -67,6 +67,8 @@ public:
       need_validate_index_ckm_(false),
       need_validate_cross_cluster_ckm_(false),
       cross_cluster_ckm_sync_finish_(false),
+      is_minimal_tablet_ckm_(false),
+      minimal_tablet_ckm_mode_scn_(),
       stop_(stop),
       tenant_id_(tenant_id),
       expected_epoch_(OB_INVALID_ID),
@@ -131,6 +133,8 @@ private:
   int check_inner_status();
   int get_table_compaction_info(const uint64_t table_id, compaction::ObTableCompactionInfo &table_compaction_info);
   int set_need_validate();
+  int refresh_minimal_tablet_ckm_mode(const share::SCN &compaction_scn);
+  bool is_tablet_checksum_completion_marker(const share::ObTabletReplicaChecksumItem &item) const;
   int get_tablet_ls_pairs(const share::schema::ObSimpleTableSchemaV2 &simple_schema);
   int get_replica_ckm(const bool include_larger_than = false);
   /* Tablet Replica Checksum Section */
@@ -171,6 +175,8 @@ private:
   bool need_validate_index_ckm_;
   bool need_validate_cross_cluster_ckm_;
   bool cross_cluster_ckm_sync_finish_;
+  bool is_minimal_tablet_ckm_;
+  share::SCN minimal_tablet_ckm_mode_scn_; // refresh once per merge round
   volatile bool &stop_;
   uint64_t tenant_id_;
   int64_t expected_epoch_;

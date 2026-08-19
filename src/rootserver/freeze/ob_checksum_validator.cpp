@@ -10,6 +10,7 @@
 #include "share/ob_service_epoch_proxy.h"
 #include "storage/compaction/ob_medium_compaction_func.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 namespace oceanbase
 {
@@ -51,6 +52,8 @@ int ObChecksumValidator::set_basic_info(
   if (OB_UNLIKELY(!freeze_info.is_valid() || expected_epoch < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(freeze_info), K(expected_epoch));
+  } else if (OB_FAIL(refresh_minimal_tablet_ckm_mode(freeze_info.frozen_scn_))) {
+    LOG_WARN("failed to refresh minimal tablet ckm mode", KR(ret), K_(tenant_id), K(freeze_info));
   } else if (FALSE_IT(freeze_info_ = freeze_info)) {
   } else if (FALSE_IT(major_merge_start_us_ = ObTimeUtility::fast_current_time())) {
   } else if (OB_FAIL(set_need_validate())) { // init freeze_info_ before call this func
@@ -107,6 +110,29 @@ int ObChecksumValidator::deal_with_special_table_at_last(bool &finish_validate)
   } else {
     finish_validate = true;
     LOG_INFO("success to deal with special table", KR(ret), K_(table_id), K_(table_compaction_info));
+  }
+  return ret;
+}
+
+int ObChecksumValidator::refresh_minimal_tablet_ckm_mode(const SCN &compaction_scn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!compaction_scn.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid compaction scn", KR(ret), K_(tenant_id), K(compaction_scn));
+  } else if (minimal_tablet_ckm_mode_scn_ == compaction_scn) {
+    // Reuse the mode snapshot when retrying the same compaction round.
+  } else {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+    if (OB_UNLIKELY(!tenant_config.is_valid())) {
+      ret = OB_EAGAIN;
+      LOG_WARN("tenant config is not valid, retry to refresh later", KR(ret), K_(tenant_id));
+    } else {
+      is_minimal_tablet_ckm_ = tenant_config->_enable_minimal_tablet_checksum;
+      minimal_tablet_ckm_mode_scn_ = compaction_scn;
+      LOG_INFO("success to refresh minimal tablet checksum mode", K_(tenant_id),
+               K(compaction_scn), K_(is_minimal_tablet_ckm));
+    }
   }
   return ret;
 }
@@ -171,6 +197,8 @@ int ObChecksumValidator::check_inner_status()
 void ObChecksumValidator::clear_cached_info()
 {
   cross_cluster_ckm_sync_finish_ = false;
+  // Keep the minimal tablet checksum mode snapshot across retries of the same compaction SCN.
+  // It will be refreshed when set_basic_info() sees a new SCN.
   freeze_info_.reset();
   major_merge_start_us_ = 0;
   schema_guard_ = nullptr;
@@ -431,12 +459,20 @@ int ObChecksumValidator::validate_cross_cluster_checksum()
   } else if (table_compaction_info_.is_index_ckm_verified()) {
     // not sync/valid cross cluster before validate index checksum
     if (need_validate_cross_cluster_ckm_) { // need to validate cross-cluster checksum
-      if (cross_cluster_ckm_sync_finish_ && OB_FAIL(validate_replica_and_tablet_checksum())) {
+      if (is_minimal_tablet_ckm_) {
+        // in minimal mode, tablet checksum items are not written except the
+        // completion marker (1, 1) of the special table, skip verification directly
+        if (SPECIAL_TABLE_ID != table_id_) {
+          (void) uncompact_info_.add_skip_verify_table(table_id_);
+        }
+      } else if (cross_cluster_ckm_sync_finish_ && OB_FAIL(validate_replica_and_tablet_checksum())) {
         LOG_WARN("fail to validate cross-cluster checksum", KR(ret), K_(stop),
                  "compaction_scn", get_compaction_scn(), K_(expected_epoch), K_(table_id));
       }
     } else { // no need to validate cross-cluster checksum, write checksum to inner_table
-      if (OB_FAIL(try_update_tablet_checksum_items())) {
+      if (is_minimal_tablet_ckm_ && SPECIAL_TABLE_ID != table_id_) {
+        // in minimal mode, only the completion marker (1, 1) of the special table is written to __all_tablet_checksum
+      } else if (OB_FAIL(try_update_tablet_checksum_items())) {
         LOG_WARN("fail to wrote checksum", KR(ret), K_(tenant_id), "compaction_scn", get_compaction_scn(), KPC_(simple_schema));
       }
     }
@@ -654,6 +690,15 @@ int ObChecksumValidator::push_finish_tablet_ls_pairs_with_update(
   return ret;
 }
 
+bool ObChecksumValidator::is_tablet_checksum_completion_marker(
+  const ObTabletReplicaChecksumItem &item) const
+{
+  // The first tablet in SYS LS marks that tablet checksum materialization
+  // for the compaction round has completed.
+  return item.ls_id_.is_sys_ls()
+      && ObTabletID::MIN_VALID_TABLET_ID == item.tablet_id_.id();
+}
+
 int ObChecksumValidator::push_tablet_ckm_items_with_update(
   const ObIArray<ObTabletReplicaChecksumItem> &replica_ckm_items)
 {
@@ -670,6 +715,8 @@ int ObChecksumValidator::push_tablet_ckm_items_with_update(
     } else if (OB_FAIL(curr_replica_item.check_data_checksum_type(is_cs_replica))) {
       LOG_WARN("fail to check data checksum type", KR(ret), K(curr_replica_item));
     } else if (is_cs_replica) { // skip report data checksum for column store replica to __all_tablet_checksum
+    } else if (is_minimal_tablet_ckm_ && !is_tablet_checksum_completion_marker(curr_replica_item)) {
+      // in minimal mode, only the completion marker (1, 1) is written to __all_tablet_checksum
     } else {
       if (nullptr != prev_replica_item && curr_replica_item.is_same_tablet( *prev_replica_item)) { // write one checksum_item per tablet
       } else if (OB_FAIL(tmp_checksum_item.assign(curr_replica_item))) {
