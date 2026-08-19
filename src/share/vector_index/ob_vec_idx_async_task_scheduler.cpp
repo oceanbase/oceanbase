@@ -42,6 +42,10 @@ namespace share
 
 ERRSIM_POINT_DEF(ERRSIM_VEC_SKIP_LOAD_TRIGGERED_TASKS,
     "Skip loading manually triggered vector async tasks and return success.");
+ERRSIM_POINT_DEF(ERRSIM_VEC_SKIP_LS_EXEC_SYNC,
+    "Skip publishing newly collected LS executor pairs for one scheduler round.");
+ERRSIM_POINT_DEF(ERRSIM_VEC_FAIL_LS_EXEC_GET,
+    "Fail before get_ls for the second newly collected LS executor pair.");
 
 // ---------------------------------- ObVecIdxAsyncTaskScheduler ----------------------------------//
 
@@ -64,6 +68,69 @@ struct ObStartupCleanupTaskKey
   uint64_t table_id_;
   uint64_t tablet_id_;
   int64_t task_id_;
+};
+
+// Owns a newly constructed leader/follower executor pair until both objects are
+// successfully published to the scheduler maps.  This guard is intentionally
+// local to this translation unit: map-owned executors still use the existing
+// retire/ref-count lifecycle after publication.
+class ObVecIdxExecutorPairGuard
+{
+public:
+  explicit ObVecIdxExecutorPairGuard(common::ObIAllocator &allocator)
+    : allocator_(allocator), leader_exec_(nullptr), follower_exec_(nullptr)
+  {}
+
+  ~ObVecIdxExecutorPairGuard()
+  {
+    reset();
+  }
+
+  int alloc_and_construct()
+  {
+    int ret = OB_SUCCESS;
+    void *buf = nullptr;
+    if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObVecIdxLeaderExecutors)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc leader executor set", KR(ret));
+    } else {
+      leader_exec_ = new (buf) ObVecIdxLeaderExecutors();
+      if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObVecIdxFollowerExecutors)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc follower executor set", KR(ret));
+      } else {
+        follower_exec_ = new (buf) ObVecIdxFollowerExecutors();
+      }
+    }
+    return ret;
+  }
+
+  ObVecIdxLeaderExecutors *get_leader() { return leader_exec_; }
+  ObVecIdxFollowerExecutors *get_follower() { return follower_exec_; }
+
+  void release_leader() { leader_exec_ = nullptr; }
+  void release_follower() { follower_exec_ = nullptr; }
+
+private:
+  void reset()
+  {
+    if (OB_NOT_NULL(leader_exec_)) {
+      leader_exec_->~ObVecIdxLeaderExecutors();
+      allocator_.free(leader_exec_);
+      leader_exec_ = nullptr;
+    }
+    if (OB_NOT_NULL(follower_exec_)) {
+      follower_exec_->~ObVecIdxFollowerExecutors();
+      allocator_.free(follower_exec_);
+      follower_exec_ = nullptr;
+    }
+  }
+
+private:
+  common::ObIAllocator &allocator_;
+  ObVecIdxLeaderExecutors *leader_exec_;
+  ObVecIdxFollowerExecutors *follower_exec_;
+  DISALLOW_COPY_AND_ASSIGN(ObVecIdxExecutorPairGuard);
 };
 
 ObVecIdxAsyncTaskScheduler::~ObVecIdxAsyncTaskScheduler()
@@ -1421,20 +1488,34 @@ int ObVecIdxAsyncTaskScheduler::sync_ls_executors()
   int ret = OB_SUCCESS;
   ObSEArray<share::ObLSID, 16> stale_ls_ids;
   ObSEArray<share::ObLSID, 16> new_ls_ids;
+  ObSEArray<share::ObLSID, 16> inconsistent_ls_ids;
 
-  // Step 1 & 2: under lock, collect stale IDs (from leader map, follower map has the same key set),
-  // remove them from both maps, then collect new LS IDs.
+  // Step 1 & 2: under lock, collect stale IDs from both maps, remove stale and
+  // inconsistent executor pairs, then collect new LS IDs.
   {
     common::ObSpinLockGuard guard(ls_executor_lock_);
     LSIndexMgrMap &mgr_map = service_->get_ls_index_mgr_map();
+    auto push_unique_ls_id = [](ObSEArray<share::ObLSID, 16> &ls_ids,
+                                const share::ObLSID &ls_id) -> int {
+      int inner_ret = OB_SUCCESS;
+      bool found = false;
+      for (int64_t i = 0; !found && i < ls_ids.count(); ++i) {
+        found = (ls_ids.at(i) == ls_id);
+      }
+      if (!found) {
+        inner_ret = ls_ids.push_back(ls_id);
+      }
+      return inner_ret;
+    };
 
-    auto collect_stale_func = [&](common::hash::HashMapPair<share::ObLSID, ObVecIdxLeaderExecutors *> &entry) -> int {
+    auto collect_stale_leader_func =
+        [&](common::hash::HashMapPair<share::ObLSID, ObVecIdxLeaderExecutors *> &entry) -> int {
       int inner_ret = OB_SUCCESS;
       ObPluginVectorIndexMgr *mgr = nullptr;
       if (OB_SUCCESS != (inner_ret = mgr_map.get_refactored(entry.first, mgr))) {
         if (OB_HASH_NOT_EXIST == inner_ret) {
           inner_ret = OB_SUCCESS;
-          if (OB_SUCCESS != (inner_ret = stale_ls_ids.push_back(entry.first))) {
+          if (OB_SUCCESS != (inner_ret = push_unique_ls_id(stale_ls_ids, entry.first))) {
             LOG_WARN("fail to push stale ls id", K(inner_ret), K(entry.first));
           }
         } else {
@@ -1443,38 +1524,77 @@ int ObVecIdxAsyncTaskScheduler::sync_ls_executors()
       }
       return inner_ret;
     };
-    if (OB_FAIL(ls_leader_executor_map_.foreach_refactored(collect_stale_func))) {
-      LOG_WARN("fail to collect stale ls executors", KR(ret), K_(tenant_id));
+    auto collect_stale_follower_func =
+        [&](common::hash::HashMapPair<share::ObLSID, ObVecIdxFollowerExecutors *> &entry) -> int {
+      int inner_ret = OB_SUCCESS;
+      ObPluginVectorIndexMgr *mgr = nullptr;
+      if (OB_SUCCESS != (inner_ret = mgr_map.get_refactored(entry.first, mgr))) {
+        if (OB_HASH_NOT_EXIST == inner_ret) {
+          inner_ret = OB_SUCCESS;
+          if (OB_SUCCESS != (inner_ret = push_unique_ls_id(stale_ls_ids, entry.first))) {
+            LOG_WARN("fail to push stale follower ls id", K(inner_ret), K(entry.first));
+          }
+        } else {
+          LOG_WARN("fail to get ls mgr for follower executor", K(inner_ret), K(entry.first));
+        }
+      }
+      return inner_ret;
+    };
+    if (OB_FAIL(ls_leader_executor_map_.foreach_refactored(collect_stale_leader_func))) {
+      LOG_WARN("fail to collect stale leader ls executors", KR(ret), K_(tenant_id));
+    } else if (OB_FAIL(ls_follower_executor_map_.foreach_refactored(collect_stale_follower_func))) {
+      LOG_WARN("fail to collect stale follower ls executors", KR(ret), K_(tenant_id));
     }
 
     for (int64_t i = 0; OB_SUCC(ret) && i < stale_ls_ids.count(); i++) {
       const share::ObLSID &stale_id = stale_ls_ids.at(i);
       ObVecIdxLeaderExecutors *leader_exec = nullptr;
       ObVecIdxFollowerExecutors *follower_exec = nullptr;
-      if (OB_FAIL(ls_leader_executor_map_.erase_refactored(stale_id, &leader_exec))) {
-        LOG_WARN("fail to erase stale leader executor", KR(ret), K(stale_id));
-      } else if (OB_NOT_NULL(leader_exec)) {
+      const int leader_ret = ls_leader_executor_map_.erase_refactored(stale_id, &leader_exec);
+      if (OB_SUCCESS == leader_ret) {
         retire_leader_executor_(leader_exec);
+      } else if (OB_HASH_NOT_EXIST != leader_ret) {
+        ret = leader_ret;
+        LOG_WARN("fail to erase stale leader executor", KR(ret), K(stale_id));
       }
-      int tmp_ret = ls_follower_executor_map_.erase_refactored(stale_id, &follower_exec);
-      if (OB_SUCCESS != tmp_ret && OB_HASH_NOT_EXIST != tmp_ret) {
-        LOG_WARN("fail to erase stale follower executor", K(tmp_ret), K(stale_id));
-      } else if (OB_NOT_NULL(follower_exec)) {
+      const int follower_ret = ls_follower_executor_map_.erase_refactored(stale_id, &follower_exec);
+      if (OB_SUCCESS == follower_ret) {
         retire_follower_executor_(follower_exec);
+      } else if (OB_HASH_NOT_EXIST != follower_ret) {
+        if (OB_SUCC(ret)) {
+          ret = follower_ret;
+        }
+        LOG_WARN("fail to erase stale follower executor", K(follower_ret), K(stale_id));
       }
     }
 
     auto collect_new_func = [&](common::hash::HashMapPair<share::ObLSID, ObPluginVectorIndexMgr *> &entry) -> int {
       int inner_ret = OB_SUCCESS;
-      ObVecIdxLeaderExecutors *existing = nullptr;
+      ObVecIdxLeaderExecutors *existing_leader = nullptr;
+      ObVecIdxFollowerExecutors *existing_follower = nullptr;
+      const int leader_ret = ls_leader_executor_map_.get_refactored(entry.first, existing_leader);
+      const int follower_ret = ls_follower_executor_map_.get_refactored(entry.first, existing_follower);
+      const bool leader_exists = (OB_SUCCESS == leader_ret);
+      const bool follower_exists = (OB_SUCCESS == follower_ret);
       if (!entry.first.is_user_ls()) {
         // Non-user LS (e.g. SYS LS) does not carry vector index data; skip to avoid
         // leaking SHARE_MOD ObLSHandle refs that block LS safe-destroy on tenant GC.
-      } else if (OB_SUCCESS == ls_leader_executor_map_.get_refactored(entry.first, existing)) {
+      } else if (OB_SUCCESS != leader_ret && OB_HASH_NOT_EXIST != leader_ret) {
+        inner_ret = leader_ret;
+        LOG_WARN("fail to get leader executor when collecting new ls", K(inner_ret), K(entry.first));
+      } else if (OB_SUCCESS != follower_ret && OB_HASH_NOT_EXIST != follower_ret) {
+        inner_ret = follower_ret;
+        LOG_WARN("fail to get follower executor when collecting new ls", K(inner_ret), K(entry.first));
+      } else if (leader_exists && follower_exists
+                 && OB_NOT_NULL(existing_leader) && OB_NOT_NULL(existing_follower)) {
         // already exists, skip
+      } else if (leader_exists || follower_exists) {
+        if (OB_SUCCESS != (inner_ret = push_unique_ls_id(inconsistent_ls_ids, entry.first))) {
+          LOG_WARN("fail to push inconsistent ls id", K(inner_ret), K(entry.first));
+        }
       } else if (OB_NOT_NULL(entry.second) && entry.second->is_vec_idx_async_executor_bind_stopped()) {
         // LoadScheduler::stop(): do not queue ls_id for new SHARE_MOD executor binds.
-      } else if (OB_SUCCESS != (inner_ret = new_ls_ids.push_back(entry.first))) {
+      } else if (OB_SUCCESS != (inner_ret = push_unique_ls_id(new_ls_ids, entry.first))) {
         LOG_WARN("fail to push new ls id", K(inner_ret), K(entry.first));
       }
       return inner_ret;
@@ -1482,6 +1602,46 @@ int ObVecIdxAsyncTaskScheduler::sync_ls_executors()
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(mgr_map.foreach_refactored(collect_new_func))) {
       LOG_WARN("fail to collect new ls ids", KR(ret), K_(tenant_id));
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < inconsistent_ls_ids.count(); ++i) {
+      const share::ObLSID &ls_id = inconsistent_ls_ids.at(i);
+      ObVecIdxLeaderExecutors *leader_exec = nullptr;
+      ObVecIdxFollowerExecutors *follower_exec = nullptr;
+      const int leader_ret = ls_leader_executor_map_.erase_refactored(ls_id, &leader_exec);
+      const int follower_ret = ls_follower_executor_map_.erase_refactored(ls_id, &follower_exec);
+      bool pair_removed = true;
+      if (OB_SUCCESS == leader_ret) {
+        retire_leader_executor_(leader_exec);
+      } else if (OB_HASH_NOT_EXIST != leader_ret) {
+        ret = leader_ret;
+        pair_removed = false;
+        LOG_WARN("fail to erase inconsistent leader executor", KR(ret), K(ls_id));
+      }
+      if (OB_SUCCESS == follower_ret) {
+        retire_follower_executor_(follower_exec);
+      } else if (OB_HASH_NOT_EXIST != follower_ret) {
+        if (OB_SUCC(ret)) {
+          ret = follower_ret;
+        }
+        pair_removed = false;
+        LOG_WARN("fail to erase inconsistent follower executor", K(follower_ret), K(ls_id));
+      }
+      if (pair_removed) {
+        ObPluginVectorIndexMgr *mgr = nullptr;
+        const int mgr_ret = mgr_map.get_refactored(ls_id, mgr);
+        if (OB_SUCCESS == mgr_ret && OB_NOT_NULL(mgr)
+            && !mgr->is_vec_idx_async_executor_bind_stopped()) {
+          if (OB_FAIL(push_unique_ls_id(new_ls_ids, ls_id))) {
+            LOG_WARN("fail to queue inconsistent ls executor for recreation", KR(ret), K(ls_id));
+          }
+        } else if (OB_SUCCESS != mgr_ret && OB_HASH_NOT_EXIST != mgr_ret) {
+          ret = mgr_ret;
+          LOG_WARN("fail to recheck ls mgr after removing inconsistent executor pair", KR(ret), K(ls_id));
+        }
+        LOG_WARN("removed inconsistent ls executor pair", K(ls_id),
+                 KP(leader_exec), KP(follower_exec));
+      }
     }
     if (stale_ls_ids.count() > 0) {
       LOG_INFO("[VEC_ASYNC_TASK_SCHED]vec idx ls executors removed for stale ls", K_(tenant_id), K(stale_ls_ids));
@@ -1491,42 +1651,37 @@ int ObVecIdxAsyncTaskScheduler::sync_ls_executors()
     }
   }
 
-  // Step 3: outside lock, init executors for new LSes (heavy: get_ls, alloc, init)
-  ObSEArray<std::pair<share::ObLSID, ObVecIdxLeaderExecutors *>, 16> leader_executors_to_insert;
-  ObSEArray<std::pair<share::ObLSID, ObVecIdxFollowerExecutors *>, 16> follower_executors_to_insert;
-  for (int64_t i = 0; OB_SUCC(ret) && i < new_ls_ids.count(); i++) {
-    const share::ObLSID &ls_id = new_ls_ids.at(i);
-    ObLSHandle ls_handle;
-    ObLSService *ls_svr = MTL(ObLSService *);
-    void *leader_buf = nullptr;
-    void *follower_buf = nullptr;
-    ObVecIdxLeaderExecutors *leader_exec = nullptr;
-    ObVecIdxFollowerExecutors *follower_exec = nullptr;
-    if (OB_ISNULL(ls_svr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ls service is null", KR(ret));
-    } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::SHARE_MOD))) {
-      LOG_WARN("fail to get ls", KR(ret), K(ls_id));
-    } else if (OB_ISNULL(ls_handle.get_ls())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get null ls", KR(ret), K(ls_id));
-    } else if (ls_handle.get_ls()->is_logonly_replica()) {
-      LOG_INFO("skip create vec idx executors for log replica", K(ls_id));
-    } else {
-      ObPluginVectorIndexMgr *ls_mgr = nullptr;
-      const int mgr_ret = service_->get_ls_index_mgr_map().get_refactored(ls_id, ls_mgr);
-      if (OB_SUCCESS == mgr_ret && OB_NOT_NULL(ls_mgr) && ls_mgr->is_vec_idx_async_executor_bind_stopped()) {
-        continue;
-      }
-      if (OB_ISNULL(leader_buf = executor_allocator_.alloc(sizeof(ObVecIdxLeaderExecutors)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to alloc leader executor set", KR(ret));
-      } else if (OB_ISNULL(follower_buf = executor_allocator_.alloc(sizeof(ObVecIdxFollowerExecutors)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to alloc follower executor set", KR(ret));
+  if (OB_UNLIKELY(ERRSIM_VEC_SKIP_LS_EXEC_SYNC)) {
+    LOG_WARN("[VEC_SYNC_LS_EXEC_ERRSIM] skip publishing new ls executor pairs",
+             K_(tenant_id), "new_ls_count", new_ls_ids.count(), K(new_ls_ids));
+  } else {
+    // Step 3: initialize and publish one LS executor pair at a time.  The local
+    // guard keeps ownership until both maps have accepted the pair, so an error
+    // on a later LS cannot leak executors initialized for an earlier LS.
+    for (int64_t i = 0; OB_SUCC(ret) && i < new_ls_ids.count(); i++) {
+      const share::ObLSID &ls_id = new_ls_ids.at(i);
+      ObLSHandle ls_handle;
+      ObLSService *ls_svr = MTL(ObLSService *);
+      ObVecIdxExecutorPairGuard executor_guard(executor_allocator_);
+      if (OB_ISNULL(ls_svr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ls service is null", KR(ret));
+      } else if (i > 0 && OB_FAIL(EVENT_CALL(ERRSIM_VEC_FAIL_LS_EXEC_GET))) {
+        LOG_WARN("[VEC_SYNC_LS_EXEC_ERRSIM] fail before get ls",
+                 KR(ret), K_(tenant_id), K(ls_id), "new_ls_idx", i,
+                 "new_ls_count", new_ls_ids.count());
+      } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::SHARE_MOD))) {
+        LOG_WARN("fail to get ls", KR(ret), K(ls_id));
+      } else if (OB_ISNULL(ls_handle.get_ls())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null ls", KR(ret), K(ls_id));
+      } else if (ls_handle.get_ls()->is_logonly_replica()) {
+        LOG_INFO("skip create vec idx executors for log replica", K(ls_id));
+      } else if (OB_FAIL(executor_guard.alloc_and_construct())) {
+        LOG_WARN("fail to allocate ls executor pair", KR(ret), K(ls_id));
       } else {
-        leader_exec = new (leader_buf) ObVecIdxLeaderExecutors();
-        follower_exec = new (follower_buf) ObVecIdxFollowerExecutors();
+        ObVecIdxLeaderExecutors *leader_exec = executor_guard.get_leader();
+        ObVecIdxFollowerExecutors *follower_exec = executor_guard.get_follower();
         if (OB_FAIL(leader_exec->async_task_exec_.init(tenant_id_, ls_handle))) {
           LOG_WARN("fail to init async task executor", KR(ret), K(ls_id));
         } else if (OB_FAIL(leader_exec->embedding_task_exec_.init(tenant_id_, ls_handle))) {
@@ -1543,84 +1698,112 @@ int ObVecIdxAsyncTaskScheduler::sync_ls_executors()
           LOG_WARN("fail to init follower mem sync executor", KR(ret), K(ls_id));
         } else if (OB_FAIL(follower_exec->ivf_task_exec_.init(tenant_id_, ls_handle))) {
           LOG_WARN("fail to init ivf task executor for follower", KR(ret), K(ls_id));
-        } else if (OB_FAIL(leader_executors_to_insert.push_back(std::make_pair(ls_id, leader_exec)))) {
-          LOG_WARN("fail to push leader executor to insert list", KR(ret), K(ls_id));
-        } else if (OB_FAIL(follower_executors_to_insert.push_back(std::make_pair(ls_id, follower_exec)))) {
-          LOG_WARN("fail to push follower executor to insert list", KR(ret), K(ls_id));
         } else {
           leader_exec->is_inited_ = true;
           follower_exec->is_inited_ = true;
-          LOG_INFO("vec idx ls executors inited", K_(tenant_id), K(ls_id));
-        }
-        if (OB_FAIL(ret)) {
-          if (OB_NOT_NULL(leader_exec)) {
-            leader_exec->~ObVecIdxLeaderExecutors();
-            executor_allocator_.free(leader_buf);
-            leader_buf = nullptr;
-            leader_exec = nullptr;
-          }
-          if (OB_NOT_NULL(follower_exec)) {
-            follower_exec->~ObVecIdxFollowerExecutors();
-            executor_allocator_.free(follower_buf);
-            follower_buf = nullptr;
-            follower_exec = nullptr;
-          }
-        }
-      }
-    }
-  }
 
-  // Step 4: under lock briefly, insert new executors (re-check LS still in mgr_map)
-  if (OB_SUCC(ret) && !leader_executors_to_insert.empty()) {
-    common::ObSpinLockGuard guard(ls_executor_lock_);
-    LSIndexMgrMap &mgr_map = service_->get_ls_index_mgr_map();
-    for (int64_t i = 0; OB_SUCC(ret) && i < leader_executors_to_insert.count(); i++) {
-      const share::ObLSID &ls_id = leader_executors_to_insert.at(i).first;
-      ObVecIdxLeaderExecutors *leader_exec = leader_executors_to_insert.at(i).second;
-      ObVecIdxFollowerExecutors *follower_exec = follower_executors_to_insert.at(i).second;
-      ObPluginVectorIndexMgr *mgr = nullptr;
-      int tmp_ret = mgr_map.get_refactored(ls_id, mgr);
-      if (OB_SUCCESS != tmp_ret) {
-        if (OB_HASH_NOT_EXIST == tmp_ret) {
-          leader_exec->~ObVecIdxLeaderExecutors();
-          follower_exec->~ObVecIdxFollowerExecutors();
-          LOG_INFO("ls removed before executor insert, skip", K(ls_id));
-        } else {
-          ret = tmp_ret;
-          LOG_WARN("fail to get ls mgr", KR(ret), K(ls_id));
-          leader_exec->~ObVecIdxLeaderExecutors();
-          follower_exec->~ObVecIdxFollowerExecutors();
+          // Step 4 for this LS: re-check and publish under the map lock.
+          common::ObSpinLockGuard guard(ls_executor_lock_);
+          LSIndexMgrMap &mgr_map = service_->get_ls_index_mgr_map();
+          ObVecIdxLeaderExecutors *existing_leader = nullptr;
+          ObVecIdxFollowerExecutors *existing_follower = nullptr;
+          ObPluginVectorIndexMgr *mgr = nullptr;
+          const int mgr_ret = mgr_map.get_refactored(ls_id, mgr);
+          const int leader_ret = ls_leader_executor_map_.get_refactored(ls_id, existing_leader);
+          const int follower_ret = ls_follower_executor_map_.get_refactored(ls_id, existing_follower);
+          const bool leader_exists = (OB_SUCCESS == leader_ret);
+          const bool follower_exists = (OB_SUCCESS == follower_ret);
+
+          if (OB_HASH_NOT_EXIST == mgr_ret) {
+            LOG_INFO("ls removed before executor insert, skip", K(ls_id));
+          } else if (OB_SUCCESS != mgr_ret) {
+            ret = mgr_ret;
+            LOG_WARN("fail to get ls mgr", KR(ret), K(ls_id));
+          } else if (OB_ISNULL(mgr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get null ls mgr before executor insert", KR(ret), K(ls_id));
+          } else if (mgr->is_vec_idx_async_executor_bind_stopped()) {
+            LOG_INFO("vec idx async bind stopped before executor insert, skip", K(ls_id));
+          } else if (OB_SUCCESS != leader_ret && OB_HASH_NOT_EXIST != leader_ret) {
+            ret = leader_ret;
+            LOG_WARN("fail to recheck leader executor before insert", KR(ret), K(ls_id));
+          } else if (OB_SUCCESS != follower_ret && OB_HASH_NOT_EXIST != follower_ret) {
+            ret = follower_ret;
+            LOG_WARN("fail to recheck follower executor before insert", KR(ret), K(ls_id));
+          } else if (leader_exists && follower_exists
+                     && OB_NOT_NULL(existing_leader) && OB_NOT_NULL(existing_follower)) {
+            LOG_INFO("ls executor pair already inserted, skip duplicate", K(ls_id));
+          } else {
+            // A half-published or null-valued pair can be left only by an earlier
+            // exceptional map operation.  Retire it before publishing a full pair.
+            if (leader_exists) {
+              ObVecIdxLeaderExecutors *erased_leader = nullptr;
+              if (OB_FAIL(ls_leader_executor_map_.erase_refactored(ls_id, &erased_leader))) {
+                LOG_WARN("fail to erase inconsistent leader executor before insert", KR(ret), K(ls_id));
+              } else {
+                retire_leader_executor_(erased_leader);
+              }
+            }
+            if (OB_SUCC(ret) && follower_exists) {
+              ObVecIdxFollowerExecutors *erased_follower = nullptr;
+              if (OB_FAIL(ls_follower_executor_map_.erase_refactored(ls_id, &erased_follower))) {
+                LOG_WARN("fail to erase inconsistent follower executor before insert", KR(ret), K(ls_id));
+              } else {
+                retire_follower_executor_(erased_follower);
+              }
+            }
+            if (OB_SUCC(ret)) {
+              if (OB_FAIL(ls_leader_executor_map_.set_refactored(ls_id, leader_exec))) {
+                LOG_WARN("fail to set leader executor into map", KR(ret), K(ls_id));
+              } else if (OB_FAIL(ls_follower_executor_map_.set_refactored(ls_id, follower_exec))) {
+                LOG_WARN("fail to set follower executor into map", KR(ret), K(ls_id));
+                ObVecIdxLeaderExecutors *rollback_exec = nullptr;
+                const int rollback_ret = ls_leader_executor_map_.erase_refactored(ls_id, &rollback_exec);
+                if (OB_SUCCESS == rollback_ret) {
+                  if (rollback_exec != leader_exec) {
+                    int tmp_ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("rollback erased unexpected leader executor", K(tmp_ret), K(ls_id),
+                             KP(rollback_exec), KP(leader_exec));
+                    retire_leader_executor_(rollback_exec);
+                  }
+                  // executor_guard still owns leader_exec and will destroy it.
+                } else {
+                  ObVecIdxLeaderExecutors *mapped_leader = nullptr;
+                  const int verify_ret = ls_leader_executor_map_.get_refactored(ls_id, mapped_leader);
+                  if (OB_SUCCESS == verify_ret && mapped_leader == leader_exec) {
+                    // The failed erase left leader_exec in the map.  Transfer its
+                    // ownership and reconcile the half-published pair next round.
+                    executor_guard.release_leader();
+                  } else if (OB_SUCCESS != verify_ret && OB_HASH_NOT_EXIST != verify_ret) {
+                    // Ownership cannot be proven after two map errors.  Prefer
+                    // leaving the object alive over destroying a possible map value.
+                    executor_guard.release_leader();
+                    LOG_WARN("fail to verify leader executor ownership after rollback failure",
+                             K(verify_ret), K(ls_id));
+                  }
+                  LOG_WARN("fail to rollback leader executor from map", K(rollback_ret),
+                           K(verify_ret), K(ls_id), KP(mapped_leader));
+                }
+              } else {
+                // Both maps now own their respective objects.
+                executor_guard.release_leader();
+                executor_guard.release_follower();
+                if (mgr->get_ls_leader()) {
+                  // Compensate for mark_ls_need_resume() that fired before this executor existed.
+                  leader_exec->set_need_resume(true);
+                  LOG_INFO("new executor for already-leader LS, auto-set need_resume",
+                           K(ls_id), K_(tenant_id));
+                } else {
+                  // Symmetric compensation for the follower side.
+                  follower_exec->set_need_resume(true);
+                  LOG_INFO("new executor for already-follower LS, auto-set follower need_resume",
+                           K(ls_id), K_(tenant_id));
+                }
+                LOG_INFO("vec idx ls executors inited and inserted", K_(tenant_id), K(ls_id));
+              }
+            }
+          }
         }
-      } else if (OB_NOT_NULL(mgr) && mgr->is_vec_idx_async_executor_bind_stopped()) {
-        leader_exec->~ObVecIdxLeaderExecutors();
-        follower_exec->~ObVecIdxFollowerExecutors();
-        LOG_INFO("vec idx async bind stopped before executor insert, skip", K(ls_id));
-      } else if (OB_FAIL(ls_leader_executor_map_.set_refactored(ls_id, leader_exec))) {
-        LOG_WARN("fail to set leader executor into map", KR(ret), K(ls_id));
-        leader_exec->~ObVecIdxLeaderExecutors();
-        follower_exec->~ObVecIdxFollowerExecutors();
-      } else if (OB_FAIL(ls_follower_executor_map_.set_refactored(ls_id, follower_exec))) {
-        LOG_WARN("fail to set follower executor into map", KR(ret), K(ls_id));
-        follower_exec->~ObVecIdxFollowerExecutors();
-        int tmp_ret = ls_leader_executor_map_.erase_refactored(ls_id);
-        if (OB_SUCCESS != tmp_ret) {
-          LOG_WARN("fail to rollback leader executor from map", K(tmp_ret), K(ls_id));
-        }
-        leader_exec->~ObVecIdxLeaderExecutors();
-      } else if (OB_NOT_NULL(mgr) && mgr->get_ls_leader()) {
-        // Compensate for mark_ls_need_resume() that fired before this executor existed.
-        // switch_to_leader() sets mgr->ls_leader_=true BEFORE mark_ls_need_resume(),
-        // so if ls_leader is true here, the resume flag was lost and needs compensation.
-        leader_exec->set_need_resume(true);
-        LOG_INFO("new executor for already-leader LS, auto-set need_resume",
-                 K(ls_id), K_(tenant_id));
-      } else if (OB_NOT_NULL(mgr) && !mgr->get_ls_leader()) {
-        // Symmetric compensation for the follower side: if mark_ls_need_resume_for_follower()
-        // fired before this executor was created, the flag would be lost. Set it here so
-        // the next timer round runs the R1 sweep on the follower load path.
-        follower_exec->set_need_resume(true);
-        LOG_INFO("new executor for already-follower LS, auto-set follower need_resume",
-                 K(ls_id), K_(tenant_id));
       }
     }
   }
