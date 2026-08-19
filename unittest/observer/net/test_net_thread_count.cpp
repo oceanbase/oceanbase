@@ -214,26 +214,38 @@ void *post_rpc(void *data)
   return retv;
 }
 
+class PnioGroupGuard
+{
+public:
+  PnioGroupGuard(int group_id, int thread_count)
+    : group_id_(group_id), expected_thread_count_(thread_count), actual_thread_count_(-1)
+  {
+    actual_thread_count_ = pn_provision(-1, group_id_, expected_thread_count_);
+  }
+
+  ~PnioGroupGuard()
+  {
+    pn_stop(group_id_);
+    pn_wait(group_id_);
+  }
+
+  bool is_valid() const
+  {
+    const bool valid = (actual_thread_count_ == expected_thread_count_);
+    return valid;
+  }
+
+private:
+  int group_id_;
+  int expected_thread_count_;
+  int actual_thread_count_;
+};
+
 class TestNetThreadCount : public testing::Test
 {
 public:
   TestNetThreadCount()
   {}
-  virtual void SetUp() override
-  {
-    int ret = OB_SUCCESS;
-    int thread_count = 1;
-    int count = pn_provision(-1, TEST_PNIO_GROUP, thread_count);
-    if (count != thread_count) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("create test group failed");
-    }
-  }
-  virtual void TearDown() override
-  {
-    pn_stop(TEST_PNIO_GROUP);
-    pn_wait(TEST_PNIO_GROUP);
-  }
   virtual ~TestNetThreadCount()
   {}
   const static int TEST_PNIO_GROUP = 10;
@@ -241,6 +253,9 @@ public:
 
 TEST_F(TestNetThreadCount, test_pn_interface)
 {
+  PnioGroupGuard pnio_group_guard(TEST_PNIO_GROUP, 1);
+  ASSERT_TRUE(pnio_group_guard.is_valid());
+
   // increase pn thread
   ASSERT_EQ(pn_update_thread_count(TEST_PNIO_GROUP, 2), 0);
   ASSERT_EQ(pn_update_thread_count(TEST_PNIO_GROUP, 8), 0);
