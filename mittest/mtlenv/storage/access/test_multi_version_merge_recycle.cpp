@@ -2061,8 +2061,12 @@ TEST_P(TestMultiVersionMergeRecycle, multi_uncommitted_trans_recycle)
 
   const char *result1 =
       "bigint   var   bigint  bigint      bigint bigint  flag     flag_type  multi_version_row_flag trans_id\n"
-      "1        var1  -33      0          NOP     14     UPDATE    NORMAL        LF                trans_id_0\n" // not filter because this row don't have F-flag
       "2        var2  -50      0          1       1      INSERT    NORMAL        CLF                trans_id_0\n";
+
+  // The physical F row of rowkey=1 belongs to the aborted transaction 4 and
+  // is discarded by the scanner.  The first visible committed row (v33) still
+  // decides the filter result for the complete rowkey; it is not exempt from
+  // recycling merely because its physical F flag was discarded.
 
   ObMockIterator res_iter;
   ObStoreRowIterator *scanner = NULL;
@@ -2084,6 +2088,258 @@ TEST_P(TestMultiVersionMergeRecycle, multi_uncommitted_trans_recycle)
   handle1.reset();
   handle2.reset();
   merger.reset();
+}
+
+/**
+ * Reproduce a partial-update row fusion bug across three minor SSTables.
+ *
+ * After ROWSCN recycling with base_version=40, rowkey=1 should have these
+ * participating rows:
+ *   - newest SSTable: v50 shadow/update plus v45, value1 is NOP
+ *   - middle SSTable: v35 value1=200, filtered because it has F and v35 <= 40
+ *   - oldest SSTable: aborted F|U followed by v20 value1=100 without F
+ *
+ * The v20 row must not be used to compact the v50 shadow row.  The correct
+ * v35 value is already present in the base major SSTable represented by
+ * base_version=40, so value1 should remain NOP for the later major merge to
+ * fill.  The regression let v20 escape ROWSCN filtering and filled the v50
+ * shadow row with value1=100.
+ */
+TEST_P(TestMultiVersionMergeRecycle, partial_update_uncommitted_prefix_wrong_fuse)
+{
+  ObTabletMergeDagParam param;
+  ObTabletExeMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
+  ObScnRange scn_range;
+
+  // Oldest minor: the aborted uncommitted row owns F.  The following v20 row
+  // has no F, which is the stale value that incorrectly survives filtering.
+  ObTableHandleV2 old_handle;
+  const char *old_data[1];
+  old_data[0] =
+      "bigint   var   bigint  bigint  bigint bigint  flag    flag_type  multi_version_row_flag trans_id\n"
+      "1        var1  MIN     -10     NOP    NOP     UPDATE  NORMAL     FU                     trans_id_1\n"
+      "1        var1  -20     0       100    100     INSERT  NORMAL     CL                     trans_id_0\n";
+
+  int64_t snapshot_version = 30;
+  PREPARE_SCN_RANGE(1, snapshot_version);
+  prepare_table_schema(old_data, schema_rowkey_cnt_, scn_range, snapshot_version,
+                       ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE);
+  reset_writer(snapshot_version);
+  prepare_one_macro(old_data, 1, true);
+  prepare_data_end(old_handle);
+  merge_context.static_param_.tables_handle_.add_table(old_handle);
+
+  // Middle minor: value1=200 is the correct history.  rowkey=0 keeps the
+  // block open so rowkey=1 is removed by the row-level ROWSCN filter.
+  ObTableHandleV2 middle_handle;
+  const char *middle_data[1];
+  middle_data[0] =
+      "bigint   var   bigint  bigint  bigint bigint  flag    flag_type  multi_version_row_flag trans_id\n"
+      "0        var0  -50     0       0      0       INSERT  NORMAL     CLF                    trans_id_0\n"
+      "1        var1  -35     0       200    NOP     UPDATE  NORMAL     LF                     trans_id_0\n";
+
+  snapshot_version = 40;
+  PREPARE_SCN_RANGE(30, snapshot_version);
+  reset_writer(snapshot_version);
+  prepare_one_macro(middle_data, 1, true);
+  prepare_data_end(middle_handle);
+  merge_context.static_param_.tables_handle_.add_table(middle_handle);
+
+  // Newest minor: v50 and v45 form a retained multi-version chain, which is
+  // why v50 has a shadow row.  The updated column is NOP in every version and
+  // must be filled from the base major later, not from v20.
+  ObTableHandleV2 new_handle;
+  const char *new_data[1];
+  new_data[0] =
+      "bigint   var   bigint  bigint  bigint bigint  flag    flag_type  multi_version_row_flag trans_id\n"
+      "1        var1  -50     MIN     NOP    500     UPDATE  NORMAL     SF                     trans_id_0\n"
+      "1        var1  -50     0       NOP    500     UPDATE  NORMAL     N                      trans_id_0\n"
+      "1        var1  -45     0       NOP    450     UPDATE  NORMAL     L                      trans_id_0\n";
+
+  snapshot_version = 60;
+  PREPARE_SCN_RANGE(40, snapshot_version);
+  reset_writer(snapshot_version);
+  prepare_one_macro(new_data, 1, true);
+  prepare_data_end(new_handle);
+  merge_context.static_param_.tables_handle_.add_table(new_handle);
+
+  // The scanner discards the aborted F|U row before it reaches the merge
+  // iterator.  Therefore v20 is the first row actually output for this
+  // rowkey and must decide whether the whole rowkey is recycled.
+  insert_tx_data(1 /*tx_id*/, INT64_MAX /*abort*/);
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 100;
+  trans_version_range.multi_version_start_ = 40;
+  trans_version_range.base_version_ = 40;
+
+  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context, GetParam());
+  ObSSTable *merged_sstable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, merger.merge_partition(merge_context, 0));
+  build_sstable(merge_context, merged_sstable);
+
+  // v20 and v35 are covered by the base major and should both be recycled.
+  // The v50 shadow row must remain partial (S without C, value1=NOP) until a
+  // later major merge fills value1=200 from the base major.
+  const char *result1 =
+      "bigint   var   bigint  bigint  bigint bigint  flag    flag_type  multi_version_row_flag trans_id\n"
+      "0        var0  -50     0       0      0       INSERT  NORMAL     CLF                    trans_id_0\n"
+      "1        var1  -50     MIN     NOP    500     UPDATE  NORMAL     SF                     trans_id_0\n"
+      "1        var1  -50     0       NOP    500     UPDATE  NORMAL     N                      trans_id_0\n"
+      "1        var1  -45     0       NOP    450     UPDATE  NORMAL     L                      trans_id_0\n";
+
+  ObMockIterator res_iter;
+  ObStoreRowIterator *scanner = nullptr;
+  ObDatumRange range;
+  res_iter.reset();
+  range.set_whole_range();
+  trans_version_range.base_version_ = 1;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.snapshot_version_ = INT64_MAX;
+  prepare_query_param(trans_version_range);
+  ASSERT_EQ(OB_SUCCESS, merged_sstable->scan(iter_param_, context_, range, scanner));
+  ASSERT_EQ(OB_SUCCESS, res_iter.from(result1));
+  ObMockDirectReadIterator sstable_iter;
+  ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
+  const bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(
+      sstable_iter, true /*cmp multi version row flag*/, false);
+
+  clear_tx_data();
+  scanner->~ObStoreRowIterator();
+  old_handle.reset();
+  middle_handle.reset();
+  new_handle.reset();
+  merger.reset();
+  ASSERT_TRUE(is_equal);
+}
+
+/**
+ * Verify that FIRST_COMMITTED_ROW_SELECTED keeps a rowkey while its first
+ * output row is fused across a block boundary.
+ *
+ * The physical F row of rowkey=1 belongs to an aborted transaction.  After
+ * the scanner discards that F|U row, v13/C is the first visible committed row
+ * and has no physical F flag.  The first block is OP_OPEN because v13 is newer
+ * than base_version.  Since base_version < 13 <= multi_version_start, v13 is
+ * selected by the row filter and immediately enters compact_old_row() before
+ * it is returned to the merger.  The next block contains only v10/v8, so its
+ * aggregate ROWSCN result is OP_FILTER.  At micro merge level,
+ * FIRST_COMMITTED_ROW_SELECTED must make should_keep_rowkey() change that
+ * operation to OP_OPEN, allowing v10/v8 to complete the fuse.
+ *
+ * At macro merge level the internal fetch requests open_block=true and opens
+ * the next macro directly.  It validates the same cross-block fuse result,
+ * but does not exercise the micro block-op conversion described above.
+ */
+TEST_P(TestMultiVersionMergeRecycle, selected_row_fuse_across_filter_block)
+{
+  ObTabletMergeDagParam param;
+  ObTabletExeMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
+  ObScnRange scn_range;
+  const ObMergeLevel merge_level = GetParam();
+
+  ObTableHandleV2 handle1;
+  const char *micro_data[2];
+  micro_data[0] = // OPEN: the aborted F|U is followed by retained v13/C.
+      "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag trans_id\n"
+      "0        var0  -8       0        0      0      EXIST   CLF                    trans_id_0\n"
+      "1        var1  MIN      -10      NOP    NOP    EXIST   FU                     trans_id_1\n"
+      "1        var1  -13      0        NOP    13     EXIST   C                      trans_id_0\n";
+
+  micro_data[1] = // FILTER by aggregate ROWSCN, but rowkey=1 is already SELECTED.
+      "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag trans_id\n"
+      "1        var1  -10      0        10     NOP    EXIST   N                      trans_id_0\n"
+      "1        var1  -8       0        NOP    8      EXIST   L                      trans_id_0\n";
+
+  int64_t snapshot_version = 20;
+  PREPARE_SCN_RANGE(1, snapshot_version);
+  prepare_table_schema(micro_data, schema_rowkey_cnt_, scn_range, snapshot_version);
+  reset_writer(snapshot_version);
+  if (MICRO_BLOCK_MERGE_LEVEL == merge_level) {
+    prepare_one_macro(micro_data, 2);
+  } else {
+    prepare_one_macro(micro_data, 1);
+    prepare_one_macro(&micro_data[1], 1);
+  }
+  prepare_data_end(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
+
+  // A second SSTable is required for minor merge and remains independently
+  // reusable, so it does not affect rowkey=1's state transitions.
+  ObTableHandleV2 handle2;
+  const char *micro_data2[1];
+  micro_data2[0] =
+      "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
+      "2        var2  -20      0        20     20     EXIST   CLF\n";
+
+  snapshot_version = 25;
+  PREPARE_SCN_RANGE(20, snapshot_version);
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data2, 1);
+  prepare_data_end(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
+
+  insert_tx_data(1 /*tx_id*/, INT64_MAX /*abort*/);
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 100;
+  trans_version_range.multi_version_start_ = 14;
+  trans_version_range.base_version_ = 12;
+
+  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context, merge_level);
+  ObSSTable *merged_sstable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, merger.merge_partition(merge_context, 0));
+  build_sstable(merge_context, merged_sstable);
+
+  const char *result1 =
+      "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
+      "1        var1  -13      0        10     13     EXIST   CLF\n"
+      "2        var2  -20      0        20     20     EXIST   CLF\n";
+
+  ObMockIterator res_iter;
+  ObStoreRowIterator *scanner = nullptr;
+  ObDatumRange range;
+  res_iter.reset();
+  range.set_whole_range();
+  trans_version_range.base_version_ = 1;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.snapshot_version_ = INT64_MAX;
+  prepare_query_param(trans_version_range);
+  ASSERT_EQ(OB_SUCCESS, merged_sstable->scan(iter_param_, context_, range, scanner));
+  ASSERT_EQ(OB_SUCCESS, res_iter.from(result1));
+  ObMockDirectReadIterator sstable_iter;
+  ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
+  const bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(
+      sstable_iter, true /*cmp multi version row flag*/);
+
+  const ObICompactionFilter::ObFilterStatistics &filter_statistics =
+      merge_context.filter_ctx_.filter_statistics_;
+  const int64_t micro_open_cnt = filter_statistics.micro_cnt_[ObBlockOp::OP_OPEN];
+  const int64_t micro_filter_cnt = filter_statistics.micro_cnt_[ObBlockOp::OP_FILTER];
+  const int64_t micro_none_cnt = filter_statistics.micro_cnt_[ObBlockOp::OP_NONE];
+  const int64_t filter_block_row_cnt = filter_statistics.filter_block_row_cnt_;
+  const int64_t filter_row_cnt =
+      filter_statistics.row_cnt_[ObICompactionFilter::FILTER_RET_REMOVE];
+
+  clear_tx_data();
+  scanner->~ObStoreRowIterator();
+  handle1.reset();
+  handle2.reset();
+  merger.reset();
+
+  ASSERT_TRUE(is_equal);
+  ASSERT_EQ(0, filter_block_row_cnt);
+  ASSERT_EQ(1, filter_row_cnt); // rowkey=0 is removed from the opened first block.
+  if (MICRO_BLOCK_MERGE_LEVEL == merge_level) {
+    // The first micro contains an uncommitted row and is opened directly, so
+    // it is not recorded by filter statistics.  OPEN=1 is the second micro's
+    // original FILTER result being overridden by FIRST_COMMITTED_ROW_SELECTED.
+    ASSERT_EQ(1, micro_open_cnt);
+    ASSERT_EQ(0, micro_filter_cnt);
+    ASSERT_EQ(1, micro_none_cnt);
+  }
 }
 
 /**

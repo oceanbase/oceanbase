@@ -1933,10 +1933,17 @@ int ObPartitionMinorRowMergeIter::fetch_row_with_filter()
       if (curr_row_->is_last_multi_version_row()) {
         rowkey_state_.set_last_row_output();
       }
-    } else if (curr_row_->is_uncommitted_row() || !curr_row_->is_first_multi_version_row()) {
-      // only filter rowkey from First to Last mv row
+    } else if (curr_row_->is_ghost_row()
+               || curr_row_->is_uncommitted_row()
+               || rowkey_state_.should_keep_rowkey()) {
+      // The first row actually output by this iterator decides whether the
+      // whole rowkey is kept or recycled.  Do not rely on the physical F flag,
+      // since an aborted uncommitted F row may have been skipped by the row
+      // scanner before reaching the merge iterator.
       break;
-    } else if (filter_handle_.is_valid() && OB_FAIL(filter_handle_.filter(*curr_row_, filter_ret))) {
+    } else if (!filter_handle_.is_valid()) {
+      break;
+    } else if (OB_FAIL(filter_handle_.filter(*curr_row_, filter_ret))) {
       LOG_WARN("Failed to filter row", K(ret), K(*this));
     } else if (ObICompactionFilter::FILTER_RET_REMOVE == filter_ret) {
       if (curr_row_->is_last_multi_version_row()) {
@@ -1945,6 +1952,7 @@ int ObPartitionMinorRowMergeIter::fetch_row_with_filter()
         rowkey_state_.set_recycling();
       }
     } else {
+      rowkey_state_.set_first_committed_row_selected();
       break;
     }
   } // while
@@ -2193,7 +2201,9 @@ int ObPartitionMinorRowMergeIter::try_make_committing_trans_compacted()
     LOG_WARN("Unexpceted null current row", K(ret), KP_(curr_row));
   } else if (curr_row_->is_uncommitted_row() || curr_row_->is_ghost_row()) {
     // skip uncommited row and last row(including ghost row)
-  } else if (rowkey_state_.is_last_row_output() || rowkey_state_.is_uncommitted_row_output()) {
+  } else if (rowkey_state_.is_last_row_output()
+             || rowkey_state_.is_first_committed_row_selected()
+             || rowkey_state_.is_uncommitted_row_output()) {
     // need check first output row is compacted
     if (is_compact_completed_row() && !is_curr_row_commiting()) {
       // 1. if first row is already compacted, all the rows following are all from commited transaction;
@@ -2560,7 +2570,8 @@ int ObPartitionMinorMacroMergeIter::inner_init(const ObMergeParameter &merge_par
 
 void ObPartitionMinorMacroMergeIter::update_rowkey_state_by_prev_block(const ObBlockOp &block_op, bool is_last_row_last_flag)
 {
-  // Update rowkey_state_ based on previous block's last row
+  // A reused/filtered block also makes the KEEP/REMOVE decision for a rowkey
+  // that continues in the next block.
   if (block_op.is_none() || block_op.is_filter()) {
     if (is_last_row_last_flag) {
       rowkey_state_.set_last_row_output();
@@ -3126,7 +3137,8 @@ int ObPartitionMinorMicroMergeIter::get_block_op(
     block_op.set_open();
   } else if (filter_handle_.is_valid()) {
     // If has filter_handle, use filter to determine the operation
-    if (OB_FAIL(filter_handle_.get_block_op_from_filter_for_minor(micro_block, rowkey_state_, block_op))) {
+    if (OB_FAIL(filter_handle_.get_block_op_from_filter_for_minor(
+        micro_block, rowkey_state_, block_op))) {
       LOG_WARN("Failed to get block op from filter", K(ret), K(micro_block));
     }
   } else {

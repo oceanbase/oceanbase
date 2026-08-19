@@ -358,7 +358,7 @@ int ObCompactionFilterHandle::get_block_op_from_filter_for_minor(
   if (OB_SUCC(inner_get_block_op_from_filter(block, orig_block_op))) {
     new_block_op = orig_block_op;
     if (new_block_op.is_filter()) {
-      if (rowkey_state.have_rowkey_output_row()) {
+      if (rowkey_state.should_keep_rowkey()) {
         new_block_op.set_open();
       }
     } else if (new_block_op.is_none() && rowkey_state.is_recycling()) {

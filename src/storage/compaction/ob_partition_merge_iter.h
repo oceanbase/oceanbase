@@ -132,22 +132,49 @@ private:
 //  - minor row iter
 //    - minor macro iter
 
-// State machine for rowkey output status in minor merge
+// State machine for processing one multi-version rowkey in minor merge.
+//
+// Row-level KEEP path:
+//   LAST_ROW_OUTPUT
+//     -> FIRST_COMMITTED_ROW_SELECTED (filter accepted the first visible
+//        committed row, but next() has not returned its result yet)
+//     -> FIRST_COMMITTED_ROW_OUTPUT (next() returned a non-L row or its fused
+//        row), then LAST_ROW_OUTPUT when the logical L row is returned;
+//     -> LAST_ROW_OUTPUT directly if the first returned row already has L.
+//
+// Row-level REMOVE path:
+//   LAST_ROW_OUTPUT -> RECYCLING -> LAST_ROW_OUTPUT (the logical L row was
+//   consumed by the filter).
+//
+// An uncommitted row bypasses the row filter.  After it is returned, the state
+// becomes UNCOMMITTED_ROW_OUTPUT so later rows of the same rowkey are kept; it
+// changes to FIRST_COMMITTED_ROW_OUTPUT after the first committed row is
+// returned, or LAST_ROW_OUTPUT if that row already has L.
+//
+// Block-level path for a block whose last row does not have L:
+//   OP_NONE   -> FIRST_COMMITTED_ROW_OUTPUT (the block is reused);
+//   OP_FILTER -> RECYCLING (the block is filtered);
+//   OP_OPEN   -> no transition here, rows drive the state machine.
+// A reused/filtered block ending with L always changes to LAST_ROW_OUTPUT.
 struct ObMinorRowkeyOutputState {
   enum State: uint8_t {
-    UNCOMMITTED_ROW_OUTPUT = 0, // Uncommitted row (U flag) has been output
-    FIRST_COMMITTED_ROW_OUTPUT,     // First committed row (F flag) has been output, but not last row (L flag)
-    RECYCLING,                // Recycling multi-version rows in the middle
-    LAST_ROW_OUTPUT,          // Last row (L flag) has been output, rowkey completed
+    UNCOMMITTED_ROW_OUTPUT = 0,    // An uncommitted row has been output.
+    FIRST_COMMITTED_ROW_SELECTED,  // First visible committed row is kept, but has not been output.
+    FIRST_COMMITTED_ROW_OUTPUT,    // First committed row has been output, but not the L row.
+    RECYCLING,                     // Remaining rows of this rowkey are being filtered.
+    LAST_ROW_OUTPUT,               // Rowkey completed, or no rowkey is active yet.
   };
   ObMinorRowkeyOutputState() : state_(LAST_ROW_OUTPUT) {}
   void reset() { state_ = LAST_ROW_OUTPUT; }
   bool have_rowkey_output_row() const { return state_ == UNCOMMITTED_ROW_OUTPUT || state_ == FIRST_COMMITTED_ROW_OUTPUT; }
+  bool should_keep_rowkey() const { return state_ == FIRST_COMMITTED_ROW_SELECTED || have_rowkey_output_row(); }
+  bool is_first_committed_row_selected() const { return state_ == FIRST_COMMITTED_ROW_SELECTED; }
   bool is_first_committed_row_output() const { return state_ == FIRST_COMMITTED_ROW_OUTPUT; }
   bool is_uncommitted_row_output() const { return state_ == UNCOMMITTED_ROW_OUTPUT; }
   bool is_recycling() const { return state_ == RECYCLING; }
   bool is_last_row_output() const { return state_ == LAST_ROW_OUTPUT; }
   void set_uncommitted_row_output() { state_ = UNCOMMITTED_ROW_OUTPUT; }
+  void set_first_committed_row_selected() { state_ = FIRST_COMMITTED_ROW_SELECTED; }
   void set_first_committed_row_output() { state_ = FIRST_COMMITTED_ROW_OUTPUT; }
   void set_recycling() { state_ = RECYCLING; }
   void set_last_row_output() { state_ = LAST_ROW_OUTPUT; }
