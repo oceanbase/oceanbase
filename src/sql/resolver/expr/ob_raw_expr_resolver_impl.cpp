@@ -3996,7 +3996,6 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
       if (OB_SUCC(ret) &&
           OB_NOT_NULL(ctx_.stmt_) &&
           OB_NOT_NULL(c_expr) &&
-          OB_NOT_NULL(session_info->get_pl_context()) &&
           T_QUESTIONMARK == c_expr->get_expr_type() &&
           c_expr->get_result_type().is_ext() &&
           (pl::PL_RECORD_TYPE == c_expr->get_result_type().get_extend_type() ||
