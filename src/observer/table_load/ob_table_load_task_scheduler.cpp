@@ -10,6 +10,8 @@
 #include "observer/omt/ob_tenant.h"
 #include "observer/table_load/ob_table_load_stat.h"
 #include "observer/table_load/ob_table_load_task.h"
+#include "share/interrupt/ob_global_interrupt_call.h"
+#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {
@@ -19,6 +21,39 @@ using namespace common;
 using namespace share;
 using namespace sql;
 using namespace storage;
+
+/**
+ * ObTableLoadWorker
+ */
+
+// copy from ObThWorker::check_status
+int ObTableLoadWorker::check_status()
+{
+  int ret = OB_SUCCESS;
+  if (nullptr != session_) {
+    session_->is_terminate(ret);
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_UNLIKELY((OB_SUCCESS != (ret = CHECK_MEM_STATUS())))) {
+    } else if (is_timeout()) {
+      ret = OB_TIMEOUT;
+    } else if (IS_INTERRUPTED()) {
+      ObInterruptCode &ic = GET_INTERRUPT_CODE();
+      ret = ic.code_;
+      LOG_WARN("received a interrupt", K(ic), K(ret));
+    } else {
+      if (WS_OUT_OF_THROTTLE == check_wait()) {
+        ret = OB_KILLED_BY_THROTTLING;
+      }
+    }
+  }
+  return ret;
+}
+
+/**
+ * ObTableLoadTaskThreadPoolScheduler
+ */
 
 int ObTableLoadTaskThreadPoolScheduler::MyThreadPool::init()
 {
@@ -31,6 +66,9 @@ int ObTableLoadTaskThreadPoolScheduler::MyThreadPool::init()
 
 void ObTableLoadTaskThreadPoolScheduler::MyThreadPool::run1()
 {
+  ObTableLoadWorker worker;
+  Worker::set_worker_to_thread_local(&worker);
+
   OB_ASSERT(OB_NOT_NULL(scheduler_));
   const int64_t thread_count = get_thread_count();
   // LOG_INFO("table load task thread start", KP(this), "pid", get_tid_cache(), "thread_idx", get_thread_idx());

@@ -127,21 +127,17 @@ int ObTableDirectInsertOp::inner_get_next_row()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("child op is null", K(ret));
   } else if (MY_SPEC.is_returning_) {
-    if (OB_FAIL(child_->get_next_row())) {
+    if (OB_FAIL(next_row())) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
-        LOG_WARN("fail get next row from child", K(ret));
+        LOG_WARN("failed to process next row", KR(ret));
       }
-    } else if (OB_FAIL(next_row())) {
-      LOG_WARN("failed to process next row", KR(ret));
     }
   } else {
     do {
-      if (OB_FAIL(child_->get_next_row())) {
+      if (OB_FAIL(next_row())) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
-          LOG_WARN("fail get next row from child", K(ret));
+          LOG_WARN("failed to process next row", KR(ret));
         }
-      } else if (OB_FAIL(next_row())) {
-        LOG_WARN("failed to process next row", KR(ret));
       }
     } while (OB_SUCC(ret));
   }
@@ -169,6 +165,8 @@ int ObTableDirectInsertOp::next_vector(const int64_t max_row_cnt)
         brs_.end_ = true;
         ret = OB_SUCCESS;
       }
+    } else if (OB_FAIL(try_check_status_by_rows(child_brs->size_))) {
+      LOG_WARN("fail to check status", K(ret));
     } else {
       brs_.copy(child_brs);
     }
@@ -208,6 +206,8 @@ int ObTableDirectInsertOp::next_batch(const int64_t max_row_cnt)
         brs_.end_ = true;
         ret = OB_SUCCESS;
       }
+    } else if (OB_FAIL(try_check_status_by_rows(child_brs->size_))) {
+      LOG_WARN("fail to check status", K(ret));
     } else {
       brs_.copy(child_brs);
     }
@@ -239,7 +239,13 @@ int ObTableDirectInsertOp::next_row()
   int ret = OB_SUCCESS;
   bool is_skipped = false;
   clear_evaluated_flag();
-  if (OB_FAIL(ObDMLService::process_insert_row(MY_SPEC.ins_ctdef_, ins_rtdef_, *this, is_skipped))) {
+  if (OB_FAIL(child_->get_next_row())) {
+    if (OB_UNLIKELY(OB_ITER_END != ret)) {
+      LOG_WARN("fail get next row from child", K(ret));
+    }
+  } else if (OB_FAIL(try_check_status())) {
+    LOG_WARN("fail to check status", K(ret));
+  } else if (OB_FAIL(ObDMLService::process_insert_row(MY_SPEC.ins_ctdef_, ins_rtdef_, *this, is_skipped))) {
     LOG_WARN("failed to process insert row", KR(ret), K(ins_rtdef_.cur_row_num_));
   } else if (!is_skipped) {
     const ExprFixedArray &dml_expr_array = MY_SPEC.ins_ctdef_.new_row_;
@@ -259,9 +265,6 @@ int ObTableDirectInsertOp::next_row()
     } else if (OB_FAIL(write_row(*tablet_id_ptr, datum_row_))) {
       LOG_WARN("failed to write row", KR(ret));
     }
-  }
-  if (OB_SUCC(ret)) {
-    ins_rtdef_.cur_row_num_++;
   }
   return ret;
 }

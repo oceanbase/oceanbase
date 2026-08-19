@@ -19,6 +19,14 @@ namespace observer
 {
 class ObTableLoadTask;
 
+class ObTableLoadWorker final : public lib::Worker
+{
+public:
+  ObTableLoadWorker() = default;
+  virtual ~ObTableLoadWorker() = default;
+  int check_status() override;
+};
+
 class ObITableLoadTaskScheduler
 {
 public:

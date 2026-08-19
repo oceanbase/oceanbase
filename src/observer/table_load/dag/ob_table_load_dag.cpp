@@ -142,6 +142,8 @@ int ObTableLoadDag::check_status()
   int ret = OB_SUCCESS;
   if (OB_FAIL(ret_code_)) {
     LOG_WARN("dag has error", KR(ret));
+  } else if (OB_FAIL(THIS_WORKER.check_status())) {
+    LOG_WARN("fail to check worker status", KR(ret));
   }
   return ret;
 }
