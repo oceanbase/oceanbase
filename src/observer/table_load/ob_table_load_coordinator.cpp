@@ -542,8 +542,7 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
         int64_t coord_session_count = 0;
         int64_t write_session_count = 0;
         int64_t min_session_count = ctx_->param_.parallel_;
-        int64_t max_session_count = 0;
-        int64_t limit_session_count = MIN(memory_limit / min_part_memory, ObMacroDataSeq::MAX_PARALLEL_IDX + 1);  // 节点内不能超过这个并行度
+        int64_t limit_session_count = MIN(memory_limit / min_part_memory, (ObMacroDataSeq::MAX_PARALLEL_IDX - 1) / 2);  // 节点内不能超过这个并行度
         int64_t total_limit_session_count = MIN(limit_session_count * store_server_count, parallel_servers_target); // 所有节点加起来不能超过这个并行度
         int64_t total_session_count = MIN(ctx_->param_.parallel_, total_limit_session_count);
         ObDirectLoadResourceOpRes apply_res;
