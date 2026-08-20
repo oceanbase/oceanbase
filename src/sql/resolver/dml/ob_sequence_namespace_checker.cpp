@@ -315,7 +315,7 @@ int ObSequenceNamespaceChecker::check_link_sequence_exists(const ObDbLinkSchema 
                                                     dblink_schema->get_tenant_name(),
                                                     dblink_schema->get_user_name(),
                                                     dblink_schema->get_plain_password(),
-                                                    database_name,
+                                                    dblink_schema->get_database_name(),
                                                     dblink_schema->get_conn_string(),
                                                     dblink_schema->get_cluster_name()))) {
         LOG_WARN("create dblink pool failed", K(ret), K(param_ctx));
