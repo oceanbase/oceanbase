@@ -37,18 +37,22 @@ private:
         check_sort_indexs_(),
         late_table_id_(common::OB_INVALID_ID),
         base_index_(common::OB_INVALID_ID),
-        check_column_store_(false) { }
+        check_column_store_(false),
+        stmt_id_(common::OB_INVALID_STMT_ID) { }
     ObSEArray<uint64_t, 4> late_material_indexs_;
     ObSEArray<uint64_t, 2> check_sort_indexs_;  // global index of partition table is ok even if there is no sort op
     uint64_t late_table_id_;
     uint64_t base_index_;
     bool check_column_store_;
 
+    int64_t stmt_id_;
+
     TO_STRING_KV(K_(late_material_indexs),
                  K_(check_sort_indexs),
                  K_(late_table_id),
                  K_(base_index),
-                 K_(check_column_store));
+                 K_(check_column_store),
+                 K_(stmt_id));
   };
 
   struct ObLateMaterializationInfo
@@ -130,6 +134,9 @@ private:
                              ObLateMaterializationInfo &info,
                              ObCostBasedLateMaterializationCtx &check_ctx,
                              bool &trans_happened);
+  int find_target_plan(ObLogicalOperator* op,
+                      const int64_t stmt_id,
+                      ObLogicalOperator *&target_plan);
   int check_transform_plan_expected(ObLogicalOperator* top,
                                     ObCostBasedLateMaterializationCtx &ctx,
                                     bool &is_valid);

@@ -46,6 +46,7 @@ int ObTransformLateMaterialization::transform_one_stmt(ObIArray<ObParentDMLStmt>
     LOG_WARN("failed to check if table need late materialization", K(ret));
   } else if (info.candi_indexs_.empty() && !info.is_allow_column_table_) {
     /* do nothing */
+  } else if (OB_FALSE_IT(check_ctx.stmt_id_ = stmt->get_stmt_id())){
   } else if (OB_FAIL(inner_accept_transform(parent_stmts, stmt, force_trans, info, check_ctx,
                                             trans_happened))) {
     LOG_WARN("failed to do inner accept transform", K(ret));
@@ -573,6 +574,8 @@ int ObTransformLateMaterialization::inner_accept_transform(ObIArray<ObParentDMLS
   } else if (ctx_->eval_cost_) {
     LOG_TRACE("not accept transform because already in one accepct transform");
   } else {
+    ObSEArray<ObParentDMLStmt, 4> dummy_parent_stmts;
+    ObIArray<ObParentDMLStmt> &eval_parent_stmts = stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_5_0_2)? dummy_parent_stmts : parent_stmts;
     if (OB_SUCC(ret)) {
       if (OB_FAIL(try_trans_helper.fill_helper(stmt->get_query_ctx()))) {
         LOG_WARN("failed to fill try trans helper", K(ret));
@@ -581,12 +584,12 @@ int ObTransformLateMaterialization::inner_accept_transform(ObIArray<ObParentDMLS
       } else if (force_accept && stmt->get_stmt_hint().query_hint_->has_outline_data()) {
         trans_happened = true;
         LOG_TRACE("force accept to use late materialization");
-      } else if (OB_FAIL(evaluate_stmt_cost(parent_stmts, trans_stmt, true, trans_stmt_cost,
+      } else if (OB_FAIL(evaluate_stmt_cost(eval_parent_stmts, trans_stmt, true, trans_stmt_cost,
                                             is_expected, check_ctx))) {
         LOG_WARN("failed to evaluate cost for the transformed stmt", K(ret));
       } else if (!is_expected) {
         trans_happened = false;
-      } else if (!force_accept && OB_FAIL(evaluate_stmt_cost(parent_stmts, stmt, false,
+      } else if (!force_accept && OB_FAIL(evaluate_stmt_cost(eval_parent_stmts, stmt, false,
                                                              base_stmt_cost, is_base_expected,
                                                              check_ctx))) {
         LOG_WARN("failed to evaluate cost of select_stmt");
@@ -1134,18 +1137,44 @@ int ObTransformLateMaterialization::is_expected_plan(ObLogPlan *plan,
   ObCostBasedLateMaterializationCtx *local_ctx =
                                          static_cast<ObCostBasedLateMaterializationCtx*>(check_ctx);
   is_expected = false;
+  ObLogicalOperator *target_plan = NULL;
   if (OB_ISNULL(plan) || OB_ISNULL(local_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null param", K(ret));
+  } else if (OB_FAIL(find_target_plan(plan->get_plan_root(), local_ctx->stmt_id_, target_plan))) {
+    LOG_WARN("failed to find target plan", K(ret));
+  } else if (NULL == target_plan) {
+    // do nothing
   } else if (is_trans_plan) {
-    if (OB_FAIL(check_transform_plan_expected(plan->get_plan_root(), *local_ctx, is_expected))) {
+    if (OB_FAIL(check_transform_plan_expected(target_plan, *local_ctx, is_expected))) {
       LOG_WARN("failed to check transform plan expected", K(ret));
     }
   } else if (!is_trans_plan) {
-    if (OB_FAIL(get_index_of_base_stmt_path(plan->get_plan_root(), *local_ctx))) {
+    if (OB_FAIL(get_index_of_base_stmt_path(target_plan, *local_ctx))) {
       LOG_WARN("failed to get base stmt best index", K(ret));
     } else {
       is_expected = true;
+    }
+  }
+  return ret;
+}
+
+int ObTransformLateMaterialization::find_target_plan(ObLogicalOperator* op,
+                                                    const int64_t stmt_id,
+                                                    ObLogicalOperator *&target_plan)
+{
+  int ret = OB_SUCCESS;
+  target_plan = NULL;
+  if (OB_ISNULL(op) || OB_ISNULL(op->get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null", K(ret), K(op));
+  } else if (stmt_id == op->get_stmt()->get_stmt_id()) {
+    target_plan = op;
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && NULL == target_plan && i < op->get_num_of_child(); ++i) {
+      if (OB_FAIL(SMART_CALL(find_target_plan(op->get_child(i), stmt_id, target_plan)))) {
+        LOG_WARN("failed to find operator", K(ret));
+      }
     }
   }
   return ret;
