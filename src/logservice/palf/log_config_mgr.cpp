@@ -513,18 +513,16 @@ int LogConfigMgr::get_log_sync_children_list(LogLearnerList &children) const
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  LogLearner pre_sync_learner;
   SpinLockGuard gaurd(child_lock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (OB_FAIL(children.deep_copy(log_sync_children_))) {
     PALF_LOG(WARN, "deep_copy children_list failed", KR(ret), K_(palf_id), K_(self));
   } else if (pre_sync_learner_.is_valid() && !children.contains(pre_sync_learner_)) {
-    if (OB_TMP_FAIL(children_.get_learner_by_addr(pre_sync_learner_, pre_sync_learner))) {
-      // The target may have been removed from children_ before the config change exits.
-    } else if (OB_FAIL(children.add_learner(pre_sync_learner))) {
-      PALF_LOG(WARN, "add pre-sync learner failed", KR(ret), K_(palf_id), K_(self),
-          K_(pre_sync_learner), K(pre_sync_learner), K(children));
+    if (OB_TMP_FAIL(children.add_learner(LogLearner(pre_sync_learner_,
+        0 /* register_time_us, unused for pre-sync */)))) {
+      PALF_LOG(WARN, "add pre-sync learner failed", KR(tmp_ret), K_(palf_id), K_(self),
+          K_(pre_sync_learner), K(children));
     }
   } else {
     //pass
@@ -2476,7 +2474,6 @@ void LogConfigMgr::try_enable_pre_sync_learner_(const LogConfigChangeArgs &args,
       is_lsn_gap_small &&
       is_log_id_gap_small &&
       target.is_valid() &&
-      children_.contains(target) &&
       pre_sync_learner_ != target) {
     pre_sync_learner_ = target;
     PALF_LOG(INFO, "enable pre-sync learner", K_(palf_id), K_(self), K(target),

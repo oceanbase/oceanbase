@@ -1462,8 +1462,10 @@ TEST_F(TestObSimpleLogClusterConfigChange, one_f_to_two_f_catch_up)
     SCOPED_TRACE(scenario.name_);
     const int64_t id = ATOMIC_AAF(&palf_id_, 1);
     const int64_t target_idx = 3;
+    const int64_t parent_idx = 4;
     int64_t leader_idx = OB_INVALID_INDEX;
-    bool target_blocked = false;
+    bool parent_target_blocked = false;
+    bool leader_target_blocked = false;
     std::atomic<bool> stop_writer(false);
     std::atomic<bool> saw_pre_sync(false);
     std::atomic<int64_t> write_count(0);
@@ -1480,7 +1482,10 @@ TEST_F(TestObSimpleLogClusterConfigChange, one_f_to_two_f_catch_up)
       if (writer.joinable()) {
         writer.join();
       }
-      if (target_blocked) {
+      if (parent_target_blocked) {
+        unblock_net(parent_idx, target_idx);
+      }
+      if (leader_target_blocked) {
         unblock_net(leader_idx, target_idx);
       }
       leader.reset();
@@ -1499,25 +1504,37 @@ TEST_F(TestObSimpleLogClusterConfigChange, one_f_to_two_f_catch_up)
     }
     ASSERT_EQ(1, replica_num);
 
+    ObMember parent(get_cluster()[parent_idx]->get_addr(), 1);
+    ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(
+        parent, CONFIG_CHANGE_TIMEOUT_US));
+    EXPECT_UNTIL_EQ(true,
+        leader.palf_handle_impl_->config_mgr_.children_.contains(parent.get_server()));
+
     ObMember target(get_cluster()[target_idx]->get_addr(), 1);
     target.set_migrating();
     ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(
         target, CONFIG_CHANGE_TIMEOUT_US));
     EXPECT_UNTIL_EQ(1, leader.palf_handle_impl_->config_mgr_.children_.get_member_number());
-    EXPECT_UNTIL_EQ(leader.palf_handle_impl_->self_,
+    EXPECT_UNTIL_EQ(parent.get_server(),
         palf_list[target_idx]->palf_handle_impl_->config_mgr_.parent_);
+    EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.children_.contains(target.get_server()));
 
     if (scenario.initial_log_count_ > 0) {
-      block_net(leader_idx, target_idx);
-      target_blocked = true;
+      block_net(parent_idx, target_idx);
+      parent_target_blocked = true;
       ASSERT_EQ(OB_SUCCESS, submit_log(leader,
           scenario.initial_log_count_, id, scenario.initial_log_size_));
       ASSERT_EQ(OB_SUCCESS, wait_until_has_committed(
           leader, leader.palf_handle_impl_->get_max_lsn()));
       if (!scenario.keep_target_blocked_) {
-        unblock_net(leader_idx, target_idx);
-        target_blocked = false;
+        unblock_net(parent_idx, target_idx);
+        parent_target_blocked = false;
       }
+    }
+
+    if (scenario.keep_target_blocked_) {
+      block_net(leader_idx, target_idx);
+      leader_target_blocked = true;
     }
 
     if (scenario.write_interval_us_ > 0) {

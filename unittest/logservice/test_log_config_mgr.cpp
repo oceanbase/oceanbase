@@ -177,7 +177,7 @@ TEST_F(TestLogConfigMgr, test_pre_sync_migrating_learner)
   cm.is_inited_ = true;
   cm.palf_id_ = 1;
   cm.self_ = addr1;
-  EXPECT_EQ(OB_SUCCESS, cm.children_.add_learner(LogLearner(addr2, 1)));
+  EXPECT_FALSE(cm.children_.contains(addr2));
 
   cm.try_enable_pre_sync_learner_(args,
       follower_lsn + LEADER_DEFAULT_GROUP_BUFFER_SIZE,
