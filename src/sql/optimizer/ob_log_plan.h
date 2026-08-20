@@ -581,6 +581,7 @@ public:
       force_hash_local_(false),
       force_pushdown_group_by_(false),
       is_scalar_group_by_(false),
+      origin_group_exprs_(),
       distinct_exprs_(),
       aggr_code_expr_(NULL),
       non_distinct_aggr_items_(),
@@ -656,6 +657,7 @@ public:
     bool is_from_povit_;
     bool ignore_hint_;
     uint64_t optimizer_features_enable_version_;
+    ObSEArray<ObRawExpr*, 8> origin_group_exprs_;
     ObSEArray<ObRawExpr*, 8> distinct_exprs_;
 
     // context for three stage group by push down
@@ -704,6 +706,7 @@ public:
                  K_(is_from_povit),
                  K_(ignore_hint),
                  K_(optimizer_features_enable_version),
+                 K_(origin_group_exprs),
                  K_(distinct_exprs),
                  K_(pushdown_groupby_columns),
                  K_(group_ndv),

@@ -1075,13 +1075,19 @@ int ObSelectLogPlan::candi_allocate_normal_group_by(const ObIArray<ObRawExpr*> &
                                                     ObIArray<CandidatePlan> &groupby_plans)
 {
   int ret = OB_SUCCESS;
+  const ObSelectStmt *stmt = get_stmt();
   SMART_VAR(GroupingOpHelper, groupby_helper) {// TODO
     ObSEArray<ObRawExpr*, 1> dummy_exprs;
-    if (OB_FAIL(init_groupby_helper(group_by_exprs,
-                                    dummy_exprs,
-                                    aggr_items,
-                                    is_from_povit,
-                                    groupby_helper))) {
+    if (OB_ISNULL(stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(stmt));
+    } else if (OB_FAIL(groupby_helper.origin_group_exprs_.assign(stmt->get_group_exprs()))) {
+      LOG_WARN("failed to assign original group exprs", K(ret));
+    } else if (OB_FAIL(init_groupby_helper(group_by_exprs,
+                                           dummy_exprs,
+                                           aggr_items,
+                                           is_from_povit,
+                                           groupby_helper))) {
       LOG_WARN("failed to init group by helper", K(ret));
     } else if (groupby_helper.can_storage_pushdown_ &&
                OB_FAIL(try_push_aggr_into_table_scan(candi_plans,

@@ -5420,6 +5420,13 @@ int ObLogPlan::get_distribute_group_by_method(ObLogicalOperator *top,
         OB_FAIL(top->check_sharding_compatible_with_reduce_expr(reduce_exprs,
                                                                 is_partition_wise))) {
       LOG_WARN("failed to check if sharding compatible with distinct expr", K(ret));
+    } else if (reduce_exprs.empty() &&
+               query_ctx->check_opt_compat_version(COMPAT_VERSION_5_0_2) &&
+               !groupby_helper.origin_group_exprs_.empty() &&
+               !get_pushdown_filters().empty() &&
+               OB_FAIL(top->check_sharding_compatible_with_reduce_expr(groupby_helper.origin_group_exprs_,
+                                                                       is_partition_wise))) {
+      LOG_WARN("failed to check if sharding compatible with original group exprs", K(ret));
     } else if (is_partition_wise) {
       if (top->get_is_local_order_by_das()) {
         group_dist_methods &= ~DistAlgo::DIST_PARTITION_WISE;
