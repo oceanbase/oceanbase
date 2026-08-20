@@ -34,13 +34,13 @@ devdeps-icu-69.1-342025121913.el7.aarch64.rpm
 devdeps-s3-cpp-sdk-1.11.156-102023122011.el7.aarch64.rpm
 devdeps-protobuf-c-1.5.1-100000052025032810.el7.aarch64.rpm
 devdeps-roaringbitmap-croaring-3.0.0-42024042816.el7.aarch64.rpm
-devdeps-apache-arrow-20.0.0-482026031617.el7.aarch64.rpm
+devdeps-apache-arrow-20.0.0-892026081909.el7.aarch64.rpm
 devdeps-vsag-1.2.0-442026062614.el7.aarch64.rpm
 devdeps-apache-orc-2.1.1-92025111409.el7.aarch64.rpm
 devdeps-fast-float-6.1.3-42024112122.el7.aarch64.rpm
 devdeps-hdfs-sdk-3.3.6-112024123116.el7.aarch64.rpm
 devdeps-apache-avro-cpp-1.12.0-72025062510.el7.aarch64.rpm
-devdeps-apache-thrift-0.16.0-132025070909.el7.aarch64.rpm
+devdeps-apache-thrift-0.24.0-52026081817.el7.aarch64.rpm
 devdeps-mit-krb5-1.21.3-212025063015.el7.aarch64.rpm
 devdeps-cyrus-sasl-2.1.28-102025070115.el7.aarch64.rpm
 devdeps-python3-3.13.3-132025070111.el7.aarch64.rpm
@@ -51,7 +51,7 @@ devdeps-zstd-1.1.1-52026052517.el7.aarch64.rpm
 devdeps-zstd-1.3.8-52026052517.el7.aarch64.rpm
 devdeps-zstd-1.5.7-52026052517.el7.aarch64.rpm
 devdeps-obcharset-1.0.0-32025111215.el7.aarch64.rpm
-devdeps-hms-client-1.0.0-22025112014.el7.aarch64.rpm
+devdeps-hms-client-1.0.0-52026081815.el7.aarch64.rpm
 devdeps-kafka-2.12.1-52026012814.el7.aarch64.rpm
 
 [tools]
