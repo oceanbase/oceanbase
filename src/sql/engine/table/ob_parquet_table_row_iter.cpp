@@ -3254,6 +3254,31 @@ int ObParquetTableRowIterator::read_min_max_datum(const std::string &min_val, co
                    == static_cast<const parquet::TimeLogicalType*>(log_type)->time_unit()) {
         min_datum.set_time(tmp_min32 * USECS_PER_MSEC);
         max_datum.set_time(tmp_max32 * USECS_PER_MSEC);
+      } else if (log_type->is_decimal() && ob_is_number_or_decimal_int_tc(column_meta.type_)) {
+        if (ob_is_decimal_int_tc(column_meta.type_)
+            && DECIMAL_INT_32 == get_decimalint_type(column_meta.precision_)) {
+          min_datum.set_int32(tmp_min32);
+          max_datum.set_int32(tmp_max32);
+        } else if (ob_is_decimal_int_tc(column_meta.type_)
+                   && get_decimalint_type(column_meta.precision_) > DECIMAL_INT_256) {
+          // ObStorageDatum only support 40 byte memory
+          // do nothing
+        } else {
+          ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx);
+          int32_t int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(
+              (column_meta.precision_ == -1) ? 38 : column_meta.precision_);
+          ObArrayWrap<char> buffer;
+          OZ (buffer.allocate_array(tmp_alloc_g.get_allocator(), int_bytes));
+          if (OB_FAIL(to_numeric_hive(pointer_cast<const char*>(min_val.data()), min_val.size(),
+                                      buffer.get_data(), buffer.count(), physical_type,
+                                      column_meta, tmp_alloc_g.get_allocator(), min_datum))) {
+            LOG_WARN("failed to convert numeric", K(ret));
+          } else if (OB_FAIL(to_numeric_hive(pointer_cast<const char*>(max_val.data()), max_val.size(),
+                                             buffer.get_data(), buffer.count(), physical_type,
+                                             column_meta, tmp_alloc_g.get_allocator(), max_datum))) {
+            LOG_WARN("failed to convert numeric", K(ret));
+          }
+        }
       }
       break;
     }
@@ -3321,6 +3346,31 @@ int ObParquetTableRowIterator::read_min_max_datum(const std::string &min_val, co
               }
             }
           }
+      } else if (log_type->is_decimal() && ob_is_number_or_decimal_int_tc(column_meta.type_)) {
+        if (ob_is_decimal_int_tc(column_meta.type_)
+            && DECIMAL_INT_64 == get_decimalint_type(column_meta.precision_)) {
+          min_datum.set_int(tmp_min64);
+          max_datum.set_int(tmp_max64);
+        } else if (ob_is_decimal_int_tc(column_meta.type_)
+                   && get_decimalint_type(column_meta.precision_) > DECIMAL_INT_256) {
+          // ObStorageDatum only support 40 byte memory
+          // do nothing
+        } else {
+          ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx);
+          int32_t int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(
+              (column_meta.precision_ == -1) ? 38 : column_meta.precision_);
+          ObArrayWrap<char> buffer;
+          OZ (buffer.allocate_array(tmp_alloc_g.get_allocator(), int_bytes));
+          if (OB_FAIL(to_numeric_hive(pointer_cast<const char*>(min_val.data()), min_val.size(),
+                                      buffer.get_data(), buffer.count(), physical_type,
+                                      column_meta, tmp_alloc_g.get_allocator(), min_datum))) {
+            LOG_WARN("failed to convert numeric", K(ret));
+          } else if (OB_FAIL(to_numeric_hive(pointer_cast<const char*>(max_val.data()), max_val.size(),
+                                             buffer.get_data(), buffer.count(), physical_type,
+                                             column_meta, tmp_alloc_g.get_allocator(), max_datum))) {
+            LOG_WARN("failed to convert numeric", K(ret));
+          }
+        }
       }
       break;
     }
