@@ -1113,7 +1113,8 @@ int ObPLDependencyCheck::check_dup_pl_cache_obj(const ObPLCacheBasicCtx &pc_ctx,
 
 bool ObPLObjectValue::match_params_info(const Ob2DArray<ObPlParamInfo,
                                         OB_MALLOC_BIG_BLOCK_SIZE,
-                                        ObWrapperAllocator, false> &infos)
+                                        ObWrapperAllocator, false> &infos,
+                                        bool strict)
 {
   bool is_same = true;
   if (infos.count() != params_info_.count()) {
@@ -1123,7 +1124,8 @@ bool ObPLObjectValue::match_params_info(const Ob2DArray<ObPlParamInfo,
     for (int64_t i = 0; is_same && i < N; ++i) {
       if (true == is_same && params_info_.at(i).flag_.need_to_check_type_) {
         if (infos.at(i).type_ != params_info_.at(i).type_) {
-          if (enable_share_cache_for_null_param_
+          if (!strict
+            && enable_share_cache_for_null_param_
             && !params_info_.at(i).flag_.need_strict_type_match_
             && ObNullType == params_info_.at(i).type_) {
             is_same = true;
@@ -1533,7 +1535,7 @@ int ObPLObjectSet::inner_add_cache_obj(ObILibCacheCtx &ctx,
   } else {
     DLIST_FOREACH(pl_object_value, object_value_sets_) {
       pl_object_value->enable_share_cache_for_null_param_ = pc_ctx.session_info_->enable_pl_null_literal_parameterization();
-      if (true == pl_object_value->match_params_info(cache_object->get_params_info())) {
+      if (true == pl_object_value->match_params_info(cache_object->get_params_info(), true)) {
         bool is_dup = false;
         // check if already have same cache obj
         OZ (pl_object_value->check_dup_pl_cache_obj(pc_ctx, pl_object_value->stored_schema_objs_,

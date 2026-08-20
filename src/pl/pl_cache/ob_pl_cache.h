@@ -364,7 +364,8 @@ public:
 
   bool match_params_info(const Ob2DArray<ObPlParamInfo,
                                 OB_MALLOC_BIG_BLOCK_SIZE,
-                                ObWrapperAllocator, false> &infos);
+                                ObWrapperAllocator, false> &infos,
+                                bool strict = false);
 
   int match_complex_type_info(const ObPlParamInfo &param_info,
                               const ObObjParam &param,
