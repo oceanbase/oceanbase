@@ -11526,10 +11526,11 @@ int ObLogPlan::sort_pwj_constraint(ObLocationConstraintContext &location_constra
   return ret;
 }
 
-int ObLogPlan::check_enable_plan_expiration(bool &enable) const
+int ObLogPlan::check_enable_plan_expiration(bool &enable_plan_expiration, bool &enable_plan_expiration_with_time) const
 {
   int ret = OB_SUCCESS;
-  enable = false;
+  enable_plan_expiration = false;
+  enable_plan_expiration_with_time = false;
   ObOptimizerContext &opt_ctx = get_optimizer_context();
   ObSQLSessionInfo *session_info = opt_ctx.get_session_info();
   ObQueryCtx *query_ctx = opt_ctx.get_query_ctx();
@@ -11540,9 +11541,6 @@ int ObLogPlan::check_enable_plan_expiration(bool &enable) const
     // only enable plan expiration for user session queries
   } else if (!get_stmt()->is_select_stmt()) {
     // do nothing
-  } else if (opt_ctx.get_phy_plan_type() != OB_PHY_PLAN_LOCAL &&
-             opt_ctx.get_phy_plan_type() != OB_PHY_PLAN_DISTRIBUTED) {
-    // do nothing
   } else if (query_ctx->get_query_hint().has_outline_data()
 #ifdef OB_BUILD_SPM
              && !query_ctx->is_spm_evolution_
@@ -11552,9 +11550,38 @@ int ObLogPlan::check_enable_plan_expiration(bool &enable) const
   } else {
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session_info->get_effective_tenant_id()));
     const ObOptParamHint &opt_params = query_ctx->get_global_hint().opt_params_;
-    enable = !tenant_config.is_valid() ? true : enable = tenant_config->_enable_plan_expiration_by_exec_feedback;
-    if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ENABLE_PLAN_EXPIRATION_BY_EXEC_FEEDBACK, enable))) {
+    enable_plan_expiration = !tenant_config.is_valid() ? true : tenant_config->_enable_plan_expiration_by_exec_feedback;
+    if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ENABLE_PLAN_EXPIRATION_BY_EXEC_FEEDBACK, enable_plan_expiration))) {
       LOG_WARN("failed to get enable_plan_expiration_by_exec_feedback opt_param", K(ret));
+    } else if (query_ctx->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP9, COMPAT_VERSION_4_3_0,
+                                                   COMPAT_VERSION_4_3_5_BP7, COMPAT_VERSION_4_4_0,
+                                                   COMPAT_VERSION_4_4_2_BP3, COMPAT_VERSION_4_5_0,
+                                                   COMPAT_VERSION_5_0_2)) {
+      enable_plan_expiration = enable_plan_expiration && (OB_PHY_PLAN_LOCAL == opt_ctx.get_phy_plan_type()
+                          || OB_PHY_PLAN_REMOTE == opt_ctx.get_phy_plan_type());
+      const ObLogicalOperator *node = root_;
+      while (OB_SUCC(ret) && enable_plan_expiration) {
+        if (OB_ISNULL(node)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("node is null", K(ret));
+        } else if (node->is_table_scan()) {
+          break;
+        } else if (node->get_num_of_child() == 1) {
+          node = node->get_child(ObLogicalOperator::first_child);
+        } else {
+          enable_plan_expiration = false;
+          break;
+        }
+      }
+      if (OB_SUCC(ret) && enable_plan_expiration && node->is_table_scan()) {
+        enable_plan_expiration = static_cast<const ObLogTableScan *>(node)->is_need_feedback();
+      } else {
+        enable_plan_expiration = false;
+      }
+    } else {
+      enable_plan_expiration_with_time = true;
+      enable_plan_expiration = enable_plan_expiration && (OB_PHY_PLAN_LOCAL == opt_ctx.get_phy_plan_type()
+                          || OB_PHY_PLAN_DISTRIBUTED == opt_ctx.get_phy_plan_type());
     }
   }
   return ret;

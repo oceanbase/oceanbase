@@ -1134,22 +1134,54 @@ int ObPlanCache::add_plan_cache(ObILibCacheCtx &ctx,
     ObPlanCacheCtx &pc_ctx = static_cast<ObPlanCacheCtx&>(ctx);
     pc_ctx.key_ = &(pc_ctx.fp_result_.pc_key_);
     int tmp_ret = OB_SUCCESS;
-    if (pc_ctx.regenerating_expired_plan_
-        && OB_SUCCESS != (tmp_ret = remove_cache_node(pc_ctx.key_))) {
-      SQL_PC_LOG(WARN, "fail to remove lib cache node for expired plan", K(tmp_ret));
-    }
-    do {
-      if (OB_FAIL(add_cache_obj(ctx, pc_ctx.key_, cache_obj)) && OB_OLD_SCHEMA_VERSION == ret) {
-        SQL_PC_LOG(INFO, "table or view in plan cache value is old", K(ret));
-      }
-      if (ctx.need_destroy_node_) {
-        SQL_PC_LOG(INFO, "The cache node needs to be evict due to an invalid state", K(ret));
-        if (OB_SUCCESS != (tmp_ret = remove_cache_node(pc_ctx.key_))) {
-          ret = tmp_ret;
-          SQL_PC_LOG(WARN, "fail to remove lib cache node", K(ret));
+    bool need_add_plan = true;
+    if (pc_ctx.regenerating_expired_plan_) {
+      ObPhysicalPlan* new_plan = static_cast<ObPhysicalPlan*>(cache_obj);
+      ObCacheObjGuard old_plan_guard(PLAN_GEN_HANDLE);
+      if (OB_SUCCESS != (tmp_ret = ref_plan(pc_ctx.expired_plan_id_, old_plan_guard))) {
+        SQL_PC_LOG(WARN, "fail to ref expired plan", K(tmp_ret), K(pc_ctx.expired_plan_id_));
+      } else if (OB_ISNULL(old_plan_guard.cache_obj_)
+                  || ObLibCacheNameSpace::NS_CRSR != old_plan_guard.cache_obj_->get_ns()) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        SQL_PC_LOG(WARN, "invalid expired plan", K(tmp_ret), KP(old_plan_guard.cache_obj_));
+      } else {
+        ObPhysicalPlan *old_plan = static_cast<ObPhysicalPlan*>(old_plan_guard.cache_obj_);
+        if (new_plan->get_plan_hash_value() == old_plan->get_plan_hash_value()) {
+          int64_t old_exec_usec = ATOMIC_LOAD(&old_plan->stat_.first_exec_usec_);
+          int64_t old_row_count = ATOMIC_LOAD(&old_plan->stat_.first_exec_row_count_);
+          ATOMIC_STORE(&old_plan->stat_.first_exec_usec_, old_exec_usec * 2);
+          ATOMIC_STORE(&old_plan->stat_.first_exec_row_count_, old_row_count * 2);
+          old_plan->set_is_expired(NOT_EXPIRED);
+          need_add_plan = false;
+          pc_ctx.need_evolution_ = false;
+          ret = OB_SQL_PC_PLAN_DUPLICATE;
+          SQL_PC_LOG(INFO, "keep expired plan with the same plan hash",
+                     K(pc_ctx.expired_plan_id_), K(new_plan->get_plan_hash_value()));
+        } else {
+          int64_t old_exec_usec = ATOMIC_LOAD(&old_plan->stat_.first_exec_usec_);
+          int64_t old_row_count = ATOMIC_LOAD(&old_plan->stat_.first_exec_row_count_);
+          ATOMIC_STORE(&new_plan->stat_.first_exec_usec_, old_exec_usec * 2);
+          ATOMIC_STORE(&new_plan->stat_.first_exec_row_count_, old_row_count * 2);
         }
       }
-    } while (OB_OLD_SCHEMA_VERSION == ret && pc_ctx.need_retry_add_plan());
+      if (need_add_plan && OB_SUCCESS != (tmp_ret = remove_cache_node(pc_ctx.key_))) {
+        SQL_PC_LOG(WARN, "fail to remove lib cache node for expired plan", K(tmp_ret));
+      }
+    }
+    if (need_add_plan) {
+      do {
+        if (OB_FAIL(add_cache_obj(ctx, pc_ctx.key_, cache_obj)) && OB_OLD_SCHEMA_VERSION == ret) {
+          SQL_PC_LOG(INFO, "table or view in plan cache value is old", K(ret));
+        }
+        if (ctx.need_destroy_node_) {
+          SQL_PC_LOG(INFO, "The cache node needs to be evict due to an invalid state", K(ret));
+          if (OB_SUCCESS != (tmp_ret = remove_cache_node(pc_ctx.key_))) {
+            ret = tmp_ret;
+            SQL_PC_LOG(WARN, "fail to remove lib cache node", K(ret));
+          }
+        }
+      } while (OB_OLD_SCHEMA_VERSION == ret && pc_ctx.need_retry_add_plan());
+    }
   }
   return ret;
 }
@@ -1344,6 +1376,7 @@ int ObPlanCache::get_cache_obj(ObILibCacheCtx &ctx,
           && static_cast<ObPhysicalPlan*>(cache_obj)->is_expired()
           && static_cast<ObPCVSet*>(cache_node)->set_expired_time()) {
         static_cast<ObPlanCacheCtx&>(ctx).regenerating_expired_plan_ = true;
+        static_cast<ObPlanCacheCtx&>(ctx).expired_plan_id_ = cache_obj->get_object_id();
       }
       guard.cache_obj_ = cache_obj;
       LOG_DEBUG("succ to get cache obj", KPC(key));

@@ -3504,18 +3504,50 @@ int ObLogTableScan::is_table_get(bool &is_get) const
  */
 bool ObLogTableScan::is_need_feedback() const
 {
-  bool ret = false;
-  const int64_t SELECTION_THRESHOLD = 80;
-  double table_row_count = get_table_row_count();
-  double logical_query_range_row_count = get_logical_query_range_row_count();
-  int64_t sel = (is_whole_range_scan() || table_row_count == 0) ?
-                  100 : static_cast<int64_t>(logical_query_range_row_count) * 100 / table_row_count;
+  int ret = OB_SUCCESS;
+  bool b_ret = false;
+  const ObDMLStmt *stmt = get_stmt();
+  if (OB_ISNULL(stmt) || OB_ISNULL(stmt->get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected NULL", KP(stmt));
+  } else if (stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP9, COMPAT_VERSION_4_3_0,
+                                                             COMPAT_VERSION_4_3_5_BP7, COMPAT_VERSION_4_4_0,
+                                                             COMPAT_VERSION_4_4_2_BP3, COMPAT_VERSION_4_5_0,
+                                                             COMPAT_VERSION_5_0_2)) {
+    bool is_get = false;
+    SampleInfo::SampleMethod sample_method = get_sample_info().method_;
+    const ObQueryRangeProvider *pre_range = get_pre_graph();
+    if (sample_method != SampleInfo::NO_SAMPLE) {
+      //do nothing
+    } else if (use_das()) {
+      //do nothing
+    } else if (get_diverse_path_count() <= 1) {
+      //do nothing
+    } else if (is_whole_range_scan()) {
+      b_ret = true;
+    } else if (NULL == pre_range) {
+      //do nothing
+    } else if (OB_FAIL(pre_range->is_get(is_get))) {
+      LOG_WARN("failed to get is_get", K(ret));
+    } else if (is_get) {
+      //do nothing
+    } else if (use_query_range()) {
+      b_ret = true;
+    }
+    LOG_TRACE("is_need_feedback", K(is_get), K(sample_method), K(b_ret), K(ret));
+  } else {
+    const int64_t SELECTION_THRESHOLD = 80;
+    double table_row_count = get_table_row_count();
+    double logical_query_range_row_count = get_logical_query_range_row_count();
+    int64_t sel = (is_whole_range_scan() || table_row_count == 0) ?
+                    100 : static_cast<int64_t>(logical_query_range_row_count) * 100 / table_row_count;
 
-  ret = sel >= SELECTION_THRESHOLD && !is_multi_part_table_scan_;
+    b_ret = sel >= SELECTION_THRESHOLD && !is_multi_part_table_scan_;
 
-  LOG_TRACE("is_need_feedback", K(table_row_count),
-            K(logical_query_range_row_count), K(sel), K(ret));
-  return ret;
+    LOG_TRACE("is_need_feedback", K(table_row_count),
+              K(logical_query_range_row_count), K(sel), K(b_ret));
+  }
+  return b_ret;
 }
 
 int ObLogTableScan::get_phy_location_type(ObTableLocationType &location_type)

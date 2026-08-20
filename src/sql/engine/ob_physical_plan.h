@@ -444,6 +444,7 @@ public:
   virtual PreCalcExprHandler* get_pre_calc_expr_handler() override;
 
   void set_enable_plan_expiration(bool enable) { stat_.enable_plan_expiration_ = enable; }
+  void set_enable_plan_expiration_with_time(bool enable) { stat_.enable_plan_expiration_with_time_ = enable; }
   void set_optimizer_features_enable_version(uint64_t opt_version)
   { optimizer_features_enable_version_ = opt_version; }
   uint64_t get_optimizer_features_enable_version() const

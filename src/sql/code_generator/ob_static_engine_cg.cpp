@@ -10578,11 +10578,13 @@ int ObStaticEngineCG::set_properties_post(const ObLogPlan &log_plan, ObPhysicalP
   }
 
   if (OB_SUCC(ret)) {
-    bool enable = false;
-    if (OB_FAIL(log_plan.check_enable_plan_expiration(enable))) {
+    bool enable_plan_expiration = false;
+    bool enable_plan_expiration_with_time = false;
+    if (OB_FAIL(log_plan.check_enable_plan_expiration(enable_plan_expiration, enable_plan_expiration_with_time))) {
       LOG_WARN("failed to check enable plan expiration", K(ret));
-    } else if (enable) {
+    } else if (enable_plan_expiration) {
       phy_plan.set_enable_plan_expiration(true);
+      phy_plan.set_enable_plan_expiration_with_time(enable_plan_expiration_with_time);
     }
   }
 

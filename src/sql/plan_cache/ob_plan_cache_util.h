@@ -697,6 +697,7 @@ struct ObPlanStat
 
   // check whether plan has stable performance
   bool enable_plan_expiration_;
+  bool enable_plan_expiration_with_time_;
   int64_t first_exec_row_count_;
   int64_t first_exec_usec_;
   int64_t sample_times_;
@@ -798,6 +799,7 @@ struct ObPlanStat
       access_table_num_(0),
       is_expired_(NOT_EXPIRED),
       enable_plan_expiration_(false),
+      enable_plan_expiration_with_time_(false),
       first_exec_row_count_(-1),
       first_exec_usec_(0),
       sample_times_(0),
@@ -887,6 +889,7 @@ struct ObPlanStat
       access_table_num_(0),
       is_expired_(NOT_EXPIRED),
       enable_plan_expiration_(rhs.enable_plan_expiration_),
+      enable_plan_expiration_with_time_(rhs.enable_plan_expiration_with_time_),
       first_exec_row_count_(rhs.first_exec_row_count_),
       first_exec_usec_(rhs.first_exec_usec_),
       sample_times_(rhs.sample_times_),
@@ -1105,7 +1108,14 @@ struct ObPlanStat
                K_(plan_hash_value),
                K_(hints_all_worked),
                K_(vec_index_exec_ctx),
-               K_(opt_stat_plan_expired_at));
+               K_(opt_stat_plan_expired_at),
+               K_(enable_plan_expiration),
+               K_(enable_plan_expiration_with_time),
+               K_(first_exec_row_count),
+               K_(first_exec_usec),
+               K_(sample_times),
+               K_(sample_exec_row_count),
+               K_(sample_exec_usec));
 };
 
 struct SysVarNameVal

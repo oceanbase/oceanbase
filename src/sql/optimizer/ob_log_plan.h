@@ -482,7 +482,7 @@ public:
                                   bool &multi_part_table,
                                   common::ObAddr &first_addr);
 
-  int check_enable_plan_expiration(bool &enable) const;
+  int check_enable_plan_expiration(bool &enable_plan_expiration, bool &enable_plan_expiration_with_time) const;
   bool need_consistent_read() const;
 
   int check_need_multi_partition_dml(const ObDMLStmt &stmt,
