@@ -513,13 +513,13 @@ int ObBase64Encoder::decode_with_simd(const char *input,  const int64_t input_le
   #if OB_USE_MULTITARGET_CODE
   bool avx512_supported = common::is_arch_supported(ObTargetArch::AVX512);
   if (avx512_supported && OB_FAIL(specific::avx512::do_decode_with_avx512(input, input_len, output, output_len, pos, BASE64_VALUES, skip_spaces))) {
-    _OB_LOG(WARN, "input may be an illegal base64 string", K(ret), K(input_len));
+    OB_LOG(WARN, "input may be an illegal base64 string", K(ret), K(input_len));
   } else if (!avx512_supported && OB_FAIL(decode(input, input_len, output, output_len, pos, skip_spaces))) {
-    _OB_LOG(WARN, "input is not legal base64 string", K(ret), K(input_len));
+    OB_LOG(WARN, "input is not legal base64 string", K(ret), K(input_len));
   }
   #else
   if (OB_FAIL(decode(input, input_len, output, output_len, pos, skip_spaces))) {
-    _OB_LOG(WARN, "input is not legal base64 string", K(ret), K(input_len));
+    OB_LOG(WARN, "input is not legal base64 string", K(ret), K(input_len));
   }
   #endif
   return ret;
