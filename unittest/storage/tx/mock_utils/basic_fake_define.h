@@ -565,9 +565,14 @@ public:
   }
 
   int get_role(bool &is_leader, int64_t &epoch) {
-    is_leader = true;
-    epoch = 1;
+    is_leader = ATOMIC_LOAD(&is_leader_);
+    epoch = ATOMIC_LOAD(&role_epoch_);
     return OB_SUCCESS;
+  }
+
+  void set_role(const bool is_leader, const int64_t epoch) {
+    ATOMIC_STORE(&is_leader_, is_leader);
+    ATOMIC_STORE(&role_epoch_, epoch);
   }
 
   int get_max_decided_scn(share::SCN &scn) {
@@ -666,6 +671,8 @@ public:
   int64_t inflight_cnt_ = 0;
   int64_t unreplay_cnt_ = 0;
   bool is_sleeping_ = false;
+  bool is_leader_ = true;
+  int64_t role_epoch_ = 1;
   common::SimpleCond cond_;
 };
 
