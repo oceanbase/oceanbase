@@ -104,7 +104,9 @@ bool ObLSRecoveryGuard::skip_check_member_list_change_(const uint64_t tenant_id)
       bret = false;
     } else {
       bret = true;
-      LOG_INFO("primary tenant without logonly replica can skip check member list change", K(tenant_id));
+      if (TC_REACH_TIME_INTERVAL(1_min)) {
+        LOG_INFO("primary tenant without logonly replica can skip check member list change", K(tenant_id));
+      }
     }
   }
   return bret;
