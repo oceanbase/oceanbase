@@ -1599,7 +1599,20 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
         audit_record.total_ssstore_read_row_count_ = plan_ctx->get_total_ssstore_read_row_count();
       }
     }
-
+    bool is_spm_fallback = false;
+    ObPhysicalPlan *plan = result.get_physical_plan();
+#ifdef OB_BUILD_SPM
+    is_spm_fallback = ObSpmCacheCtx::STAT_FALLBACK_EXECUTE_PLAN == ctx_.spm_ctx_.spm_stat_;
+    // Record a timed-out SPM evolution attempt before retrying with the other
+    // plan.  The timeout is deliberately doubled as an evolution penalty.
+    if (session.get_local_ob_enable_plan_cache()
+        && retry_ctrl_.need_retry()
+        && ObSpmCacheCtx::STAT_FALLBACK_EXECUTE_PLAN == ctx_.spm_ctx_.spm_stat_
+        && OB_NOT_NULL(plan)) {
+      const int64_t timeout_penalty = ctx_.spm_ctx_.get_timeout_penalty();
+      plan->update_evolution_stat(audit_record, timeout_penalty, timeout_penalty);
+    }
+#endif
     //update v$sql statistics
     if ((OB_SUCC(ret) || audit_record.is_timeout())
         && session.get_local_ob_enable_plan_cache()
@@ -1607,7 +1620,6 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
         && !is_ps_cursor()) {
       // ps cursor do this in inner open
       ObIArray<ObTableRowCount> *table_row_count_list = NULL;
-      ObPhysicalPlan *plan = result.get_physical_plan();
       ObPhysicalPlanCtx *plan_ctx = result.get_exec_context().get_physical_plan_ctx();
       if (OB_NOT_NULL(plan_ctx)) {
         table_row_count_list = &(plan_ctx->get_table_row_count_list());
@@ -1617,18 +1629,21 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
         if (!(ctx_.self_add_plan_) && ctx_.plan_cache_hit_) {
           plan->update_plan_stat(audit_record,
               false, // false mean not first update plan stat
-              table_row_count_list);
+              table_row_count_list,
+              !is_spm_fallback);
           plan->update_cache_access_stat(audit_record.table_scan_stat_);
         } else if (ctx_.self_add_plan_ && !ctx_.plan_cache_hit_) {
           plan->update_plan_stat(audit_record,
               true,
-              table_row_count_list);
+              table_row_count_list,
+              !is_spm_fallback);
           plan->update_cache_access_stat(audit_record.table_scan_stat_);
         } else if (ctx_.self_add_plan_ && ctx_.plan_cache_hit_) {
           // spm evolution plan first execute
           plan->update_plan_stat(audit_record,
               true,
-              table_row_count_list);
+              table_row_count_list,
+              !is_spm_fallback);
           plan->update_cache_access_stat(audit_record.table_scan_stat_);
         }
       }

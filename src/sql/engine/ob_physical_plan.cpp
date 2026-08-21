@@ -489,7 +489,8 @@ int ObPhysicalPlan::init_operator_stats()
 
 void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
                                       const bool is_first,
-                                      const ObIArray<ObTableRowCount> *table_row_count_list)
+                                      const ObIArray<ObTableRowCount> *table_row_count_list,
+                                      const bool update_evolution_statistics)
 {
   const int64_t current_time = ObClockGenerator::getClock();
   int64_t execute_count = 0;
@@ -507,7 +508,9 @@ void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
     } else {
       ATOMIC_INC(&(stat_.hit_count_));
     }
-    update_evolution_stat(record);  //for spm
+    if (update_evolution_statistics) {
+      update_evolution_stat(record);  // for spm
+    }
   } else { // long route stat begin
     execute_count = ATOMIC_AAF(&stat_.execute_times_, 1);
     ATOMIC_AAF(&(stat_.total_process_time_), record.get_process_time());
@@ -543,7 +546,9 @@ void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
     }
 
     ATOMIC_STORE(&(stat_.last_active_time_), current_time);
-    update_evolution_stat(record);  //for spm
+    if (update_evolution_statistics) {
+      update_evolution_stat(record);  // for spm
+    }
     if (stat_.is_bind_sensitive_ && execute_count > 0) {
       int64_t pos = execute_count % ObPlanStat::MAX_SCAN_STAT_SIZE;
       ATOMIC_STORE(&(stat_.table_scan_stat_[pos].query_range_row_count_),
@@ -560,7 +565,9 @@ void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
   }
 }
 
-void ObPhysicalPlan::update_evolution_stat(const ObAuditRecordData &record)
+void ObPhysicalPlan::update_evolution_stat(const ObAuditRecordData &record,
+                                           const int64_t cpu_time,
+                                           const int64_t elapsed_time)
 {
   if (ATOMIC_LOAD(&stat_.is_evolution_)) {
     ATOMIC_INC(&(stat_.evolution_stat_.executions_));
@@ -573,7 +580,9 @@ void ObPhysicalPlan::update_evolution_stat(const ObAuditRecordData &record)
     ObEvoRecordsGuard guard;
     stat_.get_evo_records(guard);
     if (NULL != guard.get_evo_records()) {
-      guard.get_evo_records()->set_record_for_finish_plan(record.exec_timestamp_.receive_ts_, record.get_elapsed_time());
+      guard.get_evo_records()->set_record_for_finish_plan(
+          record.exec_timestamp_.receive_ts_,
+          elapsed_time >= 0 ? elapsed_time : record.get_elapsed_time());
     }
   }
 }
