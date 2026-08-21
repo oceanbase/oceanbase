@@ -11,7 +11,7 @@ round(1.345)
 1
 select -13.544;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					-13.544	246	6	7	N	32897	3	63
+def					-13.544	246	7	7	N	32897	3	63
 -13.544
 -13.544
 select round(-13.544);

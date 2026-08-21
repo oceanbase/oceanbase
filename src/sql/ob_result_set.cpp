@@ -1380,6 +1380,31 @@ void ObResultSet::set_statement_name(const common::ObString name)
   statement_name_ = name;
 }
 
+int ObResultSet::update_paramed_field_metadata(const ObPhysicalPlanCtx &plan_ctx)
+{
+  int ret = OB_SUCCESS;
+  const ParamStore &params = plan_ctx.get_param_store();
+  for (int64_t i = 0; OB_SUCC(ret) && i < field_columns_.count(); ++i) {
+    ObField &field = field_columns_.at(i);
+    const int64_t param_idx = field.param_store_idx_;
+
+    if (param_idx == OB_INVALID_INDEX) {
+      // do nothing
+    } else if (param_idx < 0 || param_idx >= params.count()) {
+      LOG_WARN("invalid ps param idx", K(ret), K(param_idx), K(params.count()));
+    } else {
+      const ObObjParam &param = params.at(param_idx);
+      if (!param.is_null()) {
+        ObField::get_field_mb_length(field.type_.get_type(),
+                                     param.get_accuracy(),
+                                     param.get_collation_type(),
+                                     field.length_);
+        LOG_DEBUG("update ps paramed field metadata", K(field), K(param));
+      }
+    }
+  }
+  return ret;
+}
 int ObResultSet::from_plan(const ObPhysicalPlan &phy_plan, const ObIArray<ObPCParam *> &raw_params)
 {
   int ret = OB_SUCCESS;
@@ -1390,16 +1415,21 @@ int ObResultSet::from_plan(const ObPhysicalPlan &phy_plan, const ObIArray<ObPCPa
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("physical plan ctx is null or ref handle is invalid",
              K(ret), K(plan_ctx));
-  } else if (phy_plan.contain_paramed_column_field()
+  } else if ((phy_plan.contain_paramed_column_field()
+              || phy_plan.need_update_paramed_field())
              && OB_FAIL(copy_field_columns(phy_plan))) {
     // 因为会修改ObField中的cname_，所以这里深拷计划中的field_columns_
     LOG_WARN("failed to copy field columns", K(ret));
   } else if (phy_plan.contain_paramed_column_field()
              && OB_FAIL(construct_field_name(raw_params, false, *session_info))) {
     LOG_WARN("failed to construct field name", K(ret));
+  } else if (phy_plan.need_update_paramed_field()
+             && OB_FAIL(update_paramed_field_metadata(*plan_ctx))) {
+    LOG_WARN("failed to update ps paramed field metadata", K(ret));
   } else {
     int64_t ps_param_count = plan_ctx->get_orig_question_mark_cnt();
-    p_field_columns_ = phy_plan.contain_paramed_column_field()
+    p_field_columns_ = (phy_plan.contain_paramed_column_field()
+                        || phy_plan.need_update_paramed_field())
                                   ? &field_columns_
                                   : &phy_plan.get_field_columns();
     p_returning_param_columns_ = &phy_plan.get_returning_param_fields();

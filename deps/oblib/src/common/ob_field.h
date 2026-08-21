@@ -86,6 +86,7 @@ public:
   bool is_paramed_select_item_;
   bool is_hidden_rowid_;
   uint8_t inout_mode_; // using for routine/anonymous resultset
+  int64_t param_store_idx_;
 
   ObField()
     : dname_(), tname_(), org_tname_(), cname_(), org_cname_(), type_(),
@@ -93,9 +94,12 @@ public:
       default_value_(ObObj::make_nop_obj()), accuracy_(),
       charsetnr_(CS_TYPE_UTF8MB4_GENERAL_CI),
       flags_(0), length_(0), paramed_ctx_(NULL), is_paramed_select_item_(false),
-      is_hidden_rowid_(false), inout_mode_(0)
+      is_hidden_rowid_(false), inout_mode_(0),
+      param_store_idx_(-1)
   {
   }
+
+  void reset();
 
   int64_t get_convert_size() const; //deep copy size
   int64_t to_string(char *buffer, int64_t length) const;
@@ -104,7 +108,6 @@ public:
   int deep_copy(const ObField &other, ObIAllocator *allocator);
 
   int update_field_mb_length();
-
   static int get_field_mb_length(const ObObjType type,
                                  const ObAccuracy &accuracy,
                                  const ObCollationType charsetnr,
