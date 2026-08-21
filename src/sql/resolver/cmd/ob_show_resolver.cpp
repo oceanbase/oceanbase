@@ -2126,14 +2126,10 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
         }
         if (OB_SUCC(ret)) {
           if (sub_path.empty()) {  // oracle模式下空串会导致全表扫描, 无法利用range_key传递参数
-            ObSqlString tmp_sub_path;
-            tmp_sub_path.append("/");
-            sub_path = tmp_sub_path.string();
+            sub_path = ObString("/");
           }
           if (pattern.empty()) {  // 同
-            ObSqlString tmp_pattern;
-            tmp_pattern.append("*");
-            pattern = tmp_pattern.string();
+            pattern = ObString("*");
           }
           if (!support_pattern_type) {
             GEN_SQL_STEP_1(ObShowSqlSet::LOCATION_UTILS_LIST);
