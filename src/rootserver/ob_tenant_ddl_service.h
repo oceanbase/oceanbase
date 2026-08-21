@@ -621,6 +621,7 @@ private:
   // The addition of new configuration items requires the addition or modification of related test cases to ensure their effectiveness.
   int add_extra_tenant_init_config_(
       const uint64_t tenant_id,
+      const bool is_mysql_tenant,
       common::ObIArray<common::ObConfigPairs> &init_configs);
 
   int check_locality_match_unit_type_(

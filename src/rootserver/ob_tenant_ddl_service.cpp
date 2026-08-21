@@ -9,6 +9,7 @@
 #include "rootserver/restore/ob_restore_util.h"
 #include "rootserver/restore/ob_tenant_clone_util.h"
 #include "share/ob_primary_zone_util.h"
+#include "share/ob_get_compat_mode.h"
 #include "share/ls/ob_ls_creator.h"
 #include "rootserver/ob_tenant_thread_helper.h"
 #include "rootserver/ob_ddl_service.h"
@@ -93,6 +94,8 @@ using namespace obrpc;
 using namespace share;
 namespace rootserver
 {
+
+static constexpr const char *MYSQL_USER_TENANT_DEFAULT_OPEN_CURSORS = "500";
 
 int ObTenantDDLService::check_inner_stat()
 {
@@ -1672,9 +1675,15 @@ int ObTenantDDLService::init_tenant_env_before_schema_(
   FLOG_INFO("[CREATE_TENANT] STEP 2.4. start init_tenant_env_before_schema_", K(tenant_id));
   const ObCreateTenantArg &create_tenant_arg = arg.create_tenant_arg_;
   common::ObArray<common::ObConfigPairs> init_configs;
-  if (OB_FAIL(generate_tenant_init_configs(create_tenant_arg, user_tenant_id, init_configs))) {
+  lib::Worker::CompatMode user_tenant_mode = lib::Worker::CompatMode::INVALID;
+  if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(user_tenant_id, user_tenant_mode))) {
+    LOG_WARN("failed to get user tenant compatibility mode", KR(ret), K(user_tenant_id));
+  } else if (OB_FAIL(generate_tenant_init_configs(create_tenant_arg, user_tenant_id, init_configs))) {
     LOG_WARN("failed to generate tenant init configs", KR(ret), K(arg), K(tenant_id));
-  } else if (OB_FAIL(add_extra_tenant_init_config_(user_tenant_id, init_configs))) {
+  } else if (OB_FAIL(add_extra_tenant_init_config_(
+             user_tenant_id,
+             lib::Worker::CompatMode::MYSQL == user_tenant_mode,
+             init_configs))) {
     LOG_WARN("fail to add_extra_tenant_init_config", KR(ret), K(tenant_id));
   } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id))) {
     LOG_WARN("failed to start trans", KR(ret), K(tenant_id));
@@ -2305,6 +2314,7 @@ int ObTenantDDLService::init(
 
 int ObTenantDDLService::add_extra_tenant_init_config_(
                   const uint64_t tenant_id,
+                  const bool is_mysql_tenant,
                   common::ObIArray<common::ObConfigPairs> &init_configs)
 {
   // For clusters upgraded from a lower version, modifying config default values may affect existing tenants.
@@ -2341,6 +2351,8 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
   ObString config_value_append_update_global_indexes_for_dynamic_partition("AUTO");
   ObString config_name_mv_refresh_queuing("_enable_mv_refresh_queuing");
   ObString config_value_mv_refresh_queuing("true");
+  ObString config_name_open_cursors("open_cursors");
+  ObString config_value_open_cursors(MYSQL_USER_TENANT_DEFAULT_OPEN_CURSORS);
 
   if (OB_FAIL(ObParallelDDLControlMode::generate_parallel_ddl_control_config_for_create_tenant(config_value))) {
     LOG_WARN("fail to generate parallel ddl control config value", KR(ret));
@@ -2379,6 +2391,11 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
         LOG_WARN("fail to add config", KR(ret), K(config_name_append_update_global_indexes_for_dynamic_partition), K(config_value_append_update_global_indexes_for_dynamic_partition));
       } else if (OB_FAIL(tenant_init_config.add_config(config_name_mv_refresh_queuing, config_value_mv_refresh_queuing))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name_mv_refresh_queuing), K(config_value_mv_refresh_queuing));
+      }
+      if (OB_SUCC(ret) && is_user_tenant(tenant_id) && is_mysql_tenant) {
+        if (OB_FAIL(tenant_init_config.add_config(config_name_open_cursors, config_value_open_cursors))) {
+          LOG_WARN("fail to add config", KR(ret), K(config_name_open_cursors), K(config_value_open_cursors));
+        }
       }
       // ---- Add new tenant init config above this line -----
       // At the same time, to verify modification, you need modify test case tenant_init_config(_oracle).test
