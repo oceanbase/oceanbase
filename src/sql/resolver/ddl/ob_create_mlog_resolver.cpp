@@ -299,8 +299,8 @@ int ObCreateMLogResolver::resolve_table_name_node(
     LOG_WARN("create materialized view log on a non-user table or mview is not supported",
         KR(ret), K(data_table_schema->get_table_type()));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view log on a non-user table or mview is");
-  } else if (OB_FAIL(ObCompactionTTLUtil::check_create_mlog_for_ttl_valid(*data_table_schema))) {
-    LOG_WARN("failed to check create mlog for ttl valid", KR(ret), K(*data_table_schema));
+  } else if (OB_FAIL(check_can_create_mlog(*data_table_schema))) {
+    LOG_WARN("failed to check can create mlog", KR(ret), K(*data_table_schema));
   }
 
   if (OB_SUCC(ret)) {
@@ -731,5 +731,30 @@ int ObCreateMLogResolver::resolve_purge_start_next_node(
   }
   return ret;
 }
+
+int ObCreateMLogResolver::check_can_create_mlog(const ObTableSchema &base_table)
+{
+  int ret = OB_SUCCESS;
+  if (base_table.is_auto_partitioned_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("create materialized view log on auto-partitioned table is not supported", KR(ret),
+             K(base_table.get_table_id()));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view log on auto-partitioned table is");
+  } else if (base_table.is_random_part()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("create materialized view log on random partition table is not supported", KR(ret),
+             K(base_table.get_table_id()));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view log on random partition table is");
+  } else if (base_table.with_dynamic_partition_policy()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("create materialized view log on dynamic partition table is not supported", KR(ret),
+             K(base_table.get_table_id()));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view log on dynamic partition table is");
+  } else if (OB_FAIL(ObCompactionTTLUtil::check_create_mlog_for_ttl_valid(base_table))) {
+    LOG_WARN("failed to check create mlog for ttl valid", KR(ret), K(base_table));
+  }
+  return ret;
+}
+
 } // sql
 } // oceanbase

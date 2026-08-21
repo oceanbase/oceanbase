@@ -20,6 +20,7 @@ public:
   explicit ObCreateMLogResolver(ObResolverParams &params);
   virtual ~ObCreateMLogResolver() {}
   virtual int resolve(const ParseNode &parse_tree);
+  static int check_can_create_mlog(const share::schema::ObTableSchema &base_table);
 
 protected:
   int fill_session_info_into_arg(const sql::ObSQLSessionInfo &session,

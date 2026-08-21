@@ -1231,6 +1231,11 @@ int ObTriggerResolver::resolve_base_object(ObCreateTriggerArg &tg_arg,
   } else if (table_schema->is_in_recyclebin()) {
     ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
     LOG_WARN("table is in recyclebin", K(ret));
+  } else if (table_schema->mv_container_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("create trigger on materialized view container table is not supported",
+             K(ret), K(table_schema->get_table_id()));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create trigger on materialized view container table is");
   } else if (tg_info.is_instead_dml_type()) {
     if (!table_schema->is_user_view()) {
       ret = OB_ERR_INSTEAD_TRI_ON_TABLE;
@@ -1518,4 +1523,3 @@ const ObString ObTriggerResolver::REF_PARENT = "PARENT";
 
 } // namespace sql
 } // namespace oceanbase
-
