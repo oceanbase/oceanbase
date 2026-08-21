@@ -1154,7 +1154,7 @@ int ObAdminSetConfig::check_with_lock_before_update_(
       ObSqlString sub_string;
       sqlclient::ObMySQLResult *result = NULL;
       if (0 == ObString(table_name).case_compare(OB_TENANT_PARAMETER_TNAME)
-          && sub_string.assign_fmt("AND tenant_id = %lu ", tenant_id)) {
+          && OB_FAIL(sub_string.assign_fmt("AND tenant_id = %lu ", tenant_id))) {
         LOG_WARN("fail to build sub sql string", KR(ret), K(tenant_id), K(table_name));
       } else if (OB_FAIL(sql_string.assign_fmt(
               "SELECT config_version AS current_config_version "
