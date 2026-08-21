@@ -3479,6 +3479,33 @@ int ObSelectResolver::expand_target_list(
   return ret;
 }
 
+int ObSelectResolver::expand_visible_columns_for_transpose(
+    const TableItem &table_item,
+    ObIArray<SelectItem> &select_items)
+{
+  int ret = OB_SUCCESS;
+  if (table_item.is_joined_table()) {
+    const JoinedTable *joined_table = static_cast<const JoinedTable *>(&table_item);
+    if (OB_FAIL(find_select_columns_for_joined_table_recursive(joined_table, &select_items))) {
+      LOG_WARN("failed to expand joined table columns for transpose", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < select_items.count(); ++i) {
+      ObRawExpr *coalesce_expr = NULL;
+      const JoinedTable *root_joined_table = joined_table;
+      if (OB_FAIL(recursive_find_coalesce_expr(root_joined_table,
+                                               select_items.at(i).alias_name_,
+                                               coalesce_expr))) {
+        LOG_WARN("failed to find coalesce expr for transpose", K(ret));
+      } else if (NULL != coalesce_expr) {
+        select_items.at(i).expr_ = coalesce_expr;
+      }
+    }
+  } else if (OB_FAIL(expand_target_list(table_item, select_items))) {
+    LOG_WARN("failed to expand table columns for transpose", K(ret));
+  }
+  return ret;
+}
+
 // construct select item from select_expr
 int ObSelectResolver::set_select_item(SelectItem &select_item, bool is_auto_gen)
 {
@@ -6895,6 +6922,8 @@ int ObSelectResolver::recursive_find_coalesce_expr(const JoinedTable *&joined_ta
     }
   }
 
+  // TODO tuliwei.tlw: Track JOIN-node and column origin instead of searching one branch by name,
+  // which can miss or misbind COALESCE expressions for nested JOINs.
   if (!found) {
     if (RIGHT_OUTER_JOIN == joined_table->joined_type_) {
       if (TableItem::JOINED_TABLE == joined_table->right_table_->type_) {

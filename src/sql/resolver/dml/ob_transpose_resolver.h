@@ -14,6 +14,7 @@ namespace sql
 {
 class ObDMLResolver;
 class TransposeDef;
+struct SelectItem;
 
 struct TransposeDef
 {
@@ -178,11 +179,8 @@ private:
                       ObIArray<ObRawExpr *> &columns);
   int resolve_const_exprs(const ParseNode &expr_node,
                           ObIArray<ObRawExpr *> &const_exprs);
-  int resolve_table_column_item(const TableItem &table_item,
-                                ObString &column_name,
-                                ColumnItem *&column_item);
   int resolve_all_table_columns(const TableItem &table_item,
-                                ObIArray<ColumnItem> &column_items);
+                                ObIArray<SelectItem> &select_items);
   int get_old_or_group_column(const ObIArray<ObString> &columns_in_aggrs,
                               TableItem &orig_table_item,
                               TransposeDef &trans_def);
@@ -216,11 +214,11 @@ private:
   int add_new_table_item(TableItem *&new_table_item, const ObString &alias_name);
   int generate_select_list(TableItem *table, ObIArray<ObRawExpr *> &basic_select_exprs);
 
-  int get_column_item_idx_by_name(ObIArray<ColumnItem> &array,
+  int get_column_item_idx_by_name(ObIArray<SelectItem> &array,
                                   const ObString &var,
                                   int64_t &idx);
 
-  int remove_column_item_by_names(ObIArray<ColumnItem> &column_items,
+  int remove_column_item_by_names(ObIArray<SelectItem> &column_items,
                                   const ObIArray<ObString> &names);
   int get_combine_name(ObIArray<ObString> &exprs, ObString &comb_name);
   int get_combine_name(ObIArray<ObRawExpr *> &exprs, ObString &comb_name);

@@ -8096,13 +8096,18 @@ int ObUnpivotRawExpr::assign(const ObRawExpr &other)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(this != &other)) {
-    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class())) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class())
+        || OB_UNLIKELY(get_expr_type() != other.get_expr_type())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
     } else {
       const ObUnpivotRawExpr &tmp = static_cast<const ObUnpivotRawExpr &>(other);
-      if (OB_FAIL(exprs_.assign(tmp.exprs_))) {
+      if (OB_FAIL(ObRawExpr::assign(other))) {
+        LOG_WARN("failed to assign base raw expr", K(ret));
+      } else if (OB_FAIL(exprs_.assign(tmp.exprs_))) {
         LOG_WARN("failed to assign exprs", K(ret));
+      } else {
+        is_label_expr_ = tmp.is_label_expr_;
       }
     }
   }

@@ -304,7 +304,11 @@ ObUnpivotV2Op::ObUnpivotV2Op(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOp
 int ObUnpivotV2Op::inner_open()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObOperator::inner_open())) {
+  if (!MY_SPEC.is_vectorized()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "UNPIVOT with rowsets disabled");
+    LOG_WARN("unpivot v2 does not support rowsets disabled", K(ret));
+  } else if (OB_FAIL(ObOperator::inner_open())) {
     LOG_WARN("failed to open in base class", K(ret));
   } else if (!MY_SPEC.use_rich_format_) {
     int64_t size = MY_SPEC.max_batch_size_ * MY_SPEC.origin_exprs_.count() * sizeof(ObDatum);
@@ -351,6 +355,12 @@ int ObUnpivotV2Op::inner_open()
     }
   }
   return ret;
+}
+
+int ObUnpivotV2Op::inner_get_next_row()
+{
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, "UNPIVOT with rowsets disabled");
+  return OB_NOT_SUPPORTED;
 }
 
 int ObUnpivotV2Op::inner_close()
@@ -515,7 +525,23 @@ int ObUnpivotV2Op::project_vector_with_offset()
   for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.origin_exprs_.count(); ++i) {
     ObExpr *expr = MY_SPEC.origin_exprs_.at(i);
     ObIVector *vec = expr->get_vector(eval_ctx_);
-    if (0 != offset_) {
+    if (0 != offset_ && VEC_CONTINUOUS == expr->get_format(eval_ctx_)) {
+      ObContinuousBase *continuous_vec = static_cast<ObContinuousBase *>(vec);
+      ObBitVector *nulls = continuous_vec->get_nulls();
+      bool has_null = false;
+      // Source indexes are greater than destination indexes, so ascending in-place copy is safe.
+      for (int64_t j = 0; j < brs_.size_; ++j) {
+        const bool is_null = nulls->at(j + offset_);
+        if (is_null) {
+          nulls->set(j);
+          has_null = true;
+        } else {
+          nulls->unset(j);
+        }
+      }
+      continuous_vec->set_has_null(has_null);
+      continuous_vec->set_offsets(continuous_vec->get_offsets() + offset_);
+    } else if (0 != offset_) {
       for (int64_t j = 0; OB_SUCC(ret) && j < brs_.size_; ++j) {
         if (child_brs_->skip_->at(j + offset_)) {
           /* do nothing */

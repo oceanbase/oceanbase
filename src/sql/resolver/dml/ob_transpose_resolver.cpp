@@ -405,27 +405,28 @@ int ObTransposeResolver::resolve_unpivot_clause(const ParseNode &transpose_node,
             LOG_WARN("in column count is not match in literal count", K(unpivot_def), K(in_pair), K(ret));
           }
         } else {
-          // 根据in_pair的名字拼凑一个name作为const_expr
           ObString name;
-          ObConstRawExpr *const_expr = NULL;
           if (OB_FAIL(get_combine_name(in_pair.column_names_, name))) {
             LOG_WARN("failed to get combine name", K(ret));
-          } else if (OB_FAIL(ObRawExprUtils::build_const_string_expr(
-                          *cur_resolver_->params_.expr_factory_, ObVarcharType,
-                          name,
-                          cur_resolver_->params_.session_info_->get_nls_collation(),
-                          const_expr))) {
-            LOG_WARN("failed to build const string expr", K(ret));
-          } else if (OB_ISNULL(const_expr)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("const expr is null", K(ret));
-          } else {
-            const_expr->set_length(name.length());
-            const_expr->set_length_semantics(cur_resolver_->params_.session_info_->get_local_nls_length_semantics());
           }
           for (int64_t i = 0; OB_SUCC(ret) && i < unpivot_def.label_columns_.count(); ++i) {
-            if (OB_FAIL(in_pair.const_exprs_.push_back(const_expr))) {
-              LOG_WARN("failed to push back", K(ret));
+            ObConstRawExpr *const_expr = NULL;
+            if (OB_FAIL(ObRawExprUtils::build_const_string_expr(
+                            *cur_resolver_->params_.expr_factory_, ObVarcharType,
+                            name,
+                            cur_resolver_->params_.session_info_->get_nls_collation(),
+                            const_expr))) {
+              LOG_WARN("failed to build const string expr", K(ret));
+            } else if (OB_ISNULL(const_expr)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("const expr is null", K(ret));
+            } else {
+              const_expr->set_length(name.length());
+              const_expr->set_length_semantics(
+                  cur_resolver_->params_.session_info_->get_local_nls_length_semantics());
+              if (OB_FAIL(in_pair.const_exprs_.push_back(const_expr))) {
+                LOG_WARN("failed to push back", K(ret));
+              }
             }
           }
         }
@@ -446,7 +447,8 @@ int ObTransposeResolver::check_pivot_aggr_expr(ObRawExpr *expr) const
     LOG_WARN("expect aggregate function inside pivot operation", KPC(expr), K(ret));
   } else if (static_cast<ObAggFunRawExpr *>(expr)->get_real_param_count() > 2 ||
              static_cast<ObAggFunRawExpr *>(expr)->get_order_items().count() > 0) {
-    ret = OB_ERR_EXPECT_AGGREGATE_FUNCTION_INSIDE_PIVOT_OPERATION;
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "aggregate function in PIVOT");
     LOG_WARN("not support aggregation type in pivot", K(ret), K(expr->get_expr_type()));
   } else {
     // white list
@@ -461,7 +463,6 @@ int ObTransposeResolver::check_pivot_aggr_expr(ObRawExpr *expr) const
       case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS:
       case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE:
       case T_FUN_GROUP_CONCAT:
-      case T_FUN_MEDIAN:
       case T_FUN_JSON_ARRAYAGG:
       case T_FUN_ORA_JSON_ARRAYAGG:
       case T_FUN_JSON_OBJECTAGG:
@@ -472,8 +473,9 @@ int ObTransposeResolver::check_pivot_aggr_expr(ObRawExpr *expr) const
         break;
       }
       default: {
-        ret = OB_ERR_EXPECT_AGGREGATE_FUNCTION_INSIDE_PIVOT_OPERATION;
-        LOG_WARN("expect aggregate function inside pivot operation", KPC(expr), K(ret));
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "aggregate function in PIVOT");
+        LOG_WARN("not support aggregation type in pivot", KPC(expr), K(ret));
       }
     }
   }
@@ -486,18 +488,22 @@ int ObTransposeResolver::resolve_columns(const ParseNode &column_node,
                                          ObIArray<ObRawExpr *> &columns)
 {
   int ret = OB_SUCCESS;
-  ColumnItem *column_item = NULL;
+  UNUSED(table_item);
   columns.reuse();
   if (OB_FAIL(resolve_column_names(column_node, column_names))) {
     LOG_WARN("failed to resolve column names", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < column_names.count(); ++i) {
-    if (OB_FAIL(resolve_table_column_item(table_item, column_names.at(i), column_item))) {
-      LOG_WARN("failed to resolve single table column item", K(ret));
-    } else if (OB_ISNULL(column_item)) {
+    // The transpose namespace checker is scoped to the origin table before this clause is resolved.
+    ObRawExpr *column_expr = NULL;
+    ObQualifiedName q_name;
+    q_name.col_name_ = column_names.at(i);
+    if (OB_FAIL(cur_resolver_->resolve_table_column_expr(q_name, column_expr))) {
+      LOG_WARN("failed to resolve table column expr", K(ret), K(q_name));
+    } else if (OB_ISNULL(column_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret));
-    } else if(OB_FAIL(columns.push_back(column_item->get_expr()))) {
+    } else if (OB_FAIL(columns.push_back(column_expr))) {
       LOG_WARN("failed to push back", K(ret));
     }
   }
@@ -575,84 +581,21 @@ int ObTransposeResolver::resolve_const_exprs(
   return ret;
 }
 
-int ObTransposeResolver::resolve_table_column_item(const TableItem &table_item,
-                                                   ObString &column_name,
-                                                   ColumnItem *&column_item)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(cur_resolver_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (table_item.is_joined_table()) {
-    const JoinedTable &joined_table = static_cast<const JoinedTable &>(table_item);
-    ColumnItem *left_column_item = NULL;
-    ColumnItem *right_column_item = NULL;
-    if (OB_ISNULL(joined_table.left_table_) || OB_ISNULL(joined_table.right_table_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else {
-      if (OB_SUCC(ret) && OB_FAIL(SMART_CALL(resolve_table_column_item(
-              *joined_table.left_table_, column_name, left_column_item)))) {
-        if (ret == OB_ERR_BAD_FIELD_ERROR) {
-          left_column_item = NULL;
-          ret = OB_SUCCESS;
-        }
-      }
-      if (OB_SUCC(ret) && OB_FAIL(SMART_CALL(resolve_table_column_item(
-              *joined_table.right_table_, column_name, right_column_item)))) {
-        if (ret == OB_ERR_BAD_FIELD_ERROR) {
-          right_column_item = NULL;
-          ret = OB_SUCCESS;
-        }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (left_column_item == NULL && right_column_item == NULL) {
-        ret = OB_ERR_BAD_FIELD_ERROR;
-        LOG_WARN("not found column in joined table", K(ret), K(column_name));
-      } else if (left_column_item != NULL && right_column_item != NULL) {
-        ret = OB_NON_UNIQ_ERROR;
-        LOG_WARN("column in joined tables is ambiguous", K(column_name));
-      } else if (left_column_item != NULL) {
-        column_item = left_column_item;
-      } else {
-        column_item = right_column_item;
-      }
-    }
-  } else if (OB_FAIL(cur_resolver_->resolve_single_table_column_item(
-                 table_item, column_name, false, column_item))) {
-    LOG_WARN("failed to resolve single table column item", K(ret), K(table_item));
-  }
-  return ret;
-}
-
 int ObTransposeResolver::resolve_all_table_columns(const TableItem &table_item,
-                                                   ObIArray<ColumnItem> &column_items)
+                                                   ObIArray<SelectItem> &select_items)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(cur_resolver_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(cur_resolver_), K(table_item));
-  } else if (table_item.is_basic_table() || table_item.is_fake_cte_table() || table_item.is_link_table()) {
-    if (OB_FAIL(cur_resolver_->resolve_all_basic_table_columns(table_item, false, &column_items))) {
-      LOG_WARN("resolve all basic table columns failed", K(ret));
-    }
-  } else if (table_item.is_generated_table() || table_item.is_temp_table()) {
-    if (OB_FAIL(cur_resolver_->resolve_all_generated_table_columns(table_item, column_items))) {
-      LOG_WARN("resolve all generated table columns failed", K(ret));
-    }
-  } else if (table_item.is_joined_table()) {
-    const JoinedTable &joined_table = static_cast<const JoinedTable &> (table_item);
-    if (OB_ISNULL(joined_table.left_table_) || OB_ISNULL(joined_table.right_table_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if (OB_FAIL(SMART_CALL(resolve_all_table_columns(*joined_table.left_table_, column_items)))) {
-      LOG_WARN("failed to resolve columns for left table of joined table", K(ret));
-    } else if (OB_FAIL(SMART_CALL(resolve_all_table_columns(*joined_table.right_table_, column_items)))) {
-      LOG_WARN("failed to resolve columns for right table of joined table", K(ret));
-    }
-  } else {
+  } else if (!cur_resolver_->is_select_resolver()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("not support this table", K(table_item), K(ret));
+    LOG_WARN("transpose resolver requires select resolver", K(ret));
+  } else if (OB_FAIL(static_cast<ObSelectResolver *>(cur_resolver_)->
+                     expand_visible_columns_for_transpose(table_item, select_items))) {
+    LOG_WARN("failed to expand visible columns for transpose", K(ret), K(table_item));
+  } else {
+    // do nothing
   }
   return ret;
 }
@@ -664,7 +607,7 @@ int ObTransposeResolver::get_old_or_group_column(
 {
   int ret = OB_SUCCESS;
   //1.get columns
-  ObSEArray<ColumnItem, 16> column_items;
+  ObSEArray<SelectItem, 16> column_items;
   if (OB_FAIL(resolve_all_table_columns(orig_table_item, column_items))) {
     LOG_WARN("failed to resolve all table columns", K(ret));
   }
@@ -679,24 +622,25 @@ int ObTransposeResolver::get_old_or_group_column(
     }
     pivot_def.group_columns_.reuse();
     for (int64_t i = 0; OB_SUCC(ret) && i < column_items.count(); ++i) {
-      ObColumnRefRawExpr *col_ref_expr = column_items.at(i).get_expr();
-      if (OB_ISNULL(col_ref_expr)) {
+      ObRawExpr *column_expr = column_items.at(i).expr_;
+      const ObString &column_name = column_items.at(i).alias_name_;
+      if (OB_ISNULL(column_expr)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("col_ref_expr is null", K(ret));
-      } else if (OB_FAIL(col_ref_expr->set_expr_name(col_ref_expr->get_column_name()))) {
+        LOG_WARN("column expr is null", K(ret));
+      } else if (OB_FAIL(column_expr->set_expr_name(column_name))) {
         LOG_WARN("failed to set expr name", K(ret));
-      } else if (OB_FAIL(pivot_def.group_columns_.push_back(col_ref_expr)) ||
-                OB_FAIL(pivot_def.group_column_names_.push_back(col_ref_expr->get_column_name()))) {
+      } else if (OB_FAIL(pivot_def.group_columns_.push_back(column_expr)) ||
+                 OB_FAIL(pivot_def.group_column_names_.push_back(column_name))) {
         LOG_WARN("failed to push back", K(ret));
-      } else if (ObUserDefinedSQLType == col_ref_expr->get_data_type()) {
+      } else if (ObUserDefinedSQLType == column_expr->get_data_type()) {
         ret = OB_ERR_NO_ORDER_MAP_SQL;
         LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
-      } else if (ObLongTextType == col_ref_expr->get_data_type()
-                || ObLobType == col_ref_expr->get_data_type()
-                || ObJsonType == col_ref_expr->get_data_type()
-                || ObGeometryType == col_ref_expr->get_data_type()
-                || ObExtendType == col_ref_expr->get_data_type()) {
-        ret = (lib::is_oracle_mode() && ObJsonType == col_ref_expr->get_data_type())
+      } else if (ObLongTextType == column_expr->get_data_type()
+                || ObLobType == column_expr->get_data_type()
+                || ObJsonType == column_expr->get_data_type()
+                || ObGeometryType == column_expr->get_data_type()
+                || ObExtendType == column_expr->get_data_type()) {
+        ret = (lib::is_oracle_mode() && ObJsonType == column_expr->get_data_type())
                 ? OB_ERR_INVALID_CMP_OP : OB_ERR_INVALID_TYPE_FOR_OP;
         LOG_WARN("group by lob expr is not allowed", K(ret));
       }
@@ -711,14 +655,15 @@ int ObTransposeResolver::get_old_or_group_column(
     }
     unpivot_def.orig_columns_.reuse();
     for (int64_t i = 0; OB_SUCC(ret) && i < column_items.count(); ++i) {
-      ObColumnRefRawExpr *col_ref_expr = column_items.at(i).get_expr();
-      if (OB_ISNULL(col_ref_expr)) {
+      ObRawExpr *column_expr = column_items.at(i).expr_;
+      const ObString &column_name = column_items.at(i).alias_name_;
+      if (OB_ISNULL(column_expr)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("col_ref_expr is null", K(ret));
-      } else if (OB_FAIL(col_ref_expr->set_expr_name(col_ref_expr->get_column_name()))) {
+        LOG_WARN("column expr is null", K(ret));
+      } else if (OB_FAIL(column_expr->set_expr_name(column_name))) {
         LOG_WARN("failed to set expr name", K(ret));
-      } else if (OB_FAIL(unpivot_def.orig_columns_.push_back(col_ref_expr)) ||
-                OB_FAIL(unpivot_def.orig_column_names_.push_back(col_ref_expr->get_column_name()))) {
+      } else if (OB_FAIL(unpivot_def.orig_columns_.push_back(column_expr)) ||
+                 OB_FAIL(unpivot_def.orig_column_names_.push_back(column_name))) {
         LOG_WARN("failed to push back", K(ret));
       }
     }
@@ -740,6 +685,8 @@ int ObTransposeResolver::try_add_cast_to_unpivot(UnpivotDef &unpivot_def)
       if (OB_ISNULL(in_pair.const_exprs_.at(j))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret));
+      } else if (OB_FAIL(in_pair.const_exprs_.at(j)->formalize(cur_resolver_->params_.session_info_))) {
+        LOG_WARN("failed to formalize unpivot label expr", K(ret));
       } else if (OB_FAIL(tmp_types.push_back(in_pair.const_exprs_.at(j)->get_result_type()))) {
         LOG_WARN("failed to push back", K(ret));
       }
@@ -1164,6 +1111,7 @@ int ObTransposeResolver::get_exprs_for_unpivot_table(UnpivotDef &trans_def,
       }
     }
     // value column (unpivot(in_pair.column_exprs))
+    ObSEArray<ObRawExpr *, 4> not_null_exprs;
     for (int64_t i = 0; OB_SUCC(ret) && i < trans_def.value_columns_.count(); ++i) {
       param_exprs.reuse();
       for (int64_t j = 0; OB_SUCC(ret) && j < trans_def.in_pairs_.count(); ++j) {
@@ -1190,7 +1138,7 @@ int ObTransposeResolver::get_exprs_for_unpivot_table(UnpivotDef &trans_def,
           } else if (OB_ISNULL(not_null_expr)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected null", K(ret));
-          } else if (OB_FAIL(condition_exprs.push_back(not_null_expr))) {
+          } else if (OB_FAIL(not_null_exprs.push_back(not_null_expr))) {
             LOG_WARN("failed to push back", K(ret));
           }
         }
@@ -1204,6 +1152,19 @@ int ObTransposeResolver::get_exprs_for_unpivot_table(UnpivotDef &trans_def,
       } else if (OB_FALSE_IT(target_expr->set_result_type(trans_def.value_col_types_.at(i)))) {
         LOG_WARN("failed to set result type", K(ret));
       } else if (OB_FAIL(select_exprs.push_back(target_expr))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && !need_unpivot_op && trans_def.is_exclude_null()) {
+      ObRawExpr *not_null_expr = NULL;
+      if (OB_FAIL(ObRawExprUtils::build_or_exprs(*expr_factory,
+                                                not_null_exprs,
+                                                not_null_expr))) {
+        LOG_WARN("failed to build not null condition for unpivot", K(ret));
+      } else if (OB_ISNULL(not_null_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("not null expr is null", K(ret));
+      } else if (OB_FAIL(condition_exprs.push_back(not_null_expr))) {
         LOG_WARN("failed to push back", K(ret));
       }
     }
@@ -1494,7 +1455,7 @@ int ObTransposeResolver::generate_select_list(TableItem *table,
 }
 
 int ObTransposeResolver::get_column_item_idx_by_name(
-    ObIArray<ColumnItem> &array,
+    ObIArray<SelectItem> &array,
     const ObString &var,
     int64_t &idx)
 {
@@ -1502,7 +1463,7 @@ int ObTransposeResolver::get_column_item_idx_by_name(
   idx = OB_INVALID_INDEX;
   const int64_t num = array.count();
   for (int64_t i = 0; i < num; i++) {
-    if (var == array.at(i).column_name_) {
+    if (var == array.at(i).alias_name_) {
       idx = i;
       break;
     }
@@ -1511,7 +1472,7 @@ int ObTransposeResolver::get_column_item_idx_by_name(
 }
 
 int ObTransposeResolver::remove_column_item_by_names(
-    ObIArray<ColumnItem> &column_items,
+    ObIArray<SelectItem> &column_items,
     const ObIArray<ObString> &names)
 {
   int ret = OB_SUCCESS;

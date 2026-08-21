@@ -82,6 +82,9 @@ public:
   void set_current_recursive_cte_table_item(TableItem *table_item) { current_recursive_cte_table_item_ = table_item; }
   void set_current_cte_involed_stmt(ObSelectStmt *stmt) { current_cte_involed_stmt_ = stmt; }
   int check_auto_gen_column_names();
+  // Expand transpose input columns with the same JOIN visibility and COALESCE semantics as SELECT *.
+  int expand_visible_columns_for_transpose(const TableItem &table_item,
+                                           common::ObIArray<SelectItem> &select_items);
 
   void set_is_top_stmt(bool is_top_stmt) { is_top_stmt_ = is_top_stmt; }
   bool is_top_stmt() const { return is_top_stmt_; }

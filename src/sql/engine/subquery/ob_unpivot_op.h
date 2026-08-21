@@ -107,10 +107,7 @@ public:
   virtual int inner_close() override;
   virtual int inner_rescan() override;
   virtual int inner_get_next_batch(const int64_t max_row_cnt) override;
-  virtual int inner_get_next_row() override
-  {
-    return OB_NOT_IMPLEMENT;
-  }
+  virtual int inner_get_next_row() override;
   virtual void destroy() override;
 
 private:
