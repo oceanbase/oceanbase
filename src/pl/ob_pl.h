@@ -175,7 +175,6 @@ public:
   inline bool get_has_set_autocommit_stmt() const { return flag_.has_member(HAS_SET_AUTOCOMMIT_STMT); }
   inline void set_autonomous() { flag_.add_member(IS_AUTONOMOUS_TRANSACTION); }
   inline bool is_autonomous() const { return flag_.has_member(IS_AUTONOMOUS_TRANSACTION); }
-
   inline const ObPLDataType &get_ret_type() const { return ret_type_; }
   inline void set_ret_type(const ObPLDataType &ret_type) { ret_type_ = ret_type; }
   inline int set_ret_type_info(const common::ObIArray<common::ObString>& type_info, ObPLEnumSetCtx *enum_set_ctx)

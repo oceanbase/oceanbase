@@ -17,6 +17,7 @@ static t_node *MYSQL_PL_NON_RESERVED_KEYWORDS_ROOT = NULL;
 static const NonReservedKeyword MYSQL_PL_NON_RESERVED_KEYWORDS[] =
 {
   {"after", AFTER},
+  {"async_commit", ASYNC_COMMIT},
   {"at", AT},
   {"begin", BEGIN_KEY},
   {"binary_integer", BINARY_INTEGER},
