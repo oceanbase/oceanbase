@@ -159,7 +159,7 @@ private:
                                                 - IO_TIME_DETECT_FLAG_BIT
                                                 - IO_DETECT_FLAG_BIT;
 
-  union {
+  union { // FARM COMPAT WHITELIST
     int64_t flag_;
     struct {
       int64_t mode_ : IO_MODE_BIT;

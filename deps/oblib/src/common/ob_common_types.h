@@ -136,7 +136,7 @@ struct ObQueryFlag
       uint64_t is_show_seed_   : OBSF_BIT_IS_SHOW_SEED;
       uint64_t skip_read_lob_   : OBSF_BIT_SKIP_READ_LOB;
       uint64_t is_lookup_for_4377_ : OBSF_BIT_IS_LOOKUP_FOR_4377;
-      uint64_t for_foreign_key_check_ : OBSF_BIT_FOREIGN_KEY_CHECK;
+      uint64_t for_foreign_key_check_ : OBSF_BIT_FOREIGN_KEY_CHECK; // FARM COMPAT WHITELIST
       uint64_t reserved_       : OBSF_BIT_RESERVED;
     };
   };
