@@ -73,14 +73,8 @@ public:
   static int check_inlist_rewrite_enable(const ParseNode &in_list,
                                          const ObItemType op_type,
                                          const ObRawExpr &left_expr,
-                                         const ObStmtScope &scope,
                                          const bool is_root_condition,
-                                         const bool is_need_print,
-                                         const bool is_in_pl_prepare,
-                                         const ObSQLSessionInfo *session_info,
-                                         const ParamStore *param_store,
-                                         const ObStmt *stmt,
-                                         common::ObIAllocator &alloc,
+                                         const ObExprResolveContext &resolve_ctx,
                                          bool &is_question_mark,
                                          bool &is_enable);
   // try to merge IN nodes under root_node (which is an AND/OR node)

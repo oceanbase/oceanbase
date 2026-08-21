@@ -1804,6 +1804,7 @@ struct ObResolveContext
     is_variable_allowed_(true),
     is_expanding_view_(false),
     is_need_print_(false),
+    is_mview_definition_sql_(false),
     is_from_show_resolver_(false),
     is_in_system_view_(false),
     match_exprs_(NULL),
@@ -1857,6 +1858,7 @@ struct ObResolveContext
   bool is_variable_allowed_;
   bool is_expanding_view_;
   bool is_need_print_;
+  bool is_mview_definition_sql_;
   bool is_from_show_resolver_;
   bool is_in_system_view_;
   common::ObIArray<ObMatchFunRawExpr*> *match_exprs_;

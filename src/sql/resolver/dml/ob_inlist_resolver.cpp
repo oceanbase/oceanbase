@@ -282,18 +282,14 @@ int ObInListResolver::get_inlist_rewrite_info(const ParseNode &in_list,
 int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
                                                   const ObItemType op_type,
                                                   const ObRawExpr &left_expr,
-                                                  const ObStmtScope &scope,
                                                   const bool is_root_condition,
-                                                  const bool is_need_print,
-                                                  const bool is_in_pl_prepare,
-                                                  const ObSQLSessionInfo *session_info,
-                                                  const ParamStore *param_store,
-                                                  const ObStmt *stmt,
-                                                  ObIAllocator &alloc,
+                                                  const ObExprResolveContext &resolve_ctx,
                                                   bool &is_question_mark,
                                                   bool &is_enable)
 {
   int ret = OB_SUCCESS;
+  const ObSQLSessionInfo *session_info = resolve_ctx.session_info_;
+  const ObStmt *stmt = resolve_ctx.stmt_;
   is_enable = false;
   int64_t threshold = INT64_MAX;
   uint64_t optimizer_features_enable_version = 0;
@@ -302,17 +298,19 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
   if (OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), KP(session_info));
-  } else if (T_WHERE_SCOPE != scope
+  } else if (T_WHERE_SCOPE != resolve_ctx.current_scope_
              || !is_root_condition
              || (T_OP_IN != op_type && T_OP_NOT_IN != op_type)
              || T_EXPR_LIST != in_list.type_
-             || is_need_print
-             || is_in_pl_prepare
+             || resolve_ctx.is_need_print_
+             || resolve_ctx.is_mview_definition_sql_
+             || NULL != resolve_ctx.secondary_namespace_
              || (NULL != stmt
                  && stmt->is_select_stmt()
                  && static_cast<const ObSelectStmt *>(stmt)->is_hierarchical_query())) {
     LOG_TRACE("no need rewrite inlist",
-              K(is_root_condition), K(scope), K(in_list.type_), K(op_type), K(is_need_print));
+              K(is_root_condition), K(resolve_ctx.current_scope_), K(in_list.type_), K(op_type),
+              K(resolve_ctx.is_need_print_), K(resolve_ctx.is_mview_definition_sql_));
   } else {
     if (NULL == stmt) {
       if (OB_FAIL(session_info->get_optimizer_features_enable_version(optimizer_features_enable_version))) {
@@ -372,8 +370,8 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
                                               share::SYS_VAR_COLLATION_SERVER, server_collation))) {
       LOG_WARN("get sys variables failed", K(ret));
     } else {
-      ObInListsResolverHelper helper(alloc,
-                                     param_store,
+      ObInListsResolverHelper helper(resolve_ctx.expr_factory_.get_allocator(),
+                                     resolve_ctx.param_list_,
                                      connect_collation,
                                      nchar_collation,
                                      static_cast<ObCollationType>(server_collation),
