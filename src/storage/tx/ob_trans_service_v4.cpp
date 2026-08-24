@@ -1008,7 +1008,7 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
               K(ret), K(store_ctx), K(snapshot));
   }
 
-  bool check_readable_ok = false;
+  bool real_leader_checked = false;
   ObTransID snap_tx_id = snapshot.core_.tx_id_;
   ObPartTransCtx *tx_ctx = NULL;
   if (OB_SUCC(ret) && snap_tx_id.is_valid()) {
@@ -1017,24 +1017,42 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
     int64_t part_epoch = 0;
     CHECK_TX_PARTS_CONTAIN_(snapshot.parts_, left_, right_, ls_id, part_epoch, exist);
     if (OB_SUCC(ret) && (exist || read_latest)) {
-      if (OB_FAIL(get_tx_ctx_(ls_id, store_ctx.ls_, snap_tx_id, tx_ctx))) {
-        if (OB_TRANS_CTX_NOT_EXIST == ret && !exist) {
-          ret = OB_SUCCESS;
-        } else {
-          if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
-            ret = OB_STANDBY_READ_ONLY;
-          }
-          TRANS_LOG(WARN, "get tx ctx fail",
-                    K(ret), K(store_ctx), K(snapshot), K(ls_id), K(exist), K(read_latest));
-        }
-      } else if (exist && tx_ctx->epoch_ != part_epoch) {
-        ret = OB_TRANS_CTX_NOT_EXIST;
-        TRANS_LOG(WARN, "exist txCtx epoch mismatch within snapshot", K(ret),
-                  K(part_epoch), K(tx_ctx->epoch_), K(ls_id), KPC(tx_ctx), K(snapshot));
-      } else if (OB_FAIL(tx_ctx->check_status())) {
-        TRANS_LOG(WARN, "check status fail", K(ret), K(store_ctx), KPC(tx_ctx));
+      // Tx ctx role changes can lag behind PALF. Only reads that may access this
+      // transaction's own writes pay the cost of checking the election role.
+      bool is_real_leader = false;
+      int64_t leader_epoch = 0;
+      if (OB_FAIL(store_ctx.ls_->get_tx_svr()->get_tx_ls_log_adapter()->get_role(is_real_leader, leader_epoch))) {
+        TRANS_LOG(WARN, "get replica role fail", K(ret), K(ls_id), K(store_ctx), K(snapshot));
+      } else if (!is_real_leader) {
+        ret = OB_NOT_MASTER;
+        TRANS_LOG(WARN, "replica is not leader when reading transaction's own writes", K(ret),
+                                                                                       K(ls_id),
+                                                                                       K(leader_epoch),
+                                                                                       K(store_ctx),
+                                                                                       K(snapshot));
       } else {
-        check_readable_ok = true;
+        real_leader_checked = true;
+        if (OB_FAIL(get_tx_ctx_(ls_id, store_ctx.ls_, snap_tx_id, tx_ctx))) {
+          if (OB_TRANS_CTX_NOT_EXIST == ret && !exist) {
+            ret = OB_SUCCESS;
+          } else {
+            if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
+              ret = OB_STANDBY_READ_ONLY;
+            }
+            TRANS_LOG(WARN, "get tx ctx fail", K(ret),
+                                               K(store_ctx),
+                                               K(snapshot),
+                                               K(ls_id),
+                                               K(exist),
+                                               K(read_latest));
+          }
+        } else if (exist && tx_ctx->epoch_ != part_epoch) {
+          ret = OB_TRANS_CTX_NOT_EXIST;
+          TRANS_LOG(WARN, "exist txCtx epoch mismatch within snapshot", K(ret),
+                    K(part_epoch), K(tx_ctx->epoch_), K(ls_id), KPC(tx_ctx), K(snapshot));
+        } else if (OB_FAIL(tx_ctx->check_status())) {
+          TRANS_LOG(WARN, "check status fail", K(ret), K(store_ctx), KPC(tx_ctx));
+        }
       }
       if (OB_FAIL(ret) && OB_NOT_NULL(tx_ctx)) {
         revert_tx_ctx_(store_ctx.ls_, tx_ctx);
@@ -1050,7 +1068,7 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
             && snapshot.snapshot_lsid_ == ls_id
             && snapshot.snapshot_acquire_addr_ == GCTX.self_addr()
             && snapshot.snapshot_ls_role_ == common::ObRole::LEADER)
-        || check_readable_ok) {
+        || real_leader_checked) {
       // do nohting
     } else if (
       OB_FAIL(check_replica_readable_(snapshot,

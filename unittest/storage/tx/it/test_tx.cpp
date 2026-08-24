@@ -137,6 +137,48 @@ TEST_F(ObTestTx, basic)
   COMMIT_TX(n1, tx, 500 * 1000);
 }
 
+TEST_F(ObTestTx, read_own_write_checks_election_leader)
+{
+  GCONF._ob_trans_rpc_timeout = 50;
+  ObTxNode::reset_localtion_adapter();
+
+  START_ONE_TX_NODE(n1);
+  PREPARE_TX(n1, tx);
+  PREPARE_TX_PARAM(tx_param);
+  tx_param.timeout_us_ = 10 * 1000 * 1000;
+  GET_READ_SNAPSHOT(n1, tx, tx_param, write_snapshot);
+  CREATE_IMPLICIT_SAVEPOINT(n1, tx, tx_param, sp);
+  ASSERT_EQ(OB_SUCCESS, n1->write(tx, write_snapshot, 100, 112));
+
+  ObTxReadSnapshot read_snapshot;
+  ASSERT_EQ(OB_SUCCESS,
+            n1->get_read_snapshot(tx,
+                                  tx_param.isolation_,
+                                  n1->ts_after_ms(100),
+                                  read_snapshot));
+  ASSERT_GT(read_snapshot.parts_.count(), 0);
+
+  int64_t value = 0;
+  ASSERT_EQ(OB_SUCCESS, n1->read(read_snapshot, 100, value));
+  ASSERT_EQ(112, value);
+
+  // The transaction layer may still regard itself as leader while PALF has
+  // already changed to follower. Reading the transaction's own writes must
+  // follow PALF's role and return a retryable routing error.
+  n1->fake_tx_log_adapter_->set_role(false, 2);
+  EXPECT_EQ(OB_NOT_MASTER, n1->read(read_snapshot, 100, value));
+
+  ObTxReadSnapshot missing_ctx_snapshot;
+  ASSERT_EQ(OB_SUCCESS, missing_ctx_snapshot.assign(read_snapshot));
+  missing_ctx_snapshot.set_tx_id(ObTransID(2026073100117912547LL));
+
+  // A genuine missing context on the current leader keeps its original error.
+  n1->fake_tx_log_adapter_->set_role(true, 3);
+  EXPECT_EQ(OB_TRANS_CTX_NOT_EXIST, n1->read(missing_ctx_snapshot, 100, value));
+
+  ASSERT_EQ(OB_SUCCESS, n1->rollback_tx(tx));
+}
+
 TEST_F(ObTestTx, tx_2pc_blocking_and_get_gts_callback_concurrent_problem)
 {
   GCONF._ob_trans_rpc_timeout = 50;
