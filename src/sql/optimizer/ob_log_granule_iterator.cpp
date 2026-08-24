@@ -226,6 +226,9 @@ int ObLogGranuleIterator::check_adaptive_task_splitting(ObLogTableScan *tsc)
   int64_t tenant_id =
         get_plan()->get_optimizer_context().get_session_info()->get_effective_tenant_id();
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  bool enable_px_task_rebalance = tenant_config.is_valid()
+                                  && tenant_config->_enable_px_task_rebalance;
+  ObQueryCtx *query_ctx = get_plan()->get_optimizer_context().get_query_ctx();
   bool exist_deadlock_condition = false;
   uint64_t min_version = GET_MIN_CLUSTER_VERSION();
   bool version_check =
@@ -233,7 +236,13 @@ int ObLogGranuleIterator::check_adaptive_task_splitting(ObLogTableScan *tsc)
       || (min_version >= MOCK_CLUSTER_VERSION_4_4_2_0 && min_version < CLUSTER_VERSION_4_5_0_0)
       || (min_version >= MOCK_CLUSTER_VERSION_4_3_5_3 && min_version < CLUSTER_VERSION_4_4_0_0);
   if (!version_check) {
-  } else if (!tenant_config.is_valid() || !tenant_config->_enable_px_task_rebalance) {
+  } else if (OB_ISNULL(query_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null query ctx", K(ret));
+  } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_bool_opt_param(ObOptParamHint::_ENABLE_PX_TASK_REBALANCE,
+                                                                                 enable_px_task_rebalance))) {
+    LOG_WARN("failed to get _enable_px_task_rebalance opt param", K(ret));
+  } else if (!enable_px_task_rebalance) {
   } else if (!ObGranuleUtil::can_resplit_gi_task(gi_attri_flag_)) {
   } else if (is_rescanable()) {
     // for rescanable gi, we can not handle the rescan process among all workers since gi task
