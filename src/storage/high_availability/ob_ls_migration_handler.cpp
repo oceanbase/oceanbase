@@ -494,7 +494,8 @@ int ObLSMigrationHandler::check_task_exist(const share::ObTaskId &task_id, bool 
 
 int ObLSMigrationHandler::get_migration_task_and_handler_status(
     ObLSMigrationTask &task,
-    ObLSMigrationHandlerStatus &status)
+    ObLSMigrationHandlerStatus &status,
+    ObLSMigrationCostStatic *cost_static)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -507,6 +508,9 @@ int ObLSMigrationHandler::get_migration_task_and_handler_status(
     } else {
       task = task_list_.at(0);
       status = status_;
+      if (OB_NOT_NULL(cost_static)) {
+        cost_static->assign(cost_static_);
+      }
     }
   }
   return ret;
@@ -1164,6 +1168,7 @@ void ObLSMigrationHandler::fill_build_ls_dag_net_param_(
 {
   UNUSED(task);
   param.ha_svc_ctx_ = ha_svc_ctx_;
+  param.cost_static_ = &cost_static_;
 }
 
 void ObLSMigrationHandler::fill_prepare_ls_dag_net_param_(

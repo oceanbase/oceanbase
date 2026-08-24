@@ -100,6 +100,7 @@ public:
   // (see ObMigrationFinishTask::check_split_tablets_ready_)
   common::hash::ObHashSet<common::ObTabletID> non_existent_tablet_ids_;
   ObParallelCreateTabletsInfo parallel_create_tablets_info_;
+  ObLSMigrationCostStatic *cost_static_;
 
   INHERIT_TO_STRING_KV(
       "ObIHADagNetCtx", ObIHADagNetCtx,
@@ -155,6 +156,7 @@ public:
   ObMigrationOpArg arg_;
   share::ObTaskId task_id_;
   ObStorageHAServiceCtx ha_svc_ctx_;
+  ObLSMigrationCostStatic *cost_static_;
 };
 
 class ObMigrationDagNet: public share::ObIDagNet
@@ -467,7 +469,7 @@ public:
   virtual int process() override;
   VIRTUAL_TO_STRING_KV(K("ObTabletFinishMigrationTask"), KP(this), KPC(ha_dag_net_ctx_), KPC(copy_tablet_ctx_), KPC(ls_));
 private:
-  int update_data_and_expected_status_();
+  int update_data_and_expected_status_(bool &is_skipped);
   // handle cs replica
   int prepare_co_convert_ctx(bool &is_migrate_data_tablet, ObHATabletGroupCOConvertCtx *&group_convert_ctx);
   int update_co_convert_status_for_cs_replica(const bool tablet_is_deleted);

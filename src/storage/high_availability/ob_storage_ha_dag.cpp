@@ -672,11 +672,15 @@ int ObStorageHADagUtils::deal_with_non_migrated_tablet(
   }
 
   if (OB_SUCC(ret) && !need_migrate) {
+    // tablet is skipped (local not exist / already newer than src) — no data copy.
     if (ls->is_cs_replica()
           && OB_FAIL(ObHATabletGroupCOConvertCtx::update_deleted_data_tablet_status(tablet_group_ctx, logic_tablet_id.tablet_id_))) {
       LOG_WARN("failed to update deleted tablet status", K(ret));
     } else if (OB_FAIL(ctx->tablet_dep_mgr_.remove_tablet_dependency(logic_tablet_id.tablet_id_))) {
       LOG_WARN("failed to remove tablet dependency", K(ret), K(logic_tablet_id));
+    } else if (OB_NOT_NULL(ctx->cost_static_)) {
+      // Count only after all skip cleanup succeeds, so a DAG retry cannot double count it.
+      ATOMIC_INC(&ctx->cost_static_->skipped_tablet_count_);
     }
   }
 
@@ -1254,4 +1258,3 @@ int ObStorageHACancelDagNetUtils::cancel_migration_task_(const share::ObTaskId &
 
 }
 }
-

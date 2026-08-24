@@ -2292,6 +2292,8 @@ public:
   static int dba_ob_sys_variable_history_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_sys_variable_history_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_mview_deps_schema(share::schema::ObTableSchema &table_schema);
+  static int gv_ob_ls_migration_tasks_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_ls_migration_tasks_schema(share::schema::ObTableSchema &table_schema);
   static int dba_synonyms_schema(share::schema::ObTableSchema &table_schema);
   static int dba_objects_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_objects_schema(share::schema::ObTableSchema &table_schema);
@@ -5914,6 +5916,8 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::dba_ob_sys_variable_history_schema,
   ObInnerTableSchema::cdb_ob_sys_variable_history_schema,
   ObInnerTableSchema::cdb_mview_deps_schema,
+  ObInnerTableSchema::gv_ob_ls_migration_tasks_schema,
+  ObInnerTableSchema::v_ob_ls_migration_tasks_schema,
   ObInnerTableSchema::dba_synonyms_schema,
   ObInnerTableSchema::dba_objects_ora_schema,
   ObInnerTableSchema::all_objects_schema,

@@ -2747,7 +2747,10 @@ ObLSMigrationCostStatic::ObLSMigrationCostStatic()
     wait_log_replay_cost_(0),
     complete_dag_net_cost_(0),
     start_ts_(0),
-    finish_ts_(0)
+    finish_ts_(0),
+    finished_tablet_count_(0),
+    skipped_tablet_count_(0),
+    dag_retry_count_(0)
 {
 }
 
@@ -2763,6 +2766,28 @@ void ObLSMigrationCostStatic::reset()
   complete_dag_net_cost_ = 0;
   start_ts_ = 0;
   finish_ts_ = 0;
+  finished_tablet_count_ = 0;
+  skipped_tablet_count_ = 0;
+  dag_retry_count_ = 0;
+}
+
+int ObLSMigrationCostStatic::assign(const ObLSMigrationCostStatic &other)
+{
+  int ret = OB_SUCCESS;
+  clog_checkpoint_scn_ = other.clog_checkpoint_scn_;
+  create_tablet_cost_ = other.create_tablet_cost_;
+  migration_dag_net_cost_ = other.migration_dag_net_cost_;
+  prewarm_cost_ = other.prewarm_cost_;
+  wait_log_sync_cost_ = other.wait_log_sync_cost_;
+  wait_log_replay_cost_ = other.wait_log_replay_cost_;
+  complete_dag_net_cost_ = other.complete_dag_net_cost_;
+  start_ts_ = other.start_ts_;
+  finish_ts_ = other.finish_ts_;
+  tablet_count_ = other.tablet_count_;
+  finished_tablet_count_ = other.finished_tablet_count_;
+  skipped_tablet_count_ = other.skipped_tablet_count_;
+  dag_retry_count_ = other.dag_retry_count_;
+  return ret;
 }
 
 int64_t ObLSMigrationCostStatic::to_string(char *buf, const int64_t buf_len) const
@@ -2771,7 +2796,8 @@ int64_t ObLSMigrationCostStatic::to_string(char *buf, const int64_t buf_len) con
   (void)databuff_printf(buf, buf_len, pos,
                    "{total_cost=%ld,clog_checkpoint_scn=%ld,tablet_count=%ld,create_tablet_cost=%ld,"
                    "migration_dag_net_cost=%ld,prewarm_cost=%ld,wait_log_sync_cost=%ld,"
-                   "wait_log_replay_cost=%ld,complete_dag_net_cost=%ld}",
+                   "wait_log_replay_cost=%ld,complete_dag_net_cost=%ld,"
+                   "finished_tablet_count=%ld,skipped_tablet_count=%ld,dag_retry_count=%ld}",
                    finish_ts_ - start_ts_,
                    clog_checkpoint_scn_.is_valid() ? clog_checkpoint_scn_.get_val_for_tx() : 0,
                    tablet_count_,
@@ -2780,7 +2806,10 @@ int64_t ObLSMigrationCostStatic::to_string(char *buf, const int64_t buf_len) con
                    prewarm_cost_,
                    wait_log_sync_cost_,
                    wait_log_replay_cost_,
-                   complete_dag_net_cost_);
+                   complete_dag_net_cost_,
+                   finished_tablet_count_,
+                   skipped_tablet_count_,
+                   dag_retry_count_);
   return pos;
 }
 

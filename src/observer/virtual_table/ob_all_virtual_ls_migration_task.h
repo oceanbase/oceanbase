@@ -40,7 +40,8 @@ private:
 private:
   int next_migration_task_(
       ObLSMigrationTask &task,
-      ObLSMigrationHandlerStatus &status);
+      ObLSMigrationHandlerStatus &status,
+      storage::ObLSMigrationCostStatic &cost_static);
 private:
   common::ObAddr addr_;
   /* 跨租户访问的资源必须由ObMultiTenantOperator来处理释放*/

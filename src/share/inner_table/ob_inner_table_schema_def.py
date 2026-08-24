@@ -17919,6 +17919,10 @@ def_table_schema(
   ('data_src', 'varchar:MAX_IP_PORT_LENGTH'),
   ('paxos_replica_number', 'int'),
   ('prioritize_same_zone_src', 'varchar:MAX_BOOL_STR_LENGTH'),
+  ('total_tablet_count', 'int', 'true'),
+  ('finished_tablet_count', 'int', 'true'),
+  ('skipped_tablet_count', 'int', 'true'),
+  ('dag_retry_count', 'int', 'true'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -48254,6 +48258,73 @@ def_table_schema(
 
 # 21751: GV$OB_RESOURCE_FUNCTION_INFO
 # 21752: V$OB_RESOURCE_FUNCTION_INFO
+# 21759: GV$OB_LS_MIGRATION_TASKS
+# 21760: V$OB_LS_MIGRATION_TASKS
+
+def_table_schema(
+  owner           = 'gukaijie.gkj',
+  table_name      = 'GV$OB_LS_MIGRATION_TASKS',
+  table_id        = '21759',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    LS_ID,
+    TYPE AS TASK_TYPE,
+    STATUS,
+    TASK_ID,
+    PRIORITY,
+    CONFIG_VERSION,
+    SRC,
+    DST,
+    DATA_SRC,
+    PAXOS_REPLICA_NUMBER,
+    PRIORITIZE_SAME_ZONE_SRC,
+    TOTAL_TABLET_COUNT,
+    FINISHED_TABLET_COUNT,
+    SKIPPED_TABLET_COUNT,
+    DAG_RETRY_COUNT
+  FROM oceanbase.__all_virtual_ls_migration_task
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'gukaijie.gkj',
+  table_name      = 'V$OB_LS_MIGRATION_TASKS',
+  table_id        = '21760',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    LS_ID,
+    TASK_TYPE,
+    STATUS,
+    TASK_ID,
+    PRIORITY,
+    CONFIG_VERSION,
+    SRC,
+    DST,
+    DATA_SRC,
+    PAXOS_REPLICA_NUMBER,
+    PRIORITIZE_SAME_ZONE_SRC,
+    TOTAL_TABLET_COUNT,
+    FINISHED_TABLET_COUNT,
+    SKIPPED_TABLET_COUNT,
+    DAG_RETRY_COUNT
+  FROM oceanbase.GV$OB_LS_MIGRATION_TASKS
+  WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
+  """.replace("\n", " ")
+)
 
 # 21753: GV$OB_JVM_STATUS
 # 21754: V$OB_JVM_STATUS

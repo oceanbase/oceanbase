@@ -74,7 +74,8 @@ bool ObAllVirtualLSMigrationTask::is_need_process(uint64_t tenant_id)
 
 int ObAllVirtualLSMigrationTask::next_migration_task_(
     ObLSMigrationTask &task,
-    ObLSMigrationHandlerStatus &status)
+    ObLSMigrationHandlerStatus &status,
+    ObLSMigrationCostStatic &cost_static)
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
@@ -94,9 +95,9 @@ int ObAllVirtualLSMigrationTask::next_migration_task_(
       SERVER_LOG(WARN, "migration_handler shouldn't NULL here", K(ls));
       // try another ls
       ret = OB_EAGAIN;
-    } else if (OB_FAIL(migration_handler->get_migration_task_and_handler_status(task, status))) {
+    } else if (OB_FAIL(migration_handler->get_migration_task_and_handler_status(task, status, &cost_static))) {
       if (OB_ENTRY_NOT_EXIST != ret) {
-        SERVER_LOG(WARN, "get_migration_task_and_handler_status failed", K(ret), K(ls));
+        SERVER_LOG(WARN, "get migration task and handler status failed", K(ret), K(ls));
       } else {
         // try another ls
         ret = OB_EAGAIN;
@@ -111,13 +112,14 @@ int ObAllVirtualLSMigrationTask::process_curr_tenant(ObNewRow *&row)
   int ret = OB_SUCCESS;
   ObLSMigrationTask task;
   ObLSMigrationHandlerStatus status = ObLSMigrationHandlerStatus::MAX_STATUS;
+  ObLSMigrationCostStatic cost_static;
   if (NULL == allocator_) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "allocator_ shouldn't be NULL", K(allocator_), K(ret));
   } else if (FALSE_IT(start_to_read_ = true)) {
   } else if (ls_iter_guard_.get_ptr() == nullptr && OB_FAIL(MTL(ObLSService*)->get_ls_iter(ls_iter_guard_, ObLSGetMod::OBSERVER_MOD))) {
     SERVER_LOG(WARN, "get_ls_iter fail", K(ret));
-  } else if (OB_FAIL(next_migration_task_(task, status))) {
+  } else if (OB_FAIL(next_migration_task_(task, status, cost_static))) {
     if (OB_ITER_END != ret) {
       SERVER_LOG(WARN, "get next_migration_task_ failed", K(ret));
     }
@@ -211,6 +213,22 @@ int ObAllVirtualLSMigrationTask::process_curr_tenant(ObNewRow *&row)
           // prioritize_same_zone_src
           cur_row_.cells_[i].set_varchar(task.arg_.prioritize_same_zone_src_ ? "YES" : "NO");
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          break;
+        case OB_APP_MIN_COLUMN_ID + 14:
+          // total_tablet_count
+          cur_row_.cells_[i].set_int(cost_static.tablet_count_);
+          break;
+        case OB_APP_MIN_COLUMN_ID + 15:
+          // finished_tablet_count
+          cur_row_.cells_[i].set_int(cost_static.finished_tablet_count_);
+          break;
+        case OB_APP_MIN_COLUMN_ID + 16:
+          // skipped_tablet_count
+          cur_row_.cells_[i].set_int(cost_static.skipped_tablet_count_);
+          break;
+        case OB_APP_MIN_COLUMN_ID + 17:
+          // dag_retry_count
+          cur_row_.cells_[i].set_int(cost_static.dag_retry_count_);
           break;
         default:
           ret = OB_ERR_UNEXPECTED;

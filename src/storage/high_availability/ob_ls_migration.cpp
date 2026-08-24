@@ -29,6 +29,7 @@ ERRSIM_POINT_DEF(EN_UPDATE_LS_MIGRATION_STATUS_FAILED);
 ERRSIM_POINT_DEF(EN_JOIN_LEARNER_LIST_FAILED);
 ERRSIM_POINT_DEF(EN_MIGRATION_RPC_NOT_SUPPORT);
 ERRSIM_POINT_DEF(EN_DATA_TABLET_MIGRATION_DAG_OUT_OF_RETRY);
+ERRSIM_POINT_DEF(EN_TABLET_FINISH_BEFORE_REMOVE_DEPENDENCY_FAILED);
 ERRSIM_POINT_DEF(MIGRATION_START_RUNNING_FAILED);
 ERRSIM_POINT_DEF(MIGRATION_WAIT_UPDATE_TABLET_HA_STATUS);
 ERRSIM_POINT_DEF(EN_TABLET_GROUP_GENERATE_TASK_PROCESS_FAILED);
@@ -168,7 +169,8 @@ ObMigrationCtx::ObMigrationCtx()
     check_tablet_info_cost_time_(0),
     tablet_dep_mgr_(),
     non_existent_tablet_ids_(),
-    parallel_create_tablets_info_()
+    parallel_create_tablets_info_(),
+    cost_static_(nullptr)
 {
   local_clog_checkpoint_scn_.set_min();
 }
@@ -222,6 +224,7 @@ void ObMigrationCtx::reset()
   tablet_dep_mgr_.reset();
   non_existent_tablet_ids_.reuse();
   parallel_create_tablets_info_.reset();
+  cost_static_ = nullptr;
 }
 
 int ObMigrationCtx::fill_comment(char *buf, const int64_t buf_len) const
@@ -350,7 +353,8 @@ int ObCopyTabletCtx::get_copy_tablet_record_extra_info(ObCopyTabletRecordExtraIn
 ObMigrationDagNetInitParam::ObMigrationDagNetInitParam()
   : arg_(),
     task_id_(),
-    ha_svc_ctx_()
+    ha_svc_ctx_(),
+    cost_static_(nullptr)
 {
 }
 
@@ -430,6 +434,7 @@ int ObMigrationDagNet::init_by_param(const ObIDagInitParam *param)
     ctx_->tenant_id_ = MTL_ID();
     ctx_->arg_ = init_param->arg_;
     ctx_->task_id_ = init_param->task_id_;
+    ctx_->cost_static_ = init_param->cost_static_;
     ha_svc_ctx_ = init_param->ha_svc_ctx_;
     is_inited_ = true;
   }
@@ -926,6 +931,14 @@ int ObStartMigrationTask::init()
     LOG_WARN("failed to get migration ctx from dag net", K(ret));
   } else {
     ctx_->reuse();
+    if (OB_NOT_NULL(ctx_->cost_static_)) {
+      ctx_->cost_static_->tablet_count_ = 0;
+      ctx_->cost_static_->finished_tablet_count_ = 0;
+      ctx_->cost_static_->skipped_tablet_count_ = 0;
+      // NOTE: dag_retry_count_ is intentionally NOT reset here.
+      // It tracks retries across the handler's lifetime and is reset when
+      // ObLSMigrationHandler::reuse_() resets cost_static_.
+    }
     is_inited_ = true;
     LOG_INFO("succeed init start migration task", "ls id", ctx_->arg_.ls_id_,
         "dag_id", *ObCurTraceId::get_trace_id(), "dag_net_id", ctx_->task_id_);
@@ -1228,6 +1241,10 @@ int ObStartMigrationTask::choose_src_()
         LOG_WARN("ls should not be NULL", K(ret), KPC(ctx_), KP(ls));
       } else if (OB_FAIL(ls->get_ls_migration_handler()->set_ha_src_info(ctx_->minor_src_))) {
         LOG_WARN("failed to set ha src info", K(ret), KPC(ctx_));
+      }
+      if (OB_NOT_NULL(ctx_->cost_static_)) {
+        ctx_->cost_static_->tablet_count_ = ctx_->sys_tablet_id_array_.count() +
+                                            ctx_->data_tablet_id_array_.count();
       }
       FLOG_INFO("choose src",  K(src_info),
           K(ls_info), K(ctx_->sys_tablet_id_array_), K(ctx_->data_tablet_id_array_));
@@ -2759,6 +2776,9 @@ int ObTabletMigrationDag::inner_reset_status_for_retry()
     LOG_WARN("failed to get retry count", K(ret));
   } else {
     LOG_INFO("start retry", KPC(this));
+    if (OB_NOT_NULL(ctx->cost_static_)) {
+      ATOMIC_INC(&ctx->cost_static_->dag_retry_count_);
+    }
     result_mgr_.reuse();
     SERVER_EVENT_ADD("storage_ha", "tablet_migration_retry",
         "tenant_id", ctx->tenant_id_,
@@ -2921,6 +2941,11 @@ int ObTabletMigrationTask::process()
       LOG_WARN("failed to update ha expected status", K(ret), KPC(copy_tablet_ctx_));
     } else if (OB_FAIL(ctx_->tablet_dep_mgr_.remove_tablet_dependency(copy_tablet_ctx_->tablet_id_))) {
       LOG_WARN("failed to remove tablet dependency", K(ret), KPC(copy_tablet_ctx_));
+    }
+    // TABLET_NOT_EXIST tablets skip generate_migration_tasks_(), so no finish task
+    // will count them. Increment skipped here to keep finished + skipped == total.
+    if (OB_SUCC(ret) && OB_NOT_NULL(ctx_->cost_static_)) {
+      ATOMIC_INC(&ctx_->cost_static_->skipped_tablet_count_);
     }
   } else if (OB_FAIL(build_copy_table_key_info_())) {
     LOG_WARN("failed to build copy table key info", K(ret), KPC(copy_tablet_ctx_));
@@ -3685,25 +3710,42 @@ int ObTabletFinishMigrationTask::process()
 {
   int ret = OB_SUCCESS;
   LOG_INFO("start do tablet finish migration task", KPC(copy_tablet_ctx_));
+  ObMigrationCtx *ctx = nullptr;
+  bool is_skipped = false;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet finish migration task do not init", K(ret), KPC(copy_tablet_ctx_));
-  } else if (ha_dag_net_ctx_->is_failed()) {
-    // dag net is already failed, the failure handling will do the cleanup
-    LOG_INFO("dag net is failed, skip tablet finish migration task", KPC(copy_tablet_ctx_));
-  } else if (OB_FAIL(update_data_and_expected_status_())) {
-    LOG_WARN("failed to update data and expected status", K(ret));
-  } else if (copy_tablet_ctx_->tablet_id_.is_ls_inner_tablet()) {
-    // skip, ls inner tablet won't be added to tablet dependency manager
+  } else if (OB_ISNULL(ctx = static_cast<ObMigrationCtx *>(ha_dag_net_ctx_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("migration ctx should not be NULL", K(ret), KP(ctx));
   } else {
-    ObMigrationCtx *ctx = nullptr;
-    if (OB_ISNULL(ctx = static_cast<ObMigrationCtx *>(ha_dag_net_ctx_))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("migration ctx should not be NULL", K(ret), KP(ctx));
+    bool is_failed = false;
+    if (ha_dag_net_ctx_->is_failed()) {
+      // dag net is already failed, the failure handling will do the cleanup
+      is_failed = true;
+      LOG_INFO("dag net is failed, skip tablet finish migration task", KPC(copy_tablet_ctx_));
+    } else if (OB_FAIL(update_data_and_expected_status_(is_skipped))) {
+      LOG_WARN("failed to update data and expected status", K(ret));
+    } else if (copy_tablet_ctx_->tablet_id_.is_ls_inner_tablet()) {
+      // skip, ls inner tablet won't be added to tablet dependency manager
+    } else {
+      // remove tablet dependency must be the last step of TabletMigrationDag
+#ifdef ERRSIM
+      ret = OB_E(EN_TABLET_FINISH_BEFORE_REMOVE_DEPENDENCY_FAILED) OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        STORAGE_LOG(ERROR, "fake EN_TABLET_FINISH_BEFORE_REMOVE_DEPENDENCY_FAILED", K(ret));
+      }
+#endif
+      if (OB_SUCC(ret) && OB_FAIL(ctx->tablet_dep_mgr_.remove_tablet_dependency(copy_tablet_ctx_->tablet_id_))) {
+        LOG_WARN("failed to remove tablet dependency", K(ret), KPC(ctx), KPC(copy_tablet_ctx_));
+      }
     }
-    // remove tablet dependency must be the last step of TabletMigrationDag
-    else if (OB_FAIL(ctx->tablet_dep_mgr_.remove_tablet_dependency(copy_tablet_ctx_->tablet_id_))) {
-      LOG_WARN("failed to remove tablet dependency", K(ret), KPC(ctx), KPC(copy_tablet_ctx_));
+    if (!is_failed && OB_SUCC(ret) && OB_NOT_NULL(ctx->cost_static_)) {
+      if (is_skipped) {
+        ATOMIC_INC(&ctx->cost_static_->skipped_tablet_count_);
+      } else {
+        ATOMIC_INC(&ctx->cost_static_->finished_tablet_count_);
+      }
     }
   }
 
@@ -3716,11 +3758,12 @@ int ObTabletFinishMigrationTask::process()
   return ret;
 }
 
-int ObTabletFinishMigrationTask::update_data_and_expected_status_()
+int ObTabletFinishMigrationTask::update_data_and_expected_status_(bool &is_skipped)
 {
   int ret = OB_SUCCESS;
   ObCopyTabletStatus::STATUS status;
   ObTablet *tablet = nullptr;
+  is_skipped = false;
 #ifdef ERRSIM
   int tmp_wait_tablet_id = -MIGRATION_WAIT_UPDATE_TABLET_HA_STATUS;
   if (tmp_wait_tablet_id == copy_tablet_ctx_->tablet_id_.id()) {
@@ -3737,6 +3780,7 @@ int ObTabletFinishMigrationTask::update_data_and_expected_status_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), KPC(copy_tablet_ctx_));
   } else if (ObCopyTabletStatus::TABLET_NOT_EXIST == status) {
+    is_skipped = true;
     const ObTabletExpectedStatus::STATUS expected_status = ObTabletExpectedStatus::DELETED;
     ObMigrationCtx *migration_ctx = nullptr;
 
@@ -3794,10 +3838,12 @@ int ObTabletFinishMigrationTask::update_data_and_expected_status_()
     }
 #endif
     const ObTabletDataStatus::STATUS data_status = ObTabletDataStatus::COMPLETE;
+    DEBUG_SYNC(BEFORE_UPDATE_TABLET_HA_DATA_STATUS);
     if (FAILEDx(ls_->update_tablet_ha_data_status(tablet->get_reorganization_scn(), copy_tablet_ctx_->tablet_id_, data_status))) {
       if (OB_TABLET_NOT_EXIST == ret) {
         LOG_INFO("migration tablet maybe deleted, skip it", K(ret), KPC(copy_tablet_ctx_));
         ret = OB_SUCCESS;
+        is_skipped = true;
         if (OB_FAIL(update_co_convert_status_for_cs_replica(true /*tablet_is_deleted*/))) {
           LOG_WARN("failed update convert status for cs replica", K(ret), KPC_(copy_tablet_ctx));
         }

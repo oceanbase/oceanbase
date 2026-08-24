@@ -395,6 +395,7 @@ struct ObMigrationOpArg
   // Now only used for replace ls operation. Only if the config version is the same, then
   // the replica can forcibly change the member list to only include itself.
   palf::LogConfigVersion member_list_config_version_;
+
 };
 
 struct ObStorageHASrcInfo
@@ -858,6 +859,7 @@ public:
   ObLSMigrationCostStatic();
   ~ObLSMigrationCostStatic() = default;
   void reset();
+  int assign(const ObLSMigrationCostStatic &cost_static);
   int64_t to_string(char *buf, const int64_t buf_len) const;
 public:
   share::SCN clog_checkpoint_scn_;
@@ -870,6 +872,11 @@ public:
   int64_t complete_dag_net_cost_;
   int64_t start_ts_;
   int64_t finish_ts_;
+  int64_t finished_tablet_count_;
+  int64_t skipped_tablet_count_;
+  int64_t dag_retry_count_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObLSMigrationCostStatic);
 };
 
 }

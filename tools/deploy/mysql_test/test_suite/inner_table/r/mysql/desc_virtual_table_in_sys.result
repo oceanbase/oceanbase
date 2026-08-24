@@ -11702,6 +11702,10 @@ dst	varchar(52)	NO		NULL
 data_src	varchar(52)	NO		NULL	
 paxos_replica_number	bigint(20)	NO		NULL	
 prioritize_same_zone_src	varchar(4)	NO		NULL	
+total_tablet_count	bigint(20)	YES		NULL	
+finished_tablet_count	bigint(20)	YES		NULL	
+skipped_tablet_count	bigint(20)	YES		NULL	
+dag_retry_count	bigint(20)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ls_migration_task;
 IF(count(*) >= 0, 1, 0)
 1

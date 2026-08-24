@@ -103,7 +103,8 @@ public:
   int set_result_for_split(const int32_t result);
   int get_migration_task_and_handler_status(
       ObLSMigrationTask &task,
-      ObLSMigrationHandlerStatus &status);
+      ObLSMigrationHandlerStatus &status,
+      ObLSMigrationCostStatic *cost_static = nullptr);
   int update_advance_ls_checkpoint_scn(const share::SCN &scn);
   int advance_ls_checkpoint();
 
