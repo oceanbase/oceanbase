@@ -17,6 +17,7 @@
 #include "lib/stat/ob_diagnose_info.h"
 #include "storage/meta_mem/ob_meta_obj_struct.h"
 #include "storage/meta_mem/ob_meta_pointer.h"
+#include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/ob_resource_map.h"
 
 namespace oceanbase
@@ -567,7 +568,10 @@ int ObMetaPointerMap<Key, T>::get_meta_obj_with_external_memory(
   uint64_t hash_val = 0;
   ObMetaPointerHandle<Key, T> ptr_hdl(*this);
   ObMetaPointer<T> *t_ptr = nullptr;
+  ObMetaPointer<T> *protected_ptr = nullptr;
+  ObMetaDiskAddr protected_disk_addr;
   bool is_in_memory = false;
+  ObTabletHandle tmp_guard;
   guard.reset();
   if (OB_UNLIKELY(!key.is_valid())) {
     ret = common::OB_INVALID_ARGUMENT;
@@ -580,8 +584,20 @@ int ObMetaPointerMap<Key, T>::get_meta_obj_with_external_memory(
       if (common::OB_ENTRY_NOT_EXIST != ret) {
         STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
       }
-    } else if (!ptr_hdl.get_resource_ptr()->get_addr().is_disked()) {
+    } else if (OB_ISNULL(t_ptr = ptr_hdl.get_resource_ptr())) {
+      ret = common::OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "fail to get meta pointer", K(ret), KP(t_ptr), K(key));
+    } else if (!t_ptr->get_addr().is_disked()) {
       ret = OB_EAGAIN; // For non-disked addr tablet, please wait for persist.
+    } else if (t_ptr->is_in_memory() && OB_FAIL(t_ptr->get_in_memory_obj(tmp_guard))) {
+      STORAGE_LOG(WARN, "fail to get meta object", K(ret), KP(t_ptr), K(key));
+    } else if (tmp_guard.is_valid()) {
+      tmp_guard.set_wash_priority(WashTabletPriority::WTP_LOW);
+      // Keep the current in-memory tablet alive until the copied tablet has
+      // finished increasing all of its macro block references.
+      is_in_memory = true;
+      protected_ptr = t_ptr;
+      protected_disk_addr = t_ptr->get_addr();
     }
   } else if (OB_FAIL(try_get_in_memory_meta_obj(key, ptr_hdl, guard, is_in_memory))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
@@ -592,7 +608,7 @@ int ObMetaPointerMap<Key, T>::get_meta_obj_with_external_memory(
   } else if (is_in_memory) {
     EVENT_INC(ObStatEventIds::TABLET_CACHE_HIT);
   }
-  if (OB_SUCC(ret) && !is_in_memory) {
+  if (OB_SUCC(ret) && (force_alloc_new || !is_in_memory)) {
     t_ptr = ptr_hdl.get_resource_ptr();
     ObMetaDiskAddr disk_addr;
     void *buf = allocator.alloc(sizeof(T));
@@ -603,6 +619,7 @@ int ObMetaPointerMap<Key, T>::get_meta_obj_with_external_memory(
       bool need_free_obj = false;
       T *t = new (buf) T();
       do {
+        bool post_work_outside_lock = false;
         t->reset();
         if (OB_FAIL(load_meta_obj(key, t_ptr, allocator, disk_addr, t))) {
           STORAGE_LOG(WARN, "load obj from disk fail", K(ret), K(key), KPC(t_ptr), K(lbt()));
@@ -634,6 +651,13 @@ int ObMetaPointerMap<Key, T>::get_meta_obj_with_external_memory(
             if (REACH_TIME_INTERVAL(1000000)) {
               STORAGE_LOG(WARN, "disk address change", K(ret), K(disk_addr), KPC(t_ptr));
             }
+          } else if (force_alloc_new
+              && tmp_guard.is_valid()
+              && protected_ptr == t_ptr
+              && protected_disk_addr == disk_addr) {
+            // The temporary guard protects the macro blocks represented by
+            // disk_addr, so the expensive post work can safely run unlocked.
+            post_work_outside_lock = true;
           } else if (OB_FAIL(t->deserialize_post_work(allocator))) {
             STORAGE_LOG(WARN, "fail to deserialize post work", K(ret), KP(t));
           } else if (OB_FAIL(t->assign_pointer_handle(ptr_hdl))) {
@@ -643,6 +667,23 @@ int ObMetaPointerMap<Key, T>::get_meta_obj_with_external_memory(
             guard.set_obj(t, &allocator, t3m);
           }
         }  // write lock end
+        if (OB_SUCC(ret) && post_work_outside_lock) {
+          if (OB_FAIL(t->deserialize_post_work(allocator))) {
+            STORAGE_LOG(WARN, "fail to deserialize post work", K(ret), KP(t));
+          } else if (OB_FAIL(t->assign_pointer_handle(ptr_hdl))) {
+            STORAGE_LOG(WARN, "fail to assign pointer handle", K(ret), KP(t));
+          } else {
+            ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+            guard.set_obj(t, &allocator, t3m);
+          }
+        }
+        if (OB_ITEM_NOT_MATCH == ret && force_alloc_new) {
+          // The held tablet no longer matches the address to be loaded.  Drop
+          // it and use the original in-lock fallback for the retry.
+          tmp_guard.reset();
+          protected_ptr = nullptr;
+          protected_disk_addr.reset();
+        }
         if ((OB_FAIL(ret) && OB_NOT_NULL(t)) || need_free_obj) {
           t->dec_macro_ref_cnt();
         }

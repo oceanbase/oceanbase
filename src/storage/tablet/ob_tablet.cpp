@@ -22,6 +22,7 @@
 #include "lib/lock/ob_thread_cond.h"
 #include "lib/objectpool/ob_server_object_pool.h"
 #include "lib/utility/ob_macro_utils.h"
+#include "lib/utility/ob_tracepoint.h"
 #include "logservice/ob_log_base_header.h"
 #include "logservice/ob_log_base_type.h"
 #include "logservice/palf/palf_options.h"
@@ -87,6 +88,8 @@ using namespace palf;
 
 namespace storage
 {
+ERRSIM_POINT_DEF(EN_TABLET_ASSIGN_POINTER_HANDLE_FAILED);
+
 #define ALLOC_AND_INIT(allocator, addr, args...)                                  \
   do {                                                                            \
     if (OB_SUCC(ret)) {                                                           \
@@ -3314,7 +3317,9 @@ int ObTablet::get_meta_disk_addr(ObMetaDiskAddr &addr) const
 int ObTablet::assign_pointer_handle(const ObTabletPointerHandle &ptr_hdl)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(pointer_hdl_.assign(ptr_hdl))) {
+  if (OB_FAIL(OB_E(EN_TABLET_ASSIGN_POINTER_HANDLE_FAILED) OB_SUCCESS)) {
+    LOG_WARN("inject failure before assigning tablet pointer handle", K(ret));
+  } else if (OB_FAIL(pointer_hdl_.assign(ptr_hdl))) {
     LOG_WARN("assign tablet ptr fail", K(ret));
   }
   return ret;
