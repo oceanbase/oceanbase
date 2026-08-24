@@ -935,6 +935,19 @@ private:
       ObTabletHandle &old_tablet,
       ObMetaDiskAddr &old_tablet_addr,
       ObTimeGuard &time_guard);
+  int try_update_tablet_after_persist(
+      const ObTabletMapKey &key,
+      const ObMetaDiskAddr &old_tablet_addr,
+      const ObTabletHandle &old_tablet_handle,
+      ObTabletHandle &new_tablet_handle,
+      ObTimeGuard &time_guard,
+      const share::SCN &ss_change_version = share::SCN::invalid_scn());
+  typedef common::ObFunction<int()> TabletUpdateOp;
+  int retry_tablet_update(
+      const ObTabletMapKey &key,
+      const char *operation,
+      common::ObArenaAllocator &allocator,
+      const TabletUpdateOp &op);
 
 private:
   static int replay_deserialize_tablet(

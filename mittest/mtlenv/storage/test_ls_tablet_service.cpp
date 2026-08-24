@@ -193,6 +193,85 @@ TEST_F(TestLSTabletService, test_bucket_cnt)
   ASSERT_EQ(unify_bucket_num, id_set_bkt_cnt);
 }
 
+TEST_F(TestLSTabletService, test_retry_tablet_update)
+{
+  const ObTabletMapKey key(ls_id_, ObTabletID(10000013));
+  int64_t call_count = 0;
+  common::ObArenaAllocator allocator("RetryTabletUpd");
+  ObLSTabletService::TabletUpdateOp op([&]() -> int {
+    return ++call_count < 2 ? OB_EAGAIN : OB_SUCCESS;
+  });
+
+  ASSERT_TRUE(op.is_valid());
+  EXPECT_EQ(OB_SUCCESS, ls_tablet_service_->retry_tablet_update(key, "test tablet update", allocator, op));
+  EXPECT_EQ(2, call_count);
+}
+
+TEST_F(TestLSTabletService, test_try_update_tablet_after_persist_stale_addr)
+{
+  const ObTabletID tablet_id(10000013);
+  const ObTabletMapKey key(ls_id_, tablet_id);
+  ObLSHandle ls_handle;
+  ObTableSchema schema;
+  TestSchemaUtils::prepare_data_schema(schema);
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(ls_handle, tablet_id, schema, allocator_));
+
+  ObTimeGuard time_guard("TestTryUpdateAfterPersistStale");
+  ObTabletHandle old_handle;
+  ObMetaDiskAddr expected_addr;
+  ASSERT_EQ(OB_SUCCESS, ls_tablet_service_->get_tablet_and_address(key, old_handle, expected_addr, time_guard));
+  ObTablet *const old_tablet = old_handle.get_obj();
+
+  ObTabletHandle new_handle;
+  int32_t private_transfer_epoch = -1;
+  ASSERT_EQ(OB_SUCCESS, old_tablet->get_private_transfer_epoch(private_transfer_epoch));
+  const ObTabletPersisterParam persist_param(DATA_CURRENT_VERSION,
+                                             ls_id_,
+                                             ls_handle.get_ls()->get_ls_epoch(),
+                                             tablet_id,
+                                             private_transfer_epoch,
+                                             0/*tablet_meta_version*/);
+  ASSERT_EQ(OB_SUCCESS, ObTabletPersister::persist_and_transform_tablet(persist_param, *old_tablet, new_handle));
+  const ObMetaDiskAddr persisted_addr = new_handle.get_obj()->get_tablet_addr();
+  ASSERT_TRUE(persisted_addr.is_disked());
+
+  // Emulate create_memtable publishing an incremented tablet address sequence after the new tablet has been persisted.
+  ObMetaDiskAddr advanced_addr = expected_addr;
+  advanced_addr.inc_seq();
+  old_tablet->set_tablet_addr(advanced_addr);
+  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+  ObUpdateTabletPointerParam update_pointer_param;
+  ASSERT_EQ(OB_SUCCESS, old_tablet->get_updating_tablet_pointer_param(update_pointer_param));
+  ASSERT_EQ(OB_SUCCESS, t3m->compare_and_swap_tablet(key, old_handle, old_handle, update_pointer_param));
+  ObMetaDiskAddr published_addr;
+  ASSERT_EQ(OB_SUCCESS, t3m->get_tablet_addr(key, published_addr));
+  ASSERT_TRUE(expected_addr.is_equal_for_persistence(published_addr));
+  ASSERT_EQ(expected_addr.seq() + 1, published_addr.seq());
+  ASSERT_TRUE(expected_addr != published_addr);
+
+  ObStorageLogger *slogger = &TENANT_SLOGGER;
+  ASSERT_NE(nullptr, slogger);
+  ObLogCursor slog_before;
+  ObLogCursor slog_after;
+  ASSERT_EQ(OB_SUCCESS, slogger->get_active_cursor(slog_before));
+  EXPECT_EQ(OB_EAGAIN, ls_tablet_service_->try_update_tablet_after_persist(key, expected_addr, old_handle, new_handle,
+      time_guard));
+  ASSERT_EQ(OB_SUCCESS, slogger->get_active_cursor(slog_after));
+  EXPECT_TRUE(slog_before.equal(slog_after));
+
+  ObTabletHandle current_handle;
+  ObMetaDiskAddr current_addr;
+  ASSERT_EQ(OB_SUCCESS, ls_tablet_service_->get_tablet(
+      tablet_id, current_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK));
+  ASSERT_EQ(OB_SUCCESS, t3m->get_tablet_addr(key, current_addr));
+  EXPECT_EQ(old_tablet, current_handle.get_obj());
+  EXPECT_NE(new_handle.get_obj(), current_handle.get_obj());
+  EXPECT_TRUE(published_addr == current_addr);
+  EXPECT_TRUE(persisted_addr != current_addr);
+  ASSERT_EQ(OB_SUCCESS, t3m->del_tablet(key));
+}
+
 void TestLSTabletService::construct_sstable(
     const ObTabletID &tablet_id,
     blocksstable::ObSSTable &sstable,
