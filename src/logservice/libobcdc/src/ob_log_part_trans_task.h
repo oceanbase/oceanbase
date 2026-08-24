@@ -1256,6 +1256,7 @@ public:
       bool &is_not_barrier,
       ObSchemaOperationType &op_type) const;
   ObIAllocator &get_log_entry_task_base_allocator() { return log_entry_task_base_allocator_; };
+  int reserve_tic_update_info(const int64_t count);
   int push_tic_update_info(const TICUpdateInfo &tic_update_info);
   void get_tic_update_info(ObArray<TICUpdateInfo> &tic_update_infos) const
   {
