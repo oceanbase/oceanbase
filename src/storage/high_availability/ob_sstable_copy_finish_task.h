@@ -298,7 +298,6 @@ private:
   ObRestoreMacroBlockIdMgr *restore_macro_block_id_mgr_;
   ObMacroBlockReuseMgr macro_block_reuse_mgr_;
   common::ObArenaAllocator allocator_;
-  ObTableHandleV2 split_src_sstable_handle_;
   DISALLOW_COPY_AND_ASSIGN(ObSSTableCopyFinishTask);
 };
 
