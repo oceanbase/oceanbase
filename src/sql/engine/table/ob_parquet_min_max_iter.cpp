@@ -10,6 +10,7 @@
 #include "share/external_table/ob_external_table_utils.h"
 #include "share/ob_compatibility_control.h"
 #include "sql/engine/basic/ob_arrow_basic.h"
+#include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/ob_sql_context.h"
 #include "sql/resolver/ob_stmt_type.h"
 
@@ -26,6 +27,33 @@ static bool is_contain_field_id(std::shared_ptr<parquet::FileMetaData> file_meta
     }
   }
   return contains_id;
+}
+
+int ObParquetMinMaxIter::normalize_decimal_stat_datum(const ObExpr &agg_expr,
+                                                      const ObColumnMeta &src_meta,
+                                                      blocksstable::ObStorageDatum &datum)
+{
+  int ret = OB_SUCCESS;
+  if (!datum.is_null() && ob_is_decimal_int_tc(src_meta.type_)
+      && ObDecimalIntType == agg_expr.datum_meta_.type_) {
+    ObDecimalIntBuilder normalized;
+    if (OB_FAIL(ObDatumCast::common_scale_decimalint(datum.get_decimal_int(),
+                                                     datum.len_,
+                                                     src_meta.scale_,
+                                                     agg_expr.datum_meta_.scale_,
+                                                     agg_expr.datum_meta_.precision_,
+                                                     CM_COLUMN_CONVERT,
+                                                     normalized))) {
+      LOG_WARN("failed to normalize decimal statistic datum",
+               K(ret),
+               K(src_meta),
+               K(agg_expr.datum_meta_),
+               K(datum.len_));
+    } else {
+      datum.set_decimal_int(normalized.get_decimal_int(), normalized.get_int_bytes());
+    }
+  }
+  return ret;
 }
 
 ObParquetMinMaxIter::~ObParquetMinMaxIter()
@@ -565,6 +593,10 @@ int ObParquetMinMaxIter::merge_rowgroup_statistics(ObExpr *agg_expr,
       LOG_WARN("failed to read min max datum", K(ret), K(rg_idx), K(parquet_col_idx));
     } else if (rg_min_datum.is_null() || rg_max_datum.is_null()) {
       LOG_TRACE("datum is null", K(rg_idx), K(parquet_col_idx));
+    } else if (OB_FAIL(normalize_decimal_stat_datum(*agg_expr, column_meta, rg_min_datum))) {
+      LOG_WARN("failed to normalize min decimal statistic", K(ret), K(rg_idx), K(agg_idx));
+    } else if (OB_FAIL(normalize_decimal_stat_datum(*agg_expr, column_meta, rg_max_datum))) {
+      LOG_WARN("failed to normalize max decimal statistic", K(ret), K(rg_idx), K(agg_idx));
     } else if (OB_FAIL(merge_agg_datum(agg_expr, agg_idx, rg_min_datum, rg_max_datum))) {
       LOG_WARN("failed to merge agg datum", K(ret), K(agg_idx));
     }

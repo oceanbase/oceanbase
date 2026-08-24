@@ -54,6 +54,9 @@ private:
   int merge_agg_datum(ObExpr *agg_expr, const int64_t agg_idx,
                       const blocksstable::ObStorageDatum &rg_min_datum,
                       const blocksstable::ObStorageDatum &rg_max_datum);
+  static int normalize_decimal_stat_datum(const ObExpr &agg_expr,
+                                          const ObColumnMeta &src_meta,
+                                          blocksstable::ObStorageDatum &datum);
   int output_aggregate_result(int64_t &count);
   int calc_file_meta_column(const int64_t read_count, ObEvalCtx &eval_ctx);
   int calc_column_convert(const int64_t read_count, ObEvalCtx &eval_ctx);

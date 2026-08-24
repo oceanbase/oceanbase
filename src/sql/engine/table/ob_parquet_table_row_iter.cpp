@@ -3264,18 +3264,17 @@ int ObParquetTableRowIterator::read_min_max_datum(const std::string &min_val, co
           // ObStorageDatum only support 40 byte memory
           // do nothing
         } else {
-          ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx);
           int32_t int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(
               (column_meta.precision_ == -1) ? 38 : column_meta.precision_);
           ObArrayWrap<char> buffer;
-          OZ (buffer.allocate_array(tmp_alloc_g.get_allocator(), int_bytes));
+          OZ (buffer.allocate_array(tmp_alloc, int_bytes));
           if (OB_FAIL(to_numeric_hive(pointer_cast<const char*>(min_val.data()), min_val.size(),
                                       buffer.get_data(), buffer.count(), physical_type,
-                                      column_meta, tmp_alloc_g.get_allocator(), min_datum))) {
+                                      column_meta, tmp_alloc, min_datum))) {
             LOG_WARN("failed to convert numeric", K(ret));
           } else if (OB_FAIL(to_numeric_hive(pointer_cast<const char*>(max_val.data()), max_val.size(),
                                              buffer.get_data(), buffer.count(), physical_type,
-                                             column_meta, tmp_alloc_g.get_allocator(), max_datum))) {
+                                             column_meta, tmp_alloc, max_datum))) {
             LOG_WARN("failed to convert numeric", K(ret));
           }
         }
@@ -3356,18 +3355,17 @@ int ObParquetTableRowIterator::read_min_max_datum(const std::string &min_val, co
           // ObStorageDatum only support 40 byte memory
           // do nothing
         } else {
-          ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx);
           int32_t int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(
               (column_meta.precision_ == -1) ? 38 : column_meta.precision_);
           ObArrayWrap<char> buffer;
-          OZ (buffer.allocate_array(tmp_alloc_g.get_allocator(), int_bytes));
+          OZ (buffer.allocate_array(tmp_alloc, int_bytes));
           if (OB_FAIL(to_numeric_hive(pointer_cast<const char*>(min_val.data()), min_val.size(),
                                       buffer.get_data(), buffer.count(), physical_type,
-                                      column_meta, tmp_alloc_g.get_allocator(), min_datum))) {
+                                      column_meta, tmp_alloc, min_datum))) {
             LOG_WARN("failed to convert numeric", K(ret));
           } else if (OB_FAIL(to_numeric_hive(pointer_cast<const char*>(max_val.data()), max_val.size(),
                                              buffer.get_data(), buffer.count(), physical_type,
-                                             column_meta, tmp_alloc_g.get_allocator(), max_datum))) {
+                                             column_meta, tmp_alloc, max_datum))) {
             LOG_WARN("failed to convert numeric", K(ret));
           }
         }
