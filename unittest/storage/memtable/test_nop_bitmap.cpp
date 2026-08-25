@@ -185,6 +185,32 @@ TEST(TestNopBitMap, smoke_test)
   ASSERT_TRUE(bitmap.is_empty());
 }
 
+TEST(TestNopBitMap, test_non_contiguous_extra_rowkey)
+{
+  // Requested columns: [k1, k2, k3, k4, c1, ORA_ROWSCN].
+  ObNopBitMap bitmap;
+  ASSERT_EQ(OB_SUCCESS, bitmap.init(6, 4, 1, 5));
+  ASSERT_EQ(1, bitmap.get_nop_cnt());
+  ASSERT_TRUE(bitmap.test(4));
+  ASSERT_FALSE(bitmap.test(5));
+
+  bitmap.set_false(4);
+  ASSERT_TRUE(bitmap.is_empty());
+
+  blocksstable::ObStorageDatum cells[6];
+  for (int64_t i = 0; i < 6; ++i) {
+    cells[i].set_int(i);
+  }
+  cells[4].set_int(200);
+  bitmap.reuse();
+  ASSERT_EQ(1, bitmap.get_nop_cnt());
+  ASSERT_TRUE(bitmap.test(4));
+  ASSERT_FALSE(bitmap.test(5));
+  ASSERT_EQ(OB_SUCCESS, bitmap.set_nop_datums(cells));
+  ASSERT_TRUE(cells[4].is_nop());
+  ASSERT_FALSE(cells[5].is_nop());
+}
+
 }
 }
 

@@ -820,7 +820,10 @@ int ObMemtable::get(
         }
         ObNopBitMap bitmap;
         int64_t row_scn = 0;
-        if (OB_FAIL(bitmap.init(request_cnt, store_rowkey->get_obj_cnt() + read_info->get_extra_rowkey_count()))) {
+        if (OB_FAIL(bitmap.init(request_cnt,
+                                store_rowkey->get_obj_cnt(),
+                                read_info->get_extra_rowkey_count(),
+                                read_info->get_trans_col_index()))) {
           TRANS_LOG(WARN, "Failed to innt bitmap", K(ret), K(request_cnt), KPC(store_rowkey));
         } else if (OB_FAIL(ObReadRow::iterate_row(*read_info, *store_rowkey, value_iter, row, bitmap, row_scn))) {
           TRANS_LOG(WARN, "Failed to iterate row, ", K(ret), K(rowkey));

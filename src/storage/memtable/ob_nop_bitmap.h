@@ -29,16 +29,34 @@ class ObNopBitMap
 {
 public:
   ObNopBitMap():
-    size_(0), cnt_(0), nop_cnt_(0), rowkey_cnt_(0) {}
+    size_(0), cnt_(0), nop_cnt_(0), rowkey_cnt_(0), extra_rowkey_cnt_(0), trans_col_index_(OB_INVALID_INDEX) {}
 
+  // Initializes for cases when rowkey columns form a contiguous prefix in the requested column order.
   int init(int64_t size, int64_t rowkey_cnt)
   {
     size_ = round_up(size);
     cnt_ = size;
     nop_cnt_ = size - rowkey_cnt;
     rowkey_cnt_ = rowkey_cnt;
+    extra_rowkey_cnt_ = 0;
+    trans_col_index_ = OB_INVALID_INDEX;
     MEMSET_(static_cast<void*>(bitmap_), 0xFF, size_ >> 3);
     return common::OB_SUCCESS;
+  }
+
+  // Initializes for cases when extra rowkey columns may not immediately follow the schema rowkey columns in the requested column order.
+  int init(int64_t size, int64_t rowkey_cnt, int64_t extra_rowkey_cnt, int64_t trans_col_index)
+  {
+    int ret = OB_SUCCESS;
+    if (trans_col_index == rowkey_cnt) {
+      ret = init(size, rowkey_cnt + extra_rowkey_cnt);
+    } else if (OB_FAIL(init(size, rowkey_cnt))) {
+    } else {
+      extra_rowkey_cnt_ = extra_rowkey_cnt;
+      trans_col_index_ = trans_col_index;
+      set_trans_cols();
+    }
+    return ret;
   }
 
   inline void set_false(int64_t pos)
@@ -66,6 +84,7 @@ public:
   {
     MEMSET_(static_cast<void*>(bitmap_), 0xFF, size_ >> 3);
     nop_cnt_ = cnt_ - rowkey_cnt_;
+    set_trans_cols();
   }
 
   inline int set_nop_obj(common::ObObj *obj_ptr)
@@ -110,13 +129,23 @@ public:
     return common::OB_SUCCESS;
   }
 
-  TO_STRING_KV(K(size_), K(cnt_), K(nop_cnt_), K(rowkey_cnt_), K(bitmap_));
+  TO_STRING_KV(K(size_), K(cnt_), K(nop_cnt_), K(rowkey_cnt_), K(extra_rowkey_cnt_), K(trans_col_index_), K(bitmap_));
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObNopBitMap);
   inline int64_t round_up(int64_t n)
   {
     return (n + mask) & ~mask;
+  }
+  inline void set_trans_cols()
+  {
+    if (OB_INVALID_INDEX != trans_col_index_) {
+      for (int64_t i = 0; i < extra_rowkey_cnt_; ++i) {
+        const int64_t pos = trans_col_index_ + i;
+        bitmap_[pos >> shift_bits] &= ~(1LLU << (pos & mask));
+      }
+      nop_cnt_ -= extra_rowkey_cnt_;
+    }
   }
 private:
   static const int64_t mask = 63;
@@ -125,6 +154,8 @@ private:
   int64_t cnt_;
   int64_t nop_cnt_;
   int64_t rowkey_cnt_;
+  int64_t extra_rowkey_cnt_;
+  int64_t trans_col_index_;
   uint64_t bitmap_[(common::OB_ROW_MAX_COLUMNS_COUNT >> shift_bits) + 1];
 };
 
