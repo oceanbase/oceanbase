@@ -3140,6 +3140,12 @@ int ObDMLResolver::resolve_columns(ObRawExpr *&expr, ObArray<ObQualifiedName> &c
             ret = OB_SUCCESS;
             q_name.ref_expr_ = q_name_next.ref_expr_;
             q_name.access_idents_.at(0).set_type(UNKNOWN);
+            if (!q_name.tbl_name_.empty()
+                && q_name.catalog_name_.empty()
+                && q_name.database_name_.empty()
+                && q_name.dblink_name_.empty()) {
+              q_name.database_name_ = q_name.tbl_name_;
+            }
             q_name.tbl_name_.assign_ptr(
               lib::is_mysql_mode() ? str_tolower(const_cast<char *>(q_name.col_name_.ptr()),
                                                 static_cast<int32_t>(q_name.col_name_.length())) :
