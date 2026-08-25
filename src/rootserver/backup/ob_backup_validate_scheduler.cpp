@@ -1565,6 +1565,7 @@ int ObUserTenantBackupValidateJobMgr::check_data_backup_dest_validity_(bool &is_
 {
   int ret = OB_SUCCESS;
   ObBackupPathString backup_dest_str;
+  ObBackupPathString complete_backup_dest_str;
   ObBackupDestMgr dest_mgr;
   share::ObBackupHelper backup_helper;
   ObBackupDest backup_dest;
@@ -1589,9 +1590,11 @@ int ObUserTenantBackupValidateJobMgr::check_data_backup_dest_validity_(bool &is_
     } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(*sql_proxy_, tenant_id,
                                                                     backup_dest, backup_dest_id_))) {
       LOG_WARN("[BACKUP_VALIDATE]failed to get backup dest id", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(dest_mgr.init(tenant_id,
-                                       ObBackupDestType::TYPE::DEST_TYPE_BACKUP_DATA, backup_dest_str,  *sql_proxy_))) {
-      LOG_WARN("[BACKUP_VALIDATE]failed to init dest mgr", KR(ret), K(backup_dest_str));
+    } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_, tenant_id, backup_dest_str, complete_backup_dest_str))) {
+      LOG_WARN("[BACKUP_VALIDATE]failed to get complete backup dest", KR(ret), K(tenant_id), K(backup_dest_str));
+    } else if (OB_FAIL(dest_mgr.init(tenant_id, ObBackupDestType::TYPE::DEST_TYPE_BACKUP_DATA,
+                                       complete_backup_dest_str, *sql_proxy_))) {
+      LOG_WARN("[BACKUP_VALIDATE]failed to init dest mgr", KR(ret), K(backup_dest));
     } else if (OB_FAIL(dest_mgr.check_dest_validity(*rpc_proxy_, true/*need_format_file*/, false/*need_check_permission*/))) {
       LOG_WARN("[BACKUP_VALIDATE]fail to check dest validity",
                     KR(ret), K(job_id), K(tenant_id));
@@ -1613,6 +1616,7 @@ int ObUserTenantBackupValidateJobMgr::check_log_archive_dest_validity_(bool &is_
 {
   int ret = OB_SUCCESS;
   ObBackupPathString archive_dest_str;
+  ObBackupPathString complete_archive_dest_str;
   share::ObArchivePersistHelper helper;
   ObBackupDestMgr dest_mgr;
   ObBackupDest archive_dest;
@@ -1637,8 +1641,11 @@ int ObUserTenantBackupValidateJobMgr::check_log_archive_dest_validity_(bool &is_
       LOG_WARN("[BACKUP_VALIDATE]failed to set archive dest", KR(ret), K(archive_dest_str));
     } else if (OB_FAIL(helper.get_dest_id(*sql_proxy_, false/*need_lock*/, dest_no, archive_dest_id_))) {
       LOG_WARN("[BACKUP_VALIDATE]failed to get archive dest id", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_, tenant_id, archive_dest_str,
+                                                                        complete_archive_dest_str))) {
+      LOG_WARN("[BACKUP_VALIDATE]failed to get complete archive dest", KR(ret), K(tenant_id), K(archive_dest_str));
     } else if (OB_FAIL(dest_mgr.init(tenant_id, ObBackupDestType::DEST_TYPE_ARCHIVE_LOG,
-                                archive_dest_str, *sql_proxy_))) {
+                                         complete_archive_dest_str, *sql_proxy_))) {
       LOG_WARN("[BACKUP_VALIDATE]failed to init dest mgr", K(ret), K(job_id), K(tenant_id));
     } else if (OB_FAIL(dest_mgr.check_dest_validity(*rpc_proxy_, true/*need_format_file*/, false/*need_check_permission*/))) {
       LOG_WARN("[BACKUP_VALIDATE]failed to check dest validity", K(ret), K(job_id), K(tenant_id));

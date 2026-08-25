@@ -829,6 +829,7 @@ int ObArchiveHandler::check_archive_dest_validity_(const int64_t dest_no)
   share::ObArchivePersistHelper helper;
   bool need_lock = false;
   ObBackupPathString dest_str;
+  ObBackupPathString complete_dest_str;
   ObBackupDestMgr dest_mgr;
   ObBackupDestType::TYPE dest_type = ObBackupDestType::TYPE::DEST_TYPE_ARCHIVE_LOG;
 
@@ -836,7 +837,9 @@ int ObArchiveHandler::check_archive_dest_validity_(const int64_t dest_no)
     LOG_WARN("fail to init archive helper", K(ret), K(tenant_id_));
   } else if (OB_FAIL(helper.get_archive_dest(*sql_proxy_, need_lock, dest_no, dest_str))) {
     LOG_WARN("fail to get archive path", K(ret), K(tenant_id_));
-  } else if (OB_FAIL(dest_mgr.init(tenant_id_, dest_type, dest_str,  *sql_proxy_))) {
+  } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_, tenant_id_, dest_str, complete_dest_str))) {
+    LOG_WARN("fail to get archive dest", K(ret), K(tenant_id_), K(dest_str));
+  } else if (OB_FAIL(dest_mgr.init(tenant_id_, dest_type, complete_dest_str, *sql_proxy_))) {
     LOG_WARN("fail to init dest manager", K(ret), K(tenant_id_), K(dest_str));
   } else if (OB_FAIL(dest_mgr.check_dest_validity(*rpc_proxy_, true/*need_format_file*/, true/*need_check_permission*/))) {
     LOG_WARN("fail to check archive dest validity", K(ret), K(tenant_id_), K(dest_str));

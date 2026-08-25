@@ -1893,6 +1893,31 @@ int ObBackupStorageInfoOperator::get_backup_dest(
   return ret;
 }
 
+int ObBackupStorageInfoOperator::get_backup_dest(
+    common::ObISQLClient &proxy,
+    const uint64_t tenant_id,
+    const ObBackupPathString &backup_dest_str,
+    ObBackupPathString &complete_backup_dest_str)
+{
+  int ret = OB_SUCCESS;
+  ObBackupDest backup_dest;
+  ObBackupPathString backup_path;
+  complete_backup_dest_str.reset();
+  if (!is_valid_tenant_id(tenant_id) || backup_dest_str.is_empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), "is_empty", backup_dest_str.is_empty());
+  } else if (OB_FAIL(backup_dest.set(backup_dest_str))) {
+    LOG_WARN("failed to set backup dest", K(ret), K(tenant_id), K(backup_dest_str));
+  } else if (OB_FAIL(backup_dest.get_backup_path_str(backup_path.ptr(), backup_path.capacity()))) {
+    LOG_WARN("failed to get backup path str", K(ret), K(tenant_id), K(backup_dest));
+  } else if (OB_FAIL(get_backup_dest(proxy, tenant_id, backup_path, backup_dest))) {
+    LOG_WARN("failed to get backup dest", K(ret), K(tenant_id), K(backup_dest));
+  } else if (OB_FAIL(backup_dest.get_backup_dest_str(complete_backup_dest_str.ptr(), complete_backup_dest_str.capacity()))) {
+    LOG_WARN("failed to get backup dest str", K(ret), K(tenant_id), K(backup_dest));
+  }
+  return ret;
+}
+
 int ObBackupStorageInfoOperator::get_backup_dest_by_dest_id(
     common::ObISQLClient &proxy,
     const uint64_t tenant_id,
