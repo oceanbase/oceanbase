@@ -167,7 +167,7 @@ int ObExprObjectConstruct::newx(ObEvalCtx &ctx, ObObj &result, uint64_t udt_id, 
       CK (OB_NOT_NULL(ns));
       OZ (ns->get_user_type(udt_id, user_type, &tmp_alloc));
       CK (OB_NOT_NULL(user_type));
-      OZ (user_type->newx(*alloc, ns, ptr));
+      OZ (user_type->newx(*alloc, ns, ptr, true/*set_null*/));
       OZ (user_type->get_size(pl::PL_TYPE_INIT_SIZE, init_size));
       OX (new_composite.set_extend(ptr, user_type->get_type(), init_size));
       OX (result = new_composite);

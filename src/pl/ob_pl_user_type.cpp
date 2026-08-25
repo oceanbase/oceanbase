@@ -214,10 +214,11 @@ int ObUserDefinedType::generate_construct(ObPLCodeGenerator &generator,
   return ret;
 }
 
-int ObUserDefinedType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64_t &ptr) const
+int ObUserDefinedType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64_t &ptr,
+                            bool set_null) const
 {
   int ret = OB_NOT_SUPPORTED;
-  UNUSEDx(allocator, ns, ptr);
+  UNUSEDx(allocator, ns, ptr, set_null);
   LOG_WARN("Unexpected type to nex", K(ret));
   return ret;
 }
@@ -1063,10 +1064,11 @@ int ObUserDefinedSubType::generate_new(ObPLCodeGenerator &generator,
 
 int ObUserDefinedSubType::newx(common::ObIAllocator &allocator,
                                const ObPLINS *ns,
-                               int64_t &ptr) const
+                               int64_t &ptr,
+                               bool set_null) const
 {
   int ret = OB_NOT_SUPPORTED;
-  UNUSEDx(allocator, ns, ptr);
+  UNUSEDx(allocator, ns, ptr, set_null);
   return ret;
 }
 
@@ -1161,10 +1163,11 @@ int ObRefCursorType::generate_new(ObPLCodeGenerator &generator,
   return ret;
 }
 
-int ObRefCursorType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64_t &ptr) const
+int ObRefCursorType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64_t &ptr,
+                          bool set_null) const
 {
   int ret = OB_NOT_SUPPORTED;
-  UNUSEDx(allocator, ns, ptr);
+  UNUSEDx(allocator, ns, ptr, set_null);
   return ret;
 }
 
@@ -1644,7 +1647,8 @@ int ObRecordType::generate_new(ObPLCodeGenerator &generator,
 }
 
 
-int ObRecordType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64_t &ptr) const
+int ObRecordType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64_t &ptr,
+                       bool set_null) const
 {
   int ret = OB_SUCCESS;
   ObPLRecord *record = NULL;
@@ -1669,9 +1673,12 @@ int ObRecordType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64
         int64_t init_size = OB_INVALID_SIZE;
         int64_t member_ptr = 0;
         OZ (get_member(i)->get_size(PL_TYPE_INIT_SIZE, init_size));
-        OZ (get_member(i)->newx(*record->get_allocator(), ns, member_ptr));
+        OZ (get_member(i)->newx(*record->get_allocator(), ns, member_ptr, set_null));
         OX (member->set_extend(member_ptr, get_member(i)->get_type(), init_size));
       }
+    }
+    if (OB_SUCC(ret) && set_null && is_object_type()) {
+      record->set_null();
     }
     if (OB_FAIL(ret)) {
       ObObj tmp;
@@ -1987,13 +1994,8 @@ int ObRecordType::init_session_var(const ObPLResolveCtx &resolve_ctx,
             int64_t init_size = OB_INVALID_SIZE;
             int64_t member_ptr = 0;
             OZ (get_member(i)->get_size(PL_TYPE_INIT_SIZE, init_size));
-            OZ (get_member(i)->newx(*record->get_allocator(), &resolve_ctx, member_ptr));
+            OZ (get_member(i)->newx(*record->get_allocator(), &resolve_ctx, member_ptr, true));
             OX (member->set_extend(member_ptr, get_member(i)->get_type(), init_size));
-            if (OB_SUCC(ret) && get_member(i)->is_record_type()) {
-              ObPLComposite *composite = reinterpret_cast<ObPLComposite *>(member_ptr);
-              CK (OB_NOT_NULL(composite));
-              OX (composite->set_null());
-            }
           } else {
             ObObj tmp;
             OZ (common::deep_copy_obj(*record->get_allocator(), result, tmp));
@@ -2007,13 +2009,8 @@ int ObRecordType::init_session_var(const ObPLResolveCtx &resolve_ctx,
             int64_t init_size = OB_INVALID_SIZE;
             int64_t member_ptr = 0;
             OZ (get_member(i)->get_size(PL_TYPE_INIT_SIZE, init_size));
-            OZ (get_member(i)->newx(*record->get_allocator(), &resolve_ctx, member_ptr));
+            OZ (get_member(i)->newx(*record->get_allocator(), &resolve_ctx, member_ptr, true));
             OX (member->set_extend(member_ptr, get_member(i)->get_type(), init_size));
-            if (OB_SUCC(ret) && get_member(i)->is_record_type()) {
-              ObPLComposite *composite = reinterpret_cast<ObPLComposite *>(member_ptr);
-              CK (OB_NOT_NULL(composite));
-              OX (composite->set_null());
-            }
           }
         }
       }
@@ -2422,13 +2419,15 @@ int ObOpaqueType::generate_construct(ObPLCodeGenerator &generator,
   return OB_SUCCESS;
 }
 
-int ObOpaqueType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64_t &ptr) const
+int ObOpaqueType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64_t &ptr,
+                       bool set_null) const
 {
   int ret = OB_SUCCESS;
   ObPLOpaque *opaque = NULL;
   ObPLOpaque tmp;
   int64_t init_size = tmp.get_init_size();
   UNUSED(ns);
+  UNUSED(set_null);
   OX (opaque = reinterpret_cast<ObPLOpaque *>(allocator.alloc(init_size)));
   CK (OB_NOT_NULL(opaque));
   OX (new (opaque) ObPLOpaque());
@@ -2612,8 +2611,11 @@ int ObCollectionType::generate_new(ObPLCodeGenerator &generator,
 }
 
 
-int ObCollectionType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64_t &ptr) const
+int ObCollectionType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64_t &ptr,
+                           bool set_null) const
 {
+  // Collection nullness is represented by count_; set_null is unused here.
+  UNUSED(set_null);
 
 #define COLLECTION_NEWX(class) \
   do { \
@@ -3527,10 +3529,11 @@ int ObNestedTableType::generate_construct(ObPLCodeGenerator &generator,
   return ret;
 }
 
-int ObNestedTableType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64_t &ptr) const
+int ObNestedTableType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64_t &ptr,
+                            bool set_null) const
 {
   int ret = OB_SUCCESS;
-  OZ (ObCollectionType::newx(allocator, ns, ptr));
+  OZ (ObCollectionType::newx(allocator, ns, ptr, set_null));
   return ret;
 }
 
@@ -3692,10 +3695,11 @@ int ObVArrayType::generate_construct(ObPLCodeGenerator &generator,
   return ret;
 }
 
-int ObVArrayType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64_t &ptr) const
+int ObVArrayType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64_t &ptr,
+                       bool set_null) const
 {
   int ret = OB_SUCCESS;
-  OZ (ObCollectionType::newx(allocator, ns, ptr));
+  OZ (ObCollectionType::newx(allocator, ns, ptr, set_null));
   OX (reinterpret_cast<ObPLVArray*>(ptr)->set_capacity(capacity_));
   return ret;
 }
@@ -3776,10 +3780,11 @@ int ObAssocArrayType::generate_construct(ObPLCodeGenerator &generator,
   return ret;
 }
 
-int ObAssocArrayType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64_t &ptr) const
+int ObAssocArrayType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64_t &ptr,
+                           bool set_null) const
 {
   int ret = OB_SUCCESS;
-  OZ (ObCollectionType::newx(allocator, ns, ptr));
+  OZ (ObCollectionType::newx(allocator, ns, ptr, set_null));
   return ret;
 }
 

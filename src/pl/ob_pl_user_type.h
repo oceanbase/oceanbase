@@ -91,7 +91,8 @@ public:
                                             const pl::ObPLStmt *s = NULL) const;
   virtual int newx(common::ObIAllocator &allocator,
                    const ObPLINS *ns,
-                   int64_t &ptr) const;
+                   int64_t &ptr,
+                   bool set_null = false) const;
 
   virtual int get_size(ObPLTypeSize type, int64_t &size) const;
   virtual int init_session_var(const ObPLResolveCtx &resolve_ctx,
@@ -235,7 +236,8 @@ public:
                                                 const pl::ObPLStmt *s = NULL) const;
   virtual int newx(common::ObIAllocator &allocator,
                    const ObPLINS *ns,
-                   int64_t &ptr) const;
+                   int64_t &ptr,
+                   bool set_null = false) const;
 
   virtual int get_all_depended_user_type(const ObPLResolveCtx &resolve_ctx,
                                          const ObPLBlockNS &current_ns) const;
@@ -305,7 +307,8 @@ public:
                                               const pl::ObPLStmt *s = NULL) const;
   virtual int newx(common::ObIAllocator &allocator,
                      const ObPLINS *ns,
-                     int64_t &ptr) const;
+                     int64_t &ptr,
+                     bool set_null = false) const;
 
 public:
   int deep_copy(common::ObIAllocator &alloc, const ObRefCursorType &other);
@@ -479,7 +482,8 @@ public:
                                                 const pl::ObPLStmt *s = NULL) const;
   virtual int newx(common::ObIAllocator &allocator,
                      const ObPLINS *ns,
-                     int64_t &ptr) const;
+                     int64_t &ptr,
+                     bool set_null = false) const;
 
   virtual int get_size(ObPLTypeSize type, int64_t &size) const;
 
@@ -569,7 +573,8 @@ public:
   }
   virtual int newx(common::ObIAllocator &allocator,
                    const ObPLINS *ns,
-                   int64_t &ptr) const;
+                   int64_t &ptr,
+                   bool set_null = false) const;
   virtual int init_session_var(const ObPLResolveCtx &resolve_ctx,
                                common::ObIAllocator &obj_allocator,
                                sql::ObExecContext &exec_ctx,
@@ -641,7 +646,8 @@ public:
                            const pl::ObPLStmt *s = NULL) const;
   virtual int newx(common::ObIAllocator &allocator,
                      const ObPLINS *ns,
-                     int64_t &ptr) const;
+                     int64_t &ptr,
+                     bool set_null = false) const;
 
   virtual int get_size(ObPLTypeSize type, int64_t &size) const;
 
@@ -718,7 +724,8 @@ public:
                                  const pl::ObPLStmt *stmt = NULL) const;
   virtual int newx(common::ObIAllocator &allocator,
                        const ObPLINS *ns,
-                       int64_t &ptr) const;
+                       int64_t &ptr,
+                       bool set_null = false) const;
   virtual int init_session_var(const ObPLResolveCtx &resolve_ctx,
                                common::ObIAllocator &obj_allocator,
                                sql::ObExecContext &exec_ctx,
@@ -796,7 +803,8 @@ public:
                                  const pl::ObPLStmt *stmt = NULL) const;
   virtual int newx(common::ObIAllocator &allocator,
                        const ObPLINS *ns,
-                       int64_t &ptr) const;
+                       int64_t &ptr,
+                       bool set_null = false) const;
 
   virtual int init_session_var(
     const ObPLResolveCtx &resolve_ctx, common::ObIAllocator &obj_allocator,
@@ -838,7 +846,8 @@ public:
                                  const pl::ObPLStmt *stmt = NULL) const;
   virtual int newx(common::ObIAllocator &allocator,
                        const ObPLINS *ns,
-                       int64_t &ptr) const;
+                       int64_t &ptr,
+                       bool set_null = false) const;
   virtual int init_session_var(const ObPLResolveCtx &resolve_ctx,
                                common::ObIAllocator &obj_allocator,
                                sql::ObExecContext &exec_ctx,

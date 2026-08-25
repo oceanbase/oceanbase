@@ -421,7 +421,8 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
                   ObObj new_composite;
                   int64_t ptr = 0;
                   int64_t init_size = OB_INVALID_SIZE;
-                  OZ (collection_type->get_element_type().newx(*coll->get_allocator(), ns, ptr));
+                  OZ (collection_type->get_element_type().newx(
+                        *coll->get_allocator(), ns, ptr, true/*set_null*/));
                   OZ (collection_type->get_element_type().get_size(pl::PL_TYPE_INIT_SIZE, init_size));
                   OX (new_composite.set_extend(ptr, collection_type->get_element_type().get_type(), init_size));
                   int64_t pos = is_repeated_key ? index : (assoc_array->get_count() - 1);
@@ -449,7 +450,8 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
                 ObObj new_composite;
                 int64_t ptr = 0;
                 int64_t init_size = OB_INVALID_SIZE;
-                OZ (collection_type->get_element_type().newx(*coll->get_allocator(), ns, ptr));
+                OZ (collection_type->get_element_type().newx(
+                      *coll->get_allocator(), ns, ptr, true));
                 OZ (collection_type->get_element_type().get_size(pl::PL_TYPE_INIT_SIZE, init_size));
                 OX (new_composite.set_extend(ptr, collection_type->get_element_type().get_type(), init_size));
                 OX (static_cast<ObObj*>(coll->get_data())[i] = new_composite);

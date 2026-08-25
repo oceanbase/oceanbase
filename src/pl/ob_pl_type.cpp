@@ -845,7 +845,7 @@ int ObPLDataType::generate_new(ObPLCodeGenerator &generator,
   return ret;
 }
 
-int ObPLDataType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64_t &ptr) const
+int ObPLDataType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64_t &ptr, bool set_null) const
 {
   int ret = OB_SUCCESS;
   if (is_obj_type()) {
@@ -857,7 +857,7 @@ int ObPLDataType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64
     const ObUserDefinedType *user_type = NULL;
     OZ (ns->get_user_type(get_user_type_id(), user_type, &tmp_allocator));
     CK (OB_NOT_NULL(user_type));
-    OZ (SMART_CALL(user_type->newx(allocator, ns, ptr)));
+    OZ (SMART_CALL(user_type->newx(allocator, ns, ptr, set_null)));
   }
   return ret;
 }

@@ -551,7 +551,10 @@ public:
                                        jit::ObLLVMValue &allocator,
                                        bool is_top_level,
                                        const pl::ObPLStmt *stmt = NULL) const;
-  virtual int newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64_t &ptr) const;
+  virtual int newx(common::ObIAllocator &allocator,
+                   const ObPLINS *ns,
+                   int64_t &ptr,
+                   bool set_null = false) const;
   virtual int get_size(ObPLTypeSize type, int64_t &size) const;
   virtual int init_session_var(const ObPLResolveCtx &resolve_ctx,
                                common::ObIAllocator &obj_allocator,
