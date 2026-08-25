@@ -1179,7 +1179,9 @@ int ObLogJoin::bloom_filter_partition_type(const ObShardingInfo &right_child_sha
 
 bool ObLogJoin::is_block_input(const int64_t child_idx) const
 {
-  return HASH_JOIN == join_algo_ && 0 == child_idx;
+  return HASH_JOIN == join_algo_
+      && CONNECT_BY_JOIN != join_type_
+      && 0 == child_idx;
 }
 
 int ObLogJoin::is_left_unique(bool &left_unique) const
