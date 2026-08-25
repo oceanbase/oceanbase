@@ -552,7 +552,6 @@ OB_DEF_SERIALIZE_SIZE(ObCommonConfig)
     const ObString external_kms_info_cfg(EXTERNAL_KMS_INFO);
     const ObString ssl_external_kms_info_cfg(SSL_EXTERNAL_KMS_INFO);
     for (; OB_SUCC(ret) && it != container_.end(); ++it) {
-      MEMSET(kv_str, '\0', OB_MAX_CONFIG_NAME_LEN + OB_MAX_CONFIG_VALUE_LEN + 1);
       int64_t pos = 0;
       if (OB_NOT_NULL(it->second)
           && (it->second->value_updated()
