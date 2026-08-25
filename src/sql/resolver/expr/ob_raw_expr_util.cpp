@@ -7855,14 +7855,23 @@ int ObRawExprUtils::replace_level_column(ObRawExpr *&raw_expr, ObRawExpr *to, bo
   }
   return ret;
 }
-int ObRawExprUtils::build_const_bool_expr(ObRawExprFactory *expr_factory, ObRawExpr *&expr, bool b_value)
+int ObRawExprUtils::build_const_bool_expr(ObRawExprFactory *expr_factory,
+                                          ObRawExpr *&expr,
+                                          bool b_value,
+                                          const ObRawExprResType *result_type)
 {
   int ret = OB_SUCCESS;
   ObConstRawExpr *bool_expr = NULL;
   if (OB_ISNULL(expr_factory)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr_factory is null", K(ret));
-  } else if (OB_FAIL(expr_factory->create_raw_expr(T_BOOL, bool_expr))) {
+  } else if (OB_NOT_NULL(result_type) && !result_type->is_integer_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected bool expr result type", K(ret), KPC(result_type));
+  } else if (OB_FAIL(expr_factory->create_raw_expr(OB_ISNULL(result_type)
+                                                    ? T_BOOL
+                                                    : static_cast<ObItemType>(result_type->get_type()),
+                                                    bool_expr))) {
     LOG_WARN("build const bool expr failed", K(ret));
   } else if (OB_ISNULL(bool_expr)) {
     ret = OB_ERR_UNEXPECTED;
@@ -7871,8 +7880,18 @@ int ObRawExprUtils::build_const_bool_expr(ObRawExprFactory *expr_factory, ObRawE
     LOG_WARN("failed to extract expr info", K(ret));
   } else {
     ObObj val;
-    val.set_bool(b_value);
+    if (OB_ISNULL(result_type)) {
+      val.set_bool(b_value);
+    } else if (ob_is_unsigned_type(result_type->get_type())) {
+      val.set_uint(result_type->get_type(), b_value ? 1 : 0);
+    } else {
+      val.set_int(result_type->get_type(), b_value ? 1 : 0);
+    }
     bool_expr->set_value(val);
+    if (OB_NOT_NULL(result_type)) {
+      bool_expr->set_result_type(*result_type);
+      bool_expr->set_is_literal_bool(true);
+    }
     expr = bool_expr;
   }
   return ret;

@@ -849,7 +849,8 @@ public:
                                          ObOpPseudoColumnRawExpr *&expr);
   static int build_const_bool_expr(ObRawExprFactory *expr_factory,
                                    ObRawExpr *&expr,
-                                   bool b_value);
+                                   bool b_value,
+                                   const ObRawExprResType *result_type = NULL);
   static int build_const_string_expr(ObRawExprFactory &expr_factory,
                                      common::ObObjType type,
                                      const common::ObString &string_value,

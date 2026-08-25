@@ -1867,9 +1867,11 @@ int ObTransformSimplifyExpr::adjust_subquery_comparison_expr(ObRawExpr*& expr,
   }
   if (OB_FAIL(ret)) {
   } else if (build_bool_expr) {
+    const ObRawExprResType &result_type = expr->get_result_type();
     if (OB_FAIL(ObRawExprUtils::build_const_bool_expr(ctx_->expr_factory_,
                                                       bool_expr,
-                                                      b_value))) {
+                                                      b_value,
+                                                      &result_type))) {
       LOG_WARN("failed to build const bool expr", K(ret));
     } else {
       expr = bool_expr;
