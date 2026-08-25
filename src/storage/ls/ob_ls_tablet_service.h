@@ -678,6 +678,12 @@ private:
       const bool allow_no_ready_read);
 
   int mock_duplicated_rows_(blocksstable::ObDatumRowIterator *&duplicated_rows);
+  int get_tablet_and_address(
+      const ObTabletMapKey &key,
+      ObTabletHandle &old_tablet,
+      ObMetaDiskAddr &old_tablet_addr,
+      ObTimeGuard &time_guard);
+
 private:
   static int replay_create_inner_tablet(
       common::ObArenaAllocator &allocator,
