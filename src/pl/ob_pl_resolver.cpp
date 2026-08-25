@@ -4013,8 +4013,12 @@ int ObPLResolver::resolve_declare_var_comm(const ObStmtNodeTree *parse_tree,
           }
         }
         if (OB_SUCC(ret) && OB_NOT_NULL(default_expr)) {
-          OZ (check_access_external_state(default_expr,
-                                          has_access_external_state));
+          if (constant) {
+            has_access_external_state = default_expr->has_flag(CNT_PL_UDF);
+          } else {
+            OZ (check_access_external_state(default_expr,
+                                            has_access_external_state));
+          }
         }
       } else if (OB_NOT_NULL(data_type.get_data_type()) && !unit_ast.is_routine()) { // 基础类型如果, 没有默认值, 设置为NULL
         common::ObIArray<common::ObString>* type_info = NULL;

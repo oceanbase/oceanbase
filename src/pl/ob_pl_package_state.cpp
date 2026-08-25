@@ -880,7 +880,7 @@ int ObPLPackageState::check_version(const ObPackageStateVersion &state_version,
         LOG_WARN("fail to check dep schema", K(ret), K(cur_state_version), K(state_version));
       }
     }
-    if (OB_SUCC(ret) && match &&
+    if (OB_SUCC(ret) && match && cur_state_version.body_merge_version_ != OB_INVALID_VERSION &&
         cur_state_version.body_merge_version_ != state_version.body_merge_version_ &&
         OB_NOT_NULL(body)) {
       if(OB_FAIL(ObRoutinePersistentInfo::check_dep_schema(schema_guard,
