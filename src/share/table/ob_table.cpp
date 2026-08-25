@@ -3921,10 +3921,14 @@ OB_DEF_DESERIALIZE(ObHCell)
   int64_t cell_num = 0;
   OB_UNIS_DECODE(cell_num);
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(objs_.prepare_allocate(cell_num + 1))) {
+    if (OB_UNLIKELY(cell_num != ObHTableConstants::COL_IDX_V
+                    && cell_num != ObHTableConstants::COL_IDX_TTL)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid hbase cell object count", K(ret), K(cell_num));
+    } else if (OB_FAIL(objs_.prepare_allocate(cell_num + 1))) {
       LOG_WARN("fail to prepare allocate objs", K(ret), K(cell_num));
     } else {
-      // [Q T V (TTL)]
+      // [Q T V (TTL)], reserve objs_[COL_IDX_K] for the row key.
       ObObj &Q = objs_[ObHTableConstants::COL_IDX_Q];
       ObObj &T = objs_[ObHTableConstants::COL_IDX_T];
       ObObj &V = objs_[ObHTableConstants::COL_IDX_V];
@@ -3935,10 +3939,10 @@ OB_DEF_DESERIALIZE(ObHCell)
       } else if (OB_FAIL(ObTableSerialUtil::deserialize(buf, data_len, pos, V))) {
         LOG_WARN("fail to deserialize V object", K(ret), K(buf), K(data_len), K(pos));
       }
-      if (OB_SUCC(ret) && cell_num == 4) {
+      if (OB_SUCC(ret) && cell_num == ObHTableConstants::COL_IDX_TTL) {
         ObObj &TTL = objs_[ObHTableConstants::COL_IDX_TTL];
         if (OB_FAIL(ObTableSerialUtil::deserialize(buf, data_len, pos, TTL))) {
-          LOG_WARN("fail to deserialize V object", K(ret), K(buf), K(data_len), K(pos));
+          LOG_WARN("fail to deserialize TTL object", K(ret), K(buf), K(data_len), K(pos));
         }
       }
     }
@@ -3975,6 +3979,7 @@ OB_DEF_DESERIALIZE(ObHCfRows)
     [QTV(TTL)] [QTV(TTL)][QTV(TTL)][QTV(TTL)] [QTV(TTL)][QTV(TTL)]
   */
   int ret = OB_SUCCESS;
+  int64_t total_cell_count = 0;
   // decode real_table_name_
   OB_UNIS_DECODE(real_table_name_);
   if (OB_SUCC(ret) && (OB_ISNULL(keys_) || OB_ISNULL(deserialize_alloc_))) {
@@ -3990,37 +3995,72 @@ OB_DEF_DESERIALIZE(ObHCfRows)
     int64_t key_idx_num = 0;
     OB_UNIS_DECODE(key_idx_num);
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(key_idx.prepare_allocate(key_idx_num))) {
-        LOG_WARN("fail to prepare allocate key index", K(ret));
+      if (OB_UNLIKELY(key_idx_num < 0
+                      || key_idx_num > UINT32_MAX
+                      || pos < 0
+                      || pos > data_len
+                      || key_idx_num > data_len - pos)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid key index array size", K(ret), K(key_idx_num), K(data_len), K(pos));
+      } else if (OB_FAIL(key_idx.prepare_allocate(key_idx_num))) {
+        LOG_WARN("fail to prepare allocate key index", K(ret), K(key_idx_num));
       }
       int64_t idx = 0;
-      for (int i = 0; OB_SUCC(ret) && i < key_idx_num; ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < key_idx_num; ++i) {
         OB_UNIS_DECODE(idx);
-        key_idx.at(i) = idx;
+        if (OB_SUCC(ret)) {
+          if (OB_UNLIKELY(idx < 0 || idx >= keys_->count())) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("key index is out of range", K(ret), K(idx), "key_count", keys_->count());
+          } else {
+            key_idx.at(i) = idx;
+          }
+        }
       }
       if (OB_SUCC(ret)) {
-        // encode cell_num_array, [1, 3, 2, ...]
+        // decode cell_num_array, [1, 3, 2, ...]
         int64_t cell_num_array_size = 0;
         int64_t cell_num = 0;
         OB_UNIS_DECODE(cell_num_array_size);
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(cell_num_array.prepare_allocate(cell_num_array_size))) {
+          if (OB_UNLIKELY(cell_num_array_size < 0
+                          || cell_num_array_size > UINT32_MAX
+                          || pos < 0
+                          || pos > data_len
+                          || cell_num_array_size > data_len - pos)) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid cell number array size", K(ret), K(cell_num_array_size), K(data_len), K(pos));
+          } else if (OB_UNLIKELY(key_idx_num != cell_num_array_size)) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("the size of key index array does not equal to cell num array",
+                     K(ret), K(key_idx_num), K(cell_num_array_size));
+          } else if (OB_FAIL(cell_num_array.prepare_allocate(cell_num_array_size))) {
             LOG_WARN("fail to prepare allocate cell num array", K(ret), K(cell_num_array_size));
           }
-          for (int i = 0; OB_SUCC(ret) && i < cell_num_array_size; ++i) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < cell_num_array_size; ++i) {
             OB_UNIS_DECODE(cell_num);
-            cell_num_array.at(i) = cell_num;
-            cell_count_ += cell_num;
+            if (OB_SUCC(ret)) {
+              if (OB_UNLIKELY(cell_num < 0 || cell_num > UINT32_MAX)) {
+                ret = OB_INVALID_ARGUMENT;
+                LOG_WARN("invalid cell number", K(ret), K(cell_num), K(i));
+              } else if (OB_UNLIKELY(total_cell_count > INT64_MAX - cell_num)) {
+                ret = OB_INVALID_ARGUMENT;
+                LOG_WARN("total cell count overflow", K(ret), K(total_cell_count), K(cell_num), K(i));
+              } else {
+                cell_num_array.at(i) = cell_num;
+                total_cell_count += cell_num;
+              }
+            }
           }
           if (OB_SUCC(ret)) {
-            // decode cell and construct ObHCfRow
-            if (key_idx_num != cell_num_array_size) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("the size of key index array does not equal to cell num array", K(ret), K(key_idx_num), K(cell_num_array_size));
+            if (OB_UNLIKELY(pos < 0 || pos > data_len || total_cell_count > data_len - pos)) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("cell count exceeds remaining payload", K(ret), K(total_cell_count), K(data_len), K(pos));
             } else if (OB_FAIL(rows_.prepare_allocate(key_idx_num))) {
               LOG_WARN("fail to prepare allocate rows", K(ret), K(key_idx_num));
             } else {
-              for (int i = 0; OB_SUCC(ret) && i < key_idx_num; ++i) {
+              // All untrusted metadata has been validated before constructing rows and cells.
+              for (int64_t i = 0; OB_SUCC(ret) && i < key_idx_num; ++i) {
                 int64_t first_timestamp = 0;
                 cell_num = cell_num_array.at(i);
                 idx = key_idx.at(i);
@@ -4033,28 +4073,38 @@ OB_DEF_DESERIALIZE(ObHCfRows)
                 if (OB_FAIL(cf_row.cells_.prepare_allocate(cell_num))) {
                   LOG_WARN("fail to prepare allocate cells", K(ret), K(idx), K(real_table_name_), K(cell_num));
                 }
-                for (int j = 0; OB_SUCC(ret) && j < cell_num; ++j) {
+                for (int64_t j = 0; OB_SUCC(ret) && j < cell_num; ++j) {
                   ObHCell &cell = cf_row.cells_.at(j);
                   cell.set_allocator(deserialize_alloc_);
-                  OB_UNIS_DECODE(cell);
-                  if (OB_SUCC(ret)) {
-                    if (OB_FAIL(cell.set_rowkey_value(ObHTableConstants::COL_IDX_K, k_obj))) {
-                      LOG_WARN("fail to set rowkey value", K(ret), K(k_obj), K(cell));
-                    } else {
-                      ObObj *T = cell.get_cell_obj(ObHTableConstants::COL_IDX_T);
-                      if (OB_ISNULL(T)) {
-                        ret = OB_ERR_UNEXPECTED;
-                        LOG_WARN("T is null", K(ret));
-                      } else if (T->get_int() == ObHTableConstants::LATEST_TIMESTAMP) {
-                        T->set_int(now_ms_);
+                  const int64_t cell_start_pos = pos;
+                  if (OB_UNLIKELY(pos < 0 || pos >= data_len)) {
+                    ret = OB_INVALID_ARGUMENT;
+                    LOG_WARN("cell payload is missing", K(ret), K(i), K(j), K(data_len), K(pos));
+                  } else if (OB_FAIL(serialization::decode(buf, data_len, pos, cell))) {
+                    LOG_WARN("fail to deserialize cell", K(ret), K(i), K(j), K(data_len), K(pos));
+                  } else if (OB_UNLIKELY(pos <= cell_start_pos
+                                         || pos > data_len
+                                         || (cell.count() != ObHTableConstants::COL_IDX_V + 1
+                                             && cell.count() != ObHTableConstants::COL_IDX_TTL + 1))) {
+                    ret = OB_INVALID_ARGUMENT;
+                    LOG_WARN("invalid deserialized hbase cell", K(ret), K(i), K(j),
+                             K(cell_start_pos), K(data_len), K(pos), "cell_obj_count", cell.count());
+                  } else if (OB_FAIL(cell.set_rowkey_value(ObHTableConstants::COL_IDX_K, k_obj))) {
+                    LOG_WARN("fail to set rowkey value", K(ret), K(k_obj), K(cell));
+                  } else {
+                    ObObj *T = cell.get_cell_obj(ObHTableConstants::COL_IDX_T);
+                    if (OB_ISNULL(T)) {
+                      ret = OB_ERR_UNEXPECTED;
+                      LOG_WARN("T is null", K(ret));
+                    } else if (T->get_int() == ObHTableConstants::LATEST_TIMESTAMP) {
+                      T->set_int(now_ms_);
+                    }
+                    if (OB_SUCC(ret)) {
+                      if (j == 0) {
+                        first_timestamp = T->get_int();
                       }
-                      if (OB_SUCC(ret)) {
-                        if (j == 0) {
-                          first_timestamp = T->get_int();
-                        }
-                        if (T->get_int() != first_timestamp) {
-                          cf_row.is_same_timestamp_ = false;
-                        }
+                      if (T->get_int() != first_timestamp) {
+                        cf_row.is_same_timestamp_ = false;
                       }
                     }
                   }
@@ -4065,6 +4115,9 @@ OB_DEF_DESERIALIZE(ObHCfRows)
         }
       }
     }
+  }
+  if (OB_SUCC(ret)) {
+    cell_count_ = total_cell_count;
   }
   return ret;
 }
