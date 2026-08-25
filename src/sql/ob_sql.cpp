@@ -2161,7 +2161,6 @@ int ObSql::handle_ps_prepare(const ObString &stmt,
       } else if (!is_expired
                  && !context.is_pre_execute_ // ps prepare
                  && stmt_info->get_is_prexecute() // prexecute prepare
-                 && stmt::T_ANONYMOUS_BLOCK == stmt_info->get_stmt_type()
                  && FALSE_IT(is_expired = true)) {
         // prexecute prepare anonymous block result can not reused by ps prepare.
         // but ps prepare anonymous block can reused by prexecute.
